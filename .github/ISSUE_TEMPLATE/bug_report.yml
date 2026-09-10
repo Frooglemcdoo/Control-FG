@@ -1,0 +1,61 @@
+name: Bug report
+description: Report a reproducible Control FG problem
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please reproduce the issue with Control FG by itself if possible. Attach the log ZIP from `Collect-ControlFG-Logs.cmd`.
+  - type: input
+    id: version
+    attributes:
+      label: Control FG version
+      placeholder: v1.0.0
+    validations:
+      required: true
+  - type: input
+    id: control_build
+    attributes:
+      label: Control store/build
+      placeholder: Steam build 21225456
+    validations:
+      required: true
+  - type: input
+    id: gpu
+    attributes:
+      label: GPU and driver
+      placeholder: GeForce RTX 5090, driver x.xx
+    validations:
+      required: true
+  - type: dropdown
+    id: hdr
+    attributes:
+      label: HDR
+      options: ["Off", "On", "Both / changes during reproduction"]
+    validations:
+      required: true
+  - type: input
+    id: fg_mode
+    attributes:
+      label: FG mode
+      placeholder: Off / Dynamic / 2x / 3x / 4x / 5x / 6x
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Reproduction steps
+      description: What did you do, what happened, and what did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: other_mods
+    attributes:
+      label: Other graphics/injection mods
+      description: List ReShade, Special K, other dxgi.dll wrappers, FPS limiters, overlays, etc.
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Drag the ZIP created by Collect-ControlFG-Logs.cmd here.
