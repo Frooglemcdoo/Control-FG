@@ -1,0 +1,42 @@
+CONTROL FG - DLSS FRAME GENERATION 2X-6X + DYNAMIC MFG
+
+SHORT DESCRIPTION
+Adds NVIDIA DLSS Frame Generation to Control (DX12), including fixed 2x-6x MFG, Dynamic MFG, live HDR handling, persistent settings, and a Control-styled F10 overlay.
+
+DESCRIPTION
+Control FG brings NVIDIA DLSS Frame Generation to the DirectX 12 version of Control with a native-looking in-game configuration overlay.
+
+FEATURES
+• Fixed 2x, 3x, 4x, 5x and 6x Frame Generation / Multi Frame Generation on supported hardware.
+• Native Dynamic MFG that varies the generated-frame count toward a target output frame rate.
+• Dynamic Auto target based on the game monitor refresh rate or a Manual 30-1000 FPS slider.
+• HDR support, including live HDR off/on switching.
+• F10 Control-style overlay showing mode, effective multiplier, current FPS, HDR state and GPU maximum.
+• Overlay starts hidden and settings save automatically.
+• RTX 40-series is intentionally limited to Off + 2x. Dynamic and 3x-6x are greyed out.
+
+REQUIREMENTS
+• Control on Steam. Verified against Steam build 21225456.
+• DirectX 12 / Control_DX12.exe.
+• NVIDIA RTX GPU with DLSS Frame Generation support.
+• Current NVIDIA driver. If FG is unavailable, verify Hardware-accelerated GPU scheduling (HAGS) is enabled.
+
+INSTALL
+1. Steam > Control > Properties > Installed Files > Browse.
+2. Close Control.
+3. Extract the mod ZIP.
+4. Copy dxgi.dll and the ControlFGStreamline folder beside Control_DX12.exe.
+5. Launch Control in DX12.
+6. Press F10 to open/close the overlay.
+
+UNINSTALL
+Close Control and remove Control FG's dxgi.dll and ControlFGStreamline folder. Only remove dxgi.dll if you know it belongs to Control FG.
+
+KNOWN LIMITATIONS
+• Verified only against Steam DX12 build 21225456.
+• DX11 is unsupported.
+• GOG/Epic versions are not yet claimed compatible.
+• Other mods that use a local dxgi.dll may conflict. Automatic proxy chaining is not supported in the first release.
+
+CREDITS / DISCLAIMER
+Uses NVIDIA Streamline 2.14.1. Control FG is an unofficial fan-made mod and is not affiliated with or endorsed by Remedy Entertainment, 505 Games, NVIDIA, Valve, or Nexus Mods. Control and related trademarks/assets belong to their respective owners.
