@@ -1,0 +1,108 @@
+{
+  "SteamAppId": "870780",
+  "SteamBuildId": "21225456",
+  "ProbeVersion": "1.0.0",
+  "RequiredFiles": [
+    {
+      "Name": "Control_DX12.exe",
+      "SHA256": "9441DB3AE75B267ABD989846AD0895E3FE24ABCC0F06E58F93C34FC8D4736506"
+    },
+    {
+      "Name": "d3d_rmdwin10_f.dll",
+      "SHA256": "CCEB99CBD9C019AF907C24C44701A53C8D230965C1FB31C325233E4C80214AA5"
+    },
+    {
+      "Name": "renderer_rmdwin10_f.dll",
+      "SHA256": "EBFB5B47CEBC2D4482E912B8090BD343F717BAB8A178B5A6385DEC9105E7C433"
+    }
+  ],
+  "StreamlineSDK": {
+    "Version": "2.14.1",
+    "ReleaseArchiveSHA256": "92C4D954631A1710DA86CA3FA8D5034F2B9503838C95FC4AE977AE149319781B",
+    "Configuration": "Production",
+    "Architecture": "x64"
+  },
+  "Phase": "First public release. v0.8.26 remains the runtime-proven FG/HDR/Dynamic core; v1.0.0 promotes the stabilized Control-native UI, persistence, packaging, and RTX 40-series policy branch.",
+  "SourceRevision": "r1",
+  "DLSSGGeneratedFramesRequested": 3,
+  "TargetMultiplier": "4x",
+  "ExpectedFramesPresented": 4,
+  "SelectableMultipliers": [
+    "Off",
+    "Dynamic",
+    "2x",
+    "3x",
+    "4x",
+    "5x",
+    "6x"
+  ],
+  "OverlayHotkey": "F10",
+  "DynamicMFG": {
+    "Mode": "DLSSGMode::eDynamic",
+    "AutoTargetPolicy": "Explicit game-monitor refresh from Windows",
+    "AutoDetection": [
+      "QueryDisplayConfig",
+      "EnumDisplaySettingsEx",
+      "SDK 0.0f fallback only if unresolved"
+    ],
+    "ManualTargetRangeFPS": [
+      30,
+      1000
+    ],
+    "ManualControls": [
+      "Auto",
+      "Slider"
+    ],
+    "SupportGate": "DLSSGState::bIsDynamicMFGSupported",
+    "VSyncPolicy": "Retain v0.8.24: force Present/Present1 SyncInterval=0 only while user mode is Dynamic and DLSS-G is API-enabled; preserve requested SyncInterval otherwise",
+    "Rationale": "v0.8.26 runtime PASS proved Dynamic MFG after adding PCL eSimulationStart. v1.0.0 makes no Dynamic-generation changes.",
+    "SliderRangeFPS": [
+      30,
+      1000
+    ],
+    "ReflexLimiterPolicy": "Dynamic: frameLimitUs = round(1000000 / resolved target FPS); fixed/off: frameLimitUs = 0",
+    "ReflexMode": "ReflexMode::eLowLatency",
+    "ReflexLimiterReapply": "Reapply slReflexSetOptions when the Dynamic target changes; restore zero on leaving Dynamic",
+    "PCLSimulationStartPolicy": "Emit eSimulationStart once per Control beginFrame, after slReflexSleep, on the same frame token used for constants/tags/present markers.",
+    "PCLUnimplementedMarkers": "Do not fabricate SimulationEnd or RenderSubmitStart/End; identify real Control boundaries before adding them."
+  },
+  "Overlay": {
+    "Hotkey": "F10",
+    "Presentation": "Win32 layered topmost no-activate process-local panel; hidden at startup and toggled with F10",
+    "Persistence": "%LOCALAPPDATA%\\ControlFG\\settings.ini",
+    "PersistedValues": [
+      "Frame Generation mode",
+      "Dynamic target policy/value"
+    ],
+    "RuntimeStatus": [
+      "Selected mode",
+      "Effective multiplier",
+      "Current output FPS",
+      "HDR bridge state",
+      "GPU/Dynamic capability"
+    ],
+    "SettingsSchema": 1,
+    "Title": "Embedded CONTROL FG approved wordmark resource",
+    "VisualStyle": "Control-native black/white/red menu aesthetic with Bahnschrift condensed typography, square controls, white selected state with black text, thick Dynamic target slider, and no side scrollbar",
+    "Position": "Top-right of the Control game client with 18px inset"
+  },
+  "RTX40SeriesPolicy": {
+    "Detection": "DXGI adapter Description matched by active D3D12 device LUID; GeForce RTX 40 prefix only",
+    "Allowed": [
+      "Off",
+      "2x"
+    ],
+    "Disabled": [
+      "Dynamic",
+      "3x",
+      "4x",
+      "5x",
+      "6x"
+    ],
+    "Enforcement": [
+      "overlay grey/non-clickable",
+      "runtime SetDLSSGMode gate",
+      "persisted unsupported selections coerced to 2x"
+    ]
+  }
+}
