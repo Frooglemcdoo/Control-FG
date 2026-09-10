@@ -1,0 +1,16 @@
+name: Feature request
+description: Suggest a Control FG improvement
+title: "[Feature] "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: request
+    attributes:
+      label: Feature
+      description: Describe the feature and the problem it would solve.
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context

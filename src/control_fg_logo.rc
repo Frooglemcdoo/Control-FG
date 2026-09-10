@@ -1,0 +1,3 @@
+#include "control_fg_logo_resource.h"
+
+IDR_CONTROL_FG_LOGO_BGRA RCDATA "..\\assets\\control_fg_logo.bgra"
