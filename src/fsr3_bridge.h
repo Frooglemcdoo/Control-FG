@@ -208,7 +208,7 @@ static void ConfigureFSR3ForPresent(unsigned long long present) noexcept {
     bool hdrEnabled=false;if(originalIsHDREnabled){__try{hdrEnabled=originalIsHDREnabled();}__except(EXCEPTION_EXECUTE_HANDLER){hdrEnabled=true;}}
     bool prepared=fsrPreparedFrame.load(std::memory_order_acquire)==present;bool enabled=IsFSR3RuntimeEnabled()&&prepared&&!hdrEnabled;
     ffxConfigureDescFrameGeneration config{};config.header.type=FFX_API_CONFIGURE_DESC_TYPE_FRAMEGENERATION;config.swapChain=fsrSwapChain.load();config.frameGenerationCallback=&FSR3GenerationCallback;config.frameGenerationCallbackUserContext=&fsrFrameGenerationContext;
-    config.frameGenerationEnabled=enabled;config.allowAsyncWorkloads=false;config.HUDLessColor={};config.flags=0;config.onlyPresentGenerated=false;config.generationRect={0,0,fsrDisplayWidth.load(),fsrDisplayHeight.load()};config.frameID=present;
+    config.frameGenerationEnabled=enabled;config.allowAsyncWorkloads=false;config.HUDLessColor={};config.flags=0;config.onlyPresentGenerated=false;config.generationRect={0,0,static_cast<int32_t>(fsrDisplayWidth.load()),static_cast<int32_t>(fsrDisplayHeight.load())};config.frameID=present;
     auto result=ffxConfigureApi(&fsrFrameGenerationContext,&config.header);if(result==FFX_API_RETURN_OK)++fsrConfigureSuccesses;
     if(call<=24||result!=FFX_API_RETURN_OK||(call%240)==0)Log("FSR3_CONFIGURE present=%llu result=%u enabled=%u prepared=%u hdr=%u sync_compute=1 calls=%llu successes=%llu callbacks=%llu dispatch_successes=%llu",present,result,unsigned(enabled),unsigned(prepared),unsigned(hdrEnabled),call,fsrConfigureSuccesses.load(),fsrGenerationCallbacks.load(),fsrDispatchSuccesses.load());
 }
