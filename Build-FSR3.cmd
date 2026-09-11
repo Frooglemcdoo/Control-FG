@@ -16,7 +16,7 @@ for /f "usebackq tokens=*" %%I in (`"%VSWHERE%" -latest -products * -requires Mi
 if not defined CONTROL_VSROOT exit /b 1
 call "%CONTROL_VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
 if errorlevel 1 exit /b 1
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File Fetch-Streamline.ps1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File Fetch-Streamline-Headers.ps1
 if errorlevel 1 exit /b 1
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File Fetch-FidelityFX.ps1
 if errorlevel 1 exit /b 1

@@ -39,15 +39,34 @@ try {
     # The minimal prebuilt package carries the signed runtimes and samples, but its
     # 2.3.0 layout does not expose the public headers at the former SDK path.
     # Fetch the immutable release commit for headers and keep the release ZIP for DLLs.
-    $sourceArchive = Join-Path $work ('FidelityFX-SDK-' + $SourceCommit + '.zip')
-    $sourceExpanded = Join-Path $work 'source'
-    Write-Host ('Downloading FidelityFX SDK headers from pinned commit ' + $SourceCommit + '...')
-    Invoke-WebRequest -UseBasicParsing -Uri $SourceUrl -OutFile $sourceArchive
-    New-Item -ItemType Directory -Path $sourceExpanded -Force | Out-Null
-    Expand-Archive -LiteralPath $sourceArchive -DestinationPath $sourceExpanded -Force
-    $apiHeader = Get-ChildItem -LiteralPath $sourceExpanded -Filter 'ffx_api.h' -File -Recurse | Where-Object { $_.FullName -match '[\\/]Kits[\\/]FidelityFX[\\/]api[\\/]include[\\/]ffx_api\.h$' } | Select-Object -First 1
-    if (-not $apiHeader) { throw 'Could not locate ffx_api.h in pinned FidelityFX source commit.' }
-    $fidelityRoot = $apiHeader.Directory.Parent.Parent.FullName
+    # Stage only the public headers needed by the bridge from the immutable SDK commit.
+    $headerRoot = Join-Path $work 'headers'
+    $headerManifest = @'
+1b711807c597630f4a8d2dfa2572a845c069829a|api/include/dx12/ffx_api_dx12.h
+5b518dc532a1cf7a89ee6cbac6ed10723ccb22c7|api/include/dx12/ffx_api_dx12.hpp
+484ec23fa38a34c9061451cffd9f420ec2f7c1e8|api/include/ffx_api.h
+bda66b2cee5eae0f0e24eec3d9fd80b6d3caa307|api/include/ffx_api.hpp
+ac05ec4bbd5d338643825d81c0ffccd5fbbd1c3e|api/include/ffx_api_loader.h
+07c0da20c8ae370caaa8bc674e7f22df83cbf163|api/include/ffx_api_types.h
+8bc71ca2628552aa544abc8b205f267713916d1c|framegeneration/include/dx12/ffx_api_framegeneration_dx12.h
+0fe46f0b08efbbc9481459c22370bb494bf56031|framegeneration/include/dx12/ffx_api_framegeneration_dx12.hpp
+5ca5486460744e4357e30d3d273d7f12019fb5b1|framegeneration/include/ffx_framegeneration.h
+baac01b2b5ec4ef220e62eb3fae26ef7784f25c1|framegeneration/include/ffx_framegeneration.hpp
+e7e514ddb6666753de3b14f720d8e6774339b0b9|framegeneration/include/ffx_framegeneration_api_types.h
+'@
+    foreach ($line in ($headerManifest -split "\r?\n")) {
+        if (-not $line.Trim()) { continue }
+        $parts = $line.Split('|', 2)
+        $expectedBlob = $parts[0]
+        $relative = $parts[1]
+        $dest = Join-Path $headerRoot $relative
+        New-Item -ItemType Directory -Path (Split-Path -Parent $dest) -Force | Out-Null
+        $headerUri = 'https://raw.githubusercontent.com/GPUOpen-LibrariesAndSDKs/FidelityFX-SDK/' + $SourceCommit + '/Kits/FidelityFX/' + $relative
+        Invoke-WebRequest -UseBasicParsing -Uri $headerUri -OutFile $dest
+        $actualBlob = (& git hash-object -- $dest).Trim()
+        if ($LASTEXITCODE -ne 0 -or $actualBlob -ne $expectedBlob) { throw ('FidelityFX header blob mismatch: ' + $relative) }
+    }
+    $fidelityRoot = $headerRoot
     if (Test-Path -LiteralPath $thirdParty) { Remove-Item -LiteralPath $thirdParty -Recurse -Force }
     New-Item -ItemType Directory -Path $thirdParty -Force | Out-Null
     Copy-Item -LiteralPath (Join-Path $fidelityRoot 'api') -Destination $thirdParty -Recurse -Force
