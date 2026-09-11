@@ -1,91 +1,83 @@
 #requires -Version 5.1
+[CmdletBinding()]
+param()
 $ErrorActionPreference = 'Stop'
-
 $Version = '2.14.1'
-$ArchiveSha256 = '92C4D954631A1710DA86CA3FA8D5034F2B9503838C95FC4AE977AE149319781B'
-$ReleaseUrl = 'https://github.com/NVIDIA-RTX/Streamline/releases/download/v2.14.1/streamline-sdk-v2.14.1.zip'
-$SdkRoot = Join-Path $PSScriptRoot 'third_party\streamline'
-$CacheRoot = Join-Path $env:LOCALAPPDATA 'ControlFG\Cache'
-$Archive = Join-Path $CacheRoot 'streamline-sdk-v2.14.1.zip'
-$ExtractRoot = Join-Path $CacheRoot 'streamline-sdk-v2.14.1'
-
-function Get-Sha256([string]$Path) {
-    return (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToUpperInvariant()
-}
-
+$Url = 'https://github.com/NVIDIA-RTX/Streamline/releases/download/v2.14.1/streamline-sdk-v2.14.1.zip'
+$ExpectedArchiveSHA256 = '92C4D954631A1710DA86CA3FA8D5034F2B9503838C95FC4AE977AE149319781B'
+$requiredBinaries = @('sl.interposer.dll','sl.common.dll','sl.pcl.dll','sl.reflex.dll','sl.dlss_g.dll','nvngx_dlssg.dll')
 try {
-    New-Item -ItemType Directory -Path $CacheRoot -Force | Out-Null
-
-    $needDownload = $true
-    if (Test-Path -LiteralPath $Archive) {
-        if ((Get-Sha256 $Archive) -eq $ArchiveSha256) { $needDownload = $false }
-        else { Remove-Item -LiteralPath $Archive -Force }
+    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+    $thirdParty = Join-Path $PSScriptRoot 'third_party\streamline'
+    $includeStage = Join-Path $thirdParty 'include'
+    $binStage = Join-Path $thirdParty 'bin'
+    $infoPath = Join-Path $thirdParty 'sdk-info.json'
+    if (Test-Path -LiteralPath $infoPath) {
+        try {
+            $existing = Get-Content -LiteralPath $infoPath -Raw | ConvertFrom-Json
+            $complete = ($existing.Version -eq $Version) -and (Test-Path -LiteralPath (Join-Path $includeStage 'sl.h'))
+            foreach ($name in $requiredBinaries) { $complete = $complete -and (Test-Path -LiteralPath (Join-Path $binStage $name)) }
+            if ($complete) {
+                Write-Host 'Streamline SDK 2.14.1 is already staged; hashes will be rechecked.'
+                foreach ($entry in $existing.Files) {
+                    $p = Join-Path $thirdParty $entry.Path
+                    if (-not (Test-Path -LiteralPath $p) -or (Get-FileHash -LiteralPath $p -Algorithm SHA256).Hash -ne $entry.SHA256) { throw ('Staged Streamline file changed: ' + $entry.Path) }
+                }
+                Write-Host 'PASS: existing staged SDK files match sdk-info.json.'
+                exit 0
+            }
+        } catch { Write-Host ('Existing staging is incomplete and will be replaced: ' + $_.Exception.Message) }
     }
 
-    if ($needDownload) {
-        Write-Host ('Downloading NVIDIA Streamline SDK ' + $Version + ' ...')
-        Invoke-WebRequest -Uri $ReleaseUrl -OutFile $Archive -UseBasicParsing
+    $work = Join-Path $PSScriptRoot 'third_party\_streamline_fetch'
+    $archive = Join-Path $work 'streamline-sdk-v2.14.1.zip'
+    $expanded = Join-Path $work 'expanded'
+    if (Test-Path -LiteralPath $work) { Remove-Item -LiteralPath $work -Recurse -Force }
+    New-Item -ItemType Directory -Path $expanded -Force | Out-Null
+    Write-Host ('Downloading official NVIDIA Streamline SDK ' + $Version + ' (~276 MB)...')
+    Invoke-WebRequest -UseBasicParsing -Uri $Url -OutFile $archive
+    $archiveHash = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash
+    if ($archiveHash -ne $ExpectedArchiveSHA256) { throw ('Streamline release ZIP hash mismatch. Expected ' + $ExpectedArchiveSHA256 + ' got ' + $archiveHash) }
+    Write-Host 'PASS: official release ZIP SHA-256 matches NVIDIA GitHub release metadata.'
+    Expand-Archive -LiteralPath $archive -DestinationPath $expanded -Force
+
+    $slHeader = Get-ChildItem -LiteralPath $expanded -Filter 'sl.h' -File -Recurse |
+        Where-Object { $_.Directory.Name -eq 'include' } | Select-Object -First 1
+    if (-not $slHeader) { throw 'Could not locate include\sl.h in the official SDK archive.' }
+    $sdkRoot = $slHeader.Directory.Parent.FullName
+    $sdkBin = Join-Path $sdkRoot 'bin\x64'
+    if (-not (Test-Path -LiteralPath $sdkBin)) { throw ('Could not locate official x64 production bin folder: ' + $sdkBin) }
+
+    if (Test-Path -LiteralPath $thirdParty) { Remove-Item -LiteralPath $thirdParty -Recurse -Force }
+    New-Item -ItemType Directory -Path $includeStage -Force | Out-Null
+    New-Item -ItemType Directory -Path $binStage -Force | Out-Null
+    Copy-Item -LiteralPath (Join-Path $slHeader.Directory.FullName '*') -Destination $includeStage -Force -ErrorAction SilentlyContinue
+    # LiteralPath does not expand '*'; copy headers explicitly for PowerShell 5.1.
+    Get-ChildItem -LiteralPath $slHeader.Directory.FullName -File | Copy-Item -Destination $includeStage -Force
+
+    $fileRecords = @()
+    foreach ($name in $requiredBinaries) {
+        $source = Join-Path $sdkBin $name
+        if (-not (Test-Path -LiteralPath $source)) { throw ('Required production Streamline binary is missing from official SDK: ' + $name) }
+        $dest = Join-Path $binStage $name
+        Copy-Item -LiteralPath $source -Destination $dest -Force
+        $fileRecords += [ordered]@{ Path = ('bin/' + $name); SHA256 = (Get-FileHash -LiteralPath $dest -Algorithm SHA256).Hash; Size = (Get-Item -LiteralPath $dest).Length }
     }
-
-    $actualArchiveHash = Get-Sha256 $Archive
-    if ($actualArchiveHash -ne $ArchiveSha256) {
-        throw ('Streamline archive SHA-256 mismatch. Expected ' + $ArchiveSha256 + ', got ' + $actualArchiveHash)
-    }
-
-    if (Test-Path -LiteralPath $ExtractRoot) { Remove-Item -LiteralPath $ExtractRoot -Recurse -Force }
-    New-Item -ItemType Directory -Path $ExtractRoot -Force | Out-Null
-    Expand-Archive -LiteralPath $Archive -DestinationPath $ExtractRoot -Force
-
-    $sourceRoot = Get-ChildItem -LiteralPath $ExtractRoot -Directory | Select-Object -First 1
-    if (-not $sourceRoot) { throw 'The Streamline archive did not contain an SDK directory.' }
-
-    if (Test-Path -LiteralPath $SdkRoot) { Remove-Item -LiteralPath $SdkRoot -Recurse -Force }
-    New-Item -ItemType Directory -Path (Join-Path $SdkRoot 'include'), (Join-Path $SdkRoot 'bin') -Force | Out-Null
-
-    $includeNames = @('sl.h','sl_consts.h','sl_core_api.h','sl_core_types.h','sl_dlss_g.h','sl_helpers.h','sl_hooks.h','sl_pcl.h','sl_reflex.h','sl_result.h','sl_struct.h','sl_version.h')
-    foreach ($name in $includeNames) {
-        $source = Join-Path $sourceRoot.FullName ('include\' + $name)
-        if (-not (Test-Path -LiteralPath $source)) { throw ('Missing Streamline include: ' + $name) }
-        Copy-Item -LiteralPath $source -Destination (Join-Path $SdkRoot ('include\' + $name)) -Force
-    }
-
-    $runtimeNames = @('sl.interposer.dll','sl.common.dll','sl.pcl.dll','sl.reflex.dll','sl.dlss_g.dll','nvngx_dlssg.dll')
-    $binCandidates = @(
-        (Join-Path $sourceRoot.FullName 'bin\x64'),
-        (Join-Path $sourceRoot.FullName 'bin\x64\Release'),
-        (Join-Path $sourceRoot.FullName 'bin')
-    )
-    foreach ($name in $runtimeNames) {
-        $found = $null
-        foreach ($dir in $binCandidates) {
-            $candidate = Join-Path $dir $name
-            if (Test-Path -LiteralPath $candidate) { $found = $candidate; break }
-        }
-        if (-not $found) {
-            $match = Get-ChildItem -LiteralPath $sourceRoot.FullName -Recurse -File -Filter $name -ErrorAction SilentlyContinue | Where-Object { $_.FullName -notmatch '\\debug\\' } | Select-Object -First 1
-            if ($match) { $found = $match.FullName }
-        }
-        if (-not $found) { throw ('Missing Streamline runtime: ' + $name) }
-        Copy-Item -LiteralPath $found -Destination (Join-Path $SdkRoot ('bin\' + $name)) -Force
-    }
-
-    $records = @()
-    foreach ($name in $includeNames) {
-        $p = Join-Path $SdkRoot ('include\' + $name)
-        $records += [ordered]@{ Path=('include/' + $name); SHA256=(Get-Sha256 $p) }
-    }
-    foreach ($name in $runtimeNames) {
-        $p = Join-Path $SdkRoot ('bin\' + $name)
-        $records += [ordered]@{ Path=('bin/' + $name); SHA256=(Get-Sha256 $p) }
+    foreach ($header in Get-ChildItem -LiteralPath $includeStage -File) {
+        $fileRecords += [ordered]@{ Path = ('include/' + $header.Name); SHA256 = (Get-FileHash -LiteralPath $header.FullName -Algorithm SHA256).Hash; Size = $header.Length }
     }
     [ordered]@{
-        Version=$Version
-        SourceUrl=$ReleaseUrl
-        SourceArchiveSHA256=$ArchiveSha256
-        Files=$records
-    } | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $SdkRoot 'sdk-info.json') -Encoding UTF8
-
-    Write-Host ('PASS: staged and hashed NVIDIA Streamline SDK ' + $Version + ' in ' + $SdkRoot)
+        Version = $Version
+        Source = 'NVIDIA-RTX/Streamline official GitHub release'
+        SourceURL = $Url
+        SourceArchiveSHA256 = $ExpectedArchiveSHA256
+        Architecture = 'x64'
+        Configuration = 'Production'
+        StagedUtc = [DateTime]::UtcNow.ToString('o')
+        Files = $fileRecords
+    } | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $infoPath -Encoding UTF8
+    Remove-Item -LiteralPath $work -Recurse -Force
+    Write-Host ('PASS: staged ' + $requiredBinaries.Count + ' production runtime DLLs and official SDK headers under third_party\streamline.')
 } catch {
     Write-Error $_
     exit 1
