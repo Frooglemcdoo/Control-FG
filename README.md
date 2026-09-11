@@ -32,6 +32,35 @@ For the prebuilt Nexus/GitHub release, see [INSTALL.md](INSTALL.md). The short v
 
 See [BUILDING.md](BUILDING.md). `Build.cmd` downloads and hash-verifies the pinned official Streamline 2.14.1 SDK, compiles the x64 DXGI proxy, runs ABI/export/smoke checks, and creates the release ZIPs.
 
+
+
+## Screenshots
+
+### Dynamic Multi Frame Generation
+
+![Dynamic MFG](screenshots/hero-dynamic-5x.png)
+
+Dynamic Multi Frame Generation automatically adjusts the generated-frame count toward your target output FPS.
+
+### Fixed 6× Multi Frame Generation
+
+![6x FG](screenshots/fixed-6x.png)
+
+Up to 6× Multi Frame Generation on supported hardware.
+
+### Fixed 4× Multi Frame Generation
+
+![4x FG](screenshots/fixed-4x.png)
+
+Selectable fixed multipliers from 2× through 6×.
+
+### RTX 40-Series Compatible 2×
+
+![2x FG](screenshots/fixed-2x.png)
+
+GeForce RTX 40-series GPUs are intentionally limited to Off and 2×.
+
+
 ## Troubleshooting
 
 See [TROUBLESHOOTING.md](TROUBLESHOOTING.md). The most common issues are launching the DX11 executable, using an unsupported game build, an outdated NVIDIA driver/HAGS configuration, or another mod already occupying `dxgi.dll` in the Control directory.
