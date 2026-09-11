@@ -6,7 +6,7 @@
 
 ## Short description
 
-Adds engine-aware NVIDIA DLSS Frame Generation to Control (DX12), including fixed 2x–6x MFG, Dynamic MFG, live HDR handling, persistent settings, and a Control-styled F10 overlay.
+Adds engine-aware NVIDIA DLSS Frame Generation to Control (DX12), including fixed 2x–6x MFG, Dynamic MFG, live HDR handling, stable HUD/UI separation, persistent settings, and a Control-styled F10 overlay.
 
 ## Main description
 
@@ -18,36 +18,56 @@ Unlike a generic FG translation layer, Control FG is built specifically around *
 
 That makes Control FG less portable than broad compatibility tools, but gives it a much deeper, game-aware integration in a title that never originally shipped with Frame Generation.
 
+### Stable HUD/UI — one of Control FG's biggest advantages
+
+Control FG captures Control's full-resolution scene **immediately before the game draws its HUD and UI**. The Frame Generation backend therefore receives a true HUD-less scene instead of having to treat objective text, health/energy bars, prompts, icons, and menus as moving scene content.
+
+This is a major difference from screen-space Frame Generation solutions such as **Lossless Scaling**, which only see the final composited image, and from generic injection paths such as **OptiFG** when a true HUD-less resource is not available. Those broader solutions may need to infer or heuristically reconstruct the HUD-less image. Control FG has a build-locked point inside Control's renderer where the actual pre-UI scene is available directly.
+
+In current Control testing this produces a **very stable HUD and UI during camera movement**, without the large UI smear/ghost trails that can appear when the HUD is included in Frame Generation.
+
 ### What makes this different
 
-Universal tools such as OptiScaler-style translation layers or ReShade add-ons are designed first for compatibility across many games. They are strongest when a game already exposes the standardized resources, callbacks, and timing needed by an upscaler or Frame Generation API.
-
-Control FG takes the opposite approach. It identifies and feeds the same kinds of engine data a native FG implementation would normally receive:
+Control FG identifies and feeds the same kinds of engine data a native FG implementation would normally receive:
 
 - Control's actual renderer frame boundaries.
 - Depth and motion-vector resources from the game's existing DLSS path.
 - Camera transform, field of view, jitter, and reset/discontinuity state.
-- A genuine pre-UI / HUD-less scene surface for cleaner generated frames.
+- A genuine pre-UI / HUD-less scene surface.
 - HDR state and live presentation transitions.
 - Game-specific synchronization and presentation behavior.
 
-This is not meant to replace OptiScaler, ReShade, or other broad graphics frameworks—the design goals are different. Those projects prioritize **wide compatibility and reusable interception**; Control FG prioritizes **deep integration with Control itself**.
+This is not meant to replace OptiScaler, ReShade, Lossless Scaling, or other broad graphics frameworks—the design goals are different. Those projects prioritize **wide compatibility and reusable interception**; Control FG prioritizes **deep integration with Control itself**.
 
 ### Features
 
-- Fixed **2x, 3x, 4x, 5x and 6x** Frame Generation / Multi Frame Generation on supported hardware.
+- Fixed **2x, 3x, 4x, 5x and 6x** Frame Generation / Multi Frame Generation on supported NVIDIA hardware.
 - **Dynamic MFG** that automatically changes the multiplier to approach a target output frame rate.
 - Dynamic **Auto** target based on the game monitor's refresh rate, or a **Manual 30–1000 FPS** target slider.
 - **HDR support**, including switching HDR off and back on during gameplay.
 - **F10 Control-style overlay** with mode, effective multiplier, current FPS, HDR state and GPU maximum.
+- **Stable HUD/UI handling** using a real Control pre-UI scene capture.
 - Overlay starts hidden and settings are saved automatically.
-- **RTX 40-series:** intentionally limited to **Off + 2x**; higher MFG modes and Dynamic are greyed out.
+- **RTX 40-series:** intentionally limited to **Off + 2x** in the current public DLSS FG release; higher MFG modes and Dynamic are greyed out.
+
+### FSR Frame Generation expansion — in development
+
+Control FG's AMD FSR Frame Generation backend is being developed using the same game-specific depth, motion-vector, camera, timing, and HUD-less inputs.
+
+The target hardware layout is:
+
+- **RTX 20-series:** FSR Frame Generation.
+- **RTX 30-series:** FSR Frame Generation.
+- **RTX 40-series:** selectable DLSS Frame Generation or FSR Frame Generation.
+- **RTX 50-series:** selectable DLSS Frame Generation / Multi Frame Generation or FSR Frame Generation.
+
+The goal is to expose the backend choice directly in the Control FG overlay. This is still development work and is not part of the current public Nexus release until the unified runtime selector is complete.
 
 ### Requirements
 
 - Control on **Steam** — currently verified against build **21225456**.
 - Run the game in **DirectX 12** mode.
-- NVIDIA RTX GPU with DLSS Frame Generation support.
+- Current public release: NVIDIA RTX GPU with DLSS Frame Generation support.
 - Current NVIDIA driver. If Frame Generation is unavailable, verify Hardware-accelerated GPU scheduling (HAGS) is enabled.
 
 ### Installation
@@ -87,4 +107,4 @@ If F10 does not open the overlay, first confirm you launched DX12 and that `dxgi
 
 ### Credits / disclaimer
 
-Uses **NVIDIA Streamline 2.14.1**. Control FG is an unofficial fan-made mod and is not affiliated with or endorsed by Remedy Entertainment, 505 Games, NVIDIA, Valve, Nexus Mods, OptiScaler, or ReShade. *Control* and related trademarks/assets belong to their respective owners.
+Uses **NVIDIA Streamline 2.14.1** in the current public release. Control FG is an unofficial fan-made mod and is not affiliated with or endorsed by Remedy Entertainment, 505 Games, NVIDIA, AMD, Valve, Nexus Mods, OptiScaler, ReShade, or Lossless Scaling. *Control* and related trademarks/assets belong to their respective owners.
