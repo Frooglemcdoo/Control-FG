@@ -45,7 +45,10 @@ try {
     Invoke-WebRequest -UseBasicParsing -Uri $SourceUrl -OutFile $sourceArchive
     New-Item -ItemType Directory -Path $sourceExpanded -Force | Out-Null
     Expand-Archive -LiteralPath $sourceArchive -DestinationPath $sourceExpanded -Force
-    $apiHeader = Get-ChildItem -LiteralPath $sourceExpanded -Filter 'ffx_api.h' -File -Recurse | Where-Object { $_.FullName -match '[\\/]Kits[\\/]FidelityFX[\\/]api[\\/]include[\\/]ffx_api\.h    if (Test-Path -LiteralPath $thirdParty) { Remove-Item -LiteralPath $thirdParty -Recurse -Force }
+    $apiHeader = Get-ChildItem -LiteralPath $sourceExpanded -Filter 'ffx_api.h' -File -Recurse | Where-Object { $_.FullName -match '[\\/]Kits[\\/]FidelityFX[\\/]api[\\/]include[\\/]ffx_api\.h$' } | Select-Object -First 1
+    if (-not $apiHeader) { throw 'Could not locate ffx_api.h in pinned FidelityFX source commit.' }
+    $fidelityRoot = $apiHeader.Directory.Parent.Parent.FullName
+    if (Test-Path -LiteralPath $thirdParty) { Remove-Item -LiteralPath $thirdParty -Recurse -Force }
     New-Item -ItemType Directory -Path $thirdParty -Force | Out-Null
     Copy-Item -LiteralPath (Join-Path $fidelityRoot 'api') -Destination $thirdParty -Recurse -Force
     Copy-Item -LiteralPath (Join-Path $fidelityRoot 'framegeneration') -Destination $thirdParty -Recurse -Force
