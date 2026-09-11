@@ -46,7 +46,7 @@ try {
         $uri = 'https://raw.githubusercontent.com/NVIDIA-RTX/Streamline/' + $SourceCommit + '/include/' + $name
         $dest = Join-Path $includeStage $name
         Invoke-WebRequest -UseBasicParsing -Uri $uri -OutFile $dest
-        $actualBlob = (& git hash-object -- $dest).Trim()
+        $actualBlob = (& git hash-object --no-filters -- $dest).Trim()
         if ($LASTEXITCODE -ne 0 -or $actualBlob -ne $expectedBlob) { throw ('Streamline header blob mismatch: ' + $name) }
         $records += [ordered]@{ Path=('include/' + $name); GitBlob=$actualBlob; SHA256=(Get-FileHash -LiteralPath $dest -Algorithm SHA256).Hash; Size=(Get-Item -LiteralPath $dest).Length }
     }

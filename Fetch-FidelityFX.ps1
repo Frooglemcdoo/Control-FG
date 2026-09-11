@@ -50,7 +50,7 @@ try {
         New-Item -ItemType Directory -Path (Split-Path -Parent $dest) -Force | Out-Null
         $uri = 'https://raw.githubusercontent.com/GPUOpen-LibrariesAndSDKs/FidelityFX-SDK/' + $SourceCommit + '/Kits/FidelityFX/' + $relative
         Invoke-WebRequest -UseBasicParsing -Uri $uri -OutFile $dest
-        $actualBlob = (& git hash-object -- $dest).Trim()
+        $actualBlob = (& git hash-object --no-filters -- $dest).Trim()
         if ($LASTEXITCODE -ne 0 -or $actualBlob -ne $expectedBlob) { throw ('FidelityFX header blob mismatch: ' + $relative) }
         $records += [ordered]@{ Path=$relative; GitBlob=$actualBlob; SHA256=(Get-FileHash -LiteralPath $dest -Algorithm SHA256).Hash; Size=(Get-Item -LiteralPath $dest).Length }
     }
@@ -64,7 +64,7 @@ try {
         $dest = Join-Path $thirdParty ('bin\' + $name)
         $uri = 'https://raw.githubusercontent.com/GPUOpen-LibrariesAndSDKs/FidelityFX-SDK/' + $SourceCommit + '/Kits/FidelityFX/signedbin/' + $name
         Invoke-WebRequest -UseBasicParsing -Uri $uri -OutFile $dest
-        $actualBlob = (& git hash-object -- $dest).Trim()
+        $actualBlob = (& git hash-object --no-filters -- $dest).Trim()
         if ($LASTEXITCODE -ne 0 -or $actualBlob -ne $expectedBlob) { throw ('FidelityFX runtime blob mismatch: ' + $name) }
         $signature = Get-AuthenticodeSignature -LiteralPath $dest
         if ($signature.Status -ne 'Valid') { throw ('FidelityFX runtime signature is not valid: ' + $name + ' (' + $signature.Status + ')') }
