@@ -1078,6 +1078,14 @@ public:
     HRESULT STDMETHODCALLTYPE CreateSwapChain(IUnknown* pDevice, DXGI_SWAP_CHAIN_DESC* pDesc, IDXGISwapChain** ppSwapChain) override {
         if (!ppSwapChain) return E_POINTER;
         *ppSwapChain = nullptr;
+#ifdef CONTROLFG_FSR3_BRINGUP
+        if (IsFSR3BackendSelected()) {
+            const HRESULT fsrHr = CreateFSR3SwapChainLegacy(inner_, pDevice, pDesc, ppSwapChain);
+            if (SUCCEEDED(fsrHr)) return fsrHr;
+            Log("FSR3_SWAPCHAIN_FALLBACK entrypoint=CreateSwapChain hr=0x%08lX native_retry=1", static_cast<unsigned long>(fsrHr));
+            return inner_->CreateSwapChain(pDevice, pDesc, ppSwapChain);
+        }
+#endif
         if (!pDesc || !ShouldWatchHdr10BridgeTransition(pDesc->BufferDesc.Format) || !GetHdr10BridgeDirectQueue())
             return inner_->CreateSwapChain(pDevice, pDesc, ppSwapChain);
 
@@ -1124,6 +1132,14 @@ public:
         const DXGI_SWAP_CHAIN_FULLSCREEN_DESC* pFullscreenDesc, IDXGIOutput* pRestrictToOutput, IDXGISwapChain1** ppSwapChain) override {
         if (!ppSwapChain) return E_POINTER;
         *ppSwapChain = nullptr;
+#ifdef CONTROLFG_FSR3_BRINGUP
+        if (IsFSR3BackendSelected()) {
+            const HRESULT fsrHr = CreateFSR3SwapChainForHwnd(inner_, pDevice, hWnd, pDesc, pFullscreenDesc, pRestrictToOutput, ppSwapChain);
+            if (SUCCEEDED(fsrHr)) return fsrHr;
+            Log("FSR3_SWAPCHAIN_FALLBACK entrypoint=CreateSwapChainForHwnd hr=0x%08lX native_retry=1", static_cast<unsigned long>(fsrHr));
+            return inner_->CreateSwapChainForHwnd(pDevice, hWnd, pDesc, pFullscreenDesc, pRestrictToOutput, ppSwapChain);
+        }
+#endif
         if (!pDesc || !ShouldWatchHdr10BridgeTransition(pDesc->Format) || !GetHdr10BridgeDirectQueue())
             return inner_->CreateSwapChainForHwnd(pDevice, hWnd, pDesc, pFullscreenDesc, pRestrictToOutput, ppSwapChain);
 
@@ -1270,7 +1286,7 @@ private:
 
 static bool WrapFactoryForHdr10Bridge(void** factory, REFIID requestedIid, const char* entrypoint) noexcept {
     if (!factory || !*factory) return false;
-    if (Hdr10BridgeDisabledByEnvironment()) {
+    if (Hdr10BridgeDisabledByEnvironment() && !IsFSR3BackendSelected()) {
         Log("HDR10_FACTORY_WRAP_SKIP entrypoint=%s reason=disabled_by_environment", entrypoint ? entrypoint : "unknown");
         return false;
     }

@@ -113,6 +113,11 @@ static bool HashMatches(HMODULE module, const char* expected) {
 }
 
 #include "streamline_bridge.h"
+#ifdef CONTROLFG_FSR3_BRINGUP
+static bool IsFSR3BackendSelected() noexcept;
+static HRESULT CreateFSR3SwapChainForHwnd(IDXGIFactory7*, IUnknown*, HWND, const DXGI_SWAP_CHAIN_DESC1*, const DXGI_SWAP_CHAIN_FULLSCREEN_DESC*, IDXGIOutput*, IDXGISwapChain1**) noexcept;
+static HRESULT CreateFSR3SwapChainLegacy(IDXGIFactory7*, IUnknown*, DXGI_SWAP_CHAIN_DESC*, IDXGISwapChain**) noexcept;
+#endif
 #include "hdr10_bridge.h"
 #include "fg_overlay.h"
 
@@ -292,6 +297,7 @@ static bool ReadEngineCommandContext(ID3D12Resource* candidate, EngineCommandCon
 #include "semantic_capture.h"
 #include "camera_capture.h"
 #include "streamline_frame.h"
+#include "fsr3_bridge.h"
 
 static void ExtendPathTrace(unsigned long long present, unsigned long long frames) noexcept {
     const unsigned long long target = present + frames;
@@ -407,6 +413,9 @@ static bool HookAA(void* t1, void* t2, void* t3, void* t4, void* t5, void* t6,
     if (result) {
         SubmitSLCommonConstantsForAA(call, currentPresent, slCameraKnown, slCamera, resetKnown, resetValue);
         SubmitSLDepthMotionTagsForAA(call, currentPresent, textures, _countof(textures));
+#ifdef CONTROLFG_FSR3_BRINGUP
+        SubmitFSR3PrepareForAA(call, currentPresent, textures, _countof(textures), slCameraKnown, slCamera, resetKnown, resetValue);
+#endif
         if (!slCameraKnown && (call <= 12 || (call % 240) == 0)) {
             Log("SL_CAMERA_FRAME_UNAVAILABLE call=%llu present=%llu reason=%s exception=0x%08lX",
                 call, currentPresent, slCameraReason ? slCameraReason : "unknown", slCameraFault);
@@ -467,6 +476,9 @@ static void HookPresent() {
     // gate and native Present so the first enabled FG frame satisfies it too.
     TouchSLCurrentBackBufferIndex(count);
     sl::FrameToken* slPresentToken = BeginSLPresentFrame(count);
+#ifdef CONTROLFG_FSR3_BRINGUP
+    ConfigureFSR3ForPresent(count);
+#endif
     originalPresent();
     EndSLPresentFrame(count, slPresentToken);
     if (trace) Log("PRESENT_RETURN count=%llu aa=%llu begin=%llu hud_dispatch=%llu hud_render=%llu", count, aaCount.load(), beginCount.load(), hudCount.load(), hudRenderCount.load());
@@ -788,8 +800,12 @@ static BOOL CALLBACK Configure(PINIT_ONCE, PVOID, PVOID*) noexcept {
             return TRUE;
         }
         Log("HOOK_INSTALLED label=CONTROL_COMMAND_QUEUE_CTOR");
+#ifndef CONTROLFG_FSR3_BRINGUP
         StartFGOverlay();
         Log("PROBE_ACTIVE hooks=9 fg_activation=resource_gated presentation_proxy=active common_constants=per_dlss_frame frame_tokens=begin_indexed pcl_present_markers=frame_gated reflex_mode=low_latency reflex_sleep=active streamline_sdk=2.14.1 streamline_bootstrap=deferred_post_native_factory bootstrap_state=%u semantic_capture=post_eval swapchain_capture=mode_change_aware camera_capture=pre_aa hud_render_hook=native_slot17 hud_rtt_hook=two_native_texture_ctor command_context=pre_ui_readonly_tls_sentinel_safe host_device=native queue_route=exact_constructor_only control_ngx_feature_path=ControlFGStreamline streamline_ngx_paths=runtime_plus_game device_bind=early_before_control_ngx factory_upgrade=presentation_only swapchain_upgrade=via_factory command_queue_proxy=exact_ctor_private_device features_requested=3 features=reflex,pcl,dlssg dlssg_loaded_expected=1 resource_tags=depth_mv_plus_hudless_sdr hdr10_resource_tags=depth_mv_only_optional_hudless_off backbuffer_index=every_present fg_baseline=working mfg_mode=fixed_plus_native_dynamic default_multiplier=4x max_selector=6x dynamic_mode=native_eDynamic dynamic_auto_target=explicit_game_monitor_refresh dynamic_manual_target=30-1000_fps dynamic_vsync_policy=syncinterval0_while_active dynamic_reflex_limiter=target_fps dynamic_target_ui=auto_manual_thick_slider overlay=win32_layered_control_native_menu persistence=localappdata_ini overlay_status=selected,effective,current_fps,hdr,capability overlay_title=embedded_control_fg_logo_control_native overlay_font=bahnschrift_semicondensed overlay_selected=white_fill_black_text overlay_sections=control_red selector=off,dynamic,2x,3x,4x,5x,6x gpu_policy=rtx40_off_plus_2x_only transition_telemetry=segment_confirmed hdr10_bridge=fp16_scrgb_shadow_to_rgb10_pq project_id=305914b8-cf5b-4535-8e53-5589bf8cefa5 device_set=%u hdr_query=enabled transition_capture=enabled", slBootstrapState.load(), slDeviceConfigured.load());
+#else
+        Log("PROBE_ACTIVE backend=fsr3 fixed_2x_sdr_bringup=1 fidelityfx_sdk=2.3.0 fsr3_provider=3.1.6 swapchain=3.1.7 streamline_presentation=disabled sync_compute=1 hdr_generation=disabled fail_open=1");
+#endif
     } catch (...) {
         Log("PROBE_DISABLED initialization_exception");
     }
@@ -818,11 +834,17 @@ extern "C" HRESULT WINAPI ProbeCreateDXGIFactory(REFIID iid, void** factory) {
     StartProbe();
     const HRESULT hr = fn(iid, factory);
     if (SUCCEEDED(hr)) {
+#ifdef CONTROLFG_FSR3_BRINGUP
+        const bool core = InitializeFSR3Core("CreateDXGIFactory");
+        const bool wrapped = core ? WrapFactoryForHdr10Bridge(factory, iid, "CreateDXGIFactory") : false;
+        Log("FSR3_FACTORY_RETURN entrypoint=CreateDXGIFactory factory=%p core=%u factory_wrap=%u streamline_upgrade=0", factory ? *factory : nullptr, unsigned(core), unsigned(wrapped));
+#else
         Log("SL_FACTORY_NATIVE entrypoint=CreateDXGIFactory factory=%p isolation=early_bind_native_interface bootstrap_state=%u", factory ? *factory : nullptr, slBootstrapState.load());
         InitializeStreamlineCoreAfterFactory("CreateDXGIFactory");
         const bool upgraded = UpgradeFactoryForPresentation(factory, "CreateDXGIFactory");
         const bool hdrWrapped = upgraded ? WrapFactoryForHdr10Bridge(factory, iid, "CreateDXGIFactory") : false;
         Log("SL_FACTORY_RETURN entrypoint=CreateDXGIFactory factory=%p proxy_upgrade=%u hdr_factory_wrap=%u", factory ? *factory : nullptr, unsigned(upgraded), unsigned(hdrWrapped));
+#endif
     }
     return hr;
 }
@@ -832,11 +854,17 @@ extern "C" HRESULT WINAPI ProbeCreateDXGIFactory1(REFIID iid, void** factory) {
     StartProbe();
     const HRESULT hr = fn(iid, factory);
     if (SUCCEEDED(hr)) {
+#ifdef CONTROLFG_FSR3_BRINGUP
+        const bool core = InitializeFSR3Core("CreateDXGIFactory1");
+        const bool wrapped = core ? WrapFactoryForHdr10Bridge(factory, iid, "CreateDXGIFactory1") : false;
+        Log("FSR3_FACTORY_RETURN entrypoint=CreateDXGIFactory1 factory=%p core=%u factory_wrap=%u streamline_upgrade=0", factory ? *factory : nullptr, unsigned(core), unsigned(wrapped));
+#else
         Log("SL_FACTORY_NATIVE entrypoint=CreateDXGIFactory1 factory=%p isolation=early_bind_native_interface bootstrap_state=%u", factory ? *factory : nullptr, slBootstrapState.load());
         InitializeStreamlineCoreAfterFactory("CreateDXGIFactory1");
         const bool upgraded = UpgradeFactoryForPresentation(factory, "CreateDXGIFactory1");
         const bool hdrWrapped = upgraded ? WrapFactoryForHdr10Bridge(factory, iid, "CreateDXGIFactory1") : false;
         Log("SL_FACTORY_RETURN entrypoint=CreateDXGIFactory1 factory=%p proxy_upgrade=%u hdr_factory_wrap=%u", factory ? *factory : nullptr, unsigned(upgraded), unsigned(hdrWrapped));
+#endif
     }
     return hr;
 }
@@ -846,11 +874,17 @@ extern "C" HRESULT WINAPI ProbeCreateDXGIFactory2(UINT flags, REFIID iid, void**
     StartProbe();
     const HRESULT hr = fn(flags, iid, factory);
     if (SUCCEEDED(hr)) {
+#ifdef CONTROLFG_FSR3_BRINGUP
+        const bool core = InitializeFSR3Core("CreateDXGIFactory2");
+        const bool wrapped = core ? WrapFactoryForHdr10Bridge(factory, iid, "CreateDXGIFactory2") : false;
+        Log("FSR3_FACTORY_RETURN entrypoint=CreateDXGIFactory2 factory=%p core=%u factory_wrap=%u streamline_upgrade=0", factory ? *factory : nullptr, unsigned(core), unsigned(wrapped));
+#else
         Log("SL_FACTORY_NATIVE entrypoint=CreateDXGIFactory2 factory=%p isolation=early_bind_native_interface bootstrap_state=%u", factory ? *factory : nullptr, slBootstrapState.load());
         InitializeStreamlineCoreAfterFactory("CreateDXGIFactory2");
         const bool upgraded = UpgradeFactoryForPresentation(factory, "CreateDXGIFactory2");
         const bool hdrWrapped = upgraded ? WrapFactoryForHdr10Bridge(factory, iid, "CreateDXGIFactory2") : false;
         Log("SL_FACTORY_RETURN entrypoint=CreateDXGIFactory2 factory=%p proxy_upgrade=%u hdr_factory_wrap=%u", factory ? *factory : nullptr, unsigned(upgraded), unsigned(hdrWrapped));
+#endif
     }
     return hr;
 }

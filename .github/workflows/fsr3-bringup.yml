@@ -1,0 +1,26 @@
+name: Build FSR3 bring-up
+on:
+  push:
+    branches:
+      - feature/fsr3-frame-generation
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: windows-2025
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and verify FSR3 alpha
+        shell: cmd
+        run: |
+          set CONTROLFG_CI=1
+          call Build-FSR3.cmd
+      - name: Upload FSR3 test package
+        uses: actions/upload-artifact@v4
+        with:
+          name: Control-FG-FSR3-v1.1.0-alpha1
+          path: |
+            release/Control-FG-FSR3-v1.1.0-alpha1.zip
+            Build-FSR3.log
+            build/fsr3-build-validation.json
+          if-no-files-found: error
