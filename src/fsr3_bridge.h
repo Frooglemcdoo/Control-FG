@@ -144,7 +144,7 @@ static bool SelectFSR3Provider(ID3D12Device* device) noexcept {
     ffxQueryDescGetVersions query{}; query.header.type=FFX_API_QUERY_DESC_TYPE_GET_VERSIONS; query.createDescType=FFX_API_CREATE_CONTEXT_DESC_TYPE_FRAMEGENERATION; query.device=device;
     uint64_t count=0; query.outputCount=&count; auto result=ffxQueryApi(nullptr,&query.header);
     if(result!=FFX_API_RETURN_OK||!count||count>64){Log("FSR3_PROVIDER_QUERY_FAILED result=%u count=%llu",result,count);return false;}
-    std::vector<uint64_t> ids{size_t(count)}; std::vector<const char*> names{size_t(count)};
+    std::vector<uint64_t> ids(static_cast<size_t>(count)); std::vector<const char*> names(static_cast<size_t>(count));
     query.versionIds=ids.data();query.versionNames=names.data();result=ffxQueryApi(nullptr,&query.header);
     if(result!=FFX_API_RETURN_OK)return false;
     for(uint64_t i=0;i<count;++i){const char* name=names[size_t(i)]?names[size_t(i)]:"(null)";Log("FSR3_PROVIDER index=%llu id=%llu name=%s",i,ids[size_t(i)],name);
