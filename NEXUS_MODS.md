@@ -6,13 +6,32 @@
 
 ## Short description
 
-Adds NVIDIA DLSS Frame Generation to Control (DX12), including fixed 2x–6x MFG, Dynamic MFG, live HDR handling, persistent settings, and a Control-styled F10 overlay.
+Adds engine-aware NVIDIA DLSS Frame Generation to Control (DX12), including fixed 2x–6x MFG, Dynamic MFG, live HDR handling, persistent settings, and a Control-styled F10 overlay.
 
 ## Main description
 
 ### Control FG
 
 Control FG brings NVIDIA DLSS Frame Generation to the DirectX 12 version of **Control** with a native-looking in-game configuration overlay.
+
+Unlike a generic FG translation layer, Control FG is built specifically around **Control's renderer**. Control does not provide an existing native Frame Generation path for the mod to simply translate. Instead, the mod reconstructs the inputs FG needs directly from the game: renderer frame boundaries, depth and motion vectors, camera data, jitter/reset state, a real pre-UI scene surface, HDR state, and presentation timing.
+
+That makes Control FG less portable than broad compatibility tools, but gives it a much deeper, game-aware integration in a title that never originally shipped with Frame Generation.
+
+### What makes this different
+
+Universal tools such as OptiScaler-style translation layers or ReShade add-ons are designed first for compatibility across many games. They are strongest when a game already exposes the standardized resources, callbacks, and timing needed by an upscaler or Frame Generation API.
+
+Control FG takes the opposite approach. It identifies and feeds the same kinds of engine data a native FG implementation would normally receive:
+
+- Control's actual renderer frame boundaries.
+- Depth and motion-vector resources from the game's existing DLSS path.
+- Camera transform, field of view, jitter, and reset/discontinuity state.
+- A genuine pre-UI / HUD-less scene surface for cleaner generated frames.
+- HDR state and live presentation transitions.
+- Game-specific synchronization and presentation behavior.
+
+This is not meant to replace OptiScaler, ReShade, or other broad graphics frameworks—the design goals are different. Those projects prioritize **wide compatibility and reusable interception**; Control FG prioritizes **deep integration with Control itself**.
 
 ### Features
 
@@ -68,4 +87,4 @@ If F10 does not open the overlay, first confirm you launched DX12 and that `dxgi
 
 ### Credits / disclaimer
 
-Uses **NVIDIA Streamline 2.14.1**. Control FG is an unofficial fan-made mod and is not affiliated with or endorsed by Remedy Entertainment, 505 Games, NVIDIA, Valve, or Nexus Mods. *Control* and related trademarks/assets belong to their respective owners.
+Uses **NVIDIA Streamline 2.14.1**. Control FG is an unofficial fan-made mod and is not affiliated with or endorsed by Remedy Entertainment, 505 Games, NVIDIA, Valve, Nexus Mods, OptiScaler, or ReShade. *Control* and related trademarks/assets belong to their respective owners.
