@@ -4,6 +4,8 @@
 
 **Control FG** adds NVIDIA DLSS Frame Generation to the DirectX 12 version of Remedy Entertainment's *Control*, including fixed Frame Generation and Multi Frame Generation modes, native Dynamic Multi Frame Generation, live HDR handling, persistent settings, and an in-game overlay styled to fit Control's menu aesthetic.
 
+Unlike a generic FG translation layer, Control FG is **game-specific and engine-aware**. *Control* does not expose a native Frame Generation integration for the mod to translate, so Control FG reconstructs the inputs FG needs directly from the game's renderer: frame boundaries, depth and motion-vector resources, camera data, jitter/reset state, pre-UI scene color, HDR state, and presentation timing. That makes the project less portable than broad compatibility tools, but allows a much deeper integration with *Control* itself.
+
 > **Current release:** v1.0.0  
 > **Verified game target:** Control on Steam, DX12, Steam build `21225456`  
 > **Streamline:** NVIDIA Streamline `2.14.1`
@@ -17,6 +19,23 @@
 - **Persistent settings** stored in `%LOCALAPPDATA%\ControlFG\settings.ini`.
 - **RTX 40-series safety policy:** Off and 2x are available; Dynamic and 3x–6x are disabled.
 - Runtime-proven Dynamic MFG integration using Reflex pacing and the PCL `SimulationStart` marker required by the working path.
+
+## Why Control FG is different
+
+Tools such as universal upscaler/Frame Generation translators and ReShade-style add-ons are designed first for portability across many games. They typically work at a graphics/API interception layer and are strongest when a game already exposes the standardized resources and timing needed by an upscaler or Frame Generation API.
+
+Control FG takes the opposite approach: it is **deeply integrated with one game's renderer**. Because *Control* shipped without a native FG source path, the mod identifies and reconstructs the data that a native implementation would normally provide, including:
+
+- Control's actual renderer frame boundaries.
+- Depth and motion-vector resources used by the game's existing DLSS path.
+- Camera transform, field of view, jitter, and reset/discontinuity state.
+- A genuine pre-UI / HUD-less scene surface for cleaner generated frames.
+- HDR state and presentation transitions.
+- Game-specific synchronization and presentation behavior.
+
+This is not intended as a replacement for broad tools such as OptiScaler or ReShade. The design goals are different: those projects prioritize **wide compatibility and reusable interception**, while Control FG prioritizes **deep, game-aware integration** in a title that did not originally ship with Frame Generation.
+
+The long-term architecture is being separated into a reusable FG backend layer and a game-specific semantic-capture layer. That makes it possible to investigate additional backends while preserving the higher-quality game data discovered specifically for *Control*.
 
 ## Hardware support
 
