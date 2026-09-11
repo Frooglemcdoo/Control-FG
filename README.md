@@ -19,6 +19,7 @@ Unlike a generic FG translation layer, Control FG is **game-specific and engine-
 - **Persistent settings** stored in `%LOCALAPPDATA%\ControlFG\settings.ini`.
 - **RTX 40-series safety policy:** Off and 2x are available; Dynamic and 3x–6x are disabled.
 - Runtime-proven Dynamic MFG integration using Reflex pacing and the PCL `SimulationStart` marker required by the working path.
+- **Game-aware HUD/UI handling:** Control FG captures a real pre-UI scene surface so generated frames do not need to treat the fully composited HUD as moving scene content.
 
 ## Why Control FG is different
 
@@ -29,19 +30,33 @@ Control FG takes the opposite approach: it is **deeply integrated with one game'
 - Control's actual renderer frame boundaries.
 - Depth and motion-vector resources used by the game's existing DLSS path.
 - Camera transform, field of view, jitter, and reset/discontinuity state.
-- A genuine pre-UI / HUD-less scene surface for cleaner generated frames.
+- A genuine pre-UI / HUD-less scene surface.
 - HDR state and presentation transitions.
 - Game-specific synchronization and presentation behavior.
 
-This is not intended as a replacement for broad tools such as OptiScaler or ReShade. The design goals are different: those projects prioritize **wide compatibility and reusable interception**, while Control FG prioritizes **deep, game-aware integration** in a title that did not originally ship with Frame Generation.
+### Stable HUD and UI under Frame Generation
+
+One of the biggest practical advantages of this game-specific approach is **HUD stability**. Control FG captures the full-resolution scene immediately before Control draws its HUD and UI, then supplies that HUD-less scene data to the Frame Generation backend. This keeps objective text, health/energy elements, prompts, icons, and menus from being interpreted as moving world geometry when the camera moves.
+
+That is a fundamentally different approach from screen-space Frame Generation solutions such as Lossless Scaling, which only see the final composited image, and from generic injection paths such as OptiFG when a true HUD-less resource is not available. Generic solutions may need to infer or heuristically reconstruct the HUD-less image; Control FG has a build-locked renderer boundary where the actual pre-UI scene is available directly.
+
+In current Control testing, this produces a notably stable HUD/UI during camera movement while still allowing the generated scene frames to interpolate normally.
+
+This is not intended as a replacement for broad tools such as OptiScaler, ReShade, or Lossless Scaling. The design goals are different: those projects prioritize **wide compatibility and reusable interception**, while Control FG prioritizes **deep, game-aware integration** in a title that did not originally ship with Frame Generation.
 
 The long-term architecture is being separated into a reusable FG backend layer and a game-specific semantic-capture layer. That makes it possible to investigate additional backends while preserving the higher-quality game data discovered specifically for *Control*.
 
 ## Hardware support
 
-Control FG relies on NVIDIA DLSS Frame Generation support. On **GeForce RTX 40-series**, the mod intentionally exposes only **Off and 2x**. On hardware that reports Multi Frame Generation support, the overlay exposes modes up to the supported maximum, currently capped by the UI at **6x**, plus Dynamic MFG when the driver reports it available.
+Control FG's current public release relies on NVIDIA DLSS Frame Generation support. On **GeForce RTX 40-series**, the mod intentionally exposes only **Off and 2x**. On hardware that reports Multi Frame Generation support, the overlay exposes modes up to the supported maximum, currently capped by the UI at **6x**, plus Dynamic MFG when the driver reports it available.
 
 A current NVIDIA driver is strongly recommended. Hardware-accelerated GPU scheduling (HAGS) should be enabled if DLSS Frame Generation is unavailable on an otherwise supported system.
+
+### FSR Frame Generation backend — in development
+
+An AMD FSR Frame Generation backend is under active development using the same Control-specific depth, motion-vector, camera, timing, and HUD-less scene data. The goal is to extend Frame Generation support to **GeForce RTX 20- and 30-series GPUs** through FSR, while allowing **RTX 40- and 50-series users to choose between NVIDIA DLSS Frame Generation and AMD FSR Frame Generation** from the Control FG overlay.
+
+AMD lists FSR 3.x Frame Generation support for NVIDIA GeForce RTX 20-series and newer hardware, with RTX 30-series and newer recommended for the strongest experience. This backend is not part of the current public release until runtime backend selection and validation are complete.
 
 ## Install
 
@@ -50,8 +65,6 @@ For the prebuilt Nexus/GitHub release, see [INSTALL.md](INSTALL.md). The short v
 ## Build from source
 
 See [BUILDING.md](BUILDING.md). `Build.cmd` downloads and hash-verifies the pinned official Streamline 2.14.1 SDK, compiles the x64 DXGI proxy, runs ABI/export/smoke checks, and creates the release ZIPs.
-
-
 
 ## Screenshots
 
@@ -79,7 +92,6 @@ Selectable fixed multipliers from 2× through 6×.
 
 GeForce RTX 40-series GPUs are intentionally limited to Off and 2×.
 
-
 ## Troubleshooting
 
 See [TROUBLESHOOTING.md](TROUBLESHOOTING.md). The most common issues are launching the DX11 executable, using an unsupported game build, an outdated NVIDIA driver/HAGS configuration, or another mod already occupying `dxgi.dll` in the Control directory.
@@ -90,10 +102,10 @@ This release is **build-locked to the Steam DX12 version listed above**. GOG/Epi
 
 ## Project status / roadmap
 
-Frame Generation is Mod #1. After this release is stable, planned work moves into a separate DLSS Super Resolution module with selectable runtime/model families, followed by Ray Reconstruction research and integration. See [ROADMAP.md](ROADMAP.md).
+Frame Generation is Mod #1. Current development is expanding the renderer integration to additional FG backends while preserving Control FG's game-specific HUD-less, motion-vector, depth, camera, HDR, and presentation data. Planned work also includes a separate DLSS Super Resolution module with selectable runtime/model families, followed by Ray Reconstruction research and integration. See [ROADMAP.md](ROADMAP.md).
 
 ## Credits and legal
 
-Control FG is an unofficial fan-made mod and is not affiliated with or endorsed by Remedy Entertainment, 505 Games, NVIDIA, or Valve. *Control* and its trademarks/assets belong to their respective owners. NVIDIA Streamline is redistributed under its upstream license; see [legal/STREAMLINE-LICENSE.txt](legal/STREAMLINE-LICENSE.txt) and [legal/THIRD-PARTY-NOTICES.md](legal/THIRD-PARTY-NOTICES.md).
+Control FG is an unofficial fan-made mod and is not affiliated with or endorsed by Remedy Entertainment, 505 Games, NVIDIA, AMD, Valve, OptiScaler, ReShade, or Lossless Scaling. *Control* and its trademarks/assets belong to their respective owners. NVIDIA Streamline is redistributed under its upstream license; see [legal/STREAMLINE-LICENSE.txt](legal/STREAMLINE-LICENSE.txt) and [legal/THIRD-PARTY-NOTICES.md](legal/THIRD-PARTY-NOTICES.md).
 
 No project-wide open-source license has been selected for Control FG yet. Until one is added by the project owner, normal copyright rules apply to the original Control FG source code.
