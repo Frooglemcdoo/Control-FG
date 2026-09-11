@@ -1,6 +1,6 @@
 # Control FG
 
-![Control FG](assets/control_fg_logo.png)
+![Control FG](assets/control_fg_logo.svg)
 
 **Control FG** adds NVIDIA DLSS Frame Generation to the DirectX 12 version of Remedy Entertainment's *Control*, including fixed Frame Generation and Multi Frame Generation modes, native Dynamic Multi Frame Generation, live HDR handling, persistent settings, and an in-game overlay styled to fit Control's menu aesthetic.
 
