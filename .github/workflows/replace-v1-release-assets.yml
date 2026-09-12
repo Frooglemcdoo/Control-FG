@@ -80,13 +80,8 @@ jobs:
           $body = [string]$release.body
           $heading = '## September 11, 2026 overlay stability hotfix'
           if (-not $body.Contains($heading)) {
-            $note = @'
-
-## September 11, 2026 overlay stability hotfix
-
-The v1.0.0 binary asset was refreshed with the tested F10 overlay stability fix. The overlay is now double-buffered, avoids repeated HWND position/visibility churn, caches the Control game window, and refreshes passive status at a reduced cadence. This fixes the overlay flicker that was most visible in menus/title screens and during screen recording. The validated v0.8.26 Frame Generation/HDR/Streamline core is unchanged.
-'@
-            $updated = $body.TrimEnd() + "`r`n" + $note.TrimStart()
+            $note = "`r`n`r`n## September 11, 2026 overlay stability hotfix`r`n`r`nThe v1.0.0 binary asset was refreshed with the tested F10 overlay stability fix. The overlay is now double-buffered, avoids repeated HWND position/visibility churn, caches the Control game window, and refreshes passive status at a reduced cadence. This fixes the overlay flicker that was most visible in menus/title screens and during screen recording. The validated v0.8.26 Frame Generation/HDR/Streamline core is unchanged.`r`n"
+            $updated = $body.TrimEnd() + $note
             $notesFile = Join-Path $env:RUNNER_TEMP 'release-notes.md'
             [IO.File]::WriteAllText($notesFile, $updated, [Text.UTF8Encoding]::new($false))
             gh release edit v1.0.0 --repo $env:GITHUB_REPOSITORY --notes-file $notesFile
