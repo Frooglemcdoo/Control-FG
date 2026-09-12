@@ -1,0 +1,111 @@
+name: Replace v1.0.0 hotfix assets
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/replace-v1-release-assets.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  rebuild-and-replace:
+    if: github.repository == 'Frooglemcdoo/Control-FG'
+    runs-on: windows-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Check out fixed production source
+        uses: actions/checkout@v4
+
+      - name: Build and verify Control FG v1.0.0 hotfix
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $p = New-Object System.Diagnostics.Process
+          $p.StartInfo.FileName = 'cmd.exe'
+          $p.StartInfo.Arguments = '/d /c Build.cmd'
+          $p.StartInfo.UseShellExecute = $false
+          $p.StartInfo.RedirectStandardInput = $true
+          [void]$p.Start()
+          $p.StandardInput.WriteLine(' ')
+          $p.StandardInput.Close()
+          $p.WaitForExit()
+          if (Test-Path -LiteralPath 'Build.log') { Get-Content -LiteralPath 'Build.log' }
+          if ($p.ExitCode -ne 0) { throw "Build.cmd failed with exit code $($p.ExitCode)." }
+
+          $zip = 'release/Control-FG-v1.0.0.zip'
+          $sums = 'release/SHA256SUMS.txt'
+          $dll = 'build/dxgi.dll'
+          foreach ($path in @($zip, $sums, $dll, 'build/build-validation.json')) {
+            if (-not (Test-Path -LiteralPath $path)) { throw "Missing verified release output: $path" }
+          }
+
+          $bytes = [IO.File]::ReadAllBytes($dll)
+          $ascii = [Text.Encoding]::ASCII.GetString($bytes)
+          foreach ($marker in @('FG_OVERLAY_STABILITY_TEST','FG_OVERLAY_CADENCE','FG_OVERLAY_VISIBILITY_TRANSITION')) {
+            if (-not $ascii.Contains($marker)) { throw "Overlay hotfix marker missing from dxgi.dll: $marker" }
+          }
+
+          $validation = Get-Content -LiteralPath 'build/build-validation.json' -Raw | ConvertFrom-Json
+          $dllHash = (Get-FileHash -LiteralPath $dll -Algorithm SHA256).Hash
+          if ($validation.SHA256 -ne $dllHash) { throw 'dxgi.dll does not match build-validation.json.' }
+
+          Write-Host ('Verified release ZIP SHA256: ' + (Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash)
+          Write-Host ('Verified dxgi.dll SHA256: ' + $dllHash)
+
+      - name: Replace v1.0.0 release assets
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          gh release upload v1.0.0 `
+            'release/Control-FG-v1.0.0.zip' `
+            'release/SHA256SUMS.txt' `
+            --clobber `
+            --repo $env:GITHUB_REPOSITORY
+          if ($LASTEXITCODE -ne 0) { throw 'GitHub release asset replacement failed.' }
+
+      - name: Add hotfix note to the existing release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $release = gh release view v1.0.0 --repo $env:GITHUB_REPOSITORY --json body | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0) { throw 'Unable to read v1.0.0 release metadata.' }
+          $body = [string]$release.body
+          $heading = '## September 11, 2026 overlay stability hotfix'
+          if (-not $body.Contains($heading)) {
+            $note = @'
+
+## September 11, 2026 overlay stability hotfix
+
+The v1.0.0 binary asset was refreshed with the tested F10 overlay stability fix. The overlay is now double-buffered, avoids repeated HWND position/visibility churn, caches the Control game window, and refreshes passive status at a reduced cadence. This fixes the overlay flicker that was most visible in menus/title screens and during screen recording. The validated v0.8.26 Frame Generation/HDR/Streamline core is unchanged.
+'@
+            $updated = $body.TrimEnd() + "`r`n" + $note.TrimStart()
+            $notesFile = Join-Path $env:RUNNER_TEMP 'release-notes.md'
+            [IO.File]::WriteAllText($notesFile, $updated, [Text.UTF8Encoding]::new($false))
+            gh release edit v1.0.0 --repo $env:GITHUB_REPOSITORY --notes-file $notesFile
+            if ($LASTEXITCODE -ne 0) { throw 'Unable to update v1.0.0 release notes.' }
+          }
+
+      - name: Verify published assets
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $release = gh release view v1.0.0 --repo $env:GITHUB_REPOSITORY --json assets,body | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0) { throw 'Unable to verify published release.' }
+          $names = @($release.assets | ForEach-Object { $_.name })
+          foreach ($required in @('Control-FG-v1.0.0.zip','SHA256SUMS.txt')) {
+            if ($names -notcontains $required) { throw "Published release is missing asset: $required" }
+          }
+          if (-not ([string]$release.body).Contains('September 11, 2026 overlay stability hotfix')) {
+            throw 'Published release notes are missing the overlay hotfix note.'
+          }
+          Write-Host 'PASS: v1.0.0 hotfix assets and release note are published.'
