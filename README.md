@@ -10,6 +10,12 @@ Unlike a generic FG translation layer, Control FG is **game-specific and engine-
 > **Verified game target:** Control on Steam, DX12, Steam build `21225456`  
 > **Streamline:** NVIDIA Streamline `2.14.1`
 
+## Video Demonstration
+
+[![Control FG – App and Overlay Demonstration](https://img.youtube.com/vi/aP7UeCSx00c/maxresdefault.jpg)](https://youtu.be/aP7UeCSx00c)
+
+[Watch Control FG – App and Overlay Demonstration on YouTube](https://youtu.be/aP7UeCSx00c)
+
 ## Features
 
 - **Off / 2x / 3x / 4x / 5x / 6x** fixed Frame Generation modes on supported hardware.
