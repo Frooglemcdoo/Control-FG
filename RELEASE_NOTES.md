@@ -13,6 +13,20 @@ Control FG v1.0.0 is the first public release of the Control DX12 Frame Generati
 - RTX 40-series mode policy exposing **Off + 2x** while disabling unsupported higher MFG/Dynamic choices.
 - Public build/release scripts, diagnostics collection and troubleshooting documentation.
 
+## Overlay stability hotfix
+
+The production overlay now uses a lower-churn compositor path that eliminates the flicker reproduced most heavily on Control's title/menu screens and while screen recording.
+
+- Overlay drawing is double-buffered and published as one completed frame.
+- The 50 ms hotkey/input timer remains responsive, but expensive window and compositor operations are no longer performed every timer tick.
+- Control's game HWND is cached.
+- Overlay placement is checked periodically and `SetWindowPos` is called only when the calculated rectangle changes.
+- Visibility changes call `ShowWindow` only on actual show/hide transitions.
+- Passive runtime status is refreshed at 4 Hz while direct mouse/button/slider interaction still repaints immediately.
+- New `FG_OVERLAY_CADENCE` logging records paint rate, placement changes and game-window discovery activity.
+
+This hotfix changes only the external Win32 overlay path. The validated v0.8.26 Frame Generation, HDR10, Reflex, PCL, resource-tagging and Streamline generation baseline is unchanged.
+
 ## Verified target
 
 **Control — Steam DX12 — Steam build 21225456**
