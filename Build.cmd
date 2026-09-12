@@ -15,7 +15,7 @@ pause
 exit /b %BUILD_RESULT%
 
 :build
-echo Control FG v1.0.0 - overlay stability test R1
+echo Control FG v1.0.0 - public release build with overlay stability hotfix
 set "VSWHERE=%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe"
 if not exist "%VSWHERE%" (
   echo Visual Studio C++ tools were not found. Install the Desktop development with C++ workload and a Windows SDK.
