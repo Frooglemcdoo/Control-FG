@@ -16,6 +16,18 @@ First public release of Control FG.
 - Public build scripts now fetch and verify the pinned official NVIDIA Streamline 2.14.1 SDK.
 - Release packaging, checksums, troubleshooting documentation and log collector added for public support.
 
+### Overlay stability hotfix
+
+- Fixed F10 overlay flicker that was most visible on the title/menu screens and during screen recording.
+- Decoupled compositor-heavy overlay work from the 50 ms input/hotkey polling loop.
+- Cached the Control game window instead of repeatedly enumerating process windows.
+- `SetWindowPos` now runs only when the calculated overlay placement actually changes.
+- `ShowWindow` now runs only on real visibility transitions.
+- Passive status repaint cadence is limited to 4 Hz while controls still repaint immediately when used.
+- Overlay rendering is double-buffered and committed with a single `BitBlt`, preventing DWM/capture software from observing partially drawn UI frames.
+- Added `FG_OVERLAY_CADENCE` telemetry for paint, placement and window-search activity.
+- No changes were made to the frozen v0.8.26 Frame Generation, HDR10, Reflex, PCL or Streamline generation path.
+
 ### Runtime baseline
 
 The generation core is based on the runtime-proven v0.8.26 implementation. Later pre-release revisions focused on persistence, UI and hardware-policy polish rather than changing the stabilized FG core.
