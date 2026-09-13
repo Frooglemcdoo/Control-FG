@@ -68,6 +68,20 @@ AMD lists FSR 3.x Frame Generation support for NVIDIA GeForce RTX 20-series and 
 
 For the prebuilt Nexus/GitHub release, see [INSTALL.md](INSTALL.md). The short version is: copy `dxgi.dll` and the `ControlFGStreamline` folder beside `Control_DX12.exe`, launch Control in DX12 mode, and press **F10**.
 
+### ReShade / RenoDX compatibility
+
+Control FG uses `dxgi.dll`, which can conflict with ReShade when ReShade is also installed under the same filename. **ReShade can be used alongside Control FG by renaming ReShade's `dxgi.dll` to `d3d12.dll`.**
+
+Use this layout in the Control game directory:
+
+- Keep **Control FG's** `dxgi.dll` named `dxgi.dll`.
+- Rename **ReShade's** `dxgi.dll` to `d3d12.dll`.
+- Leave the rest of the ReShade installation unchanged.
+
+This allows Control FG and ReShade to load together without competing for the same `dxgi.dll` filename.
+
+The same approach is expected to work with **RenoDX** configurations that use the same DXGI injection/loading method. RenoDX has not yet been fully validated across every configuration, so additional testing and feedback are welcome.
+
 ## Build from source
 
 See [BUILDING.md](BUILDING.md). `Build.cmd` downloads and hash-verifies the pinned official Streamline 2.14.1 SDK, compiles the x64 DXGI proxy, runs ABI/export/smoke checks, and creates the release ZIPs.
@@ -100,11 +114,11 @@ GeForce RTX 40-series GPUs are intentionally limited to Off and 2×.
 
 ## Troubleshooting
 
-See [TROUBLESHOOTING.md](TROUBLESHOOTING.md). The most common issues are launching the DX11 executable, using an unsupported game build, an outdated NVIDIA driver/HAGS configuration, or another mod already occupying `dxgi.dll` in the Control directory.
+See [TROUBLESHOOTING.md](TROUBLESHOOTING.md). The most common issues are launching the DX11 executable, using an unsupported game build, an outdated NVIDIA driver/HAGS configuration, or a second wrapper competing for `dxgi.dll`. For ReShade, use the `d3d12.dll` rename described in the compatibility section above.
 
 ## Current compatibility
 
-This release is **build-locked to the Steam DX12 version listed above**. GOG/Epic builds and later Control patches are not claimed compatible until tested. Other wrappers that install their own `dxgi.dll` in the same directory are not supported by the first release.
+This release is **build-locked to the Steam DX12 version listed above**. GOG/Epic builds and later Control patches are not claimed compatible until tested. ReShade can be used alongside Control FG with the loader rename described above. RenoDX is expected to work through the same approach when using the same DXGI injection method, but has not yet been fully validated across configurations.
 
 ## Project status / roadmap
 
