@@ -133,7 +133,7 @@ This release is **build-locked to the Steam DX12 version listed above**. GOG/Epi
 
 ## Project status / roadmap
 
-Frame Generation and Ray Reconstruction are now both part of the v2.0.0 release. Future work includes additional GPU compatibility research, including RTX 20/30-series Frame Generation and Multi Frame Generation, plus a separate DLSS Super Resolution module with selectable runtime/model families. See [ROADMAP.md](ROADMAP.md).
+Frame Generation and Ray Reconstruction are now both part of the v2.0.0 release. The next major development target is **DLSS 5 integration**, followed by additional GPU compatibility research including RTX 20/30-series Frame Generation and Multi Frame Generation. See [ROADMAP.md](ROADMAP.md).
 
 ## Credits and legal
 
