@@ -1,6 +1,6 @@
 # Control FG v2.0.0 — Release Notes
 
-Control FG v2.0.0 is the Ray Reconstruction and renderer-stability update for Control DX12.
+v2.0.0 is the Ray Reconstruction and renderer-stability update for Control DX12.
 
 ## New in v2.0.0
 
@@ -12,53 +12,53 @@ Control FG v2.0.0 is the Ray Reconstruction and renderer-stability update for Co
 
 ## Ray Reconstruction implementation
 
-Ray Reconstruction is not applied as a screen-space effect after Control has already denoised its ray-traced image. Control FG integrates at the game's native RT denoising boundary.
+Ray Reconstruction runs at Control's native RT denoising boundary. When RR is enabled, Control FG bypasses Control's native denoiser for the RR path and provides RR with game-native depth, motion vectors, camera/jitter state, ray-tracing resources, reset state, and HDR/presentation context.
 
-When RR is enabled, the mod bypasses Control's native denoiser for the RR path and provides NVIDIA Ray Reconstruction with game-native renderer state including depth, motion vectors, camera and jitter state, ray-tracing resources, reset/discontinuity state, and current presentation/HDR context.
+This avoids a double-denoise path and allows RR to coexist with Control's DLSS modes, ray tracing, HDR, and Frame Generation.
 
-This keeps RR on the correct side of the renderer pipeline, avoids a double-denoise path, and allows it to coexist with Control's DLSS modes, ray tracing, HDR and Frame Generation.
+## Performance
+
+Extensive testing shows the largest RR cost at native 4K with DLAA:
+
+- **4K + DLAA:** roughly **20–30%** lower performance with RR enabled.
+- **1440p / 1080p:** typically around **2–10%**, often difficult to notice depending on the scene.
+- **4K + DLSS Quality:** the RR cost is much less noticeable than 4K DLAA.
+
+The 4K DLAA hit was reproduced across repeated RR toggles, resolution changes, DLSS modes, and RT configurations and currently appears to be a real workload cost rather than an obvious mod-side bug.
 
 ## HDR / Frame Generation fixes
 
-The final path performs a hard DLSS-G lifecycle reset across a display-domain change:
+Across an HDR/SDR transition, Control FG now:
 
-1. Frame Generation is committed off.
-2. DLSS-G feature resources are explicitly freed.
-3. Control is allowed to complete its HDR/SDR transition.
-4. The mod waits for the new display domain to settle.
-5. Fresh tagged frames are required before FG is rearmed.
+1. commits Frame Generation off;
+2. frees DLSS-G feature resources;
+3. lets Control/Windows complete the display-domain transition;
+4. waits for the new domain to settle;
+5. requires fresh tagged frames before rearming FG.
 
-The recovery also handles Windows HDR transitions where Control does **not** call `ResizeBuffers`, and suppresses delayed duplicate display-domain notifications so the same transition cannot trigger a second teardown.
-
-This fixes the corrupted/generated-image state reproduced during repeated **Win + Alt + B** HDR switching in testing.
+This also handles transitions where Control does not call `ResizeBuffers` and prevents delayed duplicate HDR notifications from triggering a second teardown for the same transition.
 
 ## HUD / UI Frame Generation fix
 
-Control FG captures Control's actual full-resolution scene **before the game draws the HUD/UI**. Generated scene frames therefore do not have to interpret objective text, health/energy elements, prompts, icons or menus as moving world geometry.
-
-The UI is handled separately and recomposited over the generated result. This substantially improves HUD stability during camera movement compared with feeding Frame Generation only the final composited image.
+Control FG captures Control's full-resolution scene before the HUD/UI is drawn and handles the UI separately. This substantially improves HUD stability during camera movement and prevents UI elements from being interpreted as moving world geometry by Frame Generation.
 
 ## Overlay fixes
 
-- Lower-churn/double-buffered overlay drawing reduces flicker on title/menu screens and during screen recording.
-- Expensive window/compositor operations are not repeated every timer tick.
-- Dynamic Target FPS controls are shown **only** when Dynamic FG is selected.
-- In fixed FG modes the entire Dynamic Target FPS section collapses, including Auto/Manual controls, target readout, slider and reserved blank space.
+- Lower-churn/double-buffered drawing reduces overlay flicker.
+- Dynamic Target FPS controls appear only while Dynamic FG is selected.
+- In fixed FG modes the entire Dynamic Target FPS section collapses with no reserved blank space.
 
-## Existing Frame Generation features retained
+## Existing FG features retained
 
-- Fixed DLSS Frame Generation / Multi Frame Generation modes from **2x through 6x** on supported hardware.
-- **Dynamic Multi Frame Generation** with Auto monitor-refresh targeting or a Manual 30–1000 FPS output target.
-- Dynamic pacing using NVIDIA Reflex and the PCL `SimulationStart` marker used by the validated runtime path.
-- Persistent, Control-styled **F10 overlay**.
-- RTX 40-series mode policy exposing **Off + 2x** while disabling unsupported higher MFG/Dynamic choices.
+- Fixed **2x through 6x** FG/MFG modes on supported hardware.
+- **Dynamic MFG** with Auto monitor-refresh targeting or Manual 30–1000 FPS targeting.
+- RTX 40-series policy exposing **Off + 2x**.
+- Persistent F10 overlay and settings.
 
-## ReShade / RenoDX compatibility
+## Next
 
-Control FG uses `dxgi.dll`. If ReShade also uses `dxgi.dll`, rename the ReShade DLL to `d3d12.dll` and leave Control FG as `dxgi.dll`.
+The next major development target is **DLSS 5 integration**. RTX 20/30-series FG/MFG compatibility research is planned after that.
 
 ## Verified target
 
 **Control — Steam DX12 — Steam build 21225456**
-
-DX11 is not supported. GOG/Epic builds and later Control patches are not claimed compatible until tested.
