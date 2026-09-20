@@ -6,7 +6,7 @@
 
 Unlike a generic FG translation layer, Control FG is **game-specific and engine-aware**. *Control* does not expose a native Frame Generation integration for the mod to translate, so Control FG reconstructs the inputs FG needs directly from the game's renderer: frame boundaries, depth and motion-vector resources, camera data, jitter/reset state, pre-UI scene color, HDR state, and presentation timing. That makes the project less portable than broad compatibility tools, but allows a much deeper integration with *Control* itself.
 
-> **Current release:** v1.0.0  
+> **Current release:** v2.0.0  
 > **Verified game target:** Control on Steam, DX12, Steam build `21225456`  
 > **Streamline:** NVIDIA Streamline `2.14.1`
 
@@ -30,7 +30,7 @@ Unlike a generic FG translation layer, Control FG is **game-specific and engine-
 
 ## DLSS Ray Reconstruction
 
-Control FG v1.0.0 now includes a working **DLSS Ray Reconstruction** path for Control's ray-traced renderer.
+Control FG v2.0.0 includes a working **DLSS Ray Reconstruction** path for Control's ray-traced renderer.
 
 The implementation is game-specific rather than a generic post-process replacement. Control FG hooks the game's native ray-tracing/denoising boundary, disables the native denoiser for the RR path, and feeds Ray Reconstruction the renderer state it needs from Control itself: depth, motion vectors, camera/jitter data, ray-tracing resources, reset/discontinuity state, and the same presentation/HDR context used by the Frame Generation integration.
 
@@ -71,9 +71,9 @@ A current NVIDIA driver is strongly recommended. Hardware-accelerated GPU schedu
 
 ### Future RTX 20/30-series Frame Generation research
 
-Support for **RTX 20-series (Turing)** and **RTX 30-series (Ampere)** Frame Generation / Multi Frame Generation is planned as a post-v1.0.0 research track. Recent community work has shown a path involving early architecture-gate handling plus GPU-specific DLSS-G backend/kernel support.
+Support for **RTX 20-series (Turing)** and **RTX 30-series (Ampere)** Frame Generation / Multi Frame Generation is planned as a post-v2.0.0 research track. Recent community work has shown a path involving early architecture-gate handling plus GPU-specific DLSS-G backend/kernel support.
 
-That work is intentionally **not part of v1.0.0**. The current release remains focused on the validated RTX 40/50-series path while future compatibility work is developed and tested separately. See [ROADMAP.md](ROADMAP.md).
+That work is intentionally **not part of v2.0.0**. The current release remains focused on the validated RTX 40/50-series path while future compatibility work is developed and tested separately. See [ROADMAP.md](ROADMAP.md).
 
 ## Install
 
@@ -133,7 +133,7 @@ This release is **build-locked to the Steam DX12 version listed above**. GOG/Epi
 
 ## Project status / roadmap
 
-Frame Generation and Ray Reconstruction are now both part of the v1.0.0 release. Future work includes additional GPU compatibility research, including RTX 20/30-series Frame Generation and Multi Frame Generation, plus a separate DLSS Super Resolution module with selectable runtime/model families. See [ROADMAP.md](ROADMAP.md).
+Frame Generation and Ray Reconstruction are now both part of the v2.0.0 release. Future work includes additional GPU compatibility research, including RTX 20/30-series Frame Generation and Multi Frame Generation, plus a separate DLSS Super Resolution module with selectable runtime/model families. See [ROADMAP.md](ROADMAP.md).
 
 ## Credits and legal
 
