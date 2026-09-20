@@ -69,11 +69,11 @@ Control FG's current public release relies on NVIDIA DLSS Frame Generation suppo
 
 A current NVIDIA driver is strongly recommended. Hardware-accelerated GPU scheduling (HAGS) should be enabled if DLSS Frame Generation is unavailable on an otherwise supported system.
 
-### FSR Frame Generation backend — in development
+### Future RTX 20/30-series Frame Generation research
 
-An AMD FSR Frame Generation backend is under active development using the same Control-specific depth, motion-vector, camera, timing, and HUD-less scene data. The goal is to extend Frame Generation support to **GeForce RTX 20- and 30-series GPUs** through FSR, while allowing **RTX 40- and 50-series users to choose between NVIDIA DLSS Frame Generation and AMD FSR Frame Generation** from the Control FG overlay.
+Support for **RTX 20-series (Turing)** and **RTX 30-series (Ampere)** Frame Generation / Multi Frame Generation is planned as a post-v1.0.0 research track. Recent community work has shown a path involving early architecture-gate handling plus GPU-specific DLSS-G backend/kernel support.
 
-AMD lists FSR 3.x Frame Generation support for NVIDIA GeForce RTX 20-series and newer hardware, with RTX 30-series and newer recommended for the strongest experience. This backend is not part of the current public release until runtime backend selection and validation are complete.
+That work is intentionally **not part of v1.0.0**. The current release remains focused on the validated RTX 40/50-series path while future compatibility work is developed and tested separately. See [ROADMAP.md](ROADMAP.md).
 
 ## Install
 
