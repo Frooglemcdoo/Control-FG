@@ -26,6 +26,20 @@ Completed for v2.0.0:
 - Dynamic Target FPS UI collapse outside Dynamic mode;
 - overlay stability/flicker cleanup.
 
+## Next: DLSS 5 integration
+
+The next major development target after v2.0.0 is adding **DLSS 5** support to Control FG.
+
+The goal is to integrate DLSS 5 into the same game-aware renderer path already used by Frame Generation and Ray Reconstruction, while preserving the existing Control-specific depth, motion-vector, camera/jitter, HDR, HUD-less/UI, and presentation handling.
+
+Planned work includes:
+
+- integrating DLSS 5 support into the existing Control FG overlay and runtime selection path;
+- validating image quality and performance across 1080p, 1440p and 4K;
+- testing compatibility with Ray Reconstruction, Frame Generation, HDR and live DLSS mode changes;
+- keeping the current v2.0.0 FG/RR path isolated and stable while DLSS 5 support is developed;
+- adding safe fallback behavior before exposing it as a public option.
+
 ## Future: RTX 20/30-series Frame Generation and Multi Frame Generation
 
 Post-v2.0.0 research will investigate extending NVIDIA Frame Generation / Multi Frame Generation support to **RTX 20-series (Turing)** and **RTX 30-series (Ampere)** hardware.
@@ -45,7 +59,7 @@ Reference project for this research:
 
 This work is **not included in v2.0.0**.
 
-## Next: DLSS Super Resolution module
+## Later: DLSS Super Resolution / runtime flexibility
 
 A separate DLSS Super Resolution module is also planned. The goal is to expose selectable NVIDIA DLSS SR runtime/model families rather than tying Frame Generation or Ray Reconstruction development to one upscaler path.
 
