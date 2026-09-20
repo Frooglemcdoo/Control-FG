@@ -15,41 +15,7 @@ jobs:
       - name: Reconstruct staged v2 source
         shell: pwsh
         run: |
-          $parts = Get-ChildItem ".release-bundle\part*.txt" | Where-Object { $_.BaseName -match '^part00[0-3]
-          if (-not $parts) { throw "No staged source bundle parts found." }
-          $builder = New-Object System.Text.StringBuilder
-          foreach ($part in $parts) {
-            [void]$builder.Append([IO.File]::ReadAllText($part.FullName).Trim())
-          }
-          $base64 = [Regex]::Replace($builder.ToString(), '\\s', '')
-          switch ($base64.Length % 4) {
-            2 { $base64 += '==' }
-            3 { $base64 += '=' }
-            1 { throw "Invalid staged Base64 length: $($base64.Length)" }
-          }
-          [IO.File]::WriteAllBytes("ControlFG-v2-source.zip", [Convert]::FromBase64String($base64))
-          New-Item -ItemType Directory -Force "_diag_src" | Out-Null
-          Expand-Archive -LiteralPath "ControlFG-v2-source.zip" -DestinationPath "_diag_src" -Force
-          Write-Host "=== source files ==="
-          Get-ChildItem "_diag_src" -Recurse -File | ForEach-Object { $_.FullName.Substring((Resolve-Path "_diag_src").Path.Length + 1) }
-
-      - name: Locate diagnostic patch sites
-        shell: pwsh
-        run: |
-          Write-Host "=== HDR bridge sites ==="
-          Get-ChildItem "_diag_src" -Recurse -File -Include *.h,*.cpp | Select-String -Pattern "HDR10_BRIDGE_DORMANT|ShouldWatchHdr10BridgeTransition|Hdr10SwapChainProxy" | Select-Object -First 80 | ForEach-Object { "$($_.Path):$($_.LineNumber): $($_.Line.Trim())" }
-          Write-Host "=== GPU policy sites ==="
-          Get-ChildItem "_diag_src" -Recurse -File -Include *.h,*.cpp | Select-String -Pattern "FG_GPU_CLASS_DETECT|slGpuIsRtx40Series|rtx40_series" | Select-Object -First 80 | ForEach-Object { "$($_.Path):$($_.LineNumber): $($_.Line.Trim())" }
-          Write-Host "=== v2 identity sites ==="
-          Get-ChildItem "_diag_src" -Recurse -File -Include *.h,*.cpp | Select-String -Pattern "PROBE v2.0.0|release=public|rr=models_E_F_default_F" | Select-Object -First 80 | ForEach-Object { "$($_.Path):$($_.LineNumber): $($_.Line.Trim())" }
-
-      - name: Upload reconstructed source
-        uses: actions/upload-artifact@v4
-        with:
-          name: ControlFG-v2-reconstructed-source
-          path: ControlFG-v2-source.zip
-          retention-days: 2
- } | Sort-Object Name
+          $parts = Get-ChildItem ".release-bundle\part*.txt" | Where-Object { $_.BaseName -match '^part00[0-3]$' } | Sort-Object Name
           if (-not $parts) { throw "No staged source bundle parts found." }
           $builder = New-Object System.Text.StringBuilder
           foreach ($part in $parts) {
