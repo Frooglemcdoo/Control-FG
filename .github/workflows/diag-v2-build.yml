@@ -21,7 +21,13 @@ jobs:
           foreach ($part in $parts) {
             [void]$builder.Append([IO.File]::ReadAllText($part.FullName).Trim())
           }
-          [IO.File]::WriteAllBytes("ControlFG-v2-source.zip", [Convert]::FromBase64String($builder.ToString()))
+          $base64 = [Regex]::Replace($builder.ToString(), '\\s', '')
+          switch ($base64.Length % 4) {
+            2 { $base64 += '==' }
+            3 { $base64 += '=' }
+            1 { throw "Invalid staged Base64 length: $($base64.Length)" }
+          }
+          [IO.File]::WriteAllBytes("ControlFG-v2-source.zip", [Convert]::FromBase64String($base64))
           New-Item -ItemType Directory -Force "_diag_src" | Out-Null
           Expand-Archive -LiteralPath "ControlFG-v2-source.zip" -DestinationPath "_diag_src" -Force
           Write-Host "=== source files ==="
