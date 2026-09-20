@@ -1,25 +1,36 @@
 # Control FG roadmap
 
-## v1.0.0 — Frame Generation + Ray Reconstruction
+## v1.0.0 — Frame Generation
 
-The first public release now includes the stable Control-specific DLSS Frame Generation path and working DLSS Ray Reconstruction.
-
-Completed for v1.0.0:
+The original public release established the Control-specific DLSS Frame Generation path:
 
 - fixed 2x–6x Frame Generation modes on supported hardware;
 - native Dynamic Multi Frame Generation;
-- live HDR/SDR transitions with hard DLSS-G resource reset/rearm;
+- live HDR support;
 - persistent F10 overlay and runtime status;
-- Control-native HUD-less scene capture and UI recomposition for generated frames;
+- Control-native HUD-less scene capture for generated frames.
+
+## v2.0.0 — Ray Reconstruction + renderer stability
+
+v2.0.0 adds working DLSS Ray Reconstruction and finalizes several renderer/presentation fixes.
+
+Completed for v2.0.0:
+
 - DLSS Ray Reconstruction integrated at Control's native RT denoising boundary;
 - RR runtime 310.9.1 with Preset F default and live E/F switching;
-- compatibility testing across DLSS mode changes, ray tracing, HDR and Frame Generation.
+- compatibility testing across DLSS mode changes, ray tracing, HDR and Frame Generation;
+- hard DLSS-G resource reset/rearm across HDR/SDR transitions;
+- no-`ResizeBuffers` HDR recovery;
+- duplicate HDR-transition suppression;
+- Control-native HUD-less scene capture plus separate UI recomposition;
+- Dynamic Target FPS UI collapse outside Dynamic mode;
+- overlay stability/flicker cleanup.
 
 ## Future: RTX 20/30-series Frame Generation and Multi Frame Generation
 
-Post-v1.0.0 research will investigate extending NVIDIA Frame Generation / Multi Frame Generation support to **RTX 20-series (Turing)** and **RTX 30-series (Ampere)** hardware.
+Post-v2.0.0 research will investigate extending NVIDIA Frame Generation / Multi Frame Generation support to **RTX 20-series (Turing)** and **RTX 30-series (Ampere)** hardware.
 
-Recent community work has demonstrated that this is technically possible by combining architecture-gate handling with GPU-specific DLSS-G kernel/backend work. Control FG will treat this as a separate compatibility project so the stable v1.0.0 FG/RR path is not destabilized.
+Recent community work has demonstrated that this is technically possible by combining architecture-gate handling with GPU-specific DLSS-G kernel/backend work. Control FG will treat this as a separate compatibility project so the stable v2.0.0 FG/RR path is not destabilized.
 
 Research areas include:
 
@@ -32,7 +43,7 @@ Research areas include:
 Reference project for this research:
 - `sdli1995/dlssg_for_sm86`
 
-This work is **not included in v1.0.0**.
+This work is **not included in v2.0.0**.
 
 ## Next: DLSS Super Resolution module
 
