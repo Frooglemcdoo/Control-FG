@@ -1,36 +1,62 @@
 # Control FG v1.0.0 — Release Notes
 
-Control FG v1.0.0 is the first public release of the Control DX12 Frame Generation mod.
+Control FG v1.0.0 is the first public release of the Control DX12 Frame Generation and Ray Reconstruction mod.
 
 ## Included in v1.0.0
 
 - Fixed DLSS Frame Generation / Multi Frame Generation modes from **2x through 6x** on supported hardware.
-- **Dynamic Multi Frame Generation** with Auto monitor refresh targeting or a Manual 30–1000 FPS output target.
+- **Dynamic Multi Frame Generation** with Auto monitor-refresh targeting or a Manual 30–1000 FPS output target.
 - Dynamic pacing using NVIDIA Reflex and the PCL `SimulationStart` marker used by the validated runtime path.
+- **DLSS Ray Reconstruction** integrated into Control's native DX12 ray-tracing/denoising path.
+- NVIDIA RR runtime **310.9.1** with **Preset F** default and live **E/F** selection.
 - Live HDR support, including HDR off/on transitions without restarting Control.
 - A persistent, Control-styled **F10 overlay** showing mode, effective multiplier, current FPS, HDR state and GPU maximum.
 - Settings persisted at `%LOCALAPPDATA%\ControlFG\settings.ini`.
 - RTX 40-series mode policy exposing **Off + 2x** while disabling unsupported higher MFG/Dynamic choices.
-- Public build/release scripts, diagnostics collection and troubleshooting documentation.
 
-## Overlay stability hotfix
+## Ray Reconstruction implementation
 
-The production overlay now uses a lower-churn compositor path that eliminates the flicker reproduced most heavily on Control's title/menu screens and while screen recording.
+Ray Reconstruction is not applied as a screen-space effect after Control has already denoised its ray-traced image. Control FG integrates at the game's native RT denoising boundary.
 
-- Overlay drawing is double-buffered and published as one completed frame.
-- The 50 ms hotkey/input timer remains responsive, but expensive window and compositor operations are no longer performed every timer tick.
-- Control's game HWND is cached.
-- Overlay placement is checked periodically and `SetWindowPos` is called only when the calculated rectangle changes.
-- Visibility changes call `ShowWindow` only on actual show/hide transitions.
-- Passive runtime status is refreshed at 4 Hz while direct mouse/button/slider interaction still repaints immediately.
-- New `FG_OVERLAY_CADENCE` logging records paint rate, placement changes and game-window discovery activity.
+When RR is enabled, the mod bypasses Control's native denoiser for the RR path and provides NVIDIA Ray Reconstruction with game-native renderer state including depth, motion vectors, camera and jitter state, ray-tracing resources, reset/discontinuity state, and current presentation/HDR context.
 
-This hotfix changes only the external Win32 overlay path. The validated v0.8.26 Frame Generation, HDR10, Reflex, PCL, resource-tagging and Streamline generation baseline is unchanged.
+This keeps RR on the correct side of the renderer pipeline, avoids a double-denoise path, and allows it to coexist with Control's DLSS modes, ray tracing, HDR and Frame Generation.
+
+## HDR / Frame Generation fixes
+
+A substantial part of the final v1.0.0 stabilization work focused on Windows SDR/HDR transitions while DLSS-G was active.
+
+The final path performs a hard DLSS-G lifecycle reset across a display-domain change:
+
+1. Frame Generation is committed off.
+2. DLSS-G feature resources are explicitly freed.
+3. Control is allowed to complete its HDR/SDR transition.
+4. The mod waits for the new display domain to settle.
+5. Fresh tagged frames are required before FG is rearmed.
+
+The recovery also handles Windows HDR transitions where Control does **not** call `ResizeBuffers`, and suppresses delayed duplicate display-domain notifications so the same transition cannot trigger a second teardown.
+
+This fixes the corrupted/generated-image state reproduced during repeated **Win + Alt + B** HDR switching in testing.
+
+## HUD / UI Frame Generation fix
+
+Control FG captures Control's actual full-resolution scene **before the game draws the HUD/UI**. Generated scene frames therefore do not have to interpret objective text, health/energy elements, prompts, icons or menus as moving world geometry.
+
+The UI is handled separately and recomposited over the generated result. This substantially improves HUD stability during camera movement compared with feeding Frame Generation only the final composited image.
+
+## Overlay fixes
+
+- Lower-churn/double-buffered overlay drawing reduces flicker on title/menu screens and during screen recording.
+- Expensive window/compositor operations are not repeated every timer tick.
+- Dynamic Target FPS controls are now shown **only** when Dynamic FG is selected.
+- In fixed FG modes the entire Dynamic Target FPS section collapses, including Auto/Manual controls, target readout, slider and reserved blank space.
+
+## ReShade / RenoDX compatibility
+
+Control FG uses `dxgi.dll`. If ReShade also uses `dxgi.dll`, rename the ReShade DLL to `d3d12.dll` and leave Control FG as `dxgi.dll`.
 
 ## Verified target
 
 **Control — Steam DX12 — Steam build 21225456**
 
-The first release does not claim compatibility with DX11, GOG/Epic builds, later Control patches, or other wrappers that already install their own `dxgi.dll` beside `Control_DX12.exe`.
-
-The stabilized generation runtime is based on the v0.8.26 validation baseline. Later pre-release versions focused on user interface, persistence, policy and release packaging rather than changing the core FG path.
+DX11 is not supported. GOG/Epic builds and later Control patches are not claimed compatible until tested.
