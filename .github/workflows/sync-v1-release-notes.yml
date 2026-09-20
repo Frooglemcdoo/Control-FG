@@ -1,0 +1,28 @@
+name: Sync v1.0.0 release notes
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/sync-v1-release-notes.yml'
+      - 'GITHUB_RELEASE.md'
+
+permissions:
+  contents: write
+
+jobs:
+  sync-release-notes:
+    if: github.repository == 'Frooglemcdoo/Control-FG'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Sync v1.0.0 GitHub Release body
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release edit v1.0.0 --repo "$GITHUB_REPOSITORY" --notes-file GITHUB_RELEASE.md
+          gh release view v1.0.0 --repo "$GITHUB_REPOSITORY" --json tagName,name,body
