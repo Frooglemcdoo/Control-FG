@@ -1,31 +1,38 @@
 # Control FG roadmap
 
-## v1.0.0 — Frame Generation
+## v1.0.0 — Frame Generation + Ray Reconstruction
 
-The first public release is focused on a stable DLSS Frame Generation experience for Control DX12:
+The first public release now includes the stable Control-specific DLSS Frame Generation path and working DLSS Ray Reconstruction.
 
-- fixed 2x–6x modes on supported hardware;
+Completed for v1.0.0:
+
+- fixed 2x–6x Frame Generation modes on supported hardware;
 - native Dynamic Multi Frame Generation;
-- live HDR transitions;
+- live HDR/SDR transitions with hard DLSS-G resource reset/rearm;
 - persistent F10 overlay and runtime status;
-- capability-aware mode restrictions.
+- Control-native HUD-less scene capture and UI recomposition for generated frames;
+- DLSS Ray Reconstruction integrated at Control's native RT denoising boundary;
+- RR runtime 310.9.1 with Preset F default and live E/F switching;
+- compatibility testing across DLSS mode changes, ray tracing, HDR and Frame Generation.
 
-## Current development: DLSS Ray Reconstruction
+## Future: RTX 20/30-series Frame Generation and Multi Frame Generation
 
-Ray Reconstruction is now an active development target and is making good progress.
+Post-v1.0.0 research will investigate extending NVIDIA Frame Generation / Multi Frame Generation support to **RTX 20-series (Turing)** and **RTX 30-series (Ampere)** hardware.
 
-The goal is to integrate NVIDIA DLSS Ray Reconstruction directly into Control's existing DX12 ray-tracing path rather than treating it as a generic post-process replacement. Current work is focused on identifying and validating the native game/NGX integration points, proving the resources and state Ray Reconstruction needs, and building the runtime path carefully without destabilizing the production Frame Generation core.
+Recent community work has demonstrated that this is technically possible by combining architecture-gate handling with GPU-specific DLSS-G kernel/backend work. Control FG will treat this as a separate compatibility project so the stable v1.0.0 FG/RR path is not destabilized.
 
-Current areas of work include:
+Research areas include:
 
-- validating Control's native NGX and ray-tracing integration points;
-- identifying the denoiser replacement boundary used by the game's existing RT pipeline;
-- proving the depth, motion-vector, camera and ray-tracing resources required by Ray Reconstruction;
-- integrating the required Streamline / NGX feature path while keeping the existing Frame Generation implementation stable;
-- testing compatibility with live DLSS mode changes, ray tracing, HDR and Frame Generation;
-- building runtime validation and fallback behavior before exposing Ray Reconstruction as a public feature.
+- early Streamline/NVAPI architecture gating so the DLSS-G plugin is not rejected before initialization;
+- Turing/SM75 and Ampere/SM86 execution paths;
+- exposing higher MFG multipliers where the runtime and hardware path prove stable;
+- preserving Control FG's existing HUD-less scene capture, HDR lifecycle handling, Reflex pacing and dynamic multiplier logic;
+- real-hardware validation before any public support claim.
 
-Ray Reconstruction will remain marked as **in development** until image quality, stability, resource lifetime, synchronization and compatibility are proven in real gameplay. The project will continue to distinguish confirmed runtime behavior from experimental work.
+Reference project for this research:
+- `sdli1995/dlssg_for_sm86`
+
+This work is **not included in v1.0.0**.
 
 ## Next: DLSS Super Resolution module
 
@@ -35,7 +42,7 @@ Planned research includes:
 
 - selectable DLSS Super Resolution runtime/model families;
 - newer transformer/model variants where the game inputs and NVIDIA runtime support permit them;
-- a clean Control-styled UI integrated alongside FG and future RR controls;
+- a clean Control-styled UI integrated alongside FG and RR controls;
 - compatibility checks and safe fallback behavior.
 
 ## Longer-term direction
