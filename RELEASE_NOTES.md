@@ -1,18 +1,14 @@
-# Control FG v1.0.0 — Release Notes
+# Control FG v2.0.0 — Release Notes
 
-Control FG v1.0.0 is the first public release of the Control DX12 Frame Generation and Ray Reconstruction mod.
+Control FG v2.0.0 is the Ray Reconstruction and renderer-stability update for Control DX12.
 
-## Included in v1.0.0
+## New in v2.0.0
 
-- Fixed DLSS Frame Generation / Multi Frame Generation modes from **2x through 6x** on supported hardware.
-- **Dynamic Multi Frame Generation** with Auto monitor-refresh targeting or a Manual 30–1000 FPS output target.
-- Dynamic pacing using NVIDIA Reflex and the PCL `SimulationStart` marker used by the validated runtime path.
 - **DLSS Ray Reconstruction** integrated into Control's native DX12 ray-tracing/denoising path.
 - NVIDIA RR runtime **310.9.1** with **Preset F** default and live **E/F** selection.
-- Live HDR support, including HDR off/on transitions without restarting Control.
-- A persistent, Control-styled **F10 overlay** showing mode, effective multiplier, current FPS, HDR state and GPU maximum.
-- Settings persisted at `%LOCALAPPDATA%\ControlFG\settings.ini`.
-- RTX 40-series mode policy exposing **Off + 2x** while disabling unsupported higher MFG/Dynamic choices.
+- Finalized HDR/SDR Frame Generation recovery.
+- Finalized HUD/UI handling for generated frames.
+- Dynamic Target FPS UI now collapses completely outside Dynamic FG mode.
 
 ## Ray Reconstruction implementation
 
@@ -23,8 +19,6 @@ When RR is enabled, the mod bypasses Control's native denoiser for the RR path a
 This keeps RR on the correct side of the renderer pipeline, avoids a double-denoise path, and allows it to coexist with Control's DLSS modes, ray tracing, HDR and Frame Generation.
 
 ## HDR / Frame Generation fixes
-
-A substantial part of the final v1.0.0 stabilization work focused on Windows SDR/HDR transitions while DLSS-G was active.
 
 The final path performs a hard DLSS-G lifecycle reset across a display-domain change:
 
@@ -48,8 +42,16 @@ The UI is handled separately and recomposited over the generated result. This su
 
 - Lower-churn/double-buffered overlay drawing reduces flicker on title/menu screens and during screen recording.
 - Expensive window/compositor operations are not repeated every timer tick.
-- Dynamic Target FPS controls are now shown **only** when Dynamic FG is selected.
+- Dynamic Target FPS controls are shown **only** when Dynamic FG is selected.
 - In fixed FG modes the entire Dynamic Target FPS section collapses, including Auto/Manual controls, target readout, slider and reserved blank space.
+
+## Existing Frame Generation features retained
+
+- Fixed DLSS Frame Generation / Multi Frame Generation modes from **2x through 6x** on supported hardware.
+- **Dynamic Multi Frame Generation** with Auto monitor-refresh targeting or a Manual 30–1000 FPS output target.
+- Dynamic pacing using NVIDIA Reflex and the PCL `SimulationStart` marker used by the validated runtime path.
+- Persistent, Control-styled **F10 overlay**.
+- RTX 40-series mode policy exposing **Off + 2x** while disabling unsupported higher MFG/Dynamic choices.
 
 ## ReShade / RenoDX compatibility
 
