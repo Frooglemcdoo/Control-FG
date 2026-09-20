@@ -1,4 +1,4 @@
-name: Sync v1.0.0 release notes
+name: Restore v1.0.0 historical release notes
 
 on:
   push:
@@ -6,7 +6,7 @@ on:
       - main
     paths:
       - '.github/workflows/sync-v1-release-notes.yml'
-      - 'GITHUB_RELEASE.md'
+      - 'GITHUB_RELEASE_V1.md'
 
 permissions:
   contents: write
@@ -18,11 +18,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Sync v1.0.0 GitHub Release body
+      - name: Restore v1.0.0 GitHub Release body
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          gh release edit v1.0.0 --repo "$GITHUB_REPOSITORY" --notes-file GITHUB_RELEASE.md
+          gh release edit v1.0.0 --repo "$GITHUB_REPOSITORY" --notes-file GITHUB_RELEASE_V1.md
           gh release view v1.0.0 --repo "$GITHUB_REPOSITORY" --json tagName,name,body
