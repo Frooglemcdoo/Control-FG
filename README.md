@@ -2,7 +2,7 @@
 
 ![Control FG](assets/control_fg_logo.png)
 
-**Control FG** adds NVIDIA DLSS Frame Generation to the DirectX 12 version of Remedy Entertainment's *Control*, including fixed Frame Generation and Multi Frame Generation modes, native Dynamic Multi Frame Generation, live HDR handling, persistent settings, and an in-game overlay styled to fit Control's menu aesthetic.
+**Control FG** adds NVIDIA DLSS Frame Generation and DLSS Ray Reconstruction to the DirectX 12 version of Remedy Entertainment's *Control*, including fixed Frame Generation and Multi Frame Generation modes, native Dynamic Multi Frame Generation, live HDR handling, persistent settings, and an in-game overlay styled to fit Control's menu aesthetic.
 
 Unlike a generic FG translation layer, Control FG is **game-specific and engine-aware**. *Control* does not expose a native Frame Generation integration for the mod to translate, so Control FG reconstructs the inputs FG needs directly from the game's renderer: frame boundaries, depth and motion-vector resources, camera data, jitter/reset state, pre-UI scene color, HDR state, and presentation timing. That makes the project less portable than broad compatibility tools, but allows a much deeper integration with *Control* itself.
 
@@ -20,12 +20,23 @@ Unlike a generic FG translation layer, Control FG is **game-specific and engine-
 
 - **Off / 2x / 3x / 4x / 5x / 6x** fixed Frame Generation modes on supported hardware.
 - **Native Dynamic MFG** with Auto monitor-refresh targeting or a manual 30–1000 FPS target.
-- **Live HDR support**, including enabling/disabling HDR during gameplay without restarting the game.
+- **DLSS Ray Reconstruction**, integrated directly into Control's native DX12 ray-tracing path and exposed through the in-game overlay.
+- **Live HDR support**, including enabling/disabling HDR during gameplay without restarting the game. HDR/SDR transitions now perform a hard DLSS-G resource reset and clean rearm so Frame Generation does not carry stale presentation state across a Windows HDR mode change.
 - **F10 overlay** that starts hidden and shows current mode, effective multiplier, output FPS, HDR state, and reported GPU maximum.
 - **Persistent settings** stored in `%LOCALAPPDATA%\ControlFG\settings.ini`.
 - **RTX 40-series safety policy:** Off and 2x are available; Dynamic and 3x–6x are disabled.
 - Runtime-proven Dynamic MFG integration using Reflex pacing and the PCL `SimulationStart` marker required by the working path.
-- **Game-aware HUD/UI handling:** Control FG captures a real pre-UI scene surface so generated frames do not need to treat the fully composited HUD as moving scene content.
+- **Game-aware HUD/UI handling:** Control FG captures a real pre-UI scene surface and recomposites the UI separately, preventing the HUD from being treated as moving world geometry by Frame Generation.
+
+## DLSS Ray Reconstruction
+
+Control FG v1.0.0 now includes a working **DLSS Ray Reconstruction** path for Control's ray-traced renderer.
+
+The implementation is game-specific rather than a generic post-process replacement. Control FG hooks the game's native ray-tracing/denoising boundary, disables the native denoiser for the RR path, and feeds Ray Reconstruction the renderer state it needs from Control itself: depth, motion vectors, camera/jitter data, ray-tracing resources, reset/discontinuity state, and the same presentation/HDR context used by the Frame Generation integration.
+
+The current RR path uses the NVIDIA RR runtime `310.9.1`. Preset **F** is the default, with **E/F** selectable live from the overlay. RR is designed to coexist with Control's DLSS modes, ray tracing, HDR, and Frame Generation rather than running as an isolated screen-space filter.
+
+Because the integration happens at Control's renderer boundary, RR replaces the game's native ray-tracing denoising stage instead of denoising an already-denoised final image. This is important for preserving the intended reconstruction inputs and avoiding a double-denoise path.
 
 ## Why Control FG is different
 
@@ -122,7 +133,7 @@ This release is **build-locked to the Steam DX12 version listed above**. GOG/Epi
 
 ## Project status / roadmap
 
-Frame Generation is Mod #1. Current development is expanding the renderer integration to additional FG backends while preserving Control FG's game-specific HUD-less, motion-vector, depth, camera, HDR, and presentation data. Planned work also includes a separate DLSS Super Resolution module with selectable runtime/model families, followed by Ray Reconstruction research and integration. See [ROADMAP.md](ROADMAP.md).
+Frame Generation and Ray Reconstruction are now both part of the v1.0.0 release. Future work includes additional GPU compatibility research, including RTX 20/30-series Frame Generation and Multi Frame Generation, plus a separate DLSS Super Resolution module with selectable runtime/model families. See [ROADMAP.md](ROADMAP.md).
 
 ## Credits and legal
 
