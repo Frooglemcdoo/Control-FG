@@ -1,0 +1,46 @@
+name: Extract signed pre-MFG Streamline plugin
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - 'diag/sl-dlssg-dev-r9'
+
+jobs:
+  extract:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout NVIDIA Streamline v2.4.15 with LFS
+        uses: actions/checkout@v4
+        with:
+          repository: NVIDIA-RTX/Streamline
+          ref: v2.4.15
+          lfs: true
+          path: streamline2415
+
+      - name: Collect signed pre-MFG binaries
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force out2415 | Out-Null
+          $names = @(
+            "sl.dlss_g.dll",
+            "sl.common.dll",
+            "sl.pcl.dll",
+            "sl.reflex.dll",
+            "sl.interposer.dll",
+            "nvngx_dlssg.dll"
+          )
+          foreach ($n in $names) {
+            $src = Join-Path "streamline2415\bin\x64" $n
+            if (!(Test-Path $src)) { throw "Missing $src" }
+            Copy-Item $src (Join-Path "out2415" $n) -Force
+            $vi=[System.Diagnostics.FileVersionInfo]::GetVersionInfo((Resolve-Path (Join-Path "out2415" $n)))
+            Write-Host "$n version=$($vi.FileVersion) sha256=$((Get-FileHash (Join-Path "out2415" $n) -Algorithm SHA256).Hash.ToLowerInvariant()) size=$((Get-Item (Join-Path "out2415" $n)).Length)"
+          }
+
+      - name: Upload signed pre-MFG bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: streamline-2.4.15-signed-pre-mfg
+          path: out2415\*
+          retention-days: 2
