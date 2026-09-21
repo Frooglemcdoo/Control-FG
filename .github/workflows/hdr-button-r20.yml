@@ -1,7 +1,7 @@
-name: HDR Button R23 Windows build
+name: HDR Button R27 Windows build
 on:
   push:
-    branches: ['diag/rtx50-hdr-button-r23']
+    branches: ['diag/rtx50-hdr-button-r27']
   workflow_dispatch:
 permissions:
   contents: read
@@ -53,7 +53,7 @@ jobs:
       - name: Add test notes
         run: |
           @'
-          CONTROL FG RTX50 HDR BUTTON R23 TEST
+          CONTROL FG RTX50 HDR BUTTON R27 TEST
 
           Open the F10 overlay. A new HDR ON / HDR OFF button appears in the HDR status column near the top of the F10 overlay.
 
@@ -67,11 +67,11 @@ jobs:
           Do not press Win+Alt+B yourself during this test; the button manages Windows HDR and then verifies Control HDR separately.
 
           RTX50 diagnostic only. The original v2 HUD/UI recomposition path is unchanged.
-          '@ | Set-Content diagnostics/hdr-button-r20/package/HDR-BUTTON-R23-TEST.txt -Encoding UTF8
+          '@ | Set-Content diagnostics/hdr-button-r20/package/HDR-BUTTON-R27-TEST.txt -Encoding UTF8
       - name: Upload diagnostic
         uses: actions/upload-artifact@v4
         with:
-          name: Control-FG-RTX50-HDR-Button-R23
+          name: Control-FG-RTX50-HDR-Button-R27
           path: diagnostics/hdr-button-r20/package/
           retention-days: 7
           if-no-files-found: error
