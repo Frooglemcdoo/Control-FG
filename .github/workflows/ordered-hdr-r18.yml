@@ -1,0 +1,63 @@
+name: Ordered HDR R18 Windows build
+on:
+  push:
+    branches: ['diag/rtx50-ordered-hdr-r18']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: TsudaKageyu/minhook
+          ref: v1.3.4
+          path: diagnostics/ordered-hdr-r18/third_party/minhook
+      - name: Prepare hash-locked baseline and validate imports
+        run: |
+          $ErrorActionPreference='Stop'
+          Invoke-WebRequest 'https://github.com/Frooglemcdoo/Control-FG/releases/download/v2.0.0/Control-FG-v2.0.0.zip' -OutFile baseline.zip
+          python diagnostics/ordered-hdr-r18/tools/prepare.py baseline.zip diagnostics/ordered-hdr-r18/package
+          if ($LASTEXITCODE -ne 0) { throw 'prepare failed' }
+          python -m pip -q install pefile
+          if ($LASTEXITCODE -ne 0) { throw 'pefile install failed' }
+          python -c "import pefile; p=pefile.PE('diagnostics/ordered-hdr-r18/package/dxgi.dll'); d={x.dll:[y.name for y in x.imports] for x in p.DIRECTORY_ENTRY_IMPORT}; print(d); assert b'ControlFGHDRGuard_Bootstrap' in d[b'ControlFGHDRGuard.dll']; assert len(d)==7"
+          if ($LASTEXITCODE -ne 0) { throw 'PE import verification failed' }
+      - name: Compile MSVC Release with warnings as errors
+        run: |
+          cmake -S diagnostics/ordered-hdr-r18 -B diagnostics/ordered-hdr-r18/build -A x64
+          if ($LASTEXITCODE -ne 0) { throw 'configure failed' }
+          cmake --build diagnostics/ordered-hdr-r18/build --config Release --parallel
+          if ($LASTEXITCODE -ne 0) { throw 'build failed' }
+      - name: Run policy and helper loader tests
+        run: |
+          ctest --test-dir diagnostics/ordered-hdr-r18/build -C Release --output-on-failure --verbose
+          if ($LASTEXITCODE -ne 0) { throw 'ctest failed' }
+      - name: Test actual packaged core and detour installation
+        run: |
+          $ErrorActionPreference='Stop'
+          $root='diagnostics/ordered-hdr-r18'
+          Copy-Item "$root/build/Release/ControlFGHDRGuard.dll" "$root/package/ControlFGHDRGuard.dll"
+          Copy-Item "$root/third_party/minhook/LICENSE.txt" "$root/package/legal/MINHOOK-LICENSE.txt"
+          & "$root/build/Release/core_load_test.exe" (Resolve-Path "$root/package/dxgi.dll").Path
+          if ($LASTEXITCODE -ne 0) { throw 'packaged core loader/detour smoke test failed' }
+          $tokens=$null; $errors=$null
+          [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path "$root/package/Collect-ControlFG-Compact-Logs.ps1").Path,[ref]$tokens,[ref]$errors) | Out-Null
+          if ($errors.Count) { $errors | Format-List; throw 'collector syntax failure' }
+          Write-Host 'PASS compact collector PowerShell syntax'
+          Get-FileHash "$root/package/dxgi.dll","$root/package/ControlFGHDRGuard.dll" -Algorithm SHA256 | Format-Table -AutoSize
+      - name: Upload diagnostic and test evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: RTX50-Ordered-HDR-R18
+          path: |
+            diagnostics/ordered-hdr-r18/package/
+            diagnostics/ordered-hdr-r18/build/Testing/Temporary/LastTest.log
+          if-no-files-found: error
+          retention-days: 7
