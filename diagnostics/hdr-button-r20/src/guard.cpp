@@ -36,6 +36,7 @@ static std::atomic<HWND> buttonWindow{nullptr};
 static WNDPROC originalOverlayProc{};
 static constexpr UINT kAttachButtonMessage = WM_APP + 0x420;
 static constexpr int kHdrButtonId = 0x4844;
+static void Log(const char* fmt,...) noexcept;
 using GameHdrGet = bool (*)();
 using GameHdrSetVoid = void (*)(bool);
 using GameHdrSetBool = bool (*)(bool);
