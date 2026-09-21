@@ -1,0 +1,101 @@
+name: Ordered HDR R19 Windows build
+on:
+  push:
+    branches: ['diag/rtx50-ordered-hdr-r19']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: TsudaKageyu/minhook
+          ref: c3fcafdc10146beb5919319d0683e44e3c30d537
+          path: diagnostics/ordered-hdr-r19/third_party/minhook
+      - name: Derive reviewed controller source and prepare baseline
+        run: |
+          $ErrorActionPreference='Stop'
+          $old='diagnostics/ordered-hdr-r18';$root='diagnostics/ordered-hdr-r19'
+          New-Item -ItemType Directory -Force "$root/tools" | Out-Null
+          Copy-Item "$old/src/guard.cpp","$old/src/transition.h" "$root/src/"
+          Copy-Item "$old/tests/policy_test.cpp","$old/tests/load_test.cpp","$old/tests/core_load_test.cpp" "$root/tests/"
+          Copy-Item "$old/CMakeLists.txt" "$root/CMakeLists.txt"
+          Copy-Item "$old/tools/prepare.py" "$root/tools/prepare.py"
+          python "$root/upgrade.py" $root
+          if ($LASTEXITCODE -ne 0) { throw 'source derivation failed' }
+          Invoke-WebRequest 'https://github.com/Frooglemcdoo/Control-FG/releases/download/v2.0.0/Control-FG-v2.0.0.zip' -OutFile baseline.zip
+          python "$root/tools/prepare.py" baseline.zip "$root/package"
+          if ($LASTEXITCODE -ne 0) { throw 'baseline preparation failed' }
+      - name: Compile MSVC Release with warnings as errors
+        run: |
+          cmake -S diagnostics/ordered-hdr-r19 -B diagnostics/ordered-hdr-r19/build -A x64
+          if ($LASTEXITCODE -ne 0) { throw 'configure failed' }
+          cmake --build diagnostics/ordered-hdr-r19/build --config Release --parallel
+          if ($LASTEXITCODE -ne 0) { throw 'build failed' }
+      - name: Policy, loader, readiness and Windows hotkey-message tests
+        run: |
+          ctest --test-dir diagnostics/ordered-hdr-r19/build -C Release --output-on-failure --verbose
+          if ($LASTEXITCODE -ne 0) { throw 'ctest failed' }
+      - name: Packaged-core detour and collector checks
+        run: |
+          $ErrorActionPreference='Stop';$root='diagnostics/ordered-hdr-r19'
+          Copy-Item "$root/build/Release/ControlFGHDRGuard.dll" "$root/package/ControlFGHDRGuard.dll"
+          Copy-Item "$root/third_party/minhook/LICENSE.txt" "$root/package/legal/MINHOOK-LICENSE.txt"
+          & "$root/build/Release/core_load_test.exe" (Resolve-Path "$root/package/dxgi.dll").Path
+          if ($LASTEXITCODE -ne 0) { throw 'packaged core loader/detour failed' }
+          $tokens=$null; $errors=$null
+          [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path "$root/package/Collect-ControlFG-Compact-Logs.ps1").Path,[ref]$tokens,[ref]$errors) | Out-Null
+          if ($errors.Count) { $errors | Format-List; throw 'collector syntax failure' }
+          Write-Host 'PASS compact collector PowerShell syntax'
+          Get-FileHash "$root/package/dxgi.dll","$root/package/ControlFGHDRGuard.dll" -Algorithm SHA256 | Format-Table -AutoSize
+      - name: Record scope and archive generated source
+        run: |
+          $ErrorActionPreference='Stop';$root='diagnostics/ordered-hdr-r19'
+          $notes=@(
+            'Control FG - RTX50 HDR Controller R19 TEST',
+            '',
+            'FOR THIS TEST USE CTRL + ALT + F11, NOT WIN + ALT + B.',
+            'Ctrl+Alt+F11 asks the controller to stop FG before it sends the Windows HDR toggle.',
+            'Tap and release all keys, keep the game focused, then wait for HDR and FG to recover.',
+            'Native Win+Alt+B is deliberately NOT intercepted in this build.',
+            '',
+            'Close Control. Copy dxgi.dll, ControlFGHDRGuard.dll, the complete ControlFGStreamline folder,',
+            'and the included collector and build JSON beside Control_DX12.exe. Launch through Steam normally.',
+            'Start in SDR with 2x FG. Tap Ctrl+Alt+F11 once. Wait before testing the reverse transition.',
+            'A brief base-FPS period is intentional. If nothing happens or FG stays off, collect logs rather',
+            'than forcing another switch. A timeout holds FG off; selecting Off in F10 acknowledges failure.',
+            '',
+            'R19 changes the request route and controller diagnostics. Full v2 UI recomposition is retained.',
+            'It does not use R14-R17 rendering patches and does not modify any NVIDIA DLL.',
+            'The original R18 full-input warmup and fence requirements remain; no readiness gate is removed.',
+            'A rejected command, missing render callback, invalid HDR query or external HDR change is now logged.',
+            '',
+            'Build and unit tests are not evidence of a visual HDR fix. Runtime sign-off is still required.',
+            'Rollback: close the game, copy rollback/dxgi.dll over dxgi.dll, then remove ControlFGHDRGuard.dll.'
+          )
+          $notes | Set-Content "$root/package/START-HERE-R19.txt" -Encoding utf8
+          $record=Get-Content "$root/package/ORDERED-HDR-BUILD.json" -Raw | ConvertFrom-Json
+          $record | Add-Member NoteProperty source_commit $env:GITHUB_SHA
+          $record | Add-Member NoteProperty controller_sha256 (Get-FileHash "$root/package/ControlFGHDRGuard.dll" -Algorithm SHA256).Hash.ToLowerInvariant()
+          $record | Add-Member NoteProperty test_hotkey 'Ctrl+Alt+F11'
+          $record | Add-Member NoteProperty native_WinAltB_intercepted $false
+          $record | Add-Member NoteProperty actual_game_test 'not_run'
+          $record | ConvertTo-Json -Depth 8 | Set-Content "$root/package/ORDERED-HDR-BUILD.json" -Encoding utf8
+          Compress-Archive -Path "$root/src","$root/tests","$root/tools","$root/generated","$root/CMakeLists.txt","$root/upgrade.py" -DestinationPath "$root/Controller-Source-R19.zip"
+      - name: Upload diagnostic, source and tests
+        uses: actions/upload-artifact@v4
+        with:
+          name: RTX50-Ordered-HDR-R19
+          path: |
+            diagnostics/ordered-hdr-r19/package/
+            diagnostics/ordered-hdr-r19/Controller-Source-R19.zip
+            diagnostics/ordered-hdr-r19/build/Testing/Temporary/LastTest.log
+          if-no-files-found: error
+          retention-days: 7
