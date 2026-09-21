@@ -1,0 +1,24 @@
+name: Fetch Control FG v1 release asset
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - 'diag/sl-dlssg-dev-r9'
+
+jobs:
+  fetch:
+    runs-on: windows-latest
+    steps:
+      - name: Download v1.0.0 release
+        shell: pwsh
+        run: |
+          $url = "https://github.com/Frooglemcdoo/Control-FG/releases/download/v1.0.0/Control-FG-v1.0.0.zip"
+          Invoke-WebRequest -Uri $url -OutFile Control-FG-v1.0.0.zip
+          Write-Host "SHA256=$((Get-FileHash Control-FG-v1.0.0.zip -Algorithm SHA256).Hash.ToLowerInvariant())"
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: control-fg-v1-release
+          path: Control-FG-v1.0.0.zip
+          retention-days: 2
