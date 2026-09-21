@@ -46,29 +46,9 @@ jobs:
             Write-Host "CFG=$($cfg.FullName)"
           }
 
-          @'
-{
-  "mode": "prev",
-  "showDebugText": false,
-  "numFramesToGenerate": 1
-}
-'@ | Set-Content out\sl.dlss_g.prev.json -Encoding ascii
-
-          @'
-{
-  "mode": "cur",
-  "showDebugText": false,
-  "numFramesToGenerate": 1
-}
-'@ | Set-Content out\sl.dlss_g.cur.json -Encoding ascii
-
-          @'
-{
-  "mode": "auto",
-  "showDebugText": false,
-  "numFramesToGenerate": 1
-}
-'@ | Set-Content out\sl.dlss_g.auto.json -Encoding ascii
+          '{"mode":"prev","showDebugText":false,"numFramesToGenerate":1}' | Set-Content out\sl.dlss_g.prev.json -Encoding ascii
+          '{"mode":"cur","showDebugText":false,"numFramesToGenerate":1}' | Set-Content out\sl.dlss_g.cur.json -Encoding ascii
+          '{"mode":"auto","showDebugText":false,"numFramesToGenerate":1}' | Set-Content out\sl.dlss_g.auto.json -Encoding ascii
 
       - name: Upload dev plugin bundle
         uses: actions/upload-artifact@v4
