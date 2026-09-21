@@ -1,7 +1,7 @@
-name: HDR Button R20 Windows build
+name: HDR Button R21 Windows build
 on:
   push:
-    branches: ['diag/rtx50-hdr-button-r20']
+    branches: ['diag/rtx50-hdr-button-r21']
   workflow_dispatch:
 permissions:
   contents: read
@@ -18,30 +18,30 @@ jobs:
         with:
           repository: TsudaKageyu/minhook
           ref: v1.3.4
-          path: diagnostics/hdr-button-r20/third_party/minhook
+          path: diagnostics/hdr-button-r21/third_party/minhook
       - name: Prepare exact public v2 package
         run: |
           $ErrorActionPreference='Stop'
           Invoke-WebRequest 'https://github.com/Frooglemcdoo/Control-FG/releases/download/v2.0.0/Control-FG-v2.0.0.zip' -OutFile baseline.zip
-          python diagnostics/hdr-button-r20/tools/prepare.py baseline.zip diagnostics/hdr-button-r20/package
+          python diagnostics/hdr-button-r21/tools/prepare.py baseline.zip diagnostics/hdr-button-r21/package
           if ($LASTEXITCODE -ne 0) { throw 'prepare failed' }
           python -m pip -q install pefile
-          python -c "import pefile; p=pefile.PE('diagnostics/hdr-button-r20/package/dxgi.dll'); d={x.dll:[y.name for y in x.imports] for x in p.DIRECTORY_ENTRY_IMPORT}; print(d); assert b'ControlFGHDRButton_Bootstrap' in d[b'ControlFGHDRButton.dll']"
+          python -c "import pefile; p=pefile.PE('diagnostics/hdr-button-r21/package/dxgi.dll'); d={x.dll:[y.name for y in x.imports] for x in p.DIRECTORY_ENTRY_IMPORT}; print(d); assert b'ControlFGHDRButton_Bootstrap' in d[b'ControlFGHDRButton.dll']"
           if ($LASTEXITCODE -ne 0) { throw 'PE import validation failed' }
       - name: Compile MSVC Release
         run: |
-          cmake -S diagnostics/hdr-button-r20 -B diagnostics/hdr-button-r20/build -A x64
+          cmake -S diagnostics/hdr-button-r21 -B diagnostics/hdr-button-r21/build -A x64
           if ($LASTEXITCODE -ne 0) { throw 'configure failed' }
-          cmake --build diagnostics/hdr-button-r20/build --config Release --parallel
+          cmake --build diagnostics/hdr-button-r21/build --config Release --parallel
           if ($LASTEXITCODE -ne 0) { throw 'build failed' }
       - name: Unit and loader tests
         run: |
-          ctest --test-dir diagnostics/hdr-button-r20/build -C Release --output-on-failure --verbose
+          ctest --test-dir diagnostics/hdr-button-r21/build -C Release --output-on-failure --verbose
           if ($LASTEXITCODE -ne 0) { throw 'ctest failed' }
       - name: Assemble and smoke-test package
         run: |
           $ErrorActionPreference='Stop'
-          $root='diagnostics/hdr-button-r20'
+          $root='diagnostics/hdr-button-r21'
           Copy-Item "$root/build/Release/ControlFGHDRButton.dll" "$root/package/ControlFGHDRButton.dll"
           Copy-Item "$root/third_party/minhook/LICENSE.txt" "$root/package/legal/MINHOOK-LICENSE.txt"
           & "$root/build/Release/core_load_test.exe" (Resolve-Path "$root/package/dxgi.dll").Path
@@ -53,7 +53,7 @@ jobs:
       - name: Add test notes
         run: |
           @'
-          CONTROL FG RTX50 HDR BUTTON R20 TEST
+          CONTROL FG RTX50 HDR BUTTON R21 TEST
 
           Open the F10 overlay. A new HDR ON / HDR OFF button appears in the lower-right corner.
 
@@ -67,11 +67,11 @@ jobs:
           Do not use Win+Alt+B during this test.
 
           RTX50 diagnostic only. The original v2 HUD/UI recomposition path is unchanged.
-          '@ | Set-Content diagnostics/hdr-button-r20/package/HDR-BUTTON-R20-TEST.txt -Encoding UTF8
+          '@ | Set-Content diagnostics/hdr-button-r21/package/HDR-BUTTON-R21-TEST.txt -Encoding UTF8
       - name: Upload diagnostic
         uses: actions/upload-artifact@v4
         with:
-          name: Control-FG-RTX50-HDR-Button-R20
-          path: diagnostics/hdr-button-r20/package/
+          name: Control-FG-RTX50-HDR-Button-R21
+          path: diagnostics/hdr-button-r21/package/
           retention-days: 7
           if-no-files-found: error
