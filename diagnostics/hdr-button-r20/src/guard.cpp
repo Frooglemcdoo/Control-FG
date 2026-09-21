@@ -37,6 +37,7 @@ static WNDPROC originalOverlayProc{};
 static constexpr UINT kAttachButtonMessage = WM_APP + 0x420;
 static constexpr int kHdrButtonId = 0x4844;
 static void Log(const char* fmt,...) noexcept;
+static HWND FindGameWindow() noexcept;
 using GameHdrGet = bool (*)();
 using GameHdrDisplayFn = bool (*)(HWND,bool);
 using GameHdrSettingsFn = void (*)(bool,float,bool);
@@ -334,7 +335,8 @@ static bool StartButtonTransition() noexcept {
 static void OnFrame() noexcept {
     if(ready.load()) {
         State active=SnapshotState();
-        if(active.active() && active.phase!=Phase::WaitFgResume) WriteTransitionFgHold(true);
+        if((active.active() && active.phase!=Phase::WaitFgResume) || active.phase==Phase::Failed)
+            WriteTransitionFgHold(true);
     }
     if(ready.load() && pendingBegin.exchange(false)) {
         AcquireSRWLockExclusive(&stateLock);
