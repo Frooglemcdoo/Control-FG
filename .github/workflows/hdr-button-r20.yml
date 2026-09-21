@@ -1,7 +1,7 @@
-name: HDR Setter Scan R24 Windows build
+name: HDR Setter Scan R25 Windows build
 on:
   push:
-    branches: ['diag/rtx50-hdr-setter-scan-r24']
+    branches: ['diag/rtx50-hdr-setter-scan-r25']
   workflow_dispatch:
 permissions:
   contents: read
@@ -53,11 +53,11 @@ jobs:
       - name: Add test notes
         run: |
           @'
-          CONTROL FG RTX50 HDR SETTER SCAN R24
+          CONTROL FG RTX50 HDR SETTER SCAN R25
 
           The HDR button intentionally remains unavailable in this read-only discovery build.
 
-          R24 performs NO FG shutdown and NO HDR change. It resolves Control's real
+          R25 performs NO FG shutdown and NO HDR change. It resolves Control's real
           DeviceUtil::isHDREnabled() getter, logs its machine code, identifies module
           data referenced by that getter (and one direct-call level), and scans the
           exact loaded d3d_rmdwin10_f.dll .text section for read/write references to
@@ -68,11 +68,11 @@ jobs:
 
           RTX50 diagnostic only. The original renderer and NVIDIA/Streamline binaries
           remain unchanged.
-          '@ | Set-Content diagnostics/hdr-button-r20/package/HDR-BUTTON-R24-TEST.txt -Encoding UTF8
+          '@ | Set-Content diagnostics/hdr-button-r20/package/HDR-BUTTON-R25-TEST.txt -Encoding UTF8
       - name: Upload diagnostic
         uses: actions/upload-artifact@v4
         with:
-          name: Control-FG-RTX50-HDR-Setter-Scan-R24-Retry
+          name: Control-FG-RTX50-HDR-Setter-Scan-R25-Retry
           path: diagnostics/hdr-button-r20/package/
           retention-days: 7
           if-no-files-found: error
