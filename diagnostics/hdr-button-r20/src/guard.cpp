@@ -264,10 +264,10 @@ static LRESULT CALLBACK OverlaySubclass(HWND hwnd,UINT msg,WPARAM wp,LPARAM lp) 
     if(msg==kAttachButtonMessage) {
         if(!buttonWindow.load()) {
             HWND b=CreateWindowExW(0,L"BUTTON",L"HDR",WS_CHILD|WS_VISIBLE|BS_OWNERDRAW,
-                614,548,96,34,hwnd,reinterpret_cast<HMENU>(static_cast<INT_PTR>(kHdrButtonId)),selfModule,nullptr);
+                448,128,108,40,hwnd,reinterpret_cast<HMENU>(static_cast<INT_PTR>(kHdrButtonId)),selfModule,nullptr);
             if(b) {
                 buttonWindow.store(b);
-                Log("HDR_BUTTON_OVERLAY_ATTACH overlay=%p button=%p rect=614,548,96,34",hwnd,b);
+                Log("HDR_BUTTON_OVERLAY_ATTACH overlay=%p button=%p rect=448,128,108,40",hwnd,b);
                 UpdateButtonVisual();
             } else Log("HDR_BUTTON_OVERLAY_ATTACH_FAIL error=%lu",GetLastError());
         }
@@ -420,7 +420,7 @@ static DWORD WINAPI Worker(void*) noexcept {
     CreateDirectoryW(logDir.c_str(),nullptr);
     SYSTEMTIME st{};GetSystemTime(&st);
     wchar_t name[180]{};
-    swprintf_s(name,L"\\hdr-button-R20-%04u%02u%02u-%02u%02u%02u-%lu.log",
+    swprintf_s(name,L"\\hdr-button-R21-%04u%02u%02u-%02u%02u%02u-%lu.log",
         st.wYear,st.wMonth,st.wDay,st.wHour,st.wMinute,st.wSecond,GetCurrentProcessId());
     logFile=CreateFileW((logDir+name).c_str(),GENERIC_WRITE,FILE_SHARE_READ|FILE_SHARE_WRITE,nullptr,
         CREATE_ALWAYS,FILE_ATTRIBUTE_NORMAL,nullptr);
@@ -429,7 +429,7 @@ static DWORD WINAPI Worker(void*) noexcept {
     std::wstring directory(own);directory=directory.substr(0,directory.find_last_of(L"\\/"));
     std::wstring corePath=directory+L"\\dxgi.dll";
     std::string hash=HashFile(corePath);
-    Log("HDR_BUTTON_BUILD version=R20 expected_core_sha256=%s actual_core_sha256=%s ui=F10_overlay_child_button",
+    Log("HDR_BUTTON_BUILD version=R21 expected_core_sha256=%s actual_core_sha256=%s ui=F10_overlay_child_button",
         kExpectedCoreSha256,hash.c_str());
     if(hash!=kExpectedCoreSha256){Log("HDR_BUTTON_INSTALL_FAIL reason=core_hash");return 0;}
     core=reinterpret_cast<unsigned char*>(GetModuleHandleW(corePath.c_str()));
@@ -472,7 +472,7 @@ static DWORD WINAPI Worker(void*) noexcept {
 }
 
 extern "C" __declspec(dllexport) void WINAPI ControlFGHDRButton_Bootstrap(){}
-extern "C" __declspec(dllexport) unsigned WINAPI ControlFGHDRButton_Version(){return 0x00200001;}
+extern "C" __declspec(dllexport) unsigned WINAPI ControlFGHDRButton_Version(){return 0x00210001;}
 
 BOOL WINAPI DllMain(HINSTANCE mod,DWORD reason,LPVOID) {
     if(reason==DLL_PROCESS_ATTACH) {
