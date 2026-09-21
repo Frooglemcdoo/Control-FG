@@ -84,6 +84,164 @@ static void LogHdrExports(HMODULE module) noexcept {
         Log("HDR_BUTTON_GAME_EXPORT_SCAN_FAIL code=0x%08lX",GetExceptionCode());
     }
 }
+
+struct HdrScanRange {
+    unsigned char* base{};
+    size_t imageSize{};
+    unsigned char* text{};
+    size_t textSize{};
+};
+static bool GetHdrScanRange(HMODULE module, HdrScanRange& out) noexcept {
+    out={};
+    if(!module)return false;
+    auto* base=reinterpret_cast<unsigned char*>(module);
+    __try {
+        auto* dos=reinterpret_cast<IMAGE_DOS_HEADER*>(base);
+        if(dos->e_magic!=IMAGE_DOS_SIGNATURE)return false;
+        auto* nt=reinterpret_cast<IMAGE_NT_HEADERS64*>(base+dos->e_lfanew);
+        if(nt->Signature!=IMAGE_NT_SIGNATURE || nt->OptionalHeader.Magic!=IMAGE_NT_OPTIONAL_HDR64_MAGIC)return false;
+        out.base=base;out.imageSize=nt->OptionalHeader.SizeOfImage;
+        auto* sec=IMAGE_FIRST_SECTION(nt);
+        for(unsigned i=0;i<nt->FileHeader.NumberOfSections;++i) {
+            char name[9]{};memcpy(name,sec[i].Name,8);
+            if(strcmp(name,".text")==0) {
+                out.text=base+sec[i].VirtualAddress;
+                out.textSize=sec[i].Misc.VirtualSize;
+                return out.text && out.textSize;
+            }
+        }
+    } __except(EXCEPTION_EXECUTE_HANDLER) {
+        Log("HDR_SETTER_SCAN_PE_FAIL code=0x%08lX",GetExceptionCode());
+    }
+    return false;
+}
+static void LogScanBytes(const char* label,const unsigned char* p,size_t count,const HdrScanRange& range) noexcept {
+    if(!p || p<range.base || p>=range.base+range.imageSize)return;
+    if(p+count>range.base+range.imageSize)count=static_cast<size_t>(range.base+range.imageSize-p);
+    char hex[769]{};size_t used=0;
+    for(size_t i=0;i<count && used+3<sizeof(hex);++i) {
+        int n=snprintf(hex+used,sizeof(hex)-used,"%02X",p[i]);
+        if(n<=0)break;used+=static_cast<size_t>(n);
+        if(i+1<count && used+2<sizeof(hex))hex[used++]=' ';
+    }
+    hex[used]=0;
+    Log("HDR_SETTER_SCAN_BYTES label=%s rva=0x%zX size=%zu bytes=%s",
+        label,static_cast<size_t>(p-range.base),count,hex);
+}
+struct RipPattern { const unsigned char* prefix; size_t prefixLen; size_t dispOffset; size_t instructionLen; const char* kind; };
+static bool MatchPrefix(const unsigned char* p,const unsigned char* end,const unsigned char* prefix,size_t n) noexcept {
+    return p+n<=end && memcmp(p,prefix,n)==0;
+}
+static void AddUniqueTarget(std::vector<uintptr_t>& targets,uintptr_t target) {
+    for(auto v:targets)if(v==target)return;
+    targets.push_back(target);
+}
+static void ScanFunctionDataRefs(const unsigned char* fn,size_t len,const char* source,
+                                 const HdrScanRange& range,std::vector<uintptr_t>& targets) noexcept {
+    static const unsigned char p1[]={0x48,0x8B,0x05};
+    static const unsigned char p2[]={0x48,0x8D,0x05};
+    static const unsigned char p3[]={0x48,0x89,0x05};
+    static const unsigned char p4[]={0x8A,0x05};
+    static const unsigned char p5[]={0x88,0x05};
+    static const unsigned char p6[]={0x0F,0xB6,0x05};
+    static const unsigned char p7[]={0x80,0x3D};
+    static const unsigned char p8[]={0x83,0x3D};
+    static const unsigned char p9[]={0xC6,0x05};
+    static const unsigned char p10[]={0xC7,0x05};
+    static const unsigned char p11[]={0x39,0x05};
+    static const unsigned char p12[]={0x38,0x05};
+    const RipPattern patterns[]={
+        {p1,3,3,7,"read64"},{p2,3,3,7,"lea"},{p3,3,3,7,"write64"},
+        {p4,2,2,6,"read8"},{p5,2,2,6,"write8"},{p6,3,3,7,"read8zx"},
+        {p7,2,2,7,"cmp8"},{p8,2,2,7,"cmp32imm8"},{p9,2,2,7,"write8imm"},
+        {p10,2,2,10,"write32imm"},{p11,2,2,6,"cmp32"},{p12,2,2,6,"cmp8reg"}
+    };
+    const unsigned char* end=fn+len;
+    for(size_t off=0;off<len;++off) {
+        const unsigned char* p=fn+off;
+        for(const auto& pat:patterns) {
+            if(!MatchPrefix(p,end,pat.prefix,pat.prefixLen) || p+pat.instructionLen>end)continue;
+            int32_t disp{};memcpy(&disp,p+pat.dispOffset,sizeof(disp));
+            uintptr_t target=reinterpret_cast<uintptr_t>(p+pat.instructionLen)+static_cast<int64_t>(disp);
+            uintptr_t lo=reinterpret_cast<uintptr_t>(range.base),hi=lo+range.imageSize;
+            if(target<lo || target>=hi)continue;
+            AddUniqueTarget(targets,target);
+            Log("HDR_SETTER_SCAN_DATAREF source=%s site_rva=0x%zX kind=%s target_rva=0x%zX",
+                source,static_cast<size_t>(p-range.base),pat.kind,static_cast<size_t>(target-lo));
+        }
+        if(p+5<=end && *p==0xE8) {
+            int32_t rel{};memcpy(&rel,p+1,sizeof(rel));
+            const unsigned char* dst=p+5+rel;
+            if(dst>=range.text && dst<range.text+range.textSize) {
+                Log("HDR_SETTER_SCAN_CALL source=%s site_rva=0x%zX target_rva=0x%zX",
+                    source,static_cast<size_t>(p-range.base),static_cast<size_t>(dst-range.base));
+            }
+        }
+    }
+}
+static const char* XrefKindAt(const unsigned char* p,const unsigned char* end,size_t& len,size_t& dispOff) noexcept {
+    if(p+6<=end && p[0]==0x88 && p[1]==0x05){len=6;dispOff=2;return "WRITE8";}
+    if(p+7<=end && p[0]==0xC6 && p[1]==0x05){len=7;dispOff=2;return "WRITE8_IMM";}
+    if(p+7<=end && p[0]==0x48 && p[1]==0x89 && p[2]==0x05){len=7;dispOff=3;return "WRITE64";}
+    if(p+6<=end && p[0]==0x89 && p[1]==0x05){len=6;dispOff=2;return "WRITE32";}
+    if(p+10<=end && p[0]==0xC7 && p[1]==0x05){len=10;dispOff=2;return "WRITE32_IMM";}
+    if(p+6<=end && p[0]==0x8A && p[1]==0x05){len=6;dispOff=2;return "READ8";}
+    if(p+7<=end && p[0]==0x0F && p[1]==0xB6 && p[2]==0x05){len=7;dispOff=3;return "READ8ZX";}
+    if(p+7<=end && p[0]==0x48 && p[1]==0x8B && p[2]==0x05){len=7;dispOff=3;return "READ64";}
+    if(p+7<=end && p[0]==0x80 && p[1]==0x3D){len=7;dispOff=2;return "CMP8";}
+    if(p+7<=end && p[0]==0x83 && p[1]==0x3D){len=7;dispOff=2;return "CMP32";}
+    if(p+6<=end && p[0]==0x38 && p[1]==0x05){len=6;dispOff=2;return "CMP8REG";}
+    if(p+6<=end && p[0]==0x39 && p[1]==0x05){len=6;dispOff=2;return "CMP32REG";}
+    return nullptr;
+}
+static void ScanTextXrefsToTargets(const HdrScanRange& range,const std::vector<uintptr_t>& targets) noexcept {
+    const unsigned char* end=range.text+range.textSize;
+    unsigned logged=0,writes=0;
+    for(const unsigned char* p=range.text;p<end && logged<256;++p) {
+        size_t len=0,dispOff=0;const char* kind=XrefKindAt(p,end,len,dispOff);
+        if(!kind)continue;
+        int32_t disp{};memcpy(&disp,p+dispOff,sizeof(disp));
+        uintptr_t target=reinterpret_cast<uintptr_t>(p+len)+static_cast<int64_t>(disp);
+        bool wanted=false;for(auto v:targets)if(v==target){wanted=true;break;}if(!wanted)continue;
+        DWORD64 imageBase=reinterpret_cast<DWORD64>(range.base);
+        PRUNTIME_FUNCTION rf=RtlLookupFunctionEntry(reinterpret_cast<DWORD64>(p),&imageBase,nullptr);
+        size_t begin=0,endRva=0;
+        if(rf){begin=rf->BeginAddress;endRva=rf->EndAddress;}
+        const bool write=strncmp(kind,"WRITE",5)==0;if(write)++writes;
+        Log("HDR_SETTER_SCAN_XREF kind=%s site_rva=0x%zX target_rva=0x%zX function_begin=0x%zX function_end=0x%zX",
+            kind,static_cast<size_t>(p-range.base),static_cast<size_t>(target-reinterpret_cast<uintptr_t>(range.base)),begin,endRva);
+        const unsigned char* start=p>=range.text+16?p-16:range.text;
+        LogScanBytes(write?"writer_context":"xref_context",start,48,range);
+        ++logged;
+    }
+    Log("HDR_SETTER_SCAN_XREF_SUMMARY targets=%zu xrefs=%u writes=%u",targets.size(),logged,writes);
+}
+static void ScanHdrGetterAndWriters(HMODULE module,GameHdrGet getter) noexcept {
+    HdrScanRange range{};
+    if(!module || !getter || !GetHdrScanRange(module,range)) {
+        Log("HDR_SETTER_SCAN_FAIL reason=module_or_getter_or_text");
+        return;
+    }
+    auto* get=reinterpret_cast<unsigned char*>(getter);
+    Log("HDR_SETTER_SCAN_BEGIN module=%p image_size=0x%zX text_rva=0x%zX text_size=0x%zX getter_rva=0x%zX",
+        module,range.imageSize,static_cast<size_t>(range.text-range.base),range.textSize,static_cast<size_t>(get-range.base));
+    LogScanBytes("isHDREnabled",get,96,range);
+    std::vector<uintptr_t> targets;
+    ScanFunctionDataRefs(get,96,"getter",range,targets);
+    // Follow direct calls made by the getter one level so wrappers still expose their backing state.
+    for(size_t off=0;off<96;++off) {
+        auto* p=get+off;
+        if(p+5>range.base+range.imageSize || *p!=0xE8)continue;
+        int32_t rel{};memcpy(&rel,p+1,sizeof(rel));
+        auto* dst=p+5+rel;
+        if(dst<range.text || dst>=range.text+range.textSize)continue;
+        LogScanBytes("getter_call_target",dst,96,range);
+        ScanFunctionDataRefs(dst,96,"getter_call_target",range,targets);
+    }
+    ScanTextXrefsToTargets(range,targets);
+    Log("HDR_SETTER_SCAN_END candidate_state_targets=%zu",targets.size());
+}
+
 static bool ResolveGameHdrApi() noexcept {
     gameD3d=GetModuleHandleW(L"d3d_rmdwin10_f.dll");
     if(!gameD3d)return false;
@@ -104,14 +262,16 @@ static bool ResolveGameHdrApi() noexcept {
         break;
     }
     LogHdrExports(gameD3d);
+    ScanHdrGetterAndWriters(gameD3d,gameHdrGet);
     bool current=false;
     const bool getterWorks=gameHdrGet && ReadGameHdr(current);
     const bool setterWorks=gameHdrSetVoid || gameHdrSetBool;
-    gameHdrControlReady.store(getterWorks && setterWorks);
+    gameHdrControlReady.store(false);
     lastGameHdr.store(current);
     Log("HDR_BUTTON_GAME_API getter=%p getter_works=%u setter_void=%p setter_bool=%p control_ready=%u initial_game_hdr=%u",
-        gameHdrGet,unsigned(getterWorks),gameHdrSetVoid,gameHdrSetBool,unsigned(getterWorks&&setterWorks),unsigned(current));
-    return getterWorks && setterWorks;
+        gameHdrGet,unsigned(getterWorks),gameHdrSetVoid,gameHdrSetBool,0u,unsigned(current));
+    (void)setterWorks;
+    return false;
 }
 static bool SetGameHdr(bool enable) noexcept {
     if(!gameHdrControlReady.load())return false;
@@ -571,7 +731,7 @@ static DWORD WINAPI Worker(void*) noexcept {
     CreateDirectoryW(logDir.c_str(),nullptr);
     SYSTEMTIME st{};GetSystemTime(&st);
     wchar_t name[180]{};
-    swprintf_s(name,L"\\hdr-button-R23-%04u%02u%02u-%02u%02u%02u-%lu.log",
+    swprintf_s(name,L"\\hdr-button-R24-%04u%02u%02u-%02u%02u%02u-%lu.log",
         st.wYear,st.wMonth,st.wDay,st.wHour,st.wMinute,st.wSecond,GetCurrentProcessId());
     logFile=CreateFileW((logDir+name).c_str(),GENERIC_WRITE,FILE_SHARE_READ|FILE_SHARE_WRITE,nullptr,
         CREATE_ALWAYS,FILE_ATTRIBUTE_NORMAL,nullptr);
@@ -580,7 +740,7 @@ static DWORD WINAPI Worker(void*) noexcept {
     std::wstring directory(own);directory=directory.substr(0,directory.find_last_of(L"\\/"));
     std::wstring corePath=directory+L"\\dxgi.dll";
     std::string hash=HashFile(corePath);
-    Log("HDR_BUTTON_BUILD version=R23 expected_core_sha256=%s actual_core_sha256=%s ui=F10_overlay_child_button",
+    Log("HDR_BUTTON_BUILD version=R24 expected_core_sha256=%s actual_core_sha256=%s ui=F10_overlay_child_button",
         kExpectedCoreSha256,hash.c_str());
     if(hash!=kExpectedCoreSha256){Log("HDR_BUTTON_INSTALL_FAIL reason=core_hash");return 0;}
     core=reinterpret_cast<unsigned char*>(GetModuleHandleW(corePath.c_str()));
@@ -629,7 +789,7 @@ static DWORD WINAPI Worker(void*) noexcept {
 }
 
 extern "C" __declspec(dllexport) void WINAPI ControlFGHDRButton_Bootstrap(){}
-extern "C" __declspec(dllexport) unsigned WINAPI ControlFGHDRButton_Version(){return 0x00230001;}
+extern "C" __declspec(dllexport) unsigned WINAPI ControlFGHDRButton_Version(){return 0x00240001;}
 
 BOOL WINAPI DllMain(HINSTANCE mod,DWORD reason,LPVOID) {
     if(reason==DLL_PROCESS_ATTACH) {
