@@ -59,10 +59,8 @@ def main():
     collector=out/'Collect-ControlFG-Compact-Logs.ps1'
     text=collector.read_text(encoding='utf-8-sig')
     needle="        if ($env:LOCALAPPDATA) {"
-    insert="""        foreach ($runPid in $runPids.Keys) {
-            $hdrButtonLogs=@(Get-ChildItem -LiteralPath $LogDirectory -File -Filter ('hdr-button-R22-*-'+$runPid+'.log') -ErrorAction SilentlyContinue | Where-Object { Test-RegularFile $_ } | Sort-Object LastWriteTimeUtc -Descending | Select-Object -First 1)
-            foreach ($hdrButtonLog in $hdrButtonLogs) { Copy-CompactFile $hdrButtonLog ('hdr-button/'+$hdrButtonLog.Name) 512KB $true }
-        }
+    insert="""        $hdrButtonLogs=@(Get-ChildItem -LiteralPath $LogDirectory -File -Filter 'hdr-button-R22-*.log' -ErrorAction SilentlyContinue | Where-Object { Test-RegularFile $_ } | Sort-Object LastWriteTimeUtc -Descending | Select-Object -First 3)
+        foreach ($hdrButtonLog in $hdrButtonLogs) { Copy-CompactFile $hdrButtonLog ('hdr-button/'+$hdrButtonLog.Name) 512KB $true }
         $hdrBuild=Get-Item -LiteralPath (Join-Path $ProjectDirectory 'HDR-BUTTON-R22-BUILD.json') -ErrorAction SilentlyContinue
         if (Test-RegularFile $hdrBuild) { Copy-CompactFile $hdrBuild 'package/HDR-BUTTON-R22-BUILD.json' 64KB }
 """
