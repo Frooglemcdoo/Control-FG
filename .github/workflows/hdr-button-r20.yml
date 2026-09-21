@@ -1,7 +1,7 @@
-name: HDR Button R23 Windows build
+name: HDR Setter Scan R24 Windows build
 on:
   push:
-    branches: ['diag/rtx50-hdr-button-r23']
+    branches: ['diag/rtx50-hdr-button-r24']
   workflow_dispatch:
 permissions:
   contents: read
@@ -53,25 +53,20 @@ jobs:
       - name: Add test notes
         run: |
           @'
-          CONTROL FG RTX50 HDR BUTTON R23 TEST
+          CONTROL FG RTX50 HDR BUTTON R24 TEST
 
-          Open the F10 overlay. A new HDR ON / HDR OFF button appears in the HDR status column near the top of the F10 overlay.
+          Open the F10 overlay. The HDR button intentionally remains unavailable in this read-only discovery build.
 
-          Clicking it performs:
-          1. request the existing v2 HDR hard-reset while the display is still in the old mode;
-          2. wait until Frame Generation is actually OFF and DLSS-G resources have been freed;
-          3. control Windows HDR and Control in-game HDR as separate states after FG is confirmed off;
-          4. wait for Control's HDR bridge to enter the requested game-side domain;
-          5. wait for the existing v2 core to restore the user's unchanged FG selection.
+R24 performs NO FG shutdown and NO HDR change. It resolves Control's real DeviceUtil::isHDREnabled() getter, logs its machine code, identifies module data referenced by that getter (and one direct-call level), and scans the exact loaded d3d_rmdwin10_f.dll .text section for read/write references to the same state.
 
-          Do not press Win+Alt+B yourself during this test; the button manages Windows HDR and then verifies Control HDR separately.
+Launch Control, reach gameplay once, then run the included compact collector. Do not click or manually toggle HDR for this diagnostic.
 
-          RTX50 diagnostic only. The original v2 HUD/UI recomposition path is unchanged.
-          '@ | Set-Content diagnostics/hdr-button-r20/package/HDR-BUTTON-R23-TEST.txt -Encoding UTF8
+RTX50 diagnostic only. The original renderer and NVIDIA/Streamline binaries remain unchanged.
+          '@ | Set-Content diagnostics/hdr-button-r20/package/HDR-BUTTON-R24-TEST.txt -Encoding UTF8
       - name: Upload diagnostic
         uses: actions/upload-artifact@v4
         with:
-          name: Control-FG-RTX50-HDR-Button-R23
+          name: Control-FG-RTX50-HDR-Button-R24
           path: diagnostics/hdr-button-r20/package/
           retention-days: 7
           if-no-files-found: error
