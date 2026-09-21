@@ -1,0 +1,78 @@
+name: Fetch Streamline 2.14.1 dev DLSS-G
+
+on:
+  push:
+    branches:
+      - 'diag/sl-dlssg-dev-r9'
+  workflow_dispatch:
+
+jobs:
+  fetch:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download official Streamline 2.14.1 SDK
+        shell: pwsh
+        run: |
+          $url = "https://github.com/NVIDIA-RTX/Streamline/releases/download/v2.14.1/streamline-sdk-v2.14.1.zip"
+          Invoke-WebRequest -Uri $url -OutFile streamline-sdk-v2.14.1.zip
+          $hash = (Get-FileHash streamline-sdk-v2.14.1.zip -Algorithm SHA256).Hash.ToLowerInvariant()
+          Write-Host "SDK_SHA256=$hash"
+          if ($hash -ne "92c4d954631a1710da86ca3fa8d5034f2b9503838c95fc4ae977ae149319781b") {
+            throw "Unexpected Streamline SDK hash: $hash"
+          }
+
+      - name: Extract dev DLSS-G plugin and config
+        shell: pwsh
+        run: |
+          Expand-Archive streamline-sdk-v2.14.1.zip -DestinationPath sdk -Force
+          New-Item -ItemType Directory -Force out | Out-Null
+          $dlls = Get-ChildItem sdk -Recurse -File -Filter sl.dlss_g.dll | Where-Object { $_.FullName -match '(?i)development|develop' }
+          if (-not $dlls) {
+            Write-Host "No development sl.dlss_g.dll match by path; listing all candidates:"
+            Get-ChildItem sdk -Recurse -File -Filter sl.dlss_g.dll | ForEach-Object { $_.FullName }
+            throw "Development sl.dlss_g.dll not found"
+          }
+          $dll = $dlls | Where-Object { $_.FullName -match '(?i)x64|win64|x86_64' } | Select-Object -First 1
+          if (-not $dll) { $dll = $dlls | Select-Object -First 1 }
+          Copy-Item $dll.FullName out\sl.dlss_g.dll -Force
+          Write-Host "DEV_DLL=$($dll.FullName)"
+          Write-Host "DEV_DLL_SHA256=$((Get-FileHash out\sl.dlss_g.dll -Algorithm SHA256).Hash.ToLowerInvariant())"
+
+          $cfg = Get-ChildItem sdk -Recurse -File -Filter sl.dlss_g.json | Select-Object -First 1
+          if ($cfg) {
+            Copy-Item $cfg.FullName out\sl.dlss_g.original.json -Force
+            Write-Host "CFG=$($cfg.FullName)"
+          }
+
+          @'
+{
+  "mode": "prev",
+  "showDebugText": false,
+  "numFramesToGenerate": 1
+}
+'@ | Set-Content out\sl.dlss_g.prev.json -Encoding ascii
+
+          @'
+{
+  "mode": "cur",
+  "showDebugText": false,
+  "numFramesToGenerate": 1
+}
+'@ | Set-Content out\sl.dlss_g.cur.json -Encoding ascii
+
+          @'
+{
+  "mode": "auto",
+  "showDebugText": false,
+  "numFramesToGenerate": 1
+}
+'@ | Set-Content out\sl.dlss_g.auto.json -Encoding ascii
+
+      - name: Upload dev plugin bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: streamline-2.14.1-dev-dlssg
+          path: out\*
+          retention-days: 2
