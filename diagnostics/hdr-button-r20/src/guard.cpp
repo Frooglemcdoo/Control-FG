@@ -242,6 +242,68 @@ static void ScanHdrGetterAndWriters(HMODULE module,GameHdrGet getter) noexcept {
     Log("HDR_SETTER_SCAN_END candidate_state_targets=%zu",targets.size());
 }
 
+
+static void ScanDirectCallsToAddress(HMODULE module,const char* label,const char* symbol,void* address) noexcept {
+    HdrScanRange range{};
+    if(!module || !address || !GetHdrScanRange(module,range)) {
+        Log("HDR_SETTER_CALLSCAN_SKIP label=%s symbol=%s address=%p",label,symbol?symbol:"null",address);
+        return;
+    }
+    auto* target=reinterpret_cast<unsigned char*>(address);
+    Log("HDR_SETTER_EXPORT_TARGET label=%s symbol=%s rva=0x%zX address=%p",
+        label,symbol,static_cast<size_t>(target-range.base),address);
+    LogScanBytes(label,target,192,range);
+    const unsigned char* end=range.text+range.textSize;
+    unsigned directCalls=0,directJumps=0,indirectCalls=0;
+    for(const unsigned char* p=range.text;p<end;++p) {
+        if(p+5<=end && (p[0]==0xE8 || p[0]==0xE9)) {
+            int32_t rel{};memcpy(&rel,p+1,sizeof(rel));
+            auto* dst=p+5+rel;
+            if(dst==target) {
+                DWORD64 imageBase=reinterpret_cast<DWORD64>(range.base);
+                PRUNTIME_FUNCTION rf=RtlLookupFunctionEntry(reinterpret_cast<DWORD64>(p),&imageBase,nullptr);
+                size_t begin=rf?rf->BeginAddress:0,endRva=rf?rf->EndAddress:0;
+                const bool call=p[0]==0xE8;
+                Log("HDR_SETTER_CALLSITE label=%s kind=%s site_rva=0x%zX function_begin=0x%zX function_end=0x%zX",
+                    label,call?"CALL_REL32":"JMP_REL32",static_cast<size_t>(p-range.base),begin,endRva);
+                const unsigned char* start=p>=range.text+48?p-48:range.text;
+                LogScanBytes(call?"call_context":"jump_context",start,128,range);
+                if(call)++directCalls;else ++directJumps;
+            }
+        }
+        if(p+6<=end && p[0]==0xFF && p[1]==0x15) {
+            int32_t disp{};memcpy(&disp,p+2,sizeof(disp));
+            auto** slot=reinterpret_cast<void**>(const_cast<unsigned char*>(p)+6+disp);
+            uintptr_t slotAddr=reinterpret_cast<uintptr_t>(slot);
+            uintptr_t imageLo=reinterpret_cast<uintptr_t>(range.base),imageHi=imageLo+range.imageSize;
+            if(slotAddr>=imageLo && slotAddr+sizeof(void*)<=imageHi) {
+                void* resolved=nullptr;
+                __try { resolved=*slot; } __except(EXCEPTION_EXECUTE_HANDLER) { resolved=nullptr; }
+                if(resolved==address) {
+                    DWORD64 imageBase=reinterpret_cast<DWORD64>(range.base);
+                    PRUNTIME_FUNCTION rf=RtlLookupFunctionEntry(reinterpret_cast<DWORD64>(p),&imageBase,nullptr);
+                    size_t begin=rf?rf->BeginAddress:0,endRva=rf?rf->EndAddress:0;
+                    Log("HDR_SETTER_CALLSITE label=%s kind=CALL_RIP_IAT site_rva=0x%zX slot_rva=0x%zX function_begin=0x%zX function_end=0x%zX",
+                        label,static_cast<size_t>(p-range.base),static_cast<size_t>(slotAddr-imageLo),begin,endRva);
+                    const unsigned char* start=p>=range.text+48?p-48:range.text;
+                    LogScanBytes("indirect_call_context",start,128,range);
+                    ++indirectCalls;
+                }
+            }
+        }
+    }
+    Log("HDR_SETTER_CALLSCAN_SUMMARY label=%s direct_calls=%u direct_jumps=%u indirect_calls=%u",
+        label,directCalls,directJumps,indirectCalls);
+}
+static void ScanKnownHdrSetters(HMODULE module) noexcept {
+    const char* displayName="?setHDREnabledDisplay@DeviceUtilDXGI@d3d@@SA_NPEAUHWND__@@_N@Z";
+    const char* settingsName="?setHDRSettings@DeviceUtil@d3d@@SAX_NM0@Z";
+    void* displaySetter=reinterpret_cast<void*>(GetProcAddress(module,displayName));
+    void* settingsSetter=reinterpret_cast<void*>(GetProcAddress(module,settingsName));
+    Log("HDR_SETTER_KNOWN_EXPORTS display_setter=%p settings_setter=%p",displaySetter,settingsSetter);
+    ScanDirectCallsToAddress(module,"setHDREnabledDisplay",displayName,displaySetter);
+    ScanDirectCallsToAddress(module,"setHDRSettings",settingsName,settingsSetter);
+}
 static bool ResolveGameHdrApi() noexcept {
     gameD3d=GetModuleHandleW(L"d3d_rmdwin10_f.dll");
     if(!gameD3d)return false;
@@ -263,6 +325,7 @@ static bool ResolveGameHdrApi() noexcept {
     }
     LogHdrExports(gameD3d);
     ScanHdrGetterAndWriters(gameD3d,gameHdrGet);
+    ScanKnownHdrSetters(gameD3d);
     bool current=false;
     const bool getterWorks=gameHdrGet && ReadGameHdr(current);
     const bool setterWorks=gameHdrSetVoid || gameHdrSetBool;
@@ -731,7 +794,7 @@ static DWORD WINAPI Worker(void*) noexcept {
     CreateDirectoryW(logDir.c_str(),nullptr);
     SYSTEMTIME st{};GetSystemTime(&st);
     wchar_t name[180]{};
-    swprintf_s(name,L"\\hdr-button-R24-%04u%02u%02u-%02u%02u%02u-%lu.log",
+    swprintf_s(name,L"\\hdr-button-R25-%04u%02u%02u-%02u%02u%02u-%lu.log",
         st.wYear,st.wMonth,st.wDay,st.wHour,st.wMinute,st.wSecond,GetCurrentProcessId());
     logFile=CreateFileW((logDir+name).c_str(),GENERIC_WRITE,FILE_SHARE_READ|FILE_SHARE_WRITE,nullptr,
         CREATE_ALWAYS,FILE_ATTRIBUTE_NORMAL,nullptr);
@@ -740,7 +803,7 @@ static DWORD WINAPI Worker(void*) noexcept {
     std::wstring directory(own);directory=directory.substr(0,directory.find_last_of(L"\\/"));
     std::wstring corePath=directory+L"\\dxgi.dll";
     std::string hash=HashFile(corePath);
-    Log("HDR_BUTTON_BUILD version=R24 expected_core_sha256=%s actual_core_sha256=%s ui=F10_overlay_child_button",
+    Log("HDR_BUTTON_BUILD version=R25 expected_core_sha256=%s actual_core_sha256=%s ui=F10_overlay_child_button",
         kExpectedCoreSha256,hash.c_str());
     if(hash!=kExpectedCoreSha256){Log("HDR_BUTTON_INSTALL_FAIL reason=core_hash");return 0;}
     core=reinterpret_cast<unsigned char*>(GetModuleHandleW(corePath.c_str()));
@@ -789,7 +852,7 @@ static DWORD WINAPI Worker(void*) noexcept {
 }
 
 extern "C" __declspec(dllexport) void WINAPI ControlFGHDRButton_Bootstrap(){}
-extern "C" __declspec(dllexport) unsigned WINAPI ControlFGHDRButton_Version(){return 0x00240001;}
+extern "C" __declspec(dllexport) unsigned WINAPI ControlFGHDRButton_Version(){return 0x00250001;}
 
 BOOL WINAPI DllMain(HINSTANCE mod,DWORD reason,LPVOID) {
     if(reason==DLL_PROCESS_ATTACH) {
