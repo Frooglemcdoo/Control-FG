@@ -135,14 +135,30 @@ static bool ResolveDisplayTarget(HWND game,DisplayTarget& out) noexcept {
     return false;
 }
 
-static LONG SetSystemHdr(const DisplayTarget& target,bool enable) noexcept {
-    DISPLAYCONFIG_SET_ADVANCED_COLOR_STATE state{};
-    state.header.type=DISPLAYCONFIG_DEVICE_INFO_SET_ADVANCED_COLOR_STATE;
-    state.header.size=sizeof(state);
-    state.header.adapterId=target.adapter;
-    state.header.id=target.targetId;
-    state.enableAdvancedColor=enable?1u:0u;
-    return DisplayConfigSetDeviceInfo(&state.header);
+static bool HdrShortcutKeysReleased() noexcept {
+    const int keys[] = {VK_LWIN,VK_RWIN,VK_LMENU,VK_RMENU,VK_MENU,'B'};
+    for(int key : keys) if(GetAsyncKeyState(key)&0x8000) return false;
+    return true;
+}
+static bool SendWindowsHdrShortcut() noexcept {
+    if(!HdrShortcutKeysReleased()) return false;
+    INPUT in[6]{};
+    const WORD keys[6] = {VK_LWIN,VK_LMENU,'B','B',VK_LMENU,VK_LWIN};
+    for(int i=0;i<6;++i) {
+        in[i].type=INPUT_KEYBOARD;
+        in[i].ki.wVk=keys[i];
+        if(i>=3) in[i].ki.dwFlags|=KEYEVENTF_KEYUP;
+        if(keys[i]==VK_LWIN) in[i].ki.dwFlags|=KEYEVENTF_EXTENDEDKEY;
+    }
+    SetLastError(ERROR_SUCCESS);
+    const UINT sent=SendInput(6,in,sizeof(INPUT));
+    const DWORD err=GetLastError();
+    Log("HDR_BUTTON_WINDOWS_SHORTCUT sent=%u expected=6 error=%lu",sent,err);
+    if(sent==6) return true;
+    INPUT release[3]{};
+    release[0]=in[3];release[1]=in[4];release[2]=in[5];
+    SendInput(3,release,sizeof(INPUT));
+    return false;
 }
 
 static void UpdateButtonVisual() noexcept {
@@ -365,20 +381,20 @@ static void PollTransition() noexcept {
     }
 
     if(s.phase==Phase::SetSystemHdr) {
-        HWND game=FindGameWindow();
         DisplayTarget d{};
-        if(!ResolveDisplayTarget(game,d) || !d.hdrSupported) {
+        if(!ResolveDisplayTarget(FindGameWindow(),d) || !d.hdrSupported) {
             SetPhase(Phase::Failed,"display_target_lost");return;
         }
         if(d.hdrEnabled==s.targetHdr) {
             Log("HDR_BUTTON_WINDOWS_HDR_ALREADY target=%u",unsigned(s.targetHdr));
             SetPhase(Phase::WaitGameHdr);return;
         }
-        LONG result=SetSystemHdr(d,s.targetHdr);
-        Log("HDR_BUTTON_WINDOWS_HDR_SET target=%u result=%ld adapter=%08lx:%08lx target_id=%u",
-            unsigned(s.targetHdr),result,static_cast<unsigned long>(d.adapter.HighPart),
-            static_cast<unsigned long>(d.adapter.LowPart),d.targetId);
-        if(result!=ERROR_SUCCESS){SetPhase(Phase::Failed,"DisplayConfigSetDeviceInfo_failed");return;}
+        if(!HdrShortcutKeysReleased()) return;
+        if(!SendWindowsHdrShortcut()) {
+            SetPhase(Phase::Failed,"WinAltB_SendInput_failed");return;
+        }
+        Log("HDR_BUTTON_WINDOWS_HDR_TOGGLE_SENT source_hdr=%u target_hdr=%u",
+            unsigned(s.sourceHdr),unsigned(s.targetHdr));
         SetPhase(Phase::WaitGameHdr);return;
     }
 
@@ -420,7 +436,7 @@ static DWORD WINAPI Worker(void*) noexcept {
     CreateDirectoryW(logDir.c_str(),nullptr);
     SYSTEMTIME st{};GetSystemTime(&st);
     wchar_t name[180]{};
-    swprintf_s(name,L"\\hdr-button-R21-%04u%02u%02u-%02u%02u%02u-%lu.log",
+    swprintf_s(name,L"\\hdr-button-R22-%04u%02u%02u-%02u%02u%02u-%lu.log",
         st.wYear,st.wMonth,st.wDay,st.wHour,st.wMinute,st.wSecond,GetCurrentProcessId());
     logFile=CreateFileW((logDir+name).c_str(),GENERIC_WRITE,FILE_SHARE_READ|FILE_SHARE_WRITE,nullptr,
         CREATE_ALWAYS,FILE_ATTRIBUTE_NORMAL,nullptr);
@@ -429,14 +445,14 @@ static DWORD WINAPI Worker(void*) noexcept {
     std::wstring directory(own);directory=directory.substr(0,directory.find_last_of(L"\\/"));
     std::wstring corePath=directory+L"\\dxgi.dll";
     std::string hash=HashFile(corePath);
-    Log("HDR_BUTTON_BUILD version=R21 expected_core_sha256=%s actual_core_sha256=%s ui=F10_overlay_child_button",
+    Log("HDR_BUTTON_BUILD version=R22 expected_core_sha256=%s actual_core_sha256=%s ui=F10_overlay_child_button",
         kExpectedCoreSha256,hash.c_str());
     if(hash!=kExpectedCoreSha256){Log("HDR_BUTTON_INSTALL_FAIL reason=core_hash");return 0;}
     core=reinterpret_cast<unsigned char*>(GetModuleHandleW(corePath.c_str()));
     if(!core){Log("HDR_BUTTON_INSTALL_FAIL reason=core_module");return 0;}
     if(!InstallCoreHook()){Log("HDR_BUTTON_INSTALL_FAIL reason=core_hook");return 0;}
     ready.store(true);
-    Log("HDR_BUTTON_READY controller=direct_DisplayConfigSetDeviceInfo sequence=FG_off_then_system_HDR_then_game_bridge_then_FG_resume");
+    Log("HDR_BUTTON_READY controller=overlay_button_WinAltB_after_confirmed_FG_off sequence=FG_off_then_Windows_HDR_shortcut_then_game_bridge_then_FG_resume");
 
     uint64_t completeSince=0;
     while(true) {
@@ -472,7 +488,7 @@ static DWORD WINAPI Worker(void*) noexcept {
 }
 
 extern "C" __declspec(dllexport) void WINAPI ControlFGHDRButton_Bootstrap(){}
-extern "C" __declspec(dllexport) unsigned WINAPI ControlFGHDRButton_Version(){return 0x00210001;}
+extern "C" __declspec(dllexport) unsigned WINAPI ControlFGHDRButton_Version(){return 0x00220001;}
 
 BOOL WINAPI DllMain(HINSTANCE mod,DWORD reason,LPVOID) {
     if(reason==DLL_PROCESS_ATTACH) {
