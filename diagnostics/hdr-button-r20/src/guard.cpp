@@ -40,10 +40,14 @@ static void Log(const char* fmt,...) noexcept;
 using GameHdrGet = bool (*)();
 using GameHdrSetVoid = void (*)(bool);
 using GameHdrSetBool = bool (*)(bool);
+using GameHdrDisplayFn = bool (*)(HWND,bool);
+using GameHdrSettingsFn = void (*)(bool,float,bool);
 static HMODULE gameD3d{};
 static GameHdrGet gameHdrGet{};
 static GameHdrSetVoid gameHdrSetVoid{};
 static GameHdrSetBool gameHdrSetBool{};
+static GameHdrDisplayFn originalGameHdrDisplay{};
+static GameHdrSettingsFn originalGameHdrSettings{};
 static std::atomic<bool> gameHdrControlReady{false};
 static std::atomic<int> pendingGameHdrSet{-1};
 static std::atomic<bool> systemToggleSent{false};
@@ -304,6 +308,80 @@ static void ScanKnownHdrSetters(HMODULE module) noexcept {
     ScanDirectCallsToAddress(module,"setHDREnabledDisplay",displayName,displaySetter);
     ScanDirectCallsToAddress(module,"setHDRSettings",settingsName,settingsSetter);
 }
+
+struct NativeHdrFields {
+    bool valid{};
+    bool enabled{};
+    bool dirty{};
+    bool requested{};
+    float value{};
+};
+static NativeHdrFields SnapshotNativeHdrFields() noexcept {
+    NativeHdrFields s{};
+    if(!gameD3d)return s;
+    __try {
+        auto* native=*reinterpret_cast<unsigned char**>(reinterpret_cast<unsigned char*>(gameD3d)+0x136D28);
+        if(!native)return s;
+        s.valid=true;
+        s.enabled=native[0xF8]!=0;
+        s.dirty=native[0xFA]!=0;
+        s.requested=native[0xFB]!=0;
+        memcpy(&s.value,native+0x104,sizeof(float));
+    } __except(EXCEPTION_EXECUTE_HANDLER) {
+        s={};
+    }
+    return s;
+}
+static bool HookGameHdrDisplay(HWND hwnd,bool enable) noexcept {
+    const NativeHdrFields before=SnapshotNativeHdrFields();
+    Log("HDR_NATIVE_CALL name=setHDREnabledDisplay phase=enter hwnd=%p enable=%u native_valid=%u enabled=%u dirty=%u requested=%u value=%.9g",
+        hwnd,unsigned(enable),unsigned(before.valid),unsigned(before.enabled),unsigned(before.dirty),unsigned(before.requested),double(before.value));
+    bool result=false;
+    __try { result=originalGameHdrDisplay?originalGameHdrDisplay(hwnd,enable):false; }
+    __except(EXCEPTION_EXECUTE_HANDLER) {
+        Log("HDR_NATIVE_CALL_EXCEPTION name=setHDREnabledDisplay code=0x%08lX",GetExceptionCode());
+        return false;
+    }
+    const NativeHdrFields after=SnapshotNativeHdrFields();
+    Log("HDR_NATIVE_CALL name=setHDREnabledDisplay phase=exit hwnd=%p enable=%u result=%u enabled=%u dirty=%u requested=%u value=%.9g",
+        hwnd,unsigned(enable),unsigned(result),unsigned(after.enabled),unsigned(after.dirty),unsigned(after.requested),double(after.value));
+    return result;
+}
+static void HookGameHdrSettings(bool enable,float value,bool force) noexcept {
+    const NativeHdrFields before=SnapshotNativeHdrFields();
+    Log("HDR_NATIVE_CALL name=setHDRSettings phase=enter enable=%u value=%.9g force=%u native_valid=%u enabled=%u dirty=%u requested=%u current_value=%.9g",
+        unsigned(enable),double(value),unsigned(force),unsigned(before.valid),unsigned(before.enabled),unsigned(before.dirty),unsigned(before.requested),double(before.value));
+    __try { if(originalGameHdrSettings) originalGameHdrSettings(enable,value,force); }
+    __except(EXCEPTION_EXECUTE_HANDLER) {
+        Log("HDR_NATIVE_CALL_EXCEPTION name=setHDRSettings code=0x%08lX",GetExceptionCode());
+        return;
+    }
+    const NativeHdrFields after=SnapshotNativeHdrFields();
+    Log("HDR_NATIVE_CALL name=setHDRSettings phase=exit enable=%u value=%.9g force=%u enabled=%u dirty=%u requested=%u current_value=%.9g",
+        unsigned(enable),double(value),unsigned(force),unsigned(after.enabled),unsigned(after.dirty),unsigned(after.requested),double(after.value));
+}
+static void InstallNativeHdrTraceHooks(HMODULE module) noexcept {
+    const char* displayName="?setHDREnabledDisplay@DeviceUtilDXGI@d3d@@SA_NPEAUHWND__@@_N@Z";
+    const char* settingsName="?setHDRSettings@DeviceUtil@d3d@@SAX_NM0@Z";
+    void* displaySetter=reinterpret_cast<void*>(GetProcAddress(module,displayName));
+    void* settingsSetter=reinterpret_cast<void*>(GetProcAddress(module,settingsName));
+    if(displaySetter) {
+        auto s=MH_CreateHook(displaySetter,reinterpret_cast<void*>(&HookGameHdrDisplay),reinterpret_cast<void**>(&originalGameHdrDisplay));
+        Log("HDR_NATIVE_HOOK name=setHDREnabledDisplay create=%s target=%p original=%p",MH_StatusToString(s),displaySetter,originalGameHdrDisplay);
+        if(s==MH_OK || s==MH_ERROR_ALREADY_CREATED) {
+            auto e=MH_EnableHook(displaySetter);
+            Log("HDR_NATIVE_HOOK name=setHDREnabledDisplay enable=%s",MH_StatusToString(e));
+        }
+    }
+    if(settingsSetter) {
+        auto s=MH_CreateHook(settingsSetter,reinterpret_cast<void*>(&HookGameHdrSettings),reinterpret_cast<void**>(&originalGameHdrSettings));
+        Log("HDR_NATIVE_HOOK name=setHDRSettings create=%s target=%p original=%p",MH_StatusToString(s),settingsSetter,originalGameHdrSettings);
+        if(s==MH_OK || s==MH_ERROR_ALREADY_CREATED) {
+            auto e=MH_EnableHook(settingsSetter);
+            Log("HDR_NATIVE_HOOK name=setHDRSettings enable=%s",MH_StatusToString(e));
+        }
+    }
+}
 static bool ResolveGameHdrApi() noexcept {
     gameD3d=GetModuleHandleW(L"d3d_rmdwin10_f.dll");
     if(!gameD3d)return false;
@@ -326,6 +404,7 @@ static bool ResolveGameHdrApi() noexcept {
     LogHdrExports(gameD3d);
     ScanHdrGetterAndWriters(gameD3d,gameHdrGet);
     ScanKnownHdrSetters(gameD3d);
+    InstallNativeHdrTraceHooks(gameD3d);
     bool current=false;
     const bool getterWorks=gameHdrGet && ReadGameHdr(current);
     const bool setterWorks=gameHdrSetVoid || gameHdrSetBool;
@@ -794,7 +873,7 @@ static DWORD WINAPI Worker(void*) noexcept {
     CreateDirectoryW(logDir.c_str(),nullptr);
     SYSTEMTIME st{};GetSystemTime(&st);
     wchar_t name[180]{};
-    swprintf_s(name,L"\\hdr-button-R25-%04u%02u%02u-%02u%02u%02u-%lu.log",
+    swprintf_s(name,L"\\hdr-button-R26-%04u%02u%02u-%02u%02u%02u-%lu.log",
         st.wYear,st.wMonth,st.wDay,st.wHour,st.wMinute,st.wSecond,GetCurrentProcessId());
     logFile=CreateFileW((logDir+name).c_str(),GENERIC_WRITE,FILE_SHARE_READ|FILE_SHARE_WRITE,nullptr,
         CREATE_ALWAYS,FILE_ATTRIBUTE_NORMAL,nullptr);
@@ -803,7 +882,7 @@ static DWORD WINAPI Worker(void*) noexcept {
     std::wstring directory(own);directory=directory.substr(0,directory.find_last_of(L"\\/"));
     std::wstring corePath=directory+L"\\dxgi.dll";
     std::string hash=HashFile(corePath);
-    Log("HDR_BUTTON_BUILD version=R25 expected_core_sha256=%s actual_core_sha256=%s ui=F10_overlay_child_button",
+    Log("HDR_BUTTON_BUILD version=R26 expected_core_sha256=%s actual_core_sha256=%s ui=F10_overlay_child_button",
         kExpectedCoreSha256,hash.c_str());
     if(hash!=kExpectedCoreSha256){Log("HDR_BUTTON_INSTALL_FAIL reason=core_hash");return 0;}
     core=reinterpret_cast<unsigned char*>(GetModuleHandleW(corePath.c_str()));
@@ -852,7 +931,7 @@ static DWORD WINAPI Worker(void*) noexcept {
 }
 
 extern "C" __declspec(dllexport) void WINAPI ControlFGHDRButton_Bootstrap(){}
-extern "C" __declspec(dllexport) unsigned WINAPI ControlFGHDRButton_Version(){return 0x00250001;}
+extern "C" __declspec(dllexport) unsigned WINAPI ControlFGHDRButton_Version(){return 0x00260001;}
 
 BOOL WINAPI DllMain(HINSTANCE mod,DWORD reason,LPVOID) {
     if(reason==DLL_PROCESS_ATTACH) {
