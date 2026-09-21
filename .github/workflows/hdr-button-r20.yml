@@ -55,16 +55,16 @@ jobs:
           @'
           CONTROL FG RTX50 HDR BUTTON R22 TEST
 
-          Open the F10 overlay. A new HDR ON / HDR OFF button appears in the lower-right corner.
+          Open the F10 overlay. A new HDR ON / HDR OFF button appears in the HDR status column near the top of the F10 overlay.
 
           Clicking it performs:
           1. request the existing v2 HDR hard-reset while the display is still in the old mode;
           2. wait until Frame Generation is actually OFF and DLSS-G resources have been freed;
-          3. switch Windows HDR directly through DisplayConfigSetDeviceInfo;
+          3. send Win+Alt+B internally once, after FG is confirmed off, to switch Windows HDR;
           4. wait for Control's HDR bridge to enter the requested game-side domain;
           5. wait for the existing v2 core to restore the user's unchanged FG selection.
 
-          Do not use Win+Alt+B during this test.
+          Do not press Win+Alt+B yourself during this test; the button sends it internally at the safe point.
 
           RTX50 diagnostic only. The original v2 HUD/UI recomposition path is unchanged.
           '@ | Set-Content diagnostics/hdr-button-r20/package/HDR-BUTTON-R22-TEST.txt -Encoding UTF8
