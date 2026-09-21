@@ -36,6 +36,98 @@ static std::atomic<HWND> buttonWindow{nullptr};
 static WNDPROC originalOverlayProc{};
 static constexpr UINT kAttachButtonMessage = WM_APP + 0x420;
 static constexpr int kHdrButtonId = 0x4844;
+using GameHdrGet = bool (*)();
+using GameHdrSetVoid = void (*)(bool);
+using GameHdrSetBool = bool (*)(bool);
+static HMODULE gameD3d{};
+static GameHdrGet gameHdrGet{};
+static GameHdrSetVoid gameHdrSetVoid{};
+static GameHdrSetBool gameHdrSetBool{};
+static std::atomic<bool> gameHdrControlReady{false};
+static std::atomic<int> pendingGameHdrSet{-1};
+static std::atomic<bool> systemToggleSent{false};
+static std::atomic<bool> gameSetAttempted{false};
+static std::atomic<bool> lastGameHdr{false};
+static std::atomic<bool> lastSystemHdr{false};
+static std::atomic<bool> lastBridgeHdr{false};
+
+static bool ReadGameHdr(bool& value) noexcept {
+    if(!gameHdrGet)return false;
+    __try { value=gameHdrGet(); return true; }
+    __except(EXCEPTION_EXECUTE_HANDLER) { Log("HDR_BUTTON_GAME_GET_EXCEPTION code=0x%08lX",GetExceptionCode()); return false; }
+}
+static void LogHdrExports(HMODULE module) noexcept {
+    if(!module)return;
+    auto* base=reinterpret_cast<unsigned char*>(module);
+    __try {
+        auto* dos=reinterpret_cast<IMAGE_DOS_HEADER*>(base);
+        auto* nt=reinterpret_cast<IMAGE_NT_HEADERS64*>(base+dos->e_lfanew);
+        const auto& dir=nt->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_EXPORT];
+        if(!dir.VirtualAddress || !dir.Size)return;
+        auto* exp=reinterpret_cast<IMAGE_EXPORT_DIRECTORY*>(base+dir.VirtualAddress);
+        auto* names=reinterpret_cast<DWORD*>(base+exp->AddressOfNames);
+        auto* ords=reinterpret_cast<WORD*>(base+exp->AddressOfNameOrdinals);
+        auto* funcs=reinterpret_cast<DWORD*>(base+exp->AddressOfFunctions);
+        unsigned logged=0;
+        for(DWORD i=0;i<exp->NumberOfNames && logged<64;++i) {
+            const char* name=reinterpret_cast<const char*>(base+names[i]);
+            if(!name)continue;
+            if(strstr(name,"HDR") || strstr(name,"Hdr") || strstr(name,"hdr")) {
+                const DWORD rva=funcs[ords[i]];
+                Log("HDR_BUTTON_GAME_EXPORT rva=0x%X name=%s",rva,name);
+                ++logged;
+            }
+        }
+        Log("HDR_BUTTON_GAME_EXPORT_SCAN names=%u hdr_exports=%u",exp->NumberOfNames,logged);
+    } __except(EXCEPTION_EXECUTE_HANDLER) {
+        Log("HDR_BUTTON_GAME_EXPORT_SCAN_FAIL code=0x%08lX",GetExceptionCode());
+    }
+}
+static bool ResolveGameHdrApi() noexcept {
+    gameD3d=GetModuleHandleW(L"d3d_rmdwin10_f.dll");
+    if(!gameD3d)return false;
+    gameHdrGet=reinterpret_cast<GameHdrGet>(GetProcAddress(gameD3d,"?isHDREnabled@DeviceUtil@d3d@@SA_NXZ"));
+    struct Candidate { const char* name; bool boolReturn; };
+    const Candidate candidates[]={
+        {"?setHDREnabled@DeviceUtil@d3d@@SAX_N@Z",false},
+        {"?setHDREnabled@DeviceUtil@d3d@@SA_N_N@Z",true},
+        {"?setHdrEnabled@DeviceUtil@d3d@@SAX_N@Z",false},
+        {"?setHdrEnabled@DeviceUtil@d3d@@SA_N_N@Z",true}
+    };
+    for(const auto& candidate:candidates) {
+        auto p=GetProcAddress(gameD3d,candidate.name);
+        if(!p)continue;
+        if(candidate.boolReturn) gameHdrSetBool=reinterpret_cast<GameHdrSetBool>(p);
+        else gameHdrSetVoid=reinterpret_cast<GameHdrSetVoid>(p);
+        Log("HDR_BUTTON_GAME_SETTER_RESOLVED name=%s address=%p bool_return=%u",candidate.name,p,unsigned(candidate.boolReturn));
+        break;
+    }
+    LogHdrExports(gameD3d);
+    bool current=false;
+    const bool getterWorks=gameHdrGet && ReadGameHdr(current);
+    const bool setterWorks=gameHdrSetVoid || gameHdrSetBool;
+    gameHdrControlReady.store(getterWorks && setterWorks);
+    lastGameHdr.store(current);
+    Log("HDR_BUTTON_GAME_API getter=%p getter_works=%u setter_void=%p setter_bool=%p control_ready=%u initial_game_hdr=%u",
+        gameHdrGet,unsigned(getterWorks),gameHdrSetVoid,gameHdrSetBool,unsigned(getterWorks&&setterWorks),unsigned(current));
+    return getterWorks && setterWorks;
+}
+static bool SetGameHdr(bool enable) noexcept {
+    if(!gameHdrControlReady.load())return false;
+    bool callResult=true;
+    __try {
+        if(gameHdrSetVoid) gameHdrSetVoid(enable);
+        else if(gameHdrSetBool) callResult=gameHdrSetBool(enable);
+        else return false;
+    } __except(EXCEPTION_EXECUTE_HANDLER) {
+        Log("HDR_BUTTON_GAME_SET_EXCEPTION target=%u code=0x%08lX",unsigned(enable),GetExceptionCode());
+        return false;
+    }
+    bool after=false;const bool readOk=ReadGameHdr(after);
+    Log("HDR_BUTTON_GAME_SET target=%u call_result=%u read_ok=%u immediate_game_hdr=%u",
+        unsigned(enable),unsigned(callResult),unsigned(readOk),unsigned(after));
+    return callResult;
+}
 
 struct DisplayTarget {
     bool valid{};
@@ -188,12 +280,17 @@ static bool StartButtonTransition() noexcept {
         Log("HDR_BUTTON_REJECT reason=rtx50_only gpu_known=%u rtx40=%u",read32(0xABB10),read32(0xABB14));
         return false;
     }
+    if(!gameHdrControlReady.load()) {
+        Log("HDR_BUTTON_REJECT reason=game_hdr_setter_unresolved safe_no_side_effects=1");
+        return false;
+    }
     HWND game=FindGameWindow();
     DisplayTarget d{};
-    if(!ResolveDisplayTarget(game,d) || !d.hdrSupported) {
+    bool gameHdr=false;
+    if(!ResolveDisplayTarget(game,d) || !d.hdrSupported || !ReadGameHdr(gameHdr)) {
         currentHdrKnown.store(d.valid);
         displayHdrSupported.store(d.hdrSupported);
-        Log("HDR_BUTTON_REJECT reason=display_hdr_unavailable game=%p valid=%u supported=%u",
+        Log("HDR_BUTTON_REJECT reason=hdr_state_unavailable game=%p display_valid=%u display_supported=%u",
             game,unsigned(d.valid),unsigned(d.hdrSupported));
         UpdateButtonVisual();
         return false;
@@ -206,8 +303,9 @@ static bool StartButtonTransition() noexcept {
         return false;
     }
     transition=State{};
-    transition.sourceHdr=d.hdrEnabled;
-    transition.targetHdr=!d.hdrEnabled;
+    const bool effectiveHdr=d.hdrEnabled && gameHdr;
+    transition.sourceHdr=effectiveHdr;
+    transition.targetHdr=!effectiveHdr;
     transition.sourceSelection=read32(0xAA0A0);
     transition.sourceFgWasEnabled=transition.sourceSelection!=0 && read32(0xAB9D0)!=0;
     transition.startedMs=GetTickCount64();
@@ -218,12 +316,14 @@ static bool StartButtonTransition() noexcept {
     State s=transition;
     ReleaseSRWLockExclusive(&stateLock);
 
-    currentHdr.store(d.hdrEnabled);
+    currentHdr.store(effectiveHdr);
     currentHdrKnown.store(true);
     displayHdrSupported.store(true);
-    Log("HDR_BUTTON_REQUEST source_hdr=%u target_hdr=%u selection=%u fg_api_enabled=%u present=%llu free_count=%llu",
-        unsigned(s.sourceHdr),unsigned(s.targetHdr),s.sourceSelection,read32(0xAB9D0),
-        s.basePresent,s.baseFreeCount);
+    lastSystemHdr.store(d.hdrEnabled);lastGameHdr.store(gameHdr);lastBridgeHdr.store(read32(0xABCF0)!=0);
+    systemToggleSent.store(false);gameSetAttempted.store(false);pendingGameHdrSet.store(-1);
+    Log("HDR_BUTTON_REQUEST source_effective_hdr=%u target_hdr=%u system_hdr=%u game_hdr=%u bridge_hdr=%u selection=%u fg_api_enabled=%u present=%llu free_count=%llu",
+        unsigned(s.sourceHdr),unsigned(s.targetHdr),unsigned(d.hdrEnabled),unsigned(gameHdr),unsigned(read32(0xABCF0)!=0),
+        s.sourceSelection,read32(0xAB9D0),s.basePresent,s.baseFreeCount);
     if(s.phase==Phase::RequestOff)pendingBegin.store(true);
     UpdateButtonVisual();
     return true;
@@ -246,13 +346,24 @@ static void OnFrame() noexcept {
         ReleaseSRWLockExclusive(&stateLock);
         UpdateButtonVisual();
     }
+    const int gameSet=pendingGameHdrSet.exchange(-1);
+    if(gameSet>=0) {
+        const bool ok=SetGameHdr(gameSet!=0);
+        if(!ok) {
+            AcquireSRWLockExclusive(&stateLock);
+            if(transition.active())transition.fail("game_hdr_setter_failed");
+            ReleaseSRWLockExclusive(&stateLock);
+            Log("HDR_BUTTON_FAIL reason=game_hdr_setter_failed target=%d",gameSet);
+            UpdateButtonVisual();
+        }
+    }
     originalFrame();
 }
 
 static LRESULT DrawHdrButton(const DRAWITEMSTRUCT* di) noexcept {
     if(!di || di->CtlID!=kHdrButtonId)return FALSE;
     State s=SnapshotState();
-    const bool supported=displayHdrSupported.load();
+    const bool supported=displayHdrSupported.load() && gameHdrControlReady.load();
     const bool hdr=currentHdr.load();
     RECT r=di->rcItem;
     HDC dc=di->hDC;
@@ -380,36 +491,59 @@ static void PollTransition() noexcept {
         return;
     }
 
-    if(s.phase==Phase::SetSystemHdr) {
+    if(s.phase==Phase::SetSystemHdr || s.phase==Phase::WaitGameHdr) {
         DisplayTarget d{};
-        if(!ResolveDisplayTarget(FindGameWindow(),d) || !d.hdrSupported) {
-            SetPhase(Phase::Failed,"display_target_lost");return;
+        bool gameHdr=false;
+        if(!ResolveDisplayTarget(FindGameWindow(),d) || !d.hdrSupported || !ReadGameHdr(gameHdr)) {
+            SetPhase(Phase::Failed,"hdr_state_lost");return;
         }
-        if(d.hdrEnabled==s.targetHdr) {
-            Log("HDR_BUTTON_WINDOWS_HDR_ALREADY target=%u",unsigned(s.targetHdr));
-            SetPhase(Phase::WaitGameHdr);return;
-        }
-        if(!HdrShortcutKeysReleased()) return;
-        if(!SendWindowsHdrShortcut()) {
-            SetPhase(Phase::Failed,"WinAltB_SendInput_failed");return;
-        }
-        Log("HDR_BUTTON_WINDOWS_HDR_TOGGLE_SENT source_hdr=%u target_hdr=%u",
-            unsigned(s.sourceHdr),unsigned(s.targetHdr));
-        SetPhase(Phase::WaitGameHdr);return;
-    }
+        const bool bridgeHdr=read32(0xABCF0)!=0;
+        lastSystemHdr.store(d.hdrEnabled);lastGameHdr.store(gameHdr);lastBridgeHdr.store(bridgeHdr);
+        currentHdr.store(d.hdrEnabled && gameHdr);currentHdrKnown.store(true);displayHdrSupported.store(true);
 
-    if(s.phase==Phase::WaitGameHdr) {
-        DisplayTarget d{};
-        if(!ResolveDisplayTarget(FindGameWindow(),d))return;
-        currentHdr.store(d.hdrEnabled);currentHdrKnown.store(true);displayHdrSupported.store(d.hdrSupported);
-        const bool gameHdr=read32(0xABCF0)!=0;
-        if(d.hdrEnabled==s.targetHdr && gameHdr==s.targetHdr) {
-            Log("HDR_BUTTON_GAME_HDR_CONFIRMED system_hdr=%u bridge_hdr=%u present=%llu",
-                unsigned(d.hdrEnabled),unsigned(gameHdr),read64(0xAB7B8));
-            if(read32(0xAA0A0)==0)SetPhase(Phase::Complete);
-            else SetPhase(Phase::WaitFgResume);
+        if(s.targetHdr) {
+            // Enabling: Windows HDR first, then Control HDR, then require bridge HDR.
+            if(!d.hdrEnabled) {
+                if(!systemToggleSent.load()) {
+                    if(!HdrShortcutKeysReleased()) return;
+                    if(!SendWindowsHdrShortcut()) { SetPhase(Phase::Failed,"WinAltB_SendInput_failed"); return; }
+                    systemToggleSent.store(true);
+                    Log("HDR_BUTTON_SYSTEM_ENABLE_SENT game_hdr=%u bridge_hdr=%u",unsigned(gameHdr),unsigned(bridgeHdr));
+                }
+                SetPhase(Phase::WaitGameHdr);return;
+            }
+            if(!gameHdr) {
+                if(!gameSetAttempted.exchange(true)) {
+                    pendingGameHdrSet.store(1);
+                    Log("HDR_BUTTON_GAME_ENABLE_QUEUED system_hdr=1 bridge_hdr=%u",unsigned(bridgeHdr));
+                }
+                SetPhase(Phase::WaitGameHdr);return;
+            }
+            if(!bridgeHdr) { SetPhase(Phase::WaitGameHdr);return; }
+            Log("HDR_BUTTON_COMBINED_HDR_CONFIRMED target=1 system=1 game=1 bridge=1 present=%llu",read64(0xAB7B8));
+            SetPhase(read32(0xAA0A0)==0?Phase::Complete:Phase::WaitFgResume);return;
+        } else {
+            // Disabling: Control HDR first while Windows remains HDR, then Windows HDR off.
+            if(gameHdr || bridgeHdr) {
+                if(!gameSetAttempted.exchange(true)) {
+                    pendingGameHdrSet.store(0);
+                    Log("HDR_BUTTON_GAME_DISABLE_QUEUED system_hdr=%u game_hdr=%u bridge_hdr=%u",
+                        unsigned(d.hdrEnabled),unsigned(gameHdr),unsigned(bridgeHdr));
+                }
+                SetPhase(Phase::WaitGameHdr);return;
+            }
+            if(d.hdrEnabled) {
+                if(!systemToggleSent.load()) {
+                    if(!HdrShortcutKeysReleased()) return;
+                    if(!SendWindowsHdrShortcut()) { SetPhase(Phase::Failed,"WinAltB_SendInput_failed"); return; }
+                    systemToggleSent.store(true);
+                    Log("HDR_BUTTON_SYSTEM_DISABLE_SENT game_hdr=0 bridge_hdr=0");
+                }
+                SetPhase(Phase::WaitGameHdr);return;
+            }
+            Log("HDR_BUTTON_COMBINED_HDR_CONFIRMED target=0 system=0 game=0 bridge=0 present=%llu",read64(0xAB7B8));
+            SetPhase(read32(0xAA0A0)==0?Phase::Complete:Phase::WaitFgResume);return;
         }
-        return;
     }
 
     if(s.phase==Phase::WaitFgResume) {
@@ -436,7 +570,7 @@ static DWORD WINAPI Worker(void*) noexcept {
     CreateDirectoryW(logDir.c_str(),nullptr);
     SYSTEMTIME st{};GetSystemTime(&st);
     wchar_t name[180]{};
-    swprintf_s(name,L"\\hdr-button-R22-%04u%02u%02u-%02u%02u%02u-%lu.log",
+    swprintf_s(name,L"\\hdr-button-R23-%04u%02u%02u-%02u%02u%02u-%lu.log",
         st.wYear,st.wMonth,st.wDay,st.wHour,st.wMinute,st.wSecond,GetCurrentProcessId());
     logFile=CreateFileW((logDir+name).c_str(),GENERIC_WRITE,FILE_SHARE_READ|FILE_SHARE_WRITE,nullptr,
         CREATE_ALWAYS,FILE_ATTRIBUTE_NORMAL,nullptr);
@@ -445,14 +579,16 @@ static DWORD WINAPI Worker(void*) noexcept {
     std::wstring directory(own);directory=directory.substr(0,directory.find_last_of(L"\\/"));
     std::wstring corePath=directory+L"\\dxgi.dll";
     std::string hash=HashFile(corePath);
-    Log("HDR_BUTTON_BUILD version=R22 expected_core_sha256=%s actual_core_sha256=%s ui=F10_overlay_child_button",
+    Log("HDR_BUTTON_BUILD version=R23 expected_core_sha256=%s actual_core_sha256=%s ui=F10_overlay_child_button",
         kExpectedCoreSha256,hash.c_str());
     if(hash!=kExpectedCoreSha256){Log("HDR_BUTTON_INSTALL_FAIL reason=core_hash");return 0;}
     core=reinterpret_cast<unsigned char*>(GetModuleHandleW(corePath.c_str()));
     if(!core){Log("HDR_BUTTON_INSTALL_FAIL reason=core_module");return 0;}
     if(!InstallCoreHook()){Log("HDR_BUTTON_INSTALL_FAIL reason=core_hook");return 0;}
+    ResolveGameHdrApi();
     ready.store(true);
-    Log("HDR_BUTTON_READY controller=overlay_button_WinAltB_after_confirmed_FG_off sequence=FG_off_then_Windows_HDR_shortcut_then_game_bridge_then_FG_resume");
+    Log("HDR_BUTTON_READY controller=combined_Windows_and_Control_HDR game_hdr_control_ready=%u sequence=FG_off_then_ordered_system_and_game_HDR_then_FG_resume",
+        unsigned(gameHdrControlReady.load()));
 
     uint64_t completeSince=0;
     while(true) {
@@ -460,9 +596,13 @@ static DWORD WINAPI Worker(void*) noexcept {
 
         if(!SnapshotState().active()) {
             DisplayTarget d{};
+            bool gameHdr=false;
             if(ResolveDisplayTarget(FindGameWindow(),d)) {
-                currentHdr.store(d.hdrEnabled);
-                currentHdrKnown.store(true);
+                const bool gameKnown=ReadGameHdr(gameHdr);
+                const bool bridgeHdr=read32(0xABCF0)!=0;
+                lastSystemHdr.store(d.hdrEnabled);lastGameHdr.store(gameHdr);lastBridgeHdr.store(bridgeHdr);
+                currentHdr.store(gameKnown && d.hdrEnabled && gameHdr);
+                currentHdrKnown.store(gameKnown);
                 displayHdrSupported.store(d.hdrSupported);
             }
         }
@@ -488,7 +628,7 @@ static DWORD WINAPI Worker(void*) noexcept {
 }
 
 extern "C" __declspec(dllexport) void WINAPI ControlFGHDRButton_Bootstrap(){}
-extern "C" __declspec(dllexport) unsigned WINAPI ControlFGHDRButton_Version(){return 0x00220001;}
+extern "C" __declspec(dllexport) unsigned WINAPI ControlFGHDRButton_Version(){return 0x00230001;}
 
 BOOL WINAPI DllMain(HINSTANCE mod,DWORD reason,LPVOID) {
     if(reason==DLL_PROCESS_ATTACH) {
