@@ -18,7 +18,7 @@ inline const wchar_t* ButtonText(Phase phase, bool hdr, bool supported) noexcept
     if (!supported) return L"HDR N/A";
     if (phase != Phase::Idle && phase != Phase::Complete && phase != Phase::Failed) return L"HDR...";
     if (phase == Phase::Failed) return L"HDR ERR";
-    return hdr ? L"HDR OFF" : L"HDR ON";
+    return hdr ? L"HDR ON" : L"HDR OFF";
 }
 
 inline const char* PhaseName(Phase p) noexcept {
