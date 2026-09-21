@@ -72,7 +72,7 @@ jobs:
       - name: Upload diagnostic
         uses: actions/upload-artifact@v4
         with:
-          name: Control-FG-RTX50-HDR-Button-R24
+          name: Control-FG-RTX50-HDR-Setter-Scan-R24-Retry
           path: diagnostics/hdr-button-r20/package/
           retention-days: 7
           if-no-files-found: error
