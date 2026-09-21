@@ -1,7 +1,7 @@
-name: HDR Setter Scan R26 Windows build
+name: HDR Native Trace R26 Windows build
 on:
   push:
-    branches: ['diag/rtx50-hdr-setter-scan-r26']
+    branches: ['diag/rtx50-hdr-native-trace-r26']
   workflow_dispatch:
 permissions:
   contents: read
@@ -53,11 +53,11 @@ jobs:
       - name: Add test notes
         run: |
           @'
-          CONTROL FG RTX50 HDR SETTER SCAN R26
+          CONTROL FG RTX50 HDR NATIVE TRACE R26
 
           The HDR button intentionally remains unavailable in this read-only discovery build.
 
-          R26 performs NO FG shutdown and NO HDR change. It resolves Control's real
+          R26 performs NO automatic FG shutdown and NO automatic HDR change. It resolves Control's real
           DeviceUtil::isHDREnabled() getter, logs its machine code, identifies module
           data referenced by that getter (and one direct-call level), and scans the
           exact loaded d3d_rmdwin10_f.dll .text section for read/write references to
@@ -73,7 +73,7 @@ jobs:
       - name: Upload diagnostic
         uses: actions/upload-artifact@v4
         with:
-          name: Control-FG-RTX50-HDR-Setter-Scan-R26-Retry
+          name: Control-FG-RTX50-HDR-Native-Trace-R26
           path: diagnostics/hdr-button-r20/package/
           retention-days: 7
           if-no-files-found: error
