@@ -1,0 +1,47 @@
+name: Extract Streamline 2.7.32 FG runtime
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - 'diag/sl-dlssg-dev-r9'
+
+jobs:
+  extract:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download official Streamline 2.7.32 SDK
+        shell: pwsh
+        run: |
+          $url = "https://github.com/NVIDIA-RTX/Streamline/releases/download/v2.7.32/streamline-sdk-v2.7.32.zip"
+          Invoke-WebRequest -Uri $url -OutFile streamline-sdk-v2.7.32.zip
+          Write-Host "SDK_SHA256=$((Get-FileHash streamline-sdk-v2.7.32.zip -Algorithm SHA256).Hash.ToLowerInvariant())"
+
+      - name: Extract NVIDIA FG runtimes
+        shell: pwsh
+        run: |
+          Expand-Archive streamline-sdk-v2.7.32.zip -DestinationPath sdk2732 -Force
+          New-Item -ItemType Directory -Force out2732 | Out-Null
+
+          $fg = Get-ChildItem sdk2732 -Recurse -File -Filter nvngx_dlssg.dll
+          if (-not $fg) { throw "nvngx_dlssg.dll not found" }
+
+          $i = 0
+          foreach ($f in $fg) {
+            $i++
+            $dest = "out2732\nvngx_dlssg_$i.dll"
+            Copy-Item $f.FullName $dest -Force
+            $vi = [System.Diagnostics.FileVersionInfo]::GetVersionInfo((Resolve-Path $dest))
+            Write-Host "FG_DLL_$i=$($f.FullName)"
+            Write-Host "FG_VERSION_$i=$($vi.FileVersion)"
+            Write-Host "FG_SHA256_$i=$((Get-FileHash $dest -Algorithm SHA256).Hash.ToLowerInvariant())"
+          }
+
+      - name: Upload runtime bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: streamline-2.7.32-fg-runtimes
+          path: out2732\*
+          retention-days: 2
