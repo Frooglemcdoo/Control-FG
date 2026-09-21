@@ -100,6 +100,7 @@ static bool ResolveGameHdrApi() noexcept {
     gameHdrSettings=reinterpret_cast<GameHdrSettingsFn>(
         GetProcAddress(gameD3d,"?setHDRSettings@DeviceUtil@d3d@@SAX_NM0@Z"));
     bool current=false;
+    LogHdrExports(gameD3d);
     const bool getterWorks=gameHdrGet && ReadGameHdr(current);
     const bool settersWork=gameHdrDisplay && gameHdrSettings;
     gameHdrControlReady.store(getterWorks && settersWork);
