@@ -5,7 +5,7 @@ namespace hdrbutton {
 
 static constexpr uint64_t kTransitionTimeoutMs = 60000;
 static constexpr uint64_t kFailureRecoveryDelayMs = 1000;
-static constexpr uint64_t kFreshDomainFramesRequired = 2;
+static constexpr uint64_t kFreshDomainFramesRequired = 3;
 
 enum class Phase : uint32_t {
     Idle,
@@ -32,14 +32,14 @@ inline const wchar_t* ButtonText(Phase phase, bool hdr, bool supported) noexcept
 inline const char* PhaseName(Phase p) noexcept {
     switch (p) {
     case Phase::Idle: return "idle";
-    case Phase::RequestOff: return "request_fg_selection_off";
-    case Phase::WaitOffCommit: return "wait_fg_selection_off";
+    case Phase::RequestOff: return "request_dlssg_hard_reset";
+    case Phase::WaitOffCommit: return "wait_dlssg_resources_freed";
     case Phase::SetSystemHdr: return "set_windows_hdr_direct";
     case Phase::WaitSystemHdr: return "wait_windows_hdr";
     case Phase::SetGameHdr: return "set_control_hdr";
     case Phase::WaitDomain: return "wait_hdr_domain";
     case Phase::WaitFreshDomain: return "wait_fresh_domain";
-    case Phase::RestoreFg: return "restore_fg_selection";
+    case Phase::RestoreFg: return "confirm_saved_fg_selection";
     case Phase::WaitFgResume: return "wait_fg_resume";
     case Phase::Complete: return "complete";
     case Phase::Failed: return "failed";
@@ -58,6 +58,7 @@ struct State {
     uint64_t phaseStartedMs{};
     uint64_t basePresent{};
     uint64_t baseGeneratedCount{};
+    uint64_t baseFreeCount{};
     uint64_t freshAaBase{};
     uint64_t freshPresentBase{};
     const char* error{"none"};
