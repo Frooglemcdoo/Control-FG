@@ -26,7 +26,6 @@ static SRWLOCK logLock=SRWLOCK_INIT;
 static SRWLOCK stateLock=SRWLOCK_INIT;
 static State transition{};
 static std::atomic<bool> ready{false};
-static std::atomic<bool> pendingBegin{false};
 static std::atomic<bool> currentHdr{false};
 static std::atomic<bool> currentHdrKnown{false};
 static std::atomic<bool> displayHdrSupported{false};
@@ -710,7 +709,7 @@ static DWORD WINAPI Worker(void*) noexcept {
     CreateDirectoryW(logDir.c_str(),nullptr);
     SYSTEMTIME st{};GetSystemTime(&st);
     wchar_t name[180]{};
-    swprintf_s(name,L"\\hdr-button-R27-%04u%02u%02u-%02u%02u%02u-%lu.log",
+    swprintf_s(name,L"\\hdr-button-R30-%04u%02u%02u-%02u%02u%02u-%lu.log",
         st.wYear,st.wMonth,st.wDay,st.wHour,st.wMinute,st.wSecond,GetCurrentProcessId());
     logFile=CreateFileW((logDir+name).c_str(),GENERIC_WRITE,FILE_SHARE_READ|FILE_SHARE_WRITE,nullptr,
         CREATE_ALWAYS,FILE_ATTRIBUTE_NORMAL,nullptr);
@@ -719,15 +718,15 @@ static DWORD WINAPI Worker(void*) noexcept {
     std::wstring directory(own);directory=directory.substr(0,directory.find_last_of(L"\\/"));
     std::wstring corePath=directory+L"\\dxgi.dll";
     std::string hash=HashFile(corePath);
-    Log("HDR_BUTTON_BUILD version=R27 expected_core_sha256=%s actual_core_sha256=%s ui=F10_overlay_child_button",
-        kExpectedCoreSha256,hash.c_str());
+    Log("HDR_BUTTON_BUILD version=R30 expected_core_sha256=%s actual_core_sha256=%s ui=F10_overlay_child_button architecture=single_owner direct_windows_hdr=1 synthetic_hotkey=0 actual_fg_selection_off=1 external_shield=0 timeout_ms=%llu fail_open_restore_fg=1",
+        kExpectedCoreSha256,hash.c_str(),kTransitionTimeoutMs);
     if(hash!=kExpectedCoreSha256){Log("HDR_BUTTON_INSTALL_FAIL reason=core_hash");return 0;}
     core=reinterpret_cast<unsigned char*>(GetModuleHandleW(corePath.c_str()));
     if(!core){Log("HDR_BUTTON_INSTALL_FAIL reason=core_module");return 0;}
     if(!InstallCoreHook()){Log("HDR_BUTTON_INSTALL_FAIL reason=core_hook");return 0;}
     ResolveGameHdrApi();
     ready.store(true);
-    Log("HDR_BUTTON_READY controller=combined_Windows_and_Control_HDR game_hdr_control_ready=%u sequence=FG_off_then_ordered_system_and_game_HDR_then_FG_resume",
+    Log("HDR_BUTTON_READY controller=single_owner_windows_and_control_hdr game_hdr_control_ready=%u sequence=save_fg_selection_then_actual_off_then_direct_windows_hdr_then_control_hdr_then_two_fresh_frames_then_restore_selection hotkey_injection=0 sidecar_hold=0 shield=0",
         unsigned(gameHdrControlReady.load()));
 
     uint64_t completeSince=0;
@@ -756,7 +755,6 @@ static DWORD WINAPI Worker(void*) noexcept {
                 AcquireSRWLockExclusive(&stateLock);
                 transition=State{};
                 ReleaseSRWLockExclusive(&stateLock);
-                WriteTransitionFgHold(false);
                 transitionGameWindow.store(nullptr);
                 completeSince=0;
                 UpdateButtonVisual();
@@ -770,7 +768,7 @@ static DWORD WINAPI Worker(void*) noexcept {
 }
 
 extern "C" __declspec(dllexport) void WINAPI ControlFGHDRButton_Bootstrap(){}
-extern "C" __declspec(dllexport) unsigned WINAPI ControlFGHDRButton_Version(){return 0x00270001;}
+extern "C" __declspec(dllexport) unsigned WINAPI ControlFGHDRButton_Version(){return 0x00300001;}
 
 BOOL WINAPI DllMain(HINSTANCE mod,DWORD reason,LPVOID) {
     if(reason==DLL_PROCESS_ATTACH) {
