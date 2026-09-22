@@ -2,6 +2,7 @@ from pathlib import Path
 import sys,struct,hashlib,zipfile,json
 BASE_SHA='4b54be1519646362516665764f24f8a1455a322a741910c9c12edb8211579de4'
 CORE_SHA='6ab0089c5b67d0f3a61cc72db1e35284db5eeec0f568ab62ed7cdc07aee586f8'
+R29_EXPECTED_CORE_SHA='09d64ecd37eddae971a78bdfab643e6279fe3dc261a0d3c5a8c2f33873903b11'
 u16=lambda b,p:struct.unpack_from('<H',b,p)[0]
 u32=lambda b,p:struct.unpack_from('<I',b,p)[0]
 align=lambda n,a:(n+a-1)//a*a
@@ -51,18 +52,18 @@ def main():
     original=(out/'dxgi.dll').read_bytes();assert sha(original)==CORE_SHA
     patched,detail=add_import(original);(out/'dxgi.dll').write_bytes(patched)
     generated=out.parent/'generated';generated.mkdir(exist_ok=True)
-    (generated/'expected_core.h').write_text('#pragma once\ninline constexpr const char* kExpectedCoreSha256="'+sha(patched)+'";\n')
-    report={'build':'RTX50 HDR Button R27','baseline_zip_sha256':BASE_SHA,'baseline_core_sha256':CORE_SHA,
-            'loader_core_sha256':sha(patched),'integration':detail,'nvidia_dlls_modified':False,
+    (generated/'expected_core.h').write_text('#pragma once\ninline constexpr const char* kExpectedCoreSha256="'+R29_EXPECTED_CORE_SHA+'";\n')
+    report={'build':'RTX50 HDR Transition Quarantine R29','baseline_zip_sha256':BASE_SHA,'baseline_core_sha256':CORE_SHA,
+            'loader_core_sha256':sha(patched),'runtime_expected_core_sha256':R29_EXPECTED_CORE_SHA,'integration':detail,'nvidia_dlls_modified':False,
             'renderer_sections_modified':False,'hdr_button':'F10 overlay child button','runtime_status':'not_yet_run_in_Control'}
-    (out/'HDR-BUTTON-R27-BUILD.json').write_text(json.dumps(report,indent=2))
+    (out/'HDR-BUTTON-R29-BUILD.json').write_text(json.dumps(report,indent=2))
     collector=out/'Collect-ControlFG-Compact-Logs.ps1'
     text=collector.read_text(encoding='utf-8-sig')
     needle="        if ($env:LOCALAPPDATA) {"
-    insert="""        $hdrButtonLogs=@(Get-ChildItem -LiteralPath $LogDirectory -File -Filter 'hdr-button-R27-*.log' -ErrorAction SilentlyContinue | Where-Object { Test-RegularFile $_ } | Sort-Object LastWriteTimeUtc -Descending | Select-Object -First 3)
+    insert="""        $hdrButtonLogs=@(Get-ChildItem -LiteralPath $LogDirectory -File -Filter 'hdr-button-R29-*.log' -ErrorAction SilentlyContinue | Where-Object { Test-RegularFile $_ } | Sort-Object LastWriteTimeUtc -Descending | Select-Object -First 3)
         foreach ($hdrButtonLog in $hdrButtonLogs) { Copy-CompactFile $hdrButtonLog ('hdr-button/'+$hdrButtonLog.Name) 512KB $true }
-        $hdrBuild=Get-Item -LiteralPath (Join-Path $ProjectDirectory 'HDR-BUTTON-R27-BUILD.json') -ErrorAction SilentlyContinue
-        if (Test-RegularFile $hdrBuild) { Copy-CompactFile $hdrBuild 'package/HDR-BUTTON-R27-BUILD.json' 64KB }
+        $hdrBuild=Get-Item -LiteralPath (Join-Path $ProjectDirectory 'HDR-BUTTON-R29-BUILD.json') -ErrorAction SilentlyContinue
+        if (Test-RegularFile $hdrBuild) { Copy-CompactFile $hdrBuild 'package/HDR-BUTTON-R29-BUILD.json' 64KB }
 """
     assert text.count(needle)==1
     collector.write_text(text.replace(needle,insert+needle),encoding='utf-8-sig')
