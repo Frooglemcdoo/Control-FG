@@ -1,7 +1,7 @@
-name: HDR Final Color R31 Windows build
+name: HDR Final Color R31A Windows build
 on:
   push:
-    branches: ['diag/rtx50-hdr-final-color-r31']
+    branches: ['diag/rtx50-hdr-final-color-r31a']
   workflow_dispatch:
 permissions:
   contents: read
@@ -28,21 +28,21 @@ jobs:
           python -m pip -q install pefile
           python -c "import pefile; p=pefile.PE('diagnostics/hdr-button-r20/package/dxgi.dll'); d={x.dll:[y.name for y in x.imports] for x in p.DIRECTORY_ENTRY_IMPORT}; print(d); assert b'ControlFGHDRButton_Bootstrap' in d[b'ControlFGHDRButton.dll']"
           if ($LASTEXITCODE -ne 0) { throw 'PE import validation failed' }
-      - name: R31 architecture and HDR-input policy assertions
+      - name: R31A architecture and HDR-input policy assertions
         run: |
           $ErrorActionPreference='Stop'
           $guard=Get-Content diagnostics/hdr-button-r20/src/guard.cpp -Raw
           $transition=Get-Content diagnostics/hdr-button-r20/src/transition.h -Raw
           foreach($forbidden in @('SendInput','WriteTransitionFgHold','shieldWindow','beginHdrHardReset','VK_LWIN','VK_LMENU')) {
-            if($guard.Contains($forbidden)) { throw "R31 forbidden legacy mechanism remains: $forbidden" }
+            if($guard.Contains($forbidden)) { throw "R31A forbidden legacy mechanism remains: $forbidden" }
           }
           foreach($required in @('DisplayConfigSetDeviceInfo','WriteFGSelectionRaw(0','FailTransitionAndRestoreFG','failure_unwind_restore_saved_selection','HDR_BUTTON_FG_RESUMED')) {
-            if(-not $guard.Contains($required)) { throw "R31 required mechanism missing: $required" }
+            if(-not $guard.Contains($required)) { throw "R31A required mechanism missing: $required" }
           }
-          if(-not $transition.Contains('kTransitionTimeoutMs = 60000')) { throw 'R31 timeout contract missing' }
-          if(-not $transition.Contains('ThirtySecondStallIsSafe')) { throw 'R31 30-second stall contract missing' }
-          foreach($required in @('HookedUiRecomposeTag','R31_HDR_INPUT_PATH','kRvaUiRecomposeTagFn = 0x1A9D0','kRvaHdrDlssgOptionsPatch = 0x4196F','hudLessBufferFormat = 0','uiBufferFormat = 0','enableUserInterfaceRecomposition = eFalse')) {
-            if(-not $guard.Contains($required)) { throw "R31 HDR input mechanism missing: $required" }
+          if(-not $transition.Contains('kTransitionTimeoutMs = 60000')) { throw 'R31A timeout contract missing' }
+          if(-not $transition.Contains('ThirtySecondStallIsSafe')) { throw 'R31A 30-second stall contract missing' }
+          foreach($required in @('HookedUiRecomposeTag','R31A_HDR_INPUT_PATH','kRvaUiRecomposeTagFn = 0x1A9D0','kRvaHdrDlssgOptionsPatch = 0x4196F','kRvaHdrFreshHudlessFormatCmp = 0x4129F','kRvaHdrFreshTagMaskAnd = 0x412E2','kRvaHdrFreshTagMaskCmp = 0x412EC','hudLessBufferFormat = 0','uiBufferFormat = 0','enableUserInterfaceRecomposition = eFalse','transition_required_mask=0x3','transition_hudless_format=0')) {
+            if(-not $guard.Contains($required)) { throw "R31A HDR input mechanism missing: $required" }
           }
           @'
           import pefile
@@ -51,15 +51,18 @@ jobs:
           checks={
               0x1A9D0: bytes.fromhex('40 55 53 56 57 41 54 41 55 41 56 41 57 48 8D AC'),
               0x4196F: bytes.fromhex('41 8B C7 F7 D8 1B C9 83 E1 18 89 4D 24'),
+              0x4129F: bytes.fromhex('41 83 FF 18'),
+              0x412E2: bytes.fromhex('83 E0 0C'),
+              0x412EC: bytes.fromhex('83 F8 0C'),
           }
           for rva,expected in checks.items():
               off=p.get_offset_from_rva(rva)
               actual=image[off:off+len(expected)]
               assert actual==expected,(hex(rva),actual.hex(),expected.hex())
-          print('PASS R31 binary patch signatures')
+          print('PASS R31A binary patch signatures')
           '@ | python -
-          if ($LASTEXITCODE -ne 0) { throw 'R31 binary signature validation failed' }
-          Write-Host 'PASS R31 policy: R30 transition frozen; HDR DLSS-G final-color-only; SDR recomposition preserved.'
+          if ($LASTEXITCODE -ne 0) { throw 'R31A binary signature validation failed' }
+          Write-Host 'PASS R31A policy: R30 transition frozen; HDR DLSS-G final-color-only; SDR recomposition preserved.'
       - name: Compile MSVC Release
         run: |
           cmake -S diagnostics/hdr-button-r20 -B diagnostics/hdr-button-r20/build -A x64
@@ -85,7 +88,7 @@ jobs:
       - name: Add test notes
         run: |
           @'
-          CONTROL FG RTX50 HDR FINAL COLOR R31 A/B TEST
+          CONTROL FG RTX50 HDR FINAL COLOR R31A A/B TEST
 
           Open the F10 overlay. A new HDR ON / HDR OFF button appears in the HDR status column near the top of the F10 overlay.
 
@@ -97,7 +100,7 @@ jobs:
           5. wait for the requested Windows + Control + bridge domain and two fresh AA/render frames;
           6. restore the exact saved FG selection and confirm DLSS-G re-engages.
 
-          R31 leaves the R30 HDR transition state machine unchanged.
+          R31A leaves the R30 HDR transition state machine unchanged.
 
           HDR-only A/B change:
           - no HDR HUDless tag;
@@ -109,17 +112,17 @@ jobs:
 
           SDR retains the existing HUDless/UI recomposition path unchanged.
 
-          Expected R31 log while HDR + FG is active:
-          R31_HDR_INPUT_PATH ... mode=final_color_only ... hudless_tag=0 ui_alpha_tag=0 ui_recomposition=0
+          Expected R31A log while HDR + FG is active:
+          R31A_HDR_INPUT_PATH ... mode=final_color_only ... hudless_tag=0 ui_alpha_tag=0 ui_recomposition=0
           FG_UI_RECOMPOSITION_OPTIONS ... enabled=0 hudless_tag=0 ui_alpha_tag=0 ... hdr10_bridge=1
           SL_DLSSG_MODE ... mode=on ... color_fmt=24 hudless_fmt=0 hdr10_bridge=1
 
           RTX50 diagnostic only.
-          '@ | Set-Content diagnostics/hdr-button-r20/package/HDR-BUTTON-R31-TEST.txt -Encoding UTF8
+          '@ | Set-Content diagnostics/hdr-button-r20/package/HDR-BUTTON-R31A-TEST.txt -Encoding UTF8
       - name: Upload diagnostic
         uses: actions/upload-artifact@v4
         with:
-          name: Control-FG-RTX50-HDR-Final-Color-R31
+          name: Control-FG-RTX50-HDR-Final-Color-R31A
           path: diagnostics/hdr-button-r20/package/
           retention-days: 7
           if-no-files-found: error
