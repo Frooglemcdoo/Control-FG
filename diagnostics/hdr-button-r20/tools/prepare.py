@@ -52,17 +52,17 @@ def main():
     patched,detail=add_import(original);(out/'dxgi.dll').write_bytes(patched)
     generated=out.parent/'generated';generated.mkdir(exist_ok=True)
     (generated/'expected_core.h').write_text('#pragma once\ninline constexpr const char* kExpectedCoreSha256="'+sha(patched)+'";\n')
-    report={'build':'RTX50 HDR Full Recompose Reset R32','baseline_zip_sha256':BASE_SHA,'baseline_core_sha256':CORE_SHA,
+    report={'build':'RTX50 HDR Overlap Refree R33','baseline_zip_sha256':BASE_SHA,'baseline_core_sha256':CORE_SHA,
             'loader_core_sha256':sha(patched),'integration':detail,'nvidia_dlls_modified':False,
             'renderer_sections_modified':False,'hdr_button':'F10 overlay child button','runtime_status':'not_yet_run_in_Control'}
-    (out/'HDR-BUTTON-R32-BUILD.json').write_text(json.dumps(report,indent=2))
+    (out/'HDR-BUTTON-R33-BUILD.json').write_text(json.dumps(report,indent=2))
     collector=out/'Collect-ControlFG-Compact-Logs.ps1'
     text=collector.read_text(encoding='utf-8-sig')
     needle="        if ($env:LOCALAPPDATA) {"
-    insert="""        $hdrButtonLogs=@(Get-ChildItem -LiteralPath $LogDirectory -File -Filter 'hdr-button-R32-*.log' -ErrorAction SilentlyContinue | Where-Object { Test-RegularFile $_ } | Sort-Object LastWriteTimeUtc -Descending | Select-Object -First 3)
+    insert="""        $hdrButtonLogs=@(Get-ChildItem -LiteralPath $LogDirectory -File -Filter 'hdr-button-R33-*.log' -ErrorAction SilentlyContinue | Where-Object { Test-RegularFile $_ } | Sort-Object LastWriteTimeUtc -Descending | Select-Object -First 3)
         foreach ($hdrButtonLog in $hdrButtonLogs) { Copy-CompactFile $hdrButtonLog ('hdr-button/'+$hdrButtonLog.Name) 512KB $true }
-        $hdrBuild=Get-Item -LiteralPath (Join-Path $ProjectDirectory 'HDR-BUTTON-R32-BUILD.json') -ErrorAction SilentlyContinue
-        if (Test-RegularFile $hdrBuild) { Copy-CompactFile $hdrBuild 'package/HDR-BUTTON-R32-BUILD.json' 64KB }
+        $hdrBuild=Get-Item -LiteralPath (Join-Path $ProjectDirectory 'HDR-BUTTON-R33-BUILD.json') -ErrorAction SilentlyContinue
+        if (Test-RegularFile $hdrBuild) { Copy-CompactFile $hdrBuild 'package/HDR-BUTTON-R33-BUILD.json' 64KB }
 """
     assert text.count(needle)==1
     collector.write_text(text.replace(needle,insert+needle),encoding='utf-8-sig')
