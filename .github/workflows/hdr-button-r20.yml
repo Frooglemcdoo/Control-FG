@@ -41,7 +41,7 @@ jobs:
           }
           if(-not $transition.Contains('kTransitionTimeoutMs = 60000')) { throw 'R31A timeout contract missing' }
           if(-not $transition.Contains('ThirtySecondStallIsSafe')) { throw 'R31A 30-second stall contract missing' }
-          foreach($required in @('HookedUiRecomposeTag','R31A_HDR_INPUT_PATH','kRvaUiRecomposeTagFn = 0x1A9D0','kRvaHdrDlssgOptionsPatch = 0x4196F','kRvaHdrFreshHudlessFormatCmp = 0x4129F','kRvaHdrFreshTagMaskAnd = 0x412E2','kRvaHdrFreshTagMaskCmp = 0x412EC','hudLessBufferFormat = 0','uiBufferFormat = 0','enableUserInterfaceRecomposition = eFalse','transition_required_mask=0x3','transition_hudless_format=0')) {
+          foreach($required in @('HookedUiRecomposeTag','R31A_HDR_INPUT_PATH','kRvaUiRecomposeTagFn = 0x1A9D0','kRvaHdrDlssgOptionsPatch = 0x4196F','kRvaHdrFreshHudlessFormatCmp = 0x4129F','kRvaHdrFreshTagMaskAnd = 0x412E2','kRvaHdrFreshTagMaskCmp = 0x412EC','optionsReplacement','transition_required_mask=0x3','transition_hudless_format=0')) {
             if(-not $guard.Contains($required)) { throw "R31A HDR input mechanism missing: $required" }
           }
           @'
