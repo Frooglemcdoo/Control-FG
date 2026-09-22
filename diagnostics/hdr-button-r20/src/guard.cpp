@@ -517,7 +517,6 @@ static bool InstallCoreHook() noexcept {
     auto r=MH_CreateHook(core+0x1DF60,reinterpret_cast<void*>(&OnFrame),reinterpret_cast<void**>(&originalFrame));
     if(r!=MH_OK){Log("HDR_BUTTON_INSTALL_FAIL reason=minhook_create status=%s",MH_StatusToString(r));return false;}
     if(MH_EnableHook(core+0x1DF60)!=MH_OK)return false;
-    beginHdrHardReset=reinterpret_cast<bool(*)(uint64_t,const char*)>(core+0xCDC0);
     return true;
 }
 
