@@ -53,7 +53,7 @@ jobs:
       - name: Add test notes
         run: |
           @'
-          CONTROL FG RTX50 HDR BUTTON R29 TEST
+          CONTROL FG RTX50 HDR BUTTON R29 TEST - FRESH FRAME QUARANTINE
 
           Open the F10 overlay. A new HDR ON / HDR OFF button appears in the HDR status column near the top of the F10 overlay.
 
