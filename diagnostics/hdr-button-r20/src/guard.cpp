@@ -402,37 +402,13 @@ static bool StartButtonTransition() noexcept {
 }
 
 static void OnFrame() noexcept {
-    if(ready.load()) {
-        State active=SnapshotState();
-        if((active.active() && active.phase!=Phase::WaitFgResume) || active.phase==Phase::Failed)
-            WriteTransitionFgHold(true);
-    }
-    if(ready.load() && pendingBegin.exchange(false)) {
-        AcquireSRWLockExclusive(&stateLock);
-        if(transition.phase==Phase::RequestOff) {
-            const uint64_t next=read64(0xAB7B8)+1;
-            const bool ok=beginHdrHardReset && beginHdrHardReset(next,"overlay_hdr_button_pre_system_change");
-            if(ok) {
-                transition.phase=Phase::WaitOffCommit;
-                Log("HDR_BUTTON_FG_OFF_ARMED present=%llu selection_preserved=%u",next,transition.sourceSelection);
-            } else {
-                transition.fail("hard_reset_arm_failed");
-                Log("HDR_BUTTON_FAIL reason=hard_reset_arm_failed");
-            }
-        }
-        ReleaseSRWLockExclusive(&stateLock);
-        UpdateButtonVisual();
-    }
     const int gameSet=pendingGameHdrSet.exchange(-1);
     if(gameSet>=0) {
         const bool ok=SetGameHdr(gameSet!=0);
-        if(!ok) {
-            AcquireSRWLockExclusive(&stateLock);
-            if(transition.active())transition.fail("game_hdr_setter_failed");
-            ReleaseSRWLockExclusive(&stateLock);
-            Log("HDR_BUTTON_FAIL reason=game_hdr_setter_failed target=%d hold_fg_off=1",gameSet);
-            UpdateButtonVisual();
-        }
+        gameSetSucceeded.store(ok,std::memory_order_release);
+        gameSetCompleted.store(true,std::memory_order_release);
+        Log("HDR_BUTTON_GAME_SET_COMPLETE target=%d success=%u present=%llu",
+            gameSet,unsigned(ok),read64(kRvaPresentCounter));
     }
     originalFrame();
 }
