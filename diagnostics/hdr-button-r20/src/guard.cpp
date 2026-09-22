@@ -21,6 +21,8 @@ using namespace hdrbutton;
 static HMODULE selfModule{};
 static unsigned char* core{};
 static void (*originalFrame)(){};
+using BeginHdrHardResetFn = bool (*)(uint64_t,const char*);
+static BeginHdrHardResetFn beginHdrHardReset{};
 static HANDLE logFile=INVALID_HANDLE_VALUE;
 static SRWLOCK logLock=SRWLOCK_INIT;
 static SRWLOCK stateLock=SRWLOCK_INIT;
@@ -51,6 +53,7 @@ static std::atomic<bool> systemSetAttempted{false};
 static std::atomic<bool> gameSetAttempted{false};
 static std::atomic<bool> gameSetCompleted{false};
 static std::atomic<bool> gameSetSucceeded{false};
+static std::atomic<bool> hardResetAttempted{false};
 static std::atomic<bool> lastGameHdr{false};
 static std::atomic<bool> lastSystemHdr{false};
 static std::atomic<bool> lastBridgeHdr{false};
@@ -62,6 +65,15 @@ static constexpr size_t kRvaPresentCounter = 0xAB7B8;
 static constexpr size_t kRvaFgEnabledByApi = 0xAB9D0;
 static constexpr size_t kRvaFgGeneratedSamples = 0xABB28;
 static constexpr size_t kRvaHdrBridgeActive = 0xABCF0;
+static constexpr size_t kRvaHdrHardResetStage = 0xABC50;
+static constexpr size_t kRvaHdrHardResetFreeCount = 0xABC70;
+static constexpr size_t kRvaBeginHdrHardReset = 0xCDC0;
+
+static constexpr size_t kRvaFreshCountCap = 0x414B4;
+static constexpr size_t kRvaFreshRequiredLog = 0x41513;
+static constexpr size_t kRvaFreshSettleThreshold = 0x41569;
+static constexpr size_t kRvaNoBridgeFreshCountCap = 0x4169B;
+static constexpr size_t kRvaNoBridgeFreshSettleThreshold = 0x41742;
 
 static unsigned int ReadFGSelectionRaw() noexcept {
     return core ? static_cast<unsigned int>(InterlockedCompareExchange(
@@ -73,6 +85,54 @@ static void WriteFGSelectionRaw(unsigned int selection,const char* reason) noexc
     const unsigned int previous=static_cast<unsigned int>(InterlockedExchange(
         reinterpret_cast<volatile LONG*>(core+kRvaFgSelection),static_cast<LONG>(selection)));
     Log("HDR_BUTTON_FG_SELECTION_WRITE previous=%u target=%u reason=%s persisted=0",previous,selection,reason?reason:"none");
+}
+
+static bool PatchThreeFrameTransitionWarmup() noexcept {
+    struct Patch {
+        size_t rva;
+        const unsigned char* expected;
+        const unsigned char* replacement;
+        size_t size;
+        const char* label;
+    };
+    static const unsigned char e1[]={0x83,0xF9,0x02}, r1[]={0x83,0xF9,0x03};
+    static const unsigned char e2[]={0xC7,0x44,0x24,0x20,0x02,0x00,0x00,0x00},
+                               r2[]={0xC7,0x44,0x24,0x20,0x03,0x00,0x00,0x00};
+    static const unsigned char e3[]={0x41,0x83,0xFE,0x02}, r3[]={0x41,0x83,0xFE,0x03};
+    static const unsigned char e4[]={0x83,0xF9,0x02}, r4[]={0x83,0xF9,0x03};
+    static const unsigned char e5[]={0x41,0x83,0xFF,0x02}, r5[]={0x41,0x83,0xFF,0x03};
+    const Patch patches[]={
+        {kRvaFreshCountCap,e1,r1,sizeof(e1),"transition_fresh_count_cap_3"},
+        {kRvaFreshRequiredLog,e2,r2,sizeof(e2),"transition_required_frames_log_3"},
+        {kRvaFreshSettleThreshold,e3,r3,sizeof(e3),"transition_settle_threshold_3"},
+        {kRvaNoBridgeFreshCountCap,e4,r4,sizeof(e4),"no_bridge_fresh_count_cap_3"},
+        {kRvaNoBridgeFreshSettleThreshold,e5,r5,sizeof(e5),"no_bridge_settle_threshold_3"}
+    };
+    for(const auto& p:patches) {
+        if(memcmp(core+p.rva,p.expected,p.size)!=0) {
+            Log("R32_WARMUP_PATCH_FAIL reason=signature label=%s rva=0x%zX",p.label,p.rva);
+            return false;
+        }
+    }
+    for(const auto& p:patches) {
+        DWORD oldProtect=0;
+        unsigned char* target=core+p.rva;
+        if(!VirtualProtect(target,p.size,PAGE_EXECUTE_READWRITE,&oldProtect)) {
+            Log("R32_WARMUP_PATCH_FAIL reason=VirtualProtect label=%s error=%lu",p.label,GetLastError());
+            return false;
+        }
+        memcpy(target,p.replacement,p.size);
+        FlushInstructionCache(GetCurrentProcess(),target,p.size);
+        DWORD ignored=0;
+        VirtualProtect(target,p.size,oldProtect,&ignored);
+        if(memcmp(target,p.replacement,p.size)!=0) {
+            Log("R32_WARMUP_PATCH_FAIL reason=verify label=%s",p.label);
+            return false;
+        }
+        Log("R32_WARMUP_PATCH_OK label=%s rva=0x%zX",p.label,p.rva);
+    }
+    Log("R32_TRANSITION_POLICY hard_dlssg_free=1 recomposition=restored ring_slots=3 fresh_frames_required=3 camera_reset=control_reset_signal steady_state_hdr_unchanged=1 steady_state_sdr_unchanged=1");
+    return true;
 }
 
 static bool ReadGameHdr(bool& value) noexcept {
@@ -367,6 +427,7 @@ static bool StartButtonTransition() noexcept {
     transition.phaseStartedMs=now;
     transition.basePresent=read64(kRvaPresentCounter);
     transition.baseGeneratedCount=read64(kRvaFgGeneratedSamples);
+    transition.baseFreeCount=read64(kRvaHdrHardResetFreeCount);
     transition.freshAaBase=read64(kRvaAaCounter);
     transition.freshPresentBase=transition.basePresent;
     transition.phase=transition.sourceSelection==0?Phase::SetSystemHdr:Phase::RequestOff;
@@ -385,11 +446,12 @@ static bool StartButtonTransition() noexcept {
     gameSetAttempted.store(false);
     gameSetCompleted.store(false);
     gameSetSucceeded.store(false);
+    hardResetAttempted.store(false);
     pendingGameHdrSet.store(-1);
 
-    Log("HDR_BUTTON_REQUEST source_windows_hdr=%u target_hdr=%u game_hdr=%u bridge_hdr=%u saved_fg_selection=%u fg_api_enabled=%u present=%llu aa=%llu authority=windows_display direct_display_api=1 synthetic_hotkey=0 sidecar_fg_hold=0",
+    Log("HDR_BUTTON_REQUEST source_windows_hdr=%u target_hdr=%u game_hdr=%u bridge_hdr=%u saved_fg_selection=%u fg_api_enabled=%u present=%llu aa=%llu free_count=%llu authority=windows_display direct_display_api=1 synthetic_hotkey=0 hard_reset_before_domain=1 user_selection_preserved=1",
         unsigned(d.hdrEnabled),unsigned(s.targetHdr),unsigned(gameHdr),unsigned(read32(kRvaHdrBridgeActive)!=0),
-        s.sourceSelection,read32(kRvaFgEnabledByApi),s.basePresent,s.freshAaBase);
+        s.sourceSelection,read32(kRvaFgEnabledByApi),s.basePresent,s.freshAaBase,s.baseFreeCount);
     UpdateButtonVisual();
     return true;
 }
@@ -502,14 +564,22 @@ static std::string HashFile(const std::wstring& path) {
 
 static bool InstallCoreHook() noexcept {
     static const unsigned char frameSig[]={0x48,0x89,0x5c,0x24,0x20,0x55,0x56,0x57,0x41,0x54,0x41,0x55,0x41,0x56,0x41,0x57};
+    static const unsigned char hardResetSig[]={0x48,0x89,0x6c,0x24,0x20,0x56,0x48,0x83,0xec,0x30};
     if(memcmp(core+0x1DF60,frameSig,sizeof(frameSig))!=0) {
         Log("HDR_BUTTON_INSTALL_FAIL reason=frame_signature");
         return false;
     }
+    if(memcmp(core+kRvaBeginHdrHardReset,hardResetSig,sizeof(hardResetSig))!=0) {
+        Log("HDR_BUTTON_INSTALL_FAIL reason=hard_reset_signature");
+        return false;
+    }
+    if(!PatchThreeFrameTransitionWarmup())return false;
+    beginHdrHardReset=reinterpret_cast<BeginHdrHardResetFn>(core+kRvaBeginHdrHardReset);
     if(MH_Initialize()!=MH_OK)return false;
     auto r=MH_CreateHook(core+0x1DF60,reinterpret_cast<void*>(&OnFrame),reinterpret_cast<void**>(&originalFrame));
     if(r!=MH_OK){Log("HDR_BUTTON_INSTALL_FAIL reason=minhook_create status=%s",MH_StatusToString(r));return false;}
     if(MH_EnableHook(core+0x1DF60)!=MH_OK)return false;
+    Log("R32_HARD_RESET_READY entry_rva=0x%zX stage_rva=0x%zX free_count_rva=0x%zX",kRvaBeginHdrHardReset,kRvaHdrHardResetStage,kRvaHdrHardResetFreeCount);
     return true;
 }
 
@@ -524,9 +594,21 @@ static void PollTransition() noexcept {
     }
 
     if(s.phase==Phase::RequestOff) {
-        WriteFGSelectionRaw(0,"hdr_transition_actual_selection_off");
-        Log("HDR_BUTTON_FG_OFF_REQUEST saved_selection=%u present=%llu api_enabled=%u method=actual_user_selection_not_hold",
-            s.sourceSelection,read64(kRvaPresentCounter),read32(kRvaFgEnabledByApi));
+        if(!beginHdrHardReset) {
+            FailTransitionAndRestoreFG("hard_reset_entry_unavailable");
+            return;
+        }
+        if(!hardResetAttempted.exchange(true)) {
+            const uint64_t present=read64(kRvaPresentCounter);
+            const bool started=beginHdrHardReset(present,"r32_button_pre_domain");
+            Log("R32_HARD_RESET_REQUEST started=%u saved_selection=%u present=%llu api_enabled=%u stage=%u free_count=%llu action=wait_for_slFreeResources",
+                unsigned(started),s.sourceSelection,present,read32(kRvaFgEnabledByApi),read32(kRvaHdrHardResetStage),
+                read64(kRvaHdrHardResetFreeCount));
+            if(!started && read32(kRvaHdrHardResetStage)==0) {
+                FailTransitionAndRestoreFG("hard_reset_request_rejected");
+                return;
+            }
+        }
         SetPhase(Phase::WaitOffCommit);
         return;
     }
@@ -534,10 +616,16 @@ static void PollTransition() noexcept {
     if(s.phase==Phase::WaitOffCommit) {
         const unsigned int selection=ReadFGSelectionRaw();
         const unsigned int enabled=read32(kRvaFgEnabledByApi);
+        const unsigned int stage=read32(kRvaHdrHardResetStage);
+        const uint64_t frees=read64(kRvaHdrHardResetFreeCount);
         const uint64_t present=read64(kRvaPresentCounter);
-        if(selection==0 && enabled==0 && present>s.basePresent) {
-            Log("HDR_BUTTON_FG_OFF_CONFIRMED selection=0 api_enabled=0 present=%llu saved_selection=%u action=set_windows_hdr_direct",
-                present,s.sourceSelection);
+        if(selection!=s.sourceSelection) {
+            FailTransitionAndRestoreFG("fg_selection_changed_during_hard_reset");
+            return;
+        }
+        if(stage==2 && enabled==0 && frees>s.baseFreeCount && present>s.basePresent) {
+            Log("R32_HARD_RESET_CONFIRMED selection_preserved=%u api_enabled=0 stage=2 present=%llu free_count=%llu freed_delta=%llu action=set_windows_hdr_direct",
+                selection,present,frees,frees-s.baseFreeCount);
             SetPhase(Phase::SetSystemHdr);
         }
         return;
@@ -670,9 +758,14 @@ static void PollTransition() noexcept {
 
     if(s.phase==Phase::RestoreFg) {
         protectGameHdr.store(s.targetHdr,std::memory_order_release);
-        WriteFGSelectionRaw(s.sourceSelection,"fresh_domain_restore_saved_selection");
-        Log("HDR_BUTTON_FG_RESTORE saved_selection=%u target_hdr=%u present=%llu bridge=%u sidecar_hold=0",
-            s.sourceSelection,unsigned(s.targetHdr),read64(kRvaPresentCounter),read32(kRvaHdrBridgeActive));
+        const unsigned int selection=ReadFGSelectionRaw();
+        if(selection!=s.sourceSelection) {
+            FailTransitionAndRestoreFG("saved_fg_selection_not_preserved");
+            return;
+        }
+        Log("R32_FG_REARM_WAIT saved_selection=%u target_hdr=%u present=%llu bridge=%u hard_reset_stage=%u free_count=%llu action=core_rearm_after_three_fresh_recomposition_frames",
+            s.sourceSelection,unsigned(s.targetHdr),read64(kRvaPresentCounter),read32(kRvaHdrBridgeActive),
+            read32(kRvaHdrHardResetStage),read64(kRvaHdrHardResetFreeCount));
         if(s.sourceSelection==0)SetPhase(Phase::Complete);
         else SetPhase(Phase::WaitFgResume);
         return;
@@ -703,7 +796,7 @@ static DWORD WINAPI Worker(void*) noexcept {
     CreateDirectoryW(logDir.c_str(),nullptr);
     SYSTEMTIME st{};GetSystemTime(&st);
     wchar_t name[180]{};
-    swprintf_s(name,L"\\hdr-button-R30-%04u%02u%02u-%02u%02u%02u-%lu.log",
+    swprintf_s(name,L"\\hdr-button-R32-%04u%02u%02u-%02u%02u%02u-%lu.log",
         st.wYear,st.wMonth,st.wDay,st.wHour,st.wMinute,st.wSecond,GetCurrentProcessId());
     logFile=CreateFileW((logDir+name).c_str(),GENERIC_WRITE,FILE_SHARE_READ|FILE_SHARE_WRITE,nullptr,
         CREATE_ALWAYS,FILE_ATTRIBUTE_NORMAL,nullptr);
@@ -712,7 +805,7 @@ static DWORD WINAPI Worker(void*) noexcept {
     std::wstring directory(own);directory=directory.substr(0,directory.find_last_of(L"\\/"));
     std::wstring corePath=directory+L"\\dxgi.dll";
     std::string hash=HashFile(corePath);
-    Log("HDR_BUTTON_BUILD version=R30 expected_core_sha256=%s actual_core_sha256=%s ui=F10_overlay_child_button architecture=single_owner direct_windows_hdr=1 synthetic_hotkey=0 actual_fg_selection_off=1 external_shield=0 timeout_ms=%llu fail_open_restore_fg=1",
+    Log("HDR_BUTTON_BUILD version=R32 expected_core_sha256=%s actual_core_sha256=%s ui=F10_overlay_child_button architecture=single_owner direct_windows_hdr=1 synthetic_hotkey=0 hard_dlssg_free_before_domain=1 user_selection_preserved=1 full_recomposition=1 fresh_ring_frames=3 external_shield=0 timeout_ms=%llu fail_open_restore_fg=1",
         kExpectedCoreSha256,hash.c_str(),kTransitionTimeoutMs);
     if(hash!=kExpectedCoreSha256){Log("HDR_BUTTON_INSTALL_FAIL reason=core_hash");return 0;}
     core=reinterpret_cast<unsigned char*>(GetModuleHandleW(corePath.c_str()));
@@ -720,7 +813,7 @@ static DWORD WINAPI Worker(void*) noexcept {
     if(!InstallCoreHook()){Log("HDR_BUTTON_INSTALL_FAIL reason=core_hook");return 0;}
     ResolveGameHdrApi();
     ready.store(true);
-    Log("HDR_BUTTON_READY controller=single_owner_windows_and_control_hdr game_hdr_control_ready=%u sequence=save_fg_selection_then_actual_off_then_direct_windows_hdr_then_control_hdr_then_two_fresh_frames_then_restore_selection hotkey_injection=0 sidecar_hold=0 shield=0",
+    Log("HDR_BUTTON_READY controller=single_owner_windows_and_control_hdr game_hdr_control_ready=%u sequence=save_fg_selection_then_hard_dlssg_free_then_direct_windows_hdr_then_control_hdr_then_three_fresh_recomposition_frames_then_core_rearm hotkey_injection=0 selection_mutation=0 sidecar_hold=0 shield=0",
         unsigned(gameHdrControlReady.load()));
 
     uint64_t completeSince=0;
@@ -762,7 +855,7 @@ static DWORD WINAPI Worker(void*) noexcept {
 }
 
 extern "C" __declspec(dllexport) void WINAPI ControlFGHDRButton_Bootstrap(){}
-extern "C" __declspec(dllexport) unsigned WINAPI ControlFGHDRButton_Version(){return 0x00300001;}
+extern "C" __declspec(dllexport) unsigned WINAPI ControlFGHDRButton_Version(){return 0x00320001;}
 
 BOOL WINAPI DllMain(HINSTANCE mod,DWORD reason,LPVOID) {
     if(reason==DLL_PROCESS_ATTACH) {
