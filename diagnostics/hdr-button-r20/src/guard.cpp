@@ -746,6 +746,9 @@ static DWORD WINAPI Worker(void*) noexcept {
         PollTransition();
 
         State s=SnapshotState();
+        if(s.phase==Phase::Failed) {
+            SetShieldVisible(false);
+        }
         if(s.phase==Phase::Complete) {
             if(!completeSince)completeSince=GetTickCount64();
             if(GetTickCount64()-completeSince>800) {
