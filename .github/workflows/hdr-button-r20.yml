@@ -1,7 +1,7 @@
-name: HDR Button R27 Windows build
+name: HDR Single Owner R30 Windows build
 on:
   push:
-    branches: ['diag/rtx50-hdr-button-r27']
+    branches: ['diag/rtx50-hdr-single-owner-r30']
   workflow_dispatch:
 permissions:
   contents: read
@@ -28,6 +28,20 @@ jobs:
           python -m pip -q install pefile
           python -c "import pefile; p=pefile.PE('diagnostics/hdr-button-r20/package/dxgi.dll'); d={x.dll:[y.name for y in x.imports] for x in p.DIRECTORY_ENTRY_IMPORT}; print(d); assert b'ControlFGHDRButton_Bootstrap' in d[b'ControlFGHDRButton.dll']"
           if ($LASTEXITCODE -ne 0) { throw 'PE import validation failed' }
+      - name: R30 architecture policy assertions
+        run: |
+          $ErrorActionPreference='Stop'
+          $guard=Get-Content diagnostics/hdr-button-r20/src/guard.cpp -Raw
+          $transition=Get-Content diagnostics/hdr-button-r20/src/transition.h -Raw
+          foreach($forbidden in @('SendInput','WriteTransitionFgHold','shieldWindow','beginHdrHardReset','VK_LWIN','VK_LMENU')) {
+            if($guard.Contains($forbidden)) { throw "R30 forbidden legacy mechanism remains: $forbidden" }
+          }
+          foreach($required in @('DisplayConfigSetDeviceInfo','WriteFGSelectionRaw(0','FailTransitionAndRestoreFG','failure_unwind_restore_saved_selection','HDR_BUTTON_FG_RESUMED')) {
+            if(-not $guard.Contains($required)) { throw "R30 required mechanism missing: $required" }
+          }
+          if(-not $transition.Contains('kTransitionTimeoutMs = 60000')) { throw 'R30 timeout contract missing' }
+          if(-not $transition.Contains('ThirtySecondStallIsSafe')) { throw 'R30 30-second stall contract missing' }
+          Write-Host 'PASS R30 policy: direct HDR API, actual FG Off, no hotkey injection, no sidecar hold, no shield, fail-open restore.'
       - name: Compile MSVC Release
         run: |
           cmake -S diagnostics/hdr-button-r20 -B diagnostics/hdr-button-r20/build -A x64
@@ -53,25 +67,28 @@ jobs:
       - name: Add test notes
         run: |
           @'
-          CONTROL FG RTX50 HDR BUTTON R27 TEST
+          CONTROL FG RTX50 HDR BUTTON R30 TEST
 
           Open the F10 overlay. A new HDR ON / HDR OFF button appears in the HDR status column near the top of the F10 overlay.
 
           Clicking it performs:
-          1. request the existing v2 HDR hard-reset while the display is still in the old mode;
-          2. wait until Frame Generation is actually OFF and DLSS-G resources have been freed;
-          3. control Windows HDR and Control in-game HDR as separate states after FG is confirmed off;
-          4. wait for Control's HDR bridge to enter the requested game-side domain;
-          5. wait for the existing v2 core to restore the user's unchanged FG selection.
+          1. save the user's current FG selection;
+          2. change the actual FG selection to Off and wait until DLSS-G reports API Off;
+          3. toggle Windows HDR directly with DisplayConfigSetDeviceInfo (no Win+Alt+B injection);
+          4. apply Control's native HDR state and let the existing core own the swap-chain/bridge transition;
+          5. wait for the requested Windows + Control + bridge domain and two fresh AA/render frames;
+          6. restore the exact saved FG selection and confirm DLSS-G re-engages.
 
-          Do not press Win+Alt+B yourself during this test; the button manages Windows HDR and then verifies Control HDR separately.
+          There is no gray/black shield and no sidecar FG hold in R30.
+          A 30-second render stall is explicitly below the 60-second transition timeout.
+          Any failure path immediately restores the saved FG selection instead of latching FG Off.
 
           RTX50 diagnostic only. The original v2 HUD/UI recomposition path is unchanged.
-          '@ | Set-Content diagnostics/hdr-button-r20/package/HDR-BUTTON-R27-TEST.txt -Encoding UTF8
+          '@ | Set-Content diagnostics/hdr-button-r20/package/HDR-BUTTON-R30-TEST.txt -Encoding UTF8
       - name: Upload diagnostic
         uses: actions/upload-artifact@v4
         with:
-          name: Control-FG-RTX50-HDR-Button-R27
+          name: Control-FG-RTX50-HDR-Single-Owner-R30
           path: diagnostics/hdr-button-r20/package/
           retention-days: 7
           if-no-files-found: error
