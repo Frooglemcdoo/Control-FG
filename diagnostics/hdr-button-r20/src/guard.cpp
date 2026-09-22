@@ -298,11 +298,13 @@ static void UpdateButtonVisual() noexcept {
 }
 
 static void SetPhase(Phase phase,const char* why=nullptr) noexcept {
+    const uint64_t now=GetTickCount64();
     AcquireSRWLockExclusive(&stateLock);
     transition.phase=phase;
+    transition.phaseStartedMs=now;
     if(why)transition.error=why;
     ReleaseSRWLockExclusive(&stateLock);
-    Log("HDR_BUTTON_STATE phase=%s reason=%s",PhaseName(phase),why?why:"none");
+    Log("HDR_BUTTON_STATE phase=%s reason=%s tick=%llu",PhaseName(phase),why?why:"none",now);
     UpdateButtonVisual();
 }
 
@@ -311,6 +313,25 @@ static State SnapshotState() noexcept {
     State s=transition;
     ReleaseSRWLockShared(&stateLock);
     return s;
+}
+
+static void FailTransitionAndRestoreFG(const char* why) noexcept {
+    const uint64_t now=GetTickCount64();
+    State s=SnapshotState();
+    protectGameHdr.store(false,std::memory_order_release);
+    pendingGameHdrSet.store(-1,std::memory_order_release);
+    gameSetAttempted.store(false,std::memory_order_release);
+    gameSetCompleted.store(false,std::memory_order_release);
+    gameSetSucceeded.store(false,std::memory_order_release);
+    WriteFGSelectionRaw(s.sourceSelection,"failure_unwind_restore_saved_selection");
+    AcquireSRWLockExclusive(&stateLock);
+    transition.fail(why,now);
+    transition.failureUnwindStarted=true;
+    ReleaseSRWLockExclusive(&stateLock);
+    Log("HDR_BUTTON_FAIL reason=%s source_selection=%u restored_selection=%u present=%llu fg_api_enabled=%u system_hdr=%u game_hdr=%u bridge_hdr=%u unwind=fail_open_no_fg_latch",
+        why?why:"unknown",s.sourceSelection,ReadFGSelectionRaw(),read64(kRvaPresentCounter),read32(kRvaFgEnabledByApi),
+        unsigned(lastSystemHdr.load()),unsigned(lastGameHdr.load()),unsigned(lastBridgeHdr.load()));
+    UpdateButtonVisual();
 }
 
 static bool StartButtonTransition() noexcept {
