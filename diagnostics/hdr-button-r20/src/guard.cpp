@@ -64,6 +64,9 @@ static constexpr size_t kRvaFgGeneratedSamples = 0xABB28;
 static constexpr size_t kRvaHdrBridgeActive = 0xABCF0;
 static constexpr size_t kRvaUiRecomposeTagFn = 0x1A9D0;
 static constexpr size_t kRvaHdrDlssgOptionsPatch = 0x4196F;
+static constexpr size_t kRvaHdrFreshHudlessFormatCmp = 0x4129F;
+static constexpr size_t kRvaHdrFreshTagMaskAnd = 0x412E2;
+static constexpr size_t kRvaHdrFreshTagMaskCmp = 0x412EC;
 
 using UiRecomposeTagFn = bool (*)(unsigned long long,void*,void*,unsigned int,bool,void*);
 static UiRecomposeTagFn originalUiRecomposeTag{};
@@ -87,7 +90,7 @@ static bool HookedUiRecomposeTag(unsigned long long present,void* source,void* s
     if(core && read32(kRvaHdrBridgeActive)!=0) {
         const unsigned long long ordinal=++hdrFinalColorOnlyTagSuppressions;
         if(ordinal<=8 || (ordinal%240ull)==0) {
-            Log("R31_HDR_INPUT_PATH present=%llu mode=final_color_only hdr10_bridge=1 hudless_tag=0 ui_alpha_tag=0 ui_recomposition=0 hudless_format=0 ui_format=0 depth=1 motion_vectors=1 suppressed_tag_builds=%llu",
+            Log("R31A_HDR_INPUT_PATH present=%llu mode=final_color_only hdr10_bridge=1 hudless_tag=0 ui_alpha_tag=0 ui_recomposition=0 hudless_format=0 ui_format=0 depth=1 motion_vectors=1 suppressed_tag_builds=%llu",
                 present,ordinal);
         }
         return false;
@@ -99,35 +102,67 @@ static bool HookedUiRecomposeTag(unsigned long long present,void* source,void* s
 
 static bool PatchHdrDlssgOptionsFinalColorOnly() noexcept {
     if(!core)return false;
-    static const unsigned char expected[]={
+
+    struct Patch {
+        size_t rva;
+        const unsigned char* expected;
+        const unsigned char* replacement;
+        size_t size;
+        const char* label;
+    };
+
+    static const unsigned char optionsExpected[]={
         0x41,0x8B,0xC7,0xF7,0xD8,0x1B,0xC9,0x83,0xE1,0x18,0x89,0x4D,0x24
     };
-    static const unsigned char replacement[]={
-        0x31,0xC9,             // xor ecx,ecx
-        0x89,0x4D,0x24,       // hudLessBufferFormat = 0
-        0x89,0x4D,0x28,       // uiBufferFormat = 0
-        0x88,0x4D,0x40,       // enableUserInterfaceRecomposition = eFalse
+    static const unsigned char optionsReplacement[]={
+        0x31,0xC9,
+        0x89,0x4D,0x24,
+        0x89,0x4D,0x28,
+        0x88,0x4D,0x40,
         0x90,0x90
     };
-    static_assert(sizeof(expected)==sizeof(replacement));
-    unsigned char* target=core+kRvaHdrDlssgOptionsPatch;
-    if(memcmp(target,expected,sizeof(expected))!=0) {
-        Log("R31_HDR_OPTIONS_PATCH_FAIL reason=signature rva=0x%zX",kRvaHdrDlssgOptionsPatch);
-        return false;
+    static const unsigned char formatExpected[]={0x41,0x83,0xFF,0x18};
+    static const unsigned char formatReplacement[]={0x41,0x83,0xFF,0x00};
+    static const unsigned char maskAndExpected[]={0x83,0xE0,0x0C};
+    static const unsigned char maskAndReplacement[]={0x83,0xE0,0x03};
+    static const unsigned char maskCmpExpected[]={0x83,0xF8,0x0C};
+    static const unsigned char maskCmpReplacement[]={0x83,0xF8,0x03};
+
+    const Patch patches[]={
+        {kRvaHdrDlssgOptionsPatch,optionsExpected,optionsReplacement,sizeof(optionsExpected),"hdr_options_final_color_only"},
+        {kRvaHdrFreshHudlessFormatCmp,formatExpected,formatReplacement,sizeof(formatExpected),"hdr_fresh_domain_hudless_format_zero"},
+        {kRvaHdrFreshTagMaskAnd,maskAndExpected,maskAndReplacement,sizeof(maskAndExpected),"fresh_domain_required_mask_depth_mv"},
+        {kRvaHdrFreshTagMaskCmp,maskCmpExpected,maskCmpReplacement,sizeof(maskCmpExpected),"fresh_domain_compare_depth_mv"}
+    };
+
+    for(const auto& p:patches) {
+        unsigned char* target=core+p.rva;
+        if(memcmp(target,p.expected,p.size)!=0) {
+            Log("R31A_HDR_PATCH_FAIL reason=signature label=%s rva=0x%zX",p.label,p.rva);
+            return false;
+        }
     }
-    DWORD oldProtect=0;
-    if(!VirtualProtect(target,sizeof(replacement),PAGE_EXECUTE_READWRITE,&oldProtect)) {
-        Log("R31_HDR_OPTIONS_PATCH_FAIL reason=VirtualProtect error=%lu",GetLastError());
-        return false;
+
+    for(const auto& p:patches) {
+        unsigned char* target=core+p.rva;
+        DWORD oldProtect=0;
+        if(!VirtualProtect(target,p.size,PAGE_EXECUTE_READWRITE,&oldProtect)) {
+            Log("R31A_HDR_PATCH_FAIL reason=VirtualProtect label=%s rva=0x%zX error=%lu",p.label,p.rva,GetLastError());
+            return false;
+        }
+        memcpy(target,p.replacement,p.size);
+        FlushInstructionCache(GetCurrentProcess(),target,p.size);
+        DWORD ignored=0;
+        VirtualProtect(target,p.size,oldProtect,&ignored);
+        if(memcmp(target,p.replacement,p.size)!=0) {
+            Log("R31A_HDR_PATCH_FAIL reason=verify label=%s rva=0x%zX",p.label,p.rva);
+            return false;
+        }
+        Log("R31A_HDR_PATCH_OK label=%s rva=0x%zX",p.label,p.rva);
     }
-    memcpy(target,replacement,sizeof(replacement));
-    FlushInstructionCache(GetCurrentProcess(),target,sizeof(replacement));
-    DWORD ignored=0;
-    VirtualProtect(target,sizeof(replacement),oldProtect,&ignored);
-    const bool ok=memcmp(target,replacement,sizeof(replacement))==0;
-    Log("R31_HDR_OPTIONS_PATCH success=%u rva=0x%zX scope=hdr_bridge_only hudless_format=0 ui_format=0 ui_recomposition=0 sdr_unchanged=1",
-        unsigned(ok),kRvaHdrDlssgOptionsPatch);
-    return ok;
+
+    Log("R31A_HDR_FINAL_COLOR_READY hdr_input=final_color_depth_mv hudless_tag=0 ui_alpha_tag=0 ui_recomposition=0 hudless_format=0 transition_required_mask=0x3 transition_hudless_format=0 sdr_path=unchanged");
+    return true;
 }
 
 static bool ReadGameHdr(bool& value) noexcept {
@@ -563,7 +598,7 @@ static bool InstallCoreHook() noexcept {
         return false;
     }
     if(memcmp(core+kRvaUiRecomposeTagFn,uiTagSig,sizeof(uiTagSig))!=0) {
-        Log("R31_HDR_INPUT_HOOK_FAIL reason=ui_tag_signature rva=0x%zX",kRvaUiRecomposeTagFn);
+        Log("R31A_HDR_INPUT_HOOK_FAIL reason=ui_tag_signature rva=0x%zX",kRvaUiRecomposeTagFn);
         return false;
     }
     if(!PatchHdrDlssgOptionsFinalColorOnly())return false;
@@ -572,10 +607,10 @@ static bool InstallCoreHook() noexcept {
     if(r!=MH_OK){Log("HDR_BUTTON_INSTALL_FAIL reason=minhook_create status=%s",MH_StatusToString(r));return false;}
     r=MH_CreateHook(core+kRvaUiRecomposeTagFn,reinterpret_cast<void*>(&HookedUiRecomposeTag),
         reinterpret_cast<void**>(&originalUiRecomposeTag));
-    if(r!=MH_OK){Log("R31_HDR_INPUT_HOOK_FAIL reason=minhook_create status=%s",MH_StatusToString(r));return false;}
+    if(r!=MH_OK){Log("R31A_HDR_INPUT_HOOK_FAIL reason=minhook_create status=%s",MH_StatusToString(r));return false;}
     if(MH_EnableHook(core+0x1DF60)!=MH_OK)return false;
     if(MH_EnableHook(core+kRvaUiRecomposeTagFn)!=MH_OK)return false;
-    Log("R31_HDR_INPUT_HOOK_READY ui_tag_rva=0x%zX behavior=hdr_final_color_only sdr_passthrough=1",
+    Log("R31A_HDR_INPUT_HOOK_READY ui_tag_rva=0x%zX behavior=hdr_final_color_only sdr_passthrough=1",
         kRvaUiRecomposeTagFn);
     return true;
 }
@@ -770,7 +805,7 @@ static DWORD WINAPI Worker(void*) noexcept {
     CreateDirectoryW(logDir.c_str(),nullptr);
     SYSTEMTIME st{};GetSystemTime(&st);
     wchar_t name[180]{};
-    swprintf_s(name,L"\\hdr-button-R31-%04u%02u%02u-%02u%02u%02u-%lu.log",
+    swprintf_s(name,L"\\hdr-button-R31A-%04u%02u%02u-%02u%02u%02u-%lu.log",
         st.wYear,st.wMonth,st.wDay,st.wHour,st.wMinute,st.wSecond,GetCurrentProcessId());
     logFile=CreateFileW((logDir+name).c_str(),GENERIC_WRITE,FILE_SHARE_READ|FILE_SHARE_WRITE,nullptr,
         CREATE_ALWAYS,FILE_ATTRIBUTE_NORMAL,nullptr);
@@ -779,7 +814,7 @@ static DWORD WINAPI Worker(void*) noexcept {
     std::wstring directory(own);directory=directory.substr(0,directory.find_last_of(L"\\/"));
     std::wstring corePath=directory+L"\\dxgi.dll";
     std::string hash=HashFile(corePath);
-    Log("HDR_BUTTON_BUILD version=R31 expected_core_sha256=%s actual_core_sha256=%s ui=F10_overlay_child_button architecture=single_owner direct_windows_hdr=1 synthetic_hotkey=0 actual_fg_selection_off=1 external_shield=0 timeout_ms=%llu fail_open_restore_fg=1 hdr_fg_input=final_color_only depth_mv=1 hudless_ui_tags=0 sdr_input_path=unchanged",
+    Log("HDR_BUTTON_BUILD version=R31A expected_core_sha256=%s actual_core_sha256=%s ui=F10_overlay_child_button architecture=single_owner direct_windows_hdr=1 synthetic_hotkey=0 actual_fg_selection_off=1 external_shield=0 timeout_ms=%llu fail_open_restore_fg=1 hdr_fg_input=final_color_only depth_mv=1 hudless_ui_tags=0 sdr_input_path=unchanged",
         kExpectedCoreSha256,hash.c_str(),kTransitionTimeoutMs);
     if(hash!=kExpectedCoreSha256){Log("HDR_BUTTON_INSTALL_FAIL reason=core_hash");return 0;}
     core=reinterpret_cast<unsigned char*>(GetModuleHandleW(corePath.c_str()));
@@ -829,7 +864,7 @@ static DWORD WINAPI Worker(void*) noexcept {
 }
 
 extern "C" __declspec(dllexport) void WINAPI ControlFGHDRButton_Bootstrap(){}
-extern "C" __declspec(dllexport) unsigned WINAPI ControlFGHDRButton_Version(){return 0x00310001;}
+extern "C" __declspec(dllexport) unsigned WINAPI ControlFGHDRButton_Version(){return 0x00310101;}
 
 BOOL WINAPI DllMain(HINSTANCE mod,DWORD reason,LPVOID) {
     if(reason==DLL_PROCESS_ATTACH) {
