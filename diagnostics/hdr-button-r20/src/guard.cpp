@@ -81,6 +81,16 @@ static bool ReadGameHdr(bool& value) noexcept {
     __try { value=gameHdrGet(); return true; }
     __except(EXCEPTION_EXECUTE_HANDLER) { Log("HDR_BUTTON_GAME_GET_EXCEPTION code=0x%08lX",GetExceptionCode()); return false; }
 }
+
+static void HookedGameHdrSettings(bool enable,float value,bool force) noexcept {
+    const bool protect=protectGameHdr.load(std::memory_order_acquire);
+    const bool suppress=!enable && !force && protect;
+    Log("HDR_BUTTON_GAME_SETTINGS_HOOK enable=%u value=%.3f force=%u protect=%u action=%s",
+        unsigned(enable),double(value),unsigned(force),unsigned(protect),
+        suppress?"suppress_nonforced_disable":"forward");
+    if(suppress)return;
+    if(originalGameHdrSettings)originalGameHdrSettings(enable,value,force);
+}
 static void LogHdrExports(HMODULE module) noexcept {
     if(!module)return;
     auto* base=reinterpret_cast<unsigned char*>(module);
@@ -120,14 +130,26 @@ static bool ResolveGameHdrApi() noexcept {
     LogHdrExports(gameD3d);
     const bool getterWorks=gameHdrGet && ReadGameHdr(current);
     const bool settersWork=gameHdrDisplay && gameHdrSettings;
-    gameHdrControlReady.store(getterWorks && settersWork);
+    bool hookReady=false;
+    if(settersWork) {
+        MH_STATUS hs=MH_CreateHook(reinterpret_cast<LPVOID>(gameHdrSettings),
+            reinterpret_cast<LPVOID>(&HookedGameHdrSettings),
+            reinterpret_cast<LPVOID*>(&originalGameHdrSettings));
+        if(hs==MH_OK)hs=MH_EnableHook(reinterpret_cast<LPVOID>(gameHdrSettings));
+        hookReady=hs==MH_OK;
+        Log("HDR_BUTTON_GAME_SETTINGS_HOOK_INSTALL status=%s ready=%u target=%p trampoline=%p",
+            MH_StatusToString(hs),unsigned(hookReady),gameHdrSettings,originalGameHdrSettings);
+    }
+    gameHdrControlReady.store(getterWorks && settersWork && hookReady);
     lastGameHdr.store(current);
-    Log("HDR_BUTTON_GAME_API getter=%p getter_works=%u display_setter=%p settings_setter=%p control_ready=%u initial_game_hdr=%u",
-        gameHdrGet,unsigned(getterWorks),gameHdrDisplay,gameHdrSettings,unsigned(getterWorks&&settersWork),unsigned(current));
-    return getterWorks && settersWork;
+    Log("HDR_BUTTON_GAME_API getter=%p getter_works=%u display_setter=%p settings_setter=%p settings_hook=%u control_ready=%u initial_game_hdr=%u",
+        gameHdrGet,unsigned(getterWorks),gameHdrDisplay,gameHdrSettings,unsigned(hookReady),
+        unsigned(getterWorks&&settersWork&&hookReady),unsigned(current));
+    return getterWorks && settersWork && hookReady;
 }
 static bool SetGameHdr(bool enable) noexcept {
     if(!gameHdrControlReady.load() || !gameHdrSettings || !gameHdrDisplay)return false;
+    protectGameHdr.store(enable,std::memory_order_release);
     HWND game=transitionGameWindow.load();
     if(!game || !IsWindow(game))game=FindGameWindow();
     bool displayResult=true;
