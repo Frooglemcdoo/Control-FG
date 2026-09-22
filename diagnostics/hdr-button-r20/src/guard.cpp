@@ -94,7 +94,7 @@ static void WriteFGSelectionRaw(unsigned int selection,const char* reason) noexc
     Log("HDR_BUTTON_FG_SELECTION_WRITE previous=%u target=%u reason=%s persisted=0",previous,selection,reason?reason:"none");
 }
 
-static bool PatchThreeFrameTransitionWarmup() noexcept {
+static bool PatchTwelveFrameTransitionWarmup() noexcept {
     struct Patch {
         size_t rva;
         const unsigned char* expected;
@@ -102,22 +102,22 @@ static bool PatchThreeFrameTransitionWarmup() noexcept {
         size_t size;
         const char* label;
     };
-    static const unsigned char e1[]={0x83,0xF9,0x02}, r1[]={0x83,0xF9,0x03};
+    static const unsigned char e1[]={0x83,0xF9,0x02}, r1[]={0x83,0xF9,0x0C};
     static const unsigned char e2[]={0xC7,0x44,0x24,0x20,0x02,0x00,0x00,0x00},
-                               r2[]={0xC7,0x44,0x24,0x20,0x03,0x00,0x00,0x00};
-    static const unsigned char e3[]={0x41,0x83,0xFE,0x02}, r3[]={0x41,0x83,0xFE,0x03};
-    static const unsigned char e4[]={0x83,0xF9,0x02}, r4[]={0x83,0xF9,0x03};
-    static const unsigned char e5[]={0x41,0x83,0xFF,0x02}, r5[]={0x41,0x83,0xFF,0x03};
+                               r2[]={0xC7,0x44,0x24,0x20,0x0C,0x00,0x00,0x00};
+    static const unsigned char e3[]={0x41,0x83,0xFE,0x02}, r3[]={0x41,0x83,0xFE,0x0C};
+    static const unsigned char e4[]={0x83,0xF9,0x02}, r4[]={0x83,0xF9,0x0C};
+    static const unsigned char e5[]={0x41,0x83,0xFF,0x02}, r5[]={0x41,0x83,0xFF,0x0C};
     const Patch patches[]={
-        {kRvaFreshCountCap,e1,r1,sizeof(e1),"transition_fresh_count_cap_3"},
-        {kRvaFreshRequiredLog,e2,r2,sizeof(e2),"transition_required_frames_log_3"},
-        {kRvaFreshSettleThreshold,e3,r3,sizeof(e3),"transition_settle_threshold_3"},
-        {kRvaNoBridgeFreshCountCap,e4,r4,sizeof(e4),"no_bridge_fresh_count_cap_3"},
-        {kRvaNoBridgeFreshSettleThreshold,e5,r5,sizeof(e5),"no_bridge_settle_threshold_3"}
+        {kRvaFreshCountCap,e1,r1,sizeof(e1),"transition_fresh_count_cap_12"},
+        {kRvaFreshRequiredLog,e2,r2,sizeof(e2),"transition_required_frames_log_12"},
+        {kRvaFreshSettleThreshold,e3,r3,sizeof(e3),"transition_settle_threshold_12"},
+        {kRvaNoBridgeFreshCountCap,e4,r4,sizeof(e4),"no_bridge_fresh_count_cap_12"},
+        {kRvaNoBridgeFreshSettleThreshold,e5,r5,sizeof(e5),"no_bridge_settle_threshold_12"}
     };
     for(const auto& p:patches) {
         if(memcmp(core+p.rva,p.expected,p.size)!=0) {
-            Log("R33_WARMUP_PATCH_FAIL reason=signature label=%s rva=0x%zX",p.label,p.rva);
+            Log("R35_WARMUP_PATCH_FAIL reason=signature label=%s rva=0x%zX",p.label,p.rva);
             return false;
         }
     }
@@ -125,7 +125,7 @@ static bool PatchThreeFrameTransitionWarmup() noexcept {
         DWORD oldProtect=0;
         unsigned char* target=core+p.rva;
         if(!VirtualProtect(target,p.size,PAGE_EXECUTE_READWRITE,&oldProtect)) {
-            Log("R33_WARMUP_PATCH_FAIL reason=VirtualProtect label=%s error=%lu",p.label,GetLastError());
+            Log("R35_WARMUP_PATCH_FAIL reason=VirtualProtect label=%s error=%lu",p.label,GetLastError());
             return false;
         }
         memcpy(target,p.replacement,p.size);
@@ -133,12 +133,12 @@ static bool PatchThreeFrameTransitionWarmup() noexcept {
         DWORD ignored=0;
         VirtualProtect(target,p.size,oldProtect,&ignored);
         if(memcmp(target,p.replacement,p.size)!=0) {
-            Log("R33_WARMUP_PATCH_FAIL reason=verify label=%s",p.label);
+            Log("R35_WARMUP_PATCH_FAIL reason=verify label=%s",p.label);
             return false;
         }
-        Log("R33_WARMUP_PATCH_OK label=%s rva=0x%zX",p.label,p.rva);
+        Log("R35_WARMUP_PATCH_OK label=%s rva=0x%zX",p.label,p.rva);
     }
-    Log("R33_TRANSITION_POLICY hard_dlssg_free=1 recomposition=restored ring_slots=3 fresh_frames_required=3 camera_reset=control_reset_signal steady_state_hdr_unchanged=1 steady_state_sdr_unchanged=1");
+    Log("R35_TRANSITION_POLICY hard_dlssg_free=1 recomposition=restored ring_slots=3 fresh_frames_required=12 camera_reset=control_reset_signal steady_state_hdr_unchanged=1 steady_state_sdr_unchanged=1");
     return true;
 }
 
@@ -278,7 +278,7 @@ static bool HookedBeginHdrHardReset(uint64_t present,const char* reason) noexcep
         rebased=previousStage==2;
         if(rebased) {
             const auto ordinal=++overlapResetRebases;
-            Log("R33_OVERLAP_RESET_REBASE present=%llu reason=%s direction=%d previous_direction=%d serial_before=%llu stage_before=2 reset_generation=%llu current_generation=%llu settled_generation=%llu action=restart_hard_reset_and_refree ordinal=%llu",
+            Log("R35_OVERLAP_RESET_REBASE present=%llu reason=%s direction=%d previous_direction=%d serial_before=%llu stage_before=2 reset_generation=%llu current_generation=%llu settled_generation=%llu action=restart_hard_reset_and_refree ordinal=%llu",
                 present,reason?reason:"none",direction,previousDirection,serialBefore,
                 resetGeneration,bridgeGeneration,settledGeneration,ordinal);
         }
@@ -295,7 +295,7 @@ static bool HookedBeginHdrHardReset(uint64_t present,const char* reason) noexcep
     }
 
     if(rebased || callStage==0) {
-        Log("R33_HARD_RESET_BEGIN_OBSERVED present=%llu reason=%s result=%u direction=%d stage_before=%u stage_after=%u serial_before=%llu serial_after=%llu reset_generation=%llu current_generation=%llu overlap_rebase=%u",
+        Log("R35_HARD_RESET_BEGIN_OBSERVED present=%llu reason=%s result=%u direction=%d stage_before=%u stage_after=%u serial_before=%llu serial_after=%llu reset_generation=%llu current_generation=%llu overlap_rebase=%u",
             present,reason?reason:"none",unsigned(result),direction,callStage,stageAfter,
             serialBefore,serialAfter,resetAfter,bridgeGeneration,unsigned(rebased));
     }
@@ -631,7 +631,7 @@ static bool InstallCoreHook() noexcept {
         Log("HDR_BUTTON_INSTALL_FAIL reason=hard_reset_signature");
         return false;
     }
-    if(!PatchThreeFrameTransitionWarmup())return false;
+    if(!PatchTwelveFrameTransitionWarmup())return false;
     if(MH_Initialize()!=MH_OK)return false;
     auto r=MH_CreateHook(core+kRvaBeginHdrHardReset,reinterpret_cast<void*>(&HookedBeginHdrHardReset),
         reinterpret_cast<void**>(&originalBeginHdrHardReset));
@@ -641,7 +641,7 @@ static bool InstallCoreHook() noexcept {
     if(MH_EnableHook(core+kRvaBeginHdrHardReset)!=MH_OK)return false;
     if(MH_EnableHook(core+0x1DF60)!=MH_OK)return false;
     beginHdrHardReset=&HookedBeginHdrHardReset;
-    Log("R33_HARD_RESET_READY entry_rva=0x%zX stage_rva=0x%zX free_count_rva=0x%zX bridge_generation_rva=0x%zX settled_generation_rva=0x%zX policy=opposite_unsettled_transition_restarts_reset_and_refrees",
+    Log("R35_HARD_RESET_READY entry_rva=0x%zX stage_rva=0x%zX free_count_rva=0x%zX bridge_generation_rva=0x%zX settled_generation_rva=0x%zX policy=opposite_unsettled_transition_restarts_reset_and_refrees",
         kRvaBeginHdrHardReset,kRvaHdrHardResetStage,kRvaHdrHardResetFreeCount,
         kRvaBridgeGeneration,kRvaSettledBridgeGeneration);
     return true;
@@ -664,8 +664,8 @@ static void PollTransition() noexcept {
         }
         if(!hardResetAttempted.exchange(true)) {
             const uint64_t present=read64(kRvaPresentCounter);
-            const bool started=beginHdrHardReset(present,"r33_button_pre_domain");
-            Log("R33_HARD_RESET_REQUEST started=%u saved_selection=%u present=%llu api_enabled=%u stage=%u free_count=%llu action=wait_for_slFreeResources",
+            const bool started=beginHdrHardReset(present,"r35_button_pre_domain");
+            Log("R35_HARD_RESET_REQUEST started=%u saved_selection=%u present=%llu api_enabled=%u stage=%u free_count=%llu action=wait_for_slFreeResources",
                 unsigned(started),s.sourceSelection,present,read32(kRvaFgEnabledByApi),read32(kRvaHdrHardResetStage),
                 read64(kRvaHdrHardResetFreeCount));
             if(!started && read32(kRvaHdrHardResetStage)==0) {
@@ -688,7 +688,7 @@ static void PollTransition() noexcept {
             return;
         }
         if(stage==2 && enabled==0 && frees>s.baseFreeCount && present>s.basePresent) {
-            Log("R33_HARD_RESET_CONFIRMED selection_preserved=%u api_enabled=0 stage=2 present=%llu free_count=%llu freed_delta=%llu action=set_windows_hdr_direct",
+            Log("R35_HARD_RESET_CONFIRMED selection_preserved=%u api_enabled=0 stage=2 present=%llu free_count=%llu freed_delta=%llu action=set_windows_hdr_direct",
                 selection,present,frees,frees-s.baseFreeCount);
             SetPhase(Phase::SetSystemHdr);
         }
@@ -827,7 +827,7 @@ static void PollTransition() noexcept {
             FailTransitionAndRestoreFG("saved_fg_selection_not_preserved");
             return;
         }
-        Log("R33_FG_REARM_WAIT saved_selection=%u target_hdr=%u present=%llu bridge=%u hard_reset_stage=%u free_count=%llu action=core_rearm_after_three_fresh_recomposition_frames",
+        Log("R35_FG_REARM_WAIT saved_selection=%u target_hdr=%u present=%llu bridge=%u hard_reset_stage=%u free_count=%llu action=core_rearm_after_twelve_fresh_recomposition_frames",
             s.sourceSelection,unsigned(s.targetHdr),read64(kRvaPresentCounter),read32(kRvaHdrBridgeActive),
             read32(kRvaHdrHardResetStage),read64(kRvaHdrHardResetFreeCount));
         if(s.sourceSelection==0)SetPhase(Phase::Complete);
@@ -860,7 +860,7 @@ static DWORD WINAPI Worker(void*) noexcept {
     CreateDirectoryW(logDir.c_str(),nullptr);
     SYSTEMTIME st{};GetSystemTime(&st);
     wchar_t name[180]{};
-    swprintf_s(name,L"\\hdr-button-R33-%04u%02u%02u-%02u%02u%02u-%lu.log",
+    swprintf_s(name,L"\\hdr-button-R35-%04u%02u%02u-%02u%02u%02u-%lu.log",
         st.wYear,st.wMonth,st.wDay,st.wHour,st.wMinute,st.wSecond,GetCurrentProcessId());
     logFile=CreateFileW((logDir+name).c_str(),GENERIC_WRITE,FILE_SHARE_READ|FILE_SHARE_WRITE,nullptr,
         CREATE_ALWAYS,FILE_ATTRIBUTE_NORMAL,nullptr);
@@ -869,7 +869,7 @@ static DWORD WINAPI Worker(void*) noexcept {
     std::wstring directory(own);directory=directory.substr(0,directory.find_last_of(L"\\/"));
     std::wstring corePath=directory+L"\\dxgi.dll";
     std::string hash=HashFile(corePath);
-    Log("HDR_BUTTON_BUILD version=R33 expected_core_sha256=%s actual_core_sha256=%s ui=F10_overlay_child_button architecture=single_owner direct_windows_hdr=1 synthetic_hotkey=0 hard_dlssg_free_before_domain=1 overlap_transition_refree=1 user_selection_preserved=1 full_recomposition=1 fresh_ring_frames=3 external_shield=0 timeout_ms=%llu fail_open_restore_fg=1",
+    Log("HDR_BUTTON_BUILD version=R35 expected_core_sha256=%s actual_core_sha256=%s ui=F10_overlay_child_button architecture=single_owner direct_windows_hdr=1 synthetic_hotkey=0 hard_dlssg_free_before_domain=1 overlap_transition_refree=1 user_selection_preserved=1 full_recomposition=1 fresh_ring_frames=12 external_shield=0 timeout_ms=%llu fail_open_restore_fg=1",
         kExpectedCoreSha256,hash.c_str(),kTransitionTimeoutMs);
     if(hash!=kExpectedCoreSha256){Log("HDR_BUTTON_INSTALL_FAIL reason=core_hash");return 0;}
     core=reinterpret_cast<unsigned char*>(GetModuleHandleW(corePath.c_str()));
@@ -877,7 +877,7 @@ static DWORD WINAPI Worker(void*) noexcept {
     if(!InstallCoreHook()){Log("HDR_BUTTON_INSTALL_FAIL reason=core_hook");return 0;}
     ResolveGameHdrApi();
     ready.store(true);
-    Log("HDR_BUTTON_READY controller=single_owner_windows_and_control_hdr game_hdr_control_ready=%u sequence=save_fg_selection_then_hard_dlssg_free_then_direct_windows_hdr_then_control_hdr_then_three_fresh_recomposition_frames_then_core_rearm overlap_policy=opposite_unsettled_transition_new_serial_refree hotkey_injection=0 selection_mutation=0 sidecar_hold=0 shield=0",
+    Log("HDR_BUTTON_READY controller=single_owner_windows_and_control_hdr game_hdr_control_ready=%u sequence=save_fg_selection_then_hard_dlssg_free_then_direct_windows_hdr_then_control_hdr_then_twelve_fresh_recomposition_frames_then_core_rearm overlap_policy=opposite_unsettled_transition_new_serial_refree hotkey_injection=0 selection_mutation=0 sidecar_hold=0 shield=0",
         unsigned(gameHdrControlReady.load()));
 
     uint64_t completeSince=0;
@@ -919,7 +919,7 @@ static DWORD WINAPI Worker(void*) noexcept {
 }
 
 extern "C" __declspec(dllexport) void WINAPI ControlFGHDRButton_Bootstrap(){}
-extern "C" __declspec(dllexport) unsigned WINAPI ControlFGHDRButton_Version(){return 0x00330001;}
+extern "C" __declspec(dllexport) unsigned WINAPI ControlFGHDRButton_Version(){return 0x00350001;}
 
 BOOL WINAPI DllMain(HINSTANCE mod,DWORD reason,LPVOID) {
     if(reason==DLL_PROCESS_ATTACH) {
