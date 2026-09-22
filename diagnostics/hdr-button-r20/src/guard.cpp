@@ -344,6 +344,7 @@ static bool StartButtonTransition() noexcept {
         Log("HDR_BUTTON_REJECT reason=game_hdr_setter_unresolved safe_no_side_effects=1");
         return false;
     }
+
     HWND game=FindGameWindow();
     DisplayTarget d{};
     bool gameHdr=false;
@@ -356,38 +357,46 @@ static bool StartButtonTransition() noexcept {
         return false;
     }
 
+    const uint64_t now=GetTickCount64();
     AcquireSRWLockExclusive(&stateLock);
     if(transition.active()) {
         ReleaseSRWLockExclusive(&stateLock);
         Log("HDR_BUTTON_REJECT reason=transition_busy");
         return false;
     }
+
     transition=State{};
-    const bool effectiveHdr=d.hdrEnabled && gameHdr;
-    transition.sourceHdr=effectiveHdr;
-    transition.targetHdr=!effectiveHdr;
-    transition.sourceSelection=read32(0xAA0A0);
-    transition.sourceFgWasEnabled=transition.sourceSelection!=0 && read32(0xAB9D0)!=0;
-    transition.startedMs=GetTickCount64();
-    transition.basePresent=read64(0xAB7B8);
-    transition.baseFreeCount=read64(0xABC70);
-    transition.baseGeneratedCount=read64(0xABB28);
+    transition.sourceHdr=d.hdrEnabled;
+    transition.targetHdr=!d.hdrEnabled;
+    transition.sourceSelection=ReadFGSelectionRaw();
+    transition.sourceFgWasEnabled=transition.sourceSelection!=0 && read32(kRvaFgEnabledByApi)!=0;
+    transition.startedMs=now;
+    transition.phaseStartedMs=now;
+    transition.basePresent=read64(kRvaPresentCounter);
+    transition.baseGeneratedCount=read64(kRvaFgGeneratedSamples);
+    transition.freshAaBase=read64(kRvaAaCounter);
+    transition.freshPresentBase=transition.basePresent;
     transition.phase=transition.sourceSelection==0?Phase::SetSystemHdr:Phase::RequestOff;
     transitionGameWindow.store(game);
     State s=transition;
     ReleaseSRWLockExclusive(&stateLock);
 
-    currentHdr.store(effectiveHdr);
+    protectGameHdr.store(false,std::memory_order_release);
+    currentHdr.store(d.hdrEnabled && gameHdr && (read32(kRvaHdrBridgeActive)!=0));
     currentHdrKnown.store(true);
     displayHdrSupported.store(true);
-    lastSystemHdr.store(d.hdrEnabled);lastGameHdr.store(gameHdr);lastBridgeHdr.store(read32(0xABCF0)!=0);
-    systemToggleSent.store(false);gameSetAttempted.store(false);pendingGameHdrSet.store(-1);
-    Log("HDR_BUTTON_REQUEST source_effective_hdr=%u target_hdr=%u system_hdr=%u game_hdr=%u bridge_hdr=%u selection=%u fg_api_enabled=%u present=%llu free_count=%llu",
-        unsigned(s.sourceHdr),unsigned(s.targetHdr),unsigned(d.hdrEnabled),unsigned(gameHdr),unsigned(read32(0xABCF0)!=0),
-        s.sourceSelection,read32(0xAB9D0),s.basePresent,s.baseFreeCount);
-    if(s.phase==Phase::RequestOff)pendingBegin.store(true);
-    WriteTransitionFgHold(true);
-    Log("HDR_BUTTON_FG_HOLD enabled=1 reason=combined_hdr_transition");
+    lastSystemHdr.store(d.hdrEnabled);
+    lastGameHdr.store(gameHdr);
+    lastBridgeHdr.store(read32(kRvaHdrBridgeActive)!=0);
+    systemSetAttempted.store(false);
+    gameSetAttempted.store(false);
+    gameSetCompleted.store(false);
+    gameSetSucceeded.store(false);
+    pendingGameHdrSet.store(-1);
+
+    Log("HDR_BUTTON_REQUEST source_windows_hdr=%u target_hdr=%u game_hdr=%u bridge_hdr=%u saved_fg_selection=%u fg_api_enabled=%u present=%llu aa=%llu authority=windows_display direct_display_api=1 synthetic_hotkey=0 sidecar_fg_hold=0",
+        unsigned(d.hdrEnabled),unsigned(s.targetHdr),unsigned(gameHdr),unsigned(read32(kRvaHdrBridgeActive)!=0),
+        s.sourceSelection,read32(kRvaFgEnabledByApi),s.basePresent,s.freshAaBase);
     UpdateButtonVisual();
     return true;
 }
