@@ -44,22 +44,20 @@ jobs:
           foreach($required in @('HookedUiRecomposeTag','R31_HDR_INPUT_PATH','kRvaUiRecomposeTagFn = 0x1A9D0','kRvaHdrDlssgOptionsPatch = 0x4196F','hudLessBufferFormat = 0','uiBufferFormat = 0','enableUserInterfaceRecomposition = eFalse')) {
             if(-not $guard.Contains($required)) { throw "R31 HDR input mechanism missing: $required" }
           }
-          python - <<'PY'
+          @'
           import pefile
           p=pefile.PE('diagnostics/hdr-button-r20/package/dxgi.dll')
           image=bytes(p.__data__)
-          def raw_from_rva(rva):
-              return p.get_offset_from_rva(rva)
           checks={
               0x1A9D0: bytes.fromhex('40 55 53 56 57 41 54 41 55 41 56 41 57 48 8D AC'),
               0x4196F: bytes.fromhex('41 8B C7 F7 D8 1B C9 83 E1 18 89 4D 24'),
           }
           for rva,expected in checks.items():
-              off=raw_from_rva(rva)
+              off=p.get_offset_from_rva(rva)
               actual=image[off:off+len(expected)]
               assert actual==expected,(hex(rva),actual.hex(),expected.hex())
           print('PASS R31 binary patch signatures')
-          PY
+          '@ | python -
           if ($LASTEXITCODE -ne 0) { throw 'R31 binary signature validation failed' }
           Write-Host 'PASS R31 policy: R30 transition frozen; HDR DLSS-G final-color-only; SDR recomposition preserved.'
       - name: Compile MSVC Release
