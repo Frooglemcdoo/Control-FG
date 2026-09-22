@@ -9,6 +9,7 @@ enum class Phase : uint32_t {
     WaitOffCommit,
     SetSystemHdr,
     WaitGameHdr,
+    WaitFreshHdr,
     WaitFgResume,
     Complete,
     Failed
@@ -28,6 +29,7 @@ inline const char* PhaseName(Phase p) noexcept {
     case Phase::WaitOffCommit: return "wait_fg_off_commit";
     case Phase::SetSystemHdr: return "set_windows_hdr";
     case Phase::WaitGameHdr: return "wait_game_hdr";
+    case Phase::WaitFreshHdr: return "wait_fresh_hdr";
     case Phase::WaitFgResume: return "wait_fg_resume";
     case Phase::Complete: return "complete";
     case Phase::Failed: return "failed";
@@ -45,6 +47,8 @@ struct State {
     uint64_t basePresent{};
     uint64_t baseFreeCount{};
     uint64_t baseGeneratedCount{};
+    uint64_t drainStartPresent{};
+    uint64_t freshAaBase{};
     const char* error{"none"};
 
     bool active() const noexcept {
