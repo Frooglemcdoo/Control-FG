@@ -523,106 +523,175 @@ static bool InstallCoreHook() noexcept {
 static void PollTransition() noexcept {
     State s=SnapshotState();
     if(!s.active())return;
+
     const uint64_t now=GetTickCount64();
-    if(now-s.startedMs>15000) {
-        AcquireSRWLockExclusive(&stateLock);
-        if(transition.active())transition.fail("timeout");
-        ReleaseSRWLockExclusive(&stateLock);
-        WriteTransitionFgHold(true);
-        Log("HDR_BUTTON_FAIL reason=timeout phase=%s enabled=%u present=%llu frees=%llu bridge=%u hold_fg_off=1",
-            PhaseName(s.phase),read32(0xAB9D0),read64(0xAB7B8),read64(0xABC70),read32(0xABCF0));
-        UpdateButtonVisual();return;
+    if(TransitionTimedOut(s.startedMs,now)) {
+        FailTransitionAndRestoreFG("timeout_60s_saved_fg_restored");
+        return;
+    }
+
+    if(s.phase==Phase::RequestOff) {
+        WriteFGSelectionRaw(0,"hdr_transition_actual_selection_off");
+        Log("HDR_BUTTON_FG_OFF_REQUEST saved_selection=%u present=%llu api_enabled=%u method=actual_user_selection_not_hold",
+            s.sourceSelection,read64(kRvaPresentCounter),read32(kRvaFgEnabledByApi));
+        SetPhase(Phase::WaitOffCommit);
+        return;
     }
 
     if(s.phase==Phase::WaitOffCommit) {
-        const bool off=read32(0xAB9D0)==0;
-        const uint64_t present=read64(0xAB7B8),frees=read64(0xABC70);
-        if(off && frees>s.baseFreeCount && present>s.basePresent) {
-            Log("HDR_BUTTON_FG_OFF_CONFIRMED present=%llu free_count=%llu stage_ready_for_system_hdr=1",present,frees);
+        const unsigned int selection=ReadFGSelectionRaw();
+        const unsigned int enabled=read32(kRvaFgEnabledByApi);
+        const uint64_t present=read64(kRvaPresentCounter);
+        if(selection==0 && enabled==0 && present>s.basePresent) {
+            Log("HDR_BUTTON_FG_OFF_CONFIRMED selection=0 api_enabled=0 present=%llu saved_selection=%u action=set_windows_hdr_direct",
+                present,s.sourceSelection);
             SetPhase(Phase::SetSystemHdr);
         }
         return;
     }
 
-    if(s.phase==Phase::SetSystemHdr || s.phase==Phase::WaitGameHdr) {
+    if(s.phase==Phase::SetSystemHdr) {
+        DisplayTarget d{};
+        if(!ResolveDisplayTarget(transitionGameWindow.load(),d) || !d.hdrSupported) {
+            FailTransitionAndRestoreFG("display_target_lost_before_direct_set");
+            return;
+        }
+        lastSystemHdr.store(d.hdrEnabled);
+        if(d.hdrEnabled==s.targetHdr) {
+            Log("HDR_BUTTON_WINDOWS_ALREADY_TARGET target=%u present=%llu",unsigned(s.targetHdr),read64(kRvaPresentCounter));
+            SetPhase(Phase::SetGameHdr);
+            return;
+        }
+        if(!systemSetAttempted.exchange(true)) {
+            if(!SetWindowsHdrDirect(d,s.targetHdr)) {
+                FailTransitionAndRestoreFG("DisplayConfigSetDeviceInfo_failed");
+                return;
+            }
+        }
+        SetPhase(Phase::WaitSystemHdr);
+        return;
+    }
+
+    if(s.phase==Phase::WaitSystemHdr) {
+        DisplayTarget d{};
+        if(!ResolveDisplayTarget(transitionGameWindow.load(),d) || !d.hdrSupported) {
+            FailTransitionAndRestoreFG("display_target_lost_waiting_windows_hdr");
+            return;
+        }
+        lastSystemHdr.store(d.hdrEnabled);
+        if(d.hdrEnabled==s.targetHdr) {
+            Log("HDR_BUTTON_WINDOWS_TARGET_CONFIRMED target=%u present=%llu synthetic_hotkey=0",
+                unsigned(s.targetHdr),read64(kRvaPresentCounter));
+            SetPhase(Phase::SetGameHdr);
+        }
+        return;
+    }
+
+    if(s.phase==Phase::SetGameHdr) {
+        if(!gameSetAttempted.exchange(true)) {
+            gameSetCompleted.store(false,std::memory_order_release);
+            gameSetSucceeded.store(false,std::memory_order_release);
+            pendingGameHdrSet.store(s.targetHdr?1:0,std::memory_order_release);
+            Log("HDR_BUTTON_GAME_SET_QUEUED target=%u present=%llu native_sequence=%s",
+                unsigned(s.targetHdr),read64(kRvaPresentCounter),
+                s.targetHdr?"setHDRSettings_then_setHDREnabledDisplay":"setHDRSettings_only");
+        }
+        SetPhase(Phase::WaitDomain);
+        return;
+    }
+
+    if(s.phase==Phase::WaitDomain) {
+        if(gameSetCompleted.load(std::memory_order_acquire) &&
+           !gameSetSucceeded.load(std::memory_order_acquire)) {
+            FailTransitionAndRestoreFG("Control_native_HDR_setter_failed");
+            return;
+        }
+
         DisplayTarget d{};
         bool gameHdr=false;
         if(!ResolveDisplayTarget(transitionGameWindow.load(),d) || !d.hdrSupported || !ReadGameHdr(gameHdr)) {
-            SetPhase(Phase::Failed,"hdr_state_lost");return;
+            FailTransitionAndRestoreFG("hdr_domain_state_lost");
+            return;
         }
-        const bool bridgeHdr=read32(0xABCF0)!=0;
-        lastSystemHdr.store(d.hdrEnabled);lastGameHdr.store(gameHdr);lastBridgeHdr.store(bridgeHdr);
+        const bool bridgeHdr=read32(kRvaHdrBridgeActive)!=0;
+        lastSystemHdr.store(d.hdrEnabled);
+        lastGameHdr.store(gameHdr);
+        lastBridgeHdr.store(bridgeHdr);
         currentHdr.store(d.hdrEnabled && gameHdr && bridgeHdr);
-        currentHdrKnown.store(true);displayHdrSupported.store(true);
+        currentHdrKnown.store(true);
+        displayHdrSupported.store(true);
 
-        if(s.targetHdr) {
-            // Enable combined HDR:
-            // 1) FG remains forcibly held off.
-            // 2) Windows HDR on.
-            // 3) Native Control sequence observed in R26.
-            // 4) Require Windows + game getter + HDR bridge all ON before releasing FG.
-            if(!d.hdrEnabled) {
-                if(!systemToggleSent.load()) {
-                    if(!HdrShortcutKeysReleased()) return;
-                    if(!SendWindowsHdrShortcut()) { SetPhase(Phase::Failed,"WinAltB_SendInput_failed"); return; }
-                    systemToggleSent.store(true);
-                    Log("HDR_BUTTON_SYSTEM_ENABLE_SENT");
-                }
-                SetPhase(Phase::WaitGameHdr);return;
-            }
-            if(!gameHdr) {
-                if(!gameSetAttempted.exchange(true)) {
-                    pendingGameHdrSet.store(1);
-                    Log("HDR_BUTTON_GAME_ENABLE_QUEUED system_hdr=1 bridge_hdr=%u native_sequence=setHDRSettings_then_setHDREnabledDisplay",
-                        unsigned(bridgeHdr));
-                }
-                SetPhase(Phase::WaitGameHdr);return;
-            }
-            if(!bridgeHdr) { SetPhase(Phase::WaitGameHdr);return; }
-
-            Log("HDR_BUTTON_COMBINED_HDR_CONFIRMED target=1 system=1 game=1 bridge=1 present=%llu",
-                read64(0xAB7B8));
-            WriteTransitionFgHold(false);
-            Log("HDR_BUTTON_FG_HOLD enabled=0 reason=combined_hdr_ready target=1");
-            SetPhase(read32(0xAA0A0)==0?Phase::Complete:Phase::WaitFgResume);return;
-        } else {
-            // Disable combined HDR:
-            // 1) Native Control HDR off while Windows HDR remains available.
-            // 2) Require game getter + bridge OFF.
-            // 3) Windows HDR off.
-            // 4) Require all three OFF before releasing FG.
-            if(gameHdr || bridgeHdr) {
-                if(!gameSetAttempted.exchange(true)) {
-                    pendingGameHdrSet.store(0);
-                    Log("HDR_BUTTON_GAME_DISABLE_QUEUED system_hdr=%u game_hdr=%u bridge_hdr=%u native_sequence=setHDRSettings_only",
-                        unsigned(d.hdrEnabled),unsigned(gameHdr),unsigned(bridgeHdr));
-                }
-                SetPhase(Phase::WaitGameHdr);return;
-            }
-            if(d.hdrEnabled) {
-                if(!systemToggleSent.load()) {
-                    if(!HdrShortcutKeysReleased()) return;
-                    if(!SendWindowsHdrShortcut()) { SetPhase(Phase::Failed,"WinAltB_SendInput_failed"); return; }
-                    systemToggleSent.store(true);
-                    Log("HDR_BUTTON_SYSTEM_DISABLE_SENT game_hdr=0 bridge_hdr=0");
-                }
-                SetPhase(Phase::WaitGameHdr);return;
-            }
-
-            Log("HDR_BUTTON_COMBINED_HDR_CONFIRMED target=0 system=0 game=0 bridge=0 present=%llu",
-                read64(0xAB7B8));
-            WriteTransitionFgHold(false);
-            Log("HDR_BUTTON_FG_HOLD enabled=0 reason=combined_hdr_ready target=0");
-            SetPhase(read32(0xAA0A0)==0?Phase::Complete:Phase::WaitFgResume);return;
+        const bool domainMatches=
+            d.hdrEnabled==s.targetHdr &&
+            gameHdr==s.targetHdr &&
+            bridgeHdr==s.targetHdr;
+        if(domainMatches) {
+            const uint64_t aa=read64(kRvaAaCounter);
+            const uint64_t present=read64(kRvaPresentCounter);
+            AcquireSRWLockExclusive(&stateLock);
+            transition.freshAaBase=aa;
+            transition.freshPresentBase=present;
+            transition.phase=Phase::WaitFreshDomain;
+            transition.phaseStartedMs=now;
+            ReleaseSRWLockExclusive(&stateLock);
+            Log("HDR_BUTTON_DOMAIN_MATCH target=%u system=%u game=%u bridge=%u aa_base=%llu present=%llu action=wait_two_fresh_engine_frames",
+                unsigned(s.targetHdr),unsigned(d.hdrEnabled),unsigned(gameHdr),unsigned(bridgeHdr),aa,present);
+            UpdateButtonVisual();
         }
+        return;
+    }
+
+    if(s.phase==Phase::WaitFreshDomain) {
+        DisplayTarget d{};
+        bool gameHdr=false;
+        if(!ResolveDisplayTarget(transitionGameWindow.load(),d) || !d.hdrSupported || !ReadGameHdr(gameHdr)) {
+            FailTransitionAndRestoreFG("fresh_domain_state_lost");
+            return;
+        }
+        const bool bridgeHdr=read32(kRvaHdrBridgeActive)!=0;
+        const uint64_t aa=read64(kRvaAaCounter);
+        const uint64_t present=read64(kRvaPresentCounter);
+        lastSystemHdr.store(d.hdrEnabled);
+        lastGameHdr.store(gameHdr);
+        lastBridgeHdr.store(bridgeHdr);
+
+        const bool domainMatches=
+            d.hdrEnabled==s.targetHdr &&
+            gameHdr==s.targetHdr &&
+            bridgeHdr==s.targetHdr;
+        if(!domainMatches) {
+            AcquireSRWLockExclusive(&stateLock);
+            transition.freshAaBase=aa;
+            transition.freshPresentBase=present;
+            ReleaseSRWLockExclusive(&stateLock);
+            return;
+        }
+
+        if(aa>=s.freshAaBase+kFreshDomainFramesRequired && present>s.freshPresentBase) {
+            Log("HDR_BUTTON_FRESH_DOMAIN_CONFIRMED target=%u aa_base=%llu aa_now=%llu fresh_frames=%llu present_base=%llu present=%llu action=restore_saved_fg_selection",
+                unsigned(s.targetHdr),s.freshAaBase,aa,aa-s.freshAaBase,s.freshPresentBase,present);
+            SetPhase(Phase::RestoreFg);
+        }
+        return;
+    }
+
+    if(s.phase==Phase::RestoreFg) {
+        protectGameHdr.store(s.targetHdr,std::memory_order_release);
+        WriteFGSelectionRaw(s.sourceSelection,"fresh_domain_restore_saved_selection");
+        Log("HDR_BUTTON_FG_RESTORE saved_selection=%u target_hdr=%u present=%llu bridge=%u sidecar_hold=0",
+            s.sourceSelection,unsigned(s.targetHdr),read64(kRvaPresentCounter),read32(kRvaHdrBridgeActive));
+        if(s.sourceSelection==0)SetPhase(Phase::Complete);
+        else SetPhase(Phase::WaitFgResume);
+        return;
     }
 
     if(s.phase==Phase::WaitFgResume) {
-        const uint32_t selected=read32(0xAA0A0);
-        if(selected==0) {SetPhase(Phase::Complete);return;}
-        if(read32(0xAB9D0)!=0 && read64(0xABB28)>s.baseGeneratedCount) {
-            Log("HDR_BUTTON_FG_RESUMED selection=%u present=%llu generated_samples=%llu bridge_hdr=%u",
-                selected,read64(0xAB7B8),read64(0xABB28),read32(0xABCF0));
+        const unsigned int selection=ReadFGSelectionRaw();
+        const unsigned int enabled=read32(kRvaFgEnabledByApi);
+        const uint64_t present=read64(kRvaPresentCounter);
+        if(selection==s.sourceSelection && enabled!=0) {
+            Log("HDR_BUTTON_FG_RESUMED selection=%u api_enabled=%u present=%llu generated_samples=%llu target_hdr=%u",
+                selection,enabled,present,read64(kRvaFgGeneratedSamples),unsigned(s.targetHdr));
             SetPhase(Phase::Complete);
         }
         return;
