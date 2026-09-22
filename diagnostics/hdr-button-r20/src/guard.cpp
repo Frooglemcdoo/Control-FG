@@ -268,13 +268,7 @@ static bool ResolveDisplayTarget(HWND game,DisplayTarget& out) noexcept {
 
 struct SetAdvancedColorStatePacket {
     DISPLAYCONFIG_DEVICE_INFO_HEADER header{};
-    union {
-        struct {
-            UINT32 enableAdvancedColor : 1;
-            UINT32 reserved : 31;
-        };
-        UINT32 value;
-    };
+    UINT32 value{};
 };
 
 static bool SetWindowsHdrDirect(const DisplayTarget& d,bool enable) noexcept {
