@@ -267,30 +267,29 @@ static bool ResolveDisplayTarget(HWND game,DisplayTarget& out) noexcept {
     return false;
 }
 
-static bool HdrShortcutKeysReleased() noexcept {
-    const int keys[] = {VK_LWIN,VK_RWIN,VK_LMENU,VK_RMENU,VK_MENU,'B'};
-    for(int key : keys) if(GetAsyncKeyState(key)&0x8000) return false;
-    return true;
-}
-static bool SendWindowsHdrShortcut() noexcept {
-    if(!HdrShortcutKeysReleased()) return false;
-    INPUT in[6]{};
-    const WORD keys[6] = {VK_LWIN,VK_LMENU,'B','B',VK_LMENU,VK_LWIN};
-    for(int i=0;i<6;++i) {
-        in[i].type=INPUT_KEYBOARD;
-        in[i].ki.wVk=keys[i];
-        if(i>=3) in[i].ki.dwFlags|=KEYEVENTF_KEYUP;
-        if(keys[i]==VK_LWIN) in[i].ki.dwFlags|=KEYEVENTF_EXTENDEDKEY;
-    }
-    SetLastError(ERROR_SUCCESS);
-    const UINT sent=SendInput(6,in,sizeof(INPUT));
-    const DWORD err=GetLastError();
-    Log("HDR_BUTTON_WINDOWS_SHORTCUT sent=%u expected=6 error=%lu",sent,err);
-    if(sent==6) return true;
-    INPUT release[3]{};
-    release[0]=in[3];release[1]=in[4];release[2]=in[5];
-    SendInput(3,release,sizeof(INPUT));
-    return false;
+struct SetAdvancedColorStatePacket {
+    DISPLAYCONFIG_DEVICE_INFO_HEADER header{};
+    union {
+        struct {
+            UINT32 enableAdvancedColor : 1;
+            UINT32 reserved : 31;
+        };
+        UINT32 value;
+    };
+};
+
+static bool SetWindowsHdrDirect(const DisplayTarget& d,bool enable) noexcept {
+    if(!d.valid || !d.hdrSupported)return false;
+    SetAdvancedColorStatePacket packet{};
+    packet.header.type=static_cast<DISPLAYCONFIG_DEVICE_INFO_TYPE>(10); // DISPLAYCONFIG_DEVICE_INFO_SET_ADVANCED_COLOR_STATE
+    packet.header.size=sizeof(packet);
+    packet.header.adapterId=d.adapter;
+    packet.header.id=d.targetId;
+    packet.value=enable?1u:0u;
+    const LONG result=DisplayConfigSetDeviceInfo(&packet.header);
+    Log("HDR_BUTTON_WINDOWS_DIRECT_SET target=%u result=%ld adapter=%08lX:%08lX target_id=%u api=DisplayConfigSetDeviceInfo type=10 synthetic_hotkey=0",
+        unsigned(enable),result,static_cast<unsigned long>(d.adapter.HighPart),d.adapter.LowPart,d.targetId);
+    return result==ERROR_SUCCESS;
 }
 
 static void UpdateButtonVisual() noexcept {
