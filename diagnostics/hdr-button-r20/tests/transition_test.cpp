@@ -12,6 +12,7 @@ int main(){
  CHECK(ButtonText(s.phase,false,true)[3]==L'.');
  s.phase=Phase::WaitFreshDomain;
  CHECK(s.active());
+ CHECK(kFreshDomainFramesRequired==3);
  CHECK(ThirtySecondStallIsSafe(1000));
  CHECK(!TransitionTimedOut(1000,31000));
  CHECK(!TransitionTimedOut(1000,61000));
@@ -25,6 +26,6 @@ int main(){
  CHECK(ButtonText(s.phase,false,true)[4]==L'E');
  s.phase=Phase::Complete;
  CHECK(!s.active());
- std::puts("PASS R30 transition policy: 30s stall survives, 60s timeout, saved selection retained");
+ std::puts("PASS R32 transition policy: three fresh frames, 30s stall survives, 60s timeout, saved selection retained");
  return 0;
 }
