@@ -5,7 +5,7 @@ namespace hdrbutton {
 
 static constexpr uint64_t kTransitionTimeoutMs = 60000;
 static constexpr uint64_t kFailureRecoveryDelayMs = 1000;
-static constexpr uint64_t kFreshDomainFramesRequired = 3;
+static constexpr uint64_t kFreshDomainFramesRequired = 12;
 
 enum class Phase : uint32_t {
     Idle,
