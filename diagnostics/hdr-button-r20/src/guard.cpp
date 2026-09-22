@@ -664,7 +664,7 @@ static void PollTransition() noexcept {
         }
         if(!hardResetAttempted.exchange(true)) {
             const uint64_t present=read64(kRvaPresentCounter);
-            const bool started=beginHdrHardReset(present,"r32_button_pre_domain");
+            const bool started=beginHdrHardReset(present,"r33_button_pre_domain");
             Log("R33_HARD_RESET_REQUEST started=%u saved_selection=%u present=%llu api_enabled=%u stage=%u free_count=%llu action=wait_for_slFreeResources",
                 unsigned(started),s.sourceSelection,present,read32(kRvaFgEnabledByApi),read32(kRvaHdrHardResetStage),
                 read64(kRvaHdrHardResetFreeCount));
