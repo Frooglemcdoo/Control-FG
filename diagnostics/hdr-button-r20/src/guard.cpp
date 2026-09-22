@@ -68,6 +68,7 @@ static constexpr size_t kRvaHdrDlssgOptionsPatch = 0x4196F;
 using UiRecomposeTagFn = bool (*)(unsigned long long,void*,void*,unsigned int,bool,void*);
 static UiRecomposeTagFn originalUiRecomposeTag{};
 static std::atomic<unsigned long long> hdrFinalColorOnlyTagSuppressions{0};
+static uint32_t read32(size_t rva) noexcept;
 
 static unsigned int ReadFGSelectionRaw() noexcept {
     return core ? static_cast<unsigned int>(InterlockedCompareExchange(
