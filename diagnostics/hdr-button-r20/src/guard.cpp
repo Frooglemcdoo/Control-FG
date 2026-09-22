@@ -24,6 +24,8 @@ static void (*originalFrame)(){};
 using BeginHdrHardResetFn = bool (*)(uint64_t,const char*);
 static BeginHdrHardResetFn beginHdrHardReset{};
 static BeginHdrHardResetFn originalBeginHdrHardReset{};
+using EnsureRecomposeSlotFn = bool (*)(void*,void*,const D3D12_RESOURCE_DESC*,unsigned int,bool);
+static EnsureRecomposeSlotFn originalEnsureRecomposeSlot{};
 static HANDLE logFile=INVALID_HANDLE_VALUE;
 static SRWLOCK logLock=SRWLOCK_INIT;
 static SRWLOCK stateLock=SRWLOCK_INIT;
@@ -57,6 +59,9 @@ static std::atomic<bool> gameSetSucceeded{false};
 static std::atomic<bool> hardResetAttempted{false};
 static std::atomic<int> lastHardResetDirection{0};
 static std::atomic<unsigned long long> overlapResetRebases{0};
+static std::atomic<unsigned long long> sdrRecomposeSlotGeneration[3]{};
+static std::atomic<unsigned long long> hdrRecomposeSlotGeneration[3]{};
+static std::atomic<unsigned long long> recompositionForcedRebuilds{0};
 static std::atomic<bool> lastGameHdr{false};
 static std::atomic<bool> lastSystemHdr{false};
 static std::atomic<bool> lastBridgeHdr{false};
@@ -75,6 +80,7 @@ static constexpr size_t kRvaHdrHardResetSerial = 0xABC60;
 static constexpr size_t kRvaBridgeGeneration = 0xABD50;
 static constexpr size_t kRvaSettledBridgeGeneration = 0xABBF0;
 static constexpr size_t kRvaBeginHdrHardReset = 0xCDC0;
+static constexpr size_t kRvaEnsureRecomposeSlot = 0x197C0;
 
 static constexpr size_t kRvaFreshCountCap = 0x414B4;
 static constexpr size_t kRvaFreshRequiredLog = 0x41513;
@@ -117,7 +123,7 @@ static bool PatchThreeFrameTransitionWarmup() noexcept {
     };
     for(const auto& p:patches) {
         if(memcmp(core+p.rva,p.expected,p.size)!=0) {
-            Log("R33_WARMUP_PATCH_FAIL reason=signature label=%s rva=0x%zX",p.label,p.rva);
+            Log("R34_WARMUP_PATCH_FAIL reason=signature label=%s rva=0x%zX",p.label,p.rva);
             return false;
         }
     }
@@ -125,7 +131,7 @@ static bool PatchThreeFrameTransitionWarmup() noexcept {
         DWORD oldProtect=0;
         unsigned char* target=core+p.rva;
         if(!VirtualProtect(target,p.size,PAGE_EXECUTE_READWRITE,&oldProtect)) {
-            Log("R33_WARMUP_PATCH_FAIL reason=VirtualProtect label=%s error=%lu",p.label,GetLastError());
+            Log("R34_WARMUP_PATCH_FAIL reason=VirtualProtect label=%s error=%lu",p.label,GetLastError());
             return false;
         }
         memcpy(target,p.replacement,p.size);
@@ -133,12 +139,12 @@ static bool PatchThreeFrameTransitionWarmup() noexcept {
         DWORD ignored=0;
         VirtualProtect(target,p.size,oldProtect,&ignored);
         if(memcmp(target,p.replacement,p.size)!=0) {
-            Log("R33_WARMUP_PATCH_FAIL reason=verify label=%s",p.label);
+            Log("R34_WARMUP_PATCH_FAIL reason=verify label=%s",p.label);
             return false;
         }
-        Log("R33_WARMUP_PATCH_OK label=%s rva=0x%zX",p.label,p.rva);
+        Log("R34_WARMUP_PATCH_OK label=%s rva=0x%zX",p.label,p.rva);
     }
-    Log("R33_TRANSITION_POLICY hard_dlssg_free=1 recomposition=restored ring_slots=3 fresh_frames_required=3 camera_reset=control_reset_signal steady_state_hdr_unchanged=1 steady_state_sdr_unchanged=1");
+    Log("R34_TRANSITION_POLICY hard_dlssg_free=1 recomposition=restored ring_slots=3 fresh_frames_required=3 camera_reset=control_reset_signal steady_state_hdr_unchanged=1 steady_state_sdr_unchanged=1");
     return true;
 }
 
@@ -278,7 +284,7 @@ static bool HookedBeginHdrHardReset(uint64_t present,const char* reason) noexcep
         rebased=previousStage==2;
         if(rebased) {
             const auto ordinal=++overlapResetRebases;
-            Log("R33_OVERLAP_RESET_REBASE present=%llu reason=%s direction=%d previous_direction=%d serial_before=%llu stage_before=2 reset_generation=%llu current_generation=%llu settled_generation=%llu action=restart_hard_reset_and_refree ordinal=%llu",
+            Log("R34_OVERLAP_RESET_REBASE present=%llu reason=%s direction=%d previous_direction=%d serial_before=%llu stage_before=2 reset_generation=%llu current_generation=%llu settled_generation=%llu action=restart_hard_reset_and_refree ordinal=%llu",
                 present,reason?reason:"none",direction,previousDirection,serialBefore,
                 resetGeneration,bridgeGeneration,settledGeneration,ordinal);
         }
@@ -295,11 +301,45 @@ static bool HookedBeginHdrHardReset(uint64_t present,const char* reason) noexcep
     }
 
     if(rebased || callStage==0) {
-        Log("R33_HARD_RESET_BEGIN_OBSERVED present=%llu reason=%s result=%u direction=%d stage_before=%u stage_after=%u serial_before=%llu serial_after=%llu reset_generation=%llu current_generation=%llu overlap_rebase=%u",
+        Log("R34_HARD_RESET_BEGIN_OBSERVED present=%llu reason=%s result=%u direction=%d stage_before=%u stage_after=%u serial_before=%llu serial_after=%llu reset_generation=%llu current_generation=%llu overlap_rebase=%u",
             present,reason?reason:"none",unsigned(result),direction,callStage,stageAfter,
             serialBefore,serialAfter,resetAfter,bridgeGeneration,unsigned(rebased));
     }
     return result;
+}
+
+
+static bool HookedEnsureRecomposeSlot(void* owner,void* slotState,const D3D12_RESOURCE_DESC* desc,
+                                      unsigned int slotIndex,bool hdr10) noexcept {
+    if(!originalEnsureRecomposeSlot)return false;
+    if(slotIndex>=3 || !slotState || !desc)
+        return originalEnsureRecomposeSlot(owner,slotState,desc,slotIndex,hdr10);
+
+    const uint64_t generation=read64(kRvaBridgeGeneration);
+    auto& seen=hdr10?hdrRecomposeSlotGeneration[slotIndex]:sdrRecomposeSlotGeneration[slotIndex];
+    const uint64_t previousGeneration=seen.load(std::memory_order_acquire);
+    bool forced=false;
+    unsigned int priorHdrByte=0;
+
+    if(generation!=0 && previousGeneration!=generation) {
+        volatile char* hdrByte=reinterpret_cast<volatile char*>(
+            reinterpret_cast<unsigned char*>(slotState)+0x24);
+        priorHdrByte=static_cast<unsigned int>(static_cast<unsigned char>(*hdrByte));
+        InterlockedExchange8(hdrByte,hdr10?0:1);
+        forced=true;
+        const auto ordinal=++recompositionForcedRebuilds;
+        Log("R34_RECOMPOSE_SLOT_INVALIDATE generation=%llu previous_generation=%llu domain=%s slot=%u owner=%p slot_state=%p source_format=%u width=%llu height=%u prior_hdr_byte=%u forced_hdr_byte=%u ordinal=%llu action=release_and_recreate_destination_domain_slot",
+            generation,previousGeneration,hdr10?"hdr":"sdr",slotIndex,owner,slotState,
+            unsigned(desc->Format),desc->Width,desc->Height,priorHdrByte,unsigned(hdr10?0:1),ordinal);
+    }
+
+    const bool ok=originalEnsureRecomposeSlot(owner,slotState,desc,slotIndex,hdr10);
+    if(ok && generation!=0 && previousGeneration!=generation) {
+        seen.store(generation,std::memory_order_release);
+        Log("R34_RECOMPOSE_SLOT_REBUILT generation=%llu domain=%s slot=%u success=1 forced=%u owner=%p slot_state=%p source_format=%u action=fresh_domain_bank_ready",
+            generation,hdr10?"hdr":"sdr",slotIndex,unsigned(forced),owner,slotState,unsigned(desc->Format));
+    }
+    return ok;
 }
 
 static void Log(const char* fmt,...) noexcept {
@@ -623,6 +663,7 @@ static std::string HashFile(const std::wstring& path) {
 static bool InstallCoreHook() noexcept {
     static const unsigned char frameSig[]={0x48,0x89,0x5c,0x24,0x20,0x55,0x56,0x57,0x41,0x54,0x41,0x55,0x41,0x56,0x41,0x57};
     static const unsigned char hardResetSig[]={0x48,0x89,0x6c,0x24,0x20,0x56,0x48,0x83,0xec,0x30};
+    static const unsigned char recomposeSlotSig[]={0x40,0x55,0x53,0x56,0x57,0x41,0x54,0x41,0x55,0x41,0x56,0x41,0x57,0x48,0x8D,0xAC};
     if(memcmp(core+0x1DF60,frameSig,sizeof(frameSig))!=0) {
         Log("HDR_BUTTON_INSTALL_FAIL reason=frame_signature");
         return false;
@@ -631,19 +672,27 @@ static bool InstallCoreHook() noexcept {
         Log("HDR_BUTTON_INSTALL_FAIL reason=hard_reset_signature");
         return false;
     }
+    if(memcmp(core+kRvaEnsureRecomposeSlot,recomposeSlotSig,sizeof(recomposeSlotSig))!=0) {
+        Log("HDR_BUTTON_INSTALL_FAIL reason=recompose_slot_signature");
+        return false;
+    }
     if(!PatchThreeFrameTransitionWarmup())return false;
     if(MH_Initialize()!=MH_OK)return false;
     auto r=MH_CreateHook(core+kRvaBeginHdrHardReset,reinterpret_cast<void*>(&HookedBeginHdrHardReset),
         reinterpret_cast<void**>(&originalBeginHdrHardReset));
     if(r!=MH_OK){Log("HDR_BUTTON_INSTALL_FAIL reason=hard_reset_hook_create status=%s",MH_StatusToString(r));return false;}
+    r=MH_CreateHook(core+kRvaEnsureRecomposeSlot,reinterpret_cast<void*>(&HookedEnsureRecomposeSlot),
+        reinterpret_cast<void**>(&originalEnsureRecomposeSlot));
+    if(r!=MH_OK){Log("HDR_BUTTON_INSTALL_FAIL reason=recompose_slot_hook_create status=%s",MH_StatusToString(r));return false;}
     r=MH_CreateHook(core+0x1DF60,reinterpret_cast<void*>(&OnFrame),reinterpret_cast<void**>(&originalFrame));
     if(r!=MH_OK){Log("HDR_BUTTON_INSTALL_FAIL reason=frame_hook_create status=%s",MH_StatusToString(r));return false;}
     if(MH_EnableHook(core+kRvaBeginHdrHardReset)!=MH_OK)return false;
+    if(MH_EnableHook(core+kRvaEnsureRecomposeSlot)!=MH_OK)return false;
     if(MH_EnableHook(core+0x1DF60)!=MH_OK)return false;
     beginHdrHardReset=&HookedBeginHdrHardReset;
-    Log("R33_HARD_RESET_READY entry_rva=0x%zX stage_rva=0x%zX free_count_rva=0x%zX bridge_generation_rva=0x%zX settled_generation_rva=0x%zX policy=opposite_unsettled_transition_restarts_reset_and_refrees",
+    Log("R34_HARD_RESET_READY entry_rva=0x%zX stage_rva=0x%zX free_count_rva=0x%zX bridge_generation_rva=0x%zX settled_generation_rva=0x%zX policy=opposite_unsettled_transition_restarts_reset_and_refrees recomposition_policy=destination_domain_slots_rebuild_each_generation recompose_slot_rva=0x%zX",
         kRvaBeginHdrHardReset,kRvaHdrHardResetStage,kRvaHdrHardResetFreeCount,
-        kRvaBridgeGeneration,kRvaSettledBridgeGeneration);
+        kRvaBridgeGeneration,kRvaSettledBridgeGeneration,kRvaEnsureRecomposeSlot);
     return true;
 }
 
@@ -664,8 +713,8 @@ static void PollTransition() noexcept {
         }
         if(!hardResetAttempted.exchange(true)) {
             const uint64_t present=read64(kRvaPresentCounter);
-            const bool started=beginHdrHardReset(present,"r33_button_pre_domain");
-            Log("R33_HARD_RESET_REQUEST started=%u saved_selection=%u present=%llu api_enabled=%u stage=%u free_count=%llu action=wait_for_slFreeResources",
+            const bool started=beginHdrHardReset(present,"r34_button_pre_domain");
+            Log("R34_HARD_RESET_REQUEST started=%u saved_selection=%u present=%llu api_enabled=%u stage=%u free_count=%llu action=wait_for_slFreeResources",
                 unsigned(started),s.sourceSelection,present,read32(kRvaFgEnabledByApi),read32(kRvaHdrHardResetStage),
                 read64(kRvaHdrHardResetFreeCount));
             if(!started && read32(kRvaHdrHardResetStage)==0) {
@@ -688,7 +737,7 @@ static void PollTransition() noexcept {
             return;
         }
         if(stage==2 && enabled==0 && frees>s.baseFreeCount && present>s.basePresent) {
-            Log("R33_HARD_RESET_CONFIRMED selection_preserved=%u api_enabled=0 stage=2 present=%llu free_count=%llu freed_delta=%llu action=set_windows_hdr_direct",
+            Log("R34_HARD_RESET_CONFIRMED selection_preserved=%u api_enabled=0 stage=2 present=%llu free_count=%llu freed_delta=%llu action=set_windows_hdr_direct",
                 selection,present,frees,frees-s.baseFreeCount);
             SetPhase(Phase::SetSystemHdr);
         }
@@ -827,7 +876,7 @@ static void PollTransition() noexcept {
             FailTransitionAndRestoreFG("saved_fg_selection_not_preserved");
             return;
         }
-        Log("R33_FG_REARM_WAIT saved_selection=%u target_hdr=%u present=%llu bridge=%u hard_reset_stage=%u free_count=%llu action=core_rearm_after_three_fresh_recomposition_frames",
+        Log("R34_FG_REARM_WAIT saved_selection=%u target_hdr=%u present=%llu bridge=%u hard_reset_stage=%u free_count=%llu action=core_rearm_after_three_fresh_recomposition_frames",
             s.sourceSelection,unsigned(s.targetHdr),read64(kRvaPresentCounter),read32(kRvaHdrBridgeActive),
             read32(kRvaHdrHardResetStage),read64(kRvaHdrHardResetFreeCount));
         if(s.sourceSelection==0)SetPhase(Phase::Complete);
@@ -860,7 +909,7 @@ static DWORD WINAPI Worker(void*) noexcept {
     CreateDirectoryW(logDir.c_str(),nullptr);
     SYSTEMTIME st{};GetSystemTime(&st);
     wchar_t name[180]{};
-    swprintf_s(name,L"\\hdr-button-R33-%04u%02u%02u-%02u%02u%02u-%lu.log",
+    swprintf_s(name,L"\\hdr-button-R34-%04u%02u%02u-%02u%02u%02u-%lu.log",
         st.wYear,st.wMonth,st.wDay,st.wHour,st.wMinute,st.wSecond,GetCurrentProcessId());
     logFile=CreateFileW((logDir+name).c_str(),GENERIC_WRITE,FILE_SHARE_READ|FILE_SHARE_WRITE,nullptr,
         CREATE_ALWAYS,FILE_ATTRIBUTE_NORMAL,nullptr);
@@ -869,7 +918,7 @@ static DWORD WINAPI Worker(void*) noexcept {
     std::wstring directory(own);directory=directory.substr(0,directory.find_last_of(L"\\/"));
     std::wstring corePath=directory+L"\\dxgi.dll";
     std::string hash=HashFile(corePath);
-    Log("HDR_BUTTON_BUILD version=R33 expected_core_sha256=%s actual_core_sha256=%s ui=F10_overlay_child_button architecture=single_owner direct_windows_hdr=1 synthetic_hotkey=0 hard_dlssg_free_before_domain=1 overlap_transition_refree=1 user_selection_preserved=1 full_recomposition=1 fresh_ring_frames=3 external_shield=0 timeout_ms=%llu fail_open_restore_fg=1",
+    Log("HDR_BUTTON_BUILD version=R34 expected_core_sha256=%s actual_core_sha256=%s ui=F10_overlay_child_button architecture=single_owner direct_windows_hdr=1 synthetic_hotkey=0 hard_dlssg_free_before_domain=1 overlap_transition_refree=1 destination_domain_slot_rebuild=1 user_selection_preserved=1 full_recomposition=1 fresh_ring_frames=3 external_shield=0 timeout_ms=%llu fail_open_restore_fg=1",
         kExpectedCoreSha256,hash.c_str(),kTransitionTimeoutMs);
     if(hash!=kExpectedCoreSha256){Log("HDR_BUTTON_INSTALL_FAIL reason=core_hash");return 0;}
     core=reinterpret_cast<unsigned char*>(GetModuleHandleW(corePath.c_str()));
@@ -877,7 +926,7 @@ static DWORD WINAPI Worker(void*) noexcept {
     if(!InstallCoreHook()){Log("HDR_BUTTON_INSTALL_FAIL reason=core_hook");return 0;}
     ResolveGameHdrApi();
     ready.store(true);
-    Log("HDR_BUTTON_READY controller=single_owner_windows_and_control_hdr game_hdr_control_ready=%u sequence=save_fg_selection_then_hard_dlssg_free_then_direct_windows_hdr_then_control_hdr_then_three_fresh_recomposition_frames_then_core_rearm overlap_policy=opposite_unsettled_transition_new_serial_refree hotkey_injection=0 selection_mutation=0 sidecar_hold=0 shield=0",
+    Log("HDR_BUTTON_READY controller=single_owner_windows_and_control_hdr game_hdr_control_ready=%u sequence=save_fg_selection_then_hard_dlssg_free_then_direct_windows_hdr_then_control_hdr_then_three_fresh_recomposition_frames_then_core_rearm overlap_policy=opposite_unsettled_transition_new_serial_refree slot_policy=rebuild_all_three_destination_bank_slots_on_every_domain_generation hotkey_injection=0 selection_mutation=0 sidecar_hold=0 shield=0",
         unsigned(gameHdrControlReady.load()));
 
     uint64_t completeSince=0;
@@ -919,7 +968,7 @@ static DWORD WINAPI Worker(void*) noexcept {
 }
 
 extern "C" __declspec(dllexport) void WINAPI ControlFGHDRButton_Bootstrap(){}
-extern "C" __declspec(dllexport) unsigned WINAPI ControlFGHDRButton_Version(){return 0x00330001;}
+extern "C" __declspec(dllexport) unsigned WINAPI ControlFGHDRButton_Version(){return 0x00340001;}
 
 BOOL WINAPI DllMain(HINSTANCE mod,DWORD reason,LPVOID) {
     if(reason==DLL_PROCESS_ATTACH) {
