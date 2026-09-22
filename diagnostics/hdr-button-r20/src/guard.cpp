@@ -62,6 +62,12 @@ static constexpr size_t kRvaPresentCounter = 0xAB7B8;
 static constexpr size_t kRvaFgEnabledByApi = 0xAB9D0;
 static constexpr size_t kRvaFgGeneratedSamples = 0xABB28;
 static constexpr size_t kRvaHdrBridgeActive = 0xABCF0;
+static constexpr size_t kRvaUiRecomposeTagFn = 0x1A9D0;
+static constexpr size_t kRvaHdrDlssgOptionsPatch = 0x4196F;
+
+using UiRecomposeTagFn = bool (*)(unsigned long long,void*,void*,unsigned int,bool,void*);
+static UiRecomposeTagFn originalUiRecomposeTag{};
+static std::atomic<unsigned long long> hdrFinalColorOnlyTagSuppressions{0};
 
 static unsigned int ReadFGSelectionRaw() noexcept {
     return core ? static_cast<unsigned int>(InterlockedCompareExchange(
@@ -73,6 +79,54 @@ static void WriteFGSelectionRaw(unsigned int selection,const char* reason) noexc
     const unsigned int previous=static_cast<unsigned int>(InterlockedExchange(
         reinterpret_cast<volatile LONG*>(core+kRvaFgSelection),static_cast<LONG>(selection)));
     Log("HDR_BUTTON_FG_SELECTION_WRITE previous=%u target=%u reason=%s persisted=0",previous,selection,reason?reason:"none");
+}
+
+static bool HookedUiRecomposeTag(unsigned long long present,void* source,void* sourceDesc,
+    unsigned int sourceState,bool sourceStateKnown,void* commandContext) noexcept {
+    if(core && read32(kRvaHdrBridgeActive)!=0) {
+        const unsigned long long ordinal=++hdrFinalColorOnlyTagSuppressions;
+        if(ordinal<=8 || (ordinal%240ull)==0) {
+            Log("R31_HDR_INPUT_PATH present=%llu mode=final_color_only hdr10_bridge=1 hudless_tag=0 ui_alpha_tag=0 ui_recomposition=0 hudless_format=0 ui_format=0 depth=1 motion_vectors=1 suppressed_tag_builds=%llu",
+                present,ordinal);
+        }
+        return false;
+    }
+    return originalUiRecomposeTag
+        ? originalUiRecomposeTag(present,source,sourceDesc,sourceState,sourceStateKnown,commandContext)
+        : false;
+}
+
+static bool PatchHdrDlssgOptionsFinalColorOnly() noexcept {
+    if(!core)return false;
+    static const unsigned char expected[]={
+        0x41,0x8B,0xC7,0xF7,0xD8,0x1B,0xC9,0x83,0xE1,0x18,0x89,0x4D,0x24
+    };
+    static const unsigned char replacement[]={
+        0x31,0xC9,             // xor ecx,ecx
+        0x89,0x4D,0x24,       // hudLessBufferFormat = 0
+        0x89,0x4D,0x28,       // uiBufferFormat = 0
+        0x88,0x4D,0x40,       // enableUserInterfaceRecomposition = eFalse
+        0x90,0x90
+    };
+    static_assert(sizeof(expected)==sizeof(replacement));
+    unsigned char* target=core+kRvaHdrDlssgOptionsPatch;
+    if(memcmp(target,expected,sizeof(expected))!=0) {
+        Log("R31_HDR_OPTIONS_PATCH_FAIL reason=signature rva=0x%zX",kRvaHdrDlssgOptionsPatch);
+        return false;
+    }
+    DWORD oldProtect=0;
+    if(!VirtualProtect(target,sizeof(replacement),PAGE_EXECUTE_READWRITE,&oldProtect)) {
+        Log("R31_HDR_OPTIONS_PATCH_FAIL reason=VirtualProtect error=%lu",GetLastError());
+        return false;
+    }
+    memcpy(target,replacement,sizeof(replacement));
+    FlushInstructionCache(GetCurrentProcess(),target,sizeof(replacement));
+    DWORD ignored=0;
+    VirtualProtect(target,sizeof(replacement),oldProtect,&ignored);
+    const bool ok=memcmp(target,replacement,sizeof(replacement))==0;
+    Log("R31_HDR_OPTIONS_PATCH success=%u rva=0x%zX scope=hdr_bridge_only hudless_format=0 ui_format=0 ui_recomposition=0 sdr_unchanged=1",
+        unsigned(ok),kRvaHdrDlssgOptionsPatch);
+    return ok;
 }
 
 static bool ReadGameHdr(bool& value) noexcept {
@@ -502,14 +556,26 @@ static std::string HashFile(const std::wstring& path) {
 
 static bool InstallCoreHook() noexcept {
     static const unsigned char frameSig[]={0x48,0x89,0x5c,0x24,0x20,0x55,0x56,0x57,0x41,0x54,0x41,0x55,0x41,0x56,0x41,0x57};
+    static const unsigned char uiTagSig[]={0x40,0x55,0x53,0x56,0x57,0x41,0x54,0x41,0x55,0x41,0x56,0x41,0x57,0x48,0x8D,0xAC};
     if(memcmp(core+0x1DF60,frameSig,sizeof(frameSig))!=0) {
         Log("HDR_BUTTON_INSTALL_FAIL reason=frame_signature");
         return false;
     }
+    if(memcmp(core+kRvaUiRecomposeTagFn,uiTagSig,sizeof(uiTagSig))!=0) {
+        Log("R31_HDR_INPUT_HOOK_FAIL reason=ui_tag_signature rva=0x%zX",kRvaUiRecomposeTagFn);
+        return false;
+    }
+    if(!PatchHdrDlssgOptionsFinalColorOnly())return false;
     if(MH_Initialize()!=MH_OK)return false;
     auto r=MH_CreateHook(core+0x1DF60,reinterpret_cast<void*>(&OnFrame),reinterpret_cast<void**>(&originalFrame));
     if(r!=MH_OK){Log("HDR_BUTTON_INSTALL_FAIL reason=minhook_create status=%s",MH_StatusToString(r));return false;}
+    r=MH_CreateHook(core+kRvaUiRecomposeTagFn,reinterpret_cast<void*>(&HookedUiRecomposeTag),
+        reinterpret_cast<void**>(&originalUiRecomposeTag));
+    if(r!=MH_OK){Log("R31_HDR_INPUT_HOOK_FAIL reason=minhook_create status=%s",MH_StatusToString(r));return false;}
     if(MH_EnableHook(core+0x1DF60)!=MH_OK)return false;
+    if(MH_EnableHook(core+kRvaUiRecomposeTagFn)!=MH_OK)return false;
+    Log("R31_HDR_INPUT_HOOK_READY ui_tag_rva=0x%zX behavior=hdr_final_color_only sdr_passthrough=1",
+        kRvaUiRecomposeTagFn);
     return true;
 }
 
@@ -703,7 +769,7 @@ static DWORD WINAPI Worker(void*) noexcept {
     CreateDirectoryW(logDir.c_str(),nullptr);
     SYSTEMTIME st{};GetSystemTime(&st);
     wchar_t name[180]{};
-    swprintf_s(name,L"\\hdr-button-R30-%04u%02u%02u-%02u%02u%02u-%lu.log",
+    swprintf_s(name,L"\\hdr-button-R31-%04u%02u%02u-%02u%02u%02u-%lu.log",
         st.wYear,st.wMonth,st.wDay,st.wHour,st.wMinute,st.wSecond,GetCurrentProcessId());
     logFile=CreateFileW((logDir+name).c_str(),GENERIC_WRITE,FILE_SHARE_READ|FILE_SHARE_WRITE,nullptr,
         CREATE_ALWAYS,FILE_ATTRIBUTE_NORMAL,nullptr);
@@ -712,7 +778,7 @@ static DWORD WINAPI Worker(void*) noexcept {
     std::wstring directory(own);directory=directory.substr(0,directory.find_last_of(L"\\/"));
     std::wstring corePath=directory+L"\\dxgi.dll";
     std::string hash=HashFile(corePath);
-    Log("HDR_BUTTON_BUILD version=R30 expected_core_sha256=%s actual_core_sha256=%s ui=F10_overlay_child_button architecture=single_owner direct_windows_hdr=1 synthetic_hotkey=0 actual_fg_selection_off=1 external_shield=0 timeout_ms=%llu fail_open_restore_fg=1",
+    Log("HDR_BUTTON_BUILD version=R31 expected_core_sha256=%s actual_core_sha256=%s ui=F10_overlay_child_button architecture=single_owner direct_windows_hdr=1 synthetic_hotkey=0 actual_fg_selection_off=1 external_shield=0 timeout_ms=%llu fail_open_restore_fg=1 hdr_fg_input=final_color_only depth_mv=1 hudless_ui_tags=0 sdr_input_path=unchanged",
         kExpectedCoreSha256,hash.c_str(),kTransitionTimeoutMs);
     if(hash!=kExpectedCoreSha256){Log("HDR_BUTTON_INSTALL_FAIL reason=core_hash");return 0;}
     core=reinterpret_cast<unsigned char*>(GetModuleHandleW(corePath.c_str()));
@@ -762,7 +828,7 @@ static DWORD WINAPI Worker(void*) noexcept {
 }
 
 extern "C" __declspec(dllexport) void WINAPI ControlFGHDRButton_Bootstrap(){}
-extern "C" __declspec(dllexport) unsigned WINAPI ControlFGHDRButton_Version(){return 0x00300001;}
+extern "C" __declspec(dllexport) unsigned WINAPI ControlFGHDRButton_Version(){return 0x00310001;}
 
 BOOL WINAPI DllMain(HINSTANCE mod,DWORD reason,LPVOID) {
     if(reason==DLL_PROCESS_ATTACH) {
