@@ -4,6 +4,7 @@
 #include <d3d12.h>
 #include <bcrypt.h>
 #include <atomic>
+#include <cstddef>
 #include <vector>
 #include <string>
 #include <cstdio>
