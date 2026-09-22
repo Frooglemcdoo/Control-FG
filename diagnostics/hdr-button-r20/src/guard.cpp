@@ -57,6 +57,7 @@ static std::atomic<bool> gameSetSucceeded{false};
 static std::atomic<bool> hardResetAttempted{false};
 static std::atomic<int> lastHardResetDirection{0};
 static std::atomic<unsigned long long> overlapResetRebases{0};
+static std::atomic<unsigned long long> streamlineTagInvalidations{0};
 static std::atomic<bool> lastGameHdr{false};
 static std::atomic<bool> lastSystemHdr{false};
 static std::atomic<bool> lastBridgeHdr{false};
@@ -75,6 +76,51 @@ static constexpr size_t kRvaHdrHardResetSerial = 0xABC60;
 static constexpr size_t kRvaBridgeGeneration = 0xABD50;
 static constexpr size_t kRvaSettledBridgeGeneration = 0xABBF0;
 static constexpr size_t kRvaBeginHdrHardReset = 0xCDC0;
+
+struct SlStructTypeRaw {
+    uint32_t data1;
+    uint16_t data2;
+    uint16_t data3;
+    uint8_t data4[8];
+};
+struct SlBaseStructureRaw {
+    void* next;
+    SlStructTypeRaw structType;
+    size_t structVersion;
+};
+struct SlExtentRaw {
+    uint32_t top;
+    uint32_t left;
+    uint32_t width;
+    uint32_t height;
+};
+struct SlResourceTagRaw {
+    SlBaseStructureRaw base;
+    void* resource;
+    uint32_t type;
+    uint32_t lifecycle;
+    SlExtentRaw extent;
+};
+struct SlViewportHandleRaw {
+    SlBaseStructureRaw base;
+    uint32_t value;
+    uint32_t padding;
+};
+static_assert(sizeof(SlStructTypeRaw)==16);
+static_assert(sizeof(SlBaseStructureRaw)==32);
+static_assert(offsetof(SlResourceTagRaw,resource)==32);
+static_assert(offsetof(SlResourceTagRaw,type)==40);
+static_assert(offsetof(SlResourceTagRaw,lifecycle)==44);
+static_assert(offsetof(SlResourceTagRaw,extent)==48);
+static_assert(sizeof(SlResourceTagRaw)==64);
+static_assert(offsetof(SlViewportHandleRaw,value)==32);
+static_assert(sizeof(SlViewportHandleRaw)==40);
+
+using SlGetNewFrameTokenRawFn = int (*)(void**,const uint32_t*);
+using SlSetTagForFrameRawFn = int (*)(const void*,const SlViewportHandleRaw*,const SlResourceTagRaw*,uint32_t,void*);
+static SlGetNewFrameTokenRawFn slGetNewFrameTokenRaw{};
+static SlSetTagForFrameRawFn slSetTagForFrameRaw{};
+static std::atomic<bool> streamlineTagApiResolved{false};
 
 static constexpr size_t kRvaFreshCountCap = 0x414B4;
 static constexpr size_t kRvaFreshRequiredLog = 0x41513;
@@ -117,7 +163,7 @@ static bool PatchThreeFrameTransitionWarmup() noexcept {
     };
     for(const auto& p:patches) {
         if(memcmp(core+p.rva,p.expected,p.size)!=0) {
-            Log("R33_WARMUP_PATCH_FAIL reason=signature label=%s rva=0x%zX",p.label,p.rva);
+            Log("R36_WARMUP_PATCH_FAIL reason=signature label=%s rva=0x%zX",p.label,p.rva);
             return false;
         }
     }
@@ -125,7 +171,7 @@ static bool PatchThreeFrameTransitionWarmup() noexcept {
         DWORD oldProtect=0;
         unsigned char* target=core+p.rva;
         if(!VirtualProtect(target,p.size,PAGE_EXECUTE_READWRITE,&oldProtect)) {
-            Log("R33_WARMUP_PATCH_FAIL reason=VirtualProtect label=%s error=%lu",p.label,GetLastError());
+            Log("R36_WARMUP_PATCH_FAIL reason=VirtualProtect label=%s error=%lu",p.label,GetLastError());
             return false;
         }
         memcpy(target,p.replacement,p.size);
@@ -133,12 +179,12 @@ static bool PatchThreeFrameTransitionWarmup() noexcept {
         DWORD ignored=0;
         VirtualProtect(target,p.size,oldProtect,&ignored);
         if(memcmp(target,p.replacement,p.size)!=0) {
-            Log("R33_WARMUP_PATCH_FAIL reason=verify label=%s",p.label);
+            Log("R36_WARMUP_PATCH_FAIL reason=verify label=%s",p.label);
             return false;
         }
-        Log("R33_WARMUP_PATCH_OK label=%s rva=0x%zX",p.label,p.rva);
+        Log("R36_WARMUP_PATCH_OK label=%s rva=0x%zX",p.label,p.rva);
     }
-    Log("R33_TRANSITION_POLICY hard_dlssg_free=1 recomposition=restored ring_slots=3 fresh_frames_required=3 camera_reset=control_reset_signal steady_state_hdr_unchanged=1 steady_state_sdr_unchanged=1");
+    Log("R36_TRANSITION_POLICY hard_dlssg_free=1 recomposition=restored ring_slots=3 fresh_frames_required=3 camera_reset=control_reset_signal steady_state_hdr_unchanged=1 steady_state_sdr_unchanged=1");
     return true;
 }
 
@@ -251,6 +297,81 @@ static uint64_t read64(size_t rva) noexcept {
     return static_cast<uint64_t>(InterlockedCompareExchange64(reinterpret_cast<volatile LONG64*>(core+rva),0,0));
 }
 
+static SlBaseStructureRaw MakeSlBase(const SlStructTypeRaw& type) noexcept {
+    SlBaseStructureRaw base{};
+    base.next=nullptr;
+    base.structType=type;
+    base.structVersion=1;
+    return base;
+}
+
+static bool ResolveStreamlineTagApi() noexcept {
+    if(streamlineTagApiResolved.load(std::memory_order_acquire))
+        return slGetNewFrameTokenRaw && slSetTagForFrameRaw;
+
+    HMODULE sl=GetModuleHandleW(L"sl.interposer.dll");
+    if(!sl)return false;
+    auto getToken=reinterpret_cast<SlGetNewFrameTokenRawFn>(GetProcAddress(sl,"slGetNewFrameToken"));
+    auto setTag=reinterpret_cast<SlSetTagForFrameRawFn>(GetProcAddress(sl,"slSetTagForFrame"));
+    if(!getToken || !setTag) {
+        Log("R36_SL_TAG_API_RESOLVE_FAIL module=%p get_token=%p set_tag=%p",sl,getToken,setTag);
+        return false;
+    }
+    slGetNewFrameTokenRaw=getToken;
+    slSetTagForFrameRaw=setTag;
+    streamlineTagApiResolved.store(true,std::memory_order_release);
+    Log("R36_SL_TAG_API_READY module=%p get_token=%p set_tag=%p abi=streamline_2_14_1",sl,getToken,setTag);
+    return true;
+}
+
+static bool InvalidateStreamlineRecompositionTags(uint64_t present,const char* reason) noexcept {
+    if(!ResolveStreamlineTagApi()) {
+        Log("R36_SL_TAG_INVALIDATE_FAIL present=%llu reason=%s stage=resolve_api",present,reason?reason:"none");
+        return false;
+    }
+
+    const uint32_t frameIndex=static_cast<uint32_t>(present);
+    void* frameToken=nullptr;
+    const int tokenResult=slGetNewFrameTokenRaw(&frameToken,&frameIndex);
+    if(tokenResult!=0 || !frameToken) {
+        Log("R36_SL_TAG_INVALIDATE_FAIL present=%llu frame_index=%u reason=%s stage=get_token result=%d token=%p",
+            present,frameIndex,reason?reason:"none",tokenResult,frameToken);
+        return false;
+    }
+
+    static constexpr SlStructTypeRaw kResourceTagType{
+        0x4c6a5aad,0xb445,0x496c,{0x87,0xff,0x1a,0xf3,0x84,0x5b,0xe6,0x53}
+    };
+    static constexpr SlStructTypeRaw kViewportType{
+        0x171b6435,0x9b3c,0x4fc8,{0x99,0x94,0xfb,0xe5,0x25,0x69,0xaa,0xa4}
+    };
+    static constexpr uint32_t kBufferTypeHUDLessColor=2;
+    static constexpr uint32_t kBufferTypeUIColorAndAlpha=23;
+    static constexpr uint32_t kBufferTypeUIAlpha=69;
+    static constexpr uint32_t kResourceLifecycleValidUntilPresent=1;
+
+    SlViewportHandleRaw viewport{};
+    viewport.base=MakeSlBase(kViewportType);
+    viewport.value=0;
+
+    SlResourceTagRaw tags[3]{};
+    const uint32_t types[3]={kBufferTypeHUDLessColor,kBufferTypeUIColorAndAlpha,kBufferTypeUIAlpha};
+    for(unsigned i=0;i<3;++i) {
+        tags[i].base=MakeSlBase(kResourceTagType);
+        tags[i].resource=nullptr;
+        tags[i].type=types[i];
+        tags[i].lifecycle=kResourceLifecycleValidUntilPresent;
+        tags[i].extent=SlExtentRaw{};
+    }
+
+    const int tagResult=slSetTagForFrameRaw(frameToken,&viewport,tags,3,nullptr);
+    const bool ok=tagResult==0;
+    const auto ordinal=++streamlineTagInvalidations;
+    Log("R36_SL_TAG_INVALIDATE present=%llu frame_index=%u reason=%s token=%p get_token_result=%d set_tag_result=%d success=%u viewport=0 hudless=null ui_color_alpha=null ui_alpha=null lifecycle=valid_until_present ordinal=%llu",
+        present,frameIndex,reason?reason:"none",frameToken,tokenResult,tagResult,unsigned(ok),ordinal);
+    return ok;
+}
+
 static int HdrTransitionDirection(const char* reason) noexcept {
     if(!reason)return 0;
     if(strstr(reason,"sdr_to_hdr"))return 1;
@@ -260,6 +381,13 @@ static int HdrTransitionDirection(const char* reason) noexcept {
 
 static bool HookedBeginHdrHardReset(uint64_t present,const char* reason) noexcept {
     if(!originalBeginHdrHardReset)return false;
+
+    const bool nullTagsOk=InvalidateStreamlineRecompositionTags(present,reason);
+    if(!nullTagsOk && reason && strstr(reason,"r36_button_pre_domain")) {
+        Log("R36_HARD_RESET_ABORT present=%llu reason=%s action=do_not_start_button_transition_without_recomposition_tag_invalidation",
+            present,reason);
+        return false;
+    }
 
     const unsigned int stageBefore=read32(kRvaHdrHardResetStage);
     const uint64_t bridgeGeneration=read64(kRvaBridgeGeneration);
@@ -278,7 +406,7 @@ static bool HookedBeginHdrHardReset(uint64_t present,const char* reason) noexcep
         rebased=previousStage==2;
         if(rebased) {
             const auto ordinal=++overlapResetRebases;
-            Log("R33_OVERLAP_RESET_REBASE present=%llu reason=%s direction=%d previous_direction=%d serial_before=%llu stage_before=2 reset_generation=%llu current_generation=%llu settled_generation=%llu action=restart_hard_reset_and_refree ordinal=%llu",
+            Log("R36_OVERLAP_RESET_REBASE present=%llu reason=%s direction=%d previous_direction=%d serial_before=%llu stage_before=2 reset_generation=%llu current_generation=%llu settled_generation=%llu action=restart_hard_reset_and_refree ordinal=%llu",
                 present,reason?reason:"none",direction,previousDirection,serialBefore,
                 resetGeneration,bridgeGeneration,settledGeneration,ordinal);
         }
@@ -295,7 +423,7 @@ static bool HookedBeginHdrHardReset(uint64_t present,const char* reason) noexcep
     }
 
     if(rebased || callStage==0) {
-        Log("R33_HARD_RESET_BEGIN_OBSERVED present=%llu reason=%s result=%u direction=%d stage_before=%u stage_after=%u serial_before=%llu serial_after=%llu reset_generation=%llu current_generation=%llu overlap_rebase=%u",
+        Log("R36_HARD_RESET_BEGIN_OBSERVED present=%llu reason=%s result=%u direction=%d stage_before=%u stage_after=%u serial_before=%llu serial_after=%llu reset_generation=%llu current_generation=%llu overlap_rebase=%u",
             present,reason?reason:"none",unsigned(result),direction,callStage,stageAfter,
             serialBefore,serialAfter,resetAfter,bridgeGeneration,unsigned(rebased));
     }
@@ -641,7 +769,7 @@ static bool InstallCoreHook() noexcept {
     if(MH_EnableHook(core+kRvaBeginHdrHardReset)!=MH_OK)return false;
     if(MH_EnableHook(core+0x1DF60)!=MH_OK)return false;
     beginHdrHardReset=&HookedBeginHdrHardReset;
-    Log("R33_HARD_RESET_READY entry_rva=0x%zX stage_rva=0x%zX free_count_rva=0x%zX bridge_generation_rva=0x%zX settled_generation_rva=0x%zX policy=opposite_unsettled_transition_restarts_reset_and_refrees",
+    Log("R36_HARD_RESET_READY entry_rva=0x%zX stage_rva=0x%zX free_count_rva=0x%zX bridge_generation_rva=0x%zX settled_generation_rva=0x%zX policy=opposite_unsettled_transition_restarts_reset_and_refrees",
         kRvaBeginHdrHardReset,kRvaHdrHardResetStage,kRvaHdrHardResetFreeCount,
         kRvaBridgeGeneration,kRvaSettledBridgeGeneration);
     return true;
@@ -664,8 +792,8 @@ static void PollTransition() noexcept {
         }
         if(!hardResetAttempted.exchange(true)) {
             const uint64_t present=read64(kRvaPresentCounter);
-            const bool started=beginHdrHardReset(present,"r33_button_pre_domain");
-            Log("R33_HARD_RESET_REQUEST started=%u saved_selection=%u present=%llu api_enabled=%u stage=%u free_count=%llu action=wait_for_slFreeResources",
+            const bool started=beginHdrHardReset(present,"r36_button_pre_domain");
+            Log("R36_HARD_RESET_REQUEST started=%u saved_selection=%u present=%llu api_enabled=%u stage=%u free_count=%llu action=wait_for_slFreeResources",
                 unsigned(started),s.sourceSelection,present,read32(kRvaFgEnabledByApi),read32(kRvaHdrHardResetStage),
                 read64(kRvaHdrHardResetFreeCount));
             if(!started && read32(kRvaHdrHardResetStage)==0) {
@@ -688,7 +816,7 @@ static void PollTransition() noexcept {
             return;
         }
         if(stage==2 && enabled==0 && frees>s.baseFreeCount && present>s.basePresent) {
-            Log("R33_HARD_RESET_CONFIRMED selection_preserved=%u api_enabled=0 stage=2 present=%llu free_count=%llu freed_delta=%llu action=set_windows_hdr_direct",
+            Log("R36_HARD_RESET_CONFIRMED selection_preserved=%u api_enabled=0 stage=2 present=%llu free_count=%llu freed_delta=%llu action=set_windows_hdr_direct",
                 selection,present,frees,frees-s.baseFreeCount);
             SetPhase(Phase::SetSystemHdr);
         }
@@ -827,7 +955,7 @@ static void PollTransition() noexcept {
             FailTransitionAndRestoreFG("saved_fg_selection_not_preserved");
             return;
         }
-        Log("R33_FG_REARM_WAIT saved_selection=%u target_hdr=%u present=%llu bridge=%u hard_reset_stage=%u free_count=%llu action=core_rearm_after_three_fresh_recomposition_frames",
+        Log("R36_FG_REARM_WAIT saved_selection=%u target_hdr=%u present=%llu bridge=%u hard_reset_stage=%u free_count=%llu action=core_rearm_after_three_fresh_recomposition_frames",
             s.sourceSelection,unsigned(s.targetHdr),read64(kRvaPresentCounter),read32(kRvaHdrBridgeActive),
             read32(kRvaHdrHardResetStage),read64(kRvaHdrHardResetFreeCount));
         if(s.sourceSelection==0)SetPhase(Phase::Complete);
@@ -860,7 +988,7 @@ static DWORD WINAPI Worker(void*) noexcept {
     CreateDirectoryW(logDir.c_str(),nullptr);
     SYSTEMTIME st{};GetSystemTime(&st);
     wchar_t name[180]{};
-    swprintf_s(name,L"\\hdr-button-R33-%04u%02u%02u-%02u%02u%02u-%lu.log",
+    swprintf_s(name,L"\\hdr-button-R36-%04u%02u%02u-%02u%02u%02u-%lu.log",
         st.wYear,st.wMonth,st.wDay,st.wHour,st.wMinute,st.wSecond,GetCurrentProcessId());
     logFile=CreateFileW((logDir+name).c_str(),GENERIC_WRITE,FILE_SHARE_READ|FILE_SHARE_WRITE,nullptr,
         CREATE_ALWAYS,FILE_ATTRIBUTE_NORMAL,nullptr);
@@ -869,7 +997,7 @@ static DWORD WINAPI Worker(void*) noexcept {
     std::wstring directory(own);directory=directory.substr(0,directory.find_last_of(L"\\/"));
     std::wstring corePath=directory+L"\\dxgi.dll";
     std::string hash=HashFile(corePath);
-    Log("HDR_BUTTON_BUILD version=R33 expected_core_sha256=%s actual_core_sha256=%s ui=F10_overlay_child_button architecture=single_owner direct_windows_hdr=1 synthetic_hotkey=0 hard_dlssg_free_before_domain=1 overlap_transition_refree=1 user_selection_preserved=1 full_recomposition=1 fresh_ring_frames=3 external_shield=0 timeout_ms=%llu fail_open_restore_fg=1",
+    Log("HDR_BUTTON_BUILD version=R36 expected_core_sha256=%s actual_core_sha256=%s ui=F10_overlay_child_button architecture=single_owner direct_windows_hdr=1 synthetic_hotkey=0 hard_dlssg_free_before_domain=1 overlap_transition_refree=1 sl_recomposition_null_tags_before_reset=1 user_selection_preserved=1 full_recomposition=1 fresh_ring_frames=3 external_shield=0 timeout_ms=%llu fail_open_restore_fg=1",
         kExpectedCoreSha256,hash.c_str(),kTransitionTimeoutMs);
     if(hash!=kExpectedCoreSha256){Log("HDR_BUTTON_INSTALL_FAIL reason=core_hash");return 0;}
     core=reinterpret_cast<unsigned char*>(GetModuleHandleW(corePath.c_str()));
@@ -877,7 +1005,7 @@ static DWORD WINAPI Worker(void*) noexcept {
     if(!InstallCoreHook()){Log("HDR_BUTTON_INSTALL_FAIL reason=core_hook");return 0;}
     ResolveGameHdrApi();
     ready.store(true);
-    Log("HDR_BUTTON_READY controller=single_owner_windows_and_control_hdr game_hdr_control_ready=%u sequence=save_fg_selection_then_hard_dlssg_free_then_direct_windows_hdr_then_control_hdr_then_three_fresh_recomposition_frames_then_core_rearm overlap_policy=opposite_unsettled_transition_new_serial_refree hotkey_injection=0 selection_mutation=0 sidecar_hold=0 shield=0",
+    Log("HDR_BUTTON_READY controller=single_owner_windows_and_control_hdr game_hdr_control_ready=%u sequence=save_fg_selection_then_hard_dlssg_free_then_direct_windows_hdr_then_control_hdr_then_three_fresh_recomposition_frames_then_core_rearm overlap_policy=opposite_unsettled_transition_new_serial_refree tag_policy=null_hudless_ui_before_each_hard_reset hotkey_injection=0 selection_mutation=0 sidecar_hold=0 shield=0",
         unsigned(gameHdrControlReady.load()));
 
     uint64_t completeSince=0;
@@ -919,7 +1047,7 @@ static DWORD WINAPI Worker(void*) noexcept {
 }
 
 extern "C" __declspec(dllexport) void WINAPI ControlFGHDRButton_Bootstrap(){}
-extern "C" __declspec(dllexport) unsigned WINAPI ControlFGHDRButton_Version(){return 0x00330001;}
+extern "C" __declspec(dllexport) unsigned WINAPI ControlFGHDRButton_Version(){return 0x00360001;}
 
 BOOL WINAPI DllMain(HINSTANCE mod,DWORD reason,LPVOID) {
     if(reason==DLL_PROCESS_ATTACH) {
