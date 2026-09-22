@@ -1,7 +1,7 @@
-name: HDR Overlap Refree R33 Windows build
+name: HDR Stable Warmup R35 Windows build
 on:
   push:
-    branches: ['diag/rtx50-hdr-overlap-refree-r33']
+    branches: ['diag/rtx50-hdr-stable-warmup-r35']
   workflow_dispatch:
 permissions:
   contents: read
@@ -28,19 +28,19 @@ jobs:
           python -m pip -q install pefile
           python -c "import pefile; p=pefile.PE('diagnostics/hdr-button-r20/package/dxgi.dll'); d={x.dll:[y.name for y in x.imports] for x in p.DIRECTORY_ENTRY_IMPORT}; print(d); assert b'ControlFGHDRButton_Bootstrap' in d[b'ControlFGHDRButton.dll']"
           if ($LASTEXITCODE -ne 0) { throw 'PE import validation failed' }
-      - name: R33 architecture and lifecycle policy assertions
+      - name: R35 architecture and lifecycle policy assertions
         run: |
           $ErrorActionPreference='Stop'
           $guard=Get-Content diagnostics/hdr-button-r20/src/guard.cpp -Raw
           $transition=Get-Content diagnostics/hdr-button-r20/src/transition.h -Raw
           foreach($forbidden in @('SendInput','WriteTransitionFgHold','shieldWindow','VK_LWIN','VK_LMENU','HookedUiRecomposeTag','R31_HDR_INPUT_PATH','R31A_HDR_INPUT_PATH','WriteFGSelectionRaw(0')) {
-            if($guard.Contains($forbidden)) { throw "R33 forbidden mechanism remains: $forbidden" }
+            if($guard.Contains($forbidden)) { throw "R35 forbidden mechanism remains: $forbidden" }
           }
-          foreach($required in @('DisplayConfigSetDeviceInfo','beginHdrHardReset','originalBeginHdrHardReset','HookedBeginHdrHardReset','R33_OVERLAP_RESET_REBASE','R33_HARD_RESET_CONFIRMED','PatchThreeFrameTransitionWarmup','R33_TRANSITION_POLICY','R33_FG_REARM_WAIT','kRvaBridgeGeneration = 0xABD50','kRvaSettledBridgeGeneration = 0xABBF0','kRvaHdrHardResetResetBridgeGeneration = 0xABC58','failure_unwind_restore_saved_selection','HDR_BUTTON_FG_RESUMED')) {
-            if(-not $guard.Contains($required)) { throw "R33 required lifecycle mechanism missing: $required" }
+          foreach($required in @('DisplayConfigSetDeviceInfo','beginHdrHardReset','originalBeginHdrHardReset','HookedBeginHdrHardReset','R35_OVERLAP_RESET_REBASE','R35_HARD_RESET_CONFIRMED','PatchTwelveFrameTransitionWarmup','R35_TRANSITION_POLICY','R35_FG_REARM_WAIT','kRvaBridgeGeneration = 0xABD50','kRvaSettledBridgeGeneration = 0xABBF0','kRvaHdrHardResetResetBridgeGeneration = 0xABC58','failure_unwind_restore_saved_selection','HDR_BUTTON_FG_RESUMED')) {
+            if(-not $guard.Contains($required)) { throw "R35 required lifecycle mechanism missing: $required" }
           }
-          foreach($required in @('kTransitionTimeoutMs = 60000','kFreshDomainFramesRequired = 3','ThirtySecondStallIsSafe')) {
-            if(-not $transition.Contains($required)) { throw "R33 transition contract missing: $required" }
+          foreach($required in @('kTransitionTimeoutMs = 60000','kFreshDomainFramesRequired = 12','ThirtySecondStallIsSafe')) {
+            if(-not $transition.Contains($required)) { throw "R35 transition contract missing: $required" }
           }
           @'
           import pefile
@@ -58,10 +58,10 @@ jobs:
               off=p.get_offset_from_rva(rva)
               actual=image[off:off+len(expected)]
               assert actual==expected,(hex(rva),actual.hex(),expected.hex())
-          print('PASS R33 hard-reset and three-frame patch signatures')
+          print('PASS R35 hard-reset and twelve-frame patch signatures')
           '@ | python -
-          if ($LASTEXITCODE -ne 0) { throw 'R33 binary signature validation failed' }
-          Write-Host 'PASS R33 policy: full recomposition preserved; each opposite unsettled display transition starts a new hard-reset serial and re-frees DLSS-G resources.'
+          if ($LASTEXITCODE -ne 0) { throw 'R35 binary signature validation failed' }
+          Write-Host 'PASS R35 policy: R33 full recomposition and overlap protection retained; FG rearm delayed until twelve fresh post-transition frames.'
       - name: Compile MSVC Release
         run: |
           cmake -S diagnostics/hdr-button-r20 -B diagnostics/hdr-button-r20/build -A x64
@@ -87,43 +87,39 @@ jobs:
       - name: Add test notes
         run: |
           @'
-          CONTROL FG RTX50 HDR OVERLAP REFREE R33 TEST
+          CONTROL FG RTX50 HDR STABLE WARMUP R35 TEST
 
-          R33 keeps the original full-quality HUDless + UI-alpha recomposition path from R32.
+          R35 is based on the R33 full-quality path. The R34 forced recomposition-slot rebuild has been removed.
 
-          The R32 failure log showed one abnormal transition:
-          - the render/AA path stopped for 1,084 Presents;
-          - the display crossed HDR generation 5 -> 6 -> 7 while hard-reset serial 4 remained active;
-          - DLSS-G resources were freed only at generation 5;
-          - generation 7 later re-armed from that old reset and the extreme ghosting returned.
+          R34's failure log disproved the stale-slot theory:
+          - all three destination recomposition slots were recreated after every live SDR/HDR switch;
+          - the extreme ghosting still occurred and visual quality became worse.
 
-          R33 adds one lifecycle rule:
-          if an opposite SDR/HDR transition begins while the prior hard reset is still stage 2 and its display generation has not settled, R33 resets that completed reset to stage 0 before the core handles the new resize. The core then starts a NEW hard-reset serial and performs a NEW slFreeResources(DLSS-G) on the Present/resize path.
+          The repeatable timing problem is that Control's first two AA frames after every live HDR/SDR switch report Reset=1. R32/R33/R34 considered the domain settled after only three fresh frames, so the third frame was the first Reset=0 frame and FG was re-enabled immediately on the following Present.
 
-          This means a reset is no longer allowed to span multiple display-domain switches.
+          R35 keeps FG disabled for twelve fresh destination-domain AA/recomposition frames before rearm. This leaves roughly ten contiguous frames after Control's observed two reset frames for DLSS/DLSS-G/recomposition history to stabilize before interpolation resumes.
 
-          R32 behavior retained:
-          - user FG selection stays unchanged;
-          - real DLSS-G hard free before domain change;
-          - full HDR/SDR recomposition;
-          - three fresh recomposition frames before rearm;
+          Retained:
+          - original HUDless + UI-alpha recomposition quality path;
+          - user FG selection remains unchanged;
+          - real slFreeResources(DLSS-G) hard teardown;
+          - R33 opposite/unsettled transition refree protection;
           - no final-color-only fallback;
+          - no forced recomposition-slot invalidation;
           - no gray shield;
           - no Win+Alt+B injection.
 
-          On an overlapping recovery, expect:
-          R33_OVERLAP_RESET_REBASE
-          FG_HDR_HARD_RESET_BEGIN ... serial=<new serial>
-          FG_HDR_HARD_RESET_FREE ... frees=<incremented>
-          FG_HDR_TRANSITION_SETTLED ... fresh_frames=3
+          Expected:
+          FG_HDR_TRANSITION_GATE ... required_frames=12
+          FG_HDR_TRANSITION_SETTLED ... fresh_frames=12
           HDR_BUTTON_FG_RESUMED
 
-          Test repeated SDR <-> HDR switching at 2x, including at least 5 HDR re-enables.
-          '@ | Set-Content diagnostics/hdr-button-r20/package/HDR-BUTTON-R33-TEST.txt -Encoding UTF8
+          Test repeated SDR <-> HDR switching at 2x and verify Jesse + HUD remain clean after both directions.
+          '@ | Set-Content diagnostics/hdr-button-r20/package/HDR-BUTTON-R35-TEST.txt -Encoding UTF8
       - name: Upload diagnostic
         uses: actions/upload-artifact@v4
         with:
-          name: Control-FG-RTX50-HDR-Overlap-Refree-R33
+          name: Control-FG-RTX50-HDR-Stable-Warmup-R35
           path: diagnostics/hdr-button-r20/package/
           retention-days: 7
           if-no-files-found: error
