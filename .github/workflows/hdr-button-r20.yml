@@ -1,7 +1,7 @@
-name: HDR Single Owner R30 Windows build
+name: HDR Full Recompose Reset R32 Windows build
 on:
   push:
-    branches: ['diag/rtx50-hdr-single-owner-r30']
+    branches: ['diag/rtx50-hdr-full-recompose-reset-r32']
   workflow_dispatch:
 permissions:
   contents: read
@@ -28,20 +28,40 @@ jobs:
           python -m pip -q install pefile
           python -c "import pefile; p=pefile.PE('diagnostics/hdr-button-r20/package/dxgi.dll'); d={x.dll:[y.name for y in x.imports] for x in p.DIRECTORY_ENTRY_IMPORT}; print(d); assert b'ControlFGHDRButton_Bootstrap' in d[b'ControlFGHDRButton.dll']"
           if ($LASTEXITCODE -ne 0) { throw 'PE import validation failed' }
-      - name: R30 architecture policy assertions
+      - name: R32 architecture and lifecycle policy assertions
         run: |
           $ErrorActionPreference='Stop'
           $guard=Get-Content diagnostics/hdr-button-r20/src/guard.cpp -Raw
           $transition=Get-Content diagnostics/hdr-button-r20/src/transition.h -Raw
-          foreach($forbidden in @('SendInput','WriteTransitionFgHold','shieldWindow','beginHdrHardReset','VK_LWIN','VK_LMENU')) {
-            if($guard.Contains($forbidden)) { throw "R30 forbidden legacy mechanism remains: $forbidden" }
+          foreach($forbidden in @('SendInput','WriteTransitionFgHold','shieldWindow','VK_LWIN','VK_LMENU','HookedUiRecomposeTag','R31_HDR_INPUT_PATH','R31A_HDR_INPUT_PATH','WriteFGSelectionRaw(0')) {
+            if($guard.Contains($forbidden)) { throw "R32 forbidden mechanism remains: $forbidden" }
           }
-          foreach($required in @('DisplayConfigSetDeviceInfo','WriteFGSelectionRaw(0','FailTransitionAndRestoreFG','failure_unwind_restore_saved_selection','HDR_BUTTON_FG_RESUMED')) {
-            if(-not $guard.Contains($required)) { throw "R30 required mechanism missing: $required" }
+          foreach($required in @('DisplayConfigSetDeviceInfo','beginHdrHardReset','r32_button_pre_domain','R32_HARD_RESET_CONFIRMED','PatchThreeFrameTransitionWarmup','R32_TRANSITION_POLICY','R32_FG_REARM_WAIT','failure_unwind_restore_saved_selection','HDR_BUTTON_FG_RESUMED')) {
+            if(-not $guard.Contains($required)) { throw "R32 required lifecycle mechanism missing: $required" }
           }
-          if(-not $transition.Contains('kTransitionTimeoutMs = 60000')) { throw 'R30 timeout contract missing' }
-          if(-not $transition.Contains('ThirtySecondStallIsSafe')) { throw 'R30 30-second stall contract missing' }
-          Write-Host 'PASS R30 policy: direct HDR API, actual FG Off, no hotkey injection, no sidecar hold, no shield, fail-open restore.'
+          foreach($required in @('kTransitionTimeoutMs = 60000','kFreshDomainFramesRequired = 3','ThirtySecondStallIsSafe')) {
+            if(-not $transition.Contains($required)) { throw "R32 transition contract missing: $required" }
+          }
+          @'
+          import pefile
+          p=pefile.PE('diagnostics/hdr-button-r20/package/dxgi.dll')
+          image=bytes(p.__data__)
+          checks={
+              0x0CDC0: bytes.fromhex('48 89 6C 24 20 56 48 83 EC 30'),
+              0x414B4: bytes.fromhex('83 F9 02'),
+              0x41513: bytes.fromhex('C7 44 24 20 02 00 00 00'),
+              0x41569: bytes.fromhex('41 83 FE 02'),
+              0x4169B: bytes.fromhex('83 F9 02'),
+              0x41742: bytes.fromhex('41 83 FF 02'),
+          }
+          for rva,expected in checks.items():
+              off=p.get_offset_from_rva(rva)
+              actual=image[off:off+len(expected)]
+              assert actual==expected,(hex(rva),actual.hex(),expected.hex())
+          print('PASS R32 hard-reset and three-frame patch signatures')
+          '@ | python -
+          if ($LASTEXITCODE -ne 0) { throw 'R32 binary signature validation failed' }
+          Write-Host 'PASS R32 policy: full recomposition preserved, true DLSS-G hard free before domain switch, three fresh frames before rearm.'
       - name: Compile MSVC Release
         run: |
           cmake -S diagnostics/hdr-button-r20 -B diagnostics/hdr-button-r20/build -A x64
@@ -67,28 +87,36 @@ jobs:
       - name: Add test notes
         run: |
           @'
-          CONTROL FG RTX50 HDR BUTTON R30 TEST
+          CONTROL FG RTX50 HDR FULL RECOMPOSITION RESET R32 TEST
 
-          Open the F10 overlay. A new HDR ON / HDR OFF button appears in the HDR status column near the top of the F10 overlay.
+          R32 restores the original full-quality HDR/SDR FG path. It does NOT use the R31/R31A final-color-only diagnostic path.
 
-          Clicking it performs:
-          1. save the user's current FG selection;
-          2. change the actual FG selection to Off and wait until DLSS-G reports API Off;
-          3. toggle Windows HDR directly with DisplayConfigSetDeviceInfo (no Win+Alt+B injection);
-          4. apply Control's native HDR state and let the existing core own the swap-chain/bridge transition;
-          5. wait for the requested Windows + Control + bridge domain and two fresh AA/render frames;
-          6. restore the exact saved FG selection and confirm DLSS-G re-engages.
+          Live SDR/HDR transition sequence:
+          1. keep the user's selected FG mode unchanged (for example 2x);
+          2. invoke Control FG's existing DLSS-G hard reset while that selection is still active;
+          3. wait for DLSS-G API Off plus a confirmed slFreeResources completion;
+          4. switch Windows HDR directly and apply Control's native HDR state;
+          5. keep the original HUDless + UI-alpha recomposition path enabled;
+          6. require three fresh new-domain render/recomposition frames, matching the three-slot ring;
+          7. let the existing core re-arm the unchanged FG selection.
 
-          There is no gray/black shield and no sidecar FG hold in R30.
-          A 30-second render stall is explicitly below the 60-second transition timeout.
-          Any failure path immediately restores the saved FG selection instead of latching FG Off.
+          Steady-state SDR and steady-state HDR recomposition behavior are unchanged from the original quality path.
+          There is no gray/black shield, no Win+Alt+B injection, no final-color-only quality fallback, and no user-selection mutation.
 
-          RTX50 diagnostic only. The original v2 HUD/UI recomposition path is unchanged.
-          '@ | Set-Content diagnostics/hdr-button-r20/package/HDR-BUTTON-R30-TEST.txt -Encoding UTF8
+          Expected transition evidence:
+          R32_HARD_RESET_REQUEST
+          SL_FREE_RESOURCES ... feature=DLSS_G ... result=0
+          R32_HARD_RESET_CONFIRMED ... freed_delta=1
+          FG_HDR_TRANSITION_FRESH ... required_frames=3
+          FG_HDR_TRANSITION_SETTLED
+          HDR_BUTTON_FG_RESUMED
+
+          Test 2x FG with SDR -> HDR, move the camera and inspect Jesse/HUD, then HDR -> SDR and repeat.
+          '@ | Set-Content diagnostics/hdr-button-r20/package/HDR-BUTTON-R32-TEST.txt -Encoding UTF8
       - name: Upload diagnostic
         uses: actions/upload-artifact@v4
         with:
-          name: Control-FG-RTX50-HDR-Single-Owner-R30
+          name: Control-FG-RTX50-HDR-Full-Recompose-Reset-R32
           path: diagnostics/hdr-button-r20/package/
           retention-days: 7
           if-no-files-found: error
