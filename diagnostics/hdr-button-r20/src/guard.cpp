@@ -21,7 +21,6 @@ using namespace hdrbutton;
 static HMODULE selfModule{};
 static unsigned char* core{};
 static void (*originalFrame)(){};
-static bool (*beginHdrHardReset)(uint64_t,const char*){};
 static HANDLE logFile=INVALID_HANDLE_VALUE;
 static SRWLOCK logLock=SRWLOCK_INIT;
 static SRWLOCK stateLock=SRWLOCK_INIT;
@@ -45,18 +44,36 @@ static HMODULE gameD3d{};
 static GameHdrGet gameHdrGet{};
 static GameHdrDisplayFn gameHdrDisplay{};
 static GameHdrSettingsFn gameHdrSettings{};
+static GameHdrSettingsFn originalGameHdrSettings{};
 static std::atomic<bool> gameHdrControlReady{false};
+static std::atomic<bool> protectGameHdr{false};
 static std::atomic<int> pendingGameHdrSet{-1};
-static std::atomic<bool> systemToggleSent{false};
+static std::atomic<bool> systemSetAttempted{false};
 static std::atomic<bool> gameSetAttempted{false};
+static std::atomic<bool> gameSetCompleted{false};
+static std::atomic<bool> gameSetSucceeded{false};
 static std::atomic<bool> lastGameHdr{false};
 static std::atomic<bool> lastSystemHdr{false};
 static std::atomic<bool> lastBridgeHdr{false};
 static std::atomic<HWND> transitionGameWindow{nullptr};
 
-static void WriteTransitionFgHold(bool enabled) noexcept {
+static constexpr size_t kRvaFgSelection = 0xAA0A0;
+static constexpr size_t kRvaAaCounter = 0xAB7B0;
+static constexpr size_t kRvaPresentCounter = 0xAB7B8;
+static constexpr size_t kRvaFgEnabledByApi = 0xAB9D0;
+static constexpr size_t kRvaFgGeneratedSamples = 0xABB28;
+static constexpr size_t kRvaHdrBridgeActive = 0xABCF0;
+
+static unsigned int ReadFGSelectionRaw() noexcept {
+    return core ? static_cast<unsigned int>(InterlockedCompareExchange(
+        reinterpret_cast<volatile LONG*>(core+kRvaFgSelection),0,0)) : 0u;
+}
+
+static void WriteFGSelectionRaw(unsigned int selection,const char* reason) noexcept {
     if(!core)return;
-    InterlockedExchange(reinterpret_cast<volatile LONG*>(core+0xABC98),enabled?1:0);
+    const unsigned int previous=static_cast<unsigned int>(InterlockedExchange(
+        reinterpret_cast<volatile LONG*>(core+kRvaFgSelection),static_cast<LONG>(selection)));
+    Log("HDR_BUTTON_FG_SELECTION_WRITE previous=%u target=%u reason=%s persisted=0",previous,selection,reason?reason:"none");
 }
 
 static bool ReadGameHdr(bool& value) noexcept {
