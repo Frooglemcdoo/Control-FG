@@ -629,7 +629,7 @@ static void PaintFGOverlay(HWND hwnd) noexcept {
         DrawTextW(dc,L"75% - Tighter",-1,&hi,DT_RIGHT|DT_SINGLELINE);
         DrawTextW(dc,L"Default: 60%",-1,&def,DT_CENTER|DT_SINGLELINE);
         wchar_t status[180]{};
-        swprintf_s(status,L"Last RR: %u%%%s. Applies live while dragging; saves automatically.",control_rr_clamp::effective.load(),control_rr_clamp::applied.load()?L"":L" (native fallback)");
+        swprintf_s(status,L"Last RR: %u%%%s. Release to apply. Saves automatically.",control_rr_clamp::effective.load(),control_rr_clamp::applied.load()?L"":L" (native fallback)");
         RECT help{30,330,710,375}; DrawTextW(dc,status,-1,&help,DT_LEFT|DT_WORDBREAK);
         SelectObject(dc,buttonFont);
         PaintFGButton(dc,RECT{550,410,710,460},L"Back",false);
@@ -899,11 +899,8 @@ static LRESULT CALLBACK FGOverlayWndProc(HWND hwnd, UINT message, WPARAM wParam,
         if (fgOverlayRRSettingsPage) {
             if (x >= 24 && x <= 506 && y >= 220 && y < 270) {
                 fgOverlayClampPreview=FGOverlayClampFromX(x);
-                control_rr_clamp::Select(fgOverlayClampPreview);
                 fgOverlayClampDragging=true;
-                FGOverlayMarkSettingsDirty();
                 SetCapture(hwnd);
-                Log("RR_CLAMP_SLIDER_CS5 action=begin selected=%u apply=live",fgOverlayClampPreview);
             } else if (x >= 530 && x < 710 && y >= 220 && y < 270) {
                 fgOverlayClampPreview=60;
                 control_rr_clamp::Select(60);
@@ -1019,8 +1016,6 @@ static LRESULT CALLBACK FGOverlayWndProc(HWND hwnd, UINT message, WPARAM wParam,
     case WM_MOUSEMOVE:
         if(fgOverlayClampDragging){
             fgOverlayClampPreview=FGOverlayClampFromX(static_cast<short>(LOWORD(lParam)));
-            control_rr_clamp::Select(fgOverlayClampPreview);
-            FGOverlayMarkSettingsDirty();
             InvalidateRect(hwnd,nullptr,FALSE);return 0;
         }
         if (fgOverlaySliderDragging && !IsFGDynamicSelection(GetFGUserMultiplier())) {
@@ -1036,12 +1031,11 @@ static LRESULT CALLBACK FGOverlayWndProc(HWND hwnd, UINT message, WPARAM wParam,
     case WM_LBUTTONUP:
         if(fgOverlayClampDragging){
             fgOverlayClampPreview=FGOverlayClampFromX(static_cast<short>(LOWORD(lParam)));
-            control_rr_clamp::Select(fgOverlayClampPreview);
             fgOverlayClampDragging=false;
+            control_rr_clamp::Select(fgOverlayClampPreview);
             FGOverlayMarkSettingsDirty();FGOverlayFlushSettingsIfDue(true);
             if(GetCapture()==hwnd)ReleaseCapture();
-            Log("RR_CLAMP_SLIDER_CS5 action=end selected=%u requested=%u apply=live saved=%u",
-                fgOverlayClampPreview,control_rr_clamp::Requested(),unsigned(!fgOverlaySettingsDirty));
+            Log("RR_CLAMP_SLIDER_CS4 selected=%u",fgOverlayClampPreview);
             InvalidateRect(hwnd,nullptr,FALSE);return 0;
         }
         if (fgOverlaySliderDragging) {
@@ -1053,15 +1047,7 @@ static LRESULT CALLBACK FGOverlayWndProc(HWND hwnd, UINT message, WPARAM wParam,
         }
         break;
     case WM_CAPTURECHANGED:
-        if(fgOverlayClampDragging){
-            fgOverlayClampDragging=false;
-            control_rr_clamp::Select(fgOverlayClampPreview);
-            FGOverlayMarkSettingsDirty();
-            FGOverlayFlushSettingsIfDue(true);
-            Log("RR_CLAMP_SLIDER_CS5 action=capture_lost selected=%u requested=%u apply=live saved=%u",
-                fgOverlayClampPreview,control_rr_clamp::Requested(),unsigned(!fgOverlaySettingsDirty));
-            InvalidateRect(hwnd,nullptr,FALSE);
-        }
+        fgOverlayClampDragging=false;
         fgOverlaySliderDragging = false;
         break;
     case WM_CLOSE:
