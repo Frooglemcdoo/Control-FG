@@ -81,7 +81,7 @@ try {
                 break
             }
         }
-        if ($null -eq $matchedTarget) { throw 'Unsupported or changed Control build. Steam and Epic targets are exact-triple locked.' }
+        if ($null -eq $matchedTarget) { throw 'Unsupported or changed Control build. Steam, Epic and GOG targets are exact-triple locked.' }
         Write-Host ('Detected supported Control target: ' + $matchedTarget.Name + ' (' + $matchedTarget.Build + ')')
     } else {
         foreach ($file in $manifest.RequiredFiles) {
