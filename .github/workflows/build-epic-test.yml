@@ -1,0 +1,108 @@
+name: Build Epic compatibility test
+
+on:
+  push:
+    branches:
+      - epic-storefront-compat
+    paths:
+      - ".github/workflows/build-epic-test.yml"
+      - "docs/EPIC_COMPAT.md"
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download exact v2.1.0 drop-in
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -L --fail --retry 3             "https://github.com/Frooglemcdoo/Control-FG/releases/download/v2.1.0/Control-FG-v2.1.0-DropIn.zip"             -o base.zip
+          echo "c03d809c02dfdd3e5ac0f5c6427a98cd1091ac2eec8c0da1a704b2c0bf722f39  base.zip" | sha256sum -c -
+          mkdir pkg
+          unzip -q base.zip -d pkg
+          test -f pkg/dxgi.dll
+
+      - name: Patch target identity gates for Epic 0.0.518.2177
+        shell: python
+        run: |
+          from pathlib import Path
+
+          path = Path("pkg/dxgi.dll")
+          data = path.read_bytes()
+          patches = {
+              b"9441DB3AE75B267ABD989846AD0895E3FE24ABCC0F06E58F93C34FC8D4736506":
+              b"E1D11616941FAD767B20CD0FB1AB442771A912FF34EF404B5FB95136F53B6175",
+              b"CCEB99CBD9C019AF907C24C44701A53C8D230965C1FB31C325233E4C80214AA5":
+              b"EB598AAD837AF7B42305EB24D5F026AF416D46F055BDC5A2DA063BB99E6ABFC1",
+              b"EBFB5B47CEBC2D4482E912B8090BD343F717BAB8A178B5A6385DEC9105E7C433":
+              b"85BAAF7026AFF1403ABAD6F497441963CE2F6012E9B84D462FED972E42723C6E",
+          }
+          for old, new in patches.items():
+              count = data.count(old)
+              if count != 1:
+                  raise SystemExit(f"Expected exactly one occurrence of {old.decode()}, found {count}")
+              data = data.replace(old, new)
+          path.write_bytes(data)
+
+          # Re-open and prove all old identities are gone and all Epic identities exist once.
+          check = path.read_bytes()
+          for old, new in patches.items():
+              assert check.count(old) == 0
+              assert check.count(new) == 1
+
+      - name: Add test notes
+        shell: bash
+        run: |
+          cat > pkg/EPIC-TEST-R1.txt <<'EOF'
+          Control FG v2.1.0 - Epic Games Store Compatibility Test R1
+
+          Target:
+            Control Epic Games Store
+            File version: 0.0.518.2177
+
+          Epic binary identities:
+            Control_DX12.exe
+              E1D11616941FAD767B20CD0FB1AB442771A912FF34EF404B5FB95136F53B6175
+            d3d_rmdwin10_f.dll
+              EB598AAD837AF7B42305EB24D5F026AF416D46F055BDC5A2DA063BB99E6ABFC1
+            renderer_rmdwin10_f.dll
+              85BAAF7026AFF1403ABAD6F497441963CE2F6012E9B84D462FED972E42723C6E
+
+          This test build changes ONLY the three target SHA-256 identity gates in
+          the published v2.1.0 dxgi.dll. No renderer/D3D RVAs or hook logic were
+          changed.
+
+          Static compatibility evidence before packaging:
+            - 29/29 Steam D3D machine-code checks matched Epic at the same RVAs.
+            - 12/12 Steam renderer machine-code checks matched Epic at the same RVAs.
+            - Native NGX evaluation export RVA matched (0x52A20).
+            - NativeTexture destructor export RVA matched (0x3A3E0).
+            - NativeTexture copyRegion export RVA matched (0x3D190).
+
+          Install:
+            Copy dxgi.dll and the complete ControlFGStreamline folder beside the
+            Epic Control_DX12.exe, just like the Steam drop-in.
+
+          This is a test build. If Control does not launch, remove dxgi.dll and
+          ControlFGStreamline and report the startup log/crash behavior.
+          EOF
+
+      - name: Package
+        shell: bash
+        run: |
+          set -euo pipefail
+          (cd pkg && zip -qr ../Control-FG-v2.1.0-Epic-Test-R1.zip .)
+          sha256sum Control-FG-v2.1.0-Epic-Test-R1.zip | tee Control-FG-v2.1.0-Epic-Test-R1.sha256
+
+      - name: Upload Epic test package
+        uses: actions/upload-artifact@v4
+        with:
+          name: Control-FG-v2.1.0-Epic-Test-R1
+          path: |
+            Control-FG-v2.1.0-Epic-Test-R1.zip
+            Control-FG-v2.1.0-Epic-Test-R1.sha256
+          if-no-files-found: error
+          retention-days: 7
