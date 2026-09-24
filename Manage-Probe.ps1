@@ -17,7 +17,7 @@ try {
     if (Test-Path -LiteralPath $receiptPath) { $receipt = Get-Content -LiteralPath $receiptPath -Raw | ConvertFrom-Json }
     if (-not $GamePath -and $receipt) { $GamePath = $receipt.GamePath }
     if (-not $GamePath) {
-        Write-Host 'Steam > Control > Properties > Installed Files > Browse.'
+        Write-Host 'Browse to the Control install folder from Steam or Epic Games Store.'
         $GamePath = Read-Host 'Paste the folder containing Control_DX12.exe'
     }
     $GamePath = (Resolve-Path -LiteralPath $GamePath.Trim().Trim('"')).ProviderPath
@@ -65,9 +65,29 @@ try {
     if ($proxyHash -ne $validation.SHA256 -or $validation.AbiCheck -ne 'Passed') { throw 'The proxy DLL does not match its validated build. Run Build.cmd again.' }
 
     $manifest = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'target-manifest.json') -Raw | ConvertFrom-Json
-    foreach ($file in $manifest.RequiredFiles) {
-        $path = Join-Path $GamePath $file.Name
-        if (-not (Test-Path -LiteralPath $path) -or (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash -ne $file.SHA256) { throw ('Unsupported or changed game file: ' + $file.Name) }
+    $matchedTarget = $null
+    if ($manifest.PSObject.Properties.Name -contains 'SupportedTargets') {
+        foreach ($target in @($manifest.SupportedTargets)) {
+            $targetMatches = $true
+            foreach ($file in @($target.RequiredFiles)) {
+                $path = Join-Path $GamePath $file.Name
+                if (-not (Test-Path -LiteralPath $path) -or (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash -ne $file.SHA256) {
+                    $targetMatches = $false
+                    break
+                }
+            }
+            if ($targetMatches) {
+                $matchedTarget = $target
+                break
+            }
+        }
+        if ($null -eq $matchedTarget) { throw 'Unsupported or changed Control build. Steam and Epic targets are exact-triple locked.' }
+        Write-Host ('Detected supported Control target: ' + $matchedTarget.Name + ' (' + $matchedTarget.Build + ')')
+    } else {
+        foreach ($file in $manifest.RequiredFiles) {
+            $path = Join-Path $GamePath $file.Name
+            if (-not (Test-Path -LiteralPath $path) -or (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash -ne $file.SHA256) { throw ('Unsupported or changed game file: ' + $file.Name) }
+        }
     }
 
     $sdkRoot = Join-Path $PSScriptRoot 'third_party\streamline'
@@ -99,6 +119,7 @@ try {
         DLSSGGenerationEnabled = $true
         DLSSGGeneratedFramesRequested = 3
         TargetMultiplier = '4x'
+        GameTarget = if ($matchedTarget) { [string]$matchedTarget.Name } else { 'Steam legacy manifest' }
         InstalledUtc = [DateTime]::UtcNow.ToString('o')
         Files = @($planned | ForEach-Object { [ordered]@{ RelativePath = $_.RelativePath; SHA256 = $_.SHA256 } })
     } | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $receiptPath -Encoding UTF8
