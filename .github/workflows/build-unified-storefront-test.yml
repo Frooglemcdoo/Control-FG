@@ -49,6 +49,15 @@ jobs:
             }
           }
           $j | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $path -Encoding UTF8
+
+          # The checkpoint is part of the source-integrity manifest, so refresh
+          # its SHA after this workflow-owned evidence update.
+          $sourceManifestPath = 'SOURCE-SHA256.json'
+          $sourceManifest = Get-Content -LiteralPath $sourceManifestPath -Raw | ConvertFrom-Json
+          $checkpointHash = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()
+          $sourceManifest.PSObject.Properties[$path].Value = $checkpointHash
+          $sourceManifest | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $sourceManifestPath -Encoding UTF8
+
           Write-Host 'Updated compatibility-owned checkpoint paths:'
           foreach ($rel in $changed) { Write-Host $rel (Get-FileHash $rel -Algorithm SHA256).Hash }
 
