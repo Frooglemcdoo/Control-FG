@@ -143,6 +143,25 @@
           "SHA256": "85BAAF7026AFF1403ABAD6F497441963CE2F6012E9B84D462FED972E42723C6E"
         }
       ]
+    },
+    {
+      "Name": "GOG",
+      "Storefront": "GOG",
+      "Build": "exe-57A8912F",
+      "RequiredFiles": [
+        {
+          "Name": "Control_DX12.exe",
+          "SHA256": "57A8912F1FD839E99162AED2536914DEE01FF298938132354DA579ADC690E91E"
+        },
+        {
+          "Name": "d3d_rmdwin10_f.dll",
+          "SHA256": "CCEB99CBD9C019AF907C24C44701A53C8D230965C1FB31C325233E4C80214AA5"
+        },
+        {
+          "Name": "renderer_rmdwin10_f.dll",
+          "SHA256": "EBFB5B47CEBC2D4482E912B8090BD343F717BAB8A178B5A6385DEC9105E7C433"
+        }
+      ]
     }
   ]
 }
