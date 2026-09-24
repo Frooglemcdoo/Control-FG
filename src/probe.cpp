@@ -147,7 +147,7 @@ static void OpenLog() {
     const DWORD verboseLength=GetEnvironmentVariableW(L"CONTROLFG_VERBOSE_LOG",verbose,_countof(verbose));
     verboseAuditLogging=verboseLength>0 && verboseLength<_countof(verbose) && verbose[0]!=L'0';
     QueryPerformanceFrequency(&frequency);
-    Log("PROBE v2.0.0 internal_build=2.0.0-Clean-Native-R12-MFG-Dynamic-Test source_revision=clean-v2-native-source-r12-mfg-dynamic-test target_steam_build=21225456 frequency=%lld log_profile=%s",frequency.QuadPart,verboseAuditLogging?"verbose_audit":"release_support");
+    Log("PROBE v2.0.0 internal_build=2.0.0-Clean-Native-R12-MFG-Dynamic-Test source_revision=clean-v2-native-source-r12-mfg-dynamic-test supported_targets=steam_21225456,epic_0.0.518.2177 frequency=%lld log_profile=%s",frequency.QuadPart,verboseAuditLogging?"verbose_audit":"release_support");
     Log("CAPABILITIES fg=fixed_2x_to_6x_plus_dynamic rr=models_E_F_default_F hdr10_bridge=1 rr_guides=gbuffer_material_envbrdf rr_hit_distance=off rr_specular_mvec=off rr_diagnostic_readbacks=off streamline_sdk=2.14.1");
     Log("MONITORING profile=%s rr_perf_sample=240 support_events=startup_settings_fg_rr_model_resize_recovery_failures_fallbacks_performance verbose_env=CONTROLFG_VERBOSE_LOG",verboseAuditLogging?"verbose_audit":"release_support");
 }
@@ -888,10 +888,19 @@ static BOOL CALLBACK Configure(PINIT_ONCE, PVOID, PVOID*) noexcept {
         auto d3d = GetModuleHandleW(L"d3d_rmdwin10_f.dll");
         auto renderer = GetModuleHandleW(L"renderer_rmdwin10_f.dll");
         if (!exe || !d3d || !renderer) { Log("PROBE_DISABLED required_module_missing"); return TRUE; }
-        if (!HashMatches(exe, kExeHash) || !HashMatches(d3d, kD3dHash) || !HashMatches(renderer, kRendererHash)) {
+        const bool steamTarget =
+            HashMatches(exe, kExeHash) &&
+            HashMatches(d3d, kD3dHash) &&
+            HashMatches(renderer, kRendererHash);
+        const bool epicTarget = !steamTarget &&
+            HashMatches(exe, kEpicExeHash) &&
+            HashMatches(d3d, kEpicD3dHash) &&
+            HashMatches(renderer, kEpicRendererHash);
+        if (!steamTarget && !epicTarget) {
             Log("PROBE_DISABLED target_hash_mismatch_or_file_unreadable"); return TRUE;
         }
-        Log("TARGET_HASHES_MATCH");
+        const char* targetLabel = steamTarget ? kSteamTargetLabel : kEpicTargetLabel;
+        Log("TARGET_HASHES_MATCH storefront=%s", targetLabel);
         verifiedD3d = d3d;
         verifiedRenderer = renderer;
         if (!ResolveSemanticGetters(d3d)) {
