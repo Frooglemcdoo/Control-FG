@@ -1,0 +1,39 @@
+{
+  "status": "LOCAL_PASS_WINDOWS_GPU_REQUIRED",
+  "results": {
+    "normal-backend": "PASS 165 backend scenarios, including 3000 captured-frame retirements",
+    "normal-present": "PASS independent frame/Present counters, slot serial reuse, delayed signaling, exactly-once submission and fault retention",
+    "normal-windows_max": "PASS 165 backend scenarios, including 3000 captured-frame retirements",
+    "normal-hook": "PASS actual hook preserves owner, native result and LastError, calls native exactly once, propagates native exceptions",
+    "normal-factory": "PASS actual isolated factory: allocation failure, constructor exception cleanup, successful ownership",
+    "normal-budget_query": "PASS actual budget query: rendering adapter LUID, local node zero, COM cleanup, unavailable/null interfaces and injected failures",
+    "asan_ubsan-backend": "PASS 165 backend scenarios, including 3000 captured-frame retirements",
+    "asan_ubsan-present": "PASS independent frame/Present counters, slot serial reuse, delayed signaling, exactly-once submission and fault retention",
+    "asan_ubsan-windows_max": "PASS 165 backend scenarios, including 3000 captured-frame retirements",
+    "asan_ubsan-hook": "PASS actual hook preserves owner, native result and LastError, calls native exactly once, propagates native exceptions",
+    "asan_ubsan-factory": "PASS actual isolated factory: allocation failure, constructor exception cleanup, successful ownership",
+    "asan_ubsan-budget_query": "PASS actual budget query: rendering adapter LUID, local node zero, COM cleanup, unavailable/null interfaces and injected failures"
+  },
+  "sha256": {
+    "src/rr_dimensions.h": "d8c0b7308a740fb16df0e0a9d7ec794e7a7357ffc53e239df92dbb304499229c",
+    "src/rr_memory_budget.h": "387d60c2c6e5b90b20c4b5548083abbbb45e58e0ef0c6d9b905b44ef206c2cbd",
+    "src/rr_reflection_backend.h": "24f4951f30c0878065e196a982b102f1e06eaf33531376cd813c5d79a3e5ca61",
+    "src/rr_reflection_binding.h": "c2341c0eaf4b5d257f35d80177aace0a2301c3924a20a28a9057319ed4d6565f",
+    "src/rr_reflection_capture.h": "89c497339d28288ba6db207d05c015f4bd449f41244b6f121a45979bf6a09112",
+    "src/rr_reflection_d3d12.h": "10d33985c5169643b8ea8fac0023de5f544053adca20e5c2a5ffd6d0933111bd",
+    "src/rr_reflection_handoff_windows.h": "24b720a913548f2ca9dcf53f1d23249255df575de84d7e316672e8b40c30d890",
+    "src/rr_reflection_hooks.h": "2a6246214db8f467cc9407d64cc16b614114a875c844fd0a2b01c4dee53fe3fd",
+    "src/rr_reflection_present.h": "17faa2212467723eb11cae425815a108d8325a19c1536237b8ae203b5de17c45",
+    "src/rr_reflection_runtime.h": "258edb4fff12e5541b7a414cd607a2630003aff6dee3e20682604b888e58ad46",
+    "src/rr_reflection_windows_access.h": "464e5a9c899cb51692b0eb439e6048a168936cd6ccd490e3e31a383efd25a0ca",
+    "validation/reflection-backend/budget-query-test.cpp": "bcd5f46ea1164094387fa35650c7876a7430592e0369877d795751730b865be8",
+    "validation/reflection-backend/present-test.cpp": "ebff33c7e8b3378e62d37a3579701b03805daf5ef04394d59b4974e9c982f07c",
+    "validation/reflection-backend/run.py": "1dfd10d24fcca2f7258c9eac68740f565f655a5549c1cacf05a158e3fc51e18e",
+    "validation/reflection-backend/test_backend.cpp": "24b830f8302ad2225be30a21dc6359d8fe6b10bc1f133a8eee4ef23dc4c9201f",
+    "validation/reflection-backend/windows-max.cpp": "ff820f16074687547759e0ebe2ecf6b8dbd876fc225ceac5d9036192dfb799a6",
+    "validation/reflection-backend/windows_compile.cpp": "5d7fc62616690fe88db990266b4a3fb32a4120e631f5c48dfa8aa832014e99cc"
+  },
+  "windows_compiled": false,
+  "gpu_executed": false,
+  "rr_enabled": false
+}

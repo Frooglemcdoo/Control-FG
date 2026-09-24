@@ -1,0 +1,18 @@
+{
+  "status": "LOCAL_PASS_WINDOWS_REQUIRED",
+  "results": {
+    "tail-test-normal": "PASS: executed x64 tail relay 10000 times using Microsoft ABI; four arguments and return preserved; patch mismatch/range rejection",
+    "entry-test-normal": "PASS: r21y gateway forwards once; hit distance is not a guide prerequisite; getter faults, RR guards and SR recovery remain fail-closed",
+    "tail-test-asan_ubsan": "PASS: executed x64 tail relay 10000 times using Microsoft ABI; four arguments and return preserved; patch mismatch/range rejection",
+    "entry-test-asan_ubsan": "PASS: r21y gateway forwards once; hit distance is not a guide prerequisite; getter faults, RR guards and SR recovery remain fail-closed"
+  },
+  "windows_hook_execution": "NOT_RUN",
+  "rr_evaluation_enabled": true,
+  "limitations": "Host Win32 mocks do not validate Windows SEH, page permissions, installation timing, or game execution.",
+  "tested_sha256": {
+    "src/rr_evaluation_entry.h": "53994cdf24cf210bff9435d866615308936c871f94e8837ca87f9ec06a65a5e2",
+    "src/rr_evaluation_tail.h": "18fe7bf60489e145beab8b0a949b07e8a75a727f6bab623fcbd98aad9e346f9e",
+    "validation/evaluation-entry/entry-test.cpp": "148ff0701c95d61cf073001b9557efe58e2432272f8441512e0613df507dacc9",
+    "validation/evaluation-entry/tail-test.cpp": "b7ddb80426a0efbfb3c0f67046a254bbb8d5b09f4bff09cc572ed1c422037c51"
+  }
+}

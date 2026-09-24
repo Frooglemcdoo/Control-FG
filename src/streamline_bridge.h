@@ -12,6 +12,11 @@
 #include <sl_pcl.h>
 #include <sl_reflex.h>
 #include <sl_dlss_g.h>
+#include <sl_dlss_d.h>
+#include "fg_hdr_ui_policy.h"
+#include "fg_hdr_transition_policy.h"
+#include "fg_hdr_hotkey_policy.h"
+#include "fg_hdr_hard_reset_policy.h"
 
 using D3D12CreateDeviceFn = HRESULT (WINAPI*)(IUnknown*, D3D_FEATURE_LEVEL, REFIID, void**);
 using SLUpgradeInterfaceFn = sl::Result(void**);
@@ -31,14 +36,18 @@ static PFun_slGetFeatureFunction* slGetFeatureFunctionApi = nullptr;
 static PFun_slSetConstants* slSetConstantsApi = nullptr;
 static PFun_slSetTagForFrame* slSetTagForFrameApi = nullptr;
 static PFun_slGetNewFrameToken* slGetNewFrameTokenApi = nullptr;
+static PFun_slFreeResources* slFreeResourcesApi = nullptr;
 static PFun_slPCLSetMarker* slPCLSetMarkerApi = nullptr;
 static PFun_slReflexSetOptions* slReflexSetOptionsApi = nullptr;
 static PFun_slReflexSleep* slReflexSleepApi = nullptr;
 static PFun_slDLSSGSetOptions* slDLSSGSetOptionsApi = nullptr;
 static PFun_slDLSSGGetState* slDLSSGGetStateApi = nullptr;
+static PFun_slDLSSDSetOptions* slDLSSDSetOptionsApi = nullptr;
+static PFun_slDLSSDGetState* slDLSSDGetStateApi = nullptr;
+static PFun_slDLSSDGetOptimalSettings* slDLSSDGetOptimalSettingsApi = nullptr;
 static constexpr const char* kControlProjectId = "305914b8-cf5b-4535-8e53-5589bf8cefa5";
 static constexpr const char* kControlEngineVersion = "1.0";
-static const sl::Feature slFeaturesToLoad[] = { sl::kFeatureReflex, sl::kFeaturePCL, sl::kFeatureDLSS_G };
+static const sl::Feature slFeaturesToLoad[] = { sl::kFeatureReflex, sl::kFeaturePCL, sl::kFeatureDLSS_G, sl::kFeatureDLSS_RR };
 static D3D12CreateDeviceFn slOriginalD3D12CreateDevice = nullptr;
 
 // Minimal ABI-compatible subset of NGX definitions required only to augment the
@@ -74,6 +83,10 @@ static std::atomic<unsigned int> slBootstrapState{0};
 static std::atomic<unsigned int> slDeviceConfigured{0};
 static std::atomic<unsigned int> slDeviceBindAttempted{0};
 static std::atomic<unsigned int> slControlDlssReady{0};
+static std::atomic<unsigned int> slRrFeatureLoaded{0};
+static std::atomic<unsigned int> slRrFeatureSupported{0};
+static std::atomic<unsigned int> slRrFeatureSupportKnown{0};
+static std::atomic<unsigned int> slRrFunctionTableReady{0};
 static std::atomic<ID3D12Device*> slPendingNativeDevice{nullptr};
 static std::atomic<ID3D12Device*> slPrivateDeviceProxy{nullptr};
 static std::atomic<ID3D12Device*> slPrivateDeviceNativeIdentity{nullptr};
@@ -184,6 +197,85 @@ static std::atomic<unsigned int> slFgUserMultiplier{kSLDefaultMultiplier};
 static std::atomic<unsigned int> slFgAppliedGeneratedFrames{0};
 // 0=off, 1=fixed eOn, 2=native eDynamic.
 static std::atomic<unsigned int> slFgAppliedMode{0};
+static std::atomic<unsigned int> slFgAppliedUIRecomposition{0};
+// HDR/SDR transitions change the color domain presented to DLSS-G. The bridge
+// publishes a monotonically increasing generation whenever that domain changes.
+// r26 never forces sl::Constants::reset for this transition. Instead FG stays
+// off until two consecutive, fully tagged frames have been produced in the new
+// color domain. It is allowed to re-enable on the following Present, preventing
+// an SDR/HDR cross-domain frame pair from reaching interpolation.
+static std::atomic<unsigned long long> slFgHdrTransitionSettledGeneration{0};
+static std::atomic<unsigned long long> slFgHdrTransitionWarmupGeneration{~0ull};
+static std::atomic<unsigned long long> slFgHdrTransitionWarmupLastPresent{0};
+static std::atomic<unsigned int> slFgHdrTransitionWarmupFrames{0};
+static std::atomic<unsigned long long> slFgHdrTransitionForcedOffs{0};
+static std::atomic<unsigned long long> slFgHdrTransitionForcedOffFailures{0};
+static std::atomic<unsigned long long> slFgHdrTransitionQuiescePresents{0};
+static std::atomic<unsigned long long> slFgHdrTransitionQuiesceFailures{0};
+#include "fg_off_present_proof.h"
+static control_fg_off_present::Proof slFgOffPresentProof;
+// Windows Win+Alt+B changes the monitor output color space before Control reaches
+// ResizeBuffers. Track that display-domain flip at Present so DLSS-G can be
+// queued off for the very first Present after the OS transition, before any
+// later swap-chain resize reaches the HDR bridge.
+static std::atomic<unsigned int> slFgDisplayDomainKnown{0};
+static std::atomic<unsigned int> slFgDisplayHdrActive{0};
+static std::atomic<unsigned int> slFgDisplayColorSpace{0xFFFFFFFFu};
+static std::atomic<unsigned int> slFgDisplayTransitionPending{0};
+static std::atomic<unsigned long long> slFgDisplayTransitionBridgeGeneration{0};
+static std::atomic<unsigned long long> slFgDisplayObservedBridgeGeneration{0};
+static std::atomic<unsigned long long> slFgDisplayDomainChanges{0};
+static std::atomic<unsigned long long> slFgDisplayDomainForcedOffs{0};
+static std::atomic<unsigned long long> slFgDisplayDomainQueryFailures{0};
+static std::atomic<unsigned long long> slFgDisplayFactoryRefreshes{0};
+
+// r31: hard-reset DLSS-G state across HDR/SDR domain changes. r29/r30 proved
+// that trying to beat the Windows HDR switch is fragile. Instead, once either the
+// fresh-output observer or Control's resize path detects a domain transition, we
+// commit DLSS-G eOff on a real Present, explicitly release the DLSS-G viewport
+// resources with slFreeResources, invalidate all Control-FG FG/tag caches, and
+// keep FG hard-gated until Control finishes rebuilding the new presentation
+// domain and the retained two-fresh-frame warmup settles.
+using SLHdrHardResetStage = control_fg_hdr_hard_reset::Stage;
+static std::atomic<unsigned int> slFgHdrHardResetStage{static_cast<unsigned int>(SLHdrHardResetStage::Idle)};
+static std::atomic<unsigned long long> slFgHdrHardResetBridgeGeneration{0};
+static std::atomic<unsigned long long> slFgHdrHardResetSerial{0};
+static std::atomic<unsigned long long> slFgHdrHardResetStarts{0};
+static std::atomic<unsigned long long> slFgHdrHardResetResourceFrees{0};
+static std::atomic<unsigned long long> slFgHdrHardResetFailures{0};
+static std::atomic<unsigned long long> slFgHdrHardResetFreePresent{0};
+static std::atomic<unsigned long long> slFgHdrHardResetNoBridgeLastFreshPresent{0};
+static std::atomic<unsigned int> slFgHdrHardResetNoBridgeFreshFrames{0};
+static std::atomic<unsigned long long> slFgDisplayTransitionLastChangePresent{0};
+
+// r30 hotkey serialization state is retained only as dead diagnostic source for
+// comparison. r31 does not install the keyboard hook and never arms this state.
+// r30: the Windows HDR hotkey itself must be serialized ahead of DLSS-G.
+// r29 proved that even a correct, freshly enumerated output only becomes visible
+// after Windows has already changed the desktop HDR domain. When FG is active,
+// the overlay thread consumes the physical Win+Alt+B B-key event, this guard
+// queues eOff on the next real Present, and only after that Present succeeds does
+// the overlay replay the same Windows shortcut. The guard remains active until
+// the display-domain/bridge transition takes ownership.
+using SLHdrHotkeyStage = control_fg_hdr_hotkey::Stage;
+static std::atomic<unsigned int> slFgHdrHotkeyStage{static_cast<unsigned int>(SLHdrHotkeyStage::Idle)};
+static std::atomic<unsigned long long> slFgHdrHotkeyInterceptPresent{0};
+static std::atomic<unsigned long long> slFgHdrHotkeyBridgeGeneration{0};
+static std::atomic<unsigned long long> slFgHdrHotkeyIntercepts{0};
+static std::atomic<unsigned long long> slFgHdrHotkeyOffCommits{0};
+static std::atomic<unsigned long long> slFgHdrHotkeyReplays{0};
+static std::atomic<unsigned long long> slFgHdrHotkeyReplayFailures{0};
+static std::atomic<unsigned long long> slFgHdrHotkeyHandoffs{0};
+
+// DXGI explicitly documents that a swap chain's GetContainingOutput result can
+// be stale after the desktop display configuration changes. r29 therefore owns
+// a native (non-Streamline, non-HDR-wrapper) factory/output pair solely for the
+// Windows HDR-domain probe. IsCurrent() invalidates the pair and forces a fresh
+// output enumeration before GetDesc1 is sampled again.
+static SRWLOCK slFgDisplayDomainLock = SRWLOCK_INIT;
+static IDXGIFactory1* slFgDisplayDomainFactory = nullptr;
+static IDXGIOutput6* slFgDisplayDomainOutput = nullptr;
+static HMONITOR slFgDisplayDomainMonitor = nullptr;
 static std::atomic<unsigned long long> slFgMultiplierChanges{0};
 
 // Dynamic MFG target state.
@@ -372,10 +464,78 @@ static bool IsFGRtx40Series() noexcept {
            slGpuIsRtx40Series.load(std::memory_order_acquire) != 0;
 }
 
+// Read once before device binding; runtime patches cannot be safely unloaded.
+static std::atomic<unsigned int> slRtx40MfgRequested{0};
+static bool IsRTX40MFGSessionEnabled() noexcept {
+    static const bool enabled = []() noexcept {
+        wchar_t localPath[32768]{};
+        const DWORD count = GetEnvironmentVariableW(L"LOCALAPPDATA", localPath, _countof(localPath));
+        bool value = false;
+        if (count && count < _countof(localPath)) {
+            const std::wstring path = std::wstring(localPath) + L"\\ControlFG\\settings-mfg-test.ini";
+            value = GetPrivateProfileIntW(L"Experimental", L"RTX40MultiFG", 0, path.c_str()) == 1;
+        }
+        slRtx40MfgRequested.store(value ? 1u : 0u);
+        return value;
+    }();
+    return enabled;
+}
+static bool IsRTX40MFGRequested() noexcept {
+    (void)IsRTX40MFGSessionEnabled();
+    return slRtx40MfgRequested.load() != 0;
+}
+static bool IsRTX40MFGAllowedThisSession() noexcept {
+    return IsRTX40MFGSessionEnabled() && IsRTX40MFGRequested();
+}
+
+// The RTX 50 path never loads this sidecar or invokes its patch code.
+static std::atomic<unsigned int> slMfgExperimentReady{0};
+using ControlMFGPrepareFn = unsigned int (__cdecl*)();
+static ControlMFGPrepareFn slMfgExperimentPrepare = nullptr;
+static void InitializeRTX40MFGTest(ID3D12Device* device) noexcept {
+    if (!IsFGRtx40Series()) return;
+    if (!IsRTX40MFGSessionEnabled()) {
+        Log("FG_RTX40_NATIVE selected=1 experimental_patch=not_loaded max_multiplier=2");
+        return;
+    }
+    SetFGUserMultiplier(2u);
+    const std::wstring path = slRuntimeDirectory + L"\\ControlFG.RTX40MFG.dll";
+    const HMODULE module = LoadLibraryExW(path.c_str(), nullptr,
+        LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_SYSTEM32);
+    using InitFn = unsigned int (__cdecl*)(void*, const wchar_t*, const wchar_t*);
+    const auto init = module ? reinterpret_cast<InitFn>(GetProcAddress(module, "ControlFGMFGInitialize")) : nullptr;
+    const auto prepare = module ? reinterpret_cast<ControlMFGPrepareFn>(GetProcAddress(module, "ControlFGMFGPrepare")) : nullptr;
+    const bool ready = init && prepare && init(device, slRuntimeDirectory.c_str(), slLogDirectory.c_str());
+    if (ready) slMfgExperimentPrepare = prepare;
+    Log("FG_RTX40_MFG_INIT prepared=%u sidecar=%p action=%s", unsigned(ready), module,
+        ready ? "await_temporal_before_fg" : "fg_disabled_restart_required");
+}
+static bool PrepareRTX40MFGTest() noexcept {
+    if (!IsFGRtx40Series() || !IsRTX40MFGSessionEnabled()) return true;
+    const bool ready = slMfgExperimentPrepare && slMfgExperimentPrepare() != 0;
+    const unsigned previous = slMfgExperimentReady.exchange(ready ? 1u : 0u);
+    if (ready && !previous) {
+        slMfgCapabilityKnown.store(0u);
+        Log("FG_RTX40_MFG_READY temporal_verified=1 software_pacing=1 capability_refresh=1");
+    }
+    return ready;
+}
+// Observed frame counts and actual provider capabilities remain authoritative.
+static bool IsFGExperimentalMultiplier(unsigned int selection) noexcept {
+    return IsFGRtx40Series() && IsRTX40MFGAllowedThisSession() && slMfgExperimentReady.load() != 0u && selection >= 3u && selection <= 6u;
+}
+
+// RTX40 exposes native Dynamic only after both unlock and runtime capability succeed.
+static bool IsFGDynamicAllowedByGpuPolicy() noexcept {
+    return !IsFGRtx40Series() || (IsRTX40MFGAllowedThisSession() && slMfgExperimentReady.load() != 0u &&
+        IsFGDynamicCapabilityKnown() && IsFGDynamicMFGSupported());
+}
+
 static bool IsFGSelectionAllowedByGpuPolicy(unsigned int selection) noexcept {
     selection = NormalizeFGMultiplier(selection);
     if (!IsFGRtx40Series()) return true;
-    return selection == kSLSelectionOff || selection == 2u;
+    return selection == kSLSelectionOff || selection == 2u || IsFGExperimentalMultiplier(selection) ||
+        (selection == kSLSelectionDynamic && IsFGDynamicAllowedByGpuPolicy());
 }
 
 static void CacheFGGpuClassFromLuid(const LUID& luid) noexcept {
@@ -429,12 +589,13 @@ static void CacheFGGpuClassFromLuid(const LUID& luid) noexcept {
     slGpuIsRtx40Series.store(rtx40 ? 1u : 0u, std::memory_order_release);
     slGpuClassKnown.store(1u, std::memory_order_release);
     Log("FG_GPU_CLASS_DETECT success=1 adapter=%ls rtx40_series=%u policy=%s",
-        description, unsigned(rtx40), rtx40 ? "off_plus_2x_only" : "streamline_capability_driven");
+        description, unsigned(rtx40), rtx40 ? "EXPERIMENTAL_fixed_2x_to_6x_requests" : "streamline_capability_driven");
 }
 
 static constexpr unsigned int kSLTagDepth = 1u << 0;
 static constexpr unsigned int kSLTagMotionVectors = 1u << 1;
 static constexpr unsigned int kSLTagHUDLess = 1u << 2;
+static constexpr unsigned int kSLTagUIAlpha = 1u << 3;
 static constexpr unsigned int kSLRequiredTagMask = kSLTagDepth | kSLTagMotionVectors;
 
 static long long SLResultCode(sl::Result result) noexcept {
@@ -494,6 +655,7 @@ static bool TouchSLCurrentBackBufferIndex(unsigned long long present) noexcept {
     }
 
     const UINT index = chain3->GetCurrentBackBufferIndex();
+    if(FGAlignActive(present)) Log("ALIGN_INDEX present=%llu epoch=%llu swap=%p index=%u",present,fgAlignEpoch.load(),chain,index);
     chain3->Release();
     slLastBackBufferIndex.store(index, std::memory_order_release);
     ++slBackBufferIndexSuccesses;
@@ -545,7 +707,7 @@ static void InitializeStreamlineCoreAfterFactory(const char* trigger) noexcept {
         return;
     }
 
-    Log("SL_BOOTSTRAP_BEGIN trigger=%s stage=post_native_factory features_requested=3 features=reflex,pcl,dlssg", trigger ? trigger : "unknown");
+    Log("SL_BOOTSTRAP_BEGIN trigger=%s stage=post_native_factory features_requested=4 features=reflex,pcl,dlssg,dlssrr", trigger ? trigger : "unknown");
     try {
         const std::wstring modulePath = ModulePath(selfModule);
         const std::wstring gameDirectory = ParentDirectory(modulePath);
@@ -564,15 +726,15 @@ static void InitializeStreamlineCoreAfterFactory(const char* trigger) noexcept {
             std::wstring root = base + L"\\ControlFGProbe";
             CreateDirectoryW(root.c_str(), nullptr);
             wchar_t slRunName[96]{};
-            swprintf_s(slRunName, L"\\Streamline-v1.0.0-%lu", GetCurrentProcessId());
+            swprintf_s(slRunName, L"\\Streamline-v1.0.0-RR-Native-P9-%lu", GetCurrentProcessId());
             slLogDirectory = root + slRunName;
             CreateDirectoryW(slLogDirectory.c_str(), nullptr);
         }
 
         // Feature-load isolation requires only the signed production runtime pieces
-        // for common/PCL/Reflex/DLSS-G. DXGI factory/presentation is upgraded; the host device remains native, while Control's exact command-queue constructor temporarily routes through a private Streamline device proxy.
+        // for common/PCL/Reflex/DLSS-G/DLSS-RR. DXGI factory/presentation is upgraded; the host device remains native, while Control's exact command-queue constructor temporarily routes through a private Streamline device proxy.
         const wchar_t* required[] = { L"sl.interposer.dll", L"sl.common.dll", L"sl.pcl.dll",
-                                      L"sl.reflex.dll", L"sl.dlss_g.dll", L"nvngx_dlssg.dll" };
+                                      L"sl.reflex.dll", L"sl.dlss_g.dll", L"nvngx_dlssg.dll", L"sl.dlss_d.dll", L"nvngx_dlssd.dll" };
         for (const wchar_t* name : required) {
             const std::wstring path = slRuntimeDirectory + L"\\" + name;
             if (!FileExists(path)) {
@@ -612,18 +774,19 @@ static void InitializeStreamlineCoreAfterFactory(const char* trigger) noexcept {
         slSetConstantsApi = reinterpret_cast<PFun_slSetConstants*>(GetProcAddress(slInterposerModule, "slSetConstants"));
         slSetTagForFrameApi = reinterpret_cast<PFun_slSetTagForFrame*>(GetProcAddress(slInterposerModule, "slSetTagForFrame"));
         slGetNewFrameTokenApi = reinterpret_cast<PFun_slGetNewFrameToken*>(GetProcAddress(slInterposerModule, "slGetNewFrameToken"));
+        slFreeResourcesApi = reinterpret_cast<PFun_slFreeResources*>(GetProcAddress(slInterposerModule, "slFreeResources"));
         if (!slInitApi || !slSetD3DDeviceApi || !slIsFeatureSupportedApi || !slIsFeatureLoadedApi ||
             !slGetNativeInterfaceApi || !slUpgradeInterfaceApi || !slGetFeatureFunctionApi ||
-            !slSetConstantsApi || !slSetTagForFrameApi || !slGetNewFrameTokenApi) {
-            Log("SL_DISABLED stage=exports reason=required_core_export_missing slInit=%p slSetD3DDevice=%p slIsFeatureSupported=%p slIsFeatureLoaded=%p slGetNativeInterface=%p slUpgradeInterface=%p slGetFeatureFunction=%p slSetConstants=%p slSetTagForFrame=%p slGetNewFrameToken=%p",
-                slInitApi, slSetD3DDeviceApi, slIsFeatureSupportedApi, slIsFeatureLoadedApi, slGetNativeInterfaceApi, slUpgradeInterfaceApi, slGetFeatureFunctionApi, slSetConstantsApi, slSetTagForFrameApi, slGetNewFrameTokenApi);
+            !slSetConstantsApi || !slSetTagForFrameApi || !slGetNewFrameTokenApi || !slFreeResourcesApi) {
+            Log("SL_DISABLED stage=exports reason=required_core_export_missing slInit=%p slSetD3DDevice=%p slIsFeatureSupported=%p slIsFeatureLoaded=%p slGetNativeInterface=%p slUpgradeInterface=%p slGetFeatureFunction=%p slSetConstants=%p slSetTagForFrame=%p slGetNewFrameToken=%p slFreeResources=%p",
+                slInitApi, slSetD3DDeviceApi, slIsFeatureSupportedApi, slIsFeatureLoadedApi, slGetNativeInterfaceApi, slUpgradeInterfaceApi, slGetFeatureFunctionApi, slSetConstantsApi, slSetTagForFrameApi, slGetNewFrameTokenApi, slFreeResourcesApi);
             slBootstrapState.store(3);
             return;
         }
 
         slPluginPaths[0] = slRuntimeDirectory.c_str();
         slPluginPaths[1] = slGameDirectory.c_str();
-        Log("SL_NGX_SEARCH_PATHS count=2 path0=%ls path1=%ls purpose=make_dlssg_and_control_dlss_visible_before_device_bind",
+        Log("SL_NGX_SEARCH_PATHS count=2 path0=%ls path1=%ls purpose=make_dlssg_dlssrr_and_control_dlss_visible_before_device_bind",
             slPluginPaths[0], slPluginPaths[1]);
         sl::Preferences preferences{};
         preferences.logLevel = sl::LogLevel::eDefault;
@@ -644,9 +807,9 @@ static void InitializeStreamlineCoreAfterFactory(const char* trigger) noexcept {
         preferences.renderAPI = sl::RenderAPI::eD3D12;
 
         Log("SL_IDENTITY project_id=%s engine=custom engine_version=%s source=control_ngx_init_project_id", kControlProjectId, kControlEngineVersion);
-        Log("SL_INIT_BEGIN sdk=2.14.1 features_requested=3 features=reflex,pcl,dlssg trigger=%s", trigger ? trigger : "unknown");
+        Log("SL_INIT_BEGIN sdk=2.14.1 features_requested=4 features=reflex,pcl,dlssg,dlssrr trigger=%s", trigger ? trigger : "unknown");
         const sl::Result result = slInitApi(preferences, sl::kSDKVersion);
-        Log("SL_INIT_END sdk=2.14.1 result=%lld features_requested=3 runtime_dir=%ls log_dir=%ls",
+        Log("SL_INIT_END sdk=2.14.1 result=%lld features_requested=4 runtime_dir=%ls log_dir=%ls",
             SLResultCode(result), slRuntimeDirectory.c_str(), slLogDirectory.c_str());
         if (result != sl::Result::eOk) {
             Log("SL_DISABLED stage=init reason=slInit_failed result=%lld", SLResultCode(result));
@@ -654,7 +817,7 @@ static void InitializeStreamlineCoreAfterFactory(const char* trigger) noexcept {
             return;
         }
         slBootstrapState.store(2);
-        Log("SL_CORE_READY core_only=0 native_host_interfaces=1 features_requested=3 features=reflex,pcl,dlssg device_set=%u factory_upgrade=armed swapchain_upgrade=via_factory queue_hook=ready fg_activation_gate=armed", slDeviceConfigured.load());
+        Log("SL_CORE_READY core_only=0 native_host_interfaces=1 features_requested=4 features=reflex,pcl,dlssg,dlssrr device_set=%u factory_upgrade=armed swapchain_upgrade=via_factory queue_hook=ready fg_activation_gate=armed", slDeviceConfigured.load());
     } catch (...) {
         Log("SL_DISABLED stage=bootstrap reason=exception");
         slBootstrapState.store(3);
@@ -688,23 +851,42 @@ static void ProbeSLFeatureGate(const LUID& luid) noexcept {
     sl::AdapterInfo adapter{};
     adapter.deviceLUID = reinterpret_cast<uint8_t*>(const_cast<LUID*>(&luid));
     adapter.deviceLUIDSizeInBytes = sizeof(LUID);
-    bool reflexLoaded = false, pclLoaded = false, dlssgLoaded = false;
+    bool reflexLoaded = false, pclLoaded = false, dlssgLoaded = false, dlssrrLoaded = false;
     const sl::Result reflexLoadedResult = slIsFeatureLoadedApi(sl::kFeatureReflex, reflexLoaded);
     const sl::Result pclLoadedResult = slIsFeatureLoadedApi(sl::kFeaturePCL, pclLoaded);
     const sl::Result dlssgLoadedResult = slIsFeatureLoadedApi(sl::kFeatureDLSS_G, dlssgLoaded);
+    const sl::Result dlssrrLoadedResult = slIsFeatureLoadedApi(sl::kFeatureDLSS_RR, dlssrrLoaded);
     const sl::Result reflexSupportResult = slIsFeatureSupportedApi(sl::kFeatureReflex, adapter);
     const sl::Result pclSupportResult = slIsFeatureSupportedApi(sl::kFeaturePCL, adapter);
-    Log("SL_FEATURE_GATE project_id=%s reflex_loaded_result=%lld reflex_loaded=%u reflex_support_result=%lld pcl_loaded_result=%lld pcl_loaded=%u pcl_support_result=%lld dlssg_loaded_result=%lld dlssg_loaded=%u dlssg_expected_loaded=1 fg_api_enabled=%u",
+    const sl::Result dlssrrSupportResult = slIsFeatureSupportedApi(sl::kFeatureDLSS_RR, adapter);
+    slRrFeatureLoaded.store(dlssrrLoaded ? 1u : 0u, std::memory_order_release);
+    slRrFeatureSupportKnown.store(1u, std::memory_order_release);
+    slRrFeatureSupported.store(dlssrrSupportResult == sl::Result::eOk ? 1u : 0u, std::memory_order_release);
+    Log("SL_FEATURE_GATE project_id=%s reflex_loaded_result=%lld reflex_loaded=%u reflex_support_result=%lld pcl_loaded_result=%lld pcl_loaded=%u pcl_support_result=%lld dlssg_loaded_result=%lld dlssg_loaded=%u dlssg_expected_loaded=1 dlssrr_loaded_result=%lld dlssrr_loaded=%u dlssrr_support_result=%lld dlssrr_supported=%u rr_eval=disabled fg_api_enabled=%u",
         kControlProjectId,
         SLResultCode(reflexLoadedResult), unsigned(reflexLoaded), SLResultCode(reflexSupportResult),
         SLResultCode(pclLoadedResult), unsigned(pclLoaded), SLResultCode(pclSupportResult),
-        SLResultCode(dlssgLoadedResult), unsigned(dlssgLoaded), slFgEnabledByApi.load());
+        SLResultCode(dlssgLoadedResult), unsigned(dlssgLoaded),
+        SLResultCode(dlssrrLoadedResult), unsigned(dlssrrLoaded), SLResultCode(dlssrrSupportResult),
+        unsigned(dlssrrSupportResult == sl::Result::eOk), slFgEnabledByApi.load());
+    Log("SL_RR_FEATURE_GATE loaded=%u supported=%u support_known=1 sdk=2.14.1 model_target=preset_f_transformer evaluate=0 native_denoiser_bypass=0",
+        unsigned(dlssrrLoaded), unsigned(dlssrrSupportResult == sl::Result::eOk));
 }
 
 static bool IsHdr10BridgeActive() noexcept;
 static unsigned int GetHdr10BridgeWidth() noexcept;
 static unsigned int GetHdr10BridgeHeight() noexcept;
+static unsigned long long GetHdr10BridgeTransitionGeneration() noexcept;
 static void SetDLSSGModeForPresent(unsigned long long present, bool enable) noexcept;
+static void ObserveSLDisplayHdrDomainBeforePresent(IDXGISwapChain* swapChain, unsigned long long present) noexcept;
+static bool BeginSLDLSSGHardReset(unsigned long long present, const char* reason) noexcept;
+static void CompleteSLDLSSGHardResetAfterPresent(unsigned long long present, HRESULT presentHr, const char* source) noexcept;
+static bool IsSLDLSSGHardResetPending() noexcept;
+static bool ArmSLHdrHotkeyGuardFromInput() noexcept;
+static bool IsSLHdrHotkeyReplayReady() noexcept;
+static void MarkSLHdrHotkeyReplayResult(bool success) noexcept;
+static void ServiceSLHdrHotkeyGuardBeforePresent(unsigned long long present) noexcept;
+static void CompleteSLHdrHotkeyGuardAfterPresent(unsigned long long present, HRESULT presentHr) noexcept;
 
 static void ResolveSLFrameFeatureFunctions() noexcept {
     if (!slGetFeatureFunctionApi || !slDeviceConfigured.load()) return;
@@ -954,6 +1136,33 @@ static void ResolveDLSSGFeatureFunctions() noexcept {
     }
 }
 
+static void ResolveDLSSRRFeatureFunctions() noexcept {
+    if (!slGetFeatureFunctionApi || !slDeviceConfigured.load()) return;
+    if (!slDLSSDSetOptionsApi) {
+        void* fn = nullptr;
+        const sl::Result result = slGetFeatureFunctionApi(sl::kFeatureDLSS_RR, "slDLSSDSetOptions", fn);
+        slDLSSDSetOptionsApi = result == sl::Result::eOk ? reinterpret_cast<PFun_slDLSSDSetOptions*>(fn) : nullptr;
+        Log("SL_DLSSD_FUNCTION name=slDLSSDSetOptions result=%lld function=%p evaluate=disabled", SLResultCode(result), fn);
+    }
+    if (!slDLSSDGetStateApi) {
+        void* fn = nullptr;
+        const sl::Result result = slGetFeatureFunctionApi(sl::kFeatureDLSS_RR, "slDLSSDGetState", fn);
+        slDLSSDGetStateApi = result == sl::Result::eOk ? reinterpret_cast<PFun_slDLSSDGetState*>(fn) : nullptr;
+        Log("SL_DLSSD_FUNCTION name=slDLSSDGetState result=%lld function=%p evaluate=disabled", SLResultCode(result), fn);
+    }
+    if (!slDLSSDGetOptimalSettingsApi) {
+        void* fn = nullptr;
+        const sl::Result result = slGetFeatureFunctionApi(sl::kFeatureDLSS_RR, "slDLSSDGetOptimalSettings", fn);
+        slDLSSDGetOptimalSettingsApi = result == sl::Result::eOk ? reinterpret_cast<PFun_slDLSSDGetOptimalSettings*>(fn) : nullptr;
+        Log("SL_DLSSD_FUNCTION name=slDLSSDGetOptimalSettings result=%lld function=%p evaluate=disabled", SLResultCode(result), fn);
+    }
+    const bool ready = slDLSSDSetOptionsApi && slDLSSDGetStateApi && slDLSSDGetOptimalSettingsApi;
+    slRrFunctionTableReady.store(ready ? 1u : 0u, std::memory_order_release);
+    Log("SL_RR_HANDSHAKE loaded=%u supported=%u functions_ready=%u set_options=%p get_state=%p get_optimal=%p evaluate=0 denoiser_bypass=0",
+        slRrFeatureLoaded.load(std::memory_order_acquire), slRrFeatureSupported.load(std::memory_order_acquire),
+        unsigned(ready), slDLSSDSetOptionsApi, slDLSSDGetStateApi, slDLSSDGetOptimalSettingsApi);
+}
+
 static void CacheDLSSGCapabilities(const sl::DLSSGState& state) noexcept {
     // A zero max can be transient during plugin warm-up. Do not cache either fixed
     // or Dynamic capability until Streamline is reporting a settled MFG state.
@@ -1021,6 +1230,402 @@ static bool EnsureDLSSGDynamicCapability(unsigned long long present) noexcept {
     return IsFGDynamicMFGSupported();
 }
 
+static bool IsSLDisplayHdrColorSpace(DXGI_COLOR_SPACE_TYPE colorSpace) noexcept {
+    return colorSpace == DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020 ||
+           colorSpace == DXGI_COLOR_SPACE_RGB_STUDIO_G2084_NONE_P2020;
+}
+
+static void ReleaseSLDisplayDomainProbeLocked() noexcept {
+    if (slFgDisplayDomainOutput) {
+        slFgDisplayDomainOutput->Release();
+        slFgDisplayDomainOutput = nullptr;
+    }
+    if (slFgDisplayDomainFactory) {
+        slFgDisplayDomainFactory->Release();
+        slFgDisplayDomainFactory = nullptr;
+    }
+    slFgDisplayDomainMonitor = nullptr;
+}
+
+// GetContainingOutput() is intentionally not used here. Microsoft documents
+// that the output returned by a swap chain becomes stale once the DXGI factory
+// is no longer current. Win+Alt+B is exactly such a dynamic Advanced Color/HDR
+// change on affected systems. Keep a private native DXGI factory, test
+// IsCurrent() at the Present boundary, recreate it when invalidated, and then
+// enumerate the output matching Control's HWND/HMONITOR before calling GetDesc1.
+static HRESULT GetSLFreshDisplayDescForSwapChain(
+    IDXGISwapChain* swapChain,
+    unsigned long long present,
+    DXGI_OUTPUT_DESC1& desc,
+    bool& factoryRefreshed) noexcept {
+    factoryRefreshed = false;
+    if (!swapChain) return E_INVALIDARG;
+
+    DXGI_SWAP_CHAIN_DESC swapDesc{};
+    const HRESULT swapDescHr = swapChain->GetDesc(&swapDesc);
+    if (FAILED(swapDescHr)) return swapDescHr;
+    if (!swapDesc.OutputWindow) return DXGI_ERROR_INVALID_CALL;
+
+    const HMONITOR monitor = MonitorFromWindow(swapDesc.OutputWindow, MONITOR_DEFAULTTONEAREST);
+    if (!monitor) return E_FAIL;
+
+    const char* refreshReason = nullptr;
+    unsigned long long refreshOrdinal = 0;
+    HRESULT result = S_OK;
+
+    AcquireSRWLockExclusive(&slFgDisplayDomainLock);
+    const bool missing = !slFgDisplayDomainFactory || !slFgDisplayDomainOutput;
+    const bool stale = slFgDisplayDomainFactory && !slFgDisplayDomainFactory->IsCurrent();
+    const bool monitorChanged = slFgDisplayDomainMonitor && slFgDisplayDomainMonitor != monitor;
+    if (missing || stale || monitorChanged) {
+        refreshReason = missing ? "initial" : (stale ? "factory_stale" : "monitor_changed");
+        ReleaseSLDisplayDomainProbeLocked();
+
+        using CreateFactory1Fn = HRESULT (WINAPI*)(REFIID, void**);
+        const auto createFactory1 = realDxgi
+            ? reinterpret_cast<CreateFactory1Fn>(GetProcAddress(realDxgi, "CreateDXGIFactory1"))
+            : nullptr;
+        if (!createFactory1) {
+            result = E_NOINTERFACE;
+        } else {
+            result = createFactory1(__uuidof(IDXGIFactory1), reinterpret_cast<void**>(&slFgDisplayDomainFactory));
+        }
+
+        if (SUCCEEDED(result) && slFgDisplayDomainFactory) {
+            bool found = false;
+            for (UINT adapterIndex = 0; !found; ++adapterIndex) {
+                IDXGIAdapter1* adapter = nullptr;
+                const HRESULT adapterHr = slFgDisplayDomainFactory->EnumAdapters1(adapterIndex, &adapter);
+                if (adapterHr == DXGI_ERROR_NOT_FOUND) break;
+                if (FAILED(adapterHr) || !adapter) {
+                    if (adapter) adapter->Release();
+                    continue;
+                }
+
+                for (UINT outputIndex = 0;; ++outputIndex) {
+                    IDXGIOutput* output = nullptr;
+                    const HRESULT outputHr = adapter->EnumOutputs(outputIndex, &output);
+                    if (outputHr == DXGI_ERROR_NOT_FOUND) break;
+                    if (FAILED(outputHr) || !output) {
+                        if (output) output->Release();
+                        continue;
+                    }
+
+                    DXGI_OUTPUT_DESC outputDesc{};
+                    if (SUCCEEDED(output->GetDesc(&outputDesc)) && outputDesc.Monitor == monitor) {
+                        IDXGIOutput6* output6 = nullptr;
+                        const HRESULT qiHr = output->QueryInterface(IID_PPV_ARGS(&output6));
+                        output->Release();
+                        if (SUCCEEDED(qiHr) && output6) {
+                            slFgDisplayDomainOutput = output6;
+                            slFgDisplayDomainMonitor = monitor;
+                            result = S_OK;
+                            found = true;
+                        } else {
+                            result = qiHr;
+                        }
+                        break;
+                    }
+                    output->Release();
+                }
+                adapter->Release();
+            }
+            if (!slFgDisplayDomainOutput && SUCCEEDED(result)) result = DXGI_ERROR_NOT_FOUND;
+        }
+
+        if (FAILED(result) || !slFgDisplayDomainOutput) {
+            ReleaseSLDisplayDomainProbeLocked();
+        } else {
+            factoryRefreshed = true;
+            refreshOrdinal = ++slFgDisplayFactoryRefreshes;
+        }
+    }
+
+    if (SUCCEEDED(result) && slFgDisplayDomainOutput)
+        result = slFgDisplayDomainOutput->GetDesc1(&desc);
+    ReleaseSRWLockExclusive(&slFgDisplayDomainLock);
+
+    if (factoryRefreshed) {
+        Log("FG_DISPLAY_FACTORY_REFRESH present=%llu reason=%s refreshes=%llu monitor=%p action=recreate_native_factory_enumerate_output",
+            present, refreshReason ? refreshReason : "unknown", refreshOrdinal, monitor);
+    }
+    return result;
+}
+
+static unsigned int GetSLHdrHotkeyStageValue() noexcept {
+    return slFgHdrHotkeyStage.load(std::memory_order_acquire);
+}
+
+static bool ArmSLHdrHotkeyGuardFromInput() noexcept {
+    // If DLSS-G is already off there is no dangerous generated-frame history to
+    // protect; let Windows own the shortcut normally.
+    if (slFgEnabledByApi.load(std::memory_order_acquire) == 0u) return false;
+
+    unsigned int expected = static_cast<unsigned int>(SLHdrHotkeyStage::Idle);
+    if (!slFgHdrHotkeyStage.compare_exchange_strong(
+            expected, static_cast<unsigned int>(SLHdrHotkeyStage::InterceptedWaitOffPresent),
+            std::memory_order_acq_rel, std::memory_order_acquire)) {
+        // An already-owned chord/replay stays consumed until the guard hands off.
+        return expected != static_cast<unsigned int>(SLHdrHotkeyStage::Idle);
+    }
+
+    const unsigned long long present = presentCount.load(std::memory_order_acquire);
+    const unsigned long long generation = GetHdr10BridgeTransitionGeneration();
+    slFgHdrHotkeyInterceptPresent.store(present, std::memory_order_release);
+    slFgHdrHotkeyBridgeGeneration.store(generation, std::memory_order_release);
+    const auto ordinal = ++slFgHdrHotkeyIntercepts;
+    Log("FG_HDR_HOTKEY_INTERCEPT present=%llu bridge_generation=%llu fg_enabled=1 stage=wait_off_present intercepts=%llu action=consume_physical_win_alt_b",
+        present, generation, ordinal);
+    return true;
+}
+
+static bool IsSLHdrHotkeyReplayReady() noexcept {
+    return control_fg_hdr_hotkey::ReadyToReplay(
+        static_cast<SLHdrHotkeyStage>(GetSLHdrHotkeyStageValue()));
+}
+
+static void MarkSLHdrHotkeyReplayResult(bool success) noexcept {
+    if (!success) {
+        const auto failures = ++slFgHdrHotkeyReplayFailures;
+        Log("FG_HDR_HOTKEY_REPLAY success=0 stage=off_committed_wait_key_release failures=%llu action=retry_after_key_release", failures);
+        return;
+    }
+
+    unsigned int expected = static_cast<unsigned int>(SLHdrHotkeyStage::OffCommittedWaitKeyRelease);
+    if (!slFgHdrHotkeyStage.compare_exchange_strong(
+            expected, static_cast<unsigned int>(SLHdrHotkeyStage::ReplayedWaitHdrTransition),
+            std::memory_order_acq_rel, std::memory_order_acquire)) {
+        Log("FG_HDR_HOTKEY_REPLAY success=1 stage_mismatch=%u action=ignore", expected);
+        return;
+    }
+    const auto ordinal = ++slFgHdrHotkeyReplays;
+    Log("FG_HDR_HOTKEY_REPLAY success=1 stage=wait_hdr_transition replays=%llu action=windows_shortcut_released_after_fg_off_commit", ordinal);
+}
+
+static void ServiceSLHdrHotkeyGuardBeforePresent(unsigned long long present) noexcept {
+    unsigned int expected = static_cast<unsigned int>(SLHdrHotkeyStage::InterceptedWaitOffPresent);
+    if (GetSLHdrHotkeyStageValue() != expected) return;
+
+    // SetDLSSGModeForPresent is intentionally called before the real swap-chain
+    // Present. The hotkey-stage gate inside that function forces eOff regardless
+    // of the normal frame-ready state.
+    SetDLSSGModeForPresent(present, false);
+    const bool offQueued = slFgEnabledByApi.load(std::memory_order_acquire) == 0u;
+    if (!offQueued) {
+        Log("FG_HDR_HOTKEY_OFF_QUEUE present=%llu success=0 stage=wait_off_present action=retry_next_present", present);
+        return;
+    }
+    if (slFgHdrHotkeyStage.compare_exchange_strong(
+            expected, static_cast<unsigned int>(SLHdrHotkeyStage::OffQueuedWaitPresentReturn),
+            std::memory_order_acq_rel, std::memory_order_acquire)) {
+        Log("FG_HDR_HOTKEY_OFF_QUEUE present=%llu success=1 stage=wait_present_return action=commit_eoff_on_this_present", present);
+    }
+}
+
+static void CompleteSLHdrHotkeyGuardAfterPresent(unsigned long long present, HRESULT presentHr) noexcept {
+    unsigned int expected = static_cast<unsigned int>(SLHdrHotkeyStage::OffQueuedWaitPresentReturn);
+    if (GetSLHdrHotkeyStageValue() != expected) return;
+
+    if (FAILED(presentHr) || slFgEnabledByApi.load(std::memory_order_acquire) != 0u) {
+        slFgHdrHotkeyStage.compare_exchange_strong(
+            expected, static_cast<unsigned int>(SLHdrHotkeyStage::InterceptedWaitOffPresent),
+            std::memory_order_acq_rel, std::memory_order_acquire);
+        Log("FG_HDR_HOTKEY_OFF_COMMIT present=%llu success=0 present_hr=0x%08lX fg_enabled=%u action=retry_next_present",
+            present, static_cast<unsigned long>(presentHr), slFgEnabledByApi.load(std::memory_order_acquire));
+        return;
+    }
+
+    if (slFgHdrHotkeyStage.compare_exchange_strong(
+            expected, static_cast<unsigned int>(SLHdrHotkeyStage::OffCommittedWaitKeyRelease),
+            std::memory_order_acq_rel, std::memory_order_acquire)) {
+        const auto ordinal = ++slFgHdrHotkeyOffCommits;
+        Log("FG_HDR_HOTKEY_OFF_COMMIT present=%llu success=1 present_hr=0x%08lX commits=%llu stage=wait_key_release action=allow_shortcut_replay",
+            present, static_cast<unsigned long>(presentHr), ordinal);
+    }
+}
+
+static bool IsSLDLSSGHardResetPending() noexcept {
+    return control_fg_hdr_hard_reset::Pending(static_cast<SLHdrHardResetStage>(slFgHdrHardResetStage.load(std::memory_order_acquire)));
+}
+
+static void InvalidateSLDLSSGStateAfterHardReset() noexcept {
+    // Force the next enable to rebuild DLSS-G options from newly tagged resources.
+    slFgOptionsInitialized.store(0u, std::memory_order_release);
+    slFgEnabledByApi.store(0u, std::memory_order_release);
+    slFgAppliedGeneratedFrames.store(0u, std::memory_order_release);
+    slFgAppliedMode.store(0u, std::memory_order_release);
+    slFgAppliedUIRecomposition.store(0u, std::memory_order_release);
+    slFgAppliedDynamicTargetMilliFps.store(0u, std::memory_order_release);
+    slFgGenerationConfirmedCurrentSegment.store(0u, std::memory_order_release);
+    slFgLastFramesPresented.store(0u, std::memory_order_release);
+    slFgLastStatePresent.store(0u, std::memory_order_release);
+    slFgLastStateSelection.store(0xFFFFFFFFu, std::memory_order_release);
+    slLastBackBufferIndex.store(0xFFFFFFFFu, std::memory_order_release);
+    slFgMvecDepthWidth.store(0u, std::memory_order_release);
+    slFgMvecDepthHeight.store(0u, std::memory_order_release);
+    slFgDepthFormat.store(0u, std::memory_order_release);
+    slFgMvecFormat.store(0u, std::memory_order_release);
+    slFgColorWidth.store(0u, std::memory_order_release);
+    slFgColorHeight.store(0u, std::memory_order_release);
+    slFgColorFormat.store(0u, std::memory_order_release);
+    slFgHudLessFormat.store(0u, std::memory_order_release);
+    slFgHdrTransitionWarmupGeneration.store(~0ull, std::memory_order_release);
+    slFgHdrTransitionWarmupLastPresent.store(0u, std::memory_order_release);
+    slFgHdrTransitionWarmupFrames.store(0u, std::memory_order_release);
+    for (auto& slot : slFrameSlots) {
+        slot.present.store(0u, std::memory_order_release);
+        slot.token.store(nullptr, std::memory_order_release);
+        slot.constantsReady.store(0u, std::memory_order_release);
+        slot.tagMask.store(0u, std::memory_order_release);
+    }
+}
+
+static bool BeginSLDLSSGHardReset(unsigned long long present, const char* reason) noexcept {
+    // If the user explicitly selected Off, there is no DLSS-G viewport state we need
+    // to rebuild for later re-enable. Otherwise arm once and let the real Present
+    // become the GPU/presentation boundary before slFreeResources.
+    if (GetFGUserMultiplier() == kSLSelectionOff && slFgEnabledByApi.load(std::memory_order_acquire) == 0u)
+        return false;
+
+    unsigned int expected = static_cast<unsigned int>(SLHdrHardResetStage::Idle);
+    if (!slFgHdrHardResetStage.compare_exchange_strong(
+            expected, static_cast<unsigned int>(SLHdrHardResetStage::OffQueuedWaitPresent),
+            std::memory_order_acq_rel, std::memory_order_acquire)) {
+        return true;
+    }
+
+    ++fgAlignEpoch;
+    FGAlignArm(present,reason);
+    const unsigned long long serial = ++slFgHdrHardResetSerial;
+    const unsigned long long bridgeGeneration = GetHdr10BridgeTransitionGeneration();
+    slFgHdrHardResetBridgeGeneration.store(bridgeGeneration, std::memory_order_release);
+    slFgHdrHardResetFreePresent.store(0u, std::memory_order_release);
+    slFgHdrHardResetNoBridgeLastFreshPresent.store(0u, std::memory_order_release);
+    slFgHdrHardResetNoBridgeFreshFrames.store(0u, std::memory_order_release);
+    ++slFgHdrHardResetStarts;
+
+    // Retire the r30 interception state if this source was built over an r30 tree.
+    slFgHdrHotkeyStage.store(static_cast<unsigned int>(SLHdrHotkeyStage::Idle), std::memory_order_release);
+    SetDLSSGModeForPresent(present, false);
+    const bool offQueued = slFgEnabledByApi.load(std::memory_order_acquire) == 0u;
+    Log("FG_HDR_HARD_RESET_BEGIN present=%llu serial=%llu reason=%s bridge_generation=%llu off_queued=%u action=commit_off_then_free_dlssg_resources",
+        present, serial, reason ? reason : "unknown", bridgeGeneration, unsigned(offQueued));
+    return true;
+}
+
+static void RecordSLOffPresentBoundary(IDXGISwapChain* chain,unsigned long long present,HRESULT hr) noexcept {
+    // Only real Present/Present1 calls reach here; TEST and the resize-injected
+    // Present are excluded. Occlusion/status/failure cannot create a proof.
+    slFgOffPresentProof.Observe(chain,present,hr==S_OK &&
+        slFgOptionsInitialized.load(std::memory_order_acquire)!=0u &&
+        slFgEnabledByApi.load(std::memory_order_acquire)==0u);
+}
+
+static void CompleteSLDLSSGHardResetAfterPresent(unsigned long long present, HRESULT presentHr, const char* source) noexcept {
+    if (slFgHdrHardResetStage.load(std::memory_order_acquire) != static_cast<unsigned int>(SLHdrHardResetStage::OffQueuedWaitPresent))
+        return;
+    const bool apiOff = slFgEnabledByApi.load(std::memory_order_acquire) == 0u;
+    if (!control_fg_hdr_hard_reset::CanFreeAfterPresent(
+            static_cast<SLHdrHardResetStage>(slFgHdrHardResetStage.load(std::memory_order_acquire)),
+            apiOff, SUCCEEDED(presentHr))) {
+        const auto failures = ++slFgHdrHardResetFailures;
+        Log("FG_HDR_HARD_RESET_OFF_COMMIT present=%llu source=%s success=0 present_hr=0x%08lX api_enabled=%u failures=%llu action=retry_after_next_real_present",
+            present, source ? source : "unknown", static_cast<unsigned long>(presentHr), slFgEnabledByApi.load(), failures);
+        return;
+    }
+
+    Log("FG_HDR_HARD_RESET_OFF_COMMIT present=%llu source=%s success=1 present_hr=0x%08lX action=free_dlssg_viewport_resources",
+        present, source ? source : "unknown", static_cast<unsigned long>(presentHr));
+    if (!slFreeResourcesApi) {
+        const auto failures = ++slFgHdrHardResetFailures;
+        Log("FG_HDR_HARD_RESET_FREE present=%llu serial=%llu result=missing_export success=0 failures=%llu action=hold_fg_off",
+            present, slFgHdrHardResetSerial.load(), failures);
+        return;
+    }
+
+    const sl::Result freeResult = slFreeResourcesApi(sl::kFeatureDLSS_G, slFgViewport);
+    if (freeResult != sl::Result::eOk) {
+        const auto failures = ++slFgHdrHardResetFailures;
+        Log("FG_HDR_HARD_RESET_FREE present=%llu serial=%llu result=%lld success=0 failures=%llu action=retry_after_next_real_present",
+            present, slFgHdrHardResetSerial.load(), SLResultCode(freeResult), failures);
+        return;
+    }
+
+    InvalidateSLDLSSGStateAfterHardReset();
+    slFgHdrHardResetFreePresent.store(present, std::memory_order_release);
+    slFgHdrHardResetNoBridgeLastFreshPresent.store(0u, std::memory_order_release);
+    slFgHdrHardResetNoBridgeFreshFrames.store(0u, std::memory_order_release);
+    slFgHdrHardResetStage.store(static_cast<unsigned int>(SLHdrHardResetStage::ResourcesFreedWaitBridge), std::memory_order_release);
+    const auto frees = ++slFgHdrHardResetResourceFrees;
+    Log("FG_HDR_HARD_RESET_FREE present=%llu serial=%llu result=%lld success=1 frees=%llu action=wait_for_bridge_or_stable_display_only_fresh_tags",
+        present, slFgHdrHardResetSerial.load(), SLResultCode(freeResult), frees);
+}
+
+// Win+Alt+B toggles the Windows display HDR mode before Control reacts with a
+// swap-chain resize. r28 proved that polling swapChain->GetContainingOutput()
+// is not sufficient: the returned IDXGIOutput can remain stale and never expose
+// the color-space flip. r29 samples a freshly enumerated output whenever the
+// private native factory reports IsCurrent()==FALSE, then queues DLSS-G off for
+// the same real Present that first observes the new Windows display domain.
+static void ObserveSLDisplayHdrDomainBeforePresent(IDXGISwapChain* swapChain, unsigned long long present) noexcept {
+    if (!swapChain || !present) return;
+
+    DXGI_OUTPUT_DESC1 desc{};
+    bool factoryRefreshed = false;
+    const HRESULT descHr = GetSLFreshDisplayDescForSwapChain(swapChain, present, desc, factoryRefreshed);
+    if (FAILED(descHr)) {
+        const auto failures = ++slFgDisplayDomainQueryFailures;
+        if (failures <= 4 || (failures % 240ull) == 0)
+            Log("FG_DISPLAY_DOMAIN_QUERY_FAIL present=%llu stage=fresh_factory_output hr=0x%08lX failures=%llu",
+                present, static_cast<unsigned long>(descHr), failures);
+        return;
+    }
+
+    const unsigned int colorSpace = static_cast<unsigned int>(desc.ColorSpace);
+    const unsigned int hdr = IsSLDisplayHdrColorSpace(desc.ColorSpace) ? 1u : 0u;
+    if (slFgDisplayDomainKnown.exchange(1u, std::memory_order_acq_rel) == 0u) {
+        slFgDisplayColorSpace.store(colorSpace, std::memory_order_release);
+        slFgDisplayHdrActive.store(hdr, std::memory_order_release);
+        const unsigned long long baselineBridgeGeneration = GetHdr10BridgeTransitionGeneration();
+        slFgDisplayObservedBridgeGeneration.store(baselineBridgeGeneration, std::memory_order_release);
+        Log("FG_DISPLAY_DOMAIN_BASELINE present=%llu color_space=%u hdr=%u bits_per_color=%u bridge_generation=%llu source=fresh_native_factory factory_refreshed=%u",
+            present, colorSpace, hdr, desc.BitsPerColor, baselineBridgeGeneration, unsigned(factoryRefreshed));
+        return;
+    }
+
+    const unsigned int previousColorSpace = slFgDisplayColorSpace.exchange(colorSpace, std::memory_order_acq_rel);
+    const unsigned int previousHdr = slFgDisplayHdrActive.exchange(hdr, std::memory_order_acq_rel);
+    if (!control_fg_hdr_transition::DisplayDomainFlip(true, previousHdr != 0u, hdr != 0u)) return;
+    slFgDisplayTransitionLastChangePresent.store(present, std::memory_order_release);
+    slFgHdrHardResetNoBridgeLastFreshPresent.store(0u, std::memory_order_release);
+    slFgHdrHardResetNoBridgeFreshFrames.store(0u, std::memory_order_release);
+
+    const unsigned long long bridgeGeneration = GetHdr10BridgeTransitionGeneration();
+    const unsigned long long observedBridgeGeneration = slFgDisplayObservedBridgeGeneration.exchange(bridgeGeneration, std::memory_order_acq_rel);
+    const bool bridgeAlreadyOwnsDomain = control_fg_hdr_transition::BridgeAlreadyOwnsObservedDisplayFlip(
+        observedBridgeGeneration, bridgeGeneration, IsHdr10BridgeActive(), hdr != 0u);
+    const auto changes = ++slFgDisplayDomainChanges;
+    if (bridgeAlreadyOwnsDomain) {
+        // The HDR bridge already transitioned to the domain the fresh-output observer
+        // just discovered. This is a delayed observation of a resize-side transition,
+        // not a second transition. Re-arming a hard reset here would wait forever for
+        // another bridge generation that may never come (r31a serial=2 deadlock).
+        Log("FG_DISPLAY_DOMAIN_DUPLICATE_HANDOFF present=%llu previous_color_space=%u color_space=%u previous_hdr=%u hdr=%u bits_per_color=%u observed_bridge_generation=%llu bridge_generation=%llu bridge_hdr=%u changes=%llu source=fresh_native_factory factory_refreshed=%u action=skip_duplicate_hard_reset",
+            present, previousColorSpace, colorSpace, previousHdr, hdr, desc.BitsPerColor, observedBridgeGeneration,
+            bridgeGeneration, unsigned(IsHdr10BridgeActive()), changes, unsigned(factoryRefreshed));
+        return;
+    }
+
+    slFgDisplayTransitionBridgeGeneration.store(bridgeGeneration, std::memory_order_release);
+    slFgDisplayTransitionPending.store(1u, std::memory_order_release);
+    const unsigned int wasEnabled = slFgEnabledByApi.load(std::memory_order_acquire);
+    const bool resetArmed = BeginSLDLSSGHardReset(present, hdr ? "display_sdr_to_hdr" : "display_hdr_to_sdr");
+    if (wasEnabled && slFgEnabledByApi.load(std::memory_order_acquire) == 0u) ++slFgDisplayDomainForcedOffs;
+    Log("FG_DISPLAY_DOMAIN_CHANGE present=%llu previous_color_space=%u color_space=%u previous_hdr=%u hdr=%u bits_per_color=%u observed_bridge_generation=%llu bridge_generation=%llu was_enabled=%u off_queued=%u changes=%llu forced_offs=%llu source=fresh_native_factory factory_refreshed=%u hard_reset_armed=%u action=hard_reset_dlssg_then_wait_for_bridge_transition",
+        present, previousColorSpace, colorSpace, previousHdr, hdr, desc.BitsPerColor, observedBridgeGeneration, bridgeGeneration, wasEnabled,
+        unsigned(slFgEnabledByApi.load(std::memory_order_acquire) == 0u), changes, slFgDisplayDomainForcedOffs.load(), unsigned(factoryRefreshed), unsigned(resetArmed));
+}
+
 static void SetDLSSGModeForPresent(unsigned long long present, bool frameReady) noexcept {
     if (!slDeviceConfigured.load() || !slControlDlssReady.load()) return;
     bool loaded = false;
@@ -1031,9 +1636,10 @@ static void SetDLSSGModeForPresent(unsigned long long present, bool frameReady) 
     const unsigned int selected = GetFGUserMultiplier();
     const bool dynamicRequested = IsFGDynamicSelection(selected);
     const unsigned int requestedGenerated = selected >= 2 ? selected - 1 : 0;
-    bool enable = frameReady && selected != kSLSelectionOff;
+    const bool experimentReady = PrepareRTX40MFGTest();
+    bool enable = frameReady && selected != kSLSelectionOff && experimentReady;
     if (enable && !IsFGSelectionAllowedByGpuPolicy(selected)) {
-        Log("FG_GPU_POLICY_BLOCK present=%llu selected_selection=%s selected_code=%u rtx40_series=%u allowed=off,2x action=disable",
+        Log("FG_GPU_POLICY_BLOCK present=%llu selected_selection=%s selected_code=%u rtx40_series=%u allowed=off,fixed_unlocked,dynamic_if_runtime_supported action=disable",
             present, GetFGSelectionName(selected), selected, unsigned(IsFGRtx40Series()));
         enable = false;
     }
@@ -1044,6 +1650,125 @@ static void SetDLSSGModeForPresent(unsigned long long present, bool frameReady) 
             enable = false;
         }
     }
+    const unsigned int currentTagMask = GetSLFrameTagMask(present);
+    const unsigned int currentHudlessFormat = slFgHudLessFormat.load(std::memory_order_acquire);
+    const bool hdr10BridgeActive = IsHdr10BridgeActive();
+    const bool hdrHudlessDomainReady = control_fg_hdr_ui::HudlessDomainReady(hdr10BridgeActive, currentHudlessFormat, static_cast<unsigned int>(DXGI_FORMAT_R10G10B10A2_UNORM));
+    const bool uiInputsReady = (currentTagMask & (kSLTagHUDLess | kSLTagUIAlpha)) == (kSLTagHUDLess | kSLTagUIAlpha);
+    const bool transitionInputsReady = frameReady && uiInputsReady && hdrHudlessDomainReady;
+    const unsigned long long hdrTransitionGeneration = GetHdr10BridgeTransitionGeneration();
+    const unsigned long long hdrSettledGeneration = slFgHdrTransitionSettledGeneration.load(std::memory_order_acquire);
+    unsigned int hotkeyStage = GetSLHdrHotkeyStageValue();
+    if (hotkeyStage != static_cast<unsigned int>(SLHdrHotkeyStage::Idle)) {
+        const unsigned long long hotkeyGeneration = slFgHdrHotkeyBridgeGeneration.load(std::memory_order_acquire);
+        // If the replay reached Control's HDR bridge before the display observer
+        // saw the fresh output, the bridge generation itself is sufficient to
+        // hand ownership to the existing two-fresh-frame transition gate.
+        if (control_fg_hdr_hotkey::BridgeCanTakeOwnership(
+                static_cast<SLHdrHotkeyStage>(hotkeyStage), hotkeyGeneration, hdrTransitionGeneration)) {
+            unsigned int expected = hotkeyStage;
+            if (slFgHdrHotkeyStage.compare_exchange_strong(
+                    expected, static_cast<unsigned int>(SLHdrHotkeyStage::Idle),
+                    std::memory_order_acq_rel, std::memory_order_acquire)) {
+                const auto handoffs = ++slFgHdrHotkeyHandoffs;
+                Log("FG_HDR_HOTKEY_HANDOFF present=%llu source=bridge_generation intercepted_generation=%llu bridge_generation=%llu handoffs=%llu action=bridge_warmup_owns_fg_off",
+                    present, hotkeyGeneration, hdrTransitionGeneration, handoffs);
+                hotkeyStage = static_cast<unsigned int>(SLHdrHotkeyStage::Idle);
+            }
+        }
+        if (control_fg_hdr_hotkey::ShouldHoldFG(static_cast<SLHdrHotkeyStage>(hotkeyStage))) {
+            enable = false;
+            if (present <= 16 || (present % 120ull) == 0)
+                Log("FG_HDR_HOTKEY_GATE present=%llu stage=%u bridge_generation=%llu intercepted_generation=%llu action=hold_fg_off",
+                    present, hotkeyStage, hdrTransitionGeneration, hotkeyGeneration);
+        }
+    }
+    const unsigned int hardResetStage = slFgHdrHardResetStage.load(std::memory_order_acquire);
+    if (hardResetStage != static_cast<unsigned int>(SLHdrHardResetStage::Idle)) {
+        enable = false;
+        if (present <= 16 || (present % 120ull) == 0)
+            Log("FG_HDR_HARD_RESET_GATE present=%llu stage=%u serial=%llu bridge_generation=%llu reset_bridge_generation=%llu action=hold_fg_off",
+                present, hardResetStage, slFgHdrHardResetSerial.load(), hdrTransitionGeneration, slFgHdrHardResetBridgeGeneration.load());
+    }
+    if (slFgDisplayTransitionPending.load(std::memory_order_acquire)) {
+        const unsigned long long detectedGeneration = slFgDisplayTransitionBridgeGeneration.load(std::memory_order_acquire);
+        if (control_fg_hdr_transition::HoldForPreResizeDisplayTransition(true, hdrTransitionGeneration, detectedGeneration)) {
+            enable = false;
+            if (present <= 16 || (present % 240ull) == 0)
+                Log("FG_DISPLAY_DOMAIN_GATE present=%llu bridge_generation=%llu detected_generation=%llu action=hold_fg_off_waiting_for_resize_or_display_only_settle", present, hdrTransitionGeneration, detectedGeneration);
+        } else if (control_fg_hdr_transition::BridgeTransitionObserved(true, hdrTransitionGeneration, detectedGeneration)) {
+            slFgDisplayTransitionPending.store(0u, std::memory_order_release);
+            Log("FG_DISPLAY_DOMAIN_HANDOFF present=%llu detected_generation=%llu bridge_generation=%llu action=bridge_warmup_owns_transition", present, detectedGeneration, hdrTransitionGeneration);
+        }
+    }
+    if (control_fg_hdr_transition::TransitionPending(hdrTransitionGeneration, hdrSettledGeneration)) {
+        enable = false;
+        const unsigned long long observedGeneration = slFgHdrTransitionWarmupGeneration.load(std::memory_order_acquire);
+        const unsigned long long lastPresent = slFgHdrTransitionWarmupLastPresent.load(std::memory_order_acquire);
+        const unsigned int previousFresh = slFgHdrTransitionWarmupFrames.load(std::memory_order_acquire);
+        const unsigned int fresh = control_fg_hdr_transition::NextFreshFrameCount(
+            transitionInputsReady, hdrTransitionGeneration, observedGeneration, present, lastPresent, previousFresh);
+        if (observedGeneration != hdrTransitionGeneration) {
+            slFgHdrTransitionWarmupGeneration.store(hdrTransitionGeneration, std::memory_order_release);
+            slFgHdrTransitionWarmupLastPresent.store(transitionInputsReady ? present : 0, std::memory_order_release);
+            slFgHdrTransitionWarmupFrames.store(fresh, std::memory_order_release);
+            Log("FG_HDR_TRANSITION_GATE present=%llu transition_generation=%llu settled_generation=%llu action=hold_fg_off_for_fresh_domain_pair required_frames=%u fresh_frames=%u hdr10=%u tags=0x%X hudless_format=%u", present, hdrTransitionGeneration, hdrSettledGeneration, control_fg_hdr_transition::kFreshFramesRequired, fresh, unsigned(hdr10BridgeActive), currentTagMask, currentHudlessFormat);
+        } else if (transitionInputsReady && present != lastPresent) {
+            slFgHdrTransitionWarmupLastPresent.store(present, std::memory_order_release);
+            slFgHdrTransitionWarmupFrames.store(fresh, std::memory_order_release);
+        } else if (!transitionInputsReady && previousFresh != 0) {
+            slFgHdrTransitionWarmupLastPresent.store(0, std::memory_order_release);
+            slFgHdrTransitionWarmupFrames.store(0, std::memory_order_release);
+        }
+        if (control_fg_hdr_transition::WarmupComplete(fresh)) {
+            slFgHdrTransitionSettledGeneration.store(hdrTransitionGeneration, std::memory_order_release);
+            Log("FG_HDR_TRANSITION_SETTLED present=%llu transition_generation=%llu fresh_frames=%u hdr10=%u tags=0x%X hudless_format=%u action=allow_fg_next_present", present, hdrTransitionGeneration, fresh, unsigned(hdr10BridgeActive), currentTagMask, currentHudlessFormat);
+        }
+    }
+
+    if (slFgHdrHardResetStage.load(std::memory_order_acquire) == static_cast<unsigned int>(SLHdrHardResetStage::ResourcesFreedWaitBridge)) {
+        const auto stage = static_cast<SLHdrHardResetStage>(slFgHdrHardResetStage.load(std::memory_order_acquire));
+        const unsigned long long resetGeneration = slFgHdrHardResetBridgeGeneration.load(std::memory_order_acquire);
+        const unsigned long long settledNow = slFgHdrTransitionSettledGeneration.load(std::memory_order_acquire);
+        const bool displayPending = slFgDisplayTransitionPending.load(std::memory_order_acquire) != 0u;
+        if (control_fg_hdr_hard_reset::CanRearm(
+                stage, resetGeneration, hdrTransitionGeneration, settledNow, displayPending)) {
+            slFgHdrHardResetNoBridgeLastFreshPresent.store(0u, std::memory_order_release);
+            slFgHdrHardResetNoBridgeFreshFrames.store(0u, std::memory_order_release);
+            slFgHdrHardResetStage.store(static_cast<unsigned int>(SLHdrHardResetStage::Idle), std::memory_order_release);
+            Log("FG_HDR_HARD_RESET_REARM present=%llu serial=%llu reset_bridge_generation=%llu new_bridge_generation=%llu fresh_frames=%u action=allow_clean_dlssg_recreate_next_present",
+                present, slFgHdrHardResetSerial.load(), resetGeneration, hdrTransitionGeneration, slFgHdrTransitionWarmupFrames.load());
+        } else if (hdrTransitionGeneration == resetGeneration && displayPending) {
+            const unsigned long long freePresent = slFgHdrHardResetFreePresent.load(std::memory_order_acquire);
+            const unsigned long long displayChangePresent = slFgDisplayTransitionLastChangePresent.load(std::memory_order_acquire);
+            const unsigned long long lastFreshPresent = slFgHdrHardResetNoBridgeLastFreshPresent.load(std::memory_order_acquire);
+            const unsigned int previousFresh = slFgHdrHardResetNoBridgeFreshFrames.load(std::memory_order_acquire);
+            const unsigned int fresh = control_fg_hdr_hard_reset::NextNoBridgeFreshFrameCount(
+                stage, resetGeneration, hdrTransitionGeneration, displayPending, transitionInputsReady, present,
+                freePresent, displayChangePresent, lastFreshPresent, previousFresh);
+            if (fresh != previousFresh || (!transitionInputsReady && previousFresh != 0u)) {
+                slFgHdrHardResetNoBridgeFreshFrames.store(fresh, std::memory_order_release);
+                slFgHdrHardResetNoBridgeLastFreshPresent.store(fresh ? present : 0u, std::memory_order_release);
+            }
+            if (fresh == 1u && previousFresh == 0u) {
+                Log("FG_HDR_HARD_RESET_NO_BRIDGE_SETTLE present=%llu serial=%llu reset_bridge_generation=%llu bridge_generation=%llu grace_presents=%llu fresh_frames=%u action=bridge_unchanged_collect_fresh_tags",
+                    present, slFgHdrHardResetSerial.load(), resetGeneration, hdrTransitionGeneration,
+                    control_fg_hdr_hard_reset::kNoBridgeGracePresents, fresh);
+            }
+            if (control_fg_hdr_hard_reset::CanRearmWithoutBridge(
+                    stage, resetGeneration, hdrTransitionGeneration, displayPending, present, freePresent,
+                    displayChangePresent, fresh)) {
+                slFgDisplayTransitionPending.store(0u, std::memory_order_release);
+                slFgHdrHardResetNoBridgeLastFreshPresent.store(0u, std::memory_order_release);
+                slFgHdrHardResetNoBridgeFreshFrames.store(0u, std::memory_order_release);
+                slFgHdrHardResetStage.store(static_cast<unsigned int>(SLHdrHardResetStage::Idle), std::memory_order_release);
+                Log("FG_HDR_HARD_RESET_REARM_NO_BRIDGE present=%llu serial=%llu reset_bridge_generation=%llu bridge_generation=%llu free_present=%llu display_change_present=%llu grace_presents=%llu fresh_frames=%u display_hdr=%u action=allow_clean_dlssg_recreate_next_present",
+                    present, slFgHdrHardResetSerial.load(), resetGeneration, hdrTransitionGeneration, freePresent,
+                    displayChangePresent, control_fg_hdr_hard_reset::kNoBridgeGracePresents, fresh,
+                    slFgDisplayHdrActive.load(std::memory_order_acquire));
+            }
+        }
+    }
 
     const unsigned int desiredEnabled = enable ? 1u : 0u;
     const unsigned int desiredMode = enable ? (dynamicRequested ? 2u : 1u) : 0u;
@@ -1051,9 +1776,11 @@ static void SetDLSSGModeForPresent(unsigned long long present, bool frameReady) 
     const unsigned int appliedGenerated = slFgAppliedGeneratedFrames.load(std::memory_order_acquire);
     const unsigned int appliedMode = slFgAppliedMode.load(std::memory_order_acquire);
     const unsigned int appliedDynamicTargetMilliFps = slFgAppliedDynamicTargetMilliFps.load(std::memory_order_acquire);
+    const unsigned int desiredUIRecomposition = control_fg_hdr_ui::ShouldEnableRecomposition(enable, currentTagMask, kSLTagHUDLess, kSLTagUIAlpha, hdr10BridgeActive, currentHudlessFormat, static_cast<unsigned int>(DXGI_FORMAT_R10G10B10A2_UNORM)) ? 1u : 0u;
+    const unsigned int appliedUIRecomposition = slFgAppliedUIRecomposition.load(std::memory_order_acquire);
     if (slFgOptionsInitialized.load(std::memory_order_acquire) &&
         slFgEnabledByApi.load(std::memory_order_acquire) == desiredEnabled &&
-        appliedMode == desiredMode &&
+        appliedMode == desiredMode && appliedUIRecomposition == desiredUIRecomposition &&
         (!enable || (dynamicRequested ? appliedDynamicTargetMilliFps == desiredDynamicTargetMilliFps
                                      : appliedGenerated == requestedGenerated))) return;
 
@@ -1074,11 +1801,15 @@ static void SetDLSSGModeForPresent(unsigned long long present, bool frameReady) 
     options.colorHeight = slFgColorHeight.load();
     options.colorBufferFormat = slFgColorFormat.load();
     options.hudLessBufferFormat = slFgHudLessFormat.load();
+    options.enableUserInterfaceRecomposition = desiredUIRecomposition ? sl::Boolean::eTrue : sl::Boolean::eFalse;
     if (IsHdr10BridgeActive()) {
         options.colorWidth = GetHdr10BridgeWidth();
         options.colorHeight = GetHdr10BridgeHeight();
         options.colorBufferFormat = static_cast<unsigned int>(DXGI_FORMAT_R10G10B10A2_UNORM);
-        options.hudLessBufferFormat = 0;
+        // HDR FG is only recomposed when the private pre-UI scene has been converted
+        // from Control's FP16/scRGB shadow surface into the same RGB10/PQ/BT.2020
+        // domain as the intercepted presentation backbuffer.
+        options.hudLessBufferFormat = control_fg_hdr_ui::HudlessOptionFormat(true, desiredUIRecomposition != 0, currentHudlessFormat, static_cast<unsigned int>(DXGI_FORMAT_R10G10B10A2_UNORM));
     }
 
     const unsigned int wasInitialized = slFgOptionsInitialized.load(std::memory_order_acquire);
@@ -1086,7 +1817,14 @@ static void SetDLSSGModeForPresent(unsigned long long present, bool frameReady) 
     const unsigned int previousAppliedGenerated = slFgAppliedGeneratedFrames.load(std::memory_order_acquire);
     const unsigned int previousAppliedMode = slFgAppliedMode.load(std::memory_order_acquire);
     const unsigned int previousAppliedDynamicTargetMilliFps = slFgAppliedDynamicTargetMilliFps.load(std::memory_order_acquire);
+    const unsigned int previousUIRecomposition = slFgAppliedUIRecomposition.load(std::memory_order_acquire);
+    if (desiredEnabled) slFgOffPresentProof.Invalidate();
+    if(enable&&IsFGRtx40Series()&&(IsFGExperimentalMultiplier(selected)||dynamicRequested))Log("FG_RTX40_MFG_TEST_REQUEST present=%llu selected=%u requested_generated=%u reported_max_generated=%u ui_recomposition=%u dynamic=%u target_fps=%.3f",present,selected,options.numFramesToGenerate,slMfgMaxGenerated.load(),desiredUIRecomposition,unsigned(dynamicRequested),static_cast<double>(options.dynamicTargetFrameRate));
     const sl::Result setResult = slDLSSGSetOptionsApi(slFgViewport, options);
+    if(enable&&IsFGRtx40Series()&&(IsFGExperimentalMultiplier(selected)||dynamicRequested)){
+        Log("FG_RTX40_MFG_TEST_RESULT present=%llu selected=%u result=%lld action=%s",present,selected,SLResultCode(setResult),setResult==sl::Result::eOk?"observe_actual_frames":"return_selection_to_2x");
+        if(setResult!=sl::Result::eOk)SetFGUserMultiplier(2u);
+    }
     ++slFgOptionsCalls;
     if (setResult == sl::Result::eOk) {
         slFgEnabledByApi.store(desiredEnabled, std::memory_order_release);
@@ -1094,6 +1832,9 @@ static void SetDLSSGModeForPresent(unsigned long long present, bool frameReady) 
         slFgAppliedMode.store(desiredMode, std::memory_order_release);
         slFgAppliedGeneratedFrames.store(enable && !dynamicRequested ? requestedGenerated : 0u, std::memory_order_release);
         slFgAppliedDynamicTargetMilliFps.store(enable && dynamicRequested ? desiredDynamicTargetMilliFps : 0u, std::memory_order_release);
+        slFgAppliedUIRecomposition.store(desiredUIRecomposition, std::memory_order_release);
+        if (previousUIRecomposition != desiredUIRecomposition || slFgOptionsCalls.load() <= 8)
+            Log("FG_UI_RECOMPOSITION_OPTIONS present=%llu enabled=%u hudless_tag=%u ui_alpha_tag=%u hudless_format=%u hdr10_bridge=%u hdr10_domain_ready=%u", present, desiredUIRecomposition, unsigned((currentTagMask&kSLTagHUDLess)!=0), unsigned((currentTagMask&kSLTagUIAlpha)!=0), slFgHudLessFormat.load(), unsigned(IsHdr10BridgeActive()), unsigned(hdrHudlessDomainReady));
 
         const bool fixedMultiplierChanged = wasInitialized && wasEnabled && enable && previousAppliedMode == 1u && desiredMode == 1u && previousAppliedGenerated != requestedGenerated;
         const bool modeChanged = wasInitialized && wasEnabled && enable && previousAppliedMode != desiredMode;
@@ -1163,6 +1904,65 @@ static void SetDLSSGModeForPresent(unsigned long long present, bool frameReady) 
     }
 }
 
+
+// R5 isolation: when normal presentation already committed FG Off, reuse that
+// boundary instead of injecting another Present during ResizeBuffers. Otherwise
+// retain the original quiesce path; resource freeing and recovery gates remain.
+static bool QuiesceDLSSGForHdrSwapchainTransition(IDXGISwapChain* swapChain, const char* reason) noexcept {
+    const unsigned long long present = presentCount.load(std::memory_order_acquire);
+    // Consume before Begin hard reset queues Off: newly queued Off is not proof
+    // of a completed boundary. Require the same swapchain and currently Off API.
+    const auto priorOffPresent = slFgOffPresentProof.Take(swapChain);
+    const bool priorOffCommitted = priorOffPresent != 0 &&
+        slFgEnabledByApi.load(std::memory_order_acquire) == 0u;
+    const bool resetNeeded = BeginSLDLSSGHardReset(present, reason);
+    if (!resetNeeded) {
+        Log("FG_HDR_TRANSITION_PREP reason=%s action=hard_reset_not_needed user_selection=off success=1", reason ? reason : "unknown");
+        return true;
+    }
+    if (!swapChain) {
+        ++slFgHdrTransitionQuiesceFailures;
+        Log("FG_HDR_TRANSITION_QUIESCE reason=%s action=hard_reset success=0 stage=swapchain_missing failures=%llu", reason ? reason : "unknown", slFgHdrTransitionQuiesceFailures.load());
+        return false;
+    }
+
+    const unsigned int stage = slFgHdrHardResetStage.load(std::memory_order_acquire);
+    if (stage == static_cast<unsigned int>(SLHdrHardResetStage::ResourcesFreedWaitBridge)) {
+        Log("FG_HDR_TRANSITION_QUIESCE reason=%s action=hard_reset success=1 stage=resources_already_freed serial=%llu", reason ? reason : "unknown", slFgHdrHardResetSerial.load());
+        return true;
+    }
+
+    if (priorOffCommitted) {
+        // FG has remained Off since a successful normal presentation. Free at
+        // this resize boundary without advancing the inner swapchain again.
+        CompleteSLDLSSGHardResetAfterPresent(present, S_OK, "reuse_normal_off_present");
+        const bool freed = slFgHdrHardResetStage.load(std::memory_order_acquire) ==
+            static_cast<unsigned int>(SLHdrHardResetStage::ResourcesFreedWaitBridge);
+        if (!freed) ++slFgHdrTransitionQuiesceFailures;
+        Log("FG_HDR_TRANSITION_REUSE_OFF reason=%s present=%llu prior_off_present=%llu resources_freed=%u injected_present=0 action=%s",
+            reason ? reason : "unknown", present, priorOffPresent, unsigned(freed), freed ? "resize_after_existing_off_commit" : "hold_fg_off");
+        return freed;
+    }
+    Log("FG_HDR_TRANSITION_FALLBACK reason=%s present=%llu action=original_quiesce_present no_reusable_off_boundary=1",
+        reason ? reason : "unknown", present);
+
+    // A real Present is the boundary at which DLSS-G consumes eOff. Once that
+    // Present returns successfully, r31 immediately slFreeResources() the DLSS-G
+    // viewport before Control mutates the swapchain/HDR bridge resources.
+    const auto alignSerial=FGAlignPresentEnter(present,swapChain,"resize_quiesce",0);
+    const HRESULT presentHr = swapChain->Present(0, 0);
+    FGAlignPresentExit(alignSerial,present,swapChain,presentHr);
+    CompleteSLDLSSGHardResetAfterPresent(present, presentHr, "resize_quiesce_present");
+    const bool committedAndFreed = slFgHdrHardResetStage.load(std::memory_order_acquire) ==
+        static_cast<unsigned int>(SLHdrHardResetStage::ResourcesFreedWaitBridge);
+    if (committedAndFreed) ++slFgHdrTransitionQuiescePresents;
+    else ++slFgHdrTransitionQuiesceFailures;
+    Log("FG_HDR_TRANSITION_QUIESCE reason=%s action=hard_reset_then_resize present_hr=0x%08lX resources_freed=%u quiesce_presents=%llu failures=%llu",
+        reason ? reason : "unknown", static_cast<unsigned long>(presentHr), unsigned(committedAndFreed),
+        slFgHdrTransitionQuiescePresents.load(), slFgHdrTransitionQuiesceFailures.load());
+    return committedAndFreed;
+}
+
 static bool PrepareSLPrivateDeviceProxy(ID3D12Device* baseDevice) noexcept {
     if (!baseDevice || !slUpgradeInterfaceApi || !slGetNativeInterfaceApi || slBootstrapState.load() != 2) {
         Log("SL_DEVICE_PROXY_SKIP reason=core_not_ready native_device=%p bootstrap_state=%u", baseDevice, slBootstrapState.load());
@@ -1215,16 +2015,18 @@ static void TryConfigureSLNativeDeviceEarly(ID3D12Device* baseDevice, const char
     CacheFGGpuClassFromLuid(luid);
     Log("SL_DEVICE_BIND_BEGIN native_device=%p adapter_luid=%08lX:%08lX trigger=%s ordering=before_control_ngx dual_ngx_paths=1",
         baseDevice, static_cast<unsigned long>(luid.HighPart), luid.LowPart, trigger ? trigger : "unknown");
+    InitializeRTX40MFGTest(baseDevice);
     const sl::Result result = slSetD3DDeviceApi(baseDevice);
     Log("SL_DEVICE_BIND_END native_device=%p result=%lld trigger=%s ordering=before_control_ngx dual_ngx_paths=1",
         baseDevice, SLResultCode(result), trigger ? trigger : "unknown");
     if (result == sl::Result::eOk) {
         slDeviceConfigured.store(1);
-        Log("SL_DEVICE_READY native_device=%p features_requested=3 control_dlss_ready=%u ordering=before_control_ngx dual_ngx_paths=1 factory_upgrade=presentation_only swapchain_upgrade=via_factory queue_hook=1 fg_enabled=0",
+        Log("SL_DEVICE_READY native_device=%p features_requested=4 control_dlss_ready=%u ordering=before_control_ngx dual_ngx_paths=1 factory_upgrade=presentation_only swapchain_upgrade=via_factory queue_hook=1 fg_enabled=0",
             baseDevice, slControlDlssReady.load());
         ProbeSLFeatureGate(luid);
         ResolveSLFrameFeatureFunctions();
         ResolveDLSSGFeatureFunctions();
+        ResolveDLSSRRFeatureFunctions();
         ConfigureSLReflexForCurrentFG(presentCount.load());
     } else {
         Log("SL_DEVICE_BIND_FAILED result=%lld ordering=before_control_ngx dual_ngx_paths=1 fg_enabled=0", SLResultCode(result));
@@ -1301,15 +2103,17 @@ static void TryConfigureSLNativeDeviceDeferred(const char* trigger) noexcept {
     CacheFGGpuClassFromLuid(luid);
     Log("SL_DEVICE_BIND_BEGIN native_device=%p adapter_luid=%08lX:%08lX trigger=%s ordering=after_control_dlss",
         baseDevice, static_cast<unsigned long>(luid.HighPart), luid.LowPart, trigger ? trigger : "unknown");
+    InitializeRTX40MFGTest(baseDevice);
     const sl::Result result = slSetD3DDeviceApi(baseDevice);
     Log("SL_DEVICE_BIND_END native_device=%p result=%lld trigger=%s ordering=after_control_dlss",
         baseDevice, SLResultCode(result), trigger ? trigger : "unknown");
     if (result == sl::Result::eOk) {
         slDeviceConfigured.store(1);
-        Log("SL_DEVICE_READY native_device=%p features_requested=3 control_dlss_ready=1 ordering=after_control_dlss factory_upgrade=presentation_only swapchain_upgrade=via_factory queue_hook=1 fg_enabled=0", baseDevice);
+        Log("SL_DEVICE_READY native_device=%p features_requested=4 control_dlss_ready=1 ordering=after_control_dlss factory_upgrade=presentation_only swapchain_upgrade=via_factory queue_hook=1 fg_enabled=0", baseDevice);
         ProbeSLFeatureGate(luid);
         ResolveSLFrameFeatureFunctions();
         ResolveDLSSGFeatureFunctions();
+        ResolveDLSSRRFeatureFunctions();
         ConfigureSLReflexForCurrentFG(presentCount.load());
     } else {
         Log("SL_DEVICE_BIND_FAILED result=%lld control_dlss_ready=1 fg_enabled=0", SLResultCode(result));
@@ -1646,7 +2450,7 @@ static HRESULT WINAPI HookD3D12CreateDevice(IUnknown* adapter, D3D_FEATURE_LEVEL
     Log("D3D12_CREATE_DEVICE_RETURN hr=0x%08lX adapter=%p feature_level=0x%X iid=%08lX returned=%p bootstrap_state=%u device_set=%u control_dlss_ready=%u",
         static_cast<unsigned long>(hr), adapter, unsigned(minimumFeatureLevel), iid.Data1, returned,
         slBootstrapState.load(), slDeviceConfigured.load(), slControlDlssReady.load());
-    if (SUCCEEDED(hr) && returned) CaptureSLNativeDeviceForDeferredBind(returned);
+    if (SUCCEEDED(hr) && returned) { const DWORD clampError=GetLastError(); control_rr_clamp::InstallDevice(static_cast<IUnknown*>(returned)); SetLastError(clampError); CaptureSLNativeDeviceForDeferredBind(returned); }
     return hr;
 }
 
@@ -1799,7 +2603,7 @@ static void ProbeSLPresentState(unsigned long long present) noexcept {
     sl::Result unwrapResult = sl::Result::eErrorInvalidParameter;
     if (slGetNativeInterfaceApi) unwrapResult = slGetNativeInterfaceApi(chain, &nativeChain);
     const bool proxyChain = unwrapResult == sl::Result::eOk && nativeChain && nativeChain != chain;
-    Log("SL_PRESENT_MANUAL_GATE present=%llu chain=%p desc_hr=0x%08lX width=%u height=%u format=%u buffers=%u unwrap_result=%lld native_chain=%p proxy_chain=%u bootstrap_state=%u features_requested=3 device_set=%u control_dlss_ready=%u bind_attempted=%u factory_upgrade_count=%u queue_route_calls=%u fg_api_enabled=%u",
+    Log("SL_PRESENT_MANUAL_GATE present=%llu chain=%p desc_hr=0x%08lX width=%u height=%u format=%u buffers=%u unwrap_result=%lld native_chain=%p proxy_chain=%u bootstrap_state=%u features_requested=4 device_set=%u control_dlss_ready=%u bind_attempted=%u factory_upgrade_count=%u queue_route_calls=%u fg_api_enabled=%u",
         present, chain, static_cast<unsigned long>(descHr),
         SUCCEEDED(descHr) ? desc.BufferDesc.Width : 0u, SUCCEEDED(descHr) ? desc.BufferDesc.Height : 0u,
         SUCCEEDED(descHr) ? unsigned(desc.BufferDesc.Format) : 0u, SUCCEEDED(descHr) ? desc.BufferCount : 0u,

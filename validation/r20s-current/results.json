@@ -1,0 +1,20 @@
+{
+  "status": "LOCAL_PASS_WINDOWS_GPU_REQUIRED",
+  "version": "1.0.0-RR-Native-G12-r20s",
+  "checks": [
+    "E_to_F_live_switch_allowed",
+    "F_to_E_live_switch_allowed",
+    "K_L_M_live_switch_rejected",
+    "preset_generation_changes",
+    "skin_responsivity_toggle",
+    "partial_diagnostic_mode",
+    "full_rr_mode"
+  ],
+  "tested_sha256": {
+    "validation/r20s-current/mode-test.cpp": "9eee994bcc3aa0553442cc68a40b43b6cb1acdba6baaaf8b813d946a7ba739ce",
+    "src/rr_user_control.h": "b0ec97e33c18ef59c780e895081f14db81c5ce8d4d22a82b409588d3c2342194"
+  },
+  "limitations": [
+    "Portable policy test only; Windows/MSVC, NGX feature creation, character mask GPU dispatch and live E/F switching require Windows/GPU validation"
+  ]
+}

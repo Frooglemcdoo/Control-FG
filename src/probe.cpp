@@ -1,5 +1,5 @@
 // Control Steam build 21225456. Streamline 2.14.1 selectable DLSS-G Multi Frame Generation + overlay.
-// v1.0.0 is the first public release and freezes the v0.8.26 runtime-proven FG core.
+// v2.0.0 public release. Internal source revision r31c keeps the r24 compute HUDless path, r26 two-fresh-frame warmup, r27 resize quiesce fallback, and r29 fresh-output observer. r31c retains the r31 hard-reset architecture, preserves r31b delayed duplicate suppression, and adds a no-ResizeBuffers recovery path: after a display-only HDR/SDR flip frees DLSS-G resources, FG can rearm on the unchanged bridge generation after a 30-Present grace period plus two consecutive fresh tagged frames.
  // persistent user settings plus a Control-native overlay with improved bottom spacing and effective multiplier/HDR status.
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
@@ -17,6 +17,7 @@
 #include <string>
 #include <vector>
 #include <new>
+#include <intrin.h>
 #include "target.h"
 
 static_assert(sizeof(void*) == 8, "Build x64 only");
@@ -24,6 +25,7 @@ static HMODULE selfModule = nullptr, realDxgi = nullptr;
 static INIT_ONCE loadOnce = INIT_ONCE_STATIC_INIT, probeOnce = INIT_ONCE_STATIC_INIT;
 static SRWLOCK logLock = SRWLOCK_INIT;
 static HANDLE logFile = INVALID_HANDLE_VALUE;
+static bool verboseAuditLogging = false;
 static LARGE_INTEGER frequency{};
 static std::atomic<unsigned long long> aaCount{0}, presentCount{0}, beginCount{0}, hudCount{0};
 static std::atomic<unsigned long long> aaFailures{0}, sampleCount{0};
@@ -52,6 +54,12 @@ static thread_local unsigned int hudPrimaryTrackedState = 0;
 static thread_local unsigned int hudPrimaryStateKnown = 0;
 static HMODULE verifiedD3d = nullptr, verifiedRenderer = nullptr;
 
+#include "release_log_policy.h"
+
+static bool ReleaseLogSuppressed(const char* body) noexcept {
+    return control_fg_release_log::ShouldSuppress(body, verboseAuditLogging);
+}
+
 static void Log(const char* format, ...) noexcept {
     DWORD savedError = GetLastError();
     if (logFile != INVALID_HANDLE_VALUE) {
@@ -60,6 +68,7 @@ static void Log(const char* format, ...) noexcept {
         va_start(args, format);
         _vsnprintf_s(body, sizeof(body), _TRUNCATE, format, args);
         va_end(args);
+        if (ReleaseLogSuppressed(body)) { SetLastError(savedError); return; }
         LARGE_INTEGER now{};
         QueryPerformanceCounter(&now);
         int n = _snprintf_s(line, sizeof(line), _TRUNCATE, "qpc=%lld tid=%lu %s\r\n", now.QuadPart, GetCurrentThreadId(), body);
@@ -112,7 +121,12 @@ static bool HashMatches(HMODULE module, const char* expected) {
     return strcmp(hex, expected) == 0;
 }
 
+#include "fg_alignment_trace.h"
+#include "fg_pixel_capture.h"
+#include "fg_native_source.h"
+#include "rr_clamp_strength.h"
 #include "streamline_bridge.h"
+static HRESULT SubmitFGUIRecompositionBeforePresent(unsigned long long present) noexcept;
 #include "hdr10_bridge.h"
 #include "fg_overlay.h"
 
@@ -129,9 +143,13 @@ static void OpenLog() {
         time.wYear, time.wMonth, time.wDay, time.wHour, time.wMinute, time.wSecond, time.wMilliseconds, GetCurrentProcessId());
     logFile = CreateFileW((dir + name).c_str(), GENERIC_WRITE, FILE_SHARE_READ, nullptr,
         CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr);
+    wchar_t verbose[8]{};
+    const DWORD verboseLength=GetEnvironmentVariableW(L"CONTROLFG_VERBOSE_LOG",verbose,_countof(verbose));
+    verboseAuditLogging=verboseLength>0 && verboseLength<_countof(verbose) && verbose[0]!=L'0';
     QueryPerformanceFrequency(&frequency);
-    Log("PROBE v1.0.0 target_steam_build=21225456 frequency=%lld source_revision=r1 fg_activation=resource_gated presentation_proxy=active common_constants=active frame_sync=active resource_tags=active backbuffer_index=every_present fg_baseline=working hdr10_bridge=transition_aware hdr_transition_watch=dormant_rgb10_to_fp16 mfg_mode=fixed_plus_native_dynamic default_multiplier=4x generated_frames_requested=3 target_frames_presented=4 max_selector=6x dynamic_mode=native_eDynamic dynamic_auto_target=explicit_game_monitor_refresh dynamic_manual_target=30-1000_fps dynamic_vsync_policy=syncinterval0_while_active dynamic_reflex_limiter=target_fps dynamic_pcl_simulation_start=control_beginframe_after_sleep dynamic_target_ui=auto_manual_thick_slider overlay=win32_layered_control_native_menu persistence=localappdata_ini overlay_status=selected,effective,current_fps,hdr,capability overlay_title=embedded_control_fg_logo_control_native overlay_font=bahnschrift_semicondensed overlay_selected=white_fill_black_text overlay_sections=control_red selector=off,dynamic,2x,3x,4x,5x,6x gpu_policy=rtx40_off_plus_2x_only transition_telemetry=segment_confirmed streamline_sdk=2.14.1", frequency.QuadPart);
-    Log("LIMITS v1.0.0 public release; the v0.8.26 FG/HDR/Dynamic core remains frozen after runtime PASS. This build keeps the Control-native overlay and adds an RTX 40-series policy gate: Off and 2x remain selectable; Dynamic and 3x-6x are disabled and runtime-blocked. The v0.8.26 FG/HDR/Dynamic core remains otherwise unchanged. No generation, timing, camera, HUD, HDR conversion, or Control binary hooks are changed.");
+    Log("PROBE v2.0.0 internal_build=2.0.0-Clean-Native-R12-MFG-Dynamic-Test source_revision=clean-v2-native-source-r12-mfg-dynamic-test target_steam_build=21225456 frequency=%lld log_profile=%s",frequency.QuadPart,verboseAuditLogging?"verbose_audit":"release_support");
+    Log("CAPABILITIES fg=fixed_2x_to_6x_plus_dynamic rr=models_E_F_default_F hdr10_bridge=1 rr_guides=gbuffer_material_envbrdf rr_hit_distance=off rr_specular_mvec=off rr_diagnostic_readbacks=off streamline_sdk=2.14.1");
+    Log("MONITORING profile=%s rr_perf_sample=240 support_events=startup_settings_fg_rr_model_resize_recovery_failures_fallbacks_performance verbose_env=CONTROLFG_VERBOSE_LOG",verboseAuditLogging?"verbose_audit":"release_support");
 }
 
 // +0x88 was observed at multiple resource loads in the hash-locked doAntiAliasing
@@ -260,8 +278,12 @@ static bool ReadEngineCommandContext(ID3D12Resource* candidate, EngineCommandCon
             } __except (EXCEPTION_EXECUTE_HANDLER) { tlsContext = nullptr; }
             tlsGood = TryReadEngineCommandContextCandidate(tlsContext, 1, out, &commandDevice);
             if (!tlsGood && tlsContext) {
-                Log("HUD_COMMAND_CONTEXT_TLS_REJECT tls_index=%lu tls_block=%p tls_context=%p reason=invalid_command_context",
-                    static_cast<unsigned long>(out->tlsIndex), out->tlsBlock, tlsContext);
+                // Logging only: leave TLS validation and global fallback unchanged.
+                static std::atomic<unsigned long long> rejected{0};
+                const auto count=rejected.fetch_add(1,std::memory_order_relaxed)+1;
+                if(count<=4 || (count & (count-1))==0)
+                    Log("HUD_COMMAND_CONTEXT_TLS_REJECT tls_index=%lu tls_block=%p tls_context=%p reason=invalid_command_context reject_count=%llu log_policy=first4_then_powers_of_two",
+                        static_cast<unsigned long>(out->tlsIndex), out->tlsBlock, tlsContext,count);
             }
         }
         if (!tlsGood) {
@@ -291,7 +313,19 @@ static bool ReadEngineCommandContext(ID3D12Resource* candidate, EngineCommandCon
 
 #include "semantic_capture.h"
 #include "camera_capture.h"
+#include "rr_user_control.h"
 #include "streamline_frame.h"
+#include "rr_options_r20p.h"
+#include "rr_guide_render.h"
+#include "fg_ui_recomposition.h"
+#include "rr_performance.h"
+#include "rr_albedo_capture.h"
+#include "rr_diffuse_replay.h"
+#include "rr_live_guides.h"
+#include "rr_reflection_runtime.h"
+#include "rr_distance_runtime.h"
+#include "rr_input_capture.h"
+static bool RRNativePrepareAA(void* color,void*& normal,void*& diffuse,void*& specular) noexcept;
 
 static void ExtendPathTrace(unsigned long long present, unsigned long long frames) noexcept {
     const unsigned long long target = present + frames;
@@ -331,7 +365,7 @@ static bool HookAA(void* t1, void* t2, void* t3, void* t4, void* t5, void* t6,
     const auto gapPresents = (previousPresent && currentPresent > previousPresent) ? currentPresent - previousPresent : 0;
     const bool resumeGap = previousPresent != 0 && gapPresents > 2;
     const bool startupCandidate = call <= 12;
-    const bool periodicCandidate = (call % 240) == 0;
+    const bool periodicCandidate = false; // r20x lean performance branch: no periodic semantic captures
     const bool baselineSample = (startupCandidate || periodicCandidate) && baselineSampleCount.load() < 32;
     const bool resumeSample = resumeGap && transitionSampleCount.load() < 32;
     bool sample = baselineSample || resumeSample;
@@ -365,7 +399,17 @@ static bool HookAA(void* t1, void* t2, void* t3, void* t4, void* t5, void* t6,
     }
     SetLastError(saved);
 
-    const bool result = originalAA(t1,t2,t3,t4,t5,t6,t7,t8,t9,flag,d1,d2,f1,f2,f3);
+    const bool argumentsReady=RRNativePrepareAA(t2,t7,t8,t9);
+    // Control uses negative f3 as its native "use configured/default sharpening"
+    // sentinel. The user override is intentionally restricted to native SR/DLAA:
+    // Streamline DLSS-RR 2.14.1 explicitly ignores the sharpness option.
+    const bool aaSharpnessOverride = control_rr::RRUserSharpnessOverrideEnabled() && !control_rr::RRUserRequested();
+    const float appliedF3 = aaSharpnessOverride ? control_rr::RRUserSharpnessValue() : f3;
+    if (aaSharpnessOverride && (call <= 4 || (call % 240) == 0)) {
+        Log("AA_SHARPNESS_OVERRIDE call=%llu present=%llu input=%.9g applied=%.9g scope=native_sr_dlaa rr_requested=0",
+            call,currentPresent,double(f3),double(appliedF3));
+    }
+    const bool result = argumentsReady&&originalAA(t1,t2,t3,t4,t5,t6,t7,t8,t9,flag,d1,d2,f1,f2,appliedF3);
     MarkControlDLSSReady(call, result);
 
     // Reset is an NGX input populated inside the original DLSS wrapper, so read
@@ -405,6 +449,7 @@ static bool HookAA(void* t1, void* t2, void* t3, void* t4, void* t5, void* t6,
     }
 
     if (result) {
+        ConfigureRR20POptionsForAA(call, currentPresent, slCameraKnown, slCamera);
         SubmitSLCommonConstantsForAA(call, currentPresent, slCameraKnown, slCamera, resetKnown, resetValue);
         SubmitSLDepthMotionTagsForAA(call, currentPresent, textures, _countof(textures));
         if (!slCameraKnown && (call <= 12 || (call % 240) == 0)) {
@@ -413,7 +458,9 @@ static bool HookAA(void* t1, void* t2, void* t3, void* t4, void* t5, void* t6,
         }
     }
 
-    if (sample && result) CaptureSemantic(call, sampledResources, sampleReason);
+    if (sample && result) {
+        CaptureSemantic(call, sampledResources, sampleReason);
+    }
     if (!result) {
         ++aaFailures;
         ExtendPathTrace(currentPresent, 12);
@@ -422,7 +469,102 @@ static bool HookAA(void* t1, void* t2, void* t3, void* t4, void* t5, void* t6,
         Log("AA_RETURN call=%llu success=%u failures=%llu reset_known=%u reset=%d gap_presents=%llu sample_reason=%s",
             call, result ? 1u : 0u, aaFailures.load(), unsigned(resetKnown), resetValue, gapPresents, sampleReason);
     }
+    // RR diagnostic only: preserve production AA/FG ordering, then give a
+    // joined material capture one later same-frame copy opportunity.
+    // r20x: disable diagnostic joined capture in performance branch.
     return result;
+}
+
+// RR Phase 2 observation-only runtime hooks. These wrap renderer imports of
+// DeviceUtilRaytracing setup/dispatch calls. They do not change arguments,
+// resources, command-list state, or GPU work.
+using RRBeginPipelineSetupFn = void (*)(int, int);
+using RRSetRayGenerationFn = void (*)(const char*);
+using RRRaytraceFn = void (*)(int, int);
+static RRBeginPipelineSetupFn originalRRBeginPipelineSetup = nullptr;
+static RRSetRayGenerationFn originalRRSetRayGeneration = nullptr;
+static RRRaytraceFn originalRRRaytrace = nullptr;
+static std::atomic<unsigned long long> rrPipelineSetupCount{0};
+static std::atomic<unsigned long long> rrRayGenerationCount{0};
+static std::atomic<unsigned long long> rrRaytraceDispatchCount{0};
+static thread_local int rrCurrentPipelineArg0 = -1;
+static thread_local int rrCurrentPipelineArg1 = -1;
+static thread_local char rrCurrentRayGeneration[128] = "<unset>";
+
+static void RRSafeCopyCString(const char* source, char* dest, size_t destBytes) noexcept {
+    if (!dest || !destBytes) return;
+    dest[0] = '\0';
+    if (!source) {
+        strncpy_s(dest, destBytes, "<null>", _TRUNCATE);
+        return;
+    }
+    __try {
+        size_t i = 0;
+        for (; i + 1 < destBytes && source[i]; ++i) {
+            const unsigned char c = static_cast<unsigned char>(source[i]);
+            dest[i] = (c >= 0x20 && c <= 0x7E) ? static_cast<char>(c) : '?';
+        }
+        dest[i] = '\0';
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        strncpy_s(dest, destBytes, "<fault>", _TRUNCATE);
+    }
+}
+
+
+static void HookRRBeginPipelineSetup(int a, int b) {
+    const auto call = ++rrPipelineSetupCount;
+    rrCurrentPipelineArg0 = a;
+    rrCurrentPipelineArg1 = b;
+    if (call <= 32) {
+        Log("RR_PIPELINE_SETUP call=%llu arg0=%d arg1=%d begin=%llu present=%llu aa=%llu",
+            call, a, b, beginCount.load(), presentCount.load(), aaCount.load());
+    }
+    originalRRBeginPipelineSetup(a, b);
+}
+
+static void HookRRSetRayGeneration(const char* name) {
+    const auto call = ++rrRayGenerationCount;
+    char safeName[128]{};
+    RRSafeCopyCString(name, safeName, sizeof(safeName));
+    strncpy_s(rrCurrentRayGeneration, sizeof(rrCurrentRayGeneration), safeName, _TRUNCATE);
+    if (call <= 32) {
+        Log("RR_RAYGEN_BIND call=%llu pipeline_arg0=%d pipeline_arg1=%d name=%s begin=%llu present=%llu aa=%llu",
+            call, rrCurrentPipelineArg0, rrCurrentPipelineArg1, safeName,
+            beginCount.load(), presentCount.load(), aaCount.load());
+    }
+    originalRRSetRayGeneration(name);
+}
+
+static void HookRRRaytrace(int a, int b) {
+    const auto call = ++rrRaytraceDispatchCount;
+    const bool sample = call <= 32 || (call % 240) == 0;
+    LARGE_INTEGER before{}, after{};
+    unsigned long long engineFrame = 0;
+    DWORD frameFault = 0;
+    bool engineFrameKnown = false;
+    EngineCommandContextSnapshot command{};
+    bool commandKnown = false;
+    char raygen[128]{};
+    if (sample) {
+        RRSafeCopyCString(rrCurrentRayGeneration, raygen, sizeof(raygen));
+        engineFrameKnown = ReadEngineFrameSafe(&engineFrame, &frameFault);
+        commandKnown = ReadEngineCommandContext(nullptr, &command);
+        Log("RR_RAYTRACE_ENTER call=%llu arg0=%d arg1=%d raygen=%s pipeline_arg0=%d pipeline_arg1=%d begin=%llu present=%llu aa=%llu engine_frame=%llu engine_frame_known=%u engine_frame_exception=0x%08lX command_known=%u context=%p command_list=%p command_type=%u source_tls=%u command_exception=0x%08lX",
+            call, a, b, raygen, rrCurrentPipelineArg0, rrCurrentPipelineArg1,
+            beginCount.load(), presentCount.load(), aaCount.load(), engineFrame,
+            unsigned(engineFrameKnown), frameFault, unsigned(commandKnown), command.context,
+            command.commandList, command.commandType, command.sourceTls, command.fault);
+        QueryPerformanceCounter(&before);
+    }
+    originalRRRaytrace(a, b);
+    RRGuideTryCapture(aaCount.load(), rrCurrentRayGeneration);
+    if (sample) {
+        QueryPerformanceCounter(&after);
+        const long long ticks = after.QuadPart - before.QuadPart;
+        const double us = frequency.QuadPart > 0 ? (double(ticks) * 1000000.0 / double(frequency.QuadPart)) : 0.0;
+        Log("RR_RAYTRACE_RETURN call=%llu arg0=%d arg1=%d raygen=%s duration_us=%.3f begin=%llu present=%llu aa=%llu",
+            call, a, b, raygen, us, beginCount.load(), presentCount.load(), aaCount.load());
+    }
 }
 
 static bool TraceFrame(unsigned long long count) noexcept {
@@ -432,6 +574,8 @@ static bool TraceFrame(unsigned long long count) noexcept {
 
 static void HookBegin() {
     auto count = ++beginCount;
+    FGAlignPoll(presentCount.load());
+    FGPixelPoll();
     PrepareSLFrameToken(count);
     // This is Control's existing one-per-frame renderer begin boundary. The frame
     // token and Reflex sleep have already been issued above, matching NVIDIA's
@@ -446,7 +590,7 @@ static void HookBegin() {
 static void HookPresent() {
     auto count = ++presentCount;
     const bool windowTrace = ShouldPathTrace(count);
-    const bool periodicTrace = aaCount.load() > 0 && (count % 121) == 0;
+    const bool periodicTrace = false; // r20x lean performance branch: no periodic swap capture
     const bool captureSwap = aaCount.load() > 0 && (windowTrace || periodicTrace) && swapSamples.load() < 160;
     bool enumerateAll = false;
     if (captureSwap) {
@@ -467,8 +611,16 @@ static void HookPresent() {
     // gate and native Present so the first enabled FG frame satisfies it too.
     TouchSLCurrentBackBufferIndex(count);
     sl::FrameToken* slPresentToken = BeginSLPresentFrame(count);
+    if(FGAlignActive(count)) Log("ALIGN_NATIVE_PRESENT present=%llu begin=%llu aa=%llu token=%p tag_mask=0x%X fg_enabled=%u",count,beginCount.load(),aaCount.load(),slPresentToken,GetSLFrameTagMask(count),slFgEnabledByApi.load());
     originalPresent();
     EndSLPresentFrame(count, slPresentToken);
+    RRGuideAfterPresent(count);
+    RRLiveAfterPresent(count);
+    RRReflectionAfterPresent(count); // Retire even after RR/F is disabled.
+    RRDistanceAfterPresent();
+    RRInputCaptureAfterPresent(count);
+    RRDiffuseAfterPresent(count);
+    RRPerfAfterPresent(count);
     if (trace) Log("PRESENT_RETURN count=%llu aa=%llu begin=%llu hud_dispatch=%llu hud_render=%llu", count, aaCount.load(), beginCount.load(), hudCount.load(), hudRenderCount.load());
     TryConfigureSLNativeDeviceDeferred("post_present_after_control_dlss");
 
@@ -526,10 +678,10 @@ static void* HookRenderToTextureCtor(void* self, const void* color, const void* 
             const unsigned int direct = unsigned(commandKnown && cmd.commandType == D3D12_COMMAND_LIST_TYPE_DIRECT);
             const unsigned int aliasPrimary = unsigned(c.resource && hudPrimaryResource && c.resource == hudPrimaryResource);
 
-            if (currentDlssFrame) {
-                SubmitSLHUDLessTagForFrame(currentPresent, engineFrame, hudPrimaryResource,
-                    hudPrimaryDesc, hudPrimaryTrackedState, hudPrimaryStateKnown != 0,
-                    reinterpret_cast<ID3D12GraphicsCommandList*>(cmd.commandList), direct != 0, cmd.deviceMatch != 0);
+            if (currentDlssFrame && commandKnown && direct && cmd.deviceMatch) {
+                PrepareFGUIRecompositionBeforeHUD(currentPresent, hudPrimaryResource, hudPrimaryDesc,
+                    hudPrimaryTrackedState, hudPrimaryStateKnown != 0,
+                    reinterpret_cast<ID3D12GraphicsCommandList*>(cmd.commandList));
             }
 
             if (hudTargetTrace && hudTargetRecords.load() < 224) {
@@ -597,6 +749,20 @@ static void HookHUDRender(void* object) {
     hudPrimaryStateKnown = 0;
     hudTargetTrace = targetTrace;
     originalHUDRender(object);
+    // UI has now been recorded into the same final-color resource. Generate a
+    // private UI-alpha mask against the pre-UI snapshot and tag both private
+    // resources for the upcoming Present.
+    if (hudPrimaryNative && hudPrimaryResource && aaCount.load() > 0 && lastAaObservedPresent.load() == presentCount.load()) {
+        NativeTextureStateSnapshot post{};
+        const bool postOk=ReadNativeTextureState(hudPrimaryNative,&post);
+        EngineCommandContextSnapshot postCmd{};
+        const bool postCmdKnown=postOk&&ReadEngineCommandContext(hudPrimaryResource,&postCmd);
+        const bool postDirect=postCmdKnown&&postCmd.commandType==D3D12_COMMAND_LIST_TYPE_DIRECT;
+        if(postOk&&postCmdKnown&&postDirect&&postCmd.deviceMatch) {
+            FGAlignProduced(presentCount.load()+1,hudPrimaryResource,reinterpret_cast<void*>(postCmd.commandList));
+            FinalizeFGUIRecompositionAfterHUD(presentCount.load(),hudPrimaryResource,post.desc,post.trackedState,post.stateKnown!=0,reinterpret_cast<ID3D12GraphicsCommandList*>(postCmd.commandList));
+        }
+    }
     if (targetTrace) {
         Log("HUD_RTT_FRAME_SUMMARY hud_render=%llu present=%llu aa=%llu constructors=%u last_backbuffer=%p backbuffer_index=%u dlss_output=%p",
             count, presentCount.load(), aaCount.load(), hudRttOrdinal, lastSwapBackbuffer.load(), lastSwapBackbufferIndex.load(), lastDlssOutput.load());
@@ -670,6 +836,48 @@ static bool Exchange(Patch& p, bool install) {
     if (!VirtualProtect(p.slot, sizeof(void*), old, &ignored))
         Log("PROTECTION_RESTORE_FAILED label=%s error=%lu", p.label, GetLastError());
     return previous == expected;
+}
+
+#include "rr_albedo_hooks.h"
+#include "rr_native_frame.h"
+#include "rr_native_guides.h"
+#include "rr_skin_mask_runtime.h"
+#include "rr_evaluation_entry.h"
+#include "rr_reflection_hooks.h"
+
+static unsigned int InstallRRObservationHooks(HMODULE renderer, HMODULE d3d) noexcept {
+    originalRRBeginPipelineSetup = d3d ? reinterpret_cast<RRBeginPipelineSetupFn>(GetProcAddress(d3d, kRRBeginPipelineSetupSymbol)) : nullptr;
+    originalRRSetRayGeneration = d3d ? reinterpret_cast<RRSetRayGenerationFn>(GetProcAddress(d3d, kRRSetRayGenerationSymbol)) : nullptr;
+    originalRRRaytrace = d3d ? reinterpret_cast<RRRaytraceFn>(GetProcAddress(d3d, kRRRaytraceSymbol)) : nullptr;
+
+    Patch candidates[] = {
+        {FindImport(renderer, "d3d_rmdwin10_f.dll", kRRBeginPipelineSetupSymbol),
+            reinterpret_cast<void*>(originalRRBeginPipelineSetup), reinterpret_cast<void*>(&HookRRBeginPipelineSetup), "RR_BEGIN_PIPELINE_SETUP"},
+        {FindImport(renderer, "d3d_rmdwin10_f.dll", kRRSetRayGenerationSymbol),
+            reinterpret_cast<void*>(originalRRSetRayGeneration), reinterpret_cast<void*>(&HookRRSetRayGeneration), "RR_SET_RAY_GENERATION"},
+        {FindImport(renderer, "d3d_rmdwin10_f.dll", kRRRaytraceSymbol),
+            reinterpret_cast<void*>(originalRRRaytrace), reinterpret_cast<void*>(&HookRRRaytrace), "RR_RAYTRACE"}
+    };
+
+    unsigned int installed = 0;
+    for (auto& candidate : candidates) {
+        Log("RR_OBSERVER_TARGET label=%s slot=%p original=%p slot_value=%p",
+            candidate.label, candidate.slot, candidate.original,
+            candidate.slot ? *candidate.slot : nullptr);
+        if (!candidate.slot || !candidate.original || *candidate.slot != candidate.original) {
+            Log("RR_OBSERVER_SKIPPED label=%s reason=%s", candidate.label,
+                !candidate.slot ? "import_not_found" : !candidate.original ? "export_not_found" : "unexpected_target");
+            continue;
+        }
+        if (Exchange(candidate, true)) {
+            ++installed;
+            Log("RR_OBSERVER_INSTALLED label=%s", candidate.label);
+        } else {
+            Log("RR_OBSERVER_SKIPPED label=%s reason=exchange_failed", candidate.label);
+        }
+    }
+    Log("RR_OBSERVER_SUMMARY installed=%u requested=%zu p4_hot_binding_hooks=disabled", installed, _countof(candidates));
+    return installed;
 }
 
 static BOOL CALLBACK Configure(PINIT_ONCE, PVOID, PVOID*) noexcept {
@@ -788,8 +996,26 @@ static BOOL CALLBACK Configure(PINIT_ONCE, PVOID, PVOID*) noexcept {
             return TRUE;
         }
         Log("HOOK_INSTALLED label=CONTROL_COMMAND_QUEUE_CTOR");
+        const bool guideInputsReady = RRGuideInitializeInputs(d3d);
+        const unsigned int rrObserverHooks = 0;
+        Log("RR_OBSERVER_HOOKS_DISABLED reason=r20x_performance_cleanup diagnostic_only=1");
+        const bool albedoHooksReady = guideInputsReady && RRAlbedoInstallHooks(renderer, d3d);
+        if(albedoHooksReady) rrAlbedoStage.store(RRAlbedoStage::Disabled,std::memory_order_release);
+        Log("RR_GUIDE_G3_NATIVE_PATH ready=%u diagnostic_capture=0 recurring_replay=on_demand_full_rr_only rr_eval=warmup_then_native", unsigned(albedoHooksReady));
+        RRGuideArm(false);
+        const bool evaluationEntryReady = RRInstallEvaluationEntry(d3d);
+        Log("RR_G12_EVALUATION_INSTALL ready=%u rr_eval=warmup_then_native", unsigned(evaluationEntryReady));
+        const bool temporalAccessReady=guideInputsReady&&RRReflectionInitializeAccessOnly(d3d);
+        Log("RR_TEMPORAL_ACCESS_INSTALL ready=%u reflection_geometry_capture=0 hit_distance_runtime=0 specular_mvec_runtime=0 rr_eval=warmup_then_native",unsigned(temporalAccessReady));
+        const bool distanceHooksReady=temporalAccessReady&&RRReflectionInstall(renderer,d3d);
+        Log("RR_F_DISTANCE_D1_INSTALL ready=%u capture=F_only fallback=unbound",unsigned(distanceHooksReady));
+        // Load persisted RR preset before the native feature-create hook can be consumed.
+        // StartFGOverlay() later reuses this already-loaded settings state.
+        FGOverlayLoadSettings();
+        const bool nativeRRReady=temporalAccessReady&&evaluationEntryReady&&albedoHooksReady&&RRNativeInstallFrame(renderer,d3d);
+        Log("RR_NATIVE_EXPERIMENT_INSTALL ready=%u mode=warmup_then_native_rr fixed_resolution=1",unsigned(nativeRRReady));
         StartFGOverlay();
-        Log("PROBE_ACTIVE hooks=9 fg_activation=resource_gated presentation_proxy=active common_constants=per_dlss_frame frame_tokens=begin_indexed pcl_present_markers=frame_gated reflex_mode=low_latency reflex_sleep=active streamline_sdk=2.14.1 streamline_bootstrap=deferred_post_native_factory bootstrap_state=%u semantic_capture=post_eval swapchain_capture=mode_change_aware camera_capture=pre_aa hud_render_hook=native_slot17 hud_rtt_hook=two_native_texture_ctor command_context=pre_ui_readonly_tls_sentinel_safe host_device=native queue_route=exact_constructor_only control_ngx_feature_path=ControlFGStreamline streamline_ngx_paths=runtime_plus_game device_bind=early_before_control_ngx factory_upgrade=presentation_only swapchain_upgrade=via_factory command_queue_proxy=exact_ctor_private_device features_requested=3 features=reflex,pcl,dlssg dlssg_loaded_expected=1 resource_tags=depth_mv_plus_hudless_sdr hdr10_resource_tags=depth_mv_only_optional_hudless_off backbuffer_index=every_present fg_baseline=working mfg_mode=fixed_plus_native_dynamic default_multiplier=4x max_selector=6x dynamic_mode=native_eDynamic dynamic_auto_target=explicit_game_monitor_refresh dynamic_manual_target=30-1000_fps dynamic_vsync_policy=syncinterval0_while_active dynamic_reflex_limiter=target_fps dynamic_target_ui=auto_manual_thick_slider overlay=win32_layered_control_native_menu persistence=localappdata_ini overlay_status=selected,effective,current_fps,hdr,capability overlay_title=embedded_control_fg_logo_control_native overlay_font=bahnschrift_semicondensed overlay_selected=white_fill_black_text overlay_sections=control_red selector=off,dynamic,2x,3x,4x,5x,6x gpu_policy=rtx40_off_plus_2x_only transition_telemetry=segment_confirmed hdr10_bridge=fp16_scrgb_shadow_to_rgb10_pq project_id=305914b8-cf5b-4535-8e53-5589bf8cefa5 device_set=%u hdr_query=enabled transition_capture=enabled", slBootstrapState.load(), slDeviceConfigured.load());
+        Log("PROBE_ACTIVE hooks=9 rr_observer_hooks=%u fg_activation=resource_gated presentation_proxy=active common_constants=per_dlss_frame frame_tokens=begin_indexed pcl_present_markers=frame_gated reflex_mode=low_latency reflex_sleep=active streamline_sdk=2.14.1 streamline_bootstrap=deferred_post_native_factory bootstrap_state=%u semantic_capture=post_eval swapchain_capture=mode_change_aware camera_capture=pre_aa hud_render_hook=native_slot17 hud_rtt_hook=two_native_texture_ctor command_context=pre_ui_readonly_tls_sentinel_safe host_device=native queue_route=exact_constructor_only control_ngx_feature_path=ControlFGStreamline streamline_ngx_paths=runtime_plus_game device_bind=early_before_control_ngx factory_upgrade=presentation_only swapchain_upgrade=via_factory command_queue_proxy=exact_ctor_private_device features_requested=4 features=reflex,pcl,dlssg,dlssrr dlssg_loaded_expected=1 dlssrr_loaded_expected=1 resource_tags=depth_mv_plus_private_hudless_plus_ui_alpha_sdr_and_hdr10 hdr10_resource_tags=depth_mv_plus_rgb10_pq_hudless_plus_ui_alpha backbuffer_index=every_present fg_baseline=working mfg_mode=fixed_plus_native_dynamic default_multiplier=4x max_selector=6x dynamic_mode=native_eDynamic dynamic_auto_target=explicit_game_monitor_refresh dynamic_manual_target=30-1000_fps dynamic_vsync_policy=syncinterval0_while_active dynamic_reflex_limiter=target_fps dynamic_target_ui=auto_manual_thick_slider rr_preset_selector=public_E_F rr_preset_live_switch=E_F rr_modes=off,full_public_partial_hidden skin_responsivity=disabled overlay=win32_layered_control_native_menu persistence=localappdata_ini_schema8_fg_mode_dynamic_target_rr_toggle_preset overlay_status=selected,effective,current_fps,hdr,capability overlay_title=embedded_control_fg_logo_control_native overlay_font=bahnschrift_semicondensed overlay_selected=white_fill_black_text overlay_sections=fg_status_generation_dynamic_plus_rr_toggle selector=off,dynamic,2x,3x,4x,5x,6x gpu_policy=rtx40_off_plus_2x_only transition_telemetry=segment_confirmed hdr_hotkey_guard=win_alt_b_pre_os_quiesce_replay hdr10_bridge=fp16_scrgb_shadow_to_rgb10_pq hdr10_fg_ui=pre_ui_fp16_to_rgb10_pq_plus_r8_alpha project_id=305914b8-cf5b-4535-8e53-5589bf8cefa5 device_set=%u hdr_query=enabled transition_capture=enabled rr_phase=NativeG12RRExperiment rr_live_guides=renodx_descriptor_parity_bounded_material_srv rr_eval=warmup_then_native rr_guide=renodx_style_gbuffer_material_envbrdf rr_capture=disabled_production rr_observer_hooks=stable3 p4_hot_binding_hooks=disabled ngx_set_calls=per_rr_frame ngx_setup_intercept=disabled rr_native_denoiser=specular_energy_clamp_gi_contact_shadow_broad_diffuse", rrObserverHooks, slBootstrapState.load(), slDeviceConfigured.load());
     } catch (...) {
         Log("PROBE_DISABLED initialization_exception");
     }

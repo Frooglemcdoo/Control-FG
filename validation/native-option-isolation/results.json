@@ -1,0 +1,11 @@
+{
+  "status": "PASS",
+  "scope": "Portable policy and exact six-byte RIP-relative jitter redirect encoding. Windows instruction patching and GPU behavior are not executed here.",
+  "windows_msvc": "NOT_RUN",
+  "windows_runtime": "NOT_RUN",
+  "gpu_execution": "NOT_RUN",
+  "tested_sha256": {
+    "validation/native-option-isolation/policy.cpp": "c2b828a3c6a3b09b28dd8d748aff7af96025d90531fffaba0a714ed422a6f99b",
+    "src/rr_native_option_policy.h": "8bad864db4ef88c8d3e6ff7e2b1f067c57ee1247af51188a366c433e986e379f"
+  }
+}

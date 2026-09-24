@@ -1,0 +1,32 @@
+{
+  "status": "PASS",
+  "probe_normalizes_exactly_to_tested_candidate": true,
+  "allowed_diagnostic_identity_substitutions": {
+    "1.0.0-RR-Native-G4": "1.0.0-RR-Native-G3",
+    "r1-rr-native-g4": "r1-rr-native-g3",
+    "NativeG4PrimaryViewMaterialImages": "NativeG3ShaderModel51MaterialImages"
+  },
+  "frozen_files_verified": 11,
+  "source_sha256": {
+    "src/rr_albedo_capture.h": "95b9b55616699b35fd31da9e904269fa1ee9f7c569aadff8b43fcfc66a554481",
+    "src/rr_albedo_draw_abi.h": "c53f5279f80edb8cd31246899da2b88073a7415ea484bd3378e46c21d7303f1a",
+    "src/probe.cpp": "573d054b57a521d772949036a0c7602bedb6f6e15378d9640edc6ab278a923a4",
+    "src/streamline_bridge.h": "99c182228471c9007d6ab8526e906546d8917b737797d6bb1b1a5a606a5dc546",
+    "src/fg_overlay.h": "ce01a2e14917fd0b35fdf6e8f3e8d37a8b1ba032150666719943d83a63b21c24"
+  },
+  "existing_regression_test_applicability": "Both behavior-changing headers exactly match prior48normal+ASanUBSan testedcandidate; no rerun required.",
+  "gameplay_or_crash_fix_validated": false,
+  "runtime_files_differing_from_G3_source": [
+    "rr_albedo_draw_abi.h",
+    "rr_albedo_capture.h",
+    "probe.cpp",
+    "fg_overlay.h"
+  ],
+  "overlay": {
+    "reason": "Preapply the unchanged R1 patch already run by G3 Build.cmd before source-hash verification. Actual built overlay behavior is unchanged.",
+    "original_source_sha256": "c54322b734c285c10d46841fff6b213402fda2cf4b93fac41bb29f627fc476cc",
+    "same_R1_patch_sha256": "36299ee595722cdea27f888f251e645c61e578a005737ec75aa400d06d619539",
+    "patched_baseline_equals_G4": true,
+    "patched_sha256": "ce01a2e14917fd0b35fdf6e8f3e8d37a8b1ba032150666719943d83a63b21c24"
+  }
+}

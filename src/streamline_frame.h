@@ -193,6 +193,211 @@ static bool BuildSLCommonConstants(const CameraSnapshot& camera, const SLNgxFram
     return true;
 }
 
+
+// ---------------- Ray Reconstruction Phase 7: options/optimal-settings handshake ----------------
+// P6 proved the official DLSS-RR plugin loads and is supported. P7 exercises
+// only the CPU-side configuration/query surface. It deliberately does NOT tag
+// RR material guides, call slEvaluateFeature, bypass Control's native denoisers,
+// or submit any additional GPU work.
+struct RRPhase7NgxOptionsInputs {
+    unsigned int renderWidth{};
+    unsigned int renderHeight{};
+    unsigned int outputWidth{};
+    unsigned int outputHeight{};
+    float preExposure{1.0f};
+    float exposureScale{1.0f};
+    unsigned int renderWidthStatus{};
+    unsigned int renderHeightStatus{};
+    unsigned int outputWidthStatus{};
+    unsigned int outputHeightStatus{};
+    unsigned int preExposureStatus{};
+    unsigned int exposureScaleStatus{};
+    DWORD fault{};
+};
+
+static std::atomic<unsigned int> rrP7OptionsApplied{0};
+static std::atomic<unsigned int> rrP7OptionsQueryFinished{0};
+static std::atomic<unsigned int> rrP7OptionsAttempts{0};
+static SRWLOCK rrP7OptionsLock = SRWLOCK_INIT;
+
+static bool ReadRRPhase7NgxOptionsInputs(RRPhase7NgxOptionsInputs* out) noexcept {
+    if (!out) return false;
+    *out = RRPhase7NgxOptionsInputs{};
+    const DWORD saved = GetLastError();
+    bool queried = false;
+    __try {
+        auto base = reinterpret_cast<unsigned char*>(verifiedD3d);
+        auto context = base ? *reinterpret_cast<unsigned char**>(base + kDlssContextPointerRva) : nullptr;
+        void* parameters = context ? *reinterpret_cast<void**>(context + kNgxParametersOffset) : nullptr;
+        if (parameters && ngxGetUInt && ngxGetFloat) {
+            out->renderWidthStatus = ngxGetUInt(parameters, "Width", &out->renderWidth);
+            out->renderHeightStatus = ngxGetUInt(parameters, "Height", &out->renderHeight);
+            out->outputWidthStatus = ngxGetUInt(parameters, "OutWidth", &out->outputWidth);
+            out->outputHeightStatus = ngxGetUInt(parameters, "OutHeight", &out->outputHeight);
+            out->preExposureStatus = ngxGetFloat(parameters, "DLSS.Pre.Exposure", &out->preExposure);
+            out->exposureScaleStatus = ngxGetFloat(parameters, "DLSS.Exposure.Scale", &out->exposureScale);
+            queried = true;
+        }
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        out->fault = GetExceptionCode();
+        queried = false;
+    }
+    SetLastError(saved);
+    return queried;
+}
+
+static bool RRPhase7NgxOptionsComplete(const RRPhase7NgxOptionsInputs& in) noexcept {
+    return in.renderWidthStatus == 1 && in.renderHeightStatus == 1 &&
+           in.outputWidthStatus == 1 && in.outputHeightStatus == 1 &&
+           in.preExposureStatus == 1 && in.exposureScaleStatus == 1 &&
+           in.renderWidth != 0 && in.renderHeight != 0 &&
+           in.outputWidth != 0 && in.outputHeight != 0 &&
+           std::isfinite(in.preExposure) && std::isfinite(in.exposureScale);
+}
+
+static void RRCopyAffine4x3(sl::float4x4& dst, const double* src) noexcept {
+    // Control's validated camera affine arrays are row-major 4x3 matrices.
+    // Promote to the row-major 4x4 form required by DLSSDOptions.
+    dst.setRow(0, sl::float4(float(src[0]), float(src[1]), float(src[2]), 0.f));
+    dst.setRow(1, sl::float4(float(src[3]), float(src[4]), float(src[5]), 0.f));
+    dst.setRow(2, sl::float4(float(src[6]), float(src[7]), float(src[8]), 0.f));
+    dst.setRow(3, sl::float4(float(src[9]), float(src[10]), float(src[11]), 1.f));
+}
+
+static const char* RRDLSSModeName(sl::DLSSMode mode) noexcept {
+    switch (mode) {
+        case sl::DLSSMode::eOff: return "off";
+        case sl::DLSSMode::eMaxPerformance: return "performance";
+        case sl::DLSSMode::eBalanced: return "balanced";
+        case sl::DLSSMode::eMaxQuality: return "quality";
+        case sl::DLSSMode::eUltraPerformance: return "ultra_performance";
+        case sl::DLSSMode::eUltraQuality: return "ultra_quality";
+        case sl::DLSSMode::eDLAA: return "dlaa";
+        default: return "unknown";
+    }
+}
+
+static void FillRRPhase7BaseOptions(const RRPhase7NgxOptionsInputs& in, const CameraSnapshot& camera,
+                                    sl::DLSSMode mode, sl::DLSSDOptions* out) noexcept {
+    sl::DLSSDOptions options{};
+    options.mode = mode;
+    options.outputWidth = in.outputWidth;
+    options.outputHeight = in.outputHeight;
+    options.sharpness = 0.0f;
+    options.preExposure = in.preExposure;
+    options.exposureScale = in.exposureScale;
+    // DLSS-RR requires HDR/linear color input even when final presentation is SDR.
+    options.colorBuffersHDR = sl::Boolean::eTrue;
+    options.indicatorInvertAxisX = sl::Boolean::eFalse;
+    options.indicatorInvertAxisY = sl::Boolean::eFalse;
+    // P7 does not submit normal/roughness guides yet. Keep the option explicit
+    // and conservative until the semantic guide map is validated.
+    options.normalRoughnessMode = sl::DLSSDNormalRoughnessMode::eUnpacked;
+    RRCopyAffine4x3(options.worldToCameraView, camera.worldToView);
+    RRCopyAffine4x3(options.cameraViewToWorld, camera.viewToWorld);
+    options.alphaUpscalingEnabled = sl::Boolean::eFalse;
+    options.dlaaPreset = sl::DLSSDPreset::ePresetF;
+    options.qualityPreset = sl::DLSSDPreset::ePresetF;
+    options.balancedPreset = sl::DLSSDPreset::ePresetF;
+    options.performancePreset = sl::DLSSDPreset::ePresetF;
+    options.ultraPerformancePreset = sl::DLSSDPreset::ePresetF;
+    options.ultraQualityPreset = sl::DLSSDPreset::ePresetF;
+    *out = options;
+}
+
+static void ConfigureRRPhase7OptionsForAA(unsigned long long call, unsigned long long currentPresent,
+                                          bool cameraKnown, const CameraSnapshot& camera) noexcept {
+    if (rrP7OptionsQueryFinished.load(std::memory_order_acquire)) return;
+    if (!cameraKnown || !slDeviceConfigured.load() || !slRrFeatureLoaded.load() ||
+        !slRrFeatureSupported.load() || !slRrFunctionTableReady.load() ||
+        !slDLSSDGetOptimalSettingsApi || !slDLSSDSetOptionsApi || !slDLSSDGetStateApi) return;
+
+    const unsigned int attempt = ++rrP7OptionsAttempts;
+    if (attempt > 16) return;
+
+    RRPhase7NgxOptionsInputs in{};
+    if (!ReadRRPhase7NgxOptionsInputs(&in) || !RRPhase7NgxOptionsComplete(in)) {
+        Log("SL_RR_OPTIONS_SKIP call=%llu present=%llu attempt=%u reason=ngx_inputs_incomplete fault=0x%08lX statuses=%u,%u,%u,%u,%u,%u render=%ux%u output=%ux%u",
+            call, currentPresent, attempt, in.fault, in.renderWidthStatus, in.renderHeightStatus,
+            in.outputWidthStatus, in.outputHeightStatus, in.preExposureStatus, in.exposureScaleStatus,
+            in.renderWidth, in.renderHeight, in.outputWidth, in.outputHeight);
+        return;
+    }
+
+    AcquireSRWLockExclusive(&rrP7OptionsLock);
+    if (rrP7OptionsQueryFinished.load(std::memory_order_relaxed)) {
+        ReleaseSRWLockExclusive(&rrP7OptionsLock);
+        return;
+    }
+
+    const sl::DLSSMode modes[] = {
+        sl::DLSSMode::eDLAA,
+        sl::DLSSMode::eMaxQuality,
+        sl::DLSSMode::eBalanced,
+        sl::DLSSMode::eMaxPerformance,
+        sl::DLSSMode::eUltraPerformance,
+        sl::DLSSMode::eUltraQuality,
+    };
+
+    sl::DLSSMode bestMode = sl::DLSSMode::eOff;
+    unsigned long long bestError = ~0ull;
+    sl::DLSSDOptimalSettings bestSettings{};
+    sl::Result bestResult = sl::Result::eErrorMissingInputParameter;
+
+    for (sl::DLSSMode mode : modes) {
+        sl::DLSSDOptions options{};
+        FillRRPhase7BaseOptions(in, camera, mode, &options);
+        sl::DLSSDOptimalSettings settings{};
+        const sl::Result result = slDLSSDGetOptimalSettingsApi(options, settings);
+        unsigned long long error = ~0ull;
+        if (result == sl::Result::eOk && settings.optimalRenderWidth && settings.optimalRenderHeight) {
+            const long long dx = static_cast<long long>(settings.optimalRenderWidth) - static_cast<long long>(in.renderWidth);
+            const long long dy = static_cast<long long>(settings.optimalRenderHeight) - static_cast<long long>(in.renderHeight);
+            error = static_cast<unsigned long long>(dx < 0 ? -dx : dx) +
+                    static_cast<unsigned long long>(dy < 0 ? -dy : dy);
+            if (error < bestError) {
+                bestError = error;
+                bestMode = mode;
+                bestSettings = settings;
+                bestResult = result;
+            }
+        }
+        Log("SL_RR_OPTIMAL_CANDIDATE call=%llu present=%llu mode=%s mode_value=%u result=%lld output=%ux%u current_render=%ux%u optimal=%ux%u min=%ux%u max=%ux%u sharpness=%.9g error_pixels=%llu",
+            call, currentPresent, RRDLSSModeName(mode), unsigned(mode), SLResultCode(result),
+            in.outputWidth, in.outputHeight, in.renderWidth, in.renderHeight,
+            settings.optimalRenderWidth, settings.optimalRenderHeight,
+            settings.renderWidthMin, settings.renderHeightMin, settings.renderWidthMax, settings.renderHeightMax,
+            double(settings.optimalSharpness), error == ~0ull ? 0xffffffffffffffffull : error);
+    }
+
+    rrP7OptionsQueryFinished.store(1, std::memory_order_release);
+    const unsigned long long tolerance = 8;
+    if (bestResult != sl::Result::eOk || bestMode == sl::DLSSMode::eOff || bestError > tolerance) {
+        Log("SL_RR_OPTIONS_SKIP call=%llu present=%llu attempt=%u reason=no_matching_dlss_mode current_render=%ux%u output=%ux%u best_mode=%s best_error_pixels=%llu tolerance=%llu",
+            call, currentPresent, attempt, in.renderWidth, in.renderHeight, in.outputWidth, in.outputHeight,
+            RRDLSSModeName(bestMode), bestError, tolerance);
+        ReleaseSRWLockExclusive(&rrP7OptionsLock);
+        return;
+    }
+
+    sl::DLSSDOptions selected{};
+    FillRRPhase7BaseOptions(in, camera, bestMode, &selected);
+    const sl::Result setResult = slDLSSDSetOptionsApi(slFgViewport, selected);
+    sl::DLSSDState state{};
+    const sl::Result stateResult = setResult == sl::Result::eOk ? slDLSSDGetStateApi(slFgViewport, state) : sl::Result::eErrorFeatureFailedToLoad;
+    const bool success = setResult == sl::Result::eOk;
+    if (success) rrP7OptionsApplied.store(1, std::memory_order_release);
+
+    Log("SL_RR_OPTIONS_HANDSHAKE call=%llu present=%llu attempt=%u success=%u mode=%s mode_value=%u render=%ux%u output=%ux%u optimal=%ux%u pre_exposure=%.9g exposure_scale=%.9g hdr_input=1 normal_roughness=unpacked preset=dlaa:F,quality:F,balanced:F,performance:F,ultra_performance:F,ultra_quality:F set_result=%lld state_result=%lld estimated_vram=%llu rr_evaluate=0 native_denoiser_bypass=0",
+        call, currentPresent, attempt, unsigned(success), RRDLSSModeName(bestMode), unsigned(bestMode),
+        in.renderWidth, in.renderHeight, in.outputWidth, in.outputHeight,
+        bestSettings.optimalRenderWidth, bestSettings.optimalRenderHeight,
+        double(in.preExposure), double(in.exposureScale), SLResultCode(setResult), SLResultCode(stateResult),
+        static_cast<unsigned long long>(state.estimatedVRAMUsageInBytes));
+
+    ReleaseSRWLockExclusive(&rrP7OptionsLock);
+}
+
 static void CommitSLPreviousCamera(const CameraSnapshot& camera) noexcept {
     AcquireSRWLockExclusive(&slCameraHistoryLock);
     slPreviousCamera = camera;
@@ -250,6 +455,10 @@ static void SubmitSLCommonConstantsForAA(unsigned long long call, unsigned long 
         return;
     }
 
+    // HDR/SDR color-domain transitions are handled by the FG eOff + fresh-frame
+    // warmup gate in streamline_bridge.h. Do not manufacture a common-constants
+    // reset here: r25 proved that forcing reset=true at this boundary regresses
+    // interpolation quality after HDR -> SDR.
     sl::Constants constants{};
     bool usedHistory = false;
     if (!BuildSLCommonConstants(camera, inputs, resetKnown, resetValue, &constants, &usedHistory)) {
@@ -261,6 +470,7 @@ static void SubmitSLCommonConstantsForAA(unsigned long long call, unsigned long 
     }
 
     const sl::Result result = slSetConstantsApi(constants, *token, slFgViewport);
+    if(FGAlignActive(targetPresent)) Log("ALIGN_CONSTANTS target=%llu call=%llu token=%p result=%lld",targetPresent,call,token,SLResultCode(result));
     const bool success = result == sl::Result::eOk;
     MarkSLFrameConstantsReady(targetPresent, success);
     if (success) {
@@ -374,6 +584,7 @@ static void SubmitSLDepthMotionTagsForAA(unsigned long long call, unsigned long 
     ++slResourceTagCalls;
     const sl::Result result = slSetTagForFrameApi(*token, slFgViewport, tags, _countof(tags), nullptr);
     const bool success = result == sl::Result::eOk;
+    if(FGAlignActive(targetPresent)) Log("ALIGN_DEPTH_MV target=%llu call=%llu token=%p depth=%p motion=%p success=%u depth_state=0x%X motion_state=0x%X",targetPresent,call,token,depth.resource,motion.resource,unsigned(success),depth.trackedState,motion.trackedState);
     if (success) {
         ++slResourceTagSuccesses;
         slFgMvecDepthWidth.store(static_cast<unsigned int>(depth.desc.Width));

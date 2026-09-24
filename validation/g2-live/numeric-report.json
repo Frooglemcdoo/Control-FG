@@ -1,0 +1,1077 @@
+{
+  "schema": "ControlFG.G2.Capture.NumericReview.v1",
+  "capture": "rr-guide-g2-20260913-042850-566-51652",
+  "width": 2560,
+  "height": 1440,
+  "pixels_compared": 3686400,
+  "metadata_engine_frame": 3283,
+  "metadata_camera_engine_frame": 3283,
+  "metadata_present_token": 3283,
+  "all_collected_files_verified": true,
+  "files": [
+    {
+      "name": "gbuffer1.rgba8",
+      "bytes": 14745600,
+      "sha256": "33b8c7c62a00ea4831a3fd8ae6e31ed0a8844bd41c2083cf84aae9bad40a9b45",
+      "collector_size_match": true,
+      "collector_hash_match": true
+    },
+    {
+      "name": "gbuffer2.rgba8",
+      "bytes": 14745600,
+      "sha256": "b743edfcf8142f366849a70bd8502ec6a24f3ccce0bc02a3c9f4fe0a3201fac7",
+      "collector_size_match": true,
+      "collector_hash_match": true
+    },
+    {
+      "name": "normal-roughness.rgba32f",
+      "bytes": 58982400,
+      "sha256": "0eb1e2af44343a2794e7224ffd8b375e27cf40e70f4e926086ed0a6380342a1e",
+      "collector_size_match": true,
+      "collector_hash_match": true
+    },
+    {
+      "name": "world-normal.bmp",
+      "bytes": 11059254,
+      "sha256": "dcda0f2657804a6c85b2ae6d008318b130966aea4f67c659fb52c6aa0eb6d5b1",
+      "collector_size_match": true,
+      "collector_hash_match": true
+    },
+    {
+      "name": "roughness.bmp",
+      "bytes": 11059254,
+      "sha256": "68344e0c3188aab7524819f5cea64f2794fe344052e2ed60c335bd01d287d528",
+      "collector_size_match": true,
+      "collector_hash_match": true
+    },
+    {
+      "name": "material-id.bmp",
+      "bytes": 11059254,
+      "sha256": "7a0f86887081d08d894ce6c2c2496ab4ffddccae2227271d412413ef7bd505dd",
+      "collector_size_match": true,
+      "collector_hash_match": true
+    },
+    {
+      "name": "metadata.json",
+      "bytes": 4272,
+      "sha256": "7eedbbc583a614e3f1a82c215c3b00ed79c90675fded919026cdb0d3d28728c3",
+      "collector_size_match": true,
+      "collector_hash_match": true
+    },
+    {
+      "name": "native-albedo-ps-000.dxbc",
+      "bytes": 2908,
+      "sha256": "6e8fdc47e77f203157c23e9f77e19b1a66f874a66e3955e29aff3181309536dd",
+      "collector_size_match": true,
+      "collector_hash_match": true
+    },
+    {
+      "name": "native-albedo-ps-001.dxbc",
+      "bytes": 3580,
+      "sha256": "b2b8ab2bf331f79837bd09ef24b669cbbfbc506b4a369edabbdead78f92a7411",
+      "collector_size_match": true,
+      "collector_hash_match": true
+    },
+    {
+      "name": "native-albedo-ps-002.dxbc",
+      "bytes": 3220,
+      "sha256": "27713d41a80358660ae326a31132bc6d82fec98147b31497a13d0fac9cce5db2",
+      "collector_size_match": true,
+      "collector_hash_match": true
+    }
+  ],
+  "normal": {
+    "nonfinite_components": 0,
+    "component_outside_minus1_plus1": 0,
+    "components": {
+      "x": {
+        "min": -0.9999995231628418,
+        "max": 0.9550413489341736,
+        "mean": -0.22869838771641088,
+        "p50": -0.002999170683324337,
+        "p99": 0.45476860672235203,
+        "p999": 0.9189028757810589
+      },
+      "y": {
+        "min": -0.9999997615814209,
+        "max": 0.9999997615814209,
+        "mean": 0.3918054458740909,
+        "p50": 0.030195368453860283,
+        "p99": 0.9999993443489075,
+        "p999": 0.9999997615814209
+      },
+      "z": {
+        "min": -0.8411357998847961,
+        "max": 0.9999998211860657,
+        "mean": 0.3501623903875257,
+        "p50": 0.03969535976648331,
+        "p99": 0.9999961256980896,
+        "p999": 0.9999998211860657
+      }
+    },
+    "unit_length": {
+      "min": 0.9999998482730981,
+      "max": 1.000000063429635,
+      "mean": 0.9999999511170286,
+      "p50": 0.9999999446711814,
+      "p99": 1.0000000328842067,
+      "p999": 1.000000041696541
+    },
+    "max_unit_length_error": 1.517269019313261e-07,
+    "pixels_outside_metadata_unit_tolerance": 0,
+    "reference_component_absolute_error": {
+      "min": 1.900701818158268e-13,
+      "max": 3.2274951855537637e-07,
+      "mean": 1.0615479146634153e-07,
+      "p50": 1.0493650307724645e-07,
+      "p99": 2.167819628581119e-07,
+      "p999": 2.3577933815207772e-07
+    },
+    "reference_pixel_max_absolute_error": {
+      "min": 1.0425903806954295e-08,
+      "max": 3.2274951855537637e-07,
+      "mean": 1.6881692359534164e-07,
+      "p50": 1.7528860477705743e-07,
+      "p99": 2.2543163658017562e-07,
+      "p999": 2.474223441923939e-07
+    },
+    "reference_vector_error": {
+      "min": 1.4413539475178594e-08,
+      "max": 3.800002210436037e-07,
+      "mean": 2.0791171733760938e-07,
+      "p50": 2.1202824459531298e-07,
+      "p99": 2.8318471336787755e-07,
+      "p999": 3.1167468080446093e-07
+    },
+    "reference_angle_degrees": {
+      "min": 2.0842624571139788e-07,
+      "max": 2.1572752076757648e-05,
+      "mean": 1.141920248125854e-05,
+      "p50": 1.1582409030320333e-05,
+      "p99": 1.5736120488610916e-05,
+      "p999": 1.7381661252648854e-05
+    },
+    "reference_pixels_error_above_1e_6": 0,
+    "reference_pixels_error_above_2e_6": 0,
+    "dominant_world_axis_pixel_counts": {
+      "+x": 16479,
+      "-x": 827174,
+      "+y": 1519762,
+      "-y": 77492,
+      "+z": 1243432,
+      "-z": 2061
+    },
+    "within_one_degree_world_axis_pixel_counts": {
+      "+x": 0,
+      "-x": 244755,
+      "+y": 373337,
+      "-y": 5977,
+      "+z": 343759,
+      "-z": 0
+    }
+  },
+  "roughness": {
+    "nonfinite_pixels": 0,
+    "outside_range_pixels": 0,
+    "values": {
+      "min": 0.0,
+      "max": 1.0,
+      "mean": 0.44976357542474743,
+      "p50": 0.4313725233078003,
+      "p99": 0.8823529481887817,
+      "p999": 1.0
+    },
+    "reference_absolute_error": {
+      "min": 0.0,
+      "max": 4.441130396770632e-08,
+      "mean": 2.257425769801621e-08,
+      "p50": 2.4309345314499353e-08,
+      "p99": 4.3008841710268086e-08,
+      "p999": 4.441130396770632e-08
+    },
+    "byte_equation": "round(gpu_alpha * 255) == 255 - raw_gbuffer1_blue",
+    "byte_equation_mismatches": 0,
+    "unique_values": 256,
+    "zero_pixels": 534,
+    "one_pixels": 17235,
+    "byte_histogram": [
+      534,
+      194,
+      159,
+      155,
+      146,
+      154,
+      191,
+      184,
+      297,
+      364,
+      405,
+      409,
+      394,
+      561,
+      320,
+      323,
+      304,
+      196,
+      169,
+      176,
+      188,
+      175,
+      200,
+      282,
+      322,
+      230,
+      268,
+      313,
+      271,
+      430,
+      715,
+      1501,
+      2531,
+      4987,
+      7543,
+      10388,
+      12399,
+      16430,
+      19174,
+      21267,
+      25389,
+      28290,
+      30773,
+      31850,
+      33101,
+      32410,
+      28948,
+      26485,
+      28427,
+      25136,
+      25746,
+      31937,
+      37522,
+      26343,
+      20519,
+      15170,
+      11147,
+      8209,
+      5092,
+      4521,
+      3866,
+      4139,
+      4363,
+      4823,
+      4742,
+      3606,
+      3432,
+      3635,
+      2843,
+      2674,
+      2643,
+      2540,
+      2886,
+      2611,
+      3370,
+      3214,
+      2808,
+      3365,
+      3593,
+      3886,
+      4408,
+      4532,
+      7267,
+      5935,
+      6519,
+      7321,
+      9217,
+      10510,
+      12485,
+      14955,
+      17582,
+      20102,
+      24438,
+      29153,
+      34818,
+      39614,
+      48413,
+      51830,
+      54378,
+      55629,
+      57081,
+      61959,
+      66540,
+      70410,
+      74854,
+      75612,
+      75033,
+      74784,
+      72191,
+      70076,
+      68157,
+      64803,
+      65871,
+      58859,
+      53283,
+      50235,
+      46651,
+      42639,
+      39828,
+      37282,
+      35236,
+      32968,
+      30118,
+      27734,
+      26052,
+      24126,
+      22615,
+      21345,
+      22108,
+      23583,
+      23502,
+      23363,
+      23349,
+      22576,
+      21872,
+      21940,
+      22199,
+      22651,
+      21266,
+      20363,
+      19857,
+      19984,
+      19708,
+      20529,
+      18866,
+      17884,
+      17689,
+      17172,
+      16427,
+      16763,
+      20440,
+      17483,
+      15830,
+      15329,
+      14948,
+      14525,
+      13545,
+      12544,
+      11204,
+      9858,
+      8935,
+      8178,
+      7481,
+      7495,
+      6325,
+      6052,
+      5935,
+      5871,
+      6851,
+      7367,
+      7374,
+      7800,
+      8856,
+      7810,
+      7237,
+      7202,
+      6065,
+      5642,
+      5566,
+      5749,
+      6594,
+      7124,
+      7163,
+      9494,
+      13398,
+      12916,
+      11077,
+      9385,
+      9006,
+      9860,
+      15909,
+      6993,
+      7007,
+      7804,
+      7547,
+      7708,
+      7938,
+      7948,
+      7973,
+      7934,
+      7784,
+      7593,
+      7522,
+      7281,
+      7190,
+      7075,
+      6951,
+      6975,
+      6320,
+      6020,
+      5847,
+      5696,
+      5493,
+      5874,
+      25289,
+      14431,
+      8265,
+      5231,
+      4087,
+      4021,
+      3874,
+      3585,
+      3343,
+      3059,
+      2447,
+      2204,
+      2115,
+      2083,
+      1764,
+      4181,
+      1482,
+      1215,
+      1078,
+      966,
+      805,
+      597,
+      563,
+      480,
+      244,
+      155,
+      86,
+      107,
+      167,
+      65,
+      79,
+      71,
+      67,
+      68,
+      73,
+      72,
+      92,
+      94,
+      97,
+      75,
+      90,
+      17235
+    ]
+  },
+  "raw_inputs": {
+    "gbuffer1_channel_byte_stats": {
+      "r": {
+        "min": 0.0,
+        "max": 255.0,
+        "mean": 129.0661040581597,
+        "p50": 127.0,
+        "p99": 194.0,
+        "p999": 239.0
+      },
+      "g": {
+        "min": 0.0,
+        "max": 255.0,
+        "mean": 157.3629288736979,
+        "p50": 124.0,
+        "p99": 221.0,
+        "p999": 235.0
+      },
+      "b": {
+        "min": 0.0,
+        "max": 255.0,
+        "mean": 140.31028428819445,
+        "p50": 145.0,
+        "p99": 219.0,
+        "p999": 242.0
+      },
+      "a": {
+        "min": 0.0,
+        "max": 255.0,
+        "mean": 127.56209581163195,
+        "p50": 134.0,
+        "p99": 253.0,
+        "p999": 254.0
+      }
+    },
+    "gbuffer2_channel_byte_stats": {
+      "r": {
+        "min": 0.0,
+        "max": 255.0,
+        "mean": 1.6854546440972222,
+        "p50": 0.0,
+        "p99": 63.0,
+        "p999": 255.0
+      },
+      "g": {
+        "min": 0.0,
+        "max": 255.0,
+        "mean": 24.764739312065974,
+        "p50": 14.0,
+        "p99": 176.0,
+        "p999": 191.0
+      },
+      "b": {
+        "min": 0.0,
+        "max": 6.0,
+        "mean": 2.4730352105034723,
+        "p50": 1.0,
+        "p99": 6.0,
+        "p999": 6.0
+      },
+      "a": {
+        "min": 0.0,
+        "max": 251.0,
+        "mean": 192.34676595052085,
+        "p50": 221.0,
+        "p99": 251.0,
+        "p999": 251.0
+      }
+    },
+    "gbuffer1_alpha_bit0_pixels": 220516,
+    "gbuffer1_all_zero_pixels": 1,
+    "gbuffer2_all_zero_pixels": 1,
+    "both_gbuffers_zero_pixels": 1,
+    "both_gbuffers_zero_examples": [
+      {
+        "x": 339,
+        "y": 813,
+        "normal_roughness": [
+          0.747369110584259,
+          -0.6612749695777893,
+          -0.06445778906345367,
+          1.0
+        ]
+      }
+    ],
+    "gbuffer1_packed_uint32_le_histogram": {
+      "unique_count": 2138339,
+      "top": [
+        {
+          "value": 2426305462,
+          "pixels": 6677,
+          "fraction": 0.0018112521701388888
+        },
+        {
+          "value": 2426370998,
+          "pixels": 6120,
+          "fraction": 0.00166015625
+        },
+        {
+          "value": 3201530210,
+          "pixels": 5385,
+          "fraction": 0.0014607747395833333
+        },
+        {
+          "value": 3201595746,
+          "pixels": 5273,
+          "fraction": 0.001430392795138889
+        },
+        {
+          "value": 2426239926,
+          "pixels": 5138,
+          "fraction": 0.0013937717013888888
+        },
+        {
+          "value": 3201464674,
+          "pixels": 4859,
+          "fraction": 0.001318088107638889
+        },
+        {
+          "value": 3201661282,
+          "pixels": 4840,
+          "fraction": 0.0013129340277777779
+        },
+        {
+          "value": 2426436534,
+          "pixels": 4816,
+          "fraction": 0.001306423611111111
+        },
+        {
+          "value": 3201399138,
+          "pixels": 4473,
+          "fraction": 0.00121337890625
+        },
+        {
+          "value": 2426502070,
+          "pixels": 4335,
+          "fraction": 0.0011759440104166666
+        },
+        {
+          "value": 3201726818,
+          "pixels": 4005,
+          "fraction": 0.00108642578125
+        },
+        {
+          "value": 3168041314,
+          "pixels": 3974,
+          "fraction": 0.0010780164930555556
+        },
+        {
+          "value": 3167975778,
+          "pixels": 3953,
+          "fraction": 0.0010723198784722222
+        },
+        {
+          "value": 3167910242,
+          "pixels": 3935,
+          "fraction": 0.0010674370659722221
+        },
+        {
+          "value": 3168106850,
+          "pixels": 3770,
+          "fraction": 0.001022677951388889
+        },
+        {
+          "value": 3168172386,
+          "pixels": 3753,
+          "fraction": 0.00101806640625
+        },
+        {
+          "value": 3201333602,
+          "pixels": 3627,
+          "fraction": 0.00098388671875
+        },
+        {
+          "value": 2426567606,
+          "pixels": 3567,
+          "fraction": 0.0009676106770833333
+        },
+        {
+          "value": 3201792354,
+          "pixels": 3547,
+          "fraction": 0.0009621853298611111
+        },
+        {
+          "value": 3167844706,
+          "pixels": 3526,
+          "fraction": 0.0009564887152777778
+        }
+      ]
+    },
+    "gbuffer2_packed_uint32_le_histogram": {
+      "unique_count": 13640,
+      "top": [
+        {
+          "value": 4026607872,
+          "pixels": 764820,
+          "fraction": 0.207470703125
+        },
+        {
+          "value": 3708161536,
+          "pixels": 744365,
+          "fraction": 0.20192192925347222
+        },
+        {
+          "value": 2097221120,
+          "pixels": 434581,
+          "fraction": 0.11788764105902778
+        },
+        {
+          "value": 3825208832,
+          "pixels": 378593,
+          "fraction": 0.10269992404513889
+        },
+        {
+          "value": 3623947776,
+          "pixels": 262692,
+          "fraction": 0.071259765625
+        },
+        {
+          "value": 2533363200,
+          "pixels": 190361,
+          "fraction": 0.05163872612847222
+        },
+        {
+          "value": 2617249280,
+          "pixels": 59437,
+          "fraction": 0.01612331814236111
+        },
+        {
+          "value": 3842313728,
+          "pixels": 59414,
+          "fraction": 0.016117078993055554
+        },
+        {
+          "value": 2365786624,
+          "pixels": 36249,
+          "fraction": 0.009833170572916666
+        },
+        {
+          "value": 4194503168,
+          "pixels": 34161,
+          "fraction": 0.009266764322916666
+        },
+        {
+          "value": 4194437632,
+          "pixels": 34099,
+          "fraction": 0.009249945746527778
+        },
+        {
+          "value": 3087384320,
+          "pixels": 25064,
+          "fraction": 0.006799045138888889
+        },
+        {
+          "value": 201656832,
+          "pixels": 20299,
+          "fraction": 0.005506456163194445
+        },
+        {
+          "value": 117837312,
+          "pixels": 19890,
+          "fraction": 0.0053955078125
+        },
+        {
+          "value": 3406040576,
+          "pixels": 19115,
+          "fraction": 0.0051852756076388885
+        },
+        {
+          "value": 855902720,
+          "pixels": 18860,
+          "fraction": 0.005116102430555556
+        },
+        {
+          "value": 201657088,
+          "pixels": 17769,
+          "fraction": 0.004820149739583333
+        },
+        {
+          "value": 117509632,
+          "pixels": 14367,
+          "fraction": 0.0038972981770833332
+        },
+        {
+          "value": 453380608,
+          "pixels": 13376,
+          "fraction": 0.003628472222222222
+        },
+        {
+          "value": 201656576,
+          "pixels": 11235,
+          "fraction": 0.003047688802083333
+        }
+      ]
+    },
+    "encoded_normal_x": {
+      "min": 0.0,
+      "max": 2047.0,
+      "mean": 1036.1478247070313,
+      "p50": 1017.0,
+      "p99": 1556.0,
+      "p999": 1915.0
+    },
+    "encoded_normal_y": {
+      "min": 0.0,
+      "max": 4095.0,
+      "mean": 2525.323380262587,
+      "p50": 1994.0,
+      "p99": 3536.0,
+      "p999": 3773.0
+    }
+  },
+  "material_ids": {
+    "unique_count": 134,
+    "top": [
+      {
+        "value": 496,
+        "pixels": 764820,
+        "fraction": 0.207470703125
+      },
+      {
+        "value": 1757,
+        "pixels": 744365,
+        "fraction": 0.20192192925347222
+      },
+      {
+        "value": 381,
+        "pixels": 434581,
+        "fraction": 0.11788764105902778
+      },
+      {
+        "value": 228,
+        "pixels": 378593,
+        "fraction": 0.10269992404513889
+      },
+      {
+        "value": 472,
+        "pixels": 262692,
+        "fraction": 0.071259765625
+      },
+      {
+        "value": 151,
+        "pixels": 190361,
+        "fraction": 0.05163872612847222
+      },
+      {
+        "value": 1449,
+        "pixels": 78659,
+        "fraction": 0.02133761935763889
+      },
+      {
+        "value": 1517,
+        "pixels": 69666,
+        "fraction": 0.018898111979166667
+      },
+      {
+        "value": 1292,
+        "pixels": 67887,
+        "fraction": 0.01841552734375
+      },
+      {
+        "value": 156,
+        "pixels": 59437,
+        "fraction": 0.01612331814236111
+      },
+      {
+        "value": 1509,
+        "pixels": 59414,
+        "fraction": 0.016117078993055554
+      },
+      {
+        "value": 762,
+        "pixels": 42594,
+        "fraction": 0.011554361979166667
+      },
+      {
+        "value": 1275,
+        "pixels": 41859,
+        "fraction": 0.01135498046875
+      },
+      {
+        "value": 1075,
+        "pixels": 40757,
+        "fraction": 0.011056043836805555
+      },
+      {
+        "value": 909,
+        "pixels": 36302,
+        "fraction": 0.009847547743055556
+      },
+      {
+        "value": 674,
+        "pixels": 35083,
+        "fraction": 0.009516872829861111
+      },
+      {
+        "value": 1018,
+        "pixels": 34241,
+        "fraction": 0.009288465711805555
+      },
+      {
+        "value": 1464,
+        "pixels": 25064,
+        "fraction": 0.006799045138888889
+      },
+      {
+        "value": 956,
+        "pixels": 23258,
+        "fraction": 0.006309136284722222
+      },
+      {
+        "value": 1563,
+        "pixels": 21734,
+        "fraction": 0.0058957248263888885
+      },
+      {
+        "value": 796,
+        "pixels": 20488,
+        "fraction": 0.005557725694444444
+      },
+      {
+        "value": 1543,
+        "pixels": 19890,
+        "fraction": 0.0053955078125
+      },
+      {
+        "value": 1227,
+        "pixels": 19115,
+        "fraction": 0.0051852756076388885
+      },
+      {
+        "value": 1010,
+        "pixels": 16259,
+        "fraction": 0.0044105360243055555
+      },
+      {
+        "value": 25,
+        "pixels": 15701,
+        "fraction": 0.004259168836805555
+      },
+      {
+        "value": 263,
+        "pixels": 14367,
+        "fraction": 0.0038972981770833332
+      },
+      {
+        "value": 113,
+        "pixels": 12353,
+        "fraction": 0.0033509657118055555
+      },
+      {
+        "value": 1052,
+        "pixels": 11487,
+        "fraction": 0.0031160481770833334
+      },
+      {
+        "value": 1741,
+        "pixels": 9352,
+        "fraction": 0.0025368923611111113
+      },
+      {
+        "value": 1323,
+        "pixels": 8588,
+        "fraction": 0.002329644097222222
+      },
+      {
+        "value": 388,
+        "pixels": 8390,
+        "fraction": 0.0022759331597222224
+      },
+      {
+        "value": 1084,
+        "pixels": 7548,
+        "fraction": 0.0020475260416666667
+      },
+      {
+        "value": 9,
+        "pixels": 7287,
+        "fraction": 0.0019767252604166665
+      },
+      {
+        "value": 478,
+        "pixels": 7144,
+        "fraction": 0.0019379340277777778
+      },
+      {
+        "value": 714,
+        "pixels": 6873,
+        "fraction": 0.0018644205729166667
+      },
+      {
+        "value": 1088,
+        "pixels": 5630,
+        "fraction": 0.0015272352430555556
+      },
+      {
+        "value": 1241,
+        "pixels": 4760,
+        "fraction": 0.0012912326388888889
+      },
+      {
+        "value": 1531,
+        "pixels": 4733,
+        "fraction": 0.0012839084201388888
+      },
+      {
+        "value": 312,
+        "pixels": 4330,
+        "fraction": 0.001174587673611111
+      },
+      {
+        "value": 349,
+        "pixels": 4238,
+        "fraction": 0.0011496310763888888
+      }
+    ],
+    "id_zero_pixels": 1,
+    "min": 0,
+    "max": 1757
+  },
+  "camera_rotation": {
+    "basis_rows": [
+      [
+        -0.8409339189529419,
+        0.0,
+        -0.5411381125450134
+      ],
+      [
+        0.07275617122650146,
+        0.99092036485672,
+        -0.11306378990411758
+      ],
+      [
+        0.5362247824668884,
+        -0.1344502866268158,
+        -0.8332985043525696
+      ]
+    ],
+    "basis_gram_matrix": [
+      [
+        1.0000003128943327,
+        -6.331613011667514e-09,
+        -2.79276370918069e-08
+      ],
+      [
+        -6.331613011667514e-09,
+        1.0000000505267974,
+        2.2033253888054105e-08
+      ],
+      [
+        -2.79276370918069e-08,
+        2.2033253888054105e-08,
+        1.0000002942619242
+      ]
+    ],
+    "determinant": 1.0000003288415338,
+    "max_orthonormal_error": 3.128943326657918e-07
+  },
+  "bmp": {
+    "world-normal.bmp": {
+      "file_bytes": 11059254,
+      "declared_bytes": 11059254,
+      "pixel_offset": 54,
+      "width": 2560,
+      "signed_height": -1440,
+      "bits_per_pixel": 24,
+      "top_down": true,
+      "channel_mismatches": 0,
+      "pixel_mismatches": 0,
+      "max_byte_error": 0
+    },
+    "roughness.bmp": {
+      "file_bytes": 11059254,
+      "declared_bytes": 11059254,
+      "pixel_offset": 54,
+      "width": 2560,
+      "signed_height": -1440,
+      "bits_per_pixel": 24,
+      "top_down": true,
+      "channel_mismatches": 0,
+      "pixel_mismatches": 0,
+      "max_byte_error": 0
+    },
+    "material-id.bmp": {
+      "file_bytes": 11059254,
+      "declared_bytes": 11059254,
+      "pixel_offset": 54,
+      "width": 2560,
+      "signed_height": -1440,
+      "bits_per_pixel": 24,
+      "top_down": true,
+      "channel_mismatches": 0,
+      "pixel_mismatches": 0,
+      "max_byte_error": 0
+    }
+  },
+  "limitations": [
+    "Shader arithmetic agreement verifies implementation and raw/export correspondence, not the original game shader semantics independently.",
+    "Applying the recorded camera basis correctly does not independently prove its coordinate convention or temporal alignment with original rendering.",
+    "One frame and no depth/visibility input cannot prove background masks, material coverage, every rendering path, or behavior under motion.",
+    "Packed zero values, material ID zero and GBuffer1 alpha bit zero are not proven background-validity indicators.",
+    "Material IDs are diagnostic keys; this run contains no material-table data or albedo/hit-distance guides.",
+    "No RR evaluation or reconstructed image was generated by G2."
+  ],
+  "lossless_png_previews": [
+    {
+      "file": "world-normal.png",
+      "pixels_identical_to_original_bmp": true,
+      "sha256": "43ab0f543cebb100b8db9312a203910aaeb59e294c790091a6aa6c7b211b1404"
+    },
+    {
+      "file": "roughness.png",
+      "pixels_identical_to_original_bmp": true,
+      "sha256": "dea4336f0d939850e2bf608fc0fd7b2a4be735a470c7d3a1b0dd5cc5b4e63765"
+    },
+    {
+      "file": "material-id.png",
+      "pixels_identical_to_original_bmp": true,
+      "sha256": "dfc4d50b00f8721dd1821d711d26d6cfce4aec240eb23f97fa4cd6d7f34d6cbe"
+    }
+  ]
+}

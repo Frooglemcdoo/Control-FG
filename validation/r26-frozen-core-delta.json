@@ -1,0 +1,33 @@
+{
+  "status": "PASS",
+  "baseline": "r25 approved production-core checkpoint",
+  "release": "r26-hdr-transition-fresh-pair-warmup",
+  "expected_changed_paths": [
+    "src/streamline_bridge.h",
+    "src/streamline_frame.h"
+  ],
+  "changed_files": [
+    {
+      "Path": "src/streamline_bridge.h",
+      "PreviousSHA256": "2AAB41326A4045BF91EACE5B477E2665FFABDE55BF92F76CBC8ADB3D7A5E341C",
+      "R26SHA256": "DD7D32732EDC1E74A25FF9AABC7D88A079676890684A6E21FE89FB545BDC59A0"
+    },
+    {
+      "Path": "src/streamline_frame.h",
+      "PreviousSHA256": "B13757B7C4D1A8690477200AD065CFA148245C62909AA5CACDC976948A4E6DBA",
+      "R26SHA256": "0990E1FFB1F76A0E20B06EFC376CF807AE1E304FB9A1B7A84CDEF1C0E2855951"
+    }
+  ],
+  "unchanged_count": 9,
+  "total_count": 11,
+  "assertions": [
+    "Exactly two files changed from the r25 production-core checkpoint.",
+    "The two changed files are src/streamline_bridge.h and src/streamline_frame.h.",
+    "The remaining nine checkpointed files retain their r25 hashes.",
+    "The r26 hashes recorded here match the current source."
+  ],
+  "tested_sha256": {
+    "src/streamline_bridge.h": "dd7d32732edc1e74a25ff9aabc7d88a079676890684a6e21fe89fb545bdc59a0",
+    "src/streamline_frame.h": "0990e1ffb1f76a0e20b06efc376cf807ae1e304fb9a1b7a84cdef1c0e2855951"
+  }
+}

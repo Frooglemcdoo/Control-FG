@@ -6,7 +6,7 @@
 
 Unlike a generic graphics injection layer, Control FG is **game-specific and engine-aware**. *Control* does not expose a native Frame Generation integration for the mod to translate, so the project reconstructs the inputs FG and RR need directly from the game's renderer: frame boundaries, depth and motion vectors, camera/jitter state, pre-UI scene color, ray-tracing resources, HDR state, and presentation timing.
 
-> **Current release:** v2.0.0  
+> **Current release:** [v2.1.0](https://github.com/Frooglemcdoo/Control-FG/releases/tag/v2.1.0)  
 > **Verified game target:** Control on Steam, DX12, Steam build `21225456`  
 > **Streamline:** NVIDIA Streamline `2.14.1`
 
@@ -16,16 +16,28 @@ Unlike a generic graphics injection layer, Control FG is **game-specific and eng
 
 [Watch Control FG – App and Overlay Demonstration on YouTube](https://youtu.be/aP7UeCSx00c)
 
-## What's new in v2.0.0
+## What's new in v2.1.0
 
-- **DLSS Ray Reconstruction** integrated directly into Control's native DX12 ray-tracing/denoising path.
-- NVIDIA RR runtime **310.9.1** with **Preset F** as the default and live **E/F** switching.
-- Finalized **HDR/SDR Frame Generation recovery** with explicit DLSS-G resource teardown and clean rearm.
-- Handles HDR transitions where Control does **not** call `ResizeBuffers`.
-- Suppresses delayed duplicate HDR transitions that could trigger a second FG teardown.
-- Improved **HUD/UI stability** using Control's real pre-UI scene plus separate UI recomposition for generated frames.
-- Dynamic Target FPS controls appear only while **Dynamic FG** is selected and the entire section collapses in fixed modes.
-- Overlay stability/flicker cleanup.
+- **Experimental RTX 40-series Multi Frame Generation**, available as an opt-in setting in Options. Disabled by default; restart Control after enabling it.
+- A dedicated **Ray Reconstruction settings page**, with a reflection clamp slider from **25 to 75**, default **60**, and a **Reset to default** button.
+- **Overlay shortcut rebinding** in Options.
+
+## Fixes and improvements
+
+- Reworked Frame Generation synchronization and resource handling to address flickering, ghosting, and stability problems.
+- Improved HDR/SDR transition handling and Frame Generation recovery.
+- Improved HUD/UI handling on generated frames.
+- Improved GPU command and resource lifetime management during resizing, resource replacement, and shutdown.
+- Added safeguards for stale frames, queue changes, and invalid device/resource combinations.
+- Improved RR Model F projection validation and hit-distance handling.
+- Refined RR reflection clamping to preserve more natural skin and material appearance.
+- Cleaned up the overlay and removed the HDR restart footer.
+
+## Known issues
+
+**RR indirect diffuse lighting:** blinds can show crawling/noisy streaks when Ray Reconstruction and **Ray Traced Indirect Diffuse Lighting** are enabled together. Reported on both RTX 40- and 50-series GPUs; Models E and F behave similarly. **Workaround:** disable Ray Traced Indirect Diffuse Lighting in the game, or disable RR in the overlay.
+
+Periodic frame-time spikes with the overlay visible have also been reported on an RTX 4070. Close the overlay during gameplay if affected. If an HDR transition causes corruption, restart Control with the desired HDR setting. See [KNOWN_ISSUES.md](KNOWN_ISSUES.md) for support details.
 
 ## DLSS Ray Reconstruction
 
@@ -56,8 +68,8 @@ The 4K DLAA hit was reproduced across repeated RR toggles, resolution changes, D
 - **Off / 2x / 3x / 4x / 5x / 6x** fixed Frame Generation modes on supported hardware.
 - **Native Dynamic MFG** with automatic monitor-refresh targeting or a manual 30–1000 FPS target.
 - Runtime pacing using NVIDIA Reflex and PCL `SimulationStart`.
-- **RTX 40-series safety policy:** Off and 2x only.
-- Live HDR/SDR switching without restarting Control.
+- **RTX 40-series:** Off and 2x by default; optional experimental MFG through Options (restart required).
+- HDR/SDR transition recovery; see known issues if a transition causes corruption.
 - Persistent settings stored in `%LOCALAPPDATA%\ControlFG\settings.ini`.
 
 ### HDR/SDR recovery
@@ -92,7 +104,7 @@ That game-specific data is shared across the FG and RR integrations instead of t
 
 Control FG's current public release relies on NVIDIA DLSS Frame Generation support.
 
-On **GeForce RTX 40-series**, the mod intentionally exposes only **Off and 2x**. On hardware that reports Multi Frame Generation support, the overlay exposes modes up to the supported maximum, currently capped by the UI at **6x**, plus Dynamic MFG when supported.
+On **GeForce RTX 40-series**, **Off and 2x** remain the default. Enable **experimental RTX 40-series MFG** in Options and restart Control to use the extended path. Availability remains subject to runtime capability checks. On hardware that reports Multi Frame Generation support, the overlay exposes modes up to the supported maximum, currently capped by the UI at **6x**, plus Dynamic MFG when supported.
 
 A current NVIDIA driver is strongly recommended. Hardware-accelerated GPU scheduling (HAGS) should be enabled if DLSS Frame Generation is unavailable on otherwise supported hardware.
 
@@ -105,7 +117,7 @@ The short version:
 1. Copy `dxgi.dll` beside `Control_DX12.exe`.
 2. Copy the complete `ControlFGStreamline` folder beside it.
 3. Launch Control in DX12 mode.
-4. Press **F10**.
+4. Press **F10**, or your saved custom shortcut. The header cog opens Options; the cog beside RR opens its settings.
 
 ## Screenshots
 
@@ -131,7 +143,7 @@ Selectable fixed multipliers from 2× through 6×.
 
 ![2x FG](screenshots/fixed-2x.png)
 
-GeForce RTX 40-series GPUs are intentionally limited to Off and 2×.
+RTX 40-series defaults to Off and 2×. v2.1.0 adds optional experimental MFG in Options; restart after enabling it.
 
 ## Troubleshooting and logs
 

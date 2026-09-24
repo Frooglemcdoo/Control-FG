@@ -1,0 +1,49 @@
+PASS equal primary and camera identities remain supported
+PASS distinct primary and camera captured
+PASS serial replay accepts primary distinct from camera
+PASS worker replay accepts captured primary
+PASS serial camera identity rejected as primary
+PASS serial mismatched primary rejected
+PASS worker mismatched primary rejected
+PASS worker invalid view vtable rejected
+PASS worker missing TLS rejected
+PASS replay manager mismatch rejected
+PASS replay frame mismatch rejected
+PASS replay unreadable frame rejected
+PASS replay prior draw fault rejected
+PASS replay invalid draw range rejected
+PASS replay binding read failure rejected
+PASS replay restores last error
+PASS join primary completes with separate camera
+PASS join camera identity rejected
+PASS join different valid primary rejected
+PASS join invalid callback vtable rejected
+PASS join renderer mismatch rejected
+PASS join manager mismatch rejected
+PASS join frame mismatch fails capture
+PASS join without completed replay fails capture
+PASS join scopes serial primary during original callback
+PASS copy accepts paired camera distinct from primary
+PASS copy primary substituted for camera rejected
+PASS copy different camera rejected
+PASS copy frame mismatch rejected
+PASS copy width mismatch rejected
+PASS copy height mismatch rejected
+PASS copy device mismatch rejected
+PASS copy queue mismatch rejected
+PASS invalid primary TLS blocks preparation allocation
+PASS invalid primary vtable blocks preparation allocation
+PASS null primary blocks preparation allocation
+PASS persistent camera frame mismatch blocks allocation
+PASS persistent camera renderer mismatch blocks allocation
+PASS preparation wireframe blocks allocation
+PASS preparation secondary wireframe blocks allocation
+PASS preparation disabled primary blocks allocation
+PASS primary read null output safe
+PASS primary read null module clears output
+PASS primary read absent TLS array clears output
+PASS primary TLS index upper bound accepted
+PASS primary TLS index out of bounds rejected
+PASS failed primary prep clears partially populated state
+PASS parallel flag preserved with primary view
+RESULT passed=48 failed=0

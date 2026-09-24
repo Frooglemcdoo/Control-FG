@@ -1,0 +1,21 @@
+{
+  "README.md": "c5bf614ac6656c99077c87be31fe6e00f5c9fe8cf376da0089acd595f80e2123",
+  "evidence/audit.json": "bf9d35a15027c2ca773a053d347adc7773cb4199ba93078f3a6cadbf7ca1800c",
+  "evidence/deferredlight_filtering_specular-000.json": "f02ef5725e37c01bdf482ddea29756a61f4610bb4af577956efca24879821063",
+  "evidence/deferredlight_filtering_specular-001.json": "63594bb763e622c87b810e051dca51d54b083ee0745446169e75d9948d611a9f",
+  "evidence/deferredlight_filtering_specular-002.json": "227f2948789be99fab0633f5d5ea303a5f209cbcac96333cfc68b9e8ecb732eb",
+  "evidence/deferredlight_filtering_specular-003.json": "b9a37f7b69d890f3853c70363cfb135eaa879562205c0c2c581fc4f0259e7d20",
+  "evidence/diffuse-filter.asm": "3550a26144892d33dc0009a469256bc6058957eaa7d1008d2b7dbdd7f0f7716a",
+  "evidence/position-srv-bind.asm": "03313d5c6c7491d597fca808f54b7018b513e7f4c39b15e918b39d33b11a912d",
+  "evidence/position-uav-bind.asm": "161e9d99a4166676ee1f70a6a684e49e72687f516b5ca67d82b76478c7fc3a1c",
+  "evidence/raytracing-passes.asm": "2a097ad5e71e012f6a65ff6e90f042ca85275e37e082281420441c74e0dcdeae",
+  "evidence/specular-filter.asm": "9fb40a1e59121f5bf576cfe71d513416b57692d1e8b96c8138e99f539760b633",
+  "shaders/deferredlight_filtering_specular-000.dxbc": "96efef41f57ee3497c9415106b5edd29780591e0a1973e14e0b414d4a43d565e",
+  "shaders/deferredlight_filtering_specular-001.dxbc": "61838ef515a4f5643f5d872279aa88793971337dea8a37b6575893b4893c5e18",
+  "shaders/deferredlight_filtering_specular-002.dxbc": "1467761bc826bd6a3af678967c08372a8850720d44511b1615ccd6529bf6c160",
+  "shaders/deferredlight_filtering_specular-003.dxbc": "cc2f9a07b5666329921dbaf25cb11c7497cac9ccbaf17bac68206d133c5914c3",
+  "tools/audit.py": "2e37f2bc0696ba3612916fcd7c8e1b5c561cf4b3bb18d7d3409a6e46a245185d",
+  "tools/d3d12TokenizedProgramFormat.hpp": "cf808b363406fce9387d7ec8daec19940175af966589c0d3e084a4c41c3f5060",
+  "tools/decode_dxbc.py": "64313747e8db66418c4512f78128efede4bd79dae5826207bc71e147af1333c1",
+  "tools/pe_tools.py": "e613f0aa9996631a19c8375854d35f6c6667e1b231f6c0973f6f66ed5279be59"
+}

@@ -1,0 +1,31 @@
+{
+  "build": "1.0.0-RR-Native-G4",
+  "current_evidence_directory": "validation/g4-current",
+  "older_validation_directories": "Historical G1/G2/G3 results, not fresh G4 runs.",
+  "nonreproduction": {
+    "watcher_seconds": 79.124073,
+    "dump_present": false,
+    "crash_resolved": false
+  },
+  "checks": {
+    "frozen_files": 11,
+    "behavior_headers_match_previously_tested_candidate": 2,
+    "prior_exact_source_host_cases_normal": 48,
+    "prior_exact_source_host_cases_sanitized": 48,
+    "fresh_windows_target_object_compilations": 4,
+    "fresh_shared_contract_cases": 76,
+    "collector_first_line_G4_identity_fixture": "PASS",
+    "overlay_matches_G3_with_same_existing_R1_patch": true
+  },
+  "limits": [
+    "No MSVC execution or DLL linking.",
+    "No Windows game or GPU execution.",
+    "No crash-resolution claim.",
+    "Native RR evaluation remains disabled."
+  ],
+  "prior_full_checkpoint": {
+    "name": "Control-RR-G3-UI-Removal-Crash-Checkpoint.zip",
+    "sha256": "610b00908f6b4d3384cb4e9b5e561c310b2d5bb8b4a8755e8003c063ee8087fc"
+  },
+  "fresh_source_and_release_validation": true
+}

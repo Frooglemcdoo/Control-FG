@@ -1,0 +1,35 @@
+{
+  "status": "RR_EXECUTION_CONFIRMED_RECOVERY_FAILED",
+  "archive": "Control-FG-v1.0.0-RR-Native-G12-r20f-Logs-20260915-164106-caf46f07.zip",
+  "archive_sha256": "c45965a56570f610d4d603efae8e8c8c43b9923c705fbd6a98d242a6056d8c66",
+  "main_log": "probe/probe-20260915-213821-488-43708.log",
+  "log_sha256": {
+    "probe/probe-20260915-213712-003-26792.log": "8f0272dbc5b8a2f1d90e5e8f5f8e0233770c17a94df62c132d48cab701898a1c",
+    "probe/probe-20260915-213745-057-17132.log": "88c4a90229670e754cfafe99ca482691b5388584f0e5224cda8154cb86ac64e8",
+    "probe/probe-20260915-213819-506-43760.log": "0251c3c0272fd4037a8f5ce7e90f3fdd9225bea7785acb4109bc81c0356b7db5",
+    "probe/probe-20260915-213821-488-43708.log": "1ae92f32d85269de80bfc4ff833463dcd7bf409f7e56c694d369c68b2528775a"
+  },
+  "version": "1.0.0-RR-Native-G12-r20f",
+  "preset_requested": "F",
+  "runtime": "310.9.1",
+  "rr_evaluation_success_samples": 21,
+  "rr_evaluation_counter_lower_bound": 4096,
+  "first_evaluation": "qpc=3116997623195 tid=59552 RR_NATIVE_EVALUATED frame=2244 result=0x00000001 success=1 diffuse=000002224F376750 specular=000002224F373780 normal=000002224F375430 distance=00000222841F3380 replaces_sr=1",
+  "last_evaluation_sample": "qpc=3117458505460 tid=59552 RR_NATIVE_EVALUATED frame=6323 result=0x00000001 success=1 diffuse=000002224F37C6F0 specular=000002224F37AA40 normal=000002224F378D90 distance=00000222841F16D0 replaces_sr=1",
+  "noisy_copies": 4288,
+  "copy_frames": [
+    2244,
+    6531
+  ],
+  "explicit_stop_events": 0,
+  "first_stopped_mode_sample": "qpc=3117505853410 tid=59552 RR_FRAME_MODE frame=6719 selected=0 ready=1 supported=1 active=0 reset_success=1 stopped=1 width=2560 height=1440 reset=1 rt_effects=0x1 required_effects=0x1",
+  "native_history_reset": "qpc=3117522915832 tid=59552 RR_NATIVE_HISTORY_RESET success=1",
+  "resumed_native_aa_frame": 6893,
+  "last_counters": "qpc=3118123462618 tid=59552 COUNTERS begin=12480 present=12480 aa=7205 aa_failures=0 hud_dispatch=12481 hud_render=12480 samples=36 transition_samples=5 swap_samples=145 hud_target_frames=96 hud_target_records=224 backbuffer_index_successes=12480 backbuffer_index_failures=0 fg_ready_presents=7205 fg_enabled_presents=7205 generated_state_samples=74",
+  "diagnosis": "Rendering stopped after frame 6531 while Present and early mode calls continued; native history reset and AA resumed at 6893. Source treats a selected Ready frame with no lighting as terminal on the next Begin.",
+  "limits": [
+    "Exact first stopped frame and previous coordinator stage were not logged; Ready abandonment is inferred from source plus the absence of lighting/AA/errors and stable extent/frame progression.",
+    "The log does not identify which screenshot/capture API initiated the pause.",
+    "Successful native evaluations do not establish final RR image quality."
+  ]
+}

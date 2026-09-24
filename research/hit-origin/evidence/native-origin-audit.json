@@ -1,0 +1,331 @@
+{
+  "status": "PASS",
+  "variants": [
+    {
+      "shader": "rt_reflection-000.dxbc",
+      "sha256": "c2e4c0c4b48b191ba281595dcf11c7962c5c05c615cbe036ca6e8616c09fd30e",
+      "primary_roots": [
+        "%.i0158",
+        "%.i1159",
+        "%.i2"
+      ],
+      "cases": 64
+    },
+    {
+      "shader": "rt_reflection-001.dxbc",
+      "sha256": "ab8df1c9b3263f534b6d43f1beb90acb5e7d0b8956844047e6abbd83aa964ed6",
+      "primary_roots": [
+        "%.i0158",
+        "%.i1159",
+        "%.i2"
+      ],
+      "cases": 64
+    },
+    {
+      "shader": "rt_reflection-002.dxbc",
+      "sha256": "a2ed39a3d4c1eaa9a2e401bc1f04df468007a77a97b6105215991622005a5ecb",
+      "primary_roots": [
+        "%.i0164",
+        "%.i1165",
+        "%.i2"
+      ],
+      "cases": 64
+    },
+    {
+      "shader": "rt_reflection-003.dxbc",
+      "sha256": "9d8bf04e11cafae08916137cf8e4dd66730d8beac6daa2fd6add19e8dc9b5da5",
+      "primary_roots": [
+        "%.i0164",
+        "%.i1165",
+        "%.i2"
+      ],
+      "cases": 64
+    },
+    {
+      "shader": "rt_reflection-004.dxbc",
+      "sha256": "7e701da941303a50fa89f2e6fce276d11788e718c3e93a221e7a17a883ea968d",
+      "primary_roots": [
+        "%.i0158",
+        "%.i1159",
+        "%.i2"
+      ],
+      "cases": 64
+    },
+    {
+      "shader": "rt_reflection-005.dxbc",
+      "sha256": "707337cbef486f61e0577b70e021b98397f6085e4069982d78591883b6b04585",
+      "primary_roots": [
+        "%.i0158",
+        "%.i1159",
+        "%.i2"
+      ],
+      "cases": 64
+    },
+    {
+      "shader": "rt_reflection-006.dxbc",
+      "sha256": "0411098fa35a9f6e388bc2f30e2dd79240cb0fb39654f53ab8b54d1d4785f00a",
+      "primary_roots": [
+        "%.i0164",
+        "%.i1165",
+        "%.i2"
+      ],
+      "cases": 64
+    },
+    {
+      "shader": "rt_reflection-007.dxbc",
+      "sha256": "bd8cd8bd7d87cca2d1e5f6ddb2bb3a239d4e69422d2e9777979b1d29791a2727",
+      "primary_roots": [
+        "%.i0164",
+        "%.i1165",
+        "%.i2"
+      ],
+      "cases": 64
+    },
+    {
+      "shader": "rt_reflection-008.dxbc",
+      "sha256": "3b58fb0edaac252905cfce5533c82c275cba7752e074449e1ac6fe8bc640f95a",
+      "primary_roots": [
+        "%.i0158",
+        "%.i1159",
+        "%.i2"
+      ],
+      "cases": 64
+    },
+    {
+      "shader": "rt_reflection-009.dxbc",
+      "sha256": "dc43fec4e661fa830db96d9f1187ae10d45f135c6e7f97a197cce88a44154ba2",
+      "primary_roots": [
+        "%.i0158",
+        "%.i1159",
+        "%.i2"
+      ],
+      "cases": 64
+    },
+    {
+      "shader": "rt_reflection-010.dxbc",
+      "sha256": "3f999b7dea64a02cd195f9af515a5e034508a548571d86beed62d1421d0fd8a9",
+      "primary_roots": [
+        "%.i0164",
+        "%.i1165",
+        "%.i2"
+      ],
+      "cases": 64
+    },
+    {
+      "shader": "rt_reflection-011.dxbc",
+      "sha256": "814a8027eaccd5af570435800a72ea93e39631ee8a7ad81a6e5ac1d4c5cb9564",
+      "primary_roots": [
+        "%.i0164",
+        "%.i1165",
+        "%.i2"
+      ],
+      "cases": 64
+    },
+    {
+      "shader": "rt_reflection-012.dxbc",
+      "sha256": "2a86923b674f36c6df3928dbb3396b0616fa9a9feb224ded9f66580585d49bae",
+      "primary_roots": [
+        "%.i0158",
+        "%.i1159",
+        "%.i2"
+      ],
+      "cases": 64
+    },
+    {
+      "shader": "rt_reflection-013.dxbc",
+      "sha256": "5b9d5e7f3fa0065d1f338eed7f523740c6c3cb239352789c7d64d843870add7a",
+      "primary_roots": [
+        "%.i0158",
+        "%.i1159",
+        "%.i2"
+      ],
+      "cases": 64
+    },
+    {
+      "shader": "rt_reflection-014.dxbc",
+      "sha256": "b71d5079430b9721802cbb17aa3d4544ac0eb98388782f179669e5f30523e1a6",
+      "primary_roots": [
+        "%.i0164",
+        "%.i1165",
+        "%.i2"
+      ],
+      "cases": 64
+    },
+    {
+      "shader": "rt_reflection-015.dxbc",
+      "sha256": "9c61d79b9a042510a13b14acdc00e28fb30b870955c0167977242d24059082d0",
+      "primary_roots": [
+        "%.i0164",
+        "%.i1165",
+        "%.i2"
+      ],
+      "cases": 64
+    },
+    {
+      "shader": "rt_reflection-016.dxbc",
+      "sha256": "4ef8cbe9e4fc81b5ced1026e6681732d4518db1aa96d26d4ae41fd13965bce91",
+      "primary_roots": [
+        "%.i0174",
+        "%.i1175",
+        "%.i2"
+      ],
+      "cases": 64
+    },
+    {
+      "shader": "rt_reflection-017.dxbc",
+      "sha256": "b188002bdb6ab4feb7af2d4cc95e5c40b7671d746028059ddfd97ab326295dbf",
+      "primary_roots": [
+        "%.i0174",
+        "%.i1175",
+        "%.i2"
+      ],
+      "cases": 64
+    },
+    {
+      "shader": "rt_reflection-018.dxbc",
+      "sha256": "4b26c839a2fe5397922ebebe722b0fbf54f94bfaa2bdeb2f7984250f27454423",
+      "primary_roots": [
+        "%.i0181",
+        "%.i1182",
+        "%.i2"
+      ],
+      "cases": 64
+    },
+    {
+      "shader": "rt_reflection-019.dxbc",
+      "sha256": "799ac13dbfbb26e703179c95d2a9bbfaf91c6d3cc17cf4c394fcee0575ac2297",
+      "primary_roots": [
+        "%.i0181",
+        "%.i1182",
+        "%.i2"
+      ],
+      "cases": 64
+    },
+    {
+      "shader": "rt_reflection-020.dxbc",
+      "sha256": "b2549f5c5005000cfd548ad1977fad632cf5f6dae5f4784055e7c5072102d4a1",
+      "primary_roots": [
+        "%.i0174",
+        "%.i1175",
+        "%.i2"
+      ],
+      "cases": 64
+    },
+    {
+      "shader": "rt_reflection-021.dxbc",
+      "sha256": "6c98b4e52a114ffa64a4416b16f4fa3f7e35cb15b1aed9b225a55de2c5500373",
+      "primary_roots": [
+        "%.i0174",
+        "%.i1175",
+        "%.i2"
+      ],
+      "cases": 64
+    },
+    {
+      "shader": "rt_reflection-022.dxbc",
+      "sha256": "f92bb7c2703f220f474b5f9e26337b08a81e8271a525df0d0b45160912b5930c",
+      "primary_roots": [
+        "%.i0181",
+        "%.i1182",
+        "%.i2"
+      ],
+      "cases": 64
+    },
+    {
+      "shader": "rt_reflection-023.dxbc",
+      "sha256": "ec647c1608fc6d3268720378d287f936de6f4dd8bdfcb21ee64f7b0516e4c571",
+      "primary_roots": [
+        "%.i0181",
+        "%.i1182",
+        "%.i2"
+      ],
+      "cases": 64
+    },
+    {
+      "shader": "rt_reflection-024.dxbc",
+      "sha256": "265bc062fcf2129a404ce56dc15c0883da0d52c3c22a78bd1b02d5c54f7c5645",
+      "primary_roots": [
+        "%.i0174",
+        "%.i1175",
+        "%.i2"
+      ],
+      "cases": 64
+    },
+    {
+      "shader": "rt_reflection-025.dxbc",
+      "sha256": "f20ed1cb40ef15b74e94101dcf16ea137315ad96d475b09a595b0e03cbb6238e",
+      "primary_roots": [
+        "%.i0174",
+        "%.i1175",
+        "%.i2"
+      ],
+      "cases": 64
+    },
+    {
+      "shader": "rt_reflection-026.dxbc",
+      "sha256": "4104edb9538ee61c94b0f814e61d5b3d6caa96d106c8b1f9b26a92808ac8570e",
+      "primary_roots": [
+        "%.i0181",
+        "%.i1182",
+        "%.i2"
+      ],
+      "cases": 64
+    },
+    {
+      "shader": "rt_reflection-027.dxbc",
+      "sha256": "429c3b507ec77d5b616c299fbbfd1d531c069b31cbf77da459295d0f147914d6",
+      "primary_roots": [
+        "%.i0181",
+        "%.i1182",
+        "%.i2"
+      ],
+      "cases": 64
+    },
+    {
+      "shader": "rt_reflection-028.dxbc",
+      "sha256": "0550895d74dccae3ba8766cfe7f6437bf2fe24e9a404cc4325713314d3b6d8a6",
+      "primary_roots": [
+        "%.i0174",
+        "%.i1175",
+        "%.i2"
+      ],
+      "cases": 64
+    },
+    {
+      "shader": "rt_reflection-029.dxbc",
+      "sha256": "075d43923bd074702bdfd28bbfeb5dff2ff35e6f91510566328de5b5f0f279ac",
+      "primary_roots": [
+        "%.i0174",
+        "%.i1175",
+        "%.i2"
+      ],
+      "cases": 64
+    },
+    {
+      "shader": "rt_reflection-030.dxbc",
+      "sha256": "f6a84e6fad328e1e994b442c0556f8e2815eeab14acc813fb6eff3fc7324bfbe",
+      "primary_roots": [
+        "%.i0181",
+        "%.i1182",
+        "%.i2"
+      ],
+      "cases": 64
+    },
+    {
+      "shader": "rt_reflection-031.dxbc",
+      "sha256": "039a1dfd754cf675aafab55d979f612d82000f872c04844232dc24eb80e2eebe",
+      "primary_roots": [
+        "%.i0181",
+        "%.i1182",
+        "%.i2"
+      ],
+      "cases": 64
+    }
+  ],
+  "cases": 2048,
+  "source": "native DXIL SSA interpreter compared to independent homogeneous matrix formula",
+  "inv_resolution": "sys_constants register 1 components 2/3: g_vInvOutputRes",
+  "matrix": "sys_constants registers 14..17: g_mClipToView",
+  "negative_check": "wrong matrix register rejected",
+  "limits": "Does not prove which constants, resource or shader variant are bound in a running frame."
+}

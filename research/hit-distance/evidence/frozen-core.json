@@ -1,0 +1,57 @@
+[
+  {
+    "file": "src/streamline_bridge.h",
+    "sha256": "99c182228471c9007d6ab8526e906546d8917b737797d6bb1b1a5a606a5dc546",
+    "match": true
+  },
+  {
+    "file": "src/hdr10_bridge.h",
+    "sha256": "dc0c5b6ea1b5fd8345a27475497a4321223c9dc1984a7a7aea154add2b0c1224",
+    "match": true
+  },
+  {
+    "file": "Fetch-Streamline.ps1",
+    "sha256": "4b4a31b9bccc05693960ded26b8aa3f43592b606a971613c34c7daa4be0607db",
+    "match": true
+  },
+  {
+    "file": "Verify-Streamline.ps1",
+    "sha256": "a4a6fb274a09abf042a1b57760850cbcb9e42a3c5486bdd32c051d901cc37cc4",
+    "match": true
+  },
+  {
+    "file": "target-manifest.json",
+    "sha256": "a370e4a63a645b34066e8a4123cb14f7077b32a9c0df3f864c77af50f92079f6",
+    "match": true
+  },
+  {
+    "file": "src/streamline_frame.h",
+    "sha256": "524d15c1b021af383b443b4292f77c6a075f4cbf0707a9d430069f8a5731b13d",
+    "match": true
+  },
+  {
+    "file": "src/camera_capture.h",
+    "sha256": "70cd42781d391410b95a4c6b4aefcec18cd828eb29d3a88e42377e3686211a01",
+    "match": true
+  },
+  {
+    "file": "src/semantic_capture.h",
+    "sha256": "df8a31a272fd2b860bc352cd384e1d53cab29db2d47614628f4930d73deaf8c3",
+    "match": true
+  },
+  {
+    "file": "src/target.h",
+    "sha256": "331cfa13d33119fe9e54fd27154601f05704a8c5ab763354d0a5620df1f601c4",
+    "match": true
+  },
+  {
+    "file": "src/abi_check.cpp",
+    "sha256": "eb9da48faeccc7e1efc5385fc6720b4469d794f816e2727476ed4aa16e015249",
+    "match": true
+  },
+  {
+    "file": "src/dxgi.def",
+    "sha256": "6c502244a7a3bc01c47ddfe2f4b0f6803195de1ae5fe8e917ae8d1b624fb3c68",
+    "match": true
+  }
+]

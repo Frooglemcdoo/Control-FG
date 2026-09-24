@@ -1,0 +1,1769 @@
+{
+  "scope": "Actual G3 header; previous compatibility suite plus SM5.1 serialization/operand/declaration tests, actual Control PS blobs and unmodified Microsoft FXC fixtures. No GPU execution.",
+  "header_sha256": "7afda0c31ae710e0f27c7b06420f54f4052e385dc7fbb32ec38df3910e1f6a35",
+  "compatibility_checks": 151,
+  "sm51_checks": 69,
+  "checks": [
+    {
+      "name": "one-target",
+      "expected_accept": true,
+      "accepted": true,
+      "result": "PASS ok targets=1 instructions=3 resources=0 hash=346c83344ad3e3ca",
+      "pass": true,
+      "sha256": "9bafb9cdc68aad53da5272ec7eca984b382dc4891c34209c69de62e0c1c24aa0"
+    },
+    {
+      "name": "two-targets",
+      "expected_accept": true,
+      "accepted": true,
+      "result": "PASS ok targets=2 instructions=5 resources=0 hash=051b82414b88b805",
+      "pass": true,
+      "sha256": "1bac9d9438ba6e8a9bc56cc069b7b31056d2ca0b39cde17f856770aceab445f0"
+    },
+    {
+      "name": "OSGN-system-0",
+      "expected_accept": true,
+      "accepted": true,
+      "result": "PASS ok targets=1 instructions=3 resources=0 hash=346c83344ad3e3ca",
+      "pass": true,
+      "sha256": "9bafb9cdc68aad53da5272ec7eca984b382dc4891c34209c69de62e0c1c24aa0"
+    },
+    {
+      "name": "OSGN-system-64",
+      "expected_accept": true,
+      "accepted": true,
+      "result": "PASS ok targets=1 instructions=3 resources=0 hash=1501a00b12cba70a",
+      "pass": true,
+      "sha256": "fb11d749647d4a38fec01eb9aa7c8064ec7412b540c1a5ede3073271aaa23f0e"
+    },
+    {
+      "name": "OSG5-system-0",
+      "expected_accept": true,
+      "accepted": true,
+      "result": "PASS ok targets=1 instructions=3 resources=0 hash=f7f995cc6b12e4f7",
+      "pass": true,
+      "sha256": "0bb20a84af548dae0e999af8ff75b138a13afe255447b44f91a27192704c6802"
+    },
+    {
+      "name": "OSG5-system-64",
+      "expected_accept": true,
+      "accepted": true,
+      "result": "PASS ok targets=1 instructions=3 resources=0 hash=7387159796257737",
+      "pass": true,
+      "sha256": "4ea65b56b83943a697bcd8627b0895654cbf0f0cb94688fd705c5540edd61637"
+    },
+    {
+      "name": "OSG1-system-0",
+      "expected_accept": true,
+      "accepted": true,
+      "result": "PASS ok targets=1 instructions=3 resources=0 hash=845b84657c7af32b",
+      "pass": true,
+      "sha256": "87c80beceec16ea9d2406e2c7261ce8259bea4072a95a86b80edbd425b314692"
+    },
+    {
+      "name": "OSG1-system-64",
+      "expected_accept": true,
+      "accepted": true,
+      "result": "PASS ok targets=1 instructions=3 resources=0 hash=8c85afeae69c87eb",
+      "pass": true,
+      "sha256": "fc41295651e844e6ef966b6255786658bb10ec4de0e603543c45f85cc094be68"
+    },
+    {
+      "name": "case-insensitive-target",
+      "expected_accept": true,
+      "accepted": true,
+      "result": "PASS ok targets=1 instructions=3 resources=0 hash=63be0fe19148ad8a",
+      "pass": true,
+      "sha256": "e97c63b9e090264736d1a77dc1cab1aab9eef5bb038d5bb1b42679878b74406c"
+    },
+    {
+      "name": "read-only-bindings",
+      "expected_accept": true,
+      "accepted": true,
+      "result": "PASS ok targets=1 instructions=3 resources=6 hash=52da4dcc7d512dd1",
+      "pass": true,
+      "sha256": "c52189c7b159f5a5e3d6ba95ed6db6216a56503db622b99e624596adfd30eddd"
+    },
+    {
+      "name": "immediate-constant-buffer",
+      "expected_accept": true,
+      "accepted": true,
+      "result": "PASS ok targets=1 instructions=4 resources=0 hash=e00863bf99fc3487",
+      "pass": true,
+      "sha256": "777ac18e51c8a53fabcde30b85c0ae94fb6bd5d44bea929236ad6a866d403a72"
+    },
+    {
+      "name": "debug-custom-data",
+      "expected_accept": true,
+      "accepted": true,
+      "result": "PASS ok targets=1 instructions=4 resources=0 hash=0a021fbd5e28fcf1",
+      "pass": true,
+      "sha256": "2c96068de606a8a2124fb4991df2a84bbe2afa27ae316a464e98cbc5d3b7edb3"
+    },
+    {
+      "name": "comment-custom-data",
+      "expected_accept": true,
+      "accepted": true,
+      "result": "PASS ok targets=1 instructions=4 resources=0 hash=40d5f59bf5d755ef",
+      "pass": true,
+      "sha256": "588d696a5d18acbc285261427f4bfc1857a33c659da70dae688ada1abb1cc700"
+    },
+    {
+      "name": "if-else",
+      "expected_accept": true,
+      "accepted": true,
+      "result": "PASS ok targets=1 instructions=5 resources=0 hash=e1fd88377eece2e4",
+      "pass": true,
+      "sha256": "1d2ba042e4c489e14c297de82d35aed68860bba37806986d71f2ffe3842efc7e"
+    },
+    {
+      "name": "loop-break",
+      "expected_accept": true,
+      "accepted": true,
+      "result": "PASS ok targets=1 instructions=5 resources=0 hash=d39113d034947a5c",
+      "pass": true,
+      "sha256": "086351cd164388dd226146dc1fe3ae814308a6d74dfa5853094a942bf8385b48"
+    },
+    {
+      "name": "switch-case",
+      "expected_accept": true,
+      "accepted": true,
+      "result": "PASS ok targets=1 instructions=6 resources=0 hash=db044bc4afcfb233",
+      "pass": true,
+      "sha256": "4000d68e5e37f071ac011318da28ac34b656e816c06d888b0c62fd5c6271926e"
+    },
+    {
+      "name": "wrong-stage",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_stage targets=0 instructions=0 resources=0 hash=df3164d07220af2f",
+      "pass": true,
+      "sha256": "6feece71088a2129869bb9b613a8f1277d2ff0fd234d4f0d04dfeb6734373b74"
+    },
+    {
+      "name": "zero-targets",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_signature_table targets=0 instructions=0 resources=0 hash=bfa68642c9fab9ca",
+      "pass": true,
+      "sha256": "428fd90011de6c0b58ff2baaf3b642a895bcda99e1a70cc7b3a2a36049ec7f48"
+    },
+    {
+      "name": "three-targets",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_signature_table targets=0 instructions=0 resources=0 hash=7c98a0a50feed551",
+      "pass": true,
+      "sha256": "f172d75d0b5ab39e2a668ef3c240275a96a7cc950b9d824d1a005d67f4698317"
+    },
+    {
+      "name": "integer-target",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_target_contract targets=0 instructions=0 resources=0 hash=6ee3aab4d99861cc",
+      "pass": true,
+      "sha256": "05c2346e9caf5942872fb4a961c04381b40fd065e14d49ab04e52fa8a2d7fdc2"
+    },
+    {
+      "name": "depth-semantic",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_target_contract targets=0 instructions=0 resources=0 hash=559868290ad03255",
+      "pass": true,
+      "sha256": "5822cbf2eb401412e79fd35852ebeabcaf0f8993dda220114548dd5d4a9680f3"
+    },
+    {
+      "name": "coverage-semantic",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_target_contract targets=0 instructions=0 resources=0 hash=5f5bf4ecbee5a261",
+      "pass": true,
+      "sha256": "04de96d21df05f63af05fb3389296daf64a5f3b6fd8505deae523db1f48c0b3c"
+    },
+    {
+      "name": "ordinary-color-semantic",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_target_contract targets=0 instructions=0 resources=0 hash=bc1448be4a23e38a",
+      "pass": true,
+      "sha256": "a86d047323ff9432447ef00f6cd73c2470194de93d351d14e5e9d840bf39bab7"
+    },
+    {
+      "name": "nonzero-stream",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_signature_stream targets=0 instructions=0 resources=0 hash=6e82f25174ec7326",
+      "pass": true,
+      "sha256": "2c3cf1ed873f49986935a91a18edd66d248f0986d06a2c24c2c8283e52678f62"
+    },
+    {
+      "name": "minimum-precision",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_signature_precision targets=0 instructions=0 resources=0 hash=8d375c096890f67a",
+      "pass": true,
+      "sha256": "84dd3749090e61c165934f2467cba5258b8605d237bb3e59d78834b2bf4a1e27"
+    },
+    {
+      "name": "duplicate-target",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_duplicate_target targets=0 instructions=0 resources=0 hash=b9eb0015c478ced5",
+      "pass": true,
+      "sha256": "ddcce99362b46cbfd5a1d6cfb590d89c4d612faeef66414be01aa145930bf698"
+    },
+    {
+      "name": "target-gap",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_target_contract targets=0 instructions=0 resources=0 hash=b1d7f7e060e1bbf5",
+      "pass": true,
+      "sha256": "6c4097dad6d98c60e5f9fda9eaabaf727b8a128017207ec741a1e1e7a13f3289"
+    },
+    {
+      "name": "missing-rgb",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_target_contract targets=0 instructions=0 resources=0 hash=7fc74bbe2927d7d6",
+      "pass": true,
+      "sha256": "cd7b76547347d57618acd24d9f2206d1d551eaad5b2e10af0209c03c7ea861b8"
+    },
+    {
+      "name": "never-written-rgb",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_target_contract targets=0 instructions=0 resources=0 hash=a51b179de860d0b1",
+      "pass": true,
+      "sha256": "edc3e11732db23f0f19d4d32811f72959244a98858dc1d2f3157909f05b62c64"
+    },
+    {
+      "name": "resource-4",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_writable_or_unknown_resource targets=0 instructions=0 resources=0 hash=9a2a3fd073303be7",
+      "pass": true,
+      "sha256": "64240e535bec5c00eb935adbe87cbadb95b30c035481c0bdd8c95bccd932a223"
+    },
+    {
+      "name": "resource-6",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_writable_or_unknown_resource targets=0 instructions=0 resources=0 hash=0de891939030a799",
+      "pass": true,
+      "sha256": "1f527cd217359ab709901659580f4c857f7b8326add50c2a64b36fcc65f3db29"
+    },
+    {
+      "name": "resource-8",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_writable_or_unknown_resource targets=0 instructions=0 resources=0 hash=a5045fe5c1e90afb",
+      "pass": true,
+      "sha256": "acef53756b872f79563eda666b62d98e913fe26f9b6eaec9e263995d4d227618"
+    },
+    {
+      "name": "resource-9",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_writable_or_unknown_resource targets=0 instructions=0 resources=0 hash=d9898a46b38d21de",
+      "pass": true,
+      "sha256": "feab9171bb81a189de21c295aa50d36dd20eae17e5838abc8023bc4da26e134b"
+    },
+    {
+      "name": "resource-10",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_writable_or_unknown_resource targets=0 instructions=0 resources=0 hash=c1bbdd6b6b5284fd",
+      "pass": true,
+      "sha256": "c6cee2788363faf2dc7351316f655dc7122ce264785fa1e1ae0241d1cb49354a"
+    },
+    {
+      "name": "resource-11",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_writable_or_unknown_resource targets=0 instructions=0 resources=0 hash=cdb2be3ac51c9420",
+      "pass": true,
+      "sha256": "2712bd569ccf1ae39f30168d4936ee9f5dc842b376ab706388d0e6781e344188"
+    },
+    {
+      "name": "resource-12",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_writable_or_unknown_resource targets=0 instructions=0 resources=0 hash=a4634ce1d52a991f",
+      "pass": true,
+      "sha256": "7da914ec832dd44bcbc0c9af3dc4d3d0ac994ef8a32b82a0f0b8d0bab03a51f2"
+    },
+    {
+      "name": "resource-13",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_writable_or_unknown_resource targets=0 instructions=0 resources=0 hash=c731eb604df75a72",
+      "pass": true,
+      "sha256": "d73b6a8c8313ad553fd9054900c9879af2b5b594c852c8ee27d235ae11683be6"
+    },
+    {
+      "name": "resource-4294967295",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_writable_or_unknown_resource targets=0 instructions=0 resources=0 hash=89e22f68e25a3c87",
+      "pass": true,
+      "sha256": "94a218f2d41324e8b058cbb0477a1ec2b136f4e7e99914b882e8ff1fbd52978f"
+    },
+    {
+      "name": "writable-opcode-156",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_writable_instruction targets=0 instructions=0 resources=0 hash=3f6f9877796fd5e2",
+      "pass": true,
+      "sha256": "8a6e1db9ca0e5e9f3f9bc1e4c8db87c9a631b37cd51d2d4bf3033fb4a2ad1253"
+    },
+    {
+      "name": "writable-opcode-157",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_writable_instruction targets=0 instructions=0 resources=0 hash=44377c790225c54b",
+      "pass": true,
+      "sha256": "f2d404de867509ba78c47f2678bd9d14f6d5e9d8f2109c2c548e64bab46352e0"
+    },
+    {
+      "name": "writable-opcode-158",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_writable_instruction targets=0 instructions=0 resources=0 hash=fc25787dc3e69c20",
+      "pass": true,
+      "sha256": "f633b61b7d9462e33dd5130fdcfc516017a14cf1427d5ff2a25369126436f1a7"
+    },
+    {
+      "name": "writable-opcode-159",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_writable_instruction targets=0 instructions=0 resources=0 hash=00ed5c7f4c9c8b89",
+      "pass": true,
+      "sha256": "481572bce40c8c774158d66cf61bd03781b7a450bf8e93708b87b7f94773e13b"
+    },
+    {
+      "name": "writable-opcode-160",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_writable_instruction targets=0 instructions=0 resources=0 hash=91b4af52d2f60a36",
+      "pass": true,
+      "sha256": "6dfca6dfa2f3c42c73219835cbd1074ab606b80a2818a8e712a99138adab8085"
+    },
+    {
+      "name": "writable-opcode-163",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_writable_instruction targets=0 instructions=0 resources=0 hash=55dc6f2f8b44775d",
+      "pass": true,
+      "sha256": "db9ab1788278b8cce10c784a2cab48b4d9709e9f5fd28de84fc86b2158436280"
+    },
+    {
+      "name": "writable-opcode-164",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_writable_instruction targets=0 instructions=0 resources=0 hash=159ef37158e6c63a",
+      "pass": true,
+      "sha256": "36b2940f0e4745b76f192d3cb5e85ab8c1e83e7943e034ce474b57bda3361b48"
+    },
+    {
+      "name": "writable-opcode-166",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_writable_instruction targets=0 instructions=0 resources=0 hash=d254d377a35d8c78",
+      "pass": true,
+      "sha256": "f276379f4aefb34a932506310846e1b5b8d794edb0761544ea23749d2b8c4cbb"
+    },
+    {
+      "name": "writable-opcode-168",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_writable_instruction targets=0 instructions=0 resources=0 hash=89e02715c714922e",
+      "pass": true,
+      "sha256": "7a84376deea7d6bbf8c2e206f82631510b56e2eac301cdfd85bc82377441f996"
+    },
+    {
+      "name": "writable-opcode-169",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_writable_instruction targets=0 instructions=0 resources=0 hash=8ea80b174fca8197",
+      "pass": true,
+      "sha256": "abb0bcb656666c9881ef47c74ac5d016476bd460600b15241f9863455b564769"
+    },
+    {
+      "name": "writable-opcode-170",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_writable_instruction targets=0 instructions=0 resources=0 hash=4696071c118b586c",
+      "pass": true,
+      "sha256": "a548dafcfa15f53d22ce70ba2c50a84de73a73c1cdbc56a1a88cc0efab9e4eb1"
+    },
+    {
+      "name": "writable-opcode-171",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_writable_instruction targets=0 instructions=0 resources=0 hash=4e07e6f27f62ff55",
+      "pass": true,
+      "sha256": "4bbfede9c75eb54de9efd2f0740bc84841762b1da965638e7bfc14519ddfd330"
+    },
+    {
+      "name": "writable-opcode-172",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_writable_instruction targets=0 instructions=0 resources=0 hash=0dca6b344d054e32",
+      "pass": true,
+      "sha256": "60b817b74fe46e347ef695c4be7200793e18fa53682a409e9c1940e4ccb80913"
+    },
+    {
+      "name": "writable-opcode-173",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_writable_instruction targets=0 instructions=0 resources=0 hash=12924f35d5bb3d9b",
+      "pass": true,
+      "sha256": "d6ae4fe6fbb1c47067f10a1ee6d49c7b10dac2ecc6d01fe6736da1af72a764f8"
+    },
+    {
+      "name": "writable-opcode-174",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_writable_instruction targets=0 instructions=0 resources=0 hash=ca804b3a977c1470",
+      "pass": true,
+      "sha256": "6d600d7e7e97f75053e5f0a99b6cbbabce9c9bae16aa0d04a68d70466e48c900"
+    },
+    {
+      "name": "writable-opcode-175",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_writable_instruction targets=0 instructions=0 resources=0 hash=d1f22b110553bb59",
+      "pass": true,
+      "sha256": "0d4fe19acfb360965cdf01c01f5199da8d0b5b847803078f912c1c59b3e0e525"
+    },
+    {
+      "name": "writable-opcode-176",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_writable_instruction targets=0 instructions=0 resources=0 hash=a15dbfcceab8fa46",
+      "pass": true,
+      "sha256": "5e02b95a82b9e2c3ec8cd4603d7845eea7d32e4f684b0ce5812395afbc1219fd"
+    },
+    {
+      "name": "writable-opcode-177",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_writable_instruction targets=0 instructions=0 resources=0 hash=a625a3ce736ee9af",
+      "pass": true,
+      "sha256": "a8a20f313ed94490d3e96da055241d478328f8a645dafa3388dacf403c32eb5a"
+    },
+    {
+      "name": "writable-opcode-178",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_writable_instruction targets=0 instructions=0 resources=0 hash=60bd9ba81a517804",
+      "pass": true,
+      "sha256": "13f5800e683b05558f695dd071de900b94696710188ca19fee8be528033ec430"
+    },
+    {
+      "name": "writable-opcode-179",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_writable_instruction targets=0 instructions=0 resources=0 hash=65857fa9a307676d",
+      "pass": true,
+      "sha256": "7b1af0d42e04ada1e92c2d10a297b77b99c009d4f2a31b4e41cb0edf3db19a41"
+    },
+    {
+      "name": "writable-opcode-180",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_writable_instruction targets=0 instructions=0 resources=0 hash=254803eb70a9b64a",
+      "pass": true,
+      "sha256": "08b6ac3385f5e4658bda2bab3c774b476f069c8d56875ab23e942318a3a4c192"
+    },
+    {
+      "name": "writable-opcode-181",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_writable_instruction targets=0 instructions=0 resources=0 hash=2cb9e3c1de815d33",
+      "pass": true,
+      "sha256": "5828b47083265f4df9655866e4f6ddee99ae3c58b09057fbe729a522e68d6aaf"
+    },
+    {
+      "name": "writable-opcode-182",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_writable_instruction targets=0 instructions=0 resources=0 hash=e4a7dfc6a0423408",
+      "pass": true,
+      "sha256": "6b74b8755547d4a87d50c96de21c1b942db6b22ae842ff54764b0e8c83db64af"
+    },
+    {
+      "name": "writable-opcode-183",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_writable_instruction targets=0 instructions=0 resources=0 hash=e96fc3c828f82371",
+      "pass": true,
+      "sha256": "ef44ef52d7a1fcd916edb42885bb37541c088f273b9a629bc7ae6843c3260157"
+    },
+    {
+      "name": "writable-opcode-184",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_writable_instruction targets=0 instructions=0 resources=0 hash=9989378fded7823e",
+      "pass": true,
+      "sha256": "ca147955609e420719a6cfbfff68b21d0459411c0c2149ceca91a7ec9bcae383"
+    },
+    {
+      "name": "writable-opcode-185",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_writable_instruction targets=0 instructions=0 resources=0 hash=9e511b91678d71a7",
+      "pass": true,
+      "sha256": "8900534f1167275e3b0a4189f790c900f6907abeb71ad8efd3b28830c6ae9378"
+    },
+    {
+      "name": "writable-opcode-186",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_writable_instruction targets=0 instructions=0 resources=0 hash=563f1796294e487c",
+      "pass": true,
+      "sha256": "e41838bd31ed66c965a0ced42a2af1261d1101925736761df32d2e81fc8130b2"
+    },
+    {
+      "name": "writable-opcode-187",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_writable_instruction targets=0 instructions=0 resources=0 hash=5db0f76c9725ef65",
+      "pass": true,
+      "sha256": "be6de153320c4ce499c85f91cc28ddedfe8ac64959d5813bb4fb982daa2ad6f7"
+    },
+    {
+      "name": "writable-opcode-188",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_writable_instruction targets=0 instructions=0 resources=0 hash=1d737bae64c83e42",
+      "pass": true,
+      "sha256": "4e2d587cfda62daa0921b703d87dad274ac9369ac262a9eb3fd0507974b40b2d"
+    },
+    {
+      "name": "writable-opcode-189",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_writable_instruction targets=0 instructions=0 resources=0 hash=223b5fafed7e2dab",
+      "pass": true,
+      "sha256": "40f68b0f3d6dce67e90198ed085d98acb324583e6f5c7928a27c44adb09eaa44"
+    },
+    {
+      "name": "writable-opcode-190",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_writable_instruction targets=0 instructions=0 resources=0 hash=dcd357899460bc00",
+      "pass": true,
+      "sha256": "7b1f295185ab7e142cc7c78e8454e1c87ea7ec45d0b060438842fc17e158b8aa"
+    },
+    {
+      "name": "writable-opcode-225",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_writable_instruction targets=0 instructions=0 resources=0 hash=d7cad1119fd9715f",
+      "pass": true,
+      "sha256": "4acff1618974f8d80f7df4657b9d8168b4db8052d607571d9ce4151b68de9aa2"
+    },
+    {
+      "name": "unsupported-opcode-4",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_unsupported_instruction targets=0 instructions=0 resources=0 hash=b78d8fe010c795da",
+      "pass": true,
+      "sha256": "54187d69a0bea7111c83379ede03aa4834acb3e99c261bf1b9d6fcb1db504f54"
+    },
+    {
+      "name": "unsupported-opcode-5",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_unsupported_instruction targets=0 instructions=0 resources=0 hash=beff6fb67e9f3cc3",
+      "pass": true,
+      "sha256": "f5471b38981f4e4bf7200b617ab2399f5272297f0508a2bed875ea846e5c6862"
+    },
+    {
+      "name": "unsupported-opcode-9",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_unsupported_instruction targets=0 instructions=0 resources=0 hash=3340a35aeccd08b7",
+      "pass": true,
+      "sha256": "d57c489455d4beca6a3ace6f6e70e91820821c4eb0266ad30aa77476a72418d3"
+    },
+    {
+      "name": "unsupported-opcode-19",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_unsupported_instruction targets=0 instructions=0 resources=0 hash=07741c185ae8370d",
+      "pass": true,
+      "sha256": "6fa10e0959ea3e62a50d03412cc3a246c4838d8f1c6da6f3638ea8ff472aae2e"
+    },
+    {
+      "name": "unsupported-opcode-20",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_unsupported_instruction targets=0 instructions=0 resources=0 hash=c9e09c2f0dac3d6a",
+      "pass": true,
+      "sha256": "e4d6f415bfa7dc0d17a9c551a99aa9345f370c81ec82893c96d13db487f3fe76"
+    },
+    {
+      "name": "unsupported-opcode-44",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_unsupported_instruction targets=0 instructions=0 resources=0 hash=9066e6aed5603db2",
+      "pass": true,
+      "sha256": "e4d4ce6dad58c70b3be59a934bb84c3b9e76276e570e8f6dd70ad9e6140cabaa"
+    },
+    {
+      "name": "unsupported-opcode-107",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_unsupported_instruction targets=0 instructions=0 resources=0 hash=11f2a02a4beb6695",
+      "pass": true,
+      "sha256": "88f482feb55cc2442915f5fae17d5872683e29352730bbad24d4d6107b30ae8f"
+    },
+    {
+      "name": "unsupported-opcode-112",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_unsupported_instruction targets=0 instructions=0 resources=0 hash=65487904b7416186",
+      "pass": true,
+      "sha256": "6a6ea3264256312664ee3587b1b2d0b9775da724ab76d3b716ce4003fee66571"
+    },
+    {
+      "name": "unsupported-opcode-120",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_unsupported_instruction targets=0 instructions=0 resources=0 hash=5d73f0c7ab5fe97e",
+      "pass": true,
+      "sha256": "edf3f32163f88ba18f5ceba597f3d4df7437454298edd4e9286655f5b6c22552"
+    },
+    {
+      "name": "unsupported-opcode-143",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_unsupported_instruction targets=0 instructions=0 resources=0 hash=f1444c0534d99b79",
+      "pass": true,
+      "sha256": "5677425105958653d8ac3c5fdeb00d59eb1a06395e779cfa6fff01a697a6852a"
+    },
+    {
+      "name": "unsupported-opcode-191",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_unsupported_instruction targets=0 instructions=0 resources=0 hash=e19b3b8b1d16ab69",
+      "pass": true,
+      "sha256": "1b0ff4b583831847b4ba179c94bd71cfdbc92d43540b883dad958a2a1405520e"
+    },
+    {
+      "name": "unsupported-opcode-207",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_unsupported_instruction targets=0 instructions=0 resources=0 hash=329289c279071339",
+      "pass": true,
+      "sha256": "c0af34a48a4e714dbc4b8e247062a3b52360616f7fb30aba3c965c976d86f916"
+    },
+    {
+      "name": "unsupported-opcode-234",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_unsupported_instruction targets=0 instructions=0 resources=0 hash=87e444d955b8d02c",
+      "pass": true,
+      "sha256": "e4d9203c7601cf26049e1bec3646845651fc7560c28c1e365cd9041c8c02b380"
+    },
+    {
+      "name": "unsupported-opcode-235",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_unsupported_instruction targets=0 instructions=0 resources=0 hash=8f5624afc3907715",
+      "pass": true,
+      "sha256": "4b1e35fe3be4046e548b25a4336562d394ac865a6275327d78a762bf7a05b084"
+    },
+    {
+      "name": "unsupported-opcode-511",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_unsupported_instruction targets=0 instructions=0 resources=0 hash=f6b4d2771493f87a",
+      "pass": true,
+      "sha256": "6b65a485a84e023e4eb147dc666de499ca25523b34cd41ef12be26cf61e61a52"
+    },
+    {
+      "name": "forbidden-operand-12",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_forbidden_operand targets=0 instructions=0 resources=0 hash=2043767aec94d3ea",
+      "pass": true,
+      "sha256": "b81d09e3553b1857150620f1d5d9c0b78766c1d73a2e4a0f24beecd5b2015c5b"
+    },
+    {
+      "name": "forbidden-operand-15",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_forbidden_operand targets=0 instructions=0 resources=0 hash=c5d7d09d0056a83a",
+      "pass": true,
+      "sha256": "6787ec330c364345994a8375347384d7e8f37b57e5bdd175dcc1862653dd41ba"
+    },
+    {
+      "name": "forbidden-operand-30",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_forbidden_operand targets=0 instructions=0 resources=0 hash=305b4a966f7dbbe7",
+      "pass": true,
+      "sha256": "5c763a1871ddb4bb66bcc8e627a0e5a40873c626648562edf601c6af080c8b58"
+    },
+    {
+      "name": "forbidden-operand-31",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_forbidden_operand targets=0 instructions=0 resources=0 hash=50d91b499b8e0c97",
+      "pass": true,
+      "sha256": "b3950eadd494b1db608b93367c443d664275d4b39bd9e1c3d7fd40af11a5694e"
+    },
+    {
+      "name": "forbidden-operand-38",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_forbidden_operand targets=0 instructions=0 resources=0 hash=92c88057ee21f6dc",
+      "pass": true,
+      "sha256": "5605c940be3b9b849f3e207b35e6d5eb92b30f49080a196e75a92e1e4803ad05"
+    },
+    {
+      "name": "forbidden-operand-39",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_forbidden_operand targets=0 instructions=0 resources=0 hash=b346510b1a32478c",
+      "pass": true,
+      "sha256": "caf98f61beb21c558d3f8d07de3f76371e5e6e490e855306788946c115b5e325"
+    },
+    {
+      "name": "forbidden-operand-41",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_forbidden_operand targets=0 instructions=0 resources=0 hash=05009faf2fd0d02c",
+      "pass": true,
+      "sha256": "36200883864cd7f6e046a71ced826d052a9f2b004047d3850ba529430d9ca608"
+    },
+    {
+      "name": "unknown-custom-data",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_custom_data targets=0 instructions=0 resources=0 hash=3c4adb39cb6095df",
+      "pass": true,
+      "sha256": "26d54324ca298f316624d8f75e279805518ec35f823017bd420f191a4464ee90"
+    },
+    {
+      "name": "custom-count-zero",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_custom_data targets=0 instructions=0 resources=0 hash=51c1bdf748b7f0d5",
+      "pass": true,
+      "sha256": "fb0256b856366df8785220da3c4d8b365c4625481cc28d6d77564aacffadbd54"
+    },
+    {
+      "name": "custom-count-overflow",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_custom_data targets=0 instructions=0 resources=0 hash=aa675a32e1f88009",
+      "pass": true,
+      "sha256": "22006465060291da7105bbecde6359b62b4bf792f0590bb4d2cff8f92dc729b7"
+    },
+    {
+      "name": "custom-buffer-partial-vector",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_custom_data targets=0 instructions=0 resources=0 hash=478788415a04ecbf",
+      "pass": true,
+      "sha256": "e3eeeae5a54fbc23027319de44b0ea3044dbffc2b0d55051ce824142e9ff7143"
+    },
+    {
+      "name": "zero-instruction-length",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_instruction_length targets=0 instructions=0 resources=0 hash=d880ad58584b652f",
+      "pass": true,
+      "sha256": "e77bf08bc3b01ad3078b8e5c2a7748c9016893895a5945110743463c09482fb2"
+    },
+    {
+      "name": "instruction-past-end",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_instruction_length targets=0 instructions=0 resources=0 hash=725f31bb9a1f4c92",
+      "pass": true,
+      "sha256": "143f58bf698735141b3dcd9f9519cf340cdee57366164b4930cd5271e4cbf8f3"
+    },
+    {
+      "name": "missing-operand",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_operand_bounds targets=0 instructions=0 resources=0 hash=67445b41289d2388",
+      "pass": true,
+      "sha256": "6a04a842d418a457eda2d13da12393fb1a73ac165d17f105da72e23c9be16b35"
+    },
+    {
+      "name": "extra-operand",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_operand_count targets=0 instructions=0 resources=0 hash=2f393aac76d6ad22",
+      "pass": true,
+      "sha256": "4e99c329cb92916f9f9249fe74dc4abd6e630b0e977afdf02203d36f7f9d900c"
+    },
+    {
+      "name": "dangling-instruction-extension",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_instruction_extension targets=0 instructions=0 resources=0 hash=d46856c507433db8",
+      "pass": true,
+      "sha256": "a5011ff0aa7872255081fc2f8966fbc114ac0d5cd6650650d9bfe4f0435ec861"
+    },
+    {
+      "name": "unknown-instruction-extension",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_unknown_instruction_extension targets=0 instructions=0 resources=0 hash=80ec82de7d61544b",
+      "pass": true,
+      "sha256": "bb12b1f16f84a45bfffda244236c47a79b9218f645c493a5647f6aa7f982ffef"
+    },
+    {
+      "name": "write-third-target",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_output_register targets=0 instructions=0 resources=0 hash=c73a97ab0867266c",
+      "pass": true,
+      "sha256": "65108f8f650171bc628c675a716fd39bf4a4faf67c69e08c8cf4ad6334e4e376"
+    },
+    {
+      "name": "write-resource",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_invalid_destination targets=0 instructions=0 resources=0 hash=df85ee02696025ba",
+      "pass": true,
+      "sha256": "5c72f8958ed85cfd707943175a130095bdef2d31f7ebd1298112b688656447a0"
+    },
+    {
+      "name": "null-source",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_null_source targets=0 instructions=0 resources=0 hash=aadd70886c9b36a4",
+      "pass": true,
+      "sha256": "d27bf868541eaa1a8f75d9dc9d536cdf6c4469b7b71f05ebf31556b4aabe5775"
+    },
+    {
+      "name": "temp-without-index",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_operand_dimensions targets=0 instructions=0 resources=0 hash=ea2e1ed2aa20bd9c",
+      "pass": true,
+      "sha256": "22991d57024e6b1bd213d7ae1232f0fb6556a3ac8fed8ca0f40c44d1b8b45abc"
+    },
+    {
+      "name": "late-immediate-buffer",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_declaration_order targets=0 instructions=0 resources=0 hash=fc01d48e07685cd1",
+      "pass": true,
+      "sha256": "76201e1fc13cc0d7e98cdead4cdbf8e1a95075f4c63335b0ac8061c66626a47b"
+    },
+    {
+      "name": "missing-output-declaration",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_incomplete_program targets=0 instructions=0 resources=0 hash=5de08a73bcc76c2d",
+      "pass": true,
+      "sha256": "a8209389b9fbf766282b7ee3176c7b1523c7cb2ef4e8ae9523ee312d20f16074"
+    },
+    {
+      "name": "duplicate-output-declaration",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_duplicate_output_declaration targets=0 instructions=0 resources=0 hash=e622d0c26f67dd9f",
+      "pass": true,
+      "sha256": "e91dcf9e47938a01224dae210c951bbfd66bf6aba6d35c89523da6654229a12a"
+    },
+    {
+      "name": "declaration-mask-mismatch",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_output_declaration targets=0 instructions=0 resources=0 hash=b9762a87af62ecd2",
+      "pass": true,
+      "sha256": "6528ff96ab1a50f835ba5437a8c846b06b9da779cdf2e70e1fadd784a0e0e548"
+    },
+    {
+      "name": "no-return",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_incomplete_program targets=0 instructions=0 resources=0 hash=545386e6601b097c",
+      "pass": true,
+      "sha256": "0a97403f5264685232ff2a339644c880ec04c7ebdfae70d96b51b57f55416b2b"
+    },
+    {
+      "name": "unclosed-if",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_incomplete_program targets=0 instructions=0 resources=0 hash=37d49123418d5a61",
+      "pass": true,
+      "sha256": "e918911d081f86d63b1c24746cb127e4f2da96aa1a2eb6fa019600d8903c6efd"
+    },
+    {
+      "name": "else-without-if",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_control_else targets=0 instructions=0 resources=0 hash=02ac3816d23247a4",
+      "pass": true,
+      "sha256": "bb181a0e02ad59075918716f239b954015c8afb2ce71894abb5aa8ff7c4d4734"
+    },
+    {
+      "name": "break-without-loop",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_control_break targets=0 instructions=0 resources=0 hash=f303279cba6f5794",
+      "pass": true,
+      "sha256": "b318850eb7e3dffe6e8ed3ab033bcc445f67994935eaa2b72e8735a1dc624543"
+    },
+    {
+      "name": "bad-container-magic",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_header targets=0 instructions=0 resources=0 hash=f888287cc2143641",
+      "pass": true,
+      "sha256": "ba828b8eb6dd220dc5fa945a5c1c7ea0f1652c7b484c976da6045a5dfb6c930e"
+    },
+    {
+      "name": "wrong-total-size",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_header targets=0 instructions=0 resources=0 hash=feec091d65a1b6ae",
+      "pass": true,
+      "sha256": "086d98344c687925f17522c81b001351593a204c8e8972c66ccf808262b9c4ff"
+    },
+    {
+      "name": "zero-chunks",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_chunk_table targets=0 instructions=0 resources=0 hash=9918dce2aba37069",
+      "pass": true,
+      "sha256": "ce59275092f19229c4311b779fa66eae08677f272df54f9160b4a84df5d26eb9"
+    },
+    {
+      "name": "too-many-chunks",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_chunk_table targets=0 instructions=0 resources=0 hash=d058401698980294",
+      "pass": true,
+      "sha256": "a16f5e7da91582778816fc8259e60117104593e38370f38ab1068774f98bd686"
+    },
+    {
+      "name": "chunk-outside",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_chunk_offset targets=0 instructions=0 resources=0 hash=887cf99d1dd68fea",
+      "pass": true,
+      "sha256": "d7b1bc09f54af842a012fe2d6668871a820d1b108b90ad2305c6a68175c65c40"
+    },
+    {
+      "name": "unaligned-chunk",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_chunk_offset targets=0 instructions=0 resources=0 hash=379271821b74932f",
+      "pass": true,
+      "sha256": "c07dcc4d21e521f1aacf4ffe8947276c8c1a6e187537ba0fc17b2769b5be8ede"
+    },
+    {
+      "name": "overlapping-chunks",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_chunk_overlap targets=0 instructions=0 resources=0 hash=2993e088b8db667e",
+      "pass": true,
+      "sha256": "b74bbc933e7a695fa9574dd23967362602afe6986a03aac7b1b310105ce83ad1"
+    },
+    {
+      "name": "chunk-length-overflow",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_chunk_size targets=0 instructions=0 resources=0 hash=88919db6a5510b4a",
+      "pass": true,
+      "sha256": "2ea17a23e8967dffbd0a858e6b6efde588953ff5e299dee1998f2e91a7d15091"
+    },
+    {
+      "name": "duplicate-code",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_duplicate_code targets=0 instructions=0 resources=0 hash=422c9c9b42979757",
+      "pass": true,
+      "sha256": "30fb1448bf58d589b85c17705f6aceb827d9e3b7ff49b6bd1df07f41ca84ce09"
+    },
+    {
+      "name": "unknown-chunk",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_unsupported_chunk targets=0 instructions=0 resources=0 hash=edba39b40346c561",
+      "pass": true,
+      "sha256": "70b33b2b20a12c258900ef04aba980bd59581f93f8fc862bb2e4721f249af006"
+    },
+    {
+      "name": "missing-rdef",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_required_chunks targets=0 instructions=0 resources=0 hash=5206538f6b82179c",
+      "pass": true,
+      "sha256": "e1a89655c478a02f8a9ff31c5da54adc803ffcd70dd45acf6c11cd2a016a869d"
+    },
+    {
+      "name": "truncated-0",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_size targets=0 instructions=0 resources=0 hash=cbf29ce484222325",
+      "pass": true,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "truncated-1",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_size targets=0 instructions=0 resources=0 hash=af63f94c86021dd3",
+      "pass": true,
+      "sha256": "3f39d5c348e5b79d06e842c114e6cc571583bbf44e4b0ebfda1a01ec05745d43"
+    },
+    {
+      "name": "truncated-4",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_size targets=0 instructions=0 resources=0 hash=5d1b3d7271e4cb5e",
+      "pass": true,
+      "sha256": "15d18ea0cc5bd2665b7c4eb39805771377e3cb87831eea48ededa448b2815337"
+    },
+    {
+      "name": "truncated-16",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_size targets=0 instructions=0 resources=0 hash=7612cf657d512bfe",
+      "pass": true,
+      "sha256": "c80810a29a85aed2ded225eafee81f50f93dafbf5c4c8c51e24f1d6d41edad81"
+    },
+    {
+      "name": "truncated-28",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_size targets=0 instructions=0 resources=0 hash=65b72ad8a6fc9233",
+      "pass": true,
+      "sha256": "4d2d36bda192c613ecacbf0d3772e8ff1f74d933765318895adefcc5cdf82acb"
+    },
+    {
+      "name": "truncated-31",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_size targets=0 instructions=0 resources=0 hash=15e44496cd114610",
+      "pass": true,
+      "sha256": "c34407c4fb4ee1b227a831a89cedcce2927c3c6f5f4e4b4996d01db1d7908d5f"
+    },
+    {
+      "name": "truncated-32",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_header targets=0 instructions=0 resources=0 hash=44269c3e745a0d30",
+      "pass": true,
+      "sha256": "764866d11bb48cf33d4912e973bb34959ec300e6887588eda411695f24b684a1"
+    },
+    {
+      "name": "truncated-40",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_header targets=0 instructions=0 resources=0 hash=6f866d62ba10f6c4",
+      "pass": true,
+      "sha256": "a775a128b174989654998d5bcd213ebb0c5dfa6daa0840493061ff0a21acb080"
+    },
+    {
+      "name": "truncated-203",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_size targets=0 instructions=0 resources=0 hash=d574c3a7417f040f",
+      "pass": true,
+      "sha256": "c3e6db7a3c0587cffe23fd578f6efd657615b95b56b59ee7b2174f9d28f0a952"
+    },
+    {
+      "name": "maximum-blob-cap",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_size targets=0 instructions=0 resources=0 hash=4ebe9b86711e13f5",
+      "pass": true,
+      "sha256": "ccdfec163ea23ff794acfd1706b5abaf44298ff47b09721489ba6392c40e16ed"
+    },
+    {
+      "name": "microsoft-abs1",
+      "expected_accept": true,
+      "accepted": true,
+      "result": "PASS ok targets=1 instructions=5 resources=0 hash=a95017bf177f31f1",
+      "pass": true,
+      "sha256": "ffaaf0a4a2425f11f70b962677e23c8f77707f4ec297ef8bf1451aaa2536a3c2"
+    },
+    {
+      "name": "microsoft-cbuffer1.50",
+      "expected_accept": true,
+      "accepted": true,
+      "result": "PASS ok targets=1 instructions=5 resources=1 hash=2945650847e55e03",
+      "pass": true,
+      "sha256": "d9ac6135501da0d34a06aee6cbce2dc54fd0cafa28568f4ddd6cf675b2cb3a62"
+    },
+    {
+      "name": "microsoft-derivatives",
+      "expected_accept": true,
+      "accepted": true,
+      "result": "PASS ok targets=1 instructions=17 resources=0 hash=799afad7fbb83ca0",
+      "pass": true,
+      "sha256": "d43c652659b1000547ce0b696290b04a21d1c135f3ac8d6a931209d848de6c88"
+    },
+    {
+      "name": "microsoft-dot1",
+      "expected_accept": true,
+      "accepted": true,
+      "result": "PASS ok targets=1 instructions=11 resources=0 hash=6757f230906fbe28",
+      "pass": true,
+      "sha256": "8a3d4c6c3b0b2fac3c9af353eae4b00e532c940fc429446ea5c2820edd2987bd"
+    },
+    {
+      "name": "microsoft-f32f16",
+      "expected_accept": true,
+      "accepted": true,
+      "result": "PASS ok targets=1 instructions=10 resources=0 hash=8f626bd1b9a64536",
+      "pass": true,
+      "sha256": "25a7eef73c8930aa3f32e2cbf2e3d15b2a0f431776488fce8696301f8bc8d504"
+    },
+    {
+      "name": "microsoft-neg1",
+      "expected_accept": true,
+      "accepted": true,
+      "result": "PASS ok targets=1 instructions=5 resources=0 hash=9d7d44d735473b70",
+      "pass": true,
+      "sha256": "9df6f39fb6d283a8f950ba7a851b8ca9ce08c44c08d1d7b10a2de155879ddc21"
+    },
+    {
+      "name": "microsoft-negabs1",
+      "expected_accept": true,
+      "accepted": true,
+      "result": "PASS ok targets=1 instructions=5 resources=0 hash=dc5580499bf0a51c",
+      "pass": true,
+      "sha256": "0e61e3f82588f464948d1ba033977a45a02d4d73b5e6bf3298b14be610b4d7aa"
+    },
+    {
+      "name": "microsoft-passthrough1",
+      "expected_accept": true,
+      "accepted": true,
+      "result": "PASS ok targets=0 instructions=5 resources=0 hash=6398ad8a47b371b8",
+      "pass": true,
+      "sha256": "71d6adc05699680eb95eabec51b581d44ea0b3bc98be81e7cc0a753427127170"
+    },
+    {
+      "name": "microsoft-passthrough2",
+      "expected_accept": true,
+      "accepted": true,
+      "result": "PASS ok targets=1 instructions=5 resources=0 hash=5a7eee35285ce9c7",
+      "pass": true,
+      "sha256": "a2355810de39566b5469bd62e1eb3073f8130ab7aa5bed6498649908dfae9465"
+    },
+    {
+      "name": "microsoft-sample1",
+      "expected_accept": true,
+      "accepted": true,
+      "result": "PASS ok targets=1 instructions=10 resources=3 hash=96fc17552b6ffadd",
+      "pass": true,
+      "sha256": "9ffcbc04a59e7f462b0196d6bb14852c79b7fcc4b2f8b5067d95215ce6fceade"
+    },
+    {
+      "name": "microsoft-output1",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_signature_table targets=0 instructions=0 resources=0 hash=a291c1a8cfbcf0a1",
+      "pass": true,
+      "sha256": "e93a4f6603c1dd582b3128bb6ed9da6a9c06eb566bce03158bbe05268107db5a"
+    },
+    {
+      "name": "microsoft-output2",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_signature_table targets=0 instructions=0 resources=0 hash=45748d0e9decef3a",
+      "pass": true,
+      "sha256": "8a669fed13d72ddf8aa36dde4825b1e25728b75b32a116cc3b37704279ff9515"
+    },
+    {
+      "name": "microsoft-raw_buf1",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_unsupported_chunk targets=0 instructions=0 resources=0 hash=87771cadfca5a505",
+      "pass": true,
+      "sha256": "982e469b91def2ab6b38dfa928f3d8f39b402b91fb9ebad68c2e246e99d93a61"
+    },
+    {
+      "name": "microsoft-uav_typed_load_store1",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_unsupported_chunk targets=0 instructions=0 resources=0 hash=705d23084e9ae9d6",
+      "pass": true,
+      "sha256": "14edc1da4c54ab597b8f2a2e04d420422ca21f32e90c38acf37f439b48ba74ea"
+    },
+    {
+      "name": "microsoft-binary1",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_target_contract targets=0 instructions=0 resources=0 hash=83afd3ea3ffd0074",
+      "pass": true,
+      "sha256": "5b7ced2cedb0d2004c1bfe399c18e71ecad2cbc95d4a3bbff0ebc28c4dd2aa27"
+    },
+    {
+      "name": "microsoft-ubfeu16",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_unsupported_chunk targets=0 instructions=0 resources=0 hash=f4ee4a9d2bb4f1c9",
+      "pass": true,
+      "sha256": "d01e1ddc8fefe571d9a4c2205ea8dc0320c3589aa03631ab505a18d48b5b0bb7"
+    },
+    {
+      "name": "sm51-no-resources",
+      "expected_accept": true,
+      "accepted": true,
+      "result": "PASS ok targets=1 instructions=4 resources=0 hash=dbf1050cfbc0e65e",
+      "pass": true,
+      "sha256": "962a07dc8fb5fc3e07c27547a37613c86114fd7fee1fc64f376ce2da3c487630"
+    },
+    {
+      "name": "sm51-vertex-no-resources",
+      "expected_accept": true,
+      "accepted": true,
+      "result": "PASS ok targets=0 instructions=4 resources=0 hash=903fa867c524cdc9",
+      "pass": true,
+      "sha256": "5535074cb453214b84fd4d74061d27ea3dd88b8ccacb46ee5fdb669708c9d48d"
+    },
+    {
+      "name": "sm51-binding-kind-0",
+      "expected_accept": true,
+      "accepted": true,
+      "result": "PASS ok targets=1 instructions=5 resources=1 hash=acd1a50dea210440",
+      "pass": true,
+      "sha256": "117e7418a94aecc331649642e806976396b4ae1cce94ab30427ffb960cf6ed07"
+    },
+    {
+      "name": "sm51-binding-kind-1",
+      "expected_accept": true,
+      "accepted": true,
+      "result": "PASS ok targets=1 instructions=5 resources=1 hash=4bf1cd33fec9ce9e",
+      "pass": true,
+      "sha256": "239577175f0ee463b45aca782630d7f28c25b7323583c0f43ab2a311407fb17a"
+    },
+    {
+      "name": "sm51-binding-kind-2",
+      "expected_accept": true,
+      "accepted": true,
+      "result": "PASS ok targets=1 instructions=5 resources=1 hash=81828f98f87e7aed",
+      "pass": true,
+      "sha256": "610fbdff1f95ad86d72868c9b6bffeda53e4e67e9b29374730c390c2351ef384"
+    },
+    {
+      "name": "sm51-binding-kind-3",
+      "expected_accept": true,
+      "accepted": true,
+      "result": "PASS ok targets=1 instructions=5 resources=1 hash=fddfe1ef92ef9328",
+      "pass": true,
+      "sha256": "e7e1b4a7e86ed2a60e9bd775f5c28ebb2f90588c5e010c6cac6bbf2a3e98c940"
+    },
+    {
+      "name": "sm51-binding-kind-5",
+      "expected_accept": true,
+      "accepted": true,
+      "result": "PASS ok targets=1 instructions=5 resources=1 hash=4a835b8df28fbdda",
+      "pass": true,
+      "sha256": "6b297805f398a677aae1903951f2878861ae0f5d3136f13685af8bbed7836940"
+    },
+    {
+      "name": "sm51-binding-kind-7",
+      "expected_accept": true,
+      "accepted": true,
+      "result": "PASS ok targets=1 instructions=5 resources=1 hash=667d2692587e27af",
+      "pass": true,
+      "sha256": "5cb528e38494ac59389fac3fdb11b4a248af1e0182c4c82ea9c82c9fce5ea4e7"
+    },
+    {
+      "name": "sm51-unbounded-texture",
+      "expected_accept": true,
+      "accepted": true,
+      "result": "PASS ok targets=1 instructions=5 resources=1 hash=9bc54ea5355e712b",
+      "pass": true,
+      "sha256": "237ccb1919916bf647b6227beb3d1875e253452a48e79a0911d98da9c46960a5"
+    },
+    {
+      "name": "sm51-unbounded-offset",
+      "expected_accept": true,
+      "accepted": true,
+      "result": "PASS ok targets=1 instructions=5 resources=1 hash=69acf0c145b7d88f",
+      "pass": true,
+      "sha256": "5425c9c80e99145f2827a10b041119e454bb5f803ee2a3a20bc639a832333fab"
+    },
+    {
+      "name": "sm51-large-space-id",
+      "expected_accept": true,
+      "accepted": true,
+      "result": "PASS ok targets=1 instructions=5 resources=1 hash=3582cc54489dbb8a",
+      "pass": true,
+      "sha256": "b88b42552f0fcb49cf14f3ec9903ebf28d83538b4bc2b7ba62c40ed5a3234031"
+    },
+    {
+      "name": "sm51-finite-maximum",
+      "expected_accept": true,
+      "accepted": true,
+      "result": "PASS ok targets=1 instructions=5 resources=1 hash=dc952462ca86c87d",
+      "pass": true,
+      "sha256": "559ec82033ca42302d4d48cf0c94b99fc250193553598af1b3507272cb234f3a"
+    },
+    {
+      "name": "sm51-same-range-distinct-spaces",
+      "expected_accept": true,
+      "accepted": true,
+      "result": "PASS ok targets=1 instructions=6 resources=2 hash=4b8ac5efc000b09d",
+      "pass": true,
+      "sha256": "fccf825f106075d48b33b1321321d855255e022f3ceba2f450e37db5f8d51178"
+    },
+    {
+      "name": "sm51-mixed-resource-classes-same-id",
+      "expected_accept": true,
+      "accepted": true,
+      "result": "PASS ok targets=1 instructions=7 resources=3 hash=dba9e82b0582b621",
+      "pass": true,
+      "sha256": "943d054f21d7c3bc85fee39e5d27c01de141c24d75e114c43ffee62dc172f1d0"
+    },
+    {
+      "name": "sm51-duplicate-resource-id",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_duplicate_binding_identifier targets=0 instructions=0 resources=0 hash=a5e4170febb45ded",
+      "pass": true,
+      "sha256": "19ffe6d88c4ec357796e69ac0821b87bcb96d7e18e340fba2e008b6f37cc5b95"
+    },
+    {
+      "name": "sm51-overlapping-space-range",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_overlapping_binding_range targets=0 instructions=0 resources=0 hash=b426ff7da6a70cc3",
+      "pass": true,
+      "sha256": "14e19b7feff3394779556edc5bf5bff93f81dd5b3ea4f866a1bae14ff854c8ee"
+    },
+    {
+      "name": "sm51-unbounded-overlap",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_overlapping_binding_range targets=0 instructions=0 resources=0 hash=19537b380d5e28a6",
+      "pass": true,
+      "sha256": "d740c123649e6e83dcfc98d8df98598a7aabc735f65b3d0b7a6e733640b79ea2"
+    },
+    {
+      "name": "sm51-rdef-range-overflow",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_rdef_binding targets=0 instructions=0 resources=0 hash=62f233ede6e8f512",
+      "pass": true,
+      "sha256": "0bafcfe9ca92d74443e1d870d35caa171c9f1b6962a731e1e1d18f101c760143"
+    },
+    {
+      "name": "sm51-rdef-old-record-width",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_rdef_declaration_mismatch targets=0 instructions=0 resources=0 hash=aa54f8375e016ad2",
+      "pass": true,
+      "sha256": "1af57f87d0accd1975507a56de605b8d74e812730f54710c6796fed60ad270c5"
+    },
+    {
+      "name": "sm51-rdef-wrong-profile",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_rdef_profile targets=0 instructions=0 resources=0 hash=5e7af21b5b26d4c9",
+      "pass": true,
+      "sha256": "42353b17a5d8593cc9f6d21bc8ea5c86387fcaeb4027c6ddd9ae4e86cad05a53"
+    },
+    {
+      "name": "sm51-decl-space-mismatch",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_rdef_declaration_mismatch targets=0 instructions=0 resources=0 hash=0f18b95823c608ed",
+      "pass": true,
+      "sha256": "ba8ce6ef2ad3403892c8e37bedfa4bb7ee4bf360d28e141fc3e8b60d8fdcee38"
+    },
+    {
+      "name": "sm51-decl-identifier-mismatch",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_rdef_declaration_mismatch targets=0 instructions=0 resources=0 hash=e78416a94d178b53",
+      "pass": true,
+      "sha256": "721e63ee7abaeeeecb5e342f66ff9766e412dd58b23bcf53487626dba3e0374a"
+    },
+    {
+      "name": "sm51-decl-range-mismatch",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_rdef_declaration_mismatch targets=0 instructions=0 resources=0 hash=367e5147b4991a3a",
+      "pass": true,
+      "sha256": "355e7ed62857f795209bd69e4bcc245cd9edad4ebfb52d41f3cf946c7924fb02"
+    },
+    {
+      "name": "sm51-missing-declaration",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_missing_resource_declaration targets=0 instructions=0 resources=0 hash=6745e2b038cebde2",
+      "pass": true,
+      "sha256": "70e847b9f87dd0bcbf88b2a09b39cbfb8844c246e9e2e27f6af7698d96bee988"
+    },
+    {
+      "name": "sm51-declaration-no-metadata",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_rdef_declaration_mismatch targets=0 instructions=0 resources=0 hash=d4c2b4f2590cd477",
+      "pass": true,
+      "sha256": "dc0f7065c653136d40131d2d60da18c63dc2aef3c544bbc48b7d696ca460ccb6"
+    },
+    {
+      "name": "sm51-duplicate-declaration",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_rdef_declaration_mismatch targets=0 instructions=0 resources=0 hash=ee28af2ea5e5a0f3",
+      "pass": true,
+      "sha256": "1a5ad2eceb1b12cbc8240dddcaaecbbd005c3a2304f21ba52dea97952a8a0bbf"
+    },
+    {
+      "name": "sm51-declaration-descending-range",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_declaration_binding_range targets=0 instructions=0 resources=0 hash=46e3452ccdd31716",
+      "pass": true,
+      "sha256": "563a78a21ef9f59ac80c2ffc09dd8054e5ee860b78c66f11959bc32ac618b427"
+    },
+    {
+      "name": "sm51-old-declaration-dimensions",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_operand_dimensions targets=0 instructions=0 resources=0 hash=5f7620282f384633",
+      "pass": true,
+      "sha256": "359098c6e245ad030e9738c43ff739921aa0892676096414d9575552133271fd"
+    },
+    {
+      "name": "sm51-missing-declaration-space",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_rdef_declaration_mismatch targets=0 instructions=0 resources=0 hash=e19fc79e8788658e",
+      "pass": true,
+      "sha256": "c78d0fff1a35d56ae63acd7db2f3f2cb63095dab1e1924bcdbbbef790feef001"
+    },
+    {
+      "name": "sm51-trailing-extra-space",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_instruction_length targets=0 instructions=0 resources=0 hash=14a8f59024745375",
+      "pass": true,
+      "sha256": "441068e96a8ac0b4283771dcfacfc42baed1e4c65b27810e7111798bb458412d"
+    },
+    {
+      "name": "sm51-cbuffer-vector-bound",
+      "expected_accept": true,
+      "accepted": true,
+      "result": "PASS ok targets=1 instructions=5 resources=1 hash=b324ebf0d8628f05",
+      "pass": true,
+      "sha256": "1a3b4058b5c6628c1f62049526ffff766b7f4fb023613a6ac8a90a8300cab354"
+    },
+    {
+      "name": "sm51-cbuffer-vector-overflow",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_constant_vector_range targets=0 instructions=0 resources=0 hash=0b95cbd6e1204dda",
+      "pass": true,
+      "sha256": "12d82a2ba93b0898e696f393cf4b3763df719c257b85a1bcf0c7289eaaf83df7"
+    },
+    {
+      "name": "sm51-cbuffer-register-overflow",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_resource_index_range targets=0 instructions=0 resources=0 hash=b34c8106813f764c",
+      "pass": true,
+      "sha256": "ec7f56f7f6491c32cd832a2aa60165f26cde332d8ee771abc5f7f589f8349775"
+    },
+    {
+      "name": "sm51-cbuffer-missing-vector-space",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_declaration_length targets=0 instructions=0 resources=0 hash=7c126f7b43bf0abd",
+      "pass": true,
+      "sha256": "e891ce1bc05fb614701e9c882556227768c66a436c73b91848b30d02aa5825fd"
+    },
+    {
+      "name": "sm51-cbuffer-size-overflow",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_constant_buffer_size targets=0 instructions=0 resources=0 hash=a3049c8bbe53ca23",
+      "pass": true,
+      "sha256": "0149b2342d6783e911afdbf176ae4b5f9d3769fda8e4eaa713e077a1e8e6878b"
+    },
+    {
+      "name": "sm51-texture-sampler-use",
+      "expected_accept": true,
+      "accepted": true,
+      "result": "PASS ok targets=1 instructions=6 resources=2 hash=e3b88f4dec59638a",
+      "pass": true,
+      "sha256": "1729958a31084139e56367c1d877cd159914004d048c3b8bcf2b11d777ab7aa1"
+    },
+    {
+      "name": "sm51-relative-nonuniform-texture",
+      "expected_accept": true,
+      "accepted": true,
+      "result": "PASS ok targets=1 instructions=6 resources=2 hash=fc543bdccda4a766",
+      "pass": true,
+      "sha256": "abf813bbdcb4fc4d77e62de81486bc76186894c527659fb2c4ec6b4bc99d8952"
+    },
+    {
+      "name": "sm51-use-unknown-id",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_undeclared_binding_identifier targets=0 instructions=0 resources=0 hash=ce5b621235d64ad0",
+      "pass": true,
+      "sha256": "bd380ccb21f06410289e11a2751a12a6a8222def12c611b711a1d08af0189e53"
+    },
+    {
+      "name": "sm51-use-wrong-sampler-slot",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_resource_index_range targets=0 instructions=0 resources=0 hash=8373272ad7ba2cad",
+      "pass": true,
+      "sha256": "c2ec42467fb21d1de1110063ca6cc4787b64a5a5fc0956623f5392197fe2f9e8"
+    },
+    {
+      "name": "sm51-use-old-resource-dimensions",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_operand_dimensions targets=0 instructions=0 resources=0 hash=00304e6e6d09cf74",
+      "pass": true,
+      "sha256": "ae7ff795fa17349bb5dbefbad1ea9e0cf391c771bd404618663f4e36df8e16f2"
+    },
+    {
+      "name": "sm51-dynamic-resource-id",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_dynamic_binding_identifier targets=0 instructions=0 resources=0 hash=8d48931b757c4dca",
+      "pass": true,
+      "sha256": "6de62b5d170bb6be3e83cb8889fdb3183bd5386e2fdf0c048eadb31b7df3ff8b"
+    },
+    {
+      "name": "sm51-nonuniform-temp-operand",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_operand_modifier targets=0 instructions=0 resources=0 hash=96c5685c9d162ad9",
+      "pass": true,
+      "sha256": "f8f532162410a25c3029e9c6674651a7c87671e7760af5b6d38bdc086af107f1"
+    },
+    {
+      "name": "sm51-structured-stride-mismatch",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_structured_stride targets=0 instructions=0 resources=0 hash=72e881c0274201ba",
+      "pass": true,
+      "sha256": "92536d3036631ffe4c4d52d6935bcc1f527965319a0d95d8ff767528549dcf06"
+    },
+    {
+      "name": "sm51-structured-decl-wrong-type",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_rdef_declaration_type targets=0 instructions=0 resources=0 hash=3a9d2cbba3e1d9be",
+      "pass": true,
+      "sha256": "01e183336e341382334b71b2ccd12008743a093e89e9a3cdabbf1f6fb1ed763c"
+    },
+    {
+      "name": "sm51-forbidden-rdef-4",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_writable_or_unknown_resource targets=0 instructions=0 resources=0 hash=f7b4a1b18abd4eef",
+      "pass": true,
+      "sha256": "5f7407840f8cf2b59c938bc9b23879527fb78f806646d21e01316bd1694b2c4b"
+    },
+    {
+      "name": "sm51-forbidden-rdef-6",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_writable_or_unknown_resource targets=0 instructions=0 resources=0 hash=871432f28b19835d",
+      "pass": true,
+      "sha256": "c19ed10ed930578d81972d9d872c6875daa9688556ddb4eab531013ff70d4b8d"
+    },
+    {
+      "name": "sm51-forbidden-rdef-8",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_writable_or_unknown_resource targets=0 instructions=0 resources=0 hash=a721a6766464d1b3",
+      "pass": true,
+      "sha256": "3cbecae7f7f36fd4ba56f5607d33df18a4a4efc0144cac185d0aae1b856d9b47"
+    },
+    {
+      "name": "sm51-forbidden-rdef-9",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_writable_or_unknown_resource targets=0 instructions=0 resources=0 hash=cf1b8bc4f894d696",
+      "pass": true,
+      "sha256": "16f544bcd11668a2f2e47bcabff3ed81ea98f76f6cb23c09e32bb5f6cb02ceda"
+    },
+    {
+      "name": "sm51-forbidden-rdef-10",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_writable_or_unknown_resource targets=0 instructions=0 resources=0 hash=782ef48102582ee1",
+      "pass": true,
+      "sha256": "656e3d84ecd32006d815fee90dfced8f9c9a0d61c32ab0294285bb4efd7f2b4c"
+    },
+    {
+      "name": "sm51-forbidden-rdef-11",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_writable_or_unknown_resource targets=0 instructions=0 resources=0 hash=0766d960db0422c4",
+      "pass": true,
+      "sha256": "d70b1a19a8c86e34fdb6393c498ed6ae3ff7239bb3341da72a2e91079bbc9329"
+    },
+    {
+      "name": "sm51-forbidden-rdef-12",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_writable_or_unknown_resource targets=0 instructions=0 resources=0 hash=98e924f193c3b5e7",
+      "pass": true,
+      "sha256": "78a96085d4f7159debd850497eb0f54b42c717c9ac0fae76fe9a69133ff41cb8"
+    },
+    {
+      "name": "sm51-forbidden-rdef-13",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_writable_or_unknown_resource targets=0 instructions=0 resources=0 hash=7b1ae6eccdc3b2da",
+      "pass": true,
+      "sha256": "59115e0adb7d5292f05ebcf787399c0632ecca67e2e67d5fac7b5480d8c14723"
+    },
+    {
+      "name": "sm51-forbidden-opcode-156",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_writable_instruction targets=0 instructions=0 resources=0 hash=61009931586fd97c",
+      "pass": true,
+      "sha256": "f3791c6512d800ac887a625bad3dc2036f744d970bafbee5963f8830e3d10a51"
+    },
+    {
+      "name": "sm51-forbidden-opcode-157",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_writable_instruction targets=0 instructions=0 resources=0 hash=68727907c6478065",
+      "pass": true,
+      "sha256": "63e1f692e295cb55f9d1f18ea6ce17edc0b51a21346c337823e6163251b8b5cd"
+    },
+    {
+      "name": "sm51-forbidden-opcode-158",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_writable_instruction targets=0 instructions=0 resources=0 hash=a44ab92b0df9133e",
+      "pass": true,
+      "sha256": "bce444a5bccf37495e6ca9940a4fdf79f3b00d6f955c8691b9089029e155db9c"
+    },
+    {
+      "name": "sm51-forbidden-opcode-164",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_writable_instruction targets=0 instructions=0 resources=0 hash=7b282dbd6135f914",
+      "pass": true,
+      "sha256": "4eedd5106c9a51dcb06e12ab252d0958ef0a46b8fe9df1f6c08c58d258712825"
+    },
+    {
+      "name": "sm51-forbidden-opcode-166",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_writable_instruction targets=0 instructions=0 resources=0 hash=bbc851e2319d7b56",
+      "pass": true,
+      "sha256": "54718232f0416b7c4a99ef8210a0383f7906f75e2ec87f054ba879c4d04ec3f3"
+    },
+    {
+      "name": "sm51-forbidden-opcode-168",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_writable_instruction targets=0 instructions=0 resources=0 hash=f73de99edb453d10",
+      "pass": true,
+      "sha256": "84adea524e2fe827f6556307a86340809ba321d2bbbf8740c2d17c20067bd7cc"
+    },
+    {
+      "name": "sm51-forbidden-opcode-169",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_writable_instruction targets=0 instructions=0 resources=0 hash=fc05cda063fb2c79",
+      "pass": true,
+      "sha256": "70c641a4c8dc7715a55ad7c5286556ad0ed6ae4ffd1e86a931100ecd5c08354c"
+    },
+    {
+      "name": "sm51-forbidden-opcode-189",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_writable_instruction targets=0 instructions=0 resources=0 hash=87c499fbf5cd6085",
+      "pass": true,
+      "sha256": "c94fe7bdfbb8b2fee19a0af2235735dde40e0d123f6eaa2add492eaba2f508be"
+    },
+    {
+      "name": "actual-control-native-albedo-ps-000",
+      "expected_accept": true,
+      "accepted": true,
+      "result": "PASS ok targets=1 instructions=13 resources=4 hash=92a2f8a7629c3ee4",
+      "pass": true,
+      "sha256": "6e8fdc47e77f203157c23e9f77e19b1a66f874a66e3955e29aff3181309536dd"
+    },
+    {
+      "name": "actual-control-native-albedo-ps-001",
+      "expected_accept": true,
+      "accepted": true,
+      "result": "PASS ok targets=1 instructions=31 resources=4 hash=e9eecbed200c5f99",
+      "pass": true,
+      "sha256": "b2b8ab2bf331f79837bd09ef24b669cbbfbc506b4a369edabbdead78f92a7411"
+    },
+    {
+      "name": "actual-control-native-albedo-ps-002",
+      "expected_accept": true,
+      "accepted": true,
+      "result": "PASS ok targets=1 instructions=21 resources=4 hash=77ceb0dd99baf331",
+      "pass": true,
+      "sha256": "27713d41a80358660ae326a31132bc6d82fec98147b31497a13d0fac9cce5db2"
+    },
+    {
+      "name": "microsoft-cbuffer1.51-with-embedded-root",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_unsupported_chunk targets=0 instructions=0 resources=0 hash=aaec224500f68da8",
+      "pass": true,
+      "sha256": "8ac0a5cdb76d635f906b57b983878c73e2bbde5c9c867aa22e12e6877d71a44f"
+    },
+    {
+      "name": "microsoft-cbuffer1.51-root-removed",
+      "expected_accept": true,
+      "accepted": true,
+      "result": "PASS ok targets=1 instructions=5 resources=1 hash=fde7303dde8c4dc8",
+      "pass": true,
+      "sha256": "3e7ffb30198d3f5763e953d1868f4f234d2819bc0934bf8f92c305f9c9399821"
+    },
+    {
+      "name": "microsoft-cbuffer2.51-with-embedded-root",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_unsupported_chunk targets=0 instructions=0 resources=0 hash=8af2e830a0f5d762",
+      "pass": true,
+      "sha256": "8208d6468982f79a09385aa5433b661f3523fca24c9cb71f15e95bf55822ace1"
+    },
+    {
+      "name": "microsoft-cbuffer2.51-root-removed",
+      "expected_accept": true,
+      "accepted": true,
+      "result": "PASS ok targets=1 instructions=5 resources=1 hash=cf9fefec05fc99e7",
+      "pass": true,
+      "sha256": "24388a45f81ddf68cfb0fe17902855795477dda4565a2b1f999a22ca3f2c9fa8"
+    },
+    {
+      "name": "microsoft-cbuffer3.51-with-embedded-root",
+      "expected_accept": false,
+      "accepted": false,
+      "result": "REJECT dxbc_unsupported_chunk targets=0 instructions=0 resources=0 hash=546e4177bd9897da",
+      "pass": true,
+      "sha256": "7a32444d825a5bf850f1bb51bc0595d92f84821b84452b11289fdcb4590813d0"
+    },
+    {
+      "name": "microsoft-cbuffer3.51-root-removed",
+      "expected_accept": true,
+      "accepted": true,
+      "result": "PASS ok targets=1 instructions=11 resources=2 hash=5dfd9d6a0aa84b9e",
+      "pass": true,
+      "sha256": "c674cbc5a40bbfbf63b42b869d755351195601d9903d81c6018fb32f62f0102d"
+    }
+  ],
+  "pass": true
+}

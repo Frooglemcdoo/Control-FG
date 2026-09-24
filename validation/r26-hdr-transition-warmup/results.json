@@ -1,0 +1,34 @@
+{
+  "status": "LOCAL_PASS",
+  "scope": "r26 HDR/SDR transition fresh-domain warmup candidate. r24 compute HUDless path retained; r25 forced common-constants reset removed after live regression. Portable policy and inherited HDR/release tests pass; Windows/MSVC/live game remain host sign-off.",
+  "tests": {
+    "policy_normal": "PASS HDR transition warmup policy: eOff transition requires two consecutive fully tagged new-domain frames; no forced common-constants reset",
+    "policy_asan_ubsan": "PASS HDR transition warmup policy: eOff transition requires two consecutive fully tagged new-domain frames; no forced common-constants reset",
+    "hdr_ui_policy": "PASS HDR FG UI policy: HDR rejects FP16 HUDless, accepts RGB10/PQ-domain HUDless, SDR behavior retained",
+    "hdr_color": "PASS HDR HUDless color conversion: shared scRGB/709 -> BT.2020 -> 80-nit-scaled PQ reference vectors",
+    "release_log": "PASS release log filter: audit noise suppressed by default; support events retained; verbose restores audit traces",
+    "preset_policy": "PASS r21z preset policy: F default, E/F live switch, repeated selection stable",
+    "evaluation_gateway": "PASS r21y gateway forwards once; hit distance is not a guide prerequisite; getter faults, RR guards and SR recovery remain fail-closed",
+    "native_signal_policy": "PASS r21x specular signal policy keeps native CameraCut clamp sticky across bind->dispatch, reference only when ready before bind, raw copy only as fallback",
+    "specular_temporal": "PASS reference-dispatch admission plus 144 mip-count pairs, dispatch-list handoff, frame/view/device/queue guards, malformed mips, mid-read mutation, exact copy once and no retry after faults",
+    "performance_policy": "PASS query leases: exact Present, fence reuse, abandonment, stale serials, exhaustion, device loss, 5000 cycles; timing conversion and comparison warmup/mode/resize/FG/reset/gap gates"
+  },
+  "assertions": [
+    "DLSS-G is forced to eOff before SDR->HDR and HDR->SDR ResizeBuffers/ResizeBuffers1 transitions",
+    "HDR bridge publishes a monotonically increasing color-domain transition generation",
+    "r25 forced common-constants transition reset is absent",
+    "two consecutive frames with valid common constants, depth, motion vectors, HUDless color and UI alpha are required to settle the new color domain",
+    "FG may re-enable only on the Present following those two fresh-domain frames",
+    "r24 compute-only HDR HUDless conversion and RR path remain unchanged"
+  ],
+  "tested_sha256": {
+    "src/fg_hdr_transition_policy.h": "d398e2f2412bdcb21a76fbd54c8c9a544f1595f44d91fae2849bd4efa06a80b9",
+    "validation/r26-hdr-transition-warmup/policy-test.cpp": "a1c6d9223843b4c0fda6a554cb9bc8b08bba83ad79d48523f3cb88bbb0dc3a69",
+    "src/streamline_bridge.h": "dd7d32732edc1e74a25ff9aabc7d88a079676890684a6e21fe89fb545bdc59a0",
+    "src/hdr10_bridge.h": "738861fadcd56d9acbba1776ba691c20683a026b6bafc1392cd2aacc3534c2d2",
+    "src/streamline_frame.h": "0990e1ffb1f76a0e20b06efc376cf807ae1e304fb9a1b7a84cdef1c0e2855951",
+    "src/probe.cpp": "c9d258e63ce6825865616a8d8584d050c2bce54e3318fde57f9525e86e661cab",
+    "Build-Metadata.ps1": "1111e192b47ea6f3c6bcf9353337c87ad16b48905a97da4a4531354cbce77438",
+    "Build.cmd": "3e21bd313ff5364ffbfe4f0671c2efb49005ab1c974c26221b696d09c247c7fe"
+  }
+}

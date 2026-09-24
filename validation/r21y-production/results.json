@@ -1,0 +1,34 @@
+{
+  "status": "LOCAL_PASS",
+  "scope": "Inherited r21y production cleanup revalidated for r22 release; active changes are logging cadence/packaging plus existing F/E UI. Windows/MSVC game execution remains host sign-off.",
+  "tests": {
+    "evaluation_entry_normal": "PASS: r21y gateway forwards once; hit distance is not a guide prerequisite; getter faults, RR guards and SR recovery remain fail-closed",
+    "evaluation_entry_asan_ubsan": "PASS: r21y gateway forwards once; hit distance is not a guide prerequisite; getter faults, RR guards and SR recovery remain fail-closed",
+    "native_clamp_policy_normal": "PASS: r21x specular signal policy keeps native CameraCut clamp sticky across bind->dispatch, reference only when ready before bind, raw copy only as fallback",
+    "native_clamp_policy_asan_ubsan": "PASS: r21x specular signal policy keeps native CameraCut clamp sticky across bind->dispatch, reference only when ready before bind, raw copy only as fallback",
+    "specular_temporal_normal": "PASS reference-dispatch admission plus 144 mip-count pairs, dispatch-list handoff, frame/view/device/queue guards, malformed mips, mid-read mutation, exact copy once and no retry after faults",
+    "specular_temporal_asan_ubsan": "PASS reference-dispatch admission plus 144 mip-count pairs, dispatch-list handoff, frame/view/device/queue guards, malformed mips, mid-read mutation, exact copy once and no retry after faults"
+  },
+  "assertions": [
+    "production probe does not invoke reflection capture install, reflection present retirement or hit-distance present retirement",
+    "evaluation gateway does not call RRDistanceBeforeEvaluation and binds null hit distance",
+    "guide-stat capture allocation/record/retire are gated by rrLiveGuideStatsEnabled=false",
+    "public overlay exposes RR ON/OFF plus E/F model selection with no NATIVE CLAMP label",
+    "production build does not compile the reference add-on or hit-distance/reference clamp compiler tools",
+    "binary package does not include the archived reference add-on"
+  ],
+  "tested_sha256": {
+    "src/probe.cpp": "1a7a28de774a8ddf331b8e920422a8dc7e45602c0c1efd8483ea3bc5be81804b",
+    "src/rr_reflection_hooks.h": "0928415f4c9117e081616e537340d0b7ebb943320c2f8f0f7271b50dbd8654a8",
+    "src/rr_evaluation_entry.h": "53994cdf24cf210bff9435d866615308936c871f94e8837ca87f9ec06a65a5e2",
+    "src/rr_live_guides.h": "72eae4a95db07473ef5862b7aaa454099830443dedc42f4020f5f4c6a5f208b2",
+    "src/rr_live_retire.h": "e23287fe543638c300f5682c13b635ef8a9559d08851e6a81c9159f2f0e07dd6",
+    "src/rr_native_frame.h": "d5e67451dce62eddc3496960091901df12485f59add2c549101dcc1bf33ca3cf",
+    "src/fg_overlay.h": "9252a662df646d1992a3908224cd56a82a4cf7c36a56624974f32cacda6ccb5b",
+    "Build.cmd": "8a3f352ba2a26151a8764724df4f11fcb32ef7bbe046dd86d4e76f3a00ce47f7",
+    "Make-DropIn.ps1": "8b58d2b655454c41c7f2b179518bb70fc1a8ec204a7d797f275bfbc70518b6e0",
+    "validation/evaluation-entry/entry-test.cpp": "148ff0701c95d61cf073001b9557efe58e2432272f8441512e0613df507dacc9",
+    "validation/native-specular-clamp/policy-test.cpp": "64aef21895e04328a21e053a244fda2454ed21793c02f6b6c640c89a0350a7fb",
+    "validation/specular-noisy/test.cpp": "8c40de36dbc0c9c35114874b82afaf583b24078418ac8a31f87346af96adda41"
+  }
+}

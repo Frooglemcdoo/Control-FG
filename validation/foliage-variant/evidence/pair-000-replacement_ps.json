@@ -1,0 +1,160 @@
+{
+  "file": "pair-000-replacement_ps.dxbc",
+  "sha256": "cd3f9865a91912865a87dbae62a8e41f8a8a7e9281e6f123e90106e6aae73b0b",
+  "bytes": 1072,
+  "bindings": [
+    {
+      "name": "g_sMaterialArrayGlobal",
+      "kind": 3,
+      "return_type": 0,
+      "dimension": 0,
+      "samples": 0,
+      "slot": 19,
+      "count": 1,
+      "flags": 0,
+      "space": 1,
+      "identifier": 0
+    },
+    {
+      "name": "g_sMaterialTextureArray",
+      "kind": 2,
+      "return_type": 5,
+      "dimension": 4,
+      "samples": 4294967295,
+      "slot": 0,
+      "count": 0,
+      "flags": 12,
+      "space": 1,
+      "identifier": 0
+    },
+    {
+      "name": "mid_general",
+      "kind": 0,
+      "return_type": 0,
+      "dimension": 0,
+      "samples": 0,
+      "slot": 0,
+      "count": 1,
+      "flags": 0,
+      "space": 0,
+      "identifier": 0
+    }
+  ],
+  "constant_buffers": [
+    {
+      "name": "mid_general",
+      "size": 16,
+      "flags": 0,
+      "kind": 0,
+      "variables": [
+        {
+          "name": "g_uMaterialID",
+          "offset": 0,
+          "size": 4,
+          "flags": 2,
+          "type": {
+            "type_offset": 324,
+            "cls": 0,
+            "base": 19,
+            "rows": 1,
+            "cols": 1,
+            "array": 0,
+            "members": []
+          }
+        }
+      ]
+    }
+  ],
+  "instructions": [
+    {
+      "dword": 2,
+      "name": "dcl_global_flags",
+      "operands": [
+        "raw:"
+      ]
+    },
+    {
+      "dword": 3,
+      "name": "dcl_constant_buffer",
+      "operands": [
+        "raw:0x308e46,0x0,0x0,0x0,0x1,0x0"
+      ]
+    },
+    {
+      "dword": 10,
+      "name": "dcl_sampler",
+      "operands": [
+        "raw:0x306e46,0x0,0x13,0x13,0x1"
+      ]
+    },
+    {
+      "dword": 16,
+      "name": "dcl_resource",
+      "operands": [
+        "raw:0x307e46,0x0,0x0,0xffffffff,0x5555,0x1"
+      ]
+    },
+    {
+      "dword": 23,
+      "name": "dcl_input_ps",
+      "operands": [
+        "raw:0x101032,0x1"
+      ]
+    },
+    {
+      "dword": 26,
+      "name": "dcl_output",
+      "operands": [
+        "raw:0x1020f2,0x0"
+      ]
+    },
+    {
+      "dword": 29,
+      "name": "dcl_temps",
+      "operands": [
+        "raw:0x1"
+      ]
+    },
+    {
+      "dword": 31,
+      "name": "imul",
+      "operands": [
+        "null",
+        "r[0].x",
+        "cb[0][0][0].x",
+        "l(35)"
+      ]
+    },
+    {
+      "dword": 41,
+      "name": "sample",
+      "operands": [
+        "r[0].xyz",
+        "v[1].xyxx",
+        "t[0][r[0].x].xyzw",
+        "s[0][19]"
+      ]
+    },
+    {
+      "dword": 54,
+      "name": "mov",
+      "operands": [
+        "o[0].xyz",
+        "r[0].xyzx"
+      ]
+    },
+    {
+      "dword": 59,
+      "name": "mov",
+      "operands": [
+        "o[0].w",
+        "l(1)"
+      ]
+    },
+    {
+      "dword": 64,
+      "name": "ret",
+      "operands": []
+    }
+  ]
+}

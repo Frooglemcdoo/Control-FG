@@ -1,0 +1,22 @@
+{
+  "status": "EXACT_BINARY_STATIC_PASS",
+  "sha256": "cceb99cbd9c019af907c24c44701a53c8d230965c1fb31c325233e4c80214aa5",
+  "checked_bytes": {
+    "0x2eb4d": "4a833c3000",
+    "0x2eb52": "752f",
+    "0x2eb61": "e8eac00000",
+    "0x2eb76": "e8d5c00000",
+    "0x2ed63": "498b87a0000000",
+    "0x2ed6a": "4c89bbe0090000",
+    "0x2ed7a": "488906",
+    "0x2ee11": "ff9070010000",
+    "0x3ad74": "894720"
+  },
+  "findings": [
+    "Non-null TLS+8 branches from 0x2eb52 to 0x2eb83, bypassing both color and depth prepareForProducing calls.",
+    "Native setRenderTargets loads depth texture+0xA0 into device state+0x40 and depth identity into state+0x9E0 before OMSetRenderTargets.",
+    "prepareForProducing writes tracker+0x20 after recording ResourceBarrier; tracker is CPU recording metadata, not a GPU completion observation."
+  ],
+  "runtime_limit": "Static code establishes the native worker binding contract, not the precise inter-thread scheduling that produced r11 state 0xC0.",
+  "policy": "Workers must preserve nonzero matching inherited DSV and depth identity; primary retains exact depth-write state. No new barriers."
+}

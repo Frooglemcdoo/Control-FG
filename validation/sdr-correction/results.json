@@ -1,0 +1,22 @@
+{
+  "candidate": "2.0.0-Clean-Native-R10",
+  "status": "PASS",
+  "tests": {
+    "production_copy_mock": "PASS asynchronous retirement, ring reuse, resize, queue changes, replacement, shutdown, timeout, failed signal and device removal",
+    "windows_header_compile": "PASS Windows x64 -Wall -Wextra -Werror",
+    "native_identity_policy": "PASS local runtime",
+    "rr_unchanged": 79,
+    "hdr_conversion_unchanged": true,
+    "resize_and_destroy_integration": "PASS source contracts"
+  },
+  "limitations": [
+    "No local full MSVC DLL or GPU runtime.",
+    "Reuse/resize may still wait; F9 readback wait remains."
+  ],
+  "changed_source_files": [
+    "src/fg_sdr_correction.h",
+    "src/probe.cpp",
+    "src/fg_pixel_capture.h",
+    "src/hdr10_bridge.h"
+  ]
+}

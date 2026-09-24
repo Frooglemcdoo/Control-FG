@@ -1,0 +1,31 @@
+{
+  "pass": true,
+  "header_sha256": "7afda0c31ae710e0f27c7b06420f54f4052e385dc7fbb32ec38df3910e1f6a35",
+  "compatibility_cases": 151,
+  "sm51_cases": 69,
+  "total_cases": 220,
+  "sanitizer_mutations": 120000,
+  "accepted_mutations": 9793,
+  "address_sanitizer": "PASS",
+  "undefined_behavior_sanitizer": "PASS",
+  "leak_sanitizer": "not run: traced environment",
+  "windows_header_compile": "PASS compile-only, real Windows-compatible headers, SEH, -Wall -Wextra -Wconversion -Werror",
+  "actual_shaders": [
+    {
+      "file": "native-albedo-ps-000.dxbc",
+      "size": 2908,
+      "sha256": "6e8fdc47e77f203157c23e9f77e19b1a66f874a66e3955e29aff3181309536dd"
+    },
+    {
+      "file": "native-albedo-ps-001.dxbc",
+      "size": 3580,
+      "sha256": "b2b8ab2bf331f79837bd09ef24b669cbbfbc506b4a369edabbdead78f92a7411"
+    },
+    {
+      "file": "native-albedo-ps-002.dxbc",
+      "size": 3220,
+      "sha256": "27713d41a80358660ae326a31132bc6d82fec98147b31497a13d0fac9cce5db2"
+    }
+  ],
+  "official_vs51_limit": "No VS5.1 binaries in current Microsoft DXC converter fixture corpus; no unmodified official VS5.1 result claimed"
+}

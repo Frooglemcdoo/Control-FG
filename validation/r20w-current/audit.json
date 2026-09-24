@@ -1,0 +1,13 @@
+{
+  "status": "SOURCE_STATIC_PASS_WINDOWS_RUNTIME_REQUIRED",
+  "steam_build": "21225456",
+  "renderer_sha256": "ebfb5b47cebc2d4482e912b8090bd343f717bab8a178b5a6385dec9105e7c433",
+  "diffuse_filter_rva": "0x14C90",
+  "broad_parent_rva": "0x248940",
+  "full_rr_bypass_sites": [
+    {"rva":"0x2489A4","bytes":"e8e7c2dcff","target":"0x14C90"},
+    {"rva":"0x24A3F2","bytes":"e899a8dcff","target":"0x14C90"}
+  ],
+  "disassembly_finding": "third argument controls g_DLF_iFilterPassCount; temporal_feedback is independently dispatched, so passCount=0 is not a complete denoiser bypass",
+  "policy": "FULL RR + (RT AO or RT sun shadow): bypass the complete filterDiffuseNoise call; preserve parent 0x248940. OFF/PARTIAL: native forwarding."
+}

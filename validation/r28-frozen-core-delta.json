@@ -1,0 +1,33 @@
+{
+  "status": "PASS",
+  "baseline": "r27 approved production-core checkpoint",
+  "release": "r28-display-hdr-prepresent-guard",
+  "expected_changed_paths": [
+    "src/hdr10_bridge.h",
+    "src/streamline_bridge.h"
+  ],
+  "changed_files": [
+    {
+      "Path": "src/hdr10_bridge.h",
+      "PreviousSHA256": "C9F82601939FC46B14350FBD63865CDCA4EFDC5011750145C21FB3E075E155B9",
+      "R28SHA256": "72181A7DF22F6AB99D4D90C6654E65255C4E8013647C0D6D681722A77CF6884F"
+    },
+    {
+      "Path": "src/streamline_bridge.h",
+      "PreviousSHA256": "38B207996BBAA138095CAD666B52E732EE8DB839B7DB7B46960068860FED1907",
+      "R28SHA256": "9FA2A8C5475A861D6F407EA56D5476CF491FFABA4A35CAA1280F61BF8F4CE7AD"
+    }
+  ],
+  "unchanged_count": 9,
+  "total_count": 11,
+  "assertions": [
+    "Exactly two files changed from the r27 production-core checkpoint.",
+    "The two changed files are src/hdr10_bridge.h and src/streamline_bridge.h.",
+    "The remaining nine checkpointed files retain their r27 hashes.",
+    "The r28 hashes recorded here match the current source."
+  ],
+  "tested_sha256": {
+    "src/hdr10_bridge.h": "72181a7df22f6ab99d4d90c6654e65255c4e8013647c0d6d681722a77cf6884f",
+    "src/streamline_bridge.h": "9fa2a8c5475a861d6f407ea56d5476cf491ffaba4a35caa1280f61bf8f4ce7ad"
+  }
+}

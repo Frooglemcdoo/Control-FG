@@ -1,0 +1,16 @@
+{
+  "results": {
+    "normal": "PASS 2048 native-SSA fixtures; perspective divide, asymmetric offsets, depth/finite guards and distance integration; worst error 3.17203e-07",
+    "sanitized": "PASS 2048 native-SSA fixtures; perspective divide, asymmetric offsets, depth/finite guards and distance integration; worst error 3.17203e-07",
+    "HLSL": "PASS cs_6_0 compile",
+    "constant_layout": "PASS 144-byte cbuffer offsets"
+  },
+  "source_sha256": {
+    "rr_hit_distance_from_depth.hlsl": "5aaa4e63fb937435815b5970ff22d47c3f88f5572e4733f9c206b4326d1d5cb7",
+    "rr_hit_origin_shared.h": "ed9aca5df3acaec3556333bc536fda37529db24b17c2c0272c13f892340a7424",
+    "rr_hit_distance_shared.h": "76881f2ffe5bb1318c71600d76a710be9d845cefb13e3f4a85eacbff92f385f8"
+  },
+  "runtime_wired": false,
+  "gpu_executed": false,
+  "rr_enabled": false
+}

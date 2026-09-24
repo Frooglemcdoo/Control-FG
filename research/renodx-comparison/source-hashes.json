@@ -1,0 +1,14 @@
+{
+  "source": "User-supplied RenoDX archive, no runtime logs supplied with reference",
+  "revision": "120663347a89ebe36c37eeb14653ad6b50958bc6",
+  "archive_sha256": "89a5ef3d9ca3add0afef5fd1afd4f0da0aa21b50bc951ffd0b3b90bfc789b584",
+  "files_sha256": {
+    "src/games/control-rr/addon.cpp": "7ace4089c6d365caa7e13387f2ba3852964667de131927b62f6d84c481e21df6",
+    "src/games/control-rr/rr.hpp": "f032bbeec8f6901de8ae24979b9872836986d0d4570ebced124c1cc74ec52fab",
+    "src/games/control-rr/rrg.cs_5_0.hlsl": "2aec7ed806628fc7a01b168aa1c37ca2724f9da8bbd5622c8df77862e47edb5d",
+    "src/games/control-rr/specmv.cs_5_0.hlsl": "1989876dbb0fd4b8c7c0dcf1d7fef8b1c4a5b254a1d201302344e010b0835400",
+    "src/games/control-rr/dlf_taa_spec_0x600347E7.cs_5_1.hlsl": "9c3ac3e7633789d9f59a8cdc14d09e3d74b64d80bee42a9dfcda7aeb2ec5629b",
+    "src/games/control-rr/dlf_spatial_spec.hlsli": "33cb8ab6e44d1d31e51962b4e3292d22e489d4063cee025d5629debc3ffcb557"
+  },
+  "ported_code": "r21w diagnostic only: behavior-equivalent current-frame 0x600347E7 specular energy clamp; production RR/FG path remains independent"
+}

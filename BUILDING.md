@@ -1,46 +1,14 @@
-# Building Control FG from source
+# Building Control FG v2.1.0
 
-## Requirements
+Extract the source to a fresh directory on Windows. Use Visual Studio 2026 C++ build tools and the Windows SDK.
 
-- Windows x64.
-- Visual Studio with **Desktop development with C++** and a Windows SDK. The build script uses `vswhere.exe` and `vcvars64.bat`; Visual Studio 2022/2026 toolchains are suitable when the required C++ components are installed.
-- Internet access on the first build to retrieve the pinned official NVIDIA Streamline SDK 2.14.1 release.
+1. Run `Build.cmd`. It stages the pinned dependencies, runs source/build checks, and produces `build/dxgi.dll`, `build/ControlFG.RTX40MFG.dll`, and `build/build-validation.json`.
+2. Run `Make-DropIn.cmd` after a successful build. The public package is `release/Control-FG-v2.1.0.zip`.
+3. Install and smoke-test that package in Control DX12. See INSTALL.md and KNOWN_ISSUES.md.
+4. Publish the ZIP in a new GitHub release tagged `v2.1.0`, using RELEASE_NOTES.md. Retain the generated SHA256SUMS and build-validation.json with the build records.
 
-## Build
+Do not replace the v2.0.0 asset or write these notes into GITHUB_RELEASE.md on main: the existing notes workflow targets v2.0.0.
 
-From an extracted source checkout:
+Public packaging uses v2.1.0; internal build identifiers retain the tested CS5 lineage for existing validation contracts. The unsuccessful GI1 experiment is excluded. This source package needs Windows compilation before it can be installed.
 
-```bat
-Build.cmd
-```
-
-`Build.cmd` performs the following:
-
-1. stages NVIDIA Streamline 2.14.1 from the official NVIDIA-RTX/Streamline GitHub release;
-2. verifies the pinned SDK archive and staged file hashes;
-3. checks the C++ ABI used by Control's imported DLSS symbol;
-4. compiles the x64 DXGI proxy;
-5. checks proxy exports/imports and runtime identity markers;
-6. runs a DXGI smoke test;
-7. creates the binary drop-in and public-release ZIPs.
-
-Generated artifacts are ignored by Git and appear under `build\` and `release\`.
-
-## Supported Control build
-
-The current source is build-locked to Steam build `21225456`. `target-manifest.json` records the tested hashes. The source installer refuses to install against changed required game binaries. A manual binary drop-in does not replace this requirement; unsupported game versions are simply not claimed compatible.
-
-## Streamline pin
-
-- Version: `2.14.1`
-- Official release archive SHA-256: `92C4D954631A1710DA86CA3FA8D5034F2B9503838C95FC4AE977AE149319781B`
-
-Do not silently replace the pinned Streamline binaries when reproducing a release build.
-
-## Runtime validation baseline
-
-The core runtime baseline is v0.8.26, where fixed 2x–6x, native Dynamic MFG, live HDR transitions, and live multiplier switching were exercised successfully. v0.8.27–v0.8.35 were release/UI/policy revisions that did not intentionally change the proven generation core. v1.0.0 promotes that stabilized branch to the first public release.
-
-## Source licensing
-
-Third-party components retain their own licenses. See `legal/`. The project owner has not yet selected a license for original Control FG source code; choose and add one before granting third parties reuse/redistribution rights.
+The retained RR_NATIVE_G12_R20P.md is an input to a historical validation script, not current build guidance. Other historical milestone Markdown has been removed; runtime source, tests, and license notices are retained.

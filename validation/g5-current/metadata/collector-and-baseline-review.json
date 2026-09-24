@@ -1,0 +1,41 @@
+{
+  "status": "PASS",
+  "comparison": "final G4 release to G5 release; collector identity text only, persistent SDK cache and built R1 overlay unchanged",
+  "files": {
+    "Collect-ControlFG-Logs.ps1": {
+      "g4_sha256": "0689878912fea01fc3731bac8c2c05f0671c45a3c42575718487f5258f26a698",
+      "g5_sha256": "96683fea1b87ed98cc0d97552e5af0012678efbf0d3ea36a051ec73439b6db36",
+      "only_G4_to_G5_text": true
+    },
+    "Collect-ControlFG-Logs.cmd": {
+      "g4_sha256": "046943f9b84c74f2a1fffc74be60072e91042b021832516a22f74813aaadee6c",
+      "g5_sha256": "046943f9b84c74f2a1fffc74be60072e91042b021832516a22f74813aaadee6c",
+      "only_G4_to_G5_text": true
+    },
+    "Collect-Logs.cmd": {
+      "g4_sha256": "046943f9b84c74f2a1fffc74be60072e91042b021832516a22f74813aaadee6c",
+      "g5_sha256": "046943f9b84c74f2a1fffc74be60072e91042b021832516a22f74813aaadee6c",
+      "only_G4_to_G5_text": true
+    },
+    "Fetch-Streamline.ps1": {
+      "sha256": "4b4a31b9bccc05693960ded26b8aa3f43592b606a971613c34c7daa4be0607db",
+      "unchanged": true
+    },
+    "Verify-Streamline.ps1": {
+      "sha256": "a4a6fb274a09abf042a1b57760850cbcb9e42a3c5486bdd32c051d901cc37cc4",
+      "unchanged": true
+    },
+    "Patch-OverlayStability.ps1": {
+      "sha256": "36299ee595722cdea27f888f251e645c61e578a005737ec75aa400d06d619539",
+      "unchanged": true
+    },
+    "src/fg_overlay.h": {
+      "sha256": "ce01a2e14917fd0b35fdf6e8f3e8d37a8b1ba032150666719943d83a63b21c24",
+      "unchanged": true
+    },
+    "g3-frozen-files.json": {
+      "sha256": "28bfc381db775f4946d2f9994afc934f20357f5eeb771e4f793fc5f8f17615bd",
+      "unchanged": true
+    }
+  }
+}

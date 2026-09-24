@@ -76,3 +76,54 @@ inline constexpr char kControlNgxProjectId[] = "305914b8-cf5b-4535-8e53-5589bf8c
 inline constexpr size_t kControlNgxInitCallRva = 0x1E88A;
 inline constexpr size_t kControlNgxInitWrapperRva = 0x52CC0;
 
+
+// Ray Reconstruction Phase 2 observation-only hooks. These are exported by the
+// hash-locked d3d module and imported by the renderer. Phase 2 patches only the
+// renderer IAT slots for these exports so it can timestamp RT pipeline setup and
+// dispatch ordering; renderer/d3d code bytes and GPU work remain untouched.
+inline constexpr char kRRBeginPipelineSetupSymbol[] =
+    "?beginPipelineSetup@DeviceUtilRaytracing@d3d@@SAXHH@Z";
+inline constexpr char kRRSetRayGenerationSymbol[] =
+    "?setRayGeneration@DeviceUtilRaytracing@d3d@@SAXPEBD@Z";
+inline constexpr char kRRRaytraceSymbol[] =
+    "?raytrace@DeviceUtilRaytracing@d3d@@SAXHH@Z";
+
+
+// Ray Reconstruction Phase 5 low-overhead direct snapshot path. P4 proved
+// that intercepting ShaderTexture::setNativeTexture is far too hot for runtime
+// use (~28k calls/sec in the validation capture). P5 does NOT hook that path.
+// Instead it queries a small set of build-locked ShaderTexture globals through
+// the read-only getNativeTexture() export only at the existing sampled DLSS
+// boundary.
+inline constexpr char kRRGetNativeTextureSymbol[] =
+    "?getNativeTexture@ShaderTexture@d3d@@QEAAPEAVNativeTexture@2@XZ";
+
+// Stable renderer-relative ShaderTexture objects recovered by the P4 capture.
+// These are object addresses, not resource pointers; getNativeTexture() resolves
+// the current per-frame NativeTexture without intercepting the hot binding path.
+inline constexpr size_t kRRShaderReflectionTargetRva      = 0x01296788;
+inline constexpr size_t kRRShaderDiffuseGIColorRva        = 0x012973E8;
+inline constexpr size_t kRRShaderDiffuseGIWeightUavRva    = 0x01297478;
+inline constexpr size_t kRRShaderDiffuseGIWeightSrvRva    = 0x012974A0;
+inline constexpr size_t kRRShaderGBufferCandidate0Rva     = 0x01296440;
+inline constexpr size_t kRRShaderGBufferCandidate1Rva     = 0x01296468;
+inline constexpr size_t kRRShaderGBufferCandidate2Rva     = 0x01296490;
+inline constexpr size_t kRRShaderGBufferCandidate3Rva     = 0x012964B8;
+inline constexpr size_t kRRShaderGBufferCandidate4Rva     = 0x012964E0;
+inline constexpr size_t kRRShaderLightBufferDiffuseRva    = 0x01297EF8;
+inline constexpr size_t kRRShaderLightBufferSpecularRva   = 0x01297F20;
+
+// P3 runtime/static correlation proved these build-locked renderer function
+// ranges contain the relevant RR producer/guide setup work.
+inline constexpr size_t kRRReflectionDiffuseFunctionBeginRva = 0x00128D20;
+inline constexpr size_t kRRReflectionDiffuseFunctionEndRva   = 0x0012DA38;
+inline constexpr size_t kRRGBufferNormalsFunctionBeginRva   = 0x001268A0;
+inline constexpr size_t kRRGBufferNormalsFunctionEndRva     = 0x001278F4;
+inline constexpr size_t kRRLightInputsFunctionBeginRva      = 0x000C86B0;
+inline constexpr size_t kRRLightInputsFunctionEndRva        = 0x000C92E6;
+inline constexpr size_t kRRLightBuffersFunctionBeginRva     = 0x001371A0;
+inline constexpr size_t kRRLightBuffersFunctionEndRva       = 0x001373AB;
+inline constexpr size_t kRRRadianceFunctionBeginRva         = 0x000A4AD0;
+inline constexpr size_t kRRRadianceFunctionEndRva           = 0x000A5383;
+inline constexpr size_t kRRShadowFunctionBeginRva           = 0x0023ED10;
+inline constexpr size_t kRRShadowFunctionEndRva             = 0x0023FCD1;

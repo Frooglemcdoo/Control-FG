@@ -1,0 +1,19 @@
+{
+  "status": "PASS",
+  "tests": {
+    "capture_header": "PASS Windows x64 cross-compile -Wall -Wextra -Werror",
+    "analyzer": "PASS formats, masks, PQ, stale SDR/HDR, alternate shadow, stationary ambiguity",
+    "real_capture": "PASS 4 current frames and 3 previous-frame matches; initial broken frame outside previous sample coverage",
+    "rr_unchanged": 79,
+    "overlay_unchanged": true,
+    "fg_reset_policy_unchanged": true
+  },
+  "msvc_build": "NOT_RUN",
+  "gpu_runtime": "NOT_RUN",
+  "changed_source_files": [
+    "src/fg_present_capture.h",
+    "src/probe.cpp",
+    "src/fg_pixel_capture.h",
+    "src/hdr10_bridge.h"
+  ]
+}

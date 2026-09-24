@@ -1,0 +1,41 @@
+{
+  "Status": "PASS",
+  "HostPowerShell": "7.6.6",
+  "NativeWindowsExecution": false,
+  "CheckCount": 16,
+  "Checks": {
+    "Version": true,
+    "Revision": true,
+    "Phase": true,
+    "TypedJoinedFrameEnabled": true,
+    "ExistingPrimaryViewEnabled": true,
+    "PairedMarker": true,
+    "CapturePrefix": true,
+    "CaptureSchema": true,
+    "CollectionSchema": true,
+    "OneFrame": true,
+    "RREvaluationOff": true,
+    "DenoiserBypassOff": true,
+    "ProbeIdentity": true,
+    "MarkersInSource": true,
+    "SharedInstallContract": true,
+    "ElevenFrozenHashes": true
+  },
+  "ParsedScriptCount": 13,
+  "ParsedScripts": [
+    "Build-Metadata.ps1",
+    "Collect-ControlFG-Logs.ps1",
+    "Fetch-Streamline.ps1",
+    "Make-DropIn.ps1",
+    "Manage-Probe.ps1",
+    "Patch-OverlayStability.ps1",
+    "Verify-Build.ps1",
+    "Verify-Source.ps1",
+    "Verify-Streamline.ps1",
+    "validation/g5-current/test-release-contract.ps1",
+    "validation/g5-current/metadata/check-identity.ps1",
+    "validation/g4-current/test-release-contract.ps1",
+    "validation/g4-current/collector-identity/validate-metadata.ps1"
+  ],
+  "SourceManifest": "Deferred until final package report collection; not refreshed by this check."
+}

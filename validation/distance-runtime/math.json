@@ -1,0 +1,35 @@
+{
+  "status": "PASS",
+  "results": {
+    "validation/distance-runtime/input.cpp:normal": "PASS production input: bound provider bytes with stale mirrors, bound world basis/frame rejection, nonfinite matrix, wrong size and wrong extent",
+    "research/hit-distance/tests/test_distance.cpp:normal": "PASS 65536 material classifications; 100000 independent matrix/distance cases; invalid/miss/no-ray/zero/extreme cases; worst relative error 9.0492953e-07",
+    "research/hit-origin/tests/test_origin.cpp:normal": "PASS 2048 native-SSA fixtures; perspective divide, asymmetric offsets, depth/finite guards and distance integration; worst error 3.17203e-07",
+    "research/provider-auth/tests/test.cpp:normal": "PASS bound snapshot despite stale mirror, changed bytes/metadata, failed reads, arena bounds; byte mismatch, unavailable provider, size-before-compare, metadata mutation, read failure, aliasing",
+    "validation/distance-runtime/input.cpp:asan_ubsan": "PASS production input: bound provider bytes with stale mirrors, bound world basis/frame rejection, nonfinite matrix, wrong size and wrong extent",
+    "research/hit-distance/tests/test_distance.cpp:asan_ubsan": "PASS 65536 material classifications; 100000 independent matrix/distance cases; invalid/miss/no-ray/zero/extreme cases; worst relative error 9.0492953e-07",
+    "research/hit-origin/tests/test_origin.cpp:asan_ubsan": "PASS 2048 native-SSA fixtures; perspective divide, asymmetric offsets, depth/finite guards and distance integration; worst error 3.17203e-07",
+    "research/provider-auth/tests/test.cpp:asan_ubsan": "PASS bound snapshot despite stale mirror, changed bytes/metadata, failed reads, arena bounds; byte mismatch, unavailable provider, size-before-compare, metadata mutation, read failure, aliasing"
+  },
+  "production_headers_byte_identical_to_tested_headers": [
+    [
+      "src/shaders/rr_hit_distance_shared.h",
+      "research/hit-distance/src/rr_hit_distance_shared.h"
+    ],
+    [
+      "src/shaders/rr_hit_origin_shared.h",
+      "research/hit-origin/src/rr_hit_origin_shared.h"
+    ],
+    [
+      "src/rr_provider_auth.h",
+      "research/provider-auth/src/rr_provider_auth.h"
+    ]
+  ],
+  "sha256": {
+    "src/shaders/rr_hit_distance_shared.h": "76881f2ffe5bb1318c71600d76a710be9d845cefb13e3f4a85eacbff92f385f8",
+    "src/shaders/rr_hit_origin_shared.h": "ed9aca5df3acaec3556333bc536fda37529db24b17c2c0272c13f892340a7424",
+    "src/rr_provider_auth.h": "d51372852affa8760461c9b62a722ca52c317f9155ec4a339c10c792e3009c9e",
+    "validation/distance-runtime/input.cpp": "7149987d286ef7591e3eb4d9985e4e55bbcc6f2ca32162b2a07eb6b26f159f59",
+    "src/rr_distance_input.h": "e014f62b1c08f590e0d8e7ddd1f73bdaeb3cf04d0ed7a9582399c6771574be84"
+  },
+  "gpu_execution": false
+}

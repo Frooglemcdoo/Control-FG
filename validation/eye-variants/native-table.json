@@ -1,0 +1,15 @@
+{
+  "status": "PASS",
+  "renderer_sha256": "ebfb5b47cebc2d4482e912b8090bd343f717bab8a178b5a6385dec9105e7c433",
+  "table_offset": 568,
+  "count_offset": 576,
+  "record_stride": 168,
+  "key_offset": 4,
+  "instruction_bytes": {
+    "0x1dd3fd": "8b9140020000",
+    "0x1dd40d": "4c8b9938020000",
+    "0x1dd41d": "4c69c9a8000000",
+    "0x1dd427": "453b5104"
+  },
+  "scope": "Read-only table layout; not eye variant semantics or runtime admission."
+}

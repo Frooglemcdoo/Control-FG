@@ -27,6 +27,7 @@ static std::atomic<unsigned long long> hdr10BridgeDormantSwapchains{0};
 static std::atomic<unsigned long long> hdr10BridgeActivationCount{0};
 static std::atomic<unsigned long long> hdr10BridgeDeactivationCount{0};
 static std::atomic<unsigned long long> hdr10BridgeActivationFailures{0};
+static std::atomic<unsigned long long> hdr10BridgeTransitionGeneration{0};
 static std::atomic<unsigned long long> fgDynamicVsyncBypassPresents{0};
 static std::atomic<unsigned int> fgDynamicVsyncLastRequested{0xFFFFFFFFu};
 
@@ -56,6 +57,9 @@ static unsigned int GetHdr10BridgeWidth() noexcept {
 }
 static unsigned int GetHdr10BridgeHeight() noexcept {
     return hdr10BridgeHeight.load(std::memory_order_acquire);
+}
+static unsigned long long GetHdr10BridgeTransitionGeneration() noexcept {
+    return hdr10BridgeTransitionGeneration.load(std::memory_order_acquire);
 }
 
 static bool Hdr10BridgeDisabledByEnvironment() noexcept {
@@ -133,6 +137,9 @@ float4 PSMain(VSOut i) : SV_Target
 }
 )HLSL";
 
+#include "fg_present_capture.h"
+#include "fg_sdr_correction.h"
+
 class Hdr10SwapChainProxy final : public IDXGISwapChain4 {
 public:
     Hdr10SwapChainProxy(IDXGISwapChain4* inner, DXGI_FORMAT gameFormat, DXGI_USAGE gameUsage) noexcept
@@ -155,6 +162,8 @@ public:
     }
 
     virtual ~Hdr10SwapChainProxy() {
+        sdrCorrection_.Shutdown();
+        slFgOffPresentProof.Invalidate();
         if (active_) ClearActiveState("destroy");
         WaitForConversions();
         ReleaseResources();
@@ -210,7 +219,14 @@ public:
 
     // IDXGISwapChain
     HRESULT STDMETHODCALLTYPE Present(UINT SyncInterval, UINT Flags) override {
-        if (active_ && (Flags & DXGI_PRESENT_TEST) == 0) {
+        const bool realPresent = (Flags & DXGI_PRESENT_TEST) == 0;
+        const unsigned long long present = presentCount.load(std::memory_order_acquire);
+        if (realPresent) {
+            const HRESULT uiWork=SubmitFGUIRecompositionBeforePresent(present);
+            if(FAILED(uiWork))return uiWork;
+            ObserveSLDisplayHdrDomainBeforePresent(inner_, present);
+        }
+        if (active_ && realPresent) {
             const HRESULT convert = ConvertCurrentBackBuffer();
             if (FAILED(convert)) {
                 ++hdr10BridgeConversionFailures;
@@ -218,10 +234,20 @@ public:
                 Log("HDR10_BRIDGE_PRESENT_FAIL stage=convert hr=0x%08lX failures=%llu", static_cast<unsigned long>(convert), hdr10BridgeConversionFailures.load());
             }
         }
-        const UINT appliedSyncInterval = (Flags & DXGI_PRESENT_TEST) != 0
+        if (!active_ && realPresent) {
+            const HRESULT correction=sdrCorrection_.Apply(this,inner_,present);
+            if(FAILED(correction)){Log("FG_SDR_PRESENT_FAIL frame=%llu hr=0x%08lX action=stop_failed_copy",present,static_cast<unsigned long>(correction));return correction;}
+            FGPixelSDRPresent(inner_, present);
+        }
+        const UINT appliedSyncInterval = !realPresent
             ? SyncInterval
             : ApplyDynamicMFGPresentSyncInterval(SyncInterval, "Present");
-        return inner_->Present(appliedSyncInterval, Flags);
+        const auto alignSerial=realPresent?FGAlignPresentEnter(present,inner_,"Present",Flags):0;
+        const HRESULT hr = inner_->Present(appliedSyncInterval, Flags);
+        if(realPresent) FGAlignPresentExit(alignSerial,present,inner_,hr);
+        if (realPresent) RecordSLOffPresentBoundary(inner_, present, hr);
+        if (realPresent) CompleteSLDLSSGHardResetAfterPresent(present, hr, "present");
+        return hr;
     }
     HRESULT STDMETHODCALLTYPE GetBuffer(UINT Buffer, REFIID riid, void** ppSurface) override {
         if (!ppSurface) return E_POINTER;
@@ -251,7 +277,16 @@ public:
     }
     HRESULT STDMETHODCALLTYPE ResizeBuffers(UINT BufferCount, UINT Width, UINT Height,
         DXGI_FORMAT NewFormat, UINT SwapChainFlags) override {
+        const HRESULT sdrDrain=sdrCorrection_.PrepareResize(presentCount.load(),"ResizeBuffers");
+        if(FAILED(sdrDrain))return sdrDrain;
         const DXGI_FORMAT requested = NewFormat == DXGI_FORMAT_UNKNOWN ? gameFormat_ : NewFormat;
+        const bool domainTransition = (!active_ && requested == DXGI_FORMAT_R16G16B16A16_FLOAT) ||
+                                      (active_ && requested != DXGI_FORMAT_R16G16B16A16_FLOAT);
+        if (domainTransition) {
+            if (!QuiesceDLSSGForHdrSwapchainTransition(inner_, active_ ? "hdr_to_sdr_resize" : "sdr_to_hdr_resize")) {
+                Log("HDR10_BRIDGE_TRANSITION_WARN stage=ResizeBuffers reason=fg_hard_reset_failed action=continue_resize_fail_closed_fg_off");
+            }
+        }
         if (!active_ && requested != DXGI_FORMAT_R16G16B16A16_FLOAT) {
             const HRESULT hr = inner_->ResizeBuffers(BufferCount, Width, Height, NewFormat, SwapChainFlags);
             if (SUCCEEDED(hr)) {
@@ -346,7 +381,14 @@ public:
     }
     HRESULT STDMETHODCALLTYPE Present1(UINT SyncInterval, UINT PresentFlags,
         const DXGI_PRESENT_PARAMETERS* pPresentParameters) override {
-        if (active_ && (PresentFlags & DXGI_PRESENT_TEST) == 0) {
+        const bool realPresent = (PresentFlags & DXGI_PRESENT_TEST) == 0;
+        const unsigned long long present = presentCount.load(std::memory_order_acquire);
+        if (realPresent) {
+            const HRESULT uiWork=SubmitFGUIRecompositionBeforePresent(present);
+            if(FAILED(uiWork))return uiWork;
+            ObserveSLDisplayHdrDomainBeforePresent(inner_, present);
+        }
+        if (active_ && realPresent) {
             const HRESULT convert = ConvertCurrentBackBuffer();
             if (FAILED(convert)) {
                 ++hdr10BridgeConversionFailures;
@@ -354,10 +396,20 @@ public:
                 Log("HDR10_BRIDGE_PRESENT_FAIL stage=convert1 hr=0x%08lX failures=%llu", static_cast<unsigned long>(convert), hdr10BridgeConversionFailures.load());
             }
         }
-        const UINT appliedSyncInterval = (PresentFlags & DXGI_PRESENT_TEST) != 0
+        if (!active_ && realPresent) {
+            const HRESULT correction=sdrCorrection_.Apply(this,inner_,present);
+            if(FAILED(correction)){Log("FG_SDR_PRESENT_FAIL frame=%llu hr=0x%08lX action=stop_failed_copy",present,static_cast<unsigned long>(correction));return correction;}
+            FGPixelSDRPresent(inner_, present);
+        }
+        const UINT appliedSyncInterval = !realPresent
             ? SyncInterval
             : ApplyDynamicMFGPresentSyncInterval(SyncInterval, "Present1");
-        return inner_->Present1(appliedSyncInterval, PresentFlags, pPresentParameters);
+        const auto alignSerial=realPresent?FGAlignPresentEnter(present,inner_,"Present1",PresentFlags):0;
+        const HRESULT hr = inner_->Present1(appliedSyncInterval, PresentFlags, pPresentParameters);
+        if(realPresent) FGAlignPresentExit(alignSerial,present,inner_,hr);
+        if (realPresent) RecordSLOffPresentBoundary(inner_, present, hr);
+        if (realPresent) CompleteSLDLSSGHardResetAfterPresent(present, hr, "present");
+        return hr;
     }
     BOOL STDMETHODCALLTYPE IsTemporaryMonoSupported() override { return inner_->IsTemporaryMonoSupported(); }
     HRESULT STDMETHODCALLTYPE GetRestrictToOutput(IDXGIOutput** ppRestrictToOutput) override {
@@ -417,7 +469,16 @@ public:
     HRESULT STDMETHODCALLTYPE ResizeBuffers1(UINT BufferCount, UINT Width, UINT Height,
         DXGI_FORMAT Format, UINT SwapChainFlags, const UINT* pCreationNodeMask,
         IUnknown* const* ppPresentQueue) override {
+        const HRESULT sdrDrain=sdrCorrection_.PrepareResize(presentCount.load(),"ResizeBuffers1");
+        if(FAILED(sdrDrain))return sdrDrain;
         const DXGI_FORMAT requested = Format == DXGI_FORMAT_UNKNOWN ? gameFormat_ : Format;
+        const bool domainTransition = (!active_ && requested == DXGI_FORMAT_R16G16B16A16_FLOAT) ||
+                                      (active_ && requested != DXGI_FORMAT_R16G16B16A16_FLOAT);
+        if (domainTransition) {
+            if (!QuiesceDLSSGForHdrSwapchainTransition(inner_, active_ ? "hdr_to_sdr_resize1" : "sdr_to_hdr_resize1")) {
+                Log("HDR10_BRIDGE_TRANSITION_WARN stage=ResizeBuffers1 reason=fg_hard_reset_failed action=continue_resize_fail_closed_fg_off");
+            }
+        }
         if (!active_ && requested != DXGI_FORMAT_R16G16B16A16_FLOAT) {
             const HRESULT hr = inner_->ResizeBuffers1(BufferCount, Width, Height, Format, SwapChainFlags, pCreationNodeMask, ppPresentQueue);
             if (SUCCEEDED(hr)) {
@@ -507,22 +568,26 @@ private:
     void PublishActiveState(const char* reason) noexcept {
         hdr10BridgeWidth.store(width_, std::memory_order_release);
         hdr10BridgeHeight.store(height_, std::memory_order_release);
-        hdr10BridgeActive.store(1, std::memory_order_release);
+        const unsigned int previous = hdr10BridgeActive.exchange(1, std::memory_order_acq_rel);
+        unsigned long long transitionGeneration = hdr10BridgeTransitionGeneration.load(std::memory_order_acquire);
+        if (!previous) transitionGeneration = hdr10BridgeTransitionGeneration.fetch_add(1, std::memory_order_acq_rel) + 1;
         slFgColorWidth.store(width_, std::memory_order_release);
         slFgColorHeight.store(height_, std::memory_order_release);
         slFgColorFormat.store(static_cast<unsigned int>(DXGI_FORMAT_R10G10B10A2_UNORM), std::memory_order_release);
         slFgHudLessFormat.store(0, std::memory_order_release);
         const auto activations = ++hdr10BridgeActivationCount;
-        Log("HDR10_BRIDGE_ACTIVE wrapper=%p inner=%p reason=%s width=%u height=%u buffers=%u game_format=%u real_format=%u source_space=scrgb_rec709_linear source_white_nits=80 target_space=hdr10_bt2100 target_transfer=st2084 target_primaries=bt2020 activations=%llu",
+        Log("HDR10_BRIDGE_ACTIVE wrapper=%p inner=%p reason=%s width=%u height=%u buffers=%u game_format=%u real_format=%u source_space=scrgb_rec709_linear source_white_nits=80 target_space=hdr10_bt2100 target_transfer=st2084 target_primaries=bt2020 activations=%llu transition_generation=%llu",
             this, inner_, reason ? reason : "unknown", width_, height_, bufferCount_, unsigned(gameFormat_),
-            unsigned(DXGI_FORMAT_R10G10B10A2_UNORM), activations);
+            unsigned(DXGI_FORMAT_R10G10B10A2_UNORM), activations, transitionGeneration);
     }
 
     void ClearActiveState(const char* reason) noexcept {
-        hdr10BridgeActive.store(0, std::memory_order_release);
+        const unsigned int previous = hdr10BridgeActive.exchange(0, std::memory_order_acq_rel);
+        unsigned long long transitionGeneration = hdr10BridgeTransitionGeneration.load(std::memory_order_acquire);
+        if (previous) transitionGeneration = hdr10BridgeTransitionGeneration.fetch_add(1, std::memory_order_acq_rel) + 1;
         hdr10BridgeWidth.store(0, std::memory_order_release);
         hdr10BridgeHeight.store(0, std::memory_order_release);
-        Log("HDR10_BRIDGE_INACTIVE wrapper=%p reason=%s", this, reason ? reason : "unknown");
+        Log("HDR10_BRIDGE_INACTIVE wrapper=%p reason=%s transition_generation=%llu", this, reason ? reason : "unknown", transitionGeneration);
     }
 
     void RestorePassthroughColorSpace(const char* reason) noexcept {
@@ -855,17 +920,31 @@ private:
         const UINT index = inner_->GetCurrentBackBufferIndex();
         if (index >= bufferCount_ || index >= shadows_.size() || index >= realBuffers_.size() ||
             index >= allocators_.size() || !shadows_[index] || !realBuffers_[index] || !allocators_[index]) return DXGI_ERROR_INVALID_CALL;
+        const auto selection=FGNativeSourceSelect(this,shadows_.data(),bufferCount_,index);
+        const UINT sourceIndex=selection.source;
+        const bool sourceVerified=selection.status==control_fg_native_source::Status::Matched;
+        if(sourceIndex>=shadows_.size()||!shadows_[sourceIndex])return DXGI_ERROR_INVALID_CALL;
+        if(FGAlignActive(presentCount.load())||FGPixelNeedsPresent(presentCount.load())||(presentCount.load()%120)==0)
+            Log("FG_NATIVE_SOURCE frame=%llu native_index=%u source=%u destination=%u native_resource=%p verified=%u corrected=%u reason=%s",
+                presentCount.load(),selection.nativeIndex,sourceIndex,index,reinterpret_cast<void*>(selection.resource),unsigned(sourceVerified),unsigned(sourceVerified&&sourceIndex!=index),control_fg_native_source::Name(selection.status));
+        FGAlignBridge(presentCount.load(),sourceIndex,shadows_[sourceIndex],realBuffers_[index],queue);
         HRESULT hr = WaitAllocator(index);
         if (FAILED(hr)) return hr;
         hr = allocators_[index]->Reset();
         if (FAILED(hr)) return hr;
         hr = commandList_->Reset(allocators_[index], pso_);
         if (FAILED(hr)) return hr;
+        FGPixelBridge(commandList_,shadows_[sourceIndex],presentCount.load(),sourceIndex);
+        if(FGPixelNeedsPresent(presentCount.load())) {
+            for(UINT candidate=0;candidate<shadows_.size()&&candidate<4;++candidate)
+                if(shadows_[candidate])FGPixelBridge(commandList_,shadows_[candidate],presentCount.load(),candidate,6+candidate);
+            Log("PIXEL_HDR_SELECTION frame=%llu selected=%u count=%u captured=%u",presentCount.load(),sourceIndex,bufferCount_,bufferCount_<4?bufferCount_:4);
+        }
 
         D3D12_RESOURCE_BARRIER barriers[2]{};
         barriers[0].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
         barriers[0].Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
-        barriers[0].Transition.pResource = shadows_[index];
+        barriers[0].Transition.pResource = shadows_[sourceIndex];
         barriers[0].Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
         barriers[0].Transition.StateBefore = D3D12_RESOURCE_STATE_COMMON;
         barriers[0].Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
@@ -895,7 +974,7 @@ private:
         ID3D12DescriptorHeap* heaps[] = {srvHeap_};
         commandList_->SetDescriptorHeaps(1, heaps);
         D3D12_GPU_DESCRIPTOR_HANDLE srvGpu = srvHeap_->GetGPUDescriptorHandleForHeapStart();
-        srvGpu.ptr += UINT64(index) * UINT64(srvIncrement_);
+        srvGpu.ptr += UINT64(sourceIndex) * UINT64(srvIncrement_);
         commandList_->SetGraphicsRootDescriptorTable(0, srvGpu);
         commandList_->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
         commandList_->DrawInstanced(3, 1, 0, 0);
@@ -903,6 +982,7 @@ private:
         std::swap(barriers[0].Transition.StateBefore, barriers[0].Transition.StateAfter);
         std::swap(barriers[1].Transition.StateBefore, barriers[1].Transition.StateAfter);
         commandList_->ResourceBarrier(2, barriers);
+        FGPixelBridge(commandList_,realBuffers_[index],presentCount.load(),index,5);
         hr = commandList_->Close();
         if (FAILED(hr)) return hr;
         ID3D12CommandList* lists[] = {commandList_};
@@ -988,6 +1068,7 @@ private:
         srvIncrement_ = 0; rtvIncrement_ = 0; width_ = 0; height_ = 0; bufferCount_ = 0;
     }
 
+    FGSDRCorrection sdrCorrection_{};
     std::atomic<ULONG> refs_{1};
     IDXGISwapChain4* inner_{};
     ID3D12Device* device_{};

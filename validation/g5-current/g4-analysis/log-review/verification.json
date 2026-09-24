@@ -1,0 +1,328 @@
+{
+  "identity": {
+    "version": "1.0.0-RR-Native-G4",
+    "phase": "NativeG4PrimaryViewMaterialImages",
+    "recorded_build_sha256": "79d2c6e852a98694e4894128b444c82c513b15ad80620dea4308ecffd339d745",
+    "recorded_install_sha256": "79d2c6e852a98694e4894128b444c82c513b15ad80620dea4308ecffd339d745",
+    "versions_match": true,
+    "hashes_match": true,
+    "binary_supplied": false,
+    "limits": "Build and install records agree. No installed dxgi.dll copy is included, so its bytes cannot be independently rehashed from this upload."
+  },
+  "collection_files": [
+    {
+      "path": "g4-logs/rr-guides/rr-guide-g3-20260913-144531-841-48084/gbuffer1.rgba8",
+      "size": 14745600,
+      "sha256": "8e6f92340a0a0c816414d2cbc3e83b27991e24ba8b6d59c0aff574e5cc8c84b5",
+      "size_matches": true,
+      "sha256_matches": true
+    },
+    {
+      "path": "g4-logs/rr-guides/rr-guide-g3-20260913-144531-841-48084/gbuffer2.rgba8",
+      "size": 14745600,
+      "sha256": "54674efca59d818844340a66a801dcc63d1b6b190f162a560d84d1d16f665ef9",
+      "size_matches": true,
+      "sha256_matches": true
+    },
+    {
+      "path": "g4-logs/rr-guides/rr-guide-g3-20260913-144531-841-48084/normal-roughness.rgba32f",
+      "size": 58982400,
+      "sha256": "7e57fa812225c713b08d64e663fee029aae4ce998c872799dc98fa481c2725a7",
+      "size_matches": true,
+      "sha256_matches": true
+    },
+    {
+      "path": "g4-logs/rr-guides/rr-guide-g3-20260913-144531-841-48084/world-normal.bmp",
+      "size": 11059254,
+      "sha256": "2b1bc0c3f37827155183cb55c59214343b142da2bcf98c3f3ef4540700aedfab",
+      "size_matches": true,
+      "sha256_matches": true
+    },
+    {
+      "path": "g4-logs/rr-guides/rr-guide-g3-20260913-144531-841-48084/roughness.bmp",
+      "size": 11059254,
+      "sha256": "d7311a89845636733ec4d2d5b076982d4a2dead24a36db089ef78b8f7775f771",
+      "size_matches": true,
+      "sha256_matches": true
+    },
+    {
+      "path": "g4-logs/rr-guides/rr-guide-g3-20260913-144531-841-48084/material-id.bmp",
+      "size": 11059254,
+      "sha256": "5f28675b18eafea1d07cece1587ec631eaf34a1e7d715281dd47492097374216",
+      "size_matches": true,
+      "sha256_matches": true
+    },
+    {
+      "path": "g4-logs/rr-guides/rr-guide-g3-20260913-144531-841-48084/metadata.json",
+      "size": 4312,
+      "sha256": "8a2a7d8610b050d249fd5ddf1d6b2dd69ba50eec73eab1cacea710b4ed59b00a",
+      "size_matches": true,
+      "sha256_matches": true
+    },
+    {
+      "path": "g4-logs/rr-guides/rr-guide-g3-20260913-144531-841-48084/native-albedo-ps-000.dxbc",
+      "size": 2908,
+      "sha256": "6e8fdc47e77f203157c23e9f77e19b1a66f874a66e3955e29aff3181309536dd",
+      "size_matches": true,
+      "sha256_matches": true
+    },
+    {
+      "path": "g4-logs/rr-guides/rr-guide-g3-20260913-144531-841-48084/native-albedo-ps-001.dxbc",
+      "size": 3580,
+      "sha256": "b2b8ab2bf331f79837bd09ef24b669cbbfbc506b4a369edabbdead78f92a7411",
+      "size_matches": true,
+      "sha256_matches": true
+    },
+    {
+      "path": "g4-logs/rr-guides/rr-guide-g3-20260913-144531-841-48084/native-albedo-ps-002.dxbc",
+      "size": 3220,
+      "sha256": "27713d41a80358660ae326a31132bc6d82fec98147b31497a13d0fac9cce5db2",
+      "size_matches": true,
+      "sha256_matches": true
+    }
+  ],
+  "collection_total_bytes": 121665382,
+  "probe_reports": [
+    {
+      "file": "probe-20260913-144349-655-13276.log",
+      "bytes": 2678,
+      "sha256": "91768d8496349547791357b41ec536e275557bfdf12f97a59879cb14a81927c1",
+      "lines": 8,
+      "qpc_frequency": 10000000,
+      "logged_span_seconds": 0.0115106,
+      "last_counters": null,
+      "fg_state_samples": 0,
+      "fg_frames_presented_samples": {},
+      "last_fg_state_sample": null,
+      "exceptional_numeric_fields": [],
+      "stop_events": {
+        "PROBE_DISABLED": 1,
+        "SL_DISABLED": 1
+      },
+      "rr_guide_records": []
+    },
+    {
+      "file": "probe-20260913-144442-331-44448.log",
+      "bytes": 39131,
+      "sha256": "85f3fb9f9706df3177cf7dee87027b32f7685b3cd347625fb7fb769d86137f0b",
+      "lines": 241,
+      "qpc_frequency": 10000000,
+      "logged_span_seconds": 10.8067406,
+      "last_counters": null,
+      "fg_state_samples": 4,
+      "fg_frames_presented_samples": {
+        "1": 4
+      },
+      "last_fg_state_sample": {
+        "qpc": "1140646216266",
+        "tid": "45536",
+        "present": "4",
+        "result": "0",
+        "status": "0x0",
+        "frames_presented": "1",
+        "selected_selection": "3x",
+        "selected_code": "3",
+        "requested_generated": "2",
+        "target_multiplier": "3x",
+        "dynamic_target_policy": "n/a",
+        "dynamic_target_fps": "0.000",
+        "detected_refresh_fps": "143.999",
+        "max_generated": "5",
+        "max_multiplier": "6x",
+        "dynamic_supported": "1",
+        "min_dimension": "100",
+        "constants_successes": "0",
+        "tag_successes": "0",
+        "tag_failures": "0",
+        "frame_tag_mask": "0x0",
+        "simulation_marker_starts": "4",
+        "simulation_marker_failures": "0",
+        "marker_starts": "0",
+        "marker_ends": "0",
+        "fg_api_enabled": "0",
+        "backbuffer_index_successes": "4",
+        "backbuffer_index_failures": "0",
+        "last_backbuffer_index": "1",
+        "generated_segments": "0",
+        "target_multiplier_state_samples": "0",
+        "dynamic_generated_state_samples": "0",
+        "max_frames_presented_observed": "1"
+      },
+      "exceptional_numeric_fields": [],
+      "stop_events": {},
+      "rr_guide_records": [
+        {
+          "line": 25,
+          "text": "qpc=1140549149816 tid=45536 RR_GUIDE_G3_ALBEDO_HOOKS_READY prepare=0x632008 join=0x631C18 serial=0x12E29E worker=0x126591 captures=1 rr_eval=disabled"
+        },
+        {
+          "line": 26,
+          "text": "qpc=1140549149889 tid=45536 RR_GUIDE_G3_NATIVE_PATH ready=1 normal_fallback=1 semantics_verified=0 rr_eval=disabled"
+        },
+        {
+          "line": 27,
+          "text": "qpc=1140549150294 tid=45536 RR_GUIDE_G3_READY ready=1 max_captures=1 max_attempts=8 max_pixels=8388608 async_preparation=1 rr_evaluate=0 native_denoiser=untouched"
+        }
+      ]
+    },
+    {
+      "file": "probe-20260913-144503-119-50648.log",
+      "bytes": 5274,
+      "sha256": "d516916c98e04123d10ea76868afb0118fd5b7b88b7157c93df5f824062c9829",
+      "lines": 24,
+      "qpc_frequency": 10000000,
+      "logged_span_seconds": 1.2261642,
+      "last_counters": null,
+      "fg_state_samples": 0,
+      "fg_frames_presented_samples": {},
+      "last_fg_state_sample": null,
+      "exceptional_numeric_fields": [],
+      "stop_events": {
+        "PROBE_DISABLED": 1
+      },
+      "rr_guide_records": []
+    },
+    {
+      "file": "probe-20260913-144505-270-48084.log",
+      "bytes": 924442,
+      "sha256": "65356a2736ac254ac4692dbfb250989e53573cd84f25ffcbfb923691924532ca",
+      "lines": 4633,
+      "qpc_frequency": 10000000,
+      "logged_span_seconds": 83.9099233,
+      "last_counters": {
+        "qpc": "1141612940306",
+        "tid": "50672",
+        "begin": "7200",
+        "present": "7200",
+        "aa": "4992",
+        "aa_failures": "0",
+        "hud_dispatch": "7201",
+        "hud_render": "7200",
+        "samples": "32",
+        "transition_samples": "1",
+        "swap_samples": "58",
+        "hud_target_frames": "64",
+        "hud_target_records": "128",
+        "backbuffer_index_successes": "7200",
+        "backbuffer_index_failures": "0",
+        "fg_ready_presents": "4992",
+        "fg_enabled_presents": "4992",
+        "generated_state_samples": "69"
+      },
+      "fg_state_samples": 87,
+      "fg_frames_presented_samples": {
+        "1": 18,
+        "2": 69
+      },
+      "last_fg_state_sample": {
+        "qpc": "1141612939906",
+        "tid": "50672",
+        "present": "7200",
+        "result": "0",
+        "status": "0x0",
+        "frames_presented": "1",
+        "selected_selection": "2x",
+        "selected_code": "2",
+        "requested_generated": "1",
+        "target_multiplier": "2x",
+        "dynamic_target_policy": "n/a",
+        "dynamic_target_fps": "0.000",
+        "detected_refresh_fps": "143.999",
+        "max_generated": "5",
+        "max_multiplier": "6x",
+        "dynamic_supported": "1",
+        "min_dimension": "100",
+        "constants_successes": "4992",
+        "tag_successes": "9984",
+        "tag_failures": "0",
+        "frame_tag_mask": "0x0",
+        "simulation_marker_starts": "7200",
+        "simulation_marker_failures": "0",
+        "marker_starts": "4992",
+        "marker_ends": "4992",
+        "fg_api_enabled": "0",
+        "backbuffer_index_successes": "7200",
+        "backbuffer_index_failures": "0",
+        "last_backbuffer_index": "1",
+        "generated_segments": "1",
+        "target_multiplier_state_samples": "69",
+        "dynamic_generated_state_samples": "0",
+        "max_frames_presented_observed": "2"
+      },
+      "exceptional_numeric_fields": [],
+      "stop_events": {
+        "RR_GUIDE_G3_ALBEDO_STOP": 1
+      },
+      "rr_guide_records": [
+        {
+          "line": 25,
+          "text": "qpc=1140778961502 tid=50672 RR_GUIDE_G3_ALBEDO_HOOKS_READY prepare=0x632008 join=0x631C18 serial=0x12E29E worker=0x126591 captures=1 rr_eval=disabled"
+        },
+        {
+          "line": 26,
+          "text": "qpc=1140778961550 tid=50672 RR_GUIDE_G3_NATIVE_PATH ready=1 normal_fallback=1 semantics_verified=0 rr_eval=disabled"
+        },
+        {
+          "line": 27,
+          "text": "qpc=1140778961965 tid=50672 RR_GUIDE_G3_READY ready=1 max_captures=1 max_attempts=8 max_pixels=8388608 async_preparation=1 rr_evaluate=0 native_denoiser=untouched"
+        },
+        {
+          "line": 2343,
+          "text": "qpc=1141040876471 tid=50672 RR_GUIDE_G3_PREPARE_QUEUED attempt=1 aa=120 width=2560 height=1440 render_ms=1.153 borrowed_inputs_retained=0"
+        },
+        {
+          "line": 2344,
+          "text": "qpc=1141041118183 tid=47652 RR_GUIDE_G3_PREPARE_TIMING stage=resources ms=24.166 hr=0x00000000 width=2560 height=1440 thread=47652"
+        },
+        {
+          "line": 2345,
+          "text": "qpc=1141041127129 tid=47652 RR_GUIDE_G3_PREPARE_TIMING stage=descriptors_and_root_signature ms=0.873 hr=0x00000000"
+        },
+        {
+          "line": 2346,
+          "text": "qpc=1141041152146 tid=47652 RR_GUIDE_G3_PREPARE_TIMING stage=compute_pipeline ms=2.483 hr=0x00000000"
+        },
+        {
+          "line": 2347,
+          "text": "qpc=1141041156260 tid=47652 RR_GUIDE_G3_PREPARE_TIMING stage=command_objects ms=0.395 hr=0x00000000"
+        },
+        {
+          "line": 2348,
+          "text": "qpc=1141041156374 tid=47652 RR_GUIDE_G3_PREPARE_COMPLETE attempt=1 retire_only=0 ms=27.991 hr=0x00000000 width=2560 height=1440 thread=47652"
+        },
+        {
+          "line": 2349,
+          "text": "qpc=1141041272492 tid=50672 RR_GUIDE_G3_SHADER_CONTRACT frame=1754 source_batches=503 accepted_batches=468 rejected_batches=35 targets=1 shader_count=3 cpu_ms=2.229 semantics_verified=0"
+        },
+        {
+          "line": 2350,
+          "text": "qpc=1141041345500 tid=50672 RR_GUIDE_G3_ALBEDO_PREPARED frame=1754 width=2560 height=1440 targets=1 allocation_clear_ms=7.271 total_ms=9.527 capture_frames=1 primary_view=00000091511FF380 camera_view=000001F7EE9B3A50"
+        },
+        {
+          "line": 2351,
+          "text": "qpc=1141043712171 tid=50672 RR_GUIDE_G3_ALBEDO_JOINED frame=1754 ranges=4 replayed_batches=468 skipped_ranges=0 max_replay_cpu_ms=236.024 resource_table_same=0 scene_coverage_validated=0"
+        },
+        {
+          "line": 2354,
+          "text": "qpc=1141043823233 tid=50672 RR_GUIDE_G3_ALBEDO_STOP reason=joined_capture_frame_expired exception=0x00000000 allocations_retained=1 rr_eval=disabled"
+        },
+        {
+          "line": 2355,
+          "text": "qpc=1141043823654 tid=50672 RR_GUIDE_G3_CAPTURE_TIMING attempt=2 aa=124 copy_ms=0.018 render_ms=0.050 commands_started=1"
+        },
+        {
+          "line": 2356,
+          "text": "qpc=1141043823719 tid=50672 RR_GUIDE_G3_INPUTS_COPIED aa=124 frame=1755 present=1755 width=2560 height=1440 source_states_restored=1 shader_sha256=1f2e8a2baf6c8dd0e912e9c057d3924485aa5d5aead5abffb6b2cc5abeb042bf"
+        },
+        {
+          "line": 2357,
+          "text": "qpc=1141043850836 tid=50672 RR_GUIDE_G3_DISPATCH_SUBMITTED present=1756 frame=1755 width=2560 height=1440 engine_descriptor_state_changed=0"
+        },
+        {
+          "line": 2358,
+          "text": "qpc=1141045661529 tid=7932 RR_GUIDE_G3_EXPORT_COMPLETE directory=C:\\Users\\mattn\\AppData\\Local\\ControlFGProbe\\rr-guide-g3-20260913-144531-841-48084 frame=1755 width=2560 height=1440 rr_evaluate=0"
+        }
+      ]
+    }
+  ]
+}

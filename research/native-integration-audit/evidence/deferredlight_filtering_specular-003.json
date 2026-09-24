@@ -1,0 +1,1314 @@
+{
+  "file": "deferredlight_filtering_specular-003.dxbc",
+  "sha256": "cc2f9a07b5666329921dbaf25cb11c7497cac9ccbaf17bac68206d133c5914c3",
+  "bytes": 5664,
+  "bindings": [
+    {
+      "name": "g_sLinearClamp",
+      "kind": 3,
+      "return_type": 0,
+      "dimension": 0,
+      "samples": 0,
+      "slot": 6,
+      "count": 1,
+      "flags": 0,
+      "space": 1,
+      "identifier": 0
+    },
+    {
+      "name": "g_tGBuffer1",
+      "kind": 2,
+      "return_type": 5,
+      "dimension": 4,
+      "samples": 4294967295,
+      "slot": 0,
+      "count": 1,
+      "flags": 12,
+      "space": 0,
+      "identifier": 0
+    },
+    {
+      "name": "g_tGBuffer2",
+      "kind": 2,
+      "return_type": 5,
+      "dimension": 4,
+      "samples": 4294967295,
+      "slot": 1,
+      "count": 1,
+      "flags": 12,
+      "space": 0,
+      "identifier": 1
+    },
+    {
+      "name": "g_tClipDepth",
+      "kind": 2,
+      "return_type": 5,
+      "dimension": 4,
+      "samples": 4294967295,
+      "slot": 2,
+      "count": 1,
+      "flags": 12,
+      "space": 0,
+      "identifier": 2
+    },
+    {
+      "name": "g_sbMaterialDataPart1",
+      "kind": 5,
+      "return_type": 6,
+      "dimension": 1,
+      "samples": 8,
+      "slot": 3,
+      "count": 1,
+      "flags": 0,
+      "space": 0,
+      "identifier": 3
+    },
+    {
+      "name": "g_tEnvBRDF",
+      "kind": 2,
+      "return_type": 5,
+      "dimension": 4,
+      "samples": 4294967295,
+      "slot": 4,
+      "count": 1,
+      "flags": 12,
+      "space": 0,
+      "identifier": 4
+    },
+    {
+      "name": "g_DLF_rwtColorSource",
+      "kind": 2,
+      "return_type": 5,
+      "dimension": 4,
+      "samples": 4294967295,
+      "slot": 5,
+      "count": 1,
+      "flags": 8,
+      "space": 0,
+      "identifier": 5
+    },
+    {
+      "name": "g_DLF_rwtColorTarget",
+      "kind": 4,
+      "return_type": 5,
+      "dimension": 4,
+      "samples": 4294967295,
+      "slot": 0,
+      "count": 1,
+      "flags": 8,
+      "space": 0,
+      "identifier": 0
+    },
+    {
+      "name": "sys_constants",
+      "kind": 0,
+      "return_type": 0,
+      "dimension": 0,
+      "samples": 0,
+      "slot": 0,
+      "count": 1,
+      "flags": 0,
+      "space": 0,
+      "identifier": 0
+    }
+  ],
+  "constant_buffers": [
+    {
+      "name": "sys_constants",
+      "size": 1136,
+      "flags": 0,
+      "kind": 0,
+      "variables": [
+        {
+          "name": "g_vScreenRes",
+          "offset": 0,
+          "size": 8,
+          "flags": 0,
+          "type": {
+            "type_offset": 1912,
+            "cls": 1,
+            "base": 3,
+            "rows": 1,
+            "cols": 2,
+            "array": 0,
+            "members": []
+          }
+        },
+        {
+          "name": "g_vInvScreenRes",
+          "offset": 8,
+          "size": 8,
+          "flags": 2,
+          "type": {
+            "type_offset": 1912,
+            "cls": 1,
+            "base": 3,
+            "rows": 1,
+            "cols": 2,
+            "array": 0,
+            "members": []
+          }
+        },
+        {
+          "name": "g_vOutputRes",
+          "offset": 16,
+          "size": 8,
+          "flags": 0,
+          "type": {
+            "type_offset": 1912,
+            "cls": 1,
+            "base": 3,
+            "rows": 1,
+            "cols": 2,
+            "array": 0,
+            "members": []
+          }
+        },
+        {
+          "name": "g_vInvOutputRes",
+          "offset": 24,
+          "size": 8,
+          "flags": 0,
+          "type": {
+            "type_offset": 1912,
+            "cls": 1,
+            "base": 3,
+            "rows": 1,
+            "cols": 2,
+            "array": 0,
+            "members": []
+          }
+        },
+        {
+          "name": "g_mWorldToView",
+          "offset": 32,
+          "size": 64,
+          "flags": 0,
+          "type": {
+            "type_offset": 2020,
+            "cls": 3,
+            "base": 3,
+            "rows": 4,
+            "cols": 4,
+            "array": 0,
+            "members": []
+          }
+        },
+        {
+          "name": "g_mViewToWorld",
+          "offset": 96,
+          "size": 64,
+          "flags": 0,
+          "type": {
+            "type_offset": 2020,
+            "cls": 3,
+            "base": 3,
+            "rows": 4,
+            "cols": 4,
+            "array": 0,
+            "members": []
+          }
+        },
+        {
+          "name": "g_mViewToClip",
+          "offset": 160,
+          "size": 64,
+          "flags": 0,
+          "type": {
+            "type_offset": 2020,
+            "cls": 3,
+            "base": 3,
+            "rows": 4,
+            "cols": 4,
+            "array": 0,
+            "members": []
+          }
+        },
+        {
+          "name": "g_mClipToView",
+          "offset": 224,
+          "size": 64,
+          "flags": 2,
+          "type": {
+            "type_offset": 2020,
+            "cls": 3,
+            "base": 3,
+            "rows": 4,
+            "cols": 4,
+            "array": 0,
+            "members": []
+          }
+        },
+        {
+          "name": "g_mWorldToClip",
+          "offset": 288,
+          "size": 64,
+          "flags": 0,
+          "type": {
+            "type_offset": 2020,
+            "cls": 3,
+            "base": 3,
+            "rows": 4,
+            "cols": 4,
+            "array": 0,
+            "members": []
+          }
+        },
+        {
+          "name": "g_mClipToWorld",
+          "offset": 352,
+          "size": 64,
+          "flags": 0,
+          "type": {
+            "type_offset": 2020,
+            "cls": 3,
+            "base": 3,
+            "rows": 4,
+            "cols": 4,
+            "array": 0,
+            "members": []
+          }
+        },
+        {
+          "name": "g_mClipToPreviousClip",
+          "offset": 416,
+          "size": 64,
+          "flags": 0,
+          "type": {
+            "type_offset": 2020,
+            "cls": 3,
+            "base": 3,
+            "rows": 4,
+            "cols": 4,
+            "array": 0,
+            "members": []
+          }
+        },
+        {
+          "name": "g_mViewToPreviousClip",
+          "offset": 480,
+          "size": 64,
+          "flags": 0,
+          "type": {
+            "type_offset": 2020,
+            "cls": 3,
+            "base": 3,
+            "rows": 4,
+            "cols": 4,
+            "array": 0,
+            "members": []
+          }
+        },
+        {
+          "name": "g_mPreviousViewToView",
+          "offset": 544,
+          "size": 64,
+          "flags": 0,
+          "type": {
+            "type_offset": 2020,
+            "cls": 3,
+            "base": 3,
+            "rows": 4,
+            "cols": 4,
+            "array": 0,
+            "members": []
+          }
+        },
+        {
+          "name": "g_mPreviousWorldToClip",
+          "offset": 608,
+          "size": 64,
+          "flags": 0,
+          "type": {
+            "type_offset": 2020,
+            "cls": 3,
+            "base": 3,
+            "rows": 4,
+            "cols": 4,
+            "array": 0,
+            "members": []
+          }
+        },
+        {
+          "name": "g_mPreviousViewToClip",
+          "offset": 672,
+          "size": 64,
+          "flags": 0,
+          "type": {
+            "type_offset": 2020,
+            "cls": 3,
+            "base": 3,
+            "rows": 4,
+            "cols": 4,
+            "array": 0,
+            "members": []
+          }
+        },
+        {
+          "name": "g_mClipToPreviousClipNoJitter",
+          "offset": 736,
+          "size": 64,
+          "flags": 0,
+          "type": {
+            "type_offset": 2020,
+            "cls": 3,
+            "base": 3,
+            "rows": 4,
+            "cols": 4,
+            "array": 0,
+            "members": []
+          }
+        },
+        {
+          "name": "g_mPreviousClipToClipNoJitter",
+          "offset": 800,
+          "size": 64,
+          "flags": 0,
+          "type": {
+            "type_offset": 2020,
+            "cls": 3,
+            "base": 3,
+            "rows": 4,
+            "cols": 4,
+            "array": 0,
+            "members": []
+          }
+        },
+        {
+          "name": "g_vViewPoint",
+          "offset": 864,
+          "size": 16,
+          "flags": 0,
+          "type": {
+            "type_offset": 2320,
+            "cls": 1,
+            "base": 3,
+            "rows": 1,
+            "cols": 4,
+            "array": 0,
+            "members": []
+          }
+        },
+        {
+          "name": "g_fInvNear",
+          "offset": 880,
+          "size": 4,
+          "flags": 0,
+          "type": {
+            "type_offset": 2376,
+            "cls": 0,
+            "base": 3,
+            "rows": 1,
+            "cols": 1,
+            "array": 0,
+            "members": []
+          }
+        },
+        {
+          "name": "g_mViewToCameraView",
+          "offset": 896,
+          "size": 64,
+          "flags": 0,
+          "type": {
+            "type_offset": 2020,
+            "cls": 3,
+            "base": 3,
+            "rows": 4,
+            "cols": 4,
+            "array": 0,
+            "members": []
+          }
+        },
+        {
+          "name": "g_mCameraViewToCameraClip",
+          "offset": 960,
+          "size": 64,
+          "flags": 0,
+          "type": {
+            "type_offset": 2020,
+            "cls": 3,
+            "base": 3,
+            "rows": 4,
+            "cols": 4,
+            "array": 0,
+            "members": []
+          }
+        },
+        {
+          "name": "g_mCameraClipToView",
+          "offset": 1024,
+          "size": 64,
+          "flags": 0,
+          "type": {
+            "type_offset": 2020,
+            "cls": 3,
+            "base": 3,
+            "rows": 4,
+            "cols": 4,
+            "array": 0,
+            "members": []
+          }
+        },
+        {
+          "name": "g_fWorldTime",
+          "offset": 1088,
+          "size": 4,
+          "flags": 0,
+          "type": {
+            "type_offset": 2376,
+            "cls": 0,
+            "base": 3,
+            "rows": 1,
+            "cols": 1,
+            "array": 0,
+            "members": []
+          }
+        },
+        {
+          "name": "g_fWorldTimeDelta",
+          "offset": 1092,
+          "size": 4,
+          "flags": 0,
+          "type": {
+            "type_offset": 2376,
+            "cls": 0,
+            "base": 3,
+            "rows": 1,
+            "cols": 1,
+            "array": 0,
+            "members": []
+          }
+        },
+        {
+          "name": "g_fRealTime",
+          "offset": 1096,
+          "size": 4,
+          "flags": 0,
+          "type": {
+            "type_offset": 2376,
+            "cls": 0,
+            "base": 3,
+            "rows": 1,
+            "cols": 1,
+            "array": 0,
+            "members": []
+          }
+        },
+        {
+          "name": "g_fRealTimeDelta",
+          "offset": 1100,
+          "size": 4,
+          "flags": 0,
+          "type": {
+            "type_offset": 2376,
+            "cls": 0,
+            "base": 3,
+            "rows": 1,
+            "cols": 1,
+            "array": 0,
+            "members": []
+          }
+        },
+        {
+          "name": "g_fLastValidWorldTimeDelta",
+          "offset": 1104,
+          "size": 4,
+          "flags": 0,
+          "type": {
+            "type_offset": 2376,
+            "cls": 0,
+            "base": 3,
+            "rows": 1,
+            "cols": 1,
+            "array": 0,
+            "members": []
+          }
+        },
+        {
+          "name": "g_uTemporalFrame",
+          "offset": 1108,
+          "size": 4,
+          "flags": 0,
+          "type": {
+            "type_offset": 2588,
+            "cls": 0,
+            "base": 19,
+            "rows": 1,
+            "cols": 1,
+            "array": 0,
+            "members": []
+          }
+        },
+        {
+          "name": "g_uCurrentFrame",
+          "offset": 1112,
+          "size": 4,
+          "flags": 0,
+          "type": {
+            "type_offset": 2588,
+            "cls": 0,
+            "base": 19,
+            "rows": 1,
+            "cols": 1,
+            "array": 0,
+            "members": []
+          }
+        },
+        {
+          "name": "g_bHDR",
+          "offset": 1116,
+          "size": 4,
+          "flags": 0,
+          "type": {
+            "type_offset": 2652,
+            "cls": 0,
+            "base": 1,
+            "rows": 1,
+            "cols": 1,
+            "array": 0,
+            "members": []
+          }
+        },
+        {
+          "name": "g_fHDRSDRSceneBrightnessMultiplier",
+          "offset": 1120,
+          "size": 4,
+          "flags": 0,
+          "type": {
+            "type_offset": 2376,
+            "cls": 0,
+            "base": 3,
+            "rows": 1,
+            "cols": 1,
+            "array": 0,
+            "members": []
+          }
+        },
+        {
+          "name": "g_fHDRSDRUIBrightnessMultiplier",
+          "offset": 1124,
+          "size": 4,
+          "flags": 0,
+          "type": {
+            "type_offset": 2376,
+            "cls": 0,
+            "base": 3,
+            "rows": 1,
+            "cols": 1,
+            "array": 0,
+            "members": []
+          }
+        }
+      ]
+    },
+    {
+      "name": "g_sbMaterialDataPart1",
+      "size": 8,
+      "flags": 0,
+      "kind": 3,
+      "variables": [
+        {
+          "name": "$Element",
+          "offset": 0,
+          "size": 8,
+          "flags": 2,
+          "type": {
+            "type_offset": 2944,
+            "cls": 5,
+            "base": 0,
+            "rows": 1,
+            "cols": 2,
+            "array": 0,
+            "members": [
+              {
+                "name": "vSpecularColor_uBRDF",
+                "byte_offset": 0,
+                "type": {
+                  "type_offset": 2844,
+                  "cls": 0,
+                  "base": 19,
+                  "rows": 1,
+                  "cols": 1,
+                  "array": 0,
+                  "members": []
+                }
+              },
+              {
+                "name": "uScatterIndex_vTranslucencyDepthRange",
+                "byte_offset": 4,
+                "type": {
+                  "type_offset": 2844,
+                  "cls": 0,
+                  "base": 19,
+                  "rows": 1,
+                  "cols": 1,
+                  "array": 0,
+                  "members": []
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "instructions": [
+    {
+      "dword": 2,
+      "name": "dcl_global_flags",
+      "operands": [
+        "raw:"
+      ]
+    },
+    {
+      "dword": 3,
+      "name": "dcl_constant_buffer",
+      "operands": [
+        "raw:0x308e46,0x0,0x0,0x0,0x12,0x0"
+      ]
+    },
+    {
+      "dword": 10,
+      "name": "dcl_sampler",
+      "operands": [
+        "raw:0x306e46,0x0,0x6,0x6,0x1"
+      ]
+    },
+    {
+      "dword": 16,
+      "name": "dcl_resource",
+      "operands": [
+        "raw:0x307e46,0x0,0x0,0x0,0x5555,0x0"
+      ]
+    },
+    {
+      "dword": 23,
+      "name": "dcl_resource",
+      "operands": [
+        "raw:0x307e46,0x1,0x1,0x1,0x5555,0x0"
+      ]
+    },
+    {
+      "dword": 30,
+      "name": "dcl_resource",
+      "operands": [
+        "raw:0x307e46,0x2,0x2,0x2,0x5555,0x0"
+      ]
+    },
+    {
+      "dword": 37,
+      "name": "dcl_resource_structured",
+      "operands": [
+        "raw:0x307e46,0x3,0x3,0x3,0x8,0x0"
+      ]
+    },
+    {
+      "dword": 44,
+      "name": "dcl_resource",
+      "operands": [
+        "raw:0x307e46,0x4,0x4,0x4,0x5555,0x0"
+      ]
+    },
+    {
+      "dword": 51,
+      "name": "dcl_resource",
+      "operands": [
+        "raw:0x307e46,0x5,0x5,0x5,0x5555,0x0"
+      ]
+    },
+    {
+      "dword": 58,
+      "name": "dcl_unordered_access_view_typed",
+      "operands": [
+        "raw:0x31ee46,0x0,0x0,0x0,0x5555,0x0"
+      ]
+    },
+    {
+      "dword": 65,
+      "name": "dcl_input",
+      "operands": [
+        "raw:0x21032"
+      ]
+    },
+    {
+      "dword": 67,
+      "name": "dcl_input",
+      "operands": [
+        "raw:0x22032"
+      ]
+    },
+    {
+      "dword": 69,
+      "name": "dcl_temps",
+      "operands": [
+        "raw:0x6"
+      ]
+    },
+    {
+      "dword": 71,
+      "name": "dcl_thread_group",
+      "operands": [
+        "raw:0x8,0x8,0x1"
+      ]
+    },
+    {
+      "dword": 75,
+      "name": "imad",
+      "operands": [
+        "r[0].xy",
+        "type33.xyxx",
+        "l(8,8,0,0)",
+        "type34.xyxx"
+      ]
+    },
+    {
+      "dword": 85,
+      "name": "mov",
+      "operands": [
+        "r[0].zw",
+        "l(0,0,0,0)"
+      ]
+    },
+    {
+      "dword": 93,
+      "name": "ld",
+      "operands": [
+        "r[1].xyz",
+        "r[0].xyww",
+        "t[5][5].xyzw"
+      ]
+    },
+    {
+      "dword": 101,
+      "name": "utof",
+      "operands": [
+        "r[2].xy",
+        "r[0].xyxx"
+      ]
+    },
+    {
+      "dword": 106,
+      "name": "add",
+      "operands": [
+        "r[2].xy",
+        "r[2].xyxx",
+        "l(0.5,0.5,0,0)"
+      ]
+    },
+    {
+      "dword": 116,
+      "name": "mul",
+      "operands": [
+        "r[2].xy",
+        "r[2].xyxx",
+        "cb[0][0][0].zwzz"
+      ]
+    },
+    {
+      "dword": 125,
+      "name": "ld",
+      "operands": [
+        "r[1].w",
+        "r[0].xyww",
+        "t[2][2].yzwx"
+      ]
+    },
+    {
+      "dword": 133,
+      "name": "mad",
+      "operands": [
+        "r[2].xy",
+        "r[2].xyxx",
+        "l(2,-2,0,0)",
+        "l(-1,1,0,0)"
+      ]
+    },
+    {
+      "dword": 148,
+      "name": "mul",
+      "operands": [
+        "r[3].xyzw",
+        "r[2].yyyy",
+        "cb[0][0][15].xyzw"
+      ]
+    },
+    {
+      "dword": 157,
+      "name": "mad",
+      "operands": [
+        "r[2].xyzw",
+        "cb[0][0][14].xyzw",
+        "r[2].xxxx",
+        "r[3].xyzw"
+      ]
+    },
+    {
+      "dword": 168,
+      "name": "mad",
+      "operands": [
+        "r[2].xyzw",
+        "cb[0][0][16].xyzw",
+        "r[1].wwww",
+        "r[2].xyzw"
+      ]
+    },
+    {
+      "dword": 179,
+      "name": "add",
+      "operands": [
+        "r[2].xyzw",
+        "r[2].xyzw",
+        "cb[0][0][17].xyzw"
+      ]
+    },
+    {
+      "dword": 188,
+      "name": "rcp",
+      "operands": [
+        "r[1].w",
+        "r[2].w"
+      ]
+    },
+    {
+      "dword": 193,
+      "name": "mul",
+      "operands": [
+        "r[2].xyz",
+        "r[1].wwww",
+        "r[2].xyzx"
+      ]
+    },
+    {
+      "dword": 200,
+      "name": "ld",
+      "operands": [
+        "r[3].xyzw",
+        "r[0].xyww",
+        "t[0][0].xzyw"
+      ]
+    },
+    {
+      "dword": 208,
+      "name": "mad",
+      "operands": [
+        "r[1].w",
+        "r[3].w",
+        "l(255)",
+        "l(0.5)"
+      ]
+    },
+    {
+      "dword": 217,
+      "name": "ftou",
+      "operands": [
+        "r[1].w",
+        "r[1].w"
+      ]
+    },
+    {
+      "dword": 222,
+      "name": "and",
+      "operands": [
+        "r[1].w",
+        "r[1].w",
+        "l(254)"
+      ]
+    },
+    {
+      "dword": 229,
+      "name": "utof",
+      "operands": [
+        "r[4].z",
+        "r[1].w"
+      ]
+    },
+    {
+      "dword": 234,
+      "name": "mov",
+      "operands": [
+        "r[4].xy",
+        "r[3].xzxx"
+      ]
+    },
+    {
+      "dword": 239,
+      "name": "mad",
+      "operands": [
+        "r[4].xyz",
+        "r[4].xyzx",
+        "l(255,255,1,0)",
+        "l(0.5,0.5,0.5,0)"
+      ]
+    },
+    {
+      "dword": 254,
+      "name": "round_ni",
+      "operands": [
+        "r[4].xyz",
+        "r[4].xyzx"
+      ]
+    },
+    {
+      "dword": 259,
+      "name": "ftoi",
+      "operands": [
+        "r[4].xyz",
+        "r[4].xyzx"
+      ]
+    },
+    {
+      "dword": 264,
+      "name": "ubfe",
+      "operands": [
+        "r[5].xyzw",
+        "l(3,4,3,4)",
+        "l(1,4,1,4)",
+        "r[4].zzzz"
+      ]
+    },
+    {
+      "dword": 279,
+      "name": "bfi",
+      "operands": [
+        "r[4].xyzw",
+        "l(29,28,29,28)",
+        "l(3,4,3,4)",
+        "r[4].xyxy",
+        "r[5].xyzw"
+      ]
+    },
+    {
+      "dword": 296,
+      "name": "itof",
+      "operands": [
+        "r[4].xyzw",
+        "r[4].xyzw"
+      ]
+    },
+    {
+      "dword": 301,
+      "name": "mad",
+      "operands": [
+        "r[4].xyzw",
+        "r[4].xyzw",
+        "l(0.00097703957,0.000488400517,0.00097703957,0.000488400517)",
+        "l(-1,-1,-1,-1)"
+      ]
+    },
+    {
+      "dword": 316,
+      "name": "mul",
+      "operands": [
+        "r[4].xyzw",
+        "r[4].xyzw",
+        "l(1.29999995,1.29999995,2.5999999,2.5999999)"
+      ]
+    },
+    {
+      "dword": 326,
+      "name": "dp2",
+      "operands": [
+        "r[1].w",
+        "r[4].xyxx",
+        "r[4].xyxx"
+      ]
+    },
+    {
+      "dword": 333,
+      "name": "add",
+      "operands": [
+        "r[4].xy",
+        "r[1].wwww",
+        "l(1,-1,0,0)"
+      ]
+    },
+    {
+      "dword": 343,
+      "name": "div",
+      "operands": [
+        "r[4].xyz",
+        "r[4].zwyz",
+        "r[4].xxxx"
+      ]
+    },
+    {
+      "dword": 350,
+      "name": "dp3",
+      "operands": [
+        "r[1].w",
+        "r[2].xyzx",
+        "r[2].xyzx"
+      ]
+    },
+    {
+      "dword": 357,
+      "name": "rsq",
+      "operands": [
+        "r[1].w",
+        "r[1].w"
+      ]
+    },
+    {
+      "dword": 362,
+      "name": "mul",
+      "operands": [
+        "r[2].xyz",
+        "r[1].wwww",
+        "r[2].xyzx"
+      ]
+    },
+    {
+      "dword": 369,
+      "name": "dp3",
+      "operands": [
+        "r[3].x",
+        "r[4].xyzx",
+        "-r[2].xyzx"
+      ]
+    },
+    {
+      "dword": 377,
+      "name": "ld",
+      "operands": [
+        "r[2].xyz",
+        "r[0].xyzw",
+        "t[1][1].yzwx"
+      ]
+    },
+    {
+      "dword": 385,
+      "name": "mul",
+      "operands": [
+        "r[0].zw",
+        "r[2].yyyz",
+        "l(0,0,255,255)"
+      ]
+    },
+    {
+      "dword": 395,
+      "name": "ftou",
+      "operands": [
+        "r[0].zw",
+        "r[0].zzzw"
+      ]
+    },
+    {
+      "dword": 400,
+      "name": "ishl",
+      "operands": [
+        "r[0].z",
+        "r[0].z",
+        "l(8)"
+      ]
+    },
+    {
+      "dword": 407,
+      "name": "or",
+      "operands": [
+        "r[0].z",
+        "r[0].w",
+        "r[0].z"
+      ]
+    },
+    {
+      "dword": 414,
+      "name": "ld_structured",
+      "operands": [
+        "r[0].w",
+        "r[0].z",
+        "l(0)",
+        "t[3][3].xxxx"
+      ]
+    },
+    {
+      "dword": 424,
+      "name": "ushr",
+      "operands": [
+        "r[1].w",
+        "r[0].w",
+        "l(24)"
+      ]
+    },
+    {
+      "dword": 431,
+      "name": "ubfe",
+      "operands": [
+        "r[2].yz",
+        "l(0,8,8,0)",
+        "l(0,16,8,0)",
+        "r[0].wwww"
+      ]
+    },
+    {
+      "dword": 446,
+      "name": "utof",
+      "operands": [
+        "r[4].xw",
+        "r[1].wwww"
+      ]
+    },
+    {
+      "dword": 451,
+      "name": "utof",
+      "operands": [
+        "r[4].yz",
+        "r[2].yyzy"
+      ]
+    },
+    {
+      "dword": 456,
+      "name": "mul",
+      "operands": [
+        "r[4].xyzw",
+        "r[4].xyzw",
+        "l(0.00392156886,0.00392156886,0.00392156886,0.00392156886)"
+      ]
+    },
+    {
+      "dword": 466,
+      "name": "ld_structured",
+      "operands": [
+        "r[0].z",
+        "r[0].z",
+        "l(0)",
+        "t[3][3].xxxx"
+      ]
+    },
+    {
+      "dword": 476,
+      "name": "and",
+      "operands": [
+        "r[0].z",
+        "r[0].z",
+        "l(255)"
+      ]
+    },
+    {
+      "dword": 483,
+      "name": "dp3",
+      "operands": [
+        "r[0].w",
+        "r[4].wyzw",
+        "l(0.212599993,0.715200007,0.0722000003,0)"
+      ]
+    },
+    {
+      "dword": 493,
+      "name": "add",
+      "operands": [
+        "r[1].w",
+        "r[0].w",
+        "l(9.99999997e-07)"
+      ]
+    },
+    {
+      "dword": 500,
+      "name": "rcp",
+      "operands": [
+        "r[1].w",
+        "r[1].w"
+      ]
+    },
+    {
+      "dword": 505,
+      "name": "mul",
+      "operands": [
+        "r[0].w",
+        "r[0].w",
+        "l(10000)"
+      ]
+    },
+    {
+      "dword": 512,
+      "name": "min",
+      "operands": [
+        "r[0].w",
+        "r[0].w",
+        "l(1)"
+      ]
+    },
+    {
+      "dword": 519,
+      "name": "mad",
+      "operands": [
+        "r[5].xyzw",
+        "r[4].wyzw",
+        "r[1].wwww",
+        "l(-1,-1,-1,-1)"
+      ]
+    },
+    {
+      "dword": 531,
+      "name": "mad",
+      "operands": [
+        "r[5].xyzw",
+        "r[0].wwww",
+        "r[5].xyzw",
+        "l(1,1,1,1)"
+      ]
+    },
+    {
+      "dword": 543,
+      "name": "mul",
+      "operands": [
+        "r[2].xyzw",
+        "r[2].xxxx",
+        "r[5].xyzw"
+      ]
+    },
+    {
+      "dword": 550,
+      "name": "movc",
+      "operands": [
+        "r[2].xyzw",
+        "r[0].zzzz",
+        "r[4].xyzw",
+        "r[2].xyzw"
+      ]
+    },
+    {
+      "dword": 559,
+      "name": "sample_l",
+      "operands": [
+        "r[0].zw",
+        "r[3].xyxx",
+        "t[4][4].zwxy",
+        "s[0][6]",
+        "l(0)"
+      ]
+    },
+    {
+      "dword": 572,
+      "name": "mad",
+      "operands": [
+        "r[2].xyzw",
+        "r[2].xyzw",
+        "r[0].zzzz",
+        "r[0].wwww"
+      ]
+    },
+    {
+      "dword": 581,
+      "name": "mul",
+      "operands": [
+        "r[1].xyzw",
+        "r[1].xyzx",
+        "r[2].xyzw"
+      ]
+    },
+    {
+      "dword": 588,
+      "name": "store_uav_typed",
+      "operands": [
+        "type30[0][0].xyzw",
+        "r[0].xyyy",
+        "r[1].xyzw"
+      ]
+    },
+    {
+      "dword": 596,
+      "name": "ret",
+      "operands": []
+    }
+  ]
+}

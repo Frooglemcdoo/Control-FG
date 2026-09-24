@@ -1,0 +1,249 @@
+{
+  "schema": "ControlFG.G4.AssetReview.v1",
+  "capture": "rr-guide-g3-20260913-144531-841-48084",
+  "dimensions": [
+    2560,
+    1440
+  ],
+  "pixels": 3686400,
+  "files": [
+    {
+      "name": "gbuffer1.rgba8",
+      "bytes": 14745600,
+      "sha256": "8e6f92340a0a0c816414d2cbc3e83b27991e24ba8b6d59c0aff574e5cc8c84b5",
+      "collector_match": true
+    },
+    {
+      "name": "gbuffer2.rgba8",
+      "bytes": 14745600,
+      "sha256": "54674efca59d818844340a66a801dcc63d1b6b190f162a560d84d1d16f665ef9",
+      "collector_match": true
+    },
+    {
+      "name": "normal-roughness.rgba32f",
+      "bytes": 58982400,
+      "sha256": "7e57fa812225c713b08d64e663fee029aae4ce998c872799dc98fa481c2725a7",
+      "collector_match": true
+    },
+    {
+      "name": "world-normal.bmp",
+      "bytes": 11059254,
+      "sha256": "2b1bc0c3f37827155183cb55c59214343b142da2bcf98c3f3ef4540700aedfab",
+      "collector_match": true
+    },
+    {
+      "name": "roughness.bmp",
+      "bytes": 11059254,
+      "sha256": "d7311a89845636733ec4d2d5b076982d4a2dead24a36db089ef78b8f7775f771",
+      "collector_match": true
+    },
+    {
+      "name": "material-id.bmp",
+      "bytes": 11059254,
+      "sha256": "5f28675b18eafea1d07cece1587ec631eaf34a1e7d715281dd47492097374216",
+      "collector_match": true
+    },
+    {
+      "name": "metadata.json",
+      "bytes": 4312,
+      "sha256": "8a2a7d8610b050d249fd5ddf1d6b2dd69ba50eec73eab1cacea710b4ed59b00a",
+      "collector_match": true
+    },
+    {
+      "name": "native-albedo-ps-000.dxbc",
+      "bytes": 2908,
+      "sha256": "6e8fdc47e77f203157c23e9f77e19b1a66f874a66e3955e29aff3181309536dd",
+      "collector_match": true
+    },
+    {
+      "name": "native-albedo-ps-001.dxbc",
+      "bytes": 3580,
+      "sha256": "b2b8ab2bf331f79837bd09ef24b669cbbfbc506b4a369edabbdead78f92a7411",
+      "collector_match": true
+    },
+    {
+      "name": "native-albedo-ps-002.dxbc",
+      "bytes": 3220,
+      "sha256": "27713d41a80358660ae326a31132bc6d82fec98147b31497a13d0fac9cce5db2",
+      "collector_match": true
+    }
+  ],
+  "normal": {
+    "nonfinite_pixels": 0,
+    "component_min": [
+      -0.9999995231628418,
+      -0.9999997615814209,
+      -0.9999998807907104
+    ],
+    "component_max": [
+      0.7936369180679321,
+      0.9999996423721313,
+      0.9826956987380981
+    ],
+    "length_min": 0.9999998526191811,
+    "length_max": 1.0000000649543535,
+    "max_unit_length_error": 1.4738081888232557e-07,
+    "outside_metadata_length_tolerance": 0,
+    "reference_max_component_absolute_error": 3.1330853489386357e-07,
+    "reference_mean_component_absolute_error": 1.0464361851098726e-07,
+    "reference_pixels_above_1e_6": 0
+  },
+  "roughness": {
+    "nonfinite_pixels": 0,
+    "outside_range_pixels": 0,
+    "min": 0.0,
+    "max": 1.0,
+    "mean": 0.46371778899811844,
+    "reference_max_absolute_error": 4.441130396770632e-08,
+    "byte_equation_mismatches": 0,
+    "unique_values": 245
+  },
+  "all_metadata_statistics_match": true,
+  "material_ids": {
+    "unique": 84,
+    "minimum": 0,
+    "maximum": 1756,
+    "top": [
+      {
+        "id": 794,
+        "pixels": 945228
+      },
+      {
+        "id": 1756,
+        "pixels": 702935
+      },
+      {
+        "id": 953,
+        "pixels": 539628
+      },
+      {
+        "id": 1290,
+        "pixels": 293625
+      },
+      {
+        "id": 640,
+        "pixels": 190901
+      },
+      {
+        "id": 106,
+        "pixels": 182706
+      },
+      {
+        "id": 785,
+        "pixels": 134429
+      },
+      {
+        "id": 636,
+        "pixels": 105653
+      },
+      {
+        "id": 1136,
+        "pixels": 72546
+      },
+      {
+        "id": 1123,
+        "pixels": 66648
+      }
+    ],
+    "is_albedo": false
+  },
+  "raw_inputs": {
+    "gbuffer1_zero_pixels": 4,
+    "gbuffer2_zero_pixels": 4,
+    "both_zero_pixels": 4,
+    "gbuffer1_alpha_bit0_pixels": 481517,
+    "background_validity_proven": false
+  },
+  "camera": {
+    "basis_gram_matrix": [
+      [
+        0.9999999603757388,
+        -2.580942570773459e-09,
+        2.6467021296827653e-08
+      ],
+      [
+        -2.580942570773459e-09,
+        0.9999999606158427,
+        -5.232418942568984e-10
+      ],
+      [
+        2.6467021296827653e-08,
+        -5.232418942568984e-10,
+        1.0000000383327738
+      ]
+    ],
+    "determinant": 0.9999999796621766,
+    "max_orthonormal_error": 3.962426120551754e-08,
+    "engine_frame": 1755,
+    "camera_engine_frame": 1755,
+    "present_token": 1755,
+    "temporal_alignment_independently_proven": false
+  },
+  "bmp": {
+    "world-normal.bmp": {
+      "bytes": 11059254,
+      "top_down": true,
+      "channel_mismatches": 0
+    },
+    "roughness.bmp": {
+      "bytes": 11059254,
+      "top_down": true,
+      "channel_mismatches": 0
+    },
+    "material-id.bmp": {
+      "bytes": 11059254,
+      "top_down": true,
+      "channel_mismatches": 0
+    }
+  },
+  "shader_identity": [
+    {
+      "file": "native-albedo-ps-000.dxbc",
+      "sha256": "6e8fdc47e77f203157c23e9f77e19b1a66f874a66e3955e29aff3181309536dd",
+      "bytes": 2908,
+      "fnv1a64_matches_metadata": true,
+      "identical_to_G2_equation_review": true,
+      "source_frame": 1754,
+      "declared_render_target_count": 1
+    },
+    {
+      "file": "native-albedo-ps-001.dxbc",
+      "sha256": "b2b8ab2bf331f79837bd09ef24b669cbbfbc506b4a369edabbdead78f92a7411",
+      "bytes": 3580,
+      "fnv1a64_matches_metadata": true,
+      "identical_to_G2_equation_review": true,
+      "source_frame": 1754,
+      "declared_render_target_count": 1
+    },
+    {
+      "file": "native-albedo-ps-002.dxbc",
+      "sha256": "27713d41a80358660ae326a31132bc6d82fec98147b31497a13d0fac9cce5db2",
+      "bytes": 3220,
+      "fnv1a64_matches_metadata": true,
+      "identical_to_G2_equation_review": true,
+      "source_frame": 1754,
+      "declared_render_target_count": 1
+    }
+  ],
+  "native_material_output": {
+    "has_outputs": false,
+    "count": 0,
+    "counts": {
+      "source_batches": 0,
+      "accepted_batches": 0,
+      "replayed_batches": 0,
+      "draw_ranges": 0,
+      "skipped_ranges": 0
+    },
+    "new_shader_semantics_evidence": false,
+    "new_material_coverage_evidence": false
+  },
+  "limitations": [
+    "Arithmetic and byte consistency do not independently re-prove game shader semantics.",
+    "Applying the recorded camera rotation correctly does not prove its coordinate convention or exact temporal alignment.",
+    "This is one unmasked diagnostic frame with no depth/visibility evidence; material coverage and background correctness remain unverified.",
+    "No native material target images, diffuse/specular albedo, hit-distance, or RR evaluation are present.",
+    "Pixel-shader copies came from earlier preflight frame 1754; base export and camera metadata refer to frame 1755.",
+    "All pixel-shader bytes match the previous G2 equation-reviewed identities, so decoding them again would add no new semantics evidence."
+  ]
+}

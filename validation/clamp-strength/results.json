@@ -1,0 +1,10 @@
+{
+  "local_tests": {
+    "validation/clamp-strength/policy-test.cpp": "PASS CS3 scoped/list/PSO/readiness/one-dispatch admission; selection, contamination, raw/native modes and effective-history transitions",
+    "validation/rr-no-clamp/test.cpp": "PASS CS2 defaults to prepared uncontaminated native clamp",
+    "validation/evaluation-entry/entry-test.cpp": "PASS D1 actual gateway F binding, E clearing, invalid projection and optional fallback\nPASS: r21y gateway forwards once; hit distance is not a guide prerequisite; getter faults, RR guards and SR recovery remain fail-closed"
+  },
+  "windows_build": "NOT_RUN",
+  "gpu_runtime": "NOT_RUN",
+  "inherited": "User reported improved image quality with CS2; CS3 expands immutable variants to every integer 25-75 and replaces UI selection."
+}

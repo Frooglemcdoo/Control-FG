@@ -1,0 +1,51 @@
+{
+  "passed": true,
+  "checks": [
+    {
+      "name": "probe_only_identity_and_post_aa_call",
+      "passed": true
+    },
+    {
+      "name": "albedo_only_post_join_call",
+      "passed": true
+    },
+    {
+      "name": "guide_render_only_scheduler_delta",
+      "passed": true
+    },
+    {
+      "name": "existing_input_and_copy_body_unchanged",
+      "passed": true
+    },
+    {
+      "name": "only_three_runtime_files_changed",
+      "passed": true
+    },
+    {
+      "name": "eleven_frozen_hashes",
+      "passed": true
+    },
+    {
+      "name": "overlay_matches_g4_applied_r1",
+      "passed": true
+    },
+    {
+      "name": "all_strict_input_and_present_checks_retained",
+      "passed": true
+    }
+  ],
+  "changed_runtime_files": [
+    "src/probe.cpp",
+    "src/rr_albedo_capture.h",
+    "src/rr_guide_render.h"
+  ],
+  "source_hashes": {
+    "src/probe.cpp": "4637ed1b6dd9a41bee537c3753ad62b9cffb2524711e596478f016878042e066",
+    "src/rr_albedo_capture.h": "a30e2ffd0b05f065eedcdb0255e32825f3f0680778ff540946e91651e65e36ad",
+    "src/rr_guide_render.h": "649324163bc6b6d12dcefc95957f0860d52f77e330b1d5ab9fdb5d51b34fc7d6"
+  },
+  "baseline": "Shipped G4 source; applied overlay R1",
+  "limits": [
+    "Static source comparison does not validate native resource availability, runtime performance, GPU execution or crash resolution."
+  ]
+}

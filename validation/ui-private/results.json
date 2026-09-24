@@ -1,0 +1,24 @@
+{
+  "candidate": "2.0.0-Clean-Native-R11",
+  "status": "PASS",
+  "tests": {
+    "production_private_work_mock": "PASS",
+    "native_binding_and_present_contracts": "PASS",
+    "windows_x64_ui_compile": "PASS real Windows D3D12 headers, host/Streamline stubs and placeholder shader bytes; not full DLL",
+    "retained_sdr_copy_mock": "PASS",
+    "rr_unchanged_files": 79,
+    "hdr_conversion_math_unchanged": true
+  },
+  "changed_source_files": [
+    "src/fg_ui_recomposition.h",
+    "src/probe.cpp",
+    "src/fg_pixel_capture.h",
+    "src/hdr10_bridge.h",
+    "src/fg_ui_work.h"
+  ],
+  "limitations": [
+    "No local MSVC DLL build or GPU runtime.",
+    "Extra post-HUD texture/copy per slot; previous resolution resource retention remains.",
+    "Queue-order integration is statically checked, not a GPU race test."
+  ]
+}

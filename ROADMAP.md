@@ -26,6 +26,15 @@ Completed for v2.0.0:
 - Dynamic Target FPS UI collapse outside Dynamic mode;
 - overlay stability/flicker cleanup.
 
+## v2.1.0 — RTX 40-series MFG and stability
+
+- Optional experimental RTX 40-series Multi Frame Generation.
+- RR reflection clamp settings and reset, plus overlay shortcut rebinding.
+- FG synchronization, resource lifetime, HDR recovery, and HUD/UI improvements.
+- RR Model F projection and hit-distance improvements.
+
+Follow-up: investigate the RR indirect diffuse lighting artifact on blinds and the reported RTX 4070 overlay pacing issue. See KNOWN_ISSUES.md for workarounds.
+
 ## Next: DLSS 5 integration
 
 The next major development target after v2.0.0 is adding **DLSS 5** support to Control FG.

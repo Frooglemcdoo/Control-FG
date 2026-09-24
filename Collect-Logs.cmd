@@ -1,8 +1,11 @@
 @echo off
-if not exist "%~dp0Manage-Probe.ps1" (
-  echo Extract the entire ZIP before running this file.
-  pause
-  exit /b 1
+setlocal
+if "%~1"=="" (
+    powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0Collect-ControlFG-Compact-Logs.ps1" -OutputDirectory "%~dp0."
+) else (
+    powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0Collect-ControlFG-Compact-Logs.ps1" -ProjectDirectory "%~f1\." -OutputDirectory "%~dp0."
 )
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0Manage-Probe.ps1" -Action Collect
+set "RESULT=%ERRORLEVEL%"
+if not "%RESULT%"=="0" echo Compact log collection failed.
 pause
+exit /b %RESULT%

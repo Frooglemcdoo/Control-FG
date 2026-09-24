@@ -1,0 +1,27 @@
+{
+  "status": "PASS",
+  "compiler": "Linux DXC cs_6_0, strict, warnings as errors",
+  "dxc_sha256": "b1bfa493d5c780b94c20b8b5f5aed50d1c4d03339cd55f496bd223eedeec1734",
+  "root_constants": 36,
+  "offsets_verified": [
+    0,
+    48,
+    64,
+    112,
+    128
+  ],
+  "threads": [
+    8,
+    8,
+    1
+  ],
+  "windows_fxc_cs_5_0": "NOT_RUN",
+  "gpu_execution": false,
+  "sha256": {
+    "src/shaders/rr_distance.hlsl": "4bf8a52166837c9ace61aac0b45bbc6addd95fca3aee675bebdd30fa11a27d27",
+    "src/shaders/rr_hit_distance_shared.h": "76881f2ffe5bb1318c71600d76a710be9d845cefb13e3f4a85eacbff92f385f8",
+    "src/shaders/rr_hit_origin_shared.h": "ed9aca5df3acaec3556333bc536fda37529db24b17c2c0272c13f892340a7424",
+    "src/rr_distance_input.h": "e014f62b1c08f590e0d8e7ddd1f73bdaeb3cf04d0ed7a9582399c6771574be84",
+    "tools/compile-distance.cpp": "c46c0c0ad8403a631f87a1d5294a79e28739c8af2d33e3e946a50c189a73e3d1"
+  }
+}

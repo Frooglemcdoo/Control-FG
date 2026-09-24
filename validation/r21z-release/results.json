@@ -1,0 +1,31 @@
+{
+  "status": "LOCAL_PASS",
+  "scope": "Inherited r21z F-default/E-F selection policy retained in r22 public release. Portable preset policy was rerun normal + ASan/UBSan.",
+  "tests": {
+    "preset_policy_normal": "PASS r21z preset policy: F default, E/F live switch, repeated selection stable",
+    "preset_policy_asan_ubsan": "PASS r21z preset policy: F default, E/F live switch, repeated selection stable",
+    "evaluation_entry_normal": "PASS: r21y gateway forwards once; hit distance is not a guide prerequisite; getter faults, RR guards and SR recovery remain fail-closed",
+    "evaluation_entry_asan_ubsan": "PASS: r21y gateway forwards once; hit distance is not a guide prerequisite; getter faults, RR guards and SR recovery remain fail-closed",
+    "native_clamp_policy_normal": "PASS: r21x specular signal policy keeps native CameraCut clamp sticky across bind->dispatch, reference only when ready before bind, raw copy only as fallback",
+    "native_clamp_policy_asan_ubsan": "PASS: r21x specular signal policy keeps native CameraCut clamp sticky across bind->dispatch, reference only when ready before bind, raw copy only as fallback",
+    "specular_temporal_normal": "PASS reference-dispatch admission plus 144 mip-count pairs, dispatch-list handoff, frame/view/device/queue guards, malformed mips, mid-read mutation, exact copy once and no retry after faults",
+    "specular_temporal_asan_ubsan": "PASS reference-dispatch admission plus 144 mip-count pairs, dispatch-list handoff, frame/view/device/queue guards, malformed mips, mid-read mutation, exact copy once and no retry after faults"
+  },
+  "assertions": [
+    "process/default RR preset is F",
+    "E and F remain the only public live-switch presets",
+    "overlay exposes E/F model buttons and contains no NATIVE CLAMP user-facing label",
+    "preset selection is persisted in schema 8 settings",
+    "signed-off native RR clamp path and r21y dead-work cleanup are unchanged"
+  ],
+  "tested_sha256": {
+    "validation/r21z-preset-default/test.cpp": "58e66a96435de6b034cc9e2e5ec81e2a0e37e44d11acd339ce3f954a87107152",
+    "src/rr_user_control.h": "14e42b95bdc314d95907ebf01b5bd764e9dcf679cc745ce7348ddd007988390b",
+    "src/rr_native_frame.h": "d5e67451dce62eddc3496960091901df12485f59add2c549101dcc1bf33ca3cf",
+    "src/fg_overlay.h": "9252a662df646d1992a3908224cd56a82a4cf7c36a56624974f32cacda6ccb5b",
+    "src/probe.cpp": "1a7a28de774a8ddf331b8e920422a8dc7e45602c0c1efd8483ea3bc5be81804b",
+    "Build.cmd": "8a3f352ba2a26151a8764724df4f11fcb32ef7bbe046dd86d4e76f3a00ce47f7",
+    "Make-DropIn.ps1": "8b58d2b655454c41c7f2b179518bb70fc1a8ec204a7d797f275bfbc70518b6e0",
+    "Build-Metadata.ps1": "3dcb92e9cef53a376f018a9f72cabbb7aab6ba2f7bc59195b308ced7a771f097"
+  }
+}

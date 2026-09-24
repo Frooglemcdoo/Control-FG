@@ -1,0 +1,17 @@
+{
+  "status": "PASS",
+  "normal": "PASS",
+  "asan_ubsan": "PASS",
+  "scope": "Portable dispatch-selection policy plus source-locked native provider/clamp evidence. Windows provider writes, game execution and image quality remain user-side validation.",
+  "assertions": [
+    "native clamp lease remains sticky across temporal bind to dispatch",
+    "reference dispatch is chosen only when ready before native lease is armed",
+    "raw copy is emergency fallback only when neither verified dispatch path is available",
+    "native implementation restores g_uCameraCut after the temporal dispatch and in the outer filter finally"
+  ],
+  "tested_sha256": {
+    "src/rr_specular_clamp_policy.h": "7ac3d3bc47a7f78dca58c47e90b33a6f200753d0926384e49e4335734286e458",
+    "validation/native-specular-clamp/policy-test.cpp": "64aef21895e04328a21e053a244fda2454ed21793c02f6b6c640c89a0350a7fb",
+    "src/rr_specular_native_clamp.h": "a67add68490c6fd5d3f3cda888a2622ed5a0bed93a983df9a4fa3c723b93814d"
+  }
+}

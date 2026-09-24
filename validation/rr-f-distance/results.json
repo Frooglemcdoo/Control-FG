@@ -1,0 +1,26 @@
+{
+  "status": "LOCAL_PASS",
+  "sanitizers": "ASan/UBSan",
+  "tests": {
+    "validation/rr-f-distance/test.cpp": "PASS D1 F-only admission and resets only when binding availability changes",
+    "validation/frame-coordinator/parameters.cpp": "PASS all r21r retained r21q guide aliases/setters/getters reject RR, optional hit distance binds and clears without stale values, packed roughness mode and matrices verified, SR arguments unchanged",
+    "validation/evaluation-entry/entry-test.cpp": "PASS D1 actual gateway F binding, E clearing, invalid projection and optional fallback\nPASS: r21y gateway forwards once; hit distance is not a guide prerequisite; getter faults, RR guards and SR recovery remain fail-closed",
+    "validation/primary-handoff/test.cpp": "PASS observed enqueue required, 3000 handoffs/retirements, stale/recycled identities, frame/view/device/queue/epoch/Present guards, exactly-once consumption",
+    "validation/primary-handoff/observer.cpp": "PASS actual enqueue observer: identity/closed/frame/Present/thread/lock rejection, exact native forwarding, LastError, native exceptions, installer rollback and user status; Windows SEH not exercised",
+    "validation/distance-runtime/input.cpp": "PASS production input: bound provider bytes with stale mirrors, bound world basis/frame rejection, nonfinite matrix, wrong size and wrong extent",
+    "validation/distance-runtime/record.cpp": "PASS distance dispatch and readback: exact descriptors/constants, output transitions, native command counter and all 12 fault points",
+    "validation/resolution/distance.cpp": "PASS actual distance resize: old reflection epoch rejected, in-flight diagnostic/export held, outputs released once, counters/capture reset",
+    "research/hit-distance/tests/test_distance.cpp": "PASS 65536 material classifications; 100000 independent matrix/distance cases; invalid/miss/no-ray/zero/extreme cases; worst relative error 9.0492953e-07",
+    "research/hit-origin/tests/test_origin.cpp": "PASS 2048 native-SSA fixtures; perspective divide, asymmetric offsets, depth/finite guards and distance integration; worst error 3.17203e-07",
+    "research/provider-auth/tests/test.cpp": "PASS bound snapshot despite stale mirror, changed bytes/metadata, failed reads, arena bounds; byte mismatch, unavailable provider, size-before-compare, metadata mutation, read failure, aliasing"
+  },
+  "windows_build": "NOT_RUN",
+  "gpu_runtime": "NOT_RUN",
+  "compile_flags": "g++ -std=c++17 -Wall -Wextra -Werror -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -no-pie -Isrc",
+  "environment": {
+    "ASAN_OPTIONS": "detect_leaks=0:halt_on_error=1",
+    "UBSAN_OPTIONS": "halt_on_error=1"
+  },
+  "source_verification": "Verify-Source.ps1 PASS",
+  "historical_release_validator": "tools/validate-release.py stops at inherited r31-identity check; not used as D1 validation evidence"
+}

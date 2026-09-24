@@ -1,0 +1,22 @@
+﻿{
+    "Tool":  "Control G3 heap capture",
+    "StartedUtc":  "2026-09-13T14:26:59.8124578Z",
+    "GameDirectory":  "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Control",
+    "ProcDumpPath":  "C:\\Users\\mattn\\AppData\\Local\\ControlFG\\DiagnosticTools\\ProcDump\\ProcDump64.exe",
+    "ProcDumpSHA256":  "D1FC99AE304BD1D2BF28ABEB62531DA959E2431916194981B88C958FD713A8E6",
+    "Arguments":  [
+                      "-accepteula",
+                      "-ma",
+                      "-e",
+                      "-n",
+                      "1",
+                      "-w",
+                      "Control_DX12.exe",
+                      "C:\\Users\\mattn\\Downloads\\FSR\\captures\\Control-G3-Heap-Capture-20260913-092659-9c0a6c2d\\full-dump"
+                  ],
+    "EulaAcceptanceExplicitlyRequested":  true,
+    "Status":  "NO_CONFIRMED_CAPTURE",
+    "OriginalFullDumpRetained":  true,
+    "ProcDumpExitCode":  0,
+    "FinishedUtc":  "2026-09-13T14:28:18.9365309Z"
+}

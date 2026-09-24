@@ -1,0 +1,7 @@
+{
+  "status": "PASS",
+  "native_instruction_test": "PASS exact native reset: empty/first/second/both histories; detach before release; release order; repeated reset does not release twice",
+  "pool_release": "mocked",
+  "native_allocation_clear": "static audit only",
+  "windows_gpu_validation": false
+}

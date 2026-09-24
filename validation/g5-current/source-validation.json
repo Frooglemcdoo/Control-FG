@@ -1,0 +1,467 @@
+{
+  "schema": "ControlFG.G3.SourceAuditValidation.v1",
+  "utc": "2026-09-13T15:01:42.277184+00:00",
+  "passed": true,
+  "source": "/workspace/scratch/36fa93863a31/g5-release",
+  "baseline": "/workspace/scratch/36fa93863a31/g3-source",
+  "pwsh_version": "7.6.6",
+  "checks": [
+    {
+      "name": "uploaded_baseline_source_manifest",
+      "passed": true,
+      "entries": 95,
+      "mismatches": []
+    },
+    {
+      "name": "frozen_production_core",
+      "passed": true,
+      "entries": 11,
+      "mismatches": []
+    },
+    {
+      "name": "verify_source_powershell",
+      "passed": true,
+      "command": [
+        "/workspace/scratch/36fa93863a31/validation/runtime/pwsh/pwsh",
+        "-NoLogo",
+        "-NoProfile",
+        "-File",
+        "/workspace/scratch/36fa93863a31/g5-release/Verify-Source.ps1"
+      ],
+      "exit_code": 0,
+      "stdout": "PASS: G5 source identity, hook wiring, shared installer contract, frozen files and PowerShell syntax.\n",
+      "stderr": ""
+    },
+    {
+      "name": "public_release_contracts",
+      "passed": true,
+      "command": [
+        "/opt/codex/runtimes/codex-primary-runtime/dependencies/python/bin/python3",
+        "/workspace/scratch/36fa93863a31/g5-release/tools/validate-release.py",
+        "/workspace/scratch/36fa93863a31/g5-release"
+      ],
+      "exit_code": 0,
+      "stdout": "PASS: 20 public-release checks\n",
+      "stderr": ""
+    }
+  ],
+  "source_changes": [
+    {
+      "path": "BUILDING.md",
+      "state": "changed",
+      "baseline_sha256": "a9b62c0afdb5614613b87e02a93471ffe6a6bd84426abe5d5ec9b1db8fb6c30f",
+      "candidate_sha256": "63f5e4586c8d33ef55cfd94d66f11aeb0fc8aab94380218b667b4cbe7f98bbe4"
+    },
+    {
+      "path": "Build-Metadata.ps1",
+      "state": "changed",
+      "baseline_sha256": "2b4eb1967fb6c0f40c953aac0757701ac2667f95d4be3845532bcfa86b0c729f",
+      "candidate_sha256": "c7b419d30feb097d87bae6d85bd57df6f36af2305c061c940e220e9aa54fb422"
+    },
+    {
+      "path": "Build.cmd",
+      "state": "changed",
+      "baseline_sha256": "f1c02735f87de98ddd82eabf8439ab8167161a5ec292afff88190c70a48d3694",
+      "candidate_sha256": "d1b6c09695ad78e3a36791a5ffcd72255d696fe42ff47329057351ec417c5099"
+    },
+    {
+      "path": "CHANGELOG.md",
+      "state": "changed",
+      "baseline_sha256": "97e52bee1d1f78f0abc14846c7c92fd79bc6c030e8c982fc7c517c7891a3391f",
+      "candidate_sha256": "70c7883f793b1e796085da2a938e62e71763088f8a46083faf6135894e8c7a91"
+    },
+    {
+      "path": "Collect-ControlFG-Logs.ps1",
+      "state": "changed",
+      "baseline_sha256": "773df5d975893bf488244f6874d619a0ff325bb960bea1aa004af2714f7258b6",
+      "candidate_sha256": "96683fea1b87ed98cc0d97552e5af0012678efbf0d3ea36a051ec73439b6db36"
+    },
+    {
+      "path": "GITHUB_RELEASE.md",
+      "state": "changed",
+      "baseline_sha256": "913eb53bdbc82bc47345567f0a668d744b52997e5e914da12fe49cbe4e19443a",
+      "candidate_sha256": "54411b2bec5a7f1425169ddfe151cf61149a246bb98724e959da92ee59a37005"
+    },
+    {
+      "path": "INSTALL.md",
+      "state": "changed",
+      "baseline_sha256": "f025aed538ecfbddba2b5f5480c2a2a1229882912173d5de4a5172379589fc95",
+      "candidate_sha256": "91f520f6d711aacef92790086491ef90e34119038b2b31bf70c8379953467c52"
+    },
+    {
+      "path": "Make-DropIn.ps1",
+      "state": "changed",
+      "baseline_sha256": "8f6b4027b6787228ef822fe9ba6a1c519f188a2eac8d524924654f3f6a5d6276",
+      "candidate_sha256": "31b9ce21dcdc7a250b331f4770be2d7b1d7bc3714f1e466c444795dbea66fc54"
+    },
+    {
+      "path": "Manage-Probe.ps1",
+      "state": "changed",
+      "baseline_sha256": "e3d40ac15a6f90bff1a83d99bcb3b0ac0cddcd04f99c46ffc2dc1aad280a41b5",
+      "candidate_sha256": "6e826c765b69dc47a7f365ee568a2e80eb2861b13ae8cdda493503a7c204258d"
+    },
+    {
+      "path": "NEXUS_MODS.md",
+      "state": "changed",
+      "baseline_sha256": "7c6293ea3ce0f5c7051705c35e41ba47a597587eb31603bab401883fc2d641f5",
+      "candidate_sha256": "30021b365da5c4a4205f403b8e15e3fded9b823d2035dddbdf5ca5cb60c3e559"
+    },
+    {
+      "path": "NEXUS_MODS_DESCRIPTION.txt",
+      "state": "changed",
+      "baseline_sha256": "7c6293ea3ce0f5c7051705c35e41ba47a597587eb31603bab401883fc2d641f5",
+      "candidate_sha256": "30021b365da5c4a4205f403b8e15e3fded9b823d2035dddbdf5ca5cb60c3e559"
+    },
+    {
+      "path": "README.md",
+      "state": "changed",
+      "baseline_sha256": "227cc9d7ebe692948a618c6069b1e65ed8c7e9c8dd21dc2dbd10b8622f49c5ab",
+      "candidate_sha256": "081fe837b364446790b02c5d667d6d85982d93aa04c1c6d5eb355dc99519bc6b"
+    },
+    {
+      "path": "RELEASE_CHECKLIST.md",
+      "state": "changed",
+      "baseline_sha256": "eaf7b65f5fad6b39a4bc2a1e535e445192e9c1f088e193d4811ead44c2c3f40b",
+      "candidate_sha256": "c2f46e4a33f8e9a9375fb3a1926389c3d519239ee1d5728727a2691bde9e67c1"
+    },
+    {
+      "path": "RELEASE_NOTES.md",
+      "state": "changed",
+      "baseline_sha256": "8360b623f7388a37bc1c251a60758d86965db96890ea27360e9b2d51e347156d",
+      "candidate_sha256": "bc6f5fd174055e96cccd9e1adbda9d177f863d1f07f1d956b30f91a5351f33d5"
+    },
+    {
+      "path": "ROADMAP.md",
+      "state": "changed",
+      "baseline_sha256": "e44351467bca33cb8fc7419a785025140aa5497488843f8a7e1f339f74fca700",
+      "candidate_sha256": "37b6d1bfa928a5e7e453e147d9569771abbfb4d28dbf2019a48f3e65041431fd"
+    },
+    {
+      "path": "SOURCE-SHA256.json",
+      "state": "changed",
+      "baseline_sha256": "c12915dcbc2cd2f54246d09283303abbfd03a6a94c86c9f9eacee1cba4dc0fb0",
+      "candidate_sha256": "fd6670e942542c1afa1f309e8e41f8db899990a64623d235c808da304d27682e"
+    },
+    {
+      "path": "TROUBLESHOOTING.md",
+      "state": "changed",
+      "baseline_sha256": "d9a06c756e63ee2363ac6bd4c899c49d95962d40e3288be6e0160b8e53fe7309",
+      "candidate_sha256": "c3e036e0bf0c1567ce764559422bb250e2bf2f36783326ddabb9096fe8902ab0"
+    },
+    {
+      "path": "Verify-Build.ps1",
+      "state": "changed",
+      "baseline_sha256": "bb17782f4fbec60ee7e44d57b148b98ba4b582fd01d203920fd2b2659edc825f",
+      "candidate_sha256": "d467c3c70e5ee42ead9daa6a9beabba807f9ef4f9e6dfe0f4b4b1a6d3ac41cc9"
+    },
+    {
+      "path": "Verify-Source.ps1",
+      "state": "changed",
+      "baseline_sha256": "e2d5a9d590210a2926b8cc6215e77a28688e918b14721b192b565e91a6cbc439",
+      "candidate_sha256": "64c77aa4fb7111832f564023df0cae2749fb89f80417f9b4abb8f1ead1107c17"
+    },
+    {
+      "path": "src/fg_overlay.h",
+      "state": "changed",
+      "baseline_sha256": "c54322b734c285c10d46841fff6b213402fda2cf4b93fac41bb29f627fc476cc",
+      "candidate_sha256": "ce01a2e14917fd0b35fdf6e8f3e8d37a8b1ba032150666719943d83a63b21c24"
+    },
+    {
+      "path": "src/probe.cpp",
+      "state": "changed",
+      "baseline_sha256": "60c2ec10607c128fb9c963fe72ae740ed28adc1294f162ecefbd7ba530d00a1d",
+      "candidate_sha256": "4637ed1b6dd9a41bee537c3753ad62b9cffb2524711e596478f016878042e066"
+    },
+    {
+      "path": "src/rr_albedo_capture.h",
+      "state": "changed",
+      "baseline_sha256": "236ded2bdf29b6b31132c84f20c4b923a009eff11df456fda8d906fdbb209787",
+      "candidate_sha256": "a30e2ffd0b05f065eedcdb0255e32825f3f0680778ff540946e91651e65e36ad"
+    },
+    {
+      "path": "src/rr_albedo_draw_abi.h",
+      "state": "changed",
+      "baseline_sha256": "27a504425d79ac6e95bc89cac10c9f56572e29207fb50751113bf862ff2115c4",
+      "candidate_sha256": "c53f5279f80edb8cd31246899da2b88073a7415ea484bd3378e46c21d7303f1a"
+    },
+    {
+      "path": "src/rr_guide_render.h",
+      "state": "changed",
+      "baseline_sha256": "d8b7aeae94b75b0ecf39a09080024069e157bf1c7cf338a6e77841c3bc180fec",
+      "candidate_sha256": "649324163bc6b6d12dcefc95957f0860d52f77e330b1d5ab9fdb5d51b34fc7d6"
+    },
+    {
+      "path": "tools/validate-release.py",
+      "state": "changed",
+      "baseline_sha256": "d3e39c7f24f167c1fd71305ace1248ee248a3b683e3228771c745c8dd05b1074",
+      "candidate_sha256": "afd0c69a0d9535129111b078b76f5320d6bf0de2bb52b6c1759adc846cb3f8a8"
+    },
+    {
+      "path": "ARTIFACT-SHA256.json",
+      "state": "added"
+    },
+    {
+      "path": "G4-REVIEW.md",
+      "state": "added"
+    },
+    {
+      "path": "G5-REVIEW.md",
+      "state": "added"
+    },
+    {
+      "path": "RR_NATIVE_G4.md",
+      "state": "added"
+    },
+    {
+      "path": "RR_NATIVE_G5.md",
+      "state": "added"
+    },
+    {
+      "path": "validation/g4-current/README.md",
+      "state": "added"
+    },
+    {
+      "path": "validation/g4-current/SUMMARY.json",
+      "state": "added"
+    },
+    {
+      "path": "validation/g4-current/collector-identity/metadata-validation.json",
+      "state": "added"
+    },
+    {
+      "path": "validation/g4-current/collector-identity/validate-metadata.ps1",
+      "state": "added"
+    },
+    {
+      "path": "validation/g4-current/compile/abi_check.log",
+      "state": "added"
+    },
+    {
+      "path": "validation/g4-current/compile/compile-report.json",
+      "state": "added"
+    },
+    {
+      "path": "validation/g4-current/compile/leaf_windows.log",
+      "state": "added"
+    },
+    {
+      "path": "validation/g4-current/compile/probe.log",
+      "state": "added"
+    },
+    {
+      "path": "validation/g4-current/compile/smoke.log",
+      "state": "added"
+    },
+    {
+      "path": "validation/g4-current/g3-nonreproduction/capture-session.json",
+      "state": "added"
+    },
+    {
+      "path": "validation/g4-current/g3-nonreproduction/review.json",
+      "state": "added"
+    },
+    {
+      "path": "validation/g4-current/prior-exact-source-tests/README.md",
+      "state": "added"
+    },
+    {
+      "path": "validation/g4-current/prior-exact-source-tests/results-sanitized.txt",
+      "state": "added"
+    },
+    {
+      "path": "validation/g4-current/prior-exact-source-tests/results.txt",
+      "state": "added"
+    },
+    {
+      "path": "validation/g4-current/prior-exact-source-tests/tested-source-sha256.json",
+      "state": "added"
+    },
+    {
+      "path": "validation/g4-current/release-contract-fixtures.json",
+      "state": "added"
+    },
+    {
+      "path": "validation/g4-current/reviewed-source-identities.json",
+      "state": "added"
+    },
+    {
+      "path": "validation/g4-current/runtime-delta.json",
+      "state": "added"
+    },
+    {
+      "path": "validation/g4-current/source-validation.json",
+      "state": "added"
+    },
+    {
+      "path": "validation/g4-current/test-release-contract.ps1",
+      "state": "added"
+    },
+    {
+      "path": "validation/g5-current/SUMMARY.json",
+      "state": "added"
+    },
+    {
+      "path": "validation/g5-current/compile/abi_check.log",
+      "state": "added"
+    },
+    {
+      "path": "validation/g5-current/compile/compile-report.json",
+      "state": "added"
+    },
+    {
+      "path": "validation/g5-current/compile/leaf_windows.log",
+      "state": "added"
+    },
+    {
+      "path": "validation/g5-current/compile/probe.log",
+      "state": "added"
+    },
+    {
+      "path": "validation/g5-current/compile/smoke.log",
+      "state": "added"
+    },
+    {
+      "path": "validation/g5-current/g4-analysis/asset-review/README.md",
+      "state": "added"
+    },
+    {
+      "path": "validation/g5-current/g4-analysis/asset-review/numeric-review.json",
+      "state": "added"
+    },
+    {
+      "path": "validation/g5-current/g4-analysis/asset-review/review_assets.py",
+      "state": "added"
+    },
+    {
+      "path": "validation/g5-current/g4-analysis/log-review/README.md",
+      "state": "added"
+    },
+    {
+      "path": "validation/g5-current/g4-analysis/log-review/verification.json",
+      "state": "added"
+    },
+    {
+      "path": "validation/g5-current/g4-analysis/scheduling-review/README.md",
+      "state": "added"
+    },
+    {
+      "path": "validation/g5-current/g4-analysis/scheduling-review/evidence.json",
+      "state": "added"
+    },
+    {
+      "path": "validation/g5-current/g4-evidence/Build.log",
+      "state": "added"
+    },
+    {
+      "path": "validation/g5-current/g4-evidence/build__build-validation.json",
+      "state": "added"
+    },
+    {
+      "path": "validation/g5-current/g4-evidence/capture-metadata.json",
+      "state": "added"
+    },
+    {
+      "path": "validation/g5-current/g4-evidence/collection-report.json",
+      "state": "added"
+    },
+    {
+      "path": "validation/g5-current/metadata/check-identity.ps1",
+      "state": "added"
+    },
+    {
+      "path": "validation/g5-current/metadata/collector-and-baseline-review.json",
+      "state": "added"
+    },
+    {
+      "path": "validation/g5-current/metadata/identity-review.json",
+      "state": "added"
+    },
+    {
+      "path": "validation/g5-current/package_g5.py",
+      "state": "added"
+    },
+    {
+      "path": "validation/g5-current/release-contract-fixtures.json",
+      "state": "added"
+    },
+    {
+      "path": "validation/g5-current/review_delta.py",
+      "state": "added"
+    },
+    {
+      "path": "validation/g5-current/runtime-delta.json",
+      "state": "added"
+    },
+    {
+      "path": "validation/g5-current/scheduler-tests/README.md",
+      "state": "added"
+    },
+    {
+      "path": "validation/g5-current/scheduler-tests/aa_mocks.inc",
+      "state": "added"
+    },
+    {
+      "path": "validation/g5-current/scheduler-tests/aa_under_test.inc",
+      "state": "added"
+    },
+    {
+      "path": "validation/g5-current/scheduler-tests/build-sanitized.log",
+      "state": "added"
+    },
+    {
+      "path": "validation/g5-current/scheduler-tests/build.log",
+      "state": "added"
+    },
+    {
+      "path": "validation/g5-current/scheduler-tests/capture_under_test.inc",
+      "state": "added"
+    },
+    {
+      "path": "validation/g5-current/scheduler-tests/fixtures.cpp",
+      "state": "added"
+    },
+    {
+      "path": "validation/g5-current/scheduler-tests/results-sanitized.txt",
+      "state": "added"
+    },
+    {
+      "path": "validation/g5-current/scheduler-tests/results.txt",
+      "state": "added"
+    },
+    {
+      "path": "validation/g5-current/scheduler-tests/run.py",
+      "state": "added"
+    },
+    {
+      "path": "validation/g5-current/scheduler-tests/scheduler_cases.inc",
+      "state": "added"
+    },
+    {
+      "path": "validation/g5-current/scheduler-tests/scheduler_under_test.inc",
+      "state": "added"
+    },
+    {
+      "path": "validation/g5-current/scheduler-tests/tested-source-sha256.json",
+      "state": "added"
+    },
+    {
+      "path": "validation/g5-current/scheduler-tests/validation-summary.json",
+      "state": "added"
+    },
+    {
+      "path": "validation/g5-current/scheduler-tests/write_report.py",
+      "state": "added"
+    },
+    {
+      "path": "validation/g5-current/source-validation.json",
+      "state": "added"
+    },
+    {
+      "path": "validation/g5-current/test-release-contract.ps1",
+      "state": "added"
+    }
+  ],
+  "windows_msvc_executed": false,
+  "game_executed": false,
+  "gpu_validation_executed": false
+}

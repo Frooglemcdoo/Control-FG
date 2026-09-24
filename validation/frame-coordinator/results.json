@@ -1,0 +1,31 @@
+{
+  "status": "LOCAL_PASS_WINDOWS_GPU_REQUIRED",
+  "results": {
+    "validation/frame-coordinator/test.cpp:normal": "PASS RR/SR sequencing, early rejection, eight terminal faults, history recovery, user toggle and mid-frame request isolation, resolution recovery and indirect-call encoding",
+    "validation/frame-coordinator/recovery-test.cpp:normal": "PASS r20f pause/resume cadence, 1000 interruption cycles, SR/history recovery gates, toggle, reset on resumed RR, and committed/frame faults stay terminal",
+    "validation/frame-coordinator/resolution-test.cpp:normal": "PASS logged OFF/resize/ON path, 1000 active resolution cycles, 8K/render/output changes, rapid menu choices, history/SR gates, reset, terminal late faults and UI",
+    "validation/frame-coordinator/parameters.cpp:normal": "PASS all eight lost setters/getters reject RR, packed roughness and matrices verified, SR arguments unchanged, guarded native setup handles",
+    "validation/distance-runtime/record.cpp:normal": "PASS distance dispatch and readback: exact descriptors/constants, output transitions, native command counter and all 12 fault points",
+    "validation/frame-coordinator/test.cpp:asan_ubsan": "PASS RR/SR sequencing, early rejection, eight terminal faults, history recovery, user toggle and mid-frame request isolation, resolution recovery and indirect-call encoding",
+    "validation/frame-coordinator/recovery-test.cpp:asan_ubsan": "PASS r20f pause/resume cadence, 1000 interruption cycles, SR/history recovery gates, toggle, reset on resumed RR, and committed/frame faults stay terminal",
+    "validation/frame-coordinator/resolution-test.cpp:asan_ubsan": "PASS logged OFF/resize/ON path, 1000 active resolution cycles, 8K/render/output changes, rapid menu choices, history/SR gates, reset, terminal late faults and UI",
+    "validation/frame-coordinator/parameters.cpp:asan_ubsan": "PASS all eight lost setters/getters reject RR, packed roughness and matrices verified, SR arguments unchanged, guarded native setup handles",
+    "validation/distance-runtime/record.cpp:asan_ubsan": "PASS distance dispatch and readback: exact descriptors/constants, output transitions, native command counter and all 12 fault points",
+    "native-call-relay": "PASS executed six-byte indirect-call replacement: all nine Microsoft ABI arguments, stack reference and return preserved 10000 times"
+  },
+  "windows_execution": false,
+  "gpu_execution": false,
+  "tested_sha256": {
+    "src/rr_user_control.h": "83679c8261d2c22ad90b02d30cf8fc230de8842922e37304e0aa47d83540e587",
+    "src/rr_frame_coordinator.h": "1c2f1058fb6360ae06ac32b760aeecddd5bd54891d167b6b90ec38a8769a9e71",
+    "src/rr_guide_parameters.h": "4ab65e2d3ab44ac737263c5c7110c6cfae476df2424bbcb687ca41be8dba68f8",
+    "src/rr_indirect_call.h": "2d7504ffa6860e3a9d52d73acf2905e1967a1456d64b635aefd92e032ad1de5d",
+    "src/rr_distance_record.h": "182b6be64202c7f86147798364ac6bcbae72aff5c4c2a4cb625449b173a90193",
+    "validation/frame-coordinator/recovery-test.cpp": "a1131926005b3ad390229e3703e3c5bb69faab014634d41131f5dc205ae9f7a7",
+    "validation/frame-coordinator/test.cpp": "d6e496a1e527fad49f79afb748efa84faa1bc549e6fb1d609ae5ced7308d1545",
+    "validation/frame-coordinator/parameters.cpp": "ae6cb3d6b1bb3d6fcc0e250e5d09e0c52e3f5c1b58d3a8ce91f070c39f2e9613",
+    "validation/frame-coordinator/relay.cpp": "318f0001a4033bff58b2d03cff79b804c79fc0d931d0def6dbc7404f46973e67",
+    "validation/frame-coordinator/resolution-test.cpp": "5e51305181579b98d71d981bf1e39d95ea5d1fd7408bc3401d46234de9b64f73",
+    "validation/distance-runtime/record.cpp": "6fc42ed3447605afb250a534652ae7f0702215565194f3af38ce0158a097b707"
+  }
+}

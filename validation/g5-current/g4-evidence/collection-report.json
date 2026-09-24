@@ -1,0 +1,84 @@
+﻿{
+    "Schema":  "ControlFG.RRGuideG3.Collection.v1",
+    "Version":  "1.0.0-RR-Native-G4",
+    "CollectedUtc":  "2026-09-13T14:46:42.6766339Z",
+    "ProbeLogs":  [
+                      "probe-20260913-144505-270-48084.log",
+                      "probe-20260913-144503-119-50648.log",
+                      "probe-20260913-144442-331-44448.log",
+                      "probe-20260913-144349-655-13276.log"
+                  ],
+    "MatchingProcessIds":  [
+                               "13276",
+                               "48084",
+                               "50648",
+                               "44448"
+                           ],
+    "CaptureLimit":  2,
+    "PerCaptureLimitBytes":  671088640,
+    "Captures":  [
+                     {
+                         "Directory":  "rr-guide-g3-20260913-144531-841-48084",
+                         "Bytes":  121665382,
+                         "HasNativeAlbedoOutputs":  false,
+                         "NativeAlbedoOutputCount":  0,
+                         "NativeAlbedoShaderCount":  3,
+                         "Files":  [
+                                       {
+                                           "Name":  "gbuffer1.rgba8",
+                                           "Bytes":  14745600,
+                                           "SHA256":  "8E6F92340A0A0C816414D2CBC3E83B27991E24BA8B6D59C0AFF574E5CC8C84B5"
+                                       },
+                                       {
+                                           "Name":  "gbuffer2.rgba8",
+                                           "Bytes":  14745600,
+                                           "SHA256":  "54674EFCA59D818844340A66A801DCC63D1B6B190F162A560D84D1D16F665EF9"
+                                       },
+                                       {
+                                           "Name":  "normal-roughness.rgba32f",
+                                           "Bytes":  58982400,
+                                           "SHA256":  "7E57FA812225C713B08D64E663FEE029AAE4CE998C872799DC98FA481C2725A7"
+                                       },
+                                       {
+                                           "Name":  "world-normal.bmp",
+                                           "Bytes":  11059254,
+                                           "SHA256":  "2B1BC0C3F37827155183CB55C59214343B142DA2BCF98C3F3EF4540700AEDFAB"
+                                       },
+                                       {
+                                           "Name":  "roughness.bmp",
+                                           "Bytes":  11059254,
+                                           "SHA256":  "D7311A89845636733EC4D2D5B076982D4A2DEAD24A36DB089EF78B8F7775F771"
+                                       },
+                                       {
+                                           "Name":  "material-id.bmp",
+                                           "Bytes":  11059254,
+                                           "SHA256":  "5F28675B18EAFEA1D07CECE1587EC631EAF34A1E7D715281DD47492097374216"
+                                       },
+                                       {
+                                           "Name":  "metadata.json",
+                                           "Bytes":  4312,
+                                           "SHA256":  "8A2A7D8610B050D249FD5DDF1D6B2DD69BA50EEC73EAB1CACEA710B4ED59B00A"
+                                       },
+                                       {
+                                           "Name":  "native-albedo-ps-000.dxbc",
+                                           "Bytes":  2908,
+                                           "SHA256":  "6E8FDC47E77F203157C23E9F77E19B1A66F874A66E3955E29AFF3181309536DD"
+                                       },
+                                       {
+                                           "Name":  "native-albedo-ps-001.dxbc",
+                                           "Bytes":  3580,
+                                           "SHA256":  "B2B8AB2BF331F79837BD09EF24B669CBBFBC506B4A369EDABBDEAD78F92A7411"
+                                       },
+                                       {
+                                           "Name":  "native-albedo-ps-002.dxbc",
+                                           "Bytes":  3220,
+                                           "SHA256":  "27713D41A80358660AE326A31132BC6D82FEC98147B31497A13D0FAC9CCE5DB2"
+                                       }
+                                   ]
+                     }
+                 ],
+    "Notes":  [
+
+              ],
+    "StreamlineDirectoryPolicy":  "Frozen bridge retains P9 folder label; only directories matching selected G4 probe-log PIDs are included."
+}

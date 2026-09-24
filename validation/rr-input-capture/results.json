@@ -1,0 +1,11 @@
+{
+  "status": "LOCAL_PASS",
+  "tests": {
+    "validation/rr-input-capture/policy.cpp": "PASS C1 capture lifecycle: capacity, no early submit/map/reuse, device loss and allocation failure",
+    "validation/rr-input-capture/record.cpp": "PASS actual C1 recorder: E/F buffer copies, state restoration, native command count, every recording fault",
+    "validation/evaluation-entry/entry-test.cpp": "PASS D1 actual gateway F binding, E clearing, invalid projection and optional fallback\nPASS: r21y gateway forwards once; hit distance is not a guide prerequisite; getter faults, RR guards and SR recovery remain fail-closed"
+  },
+  "sanitizers": "ASan/UBSan; leak detection disabled under host tracer",
+  "windows_build": "NOT_RUN",
+  "gpu_runtime": "NOT_RUN"
+}

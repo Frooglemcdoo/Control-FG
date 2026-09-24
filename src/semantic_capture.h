@@ -158,6 +158,230 @@ static void CaptureSemantic(unsigned long long call, void* const* slots,
     SetLastError(saved);
 }
 
+
+
+// RR Native P4: observe Control's own NGX parameter-population boundary.
+// Static analysis of the hash-locked Steam build maps the DLSS parameter setup
+// helper to d3d RVA 0x1CDF0 and its single call inside doAntiAliasing to RVA
+// 0x1FDBB. We replace only that CALL with a near JMP to a tiny relay. The relay
+// invokes Remedy's original helper with the untouched ABI/stack, snapshots the
+// Control-owned NGX parameter object immediately AFTER setup, preserves the
+// helper return value, and jumps back to the original continuation. No NGX Set
+// calls are added and NVIDIA evaluation remains entirely game-owned.
+inline constexpr size_t kNativeNgxSetupCallRva = 0x1FDBB;
+inline constexpr size_t kNativeNgxSetupHelperRva = 0x1CDF0;
+static unsigned char* rrNativeSetupCallsite = nullptr;
+static void* rrNativeSetupHelper = nullptr;
+static void* rrNativeSetupRelay = nullptr;
+static std::atomic<unsigned long long> rrNativeSetupCount{0};
+static std::atomic<unsigned int> rrNativePostSetupSnapshotCount{0};
+
+static void CaptureNativeRRNgxPostSetup(unsigned long long aaCall,
+                                        unsigned long long setupOrdinal) noexcept {
+    if (!ngxGetResource || !ngxGetInt || !ngxGetUInt) return;
+    unsigned int current = rrNativePostSetupSnapshotCount.load();
+    if (current >= 8 || aaCall < 120 || (aaCall % 120) != 0) return;
+    current = rrNativePostSetupSnapshotCount.fetch_add(1) + 1;
+    if (current > 8) return;
+
+    const DWORD saved = GetLastError();
+    __try {
+        auto base = reinterpret_cast<unsigned char*>(verifiedD3d);
+        auto context = base ? *reinterpret_cast<unsigned char**>(base + kDlssContextPointerRva) : nullptr;
+        void* parameters = context ? *reinterpret_cast<void**>(context + kNgxParametersOffset) : nullptr;
+        if (!parameters) {
+            Log("RR_NATIVE_POST_SETUP_UNAVAILABLE aa_call=%llu setup=%llu snapshot=%u context=%p parameters=%p",
+                aaCall, setupOrdinal, current, context, parameters);
+            SetLastError(saved);
+            return;
+        }
+
+        Log("RR_NATIVE_POST_SETUP_BEGIN aa_call=%llu setup=%llu snapshot=%u context=%p parameters=%p mode=read_only hot_hooks=0 set_calls=0",
+            aaCall, setupOrdinal, current, context, parameters);
+
+        const char* resourceKeys[] = {
+            "Color", "Output", "Depth", "MotionVectors", "ExposureTexture",
+            "DLSS.Input.DiffuseAlbedo", "DLSS.Input.SpecularAlbedo",
+            "GBuffer.Normals", "GBuffer.Roughness", "GBuffer.Albedo",
+            "GBuffer.DiffuseAlbedo", "GBuffer.SpecularAlbedo", "GBuffer.IndirectAlbedo",
+            "GBuffer.SpecularMvec", "GBuffer.DisocclusionMask", "GBuffer.Emissive",
+            "DLSSD.ReflectedAlbedo", "DLSSD.DiffuseHitDistance", "DLSSD.SpecularHitDistance",
+            "DLSSD.DiffuseRayDirection", "DLSSD.SpecularRayDirection",
+            "DLSSD.DiffuseRayDirectionHitDistance", "DLSSD.SpecularRayDirectionHitDistance",
+            "DLSSD.ColorBeforeParticles", "DLSSD.ColorAfterParticles",
+            "DLSSD.ColorBeforeTransparency", "DLSSD.ColorAfterTransparency",
+            "DLSSD.ColorBeforeFog", "DLSSD.ColorAfterFog",
+            "DLSSD.ScreenSpaceSubsurfaceScatteringGuide", "DLSSD.ScreenSpaceRefractionGuide",
+            "DLSSD.DepthOfFieldGuide", "DLSSD.ResponsivityMask", "DLSSD.Alpha", "DLSSD.OutputAlpha"
+        };
+
+        unsigned int resourceHits = 0;
+        unsigned int rrHits = 0;
+        for (const char* key : resourceKeys) {
+            ID3D12Resource* resource = nullptr;
+            const unsigned int status = ngxGetResource(parameters, key, &resource);
+            if (status == 1 && resource) {
+                ++resourceHits;
+                if (strcmp(key, "Color") && strcmp(key, "Output") && strcmp(key, "Depth") &&
+                    strcmp(key, "MotionVectors") && strcmp(key, "ExposureTexture")) ++rrHits;
+                const D3D12_RESOURCE_DESC desc = resource->GetDesc();
+                Log("RR_NATIVE_POST_SETUP_RESOURCE aa_call=%llu setup=%llu snapshot=%u key=%s status=0x%08X resource=%p dimension=%u width=%llu height=%u array=%u mips=%u format=%u samples=%u flags=%u",
+                    aaCall, setupOrdinal, current, key, status, resource, unsigned(desc.Dimension),
+                    desc.Width, desc.Height, unsigned(desc.DepthOrArraySize), unsigned(desc.MipLevels),
+                    unsigned(desc.Format), desc.SampleDesc.Count, unsigned(desc.Flags));
+            } else {
+                Log("RR_NATIVE_POST_SETUP_RESOURCE_EMPTY aa_call=%llu setup=%llu snapshot=%u key=%s status=0x%08X resource=%p",
+                    aaCall, setupOrdinal, current, key, status, resource);
+            }
+        }
+
+        const char* intKeys[] = {
+            "Reset", "DLSS.Feature.Create.Flags", "DLSS.Denoise.Mode", "DLSS.Roughness.Mode",
+            "DLSS.Use.HW.Depth", "RayReconstruction.Hint.Render.Preset.DLAA",
+            "RayReconstruction.Hint.Render.Preset.Quality", "RayReconstruction.Hint.Render.Preset.Balanced",
+            "RayReconstruction.Hint.Render.Preset.Performance", "RayReconstruction.Hint.Render.Preset.UltraPerformance",
+            "RayReconstruction.Hint.Render.Preset.UltraQuality"
+        };
+        unsigned int intHits = 0;
+        for (const char* key : intKeys) {
+            int value = 0;
+            const unsigned int status = ngxGetInt(parameters, key, &value);
+            if (status == 1) {
+                ++intHits;
+                Log("RR_NATIVE_POST_SETUP_INT aa_call=%llu setup=%llu snapshot=%u key=%s status=0x%08X value=%d",
+                    aaCall, setupOrdinal, current, key, status, value);
+            } else {
+                unsigned int uvalue = 0;
+                const unsigned int ustatus = ngxGetUInt(parameters, key, &uvalue);
+                if (ustatus == 1) {
+                    ++intHits;
+                    Log("RR_NATIVE_POST_SETUP_UINT aa_call=%llu setup=%llu snapshot=%u key=%s status=0x%08X value=%u int_status=0x%08X",
+                        aaCall, setupOrdinal, current, key, ustatus, uvalue, status);
+                } else {
+                    Log("RR_NATIVE_POST_SETUP_INT_EMPTY aa_call=%llu setup=%llu snapshot=%u key=%s int_status=0x%08X uint_status=0x%08X",
+                        aaCall, setupOrdinal, current, key, status, ustatus);
+                }
+            }
+        }
+
+        Log("RR_NATIVE_POST_SETUP_SUMMARY aa_call=%llu setup=%llu snapshot=%u resource_hits=%u rr_resource_hits=%u int_hits=%u rr_eval=0 ngx_writes=0 denoiser_bypass=0",
+            aaCall, setupOrdinal, current, resourceHits, rrHits, intHits);
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        Log("RR_NATIVE_POST_SETUP_EXCEPTION aa_call=%llu setup=%llu snapshot=%u exception=0x%08lX",
+            aaCall, setupOrdinal, current, GetExceptionCode());
+    }
+    SetLastError(saved);
+}
+
+static void NativeRRNgxPostSetupProbe() noexcept {
+    const unsigned long long setupOrdinal = rrNativeSetupCount.fetch_add(1) + 1;
+    const unsigned long long aaCall = aaCount.load();
+    CaptureNativeRRNgxPostSetup(aaCall, setupOrdinal);
+}
+
+static void EmitRelayByte(unsigned char*& p, unsigned char v) noexcept { *p++ = v; }
+static void EmitRelayU64(unsigned char*& p, uint64_t v) noexcept { memcpy(p, &v, sizeof(v)); p += sizeof(v); }
+
+static bool PrepareNativeNgxPostSetupHook(HMODULE d3d) noexcept {
+    if (!d3d || !originalAA) return false;
+    auto base = reinterpret_cast<unsigned char*>(d3d);
+    auto call = base + kNativeNgxSetupCallRva;
+    auto expectedTarget = base + kNativeNgxSetupHelperRva;
+
+    if (call[0] != 0xE8) {
+        Log("RR_NATIVE_SETUP_HOOK_UNAVAILABLE reason=opcode_mismatch call_rva=0x%zX opcode=0x%02X",
+            kNativeNgxSetupCallRva, unsigned(call[0]));
+        return false;
+    }
+    int32_t originalRel = 0;
+    memcpy(&originalRel, call + 1, sizeof(originalRel));
+    auto resolvedTarget = call + 5 + originalRel;
+    if (resolvedTarget != expectedTarget) {
+        Log("RR_NATIVE_SETUP_HOOK_UNAVAILABLE reason=target_mismatch call_rva=0x%zX resolved=%p expected=%p",
+            kNativeNgxSetupCallRva, resolvedTarget, expectedTarget);
+        return false;
+    }
+
+    rrNativeSetupCallsite = call;
+    rrNativeSetupHelper = resolvedTarget;
+    rrNativeSetupRelay = AllocateExecutableRelayNear(call);
+    if (!rrNativeSetupRelay) {
+        Log("RR_NATIVE_SETUP_HOOK_UNAVAILABLE reason=relay_allocation_failed callsite=%p", call);
+        return false;
+    }
+    if (!Rel32Fits(call + 5, rrNativeSetupRelay)) {
+        Log("RR_NATIVE_SETUP_HOOK_UNAVAILABLE reason=relay_out_of_range callsite=%p relay=%p", call, rrNativeSetupRelay);
+        VirtualFree(rrNativeSetupRelay, 0, MEM_RELEASE);
+        rrNativeSetupRelay = nullptr;
+        return false;
+    }
+
+    // The callsite is changed from CALL helper to JMP relay. Entering via JMP
+    // preserves the exact stack layout the original helper expects. The relay:
+    //   call original helper
+    //   preserve RAX/XMM0 return values
+    //   call the no-argument read-only probe with proper x64 shadow/alignment
+    //   restore return values
+    //   jump back to callsite+5
+    auto out = reinterpret_cast<unsigned char*>(rrNativeSetupRelay);
+    unsigned char* w = out;
+    // mov r11, originalHelper
+    EmitRelayByte(w, 0x49); EmitRelayByte(w, 0xBB); EmitRelayU64(w, reinterpret_cast<uint64_t>(rrNativeSetupHelper));
+    // call r11
+    EmitRelayByte(w, 0x41); EmitRelayByte(w, 0xFF); EmitRelayByte(w, 0xD3);
+    // sub rsp, 40h (32-byte shadow + return preservation, keeps pre-call alignment)
+    EmitRelayByte(w, 0x48); EmitRelayByte(w, 0x83); EmitRelayByte(w, 0xEC); EmitRelayByte(w, 0x40);
+    // mov [rsp+20h], rax
+    const unsigned char saveRax[] = {0x48,0x89,0x44,0x24,0x20}; memcpy(w, saveRax, sizeof(saveRax)); w += sizeof(saveRax);
+    // movdqu [rsp+30h], xmm0
+    const unsigned char saveXmm0[] = {0xF3,0x0F,0x7F,0x44,0x24,0x30}; memcpy(w, saveXmm0, sizeof(saveXmm0)); w += sizeof(saveXmm0);
+    // mov r11, NativeRRNgxPostSetupProbe ; call r11
+    EmitRelayByte(w, 0x49); EmitRelayByte(w, 0xBB); EmitRelayU64(w, reinterpret_cast<uint64_t>(&NativeRRNgxPostSetupProbe));
+    EmitRelayByte(w, 0x41); EmitRelayByte(w, 0xFF); EmitRelayByte(w, 0xD3);
+    // movdqu xmm0, [rsp+30h]
+    const unsigned char restoreXmm0[] = {0xF3,0x0F,0x6F,0x44,0x24,0x30}; memcpy(w, restoreXmm0, sizeof(restoreXmm0)); w += sizeof(restoreXmm0);
+    // mov rax, [rsp+20h]
+    const unsigned char restoreRax[] = {0x48,0x8B,0x44,0x24,0x20}; memcpy(w, restoreRax, sizeof(restoreRax)); w += sizeof(restoreRax);
+    // add rsp, 40h
+    EmitRelayByte(w, 0x48); EmitRelayByte(w, 0x83); EmitRelayByte(w, 0xC4); EmitRelayByte(w, 0x40);
+    // mov r11, continuation ; jmp r11
+    EmitRelayByte(w, 0x49); EmitRelayByte(w, 0xBB); EmitRelayU64(w, reinterpret_cast<uint64_t>(call + 5));
+    EmitRelayByte(w, 0x41); EmitRelayByte(w, 0xFF); EmitRelayByte(w, 0xE3);
+
+    const size_t relaySize = size_t(w - out);
+    FlushInstructionCache(GetCurrentProcess(), out, relaySize);
+    DWORD relayOld = 0;
+    if (!VirtualProtect(out, 0x1000, PAGE_EXECUTE_READ, &relayOld)) {
+        Log("RR_NATIVE_SETUP_HOOK_UNAVAILABLE reason=relay_protect_failed error=%lu", GetLastError());
+        VirtualFree(rrNativeSetupRelay, 0, MEM_RELEASE);
+        rrNativeSetupRelay = nullptr;
+        return false;
+    }
+
+    const intptr_t delta64 = reinterpret_cast<unsigned char*>(rrNativeSetupRelay) - (call + 5);
+    if (delta64 < INT32_MIN || delta64 > INT32_MAX) {
+        Log("RR_NATIVE_SETUP_HOOK_UNAVAILABLE reason=patch_delta_out_of_range");
+        return false;
+    }
+    const int32_t rel32 = static_cast<int32_t>(delta64);
+    unsigned char patch[5] = {0xE9,0,0,0,0};
+    memcpy(patch + 1, &rel32, sizeof(rel32));
+    DWORD old = 0;
+    if (!VirtualProtect(call, sizeof(patch), PAGE_EXECUTE_READWRITE, &old)) {
+        Log("RR_NATIVE_SETUP_HOOK_UNAVAILABLE reason=callsite_protect_failed error=%lu", GetLastError());
+        return false;
+    }
+    memcpy(call, patch, sizeof(patch));
+    FlushInstructionCache(GetCurrentProcess(), call, sizeof(patch));
+    DWORD ignored = 0;
+    VirtualProtect(call, sizeof(patch), old, &ignored);
+
+    Log("RR_NATIVE_SETUP_HOOK_INSTALLED callsite=%p call_rva=0x%zX helper=%p helper_rva=0x%zX relay=%p relay_bytes=%zu mode=post_setup_read_only",
+        call, kNativeNgxSetupCallRva, resolvedTarget, kNativeNgxSetupHelperRva,
+        rrNativeSetupRelay, relaySize);
+    return true;
+}
+
 // +0x178 is the object whose vtable slot 8 is called by DeviceUtil::present.
 // v0.7 preserves v0.6 pre/post-Present sampling and re-queries buffer/color-space
 // capabilities whenever the chain format or engine HDR state changes. DXGI exposes support

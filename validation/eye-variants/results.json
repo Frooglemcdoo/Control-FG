@@ -1,0 +1,23 @@
+{
+  "status": "LOCAL_PASS_WINDOWS_REQUIRED",
+  "results": {
+    "normal-selector": "PASS",
+    "normal-integration": "PASS",
+    "normal-format": "PASS",
+    "asan_ubsan-selector": "PASS",
+    "asan_ubsan-integration": "PASS",
+    "asan_ubsan-format": "PASS"
+  },
+  "sha256": {
+    "src/rr_eye_variants.h": "6b034f1d185f49de728a6f50a0be4a76b8aeb14ffa9219552fdc8ea82c33dc89",
+    "src/rr_albedo_prepare.h": "35177f012470c6ec3ddd0b49fdf66b5576c7fc5e009516b9ca990a2d806c531f",
+    "src/rr_albedo_capture.h": "8cdf308aeff93b10a0816ccd6be41c92c4ac32552ad9855c27ec21e785270da2",
+    "src/rr_diffuse_replay.h": "dbc4a00122a89655fe3e4a74fbb4aa945ab4aa821d4870489a41c0234dc70be3",
+    "src/rr_albedo_shader.h": "8b4bfdbe92097fed0719c7952c68d85501abc86c28c86c6f5c17ff118738cd0b",
+    "Collect-ControlFG-Logs.ps1": "e6e7b6eb0de117ea8b863dede1bf7079225092288c471d62019069a7dddcc63f",
+    "validation/eye-variants/test.cpp": "4fd16bfa6dab36aee69807a9ec461abbc881c90ea46891d8e34f15e623677f3d",
+    "validation/eye-variants/integration.cpp": "1be35b03c2a9bc3c57a1a384124ea7ee36544519af8eb8d44b8848b096f6be04",
+    "validation/eye-variants/run.py": "1cf2073b35c368e9b9551b436a9cdbbc66655d8d9346d118f32bf3125d993e5f"
+  },
+  "limits": "Captured foliage programs exercise the actual validator as fixtures; no eye bytecode or Windows gameplay execution is claimed."
+}

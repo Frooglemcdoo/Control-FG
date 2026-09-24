@@ -1,0 +1,16 @@
+{
+  "status": "PASS",
+  "checks": [
+    "primary_thread_gate",
+    "detach_and_close",
+    "enqueue_before_replacement",
+    "new_primary_context",
+    "fifo_queue_to_d3d",
+    "append_preserves_order"
+  ],
+  "observed_hook_site": "d3d+32991 -> 24E0; Direct queue+28 after Close",
+  "ordering": "primary Close -> append -> replacement context; queue array traversed in insertion order",
+  "gpu_dependency": "existing copy-destination to NON_PIXEL_SHADER_RESOURCE barriers order copied inputs before their later SRV use",
+  "scope": "Static exact-DLL proof plus runtime enqueue observation required; no GPU execution claimed",
+  "docs": "https://learn.microsoft.com/en-us/windows/win32/direct3d12/executing-and-synchronizing-command-lists"
+}

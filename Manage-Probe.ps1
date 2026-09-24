@@ -2,60 +2,16 @@
 [CmdletBinding()]
 param([ValidateSet('Install', 'Uninstall', 'Collect')][string]$Action = 'Install', [string]$GamePath)
 $ErrorActionPreference = 'Stop'
-$RuntimeNames = @('sl.interposer.dll','sl.common.dll','sl.pcl.dll','sl.reflex.dll','sl.dlss_g.dll','nvngx_dlssg.dll')
+. (Join-Path $PSScriptRoot 'Build-Metadata.ps1')
+$ProbeVersion = $ControlFGBuild.Version
+$RuntimeNames = @('sl.interposer.dll','sl.common.dll','sl.pcl.dll','sl.reflex.dll','sl.dlss_g.dll','nvngx_dlssg.dll','sl.dlss_d.dll','nvngx_dlssd.dll')
 try {
     if ($Action -eq 'Collect') {
-        $logDir = Join-Path $env:LOCALAPPDATA 'ControlFGProbe'
-        $logs = @(Get-ChildItem -LiteralPath $logDir -Filter 'probe-*.log' -File -ErrorAction SilentlyContinue |
-            Where-Object { (Get-Content -LiteralPath $_.FullName -TotalCount 1) -match ' PROBE v1\.0\.0 ' } |
-            Sort-Object LastWriteTime -Descending | Select-Object -First 3)
-        if (-not $logs.Count) { throw 'No v1.0.0 log exists. Check Build/Install first. Logs from every other probe version are excluded.' }
-        $name = 'Control-FG-v1.0.0-Logs-' + (Get-Date -Format 'yyyyMMdd-HHmmss') + '-' + [guid]::NewGuid().ToString('N').Substring(0,6) + '.zip'
-        $zip = Join-Path $PSScriptRoot $name
-        $stage = Join-Path $env:TEMP ('ControlFG-v1.0.0-Collect-' + [guid]::NewGuid().ToString('N'))
-        try {
-            New-Item -ItemType Directory -Path $stage -Force | Out-Null
-            $probeStage = Join-Path $stage 'probe'
-            $packageStage = Join-Path $stage 'package'
-            $streamlineStage = Join-Path $stage 'streamline'
-            New-Item -ItemType Directory -Path $probeStage,$packageStage,$streamlineStage -Force | Out-Null
-            foreach ($log in $logs) { Copy-Item -LiteralPath $log.FullName -Destination (Join-Path $probeStage $log.Name) -Force }
-            foreach ($relative in @('Build.log', 'build\build-validation.json', 'third_party\streamline\sdk-info.json', 'installation.json')) {
-                $path = Join-Path $PSScriptRoot $relative
-                if (Test-Path -LiteralPath $path) {
-                    $safeName = ($relative -replace '[\\/]', '__')
-                    Copy-Item -LiteralPath $path -Destination (Join-Path $packageStage $safeName) -Force
-                }
-            }
-            $settingsPath = Join-Path (Join-Path $env:LOCALAPPDATA 'ControlFG') 'settings.ini'
-            if (Test-Path -LiteralPath $settingsPath) {
-                Copy-Item -LiteralPath $settingsPath -Destination (Join-Path $packageStage 'ControlFG-settings.ini') -Force
-            }
-            $slRunDirs = @(Get-ChildItem -LiteralPath $logDir -Directory -Filter 'Streamline-v1.0.0-*' -ErrorAction SilentlyContinue |
-                Sort-Object LastWriteTime -Descending | Select-Object -First 3)
-            foreach ($slDir in $slRunDirs) {
-                $runStage = Join-Path $streamlineStage $slDir.Name
-                New-Item -ItemType Directory -Path $runStage -Force | Out-Null
-                $slFiles = @(Get-ChildItem -LiteralPath $slDir.FullName -File -Recurse -ErrorAction SilentlyContinue |
-                    Sort-Object LastWriteTime -Descending | Select-Object -First 30)
-                foreach ($slFile in $slFiles) {
-                    $relative = $slFile.FullName.Substring($slDir.FullName.Length).TrimStart('\')
-                    $destination = Join-Path $runStage $relative
-                    $parent = Split-Path -Parent $destination
-                    if (-not (Test-Path -LiteralPath $parent)) { New-Item -ItemType Directory -Path $parent -Force | Out-Null }
-                    Copy-Item -LiteralPath $slFile.FullName -Destination $destination -Force
-                }
-            }
-            if (Test-Path -LiteralPath $zip) { Remove-Item -LiteralPath $zip -Force }
-            Compress-Archive -Path (Join-Path $stage '*') -DestinationPath $zip
-        } finally {
-            if (Test-Path -LiteralPath $stage) { Remove-Item -LiteralPath $stage -Recurse -Force -ErrorAction SilentlyContinue }
-        }
-        Write-Host ('Upload this ZIP: ' + $zip)
-        exit 0
+        & (Join-Path $PSScriptRoot 'Collect-ControlFG-Logs.ps1')
+        exit $LASTEXITCODE
     }
 
-    if (Get-Process -Name 'Control_DX12', 'Control_DX11', 'Control' -ErrorAction SilentlyContinue) { throw 'Close Control before installing or removing the v1.0.0 bridge.' }
+    if (Get-Process -Name 'Control_DX12', 'Control_DX11', 'Control' -ErrorAction SilentlyContinue) { throw 'Close Control before installing or removing this Control FG build.' }
     $receiptPath = Join-Path $PSScriptRoot 'installation.json'
     $receipt = $null
     if (Test-Path -LiteralPath $receiptPath) { $receipt = Get-Content -LiteralPath $receiptPath -Raw | ConvertFrom-Json }
@@ -68,7 +24,7 @@ try {
     if (-not (Test-Path -LiteralPath (Join-Path $GamePath 'Control_DX12.exe'))) { throw 'This folder does not contain Control_DX12.exe.' }
 
     if ($Action -eq 'Uninstall') {
-        if (-not $receipt -or $receipt.GamePath -ine $GamePath -or $receipt.Version -ne '1.0.0') { throw 'No matching v1.0.0 installation receipt. Do not delete unrelated files.' }
+        if (-not $receipt -or $receipt.GamePath -ine $GamePath -or $receipt.Version -ne $ProbeVersion) { throw 'No matching Control FG installation receipt for this build. Do not delete unrelated files.' }
         # Validate every existing installed file before removing the first one.
         foreach ($file in $receipt.Files) {
             $path = Join-Path $GamePath ($file.RelativePath -replace '/', '\')
@@ -87,7 +43,7 @@ try {
             else { Write-Warning 'ControlFGStreamline was not removed because it contains unexpected files.' }
         }
         Remove-Item -LiteralPath $receiptPath -Force
-        Write-Host 'Control FG v1.0.0 Control FG build removed. Original game files were not replaced.'
+        Write-Host ('Control FG v' + $ProbeVersion + ' removed. Original game files and user-supplied ReShade were not replaced or removed.')
         exit 0
     }
 
@@ -96,12 +52,15 @@ try {
     $runtimeDestination = Join-Path $GamePath 'ControlFGStreamline'
     if (Test-Path -LiteralPath $proxyDestination) { throw 'A dxgi.dll already exists. Uninstall the previously installed proxy first.' }
     if (Test-Path -LiteralPath $runtimeDestination) { throw 'A ControlFGStreamline folder already exists. It was not modified. Remove/rename it only if you know it belongs to an earlier Control FG test.' }
+    if (Test-Path -LiteralPath (Join-Path $GamePath 'ControlFG-RenoDXClampRef.addon64')) { Write-Warning 'An archived Control FG reference add-on is still beside the game. the public release does not use it; remove it unless you are deliberately reproducing the old r21w diagnostic.' }
+    if (Test-Path -LiteralPath (Join-Path $GamePath 'renodx-control-rr.addon64')) { Write-Warning 'The full RenoDX Control RR add-on is present. It can alter the same denoiser shader/NGX path; remove it when validating the public release.' }
+    if (Test-Path -LiteralPath (Join-Path $GamePath 'd3d12.dll')) { Write-Warning 'A d3d12.dll is present (commonly ReShade). The public release does not require it; remove/rename it for an uncontaminated validation run.' }
 
     $proxySource = Join-Path $PSScriptRoot 'build\dxgi.dll'
     $validationPath = Join-Path $PSScriptRoot 'build\build-validation.json'
     if (-not (Test-Path -LiteralPath $proxySource) -or -not (Test-Path -LiteralPath $validationPath)) { throw 'Run Build.cmd successfully first.' }
     $validation = Get-Content -LiteralPath $validationPath -Raw | ConvertFrom-Json
-    if ($validation.Version -ne '1.0.0' -or $validation.StreamlineSDKVersion -ne '2.14.1' -or $validation.DLSSGGenerationEnabled -ne $true -or $validation.DLSSGGeneratedFramesRequested -ne 3 -or $validation.TargetMultiplier -ne '4x') { throw 'Wrong/incomplete v1.0.0 build validation. Extract this package into a new folder, run Fetch-Streamline.cmd, then Build.cmd.' }
+    Assert-ControlFGBuildValidation $validation
     $proxyHash = (Get-FileHash -LiteralPath $proxySource -Algorithm SHA256).Hash
     if ($proxyHash -ne $validation.SHA256 -or $validation.AbiCheck -ne 'Passed') { throw 'The proxy DLL does not match its validated build. Run Build.cmd again.' }
 
@@ -117,7 +76,9 @@ try {
     $sdkInfo = Get-Content -LiteralPath $sdkInfoPath -Raw | ConvertFrom-Json
     if ($sdkInfo.Version -ne '2.14.1' -or $sdkInfo.SourceArchiveSHA256 -ne '92C4D954631A1710DA86CA3FA8D5034F2B9503838C95FC4AE977AE149319781B') { throw 'Staged Streamline SDK does not match the pinned official 2.14.1 release.' }
 
-    $planned = @([ordered]@{ RelativePath = 'dxgi.dll'; Source = $proxySource; SHA256 = $proxyHash })
+    $planned = @(
+        [ordered]@{ RelativePath = 'dxgi.dll'; Source = $proxySource; SHA256 = $proxyHash }
+    )
     foreach ($name in $RuntimeNames) {
         $source = Join-Path $sdkRoot ('bin\' + $name)
         if (-not (Test-Path -LiteralPath $source)) { throw ('Missing staged Streamline runtime: ' + $name) }
@@ -128,9 +89,11 @@ try {
         $planned += [ordered]@{ RelativePath = ('ControlFGStreamline/' + $name); Source = $source; SHA256 = $hash }
     }
 
+    $testSidecar=Join-Path $PSScriptRoot 'build/ControlFG.RTX40MFG.dll'
+    $planned += [ordered]@{ RelativePath='ControlFGStreamline/ControlFG.RTX40MFG.dll'; Source=$testSidecar; SHA256=(Get-FileHash -LiteralPath $testSidecar -Algorithm SHA256).Hash }
     # Receipt is written before copies so any partial copy remains safely recoverable.
     [ordered]@{
-        Version = '1.0.0'
+        Version = $ProbeVersion
         GamePath = $GamePath
         StreamlineSDKVersion = '2.14.1'
         DLSSGGenerationEnabled = $true
@@ -145,7 +108,8 @@ try {
         $destination = Join-Path $GamePath ($file.RelativePath -replace '/', '\')
         [IO.File]::Copy($file.Source, $destination, $false)
     }
-    Write-Host 'Installed Control FG v1.0.0 with runtime-proven fixed 2x-6x plus native Dynamic/HDR and the Control-native top-right persistent F10 overlay with live FPS and embedded CONTROL FG title; latency telemetry removed.'
-    Write-Host 'IMPORTANT: the v0.8.26 generation core is frozen. Change mode and Dynamic target in the F10 overlay, restart Control, and confirm the saved values are restored.'
-    Write-Host 'After installation, run a short fixed/Dynamic/HDR smoke test before distribution.' 
+    Write-Host ('Installed Control FG v' + $ProbeVersion + ' production package. No ReShade/RenoDX reference add-on is part of the install.')
+    Write-Host 'For a clean public-release validation run, remove/rename ReShade d3d12.dll and any archived ControlFG-RenoDXClampRef.addon64.'
+    Write-Host 'Do not install the full RenoDX Control add-on and do not place loose DLSS/DLSSD runtimes beside Control_DX12.exe. Control FG continues to use ControlFGStreamline.'
+    Write-Host 'Use 4K DLAA, FG OFF, RR ON. Preset F is the default; E remains available in the overlay. Collect compact logs only if support data is needed. Set CONTROLFG_VERBOSE_LOG=1 before launch only for deep diagnostic logging.'
 } catch { Write-Error $_; exit 1 }

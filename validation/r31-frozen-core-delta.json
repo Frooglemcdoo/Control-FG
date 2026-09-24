@@ -1,0 +1,34 @@
+{
+  "status": "PASS",
+  "baseline": "r30 approved production-core checkpoint",
+  "release": "r31c-hdr-dlssg-hard-reset-display-only-rearm",
+  "expected_changed_paths": [
+    "src/streamline_bridge.h",
+    "src/hdr10_bridge.h"
+  ],
+  "changed_files": [
+    {
+      "Path": "src/streamline_bridge.h",
+      "PreviousSHA256": "F3AA596183E6923F72D4F014BBA6155C0E4AFFC927BD8B9840E1B83DDB7FC712",
+      "R31SHA256": "20954F2C3BB2740E7E7A28D2AB50C25C59162146B2443D0C36230C6F72254598"
+    },
+    {
+      "Path": "src/hdr10_bridge.h",
+      "PreviousSHA256": "97EAB731B4ADCA35893E22D596537B0F7820CD7CD6FF18E7BD048F48DFCA6793",
+      "R31SHA256": "9778B0CD19817D7E26FE7FB08BA10FE1CBA87E3163D55D6FDF0E9E1A29875AA2"
+    }
+  ],
+  "unchanged_count": 9,
+  "total_count": 11,
+  "assertions": [
+    "Exactly 2 frozen-core files changed from r30.",
+    "The changed frozen-core files are src/streamline_bridge.h and src/hdr10_bridge.h.",
+    "The other nine checkpointed files retain their r30 hashes.",
+    "The r31 hashes recorded here match the current source.",
+    "The r31c runtime fix changes only src/streamline_bridge.h inside the previously approved r31 frozen-core delta, adding a display-only no-ResizeBuffers rearm path while retaining delayed observer duplicate suppression."
+  ],
+  "tested_sha256": {
+    "src/streamline_bridge.h": "20954F2C3BB2740E7E7A28D2AB50C25C59162146B2443D0C36230C6F72254598",
+    "src/hdr10_bridge.h": "9778b0cd19817d7e26fe7fb08ba10fe1cba87e3163d55d6fdf0e9e1a29875aa2"
+  }
+}

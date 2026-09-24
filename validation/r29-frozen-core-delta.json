@@ -1,0 +1,26 @@
+{
+  "status": "PASS",
+  "baseline": "r28 approved production-core checkpoint",
+  "release": "r29-fresh-dxgi-output-hdr-guard",
+  "expected_changed_paths": [
+    "src/streamline_bridge.h"
+  ],
+  "changed_files": [
+    {
+      "Path": "src/streamline_bridge.h",
+      "PreviousSHA256": "9FA2A8C5475A861D6F407EA56D5476CF491FFABA4A35CAA1280F61BF8F4CE7AD",
+      "R29SHA256": "306AEEC4018239F356BC17A21CCBD094173CD2C08197FA1EB4641B4790EC5073"
+    }
+  ],
+  "unchanged_count": 10,
+  "total_count": 11,
+  "assertions": [
+    "Exactly one file changed from the r28 production-core checkpoint.",
+    "The changed file is src/streamline_bridge.h.",
+    "src/hdr10_bridge.h and the other nine checkpointed files retain their r28 hashes.",
+    "The r29 hash recorded here matches the current source."
+  ],
+  "tested_sha256": {
+    "src/streamline_bridge.h": "306aeec4018239f356bc17a21ccbd094173cd2c08197fa1eb4641b4790ec5073"
+  }
+}

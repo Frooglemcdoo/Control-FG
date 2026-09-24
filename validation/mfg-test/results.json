@@ -1,0 +1,38 @@
+{
+  "candidate": "2.0.0-Clean-Native-R12-MFG-Dynamic-Test",
+  "status": "LOCAL_PASS",
+  "tests": {
+    "windows_x64_sidecar_cross_compile": "PASS Zig clang x86_64-windows-gnu, C++20, MS extensions; linked PE DLL; not shipped as a substitute for MSVC",
+    "production_bridge_mock": "PASS non-Ada and wrong provider rejection, partial patch failure, pending temporal, idempotence, descriptor recheck, retry cap",
+    "source_isolation": "PASS device classification before sidecar load; both device-bind paths; temporal before FG options; no capability bypass",
+    "profile_310_9_1": "PASS exact original 310.9 profile and descriptor discovery functions retained",
+    "unchanged_R12_render_core": "PASS private UI, native identity, HDR/SDR correction and 79 RR files",
+    "binary_marker_source_consistency": "PASS 91 markers",
+    "dynamic_policy": "PASS production policy exhaustive 16 combinations and all UI target gates",
+    "fixed_mfg_prior_run": "RTX4070 driver591.86 SDR: observed 2x through 6x; zero private UI failure markers; user reports smooth",
+    "dynamic_prior_run": "Unsupported: driver missing required components; NVIDIA requires >=595.41; current591.86",
+    "full_msvc_build": "NOT_RUN",
+    "gpu_runtime": "NOT_RUN"
+  },
+  "changed_source_files": [
+    "src/fg_overlay.h",
+    "src/fg_pixel_capture.h",
+    "src/probe.cpp",
+    "src/rtx40_mfg/ada_patch.cpp",
+    "src/rtx40_mfg/ada_patch.h",
+    "src/rtx40_mfg/control_bridge.cpp",
+    "src/rtx40_mfg/gates.cpp",
+    "src/rtx40_mfg/log.cpp",
+    "src/rtx40_mfg/log.h",
+    "src/rtx40_mfg/patches.cpp",
+    "src/rtx40_mfg/patches.h",
+    "src/rtx40_mfg/provider_policy.cpp",
+    "src/rtx40_mfg/provider_policy.h",
+    "src/streamline_bridge.h"
+  ],
+  "limitations": [
+    "No Windows/MSVC full game DLL build locally. Build.cmd performs this on the build PC.",
+    "No Dynamic GPU run for this revision; prior fixed-MFG successful. RTX40 HDR remains untested.",
+    "Early plugin setup and temporal publication require runtime confirmation; fail closed disables FG."
+  ]
+}

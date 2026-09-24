@@ -1,0 +1,28 @@
+{
+  "status": "LOCAL_PASS",
+  "scope": "r24 HDR FG compute-only HUDless state-safety candidate. Portable HDR policy/color tests passed normal + ASan/UBSan; source gates forbid graphics-state mutation. Windows/MSVC and live game execution remain host sign-off.",
+  "tests": {
+    "policy_normal": "PASS HDR FG UI policy: HDR rejects FP16 HUDless, accepts RGB10/PQ-domain HUDless, SDR behavior retained",
+    "policy_asan_ubsan": "PASS HDR FG UI policy: HDR rejects FP16 HUDless, accepts RGB10/PQ-domain HUDless, SDR behavior retained",
+    "color_normal": "PASS HDR HUDless color conversion: shared scRGB/709 -> BT.2020 -> 80-nit-scaled PQ reference vectors",
+    "color_asan_ubsan": "PASS HDR HUDless color conversion: shared scRGB/709 -> BT.2020 -> 80-nit-scaled PQ reference vectors"
+  },
+  "assertions": [
+    "HDR HUDless conversion uses compute/UAV only and contains no graphics draw/RTV/viewport/scissor/topology mutation",
+    "R10G10B10A2 typed UAV store support is checked before enabling the HDR conversion",
+    "conversion output remains RGB10/PQ/BT.2020 and is tagged only after transition to shader-resource state",
+    "the conversion restores the signed-off r22 UI-alpha compute heap/root/PSO/table before returning to Control",
+    "HDR UI recomposition remains fail-closed unless the converted RGB10 HUDless and UI-alpha tags are ready",
+    "RR and SDR FG paths remain outside this targeted change"
+  ],
+  "tested_sha256": {
+    "src/fg_ui_recomposition.h": "90463faf22c994df4a66904dc990f52adc2c6b9689fa5c958f6eacb212e01c01",
+    "src/fg_hdr_ui_policy.h": "cc2f8e2702bea5591921262482e3ee3615af5ebe7ce3b8a600ad5330b51109ab",
+    "src/streamline_bridge.h": "c45f68fb1e5b408d8d43191ae196cb7c9b7eeafa12259cd4d2a1e0256e939e66",
+    "src/probe.cpp": "e583c5086a14bcf30c300f486d423429c84566e9ab157edf143f99d1fdea41e1",
+    "Build-Metadata.ps1": "0bf7acb07a26a6f8d0205c67a53bf698b315079d819785b96f150911afb6695b",
+    "Build.cmd": "955d5b8590bf4329ff1f84271a363028c9a491c4264f01ccfe1086f86b1e781b",
+    "validation/hdr-fg-ui/policy-test.cpp": "77e71313c999bf43fad2e470f4f4d42b281045dd1baba2977953b1bbd48d1622",
+    "validation/hdr-fg-ui/color-test.cpp": "b07084f9a4eee57dd8a67c794f917c8d0ff2a8b0beaa3b46ca129551124a9b99"
+  }
+}

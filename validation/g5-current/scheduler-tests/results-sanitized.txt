@@ -1,0 +1,81 @@
+PASS equal primary and camera identities remain supported
+PASS distinct primary and camera captured
+PASS serial replay accepts primary distinct from camera
+PASS worker replay accepts captured primary
+PASS serial camera identity rejected as primary
+PASS serial mismatched primary rejected
+PASS worker mismatched primary rejected
+PASS worker invalid view vtable rejected
+PASS worker missing TLS rejected
+PASS replay manager mismatch rejected
+PASS replay frame mismatch rejected
+PASS replay unreadable frame rejected
+PASS replay prior draw fault rejected
+PASS replay invalid draw range rejected
+PASS replay binding read failure rejected
+PASS replay restores last error
+PASS join primary completes with separate camera
+PASS join camera identity rejected
+PASS join different valid primary rejected
+PASS join invalid callback vtable rejected
+PASS join renderer mismatch rejected
+PASS join manager mismatch rejected
+PASS join frame mismatch fails capture
+PASS join without completed replay fails capture
+PASS join scopes serial primary during original callback
+PASS copy accepts paired camera distinct from primary
+PASS copy primary substituted for camera rejected
+PASS copy different camera rejected
+PASS copy frame mismatch rejected
+PASS copy width mismatch rejected
+PASS copy height mismatch rejected
+PASS copy device mismatch rejected
+PASS copy queue mismatch rejected
+PASS invalid primary TLS blocks preparation allocation
+PASS invalid primary vtable blocks preparation allocation
+PASS null primary blocks preparation allocation
+PASS persistent camera frame mismatch blocks allocation
+PASS persistent camera renderer mismatch blocks allocation
+PASS preparation wireframe blocks allocation
+PASS preparation secondary wireframe blocks allocation
+PASS preparation disabled primary blocks allocation
+PASS primary read null output safe
+PASS primary read null module clears output
+PASS primary read absent TLS array clears output
+PASS primary TLS index upper bound accepted
+PASS primary TLS index out of bounds rejected
+PASS failed primary prep clears partially populated state
+PASS parallel flag preserved with primary view
+PASS G5 reflection-before-join captures both guides at frame 1754
+PASS G5 join completes original callback before scheduling
+PASS G5 rejected copy preflight retries post-AA in same frame
+PASS G5 unavailable join inputs retry same-frame post-AA
+PASS G5 unavailable borrowed device retries before commands
+PASS G5 camera rejection retries before commands
+PASS G5 source failure after commands stops later opportunities
+PASS G5 material copy failure after source commands is terminal
+PASS G5 frame 1754 material rejected at frame 1755 with normal fallback
+PASS G5 same-AA joined retry bypasses only the cadence gate
+PASS G5 joined opportunity cannot allocate from Waiting
+PASS G5 joined opportunity cannot consume Preparing
+PASS G5 reflection can still queue first preparation
+PASS G5 failed reflection worker creation leaves retryable Waiting
+PASS G5 non-reflection never starts preparation
+PASS G5 recording material is not a joined opportunity
+PASS G5 joined opportunity respects inactive gate
+PASS G5 joined opportunity respects minimum AA count
+PASS G5 busy guide lock preserves pending capture
+PASS G5 all completed or submitted job stages ignore joined opportunity
+PASS G5 successful joined capture is never duplicated
+PASS G5 pre-command failures capped at eight attempts
+PASS G5 eighth attempt may succeed
+PASS G5 exhausted attempt count stops before input reads
+PASS G5 missing prepared owner fails without recording
+PASS G5 changed queue retires unused job without recording
+PASS G5 invalid join identity never schedules copy
+PASS G5 join changing engine frame never schedules copy
+PASS G5 no completed replay never schedules copy
+PASS G5 actual HookAA copies after successful AA and FG callbacks
+PASS G5 actual HookAA leaves capture pending after failed AA
+PASS G5 actual HookAA retries rejected primary-join copy at frame 1754
+RESULT passed=80 failed=0

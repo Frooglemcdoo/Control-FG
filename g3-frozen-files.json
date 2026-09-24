@@ -1,0 +1,49 @@
+{
+  "Description": "r31c approved production-core checkpoint candidate. Relative to r31b, only src/streamline_bridge.h changes, adding display-only no-ResizeBuffers hard-reset rearm while retaining delayed duplicate suppression; the remaining ten listed core files retain their prior hashes.",
+  "Files": [
+    {
+      "Path": "src/streamline_bridge.h",
+      "SHA256": "20954F2C3BB2740E7E7A28D2AB50C25C59162146B2443D0C36230C6F72254598"
+    },
+    {
+      "Path": "src/hdr10_bridge.h",
+      "SHA256": "9778B0CD19817D7E26FE7FB08BA10FE1CBA87E3163D55D6FDF0E9E1A29875AA2"
+    },
+    {
+      "Path": "Fetch-Streamline.ps1",
+      "SHA256": "4B4A31B9BCCC05693960DED26B8AA3F43592B606A971613C34C7DAA4BE0607DB"
+    },
+    {
+      "Path": "Verify-Streamline.ps1",
+      "SHA256": "A4A6FB274A09ABF042A1B57760850CBCB9E42A3C5486BDD32C051D901CC37CC4"
+    },
+    {
+      "Path": "target-manifest.json",
+      "SHA256": "A370E4A63A645B34066E8A4123CB14F7077B32A9C0DF3F864C77AF50F92079F6"
+    },
+    {
+      "Path": "src/streamline_frame.h",
+      "SHA256": "0990E1FFB1F76A0E20B06EFC376CF807AE1E304FB9A1B7A84CDEF1C0E2855951"
+    },
+    {
+      "Path": "src/camera_capture.h",
+      "SHA256": "70CD42781D391410B95A4C6B4AEFCEC18CD828EB29D3A88E42377E3686211A01"
+    },
+    {
+      "Path": "src/semantic_capture.h",
+      "SHA256": "DF8A31A272FD2B860BC352CD384E1D53CAB29DB2D47614628F4930D73DEAF8C3"
+    },
+    {
+      "Path": "src/target.h",
+      "SHA256": "331CFA13D33119FE9E54FD27154601F05704A8C5AB763354D0A5620DF1F601C4"
+    },
+    {
+      "Path": "src/abi_check.cpp",
+      "SHA256": "EB9DA48FAECCC7E1EFC5385FC6720B4469D794F816E2727476ED4AA16E015249"
+    },
+    {
+      "Path": "src/dxgi.def",
+      "SHA256": "6C502244A7A3BC01C47DDFE2F4B0F6803195DE1AE5FE8E917AE8D1B624FB3C68"
+    }
+  ]
+}

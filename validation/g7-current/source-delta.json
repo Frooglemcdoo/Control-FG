@@ -1,0 +1,32 @@
+{
+  "baseline": "Control-FG-v1.0.0-RR-Native-G5-FastBuild-Full-Source.zip",
+  "baseline_sha256": "1459629d2ec04067a7981767d83d7394e08c27725372a4054fdbfedeeb32ff6e",
+  "changed": [
+    "BUILDING.md",
+    "Build-Metadata.ps1",
+    "Build.cmd",
+    "CHANGELOG.md",
+    "Collect-ControlFG-Logs.ps1",
+    "GITHUB_RELEASE.md",
+    "INSTALL.md",
+    "Make-DropIn.ps1",
+    "Manage-Probe.ps1",
+    "NEXUS_MODS.md",
+    "NEXUS_MODS_DESCRIPTION.txt",
+    "README.md",
+    "RELEASE_CHECKLIST.md",
+    "RELEASE_NOTES.md",
+    "TROUBLESHOOTING.md",
+    "Verify-Build.ps1",
+    "Verify-Source.ps1",
+    "src/probe.cpp",
+    "src/rr_albedo_capture.h",
+    "src/rr_albedo_prepare.h",
+    "src/rr_guide_export.h",
+    "tools/validate-release.py"
+  ],
+  "added": [
+    "RR_NATIVE_G7.md"
+  ],
+  "removed": []
+}

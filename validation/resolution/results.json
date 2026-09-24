@@ -1,0 +1,29 @@
+{
+  "status": "LOCAL_PASS_WINDOWS_GPU_REQUIRED",
+  "results": {
+    "diffuse:normal": "PASS actual diffuse preparation/resize: stale diagnostic size, CPU join, primary thread, post-Present fence, 1000 bounded cycles, coalesced 8K, device loss",
+    "distance:normal": "PASS actual distance resize: old reflection epoch rejected, in-flight diagnostic/export held, outputs released once, counters/capture reset",
+    "diffuse:asan_ubsan": "PASS actual diffuse preparation/resize: stale diagnostic size, CPU join, primary thread, post-Present fence, 1000 bounded cycles, coalesced 8K, device loss",
+    "distance:asan_ubsan": "PASS actual distance resize: old reflection epoch rejected, in-flight diagnostic/export held, outputs released once, counters/capture reset"
+  },
+  "windows_execution": false,
+  "windows_seh_exercised": false,
+  "gpu_execution": false,
+  "tested_sha256": {
+    "src/probe.cpp": "e35285e8e236fc65b794774db2234b0077eab3e3f7554b59f2637a8e85422f3d",
+    "src/rr_diffuse_replay.h": "357c4fe2466e6f22e6c08ee95e529b5518af27dcf2f0aff314bfe3a50796c8ad",
+    "src/rr_diffuse_resize.h": "f2c10134ea732b83262bc2fa8013fd1817f421d25f35d91474e316988fb8f29e",
+    "src/rr_diffuse_draw.h": "45f38d2d8032899754a8c6865f146ab2f691ae198729ab2301068d95480d4710",
+    "src/rr_diffuse_join.h": "3947d6530c67fc02f514969ae741ef87f72b41a8e99a86680441ef3f9b4dc8ef",
+    "src/rr_distance_runtime.h": "bdd355abb8391aaca9bcf066e03cbbd198ba0fbd785a1100ee78a129735976de",
+    "src/rr_distance_resize.h": "5d5ab9ac687379471f1105186bbfe9cc2b99d3baa9296a87ca2e4c864d257c41",
+    "src/rr_live_guides.h": "3e3e7ce12ad00fe9d9d1ab8ab823e6b73be0468be37da4ea8ab698d802a08f90",
+    "src/rr_reflection_runtime.h": "258edb4fff12e5541b7a414cd607a2630003aff6dee3e20682604b888e58ad46",
+    "src/rr_native_frame.h": "d9e54d838e7f4e9680021ed4fdec5f193389f6a6c6dfc3c9c140a453e0d2b17d",
+    "src/rr_frame_coordinator.h": "1c2f1058fb6360ae06ac32b760aeecddd5bd54891d167b6b90ec38a8769a9e71",
+    "src/rr_user_control.h": "83679c8261d2c22ad90b02d30cf8fc230de8842922e37304e0aa47d83540e587",
+    "validation/resolution/diffuse.cpp": "98cc3e8f1ceba50ea2e9f58f4500707c852e7bbcbe6d5435ba8b1cca6d528dd1",
+    "validation/resolution/distance.cpp": "375de75eb26095c6c3075a0244e31c12a72d22fc454932045d35cee6c74230c8",
+    "validation/resolution/run.py": "7d3b6798d868485057eff7e85b9c9725d139ef898297066f77859bcdf2944f4f"
+  }
+}
