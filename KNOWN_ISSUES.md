@@ -1,8 +1,14 @@
-# Known issues — v2.1.0
+# Known issues — v2.1.1
+
+## GOG Galaxy overlay conflict
+
+Disable GOG Galaxy's in-game overlay for Control. It can cause input/focus stalls and make Control FG or other overlays disappear. Close the game, open Control in Galaxy, then **menu beside Play → Manage installation → Configure → Features**. Disable **Use default settings** if shown, then uncheck **Overlay / Access GOG GALAXY features in-game**. Confirm and restart Control. See [INSTALL.md](INSTALL.md#gog-galaxy-disable-the-overlay-for-control).
+
+GOG's validated game binaries are supported; this is a Galaxy overlay compatibility issue.
 
 ## RR and indirect diffuse lighting
 
-Blinds can exhibit crawling/noisy streaks when RR and Ray Traced Indirect Diffuse Lighting are both enabled, on RTX 40- and 50-series GPUs. E/F selection does not resolve it. Disable Ray Traced Indirect Diffuse Lighting or RR as a workaround. Investigation is ongoing.
+Blinds can exhibit crawling/noisy streaks when RR and Ray Traced Indirect Diffuse Lighting are both enabled, on RTX 40- and 50-series GPUs. E/F selection does not resolve it. Disable Ray Traced Indirect Diffuse Lighting or RR as a workaround. The reflection clamp slider does not resolve this artifact; it controls specular/firefly clamping. Investigation is ongoing.
 
 ## RTX 40-series overlay pacing
 

@@ -1,4 +1,4 @@
-// Control Steam build 21225456. Streamline 2.14.1 selectable DLSS-G Multi Frame Generation + overlay.
+// Control verified Steam, Epic Games Store, and GOG DX12 builds. Streamline 2.14.1 selectable DLSS-G Multi Frame Generation + overlay.
 // v2.0.0 public release. Internal source revision r31c keeps the r24 compute HUDless path, r26 two-fresh-frame warmup, r27 resize quiesce fallback, and r29 fresh-output observer. r31c retains the r31 hard-reset architecture, preserves r31b delayed duplicate suppression, and adds a no-ResizeBuffers recovery path: after a display-only HDR/SDR flip frees DLSS-G resources, FG can rearm on the unchanged bridge generation after a 30-Present grace period plus two consecutive fresh tagged frames.
  // persistent user settings plus a Control-native overlay with improved bottom spacing and effective multiplier/HDR status.
 #define WIN32_LEAN_AND_MEAN
@@ -147,7 +147,7 @@ static void OpenLog() {
     const DWORD verboseLength=GetEnvironmentVariableW(L"CONTROLFG_VERBOSE_LOG",verbose,_countof(verbose));
     verboseAuditLogging=verboseLength>0 && verboseLength<_countof(verbose) && verbose[0]!=L'0';
     QueryPerformanceFrequency(&frequency);
-    Log("PROBE v2.0.0 internal_build=2.0.0-Clean-Native-R12-MFG-Dynamic-Test source_revision=clean-v2-native-source-r12-mfg-dynamic-test supported_targets=steam_21225456,epic_0.0.518.2177,gog_57a8912f frequency=%lld log_profile=%s",frequency.QuadPart,verboseAuditLogging?"verbose_audit":"release_support");
+    Log("PROBE v2.1.1 internal_build=2.1.1 source_revision=v2.1.1-unified-storefront-r3 supported_targets=steam_21225456,epic_0.0.518.2177,gog_57a8912f frequency=%lld log_profile=%s",frequency.QuadPart,verboseAuditLogging?"verbose_audit":"release_support");
     Log("CAPABILITIES fg=fixed_2x_to_6x_plus_dynamic rr=models_E_F_default_F hdr10_bridge=1 rr_guides=gbuffer_material_envbrdf rr_hit_distance=off rr_specular_mvec=off rr_diagnostic_readbacks=off streamline_sdk=2.14.1");
     Log("MONITORING profile=%s rr_perf_sample=240 support_events=startup_settings_fg_rr_model_resize_recovery_failures_fallbacks_performance verbose_env=CONTROLFG_VERBOSE_LOG",verboseAuditLogging?"verbose_audit":"release_support");
 }

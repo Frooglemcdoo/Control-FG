@@ -1,5 +1,13 @@
 # Changelog
 
+## v2.1.1 — unified storefront support
+
+- Added validated Epic Games Store and GOG support alongside Steam in one package.
+- Preserved complete matching game-file identity checks.
+- Updated version labels and installation documentation for all three storefronts.
+- Added the GOG Galaxy overlay conflict and per-game disable instructions.
+- Retained R3 rendering/input behavior and the existing RR noise known issue.
+
 ## v1.0.0 — first public release
 
 First public release of Control FG.

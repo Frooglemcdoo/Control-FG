@@ -47,7 +47,7 @@ with tempfile.TemporaryDirectory() as temp:
     assert np.array_equal(actual[:,:6],original[:,:6]) and np.all(actual[:,6]==0) and np.all(actual[:,7]==0x3c)
     results['r5_full_capture_cpu_reference_and_comparator']='PASS'
     results['r5_projection_double_reference']='PASS'
-sourcePaths=[p for p in (root/'src').glob('rr_reflectance*') if p.is_file()]+list(here.glob('*.cpp'))+[Path(__file__).resolve(),root/'src/shaders/rr_reflectance_capture.hlsl',root/'src/shaders/rr_envbrdf_generated.hlsli',root/'src/shaders/ControlPrimaryGuideDecode.hlsli',root/'tools/compile-reflectance.cpp',root/'Collect-ControlFG-Logs.ps1',root/'src/rr_guide_export.h',root/'src/rr_guide_render.h']
+sourcePaths=[p for p in (root/'src').glob('rr_reflectance*') if p.is_file()]+list(here.glob('*.cpp'))+[Path(__file__).resolve(),root/'src/shaders/rr_reflectance_capture.hlsl',root/'src/shaders/rr_envbrdf_generated.hlsli',root/'src/shaders/ControlPrimaryGuideDecode.hlsli',root/'tools/compile-reflectance.cpp',root/'tools/diagnostics/Collect-ControlFG-Logs.ps1',root/'src/rr_guide_export.h',root/'src/rr_guide_render.h']
 report={'status':'LOCAL_PASS_WINDOWS_GPU_REQUIRED','results':results,'r5_frame':meta['engine_frame'],'r5_pixels':n,'max_double_projection_cosine_error':error,
     'view_convention':'unjittered symmetric perspective pixel centers; native jitter/coverage not validated',
     'shader_compile':'NOT_RUN_LOCAL; mandatory Build.cmd compilation/reflection gate','gpu_execution':'NOT_RUN','rr_evaluation':False,

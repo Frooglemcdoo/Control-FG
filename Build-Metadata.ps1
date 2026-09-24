@@ -1,9 +1,9 @@
 #requires -Version 5.1
 # Shared identity and installer contract. Dot-source this file; it performs no I/O.
 $ControlFGBuild = [ordered]@{
-    Version = '2.0.0-Clean-Native-R12-MFG-Dynamic-Test'
-    BaseProductionVersion = '1.0.0-r1'
-    SourceRevision = 'clean-v2-native-source-r12-mfg-dynamic-test'
+    Version = '2.1.1'
+    BaseProductionVersion = '2.1.0'
+    SourceRevision = 'v2.1.1-unified-storefront-r3'
     RRPhase = 'NativeG12RRExperiment'
     RRNativePreset = 'Preset F public default with live E/F model selection'
     RRRuntimeVersion = '310.9.1'

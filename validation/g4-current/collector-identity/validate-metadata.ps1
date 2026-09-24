@@ -45,7 +45,11 @@ try {
     $fixturePackage=Join-Path $fixture 'package';$fixtureLocal=Join-Path $fixture 'local';$fixtureTemp=Join-Path $fixture 'temp'
     $logs=Join-Path $fixtureLocal 'ControlFGProbe'
     foreach($path in @($fixturePackage,$logs,$fixtureTemp)) { [void](New-Item -ItemType Directory -Path $path -Force) }
-    foreach($name in @('Build-Metadata.ps1','Collect-ControlFG-Logs.ps1')) { Copy-Item -LiteralPath (Join-Path $PackageRoot $name) -Destination (Join-Path $fixturePackage $name) }
+    foreach($name in @('Build-Metadata.ps1','tools/diagnostics/Collect-ControlFG-Logs.ps1','tools/diagnostics/Collect-LiveGuides.ps1')) {
+        $destination=Join-Path $fixturePackage $name
+        [void](New-Item -ItemType Directory -Path (Split-Path -Parent $destination) -Force)
+        Copy-Item -LiteralPath (Join-Path $PackageRoot $name) -Destination $destination
+    }
     $g3=Join-Path $logs 'probe-20260913-150000-001-111.log';$g4=Join-Path $logs 'probe-20260913-140000-001-222.log';$decoy=Join-Path $logs 'probe-20260913-160000-001-333.log'
     '[0] PROBE v1.0.0-RR-Native-G3 source_revision=r1-rr-native-g3' | Set-Content -LiteralPath $g3
     '[0] PROBE v1.0.0-RR-Native-G4 source_revision=r1-rr-native-g4 rr_phase=NativeG4PrimaryViewMaterialImages' | Set-Content -LiteralPath $g4
@@ -53,7 +57,7 @@ try {
     (Get-Item $g4).LastWriteTimeUtc=[DateTime]::UtcNow.AddHours(-1)
     $env:LOCALAPPDATA=$fixtureLocal;$env:TEMP=$fixtureTemp
     $powershell=(Get-Process -Id $PID).Path
-    & $powershell -NoProfile -File (Join-Path $fixturePackage 'Collect-ControlFG-Logs.ps1')
+    & $powershell -NoProfile -File (Join-Path $fixturePackage 'tools/diagnostics/Collect-ControlFG-Logs.ps1')
     if($LASTEXITCODE -ne 0) { throw 'Actual G4 collector failed fixture' }
     $zips=@(Get-ChildItem -LiteralPath $fixturePackage -Filter '*.zip' -File)
     if($zips.Count -ne 1 -or $zips[0].Name -notlike 'Control-FG-v1.0.0-RR-Native-G4-Logs-*') { throw 'Collector ZIP identity wrong' }

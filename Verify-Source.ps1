@@ -10,14 +10,21 @@ try {
     $currentReleaseValidation = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'validation/current-release/results.json') -Raw | ConvertFrom-Json
     if ($currentReleaseValidation.status -cne 'LOCAL_PASS' -or -not ([string]$currentReleaseValidation.tests.portable_gate).StartsWith('PASS')) { throw 'Current-release evidence checkpoint is incomplete.' }
     $currentReleasePaths = @($currentReleaseValidation.tested_sha256.PSObject.Properties | ForEach-Object { $_.Name })
-    # Parse every shipped PowerShell script before invoking the full C++ build.
-    foreach ($file in @(Get-ChildItem -LiteralPath $PSScriptRoot -File -Filter '*.ps1')) {
+    # Keep normal support simple; specialized collectors belong in tools/diagnostics.
+    $supportCollectors = @('Collect-ControlFG-Compact-Logs.cmd', 'Collect-ControlFG-Compact-Logs.ps1')
+    foreach ($file in @(Get-ChildItem -LiteralPath $PSScriptRoot -File -Filter 'Collect-*')) {
+        if ($supportCollectors -cnotcontains $file.Name) { throw ('Developer collector in source root: ' + $file.Name) }
+    }
+    # Parse root and relocated diagnostic PowerShell scripts before the C++ build.
+    $scriptFiles = @(Get-ChildItem -LiteralPath $PSScriptRoot -File -Filter '*.ps1')
+    $scriptFiles += @(Get-ChildItem -LiteralPath (Join-Path $PSScriptRoot 'tools/diagnostics') -File -Filter '*.ps1')
+    foreach ($file in $scriptFiles) {
         $tokens = $null; $errors = $null
         [void][System.Management.Automation.Language.Parser]::ParseFile($file.FullName, [ref]$tokens, [ref]$errors)
         if ($errors.Count) { throw ('PowerShell parse error in ' + $file.Name + ': ' + $errors[0].Message) }
     }
     $probe = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'src/probe.cpp') -Raw
-    foreach ($marker in @('PROBE v2.0.0 internal_build=2.0.0-Clean-Native-R12-MFG-Dynamic-Test','source_revision=clean-v2-native-source-r12-mfg-dynamic-test','log_profile=%s','CAPABILITIES fg=fixed_2x_to_6x_plus_dynamic','MONITORING profile=%s rr_perf_sample=240','CONTROLFG_VERBOSE_LOG')) {
+    foreach ($marker in @('PROBE v2.1.1 internal_build=2.1.1','source_revision=v2.1.1-unified-storefront-r3','log_profile=%s','CAPABILITIES fg=fixed_2x_to_6x_plus_dynamic','MONITORING profile=%s rr_perf_sample=240','CONTROLFG_VERBOSE_LOG')) {
         if (-not $probe.Contains($marker)) { throw ('Release source identity/logging mismatch: ' + $marker) }
     }
     $guide = ''

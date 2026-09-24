@@ -1,0 +1,66 @@
+name: Prepare Control FG v2.1.1
+
+on:
+  push:
+    branches: [release/v2.1.1]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - name: Preserve repository bytes
+        shell: pwsh
+        run: git config --global core.autocrlf false
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify committed source evidence
+        run: python tools/verify_source_evidence.py
+      - name: Build, test, and package
+        shell: cmd
+        run: echo.|Build.cmd
+      - name: Verify deployment and archive matching source
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          python tools/verify-deployment.py
+          if ($LASTEXITCODE -ne 0) { throw 'Deployment verification failed.' }
+          git diff --exit-code
+          if ($LASTEXITCODE -ne 0) { throw 'Build changed tracked source; archive would not match the build.' }
+          git archive --format=zip --prefix=Control-FG-v2.1.1-Source/ --output=release/Control-FG-v2.1.1-Source.zip HEAD
+          if ($LASTEXITCODE -ne 0) { throw 'Source archive failed.' }
+          $sourceHash = (Get-FileHash release/Control-FG-v2.1.1-Source.zip -Algorithm SHA256).Hash.ToLowerInvariant()
+          Add-Content release/SHA256SUMS.txt "$sourceHash  Control-FG-v2.1.1-Source.zip" -Encoding ascii
+          [ordered]@{
+            Version = '2.1.1'
+            SourceCommit = $env:GITHUB_SHA
+            BaselineCommit = '0d5040d7dd5713066f42a82c1f646c4271cde260'
+            RuntimeValidation = 'Inherited user-tested unified R3 on Steam/Epic/GOG; fresh v2.1.1 in-game run not performed by CI.'
+            BuildValidation = 'Windows Build.cmd, source verification, C++ suite, ABI/exports, proxy smoke and deployment verification passed.'
+          } | ConvertTo-Json | Set-Content release/RELEASE-PROVENANCE.json -Encoding utf8
+      - name: Upload release preparation artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: Control-FG-v2.1.1-Release
+          path: |
+            release/Control-FG-v2.1.1.zip
+            release/Control-FG-v2.1.1-Source.zip
+            release/SHA256SUMS.txt
+            release/RELEASE-PROVENANCE.json
+            build/build-validation.json
+            build/deployment-validation.json
+            Build.log
+          if-no-files-found: error
+          retention-days: 30
+      - name: Retain build log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Control-FG-v2.1.1-Failure
+          path: Build.log

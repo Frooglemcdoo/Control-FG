@@ -1,17 +1,17 @@
-# GOG compatibility validation
+# GOG compatibility
 
-GOG is validated as a separate storefront identity before being admitted by Control FG.
+The GOG EXE identity beginning `57A8912F` is supported in v2.1.1. Its D3D and renderer DLLs match the verified Steam files byte-for-byte. The unified R3 build was user-tested on GOG. **Disable Galaxy's in-game overlay for Control**; see [installation instructions](../INSTALL.md#gog-galaxy-disable-the-overlay-for-control). The collector below remains available for investigating other builds.
 
 Run:
 
 ```bat
-Collect-GOG-Compatibility.cmd
+tools\diagnostics\Collect-GOG-Compatibility.cmd
 ```
 
 The collector attempts to find the GOG install from GOG registry entries and common GOG/Galaxy install paths. If detection fails:
 
 ```bat
-Collect-GOG-Compatibility.cmd --gog "D:\GOG Games\Control"
+tools\diagnostics\Collect-GOG-Compatibility.cmd --gog "D:\GOG Games\Control"
 ```
 
 If Steam or Epic is installed locally, the collector also compares the GOG renderer/D3D binaries directly against that already-validated reference.

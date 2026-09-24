@@ -20,8 +20,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p package/tools package/src package/docs
-          cp Collect-GOG-Compatibility.cmd package/
+          mkdir -p package/tools/diagnostics package/src package/docs
+          cp tools/diagnostics/Collect-GOG-Compatibility.cmd package/tools/diagnostics/
           cp tools/gog_compat_probe.py package/tools/
           cp tools/pe_tools.py package/tools/
           cp src/target.h package/src/
@@ -29,13 +29,13 @@ jobs:
           cat > package/README.txt <<'EOF'
           Control FG - GOG Compatibility Probe
 
-          Run Collect-GOG-Compatibility.cmd.
+          Run tools\diagnostics\Collect-GOG-Compatibility.cmd.
 
           The probe is read-only. It hashes and compares the local Control
           binaries and does not modify or copy game binaries into its report.
 
           If auto-detection fails:
-            Collect-GOG-Compatibility.cmd --gog "D:\GOG Games\Control"
+            tools\diagnostics\Collect-GOG-Compatibility.cmd --gog "D:\GOG Games\Control"
 
           Send back the generated compatibility-output\GOG-<timestamp>.zip.
           EOF

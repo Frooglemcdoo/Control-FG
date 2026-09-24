@@ -4,7 +4,7 @@
 #include "settings_cog_image.h"
 #include "rr_user_control.h"
 
-// Process-local Control FG overlay for v2.0.0.
+// Process-local Control FG overlay for v2.1.1.
 // The v0.8.26 generation path is intentionally untouched. This layer owns only
 // UI, settings persistence, monitor refresh discovery, and read-only runtime status.
 // The overlay starts hidden and is shown only by an explicit F10 press.
@@ -553,7 +553,7 @@ static void PaintFGOverlay(HWND hwnd) noexcept {
     SelectObject(dc, smallFont);
     SetTextColor(dc, RGB(185, 185, 185));
     RECT versionRc{410, 31, 480, 55};
-    DrawTextW(dc, L"v2.0.0", -1, &versionRc, DT_RIGHT | DT_VCENTER | DT_SINGLELINE);
+    DrawTextW(dc, L"v2.1.1", -1, &versionRc, DT_RIGHT | DT_VCENTER | DT_SINGLELINE);
     PaintFGSettingsCog(dc, 502, 26);
     RECT keyBox{545, 25, 666, 57};
     SelectObject(dc, buttonSelectedFont);

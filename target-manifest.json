@@ -1,7 +1,7 @@
 {
   "SteamAppId": "870780",
   "SteamBuildId": "21225456",
-  "ProbeVersion": "1.0.0",
+  "ProbeVersion": "2.1.1",
   "RequiredFiles": [
     {
       "Name": "Control_DX12.exe",
@@ -22,8 +22,8 @@
     "Configuration": "Production",
     "Architecture": "x64"
   },
-  "Phase": "First public release. v0.8.26 remains the runtime-proven FG/HDR/Dynamic core; v1.0.0 promotes the stabilized Control-native UI, persistence, packaging, and RTX 40-series policy branch.",
-  "SourceRevision": "r1",
+  "Phase": "Unified Steam, Epic Games Store and GOG release based on the runtime-tested R3 storefront build. Full matching EXE/D3D/renderer hash triples remain required.",
+  "SourceRevision": "v2.1.1-unified-storefront-r3",
   "DLSSGGeneratedFramesRequested": 3,
   "TargetMultiplier": "4x",
   "ExpectedFramesPresented": 4,

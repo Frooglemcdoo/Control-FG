@@ -49,7 +49,7 @@ assert 'source->AddRef();job->part1Source=source;' in readback
 assert 'RRGuideTryAcquireNativeLock(current.recordingLock)' in readback
 assert 'RRGuideReleaseNativeLock(current.recordingLock)' in readback
 assert 'RRPart1SameContext(again,current)' in readback
-assert 'part1_source_frame' in (root/'Collect-ControlFG-Logs.ps1').read_text()
+assert 'part1_source_frame' in (root/'tools/diagnostics/Collect-ControlFG-Logs.ps1').read_text()
 gpu=json.loads((root/'validation/reflectance-gpu/validation.json').read_text())
 assert gpu['status']=='LOCAL_PASS_WINDOWS_GPU_REQUIRED' and len(gpu['results'])==8
 for n,h in gpu['tested_sha256'].items():assert digest(root/n)==h,n

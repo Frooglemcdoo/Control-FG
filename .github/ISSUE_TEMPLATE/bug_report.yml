@@ -6,7 +6,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Please reproduce the issue with Control FG by itself if possible. Attach the log ZIP from `Collect-ControlFG-Logs.cmd`.
+        Please reproduce the issue with Control FG by itself if possible. Attach the log ZIP from `Collect-ControlFG-Compact-Logs.cmd`.
   - type: input
     id: version
     attributes:
@@ -58,4 +58,4 @@ body:
     id: logs
     attributes:
       label: Logs
-      description: Drag the ZIP created by Collect-ControlFG-Logs.cmd here.
+      description: Drag the ZIP created by Collect-ControlFG-Compact-Logs.cmd here.

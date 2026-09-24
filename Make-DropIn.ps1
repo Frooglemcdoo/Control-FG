@@ -4,7 +4,7 @@ param()
 $ErrorActionPreference='Stop'
 . (Join-Path $PSScriptRoot 'Build-Metadata.ps1')
 $Version=$ControlFGBuild.Version
-$PublicVersion='2.1.0'
+$PublicVersion=$ControlFGBuild.Version
 $RuntimeNames=@('sl.interposer.dll','sl.common.dll','sl.pcl.dll','sl.reflex.dll','sl.dlss_g.dll','nvngx_dlssg.dll','sl.dlss_d.dll','nvngx_dlssd.dll')
 try {
     $validationPath=Join-Path $PSScriptRoot 'build\build-validation.json'
@@ -35,7 +35,7 @@ try {
         Copy-Item -LiteralPath $src -Destination (Join-Path (Join-Path $out 'ControlFGStreamline') $name)
     }
 
-    foreach ($doc in @('Collect-Alignment-Logs.cmd','Collect-Alignment-Logs.ps1','KNOWN_ISSUES.md','README.md','INSTALL.md','TROUBLESHOOTING.md','RELEASE_NOTES.md','Collect-ControlFG-Compact-Logs.cmd','Collect-ControlFG-Compact-Logs.ps1')) {
+    foreach ($doc in @('KNOWN_ISSUES.md','README.md','INSTALL.md','TROUBLESHOOTING.md','RELEASE_NOTES.md','target-manifest.json','Collect-ControlFG-Compact-Logs.cmd','Collect-ControlFG-Compact-Logs.ps1')) {
         $src=Join-Path $PSScriptRoot $doc
         if (-not (Test-Path -LiteralPath $src)) { throw ('Missing public release document: '+$doc) }
         Copy-Item -LiteralPath $src -Destination (Join-Path $out $doc)

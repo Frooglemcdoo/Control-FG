@@ -2,6 +2,7 @@
 [CmdletBinding()]
 param()
 $ErrorActionPreference = 'Stop'
+$ControlFGProjectRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..'))
 function Test-ControlFGInteger($Value) {
     return ($Value -is [int] -or $Value -is [long])
 }
@@ -24,13 +25,13 @@ namespace ControlFG {
     }
 }
 try {
-    . (Join-Path $PSScriptRoot 'Build-Metadata.ps1')
+    . (Join-Path $ControlFGProjectRoot 'Build-Metadata.ps1')
     $logDir = Join-Path $env:LOCALAPPDATA 'ControlFGProbe'
     if (-not (Test-Path -LiteralPath $logDir -PathType Container)) { throw 'No Control FG log directory exists yet. Run Control with G11 first.' }
     $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
     $suffix = [guid]::NewGuid().ToString('N').Substring(0,8)
     $stage = Join-Path $env:TEMP ('ControlFG-G11-Collect-' + $suffix)
-    $zip = Join-Path $PSScriptRoot ('Control-FG-v' + $ControlFGBuild.Version + '-Logs-' + $stamp + '-' + $suffix + '.zip')
+    $zip = Join-Path $ControlFGProjectRoot ('Control-FG-v' + $ControlFGBuild.Version + '-Logs-' + $stamp + '-' + $suffix + '.zip')
     $identity = ' PROBE v' + $ControlFGBuild.Version + ' '
     $probeLogs = @(Get-ChildItem -LiteralPath $logDir -File -Filter 'probe-*.log' |
         Where-Object { $_.Length -le 32MB -and -not ($_.Attributes -band [IO.FileAttributes]::ReparsePoint) -and ([string](Get-Content -LiteralPath $_.FullName -TotalCount 1)).Contains($identity) } |
@@ -267,7 +268,7 @@ try {
             }
         }
         foreach ($relative in @('Build.log','build/build-validation.json','third_party/streamline/sdk-info.json','installation.json')) {
-            $source = Join-Path $PSScriptRoot $relative
+            $source = Join-Path $ControlFGProjectRoot $relative
             if (Test-Path -LiteralPath $source -PathType Leaf) {
                 $file = Get-Item -LiteralPath $source
                 if ($file.Length -le 16MB -and -not ($file.Attributes -band [IO.FileAttributes]::ReparsePoint)) {

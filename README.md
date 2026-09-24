@@ -6,8 +6,10 @@
 
 Unlike a generic graphics injection layer, Control FG is **game-specific and engine-aware**. *Control* does not expose a native Frame Generation integration for the mod to translate, so the project reconstructs the inputs FG and RR need directly from the game's renderer: frame boundaries, depth and motion vectors, camera/jitter state, pre-UI scene color, ray-tracing resources, HDR state, and presentation timing.
 
-> **Current release:** [v2.1.0](https://github.com/Frooglemcdoo/Control-FG/releases/tag/v2.1.0)  
-> **Verified game target:** Control on Steam, DX12, Steam build `21225456`  
+> **Current release:** [v2.1.1](https://github.com/Frooglemcdoo/Control-FG/releases/tag/v2.1.1)
+>
+> **Supported storefronts:** Steam, Epic Games Store, and GOG — DirectX 12
+>
 > **Streamline:** NVIDIA Streamline `2.14.1`
 
 ## Huge thanks to HotKnives!
@@ -20,7 +22,14 @@ A massive shoutout to **HotKnives** for lending me his machine and helping with 
 
 [Watch Control FG – App and Overlay Demonstration on YouTube](https://youtu.be/aP7UeCSx00c)
 
-## What's new in v2.1.0
+## What's new in v2.1.1
+
+- **Epic Games Store and GOG are now supported**, alongside Steam, in one download.
+- Validated storefront profiles retain the exact game-file checks used by the runtime and installer.
+- Installation instructions now cover all three storefronts.
+- **GOG users: disable the GOG Galaxy in-game overlay for Control** before playing. See the steps below.
+
+### Included from v2.1.0
 
 - **Experimental RTX 40-series Multi Frame Generation**, available as an opt-in setting in Options. Disabled by default; restart Control after enabling it.
 - A dedicated **Ray Reconstruction settings page**, with a reflection clamp slider from **25 to 75**, default **60**, and a **Reset to default** button.
@@ -38,6 +47,8 @@ A massive shoutout to **HotKnives** for lending me his machine and helping with 
 - Cleaned up the overlay and removed the HDR restart footer.
 
 ## Known issues
+
+**GOG Galaxy overlay conflict:** Galaxy's in-game overlay can cause input/focus stalls and make Control FG or other overlays disappear. Disable it for Control using the [steps below](#gog-disable-galaxys-in-game-overlay).
 
 **RR indirect diffuse lighting:** blinds can show crawling/noisy streaks when Ray Reconstruction and **Ray Traced Indirect Diffuse Lighting** are enabled together. Reported on both RTX 40- and 50-series GPUs; Models E and F behave similarly. **Workaround:** disable Ray Traced Indirect Diffuse Lighting in the game, or disable RR in the overlay.
 
@@ -112,16 +123,34 @@ On **GeForce RTX 40-series**, **Off and 2x** remain the default. Enable **experi
 
 A current NVIDIA driver is strongly recommended. Hardware-accelerated GPU scheduling (HAGS) should be enabled if DLSS Frame Generation is unavailable on otherwise supported hardware.
 
-## Install
+## Install — Steam, Epic Games Store, and GOG
 
-See [INSTALL.md](INSTALL.md).
+Download **`Control-FG-v2.1.1.zip`** from the [release assets](https://github.com/Frooglemcdoo/Control-FG/releases/tag/v2.1.1). This is the same deployment package for all three stores; the source ZIP requires compilation.
 
-The short version:
+Close Control, then locate the folder containing **`Control_DX12.exe`**:
 
-1. Copy `dxgi.dll` beside `Control_DX12.exe`.
-2. Copy the complete `ControlFGStreamline` folder beside it.
-3. Launch Control in DX12 mode.
-4. Press **F10**, or your saved custom shortcut. The header cog opens Options; the cog beside RR opens its settings.
+| Storefront | Find the game folder | Example path (your location may differ) |
+| --- | --- | --- |
+| Steam | Library → right-click Control → Manage → Browse local files | `C:\Program Files (x86)\Steam\steamapps\common\Control` |
+| Epic Games Store | Library → Control's three-dot menu → Manage → folder icon beside Installation | `C:\Program Files\Epic Games\Control` |
+| GOG Galaxy | Control → menu beside Play → Manage installation → Show folder | `C:\Program Files (x86)\GOG Galaxy\Games\Control` |
+
+1. Extract the release ZIP.
+2. Copy **`dxgi.dll`** and the **complete `ControlFGStreamline` folder** beside `Control_DX12.exe`. Replace your previous Control FG files together when updating.
+3. For GOG, disable Galaxy's in-game overlay using the steps below.
+4. Launch **Control in DirectX 12 mode**. If the launcher offers a choice, select DX12.
+5. Press **F10**, or your saved custom shortcut. The header cog opens Options; the cog beside RR opens its settings.
+
+For a GOG offline installation, use the folder you selected when installing the game. See [INSTALL.md](INSTALL.md) for updating, removal, and source-build instructions.
+
+### GOG: disable Galaxy's in-game overlay
+
+1. Close Control and select it in **GOG Galaxy**.
+2. Open the menu beside **Play** → **Manage installation** → **Configure**.
+3. Select **Features** and uncheck **Overlay** / **Access GOG GALAXY features in-game**. If shown, turn off **Use default settings** first so you can change the per-game option.
+4. Save/confirm the change if prompted, then relaunch Control in DX12 mode.
+
+If the per-game option is unavailable, Galaxy's global setting is **Settings → Game features → Overlay**; disabling it there affects all games. The game must be restarted after changing the setting. This workaround concerns Galaxy's overlay; Control FG's F10 overlay remains available.
 
 ## Screenshots
 
@@ -157,7 +186,15 @@ If you need to report an issue, reproduce it once and run `Collect-ControlFG-Com
 
 ## Current compatibility
 
-This release is **build-locked to Control on Steam, DX12, Steam build `21225456`**. DX11 is not supported. Other storefront builds and later game patches are not claimed compatible until tested.
+**Steam, Epic Games Store, and GOG are supported** for the validated DX12 builds:
+
+| Storefront | Validated identity |
+| --- | --- |
+| Steam | Build `21225456` |
+| Epic Games Store | Game binary version `0.0.518.2177` |
+| GOG | EXE SHA-256 begins `57A8912F`; engine DLLs match the verified Steam binaries |
+
+The runtime and source installer require one complete, recognized combination of `Control_DX12.exe`, `d3d_rmdwin10_f.dll`, and `renderer_rmdwin10_f.dll`. Unknown or mismatched combinations are rejected. Exact identities are recorded in [target-manifest.json](target-manifest.json). DX11 and unvalidated game updates are not supported. **Disable Galaxy's in-game overlay when using the GOG version.**
 
 ## Roadmap
 

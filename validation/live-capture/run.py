@@ -12,5 +12,5 @@ with tempfile.TemporaryDirectory() as temp:
    source=bytes((i*40+j)%256 for j in range(144));assert (capture/name).read_bytes()==source[16:16+active]+source[80:80+active]
   assert not (out/'ControlFGProbe/rr-live-g15-1-43/metadata.json').exists()
   subprocess.run([sys.executable,str(root/'tools/analyze-live-capture.py'),str(capture),str(out/'analysis')],check=True,stdout=subprocess.DEVNULL)
-files=[root/'src/rr_live_capture.h',root/'Collect-LiveGuides.ps1',root/'tools/analyze-live-capture.py',here/'export-test.cpp']
+files=[root/'src/rr_live_capture.h',root/'tools/diagnostics/Collect-LiveGuides.ps1',root/'tools/analyze-live-capture.py',here/'export-test.cpp']
 (here/'results.json').write_text(json.dumps({'status':'LOCAL_EXPORT_PASS_WINDOWS_REQUIRED','results':results,'sha256':{str(p.relative_to(root)):hashlib.sha256(p.read_bytes()).hexdigest() for p in files},'limits':'Win32 exporter uses POSIX file shim; no GPU or PowerShell runtime validation on this host.'},indent=2)+'\n');print('PASS: actual live exporter normal and ASan/UBSan; metadata and active bytes independently checked; offline analyzer exercised')

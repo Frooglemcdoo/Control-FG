@@ -32,5 +32,5 @@ control_rr_albedo::RejectionExample e;e.reason=control_rr_albedo::RejectReason::
     d=json.loads(result);assert d['accepted_families']['eye']==1 and sum(d['accepted_families'].values())==d['accepted_batches'] and d['rejection_total_reconciled']
     assert d['examples'][0]['eye_variants']=={'table_valid':True,'match_count':2,'keys':[1,2,3,4],'matches':[True,False,True,False]}
    results[mode+'-'+name]='PASS'
-files=['src/rr_eye_variants.h','src/rr_albedo_prepare.h','src/rr_albedo_capture.h','src/rr_diffuse_replay.h','src/rr_albedo_shader.h','Collect-ControlFG-Logs.ps1','validation/eye-variants/test.cpp','validation/eye-variants/integration.cpp','validation/eye-variants/run.py']
+files=['src/rr_eye_variants.h','src/rr_albedo_prepare.h','src/rr_albedo_capture.h','src/rr_diffuse_replay.h','src/rr_albedo_shader.h','tools/diagnostics/Collect-ControlFG-Logs.ps1','validation/eye-variants/test.cpp','validation/eye-variants/integration.cpp','validation/eye-variants/run.py']
 (here/'results.json').write_text(json.dumps({'status':'LOCAL_PASS_WINDOWS_REQUIRED','results':results,'sha256':{n:hashlib.sha256((root/n).read_bytes()).hexdigest() for n in files},'limits':'Captured foliage programs exercise the actual validator as fixtures; no eye bytecode or Windows gameplay execution is claimed.'},indent=2)+'\n');print(json.dumps(results,indent=2))

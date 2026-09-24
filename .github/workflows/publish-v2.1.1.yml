@@ -1,0 +1,82 @@
+name: Publish Control FG v2.1.1
+
+on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/publish-v2.1.1.yml]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: publish-control-fg-v2.1.1
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.repository == 'Frooglemcdoo/Control-FG' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Retrieve the successful Windows build for this exact commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main
+          run_id=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/prepare-v2.1.1.yml/runs?head_sha=$GITHUB_SHA&status=completed&per_page=100" --jq '[.workflow_runs[] | select(.conclusion == "success" and .head_branch == "release/v2.1.1")][0].id // empty')
+          test -n "$run_id"
+          gh run download "$run_id" --repo "$GITHUB_REPOSITORY" --name Control-FG-v2.1.1-Release --dir artifact
+      - name: Verify release provenance, archives and checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib, json, os, subprocess, zipfile
+          release = Path('artifact/release')
+          provenance = json.loads((release/'RELEASE-PROVENANCE.json').read_text(encoding='utf-8-sig'))
+          assert provenance['SourceCommit'] == os.environ['GITHUB_SHA']
+          assert provenance['Version'] == '2.1.1'
+          checksums = {}
+          for line in (release/'SHA256SUMS.txt').read_text(encoding='utf-8-sig').splitlines():
+              digest, name = line.split(None, 1)
+              checksums[name.strip()] = digest.lower()
+          for name in ('Control-FG-v2.1.1.zip', 'Control-FG-v2.1.1-Source.zip'):
+              assert hashlib.sha256((release/name).read_bytes()).hexdigest() == checksums[name]
+          with zipfile.ZipFile(release/'Control-FG-v2.1.1.zip') as package:
+              assert package.testzip() is None
+              contents = {n.replace('\\', '/'): package.read(n) for n in package.namelist() if not n.endswith('/')}
+              for name, data in contents.items():
+                  if name.endswith('.dll'):
+                      assert hashlib.sha256(data).hexdigest() == checksums[name], name
+              assert {n for n in contents if n.startswith('Collect-')} == {'Collect-ControlFG-Compact-Logs.cmd', 'Collect-ControlFG-Compact-Logs.ps1'}
+          with zipfile.ZipFile(release/'Control-FG-v2.1.1-Source.zip') as source:
+              prefix = 'Control-FG-v2.1.1-Source/'
+              tracked = subprocess.check_output(['git', 'ls-tree', '-r', '--name-only', 'HEAD']).decode().splitlines()
+              members = {n[len(prefix):] for n in source.namelist() if not n.endswith('/')}
+              assert members == set(tracked)
+              for name in tracked:
+                  assert source.read(prefix+name) == subprocess.check_output(['git', 'show', 'HEAD:'+name]), name
+              assert {n for n in members if '/' not in n and n.startswith('Collect-')} == {'Collect-ControlFG-Compact-Logs.cmd', 'Collect-ControlFG-Compact-Logs.ps1'}
+          print('PASS: exact source commit, successful Windows provenance and release payload hashes')
+          PY
+      - name: Publish the verified v2.1.1 release
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release create v2.1.1 \
+            artifact/release/Control-FG-v2.1.1.zip \
+            artifact/release/Control-FG-v2.1.1-Source.zip \
+            artifact/release/SHA256SUMS.txt \
+            artifact/release/RELEASE-PROVENANCE.json \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" --latest \
+            --title "Control FG v2.1.1 - Steam, Epic Games Store and GOG" \
+            --notes-file RELEASE_NOTES.md

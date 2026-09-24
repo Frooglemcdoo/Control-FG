@@ -1,8 +1,9 @@
 #requires -Version 5.1
 param([string]$LogDirectory='', [string]$OutputDirectory='')
 $ErrorActionPreference='Stop'
+$ControlFGProjectRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..'))
 if (-not $LogDirectory) { $LogDirectory=Join-Path $env:LOCALAPPDATA 'ControlFGProbe' }
-if (-not $OutputDirectory) { $OutputDirectory=$PSScriptRoot }
+if (-not $OutputDirectory) { $OutputDirectory=$ControlFGProjectRoot }
 $selected=$null
 foreach ($f in @(Get-ChildItem -LiteralPath $LogDirectory -Filter 'probe-*.log' -File | Sort-Object LastWriteTimeUtc -Descending)) {
     $header=Get-Content -LiteralPath $f.FullName -TotalCount 8
@@ -18,7 +19,7 @@ $captureDirectory=Join-Path $LogDirectory ('Native-R12-MFG-Dynamic-Test-'+$Match
 if (Test-Path -LiteralPath $captureDirectory -PathType Container) { Copy-Item -LiteralPath $captureDirectory -Destination $stage -Recurse } else { 'No pixel samples saved; inspect PIXEL_REQUEST/ABORT/INVALID in the included log.' | Set-Content -LiteralPath (Join-Path $stage 'CAPTURE-MISSING.txt'); Write-Warning 'No samples saved. Send this ZIP so the capture failure can be diagnosed.' }
 
 foreach ($name in @('Build.log','Build-Metadata.ps1','README.md')) {
-    $source=Join-Path $PSScriptRoot $name
+    $source=Join-Path $ControlFGProjectRoot $name
     if (Test-Path -LiteralPath $source) { Copy-Item -LiteralPath $source -Destination $stage }
 }
 $zip=$stage+'.zip'

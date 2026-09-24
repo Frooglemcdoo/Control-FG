@@ -1,6 +1,6 @@
-# Epic Games Store compatibility work
+# Epic Games Store compatibility
 
-This branch contains a **read-only compatibility collector** for adding Epic Games Store support without weakening Control FG's existing build lock.
+Epic binary version `0.0.518.2177` is supported in v2.1.1. Startup, overlay, FG and RR were user-tested successfully. All three file hashes differ from Steam, while the validated engine contracts share the same layout. See [installation instructions](../INSTALL.md). The collector below remains available for investigating other builds.
 
 ## Why this is required
 
@@ -10,20 +10,20 @@ Control FG currently validates exact SHA-256 identities for:
 - `d3d_rmdwin10_f.dll`
 - `renderer_rmdwin10_f.dll`
 
-The runtime also uses build-locked internal RVAs in the D3D and renderer modules. Epic support therefore must be added as an explicit target profile, not by disabling the hash checks.
+The runtime also uses build-locked internal RVAs in the D3D and renderer modules. Epic is admitted through an explicit target profile; the hash checks remain enabled.
 
 ## Run the collector
 
 Close Control, then from the repository root run:
 
 ```bat
-Collect-Epic-Compatibility.cmd
+tools\diagnostics\Collect-Epic-Compatibility.cmd
 ```
 
 The script auto-detects Epic and Steam installs when possible. To specify them directly:
 
 ```bat
-Collect-Epic-Compatibility.cmd --epic "D:\Epic Games\Control" --steam "D:\SteamLibrary\steamapps\common\Control"
+tools\diagnostics\Collect-Epic-Compatibility.cmd --epic "D:\Epic Games\Control" --steam "D:\SteamLibrary\steamapps\common\Control"
 ```
 
 It creates `compatibility-output\Epic-<timestamp>.zip`.

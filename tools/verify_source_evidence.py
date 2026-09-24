@@ -14,6 +14,9 @@ def validate_current_checkpoint(report):
 
 def verify_source_evidence(root):
     root = Path(root).resolve()
+    support_collectors = {'Collect-ControlFG-Compact-Logs.cmd', 'Collect-ControlFG-Compact-Logs.ps1'}
+    if {p.name for p in root.glob('Collect-*') if p.is_file()} != support_collectors:
+        raise ValueError('Only the compact support collector pair belongs in the source root')
     script = (root / 'Verify-Source.ps1').read_text(encoding='utf-8-sig')
     all_references = list(dict.fromkeys(re.findall(
         r"Join-Path\s+\$PSScriptRoot\s+'([^']+\.json)'", script)))

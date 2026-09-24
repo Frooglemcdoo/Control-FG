@@ -7,7 +7,7 @@ $ProbeVersion = $ControlFGBuild.Version
 $RuntimeNames = @('sl.interposer.dll','sl.common.dll','sl.pcl.dll','sl.reflex.dll','sl.dlss_g.dll','nvngx_dlssg.dll','sl.dlss_d.dll','nvngx_dlssd.dll')
 try {
     if ($Action -eq 'Collect') {
-        & (Join-Path $PSScriptRoot 'Collect-ControlFG-Logs.ps1')
+        & (Join-Path $PSScriptRoot 'tools/diagnostics/Collect-ControlFG-Logs.ps1')
         exit $LASTEXITCODE
     }
 
@@ -17,7 +17,7 @@ try {
     if (Test-Path -LiteralPath $receiptPath) { $receipt = Get-Content -LiteralPath $receiptPath -Raw | ConvertFrom-Json }
     if (-not $GamePath -and $receipt) { $GamePath = $receipt.GamePath }
     if (-not $GamePath) {
-        Write-Host 'Browse to the Control install folder from Steam or Epic Games Store.'
+        Write-Host 'Browse to the Control install folder from Steam, Epic Games Store, or GOG Galaxy.'
         $GamePath = Read-Host 'Paste the folder containing Control_DX12.exe'
     }
     $GamePath = (Resolve-Path -LiteralPath $GamePath.Trim().Trim('"')).ProviderPath

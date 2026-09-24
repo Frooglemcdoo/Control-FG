@@ -48,8 +48,8 @@ try {
     $binaryUnicodeText = [Text.Encoding]::Unicode.GetString($bytes)
     $markers = @(
         'FG_OVERLAY_SETTINGS_S5 binding=persisted_single_key options=replacement_page default=F10',
-        'PROBE v2.0.0 internal_build=2.0.0-Clean-Native-R12-MFG-Dynamic-Test',
-        'source_revision=clean-v2-native-source-r12-mfg-dynamic-test','log_profile=%s','CAPABILITIES fg=fixed_2x_to_6x_plus_dynamic',
+        'PROBE v2.1.1 internal_build=2.1.1',
+        'source_revision=v2.1.1-unified-storefront-r3','log_profile=%s','CAPABILITIES fg=fixed_2x_to_6x_plus_dynamic',
         'MONITORING profile=%s rr_perf_sample=240','CONTROLFG_VERBOSE_LOG',
         'RR_PRESET_HOOK_READY','default_preset=F selectable=E,F,K,L,M','RR_PRESET_REQUEST','RR_PRESET_UI','RR_PRESET_LIVE_SWITCH',
         'RR_NATIVE_EVALUATED','RR_FRAME_MODE','RR_RESIZE_EPOCH_BEGIN','RR_RESIZE_EPOCH_RELEASE','RR_FRAME_RECOVERY_SR',
@@ -133,6 +133,6 @@ try {
     Assert-ControlFGBuildValidation ([pscustomobject]$validation)
     $validation | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $PSScriptRoot 'build\build-validation.json') -Encoding UTF8
 
-    Write-Host 'PASS: Control FG v2.0.0 r31c HDR DLSS-G hard-reset candidate validated: Model F default/E alternate, concise support logging, signed-off RR/SDR FG retained; HDR-domain changes commit FG off, free DLSS-G viewport resources, invalidate FG caches, then rearm after bridge/fresh-frame settle.'
+    Write-Host 'PASS: Control FG v2.1.1 unified Steam/Epic/GOG build validated: Model F default/E alternate, concise support logging, signed-off RR/SDR FG retained; HDR-domain changes commit FG off, free DLSS-G viewport resources, invalidate FG caches, then rearm after bridge/fresh-frame settle.'
     Write-Host 'Build checks do not validate live Control/driver behavior. r31c sign-off requires FG_HDR_HARD_RESET_BEGIN -> OFF_COMMIT success=1 -> FREE success=1, then either bridge transition + two-fresh-frame settle -> FG_HDR_HARD_RESET_REARM or no-resize settle -> FG_HDR_HARD_RESET_REARM_NO_BRIDGE, followed by SL_DLSSG_MODE mode=on.'
 } catch { Write-Error $_; exit 1 }
