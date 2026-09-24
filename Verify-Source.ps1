@@ -355,13 +355,7 @@ try {
         if (-not $overlaySource.Contains($contract)) { throw ('r31 HDR no-hotkey-interception contract missing: ' + $contract) }
     }
     if ($hdrBridge.Contains('ServiceSLHdrHotkeyGuardBeforePresent') -or $hdrBridge.Contains('CompleteSLHdrHotkeyGuardAfterPresent')) { throw 'r31 HDR bridge must not service the retired r30 hotkey serialization path.' }
-    if ($overlaySource.Contains('fgOverlayKeyboardHook = SetWindowsHookExW(') -or
-        $overlaySource.Contains('SetWindowsHookExW(WH_KEYBOARD_LL, FGOverlayLowLevelKeyboardProc')) {
-        throw 'r31 overlay must not install the retired low-level keyboard hook for HDR.'
-    }
-    foreach ($contract in @('FGOverlayToggleLowLevelKeyboardProc','fgOverlayToggleKeyboardHook = SetWindowsHookExW','LLKHF_INJECTED','input=physical_keyboard_hook','fallback=GetAsyncKeyState')) {
-        if (-not $overlaySource.Contains($contract)) { throw ('Overlay physical-hotkey hardening contract missing: ' + $contract) }
-    }
+    if ($overlaySource.Contains('SetWindowsHookExW(')) { throw 'r31 overlay must not install a low-level keyboard hook for HDR.' }
     $observerSignature = 'static void ObserveSLDisplayHdrDomainBeforePresent(IDXGISwapChain* swapChain, unsigned long long present) noexcept {'
     $observerStart = $slBridge.IndexOf($observerSignature)
     $observerEnd = $slBridge.IndexOf('static void SetDLSSGModeForPresent', $observerStart)
