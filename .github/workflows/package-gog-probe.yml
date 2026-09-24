@@ -1,0 +1,53 @@
+name: Package GOG compatibility probe
+
+on:
+  push:
+    branches:
+      - epic-storefront-compat
+    paths:
+      - ".github/workflows/package-gog-probe.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Package GOG probe
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p package/tools package/src package/docs
+          cp Collect-GOG-Compatibility.cmd package/
+          cp tools/gog_compat_probe.py package/tools/
+          cp tools/pe_tools.py package/tools/
+          cp src/target.h package/src/
+          cp docs/GOG_COMPAT.md package/docs/
+          cat > package/README.txt <<'EOF'
+          Control FG - GOG Compatibility Probe
+
+          Run Collect-GOG-Compatibility.cmd.
+
+          The probe is read-only. It hashes and compares the local Control
+          binaries and does not modify or copy game binaries into its report.
+
+          If auto-detection fails:
+            Collect-GOG-Compatibility.cmd --gog "D:\GOG Games\Control"
+
+          Send back the generated compatibility-output\GOG-<timestamp>.zip.
+          EOF
+          (cd package && zip -qr ../Control-FG-GOG-Compatibility-Probe-R1.zip .)
+          sha256sum Control-FG-GOG-Compatibility-Probe-R1.zip > Control-FG-GOG-Compatibility-Probe-R1.sha256
+
+      - name: Upload probe
+        uses: actions/upload-artifact@v4
+        with:
+          name: Control-FG-GOG-Compatibility-Probe-R1
+          path: |
+            Control-FG-GOG-Compatibility-Probe-R1.zip
+            Control-FG-GOG-Compatibility-Probe-R1.sha256
+          retention-days: 7
+          if-no-files-found: error
