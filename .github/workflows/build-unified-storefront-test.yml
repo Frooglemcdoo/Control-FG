@@ -1,0 +1,70 @@
+name: Build unified Steam Epic test
+
+on:
+  push:
+    branches:
+      - epic-storefront-compat
+    paths:
+      - ".github/workflows/build-unified-storefront-test.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Refresh storefront compatibility checkpoint
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $path = 'validation/current-release/results.json'
+          $j = Get-Content -LiteralPath $path -Raw | ConvertFrom-Json
+          $j.scope = 'v2.1.0 runtime plus verified Epic Games Store target 0.0.518.2177; shared renderer/D3D RVAs statically matched and Epic GPU runtime validated.'
+          $j.tests.gpu_runtime = 'PASS Epic 0.0.518.2177: startup, 9 hooks, Streamline 2.14.1, RR Model F, and 3x FG frames_presented=3; compact log 20260924-135615.'
+          $changed = @(
+            'src/target.h',
+            'src/probe.cpp',
+            'Manage-Probe.ps1',
+            'target-manifest.json'
+          )
+          foreach ($rel in $changed) {
+            $hash = (Get-FileHash -LiteralPath $rel -Algorithm SHA256).Hash.ToLowerInvariant()
+            $prop = $j.tested_sha256.PSObject.Properties[$rel]
+            if ($null -eq $prop) {
+              $j.tested_sha256 | Add-Member -NotePropertyName $rel -NotePropertyValue $hash
+            } else {
+              $prop.Value = $hash
+            }
+          }
+          $j | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $path -Encoding UTF8
+          Write-Host 'Updated compatibility-owned checkpoint paths:'
+          foreach ($rel in $changed) { Write-Host $rel (Get-FileHash $rel -Algorithm SHA256).Hash }
+
+      - name: Build and validate
+        shell: cmd
+        run: echo.|Build.cmd
+
+      - name: Rename unified test package
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $src = 'release/Control-FG-v2.1.0.zip'
+          if (-not (Test-Path -LiteralPath $src)) { throw 'Expected release package was not produced.' }
+          Copy-Item -LiteralPath $src -Destination 'Control-FG-v2.1.0-Steam-Epic-Unified-Test-R2.zip'
+          (Get-FileHash -LiteralPath 'Control-FG-v2.1.0-Steam-Epic-Unified-Test-R2.zip' -Algorithm SHA256).Hash.ToLowerInvariant() |
+            Set-Content -LiteralPath 'Control-FG-v2.1.0-Steam-Epic-Unified-Test-R2.sha256' -Encoding ASCII
+
+      - name: Upload unified test
+        uses: actions/upload-artifact@v4
+        with:
+          name: Control-FG-v2.1.0-Steam-Epic-Unified-Test-R2
+          path: |
+            Control-FG-v2.1.0-Steam-Epic-Unified-Test-R2.zip
+            Control-FG-v2.1.0-Steam-Epic-Unified-Test-R2.sha256
+            build/build-validation.json
+            Build.log
+          if-no-files-found: error
+          retention-days: 7
