@@ -21,8 +21,24 @@ jobs:
           set -euo pipefail
           curl -L --fail --retry 3             "https://github.com/Frooglemcdoo/Control-FG/releases/download/v2.1.0/Control-FG-v2.1.0-DropIn.zip"             -o base.zip
           echo "c03d809c02dfdd3e5ac0f5c6427a98cd1091ac2eec8c0da1a704b2c0bf722f39  base.zip" | sha256sum -c -
-          mkdir pkg
-          unzip -q base.zip -d pkg
+          python - <<'PY'
+          import zipfile
+          from pathlib import Path
+
+          out = Path("pkg")
+          out.mkdir()
+          with zipfile.ZipFile("base.zip") as z:
+              for info in z.infolist():
+                  name = info.filename.replace("\\", "/").lstrip("/")
+                  if not name:
+                      continue
+                  target = out / name
+                  if info.is_dir():
+                      target.mkdir(parents=True, exist_ok=True)
+                      continue
+                  target.parent.mkdir(parents=True, exist_ok=True)
+                  target.write_bytes(z.read(info))
+          PY
           test -f pkg/dxgi.dll
 
       - name: Patch target identity gates for Epic 0.0.518.2177
