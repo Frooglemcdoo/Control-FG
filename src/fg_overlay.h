@@ -44,8 +44,13 @@ static int FGOverlayClampToX(unsigned value) noexcept {
 }
 static bool fgOverlayBindingCapture = false;
 static bool fgOverlayBindingKeysDown[256]{};
-static bool fgOverlayToggleWasDown = false;
+static bool fgOverlayToggleWasDown = false; // async fallback only
 static unsigned int fgOverlayToggleKey = VK_F10;
+static constexpr UINT kFGOverlayToggleMessage = WM_APP + 0x3F2;
+static HWND fgOverlayToggleWindow = nullptr;
+static HHOOK fgOverlayToggleKeyboardHook = nullptr;
+static unsigned int fgOverlayToggleHookDownKey = 0;
+static std::atomic<unsigned int> fgOverlayToggleInjectedIgnored{0};
 static const wchar_t* fgOverlayBindingMessage = L"Choose a single keyboard key. Esc cancels; F9 is reserved.";
 
 static bool FGOverlayBindingKeyAllowed(unsigned int key) noexcept {
@@ -841,6 +846,14 @@ static void FGOverlayApplySliderPoint(HWND hwnd, int x) noexcept {
 
 static LRESULT CALLBACK FGOverlayWndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) noexcept {
     switch (message) {
+    case kFGOverlayToggleMessage: {
+        if (fgOverlayBindingCapture || !FGOverlayGameIsForeground(nullptr)) return 0;
+        const unsigned int next = fgOverlayVisible.load(std::memory_order_acquire) ? 0u : 1u;
+        fgOverlayVisible.store(next, std::memory_order_release);
+        Log("FG_OVERLAY_TOGGLE visible=%u key=%u input=physical_keyboard_hook injected_ignored=%u",
+            next, fgOverlayToggleKey, fgOverlayToggleInjectedIgnored.load(std::memory_order_acquire));
+        return 0;
+    }
     case WM_ERASEBKGND:
         return 1;
     case WM_PAINT:
@@ -875,7 +888,9 @@ static LRESULT CALLBACK FGOverlayWndProc(HWND hwnd, UINT message, WPARAM wParam,
             } else if (x >= 30 && x < 270 && y >= 325 && y < 375) {
                 fgOverlayBindingCapture = false;
                 fgOverlayToggleKey = VK_F10;
-                fgOverlayToggleWasDown = (GetAsyncKeyState(VK_F10) & 0x8000) != 0;
+                fgOverlayToggleHookDownKey = 0;
+                fgOverlayToggleWasDown = !fgOverlayToggleKeyboardHook &&
+                    ((GetAsyncKeyState(VK_F10) & 0x8000) != 0);
                 FGOverlayMarkSettingsDirty();
                 FGOverlayFlushSettingsIfDue(true);
                 fgOverlayBindingMessage = fgOverlaySettingsDirty ? L"F10 restored for this session. Saving failed; retrying." : L"Shortcut restored to F10 and saved.";
@@ -1137,6 +1152,41 @@ static bool FGOverlayKeyDown(int vk) noexcept {
     return (GetAsyncKeyState(vk) & 0x8000) != 0;
 }
 
+// Overlay toggle input is intentionally non-consuming. The old 50 ms
+// GetAsyncKeyState edge detector could observe transient synthetic/high-state
+// input from third-party overlays (reproduced under GOG Galaxy) and interpret it
+// as a real F10 press. The low-level hook only accepts a non-injected physical
+// keydown, ignores autorepeat until the matching keyup, and posts the actual
+// visibility change back to this overlay thread. If hook installation fails, the
+// timer retains the historical GetAsyncKeyState path as a fallback.
+static LRESULT CALLBACK FGOverlayToggleLowLevelKeyboardProc(int code, WPARAM message, LPARAM param) noexcept {
+    if (code < 0 || !param) return CallNextHookEx(nullptr, code, message, param);
+    const auto* key = reinterpret_cast<const KBDLLHOOKSTRUCT*>(param);
+    const bool keyDown = message == WM_KEYDOWN || message == WM_SYSKEYDOWN;
+    const bool keyUp = message == WM_KEYUP || message == WM_SYSKEYUP;
+
+    if (keyUp && fgOverlayToggleHookDownKey == key->vkCode) {
+        fgOverlayToggleHookDownKey = 0;
+        return CallNextHookEx(nullptr, code, message, param);
+    }
+    if (!keyDown || key->vkCode != fgOverlayToggleKey)
+        return CallNextHookEx(nullptr, code, message, param);
+
+    if ((key->flags & LLKHF_INJECTED) != 0) {
+        fgOverlayToggleInjectedIgnored.fetch_add(1u, std::memory_order_relaxed);
+        return CallNextHookEx(nullptr, code, message, param);
+    }
+    if (fgOverlayToggleHookDownKey == key->vkCode)
+        return CallNextHookEx(nullptr, code, message, param);
+
+    fgOverlayToggleHookDownKey = key->vkCode;
+    if (!fgOverlayBindingCapture && fgOverlayToggleWindow &&
+        FGOverlayGameIsForeground(nullptr)) {
+        PostMessageW(fgOverlayToggleWindow, kFGOverlayToggleMessage, 0, 0);
+    }
+    return CallNextHookEx(nullptr, code, message, param);
+}
+
 static LRESULT CALLBACK FGOverlayLowLevelKeyboardProc(int code, WPARAM message, LPARAM param) noexcept {
     if (code < 0 || !param) return CallNextHookEx(nullptr, code, message, param);
     const auto* key = reinterpret_cast<const KBDLLHOOKSTRUCT*>(param);
@@ -1241,13 +1291,23 @@ static DWORD WINAPI FGOverlayThreadProc(LPVOID) noexcept {
     ShowWindow(overlay, SW_HIDE);
     fgOverlayKeyboardHook = nullptr;
     Log("FG_HDR_HOTKEY_HOOK installed=0 hook=null error=0 policy=disabled_r31_display_or_resize_detected_hard_dlssg_reset");
-    Log("FG_OVERLAY_READY hwnd=%p hotkey=F10 input=GetAsyncKeyState_nonexclusive default_selection=%s selector=off,dynamic,2x,3x,4x,5x,6x dynamic_auto_target=explicit_game_monitor_refresh dynamic_manual_target=30-1000_fps rr_controls=on_off_plus_model_E_F rr_model_default=F rr_model_live_switch=E_F partial=hidden skin=hidden aa_sharpness=hidden controls=auto,manual,thick_slider_30_1000 presentation=os_layered_noactivate_control_native_menu_anchor_top_right startup_visibility=hidden_f10_only persistence=localappdata_ini runtime_status=selected,effective,current_fps,hdr,capability title=embedded_control_fg_logo_control_native font=bahnschrift_semicondensed selected_style=white_fill_black_text section_headers=control_red no_side_scrollbar=1 dynamic_vsync_policy=syncinterval0_while_active dynamic_reflex_limiter=target_fps gpu_policy=rtx40_off_plus_2x_only",
+
+    fgOverlayToggleWindow = overlay;
+    SetLastError(ERROR_SUCCESS);
+    fgOverlayToggleKeyboardHook = SetWindowsHookExW(
+        WH_KEYBOARD_LL, FGOverlayToggleLowLevelKeyboardProc, selfModule, 0);
+    const DWORD toggleHookError = fgOverlayToggleKeyboardHook ? ERROR_SUCCESS : GetLastError();
+    Log("FG_OVERLAY_HOTKEY_HOOK installed=%u hook=%p error=%lu mode=physical_nonexclusive ignore_injected=1 fallback=GetAsyncKeyState",
+        unsigned(fgOverlayToggleKeyboardHook != nullptr), fgOverlayToggleKeyboardHook, toggleHookError);
+
+    Log("FG_OVERLAY_READY hwnd=%p hotkey=F10 input=physical_keyboard_hook_with_async_fallback default_selection=%s selector=off,dynamic,2x,3x,4x,5x,6x dynamic_auto_target=explicit_game_monitor_refresh dynamic_manual_target=30-1000_fps rr_controls=on_off_plus_model_E_F rr_model_default=F rr_model_live_switch=E_F partial=hidden skin=hidden aa_sharpness=hidden controls=auto,manual,thick_slider_30_1000 presentation=os_layered_noactivate_control_native_menu_anchor_top_right startup_visibility=hidden_f10_only persistence=localappdata_ini runtime_status=selected,effective,current_fps,hdr,capability title=embedded_control_fg_logo_control_native font=bahnschrift_semicondensed selected_style=white_fill_black_text section_headers=control_red no_side_scrollbar=1 dynamic_vsync_policy=syncinterval0_while_active dynamic_reflex_limiter=target_fps gpu_policy=rtx40_off_plus_2x_only",
         overlay, GetFGSelectionName(GetFGUserMultiplier()));
     Log("FG_OVERLAY_STABILITY_TEST revision=R1 double_buffered=1 timer_ms=50 window_search_ms=1000 placement_poll_ms=250 status_paint_ms=250 setwindowpos_on_change_only=1 showhide_on_transition_only=1 fg_path_unchanged=v0.8.26");
     Log("FG_OVERLAY_SETTINGS_S5 binding=persisted_single_key options=replacement_page default=F10");
     SetTimer(overlay, kFGOverlayTimer, 50, nullptr);
 
-    fgOverlayToggleWasDown = (GetAsyncKeyState(fgOverlayToggleKey) & 0x8000) != 0;
+    fgOverlayToggleWasDown = !fgOverlayToggleKeyboardHook &&
+        ((GetAsyncKeyState(fgOverlayToggleKey) & 0x8000) != 0);
     MSG msg{};
     while (GetMessageW(&msg, nullptr, 0, 0) > 0) {
         TranslateMessage(&msg);
@@ -1303,13 +1363,18 @@ static DWORD WINAPI FGOverlayThreadProc(LPVOID) noexcept {
                 }
                 if (!fgOverlayBindingCapture) InvalidateRect(overlay, nullptr, FALSE);
             }
-            const bool toggleDown = (GetAsyncKeyState(static_cast<int>(fgOverlayToggleKey)) & 0x8000) != 0;
-            if (!capturingBinding && gameForeground && toggleDown && !fgOverlayToggleWasDown) {
-                const unsigned int next = fgOverlayVisible.load(std::memory_order_acquire) ? 0u : 1u;
-                fgOverlayVisible.store(next, std::memory_order_release);
-                Log("FG_OVERLAY_TOGGLE visible=%u key=%u input=nonexclusive", next, fgOverlayToggleKey);
+            if (!fgOverlayToggleKeyboardHook) {
+                const bool toggleDown =
+                    (GetAsyncKeyState(static_cast<int>(fgOverlayToggleKey)) & 0x8000) != 0;
+                if (!capturingBinding && gameForeground && toggleDown && !fgOverlayToggleWasDown) {
+                    const unsigned int next =
+                        fgOverlayVisible.load(std::memory_order_acquire) ? 0u : 1u;
+                    fgOverlayVisible.store(next, std::memory_order_release);
+                    Log("FG_OVERLAY_TOGGLE visible=%u key=%u input=GetAsyncKeyState_fallback",
+                        next, fgOverlayToggleKey);
+                }
+                fgOverlayToggleWasDown = toggleDown;
             }
-            fgOverlayToggleWasDown = toggleDown;
             const bool show = gameForeground && fgOverlayVisible.load(std::memory_order_acquire);
             FGOverlaySetShown(overlay, game, show);
             if (show) {
@@ -1326,6 +1391,13 @@ static DWORD WINAPI FGOverlayThreadProc(LPVOID) noexcept {
         }
     }
     FGOverlayFlushSettingsIfDue(true);
+    if (fgOverlayToggleKeyboardHook) {
+        UnhookWindowsHookEx(fgOverlayToggleKeyboardHook);
+        fgOverlayToggleKeyboardHook = nullptr;
+        Log("FG_OVERLAY_HOTKEY_HOOK installed=0 reason=overlay_thread_exit");
+    }
+    fgOverlayToggleWindow = nullptr;
+    fgOverlayToggleHookDownKey = 0;
     if (fgOverlayKeyboardHook) {
         UnhookWindowsHookEx(fgOverlayKeyboardHook);
         fgOverlayKeyboardHook = nullptr;
