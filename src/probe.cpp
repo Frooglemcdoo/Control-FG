@@ -147,7 +147,7 @@ static void OpenLog() {
     const DWORD verboseLength=GetEnvironmentVariableW(L"CONTROLFG_VERBOSE_LOG",verbose,_countof(verbose));
     verboseAuditLogging=verboseLength>0 && verboseLength<_countof(verbose) && verbose[0]!=L'0';
     QueryPerformanceFrequency(&frequency);
-    Log("PROBE v2.0.0 internal_build=2.0.0-Clean-Native-R12-MFG-Dynamic-Test source_revision=clean-v2-native-source-r12-mfg-dynamic-test supported_targets=steam_21225456,epic_0.0.518.2177 frequency=%lld log_profile=%s",frequency.QuadPart,verboseAuditLogging?"verbose_audit":"release_support");
+    Log("PROBE v2.0.0 internal_build=2.0.0-Clean-Native-R12-MFG-Dynamic-Test source_revision=clean-v2-native-source-r12-mfg-dynamic-test supported_targets=steam_21225456,epic_0.0.518.2177,gog_57a8912f frequency=%lld log_profile=%s",frequency.QuadPart,verboseAuditLogging?"verbose_audit":"release_support");
     Log("CAPABILITIES fg=fixed_2x_to_6x_plus_dynamic rr=models_E_F_default_F hdr10_bridge=1 rr_guides=gbuffer_material_envbrdf rr_hit_distance=off rr_specular_mvec=off rr_diagnostic_readbacks=off streamline_sdk=2.14.1");
     Log("MONITORING profile=%s rr_perf_sample=240 support_events=startup_settings_fg_rr_model_resize_recovery_failures_fallbacks_performance verbose_env=CONTROLFG_VERBOSE_LOG",verboseAuditLogging?"verbose_audit":"release_support");
 }
@@ -896,10 +896,17 @@ static BOOL CALLBACK Configure(PINIT_ONCE, PVOID, PVOID*) noexcept {
             HashMatches(exe, kEpicExeHash) &&
             HashMatches(d3d, kEpicD3dHash) &&
             HashMatches(renderer, kEpicRendererHash);
-        if (!steamTarget && !epicTarget) {
+        const bool gogTarget = !steamTarget && !epicTarget &&
+            HashMatches(exe, kGogExeHash) &&
+            HashMatches(d3d, kGogD3dHash) &&
+            HashMatches(renderer, kGogRendererHash);
+        if (!steamTarget && !epicTarget && !gogTarget) {
             Log("PROBE_DISABLED target_hash_mismatch_or_file_unreadable"); return TRUE;
         }
-        const char* targetLabel = steamTarget ? kSteamTargetLabel : kEpicTargetLabel;
+        const char* targetLabel =
+            steamTarget ? kSteamTargetLabel :
+            epicTarget ? kEpicTargetLabel :
+            kGogTargetLabel;
         Log("TARGET_HASHES_MATCH storefront=%s", targetLabel);
         verifiedD3d = d3d;
         verifiedRenderer = renderer;
