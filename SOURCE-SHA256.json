@@ -376,7 +376,7 @@
   "validation/clamp-strength/policy-test.cpp": "963d052ecc475fddde7d1b1d9e8208e304a7a799720144c7be0b8538ef9789ff",
   "validation/clamp-strength/results.json": "7f7419ca5e28e26d7105bec1afe4c38064549e020ab62254d01aebdc76b58030",
   "validation/current-release/r31c-baseline-results.json": "36ecb800244a0d80be15270fb8c9c69e861c9a858be2ea5966f73bc561707097",
-  "validation/current-release/results.json": "c5a0974b48a1506bf9025772759f98165284eb1d12d6643c09c1fe79c193675b",
+  "validation/current-release/results.json": "2a5e64bda5e903e3dfa3d7442a51fe0913b8d32827917e29d4aa9e5022febe79",
   "validation/distance-runtime/input.cpp": "7149987d286ef7591e3eb4d9985e4e55bbcc6f2ca32162b2a07eb6b26f159f59",
   "validation/distance-runtime/math.json": "0c23d3cae75626c792a25942bd9a983b15d824da72a09bbac16ac111762a6d99",
   "validation/distance-runtime/record.cpp": "6fc42ed3447605afb250a534652ae7f0702215565194f3af38ce0158a097b707",
@@ -752,7 +752,7 @@
   "TROUBLESHOOTING.md": "ad80fca7e116df07d48a1b5dbaf2dd95d866de40f93c250b200c0513e3588ffa",
   "RELEASE_NOTES.md": "88f5963c11e0ec53582553fb6c51866dfb7309d971138db7edb21d2b3c9309fd",
   "INSTALL.md": "a1456c32805e0037c667107aec642778b64b43f8cd6121b82091678f9453c29e",
-  "README.md": "4d73f36c946abbef44f8bf8facb170e1bab0e3fb0e3b3d09fd4341210d0fdac5",
+  "README.md": "29626caae592f23690ba8cbe361e9c8e70332578cef6557c90595b9069bc4192",
   "Make-DropIn.ps1": "dd2a68ede408ca51da286b0956e7b5fca1b09f36e6a5f067749ce518ec55a00e",
   "KNOWN_ISSUES.md": "578bdb8bea3b1bae6c1c27d66b86445e7e14585bffc3e623e4d9230f96c6445f"
 }

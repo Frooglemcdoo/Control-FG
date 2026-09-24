@@ -10,6 +10,10 @@ Unlike a generic graphics injection layer, Control FG is **game-specific and eng
 > **Verified game target:** Control on Steam, DX12, Steam build `21225456`  
 > **Streamline:** NVIDIA Streamline `2.14.1`
 
+## Huge thanks to HotKnives!
+
+A massive shoutout to **HotKnives** for lending me his machine and helping with QA for the recent release and bug fixes. Having his hardware available and his help testing changes made a huge difference in tracking down issues and getting v2.1.0 ready. Really appreciate the time and support!
+
 ## Video Demonstration
 
 [![Control FG – App and Overlay Demonstration](https://img.youtube.com/vi/aP7UeCSx00c/maxresdefault.jpg)](https://youtu.be/aP7UeCSx00c)
