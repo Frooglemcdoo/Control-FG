@@ -1,4 +1,4 @@
-name: Build unified Steam Epic test
+name: Build unified Steam Epic GOG test
 
 on:
   push:
@@ -31,8 +31,8 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $path = 'validation/current-release/results.json'
           $j = Get-Content -LiteralPath $path -Raw | ConvertFrom-Json
-          $j.scope = 'v2.1.0 runtime plus verified Epic Games Store target 0.0.518.2177; shared renderer/D3D RVAs statically matched and Epic GPU runtime validated.'
-          $j.tests.gpu_runtime = 'PASS Epic 0.0.518.2177: startup, 9 hooks, Streamline 2.14.1, RR Model F, and 3x FG frames_presented=3; compact log 20260924-135615.'
+          $j.scope = 'v2.1.0 runtime plus verified Epic target and GOG storefront candidate; GOG reuses the exact Steam renderer/D3D binaries and differs only in Control_DX12.exe identity.'
+          $j.tests.gpu_runtime = 'PASS Epic 0.0.518.2177: startup, 9 hooks, Streamline 2.14.1, RR Model F, and 3x FG frames_presented=3; GOG static profile: exact Steam d3d/renderer hashes with storefront-specific EXE.'
           $changed = @(
             'src/target.h',
             'src/probe.cpp',
@@ -54,6 +54,15 @@ jobs:
           # its SHA after this workflow-owned evidence update.
           $sourceManifestPath = 'SOURCE-SHA256.json'
           $sourceManifest = Get-Content -LiteralPath $sourceManifestPath -Raw | ConvertFrom-Json
+          foreach ($rel in $changed) {
+            $hash = (Get-FileHash -LiteralPath $rel -Algorithm SHA256).Hash.ToLowerInvariant()
+            $prop = $sourceManifest.PSObject.Properties[$rel]
+            if ($null -eq $prop) {
+              $sourceManifest | Add-Member -NotePropertyName $rel -NotePropertyValue $hash
+            } else {
+              $prop.Value = $hash
+            }
+          }
           $checkpointHash = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()
           $sourceManifest.PSObject.Properties[$path].Value = $checkpointHash
           $sourceManifest | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $sourceManifestPath -Encoding UTF8
@@ -71,17 +80,17 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $src = 'release/Control-FG-v2.1.0.zip'
           if (-not (Test-Path -LiteralPath $src)) { throw 'Expected release package was not produced.' }
-          Copy-Item -LiteralPath $src -Destination 'Control-FG-v2.1.0-Steam-Epic-Unified-Test-R2.zip'
-          (Get-FileHash -LiteralPath 'Control-FG-v2.1.0-Steam-Epic-Unified-Test-R2.zip' -Algorithm SHA256).Hash.ToLowerInvariant() |
-            Set-Content -LiteralPath 'Control-FG-v2.1.0-Steam-Epic-Unified-Test-R2.sha256' -Encoding ASCII
+          Copy-Item -LiteralPath $src -Destination 'Control-FG-v2.1.0-Steam-Epic-GOG-Unified-Test-R3.zip'
+          (Get-FileHash -LiteralPath 'Control-FG-v2.1.0-Steam-Epic-GOG-Unified-Test-R3.zip' -Algorithm SHA256).Hash.ToLowerInvariant() |
+            Set-Content -LiteralPath 'Control-FG-v2.1.0-Steam-Epic-GOG-Unified-Test-R3.sha256' -Encoding ASCII
 
       - name: Upload unified test
         uses: actions/upload-artifact@v4
         with:
-          name: Control-FG-v2.1.0-Steam-Epic-Unified-Test-R2
+          name: Control-FG-v2.1.0-Steam-Epic-GOG-Unified-Test-R3
           path: |
-            Control-FG-v2.1.0-Steam-Epic-Unified-Test-R2.zip
-            Control-FG-v2.1.0-Steam-Epic-Unified-Test-R2.sha256
+            Control-FG-v2.1.0-Steam-Epic-GOG-Unified-Test-R3.zip
+            Control-FG-v2.1.0-Steam-Epic-GOG-Unified-Test-R3.sha256
             build/build-validation.json
             Build.log
           if-no-files-found: error
