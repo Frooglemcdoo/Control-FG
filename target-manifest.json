@@ -104,5 +104,45 @@
       "runtime SetDLSSGMode gate",
       "persisted unsupported selections coerced to 2x"
     ]
-  }
+  },
+  "SupportedTargets": [
+    {
+      "Name": "Steam",
+      "Storefront": "Steam",
+      "Build": "21225456",
+      "RequiredFiles": [
+        {
+          "Name": "Control_DX12.exe",
+          "SHA256": "9441DB3AE75B267ABD989846AD0895E3FE24ABCC0F06E58F93C34FC8D4736506"
+        },
+        {
+          "Name": "d3d_rmdwin10_f.dll",
+          "SHA256": "CCEB99CBD9C019AF907C24C44701A53C8D230965C1FB31C325233E4C80214AA5"
+        },
+        {
+          "Name": "renderer_rmdwin10_f.dll",
+          "SHA256": "EBFB5B47CEBC2D4482E912B8090BD343F717BAB8A178B5A6385DEC9105E7C433"
+        }
+      ]
+    },
+    {
+      "Name": "Epic Games Store",
+      "Storefront": "Epic",
+      "Build": "0.0.518.2177",
+      "RequiredFiles": [
+        {
+          "Name": "Control_DX12.exe",
+          "SHA256": "E1D11616941FAD767B20CD0FB1AB442771A912FF34EF404B5FB95136F53B6175"
+        },
+        {
+          "Name": "d3d_rmdwin10_f.dll",
+          "SHA256": "EB598AAD837AF7B42305EB24D5F026AF416D46F055BDC5A2DA063BB99E6ABFC1"
+        },
+        {
+          "Name": "renderer_rmdwin10_f.dll",
+          "SHA256": "85BAAF7026AFF1403ABAD6F497441963CE2F6012E9B84D462FED972E42723C6E"
+        }
+      ]
+    }
+  ]
 }
