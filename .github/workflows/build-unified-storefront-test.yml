@@ -8,11 +8,9 @@ on:
       - ".github/workflows/build-unified-storefront-test.yml"
       - "src/target.h"
       - "src/probe.cpp"
-      - "src/fg_overlay.h"
       - "Manage-Probe.ps1"
       - "target-manifest.json"
       - "SOURCE-SHA256.json"
-      - "Verify-Source.ps1"
 
 permissions:
   contents: read
@@ -38,9 +36,7 @@ jobs:
           $changed = @(
             'src/target.h',
             'src/probe.cpp',
-            'src/fg_overlay.h',
             'Manage-Probe.ps1',
-            'Verify-Source.ps1',
             'target-manifest.json'
           )
           foreach ($rel in $changed) {
