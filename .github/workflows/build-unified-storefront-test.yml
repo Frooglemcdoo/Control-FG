@@ -14,6 +14,10 @@ jobs:
   build:
     runs-on: windows-latest
     steps:
+      - name: Preserve repository bytes
+        shell: powershell
+        run: git config --global core.autocrlf false
+
       - uses: actions/checkout@v4
 
       - name: Refresh storefront compatibility checkpoint
