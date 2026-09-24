@@ -8,6 +8,7 @@ on:
       - ".github/workflows/build-unified-storefront-test.yml"
       - "src/target.h"
       - "src/probe.cpp"
+      - "src/fg_overlay.h"
       - "Manage-Probe.ps1"
       - "target-manifest.json"
       - "SOURCE-SHA256.json"
@@ -36,6 +37,7 @@ jobs:
           $changed = @(
             'src/target.h',
             'src/probe.cpp',
+            'src/fg_overlay.h',
             'Manage-Probe.ps1',
             'target-manifest.json'
           )
@@ -80,17 +82,17 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $src = 'release/Control-FG-v2.1.0.zip'
           if (-not (Test-Path -LiteralPath $src)) { throw 'Expected release package was not produced.' }
-          Copy-Item -LiteralPath $src -Destination 'Control-FG-v2.1.0-Steam-Epic-GOG-Unified-Test-R3.zip'
-          (Get-FileHash -LiteralPath 'Control-FG-v2.1.0-Steam-Epic-GOG-Unified-Test-R3.zip' -Algorithm SHA256).Hash.ToLowerInvariant() |
-            Set-Content -LiteralPath 'Control-FG-v2.1.0-Steam-Epic-GOG-Unified-Test-R3.sha256' -Encoding ASCII
+          Copy-Item -LiteralPath $src -Destination 'Control-FG-v2.1.0-Steam-Epic-GOG-Unified-Test-R4.zip'
+          (Get-FileHash -LiteralPath 'Control-FG-v2.1.0-Steam-Epic-GOG-Unified-Test-R4.zip' -Algorithm SHA256).Hash.ToLowerInvariant() |
+            Set-Content -LiteralPath 'Control-FG-v2.1.0-Steam-Epic-GOG-Unified-Test-R4.sha256' -Encoding ASCII
 
       - name: Upload unified test
         uses: actions/upload-artifact@v4
         with:
-          name: Control-FG-v2.1.0-Steam-Epic-GOG-Unified-Test-R3
+          name: Control-FG-v2.1.0-Steam-Epic-GOG-Unified-Test-R4
           path: |
-            Control-FG-v2.1.0-Steam-Epic-GOG-Unified-Test-R3.zip
-            Control-FG-v2.1.0-Steam-Epic-GOG-Unified-Test-R3.sha256
+            Control-FG-v2.1.0-Steam-Epic-GOG-Unified-Test-R4.zip
+            Control-FG-v2.1.0-Steam-Epic-GOG-Unified-Test-R4.sha256
             build/build-validation.json
             Build.log
           if-no-files-found: error
