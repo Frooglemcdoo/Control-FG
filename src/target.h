@@ -1,7 +1,14 @@
 #pragma once
+// Verified storefront identities. Keep the original k*Hash names as Steam aliases
+// for historical validation/tests; runtime admission requires one complete triple.
 inline constexpr char kExeHash[] = "9441DB3AE75B267ABD989846AD0895E3FE24ABCC0F06E58F93C34FC8D4736506";
 inline constexpr char kD3dHash[] = "CCEB99CBD9C019AF907C24C44701A53C8D230965C1FB31C325233E4C80214AA5";
 inline constexpr char kRendererHash[] = "EBFB5B47CEBC2D4482E912B8090BD343F717BAB8A178B5A6385DEC9105E7C433";
+inline constexpr char kEpicExeHash[] = "E1D11616941FAD767B20CD0FB1AB442771A912FF34EF404B5FB95136F53B6175";
+inline constexpr char kEpicD3dHash[] = "EB598AAD837AF7B42305EB24D5F026AF416D46F055BDC5A2DA063BB99E6ABFC1";
+inline constexpr char kEpicRendererHash[] = "85BAAF7026AFF1403ABAD6F497441963CE2F6012E9B84D462FED972E42723C6E";
+inline constexpr char kSteamTargetLabel[] = "steam_21225456";
+inline constexpr char kEpicTargetLabel[] = "epic_0.0.518.2177";
 inline constexpr char kAASymbol[] = "?doAntiAliasing@DLSS@d3d@@SA_NPEAVNativeTexture@2@00000000_NNNMMM@Z";
 inline constexpr char kPresentSymbol[] = "?present@DeviceUtil@d3d@@SAXXZ";
 inline constexpr char kBeginSymbol[] = "?beginFrame@FrameBeginHandler@d3d@@SAXXZ";
