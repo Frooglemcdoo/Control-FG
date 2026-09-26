@@ -5,12 +5,25 @@
 #include "rr_live_frame_input.h"
 #include "rr_distance_binding_policy.h"
 #include "rr_skin_diagnostic.h"
+#include "rr_responsivity_runtime.h"
 // Exact-build evaluation gateway installed during initialization. The live
 // candidate pass owns its resources; original NGX arguments pass through.
 using RREvaluationC = unsigned int (*)(ID3D12GraphicsCommandList*, void*, void*, void*);
 static RREvaluationC rrEvaluationOriginal = nullptr;
 static RRAlbedoCallPatch rrEvaluationPatches[2]{};
 static std::atomic<unsigned long long> rrEvaluationCalls[2]{};
+static LONGLONG rrGI25LastEvaluationQpc=0;
+static LARGE_INTEGER rrGI25QpcFrequency{};
+static float RRGI25FrameTimeMs() noexcept {
+ LARGE_INTEGER now{};
+ if(rrGI25QpcFrequency.QuadPart<=0)QueryPerformanceFrequency(&rrGI25QpcFrequency);
+ QueryPerformanceCounter(&now);
+ float ms=16.666667f;
+ if(rrGI25LastEvaluationQpc>0&&rrGI25QpcFrequency.QuadPart>0)
+  ms=static_cast<float>((double(now.QuadPart-rrGI25LastEvaluationQpc)*1000.0)/double(rrGI25QpcFrequency.QuadPart));
+ rrGI25LastEvaluationQpc=now.QuadPart;
+ return control_rr_responsivity::ClampFrameTimeMs(ms);
+}
 #include "rr_evaluation_inputs.h"
 static RREvaluationInputs RRReadEvaluationInputs(void* parameters) noexcept {
     RREvaluationInputs in{};
@@ -51,9 +64,11 @@ static unsigned int RREvaluationEntry(unsigned int branch, ID3D12GraphicsCommand
     if(false&&rrNativeFrameEnabled)RRNativeObserveSkinInputs(parameters,in.frame,"r20t_disabled",in.width,in.height);
     // D1: optional, owned, same-frame distance; never reuses a prior frame.
     RRNativeGuideBindings bindings{};bool rrAttempt=false;
-    ID3D12Resource* hitDistance=nullptr;bool distanceReset=false;bool clampReset=false;
+    ID3D12Resource* hitDistance=nullptr;bool distanceReset=false;bool clampReset=false;bool responsivityReset=false;
+    float rrFrameTimeMs=16.666667f;int rrResponsivityBias=0;
     static control_rr_clamp::History clampHistory;
     static control_rr::DistanceBindingHistory distanceHistory;
+    static std::atomic<int> responsivityHistory{1001};
     void* evaluationFeature=feature;bool presetReset=false;unsigned activePreset=0;
     if(rrNativeFrameEnabled&&branch==1&&!partial){
         if(!RRNativeResolveEvaluationPreset(list,feature,parameters,&evaluationFeature,&presetReset,&activePreset)){
@@ -62,10 +77,13 @@ static unsigned int RREvaluationEntry(unsigned int branch, ID3D12GraphicsCommand
             SetLastError(incomingError);return 0xBAD00001u;
         }
         const bool guides=in.valid==127&&!in.fault&&RRNativeTakeGuides(in,bindings);
-        if(false&&guides&&control_rr::RRUserSkinResponsivity()){
-            ID3D12Resource* character=RRDiffuseCharacterCurrent(in.frame,in.width,in.height);
-            if(character)bindings.responsivity=RRSkinMaskBeforeEvaluation(list,character,in.width,in.height,in.frame);
-        }
+        rrFrameTimeMs=RRGI25FrameTimeMs();
+        rrResponsivityBias=activePreset==control_rr::RRPresetF?control_rr::RRUserResponsivityBias():0;
+        if(guides&&control_rr_responsivity::Enabled(activePreset==control_rr::RRPresetF,rrResponsivityBias))
+            bindings.responsivity=RRResponsivityBeforeEvaluation(list,in.width,in.height,in.frame,rrResponsivityBias);
+        const int previousResponsivity=responsivityHistory.exchange(rrResponsivityBias,std::memory_order_acq_rel);
+        responsivityReset=previousResponsivity!=rrResponsivityBias;
+        if(responsivityReset)Log("RR_GI25_RESPONSIVITY_RESET frame=%llu previous=%d current=%d bound=%u",in.frame,previousResponsivity,rrResponsivityBias,unsigned(bindings.responsivity!=nullptr));
         const bool lighting=RRNativeLightingReady(in.frame);
         const bool beginEvaluation=rrNativeFrame.BeginEvaluation(in.frame,guides,lighting);
         if(control_rr::DistanceEligible(beginEvaluation,bindings.projectionValid,activePreset,control_rr::RRPresetF))
@@ -73,11 +91,15 @@ static unsigned int RREvaluationEntry(unsigned int branch, ID3D12GraphicsCommand
         distanceReset=distanceHistory.Update(hitDistance!=nullptr);
         clampReset=clampHistory.Update(control_rr_clamp::effective.load(std::memory_order_acquire));
         if(clampReset)Log("RR_CLAMP_CS3_HISTORY_RESET frame=%llu effective=%u",in.frame,control_rr_clamp::effective.load());
-        if(!beginEvaluation||!RRNativeSetGuides(parameters,&bindings,hitDistance,rrNativeFrame.Reset()||presetReset||distanceReset||clampReset)){
+        const bool frameTimeReady=RRNativeSetFrameTime(parameters,rrFrameTimeMs);
+        if(!beginEvaluation||!frameTimeReady||!RRNativeSetGuides(parameters,&bindings,hitDistance,rrNativeFrame.Reset()||presetReset||distanceReset||clampReset||responsivityReset)){
             rrNativeFrame.Fail();control_rr::RRUserPublish(control_rr::RRUserStatus::Stopped);
-            Log("RR_FRAME_STOP frame=%llu reason=pre_evaluation_contract hit_distance_required=0 guides=%u lighting=%u native_evaluation_called=0",in.frame,unsigned(guides),unsigned(lighting));
+            Log("RR_FRAME_STOP frame=%llu reason=pre_evaluation_contract hit_distance_required=0 guides=%u lighting=%u frame_time_ready=%u native_evaluation_called=0",in.frame,unsigned(guides),unsigned(lighting),unsigned(frameTimeReady));
             SetLastError(incomingError);return 0xBAD00001u;
         }
+        if(call<=4||(call%240)==0||responsivityReset)
+            Log("RR_GI25_TEMPORAL_INPUTS frame=%llu preset=%u frame_time_ms=%.3f responsivity_bias=%d responsivity_value=%.3f responsivity_bound=%u reset=%u",
+             in.frame,activePreset,double(rrFrameTimeMs),rrResponsivityBias,double(control_rr_responsivity::MaskValue(rrResponsivityBias)),unsigned(bindings.responsivity!=nullptr),unsigned(responsivityReset));
         RRInputCaptureBeforeEvaluation(list,in.frame,activePreset,bindings.normal,bindings.specular,bindings.diffuse,
             hitDistance,hitDistance?rrDistanceLastStatus:nullptr,bindings.viewToClip,bindings.projectionValid);
         rrAttempt=true;
@@ -102,7 +124,7 @@ static unsigned int RREvaluationEntry(unsigned int branch, ID3D12GraphicsCommand
     const double perfNativeCpu=RRPerfElapsed(perfNativeStart);
     RRPerfEnd(perf);
     RRPerfEvaluation(in.frame,rrAttempt,(result&0xFFF00000u)!=0xBAD00000u,
-        in.reset!=0||(rrAttempt&&(rrNativeFrame.Reset()||presetReset||distanceReset||clampReset)),perfEntry,perfGuidesCpu,perfNativeCpu,
+        in.reset!=0||(rrAttempt&&(rrNativeFrame.Reset()||presetReset||distanceReset||clampReset||responsivityReset)),perfEntry,perfGuidesCpu,perfNativeCpu,
         GetFGUserMultiplier(),IsHdr10BridgeActive()?1u:0u);
     if(partial&&branch==1){
         const bool success=(result&0xFFF00000u)!=0xBAD00000u;
@@ -113,7 +135,7 @@ static unsigned int RREvaluationEntry(unsigned int branch, ID3D12GraphicsCommand
         const bool success=(result&0xFFF00000u)!=0xBAD00000u;
         rrNativeFrame.EvaluationResult(success);
         control_rr::RRUserPublish(success?control_rr::RRUserStatus::Active:control_rr::RRUserStatus::Stopped);
-        if(call<=4||(call%240)==0||!success||rrNativeFrame.Reset()||presetReset||distanceReset||clampReset)Log("RR_NATIVE_EVALUATED frame=%llu result=0x%08X success=%u diffuse=%p specular=%p normal=%p hit_distance=D1_optional specular_mvec=cleared reflection_mvec=cleared matrix_mode=preset_dependent_projection_p1 responsivity=%p replaces_sr=1 reset=%u preset_reset=%u preset_requested=%s preset_value=%u active_preset=%u control_feature=%p evaluation_feature=%p native_create_confirmed=%u native_create_generation=%llu",in.frame,result,unsigned(success),bindings.diffuse,bindings.specular,bindings.normal,bindings.responsivity,unsigned(rrNativeFrame.Reset()||presetReset||distanceReset||clampReset),unsigned(presetReset),control_rr::RRUserPresetLabel(),control_rr::RRUserPresetValue(),activePreset,feature,evaluationFeature,control_rr::RRUserConfirmedPresetValue(),control_rr::RRUserPresetCreateGeneration());
+        if(call<=4||(call%240)==0||!success||rrNativeFrame.Reset()||presetReset||distanceReset||clampReset||responsivityReset)Log("RR_NATIVE_EVALUATED frame=%llu result=0x%08X success=%u diffuse=%p specular=%p normal=%p hit_distance=D1_optional specular_mvec=cleared reflection_mvec=cleared matrix_mode=preset_dependent_projection_p1 responsivity=%p responsivity_bias=%d frame_time_ms=%.3f replaces_sr=1 reset=%u preset_reset=%u preset_requested=%s preset_value=%u active_preset=%u control_feature=%p evaluation_feature=%p native_create_confirmed=%u native_create_generation=%llu",in.frame,result,unsigned(success),bindings.diffuse,bindings.specular,bindings.normal,bindings.responsivity,rrResponsivityBias,double(rrFrameTimeMs),unsigned(rrNativeFrame.Reset()||presetReset||distanceReset||clampReset||responsivityReset),unsigned(presetReset),control_rr::RRUserPresetLabel(),control_rr::RRUserPresetValue(),activePreset,feature,evaluationFeature,control_rr::RRUserConfirmedPresetValue(),control_rr::RRUserPresetCreateGeneration());
     } else if(rrNativeFrameEnabled&&branch==0){
         if(rrNativeFrame.Selected()){rrNativeFrame.Fail();Log("RR_FRAME_STOP frame=%llu reason=unexpected_sr_branch",in.frame);}
         else {
