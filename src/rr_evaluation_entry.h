@@ -5,23 +5,19 @@
 #include "rr_live_frame_input.h"
 #include "rr_distance_binding_policy.h"
 #include "rr_skin_diagnostic.h"
-#include "rr_responsivity_runtime.h"
+#include "rr_responsivity_policy.h"
 // Exact-build evaluation gateway installed during initialization. The live
 // candidate pass owns its resources; original NGX arguments pass through.
 using RREvaluationC = unsigned int (*)(ID3D12GraphicsCommandList*, void*, void*, void*);
 static RREvaluationC rrEvaluationOriginal = nullptr;
 static RRAlbedoCallPatch rrEvaluationPatches[2]{};
 static std::atomic<unsigned long long> rrEvaluationCalls[2]{};
-static LONGLONG rrGI25LastEvaluationQpc=0;
-static LARGE_INTEGER rrGI25QpcFrequency{};
+static long long rrGI25LastEvaluationClock=0;
 static float RRGI25FrameTimeMs() noexcept {
- LARGE_INTEGER now{};
- if(rrGI25QpcFrequency.QuadPart<=0)QueryPerformanceFrequency(&rrGI25QpcFrequency);
- QueryPerformanceCounter(&now);
+ const auto now=RRPerfClock();
  float ms=16.666667f;
- if(rrGI25LastEvaluationQpc>0&&rrGI25QpcFrequency.QuadPart>0)
-  ms=static_cast<float>((double(now.QuadPart-rrGI25LastEvaluationQpc)*1000.0)/double(rrGI25QpcFrequency.QuadPart));
- rrGI25LastEvaluationQpc=now.QuadPart;
+ if(rrGI25LastEvaluationClock)ms=static_cast<float>(RRPerfElapsed(rrGI25LastEvaluationClock));
+ rrGI25LastEvaluationClock=now;
  return control_rr_responsivity::ClampFrameTimeMs(ms);
 }
 #include "rr_evaluation_inputs.h"
