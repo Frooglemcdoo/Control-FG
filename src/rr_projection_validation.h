@@ -24,6 +24,7 @@ inline bool CopyValidatedProjection(const double* projection, const double* inve
 }
 }
 
+namespace control_rr {
 inline bool CopyValidatedAffine43(const double* matrix,const double* inverse,float* output) noexcept {
  if(!matrix||!inverse||!output)return false;
  double a[16]{},b[16]{};
@@ -52,4 +53,5 @@ inline bool CopyValidatedAffine43(const double* matrix,const double* inverse,flo
  }
  for(unsigned i=0;i<16;++i)output[i]=static_cast<float>(a[i]);
  return true;
+}
 }
