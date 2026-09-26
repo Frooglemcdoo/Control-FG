@@ -1,0 +1,109 @@
+param([string]$Root = (Get-Location).Path)
+$ErrorActionPreference = 'Stop'
+function Read-Utf8([string]$rel) {
+  $p=Join-Path $Root $rel
+  if(!(Test-Path -LiteralPath $p)){ throw "GI24 missing required file: $rel" }
+  return ([IO.File]::ReadAllText($p,[Text.UTF8Encoding]::new($false))).Replace("`r`n","`n")
+}
+function Write-Utf8([string]$rel,[string]$text) {
+  $p=Join-Path $Root $rel
+  [IO.File]::WriteAllText($p,$text,[Text.UTF8Encoding]::new($false))
+}
+function Replace-Exact([string]$rel,[string]$old,[string]$new) {
+  $s=Read-Utf8 $rel
+  if($s.Contains($new)){ return }
+  if(!$s.Contains($old)){ throw "GI24 patch contract missing in $rel" }
+  Write-Utf8 $rel ($s.Replace($old,$new))
+}
+
+$old=@'
+inline std::atomic<unsigned int> rrUserSpecularSignalMode{static_cast<unsigned int>(RRSpecularSignalMode::NativeClamp)};
+inline std::atomic<RRUserStatus> rrUserStatus{RRUserStatus::Off};
+'@
+$new=@'
+inline std::atomic<unsigned int> rrUserSpecularSignalMode{static_cast<unsigned int>(RRSpecularSignalMode::NativeClamp)};
+// GI24 A/B: when true, keep RR selected for reflections/specular but allow
+// Control's native diffuse-GI denoiser/filter path to run.
+inline std::atomic<bool> rrUserNativeDiffuse{false};
+inline std::atomic<RRUserStatus> rrUserStatus{RRUserStatus::Off};
+'@
+Replace-Exact 'src/rr_user_control.h' $old $new
+$old=@'
+inline const char* RRUserSpecularSignalLabel() noexcept {return RRUserSpecularReferenceRequested()?"renodx_reference":"native_control_clamp";}
+inline const char* RRUserModeLabel() noexcept {switch(RRUserModeValue()){case RRUserMode::Partial:return "partial";case RRUserMode::Full:return "full";default:return "off";}}
+'@
+$new=@'
+inline const char* RRUserSpecularSignalLabel() noexcept {return RRUserSpecularReferenceRequested()?"renodx_reference":"native_control_clamp";}
+inline bool RRUserNativeDiffuseRequested() noexcept {return rrUserNativeDiffuse.load(std::memory_order_acquire);}
+inline void RRUserSetNativeDiffuseRequested(bool enabled) noexcept {rrUserNativeDiffuse.store(enabled,std::memory_order_release);}
+inline const char* RRUserDiffuseModeLabel() noexcept {return RRUserNativeDiffuseRequested()?"native_diffuse_hybrid":"full_rr";}
+inline const char* RRUserModeLabel() noexcept {switch(RRUserModeValue()){case RRUserMode::Partial:return "partial";case RRUserMode::Full:return "full";default:return "off";}}
+'@
+Replace-Exact 'src/rr_user_control.h' $old $new
+
+$old=@'
+static bool RRNativeSelectedOption(void*) noexcept {
+ const bool active=rrNativeFrame.Selected()||RRNativePartialActive();
+ return control_rr::NativeRenderOption(rrNativeFrameEnabled,active,rrNativeFrame.Stopped());
+}
+static bool RRNativePrepareAA(void* color,void*& normal,void*& diffuse,void*& specular) noexcept {
+'@
+$new=@'
+static bool RRNativeSelectedOption(void*) noexcept {
+ const bool active=rrNativeFrame.Selected()||RRNativePartialActive();
+ return control_rr::NativeRenderOption(rrNativeFrameEnabled,active,rrNativeFrame.Stopped());
+}
+static bool RRNativeGIBypassOption(void*) noexcept {
+ const bool full=rrNativeFrameEnabled&&rrNativeFrame.Selected()&&!rrNativeFrame.Stopped();
+ if(full&&control_rr::RRUserNativeDiffuseRequested())return false;
+ return RRNativeSelectedOption(nullptr);
+}
+static bool RRNativePrepareAA(void* color,void*& normal,void*& diffuse,void*& specular) noexcept {
+'@
+Replace-Exact 'src/rr_native_frame.h' $old $new
+
+Replace-Exact 'src/rr_native_frame.h' `
+'!RRAlbedoPrepareCallPatch(base+0x12cd45,reinterpret_cast<void*>(rrNativeOptionOriginal),reinterpret_cast<void*>(&RRNativeSelectedOption),&rrNativeGIBypassOptionPatch)||' `
+'!RRAlbedoPrepareCallPatch(base+0x12cd45,reinterpret_cast<void*>(rrNativeOptionOriginal),reinterpret_cast<void*>(&RRNativeGIBypassOption),&rrNativeGIBypassOptionPatch)||'
+
+$old=@'
+ const bool full=rrNativeFrameEnabled&&rrNativeFrame.Selected()&&!rrNativeFrame.Stopped();
+ const auto policy=control_rr::BroadDiffusePolicy(full,RRNativePartialActive(),rrNativeRTFrame.effects);
+'@
+$new=@'
+ const bool full=rrNativeFrameEnabled&&rrNativeFrame.Selected()&&!rrNativeFrame.Stopped()&&!control_rr::RRUserNativeDiffuseRequested();
+ const auto policy=control_rr::BroadDiffusePolicy(full,RRNativePartialActive(),rrNativeRTFrame.effects);
+'@
+Replace-Exact 'src/rr_native_frame.h' $old $new
+
+Replace-Exact 'src/rr_native_frame.h' `
+'Log("RR_NOISY_GI frame=%llu success=%u history_empty=%u native_filter_skipped=1 rt_effects=0x%X",frame,unsigned(okay),unsigned(empty),rrNativeRTFrame.effects);' `
+'Log("RR_GI24_DIFFUSE_MODE frame=%llu success=%u history_empty=%u native_diffuse=%u rr_selected=1 rt_effects=0x%X",frame,unsigned(okay),unsigned(empty),unsigned(control_rr::RRUserNativeDiffuseRequested()),rrNativeRTFrame.effects);'
+
+Replace-Exact 'src/rr_native_frame.h' `
+'Log("RR_NATIVE_OPTION_ISOLATION ready=1 registered_option=forced_off_never_true reflection=mod_state gi_radius=mod_state gi_bypass=mod_state jitter=private_mirror partial_mode=mod_owned_option_reads_no_feature13");' `
+'Log("RR_NATIVE_OPTION_ISOLATION ready=1 registered_option=forced_off_never_true reflection=mod_state gi_radius=mod_state gi_bypass=GI24_hybrid_switch jitter=private_mirror partial_mode=mod_owned_option_reads_no_feature13");'
+
+Replace-Exact 'src/rr_native_frame.h' `
+'native_gi_bypass=1 contact_shadow_denoiser=temporal_off_spatial_zero broad_diffuse_denoiser=temporal_and_spatial_bypassed' `
+'native_gi_bypass=GI24_switch contact_shadow_denoiser=temporal_off_spatial_zero broad_diffuse_denoiser=GI24_switch'
+
+Replace-Exact 'src/fg_overlay.h' `
+'static int FGOverlayDesiredHeight() noexcept { if (fgOverlayOptionsPage) return 640; if (fgOverlayRRSettingsPage) return 490; return IsFGDynamicSelection(GetFGUserMultiplier()) ? kFGOverlayHeight : kFGOverlayCompactHeight; }' `
+'static int FGOverlayDesiredHeight() noexcept { if (fgOverlayOptionsPage) return 640; if (fgOverlayRRSettingsPage) return 570; return IsFGDynamicSelection(GetFGUserMultiplier()) ? kFGOverlayHeight : kFGOverlayCompactHeight; }'
+
+$old=@'
+        wchar_t status[180]{};
+        swprintf_s(status,L"Last RR: %u%%%s. Release to apply. Saves automatically.",control_rr_clamp::effective.load(),control_rr_clamp::applied.load()?L"":L" (native fallback)");
+        RECT help{30,330,710,375}; DrawTextW(dc,status,-1,&help,DT_LEFT|DT_WORDBREAK);
+        SelectObject(dc,buttonFont);
+        PaintFGButton(dc,RECT{550,410,710,460},L"Back",false);
+'@
+$new=@'
+        wchar_t status[180]{};
+        swprintf_s(status,L"Last RR: %u%%%s. Release to apply. Saves automatically.",control_rr_clamp::effective.load(),control_rr_clamp::applied.load()?L"":L" (native fallback)");
+        RECT help{30,330,710,365}; DrawTextW(dc,status,-1,&help,DT_LEFT|DT_WORDBREAK);
+        SelectObject(dc,bodyFont); SetTextColor(dc,RGB(246,246,246));
+        RECT hybridLabel{30,382,470,420}; DrawTextW(dc,L"Native diffuse GI + RR reflections",-1,&hybridLabel,DT_LEFT|DT_VCENTER|DT_SINGLELINE);
+        const bool hybrid=control_rr::RRUserNativeDiffuseRequested();
+        SelectObject(dc,hybrid?buttonSelecte
