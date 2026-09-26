@@ -22,15 +22,30 @@ static bool RRNativeTakeGuides(const RREvaluationInputs& in,RRNativeGuideBinding
     bindings.worldToView[index]=identity;
     bindings.viewToClip[index]=identity;
    }
-   // P1 isolates projection data on F. View-space normals retain identity WorldToView.
-   // E and rejected snapshots keep the exact reference bindings above.
+   // GI26: F's SpecularHitDistance path requires the real camera matrices.
+   // The old path incorrectly left WorldToView as identity because the normal
+   // guide itself is view-space. Those are separate contracts: normal space
+   // does not change the camera matrices used to reproject a world-space hit.
+   // E still keeps the exact reference identity bindings because it does not
+   // bind SpecularHitDistance.
    if(control_rr::RRUserPresetValue()==control_rr::RRPresetF) {
-    const bool validProjection=control_rr::CopyValidatedProjection(slot.camera.viewToClip,slot.camera.clipToView,bindings.viewToClip);
-    bindings.projectionValid=validProjection;
+    const bool validWorldToView=control_rr::CopyValidatedAffine43(
+     slot.camera.worldToView,slot.camera.viewToWorld,bindings.worldToView);
+    const bool validProjection=control_rr::CopyValidatedProjection(
+     slot.camera.viewToClip,slot.camera.clipToView,bindings.viewToClip);
+    bindings.projectionValid=validWorldToView&&validProjection;
+    if(!bindings.projectionValid){
+     for(unsigned row=0;row<4;++row)for(unsigned column=0;column<4;++column){
+      const unsigned index=row*4+column;const float identity=(row==column)?1.0f:0.0f;
+      bindings.worldToView[index]=identity;bindings.viewToClip[index]=identity;
+     }
+    }
     static unsigned long long projectionChecks=0;
     const auto check=++projectionChecks;
-    if(check<=4||(check%240)==0||!validProjection)
-     Log("RR_F_PROJECTION_P1 frame=%llu valid=%u mode=%s hit_distance=D1_gated",in.frame,unsigned(validProjection),validProjection?"native_projection_view_normals":"identity_fallback");
+    if(check<=4||(check%240)==0||!bindings.projectionValid)
+     Log("RR_GI26_SPECULAR_CAMERA frame=%llu valid=%u world_to_view=%u view_to_clip=%u mode=%s hit_distance=D1_gated",
+      in.frame,unsigned(bindings.projectionValid),unsigned(validWorldToView),unsigned(validProjection),
+      bindings.projectionValid?"native_world_to_view_plus_projection":"identity_fallback");
    }
    if(!owner->policy.TakeEvaluation({i,state.serial},state.key))__leave;
    bindings.normal=slot.normal;bindings.specular=slot.specular;bindings.diffuse=slot.diffuse;
