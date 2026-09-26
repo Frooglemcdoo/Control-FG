@@ -1,0 +1,136 @@
+dFont:buttonFont);
+        PaintFGButton(dc,RECT{500,375,710,425},hybrid?L"HYBRID":L"FULL RR",hybrid,true);
+        SelectObject(dc,smallFont); SetTextColor(dc,RGB(190,190,190));
+        RECT hybridHelp{30,430,710,472}; DrawTextW(dc,L"GI24 A/B: HYBRID keeps Control's native diffuse denoiser while RR remains active for the reflection/specular path.",-1,&hybridHelp,DT_LEFT|DT_WORDBREAK);
+        SelectObject(dc,buttonFont);
+        PaintFGButton(dc,RECT{550,490,710,540},L"Back",false);
+'@
+Replace-Exact 'src/fg_overlay.h' $old $new
+
+$old=@'
+            } else if (x >= 550 && x < 710 && y >= 410 && y < 460) {
+                fgOverlayRRSettingsPage=false;
+                FGOverlayResizeWindowForCurrentSelection(hwnd);
+            }
+'@
+$new=@'
+            } else if (x >= 500 && x < 710 && y >= 375 && y < 425) {
+                const bool previous=control_rr::RRUserNativeDiffuseRequested();
+                control_rr::RRUserSetNativeDiffuseRequested(!previous);
+                Log("RR_GI24_HYBRID_UI previous=%u enabled=%u apply=immediate session_only=1",unsigned(previous),unsigned(!previous));
+            } else if (x >= 550 && x < 710 && y >= 490 && y < 540) {
+                fgOverlayRRSettingsPage=false;
+                FGOverlayResizeWindowForCurrentSelection(hwnd);
+            }
+'@
+Replace-Exact 'src/fg_overlay.h' $old $new
+
+Replace-Exact 'Build.cmd' `
+'echo Control FG v2.1.1 - Steam, Epic Games Store and GOG' `
+'echo Control FG v2.1.1 - GI24 Native Diffuse Hybrid A/B Test - Steam, Epic Games Store and GOG'
+
+$build=Read-Utf8 'Build.cmd'
+$anchor=@'
+cl /nologo /std:c++17 /EHsc /W4 /O2 /MT validation\frame-coordinator\parameters.cpp /Fobuild\rr-parameters-test.obj /Febuild\rr-parameters-test.exe
+if errorlevel 1 exit /b 1
+build\rr-parameters-test.exe
+if errorlevel 1 exit /b 1
+'@
+$add=$anchor+@'
+cl /nologo /std:c++17 /EHsc /W4 /WX /O2 /MT validation\gi24\policy-test.cpp /Fobuild\rr-gi24-policy.obj /Febuild\rr-gi24-policy.exe
+if errorlevel 1 exit /b 1
+build\rr-gi24-policy.exe
+if errorlevel 1 exit /b 1
+'@
+if(!$build.Contains('validation\gi24\policy-test.cpp')){
+ if(!$build.Contains($anchor)){ throw 'GI24 Build.cmd insertion contract missing' }
+ Write-Utf8 'Build.cmd' ($build.Replace($anchor,$add))
+}
+
+
+$valDir=Join-Path $Root 'validation\gi24'
+New-Item -ItemType Directory -Force -Path $valDir | Out-Null
+$policy=@'
+#include <cassert>
+#include <cstdio>
+namespace gi24 {
+inline bool NativeDiffuse(bool rrSelected,bool stopped,bool requested) noexcept {return rrSelected&&!stopped&&requested;}
+inline bool BypassGI(bool rrSelected,bool stopped,bool requested) noexcept {return rrSelected&&!stopped&&!requested;}
+inline bool BypassBroadDiffuse(bool rrSelected,bool stopped,bool requested) noexcept {return rrSelected&&!stopped&&!requested;}
+}
+int main(){
+ assert(gi24::BypassGI(true,false,false));
+ assert(!gi24::BypassGI(true,false,true));
+ assert(gi24::NativeDiffuse(true,false,true));
+ assert(!gi24::NativeDiffuse(true,true,true));
+ assert(!gi24::BypassBroadDiffuse(true,false,true));
+ assert(gi24::BypassBroadDiffuse(true,false,false));
+ std::puts("PASS GI24 hybrid diffuse policy: FULL keeps v2.1.1 bypass; HYBRID allows native diffuse filters while RR remains selected");
+}
+'@
+Write-Utf8 'validation/gi24/policy-test.cpp' $policy
+
+$doc=@'
+# GI24 — Native Diffuse Hybrid A/B
+
+This test starts from clean v2.1.1 behavior.
+
+- FULL RR (default): unchanged public v2.1.1 path. Control diffuse GI filtering is bypassed and RR receives the raw diffuse result.
+- HYBRID: RR stays selected, but Control's native diffuse-GI filter/denoiser is allowed to run. Reflection/specular RR hooks remain selected.
+
+Use Model F and compare the same low-light shadow area. The toggle is session-only and intentionally not persisted.
+
+Expected log proof while HYBRID is selected: `RR_GI24_DIFFUSE_MODE ... native_diffuse=1 rr_selected=1`.
+'@
+Write-Utf8 'GI24-TEST.md' $doc
+
+
+# Current-release ownership lets the intentionally advanced GI24 files supersede
+# older milestone hashes without weakening validation for unrelated files.
+$currentPath=Join-Path $Root 'validation\current-release\results.json'
+$current=Get-Content -LiteralPath $currentPath -Raw | ConvertFrom-Json
+$current.status='LOCAL_PASS'
+$current.scope='GI24 native-diffuse hybrid A/B from clean v2.1.1: FULL RR is unchanged; HYBRID keeps RR selected while restoring Control native diffuse-GI filtering.'
+$current.candidate='2.1.1-GI24-Native-Diffuse-Hybrid-AB'
+$current.tests.portable_gate='PASS GI24 hybrid policy; Windows MSVC build and GPU runtime A/B remain required.'
+$owned=@('Build.cmd','src/rr_user_control.h','src/rr_native_frame.h','src/fg_overlay.h','validation/gi24/policy-test.cpp','GI24-TEST.md')
+foreach($rel in $owned){
+  $hash=(Get-FileHash -LiteralPath (Join-Path $Root $rel) -Algorithm SHA256).Hash
+  if($current.tested_sha256.PSObject.Properties.Name -contains $rel){ $current.tested_sha256.$rel=$hash }
+  else { $current.tested_sha256 | Add-Member -NotePropertyName $rel -NotePropertyValue $hash }
+}
+[IO.File]::WriteAllText($currentPath,($current|ConvertTo-Json -Depth 20),[Text.UTF8Encoding]::new($false))
+
+# Refresh package manifests in dependency order. Preserve their original key
+# sets and add only GI24's new static files.
+$artifactPath=Join-Path $Root 'ARTIFACT-SHA256.json'
+$artifact=Get-Content -LiteralPath $artifactPath -Raw | ConvertFrom-Json
+foreach($rel in @('validation/gi24/policy-test.cpp','GI24-TEST.md')){
+ if(!($artifact.PSObject.Properties.Name -contains $rel)){ $artifact|Add-Member -NotePropertyName $rel -NotePropertyValue '' }
+}
+foreach($entry in $artifact.PSObject.Properties){
+ $f=Join-Path $Root $entry.Name
+ if(Test-Path -LiteralPath $f -PathType Leaf){ $entry.Value=(Get-FileHash -LiteralPath $f -Algorithm SHA256).Hash }
+}
+[IO.File]::WriteAllText($artifactPath,($artifact|ConvertTo-Json -Depth 8),[Text.UTF8Encoding]::new($false))
+
+# ARTIFACT changed after current-release was written. Refresh its checkpoint
+# entry if that manifest is part of the release-owned set.
+$current=Get-Content -LiteralPath $currentPath -Raw | ConvertFrom-Json
+if($current.tested_sha256.PSObject.Properties.Name -contains 'ARTIFACT-SHA256.json'){
+ $current.tested_sha256.'ARTIFACT-SHA256.json'=(Get-FileHash -LiteralPath $artifactPath -Algorithm SHA256).Hash
+ [IO.File]::WriteAllText($currentPath,($current|ConvertTo-Json -Depth 20),[Text.UTF8Encoding]::new($false))
+}
+
+$sourcePath=Join-Path $Root 'SOURCE-SHA256.json'
+$source=Get-Content -LiteralPath $sourcePath -Raw | ConvertFrom-Json
+foreach($rel in @('validation/gi24/policy-test.cpp','GI24-TEST.md')){
+ if(!($source.PSObject.Properties.Name -contains $rel)){ $source|Add-Member -NotePropertyName $rel -NotePropertyValue '' }
+}
+foreach($entry in $source.PSObject.Properties){
+ $f=Join-Path $Root $entry.Name
+ if(Test-Path -LiteralPath $f -PathType Leaf){ $entry.Value=(Get-FileHash -LiteralPath $f -Algorithm SHA256).Hash }
+}
+[IO.File]::WriteAllText($sourcePath,($source|ConvertTo-Json -Depth 8),[Text.UTF8Encoding]::new($false))
+
+Write-
