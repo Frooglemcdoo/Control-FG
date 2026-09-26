@@ -36,7 +36,7 @@ if errorlevel 1 exit /b 1
 build\rr-parameters-test.exe
 if errorlevel 1 exit /b 1
 '@
-$add=$anchor+@'
+$add=$anchor+"`n"+@'
 cl /nologo /std:c++17 /EHsc /W4 /WX /O2 /MT validation\gi24\policy-test.cpp /Fobuild\rr-gi24-policy.obj /Febuild\rr-gi24-policy.exe
 if errorlevel 1 exit /b 1
 build\rr-gi24-policy.exe
