@@ -74,6 +74,8 @@ static unsigned currentEffects=1;
 static bool RRNativeLightingReady(unsigned long long frame){return checkRTStack?rrNativeRTFrame.Complete(frame,currentEffects,rrNativeLightingComplete):rrNativeLightingComplete;}
 static bool lastRRReset=false;
 static bool RRNativeSetGuides(void*,const RRNativeGuideBindings*,ID3D12Resource* distance,bool reset){lastDistance=distance;lastRRReset=reset;return !setFailure;}
+static bool RRNativeSetFrameTime(void*,float){return !setFailure;}
+static ID3D12Resource* RRResponsivityBeforeEvaluation(ID3D12GraphicsCommandList*,UINT,UINT,unsigned long long,int){return nullptr;}
 static UINT RRDiffuseFamilyCount(unsigned long long,UINT){return 0;}
 struct RRDiffuseCharacterSummary {UINT batches=0;unsigned long long instances=0,fingerprint=0;};
 static RRDiffuseCharacterSummary RRDiffuseCharacterInfo(unsigned long long){return {};}
