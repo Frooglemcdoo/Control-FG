@@ -842,6 +842,7 @@ static bool Exchange(Patch& p, bool install) {
 #include "rr_native_frame.h"
 #include "rr_native_guides.h"
 #include "rr_skin_mask_runtime.h"
+#include "rr_responsivity_runtime.h"
 #include "rr_evaluation_entry.h"
 #include "rr_reflection_hooks.h"
 
