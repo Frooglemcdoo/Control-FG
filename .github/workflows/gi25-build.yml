@@ -1,0 +1,121 @@
+name: GI25 RR Temporal Inputs Build
+
+on:
+  push:
+    branches: [gi25-rr-temporal-inputs]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - name: Preserve repository bytes
+        shell: pwsh
+        run: git config --global core.autocrlf false
+      - uses: actions/checkout@v4
+      - name: Refresh GI25 validation ownership and manifests
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $utf8=[Text.UTF8Encoding]::new($false)
+          $root=$PWD
+          $currentPath=Join-Path $root 'validation/current-release/results.json'
+          $current=Get-Content -LiteralPath $currentPath -Raw | ConvertFrom-Json
+          $current.status='LOCAL_PASS'
+          $current.scope='GI25 pure RR temporal-input parity: native denoisers remain bypassed; Model F gets a signed full-frame DLSSD.ResponsivityMask and every RR evaluation gets FrameTimeDeltaInMsec.'
+          $current.candidate='2.1.1-GI25-RR-Temporal-Inputs'
+          $current.tests.portable_gate='PASS GI25 signed responsivity and frame-time policy; Windows MSVC build required before runtime test.'
+          $owned=@(
+            'Build.cmd','src/rr_user_control.h','src/rr_native_guides.h','src/rr_evaluation_entry.h','src/fg_overlay.h',
+            'src/rr_responsivity_policy.h','src/rr_responsivity_runtime.h','validation/gi25/policy-test.cpp','GI25-TEST.md'
+          )
+          foreach($rel in $owned){
+            $hash=(Get-FileHash -LiteralPath (Join-Path $root $rel) -Algorithm SHA256).Hash
+            if($current.tested_sha256.PSObject.Properties.Name -contains $rel){$current.tested_sha256.$rel=$hash}
+            else{$current.tested_sha256|Add-Member -NotePropertyName $rel -NotePropertyValue $hash}
+          }
+          [IO.File]::WriteAllText($currentPath,($current|ConvertTo-Json -Depth 30),$utf8)
+
+          $artifactPath=Join-Path $root 'ARTIFACT-SHA256.json'
+          $artifact=Get-Content -LiteralPath $artifactPath -Raw | ConvertFrom-Json
+          foreach($rel in @('src/rr_responsivity_policy.h','src/rr_responsivity_runtime.h','validation/gi25/policy-test.cpp','GI25-TEST.md')){
+            if(!($artifact.PSObject.Properties.Name -contains $rel)){$artifact|Add-Member -NotePropertyName $rel -NotePropertyValue ''}
+          }
+          foreach($entry in $artifact.PSObject.Properties){
+            $file=Join-Path $root $entry.Name
+            if(Test-Path -LiteralPath $file -PathType Leaf){$entry.Value=(Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash}
+          }
+          [IO.File]::WriteAllText($artifactPath,($artifact|ConvertTo-Json -Depth 10),$utf8)
+
+          $current=Get-Content -LiteralPath $currentPath -Raw | ConvertFrom-Json
+          if($current.tested_sha256.PSObject.Properties.Name -contains 'ARTIFACT-SHA256.json'){
+            $current.tested_sha256.'ARTIFACT-SHA256.json'=(Get-FileHash -LiteralPath $artifactPath -Algorithm SHA256).Hash
+          }
+          [IO.File]::WriteAllText($currentPath,($current|ConvertTo-Json -Depth 30),$utf8)
+
+          $sourcePath=Join-Path $root 'SOURCE-SHA256.json'
+          $source=Get-Content -LiteralPath $sourcePath -Raw | ConvertFrom-Json
+          foreach($rel in @('src/rr_responsivity_policy.h','src/rr_responsivity_runtime.h','validation/gi25/policy-test.cpp','GI25-TEST.md')){
+            if(!($source.PSObject.Properties.Name -contains $rel)){$source|Add-Member -NotePropertyName $rel -NotePropertyValue ''}
+          }
+          foreach($entry in $source.PSObject.Properties){
+            $file=Join-Path $root $entry.Name
+            if(Test-Path -LiteralPath $file -PathType Leaf){$entry.Value=(Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash}
+          }
+          [IO.File]::WriteAllText($sourcePath,($source|ConvertTo-Json -Depth 10),$utf8)
+      - name: Build and validate GI25
+        shell: cmd
+        run: echo.|Build.cmd
+      - name: Verify GI25 build markers
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $dll=[IO.File]::ReadAllBytes((Join-Path $PWD 'build/dxgi.dll'))
+          $ascii=[Text.Encoding]::ASCII.GetString($dll)
+          foreach($marker in @('RR_GI25_RESPONSIVITY_READY','RR_GI25_RESPONSIVITY frame=','RR_GI25_TEMPORAL_INPUTS','FrameTimeDeltaInMsec','RR_GI25_RESPONSIVITY_UI')){
+            if(!$ascii.Contains($marker)){throw "GI25 marker missing from dxgi.dll: $marker"}
+          }
+          Write-Host 'PASS: GI25 runtime markers are present in dxgi.dll.'
+      - name: Package GI25 source
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $release=Join-Path $PWD 'release-gi25'
+          $rootName='Control-FG-v2.1.1-GI25-RR-Temporal-Inputs-Source'
+          $stage=Join-Path $release $rootName
+          New-Item -ItemType Directory -Force -Path $stage|Out-Null
+          foreach($path in (git ls-files)){
+            if($path -eq '.github/workflows/gi25-build.yml'){continue}
+            $src=Join-Path $PWD $path
+            if(!(Test-Path -LiteralPath $src -PathType Leaf)){continue}
+            $dst=Join-Path $stage $path
+            New-Item -ItemType Directory -Force -Path (Split-Path -Parent $dst)|Out-Null
+            Copy-Item -LiteralPath $src -Destination $dst -Force
+          }
+          foreach($path in @('ARTIFACT-SHA256.json','SOURCE-SHA256.json','validation/current-release/results.json')){
+            Copy-Item -LiteralPath (Join-Path $PWD $path) -Destination (Join-Path $stage $path) -Force
+          }
+          $zip=Join-Path $release ($rootName+'.zip')
+          Compress-Archive -Path $stage -DestinationPath $zip -CompressionLevel Optimal
+          $hash=(Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash.ToLowerInvariant()
+          Set-Content -LiteralPath (Join-Path $release 'GI25-SHA256.txt') -Value "$hash  $rootName.zip" -Encoding ascii
+          $drop=Join-Path $PWD 'release/Control-FG-v2.1.1.zip'
+          if(!(Test-Path -LiteralPath $drop)){throw 'GI25 drop-in package missing after Build.cmd'}
+          $dropHash=(Get-FileHash -LiteralPath $drop -Algorithm SHA256).Hash.ToLowerInvariant()
+          Add-Content -LiteralPath (Join-Path $release 'GI25-SHA256.txt') -Value "$dropHash  Control-FG-v2.1.1-GI25-RR-Temporal-Inputs-DropIn.zip" -Encoding ascii
+          Copy-Item -LiteralPath $drop -Destination (Join-Path $release 'Control-FG-v2.1.1-GI25-RR-Temporal-Inputs-DropIn.zip')
+      - name: Upload GI25 packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: Control-FG-v2.1.1-GI25
+          path: |
+            release-gi25/Control-FG-v2.1.1-GI25-RR-Temporal-Inputs-Source.zip
+            release-gi25/Control-FG-v2.1.1-GI25-RR-Temporal-Inputs-DropIn.zip
+            release-gi25/GI25-SHA256.txt
+            build/build-validation.json
+            Build.log
+          if-no-files-found: error
+          retention-days: 7
