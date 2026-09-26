@@ -1,0 +1,91 @@
+name: GI26 F Specular Camera Matrix Build
+
+on:
+  push:
+    branches: [gi26-f-specular-camera-matrix]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - name: Preserve repository bytes
+        shell: pwsh
+        run: git config --global core.autocrlf false
+      - uses: actions/checkout@v4
+      - name: Refresh GI26 validation ownership and manifests
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $utf8=[Text.UTF8Encoding]::new($false);$root=$PWD
+          $currentPath=Join-Path $root 'validation/current-release/results.json'
+          $current=Get-Content -LiteralPath $currentPath -Raw|ConvertFrom-Json
+          $current.status='LOCAL_PASS'
+          $current.scope='GI26 clean-v2.1.1 Model-F specular reprojection fix: SpecularHitDistance now receives validated native WorldToView plus ViewToClip; E remains unchanged reference identity path.'
+          $current.candidate='2.1.1-GI26-F-Specular-Camera-Matrix'
+          $current.tests.portable_gate='PASS existing projection test extended for Remedy row-major 4x3 affine WorldToView expansion/inverse validation; Windows build required.'
+          $owned=@('Build.cmd','src/rr_projection_validation.h','src/rr_native_guides.h','src/rr_evaluation_entry.h','validation/rr-f-projection/test.cpp','GI26-TEST.md')
+          foreach($rel in $owned){
+            $hash=(Get-FileHash -LiteralPath (Join-Path $root $rel) -Algorithm SHA256).Hash
+            if($current.tested_sha256.PSObject.Properties.Name -contains $rel){$current.tested_sha256.$rel=$hash}
+            else{$current.tested_sha256|Add-Member -NotePropertyName $rel -NotePropertyValue $hash}
+          }
+          [IO.File]::WriteAllText($currentPath,($current|ConvertTo-Json -Depth 30),$utf8)
+          $artifactPath=Join-Path $root 'ARTIFACT-SHA256.json'
+          $artifact=Get-Content -LiteralPath $artifactPath -Raw|ConvertFrom-Json
+          foreach($rel in @('GI26-TEST.md')){if(!($artifact.PSObject.Properties.Name -contains $rel)){$artifact|Add-Member -NotePropertyName $rel -NotePropertyValue ''}}
+          foreach($entry in $artifact.PSObject.Properties){$f=Join-Path $root $entry.Name;if(Test-Path -LiteralPath $f -PathType Leaf){$entry.Value=(Get-FileHash -LiteralPath $f -Algorithm SHA256).Hash}}
+          [IO.File]::WriteAllText($artifactPath,($artifact|ConvertTo-Json -Depth 10),$utf8)
+          $current=Get-Content -LiteralPath $currentPath -Raw|ConvertFrom-Json
+          if($current.tested_sha256.PSObject.Properties.Name -contains 'ARTIFACT-SHA256.json'){$current.tested_sha256.'ARTIFACT-SHA256.json'=(Get-FileHash $artifactPath -Algorithm SHA256).Hash}
+          [IO.File]::WriteAllText($currentPath,($current|ConvertTo-Json -Depth 30),$utf8)
+          $sourcePath=Join-Path $root 'SOURCE-SHA256.json'
+          $source=Get-Content -LiteralPath $sourcePath -Raw|ConvertFrom-Json
+          foreach($rel in @('GI26-TEST.md')){if(!($source.PSObject.Properties.Name -contains $rel)){$source|Add-Member -NotePropertyName $rel -NotePropertyValue ''}}
+          foreach($entry in $source.PSObject.Properties){$f=Join-Path $root $entry.Name;if(Test-Path -LiteralPath $f -PathType Leaf){$entry.Value=(Get-FileHash -LiteralPath $f -Algorithm SHA256).Hash}}
+          [IO.File]::WriteAllText($sourcePath,($source|ConvertTo-Json -Depth 10),$utf8)
+      - name: Build and validate GI26
+        shell: cmd
+        run: echo.|Build.cmd
+      - name: Verify GI26 runtime markers
+        shell: pwsh
+        run: |
+          $dll=[Text.Encoding]::ASCII.GetString([IO.File]::ReadAllBytes((Join-Path $PWD 'build/dxgi.dll')))
+          foreach($marker in @('RR_GI26_SPECULAR_CAMERA','GI26_F_native_world_to_view_plus_projection_E_identity')){
+            if(!$dll.Contains($marker)){throw "GI26 marker missing: $marker"}
+          }
+          Write-Host 'PASS: GI26 runtime markers present.'
+      - name: Package GI26
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $release=Join-Path $PWD 'release-gi26';$rootName='Control-FG-v2.1.1-GI26-F-Specular-Camera-Matrix-Source';$stage=Join-Path $release $rootName
+          New-Item -ItemType Directory -Force -Path $stage|Out-Null
+          foreach($path in (git ls-files)){
+            if($path -eq '.github/workflows/gi26-build.yml'){continue}
+            $src=Join-Path $PWD $path;if(!(Test-Path -LiteralPath $src -PathType Leaf)){continue}
+            $dst=Join-Path $stage $path;New-Item -ItemType Directory -Force -Path (Split-Path -Parent $dst)|Out-Null;Copy-Item $src $dst -Force
+          }
+          foreach($path in @('ARTIFACT-SHA256.json','SOURCE-SHA256.json','validation/current-release/results.json')){
+            Copy-Item (Join-Path $PWD $path) (Join-Path $stage $path) -Force
+          }
+          $zip=Join-Path $release ($rootName+'.zip');Compress-Archive -Path $stage -DestinationPath $zip -CompressionLevel Optimal
+          $drop=Join-Path $PWD 'release/Control-FG-v2.1.1.zip';if(!(Test-Path $drop)){throw 'drop-in missing'}
+          $dropOut=Join-Path $release 'Control-FG-v2.1.1-GI26-F-Specular-Camera-Matrix-DropIn.zip';Copy-Item $drop $dropOut
+          $h1=(Get-FileHash $zip -Algorithm SHA256).Hash.ToLowerInvariant();$h2=(Get-FileHash $dropOut -Algorithm SHA256).Hash.ToLowerInvariant()
+          Set-Content (Join-Path $release 'GI26-SHA256.txt') "$h1  $rootName.zip`n$h2  Control-FG-v2.1.1-GI26-F-Specular-Camera-Matrix-DropIn.zip" -Encoding ascii
+      - name: Upload GI26 packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: Control-FG-v2.1.1-GI26
+          path: |
+            release-gi26/Control-FG-v2.1.1-GI26-F-Specular-Camera-Matrix-Source.zip
+            release-gi26/Control-FG-v2.1.1-GI26-F-Specular-Camera-Matrix-DropIn.zip
+            release-gi26/GI26-SHA256.txt
+            build/build-validation.json
+            Build.log
+          if-no-files-found: error
+          retention-days: 7
