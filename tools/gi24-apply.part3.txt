@@ -1,0 +1,2 @@
+Host 'PASS: GI24 Native Diffuse Hybrid A/B patch applied.'
+Write-Host 'Run Build.cmd next.'
