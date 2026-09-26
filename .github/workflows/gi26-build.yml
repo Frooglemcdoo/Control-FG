@@ -27,7 +27,7 @@ jobs:
           $current.scope='GI26 clean-v2.1.1 Model-F specular reprojection fix: SpecularHitDistance now receives validated native WorldToView plus ViewToClip; E remains unchanged reference identity path.'
           $current.candidate='2.1.1-GI26-F-Specular-Camera-Matrix'
           $current.tests.portable_gate='PASS existing projection test extended for Remedy row-major 4x3 affine WorldToView expansion/inverse validation; Windows build required.'
-          $owned=@('Build.cmd','src/rr_projection_validation.h','src/rr_native_guides.h','src/rr_evaluation_entry.h','validation/rr-f-projection/test.cpp','GI26-TEST.md')
+          $owned=@('Build.cmd','Verify-Build.ps1','src/rr_projection_validation.h','src/rr_native_guides.h','src/rr_evaluation_entry.h','validation/rr-f-projection/test.cpp','GI26-TEST.md')
           foreach($rel in $owned){
             $hash=(Get-FileHash -LiteralPath (Join-Path $root $rel) -Algorithm SHA256).Hash
             if($current.tested_sha256.PSObject.Properties.Name -contains $rel){$current.tested_sha256.$rel=$hash}
