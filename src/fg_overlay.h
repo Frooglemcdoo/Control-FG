@@ -26,6 +26,8 @@ static HWND fgOverlayLastRefreshGame = nullptr;
 static bool fgOverlaySliderDragging = false;
 static bool fgOverlayClampDragging = false;
 static unsigned fgOverlayClampPreview = 60;
+static bool fgOverlayResponsivityDragging = false;
+static int fgOverlayResponsivityPreview = -50;
 static bool fgOverlaySettingsDirty = false;
 static ULONGLONG fgOverlaySettingsDirtyMs = 0;
 static ULONGLONG fgOverlaySettingsSavedPulseUntilMs = 0;
@@ -41,6 +43,15 @@ static unsigned FGOverlayClampFromX(int x) noexcept {
 }
 static int FGOverlayClampToX(unsigned value) noexcept {
     return 30 + static_cast<int>(control_rr_clamp::Normalize(value) - 25u) * 470 / 50;
+}
+static int FGOverlayResponsivityFromX(int x) noexcept {
+    if (x <= 30) return -100;
+    if (x >= 500) return 100;
+    return -100 + ((x - 30) * 200 + 235) / 470;
+}
+static int FGOverlayResponsivityToX(int value) noexcept {
+    if(value<-100)value=-100;else if(value>100)value=100;
+    return 30 + (value + 100) * 470 / 200;
 }
 static bool fgOverlayBindingCapture = false;
 static bool fgOverlayBindingKeysDown[256]{};
@@ -160,6 +171,7 @@ static void FGOverlayLoadSettings() noexcept {
         control_rr::RRUserSetSharpnessOverrideEnabled(false);
         control_rr::RRUserSetPresetValue(control_rr::RRPresetF);
         control_rr::RRUserSetSkinMode(control_rr::RRSkinMode::Off);
+        control_rr::RRUserSetResponsivityBias(-50);
         control_rr::RRUserMarkPresetRestartRequired(false);
         control_rr::RRUserSetSpecularSignalMode(control_rr::RRSpecularSignalMode::NativeClamp);
         control_rr::RRUserRequest(false);
@@ -177,6 +189,7 @@ static void FGOverlayLoadSettings() noexcept {
     const bool rrEnabled = GetPrivateProfileIntW(L"RayReconstruction", L"Enabled", 0, fgOverlaySettingsPath.c_str()) != 0;
     const unsigned int rawRrPreset = GetPrivateProfileIntW(L"RayReconstruction", L"Preset", control_rr::RRPresetF, fgOverlaySettingsPath.c_str());
     const unsigned int rrPreset = rawRrPreset == control_rr::RRPresetE ? control_rr::RRPresetE : control_rr::RRPresetF;
+    const int rrResponsivity = GetPrivateProfileIntW(L"RayReconstruction", L"ResponsivityBias", -50, fgOverlaySettingsPath.c_str());
 
     slFgUserMultiplier.store(selection, std::memory_order_release);
     slFgDynamicManualTargetFps.store(manualTarget, std::memory_order_release);
@@ -184,11 +197,12 @@ static void FGOverlayLoadSettings() noexcept {
     control_rr::RRUserSetSharpnessOverrideEnabled(false);
     control_rr::RRUserSetPresetValue(rrPreset);
     control_rr::RRUserSetSkinMode(control_rr::RRSkinMode::Off);
+    control_rr::RRUserSetResponsivityBias(rrResponsivity);
     control_rr::RRUserMarkPresetRestartRequired(false);
     control_rr::RRUserSetSpecularSignalMode(control_rr::RRSpecularSignalMode::NativeClamp);
     control_rr::RRUserRequest(rrEnabled);
-    Log("FG_SETTINGS_LOAD success=1 path=%ls selection=%s selected_code=%u target_policy=%s manual_target_fps=%u rr_enabled=%u rr_preset=%s rr_preset_value=%u skin_mode=off schema=8 ui=fg_full_rr_toggle_model_E_F",
-        fgOverlaySettingsPath.c_str(), GetFGSelectionName(selection), selection, manualTarget ? "manual" : "auto", manualTarget, unsigned(rrEnabled), control_rr::RRUserPresetLabel(), control_rr::RRUserPresetValue());
+    Log("FG_SETTINGS_LOAD success=1 path=%ls selection=%s selected_code=%u target_policy=%s manual_target_fps=%u rr_enabled=%u rr_preset=%s rr_preset_value=%u responsivity_bias=%d skin_mode=off schema=9 ui=fg_full_rr_toggle_model_E_F_responsivity",
+        fgOverlaySettingsPath.c_str(), GetFGSelectionName(selection), selection, manualTarget ? "manual" : "auto", manualTarget, unsigned(rrEnabled), control_rr::RRUserPresetLabel(), control_rr::RRUserPresetValue(),control_rr::RRUserResponsivityBias());
 }
 
 static bool FGOverlaySaveSettingsNow() noexcept {
@@ -199,6 +213,8 @@ static bool FGOverlaySaveSettingsNow() noexcept {
 
     wchar_t clampText[8]{};
     swprintf_s(clampText,L"%u",control_rr_clamp::Requested());
+    wchar_t responsivityText[16]{};
+    swprintf_s(responsivityText,L"%d",control_rr::RRUserResponsivityBias());
     wchar_t experimentalText[8]{};
     swprintf_s(experimentalText, L"%u", IsRTX40MFGRequested() ? 1u : 0u);
     wchar_t bindingText[16]{};
@@ -212,12 +228,13 @@ static bool FGOverlaySaveSettingsNow() noexcept {
     swprintf_s(rrEnabledText, L"%u", control_rr::RRUserRequested() ? 1u : 0u);
     swprintf_s(rrPresetText, L"%u", control_rr::RRUserPresetValue());
 
-    bool ok = WritePrivateProfileStringW(L"ControlFG", L"Schema", L"8", fgOverlaySettingsPath.c_str()) != FALSE;
+    bool ok = WritePrivateProfileStringW(L"ControlFG", L"Schema", L"9", fgOverlaySettingsPath.c_str()) != FALSE;
     ok = (WritePrivateProfileStringW(L"FrameGeneration", L"Mode", modeText, fgOverlaySettingsPath.c_str()) != FALSE) && ok;
     ok = (WritePrivateProfileStringW(L"FrameGeneration", L"DynamicTargetFPS", targetText, fgOverlaySettingsPath.c_str()) != FALSE) && ok;
     ok = (WritePrivateProfileStringW(L"RayReconstruction", L"Enabled", rrEnabledText, fgOverlaySettingsPath.c_str()) != FALSE) && ok;
     ok = (WritePrivateProfileStringW(L"RayReconstruction", L"Preset", rrPresetText, fgOverlaySettingsPath.c_str()) != FALSE) && ok;
     ok = (WritePrivateProfileStringW(L"RayReconstruction", L"ReflectionClamp", clampText, fgOverlaySettingsPath.c_str()) != FALSE) && ok;
+    ok = (WritePrivateProfileStringW(L"RayReconstruction", L"ResponsivityBias", responsivityText, fgOverlaySettingsPath.c_str()) != FALSE) && ok;
     ok = (WritePrivateProfileStringW(L"Overlay", L"ToggleKey", bindingText, fgOverlaySettingsPath.c_str()) != FALSE) && ok;
     ok = (WritePrivateProfileStringW(L"Experimental", L"RTX40MultiFG", experimentalText, fgOverlaySettingsPath.c_str()) != FALSE) && ok;
     // Old experimental RR/AA settings are intentionally removed; FG settings remain intact.
@@ -226,9 +243,9 @@ static bool FGOverlaySaveSettingsNow() noexcept {
     WritePrivateProfileStringW(L"RayReconstruction", L"SkinPreserveNative", nullptr, fgOverlaySettingsPath.c_str());
     if (ok) WritePrivateProfileStringW(nullptr, nullptr, nullptr, fgOverlaySettingsPath.c_str());
 
-    Log("FG_SETTINGS_SAVE success=%u path=%ls selection=%s selected_code=%u target_policy=%s manual_target_fps=%u rr_enabled=%u rr_preset=%s rr_preset_value=%u schema=8 ui=fg_full_rr_toggle_model_E_F",
+    Log("FG_SETTINGS_SAVE success=%u path=%ls selection=%s selected_code=%u target_policy=%s manual_target_fps=%u rr_enabled=%u rr_preset=%s rr_preset_value=%u responsivity_bias=%d schema=9 ui=fg_full_rr_toggle_model_E_F_responsivity",
         unsigned(ok), fgOverlaySettingsPath.c_str(), GetFGSelectionName(GetFGUserMultiplier()), GetFGUserMultiplier(),
-        GetFGDynamicManualTargetFps() ? "manual" : "auto", GetFGDynamicManualTargetFps(), unsigned(control_rr::RRUserRequested()), control_rr::RRUserPresetLabel(), control_rr::RRUserPresetValue());
+        GetFGDynamicManualTargetFps() ? "manual" : "auto", GetFGDynamicManualTargetFps(), unsigned(control_rr::RRUserRequested()), control_rr::RRUserPresetLabel(), control_rr::RRUserPresetValue(),control_rr::RRUserResponsivityBias());
     if (ok) fgOverlaySettingsSavedPulseUntilMs = GetTickCount64() + 1200ull;
     return ok;
 }
@@ -630,9 +647,30 @@ static void PaintFGOverlay(HWND hwnd) noexcept {
         DrawTextW(dc,L"Default: 60%",-1,&def,DT_CENTER|DT_SINGLELINE);
         wchar_t status[180]{};
         swprintf_s(status,L"Last RR: %u%%%s. Release to apply. Saves automatically.",control_rr_clamp::effective.load(),control_rr_clamp::applied.load()?L"":L" (native fallback)");
-        RECT help{30,330,710,375}; DrawTextW(dc,status,-1,&help,DT_LEFT|DT_WORDBREAK);
+        RECT help{30,330,710,365}; DrawTextW(dc,status,-1,&help,DT_LEFT|DT_WORDBREAK);
+
+        SelectObject(dc,bodyFont); SetTextColor(dc,RGB(246,246,246));
+        const int resp=fgOverlayResponsivityDragging?fgOverlayResponsivityPreview:control_rr::RRUserResponsivityBias();
+        wchar_t respLabel[96]{};swprintf_s(respLabel,L"RR responsivity bias: %+d%%",resp);
+        RECT respLabelRc{30,382,710,412};DrawTextW(dc,respLabel,-1,&respLabelRc,DT_LEFT|DT_SINGLELINE);
+        const int respKnob=FGOverlayResponsivityToX(resp);
+        PaintFGRect(dc,RECT{30,430,500,452},RGB(45,45,45),RGB(95,95,95));
+        const int neutral=FGOverlayResponsivityToX(0);
+        if(respKnob<neutral)PaintFGRect(dc,RECT{respKnob,430,neutral,452},RGB(240,240,240),RGB(240,240,240));
+        else PaintFGRect(dc,RECT{neutral,430,respKnob,452},RGB(240,240,240),RGB(240,240,240));
+        PaintFGRect(dc,RECT{respKnob-6,420,respKnob+6,462},RGB(255,255,255),RGB(255,255,255));
         SelectObject(dc,buttonFont);
-        PaintFGButton(dc,RECT{550,410,710,460},L"Back",false);
+        PaintFGButton(dc,RECT{530,416,710,466},L"Reset to -50%",false);
+        SelectObject(dc,smallFont);SetTextColor(dc,RGB(246,246,246));
+        RECT respLo{30,470,230,492},respZero{235,470,295,492},respHi{300,470,500,492};
+        DrawTextW(dc,L"-100  More history",-1,&respLo,DT_LEFT|DT_SINGLELINE);
+        DrawTextW(dc,L"0",-1,&respZero,DT_CENTER|DT_SINGLELINE);
+        DrawTextW(dc,L"+100  Faster response",-1,&respHi,DT_RIGHT|DT_SINGLELINE);
+        SetTextColor(dc,RGB(190,190,190));
+        RECT respHelp{30,500,710,542};
+        DrawTextW(dc,L"GI25: Preset F only. Negative values favor temporal stability; 0 disables the mask. Frame-time delta is supplied every RR evaluation.",-1,&respHelp,DT_LEFT|DT_WORDBREAK);
+        SelectObject(dc,buttonFont);
+        PaintFGButton(dc,RECT{550,560,710,610},L"Back",false);
     } else {
     const unsigned int selected = GetFGUserMultiplier();
     const unsigned int maxSupported = GetFGMaxSupportedMultiplier();
@@ -811,7 +849,7 @@ static bool FGOverlaySliderFromPoint(int x, int y) noexcept {
     return IsFGDynamicSelection(GetFGUserMultiplier()) && y >= 443 && y < 512 && x >= 30 && x < 710;
 }
 static int FGOverlayLowerSectionOffset() noexcept { return IsFGDynamicSelection(GetFGUserMultiplier()) ? 0 : -kFGOverlayDynamicSectionHeight; }
-static int FGOverlayDesiredHeight() noexcept { if (fgOverlayOptionsPage) return 640; if (fgOverlayRRSettingsPage) return 490; return IsFGDynamicSelection(GetFGUserMultiplier()) ? kFGOverlayHeight : kFGOverlayCompactHeight; }
+static int FGOverlayDesiredHeight() noexcept { if (fgOverlayOptionsPage) return 640; if (fgOverlayRRSettingsPage) return 640; return IsFGDynamicSelection(GetFGUserMultiplier()) ? kFGOverlayHeight : kFGOverlayCompactHeight; }
 static void FGOverlayResizeWindowForCurrentSelection(HWND hwnd) noexcept {
     if (!hwnd) return;
     SetWindowPos(hwnd, nullptr, 0, 0, kFGOverlayWidth, FGOverlayDesiredHeight(),
@@ -907,7 +945,16 @@ static LRESULT CALLBACK FGOverlayWndProc(HWND hwnd, UINT message, WPARAM wParam,
                 FGOverlayMarkSettingsDirty();
                 FGOverlayFlushSettingsIfDue(true);
                 Log("RR_CLAMP_RESET_CS4 selected=60");
-            } else if (x >= 550 && x < 710 && y >= 410 && y < 460) {
+            } else if (x >= 24 && x <= 506 && y >= 416 && y < 466) {
+                fgOverlayResponsivityPreview=FGOverlayResponsivityFromX(x);
+                fgOverlayResponsivityDragging=true;
+                SetCapture(hwnd);
+            } else if (x >= 530 && x < 710 && y >= 416 && y < 466) {
+                fgOverlayResponsivityPreview=-50;
+                control_rr::RRUserSetResponsivityBias(-50);
+                FGOverlayMarkSettingsDirty();FGOverlayFlushSettingsIfDue(true);
+                Log("RR_GI25_RESPONSIVITY_RESET_UI selected=-50");
+            } else if (x >= 550 && x < 710 && y >= 560 && y < 610) {
                 fgOverlayRRSettingsPage=false;
                 FGOverlayResizeWindowForCurrentSelection(hwnd);
             }
@@ -1018,6 +1065,10 @@ static LRESULT CALLBACK FGOverlayWndProc(HWND hwnd, UINT message, WPARAM wParam,
             fgOverlayClampPreview=FGOverlayClampFromX(static_cast<short>(LOWORD(lParam)));
             InvalidateRect(hwnd,nullptr,FALSE);return 0;
         }
+        if(fgOverlayResponsivityDragging){
+            fgOverlayResponsivityPreview=FGOverlayResponsivityFromX(static_cast<short>(LOWORD(lParam)));
+            InvalidateRect(hwnd,nullptr,FALSE);return 0;
+        }
         if (fgOverlaySliderDragging && !IsFGDynamicSelection(GetFGUserMultiplier())) {
             fgOverlaySliderDragging = false;
             if (GetCapture() == hwnd) ReleaseCapture();
@@ -1038,6 +1089,15 @@ static LRESULT CALLBACK FGOverlayWndProc(HWND hwnd, UINT message, WPARAM wParam,
             Log("RR_CLAMP_SLIDER_CS4 selected=%u",fgOverlayClampPreview);
             InvalidateRect(hwnd,nullptr,FALSE);return 0;
         }
+        if(fgOverlayResponsivityDragging){
+            fgOverlayResponsivityPreview=FGOverlayResponsivityFromX(static_cast<short>(LOWORD(lParam)));
+            fgOverlayResponsivityDragging=false;
+            control_rr::RRUserSetResponsivityBias(fgOverlayResponsivityPreview);
+            FGOverlayMarkSettingsDirty();FGOverlayFlushSettingsIfDue(true);
+            if(GetCapture()==hwnd)ReleaseCapture();
+            Log("RR_GI25_RESPONSIVITY_UI selected=%d value=%.3f",fgOverlayResponsivityPreview,double(control_rr::RRUserResponsivityValue()));
+            InvalidateRect(hwnd,nullptr,FALSE);return 0;
+        }
         if (fgOverlaySliderDragging) {
             fgOverlaySliderDragging = false;
             if (GetCapture() == hwnd) ReleaseCapture();
@@ -1048,10 +1108,12 @@ static LRESULT CALLBACK FGOverlayWndProc(HWND hwnd, UINT message, WPARAM wParam,
         break;
     case WM_CAPTURECHANGED:
         fgOverlayClampDragging=false;
+        fgOverlayResponsivityDragging=false;
         fgOverlaySliderDragging = false;
         break;
     case WM_CLOSE:
         fgOverlayClampDragging=false;
+        fgOverlayResponsivityDragging=false;
         if(GetCapture()==hwnd)ReleaseCapture();
         fgOverlayBindingCapture = false;
         FGOverlayFlushSettingsIfDue(true);
