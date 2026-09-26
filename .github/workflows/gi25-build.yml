@@ -29,7 +29,7 @@ jobs:
           $current.candidate='2.1.1-GI25-RR-Temporal-Inputs'
           $current.tests.portable_gate='PASS GI25 signed responsivity and frame-time policy; Windows MSVC build required before runtime test.'
           $owned=@(
-            'Build.cmd','src/rr_user_control.h','src/rr_native_guides.h','src/rr_evaluation_entry.h','src/fg_overlay.h',
+            'Build.cmd','src/probe.cpp','src/rr_user_control.h','src/rr_native_guides.h','src/rr_evaluation_entry.h','src/fg_overlay.h','validation/evaluation-entry/entry-test.cpp',
             'src/rr_responsivity_policy.h','src/rr_responsivity_runtime.h','validation/gi25/policy-test.cpp','GI25-TEST.md'
           )
           foreach($rel in $owned){
