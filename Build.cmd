@@ -15,7 +15,7 @@ pause
 exit /b %BUILD_RESULT%
 
 :build
-echo Control FG v2.1.1 - Steam, Epic Games Store and GOG
+echo Control FG v2.1.1 - GI25 RR Temporal Inputs - Steam, Epic Games Store and GOG
 set "VSWHERE=%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe"
 if not exist "%VSWHERE%" (
   echo Visual Studio C++ tools were not found. Install the Desktop development with C++ workload and a Windows SDK.
@@ -192,6 +192,10 @@ if errorlevel 1 exit /b 1
 build\rr-recovery-test.exe
 if errorlevel 1 exit /b 1
 cl /nologo /std:c++17 /EHsc /W4 /O2 /MT validation\frame-coordinator\parameters.cpp /Fobuild\rr-parameters-test.obj /Febuild\rr-parameters-test.exe
+if errorlevel 1 exit /b 1
+cl /nologo /std:c++17 /EHsc /W4 /WX /O2 /MT validation\gi25\policy-test.cpp /Fobuild\rr-gi25-policy.obj /Febuild\rr-gi25-policy.exe
+if errorlevel 1 exit /b 1
+build\rr-gi25-policy.exe
 if errorlevel 1 exit /b 1
 build\rr-parameters-test.exe
 if errorlevel 1 exit /b 1
