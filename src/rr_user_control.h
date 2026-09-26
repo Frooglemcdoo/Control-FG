@@ -37,6 +37,10 @@ inline std::atomic<unsigned int> rrUserPresetCreateConfirmed{0};
 inline std::atomic<unsigned long long> rrUserPresetCreateGeneration{0};
 enum class RRSkinMode : unsigned int { Off=0, Responsivity=1 };
 inline std::atomic<unsigned int> rrUserSkinMode{static_cast<unsigned int>(RRSkinMode::Off)};
+// GI25: full-frame DLSS-RR temporal responsivity bias. Signed range matches
+// the R16F/R8_SNORM mask contract: negative favors temporal stability, positive
+// favors faster response. Zero disables the optional mask.
+inline std::atomic<int> rrUserResponsivityBias{-50};
 inline void RRUserCaptureFailure(RRWaitReason reason) noexcept {
  rrUserCaptureReason.store(reason,std::memory_order_release);
 }
@@ -130,6 +134,12 @@ inline RRSkinMode RRUserSkinModeValue() noexcept {return static_cast<RRSkinMode>
 inline bool RRUserSkinResponsivity() noexcept {return RRUserSkinModeValue()==RRSkinMode::Responsivity;}
 inline void RRUserSetSkinMode(RRSkinMode mode) noexcept {rrUserSkinMode.store(static_cast<unsigned int>(mode),std::memory_order_release);}
 inline const char* RRUserSkinModeLabel() noexcept {return RRUserSkinResponsivity()?"responsivity":"off";}
+inline int RRUserResponsivityBias() noexcept {return rrUserResponsivityBias.load(std::memory_order_acquire);}
+inline void RRUserSetResponsivityBias(int value) noexcept {
+ if(value<-100)value=-100;else if(value>100)value=100;
+ rrUserResponsivityBias.store(value,std::memory_order_release);
+}
+inline float RRUserResponsivityValue() noexcept {return static_cast<float>(RRUserResponsivityBias())/100.0f;}
 inline bool RRUserSharpnessOverrideEnabled() noexcept {return rrUserSharpnessOverride.load(std::memory_order_acquire);}
 inline void RRUserSetSharpnessOverrideEnabled(bool enabled) noexcept {rrUserSharpnessOverride.store(enabled,std::memory_order_release);}
 inline const wchar_t* RRUserLabel() noexcept {
