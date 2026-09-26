@@ -54,6 +54,10 @@ struct RRNativeParameterApi {
   using Fn=void (*)(void*,const char*,int);
   reinterpret_cast<Fn>(reinterpret_cast<unsigned char*>(verifiedD3d)+0x51ef0)(parameters,name,value);
  }
+ void Float(const char* name,float value) const {
+  using Fn=void (*)(void*,const char*,float);
+  reinterpret_cast<Fn>(reinterpret_cast<unsigned char*>(verifiedD3d)+0x51ea0)(parameters,name,value);
+ }
  bool ResourceEquals(const char* name,ID3D12Resource* expected) const {
   ID3D12Resource* actual=nullptr;const auto result=ngxGetResource(parameters,name,&actual);
   const bool okay=result==1&&actual==expected;
@@ -72,6 +76,13 @@ struct RRNativeParameterApi {
   if(!okay)Log("RR_PARAMETER_REJECT key=%s result=0x%08X expected=%d actual=%d",name,result,expected,actual);
   return okay;
  }
+ bool FloatEquals(const char* name,float expected) const {
+  float actual=0.0f;const auto result=ngxGetFloat(parameters,name,&actual);
+  float delta=actual-expected;if(delta<0.0f)delta=-delta;
+  const bool okay=result==1&&delta<=0.001f;
+  if(!okay)Log("RR_PARAMETER_REJECT key=%s result=0x%08X expected=%.6f actual=%.6f",name,result,double(expected),double(actual));
+  return okay;
+ }
 };
 static bool RRNativeSetGuides(void* parameters,const RRNativeGuideBindings* bindings,ID3D12Resource* distance,bool reset) noexcept {
  __try {
@@ -83,5 +94,13 @@ static bool RRNativeSetGuides(void* parameters,const RRNativeGuideBindings* bind
   // NGX parameter object.
   api.Resource("DLSSD.ResponsivityMask",bindings->responsivity);
   return api.ResourceEquals("DLSSD.ResponsivityMask",bindings->responsivity);
+ } __except(EXCEPTION_EXECUTE_HANDLER){return false;}
+}
+static bool RRNativeSetFrameTime(void* parameters,float frameTimeMs) noexcept {
+ __try {
+  if(!parameters)return false;
+  RRNativeParameterApi api{parameters};
+  api.Float("FrameTimeDeltaInMsec",frameTimeMs);
+  return api.FloatEquals("FrameTimeDeltaInMsec",frameTimeMs);
  } __except(EXCEPTION_EXECUTE_HANDLER){return false;}
 }
