@@ -576,15 +576,20 @@ static void RRNativeHookDiffuseCommon(unsigned site, void* color, void* history,
    Log("RR_GI29_DLF_FAIL frame=%llu site=%u list_ready=%u capture_mask=0x%02X",frame,site,unsigned(listReady),control_rr_clamp::DlfCaptureMask());
    SetLastError(saved);return;
   }
+  const auto temporalBefore=control_rr_clamp::DlfUse(1);
+  const auto spatialXBefore=control_rr_clamp::DlfUse(2),spatialYBefore=control_rr_clamp::DlfUse(3);
   SetLastError(saved);rrNativeDiffuseFilterOriginal(color,history,passes);
-  const DWORD nativeError=GetLastError();bool giObserved=true;
-  if(site==2){
+  const DWORD nativeError=GetLastError();
+  const bool temporalUsed=control_rr_clamp::DlfUse(1)>temporalBefore;
+  const bool spatialUsed=passes==0||control_rr_clamp::DlfUse(2)>spatialXBefore||control_rr_clamp::DlfUse(3)>spatialYBefore;
+  bool giObserved=temporalUsed&&spatialUsed;
+  if(site==2&&giObserved){
    giObserved=rrNativeRTFrame.ObserveGIClamp(frame,rrNativeFrame.Selected()&&rrNativeFrame.Stage()==control_rr::RRFrameStage::Lighting);
-   if(!giObserved)rrNativeFrame.Fail("gi29_diffuse_gi_observation");
   }
-  if(frame<=4||(frame%240)==0||!giObserved)
-   Log("RR_GI29_DLF_DIFFUSE frame=%llu site=%u mode=direct_shader_replacement passes_in=%u temporal_shader=replaced spatial_shader=replaced gi_observed=%u capture_mask=0x%02X",
-    frame,site,passes,unsigned(giObserved),control_rr_clamp::DlfCaptureMask());
+  if(!temporalUsed||!spatialUsed||!giObserved)rrNativeFrame.Fail("gi29_diffuse_dlf_replacement_missing");
+  if(frame<=4||(frame%240)==0||!temporalUsed||!spatialUsed||!giObserved)
+   Log("RR_GI29_DLF_DIFFUSE frame=%llu site=%u mode=direct_shader_replacement passes_in=%u temporal_used=%u spatial_used=%u gi_observed=%u capture_mask=0x%02X diffuse_clamp=100",
+    frame,site,passes,unsigned(temporalUsed),unsigned(spatialUsed),unsigned(giObserved),control_rr_clamp::DlfCaptureMask());
   SetLastError(nativeError);return;
  }
 
@@ -680,11 +685,18 @@ static void RRNativeHookFilter(void* color,void* history,unsigned passes,bool ev
     frame,unsigned(listReady),control_rr_clamp::DlfCaptureMask(),unsigned(begin));
    SetLastError(saved);return;
   }
+  const auto temporalBefore=control_rr_clamp::DlfUse(0);
+  const auto spatialXBefore=control_rr_clamp::DlfUse(4),spatialYBefore=control_rr_clamp::DlfUse(5);
   SetLastError(saved);rrNativeFilterOriginal(color,history,passes,evaluateColor);
-  const DWORD nativeError=GetLastError();rrNativeLightingComplete=true;RRPerfFilter(frame,RRPerfElapsed(perfStart));
-  if(frame<=4||(frame%240)==0)
-   Log("RR_GI29_DLF_SPECULAR frame=%llu mode=direct_shader_replacement passes_in=%u brdf=%u specular_temporal_clamp=60 temporal_history=off spatial_passthrough=1 capture_mask=0x%02X",
-    frame,passes,unsigned(evaluateColor),control_rr_clamp::DlfCaptureMask());
+  const DWORD nativeError=GetLastError();
+  const bool temporalUsed=control_rr_clamp::DlfUse(0)>temporalBefore;
+  const bool spatialUsed=passes==0||control_rr_clamp::DlfUse(4)>spatialXBefore||control_rr_clamp::DlfUse(5)>spatialYBefore;
+  rrNativeLightingComplete=temporalUsed&&spatialUsed;
+  RRPerfFilter(frame,RRPerfElapsed(perfStart));
+  if(!rrNativeLightingComplete)rrNativeFrame.Fail("gi29_specular_dlf_replacement_missing");
+  if(frame<=4||(frame%240)==0||!rrNativeLightingComplete)
+   Log("RR_GI29_DLF_SPECULAR frame=%llu mode=direct_shader_replacement passes_in=%u brdf=%u temporal_used=%u spatial_used=%u specular_temporal_clamp=60 temporal_history=off spatial_passthrough=1 capture_mask=0x%02X",
+    frame,passes,unsigned(evaluateColor),unsigned(temporalUsed),unsigned(spatialUsed),control_rr_clamp::DlfCaptureMask());
   SetLastError(nativeError);return;
  }
  control_rr_specular::Scope scope{};
