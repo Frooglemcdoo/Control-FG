@@ -50,13 +50,11 @@ static unsigned int RREvaluationEntry(unsigned int branch, ID3D12GraphicsCommand
     // Compile-time retained references keep the old skin experiment available for source comparison,
     // but r20t never executes it.
     if(false&&rrNativeFrameEnabled)RRNativeObserveSkinInputs(parameters,in.frame,"r20t_disabled",in.width,in.height);
-    // D1: optional, owned, same-frame distance; never reuses a prior frame.
+    // GI30 clean RenoDX baseline: no optional reflection-geometry resources.
     RRNativeGuideBindings bindings{};bool rrAttempt=false;
     ID3D12Resource* hitDistance=nullptr;ID3D12Resource* specularMotion=nullptr;
-    bool distanceReset=false;bool clampReset=false;bool specularMotionReset=false;bool specularMotionHistory=false;
+    bool distanceReset=false;bool clampReset=false;bool specularMotionReset=false;
     static control_rr_clamp::History clampHistory;
-    static control_rr::DistanceBindingHistory distanceHistory;
-    static bool specularMotionWasBound=false;
     void* evaluationFeature=feature;bool presetReset=false;unsigned activePreset=0;
     if(rrNativeFrameEnabled&&branch==1&&!partial){
         if(!RRNativeResolveEvaluationPreset(list,feature,parameters,&evaluationFeature,&presetReset,&activePreset)){
@@ -71,43 +69,30 @@ static unsigned int RREvaluationEntry(unsigned int branch, ID3D12GraphicsCommand
         }
         const bool lighting=RRNativeLightingReady(in.frame);
         const bool beginEvaluation=rrNativeFrame.BeginEvaluation(in.frame,guides,lighting);
-        const bool specularMotionRequested=beginEvaluation&&activePreset==control_rr::RRPresetF&&control_rr::RRUserSpecularMotionRequested();
-        float mvScaleX=0.0f,mvScaleY=0.0f;
-        const bool mvScaleReady=specularMotionRequested&&ngxGetFloat&&
-            ngxGetFloat(parameters,"MV.Scale.X",&mvScaleX)==1&&ngxGetFloat(parameters,"MV.Scale.Y",&mvScaleY)==1&&
-            std::isfinite(mvScaleX)&&std::isfinite(mvScaleY)&&std::fabs(mvScaleX)>1.0e-8f&&std::fabs(mvScaleY)>1.0e-8f;
-        if(mvScaleReady&&guides){
-            specularMotion=RRSpecMvBeforeEvaluation(list,in.depth,in.motion,bindings.gbuffer1Source,bindings.camera,in.frame,
-                in.reset!=0||rrNativeFrame.Reset()||presetReset,mvScaleX,mvScaleY,&specularMotionHistory);
-            if(specularMotion){
-                bindings.specularMotion=specularMotion;
-                bindings.projectionValid=false;
-                for(unsigned row=0;row<4;++row)for(unsigned column=0;column<4;++column){
-                    const unsigned index=row*4+column;const float identity=row==column?1.0f:0.0f;
-                    bindings.worldToView[index]=identity;bindings.viewToClip[index]=identity;
-                }
-            }
-        }
-        control_rr::RRUserPublishSpecularMotionActive(specularMotion!=nullptr);
-        specularMotionReset=specularMotionWasBound!=(specularMotion!=nullptr);specularMotionWasBound=specularMotion!=nullptr;
-        if(!specularMotion&&control_rr::DistanceEligible(beginEvaluation,bindings.projectionValid,activePreset,control_rr::RRPresetF))
-            hitDistance=RRDistanceBeforeEvaluation(list,in.depth,in.frame,lighting);
-        distanceReset=distanceHistory.Update(hitDistance!=nullptr);
+        // GI30: deliberately do not run GI27 specular-MV generation or the D1
+        // hit-distance path. rr_guide_parameters also clears all three persistent
+        // NGX geometry keys every frame as a second fail-closed boundary.
+        control_rr::RRUserPublishSpecularMotionActive(false);
+        bindings.specularMotion=nullptr;
+        bindings.projectionValid=false;
+        hitDistance=nullptr;
+        specularMotion=nullptr;
         clampReset=clampHistory.Update(control_rr_clamp::effective.load(std::memory_order_acquire));
         if(clampReset)Log("RR_CLAMP_CS3_HISTORY_RESET frame=%llu effective=%u",in.frame,control_rr_clamp::effective.load());
-        if(specularMotionReset)Log("RR_GI27_SPECMV_HISTORY_RESET frame=%llu requested=%u active=%u",in.frame,unsigned(specularMotionRequested),unsigned(specularMotion!=nullptr));
-        if(!beginEvaluation||!RRNativeSetGuides(parameters,&bindings,hitDistance,rrNativeFrame.Reset()||presetReset||distanceReset||clampReset||specularMotionReset)){
+        if(call<=4||(call%240)==0)
+            Log("RR_GI30_RENODX_BASELINE frame=%llu preset=%u specular_mvec=cleared reflection_mvec=cleared hit_distance=cleared matrices=identity direct_dlf=%u clamp=%u",
+                in.frame,activePreset,unsigned(control_rr::RRUserDirectDlfParity()),control_rr_clamp::effective.load(std::memory_order_acquire));
+        if(!beginEvaluation||!RRNativeSetGuides(parameters,&bindings,nullptr,rrNativeFrame.Reset()||presetReset||clampReset)){
             rrNativeFrame.Fail();control_rr::RRUserPublish(control_rr::RRUserStatus::Stopped);
             Log("RR_FRAME_STOP frame=%llu reason=pre_evaluation_contract hit_distance_required=0 guides=%u lighting=%u native_evaluation_called=0",in.frame,unsigned(guides),unsigned(lighting));
             SetLastError(incomingError);return 0xBAD00001u;
         }
         RRInputCaptureBeforeEvaluation(list,in.frame,activePreset,bindings.normal,bindings.specular,bindings.diffuse,
-            hitDistance,hitDistance?rrDistanceLastStatus:nullptr,bindings.viewToClip,bindings.projectionValid);
+            nullptr,nullptr,bindings.viewToClip,false);
         rrAttempt=true;
-        if(call<=4||(call%240)==0||distanceReset||specularMotionReset)
-            Log("RR_GI27_SPECMV_BIND frame=%llu preset=%u requested=%u active=%u resource=%p history=%u mv_scale_ready=%u mv_scale=%.6g,%.6g fallback_hit_distance=%u hit_distance=%p history_reset=%u",
-                in.frame,activePreset,unsigned(specularMotionRequested),unsigned(specularMotion!=nullptr),specularMotion,unsigned(specularMotionHistory),
-                unsigned(mvScaleReady),double(mvScaleX),double(mvScaleY),unsigned(!specularMotion&&hitDistance!=nullptr),hitDistance,unsigned(specularMotionReset||distanceReset));
+        if(call<=4||(call%240)==0)
+            Log("RR_GI30_GEOMETRY_BIND frame=%llu preset=%u specular_mvec=%p reflection_mvec=%p hit_distance=%p matrix_mode=identity",
+                in.frame,activePreset,bindings.specularMotion,bindings.specularMotion,hitDistance);
     }
     if(rrNativeFrameEnabled&&branch==0&&rrNativeFrame.Selected()){
         rrNativeFrame.Fail();Log("RR_FRAME_STOP frame=%llu reason=unexpected_sr_branch native_evaluation_called=0",in.frame);
@@ -127,7 +112,7 @@ static unsigned int RREvaluationEntry(unsigned int branch, ID3D12GraphicsCommand
     const double perfNativeCpu=RRPerfElapsed(perfNativeStart);
     RRPerfEnd(perf);
     RRPerfEvaluation(in.frame,rrAttempt,(result&0xFFF00000u)!=0xBAD00000u,
-        in.reset!=0||(rrAttempt&&(rrNativeFrame.Reset()||presetReset||distanceReset||clampReset||specularMotionReset)),perfEntry,perfGuidesCpu,perfNativeCpu,
+        in.reset!=0||(rrAttempt&&(rrNativeFrame.Reset()||presetReset||clampReset)),perfEntry,perfGuidesCpu,perfNativeCpu,
         GetFGUserMultiplier(),IsHdr10BridgeActive()?1u:0u);
     if(partial&&branch==1){
         const bool success=(result&0xFFF00000u)!=0xBAD00000u;
@@ -138,7 +123,7 @@ static unsigned int RREvaluationEntry(unsigned int branch, ID3D12GraphicsCommand
         const bool success=(result&0xFFF00000u)!=0xBAD00000u;
         rrNativeFrame.EvaluationResult(success);
         control_rr::RRUserPublish(success?control_rr::RRUserStatus::Active:control_rr::RRUserStatus::Stopped);
-        if(call<=4||(call%240)==0||!success||rrNativeFrame.Reset()||presetReset||distanceReset||clampReset||specularMotionReset)Log("RR_NATIVE_EVALUATED frame=%llu result=0x%08X success=%u diffuse=%p specular=%p normal=%p hit_distance=%p specular_mvec=%p reflection_mvec=%p matrix_mode=%s responsivity=%p replaces_sr=1 reset=%u preset_reset=%u preset_requested=%s preset_value=%u active_preset=%u control_feature=%p evaluation_feature=%p native_create_confirmed=%u native_create_generation=%llu",in.frame,result,unsigned(success),bindings.diffuse,bindings.specular,bindings.normal,hitDistance,bindings.specularMotion,bindings.specularMotion,bindings.specularMotion?"GI27_shader_owned_camera_reprojection":"preset_dependent_projection_p1",bindings.responsivity,unsigned(rrNativeFrame.Reset()||presetReset||distanceReset||clampReset||specularMotionReset),unsigned(presetReset),control_rr::RRUserPresetLabel(),control_rr::RRUserPresetValue(),activePreset,feature,evaluationFeature,control_rr::RRUserConfirmedPresetValue(),control_rr::RRUserPresetCreateGeneration());
+        if(call<=4||(call%240)==0||!success||rrNativeFrame.Reset()||presetReset||clampReset)Log("RR_NATIVE_EVALUATED frame=%llu result=0x%08X success=%u diffuse=%p specular=%p normal=%p hit_distance=%p specular_mvec=%p reflection_mvec=%p matrix_mode=identity_renodx_baseline responsivity=%p replaces_sr=1 reset=%u preset_reset=%u preset_requested=%s preset_value=%u active_preset=%u control_feature=%p evaluation_feature=%p native_create_confirmed=%u native_create_generation=%llu",in.frame,result,unsigned(success),bindings.diffuse,bindings.specular,bindings.normal,hitDistance,bindings.specularMotion,bindings.specularMotion,bindings.responsivity,unsigned(rrNativeFrame.Reset()||presetReset||clampReset),unsigned(presetReset),control_rr::RRUserPresetLabel(),control_rr::RRUserPresetValue(),activePreset,feature,evaluationFeature,control_rr::RRUserConfirmedPresetValue(),control_rr::RRUserPresetCreateGeneration());
     } else if(rrNativeFrameEnabled&&branch==0){
         if(rrNativeFrame.Selected()){rrNativeFrame.Fail();Log("RR_FRAME_STOP frame=%llu reason=unexpected_sr_branch",in.frame);}
         else {
