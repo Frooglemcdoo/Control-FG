@@ -45,11 +45,12 @@ static RRNativeGIReleaseFn rrNativeGIReleaseOriginal=nullptr;
 static RRAlbedoCallPatch rrNativeReflectionOptionPatch{},rrNativeGIRadiusOptionPatch{},rrNativeGIBypassOptionPatch{};
 static RRAlbedoCallPatch rrNativeGIReleasePatch{};
 static RRAlbedoCallPatch rrNativeContactShadowFilterPatch{};
-static RRAlbedoCallPatch rrNativeBroadDiffuseFilterPatchA{},rrNativeBroadDiffuseFilterPatchB{};
+static RRAlbedoCallPatch rrNativeBroadDiffuseFilterPatchMain{},rrNativeBroadDiffuseFilterPatchA{},rrNativeBroadDiffuseFilterPatchB{};
 static RRNativeJitterOptionPatch rrNativeJitterOptionPatch{};
 static std::atomic<unsigned long long> rrNativeRegisteredOptionRepairs{0};
 static std::atomic<unsigned long long> rrNativeContactShadowBypasses{0};
-static std::atomic<unsigned long long> rrNativeBroadDiffuseBypassesA{0},rrNativeBroadDiffuseBypassesB{0};
+static std::atomic<unsigned long long> rrNativeBroadDiffuseBypassesMain{0},rrNativeBroadDiffuseBypassesA{0},rrNativeBroadDiffuseBypassesB{0};
+static std::atomic<unsigned long long> rrNativeDiffuseClampCalls{0},rrNativeDiffuseClampFallbacks{0};
 static std::atomic<unsigned long long> rrNativeClampDispatches{0},rrNativeClampFallbacks{0},rrNativeClampRestoreFailures{0};
 // r20w: a resolution change is a hard RR epoch boundary.  Do not allocate or
 // record any FULL-RR auxiliary work while Control is rebuilding its own render
@@ -224,6 +225,11 @@ static bool RRNativeKeepRegisteredOptionOff() noexcept {
 static bool RRNativeSelectedOption(void*) noexcept {
  const bool active=rrNativeFrame.Selected()||RRNativePartialActive();
  return control_rr::NativeRenderOption(rrNativeFrameEnabled,active,rrNativeFrame.Stopped());
+}
+static bool RRNativeGIBypassOption(void*) noexcept {
+ const bool full=rrNativeFrameEnabled&&rrNativeFrame.Selected()&&!rrNativeFrame.Stopped();
+ if(full&&control_rr::RRUserDiffuseClampRenoDX())return false;
+ return RRNativeSelectedOption(nullptr);
 }
 static bool RRNativePrepareAA(void* color,void*& normal,void*& diffuse,void*& specular) noexcept {
  if(!rrNativeFrameEnabled)return true;
@@ -504,6 +510,17 @@ static void RRNativeHookContactShadowFilter(void* color,void* history,void* auxi
  }
  const bool full=rrNativeFrame.Selected()&&!rrNativeFrame.Stopped();
  const bool contact=(rrNativeRTFrame.effects&control_rr::RTContactShadow)!=0;
+ if(full&&contact&&control_rr::RRUserContactShadowRenoDX()){
+  const DWORD saved=GetLastError();
+  rrNativeContactShadowFilterOriginal(color,history,auxiliary,temporal,spatialSize,spatialStep);
+  const DWORD nativeError=GetLastError();
+  const auto count=rrNativeContactShadowBypasses.fetch_add(1,std::memory_order_relaxed)+1;
+  const auto frame=rrNativeFrame.Key().frame;
+  if(count<=4||(frame&&frame%240==0))
+   Log("RR_GI28_CONTACT_SHADOW frame=%llu mode=renodx_native temporal=%u spatial_size=%d spatial_step=%d native_call_preserved=1",
+    static_cast<unsigned long long>(frame),unsigned(temporal),spatialSize,spatialStep);
+  SetLastError(nativeError);return;
+ }
  const auto policy=control_rr::ContactShadowFilterPolicy(full,contact,temporal,spatialSize,spatialStep);
  if(!policy.neutralized){
   rrNativeContactShadowFilterOriginal(color,history,auxiliary,temporal,spatialSize,spatialStep);return;
@@ -514,34 +531,72 @@ static void RRNativeHookContactShadowFilter(void* color,void* history,void* auxi
  const DWORD nativeError=GetLastError();
  const auto count=rrNativeContactShadowBypasses.fetch_add(1,std::memory_order_relaxed)+1;
  const auto frame=rrNativeFrame.Key().frame;
- if(count<=2||(frame&&frame%600==0))
-  Log("RR_NOISY_CONTACT_SHADOW frame=%llu count=%llu temporal_in=%u temporal_out=0 spatial_size_in=%d spatial_size_out=0 spatial_step_in=%d spatial_step_out=1 native_call_preserved=1 feature_rr=1",
-   static_cast<unsigned long long>(frame),count,unsigned(temporal),spatialSize,spatialStep);
+ if(count<=4||(frame&&frame%240==0))
+  Log("RR_GI28_CONTACT_SHADOW frame=%llu mode=current_mod temporal_in=%u temporal_out=0 spatial_size_in=%d spatial_size_out=0 spatial_step_in=%d spatial_step_out=1 native_call_preserved=1",
+   static_cast<unsigned long long>(frame),unsigned(temporal),spatialSize,spatialStep);
  SetLastError(nativeError);
 }
-static void RRNativeHookBroadDiffuseCommon(unsigned site, void* color, void* history, unsigned passes) {
+static void RRNativeHookDiffuseCommon(unsigned site, void* color, void* history, unsigned passes) {
  if(!rrNativeDiffuseFilterOriginal)return;
- // r20v: the two remaining direct DLF calls live inside renderer+0x248940.
- // filterDiffuseNoise always executes its temporal_feedback technique even when
- // passCount is zero, so FULL RR must bypass the function boundary completely;
- // merely forcing passes=0 would still pre-denoise RR's input.
  const bool full=rrNativeFrameEnabled&&rrNativeFrame.Selected()&&!rrNativeFrame.Stopped();
- const auto policy=control_rr::BroadDiffusePolicy(full,RRNativePartialActive(),rrNativeRTFrame.effects);
- if(!policy.bypass){rrNativeDiffuseFilterOriginal(color,history,passes);return;}
+ if(!full){
+  rrNativeDiffuseFilterOriginal(color,history,passes);return;
+ }
+
+ const bool useRenoDXClamp=control_rr::RRUserDiffuseClampRenoDX();
+ if(useRenoDXClamp){
+  const DWORD saved=GetLastError();
+  control_rr_native_clamp::Lease lease{};
+  const bool armed=rrNativeClampApi.Arm(lease);
+  bool returned=false,restored=false;
+  if(armed){
+   SetLastError(saved);
+   __try {
+    // RenoDX parity: preserve Control's native current-frame diffuse firefly
+    // clamp but suppress temporal history through g_uCameraCut=1 and suppress
+    // the spatial loop by forcing passCount=0.
+    rrNativeDiffuseFilterOriginal(color,history,0);
+    returned=true;
+   } __finally {
+    restored=rrNativeClampApi.Restore(lease);
+   }
+  }
+  const DWORD nativeError=GetLastError();
+  const auto frame=rrNativeFrame.Key().frame;
+  const auto count=rrNativeDiffuseClampCalls.fetch_add(1,std::memory_order_relaxed)+1;
+  bool giObserved=true;
+  if(site==2){
+   DWORD fault=0;unsigned long long observedFrame=0;
+   giObserved=returned&&restored&&ReadEngineFrameSafe(&observedFrame,&fault)&&
+    rrNativeRTFrame.ObserveGIClamp(observedFrame,
+     rrNativeFrame.Selected()&&rrNativeFrame.Stage()==control_rr::RRFrameStage::Lighting);
+   if(!giObserved)rrNativeFrame.Fail("diffuse_gi_clamp_contract");
+  }
+  if(count<=6||(frame&&frame%240==0)||!armed||!returned||!restored||!giObserved)
+   Log("RR_GI28_DIFFUSE_CLAMP frame=%llu site=%u mode=renodx clamp=native_1_0 temporal_history=off spatial_passes=0 passes_in=%u camera_cut_armed=%u native_returned=%u restore=%u gi_observed=%u",
+    static_cast<unsigned long long>(frame),site,passes,unsigned(armed),unsigned(returned),unsigned(restored),unsigned(giObserved));
+  if(armed&&returned&&restored&&giObserved){SetLastError(nativeError);return;}
+  rrNativeDiffuseClampFallbacks.fetch_add(1,std::memory_order_relaxed);
+  // Fail closed to the old raw-RR path. Never run native diffuse temporal
+  // accumulation if the camera-cut lease could not be proven.
+  SetLastError(saved);return;
+ }
+
+ // GI28 OFF baseline: preserve the public v2.1.1 full-RR behavior by bypassing
+ // the whole diffuse filter boundary. The main GI call normally never reaches
+ // here because RRNativeGIBypassOption returns true.
  const DWORD saved=GetLastError();
- auto& counter=(site==0)?rrNativeBroadDiffuseBypassesA:rrNativeBroadDiffuseBypassesB;
+ auto& counter=(site==2)?rrNativeBroadDiffuseBypassesMain:(site==0?rrNativeBroadDiffuseBypassesA:rrNativeBroadDiffuseBypassesB);
  const auto count=counter.fetch_add(1,std::memory_order_relaxed)+1;
  const auto frame=rrNativeFrame.Key().frame;
- // Preserve the parent renderer function and all of its non-DLF work.  The raw
- // producer texture remains in place; only the temporal+spatial DLF transform is
- // omitted. This is intentionally FULL-only and reversible at the callsite.
- if(count<=2||(frame&&frame%600==0))
-  Log("RR_NOISY_BROAD_DIFFUSE frame=%llu site=%u count=%llu passes_in=%u temporal_feedback_skipped=1 spatial_filter_skipped=1 parent_248940_preserved=1 rt_effects=0x%X feature_rr=1",
-   static_cast<unsigned long long>(frame),site,count,passes,rrNativeRTFrame.effects);
+ if(count<=4||(frame&&frame%240==0))
+  Log("RR_GI28_DIFFUSE_CLAMP frame=%llu site=%u mode=off temporal_feedback_skipped=1 spatial_filter_skipped=1 passes_in=%u",
+   static_cast<unsigned long long>(frame),site,passes);
  SetLastError(saved);
 }
-static void RRNativeHookBroadDiffuseA(void* color,void* history,unsigned passes) {RRNativeHookBroadDiffuseCommon(0,color,history,passes);}
-static void RRNativeHookBroadDiffuseB(void* color,void* history,unsigned passes) {RRNativeHookBroadDiffuseCommon(1,color,history,passes);}
+static void RRNativeHookBroadDiffuseA(void* color,void* history,unsigned passes) {RRNativeHookDiffuseCommon(0,color,history,passes);}
+static void RRNativeHookBroadDiffuseB(void* color,void* history,unsigned passes) {RRNativeHookDiffuseCommon(1,color,history,passes);}
+static void RRNativeHookDiffuseGIMain(void* color,void* history,unsigned passes) {RRNativeHookDiffuseCommon(2,color,history,passes);}
 static void RRNativeHookFilter(void* color,void* history,unsigned passes,bool evaluateColor) {
  if(!rrNativeFrameEnabled){rrNativeFilterOriginal(color,history,passes,evaluateColor);return;}
  const DWORD saved=GetLastError();
@@ -621,9 +676,10 @@ static bool RRNativeInstallFrame(HMODULE renderer,HMODULE d3d) noexcept {
   !RRAlbedoPrepareCallPatch(base+0x16744,reinterpret_cast<void*>(rrNativeTemporalBindOriginal),reinterpret_cast<void*>(&RRNativeHookTemporalBind),&rrNativeTemporalBindPatch)||
   !RRAlbedoPrepareCallPatch(base+0x12b8ad,reinterpret_cast<void*>(rrNativeOptionOriginal),reinterpret_cast<void*>(&RRNativeSelectedOption),&rrNativeReflectionOptionPatch)||
   !RRAlbedoPrepareCallPatch(base+0x12bda4,reinterpret_cast<void*>(rrNativeOptionOriginal),reinterpret_cast<void*>(&RRNativeSelectedOption),&rrNativeGIRadiusOptionPatch)||
-  !RRAlbedoPrepareCallPatch(base+0x12cd45,reinterpret_cast<void*>(rrNativeOptionOriginal),reinterpret_cast<void*>(&RRNativeSelectedOption),&rrNativeGIBypassOptionPatch)||
+  !RRAlbedoPrepareCallPatch(base+0x12cd45,reinterpret_cast<void*>(rrNativeOptionOriginal),reinterpret_cast<void*>(&RRNativeGIBypassOption),&rrNativeGIBypassOptionPatch)||
   !RRAlbedoPrepareCallPatch(base+0x12b8d7,reinterpret_cast<void*>(rrNativeFilterOriginal),reinterpret_cast<void*>(&RRNativeHookFilter),&rrNativeFilterPatch)||
   !RRAlbedoPrepareCallPatch(base+0x12cd55,reinterpret_cast<void*>(rrNativeGIReleaseOriginal),reinterpret_cast<void*>(&RRNativeHookGIRelease),&rrNativeGIReleasePatch)||
+  !RRAlbedoPrepareCallPatch(base+0x12cd96,reinterpret_cast<void*>(rrNativeDiffuseFilterOriginal),reinterpret_cast<void*>(&RRNativeHookDiffuseGIMain),&rrNativeBroadDiffuseFilterPatchMain)||
   !RRAlbedoPrepareCallPatch(base+0x23fb55,reinterpret_cast<void*>(rrNativeContactShadowFilterOriginal),reinterpret_cast<void*>(&RRNativeHookContactShadowFilter),&rrNativeContactShadowFilterPatch)||
   !RRAlbedoPrepareCallPatch(base+0x2489a4,reinterpret_cast<void*>(rrNativeDiffuseFilterOriginal),reinterpret_cast<void*>(&RRNativeHookBroadDiffuseA),&rrNativeBroadDiffuseFilterPatchA)||
   !RRAlbedoPrepareCallPatch(base+0x24a3f2,reinterpret_cast<void*>(rrNativeDiffuseFilterOriginal),reinterpret_cast<void*>(&RRNativeHookBroadDiffuseB),&rrNativeBroadDiffuseFilterPatchB)||
@@ -633,7 +689,7 @@ static bool RRNativeInstallFrame(HMODULE renderer,HMODULE d3d) noexcept {
  // this point forward the registered option is never written TRUE by the mod.
  if(!RRNativeKeepRegisteredOptionOff()||!rrNativeJitterOptionPatch.Set(false))return false;
 
- bool temporalBind=false,reflectionOption=false,giRadiusOption=false,giBypassOption=false,filter=false,gi=false,contactShadow=false,broadA=false,broadB=false,jitter=false;
+ bool temporalBind=false,reflectionOption=false,giRadiusOption=false,giBypassOption=false,filter=false,gi=false,giMain=false,contactShadow=false,broadA=false,broadB=false,jitter=false;
  if(rrNativeDispatchPatch.Exchange(true)&&rrNativeDispatchPatch.healthy){
   temporalBind=RRAlbedoExchangeCall(&rrNativeTemporalBindPatch,true);
   if(temporalBind&&rrNativeTemporalBindPatch.writeHealthy){
@@ -647,6 +703,8 @@ static bool RRNativeInstallFrame(HMODULE renderer,HMODULE d3d) noexcept {
      if(filter&&rrNativeFilterPatch.writeHealthy){
       gi=RRAlbedoExchangeCall(&rrNativeGIReleasePatch,true);
       if(gi&&rrNativeGIReleasePatch.writeHealthy){
+       giMain=RRAlbedoExchangeCall(&rrNativeBroadDiffuseFilterPatchMain,true);
+       if(giMain&&rrNativeBroadDiffuseFilterPatchMain.writeHealthy){
        contactShadow=RRAlbedoExchangeCall(&rrNativeContactShadowFilterPatch,true);
        if(contactShadow&&rrNativeContactShadowFilterPatch.writeHealthy){
         broadA=RRAlbedoExchangeCall(&rrNativeBroadDiffuseFilterPatchA,true);
@@ -658,7 +716,7 @@ static bool RRNativeInstallFrame(HMODULE renderer,HMODULE d3d) noexcept {
          rrNativeFrameEnabled=true;
          Log("RR_NATIVE_OPTION_ISOLATION ready=1 registered_option=forced_off_never_true reflection=mod_state gi_radius=mod_state gi_bypass=mod_state jitter=private_mirror partial_mode=mod_owned_option_reads_no_feature13");
          Log("RR_NATIVE_SPECULAR_CLAMP_READY ready=1 target_shader_crc=0x600347E7 camera_cut_provider=name_resolved_per_filter bind_site=0x16744 dispatch_site=0x16786 temporal_history=forced_zero current_frame_energy_clamp=CS3_default_60 restore=verified_each_dispatch reshade_required=0");
-         Log("RR_FRAME_HOOKS_READY native_feature=13 early_mode=1 temporal_signal=CS3_integrated_adjustable raw_copy=off_or_fallback public_reference_ui=0 reflection_geometry_capture=D1_F_only hit_distance_runtime=D1_F_fallback specular_mvec_runtime=GI27_F_optional_default_on guide_stats_readback=0 zero_spatial=1 preserve_brdf=1 native_gi_bypass=1 contact_shadow_denoiser=temporal_off_spatial_zero broad_diffuse_denoiser=temporal_and_spatial_bypassed full_rt_settings=1 option_isolation=1");
+         Log("RR_FRAME_HOOKS_READY native_feature=13 early_mode=1 temporal_signal=CS3_integrated_adjustable raw_copy=off_or_fallback public_reference_ui=0 reflection_geometry_capture=D1_F_only hit_distance_runtime=D1_F_fallback specular_mvec_runtime=GI27_F_optional_default_on guide_stats_readback=0 zero_spatial=1 preserve_brdf=1 native_gi_bypass=GI28_switch diffuse_clamp=GI28_native_reference_1_0_temporal_off_spatial_zero contact_shadow_denoiser=GI28_current_mod_or_renodx_native broad_diffuse_denoiser=GI28_switch full_rt_settings=1 option_isolation=1");
          return true;
         }
        }
@@ -671,12 +729,14 @@ static bool RRNativeInstallFrame(HMODULE renderer,HMODULE d3d) noexcept {
 }
 }
 }
+}
  rrNativeFrameEnabled=false;rrNativePartialFrame.store(false,std::memory_order_release);rrNativeJitterOptionPatch.Set(false);RRNativeKeepRegisteredOptionOff();
  if(rrNativeResetPatch.changed)rrNativeResetPatch.Exchange(false);
  if(jitter)rrNativeJitterOptionPatch.Exchange(false);
  if(broadB)RRAlbedoExchangeCall(&rrNativeBroadDiffuseFilterPatchB,false);
  if(broadA)RRAlbedoExchangeCall(&rrNativeBroadDiffuseFilterPatchA,false);
  if(contactShadow)RRAlbedoExchangeCall(&rrNativeContactShadowFilterPatch,false);
+ if(giMain)RRAlbedoExchangeCall(&rrNativeBroadDiffuseFilterPatchMain,false);
  if(gi)RRAlbedoExchangeCall(&rrNativeGIReleasePatch,false);
  if(filter)RRAlbedoExchangeCall(&rrNativeFilterPatch,false);
  if(temporalBind)RRAlbedoExchangeCall(&rrNativeTemporalBindPatch,false);
