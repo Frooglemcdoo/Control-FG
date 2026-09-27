@@ -49,13 +49,13 @@ try {
     $markers = @(
         'FG_OVERLAY_SETTINGS_S5 binding=persisted_single_key options=replacement_page default=F10',
         'PROBE v2.1.1 internal_build=2.1.1',
-        'source_revision=v2.1.1-pt2-r2-proxy-device-composite','log_profile=%s','CAPABILITIES fg=fixed_2x_to_6x_plus_dynamic',
+        'source_revision=v2.1.1-pt3-hybrid-beauty','log_profile=%s','CAPABILITIES fg=fixed_2x_to_6x_plus_dynamic',
         'MONITORING profile=%s rr_perf_sample=240','CONTROLFG_VERBOSE_LOG',
         'RR_PRESET_HOOK_READY','default_preset=F selectable=E,F,K,L,M','RR_PRESET_REQUEST','RR_PRESET_UI','RR_PRESET_LIVE_SWITCH',
         'RR_NATIVE_EVALUATED','RR_FRAME_MODE','RR_RESIZE_EPOCH_BEGIN','RR_RESIZE_EPOCH_RELEASE','RR_FRAME_RECOVERY_SR',
         'RR_TEMPORAL_ACCESS_READY','RR_TEMPORAL_ACCESS_INSTALL','RR_NATIVE_SPECULAR_CLAMP_READY',
         'RR_SPECULAR_SIGNAL frame=%llu mode=raw_copy_fallback',
-        'hit_distance=%p','specular_mvec=%p','reflection_mvec=%p','RR_GI30_RENODX_BASELINE','RR_GI30_GEOMETRY_BIND','matrix_mode=identity_renodx_baseline','RR_GI30_GEOMETRY_UI','RR_GI30_DLF_UI','RR_GI28_DIFFUSE_CLAMP','RR_GI28_CONTACT_SHADOW','clamp=native_1_0 temporal_history=off spatial_passes=0','RR_GI29_DLF_CAPTURE','RR_GI29_DLF_SET','RR_GI29_DLF_MODE','RR_GI29_DLF_SPECULAR','RR_GI29_DLF_DIFFUSE','RR_GI29_CONTACT_SHADOW','PT0_READY mode=fat_dxr_probe','PT0_DEVICE_HOOKS','PT0_COMMAND_HOOKS','PT0_BUILD_AS','PT0_DXR_PASS','PT0_DISPATCH_CAPTURE','PT0_TLAS_OK','PT0_DESCRIPTOR','PT0_RESOURCE_CENSUS','PT0_PASS_SUMMARY','PT0_SUMMARY','PT1_TLAS_DESCRIPTOR','PT2_RUNTIME_READY','PT2_READY','PT2_TOGGLE','PT2_MODE','PT2_DISPATCH_OK','PT2_COUNTERS','PT2_COMPOSITE_READY','PT2_COMPOSITE_OK','PT2_COMPOSITE_SKIP','dlf_shaders=GI29_six_direct_replacements','specular_temporal_clamp=60','diffuse_clamp=100','RR_CLAMP_STRENGTH_CS3','RR_CLAMP_CS3_CAPTURE','RR_SPECULAR_SIGNAL frame=%llu mode=native_control_energy_clamp','RR_INPUT_CAPTURE_C1_REQUEST','RR_INPUT_CAPTURE_C1_RECORDED','RR_INPUT_CAPTURE_C1_EXPORTED','RR_REFLECTION_COPIED','RR_REFLECTION_PREPARED',
+        'hit_distance=%p','specular_mvec=%p','reflection_mvec=%p','RR_GI30_RENODX_BASELINE','RR_GI30_GEOMETRY_BIND','matrix_mode=identity_renodx_baseline','RR_GI30_GEOMETRY_UI','RR_GI30_DLF_UI','RR_GI28_DIFFUSE_CLAMP','RR_GI28_CONTACT_SHADOW','clamp=native_1_0 temporal_history=off spatial_passes=0','RR_GI29_DLF_CAPTURE','RR_GI29_DLF_SET','RR_GI29_DLF_MODE','RR_GI29_DLF_SPECULAR','RR_GI29_DLF_DIFFUSE','RR_GI29_CONTACT_SHADOW','PT0_READY mode=fat_dxr_probe','PT0_DEVICE_HOOKS','PT0_COMMAND_HOOKS','PT0_BUILD_AS','PT0_DXR_PASS','PT0_DISPATCH_CAPTURE','PT0_TLAS_OK','PT0_DESCRIPTOR','PT0_RESOURCE_CENSUS','PT0_PASS_SUMMARY','PT0_SUMMARY','PT1_TLAS_DESCRIPTOR','PT3_RUNTIME_READY','PT3_READY','PT3_TOGGLE','PT3_MODE','PT3_DISPATCH_OK','PT3_COUNTERS','PT3_COMPOSITE_READY','PT3_COMPOSITE_OK','PT3_COMPOSITE_SKIP','beauty=hybrid_raster_primary_material_plus_stochastic_diffuse_and_specular_secondary_rays','dlf_shaders=GI29_six_direct_replacements','specular_temporal_clamp=60','diffuse_clamp=100','RR_CLAMP_STRENGTH_CS3','RR_CLAMP_CS3_CAPTURE','RR_SPECULAR_SIGNAL frame=%llu mode=native_control_energy_clamp','RR_INPUT_CAPTURE_C1_REQUEST','RR_INPUT_CAPTURE_C1_RECORDED','RR_INPUT_CAPTURE_C1_EXPORTED','RR_REFLECTION_COPIED','RR_REFLECTION_PREPARED',
         'RR_PERF_READY gpu_frequency=%llu sample_every=240','RR_PERF_FRAME','RR_PERF_GPU',
         'SL_BOOTSTRAP_BEGIN','SL_CORE_READY','SL_DEVICE_READY','SL_FEATURE_GATE','SL_RR_FEATURE_GATE','SL_RR_HANDSHAKE','SL_DLSSD_FUNCTION',
         'FG_UI_PRIVATE_DEVICE_FAIL','FG_UI_PRIVATE_WORK_FAIL','FG_RTX40_MFG_INIT','FG_RTX40_MFG_READY','FG_RTX40_MFG_TEST_REQUEST','FG_RTX40_MFG_TEST_RESULT','FG_UI_PRIVATE_SUBMIT','FG_UI_PRIVATE_FAIL','FG_UI_RECOMPOSE_READY','FG_HDR_HUDLESS_PIPELINE_READY','conversion=compute_uav no_graphics_state=1 private_command_list=1','FG_HDR_HUDLESS_CONVERT','FG_HDR_HOTKEY_HOOK','FG_HDR_HARD_RESET_BEGIN','FG_HDR_HARD_RESET_OFF_COMMIT','FG_HDR_HARD_RESET_FREE','FG_HDR_HARD_RESET_GATE','FG_HDR_HARD_RESET_REARM','FG_DISPLAY_FACTORY_REFRESH','FG_DISPLAY_DOMAIN_BASELINE','FG_DISPLAY_DOMAIN_CHANGE','FG_DISPLAY_DOMAIN_GATE','FG_DISPLAY_DOMAIN_HANDOFF','FG_HDR_TRANSITION_PREP','FG_HDR_TRANSITION_QUIESCE','FG_HDR_TRANSITION_GATE','FG_HDR_TRANSITION_SETTLED','FG_UI_RECOMPOSITION_OPTIONS','SL_DLSSG_MODE','SL_DLSSG_STATE',
@@ -77,7 +77,7 @@ try {
     foreach ($marker in ($markers + $runtimeGuideMarkers)) {
         if (-not $binaryText.Contains($marker)) { throw ('Wrong or incomplete ' + $ControlFGBuild.Version + ' DLL: missing ' + $marker) }
     }
-    foreach ($wideMarker in @('CONTROL_FG_DISABLE_HDR10_BRIDGE','\ControlFG','\settings-mfg-test.ini','FrameGeneration','RayReconstruction')) {
+    foreach ($wideMarker in @('CONTROL_FG_DISABLE_HDR10_BRIDGE','\ControlFG','\settings-mfg-test.ini','FrameGeneration','RayReconstruction','PathTracing','ViewPT3','BEAUTY')) {
         if (-not $binaryUnicodeText.Contains($wideMarker)) {
             throw ('Wrong or incomplete ' + $ControlFGBuild.Version + ' DLL: missing UTF-16 marker ' + $wideMarker)
         }
@@ -96,7 +96,7 @@ try {
     $validation = [ordered]@{}
     foreach ($key in $ControlFGBuild.Keys) { $validation[$key] = $ControlFGBuild[$key] }
     $details = [ordered]@{
-        RRInstrumentation = 'PT2 R2: PT2 ray/counter pipeline plus proxy-aware Streamline/native device identity for the late Present composite. Uses the same canonical native-interface comparison already proven by FG UI private work; PT OFF remains a true native baseline.' 
+        RRInstrumentation = 'PT3 Hybrid Beauty: PT OFF remains native Control baseline. PT ON BEAUTY uses Control GBuffer1/GBuffer2 + MaterialDataPart1 for the raster primary surface and traces one stochastic diffuse plus one stochastic specular secondary ray through Control g_rtScene per pixel. Debug views remain available; late proxy-aware SDR/HDR composite is retained.' 
         RRLiveShaderHeaderSHA256 = (Get-FileHash -LiteralPath (Join-Path $PSScriptRoot 'build/rr_live_compiled.h') -Algorithm SHA256).Hash
         RRReflectanceShaderHeaderSHA256 = (Get-FileHash -LiteralPath (Join-Path $PSScriptRoot 'build/rr_reflectance_compiled.h') -Algorithm SHA256).Hash
         SHA256 = (Get-FileHash -LiteralPath $dll -Algorithm SHA256).Hash
