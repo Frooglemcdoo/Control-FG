@@ -226,13 +226,36 @@ ck('production-reference-runtime-removed', all(x not in native_frame for x in [
 reflection_hooks = (root/'src/rr_reflection_hooks.h').read_text(encoding='utf-8-sig')
 eval_entry = (root/'src/rr_evaluation_entry.h').read_text(encoding='utf-8-sig')
 live_retire = (root/'src/rr_live_retire.h').read_text(encoding='utf-8-sig')
-ck('temporal-access-only-install', all(x in probe+reflection_hooks for x in [
-    'RRReflectionInitializeAccessOnly(d3d)','RR_TEMPORAL_ACCESS_READY','RR_TEMPORAL_ACCESS_INSTALL',
-    'reflection_geometry_capture=0','hit_distance_runtime=0','specular_mvec_runtime=0'
+ck('temporal-access-install', all(x in probe+reflection_hooks for x in [
+    'RRReflectionInitializeAccessOnly(d3d)','RR_TEMPORAL_ACCESS_READY','RR_TEMPORAL_ACCESS_INSTALL'
 ]))
-ck('D1-reflection-lifetime', all(x in probe for x in ['RRReflectionInstall(renderer,d3d)','RRReflectionAfterPresent(count)','#include "rr_distance_runtime.h"']))
-ck('D1-F-only', 'RRUserPresetValue()==control_rr::RRPresetF' in reflection_hooks and 'DistanceEligible(beginEvaluation,bindings.projectionValid,activePreset' in eval_entry)
-ck('D1-optional-binding', 'RRNativeSetGuides(parameters,&bindings,hitDistance' in eval_entry and 'RR_F_DISTANCE_D1' in eval_entry)
+ck('GI27-capability', 'rr_specular_mvec=GI27_reference_derived_default_on' in probe and
+   'specular_mvec_runtime=GI27_F_optional_default_on' in native_frame and
+   'hit_distance_runtime=D1_F_fallback' in native_frame)
+ck('GI27-reflection-lifetime', all(x in probe for x in [
+    'RRReflectionInstall(renderer,d3d)','RRReflectionAfterPresent(count)',
+    '#include "rr_distance_runtime.h"','#include "rr_specular_mv_runtime.h"'
+]))
+specmv_runtime = (root/'src/rr_specular_mv_runtime.h').read_text(encoding='utf-8-sig')
+specmv_shader = (root/'src/shaders/rr_specular_mv.hlsl').read_text(encoding='utf-8-sig')
+guide_parameters = (root/'src/rr_guide_parameters.h').read_text(encoding='utf-8-sig')
+ck('GI27-runtime', all(x in specmv_runtime for x in [
+    'RR_GI27_SPECMV_READY','RR_GI27_SPECMV frame=%llu','TakeOnPrimaryQueue',
+    'reflection->backend.Destinations()','DXGI_FORMAT_R16G16_FLOAT'
+]))
+ck('GI27-reference-formula', all(x in specmv_shader for x in [
+    'virtual_pos = surface_pos + view_dir * effective_t',
+    'NdcDelta(virtual_pos) - NdcDelta(surface_pos)',
+    'SpecMV[tid.xy] = game_mv + scaled',
+    'effective_t = hit_t * gloss * gloss'
+]) and 'reflect(view_dir' not in specmv_shader)
+ck('GI27-exclusive-binding', all(x in guide_parameters for x in [
+    'api.Resource("GBuffer.SpecularMvec",specMv)',
+    'api.Resource("MotionVectorsReflection",specMv)',
+    'Resource* const specDistance=specMv?none:distance'
+]) and 'RRSpecMvBeforeEvaluation' in eval_entry and 'RR_GI27_SPECMV_BIND' in eval_entry)
+ck('D1-F-fallback', 'RRUserPresetValue()==control_rr::RRPresetF' in reflection_hooks and
+   'RRDistanceBeforeEvaluation' in eval_entry and 'fallback_hit_distance' in eval_entry)
 ck('guide-stats-readback-disabled', 'static constexpr bool rrLiveGuideStatsEnabled=false;' in live_guides and 'if(SUCCEEDED(hr)&&rrLiveGuideStatsEnabled)RRLiveCapturePrepare(c);' in live_guides and 'if(rrLiveGuideStatsEnabled&&rrLiveCaptureRRFrame' in live_guides and 'rrLiveGuideStatsEnabled && !c->stopped' in live_retire)
 ck('metadata-dead-work-disabled', all(x in metadata for x in [
     'RRReflectionCaptureEnabled = $true','RRHitDistanceOutputEnabled = $true','RRLiveCandidateReadbackEnabled = $false',
