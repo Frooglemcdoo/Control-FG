@@ -124,7 +124,7 @@ static void RestoreNative(ID3D12GraphicsCommandList4* list,const control_pt0::Co
  }
 }
 
-static bool Run(ID3D12GraphicsCommandList4* list,const D3D12_DISPATCH_RAYS_DESC* nativeDesc,unsigned long long frame,std::uint64_t signature) noexcept {
+static bool Run(ID3D12GraphicsCommandList4* list,unsigned long long frame,std::uint64_t signature) noexcept {
  const unsigned m=mode.load(std::memory_order_acquire);if(!m)return false;
  const auto attempt=++attempts;
  const D3D12_GPU_VIRTUAL_ADDRESS tlas=PT0LatestTlas();
@@ -140,9 +140,6 @@ static bool Run(ID3D12GraphicsCommandList4* list,const D3D12_DISPATCH_RAYS_DESC*
  Constants constants{};for(UINT i=0;i<16;++i)constants.clipToWorld[i]=static_cast<float>(camera.clipToWorld[i]);
  constants.cameraPosTMin[0]=static_cast<float>(camera.viewToWorld[9]);constants.cameraPosTMin[1]=static_cast<float>(camera.viewToWorld[10]);constants.cameraPosTMin[2]=static_cast<float>(camera.viewToWorld[11]);constants.cameraPosTMin[3]=0.01f;
  constants.outputSize[0]=static_cast<UINT>(desc.Width);constants.outputSize[1]=desc.Height;constants.mode=m;
- if(!nativeDesc||nativeDesc->Width!=constants.outputSize[0]||nativeDesc->Height!=constants.outputSize[1]){
-  if(attempt<=8||(attempt%240)==0)Log("PT1_INLINE_RAY_SKIP frame=%llu reason=extent_mismatch native=%ux%u target=%ux%u",frame,nativeDesc?nativeDesc->Width:0,nativeDesc?nativeDesc->Height:0,constants.outputSize[0],constants.outputSize[1]);++skips;return false;
- }
  const auto h=control_pt0::HooksFor(list);if(!h.dispatchCompute||!h.setPipeline||!h.setHeaps||!h.setRoot||!h.setTable||!h.setConstants){++skips;return false;}
  const auto saved=control_pt0::command;
  auto* base=reinterpret_cast<ID3D12GraphicsCommandList*>(list);
@@ -152,7 +149,7 @@ static bool Run(ID3D12GraphicsCommandList4* list,const D3D12_DISPATCH_RAYS_DESC*
  h.dispatchCompute(base,(constants.outputSize[0]+7)/8,(constants.outputSize[1]+7)/8,1);
  base->ResourceBarrier(1,&barrier);
  RestoreNative(list,saved,h);
- const auto ok=++successes;if(ok<=8||(ok%240)==0)Log("PT1_CUSTOM_DISPATCH_OK frame=%llu mode=%s sig=%016llX tlas=0x%llX target=%p format=%u size=%ux%u groups=%ux%u restored_root=%p restored_state=%p restored_pipeline=%p successes=%llu",
+ const auto ok=++successes;if(ok<=8||(ok%240)==0)Log("PT1_CUSTOM_DISPATCH_OK frame=%llu boundary=post_deferred_reflection mode=%s sig=%016llX tlas=0x%llX target=%p format=%u size=%ux%u groups=%ux%u restored_root=%p restored_state=%p restored_pipeline=%p successes=%llu",
   frame,ModeName(m),signature,tlas,target,unsigned(desc.Format),constants.outputSize[0],constants.outputSize[1],(constants.outputSize[0]+7)/8,(constants.outputSize[1]+7)/8,saved.root,saved.stateObject,saved.pipeline,ok);
  return true;
 }
@@ -163,9 +160,23 @@ static void Poll(unsigned long long present) noexcept {
  f7Down=down;
 }
 
+static void DeferredReflectionBoundary() noexcept {
+ const unsigned m=mode.load(std::memory_order_acquire);if(!m)return;
+ unsigned long long frame=0;DWORD frameFault=0;if(!ReadEngineFrameSafe(&frame,&frameFault))return;
+ static unsigned long long lastFrame=~0ull;if(lastFrame==frame)return;
+ EngineCommandContextSnapshot c{};if(!ReadEngineCommandContext(nullptr,&c)||!c.commandList)return;
+ auto* base=reinterpret_cast<ID3D12GraphicsCommandList*>(c.commandList);
+ if(!PT0EnsureCommandHooks(base))return;
+ ID3D12GraphicsCommandList4* list4=nullptr;
+ if(FAILED(base->QueryInterface(IID_PPV_ARGS(&list4)))||!list4)return;
+ const auto sig=PT0LatestReflectionSig();
+ Log("PT1_DEFERRED_BOUNDARY frame=%llu mode=%s list=%p sig=%016llX tlas=0x%llX target=reflection_after_deferred_shading",frame,ModeName(m),list4,sig,PT0LatestTlas());
+ const bool ran=Run(list4,frame,sig);
+ if(ran)lastFrame=frame;
+ list4->Release();
+}
+
 } // namespace control_pt1
 
-static void PT1AfterNativeReflection(ID3D12GraphicsCommandList4* list,const D3D12_DISPATCH_RAYS_DESC* nativeDesc,unsigned long long frame,std::uint64_t signature) noexcept {
- control_pt1::Run(list,nativeDesc,frame,signature);
-}
+static void PT1DeferredReflectionBoundary() noexcept {control_pt1::DeferredReflectionBoundary();}
 static void PT1Poll(unsigned long long present) noexcept {control_pt1::Poll(present);}

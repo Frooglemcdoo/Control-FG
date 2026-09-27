@@ -3,14 +3,14 @@
 $ControlFGBuild = [ordered]@{
     Version = '2.1.1'
     BaseProductionVersion = '2.1.0'
-    SourceRevision = 'v2.1.1-pt1-inline-ray-proof'
+    SourceRevision = 'v2.1.1-pt1-r2-tlas-descriptor-boundary'
     RRPhase = 'NativeG12RRExperiment'
     RRNativePreset = 'Preset F public default with live E/F model selection'
     RRRuntimeVersion = '310.9.1'
     RRPreLightingPauseRecovery = 'complete_native_sr_then_reset_rr'
     RRUserToggleDefault = 'persisted_on_off_setting'
     RRUserToggleLocation = 'F10_overlay'
-    RRExperimentScope = 'PT1_inline_RayQuery_reflection_target_proof_reusing_Control_TLAS_after_native_reflection_with_fail_closed_F7_modes'
+    RRExperimentScope = 'PT1_R2_inline_RayQuery_post_deferred_reflection_using_RTAS_descriptor_TLAS_from_Control_506144_descriptor_heap'
     RRRepresentativeReflectionRay = 0
     RRReflectionCaptureEnabled = $true
     RRReflectionCopyOnly = $false

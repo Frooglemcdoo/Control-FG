@@ -4,8 +4,6 @@
 #include <cstdint>
 #include <cstring>
 
-static void PT1AfterNativeReflection(ID3D12GraphicsCommandList4* list,const D3D12_DISPATCH_RAYS_DESC* nativeDesc,unsigned long long frame,std::uint64_t signature) noexcept;
-
 namespace control_pt0 {
 
 static constexpr UINT MaxHeaps=96;
@@ -81,6 +79,7 @@ static ASRecord accel[MaxASRecords]{};
 static PassRecord passes[MaxPassRecords]{};
 static std::atomic<unsigned long long> dispatchCount{0},buildCount{0},tlasMatches{0},descriptorEvents{0};
 static std::atomic<D3D12_GPU_VIRTUAL_ADDRESS> latestTlas{0};
+static std::atomic<std::uint64_t> latestReflectionSig{0};
 static std::atomic<unsigned long long> verboseUntilPresent{0};
 static std::atomic<unsigned int> deviceHookReady{0},commandHookReady{0};
 static thread_local CommandState command{};
@@ -172,7 +171,7 @@ static void RememberHeap(ID3D12Device* device,ID3D12DescriptorHeap* heap) noexce
  if(!device||!heap)return;const auto d=heap->GetDesc();
  HeapRecord rec{};rec.heap=heap;rec.type=d.Type;rec.count=d.NumDescriptors;rec.increment=device->GetDescriptorHandleIncrementSize(d.Type);rec.cpuStart=heap->GetCPUDescriptorHandleForHeapStart().ptr;
  rec.shaderVisible=(d.Flags&D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE)!=0;rec.gpuStart=rec.shaderVisible?heap->GetGPUDescriptorHandleForHeapStart().ptr:0;
- if(rec.count&&rec.count<=262144)rec.meta=static_cast<DescriptorMeta*>(HeapAlloc(GetProcessHeap(),HEAP_ZERO_MEMORY,sizeof(DescriptorMeta)*rec.count));
+ if(rec.count&&rec.count<=600000)rec.meta=static_cast<DescriptorMeta*>(HeapAlloc(GetProcessHeap(),HEAP_ZERO_MEMORY,sizeof(DescriptorMeta)*rec.count));
  AcquireSRWLockExclusive(&lock);for(auto& h:heaps)if(!h.heap){h=rec;rec.heap=nullptr;break;}ReleaseSRWLockExclusive(&lock);
  if(rec.heap&&rec.meta)HeapFree(GetProcessHeap(),0,rec.meta);
  Log("PT0_DESCRIPTOR_HEAP heap=%p type=%u count=%u shader_visible=%u cpu_start=0x%llX gpu_start=0x%llX increment=%u",
@@ -192,7 +191,16 @@ static void STDMETHODCALLTYPE CreateCBVHook(ID3D12Device* d,const D3D12_CONSTANT
  deviceHooks.createCBV(d,desc,dst);AcquireSRWLockExclusive(&lock);if(auto* m=MetaCpu(dst)){*m={};m->kind=DescriptorKind::CBV;if(desc){m->gpuva=desc->BufferLocation;m->sizeBytes=desc->SizeInBytes;}}ReleaseSRWLockExclusive(&lock);++descriptorEvents;
 }
 static void STDMETHODCALLTYPE CreateSRVHook(ID3D12Device* d,ID3D12Resource* r,const D3D12_SHADER_RESOURCE_VIEW_DESC* desc,D3D12_CPU_DESCRIPTOR_HANDLE dst) {
- deviceHooks.createSRV(d,r,desc,dst);AcquireSRWLockExclusive(&lock);if(auto* m=MetaCpu(dst)){*m={};m->kind=DescriptorKind::SRV;FillResource(*m,r);if(desc){m->format=desc->Format;m->dimension=static_cast<UINT>(desc->ViewDimension);if(desc->ViewDimension==D3D12_SRV_DIMENSION_RAYTRACING_ACCELERATION_STRUCTURE)m->gpuva=desc->RaytracingAccelerationStructure.Location;}}ReleaseSRWLockExclusive(&lock);++descriptorEvents;
+ deviceHooks.createSRV(d,r,desc,dst);
+ D3D12_GPU_VIRTUAL_ADDRESS rtas=0;
+ AcquireSRWLockExclusive(&lock);
+ if(auto* m=MetaCpu(dst)){
+  *m={};m->kind=DescriptorKind::SRV;FillResource(*m,r);
+  if(desc){m->format=desc->Format;m->dimension=static_cast<UINT>(desc->ViewDimension);if(desc->ViewDimension==D3D12_SRV_DIMENSION_RAYTRACING_ACCELERATION_STRUCTURE){m->gpuva=desc->RaytracingAccelerationStructure.Location;rtas=m->gpuva;}}
+ }
+ ReleaseSRWLockExclusive(&lock);
+ if(rtas){latestTlas.store(rtas,std::memory_order_release);Log("PT1_TLAS_DESCRIPTOR source=create_srv gpuva=0x%llX cpu=0x%llX",rtas,static_cast<unsigned long long>(dst.ptr));}
+ ++descriptorEvents;
 }
 static void STDMETHODCALLTYPE CreateUAVHook(ID3D12Device* d,ID3D12Resource* r,ID3D12Resource* counter,const D3D12_UNORDERED_ACCESS_VIEW_DESC* desc,D3D12_CPU_DESCRIPTOR_HANDLE dst) {
  deviceHooks.createUAV(d,r,counter,desc,dst);AcquireSRWLockExclusive(&lock);if(auto* m=MetaCpu(dst)){*m={};m->kind=DescriptorKind::UAV;FillResource(*m,r);if(desc){m->format=desc->Format;m->dimension=static_cast<UINT>(desc->ViewDimension);}}ReleaseSRWLockExclusive(&lock);++descriptorEvents;
@@ -284,7 +292,7 @@ static void LogTable(std::uint64_t sig,UINT root,D3D12_GPU_DESCRIPTOR_HANDLE han
  if(!handle.ptr)return;AcquireSRWLockShared(&lock);UINT base=0;auto* h=ResolveGpu(handle.ptr,&base);if(!h||!h->meta){ReleaseSRWLockShared(&lock);Log("PT0_ROOT_TABLE sig=%016llX root=%u handle=0x%llX heap=unresolved",sig,root,handle.ptr);return;}
  Log("PT0_ROOT_TABLE sig=%016llX root=%u handle=0x%llX heap=%p heap_type=%u base_index=%u",sig,root,handle.ptr,h->heap,unsigned(h->type),base);
  const UINT end=(base+MaxDescriptorsPerCensus<h->count)?base+MaxDescriptorsPerCensus:h->count;
- for(UINT i=base;i<end;++i){const auto& m=h->meta[i];if(m.kind==DescriptorKind::Empty)continue;const bool tlas=m.kind==DescriptorKind::SRV&&m.dimension==D3D12_SRV_DIMENSION_RAYTRACING_ACCELERATION_STRUCTURE;Log("PT0_DESCRIPTOR sig=%016llX root=%u index=%u kind=%u resource=%p format=%u view_dim=%u gpuva=0x%llX width=%llu height=%u size=%u tlas=%u",sig,root,i,unsigned(m.kind),m.resource,unsigned(m.format),m.dimension,m.gpuva,m.width,m.height,m.sizeBytes,unsigned(tlas));if(tlas){++tlasMatches;Log("PT0_TLAS_OK sig=%016llX source=descriptor_table root=%u index=%u gpuva=0x%llX raygen=%s",sig,root,i,m.gpuva,semantic.raygen);}}
+ for(UINT i=base;i<end;++i){const auto& m=h->meta[i];if(m.kind==DescriptorKind::Empty)continue;const bool tlas=m.kind==DescriptorKind::SRV&&m.dimension==D3D12_SRV_DIMENSION_RAYTRACING_ACCELERATION_STRUCTURE;Log("PT0_DESCRIPTOR sig=%016llX root=%u index=%u kind=%u resource=%p format=%u view_dim=%u gpuva=0x%llX width=%llu height=%u size=%u tlas=%u",sig,root,i,unsigned(m.kind),m.resource,unsigned(m.format),m.dimension,m.gpuva,m.width,m.height,m.sizeBytes,unsigned(tlas));if(tlas){latestTlas.store(m.gpuva,std::memory_order_release);++tlasMatches;Log("PT0_TLAS_OK sig=%016llX source=descriptor_table root=%u index=%u gpuva=0x%llX raygen=%s",sig,root,i,m.gpuva,semantic.raygen);}}
  ReleaseSRWLockShared(&lock);
 }
 static void STDMETHODCALLTYPE DispatchHook(ID3D12GraphicsCommandList4* l,const D3D12_DISPATCH_RAYS_DESC* d){
@@ -292,6 +300,7 @@ static void STDMETHODCALLTYPE DispatchHook(ID3D12GraphicsCommandList4* l,const D
  std::uint64_t sig=HashString(semantic.raygen);sig=HashBytes(&semantic.pipelineA,sizeof(semantic.pipelineA),sig);sig=HashBytes(&semantic.pipelineB,sizeof(semantic.pipelineB),sig);sig=HashBytes(&d->Width,sizeof(d->Width),sig);sig=HashBytes(&d->Height,sizeof(d->Height),sig);sig=HashBytes(&d->Depth,sizeof(d->Depth),sig);
  const UINT64 shape[]={d->RayGenerationShaderRecord.SizeInBytes,d->MissShaderTable.SizeInBytes,d->MissShaderTable.StrideInBytes,d->HitGroupTable.StrideInBytes,d->CallableShaderTable.StrideInBytes};sig=HashBytes(shape,sizeof(shape),sig);
  bool first=false;unsigned long long occurrence=0;AcquireSRWLockExclusive(&lock);PassRecord* rec=nullptr;for(auto& p:passes)if(p.signature==sig){rec=&p;break;}if(!rec)for(auto& p:passes)if(!p.signature){rec=&p;first=true;p.signature=sig;p.firstFrame=semantic.frame;p.width=d->Width;p.height=d->Height;p.depth=d->Depth;strncpy_s(p.raygen,sizeof(p.raygen),semantic.raygen,_TRUNCATE);break;}if(rec){occurrence=++rec->count;rec->lastFrame=semantic.frame;}ReleaseSRWLockExclusive(&lock);
+ if(semantic.active&&std::strcmp(semantic.raygen,"reflectionRayGeneration")==0)latestReflectionSig.store(sig,std::memory_order_release);
  const bool detail=first||occurrence<=4||Verbose();
  if(detail)Log("PT0_DXR_PASS sig=%016llX occurrence=%llu frame=%llu class=%s raygen=%s ray_args=%d,%d pipeline_args=%d,%d dimensions=%ux%ux%u list=%p state=%p root=%p heaps=%u",sig,occurrence,semantic.frame,Classify(semantic.raygen),semantic.raygen,semantic.rayA,semantic.rayB,semantic.pipelineA,semantic.pipelineB,d->Width,d->Height,d->Depth,l,command.stateObject,command.root,command.heapCount);
  if(detail)Log("PT0_DISPATCH_CAPTURE sig=%016llX raygen_va=0x%llX raygen_size=%llu miss_va=0x%llX miss_size=%llu miss_stride=%llu hit_va=0x%llX hit_size=%llu hit_stride=%llu callable_va=0x%llX callable_size=%llu callable_stride=%llu",sig,d->RayGenerationShaderRecord.StartAddress,d->RayGenerationShaderRecord.SizeInBytes,d->MissShaderTable.StartAddress,d->MissShaderTable.SizeInBytes,d->MissShaderTable.StrideInBytes,d->HitGroupTable.StartAddress,d->HitGroupTable.SizeInBytes,d->HitGroupTable.StrideInBytes,d->CallableShaderTable.StartAddress,d->CallableShaderTable.SizeInBytes,d->CallableShaderTable.StrideInBytes);
@@ -299,7 +308,6 @@ static void STDMETHODCALLTYPE DispatchHook(ID3D12GraphicsCommandList4* l,const D
   LogKnownTexture("reflection_target",kRRShaderReflectionTargetRva,sig);LogKnownTexture("diffuse_gi_color",kRRShaderDiffuseGIColorRva,sig);LogKnownTexture("diffuse_gi_weight_uav",kRRShaderDiffuseGIWeightUavRva,sig);LogKnownTexture("diffuse_gi_weight_srv",kRRShaderDiffuseGIWeightSrvRva,sig);LogKnownTexture("gbuffer0",kRRShaderGBufferCandidate0Rva,sig);LogKnownTexture("gbuffer1",kRRShaderGBufferCandidate1Rva,sig);LogKnownTexture("gbuffer2",kRRShaderGBufferCandidate2Rva,sig);LogKnownTexture("gbuffer3",kRRShaderGBufferCandidate3Rva,sig);LogKnownTexture("gbuffer4",kRRShaderGBufferCandidate4Rva,sig);LogKnownTexture("light_diffuse",kRRShaderLightBufferDiffuseRva,sig);LogKnownTexture("light_specular",kRRShaderLightBufferSpecularRva,sig);
  }
  h.dispatch(l,d);
- if(semantic.active&&std::strcmp(semantic.raygen,"reflectionRayGeneration")==0)::PT1AfterNativeReflection(l,d,semantic.frame,sig);
 }
 
 static bool EnsureCommandHooks(ID3D12GraphicsCommandList* base) noexcept {
@@ -324,3 +332,4 @@ static void PT0ClearSemantic() noexcept {control_pt0::ClearSemantic();}
 static void PT0Poll(unsigned long long present) noexcept {control_pt0::Poll(present);}
 static void PT0Summary(unsigned long long present) noexcept {control_pt0::Summary(present);}
 static D3D12_GPU_VIRTUAL_ADDRESS PT0LatestTlas() noexcept {return control_pt0::latestTlas.load(std::memory_order_acquire);}
+static std::uint64_t PT0LatestReflectionSig() noexcept {return control_pt0::latestReflectionSig.load(std::memory_order_acquire);}

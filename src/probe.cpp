@@ -148,8 +148,8 @@ static void OpenLog() {
     const DWORD verboseLength=GetEnvironmentVariableW(L"CONTROLFG_VERBOSE_LOG",verbose,_countof(verbose));
     verboseAuditLogging=verboseLength>0 && verboseLength<_countof(verbose) && verbose[0]!=L'0';
     QueryPerformanceFrequency(&frequency);
-    Log("PROBE v2.1.1 internal_build=2.1.1 source_revision=v2.1.1-pt1-inline-ray-proof supported_targets=steam_21225456,epic_0.0.518.2177,gog_57a8912f frequency=%lld log_profile=%s",frequency.QuadPart,verboseAuditLogging?"verbose_audit":"release_support");
-    Log("CAPABILITIES fg=fixed_2x_to_6x_plus_dynamic rr=models_E_F_default_F hdr10_bridge=1 rr_guides=gbuffer_material_envbrdf rr_hit_distance=cleared rr_specular_mvec=cleared rr_diagnostic_readbacks=off pt0=dxr_fat_probe pt1=inline_rayquery_reflection_proof streamline_sdk=2.14.1");
+    Log("PROBE v2.1.1 internal_build=2.1.1 source_revision=v2.1.1-pt1-r2-tlas-descriptor-boundary supported_targets=steam_21225456,epic_0.0.518.2177,gog_57a8912f frequency=%lld log_profile=%s",frequency.QuadPart,verboseAuditLogging?"verbose_audit":"release_support");
+    Log("CAPABILITIES fg=fixed_2x_to_6x_plus_dynamic rr=models_E_F_default_F hdr10_bridge=1 rr_guides=gbuffer_material_envbrdf rr_hit_distance=cleared rr_specular_mvec=cleared rr_diagnostic_readbacks=off pt0=dxr_fat_probe pt1=inline_rayquery_reflection_proof_r2 streamline_sdk=2.14.1");
     Log("MONITORING profile=%s rr_perf_sample=240 support_events=startup_settings_fg_rr_model_resize_recovery_failures_fallbacks_performance verbose_env=CONTROLFG_VERBOSE_LOG",verboseAuditLogging?"verbose_audit":"release_support");
 }
 
@@ -517,6 +517,9 @@ static void RRSafeCopyCString(const char* source, char* dest, size_t destBytes) 
 
 static void HookRRBeginPipelineSetup(int a, int b) {
     const auto call = ++rrPipelineSetupCount;
+    // The next native RT setup begins only after Control's deferred reflection
+    // compute has consumed reflectionRayGeneration and finalized the reflection UAV.
+    if (!strcmp(rrCurrentRayGeneration,"reflectionRayGeneration")) PT1DeferredReflectionBoundary();
     rrCurrentPipelineArg0 = a;
     rrCurrentPipelineArg1 = b;
     if (call <= 32) {
@@ -1052,7 +1055,7 @@ static BOOL CALLBACK Configure(PINIT_ONCE, PVOID, PVOID*) noexcept {
         Log("RR_NATIVE_EXPERIMENT_INSTALL ready=%u mode=warmup_then_native_rr fixed_resolution=1",unsigned(nativeRRReady));
         StartFGOverlay();
         Log("PT0_READY mode=fat_dxr_probe auto_capture=first64_and_periodic hotkey=F8 detailed_window_presents=600 device_descriptor_tracking=1 command_list4_tracking=1 build_as_tracking=1 dispatch_rays_tracking=1 pass_fingerprinting=1 resource_census=1");
-        Log("PT1_READY mode=inline_rayquery_reflection_proof default=off hotkey=F7 modes=off,hit_miss,hit_distance,instance_id target=reflectionRayGeneration pt0_detail_hotkey=F8 fail_closed=1");
+        Log("PT1_READY mode=inline_rayquery_reflection_proof_r2 default=off hotkey=F7 modes=off,hit_miss,hit_distance,instance_id target=post_deferred_reflection pt0_detail_hotkey=F8 tlas_source=rtas_descriptor fail_closed=1");
         Log("PROBE_ACTIVE hooks=9 rr_observer_hooks=%u fg_activation=resource_gated presentation_proxy=active common_constants=per_dlss_frame frame_tokens=begin_indexed pcl_present_markers=frame_gated reflex_mode=low_latency reflex_sleep=active streamline_sdk=2.14.1 streamline_bootstrap=deferred_post_native_factory bootstrap_state=%u semantic_capture=post_eval swapchain_capture=mode_change_aware camera_capture=pre_aa hud_render_hook=native_slot17 hud_rtt_hook=two_native_texture_ctor command_context=pre_ui_readonly_tls_sentinel_safe host_device=native queue_route=exact_constructor_only control_ngx_feature_path=ControlFGStreamline streamline_ngx_paths=runtime_plus_game device_bind=early_before_control_ngx factory_upgrade=presentation_only swapchain_upgrade=via_factory command_queue_proxy=exact_ctor_private_device features_requested=4 features=reflex,pcl,dlssg,dlssrr dlssg_loaded_expected=1 dlssrr_loaded_expected=1 resource_tags=depth_mv_plus_private_hudless_plus_ui_alpha_sdr_and_hdr10 hdr10_resource_tags=depth_mv_plus_rgb10_pq_hudless_plus_ui_alpha backbuffer_index=every_present fg_baseline=working mfg_mode=fixed_plus_native_dynamic default_multiplier=4x max_selector=6x dynamic_mode=native_eDynamic dynamic_auto_target=explicit_game_monitor_refresh dynamic_manual_target=30-1000_fps dynamic_vsync_policy=syncinterval0_while_active dynamic_reflex_limiter=target_fps dynamic_target_ui=auto_manual_thick_slider rr_preset_selector=public_E_F rr_preset_live_switch=E_F rr_modes=off,full_public_partial_hidden skin_responsivity=disabled overlay=win32_layered_control_native_menu persistence=localappdata_ini_schema8_fg_mode_dynamic_target_rr_toggle_preset overlay_status=selected,effective,current_fps,hdr,capability overlay_title=embedded_control_fg_logo_control_native overlay_font=bahnschrift_semicondensed overlay_selected=white_fill_black_text overlay_sections=fg_status_generation_dynamic_plus_rr_toggle selector=off,dynamic,2x,3x,4x,5x,6x gpu_policy=rtx40_off_plus_2x_only transition_telemetry=segment_confirmed hdr_hotkey_guard=win_alt_b_pre_os_quiesce_replay hdr10_bridge=fp16_scrgb_shadow_to_rgb10_pq hdr10_fg_ui=pre_ui_fp16_to_rgb10_pq_plus_r8_alpha project_id=305914b8-cf5b-4535-8e53-5589bf8cefa5 device_set=%u hdr_query=enabled transition_capture=enabled rr_phase=NativeG12RRExperiment rr_live_guides=renodx_descriptor_parity_bounded_material_srv rr_eval=warmup_then_native rr_guide=renodx_style_gbuffer_material_envbrdf rr_capture=disabled_production rr_observer_hooks=stable3 p4_hot_binding_hooks=disabled ngx_set_calls=per_rr_frame ngx_setup_intercept=disabled rr_native_denoiser=specular_energy_clamp_gi_contact_shadow_broad_diffuse", rrObserverHooks, slBootstrapState.load(), slDeviceConfigured.load());
     } catch (...) {
         Log("PROBE_DISABLED initialization_exception");
