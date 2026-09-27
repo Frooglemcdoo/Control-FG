@@ -639,10 +639,29 @@ static void PaintFGOverlay(HWND hwnd) noexcept {
         SelectObject(dc,mvRequested?buttonSelectedFont:buttonFont);
         PaintFGButton(dc,RECT{500,375,710,425},mvText,mvRequested,true);
         SelectObject(dc,smallFont);SetTextColor(dc,RGB(190,190,190));
-        RECT mvHelp{30,430,710,472};
-        DrawTextW(dc,L"GI27: Model F only. ON computes reflected-image MVs from Control's reflection hit arrays; OFF uses the public hit-distance path.",-1,&mvHelp,DT_LEFT|DT_WORDBREAK);
+        RECT mvHelp{30,430,710,468};
+        DrawTextW(dc,L"GI27: Model F only. ON computes reflected-image MVs; OFF uses the hit-distance fallback.",-1,&mvHelp,DT_LEFT|DT_WORDBREAK);
+
+        SelectObject(dc,bodyFont);SetTextColor(dc,RGB(246,246,246));
+        RECT diffuseLabel{30,482,470,520};DrawTextW(dc,L"Diffuse current-frame clamp",-1,&diffuseLabel,DT_LEFT|DT_VCENTER|DT_SINGLELINE);
+        const bool diffuseClamp=control_rr::RRUserDiffuseClampRenoDX();
+        SelectObject(dc,diffuseClamp?buttonSelectedFont:buttonFont);
+        PaintFGButton(dc,RECT{500,475,710,525},diffuseClamp?L"RENODX":L"OFF",diffuseClamp,true);
+        SelectObject(dc,smallFont);SetTextColor(dc,RGB(190,190,190));
+        RECT diffuseHelp{30,530,710,570};
+        DrawTextW(dc,L"RENODX keeps Control's native 1.0 diffuse firefly clamp, but forces temporal history off and spatial passes to zero. Specular clamp is unchanged.",-1,&diffuseHelp,DT_LEFT|DT_WORDBREAK);
+
+        SelectObject(dc,bodyFont);SetTextColor(dc,RGB(246,246,246));
+        RECT contactLabel{30,590,470,628};DrawTextW(dc,L"Contact-shadow path",-1,&contactLabel,DT_LEFT|DT_VCENTER|DT_SINGLELINE);
+        const bool contactReno=control_rr::RRUserContactShadowRenoDX();
+        SelectObject(dc,contactReno?buttonSelectedFont:buttonFont);
+        PaintFGButton(dc,RECT{500,582,710,632},contactReno?L"RENODX":L"CURRENT MOD",contactReno,true);
+        SelectObject(dc,smallFont);SetTextColor(dc,RGB(190,190,190));
+        RECT contactHelp{30,638,710,678};
+        DrawTextW(dc,L"RENODX leaves Control's contact-shadow filter untouched. CURRENT MOD disables its temporal and spatial denoising while RR is active.",-1,&contactHelp,DT_LEFT|DT_WORDBREAK);
+
         SelectObject(dc,buttonFont);
-        PaintFGButton(dc,RECT{550,490,710,540},L"Back",false);
+        PaintFGButton(dc,RECT{550,700,710,750},L"Back",false);
     } else {
     const unsigned int selected = GetFGUserMultiplier();
     const unsigned int maxSupported = GetFGMaxSupportedMultiplier();
@@ -821,7 +840,7 @@ static bool FGOverlaySliderFromPoint(int x, int y) noexcept {
     return IsFGDynamicSelection(GetFGUserMultiplier()) && y >= 443 && y < 512 && x >= 30 && x < 710;
 }
 static int FGOverlayLowerSectionOffset() noexcept { return IsFGDynamicSelection(GetFGUserMultiplier()) ? 0 : -kFGOverlayDynamicSectionHeight; }
-static int FGOverlayDesiredHeight() noexcept { if (fgOverlayOptionsPage) return 640; if (fgOverlayRRSettingsPage) return 570; return IsFGDynamicSelection(GetFGUserMultiplier()) ? kFGOverlayHeight : kFGOverlayCompactHeight; }
+static int FGOverlayDesiredHeight() noexcept { if (fgOverlayOptionsPage) return 640; if (fgOverlayRRSettingsPage) return 780; return IsFGDynamicSelection(GetFGUserMultiplier()) ? kFGOverlayHeight : kFGOverlayCompactHeight; }
 static void FGOverlayResizeWindowForCurrentSelection(HWND hwnd) noexcept {
     if (!hwnd) return;
     SetWindowPos(hwnd, nullptr, 0, 0, kFGOverlayWidth, FGOverlayDesiredHeight(),
@@ -921,7 +940,15 @@ static LRESULT CALLBACK FGOverlayWndProc(HWND hwnd, UINT message, WPARAM wParam,
                 const bool previous=control_rr::RRUserSpecularMotionRequested();
                 control_rr::RRUserSetSpecularMotionRequested(!previous);
                 Log("RR_GI27_SPECMV_UI previous=%u enabled=%u apply=next_rr_evaluation session_only=1",unsigned(previous),unsigned(!previous));
-            } else if (x >= 550 && x < 710 && y >= 490 && y < 540) {
+            } else if (x >= 500 && x < 710 && y >= 475 && y < 525) {
+                const bool previous=control_rr::RRUserDiffuseClampRenoDX();
+                control_rr::RRUserSetDiffuseClampRenoDX(!previous);
+                Log("RR_GI28_DIFFUSE_UI previous=%u renodx=%u apply=immediate session_only=1 specular_clamp_unchanged=1",unsigned(previous),unsigned(!previous));
+            } else if (x >= 500 && x < 710 && y >= 582 && y < 632) {
+                const bool previous=control_rr::RRUserContactShadowRenoDX();
+                control_rr::RRUserSetContactShadowRenoDX(!previous);
+                Log("RR_GI28_CONTACT_UI previous=%u renodx=%u apply=immediate session_only=1",unsigned(previous),unsigned(!previous));
+            } else if (x >= 550 && x < 710 && y >= 700 && y < 750) {
                 fgOverlayRRSettingsPage=false;
                 FGOverlayResizeWindowForCurrentSelection(hwnd);
             }
