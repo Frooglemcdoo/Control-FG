@@ -137,8 +137,8 @@ try {
     foreach ($contract in @('RRReflectionInitializeAccessOnly(d3d)','RR_TEMPORAL_ACCESS_INSTALL')) {
         if (-not ($probe + $reflectionHooks).Contains($contract)) { throw ('GI27 temporal-access contract missing: ' + $contract) }
     }
-    foreach ($contract in @('reflection_geometry=cleared','hit_distance=cleared','specular_mvec=cleared','matrices=identity')) {
-        if (-not ($probe + $nativeFrame + $evaluationEntry).Contains($contract)) { throw ('PT0 clean RR runtime capability contract missing: ' + $contract) }
+    foreach ($contract in @('specular_mvec=cleared reflection_mvec=cleared hit_distance=cleared matrices=identity','RR_GI30_GEOMETRY_BIND','matrix_mode=identity')) {
+        if (-not $evaluationEntry.Contains($contract)) { throw ('PT0 clean RR evaluation contract missing: ' + $contract) }
     }
     foreach ($required in @('RRReflectionInstall(renderer,d3d)','RRReflectionAfterPresent(count)','RRDistanceAfterPresent()','#include "rr_distance_runtime.h"','#include "rr_specular_mv_runtime.h"')) {
         if (-not $probe.Contains($required)) { throw ('GI27 reflection/spec-MV lifetime integration missing: ' + $required) }
