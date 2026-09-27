@@ -24,7 +24,7 @@ try {
         if ($errors.Count) { throw ('PowerShell parse error in ' + $file.Name + ': ' + $errors[0].Message) }
     }
     $probe = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'src/probe.cpp') -Raw
-    foreach ($marker in @('PROBE v2.1.1 internal_build=2.1.1','source_revision=v2.1.1-pt0-fat-dxr-probe','log_profile=%s','CAPABILITIES fg=fixed_2x_to_6x_plus_dynamic','MONITORING profile=%s rr_perf_sample=240','CONTROLFG_VERBOSE_LOG')) {
+    foreach ($marker in @('PROBE v2.1.1 internal_build=2.1.1','source_revision=v2.1.1-pt1-inline-ray-proof','log_profile=%s','CAPABILITIES fg=fixed_2x_to_6x_plus_dynamic','MONITORING profile=%s rr_perf_sample=240','CONTROLFG_VERBOSE_LOG')) {
         if (-not $probe.Contains($marker)) { throw ('Release source identity/logging mismatch: ' + $marker) }
     }
     $guide = ''
@@ -179,6 +179,24 @@ try {
     }
     foreach ($required in @('#include "pt0_dxr_probe.h"','InstallRRObservationHooks(renderer,d3d)','PT0EnsureCommandHooks','PT0SetSemantic','PT0Summary(count)','PT0_READY mode=fat_dxr_probe')) {
         if (-not $probe.Contains($required)) { throw ('PT0 integration contract missing: ' + $required) }
+    }
+    $pt1 = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'src/pt1_inline_ray.h') -Raw
+    $pt1Shader = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'src/shaders/pt1_inline_ray.hlsl') -Raw
+    $pt1Compiler = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'tools/Compile-PT1-Ray.ps1') -Raw
+    foreach ($required in @('PT1_INLINE_RAY_READY','PT1_INLINE_RAY_SKIP','PT1_CUSTOM_DISPATCH_OK','PT1_MODE','PT0LatestTlas()','reflectionRayGeneration','D3D12_RAYTRACING_TIER_1_1','D3D12_SRV_DIMENSION_RAYTRACING_ACCELERATION_STRUCTURE')) {
+        if (-not $pt1.Contains($required)) { throw ('PT1 inline-ray runtime contract missing: ' + $required) }
+    }
+    foreach ($required in @('RayQuery<RAY_FLAG_FORCE_OPAQUE>','TraceRayInline','CommittedRayT','CommittedInstanceID','RWTexture2D<float4> Output','row_major float4x4 ClipToWorld')) {
+        if (-not $pt1Shader.Contains($required)) { throw ('PT1 inline-ray shader contract missing: ' + $required) }
+    }
+    foreach ($required in @('-T cs_6_5','-E main','pt1_inline_ray_compiled.h')) {
+        if (-not $pt1Compiler.Contains($required)) { throw ('PT1 DXC compiler contract missing: ' + $required) }
+    }
+    foreach ($required in @('#include "pt1_inline_ray.h"','PT1Poll(presentCount.load())','PT1_EARLY_DXR_HOOK','PT1_READY mode=inline_rayquery_reflection_proof')) {
+        if (-not $probe.Contains($required)) { throw ('PT1 probe integration contract missing: ' + $required) }
+    }
+    foreach ($required in @('Compile-PT1-Ray.ps1','d3d12.lib','d3dcompiler.lib')) {
+        if (-not $buildCmd.Contains($required)) { throw ('PT1 build contract missing: ' + $required) }
     }
     if (-not $reflectionHooks.Contains('RRUserPresetValue()==control_rr::RRPresetF')) { throw 'D1 producer must be F only.' }
     if (-not $liveGuides.Contains('static constexpr bool rrLiveGuideStatsEnabled=false;')) { throw 'r22 guide-stat readback must be compiled out in production.' }

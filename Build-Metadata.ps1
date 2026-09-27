@@ -3,14 +3,14 @@
 $ControlFGBuild = [ordered]@{
     Version = '2.1.1'
     BaseProductionVersion = '2.1.0'
-    SourceRevision = 'v2.1.1-unified-storefront-r3'
+    SourceRevision = 'v2.1.1-pt1-inline-ray-proof'
     RRPhase = 'NativeG12RRExperiment'
     RRNativePreset = 'Preset F public default with live E/F model selection'
     RRRuntimeVersion = '310.9.1'
     RRPreLightingPauseRecovery = 'complete_native_sr_then_reset_rr'
     RRUserToggleDefault = 'persisted_on_off_setting'
     RRUserToggleLocation = 'F10_overlay'
-    RRExperimentScope = 'PT0_fat_DXR_probe_dispatchrays_buildAS_stateobject_descriptor_TLAS_pass_fingerprinting_resource_census'
+    RRExperimentScope = 'PT1_inline_RayQuery_reflection_target_proof_reusing_Control_TLAS_after_native_reflection_with_fail_closed_F7_modes'
     RRRepresentativeReflectionRay = 0
     RRReflectionCaptureEnabled = $true
     RRReflectionCopyOnly = $false

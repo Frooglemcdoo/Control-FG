@@ -4,6 +4,8 @@
 #include <cstdint>
 #include <cstring>
 
+static void PT1AfterNativeReflection(ID3D12GraphicsCommandList4* list,const D3D12_DISPATCH_RAYS_DESC* nativeDesc,unsigned long long frame,std::uint64_t signature) noexcept;
+
 namespace control_pt0 {
 
 static constexpr UINT MaxHeaps=96;
@@ -60,6 +62,7 @@ struct Semantic {
 struct CommandState {
  ID3D12GraphicsCommandList4* list=nullptr;
  ID3D12StateObject* stateObject=nullptr;
+ ID3D12PipelineState* pipeline=nullptr;
  ID3D12RootSignature* root=nullptr;
  ID3D12DescriptorHeap* heaps[2]{};
  UINT heapCount=0;
@@ -67,6 +70,7 @@ struct CommandState {
  D3D12_GPU_VIRTUAL_ADDRESS cbv[MaxCommandTables]{};
  D3D12_GPU_VIRTUAL_ADDRESS srv[MaxCommandTables]{};
  D3D12_GPU_VIRTUAL_ADDRESS uav[MaxCommandTables]{};
+ UINT constants[MaxCommandTables][64]{};
  std::uint64_t constantsHash[MaxCommandTables]{};
  UINT constantsCount[MaxCommandTables]{};
 };
@@ -76,6 +80,7 @@ static HeapRecord heaps[MaxHeaps]{};
 static ASRecord accel[MaxASRecords]{};
 static PassRecord passes[MaxPassRecords]{};
 static std::atomic<unsigned long long> dispatchCount{0},buildCount{0},tlasMatches{0},descriptorEvents{0};
+static std::atomic<D3D12_GPU_VIRTUAL_ADDRESS> latestTlas{0};
 static std::atomic<unsigned long long> verboseUntilPresent{0};
 static std::atomic<unsigned int> deviceHookReady{0},commandHookReady{0};
 static thread_local CommandState command{};
@@ -88,6 +93,8 @@ using CreateSRVFn=void(STDMETHODCALLTYPE*)(ID3D12Device*,ID3D12Resource*,const D
 using CreateUAVFn=void(STDMETHODCALLTYPE*)(ID3D12Device*,ID3D12Resource*,ID3D12Resource*,const D3D12_UNORDERED_ACCESS_VIEW_DESC*,D3D12_CPU_DESCRIPTOR_HANDLE);
 using CopyDescriptorsFn=void(STDMETHODCALLTYPE*)(ID3D12Device*,UINT,const D3D12_CPU_DESCRIPTOR_HANDLE*,const UINT*,UINT,const D3D12_CPU_DESCRIPTOR_HANDLE*,const UINT*,D3D12_DESCRIPTOR_HEAP_TYPE);
 using CopyDescriptorsSimpleFn=void(STDMETHODCALLTYPE*)(ID3D12Device*,UINT,D3D12_CPU_DESCRIPTOR_HANDLE,D3D12_CPU_DESCRIPTOR_HANDLE,D3D12_DESCRIPTOR_HEAP_TYPE);
+using DispatchComputeFn=void(STDMETHODCALLTYPE*)(ID3D12GraphicsCommandList*,UINT,UINT,UINT);
+using SetPipelineFn=void(STDMETHODCALLTYPE*)(ID3D12GraphicsCommandList*,ID3D12PipelineState*);
 using SetHeapsFn=void(STDMETHODCALLTYPE*)(ID3D12GraphicsCommandList*,UINT,ID3D12DescriptorHeap*const*);
 using SetRootFn=void(STDMETHODCALLTYPE*)(ID3D12GraphicsCommandList*,ID3D12RootSignature*);
 using SetTableFn=void(STDMETHODCALLTYPE*)(ID3D12GraphicsCommandList*,UINT,D3D12_GPU_DESCRIPTOR_HANDLE);
@@ -106,6 +113,7 @@ static DeviceHooks deviceHooks{};
 
 struct CommandHooks {
  void** table=nullptr;
+ DispatchComputeFn dispatchCompute=nullptr;SetPipelineFn setPipeline=nullptr;
  SetHeapsFn setHeaps=nullptr;SetRootFn setRoot=nullptr;SetTableFn setTable=nullptr;SetConstantsFn setConstants=nullptr;
  SetGpuVaFn setCBV=nullptr,setSRV=nullptr,setUAV=nullptr;
  BuildASFn buildAS=nullptr;SetStateObjectFn setState=nullptr;DispatchRaysFn dispatch=nullptr;
@@ -172,6 +180,11 @@ static void RememberHeap(ID3D12Device* device,ID3D12DescriptorHeap* heap) noexce
   static_cast<unsigned long long>(heap->GetCPUDescriptorHandleForHeapStart().ptr),
   static_cast<unsigned long long>((d.Flags&D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE)?heap->GetGPUDescriptorHandleForHeapStart().ptr:0),device->GetDescriptorHandleIncrementSize(d.Type));
 }
+static void RememberBoundHeap(ID3D12DescriptorHeap* heap) noexcept {
+ if(!heap)return;
+ AcquireSRWLockShared(&lock);bool known=false;for(const auto& h:heaps)if(h.heap==heap){known=true;break;}ReleaseSRWLockShared(&lock);
+ if(known)return;ID3D12Device* d=nullptr;if(SUCCEEDED(heap->GetDevice(IID_PPV_ARGS(&d)))&&d){RememberHeap(d,heap);d->Release();}
+}
 static HRESULT STDMETHODCALLTYPE CreateHeapHook(ID3D12Device* d,const D3D12_DESCRIPTOR_HEAP_DESC* desc,REFIID iid,void** out) {
  const HRESULT hr=deviceHooks.createHeap(d,desc,iid,out);if(SUCCEEDED(hr)&&out&&*out)RememberHeap(d,static_cast<ID3D12DescriptorHeap*>(*out));return hr;
 }
@@ -208,17 +221,53 @@ static void OnDevice(IUnknown* unknown) noexcept {
 static CommandHooks HooksFor(ID3D12GraphicsCommandList4* list) noexcept {CommandHooks h{};auto** t=*reinterpret_cast<void***>(list);AcquireSRWLockShared(&lock);if(commandHooks.table==t)h=commandHooks;ReleaseSRWLockShared(&lock);return h;}
 static void ResetCommand(ID3D12GraphicsCommandList4* list) noexcept {if(command.list!=list){command={};command.list=list;}}
 
-static void STDMETHODCALLTYPE SetHeapsHook(ID3D12GraphicsCommandList* l,UINT n,ID3D12DescriptorHeap*const* hs){auto h=HooksFor(reinterpret_cast<ID3D12GraphicsCommandList4*>(l));if(!h.setHeaps)return;ResetCommand(reinterpret_cast<ID3D12GraphicsCommandList4*>(l));command.heapCount=n>2?2:n;for(UINT i=0;i<2;++i)command.heaps[i]=i<command.heapCount?hs[i]:nullptr;h.setHeaps(l,n,hs);}
-static void STDMETHODCALLTYPE SetRootHook(ID3D12GraphicsCommandList* l,ID3D12RootSignature* r){auto h=HooksFor(reinterpret_cast<ID3D12GraphicsCommandList4*>(l));if(!h.setRoot)return;ResetCommand(reinterpret_cast<ID3D12GraphicsCommandList4*>(l));command.root=r;h.setRoot(l,r);}
-static void STDMETHODCALLTYPE SetTableHook(ID3D12GraphicsCommandList* l,UINT i,D3D12_GPU_DESCRIPTOR_HANDLE v){auto h=HooksFor(reinterpret_cast<ID3D12GraphicsCommandList4*>(l));if(!h.setTable)return;ResetCommand(reinterpret_cast<ID3D12GraphicsCommandList4*>(l));if(i<MaxCommandTables)command.tables[i]=v;h.setTable(l,i,v);}
-static void STDMETHODCALLTYPE SetConstantsHook(ID3D12GraphicsCommandList* l,UINT i,UINT n,const void* data,UINT offset){auto h=HooksFor(reinterpret_cast<ID3D12GraphicsCommandList4*>(l));if(!h.setConstants)return;ResetCommand(reinterpret_cast<ID3D12GraphicsCommandList4*>(l));if(i<MaxCommandTables&&data){command.constantsHash[i]=HashBytes(data,size_t(n)*4);command.constantsCount[i]=n;}h.setConstants(l,i,n,data,offset);}
-static void STDMETHODCALLTYPE SetCBVHook(ID3D12GraphicsCommandList* l,UINT i,D3D12_GPU_VIRTUAL_ADDRESS v){auto h=HooksFor(reinterpret_cast<ID3D12GraphicsCommandList4*>(l));if(!h.setCBV)return;ResetCommand(reinterpret_cast<ID3D12GraphicsCommandList4*>(l));if(i<MaxCommandTables)command.cbv[i]=v;h.setCBV(l,i,v);}
-static void STDMETHODCALLTYPE SetSRVHook(ID3D12GraphicsCommandList* l,UINT i,D3D12_GPU_VIRTUAL_ADDRESS v){auto h=HooksFor(reinterpret_cast<ID3D12GraphicsCommandList4*>(l));if(!h.setSRV)return;ResetCommand(reinterpret_cast<ID3D12GraphicsCommandList4*>(l));if(i<MaxCommandTables)command.srv[i]=v;h.setSRV(l,i,v);}
-static void STDMETHODCALLTYPE SetUAVHook(ID3D12GraphicsCommandList* l,UINT i,D3D12_GPU_VIRTUAL_ADDRESS v){auto h=HooksFor(reinterpret_cast<ID3D12GraphicsCommandList4*>(l));if(!h.setUAV)return;ResetCommand(reinterpret_cast<ID3D12GraphicsCommandList4*>(l));if(i<MaxCommandTables)command.uav[i]=v;h.setUAV(l,i,v);}
+static void STDMETHODCALLTYPE SetPipelineHook(ID3D12GraphicsCommandList* l,ID3D12PipelineState* p){
+ auto h=HooksFor(reinterpret_cast<ID3D12GraphicsCommandList4*>(l));if(!h.setPipeline)return;ResetCommand(reinterpret_cast<ID3D12GraphicsCommandList4*>(l));command.pipeline=p;h.setPipeline(l,p);
+}
+static void STDMETHODCALLTYPE SetHeapsHook(ID3D12GraphicsCommandList* l,UINT n,ID3D12DescriptorHeap*const* hs){
+ auto h=HooksFor(reinterpret_cast<ID3D12GraphicsCommandList4*>(l));if(!h.setHeaps)return;ResetCommand(reinterpret_cast<ID3D12GraphicsCommandList4*>(l));
+ command.heapCount=n>2?2:n;std::memset(command.tables,0,sizeof(command.tables));
+ for(UINT i=0;i<2;++i){command.heaps[i]=i<command.heapCount?hs[i]:nullptr;if(i<command.heapCount)RememberBoundHeap(hs[i]);}
+ h.setHeaps(l,n,hs);
+}
+static void STDMETHODCALLTYPE SetRootHook(ID3D12GraphicsCommandList* l,ID3D12RootSignature* r){
+ auto h=HooksFor(reinterpret_cast<ID3D12GraphicsCommandList4*>(l));if(!h.setRoot)return;ResetCommand(reinterpret_cast<ID3D12GraphicsCommandList4*>(l));
+ if(command.root!=r){
+  std::memset(command.tables,0,sizeof(command.tables));std::memset(command.cbv,0,sizeof(command.cbv));std::memset(command.srv,0,sizeof(command.srv));std::memset(command.uav,0,sizeof(command.uav));
+  std::memset(command.constants,0,sizeof(command.constants));std::memset(command.constantsCount,0,sizeof(command.constantsCount));std::memset(command.constantsHash,0,sizeof(command.constantsHash));
+ }
+ command.root=r;h.setRoot(l,r);
+}
+static void STDMETHODCALLTYPE SetTableHook(ID3D12GraphicsCommandList* l,UINT i,D3D12_GPU_DESCRIPTOR_HANDLE v){
+ auto h=HooksFor(reinterpret_cast<ID3D12GraphicsCommandList4*>(l));if(!h.setTable)return;ResetCommand(reinterpret_cast<ID3D12GraphicsCommandList4*>(l));
+ if(i<MaxCommandTables){command.tables[i]=v;command.cbv[i]=command.srv[i]=command.uav[i]=0;command.constantsCount[i]=0;}h.setTable(l,i,v);
+}
+static void STDMETHODCALLTYPE SetConstantsHook(ID3D12GraphicsCommandList* l,UINT i,UINT n,const void* data,UINT offset){
+ auto h=HooksFor(reinterpret_cast<ID3D12GraphicsCommandList4*>(l));if(!h.setConstants)return;ResetCommand(reinterpret_cast<ID3D12GraphicsCommandList4*>(l));
+ if(i<MaxCommandTables&&data&&offset<64){
+  command.tables[i]={};command.cbv[i]=command.srv[i]=command.uav[i]=0;
+  const UINT copy=(n<64-offset)?n:64-offset;std::memcpy(&command.constants[i][offset],data,size_t(copy)*4);
+  const UINT end=offset+copy;if(end>command.constantsCount[i])command.constantsCount[i]=end;
+  command.constantsHash[i]=HashBytes(command.constants[i],size_t(command.constantsCount[i])*4);
+ }
+ h.setConstants(l,i,n,data,offset);
+}
+static void STDMETHODCALLTYPE SetCBVHook(ID3D12GraphicsCommandList* l,UINT i,D3D12_GPU_VIRTUAL_ADDRESS v){
+ auto h=HooksFor(reinterpret_cast<ID3D12GraphicsCommandList4*>(l));if(!h.setCBV)return;ResetCommand(reinterpret_cast<ID3D12GraphicsCommandList4*>(l));
+ if(i<MaxCommandTables){command.cbv[i]=v;command.tables[i]={};command.srv[i]=command.uav[i]=0;command.constantsCount[i]=0;}h.setCBV(l,i,v);
+}
+static void STDMETHODCALLTYPE SetSRVHook(ID3D12GraphicsCommandList* l,UINT i,D3D12_GPU_VIRTUAL_ADDRESS v){
+ auto h=HooksFor(reinterpret_cast<ID3D12GraphicsCommandList4*>(l));if(!h.setSRV)return;ResetCommand(reinterpret_cast<ID3D12GraphicsCommandList4*>(l));
+ if(i<MaxCommandTables){command.srv[i]=v;command.tables[i]={};command.cbv[i]=command.uav[i]=0;command.constantsCount[i]=0;}h.setSRV(l,i,v);
+}
+static void STDMETHODCALLTYPE SetUAVHook(ID3D12GraphicsCommandList* l,UINT i,D3D12_GPU_VIRTUAL_ADDRESS v){
+ auto h=HooksFor(reinterpret_cast<ID3D12GraphicsCommandList4*>(l));if(!h.setUAV)return;ResetCommand(reinterpret_cast<ID3D12GraphicsCommandList4*>(l));
+ if(i<MaxCommandTables){command.uav[i]=v;command.tables[i]={};command.cbv[i]=command.srv[i]=0;command.constantsCount[i]=0;}h.setUAV(l,i,v);
+}
 
 static bool IsKnownTLAS(D3D12_GPU_VIRTUAL_ADDRESS va) noexcept {for(const auto& a:accel)if(a.address==va&&a.type==D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL)return true;return false;}
 static void STDMETHODCALLTYPE BuildASHook(ID3D12GraphicsCommandList4* l,const D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC* d,UINT n,const D3D12_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO_DESC* p){
- auto h=HooksFor(l);if(!h.buildAS)return;const auto frame=EngineFrame();if(d){AcquireSRWLockExclusive(&lock);ASRecord* slot=nullptr;for(auto& a:accel)if(a.address==d->DestAccelerationStructureData){slot=&a;break;}if(!slot)for(auto& a:accel)if(!a.address){slot=&a;break;}if(slot){slot->address=d->DestAccelerationStructureData;slot->type=d->Inputs.Type;slot->numDescs=d->Inputs.NumDescs;slot->flags=unsigned(d->Inputs.Flags);slot->lastFrame=frame;}ReleaseSRWLockExclusive(&lock);
+ auto h=HooksFor(l);if(!h.buildAS)return;const auto frame=EngineFrame();if(d){AcquireSRWLockExclusive(&lock);ASRecord* slot=nullptr;for(auto& a:accel)if(a.address==d->DestAccelerationStructureData){slot=&a;break;}if(!slot)for(auto& a:accel)if(!a.address){slot=&a;break;}if(slot){slot->address=d->DestAccelerationStructureData;slot->type=d->Inputs.Type;slot->numDescs=d->Inputs.NumDescs;slot->flags=unsigned(d->Inputs.Flags);slot->lastFrame=frame;}if(d->Inputs.Type==D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL)latestTlas.store(d->DestAccelerationStructureData,std::memory_order_release);ReleaseSRWLockExclusive(&lock);
  const auto c=++buildCount;if(d->Inputs.Type==D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL||c<=32||Verbose())Log("PT0_BUILD_AS count=%llu frame=%llu type=%s dest=0x%llX source=0x%llX scratch=0x%llX num_descs=%u flags=0x%X postbuild=%u",c,frame,d->Inputs.Type==D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL?"TLAS":"BLAS",d->DestAccelerationStructureData,d->SourceAccelerationStructureData,d->ScratchAccelerationStructureData,d->Inputs.NumDescs,unsigned(d->Inputs.Flags),n);}
  h.buildAS(l,d,n,p);
 }
@@ -241,7 +290,7 @@ static void LogTable(std::uint64_t sig,UINT root,D3D12_GPU_DESCRIPTOR_HANDLE han
 static void STDMETHODCALLTYPE DispatchHook(ID3D12GraphicsCommandList4* l,const D3D12_DISPATCH_RAYS_DESC* d){
  auto h=HooksFor(l);if(!h.dispatch)return;ResetCommand(l);const auto call=++dispatchCount;if(!d){h.dispatch(l,d);return;}
  std::uint64_t sig=HashString(semantic.raygen);sig=HashBytes(&semantic.pipelineA,sizeof(semantic.pipelineA),sig);sig=HashBytes(&semantic.pipelineB,sizeof(semantic.pipelineB),sig);sig=HashBytes(&d->Width,sizeof(d->Width),sig);sig=HashBytes(&d->Height,sizeof(d->Height),sig);sig=HashBytes(&d->Depth,sizeof(d->Depth),sig);
- const UINT64 shape[]={d->RayGenerationShaderRecord.SizeInBytes,d->MissShaderTable.SizeInBytes,d->MissShaderTable.StrideInBytes,d->HitGroupTable.SizeInBytes,d->HitGroupTable.StrideInBytes,d->CallableShaderTable.SizeInBytes,d->CallableShaderTable.StrideInBytes};sig=HashBytes(shape,sizeof(shape),sig);
+ const UINT64 shape[]={d->RayGenerationShaderRecord.SizeInBytes,d->MissShaderTable.SizeInBytes,d->MissShaderTable.StrideInBytes,d->HitGroupTable.StrideInBytes,d->CallableShaderTable.StrideInBytes};sig=HashBytes(shape,sizeof(shape),sig);
  bool first=false;unsigned long long occurrence=0;AcquireSRWLockExclusive(&lock);PassRecord* rec=nullptr;for(auto& p:passes)if(p.signature==sig){rec=&p;break;}if(!rec)for(auto& p:passes)if(!p.signature){rec=&p;first=true;p.signature=sig;p.firstFrame=semantic.frame;p.width=d->Width;p.height=d->Height;p.depth=d->Depth;strncpy_s(p.raygen,sizeof(p.raygen),semantic.raygen,_TRUNCATE);break;}if(rec){occurrence=++rec->count;rec->lastFrame=semantic.frame;}ReleaseSRWLockExclusive(&lock);
  const bool detail=first||occurrence<=4||Verbose();
  if(detail)Log("PT0_DXR_PASS sig=%016llX occurrence=%llu frame=%llu class=%s raygen=%s ray_args=%d,%d pipeline_args=%d,%d dimensions=%ux%ux%u list=%p state=%p root=%p heaps=%u",sig,occurrence,semantic.frame,Classify(semantic.raygen),semantic.raygen,semantic.rayA,semantic.rayB,semantic.pipelineA,semantic.pipelineB,d->Width,d->Height,d->Depth,l,command.stateObject,command.root,command.heapCount);
@@ -250,19 +299,20 @@ static void STDMETHODCALLTYPE DispatchHook(ID3D12GraphicsCommandList4* l,const D
   LogKnownTexture("reflection_target",kRRShaderReflectionTargetRva,sig);LogKnownTexture("diffuse_gi_color",kRRShaderDiffuseGIColorRva,sig);LogKnownTexture("diffuse_gi_weight_uav",kRRShaderDiffuseGIWeightUavRva,sig);LogKnownTexture("diffuse_gi_weight_srv",kRRShaderDiffuseGIWeightSrvRva,sig);LogKnownTexture("gbuffer0",kRRShaderGBufferCandidate0Rva,sig);LogKnownTexture("gbuffer1",kRRShaderGBufferCandidate1Rva,sig);LogKnownTexture("gbuffer2",kRRShaderGBufferCandidate2Rva,sig);LogKnownTexture("gbuffer3",kRRShaderGBufferCandidate3Rva,sig);LogKnownTexture("gbuffer4",kRRShaderGBufferCandidate4Rva,sig);LogKnownTexture("light_diffuse",kRRShaderLightBufferDiffuseRva,sig);LogKnownTexture("light_specular",kRRShaderLightBufferSpecularRva,sig);
  }
  h.dispatch(l,d);
+ if(semantic.active&&std::strcmp(semantic.raygen,"reflectionRayGeneration")==0)::PT1AfterNativeReflection(l,d,semantic.frame,sig);
 }
 
 static bool EnsureCommandHooks(ID3D12GraphicsCommandList* base) noexcept {
  if(!base)return false;ID3D12GraphicsCommandList4* l4=nullptr;if(FAILED(base->QueryInterface(IID_PPV_ARGS(&l4)))||!l4)return false;auto** t=*reinterpret_cast<void***>(l4);
  if(commandHookReady.load()==1&&commandHooks.table==t){l4->Release();return true;}
- CommandHooks h{};h.table=t;h.setHeaps=reinterpret_cast<SetHeapsFn>(t[28]);h.setRoot=reinterpret_cast<SetRootFn>(t[29]);h.setTable=reinterpret_cast<SetTableFn>(t[31]);h.setConstants=reinterpret_cast<SetConstantsFn>(t[35]);h.setCBV=reinterpret_cast<SetGpuVaFn>(t[37]);h.setSRV=reinterpret_cast<SetGpuVaFn>(t[39]);h.setUAV=reinterpret_cast<SetGpuVaFn>(t[41]);h.buildAS=reinterpret_cast<BuildASFn>(t[72]);h.setState=reinterpret_cast<SetStateObjectFn>(t[75]);h.dispatch=reinterpret_cast<DispatchRaysFn>(t[76]);
- bool ok=h.setHeaps&&h.setRoot&&h.setTable&&h.setConstants&&h.setCBV&&h.setSRV&&h.setUAV&&h.buildAS&&h.setState&&h.dispatch;
- if(ok){commandHooks=h;ok=PatchSlot(&t[28],reinterpret_cast<void*>(&SetHeapsHook))&&PatchSlot(&t[29],reinterpret_cast<void*>(&SetRootHook))&&PatchSlot(&t[31],reinterpret_cast<void*>(&SetTableHook))&&PatchSlot(&t[35],reinterpret_cast<void*>(&SetConstantsHook))&&PatchSlot(&t[37],reinterpret_cast<void*>(&SetCBVHook))&&PatchSlot(&t[39],reinterpret_cast<void*>(&SetSRVHook))&&PatchSlot(&t[41],reinterpret_cast<void*>(&SetUAVHook))&&PatchSlot(&t[72],reinterpret_cast<void*>(&BuildASHook))&&PatchSlot(&t[75],reinterpret_cast<void*>(&SetStateHook))&&PatchSlot(&t[76],reinterpret_cast<void*>(&DispatchHook));}
- commandHookReady.store(ok?1u:2u);Log("PT0_COMMAND_HOOKS ready=%u base_list=%p list4=%p same_interface=%u table=%p dispatch_slot=76 build_as_slot=72 state_slot=75",unsigned(ok),base,l4,unsigned(reinterpret_cast<void*>(base)==reinterpret_cast<void*>(l4)),t);l4->Release();return ok;
+ CommandHooks h{};h.table=t;h.dispatchCompute=reinterpret_cast<DispatchComputeFn>(t[14]);h.setPipeline=reinterpret_cast<SetPipelineFn>(t[25]);h.setHeaps=reinterpret_cast<SetHeapsFn>(t[28]);h.setRoot=reinterpret_cast<SetRootFn>(t[29]);h.setTable=reinterpret_cast<SetTableFn>(t[31]);h.setConstants=reinterpret_cast<SetConstantsFn>(t[35]);h.setCBV=reinterpret_cast<SetGpuVaFn>(t[37]);h.setSRV=reinterpret_cast<SetGpuVaFn>(t[39]);h.setUAV=reinterpret_cast<SetGpuVaFn>(t[41]);h.buildAS=reinterpret_cast<BuildASFn>(t[72]);h.setState=reinterpret_cast<SetStateObjectFn>(t[75]);h.dispatch=reinterpret_cast<DispatchRaysFn>(t[76]);
+ bool ok=h.dispatchCompute&&h.setPipeline&&h.setHeaps&&h.setRoot&&h.setTable&&h.setConstants&&h.setCBV&&h.setSRV&&h.setUAV&&h.buildAS&&h.setState&&h.dispatch;
+ if(ok){commandHooks=h;ok=PatchSlot(&t[25],reinterpret_cast<void*>(&SetPipelineHook))&&PatchSlot(&t[28],reinterpret_cast<void*>(&SetHeapsHook))&&PatchSlot(&t[29],reinterpret_cast<void*>(&SetRootHook))&&PatchSlot(&t[31],reinterpret_cast<void*>(&SetTableHook))&&PatchSlot(&t[35],reinterpret_cast<void*>(&SetConstantsHook))&&PatchSlot(&t[37],reinterpret_cast<void*>(&SetCBVHook))&&PatchSlot(&t[39],reinterpret_cast<void*>(&SetSRVHook))&&PatchSlot(&t[41],reinterpret_cast<void*>(&SetUAVHook))&&PatchSlot(&t[72],reinterpret_cast<void*>(&BuildASHook))&&PatchSlot(&t[75],reinterpret_cast<void*>(&SetStateHook))&&PatchSlot(&t[76],reinterpret_cast<void*>(&DispatchHook));}
+ commandHookReady.store(ok?1u:2u);Log("PT0_COMMAND_HOOKS ready=%u base_list=%p list4=%p same_interface=%u table=%p compute_dispatch_slot=14 pipeline_slot=25 dispatch_rays_slot=76 build_as_slot=72 state_slot=75",unsigned(ok),base,l4,unsigned(reinterpret_cast<void*>(base)==reinterpret_cast<void*>(l4)),t);l4->Release();return ok;
 }
 static void SetSemantic(const char* raygen,int pa,int pb,int a,int b,unsigned long long frame) noexcept {semantic={};semantic.active=true;semantic.pipelineA=pa;semantic.pipelineB=pb;semantic.rayA=a;semantic.rayB=b;semantic.frame=frame;if(raygen)strncpy_s(semantic.raygen,sizeof(semantic.raygen),raygen,_TRUNCATE);}
 static void ClearSemantic() noexcept {semantic.active=false;}
-static void Poll(unsigned long long present) noexcept {const bool down=(GetAsyncKeyState(VK_F7)&0x8000)!=0;if(down&&!f7WasDown){verboseUntilPresent.store(present+600,std::memory_order_release);Log("PT0_CAPTURE_ARM present=%llu until=%llu hotkey=F7 detail_dispatches=1 resource_census=1 descriptor_census=1",present,present+600);}f7WasDown=down;}
+static void Poll(unsigned long long present) noexcept {const bool down=(GetAsyncKeyState(VK_F8)&0x8000)!=0;if(down&&!f7WasDown){verboseUntilPresent.store(present+600,std::memory_order_release);Log("PT0_CAPTURE_ARM present=%llu until=%llu hotkey=F8 detail_dispatches=1 resource_census=1 descriptor_census=1",present,present+600);}f7WasDown=down;}
 static void Summary(unsigned long long present) noexcept {if(present!=1&&present%600!=0)return;unsigned used=0;AcquireSRWLockShared(&lock);for(const auto& p:passes)if(p.signature){++used;Log("PT0_PASS_SUMMARY sig=%016llX count=%llu first_frame=%llu last_frame=%llu dimensions=%ux%ux%u raygen=%s",p.signature,p.count,p.firstFrame,p.lastFrame,p.width,p.height,p.depth,p.raygen);}ReleaseSRWLockShared(&lock);Log("PT0_SUMMARY present=%llu passes=%u dispatches=%llu as_builds=%llu tlas_matches=%llu descriptor_events=%llu device_hooks=%u command_hooks=%u",present,used,dispatchCount.load(),buildCount.load(),tlasMatches.load(),descriptorEvents.load(),deviceHookReady.load(),commandHookReady.load());}
 
 } // namespace control_pt0
@@ -273,3 +323,4 @@ static void PT0SetSemantic(const char* raygen,int pa,int pb,int a,int b,unsigned
 static void PT0ClearSemantic() noexcept {control_pt0::ClearSemantic();}
 static void PT0Poll(unsigned long long present) noexcept {control_pt0::Poll(present);}
 static void PT0Summary(unsigned long long present) noexcept {control_pt0::Summary(present);}
+static D3D12_GPU_VIRTUAL_ADDRESS PT0LatestTlas() noexcept {return control_pt0::latestTlas.load(std::memory_order_acquire);}

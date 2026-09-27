@@ -15,7 +15,7 @@ pause
 exit /b %BUILD_RESULT%
 
 :build
-echo Control FG v2.1.1 - PT0 Fat DXR Probe - Steam, Epic Games Store and GOG
+echo Control FG v2.1.1 - PT1 Inline RayQuery Reflection Proof - Steam, Epic Games Store and GOG
 set "VSWHERE=%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe"
 if not exist "%VSWHERE%" (
   echo Visual Studio C++ tools were not found. Install the Desktop development with C++ workload and a Windows SDK.
@@ -316,6 +316,8 @@ cl /nologo /std:c++17 /EHsc /W4 /WX /O2 /MT tools\compile-dlf-parity.cpp /Fobuil
 if errorlevel 1 exit /b 1
 build\compile-dlf-parity.exe
 if errorlevel 1 exit /b 1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools\Compile-PT1-Ray.ps1
+if errorlevel 1 exit /b 1
 cl /nologo /std:c++17 /EHsc /W4 /WX validation\clamp-strength\policy-test.cpp /Febuild\clamp-strength-test.exe
 if errorlevel 1 exit /b 1
 cl /nologo /std:c++17 /EHsc /W4 /WX validation\clamp-strength\dispatch-test.cpp /Febuild\clamp-dispatch-test.exe
@@ -328,7 +330,7 @@ cl /nologo /std:c++17 /EHsc /W4 /WX validation\clamp-strength\dispatch-test.cpp 
 if errorlevel 1 exit /b 1
 build\clamp-dispatch-test.exe
 if errorlevel 1 exit /b 1
-cl /nologo /std:c++17 /EHsc /W4 /O2 /MT /LD /guard:cf /DUNICODE /D_UNICODE /I "third_party\streamline\include" src\probe.cpp build\control_fg_logo.res /Fobuild\probe.obj /Febuild\dxgi.dll /link /DEF:src\dxgi.def /INCREMENTAL:NO /DYNAMICBASE /NXCOMPAT /GUARD:CF bcrypt.lib wintrust.lib user32.lib gdi32.lib msimg32.lib
+cl /nologo /std:c++17 /EHsc /W4 /O2 /MT /LD /guard:cf /DUNICODE /D_UNICODE /I "third_party\streamline\include" /I "build" src\probe.cpp build\control_fg_logo.res /Fobuild\probe.obj /Febuild\dxgi.dll /link /DEF:src\dxgi.def /INCREMENTAL:NO /DYNAMICBASE /NXCOMPAT /GUARD:CF bcrypt.lib wintrust.lib user32.lib gdi32.lib msimg32.lib d3d12.lib d3dcompiler.lib
 if errorlevel 1 exit /b 1
 dumpbin /exports build\dxgi.dll > build\exports.txt
 if errorlevel 1 exit /b 1
