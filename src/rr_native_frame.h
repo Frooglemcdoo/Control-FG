@@ -223,11 +223,14 @@ static bool RRNativeKeepRegisteredOptionOff() noexcept {
  } __except(EXCEPTION_EXECUTE_HANDLER){return false;}
 }
 static bool RRNativeSelectedOption(void*) noexcept {
+ const bool direct=rrNativeFrameEnabled&&control_rr::RRUserDirectDlfParity()&&rrNativeFrame.Selected()&&!rrNativeFrame.Stopped();
+ if(direct)return false;
  const bool active=rrNativeFrame.Selected()||RRNativePartialActive();
  return control_rr::NativeRenderOption(rrNativeFrameEnabled,active,rrNativeFrame.Stopped());
 }
 static bool RRNativeGIBypassOption(void*) noexcept {
  const bool full=rrNativeFrameEnabled&&rrNativeFrame.Selected()&&!rrNativeFrame.Stopped();
+ if(full&&control_rr::RRUserDirectDlfParity())return false;
  if(full&&control_rr::RRUserDiffuseClampRenoDX())return false;
  return RRNativeSelectedOption(nullptr);
 }
@@ -303,7 +306,9 @@ static bool RRNativeReady(unsigned width,unsigned height) noexcept {
    for(const auto& slot:rrLive->policy.Inspect())if(slot.state==control_rr::SlotState::Free){ready=true;break;}
   }
  } __except(EXCEPTION_EXECUTE_HANDLER){ready=false;}
- ReleaseSRWLockExclusive(&rrLiveLock);return ready;
+ ReleaseSRWLockExclusive(&rrLiveLock);
+ if(ready&&control_rr::RRUserDirectDlfParity())ready=control_rr_clamp::DlfAllTargetsCaptured();
+ return ready;
 }
 static bool RRNativeHookReset(unsigned outputWidth,unsigned outputHeight,unsigned width,unsigned height,
  bool flag0,bool flag1,bool nativeRequest,bool flag3,bool& reset) {
@@ -325,6 +330,11 @@ static bool RRNativeHookReset(unsigned outputWidth,unsigned outputHeight,unsigne
  const bool partial=partialRequested&&known&&supported&&configuration&&!rrNativeFrame.Stopped()&&!selected;
  rrNativePartialFrame.store(partial,std::memory_order_release);
  rrNativeRTFrame.Begin(frame,effects,selected);
+ const bool directDlf=selected&&control_rr::RRUserDirectDlfParity()&&!rrNativeFrame.Stopped();
+ control_rr_clamp::SetDlfParityEnabled(directDlf);
+ if((frame<=4)||(frame%240==0)||rrNativeFrame.Reset())
+  Log("RR_GI29_DLF_MODE frame=%llu requested=%u enabled=%u capture_mask=0x%02X all_targets=%u specular_clamp=60",
+   frame,unsigned(control_rr::RRUserDirectDlfParity()),unsigned(directDlf),control_rr_clamp::DlfCaptureMask(),unsigned(control_rr_clamp::DlfAllTargetsCaptured()));
  if(previousKey.frame&&previousKey.rtEffects!=effects)
   Log("RR_RT_SETTINGS frame=%llu old_effects=0x%X new_effects=0x%X rr_selected=%u reset=%u",frame,previousKey.rtEffects,effects,unsigned(selected),unsigned(rrNativeFrame.Reset()));
  if(previousKey.frame&&!control_rr::SameExtent(previousKey,rrNativeFrame.Key()))
@@ -341,6 +351,7 @@ static bool RRNativeHookReset(unsigned outputWidth,unsigned outputHeight,unsigne
  // an exception/failure cannot inherit the previous frame's RR jitter state.
  if(!RRNativeKeepRegisteredOptionOff()||!rrNativeJitterOptionPatch.Set(false)){
   rrNativeFrame.Fail("native_registered_option_guard");rrLiveCaptureRRFrame=false;rrNativePartialFrame.store(false,std::memory_order_release);
+  control_rr_clamp::SetDlfParityEnabled(false);
   rrNativeJitterOptionPatch.Set(false);
   SetLastError(saved);
   const bool srResult=rrNativeResetOriginal(outputWidth,outputHeight,width,height,flag0,flag1,false,flag3,reset);
@@ -502,6 +513,11 @@ static void RRNativeHookDispatch(void* state,const void* groups) {
    static_cast<unsigned long long>(scope->frame.frame));
  SetLastError(saved);
 }
+static bool RRNativeEnsureDlfList(unsigned long long frame) noexcept {
+ control_rr_reflection::Context context{};
+ if(!RRReflectionCurrent(nullptr,context)||context.frame!=frame||!context.list)return control_rr_clamp::listTable!=nullptr;
+ return control_rr_clamp::InstallList(reinterpret_cast<ID3D12GraphicsCommandList*>(context.list));
+}
 static void RRNativeHookContactShadowFilter(void* color,void* history,void* auxiliary,
  bool temporal,int spatialSize,int spatialStep) {
  if(!rrNativeFrameEnabled||!rrNativeContactShadowFilterOriginal){
@@ -510,6 +526,15 @@ static void RRNativeHookContactShadowFilter(void* color,void* history,void* auxi
  }
  const bool full=rrNativeFrame.Selected()&&!rrNativeFrame.Stopped();
  const bool contact=(rrNativeRTFrame.effects&control_rr::RTContactShadow)!=0;
+ if(full&&contact&&control_rr::RRUserDirectDlfParity()){
+  const DWORD saved=GetLastError();
+  rrNativeContactShadowFilterOriginal(color,history,auxiliary,temporal,spatialSize,spatialStep);
+  const DWORD nativeError=GetLastError();const auto frame=rrNativeFrame.Key().frame;
+  if(frame<=4||(frame%240)==0)
+   Log("RR_GI29_CONTACT_SHADOW frame=%llu mode=native_untouched temporal=%u spatial_size=%d spatial_step=%d",
+    static_cast<unsigned long long>(frame),unsigned(temporal),spatialSize,spatialStep);
+  SetLastError(nativeError);return;
+ }
  if(full&&contact&&control_rr::RRUserContactShadowRenoDX()){
   const DWORD saved=GetLastError();
   rrNativeContactShadowFilterOriginal(color,history,auxiliary,temporal,spatialSize,spatialStep);
@@ -541,6 +566,26 @@ static void RRNativeHookDiffuseCommon(unsigned site, void* color, void* history,
  const bool full=rrNativeFrameEnabled&&rrNativeFrame.Selected()&&!rrNativeFrame.Stopped();
  if(!full){
   rrNativeDiffuseFilterOriginal(color,history,passes);return;
+ }
+
+ if(control_rr::RRUserDirectDlfParity()){
+  const DWORD saved=GetLastError();const auto frame=rrNativeFrame.Key().frame;
+  const bool listReady=RRNativeEnsureDlfList(frame);
+  if(!listReady||!control_rr_clamp::DlfAllTargetsCaptured()){
+   rrNativeFrame.Fail("gi29_dlf_runtime_not_ready");
+   Log("RR_GI29_DLF_FAIL frame=%llu site=%u list_ready=%u capture_mask=0x%02X",frame,site,unsigned(listReady),control_rr_clamp::DlfCaptureMask());
+   SetLastError(saved);return;
+  }
+  SetLastError(saved);rrNativeDiffuseFilterOriginal(color,history,passes);
+  const DWORD nativeError=GetLastError();bool giObserved=true;
+  if(site==2){
+   giObserved=rrNativeRTFrame.ObserveGIClamp(frame,rrNativeFrame.Selected()&&rrNativeFrame.Stage()==control_rr::RRFrameStage::Lighting);
+   if(!giObserved)rrNativeFrame.Fail("gi29_diffuse_gi_observation");
+  }
+  if(frame<=4||(frame%240)==0||!giObserved)
+   Log("RR_GI29_DLF_DIFFUSE frame=%llu site=%u mode=direct_shader_replacement passes_in=%u temporal_shader=replaced spatial_shader=replaced gi_observed=%u capture_mask=0x%02X",
+    frame,site,passes,unsigned(giObserved),control_rr_clamp::DlfCaptureMask());
+  SetLastError(nativeError);return;
  }
 
  const bool useRenoDXClamp=control_rr::RRUserDiffuseClampRenoDX();
@@ -624,6 +669,23 @@ static void RRNativeHookFilter(void* color,void* history,unsigned passes,bool ev
   }
   SetLastError(saved);rrNativeFilterOriginal(color,history,passes,evaluateColor);
   const DWORD nativeError=GetLastError();RRPerfFilter(rrNativeFrame.Key().frame,RRPerfElapsed(perfStart));SetLastError(nativeError);return;
+ }
+ if(control_rr::RRUserDirectDlfParity()){
+  const auto frame=rrNativeFrame.Key().frame;
+  const bool listReady=RRNativeEnsureDlfList(frame);
+  const bool begin=rrNativeFrame.BeginLighting(frame);
+  if(!listReady||!control_rr_clamp::DlfAllTargetsCaptured()||!begin){
+   rrNativeFrame.Fail("gi29_specular_dlf_runtime_not_ready");
+   Log("RR_GI29_DLF_FAIL frame=%llu site=specular list_ready=%u capture_mask=0x%02X begin_lighting=%u",
+    frame,unsigned(listReady),control_rr_clamp::DlfCaptureMask(),unsigned(begin));
+   SetLastError(saved);return;
+  }
+  SetLastError(saved);rrNativeFilterOriginal(color,history,passes,evaluateColor);
+  const DWORD nativeError=GetLastError();rrNativeLightingComplete=true;RRPerfFilter(frame,RRPerfElapsed(perfStart));
+  if(frame<=4||(frame%240)==0)
+   Log("RR_GI29_DLF_SPECULAR frame=%llu mode=direct_shader_replacement passes_in=%u brdf=%u specular_temporal_clamp=60 temporal_history=off spatial_passthrough=1 capture_mask=0x%02X",
+    frame,passes,unsigned(evaluateColor),control_rr_clamp::DlfCaptureMask());
+  SetLastError(nativeError);return;
  }
  control_rr_specular::Scope scope{};
  auto access=rrReflectionAccess;access.current=&RRReflectionCurrent;access.user=nullptr;
@@ -721,7 +783,7 @@ static bool RRNativeInstallFrame(HMODULE renderer,HMODULE d3d) noexcept {
          rrNativeFrameEnabled=true;
          Log("RR_NATIVE_OPTION_ISOLATION ready=1 registered_option=forced_off_never_true reflection=mod_state gi_radius=mod_state gi_bypass=mod_state jitter=private_mirror partial_mode=mod_owned_option_reads_no_feature13");
          Log("RR_NATIVE_SPECULAR_CLAMP_READY ready=1 target_shader_crc=0x600347E7 camera_cut_provider=name_resolved_per_filter bind_site=0x16744 dispatch_site=0x16786 temporal_history=forced_zero current_frame_energy_clamp=CS3_default_60 restore=verified_each_dispatch reshade_required=0");
-         Log("RR_FRAME_HOOKS_READY native_feature=13 early_mode=1 temporal_signal=CS3_integrated_adjustable raw_copy=off_or_fallback public_reference_ui=0 reflection_geometry_capture=D1_F_only hit_distance_runtime=D1_F_fallback specular_mvec_runtime=GI27_F_optional_default_on guide_stats_readback=0 zero_spatial=1 preserve_brdf=1 native_gi_bypass=GI28_switch diffuse_clamp=GI28_native_reference_1_0_temporal_off_spatial_zero contact_shadow_denoiser=GI28_current_mod_or_renodx_native broad_diffuse_denoiser=GI28_switch full_rt_settings=1 option_isolation=1");
+         Log("RR_FRAME_HOOKS_READY native_feature=13 early_mode=1 temporal_signal=CS3_integrated_adjustable raw_copy=off_or_fallback public_reference_ui=0 reflection_geometry_capture=D1_F_only hit_distance_runtime=D1_F_fallback specular_mvec_runtime=GI27_F_optional_default_on guide_stats_readback=0 zero_spatial=1 preserve_brdf=1 native_gi_bypass=GI29_direct_shader_switch dlf_shaders=GI29_six_direct_replacements specular_clamp=60 diffuse_clamp=100 temporal_history=off spatial_replacements=passthrough contact_shadow_denoiser=native_untouched_in_GI29 full_rt_settings=1 option_isolation=1");
          return true;
         }
        }
