@@ -582,9 +582,14 @@ static void RRNativeHookDiffuseCommon(unsigned site, void* color, void* history,
   SetLastError(saved);return;
  }
 
- // GI28 OFF baseline: preserve the public v2.1.1 full-RR behavior by bypassing
- // the whole diffuse filter boundary. The main GI call normally never reaches
- // here because RRNativeGIBypassOption returns true.
+ // GI28 OFF baseline: preserve the public v2.1.1 full-RR behavior. The two
+ // broad sites bypass only under the original BroadDiffusePolicy; unrelated
+ // native diffuse calls continue unchanged. The main GI call normally never
+ // reaches here because RRNativeGIBypassOption returns true.
+ if(site!=2){
+  const auto policy=control_rr::BroadDiffusePolicy(full,RRNativePartialActive(),rrNativeRTFrame.effects);
+  if(!policy.bypass){rrNativeDiffuseFilterOriginal(color,history,passes);return;}
+ }
  const DWORD saved=GetLastError();
  auto& counter=(site==2)?rrNativeBroadDiffuseBypassesMain:(site==0?rrNativeBroadDiffuseBypassesA:rrNativeBroadDiffuseBypassesB);
  const auto count=counter.fetch_add(1,std::memory_order_relaxed)+1;
