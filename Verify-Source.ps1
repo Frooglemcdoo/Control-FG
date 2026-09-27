@@ -195,8 +195,9 @@ try {
     foreach ($required in @('#include "pt2_pathtrace.h"','PT2Poll(presentCount.load())','PT2DeferredReflectionBoundary()','PT2_RUNTIME_READY','PT2IsEnabled()','PT2SetEnabled','PT2SetViewMode','PT2GetOverlayStats')) {
         if (-not ($probe + $overlay).Contains($required)) { throw ('PT2 integration/overlay contract missing: ' + $required) }
     }
+    $pt2HdrBridge = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'src/hdr10_bridge.h') -Raw
     foreach ($required in @('SubmitPT2CompositeBeforePresent(this,true,present)','SubmitPT2CompositeBeforePresent(this,false,present)')) {
-        if (-not $hdrBridge.Contains($required)) { throw ('PT2 late-composite HDR/SDR boundary missing: ' + $required) }
+        if (-not $pt2HdrBridge.Contains($required)) { throw ('PT2 late-composite HDR/SDR boundary missing: ' + $required) }
     }
     foreach ($required in @('Compile-PT2-Ray.ps1','d3d12.lib','d3dcompiler.lib')) {
         if (-not $buildCmd.Contains($required)) { throw ('PT2 build contract missing: ' + $required) }
