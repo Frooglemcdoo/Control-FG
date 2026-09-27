@@ -415,7 +415,8 @@ static bool EnsureCompositeCore(ID3D12Device* device) noexcept {
     static ID3DBlob* cachedVs=nullptr;static ID3DBlob* cachedPs=nullptr;
     if(cachedVs)cachedVs->Release();if(cachedPs)cachedPs->Release();cachedVs=vs;cachedPs=ps;
     owner.compositeReady=true;
-    Log("PT3_COMPOSITE_READY ready=1 slots=3 no_cpu_wait=1 source_format=%u target_formats=r10_fp16_rgba8_bgra8 native_copy=1 beauty=path_lighting_multiplier_over_native",unsigned(DXGI_FORMAT_R16G16B16A16_FLOAT));\n    Log("PT4_FULL_SCENE_READY renderer=integrated_full_scene primary=camera_ray secondary=diffuse_plus_specular composite=native_scene_times_path_lighting ui_protection=bright_pixel");
+    Log("PT3_COMPOSITE_READY ready=1 slots=3 no_cpu_wait=1 source_format=%u target_formats=r10_fp16_rgba8_bgra8 native_copy=1 beauty=path_lighting_multiplier_over_native",unsigned(DXGI_FORMAT_R16G16B16A16_FLOAT));
+    Log("PT4_FULL_SCENE_READY renderer=integrated_full_scene primary=camera_ray secondary=diffuse_plus_specular composite=native_scene_times_path_lighting ui_protection=bright_pixel");
     return true;
 }
 
