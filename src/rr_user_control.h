@@ -16,6 +16,11 @@ inline std::atomic<unsigned int> rrUserSpecularSignalMode{static_cast<unsigned i
 // in this diagnostic build; OFF returns to the public v2.1.1 F hit-distance path.
 inline std::atomic<bool> rrUserSpecularMotion{true};
 inline std::atomic<bool> rrUserSpecularMotionActive{false};
+// GI28 signal-parity A/B. Diffuse clamp ON preserves the native current-frame
+// firefly/energy clamp while temporal history and spatial passes remain off.
+// Contact-shadow RenoDX mode leaves Control's contact-shadow filter untouched.
+inline std::atomic<bool> rrUserDiffuseClampRenoDX{true};
+inline std::atomic<bool> rrUserContactShadowRenoDX{false};
 inline std::atomic<RRUserStatus> rrUserStatus{RRUserStatus::Off};
 enum class RRWaitReason {Guides,Unsupported,EnableReflections,OtherRT,Matrix,Resolution,Depth,Input,Handoff,Pipeline,CaptureBudget,CaptureBudgetQuery,CaptureAllocation};
 inline std::atomic<RRWaitReason> rrUserWaitReason{RRWaitReason::Guides};
@@ -100,6 +105,10 @@ inline bool RRUserSpecularMotionRequested() noexcept {return rrUserSpecularMotio
 inline void RRUserSetSpecularMotionRequested(bool enabled) noexcept {rrUserSpecularMotion.store(enabled,std::memory_order_release);if(!enabled)rrUserSpecularMotionActive.store(false,std::memory_order_release);}
 inline bool RRUserSpecularMotionActive() noexcept {return rrUserSpecularMotionActive.load(std::memory_order_acquire);}
 inline void RRUserPublishSpecularMotionActive(bool active) noexcept {rrUserSpecularMotionActive.store(active,std::memory_order_release);}
+inline bool RRUserDiffuseClampRenoDX() noexcept {return rrUserDiffuseClampRenoDX.load(std::memory_order_acquire);}
+inline void RRUserSetDiffuseClampRenoDX(bool enabled) noexcept {rrUserDiffuseClampRenoDX.store(enabled,std::memory_order_release);}
+inline bool RRUserContactShadowRenoDX() noexcept {return rrUserContactShadowRenoDX.load(std::memory_order_acquire);}
+inline void RRUserSetContactShadowRenoDX(bool enabled) noexcept {rrUserContactShadowRenoDX.store(enabled,std::memory_order_release);}
 inline const char* RRUserModeLabel() noexcept {switch(RRUserModeValue()){case RRUserMode::Partial:return "partial";case RRUserMode::Full:return "full";default:return "off";}}
 inline void RRUserPublish(RRUserStatus status) noexcept {rrUserStatus.store(status,std::memory_order_release);}
 inline unsigned int RRUserSharpnessPercent() noexcept {return rrUserSharpnessPercent.load(std::memory_order_acquire);}
