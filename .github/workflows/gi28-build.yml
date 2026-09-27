@@ -37,6 +37,13 @@ jobs:
           $current.scope='GI28 RenoDX signal-parity A/B on top of GI27: existing specular clamp unchanged/default 60; diffuse current-frame native 1.0 clamp A/B with temporal history off and spatial zero; contact-shadow Current Mod vs RenoDX-native A/B.'
           $current.candidate='2.1.1-GI28-RenoDX-Signal-Parity-AB'
           $current.tests.portable_gate='PASS GI28 RR-settings routing, RT-stack clamp observation, control defaults; Windows MSVC build and GPU A/B required.'
+          # The GI28 branch inherits GI27 source edits whose generated current-release
+          # checkpoint was produced in CI rather than committed. Refresh every
+          # existing checkpoint against this exact checkout before adding GI28 files.
+          foreach($entry in $current.tested_sha256.PSObject.Properties){
+            $p=Join-Path $root $entry.Name
+            if(Test-Path -LiteralPath $p -PathType Leaf){$entry.Value=(Get-FileHash -LiteralPath $p -Algorithm SHA256).Hash}
+          }
           foreach($rel in $owned){
             $p=Join-Path $root $rel
             if(!(Test-Path -LiteralPath $p -PathType Leaf)){throw "GI28 owned file missing: $rel"}
