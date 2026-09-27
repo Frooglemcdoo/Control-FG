@@ -148,7 +148,7 @@ static void OpenLog() {
     verboseAuditLogging=verboseLength>0 && verboseLength<_countof(verbose) && verbose[0]!=L'0';
     QueryPerformanceFrequency(&frequency);
     Log("PROBE v2.1.1 internal_build=2.1.1 source_revision=v2.1.1-unified-storefront-r3 supported_targets=steam_21225456,epic_0.0.518.2177,gog_57a8912f frequency=%lld log_profile=%s",frequency.QuadPart,verboseAuditLogging?"verbose_audit":"release_support");
-    Log("CAPABILITIES fg=fixed_2x_to_6x_plus_dynamic rr=models_E_F_default_F hdr10_bridge=1 rr_guides=gbuffer_material_envbrdf rr_hit_distance=off rr_specular_mvec=off rr_diagnostic_readbacks=off streamline_sdk=2.14.1");
+    Log("CAPABILITIES fg=fixed_2x_to_6x_plus_dynamic rr=models_E_F_default_F hdr10_bridge=1 rr_guides=gbuffer_material_envbrdf rr_hit_distance=F_fallback rr_specular_mvec=GI27_reference_derived_default_on rr_diagnostic_readbacks=off streamline_sdk=2.14.1");
     Log("MONITORING profile=%s rr_perf_sample=240 support_events=startup_settings_fg_rr_model_resize_recovery_failures_fallbacks_performance verbose_env=CONTROLFG_VERBOSE_LOG",verboseAuditLogging?"verbose_audit":"release_support");
 }
 
@@ -324,6 +324,7 @@ static bool ReadEngineCommandContext(ID3D12Resource* candidate, EngineCommandCon
 #include "rr_live_guides.h"
 #include "rr_reflection_runtime.h"
 #include "rr_distance_runtime.h"
+#include "rr_specular_mv_runtime.h"
 #include "rr_input_capture.h"
 static bool RRNativePrepareAA(void* color,void*& normal,void*& diffuse,void*& specular) noexcept;
 
