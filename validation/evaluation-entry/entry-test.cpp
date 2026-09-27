@@ -13,7 +13,7 @@ constexpr unsigned D3D12_RESOURCE_DIMENSION_TEXTURE2D=3;
 constexpr unsigned DXGI_FORMAT_R16_FLOAT=54;
 struct FakeDesc {unsigned Dimension=3;unsigned long long Width=2560;unsigned Height=1440,DepthOrArraySize=1,MipLevels=1,Format=DXGI_FORMAT_R16_FLOAT,Flags=0;struct{unsigned Count=1;}SampleDesc;};
 using D3D12_RESOURCE_DESC=FakeDesc;
-struct ID3D12GraphicsCommandList {};struct ID3D12Resource {FakeDesc GetDesc(){return {};}};
+struct ID3D12GraphicsCommandList {};struct ID3D12Resource {FakeDesc GetDesc(){return {};}};struct CameraSnapshot {};
 static DWORD lastError=0;
 static DWORD GetLastError(){return lastError;}
 static void SetLastError(DWORD x){lastError=x;}
@@ -52,15 +52,17 @@ static void RRLiveBeforeEvaluation(ID3D12GraphicsCommandList*,const control_rr::
 #include "../../src/rr_evaluation_inputs.h"
 static control_rr::RRFrameCoordinator rrNativeFrame;
 static bool rrNativeFrameEnabled=false,rrNativeLightingComplete=false,missingGuides=false,setFailure=false;
-static unsigned distanceCalls=0,testPreset=6;
+static unsigned distanceCalls=0,specMvCalls=0,testPreset=6;
 static bool testProjection=false;
 static ID3D12Resource* testDistance=nullptr;
+static ID3D12Resource* testSpecMv=nullptr;
 static ID3D12Resource* lastDistance=nullptr;
 static ID3D12Resource* RRDistanceBeforeEvaluation(ID3D12GraphicsCommandList*,ID3D12Resource*,unsigned long long,bool){++distanceCalls;return testDistance;}
+static ID3D12Resource* RRSpecMvBeforeEvaluation(ID3D12GraphicsCommandList*,ID3D12Resource*,ID3D12Resource*,ID3D12Resource*,const CameraSnapshot&,unsigned long long,bool,float,float,bool* history){++specMvCalls;if(history)*history=testSpecMv!=nullptr;return testSpecMv;}
 static ID3D12Resource* rrDistanceLastStatus=nullptr;
 static void RRInputCaptureBeforeEvaluation(ID3D12GraphicsCommandList*,unsigned long long,unsigned,ID3D12Resource*,ID3D12Resource*,ID3D12Resource*,ID3D12Resource*,ID3D12Resource*,const float*,bool){}
 static bool RRNativePartialActive(){return false;}
-struct RRNativeGuideBindings {float viewToClip[16]{};bool projectionValid=false;ID3D12Resource*normal=nullptr;ID3D12Resource*diffuse=nullptr;ID3D12Resource*specular=nullptr;ID3D12Resource*responsivity=nullptr;};
+struct RRNativeGuideBindings {float worldToView[16]{},viewToClip[16]{};bool projectionValid=false;ID3D12Resource*normal=nullptr;ID3D12Resource*diffuse=nullptr;ID3D12Resource*specular=nullptr;ID3D12Resource*responsivity=nullptr;ID3D12Resource*specularMotion=nullptr;ID3D12Resource*gbuffer1Source=reinterpret_cast<ID3D12Resource*>(0x5555);CameraSnapshot camera{};};
 static bool RRNativeResolveEvaluationPreset(ID3D12GraphicsCommandList*,void* feature,void*,void** out,bool* reset,unsigned* active){
  *out=feature;*reset=false;*active=testPreset;return true;
 }
@@ -152,16 +154,20 @@ int main(){
  // Exercise the actual gateway: F binds; E clears; bad projection skips dispatch;
  // unavailable distance remains optional and cannot stop a valid RR evaluation.
  checkRTStack=false;missingGuides=setFailure=failGet=false;rrNativeLightingComplete=true;
- for(unsigned mode=0;mode<4;++mode){
+ for(unsigned mode=0;mode<5;++mode){
   testPreset=mode==1?5:6;testProjection=mode!=2;
   testDistance=mode==3?nullptr:reinterpret_cast<ID3D12Resource*>(0x9876);
+  testSpecMv=mode==4?reinterpret_cast<ID3D12Resource*>(0x4444):nullptr;
+  control_rr::RRUserSetSpecularMotionRequested(mode==4);
   rrNativeFrame={};assert(rrNativeFrame.Begin({42,3840,2160,2560,1440},true,true));
   assert(rrNativeFrame.FeatureResult(true,true));assert(rrNativeFrame.BeginLighting(42));
-  const auto before=distanceCalls;SetLastError(17);
+  const auto before=distanceCalls,specBefore=specMvCalls;SetLastError(17);
   assert(RREvaluationEntry1(reinterpret_cast<ID3D12GraphicsCommandList*>(1),reinterpret_cast<void*>(2),reinterpret_cast<void*>(3),reinterpret_cast<void*>(4))==1);
+  assert(specMvCalls==specBefore+(mode==4?1u:0u));
   assert(distanceCalls==before+((mode==0||mode==3)?1u:0u));
   assert(lastDistance==(mode==0?testDistance:nullptr));
+  assert(control_rr::RRUserSpecularMotionActive()==(mode==4));
  }
- puts("PASS D1 actual gateway F binding, E clearing, invalid projection and optional fallback");
+ puts("PASS GI27 actual gateway explicit specular-MV binding, F hit-distance fallback, E clearing and optional distance fallback");
  puts("PASS: r21y gateway forwards once; hit distance is not a guide prerequisite; getter faults, RR guards and SR recovery remain fail-closed");
 }
