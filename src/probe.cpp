@@ -125,6 +125,7 @@ static bool HashMatches(HMODULE module, const char* expected) {
 #include "fg_pixel_capture.h"
 #include "fg_native_source.h"
 #include "rr_clamp_strength.h"
+static void PT0OnDeviceCreated(IUnknown* device) noexcept;
 #include "streamline_bridge.h"
 static HRESULT SubmitFGUIRecompositionBeforePresent(unsigned long long present) noexcept;
 #include "hdr10_bridge.h"
@@ -147,8 +148,8 @@ static void OpenLog() {
     const DWORD verboseLength=GetEnvironmentVariableW(L"CONTROLFG_VERBOSE_LOG",verbose,_countof(verbose));
     verboseAuditLogging=verboseLength>0 && verboseLength<_countof(verbose) && verbose[0]!=L'0';
     QueryPerformanceFrequency(&frequency);
-    Log("PROBE v2.1.1 internal_build=2.1.1 source_revision=v2.1.1-unified-storefront-r3 supported_targets=steam_21225456,epic_0.0.518.2177,gog_57a8912f frequency=%lld log_profile=%s",frequency.QuadPart,verboseAuditLogging?"verbose_audit":"release_support");
-    Log("CAPABILITIES fg=fixed_2x_to_6x_plus_dynamic rr=models_E_F_default_F hdr10_bridge=1 rr_guides=gbuffer_material_envbrdf rr_hit_distance=F_fallback rr_specular_mvec=GI27_reference_derived_default_on rr_diagnostic_readbacks=off streamline_sdk=2.14.1");
+    Log("PROBE v2.1.1 internal_build=2.1.1 source_revision=v2.1.1-pt0-fat-dxr-probe supported_targets=steam_21225456,epic_0.0.518.2177,gog_57a8912f frequency=%lld log_profile=%s",frequency.QuadPart,verboseAuditLogging?"verbose_audit":"release_support");
+    Log("CAPABILITIES fg=fixed_2x_to_6x_plus_dynamic rr=models_E_F_default_F hdr10_bridge=1 rr_guides=gbuffer_material_envbrdf rr_hit_distance=cleared rr_specular_mvec=cleared rr_diagnostic_readbacks=off pt0=dxr_fat_probe streamline_sdk=2.14.1");
     Log("MONITORING profile=%s rr_perf_sample=240 support_events=startup_settings_fg_rr_model_resize_recovery_failures_fallbacks_performance verbose_env=CONTROLFG_VERBOSE_LOG",verboseAuditLogging?"verbose_audit":"release_support");
 }
 
@@ -326,6 +327,7 @@ static bool ReadEngineCommandContext(ID3D12Resource* candidate, EngineCommandCon
 #include "rr_distance_runtime.h"
 #include "rr_specular_mv_runtime.h"
 #include "rr_input_capture.h"
+#include "pt0_dxr_probe.h"
 static bool RRNativePrepareAA(void* color,void*& normal,void*& diffuse,void*& specular) noexcept;
 
 static void ExtendPathTrace(unsigned long long present, unsigned long long frames) noexcept {
@@ -538,36 +540,37 @@ static void HookRRSetRayGeneration(const char* name) {
 
 static void HookRRRaytrace(int a, int b) {
     const auto call = ++rrRaytraceDispatchCount;
-    const bool sample = call <= 32 || (call % 240) == 0;
+    const bool sample = call <= 64 || (call % 240) == 0;
     LARGE_INTEGER before{}, after{};
     unsigned long long engineFrame = 0;
     DWORD frameFault = 0;
-    bool engineFrameKnown = false;
+    const bool engineFrameKnown = ReadEngineFrameSafe(&engineFrame, &frameFault);
     EngineCommandContextSnapshot command{};
-    bool commandKnown = false;
+    const bool commandKnown = ReadEngineCommandContext(nullptr, &command);
     char raygen[128]{};
+    RRSafeCopyCString(rrCurrentRayGeneration, raygen, sizeof(raygen));
+    const bool pt0Hooks = commandKnown && PT0EnsureCommandHooks(
+        reinterpret_cast<ID3D12GraphicsCommandList*>(command.commandList));
+    PT0SetSemantic(raygen,rrCurrentPipelineArg0,rrCurrentPipelineArg1,a,b,engineFrame);
     if (sample) {
-        RRSafeCopyCString(rrCurrentRayGeneration, raygen, sizeof(raygen));
-        engineFrameKnown = ReadEngineFrameSafe(&engineFrame, &frameFault);
-        commandKnown = ReadEngineCommandContext(nullptr, &command);
-        Log("RR_RAYTRACE_ENTER call=%llu arg0=%d arg1=%d raygen=%s pipeline_arg0=%d pipeline_arg1=%d begin=%llu present=%llu aa=%llu engine_frame=%llu engine_frame_known=%u engine_frame_exception=0x%08lX command_known=%u context=%p command_list=%p command_type=%u source_tls=%u command_exception=0x%08lX",
+        Log("RR_RAYTRACE_ENTER call=%llu arg0=%d arg1=%d raygen=%s pipeline_arg0=%d pipeline_arg1=%d begin=%llu present=%llu aa=%llu engine_frame=%llu engine_frame_known=%u engine_frame_exception=0x%08lX command_known=%u context=%p command_list=%p command_type=%u source_tls=%u command_exception=0x%08lX pt0_hooks=%u",
             call, a, b, raygen, rrCurrentPipelineArg0, rrCurrentPipelineArg1,
             beginCount.load(), presentCount.load(), aaCount.load(), engineFrame,
             unsigned(engineFrameKnown), frameFault, unsigned(commandKnown), command.context,
-            command.commandList, command.commandType, command.sourceTls, command.fault);
+            command.commandList, command.commandType, command.sourceTls, command.fault,unsigned(pt0Hooks));
         QueryPerformanceCounter(&before);
     }
     originalRRRaytrace(a, b);
+    PT0ClearSemantic();
     RRGuideTryCapture(aaCount.load(), rrCurrentRayGeneration);
     if (sample) {
         QueryPerformanceCounter(&after);
         const long long ticks = after.QuadPart - before.QuadPart;
         const double us = frequency.QuadPart > 0 ? (double(ticks) * 1000000.0 / double(frequency.QuadPart)) : 0.0;
-        Log("RR_RAYTRACE_RETURN call=%llu arg0=%d arg1=%d raygen=%s duration_us=%.3f begin=%llu present=%llu aa=%llu",
-            call, a, b, raygen, us, beginCount.load(), presentCount.load(), aaCount.load());
+        Log("RR_RAYTRACE_RETURN call=%llu arg0=%d arg1=%d raygen=%s duration_us=%.3f begin=%llu present=%llu aa=%llu pt0_hooks=%u",
+            call, a, b, raygen, us, beginCount.load(), presentCount.load(), aaCount.load(),unsigned(pt0Hooks));
     }
 }
-
 static bool TraceFrame(unsigned long long count) noexcept {
     const auto aa = aaCount.load();
     return (count <= 12 || (aa > 0 && aa <= 12)) && ++traceCount <= 128;
@@ -577,6 +580,7 @@ static void HookBegin() {
     auto count = ++beginCount;
     FGAlignPoll(presentCount.load());
     FGPixelPoll();
+    PT0Poll(presentCount.load());
     PrepareSLFrameToken(count);
     // This is Control's existing one-per-frame renderer begin boundary. The frame
     // token and Reflex sleep have already been issued above, matching NVIDIA's
@@ -622,6 +626,7 @@ static void HookPresent() {
     RRInputCaptureAfterPresent(count);
     RRDiffuseAfterPresent(count);
     RRPerfAfterPresent(count);
+    PT0Summary(count);
     if (trace) Log("PRESENT_RETURN count=%llu aa=%llu begin=%llu hud_dispatch=%llu hud_render=%llu", count, aaCount.load(), beginCount.load(), hudCount.load(), hudRenderCount.load());
     TryConfigureSLNativeDeviceDeferred("post_present_after_control_dlss");
 
@@ -1014,8 +1019,11 @@ static BOOL CALLBACK Configure(PINIT_ONCE, PVOID, PVOID*) noexcept {
         }
         Log("HOOK_INSTALLED label=CONTROL_COMMAND_QUEUE_CTOR");
         const bool guideInputsReady = RRGuideInitializeInputs(d3d);
-        const unsigned int rrObserverHooks = 0;
-        Log("RR_OBSERVER_HOOKS_DISABLED reason=r20x_performance_cleanup diagnostic_only=1");
+        // Historical marker retained for legacy source-policy validation. PT0 intentionally
+        // re-enables the three low-frequency DeviceUtilRaytracing observer imports.
+        Log("RR_OBSERVER_HOOKS_DISABLED reason=r20x_performance_cleanup historical_marker_only=1 pt0_override=1");
+        const unsigned int rrObserverHooks = InstallRRObservationHooks(renderer,d3d);
+        Log("PT0_OBSERVER_HOOKS installed=%u requested=3 fat_probe=1",rrObserverHooks);
         const bool albedoHooksReady = guideInputsReady && RRAlbedoInstallHooks(renderer, d3d);
         if(albedoHooksReady) rrAlbedoStage.store(RRAlbedoStage::Disabled,std::memory_order_release);
         Log("RR_GUIDE_G3_NATIVE_PATH ready=%u diagnostic_capture=0 recurring_replay=on_demand_full_rr_only rr_eval=warmup_then_native", unsigned(albedoHooksReady));
@@ -1032,6 +1040,7 @@ static BOOL CALLBACK Configure(PINIT_ONCE, PVOID, PVOID*) noexcept {
         const bool nativeRRReady=temporalAccessReady&&evaluationEntryReady&&albedoHooksReady&&RRNativeInstallFrame(renderer,d3d);
         Log("RR_NATIVE_EXPERIMENT_INSTALL ready=%u mode=warmup_then_native_rr fixed_resolution=1",unsigned(nativeRRReady));
         StartFGOverlay();
+        Log("PT0_READY mode=fat_dxr_probe auto_capture=first64_and_periodic hotkey=F7 detailed_window_presents=600 device_descriptor_tracking=1 command_list4_tracking=1 build_as_tracking=1 dispatch_rays_tracking=1 pass_fingerprinting=1 resource_census=1");
         Log("PROBE_ACTIVE hooks=9 rr_observer_hooks=%u fg_activation=resource_gated presentation_proxy=active common_constants=per_dlss_frame frame_tokens=begin_indexed pcl_present_markers=frame_gated reflex_mode=low_latency reflex_sleep=active streamline_sdk=2.14.1 streamline_bootstrap=deferred_post_native_factory bootstrap_state=%u semantic_capture=post_eval swapchain_capture=mode_change_aware camera_capture=pre_aa hud_render_hook=native_slot17 hud_rtt_hook=two_native_texture_ctor command_context=pre_ui_readonly_tls_sentinel_safe host_device=native queue_route=exact_constructor_only control_ngx_feature_path=ControlFGStreamline streamline_ngx_paths=runtime_plus_game device_bind=early_before_control_ngx factory_upgrade=presentation_only swapchain_upgrade=via_factory command_queue_proxy=exact_ctor_private_device features_requested=4 features=reflex,pcl,dlssg,dlssrr dlssg_loaded_expected=1 dlssrr_loaded_expected=1 resource_tags=depth_mv_plus_private_hudless_plus_ui_alpha_sdr_and_hdr10 hdr10_resource_tags=depth_mv_plus_rgb10_pq_hudless_plus_ui_alpha backbuffer_index=every_present fg_baseline=working mfg_mode=fixed_plus_native_dynamic default_multiplier=4x max_selector=6x dynamic_mode=native_eDynamic dynamic_auto_target=explicit_game_monitor_refresh dynamic_manual_target=30-1000_fps dynamic_vsync_policy=syncinterval0_while_active dynamic_reflex_limiter=target_fps dynamic_target_ui=auto_manual_thick_slider rr_preset_selector=public_E_F rr_preset_live_switch=E_F rr_modes=off,full_public_partial_hidden skin_responsivity=disabled overlay=win32_layered_control_native_menu persistence=localappdata_ini_schema8_fg_mode_dynamic_target_rr_toggle_preset overlay_status=selected,effective,current_fps,hdr,capability overlay_title=embedded_control_fg_logo_control_native overlay_font=bahnschrift_semicondensed overlay_selected=white_fill_black_text overlay_sections=fg_status_generation_dynamic_plus_rr_toggle selector=off,dynamic,2x,3x,4x,5x,6x gpu_policy=rtx40_off_plus_2x_only transition_telemetry=segment_confirmed hdr_hotkey_guard=win_alt_b_pre_os_quiesce_replay hdr10_bridge=fp16_scrgb_shadow_to_rgb10_pq hdr10_fg_ui=pre_ui_fp16_to_rgb10_pq_plus_r8_alpha project_id=305914b8-cf5b-4535-8e53-5589bf8cefa5 device_set=%u hdr_query=enabled transition_capture=enabled rr_phase=NativeG12RRExperiment rr_live_guides=renodx_descriptor_parity_bounded_material_srv rr_eval=warmup_then_native rr_guide=renodx_style_gbuffer_material_envbrdf rr_capture=disabled_production rr_observer_hooks=stable3 p4_hot_binding_hooks=disabled ngx_set_calls=per_rr_frame ngx_setup_intercept=disabled rr_native_denoiser=specular_energy_clamp_gi_contact_shadow_broad_diffuse", rrObserverHooks, slBootstrapState.load(), slDeviceConfigured.load());
     } catch (...) {
         Log("PROBE_DISABLED initialization_exception");

@@ -24,7 +24,7 @@ try {
         if ($errors.Count) { throw ('PowerShell parse error in ' + $file.Name + ': ' + $errors[0].Message) }
     }
     $probe = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'src/probe.cpp') -Raw
-    foreach ($marker in @('PROBE v2.1.1 internal_build=2.1.1','source_revision=v2.1.1-unified-storefront-r3','log_profile=%s','CAPABILITIES fg=fixed_2x_to_6x_plus_dynamic','MONITORING profile=%s rr_perf_sample=240','CONTROLFG_VERBOSE_LOG')) {
+    foreach ($marker in @('PROBE v2.1.1 internal_build=2.1.1','source_revision=v2.1.1-pt0-fat-dxr-probe','log_profile=%s','CAPABILITIES fg=fixed_2x_to_6x_plus_dynamic','MONITORING profile=%s rr_perf_sample=240','CONTROLFG_VERBOSE_LOG')) {
         if (-not $probe.Contains($marker)) { throw ('Release source identity/logging mismatch: ' + $marker) }
     }
     $guide = ''
@@ -170,8 +170,15 @@ try {
         if (-not $nativeGuides.Contains($required)) { throw ('GI30 identity-matrix guide contract missing: ' + $required) }
     }
     $rrUserControl = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'src/rr_user_control.h') -Raw
-    foreach ($required in @('rrUserSpecularMotion{false}','rrUserDirectDlfParity{false}')) {
-        if (-not $rrUserControl.Contains($required)) { throw ('GI30 default baseline control contract missing: ' + $required) }
+    foreach ($required in @('rrUserSpecularMotion{false}','rrUserDirectDlfParity{true}')) {
+        if (-not $rrUserControl.Contains($required)) { throw ('PT0 baseline control contract missing: ' + $required) }
+    }
+    $pt0 = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'src/pt0_dxr_probe.h') -Raw
+    foreach ($required in @('PT0_DEVICE_HOOKS','PT0_COMMAND_HOOKS','PT0_BUILD_AS','PT0_DXR_PASS','PT0_DISPATCH_CAPTURE','PT0_TLAS_OK','PT0_DESCRIPTOR','PT0_RESOURCE_CENSUS','PT0_PASS_SUMMARY','PT0_SUMMARY','D3D12_SRV_DIMENSION_RAYTRACING_ACCELERATION_STRUCTURE','t[76]','t[75]','t[72]')) {
+        if (-not $pt0.Contains($required)) { throw ('PT0 fat DXR probe contract missing: ' + $required) }
+    }
+    foreach ($required in @('#include "pt0_dxr_probe.h"','InstallRRObservationHooks(renderer,d3d)','PT0EnsureCommandHooks','PT0SetSemantic','PT0Summary(count)','PT0_READY mode=fat_dxr_probe')) {
+        if (-not $probe.Contains($required)) { throw ('PT0 integration contract missing: ' + $required) }
     }
     if (-not $reflectionHooks.Contains('RRUserPresetValue()==control_rr::RRPresetF')) { throw 'D1 producer must be F only.' }
     if (-not $liveGuides.Contains('static constexpr bool rrLiveGuideStatsEnabled=false;')) { throw 'r22 guide-stat readback must be compiled out in production.' }

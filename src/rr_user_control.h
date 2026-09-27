@@ -21,9 +21,9 @@ inline std::atomic<bool> rrUserSpecularMotionActive{false};
 // Contact-shadow RenoDX mode leaves Control's contact-shadow filter untouched.
 inline std::atomic<bool> rrUserDiffuseClampRenoDX{true};
 inline std::atomic<bool> rrUserContactShadowRenoDX{false};
-// GI30: keep the GI29 six-shader DLF replacement available strictly for A/B.
-// Baseline starts OFF; specular clamp remains the user's established 0.60.
-inline std::atomic<bool> rrUserDirectDlfParity{false};
+// PT0 keeps the visually preferred RenoDX six-shader DLF path enabled while
+// the DXR probe observes Control's native ray tracing. Clamp remains 60%.
+inline std::atomic<bool> rrUserDirectDlfParity{true};
 inline std::atomic<RRUserStatus> rrUserStatus{RRUserStatus::Off};
 enum class RRWaitReason {Guides,Unsupported,EnableReflections,OtherRT,Matrix,Resolution,Depth,Input,Handoff,Pipeline,CaptureBudget,CaptureBudgetQuery,CaptureAllocation};
 inline std::atomic<RRWaitReason> rrUserWaitReason{RRWaitReason::Guides};
