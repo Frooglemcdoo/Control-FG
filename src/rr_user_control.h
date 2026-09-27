@@ -12,18 +12,18 @@ enum class RRUserMode : unsigned int { Off=0, Partial=1, Full=2 };
 inline std::atomic<unsigned int> rrUserMode{static_cast<unsigned int>(RRUserMode::Off)};
 enum class RRSpecularSignalMode : unsigned int { NativeClamp=0, ReferenceClamp=1 };
 inline std::atomic<unsigned int> rrUserSpecularSignalMode{static_cast<unsigned int>(RRSpecularSignalMode::NativeClamp)};
-// GI27: explicit reflected-image motion vectors for Model F. ON by default
-// in this diagnostic build; OFF returns to the public v2.1.1 F hit-distance path.
-inline std::atomic<bool> rrUserSpecularMotion{true};
+// GI30 clean RenoDX baseline: optional reflection-geometry inputs stay disabled.
+// The legacy GI27 switch remains source-visible, but evaluation never binds specular MVs.
+inline std::atomic<bool> rrUserSpecularMotion{false};
 inline std::atomic<bool> rrUserSpecularMotionActive{false};
 // GI28 signal-parity A/B. Diffuse clamp ON preserves the native current-frame
 // firefly/energy clamp while temporal history and spatial passes remain off.
 // Contact-shadow RenoDX mode leaves Control's contact-shadow filter untouched.
 inline std::atomic<bool> rrUserDiffuseClampRenoDX{true};
 inline std::atomic<bool> rrUserContactShadowRenoDX{false};
-// GI29: direct PSO replacement of RenoDX's six Control DLF shaders. Default ON.
-// Specular temporal replacement intentionally uses the user's established 0.60 clamp.
-inline std::atomic<bool> rrUserDirectDlfParity{true};
+// GI30: keep the GI29 six-shader DLF replacement available strictly for A/B.
+// Baseline starts OFF; specular clamp remains the user's established 0.60.
+inline std::atomic<bool> rrUserDirectDlfParity{false};
 inline std::atomic<RRUserStatus> rrUserStatus{RRUserStatus::Off};
 enum class RRWaitReason {Guides,Unsupported,EnableReflections,OtherRT,Matrix,Resolution,Depth,Input,Handoff,Pipeline,CaptureBudget,CaptureBudgetQuery,CaptureAllocation};
 inline std::atomic<RRWaitReason> rrUserWaitReason{RRWaitReason::Guides};
