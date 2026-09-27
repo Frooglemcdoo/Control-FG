@@ -3,14 +3,14 @@
 $ControlFGBuild = [ordered]@{
     Version = '2.1.1'
     BaseProductionVersion = '2.1.0'
-    SourceRevision = 'v2.1.1-pt2-toggle-counters-composite'
+    SourceRevision = 'v2.1.1-pt2-r2-proxy-device-composite'
     RRPhase = 'NativeG12RRExperiment'
     RRNativePreset = 'Preset F public default with live E/F model selection'
     RRRuntimeVersion = '310.9.1'
     RRPreLightingPauseRecovery = 'complete_native_sr_then_reset_rr'
     RRUserToggleDefault = 'persisted_on_off_setting'
     RRUserToggleLocation = 'F10_overlay'
-    RRExperimentScope = 'PT2_master_toggle_private_inline_RayQuery_output_GPU_sampled_counters_late_present_composite_SDR_HDR'
+    RRExperimentScope = 'PT2_R2_proxy_aware_device_identity_for_late_present_composite_plus_PT2_toggle_counters'
     RRRepresentativeReflectionRay = 0
     RRReflectionCaptureEnabled = $true
     RRReflectionCopyOnly = $false

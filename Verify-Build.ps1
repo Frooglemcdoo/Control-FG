@@ -49,7 +49,7 @@ try {
     $markers = @(
         'FG_OVERLAY_SETTINGS_S5 binding=persisted_single_key options=replacement_page default=F10',
         'PROBE v2.1.1 internal_build=2.1.1',
-        'source_revision=v2.1.1-pt2-toggle-counters-composite','log_profile=%s','CAPABILITIES fg=fixed_2x_to_6x_plus_dynamic',
+        'source_revision=v2.1.1-pt2-r2-proxy-device-composite','log_profile=%s','CAPABILITIES fg=fixed_2x_to_6x_plus_dynamic',
         'MONITORING profile=%s rr_perf_sample=240','CONTROLFG_VERBOSE_LOG',
         'RR_PRESET_HOOK_READY','default_preset=F selectable=E,F,K,L,M','RR_PRESET_REQUEST','RR_PRESET_UI','RR_PRESET_LIVE_SWITCH',
         'RR_NATIVE_EVALUATED','RR_FRAME_MODE','RR_RESIZE_EPOCH_BEGIN','RR_RESIZE_EPOCH_RELEASE','RR_FRAME_RECOVERY_SR',
@@ -96,7 +96,7 @@ try {
     $validation = [ordered]@{}
     foreach ($key in $ControlFGBuild.Keys) { $validation[$key] = $ControlFGBuild[$key] }
     $details = [ordered]@{
-        RRInstrumentation = 'PT2: persistent F10 Path Tracing OFF/ON master toggle; private FP16 inline RayQuery output; sampled GPU hit/miss/distance/instance counters; late Present composite after SDR correction or before HDR bridge conversion; F7 cycles debug view while PT is ON; PT OFF performs no PT dispatch or composite.' 
+        RRInstrumentation = 'PT2 R2: PT2 ray/counter pipeline plus proxy-aware Streamline/native device identity for the late Present composite. Uses the same canonical native-interface comparison already proven by FG UI private work; PT OFF remains a true native baseline.' 
         RRLiveShaderHeaderSHA256 = (Get-FileHash -LiteralPath (Join-Path $PSScriptRoot 'build/rr_live_compiled.h') -Algorithm SHA256).Hash
         RRReflectanceShaderHeaderSHA256 = (Get-FileHash -LiteralPath (Join-Path $PSScriptRoot 'build/rr_reflectance_compiled.h') -Algorithm SHA256).Hash
         SHA256 = (Get-FileHash -LiteralPath $dll -Algorithm SHA256).Hash

@@ -24,7 +24,7 @@ try {
         if ($errors.Count) { throw ('PowerShell parse error in ' + $file.Name + ': ' + $errors[0].Message) }
     }
     $probe = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'src/probe.cpp') -Raw
-    foreach ($marker in @('PROBE v2.1.1 internal_build=2.1.1','source_revision=v2.1.1-pt2-toggle-counters-composite','log_profile=%s','CAPABILITIES fg=fixed_2x_to_6x_plus_dynamic','MONITORING profile=%s rr_perf_sample=240','CONTROLFG_VERBOSE_LOG')) {
+    foreach ($marker in @('PROBE v2.1.1 internal_build=2.1.1','source_revision=v2.1.1-pt2-r2-proxy-device-composite','log_profile=%s','CAPABILITIES fg=fixed_2x_to_6x_plus_dynamic','MONITORING profile=%s rr_perf_sample=240','CONTROLFG_VERBOSE_LOG')) {
         if (-not $probe.Contains($marker)) { throw ('Release source identity/logging mismatch: ' + $marker) }
     }
     $guide = ''
@@ -198,6 +198,9 @@ try {
     $pt2HdrBridge = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'src/hdr10_bridge.h') -Raw
     foreach ($required in @('SubmitPT2CompositeBeforePresent(this,true,present)','SubmitPT2CompositeBeforePresent(this,false,present)')) {
         if (-not $pt2HdrBridge.Contains($required)) { throw ('PT2 late-composite HDR/SDR boundary missing: ' + $required) }
+    }
+    foreach ($required in @('#include "fg_ui_device_identity.h"','FGUISameDevice(a,b,resolveNative)','slGetNativeInterfaceApi','native_identity_compare=1')) {
+        if (-not $pt2.Contains($required)) { throw ('PT2 R2 proxy-aware device identity contract missing: ' + $required) }
     }
     foreach ($required in @('Compile-PT2-Ray.ps1','d3d12.lib','d3dcompiler.lib')) {
         if (-not $buildCmd.Contains($required)) { throw ('PT2 build contract missing: ' + $required) }
