@@ -3,14 +3,14 @@
 $ControlFGBuild = [ordered]@{
     Version = '2.1.1'
     BaseProductionVersion = '2.1.0'
-    SourceRevision = 'v2.1.1-pt2-r2-proxy-device-composite'
+    SourceRevision = 'v2.1.1-pt3-hybrid-beauty'
     RRPhase = 'NativeG12RRExperiment'
     RRNativePreset = 'Preset F public default with live E/F model selection'
     RRRuntimeVersion = '310.9.1'
     RRPreLightingPauseRecovery = 'complete_native_sr_then_reset_rr'
     RRUserToggleDefault = 'persisted_on_off_setting'
     RRUserToggleLocation = 'F10_overlay'
-    RRExperimentScope = 'PT2_R2_proxy_aware_device_identity_for_late_present_composite_plus_PT2_toggle_counters'
+    RRExperimentScope = 'PT3_hybrid_path_traced_beauty_raster_primary_material_plus_stochastic_diffuse_and_specular_secondary_rays_with_late_composite'
     RRRepresentativeReflectionRay = 0
     RRReflectionCaptureEnabled = $true
     RRReflectionCopyOnly = $false
