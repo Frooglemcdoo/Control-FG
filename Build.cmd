@@ -15,7 +15,7 @@ pause
 exit /b %BUILD_RESULT%
 
 :build
-echo Control FG v2.1.1 - PT2 R2 Proxy-Aware Late Composite - Steam, Epic Games Store and GOG
+echo Control FG v2.1.1 - PT3 Hybrid Path-Traced Beauty - Steam, Epic Games Store and GOG
 set "VSWHERE=%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe"
 if not exist "%VSWHERE%" (
   echo Visual Studio C++ tools were not found. Install the Desktop development with C++ workload and a Windows SDK.
@@ -319,6 +319,8 @@ if errorlevel 1 exit /b 1
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools\Compile-PT1-Ray.ps1
 if errorlevel 1 exit /b 1
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools\Compile-PT2-Ray.ps1
+if errorlevel 1 exit /b 1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools\Compile-PT3-PathTrace.ps1
 if errorlevel 1 exit /b 1
 cl /nologo /std:c++17 /EHsc /W4 /WX validation\clamp-strength\policy-test.cpp /Febuild\clamp-strength-test.exe
 if errorlevel 1 exit /b 1
