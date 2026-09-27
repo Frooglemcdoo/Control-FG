@@ -21,6 +21,9 @@ inline std::atomic<bool> rrUserSpecularMotionActive{false};
 // Contact-shadow RenoDX mode leaves Control's contact-shadow filter untouched.
 inline std::atomic<bool> rrUserDiffuseClampRenoDX{true};
 inline std::atomic<bool> rrUserContactShadowRenoDX{false};
+// GI29: direct PSO replacement of RenoDX's six Control DLF shaders. Default ON.
+// Specular temporal replacement intentionally uses the user's established 0.60 clamp.
+inline std::atomic<bool> rrUserDirectDlfParity{true};
 inline std::atomic<RRUserStatus> rrUserStatus{RRUserStatus::Off};
 enum class RRWaitReason {Guides,Unsupported,EnableReflections,OtherRT,Matrix,Resolution,Depth,Input,Handoff,Pipeline,CaptureBudget,CaptureBudgetQuery,CaptureAllocation};
 inline std::atomic<RRWaitReason> rrUserWaitReason{RRWaitReason::Guides};
@@ -109,6 +112,8 @@ inline bool RRUserDiffuseClampRenoDX() noexcept {return rrUserDiffuseClampRenoDX
 inline void RRUserSetDiffuseClampRenoDX(bool enabled) noexcept {rrUserDiffuseClampRenoDX.store(enabled,std::memory_order_release);}
 inline bool RRUserContactShadowRenoDX() noexcept {return rrUserContactShadowRenoDX.load(std::memory_order_acquire);}
 inline void RRUserSetContactShadowRenoDX(bool enabled) noexcept {rrUserContactShadowRenoDX.store(enabled,std::memory_order_release);}
+inline bool RRUserDirectDlfParity() noexcept {return rrUserDirectDlfParity.load(std::memory_order_acquire);}
+inline void RRUserSetDirectDlfParity(bool enabled) noexcept {rrUserDirectDlfParity.store(enabled,std::memory_order_release);}
 inline const char* RRUserModeLabel() noexcept {switch(RRUserModeValue()){case RRUserMode::Partial:return "partial";case RRUserMode::Full:return "full";default:return "off";}}
 inline void RRUserPublish(RRUserStatus status) noexcept {rrUserStatus.store(status,std::memory_order_release);}
 inline unsigned int RRUserSharpnessPercent() noexcept {return rrUserSharpnessPercent.load(std::memory_order_acquire);}
