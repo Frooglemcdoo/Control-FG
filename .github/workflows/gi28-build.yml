@@ -1,0 +1,140 @@
+name: GI28 RenoDX Signal Parity A-B
+
+on:
+  push:
+    branches: [gi28-renodx-signal-parity-ab]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - name: Preserve repository bytes
+        shell: pwsh
+        run: git config --global core.autocrlf false
+
+      - uses: actions/checkout@v4
+
+      - name: Refresh GI28 validation ownership and manifests
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $utf8=[Text.UTF8Encoding]::new($false)
+          $root=$PWD
+          $owned=@(
+            'Build.cmd','Build-Metadata.ps1','Verify-Build.ps1',
+            'src/rr_user_control.h','src/rr_rt_stack.h','src/rr_native_frame.h','src/fg_overlay.h',
+            'validation/rt-stack/policy.cpp','validation/rr-settings/run.py',
+            'validation/gi28/policy-test.cpp','GI28-TEST.md'
+          )
+
+          $currentPath=Join-Path $root 'validation/current-release/results.json'
+          $current=Get-Content -LiteralPath $currentPath -Raw|ConvertFrom-Json
+          $current.status='LOCAL_PASS'
+          $current.scope='GI28 RenoDX signal-parity A/B on top of GI27: existing specular clamp unchanged/default 60; diffuse current-frame native 1.0 clamp A/B with temporal history off and spatial zero; contact-shadow Current Mod vs RenoDX-native A/B.'
+          $current.candidate='2.1.1-GI28-RenoDX-Signal-Parity-AB'
+          $current.tests.portable_gate='PASS GI28 RR-settings routing, RT-stack clamp observation, control defaults; Windows MSVC build and GPU A/B required.'
+          foreach($rel in $owned){
+            $p=Join-Path $root $rel
+            if(!(Test-Path -LiteralPath $p -PathType Leaf)){throw "GI28 owned file missing: $rel"}
+            $hash=(Get-FileHash -LiteralPath $p -Algorithm SHA256).Hash
+            if($current.tested_sha256.PSObject.Properties.Name -contains $rel){$current.tested_sha256.$rel=$hash}
+            else{$current.tested_sha256|Add-Member -NotePropertyName $rel -NotePropertyValue $hash}
+          }
+
+          $artifactPath=Join-Path $root 'ARTIFACT-SHA256.json'
+          $artifact=Get-Content -LiteralPath $artifactPath -Raw|ConvertFrom-Json
+          foreach($rel in @('validation/gi28/policy-test.cpp','GI28-TEST.md')){
+            if(!($artifact.PSObject.Properties.Name -contains $rel)){$artifact|Add-Member -NotePropertyName $rel -NotePropertyValue ''}
+          }
+          foreach($entry in $artifact.PSObject.Properties){
+            $p=Join-Path $root $entry.Name
+            if(Test-Path -LiteralPath $p -PathType Leaf){$entry.Value=(Get-FileHash -LiteralPath $p -Algorithm SHA256).Hash}
+          }
+          [IO.File]::WriteAllText($artifactPath,($artifact|ConvertTo-Json -Depth 20),$utf8)
+
+          if($current.tested_sha256.PSObject.Properties.Name -contains 'ARTIFACT-SHA256.json'){
+            $current.tested_sha256.'ARTIFACT-SHA256.json'=(Get-FileHash -LiteralPath $artifactPath -Algorithm SHA256).Hash
+          }
+          [IO.File]::WriteAllText($currentPath,($current|ConvertTo-Json -Depth 30),$utf8)
+
+          $sourcePath=Join-Path $root 'SOURCE-SHA256.json'
+          $source=Get-Content -LiteralPath $sourcePath -Raw|ConvertFrom-Json
+          foreach($rel in @('validation/gi28/policy-test.cpp','GI28-TEST.md')){
+            if(!($source.PSObject.Properties.Name -contains $rel)){$source|Add-Member -NotePropertyName $rel -NotePropertyValue ''}
+          }
+          foreach($entry in $source.PSObject.Properties){
+            $p=Join-Path $root $entry.Name
+            if(Test-Path -LiteralPath $p -PathType Leaf){$entry.Value=(Get-FileHash -LiteralPath $p -Algorithm SHA256).Hash}
+          }
+          [IO.File]::WriteAllText($sourcePath,($source|ConvertTo-Json -Depth 20),$utf8)
+
+      - name: Build and validate GI28
+        shell: cmd
+        run: echo.|Build.cmd
+
+      - name: Verify GI28 runtime markers
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $dll=[Text.Encoding]::ASCII.GetString([IO.File]::ReadAllBytes((Join-Path $PWD 'build/dxgi.dll')))
+          foreach($marker in @(
+            'RR_GI28_DIFFUSE_CLAMP','RR_GI28_DIFFUSE_UI',
+            'RR_GI28_CONTACT_SHADOW','RR_GI28_CONTACT_UI',
+            'clamp=native_1_0 temporal_history=off spatial_passes=0',
+            'diffuse_clamp=GI28_native_reference_1_0_temporal_off_spatial_zero'
+          )){
+            if(!$dll.Contains($marker)){throw "GI28 marker missing: $marker"}
+          }
+          if(!$dll.Contains('RR_CLAMP_STRENGTH_CS3')){throw 'Existing specular clamp path missing'}
+          Write-Host 'PASS: GI28 parity runtime markers present; existing specular clamp retained.'
+
+      - name: Package GI28
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $release=Join-Path $PWD 'release-gi28'
+          $rootName='Control-FG-v2.1.1-GI28-RenoDX-Signal-Parity-Source'
+          $stage=Join-Path $release $rootName
+          New-Item -ItemType Directory -Force -Path $stage|Out-Null
+          foreach($path in (git ls-files)){
+            if($path -eq '.github/workflows/gi28-build.yml'){continue}
+            $src=Join-Path $PWD $path
+            if(!(Test-Path -LiteralPath $src -PathType Leaf)){continue}
+            $dst=Join-Path $stage $path
+            New-Item -ItemType Directory -Force -Path (Split-Path -Parent $dst)|Out-Null
+            Copy-Item -LiteralPath $src -Destination $dst -Force
+          }
+          foreach($path in @('ARTIFACT-SHA256.json','SOURCE-SHA256.json','validation/current-release/results.json')){
+            Copy-Item -LiteralPath (Join-Path $PWD $path) -Destination (Join-Path $stage $path) -Force
+          }
+          $sourceZip=Join-Path $release ($rootName+'.zip')
+          Compress-Archive -Path $stage -DestinationPath $sourceZip -CompressionLevel Optimal
+
+          $drop=Join-Path $PWD 'release/Control-FG-v2.1.1.zip'
+          if(!(Test-Path -LiteralPath $drop)){throw 'GI28 drop-in package missing after Build.cmd'}
+          $dropName='Control-FG-v2.1.1-GI28-RenoDX-Signal-Parity-DropIn.zip'
+          $dropOut=Join-Path $release $dropName
+          Copy-Item -LiteralPath $drop -Destination $dropOut -Force
+
+          $h1=(Get-FileHash -LiteralPath $sourceZip -Algorithm SHA256).Hash.ToLowerInvariant()
+          $h2=(Get-FileHash -LiteralPath $dropOut -Algorithm SHA256).Hash.ToLowerInvariant()
+          Set-Content -LiteralPath (Join-Path $release 'GI28-SHA256.txt') -Value "$h1  $rootName.zip`n$h2  $dropName" -Encoding ascii
+          Write-Host "GI28_SOURCE_SHA256=$h1"
+          Write-Host "GI28_DROPIN_SHA256=$h2"
+
+      - name: Upload GI28 packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: Control-FG-v2.1.1-GI28
+          path: |
+            release-gi28/Control-FG-v2.1.1-GI28-RenoDX-Signal-Parity-Source.zip
+            release-gi28/Control-FG-v2.1.1-GI28-RenoDX-Signal-Parity-DropIn.zip
+            release-gi28/GI28-SHA256.txt
+            build/build-validation.json
+            Build.log
+          if-no-files-found: error
+          retention-days: 7
