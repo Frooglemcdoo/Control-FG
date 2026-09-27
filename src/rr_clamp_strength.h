@@ -6,6 +6,7 @@
 #include <new>
 #include "rr_clamp_strength_policy.h"
 #include "../build/rr_clamp_variants.h"
+#include "../build/rr_dlf_parity_compiled.h"
 // Diagnostic CS3: immutable PSO clones; original creation result is never replaced.
 // Only the validated RR temporal-dispatch scope may select a clone. Descriptor
 // heaps, roots and resources stay native. Restore the exact observed native PSO.
@@ -24,6 +25,16 @@ inline ID3D12Device* hostDevice=nullptr; // held for the bounded process-lifetim
 struct Bundle {ID3D12PipelineState* native=nullptr;ID3D12PipelineState* variants[VariantCount]{};};
 inline std::atomic<Bundle*> bundles[8]{};
 inline std::atomic<unsigned> bundleCount{0};
+struct DlfBundle {ID3D12PipelineState* native=nullptr;ID3D12PipelineState* replacement=nullptr;std::uint32_t targetCrc=0;unsigned targetIndex=0;};
+inline std::atomic<DlfBundle*> dlfBundles[24]{};
+inline std::atomic<unsigned> dlfBundleCount{0};
+inline std::atomic<unsigned> dlfCaptureMask{0};
+inline std::atomic<bool> dlfParityEnabled{false};
+inline std::atomic<unsigned long long> dlfUseCount[6]{};
+inline void SetDlfParityEnabled(bool enabled) noexcept {dlfParityEnabled.store(enabled,std::memory_order_release);}
+inline bool DlfParityEnabled() noexcept {return dlfParityEnabled.load(std::memory_order_acquire);}
+inline unsigned DlfCaptureMask() noexcept {return dlfCaptureMask.load(std::memory_order_acquire);}
+inline bool DlfAllTargetsCaptured() noexcept {return (DlfCaptureMask()&0x3fu)==0x3fu;}
 struct Request {ID3D12GraphicsCommandList* list=nullptr;ID3D12PipelineState* observed=nullptr;unsigned strength=100,count=0;bool used=false;};
 inline thread_local Request* active=nullptr;
 inline bool Exchange(void** slot,void* expected,void* replacement) noexcept {
@@ -42,8 +53,60 @@ inline bool Target(const D3D12_COMPUTE_PIPELINE_STATE_DESC* desc) noexcept {
  __try {return desc&&desc->pRootSignature&&desc->CS.pShaderBytecode&&desc->CS.BytecodeLength==kRRClampNativeSize&&CRC(desc->CS.pShaderBytecode,desc->CS.BytecodeLength)==0x600347e7u;}
  __except(EXCEPTION_EXECUTE_HANDLER){return false;}
 }
+inline int DlfTargetIndex(std::uint32_t crc) noexcept {
+ switch(crc){
+  case 0x600347E7u:return 0;
+  case 0x591FC46Fu:return 1;
+  case 0x9018E4F2u:return 2;
+  case 0x2A6F7863u:return 3;
+  case 0xBA41374Du:return 4;
+  case 0x87EDDD47u:return 5;
+  default:return -1;
+ }
+}
+inline D3D12_SHADER_BYTECODE DlfReplacementBytecode(unsigned index) noexcept {
+ const int v60=Variant(60);
+ switch(index){
+  case 0:return (v60>=0)?D3D12_SHADER_BYTECODE{kRRClampShaders[v60].data,kRRClampShaders[v60].size}:D3D12_SHADER_BYTECODE{};
+  case 1:return {kGI29DlfDiffuseTemporal,kGI29DlfDiffuseTemporalSize};
+  case 2:return {kGI29DlfDiffuseSpatialX,kGI29DlfDiffuseSpatialXSize};
+  case 3:return {kGI29DlfDiffuseSpatialY,kGI29DlfDiffuseSpatialYSize};
+  case 4:return {kGI29DlfSpecularSpatialX,kGI29DlfSpecularSpatialXSize};
+  case 5:return {kGI29DlfSpecularSpatialY,kGI29DlfSpecularSpatialYSize};
+  default:return {};
+ }
+}
+inline void CaptureDlf(ID3D12Device* device,const D3D12_COMPUTE_PIPELINE_STATE_DESC* desc,void* result) noexcept {
+ if(device!=hostDevice||!desc||!result||!desc->pRootSignature||!desc->CS.pShaderBytecode||!desc->CS.BytecodeLength)return;
+ std::uint32_t crc=0;
+ __try {crc=CRC(desc->CS.pShaderBytecode,desc->CS.BytecodeLength);}
+ __except(EXCEPTION_EXECUTE_HANDLER){return;}
+ const int target=DlfTargetIndex(crc);if(target<0)return;
+ for(auto& slot:dlfBundles){auto* existing=slot.load(std::memory_order_acquire);if(existing&&existing->native==result)return;}
+ const unsigned index=dlfBundleCount.fetch_add(1,std::memory_order_acq_rel);
+ if(index>=24){Log("RR_GI29_DLF_CAPTURE_FAIL reason=cache_full target=%d crc=0x%08X",target,crc);return;}
+ auto* b=new(std::nothrow) DlfBundle{};if(!b)return;
+ auto* unknown=static_cast<IUnknown*>(result);
+ if(FAILED(unknown->QueryInterface(IID_PPV_ARGS(&b->native)))||!b->native){delete b;return;}
+ auto copy=*desc;copy.CachedPSO={};copy.CS=DlfReplacementBytecode(static_cast<unsigned>(target));
+ HRESULT hr=copy.CS.pShaderBytecode&&copy.CS.BytecodeLength?createOriginal(device,&copy,IID_PPV_ARGS(&b->replacement)):E_INVALIDARG;
+ b->targetCrc=crc;b->targetIndex=static_cast<unsigned>(target);
+ if(FAILED(hr)||!b->replacement){
+  Log("RR_GI29_DLF_CAPTURE_FAIL target=%d crc=0x%08X hr=0x%08lX",target,crc,static_cast<unsigned long>(hr));
+  if(b->native)b->native->Release();delete b;return;
+ }
+ dlfBundles[index].store(b,std::memory_order_release);
+ const unsigned mask=dlfCaptureMask.fetch_or(1u<<target,std::memory_order_acq_rel)|(1u<<target);
+ Log("RR_GI29_DLF_CAPTURE target=%d crc=0x%08X native=%p replacement=%p replacement_crc=0x%08X mask=0x%02X root_preserved=1",
+  target,crc,b->native,b->replacement,CRC(copy.CS.pShaderBytecode,copy.CS.BytecodeLength),mask);
+}
+inline DlfBundle* FindDlf(ID3D12PipelineState* native) noexcept {
+ if(!native)return nullptr;for(auto& slot:dlfBundles){auto* b=slot.load(std::memory_order_acquire);if(b&&b->native==native)return b;}return nullptr;
+}
 inline void Capture(ID3D12Device* device,const D3D12_COMPUTE_PIPELINE_STATE_DESC* desc,void* result) noexcept {
- if(device!=hostDevice||!result||!Target(desc))return;
+ if(device!=hostDevice||!result)return;
+ CaptureDlf(device,desc,result);
+ if(!Target(desc))return;
  const unsigned index=bundleCount.fetch_add(1,std::memory_order_acq_rel);
  if(index>=8){Log("RR_CLAMP_CS3_CACHE_FULL native_fallback=1");return;}
  auto* b=new(std::nothrow) Bundle{};if(!b)return;
@@ -79,7 +142,15 @@ inline Bundle* Find(ID3D12PipelineState* native) noexcept {
  if(!native)return nullptr;for(auto& slot:bundles){auto* b=slot.load(std::memory_order_acquire);if(b&&b->native==native)return b;}return nullptr;
 }
 inline void STDMETHODCALLTYPE Set(ID3D12GraphicsCommandList* list,ID3D12PipelineState* pipeline) {
- setOriginal(list,pipeline);if(active&&active->list==list)active->observed=pipeline;
+ ID3D12PipelineState* chosen=pipeline;DlfBundle* dlf=nullptr;
+ if(DlfParityEnabled()&&(dlf=FindDlf(pipeline))&&dlf->replacement)chosen=dlf->replacement;
+ setOriginal(list,chosen);
+ if(dlf&&chosen!=pipeline){
+  const auto n=dlfUseCount[dlf->targetIndex].fetch_add(1,std::memory_order_relaxed)+1;
+  if(n<=4||(n%240)==0)Log("RR_GI29_DLF_SET target=%u crc=0x%08X count=%llu native=%p replacement=%p mask=0x%02X",
+   dlf->targetIndex,dlf->targetCrc,n,pipeline,chosen,DlfCaptureMask());
+ }
+ if(active&&active->list==list)active->observed=pipeline;
 }
 inline void STDMETHODCALLTYPE Dispatch(ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT z) {
  auto* request=active;
