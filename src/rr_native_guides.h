@@ -23,16 +23,10 @@ static bool RRNativeTakeGuides(const RREvaluationInputs& in,RRNativeGuideBinding
     bindings.worldToView[index]=identity;
     bindings.viewToClip[index]=identity;
    }
-   // P1 isolates projection data on F. View-space normals retain identity WorldToView.
-   // E and rejected snapshots keep the exact reference bindings above.
-   if(control_rr::RRUserPresetValue()==control_rr::RRPresetF) {
-    const bool validProjection=control_rr::CopyValidatedProjection(slot.camera.viewToClip,slot.camera.clipToView,bindings.viewToClip);
-    bindings.projectionValid=validProjection;
-    static unsigned long long projectionChecks=0;
-    const auto check=++projectionChecks;
-    if(check<=4||(check%240)==0||!validProjection)
-     Log("RR_F_PROJECTION_P1 frame=%llu valid=%u mode=%s hit_distance=D1_gated",in.frame,unsigned(validProjection),validProjection?"native_projection_view_normals":"identity_fallback");
-   }
+   // GI30 clean RenoDX baseline: view-space guide normals use identity
+   // WorldToView and identity ViewToClip for every preset. Do not inject the
+   // retired P1 real-projection experiment into Model F.
+   bindings.projectionValid=false;
    if(!owner->policy.TakeEvaluation({i,state.serial},state.key))__leave;
    bindings.normal=slot.normal;bindings.specular=slot.specular;bindings.diffuse=slot.diffuse;
    bindings.gbuffer1Source=slot.sources[0];bindings.camera=slot.camera;
