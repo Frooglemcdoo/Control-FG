@@ -3,14 +3,14 @@
 $ControlFGBuild = [ordered]@{
     Version = '2.1.1'
     BaseProductionVersion = '2.1.0'
-    SourceRevision = 'v2.1.1-pt3-hybrid-beauty'
+    SourceRevision = 'v2.1.1-pt4-full-scene'
     RRPhase = 'NativeG12RRExperiment'
     RRNativePreset = 'Preset F public default with live E/F model selection'
     RRRuntimeVersion = '310.9.1'
     RRPreLightingPauseRecovery = 'complete_native_sr_then_reset_rr'
     RRUserToggleDefault = 'persisted_on_off_setting'
     RRUserToggleLocation = 'F10_overlay'
-    RRExperimentScope = 'PT3_hybrid_path_traced_beauty_raster_primary_material_plus_stochastic_diffuse_and_specular_secondary_rays_with_late_composite'
+    RRExperimentScope = 'PT4_full_scene_camera_primary_plus_diffuse_specular_path_lighting_multiplier_over_native_authored_frame'
     RRRepresentativeReflectionRay = 0
     RRReflectionCaptureEnabled = $true
     RRReflectionCopyOnly = $false

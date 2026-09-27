@@ -15,7 +15,7 @@ pause
 exit /b %BUILD_RESULT%
 
 :build
-echo Control FG v2.1.1 - PT3 Hybrid Path-Traced Beauty - Steam, Epic Games Store and GOG
+echo Control FG v2.1.1 - PT4 Full-Scene Path Tracing - Steam, Epic Games Store and GOG
 set "VSWHERE=%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe"
 if not exist "%VSWHERE%" (
   echo Visual Studio C++ tools were not found. Install the Desktop development with C++ workload and a Windows SDK.

@@ -24,7 +24,7 @@ try {
         if ($errors.Count) { throw ('PowerShell parse error in ' + $file.Name + ': ' + $errors[0].Message) }
     }
     $probe = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'src/probe.cpp') -Raw
-    foreach ($marker in @('PROBE v2.1.1 internal_build=2.1.1','source_revision=v2.1.1-pt3-hybrid-beauty','log_profile=%s','CAPABILITIES fg=fixed_2x_to_6x_plus_dynamic','MONITORING profile=%s rr_perf_sample=240','CONTROLFG_VERBOSE_LOG')) {
+    foreach ($marker in @('PROBE v2.1.1 internal_build=2.1.1','source_revision=v2.1.1-pt4-full-scene','log_profile=%s','CAPABILITIES fg=fixed_2x_to_6x_plus_dynamic','MONITORING profile=%s rr_perf_sample=240','CONTROLFG_VERBOSE_LOG')) {
         if (-not $probe.Contains($marker)) { throw ('Release source identity/logging mismatch: ' + $marker) }
     }
     $guide = ''
@@ -183,7 +183,7 @@ try {
     $pt3 = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'src/pt3_pathtrace.h') -Raw
     $pt3Shader = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'src/shaders/pt3_pathtrace.hlsl') -Raw
     $pt3Compiler = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'tools/Compile-PT3-PathTrace.ps1') -Raw
-    foreach ($required in @('PT3_READY','PT3_TOGGLE','PT3_MODE','PT3_DISPATCH_OK','PT3_COUNTERS','PT3_COMPOSITE_READY','PT3_COMPOSITE_OK','PT3_COMPOSITE_SKIP','SubmitPT3CompositeBeforePresent','PT0LatestTlas()','PT0LatestReflectionSig()','RRGuideReadInputs','RRPart1ReadResource','D3D12_RAYTRACING_TIER_1_1','beauty=hybrid_raster_primary_material_plus_stochastic_diffuse_and_specular_secondary_rays')) {
+    foreach ($required in @('PT3_READY','PT3_TOGGLE','PT3_MODE','PT3_DISPATCH_OK','PT3_COUNTERS','PT3_COMPOSITE_READY','PT3_COMPOSITE_OK','PT3_COMPOSITE_SKIP','SubmitPT3CompositeBeforePresent','PT0LatestTlas()','PT0LatestReflectionSig()','RRGuideReadInputs','RRPart1ReadResource','D3D12_RAYTRACING_TIER_1_1','beauty=full_scene_native_surface_plus_path_traced_lighting_multiplier')) {
         if (-not $pt3.Contains($required)) { throw ('PT3 hybrid-beauty runtime contract missing: ' + $required) }
     }
     foreach ($required in @('RayQuery<RAY_FLAG_FORCE_OPAQUE>','TraceRayInline','CommittedRayT','CommittedInstanceID','GBuffer1','GBuffer2','MaterialDataPart1','ControlDecodeNormalView','ControlNormalViewToWorld','ControlDecodeMaterialRoughness','ControlDecodeMaterialF0','CosineHemisphere','RoughReflection','if(Mode!=0u)','diffuseHit','specHit','RWStructuredBuffer<uint> Counters','InterlockedAdd','InterlockedMin','InterlockedMax','InterlockedXor')) {

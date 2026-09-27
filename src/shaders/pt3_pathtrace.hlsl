@@ -178,9 +178,9 @@ void main(uint3 dispatchId : SV_DispatchThreadID)
     }
 
     if(!primaryHit){
-        float3 sky=SkyRadiance(primaryDir);
-        Output[dispatchId.xy]=float4(HdrActive!=0u?sky:TonemapSDR(sky),1.0);
-        if(sampled){InterlockedAdd(Counters[8],1u);InterlockedAdd(Counters[10],1u);}
+        // Full-scene mode preserves Control's native sky/background. A primary
+        // miss therefore carries a neutral lighting multiplier.
+        Output[dispatchId.xy]=float4(1.0.xxx,1.0);
         return;
     }
 
@@ -193,11 +193,13 @@ void main(uint3 dispatchId : SV_DispatchThreadID)
 
     float3 f0;
     uint brdfMode;
-    float3 baseColor=MaterialColor(g2,f0,brdfMode);
+    MaterialColor(g2,f0,brdfMode);
     const float3 hitPos=camera+primaryDir*primaryT;
     const float epsilon=max(0.003,primaryT*0.00015);
 
-    uint rng=Hash32(dispatchId.x+dispatchId.y*OutputSize.x+FrameIndex*9781u+0x68bc21ebu);
+    // Stable per-pixel sampling is intentional for the first full-scene build:
+    // it avoids frame-to-frame glitter until temporal accumulation is added.
+    uint rng=Hash32(dispatchId.x+dispatchId.y*OutputSize.x+0x68bc21ebu);
 
     float diffuseT;
     uint diffuseInstance;
@@ -205,12 +207,15 @@ void main(uint3 dispatchId : SV_DispatchThreadID)
     bool diffuseHit=Trace(hitPos+n*epsilon,diffuseDir,epsilon,250.0,diffuseT,diffuseInstance);
     if(sampled)InterlockedAdd(Counters[diffuseHit?7:8],1u);
 
-    float3 diffuseRadiance;
-    if(diffuseHit){
-        float distanceFade=exp(-diffuseT*0.018);
-        float hemi=0.10+0.11*saturate(diffuseDir.y*0.5+0.5);
-        diffuseRadiance=float3(hemi,hemi*0.98,hemi*0.94)*(0.65+0.35*distanceFade);
-    }else diffuseRadiance=SkyRadiance(diffuseDir);
+    float diffuseOpen=diffuseHit
+        ? lerp(0.42,0.98,saturate(diffuseT/24.0))
+        : 1.12;
+    float3 diffuseTint=1.0.xxx;
+    if(!diffuseHit){
+        float3 sky=SkyRadiance(diffuseDir);
+        float skyL=max(dot(sky,float3(0.2126,0.7152,0.0722)),0.001);
+        diffuseTint=clamp(sky/skyL,0.72,1.28);
+    }
 
     float specT;
     uint specInstance;
@@ -218,27 +223,30 @@ void main(uint3 dispatchId : SV_DispatchThreadID)
     bool specHit=Trace(hitPos+n*epsilon,specDir,epsilon,500.0,specT,specInstance);
     if(sampled)InterlockedAdd(Counters[specHit?9:10],1u);
 
-    float3 specRadiance;
-    if(specHit){
-        float distanceFade=exp(-specT*0.012);
-        specRadiance=float3(0.11,0.115,0.12)*(0.55+0.45*distanceFade);
-    }else specRadiance=SkyRadiance(specDir)*1.15;
+    float specOpen=specHit
+        ? lerp(0.94,1.05,saturate(specT/64.0))
+        : 1.20;
+    float3 specTint=1.0.xxx;
+    if(!specHit){
+        float3 sky=SkyRadiance(specDir);
+        float skyL=max(dot(sky,float3(0.2126,0.7152,0.0722)),0.001);
+        specTint=clamp(sky/skyL,0.70,1.32);
+    }
 
     float ndotv=saturate(dot(n,-primaryDir));
     float3 fresnel=f0+(1.0-f0)*pow(1.0-ndotv,5.0);
+    float specWeight=lerp(1.0,0.30,roughness);
     float upward=saturate(n.y*0.5+0.5);
-    float3 ambient=float3(0.07,0.075,0.085)*(0.75+0.35*upward);
-    float3 diffuse=baseColor*(ambient+diffuseRadiance*0.78);
-    float specWeight=lerp(0.95,0.28,roughness);
-    float3 specular=specRadiance*fresnel*specWeight;
-    float3 color=diffuse+specular;
 
-    // Keep special Control BRDF mode 3 from becoming mirror-bright in this
-    // first material-aware hybrid path-traced pass.
-    if(brdfMode==3u)color=diffuse;
+    // PT4 full-scene BEAUTY is a path-traced lighting field, not a synthetic
+    // replacement material. The late composite multiplies this over Control's
+    // authored color frame so textures, characters and post effects remain.
+    float3 multiplier=diffuseOpen*lerp(1.0.xxx,diffuseTint,0.10);
+    multiplier+=(specOpen-1.0)*lerp(1.0.xxx,specTint,0.18)*fresnel*(1.15*specWeight);
+    multiplier*=lerp(0.96,1.04,upward);
+    if(brdfMode==3u)multiplier=diffuseOpen.xxx;
+    multiplier=lerp(1.0.xxx,multiplier,0.90);
+    multiplier=clamp(multiplier,0.50,1.50);
 
-    if(HdrActive==0u)color=TonemapSDR(color);
-    else color=clamp(color,0.0,8.0);
-
-    Output[dispatchId.xy]=float4(color,1.0);
+    Output[dispatchId.xy]=float4(multiplier,1.0);
 }

@@ -83,6 +83,10 @@ struct CompositeSlot {
     ID3D12CommandAllocator* allocator=nullptr;
     ID3D12GraphicsCommandList* list=nullptr;
     ID3D12Resource* readback=nullptr;
+    ID3D12Resource* nativeCopy=nullptr;
+    UINT64 nativeWidth=0;
+    UINT nativeHeight=0;
+    DXGI_FORMAT nativeFormat=DXGI_FORMAT_UNKNOWN;
     UINT64 fenceValue=0;
     unsigned long long sourceFrame=0;
     unsigned long long actualRays=0;
@@ -219,7 +223,7 @@ static bool InitializeRay(ID3D12Device* device) noexcept {
     if(FAILED(hr)||!owner.rayHeap){Log("PT3_FAIL stage=create_ray_heap hr=0x%08lX",static_cast<unsigned long>(hr));owner.failed=true;return false;}
     owner.rayIncrement=device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
     owner.device=device;device->AddRef();owner.ready=true;
-    Log("PT3_READY ready=1 tier=%u dxil_bytes=%zu toggle_default=off view_default=beauty output=private_fp16 final_composite=late_present counters=sampled_stride16 beauty=hybrid_raster_primary_material_plus_stochastic_diffuse_and_specular_secondary_rays",
+    Log("PT3_READY ready=1 tier=%u dxil_bytes=%zu toggle_default=off view_default=beauty output=private_fp16 final_composite=late_present counters=sampled_stride16 beauty=full_scene_native_surface_plus_path_traced_lighting_multiplier",
         unsigned(opt5.RaytracingTier),kPT3PathTraceShaderSize);
     return true;
 }
@@ -339,16 +343,30 @@ static bool RunRayPass(ID3D12GraphicsCommandList4* list,unsigned long long frame
 }
 
 static constexpr char kPT3CompositeShader[] = R"HLSL(
-Texture2D<float4> Src : register(t0);
+Texture2D<float4> PathLighting : register(t0);
+Texture2D<float4> NativeScene : register(t1);
 SamplerState LinearClamp : register(s0);
-cbuffer C : register(b0) { uint2 SrcSize; uint2 DstSize; };
+cbuffer C : register(b0) { uint2 SrcSize; uint2 DstSize; uint Mode; uint HdrActive; };
 struct V { float4 p:SV_Position; };
 V VSMain(uint id:SV_VertexID) {
     V o; float2 p=(id==0)?float2(-1,-1):(id==1)?float2(-1,3):float2(3,-1); o.p=float4(p,0,1); return o;
 }
 float4 PSMain(V i):SV_Target {
     float2 uv=(i.p.xy+0.5)/max(float2(DstSize),1.0);
-    return float4(Src.SampleLevel(LinearClamp,saturate(uv),0).rgb,1.0);
+    float3 traced=PathLighting.SampleLevel(LinearClamp,saturate(uv),0).rgb;
+    if(Mode!=0u) return float4(traced,1.0);
+
+    float3 nativeColor=NativeScene.SampleLevel(LinearClamp,saturate(uv),0).rgb;
+    float3 multiplier=clamp(traced,0.45,1.55);
+
+    // Preserve bright HUD/UI/post elements while allowing the path-traced
+    // lighting multiplier to drive the authored scene underneath.
+    float peak=max(nativeColor.r,max(nativeColor.g,nativeColor.b));
+    float protect=HdrActive!=0u ? smoothstep(2.0,6.0,peak) : smoothstep(0.82,1.0,peak);
+    float influence=lerp(0.95,0.20,protect);
+    float3 result=nativeColor*lerp(1.0.xxx,multiplier,influence);
+    result=HdrActive!=0u ? clamp(result,0.0,16.0) : saturate(result);
+    return float4(result,1.0);
 }
 )HLSL";
 
@@ -362,9 +380,9 @@ static bool EnsureCompositeCore(ID3D12Device* device) noexcept {
     hr=PT3Compile(kPT3CompositeShader,sizeof(kPT3CompositeShader)-1,"PT3Composite","PSMain","ps_5_1",&ps,&errors);
     if(FAILED(hr)||!ps){Log("PT3_COMPOSITE_FAIL stage=compile_ps hr=0x%08lX error=%s",static_cast<unsigned long>(hr),errors?static_cast<const char*>(errors->GetBufferPointer()):"none");if(errors)errors->Release();vs->Release();return false;}if(errors){errors->Release();errors=nullptr;}
 
-    D3D12_DESCRIPTOR_RANGE range{};range.RangeType=D3D12_DESCRIPTOR_RANGE_TYPE_SRV;range.NumDescriptors=1;range.BaseShaderRegister=0;
+    D3D12_DESCRIPTOR_RANGE range{};range.RangeType=D3D12_DESCRIPTOR_RANGE_TYPE_SRV;range.NumDescriptors=2;range.BaseShaderRegister=0;
     D3D12_ROOT_PARAMETER p[2]{};p[0].ParameterType=D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;p[0].DescriptorTable.NumDescriptorRanges=1;p[0].DescriptorTable.pDescriptorRanges=&range;p[0].ShaderVisibility=D3D12_SHADER_VISIBILITY_PIXEL;
-    p[1].ParameterType=D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;p[1].Constants.ShaderRegister=0;p[1].Constants.Num32BitValues=4;p[1].ShaderVisibility=D3D12_SHADER_VISIBILITY_PIXEL;
+    p[1].ParameterType=D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;p[1].Constants.ShaderRegister=0;p[1].Constants.Num32BitValues=6;p[1].ShaderVisibility=D3D12_SHADER_VISIBILITY_PIXEL;
     D3D12_STATIC_SAMPLER_DESC sampler{};sampler.Filter=D3D12_FILTER_MIN_MAG_MIP_LINEAR;sampler.AddressU=sampler.AddressV=sampler.AddressW=D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
     sampler.ComparisonFunc=D3D12_COMPARISON_FUNC_ALWAYS;sampler.MaxAnisotropy=1;sampler.MinLOD=0;sampler.MaxLOD=D3D12_FLOAT32_MAX;sampler.ShaderRegister=0;sampler.ShaderVisibility=D3D12_SHADER_VISIBILITY_PIXEL;
     D3D12_ROOT_SIGNATURE_DESC rd{};rd.NumParameters=2;rd.pParameters=p;rd.NumStaticSamplers=1;rd.pStaticSamplers=&sampler;
@@ -373,7 +391,7 @@ static bool EnsureCompositeCore(ID3D12Device* device) noexcept {
     hr=device->CreateRootSignature(0,rootBlob->GetBufferPointer(),rootBlob->GetBufferSize(),IID_PPV_ARGS(&owner.compositeRoot));rootBlob->Release();if(errors)errors->Release();
     if(FAILED(hr)||!owner.compositeRoot){vs->Release();ps->Release();Log("PT3_COMPOSITE_FAIL stage=create_root hr=0x%08lX",static_cast<unsigned long>(hr));return false;}
 
-    D3D12_DESCRIPTOR_HEAP_DESC sh{};sh.Type=D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;sh.NumDescriptors=1;sh.Flags=D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+    D3D12_DESCRIPTOR_HEAP_DESC sh{};sh.Type=D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;sh.NumDescriptors=2;sh.Flags=D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
     hr=device->CreateDescriptorHeap(&sh,IID_PPV_ARGS(&owner.compositeSrvHeap));
     D3D12_DESCRIPTOR_HEAP_DESC rh{};rh.Type=D3D12_DESCRIPTOR_HEAP_TYPE_RTV;rh.NumDescriptors=3;
     if(SUCCEEDED(hr))hr=device->CreateDescriptorHeap(&rh,IID_PPV_ARGS(&owner.compositeRtvHeap));
@@ -397,7 +415,7 @@ static bool EnsureCompositeCore(ID3D12Device* device) noexcept {
     static ID3DBlob* cachedVs=nullptr;static ID3DBlob* cachedPs=nullptr;
     if(cachedVs)cachedVs->Release();if(cachedPs)cachedPs->Release();cachedVs=vs;cachedPs=ps;
     owner.compositeReady=true;
-    Log("PT3_COMPOSITE_READY ready=1 slots=3 no_cpu_wait=1 source_format=%u target_formats=r10_fp16_rgba8_bgra8",unsigned(DXGI_FORMAT_R16G16B16A16_FLOAT));
+    Log("PT3_COMPOSITE_READY ready=1 slots=3 no_cpu_wait=1 source_format=%u target_formats=r10_fp16_rgba8_bgra8 native_copy=1 beauty=path_lighting_multiplier_over_native",unsigned(DXGI_FORMAT_R16G16B16A16_FLOAT));\n    Log("PT4_FULL_SCENE_READY renderer=integrated_full_scene primary=camera_ray secondary=diffuse_plus_specular composite=native_scene_times_path_lighting ui_protection=bright_pixel");
     return true;
 }
 
@@ -415,6 +433,23 @@ static ID3D12PipelineState* CompositePso(ID3D12Device* device,DXGI_FORMAT format
     ID3D12PipelineState* pso=nullptr;hr=device->CreateGraphicsPipelineState(&pd,IID_PPV_ARGS(&pso));vs->Release();ps->Release();
     if(FAILED(hr)||!pso){Log("PT3_COMPOSITE_FAIL stage=create_pso format=%u hr=0x%08lX",unsigned(format),static_cast<unsigned long>(hr));return nullptr;}
     for(auto& e:owner.compositePsos)if(!e.pso){e.format=format;e.pso=pso;return pso;}pso->Release();return nullptr;
+}
+
+static bool EnsureNativeCopy(CompositeSlot& slot,ID3D12Device* device,const D3D12_RESOURCE_DESC& td) noexcept {
+    if(!device||td.Dimension!=D3D12_RESOURCE_DIMENSION_TEXTURE2D||td.DepthOrArraySize!=1||td.MipLevels!=1||td.SampleDesc.Count!=1||!td.Width||!td.Height)return false;
+    if(slot.nativeCopy&&slot.nativeWidth==td.Width&&slot.nativeHeight==td.Height&&slot.nativeFormat==td.Format)return true;
+    if(slot.nativeCopy){slot.nativeCopy->Release();slot.nativeCopy=nullptr;}
+    slot.nativeWidth=0;slot.nativeHeight=0;slot.nativeFormat=DXGI_FORMAT_UNKNOWN;
+    D3D12_HEAP_PROPERTIES hp{};hp.Type=D3D12_HEAP_TYPE_DEFAULT;
+    D3D12_RESOURCE_DESC copyDesc=td;copyDesc.Flags=D3D12_RESOURCE_FLAG_NONE;copyDesc.Layout=D3D12_TEXTURE_LAYOUT_UNKNOWN;
+    HRESULT hr=device->CreateCommittedResource(&hp,D3D12_HEAP_FLAG_NONE,&copyDesc,D3D12_RESOURCE_STATE_COPY_DEST,nullptr,IID_PPV_ARGS(&slot.nativeCopy));
+    if(FAILED(hr)||!slot.nativeCopy){
+        Log("PT3_COMPOSITE_FAIL stage=native_copy_create hr=0x%08lX format=%u size=%llux%u",static_cast<unsigned long>(hr),unsigned(td.Format),td.Width,td.Height);
+        return false;
+    }
+    slot.nativeWidth=td.Width;slot.nativeHeight=td.Height;slot.nativeFormat=td.Format;
+    Log("PT4_NATIVE_SCENE_COPY_READY resource=%p format=%u size=%llux%u state=copy_dest",slot.nativeCopy,unsigned(td.Format),td.Width,td.Height);
+    return true;
 }
 
 static void ConsumeCounters(CompositeSlot& slot,unsigned long long present) noexcept {
@@ -448,32 +483,48 @@ static HRESULT CompositeBeforePresent(IDXGISwapChain3* chain,bool hdrActive,unsi
     if(slot.fenceValue&&owner.compositeFence->GetCompletedValue()<slot.fenceValue){
         target->Release();++compositeSkips;const auto n=compositeSkips.load();if(n<=8||(n%240)==0)Log("PT3_COMPOSITE_SKIP present=%llu reason=slot_busy slot=%u fence=%llu completed=%llu",present,unsigned(present%3u),slot.fenceValue,owner.compositeFence->GetCompletedValue());return S_OK;
     }
+    if(!EnsureNativeCopy(slot,owner.device,td)){target->Release();++compositeSkips;return S_OK;}
 
     hr=slot.allocator->Reset();if(SUCCEEDED(hr))hr=slot.list->Reset(slot.allocator,pso);if(FAILED(hr)){target->Release();++compositeSkips;return S_OK;}
 
-    // Refresh descriptors for current private output and current swap-chain/shadow buffer.
+    // Descriptor 0 is the path-traced lighting multiplier. Descriptor 1 is a
+    // private copy of Control's fully authored frame so BEAUTY keeps textures,
+    // direct lighting, transparencies, volumetrics, post effects and HUD.
     auto srvCpu=owner.compositeSrvHeap->GetCPUDescriptorHandleForHeapStart();
-    D3D12_SHADER_RESOURCE_VIEW_DESC sd{};sd.Format=DXGI_FORMAT_R16G16B16A16_FLOAT;sd.ViewDimension=D3D12_SRV_DIMENSION_TEXTURE2D;sd.Shader4ComponentMapping=D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;sd.Texture2D.MipLevels=1;
-    owner.device->CreateShaderResourceView(owner.output,&sd,srvCpu);
+    D3D12_SHADER_RESOURCE_VIEW_DESC pathSrv{};pathSrv.Format=DXGI_FORMAT_R16G16B16A16_FLOAT;pathSrv.ViewDimension=D3D12_SRV_DIMENSION_TEXTURE2D;pathSrv.Shader4ComponentMapping=D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;pathSrv.Texture2D.MipLevels=1;
+    owner.device->CreateShaderResourceView(owner.output,&pathSrv,srvCpu);srvCpu.ptr+=owner.compositeSrvIncrement;
+    D3D12_SHADER_RESOURCE_VIEW_DESC nativeSrv{};nativeSrv.Format=td.Format;nativeSrv.ViewDimension=D3D12_SRV_DIMENSION_TEXTURE2D;nativeSrv.Shader4ComponentMapping=D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;nativeSrv.Texture2D.MipLevels=1;
+    owner.device->CreateShaderResourceView(slot.nativeCopy,&nativeSrv,srvCpu);
+
     auto rtv=owner.compositeRtvHeap->GetCPUDescriptorHandleForHeapStart();rtv.ptr+=SIZE_T(present%3u)*owner.compositeRtvIncrement;
     owner.device->CreateRenderTargetView(target,nullptr,rtv);
 
     const D3D12_RESOURCE_STATES targetBefore=hdrActive?D3D12_RESOURCE_STATE_COMMON:D3D12_RESOURCE_STATE_PRESENT;
-    D3D12_RESOURCE_BARRIER barriers[3]{};
-    barriers[0].Type=D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;barriers[0].Transition.pResource=owner.output;barriers[0].Transition.Subresource=D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;barriers[0].Transition.StateBefore=D3D12_RESOURCE_STATE_UNORDERED_ACCESS;barriers[0].Transition.StateAfter=D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
-    barriers[1].Type=D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;barriers[1].Transition.pResource=owner.counters;barriers[1].Transition.Subresource=D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;barriers[1].Transition.StateBefore=D3D12_RESOURCE_STATE_UNORDERED_ACCESS;barriers[1].Transition.StateAfter=D3D12_RESOURCE_STATE_COPY_SOURCE;
-    barriers[2].Type=D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;barriers[2].Transition.pResource=target;barriers[2].Transition.Subresource=D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;barriers[2].Transition.StateBefore=targetBefore;barriers[2].Transition.StateAfter=D3D12_RESOURCE_STATE_RENDER_TARGET;
-    slot.list->ResourceBarrier(3,barriers);
+    D3D12_RESOURCE_BARRIER copyBarrier{};copyBarrier.Type=D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;copyBarrier.Transition.pResource=target;copyBarrier.Transition.Subresource=D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;copyBarrier.Transition.StateBefore=targetBefore;copyBarrier.Transition.StateAfter=D3D12_RESOURCE_STATE_COPY_SOURCE;
+    slot.list->ResourceBarrier(1,&copyBarrier);
+    slot.list->CopyResource(slot.nativeCopy,target);
+
+    D3D12_RESOURCE_BARRIER toDraw[4]{};
+    toDraw[0].Type=D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;toDraw[0].Transition.pResource=owner.output;toDraw[0].Transition.Subresource=D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;toDraw[0].Transition.StateBefore=D3D12_RESOURCE_STATE_UNORDERED_ACCESS;toDraw[0].Transition.StateAfter=D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+    toDraw[1].Type=D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;toDraw[1].Transition.pResource=owner.counters;toDraw[1].Transition.Subresource=D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;toDraw[1].Transition.StateBefore=D3D12_RESOURCE_STATE_UNORDERED_ACCESS;toDraw[1].Transition.StateAfter=D3D12_RESOURCE_STATE_COPY_SOURCE;
+    toDraw[2].Type=D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;toDraw[2].Transition.pResource=slot.nativeCopy;toDraw[2].Transition.Subresource=D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;toDraw[2].Transition.StateBefore=D3D12_RESOURCE_STATE_COPY_DEST;toDraw[2].Transition.StateAfter=D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+    toDraw[3].Type=D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;toDraw[3].Transition.pResource=target;toDraw[3].Transition.Subresource=D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;toDraw[3].Transition.StateBefore=D3D12_RESOURCE_STATE_COPY_SOURCE;toDraw[3].Transition.StateAfter=D3D12_RESOURCE_STATE_RENDER_TARGET;
+    slot.list->ResourceBarrier(4,toDraw);
     slot.list->CopyBufferRegion(slot.readback,0,owner.counters,0,48);
 
     D3D12_VIEWPORT vp{};vp.Width=float(td.Width);vp.Height=float(td.Height);vp.MaxDepth=1.0f;D3D12_RECT sc{0,0,LONG(td.Width),LONG(td.Height)};
     slot.list->RSSetViewports(1,&vp);slot.list->RSSetScissorRects(1,&sc);slot.list->OMSetRenderTargets(1,&rtv,FALSE,nullptr);
     slot.list->SetGraphicsRootSignature(owner.compositeRoot);ID3D12DescriptorHeap* heaps[]={owner.compositeSrvHeap};slot.list->SetDescriptorHeaps(1,heaps);
     slot.list->SetGraphicsRootDescriptorTable(0,owner.compositeSrvHeap->GetGPUDescriptorHandleForHeapStart());
-    const UINT sizes[4]={owner.outputWidth,owner.outputHeight,UINT(td.Width),td.Height};slot.list->SetGraphicsRoot32BitConstants(1,4,sizes,0);
+    const UINT sizes[6]={owner.outputWidth,owner.outputHeight,UINT(td.Width),td.Height,owner.lastMode,hdrActive?1u:0u};slot.list->SetGraphicsRoot32BitConstants(1,6,sizes,0);
     slot.list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);slot.list->DrawInstanced(3,1,0,0);
 
-    for(auto& b:barriers)std::swap(b.Transition.StateBefore,b.Transition.StateAfter);slot.list->ResourceBarrier(3,barriers);
+    D3D12_RESOURCE_BARRIER restore[4]{};
+    restore[0].Type=D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;restore[0].Transition.pResource=owner.output;restore[0].Transition.Subresource=D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;restore[0].Transition.StateBefore=D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;restore[0].Transition.StateAfter=D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+    restore[1].Type=D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;restore[1].Transition.pResource=owner.counters;restore[1].Transition.Subresource=D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;restore[1].Transition.StateBefore=D3D12_RESOURCE_STATE_COPY_SOURCE;restore[1].Transition.StateAfter=D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+    restore[2].Type=D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;restore[2].Transition.pResource=slot.nativeCopy;restore[2].Transition.Subresource=D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;restore[2].Transition.StateBefore=D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;restore[2].Transition.StateAfter=D3D12_RESOURCE_STATE_COPY_DEST;
+    restore[3].Type=D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;restore[3].Transition.pResource=target;restore[3].Transition.Subresource=D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;restore[3].Transition.StateBefore=D3D12_RESOURCE_STATE_RENDER_TARGET;restore[3].Transition.StateAfter=targetBefore;
+    slot.list->ResourceBarrier(4,restore);
     hr=slot.list->Close();if(SUCCEEDED(hr)){ID3D12CommandList* lists[]={slot.list};queue->ExecuteCommandLists(1,lists);slot.fenceValue=++owner.nextFenceValue;hr=queue->Signal(owner.compositeFence,slot.fenceValue);}
     if(SUCCEEDED(hr)){
         slot.sourceFrame=owner.lastRayFrame;slot.actualRays=owner.lastActualRays;slot.mode=owner.lastMode;
