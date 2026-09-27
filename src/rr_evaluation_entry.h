@@ -1,4 +1,5 @@
 #include "rr_clamp_strength_policy.h"
+#include <cmath>
 #pragma once
 #include "rr_evaluation_tail.h"
 #include "rr_user_control.h"
