@@ -81,8 +81,8 @@ static unsigned int RREvaluationEntry(unsigned int branch, ID3D12GraphicsCommand
         clampReset=clampHistory.Update(control_rr_clamp::effective.load(std::memory_order_acquire));
         const auto requestedQualityGeneration=control_rr::RRUserImageQualityGeneration();
         qualityReset=requestedQualityGeneration!=qualityGeneration;
-        if(qualityReset){qualityGeneration=requestedQualityGeneration;Log("RR_GI32_QUALITY_RESET frame=%llu generation=%llu jitter=%s dgi_bounces=%u direct_dlf=%u",
-            in.frame,qualityGeneration,control_rr::RRUserJitterRR1024()?"rr_1024":"control",control_rr::RRUserDgiBounces(),unsigned(control_rr::RRUserDirectDlfParity()));}
+        if(qualityReset){qualityGeneration=requestedQualityGeneration;Log("RR_GI33_QUALITY_RESET frame=%llu generation=%llu jitter=%s diffuse_samples=%u direct_dlf=%u",
+            in.frame,qualityGeneration,control_rr::RRUserJitterRR1024()?"rr_1024":"control",control_rr::RRUserDiffuseSamples(),unsigned(control_rr::RRUserDirectDlfParity()));}
         if(clampReset)Log("RR_CLAMP_CS3_HISTORY_RESET frame=%llu effective=%u",in.frame,control_rr_clamp::effective.load());
         if(call<=4||(call%240)==0)
             Log("RR_GI30_RENODX_BASELINE frame=%llu preset=%u specular_mvec=cleared reflection_mvec=cleared hit_distance=cleared matrices=identity direct_dlf=%u clamp=%u",

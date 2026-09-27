@@ -137,8 +137,8 @@ try {
     foreach ($contract in @('RRReflectionInitializeAccessOnly(d3d)','RR_TEMPORAL_ACCESS_INSTALL')) {
         if (-not ($probe + $reflectionHooks).Contains($contract)) { throw ('GI27 temporal-access contract missing: ' + $contract) }
     }
-    foreach ($contract in @('reflection_geometry=cleared','hit_distance=cleared','specular_mvec=cleared','dgi_bounces=live_native_or_1_to_16','jitter=live_control_or_rr1024')) {
-        if (-not $nativeFrame.Contains($contract)) { throw ('GI32 runtime capability contract missing: ' + $contract) }
+    foreach ($contract in @('reflection_geometry=cleared','hit_distance=cleared','specular_mvec=cleared','diffuse_samples=live_native_or_1_to_16','jitter=live_control_or_rr1024')) {
+        if (-not $nativeFrame.Contains($contract)) { throw ('GI33 runtime capability contract missing: ' + $contract) }
     }
     foreach ($required in @('RRReflectionInstall(renderer,d3d)','RRReflectionAfterPresent(count)','RRDistanceAfterPresent()','#include "rr_distance_runtime.h"','#include "rr_specular_mv_runtime.h"')) {
         if (-not $probe.Contains($required)) { throw ('GI27 reflection/spec-MV lifetime integration missing: ' + $required) }
@@ -170,17 +170,17 @@ try {
         if (-not $nativeGuides.Contains($required)) { throw ('GI30 identity-matrix guide contract missing: ' + $required) }
     }
     $rrUserControl = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'src/rr_user_control.h') -Raw
-    foreach ($required in @('rrUserSpecularMotion{false}','rrUserDirectDlfParity{true}','rrUserDgiBounces{0}','RRJitterMode::Control','if(value>16)value=16','RRUserImageQualityGeneration')) {
-        if (-not $rrUserControl.Contains($required)) { throw ('GI32 default/live quality control contract missing: ' + $required) }
+    foreach ($required in @('rrUserSpecularMotion{false}','rrUserDirectDlfParity{true}','rrUserDiffuseSamples{0}','RRJitterMode::Control','if(value>16)value=16','RRUserImageQualityGeneration')) {
+        if (-not $rrUserControl.Contains($required)) { throw ('GI33 default/live quality control contract missing: ' + $required) }
     }
-    foreach ($required in @('RRNativeHookDgiPassProvider','base+0x12bf85','RR_GI32_DGI_BOUNCES','RR_GI32_JITTER','jitterRR1024&&control_rr::NativeRenderOption','rrNativeDgiPassPatch.Prepare')) {
-        if (-not $nativeFrame.Contains($required)) { throw ('GI32 runtime hook contract missing: ' + $required) }
+    foreach ($required in @('RRNativeHookDiffuseRayCountProvider','base+0x12bf07','RR_GI33_DIFFUSE_SAMPLES','RR_GI33_JITTER','jitterRR1024&&control_rr::NativeRenderOption','rrNativeDiffuseRayCountPatch.Prepare')) {
+        if (-not $nativeFrame.Contains($required)) { throw ('GI33 runtime hook contract missing: ' + $required) }
     }
-    foreach ($required in @('RR_GI32_QUALITY_RESET','qualityReset','RRUserImageQualityGeneration')) {
-        if (-not $evaluationEntry.Contains($required)) { throw ('GI32 live-reset contract missing: ' + $required) }
+    foreach ($required in @('RR_GI33_QUALITY_RESET','qualityReset','RRUserImageQualityGeneration')) {
+        if (-not $evaluationEntry.Contains($required)) { throw ('GI33 live-reset contract missing: ' + $required) }
     }
-    foreach ($required in @('Jitter mode','RR 1024','DGI bounces:','NATIVE','RR_GI32_DGI_UI','RR_GI32_JITTER_UI','range=1_16')) {
-        if (-not $overlay.Contains($required)) { throw ('GI32 overlay contract missing: ' + $required) }
+    foreach ($required in @('Jitter mode','RR 1024','RT diffuse samples:','NATIVE','RR_GI33_DIFFUSE_SAMPLES_UI','RR_GI33_JITTER_UI','range=1_16')) {
+        if (-not $overlay.Contains($required)) { throw ('GI33 overlay contract missing: ' + $required) }
     }
     if (-not $reflectionHooks.Contains('RRUserPresetValue()==control_rr::RRPresetF')) { throw 'D1 producer must be F only.' }
     if (-not $liveGuides.Contains('static constexpr bool rrLiveGuideStatsEnabled=false;')) { throw 'r22 guide-stat readback must be compiled out in production.' }

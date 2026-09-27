@@ -26,8 +26,8 @@ static HWND fgOverlayLastRefreshGame = nullptr;
 static bool fgOverlaySliderDragging = false;
 static bool fgOverlayClampDragging = false;
 static unsigned fgOverlayClampPreview = 60;
-static bool fgOverlayDgiDragging = false;
-static unsigned fgOverlayDgiPreview = 1;
+static bool fgOverlayDiffuseSamplesDragging = false;
+static unsigned fgOverlayDiffuseSamplesPreview = 1;
 static bool fgOverlaySettingsDirty = false;
 static ULONGLONG fgOverlaySettingsDirtyMs = 0;
 static ULONGLONG fgOverlaySettingsSavedPulseUntilMs = 0;
@@ -44,12 +44,12 @@ static unsigned FGOverlayClampFromX(int x) noexcept {
 static int FGOverlayClampToX(unsigned value) noexcept {
     return 30 + static_cast<int>(control_rr_clamp::Normalize(value) - 25u) * 470 / 50;
 }
-static unsigned FGOverlayDgiFromX(int x) noexcept {
+static unsigned FGOverlayDiffuseSamplesFromX(int x) noexcept {
     if (x <= 30) return 1;
     if (x >= 500) return 16;
     return 1u + static_cast<unsigned>((x - 30) * 15 + 235) / 470u;
 }
-static int FGOverlayDgiToX(unsigned value) noexcept {
+static int FGOverlayDiffuseSamplesToX(unsigned value) noexcept {
     if(value<1)value=1;if(value>16)value=16;
     return 30 + static_cast<int>(value - 1u) * 470 / 15;
 }
@@ -653,25 +653,25 @@ static void PaintFGOverlay(HWND hwnd) noexcept {
         RECT jitterHelp{30,430,710,468};
         DrawTextW(dc,L"Live A/B. CONTROL keeps the normal DLSS/SR jitter cadence; RR 1024 restores the long native-RR period.",-1,&jitterHelp,DT_LEFT|DT_WORDBREAK);
 
-        const unsigned dgiRequested=control_rr::RRUserDgiBounces();
-        const unsigned dgiValue=fgOverlayDgiDragging?fgOverlayDgiPreview:(dgiRequested?dgiRequested:(control_rr::RRUserDgiNative()?control_rr::RRUserDgiNative():1u));
-        wchar_t dgiLabel[128]{};
-        if(dgiRequested)swprintf_s(dgiLabel,L"DGI bounces: %u",dgiValue);
-        else if(control_rr::RRUserDgiNative())swprintf_s(dgiLabel,L"DGI bounces: NATIVE (%u)",control_rr::RRUserDgiNative());
-        else swprintf_s(dgiLabel,L"DGI bounces: NATIVE");
+        const unsigned diffuseSamplesRequested=control_rr::RRUserDiffuseSamples();
+        const unsigned diffuseSamplesValue=fgOverlayDiffuseSamplesDragging?fgOverlayDiffuseSamplesPreview:(diffuseSamplesRequested?diffuseSamplesRequested:(control_rr::RRUserDiffuseSamplesNative()?control_rr::RRUserDiffuseSamplesNative():1u));
+        wchar_t diffuseSamplesLabel[128]{};
+        if(diffuseSamplesRequested)swprintf_s(diffuseSamplesLabel,L"RT diffuse samples: %u",diffuseSamplesValue);
+        else if(control_rr::RRUserDiffuseSamplesNative())swprintf_s(diffuseSamplesLabel,L"RT diffuse samples: NATIVE (%u)",control_rr::RRUserDiffuseSamplesNative());
+        else swprintf_s(diffuseSamplesLabel,L"RT diffuse samples: NATIVE");
         SelectObject(dc,bodyFont);SetTextColor(dc,RGB(246,246,246));
-        RECT dgiLabelRc{30,486,500,518};DrawTextW(dc,dgiLabel,-1,&dgiLabelRc,DT_LEFT|DT_VCENTER|DT_SINGLELINE);
-        const int dgiKnob=FGOverlayDgiToX(dgiValue);
+        RECT diffuseSamplesLabelRc{30,486,500,518};DrawTextW(dc,diffuseSamplesLabel,-1,&diffuseSamplesLabelRc,DT_LEFT|DT_VCENTER|DT_SINGLELINE);
+        const int diffuseSamplesKnob=FGOverlayDiffuseSamplesToX(diffuseSamplesValue);
         PaintFGRect(dc,RECT{30,542,500,564},RGB(45,45,45),RGB(95,95,95));
-        PaintFGRect(dc,RECT{30,542,dgiKnob,564},RGB(240,240,240),RGB(240,240,240));
-        PaintFGRect(dc,RECT{dgiKnob-6,532,dgiKnob+6,574},RGB(255,255,255),RGB(255,255,255));
+        PaintFGRect(dc,RECT{30,542,diffuseSamplesKnob,564},RGB(240,240,240),RGB(240,240,240));
+        PaintFGRect(dc,RECT{diffuseSamplesKnob-6,532,diffuseSamplesKnob+6,574},RGB(255,255,255),RGB(255,255,255));
         SelectObject(dc,buttonFont);
-        PaintFGButton(dc,RECT{530,525,710,575},L"NATIVE",dgiRequested==0,true);
+        PaintFGButton(dc,RECT{530,525,710,575},L"NATIVE",diffuseSamplesRequested==0,true);
         SelectObject(dc,smallFont);SetTextColor(dc,RGB(190,190,190));
-        RECT dgiLo{30,578,80,600},dgiHi{450,578,500,600};
-        DrawTextW(dc,L"1",-1,&dgiLo,DT_LEFT|DT_SINGLELINE);DrawTextW(dc,L"16",-1,&dgiHi,DT_RIGHT|DT_SINGLELINE);
-        RECT dgiHelp{30,605,710,645};
-        DrawTextW(dc,L"Experimental g_uDGIPassCount override. Every integer 1-16 is selectable; higher values can be very expensive.",-1,&dgiHelp,DT_LEFT|DT_WORDBREAK);
+        RECT diffuseSamplesLo{30,578,80,600},diffuseSamplesHi{450,578,500,600};
+        DrawTextW(dc,L"1",-1,&diffuseSamplesLo,DT_LEFT|DT_SINGLELINE);DrawTextW(dc,L"16",-1,&diffuseSamplesHi,DT_RIGHT|DT_SINGLELINE);
+        RECT diffuseSamplesHelp{30,605,710,645};
+        DrawTextW(dc,L"Experimental g_uRTDiffuseRayCount override (rays per pixel). Every integer 1-16 is selectable; higher values can be very expensive.",-1,&diffuseSamplesHelp,DT_LEFT|DT_WORDBREAK);
 
         SelectObject(dc,bodyFont);SetTextColor(dc,RGB(246,246,246));
         RECT dlfLabel{30,665,470,705};DrawTextW(dc,L"Direct RenoDX DLF shaders",-1,&dlfLabel,DT_LEFT|DT_VCENTER|DT_SINGLELINE);
@@ -914,7 +914,7 @@ static LRESULT CALLBACK FGOverlayWndProc(HWND hwnd, UINT message, WPARAM wParam,
             fgOverlayOptionsPage = !fgOverlayOptionsPage;
             fgOverlayRRSettingsPage = false;
             fgOverlayClampDragging = false;
-            fgOverlayDgiDragging = false;
+            fgOverlayDiffuseSamplesDragging = false;
             fgOverlayBindingCapture = false;
             fgOverlaySliderDragging = false;
             if (GetCapture() == hwnd) ReleaseCapture();
@@ -966,22 +966,22 @@ static LRESULT CALLBACK FGOverlayWndProc(HWND hwnd, UINT message, WPARAM wParam,
             } else if (x >= 390 && x < 535 && y >= 375 && y < 425) {
                 const bool previous=control_rr::RRUserJitterRR1024();
                 control_rr::RRUserSetJitterMode(control_rr::RRJitterMode::Control);
-                Log("RR_GI32_JITTER_UI previous=%s selected=control history_reset=next_rr_evaluation",previous?"rr_1024":"control");
+                Log("RR_GI33_JITTER_UI previous=%s selected=control history_reset=next_rr_evaluation",previous?"rr_1024":"control");
             } else if (x >= 545 && x < 710 && y >= 375 && y < 425) {
                 const bool previous=control_rr::RRUserJitterRR1024();
                 control_rr::RRUserSetJitterMode(control_rr::RRJitterMode::RR1024);
-                Log("RR_GI32_JITTER_UI previous=%s selected=rr_1024 history_reset=next_rr_evaluation",previous?"rr_1024":"control");
+                Log("RR_GI33_JITTER_UI previous=%s selected=rr_1024 history_reset=next_rr_evaluation",previous?"rr_1024":"control");
             } else if (x >= 24 && x <= 506 && y >= 525 && y < 580) {
-                fgOverlayDgiPreview=FGOverlayDgiFromX(x);
-                fgOverlayDgiDragging=true;SetCapture(hwnd);
+                fgOverlayDiffuseSamplesPreview=FGOverlayDiffuseSamplesFromX(x);
+                fgOverlayDiffuseSamplesDragging=true;SetCapture(hwnd);
             } else if (x >= 530 && x < 710 && y >= 525 && y < 580) {
-                const unsigned previous=control_rr::RRUserDgiBounces();
-                control_rr::RRUserSetDgiBounces(0);
-                Log("RR_GI32_DGI_UI previous=%u selected=native history_reset=next_rr_evaluation",previous);
+                const unsigned previous=control_rr::RRUserDiffuseSamples();
+                control_rr::RRUserSetDiffuseSamples(0);
+                Log("RR_GI33_DIFFUSE_SAMPLES_UI previous=%u selected=native history_reset=next_rr_evaluation",previous);
             } else if (x >= 500 && x < 710 && y >= 658 && y < 708) {
                 const bool previous=control_rr::RRUserDirectDlfParity();
                 control_rr::RRUserSetDirectDlfParity(!previous);
-                Log("RR_GI32_DLF_UI previous=%u enabled=%u apply=next_frame history_reset=next_rr_evaluation specular_clamp=60 diffuse_clamp=100",unsigned(previous),unsigned(!previous));
+                Log("RR_GI33_DLF_UI previous=%u enabled=%u apply=next_frame history_reset=next_rr_evaluation specular_clamp=60 diffuse_clamp=100",unsigned(previous),unsigned(!previous));
             } else if (x >= 550 && x < 710 && y >= 835 && y < 885) {
                 fgOverlayRRSettingsPage=false;
                 FGOverlayResizeWindowForCurrentSelection(hwnd);
@@ -1093,8 +1093,8 @@ static LRESULT CALLBACK FGOverlayWndProc(HWND hwnd, UINT message, WPARAM wParam,
             fgOverlayClampPreview=FGOverlayClampFromX(static_cast<short>(LOWORD(lParam)));
             InvalidateRect(hwnd,nullptr,FALSE);return 0;
         }
-        if(fgOverlayDgiDragging){
-            fgOverlayDgiPreview=FGOverlayDgiFromX(static_cast<short>(LOWORD(lParam)));
+        if(fgOverlayDiffuseSamplesDragging){
+            fgOverlayDiffuseSamplesPreview=FGOverlayDiffuseSamplesFromX(static_cast<short>(LOWORD(lParam)));
             InvalidateRect(hwnd,nullptr,FALSE);return 0;
         }
         if (fgOverlaySliderDragging && !IsFGDynamicSelection(GetFGUserMultiplier())) {
@@ -1108,12 +1108,12 @@ static LRESULT CALLBACK FGOverlayWndProc(HWND hwnd, UINT message, WPARAM wParam,
         }
         break;
     case WM_LBUTTONUP:
-        if(fgOverlayDgiDragging){
-            fgOverlayDgiPreview=FGOverlayDgiFromX(static_cast<short>(LOWORD(lParam)));
-            fgOverlayDgiDragging=false;
-            control_rr::RRUserSetDgiBounces(fgOverlayDgiPreview);
+        if(fgOverlayDiffuseSamplesDragging){
+            fgOverlayDiffuseSamplesPreview=FGOverlayDiffuseSamplesFromX(static_cast<short>(LOWORD(lParam)));
+            fgOverlayDiffuseSamplesDragging=false;
+            control_rr::RRUserSetDiffuseSamples(fgOverlayDiffuseSamplesPreview);
             if(GetCapture()==hwnd)ReleaseCapture();
-            Log("RR_GI32_DGI_UI selected=%u range=1_16 history_reset=next_rr_evaluation",fgOverlayDgiPreview);
+            Log("RR_GI33_DIFFUSE_SAMPLES_UI selected=%u range=1_16 history_reset=next_rr_evaluation",fgOverlayDiffuseSamplesPreview);
             InvalidateRect(hwnd,nullptr,FALSE);return 0;
         }
         if(fgOverlayClampDragging){
@@ -1135,12 +1135,12 @@ static LRESULT CALLBACK FGOverlayWndProc(HWND hwnd, UINT message, WPARAM wParam,
         break;
     case WM_CAPTURECHANGED:
         fgOverlayClampDragging=false;
-        fgOverlayDgiDragging=false;
+        fgOverlayDiffuseSamplesDragging=false;
         fgOverlaySliderDragging = false;
         break;
     case WM_CLOSE:
         fgOverlayClampDragging=false;
-        fgOverlayDgiDragging=false;
+        fgOverlayDiffuseSamplesDragging=false;
         if(GetCapture()==hwnd)ReleaseCapture();
         fgOverlayBindingCapture = false;
         FGOverlayFlushSettingsIfDue(true);

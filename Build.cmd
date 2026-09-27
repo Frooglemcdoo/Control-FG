@@ -15,7 +15,7 @@ pause
 exit /b %BUILD_RESULT%
 
 :build
-echo Control FG v2.1.1 - GI32 Live Jitter + DGI Bounces 1-16 - Steam, Epic Games Store and GOG
+echo Control FG v2.1.1 - GI33 Live Jitter + RT Diffuse Samples 1-16 - Steam, Epic Games Store and GOG
 set "VSWHERE=%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe"
 if not exist "%VSWHERE%" (
   echo Visual Studio C++ tools were not found. Install the Desktop development with C++ workload and a Windows SDK.
@@ -205,9 +205,9 @@ cl /nologo /std:c++17 /EHsc /W4 /WX /O2 /MT validation\gi29\policy-test.cpp /Fob
 if errorlevel 1 exit /b 1
 build\rr-gi29-policy.exe
 if errorlevel 1 exit /b 1
-cl /nologo /std:c++17 /EHsc /W4 /WX /O2 /MT validation\gi32\policy-test.cpp /Fobuild\rr-gi32-policy.obj /Febuild\rr-gi32-policy.exe
+cl /nologo /std:c++17 /EHsc /W4 /WX /O2 /MT validation\gi33\policy-test.cpp /Fobuild\rr-gi33-policy.obj /Febuild\rr-gi33-policy.exe
 if errorlevel 1 exit /b 1
-build\rr-gi32-policy.exe
+build\rr-gi33-policy.exe
 if errorlevel 1 exit /b 1
 build\rr-gi28-policy.exe
 if errorlevel 1 exit /b 1
