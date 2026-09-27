@@ -633,14 +633,12 @@ static void PaintFGOverlay(HWND hwnd) noexcept {
         RECT help{30,330,710,365}; DrawTextW(dc,status,-1,&help,DT_LEFT|DT_WORDBREAK);
         SelectObject(dc,bodyFont);SetTextColor(dc,RGB(246,246,246));
         RECT mvLabel{30,382,470,420};DrawTextW(dc,L"Specular motion vectors",-1,&mvLabel,DT_LEFT|DT_VCENTER|DT_SINGLELINE);
-        const bool mvRequested=control_rr::RRUserSpecularMotionRequested();
-        const bool mvActive=control_rr::RRUserSpecularMotionActive();
-        const wchar_t* mvText=!mvRequested?L"OFF":mvActive?L"ON - ACTIVE":L"ON - FALLBACK";
-        SelectObject(dc,mvRequested?buttonSelectedFont:buttonFont);
-        PaintFGButton(dc,RECT{500,375,710,425},mvText,mvRequested,true);
+        const bool mvRequested=false;
+        SelectObject(dc,buttonFont);
+        PaintFGButton(dc,RECT{500,375,710,425},L"OFF - GI30",false,false);
         SelectObject(dc,smallFont);SetTextColor(dc,RGB(190,190,190));
         RECT mvHelp{30,430,710,468};
-        DrawTextW(dc,L"GI27: Model F only. ON computes reflected-image MVs; OFF uses the hit-distance fallback.",-1,&mvHelp,DT_LEFT|DT_WORDBREAK);
+        DrawTextW(dc,L"GI30 baseline: specular MVs and hit distance are hard-disabled; RR uses identity matrices.",-1,&mvHelp,DT_LEFT|DT_WORDBREAK);
 
         SelectObject(dc,bodyFont);SetTextColor(dc,RGB(246,246,246));
         RECT dlfLabel{30,482,470,520};DrawTextW(dc,L"Direct RenoDX DLF shaders",-1,&dlfLabel,DT_LEFT|DT_VCENTER|DT_SINGLELINE);
@@ -649,11 +647,11 @@ static void PaintFGOverlay(HWND hwnd) noexcept {
         PaintFGButton(dc,RECT{500,475,710,525},directDlf?L"ON":L"OFF",directDlf,true);
         SelectObject(dc,smallFont);SetTextColor(dc,RGB(190,190,190));
         RECT dlfHelp{30,530,710,600};
-        DrawTextW(dc,L"GI29 replaces RenoDX's six DLF compute shaders directly at the native PSO. Specular clamp stays 60%; diffuse clamp is 100%; history is off; spatial shaders are passthrough.",-1,&dlfHelp,DT_LEFT|DT_WORDBREAK);
+        DrawTextW(dc,L"GI30 A/B only. Baseline starts OFF. ON enables the GI29 six-shader DLF replacement; clamp remains 60%.",-1,&dlfHelp,DT_LEFT|DT_WORDBREAK);
 
         SelectObject(dc,bodyFont);SetTextColor(dc,RGB(246,246,246));
         RECT contactLabel{30,615,710,650};
-        DrawTextW(dc,L"GI29 direct mode leaves Control contact shadows untouched.",-1,&contactLabel,DT_LEFT|DT_VCENTER|DT_SINGLELINE);
+        DrawTextW(dc,L"GI30 leaves Control contact shadows untouched in both states.",-1,&contactLabel,DT_LEFT|DT_VCENTER|DT_SINGLELINE);
 
         SelectObject(dc,buttonFont);
         PaintFGButton(dc,RECT{550,700,710,750},L"Back",false);
@@ -932,13 +930,12 @@ static LRESULT CALLBACK FGOverlayWndProc(HWND hwnd, UINT message, WPARAM wParam,
                 FGOverlayFlushSettingsIfDue(true);
                 Log("RR_CLAMP_RESET_CS4 selected=60");
             } else if (x >= 500 && x < 710 && y >= 375 && y < 425) {
-                const bool previous=control_rr::RRUserSpecularMotionRequested();
-                control_rr::RRUserSetSpecularMotionRequested(!previous);
-                Log("RR_GI27_SPECMV_UI previous=%u enabled=%u apply=next_rr_evaluation session_only=1",unsigned(previous),unsigned(!previous));
+                control_rr::RRUserSetSpecularMotionRequested(false);
+                Log("RR_GI30_GEOMETRY_UI ignored=1 specular_mvec=disabled hit_distance=disabled matrices=identity");
             } else if (x >= 500 && x < 710 && y >= 475 && y < 525) {
                 const bool previous=control_rr::RRUserDirectDlfParity();
                 control_rr::RRUserSetDirectDlfParity(!previous);
-                Log("RR_GI29_DLF_UI previous=%u enabled=%u apply=next_frame session_only=1 specular_clamp=60 diffuse_clamp=100",unsigned(previous),unsigned(!previous));
+                Log("RR_GI30_DLF_UI previous=%u enabled=%u apply=next_frame session_only=1 baseline_off=1 specular_clamp=60 diffuse_clamp=100",unsigned(previous),unsigned(!previous));
             } else if (x >= 550 && x < 710 && y >= 700 && y < 750) {
                 fgOverlayRRSettingsPage=false;
                 FGOverlayResizeWindowForCurrentSelection(hwnd);
