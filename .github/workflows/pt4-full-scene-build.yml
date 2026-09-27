@@ -43,7 +43,7 @@ jobs:
           $currentPath=Join-Path $root 'validation/current-release/results.json'
           $current=Get-Content -LiteralPath $currentPath -Raw|ConvertFrom-Json
           $current.status='LOCAL_PASS'
-          $current.scope='PT4: full-scene BEAUTY preserves Control's authored frame while a camera-primary plus diffuse/specular path-traced lighting multiplier is applied at the retained late SDR/HDR composite.'
+          $current.scope='PT4: full-scene BEAUTY preserves the native authored Control frame while a camera-primary plus diffuse/specular path-traced lighting multiplier is applied at the retained late SDR/HDR composite.'
           $current.candidate='2.1.1-PT4-Full-Scene'
           $current.tests.portable_gate='PASS PT4 full-scene source/DXIL/MSVC contracts; Windows GPU runtime proof required.'
 
