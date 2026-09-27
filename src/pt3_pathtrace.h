@@ -86,7 +86,7 @@ struct CompositeSlot {
     UINT64 fenceValue=0;
     unsigned long long sourceFrame=0;
     unsigned long long actualRays=0;
-    unsigned mode=1;
+    unsigned mode=0;
 };
 
 struct CompositePso {
@@ -121,7 +121,7 @@ struct Owner {
     D3D12_GPU_VIRTUAL_ADDRESS lastTlas=0;
     unsigned long long lastRayFrame=0;
     unsigned long long lastActualRays=0;
-    unsigned lastMode=1;
+    unsigned lastMode=0;
 };
 static Owner owner{};
 
