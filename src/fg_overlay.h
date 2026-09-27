@@ -630,9 +630,19 @@ static void PaintFGOverlay(HWND hwnd) noexcept {
         DrawTextW(dc,L"Default: 60%",-1,&def,DT_CENTER|DT_SINGLELINE);
         wchar_t status[180]{};
         swprintf_s(status,L"Last RR: %u%%%s. Release to apply. Saves automatically.",control_rr_clamp::effective.load(),control_rr_clamp::applied.load()?L"":L" (native fallback)");
-        RECT help{30,330,710,375}; DrawTextW(dc,status,-1,&help,DT_LEFT|DT_WORDBREAK);
+        RECT help{30,330,710,365}; DrawTextW(dc,status,-1,&help,DT_LEFT|DT_WORDBREAK);
+        SelectObject(dc,bodyFont);SetTextColor(dc,RGB(246,246,246));
+        RECT mvLabel{30,382,470,420};DrawTextW(dc,L"Specular motion vectors",-1,&mvLabel,DT_LEFT|DT_VCENTER|DT_SINGLELINE);
+        const bool mvRequested=control_rr::RRUserSpecularMotionRequested();
+        const bool mvActive=control_rr::RRUserSpecularMotionActive();
+        const wchar_t* mvText=!mvRequested?L"OFF":mvActive?L"ON - ACTIVE":L"ON - FALLBACK";
+        SelectObject(dc,mvRequested?buttonSelectedFont:buttonFont);
+        PaintFGButton(dc,RECT{500,375,710,425},mvText,mvRequested,true);
+        SelectObject(dc,smallFont);SetTextColor(dc,RGB(190,190,190));
+        RECT mvHelp{30,430,710,472};
+        DrawTextW(dc,L"GI27: Model F only. ON computes reflected-image MVs from Control's reflection hit arrays; OFF uses the public hit-distance path.",-1,&mvHelp,DT_LEFT|DT_WORDBREAK);
         SelectObject(dc,buttonFont);
-        PaintFGButton(dc,RECT{550,410,710,460},L"Back",false);
+        PaintFGButton(dc,RECT{550,490,710,540},L"Back",false);
     } else {
     const unsigned int selected = GetFGUserMultiplier();
     const unsigned int maxSupported = GetFGMaxSupportedMultiplier();
@@ -811,7 +821,7 @@ static bool FGOverlaySliderFromPoint(int x, int y) noexcept {
     return IsFGDynamicSelection(GetFGUserMultiplier()) && y >= 443 && y < 512 && x >= 30 && x < 710;
 }
 static int FGOverlayLowerSectionOffset() noexcept { return IsFGDynamicSelection(GetFGUserMultiplier()) ? 0 : -kFGOverlayDynamicSectionHeight; }
-static int FGOverlayDesiredHeight() noexcept { if (fgOverlayOptionsPage) return 640; if (fgOverlayRRSettingsPage) return 490; return IsFGDynamicSelection(GetFGUserMultiplier()) ? kFGOverlayHeight : kFGOverlayCompactHeight; }
+static int FGOverlayDesiredHeight() noexcept { if (fgOverlayOptionsPage) return 640; if (fgOverlayRRSettingsPage) return 570; return IsFGDynamicSelection(GetFGUserMultiplier()) ? kFGOverlayHeight : kFGOverlayCompactHeight; }
 static void FGOverlayResizeWindowForCurrentSelection(HWND hwnd) noexcept {
     if (!hwnd) return;
     SetWindowPos(hwnd, nullptr, 0, 0, kFGOverlayWidth, FGOverlayDesiredHeight(),
@@ -907,7 +917,11 @@ static LRESULT CALLBACK FGOverlayWndProc(HWND hwnd, UINT message, WPARAM wParam,
                 FGOverlayMarkSettingsDirty();
                 FGOverlayFlushSettingsIfDue(true);
                 Log("RR_CLAMP_RESET_CS4 selected=60");
-            } else if (x >= 550 && x < 710 && y >= 410 && y < 460) {
+            } else if (x >= 500 && x < 710 && y >= 375 && y < 425) {
+                const bool previous=control_rr::RRUserSpecularMotionRequested();
+                control_rr::RRUserSetSpecularMotionRequested(!previous);
+                Log("RR_GI27_SPECMV_UI previous=%u enabled=%u apply=next_rr_evaluation session_only=1",unsigned(previous),unsigned(!previous));
+            } else if (x >= 550 && x < 710 && y >= 490 && y < 540) {
                 fgOverlayRRSettingsPage=false;
                 FGOverlayResizeWindowForCurrentSelection(hwnd);
             }
