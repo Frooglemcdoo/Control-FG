@@ -257,10 +257,12 @@ ck('GI27-exclusive-binding', all(x in guide_parameters for x in [
 ck('D1-F-fallback', 'RRUserPresetValue()==control_rr::RRPresetF' in reflection_hooks and
    'RRDistanceBeforeEvaluation' in eval_entry and 'fallback_hit_distance' in eval_entry)
 ck('guide-stats-readback-disabled', 'static constexpr bool rrLiveGuideStatsEnabled=false;' in live_guides and 'if(SUCCEEDED(hr)&&rrLiveGuideStatsEnabled)RRLiveCapturePrepare(c);' in live_guides and 'if(rrLiveGuideStatsEnabled&&rrLiveCaptureRRFrame' in live_guides and 'rrLiveGuideStatsEnabled && !c->stopped' in live_retire)
-ck('metadata-dead-work-disabled', all(x in metadata for x in [
+ck('metadata-runtime', all(x in metadata for x in [
     'RRReflectionCaptureEnabled = $true','RRHitDistanceOutputEnabled = $true','RRLiveCandidateReadbackEnabled = $false',
+    'RRSpecularMotionRRBindingEnabled = $true',
     "RRProductionReflectionGeometryCapture = 'D1_F_only_owned_hit_arrays'",
-    "RRProductionHitDistanceRuntime = 'D1_F_only_optional'",
+    "RRProductionHitDistanceRuntime = 'D1_F_fallback_when_GI27_specular_mv_unavailable'",
+    "RRSpecularMotionPolicy = 'GI27_Model_F_reference_formula_default_on_A_B_hit_distance_fallback'",
     "RRProductionGuideStatsReadback = 'disabled_diagnostic_only'"
 ]))
 ck('build-dead-stages-disabled', all(x not in build for x in [
