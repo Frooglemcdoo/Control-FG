@@ -143,8 +143,11 @@ try {
     foreach ($required in @('RRReflectionInstall(renderer,d3d)','RRReflectionAfterPresent(count)','RRDistanceAfterPresent()','#include "rr_distance_runtime.h"','#include "rr_specular_mv_runtime.h"')) {
         if (-not $probe.Contains($required)) { throw ('GI27 reflection/spec-MV lifetime integration missing: ' + $required) }
     }
-    foreach ($required in @('RRSpecMvBeforeEvaluation','RRUserSpecularMotionRequested','fallback_hit_distance','RRNativeSetGuides(parameters,&bindings,hitDistance','RR_GI27_SPECMV_BIND')) {
-        if (-not $evaluationEntry.Contains($required)) { throw ('GI27 specular-MV evaluation contract missing: ' + $required) }
+    foreach ($required in @('RR_GI30_RENODX_BASELINE','RR_GI30_GEOMETRY_BIND','RRNativeSetGuides(parameters,&bindings,nullptr','hit_distance=cleared','matrices=identity')) {
+        if (-not $evaluationEntry.Contains($required)) { throw ('GI30 clean RR baseline evaluation contract missing: ' + $required) }
+    }
+    foreach ($retiredActive in @('RRSpecMvBeforeEvaluation(','RRDistanceBeforeEvaluation(','fallback_hit_distance','RR_GI27_SPECMV_BIND')) {
+        if ($evaluationEntry.Contains($retiredActive)) { throw ('GI30 retired reflection-geometry path is still active: ' + $retiredActive) }
     }
     $specMvRuntime = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'src/rr_specular_mv_runtime.h') -Raw
     $specMvShader = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'src/shaders/rr_specular_mv.hlsl') -Raw
@@ -156,8 +159,19 @@ try {
         if (-not $specMvShader.Contains($required)) { throw ('GI27 reference-derived shader contract missing: ' + $required) }
     }
     if ($specMvShader.Contains('reflect(view_dir')) { throw 'GI27 must use reflected-image virtual position, not physical reflected-ray projection.' }
-    foreach ($required in @('api.Resource("GBuffer.SpecularMvec",specMv)','api.Resource("MotionVectorsReflection",specMv)','Resource* const specDistance=specMv?none:distance')) {
-        if (-not $guideParameters.Contains($required)) { throw ('GI27 exclusive MV/hit-distance binding contract missing: ' + $required) }
+    foreach ($required in @('api.Resource("GBuffer.SpecularMvec",none)','api.Resource("MotionVectorsReflection",none)','api.Resource("DLSSD.SpecularHitDistance",none)','(void)distance')) {
+        if (-not $guideParameters.Contains($required)) { throw ('GI30 cleared optional RR geometry binding contract missing: ' + $required) }
+    }
+    if ($guideParameters.Contains('Resource* const specMv=') -or $guideParameters.Contains('Resource* const specDistance=')) {
+        throw 'GI30 guide binding must not select MV/hit-distance resources.'
+    }
+    $nativeGuides = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'src/rr_native_guides.h') -Raw
+    foreach ($required in @('bindings.projectionValid=false','identity WorldToView AND identity ViewToClip','Do not inject the')) {
+        if (-not $nativeGuides.Contains($required)) { throw ('GI30 identity-matrix guide contract missing: ' + $required) }
+    }
+    $rrUserControl = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'src/rr_user_control.h') -Raw
+    foreach ($required in @('rrUserSpecularMotion{false}','rrUserDirectDlfParity{false}')) {
+        if (-not $rrUserControl.Contains($required)) { throw ('GI30 default baseline control contract missing: ' + $required) }
     }
     if (-not $reflectionHooks.Contains('RRUserPresetValue()==control_rr::RRPresetF')) { throw 'D1 producer must be F only.' }
     if (-not $liveGuides.Contains('static constexpr bool rrLiveGuideStatsEnabled=false;')) { throw 'r22 guide-stat readback must be compiled out in production.' }
