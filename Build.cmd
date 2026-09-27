@@ -15,7 +15,7 @@ pause
 exit /b %BUILD_RESULT%
 
 :build
-echo Control FG v2.1.1 - Steam, Epic Games Store and GOG
+echo Control FG v2.1.1 - GI27 Specular Motion Vectors A/B - Steam, Epic Games Store and GOG
 set "VSWHERE=%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe"
 if not exist "%VSWHERE%" (
   echo Visual Studio C++ tools were not found. Install the Desktop development with C++ workload and a Windows SDK.
@@ -193,6 +193,14 @@ build\rr-recovery-test.exe
 if errorlevel 1 exit /b 1
 cl /nologo /std:c++17 /EHsc /W4 /O2 /MT validation\frame-coordinator\parameters.cpp /Fobuild\rr-parameters-test.obj /Febuild\rr-parameters-test.exe
 if errorlevel 1 exit /b 1
+cl /nologo /std:c++17 /EHsc /W4 /WX /O2 /MT validation\gi27\policy-test.cpp /Fobuild\rr-gi27-policy.obj /Febuild\rr-gi27-policy.exe
+if errorlevel 1 exit /b 1
+build\rr-gi27-policy.exe
+if errorlevel 1 exit /b 1
+cl /nologo /std:c++17 /EHsc /W4 /WX /O2 /MT validation\gi27\shader-contract.cpp /Fobuild\rr-gi27-shader-contract.obj /Febuild\rr-gi27-shader-contract.exe
+if errorlevel 1 exit /b 1
+build\rr-gi27-shader-contract.exe
+if errorlevel 1 exit /b 1
 build\rr-parameters-test.exe
 if errorlevel 1 exit /b 1
 cl /nologo /std:c++17 /EHsc /W4 /WX /O2 /MT validation\rr-input-capture\policy.cpp /Fobuild\rr-input-policy.obj /Febuild\rr-input-policy.exe
@@ -214,6 +222,10 @@ if errorlevel 1 exit /b 1
 cl /nologo /std:c++17 /EHsc /W4 /O2 /MT tools\compile-distance.cpp /Fobuild\compile-distance.obj /Febuild\compile-distance.exe /link d3dcompiler.lib
 if errorlevel 1 exit /b 1
 build\compile-distance.exe
+if errorlevel 1 exit /b 1
+cl /nologo /std:c++17 /EHsc /W4 /O2 /MT tools\compile-specular-mv.cpp /Fobuild\compile-specular-mv.obj /Febuild\compile-specular-mv.exe /link d3dcompiler.lib
+if errorlevel 1 exit /b 1
+build\compile-specular-mv.exe
 if errorlevel 1 exit /b 1
 cl /nologo /std:c++17 /EHsc /W4 /O2 /MT tools\compile-live.cpp /Fobuild\compile-live.obj /Febuild\compile-live.exe /link d3dcompiler.lib
 if errorlevel 1 exit /b 1
