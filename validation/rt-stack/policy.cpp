@@ -15,6 +15,10 @@ int main(){
    assert(!f.ObserveGI(8,true,false,true)&&!f.ObserveGI(8,true,true,false));
    assert(!f.giObserved&&f.ObserveGI(8,true,true,true));
    assert(!f.ObserveGI(8,true,true,true)&&f.Complete(8,effects,true));
+   f.Begin(8,effects,true);
+   assert(!f.ObserveGIClamp(7,true)&&!f.ObserveGIClamp(8,false));
+   assert(!f.giObserved&&f.ObserveGIClamp(8,true));
+   assert(!f.ObserveGIClamp(8,true)&&f.Complete(8,effects,true));
   }else assert(!f.ObserveGI(8,true,true,true));
   f.Begin(9,effects,true);assert(!f.giObserved);
   f.Begin(9,effects,false);assert(!f.ObserveGI(9,true,true,true)&&!f.Complete(9,effects,true));
@@ -31,5 +35,5 @@ int main(){
  assert(c.HistoryResetResult(true)&&c.CompleteSR());
  assert(c.Begin({2002,3840,2160,2560,1440,107},true,true));
  assert(c.FeatureResult(true,true)&&c.Reset());
- puts("PASS 64 admitted RT combinations; GI/frame/settings rejection; 2000 settings changes; OFF/history-reset/ON");
+ puts("PASS 64 admitted RT combinations; GI bypass/clamp/frame/settings rejection; 2000 settings changes; OFF/history-reset/ON");
 }
