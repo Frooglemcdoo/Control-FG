@@ -227,6 +227,10 @@ public:
             ObserveSLDisplayHdrDomainBeforePresent(inner_, present);
         }
         if (active_ && realPresent) {
+            // PT2 draws into Control's FP16 shadow backbuffer before the bridge
+            // converts it to the real RGB10/PQ presentation buffer.
+            const HRESULT pt2=SubmitPT2CompositeBeforePresent(this,true,present);
+            if(FAILED(pt2))Log("PT2_COMPOSITE_SKIP present=%llu reason=hdr_submit_error hr=0x%08lX",present,static_cast<unsigned long>(pt2));
             const HRESULT convert = ConvertCurrentBackBuffer();
             if (FAILED(convert)) {
                 ++hdr10BridgeConversionFailures;
@@ -237,6 +241,10 @@ public:
         if (!active_ && realPresent) {
             const HRESULT correction=sdrCorrection_.Apply(this,inner_,present);
             if(FAILED(correction)){Log("FG_SDR_PRESENT_FAIL frame=%llu hr=0x%08lX action=stop_failed_copy",present,static_cast<unsigned long>(correction));return correction;}
+            // SDR correction can replace the current backbuffer, so PT2 composites
+            // after that correction and immediately before the real Present.
+            const HRESULT pt2=SubmitPT2CompositeBeforePresent(this,false,present);
+            if(FAILED(pt2))Log("PT2_COMPOSITE_SKIP present=%llu reason=sdr_submit_error hr=0x%08lX",present,static_cast<unsigned long>(pt2));
             FGPixelSDRPresent(inner_, present);
         }
         const UINT appliedSyncInterval = !realPresent
@@ -389,6 +397,8 @@ public:
             ObserveSLDisplayHdrDomainBeforePresent(inner_, present);
         }
         if (active_ && realPresent) {
+            const HRESULT pt2=SubmitPT2CompositeBeforePresent(this,true,present);
+            if(FAILED(pt2))Log("PT2_COMPOSITE_SKIP present=%llu reason=hdr_present1_submit_error hr=0x%08lX",present,static_cast<unsigned long>(pt2));
             const HRESULT convert = ConvertCurrentBackBuffer();
             if (FAILED(convert)) {
                 ++hdr10BridgeConversionFailures;
@@ -399,6 +409,8 @@ public:
         if (!active_ && realPresent) {
             const HRESULT correction=sdrCorrection_.Apply(this,inner_,present);
             if(FAILED(correction)){Log("FG_SDR_PRESENT_FAIL frame=%llu hr=0x%08lX action=stop_failed_copy",present,static_cast<unsigned long>(correction));return correction;}
+            const HRESULT pt2=SubmitPT2CompositeBeforePresent(this,false,present);
+            if(FAILED(pt2))Log("PT2_COMPOSITE_SKIP present=%llu reason=sdr_present1_submit_error hr=0x%08lX",present,static_cast<unsigned long>(pt2));
             FGPixelSDRPresent(inner_, present);
         }
         const UINT appliedSyncInterval = !realPresent

@@ -3,14 +3,14 @@
 $ControlFGBuild = [ordered]@{
     Version = '2.1.1'
     BaseProductionVersion = '2.1.0'
-    SourceRevision = 'v2.1.1-pt1-r2-tlas-descriptor-boundary'
+    SourceRevision = 'v2.1.1-pt2-toggle-counters-composite'
     RRPhase = 'NativeG12RRExperiment'
     RRNativePreset = 'Preset F public default with live E/F model selection'
     RRRuntimeVersion = '310.9.1'
     RRPreLightingPauseRecovery = 'complete_native_sr_then_reset_rr'
     RRUserToggleDefault = 'persisted_on_off_setting'
     RRUserToggleLocation = 'F10_overlay'
-    RRExperimentScope = 'PT1_R2_inline_RayQuery_post_deferred_reflection_using_RTAS_descriptor_TLAS_from_Control_506144_descriptor_heap'
+    RRExperimentScope = 'PT2_master_toggle_private_inline_RayQuery_output_GPU_sampled_counters_late_present_composite_SDR_HDR'
     RRRepresentativeReflectionRay = 0
     RRReflectionCaptureEnabled = $true
     RRReflectionCopyOnly = $false

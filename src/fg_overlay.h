@@ -13,8 +13,8 @@
 
 static constexpr wchar_t kFGOverlayClassName[] = L"ControlFGOverlay_v1000";
 static constexpr int kFGOverlayWidth = 740;
-static constexpr int kFGOverlayHeight = 762;
-static constexpr int kFGOverlayCompactHeight = 542;
+static constexpr int kFGOverlayHeight = 900;
+static constexpr int kFGOverlayCompactHeight = 680;
 static constexpr int kFGOverlayDynamicSectionHeight = 220;
 static constexpr UINT_PTR kFGOverlayTimer = 0xCF32;
 static constexpr ULONGLONG kFGSettingsDebounceMs = 350;
@@ -163,7 +163,9 @@ static void FGOverlayLoadSettings() noexcept {
         control_rr::RRUserMarkPresetRestartRequired(false);
         control_rr::RRUserSetSpecularSignalMode(control_rr::RRSpecularSignalMode::NativeClamp);
         control_rr::RRUserRequest(false);
-        Log("FG_SETTINGS_LOAD success=0 reason=path_unavailable defaults=4x,dynamic_auto,rr_off,rr_model_F ui=fg_full_rr_toggle_model_E_F");
+        PT2SetViewMode(1,"settings_default");
+        PT2SetEnabled(false,"settings_default");
+        Log("FG_SETTINGS_LOAD success=0 reason=path_unavailable defaults=4x,dynamic_auto,rr_off,rr_model_F,pt_off,pt_view_hit_miss ui=fg_rr_pt");
         return;
     }
 
@@ -177,6 +179,9 @@ static void FGOverlayLoadSettings() noexcept {
     const bool rrEnabled = GetPrivateProfileIntW(L"RayReconstruction", L"Enabled", 0, fgOverlaySettingsPath.c_str()) != 0;
     const unsigned int rawRrPreset = GetPrivateProfileIntW(L"RayReconstruction", L"Preset", control_rr::RRPresetF, fgOverlaySettingsPath.c_str());
     const unsigned int rrPreset = rawRrPreset == control_rr::RRPresetE ? control_rr::RRPresetE : control_rr::RRPresetF;
+    const bool ptEnabled = GetPrivateProfileIntW(L"PathTracing", L"Enabled", 0, fgOverlaySettingsPath.c_str()) != 0;
+    unsigned int ptView = GetPrivateProfileIntW(L"PathTracing", L"View", 1, fgOverlaySettingsPath.c_str());
+    if (ptView < 1 || ptView > 3) ptView = 1;
 
     slFgUserMultiplier.store(selection, std::memory_order_release);
     slFgDynamicManualTargetFps.store(manualTarget, std::memory_order_release);
@@ -187,8 +192,10 @@ static void FGOverlayLoadSettings() noexcept {
     control_rr::RRUserMarkPresetRestartRequired(false);
     control_rr::RRUserSetSpecularSignalMode(control_rr::RRSpecularSignalMode::NativeClamp);
     control_rr::RRUserRequest(rrEnabled);
-    Log("FG_SETTINGS_LOAD success=1 path=%ls selection=%s selected_code=%u target_policy=%s manual_target_fps=%u rr_enabled=%u rr_preset=%s rr_preset_value=%u skin_mode=off schema=8 ui=fg_full_rr_toggle_model_E_F",
-        fgOverlaySettingsPath.c_str(), GetFGSelectionName(selection), selection, manualTarget ? "manual" : "auto", manualTarget, unsigned(rrEnabled), control_rr::RRUserPresetLabel(), control_rr::RRUserPresetValue());
+    PT2SetViewMode(ptView,"settings");
+    PT2SetEnabled(ptEnabled,"settings");
+    Log("FG_SETTINGS_LOAD success=1 path=%ls selection=%s selected_code=%u target_policy=%s manual_target_fps=%u rr_enabled=%u rr_preset=%s rr_preset_value=%u pt_enabled=%u pt_view=%u pt_view_name=%ls skin_mode=off schema=8 ui=fg_rr_pt",
+        fgOverlaySettingsPath.c_str(), GetFGSelectionName(selection), selection, manualTarget ? "manual" : "auto", manualTarget, unsigned(rrEnabled), control_rr::RRUserPresetLabel(), control_rr::RRUserPresetValue(),unsigned(ptEnabled),ptView,PT2ViewModeLabelWide());
 }
 
 static bool FGOverlaySaveSettingsNow() noexcept {
@@ -207,10 +214,14 @@ static bool FGOverlaySaveSettingsNow() noexcept {
     wchar_t targetText[16]{};
     wchar_t rrEnabledText[8]{};
     wchar_t rrPresetText[8]{};
+    wchar_t ptEnabledText[8]{};
+    wchar_t ptViewText[8]{};
     swprintf_s(modeText, L"%u", GetFGUserMultiplier());
     swprintf_s(targetText, L"%u", GetFGDynamicManualTargetFps());
     swprintf_s(rrEnabledText, L"%u", control_rr::RRUserRequested() ? 1u : 0u);
     swprintf_s(rrPresetText, L"%u", control_rr::RRUserPresetValue());
+    swprintf_s(ptEnabledText,L"%u",PT2IsEnabled()?1u:0u);
+    swprintf_s(ptViewText,L"%u",PT2ViewMode());
 
     bool ok = WritePrivateProfileStringW(L"ControlFG", L"Schema", L"8", fgOverlaySettingsPath.c_str()) != FALSE;
     ok = (WritePrivateProfileStringW(L"FrameGeneration", L"Mode", modeText, fgOverlaySettingsPath.c_str()) != FALSE) && ok;
@@ -218,6 +229,8 @@ static bool FGOverlaySaveSettingsNow() noexcept {
     ok = (WritePrivateProfileStringW(L"RayReconstruction", L"Enabled", rrEnabledText, fgOverlaySettingsPath.c_str()) != FALSE) && ok;
     ok = (WritePrivateProfileStringW(L"RayReconstruction", L"Preset", rrPresetText, fgOverlaySettingsPath.c_str()) != FALSE) && ok;
     ok = (WritePrivateProfileStringW(L"RayReconstruction", L"ReflectionClamp", clampText, fgOverlaySettingsPath.c_str()) != FALSE) && ok;
+    ok = (WritePrivateProfileStringW(L"PathTracing", L"Enabled", ptEnabledText, fgOverlaySettingsPath.c_str()) != FALSE) && ok;
+    ok = (WritePrivateProfileStringW(L"PathTracing", L"View", ptViewText, fgOverlaySettingsPath.c_str()) != FALSE) && ok;
     ok = (WritePrivateProfileStringW(L"Overlay", L"ToggleKey", bindingText, fgOverlaySettingsPath.c_str()) != FALSE) && ok;
     ok = (WritePrivateProfileStringW(L"Experimental", L"RTX40MultiFG", experimentalText, fgOverlaySettingsPath.c_str()) != FALSE) && ok;
     // Old experimental RR/AA settings are intentionally removed; FG settings remain intact.
@@ -226,9 +239,9 @@ static bool FGOverlaySaveSettingsNow() noexcept {
     WritePrivateProfileStringW(L"RayReconstruction", L"SkinPreserveNative", nullptr, fgOverlaySettingsPath.c_str());
     if (ok) WritePrivateProfileStringW(nullptr, nullptr, nullptr, fgOverlaySettingsPath.c_str());
 
-    Log("FG_SETTINGS_SAVE success=%u path=%ls selection=%s selected_code=%u target_policy=%s manual_target_fps=%u rr_enabled=%u rr_preset=%s rr_preset_value=%u schema=8 ui=fg_full_rr_toggle_model_E_F",
+    Log("FG_SETTINGS_SAVE success=%u path=%ls selection=%s selected_code=%u target_policy=%s manual_target_fps=%u rr_enabled=%u rr_preset=%s rr_preset_value=%u pt_enabled=%u pt_view=%u pt_view_name=%ls schema=8 ui=fg_rr_pt",
         unsigned(ok), fgOverlaySettingsPath.c_str(), GetFGSelectionName(GetFGUserMultiplier()), GetFGUserMultiplier(),
-        GetFGDynamicManualTargetFps() ? "manual" : "auto", GetFGDynamicManualTargetFps(), unsigned(control_rr::RRUserRequested()), control_rr::RRUserPresetLabel(), control_rr::RRUserPresetValue());
+        GetFGDynamicManualTargetFps() ? "manual" : "auto", GetFGDynamicManualTargetFps(), unsigned(control_rr::RRUserRequested()), control_rr::RRUserPresetLabel(), control_rr::RRUserPresetValue(),unsigned(PT2IsEnabled()),PT2ViewMode(),PT2ViewModeLabelWide());
     if (ok) fgOverlaySettingsSavedPulseUntilMs = GetTickCount64() + 1200ull;
     return ok;
 }
@@ -798,6 +811,32 @@ static void PaintFGOverlay(HWND hwnd) noexcept {
     SelectObject(dc, rrPreset == control_rr::RRPresetF ? buttonSelectedFont : buttonFont);
     PaintFGButton(dc, rrPresetF, L"F", rrPreset == control_rr::RRPresetF, true);
 
+    PaintFGDivider(dc,left,724+lowerSectionOffset,right);
+    SelectObject(dc,sectionFont);SetTextColor(dc,RGB(210,32,32));
+    RECT ptTitle{30,738+lowerSectionOffset,320,765+lowerSectionOffset};
+    DrawTextW(dc,L"PATH TRACING",-1,&ptTitle,DT_LEFT|DT_VCENTER|DT_SINGLELINE);
+    const bool ptEnabled=PT2IsEnabled();
+    const RECT ptToggle{30,774+lowerSectionOffset,220,824+lowerSectionOffset};
+    SelectObject(dc,ptEnabled?buttonSelectedFont:buttonFont);
+    PaintFGButton(dc,ptToggle,ptEnabled?L"PT ON":L"PT OFF",ptEnabled,true);
+    SelectObject(dc,labelFont);SetTextColor(dc,ptEnabled?RGB(169,169,169):RGB(78,78,78));
+    RECT ptViewLabel{244,774+lowerSectionOffset,320,824+lowerSectionOffset};
+    DrawTextW(dc,L"VIEW",-1,&ptViewLabel,DT_LEFT|DT_VCENTER|DT_SINGLELINE);
+    const unsigned ptView=PT2ViewMode();
+    const RECT ptHit{320,774+lowerSectionOffset,438,824+lowerSectionOffset};
+    const RECT ptDist{448,774+lowerSectionOffset,566,824+lowerSectionOffset};
+    const RECT ptInst{576,774+lowerSectionOffset,710,824+lowerSectionOffset};
+    SelectObject(dc,(ptEnabled&&ptView==1)?buttonSelectedFont:buttonFont);PaintFGButton(dc,ptHit,L"HIT/MISS",ptView==1,ptEnabled);
+    SelectObject(dc,(ptEnabled&&ptView==2)?buttonSelectedFont:buttonFont);PaintFGButton(dc,ptDist,L"DISTANCE",ptView==2,ptEnabled);
+    SelectObject(dc,(ptEnabled&&ptView==3)?buttonSelectedFont:buttonFont);PaintFGButton(dc,ptInst,L"INSTANCE",ptView==3,ptEnabled);
+
+    unsigned long long ptRays=0,ptSampled=0,ptHits=0,ptMisses=0;float ptMin=0,ptMax=0,ptAvg=0;unsigned ptChecksum=0;
+    PT2GetOverlayStats(&ptRays,&ptSampled,&ptHits,&ptMisses,&ptMin,&ptMax,&ptAvg,&ptChecksum);
+    SelectObject(dc,smallFont);SetTextColor(dc,ptEnabled?RGB(190,190,190):RGB(90,90,90));
+    wchar_t ptStats[220]{};
+    if(ptEnabled&&ptSampled)swprintf_s(ptStats,L"Rays %llu  |  sampled %llu  |  hits %llu  |  misses %llu  |  avg %.1f  |  checksum %08X",ptRays,ptSampled,ptHits,ptMisses,double(ptAvg),ptChecksum);
+    else swprintf_s(ptStats,ptEnabled?L"PT active - waiting for GPU counters...":L"PT OFF is the native Control RT/RR comparison baseline.");
+    RECT ptStatsRc{30,836+lowerSectionOffset,710,870+lowerSectionOffset};DrawTextW(dc,ptStats,-1,&ptStatsRc,DT_LEFT|DT_VCENTER|DT_SINGLELINE);
 
     }
     SelectObject(dc, oldFont);
@@ -846,6 +885,11 @@ static unsigned int FGOverlayRRPresetFromPoint(int x,int y) noexcept {
     if(x>=408&&x<524)return control_rr::RRPresetE;
     if(x>=536&&x<652)return control_rr::RRPresetF;
     return 0;
+}
+static bool FGOverlayPTToggleFromPoint(int x,int y) noexcept {const int y0=774+FGOverlayLowerSectionOffset();return x>=30&&x<220&&y>=y0&&y<y0+50;}
+static unsigned FGOverlayPTViewFromPoint(int x,int y) noexcept {
+    const int y0=774+FGOverlayLowerSectionOffset();if(y<y0||y>=y0+50)return 0;
+    if(x>=320&&x<438)return 1;if(x>=448&&x<566)return 2;if(x>=576&&x<710)return 3;return 0;
 }
 static void FGOverlayApplySliderPoint(HWND hwnd, int x) noexcept {
     if (!IsFGDynamicSelection(GetFGUserMultiplier())) return;
@@ -972,6 +1016,18 @@ static LRESULT CALLBACK FGOverlayWndProc(HWND hwnd, UINT message, WPARAM wParam,
                 InvalidateRect(hwnd,nullptr,FALSE);
             }
             return 0;
+        }
+        if(FGOverlayPTToggleFromPoint(x,y)){
+            const bool next=!PT2IsEnabled();PT2SetEnabled(next,"overlay");FGOverlayMarkSettingsDirty();FGOverlayFlushSettingsIfDue(true);
+            Log("PT2_OVERLAY_TOGGLE enabled=%u view=%u view_name=%ls persistence=%s",unsigned(next),PT2ViewMode(),PT2ViewModeLabelWide(),fgOverlaySettingsDirty?"dirty":"saved");
+            InvalidateRect(hwnd,nullptr,FALSE);return 0;
+        }
+        const unsigned ptViewSelection=FGOverlayPTViewFromPoint(x,y);
+        if(ptViewSelection){
+            if(!PT2IsEnabled()){Log("PT2_OVERLAY_VIEW_BLOCKED reason=pt_off requested=%u",ptViewSelection);return 0;}
+            PT2SetViewMode(ptViewSelection,"overlay");FGOverlayMarkSettingsDirty();FGOverlayFlushSettingsIfDue(true);
+            Log("PT2_OVERLAY_VIEW mode=%u name=%ls persistence=%s",PT2ViewMode(),PT2ViewModeLabelWide(),fgOverlaySettingsDirty?"dirty":"saved");
+            InvalidateRect(hwnd,nullptr,FALSE);return 0;
         }
         const unsigned int selection = FGOverlayMultiplierFromPoint(x, y);
         if (selection != 0xFFFFFFFFu) {

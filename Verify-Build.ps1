@@ -49,13 +49,13 @@ try {
     $markers = @(
         'FG_OVERLAY_SETTINGS_S5 binding=persisted_single_key options=replacement_page default=F10',
         'PROBE v2.1.1 internal_build=2.1.1',
-        'source_revision=v2.1.1-pt1-r2-tlas-descriptor-boundary','log_profile=%s','CAPABILITIES fg=fixed_2x_to_6x_plus_dynamic',
+        'source_revision=v2.1.1-pt2-toggle-counters-composite','log_profile=%s','CAPABILITIES fg=fixed_2x_to_6x_plus_dynamic',
         'MONITORING profile=%s rr_perf_sample=240','CONTROLFG_VERBOSE_LOG',
         'RR_PRESET_HOOK_READY','default_preset=F selectable=E,F,K,L,M','RR_PRESET_REQUEST','RR_PRESET_UI','RR_PRESET_LIVE_SWITCH',
         'RR_NATIVE_EVALUATED','RR_FRAME_MODE','RR_RESIZE_EPOCH_BEGIN','RR_RESIZE_EPOCH_RELEASE','RR_FRAME_RECOVERY_SR',
         'RR_TEMPORAL_ACCESS_READY','RR_TEMPORAL_ACCESS_INSTALL','RR_NATIVE_SPECULAR_CLAMP_READY',
         'RR_SPECULAR_SIGNAL frame=%llu mode=raw_copy_fallback',
-        'hit_distance=%p','specular_mvec=%p','reflection_mvec=%p','RR_GI30_RENODX_BASELINE','RR_GI30_GEOMETRY_BIND','matrix_mode=identity_renodx_baseline','RR_GI30_GEOMETRY_UI','RR_GI30_DLF_UI','RR_GI28_DIFFUSE_CLAMP','RR_GI28_CONTACT_SHADOW','clamp=native_1_0 temporal_history=off spatial_passes=0','RR_GI29_DLF_CAPTURE','RR_GI29_DLF_SET','RR_GI29_DLF_MODE','RR_GI29_DLF_SPECULAR','RR_GI29_DLF_DIFFUSE','RR_GI29_CONTACT_SHADOW','PT0_READY mode=fat_dxr_probe','PT0_DEVICE_HOOKS','PT0_COMMAND_HOOKS','PT0_BUILD_AS','PT0_DXR_PASS','PT0_DISPATCH_CAPTURE','PT0_TLAS_OK','PT0_DESCRIPTOR','PT0_RESOURCE_CENSUS','PT0_PASS_SUMMARY','PT0_SUMMARY','PT1_READY mode=inline_rayquery_reflection_proof_r2','PT1_EARLY_DXR_HOOK','PT1_TLAS_DESCRIPTOR','PT1_DEFERRED_BOUNDARY','PT1_INLINE_RAY_READY','PT1_INLINE_RAY_SKIP','PT1_CUSTOM_DISPATCH_OK','PT1_MODE','dlf_shaders=GI29_six_direct_replacements','specular_temporal_clamp=60','diffuse_clamp=100','RR_CLAMP_STRENGTH_CS3','RR_CLAMP_CS3_CAPTURE','RR_SPECULAR_SIGNAL frame=%llu mode=native_control_energy_clamp','RR_INPUT_CAPTURE_C1_REQUEST','RR_INPUT_CAPTURE_C1_RECORDED','RR_INPUT_CAPTURE_C1_EXPORTED','RR_REFLECTION_COPIED','RR_REFLECTION_PREPARED',
+        'hit_distance=%p','specular_mvec=%p','reflection_mvec=%p','RR_GI30_RENODX_BASELINE','RR_GI30_GEOMETRY_BIND','matrix_mode=identity_renodx_baseline','RR_GI30_GEOMETRY_UI','RR_GI30_DLF_UI','RR_GI28_DIFFUSE_CLAMP','RR_GI28_CONTACT_SHADOW','clamp=native_1_0 temporal_history=off spatial_passes=0','RR_GI29_DLF_CAPTURE','RR_GI29_DLF_SET','RR_GI29_DLF_MODE','RR_GI29_DLF_SPECULAR','RR_GI29_DLF_DIFFUSE','RR_GI29_CONTACT_SHADOW','PT0_READY mode=fat_dxr_probe','PT0_DEVICE_HOOKS','PT0_COMMAND_HOOKS','PT0_BUILD_AS','PT0_DXR_PASS','PT0_DISPATCH_CAPTURE','PT0_TLAS_OK','PT0_DESCRIPTOR','PT0_RESOURCE_CENSUS','PT0_PASS_SUMMARY','PT0_SUMMARY','PT1_TLAS_DESCRIPTOR','PT2_RUNTIME_READY','PT2_READY','PT2_TOGGLE','PT2_MODE','PT2_DISPATCH_OK','PT2_COUNTERS','PT2_COMPOSITE_READY','PT2_COMPOSITE_OK','PT2_COMPOSITE_SKIP','dlf_shaders=GI29_six_direct_replacements','specular_temporal_clamp=60','diffuse_clamp=100','RR_CLAMP_STRENGTH_CS3','RR_CLAMP_CS3_CAPTURE','RR_SPECULAR_SIGNAL frame=%llu mode=native_control_energy_clamp','RR_INPUT_CAPTURE_C1_REQUEST','RR_INPUT_CAPTURE_C1_RECORDED','RR_INPUT_CAPTURE_C1_EXPORTED','RR_REFLECTION_COPIED','RR_REFLECTION_PREPARED',
         'RR_PERF_READY gpu_frequency=%llu sample_every=240','RR_PERF_FRAME','RR_PERF_GPU',
         'SL_BOOTSTRAP_BEGIN','SL_CORE_READY','SL_DEVICE_READY','SL_FEATURE_GATE','SL_RR_FEATURE_GATE','SL_RR_HANDSHAKE','SL_DLSSD_FUNCTION',
         'FG_UI_PRIVATE_DEVICE_FAIL','FG_UI_PRIVATE_WORK_FAIL','FG_RTX40_MFG_INIT','FG_RTX40_MFG_READY','FG_RTX40_MFG_TEST_REQUEST','FG_RTX40_MFG_TEST_RESULT','FG_UI_PRIVATE_SUBMIT','FG_UI_PRIVATE_FAIL','FG_UI_RECOMPOSE_READY','FG_HDR_HUDLESS_PIPELINE_READY','conversion=compute_uav no_graphics_state=1 private_command_list=1','FG_HDR_HUDLESS_CONVERT','FG_HDR_HOTKEY_HOOK','FG_HDR_HARD_RESET_BEGIN','FG_HDR_HARD_RESET_OFF_COMMIT','FG_HDR_HARD_RESET_FREE','FG_HDR_HARD_RESET_GATE','FG_HDR_HARD_RESET_REARM','FG_DISPLAY_FACTORY_REFRESH','FG_DISPLAY_DOMAIN_BASELINE','FG_DISPLAY_DOMAIN_CHANGE','FG_DISPLAY_DOMAIN_GATE','FG_DISPLAY_DOMAIN_HANDOFF','FG_HDR_TRANSITION_PREP','FG_HDR_TRANSITION_QUIESCE','FG_HDR_TRANSITION_GATE','FG_HDR_TRANSITION_SETTLED','FG_UI_RECOMPOSITION_OPTIONS','SL_DLSSG_MODE','SL_DLSSG_STATE',
@@ -96,7 +96,7 @@ try {
     $validation = [ordered]@{}
     foreach ($key in $ControlFGBuild.Keys) { $validation[$key] = $ControlFGBuild[$key] }
     $details = [ordered]@{
-        RRInstrumentation = 'PT1 R2: track the 506144-entry Control shader-visible heap, recover g_rtScene TLAS from RTAS SRV metadata, and run the opt-in inline RayQuery diagnostic after deferred reflection shading so Control cannot overwrite the debug output. F7 cycles modes; F8 retains PT0 capture.' 
+        RRInstrumentation = 'PT2: persistent F10 Path Tracing OFF/ON master toggle; private FP16 inline RayQuery output; sampled GPU hit/miss/distance/instance counters; late Present composite after SDR correction or before HDR bridge conversion; F7 cycles debug view while PT is ON; PT OFF performs no PT dispatch or composite.' 
         RRLiveShaderHeaderSHA256 = (Get-FileHash -LiteralPath (Join-Path $PSScriptRoot 'build/rr_live_compiled.h') -Algorithm SHA256).Hash
         RRReflectanceShaderHeaderSHA256 = (Get-FileHash -LiteralPath (Join-Path $PSScriptRoot 'build/rr_reflectance_compiled.h') -Algorithm SHA256).Hash
         SHA256 = (Get-FileHash -LiteralPath $dll -Algorithm SHA256).Hash
@@ -118,7 +118,7 @@ try {
         DynamicTargetPolicy = 'Auto uses QueryDisplayConfig/EnumDisplaySettingsEx; Manual exposes 30-1000 FPS slider; Present SyncInterval remains forced to 0 while Dynamic is API-enabled; Reflex frameLimitUs tracks the resolved target'
         DynamicReflexLimiter = 'frameLimitUs=round(1000000/targetFPS) in Dynamic; frameLimitUs=0 in fixed/off modes'
         MFGSidecarSHA256 = (Get-FileHash -LiteralPath $sidecar -Algorithm SHA256).Hash
-        OverlayPersistence = '%LOCALAPPDATA%\ControlFG\settings-mfg-test.ini; FG mode + Dynamic target FPS + RR enabled + selected RR model; schema 8'
+        OverlayPersistence = '%LOCALAPPDATA%\ControlFG\settings-mfg-test.ini; FG mode + Dynamic target FPS + RR enabled + selected RR model + PathTracing Enabled/View; schema 8'
         OverlayRuntimeStatus = 'FG status row plus RR ON/OFF and live MODEL E/F selector. Internal native signal implementation text is not exposed.'
         Confirmed2xBaseline = 'v0.8.18-r2 SDR + HDR'
         HDR10BridgeEnabled = $true

@@ -24,7 +24,7 @@ try {
         if ($errors.Count) { throw ('PowerShell parse error in ' + $file.Name + ': ' + $errors[0].Message) }
     }
     $probe = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'src/probe.cpp') -Raw
-    foreach ($marker in @('PROBE v2.1.1 internal_build=2.1.1','source_revision=v2.1.1-pt1-r2-tlas-descriptor-boundary','log_profile=%s','CAPABILITIES fg=fixed_2x_to_6x_plus_dynamic','MONITORING profile=%s rr_perf_sample=240','CONTROLFG_VERBOSE_LOG')) {
+    foreach ($marker in @('PROBE v2.1.1 internal_build=2.1.1','source_revision=v2.1.1-pt2-toggle-counters-composite','log_profile=%s','CAPABILITIES fg=fixed_2x_to_6x_plus_dynamic','MONITORING profile=%s rr_perf_sample=240','CONTROLFG_VERBOSE_LOG')) {
         if (-not $probe.Contains($marker)) { throw ('Release source identity/logging mismatch: ' + $marker) }
     }
     $guide = ''
@@ -180,26 +180,29 @@ try {
     foreach ($required in @('#include "pt0_dxr_probe.h"','InstallRRObservationHooks(renderer,d3d)','PT0EnsureCommandHooks','PT0SetSemantic','PT0Summary(count)','PT0_READY mode=fat_dxr_probe')) {
         if (-not $probe.Contains($required)) { throw ('PT0 integration contract missing: ' + $required) }
     }
-    $pt1 = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'src/pt1_inline_ray.h') -Raw
-    $pt1Shader = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'src/shaders/pt1_inline_ray.hlsl') -Raw
-    $pt1Compiler = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'tools/Compile-PT1-Ray.ps1') -Raw
-    foreach ($required in @('PT1_INLINE_RAY_READY','PT1_INLINE_RAY_SKIP','PT1_CUSTOM_DISPATCH_OK','PT1_MODE','PT1_DEFERRED_BOUNDARY','PT0LatestTlas()','PT0LatestReflectionSig()','D3D12_RAYTRACING_TIER_1_1','D3D12_SRV_DIMENSION_RAYTRACING_ACCELERATION_STRUCTURE')) {
-        if (-not $pt1.Contains($required)) { throw ('PT1 inline-ray runtime contract missing: ' + $required) }
+    $pt2 = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'src/pt2_pathtrace.h') -Raw
+    $pt2Shader = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'src/shaders/pt2_inline_ray.hlsl') -Raw
+    $pt2Compiler = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'tools/Compile-PT2-Ray.ps1') -Raw
+    foreach ($required in @('PT2_READY','PT2_TOGGLE','PT2_MODE','PT2_DISPATCH_OK','PT2_COUNTERS','PT2_COMPOSITE_READY','PT2_COMPOSITE_OK','PT2_COMPOSITE_SKIP','SubmitPT2CompositeBeforePresent','PT0LatestTlas()','PT0LatestReflectionSig()','D3D12_RAYTRACING_TIER_1_1')) {
+        if (-not $pt2.Contains($required)) { throw ('PT2 runtime contract missing: ' + $required) }
     }
-    foreach ($required in @('RayQuery<RAY_FLAG_FORCE_OPAQUE>','TraceRayInline','CommittedRayT','CommittedInstanceID','RWTexture2D<float4> Output','row_major float4x4 ClipToWorld')) {
-        if (-not $pt1Shader.Contains($required)) { throw ('PT1 inline-ray shader contract missing: ' + $required) }
+    foreach ($required in @('RayQuery<RAY_FLAG_FORCE_OPAQUE>','TraceRayInline','CommittedRayT','CommittedInstanceID','RWTexture2D<float4> Output','RWStructuredBuffer<uint> Counters','InterlockedAdd','InterlockedMin','InterlockedMax','InterlockedXor')) {
+        if (-not $pt2Shader.Contains($required)) { throw ('PT2 inline-ray/counter shader contract missing: ' + $required) }
     }
-    foreach ($required in @('-T cs_6_5','-E main','pt1_inline_ray_compiled.h')) {
-        if (-not $pt1Compiler.Contains($required)) { throw ('PT1 DXC compiler contract missing: ' + $required) }
+    foreach ($required in @('-T cs_6_5','-E main','pt2_inline_ray_compiled.h')) {
+        if (-not $pt2Compiler.Contains($required)) { throw ('PT2 DXC compiler contract missing: ' + $required) }
     }
-    foreach ($required in @('#include "pt1_inline_ray.h"','PT1Poll(presentCount.load())','PT1_EARLY_DXR_HOOK','PT1DeferredReflectionBoundary()','PT1_READY mode=inline_rayquery_reflection_proof_r2')) {
-        if (-not $probe.Contains($required)) { throw ('PT1 probe integration contract missing: ' + $required) }
+    foreach ($required in @('#include "pt2_pathtrace.h"','PT2Poll(presentCount.load())','PT2DeferredReflectionBoundary()','PT2_RUNTIME_READY','PT2IsEnabled()','PT2SetEnabled','PT2SetViewMode','PT2GetOverlayStats')) {
+        if (-not ($probe + $overlay).Contains($required)) { throw ('PT2 integration/overlay contract missing: ' + $required) }
     }
-    foreach ($required in @('rec.count<=600000','PT1_TLAS_DESCRIPTOR','latestTlas.store(rtas','latestTlas.store(m.gpuva')) {
-        if (-not $pt0.Contains($required)) { throw ('PT1 R2 TLAS descriptor recovery contract missing: ' + $required) }
+    foreach ($required in @('SubmitPT2CompositeBeforePresent(this,true,present)','SubmitPT2CompositeBeforePresent(this,false,present)')) {
+        if (-not $hdrBridge.Contains($required)) { throw ('PT2 late-composite HDR/SDR boundary missing: ' + $required) }
     }
-    foreach ($required in @('Compile-PT1-Ray.ps1','d3d12.lib','d3dcompiler.lib')) {
-        if (-not $buildCmd.Contains($required)) { throw ('PT1 build contract missing: ' + $required) }
+    foreach ($required in @('Compile-PT2-Ray.ps1','d3d12.lib','d3dcompiler.lib')) {
+        if (-not $buildCmd.Contains($required)) { throw ('PT2 build contract missing: ' + $required) }
+    }
+    foreach ($required in @('L"PathTracing", L"Enabled"','L"PathTracing", L"View"','L"PATH TRACING"','L"PT ON"','L"PT OFF"','FGOverlayPTToggleFromPoint','FGOverlayPTViewFromPoint')) {
+        if (-not $overlay.Contains($required)) { throw ('PT2 persisted overlay contract missing: ' + $required) }
     }
     if (-not $reflectionHooks.Contains('RRUserPresetValue()==control_rr::RRPresetF')) { throw 'D1 producer must be F only.' }
     if (-not $liveGuides.Contains('static constexpr bool rrLiveGuideStatsEnabled=false;')) { throw 'r22 guide-stat readback must be compiled out in production.' }
