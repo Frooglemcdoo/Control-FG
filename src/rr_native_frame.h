@@ -658,7 +658,7 @@ static bool RRNativeInstallFrame(HMODULE renderer,HMODULE d3d) noexcept {
          rrNativeFrameEnabled=true;
          Log("RR_NATIVE_OPTION_ISOLATION ready=1 registered_option=forced_off_never_true reflection=mod_state gi_radius=mod_state gi_bypass=mod_state jitter=private_mirror partial_mode=mod_owned_option_reads_no_feature13");
          Log("RR_NATIVE_SPECULAR_CLAMP_READY ready=1 target_shader_crc=0x600347E7 camera_cut_provider=name_resolved_per_filter bind_site=0x16744 dispatch_site=0x16786 temporal_history=forced_zero current_frame_energy_clamp=CS3_default_60 restore=verified_each_dispatch reshade_required=0");
-         Log("RR_FRAME_HOOKS_READY native_feature=13 early_mode=1 temporal_signal=CS3_integrated_adjustable raw_copy=off_or_fallback public_reference_ui=0 reflection_geometry_capture=D1_F_only hit_distance_runtime=D1_optional specular_mvec_runtime=0 guide_stats_readback=0 zero_spatial=1 preserve_brdf=1 native_gi_bypass=1 contact_shadow_denoiser=temporal_off_spatial_zero broad_diffuse_denoiser=temporal_and_spatial_bypassed full_rt_settings=1 option_isolation=1");
+         Log("RR_FRAME_HOOKS_READY native_feature=13 early_mode=1 temporal_signal=CS3_integrated_adjustable raw_copy=off_or_fallback public_reference_ui=0 reflection_geometry_capture=D1_F_only hit_distance_runtime=D1_F_fallback specular_mvec_runtime=GI27_F_optional_default_on guide_stats_readback=0 zero_spatial=1 preserve_brdf=1 native_gi_bypass=1 contact_shadow_denoiser=temporal_off_spatial_zero broad_diffuse_denoiser=temporal_and_spatial_bypassed full_rt_settings=1 option_isolation=1");
          return true;
         }
        }
