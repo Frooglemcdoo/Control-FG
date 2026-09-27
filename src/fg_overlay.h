@@ -643,22 +643,17 @@ static void PaintFGOverlay(HWND hwnd) noexcept {
         DrawTextW(dc,L"GI27: Model F only. ON computes reflected-image MVs; OFF uses the hit-distance fallback.",-1,&mvHelp,DT_LEFT|DT_WORDBREAK);
 
         SelectObject(dc,bodyFont);SetTextColor(dc,RGB(246,246,246));
-        RECT diffuseLabel{30,482,470,520};DrawTextW(dc,L"Diffuse current-frame clamp",-1,&diffuseLabel,DT_LEFT|DT_VCENTER|DT_SINGLELINE);
-        const bool diffuseClamp=control_rr::RRUserDiffuseClampRenoDX();
-        SelectObject(dc,diffuseClamp?buttonSelectedFont:buttonFont);
-        PaintFGButton(dc,RECT{500,475,710,525},diffuseClamp?L"RENODX":L"OFF",diffuseClamp,true);
+        RECT dlfLabel{30,482,470,520};DrawTextW(dc,L"Direct RenoDX DLF shaders",-1,&dlfLabel,DT_LEFT|DT_VCENTER|DT_SINGLELINE);
+        const bool directDlf=control_rr::RRUserDirectDlfParity();
+        SelectObject(dc,directDlf?buttonSelectedFont:buttonFont);
+        PaintFGButton(dc,RECT{500,475,710,525},directDlf?L"ON":L"OFF",directDlf,true);
         SelectObject(dc,smallFont);SetTextColor(dc,RGB(190,190,190));
-        RECT diffuseHelp{30,530,710,570};
-        DrawTextW(dc,L"RENODX keeps Control's native 1.0 diffuse firefly clamp, but forces temporal history off and spatial passes to zero. Specular clamp is unchanged.",-1,&diffuseHelp,DT_LEFT|DT_WORDBREAK);
+        RECT dlfHelp{30,530,710,600};
+        DrawTextW(dc,L"GI29 replaces RenoDX's six DLF compute shaders directly at the native PSO. Specular clamp stays 60%; diffuse clamp is 100%; history is off; spatial shaders are passthrough.",-1,&dlfHelp,DT_LEFT|DT_WORDBREAK);
 
         SelectObject(dc,bodyFont);SetTextColor(dc,RGB(246,246,246));
-        RECT contactLabel{30,590,470,628};DrawTextW(dc,L"Contact-shadow path",-1,&contactLabel,DT_LEFT|DT_VCENTER|DT_SINGLELINE);
-        const bool contactReno=control_rr::RRUserContactShadowRenoDX();
-        SelectObject(dc,contactReno?buttonSelectedFont:buttonFont);
-        PaintFGButton(dc,RECT{500,582,710,632},contactReno?L"RENODX":L"CURRENT MOD",contactReno,true);
-        SelectObject(dc,smallFont);SetTextColor(dc,RGB(190,190,190));
-        RECT contactHelp{30,638,710,678};
-        DrawTextW(dc,L"RENODX leaves Control's contact-shadow filter untouched. CURRENT MOD disables its temporal and spatial denoising while RR is active.",-1,&contactHelp,DT_LEFT|DT_WORDBREAK);
+        RECT contactLabel{30,615,710,650};
+        DrawTextW(dc,L"GI29 direct mode leaves Control contact shadows untouched.",-1,&contactLabel,DT_LEFT|DT_VCENTER|DT_SINGLELINE);
 
         SelectObject(dc,buttonFont);
         PaintFGButton(dc,RECT{550,700,710,750},L"Back",false);
@@ -941,13 +936,9 @@ static LRESULT CALLBACK FGOverlayWndProc(HWND hwnd, UINT message, WPARAM wParam,
                 control_rr::RRUserSetSpecularMotionRequested(!previous);
                 Log("RR_GI27_SPECMV_UI previous=%u enabled=%u apply=next_rr_evaluation session_only=1",unsigned(previous),unsigned(!previous));
             } else if (x >= 500 && x < 710 && y >= 475 && y < 525) {
-                const bool previous=control_rr::RRUserDiffuseClampRenoDX();
-                control_rr::RRUserSetDiffuseClampRenoDX(!previous);
-                Log("RR_GI28_DIFFUSE_UI previous=%u renodx=%u apply=immediate session_only=1 specular_clamp_unchanged=1",unsigned(previous),unsigned(!previous));
-            } else if (x >= 500 && x < 710 && y >= 582 && y < 632) {
-                const bool previous=control_rr::RRUserContactShadowRenoDX();
-                control_rr::RRUserSetContactShadowRenoDX(!previous);
-                Log("RR_GI28_CONTACT_UI previous=%u renodx=%u apply=immediate session_only=1",unsigned(previous),unsigned(!previous));
+                const bool previous=control_rr::RRUserDirectDlfParity();
+                control_rr::RRUserSetDirectDlfParity(!previous);
+                Log("RR_GI29_DLF_UI previous=%u enabled=%u apply=next_frame session_only=1 specular_clamp=60 diffuse_clamp=100",unsigned(previous),unsigned(!previous));
             } else if (x >= 550 && x < 710 && y >= 700 && y < 750) {
                 fgOverlayRRSettingsPage=false;
                 FGOverlayResizeWindowForCurrentSelection(hwnd);
