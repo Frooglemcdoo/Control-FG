@@ -1,5 +1,6 @@
 #pragma once
 #include "../build/pt2_inline_ray_compiled.h"
+#include "fg_ui_device_identity.h"
 #include <d3dcompiler.h>
 
 namespace control_pt2 {
@@ -117,9 +118,13 @@ struct Owner {
 static Owner owner{};
 
 static bool SameDevice(ID3D12Device* a,ID3D12Device* b) noexcept {
-    if(!a||!b)return false;IUnknown* ua=nullptr;IUnknown* ub=nullptr;
-    const HRESULT ha=a->QueryInterface(IID_PPV_ARGS(&ua));const HRESULT hb=b->QueryInterface(IID_PPV_ARGS(&ub));
-    const bool same=SUCCEEDED(ha)&&SUCCEEDED(hb)&&ua==ub;if(ua)ua->Release();if(ub)ub->Release();return same;
+    const auto resolveNative=[](IUnknown* object,IUnknown** native) noexcept {
+        void* raw=nullptr;
+        const bool ok=slGetNativeInterfaceApi&&slGetNativeInterfaceApi(object,&raw)==sl::Result::eOk;
+        *native=reinterpret_cast<IUnknown*>(raw);
+        return ok;
+    };
+    return FGUISameDevice(a,b,resolveNative);
 }
 
 static D3D12_RESOURCE_DESC BufferDesc(UINT64 bytes,D3D12_RESOURCE_FLAGS flags=D3D12_RESOURCE_FLAG_NONE) noexcept {
@@ -381,7 +386,7 @@ static HRESULT CompositeBeforePresent(IDXGISwapChain3* chain,bool hdrActive,unsi
     if(!IsEnabled())return S_OK;
     if(!chain||!owner.ready||!owner.output||!owner.lastRayFrame){++compositeSkips;return S_OK;}
     auto* queue=GetHdr10BridgeDirectQueue();if(!queue){++compositeSkips;Log("PT2_COMPOSITE_SKIP present=%llu reason=queue_unavailable",present);return S_OK;}
-    ID3D12Device* device=nullptr;HRESULT hr=queue->GetDevice(IID_PPV_ARGS(&device));if(FAILED(hr)||!device||!SameDevice(device,owner.device)){if(device)device->Release();++compositeSkips;Log("PT2_COMPOSITE_SKIP present=%llu reason=device_mismatch hr=0x%08lX",present,static_cast<unsigned long>(hr));return S_OK;}
+    ID3D12Device* device=nullptr;HRESULT hr=queue->GetDevice(IID_PPV_ARGS(&device));if(FAILED(hr)||!device||!SameDevice(device,owner.device)){if(device)device->Release();++compositeSkips;Log("PT2_COMPOSITE_SKIP present=%llu reason=device_mismatch hr=0x%08lX queue=%p queue_device=%p ray_device=%p native_identity_compare=1",present,static_cast<unsigned long>(hr),queue,device,owner.device);return S_OK;}
     if(!EnsureCompositeCore(device)){device->Release();++compositeSkips;return S_OK;}
 
     const UINT index=chain->GetCurrentBackBufferIndex();ID3D12Resource* target=nullptr;hr=chain->GetBuffer(index,IID_PPV_ARGS(&target));
