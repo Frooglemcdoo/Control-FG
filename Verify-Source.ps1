@@ -134,14 +134,30 @@ try {
     $evaluationEntry = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'src/rr_evaluation_entry.h') -Raw
     $overlay = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'src/fg_overlay.h') -Raw
     $reflectionHooks = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'src/rr_reflection_hooks.h') -Raw
-    foreach ($contract in @('RRReflectionInitializeAccessOnly(d3d)','RR_TEMPORAL_ACCESS_INSTALL','reflection_geometry_capture=0','hit_distance_runtime=0','specular_mvec_runtime=0')) {
-        if (-not ($probe + $reflectionHooks).Contains($contract)) { throw ('r22 production cleanup contract missing: ' + $contract) }
+    foreach ($contract in @('RRReflectionInitializeAccessOnly(d3d)','RR_TEMPORAL_ACCESS_INSTALL')) {
+        if (-not ($probe + $reflectionHooks).Contains($contract)) { throw ('GI27 temporal-access contract missing: ' + $contract) }
     }
-    foreach ($required in @('RRReflectionInstall(renderer,d3d)','RRReflectionAfterPresent(count)','RRDistanceAfterPresent()','#include "rr_distance_runtime.h"')) {
-        if (-not $probe.Contains($required)) { throw ('D1 capture/retirement missing: ' + $required) }
+    foreach ($contract in @('rr_specular_mvec=GI27_reference_derived_default_on','reflection_geometry_capture=D1_F_only','hit_distance_runtime=D1_F_fallback','specular_mvec_runtime=GI27_F_optional_default_on')) {
+        if (-not ($probe + $nativeFrame).Contains($contract)) { throw ('GI27 runtime capability contract missing: ' + $contract) }
     }
-    foreach ($required in @('DistanceEligible(beginEvaluation,bindings.projectionValid,activePreset','RRDistanceBeforeEvaluation','RRNativeSetGuides(parameters,&bindings,hitDistance','RR_F_DISTANCE_D1')) {
-        if (-not $evaluationEntry.Contains($required)) { throw ('D1 optional distance contract missing: ' + $required) }
+    foreach ($required in @('RRReflectionInstall(renderer,d3d)','RRReflectionAfterPresent(count)','RRDistanceAfterPresent()','#include "rr_distance_runtime.h"','#include "rr_specular_mv_runtime.h"')) {
+        if (-not $probe.Contains($required)) { throw ('GI27 reflection/spec-MV lifetime integration missing: ' + $required) }
+    }
+    foreach ($required in @('RRSpecMvBeforeEvaluation','RRUserSpecularMotionRequested','fallback_hit_distance','RRNativeSetGuides(parameters,&bindings,hitDistance','RR_GI27_SPECMV_BIND')) {
+        if (-not $evaluationEntry.Contains($required)) { throw ('GI27 specular-MV evaluation contract missing: ' + $required) }
+    }
+    $specMvRuntime = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'src/rr_specular_mv_runtime.h') -Raw
+    $specMvShader = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'src/shaders/rr_specular_mv.hlsl') -Raw
+    $guideParameters = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'src/rr_guide_parameters.h') -Raw
+    foreach ($required in @('RR_GI27_SPECMV_READY','RR_GI27_SPECMV frame=%llu','TakeOnPrimaryQueue','reflection->backend.Destinations()','DXGI_FORMAT_R16G16_FLOAT','mvOutScaleX=0.5f*float(constants.width)/mvScaleX','mvOutScaleY=-0.5f*float(constants.height)/mvScaleY')) {
+        if (-not $specMvRuntime.Contains($required)) { throw ('GI27 specular-MV runtime contract missing: ' + $required) }
+    }
+    foreach ($required in @('virtual_pos = surface_pos + view_dir * effective_t','NdcDelta(virtual_pos) - NdcDelta(surface_pos)','SpecMV[tid.xy] = game_mv + scaled','effective_t = hit_t * gloss * gloss')) {
+        if (-not $specMvShader.Contains($required)) { throw ('GI27 reference-derived shader contract missing: ' + $required) }
+    }
+    if ($specMvShader.Contains('reflect(view_dir')) { throw 'GI27 must use reflected-image virtual position, not physical reflected-ray projection.' }
+    foreach ($required in @('api.Resource("GBuffer.SpecularMvec",specMv)','api.Resource("MotionVectorsReflection",specMv)','Resource* const specDistance=specMv?none:distance')) {
+        if (-not $guideParameters.Contains($required)) { throw ('GI27 exclusive MV/hit-distance binding contract missing: ' + $required) }
     }
     if (-not $reflectionHooks.Contains('RRUserPresetValue()==control_rr::RRPresetF')) { throw 'D1 producer must be F only.' }
     if (-not $liveGuides.Contains('static constexpr bool rrLiveGuideStatsEnabled=false;')) { throw 'r22 guide-stat readback must be compiled out in production.' }
