@@ -53,7 +53,7 @@ static unsigned int RREvaluationEntry(unsigned int branch, ID3D12GraphicsCommand
     // GI30 clean RenoDX baseline: no optional reflection-geometry resources.
     RRNativeGuideBindings bindings{};bool rrAttempt=false;
     ID3D12Resource* hitDistance=nullptr;ID3D12Resource* specularMotion=nullptr;
-    bool distanceReset=false;bool clampReset=false;bool specularMotionReset=false;
+    bool clampReset=false;
     static control_rr_clamp::History clampHistory;
     void* evaluationFeature=feature;bool presetReset=false;unsigned activePreset=0;
     if(rrNativeFrameEnabled&&branch==1&&!partial){

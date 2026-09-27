@@ -32,11 +32,13 @@ int main(){
  assert(noReset.resources["MotionVectorsReflection"]==nullptr);
  assert(noReset.resources["DLSSD.SpecularHitDistance"]==nullptr);
  assert(control_rr::SetGuideParameters(noReset,b,&distance,false));
- assert(noReset.resources["DLSSD.SpecularHitDistance"]==&distance);
+ assert(noReset.resources["GBuffer.SpecularMvec"]==nullptr);
+ assert(noReset.resources["MotionVectorsReflection"]==nullptr);
+ assert(noReset.resources["DLSSD.SpecularHitDistance"]==nullptr);
  b.specularMotion=&specmv;
  assert(control_rr::SetGuideParameters(noReset,b,&distance,false));
- assert(noReset.resources["GBuffer.SpecularMvec"]==&specmv);
- assert(noReset.resources["MotionVectorsReflection"]==&specmv);
+ assert(noReset.resources["GBuffer.SpecularMvec"]==nullptr);
+ assert(noReset.resources["MotionVectorsReflection"]==nullptr);
  assert(noReset.resources["DLSSD.SpecularHitDistance"]==nullptr);
  b.specularMotion=nullptr;
  assert(control_rr::SetGuideParameters(noReset,b,(Resource*)nullptr,false));
@@ -52,5 +54,5 @@ int main(){
  void* n=nullptr;void* d=nullptr;void* s=nullptr;
  assert(control_rr::PrepareNativeAAArguments(false,false,false,false,nullptr,n,d,s));assert(!n&&!d&&!s);
  assert(control_rr::PrepareNativeAAArguments(true,true,false,true,&color,n,d,s));assert(n==&color&&d==&color&&s==&color);
- puts("PASS all r21r retained r21q guide aliases/setters/getters reject RR, exclusive specular-MV/hit-distance binding clears without stale values, packed roughness mode and matrices verified, SR arguments unchanged");
+ puts("PASS GI30 guide parameters: optional specular geometry is always cleared, packed roughness aliases and matrices verified, SR arguments unchanged");
 }

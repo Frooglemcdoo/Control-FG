@@ -69,7 +69,7 @@ jobs:
             'src/shaders/gi29_dlf_spatial_spec.hlsli',
             'src/shaders/gi29_dlf_spatial_spec_x.hlsl',
             'src/shaders/gi29_dlf_spatial_spec_y.hlsl',
-            'tools/compile-dlf-parity.cpp','validation/gi29/policy-test.cpp','GI29-TEST.md','GI30-TEST.md','GI30-TEST.md'
+            'tools/compile-dlf-parity.cpp','validation/gi29/policy-test.cpp','GI29-TEST.md','GI30-TEST.md'
           )){
             if(!($artifact.PSObject.Properties.Name -contains $rel)){$artifact|Add-Member -NotePropertyName $rel -NotePropertyValue ''}
           }

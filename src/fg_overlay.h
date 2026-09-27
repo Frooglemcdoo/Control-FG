@@ -633,7 +633,6 @@ static void PaintFGOverlay(HWND hwnd) noexcept {
         RECT help{30,330,710,365}; DrawTextW(dc,status,-1,&help,DT_LEFT|DT_WORDBREAK);
         SelectObject(dc,bodyFont);SetTextColor(dc,RGB(246,246,246));
         RECT mvLabel{30,382,470,420};DrawTextW(dc,L"Specular motion vectors",-1,&mvLabel,DT_LEFT|DT_VCENTER|DT_SINGLELINE);
-        const bool mvRequested=false;
         SelectObject(dc,buttonFont);
         PaintFGButton(dc,RECT{500,375,710,425},L"OFF - GI30",false,false);
         SelectObject(dc,smallFont);SetTextColor(dc,RGB(190,190,190));

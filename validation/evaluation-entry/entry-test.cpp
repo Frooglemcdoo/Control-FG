@@ -151,8 +151,8 @@ int main(){
   const auto result=RREvaluationEntry1(reinterpret_cast<ID3D12GraphicsCommandList*>(1),reinterpret_cast<void*>(2),reinterpret_cast<void*>(3),reinterpret_cast<void*>(4));
   assert(result==(fault?0xbad00001u:1u)&&nativeCalls==calls+(fault?0:1));
  }
- // Exercise the actual gateway: F binds; E clears; bad projection skips dispatch;
- // unavailable distance remains optional and cannot stop a valid RR evaluation.
+ // GI30: exercise both E/F plus deliberately valid legacy geometry inputs.
+ // The clean RenoDX baseline must never execute or bind GI27/D1/P1 geometry.
  checkRTStack=false;missingGuides=setFailure=failGet=false;rrNativeLightingComplete=true;
  for(unsigned mode=0;mode<5;++mode){
   testPreset=mode==1?5:6;testProjection=mode!=2;
@@ -161,13 +161,14 @@ int main(){
   control_rr::RRUserSetSpecularMotionRequested(mode==4);
   rrNativeFrame={};assert(rrNativeFrame.Begin({42,3840,2160,2560,1440},true,true));
   assert(rrNativeFrame.FeatureResult(true,true));assert(rrNativeFrame.BeginLighting(42));
+  lastDistance=reinterpret_cast<ID3D12Resource*>(0xDEAD);
   const auto before=distanceCalls,specBefore=specMvCalls;SetLastError(17);
   assert(RREvaluationEntry1(reinterpret_cast<ID3D12GraphicsCommandList*>(1),reinterpret_cast<void*>(2),reinterpret_cast<void*>(3),reinterpret_cast<void*>(4))==1);
-  assert(specMvCalls==specBefore+(mode==4?1u:0u));
-  assert(distanceCalls==before+((mode==0||mode==3)?1u:0u));
-  assert(lastDistance==(mode==0?testDistance:nullptr));
-  assert(control_rr::RRUserSpecularMotionActive()==(mode==4));
+  assert(specMvCalls==specBefore);
+  assert(distanceCalls==before);
+  assert(lastDistance==nullptr);
+  assert(!control_rr::RRUserSpecularMotionActive());
  }
- puts("PASS GI27 actual gateway explicit specular-MV binding, F hit-distance fallback, E clearing and optional distance fallback");
+ puts("PASS GI30 gateway keeps specular MV, reflection MV and hit distance cleared across presets and legacy input availability");
  puts("PASS: r21y gateway forwards once; hit distance is not a guide prerequisite; getter faults, RR guards and SR recovery remain fail-closed");
 }
