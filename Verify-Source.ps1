@@ -186,7 +186,7 @@ try {
     foreach ($required in @('PT3_READY','PT3_TOGGLE','PT3_MODE','PT3_DISPATCH_OK','PT3_COUNTERS','PT3_COMPOSITE_READY','PT3_COMPOSITE_OK','PT3_COMPOSITE_SKIP','SubmitPT3CompositeBeforePresent','PT0LatestTlas()','PT0LatestReflectionSig()','RRGuideReadInputs','RRPart1ReadResource','D3D12_RAYTRACING_TIER_1_1','beauty=hybrid_raster_primary_material_plus_stochastic_diffuse_and_specular_secondary_rays')) {
         if (-not $pt3.Contains($required)) { throw ('PT3 hybrid-beauty runtime contract missing: ' + $required) }
     }
-    foreach ($required in @('RayQuery<RAY_FLAG_FORCE_OPAQUE>','TraceRayInline','CommittedRayT','CommittedInstanceID','GBuffer1','GBuffer2','MaterialDataPart1','ControlDecodeNormalView','ControlNormalViewToWorld','ControlDecodeMaterialRoughness','ControlDecodeMaterialF0','CosineHemisphere','RoughReflection','Mode==0u','diffuseHit','specHit','RWStructuredBuffer<uint> Counters','InterlockedAdd','InterlockedMin','InterlockedMax','InterlockedXor')) {
+    foreach ($required in @('RayQuery<RAY_FLAG_FORCE_OPAQUE>','TraceRayInline','CommittedRayT','CommittedInstanceID','GBuffer1','GBuffer2','MaterialDataPart1','ControlDecodeNormalView','ControlNormalViewToWorld','ControlDecodeMaterialRoughness','ControlDecodeMaterialF0','CosineHemisphere','RoughReflection','if(Mode!=0u)','diffuseHit','specHit','RWStructuredBuffer<uint> Counters','InterlockedAdd','InterlockedMin','InterlockedMax','InterlockedXor')) {
         if (-not $pt3Shader.Contains($required)) { throw ('PT3 hybrid-beauty shader contract missing: ' + $required) }
     }
     foreach ($required in @('-T cs_6_5','-E main','-I $include','pt3_pathtrace_compiled.h')) {
