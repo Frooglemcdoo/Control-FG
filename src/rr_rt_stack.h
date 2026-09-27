@@ -21,6 +21,10 @@ struct RRRTFrame {
   if(!selected||!(effects&RTDiffuseGI)||f!=frame||!lightingStarted||!correctHistory||!emptyHistory||giObserved)return false;
   giObserved=true;return true;
  }
+ bool ObserveGIClamp(std::uint64_t f,bool lightingStarted) noexcept {
+  if(!selected||!(effects&RTDiffuseGI)||f!=frame||!lightingStarted||giObserved)return false;
+  giObserved=true;return true;
+ }
  bool Complete(std::uint64_t f,unsigned currentEffects,bool reflectionComplete) const noexcept {
   return selected&&f==frame&&effects==currentEffects&&RRSupportsRTSettings(effects)&&reflectionComplete&&
    (!(effects&RTDiffuseGI)||giObserved);
