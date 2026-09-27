@@ -20,6 +20,21 @@ static const wchar_t* ModeNameWide(unsigned m) noexcept {
     switch(m){case 2:return L"HIT DISTANCE";case 3:return L"INSTANCE ID";default:return L"HIT / MISS";}
 }
 
+using PT2D3DCompileFn = HRESULT (WINAPI*)(LPCVOID,SIZE_T,LPCSTR,const D3D_SHADER_MACRO*,ID3DInclude*,LPCSTR,LPCSTR,UINT,UINT,ID3DBlob**,ID3DBlob**);
+static PT2D3DCompileFn PT2ResolveD3DCompile() noexcept {
+    static HMODULE compiler=nullptr;
+    static PT2D3DCompileFn fn=nullptr;
+    if(fn)return fn;
+    if(!compiler)compiler=LoadLibraryW(L"d3dcompiler_47.dll");
+    if(compiler)fn=reinterpret_cast<PT2D3DCompileFn>(GetProcAddress(compiler,"D3DCompile"));
+    return fn;
+}
+static HRESULT PT2Compile(LPCVOID source,SIZE_T bytes,LPCSTR sourceName,LPCSTR entry,LPCSTR target,ID3DBlob** blob,ID3DBlob** errors) noexcept {
+    auto fn=PT2ResolveD3DCompile();
+    if(!fn){if(blob)*blob=nullptr;if(errors)*errors=nullptr;return E_NOINTERFACE;}
+    return fn(source,bytes,sourceName,nullptr,nullptr,entry,target,D3DCOMPILE_OPTIMIZATION_LEVEL3,0,blob,errors);
+}
+
 static bool IsEnabled() noexcept { return enabled.load(std::memory_order_acquire)!=0; }
 static unsigned ViewMode() noexcept { unsigned m=viewMode.load(std::memory_order_acquire); return (m>=1&&m<=3)?m:1; }
 
@@ -291,9 +306,9 @@ static bool EnsureCompositeCore(ID3D12Device* device) noexcept {
     if(!owner.ready||!SameDevice(owner.device,device))return false;
 
     ID3DBlob *vs=nullptr,*ps=nullptr,*errors=nullptr,*rootBlob=nullptr;
-    HRESULT hr=D3DCompile(kPT2CompositeShader,sizeof(kPT2CompositeShader)-1,"PT2Composite",nullptr,nullptr,"VSMain","vs_5_1",D3DCOMPILE_OPTIMIZATION_LEVEL3,0,&vs,&errors);
+    HRESULT hr=PT2Compile(kPT2CompositeShader,sizeof(kPT2CompositeShader)-1,"PT2Composite","VSMain","vs_5_1",&vs,&errors);
     if(FAILED(hr)||!vs){Log("PT2_COMPOSITE_FAIL stage=compile_vs hr=0x%08lX error=%s",static_cast<unsigned long>(hr),errors?static_cast<const char*>(errors->GetBufferPointer()):"none");if(errors)errors->Release();return false;}if(errors){errors->Release();errors=nullptr;}
-    hr=D3DCompile(kPT2CompositeShader,sizeof(kPT2CompositeShader)-1,"PT2Composite",nullptr,nullptr,"PSMain","ps_5_1",D3DCOMPILE_OPTIMIZATION_LEVEL3,0,&ps,&errors);
+    hr=PT2Compile(kPT2CompositeShader,sizeof(kPT2CompositeShader)-1,"PT2Composite","PSMain","ps_5_1",&ps,&errors);
     if(FAILED(hr)||!ps){Log("PT2_COMPOSITE_FAIL stage=compile_ps hr=0x%08lX error=%s",static_cast<unsigned long>(hr),errors?static_cast<const char*>(errors->GetBufferPointer()):"none");if(errors)errors->Release();vs->Release();return false;}if(errors){errors->Release();errors=nullptr;}
 
     D3D12_DESCRIPTOR_RANGE range{};range.RangeType=D3D12_DESCRIPTOR_RANGE_TYPE_SRV;range.NumDescriptors=1;range.BaseShaderRegister=0;
@@ -337,8 +352,8 @@ static ID3D12PipelineState* CompositePso(ID3D12Device* device,DXGI_FORMAT format
     for(auto& e:owner.compositePsos)if(e.pso&&e.format==format)return e.pso;
     if(!owner.compositeRoot)return nullptr;
     ID3DBlob *vs=nullptr,*ps=nullptr,*errors=nullptr;
-    HRESULT hr=D3DCompile(kPT2CompositeShader,sizeof(kPT2CompositeShader)-1,"PT2Composite",nullptr,nullptr,"VSMain","vs_5_1",D3DCOMPILE_OPTIMIZATION_LEVEL3,0,&vs,&errors);if(errors){errors->Release();errors=nullptr;}
-    if(SUCCEEDED(hr))hr=D3DCompile(kPT2CompositeShader,sizeof(kPT2CompositeShader)-1,"PT2Composite",nullptr,nullptr,"PSMain","ps_5_1",D3DCOMPILE_OPTIMIZATION_LEVEL3,0,&ps,&errors);if(errors){errors->Release();errors=nullptr;}
+    HRESULT hr=PT2Compile(kPT2CompositeShader,sizeof(kPT2CompositeShader)-1,"PT2Composite","VSMain","vs_5_1",&vs,&errors);if(errors){errors->Release();errors=nullptr;}
+    if(SUCCEEDED(hr))hr=PT2Compile(kPT2CompositeShader,sizeof(kPT2CompositeShader)-1,"PT2Composite","PSMain","ps_5_1",&ps,&errors);if(errors){errors->Release();errors=nullptr;}
     if(FAILED(hr)||!vs||!ps){if(vs)vs->Release();if(ps)ps->Release();return nullptr;}
     D3D12_GRAPHICS_PIPELINE_STATE_DESC pd{};pd.pRootSignature=owner.compositeRoot;pd.VS={vs->GetBufferPointer(),vs->GetBufferSize()};pd.PS={ps->GetBufferPointer(),ps->GetBufferSize()};
     pd.BlendState.AlphaToCoverageEnable=FALSE;pd.BlendState.IndependentBlendEnable=FALSE;pd.BlendState.RenderTarget[0].RenderTargetWriteMask=D3D12_COLOR_WRITE_ENABLE_ALL;
