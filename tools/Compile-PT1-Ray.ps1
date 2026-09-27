@@ -1,5 +1,5 @@
 param(
-    [string]$Input = (Join-Path $PSScriptRoot '..\src\shaders\pt1_inline_ray.hlsl'),
+    [string]$Source = (Join-Path $PSScriptRoot '..\src\shaders\pt1_inline_ray.hlsl'),
     [string]$Output = (Join-Path $PSScriptRoot '..\build\pt1_inline_ray.dxil'),
     [string]$Header = (Join-Path $PSScriptRoot '..\build\pt1_inline_ray_compiled.h')
 )
@@ -14,7 +14,7 @@ if(Test-Path $kits){
 $dxc=$candidates|Where-Object{$_ -and (Test-Path -LiteralPath $_ -PathType Leaf)}|Select-Object -First 1
 if(!$dxc){throw 'DXC not found. Install a Windows 10/11 SDK containing x64\dxc.exe.'}
 New-Item -ItemType Directory -Force -Path (Split-Path -Parent $Output)|Out-Null
-& $dxc -T cs_6_5 -E main -O3 -Ges -Qstrip_debug -Qstrip_reflect -Fo $Output $Input
+& $dxc -T cs_6_5 -E main -O3 -Ges -Qstrip_debug -Qstrip_reflect -Fo $Output $Source
 if($LASTEXITCODE -ne 0){throw "DXC failed with exit code $LASTEXITCODE"}
 $bytes=[IO.File]::ReadAllBytes($Output)
 if($bytes.Length -lt 128){throw 'PT1 DXIL output is unexpectedly small.'}
