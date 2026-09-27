@@ -9,13 +9,14 @@ b=s.index('        if(FGOverlayRRToggleFromPoint',a)
 branch=s[a:b]
 code='''#include <cassert>
 namespace control_rr_clamp { unsigned value=60; unsigned Normalize(unsigned v){return v>=25&&v<=75?v:60;} void Select(unsigned v){value=v;} }
+namespace control_rr { bool spec=true,active=false; bool RRUserSpecularMotionRequested(){return spec;} bool RRUserSpecularMotionActive(){return active;} void RRUserSetSpecularMotionRequested(bool v){spec=v;if(!v)active=false;} }
 bool fgOverlayRRSettingsPage=false,fgOverlayClampDragging=false,fgOverlaySliderDragging=false;
 unsigned fgOverlayClampPreview=60;
 int captured=0,saves=0,resizes=0,offset=-220;
 #define FALSE 0
 void SetCapture(int h){captured=h;} int GetCapture(){return captured;} void ReleaseCapture(){captured=0;}
 void FGOverlayMarkSettingsDirty(){} void FGOverlayFlushSettingsIfDue(bool){++saves;}
-void Log(const char*){} void InvalidateRect(int,void*,int){} void FGOverlayResizeWindowForCurrentSelection(int){++resizes;}
+template<class... A> void Log(const char*,A...){} void InvalidateRect(int,void*,int){} void FGOverlayResizeWindowForCurrentSelection(int){++resizes;}
 int FGOverlayLowerSectionOffset(){return offset;}
 '''+helpers+'\nint click(int x,int y){int hwnd=1;\n'+branch+'''return 1;}
 int main(){
@@ -30,7 +31,10 @@ assert(click(30,245)==0&&fgOverlayClampDragging&&fgOverlayClampPreview==25);
 assert(control_rr_clamp::value==60); fgOverlayClampDragging=false; ReleaseCapture();
 assert(click(500,245)==0&&fgOverlayClampPreview==75);fgOverlayClampDragging=false;ReleaseCapture();
 assert(click(100,440)==0); // Hidden main-page RR button cannot toggle.
-assert(click(600,435)==0&&!fgOverlayRRSettingsPage);
+control_rr::spec=true;
+assert(click(600,400)==0&&!control_rr::spec); // GI27 specular-MV A/B toggles on RR page.
+assert(click(600,400)==0&&control_rr::spec);
+assert(click(600,515)==0&&!fgOverlayRRSettingsPage);
 }
 }
 '''
@@ -39,4 +43,4 @@ with tempfile.TemporaryDirectory() as d:
  p=Path(d);(p/'test.cpp').write_text(code)
  subprocess.run(['g++','-std=c++17','-Wall','-Wextra','-Werror','-fsanitize=address,undefined',str(p/'test.cpp'),'-o',str(p/'test')],check=True)
  subprocess.run([str(p/'test')],check=True)
-print('PASS: actual RR page click routing, reset/save, drag preview, compact/dynamic entry, Back, range and mapping')
+print('PASS: actual RR page click routing, GI27 specular-MV toggle, reset/save, drag preview, compact/dynamic entry, Back, range and mapping')
