@@ -163,9 +163,9 @@ static void FGOverlayLoadSettings() noexcept {
         control_rr::RRUserMarkPresetRestartRequired(false);
         control_rr::RRUserSetSpecularSignalMode(control_rr::RRSpecularSignalMode::NativeClamp);
         control_rr::RRUserRequest(false);
-        PT2SetViewMode(1,"settings_default");
-        PT2SetEnabled(false,"settings_default");
-        Log("FG_SETTINGS_LOAD success=0 reason=path_unavailable defaults=4x,dynamic_auto,rr_off,rr_model_F,pt_off,pt_view_hit_miss ui=fg_rr_pt");
+        PT3SetViewMode(0,"settings_default");
+        PT3SetEnabled(false,"settings_default");
+        Log("FG_SETTINGS_LOAD success=0 reason=path_unavailable defaults=4x,dynamic_auto,rr_off,rr_model_F,pt_off,pt_view_beauty ui=fg_rr_pt");
         return;
     }
 
@@ -180,8 +180,8 @@ static void FGOverlayLoadSettings() noexcept {
     const unsigned int rawRrPreset = GetPrivateProfileIntW(L"RayReconstruction", L"Preset", control_rr::RRPresetF, fgOverlaySettingsPath.c_str());
     const unsigned int rrPreset = rawRrPreset == control_rr::RRPresetE ? control_rr::RRPresetE : control_rr::RRPresetF;
     const bool ptEnabled = GetPrivateProfileIntW(L"PathTracing", L"Enabled", 0, fgOverlaySettingsPath.c_str()) != 0;
-    unsigned int ptView = GetPrivateProfileIntW(L"PathTracing", L"View", 1, fgOverlaySettingsPath.c_str());
-    if (ptView < 1 || ptView > 3) ptView = 1;
+    unsigned int ptView = GetPrivateProfileIntW(L"PathTracing", L"ViewPT3", 0, fgOverlaySettingsPath.c_str());
+    if (ptView > 3) ptView = 0;
 
     slFgUserMultiplier.store(selection, std::memory_order_release);
     slFgDynamicManualTargetFps.store(manualTarget, std::memory_order_release);
@@ -192,10 +192,10 @@ static void FGOverlayLoadSettings() noexcept {
     control_rr::RRUserMarkPresetRestartRequired(false);
     control_rr::RRUserSetSpecularSignalMode(control_rr::RRSpecularSignalMode::NativeClamp);
     control_rr::RRUserRequest(rrEnabled);
-    PT2SetViewMode(ptView,"settings");
-    PT2SetEnabled(ptEnabled,"settings");
+    PT3SetViewMode(ptView,"settings");
+    PT3SetEnabled(ptEnabled,"settings");
     Log("FG_SETTINGS_LOAD success=1 path=%ls selection=%s selected_code=%u target_policy=%s manual_target_fps=%u rr_enabled=%u rr_preset=%s rr_preset_value=%u pt_enabled=%u pt_view=%u pt_view_name=%ls skin_mode=off schema=8 ui=fg_rr_pt",
-        fgOverlaySettingsPath.c_str(), GetFGSelectionName(selection), selection, manualTarget ? "manual" : "auto", manualTarget, unsigned(rrEnabled), control_rr::RRUserPresetLabel(), control_rr::RRUserPresetValue(),unsigned(ptEnabled),ptView,PT2ViewModeLabelWide());
+        fgOverlaySettingsPath.c_str(), GetFGSelectionName(selection), selection, manualTarget ? "manual" : "auto", manualTarget, unsigned(rrEnabled), control_rr::RRUserPresetLabel(), control_rr::RRUserPresetValue(),unsigned(ptEnabled),ptView,PT3ViewModeLabelWide());
 }
 
 static bool FGOverlaySaveSettingsNow() noexcept {
@@ -220,8 +220,8 @@ static bool FGOverlaySaveSettingsNow() noexcept {
     swprintf_s(targetText, L"%u", GetFGDynamicManualTargetFps());
     swprintf_s(rrEnabledText, L"%u", control_rr::RRUserRequested() ? 1u : 0u);
     swprintf_s(rrPresetText, L"%u", control_rr::RRUserPresetValue());
-    swprintf_s(ptEnabledText,L"%u",PT2IsEnabled()?1u:0u);
-    swprintf_s(ptViewText,L"%u",PT2ViewMode());
+    swprintf_s(ptEnabledText,L"%u",PT3IsEnabled()?1u:0u);
+    swprintf_s(ptViewText,L"%u",PT3ViewMode());
 
     bool ok = WritePrivateProfileStringW(L"ControlFG", L"Schema", L"8", fgOverlaySettingsPath.c_str()) != FALSE;
     ok = (WritePrivateProfileStringW(L"FrameGeneration", L"Mode", modeText, fgOverlaySettingsPath.c_str()) != FALSE) && ok;
@@ -230,7 +230,7 @@ static bool FGOverlaySaveSettingsNow() noexcept {
     ok = (WritePrivateProfileStringW(L"RayReconstruction", L"Preset", rrPresetText, fgOverlaySettingsPath.c_str()) != FALSE) && ok;
     ok = (WritePrivateProfileStringW(L"RayReconstruction", L"ReflectionClamp", clampText, fgOverlaySettingsPath.c_str()) != FALSE) && ok;
     ok = (WritePrivateProfileStringW(L"PathTracing", L"Enabled", ptEnabledText, fgOverlaySettingsPath.c_str()) != FALSE) && ok;
-    ok = (WritePrivateProfileStringW(L"PathTracing", L"View", ptViewText, fgOverlaySettingsPath.c_str()) != FALSE) && ok;
+    ok = (WritePrivateProfileStringW(L"PathTracing", L"ViewPT3", ptViewText, fgOverlaySettingsPath.c_str()) != FALSE) && ok;
     ok = (WritePrivateProfileStringW(L"Overlay", L"ToggleKey", bindingText, fgOverlaySettingsPath.c_str()) != FALSE) && ok;
     ok = (WritePrivateProfileStringW(L"Experimental", L"RTX40MultiFG", experimentalText, fgOverlaySettingsPath.c_str()) != FALSE) && ok;
     // Old experimental RR/AA settings are intentionally removed; FG settings remain intact.
@@ -241,7 +241,7 @@ static bool FGOverlaySaveSettingsNow() noexcept {
 
     Log("FG_SETTINGS_SAVE success=%u path=%ls selection=%s selected_code=%u target_policy=%s manual_target_fps=%u rr_enabled=%u rr_preset=%s rr_preset_value=%u pt_enabled=%u pt_view=%u pt_view_name=%ls schema=8 ui=fg_rr_pt",
         unsigned(ok), fgOverlaySettingsPath.c_str(), GetFGSelectionName(GetFGUserMultiplier()), GetFGUserMultiplier(),
-        GetFGDynamicManualTargetFps() ? "manual" : "auto", GetFGDynamicManualTargetFps(), unsigned(control_rr::RRUserRequested()), control_rr::RRUserPresetLabel(), control_rr::RRUserPresetValue(),unsigned(PT2IsEnabled()),PT2ViewMode(),PT2ViewModeLabelWide());
+        GetFGDynamicManualTargetFps() ? "manual" : "auto", GetFGDynamicManualTargetFps(), unsigned(control_rr::RRUserRequested()), control_rr::RRUserPresetLabel(), control_rr::RRUserPresetValue(),unsigned(PT3IsEnabled()),PT3ViewMode(),PT3ViewModeLabelWide());
     if (ok) fgOverlaySettingsSavedPulseUntilMs = GetTickCount64() + 1200ull;
     return ok;
 }
@@ -815,26 +815,29 @@ static void PaintFGOverlay(HWND hwnd) noexcept {
     SelectObject(dc,sectionFont);SetTextColor(dc,RGB(210,32,32));
     RECT ptTitle{30,738+lowerSectionOffset,320,765+lowerSectionOffset};
     DrawTextW(dc,L"PATH TRACING",-1,&ptTitle,DT_LEFT|DT_VCENTER|DT_SINGLELINE);
-    const bool ptEnabled=PT2IsEnabled();
-    const RECT ptToggle{30,774+lowerSectionOffset,220,824+lowerSectionOffset};
+    const bool ptEnabled=PT3IsEnabled();
+    const RECT ptToggle{30,774+lowerSectionOffset,210,824+lowerSectionOffset};
     SelectObject(dc,ptEnabled?buttonSelectedFont:buttonFont);
     PaintFGButton(dc,ptToggle,ptEnabled?L"PT ON":L"PT OFF",ptEnabled,true);
     SelectObject(dc,labelFont);SetTextColor(dc,ptEnabled?RGB(169,169,169):RGB(78,78,78));
-    RECT ptViewLabel{244,774+lowerSectionOffset,320,824+lowerSectionOffset};
+    RECT ptViewLabel{226,774+lowerSectionOffset,292,824+lowerSectionOffset};
     DrawTextW(dc,L"VIEW",-1,&ptViewLabel,DT_LEFT|DT_VCENTER|DT_SINGLELINE);
-    const unsigned ptView=PT2ViewMode();
-    const RECT ptHit{320,774+lowerSectionOffset,438,824+lowerSectionOffset};
-    const RECT ptDist{448,774+lowerSectionOffset,566,824+lowerSectionOffset};
-    const RECT ptInst{576,774+lowerSectionOffset,710,824+lowerSectionOffset};
+    const unsigned ptView=PT3ViewMode();
+    const RECT ptBeauty{294,774+lowerSectionOffset,390,824+lowerSectionOffset};
+    const RECT ptHit{398,774+lowerSectionOffset,494,824+lowerSectionOffset};
+    const RECT ptDist{502,774+lowerSectionOffset,598,824+lowerSectionOffset};
+    const RECT ptInst{606,774+lowerSectionOffset,710,824+lowerSectionOffset};
+    SelectObject(dc,(ptEnabled&&ptView==0)?buttonSelectedFont:buttonFont);PaintFGButton(dc,ptBeauty,L"BEAUTY",ptView==0,ptEnabled);
     SelectObject(dc,(ptEnabled&&ptView==1)?buttonSelectedFont:buttonFont);PaintFGButton(dc,ptHit,L"HIT/MISS",ptView==1,ptEnabled);
     SelectObject(dc,(ptEnabled&&ptView==2)?buttonSelectedFont:buttonFont);PaintFGButton(dc,ptDist,L"DISTANCE",ptView==2,ptEnabled);
     SelectObject(dc,(ptEnabled&&ptView==3)?buttonSelectedFont:buttonFont);PaintFGButton(dc,ptInst,L"INSTANCE",ptView==3,ptEnabled);
 
     unsigned long long ptRays=0,ptSampled=0,ptHits=0,ptMisses=0;float ptMin=0,ptMax=0,ptAvg=0;unsigned ptChecksum=0;
-    PT2GetOverlayStats(&ptRays,&ptSampled,&ptHits,&ptMisses,&ptMin,&ptMax,&ptAvg,&ptChecksum);
+    PT3GetOverlayStats(&ptRays,&ptSampled,&ptHits,&ptMisses,&ptMin,&ptMax,&ptAvg,&ptChecksum);
     SelectObject(dc,smallFont);SetTextColor(dc,ptEnabled?RGB(190,190,190):RGB(90,90,90));
-    wchar_t ptStats[220]{};
-    if(ptEnabled&&ptSampled)swprintf_s(ptStats,L"Rays %llu  |  sampled %llu  |  hits %llu  |  misses %llu  |  avg %.1f  |  checksum %08X",ptRays,ptSampled,ptHits,ptMisses,double(ptAvg),ptChecksum);
+    wchar_t ptStats[256]{};
+    if(ptEnabled&&ptSampled&&ptView==0)swprintf_s(ptStats,L"BEAUTY v1  |  1 diffuse + 1 specular secondary ray  |  rays %llu  |  primary hits %llu/%llu",ptRays,ptHits,ptSampled);
+    else if(ptEnabled&&ptSampled)swprintf_s(ptStats,L"%ls  |  rays %llu  |  sampled %llu  |  hits %llu  |  misses %llu  |  avg %.1f",PT3ViewModeLabelWide(),ptRays,ptSampled,ptHits,ptMisses,double(ptAvg));
     else swprintf_s(ptStats,ptEnabled?L"PT active - waiting for GPU counters...":L"PT OFF is the native Control RT/RR comparison baseline.");
     RECT ptStatsRc{30,836+lowerSectionOffset,710,870+lowerSectionOffset};DrawTextW(dc,ptStats,-1,&ptStatsRc,DT_LEFT|DT_VCENTER|DT_SINGLELINE);
 
@@ -886,10 +889,10 @@ static unsigned int FGOverlayRRPresetFromPoint(int x,int y) noexcept {
     if(x>=536&&x<652)return control_rr::RRPresetF;
     return 0;
 }
-static bool FGOverlayPTToggleFromPoint(int x,int y) noexcept {const int y0=774+FGOverlayLowerSectionOffset();return x>=30&&x<220&&y>=y0&&y<y0+50;}
+static bool FGOverlayPTToggleFromPoint(int x,int y) noexcept {const int y0=774+FGOverlayLowerSectionOffset();return x>=30&&x<210&&y>=y0&&y<y0+50;}
 static unsigned FGOverlayPTViewFromPoint(int x,int y) noexcept {
-    const int y0=774+FGOverlayLowerSectionOffset();if(y<y0||y>=y0+50)return 0;
-    if(x>=320&&x<438)return 1;if(x>=448&&x<566)return 2;if(x>=576&&x<710)return 3;return 0;
+    const int y0=774+FGOverlayLowerSectionOffset();if(y<y0||y>=y0+50)return 0xFFFFFFFFu;
+    if(x>=294&&x<390)return 0;if(x>=398&&x<494)return 1;if(x>=502&&x<598)return 2;if(x>=606&&x<710)return 3;return 0xFFFFFFFFu;
 }
 static void FGOverlayApplySliderPoint(HWND hwnd, int x) noexcept {
     if (!IsFGDynamicSelection(GetFGUserMultiplier())) return;
@@ -1018,15 +1021,15 @@ static LRESULT CALLBACK FGOverlayWndProc(HWND hwnd, UINT message, WPARAM wParam,
             return 0;
         }
         if(FGOverlayPTToggleFromPoint(x,y)){
-            const bool next=!PT2IsEnabled();PT2SetEnabled(next,"overlay");FGOverlayMarkSettingsDirty();FGOverlayFlushSettingsIfDue(true);
-            Log("PT2_OVERLAY_TOGGLE enabled=%u view=%u view_name=%ls persistence=%s",unsigned(next),PT2ViewMode(),PT2ViewModeLabelWide(),fgOverlaySettingsDirty?"dirty":"saved");
+            const bool next=!PT3IsEnabled();PT3SetEnabled(next,"overlay");FGOverlayMarkSettingsDirty();FGOverlayFlushSettingsIfDue(true);
+            Log("PT3_OVERLAY_TOGGLE enabled=%u view=%u view_name=%ls persistence=%s",unsigned(next),PT3ViewMode(),PT3ViewModeLabelWide(),fgOverlaySettingsDirty?"dirty":"saved");
             InvalidateRect(hwnd,nullptr,FALSE);return 0;
         }
         const unsigned ptViewSelection=FGOverlayPTViewFromPoint(x,y);
-        if(ptViewSelection){
-            if(!PT2IsEnabled()){Log("PT2_OVERLAY_VIEW_BLOCKED reason=pt_off requested=%u",ptViewSelection);return 0;}
-            PT2SetViewMode(ptViewSelection,"overlay");FGOverlayMarkSettingsDirty();FGOverlayFlushSettingsIfDue(true);
-            Log("PT2_OVERLAY_VIEW mode=%u name=%ls persistence=%s",PT2ViewMode(),PT2ViewModeLabelWide(),fgOverlaySettingsDirty?"dirty":"saved");
+        if(ptViewSelection!=0xFFFFFFFFu){
+            if(!PT3IsEnabled()){Log("PT3_OVERLAY_VIEW_BLOCKED reason=pt_off requested=%u",ptViewSelection);return 0;}
+            PT3SetViewMode(ptViewSelection,"overlay");FGOverlayMarkSettingsDirty();FGOverlayFlushSettingsIfDue(true);
+            Log("PT3_OVERLAY_VIEW mode=%u name=%ls persistence=%s",PT3ViewMode(),PT3ViewModeLabelWide(),fgOverlaySettingsDirty?"dirty":"saved");
             InvalidateRect(hwnd,nullptr,FALSE);return 0;
         }
         const unsigned int selection = FGOverlayMultiplierFromPoint(x, y);
