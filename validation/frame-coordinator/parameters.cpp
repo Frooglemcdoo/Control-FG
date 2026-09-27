@@ -4,7 +4,7 @@
 #include <map>
 #include <string>
 struct Resource {};
-struct Bindings {Resource* normal;Resource* diffuse;Resource* specular;float worldToView[16]{},viewToClip[16]{};};
+struct Bindings {Resource* normal;Resource* diffuse;Resource* specular;Resource* specularMotion=nullptr;float worldToView[16]{},viewToClip[16]{};};
 struct Api {
  mutable std::map<std::string,void*> resources,pointers;
  mutable std::map<std::string,int> integers;
@@ -18,7 +18,7 @@ struct Api {
  bool IntegerEquals(const char* name,int value) const {if(++reads==loseRead)return false;auto it=integers.find(name);return it!=integers.end()&&it->second==value;}
 };
 int main(){
- Resource color,normal,diffuse,specular,distance;Bindings b{&normal,&diffuse,&specular};
+ Resource color,normal,diffuse,specular,distance,specmv;Bindings b{&normal,&diffuse,&specular};
  for(int mode=0;mode<3;++mode)for(int fail=0;fail<=13;++fail){
   Api api;for(auto* key:{"DLSS.Input.DiffuseAlbedo","GBuffer.DiffuseAlbedo","DLSS.Input.SpecularAlbedo","GBuffer.SpecularAlbedo","GBuffer.Normals","GBuffer.Roughness","GBuffer.SpecularMvec","MotionVectorsReflection","DLSSD.SpecularHitDistance"})api.resources[key]=&color;
   api.integers["DLSS.Roughness.Mode"]=0;
@@ -33,7 +33,15 @@ int main(){
  assert(noReset.resources["DLSSD.SpecularHitDistance"]==nullptr);
  assert(control_rr::SetGuideParameters(noReset,b,&distance,false));
  assert(noReset.resources["DLSSD.SpecularHitDistance"]==&distance);
+ b.specularMotion=&specmv;
+ assert(control_rr::SetGuideParameters(noReset,b,&distance,false));
+ assert(noReset.resources["GBuffer.SpecularMvec"]==&specmv);
+ assert(noReset.resources["MotionVectorsReflection"]==&specmv);
+ assert(noReset.resources["DLSSD.SpecularHitDistance"]==nullptr);
+ b.specularMotion=nullptr;
  assert(control_rr::SetGuideParameters(noReset,b,(Resource*)nullptr,false));
+ assert(noReset.resources["GBuffer.SpecularMvec"]==nullptr);
+ assert(noReset.resources["MotionVectorsReflection"]==nullptr);
  assert(noReset.resources["DLSSD.SpecularHitDistance"]==nullptr);
  for(int bit=0;bit<7;++bit){
   void* n=nullptr;void* d=nullptr;void* s=nullptr;void* c=&color;
@@ -44,5 +52,5 @@ int main(){
  void* n=nullptr;void* d=nullptr;void* s=nullptr;
  assert(control_rr::PrepareNativeAAArguments(false,false,false,false,nullptr,n,d,s));assert(!n&&!d&&!s);
  assert(control_rr::PrepareNativeAAArguments(true,true,false,true,&color,n,d,s));assert(n==&color&&d==&color&&s==&color);
- puts("PASS all r21r retained r21q guide aliases/setters/getters reject RR, optional hit distance binds and clears without stale values, packed roughness mode and matrices verified, SR arguments unchanged");
+ puts("PASS all r21r retained r21q guide aliases/setters/getters reject RR, exclusive specular-MV/hit-distance binding clears without stale values, packed roughness mode and matrices verified, SR arguments unchanged");
 }
