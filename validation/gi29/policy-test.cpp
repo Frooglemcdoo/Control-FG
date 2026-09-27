@@ -4,10 +4,10 @@
 #include <cstdio>
 int main(){
  using namespace control_rr;
- assert(!RRUserDirectDlfParity());
+ assert(RRUserDirectDlfParity());
  assert(control_rr_clamp::Requested()==60);
  assert(control_rr_clamp::Normalize(60)==60);
- RRUserSetDirectDlfParity(true);assert(RRUserDirectDlfParity());
  RRUserSetDirectDlfParity(false);assert(!RRUserDirectDlfParity());
- std::puts("PASS GI30 DLF A/B policy: clean baseline defaults OFF; six-shader mode remains toggleable; specular clamp remains 60");
+ RRUserSetDirectDlfParity(true);assert(RRUserDirectDlfParity());
+ std::puts("PASS GI32 DLF A/B policy: direct RenoDX DLF defaults ON; mode remains toggleable; specular clamp remains 60");
 }

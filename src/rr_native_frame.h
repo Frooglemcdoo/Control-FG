@@ -47,6 +47,9 @@ static RRAlbedoCallPatch rrNativeGIReleasePatch{};
 static RRAlbedoCallPatch rrNativeContactShadowFilterPatch{};
 static RRAlbedoCallPatch rrNativeBroadDiffuseFilterPatchMain{},rrNativeBroadDiffuseFilterPatchA{},rrNativeBroadDiffuseFilterPatchB{};
 static RRNativeJitterOptionPatch rrNativeJitterOptionPatch{};
+using RRNativeSetProviderFn=void (*)(int,const void*,const char*);
+static RRNativeSetProviderFn rrNativeSetProviderOriginal=nullptr;
+static RRIndirectCallPatch rrNativeDgiPassPatch{};
 static std::atomic<unsigned long long> rrNativeRegisteredOptionRepairs{0};
 static std::atomic<unsigned long long> rrNativeContactShadowBypasses{0};
 static std::atomic<unsigned long long> rrNativeBroadDiffuseBypassesMain{0},rrNativeBroadDiffuseBypassesA{0},rrNativeBroadDiffuseBypassesB{0};
@@ -262,6 +265,40 @@ static bool RRNativeReadRTSettings(unsigned* enabledBits) noexcept {
   return true;
  } __except(EXCEPTION_EXECUTE_HANDLER){return false;}
 }
+static void RRNativeHookDgiPassProvider(int provider,const void* data,const char* name) {
+ // GI32 hooks only renderer+0x12BF85, the audited setProviderData call that
+ // publishes g_uDGIPassCount. Native mode forwards the exact pointer untouched.
+ if(!rrNativeSetProviderOriginal)return;
+ const DWORD incomingError=GetLastError();
+ unsigned int nativeValue=0;bool readable=false;
+ __try {if(data){std::memcpy(&nativeValue,data,sizeof(nativeValue));readable=true;}}
+ __except(EXCEPTION_EXECUTE_HANDLER){readable=false;}
+ const unsigned int requested=control_rr::RRUserDgiBounces();
+ bool overrideActive=readable&&requested>=1&&requested<=16&&rrNativeFrameEnabled&&rrNativeFrame.Selected()&&!rrNativeFrame.Stopped();
+ unsigned int effective=overrideActive?requested:nativeValue;
+ // This exact audited call passes &stackLocal to setProviderData, then reloads
+ // that same stack local into g_uDGIPassCount immediately after the call.
+ // Patch the caller-owned 4-byte local in place so both the provider and the
+ // renderer's subsequent mirror/branch consume the selected value.
+ if(overrideActive){
+  __try {std::memcpy(const_cast<void*>(data),&effective,sizeof(effective));}
+  __except(EXCEPTION_EXECUTE_HANDLER){overrideActive=false;effective=nativeValue;}
+ }
+ SetLastError(incomingError);
+ rrNativeSetProviderOriginal(provider,data,name);
+ const DWORD nativeError=GetLastError();
+ if(readable){
+  control_rr::RRUserPublishDgiBounces(nativeValue,effective);
+  unsigned long long frame=0;DWORD fault=0;const bool frameKnown=ReadEngineFrameSafe(&frame,&fault);
+  static unsigned int lastRequested=0xFFFFFFFFu,lastNative=0xFFFFFFFFu,lastEffective=0xFFFFFFFFu;
+  if(requested!=lastRequested||nativeValue!=lastNative||effective!=lastEffective||(frameKnown&&frame%240==0)){
+   Log("RR_GI32_DGI_BOUNCES frame=%llu native=%u requested=%u effective=%u override=%u stack_value_patched=%u max=16 provider=%d",
+    frameKnown?frame:0ull,nativeValue,requested,effective,unsigned(overrideActive),unsigned(overrideActive),provider);
+   lastRequested=requested;lastNative=nativeValue;lastEffective=effective;
+  }
+ }
+ SetLastError(nativeError);
+}
 static void RRNativeHookGIRelease(void* history) {
  // Preserve the native ownership operation exactly once, including exceptions.
  rrNativeGIReleaseOriginal(history);
@@ -368,12 +405,16 @@ static bool RRNativeHookReset(unsigned outputWidth,unsigned outputHeight,unsigne
  const DWORD nativeError=GetLastError();
  const bool observed=RRNativeReadMode(&supported,&active);
  rrNativeFrame.FeatureResult(result&&observed,active);
- const bool mirrorRR=control_rr::NativeRenderOption(rrNativeFrameEnabled,rrNativeFrame.Selected()||partial,rrNativeFrame.Stopped());
+ const auto count=++rrNativeResetCalls;
+ const bool jitterRR1024=control_rr::RRUserJitterRR1024();
+ const bool mirrorRR=jitterRR1024&&control_rr::NativeRenderOption(rrNativeFrameEnabled,rrNativeFrame.Selected()||partial,rrNativeFrame.Stopped());
  if(!rrNativeJitterOptionPatch.Set(mirrorRR)){rrNativeFrame.Fail("native_jitter_option_mirror");rrNativePartialFrame.store(false,std::memory_order_release);}
+ if(count<=4||(count%240)==0)
+  Log("RR_GI32_JITTER frame=%llu mode=%s mirror=%u control_baseline=%u rr_selected=%u partial=%u",
+   frame,jitterRR1024?"rr_1024":"control",unsigned(mirrorRR),unsigned(!jitterRR1024),unsigned(rrNativeFrame.Selected()),unsigned(partial));
  RRPerfFrameMode(frame,outputWidth,outputHeight,width,height,requested,selected,ready,effects);
  control_rr::RRUserWaitingStatus(known&&supported,configuration,effects);
  control_rr::RRUserFrameStatus(requested,selected,rrNativeFrame.Stopped(),rrNativeFrame.Recovering(),rrNativeFrame.Resizing()||control_rr::RRUserRuntimePaused());
- const auto count=++rrNativeResetCalls;
  if(count<=4||(selected&&reset)||(partial&&(count%120)==0)||(count%240)==0||!result)
   Log("RR_FRAME_MODE frame=%llu mode=%s selected=%u partial=%u ready=%u supported=%u active=%u reset_success=%u stopped=%u width=%u height=%u reset=%u rt_effects=0x%X registered_option=off runtime_paused=%u runtime_pause_reasons=0x%X resize_epoch=%llu preset_epoch=%llu",frame,partial?"partial":(selected?"full":"off"),unsigned(selected),unsigned(partial),unsigned(ready),unsigned(supported),unsigned(active),unsigned(result),unsigned(rrNativeFrame.Stopped()),width,height,unsigned(reset),effects,unsigned(control_rr::RRUserRuntimePaused()),control_rr::RRUserRuntimePauseReasons(),rrNativeResizeEpoch.epoch,rrNativePresetEpoch.epoch);
  SetLastError(nativeError);return result;
@@ -763,13 +804,18 @@ static bool RRNativeInstallFrame(HMODULE renderer,HMODULE d3d) noexcept {
   !RRAlbedoPrepareCallPatch(base+0x2489a4,reinterpret_cast<void*>(rrNativeDiffuseFilterOriginal),reinterpret_cast<void*>(&RRNativeHookBroadDiffuseA),&rrNativeBroadDiffuseFilterPatchA)||
   !RRAlbedoPrepareCallPatch(base+0x24a3f2,reinterpret_cast<void*>(rrNativeDiffuseFilterOriginal),reinterpret_cast<void*>(&RRNativeHookBroadDiffuseB),&rrNativeBroadDiffuseFilterPatchB)||
   !rrNativeJitterOptionPatch.Prepare(base+0x11de2e,base+0x914620))return false;
+ rrNativeSetProviderOriginal=reinterpret_cast<RRNativeSetProviderFn>(GetProcAddress(d3d,control_rr_native_clamp::SetProviderName));
+ if(!rrNativeSetProviderOriginal||
+  !rrNativeDgiPassPatch.Prepare(base+0x12bf85,reinterpret_cast<void**>(base+control_rr_native_clamp::SetProviderIatRva),
+   reinterpret_cast<void*>(rrNativeSetProviderOriginal),reinterpret_cast<void*>(&RRNativeHookDgiPassProvider)))return false;
 
  // Clear any r20m-era leaked TRUE value only to the native OFF baseline. From
  // this point forward the registered option is never written TRUE by the mod.
  if(!RRNativeKeepRegisteredOptionOff()||!rrNativeJitterOptionPatch.Set(false))return false;
 
- bool temporalBind=false,reflectionOption=false,giRadiusOption=false,giBypassOption=false,filter=false,gi=false,giMain=false,contactShadow=false,broadA=false,broadB=false,jitter=false;
- if(rrNativeDispatchPatch.Exchange(true)&&rrNativeDispatchPatch.healthy){
+ bool dgiPass=false,temporalBind=false,reflectionOption=false,giRadiusOption=false,giBypassOption=false,filter=false,gi=false,giMain=false,contactShadow=false,broadA=false,broadB=false,jitter=false;
+ dgiPass=rrNativeDgiPassPatch.Exchange(true);
+ if(dgiPass&&rrNativeDgiPassPatch.healthy&&rrNativeDispatchPatch.Exchange(true)&&rrNativeDispatchPatch.healthy){
   temporalBind=RRAlbedoExchangeCall(&rrNativeTemporalBindPatch,true);
   if(temporalBind&&rrNativeTemporalBindPatch.writeHealthy){
   reflectionOption=RRAlbedoExchangeCall(&rrNativeReflectionOptionPatch,true);
@@ -793,9 +839,9 @@ static bool RRNativeInstallFrame(HMODULE renderer,HMODULE d3d) noexcept {
           jitter=rrNativeJitterOptionPatch.Exchange(true);
         if(jitter&&rrNativeJitterOptionPatch.healthy&&rrNativeResetPatch.Exchange(true)&&rrNativeResetPatch.healthy){
          rrNativeFrameEnabled=true;
-         Log("RR_NATIVE_OPTION_ISOLATION ready=1 registered_option=forced_off_never_true reflection=mod_state gi_radius=mod_state gi_bypass=mod_state jitter=private_mirror partial_mode=mod_owned_option_reads_no_feature13");
+         Log("RR_NATIVE_OPTION_ISOLATION ready=1 registered_option=forced_off_never_true reflection=mod_state gi_radius=mod_state gi_bypass=mod_state jitter=live_control_or_rr1024 partial_mode=mod_owned_option_reads_no_feature13");
          Log("RR_NATIVE_SPECULAR_CLAMP_READY ready=1 target_shader_crc=0x600347E7 camera_cut_provider=name_resolved_per_filter bind_site=0x16744 dispatch_site=0x16786 temporal_history=forced_zero current_frame_energy_clamp=CS3_default_60 restore=verified_each_dispatch reshade_required=0");
-         Log("RR_FRAME_HOOKS_READY native_feature=13 early_mode=1 temporal_signal=CS3_integrated_adjustable raw_copy=off_or_fallback public_reference_ui=0 reflection_geometry_capture=D1_F_only hit_distance_runtime=D1_F_fallback specular_mvec_runtime=GI27_F_optional_default_on guide_stats_readback=0 zero_spatial=1 preserve_brdf=1 native_gi_bypass=GI29_direct_shader_switch dlf_shaders=GI29_six_direct_replacements specular_clamp=60 diffuse_clamp=100 temporal_history=off spatial_replacements=passthrough contact_shadow_denoiser=native_untouched_in_GI29 full_rt_settings=1 option_isolation=1");
+         Log("RR_FRAME_HOOKS_READY native_feature=13 early_mode=1 temporal_signal=CS3_integrated_adjustable raw_copy=off_or_fallback public_reference_ui=0 reflection_geometry=cleared hit_distance=cleared specular_mvec=cleared matrices=identity guide_stats_readback=0 zero_spatial=1 preserve_brdf=1 native_gi_bypass=GI29_direct_shader_switch dlf_shaders=GI29_six_direct_replacements specular_clamp=60 diffuse_clamp=100 temporal_history=off spatial_replacements=passthrough contact_shadow_denoiser=native_untouched dgi_bounces=live_native_or_1_to_16 jitter=live_control_or_rr1024 full_rt_settings=1 option_isolation=1");
          return true;
         }
        }
@@ -823,5 +869,6 @@ static bool RRNativeInstallFrame(HMODULE renderer,HMODULE d3d) noexcept {
  if(giRadiusOption)RRAlbedoExchangeCall(&rrNativeGIRadiusOptionPatch,false);
  if(reflectionOption)RRAlbedoExchangeCall(&rrNativeReflectionOptionPatch,false);
  if(rrNativeDispatchPatch.changed)rrNativeDispatchPatch.Exchange(false);
+ if(dgiPass)rrNativeDgiPassPatch.Exchange(false);
  Log("RR_FRAME_HOOKS_FAILED mode_changes_disabled=1 relays_retained=1 option_isolation_rollback=1");return false;
 }

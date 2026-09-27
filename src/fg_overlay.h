@@ -26,6 +26,8 @@ static HWND fgOverlayLastRefreshGame = nullptr;
 static bool fgOverlaySliderDragging = false;
 static bool fgOverlayClampDragging = false;
 static unsigned fgOverlayClampPreview = 60;
+static bool fgOverlayDgiDragging = false;
+static unsigned fgOverlayDgiPreview = 1;
 static bool fgOverlaySettingsDirty = false;
 static ULONGLONG fgOverlaySettingsDirtyMs = 0;
 static ULONGLONG fgOverlaySettingsSavedPulseUntilMs = 0;
@@ -41,6 +43,15 @@ static unsigned FGOverlayClampFromX(int x) noexcept {
 }
 static int FGOverlayClampToX(unsigned value) noexcept {
     return 30 + static_cast<int>(control_rr_clamp::Normalize(value) - 25u) * 470 / 50;
+}
+static unsigned FGOverlayDgiFromX(int x) noexcept {
+    if (x <= 30) return 1;
+    if (x >= 500) return 16;
+    return 1u + static_cast<unsigned>((x - 30) * 15 + 235) / 470u;
+}
+static int FGOverlayDgiToX(unsigned value) noexcept {
+    if(value<1)value=1;if(value>16)value=16;
+    return 30 + static_cast<int>(value - 1u) * 470 / 15;
 }
 static bool fgOverlayBindingCapture = false;
 static bool fgOverlayBindingKeysDown[256]{};
@@ -632,28 +643,51 @@ static void PaintFGOverlay(HWND hwnd) noexcept {
         swprintf_s(status,L"Last RR: %u%%%s. Release to apply. Saves automatically.",control_rr_clamp::effective.load(),control_rr_clamp::applied.load()?L"":L" (native fallback)");
         RECT help{30,330,710,365}; DrawTextW(dc,status,-1,&help,DT_LEFT|DT_WORDBREAK);
         SelectObject(dc,bodyFont);SetTextColor(dc,RGB(246,246,246));
-        RECT mvLabel{30,382,470,420};DrawTextW(dc,L"Specular motion vectors",-1,&mvLabel,DT_LEFT|DT_VCENTER|DT_SINGLELINE);
-        SelectObject(dc,buttonFont);
-        PaintFGButton(dc,RECT{500,375,710,425},L"OFF - GI30",false,false);
+        RECT jitterLabel{30,382,360,420};DrawTextW(dc,L"Jitter mode",-1,&jitterLabel,DT_LEFT|DT_VCENTER|DT_SINGLELINE);
+        const bool rr1024=control_rr::RRUserJitterRR1024();
+        SelectObject(dc,!rr1024?buttonSelectedFont:buttonFont);
+        PaintFGButton(dc,RECT{390,375,535,425},L"CONTROL",!rr1024,true);
+        SelectObject(dc,rr1024?buttonSelectedFont:buttonFont);
+        PaintFGButton(dc,RECT{545,375,710,425},L"RR 1024",rr1024,true);
         SelectObject(dc,smallFont);SetTextColor(dc,RGB(190,190,190));
-        RECT mvHelp{30,430,710,468};
-        DrawTextW(dc,L"GI30 baseline: specular MVs and hit distance are hard-disabled; RR uses identity matrices.",-1,&mvHelp,DT_LEFT|DT_WORDBREAK);
+        RECT jitterHelp{30,430,710,468};
+        DrawTextW(dc,L"Live A/B. CONTROL keeps the normal DLSS/SR jitter cadence; RR 1024 restores the long native-RR period.",-1,&jitterHelp,DT_LEFT|DT_WORDBREAK);
+
+        const unsigned dgiRequested=control_rr::RRUserDgiBounces();
+        const unsigned dgiValue=fgOverlayDgiDragging?fgOverlayDgiPreview:(dgiRequested?dgiRequested:(control_rr::RRUserDgiNative()?control_rr::RRUserDgiNative():1u));
+        wchar_t dgiLabel[128]{};
+        if(dgiRequested)swprintf_s(dgiLabel,L"DGI bounces: %u",dgiValue);
+        else if(control_rr::RRUserDgiNative())swprintf_s(dgiLabel,L"DGI bounces: NATIVE (%u)",control_rr::RRUserDgiNative());
+        else swprintf_s(dgiLabel,L"DGI bounces: NATIVE");
+        SelectObject(dc,bodyFont);SetTextColor(dc,RGB(246,246,246));
+        RECT dgiLabelRc{30,486,500,518};DrawTextW(dc,dgiLabel,-1,&dgiLabelRc,DT_LEFT|DT_VCENTER|DT_SINGLELINE);
+        const int dgiKnob=FGOverlayDgiToX(dgiValue);
+        PaintFGRect(dc,RECT{30,542,500,564},RGB(45,45,45),RGB(95,95,95));
+        PaintFGRect(dc,RECT{30,542,dgiKnob,564},RGB(240,240,240),RGB(240,240,240));
+        PaintFGRect(dc,RECT{dgiKnob-6,532,dgiKnob+6,574},RGB(255,255,255),RGB(255,255,255));
+        SelectObject(dc,buttonFont);
+        PaintFGButton(dc,RECT{530,525,710,575},L"NATIVE",dgiRequested==0,true);
+        SelectObject(dc,smallFont);SetTextColor(dc,RGB(190,190,190));
+        RECT dgiLo{30,578,80,600},dgiHi{450,578,500,600};
+        DrawTextW(dc,L"1",-1,&dgiLo,DT_LEFT|DT_SINGLELINE);DrawTextW(dc,L"16",-1,&dgiHi,DT_RIGHT|DT_SINGLELINE);
+        RECT dgiHelp{30,605,710,645};
+        DrawTextW(dc,L"Experimental g_uDGIPassCount override. Every integer 1-16 is selectable; higher values can be very expensive.",-1,&dgiHelp,DT_LEFT|DT_WORDBREAK);
 
         SelectObject(dc,bodyFont);SetTextColor(dc,RGB(246,246,246));
-        RECT dlfLabel{30,482,470,520};DrawTextW(dc,L"Direct RenoDX DLF shaders",-1,&dlfLabel,DT_LEFT|DT_VCENTER|DT_SINGLELINE);
+        RECT dlfLabel{30,665,470,705};DrawTextW(dc,L"Direct RenoDX DLF shaders",-1,&dlfLabel,DT_LEFT|DT_VCENTER|DT_SINGLELINE);
         const bool directDlf=control_rr::RRUserDirectDlfParity();
         SelectObject(dc,directDlf?buttonSelectedFont:buttonFont);
-        PaintFGButton(dc,RECT{500,475,710,525},directDlf?L"ON":L"OFF",directDlf,true);
+        PaintFGButton(dc,RECT{500,658,710,708},directDlf?L"ON":L"OFF",directDlf,true);
         SelectObject(dc,smallFont);SetTextColor(dc,RGB(190,190,190));
-        RECT dlfHelp{30,530,710,600};
-        DrawTextW(dc,L"GI30 A/B only. Baseline starts OFF. ON enables the GI29 six-shader DLF replacement; clamp remains 60%.",-1,&dlfHelp,DT_LEFT|DT_WORDBREAK);
+        RECT dlfHelp{30,714,710,760};
+        DrawTextW(dc,L"GI32 baseline is ON. Uses the six direct RenoDX DLF replacements; reflection clamp remains 60%.",-1,&dlfHelp,DT_LEFT|DT_WORDBREAK);
 
         SelectObject(dc,bodyFont);SetTextColor(dc,RGB(246,246,246));
-        RECT contactLabel{30,615,710,650};
-        DrawTextW(dc,L"GI30 leaves Control contact shadows untouched in both states.",-1,&contactLabel,DT_LEFT|DT_VCENTER|DT_SINGLELINE);
+        RECT contactLabel{30,770,710,805};
+        DrawTextW(dc,L"Specular MV/hit distance remain OFF; identity RR matrices and native contact-shadow routing remain fixed.",-1,&contactLabel,DT_LEFT|DT_VCENTER|DT_WORDBREAK);
 
         SelectObject(dc,buttonFont);
-        PaintFGButton(dc,RECT{550,700,710,750},L"Back",false);
+        PaintFGButton(dc,RECT{550,835,710,885},L"Back",false);
     } else {
     const unsigned int selected = GetFGUserMultiplier();
     const unsigned int maxSupported = GetFGMaxSupportedMultiplier();
@@ -832,7 +866,7 @@ static bool FGOverlaySliderFromPoint(int x, int y) noexcept {
     return IsFGDynamicSelection(GetFGUserMultiplier()) && y >= 443 && y < 512 && x >= 30 && x < 710;
 }
 static int FGOverlayLowerSectionOffset() noexcept { return IsFGDynamicSelection(GetFGUserMultiplier()) ? 0 : -kFGOverlayDynamicSectionHeight; }
-static int FGOverlayDesiredHeight() noexcept { if (fgOverlayOptionsPage) return 640; if (fgOverlayRRSettingsPage) return 780; return IsFGDynamicSelection(GetFGUserMultiplier()) ? kFGOverlayHeight : kFGOverlayCompactHeight; }
+static int FGOverlayDesiredHeight() noexcept { if (fgOverlayOptionsPage) return 640; if (fgOverlayRRSettingsPage) return 915; return IsFGDynamicSelection(GetFGUserMultiplier()) ? kFGOverlayHeight : kFGOverlayCompactHeight; }
 static void FGOverlayResizeWindowForCurrentSelection(HWND hwnd) noexcept {
     if (!hwnd) return;
     SetWindowPos(hwnd, nullptr, 0, 0, kFGOverlayWidth, FGOverlayDesiredHeight(),
@@ -880,6 +914,7 @@ static LRESULT CALLBACK FGOverlayWndProc(HWND hwnd, UINT message, WPARAM wParam,
             fgOverlayOptionsPage = !fgOverlayOptionsPage;
             fgOverlayRRSettingsPage = false;
             fgOverlayClampDragging = false;
+            fgOverlayDgiDragging = false;
             fgOverlayBindingCapture = false;
             fgOverlaySliderDragging = false;
             if (GetCapture() == hwnd) ReleaseCapture();
@@ -928,14 +963,26 @@ static LRESULT CALLBACK FGOverlayWndProc(HWND hwnd, UINT message, WPARAM wParam,
                 FGOverlayMarkSettingsDirty();
                 FGOverlayFlushSettingsIfDue(true);
                 Log("RR_CLAMP_RESET_CS4 selected=60");
-            } else if (x >= 500 && x < 710 && y >= 375 && y < 425) {
-                control_rr::RRUserSetSpecularMotionRequested(false);
-                Log("RR_GI30_GEOMETRY_UI ignored=1 specular_mvec=disabled hit_distance=disabled matrices=identity");
-            } else if (x >= 500 && x < 710 && y >= 475 && y < 525) {
+            } else if (x >= 390 && x < 535 && y >= 375 && y < 425) {
+                const bool previous=control_rr::RRUserJitterRR1024();
+                control_rr::RRUserSetJitterMode(control_rr::RRJitterMode::Control);
+                Log("RR_GI32_JITTER_UI previous=%s selected=control history_reset=next_rr_evaluation",previous?"rr_1024":"control");
+            } else if (x >= 545 && x < 710 && y >= 375 && y < 425) {
+                const bool previous=control_rr::RRUserJitterRR1024();
+                control_rr::RRUserSetJitterMode(control_rr::RRJitterMode::RR1024);
+                Log("RR_GI32_JITTER_UI previous=%s selected=rr_1024 history_reset=next_rr_evaluation",previous?"rr_1024":"control");
+            } else if (x >= 24 && x <= 506 && y >= 525 && y < 580) {
+                fgOverlayDgiPreview=FGOverlayDgiFromX(x);
+                fgOverlayDgiDragging=true;SetCapture(hwnd);
+            } else if (x >= 530 && x < 710 && y >= 525 && y < 580) {
+                const unsigned previous=control_rr::RRUserDgiBounces();
+                control_rr::RRUserSetDgiBounces(0);
+                Log("RR_GI32_DGI_UI previous=%u selected=native history_reset=next_rr_evaluation",previous);
+            } else if (x >= 500 && x < 710 && y >= 658 && y < 708) {
                 const bool previous=control_rr::RRUserDirectDlfParity();
                 control_rr::RRUserSetDirectDlfParity(!previous);
-                Log("RR_GI30_DLF_UI previous=%u enabled=%u apply=next_frame session_only=1 baseline_off=1 specular_clamp=60 diffuse_clamp=100",unsigned(previous),unsigned(!previous));
-            } else if (x >= 550 && x < 710 && y >= 700 && y < 750) {
+                Log("RR_GI32_DLF_UI previous=%u enabled=%u apply=next_frame history_reset=next_rr_evaluation specular_clamp=60 diffuse_clamp=100",unsigned(previous),unsigned(!previous));
+            } else if (x >= 550 && x < 710 && y >= 835 && y < 885) {
                 fgOverlayRRSettingsPage=false;
                 FGOverlayResizeWindowForCurrentSelection(hwnd);
             }
@@ -1046,6 +1093,10 @@ static LRESULT CALLBACK FGOverlayWndProc(HWND hwnd, UINT message, WPARAM wParam,
             fgOverlayClampPreview=FGOverlayClampFromX(static_cast<short>(LOWORD(lParam)));
             InvalidateRect(hwnd,nullptr,FALSE);return 0;
         }
+        if(fgOverlayDgiDragging){
+            fgOverlayDgiPreview=FGOverlayDgiFromX(static_cast<short>(LOWORD(lParam)));
+            InvalidateRect(hwnd,nullptr,FALSE);return 0;
+        }
         if (fgOverlaySliderDragging && !IsFGDynamicSelection(GetFGUserMultiplier())) {
             fgOverlaySliderDragging = false;
             if (GetCapture() == hwnd) ReleaseCapture();
@@ -1057,6 +1108,14 @@ static LRESULT CALLBACK FGOverlayWndProc(HWND hwnd, UINT message, WPARAM wParam,
         }
         break;
     case WM_LBUTTONUP:
+        if(fgOverlayDgiDragging){
+            fgOverlayDgiPreview=FGOverlayDgiFromX(static_cast<short>(LOWORD(lParam)));
+            fgOverlayDgiDragging=false;
+            control_rr::RRUserSetDgiBounces(fgOverlayDgiPreview);
+            if(GetCapture()==hwnd)ReleaseCapture();
+            Log("RR_GI32_DGI_UI selected=%u range=1_16 history_reset=next_rr_evaluation",fgOverlayDgiPreview);
+            InvalidateRect(hwnd,nullptr,FALSE);return 0;
+        }
         if(fgOverlayClampDragging){
             fgOverlayClampPreview=FGOverlayClampFromX(static_cast<short>(LOWORD(lParam)));
             fgOverlayClampDragging=false;
@@ -1076,10 +1135,12 @@ static LRESULT CALLBACK FGOverlayWndProc(HWND hwnd, UINT message, WPARAM wParam,
         break;
     case WM_CAPTURECHANGED:
         fgOverlayClampDragging=false;
+        fgOverlayDgiDragging=false;
         fgOverlaySliderDragging = false;
         break;
     case WM_CLOSE:
         fgOverlayClampDragging=false;
+        fgOverlayDgiDragging=false;
         if(GetCapture()==hwnd)ReleaseCapture();
         fgOverlayBindingCapture = false;
         FGOverlayFlushSettingsIfDue(true);

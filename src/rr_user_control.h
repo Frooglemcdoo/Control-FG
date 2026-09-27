@@ -21,9 +21,18 @@ inline std::atomic<bool> rrUserSpecularMotionActive{false};
 // Contact-shadow RenoDX mode leaves Control's contact-shadow filter untouched.
 inline std::atomic<bool> rrUserDiffuseClampRenoDX{true};
 inline std::atomic<bool> rrUserContactShadowRenoDX{false};
-// GI30: keep the GI29 six-shader DLF replacement available strictly for A/B.
-// Baseline starts OFF; specular clamp remains the user's established 0.60.
-inline std::atomic<bool> rrUserDirectDlfParity{false};
+// GI32: Direct RenoDX DLF is now the preferred baseline and starts ON.
+inline std::atomic<bool> rrUserDirectDlfParity{true};
+// GI32 live image-quality A/B controls.
+// Jitter Control = preserve Control's normal DLSS/SR cadence.
+// Jitter RR1024 = restore the historical native-RR 1024-frame period.
+// DGI bounces 0 = native game value; 1..16 overrides g_uDGIPassCount.
+enum class RRJitterMode : unsigned int { Control=0, RR1024=1 };
+inline std::atomic<unsigned int> rrUserJitterMode{static_cast<unsigned int>(RRJitterMode::Control)};
+inline std::atomic<unsigned int> rrUserDgiBounces{0};
+inline std::atomic<unsigned int> rrUserDgiNative{0};
+inline std::atomic<unsigned int> rrUserDgiEffective{0};
+inline std::atomic<unsigned long long> rrUserImageQualityGeneration{1};
 inline std::atomic<RRUserStatus> rrUserStatus{RRUserStatus::Off};
 enum class RRWaitReason {Guides,Unsupported,EnableReflections,OtherRT,Matrix,Resolution,Depth,Input,Handoff,Pipeline,CaptureBudget,CaptureBudgetQuery,CaptureAllocation};
 inline std::atomic<RRWaitReason> rrUserWaitReason{RRWaitReason::Guides};
@@ -112,8 +121,32 @@ inline bool RRUserDiffuseClampRenoDX() noexcept {return rrUserDiffuseClampRenoDX
 inline void RRUserSetDiffuseClampRenoDX(bool enabled) noexcept {rrUserDiffuseClampRenoDX.store(enabled,std::memory_order_release);}
 inline bool RRUserContactShadowRenoDX() noexcept {return rrUserContactShadowRenoDX.load(std::memory_order_acquire);}
 inline void RRUserSetContactShadowRenoDX(bool enabled) noexcept {rrUserContactShadowRenoDX.store(enabled,std::memory_order_release);}
+inline unsigned long long RRUserImageQualityGeneration() noexcept {return rrUserImageQualityGeneration.load(std::memory_order_acquire);}
+inline void RRUserBumpImageQualityGeneration() noexcept {rrUserImageQualityGeneration.fetch_add(1,std::memory_order_acq_rel);}
 inline bool RRUserDirectDlfParity() noexcept {return rrUserDirectDlfParity.load(std::memory_order_acquire);}
-inline void RRUserSetDirectDlfParity(bool enabled) noexcept {rrUserDirectDlfParity.store(enabled,std::memory_order_release);}
+inline void RRUserSetDirectDlfParity(bool enabled) noexcept {
+ const bool previous=rrUserDirectDlfParity.exchange(enabled,std::memory_order_acq_rel);
+ if(previous!=enabled)RRUserBumpImageQualityGeneration();
+}
+inline RRJitterMode RRUserJitterModeValue() noexcept {return static_cast<RRJitterMode>(rrUserJitterMode.load(std::memory_order_acquire));}
+inline bool RRUserJitterRR1024() noexcept {return RRUserJitterModeValue()==RRJitterMode::RR1024;}
+inline void RRUserSetJitterMode(RRJitterMode mode) noexcept {
+ const auto next=static_cast<unsigned int>(mode);
+ const auto previous=rrUserJitterMode.exchange(next,std::memory_order_acq_rel);
+ if(previous!=next)RRUserBumpImageQualityGeneration();
+}
+inline unsigned int RRUserDgiBounces() noexcept {const auto v=rrUserDgiBounces.load(std::memory_order_acquire);return v<=16?v:16;}
+inline void RRUserSetDgiBounces(unsigned int value) noexcept {
+ if(value>16)value=16;
+ const auto previous=rrUserDgiBounces.exchange(value,std::memory_order_acq_rel);
+ if(previous!=value)RRUserBumpImageQualityGeneration();
+}
+inline void RRUserPublishDgiBounces(unsigned int nativeValue,unsigned int effectiveValue) noexcept {
+ rrUserDgiNative.store(nativeValue,std::memory_order_release);
+ rrUserDgiEffective.store(effectiveValue,std::memory_order_release);
+}
+inline unsigned int RRUserDgiNative() noexcept {return rrUserDgiNative.load(std::memory_order_acquire);}
+inline unsigned int RRUserDgiEffective() noexcept {return rrUserDgiEffective.load(std::memory_order_acquire);}
 inline const char* RRUserModeLabel() noexcept {switch(RRUserModeValue()){case RRUserMode::Partial:return "partial";case RRUserMode::Full:return "full";default:return "off";}}
 inline void RRUserPublish(RRUserStatus status) noexcept {rrUserStatus.store(status,std::memory_order_release);}
 inline unsigned int RRUserSharpnessPercent() noexcept {return rrUserSharpnessPercent.load(std::memory_order_acquire);}

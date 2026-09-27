@@ -53,8 +53,9 @@ static unsigned int RREvaluationEntry(unsigned int branch, ID3D12GraphicsCommand
     // GI30 clean RenoDX baseline: no optional reflection-geometry resources.
     RRNativeGuideBindings bindings{};bool rrAttempt=false;
     ID3D12Resource* hitDistance=nullptr;ID3D12Resource* specularMotion=nullptr;
-    bool clampReset=false;
+    bool clampReset=false,qualityReset=false;
     static control_rr_clamp::History clampHistory;
+    static unsigned long long qualityGeneration=0;
     void* evaluationFeature=feature;bool presetReset=false;unsigned activePreset=0;
     if(rrNativeFrameEnabled&&branch==1&&!partial){
         if(!RRNativeResolveEvaluationPreset(list,feature,parameters,&evaluationFeature,&presetReset,&activePreset)){
@@ -78,11 +79,15 @@ static unsigned int RREvaluationEntry(unsigned int branch, ID3D12GraphicsCommand
         hitDistance=nullptr;
         specularMotion=nullptr;
         clampReset=clampHistory.Update(control_rr_clamp::effective.load(std::memory_order_acquire));
+        const auto requestedQualityGeneration=control_rr::RRUserImageQualityGeneration();
+        qualityReset=requestedQualityGeneration!=qualityGeneration;
+        if(qualityReset){qualityGeneration=requestedQualityGeneration;Log("RR_GI32_QUALITY_RESET frame=%llu generation=%llu jitter=%s dgi_bounces=%u direct_dlf=%u",
+            in.frame,qualityGeneration,control_rr::RRUserJitterRR1024()?"rr_1024":"control",control_rr::RRUserDgiBounces(),unsigned(control_rr::RRUserDirectDlfParity()));}
         if(clampReset)Log("RR_CLAMP_CS3_HISTORY_RESET frame=%llu effective=%u",in.frame,control_rr_clamp::effective.load());
         if(call<=4||(call%240)==0)
             Log("RR_GI30_RENODX_BASELINE frame=%llu preset=%u specular_mvec=cleared reflection_mvec=cleared hit_distance=cleared matrices=identity direct_dlf=%u clamp=%u",
                 in.frame,activePreset,unsigned(control_rr::RRUserDirectDlfParity()),control_rr_clamp::effective.load(std::memory_order_acquire));
-        if(!beginEvaluation||!RRNativeSetGuides(parameters,&bindings,nullptr,rrNativeFrame.Reset()||presetReset||clampReset)){
+        if(!beginEvaluation||!RRNativeSetGuides(parameters,&bindings,nullptr,rrNativeFrame.Reset()||presetReset||clampReset||qualityReset)){
             rrNativeFrame.Fail();control_rr::RRUserPublish(control_rr::RRUserStatus::Stopped);
             Log("RR_FRAME_STOP frame=%llu reason=pre_evaluation_contract hit_distance_required=0 guides=%u lighting=%u native_evaluation_called=0",in.frame,unsigned(guides),unsigned(lighting));
             SetLastError(incomingError);return 0xBAD00001u;
@@ -112,7 +117,7 @@ static unsigned int RREvaluationEntry(unsigned int branch, ID3D12GraphicsCommand
     const double perfNativeCpu=RRPerfElapsed(perfNativeStart);
     RRPerfEnd(perf);
     RRPerfEvaluation(in.frame,rrAttempt,(result&0xFFF00000u)!=0xBAD00000u,
-        in.reset!=0||(rrAttempt&&(rrNativeFrame.Reset()||presetReset||clampReset)),perfEntry,perfGuidesCpu,perfNativeCpu,
+        in.reset!=0||(rrAttempt&&(rrNativeFrame.Reset()||presetReset||clampReset||qualityReset)),perfEntry,perfGuidesCpu,perfNativeCpu,
         GetFGUserMultiplier(),IsHdr10BridgeActive()?1u:0u);
     if(partial&&branch==1){
         const bool success=(result&0xFFF00000u)!=0xBAD00000u;
@@ -123,7 +128,7 @@ static unsigned int RREvaluationEntry(unsigned int branch, ID3D12GraphicsCommand
         const bool success=(result&0xFFF00000u)!=0xBAD00000u;
         rrNativeFrame.EvaluationResult(success);
         control_rr::RRUserPublish(success?control_rr::RRUserStatus::Active:control_rr::RRUserStatus::Stopped);
-        if(call<=4||(call%240)==0||!success||rrNativeFrame.Reset()||presetReset||clampReset)Log("RR_NATIVE_EVALUATED frame=%llu result=0x%08X success=%u diffuse=%p specular=%p normal=%p hit_distance=%p specular_mvec=%p reflection_mvec=%p matrix_mode=identity_renodx_baseline responsivity=%p replaces_sr=1 reset=%u preset_reset=%u preset_requested=%s preset_value=%u active_preset=%u control_feature=%p evaluation_feature=%p native_create_confirmed=%u native_create_generation=%llu",in.frame,result,unsigned(success),bindings.diffuse,bindings.specular,bindings.normal,hitDistance,bindings.specularMotion,bindings.specularMotion,bindings.responsivity,unsigned(rrNativeFrame.Reset()||presetReset||clampReset),unsigned(presetReset),control_rr::RRUserPresetLabel(),control_rr::RRUserPresetValue(),activePreset,feature,evaluationFeature,control_rr::RRUserConfirmedPresetValue(),control_rr::RRUserPresetCreateGeneration());
+        if(call<=4||(call%240)==0||!success||rrNativeFrame.Reset()||presetReset||clampReset||qualityReset)Log("RR_NATIVE_EVALUATED frame=%llu result=0x%08X success=%u diffuse=%p specular=%p normal=%p hit_distance=%p specular_mvec=%p reflection_mvec=%p matrix_mode=identity_renodx_baseline responsivity=%p replaces_sr=1 reset=%u preset_reset=%u preset_requested=%s preset_value=%u active_preset=%u control_feature=%p evaluation_feature=%p native_create_confirmed=%u native_create_generation=%llu",in.frame,result,unsigned(success),bindings.diffuse,bindings.specular,bindings.normal,hitDistance,bindings.specularMotion,bindings.specularMotion,bindings.responsivity,unsigned(rrNativeFrame.Reset()||presetReset||clampReset||qualityReset),unsigned(presetReset),control_rr::RRUserPresetLabel(),control_rr::RRUserPresetValue(),activePreset,feature,evaluationFeature,control_rr::RRUserConfirmedPresetValue(),control_rr::RRUserPresetCreateGeneration());
     } else if(rrNativeFrameEnabled&&branch==0){
         if(rrNativeFrame.Selected()){rrNativeFrame.Fail();Log("RR_FRAME_STOP frame=%llu reason=unexpected_sr_branch",in.frame);}
         else {

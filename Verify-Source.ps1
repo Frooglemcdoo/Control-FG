@@ -170,8 +170,17 @@ try {
         if (-not $nativeGuides.Contains($required)) { throw ('GI30 identity-matrix guide contract missing: ' + $required) }
     }
     $rrUserControl = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'src/rr_user_control.h') -Raw
-    foreach ($required in @('rrUserSpecularMotion{false}','rrUserDirectDlfParity{false}')) {
-        if (-not $rrUserControl.Contains($required)) { throw ('GI30 default baseline control contract missing: ' + $required) }
+    foreach ($required in @('rrUserSpecularMotion{false}','rrUserDirectDlfParity{true}','rrUserDgiBounces{0}','RRJitterMode::Control','if(value>16)value=16','RRUserImageQualityGeneration')) {
+        if (-not $rrUserControl.Contains($required)) { throw ('GI32 default/live quality control contract missing: ' + $required) }
+    }
+    foreach ($required in @('RRNativeHookDgiPassProvider','base+0x12bf85','RR_GI32_DGI_BOUNCES','RR_GI32_JITTER','jitterRR1024&&control_rr::NativeRenderOption','rrNativeDgiPassPatch.Prepare')) {
+        if (-not $nativeFrame.Contains($required)) { throw ('GI32 runtime hook contract missing: ' + $required) }
+    }
+    foreach ($required in @('RR_GI32_QUALITY_RESET','qualityReset','RRUserImageQualityGeneration')) {
+        if (-not $evaluationEntry.Contains($required)) { throw ('GI32 live-reset contract missing: ' + $required) }
+    }
+    foreach ($required in @('Jitter mode','RR 1024','DGI bounces:','NATIVE','RR_GI32_DGI_UI','RR_GI32_JITTER_UI','range=1_16')) {
+        if (-not $overlay.Contains($required)) { throw ('GI32 overlay contract missing: ' + $required) }
     }
     if (-not $reflectionHooks.Contains('RRUserPresetValue()==control_rr::RRPresetF')) { throw 'D1 producer must be F only.' }
     if (-not $liveGuides.Contains('static constexpr bool rrLiveGuideStatsEnabled=false;')) { throw 'r22 guide-stat readback must be compiled out in production.' }

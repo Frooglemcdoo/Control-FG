@@ -1,0 +1,173 @@
+name: GI32 Live Jitter + DGI 1-16 Build
+
+on:
+  push:
+    branches: [gi32-live-jitter-dgi-bounces]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - name: Preserve repository bytes
+        shell: pwsh
+        run: git config --global core.autocrlf false
+
+      - uses: actions/checkout@v4
+
+      - name: Refresh GI32 validation ownership and manifests
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $utf8=[Text.UTF8Encoding]::new($false)
+          $root=$PWD
+          $owned=@(
+            'Build.cmd','Build-Metadata.ps1','Verify-Build.ps1',
+            'src/rr_clamp_strength.h','src/rr_user_control.h','src/rr_native_frame.h','src/fg_overlay.h',
+            'src/rr_evaluation_entry.h','src/rr_guide_parameters.h','src/rr_native_guides.h',
+            'validation/rr-settings/run.py',
+            'src/shaders/gi29_dlf_taa_diffuse.hlsl',
+            'src/shaders/gi29_dlf_spatial_diffuse.hlsli',
+            'src/shaders/gi29_dlf_spatial_diffuse_x.hlsl',
+            'src/shaders/gi29_dlf_spatial_diffuse_y.hlsl',
+            'src/shaders/gi29_dlf_spatial_spec.hlsli',
+            'src/shaders/gi29_dlf_spatial_spec_x.hlsl',
+            'src/shaders/gi29_dlf_spatial_spec_y.hlsl',
+            'tools/compile-dlf-parity.cpp',
+            'validation/gi29/policy-test.cpp','validation/gi32/policy-test.cpp','GI29-TEST.md','GI30-TEST.md','GI32-TEST.md'
+          )
+
+          $currentPath=Join-Path $root 'validation/current-release/results.json'
+          $current=Get-Content -LiteralPath $currentPath -Raw|ConvertFrom-Json
+          $current.status='LOCAL_PASS'
+          $current.scope='GI32 live image-quality A/B: GI30 clean RR geometry baseline, Direct DLF default ON, live Control/RR1024 jitter, g_uDGIPassCount Native or every integer 1-16, quality-change RR resets, clamp 60.'
+          $current.candidate='2.1.1-GI32-Live-Jitter-DGI-1-16'
+          $current.tests.portable_gate='PASS GI32 live jitter/DGI control source contracts; Windows HLSL/MSVC build and GPU runtime proof required.'
+
+          foreach($entry in $current.tested_sha256.PSObject.Properties){
+            $p=Join-Path $root $entry.Name
+            if(Test-Path -LiteralPath $p -PathType Leaf){$entry.Value=(Get-FileHash -LiteralPath $p -Algorithm SHA256).Hash}
+          }
+          foreach($rel in $owned){
+            $p=Join-Path $root $rel
+            if(!(Test-Path -LiteralPath $p -PathType Leaf)){throw "GI32 owned file missing: $rel"}
+            $hash=(Get-FileHash -LiteralPath $p -Algorithm SHA256).Hash
+            if($current.tested_sha256.PSObject.Properties.Name -contains $rel){$current.tested_sha256.$rel=$hash}
+            else{$current.tested_sha256|Add-Member -NotePropertyName $rel -NotePropertyValue $hash}
+          }
+
+          $artifactPath=Join-Path $root 'ARTIFACT-SHA256.json'
+          $artifact=Get-Content -LiteralPath $artifactPath -Raw|ConvertFrom-Json
+          foreach($rel in @(
+            'src/shaders/gi29_dlf_taa_diffuse.hlsl',
+            'src/shaders/gi29_dlf_spatial_diffuse.hlsli',
+            'src/shaders/gi29_dlf_spatial_diffuse_x.hlsl',
+            'src/shaders/gi29_dlf_spatial_diffuse_y.hlsl',
+            'src/shaders/gi29_dlf_spatial_spec.hlsli',
+            'src/shaders/gi29_dlf_spatial_spec_x.hlsl',
+            'src/shaders/gi29_dlf_spatial_spec_y.hlsl',
+            'tools/compile-dlf-parity.cpp','validation/gi29/policy-test.cpp','validation/gi32/policy-test.cpp','GI29-TEST.md','GI30-TEST.md','GI32-TEST.md'
+          )){
+            if(!($artifact.PSObject.Properties.Name -contains $rel)){$artifact|Add-Member -NotePropertyName $rel -NotePropertyValue ''}
+          }
+          foreach($entry in $artifact.PSObject.Properties){
+            $p=Join-Path $root $entry.Name
+            if(Test-Path -LiteralPath $p -PathType Leaf){$entry.Value=(Get-FileHash -LiteralPath $p -Algorithm SHA256).Hash}
+          }
+          [IO.File]::WriteAllText($artifactPath,($artifact|ConvertTo-Json -Depth 20),$utf8)
+
+          if($current.tested_sha256.PSObject.Properties.Name -contains 'ARTIFACT-SHA256.json'){
+            $current.tested_sha256.'ARTIFACT-SHA256.json'=(Get-FileHash -LiteralPath $artifactPath -Algorithm SHA256).Hash
+          }
+          [IO.File]::WriteAllText($currentPath,($current|ConvertTo-Json -Depth 30),$utf8)
+
+          $sourcePath=Join-Path $root 'SOURCE-SHA256.json'
+          $source=Get-Content -LiteralPath $sourcePath -Raw|ConvertFrom-Json
+          foreach($rel in @(
+            'src/shaders/gi29_dlf_taa_diffuse.hlsl',
+            'src/shaders/gi29_dlf_spatial_diffuse.hlsli',
+            'src/shaders/gi29_dlf_spatial_diffuse_x.hlsl',
+            'src/shaders/gi29_dlf_spatial_diffuse_y.hlsl',
+            'src/shaders/gi29_dlf_spatial_spec.hlsli',
+            'src/shaders/gi29_dlf_spatial_spec_x.hlsl',
+            'src/shaders/gi29_dlf_spatial_spec_y.hlsl',
+            'tools/compile-dlf-parity.cpp','validation/gi29/policy-test.cpp','validation/gi32/policy-test.cpp','GI29-TEST.md','GI30-TEST.md','GI32-TEST.md'
+          )){
+            if(!($source.PSObject.Properties.Name -contains $rel)){$source|Add-Member -NotePropertyName $rel -NotePropertyValue ''}
+          }
+          foreach($entry in $source.PSObject.Properties){
+            $p=Join-Path $root $entry.Name
+            if(Test-Path -LiteralPath $p -PathType Leaf){$entry.Value=(Get-FileHash -LiteralPath $p -Algorithm SHA256).Hash}
+          }
+          [IO.File]::WriteAllText($sourcePath,($source|ConvertTo-Json -Depth 20),$utf8)
+
+      - name: Build and validate GI32
+        shell: cmd
+        run: echo.|Build.cmd
+
+      - name: Verify GI32 runtime markers
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $dll=[Text.Encoding]::ASCII.GetString([IO.File]::ReadAllBytes((Join-Path $PWD 'build/dxgi.dll')))
+          foreach($marker in @(
+            'RR_GI30_RENODX_BASELINE','RR_GI30_GEOMETRY_BIND','matrix_mode=identity_renodx_baseline',
+            'RR_GI29_DLF_CAPTURE','RR_GI29_DLF_SET','RR_GI29_DLF_MODE',
+            'RR_GI29_DLF_SPECULAR','RR_GI29_DLF_DIFFUSE','RR_GI29_CONTACT_SHADOW',
+            'RR_GI32_DLF_UI','RR_GI32_JITTER','RR_GI32_DGI_BOUNCES','RR_GI32_QUALITY_RESET',
+            'RR_GI32_JITTER_UI','RR_GI32_DGI_UI','dlf_shaders=GI29_six_direct_replacements',
+            'specular_temporal_clamp=60','diffuse_clamp=100'
+          )){
+            if(!$dll.Contains($marker)){throw "GI32 marker missing: $marker"}
+          }
+          Write-Host 'PASS: GI32 live jitter, DGI 1-16 and DLF markers present.'
+
+      - name: Package GI32
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $release=Join-Path $PWD 'release-gi32'
+          $rootName='Control-FG-v2.1.1-GI32-Live-Jitter-DGI-1-16-Source'
+          $stage=Join-Path $release $rootName
+          New-Item -ItemType Directory -Force -Path $stage|Out-Null
+          foreach($path in (git ls-files)){
+            if($path -eq '.github/workflows/gi29-build.yml' -or $path -eq '.github/workflows/gi30-build.yml' -or $path -eq '.github/workflows/gi32-build.yml'){continue}
+            $src=Join-Path $PWD $path
+            if(!(Test-Path -LiteralPath $src -PathType Leaf)){continue}
+            $dst=Join-Path $stage $path
+            New-Item -ItemType Directory -Force -Path (Split-Path -Parent $dst)|Out-Null
+            Copy-Item -LiteralPath $src -Destination $dst -Force
+          }
+          foreach($path in @('ARTIFACT-SHA256.json','SOURCE-SHA256.json','validation/current-release/results.json')){
+            Copy-Item -LiteralPath (Join-Path $PWD $path) -Destination (Join-Path $stage $path) -Force
+          }
+          $sourceZip=Join-Path $release ($rootName+'.zip')
+          Compress-Archive -Path $stage -DestinationPath $sourceZip -CompressionLevel Optimal
+
+          $drop=Join-Path $PWD 'release/Control-FG-v2.1.1.zip'
+          if(!(Test-Path -LiteralPath $drop)){throw 'GI32 drop-in package missing after Build.cmd'}
+          $dropName='Control-FG-v2.1.1-GI32-Live-Jitter-DGI-1-16-DropIn.zip'
+          $dropOut=Join-Path $release $dropName
+          Copy-Item -LiteralPath $drop -Destination $dropOut -Force
+
+          $h1=(Get-FileHash -LiteralPath $sourceZip -Algorithm SHA256).Hash.ToLowerInvariant()
+          $h2=(Get-FileHash -LiteralPath $dropOut -Algorithm SHA256).Hash.ToLowerInvariant()
+          Set-Content -LiteralPath (Join-Path $release 'GI32-SHA256.txt') -Value "$h1  $rootName.zip`n$h2  $dropName" -Encoding ascii
+          Write-Host "GI32_SOURCE_SHA256=$h1"
+          Write-Host "GI32_DROPIN_SHA256=$h2"
+
+      - name: Upload GI32 packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: Control-FG-v2.1.1-GI32
+          path: |
+            release-gi32/Control-FG-v2.1.1-GI32-Live-Jitter-DGI-1-16-Source.zip
+            release-gi32/Control-FG-v2.1.1-GI32-Live-Jitter-DGI-1-16-DropIn.zip
+            release-gi32/GI32-SHA256.txt
+            build/build-validation.json
+            Build.log
+          if-no-files-found: error
+          retention-days: 7
