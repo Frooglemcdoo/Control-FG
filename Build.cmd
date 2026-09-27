@@ -199,6 +199,10 @@ build\rr-gi27-policy.exe
 if errorlevel 1 exit /b 1
 cl /nologo /std:c++17 /EHsc /W4 /WX /O2 /MT validation\gi27\shader-contract.cpp /Fobuild\rr-gi27-shader-contract.obj /Febuild\rr-gi27-shader-contract.exe
 if errorlevel 1 exit /b 1
+cl /nologo /std:c++17 /EHsc /W4 /WX /O2 /MT validation\gi28\policy-test.cpp /Fobuild\rr-gi28-policy.obj /Febuild\rr-gi28-policy.exe
+if errorlevel 1 exit /b 1
+build\rr-gi28-policy.exe
+if errorlevel 1 exit /b 1
 build\rr-gi27-shader-contract.exe
 if errorlevel 1 exit /b 1
 build\rr-parameters-test.exe
