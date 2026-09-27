@@ -12,6 +12,10 @@ enum class RRUserMode : unsigned int { Off=0, Partial=1, Full=2 };
 inline std::atomic<unsigned int> rrUserMode{static_cast<unsigned int>(RRUserMode::Off)};
 enum class RRSpecularSignalMode : unsigned int { NativeClamp=0, ReferenceClamp=1 };
 inline std::atomic<unsigned int> rrUserSpecularSignalMode{static_cast<unsigned int>(RRSpecularSignalMode::NativeClamp)};
+// GI27: explicit reflected-image motion vectors for Model F. ON by default
+// in this diagnostic build; OFF returns to the public v2.1.1 F hit-distance path.
+inline std::atomic<bool> rrUserSpecularMotion{true};
+inline std::atomic<bool> rrUserSpecularMotionActive{false};
 inline std::atomic<RRUserStatus> rrUserStatus{RRUserStatus::Off};
 enum class RRWaitReason {Guides,Unsupported,EnableReflections,OtherRT,Matrix,Resolution,Depth,Input,Handoff,Pipeline,CaptureBudget,CaptureBudgetQuery,CaptureAllocation};
 inline std::atomic<RRWaitReason> rrUserWaitReason{RRWaitReason::Guides};
@@ -92,6 +96,10 @@ inline bool RRUserSpecularReferenceRequested() noexcept {return RRUserSpecularSi
 inline bool RRUserSpecularNativeClampRequested() noexcept {return RRUserSpecularSignalModeValue()==RRSpecularSignalMode::NativeClamp;}
 inline void RRUserSetSpecularSignalMode(RRSpecularSignalMode mode) noexcept {rrUserSpecularSignalMode.store(static_cast<unsigned int>(mode),std::memory_order_release);}
 inline const char* RRUserSpecularSignalLabel() noexcept {return RRUserSpecularReferenceRequested()?"renodx_reference":"native_control_clamp";}
+inline bool RRUserSpecularMotionRequested() noexcept {return rrUserSpecularMotion.load(std::memory_order_acquire);}
+inline void RRUserSetSpecularMotionRequested(bool enabled) noexcept {rrUserSpecularMotion.store(enabled,std::memory_order_release);if(!enabled)rrUserSpecularMotionActive.store(false,std::memory_order_release);}
+inline bool RRUserSpecularMotionActive() noexcept {return rrUserSpecularMotionActive.load(std::memory_order_acquire);}
+inline void RRUserPublishSpecularMotionActive(bool active) noexcept {rrUserSpecularMotionActive.store(active,std::memory_order_release);}
 inline const char* RRUserModeLabel() noexcept {switch(RRUserModeValue()){case RRUserMode::Partial:return "partial";case RRUserMode::Full:return "full";default:return "off";}}
 inline void RRUserPublish(RRUserStatus status) noexcept {rrUserStatus.store(status,std::memory_order_release);}
 inline unsigned int RRUserSharpnessPercent() noexcept {return rrUserSharpnessPercent.load(std::memory_order_acquire);}
