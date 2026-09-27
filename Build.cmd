@@ -15,7 +15,7 @@ pause
 exit /b %BUILD_RESULT%
 
 :build
-echo Control FG v2.1.1 - GI28 RenoDX Signal Parity A/B - Steam, Epic Games Store and GOG
+echo Control FG v2.1.1 - GI29 Direct Six-Shader DLF Parity - Steam, Epic Games Store and GOG
 set "VSWHERE=%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe"
 if not exist "%VSWHERE%" (
   echo Visual Studio C++ tools were not found. Install the Desktop development with C++ workload and a Windows SDK.
@@ -201,6 +201,10 @@ cl /nologo /std:c++17 /EHsc /W4 /WX /O2 /MT validation\gi27\shader-contract.cpp 
 if errorlevel 1 exit /b 1
 cl /nologo /std:c++17 /EHsc /W4 /WX /O2 /MT validation\gi28\policy-test.cpp /Fobuild\rr-gi28-policy.obj /Febuild\rr-gi28-policy.exe
 if errorlevel 1 exit /b 1
+cl /nologo /std:c++17 /EHsc /W4 /WX /O2 /MT validation\gi29\policy-test.cpp /Fobuild\rr-gi29-policy.obj /Febuild\rr-gi29-policy.exe
+if errorlevel 1 exit /b 1
+build\rr-gi29-policy.exe
+if errorlevel 1 exit /b 1
 build\rr-gi28-policy.exe
 if errorlevel 1 exit /b 1
 build\rr-gi27-shader-contract.exe
@@ -307,6 +311,10 @@ for /l %%S in (25,1,75) do (
   if errorlevel 1 exit /b 1
 )
 copy /y src\rr_clamp_variants.in.h build\rr_clamp_variants.h >nul
+if errorlevel 1 exit /b 1
+cl /nologo /std:c++17 /EHsc /W4 /WX /O2 /MT tools\compile-dlf-parity.cpp /Fobuild\compile-dlf-parity.obj /Febuild\compile-dlf-parity.exe /link d3dcompiler.lib
+if errorlevel 1 exit /b 1
+build\compile-dlf-parity.exe
 if errorlevel 1 exit /b 1
 cl /nologo /std:c++17 /EHsc /W4 /WX validation\clamp-strength\policy-test.cpp /Febuild\clamp-strength-test.exe
 if errorlevel 1 exit /b 1
