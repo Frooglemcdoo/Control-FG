@@ -1,0 +1,4 @@
+#define TEMPORAL_WEIGHT 0.0
+#define SPATIAL_SCALE 0.0
+#define AXIS_X 1
+#include "./gi29_dlf_spatial_diffuse.hlsli"
