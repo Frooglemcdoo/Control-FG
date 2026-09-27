@@ -1,0 +1,147 @@
+name: GI27 Specular Motion Vectors Build
+
+on:
+  push:
+    branches: [gi27-specular-motion-vectors]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - name: Preserve repository bytes
+        shell: pwsh
+        run: git config --global core.autocrlf false
+
+      - uses: actions/checkout@v4
+
+      - name: Refresh GI27 validation ownership and manifests
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $utf8=[Text.UTF8Encoding]::new($false)
+          $root=$PWD
+          $owned=@(
+            'Build.cmd','Build-Metadata.ps1','Verify-Build.ps1','Verify-Source.ps1','tools/validate-release.py',
+            'src/probe.cpp','src/fg_overlay.h','src/rr_user_control.h','src/rr_native_frame.h',
+            'src/rr_native_guides.h','src/rr_guide_parameters.h','src/rr_evaluation_entry.h',
+            'src/rr_specular_mv_policy.h','src/rr_specular_mv_runtime.h','src/shaders/rr_specular_mv.hlsl',
+            'tools/compile-specular-mv.cpp','validation/frame-coordinator/parameters.cpp',
+            'validation/evaluation-entry/entry-test.cpp','validation/rr-settings/run.py',
+            'validation/gi27/policy-test.cpp','validation/gi27/shader-contract.cpp','GI27-TEST.md'
+          )
+
+          $currentPath=Join-Path $root 'validation/current-release/results.json'
+          $current=Get-Content -LiteralPath $currentPath -Raw|ConvertFrom-Json
+          $current.status='LOCAL_PASS'
+          $current.scope='GI27 clean-v2.1.1 explicit specular-motion-vector A/B: Model F ON derives reflected-image MVs from owned reflection hit arrays + exact NGX depth/MVs + camera history; OFF is the public D1 hit-distance path.'
+          $current.candidate='2.1.1-GI27-Specular-Motion-Vectors-AB'
+          $current.tests.portable_gate='PASS GI27 policy/shader contracts plus updated parameter/evaluation/RR-settings tests; Windows HLSL/MSVC and GPU runtime remain required.'
+          foreach($rel in $owned){
+            $p=Join-Path $root $rel
+            if(!(Test-Path -LiteralPath $p -PathType Leaf)){throw "GI27 owned file missing: $rel"}
+            $hash=(Get-FileHash -LiteralPath $p -Algorithm SHA256).Hash
+            if($current.tested_sha256.PSObject.Properties.Name -contains $rel){$current.tested_sha256.$rel=$hash}
+            else{$current.tested_sha256|Add-Member -NotePropertyName $rel -NotePropertyValue $hash}
+          }
+
+          $artifactPath=Join-Path $root 'ARTIFACT-SHA256.json'
+          $artifact=Get-Content -LiteralPath $artifactPath -Raw|ConvertFrom-Json
+          foreach($rel in @(
+            'src/rr_specular_mv_policy.h','src/rr_specular_mv_runtime.h','src/shaders/rr_specular_mv.hlsl',
+            'tools/compile-specular-mv.cpp','validation/gi27/policy-test.cpp','validation/gi27/shader-contract.cpp','GI27-TEST.md'
+          )){
+            if(!($artifact.PSObject.Properties.Name -contains $rel)){$artifact|Add-Member -NotePropertyName $rel -NotePropertyValue ''}
+          }
+          foreach($entry in $artifact.PSObject.Properties){
+            $p=Join-Path $root $entry.Name
+            if(Test-Path -LiteralPath $p -PathType Leaf){$entry.Value=(Get-FileHash -LiteralPath $p -Algorithm SHA256).Hash}
+          }
+          [IO.File]::WriteAllText($artifactPath,($artifact|ConvertTo-Json -Depth 20),$utf8)
+
+          if($current.tested_sha256.PSObject.Properties.Name -contains 'ARTIFACT-SHA256.json'){
+            $current.tested_sha256.'ARTIFACT-SHA256.json'=(Get-FileHash -LiteralPath $artifactPath -Algorithm SHA256).Hash
+          }
+          [IO.File]::WriteAllText($currentPath,($current|ConvertTo-Json -Depth 30),$utf8)
+
+          $sourcePath=Join-Path $root 'SOURCE-SHA256.json'
+          $source=Get-Content -LiteralPath $sourcePath -Raw|ConvertFrom-Json
+          foreach($rel in @(
+            'src/rr_specular_mv_policy.h','src/rr_specular_mv_runtime.h','src/shaders/rr_specular_mv.hlsl',
+            'tools/compile-specular-mv.cpp','validation/gi27/policy-test.cpp','validation/gi27/shader-contract.cpp','GI27-TEST.md'
+          )){
+            if(!($source.PSObject.Properties.Name -contains $rel)){$source|Add-Member -NotePropertyName $rel -NotePropertyValue ''}
+          }
+          foreach($entry in $source.PSObject.Properties){
+            $p=Join-Path $root $entry.Name
+            if(Test-Path -LiteralPath $p -PathType Leaf){$entry.Value=(Get-FileHash -LiteralPath $p -Algorithm SHA256).Hash}
+          }
+          [IO.File]::WriteAllText($sourcePath,($source|ConvertTo-Json -Depth 20),$utf8)
+
+      - name: Build and validate GI27
+        shell: cmd
+        run: echo.|Build.cmd
+
+      - name: Verify GI27 runtime markers
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $dll=[Text.Encoding]::ASCII.GetString([IO.File]::ReadAllBytes((Join-Path $PWD 'build/dxgi.dll')))
+          foreach($marker in @(
+            'RR_GI27_SPECMV_READY','RR_GI27_SPECMV frame=','RR_GI27_SPECMV_BIND',
+            'RR_GI27_SPECMV_UI','GI27_shader_owned_camera_reprojection',
+            'specular_mvec_runtime=GI27_F_optional_default_on','reference_formula=1'
+          )){
+            if(!$dll.Contains($marker)){throw "GI27 marker missing: $marker"}
+          }
+          Write-Host 'PASS: GI27 runtime markers present.'
+
+      - name: Package GI27
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $release=Join-Path $PWD 'release-gi27'
+          $rootName='Control-FG-v2.1.1-GI27-Specular-Motion-Vectors-Source'
+          $stage=Join-Path $release $rootName
+          New-Item -ItemType Directory -Force -Path $stage|Out-Null
+          foreach($path in (git ls-files)){
+            if($path -eq '.github/workflows/gi27-build.yml'){continue}
+            $src=Join-Path $PWD $path
+            if(!(Test-Path -LiteralPath $src -PathType Leaf)){continue}
+            $dst=Join-Path $stage $path
+            New-Item -ItemType Directory -Force -Path (Split-Path -Parent $dst)|Out-Null
+            Copy-Item -LiteralPath $src -Destination $dst -Force
+          }
+          foreach($path in @('ARTIFACT-SHA256.json','SOURCE-SHA256.json','validation/current-release/results.json')){
+            Copy-Item -LiteralPath (Join-Path $PWD $path) -Destination (Join-Path $stage $path) -Force
+          }
+          $sourceZip=Join-Path $release ($rootName+'.zip')
+          Compress-Archive -Path $stage -DestinationPath $sourceZip -CompressionLevel Optimal
+
+          $drop=Join-Path $PWD 'release/Control-FG-v2.1.1.zip'
+          if(!(Test-Path -LiteralPath $drop)){throw 'GI27 drop-in package missing after Build.cmd'}
+          $dropName='Control-FG-v2.1.1-GI27-Specular-Motion-Vectors-DropIn.zip'
+          $dropOut=Join-Path $release $dropName
+          Copy-Item -LiteralPath $drop -Destination $dropOut -Force
+
+          $h1=(Get-FileHash -LiteralPath $sourceZip -Algorithm SHA256).Hash.ToLowerInvariant()
+          $h2=(Get-FileHash -LiteralPath $dropOut -Algorithm SHA256).Hash.ToLowerInvariant()
+          Set-Content -LiteralPath (Join-Path $release 'GI27-SHA256.txt') -Value "$h1  $rootName.zip`n$h2  $dropName" -Encoding ascii
+          Write-Host "GI27_SOURCE_SHA256=$h1"
+          Write-Host "GI27_DROPIN_SHA256=$h2"
+
+      - name: Upload GI27 packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: Control-FG-v2.1.1-GI27
+          path: |
+            release-gi27/Control-FG-v2.1.1-GI27-Specular-Motion-Vectors-Source.zip
+            release-gi27/Control-FG-v2.1.1-GI27-Specular-Motion-Vectors-DropIn.zip
+            release-gi27/GI27-SHA256.txt
+            build/build-validation.json
+            Build.log
+          if-no-files-found: error
+          retention-days: 7
