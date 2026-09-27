@@ -35,6 +35,7 @@ inline void SetDlfParityEnabled(bool enabled) noexcept {dlfParityEnabled.store(e
 inline bool DlfParityEnabled() noexcept {return dlfParityEnabled.load(std::memory_order_acquire);}
 inline unsigned DlfCaptureMask() noexcept {return dlfCaptureMask.load(std::memory_order_acquire);}
 inline bool DlfAllTargetsCaptured() noexcept {return (DlfCaptureMask()&0x3fu)==0x3fu;}
+inline unsigned long long DlfUse(unsigned index) noexcept {return index<6?dlfUseCount[index].load(std::memory_order_acquire):0ull;}
 struct Request {ID3D12GraphicsCommandList* list=nullptr;ID3D12PipelineState* observed=nullptr;unsigned strength=100,count=0;bool used=false;};
 inline thread_local Request* active=nullptr;
 inline bool Exchange(void** slot,void* expected,void* replacement) noexcept {
