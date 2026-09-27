@@ -17,11 +17,14 @@ bool SetGuideParameters(const Api& api,const Bindings& b,Resource* distance,bool
  // same RGBA16F guide through GBuffer.Roughness. Keep both bindings in sync.
  api.Resource("GBuffer.Roughness",b.normal);
  api.Integer("DLSS.Roughness.Mode",1);
- // RenoDX's default mode clears all optional specular-geometry inputs. Do the
- // same every evaluation so no stale value can survive in the NGX parameter map.
- api.Resource("GBuffer.SpecularMvec",none);
- api.Resource("MotionVectorsReflection",none);
- api.Resource("DLSSD.SpecularHitDistance",distance);
+ // GI27 selects exactly one specular reprojection path per evaluation.
+ // Explicit reflected-image MVs own both documented/legacy MV aliases and
+ // clear hit distance; OFF returns to the public v2.1.1 hit-distance path.
+ Resource* const specMv=b.specularMotion;
+ Resource* const specDistance=specMv?none:distance;
+ api.Resource("GBuffer.SpecularMvec",specMv);
+ api.Resource("MotionVectorsReflection",specMv);
+ api.Resource("DLSSD.SpecularHitDistance",specDistance);
  api.Pointer("WorldToViewMatrix",const_cast<float*>(b.worldToView));
  api.Pointer("ViewToClipMatrix",const_cast<float*>(b.viewToClip));
  if(reset)api.Integer("Reset",1);
@@ -32,9 +35,9 @@ bool SetGuideParameters(const Api& api,const Bindings& b,Resource* distance,bool
   api.ResourceEquals("GBuffer.Normals",b.normal)&&
   api.ResourceEquals("GBuffer.Roughness",b.normal)&&
   api.IntegerEquals("DLSS.Roughness.Mode",1)&&
-  api.ResourceEquals("GBuffer.SpecularMvec",none)&&
-  api.ResourceEquals("MotionVectorsReflection",none)&&
-  api.ResourceEquals("DLSSD.SpecularHitDistance",distance)&&
+  api.ResourceEquals("GBuffer.SpecularMvec",specMv)&&
+  api.ResourceEquals("MotionVectorsReflection",specMv)&&
+  api.ResourceEquals("DLSSD.SpecularHitDistance",specDistance)&&
   api.PointerEquals("WorldToViewMatrix",b.worldToView)&&
   api.PointerEquals("ViewToClipMatrix",b.viewToClip)&&
   (!reset||api.IntegerEquals("Reset",1));
