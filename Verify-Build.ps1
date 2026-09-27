@@ -96,7 +96,7 @@ try {
     $validation = [ordered]@{}
     foreach ($key in $ControlFGBuild.Keys) { $validation[$key] = $ControlFGBuild[$key] }
     $details = [ordered]@{
-        RRInstrumentation = 'PT4 Full-Scene Beauty: PT OFF remains native Control baseline. PT ON BEAUTY traces a camera primary plus stochastic diffuse and specular secondary rays through Control g_rtScene per pixel, converts those rays into a lighting multiplier, then applies it to a private copy of Control's authored full scene at the late SDR/HDR composite. Textures, characters, transparencies, volumetrics, post effects and UI remain visible while PT lighting is active. Debug views remain available.' 
+        RRInstrumentation = 'PT4 Full-Scene Beauty: PT OFF remains native Control baseline. PT ON BEAUTY traces a camera primary plus stochastic diffuse and specular secondary rays through Control g_rtScene per pixel, converts those rays into a lighting multiplier, then applies it to a private copy of the authored Control full scene at the late SDR/HDR composite. Textures, characters, transparencies, volumetrics, post effects and UI remain visible while PT lighting is active. Debug views remain available.' 
         RRLiveShaderHeaderSHA256 = (Get-FileHash -LiteralPath (Join-Path $PSScriptRoot 'build/rr_live_compiled.h') -Algorithm SHA256).Hash
         RRReflectanceShaderHeaderSHA256 = (Get-FileHash -LiteralPath (Join-Path $PSScriptRoot 'build/rr_reflectance_compiled.h') -Algorithm SHA256).Hash
         SHA256 = (Get-FileHash -LiteralPath $dll -Algorithm SHA256).Hash
