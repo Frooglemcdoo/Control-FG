@@ -25,7 +25,7 @@ jobs:
         run: |
           $b64 = [IO.File]::ReadAllText("tools/pt27-emissive-shader.hlsl.gz.b64").Trim()
           $gzBytes = [Convert]::FromBase64String($b64)
-          $ms = [IO.MemoryStream]::new(,$gzBytes)
+          $ms = [IO.MemoryStream]::new($gzBytes)
           $gz = [IO.Compression.GzipStream]::new($ms,[IO.Compression.CompressionMode]::Decompress)
           $out = [IO.File]::Create("src/shaders/pt3_pathtrace.hlsl")
           $gz.CopyTo($out)
