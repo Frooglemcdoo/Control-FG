@@ -1,0 +1,99 @@
+name: PT27 Emissive DXC Compile
+
+on:
+  push:
+    branches:
+      - pt27-emissive-compile
+    paths:
+      - "tools/pt27-emissive-shader.hlsl.gz.b64"
+      - ".github/workflows/pt27-emissive-dxc.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  compile:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: pt27-emissive-compile
+          fetch-depth: 0
+
+      - name: Decode exact PT27 shader
+        shell: pwsh
+        run: |
+          $b64 = [IO.File]::ReadAllText("tools/pt27-emissive-shader.hlsl.gz.b64").Trim()
+          $gzBytes = [Convert]::FromBase64String($b64)
+          $ms = [IO.MemoryStream]::new(,$gzBytes)
+          $gz = [IO.Compression.GzipStream]::new($ms,[IO.Compression.CompressionMode]::Decompress)
+          $out = [IO.File]::Create("src/shaders/pt3_pathtrace.hlsl")
+          $gz.CopyTo($out)
+          $out.Dispose()
+          $gz.Dispose()
+          $ms.Dispose()
+          $sha = (Get-FileHash "src/shaders/pt3_pathtrace.hlsl" -Algorithm SHA256).Hash
+          Write-Host "PT27 HLSL SHA256=$sha"
+          if ($sha -ne "3F779810234312BCFDE12CFE304D6AE9DE9A06EA91BBC5605A89C7B5C512C0F6") {
+            throw "PT27 shader payload hash mismatch: $sha"
+          }
+
+      - name: Locate DXC
+        id: dxc
+        shell: pwsh
+        run: |
+          $dxc = (Get-Command dxc.exe -ErrorAction SilentlyContinue).Source
+          if (-not $dxc) {
+            $kits = Join-Path ${env:ProgramFiles(x86)} "Windows Kits\10\bin"
+            $dxc = Get-ChildItem -Path $kits -Recurse -Filter dxc.exe -ErrorAction SilentlyContinue |
+              Where-Object { $_.FullName -match "\\x64\\dxc\.exe$" } |
+              Sort-Object FullName -Descending |
+              Select-Object -First 1 -ExpandProperty FullName
+          }
+          if (-not $dxc) { throw "DXC not found" }
+          Write-Host "DXC=$dxc"
+          "path=$dxc" >> $env:GITHUB_OUTPUT
+
+      - name: Compile PT27 shader
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force build | Out-Null
+          $dxc = "${{ steps.dxc.outputs.path }}"
+          & $dxc -T cs_6_5 -E main -I src/shaders -O3 -Ges -Qstrip_debug -Qstrip_reflect -Fo build/pt3_pathtrace.dxil src/shaders/pt3_pathtrace.hlsl
+          if ($LASTEXITCODE -ne 0) { throw "DXC failed with exit code $LASTEXITCODE" }
+          $bytes = [IO.File]::ReadAllBytes("build/pt3_pathtrace.dxil")
+          if ($bytes.Length -lt 128) { throw "Compiled DXIL unexpectedly small: $($bytes.Length)" }
+          Write-Host "DXIL bytes=$($bytes.Length)"
+          Write-Host "DXIL SHA256=$((Get-FileHash build/pt3_pathtrace.dxil -Algorithm SHA256).Hash)"
+
+      - name: Generate embedded header
+        shell: pwsh
+        run: |
+          $bytes = [IO.File]::ReadAllBytes("build/pt3_pathtrace.dxil")
+          $sb = [Text.StringBuilder]::new()
+          [void]$sb.AppendLine("#pragma once")
+          [void]$sb.AppendLine("// Auto-generated PT27 emissive path-tracing compute shader.")
+          [void]$sb.AppendLine("static const unsigned char kPT3PathTraceDxil[] = {")
+          for ($i=0; $i -lt $bytes.Length; $i++) {
+            if (($i % 16) -eq 0) { [void]$sb.Append("    ") }
+            [void]$sb.Append(("0x{0:X2}" -f $bytes[$i]))
+            if ($i -ne ($bytes.Length - 1)) { [void]$sb.Append(",") }
+            if ((($i + 1) % 16) -eq 0 -or $i -eq ($bytes.Length - 1)) { [void]$sb.AppendLine() } else { [void]$sb.Append(" ") }
+          }
+          [void]$sb.AppendLine("};")
+          [void]$sb.AppendLine("static const unsigned int kPT3PathTraceDxilSize = sizeof(kPT3PathTraceDxil);")
+          [IO.File]::WriteAllText("build/pt3_pathtrace_compiled.h",$sb.ToString(),[Text.UTF8Encoding]::new($false))
+
+      - name: Commit compiled shader
+        shell: pwsh
+        run: |
+          git config user.name "PT27 Build Bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add src/shaders/pt3_pathtrace.hlsl build/pt3_pathtrace_compiled.h
+          git diff --cached --quiet
+          if ($LASTEXITCODE -eq 0) {
+            Write-Host "No generated changes to commit."
+            exit 0
+          }
+          git commit -m "PT27: compile emissive lighting shader"
+          git push origin HEAD:pt27-emissive-compile
