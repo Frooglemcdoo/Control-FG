@@ -23,15 +23,8 @@ jobs:
       - name: Decode exact PT27 shader
         shell: pwsh
         run: |
-          $b64 = [IO.File]::ReadAllText("tools/pt27-emissive-shader.hlsl.gz.b64").Trim()
-          $gzBytes = [Convert]::FromBase64String($b64)
-          $ms = [IO.MemoryStream]::new($gzBytes)
-          $gz = [IO.Compression.GzipStream]::new($ms,[IO.Compression.CompressionMode]::Decompress)
-          $out = [IO.File]::Create("src/shaders/pt3_pathtrace.hlsl")
-          $gz.CopyTo($out)
-          $out.Dispose()
-          $gz.Dispose()
-          $ms.Dispose()
+          python -c "import base64,gzip,pathlib; p=pathlib.Path(r'tools/pt27-emissive-shader.hlsl.gz.b64'); pathlib.Path(r'src/shaders/pt3_pathtrace.hlsl').write_bytes(gzip.decompress(base64.b64decode(p.read_text().strip())))"
+          if ($LASTEXITCODE -ne 0) { throw "Python shader decode failed with exit code $LASTEXITCODE" }
           $sha = (Get-FileHash "src/shaders/pt3_pathtrace.hlsl" -Algorithm SHA256).Hash
           Write-Host "PT27 HLSL SHA256=$sha"
           if ($sha -ne "3F779810234312BCFDE12CFE304D6AE9DE9A06EA91BBC5605A89C7B5C512C0F6") {
