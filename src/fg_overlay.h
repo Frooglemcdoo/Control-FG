@@ -36,6 +36,18 @@ static std::wstring fgOverlaySettingsPath;
 static std::atomic<unsigned int> fgOverlaySettingsLoaded{0};
 static bool fgOverlayOptionsPage = false;
 static bool fgOverlayRRSettingsPage = false;
+static std::atomic<unsigned int> fgTextureStreamingBudgetMs{0};
+
+static unsigned int NormalizeFGTextureStreamingBudgetMs(unsigned int value) noexcept {
+    return value==4u||value==6u||value==8u ? value : 0u;
+}
+static unsigned int GetFGTextureStreamingBudgetMs() noexcept {
+    return NormalizeFGTextureStreamingBudgetMs(fgTextureStreamingBudgetMs.load(std::memory_order_acquire));
+}
+static void SetFGTextureStreamingBudgetMs(unsigned int value) noexcept {
+    fgTextureStreamingBudgetMs.store(NormalizeFGTextureStreamingBudgetMs(value),std::memory_order_release);
+}
+
 // RR panel track spans 30..500, leaving room for Reset to default.
 static unsigned FGOverlayClampFromX(int x) noexcept {
     if (x <= 30) return 25;
@@ -167,7 +179,8 @@ static void FGOverlayLoadSettings() noexcept {
         control_rr::RRUserMarkPresetRestartRequired(false);
         control_rr::RRUserSetSpecularSignalMode(control_rr::RRSpecularSignalMode::NativeClamp);
         control_rr::RRUserRequest(false);
-        Log("FG_SETTINGS_LOAD success=0 reason=path_unavailable defaults=4x,dynamic_auto,rr_off,rr_model_F ui=fg_full_rr_toggle_model_E_F");
+        SetFGTextureStreamingBudgetMs(0u);
+        Log("FG_SETTINGS_LOAD success=0 reason=path_unavailable defaults=4x,dynamic_auto,rr_off,rr_model_F,texture_streaming_off ui=fg_full_rr_toggle_model_E_F");
         return;
     }
 
@@ -181,6 +194,8 @@ static void FGOverlayLoadSettings() noexcept {
     const bool rrEnabled = GetPrivateProfileIntW(L"RayReconstruction", L"Enabled", 0, fgOverlaySettingsPath.c_str()) != 0;
     const unsigned int rawRrPreset = GetPrivateProfileIntW(L"RayReconstruction", L"Preset", control_rr::RRPresetF, fgOverlaySettingsPath.c_str());
     const unsigned int rrPreset = rawRrPreset == control_rr::RRPresetE ? control_rr::RRPresetE : control_rr::RRPresetF;
+    const unsigned int rawTextureStreamingMs = GetPrivateProfileIntW(L"Experimental", L"TextureStreamingBudgetMs", 0, fgOverlaySettingsPath.c_str());
+    const unsigned int textureStreamingMs = NormalizeFGTextureStreamingBudgetMs(rawTextureStreamingMs);
 
     slFgUserMultiplier.store(selection, std::memory_order_release);
     slFgDynamicManualTargetFps.store(manualTarget, std::memory_order_release);
@@ -191,8 +206,9 @@ static void FGOverlayLoadSettings() noexcept {
     control_rr::RRUserMarkPresetRestartRequired(false);
     control_rr::RRUserSetSpecularSignalMode(control_rr::RRSpecularSignalMode::NativeClamp);
     control_rr::RRUserRequest(rrEnabled);
-    Log("FG_SETTINGS_LOAD success=1 path=%ls selection=%s selected_code=%u target_policy=%s manual_target_fps=%u rr_enabled=%u rr_preset=%s rr_preset_value=%u skin_mode=off schema=8 ui=fg_full_rr_toggle_model_E_F",
-        fgOverlaySettingsPath.c_str(), GetFGSelectionName(selection), selection, manualTarget ? "manual" : "auto", manualTarget, unsigned(rrEnabled), control_rr::RRUserPresetLabel(), control_rr::RRUserPresetValue());
+    SetFGTextureStreamingBudgetMs(textureStreamingMs);
+    Log("FG_SETTINGS_LOAD success=1 path=%ls selection=%s selected_code=%u target_policy=%s manual_target_fps=%u rr_enabled=%u rr_preset=%s rr_preset_value=%u texture_streaming_ms=%u skin_mode=off schema=9 ui=fg_full_rr_toggle_model_E_F",
+        fgOverlaySettingsPath.c_str(), GetFGSelectionName(selection), selection, manualTarget ? "manual" : "auto", manualTarget, unsigned(rrEnabled), control_rr::RRUserPresetLabel(), control_rr::RRUserPresetValue(), textureStreamingMs);
 }
 
 static bool FGOverlaySaveSettingsNow() noexcept {
@@ -205,6 +221,8 @@ static bool FGOverlaySaveSettingsNow() noexcept {
     swprintf_s(clampText,L"%u",control_rr_clamp::Requested());
     wchar_t experimentalText[8]{};
     swprintf_s(experimentalText, L"%u", IsRTX40MFGRequested() ? 1u : 0u);
+    wchar_t textureStreamingText[8]{};
+    swprintf_s(textureStreamingText,L"%u",GetFGTextureStreamingBudgetMs());
     wchar_t bindingText[16]{};
     swprintf_s(bindingText, L"%u", fgOverlayToggleKey);
     wchar_t modeText[16]{};
@@ -216,7 +234,7 @@ static bool FGOverlaySaveSettingsNow() noexcept {
     swprintf_s(rrEnabledText, L"%u", control_rr::RRUserRequested() ? 1u : 0u);
     swprintf_s(rrPresetText, L"%u", control_rr::RRUserPresetValue());
 
-    bool ok = WritePrivateProfileStringW(L"ControlFG", L"Schema", L"8", fgOverlaySettingsPath.c_str()) != FALSE;
+    bool ok = WritePrivateProfileStringW(L"ControlFG", L"Schema", L"9", fgOverlaySettingsPath.c_str()) != FALSE;
     ok = (WritePrivateProfileStringW(L"FrameGeneration", L"Mode", modeText, fgOverlaySettingsPath.c_str()) != FALSE) && ok;
     ok = (WritePrivateProfileStringW(L"FrameGeneration", L"DynamicTargetFPS", targetText, fgOverlaySettingsPath.c_str()) != FALSE) && ok;
     ok = (WritePrivateProfileStringW(L"RayReconstruction", L"Enabled", rrEnabledText, fgOverlaySettingsPath.c_str()) != FALSE) && ok;
@@ -224,15 +242,16 @@ static bool FGOverlaySaveSettingsNow() noexcept {
     ok = (WritePrivateProfileStringW(L"RayReconstruction", L"ReflectionClamp", clampText, fgOverlaySettingsPath.c_str()) != FALSE) && ok;
     ok = (WritePrivateProfileStringW(L"Overlay", L"ToggleKey", bindingText, fgOverlaySettingsPath.c_str()) != FALSE) && ok;
     ok = (WritePrivateProfileStringW(L"Experimental", L"RTX40MultiFG", experimentalText, fgOverlaySettingsPath.c_str()) != FALSE) && ok;
+    ok = (WritePrivateProfileStringW(L"Experimental", L"TextureStreamingBudgetMs", textureStreamingText, fgOverlaySettingsPath.c_str()) != FALSE) && ok;
     // Old experimental RR/AA settings are intentionally removed; FG settings remain intact.
     WritePrivateProfileStringW(L"AntiAliasing", nullptr, nullptr, fgOverlaySettingsPath.c_str());
     WritePrivateProfileStringW(L"RayReconstruction", L"SkinResponsivity", nullptr, fgOverlaySettingsPath.c_str());
     WritePrivateProfileStringW(L"RayReconstruction", L"SkinPreserveNative", nullptr, fgOverlaySettingsPath.c_str());
     if (ok) WritePrivateProfileStringW(nullptr, nullptr, nullptr, fgOverlaySettingsPath.c_str());
 
-    Log("FG_SETTINGS_SAVE success=%u path=%ls selection=%s selected_code=%u target_policy=%s manual_target_fps=%u rr_enabled=%u rr_preset=%s rr_preset_value=%u schema=8 ui=fg_full_rr_toggle_model_E_F",
+    Log("FG_SETTINGS_SAVE success=%u path=%ls selection=%s selected_code=%u target_policy=%s manual_target_fps=%u rr_enabled=%u rr_preset=%s rr_preset_value=%u texture_streaming_ms=%u schema=9 ui=fg_full_rr_toggle_model_E_F",
         unsigned(ok), fgOverlaySettingsPath.c_str(), GetFGSelectionName(GetFGUserMultiplier()), GetFGUserMultiplier(),
-        GetFGDynamicManualTargetFps() ? "manual" : "auto", GetFGDynamicManualTargetFps(), unsigned(control_rr::RRUserRequested()), control_rr::RRUserPresetLabel(), control_rr::RRUserPresetValue());
+        GetFGDynamicManualTargetFps() ? "manual" : "auto", GetFGDynamicManualTargetFps(), unsigned(control_rr::RRUserRequested()), control_rr::RRUserPresetLabel(), control_rr::RRUserPresetValue(), GetFGTextureStreamingBudgetMs());
     if (ok) fgOverlaySettingsSavedPulseUntilMs = GetTickCount64() + 1200ull;
     return ok;
 }
