@@ -10,7 +10,7 @@ Adds engine-aware NVIDIA DLSS Frame Generation to Control (DX12), including fixe
 
 ## Main description
 
-**v2.1.1 now supports Steam, Epic Games Store, and GOG in one download. GOG users must disable Galaxy's in-game overlay for Control; see the steps below.**
+**v2.1.1 supports Steam, Epic Games Store, and GOG in one download. This update also adds experimental texture-streaming controls and fixes a major RR VRAM-lifetime bug. GOG users must disable Galaxy's in-game overlay for Control; see the steps below.**
 
 ### Control FG
 
@@ -52,6 +52,9 @@ This is not meant to replace OptiScaler, ReShade, Lossless Scaling, or other bro
 - Overlay starts hidden and settings are saved automatically.
 - **RTX 40-series:** Off + 2x by default; experimental Multi Frame Generation is available as an opt-in in Options (restart required), subject to runtime capability checks.
 - **DLSS Ray Reconstruction:** Model F by default, with live E/F selection and a dedicated reflection clamp settings page.
+- **Experimental Texture Streaming:** Off / 4 ms / 6 ms / 8 ms request budgets under Options → Experimental. Higher values can improve texture/LOD loading but **can cause traversal stutter**.
+- Optional persistent **VRAM usage monitor** toggle in Options.
+- **RR VRAM lifecycle fix:** old native RR/NGX feature allocations are retired during live enable/disable, E/F changes, and render-resolution/DLSS-mode changes instead of accumulating in VRAM.
 
 ### FSR Frame Generation expansion — in development
 
@@ -106,6 +109,7 @@ Close Control and remove Control FG's `dxgi.dll` and `ControlFGStreamline` folde
 
 ### Compatibility / known limitations
 
+- **RTX 40-series experimental MFG:** recent reports on NVIDIA **617.14** / DLSS-G **310.9.1** show 3×+ can be rejected by a newer host-side device-policy check (`Found count (2) but expected (1)`). Off/2× remains the safe fallback while the compatibility patch is being developed.
 - Validated Steam, Epic Games Store, and GOG DX12 builds are supported in one package. Complete matching game-file identities are required.
 - DX11 is not supported.
 - Disable GOG Galaxy's in-game overlay for Control. Unknown or mismatched builds and unvalidated game updates are not supported.
@@ -120,5 +124,7 @@ If F10 does not open the overlay, first confirm you launched DX12 and that `dxgi
 ### Credits / disclaimer
 
 A massive shoutout to **HotKnives** for lending his machine and helping with QA for the recent releases and bug fixes!
+
+A big thank you to **speedlemur** for the core Ray Reconstruction integration approach used by recent Control FG builds. Credit for that RR work is also recorded in the project notices.
 
 Uses **NVIDIA Streamline 2.14.1** in the current public release. Control FG is an unofficial fan-made mod and is not affiliated with or endorsed by Remedy Entertainment, 505 Games, NVIDIA, AMD, Valve, Nexus Mods, OptiScaler, ReShade, or Lossless Scaling. *Control* and related trademarks/assets belong to their respective owners.
