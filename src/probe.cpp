@@ -54,6 +54,14 @@ static thread_local unsigned int hudPrimaryTrackedState = 0;
 static thread_local unsigned int hudPrimaryStateKnown = 0;
 static HMODULE verifiedD3d = nullptr, verifiedRenderer = nullptr;
 
+static std::atomic<unsigned long long> vramProbeLocalUsageBytes{0};
+static std::atomic<unsigned long long> vramProbeLocalBudgetBytes{0};
+static std::atomic<unsigned long long> vramProbeDedicatedVideoBytes{0};
+static std::atomic<unsigned long long> vramProbePeakLocalUsageBytes{0};
+static std::atomic<unsigned int> vramProbeSampleValid{0};
+static std::atomic<unsigned int> vramProbeHdrKnown{0};
+static std::atomic<unsigned int> vramProbeHdrEnabled{0};
+
 #include "release_log_policy.h"
 
 static bool ReleaseLogSuppressed(const char* body) noexcept {
@@ -328,6 +336,60 @@ static bool ReadEngineCommandContext(ID3D12Resource* candidate, EngineCommandCon
 #include "rr_input_capture.h"
 static bool RRNativePrepareAA(void* color,void*& normal,void*& diffuse,void*& specular) noexcept;
 
+static void ProbeVideoMemory(unsigned long long call,unsigned long long present,void* color,const char* reason) noexcept {
+    const DWORD saved=GetLastError();
+    void* rawResource=nullptr;D3D12_RESOURCE_DESC resourceDesc{};DWORD describeFault=0;
+    const bool resourceKnown=Describe(color,&rawResource,&resourceDesc,&describeFault);
+    ID3D12Device* device=nullptr;IDXGIFactory4* factory=nullptr;IDXGIAdapter3* adapter=nullptr;
+    DXGI_QUERY_VIDEO_MEMORY_INFO local{};DXGI_ADAPTER_DESC2 adapterDesc{};
+    HRESULT deviceHr=E_FAIL,factoryHr=E_NOINTERFACE,adapterHr=E_FAIL,descHr=E_FAIL,localHr=E_FAIL;
+    unsigned int hdrKnown=0,hdrEnabled=0;DWORD fault=0;
+    __try {
+        if(originalIsHDREnabled){hdrEnabled=originalIsHDREnabled()?1u:0u;hdrKnown=1u;}
+        if(resourceKnown&&rawResource)
+            deviceHr=static_cast<ID3D12Resource*>(rawResource)->GetDevice(__uuidof(ID3D12Device),reinterpret_cast<void**>(&device));
+        if(SUCCEEDED(deviceHr)&&device){
+            const LUID luid=device->GetAdapterLuid();
+            using CreateFactory2Fn=HRESULT (WINAPI*)(UINT,REFIID,void**);
+            auto createFactory=reinterpret_cast<CreateFactory2Fn>(realDxgi?GetProcAddress(realDxgi,"CreateDXGIFactory2"):nullptr);
+            if(createFactory){
+                factoryHr=createFactory(0,__uuidof(IDXGIFactory4),reinterpret_cast<void**>(&factory));
+                if(SUCCEEDED(factoryHr)&&factory){
+                    adapterHr=factory->EnumAdapterByLuid(luid,__uuidof(IDXGIAdapter3),reinterpret_cast<void**>(&adapter));
+                    if(SUCCEEDED(adapterHr)&&adapter){
+                        descHr=adapter->GetDesc2(&adapterDesc);
+                        localHr=adapter->QueryVideoMemoryInfo(0,DXGI_MEMORY_SEGMENT_GROUP_LOCAL,&local);
+                    }
+                }
+            }
+        }
+    } __except(EXCEPTION_EXECUTE_HANDLER){fault=GetExceptionCode();}
+
+    if(SUCCEEDED(localHr)){
+        auto peak=vramProbePeakLocalUsageBytes.load(std::memory_order_relaxed);
+        while(peak<local.CurrentUsage&&!vramProbePeakLocalUsageBytes.compare_exchange_weak(peak,local.CurrentUsage,std::memory_order_relaxed)){}
+        vramProbeLocalUsageBytes.store(local.CurrentUsage,std::memory_order_release);
+        vramProbeLocalBudgetBytes.store(local.Budget,std::memory_order_release);
+        if(SUCCEEDED(descHr))vramProbeDedicatedVideoBytes.store(static_cast<unsigned long long>(adapterDesc.DedicatedVideoMemory),std::memory_order_release);
+        vramProbeHdrKnown.store(hdrKnown,std::memory_order_release);
+        vramProbeHdrEnabled.store(hdrEnabled,std::memory_order_release);
+        vramProbeSampleValid.store(1u,std::memory_order_release);
+    }
+    constexpr unsigned long long MiB=1024ull*1024ull;
+    Log("VRAM_PROBE call=%llu present=%llu reason=%s hdr_known=%u hdr_enabled=%u rr_requested=%u "
+        "local_budget_mib=%llu local_usage_mib=%llu local_peak_mib=%llu dedicated_video_mib=%llu "
+        "rr_streamline_resident=%u rr_alt_releases=%llu d1_capture=disabled exception=0x%08lX",
+        call,present,reason?reason:"unknown",hdrKnown,hdrEnabled,unsigned(control_rr::RRUserRequested()),
+        SUCCEEDED(localHr)?local.Budget/MiB:0ull,SUCCEEDED(localHr)?local.CurrentUsage/MiB:0ull,
+        vramProbePeakLocalUsageBytes.load(std::memory_order_relaxed)/MiB,
+        SUCCEEDED(descHr)?static_cast<unsigned long long>(adapterDesc.DedicatedVideoMemory)/MiB:0ull,
+        rr20pResourcesResident.load(std::memory_order_acquire),rrPresetLiveReleases.load(std::memory_order_relaxed),fault);
+    __try{if(adapter)adapter->Release();}__except(EXCEPTION_EXECUTE_HANDLER){}
+    __try{if(factory)factory->Release();}__except(EXCEPTION_EXECUTE_HANDLER){}
+    __try{if(device)device->Release();}__except(EXCEPTION_EXECUTE_HANDLER){}
+    SetLastError(saved);
+}
+
 static void ExtendPathTrace(unsigned long long present, unsigned long long frames) noexcept {
     const unsigned long long target = present + frames;
     unsigned long long current = pathTraceUntilPresent.load();
@@ -473,6 +535,8 @@ static bool HookAA(void* t1, void* t2, void* t3, void* t4, void* t5, void* t6,
     // RR diagnostic only: preserve production AA/FG ordering, then give a
     // joined material capture one later same-frame copy opportunity.
     // r20x: disable diagnostic joined capture in performance branch.
+    if(call==1||call==8||(call%60)==0||resetFrame||resumeGap)
+        ProbeVideoMemory(call,currentPresent,t1,resetFrame?"reset":(resumeGap?"resume_gap":((call<=8)?"startup":"periodic")));
     return result;
 }
 
