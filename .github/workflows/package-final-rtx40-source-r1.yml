@@ -1,0 +1,104 @@
+name: Package final RTX40 source R1
+
+on:
+  push:
+    branches:
+      - fix/rtx40-61714-device-policy-r1
+    paths:
+      - ".github/workflows/package-final-rtx40-source-r1.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - name: Preserve repository bytes
+        shell: powershell
+        run: git config --global core.autocrlf false
+
+      - uses: actions/checkout@v4
+
+      - name: Refresh source evidence for final source package
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $changed = @(
+            'src/probe.cpp',
+            'src/fg_overlay.h',
+            'src/rr_options_r20p.h',
+            'src/rr_native_preset.h',
+            'src/rr_native_frame.h',
+            'src/rr_live_retire.h',
+            'src/rtx40_mfg/patches.cpp',
+            'src/rtx40_mfg/control_bridge.cpp'
+          )
+          $checkpointPath = 'validation/current-release/results.json'
+          $manifestPath = 'SOURCE-SHA256.json'
+
+          $checkpoint = Get-Content -LiteralPath $checkpointPath -Raw | ConvertFrom-Json
+          foreach ($rel in $changed) {
+            $hash = (Get-FileHash -LiteralPath $rel -Algorithm SHA256).Hash.ToLowerInvariant()
+            $prop = $checkpoint.tested_sha256.PSObject.Properties[$rel]
+            if ($null -eq $prop) {
+              $checkpoint.tested_sha256 | Add-Member -NotePropertyName $rel -NotePropertyValue $hash
+            } else {
+              $prop.Value = $hash
+            }
+          }
+          $checkpoint | ConvertTo-Json -Depth 30 | Set-Content -LiteralPath $checkpointPath -Encoding UTF8
+
+          $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
+          foreach ($rel in @($changed + $checkpointPath)) {
+            $hash = (Get-FileHash -LiteralPath $rel -Algorithm SHA256).Hash.ToLowerInvariant()
+            $prop = $manifest.PSObject.Properties[$rel]
+            if ($null -eq $prop) {
+              $manifest | Add-Member -NotePropertyName $rel -NotePropertyValue $hash
+            } else {
+              $prop.Value = $hash
+            }
+          }
+          $manifest | ConvertTo-Json -Depth 30 | Set-Content -LiteralPath $manifestPath -Encoding UTF8
+
+      - name: Build and validate exact source tree
+        shell: cmd
+        run: echo.|Build.cmd
+
+      - name: Stage tracked source
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $stage = Join-Path $PWD 'source-stage'
+          New-Item -ItemType Directory -Force -Path $stage | Out-Null
+          $exclude = @(
+            '.github/workflows/build-rtx40-compat-r1.yml',
+            '.github/workflows/package-final-rtx40-source-r1.yml'
+          )
+          foreach ($rel in (git ls-files)) {
+            if ($exclude -contains $rel) { continue }
+            $src = Join-Path $PWD $rel
+            if (-not (Test-Path -LiteralPath $src -PathType Leaf)) { continue }
+            $dst = Join-Path $stage $rel
+            $dir = Split-Path -Parent $dst
+            if ($dir) { New-Item -ItemType Directory -Force -Path $dir | Out-Null }
+            Copy-Item -LiteralPath $src -Destination $dst
+          }
+          $zip = Join-Path $PWD 'Control-FG-v2.1.1-All-Fixes-RTX40-Source-R1.zip'
+          Compress-Archive -Path (Join-Path $stage '*') -DestinationPath $zip -CompressionLevel Optimal
+          (Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash.ToLowerInvariant() |
+            Set-Content -LiteralPath 'Control-FG-v2.1.1-All-Fixes-RTX40-Source-R1.sha256' -Encoding ASCII
+
+      - name: Upload source package
+        uses: actions/upload-artifact@v4
+        with:
+          name: Control-FG-v2.1.1-All-Fixes-RTX40-Source-R1
+          path: |
+            Control-FG-v2.1.1-All-Fixes-RTX40-Source-R1.zip
+            Control-FG-v2.1.1-All-Fixes-RTX40-Source-R1.sha256
+            build/build-validation.json
+            Build.log
+          if-no-files-found: error
+          retention-days: 7
