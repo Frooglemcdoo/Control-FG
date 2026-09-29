@@ -1,11 +1,11 @@
 {
   "status": "LOCAL_PASS",
-  "scope": "v2.1.1 release preparation from restored unified R3 commit 0d5040d7dd5713066f42a82c1f646c4271cde260. Source changes under src are version labels and storefront description only. Storefront identity admission and FG/RR/input behavior unchanged. September 29 documentation/update checkpoint adds experimental texture streaming UI, RR VRAM lifecycle fix notes, RTX40 617.14 compatibility notice, and RR attribution.",
+  "scope": "v2.1.2 release candidate. Carries forward validated Steam/Epic/GOG support and adds the September 29 RR VRAM lifecycle fix, Experimental Texture Streaming controls, optional VRAM monitor, RTX 40-series NVIDIA 617.14 / DLSS-G 310.9.1 compatibility path, and updated RR attribution.",
   "tests": {
     "rr_settings_input": "PASS actual RR page routing/reset/save/drag-preview/mapping using ASan/UBSan, detect_leaks=0.",
     "slider_mapping": "PASS all 51 values, endpoint clamping, monotonicity",
     "windows_build": "PENDING: final Windows result recorded in CI build/build-validation.json.",
-    "gpu_runtime": "INHERITED: user reported unified R3 runs on Steam, Epic and GOG; GOG Galaxy overlay conflict identified. Fresh v2.1.1 GPU run not performed.",
+    "gpu_runtime": "PARTIAL: September 29 RR/texture changes were user-tested; RTX 40-series 617.14 compatibility still requires hardware verification before final release sign-off.",
     "powershell_source_gate": "PENDING: executed by Windows Build.cmd.",
     "inherited_validation": "Earlier CS3 evidence retained for unchanged code; not rerun in CS4.",
     "portable_gate": "PASS R3 source equivalence excluding version labels/comment; extracted production storefront gate 36 combinations; production RR settings routing and slider mapping ASan/UBSan (leak detection disabled).",
@@ -188,5 +188,5 @@
     "src/rr_native_preset.h": "9790bc8ea98810de1a510f44bed2a06ac0c586302e673096cc7a2dd4c345fa3d",
     "src/rr_options_r20p.h": "bffc9af47b405457629228da123d1941e02bbe0fc64a27173aea714c7acf8e20"
   },
-  "candidate": "2.1.1"
+  "candidate": "2.1.2"
 }
