@@ -42,7 +42,7 @@
     "src/fg_native_source.h": "744f176dd6765401fa626d32ad6ddeb9c165e69daa789aae5ccb6d409ca989c6",
     "src/fg_native_source_policy.h": "f2e88a9d98ebb4f489e68404785039eb2a9d40e434565dfc61d1b660f42aebed",
     "src/fg_off_present_proof.h": "1006667d5fd40d903201227d0ac0c1df74b9419bead03f5e575f3bd25947cc10",
-    "src/fg_overlay.h": "0f76e0e1122232ecc2bd16d8934da569b967b164f2825a3fe25b8d2f60204e5c",
+    "src/fg_overlay.h": "5f4b73466392d8695cfcd80a716d1221437d4fc4786a24ed25fcd5200af42cb3",
     "src/fg_pixel_capture.h": "a6c05cb6a6cc62b3b0bd65441c704324a5dd215919e38355e9314e33291bf60d",
     "src/fg_present_capture.h": "1f43a2a7aa3c82bee0b8c04eff45692c06ba8f51e55aac9bb628e6aea2db43c2",
     "src/fg_sdr_correction.h": "861110a4bcdcb5868246698213104bc90e0b15c1100b9214a5198a0762065c2a",
@@ -50,7 +50,7 @@
     "src/fg_ui_recomposition.h": "fc30430811eceaf05622bd8fab2b70d668d9ecb2484018300bf9ac3be97881e4",
     "src/fg_ui_work.h": "3a2508b6e1bd182d517a764741589abc3e996c614588d73066da7ce321658445",
     "src/hdr10_bridge.h": "093c6f50006843df761fc75e597e78041b1bf5f40baebd7ea466c2bc3e16b154",
-    "src/probe.cpp": "e3fde59e39bf75c64a78eaaeedf1e0905bcf4ab769129cf072fdba57b68b5a09",
+    "src/probe.cpp": "5b133279988698179e8c00be4d413fabc6cdfd8a0d32cd6894bf1b69c1664135",
     "src/rtx40_mfg/ada_patch.cpp": "93e20b6684c92c5124b4965dbecf7a51f15872db8164c37e3e310526348c061a",
     "src/rtx40_mfg/ada_patch.h": "11b27119a5c19fa2247e936f6fd33a502ae1784070469af87c406eee335958bb",
     "src/rtx40_mfg/control_bridge.cpp": "ed10261d5dbcab421b730840a629053a235315993d4c2948ae81e30a18dcb3e3",
@@ -108,7 +108,7 @@
     "src/rr_evaluation_entry.h": "4759c3832f0e28057218dd34b49abc9008c751d9617ccfc6c7a4910cdda0dc84",
     "src/rr_projection_validation.h": "276f251220bc97bf705c631d6e909eaeba98875a046822a77226ba453d54e2ae",
     "validation/rr-f-projection/test.cpp": "909738a9cfdc1287c1737d90f4bb129e573756bd99dbb8dd67bb139b961c1747",
-    "src/rr_native_frame.h": "36f7ece554cc43ebe3c5326428d84f8a828eca5f006bc629c67223e499b55354",
+    "src/rr_native_frame.h": "a8dce547679e6bc054fdba38e11a1e1ec581d87e769e7330f7c16500b61ec4cc",
     "src/rr_distance_binding_policy.h": "53e61125b49c979e222fdf68466deac2843e6b047728d288beaf6d78538c4516",
     "src/rr_reflection_handoff_windows.h": "1a401176e2fb7e9741a2a05d836bdcffb77ed53a488202e3eae5c7d86afbcfe4",
     "src/rr_guide_parameters.h": "7e8b60b0e2437b5eff6038cf8eadec70b12f1709410a5050cbd37241455d3c77",
@@ -183,7 +183,10 @@
     "tools/diagnostics/Collect-LiveGuides.ps1": "406816eb0b8f7fac7ba81b950486c3fd1fa67e1f96619556ede6daa2c3e8aca9",
     "tools/diagnostics/Collect-RR-Inputs.cmd": "06ed12b3af038a5e8ef1cf21feb3049071f60bc0ab9c096b7abcec942cfa936d",
     "tools/diagnostics/Collect-RR-Inputs.ps1": "24882fd8e0dc367ac399dd2f33b301d8143bed2ab0736aab7e73d470d60fec1b",
-    "tools/diagnostics/README.md": "60055403c52a8cfdf8f57851ca33112c2160ad19e7fb006b520b6e2f6bd859de"
+    "tools/diagnostics/README.md": "60055403c52a8cfdf8f57851ca33112c2160ad19e7fb006b520b6e2f6bd859de",
+    "src/rr_live_retire.h": "60668c47b0756276793e009e0ed63b70f1dad5ba9c8835adb9b5ceeceda538eb",
+    "src/rr_native_preset.h": "9790bc8ea98810de1a510f44bed2a06ac0c586302e673096cc7a2dd4c345fa3d",
+    "src/rr_options_r20p.h": "bffc9af47b405457629228da123d1941e02bbe0fc64a27173aea714c7acf8e20"
   },
   "candidate": "2.1.1"
 }
