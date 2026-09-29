@@ -649,11 +649,13 @@ static void PaintFGOverlay(HWND hwnd) noexcept {
         DrawTextW(dc, L"Enable RTX 40-series Multi Frame Generation", -1, &experimentalLabel, DT_LEFT | DT_SINGLELINE | DT_VCENTER);
         SelectObject(dc, smallFont);
         RECT experimentalHelp{30, 482, 710, 520};
-        const wchar_t* note = !editable ? L"RTX 40-series only. RTX 50-series uses native NVIDIA Multi Frame Generation."
+        const wchar_t* note = !editable
+            ? L"RTX 40-series only. RTX 50-series uses native NVIDIA MFG and is never patched."
             : requested != IsRTX40MFGSessionEnabled()
-            ? L"Restart required to change the FG implementation. Disabled: native NVIDIA FG, up to 2x."
-            : (requested ? L"Experimental MFG enabled. Disabling requires a restart to restore native NVIDIA FG."
-                         : L"Native NVIDIA Frame Generation, up to 2x. Enabling experimental MFG requires a restart.");
+            ? L"Restart required. The RTX 40-series compatibility patch loads only at startup and stays active until restart."
+            : (requested
+                ? L"Experimental MFG active. The RTX 40-series compatibility patch stays active until restart, even if FG is set to Off or 2x."
+                : L"Native NVIDIA FG, up to 2x. No RTX 40-series compatibility patch is loaded unless this is enabled before restart.");
         DrawTextW(dc, note, -1, &experimentalHelp, DT_LEFT | DT_WORDBREAK);
 
         PaintFGDivider(dc, 30, 530, 710);
