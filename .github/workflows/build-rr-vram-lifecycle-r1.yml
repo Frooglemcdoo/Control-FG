@@ -1,9 +1,9 @@
-name: Build Texture Streaming Experimental R1
+name: Build Texture Streaming Experimental R2
 
 on:
   push:
     branches:
-      - feature/texture-streaming-experimental-r1
+      - feature/texture-streaming-experimental-r2
     paths:
       - ".github/workflows/build-rr-vram-lifecycle-r1.yml"
       - "src/probe.cpp"
@@ -76,19 +76,19 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           $src = 'release/Control-FG-v2.1.1.zip'
-          $dst = 'Control-FG-v2.1.1-Texture-Experimental-R1.zip'
+          $dst = 'Control-FG-v2.1.1-Texture-Experimental-R2.zip'
           if (-not (Test-Path -LiteralPath $src)) { throw 'Expected release package was not produced.' }
           Copy-Item -LiteralPath $src -Destination $dst
           (Get-FileHash -LiteralPath $dst -Algorithm SHA256).Hash.ToLowerInvariant() |
-            Set-Content -LiteralPath 'Control-FG-v2.1.1-Texture-Experimental-R1.sha256' -Encoding ASCII
+            Set-Content -LiteralPath 'Control-FG-v2.1.1-Texture-Experimental-R2.sha256' -Encoding ASCII
 
       - name: Upload test package
         uses: actions/upload-artifact@v4
         with:
-          name: Control-FG-v2.1.1-Texture-Experimental-R1
+          name: Control-FG-v2.1.1-Texture-Experimental-R2
           path: |
-            Control-FG-v2.1.1-Texture-Experimental-R1.zip
-            Control-FG-v2.1.1-Texture-Experimental-R1.sha256
+            Control-FG-v2.1.1-Texture-Experimental-R2.zip
+            Control-FG-v2.1.1-Texture-Experimental-R2.sha256
             build/build-validation.json
             Build.log
           if-no-files-found: error
