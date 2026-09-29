@@ -1,0 +1,80 @@
+name: Build HDR VRAM probe R1
+
+on:
+  push:
+    branches:
+      - probe/hdr-vram-20260928-r1
+    paths:
+      - "src/probe.cpp"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - name: Preserve repository bytes
+        shell: powershell
+        run: git config --global core.autocrlf false
+
+      - uses: actions/checkout@v4
+
+      - name: Refresh diagnostic source evidence
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $probePath = 'src/probe.cpp'
+          $checkpointPath = 'validation/current-release/results.json'
+          $manifestPath = 'SOURCE-SHA256.json'
+
+          $checkpoint = Get-Content -LiteralPath $checkpointPath -Raw | ConvertFrom-Json
+          $probeHash = (Get-FileHash -LiteralPath $probePath -Algorithm SHA256).Hash.ToLowerInvariant()
+          $probeProp = $checkpoint.tested_sha256.PSObject.Properties[$probePath]
+          if ($null -eq $probeProp) {
+            $checkpoint.tested_sha256 | Add-Member -NotePropertyName $probePath -NotePropertyValue $probeHash
+          } else {
+            $probeProp.Value = $probeHash
+          }
+          $checkpoint | ConvertTo-Json -Depth 30 | Set-Content -LiteralPath $checkpointPath -Encoding UTF8
+
+          $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
+          foreach ($rel in @($probePath, $checkpointPath)) {
+            $hash = (Get-FileHash -LiteralPath $rel -Algorithm SHA256).Hash.ToLowerInvariant()
+            $prop = $manifest.PSObject.Properties[$rel]
+            if ($null -eq $prop) {
+              $manifest | Add-Member -NotePropertyName $rel -NotePropertyValue $hash
+            } else {
+              $prop.Value = $hash
+            }
+          }
+          $manifest | ConvertTo-Json -Depth 30 | Set-Content -LiteralPath $manifestPath -Encoding UTF8
+
+      - name: Build and validate release-source probe
+        shell: cmd
+        run: echo.|Build.cmd
+
+      - name: Prepare probe package
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $src = 'release/Control-FG-v2.1.1.zip'
+          $dst = 'Control-FG-v2.1.1-HDR-VRAM-Probe-R1.zip'
+          if (-not (Test-Path -LiteralPath $src)) { throw 'Expected release package was not produced.' }
+          Copy-Item -LiteralPath $src -Destination $dst
+          (Get-FileHash -LiteralPath $dst -Algorithm SHA256).Hash.ToLowerInvariant() |
+            Set-Content -LiteralPath 'Control-FG-v2.1.1-HDR-VRAM-Probe-R1.sha256' -Encoding ASCII
+
+      - name: Upload probe package
+        uses: actions/upload-artifact@v4
+        with:
+          name: Control-FG-v2.1.1-HDR-VRAM-Probe-R1
+          path: |
+            Control-FG-v2.1.1-HDR-VRAM-Probe-R1.zip
+            Control-FG-v2.1.1-HDR-VRAM-Probe-R1.sha256
+            build/build-validation.json
+            Build.log
+          if-no-files-found: error
+          retention-days: 7
