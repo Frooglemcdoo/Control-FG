@@ -12,6 +12,9 @@
 // typography hierarchy, selected-state treatment, and thick slider aesthetic.
 
 static constexpr wchar_t kFGOverlayClassName[] = L"ControlFGOverlay_v1000";
+static constexpr wchar_t kFGVramProbeClassName[] = L"ControlFGVramLifecycle_R1";
+static constexpr int kFGVramProbeWidth = 390;
+static constexpr int kFGVramProbeHeight = 86;
 static constexpr int kFGOverlayWidth = 740;
 static constexpr int kFGOverlayHeight = 762;
 static constexpr int kFGOverlayCompactHeight = 542;
@@ -99,7 +102,8 @@ static BOOL CALLBACK FGOverlayEnumWindows(HWND hwnd, LPARAM param) noexcept {
     GetWindowThreadProcessId(hwnd, &pid);
     if (pid != search->pid || !IsWindowVisible(hwnd) || GetWindow(hwnd, GW_OWNER)) return TRUE;
     wchar_t className[64]{};
-    if (GetClassNameW(hwnd, className, _countof(className)) && wcscmp(className, kFGOverlayClassName) == 0) return TRUE;
+    if (GetClassNameW(hwnd, className, _countof(className)) &&
+        (wcscmp(className, kFGOverlayClassName) == 0 || wcscmp(className, kFGVramProbeClassName) == 0)) return TRUE;
     RECT rc{};
     if (!GetClientRect(hwnd, &rc)) return TRUE;
     const long long area = static_cast<long long>(rc.right - rc.left) * static_cast<long long>(rc.bottom - rc.top);
@@ -1221,6 +1225,57 @@ static bool FGOverlayTryReplayWindowsHdrHotkey() noexcept {
     return success;
 }
 
+static void PaintFGVramProbe(HWND hwnd) noexcept {
+    PAINTSTRUCT ps{};HDC dc=BeginPaint(hwnd,&ps);if(!dc)return;
+    RECT client{};GetClientRect(hwnd,&client);
+    HBRUSH bg=CreateSolidBrush(RGB(0,0,0));FillRect(dc,&client,bg);DeleteObject(bg);
+    HPEN border=CreatePen(PS_SOLID,1,RGB(92,92,92));HGDIOBJ oldPen=SelectObject(dc,border);
+    HGDIOBJ oldBrush=SelectObject(dc,GetStockObject(HOLLOW_BRUSH));Rectangle(dc,0,0,client.right-1,client.bottom-1);
+    SelectObject(dc,oldBrush);SelectObject(dc,oldPen);DeleteObject(border);SetBkMode(dc,TRANSPARENT);
+
+    HFONT label=CreateFGControlFont(16,FW_BOLD,L"Bahnschrift Condensed");
+    HFONT value=CreateFGControlFont(22,FW_SEMIBOLD,L"Bahnschrift SemiCondensed");
+    HFONT small=CreateFGControlFont(13,FW_NORMAL,L"Bahnschrift SemiCondensed");
+    HGDIOBJ oldFont=SelectObject(dc,label);SetTextColor(dc,RGB(255,32,32));
+    RECT labelRc{14,8,82,30};DrawTextW(dc,L"VRAM",-1,&labelRc,DT_LEFT|DT_VCENTER|DT_SINGLELINE);
+
+    wchar_t mainText[160]{},detail[192]{};
+    if(vramProbeSampleValid.load(std::memory_order_acquire)){
+        constexpr double GiB=1024.0*1024.0*1024.0;
+        const auto usage=vramProbeLocalUsageBytes.load(std::memory_order_acquire);
+        const auto budget=vramProbeLocalBudgetBytes.load(std::memory_order_acquire);
+        const auto peak=vramProbePeakLocalUsageBytes.load(std::memory_order_acquire);
+        const auto physical=vramProbeDedicatedVideoBytes.load(std::memory_order_acquire);
+        const unsigned pct=budget?static_cast<unsigned>((usage*100ull+budget/2ull)/budget):0u;
+        swprintf_s(mainText,L"%.2f / %.2f GB  (%u%%)",double(usage)/GiB,double(budget)/GiB,pct);
+        const bool hdrKnown=vramProbeHdrKnown.load(std::memory_order_acquire)!=0;
+        const bool hdr=vramProbeHdrEnabled.load(std::memory_order_acquire)!=0;
+        swprintf_s(detail,L"Peak %.2f GB   Physical %.2f GB   HDR %s",double(peak)/GiB,double(physical)/GiB,
+            hdrKnown?(hdr?L"ON":L"OFF"):L"?");
+    }else{
+        wcscpy_s(mainText,L"Waiting for GPU sample...");
+        wcscpy_s(detail,L"Updates while Control is rendering.");
+    }
+    SelectObject(dc,value);SetTextColor(dc,RGB(246,246,246));
+    RECT valueRc{82,5,376,38};DrawTextW(dc,mainText,-1,&valueRc,DT_RIGHT|DT_VCENTER|DT_SINGLELINE);
+    SelectObject(dc,small);SetTextColor(dc,RGB(185,185,185));
+    RECT detailRc{14,48,376,72};DrawTextW(dc,detail,-1,&detailRc,DT_LEFT|DT_VCENTER|DT_SINGLELINE);
+    SelectObject(dc,oldFont);DeleteObject(label);DeleteObject(value);DeleteObject(small);EndPaint(hwnd,&ps);
+}
+static LRESULT CALLBACK FGVramProbeWndProc(HWND hwnd,UINT message,WPARAM wParam,LPARAM lParam) noexcept {
+    switch(message){
+    case WM_ERASEBKGND:return 1;
+    case WM_PAINT:PaintFGVramProbe(hwnd);return 0;
+    case WM_NCHITTEST:return HTTRANSPARENT;
+    }
+    return DefWindowProcW(hwnd,message,wParam,lParam);
+}
+static void PositionFGVramProbe(HWND monitor,HWND game) noexcept {
+    if(!monitor||!game)return;RECT client{};if(!GetClientRect(game,&client)||client.right<=client.left||client.bottom<=client.top)return;
+    POINT origin{0,0};if(!ClientToScreen(game,&origin))return;
+    SetWindowPos(monitor,HWND_TOPMOST,origin.x+18,origin.y+18,kFGVramProbeWidth,kFGVramProbeHeight,SWP_NOACTIVATE);
+}
+
 static DWORD WINAPI FGOverlayThreadProc(LPVOID) noexcept {
     WNDCLASSEXW wc{};
     wc.cbSize = sizeof(wc);
@@ -1229,6 +1284,14 @@ static DWORD WINAPI FGOverlayThreadProc(LPVOID) noexcept {
     wc.hCursor = LoadCursorW(nullptr, IDC_ARROW);
     wc.lpszClassName = kFGOverlayClassName;
     RegisterClassExW(&wc);
+
+    WNDCLASSEXW vramWc{};
+    vramWc.cbSize=sizeof(vramWc);
+    vramWc.lpfnWndProc=FGVramProbeWndProc;
+    vramWc.hInstance=selfModule;
+    vramWc.hCursor=LoadCursorW(nullptr,IDC_ARROW);
+    vramWc.lpszClassName=kFGVramProbeClassName;
+    RegisterClassExW(&vramWc);
 
     HWND overlay = CreateWindowExW(WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_LAYERED | WS_EX_NOACTIVATE,
         kFGOverlayClassName, L"Control FG", WS_POPUP, 0, 0, kFGOverlayWidth, FGOverlayDesiredHeight(),
@@ -1239,6 +1302,12 @@ static DWORD WINAPI FGOverlayThreadProc(LPVOID) noexcept {
     }
     SetLayeredWindowAttributes(overlay, 0, 248, LWA_ALPHA);
     ShowWindow(overlay, SW_HIDE);
+    HWND vramMonitor=CreateWindowExW(WS_EX_TOPMOST|WS_EX_TOOLWINDOW|WS_EX_LAYERED|WS_EX_NOACTIVATE|WS_EX_TRANSPARENT,
+        kFGVramProbeClassName,L"Control FG RR VRAM",WS_POPUP,0,0,kFGVramProbeWidth,kFGVramProbeHeight,
+        nullptr,nullptr,selfModule,nullptr);
+    if(vramMonitor){SetLayeredWindowAttributes(vramMonitor,0,238,LWA_ALPHA);ShowWindow(vramMonitor,SW_HIDE);
+        Log("VRAM_MONITOR_READY hwnd=%p build=rr_vram_lifecycle_r1 update_ms=250",vramMonitor);}
+    else Log("VRAM_MONITOR_CREATE_FAILED error=%lu",GetLastError());
     fgOverlayKeyboardHook = nullptr;
     Log("FG_HDR_HOTKEY_HOOK installed=0 hook=null error=0 policy=disabled_r31_display_or_resize_detected_hard_dlssg_reset");
     Log("FG_OVERLAY_READY hwnd=%p hotkey=F10 input=GetAsyncKeyState_nonexclusive default_selection=%s selector=off,dynamic,2x,3x,4x,5x,6x dynamic_auto_target=explicit_game_monitor_refresh dynamic_manual_target=30-1000_fps rr_controls=on_off_plus_model_E_F rr_model_default=F rr_model_live_switch=E_F partial=hidden skin=hidden aa_sharpness=hidden controls=auto,manual,thick_slider_30_1000 presentation=os_layered_noactivate_control_native_menu_anchor_top_right startup_visibility=hidden_f10_only persistence=localappdata_ini runtime_status=selected,effective,current_fps,hdr,capability title=embedded_control_fg_logo_control_native font=bahnschrift_semicondensed selected_style=white_fill_black_text section_headers=control_red no_side_scrollbar=1 dynamic_vsync_policy=syncinterval0_while_active dynamic_reflex_limiter=target_fps gpu_policy=rtx40_off_plus_2x_only",
@@ -1268,6 +1337,17 @@ static DWORD WINAPI FGOverlayThreadProc(LPVOID) noexcept {
                 }
             }
             const bool gameForeground = game && FGOverlayGameIsForeground(game);
+            static bool vramMonitorShown=false;
+            static ULONGLONG vramMonitorLastPaintMs=0;
+            if(vramMonitor){
+                if(gameForeground){
+                    PositionFGVramProbe(vramMonitor,game);
+                    if(!vramMonitorShown){ShowWindow(vramMonitor,SW_SHOWNOACTIVATE);vramMonitorShown=true;}
+                    if(!vramMonitorLastPaintMs||now-vramMonitorLastPaintMs>=250){
+                        InvalidateRect(vramMonitor,nullptr,FALSE);vramMonitorLastPaintMs=now;
+                    }
+                }else if(vramMonitorShown){ShowWindow(vramMonitor,SW_HIDE);vramMonitorShown=false;}
+            }
             // r31 does not intercept or replay Win+Alt+B. Windows owns the shortcut;
             // recovery is driven by fresh DXGI output / Control resize detection.
             const bool capturingBinding = fgOverlayBindingCapture;
@@ -1332,6 +1412,7 @@ static DWORD WINAPI FGOverlayThreadProc(LPVOID) noexcept {
         Log("FG_HDR_HOTKEY_HOOK installed=0 reason=overlay_thread_exit");
     }
     if (fgSettingsCogBitmap) { DeleteObject(fgSettingsCogBitmap); fgSettingsCogBitmap = nullptr; }
+    if(vramMonitor)DestroyWindow(vramMonitor);
     DestroyWindow(overlay);
     return 0;
 }
