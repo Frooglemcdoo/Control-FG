@@ -6,6 +6,7 @@ on:
       - probe/hdr-vram-20260928-r1
     paths:
       - "src/probe.cpp"
+      - "src/fg_overlay.h"
   workflow_dispatch:
 
 permissions:
@@ -27,21 +28,24 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           $probePath = 'src/probe.cpp'
+          $overlayPath = 'src/fg_overlay.h'
           $checkpointPath = 'validation/current-release/results.json'
           $manifestPath = 'SOURCE-SHA256.json'
 
           $checkpoint = Get-Content -LiteralPath $checkpointPath -Raw | ConvertFrom-Json
-          $probeHash = (Get-FileHash -LiteralPath $probePath -Algorithm SHA256).Hash.ToLowerInvariant()
-          $probeProp = $checkpoint.tested_sha256.PSObject.Properties[$probePath]
-          if ($null -eq $probeProp) {
-            $checkpoint.tested_sha256 | Add-Member -NotePropertyName $probePath -NotePropertyValue $probeHash
-          } else {
-            $probeProp.Value = $probeHash
+          foreach ($rel in @($probePath, $overlayPath)) {
+            $hash = (Get-FileHash -LiteralPath $rel -Algorithm SHA256).Hash.ToLowerInvariant()
+            $prop = $checkpoint.tested_sha256.PSObject.Properties[$rel]
+            if ($null -eq $prop) {
+              $checkpoint.tested_sha256 | Add-Member -NotePropertyName $rel -NotePropertyValue $hash
+            } else {
+              $prop.Value = $hash
+            }
           }
           $checkpoint | ConvertTo-Json -Depth 30 | Set-Content -LiteralPath $checkpointPath -Encoding UTF8
 
           $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
-          foreach ($rel in @($probePath, $checkpointPath)) {
+          foreach ($rel in @($probePath, $overlayPath, $checkpointPath)) {
             $hash = (Get-FileHash -LiteralPath $rel -Algorithm SHA256).Hash.ToLowerInvariant()
             $prop = $manifest.PSObject.Properties[$rel]
             if ($null -eq $prop) {
@@ -61,19 +65,19 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           $src = 'release/Control-FG-v2.1.1.zip'
-          $dst = 'Control-FG-v2.1.1-HDR-VRAM-Probe-R1.zip'
+          $dst = 'Control-FG-v2.1.1-HDR-VRAM-Probe-R2.zip'
           if (-not (Test-Path -LiteralPath $src)) { throw 'Expected release package was not produced.' }
           Copy-Item -LiteralPath $src -Destination $dst
           (Get-FileHash -LiteralPath $dst -Algorithm SHA256).Hash.ToLowerInvariant() |
-            Set-Content -LiteralPath 'Control-FG-v2.1.1-HDR-VRAM-Probe-R1.sha256' -Encoding ASCII
+            Set-Content -LiteralPath 'Control-FG-v2.1.1-HDR-VRAM-Probe-R2.sha256' -Encoding ASCII
 
       - name: Upload probe package
         uses: actions/upload-artifact@v4
         with:
-          name: Control-FG-v2.1.1-HDR-VRAM-Probe-R1
+          name: Control-FG-v2.1.1-HDR-VRAM-Probe-R2
           path: |
-            Control-FG-v2.1.1-HDR-VRAM-Probe-R1.zip
-            Control-FG-v2.1.1-HDR-VRAM-Probe-R1.sha256
+            Control-FG-v2.1.1-HDR-VRAM-Probe-R2.zip
+            Control-FG-v2.1.1-HDR-VRAM-Probe-R2.sha256
             build/build-validation.json
             Build.log
           if-no-files-found: error
