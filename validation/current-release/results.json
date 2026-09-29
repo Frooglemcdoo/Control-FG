@@ -1,6 +1,6 @@
 {
   "status": "LOCAL_PASS",
-  "scope": "v2.1.1 release preparation from restored unified R3 commit 0d5040d7dd5713066f42a82c1f646c4271cde260. Source changes under src are version labels and storefront description only. Storefront identity admission and FG/RR/input behavior unchanged.",
+  "scope": "v2.1.1 release preparation from restored unified R3 commit 0d5040d7dd5713066f42a82c1f646c4271cde260. Source changes under src are version labels and storefront description only. Storefront identity admission and FG/RR/input behavior unchanged. September 29 documentation/update checkpoint adds experimental texture streaming UI, RR VRAM lifecycle fix notes, RTX40 617.14 compatibility notice, and RR attribution.",
   "tests": {
     "rr_settings_input": "PASS actual RR page routing/reset/save/drag-preview/mapping using ASan/UBSan, detect_leaks=0.",
     "slider_mapping": "PASS all 51 values, endpoint clamping, monotonicity",
@@ -14,7 +14,8 @@
     "release_packaging": "PENDING: final package verification recorded in CI build/deployment-validation.json.",
     "storefront_identity": "PASS manifest matches runtime constants; extracted production admission accepts exactly 3 known triples and rejects other tested combinations.",
     "deployment_cleanup": "PASS local archive comparison: only obsolete alignment collector pair removed; all 24 retained files including 10 DLLs identical to user upload; compact collector and all three storefront identities verified. Windows packaging execution and game runtime not rerun.",
-    "source_layout": "PASS: source root contains only compact collector pair; eight developer files relocated to tools/diagnostics, duplicate shortcuts removed, active script/fixture/probe workflow paths updated. PowerShell parsing remains a Windows CI gate."
+    "source_layout": "PASS: source root contains only compact collector pair; eight developer files relocated to tools/diagnostics, duplicate shortcuts removed, active script/fixture/probe workflow paths updated. PowerShell parsing remains a Windows CI gate.",
+    "september29_update": "PASS documentation/source checkpoint: texture streaming Off/4/6/8 with traversal warning; VRAM monitor toggle; RR live-resource lifecycle fix; RTX40 617.14/310.9.1 known issue; speedlemur attribution."
   },
   "assertions": [
     "RTX50 never loads MFG sidecar.",
@@ -33,7 +34,7 @@
     "g3-frozen-files.json": "00d78a4419ed5de586c61a1fa5d7216411df24f7d4b43f1f72de2ca885e83b03",
     "legal/RTX40MFG-MINIMAL-LICENSE.txt": "ec20fa60494c7559bc8fa44b9c7749c2e2da197f9a200c5d37fab25fed1c2276",
     "legal/RTX40MFG-UPSTREAM-LICENSE.txt": "433da96087fd9b91afd44c6350ca92da53167c9636a0a71e428f71036d8c372f",
-    "legal/THIRD-PARTY-NOTICES.md": "e8adab351f48b08b20987e311e67bc3f1052a4a772c67d364768c257d76128ba",
+    "legal/THIRD-PARTY-NOTICES.md": "663a1302868fb2d79e0953ec1351b86b52f35cfeff89012361ed87ed839cc592",
     "src/fg_alignment_trace.h": "31c85de1b05c3d2ca5a900580776bcd64ce006ccee1708fe2bdb29f8bb34c064",
     "src/fg_hdr_hard_reset_policy.h": "667d6f494ca9cf842d42cca5127c72c5622f32e1fa46bece8ae3468b6b7d3e64",
     "src/fg_hdr_hotkey_policy.h": "29ec48ab81d9fcd682be09518c2f923158011fa11ec0057ccf7dcb839b8b0165",
@@ -137,16 +138,16 @@
     "src/shaders/rr_clamp_strength.hlsl": "b448fc3d95d444a04f54abb764de00d5280cee73ee463770c7b84a2ecb149d06",
     "validation/rr-settings/run.py": "33fe6da3d3a255e7674cf88c1c1f2a3fec655765b4d226491206ced8fc518375",
     "Make-DropIn.ps1": "6cbe648e3baac214b9edab7afe10620d649bb50427092ea1a50fc3e148da61ee",
-    "RELEASE_NOTES.md": "3d2b603cfe00886b071519911f422eb2fac59773a5425d6190a7bec480bebe58",
-    "KNOWN_ISSUES.md": "b8851117c684e0b7c67e613dfaf2d85d7485d1fe4f0d9719c5320d824dde4777",
-    "README.md": "d93fa74f255c7326404140a4a98f7eb68925413c6d530ebfd96dc3c8529e9903",
+    "RELEASE_NOTES.md": "6e6029f1e893d678902e9df2b2642f2d347159868091e4f225ceffeca05957be",
+    "KNOWN_ISSUES.md": "a13b49dd8bf20108b2c31bf45549de4dd80f753c54d02668cf26bb700ee0f61c",
+    "README.md": "4aea4e794e37e561003952f4538300355c839cf954563601d48e7f68161f6741",
     "INSTALL.md": "3fc8fac7956362c272864bbb53fddad325a00c18714c67e8ec82093583a9ff57",
     "TROUBLESHOOTING.md": "9eb2b0d4e1b30774659a03c2e462268ab9b2198f9b89314b8c7d512aedfc1439",
     "ARTIFACT-SHA256.json": "96559b8a0e5494da7e2fe081644e976137c76478507124eb251d50534cc42415",
     "validation/current-release/r31c-baseline-results.json": "36ecb800244a0d80be15270fb8c9c69e861c9a858be2ea5966f73bc561707097",
     "CHANGELOG.md": "6fe269a2a2af6e741945cb53e83046d52c4c819e0cf7b88cef8936f80ac1d02f",
-    "NEXUS_MODS.md": "55c250d052c22394380727f93d4df870ae40965f62733ed96285257a76a2daa5",
-    "NEXUS_MODS_DESCRIPTION.txt": "b61fadcfdd801a91177afa5552afe3c10baefcb5963dd810f82dcc7922ed71fb",
+    "NEXUS_MODS.md": "47c3a6010069bffc5235b7345fb31362cb606085aa5ac301e11cc457cdbe4de9",
+    "NEXUS_MODS_DESCRIPTION.txt": "86579876270577f5f55b1a3e9e36a6bec0292c48b38ec2ef8b90f933708efd8f",
     "RELEASE_CHECKLIST.md": "cae48d0b7c51a9655b544ce27f1836d0f1f17ce0d491f6571646661cd9667e9a",
     "docs/EPIC_COMPAT.md": "b90a2a99d9874bd25a9e4eca5945ebec987acc9f68afa68ac99ed2c5fb9f561f",
     "docs/GOG_COMPAT.md": "70e52b6fde4ec11024e32a39ad6266e97c9d49e1581f91d41ef306f5d809d8d9",
