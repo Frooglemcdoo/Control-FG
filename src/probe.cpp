@@ -144,12 +144,8 @@ static HRESULT SubmitFGUIRecompositionBeforePresent(unsigned long long present) 
 static constexpr size_t kTextureStreamingBudgetRva = 0x9186A0;
 static constexpr size_t kTextureStreamingSlicesRva = 0x919010;
 
-static bool TextureStreamingKnownBudget(float value) noexcept {
-    const auto nearValue=[value](float target) noexcept {
-        const float d=value-target;
-        return d>-0.01f&&d<0.01f;
-    };
-    return nearValue(1.0f)||nearValue(4.0f)||nearValue(6.0f)||nearValue(8.0f);
+static bool TextureStreamingPlausibleBudget(float value) noexcept {
+    return value>=0.09f&&value<=33.01f;
 }
 
 static unsigned int NormalizeTextureStreamingExperimentalMs(unsigned int value) noexcept {
@@ -170,8 +166,13 @@ static bool ApplyTextureStreamingExperimental(unsigned int requestedMs) noexcept
         auto* slices=reinterpret_cast<int*>(reinterpret_cast<unsigned char*>(verifiedRenderer)+kTextureStreamingSlicesRva);
         const float previousBudget=*budget;
         const int previousSlices=*slices;
-        if(!TextureStreamingKnownBudget(previousBudget)||(previousSlices!=8&&previousSlices!=16)){
-            Log("TEXTURE_EXPERIMENTAL_APPLY requested_ms=%u success=0 reason=unexpected_native_state budget_rva=0x%zX observed_budget_ms=%.3f slices_rva=0x%zX observed_slices=%d allowed_budget=1,4,6,8 allowed_slices=8,16",
+
+        // P6 proved the exact registered settings and ranges. For live UI
+        // changes, allow any sane in-range current value instead of requiring
+        // only our own previous selections; Control may rewrite these settings
+        // while menus or renderer state are changing.
+        if(!TextureStreamingPlausibleBudget(previousBudget)||previousSlices<1||previousSlices>33){
+            Log("TEXTURE_EXPERIMENTAL_APPLY requested_ms=%u success=0 reason=unexpected_live_state budget_rva=0x%zX observed_budget_ms=%.3f slices_rva=0x%zX observed_slices=%d allowed_budget_range=0.1_33 allowed_slices_range=1_33",
                 requestedMs,kTextureStreamingBudgetRva,double(previousBudget),kTextureStreamingSlicesRva,previousSlices);
             return false;
         }
@@ -190,7 +191,7 @@ static bool ApplyTextureStreamingExperimental(unsigned int requestedMs) noexcept
             MemoryBarrier();
         }
 
-        Log("TEXTURE_EXPERIMENTAL_APPLY requested_ms=%u mode=%s success=%u previous_budget_ms=%.3f previous_slices=%d applied_budget_ms=%.3f applied_slices=%d target_budget_ms=%.3f target_slices=%d source=p6_r1_r2_r3 traversal_stutter_warning=1 pool=native lod=native residency=native async=native",
+        Log("TEXTURE_EXPERIMENTAL_APPLY requested_ms=%u mode=%s success=%u previous_budget_ms=%.3f previous_slices=%d applied_budget_ms=%.3f applied_slices=%d target_budget_ms=%.3f target_slices=%d source=p6_r1_r2_r3 live_switch=1 traversal_stutter_warning=1 pool=native lod=native residency=native async=native",
             requestedMs,requestedMs?"experimental":"off",unsigned(ok),double(previousBudget),previousSlices,
             double(appliedBudget),appliedSlices,double(targetBudget),targetSlices);
         return ok;
@@ -224,7 +225,7 @@ static void OpenLog() {
     Log("CAPABILITIES fg=fixed_2x_to_6x_plus_dynamic rr=models_E_F_default_F hdr10_bridge=1 rr_guides=gbuffer_material_envbrdf rr_hit_distance=off rr_specular_mvec=off rr_diagnostic_readbacks=off streamline_sdk=2.14.1");
     Log("MONITORING profile=%s rr_perf_sample=240 support_events=startup_settings_fg_rr_model_resize_recovery_failures_fallbacks_performance verbose_env=CONTROLFG_VERBOSE_LOG",verboseAuditLogging?"verbose_audit":"release_support");
     Log("RR_VRAM_LIFECYCLE build=R4 base=v2.1.1 clean_release_tag=1 d1_capture=disabled native_rr_cache=single_live_extent preset_switch=full_native_feature_epoch cache_layout=key_feature_parameters state_layout=feature_parameters release_old_extent_after_fence=1 lazy_recreate_cached_extent=1 streamline_free=nonowning_options_only owned_guides_release=rr_off");
-    Log("TEXTURE_EXPERIMENTAL_CONFIG build=R1 options=off,4ms,6ms,8ms off=native_1ms_8slices enabled=16slices source=p6_r1_r2_r3 live_switch=1 warning=traversal_stutter");
+    Log("TEXTURE_EXPERIMENTAL_CONFIG build=R2 options=off,4ms,6ms,8ms off=native_1ms_8slices enabled=16slices source=p6_r1_r2_r3 live_switch=1 live_state_range_guard=1 vram_toggle=1 warning=traversal_stutter");
 }
 
 // +0x88 was observed at multiple resource loads in the hash-locked doAntiAliasing
