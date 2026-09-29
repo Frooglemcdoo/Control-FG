@@ -41,13 +41,17 @@ extern "C" __declspec(dllexport) unsigned int __cdecl ControlFGMFGInitialize(
     if (!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_PIN | GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS,
         reinterpret_cast<LPCWSTR>(plugin), &pinned)) return 0;
     const auto arch = patches::PatchArchGates(provider, providerPath.c_str());
+    const auto devicePolicy = patches::PatchNgxDeviceSupport(provider, providerPath.c_str());
     const auto flip = patches::PatchFlipMetering(plugin, pluginPath.c_str());
     const auto maximum = patches::PatchStreamlineMaximum(plugin, pluginPath.c_str());
     prepared = arch.found >= 2 && arch.found == arch.patched
+        && devicePolicy.candidate && devicePolicy.patched
         && flip.located && flip.derived && flip.sites > 0
         && maximum.candidate && maximum.patched && maximum.compiledMaximum >= 3;
-    mfglog::Write(L"CONTROL_MFG_PREPARE ready=%u arch=%zu/%zu flip=%zu maximum=%u; temporal pending",
-        unsigned(prepared), arch.patched, arch.found, flip.sites, maximum.compiledMaximum);
+    mfglog::Write(L"CONTROL_MFG_PREPARE ready=%u arch=%zu/%zu compatibility=%u flip=%zu maximum=%u; temporal pending",
+        unsigned(prepared), arch.patched, arch.found,
+        unsigned(devicePolicy.candidate && devicePolicy.patched),
+        flip.sites, maximum.compiledMaximum);
     return prepared ? 1u : 0u;
 }
 // Runs before ANY FG creation, including 2x; never JIT the stock midpoint first.
