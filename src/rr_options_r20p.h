@@ -17,6 +17,9 @@ static std::atomic<unsigned int> rr20pOptionsApplied{0};
 static std::atomic<unsigned int> rr20pOptionsQueryFinished{0};
 static std::atomic<unsigned int> rr20pOptionsAttempts{0};
 static std::atomic<unsigned int> rr20pOptionsRebuilds{0};
+static std::atomic<unsigned int> rr20pResourcesResident{0};
+static std::atomic<unsigned long long> rr20pResourceFreeAttempts{0};
+static std::atomic<unsigned long long> rr20pResourceFreeSuccesses{0};
 static SRWLOCK rr20pOptionsLock = SRWLOCK_INIT;
 static RR20POptionsSignature rr20pOptionsSignature{};
 static bool rr20pOptionsSignatureValid=false;
@@ -51,6 +54,26 @@ static bool RR20POptionsReadyForPreset(unsigned preset) noexcept {
           rr20pOptionsSignature.preset==preset;
     ReleaseSRWLockShared(&rr20pOptionsLock);
     return ready;
+}
+
+static bool RR20PFreeStreamlineResources(const char* reason,unsigned long long frameOrPresent) noexcept {
+    if(!rr20pResourcesResident.load(std::memory_order_acquire)) return true;
+    if(!slFreeResourcesApi){
+        Log("SL_RR_RESOURCES_FREE frame_or_present=%llu reason=%s success=0 result=unavailable resident=1",
+            frameOrPresent,reason?reason:"unknown");
+        return false;
+    }
+    const auto attempt=rr20pResourceFreeAttempts.fetch_add(1,std::memory_order_relaxed)+1;
+    const sl::Result result=slFreeResourcesApi(sl::kFeatureDLSS_RR,slFgViewport);
+    const bool success=result==sl::Result::eOk;
+    if(success){
+        rr20pResourcesResident.store(0,std::memory_order_release);
+        rr20pResourceFreeSuccesses.fetch_add(1,std::memory_order_relaxed);
+    }
+    Log("SL_RR_RESOURCES_FREE frame_or_present=%llu reason=%s attempt=%llu result=%lld success=%u resident_after=%u free_successes=%llu",
+        frameOrPresent,reason?reason:"unknown",attempt,SLResultCode(result),unsigned(success),
+        rr20pResourcesResident.load(std::memory_order_acquire),rr20pResourceFreeSuccesses.load(std::memory_order_relaxed));
+    return success;
 }
 
 static sl::DLSSDPreset RR20PSelectedPreset() noexcept {
@@ -165,7 +188,13 @@ static void ConfigureRR20POptionsForAA(unsigned long long call,unsigned long lon
     const sl::Result setResult=slDLSSDSetOptionsApi(slFgViewport,selected);
     sl::DLSSDState state{};const sl::Result stateResult=setResult==sl::Result::eOk?slDLSSDGetStateApi(slFgViewport,state):sl::Result::eErrorFeatureFailedToLoad;
     const bool success=setResult==sl::Result::eOk;
-    if(success){rr20pOptionsApplied.store(1,std::memory_order_release);rr20pOptionsSignature=current;rr20pOptionsSignatureValid=true;rr20pOptionsResolvedMode=bestMode;}
+    if(success){
+        rr20pOptionsApplied.store(1,std::memory_order_release);
+        rr20pOptionsSignature=current;
+        rr20pOptionsSignatureValid=true;
+        rr20pOptionsResolvedMode=bestMode;
+        rr20pResourcesResident.store(1,std::memory_order_release);
+    }
     Log("SL_RR_OPTIONS_HANDSHAKE call=%llu present=%llu attempt=%u success=%u mode=%s mode_value=%u render=%ux%u output=%ux%u optimal=%ux%u pre_exposure=%.9g exposure_scale=%.9g sharpness=0 rr_sharpness_ignored_by_api=1 hdr_input=1 normal_roughness=packed preset=%s preset_value=%u set_result=%lld state_result=%lld estimated_vram=%llu rr_evaluate=0 native_denoiser_bypass=0 r20r=1",
         call,currentPresent,attempt,unsigned(success),RRDLSSModeName(bestMode),unsigned(bestMode),in.renderWidth,in.renderHeight,in.outputWidth,in.outputHeight,
         bestSettings.optimalRenderWidth,bestSettings.optimalRenderHeight,double(in.preExposure),double(in.exposureScale),control_rr::RRUserPresetLabel(),control_rr::RRUserPresetValue(),SLResultCode(setResult),SLResultCode(stateResult),
