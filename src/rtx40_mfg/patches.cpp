@@ -15,10 +15,17 @@ constexpr std::array<uint8_t, 13> kNgxPattern{
     0xBE, 0x05, 0x00, 0x00, 0x00              // mov  esi, 5
 };
 constexpr size_t kNgxPatchOffset = 2;
-constexpr std::array<uint8_t, 6> kNgxOriginal{
-    0x0F, 0x84, 0x03, 0x01, 0x00, 0x00 };
-constexpr std::array<uint8_t, 6> kNgxReplacement{
-    0x90, 0x90, 0x90, 0x90, 0x90, 0x90 };
+// 310.9.1 EndpointCoreInputs::ComputeAndValidateTimeFactor:
+//   test dl,dl
+//   je   single_frame_reject
+//   mov  esi,5
+//
+// Rewrite only the conditional opcode to a short jump over the original rel32.
+// This lands on the existing bounded multi-frame path and leaves its count,
+// index and resource validation intact.
+constexpr std::array<uint8_t, 2> kNgxOriginal{ 0x0F, 0x84 };
+constexpr std::array<uint8_t, 2> kNgxReplacement{ 0xEB, 0x04 };
+constexpr std::array<uint8_t, 4> kNgxRel32{ 0x03, 0x01, 0x00, 0x00 };
 
 constexpr size_t kWrapperPatternSize = 10;
 constexpr size_t kWrapperMaximumOffset = 1;
@@ -135,18 +142,19 @@ Result PatchNgxDeviceSupport(HMODULE module, const wchar_t* path) noexcept
     size_t matchCount = 0;
     uint8_t* const match = FindUniqueInCode(module, kNgxPattern.size(),
         [](const uint8_t* candidate, size_t) noexcept {
-            // The conditional jump itself may already be NOPs, so compare the
-            // surrounding context and accept either form in between.
+            const bool original =
+                std::memcmp(candidate + kNgxPatchOffset,
+                    kNgxOriginal.data(), kNgxOriginal.size()) == 0;
+            const bool patched =
+                std::memcmp(candidate + kNgxPatchOffset,
+                    kNgxReplacement.data(), kNgxReplacement.size()) == 0;
             return std::memcmp(candidate, kNgxPattern.data(),
                        kNgxPatchOffset) == 0
-                && std::memcmp(candidate + kNgxPatchOffset + kNgxOriginal.size(),
-                       kNgxPattern.data() + kNgxPatchOffset + kNgxOriginal.size(),
-                       kNgxPattern.size() - kNgxPatchOffset - kNgxOriginal.size())
-                    == 0
-                && (std::memcmp(candidate + kNgxPatchOffset,
-                        kNgxOriginal.data(), kNgxOriginal.size()) == 0
-                    || std::memcmp(candidate + kNgxPatchOffset,
-                        kNgxReplacement.data(), kNgxReplacement.size()) == 0);
+                && std::memcmp(candidate + kNgxPatchOffset + 2,
+                       kNgxRel32.data(), kNgxRel32.size()) == 0
+                && std::memcmp(candidate + 8, kNgxPattern.data() + 8,
+                       kNgxPattern.size() - 8) == 0
+                && (original || patched);
         }, matchCount);
 
     if (matchCount == 0)
@@ -157,9 +165,14 @@ Result PatchNgxDeviceSupport(HMODULE module, const wchar_t* path) noexcept
             kLabel, matchCount, path);
         return {true, false};
     }
-    return {true, ApplyBytes(kLabel, base, match + kNgxPatchOffset,
+    const bool patched = ApplyBytes(kLabel, base, match + kNgxPatchOffset,
         kNgxOriginal.data(), kNgxReplacement.data(), kNgxOriginal.size(),
-        path)};
+        path);
+    if (patched)
+        mfglog::Write(L"CONTROL_MFG_DEVICE_POLICY ComputeAndValidateTimeFactor=found "
+            L"native_device_path=single_frame bounded_max=5 ada_override=applied "
+            L"count_index_resource_validation=retained");
+    return {true, patched, 5u};
 }
 
 Result PatchStreamlineMaximum(HMODULE module, const wchar_t* path) noexcept
