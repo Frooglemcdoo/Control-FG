@@ -1,5 +1,14 @@
 # Changelog
 
+## v2.1.2 — RR VRAM, texture streaming, and RTX 40-series compatibility
+
+- Fixed RR VRAM retention across live enable/disable, Model F ↔ E changes, and resolution/DLSS-mode changes by retiring stale native RR feature epochs.
+- Added Experimental Texture Streaming controls: Off / 4 ms / 6 ms / 8 ms, with traversal-stutter warning.
+- Added a persistent VRAM usage monitor toggle.
+- Added RTX 40-series NVIDIA 617.14 / DLSS-G 310.9.1 host-device-policy compatibility for experimental 3×–6× MFG.
+- Clarified that the RTX 40 compatibility patch loads only when experimental MFG is enabled before startup and remains active until restart.
+- Added explicit Ray Reconstruction attribution to speedlemur.
+
 ## v2.1.1 — unified storefront support
 
 - Added validated Epic Games Store and GOG support alongside Steam in one package.
