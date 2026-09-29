@@ -25,3 +25,47 @@ static void RRLiveAfterPresent(unsigned long long present) noexcept {
     } __except(EXCEPTION_EXECUTE_HANDLER) {if(rrLive)rrLive->stopped=true;Log("RR_G12_LIVE_STOP reason=retirement_exception resources_retained=1 stage=guide_retirement");}
     ReleaseSRWLockExclusive(&rrLiveLock);SetLastError(saved);
 }
+
+static bool RRLiveReleaseForRROff(unsigned long long present) noexcept {
+    const DWORD saved=GetLastError();
+    if(!TryAcquireSRWLockExclusive(&rrLiveLock)){SetLastError(saved);return false;}
+    bool released=false;
+    __try {
+        auto* c=rrLive;
+        if(!c){released=true;__leave;}
+        if(c->preparing||c->stopped||!RRLiveAllFree(c)){
+            Log("RR_G12_LIVE_RELEASE_WAIT present=%llu preparing=%u stopped=%u all_free=%u",
+                present,unsigned(c->preparing),unsigned(c->stopped),unsigned(RRLiveAllFree(c)));
+            __leave;
+        }
+        const UINT width=c->width,height=c->height;
+        const auto epoch=c->epoch;
+        const auto recorded=c->recorded;
+        const auto retired=c->retired;
+        RRLiveCaptureRelease(c);
+        for(auto& s:c->slots){
+            RRLiveReleaseSources(s);
+            RRGuideRelease(s.normal);
+            RRGuideRelease(s.specular);
+            RRGuideRelease(s.diffuse);
+            RRGuideRelease(s.heap);
+        }
+        RRGuideRelease(c->pipeline);
+        RRGuideRelease(c->root);
+        RRGuideRelease(c->fence);
+        RRGuideRelease(c->queue);
+        RRGuideRelease(c->device);
+        rrLive=nullptr;
+        delete c;
+        released=true;
+        Log("RR_G12_LIVE_RELEASED present=%llu width=%u height=%u epoch=%llu recorded=%llu retired=%llu reason=rr_off resources_retained=0",
+            present,width,height,epoch,recorded,retired);
+    } __except(EXCEPTION_EXECUTE_HANDLER) {
+        Log("RR_G12_LIVE_RELEASE_FAILED present=%llu exception=0x%08lX resources_retained=1",
+            present,GetExceptionCode());
+        released=false;
+    }
+    ReleaseSRWLockExclusive(&rrLiveLock);
+    SetLastError(saved);
+    return released;
+}
