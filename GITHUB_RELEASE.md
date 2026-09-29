@@ -1,58 +1,58 @@
-# Control FG v2.0.0
-
-Major update for **Control (Steam DX12)** adding DLSS Ray Reconstruction plus the final HDR, HUD/UI, and overlay fixes from the v2.0.0 development cycle.
+# Control FG v2.1.2 — RR VRAM, Texture Streaming, and RTX 40-Series MFG Fixes
 
 ## Highlights
 
-- **DLSS Ray Reconstruction** integrated directly into Control's native DX12 ray-tracing/denoising path.
-- NVIDIA RR runtime **310.9.1**, with **Preset F** as the default and live **E/F** switching.
-- NVIDIA DLSS Frame Generation / Multi Frame Generation: **2x through 6x** on supported hardware.
-- **Native Dynamic MFG** with automatic monitor-refresh targeting or a manual 30–1000 FPS target.
-- **HDR/SDR FG recovery** with explicit DLSS-G resource teardown and clean rearm.
-- **Game-aware HUD/UI handling** using Control's real pre-UI scene and separate UI recomposition.
-- Dynamic Target FPS controls now appear only while Dynamic FG is selected and the entire section collapses in fixed modes.
+- **Fixed major Ray Reconstruction VRAM retention.** Live RR enable/disable, Model F ↔ E changes, and render-resolution / DLSS-mode changes now retire and release the previous native RR feature epoch instead of leaving old NGX allocations resident.
+- Added **Experimental Texture Streaming** controls under **Options → Experimental**: **Off / 4 ms / 6 ms / 8 ms**. Higher request budgets can improve texture and LOD loading, but **can cause traversal stutter**.
+- Added a persistent **Show VRAM usage monitor** checkbox in Options.
+- Added the **RTX 40-series NVIDIA 617.14 / DLSS-G 310.9.1 compatibility fix** for experimental Multi Frame Generation.
+- Added explicit Ray Reconstruction credit to **speedlemur** for the core RR integration approach used by recent Control FG builds.
 
-## Ray Reconstruction
+## RTX 40-series Multi Frame Generation
 
-Ray Reconstruction runs at Control's native RT denoising boundary rather than as a final-image post-process. When RR is enabled, Control FG bypasses Control's native denoiser for that path and supplies RR with game-native depth, motion vectors, camera/jitter state, ray-tracing resources, reset state, and HDR/presentation context.
+The experimental RTX 40-series path now handles the newer host-side device-policy validation in DLSS-G 310.9.1 that could reject 3×+ with:
 
-This avoids a double-denoise path and lets RR operate alongside Control's DLSS modes, ray tracing, HDR, and Frame Generation.
+`Multi frame is not supported on this device. Found count (2) but expected (1)`
 
-## Performance
+Control FG validates the exact `EndpointCoreInputs::ComputeAndValidateTimeFactor` contract and changes only the unsupported-device branch so Ada can enter the provider's existing bounded multi-frame path. Existing count, index, resource and time-factor validation remains intact. If the expected contract cannot be verified, the experimental path fails closed rather than applying an unknown patch.
 
-Extensive testing shows the largest RR cost at **4K + DLAA**:
+The compatibility patch is loaded **only when Enable RTX 40-series Multi Frame Generation is enabled before startup**. Once loaded, it remains active for that game process even if FG is temporarily changed to Off or 2×. Disable the experimental option and restart Control to return to the untouched native NVIDIA 2× path. **RTX 50-series never uses this patch.**
 
-- **4K + DLAA:** roughly **20–30%** lower performance with RR enabled.
-- **1440p / 1080p:** typically around **2–10%**, and in some scenes the difference is difficult to notice.
-- **4K + DLSS Quality:** the RR cost is substantially less noticeable than 4K DLAA.
+## Ray Reconstruction VRAM fix
 
-The 4K DLAA hit was reproduced across repeated RR toggles, resolution changes, DLSS modes, and RT configurations and appears to be a real workload cost rather than an obvious mod-side bug.
+The RR lifecycle now performs explicit feature-epoch retirement across live transitions. This addresses the multi-gigabyte VRAM growth seen when RR was enabled after startup, when switching Model F ↔ E, and when moving between DLSS render resolutions or DLAA.
 
-## Important fixes
+Starting Control with RR enabled already had a much smaller memory footprint; v2.1.2 brings the live transition path in line with that behavior by releasing stale native RR feature allocations before rebuilding.
 
-- **HDR/SDR FG recovery:** FG is committed off, DLSS-G resources are freed, the display-domain transition is allowed to settle, fresh tagged frames are required, and FG is then cleanly rearmed.
-- **No-`ResizeBuffers` HDR recovery:** covers Windows HDR transitions where Control does not rebuild the swapchain.
-- **Duplicate-transition suppression:** prevents delayed HDR detection from starting a second teardown for the same transition.
-- **HUD/UI stability:** generated frames use Control's true pre-UI scene and separate UI recomposition.
-- **Overlay cleanup:** Dynamic Target FPS controls are hidden and the entire section collapses unless Dynamic FG is selected.
-- **Overlay stability:** lower-churn/double-buffered drawing reduces menu/title-screen flicker.
+## Experimental Texture Streaming
 
-## Compatibility
+Options → Experimental now includes:
 
-Verified target: **Control on Steam, DX12, Steam build 21225456**.
+- **Off** — restores Control's native texture streaming behavior.
+- **4 ms**
+- **6 ms**
+- **8 ms**
 
-DX11 is not supported. Other storefront builds and later game patches are not claimed compatible until tested.
+The higher modes increase the texture-request budget using the validated expanded update-slice path. They can reduce delayed texture/LOD loading and level-streaming stalls, but larger values move more streaming work into a frame and **can cause traversal stutter**. The setting applies live and is saved.
 
-## Installation
+## Installation — Steam, Epic Games Store, and GOG
 
-Download `Control-FG-v2.0.0.zip`, copy `dxgi.dll` and the `ControlFGStreamline` folder beside `Control_DX12.exe`, launch Control in DX12 mode, and press **F10**.
+Download **Control-FG-v2.1.2.zip**. Close Control, extract the ZIP, and copy **dxgi.dll** plus the **complete ControlFGStreamline folder** beside **Control_DX12.exe**. Replace the previous Control FG files together when updating. Launch in **DX12** and press **F10** or your saved shortcut.
 
-See `INSTALL.md` and `TROUBLESHOOTING.md` for complete instructions.
+- **Steam:** Library → right-click Control → Manage → Browse local files.
+- **Epic:** Library → Control's three-dot menu → Manage → folder icon beside Installation.
+- **GOG Galaxy:** Control → menu beside Play → Manage installation → Show folder.
 
-## Next
+The separate **Control-FG-v2.1.2-Source.zip** requires compilation.
 
-The next major development target is **DLSS 5 integration**. RTX 20/30-series FG/MFG compatibility research is planned after that.
+## Compatibility and known issues
 
-## Notes
+Validated targets remain **Steam 21225456**, **Epic 0.0.518.2177**, and **GOG EXE SHA-256 beginning 57A8912F**. DX11 and unvalidated game updates are not supported.
 
-Control FG is an unofficial fan-made mod and is not affiliated with or endorsed by Remedy Entertainment, 505 Games, NVIDIA, AMD, or Valve.
+GOG users should disable Galaxy's in-game overlay for Control. RR with **Ray Traced Indirect Diffuse Lighting** can still show crawling/noisy streaks; disable that game setting or RR as a workaround.
+
+## Credits
+
+A massive thank you to **HotKnives** for lending hardware and helping with QA around recent releases and bug fixes.
+
+A big thank you to **speedlemur** for the core Ray Reconstruction integration approach used by recent Control FG builds. That work is credited in the project README, Nexus copy, and notices.
