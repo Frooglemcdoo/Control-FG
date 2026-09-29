@@ -1235,7 +1235,7 @@ static void PaintFGVramProbe(HWND hwnd) noexcept {
 
     HFONT label=CreateFGControlFont(16,FW_BOLD,L"Bahnschrift Condensed");
     HFONT value=CreateFGControlFont(22,FW_SEMIBOLD,L"Bahnschrift SemiCondensed");
-    HFONT small=CreateFGControlFont(13,FW_NORMAL,L"Bahnschrift SemiCondensed");
+    HFONT smallFont=CreateFGControlFont(13,FW_NORMAL,L"Bahnschrift SemiCondensed");
     HGDIOBJ oldFont=SelectObject(dc,label);SetTextColor(dc,RGB(255,32,32));
     RECT labelRc{14,8,82,30};DrawTextW(dc,L"VRAM",-1,&labelRc,DT_LEFT|DT_VCENTER|DT_SINGLELINE);
 
@@ -1258,9 +1258,9 @@ static void PaintFGVramProbe(HWND hwnd) noexcept {
     }
     SelectObject(dc,value);SetTextColor(dc,RGB(246,246,246));
     RECT valueRc{82,5,376,38};DrawTextW(dc,mainText,-1,&valueRc,DT_RIGHT|DT_VCENTER|DT_SINGLELINE);
-    SelectObject(dc,small);SetTextColor(dc,RGB(185,185,185));
+    SelectObject(dc,smallFont);SetTextColor(dc,RGB(185,185,185));
     RECT detailRc{14,48,376,72};DrawTextW(dc,detail,-1,&detailRc,DT_LEFT|DT_VCENTER|DT_SINGLELINE);
-    SelectObject(dc,oldFont);DeleteObject(label);DeleteObject(value);DeleteObject(small);EndPaint(hwnd,&ps);
+    SelectObject(dc,oldFont);DeleteObject(label);DeleteObject(value);DeleteObject(smallFont);EndPaint(hwnd,&ps);
 }
 static LRESULT CALLBACK FGVramProbeWndProc(HWND hwnd,UINT message,WPARAM wParam,LPARAM lParam) noexcept {
     switch(message){
