@@ -1,5 +1,17 @@
 # Known issues — v2.1.1
 
+## RTX 40-series Multi Frame Generation on NVIDIA 617.14 / DLSS-G 310.9.1
+
+Recent RTX 40-series reports show the experimental 3×+ path can fail on NVIDIA driver **617.14** while DLSS-G **310.9.1** is active. The captured Streamline/NGX log fails in `EndpointCoreInputs::ComputeAndValidateTimeFactor` with:
+
+`Multi frame is not supported on this device. Found count (2) but expected (1)`
+
+Control FG's current 40-series path already validates Ada hardware and patches the temporal/midpoint path, but this newer provider adds a host-side device-policy validation that is not yet handled by the public experimental unlock. **Use Off or 2× if affected.** A compatibility update is being developed around the newer validated provider path; it will fail closed to 2× if the expected 310.9.1 contract cannot be confirmed.
+
+## Experimental texture streaming
+
+Options → Experimental includes **Off / 4 ms / 6 ms / 8 ms** texture request budgets. Higher values can improve texture and LOD loading but can also increase per-frame streaming work. **Adjusting this can cause traversal stutter.** Off restores Control's native behavior.
+
 ## GOG Galaxy overlay conflict
 
 Disable GOG Galaxy's in-game overlay for Control. It can cause input/focus stalls and make Control FG or other overlays disappear. Close the game, open Control in Galaxy, then **menu beside Play → Manage installation → Configure → Features**. Disable **Use default settings** if shown, then uncheck **Overlay / Access GOG GALAXY features in-game**. Confirm and restart Control. See [INSTALL.md](INSTALL.md#gog-galaxy-disable-the-overlay-for-control).
