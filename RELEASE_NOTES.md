@@ -1,5 +1,13 @@
 # Control FG v2.1.1 — Steam, Epic Games Store, and GOG
 
+## September 29 update
+
+- Added **Experimental Texture Streaming** controls: **Off / 4 ms / 6 ms / 8 ms**. Higher request budgets can improve texture/LOD loading but can cause traversal stutter.
+- Added a persistent **VRAM usage monitor** toggle in Options.
+- Fixed the large **Ray Reconstruction VRAM retention** seen during live RR enable/disable, E/F switches, and render-resolution/DLSS mode changes. The old native RR feature epoch is now retired and released before rebuilding.
+- Added explicit RR attribution to **speedlemur** for the core integration approach used by recent Control FG RR builds.
+- Documented a new **RTX 40-series experimental MFG compatibility issue** on NVIDIA 617.14 / DLSS-G 310.9.1 where 3×+ can be rejected by the provider's newer device-policy validation. Off/2× remains the fallback while the compatibility update is developed.
+
 ## New in v2.1.1
 
 - **Epic Games Store and GOG are now supported alongside Steam in one deployment package.**
