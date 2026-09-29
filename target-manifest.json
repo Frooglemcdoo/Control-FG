@@ -22,7 +22,7 @@
     "Configuration": "Production",
     "Architecture": "x64"
   },
-  "Phase": "Unified Steam, Epic Games Store and GOG release based on the runtime-tested R3 storefront build. Full matching EXE/D3D/renderer hash triples remain required.",
+  "Phase": "v2.1.2 unified Steam, Epic Games Store and GOG release with RR VRAM lifecycle fixes, Experimental Texture Streaming, VRAM monitor, and RTX 40-series DLSS-G 310.9.1 compatibility.",
   "SourceRevision": "v2.1.2-sep29-r1",
   "DLSSGGeneratedFramesRequested": 3,
   "TargetMultiplier": "4x",
@@ -69,10 +69,14 @@
   "Overlay": {
     "Hotkey": "F10",
     "Presentation": "Win32 layered topmost no-activate process-local panel; hidden at startup and toggled with F10",
-    "Persistence": "%LOCALAPPDATA%\\ControlFG\\settings.ini",
+    "Persistence": "%LOCALAPPDATA%\\ControlFG\\settings-mfg-test.ini",
     "PersistedValues": [
       "Frame Generation mode",
-      "Dynamic target policy/value"
+      "Dynamic target policy/value",
+      "Ray Reconstruction enabled/model/clamp",
+      "Experimental RTX 40-series MFG request",
+      "Experimental texture streaming budget",
+      "VRAM monitor enabled"
     ],
     "RuntimeStatus": [
       "Selected mode",
@@ -81,28 +85,33 @@
       "HDR bridge state",
       "GPU/Dynamic capability"
     ],
-    "SettingsSchema": 1,
+    "SettingsSchema": 10,
     "Title": "Embedded CONTROL FG approved wordmark resource",
     "VisualStyle": "Control-native black/white/red menu aesthetic with Bahnschrift condensed typography, square controls, white selected state with black text, thick Dynamic target slider, and no side scrollbar",
     "Position": "Top-right of the Control game client with 18px inset"
   },
   "RTX40SeriesPolicy": {
     "Detection": "DXGI adapter Description matched by active D3D12 device LUID; GeForce RTX 40 prefix only",
-    "Allowed": [
+    "DefaultAllowed": [
       "Off",
       "2x"
     ],
-    "Disabled": [
-      "Dynamic",
+    "ExperimentalOptIn": "Enable RTX 40-series Multi Frame Generation in Options, then restart Control",
+    "ExperimentalAllowed": [
       "3x",
       "4x",
       "5x",
-      "6x"
+      "6x",
+      "Dynamic when runtime capability is confirmed"
     ],
+    "ProviderCompatibility": "DLSS-G 310.9.1 host device-policy path validates EndpointCoreInputs::ComputeAndValidateTimeFactor and bypasses only the unsupported-device branch; bounded count/index/resource validation is retained",
+    "PatchLifetime": "Loaded only when the experimental option is enabled at startup; remains active until process restart even if FG is temporarily Off or 2x",
+    "RTX50Policy": "Never load the RTX 40-series compatibility patch; use native NVIDIA MFG",
+    "FailClosed": "If the exact provider contract is not validated, experimental MFG is not enabled",
     "Enforcement": [
-      "overlay grey/non-clickable",
+      "overlay GPU-policy gate",
       "runtime SetDLSSGMode gate",
-      "persisted unsupported selections coerced to 2x"
+      "persisted unsupported selections coerced to 2x when experimental path is unavailable"
     ]
   },
   "SupportedTargets": [
