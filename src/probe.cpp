@@ -158,7 +158,7 @@ static void OpenLog() {
     Log("PROBE v2.1.1 internal_build=2.1.1 source_revision=v2.1.1-unified-storefront-r3 supported_targets=steam_21225456,epic_0.0.518.2177,gog_57a8912f frequency=%lld log_profile=%s",frequency.QuadPart,verboseAuditLogging?"verbose_audit":"release_support");
     Log("CAPABILITIES fg=fixed_2x_to_6x_plus_dynamic rr=models_E_F_default_F hdr10_bridge=1 rr_guides=gbuffer_material_envbrdf rr_hit_distance=off rr_specular_mvec=off rr_diagnostic_readbacks=off streamline_sdk=2.14.1");
     Log("MONITORING profile=%s rr_perf_sample=240 support_events=startup_settings_fg_rr_model_resize_recovery_failures_fallbacks_performance verbose_env=CONTROLFG_VERBOSE_LOG",verboseAuditLogging?"verbose_audit":"release_support");
-    Log("RR_VRAM_LIFECYCLE build=R1 base=v2.1.1 clean_release_tag=1 d1_capture=disabled streamline_free=rr_off_and_retired_preset_switch alternate_feature_release=retired_switch_and_rr_off owned_guides_release=rr_off");
+    Log("RR_VRAM_LIFECYCLE build=R2 base=v2.1.1 clean_release_tag=1 d1_capture=disabled native_rr_cache=single_live_extent release_old_extent_after_fence=1 lazy_recreate_cached_extent=1 streamline_free=nonowning_options_only owned_guides_release=rr_off");
 }
 
 // +0x88 was observed at multiple resource loads in the hash-locked doAntiAliasing
@@ -907,10 +907,148 @@ static bool Exchange(Patch& p, bool install) {
 }
 
 #include "rr_albedo_hooks.h"
+#define CONTROL_FG_RR_VRAM_RESIZE_R2 1
+static bool RRNativeVramReleaseCachedRRFeaturesForResize(unsigned long long frame,
+    unsigned outputWidth,unsigned outputHeight,unsigned width,unsigned height) noexcept;
+static bool RRNativeVramRecoverCachedRRFeature(unsigned long long frame,
+    unsigned outputWidth,unsigned outputHeight,unsigned width,unsigned height) noexcept;
 #include "rr_native_frame.h"
 #include "rr_native_guides.h"
 #include "rr_skin_mask_runtime.h"
 #include "rr_evaluation_entry.h"
+
+static bool RRNativeVramFindCacheEntry(void* parameters,void* feature,unsigned char** entryOut,
+                                         unsigned long long* countOut=nullptr) noexcept {
+    if(entryOut)*entryOut=nullptr;
+    if(countOut)*countOut=0;
+    bool found=false;
+    __try {
+        auto* state=*reinterpret_cast<unsigned char**>(reinterpret_cast<unsigned char*>(verifiedD3d)+0x111be0);
+        if(!state)return false;
+        const auto count=*reinterpret_cast<const unsigned long long*>(state+0x80);
+        auto* entries=*reinterpret_cast<unsigned char**>(state+0xA0);
+        if(countOut)*countOut=count;
+        if(!entries||count>64)return false;
+        unsigned matches=0;unsigned char* match=nullptr;
+        for(unsigned long long i=0;i<count;++i){
+            auto* entry=entries+i*24ull;
+            auto* p=*reinterpret_cast<void**>(entry+8);
+            auto* f=*reinterpret_cast<void**>(entry+16);
+            if((!parameters||p==parameters)&&(!feature||f==feature)){
+                ++matches;match=entry;
+            }
+        }
+        if(matches==1){if(entryOut)*entryOut=match;found=true;}
+    } __except(EXCEPTION_EXECUTE_HANDLER){found=false;}
+    return found;
+}
+
+static bool RRNativeVramReleaseCachedRRFeaturesForResize(unsigned long long frame,
+    unsigned outputWidth,unsigned outputHeight,unsigned width,unsigned height) noexcept {
+    struct Candidate {void* feature;RRPresetDimensions dims;unsigned preset;};
+    Candidate candidates[16]{};unsigned count=0;
+    AcquireSRWLockShared(&rrPresetFeatureLock);
+    for(const auto& r:rrPresetFeatureRecords){
+        if(r.alternate||r.released||!r.feature)continue;
+        if(r.dims.width==width&&r.dims.height==height&&r.dims.outWidth==outputWidth&&r.dims.outHeight==outputHeight)continue;
+        if(count<_countof(candidates))candidates[count++]={r.feature,r.dims,r.preset};
+    }
+    ReleaseSRWLockShared(&rrPresetFeatureLock);
+
+    bool allOkay=true;
+    for(unsigned i=0;i<count;++i){
+        auto& candidate=candidates[i];
+        unsigned char* entry=nullptr;unsigned long long cacheCount=0;
+        if(!RRNativeVramFindCacheEntry(nullptr,candidate.feature,&entry,&cacheCount)||!entry){
+            Log("RR_VRAM_NATIVE_CACHE_RELEASE_SKIP frame=%llu feature=%p preset=%u reason=cache_entry_not_unique cache_count=%llu old_render=%ux%u old_output=%ux%u new_render=%ux%u new_output=%ux%u",
+                frame,candidate.feature,candidate.preset,cacheCount,candidate.dims.width,candidate.dims.height,
+                candidate.dims.outWidth,candidate.dims.outHeight,width,height,outputWidth,outputHeight);
+            allOkay=false;continue;
+        }
+        unsigned result=0xBAD00001u;DWORD fault=0;
+        __try {result=rrNativeReleaseFeature?rrNativeReleaseFeature(candidate.feature):0xBAD00001u;}
+        __except(EXCEPTION_EXECUTE_HANDLER){fault=GetExceptionCode();}
+        const bool success=fault==0&&result==1u;
+        if(!success){
+            Log("RR_VRAM_NATIVE_CACHE_RELEASE frame=%llu feature=%p preset=%u result=0x%08X success=0 exception=0x%08lX old_render=%ux%u old_output=%ux%u",
+                frame,candidate.feature,candidate.preset,result,fault,candidate.dims.width,candidate.dims.height,
+                candidate.dims.outWidth,candidate.dims.outHeight);
+            allOkay=false;continue;
+        }
+        __try {
+            *reinterpret_cast<void**>(entry+16)=nullptr;
+            auto* state=*reinterpret_cast<unsigned char**>(reinterpret_cast<unsigned char*>(verifiedD3d)+0x111be0);
+            if(state&&*reinterpret_cast<void**>(state+0x30)==candidate.feature)
+                *reinterpret_cast<void**>(state+0x30)=nullptr;
+            MemoryBarrier();
+        } __except(EXCEPTION_EXECUTE_HANDLER){
+            Log("RR_VRAM_NATIVE_CACHE_RELEASE frame=%llu feature=%p preset=%u result=0x%08X success=0 reason=cache_null_write_exception exception=0x%08lX",
+                frame,candidate.feature,candidate.preset,result,GetExceptionCode());
+            allOkay=false;continue;
+        }
+        RRPresetFeatureRecord released{};
+        RRNativeMarkControlFeatureReleased(candidate.feature,&released);
+        rrPresetLiveReleases.fetch_add(1,std::memory_order_relaxed);
+        Log("RR_VRAM_NATIVE_CACHE_RELEASE frame=%llu feature=%p preset=%u result=0x%08X success=1 cache_feature_cleared=1 parameters_retained=1 old_render=%ux%u old_output=%ux%u new_render=%ux%u new_output=%ux%u",
+            frame,candidate.feature,candidate.preset,result,candidate.dims.width,candidate.dims.height,
+            candidate.dims.outWidth,candidate.dims.outHeight,width,height,outputWidth,outputHeight);
+    }
+    if(!RRNativeReleaseInactiveAlternates(0,"resize_epoch_retired"))allOkay=false;
+    return allOkay;
+}
+
+static bool RRNativeVramRecoverCachedRRFeature(unsigned long long frame,
+    unsigned outputWidth,unsigned outputHeight,unsigned width,unsigned height) noexcept {
+    void* parameters=nullptr;void* currentFeature=nullptr;unsigned char* state=nullptr;
+    __try {
+        state=*reinterpret_cast<unsigned char**>(reinterpret_cast<unsigned char*>(verifiedD3d)+0x111be0);
+        if(!state)return false;
+        parameters=*reinterpret_cast<void**>(state+0x28);
+        currentFeature=*reinterpret_cast<void**>(state+0x30);
+    } __except(EXCEPTION_EXECUTE_HANDLER){return false;}
+    if(!parameters||currentFeature||!rrNativeCreateOriginal||!rrNativeReleaseFeature)return false;
+
+    RRPresetDimensions dims{};
+    if(!RRNativeReadPresetDimensions(parameters,&dims)||
+       dims.width!=width||dims.height!=height||dims.outWidth!=outputWidth||dims.outHeight!=outputHeight||
+       !RRNativeLiveCreateContract(parameters)||!RRNativeApplyPreset(parameters))return false;
+
+    unsigned char* entry=nullptr;unsigned long long cacheCount=0;
+    if(!RRNativeVramFindCacheEntry(parameters,nullptr,&entry,&cacheCount)||!entry)return false;
+    __try {if(*reinterpret_cast<void**>(entry+16)!=nullptr)return false;}
+    __except(EXCEPTION_EXECUTE_HANDLER){return false;}
+
+    EngineCommandContextSnapshot command{};
+    if(!ReadEngineCommandContext(nullptr,&command)||!command.commandList||
+       command.commandType!=D3D12_COMMAND_LIST_TYPE_DIRECT)return false;
+
+    void* created=nullptr;const DWORD saved=GetLastError();
+    unsigned result=0xBAD00001u;DWORD fault=0;
+    __try {result=rrNativeCreateOriginal(command.commandList,13,parameters,&created);}
+    __except(EXCEPTION_EXECUTE_HANDLER){fault=GetExceptionCode();}
+    const DWORD createError=GetLastError();SetLastError(saved);
+    if(fault||(result&0xFFF00000u)==0xBAD00000u||!created){
+        Log("RR_VRAM_NATIVE_CACHE_RECREATE frame=%llu success=0 result=0x%08X feature=%p parameters=%p exception=0x%08lX render=%ux%u output=%ux%u cache_count=%llu",
+            frame,result,created,parameters,fault,width,height,outputWidth,outputHeight,cacheCount);
+        SetLastError(createError);return false;
+    }
+    bool published=false;
+    __try {
+        *reinterpret_cast<void**>(entry+16)=created;
+        *reinterpret_cast<void**>(state+0x30)=created;
+        MemoryBarrier();published=true;
+    } __except(EXCEPTION_EXECUTE_HANDLER){published=false;}
+    if(!published){
+        __try {rrNativeReleaseFeature(created);} __except(EXCEPTION_EXECUTE_HANDLER){}
+        SetLastError(createError);return false;
+    }
+    const unsigned preset=control_rr::RRUserPresetValue();
+    RRNativeRememberControlFeature(created,preset,parameters);
+    control_rr::RRUserConfirmPresetCreate(preset);
+    Log("RR_VRAM_NATIVE_CACHE_RECREATE frame=%llu success=1 result=0x%08X feature=%p parameters=%p preset=%u render=%ux%u output=%ux%u cache_feature_restored=1",
+        frame,result,created,parameters,preset,width,height,outputWidth,outputHeight);
+    SetLastError(createError);return true;
+}
 
 static void RRVramLifecycleAfterPresent(unsigned long long present) noexcept {
     static unsigned int offStablePresents=0;
