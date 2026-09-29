@@ -1,5 +1,9 @@
 # Third-party notices
 
+## Ray Reconstruction attribution
+
+**speedlemur** — credit for the core Ray Reconstruction integration approach used by recent Control FG builds. Getting the RR path working in *Control* required substantial renderer/NGX integration work, and this notice records that contribution explicitly.
+
 Control FG's binary package redistributes selected production runtime components from **NVIDIA Streamline 2.14.1**:
 
 - `sl.interposer.dll`
