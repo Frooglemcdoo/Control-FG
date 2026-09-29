@@ -16,6 +16,10 @@ Unlike a generic graphics injection layer, Control FG is **game-specific and eng
 
 A massive shoutout to **HotKnives** for lending me his machine and helping with QA for the recent release and bug fixes. Having his hardware available and his help testing changes made a huge difference in tracking down issues and getting v2.1.0 ready. Really appreciate the time and support!
 
+## Huge thanks to speedlemur!
+
+A big shoutout and thank you to **speedlemur** for the core Ray Reconstruction integration approach used in recent Control FG builds. Getting RR working correctly in *Control* took a lot of difficult renderer and NGX integration work, and that contribution deserves clear credit here and in the project notices.
+
 ## Video Demonstration
 
 [![Control FG – App and Overlay Demonstration](https://img.youtube.com/vi/aP7UeCSx00c/maxresdefault.jpg)](https://youtu.be/aP7UeCSx00c)
@@ -24,9 +28,12 @@ A massive shoutout to **HotKnives** for lending me his machine and helping with 
 
 ## What's new in v2.1.1
 
-- **Epic Games Store and GOG are now supported**, alongside Steam, in one download.
+- **Experimental Texture Streaming controls** are now available under **Options → Experimental** with **Off, 4 ms, 6 ms, and 8 ms** texture-request budgets. Off restores Control's native behavior. Higher budgets can improve texture/LOD loading, but **adjusting this can cause traversal stutter**.
+- Added a persistent **Show VRAM usage monitor** checkbox in Options.
+- **Fixed a major Ray Reconstruction VRAM-lifetime bug.** Live RR enable/disable, E/F preset changes, and render-resolution/DLSS mode changes could leave old native RR/NGX allocations resident. The RR lifecycle now retires and releases the previous feature epoch before rebuilding, preventing the multi-gigabyte VRAM accumulation seen during live changes.
+- **Epic Games Store and GOG are supported**, alongside Steam, in one download.
 - Validated storefront profiles retain the exact game-file checks used by the runtime and installer.
-- Installation instructions now cover all three storefronts.
+- Installation instructions cover all three storefronts.
 - **GOG users: disable the GOG Galaxy in-game overlay for Control** before playing. See the steps below.
 
 ### Included from v2.1.0
@@ -47,6 +54,8 @@ A massive shoutout to **HotKnives** for lending me his machine and helping with 
 - Cleaned up the overlay and removed the HDR restart footer.
 
 ## Known issues
+
+**RTX 40-series Multi Frame Generation on newer NVIDIA drivers:** recent RTX 40-series reports on NVIDIA driver **617.14** with DLSS-G **310.9.1** show the experimental 3×+ path can be rejected inside `EndpointCoreInputs::ComputeAndValidateTimeFactor` with `Multi frame is not supported on this device. Found count (2) but expected (1)`. The current experimental unlock already handles the Ada architecture/temporal path, but the newer provider adds a host-side device-policy validation that is not yet patched. **Off/2× remains the safe fallback while this compatibility update is being worked on.** The planned fix will validate the exact 310.9.1 function contract and fail closed to 2× if it cannot be matched safely.
 
 **GOG Galaxy overlay conflict:** Galaxy's in-game overlay can cause input/focus stalls and make Control FG or other overlays disappear. Disable it for Control using the [steps below](#gog-disable-galaxys-in-game-overlay).
 
@@ -77,6 +86,15 @@ Extensive testing shows the largest RR cost at **4K + DLAA**:
 - **4K + DLSS Quality:** the RR cost is substantially less noticeable than 4K DLAA.
 
 The 4K DLAA hit was reproduced across repeated RR toggles, resolution changes, DLSS modes, and RT configurations and currently appears to be a real workload cost rather than an obvious mod-side state or recovery bug.
+
+## Experimental Texture Streaming
+
+The Options → Experimental page now exposes a texture-request budget selector:
+
+- **Off** — restores Control's native texture-streaming budget and update-slice behavior.
+- **4 ms / 6 ms / 8 ms** — increases the per-update texture request budget while using the validated expanded update-slice path.
+
+This can reduce delayed texture/LOD loading, especially when entering a level or moving quickly through the world. The tradeoff is that larger budgets can move more streaming work into a frame and **can cause traversal stutter**. This setting is experimental and can be changed live.
 
 ## Frame Generation
 
