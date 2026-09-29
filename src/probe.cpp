@@ -54,6 +54,16 @@ static thread_local unsigned int hudPrimaryTrackedState = 0;
 static thread_local unsigned int hudPrimaryStateKnown = 0;
 static HMODULE verifiedD3d = nullptr, verifiedRenderer = nullptr;
 
+// HDR/VRAM diagnostic probe values consumed by the lightweight on-screen monitor.
+// These are read-only UI telemetry; they never affect rendering or residency.
+static std::atomic<unsigned long long> vramProbeLocalUsageBytes{0};
+static std::atomic<unsigned long long> vramProbeLocalBudgetBytes{0};
+static std::atomic<unsigned long long> vramProbeDedicatedVideoBytes{0};
+static std::atomic<unsigned long long> vramProbePeakLocalUsageBytes{0};
+static std::atomic<unsigned int> vramProbeSampleValid{0};
+static std::atomic<unsigned int> vramProbeHdrKnown{0};
+static std::atomic<unsigned int> vramProbeHdrEnabled{0};
+
 #include "release_log_policy.h"
 
 static bool ReleaseLogSuppressed(const char* body) noexcept {
@@ -150,7 +160,7 @@ static void OpenLog() {
     Log("PROBE v2.1.1 internal_build=2.1.1 source_revision=v2.1.1-unified-storefront-r3 supported_targets=steam_21225456,epic_0.0.518.2177,gog_57a8912f frequency=%lld log_profile=%s",frequency.QuadPart,verboseAuditLogging?"verbose_audit":"release_support");
     Log("CAPABILITIES fg=fixed_2x_to_6x_plus_dynamic rr=models_E_F_default_F hdr10_bridge=1 rr_guides=gbuffer_material_envbrdf rr_hit_distance=off rr_specular_mvec=off rr_diagnostic_readbacks=off streamline_sdk=2.14.1");
     Log("MONITORING profile=%s rr_perf_sample=240 support_events=startup_settings_fg_rr_model_resize_recovery_failures_fallbacks_performance verbose_env=CONTROLFG_VERBOSE_LOG",verboseAuditLogging?"verbose_audit":"release_support");
-    Log("VRAM_PROBE_CONFIG build=HDR-VRAM-Probe-R1 source=v2.1.1 cadence_aa=60 transition_samples=on metrics=dxgi_local_nonlocal_budget_usage_reservation hdr_bridge_counters=on");
+    Log("VRAM_PROBE_CONFIG build=HDR-VRAM-Probe-R2 source=v2.1.1 cadence_aa=60 transition_samples=on metrics=dxgi_local_nonlocal_budget_usage_reservation hdr_bridge_counters=on onscreen_monitor=always_when_game_foreground");
 }
 
 // +0x88 was observed at multiple resource loads in the hash-locked doAntiAliasing
@@ -398,6 +408,18 @@ static void ProbeVideoMemory(unsigned long long call, unsigned long long present
 
     const auto baseline = baselineLocalUsage.load(std::memory_order_relaxed);
     const auto peak = peakLocalUsage.load(std::memory_order_relaxed);
+    if (SUCCEEDED(localHr)) {
+        vramProbeLocalUsageBytes.store(local.CurrentUsage, std::memory_order_release);
+        vramProbeLocalBudgetBytes.store(local.Budget, std::memory_order_release);
+        vramProbePeakLocalUsageBytes.store(peak, std::memory_order_release);
+        if (SUCCEEDED(descHr))
+            vramProbeDedicatedVideoBytes.store(
+                static_cast<unsigned long long>(adapterDesc.DedicatedVideoMemory),
+                std::memory_order_release);
+        vramProbeHdrKnown.store(hdrKnown, std::memory_order_release);
+        vramProbeHdrEnabled.store(hdrEnabled, std::memory_order_release);
+        vramProbeSampleValid.store(1u, std::memory_order_release);
+    }
     const long long delta = SUCCEEDED(localHr)
         ? static_cast<long long>(local.CurrentUsage) - static_cast<long long>(baseline)
         : 0;
