@@ -604,33 +604,59 @@ static void PaintFGOverlay(HWND hwnd) noexcept {
         DrawTextW(dc, fgOverlayBindingMessage, -1, &help, DT_LEFT | DT_WORDBREAK);
         SelectObject(dc, buttonFont);
         PaintFGButton(dc, RECT{30, 325, 270, 375}, L"Reset to F10", false);
-        {
-            const bool editable = IsFGRtx40Series();
-            SelectObject(dc, sectionFont); SetTextColor(dc, RGB(255, 32, 32));
-            RECT experimentalTitle{30, 390, 710, 422};
-            DrawTextW(dc, L"EXPERIMENTAL", -1, &experimentalTitle, DT_LEFT | DT_SINGLELINE);
-            const bool requested = editable && IsRTX40MFGRequested();
-            PaintFGRect(dc, RECT{30, 440, 56, 466}, RGB(0,0,0), editable ? RGB(232,232,232) : RGB(95,95,95));
-            if (requested) {
-                HPEN checkPen = CreatePen(PS_SOLID, 3, RGB(246,246,246));
-                HGDIOBJ oldCheckPen = SelectObject(dc, checkPen);
-                MoveToEx(dc, 35, 452, nullptr); LineTo(dc, 41, 459); LineTo(dc, 52, 446);
-                SelectObject(dc, oldCheckPen); DeleteObject(checkPen);
-            }
-            SelectObject(dc, bodyFont); SetTextColor(dc, editable ? RGB(246,246,246) : RGB(125,125,125));
-            RECT experimentalLabel{70, 437, 710, 473};
-            DrawTextW(dc, L"Enable RTX 40-series Multi Frame Generation", -1, &experimentalLabel, DT_LEFT | DT_SINGLELINE | DT_VCENTER);
-            SelectObject(dc, smallFont);
-            RECT experimentalHelp{30, 485, 710, 548};
-            const wchar_t* note = !editable ? L"RTX 40-series only. RTX 50-series uses native NVIDIA Multi Frame Generation."
-                : requested != IsRTX40MFGSessionEnabled()
-                ? L"Restart required to change the FG implementation. Disabled: native NVIDIA FG, up to 2x."
-                : (requested ? L"Experimental MFG enabled. Disabling requires a restart to restore native NVIDIA FG."
-                             : L"Native NVIDIA Frame Generation, up to 2x. Enabling experimental MFG requires a restart.");
-            DrawTextW(dc, note, -1, &experimentalHelp, DT_LEFT | DT_WORDBREAK);
+
+        const bool editable = IsFGRtx40Series();
+        SelectObject(dc, sectionFont); SetTextColor(dc, RGB(255, 32, 32));
+        RECT experimentalTitle{30, 390, 710, 422};
+        DrawTextW(dc, L"EXPERIMENTAL", -1, &experimentalTitle, DT_LEFT | DT_SINGLELINE);
+        const bool requested = editable && IsRTX40MFGRequested();
+        PaintFGRect(dc, RECT{30, 440, 56, 466}, RGB(0,0,0), editable ? RGB(232,232,232) : RGB(95,95,95));
+        if (requested) {
+            HPEN checkPen = CreatePen(PS_SOLID, 3, RGB(246,246,246));
+            HGDIOBJ oldCheckPen = SelectObject(dc, checkPen);
+            MoveToEx(dc, 35, 452, nullptr); LineTo(dc, 41, 459); LineTo(dc, 52, 446);
+            SelectObject(dc, oldCheckPen); DeleteObject(checkPen);
         }
+        SelectObject(dc, bodyFont); SetTextColor(dc, editable ? RGB(246,246,246) : RGB(125,125,125));
+        RECT experimentalLabel{70, 437, 710, 473};
+        DrawTextW(dc, L"Enable RTX 40-series Multi Frame Generation", -1, &experimentalLabel, DT_LEFT | DT_SINGLELINE | DT_VCENTER);
+        SelectObject(dc, smallFont);
+        RECT experimentalHelp{30, 482, 710, 520};
+        const wchar_t* note = !editable ? L"RTX 40-series only. RTX 50-series uses native NVIDIA Multi Frame Generation."
+            : requested != IsRTX40MFGSessionEnabled()
+            ? L"Restart required to change the FG implementation. Disabled: native NVIDIA FG, up to 2x."
+            : (requested ? L"Experimental MFG enabled. Disabling requires a restart to restore native NVIDIA FG."
+                         : L"Native NVIDIA Frame Generation, up to 2x. Enabling experimental MFG requires a restart.");
+        DrawTextW(dc, note, -1, &experimentalHelp, DT_LEFT | DT_WORDBREAK);
+
+        PaintFGDivider(dc, 30, 530, 710);
+        SelectObject(dc, sectionFont); SetTextColor(dc, RGB(255, 32, 32));
+        RECT textureTitle{30, 544, 710, 574};
+        DrawTextW(dc, L"TEXTURE STREAMING", -1, &textureTitle, DT_LEFT | DT_SINGLELINE);
+        SelectObject(dc, bodyFont); SetTextColor(dc, RGB(246,246,246));
+        RECT textureLabel{30, 579, 360, 610};
+        DrawTextW(dc, L"Texture request budget", -1, &textureLabel, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+
+        const unsigned int textureMs=GetFGTextureStreamingBudgetMs();
+        const unsigned int textureValues[4]{0u,4u,6u,8u};
+        const wchar_t* textureLabels[4]{L"OFF",L"4 ms",L"6 ms",L"8 ms"};
+        const int textureX[4]{30,200,370,540};
+        SelectObject(dc, buttonFont);
+        for(unsigned int i=0;i<4;++i){
+            RECT box{textureX[i],615,textureX[i]+155,665};
+            const bool selected=textureMs==textureValues[i];
+            SelectObject(dc,selected?buttonSelectedFont:buttonFont);
+            PaintFGButton(dc,box,textureLabels[i],selected,true);
+        }
+
+        SelectObject(dc, smallFont); SetTextColor(dc, RGB(232,232,232));
+        RECT textureHelp{30, 680, 710, 731};
+        DrawTextW(dc,
+            L"OFF restores Control's native 1 ms budget / 8 update slices. 4/6/8 ms use 16 slices. Adjusting this can cause traversal stutter.",
+            -1,&textureHelp,DT_LEFT|DT_WORDBREAK);
+
         SelectObject(dc,buttonFont);
-        PaintFGButton(dc, RECT{550, 560, 710, 610}, L"Back", false);
+        PaintFGButton(dc, RECT{550, 742, 710, 792}, L"Back", false);
     } else if (fgOverlayRRSettingsPage) {
         SelectObject(dc, sectionFont); SetTextColor(dc, RGB(255,32,32));
         RECT title{30,105,710,140};
@@ -834,7 +860,7 @@ static bool FGOverlaySliderFromPoint(int x, int y) noexcept {
     return IsFGDynamicSelection(GetFGUserMultiplier()) && y >= 443 && y < 512 && x >= 30 && x < 710;
 }
 static int FGOverlayLowerSectionOffset() noexcept { return IsFGDynamicSelection(GetFGUserMultiplier()) ? 0 : -kFGOverlayDynamicSectionHeight; }
-static int FGOverlayDesiredHeight() noexcept { if (fgOverlayOptionsPage) return 640; if (fgOverlayRRSettingsPage) return 490; return IsFGDynamicSelection(GetFGUserMultiplier()) ? kFGOverlayHeight : kFGOverlayCompactHeight; }
+static int FGOverlayDesiredHeight() noexcept { if (fgOverlayOptionsPage) return 812; if (fgOverlayRRSettingsPage) return 490; return IsFGDynamicSelection(GetFGUserMultiplier()) ? kFGOverlayHeight : kFGOverlayCompactHeight; }
 static void FGOverlayResizeWindowForCurrentSelection(HWND hwnd) noexcept {
     if (!hwnd) return;
     SetWindowPos(hwnd, nullptr, 0, 0, kFGOverlayWidth, FGOverlayDesiredHeight(),
@@ -911,7 +937,26 @@ static LRESULT CALLBACK FGOverlayWndProc(HWND hwnd, UINT message, WPARAM wParam,
                 FGOverlayFlushSettingsIfDue(true);
                 fgOverlayBindingMessage = fgOverlaySettingsDirty ? L"Saving failed; retrying. Keep the game open until settings save." : L"Settings saved.";
                 Log("FG_RTX40_EXPERIMENTAL_SETTING requested=%u session_enabled=%u restart_required=%u", unsigned(requested), unsigned(IsRTX40MFGSessionEnabled()), unsigned(requested != IsRTX40MFGSessionEnabled()));
-            } else if (x >= 550 && x < 710 && y >= 560 && y < 610) {
+            } else if (y >= 615 && y < 665) {
+                unsigned int selectedTextureMs=0xFFFFFFFFu;
+                if(x>=30&&x<185)selectedTextureMs=0u;
+                else if(x>=200&&x<355)selectedTextureMs=4u;
+                else if(x>=370&&x<525)selectedTextureMs=6u;
+                else if(x>=540&&x<695)selectedTextureMs=8u;
+                if(selectedTextureMs!=0xFFFFFFFFu){
+                    const unsigned int previousTextureMs=GetFGTextureStreamingBudgetMs();
+                    if(selectedTextureMs!=previousTextureMs){
+                        const bool applied=ApplyTextureStreamingExperimental(selectedTextureMs);
+                        if(applied){
+                            SetFGTextureStreamingBudgetMs(selectedTextureMs);
+                            FGOverlayMarkSettingsDirty();
+                            FGOverlayFlushSettingsIfDue(true);
+                        }
+                        Log("TEXTURE_EXPERIMENTAL_UI previous_ms=%u selected_ms=%u applied=%u persisted=%u traversal_stutter_warning=1",
+                            previousTextureMs,selectedTextureMs,unsigned(applied),unsigned(applied&&!fgOverlaySettingsDirty));
+                    }
+                }
+            } else if (x >= 550 && x < 710 && y >= 742 && y < 792) {
                 fgOverlayBindingCapture = false;
                 fgOverlayOptionsPage = false;
                 FGOverlayResizeWindowForCurrentSelection(hwnd);
