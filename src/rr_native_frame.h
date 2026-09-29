@@ -203,6 +203,13 @@ static bool RRNativeResizeGate(bool requested,unsigned long long frame,unsigned 
   if(r.stableFrames<0xffffffffu)++r.stableFrames;
   return false;
  }
+#ifdef CONTROL_FG_RR_VRAM_RESIZE_R2
+ if(!RRNativeVramReleaseCachedRRFeaturesForResize(frame,r.outputWidth,r.outputHeight,r.width,r.height)){
+  if((r.stableFrames%8)==0)Log("RR_RESIZE_EPOCH_DRAIN frame=%llu epoch=%llu stable=%u old_work_retired=1 native_rr_cache_released=0 aux_work_paused=1",frame,r.epoch,r.stableFrames);
+  if(r.stableFrames<0xffffffffu)++r.stableFrames;
+  return false;
+ }
+#endif
  r.paused=false;control_rr::RRUserSetRuntimePaused(false);
  Log("RR_RESIZE_EPOCH_RELEASE frame=%llu epoch=%llu stable=%u output=%ux%u render=%ux%u action=rebuild_aux_then_rr_history_reset",
   frame,r.epoch,r.stableFrames,outputWidth,outputHeight,width,height);
@@ -359,7 +366,19 @@ static bool RRNativeHookReset(unsigned outputWidth,unsigned outputHeight,unsigne
   SetLastError(srError);return srResult;
  }
  SetLastError(saved);
- const bool result=rrNativeResetOriginal(outputWidth,outputHeight,width,height,flag0,flag1,selected,flag3,reset);
+ bool result=rrNativeResetOriginal(outputWidth,outputHeight,width,height,flag0,flag1,selected,flag3,reset);
+#ifdef CONTROL_FG_RR_VRAM_RESIZE_R2
+ if(!result&&selected&&runtimeRequested){
+  const DWORD firstError=GetLastError();
+  if(RRNativeVramRecoverCachedRRFeature(frame,outputWidth,outputHeight,width,height)){
+   SetLastError(saved);
+   result=rrNativeResetOriginal(outputWidth,outputHeight,width,height,flag0,flag1,selected,flag3,reset);
+   Log("RR_VRAM_NATIVE_CACHE_RETRY frame=%llu success=%u first_error=%lu retry_error=%lu output=%ux%u render=%ux%u",
+    frame,unsigned(result),static_cast<unsigned long>(firstError),static_cast<unsigned long>(GetLastError()),
+    outputWidth,outputHeight,width,height);
+  }else SetLastError(firstError);
+ }
+#endif
  const DWORD nativeError=GetLastError();
  const bool observed=RRNativeReadMode(&supported,&active);
  rrNativeFrame.FeatureResult(result&&observed,active);
