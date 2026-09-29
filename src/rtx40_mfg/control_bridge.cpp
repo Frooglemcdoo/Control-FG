@@ -48,8 +48,10 @@ extern "C" __declspec(dllexport) unsigned int __cdecl ControlFGMFGInitialize(
         && devicePolicy.candidate && devicePolicy.patched
         && flip.located && flip.derived && flip.sites > 0
         && maximum.candidate && maximum.patched && maximum.compiledMaximum >= 3;
-    mfglog::Write(L"CONTROL_MFG_PREPARE ready=%u arch=%zu/%zu flip=%zu maximum=%u; temporal pending",
-        unsigned(prepared), arch.patched, arch.found, flip.sites, maximum.compiledMaximum);
+    mfglog::Write(L"CONTROL_MFG_PREPARE ready=%u arch=%zu/%zu compatibility=%u flip=%zu maximum=%u; temporal pending",
+        unsigned(prepared), arch.patched, arch.found,
+        unsigned(devicePolicy.candidate && devicePolicy.patched),
+        flip.sites, maximum.compiledMaximum);
     return prepared ? 1u : 0u;
 }
 // Runs before ANY FG creation, including 2x; never JIT the stock midpoint first.
