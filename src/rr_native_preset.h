@@ -2,7 +2,9 @@
 #include "rr_preset_f.h"
 #include "rr_evaluation_tail.h"
 using RRNativeCreateFn=unsigned (*)(void*,unsigned,void*,void**);
+using RRNativeReleaseFeatureFn=unsigned (*)(void*);
 static RRNativeCreateFn rrNativeCreateOriginal=nullptr;
+static RRNativeReleaseFeatureFn rrNativeReleaseFeature=nullptr;
 static RRAlbedoCallPatch rrNativeCreatePatch{};
 struct RRPresetApi {
  void* parameters;
@@ -53,6 +55,40 @@ static std::vector<RRPresetFeatureRecord> rrPresetFeatureRecords;
 static std::atomic<unsigned int> rrPresetLastEvaluated{0};
 static std::atomic<unsigned long long> rrPresetLiveCreates{0};
 static std::atomic<unsigned long long> rrPresetLiveSwitches{0};
+static std::atomic<unsigned long long> rrPresetLiveReleases{0};
+static std::atomic<unsigned long long> rrPresetLiveReleaseFailures{0};
+
+static bool RRNativeReleaseInactiveAlternates(unsigned keepPreset,const char* reason) noexcept {
+ if(!rrNativeReleaseFeature){
+  Log("RR_PRESET_LIVE_RELEASE reason=%s keep_preset=%u success=0 release_api=missing retained=1",
+      reason?reason:"unknown",keepPreset);
+  return false;
+ }
+ bool allOkay=true;
+ AcquireSRWLockExclusive(&rrPresetFeatureLock);
+ for(std::size_t i=0;i<rrPresetFeatureRecords.size();){
+  auto& r=rrPresetFeatureRecords[i];
+  if(!r.alternate||(keepPreset&&r.preset==keepPreset)){++i;continue;}
+  void* feature=r.feature;
+  const unsigned preset=r.preset;
+  const unsigned result=rrNativeReleaseFeature(feature);
+  const bool success=result==1u;
+  if(success){
+   const auto released=rrPresetLiveReleases.fetch_add(1,std::memory_order_relaxed)+1;
+   Log("RR_PRESET_LIVE_RELEASE reason=%s preset=%u feature=%p result=0x%08X success=1 released=%llu retained=0",
+       reason?reason:"unknown",preset,feature,result,released);
+   rrPresetFeatureRecords.erase(rrPresetFeatureRecords.begin()+static_cast<std::ptrdiff_t>(i));
+  }else{
+   const auto failures=rrPresetLiveReleaseFailures.fetch_add(1,std::memory_order_relaxed)+1;
+   Log("RR_PRESET_LIVE_RELEASE reason=%s preset=%u feature=%p result=0x%08X success=0 failures=%llu retained=1",
+       reason?reason:"unknown",preset,feature,result,failures);
+   allOkay=false;++i;
+  }
+ }
+ ReleaseSRWLockExclusive(&rrPresetFeatureLock);
+ return allOkay;
+}
+
 
 static void RRNativeRememberControlFeature(void* feature,unsigned preset,void* parameters) noexcept {
  if(!feature||!control_rr::RRUserPresetSupported(preset))return;
@@ -166,7 +202,8 @@ static bool RRNativeInstallPreset(HMODULE d3d) noexcept {
  memcpy(p.original,old.data(),5);memcpy(p.replacement,next.data(),5);memcpy(p.relay,stub.data(),stub.size());
  DWORD previous=0;if(!VirtualProtect(p.relay,4096,PAGE_EXECUTE_READ,&previous)||!FlushInstructionCache(GetCurrentProcess(),p.relay,stub.size()))return false;
  rrNativeCreateOriginal=reinterpret_cast<RRNativeCreateFn>(target);
+ rrNativeReleaseFeature=reinterpret_cast<RRNativeReleaseFeatureFn>(GetProcAddress(d3d,"NVSDK_NGX_D3D12_ReleaseFeature"));
  if(!RRAlbedoExchangeCall(&p,true))return false;
  if(!p.writeHealthy){RRAlbedoExchangeCall(&p,false);return false;}
- Log("RR_PRESET_HOOK_READY site=0x1D457 target=0x528D0 default_preset=F selectable=E,F,K,L,M live_switch=E<->F restart_only=K,L,M create_confirmation=1 alternate_features=retained_until_exit");return true;
+ Log("RR_PRESET_HOOK_READY site=0x1D457 target=0x528D0 default_preset=F selectable=E,F,K,L,M live_switch=E<->F restart_only=K,L,M create_confirmation=1 alternate_features=release_after_retired_switch_or_rr_off release_api=%u",unsigned(rrNativeReleaseFeature!=nullptr));return true;
 }
