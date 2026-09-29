@@ -1,4 +1,4 @@
-# Troubleshooting — v2.1.1
+# Troubleshooting — v2.1.2
 
 For GOG input stalls or disappearing overlays, disable Galaxy's overlay for Control and restart the game; see [INSTALL.md](INSTALL.md#gog-galaxy-disable-the-overlay-for-control).
 
