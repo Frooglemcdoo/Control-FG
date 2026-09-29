@@ -1,7 +1,7 @@
 {
   "SteamAppId": "870780",
   "SteamBuildId": "21225456",
-  "ProbeVersion": "2.1.1",
+  "ProbeVersion": "2.1.2",
   "RequiredFiles": [
     {
       "Name": "Control_DX12.exe",
@@ -23,7 +23,7 @@
     "Architecture": "x64"
   },
   "Phase": "Unified Steam, Epic Games Store and GOG release based on the runtime-tested R3 storefront build. Full matching EXE/D3D/renderer hash triples remain required.",
-  "SourceRevision": "v2.1.1-unified-storefront-r3",
+  "SourceRevision": "v2.1.2-sep29-r1",
   "DLSSGGeneratedFramesRequested": 3,
   "TargetMultiplier": "4x",
   "ExpectedFramesPresented": 4,
