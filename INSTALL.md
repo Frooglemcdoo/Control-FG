@@ -1,6 +1,6 @@
-# Install — Control FG v2.1.1
+# Install — Control FG v2.1.2
 
-One deployment package supports the validated **Steam, Epic Games Store, and GOG** DX12 builds. Download `Control-FG-v2.1.1.zip`; `Control-FG-v2.1.1-Source.zip` contains source and requires compilation.
+One deployment package supports the validated **Steam, Epic Games Store, and GOG** DX12 builds. Download `Control-FG-v2.1.2.zip`; `Control-FG-v2.1.2-Source.zip` contains source and requires compilation.
 
 ## Find your Control installation
 
@@ -23,7 +23,7 @@ Custom libraries and GOG offline installations may use another location. Always 
 5. Launch Control in **DirectX 12** mode; select DX12 if the launcher asks.
 6. Open the overlay with **F10** or your saved custom shortcut.
 
-The header cog opens Options, including shortcut rebinding and optional experimental RTX 40-series MFG. Enabling experimental MFG requires restarting the game. The RR cog opens reflection clamp settings (25–75, default 60). RR Model F is the default, with live E/F selection.
+The header cog opens Options, including shortcut rebinding, the VRAM monitor toggle, Experimental Texture Streaming, and optional experimental RTX 40-series MFG. Enabling or disabling experimental RTX 40-series MFG requires restarting the game; once its compatibility patch is loaded it remains active until restart. The RR cog opens reflection clamp settings (25–75, default 60). RR Model F is the default, with live E/F selection.
 
 Settings are preserved in `%LOCALAPPDATA%\ControlFG\settings.ini`.
 
@@ -53,4 +53,4 @@ Close Control and remove **Control FG's** `dxgi.dll` and `ControlFGStreamline` f
 
 ## Build from source
 
-Run `Build.cmd` on Windows. A successful build also packages `release/Control-FG-v2.1.1.zip`; `Make-DropIn.cmd` can regenerate it. Install from that ZIP using the steps above. `Install.cmd` also supports a source-tree installation into the selected Steam, Epic, or GOG directory. See [BUILDING.md](BUILDING.md).
+Run `Build.cmd` on Windows. A successful build also packages `release/Control-FG-v2.1.2.zip`; `Make-DropIn.cmd` can regenerate it. Install from that ZIP using the steps above. `Install.cmd` also supports a source-tree installation into the selected Steam, Epic, or GOG directory. See [BUILDING.md](BUILDING.md).
