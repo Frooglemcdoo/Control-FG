@@ -9,7 +9,7 @@ manifest = json.loads((root / 'target-manifest.json').read_text())
 version = manifest['ProbeVersion']
 validation = json.loads((root / 'build/build-validation.json').read_text(encoding='utf-8-sig'))
 sdk = json.loads((root / 'third_party/streamline/sdk-info.json').read_text(encoding='utf-8-sig'))
-assert validation['Version'] == version == '2.1.1'
+assert validation['Version'] == version == '2.1.2'
 assert validation['AbiCheck'] == validation['ExportCheck'] == 'Passed'
 assert validation['Architecture'] == 'x64'
 runtime_names = ('sl.interposer.dll', 'sl.common.dll', 'sl.pcl.dll', 'sl.reflex.dll',
@@ -38,8 +38,8 @@ with zipfile.ZipFile(root / f'release/Control-FG-v{version}.zip') as package:
         assert hashlib.sha256(contents['ControlFGStreamline/' + name]).hexdigest() == record['SHA256'].lower(), name
     checks.append('Proxy, sidecar and all eight pinned runtime DLL hashes match')
     dll = contents['dxgi.dll']
-    assert b'PROBE v2.1.1 internal_build=2.1.1' in dll
-    assert 'v2.1.1'.encode('utf-16le') in dll
+    assert b'PROBE v2.1.2 internal_build=2.1.2' in dll
+    assert 'v2.1.2'.encode('utf-16le') in dll
     for target in manifest['SupportedTargets']:
         for file in target['RequiredFiles']:
             assert file['SHA256'].encode('ascii') in dll
