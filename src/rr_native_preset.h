@@ -46,6 +46,7 @@ struct RRPresetFeatureRecord {
  unsigned preset=0;
  RRPresetDimensions dims{};
  bool alternate=false;
+ bool released=false;
 };
 static SRWLOCK rrPresetFeatureLock=SRWLOCK_INIT;
 // Experimental E/F live switching retains created NGX feature handles until
@@ -69,6 +70,7 @@ static bool RRNativeReleaseInactiveAlternates(unsigned keepPreset,const char* re
  for(std::size_t i=0;i<rrPresetFeatureRecords.size();){
   auto& r=rrPresetFeatureRecords[i];
   if(!r.alternate||(keepPreset&&r.preset==keepPreset)){++i;continue;}
+  if(r.released){rrPresetFeatureRecords.erase(rrPresetFeatureRecords.begin()+static_cast<std::ptrdiff_t>(i));continue;}
   void* feature=r.feature;
   const unsigned preset=r.preset;
   const unsigned result=rrNativeReleaseFeature(feature);
@@ -94,19 +96,30 @@ static void RRNativeRememberControlFeature(void* feature,unsigned preset,void* p
  if(!feature||!control_rr::RRUserPresetSupported(preset))return;
  RRPresetDimensions dims{};RRNativeReadPresetDimensions(parameters,&dims);
  AcquireSRWLockExclusive(&rrPresetFeatureLock);
- bool found=false;for(auto& r:rrPresetFeatureRecords)if(!r.alternate&&r.feature==feature){r.preset=preset;r.dims=dims;found=true;break;}
- if(!found)rrPresetFeatureRecords.push_back({feature,feature,preset,dims,false});
+ bool found=false;for(auto& r:rrPresetFeatureRecords)if(!r.alternate&&r.feature==feature){r.preset=preset;r.dims=dims;r.released=false;found=true;break;}
+ if(!found)rrPresetFeatureRecords.push_back({feature,feature,preset,dims,false,false});
  ReleaseSRWLockExclusive(&rrPresetFeatureLock);
 }
 static bool RRNativeFindControlFeature(void* feature,RRPresetFeatureRecord* out) noexcept {
  if(!feature||!out)return false;bool found=false;
  AcquireSRWLockShared(&rrPresetFeatureLock);
- for(const auto& r:rrPresetFeatureRecords)if(!r.alternate&&r.feature==feature){*out=r;found=true;break;}
+ for(const auto& r:rrPresetFeatureRecords)if(!r.alternate&&!r.released&&r.feature==feature){*out=r;found=true;break;}
  ReleaseSRWLockShared(&rrPresetFeatureLock);return found;
+}
+
+static bool RRNativeMarkControlFeatureReleased(void* feature,RRPresetFeatureRecord* snapshot=nullptr) noexcept {
+ if(!feature)return false;bool found=false;
+ AcquireSRWLockExclusive(&rrPresetFeatureLock);
+ for(auto& r:rrPresetFeatureRecords)if(!r.alternate&&!r.released&&r.feature==feature){
+  if(snapshot)*snapshot=r;
+  r.released=true;found=true;break;
+ }
+ ReleaseSRWLockExclusive(&rrPresetFeatureLock);
+ return found;
 }
 static void* RRNativeFindAlternateFeature(void* baseFeature,unsigned preset,const RRPresetDimensions& dims) noexcept {
  void* found=nullptr;AcquireSRWLockShared(&rrPresetFeatureLock);
- for(const auto& r:rrPresetFeatureRecords)if(r.alternate&&r.baseFeature==baseFeature&&r.preset==preset&&
+ for(const auto& r:rrPresetFeatureRecords)if(r.alternate&&!r.released&&r.baseFeature==baseFeature&&r.preset==preset&&
   r.dims.width==dims.width&&r.dims.height==dims.height&&r.dims.outWidth==dims.outWidth&&r.dims.outHeight==dims.outHeight){found=r.feature;break;}
  ReleaseSRWLockShared(&rrPresetFeatureLock);return found;
 }
