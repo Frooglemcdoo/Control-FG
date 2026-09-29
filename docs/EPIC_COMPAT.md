@@ -1,6 +1,6 @@
 # Epic Games Store compatibility
 
-Epic binary version `0.0.518.2177` is supported in v2.1.1. Startup, overlay, FG and RR were user-tested successfully. All three file hashes differ from Steam, while the validated engine contracts share the same layout. See [installation instructions](../INSTALL.md). The collector below remains available for investigating other builds.
+Epic binary version `0.0.518.2177` is supported in v2.1.2. Startup, overlay, FG and RR were user-tested successfully. All three file hashes differ from Steam, while the validated engine contracts share the same layout. See [installation instructions](../INSTALL.md). The collector below remains available for investigating other builds.
 
 ## Why this is required
 
