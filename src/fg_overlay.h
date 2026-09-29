@@ -36,6 +36,15 @@ static std::wstring fgOverlaySettingsPath;
 static std::atomic<unsigned int> fgOverlaySettingsLoaded{0};
 static bool fgOverlayOptionsPage = false;
 static bool fgOverlayRRSettingsPage = false;
+static std::atomic<unsigned int> fgVramMonitorEnabled{1};
+
+static bool IsFGVramMonitorEnabled() noexcept {
+    return fgVramMonitorEnabled.load(std::memory_order_acquire)!=0;
+}
+static void SetFGVramMonitorEnabled(bool enabled) noexcept {
+    fgVramMonitorEnabled.store(enabled?1u:0u,std::memory_order_release);
+}
+
 static std::atomic<unsigned int> fgTextureStreamingBudgetMs{0};
 
 static unsigned int NormalizeFGTextureStreamingBudgetMs(unsigned int value) noexcept {
@@ -180,7 +189,8 @@ static void FGOverlayLoadSettings() noexcept {
         control_rr::RRUserSetSpecularSignalMode(control_rr::RRSpecularSignalMode::NativeClamp);
         control_rr::RRUserRequest(false);
         SetFGTextureStreamingBudgetMs(0u);
-        Log("FG_SETTINGS_LOAD success=0 reason=path_unavailable defaults=4x,dynamic_auto,rr_off,rr_model_F,texture_streaming_off ui=fg_full_rr_toggle_model_E_F");
+        SetFGVramMonitorEnabled(true);
+        Log("FG_SETTINGS_LOAD success=0 reason=path_unavailable defaults=4x,dynamic_auto,rr_off,rr_model_F,texture_streaming_off,vram_monitor_on ui=fg_full_rr_toggle_model_E_F");
         return;
     }
 
@@ -196,6 +206,7 @@ static void FGOverlayLoadSettings() noexcept {
     const unsigned int rrPreset = rawRrPreset == control_rr::RRPresetE ? control_rr::RRPresetE : control_rr::RRPresetF;
     const unsigned int rawTextureStreamingMs = GetPrivateProfileIntW(L"Experimental", L"TextureStreamingBudgetMs", 0, fgOverlaySettingsPath.c_str());
     const unsigned int textureStreamingMs = NormalizeFGTextureStreamingBudgetMs(rawTextureStreamingMs);
+    const bool vramMonitorEnabled = GetPrivateProfileIntW(L"Overlay", L"VramMonitorEnabled", 1, fgOverlaySettingsPath.c_str()) != 0;
 
     slFgUserMultiplier.store(selection, std::memory_order_release);
     slFgDynamicManualTargetFps.store(manualTarget, std::memory_order_release);
@@ -207,8 +218,9 @@ static void FGOverlayLoadSettings() noexcept {
     control_rr::RRUserSetSpecularSignalMode(control_rr::RRSpecularSignalMode::NativeClamp);
     control_rr::RRUserRequest(rrEnabled);
     SetFGTextureStreamingBudgetMs(textureStreamingMs);
-    Log("FG_SETTINGS_LOAD success=1 path=%ls selection=%s selected_code=%u target_policy=%s manual_target_fps=%u rr_enabled=%u rr_preset=%s rr_preset_value=%u texture_streaming_ms=%u skin_mode=off schema=9 ui=fg_full_rr_toggle_model_E_F",
-        fgOverlaySettingsPath.c_str(), GetFGSelectionName(selection), selection, manualTarget ? "manual" : "auto", manualTarget, unsigned(rrEnabled), control_rr::RRUserPresetLabel(), control_rr::RRUserPresetValue(), textureStreamingMs);
+    SetFGVramMonitorEnabled(vramMonitorEnabled);
+    Log("FG_SETTINGS_LOAD success=1 path=%ls selection=%s selected_code=%u target_policy=%s manual_target_fps=%u rr_enabled=%u rr_preset=%s rr_preset_value=%u texture_streaming_ms=%u vram_monitor=%u skin_mode=off schema=10 ui=fg_full_rr_toggle_model_E_F",
+        fgOverlaySettingsPath.c_str(), GetFGSelectionName(selection), selection, manualTarget ? "manual" : "auto", manualTarget, unsigned(rrEnabled), control_rr::RRUserPresetLabel(), control_rr::RRUserPresetValue(), textureStreamingMs, unsigned(vramMonitorEnabled));
 }
 
 static bool FGOverlaySaveSettingsNow() noexcept {
@@ -223,6 +235,8 @@ static bool FGOverlaySaveSettingsNow() noexcept {
     swprintf_s(experimentalText, L"%u", IsRTX40MFGRequested() ? 1u : 0u);
     wchar_t textureStreamingText[8]{};
     swprintf_s(textureStreamingText,L"%u",GetFGTextureStreamingBudgetMs());
+    wchar_t vramMonitorText[8]{};
+    swprintf_s(vramMonitorText,L"%u",IsFGVramMonitorEnabled()?1u:0u);
     wchar_t bindingText[16]{};
     swprintf_s(bindingText, L"%u", fgOverlayToggleKey);
     wchar_t modeText[16]{};
@@ -234,13 +248,14 @@ static bool FGOverlaySaveSettingsNow() noexcept {
     swprintf_s(rrEnabledText, L"%u", control_rr::RRUserRequested() ? 1u : 0u);
     swprintf_s(rrPresetText, L"%u", control_rr::RRUserPresetValue());
 
-    bool ok = WritePrivateProfileStringW(L"ControlFG", L"Schema", L"9", fgOverlaySettingsPath.c_str()) != FALSE;
+    bool ok = WritePrivateProfileStringW(L"ControlFG", L"Schema", L"10", fgOverlaySettingsPath.c_str()) != FALSE;
     ok = (WritePrivateProfileStringW(L"FrameGeneration", L"Mode", modeText, fgOverlaySettingsPath.c_str()) != FALSE) && ok;
     ok = (WritePrivateProfileStringW(L"FrameGeneration", L"DynamicTargetFPS", targetText, fgOverlaySettingsPath.c_str()) != FALSE) && ok;
     ok = (WritePrivateProfileStringW(L"RayReconstruction", L"Enabled", rrEnabledText, fgOverlaySettingsPath.c_str()) != FALSE) && ok;
     ok = (WritePrivateProfileStringW(L"RayReconstruction", L"Preset", rrPresetText, fgOverlaySettingsPath.c_str()) != FALSE) && ok;
     ok = (WritePrivateProfileStringW(L"RayReconstruction", L"ReflectionClamp", clampText, fgOverlaySettingsPath.c_str()) != FALSE) && ok;
     ok = (WritePrivateProfileStringW(L"Overlay", L"ToggleKey", bindingText, fgOverlaySettingsPath.c_str()) != FALSE) && ok;
+    ok = (WritePrivateProfileStringW(L"Overlay", L"VramMonitorEnabled", vramMonitorText, fgOverlaySettingsPath.c_str()) != FALSE) && ok;
     ok = (WritePrivateProfileStringW(L"Experimental", L"RTX40MultiFG", experimentalText, fgOverlaySettingsPath.c_str()) != FALSE) && ok;
     ok = (WritePrivateProfileStringW(L"Experimental", L"TextureStreamingBudgetMs", textureStreamingText, fgOverlaySettingsPath.c_str()) != FALSE) && ok;
     // Old experimental RR/AA settings are intentionally removed; FG settings remain intact.
@@ -249,9 +264,9 @@ static bool FGOverlaySaveSettingsNow() noexcept {
     WritePrivateProfileStringW(L"RayReconstruction", L"SkinPreserveNative", nullptr, fgOverlaySettingsPath.c_str());
     if (ok) WritePrivateProfileStringW(nullptr, nullptr, nullptr, fgOverlaySettingsPath.c_str());
 
-    Log("FG_SETTINGS_SAVE success=%u path=%ls selection=%s selected_code=%u target_policy=%s manual_target_fps=%u rr_enabled=%u rr_preset=%s rr_preset_value=%u texture_streaming_ms=%u schema=9 ui=fg_full_rr_toggle_model_E_F",
+    Log("FG_SETTINGS_SAVE success=%u path=%ls selection=%s selected_code=%u target_policy=%s manual_target_fps=%u rr_enabled=%u rr_preset=%s rr_preset_value=%u texture_streaming_ms=%u vram_monitor=%u schema=10 ui=fg_full_rr_toggle_model_E_F",
         unsigned(ok), fgOverlaySettingsPath.c_str(), GetFGSelectionName(GetFGUserMultiplier()), GetFGUserMultiplier(),
-        GetFGDynamicManualTargetFps() ? "manual" : "auto", GetFGDynamicManualTargetFps(), unsigned(control_rr::RRUserRequested()), control_rr::RRUserPresetLabel(), control_rr::RRUserPresetValue(), GetFGTextureStreamingBudgetMs());
+        GetFGDynamicManualTargetFps() ? "manual" : "auto", GetFGDynamicManualTargetFps(), unsigned(control_rr::RRUserRequested()), control_rr::RRUserPresetLabel(), control_rr::RRUserPresetValue(), GetFGTextureStreamingBudgetMs(), unsigned(IsFGVramMonitorEnabled()));
     if (ok) fgOverlaySettingsSavedPulseUntilMs = GetTickCount64() + 1200ull;
     return ok;
 }
@@ -605,6 +620,18 @@ static void PaintFGOverlay(HWND hwnd) noexcept {
         SelectObject(dc, buttonFont);
         PaintFGButton(dc, RECT{30, 325, 270, 375}, L"Reset to F10", false);
 
+        const bool vramEnabled=IsFGVramMonitorEnabled();
+        PaintFGRect(dc,RECT{330,337,356,363},RGB(0,0,0),RGB(232,232,232));
+        if(vramEnabled){
+            HPEN vramCheckPen=CreatePen(PS_SOLID,3,RGB(246,246,246));
+            HGDIOBJ oldVramCheckPen=SelectObject(dc,vramCheckPen);
+            MoveToEx(dc,335,349,nullptr);LineTo(dc,341,356);LineTo(dc,352,343);
+            SelectObject(dc,oldVramCheckPen);DeleteObject(vramCheckPen);
+        }
+        SelectObject(dc,bodyFont);SetTextColor(dc,RGB(246,246,246));
+        RECT vramLabel{370,327,710,373};
+        DrawTextW(dc,L"Show VRAM usage monitor",-1,&vramLabel,DT_LEFT|DT_VCENTER|DT_SINGLELINE);
+
         const bool editable = IsFGRtx40Series();
         SelectObject(dc, sectionFont); SetTextColor(dc, RGB(255, 32, 32));
         RECT experimentalTitle{30, 390, 710, 422};
@@ -928,6 +955,12 @@ static LRESULT CALLBACK FGOverlayWndProc(HWND hwnd, UINT message, WPARAM wParam,
                 FGOverlayMarkSettingsDirty();
                 FGOverlayFlushSettingsIfDue(true);
                 fgOverlayBindingMessage = fgOverlaySettingsDirty ? L"F10 restored for this session. Saving failed; retrying." : L"Shortcut restored to F10 and saved.";
+            } else if (x >= 320 && x < 710 && y >= 325 && y < 375) {
+                const bool enabled=!IsFGVramMonitorEnabled();
+                SetFGVramMonitorEnabled(enabled);
+                FGOverlayMarkSettingsDirty();
+                FGOverlayFlushSettingsIfDue(true);
+                Log("VRAM_MONITOR_SETTING enabled=%u persistence=%s",unsigned(enabled),fgOverlaySettingsDirty?"retry":"saved");
             } else if (IsFGRtx40Series() && x >= 30 && x < 710 && y >= 437 && y < 475) {
                 fgOverlayBindingCapture = false;
                 const bool requested = !IsRTX40MFGRequested();
@@ -1404,7 +1437,8 @@ static DWORD WINAPI FGOverlayThreadProc(LPVOID) noexcept {
             static bool vramMonitorShown=false;
             static ULONGLONG vramMonitorLastPaintMs=0;
             if(vramMonitor){
-                if(gameForeground){
+                const bool shouldShowVram=gameForeground&&IsFGVramMonitorEnabled();
+                if(shouldShowVram){
                     PositionFGVramProbe(vramMonitor,game);
                     if(!vramMonitorShown){ShowWindow(vramMonitor,SW_SHOWNOACTIVATE);vramMonitorShown=true;}
                     if(!vramMonitorLastPaintMs||now-vramMonitorLastPaintMs>=250){
