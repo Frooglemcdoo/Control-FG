@@ -1,6 +1,6 @@
 # GOG compatibility
 
-The GOG EXE identity beginning `57A8912F` is supported in v2.1.1. Its D3D and renderer DLLs match the verified Steam files byte-for-byte. The unified R3 build was user-tested on GOG. **Disable Galaxy's in-game overlay for Control**; see [installation instructions](../INSTALL.md#gog-galaxy-disable-the-overlay-for-control). The collector below remains available for investigating other builds.
+The GOG EXE identity beginning `57A8912F` is supported in v2.1.2. Its D3D and renderer DLLs match the verified Steam files byte-for-byte. The unified R3 build was user-tested on GOG. **Disable Galaxy's in-game overlay for Control**; see [installation instructions](../INSTALL.md#gog-galaxy-disable-the-overlay-for-control). The collector below remains available for investigating other builds.
 
 Run:
 
