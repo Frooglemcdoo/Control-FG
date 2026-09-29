@@ -378,12 +378,12 @@ static void ProbeVideoMemory(unsigned long long call,unsigned long long present,
     constexpr unsigned long long MiB=1024ull*1024ull;
     Log("VRAM_PROBE call=%llu present=%llu reason=%s hdr_known=%u hdr_enabled=%u rr_requested=%u "
         "local_budget_mib=%llu local_usage_mib=%llu local_peak_mib=%llu dedicated_video_mib=%llu "
-        "rr_streamline_resident=%u rr_alt_releases=%llu d1_capture=disabled exception=0x%08lX",
+        "rr_streamline_resident=%u rr_streamline_free_successes=%llu d1_capture=disabled exception=0x%08lX",
         call,present,reason?reason:"unknown",hdrKnown,hdrEnabled,unsigned(control_rr::RRUserRequested()),
         SUCCEEDED(localHr)?local.Budget/MiB:0ull,SUCCEEDED(localHr)?local.CurrentUsage/MiB:0ull,
         vramProbePeakLocalUsageBytes.load(std::memory_order_relaxed)/MiB,
         SUCCEEDED(descHr)?static_cast<unsigned long long>(adapterDesc.DedicatedVideoMemory)/MiB:0ull,
-        rr20pResourcesResident.load(std::memory_order_acquire),rrPresetLiveReleases.load(std::memory_order_relaxed),fault);
+        rr20pResourcesResident.load(std::memory_order_acquire),rr20pResourceFreeSuccesses.load(std::memory_order_relaxed),fault);
     __try{if(adapter)adapter->Release();}__except(EXCEPTION_EXECUTE_HANDLER){}
     __try{if(factory)factory->Release();}__except(EXCEPTION_EXECUTE_HANDLER){}
     __try{if(device)device->Release();}__except(EXCEPTION_EXECUTE_HANDLER){}
@@ -652,47 +652,7 @@ static void HookBegin() {
     if (trace) Log("BEGIN_RETURN count=%llu aa=%llu present=%llu hud_render=%llu", count, aaCount.load(), presentCount.load(), hudRenderCount.load());
 }
 
-static void RRVramLifecycleAfterPresent(unsigned long long present) noexcept {
-    static unsigned int offStablePresents=0;
-    static unsigned long long waitLogs=0;
-    if(control_rr::RRUserRequested()){
-        offStablePresents=0;
-        return;
-    }
-    if(offStablePresents<0xffffffffu)++offStablePresents;
-    if(offStablePresents<3)return;
-
-    if(!RRNativeEpochOldWorkRetired()){
-        const auto n=++waitLogs;
-        if(n<=4||(n&(n-1))==0)
-            Log("RR_VRAM_TEARDOWN_WAIT present=%llu stage=old_work_retirement off_stable=%u wait_count=%llu",
-                present,offStablePresents,n);
-        return;
-    }
-    if(!RR20PFreeStreamlineResources("rr_off_retired",present)){
-        const auto n=++waitLogs;
-        if(n<=4||(n&(n-1))==0)
-            Log("RR_VRAM_TEARDOWN_WAIT present=%llu stage=streamline_free off_stable=%u wait_count=%llu",
-                present,offStablePresents,n);
-        return;
-    }
-
-    RRNativeReleaseInactiveAlternates(0,"rr_off_retired");
-    const bool guidesReleased=RRLiveReleaseForRROff(present);
-    if(!guidesReleased){
-        const auto n=++waitLogs;
-        if(n<=4||(n&(n-1))==0)
-            Log("RR_VRAM_TEARDOWN_WAIT present=%llu stage=owned_guides off_stable=%u wait_count=%llu",
-                present,offStablePresents,n);
-        return;
-    }
-    if(offStablePresents==3||waitLogs){
-        Log("RR_VRAM_TEARDOWN_COMPLETE present=%llu off_stable=%u streamline_resident=%u alternate_releases=%llu guide_owner=%p",
-            present,offStablePresents,rr20pResourcesResident.load(std::memory_order_acquire),
-            rrPresetLiveReleases.load(std::memory_order_relaxed),rrLive);
-        waitLogs=0;
-    }
-}
+static void RRVramLifecycleAfterPresent(unsigned long long present) noexcept;
 
 static void HookPresent() {
     auto count = ++presentCount;
@@ -951,6 +911,49 @@ static bool Exchange(Patch& p, bool install) {
 #include "rr_native_guides.h"
 #include "rr_skin_mask_runtime.h"
 #include "rr_evaluation_entry.h"
+
+static void RRVramLifecycleAfterPresent(unsigned long long present) noexcept {
+    static unsigned int offStablePresents=0;
+    static unsigned long long waitLogs=0;
+    if(control_rr::RRUserRequested()){
+        offStablePresents=0;
+        return;
+    }
+    if(offStablePresents<0xffffffffu)++offStablePresents;
+    if(offStablePresents<3)return;
+
+    if(!RRNativeEpochOldWorkRetired()){
+        const auto n=++waitLogs;
+        if(n<=4||(n&(n-1))==0)
+            Log("RR_VRAM_TEARDOWN_WAIT present=%llu stage=old_work_retirement off_stable=%u wait_count=%llu",
+                present,offStablePresents,n);
+        return;
+    }
+    if(!RR20PFreeStreamlineResources("rr_off_retired",present)){
+        const auto n=++waitLogs;
+        if(n<=4||(n&(n-1))==0)
+            Log("RR_VRAM_TEARDOWN_WAIT present=%llu stage=streamline_free off_stable=%u wait_count=%llu",
+                present,offStablePresents,n);
+        return;
+    }
+
+    RRNativeReleaseInactiveAlternates(0,"rr_off_retired");
+    const bool guidesReleased=RRLiveReleaseForRROff(present);
+    if(!guidesReleased){
+        const auto n=++waitLogs;
+        if(n<=4||(n&(n-1))==0)
+            Log("RR_VRAM_TEARDOWN_WAIT present=%llu stage=owned_guides off_stable=%u wait_count=%llu",
+                present,offStablePresents,n);
+        return;
+    }
+    if(offStablePresents==3||waitLogs){
+        Log("RR_VRAM_TEARDOWN_COMPLETE present=%llu off_stable=%u streamline_resident=%u streamline_free_successes=%llu guide_owner=%p",
+            present,offStablePresents,rr20pResourcesResident.load(std::memory_order_acquire),
+            rr20pResourceFreeSuccesses.load(std::memory_order_relaxed),rrLive);
+        waitLogs=0;
+    }
+}
+
 #include "rr_reflection_hooks.h"
 
 static unsigned int InstallRRObservationHooks(HMODULE renderer, HMODULE d3d) noexcept {
