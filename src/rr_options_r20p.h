@@ -20,6 +20,7 @@ static std::atomic<unsigned int> rr20pOptionsRebuilds{0};
 static std::atomic<unsigned int> rr20pResourcesResident{0};
 static std::atomic<unsigned long long> rr20pResourceFreeAttempts{0};
 static std::atomic<unsigned long long> rr20pResourceFreeSuccesses{0};
+static std::atomic<unsigned long long> rr20pResourceFreeNotOwned{0};
 static SRWLOCK rr20pOptionsLock = SRWLOCK_INIT;
 static RR20POptionsSignature rr20pOptionsSignature{};
 static bool rr20pOptionsSignatureValid=false;
@@ -66,14 +67,25 @@ static bool RR20PFreeStreamlineResources(const char* reason,unsigned long long f
     const auto attempt=rr20pResourceFreeAttempts.fetch_add(1,std::memory_order_relaxed)+1;
     const sl::Result result=slFreeResourcesApi(sl::kFeatureDLSS_RR,slFgViewport);
     const bool success=result==sl::Result::eOk;
+    const bool nativeOwned=result==sl::Result::eErrorInvalidParameter;
     if(success){
         rr20pResourcesResident.store(0,std::memory_order_release);
         rr20pResourceFreeSuccesses.fetch_add(1,std::memory_order_relaxed);
+    }else if(nativeOwned){
+        // This integration uses Streamline for DLSSD option/state negotiation
+        // but Control evaluates the native NGX feature itself. No Streamline
+        // slEvaluateFeature instance exists for this viewport, so 2.14.1
+        // returns eErrorInvalidParameter from slFreeResources. Treat that as a
+        // terminal non-owner result and let the native cache lifecycle free the
+        // actual NGX feature instead of retrying every Present.
+        rr20pResourcesResident.store(0,std::memory_order_release);
+        rr20pResourceFreeNotOwned.fetch_add(1,std::memory_order_relaxed);
     }
-    Log("SL_RR_RESOURCES_FREE frame_or_present=%llu reason=%s attempt=%llu result=%lld success=%u resident_after=%u free_successes=%llu",
-        frameOrPresent,reason?reason:"unknown",attempt,SLResultCode(result),unsigned(success),
-        rr20pResourcesResident.load(std::memory_order_acquire),rr20pResourceFreeSuccesses.load(std::memory_order_relaxed));
-    return success;
+    Log("SL_RR_RESOURCES_FREE frame_or_present=%llu reason=%s attempt=%llu result=%lld success=%u native_owned=%u resident_after=%u free_successes=%llu nonowner_results=%llu",
+        frameOrPresent,reason?reason:"unknown",attempt,SLResultCode(result),unsigned(success),unsigned(nativeOwned),
+        rr20pResourcesResident.load(std::memory_order_acquire),rr20pResourceFreeSuccesses.load(std::memory_order_relaxed),
+        rr20pResourceFreeNotOwned.load(std::memory_order_relaxed));
+    return success||nativeOwned;
 }
 
 static sl::DLSSDPreset RR20PSelectedPreset() noexcept {
