@@ -1136,9 +1136,15 @@ static BOOL CALLBACK Configure(PINIT_ONCE, PVOID, PVOID*) noexcept {
         Log("RR_TEMPORAL_ACCESS_INSTALL ready=%u reflection_geometry_capture=0 hit_distance_runtime=0 specular_mvec_runtime=0 rr_eval=warmup_then_native",unsigned(temporalAccessReady));
         // VRAM lifecycle probe: D1 hit-distance is optional. Its three-slot
         // material/position capture costs ~1.87 GiB at 4K, so keep temporal
-        // access but do not install the capture hook in this build.
-        const bool distanceHooksReady=temporalAccessReady&&false&&RRReflectionInstall(renderer,d3d);
-        Log("RR_F_DISTANCE_D1_INSTALL ready=%u capture=disabled_vram_lifecycle_r1 fallback=unbound saved_vram=full_array_capture",unsigned(distanceHooksReady));
+        // access but leave the capture hook disabled by default. A runtime-only
+        // environment gate keeps the validated D1 code linked without enabling it.
+        wchar_t d1VramProbeValue[8]{};
+        const DWORD d1VramProbeLength=GetEnvironmentVariableW(
+            L"CONTROLFG_RR_VRAM_ENABLE_D1",d1VramProbeValue,_countof(d1VramProbeValue));
+        const bool d1VramProbeEnabled=d1VramProbeLength>0&&d1VramProbeLength<_countof(d1VramProbeValue)&&d1VramProbeValue[0]!=L'0';
+        const bool distanceHooksReady=temporalAccessReady&&d1VramProbeEnabled&&RRReflectionInstall(renderer,d3d);
+        Log("RR_F_DISTANCE_D1_INSTALL ready=%u capture=%s fallback=unbound saved_vram=full_array_capture vram_probe_default=disabled",
+            unsigned(distanceHooksReady),d1VramProbeEnabled?"enabled_by_env":"disabled_vram_lifecycle_r1");
         // Load persisted RR preset before the native feature-create hook can be consumed.
         // StartFGOverlay() later reuses this already-loaded settings state.
         FGOverlayLoadSettings();
