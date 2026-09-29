@@ -1,9 +1,9 @@
-name: Build RR VRAM cache-layout R3
+name: Build RR VRAM preset-epoch R4
 
 on:
   push:
     branches:
-      - probe/rr-vram-cache-layout-r3
+      - probe/rr-vram-preset-epoch-r4
     paths:
       - ".github/workflows/build-rr-vram-lifecycle-r1.yml"
       - "src/probe.cpp"
@@ -76,19 +76,19 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           $src = 'release/Control-FG-v2.1.1.zip'
-          $dst = 'Control-FG-v2.1.1-RR-VRAM-CacheLayout-R3.zip'
+          $dst = 'Control-FG-v2.1.1-RR-VRAM-PresetEpoch-R4.zip'
           if (-not (Test-Path -LiteralPath $src)) { throw 'Expected release package was not produced.' }
           Copy-Item -LiteralPath $src -Destination $dst
           (Get-FileHash -LiteralPath $dst -Algorithm SHA256).Hash.ToLowerInvariant() |
-            Set-Content -LiteralPath 'Control-FG-v2.1.1-RR-VRAM-CacheLayout-R3.sha256' -Encoding ASCII
+            Set-Content -LiteralPath 'Control-FG-v2.1.1-RR-VRAM-PresetEpoch-R4.sha256' -Encoding ASCII
 
       - name: Upload test package
         uses: actions/upload-artifact@v4
         with:
-          name: Control-FG-v2.1.1-RR-VRAM-CacheLayout-R3
+          name: Control-FG-v2.1.1-RR-VRAM-PresetEpoch-R4
           path: |
-            Control-FG-v2.1.1-RR-VRAM-CacheLayout-R3.zip
-            Control-FG-v2.1.1-RR-VRAM-CacheLayout-R3.sha256
+            Control-FG-v2.1.1-RR-VRAM-PresetEpoch-R4.zip
+            Control-FG-v2.1.1-RR-VRAM-PresetEpoch-R4.sha256
             build/build-validation.json
             Build.log
           if-no-files-found: error
