@@ -1,12 +1,13 @@
-# Known issues — v2.1.1
+# Known issues — v2.1.2
 
-## RTX 40-series Multi Frame Generation on NVIDIA 617.14 / DLSS-G 310.9.1
+## RTX 40-series experimental Multi Frame Generation
 
-Recent RTX 40-series reports show the experimental 3×+ path can fail on NVIDIA driver **617.14** while DLSS-G **310.9.1** is active. The captured Streamline/NGX log fails in `EndpointCoreInputs::ComputeAndValidateTimeFactor` with:
+v2.1.2 includes the NVIDIA 617.14 / DLSS-G 310.9.1 compatibility path for the host-side device-policy check that previously rejected some 3×+ requests with `Found count (2) but expected (1)`.
 
-`Multi frame is not supported on this device. Found count (2) but expected (1)`
+The compatibility patch is installed only when **Enable RTX 40-series Multi Frame Generation** is enabled before startup. Once installed, it remains active for the lifetime of that Control process, even if FG is temporarily changed to Off or 2×. Disable the experimental option and restart Control to return to the untouched native NVIDIA 2× path. RTX 50-series never uses this patch.
 
-Control FG's current 40-series path already validates Ada hardware and patches the temporal/midpoint path, but this newer provider adds a host-side device-policy validation that is not yet handled by the public experimental unlock. **Use Off or 2× if affected.** A compatibility update is being developed around the newer validated provider path; it will fail closed to 2× if the expected 310.9.1 contract cannot be confirmed.
+The feature remains experimental. If the exact expected provider contract is not found, Control FG fails closed instead of applying the patch.
+
 
 ## Experimental texture streaming
 
