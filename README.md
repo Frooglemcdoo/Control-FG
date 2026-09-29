@@ -6,7 +6,7 @@
 
 Unlike a generic graphics injection layer, Control FG is **game-specific and engine-aware**. *Control* does not expose a native Frame Generation integration for the mod to translate, so the project reconstructs the inputs FG and RR need directly from the game's renderer: frame boundaries, depth and motion vectors, camera/jitter state, pre-UI scene color, ray-tracing resources, HDR state, and presentation timing.
 
-> **Current release:** [v2.1.1](https://github.com/Frooglemcdoo/Control-FG/releases/tag/v2.1.1)
+> **Current release:** [v2.1.2](https://github.com/Frooglemcdoo/Control-FG/releases/tag/v2.1.2)
 >
 > **Supported storefronts:** Steam, Epic Games Store, and GOG — DirectX 12
 >
@@ -26,7 +26,9 @@ A big shoutout and thank you to **speedlemur** for the core Ray Reconstruction i
 
 [Watch Control FG – App and Overlay Demonstration on YouTube](https://youtu.be/aP7UeCSx00c)
 
-## What's new in v2.1.1
+## What's new in v2.1.2
+
+- **RTX 40-series Multi Frame Generation compatibility update:** adds the newer DLSS-G 310.9.1 host-side device-policy patch used by NVIDIA driver 617.14. The patch validates the exact `EndpointCoreInputs::ComputeAndValidateTimeFactor` contract, bypasses only the unsupported-device branch, retains the provider's bounded count/index/resource validation, and fails closed if the expected contract is not found.
 
 - **Experimental Texture Streaming controls** are now available under **Options → Experimental** with **Off, 4 ms, 6 ms, and 8 ms** texture-request budgets. Off restores Control's native behavior. Higher budgets can improve texture/LOD loading, but **adjusting this can cause traversal stutter**.
 - Added a persistent **Show VRAM usage monitor** checkbox in Options.
@@ -55,7 +57,7 @@ A big shoutout and thank you to **speedlemur** for the core Ray Reconstruction i
 
 ## Known issues
 
-**RTX 40-series Multi Frame Generation on newer NVIDIA drivers:** recent RTX 40-series reports on NVIDIA driver **617.14** with DLSS-G **310.9.1** show the experimental 3×+ path can be rejected inside `EndpointCoreInputs::ComputeAndValidateTimeFactor` with `Multi frame is not supported on this device. Found count (2) but expected (1)`. The current experimental unlock already handles the Ada architecture/temporal path, but the newer provider adds a host-side device-policy validation that is not yet patched. **Off/2× remains the safe fallback while this compatibility update is being worked on.** The planned fix will validate the exact 310.9.1 function contract and fail closed to 2× if it cannot be matched safely.
+**RTX 40-series experimental MFG:** v2.1.2 includes the DLSS-G 310.9.1 / NVIDIA 617.14 compatibility path. The compatibility patch is loaded only when **Enable RTX 40-series Multi Frame Generation** is enabled before launch. Once loaded, it remains active for the lifetime of that game process, even if FG is temporarily set to Off or 2×. Disable the experimental option and restart Control to return to the untouched native NVIDIA 2× path. RTX 50-series never uses this patch.
 
 **GOG Galaxy overlay conflict:** Galaxy's in-game overlay can cause input/focus stalls and make Control FG or other overlays disappear. Disable it for Control using the [steps below](#gog-disable-galaxys-in-game-overlay).
 
@@ -137,13 +139,13 @@ That game-specific data is shared across the FG and RR integrations instead of t
 
 Control FG's current public release relies on NVIDIA DLSS Frame Generation support.
 
-On **GeForce RTX 40-series**, **Off and 2x** remain the default. Enable **experimental RTX 40-series MFG** in Options and restart Control to use the extended path. Availability remains subject to runtime capability checks. On hardware that reports Multi Frame Generation support, the overlay exposes modes up to the supported maximum, currently capped by the UI at **6x**, plus Dynamic MFG when supported.
+On **GeForce RTX 40-series**, **Off and 2x** remain the default. Enable **experimental RTX 40-series MFG** in Options and restart Control to use the extended path. v2.1.2 includes the DLSS-G 310.9.1 / NVIDIA 617.14 host-device-policy compatibility fix. The patch is only installed when the experimental option is enabled at startup and remains active until the game is restarted. Availability remains subject to runtime capability checks. On hardware that reports Multi Frame Generation support, the overlay exposes modes up to the supported maximum, currently capped by the UI at **6x**, plus Dynamic MFG when supported.
 
 A current NVIDIA driver is strongly recommended. Hardware-accelerated GPU scheduling (HAGS) should be enabled if DLSS Frame Generation is unavailable on otherwise supported hardware.
 
 ## Install — Steam, Epic Games Store, and GOG
 
-Download **`Control-FG-v2.1.1.zip`** from the [release assets](https://github.com/Frooglemcdoo/Control-FG/releases/tag/v2.1.1). This is the same deployment package for all three stores; the source ZIP requires compilation.
+Download **`Control-FG-v2.1.2.zip`** from the [release assets](https://github.com/Frooglemcdoo/Control-FG/releases/tag/v2.1.2). This is the same deployment package for all three stores; the source ZIP requires compilation.
 
 Close Control, then locate the folder containing **`Control_DX12.exe`**:
 
