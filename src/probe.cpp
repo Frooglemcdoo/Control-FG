@@ -136,6 +136,71 @@ static bool HashMatches(HMODULE module, const char* expected) {
 #include "streamline_bridge.h"
 static HRESULT SubmitFGUIRecompositionBeforePresent(unsigned long long present) noexcept;
 #include "hdr10_bridge.h"
+
+// Experimental texture-streaming control recovered from the validated P6 R1/R2/R3
+// tests. Non-OFF modes keep the proven 16 update slices and vary only the
+// per-update texture-request budget: 4 ms, 6 ms, or 8 ms. OFF restores Control's
+// native 1 ms budget and 8 update slices.
+static constexpr size_t kTextureStreamingBudgetRva = 0x9186A0;
+static constexpr size_t kTextureStreamingSlicesRva = 0x919010;
+
+static bool TextureStreamingKnownBudget(float value) noexcept {
+    const auto nearValue=[value](float target) noexcept {
+        const float d=value-target;
+        return d>-0.01f&&d<0.01f;
+    };
+    return nearValue(1.0f)||nearValue(4.0f)||nearValue(6.0f)||nearValue(8.0f);
+}
+
+static unsigned int NormalizeTextureStreamingExperimentalMs(unsigned int value) noexcept {
+    return value==4u||value==6u||value==8u ? value : 0u;
+}
+
+static bool ApplyTextureStreamingExperimental(unsigned int requestedMs) noexcept {
+    requestedMs=NormalizeTextureStreamingExperimentalMs(requestedMs);
+    if(!verifiedRenderer){
+        Log("TEXTURE_EXPERIMENTAL_APPLY requested_ms=%u success=0 reason=renderer_unavailable",requestedMs);
+        return false;
+    }
+
+    const float targetBudget=requestedMs?static_cast<float>(requestedMs):1.0f;
+    const int targetSlices=requestedMs?16:8;
+    __try {
+        auto* budget=reinterpret_cast<float*>(reinterpret_cast<unsigned char*>(verifiedRenderer)+kTextureStreamingBudgetRva);
+        auto* slices=reinterpret_cast<int*>(reinterpret_cast<unsigned char*>(verifiedRenderer)+kTextureStreamingSlicesRva);
+        const float previousBudget=*budget;
+        const int previousSlices=*slices;
+        if(!TextureStreamingKnownBudget(previousBudget)||(previousSlices!=8&&previousSlices!=16)){
+            Log("TEXTURE_EXPERIMENTAL_APPLY requested_ms=%u success=0 reason=unexpected_native_state budget_rva=0x%zX observed_budget_ms=%.3f slices_rva=0x%zX observed_slices=%d allowed_budget=1,4,6,8 allowed_slices=8,16",
+                requestedMs,kTextureStreamingBudgetRva,double(previousBudget),kTextureStreamingSlicesRva,previousSlices);
+            return false;
+        }
+
+        *budget=targetBudget;
+        *slices=targetSlices;
+        MemoryBarrier();
+
+        const float appliedBudget=*budget;
+        const int appliedSlices=*slices;
+        const float delta=appliedBudget-targetBudget;
+        const bool ok=delta>-0.01f&&delta<0.01f&&appliedSlices==targetSlices;
+        if(!ok){
+            *budget=previousBudget;
+            *slices=previousSlices;
+            MemoryBarrier();
+        }
+
+        Log("TEXTURE_EXPERIMENTAL_APPLY requested_ms=%u mode=%s success=%u previous_budget_ms=%.3f previous_slices=%d applied_budget_ms=%.3f applied_slices=%d target_budget_ms=%.3f target_slices=%d source=p6_r1_r2_r3 traversal_stutter_warning=1 pool=native lod=native residency=native async=native",
+            requestedMs,requestedMs?"experimental":"off",unsigned(ok),double(previousBudget),previousSlices,
+            double(appliedBudget),appliedSlices,double(targetBudget),targetSlices);
+        return ok;
+    } __except(EXCEPTION_EXECUTE_HANDLER) {
+        Log("TEXTURE_EXPERIMENTAL_APPLY requested_ms=%u success=0 reason=exception exception=0x%08lX",
+            requestedMs,GetExceptionCode());
+        return false;
+    }
+}
+
 #include "fg_overlay.h"
 
 static void OpenLog() {
@@ -159,6 +224,7 @@ static void OpenLog() {
     Log("CAPABILITIES fg=fixed_2x_to_6x_plus_dynamic rr=models_E_F_default_F hdr10_bridge=1 rr_guides=gbuffer_material_envbrdf rr_hit_distance=off rr_specular_mvec=off rr_diagnostic_readbacks=off streamline_sdk=2.14.1");
     Log("MONITORING profile=%s rr_perf_sample=240 support_events=startup_settings_fg_rr_model_resize_recovery_failures_fallbacks_performance verbose_env=CONTROLFG_VERBOSE_LOG",verboseAuditLogging?"verbose_audit":"release_support");
     Log("RR_VRAM_LIFECYCLE build=R4 base=v2.1.1 clean_release_tag=1 d1_capture=disabled native_rr_cache=single_live_extent preset_switch=full_native_feature_epoch cache_layout=key_feature_parameters state_layout=feature_parameters release_old_extent_after_fence=1 lazy_recreate_cached_extent=1 streamline_free=nonowning_options_only owned_guides_release=rr_off");
+    Log("TEXTURE_EXPERIMENTAL_CONFIG build=R1 options=off,4ms,6ms,8ms off=native_1ms_8slices enabled=16slices source=p6_r1_r2_r3 live_switch=1 warning=traversal_stutter");
 }
 
 // +0x88 was observed at multiple resource loads in the hash-locked doAntiAliasing
@@ -1328,6 +1394,11 @@ static BOOL CALLBACK Configure(PINIT_ONCE, PVOID, PVOID*) noexcept {
         // Load persisted RR preset before the native feature-create hook can be consumed.
         // StartFGOverlay() later reuses this already-loaded settings state.
         FGOverlayLoadSettings();
+        const unsigned int textureStreamingRequestedMs=GetFGTextureStreamingBudgetMs();
+        const bool textureStreamingApplied=ApplyTextureStreamingExperimental(textureStreamingRequestedMs);
+        if(!textureStreamingApplied)SetFGTextureStreamingBudgetMs(0u);
+        Log("TEXTURE_EXPERIMENTAL_STARTUP requested_ms=%u applied=%u effective_ms=%u options=off,4,6,8 update_slices=off8_on16 traversal_stutter_warning=1",
+            textureStreamingRequestedMs,unsigned(textureStreamingApplied),GetFGTextureStreamingBudgetMs());
         const bool nativeRRReady=temporalAccessReady&&evaluationEntryReady&&albedoHooksReady&&RRNativeInstallFrame(renderer,d3d);
         Log("RR_NATIVE_EXPERIMENT_INSTALL ready=%u mode=warmup_then_native_rr fixed_resolution=1",unsigned(nativeRRReady));
         StartFGOverlay();
