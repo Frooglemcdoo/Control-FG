@@ -158,7 +158,7 @@ static void OpenLog() {
     Log("PROBE v2.1.1 internal_build=2.1.1 source_revision=v2.1.1-unified-storefront-r3 supported_targets=steam_21225456,epic_0.0.518.2177,gog_57a8912f frequency=%lld log_profile=%s",frequency.QuadPart,verboseAuditLogging?"verbose_audit":"release_support");
     Log("CAPABILITIES fg=fixed_2x_to_6x_plus_dynamic rr=models_E_F_default_F hdr10_bridge=1 rr_guides=gbuffer_material_envbrdf rr_hit_distance=off rr_specular_mvec=off rr_diagnostic_readbacks=off streamline_sdk=2.14.1");
     Log("MONITORING profile=%s rr_perf_sample=240 support_events=startup_settings_fg_rr_model_resize_recovery_failures_fallbacks_performance verbose_env=CONTROLFG_VERBOSE_LOG",verboseAuditLogging?"verbose_audit":"release_support");
-    Log("RR_VRAM_LIFECYCLE build=R3 base=v2.1.1 clean_release_tag=1 d1_capture=disabled native_rr_cache=single_live_extent cache_layout=key_feature_parameters state_layout=feature_parameters release_old_extent_after_fence=1 lazy_recreate_cached_extent=1 streamline_free=nonowning_options_only owned_guides_release=rr_off");
+    Log("RR_VRAM_LIFECYCLE build=R4 base=v2.1.1 clean_release_tag=1 d1_capture=disabled native_rr_cache=single_live_extent preset_switch=full_native_feature_epoch cache_layout=key_feature_parameters state_layout=feature_parameters release_old_extent_after_fence=1 lazy_recreate_cached_extent=1 streamline_free=nonowning_options_only owned_guides_release=rr_off");
 }
 
 // +0x88 was observed at multiple resource loads in the hash-locked doAntiAliasing
@@ -910,6 +910,8 @@ static bool Exchange(Patch& p, bool install) {
 #define CONTROL_FG_RR_VRAM_RESIZE_R2 1
 static bool RRNativeVramReleaseCachedRRFeaturesForResize(unsigned long long frame,
     unsigned outputWidth,unsigned outputHeight,unsigned width,unsigned height) noexcept;
+static bool RRNativeVramReleaseCachedRRFeaturesForPresetSwitch(unsigned long long frame,
+    unsigned newPreset) noexcept;
 static bool RRNativeVramRecoverCachedRRFeature(unsigned long long frame,
     unsigned outputWidth,unsigned outputHeight,unsigned width,unsigned height) noexcept;
 #include "rr_native_frame.h"
@@ -1010,6 +1012,20 @@ static bool RRNativeVramReleaseCachedRRFeaturesForResize(unsigned long long fram
     }
     if(!RRNativeReleaseInactiveAlternates(0,"resize_epoch_retired"))allOkay=false;
     return allOkay;
+}
+
+static bool RRNativeVramReleaseCachedRRFeaturesForPresetSwitch(unsigned long long frame,
+    unsigned newPreset) noexcept {
+    const bool released=RRNativeVramReleaseCachedRRFeaturesForResize(frame,0,0,0,0);
+    if(released){
+        rrPresetLastEvaluated.store(0,std::memory_order_release);
+        Log("RR_VRAM_PRESET_EPOCH_RELEASE frame=%llu new_preset=%u success=1 base_and_alternates_released=1 last_evaluated_reset=1",
+            frame,newPreset);
+    }else{
+        Log("RR_VRAM_PRESET_EPOCH_RELEASE frame=%llu new_preset=%u success=0 base_and_alternates_released=0",
+            frame,newPreset);
+    }
+    return released;
 }
 
 static bool RRNativeVramRecoverCachedRRFeature(unsigned long long frame,
