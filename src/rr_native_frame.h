@@ -147,9 +147,21 @@ static bool RRNativePresetGate(bool requested,unsigned long long frame) noexcept
   if(p.settleFrames<0xffffffffu)++p.settleFrames;
   return false;
  }
- // Old RR consumption is fenced out. Free the previous Streamline RR allocation
- // before configuring the next preset; without this, repeated E/F changes stack
- // full RR allocations and the reported estimated VRAM grows every switch.
+ // Old RR consumption is fenced out. R3 proved that releasing only the
+ // mod-owned alternate E handle is not enough: the native Control RR cache keeps
+ // the previous base feature resident and VRAM remains at the two-feature peak.
+ // Treat every live E<->F change as a full native RR feature epoch. Release the
+ // cached base feature plus all alternates, retain only the persistent NGX
+ // parameters, then recreate exactly one feature for the newly selected preset.
+#ifdef CONTROL_FG_RR_VRAM_RESIZE_R2
+ if(!RRNativeVramReleaseCachedRRFeaturesForPresetSwitch(frame,p.preset)){
+  if((p.settleFrames%8)==0)
+   Log("RR_PRESET_EPOCH_FREE_WAIT frame=%llu epoch=%llu preset=%u old_work_retired=1 native_rr_cache_released=0 aux_work_paused=1",
+    frame,p.epoch,p.preset);
+  if(p.settleFrames<0xffffffffu)++p.settleFrames;
+  return false;
+ }
+#endif
  if(!RR20PFreeStreamlineResources("preset_switch_retired",frame)){
   if((p.settleFrames%8)==0)
    Log("RR_PRESET_EPOCH_FREE_WAIT frame=%llu epoch=%llu preset=%u old_work_retired=1 streamline_resources_freed=0 aux_work_paused=1",
@@ -157,9 +169,6 @@ static bool RRNativePresetGate(bool requested,unsigned long long frame) noexcept
   if(p.settleFrames<0xffffffffu)++p.settleFrames;
   return false;
  }
- // Alternate NGX handles are mod-owned. Once the old epoch is fenced out,
- // discard any alternate that is not the newly selected preset.
- RRNativeReleaseInactiveAlternates(p.preset,"preset_switch_retired");
  // Keep auxiliary work paused, but open a narrow Streamline-options window so
  // the requested preset can be configured while RR evaluation remains disabled.
  p.releasePending=true;
