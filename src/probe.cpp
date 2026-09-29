@@ -1067,6 +1067,13 @@ static void RRVramLifecycleAfterPresent(unsigned long long present) noexcept {
                 present,offStablePresents,n);
         return;
     }
+    if(!RRNativeVramReleaseCachedRRFeaturesForResize(present,0,0,0,0)){
+        const auto n=++waitLogs;
+        if(n<=4||(n&(n-1))==0)
+            Log("RR_VRAM_TEARDOWN_WAIT present=%llu stage=native_cache_release off_stable=%u wait_count=%llu",
+                present,offStablePresents,n);
+        return;
+    }
     if(!RR20PFreeStreamlineResources("rr_off_retired",present)){
         const auto n=++waitLogs;
         if(n<=4||(n&(n-1))==0)
