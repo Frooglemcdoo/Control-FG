@@ -1,4 +1,4 @@
-# Nexus Mods publishing copy — v2.1.1
+# Nexus Mods publishing copy — v2.1.2
 
 ## Mod name
 
@@ -10,7 +10,7 @@ Adds engine-aware NVIDIA DLSS Frame Generation to Control (DX12), including fixe
 
 ## Main description
 
-**v2.1.1 supports Steam, Epic Games Store, and GOG in one download. This update also adds experimental texture-streaming controls and fixes a major RR VRAM-lifetime bug. GOG users must disable Galaxy's in-game overlay for Control; see the steps below.**
+**v2.1.2 supports Steam, Epic Games Store, and GOG in one download. This update fixes major RR VRAM retention, adds experimental texture-streaming controls and a VRAM monitor toggle, and adds NVIDIA 617.14 / DLSS-G 310.9.1 compatibility for experimental RTX 40-series Multi Frame Generation. GOG users must disable Galaxy's in-game overlay for Control; see the steps below.**
 
 ### Control FG
 
@@ -50,7 +50,7 @@ This is not meant to replace OptiScaler, ReShade, Lossless Scaling, or other bro
 - **F10 Control-style overlay** with mode, effective multiplier, current FPS, HDR state and GPU maximum.
 - **Stable HUD/UI handling** using a real Control pre-UI scene capture.
 - Overlay starts hidden and settings are saved automatically.
-- **RTX 40-series:** Off + 2x by default; experimental Multi Frame Generation is available as an opt-in in Options (restart required), subject to runtime capability checks.
+- **RTX 40-series:** Off + 2x by default; experimental Multi Frame Generation is available as an opt-in in Options (restart required). v2.1.2 adds the NVIDIA 617.14 / DLSS-G 310.9.1 host-device-policy compatibility path for 3x–6x.
 - **DLSS Ray Reconstruction:** Model F by default, with live E/F selection and a dedicated reflection clamp settings page.
 - **Experimental Texture Streaming:** Off / 4 ms / 6 ms / 8 ms request budgets under Options → Experimental. Higher values can improve texture/LOD loading but **can cause traversal stutter**.
 - Optional persistent **VRAM usage monitor** toggle in Options.
@@ -78,7 +78,7 @@ The goal is to expose the backend choice directly in the Control FG overlay. Thi
 
 ### Installation — Steam, Epic Games Store, and GOG
 
-1. Close Control and download `Control-FG-v2.1.1.zip`.
+1. Close Control and download `Control-FG-v2.1.2.zip`.
 2. Open the folder containing `Control_DX12.exe`:
    - **Steam:** Library → right-click Control → Manage → Browse local files.
    - **Epic:** Library → Control's three-dot menu → Manage → folder icon beside Installation.
@@ -109,7 +109,7 @@ Close Control and remove Control FG's `dxgi.dll` and `ControlFGStreamline` folde
 
 ### Compatibility / known limitations
 
-- **RTX 40-series experimental MFG:** recent reports on NVIDIA **617.14** / DLSS-G **310.9.1** show 3×+ can be rejected by a newer host-side device-policy check (`Found count (2) but expected (1)`). Off/2× remains the safe fallback while the compatibility patch is being developed.
+- **RTX 40-series experimental MFG:** v2.1.2 includes the NVIDIA **617.14** / DLSS-G **310.9.1** compatibility path. It loads only when the experimental option is enabled before startup and remains active until restart. If the exact provider contract cannot be validated, the patch fails closed.
 - Validated Steam, Epic Games Store, and GOG DX12 builds are supported in one package. Complete matching game-file identities are required.
 - DX11 is not supported.
 - Disable GOG Galaxy's in-game overlay for Control. Unknown or mismatched builds and unvalidated game updates are not supported.
