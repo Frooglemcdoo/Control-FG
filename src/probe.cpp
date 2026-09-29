@@ -150,6 +150,7 @@ static void OpenLog() {
     Log("PROBE v2.1.1 internal_build=2.1.1 source_revision=v2.1.1-unified-storefront-r3 supported_targets=steam_21225456,epic_0.0.518.2177,gog_57a8912f frequency=%lld log_profile=%s",frequency.QuadPart,verboseAuditLogging?"verbose_audit":"release_support");
     Log("CAPABILITIES fg=fixed_2x_to_6x_plus_dynamic rr=models_E_F_default_F hdr10_bridge=1 rr_guides=gbuffer_material_envbrdf rr_hit_distance=off rr_specular_mvec=off rr_diagnostic_readbacks=off streamline_sdk=2.14.1");
     Log("MONITORING profile=%s rr_perf_sample=240 support_events=startup_settings_fg_rr_model_resize_recovery_failures_fallbacks_performance verbose_env=CONTROLFG_VERBOSE_LOG",verboseAuditLogging?"verbose_audit":"release_support");
+    Log("RR_VRAM_LIFECYCLE build=R1 base=v2.1.1 clean_release_tag=1 d1_capture=disabled streamline_free=rr_off_and_retired_preset_switch alternate_feature_release=retired_switch_and_rr_off owned_guides_release=rr_off");
 }
 
 // +0x88 was observed at multiple resource loads in the hash-locked doAntiAliasing
@@ -587,6 +588,48 @@ static void HookBegin() {
     if (trace) Log("BEGIN_RETURN count=%llu aa=%llu present=%llu hud_render=%llu", count, aaCount.load(), presentCount.load(), hudRenderCount.load());
 }
 
+static void RRVramLifecycleAfterPresent(unsigned long long present) noexcept {
+    static unsigned int offStablePresents=0;
+    static unsigned long long waitLogs=0;
+    if(control_rr::RRUserRequested()){
+        offStablePresents=0;
+        return;
+    }
+    if(offStablePresents<0xffffffffu)++offStablePresents;
+    if(offStablePresents<3)return;
+
+    if(!RRNativeEpochOldWorkRetired()){
+        const auto n=++waitLogs;
+        if(n<=4||(n&(n-1))==0)
+            Log("RR_VRAM_TEARDOWN_WAIT present=%llu stage=old_work_retirement off_stable=%u wait_count=%llu",
+                present,offStablePresents,n);
+        return;
+    }
+    if(!RR20PFreeStreamlineResources("rr_off_retired",present)){
+        const auto n=++waitLogs;
+        if(n<=4||(n&(n-1))==0)
+            Log("RR_VRAM_TEARDOWN_WAIT present=%llu stage=streamline_free off_stable=%u wait_count=%llu",
+                present,offStablePresents,n);
+        return;
+    }
+
+    RRNativeReleaseInactiveAlternates(0,"rr_off_retired");
+    const bool guidesReleased=RRLiveReleaseForRROff(present);
+    if(!guidesReleased){
+        const auto n=++waitLogs;
+        if(n<=4||(n&(n-1))==0)
+            Log("RR_VRAM_TEARDOWN_WAIT present=%llu stage=owned_guides off_stable=%u wait_count=%llu",
+                present,offStablePresents,n);
+        return;
+    }
+    if(offStablePresents==3||waitLogs){
+        Log("RR_VRAM_TEARDOWN_COMPLETE present=%llu off_stable=%u streamline_resident=%u alternate_releases=%llu guide_owner=%p",
+            present,offStablePresents,rr20pResourcesResident.load(std::memory_order_acquire),
+            rrPresetLiveReleases.load(std::memory_order_relaxed),rrLive);
+        waitLogs=0;
+    }
+}
+
 static void HookPresent() {
     auto count = ++presentCount;
     const bool windowTrace = ShouldPathTrace(count);
@@ -616,8 +659,9 @@ static void HookPresent() {
     EndSLPresentFrame(count, slPresentToken);
     RRGuideAfterPresent(count);
     RRLiveAfterPresent(count);
-    RRReflectionAfterPresent(count); // Retire even after RR/F is disabled.
+    RRReflectionAfterPresent(count); // Owner stays null in this VRAM build; temporal access remains active.
     RRDistanceAfterPresent();
+    RRVramLifecycleAfterPresent(count);
     RRInputCaptureAfterPresent(count);
     RRDiffuseAfterPresent(count);
     RRPerfAfterPresent(count);
@@ -1023,8 +1067,11 @@ static BOOL CALLBACK Configure(PINIT_ONCE, PVOID, PVOID*) noexcept {
         Log("RR_G12_EVALUATION_INSTALL ready=%u rr_eval=warmup_then_native", unsigned(evaluationEntryReady));
         const bool temporalAccessReady=guideInputsReady&&RRReflectionInitializeAccessOnly(d3d);
         Log("RR_TEMPORAL_ACCESS_INSTALL ready=%u reflection_geometry_capture=0 hit_distance_runtime=0 specular_mvec_runtime=0 rr_eval=warmup_then_native",unsigned(temporalAccessReady));
-        const bool distanceHooksReady=temporalAccessReady&&RRReflectionInstall(renderer,d3d);
-        Log("RR_F_DISTANCE_D1_INSTALL ready=%u capture=F_only fallback=unbound",unsigned(distanceHooksReady));
+        // VRAM lifecycle probe: D1 hit-distance is optional. Its three-slot
+        // material/position capture costs ~1.87 GiB at 4K, so keep temporal
+        // access but do not install the capture hook in this build.
+        const bool distanceHooksReady=temporalAccessReady&&false&&RRReflectionInstall(renderer,d3d);
+        Log("RR_F_DISTANCE_D1_INSTALL ready=%u capture=disabled_vram_lifecycle_r1 fallback=unbound saved_vram=full_array_capture",unsigned(distanceHooksReady));
         // Load persisted RR preset before the native feature-create hook can be consumed.
         // StartFGOverlay() later reuses this already-loaded settings state.
         FGOverlayLoadSettings();
