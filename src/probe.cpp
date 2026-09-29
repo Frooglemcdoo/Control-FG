@@ -149,7 +149,7 @@ static void OpenLog() {
     QueryPerformanceFrequency(&frequency);
     Log("PROBE v2.1.1 internal_build=2.1.1 source_revision=v2.1.1-unified-storefront-r3 supported_targets=steam_21225456,epic_0.0.518.2177,gog_57a8912f frequency=%lld log_profile=%s",frequency.QuadPart,verboseAuditLogging?"verbose_audit":"release_support");
     Log("CAPABILITIES fg=fixed_2x_to_6x_plus_dynamic rr=models_E_F_default_F hdr10_bridge=1 rr_guides=gbuffer_material_envbrdf rr_hit_distance=off rr_specular_mvec=off rr_diagnostic_readbacks=off streamline_sdk=2.14.1");
-    Log("MONITORING profile=%s rr_perf_sample=240 support_events=startup_settings_fg_rr_model_resize_recovery_failures_fallbacks_performance verbose_env=CONTROLFG_VERBOSE_LOG",verboseAuditLogging?"verbose_audit":"release_support");
+    Log("MONITORING profile=%s rr_perf_sample=240 support_events=startup_settings_fg_rr_model_resize_recovery_failures_fallbacks_performance verbose_env=CONTROLFG_VERBOSE_LOG",verboseAuditLogging?"verbose_audit":"release_support");\n    Log("VRAM_PROBE_CONFIG build=HDR-VRAM-Probe-R1 source=v2.1.1 cadence_aa=60 transition_samples=on metrics=dxgi_local_nonlocal_budget_usage_reservation hdr_bridge_counters=on");
 }
 
 // +0x88 was observed at multiple resource loads in the hash-locked doAntiAliasing
@@ -327,6 +327,116 @@ static bool ReadEngineCommandContext(ID3D12Resource* candidate, EngineCommandCon
 #include "rr_input_capture.h"
 static bool RRNativePrepareAA(void* color,void*& normal,void*& diffuse,void*& specular) noexcept;
 
+static void ProbeVideoMemory(unsigned long long call, unsigned long long present, void* color,
+                             const char* reason) noexcept {
+    const DWORD saved = GetLastError();
+    void* rawResource = nullptr;
+    D3D12_RESOURCE_DESC resourceDesc{};
+    DWORD describeFault = 0;
+    const bool resourceKnown = Describe(color, &rawResource, &resourceDesc, &describeFault);
+
+    ID3D12Device* device = nullptr;
+    IDXGIFactory4* factory = nullptr;
+    IDXGIAdapter3* adapter = nullptr;
+    DXGI_QUERY_VIDEO_MEMORY_INFO local{};
+    DXGI_QUERY_VIDEO_MEMORY_INFO nonLocal{};
+    DXGI_ADAPTER_DESC2 adapterDesc{};
+    HRESULT deviceHr = E_FAIL;
+    HRESULT factoryHr = E_NOINTERFACE;
+    HRESULT adapterHr = E_FAIL;
+    HRESULT descHr = E_FAIL;
+    HRESULT localHr = E_FAIL;
+    HRESULT nonLocalHr = E_FAIL;
+    LUID luid{};
+    DWORD fault = 0;
+    unsigned int hdrKnown = 0;
+    unsigned int hdrEnabled = 0;
+
+    __try {
+        if (originalIsHDREnabled) {
+            hdrEnabled = originalIsHDREnabled() ? 1u : 0u;
+            hdrKnown = 1u;
+        }
+        if (resourceKnown && rawResource) {
+            deviceHr = static_cast<ID3D12Resource*>(rawResource)->GetDevice(
+                __uuidof(ID3D12Device), reinterpret_cast<void**>(&device));
+        }
+        if (SUCCEEDED(deviceHr) && device) {
+            luid = device->GetAdapterLuid();
+            using CreateFactory2Fn = HRESULT (WINAPI*)(UINT, REFIID, void**);
+            auto createFactory = reinterpret_cast<CreateFactory2Fn>(
+                realDxgi ? GetProcAddress(realDxgi, "CreateDXGIFactory2") : nullptr);
+            if (createFactory) {
+                factoryHr = createFactory(0, __uuidof(IDXGIFactory4), reinterpret_cast<void**>(&factory));
+                if (SUCCEEDED(factoryHr) && factory) {
+                    adapterHr = factory->EnumAdapterByLuid(
+                        luid, __uuidof(IDXGIAdapter3), reinterpret_cast<void**>(&adapter));
+                    if (SUCCEEDED(adapterHr) && adapter) {
+                        descHr = adapter->GetDesc2(&adapterDesc);
+                        localHr = adapter->QueryVideoMemoryInfo(
+                            0, DXGI_MEMORY_SEGMENT_GROUP_LOCAL, &local);
+                        nonLocalHr = adapter->QueryVideoMemoryInfo(
+                            0, DXGI_MEMORY_SEGMENT_GROUP_NON_LOCAL, &nonLocal);
+                    }
+                }
+            }
+        }
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        fault = GetExceptionCode();
+    }
+
+    static std::atomic<unsigned long long> baselineLocalUsage{0};
+    static std::atomic<unsigned long long> peakLocalUsage{0};
+    if (SUCCEEDED(localHr)) {
+        unsigned long long expected = 0;
+        baselineLocalUsage.compare_exchange_strong(expected, local.CurrentUsage, std::memory_order_relaxed);
+        auto peak = peakLocalUsage.load(std::memory_order_relaxed);
+        while (peak < local.CurrentUsage &&
+               !peakLocalUsage.compare_exchange_weak(peak, local.CurrentUsage, std::memory_order_relaxed)) {}
+    }
+
+    const auto baseline = baselineLocalUsage.load(std::memory_order_relaxed);
+    const auto peak = peakLocalUsage.load(std::memory_order_relaxed);
+    const long long delta = SUCCEEDED(localHr)
+        ? static_cast<long long>(local.CurrentUsage) - static_cast<long long>(baseline)
+        : 0;
+    constexpr unsigned long long MiB = 1024ull * 1024ull;
+
+    Log("VRAM_PROBE call=%llu present=%llu reason=%s hdr_known=%u hdr_enabled=%u rr_requested=%u fg_enabled=%u "
+        "resource_known=%u resource_format=%u resource_width=%llu resource_height=%u describe_exception=0x%08lX "
+        "device_hr=0x%08lX factory_hr=0x%08lX adapter_hr=0x%08lX desc_hr=0x%08lX local_hr=0x%08lX nonlocal_hr=0x%08lX "
+        "luid_high=%ld luid_low=%lu dedicated_video_mib=%llu shared_system_mib=%llu "
+        "local_budget_mib=%llu local_usage_mib=%llu local_available_reservation_mib=%llu local_current_reservation_mib=%llu "
+        "local_baseline_mib=%llu local_peak_mib=%llu local_delta_mib=%lld "
+        "nonlocal_budget_mib=%llu nonlocal_usage_mib=%llu nonlocal_available_reservation_mib=%llu nonlocal_current_reservation_mib=%llu "
+        "hdr_bridge_activations=%llu hdr_bridge_deactivations=%llu hdr_bridge_resizes=%llu hdr_bridge_generation=%llu exception=0x%08lX",
+        call, present, reason ? reason : "unknown", hdrKnown, hdrEnabled,
+        unsigned(control_rr::RRUserRequested()), slFgEnabledByApi.load(),
+        unsigned(resourceKnown), unsigned(resourceDesc.Format), resourceDesc.Width, resourceDesc.Height, describeFault,
+        static_cast<unsigned long>(deviceHr), static_cast<unsigned long>(factoryHr),
+        static_cast<unsigned long>(adapterHr), static_cast<unsigned long>(descHr),
+        static_cast<unsigned long>(localHr), static_cast<unsigned long>(nonLocalHr),
+        luid.HighPart, static_cast<unsigned long>(luid.LowPart),
+        SUCCEEDED(descHr) ? static_cast<unsigned long long>(adapterDesc.DedicatedVideoMemory) / MiB : 0ull,
+        SUCCEEDED(descHr) ? static_cast<unsigned long long>(adapterDesc.SharedSystemMemory) / MiB : 0ull,
+        SUCCEEDED(localHr) ? local.Budget / MiB : 0ull,
+        SUCCEEDED(localHr) ? local.CurrentUsage / MiB : 0ull,
+        SUCCEEDED(localHr) ? local.AvailableForReservation / MiB : 0ull,
+        SUCCEEDED(localHr) ? local.CurrentReservation / MiB : 0ull,
+        baseline / MiB, peak / MiB, delta / static_cast<long long>(MiB),
+        SUCCEEDED(nonLocalHr) ? nonLocal.Budget / MiB : 0ull,
+        SUCCEEDED(nonLocalHr) ? nonLocal.CurrentUsage / MiB : 0ull,
+        SUCCEEDED(nonLocalHr) ? nonLocal.AvailableForReservation / MiB : 0ull,
+        SUCCEEDED(nonLocalHr) ? nonLocal.CurrentReservation / MiB : 0ull,
+        hdr10BridgeActivationCount.load(), hdr10BridgeDeactivationCount.load(),
+        hdr10BridgeResizeCount.load(), hdr10BridgeTransitionGeneration.load(), fault);
+
+    __try { if (adapter) adapter->Release(); } __except (EXCEPTION_EXECUTE_HANDLER) {}
+    __try { if (factory) factory->Release(); } __except (EXCEPTION_EXECUTE_HANDLER) {}
+    __try { if (device) device->Release(); } __except (EXCEPTION_EXECUTE_HANDLER) {}
+    SetLastError(saved);
+}
+
 static void ExtendPathTrace(unsigned long long present, unsigned long long frames) noexcept {
     const unsigned long long target = present + frames;
     unsigned long long current = pathTraceUntilPresent.load();
@@ -472,6 +582,14 @@ static bool HookAA(void* t1, void* t2, void* t3, void* t4, void* t5, void* t6,
     // RR diagnostic only: preserve production AA/FG ordering, then give a
     // joined material capture one later same-frame copy opportunity.
     // r20x: disable diagnostic joined capture in performance branch.
+    const bool vramStartup = call == 1 || call == 8;
+    const bool vramPeriodic = (call % 60) == 0;
+    if (vramStartup || vramPeriodic || resetFrame || resumeGap) {
+        const char* vramReason = resetFrame ? (resumeGap ? "reset_resume" : "reset") :
+                                 resumeGap ? "resume_gap" :
+                                 vramStartup ? "startup" : "periodic";
+        ProbeVideoMemory(call, currentPresent, t1, vramReason);
+    }
     return result;
 }
 
