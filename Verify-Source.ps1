@@ -24,7 +24,7 @@ try {
         if ($errors.Count) { throw ('PowerShell parse error in ' + $file.Name + ': ' + $errors[0].Message) }
     }
     $probe = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'src/probe.cpp') -Raw
-    foreach ($marker in @('PROBE v2.1.1 internal_build=2.1.1','source_revision=v2.1.1-unified-storefront-r3','log_profile=%s','CAPABILITIES fg=fixed_2x_to_6x_plus_dynamic','MONITORING profile=%s rr_perf_sample=240','CONTROLFG_VERBOSE_LOG')) {
+    foreach ($marker in @('PROBE v2.1.2 internal_build=2.1.2','source_revision=v2.1.2-sep29-r1','log_profile=%s','CAPABILITIES fg=fixed_2x_to_6x_plus_dynamic','MONITORING profile=%s rr_perf_sample=240','CONTROLFG_VERBOSE_LOG')) {
         if (-not $probe.Contains($marker)) { throw ('Release source identity/logging mismatch: ' + $marker) }
     }
     $guide = ''
