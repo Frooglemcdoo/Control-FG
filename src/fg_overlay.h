@@ -57,6 +57,16 @@ static void SetFGTextureStreamingBudgetMs(unsigned int value) noexcept {
     fgTextureStreamingBudgetMs.store(NormalizeFGTextureStreamingBudgetMs(value),std::memory_order_release);
 }
 
+static unsigned int NormalizeFGPTReflectionRays(unsigned int value) noexcept {
+    return control_pt_reflection::NormalizeRays(value);
+}
+static unsigned int GetFGPTReflectionRays() noexcept {
+    return control_pt_reflection::RequestedRays();
+}
+static void SetFGPTReflectionRays(unsigned int value) noexcept {
+    control_pt_reflection::SelectRays(NormalizeFGPTReflectionRays(value));
+}
+
 // RR panel track spans 30..500, leaving room for Reset to default.
 static unsigned FGOverlayClampFromX(int x) noexcept {
     if (x <= 30) return 25;
@@ -189,8 +199,9 @@ static void FGOverlayLoadSettings() noexcept {
         control_rr::RRUserSetSpecularSignalMode(control_rr::RRSpecularSignalMode::NativeClamp);
         control_rr::RRUserRequest(false);
         SetFGTextureStreamingBudgetMs(0u);
+        SetFGPTReflectionRays(0u);
         SetFGVramMonitorEnabled(true);
-        Log("FG_SETTINGS_LOAD success=0 reason=path_unavailable defaults=4x,dynamic_auto,rr_off,rr_model_F,texture_streaming_off,vram_monitor_on ui=fg_full_rr_toggle_model_E_F");
+        Log("FG_SETTINGS_LOAD success=0 reason=path_unavailable defaults=4x,dynamic_auto,rr_off,rr_model_F,texture_streaming_off,pt_reflection_rays_native,vram_monitor_on ui=fg_full_rr_toggle_model_E_F");
         return;
     }
 
@@ -206,6 +217,8 @@ static void FGOverlayLoadSettings() noexcept {
     const unsigned int rrPreset = rawRrPreset == control_rr::RRPresetE ? control_rr::RRPresetE : control_rr::RRPresetF;
     const unsigned int rawTextureStreamingMs = GetPrivateProfileIntW(L"Experimental", L"TextureStreamingBudgetMs", 0, fgOverlaySettingsPath.c_str());
     const unsigned int textureStreamingMs = NormalizeFGTextureStreamingBudgetMs(rawTextureStreamingMs);
+    const unsigned int rawPtReflectionRays = GetPrivateProfileIntW(L"Experimental", L"PTReflectionRays", 0, fgOverlaySettingsPath.c_str());
+    const unsigned int ptReflectionRays = NormalizeFGPTReflectionRays(rawPtReflectionRays);
     const bool vramMonitorEnabled = GetPrivateProfileIntW(L"Overlay", L"VramMonitorEnabled", 1, fgOverlaySettingsPath.c_str()) != 0;
 
     slFgUserMultiplier.store(selection, std::memory_order_release);
@@ -218,9 +231,10 @@ static void FGOverlayLoadSettings() noexcept {
     control_rr::RRUserSetSpecularSignalMode(control_rr::RRSpecularSignalMode::NativeClamp);
     control_rr::RRUserRequest(rrEnabled);
     SetFGTextureStreamingBudgetMs(textureStreamingMs);
+    SetFGPTReflectionRays(ptReflectionRays);
     SetFGVramMonitorEnabled(vramMonitorEnabled);
-    Log("FG_SETTINGS_LOAD success=1 path=%ls selection=%s selected_code=%u target_policy=%s manual_target_fps=%u rr_enabled=%u rr_preset=%s rr_preset_value=%u texture_streaming_ms=%u vram_monitor=%u skin_mode=off schema=10 ui=fg_full_rr_toggle_model_E_F",
-        fgOverlaySettingsPath.c_str(), GetFGSelectionName(selection), selection, manualTarget ? "manual" : "auto", manualTarget, unsigned(rrEnabled), control_rr::RRUserPresetLabel(), control_rr::RRUserPresetValue(), textureStreamingMs, unsigned(vramMonitorEnabled));
+    Log("FG_SETTINGS_LOAD success=1 path=%ls selection=%s selected_code=%u target_policy=%s manual_target_fps=%u rr_enabled=%u rr_preset=%s rr_preset_value=%u texture_streaming_ms=%u pt_reflection_rays=%u vram_monitor=%u skin_mode=off schema=11 ui=fg_full_rr_toggle_model_E_F",
+        fgOverlaySettingsPath.c_str(), GetFGSelectionName(selection), selection, manualTarget ? "manual" : "auto", manualTarget, unsigned(rrEnabled), control_rr::RRUserPresetLabel(), control_rr::RRUserPresetValue(), textureStreamingMs, ptReflectionRays, unsigned(vramMonitorEnabled));
 }
 
 static bool FGOverlaySaveSettingsNow() noexcept {
@@ -235,6 +249,8 @@ static bool FGOverlaySaveSettingsNow() noexcept {
     swprintf_s(experimentalText, L"%u", IsRTX40MFGRequested() ? 1u : 0u);
     wchar_t textureStreamingText[8]{};
     swprintf_s(textureStreamingText,L"%u",GetFGTextureStreamingBudgetMs());
+    wchar_t ptReflectionRaysText[8]{};
+    swprintf_s(ptReflectionRaysText,L"%u",GetFGPTReflectionRays());
     wchar_t vramMonitorText[8]{};
     swprintf_s(vramMonitorText,L"%u",IsFGVramMonitorEnabled()?1u:0u);
     wchar_t bindingText[16]{};
@@ -248,7 +264,7 @@ static bool FGOverlaySaveSettingsNow() noexcept {
     swprintf_s(rrEnabledText, L"%u", control_rr::RRUserRequested() ? 1u : 0u);
     swprintf_s(rrPresetText, L"%u", control_rr::RRUserPresetValue());
 
-    bool ok = WritePrivateProfileStringW(L"ControlFG", L"Schema", L"10", fgOverlaySettingsPath.c_str()) != FALSE;
+    bool ok = WritePrivateProfileStringW(L"ControlFG", L"Schema", L"11", fgOverlaySettingsPath.c_str()) != FALSE;
     ok = (WritePrivateProfileStringW(L"FrameGeneration", L"Mode", modeText, fgOverlaySettingsPath.c_str()) != FALSE) && ok;
     ok = (WritePrivateProfileStringW(L"FrameGeneration", L"DynamicTargetFPS", targetText, fgOverlaySettingsPath.c_str()) != FALSE) && ok;
     ok = (WritePrivateProfileStringW(L"RayReconstruction", L"Enabled", rrEnabledText, fgOverlaySettingsPath.c_str()) != FALSE) && ok;
@@ -258,15 +274,16 @@ static bool FGOverlaySaveSettingsNow() noexcept {
     ok = (WritePrivateProfileStringW(L"Overlay", L"VramMonitorEnabled", vramMonitorText, fgOverlaySettingsPath.c_str()) != FALSE) && ok;
     ok = (WritePrivateProfileStringW(L"Experimental", L"RTX40MultiFG", experimentalText, fgOverlaySettingsPath.c_str()) != FALSE) && ok;
     ok = (WritePrivateProfileStringW(L"Experimental", L"TextureStreamingBudgetMs", textureStreamingText, fgOverlaySettingsPath.c_str()) != FALSE) && ok;
+    ok = (WritePrivateProfileStringW(L"Experimental", L"PTReflectionRays", ptReflectionRaysText, fgOverlaySettingsPath.c_str()) != FALSE) && ok;
     // Old experimental RR/AA settings are intentionally removed; FG settings remain intact.
     WritePrivateProfileStringW(L"AntiAliasing", nullptr, nullptr, fgOverlaySettingsPath.c_str());
     WritePrivateProfileStringW(L"RayReconstruction", L"SkinResponsivity", nullptr, fgOverlaySettingsPath.c_str());
     WritePrivateProfileStringW(L"RayReconstruction", L"SkinPreserveNative", nullptr, fgOverlaySettingsPath.c_str());
     if (ok) WritePrivateProfileStringW(nullptr, nullptr, nullptr, fgOverlaySettingsPath.c_str());
 
-    Log("FG_SETTINGS_SAVE success=%u path=%ls selection=%s selected_code=%u target_policy=%s manual_target_fps=%u rr_enabled=%u rr_preset=%s rr_preset_value=%u texture_streaming_ms=%u vram_monitor=%u schema=10 ui=fg_full_rr_toggle_model_E_F",
+    Log("FG_SETTINGS_SAVE success=%u path=%ls selection=%s selected_code=%u target_policy=%s manual_target_fps=%u rr_enabled=%u rr_preset=%s rr_preset_value=%u texture_streaming_ms=%u pt_reflection_rays=%u vram_monitor=%u schema=11 ui=fg_full_rr_toggle_model_E_F",
         unsigned(ok), fgOverlaySettingsPath.c_str(), GetFGSelectionName(GetFGUserMultiplier()), GetFGUserMultiplier(),
-        GetFGDynamicManualTargetFps() ? "manual" : "auto", GetFGDynamicManualTargetFps(), unsigned(control_rr::RRUserRequested()), control_rr::RRUserPresetLabel(), control_rr::RRUserPresetValue(), GetFGTextureStreamingBudgetMs(), unsigned(IsFGVramMonitorEnabled()));
+        GetFGDynamicManualTargetFps() ? "manual" : "auto", GetFGDynamicManualTargetFps(), unsigned(control_rr::RRUserRequested()), control_rr::RRUserPresetLabel(), control_rr::RRUserPresetValue(), GetFGTextureStreamingBudgetMs(), GetFGPTReflectionRays(), unsigned(IsFGVramMonitorEnabled()));
     if (ok) fgOverlaySettingsSavedPulseUntilMs = GetTickCount64() + 1200ull;
     return ok;
 }
@@ -684,8 +701,34 @@ static void PaintFGOverlay(HWND hwnd) noexcept {
             L"OFF restores Control's native 1 ms budget / 8 update slices. 4/6/8 ms use 16 slices. Adjusting this can cause traversal stutter.",
             -1,&textureHelp,DT_LEFT|DT_WORDBREAK);
 
+        PaintFGDivider(dc, 30, 748, 710);
+        SelectObject(dc, sectionFont); SetTextColor(dc, RGB(255, 32, 32));
+        RECT ptTitle{30, 762, 710, 792};
+        DrawTextW(dc, L"PT REFLECTIONS (PROBE)", -1, &ptTitle, DT_LEFT | DT_SINGLELINE);
+        SelectObject(dc, bodyFont); SetTextColor(dc, RGB(246,246,246));
+        RECT ptLabel{30, 797, 500, 828};
+        DrawTextW(dc, L"Stochastic reflection rays / pixel", -1, &ptLabel, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+
+        const unsigned int ptRays=GetFGPTReflectionRays();
+        const unsigned int ptValues[4]{0u,1u,2u,4u};
+        const wchar_t* ptLabels[4]{L"NATIVE",L"1 ray",L"2 rays",L"4 rays"};
+        const int ptX[4]{30,200,370,540};
         SelectObject(dc,buttonFont);
-        PaintFGButton(dc, RECT{550, 742, 710, 792}, L"Back", false);
+        for(unsigned int i=0;i<4;++i){
+            RECT box{ptX[i],833,ptX[i]+155,883};
+            const bool selected=ptRays==ptValues[i];
+            SelectObject(dc,selected?buttonSelectedFont:buttonFont);
+            PaintFGButton(dc,box,ptLabels[i],selected,true);
+        }
+
+        SelectObject(dc,smallFont); SetTextColor(dc,RGB(232,232,232));
+        RECT ptHelp{30,898,710,962};
+        DrawTextW(dc,
+            L"Uses Control's native stochastic DXR reflection path. This R1 changes sample count only; recursive reflection-bounce replacement is captured separately.",
+            -1,&ptHelp,DT_LEFT|DT_WORDBREAK);
+
+        SelectObject(dc,buttonFont);
+        PaintFGButton(dc, RECT{550, 975, 710, 1025}, L"Back", false);
     } else if (fgOverlayRRSettingsPage) {
         SelectObject(dc, sectionFont); SetTextColor(dc, RGB(255,32,32));
         RECT title{30,105,710,140};
@@ -889,7 +932,7 @@ static bool FGOverlaySliderFromPoint(int x, int y) noexcept {
     return IsFGDynamicSelection(GetFGUserMultiplier()) && y >= 443 && y < 512 && x >= 30 && x < 710;
 }
 static int FGOverlayLowerSectionOffset() noexcept { return IsFGDynamicSelection(GetFGUserMultiplier()) ? 0 : -kFGOverlayDynamicSectionHeight; }
-static int FGOverlayDesiredHeight() noexcept { if (fgOverlayOptionsPage) return 812; if (fgOverlayRRSettingsPage) return 490; return IsFGDynamicSelection(GetFGUserMultiplier()) ? kFGOverlayHeight : kFGOverlayCompactHeight; }
+static int FGOverlayDesiredHeight() noexcept { if (fgOverlayOptionsPage) return 1042; if (fgOverlayRRSettingsPage) return 490; return IsFGDynamicSelection(GetFGUserMultiplier()) ? kFGOverlayHeight : kFGOverlayCompactHeight; }
 static void FGOverlayResizeWindowForCurrentSelection(HWND hwnd) noexcept {
     if (!hwnd) return;
     SetWindowPos(hwnd, nullptr, 0, 0, kFGOverlayWidth, FGOverlayDesiredHeight(),
@@ -991,7 +1034,23 @@ static LRESULT CALLBACK FGOverlayWndProc(HWND hwnd, UINT message, WPARAM wParam,
                             previousTextureMs,selectedTextureMs,unsigned(applied),unsigned(applied&&!fgOverlaySettingsDirty));
                     }
                 }
-            } else if (x >= 550 && x < 710 && y >= 742 && y < 792) {
+            } else if (y >= 833 && y < 883) {
+                unsigned int selectedPtRays=0xFFFFFFFFu;
+                if(x>=30&&x<185)selectedPtRays=0u;
+                else if(x>=200&&x<355)selectedPtRays=1u;
+                else if(x>=370&&x<525)selectedPtRays=2u;
+                else if(x>=540&&x<695)selectedPtRays=4u;
+                if(selectedPtRays!=0xFFFFFFFFu){
+                    const unsigned int previousPtRays=GetFGPTReflectionRays();
+                    if(previousPtRays!=selectedPtRays){
+                        SetFGPTReflectionRays(selectedPtRays);
+                        FGOverlayMarkSettingsDirty();
+                        FGOverlayFlushSettingsIfDue(true);
+                        Log("PT_REFLECTION_UI previous_rays=%u selected_rays=%u provider_hook_ready=%u state_object_hook_ready=%u recursive_bounce_replacement=observe_only",
+                            previousPtRays,selectedPtRays,unsigned(control_pt_reflection::ProviderHookReady()),unsigned(control_pt_reflection::StateObjectHookReady()));
+                    }
+                }
+            } else if (x >= 550 && x < 710 && y >= 975 && y < 1025) {
                 fgOverlayBindingCapture = false;
                 fgOverlayOptionsPage = false;
                 FGOverlayResizeWindowForCurrentSelection(hwnd);
