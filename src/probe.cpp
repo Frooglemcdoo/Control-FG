@@ -612,9 +612,13 @@ static bool HookAA(void* t1, void* t2, void* t3, void* t4, void* t5, void* t6,
 // resources, command-list state, or GPU work.
 using RRBeginPipelineSetupFn = void (*)(int, int);
 using RRSetRayGenerationFn = void (*)(const char*);
+using RRSetMissFn = void (*)(int, const char*);
+using RRSetHitGroupFn = void (*)(int, int, const char*, const char*, const char*);
 using RRRaytraceFn = void (*)(int, int);
 static RRBeginPipelineSetupFn originalRRBeginPipelineSetup = nullptr;
 static RRSetRayGenerationFn originalRRSetRayGeneration = nullptr;
+static RRSetMissFn originalRRSetMiss = nullptr;
+static RRSetHitGroupFn originalRRSetHitGroup = nullptr;
 static RRRaytraceFn originalRRRaytrace = nullptr;
 static std::atomic<unsigned long long> rrPipelineSetupCount{0};
 static std::atomic<unsigned long long> rrRayGenerationCount{0};
@@ -667,6 +671,25 @@ static void HookRRSetRayGeneration(const char* name) {
             beginCount.load(), presentCount.load(), aaCount.load());
     }
     originalRRSetRayGeneration(name);
+}
+
+static void HookRRSetMiss(int slot, const char* name) {
+    char safeName[128]{};
+    RRSafeCopyCString(name,safeName,sizeof(safeName));
+    if(strcmp(rrCurrentRayGeneration,"reflectionRayGeneration")==0)
+        Log("PT_REFLECTION_P05_MISS slot=%d name=%s pipeline_arg0=%d pipeline_arg1=%d",slot,safeName,rrCurrentPipelineArg0,rrCurrentPipelineArg1);
+    originalRRSetMiss(slot,name);
+}
+
+static void HookRRSetHitGroup(int rayType,int geometryType,const char* intersection,const char* anyHit,const char* closestHit) {
+    char i[96]{},a[96]{},c[96]{};
+    RRSafeCopyCString(intersection,i,sizeof(i));
+    RRSafeCopyCString(anyHit,a,sizeof(a));
+    RRSafeCopyCString(closestHit,c,sizeof(c));
+    if(strcmp(rrCurrentRayGeneration,"reflectionRayGeneration")==0)
+        Log("PT_REFLECTION_P05_HITGROUP ray_type=%d geometry_type=%d intersection=%s anyhit=%s closesthit=%s pipeline_arg0=%d pipeline_arg1=%d",
+            rayType,geometryType,i,a,c,rrCurrentPipelineArg0,rrCurrentPipelineArg1);
+    originalRRSetHitGroup(rayType,geometryType,intersection,anyHit,closestHit);
 }
 
 static void HookRRRaytrace(int a, int b) {
@@ -1218,6 +1241,8 @@ static void RRVramLifecycleAfterPresent(unsigned long long present) noexcept {
 static unsigned int InstallRRObservationHooks(HMODULE renderer, HMODULE d3d) noexcept {
     originalRRBeginPipelineSetup = d3d ? reinterpret_cast<RRBeginPipelineSetupFn>(GetProcAddress(d3d, kRRBeginPipelineSetupSymbol)) : nullptr;
     originalRRSetRayGeneration = d3d ? reinterpret_cast<RRSetRayGenerationFn>(GetProcAddress(d3d, kRRSetRayGenerationSymbol)) : nullptr;
+    originalRRSetMiss = d3d ? reinterpret_cast<RRSetMissFn>(GetProcAddress(d3d, kRRSetMissSymbol)) : nullptr;
+    originalRRSetHitGroup = d3d ? reinterpret_cast<RRSetHitGroupFn>(GetProcAddress(d3d, kRRSetHitGroupSymbol)) : nullptr;
     originalRRRaytrace = d3d ? reinterpret_cast<RRRaytraceFn>(GetProcAddress(d3d, kRRRaytraceSymbol)) : nullptr;
 
     Patch candidates[] = {
@@ -1225,6 +1250,10 @@ static unsigned int InstallRRObservationHooks(HMODULE renderer, HMODULE d3d) noe
             reinterpret_cast<void*>(originalRRBeginPipelineSetup), reinterpret_cast<void*>(&HookRRBeginPipelineSetup), "RR_BEGIN_PIPELINE_SETUP"},
         {FindImport(renderer, "d3d_rmdwin10_f.dll", kRRSetRayGenerationSymbol),
             reinterpret_cast<void*>(originalRRSetRayGeneration), reinterpret_cast<void*>(&HookRRSetRayGeneration), "RR_SET_RAY_GENERATION"},
+        {FindImport(renderer, "d3d_rmdwin10_f.dll", kRRSetMissSymbol),
+            reinterpret_cast<void*>(originalRRSetMiss), reinterpret_cast<void*>(&HookRRSetMiss), "RR_SET_MISS"},
+        {FindImport(renderer, "d3d_rmdwin10_f.dll", kRRSetHitGroupSymbol),
+            reinterpret_cast<void*>(originalRRSetHitGroup), reinterpret_cast<void*>(&HookRRSetHitGroup), "RR_SET_HIT_GROUP"},
         {FindImport(renderer, "d3d_rmdwin10_f.dll", kRRRaytraceSymbol),
             reinterpret_cast<void*>(originalRRRaytrace), reinterpret_cast<void*>(&HookRRRaytrace), "RR_RAYTRACE"}
     };
@@ -1384,7 +1413,7 @@ static BOOL CALLBACK Configure(PINIT_ONCE, PVOID, PVOID*) noexcept {
         Log("HOOK_INSTALLED label=CONTROL_COMMAND_QUEUE_CTOR");
         const bool guideInputsReady = RRGuideInitializeInputs(d3d);
         const unsigned int rrObserverHooks = InstallRRObservationHooks(renderer,d3d);
-        Log("PT_REFLECTION_P0_OBSERVER ready=%u expected=3 scope=reflection_dispatch_identification gpu_work=unchanged allocations=0",rrObserverHooks);
+        Log("PT_REFLECTION_P0_OBSERVER ready=%u expected=5 scope=reflection_dispatch_identification gpu_work=unchanged allocations=0",rrObserverHooks);
         const bool albedoHooksReady = guideInputsReady && RRAlbedoInstallHooks(renderer, d3d);
         if(albedoHooksReady) rrAlbedoStage.store(RRAlbedoStage::Disabled,std::memory_order_release);
         Log("RR_GUIDE_G3_NATIVE_PATH ready=%u diagnostic_capture=0 recurring_replay=on_demand_full_rr_only rr_eval=warmup_then_native", unsigned(albedoHooksReady));
