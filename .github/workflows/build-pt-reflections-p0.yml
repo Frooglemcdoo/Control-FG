@@ -1,0 +1,106 @@
+name: Build PT reflections P0
+
+on:
+  push:
+    branches:
+      - experiment/pt-reflections-p0
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure MSVC
+        shell: cmd
+        run: |
+          for /f "usebackq tokens=*" %%I in (`"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath`) do set "VSROOT=%%I"
+          call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
+          echo VSROOT=%VSROOT%>>%GITHUB_ENV%
+
+      - name: Prepare Streamline and generated shaders
+        shell: cmd
+        run: |
+          call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
+          if not exist build mkdir build
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File Fetch-Streamline.ps1
+          if errorlevel 1 exit /b 1
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File Verify-Streamline.ps1
+          if errorlevel 1 exit /b 1
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File Verify-RRRuntime.ps1
+          if errorlevel 1 exit /b 1
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File Patch-OverlayStability.ps1
+          if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /O2 /MT tools\compile-distance.cpp /Fobuild\compile-distance.obj /Febuild\compile-distance.exe /link d3dcompiler.lib
+          if errorlevel 1 exit /b 1
+          build\compile-distance.exe
+          if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /O2 /MT tools\compile-live.cpp /Fobuild\compile-live.obj /Febuild\compile-live.exe /link d3dcompiler.lib
+          if errorlevel 1 exit /b 1
+          build\compile-live.exe
+          if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /O2 /MT tools\compile-skin-mask.cpp /Fobuild\compile-skin-mask.obj /Febuild\compile-skin-mask.exe /link d3dcompiler.lib
+          if errorlevel 1 exit /b 1
+          build\compile-skin-mask.exe
+          if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /O2 /MT tools\compile-reflectance.cpp /Fobuild\compile-reflectance.obj /Febuild\compile-reflectance.exe /link d3dcompiler.lib
+          if errorlevel 1 exit /b 1
+          build\compile-reflectance.exe
+          if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /O2 /MT tools\compile-fg-ui-alpha.cpp /Fobuild\compile-fg-ui-alpha.obj /Febuild\compile-fg-ui-alpha.exe /link d3dcompiler.lib
+          if errorlevel 1 exit /b 1
+          build\compile-fg-ui-alpha.exe
+          if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /O2 /MT tools\compile-clamp-strength.cpp /Fobuild\compile-clamp-strength.obj /Febuild\compile-clamp-strength.exe /link d3dcompiler.lib
+          if errorlevel 1 exit /b 1
+          for /l %%S in (25,1,75) do build\compile-clamp-strength.exe %%S
+          if errorlevel 1 exit /b 1
+          copy /y src\rr_clamp_variants.in.h build\rr_clamp_variants.h >nul
+          pushd src
+          rc /nologo /fo ..\build\control_fg_logo.res control_fg_logo.rc
+          set "RC_RESULT=%ERRORLEVEL%"
+          popd
+          if not "%RC_RESULT%"=="0" exit /b %RC_RESULT%
+
+      - name: Compile experimental proxy
+        shell: cmd
+        run: |
+          call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
+          cl /nologo /std:c++17 /EHsc /W4 /O2 /MT /LD /guard:cf /DUNICODE /D_UNICODE /I "third_party\streamline\include" src\probe.cpp build\control_fg_logo.res /Fobuild\probe.obj /Febuild\dxgi.dll /link /DEF:src\dxgi.def /INCREMENTAL:NO /DYNAMICBASE /NXCOMPAT /GUARD:CF bcrypt.lib wintrust.lib user32.lib gdi32.lib msimg32.lib
+          if errorlevel 1 exit /b 1
+          dumpbin /exports build\dxgi.dll > build\exports.txt
+          dumpbin /imports build\dxgi.dll > build\imports.txt
+
+      - name: Package P0
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $out='Control-FG-PT-Reflections-P0'
+          New-Item -ItemType Directory -Force -Path $out | Out-Null
+          Copy-Item build/dxgi.dll "$out/dxgi.dll"
+          @'
+          PT Reflections P0
+          -----------------
+          This is an observation-only reflection-dispatch probe.
+          It does not alter reflection pixels yet.
+          Run normal gameplay with Ray Traced Reflections enabled, then collect compact logs.
+          Look for PT_REFLECTION_P0_DISPATCH records.
+          '@ | Set-Content "$out/README.txt" -Encoding ASCII
+          Compress-Archive -Path "$out/*" -DestinationPath "$out.zip" -Force
+          (Get-FileHash "$out.zip" -Algorithm SHA256).Hash | Set-Content "$out.sha256" -Encoding ASCII
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Control-FG-PT-Reflections-P0
+          path: |
+            Control-FG-PT-Reflections-P0.zip
+            Control-FG-PT-Reflections-P0.sha256
+            build/exports.txt
+            build/imports.txt
+          if-no-files-found: error
+          retention-days: 7
