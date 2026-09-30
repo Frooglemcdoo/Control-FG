@@ -5,6 +5,9 @@ on:
     branches:
       - experiment/pt-reflections-p0
   workflow_dispatch:
+  pull_request:
+    branches:
+      - main
 
 permissions:
   contents: read
