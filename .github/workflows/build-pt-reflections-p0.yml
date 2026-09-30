@@ -112,7 +112,7 @@ jobs:
             if(-not $dump.Contains($name)){throw "Missing DXR export: $name"}
           }
           $source=Get-Content -LiteralPath src/shaders/pt_reflection_p2.hlsl -Raw
-          if(-not $source.Contains('#define PT_REFLECTION_P2_HIT_STUBS 1')){
+          if(-not $source.Contains('#define PT_REFLECTION_P2_COMPOSITE_UNVALIDATED 1')){
             throw 'P2 compile proof unexpectedly lost its runtime safety marker.'
           }
           (Get-FileHash -LiteralPath build/pt_reflection_p2.dxil -Algorithm SHA256).Hash.ToLowerInvariant() |
