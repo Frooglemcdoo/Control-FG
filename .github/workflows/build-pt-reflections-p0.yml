@@ -70,6 +70,12 @@ jobs:
           popd
           if not "%RC_RESULT%"=="0" exit /b %RC_RESULT%
 
+      - name: Audit native PT reflection contract
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          python tools/audit-pt-reflection-native.py build/pt-reflection-native-audit.json
+          if($LASTEXITCODE -ne 0){throw "Native reflection audit failed: $LASTEXITCODE"}
       - name: Compile PT reflection P2 DXIL
         shell: powershell
         run: |
@@ -149,5 +155,6 @@ jobs:
             build/pt_reflection_p2.dxil
             build/pt_reflection_p2.sha256
             build/pt_reflection_p2.dump.txt
+            build/pt-reflection-native-audit.json
           if-no-files-found: error
           retention-days: 7
