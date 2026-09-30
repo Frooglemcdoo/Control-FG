@@ -221,7 +221,7 @@ static void OpenLog() {
     const DWORD verboseLength=GetEnvironmentVariableW(L"CONTROLFG_VERBOSE_LOG",verbose,_countof(verbose));
     verboseAuditLogging=verboseLength>0 && verboseLength<_countof(verbose) && verbose[0]!=L'0';
     QueryPerformanceFrequency(&frequency);
-    Log("PROBE v2.1.2 internal_build=2.1.2 source_revision=v2.1.2-sep29-r1 supported_targets=steam_21225456,epic_0.0.518.2177,gog_57a8912f frequency=%lld log_profile=%s",frequency.QuadPart,verboseAuditLogging?"verbose_audit":"release_support");
+    Log("PROBE v2.1.2 internal_build=pt-reflections-p0 source_revision=pt-reflections-p0 supported_targets=steam_21225456,epic_0.0.518.2177,gog_57a8912f frequency=%lld log_profile=%s",frequency.QuadPart,verboseAuditLogging?"verbose_audit":"release_support");
     Log("CAPABILITIES fg=fixed_2x_to_6x_plus_dynamic rr=models_E_F_default_F hdr10_bridge=1 rr_guides=gbuffer_material_envbrdf rr_hit_distance=off rr_specular_mvec=off rr_diagnostic_readbacks=off streamline_sdk=2.14.1");
     Log("MONITORING profile=%s rr_perf_sample=240 support_events=startup_settings_fg_rr_model_resize_recovery_failures_fallbacks_performance verbose_env=CONTROLFG_VERBOSE_LOG",verboseAuditLogging?"verbose_audit":"release_support");
     Log("RR_VRAM_LIFECYCLE build=R4 base=v2.1.1 clean_release_tag=1 d1_capture=disabled native_rr_cache=single_live_extent preset_switch=full_native_feature_epoch cache_layout=key_feature_parameters state_layout=feature_parameters release_old_extent_after_fence=1 lazy_recreate_cached_extent=1 streamline_free=nonowning_options_only owned_guides_release=rr_off");
@@ -619,6 +619,8 @@ static RRRaytraceFn originalRRRaytrace = nullptr;
 static std::atomic<unsigned long long> rrPipelineSetupCount{0};
 static std::atomic<unsigned long long> rrRayGenerationCount{0};
 static std::atomic<unsigned long long> rrRaytraceDispatchCount{0};
+static std::atomic<unsigned long long> ptReflectionDispatchCount{0};
+static std::atomic<unsigned long long> ptReflectionContextFailures{0};
 static thread_local int rrCurrentPipelineArg0 = -1;
 static thread_local int rrCurrentPipelineArg1 = -1;
 static thread_local char rrCurrentRayGeneration[128] = "<unset>";
@@ -677,8 +679,11 @@ static void HookRRRaytrace(int a, int b) {
     EngineCommandContextSnapshot command{};
     bool commandKnown = false;
     char raygen[128]{};
-    if (sample) {
-        RRSafeCopyCString(rrCurrentRayGeneration, raygen, sizeof(raygen));
+    RRSafeCopyCString(rrCurrentRayGeneration, raygen, sizeof(raygen));
+    const bool ptReflection = strcmp(raygen, "reflectionRayGeneration") == 0;
+    const auto ptCall = ptReflection ? ++ptReflectionDispatchCount : 0ull;
+    const bool ptSample = ptReflection && (ptCall <= 32 || (ptCall % 240) == 0);
+    if (sample || ptSample) {
         engineFrameKnown = ReadEngineFrameSafe(&engineFrame, &frameFault);
         commandKnown = ReadEngineCommandContext(nullptr, &command);
         Log("RR_RAYTRACE_ENTER call=%llu arg0=%d arg1=%d raygen=%s pipeline_arg0=%d pipeline_arg1=%d begin=%llu present=%llu aa=%llu engine_frame=%llu engine_frame_known=%u engine_frame_exception=0x%08lX command_known=%u context=%p command_list=%p command_type=%u source_tls=%u command_exception=0x%08lX",
@@ -686,6 +691,13 @@ static void HookRRRaytrace(int a, int b) {
             beginCount.load(), presentCount.load(), aaCount.load(), engineFrame,
             unsigned(engineFrameKnown), frameFault, unsigned(commandKnown), command.context,
             command.commandList, command.commandType, command.sourceTls, command.fault);
+        if (ptSample) {
+            if (!commandKnown) ++ptReflectionContextFailures;
+            Log("PT_REFLECTION_P0_DISPATCH reflection_call=%llu rr_call=%llu frame=%llu frame_known=%u present=%llu aa=%llu command_known=%u context=%p command_list=%p command_type=%u pipeline_arg0=%d pipeline_arg1=%d mode=observe_only requested_bounces=1_2 native_dispatch_unchanged=1 allocations=0 context_failures=%llu",
+                ptCall, call, engineFrame, unsigned(engineFrameKnown), presentCount.load(), aaCount.load(),
+                unsigned(commandKnown), command.context, command.commandList, command.commandType,
+                rrCurrentPipelineArg0, rrCurrentPipelineArg1, ptReflectionContextFailures.load());
+        }
         QueryPerformanceCounter(&before);
     }
     originalRRRaytrace(a, b);
@@ -1371,8 +1383,8 @@ static BOOL CALLBACK Configure(PINIT_ONCE, PVOID, PVOID*) noexcept {
         }
         Log("HOOK_INSTALLED label=CONTROL_COMMAND_QUEUE_CTOR");
         const bool guideInputsReady = RRGuideInitializeInputs(d3d);
-        const unsigned int rrObserverHooks = 0;
-        Log("RR_OBSERVER_HOOKS_DISABLED reason=r20x_performance_cleanup diagnostic_only=1");
+        const unsigned int rrObserverHooks = InstallRRObservationHooks(renderer,d3d);
+        Log("PT_REFLECTION_P0_OBSERVER ready=%u expected=3 scope=reflection_dispatch_identification gpu_work=unchanged allocations=0",rrObserverHooks);
         const bool albedoHooksReady = guideInputsReady && RRAlbedoInstallHooks(renderer, d3d);
         if(albedoHooksReady) rrAlbedoStage.store(RRAlbedoStage::Disabled,std::memory_order_release);
         Log("RR_GUIDE_G3_NATIVE_PATH ready=%u diagnostic_capture=0 recurring_replay=on_demand_full_rr_only rr_eval=warmup_then_native", unsigned(albedoHooksReady));
