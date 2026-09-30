@@ -73,7 +73,32 @@ jobs:
           $ErrorActionPreference='Stop'
           $sdkBin=Join-Path ${env:ProgramFiles(x86)} 'Windows Kits\10\bin'
           $dxc=Get-ChildItem -LiteralPath $sdkBin -Recurse -Filter dxc.exe -ErrorAction SilentlyContinue |
-            Where-Object { $_.FullName -match '\\x64\\dxc\.exe        run: |
+            Where-Object { $_.FullName -match '\\x64\\dxc[.]exe$' } |
+            Sort-Object FullName | Select-Object -Last 1
+          if(-not $dxc){ throw 'DXC x64 was not found in the Windows SDK.' }
+          Write-Host "Using DXC: $($dxc.FullName)"
+          & $dxc.FullName -T lib_6_3 -O3 -Qstrip_debug -Fo build/pt_reflection_raygen.dxil src/shaders/pt_reflection_raygen.hlsl
+          if($LASTEXITCODE -ne 0){ throw "DXC failed with exit code $LASTEXITCODE" }
+          $bytes=[IO.File]::ReadAllBytes('build/pt_reflection_raygen.dxil')
+          if($bytes.Length -lt 32){ throw 'Compiled DXIL library is unexpectedly small.' }
+          $ascii=[Text.Encoding]::ASCII.GetString($bytes)
+          if(-not $ascii.Contains('ptReflectionRayGeneration')){ throw 'Compiled DXIL library does not expose ptReflectionRayGeneration.' }
+          $lines=New-Object System.Collections.Generic.List[string]
+          $lines.Add('#pragma once')
+          $lines.Add('static const unsigned char kPTReflectionRaygenDxil[] = {')
+          for($i=0;$i -lt $bytes.Length;$i+=16){
+            $end=[Math]::Min($i+16,$bytes.Length)
+            $chunk=for($j=$i;$j -lt $end;$j++){ '0x{0:X2}' -f $bytes[$j] }
+            $lines.Add('    '+($chunk -join ', ')+',')
+          }
+          $lines.Add('};')
+          $lines.Add('static constexpr size_t kPTReflectionRaygenDxilSize = sizeof(kPTReflectionRaygenDxil);')
+          [IO.File]::WriteAllLines((Join-Path $PWD 'build/pt_reflection_raygen_compiled.h'),$lines,[Text.Encoding]::ASCII)
+          Write-Host "P3 DXIL bytes: $($bytes.Length)"
+
+      - name: Compile experimental proxy
+        shell: cmd
+        run: |
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
           cl /nologo /std:c++17 /EHsc /W4 /O2 /MT /LD /guard:cf /DUNICODE /D_UNICODE /I "third_party\streamline\include" src\probe.cpp build\control_fg_logo.res /Fobuild\probe.obj /Febuild\dxgi.dll /link /DEF:src\dxgi.def /INCREMENTAL:NO /DYNAMICBASE /NXCOMPAT /GUARD:CF bcrypt.lib wintrust.lib user32.lib gdi32.lib msimg32.lib
           if errorlevel 1 exit /b 1
@@ -108,65 +133,5 @@ jobs:
             build/exports.txt
             build/imports.txt
             build/pt_reflection_raygen.dxil
-          if-no-files-found: error
-          retention-days: 7
- } |
-            Sort-Object FullName | Select-Object -Last 1
-          if(-not $dxc){ throw 'DXC x64 was not found in the Windows SDK.' }
-          Write-Host "Using DXC: $($dxc.FullName)"
-          & $dxc.FullName -T lib_6_3 -O3 -Qstrip_debug -Fo build/pt_reflection_raygen.dxil src/shaders/pt_reflection_raygen.hlsl
-          if($LASTEXITCODE -ne 0){ throw "DXC failed with exit code $LASTEXITCODE" }
-          $bytes=[IO.File]::ReadAllBytes('build/pt_reflection_raygen.dxil')
-          if($bytes.Length -lt 32){ throw 'Compiled DXIL library is unexpectedly small.' }
-          $ascii=[Text.Encoding]::ASCII.GetString($bytes)
-          if(-not $ascii.Contains('ptReflectionRayGeneration')){ throw 'Compiled DXIL library does not expose ptReflectionRayGeneration.' }
-          $lines=New-Object System.Collections.Generic.List[string]
-          $lines.Add('#pragma once')
-          $lines.Add('static const unsigned char kPTReflectionRaygenDxil[] = {')
-          for($i=0;$i -lt $bytes.Length;$i+=16){
-            $end=[Math]::Min($i+16,$bytes.Length)
-            $chunk=for($j=$i;$j -lt $end;$j++){ '0x{0:X2}' -f $bytes[$j] }
-            $lines.Add('    '+($chunk -join ', ')+',')
-          }
-          $lines.Add('};')
-          $lines.Add('static constexpr size_t kPTReflectionRaygenDxilSize = sizeof(kPTReflectionRaygenDxil);')
-          [IO.File]::WriteAllLines((Join-Path $PWD 'build/pt_reflection_raygen_compiled.h'),$lines,[Text.Encoding]::ASCII)
-          Write-Host "P3 DXIL bytes: $($bytes.Length)"
-
-      - name: Compile experimental proxy
-        shell: cmd
-        run: |
-          call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
-          cl /nologo /std:c++17 /EHsc /W4 /O2 /MT /LD /guard:cf /DUNICODE /D_UNICODE /I "third_party\streamline\include" src\probe.cpp build\control_fg_logo.res /Fobuild\probe.obj /Febuild\dxgi.dll /link /DEF:src\dxgi.def /INCREMENTAL:NO /DYNAMICBASE /NXCOMPAT /GUARD:CF bcrypt.lib wintrust.lib user32.lib gdi32.lib msimg32.lib
-          if errorlevel 1 exit /b 1
-          dumpbin /exports build\dxgi.dll > build\exports.txt
-          dumpbin /imports build\dxgi.dll > build\imports.txt
-
-      - name: Package P0
-        shell: powershell
-        run: |
-          $ErrorActionPreference='Stop'
-          $out='Control-FG-PT-Reflections-P3'
-          New-Item -ItemType Directory -Force -Path $out | Out-Null
-          Copy-Item build/dxgi.dll "$out/dxgi.dll"
-          @'
-          PT Reflections P3
-          -----------------
-          This is an reflection shader-record identity clone probe.
-          It does not alter reflection pixels yet.
-          Run normal gameplay with Ray Traced Reflections enabled, then collect compact logs.
-          Look for PT_REFLECTION_P2_CLONE and PT_REFLECTION_P1_GETTER records.
-          '@ | Set-Content "$out/README.txt" -Encoding ASCII
-          Compress-Archive -Path "$out/*" -DestinationPath "$out.zip" -Force
-          (Get-FileHash "$out.zip" -Algorithm SHA256).Hash | Set-Content "$out.sha256" -Encoding ASCII
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: Control-FG-PT-Reflections-P3
-          path: |
-            Control-FG-PT-Reflections-P3.zip
-            Control-FG-PT-Reflections-P3.sha256
-            build/exports.txt
-            build/imports.txt
           if-no-files-found: error
           retention-days: 7
