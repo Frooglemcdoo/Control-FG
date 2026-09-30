@@ -1,0 +1,202 @@
+name: Build PT reflections P0
+
+on:
+  push:
+    branches:
+      - experiment/pt-reflections-p0
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure MSVC
+        shell: cmd
+        run: |
+          for /f "usebackq tokens=*" %%I in (`"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath`) do set "VSROOT=%%I"
+          call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
+          echo VSROOT=%VSROOT%>>%GITHUB_ENV%
+
+      - name: Prepare Streamline and generated shaders
+        shell: cmd
+        run: |
+          call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
+          if not exist build mkdir build
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File Fetch-Streamline.ps1
+          if errorlevel 1 exit /b 1
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File Verify-Streamline.ps1
+          if errorlevel 1 exit /b 1
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File Verify-RRRuntime.ps1
+          if errorlevel 1 exit /b 1
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File Patch-OverlayStability.ps1
+          if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /O2 /MT tools\compile-distance.cpp /Fobuild\compile-distance.obj /Febuild\compile-distance.exe /link d3dcompiler.lib
+          if errorlevel 1 exit /b 1
+          build\compile-distance.exe
+          if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /O2 /MT tools\compile-live.cpp /Fobuild\compile-live.obj /Febuild\compile-live.exe /link d3dcompiler.lib
+          if errorlevel 1 exit /b 1
+          build\compile-live.exe
+          if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /O2 /MT tools\compile-skin-mask.cpp /Fobuild\compile-skin-mask.obj /Febuild\compile-skin-mask.exe /link d3dcompiler.lib
+          if errorlevel 1 exit /b 1
+          build\compile-skin-mask.exe
+          if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /O2 /MT tools\compile-reflectance.cpp /Fobuild\compile-reflectance.obj /Febuild\compile-reflectance.exe /link d3dcompiler.lib
+          if errorlevel 1 exit /b 1
+          build\compile-reflectance.exe
+          if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /O2 /MT tools\compile-fg-ui-alpha.cpp /Fobuild\compile-fg-ui-alpha.obj /Febuild\compile-fg-ui-alpha.exe /link d3dcompiler.lib
+          if errorlevel 1 exit /b 1
+          build\compile-fg-ui-alpha.exe
+          if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /O2 /MT tools\compile-clamp-strength.cpp /Fobuild\compile-clamp-strength.obj /Febuild\compile-clamp-strength.exe /link d3dcompiler.lib
+          if errorlevel 1 exit /b 1
+          for /l %%S in (25,1,75) do build\compile-clamp-strength.exe %%S
+          if errorlevel 1 exit /b 1
+          copy /y src\rr_clamp_variants.in.h build\rr_clamp_variants.h >nul
+          pushd src
+          rc /nologo /fo ..\build\control_fg_logo.res control_fg_logo.rc
+          set "RC_RESULT=%ERRORLEVEL%"
+          popd
+          if not "%RC_RESULT%"=="0" exit /b %RC_RESULT%
+
+      - name: Audit native PT reflection contract
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          python tools/audit-pt-reflection-native.py build/pt-reflection-native-audit.json
+          if($LASTEXITCODE -ne 0){throw "Native reflection audit failed: $LASTEXITCODE"}
+      - name: Compile PT reflection DXIL libraries
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $pf86=[Environment]::GetFolderPath('ProgramFilesX86')
+          $pf=[Environment]::GetFolderPath('ProgramFiles')
+          $roots=@(
+            (Join-Path $pf86 'Windows Kits\10\bin'),
+            (Join-Path $pf 'Microsoft Visual Studio'),
+            (Join-Path $pf86 'Microsoft Visual Studio')
+          ) | Where-Object { $_ -and (Test-Path -LiteralPath $_) }
+          $dxc=$null
+          foreach($root in $roots){
+            $candidate=Get-ChildItem -LiteralPath $root -Filter dxc.exe -File -Recurse -ErrorAction SilentlyContinue |
+              Sort-Object FullName -Descending | Select-Object -First 1
+            if($candidate){$dxc=$candidate.FullName;break}
+          }
+          if(-not $dxc){throw 'dxc.exe was not found in the Windows SDK / Visual Studio installation.'}
+          Write-Host "DXC: $dxc"
+          & $dxc -T lib_6_3 -HV 2021 -O3 -I src/shaders -Fo build/pt_reflection_p2.dxil src/shaders/pt_reflection_p2.hlsl
+          if($LASTEXITCODE -ne 0){throw "DXC compile failed: $LASTEXITCODE"}
+          & $dxc -dumpbin build/pt_reflection_p2.dxil | Set-Content -LiteralPath build/pt_reflection_p2.dump.txt -Encoding UTF8
+          if($LASTEXITCODE -ne 0){throw "DXC dump failed: $LASTEXITCODE"}
+          $dump=Get-Content -LiteralPath build/pt_reflection_p2.dump.txt -Raw
+          foreach($name in @(
+            'reflectionRayGeneration',
+            'reflectionClosestHit',
+            'reflectionAlphaTestAnyHit',
+            'reflectionMiss',
+            'shadowClosestHit',
+            'shadowAlphaTestAnyHit',
+            'shadowMiss'
+          )){
+            if(-not $dump.Contains($name)){throw "Missing DXR export: $name"}
+          }
+          $source=Get-Content -LiteralPath src/shaders/pt_reflection_p2.hlsl -Raw
+          foreach($contract in @(
+            'g_rwtShadow : register(u3)',
+            'g_rwtShadow[uint3(pixel,layer)]=0u',
+            'g_rwtShadow[uint3(pixel,layer)]=1u'
+          )){
+            if(-not $source.Contains($contract)){throw "Missing native shadow contract: $contract"}
+          }
+          if(-not $source.Contains('#define PT_REFLECTION_P2_COMPOSITE_UNVALIDATED 1')){
+            throw 'P2 compile proof unexpectedly lost its runtime safety marker.'
+          }
+          (Get-FileHash -LiteralPath build/pt_reflection_p2.dxil -Algorithm SHA256).Hash.ToLowerInvariant() |
+            Set-Content -LiteralPath build/pt_reflection_p2.sha256 -Encoding ASCII
+
+          & $dxc -T lib_6_3 -HV 2021 -O3 -I src/shaders -Fo build/pt_reflection_p1.dxil src/shaders/pt_reflection_p1.hlsl
+          if($LASTEXITCODE -ne 0){throw "P1 DXC compile failed: $LASTEXITCODE"}
+          & $dxc -dumpbin build/pt_reflection_p1.dxil | Set-Content -LiteralPath build/pt_reflection_p1.dump.txt -Encoding UTF8
+          if($LASTEXITCODE -ne 0){throw "P1 DXC dump failed: $LASTEXITCODE"}
+          $p1dump=Get-Content -LiteralPath build/pt_reflection_p1.dump.txt -Raw
+          foreach($name in @(
+            'reflectionRayGeneration',
+            'reflectionClosestHit',
+            'reflectionAlphaTestAnyHit',
+            'reflectionMiss',
+            'shadowClosestHit',
+            'shadowAlphaTestAnyHit',
+            'shadowMiss'
+          )){
+            if(-not $p1dump.Contains($name)){throw "P1 missing DXR export: $name"}
+          }
+          $p1source=Get-Content -LiteralPath src/shaders/pt_reflection_p1.hlsl -Raw
+          if(-not $p1source.Contains('#define PT_REFLECTION_P1_STOCK_COMPOSITE_COMPATIBLE 1')){
+            throw 'P1 stock-composite compatibility marker missing.'
+          }
+          (Get-FileHash -LiteralPath build/pt_reflection_p1.dxil -Algorithm SHA256).Hash.ToLowerInvariant() |
+            Set-Content -LiteralPath build/pt_reflection_p1.sha256 -Encoding ASCII
+      - name: Compile experimental proxy
+        shell: cmd
+        run: |
+          call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
+          cl /nologo /std:c++17 /EHsc /W4 /O2 /MT /LD /guard:cf /DUNICODE /D_UNICODE /I "third_party\streamline\include" src\probe.cpp build\control_fg_logo.res /Fobuild\probe.obj /Febuild\dxgi.dll /link /DEF:src\dxgi.def /INCREMENTAL:NO /DYNAMICBASE /NXCOMPAT /GUARD:CF bcrypt.lib wintrust.lib user32.lib gdi32.lib msimg32.lib
+          if errorlevel 1 exit /b 1
+          dumpbin /exports build\dxgi.dll > build\exports.txt
+          dumpbin /imports build\dxgi.dll > build\imports.txt
+
+      - name: Package P0
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $out='Control-FG-PT-Reflections-P0'
+          New-Item -ItemType Directory -Force -Path $out | Out-Null
+          Copy-Item build/dxgi.dll "$out/dxgi.dll"
+          Copy-Item build/pt_reflection_p1.dxil "$out/pt_reflection_p1.dxil"
+          Copy-Item build/pt_reflection_p2.dxil "$out/pt_reflection_p2.dxil"
+          @'
+          PT Reflections experimental
+          ---------------------------
+          The runtime reflection hooks are still fail-closed.
+          pt_reflection_p1.dxil is stock-composite-compatible and staged for the first visual test.
+          pt_reflection_p2.dxil contains the paired-layer two-bounce proof and remains blocked.
+          Run normal gameplay with Ray Traced Reflections enabled, then collect compact logs.
+          Relevant records:
+            PT_REFLECTION_P0_DISPATCH
+            PT_REFLECTION_P1_VARIANT_ADMIT
+            PT_REFLECTION_P1_SHADER_STORAGE_EXPORT_*
+            PT_REFLECTION_P2_SIDECAR
+          '@ | Set-Content "$out/README.txt" -Encoding ASCII
+          Compress-Archive -Path "$out/*" -DestinationPath "$out.zip" -Force
+          (Get-FileHash "$out.zip" -Algorithm SHA256).Hash | Set-Content "$out.sha256" -Encoding ASCII
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Control-FG-PT-Reflections-P0
+          path: |
+            Control-FG-PT-Reflections-P0.zip
+            Control-FG-PT-Reflections-P0.sha256
+            build/exports.txt
+            build/imports.txt
+            build/pt_reflection_p1.dxil
+            build/pt_reflection_p1.sha256
+            build/pt_reflection_p1.dump.txt
+            build/pt_reflection_p2.dxil
+            build/pt_reflection_p2.sha256
+            build/pt_reflection_p2.dump.txt
+            build/pt-reflection-native-audit.json
+            build/pt-reflection-native-audit-failure.txt
+          if-no-files-found: warn
+          retention-days: 7
