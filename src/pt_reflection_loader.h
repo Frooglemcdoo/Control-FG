@@ -16,11 +16,16 @@
 using PTReflectionRfxLookupFn = void* (*)(void*, const char*);
 using PTReflectionTechniqueLookupFn = void* (*)(void*, const char*);
 using PTReflectionVariantLookupFn = void* (*)(void*, unsigned);
+using PTShaderCodeStoragePersistFn = int (__cdecl*)(const char*, unsigned long long, unsigned);
+using PTShaderCodeStorageIsPersistedFn = bool (__cdecl*)(const char*);
 
 static PTReflectionRfxLookupFn ptReflectionOriginalRfxLookup=nullptr;
 static PTReflectionTechniqueLookupFn ptReflectionOriginalTechniqueLookup=nullptr;
 static PTReflectionVariantLookupFn ptReflectionOriginalVariantLookup=nullptr;
+static PTShaderCodeStoragePersistFn ptReflectionStoragePersist=nullptr;
+static PTShaderCodeStorageIsPersistedFn ptReflectionStorageIsPersisted=nullptr;
 static RRAlbedoCallPatch ptReflectionLookupPatches[3]{};
+static std::atomic<unsigned int> ptReflectionStorageRoundtripDone{0};
 
 static thread_local bool ptReflectionLookupScope=false;
 static thread_local void* ptReflectionLastRfxObject=nullptr;
@@ -472,11 +477,75 @@ static unsigned PTReflectionLogShaderCodeStorageExports(HMODULE d3d) noexcept {
     return matches;
 }
 
+
+static void PTReflectionProbeCachedTechniqueOnce(HMODULE renderer,HMODULE d3d) noexcept {
+    if(ptReflectionStorageRoundtripDone.load(std::memory_order_acquire)||!renderer||renderer!=verifiedRenderer||
+       !d3d||d3d!=verifiedD3d||!RRAlbedoShader::residentGetter||!ptReflectionStoragePersist||
+       !ptReflectionStorageIsPersisted)return;
+    void* technique=nullptr;
+    __try {
+        technique=*reinterpret_cast<void**>(reinterpret_cast<unsigned char*>(renderer)+0x128D900u);
+    } __except(EXCEPTION_EXECUTE_HANDLER) {
+        return;
+    }
+    if(!technique)return;
+
+    unsigned char* table=nullptr;unsigned count=0;
+    __try {
+        table=*reinterpret_cast<unsigned char**>(reinterpret_cast<unsigned char*>(technique)+0x238);
+        count=*reinterpret_cast<unsigned*>(reinterpret_cast<unsigned char*>(technique)+0x240);
+    } __except(EXCEPTION_EXECUTE_HANDLER) {
+        return;
+    }
+    if(!table||count==0||count>128)return;
+
+    for(unsigned i=0;i<count;++i){
+        auto* shader=table+static_cast<size_t>(i)*0xA8u;
+        PTReflectionRayIdentity identity{};
+        if(!PTReflectionReadRayIdentity(technique,shader,&identity))continue;
+
+        const auto& d=identity.descriptor;
+        const char* resident=nullptr;
+        bool before=false;int persisted=-0x7fffffff;DWORD fault=0;
+        unsigned char descriptorBytes[32]{};
+        char descriptorHex[65]{};
+        __try {
+            resident=RRAlbedoShader::residentGetter(d.identifier);
+            if(!resident)continue;
+            before=ptReflectionStorageIsPersisted(resident);
+            memcpy(descriptorBytes,reinterpret_cast<const void*>(d.shaderBase),sizeof(descriptorBytes));
+            persisted=ptReflectionStoragePersist(resident,static_cast<unsigned long long>(d.size),d.stage);
+        } __except(EXCEPTION_EXECUTE_HANDLER) {
+            fault=GetExceptionCode();
+        }
+        for(unsigned n=0;n<sizeof(descriptorBytes);++n)
+            sprintf_s(descriptorHex+n*2,3,"%02X",descriptorBytes[n]);
+
+        const bool same=persisted==d.identifier;
+        const bool valid=persisted>=0&&fault==0;
+        ptReflectionStorageRoundtripDone.store(1u,std::memory_order_release);
+        Log("PT_REFLECTION_P1_STORAGE_ROUNDTRIP technique=%p table_index=%u shader=%p descriptor=%p stage=%u native_id=%d bytes=%llu resident=%p is_persisted_before=%u persist_result=%d same_id=%u valid=%u exception=0x%08lX descriptor32=%s native_sha256=%s variant=%03d sidecar_loaded=%u sidecar_bytes=%llu sidecar_sha256=%s activation=disabled",
+            technique,identity.tableIndex,shader,reinterpret_cast<void*>(d.shaderBase),d.stage,d.identifier,
+            static_cast<unsigned long long>(d.size),resident,unsigned(before),persisted,unsigned(same),unsigned(valid),
+            fault,descriptorHex,identity.sha256,identity.variant,unsigned(ptReflectionP2Loaded),
+            static_cast<unsigned long long>(ptReflectionP2Bytes.size()),ptReflectionP2Sha256);
+        return;
+    }
+}
+
 static bool PTReflectionInstallShaderLookupHooks(HMODULE renderer,HMODULE d3d) noexcept {
     if(!renderer||renderer!=verifiedRenderer||!d3d||d3d!=verifiedD3d)return false;
     PTReflectionLogShaderCodeStorageExports(d3d);
     PTReflectionLogShaderCodeStorageGetterBytes(d3d);
     PTReflectionLogShaderCodeStorageGetterCallsites(d3d);
+    ptReflectionStoragePersist=reinterpret_cast<PTShaderCodeStoragePersistFn>(
+        GetProcAddress(d3d,"?persist@ShaderCodeStorage@d3d@@YAHPEBD_KW4ShaderType@2@@Z"));
+    ptReflectionStorageIsPersisted=reinterpret_cast<PTShaderCodeStorageIsPersistedFn>(
+        GetProcAddress(d3d,"?isPersisted@ShaderCodeStorage@d3d@@YA_NPEBD@Z"));
+    ptReflectionStorageRoundtripDone.store(0u,std::memory_order_release);
+    Log("PT_REFLECTION_P1_STORAGE_API persist=%p is_persisted=%p ready=%u",
+        reinterpret_cast<void*>(ptReflectionStoragePersist),reinterpret_cast<void*>(ptReflectionStorageIsPersisted),
+        unsigned(ptReflectionStoragePersist&&ptReflectionStorageIsPersisted));
     PTReflectionLoadP2Sidecar();
     ptReflectionForcedNativeVariant=PTReflectionReadForcedNativeVariant();
     ptReflectionSwapTechnique=nullptr;
