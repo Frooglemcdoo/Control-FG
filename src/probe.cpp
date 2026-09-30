@@ -625,6 +625,8 @@ static std::atomic<unsigned long long> rrRayGenerationCount{0};
 static std::atomic<unsigned long long> rrRaytraceDispatchCount{0};
 static std::atomic<unsigned long long> ptReflectionDispatchCount{0};
 static std::atomic<unsigned long long> ptReflectionContextFailures{0};
+static std::atomic<unsigned long long> ptReflectionMissBindCount{0};
+static std::atomic<unsigned long long> ptReflectionHitGroupBindCount{0};
 static void PTReflectionProbeCachedTechniqueOnce(HMODULE renderer,HMODULE d3d) noexcept;
 static thread_local int rrCurrentPipelineArg0 = -1;
 static thread_local int rrCurrentPipelineArg1 = -1;
@@ -677,8 +679,11 @@ static void HookRRSetRayGeneration(const char* name) {
 static void HookRRSetMiss(int slot, const char* name) {
     char safeName[128]{};
     RRSafeCopyCString(name,safeName,sizeof(safeName));
-    if(strcmp(rrCurrentRayGeneration,"reflectionRayGeneration")==0)
-        Log("PT_REFLECTION_P05_MISS slot=%d name=%s pipeline_arg0=%d pipeline_arg1=%d",slot,safeName,rrCurrentPipelineArg0,rrCurrentPipelineArg1);
+    if(strcmp(rrCurrentRayGeneration,"reflectionRayGeneration")==0) {
+        const auto n=++ptReflectionMissBindCount;
+        if(n<=12 || (n%480)==0)
+            Log("PT_REFLECTION_P05_MISS count=%llu slot=%d name=%s pipeline_arg0=%d pipeline_arg1=%d",n,slot,safeName,rrCurrentPipelineArg0,rrCurrentPipelineArg1);
+    }
     originalRRSetMiss(slot,name);
 }
 
@@ -687,9 +692,12 @@ static void HookRRSetHitGroup(int rayType,int geometryType,const char* intersect
     RRSafeCopyCString(intersection,i,sizeof(i));
     RRSafeCopyCString(anyHit,a,sizeof(a));
     RRSafeCopyCString(closestHit,c,sizeof(c));
-    if(strcmp(rrCurrentRayGeneration,"reflectionRayGeneration")==0)
-        Log("PT_REFLECTION_P05_HITGROUP ray_type=%d geometry_type=%d intersection=%s anyhit=%s closesthit=%s pipeline_arg0=%d pipeline_arg1=%d",
-            rayType,geometryType,i,a,c,rrCurrentPipelineArg0,rrCurrentPipelineArg1);
+    if(strcmp(rrCurrentRayGeneration,"reflectionRayGeneration")==0) {
+        const auto n=++ptReflectionHitGroupBindCount;
+        if(n<=24 || (n%960)==0)
+            Log("PT_REFLECTION_P05_HITGROUP count=%llu ray_type=%d geometry_type=%d intersection=%s anyhit=%s closesthit=%s pipeline_arg0=%d pipeline_arg1=%d",
+                n,rayType,geometryType,i,a,c,rrCurrentPipelineArg0,rrCurrentPipelineArg1);
+    }
     originalRRSetHitGroup(rayType,geometryType,intersection,anyHit,closestHit);
 }
 
