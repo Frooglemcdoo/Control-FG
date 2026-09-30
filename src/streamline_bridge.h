@@ -2450,7 +2450,13 @@ static HRESULT WINAPI HookD3D12CreateDevice(IUnknown* adapter, D3D_FEATURE_LEVEL
     Log("D3D12_CREATE_DEVICE_RETURN hr=0x%08lX adapter=%p feature_level=0x%X iid=%08lX returned=%p bootstrap_state=%u device_set=%u control_dlss_ready=%u",
         static_cast<unsigned long>(hr), adapter, unsigned(minimumFeatureLevel), iid.Data1, returned,
         slBootstrapState.load(), slDeviceConfigured.load(), slControlDlssReady.load());
-    if (SUCCEEDED(hr) && returned) { const DWORD clampError=GetLastError(); control_rr_clamp::InstallDevice(static_cast<IUnknown*>(returned)); SetLastError(clampError); CaptureSLNativeDeviceForDeferredBind(returned); }
+    if (SUCCEEDED(hr) && returned) {
+        const DWORD clampError=GetLastError();
+        control_rr_clamp::InstallDevice(static_cast<IUnknown*>(returned));
+        control_pt_reflection::InstallDevice(static_cast<IUnknown*>(returned));
+        SetLastError(clampError);
+        CaptureSLNativeDeviceForDeferredBind(returned);
+    }
     return hr;
 }
 
