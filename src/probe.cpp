@@ -133,7 +133,9 @@ static bool HashMatches(HMODULE module, const char* expected) {
 #include "fg_pixel_capture.h"
 #include "fg_native_source.h"
 #include "rr_clamp_strength.h"
+namespace control_pt_reflection { bool InstallDevice(IUnknown*) noexcept; }
 #include "streamline_bridge.h"
+#include "pt_reflections.h"
 static HRESULT SubmitFGUIRecompositionBeforePresent(unsigned long long present) noexcept;
 #include "hdr10_bridge.h"
 
@@ -1395,6 +1397,9 @@ static BOOL CALLBACK Configure(PINIT_ONCE, PVOID, PVOID*) noexcept {
         // Load persisted RR preset before the native feature-create hook can be consumed.
         // StartFGOverlay() later reuses this already-loaded settings state.
         FGOverlayLoadSettings();
+        const bool ptReflectionProviderReady=control_pt_reflection::InstallProviderHook(renderer,d3d);
+        Log("PT_REFLECTION_PROBE_INSTALL provider_ready=%u state_object_ready=%u requested_rays=%u options=native,1,2,4 recursive_bounce_replacement=observe_only",
+            unsigned(ptReflectionProviderReady),unsigned(control_pt_reflection::StateObjectHookReady()),control_pt_reflection::RequestedRays());
         const unsigned int textureStreamingRequestedMs=GetFGTextureStreamingBudgetMs();
         const bool textureStreamingApplied=ApplyTextureStreamingExperimental(textureStreamingRequestedMs);
         if(!textureStreamingApplied)SetFGTextureStreamingBudgetMs(0u);
