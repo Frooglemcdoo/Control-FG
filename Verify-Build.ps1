@@ -64,7 +64,8 @@ try {
         'FG_OVERLAY_READY','FG_OVERLAY_SELECTION','FG_SETTINGS_LOAD','FG_SETTINGS_SAVE','RR_TOGGLE',
         'rr_controls=on_off_plus_model_E_F','rr_model_default=F','rr_model_live_switch=E_F','FG_OVERLAY_DYNAMIC_TARGET',
         'dynamic_target_ui=auto_manual_thick_slider','rr_preset_selector=public_E_F','overlay_status=selected,effective,current_fps,hdr,capability','controls=auto,manual,thick_slider_30_1000',
-        'persistence=localappdata_ini_schema10_fg_mode_dynamic_target_rr_toggle_preset_texture_vram'
+        'persistence=localappdata_ini_schema10_fg_mode_dynamic_target_rr_toggle_preset_texture_vram',
+        'PT_REFLECTION_PROVIDER_HOOK','PT_REFLECTION_STATE_HOOK','PT_REFLECTION_STATE_OBJECT','PT_REFLECTION_PROBE_INSTALL','PT_REFLECTION_UI'
     )
     # Some historical guide strings remain source-contract markers even when their
     # diagnostic runtime path is deliberately compiled out. Build validation must
