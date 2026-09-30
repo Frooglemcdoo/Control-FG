@@ -66,7 +66,7 @@ def verify_source_evidence(root):
     pt_owned = {
         'src/probe.cpp','src/fg_overlay.h','src/streamline_bridge.h',
         'src/pt_reflections.h','Verify-Source.ps1','Verify-Build.ps1',
-        'tools/verify_source_evidence.py'
+        'tools/verify_source_evidence.py','.github/workflows/prepare-v2.1.2.yml'
     }
     if pt_experiment:
         pt = pt_header.read_text(encoding='utf-8-sig')
