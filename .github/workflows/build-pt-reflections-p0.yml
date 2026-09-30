@@ -140,13 +140,18 @@ jobs:
           $out='Control-FG-PT-Reflections-P0'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
+          Copy-Item build/pt_reflection_p2.dxil "$out/pt_reflection_p2.dxil"
           @'
-          PT Reflections P0
-          -----------------
-          This is an observation-only reflection-dispatch probe.
-          It does not alter reflection pixels yet.
+          PT Reflections experimental
+          ---------------------------
+          The runtime reflection hooks are still fail-closed.
+          pt_reflection_p2.dxil is staged and hashed by the proxy but is NOT activated yet.
           Run normal gameplay with Ray Traced Reflections enabled, then collect compact logs.
-          Look for PT_REFLECTION_P0_DISPATCH records.
+          Relevant records:
+            PT_REFLECTION_P0_DISPATCH
+            PT_REFLECTION_P1_VARIANT_ADMIT
+            PT_REFLECTION_P1_SHADER_STORAGE_EXPORT_*
+            PT_REFLECTION_P2_SIDECAR
           '@ | Set-Content "$out/README.txt" -Encoding ASCII
           Compress-Archive -Path "$out/*" -DestinationPath "$out.zip" -Force
           (Get-FileHash "$out.zip" -Algorithm SHA256).Hash | Set-Content "$out.sha256" -Encoding ASCII
