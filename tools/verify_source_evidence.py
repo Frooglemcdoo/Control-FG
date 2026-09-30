@@ -58,6 +58,40 @@ def verify_source_evidence(root):
         raise ValueError(f'{current_ref}: missing source evidence')
     current_paths = set(current_entries)
 
+    # PT reflection R1 is an experimental branch layered on the frozen v2.1.2
+    # checkpoint. Validate its narrow source contract directly and exempt only
+    # those intentionally changed files from the release hash checkpoint.
+    pt_header = root / 'src/pt_reflections.h'
+    pt_experiment = pt_header.is_file()
+    pt_owned = {
+        'src/probe.cpp','src/fg_overlay.h','src/streamline_bridge.h',
+        'src/pt_reflections.h','Verify-Source.ps1','Verify-Build.ps1',
+        'tools/verify_source_evidence.py'
+    }
+    if pt_experiment:
+        pt = pt_header.read_text(encoding='utf-8-sig')
+        overlay = (root/'src/fg_overlay.h').read_text(encoding='utf-8-sig')
+        bridge = (root/'src/streamline_bridge.h').read_text(encoding='utf-8-sig')
+        probe = (root/'src/probe.cpp').read_text(encoding='utf-8-sig')
+        for marker in (
+            'ReflectionRayCountCallRva = 0x12930D',
+            'SetProviderIatRva = 0x5DFF90',
+            'CreateStateObjectVtableSlot = 62',
+            'reflectionRayGeneration',
+            'PT_REFLECTION_PROVIDER_HOOK',
+            'PT_REFLECTION_STATE_OBJECT',
+        ):
+            if marker not in pt:
+                raise ValueError('PT reflection R1 source contract missing: '+marker)
+        for marker in ('L"PT REFLECTIONS (PROBE)"','L"NATIVE"','L"1 ray"','L"2 rays"','L"4 rays"','PTReflectionRays'):
+            if marker not in overlay:
+                raise ValueError('PT reflection R1 overlay contract missing: '+marker)
+        if 'control_pt_reflection::InstallDevice' not in bridge:
+            raise ValueError('PT reflection R1 Device5 hook is not wired')
+        for marker in ('#include "pt_reflections.h"','InstallProviderHook(renderer,d3d)','PT_REFLECTION_PROBE_INSTALL'):
+            if marker not in probe:
+                raise ValueError('PT reflection R1 integration missing: '+marker)
+
     for ref in references:
         report = json.loads((root / ref).read_text(encoding='utf-8-sig'))
         if ref == 'SOURCE-SHA256.json':
@@ -78,6 +112,8 @@ def verify_source_evidence(root):
             raise ValueError(f'{ref}: missing source evidence')
         for name, expected in entries.items():
             if ref != current_ref and name in current_paths:
+                continue
+            if ref == current_ref and pt_experiment and name in pt_owned:
                 continue
             check_file(ref, name, expected)
     return {'references': references, 'hashes_checked': checked,
