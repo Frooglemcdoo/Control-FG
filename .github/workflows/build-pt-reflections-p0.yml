@@ -70,6 +70,47 @@ jobs:
           popd
           if not "%RC_RESULT%"=="0" exit /b %RC_RESULT%
 
+      - name: Compile PT reflection P2 DXIL
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $pf86=[Environment]::GetFolderPath('ProgramFilesX86')
+          $pf=[Environment]::GetFolderPath('ProgramFiles')
+          $roots=@(
+            (Join-Path $pf86 'Windows Kits\10\bin'),
+            (Join-Path $pf 'Microsoft Visual Studio'),
+            (Join-Path $pf86 'Microsoft Visual Studio')
+          ) | Where-Object { $_ -and (Test-Path -LiteralPath $_) }
+          $dxc=$null
+          foreach($root in $roots){
+            $candidate=Get-ChildItem -LiteralPath $root -Filter dxc.exe -File -Recurse -ErrorAction SilentlyContinue |
+              Sort-Object FullName -Descending | Select-Object -First 1
+            if($candidate){$dxc=$candidate.FullName;break}
+          }
+          if(-not $dxc){throw 'dxc.exe was not found in the Windows SDK / Visual Studio installation.'}
+          Write-Host "DXC: $dxc"
+          & $dxc -T lib_6_3 -HV 2021 -O3 -I src/shaders -Fo build/pt_reflection_p2.dxil src/shaders/pt_reflection_p2.hlsl
+          if($LASTEXITCODE -ne 0){throw "DXC compile failed: $LASTEXITCODE"}
+          & $dxc -dumpbin build/pt_reflection_p2.dxil | Set-Content -LiteralPath build/pt_reflection_p2.dump.txt -Encoding UTF8
+          if($LASTEXITCODE -ne 0){throw "DXC dump failed: $LASTEXITCODE"}
+          $dump=Get-Content -LiteralPath build/pt_reflection_p2.dump.txt -Raw
+          foreach($name in @(
+            'reflectionRayGeneration',
+            'reflectionClosestHit',
+            'reflectionAlphaTestAnyHit',
+            'reflectionMiss',
+            'shadowClosestHit',
+            'shadowAlphaTestAnyHit',
+            'shadowMiss'
+          )){
+            if(-not $dump.Contains($name)){throw "Missing DXR export: $name"}
+          }
+          $source=Get-Content -LiteralPath src/shaders/pt_reflection_p2.hlsl -Raw
+          if(-not $source.Contains('#define PT_REFLECTION_P2_HIT_STUBS 1')){
+            throw 'P2 compile proof unexpectedly lost its runtime safety marker.'
+          }
+          (Get-FileHash -LiteralPath build/pt_reflection_p2.dxil -Algorithm SHA256).Hash.ToLowerInvariant() |
+            Set-Content -LiteralPath build/pt_reflection_p2.sha256 -Encoding ASCII
       - name: Compile experimental proxy
         shell: cmd
         run: |
@@ -105,5 +146,8 @@ jobs:
             Control-FG-PT-Reflections-P0.sha256
             build/exports.txt
             build/imports.txt
+            build/pt_reflection_p2.dxil
+            build/pt_reflection_p2.sha256
+            build/pt_reflection_p2.dump.txt
           if-no-files-found: error
           retention-days: 7
