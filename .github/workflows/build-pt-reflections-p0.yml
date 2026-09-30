@@ -112,6 +112,13 @@ jobs:
             if(-not $dump.Contains($name)){throw "Missing DXR export: $name"}
           }
           $source=Get-Content -LiteralPath src/shaders/pt_reflection_p2.hlsl -Raw
+          foreach($contract in @(
+            'g_rwtShadow : register(u3)',
+            'g_rwtShadow[uint3(pixel,layer)]=0u',
+            'g_rwtShadow[uint3(pixel,layer)]=1u'
+          )){
+            if(-not $source.Contains($contract)){throw "Missing native shadow contract: $contract"}
+          }
           if(-not $source.Contains('#define PT_REFLECTION_P2_COMPOSITE_UNVALIDATED 1')){
             throw 'P2 compile proof unexpectedly lost its runtime safety marker.'
           }
