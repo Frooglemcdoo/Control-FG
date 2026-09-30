@@ -10,6 +10,42 @@ try {
     $currentReleaseValidation = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'validation/current-release/results.json') -Raw | ConvertFrom-Json
     if ($currentReleaseValidation.status -cne 'LOCAL_PASS' -or -not ([string]$currentReleaseValidation.tests.portable_gate).StartsWith('PASS')) { throw 'Current-release evidence checkpoint is incomplete.' }
     $currentReleasePaths = @($currentReleaseValidation.tested_sha256.PSObject.Properties | ForEach-Object { $_.Name })
+    # Experimental PT reflection R1 owns only these files beyond the frozen
+    # v2.1.2 checkpoint. Keep every other current-release hash authoritative.
+    $ptReflectionHeaderPath = Join-Path $PSScriptRoot 'src/pt_reflections.h'
+    $ptReflectionExperiment = Test-Path -LiteralPath $ptReflectionHeaderPath
+    $ptReflectionExperimentPaths = @(
+        'src/probe.cpp','src/fg_overlay.h','src/streamline_bridge.h',
+        'src/pt_reflections.h','Verify-Source.ps1','Verify-Build.ps1'
+    )
+    if ($ptReflectionExperiment) {
+        $ptReflection = Get-Content -LiteralPath $ptReflectionHeaderPath -Raw
+        $ptOverlay = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'src/fg_overlay.h') -Raw
+        $ptBridge = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'src/streamline_bridge.h') -Raw
+        $ptProbe = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'src/probe.cpp') -Raw
+        foreach ($contract in @(
+            'ReflectionRayCountCallRva = 0x12930D','SetProviderIatRva = 0x5DFF90',
+            'CreateStateObjectVtableSlot = 62','0xFF,0x15,0x7D,0x6C,0x4B,0x00',
+            'requestedRays{0}','value==1u||value==2u||value==4u',
+            'reflectionRayGeneration','D3D12_STATE_SUBOBJECT_TYPE_DXIL_LIBRARY',
+            'D3D12_STATE_SUBOBJECT_TYPE_RAYTRACING_SHADER_CONFIG',
+            'D3D12_STATE_SUBOBJECT_TYPE_RAYTRACING_PIPELINE_CONFIG',
+            'PT_REFLECTION_PROVIDER_HOOK','PT_REFLECTION_STATE_OBJECT',
+            'recursive-bounce'
+        )) {
+            if (-not $ptReflection.Contains($contract)) { throw ('PT reflection R1 source contract missing: ' + $contract) }
+        }
+        foreach ($contract in @(
+            'L"PT REFLECTIONS (PROBE)"','L"NATIVE"','L"1 ray"','L"2 rays"','L"4 rays"',
+            'PTReflectionRays','recursive_bounce_replacement=observe_only'
+        )) {
+            if (-not $ptOverlay.Contains($contract)) { throw ('PT reflection R1 overlay contract missing: ' + $contract) }
+        }
+        if (-not $ptBridge.Contains('control_pt_reflection::InstallDevice')) { throw 'PT reflection R1 Device5 state-object observer is not wired to D3D12 device creation.' }
+        foreach ($contract in @('#include "pt_reflections.h"','InstallProviderHook(renderer,d3d)','PT_REFLECTION_PROBE_INSTALL')) {
+            if (-not $ptProbe.Contains($contract)) { throw ('PT reflection R1 probe integration missing: ' + $contract) }
+        }
+    }
     # Keep normal support simple; specialized collectors belong in tools/diagnostics.
     $supportCollectors = @('Collect-ControlFG-Compact-Logs.cmd', 'Collect-ControlFG-Compact-Logs.ps1')
     foreach ($file in @(Get-ChildItem -LiteralPath $PSScriptRoot -File -Filter 'Collect-*')) {
@@ -217,6 +253,7 @@ try {
         }
     }
     foreach ($entry in $currentReleaseValidation.tested_sha256.PSObject.Properties) {
+        if ($ptReflectionExperiment -and $ptReflectionExperimentPaths -contains $entry.Name) { continue }
         if ((Get-FileHash -LiteralPath (Join-Path $PSScriptRoot $entry.Name) -Algorithm SHA256).Hash -ine $entry.Value) {
             throw ('Current-release evidence does not match source: ' + $entry.Name)
         }
