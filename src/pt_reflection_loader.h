@@ -100,20 +100,55 @@ static int PTReflectionKnownVariant(const char* sha) noexcept {
     return -1;
 }
 
-static bool PTReflectionInspectRayLibrary(void* shader,unsigned key) noexcept {
-    if(!shader)return false;
+static bool PTReflectionTechniqueOwnsShader(void* technique,void* shader,
+    unsigned* indexOut,unsigned* countOut,unsigned* actualKeyOut) noexcept {
+    if(indexOut)*indexOut=0xffffffffu;
+    if(countOut)*countOut=0;
+    if(actualKeyOut)*actualKeyOut=0;
+    if(!technique||!shader)return false;
+    __try {
+        auto* base=*reinterpret_cast<unsigned char**>(
+            reinterpret_cast<unsigned char*>(technique)+0x238);
+        const unsigned count=*reinterpret_cast<unsigned*>(
+            reinterpret_cast<unsigned char*>(technique)+0x240);
+        if(!base||count==0||count>4096)return false;
+        auto* p=reinterpret_cast<unsigned char*>(shader);
+        if(p<base)return false;
+        const auto delta=static_cast<std::uintptr_t>(p-base);
+        if(delta%0xA8u)return false;
+        const auto index=static_cast<unsigned>(delta/0xA8u);
+        if(index>=count)return false;
+        const unsigned actualKey=*reinterpret_cast<unsigned*>(p+4);
+        if(indexOut)*indexOut=index;
+        if(countOut)*countOut=count;
+        if(actualKeyOut)*actualKeyOut=actualKey;
+        return true;
+    } __except(EXCEPTION_EXECUTE_HANDLER) {
+        return false;
+    }
+}
+
+static bool PTReflectionInspectRayLibrary(void* technique,void* shader,unsigned key) noexcept {
+    if(!technique||!shader)return false;
+    unsigned tableIndex=0xffffffffu,tableCount=0,actualKey=0;
+    if(!PTReflectionTechniqueOwnsShader(technique,shader,&tableIndex,&tableCount,&actualKey)){
+        const auto reject=++ptReflectionVariantRejects;
+        Log("PT_REFLECTION_P1_VARIANT_REJECT count=%llu key=0x%X technique=%p shader=%p reason=technique_table_membership",
+            reject,key,technique,shader);
+        return false;
+    }
     RRAlbedoShader::NativeDescriptor before{},after{};
     if(!RRAlbedoShader::ReadDescriptor(reinterpret_cast<std::uintptr_t>(shader),0x70,&before)||
        before.identifier<0||before.size<32||before.size>RRAlbedoShader::kMaximumBlobBytes){
         const auto reject=++ptReflectionVariantRejects;
-        Log("PT_REFLECTION_P1_VARIANT_REJECT count=%llu key=0x%X shader=%p reason=ray_descriptor",reject,key,shader);
+        Log("PT_REFLECTION_P1_VARIANT_REJECT count=%llu key=0x%X actual_key=0x%X table_index=%u table_count=%u shader=%p reason=ray_descriptor",reject,key,actualKey,tableIndex,tableCount,shader);
         return false;
     }
     const size_t bytes=static_cast<size_t>(before.size);
     unsigned char* copy=static_cast<unsigned char*>(HeapAlloc(GetProcessHeap(),0,bytes));
     if(!copy){
         const auto reject=++ptReflectionVariantRejects;
-        Log("PT_REFLECTION_P1_VARIANT_REJECT count=%llu key=0x%X shader=%p reason=allocation bytes=%zu",reject,key,shader,bytes);
+        Log("PT_REFLECTION_P1_VARIANT_REJECT count=%llu key=0x%X actual_key=0x%X table_index=%u table_count=%u shader=%p reason=allocation bytes=%zu",reject,key,actualKey,tableIndex,tableCount,shader,bytes);
         return false;
     }
     bool copied=RRAlbedoShader::CopyResident(&before,copy,bytes);
@@ -129,13 +164,13 @@ static bool PTReflectionInspectRayLibrary(void* shader,unsigned key) noexcept {
     HeapFree(GetProcessHeap(),0,copy);
     if(!container||!hashed||variant<0){
         const auto reject=++ptReflectionVariantRejects;
-        Log("PT_REFLECTION_P1_VARIANT_REJECT count=%llu key=0x%X shader=%p stage=%u identifier=%d bytes=%llu stable=%u container=%u hashed=%u sha256=%s reason=unknown_native_library",
-            reject,key,shader,before.stage,before.identifier,static_cast<unsigned long long>(before.size),
+        Log("PT_REFLECTION_P1_VARIANT_REJECT count=%llu key=0x%X actual_key=0x%X table_index=%u table_count=%u shader=%p stage=%u identifier=%d bytes=%llu stable=%u container=%u hashed=%u sha256=%s reason=unknown_native_library",
+            reject,key,actualKey,tableIndex,tableCount,shader,before.stage,before.identifier,static_cast<unsigned long long>(before.size),
             unsigned(stable),unsigned(container),unsigned(hashed),hashed?sha:"<none>");
         return false;
     }
-    Log("PT_REFLECTION_P1_VARIANT_ADMIT key=0x%X shader=%p ray_descriptor=%p stage=%u identifier=%d bytes=%llu sha256=%s variant=%03d exact_native_hash=1 replacement=disabled",
-        key,shader,reinterpret_cast<void*>(before.shaderBase),before.stage,before.identifier,
+    Log("PT_REFLECTION_P1_VARIANT_ADMIT key=0x%X actual_key=0x%X table_index=%u table_count=%u shader=%p ray_descriptor=%p stage=%u identifier=%d bytes=%llu sha256=%s variant=%03d exact_native_hash=1 replacement=disabled",
+        key,actualKey,tableIndex,tableCount,shader,reinterpret_cast<void*>(before.shaderBase),before.stage,before.identifier,
         static_cast<unsigned long long>(before.size),sha,variant);
     return true;
 }
@@ -185,7 +220,7 @@ static void* PTReflectionHookVariantLookup(void* technique,unsigned key) {
     void* result=ptReflectionOriginalVariantLookup(technique,key);
     if(technique&&technique==ptReflectionTechniqueObject){
         const auto call=++ptReflectionVariantLookups;
-        const bool admitted=PTReflectionInspectRayLibrary(result,key);
+        const bool admitted=PTReflectionInspectRayLibrary(technique,result,key);
         Log("PT_REFLECTION_P1_VARIANT call=%llu technique=%p key=0x%X shader=%p admitted=%u mode=observe_only native_result_preserved=1",
             call,technique,key,result,unsigned(admitted));
         ptReflectionTechniqueObject=nullptr;
