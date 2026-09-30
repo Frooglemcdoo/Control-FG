@@ -144,4 +144,13 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    try:
+        raise SystemExit(main())
+    except Exception as exc:
+        import traceback
+        print("PT_REFLECTION_NATIVE_AUDIT_FAILURE:", repr(exc), file=sys.stderr)
+        traceback.print_exc()
+        failure = ROOT / "build" / "pt-reflection-native-audit-failure.txt"
+        failure.parent.mkdir(parents=True, exist_ok=True)
+        failure.write_text(traceback.format_exc(), encoding="utf-8")
+        raise
