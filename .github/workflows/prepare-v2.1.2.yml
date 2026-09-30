@@ -2,7 +2,7 @@ name: Prepare Control FG v2.1.2
 
 on:
   push:
-    branches: [release/v2.1.2]
+    branches: [release/v2.1.2, experiment/pt-reflections-r1]
   workflow_dispatch:
 
 permissions:
