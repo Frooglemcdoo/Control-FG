@@ -1009,6 +1009,7 @@ static bool Exchange(Patch& p, bool install) {
 }
 
 #include "rr_albedo_hooks.h"
+#include "pt_reflection_loader.h"
 #define CONTROL_FG_RR_VRAM_RESIZE_R2 1
 static bool RRNativeVramReleaseCachedRRFeaturesForResize(unsigned long long frame,
     unsigned outputWidth,unsigned outputHeight,unsigned width,unsigned height) noexcept;
@@ -1414,6 +1415,8 @@ static BOOL CALLBACK Configure(PINIT_ONCE, PVOID, PVOID*) noexcept {
         const bool guideInputsReady = RRGuideInitializeInputs(d3d);
         const unsigned int rrObserverHooks = InstallRRObservationHooks(renderer,d3d);
         Log("PT_REFLECTION_P0_OBSERVER ready=%u expected=5 scope=reflection_dispatch_identification gpu_work=unchanged allocations=0",rrObserverHooks);
+        const bool ptReflectionLookupReady=PTReflectionInstallShaderLookupHooks(renderer);
+        Log("PT_REFLECTION_P1_LOOKUP_INSTALL ready=%u replacement=disabled fail_closed=1",unsigned(ptReflectionLookupReady));
         const bool albedoHooksReady = guideInputsReady && RRAlbedoInstallHooks(renderer, d3d);
         if(albedoHooksReady) rrAlbedoStage.store(RRAlbedoStage::Disabled,std::memory_order_release);
         Log("RR_GUIDE_G3_NATIVE_PATH ready=%u diagnostic_capture=0 recurring_replay=on_demand_full_rr_only rr_eval=warmup_then_native", unsigned(albedoHooksReady));
