@@ -21,6 +21,8 @@ static RRAlbedoCallPatch ptReflectionBindCallPatch{};
 static Patch ptReflectionShaderGetPatch{};
 static thread_local bool ptReflectionBindActive = false;
 static thread_local int ptReflectionTargetIdentifier = -1;
+alignas(16) static thread_local unsigned char ptReflectionP2ShaderClone[kPTShaderStride]{};
+static std::atomic<unsigned long long> ptReflectionP2CloneCalls{0};
 static std::atomic<unsigned long long> ptReflectionP1BindCalls{0};
 static std::atomic<unsigned long long> ptReflectionP1GetterCalls{0};
 static std::atomic<unsigned long long> ptReflectionP1Matches{0};
@@ -140,21 +142,38 @@ static void PTReflectionHookBind(void* shader, void* context) {
     unsigned index = ~0u, key = 0;
     PTReflectionDescriptor descriptor{};
     const bool matched = PTReflectionDescribeVariant(shader,&index,&key,&descriptor);
+    void* selectedShader = shader;
+    bool cloned = false;
     if (matched) {
         ++ptReflectionP1Matches;
+        __try {
+            memcpy(ptReflectionP2ShaderClone,shader,kPTShaderStride);
+            const auto clonedDescriptor = *reinterpret_cast<const std::uintptr_t*>(
+                ptReflectionP2ShaderClone + descriptor.slot);
+            const auto clonedKey = *reinterpret_cast<const unsigned*>(ptReflectionP2ShaderClone + 4);
+            if (clonedDescriptor == descriptor.base && clonedKey == key) {
+                selectedShader = ptReflectionP2ShaderClone;
+                cloned = true;
+                ++ptReflectionP2CloneCalls;
+            }
+        } __except(EXCEPTION_EXECUTE_HANDLER) {
+            selectedShader = shader;
+            cloned = false;
+        }
         ptReflectionTargetIdentifier = descriptor.identifier;
         ptReflectionBindActive = true;
         if (call <= 32 || (call % 240) == 0) {
-            Log("PT_REFLECTION_P1_LIBRARY bind=%llu shader=%p context=%p key=0x%08X variant_index=%u descriptor_slot=0x%zX descriptor=%p stage=%u identifier=%d size=%llu mode=identity_passthrough exports=raygen_closesthit_miss",
-                call,shader,context,key,index,descriptor.slot,reinterpret_cast<void*>(descriptor.base),
-                descriptor.stage,descriptor.identifier,static_cast<unsigned long long>(descriptor.size));
+            Log("PT_REFLECTION_P2_CLONE bind=%llu original_shader=%p selected_shader=%p context=%p key=0x%08X variant_index=%u descriptor_slot=0x%zX descriptor=%p stage=%u identifier=%d size=%llu cloned=%u mode=record_identity native_descriptors=1 native_bytes=1 fallback=%s clone_calls=%llu",
+                call,shader,selectedShader,context,key,index,descriptor.slot,reinterpret_cast<void*>(descriptor.base),
+                descriptor.stage,descriptor.identifier,static_cast<unsigned long long>(descriptor.size),
+                unsigned(cloned),cloned?"none":"native_shader",ptReflectionP2CloneCalls.load());
         }
     } else if (call <= 16 || (call % 240) == 0) {
-        Log("PT_REFLECTION_P1_LIBRARY bind=%llu shader=%p context=%p matched=0 fallback=native",
-            call,shader,context);
+        Log("PT_REFLECTION_P2_CLONE bind=%llu original_shader=%p selected_shader=%p context=%p matched=0 cloned=0 fallback=native",
+            call,shader,selectedShader,context);
     }
 
-    ptReflectionOriginalBind(shader,context);
+    ptReflectionOriginalBind(selectedShader,context);
     ptReflectionBindActive = false;
     ptReflectionTargetIdentifier = -1;
 }
@@ -197,7 +216,7 @@ static bool PTReflectionProbeInstall(HMODULE renderer, HMODULE d3d) noexcept {
         return false;
     }
 
-    Log("PT_REFLECTION_P1_INSTALL ready=1 bind_call_rva=0x%zX bind_target_rva=0x%zX technique_rva=0x%zX shader_stride=0x%zX mode=identity_passthrough replacement=0",
+    Log("PT_REFLECTION_P2_INSTALL ready=1 bind_call_rva=0x%zX bind_target_rva=0x%zX technique_rva=0x%zX shader_stride=0x%zX mode=record_identity_clone replacement_bytes=0 native_fallback=1",
         kPTReflectionBindCallRva,kPTReflectionBindFunctionRva,kPTReflectionTechniquePointerRva,kPTShaderStride);
     return true;
 }
