@@ -1,0 +1,172 @@
+name: Build PT reflections P3
+
+on:
+  push:
+    branches:
+      - experiment/pt-reflections-p3
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure MSVC
+        shell: cmd
+        run: |
+          for /f "usebackq tokens=*" %%I in (`"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath`) do set "VSROOT=%%I"
+          call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
+          echo VSROOT=%VSROOT%>>%GITHUB_ENV%
+
+      - name: Prepare Streamline and generated shaders
+        shell: cmd
+        run: |
+          call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
+          if not exist build mkdir build
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File Fetch-Streamline.ps1
+          if errorlevel 1 exit /b 1
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File Verify-Streamline.ps1
+          if errorlevel 1 exit /b 1
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File Verify-RRRuntime.ps1
+          if errorlevel 1 exit /b 1
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File Patch-OverlayStability.ps1
+          if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /O2 /MT tools\compile-distance.cpp /Fobuild\compile-distance.obj /Febuild\compile-distance.exe /link d3dcompiler.lib
+          if errorlevel 1 exit /b 1
+          build\compile-distance.exe
+          if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /O2 /MT tools\compile-live.cpp /Fobuild\compile-live.obj /Febuild\compile-live.exe /link d3dcompiler.lib
+          if errorlevel 1 exit /b 1
+          build\compile-live.exe
+          if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /O2 /MT tools\compile-skin-mask.cpp /Fobuild\compile-skin-mask.obj /Febuild\compile-skin-mask.exe /link d3dcompiler.lib
+          if errorlevel 1 exit /b 1
+          build\compile-skin-mask.exe
+          if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /O2 /MT tools\compile-reflectance.cpp /Fobuild\compile-reflectance.obj /Febuild\compile-reflectance.exe /link d3dcompiler.lib
+          if errorlevel 1 exit /b 1
+          build\compile-reflectance.exe
+          if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /O2 /MT tools\compile-fg-ui-alpha.cpp /Fobuild\compile-fg-ui-alpha.obj /Febuild\compile-fg-ui-alpha.exe /link d3dcompiler.lib
+          if errorlevel 1 exit /b 1
+          build\compile-fg-ui-alpha.exe
+          if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /O2 /MT tools\compile-clamp-strength.cpp /Fobuild\compile-clamp-strength.obj /Febuild\compile-clamp-strength.exe /link d3dcompiler.lib
+          if errorlevel 1 exit /b 1
+          for /l %%S in (25,1,75) do build\compile-clamp-strength.exe %%S
+          if errorlevel 1 exit /b 1
+          copy /y src\rr_clamp_variants.in.h build\rr_clamp_variants.h >nul
+          pushd src
+          rc /nologo /fo ..\build\control_fg_logo.res control_fg_logo.rc
+          set "RC_RESULT=%ERRORLEVEL%"
+          popd
+          if not "%RC_RESULT%"=="0" exit /b %RC_RESULT%
+
+      - name: Compile P3 DXR raygen
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $sdkBin=Join-Path ${env:ProgramFiles(x86)} 'Windows Kits\10\bin'
+          $dxc=Get-ChildItem -LiteralPath $sdkBin -Recurse -Filter dxc.exe -ErrorAction SilentlyContinue |
+            Where-Object { $_.FullName -match '\\x64\\dxc\.exe        run: |
+          call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
+          cl /nologo /std:c++17 /EHsc /W4 /O2 /MT /LD /guard:cf /DUNICODE /D_UNICODE /I "third_party\streamline\include" src\probe.cpp build\control_fg_logo.res /Fobuild\probe.obj /Febuild\dxgi.dll /link /DEF:src\dxgi.def /INCREMENTAL:NO /DYNAMICBASE /NXCOMPAT /GUARD:CF bcrypt.lib wintrust.lib user32.lib gdi32.lib msimg32.lib
+          if errorlevel 1 exit /b 1
+          dumpbin /exports build\dxgi.dll > build\exports.txt
+          dumpbin /imports build\dxgi.dll > build\imports.txt
+
+      - name: Package P3
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $out='Control-FG-PT-Reflections-P3'
+          New-Item -ItemType Directory -Force -Path $out | Out-Null
+          Copy-Item build/dxgi.dll "$out/dxgi.dll"
+          @'
+          PT Reflections P3
+          -----------------
+          This is the first custom DXR-library injection proof.
+          It intentionally redirects Control's reflection dispatch to a no-op custom raygen.
+          If injection works, ray-traced reflections should disappear while the game remains stable.
+          Run normal gameplay with Ray Traced Reflections enabled, then collect compact logs.
+          Look for PT_REFLECTION_P3_LIBRARY, PT_REFLECTION_P3_GETTER, and PT_REFLECTION_P3_RAYGEN_REDIRECT records.
+          '@ | Set-Content "$out/README.txt" -Encoding ASCII
+          Compress-Archive -Path "$out/*" -DestinationPath "$out.zip" -Force
+          (Get-FileHash "$out.zip" -Algorithm SHA256).Hash | Set-Content "$out.sha256" -Encoding ASCII
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Control-FG-PT-Reflections-P3
+          path: |
+            Control-FG-PT-Reflections-P3.zip
+            Control-FG-PT-Reflections-P3.sha256
+            build/exports.txt
+            build/imports.txt
+            build/pt_reflection_raygen.dxil
+          if-no-files-found: error
+          retention-days: 7
+ } |
+            Sort-Object FullName | Select-Object -Last 1
+          if(-not $dxc){ throw 'DXC x64 was not found in the Windows SDK.' }
+          Write-Host "Using DXC: $($dxc.FullName)"
+          & $dxc.FullName -T lib_6_3 -O3 -Qstrip_debug -Fo build/pt_reflection_raygen.dxil src/shaders/pt_reflection_raygen.hlsl
+          if($LASTEXITCODE -ne 0){ throw "DXC failed with exit code $LASTEXITCODE" }
+          $bytes=[IO.File]::ReadAllBytes('build/pt_reflection_raygen.dxil')
+          if($bytes.Length -lt 32){ throw 'Compiled DXIL library is unexpectedly small.' }
+          $ascii=[Text.Encoding]::ASCII.GetString($bytes)
+          if(-not $ascii.Contains('ptReflectionRayGeneration')){ throw 'Compiled DXIL library does not expose ptReflectionRayGeneration.' }
+          $lines=New-Object System.Collections.Generic.List[string]
+          $lines.Add('#pragma once')
+          $lines.Add('static const unsigned char kPTReflectionRaygenDxil[] = {')
+          for($i=0;$i -lt $bytes.Length;$i+=16){
+            $end=[Math]::Min($i+16,$bytes.Length)
+            $chunk=for($j=$i;$j -lt $end;$j++){ '0x{0:X2}' -f $bytes[$j] }
+            $lines.Add('    '+($chunk -join ', ')+',')
+          }
+          $lines.Add('};')
+          $lines.Add('static constexpr size_t kPTReflectionRaygenDxilSize = sizeof(kPTReflectionRaygenDxil);')
+          [IO.File]::WriteAllLines((Join-Path $PWD 'build/pt_reflection_raygen_compiled.h'),$lines,[Text.Encoding]::ASCII)
+          Write-Host "P3 DXIL bytes: $($bytes.Length)"
+
+      - name: Compile experimental proxy
+        shell: cmd
+        run: |
+          call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
+          cl /nologo /std:c++17 /EHsc /W4 /O2 /MT /LD /guard:cf /DUNICODE /D_UNICODE /I "third_party\streamline\include" src\probe.cpp build\control_fg_logo.res /Fobuild\probe.obj /Febuild\dxgi.dll /link /DEF:src\dxgi.def /INCREMENTAL:NO /DYNAMICBASE /NXCOMPAT /GUARD:CF bcrypt.lib wintrust.lib user32.lib gdi32.lib msimg32.lib
+          if errorlevel 1 exit /b 1
+          dumpbin /exports build\dxgi.dll > build\exports.txt
+          dumpbin /imports build\dxgi.dll > build\imports.txt
+
+      - name: Package P0
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $out='Control-FG-PT-Reflections-P3'
+          New-Item -ItemType Directory -Force -Path $out | Out-Null
+          Copy-Item build/dxgi.dll "$out/dxgi.dll"
+          @'
+          PT Reflections P3
+          -----------------
+          This is an reflection shader-record identity clone probe.
+          It does not alter reflection pixels yet.
+          Run normal gameplay with Ray Traced Reflections enabled, then collect compact logs.
+          Look for PT_REFLECTION_P2_CLONE and PT_REFLECTION_P1_GETTER records.
+          '@ | Set-Content "$out/README.txt" -Encoding ASCII
+          Compress-Archive -Path "$out/*" -DestinationPath "$out.zip" -Force
+          (Get-FileHash "$out.zip" -Algorithm SHA256).Hash | Set-Content "$out.sha256" -Encoding ASCII
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Control-FG-PT-Reflections-P3
+          path: |
+            Control-FG-PT-Reflections-P3.zip
+            Control-FG-PT-Reflections-P3.sha256
+            build/exports.txt
+            build/imports.txt
+          if-no-files-found: error
+          retention-days: 7
