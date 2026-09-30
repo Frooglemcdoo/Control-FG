@@ -145,10 +145,10 @@ bool PTPrimary(uint2 pixel, out float3 positionView, out float3 positionWorld,
     float clipDepth = g_tClipDepth.Load(int3(pixel,0)).x;
 
     RRHDClipToView m;
-    m.column0 = (RRHDVector4)g_mClipToView0;
-    m.column1 = (RRHDVector4)g_mClipToView1;
-    m.column2 = (RRHDVector4)g_mClipToView2;
-    m.column3 = (RRHDVector4)g_mClipToView3;
+    m.column0.x=g_mClipToView0.x; m.column0.y=g_mClipToView0.y; m.column0.z=g_mClipToView0.z; m.column0.w=g_mClipToView0.w;
+    m.column1.x=g_mClipToView1.x; m.column1.y=g_mClipToView1.y; m.column1.z=g_mClipToView1.z; m.column1.w=g_mClipToView1.w;
+    m.column2.x=g_mClipToView2.x; m.column2.y=g_mClipToView2.y; m.column2.z=g_mClipToView2.z; m.column2.w=g_mClipToView2.w;
+    m.column3.x=g_mClipToView3.x; m.column3.y=g_mClipToView3.y; m.column3.z=g_mClipToView3.z; m.column3.w=g_mClipToView3.w;
     RRHDPrimary p = RRHDPrimaryFromClip(pixel.x,pixel.y,
         g_vInvOutputRes.x,g_vInvOutputRes.y,clipDepth,m);
     if(p.valid==0u) {
