@@ -1415,7 +1415,7 @@ static BOOL CALLBACK Configure(PINIT_ONCE, PVOID, PVOID*) noexcept {
         const bool guideInputsReady = RRGuideInitializeInputs(d3d);
         const unsigned int rrObserverHooks = InstallRRObservationHooks(renderer,d3d);
         Log("PT_REFLECTION_P0_OBSERVER ready=%u expected=5 scope=reflection_dispatch_identification gpu_work=unchanged allocations=0",rrObserverHooks);
-        const bool ptReflectionLookupReady=PTReflectionInstallShaderLookupHooks(renderer);
+        const bool ptReflectionLookupReady=PTReflectionInstallShaderLookupHooks(renderer,d3d);
         Log("PT_REFLECTION_P1_LOOKUP_INSTALL ready=%u replacement=disabled fail_closed=1",unsigned(ptReflectionLookupReady));
         const bool albedoHooksReady = guideInputsReady && RRAlbedoInstallHooks(renderer, d3d);
         if(albedoHooksReady) rrAlbedoStage.store(RRAlbedoStage::Disabled,std::memory_order_release);
