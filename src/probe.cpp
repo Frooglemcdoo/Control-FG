@@ -625,6 +625,7 @@ static std::atomic<unsigned long long> rrRayGenerationCount{0};
 static std::atomic<unsigned long long> rrRaytraceDispatchCount{0};
 static std::atomic<unsigned long long> ptReflectionDispatchCount{0};
 static std::atomic<unsigned long long> ptReflectionContextFailures{0};
+static void PTReflectionProbeCachedTechniqueOnce(HMODULE renderer,HMODULE d3d) noexcept;
 static thread_local int rrCurrentPipelineArg0 = -1;
 static thread_local int rrCurrentPipelineArg1 = -1;
 static thread_local char rrCurrentRayGeneration[128] = "<unset>";
@@ -724,6 +725,7 @@ static void HookRRRaytrace(int a, int b) {
         QueryPerformanceCounter(&before);
     }
     originalRRRaytrace(a, b);
+    if(ptReflection) PTReflectionProbeCachedTechniqueOnce(verifiedRenderer,verifiedD3d);
     RRGuideTryCapture(aaCount.load(), rrCurrentRayGeneration);
     if (sample) {
         QueryPerformanceCounter(&after);
