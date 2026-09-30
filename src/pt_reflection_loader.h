@@ -369,6 +369,20 @@ static void* PTReflectionHookVariantLookup(void* technique,unsigned key) {
 }
 
 
+static void PTReflectionLogShaderCodeStorageGetterBytes(HMODULE d3d) noexcept {
+    if(!d3d||d3d!=verifiedD3d)return;
+    char hex[65]{};
+    DWORD fault=0;
+    __try {
+        auto* p=reinterpret_cast<const unsigned char*>(d3d)+0x40820u;
+        for(unsigned i=0;i<32;++i)sprintf_s(hex+i*2,3,"%02X",p[i]);
+    } __except(EXCEPTION_EXECUTE_HANDLER) {
+        fault=GetExceptionCode();
+        hex[0]=0;
+    }
+    Log("PT_REFLECTION_P1_SHADER_STORAGE_GET_BYTES rva=0x40820 bytes=%s fault=0x%08lX",hex,fault);
+}
+
 static unsigned PTReflectionLogShaderCodeStorageGetterCallsites(HMODULE d3d) noexcept {
     if(!d3d||d3d!=verifiedD3d)return 0;
     unsigned matches=0;
@@ -461,6 +475,7 @@ static unsigned PTReflectionLogShaderCodeStorageExports(HMODULE d3d) noexcept {
 static bool PTReflectionInstallShaderLookupHooks(HMODULE renderer,HMODULE d3d) noexcept {
     if(!renderer||renderer!=verifiedRenderer||!d3d||d3d!=verifiedD3d)return false;
     PTReflectionLogShaderCodeStorageExports(d3d);
+    PTReflectionLogShaderCodeStorageGetterBytes(d3d);
     PTReflectionLogShaderCodeStorageGetterCallsites(d3d);
     PTReflectionLoadP2Sidecar();
     ptReflectionForcedNativeVariant=PTReflectionReadForcedNativeVariant();
