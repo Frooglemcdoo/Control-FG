@@ -216,10 +216,22 @@ static bool PTReflectionInspectRayLibrary(void* technique,void* shader,unsigned 
         return false;
     }
     const auto& d=identity.descriptor;
-    Log("PT_REFLECTION_P1_VARIANT_ADMIT key=0x%X actual_key=0x%X table_index=%u table_count=%u shader=%p ray_descriptor=%p stage=%u identifier=%d bytes=%llu sha256=%s variant=%03d exact_native_hash=1 replacement=%s",
+    std::uintptr_t storageWord0=0;
+    const void* resident=nullptr;
+    DWORD storageFault=0;
+    __try {
+        storageWord0=*reinterpret_cast<const std::uintptr_t*>(d.shaderBase);
+        resident=RRAlbedoShader::residentGetter?RRAlbedoShader::residentGetter(d.identifier):nullptr;
+    } __except(EXCEPTION_EXECUTE_HANDLER) {
+        storageFault=GetExceptionCode();
+        storageWord0=0;
+        resident=nullptr;
+    }
+    Log("PT_REFLECTION_P1_VARIANT_ADMIT key=0x%X actual_key=0x%X table_index=%u table_count=%u shader=%p ray_descriptor=%p storage_q0=0x%llX resident=%p storage_q0_matches_resident=%u storage_fault=0x%08lX stage=%u identifier=%d bytes=%llu sha256=%s variant=%03d exact_native_hash=1 replacement=%s",
         key,identity.actualKey,identity.tableIndex,identity.tableCount,shader,
-        reinterpret_cast<void*>(d.shaderBase),d.stage,d.identifier,
-        static_cast<unsigned long long>(d.size),identity.sha256,identity.variant,
+        reinterpret_cast<void*>(d.shaderBase),static_cast<unsigned long long>(storageWord0),resident,
+        unsigned(resident&&storageWord0==reinterpret_cast<std::uintptr_t>(resident)),storageFault,
+        d.stage,d.identifier,static_cast<unsigned long long>(d.size),identity.sha256,identity.variant,
         ptReflectionForcedNativeVariant>=0?"native_probe_enabled":"disabled");
     return true;
 }
