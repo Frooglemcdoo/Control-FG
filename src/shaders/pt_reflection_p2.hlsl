@@ -93,6 +93,7 @@ ByteAddressBuffer g_bRaytracingVertexBuffer1 : register(t1, space3);
 RWTexture2DArray<uint>   g_rwtMaterialId : register(u0);
 RWTexture2DArray<float4> g_rwtNormal_TexcoordX : register(u1);
 RWTexture2DArray<float4> g_rwtPosition_TexcoordY : register(u2);
+RWTexture2DArray<uint>   g_rwtShadow : register(u3);
 
 float3 PTTransformPointColumns(float3 p, float4 c0, float4 c1, float4 c2, float4 c3)
 {
@@ -394,7 +395,9 @@ void reflectionMiss(inout HitData payload)
 [shader("closesthit")]
 void shadowClosestHit(inout HitData payload, in BuiltInTriangleIntersectionAttributes attribs)
 {
-    payload.value=1u;
+    uint2 pixel=DispatchRaysIndex().xy;
+    uint layer=payload.value;
+    g_rwtShadow[uint3(pixel,layer)]=0u;
 }
 
 [shader("anyhit")]
@@ -406,5 +409,7 @@ void shadowAlphaTestAnyHit(inout HitData payload, in BuiltInTriangleIntersection
 [shader("miss")]
 void shadowMiss(inout HitData payload)
 {
-    payload.value=0u;
+    uint2 pixel=DispatchRaysIndex().xy;
+    uint layer=payload.value;
+    g_rwtShadow[uint3(pixel,layer)]=1u;
 }
