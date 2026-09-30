@@ -1,4 +1,5 @@
 #pragma once
+#include "../build/pt_reflection_raygen_compiled.h"
 // PT reflections P1: reflection-library identification and scoped ShaderCodeStorage
 // interception only. No replacement bytes are returned in this milestone.
 //
@@ -20,9 +21,14 @@ static PTShaderCodeGetFn ptReflectionOriginalShaderGet = nullptr;
 static RRAlbedoCallPatch ptReflectionBindCallPatch{};
 static Patch ptReflectionShaderGetPatch{};
 static thread_local bool ptReflectionBindActive = false;
+static thread_local bool ptReflectionCustomBindActive = false;
 static thread_local int ptReflectionTargetIdentifier = -1;
 alignas(16) static thread_local unsigned char ptReflectionP2ShaderClone[kPTShaderStride]{};
+alignas(16) static thread_local unsigned char ptReflectionP3ShaderClone[kPTShaderStride]{};
+alignas(16) static thread_local unsigned char ptReflectionP3DescriptorClone[64]{};
 static std::atomic<unsigned long long> ptReflectionP2CloneCalls{0};
+static std::atomic<unsigned long long> ptReflectionP3LibraryBinds{0};
+static std::atomic<unsigned long long> ptReflectionP3GetterRedirects{0};
 static std::atomic<unsigned long long> ptReflectionP1BindCalls{0};
 static std::atomic<unsigned long long> ptReflectionP1GetterCalls{0};
 static std::atomic<unsigned long long> ptReflectionP1Matches{0};
@@ -69,10 +75,11 @@ static bool PTReflectionContains(const char* bytes, size_t size, const char* nee
 }
 
 static bool PTReflectionDescribeVariant(void* shader, unsigned* indexOut, unsigned* keyOut,
-    PTReflectionDescriptor* descriptorOut) noexcept {
+    PTReflectionDescriptor* descriptorOut, unsigned* dxbcCountOut=nullptr) noexcept {
     if (indexOut) *indexOut = ~0u;
     if (keyOut) *keyOut = 0;
     if (descriptorOut) *descriptorOut = {};
+    if (dxbcCountOut) *dxbcCountOut = 0;
     if (!shader || !verifiedRenderer || !ptReflectionOriginalShaderGet) return false;
 
     unsigned key = 0, index = ~0u;
@@ -96,6 +103,7 @@ static bool PTReflectionDescribeVariant(void* shader, unsigned* indexOut, unsign
 
     PTReflectionDescriptor found{};
     bool matched = false;
+    unsigned dxbcCount = 0;
     for (size_t slot = 0x10; slot <= 0xA0; slot += sizeof(void*)) {
         PTReflectionDescriptor d{};
         if (!PTReflectionReadDescriptor(shader, slot, &d)) continue;
@@ -107,6 +115,7 @@ static bool PTReflectionDescribeVariant(void* shader, unsigned* indexOut, unsign
         __try { dxbc = d.size >= 4 && memcmp(bytes, "DXBC", 4) == 0; }
         __except(EXCEPTION_EXECUTE_HANDLER) { dxbc = false; }
         if (!dxbc) continue;
+        ++dxbcCount;
         if (!PTReflectionContains(bytes, static_cast<size_t>(d.size), "reflectionRayGeneration")) continue;
         if (!PTReflectionContains(bytes, static_cast<size_t>(d.size), "reflectionClosestHit")) continue;
         if (!PTReflectionContains(bytes, static_cast<size_t>(d.size), "reflectionMiss")) continue;
@@ -118,6 +127,7 @@ static bool PTReflectionDescribeVariant(void* shader, unsigned* indexOut, unsign
         found = d;
         matched = true;
     }
+    if (dxbcCountOut) *dxbcCountOut = dxbcCount;
     if (!matched) return false;
     if (indexOut) *indexOut = index;
     if (keyOut) *keyOut = key;
@@ -127,6 +137,14 @@ static bool PTReflectionDescribeVariant(void* shader, unsigned* indexOut, unsign
 
 static const char* __cdecl PTReflectionHookShaderGet(int identifier) {
     const char* bytes = ptReflectionOriginalShaderGet(identifier);
+    if (ptReflectionCustomBindActive && identifier == ptReflectionTargetIdentifier) {
+        const auto call = ++ptReflectionP3GetterRedirects;
+        if (call <= 16 || (call % 240) == 0) {
+            Log("PT_REFLECTION_P3_GETTER call=%llu identifier=%d native_bytes=%p custom_bytes=%p custom_size=%zu redirected=1",
+                call,identifier,bytes,kPTReflectionRaygenDxil,kPTReflectionRaygenDxilSize);
+        }
+        return reinterpret_cast<const char*>(kPTReflectionRaygenDxil);
+    }
     if (ptReflectionBindActive && identifier == ptReflectionTargetIdentifier) {
         const auto call = ++ptReflectionP1GetterCalls;
         if (call <= 16 || (call % 240) == 0) {
@@ -139,11 +157,12 @@ static const char* __cdecl PTReflectionHookShaderGet(int identifier) {
 
 static void PTReflectionHookBind(void* shader, void* context) {
     const auto call = ++ptReflectionP1BindCalls;
-    unsigned index = ~0u, key = 0;
+    unsigned index = ~0u, key = 0, dxbcCount = 0;
     PTReflectionDescriptor descriptor{};
-    const bool matched = PTReflectionDescribeVariant(shader,&index,&key,&descriptor);
-    void* selectedShader = shader;
+    const bool matched = PTReflectionDescribeVariant(shader,&index,&key,&descriptor,&dxbcCount);
+    void* nativeShader = shader;
     bool cloned = false;
+
     if (matched) {
         ++ptReflectionP1Matches;
         __try {
@@ -152,29 +171,69 @@ static void PTReflectionHookBind(void* shader, void* context) {
                 ptReflectionP2ShaderClone + descriptor.slot);
             const auto clonedKey = *reinterpret_cast<const unsigned*>(ptReflectionP2ShaderClone + 4);
             if (clonedDescriptor == descriptor.base && clonedKey == key) {
-                selectedShader = ptReflectionP2ShaderClone;
+                nativeShader = ptReflectionP2ShaderClone;
                 cloned = true;
                 ++ptReflectionP2CloneCalls;
             }
         } __except(EXCEPTION_EXECUTE_HANDLER) {
-            selectedShader = shader;
+            nativeShader = shader;
             cloned = false;
         }
-        ptReflectionTargetIdentifier = descriptor.identifier;
-        ptReflectionBindActive = true;
-        if (call <= 32 || (call % 240) == 0) {
-            Log("PT_REFLECTION_P2_CLONE bind=%llu original_shader=%p selected_shader=%p context=%p key=0x%08X variant_index=%u descriptor_slot=0x%zX descriptor=%p stage=%u identifier=%d size=%llu cloned=%u mode=record_identity native_descriptors=1 native_bytes=1 fallback=%s clone_calls=%llu",
-                call,shader,selectedShader,context,key,index,descriptor.slot,reinterpret_cast<void*>(descriptor.base),
-                descriptor.stage,descriptor.identifier,static_cast<unsigned long long>(descriptor.size),
-                unsigned(cloned),cloned?"none":"native_shader",ptReflectionP2CloneCalls.load());
-        }
-    } else if (call <= 16 || (call % 240) == 0) {
-        Log("PT_REFLECTION_P2_CLONE bind=%llu original_shader=%p selected_shader=%p context=%p matched=0 cloned=0 fallback=native",
-            call,shader,selectedShader,context);
     }
 
-    ptReflectionOriginalBind(selectedShader,context);
+    // Always bind the native library first. This preserves Remedy's existing
+    // closest-hit, any-hit, miss and shadow exports even when the custom raygen
+    // library cannot be prepared.
+    ptReflectionTargetIdentifier = matched ? descriptor.identifier : -1;
+    ptReflectionBindActive = matched;
+    ptReflectionOriginalBind(nativeShader,context);
     ptReflectionBindActive = false;
+
+    bool customPrepared = false;
+    if (matched && cloned && dxbcCount == 1 && kPTReflectionRaygenDxilSize >= 32 &&
+        kPTReflectionRaygenDxilSize <= 1024 * 1024) {
+        __try {
+            memcpy(ptReflectionP3ShaderClone,shader,kPTShaderStride);
+            memcpy(ptReflectionP3DescriptorClone,
+                reinterpret_cast<const void*>(descriptor.base),sizeof(ptReflectionP3DescriptorClone));
+            *reinterpret_cast<std::uint64_t*>(ptReflectionP3DescriptorClone + 16) =
+                static_cast<std::uint64_t>(kPTReflectionRaygenDxilSize);
+            *reinterpret_cast<std::uintptr_t*>(ptReflectionP3ShaderClone + descriptor.slot) =
+                reinterpret_cast<std::uintptr_t>(ptReflectionP3DescriptorClone);
+
+            PTReflectionDescriptor check{};
+            customPrepared = PTReflectionReadDescriptor(
+                ptReflectionP3ShaderClone,descriptor.slot,&check) &&
+                check.identifier == descriptor.identifier &&
+                check.stage == descriptor.stage &&
+                check.size == kPTReflectionRaygenDxilSize &&
+                check.base == reinterpret_cast<std::uintptr_t>(ptReflectionP3DescriptorClone);
+        } __except(EXCEPTION_EXECUTE_HANDLER) {
+            customPrepared = false;
+        }
+    }
+
+    if (customPrepared) {
+        ptReflectionTargetIdentifier = descriptor.identifier;
+        ptReflectionCustomBindActive = true;
+        ptReflectionOriginalBind(ptReflectionP3ShaderClone,context);
+        ptReflectionCustomBindActive = false;
+        ptReflectionCustomRaygenArmed = true;
+        const auto n = ++ptReflectionP3LibraryBinds;
+        if (call <= 32 || (call % 240) == 0) {
+            Log("PT_REFLECTION_P3_LIBRARY bind=%llu original_shader=%p native_shader=%p custom_shader=%p context=%p key=0x%08X variant_index=%u dxbc_descriptors=%u descriptor_slot=0x%zX stage=%u identifier=%d native_size=%llu custom_size=%zu custom_library_bound=1 raygen_armed=1 library_binds=%llu",
+                call,shader,nativeShader,ptReflectionP3ShaderClone,context,key,index,dxbcCount,
+                descriptor.slot,descriptor.stage,descriptor.identifier,
+                static_cast<unsigned long long>(descriptor.size),kPTReflectionRaygenDxilSize,n);
+        }
+    } else {
+        ptReflectionCustomBindActive = false;
+        ptReflectionCustomRaygenArmed = false;
+        if (call <= 16 || (call % 240) == 0) {
+            Log("PT_REFLECTION_P3_LIBRARY bind=%llu shader=%p context=%p matched=%u cloned=%u dxbc_descriptors=%u custom_library_bound=0 raygen_armed=0 fallback=native",
+                call,shader,context,unsigned(matched),unsigned(cloned),dxbcCount);
+        }
+    }
     ptReflectionTargetIdentifier = -1;
 }
 
@@ -216,7 +275,7 @@ static bool PTReflectionProbeInstall(HMODULE renderer, HMODULE d3d) noexcept {
         return false;
     }
 
-    Log("PT_REFLECTION_P2_INSTALL ready=1 bind_call_rva=0x%zX bind_target_rva=0x%zX technique_rva=0x%zX shader_stride=0x%zX mode=record_identity_clone replacement_bytes=0 native_fallback=1",
-        kPTReflectionBindCallRva,kPTReflectionBindFunctionRva,kPTReflectionTechniquePointerRva,kPTShaderStride);
+    Log("PT_REFLECTION_P3_INSTALL ready=1 bind_call_rva=0x%zX bind_target_rva=0x%zX technique_rva=0x%zX shader_stride=0x%zX mode=second_library_noop_raygen custom_size=%zu native_fallback=1",
+        kPTReflectionBindCallRva,kPTReflectionBindFunctionRva,kPTReflectionTechniquePointerRva,kPTShaderStride,kPTReflectionRaygenDxilSize);
     return true;
 }
