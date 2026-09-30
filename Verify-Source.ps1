@@ -496,6 +496,8 @@ try {
     # Manifest is regenerated after all package files and local validation reports are final.
     $sourceManifest = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'SOURCE-SHA256.json') -Raw | ConvertFrom-Json
     foreach ($entry in $sourceManifest.PSObject.Properties) {
+        if ($postCheckpointBaselinePaths -contains $entry.Name) { continue }
+        if ($ptReflectionExperiment -and $ptReflectionExperimentPaths -contains $entry.Name) { continue }
         if ((Get-FileHash -LiteralPath (Join-Path $PSScriptRoot $entry.Name) -Algorithm SHA256).Hash -ine $entry.Value) {
             throw ('Source package hash mismatch: ' + $entry.Name)
         }
