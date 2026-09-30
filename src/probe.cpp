@@ -221,7 +221,7 @@ static void OpenLog() {
     const DWORD verboseLength=GetEnvironmentVariableW(L"CONTROLFG_VERBOSE_LOG",verbose,_countof(verbose));
     verboseAuditLogging=verboseLength>0 && verboseLength<_countof(verbose) && verbose[0]!=L'0';
     QueryPerformanceFrequency(&frequency);
-    Log("PROBE v2.1.2 internal_build=pt-reflections-p0 source_revision=pt-reflections-p0 supported_targets=steam_21225456,epic_0.0.518.2177,gog_57a8912f frequency=%lld log_profile=%s",frequency.QuadPart,verboseAuditLogging?"verbose_audit":"release_support");
+    Log("PROBE v2.1.2 internal_build=pt-reflections-p1 source_revision=pt-reflections-p1 supported_targets=steam_21225456,epic_0.0.518.2177,gog_57a8912f frequency=%lld log_profile=%s",frequency.QuadPart,verboseAuditLogging?"verbose_audit":"release_support");
     Log("CAPABILITIES fg=fixed_2x_to_6x_plus_dynamic rr=models_E_F_default_F hdr10_bridge=1 rr_guides=gbuffer_material_envbrdf rr_hit_distance=off rr_specular_mvec=off rr_diagnostic_readbacks=off streamline_sdk=2.14.1");
     Log("MONITORING profile=%s rr_perf_sample=240 support_events=startup_settings_fg_rr_model_resize_recovery_failures_fallbacks_performance verbose_env=CONTROLFG_VERBOSE_LOG",verboseAuditLogging?"verbose_audit":"release_support");
     Log("RR_VRAM_LIFECYCLE build=R4 base=v2.1.1 clean_release_tag=1 d1_capture=disabled native_rr_cache=single_live_extent preset_switch=full_native_feature_epoch cache_layout=key_feature_parameters state_layout=feature_parameters release_old_extent_after_fence=1 lazy_recreate_cached_extent=1 streamline_free=nonowning_options_only owned_guides_release=rr_off");
@@ -1214,6 +1214,7 @@ static void RRVramLifecycleAfterPresent(unsigned long long present) noexcept {
 }
 
 #include "rr_reflection_hooks.h"
+#include "pt_reflection_probe.h"
 
 static unsigned int InstallRRObservationHooks(HMODULE renderer, HMODULE d3d) noexcept {
     originalRRBeginPipelineSetup = d3d ? reinterpret_cast<RRBeginPipelineSetupFn>(GetProcAddress(d3d, kRRBeginPipelineSetupSymbol)) : nullptr;
@@ -1385,6 +1386,8 @@ static BOOL CALLBACK Configure(PINIT_ONCE, PVOID, PVOID*) noexcept {
         const bool guideInputsReady = RRGuideInitializeInputs(d3d);
         const unsigned int rrObserverHooks = InstallRRObservationHooks(renderer,d3d);
         Log("PT_REFLECTION_P0_OBSERVER ready=%u expected=3 scope=reflection_dispatch_identification gpu_work=unchanged allocations=0",rrObserverHooks);
+        const bool ptReflectionP1Ready = PTReflectionProbeInstall(renderer,d3d);
+        Log("PT_REFLECTION_P1_READY ready=%u mode=identity_passthrough replacement=0 native_fallback=1",unsigned(ptReflectionP1Ready));
         const bool albedoHooksReady = guideInputsReady && RRAlbedoInstallHooks(renderer, d3d);
         if(albedoHooksReady) rrAlbedoStage.store(RRAlbedoStage::Disabled,std::memory_order_release);
         Log("RR_GUIDE_G3_NATIVE_PATH ready=%u diagnostic_capture=0 recurring_replay=on_demand_full_rr_only rr_eval=warmup_then_native", unsigned(albedoHooksReady));
