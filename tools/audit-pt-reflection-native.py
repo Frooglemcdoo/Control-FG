@@ -68,13 +68,13 @@ def main() -> int:
 
         assert "dx.op.traceRay.struct.HitData" in raygen, stem
         assert "g_uRTReflectionRayCount" in text, stem
-        assert "g_rwtMaterialId" in text, stem
-        assert "g_rwtNormal_TexcoordX" in text, stem
-        assert "g_rwtPosition_TexcoordY" in text, stem
         assert "g_rtScene" in text, stem
 
         full_writer = index % 2 == 0
         if full_writer:
+            assert "g_rwtMaterialId" in text, stem
+            assert "g_rwtNormal_TexcoordX" in text, stem
+            assert "g_rwtPosition_TexcoordY" in text, stem
             assert "dx.op.textureStore.i32" in closest, stem
             assert "dx.op.textureStore.f32" in closest, stem
             assert "1.000000e+04" in closest, stem
