@@ -228,8 +228,46 @@ static void* PTReflectionHookVariantLookup(void* technique,unsigned key) {
     return result;
 }
 
+
+static unsigned PTReflectionLogShaderCodeStorageExports(HMODULE d3d) noexcept {
+    if(!d3d||d3d!=verifiedD3d)return 0;
+    unsigned matches=0;
+    __try {
+        auto* base=reinterpret_cast<unsigned char*>(d3d);
+        auto* dos=reinterpret_cast<IMAGE_DOS_HEADER*>(base);
+        if(dos->e_magic!=IMAGE_DOS_SIGNATURE)return 0;
+        auto* nt=reinterpret_cast<IMAGE_NT_HEADERS64*>(base+dos->e_lfanew);
+        if(nt->Signature!=IMAGE_NT_SIGNATURE||
+           nt->OptionalHeader.Magic!=IMAGE_NT_OPTIONAL_HDR64_MAGIC)return 0;
+        const auto& dir=nt->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_EXPORT];
+        if(!dir.VirtualAddress||dir.Size<sizeof(IMAGE_EXPORT_DIRECTORY))return 0;
+        auto* exports=reinterpret_cast<IMAGE_EXPORT_DIRECTORY*>(base+dir.VirtualAddress);
+        if(!exports->AddressOfNames||!exports->AddressOfNameOrdinals||
+           !exports->AddressOfFunctions||exports->NumberOfNames>65536)return 0;
+        auto* names=reinterpret_cast<DWORD*>(base+exports->AddressOfNames);
+        auto* ordinals=reinterpret_cast<WORD*>(base+exports->AddressOfNameOrdinals);
+        auto* functions=reinterpret_cast<DWORD*>(base+exports->AddressOfFunctions);
+        for(DWORD i=0;i<exports->NumberOfNames && matches<32;++i){
+            const char* name=reinterpret_cast<const char*>(base+names[i]);
+            if(!name||!strstr(name,"ShaderCodeStorage"))continue;
+            const WORD ordinalIndex=ordinals[i];
+            if(ordinalIndex>=exports->NumberOfFunctions)continue;
+            const DWORD rva=functions[ordinalIndex];
+            ++matches;
+            Log("PT_REFLECTION_P1_SHADER_STORAGE_EXPORT index=%u name=%s rva=0x%X address=%p",
+                matches,name,rva,base+rva);
+        }
+    } __except(EXCEPTION_EXECUTE_HANDLER) {
+        Log("PT_REFLECTION_P1_SHADER_STORAGE_EXPORT_SCAN exception=0x%08lX matches=%u",
+            GetExceptionCode(),matches);
+    }
+    Log("PT_REFLECTION_P1_SHADER_STORAGE_EXPORT_SUMMARY matches=%u known_get_rva=0x40820",matches);
+    return matches;
+}
+
 static bool PTReflectionInstallShaderLookupHooks(HMODULE renderer,HMODULE d3d) noexcept {
     if(!renderer||renderer!=verifiedRenderer||!d3d||d3d!=verifiedD3d)return false;
+    PTReflectionLogShaderCodeStorageExports(d3d);
     if(!RRAlbedoShader::Initialize(d3d)){
         Log("PT_REFLECTION_P1_LOOKUP_HOOKS ready=0 reason=resident_shader_getter");
         return false;
