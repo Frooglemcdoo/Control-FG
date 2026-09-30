@@ -68,6 +68,8 @@ Texture2D<float4> g_tLinearDepth : register(t1);
 Texture2D<float4> g_tClipDepth : register(t2);
 Texture2D<float4> g_tStaticBlueNoiseRGBA_0 : register(t4);
 RaytracingAccelerationStructure g_rtScene : register(t5);
+ByteAddressBuffer g_bRaytracingIndexBuffer : register(t0, space3);
+ByteAddressBuffer g_bRaytracingVertexBuffer1 : register(t1, space3);
 
 RWTexture2DArray<uint>   g_rwtMaterialId : register(u0);
 RWTexture2DArray<float4> g_rwtNormal_TexcoordX : register(u1);
@@ -253,21 +255,88 @@ float3 PTWorldToViewPoint(float3 p)
         g_mWorldToView0,g_mWorldToView1,g_mWorldToView2,g_mWorldToView3);
 }
 
+
+uint3 PTLoadTriangleIndices(uint primitive)
+{
+    uint baseOffset=uIndexOffset + primitive*3u*uIndexStride;
+    if(uIndexStride==2u) {
+        uint maxOffset=uIndexBufferSize>=8u ? uIndexBufferSize-8u : 0u;
+        uint aligned=min(baseOffset & ~3u,maxOffset);
+        uint2 packed=g_bRaytracingIndexBuffer.Load2(aligned);
+        if(aligned==baseOffset)
+            return uint3(packed.x & 0xffffu,packed.x >> 16u,packed.y & 0xffffu);
+        return uint3(packed.x >> 16u,packed.y & 0xffffu,packed.y >> 16u);
+    }
+    uint maxOffset=uIndexBufferSize>=12u ? uIndexBufferSize-12u : 0u;
+    uint offset=min(baseOffset,maxOffset);
+    return g_bRaytracingIndexBuffer.Load3(offset);
+}
+
+int2 PTUnpackS16x2(uint packed)
+{
+    return int2((int)(packed << 16u) >> 16,(int)packed >> 16);
+}
+
+int3 PTUnpackS16x3(uint2 packed)
+{
+    return int3((int)(packed.x << 16u) >> 16,
+                (int)packed.x >> 16,
+                (int)(packed.y << 16u) >> 16);
+}
+
+float2 PTLoadTexcoord(uint vertex)
+{
+    uint address=vertex*uVertexStride1 + uTexcoordOffset;
+    uint maxOffset=uVertexBuffer1Size>=4u ? uVertexBuffer1Size-4u : 0u;
+    uint packed=g_bRaytracingVertexBuffer1.Load(min(address,maxOffset));
+    return float2(PTUnpackS16x2(packed))*(1.0f/4095.0f);
+}
+
+float3 PTLoadNormal(uint vertex)
+{
+    uint address=vertex*uVertexStride1 + uNormalOffset;
+    uint maxOffset=uVertexBuffer1Size>=8u ? uVertexBuffer1Size-8u : 0u;
+    uint2 packed=g_bRaytracingVertexBuffer1.Load2(min(address,maxOffset));
+    return float3(PTUnpackS16x3(packed))*(1.0f/32767.0f);
+}
+
+void PTNativeHitAttributes(in BuiltInTriangleIntersectionAttributes attribs,
+                           out float2 texcoord,out float3 normalWorld)
+{
+    uint3 indices=PTLoadTriangleIndices(PrimitiveIndex());
+    float3 weights=float3(1.0f-attribs.barycentrics.x-attribs.barycentrics.y,
+                          attribs.barycentrics.x,
+                          attribs.barycentrics.y);
+    texcoord=PTLoadTexcoord(indices.x)*weights.x
+            +PTLoadTexcoord(indices.y)*weights.y
+            +PTLoadTexcoord(indices.z)*weights.z;
+    float3 normalObject=PTLoadNormal(indices.x)*weights.x
+                       +PTLoadNormal(indices.y)*weights.y
+                       +PTLoadNormal(indices.z)*weights.z;
+    float3x4 worldToObject=WorldToObject3x4();
+    normalWorld=float3(
+        dot(normalObject,float3(worldToObject[0][0],worldToObject[1][0],worldToObject[2][0])),
+        dot(normalObject,float3(worldToObject[0][1],worldToObject[1][1],worldToObject[2][1])),
+        dot(normalObject,float3(worldToObject[0][2],worldToObject[1][2],worldToObject[2][2])));
+}
+
 [shader("closesthit")]
 void reflectionClosestHit(inout HitData payload, in BuiltInTriangleIntersectionAttributes attribs)
 {
     uint layer=payload.value;
     uint2 pixel=DispatchRaysIndex().xy;
+
+    float2 texcoord;
+    float3 normalWorld;
+    PTNativeHitAttributes(attribs,texcoord,normalWorld);
+
     float3 worldHit=WorldRayOrigin()+WorldRayDirection()*RayTCurrent();
     float3 viewHit=PTWorldToViewPoint(worldHit);
 
-    // Temporary compile contract only. Actual P2 injection remains blocked
-    // because this is not Remedy's interpolated material normal/UV writer.
-    float3 n=normalize(-WorldRayDirection());
     g_rwtMaterialId[uint3(pixel,layer)]=uMaterialID;
-    g_rwtNormal_TexcoordX[uint3(pixel,layer)]=float4(n,0.0f);
-    g_rwtPosition_TexcoordY[uint3(pixel,layer)]=float4(viewHit,0.0f);
-    payload.value=(uint)min(RayTCurrent()*10000.0f,4294967295.0f);
+    g_rwtNormal_TexcoordX[uint3(pixel,layer)]=float4(normalWorld,texcoord.x);
+    g_rwtPosition_TexcoordY[uint3(pixel,layer)]=float4(viewHit,texcoord.y);
+    payload.value=(uint)(RayTCurrent()*10000.0f);
 }
 
 [shader("anyhit")]
