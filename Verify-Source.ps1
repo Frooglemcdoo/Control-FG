@@ -16,7 +16,7 @@ try {
     $ptReflectionExperiment = Test-Path -LiteralPath $ptReflectionHeaderPath
     $ptReflectionExperimentPaths = @(
         'src/probe.cpp','src/fg_overlay.h','src/streamline_bridge.h',
-        'src/pt_reflections.h','Verify-Source.ps1','Verify-Build.ps1'
+        'src/pt_reflections.h','Verify-Source.ps1','Verify-Build.ps1','tools/verify_source_evidence.py'
     )
     if ($ptReflectionExperiment) {
         $ptReflection = Get-Content -LiteralPath $ptReflectionHeaderPath -Raw
