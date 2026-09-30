@@ -369,6 +369,42 @@ static void* PTReflectionHookVariantLookup(void* technique,unsigned key) {
 }
 
 
+static unsigned PTReflectionLogShaderCodeStorageGetterCallsites(HMODULE d3d) noexcept {
+    if(!d3d||d3d!=verifiedD3d)return 0;
+    unsigned matches=0;
+    __try {
+        auto* base=reinterpret_cast<unsigned char*>(d3d);
+        auto* dos=reinterpret_cast<IMAGE_DOS_HEADER*>(base);
+        if(dos->e_magic!=IMAGE_DOS_SIGNATURE)return 0;
+        auto* nt=reinterpret_cast<IMAGE_NT_HEADERS64*>(base+dos->e_lfanew);
+        if(nt->Signature!=IMAGE_NT_SIGNATURE||nt->OptionalHeader.Magic!=IMAGE_NT_OPTIONAL_HDR64_MAGIC)return 0;
+        auto* section=IMAGE_FIRST_SECTION(nt);
+        const auto target=reinterpret_cast<std::uintptr_t>(base)+0x40820u;
+        for(unsigned si=0;si<nt->FileHeader.NumberOfSections;++si){
+            const auto& sh=section[si];
+            if(!(sh.Characteristics&IMAGE_SCN_CNT_CODE))continue;
+            auto* start=base+sh.VirtualAddress;
+            const size_t bytes=sh.Misc.VirtualSize;
+            if(bytes<5)continue;
+            for(size_t i=0;i+5<=bytes;++i){
+                if(start[i]!=0xE8)continue;
+                int32_t rel=0;memcpy(&rel,start+i+1,sizeof(rel));
+                const auto destination=reinterpret_cast<std::uintptr_t>(start+i+5)+static_cast<std::intptr_t>(rel);
+                if(destination!=target)continue;
+                ++matches;
+                if(matches<=64)
+                    Log("PT_REFLECTION_P1_SHADER_STORAGE_GET_CALLSITE index=%u rva=0x%zX address=%p",
+                        matches,static_cast<size_t>(sh.VirtualAddress+i),start+i);
+            }
+        }
+    } __except(EXCEPTION_EXECUTE_HANDLER) {
+        Log("PT_REFLECTION_P1_SHADER_STORAGE_GET_CALLSITE_SCAN exception=0x%08lX matches=%u",
+            GetExceptionCode(),matches);
+    }
+    Log("PT_REFLECTION_P1_SHADER_STORAGE_GET_CALLSITE_SUMMARY matches=%u target_rva=0x40820",matches);
+    return matches;
+}
+
 static unsigned PTReflectionLogShaderCodeStorageExports(HMODULE d3d) noexcept {
     if(!d3d||d3d!=verifiedD3d)return 0;
     unsigned matches=0;
@@ -408,6 +444,7 @@ static unsigned PTReflectionLogShaderCodeStorageExports(HMODULE d3d) noexcept {
 static bool PTReflectionInstallShaderLookupHooks(HMODULE renderer,HMODULE d3d) noexcept {
     if(!renderer||renderer!=verifiedRenderer||!d3d||d3d!=verifiedD3d)return false;
     PTReflectionLogShaderCodeStorageExports(d3d);
+    PTReflectionLogShaderCodeStorageGetterCallsites(d3d);
     PTReflectionLoadP2Sidecar();
     ptReflectionForcedNativeVariant=PTReflectionReadForcedNativeVariant();
     ptReflectionSwapTechnique=nullptr;
