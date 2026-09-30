@@ -380,6 +380,14 @@ static unsigned PTReflectionLogShaderCodeStorageGetterCallsites(HMODULE d3d) noe
         if(nt->Signature!=IMAGE_NT_SIGNATURE||nt->OptionalHeader.Magic!=IMAGE_NT_OPTIONAL_HDR64_MAGIC)return 0;
         auto* section=IMAGE_FIRST_SECTION(nt);
         const auto target=reinterpret_cast<std::uintptr_t>(base)+0x40820u;
+        const std::uintptr_t rtEntries[5]{
+            reinterpret_cast<std::uintptr_t>(GetProcAddress(d3d,kRRBeginPipelineSetupSymbol)),
+            reinterpret_cast<std::uintptr_t>(GetProcAddress(d3d,kRRSetRayGenerationSymbol)),
+            reinterpret_cast<std::uintptr_t>(GetProcAddress(d3d,kRRSetMissSymbol)),
+            reinterpret_cast<std::uintptr_t>(GetProcAddress(d3d,kRRSetHitGroupSymbol)),
+            reinterpret_cast<std::uintptr_t>(GetProcAddress(d3d,kRRRaytraceSymbol))
+        };
+        const char* rtNames[5]{"begin_pipeline","set_raygen","set_miss","set_hitgroup","raytrace"};
         for(unsigned si=0;si<nt->FileHeader.NumberOfSections;++si){
             const auto& sh=section[si];
             if(!(sh.Characteristics&IMAGE_SCN_CNT_CODE))continue;
@@ -392,9 +400,18 @@ static unsigned PTReflectionLogShaderCodeStorageGetterCallsites(HMODULE d3d) noe
                 const auto destination=reinterpret_cast<std::uintptr_t>(start+i+5)+static_cast<std::intptr_t>(rel);
                 if(destination!=target)continue;
                 ++matches;
-                if(matches<=64)
-                    Log("PT_REFLECTION_P1_SHADER_STORAGE_GET_CALLSITE index=%u rva=0x%zX address=%p",
-                        matches,static_cast<size_t>(sh.VirtualAddress+i),start+i);
+                if(matches<=64){
+                    const auto callAddress=reinterpret_cast<std::uintptr_t>(start+i);
+                    size_t nearest=0;std::uintptr_t best=~std::uintptr_t(0);
+                    for(size_t e=0;e<_countof(rtEntries);++e){
+                        if(!rtEntries[e])continue;
+                        const auto distance=callAddress>rtEntries[e]?callAddress-rtEntries[e]:rtEntries[e]-callAddress;
+                        if(distance<best){best=distance;nearest=e;}
+                    }
+                    Log("PT_REFLECTION_P1_SHADER_STORAGE_GET_CALLSITE index=%u rva=0x%zX address=%p nearest_rt=%s distance=0x%llX",
+                        matches,static_cast<size_t>(sh.VirtualAddress+i),start+i,rtNames[nearest],
+                        static_cast<unsigned long long>(best));
+                }
             }
         }
     } __except(EXCEPTION_EXECUTE_HANDLER) {
