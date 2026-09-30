@@ -34,6 +34,52 @@ static int ptReflectionForcedNativeVariant=-1;
 static void* ptReflectionSwapTechnique=nullptr;
 static void* ptReflectionSwapShader=nullptr;
 static int ptReflectionSwapVariant=-1;
+static std::vector<unsigned char> ptReflectionP2Bytes;
+static char ptReflectionP2Sha256[65]{};
+static bool ptReflectionP2Loaded=false;
+
+static bool PTReflectionLoadP2Sidecar() noexcept {
+    ptReflectionP2Bytes.clear();
+    ptReflectionP2Sha256[0]=0;
+    ptReflectionP2Loaded=false;
+    std::wstring self=ModulePath(selfModule);
+    if(self.empty())return false;
+    const auto slash=self.find_last_of(L"\\/");
+    if(slash==std::wstring::npos)return false;
+    const std::wstring path=self.substr(0,slash+1)+L"pt_reflection_p2.dxil";
+    HANDLE file=CreateFileW(path.c_str(),GENERIC_READ,FILE_SHARE_READ|FILE_SHARE_DELETE,
+        nullptr,OPEN_EXISTING,FILE_ATTRIBUTE_NORMAL,nullptr);
+    if(file==INVALID_HANDLE_VALUE){
+        Log("PT_REFLECTION_P2_SIDECAR loaded=0 reason=missing error=%lu",GetLastError());
+        return false;
+    }
+    LARGE_INTEGER size{};
+    bool okay=GetFileSizeEx(file,&size)!=FALSE&&size.QuadPart>=32&&size.QuadPart<=1024*1024;
+    if(okay){
+        try { ptReflectionP2Bytes.resize(static_cast<size_t>(size.QuadPart)); }
+        catch(...) { okay=false; }
+    }
+    DWORD read=0;
+    if(okay)okay=ReadFile(file,ptReflectionP2Bytes.data(),static_cast<DWORD>(ptReflectionP2Bytes.size()),&read,nullptr)!=FALSE&&read==ptReflectionP2Bytes.size();
+    CloseHandle(file);
+    if(okay){
+        uint32_t declared=0;
+        memcpy(&declared,ptReflectionP2Bytes.data()+24,sizeof(declared));
+        okay=memcmp(ptReflectionP2Bytes.data(),"DXBC",4)==0&&declared==ptReflectionP2Bytes.size()&&
+            PTReflectionSha256(ptReflectionP2Bytes.data(),ptReflectionP2Bytes.size(),ptReflectionP2Sha256);
+    }
+    if(!okay){
+        Log("PT_REFLECTION_P2_SIDECAR loaded=0 reason=invalid bytes=%llu",
+            static_cast<unsigned long long>(ptReflectionP2Bytes.size()));
+        ptReflectionP2Bytes.clear();
+        ptReflectionP2Sha256[0]=0;
+        return false;
+    }
+    ptReflectionP2Loaded=true;
+    Log("PT_REFLECTION_P2_SIDECAR loaded=1 bytes=%llu sha256=%s address=%p activation=disabled transport=pending",
+        static_cast<unsigned long long>(ptReflectionP2Bytes.size()),ptReflectionP2Sha256,ptReflectionP2Bytes.data());
+    return true;
+}
 
 static constexpr const char* kPTReflectionNativeHashes[32]={
     "c2e4c0c4b48b191ba281595dcf11c7962c5c05c615cbe036ca6e8616c09fd30e",
@@ -360,6 +406,7 @@ static unsigned PTReflectionLogShaderCodeStorageExports(HMODULE d3d) noexcept {
 static bool PTReflectionInstallShaderLookupHooks(HMODULE renderer,HMODULE d3d) noexcept {
     if(!renderer||renderer!=verifiedRenderer||!d3d||d3d!=verifiedD3d)return false;
     PTReflectionLogShaderCodeStorageExports(d3d);
+    PTReflectionLoadP2Sidecar();
     ptReflectionForcedNativeVariant=PTReflectionReadForcedNativeVariant();
     ptReflectionSwapTechnique=nullptr;
     ptReflectionSwapShader=nullptr;
