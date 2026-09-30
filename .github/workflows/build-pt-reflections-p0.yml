@@ -95,7 +95,7 @@ jobs:
           }
           if(-not $dxc){throw 'dxc.exe was not found in the Windows SDK / Visual Studio installation.'}
           Write-Host "DXC: $dxc"
-          & $dxc -T lib_6_3 -HV 2021 -O3 -I src/shaders -Fo build/pt_reflection_p2.dxil src/shaders/pt_reflection_p2.hlsl
+          & $dxc -T lib_6_3 -HV 2021 -O3 -enable-unbounded-descriptor-tables -I src/shaders -Fo build/pt_reflection_p2.dxil src/shaders/pt_reflection_p2.hlsl
           if($LASTEXITCODE -ne 0){throw "DXC compile failed: $LASTEXITCODE"}
           & $dxc -dumpbin build/pt_reflection_p2.dxil | Set-Content -LiteralPath build/pt_reflection_p2.dump.txt -Encoding UTF8
           if($LASTEXITCODE -ne 0){throw "DXC dump failed: $LASTEXITCODE"}
