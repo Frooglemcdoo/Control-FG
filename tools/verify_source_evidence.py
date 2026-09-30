@@ -68,6 +68,10 @@ def verify_source_evidence(root):
         'src/pt_reflections.h','Verify-Source.ps1','Verify-Build.ps1',
         'tools/verify_source_evidence.py','.github/workflows/prepare-v2.1.2.yml'
     }
+    # main commit 6579111 restored only the historical v2.0.0 release-notes
+    # file after the v2.1.2 checkpoint at 3d639bd. This is baseline drift,
+    # not PT-R1 ownership.
+    post_checkpoint_baseline = {'GITHUB_RELEASE.md'}
     if pt_experiment:
         pt = pt_header.read_text(encoding='utf-8-sig')
         overlay = (root/'src/fg_overlay.h').read_text(encoding='utf-8-sig')
@@ -112,6 +116,8 @@ def verify_source_evidence(root):
             raise ValueError(f'{ref}: missing source evidence')
         for name, expected in entries.items():
             if ref != current_ref and name in current_paths:
+                continue
+            if ref == current_ref and name in post_checkpoint_baseline:
                 continue
             if ref == current_ref and pt_experiment and name in pt_owned:
                 continue
