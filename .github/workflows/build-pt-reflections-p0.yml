@@ -145,6 +145,7 @@ jobs:
           (Get-FileHash "$out.zip" -Algorithm SHA256).Hash | Set-Content "$out.sha256" -Encoding ASCII
 
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: Control-FG-PT-Reflections-P0
           path: |
@@ -156,5 +157,6 @@ jobs:
             build/pt_reflection_p2.sha256
             build/pt_reflection_p2.dump.txt
             build/pt-reflection-native-audit.json
-          if-no-files-found: error
+            build/pt-reflection-native-audit-failure.txt
+          if-no-files-found: warn
           retention-days: 7
