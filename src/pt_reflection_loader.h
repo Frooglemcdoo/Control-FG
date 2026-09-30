@@ -30,6 +30,10 @@ static std::atomic<unsigned long long> ptReflectionRfxLookups{0};
 static std::atomic<unsigned long long> ptReflectionTechniqueLookups{0};
 static std::atomic<unsigned long long> ptReflectionVariantLookups{0};
 static std::atomic<unsigned long long> ptReflectionVariantRejects{0};
+static int ptReflectionForcedNativeVariant=-1;
+static void* ptReflectionSwapTechnique=nullptr;
+static void* ptReflectionSwapShader=nullptr;
+static int ptReflectionSwapVariant=-1;
 
 static constexpr const char* kPTReflectionNativeHashes[32]={
     "c2e4c0c4b48b191ba281595dcf11c7962c5c05c615cbe036ca6e8616c09fd30e",
@@ -128,50 +132,95 @@ static bool PTReflectionTechniqueOwnsShader(void* technique,void* shader,
     }
 }
 
-static bool PTReflectionInspectRayLibrary(void* technique,void* shader,unsigned key) noexcept {
-    if(!technique||!shader)return false;
-    unsigned tableIndex=0xffffffffu,tableCount=0,actualKey=0;
-    if(!PTReflectionTechniqueOwnsShader(technique,shader,&tableIndex,&tableCount,&actualKey)){
-        const auto reject=++ptReflectionVariantRejects;
-        Log("PT_REFLECTION_P1_VARIANT_REJECT count=%llu key=0x%X technique=%p shader=%p reason=technique_table_membership",
-            reject,key,technique,shader);
-        return false;
-    }
+
+struct PTReflectionRayIdentity {
+    RRAlbedoShader::NativeDescriptor descriptor{};
+    unsigned tableIndex=0xffffffffu;
+    unsigned tableCount=0;
+    unsigned actualKey=0;
+    char sha256[65]{};
+    int variant=-1;
+};
+
+static bool PTReflectionReadRayIdentity(void* technique,void* shader,
+    PTReflectionRayIdentity* out) noexcept {
+    if(out)*out={};
+    if(!technique||!shader||!out)return false;
+    if(!PTReflectionTechniqueOwnsShader(technique,shader,&out->tableIndex,
+        &out->tableCount,&out->actualKey))return false;
     RRAlbedoShader::NativeDescriptor before{},after{};
     if(!RRAlbedoShader::ReadDescriptor(reinterpret_cast<std::uintptr_t>(shader),0x70,&before)||
-       before.identifier<0||before.size<32||before.size>RRAlbedoShader::kMaximumBlobBytes){
-        const auto reject=++ptReflectionVariantRejects;
-        Log("PT_REFLECTION_P1_VARIANT_REJECT count=%llu key=0x%X actual_key=0x%X table_index=%u table_count=%u shader=%p reason=ray_descriptor",reject,key,actualKey,tableIndex,tableCount,shader);
-        return false;
-    }
+       before.identifier<0||before.size<32||before.size>RRAlbedoShader::kMaximumBlobBytes)return false;
     const size_t bytes=static_cast<size_t>(before.size);
     unsigned char* copy=static_cast<unsigned char*>(HeapAlloc(GetProcessHeap(),0,bytes));
-    if(!copy){
-        const auto reject=++ptReflectionVariantRejects;
-        Log("PT_REFLECTION_P1_VARIANT_REJECT count=%llu key=0x%X actual_key=0x%X table_index=%u table_count=%u shader=%p reason=allocation bytes=%zu",reject,key,actualKey,tableIndex,tableCount,shader,bytes);
-        return false;
-    }
-    bool copied=RRAlbedoShader::CopyResident(&before,copy,bytes);
-    bool stable=RRAlbedoShader::ReadDescriptor(reinterpret_cast<std::uintptr_t>(shader),0x70,&after) &&
+    if(!copy)return false;
+    const bool copied=RRAlbedoShader::CopyResident(&before,copy,bytes);
+    const bool stable=RRAlbedoShader::ReadDescriptor(reinterpret_cast<std::uintptr_t>(shader),0x70,&after) &&
         before.shaderBase==after.shaderBase&&before.stage==after.stage&&
         before.identifier==after.identifier&&before.size==after.size;
     uint32_t declared=0;
     if(copied&&bytes>=28)memcpy(&declared,copy+24,sizeof(declared));
     const bool container=copied&&stable&&bytes>=32&&memcmp(copy,"DXBC",4)==0&&declared==bytes;
-    char sha[65]{};
-    const bool hashed=container&&PTReflectionSha256(copy,bytes,sha);
-    const int variant=hashed?PTReflectionKnownVariant(sha):-1;
+    const bool hashed=container&&PTReflectionSha256(copy,bytes,out->sha256);
     HeapFree(GetProcessHeap(),0,copy);
-    if(!container||!hashed||variant<0){
-        const auto reject=++ptReflectionVariantRejects;
-        Log("PT_REFLECTION_P1_VARIANT_REJECT count=%llu key=0x%X actual_key=0x%X table_index=%u table_count=%u shader=%p stage=%u identifier=%d bytes=%llu stable=%u container=%u hashed=%u sha256=%s reason=unknown_native_library",
-            reject,key,actualKey,tableIndex,tableCount,shader,before.stage,before.identifier,static_cast<unsigned long long>(before.size),
-            unsigned(stable),unsigned(container),unsigned(hashed),hashed?sha:"<none>");
+    if(!hashed)return false;
+    out->variant=PTReflectionKnownVariant(out->sha256);
+    out->descriptor=before;
+    return out->variant>=0;
+}
+
+static bool PTReflectionFindNativeVariant(void* technique,int wanted,void** shaderOut,
+    PTReflectionRayIdentity* identityOut) noexcept {
+    if(shaderOut)*shaderOut=nullptr;
+    if(identityOut)*identityOut={};
+    if(!technique||wanted<0||wanted>=32)return false;
+    unsigned char* base=nullptr;unsigned count=0;
+    __try {
+        base=*reinterpret_cast<unsigned char**>(
+            reinterpret_cast<unsigned char*>(technique)+0x238);
+        count=*reinterpret_cast<unsigned*>(
+            reinterpret_cast<unsigned char*>(technique)+0x240);
+    } __except(EXCEPTION_EXECUTE_HANDLER) {
         return false;
     }
-    Log("PT_REFLECTION_P1_VARIANT_ADMIT key=0x%X actual_key=0x%X table_index=%u table_count=%u shader=%p ray_descriptor=%p stage=%u identifier=%d bytes=%llu sha256=%s variant=%03d exact_native_hash=1 replacement=disabled",
-        key,actualKey,tableIndex,tableCount,shader,reinterpret_cast<void*>(before.shaderBase),before.stage,before.identifier,
-        static_cast<unsigned long long>(before.size),sha,variant);
+    if(!base||count==0||count>128)return false;
+    for(unsigned i=0;i<count;++i){
+        auto* candidate=base+static_cast<size_t>(i)*0xA8u;
+        PTReflectionRayIdentity identity{};
+        if(!PTReflectionReadRayIdentity(technique,candidate,&identity))continue;
+        if(identity.variant!=wanted)continue;
+        if(shaderOut)*shaderOut=candidate;
+        if(identityOut)*identityOut=identity;
+        return true;
+    }
+    return false;
+}
+
+static int PTReflectionReadForcedNativeVariant() noexcept {
+    wchar_t value[32]{};
+    const DWORD n=GetEnvironmentVariableW(L"CONTROLFG_PT_REFLECTION_NATIVE_VARIANT",
+        value,_countof(value));
+    if(!n||n>=_countof(value))return -1;
+    wchar_t* end=nullptr;
+    const long parsed=wcstol(value,&end,10);
+    if(end==value||*end!=0||parsed<0||parsed>31)return -1;
+    return static_cast<int>(parsed);
+}
+
+static bool PTReflectionInspectRayLibrary(void* technique,void* shader,unsigned key) noexcept {
+    PTReflectionRayIdentity identity{};
+    if(!PTReflectionReadRayIdentity(technique,shader,&identity)){
+        const auto reject=++ptReflectionVariantRejects;
+        Log("PT_REFLECTION_P1_VARIANT_REJECT count=%llu key=0x%X technique=%p shader=%p reason=identity_or_unknown_native_library",
+            reject,key,technique,shader);
+        return false;
+    }
+    const auto& d=identity.descriptor;
+    Log("PT_REFLECTION_P1_VARIANT_ADMIT key=0x%X actual_key=0x%X table_index=%u table_count=%u shader=%p ray_descriptor=%p stage=%u identifier=%d bytes=%llu sha256=%s variant=%03d exact_native_hash=1 replacement=%s",
+        key,identity.actualKey,identity.tableIndex,identity.tableCount,shader,
+        reinterpret_cast<void*>(d.shaderBase),d.stage,d.identifier,
+        static_cast<unsigned long long>(d.size),identity.sha256,identity.variant,
+        ptReflectionForcedNativeVariant>=0?"native_probe_enabled":"disabled");
     return true;
 }
 
@@ -217,12 +266,43 @@ static void* PTReflectionHookTechniqueLookup(void* rfx,const char* technique) {
 }
 
 static void* PTReflectionHookVariantLookup(void* technique,unsigned key) {
-    void* result=ptReflectionOriginalVariantLookup(technique,key);
+    void* nativeResult=ptReflectionOriginalVariantLookup(technique,key);
+    void* result=nativeResult;
     if(technique&&technique==ptReflectionTechniqueObject){
         const auto call=++ptReflectionVariantLookups;
-        const bool admitted=PTReflectionInspectRayLibrary(technique,result,key);
-        Log("PT_REFLECTION_P1_VARIANT call=%llu technique=%p key=0x%X shader=%p admitted=%u mode=observe_only native_result_preserved=1",
-            call,technique,key,result,unsigned(admitted));
+        const bool admitted=PTReflectionInspectRayLibrary(technique,nativeResult,key);
+        bool swapped=false;
+        if(admitted&&ptReflectionForcedNativeVariant>=0){
+            if(ptReflectionSwapTechnique!=technique||
+               ptReflectionSwapVariant!=ptReflectionForcedNativeVariant||
+               !ptReflectionSwapShader){
+                void* candidate=nullptr;PTReflectionRayIdentity identity{};
+                if(PTReflectionFindNativeVariant(technique,ptReflectionForcedNativeVariant,
+                    &candidate,&identity)){
+                    ptReflectionSwapTechnique=technique;
+                    ptReflectionSwapVariant=ptReflectionForcedNativeVariant;
+                    ptReflectionSwapShader=candidate;
+                    Log("PT_REFLECTION_P1_NATIVE_SWAP_CACHE requested_variant=%d technique=%p shader=%p table_index=%u actual_key=0x%X sha256=%s",
+                        ptReflectionForcedNativeVariant,technique,candidate,
+                        identity.tableIndex,identity.actualKey,identity.sha256);
+                }else{
+                    ptReflectionSwapTechnique=technique;
+                    ptReflectionSwapVariant=ptReflectionForcedNativeVariant;
+                    ptReflectionSwapShader=nullptr;
+                    Log("PT_REFLECTION_P1_NATIVE_SWAP_REJECT requested_variant=%d technique=%p reason=variant_not_in_current_technique",
+                        ptReflectionForcedNativeVariant,technique);
+                }
+            }
+            if(ptReflectionSwapShader){
+                result=ptReflectionSwapShader;
+                swapped=result!=nativeResult;
+            }
+        }
+        Log("PT_REFLECTION_P1_VARIANT call=%llu technique=%p key=0x%X native_shader=%p returned_shader=%p admitted=%u swapped=%u forced_native_variant=%d mode=%s native_result_preserved=%u",
+            call,technique,key,nativeResult,result,unsigned(admitted),unsigned(swapped),
+            ptReflectionForcedNativeVariant,
+            ptReflectionForcedNativeVariant>=0?"native_variant_swap_probe":"observe_only",
+            unsigned(result==nativeResult));
         ptReflectionTechniqueObject=nullptr;
     }
     return result;
@@ -268,6 +348,12 @@ static unsigned PTReflectionLogShaderCodeStorageExports(HMODULE d3d) noexcept {
 static bool PTReflectionInstallShaderLookupHooks(HMODULE renderer,HMODULE d3d) noexcept {
     if(!renderer||renderer!=verifiedRenderer||!d3d||d3d!=verifiedD3d)return false;
     PTReflectionLogShaderCodeStorageExports(d3d);
+    ptReflectionForcedNativeVariant=PTReflectionReadForcedNativeVariant();
+    ptReflectionSwapTechnique=nullptr;
+    ptReflectionSwapShader=nullptr;
+    ptReflectionSwapVariant=-1;
+    Log("PT_REFLECTION_P1_NATIVE_SWAP_CONFIG forced_variant=%d env=CONTROLFG_PT_REFLECTION_NATIVE_VARIANT default=disabled",
+        ptReflectionForcedNativeVariant);
     if(!RRAlbedoShader::Initialize(d3d)){
         Log("PT_REFLECTION_P1_LOOKUP_HOOKS ready=0 reason=resident_shader_getter");
         return false;
@@ -303,6 +389,8 @@ static bool PTReflectionInstallShaderLookupHooks(HMODULE renderer,HMODULE d3d) n
         }
         return false;
     }
-    Log("PT_REFLECTION_P1_LOOKUP_HOOKS ready=1 rfx_callsite=0x12953C technique_callsite=0x12954B variant_callsite=0x12956C rfx_helper=0x1D9960 technique_helper=0x1D2CE0 variant_helper=0x1DD450 native_hashes=32 replacement=disabled gpu_work=unchanged");
+    Log("PT_REFLECTION_P1_LOOKUP_HOOKS ready=1 rfx_callsite=0x12953C technique_callsite=0x12954B variant_callsite=0x12956C rfx_helper=0x1D9960 technique_helper=0x1D2CE0 variant_helper=0x1DD450 native_hashes=32 native_swap_probe=%s forced_variant=%d gpu_work=%s",
+        ptReflectionForcedNativeVariant>=0?"enabled":"disabled",ptReflectionForcedNativeVariant,
+        ptReflectionForcedNativeVariant>=0?"native_reflection_permutation_may_change":"unchanged");
     return true;
 }
