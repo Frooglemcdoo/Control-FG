@@ -30,6 +30,8 @@ static std::atomic<unsigned long long> ptReflectionRfxLookups{0};
 static std::atomic<unsigned long long> ptReflectionTechniqueLookups{0};
 static std::atomic<unsigned long long> ptReflectionVariantLookups{0};
 static std::atomic<unsigned long long> ptReflectionVariantRejects{0};
+static bool PTReflectionSha256(const unsigned char* data,size_t bytes,char (&hex)[65]) noexcept;
+
 static int ptReflectionForcedNativeVariant=-1;
 static void* ptReflectionSwapTechnique=nullptr;
 static void* ptReflectionSwapShader=nullptr;
