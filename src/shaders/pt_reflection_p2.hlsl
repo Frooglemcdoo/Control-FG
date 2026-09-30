@@ -11,6 +11,22 @@ struct HitData {
     uint value; // input: output array layer. hit: RayTCurrent*10000. miss: 0.
 };
 
+// Only fields through vColorMultiplier are consumed by alpha testing.
+// Tail padding preserves Control's native 336-byte StructuredBuffer stride.
+struct PTMaterialDataPart3 {
+    float fClothDiffScatterAmount;
+    float fClothFuzzWrap;
+    float3 vClothScatterColor;
+    float fHairSmoothness;
+    float3 vSpecularColor2;
+    float fHairSpecularShift;
+    float fHairDiffuseWrap;
+    float fPAD1;
+    float fEmissionIntensity;
+    float4 vColorMultiplier;
+    float tail[67];
+};
+
 cbuffer sys_constants : register(b0)
 {
     float2 g_vScreenRes;
@@ -66,15 +82,17 @@ cbuffer rtreflection : register(b1)
 Texture2D<float4> g_tGBuffer1 : register(t0);
 Texture2D<float4> g_tLinearDepth : register(t1);
 Texture2D<float4> g_tClipDepth : register(t2);
+StructuredBuffer<PTMaterialDataPart3> g_sbMaterialDataPart3 : register(t3);
 Texture2D<float4> g_tStaticBlueNoiseRGBA_0 : register(t4);
 RaytracingAccelerationStructure g_rtScene : register(t5);
+Texture2D<float4> g_sMaterialTextureArray[] : register(t0, space1);
+SamplerState g_sLinearWrap : register(s5, space1);
 ByteAddressBuffer g_bRaytracingIndexBuffer : register(t0, space3);
 ByteAddressBuffer g_bRaytracingVertexBuffer1 : register(t1, space3);
 
 RWTexture2DArray<uint>   g_rwtMaterialId : register(u0);
 RWTexture2DArray<float4> g_rwtNormal_TexcoordX : register(u1);
 RWTexture2DArray<float4> g_rwtPosition_TexcoordY : register(u2);
-RWTexture2DArray<uint>   g_rwtShadow : register(u3);
 
 float3 PTTransformPointColumns(float3 p, float4 c0, float4 c1, float4 c2, float4 c3)
 {
@@ -194,7 +212,6 @@ void reflectionRayGeneration()
     [unroll]
     for(uint layer=0;layer<4;++layer) {
         g_rwtMaterialId[uint3(pixel,layer)]=65534u;
-        g_rwtShadow[uint3(pixel,layer)]=0u;
     }
 
     float3 primaryView,primaryWorld,normalWorld;
@@ -242,12 +259,12 @@ void reflectionRayGeneration()
     }
 }
 
-// The P2 compile proof carries compatible logical exports for Remedy's state
-// setup. The hit shaders are intentionally minimal until we either retain the
-// native hit library in the state object or finish a byte-for-byte material
-// reconstruction. This file MUST NOT be injected while PT_REFLECTION_P2_HIT_STUBS
-// remains true.
-#define PT_REFLECTION_P2_HIT_STUBS 1
+// The geometry hit/miss/alpha contract now mirrors the recovered native path.
+// Runtime use remains blocked by default because layers 1/3 are second-bounce
+// surfaces while Control's stock deferred reflection composite treats all four
+// layers as independent first-bounce samples. A debug-only injection may use
+// this to prove propagation, but it is not the final BRDF/composite path.
+#define PT_REFLECTION_P2_COMPOSITE_UNVALIDATED 1
 
 float3 PTWorldToViewPoint(float3 p)
 {
@@ -300,6 +317,17 @@ float3 PTLoadNormal(uint vertex)
     return float3(PTUnpackS16x3(packed))*(1.0f/32767.0f);
 }
 
+float2 PTNativeTexcoord(in BuiltInTriangleIntersectionAttributes attribs)
+{
+    uint3 indices=PTLoadTriangleIndices(PrimitiveIndex());
+    float3 weights=float3(1.0f-attribs.barycentrics.x-attribs.barycentrics.y,
+                          attribs.barycentrics.x,
+                          attribs.barycentrics.y);
+    return PTLoadTexcoord(indices.x)*weights.x
+          +PTLoadTexcoord(indices.y)*weights.y
+          +PTLoadTexcoord(indices.z)*weights.z;
+}
+
 void PTNativeHitAttributes(in BuiltInTriangleIntersectionAttributes attribs,
                            out float2 texcoord,out float3 normalWorld)
 {
@@ -307,9 +335,7 @@ void PTNativeHitAttributes(in BuiltInTriangleIntersectionAttributes attribs,
     float3 weights=float3(1.0f-attribs.barycentrics.x-attribs.barycentrics.y,
                           attribs.barycentrics.x,
                           attribs.barycentrics.y);
-    texcoord=PTLoadTexcoord(indices.x)*weights.x
-            +PTLoadTexcoord(indices.y)*weights.y
-            +PTLoadTexcoord(indices.z)*weights.z;
+    texcoord=PTNativeTexcoord(attribs);
     float3 normalObject=PTLoadNormal(indices.x)*weights.x
                        +PTLoadNormal(indices.y)*weights.y
                        +PTLoadNormal(indices.z)*weights.z;
@@ -339,11 +365,19 @@ void reflectionClosestHit(inout HitData payload, in BuiltInTriangleIntersectionA
     payload.value=(uint)(RayTCurrent()*10000.0f);
 }
 
+bool PTAlphaPass(in BuiltInTriangleIntersectionAttributes attribs)
+{
+    float2 texcoord=PTNativeTexcoord(attribs);
+    uint textureIndex=NonUniformResourceIndex(uMaterialID*35u);
+    float textureAlpha=g_sMaterialTextureArray[textureIndex].SampleLevel(g_sLinearWrap,texcoord,0.0f).a;
+    float multiplierAlpha=g_sbMaterialDataPart3[uMaterialID].vColorMultiplier.w;
+    return textureAlpha*multiplierAlpha>=0.5f;
+}
+
 [shader("anyhit")]
 void reflectionAlphaTestAnyHit(inout HitData payload, in BuiltInTriangleIntersectionAttributes attribs)
 {
-    // Compile-only P2 stub. Native alpha-test material sampling must be restored
-    // before runtime admission.
+    if(!PTAlphaPass(attribs)) IgnoreHit();
 }
 
 [shader("miss")]
@@ -366,6 +400,7 @@ void shadowClosestHit(inout HitData payload, in BuiltInTriangleIntersectionAttri
 [shader("anyhit")]
 void shadowAlphaTestAnyHit(inout HitData payload, in BuiltInTriangleIntersectionAttributes attribs)
 {
+    if(!PTAlphaPass(attribs)) IgnoreHit();
 }
 
 [shader("miss")]
