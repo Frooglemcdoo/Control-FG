@@ -733,7 +733,6 @@ static void HookRRRaytrace(int a, int b) {
         QueryPerformanceCounter(&before);
     }
     originalRRRaytrace(a, b);
-    if(ptReflection) PTReflectionProbeCachedTechniqueOnce(verifiedRenderer,verifiedD3d);
     RRGuideTryCapture(aaCount.load(), rrCurrentRayGeneration);
     if (sample) {
         QueryPerformanceCounter(&after);
