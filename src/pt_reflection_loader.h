@@ -36,11 +36,11 @@ static std::atomic<unsigned long long> ptReflectionP1GetIntercepts{0};
 static std::atomic<unsigned long long> ptReflectionP2RayGetIntercepts{0};
 static std::atomic<unsigned long long> ptReflectionP2CompositeGetIntercepts{0};
 static unsigned char ptReflectionP1ShaderRecord[0xA8]{};
-static unsigned char ptReflectionP1ShaderDescriptor[0x80]{};
+static unsigned char ptReflectionP1ShaderDescriptor[0x100]{};
 static unsigned char ptReflectionP2RayShaderRecord[0xA8]{};
-static unsigned char ptReflectionP2RayShaderDescriptor[0x80]{};
+static unsigned char ptReflectionP2RayShaderDescriptor[0x100]{};
 static unsigned char ptReflectionP2CompositeShaderRecord[0xA8]{};
-static unsigned char ptReflectionP2CompositeShaderDescriptor[0x80]{};
+static unsigned char ptReflectionP2CompositeShaderDescriptor[0x100]{};
 static void* ptReflectionNativeDeferredShaderRecord=nullptr;
 static bool ptReflectionP1ShaderRecordReady=false;
 static bool ptReflectionP2RayShaderRecordReady=false;
@@ -645,29 +645,53 @@ static bool PTReflectionPrepareP1ShaderRecord(void* nativeShader,
 
 static bool PTReflectionCloneShaderRecord(void* nativeShader,size_t descriptorSlot,
     unsigned stage,int syntheticId,size_t shaderBytes,
-    unsigned char (&record)[0xA8],unsigned char (&descriptor)[0x80]) noexcept {
+    unsigned char (&record)[0xA8],unsigned char (&descriptor)[0x100]) noexcept {
     if(!nativeShader||descriptorSlot+sizeof(std::uintptr_t)>sizeof(record)||
        shaderBytes<32||shaderBytes>RRAlbedoShader::kMaximumBlobBytes)return false;
     std::uintptr_t nativeDescriptorAddress=0;
     DWORD fault=0;
     __try {
-        memcpy(record,nativeShader,sizeof(record));
-        memcpy(&nativeDescriptorAddress,
-            reinterpret_cast<unsigned char*>(nativeShader)+descriptorSlot,
+        auto* nativeRecord=reinterpret_cast<unsigned char*>(nativeShader);
+        memcpy(record,nativeRecord,sizeof(record));
+        memcpy(&nativeDescriptorAddress,nativeRecord+descriptorSlot,
             sizeof(nativeDescriptorAddress));
         if(nativeDescriptorAddress<=0xFFFFu)return false;
         auto* nativeDescriptor=reinterpret_cast<unsigned char*>(nativeDescriptorAddress);
         memcpy(descriptor,nativeDescriptor,sizeof(descriptor));
 
-        const auto nativeBegin=nativeDescriptorAddress;
-        const auto nativeEnd=nativeBegin+sizeof(descriptor);
-        const auto cloneBegin=reinterpret_cast<std::uintptr_t>(descriptor);
+        const auto nativeRecordBegin=reinterpret_cast<std::uintptr_t>(nativeRecord);
+        const auto nativeRecordEnd=nativeRecordBegin+sizeof(record);
+        const auto cloneRecordBegin=reinterpret_cast<std::uintptr_t>(record);
+        const auto nativeDescriptorBegin=nativeDescriptorAddress;
+        const auto nativeDescriptorEnd=nativeDescriptorBegin+sizeof(descriptor);
+        const auto cloneDescriptorBegin=reinterpret_cast<std::uintptr_t>(descriptor);
+
+        // Relocate every pointer in the 0xA8 shader record that refers either
+        // to the record itself or into the descriptor object. Compute records
+        // use both descriptor+0x00 and descriptor+0xC0, plus an embedded
+        // self-pointer at record+0x88.
+        for(size_t off=0;off+sizeof(std::uintptr_t)<=sizeof(record);off+=sizeof(std::uintptr_t)){
+            std::uintptr_t value=0;
+            memcpy(&value,record+off,sizeof(value));
+            if(value>=nativeRecordBegin&&value<nativeRecordEnd){
+                value=cloneRecordBegin+(value-nativeRecordBegin);
+                memcpy(record+off,&value,sizeof(value));
+            }else if(value>=nativeDescriptorBegin&&value<nativeDescriptorEnd){
+                value=cloneDescriptorBegin+(value-nativeDescriptorBegin);
+                memcpy(record+off,&value,sizeof(value));
+            }
+        }
+
+        // Relocate descriptor-internal pointers as well.
         for(size_t off=0;off+sizeof(std::uintptr_t)<=sizeof(descriptor);off+=sizeof(std::uintptr_t)){
             std::uintptr_t value=0;
             memcpy(&value,descriptor+off,sizeof(value));
-            if(value>=nativeBegin&&value<nativeEnd){
-                const std::uintptr_t relocated=cloneBegin+(value-nativeBegin);
-                memcpy(descriptor+off,&relocated,sizeof(relocated));
+            if(value>=nativeDescriptorBegin&&value<nativeDescriptorEnd){
+                value=cloneDescriptorBegin+(value-nativeDescriptorBegin);
+                memcpy(descriptor+off,&value,sizeof(value));
+            }else if(value>=nativeRecordBegin&&value<nativeRecordEnd){
+                value=cloneRecordBegin+(value-nativeRecordBegin);
+                memcpy(descriptor+off,&value,sizeof(value));
             }
         }
 
@@ -675,8 +699,6 @@ static bool PTReflectionCloneShaderRecord(void* nativeShader,size_t descriptorSl
         memcpy(descriptor+8,&stage,sizeof(stage));
         memcpy(descriptor+12,&syntheticId,sizeof(syntheticId));
         memcpy(descriptor+16,&bytes,sizeof(bytes));
-        const auto cloneDescriptorAddress=reinterpret_cast<std::uintptr_t>(descriptor);
-        memcpy(record+descriptorSlot,&cloneDescriptorAddress,sizeof(cloneDescriptorAddress));
     } __except(EXCEPTION_EXECUTE_HANDLER) {
         fault=GetExceptionCode();
     }
