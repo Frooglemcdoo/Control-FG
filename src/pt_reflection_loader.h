@@ -77,7 +77,9 @@ static bool PTReflectionSha256(const unsigned char* data,size_t bytes,char (&hex
 static bool PTReflectionPrepareP2CompositeShaderRecord(void* nativeShader) noexcept;
 static void PTReflectionHookDeferredDispatch(void* state,const void* dimensions);
 static bool PTReflectionInstallComputePsoHook(HMODULE d3d) noexcept;
+static bool PTReflectionInstallComputePsoHookOnDevice(ID3D12Device* device) noexcept;
 static bool PTReflectionInstallCommandListCaptureHooks(void* commandList) noexcept;
+static bool PTReflectionEnsureCapturedCompositePso() noexcept;
 
 static int ptReflectionForcedNativeVariant=-1;
 static void* ptReflectionSwapTechnique=nullptr;
@@ -114,6 +116,8 @@ static void** ptReflectionCreateComputePipelineStateSlot=nullptr;
 static ID3D12PipelineState* ptReflectionNativeCompositePso=nullptr;
 static ID3D12PipelineState* ptReflectionP2CompositePso=nullptr;
 static ID3D12RootSignature* ptReflectionCompositeRoot=nullptr;
+static UINT ptReflectionCompositeNodeMask=0;
+static D3D12_PIPELINE_STATE_FLAGS ptReflectionCompositeFlags=D3D12_PIPELINE_STATE_FLAG_NONE;
 static std::atomic<unsigned int> ptReflectionCompositePsoCaptured{0};
 static SRWLOCK ptReflectionCompositePsoLock=SRWLOCK_INIT;
 
