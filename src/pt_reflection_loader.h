@@ -436,38 +436,81 @@ static void PTReflectionLogNativeRecordMap(void* nativeShader) noexcept {
     }
 }
 
+static bool PTReflectionValidateDeferredDescriptor(const unsigned char* descriptor,
+    size_t recordOffset,const char* kind) noexcept {
+    if(!descriptor||!RRAlbedoShader::residentGetter)return false;
+    unsigned stage=0;int id=-1;unsigned long long bytes=0;const char* resident=nullptr;
+    char sha[65]{},head[65]{};
+    uint32_t declared=0;DWORD fault=0;
+    bool valid=false;
+    __try {
+        memcpy(&stage,descriptor+8,sizeof(stage));
+        memcpy(&id,descriptor+12,sizeof(id));
+        memcpy(&bytes,descriptor+16,sizeof(bytes));
+        if(stage>6u||id<0||bytes<32||bytes>RRAlbedoShader::kMaximumBlobBytes)return false;
+        resident=RRAlbedoShader::residentGetter(id);
+        if(!resident)return false;
+        memcpy(&declared,resident+24,sizeof(declared));
+        if(memcmp(resident,"DXBC",4)!=0||declared!=bytes)return false;
+        const size_t n=(std::min)(static_cast<size_t>(bytes),size_t(32));
+        for(size_t i=0;i<n;++i)
+            sprintf_s(head+i*2,3,"%02X",static_cast<unsigned char>(resident[i]));
+        valid=PTReflectionSha256(reinterpret_cast<const unsigned char*>(resident),
+            static_cast<size_t>(bytes),sha);
+    } __except(EXCEPTION_EXECUTE_HANDLER) {
+        fault=GetExceptionCode();valid=false;
+    }
+    if(valid)
+        Log("PT_REFLECTION_P2_DEFERRED_DESCRIPTOR kind=%s record_offset=0x%zX descriptor=%p stage=%u id=%d bytes=%llu resident=%p sha256=%s head=%s exception=0x%08lX",
+            kind,recordOffset,descriptor,stage,id,bytes,resident,sha,head,fault);
+    return valid;
+}
+
 static void PTReflectionLogDeferredRecordMap(void* nativeShader) noexcept {
     if(!nativeShader||ptReflectionDeferredRecordMapLogged.exchange(1u,std::memory_order_acq_rel))return;
-    const size_t slots[5]{0x10,0x30,0x50,0x70,0x90};
-    for(unsigned i=0;i<5;++i){
-        RRAlbedoShader::NativeDescriptor d{};
-        if(!RRAlbedoShader::ReadDescriptor(reinterpret_cast<std::uintptr_t>(nativeShader),slots[i],&d)){
-            Log("PT_REFLECTION_P2_DEFERRED_RECORD_SLOT index=%u slot=0x%zX readable=0",i,slots[i]);
-            continue;
-        }
-        char sha[65]{};
-        char head[65]{};
-        DWORD fault=0;
-        bool residentOkay=false;
-        const char* resident=nullptr;
-        __try {
-            resident=RRAlbedoShader::residentGetter&&d.identifier>=0?
-                RRAlbedoShader::residentGetter(d.identifier):nullptr;
-            if(resident&&d.size>=32&&d.size<=RRAlbedoShader::kMaximumBlobBytes){
-                const size_t n=(std::min)(static_cast<size_t>(d.size),size_t(32));
-                for(size_t b=0;b<n;++b)
-                    sprintf_s(head+b*2,3,"%02X",static_cast<unsigned char>(resident[b]));
-                residentOkay=PTReflectionSha256(
-                    reinterpret_cast<const unsigned char*>(resident),
-                    static_cast<size_t>(d.size),sha);
-            }
-        } __except(EXCEPTION_EXECUTE_HANDLER) {
-            fault=GetExceptionCode();residentOkay=false;
-        }
-        Log("PT_REFLECTION_P2_DEFERRED_RECORD_SLOT index=%u slot=0x%zX readable=1 descriptor=%p stage=%u id=%d bytes=%llu resident=%p resident_ok=%u sha256=%s head=%s exception=0x%08lX",
-            i,slots[i],reinterpret_cast<void*>(d.shaderBase),d.stage,d.identifier,
-            static_cast<unsigned long long>(d.size),resident,unsigned(residentOkay),sha,head,fault);
+
+    char rawHex[0xA8*2+1]{};
+    DWORD rawFault=0;
+    __try {
+        auto* record=reinterpret_cast<const unsigned char*>(nativeShader);
+        for(size_t i=0;i<0xA8;++i)sprintf_s(rawHex+i*2,3,"%02X",record[i]);
+    } __except(EXCEPTION_EXECUTE_HANDLER) {
+        rawFault=GetExceptionCode();rawHex[0]=0;
     }
+    Log("PT_REFLECTION_P2_DEFERRED_RECORD_RAW shader=%p bytes=168 hex=%s exception=0x%08lX",
+        nativeShader,rawHex,rawFault);
+
+    unsigned validPointers=0,validInline=0;
+    for(size_t off=0;off+sizeof(std::uintptr_t)<=0xA8;off+=sizeof(std::uintptr_t)){
+        std::uintptr_t candidate=0;DWORD fault=0;
+        __try {
+            memcpy(&candidate,reinterpret_cast<const unsigned char*>(nativeShader)+off,sizeof(candidate));
+        } __except(EXCEPTION_EXECUTE_HANDLER) {
+            fault=GetExceptionCode();candidate=0;
+        }
+        if(candidate>=0x10000u){
+            bool okay=false;
+            __try {
+                okay=PTReflectionValidateDeferredDescriptor(
+                    reinterpret_cast<const unsigned char*>(candidate),off,"pointer");
+            } __except(EXCEPTION_EXECUTE_HANDLER) {
+                okay=false;
+            }
+            if(okay)++validPointers;
+        }
+
+        bool inlineOkay=false;
+        __try {
+            inlineOkay=PTReflectionValidateDeferredDescriptor(
+                reinterpret_cast<const unsigned char*>(nativeShader)+off,off,"inline");
+        } __except(EXCEPTION_EXECUTE_HANDLER) {
+            inlineOkay=false;
+        }
+        if(inlineOkay)++validInline;
+    }
+
+    Log("PT_REFLECTION_P2_DEFERRED_DESCRIPTOR_SUMMARY shader=%p valid_pointer=%u valid_inline=%u scan_bytes=168 stride=8",
+        nativeShader,validPointers,validInline);
 }
 
 static bool PTReflectionPrepareP1ShaderRecord(void* nativeShader,
