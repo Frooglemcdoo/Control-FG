@@ -417,6 +417,24 @@ static void* PTReflectionHookTechniqueLookup(void* rfx,const char* technique) {
 }
 
 static const char* PTReflectionHookShaderStorageGet(int id) {
+    if(id==kPTReflectionP2RaySyntheticStorageId&&ptReflectionP2InjectionEnabled&&
+       ptReflectionP2Loaded&&!ptReflectionP2Bytes.empty()){
+        const auto n=++ptReflectionP2RayGetIntercepts;
+        if(n<=16 || (n%240)==0)
+            Log("PT_REFLECTION_P2_RAY_GET_INTERCEPT count=%llu id=%d bytes=%llu address=%p sha256=%s",
+                n,id,static_cast<unsigned long long>(ptReflectionP2Bytes.size()),
+                ptReflectionP2Bytes.data(),ptReflectionP2Sha256);
+        return reinterpret_cast<const char*>(ptReflectionP2Bytes.data());
+    }
+    if(id==kPTReflectionP2CompositeSyntheticStorageId&&ptReflectionP2InjectionEnabled&&
+       ptReflectionP2CompositeLoaded&&!ptReflectionP2CompositeBytes.empty()){
+        const auto n=++ptReflectionP2CompositeGetIntercepts;
+        if(n<=16 || (n%240)==0)
+            Log("PT_REFLECTION_P2_COMPOSITE_GET_INTERCEPT count=%llu id=%d bytes=%llu address=%p sha256=%s",
+                n,id,static_cast<unsigned long long>(ptReflectionP2CompositeBytes.size()),
+                ptReflectionP2CompositeBytes.data(),ptReflectionP2CompositeSha256);
+        return reinterpret_cast<const char*>(ptReflectionP2CompositeBytes.data());
+    }
     if(id==kPTReflectionP1SyntheticStorageId&&ptReflectionP1InjectionEnabled&&
        ptReflectionP1Loaded&&!ptReflectionP1Bytes.empty()){
         const auto n=++ptReflectionP1GetIntercepts;
@@ -428,7 +446,6 @@ static const char* PTReflectionHookShaderStorageGet(int id) {
     }
     return ptReflectionOriginalStorageGet?ptReflectionOriginalStorageGet(id):nullptr;
 }
-
 
 static void PTReflectionLogNativeRecordMap(void* nativeShader) noexcept {
     if(!nativeShader||ptReflectionRecordMapLogged.exchange(1u,std::memory_order_acq_rel))return;
