@@ -74,6 +74,8 @@ static std::atomic<unsigned long long> ptReflectionDeferredRfxLookups{0};
 static std::atomic<unsigned long long> ptReflectionDeferredTechniqueLookups{0};
 static std::atomic<unsigned long long> ptReflectionDeferredVariantLookups{0};
 static bool PTReflectionSha256(const unsigned char* data,size_t bytes,char (&hex)[65]) noexcept;
+static bool PTReflectionPrepareP2CompositeShaderRecord(void* nativeShader) noexcept;
+static void PTReflectionHookDeferredDispatch(void* state,const void* dimensions);
 
 static int ptReflectionForcedNativeVariant=-1;
 static void* ptReflectionSwapTechnique=nullptr;
