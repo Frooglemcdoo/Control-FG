@@ -97,6 +97,11 @@ static bool ptReflectionP2Loaded=false;
 static std::vector<unsigned char> ptReflectionP2CompositeBytes;
 static char ptReflectionP2CompositeSha256[65]{};
 static bool ptReflectionP2CompositeLoaded=false;
+static std::vector<unsigned char> ptReflectionP2VerifyBytes;
+static char ptReflectionP2VerifySha256[65]{};
+static bool ptReflectionP2VerifyLoaded=false;
+static std::atomic<unsigned int> ptReflectionVerifyMode{0u};
+static std::atomic<unsigned int> ptReflectionVerifyKeyDown{0u};
 static std::vector<unsigned char> ptReflectionP2DiffuseBridgeBytes;
 static char ptReflectionP2DiffuseBridgeSha256[65]{};
 static bool ptReflectionP2DiffuseBridgeLoaded=false;
@@ -118,6 +123,7 @@ static PTCreateComputePipelineStateFn ptReflectionOriginalCreateComputePipelineS
 static void** ptReflectionCreateComputePipelineStateSlot=nullptr;
 static ID3D12PipelineState* ptReflectionNativeCompositePso=nullptr;
 static ID3D12PipelineState* ptReflectionP2CompositePso=nullptr;
+static ID3D12PipelineState* ptReflectionP2VerifyPso=nullptr;
 static ID3D12RootSignature* ptReflectionCompositeRoot=nullptr;
 static UINT ptReflectionCompositeNodeMask=0;
 static D3D12_PIPELINE_STATE_FLAGS ptReflectionCompositeFlags=D3D12_PIPELINE_STATE_FLAG_NONE;
@@ -180,6 +186,10 @@ static bool PTReflectionLoadP1Sidecar() noexcept {
 static bool PTReflectionLoadP2Sidecar() noexcept {
     return PTReflectionLoadSidecar(L"pt_reflection_p2.dxil","P2",
         ptReflectionP2Bytes,ptReflectionP2Sha256,ptReflectionP2Loaded);
+}
+static bool PTReflectionLoadP2VerifySidecar() noexcept {
+    return PTReflectionLoadSidecar(L"pt_reflection_p2_verify.dxbc","P2_VERIFY",
+        ptReflectionP2VerifyBytes,ptReflectionP2VerifySha256,ptReflectionP2VerifyLoaded);
 }
 static bool PTReflectionLoadP2CompositeSidecar() noexcept {
     const bool loaded=PTReflectionLoadSidecar(L"pt_reflection_p2_composite.dxbc","P2_COMPOSITE",
@@ -703,6 +713,21 @@ static bool PTReflectionCreateCapturedP2PsoLocked(ID3D12Device* device) noexcept
     }
 
     ptReflectionP2CompositePso=customPso;
+    if(ptReflectionP2VerifyLoaded&&!ptReflectionP2VerifyBytes.empty()){
+        D3D12_COMPUTE_PIPELINE_STATE_DESC verify=custom;
+        verify.CS.pShaderBytecode=ptReflectionP2VerifyBytes.data();
+        verify.CS.BytecodeLength=ptReflectionP2VerifyBytes.size();
+        ID3D12PipelineState* verifyPso=nullptr;
+        const HRESULT verifyHr=ptReflectionOriginalCreateComputePipelineState(
+            device,&verify,__uuidof(ID3D12PipelineState),
+            reinterpret_cast<void**>(&verifyPso));
+        if(SUCCEEDED(verifyHr)&&verifyPso)ptReflectionP2VerifyPso=verifyPso;
+        Log("PT_REFLECTION_VERIFY_PSO_CREATE ready=%u hr=0x%08lX pso=%p shader_sha256=%s bytes=%llu native_root=%p",
+            unsigned(ptReflectionP2VerifyPso!=nullptr),static_cast<unsigned long>(verifyHr),
+            ptReflectionP2VerifyPso,ptReflectionP2VerifySha256,
+            static_cast<unsigned long long>(ptReflectionP2VerifyBytes.size()),
+            ptReflectionCompositeRoot);
+    }
     Log("PT_REFLECTION_P2_PSO_CREATE ready=1 device=%p root=%p native_pso=%p p2_pso=%p p2_sha256=%s p2_bytes=%llu node_mask=%u flags=%u",
         device,ptReflectionCompositeRoot,ptReflectionNativeCompositePso,customPso,
         ptReflectionP2CompositeSha256,
@@ -1813,11 +1838,17 @@ static bool PTReflectionInstallShaderLookupHooks(HMODULE renderer,HMODULE d3d) n
         unsigned(ptReflectionStoragePersist&&ptReflectionStorageIsPersisted));
     PTReflectionLoadP1Sidecar();
     PTReflectionLoadP2Sidecar();
+    PTReflectionLoadP2VerifySidecar();
     PTReflectionLoadP2CompositeSidecar();
     PTReflectionLoadP2DiffuseBridgeSidecar();
     ptReflectionCompositePsoCaptured.store(0u,std::memory_order_release);
     ptReflectionNativeCompositePso=nullptr;
     ptReflectionP2CompositePso=nullptr;
+    ptReflectionP2VerifyPso=nullptr;
+    ptReflectionVerifyMode.store(0u,std::memory_order_release);
+    ptReflectionVerifyKeyDown.store(0u,std::memory_order_release);
+    Log("PT_REFLECTION_VERIFY_INIT mode=0 hotkey=F11 cycle=normal,composite_quadrants,diffuse_gi_marker verify_sidecar=%u",
+        unsigned(ptReflectionP2VerifyLoaded));
     ptReflectionCompositeRoot=nullptr;
     ptReflectionP1ShaderRecordReady=false;
     ptReflectionP2RayShaderRecordReady=false;
