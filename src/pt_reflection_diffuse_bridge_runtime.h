@@ -161,6 +161,8 @@ static bool PTReflectionBridgeDiffuseGI() noexcept {
     bool restored=false;
     DWORD fault=0;
     bool dispatched=false;
+    D3D12_RESOURCE_BARRIER enter[3]{},leave[3]{};
+    UINT barrierCount=0;
 
     __try {
         reason="renderer_context";
@@ -235,14 +237,12 @@ static bool PTReflectionBridgeDiffuseGI() noexcept {
         ud.Format=dgi.desc.Format;
         owner->device->CreateUnorderedAccessView(dgi.resource,nullptr,&ud,cpu);
 
-        D3D12_RESOURCE_BARRIER enter[3]{},leave[3]{};
         ID3D12Resource* resources[3]{reflection.resource,input.gbuffer1.resource,dgi.resource};
         unsigned before[3]{reflection.state,gbufferState,dgi.state};
         D3D12_RESOURCE_STATES after[3]{
             D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
             D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
             D3D12_RESOURCE_STATE_UNORDERED_ACCESS};
-        UINT barrierCount=0;
         for(UINT i=0;i<3;++i){
             if(before[i]==static_cast<unsigned>(after[i]))continue;
             auto& b=enter[barrierCount];
@@ -285,11 +285,16 @@ static bool PTReflectionBridgeDiffuseGI() noexcept {
 
     // If recording faulted after the initial transitions, attempt the exact
     // reverse barriers before releasing native tracker locks.
-    if(transitionsIssued&&!restored&&input.commandList){
-        // The bridge is experimental and fail-closed; unknown partial state is
-        // reported rather than issuing guessed barriers from outside the SEH span.
-        Log("PT_REFLECTION_P2_DGI_BRIDGE_RESTORE_UNKNOWN call=%llu action=disable_bridge_for_frame",
-            call);
+    if(transitionsIssued&&!restored&&input.commandList&&barrierCount){
+        DWORD restoreFault=0;
+        __try {
+            input.commandList->ResourceBarrier(barrierCount,leave);
+            restored=true;
+        } __except(EXCEPTION_EXECUTE_HANDLER) {
+            restoreFault=GetExceptionCode();
+        }
+        Log("PT_REFLECTION_P2_DGI_BRIDGE_EMERGENCY_RESTORE call=%llu attempted=1 success=%u exception=0x%08lX",
+            call,unsigned(restored),restoreFault);
     }
     if(recordingHeld)RRGuideReleaseNativeLock(input.recordingLock);
     while(held)RRGuideReleaseNativeLock(locks[--held]);
