@@ -57,7 +57,9 @@ static const char* PTDiffuseGIResourceShapeReason(
     if(!d.Width||!d.Height||d.Width>8192||d.Height>8192)
         return "invalid_extent";
     if(d.DepthOrArraySize!=1)return "array_or_depth_not_one";
-    if(d.MipLevels!=1)return "mip_count_not_one";
+    // Control allocates the native reflection and DGI textures with a full
+    // mip pyramid (12 at 2560x1440). Our SRV/UAV descriptors select mip 0.
+    if(d.MipLevels<1||d.MipLevels>14)return "invalid_mip_chain";
     if(d.SampleDesc.Count!=1)return "multisampled";
     if(d.Format==DXGI_FORMAT_UNKNOWN)return "unknown_format";
     if(uav&&!(d.Flags&D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS))
@@ -82,7 +84,8 @@ static void PTDiffuseGILogResourceShape(
 
 static bool PTDiffuseGIResourceShape(const D3D12_RESOURCE_DESC& d,bool uav) noexcept {
     if(d.Dimension!=D3D12_RESOURCE_DIMENSION_TEXTURE2D||!d.Width||!d.Height||
-       d.Width>8192||d.Height>8192||d.DepthOrArraySize!=1||d.MipLevels!=1||
+       d.Width>8192||d.Height>8192||d.DepthOrArraySize!=1||
+       d.MipLevels<1||d.MipLevels>14||
        d.SampleDesc.Count!=1||d.Format==DXGI_FORMAT_UNKNOWN)return false;
     if(uav&&!(d.Flags&D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS))return false;
     if(!uav&&(d.Flags&D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE))return false;
@@ -159,7 +162,7 @@ static bool PTDiffuseGICreateOwner(ID3D12Device* device,PTDiffuseGIBridgeOwner**
         D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
     ptDiffuseGIBridgeOwners.push_back(c);
     *out=c;
-    Log("PT_REFLECTION_P2_DGI_BRIDGE_CREATE ready=1 device=%p owner=%p shader_bytes=%llu sha256=%s rough_route=diffuse_gi strength=0.45",
+    Log("PT_REFLECTION_P2_DGI_BRIDGE_CREATE ready=1 device=%p owner=%p shader_bytes=%llu sha256=%s rough_route=diffuse_gi strength=0.45 mip0_views=1",
         device,c,static_cast<unsigned long long>(ptReflectionP2DiffuseBridgeBytes.size()),
         ptReflectionP2DiffuseBridgeSha256);
     return true;
@@ -258,6 +261,10 @@ static bool PTReflectionBridgeDiffuseGI() noexcept {
                     "gbuffer1",gb,gbufferShape,false);
                 PTDiffuseGILogResourceShape(call,input.engineFrame,verifyMode,
                     "diffuse_gi",dgi,dgiShape,true);
+                Log("PT_REFLECTION_P2_DGI_MIP0_CONTRACT call=%llu reflection_mips=%u diffuse_gi_mips=%u reflection_state=0x%X dgi_state=0x%X srv_mip=0 uav_mip=0 barrier_subresource=0 verified_shape=%u",
+                    call,unsigned(reflection.desc.MipLevels),unsigned(dgi.desc.MipLevels),
+                    reflection.state,dgi.state,
+                    unsigned(strcmp(reflectionShape,"ready")==0&&strcmp(gbufferShape,"ready")==0&&strcmp(dgiShape,"ready")==0));
             }
         }
         if(strcmp(reflectionShape,"ready")!=0){
@@ -320,7 +327,10 @@ static bool PTReflectionBridgeDiffuseGI() noexcept {
         D3D12_SHADER_RESOURCE_VIEW_DESC sd{};
         sd.Shader4ComponentMapping=D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
         sd.ViewDimension=D3D12_SRV_DIMENSION_TEXTURE2D;
+        sd.Texture2D.MostDetailedMip=0;
         sd.Texture2D.MipLevels=1;
+        sd.Texture2D.PlaneSlice=0;
+        sd.Texture2D.ResourceMinLODClamp=0.0f;
         sd.Format=reflection.desc.Format;
         owner->device->CreateShaderResourceView(reflection.resource,&sd,cpu);
         cpu.ptr+=owner->descriptorSize;
@@ -329,6 +339,8 @@ static bool PTReflectionBridgeDiffuseGI() noexcept {
         cpu.ptr+=owner->descriptorSize;
         D3D12_UNORDERED_ACCESS_VIEW_DESC ud{};
         ud.ViewDimension=D3D12_UAV_DIMENSION_TEXTURE2D;
+        ud.Texture2D.MipSlice=0;
+        ud.Texture2D.PlaneSlice=0;
         ud.Format=dgi.desc.Format;
         owner->device->CreateUnorderedAccessView(dgi.resource,nullptr,&ud,cpu);
 
@@ -343,7 +355,9 @@ static bool PTReflectionBridgeDiffuseGI() noexcept {
             auto& b=enter[barrierCount];
             b.Type=D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
             b.Transition.pResource=resources[i];
-            b.Transition.Subresource=D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+            // Only mip 0 is read/written. Other mips may have independent
+            // native GPU states; leave them completely untouched.
+            b.Transition.Subresource=0;
             b.Transition.StateBefore=static_cast<D3D12_RESOURCE_STATES>(before[i]);
             b.Transition.StateAfter=after[i];
             leave[barrierCount]=b;
@@ -400,7 +414,7 @@ static bool PTReflectionBridgeDiffuseGI() noexcept {
     if(dispatched){
         const auto n=ptDiffuseGIBridgeDispatches.fetch_add(1,std::memory_order_relaxed)+1;
         if(n<=16||(n%240)==0)
-            Log("PT_REFLECTION_P2_DGI_BRIDGE call=%llu dispatch=%llu frame=%llu output=%llux%u reflection=%llux%u gbuffer=%llux%u strength=0.45 roughness_gate=0.42_0.88 destination=raw_diffuse_gi_color resource_states_restored=1 verify_mode=%u marker=%u",
+            Log("PT_REFLECTION_P2_DGI_BRIDGE call=%llu dispatch=%llu frame=%llu output=%llux%u reflection=%llux%u gbuffer=%llux%u strength=0.45 roughness_gate=0.42_0.88 destination=raw_diffuse_gi_color resource_states_restored=1 mip0_views=1 verify_mode=%u marker=%u",
                 call,n,input.engineFrame,
                 static_cast<unsigned long long>(dgi.desc.Width),dgi.desc.Height,
                 static_cast<unsigned long long>(reflection.desc.Width),reflection.desc.Height,
