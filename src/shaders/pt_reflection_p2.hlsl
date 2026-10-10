@@ -213,6 +213,10 @@ void reflectionRayGeneration()
     [unroll]
     for(uint layer=0;layer<4;++layer) {
         g_rwtMaterialId[uint3(pixel,layer)]=65534u;
+        // P2 reserves layers 2/3 for secondary hits. normal.w carries the
+        // secondary material ID as raw uint bits for the post-composite pass.
+        if(layer>=2u)
+            g_rwtNormal_TexcoordX[uint3(pixel,layer)]=float4(0,0,1,asfloat(65534u));
     }
 
     float3 primaryView,primaryWorld,normalWorld;
@@ -223,12 +227,14 @@ void reflectionRayGeneration()
     float3 cameraWorld=PTCameraWorld();
     float3 viewToCamera=normalize(cameraWorld-primaryWorld);
 
-    // Four native layers become two complete two-bounce paths:
-    // path 0 => layers 0,1; path 1 => layers 2,3.
+    // Keep both first-bounce hits contiguous so Control's stock deferred
+    // composite shades layers 0/1 normally. Layers 2/3 are secondary hits and
+    // remain sentinel material IDs for the native composite.
+    // path 0 => first 0, second 2; path 1 => first 1, second 3.
     [unroll]
     for(uint path=0;path<2;++path) {
-        uint firstLayer=path*2u;
-        uint secondLayer=firstLayer+1u;
+        uint firstLayer=path;
+        uint secondLayer=path+2u;
 
         float2 random=PTRandom2(pixel,path);
         float3 h=PTSampleGGXVNDF(normalWorld,viewToCamera,roughness,random);
@@ -260,12 +266,9 @@ void reflectionRayGeneration()
     }
 }
 
-// The geometry hit/miss/alpha contract now mirrors the recovered native path.
-// Runtime use remains blocked by default because layers 1/3 are second-bounce
-// surfaces while Control's stock deferred reflection composite treats all four
-// layers as independent first-bounce samples. A debug-only injection may use
-// this to prove propagation, but it is not the final BRDF/composite path.
-#define PT_REFLECTION_P2_COMPOSITE_UNVALIDATED 1
+// Layers 0/1 remain stock-composite-compatible first hits. Layers 2/3 carry
+// secondary geometry and are consumed only by the post-native P2 add pass.
+#define PT_REFLECTION_P2_POST_COMPOSITE_READY 1
 
 float3 PTWorldToViewPoint(float3 p)
 {
@@ -360,9 +363,18 @@ void reflectionClosestHit(inout HitData payload, in BuiltInTriangleIntersectionA
     float3 worldHit=WorldRayOrigin()+WorldRayDirection()*RayTCurrent();
     float3 viewHit=PTWorldToViewPoint(worldHit);
 
-    g_rwtMaterialId[uint3(pixel,layer)]=uMaterialID;
-    g_rwtNormal_TexcoordX[uint3(pixel,layer)]=float4(normalWorld,texcoord.x);
-    g_rwtPosition_TexcoordY[uint3(pixel,layer)]=float4(viewHit,texcoord.y);
+    if(layer>=2u) {
+        // Do not let Control's stock deferred composite shade the secondary
+        // surface as an independent primary ray. Preserve its material ID in
+        // normal.w for the P2 add pass instead.
+        g_rwtMaterialId[uint3(pixel,layer)]=65534u;
+        g_rwtNormal_TexcoordX[uint3(pixel,layer)]=float4(normalWorld,asfloat(uMaterialID));
+        g_rwtPosition_TexcoordY[uint3(pixel,layer)]=float4(viewHit,0.0f);
+    } else {
+        g_rwtMaterialId[uint3(pixel,layer)]=uMaterialID;
+        g_rwtNormal_TexcoordX[uint3(pixel,layer)]=float4(normalWorld,texcoord.x);
+        g_rwtPosition_TexcoordY[uint3(pixel,layer)]=float4(viewHit,texcoord.y);
+    }
     payload.value=(uint)(RayTCurrent()*10000.0f);
 }
 
@@ -387,7 +399,12 @@ void reflectionMiss(inout HitData payload)
     uint layer=payload.value;
     uint2 pixel=DispatchRaysIndex().xy;
     float3 worldEnd=WorldRayOrigin()+WorldRayDirection()*RayTCurrent();
-    g_rwtMaterialId[uint3(pixel,layer)]=65535u;
+    if(layer>=2u) {
+        g_rwtMaterialId[uint3(pixel,layer)]=65534u;
+        g_rwtNormal_TexcoordX[uint3(pixel,layer)]=float4(0,0,1,asfloat(65535u));
+    } else {
+        g_rwtMaterialId[uint3(pixel,layer)]=65535u;
+    }
     g_rwtPosition_TexcoordY[uint3(pixel,layer)]=float4(PTWorldToViewPoint(worldEnd),0.0f);
     payload.value=0u;
 }
