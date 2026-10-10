@@ -68,6 +68,10 @@ jobs:
           if errorlevel 1 exit /b 1
           build\compile-pt-reflection-p2-composite.exe
           if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /O2 /MT tools\compile-pt-reflection-p2-diffuse-bridge.cpp /Fobuild\compile-pt-reflection-p2-diffuse-bridge.obj /Febuild\compile-pt-reflection-p2-diffuse-bridge.exe /link d3dcompiler.lib
+          if errorlevel 1 exit /b 1
+          build\compile-pt-reflection-p2-diffuse-bridge.exe
+          if errorlevel 1 exit /b 1
           pushd src
           rc /nologo /fo ..\build\control_fg_logo.res control_fg_logo.rc
           set "RC_RESULT=%ERRORLEVEL%"
@@ -170,6 +174,7 @@ jobs:
           Copy-Item build/pt_reflection_p1.dxil "$out/pt_reflection_p1.dxil"
           Copy-Item build/pt_reflection_p2.dxil "$out/pt_reflection_p2.dxil"
           Copy-Item build/pt_reflection_p2_composite.dxbc "$out/pt_reflection_p2_composite.dxbc"
+          Copy-Item build/pt_reflection_p2_diffuse_bridge.dxbc "$out/pt_reflection_p2_diffuse_bridge.dxbc"
           @'
           PT Reflections experimental
           ---------------------------
@@ -177,6 +182,7 @@ jobs:
           pt_reflection_p1.dxil is stock-composite-compatible and staged for the first visual test.
           pt_reflection_p2.dxil contains the paired two-bounce ray path.
           pt_reflection_p2_composite.dxbc adds bounce-2 radiance after Control's native first-bounce composite.
+          pt_reflection_p2_diffuse_bridge.dxbc routes rough-surface P2 radiance into Control's raw diffuse-GI color path.
           Run normal gameplay with Ray Traced Reflections enabled, then collect compact logs.
           Relevant records:
             PT_REFLECTION_P0_DISPATCH
@@ -202,6 +208,7 @@ jobs:
             build/pt_reflection_p2.dxil
             build/pt_reflection_p2.sha256
             build/pt_reflection_p2_composite.dxbc
+            build/pt_reflection_p2_diffuse_bridge.dxbc
             build/pt_reflection_p2.dump.txt
             build/pt-reflection-native-audit.json
             build/pt-reflection-native-audit-failure.txt
