@@ -1,5 +1,6 @@
 #pragma once
-// Experimental PT reflection P1 discovery scaffold.
+#include "rr_indirect_call_windows.h"
+// Experimental PT reflection P1/P2 runtime bridge.
 //
 // Scope is deliberately limited to the three build-locked direct calls in the
 // native RT-reflection pass:
@@ -29,11 +30,23 @@ static RRAlbedoCallPatch ptReflectionLookupPatches[6]{};
 static RRAlbedoCallPatch ptReflectionStorageGetPatches[6]{};
 static PTShaderCodeStorageGetFn ptReflectionOriginalStorageGet=nullptr;
 static constexpr int kPTReflectionP1SyntheticStorageId=0x6F475031;
+static constexpr int kPTReflectionP2RaySyntheticStorageId=0x6F475032;
+static constexpr int kPTReflectionP2CompositeSyntheticStorageId=0x6F475033;
 static std::atomic<unsigned long long> ptReflectionP1GetIntercepts{0};
+static std::atomic<unsigned long long> ptReflectionP2RayGetIntercepts{0};
+static std::atomic<unsigned long long> ptReflectionP2CompositeGetIntercepts{0};
 static unsigned char ptReflectionP1ShaderRecord[0xA8]{};
 static unsigned char ptReflectionP1ShaderDescriptor[0x80]{};
+static unsigned char ptReflectionP2RayShaderRecord[0xA8]{};
+static unsigned char ptReflectionP2RayShaderDescriptor[0x80]{};
+static unsigned char ptReflectionP2CompositeShaderRecord[0xA8]{};
+static unsigned char ptReflectionP2CompositeShaderDescriptor[0x80]{};
+static void* ptReflectionNativeDeferredShaderRecord=nullptr;
 static bool ptReflectionP1ShaderRecordReady=false;
+static bool ptReflectionP2RayShaderRecordReady=false;
+static bool ptReflectionP2CompositeShaderRecordReady=false;
 static bool ptReflectionP1InjectionEnabled=false;
+static bool ptReflectionP2InjectionEnabled=false;
 static std::atomic<unsigned int> ptReflectionRecordMapLogged{0};
 static std::atomic<unsigned int> ptReflectionDeferredRecordMapLogged{0};
 static std::atomic<unsigned int> ptReflectionDeferredDxbcDumped{0};
@@ -75,6 +88,16 @@ static bool ptReflectionP1StorageAttempted=false;
 static std::vector<unsigned char> ptReflectionP2Bytes;
 static char ptReflectionP2Sha256[65]{};
 static bool ptReflectionP2Loaded=false;
+static std::vector<unsigned char> ptReflectionP2CompositeBytes;
+static char ptReflectionP2CompositeSha256[65]{};
+static bool ptReflectionP2CompositeLoaded=false;
+
+using PTReflectionBindComputeFn=void (*)(void*);
+using PTReflectionDispatchFn=void (*)(void*,const void*);
+static PTReflectionBindComputeFn ptReflectionBindCompute=nullptr;
+static PTReflectionDispatchFn ptReflectionOriginalDispatch=nullptr;
+static RRIndirectCallPatch ptReflectionDeferredDispatchPatch{};
+static std::atomic<unsigned long long> ptReflectionP2PostDispatches{0};
 
 
 static bool PTReflectionLoadSidecar(const wchar_t* fileName,const char* label,
@@ -124,6 +147,10 @@ static bool PTReflectionLoadP1Sidecar() noexcept {
 static bool PTReflectionLoadP2Sidecar() noexcept {
     return PTReflectionLoadSidecar(L"pt_reflection_p2.dxil","P2",
         ptReflectionP2Bytes,ptReflectionP2Sha256,ptReflectionP2Loaded);
+}
+static bool PTReflectionLoadP2CompositeSidecar() noexcept {
+    return PTReflectionLoadSidecar(L"pt_reflection_p2_composite.dxbc","P2_COMPOSITE",
+        ptReflectionP2CompositeBytes,ptReflectionP2CompositeSha256,ptReflectionP2CompositeLoaded);
 }
 
 static constexpr const char* kPTReflectionNativeHashes[32]={
