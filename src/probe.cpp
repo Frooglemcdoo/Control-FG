@@ -1022,6 +1022,7 @@ static bool Exchange(Patch& p, bool install) {
 
 #include "rr_albedo_hooks.h"
 #include "pt_reflection_loader.h"
+static bool PTReflectionBridgeDiffuseGI() noexcept;
 #define CONTROL_FG_RR_VRAM_RESIZE_R2 1
 static bool RRNativeVramReleaseCachedRRFeaturesForResize(unsigned long long frame,
     unsigned outputWidth,unsigned outputHeight,unsigned width,unsigned height) noexcept;
@@ -1030,6 +1031,7 @@ static bool RRNativeVramReleaseCachedRRFeaturesForPresetSwitch(unsigned long lon
 static bool RRNativeVramRecoverCachedRRFeature(unsigned long long frame,
     unsigned outputWidth,unsigned outputHeight,unsigned width,unsigned height) noexcept;
 #include "rr_native_frame.h"
+#include "pt_reflection_diffuse_bridge_runtime.h"
 #include "rr_native_guides.h"
 #include "rr_skin_mask_runtime.h"
 #include "rr_evaluation_entry.h"
