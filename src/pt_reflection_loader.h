@@ -36,6 +36,7 @@ static bool ptReflectionP1ShaderRecordReady=false;
 static bool ptReflectionP1InjectionEnabled=false;
 static std::atomic<unsigned int> ptReflectionRecordMapLogged{0};
 static std::atomic<unsigned int> ptReflectionDeferredRecordMapLogged{0};
+static std::atomic<unsigned int> ptReflectionDeferredDxbcDumped{0};
 static std::atomic<unsigned int> ptReflectionStorageRoundtripDone{0};
 static int ptReflectionStorageRoundtripPersistResult=-0x7fffffff;
 static int ptReflectionStorageRoundtripNativeId=-1;
@@ -460,9 +461,35 @@ static bool PTReflectionValidateDeferredDescriptor(const unsigned char* descript
     } __except(EXCEPTION_EXECUTE_HANDLER) {
         fault=GetExceptionCode();valid=false;
     }
-    if(valid)
+    if(valid){
         Log("PT_REFLECTION_P2_DEFERRED_DESCRIPTOR kind=%s record_offset=0x%zX descriptor=%p stage=%u id=%d bytes=%llu resident=%p sha256=%s head=%s exception=0x%08lX",
             kind,recordOffset,descriptor,stage,id,bytes,resident,sha,head,fault);
+        if(stage==5u&&ptReflectionDeferredDxbcDumped.exchange(1u,std::memory_order_acq_rel)==0u){
+            constexpr size_t chunkBytes=384u;
+            const size_t totalChunks=(static_cast<size_t>(bytes)+chunkBytes-1u)/chunkBytes;
+            Log("PT_REFLECTION_P2_DEFERRED_DXBC_BEGIN id=%d bytes=%llu sha256=%s chunks=%llu chunk_bytes=%llu",
+                id,bytes,sha,static_cast<unsigned long long>(totalChunks),
+                static_cast<unsigned long long>(chunkBytes));
+            for(size_t chunk=0;chunk<totalChunks;++chunk){
+                const size_t offset=chunk*chunkBytes;
+                const size_t count=(std::min)(chunkBytes,static_cast<size_t>(bytes)-offset);
+                char hex[chunkBytes*2u+1u]{};
+                DWORD dumpFault=0;
+                __try{
+                    for(size_t i=0;i<count;++i)
+                        sprintf_s(hex+i*2u,3,"%02X",static_cast<unsigned char>(resident[offset+i]));
+                }__except(EXCEPTION_EXECUTE_HANDLER){
+                    dumpFault=GetExceptionCode();hex[0]=0;
+                }
+                Log("PT_REFLECTION_P2_DEFERRED_DXBC_CHUNK index=%llu offset=%llu bytes=%llu hex=%s exception=0x%08lX",
+                    static_cast<unsigned long long>(chunk),static_cast<unsigned long long>(offset),
+                    static_cast<unsigned long long>(count),hex,dumpFault);
+                if(dumpFault)break;
+            }
+            Log("PT_REFLECTION_P2_DEFERRED_DXBC_END id=%d bytes=%llu sha256=%s",
+                id,bytes,sha);
+        }
+    }
     return valid;
 }
 
@@ -951,6 +978,7 @@ static bool PTReflectionInstallShaderLookupHooks(HMODULE renderer,HMODULE d3d) n
     ptReflectionP1ShaderRecordReady=false;
     ptReflectionRecordMapLogged.store(0,std::memory_order_release);
     ptReflectionDeferredRecordMapLogged.store(0,std::memory_order_release);
+    ptReflectionDeferredDxbcDumped.store(0,std::memory_order_release);
     ptReflectionP1GetIntercepts.store(0,std::memory_order_release);
     const bool storageGetHooksReady=PTReflectionInstallStorageGetHooks(d3d);
     wchar_t p1EnableValue[8]{};
