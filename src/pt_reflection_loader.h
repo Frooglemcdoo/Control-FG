@@ -584,8 +584,12 @@ static void PTReflectionLogDeferredRecordMap(void* nativeShader) noexcept {
 
     Log("PT_REFLECTION_P2_DEFERRED_DESCRIPTOR_SUMMARY shader=%p valid_pointer=%u valid_inline=%u scan_bytes=168 stride=8",
         nativeShader,validPointers,validInline);
-    if(ptReflectionP2InjectionEnabled&&!ptReflectionP2CompositeShaderRecordReady)
-        PTReflectionPrepareP2CompositeShaderRecord(nativeShader);
+    if(ptReflectionP2InjectionEnabled&&!ptReflectionP2CompositeShaderRecordReady){
+        if(!PTReflectionPrepareP2CompositeShaderRecord(nativeShader)){
+            ptReflectionP2InjectionEnabled=false;
+            Log("PT_REFLECTION_P2_DISABLE reason=composite_record_prepare_failed fallback=p1");
+        }
+    }
 }
 
 static bool PTReflectionPrepareP1ShaderRecord(void* nativeShader,
@@ -785,6 +789,12 @@ static void PTReflectionHookDeferredDispatch(void* state,const void* dimensions)
 
     const auto call=ptReflectionP2PostDispatches.fetch_add(1,std::memory_order_relaxed)+1;
     const bool barrier=PTReflectionInsertReflectionUavBarrier();
+    if(!barrier){
+        ptReflectionP2InjectionEnabled=false;
+        Log("PT_REFLECTION_P2_POST_DISPATCH_DISABLE call=%llu barrier=0 dispatched=0 reason=uav_barrier_unavailable fallback=p1",
+            call);
+        return;
+    }
     DWORD fault=0,restoreFault=0;
     bool dispatched=false;
     __try {
