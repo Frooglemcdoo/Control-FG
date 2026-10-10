@@ -77,6 +77,7 @@ static bool PTReflectionSha256(const unsigned char* data,size_t bytes,char (&hex
 static bool PTReflectionPrepareP2CompositeShaderRecord(void* nativeShader) noexcept;
 static void PTReflectionHookDeferredDispatch(void* state,const void* dimensions);
 static bool PTReflectionInstallComputePsoHook(HMODULE d3d) noexcept;
+static bool PTReflectionInstallCommandListCaptureHooks(void* commandList) noexcept;
 
 static int ptReflectionForcedNativeVariant=-1;
 static void* ptReflectionSwapTechnique=nullptr;
@@ -111,6 +112,14 @@ static ID3D12PipelineState* ptReflectionP2CompositePso=nullptr;
 static ID3D12RootSignature* ptReflectionCompositeRoot=nullptr;
 static std::atomic<unsigned int> ptReflectionCompositePsoCaptured{0};
 static SRWLOCK ptReflectionCompositePsoLock=SRWLOCK_INIT;
+
+using PTSetPipelineStateFn=void (STDMETHODCALLTYPE*)(ID3D12GraphicsCommandList*,ID3D12PipelineState*);
+using PTSetComputeRootSignatureFn=void (STDMETHODCALLTYPE*)(ID3D12GraphicsCommandList*,ID3D12RootSignature*);
+static PTSetPipelineStateFn ptReflectionOriginalSetPipelineState=nullptr;
+static PTSetComputeRootSignatureFn ptReflectionOriginalSetComputeRootSignature=nullptr;
+static void** ptReflectionCommandListVtable=nullptr;
+static thread_local bool ptReflectionAwaitingCompositeBind=false;
+static std::atomic<unsigned long long> ptReflectionCompositeBindCaptures{0};
 
 
 static bool PTReflectionLoadSidecar(const wchar_t* fileName,const char* label,
@@ -765,6 +774,137 @@ static bool PTReflectionInstallComputePsoHook(HMODULE d3d) noexcept {
         reinterpret_cast<void*>(&PTReflectionHookCreateComputePipelineState),
         exchangeError);
     return true;
+}
+
+
+static void STDMETHODCALLTYPE PTReflectionHookSetComputeRootSignature(
+    ID3D12GraphicsCommandList* list,ID3D12RootSignature* root) {
+    if(ptReflectionAwaitingCompositeBind&&root){
+        AcquireSRWLockExclusive(&ptReflectionCompositePsoLock);
+        if(!ptReflectionCompositeRoot){
+            root->AddRef();
+            ptReflectionCompositeRoot=root;
+            const auto n=ptReflectionCompositeBindCaptures.fetch_add(1,std::memory_order_relaxed)+1;
+            Log("PT_REFLECTION_P2_LIVE_ROOT_CAPTURE count=%llu list=%p root=%p",n,list,root);
+        }
+        ReleaseSRWLockExclusive(&ptReflectionCompositePsoLock);
+    }
+    if(ptReflectionOriginalSetComputeRootSignature)
+        ptReflectionOriginalSetComputeRootSignature(list,root);
+}
+
+static void STDMETHODCALLTYPE PTReflectionHookSetPipelineState(
+    ID3D12GraphicsCommandList* list,ID3D12PipelineState* pso) {
+    if(ptReflectionAwaitingCompositeBind&&pso){
+        AcquireSRWLockExclusive(&ptReflectionCompositePsoLock);
+        if(!ptReflectionNativeCompositePso){
+            pso->AddRef();
+            ptReflectionNativeCompositePso=pso;
+            const auto n=ptReflectionCompositeBindCaptures.fetch_add(1,std::memory_order_relaxed)+1;
+            Log("PT_REFLECTION_P2_LIVE_PSO_CAPTURE count=%llu list=%p native_pso=%p root=%p",
+                n,list,pso,ptReflectionCompositeRoot);
+        }
+        if(ptReflectionCompositeRoot&&ptReflectionNativeCompositePso)
+            ptReflectionCompositePsoCaptured.store(1u,std::memory_order_release);
+        ReleaseSRWLockExclusive(&ptReflectionCompositePsoLock);
+    }
+    if(ptReflectionOriginalSetPipelineState)
+        ptReflectionOriginalSetPipelineState(list,pso);
+}
+
+static bool PTReflectionInstallCommandListCaptureHooks(void* commandList) noexcept {
+    auto* list=static_cast<ID3D12GraphicsCommandList*>(commandList);
+    if(!list)return false;
+    void** vtable=nullptr;
+    __try {vtable=*reinterpret_cast<void***>(list);}
+    __except(EXCEPTION_EXECUTE_HANDLER){vtable=nullptr;}
+    if(!vtable)return false;
+
+    if(ptReflectionCommandListVtable==vtable&&
+       ptReflectionOriginalSetPipelineState&&ptReflectionOriginalSetComputeRootSignature)
+        return true;
+    if(ptReflectionCommandListVtable&&ptReflectionCommandListVtable!=vtable)
+        return false;
+
+    constexpr size_t kSetPipelineStateSlot=25u;
+    constexpr size_t kSetComputeRootSignatureSlot=29u;
+    auto* originalPso=reinterpret_cast<PTSetPipelineStateFn>(vtable[kSetPipelineStateSlot]);
+    auto* originalRoot=reinterpret_cast<PTSetComputeRootSignatureFn>(vtable[kSetComputeRootSignatureSlot]);
+    if(!originalPso||!originalRoot)return false;
+
+    DWORD oldPso=0,oldRoot=0;
+    if(!VirtualProtect(&vtable[kSetPipelineStateSlot],sizeof(void*),PAGE_EXECUTE_READWRITE,&oldPso))
+        return false;
+    void* previousPso=InterlockedCompareExchangePointer(
+        &vtable[kSetPipelineStateSlot],
+        reinterpret_cast<void*>(&PTReflectionHookSetPipelineState),
+        reinterpret_cast<void*>(originalPso));
+    DWORD ignoredPso=0;
+    const BOOL psoProtect=VirtualProtect(&vtable[kSetPipelineStateSlot],sizeof(void*),oldPso,&ignoredPso);
+    if(previousPso!=reinterpret_cast<void*>(originalPso)||!psoProtect)return false;
+
+    if(!VirtualProtect(&vtable[kSetComputeRootSignatureSlot],sizeof(void*),PAGE_EXECUTE_READWRITE,&oldRoot)){
+        DWORD rollbackOld=0;
+        if(VirtualProtect(&vtable[kSetPipelineStateSlot],sizeof(void*),PAGE_EXECUTE_READWRITE,&rollbackOld)){
+            InterlockedCompareExchangePointer(&vtable[kSetPipelineStateSlot],
+                reinterpret_cast<void*>(originalPso),
+                reinterpret_cast<void*>(&PTReflectionHookSetPipelineState));
+            DWORD rollbackIgnored=0;
+            VirtualProtect(&vtable[kSetPipelineStateSlot],sizeof(void*),rollbackOld,&rollbackIgnored);
+        }
+        return false;
+    }
+    void* previousRoot=InterlockedCompareExchangePointer(
+        &vtable[kSetComputeRootSignatureSlot],
+        reinterpret_cast<void*>(&PTReflectionHookSetComputeRootSignature),
+        reinterpret_cast<void*>(originalRoot));
+    DWORD ignoredRoot=0;
+    const BOOL rootProtect=VirtualProtect(&vtable[kSetComputeRootSignatureSlot],sizeof(void*),oldRoot,&ignoredRoot);
+    if(previousRoot!=reinterpret_cast<void*>(originalRoot)||!rootProtect)return false;
+
+    ptReflectionOriginalSetPipelineState=originalPso;
+    ptReflectionOriginalSetComputeRootSignature=originalRoot;
+    ptReflectionCommandListVtable=vtable;
+    Log("PT_REFLECTION_P2_COMMAND_LIST_HOOKS ready=1 list=%p vtable=%p set_pso_slot=%llu set_root_slot=%llu original_pso=%p original_root=%p",
+        list,vtable,static_cast<unsigned long long>(kSetPipelineStateSlot),
+        static_cast<unsigned long long>(kSetComputeRootSignatureSlot),
+        reinterpret_cast<void*>(originalPso),reinterpret_cast<void*>(originalRoot));
+    return true;
+}
+
+static bool PTReflectionEnsureLiveCompositePso(ID3D12Device* device) noexcept {
+    if(!device||!ptReflectionP2CompositeLoaded||ptReflectionP2CompositeBytes.empty())
+        return false;
+    if(ptReflectionP2CompositePso)return true;
+
+    AcquireSRWLockExclusive(&ptReflectionCompositePsoLock);
+    if(!ptReflectionP2CompositePso&&ptReflectionCompositeRoot&&ptReflectionNativeCompositePso){
+        D3D12_COMPUTE_PIPELINE_STATE_DESC pd{};
+        pd.pRootSignature=ptReflectionCompositeRoot;
+        pd.CS.pShaderBytecode=ptReflectionP2CompositeBytes.data();
+        pd.CS.BytecodeLength=ptReflectionP2CompositeBytes.size();
+        pd.NodeMask=0;
+        pd.CachedPSO={nullptr,0};
+        pd.Flags=D3D12_PIPELINE_STATE_FLAG_NONE;
+        ID3D12PipelineState* custom=nullptr;
+        const HRESULT hr=device->CreateComputePipelineState(
+            &pd,__uuidof(ID3D12PipelineState),reinterpret_cast<void**>(&custom));
+        if(SUCCEEDED(hr)&&custom){
+            ptReflectionP2CompositePso=custom;
+            Log("PT_REFLECTION_P2_LIVE_PSO_CREATE ready=1 device=%p root=%p native_pso=%p p2_pso=%p p2_sha256=%s p2_bytes=%llu hr=0x%08lX",
+                device,ptReflectionCompositeRoot,ptReflectionNativeCompositePso,custom,
+                ptReflectionP2CompositeSha256,
+                static_cast<unsigned long long>(ptReflectionP2CompositeBytes.size()),
+                static_cast<unsigned long>(hr));
+        }else{
+            Log("PT_REFLECTION_P2_LIVE_PSO_CREATE ready=0 device=%p root=%p native_pso=%p hr=0x%08lX",
+                device,ptReflectionCompositeRoot,ptReflectionNativeCompositePso,
+                static_cast<unsigned long>(hr));
+        }
+    }
+    const bool ready=ptReflectionP2CompositePso!=nullptr;
+    ReleaseSRWLockExclusive(&ptReflectionCompositePsoLock);
+    return ready;
 }
 
 static bool PTReflectionCloneShaderRecord(void* nativeShader,size_t descriptorSlot,
