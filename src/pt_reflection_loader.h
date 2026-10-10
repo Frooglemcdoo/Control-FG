@@ -1347,7 +1347,7 @@ static void PTReflectionHookDeferredDispatch(void* state,const void* dimensions)
             ptReflectionVerifyMode.store(next,std::memory_order_release);
             Log("PT_REFLECTION_VERIFY_SWITCH from=%u to=%u hotkey=F11 label=%s",
                 prior,next,next==0u?"normal":next==1u?
-                    "P2_quadrant_coverage_radiance_gain":"GI_rough_marker");
+                    "P2_quadrant_coverage_radiance_gain":"GI_read_only_audit");
         }
     }else{
         ptReflectionVerifyKeyDown.store(0u,std::memory_order_release);
@@ -1872,7 +1872,7 @@ static bool PTReflectionInstallShaderLookupHooks(HMODULE renderer,HMODULE d3d) n
     ptReflectionP2VerifyPso=nullptr;
     ptReflectionVerifyMode.store(0u,std::memory_order_release);
     ptReflectionVerifyKeyDown.store(0u,std::memory_order_release);
-    Log("PT_REFLECTION_VERIFY_INIT mode=0 hotkey=F11 cycle=normal,composite_quadrants,diffuse_gi_marker verify_sidecar=%u",
+    Log("PT_REFLECTION_VERIFY_INIT mode=0 hotkey=F11 cycle=normal,composite_quadrants,diffuse_gi_cpu_audit verify_sidecar=%u",
         unsigned(ptReflectionP2VerifyLoaded));
     ptReflectionCompositeRoot=nullptr;
     ptReflectionP1ShaderRecordReady=false;
