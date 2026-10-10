@@ -102,6 +102,10 @@ static PTReflectionBindComputeFn ptReflectionBindCompute=nullptr;
 static PTReflectionDispatchFn ptReflectionOriginalDispatch=nullptr;
 static RRIndirectCallPatch ptReflectionDeferredDispatchPatch{};
 static std::atomic<unsigned long long> ptReflectionP2PostDispatches{0};
+static unsigned char ptReflectionNativeCompositeCacheTail[0x28]{};
+static unsigned char ptReflectionP2CompositeCacheTail[0x28]{};
+static bool ptReflectionNativeCompositeCacheTailReady=false;
+static bool ptReflectionP2CompositeCacheTailReady=false;
 
 using PTCreateComputePipelineStateFn=HRESULT (STDMETHODCALLTYPE*)(
     ID3D12Device*,const D3D12_COMPUTE_PIPELINE_STATE_DESC*,REFIID,void**);
@@ -1146,6 +1150,62 @@ static bool PTReflectionRestoreNativeCompositeDescriptor(
     Log("PT_REFLECTION_P2_DESCRIPTOR_RESTORE ready=%u base=%p stage=%u id=%d bytes=%llu secondary_untouched=1 exception=0x%08lX",
         unsigned(restored),snapshot.base,snapshot.stage0,snapshot.id0,snapshot.bytes0,fault);
     return restored;
+}
+
+
+static bool PTReflectionSnapshotCompositeCacheTail(bool custom) noexcept {
+    if(!ptReflectionNativeDeferredShaderRecord)return false;
+    DWORD fault=0;
+    __try {
+        auto* record=reinterpret_cast<unsigned char*>(ptReflectionNativeDeferredShaderRecord);
+        auto* target=custom?ptReflectionP2CompositeCacheTail:ptReflectionNativeCompositeCacheTail;
+        memcpy(target,record+0x80,0x28);
+    } __except(EXCEPTION_EXECUTE_HANDLER) {
+        fault=GetExceptionCode();
+    }
+    if(fault)return false;
+    if(custom)ptReflectionP2CompositeCacheTailReady=true;
+    else ptReflectionNativeCompositeCacheTailReady=true;
+    return true;
+}
+
+static bool PTReflectionRestoreCompositeCacheTail(bool custom) noexcept {
+    if(!ptReflectionNativeDeferredShaderRecord)return false;
+    const bool ready=custom?ptReflectionP2CompositeCacheTailReady:ptReflectionNativeCompositeCacheTailReady;
+    if(!ready)return false;
+    DWORD fault=0;
+    __try {
+        auto* record=reinterpret_cast<unsigned char*>(ptReflectionNativeDeferredShaderRecord);
+        const auto* source=custom?ptReflectionP2CompositeCacheTail:ptReflectionNativeCompositeCacheTail;
+        memcpy(record+0x80,source,0x28);
+        MemoryBarrier();
+    } __except(EXCEPTION_EXECUTE_HANDLER) {
+        fault=GetExceptionCode();
+    }
+    return fault==0;
+}
+
+static bool PTReflectionInvalidateCompositeCacheForCustomBind() noexcept {
+    if(!ptReflectionNativeDeferredShaderRecord)return false;
+    DWORD fault=0;
+    __try {
+        auto* record=reinterpret_cast<unsigned char*>(ptReflectionNativeDeferredShaderRecord);
+        if(!ptReflectionNativeCompositeCacheTailReady){
+            memcpy(ptReflectionNativeCompositeCacheTail,record+0x80,0x28);
+            ptReflectionNativeCompositeCacheTailReady=true;
+        }
+        // Preserve every engine-private flag/self pointer. Clear only the
+        // external cached shader-state pointer at record+0x80 so the native
+        // binder must materialize state from the now-patched descriptor.
+        std::uintptr_t nullCache=0;
+        memcpy(record+0x80,&nullCache,sizeof(nullCache));
+        MemoryBarrier();
+    } __except(EXCEPTION_EXECUTE_HANDLER) {
+        fault=GetExceptionCode();
+    }
+    if(fault)
+        Log("PT_REFLECTION_P2_CACHE_INVALIDATE ready=0 exception=0x%08lX",fault);
+    return fault==0;
 }
 
 static bool PTReflectionInsertReflectionUavBarrier() noexcept {
