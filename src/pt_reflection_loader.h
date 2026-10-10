@@ -695,10 +695,30 @@ static bool PTReflectionCloneShaderRecord(void* nativeShader,size_t descriptorSl
             }
         }
 
+        unsigned nativeStage=0;int nativeId=-1;unsigned long long nativeBytes=0;
+        memcpy(&nativeStage,nativeDescriptor+8,sizeof(nativeStage));
+        memcpy(&nativeId,nativeDescriptor+12,sizeof(nativeId));
+        memcpy(&nativeBytes,nativeDescriptor+16,sizeof(nativeBytes));
+
         const unsigned long long bytes=static_cast<unsigned long long>(shaderBytes);
-        memcpy(descriptor+8,&stage,sizeof(stage));
-        memcpy(descriptor+12,&syntheticId,sizeof(syntheticId));
-        memcpy(descriptor+16,&bytes,sizeof(bytes));
+        unsigned patchedDescriptors=0;
+        for(size_t off=0;off+24u<=sizeof(descriptor);off+=8u){
+            unsigned candidateStage=0;int candidateId=-1;unsigned long long candidateBytes=0;
+            memcpy(&candidateStage,descriptor+off+8,sizeof(candidateStage));
+            memcpy(&candidateId,descriptor+off+12,sizeof(candidateId));
+            memcpy(&candidateBytes,descriptor+off+16,sizeof(candidateBytes));
+            if(candidateStage==nativeStage&&candidateId==nativeId&&candidateBytes==nativeBytes){
+                memcpy(descriptor+off+8,&stage,sizeof(stage));
+                memcpy(descriptor+off+12,&syntheticId,sizeof(syntheticId));
+                memcpy(descriptor+off+16,&bytes,sizeof(bytes));
+                ++patchedDescriptors;
+            }
+        }
+        if(!patchedDescriptors){
+            memcpy(descriptor+8,&stage,sizeof(stage));
+            memcpy(descriptor+12,&syntheticId,sizeof(syntheticId));
+            memcpy(descriptor+16,&bytes,sizeof(bytes));
+        }
     } __except(EXCEPTION_EXECUTE_HANDLER) {
         fault=GetExceptionCode();
     }
