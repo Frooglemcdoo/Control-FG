@@ -1053,10 +1053,10 @@ static bool PTReflectionPrepareP2CompositeShaderRecord(void* nativeShader) noexc
 
 struct PTReflectionCompositeDescriptorSnapshot {
     unsigned char* base=nullptr;
-    unsigned char* secondary=nullptr;
-    unsigned stage0=0; int id0=-1; unsigned long long bytes0=0;
-    unsigned stage1=0; int id1=-1; unsigned long long bytes1=0;
-    bool secondaryMatches=false;
+    unsigned stage0=0;
+    int id0=-1;
+    unsigned long long bytes0=0;
+    std::uintptr_t secondaryAddress=0;
 };
 
 static bool PTReflectionPatchNativeCompositeDescriptor(
@@ -1069,28 +1069,30 @@ static bool PTReflectionPatchNativeCompositeDescriptor(
         std::uintptr_t baseAddress=0,secondaryAddress=0;
         memcpy(&baseAddress,record+0x60,sizeof(baseAddress));
         memcpy(&secondaryAddress,record+0x68,sizeof(secondaryAddress));
-        if(baseAddress<=0xFFFFu||secondaryAddress<=0xFFFFu)return false;
+        if(baseAddress<=0xFFFFu)return false;
+
         snapshot->base=reinterpret_cast<unsigned char*>(baseAddress);
-        snapshot->secondary=reinterpret_cast<unsigned char*>(secondaryAddress);
+        snapshot->secondaryAddress=secondaryAddress;
         memcpy(&snapshot->stage0,snapshot->base+8,sizeof(snapshot->stage0));
         memcpy(&snapshot->id0,snapshot->base+12,sizeof(snapshot->id0));
         memcpy(&snapshot->bytes0,snapshot->base+16,sizeof(snapshot->bytes0));
-        memcpy(&snapshot->stage1,snapshot->secondary+8,sizeof(snapshot->stage1));
-        memcpy(&snapshot->id1,snapshot->secondary+12,sizeof(snapshot->id1));
-        memcpy(&snapshot->bytes1,snapshot->secondary+16,sizeof(snapshot->bytes1));
-        snapshot->secondaryMatches=
-            secondaryAddress==baseAddress+0xC0u &&
-            snapshot->stage1==snapshot->stage0 &&
-            snapshot->id1==snapshot->id0 &&
-            snapshot->bytes1==snapshot->bytes0;
+
+        if(snapshot->stage0!=5u||snapshot->id0!=9248336||
+           snapshot->bytes0!=42408ull||
+           secondaryAddress!=baseAddress+0xC0u||
+           !ptReflectionP2CompositeLoaded||ptReflectionP2CompositeBytes.empty()){
+            Log("PT_REFLECTION_P2_DESCRIPTOR_PATCH custom=%u ready=0 reason=contract stage=%u id=%d bytes=%llu base=%p secondary=%p secondary_delta=0x%llX expected_secondary_delta=0xC0 composite_loaded=%u",
+                unsigned(custom),snapshot->stage0,snapshot->id0,snapshot->bytes0,
+                snapshot->base,reinterpret_cast<void*>(secondaryAddress),
+                secondaryAddress>=baseAddress?
+                    static_cast<unsigned long long>(secondaryAddress-baseAddress):~0ull,
+                unsigned(ptReflectionP2CompositeLoaded));
+            return false;
+        }
 
         if(!custom){
             good=true;
         }else{
-            if(snapshot->stage0!=5u||snapshot->id0!=9248336||
-               snapshot->bytes0!=42408ull||!snapshot->secondaryMatches||
-               !ptReflectionP2CompositeLoaded||ptReflectionP2CompositeBytes.empty())
-                return false;
             const unsigned stage=5u;
             const int id=kPTReflectionP2CompositeSyntheticStorageId;
             const unsigned long long bytes=
@@ -1098,11 +1100,18 @@ static bool PTReflectionPatchNativeCompositeDescriptor(
             memcpy(snapshot->base+8,&stage,sizeof(stage));
             memcpy(snapshot->base+12,&id,sizeof(id));
             memcpy(snapshot->base+16,&bytes,sizeof(bytes));
-            memcpy(snapshot->secondary+8,&stage,sizeof(stage));
-            memcpy(snapshot->secondary+12,&id,sizeof(id));
-            memcpy(snapshot->secondary+16,&bytes,sizeof(bytes));
             MemoryBarrier();
-            good=true;
+
+            unsigned verifyStage=0;int verifyId=-1;unsigned long long verifyBytes=0;
+            memcpy(&verifyStage,snapshot->base+8,sizeof(verifyStage));
+            memcpy(&verifyId,snapshot->base+12,sizeof(verifyId));
+            memcpy(&verifyBytes,snapshot->base+16,sizeof(verifyBytes));
+            good=verifyStage==stage&&verifyId==id&&verifyBytes==bytes;
+            Log("PT_REFLECTION_P2_DESCRIPTOR_PATCH custom=1 ready=%u base=%p secondary=%p secondary_delta=0x%llX native_stage=%u native_id=%d native_bytes=%llu custom_stage=%u custom_id=%d custom_bytes=%llu secondary_untouched=1",
+                unsigned(good),snapshot->base,reinterpret_cast<void*>(secondaryAddress),
+                static_cast<unsigned long long>(secondaryAddress-baseAddress),
+                snapshot->stage0,snapshot->id0,snapshot->bytes0,
+                verifyStage,verifyId,verifyBytes);
         }
     } __except(EXCEPTION_EXECUTE_HANDLER) {
         fault=GetExceptionCode();
@@ -1116,22 +1125,27 @@ static bool PTReflectionPatchNativeCompositeDescriptor(
 
 static bool PTReflectionRestoreNativeCompositeDescriptor(
     const PTReflectionCompositeDescriptorSnapshot& snapshot) noexcept {
-    if(!snapshot.base||!snapshot.secondary)return false;
+    if(!snapshot.base)return false;
     DWORD fault=0;
+    bool restored=false;
     __try {
         memcpy(snapshot.base+8,&snapshot.stage0,sizeof(snapshot.stage0));
         memcpy(snapshot.base+12,&snapshot.id0,sizeof(snapshot.id0));
         memcpy(snapshot.base+16,&snapshot.bytes0,sizeof(snapshot.bytes0));
-        memcpy(snapshot.secondary+8,&snapshot.stage1,sizeof(snapshot.stage1));
-        memcpy(snapshot.secondary+12,&snapshot.id1,sizeof(snapshot.id1));
-        memcpy(snapshot.secondary+16,&snapshot.bytes1,sizeof(snapshot.bytes1));
         MemoryBarrier();
+
+        unsigned stage=0;int id=-1;unsigned long long bytes=0;
+        memcpy(&stage,snapshot.base+8,sizeof(stage));
+        memcpy(&id,snapshot.base+12,sizeof(id));
+        memcpy(&bytes,snapshot.base+16,sizeof(bytes));
+        restored=stage==snapshot.stage0&&id==snapshot.id0&&bytes==snapshot.bytes0;
     } __except(EXCEPTION_EXECUTE_HANDLER) {
         fault=GetExceptionCode();
+        restored=false;
     }
-    if(fault)
-        Log("PT_REFLECTION_P2_DESCRIPTOR_RESTORE ready=0 exception=0x%08lX",fault);
-    return fault==0;
+    Log("PT_REFLECTION_P2_DESCRIPTOR_RESTORE ready=%u base=%p stage=%u id=%d bytes=%llu secondary_untouched=1 exception=0x%08lX",
+        unsigned(restored),snapshot.base,snapshot.stage0,snapshot.id0,snapshot.bytes0,fault);
+    return restored;
 }
 
 static bool PTReflectionInsertReflectionUavBarrier() noexcept {
