@@ -25,7 +25,7 @@ static PTReflectionTechniqueLookupFn ptReflectionOriginalTechniqueLookup=nullptr
 static PTReflectionVariantLookupFn ptReflectionOriginalVariantLookup=nullptr;
 static PTShaderCodeStoragePersistFn ptReflectionStoragePersist=nullptr;
 static PTShaderCodeStorageIsPersistedFn ptReflectionStorageIsPersisted=nullptr;
-static RRAlbedoCallPatch ptReflectionLookupPatches[3]{};
+static RRAlbedoCallPatch ptReflectionLookupPatches[6]{};
 static RRAlbedoCallPatch ptReflectionStorageGetPatches[6]{};
 static PTShaderCodeStorageGetFn ptReflectionOriginalStorageGet=nullptr;
 static constexpr int kPTReflectionP1SyntheticStorageId=0x6F475031;
@@ -35,6 +35,7 @@ static unsigned char ptReflectionP1ShaderDescriptor[0x80]{};
 static bool ptReflectionP1ShaderRecordReady=false;
 static bool ptReflectionP1InjectionEnabled=false;
 static std::atomic<unsigned int> ptReflectionRecordMapLogged{0};
+static std::atomic<unsigned int> ptReflectionDeferredRecordMapLogged{0};
 static std::atomic<unsigned int> ptReflectionStorageRoundtripDone{0};
 static int ptReflectionStorageRoundtripPersistResult=-0x7fffffff;
 static int ptReflectionStorageRoundtripNativeId=-1;
@@ -46,14 +47,18 @@ static bool ptReflectionStorageRoundtripValid=false;
 static void* ptReflectionStorageRoundtripTechnique=nullptr;
 static void* ptReflectionStorageRoundtripShader=nullptr;
 
-static thread_local bool ptReflectionLookupScope=false;
+static thread_local unsigned ptReflectionLookupKind=0;
 static thread_local void* ptReflectionLastRfxObject=nullptr;
 static thread_local void* ptReflectionTechniqueObject=nullptr;
+static thread_local void* ptReflectionDeferredTechniqueObject=nullptr;
 
 static std::atomic<unsigned long long> ptReflectionRfxLookups{0};
 static std::atomic<unsigned long long> ptReflectionTechniqueLookups{0};
 static std::atomic<unsigned long long> ptReflectionVariantLookups{0};
 static std::atomic<unsigned long long> ptReflectionVariantRejects{0};
+static std::atomic<unsigned long long> ptReflectionDeferredRfxLookups{0};
+static std::atomic<unsigned long long> ptReflectionDeferredTechniqueLookups{0};
+static std::atomic<unsigned long long> ptReflectionDeferredVariantLookups{0};
 static bool PTReflectionSha256(const unsigned char* data,size_t bytes,char (&hex)[65]) noexcept;
 
 static int ptReflectionForcedNativeVariant=-1;
@@ -324,20 +329,30 @@ static bool PTReflectionInspectRayLibrary(void* technique,void* shader,unsigned 
 static void* PTReflectionHookRfxLookup(void* manager,const char* name) {
     char safeName[128]{};
     RRSafeCopyCString(name,safeName,sizeof(safeName));
-    const bool target=strcmp(safeName,"rt_reflection.rfx")==0;
+    const bool rayTarget=strcmp(safeName,"rt_reflection.rfx")==0;
+    const bool deferredTarget=strcmp(safeName,"rt_deferred_reflection.rfx")==0;
     void* result=ptReflectionOriginalRfxLookup(manager,name);
-    if(target){
-        ptReflectionLookupScope=true;
+    if(rayTarget||deferredTarget){
+        ptReflectionLookupKind=rayTarget?1u:2u;
         ptReflectionLastRfxObject=result;
         ptReflectionTechniqueObject=nullptr;
-        const auto call=++ptReflectionRfxLookups;
-        if(call<=16 || (call%240)==0)
-            Log("PT_REFLECTION_P1_RFX_LOOKUP call=%llu manager=%p name=%s result=%p mode=observe_only replacement=disabled native_result_preserved=1",
-                call,manager,safeName,result);
+        ptReflectionDeferredTechniqueObject=nullptr;
+        if(rayTarget){
+            const auto call=++ptReflectionRfxLookups;
+            if(call<=16 || (call%240)==0)
+                Log("PT_REFLECTION_P1_RFX_LOOKUP call=%llu manager=%p name=%s result=%p",
+                    call,manager,safeName,result);
+        }else{
+            const auto call=++ptReflectionDeferredRfxLookups;
+            if(call<=16 || (call%240)==0)
+                Log("PT_REFLECTION_P2_DEFERRED_RFX call=%llu manager=%p name=%s result=%p composite_probe=1",
+                    call,manager,safeName,result);
+        }
     } else {
-        ptReflectionLookupScope=false;
+        ptReflectionLookupKind=0;
         ptReflectionLastRfxObject=nullptr;
         ptReflectionTechniqueObject=nullptr;
+        ptReflectionDeferredTechniqueObject=nullptr;
     }
     return result;
 }
@@ -345,23 +360,33 @@ static void* PTReflectionHookRfxLookup(void* manager,const char* name) {
 static void* PTReflectionHookTechniqueLookup(void* rfx,const char* technique) {
     char safeTechnique[128]{};
     RRSafeCopyCString(technique,safeTechnique,sizeof(safeTechnique));
-    const bool target=ptReflectionLookupScope &&
+    const bool rayTarget=ptReflectionLookupKind==1u &&
         rfx==ptReflectionLastRfxObject &&
         strcmp(safeTechnique,"rt_reflectionDeferredShading")==0;
+    const bool deferredTarget=ptReflectionLookupKind==2u &&
+        rfx==ptReflectionLastRfxObject &&
+        strcmp(safeTechnique,"rt_deferredReflection")==0;
     void* result=ptReflectionOriginalTechniqueLookup(rfx,technique);
-    if(target){
+    if(rayTarget){
         ptReflectionTechniqueObject=result;
+        ptReflectionDeferredTechniqueObject=nullptr;
         const auto call=++ptReflectionTechniqueLookups;
-        Log("PT_REFLECTION_P1_TECHNIQUE call=%llu rfx=%p technique=%s technique_object=%p mode=observe_only replacement=disabled native_result_preserved=1",
+        Log("PT_REFLECTION_P1_TECHNIQUE call=%llu rfx=%p technique=%s technique_object=%p",
+            call,rfx,safeTechnique,result);
+    }else if(deferredTarget){
+        ptReflectionDeferredTechniqueObject=result;
+        ptReflectionTechniqueObject=nullptr;
+        const auto call=++ptReflectionDeferredTechniqueLookups;
+        Log("PT_REFLECTION_P2_DEFERRED_TECHNIQUE call=%llu rfx=%p technique=%s technique_object=%p composite_probe=1",
             call,rfx,safeTechnique,result);
     }else{
         ptReflectionTechniqueObject=nullptr;
+        ptReflectionDeferredTechniqueObject=nullptr;
     }
-    ptReflectionLookupScope=false;
+    ptReflectionLookupKind=0;
     ptReflectionLastRfxObject=nullptr;
     return result;
 }
-
 
 static const char* PTReflectionHookShaderStorageGet(int id) {
     if(id==kPTReflectionP1SyntheticStorageId&&ptReflectionP1InjectionEnabled&&
@@ -406,6 +431,40 @@ static void PTReflectionLogNativeRecordMap(void* nativeShader) noexcept {
             fault=GetExceptionCode();residentOkay=false;
         }
         Log("PT_REFLECTION_P2_RECORD_SLOT index=%u slot=0x%zX readable=1 descriptor=%p stage=%u id=%d bytes=%llu resident=%p resident_ok=%u sha256=%s head=%s exception=0x%08lX",
+            i,slots[i],reinterpret_cast<void*>(d.shaderBase),d.stage,d.identifier,
+            static_cast<unsigned long long>(d.size),resident,unsigned(residentOkay),sha,head,fault);
+    }
+}
+
+static void PTReflectionLogDeferredRecordMap(void* nativeShader) noexcept {
+    if(!nativeShader||ptReflectionDeferredRecordMapLogged.exchange(1u,std::memory_order_acq_rel))return;
+    const size_t slots[5]{0x10,0x30,0x50,0x70,0x90};
+    for(unsigned i=0;i<5;++i){
+        RRAlbedoShader::NativeDescriptor d{};
+        if(!RRAlbedoShader::ReadDescriptor(reinterpret_cast<std::uintptr_t>(nativeShader),slots[i],&d)){
+            Log("PT_REFLECTION_P2_DEFERRED_RECORD_SLOT index=%u slot=0x%zX readable=0",i,slots[i]);
+            continue;
+        }
+        char sha[65]{};
+        char head[65]{};
+        DWORD fault=0;
+        bool residentOkay=false;
+        const char* resident=nullptr;
+        __try {
+            resident=RRAlbedoShader::residentGetter&&d.identifier>=0?
+                RRAlbedoShader::residentGetter(d.identifier):nullptr;
+            if(resident&&d.size>=32&&d.size<=RRAlbedoShader::kMaximumBlobBytes){
+                const size_t n=(std::min)(static_cast<size_t>(d.size),size_t(32));
+                for(size_t b=0;b<n;++b)
+                    sprintf_s(head+b*2,3,"%02X",static_cast<unsigned char>(resident[b]));
+                residentOkay=PTReflectionSha256(
+                    reinterpret_cast<const unsigned char*>(resident),
+                    static_cast<size_t>(d.size),sha);
+            }
+        } __except(EXCEPTION_EXECUTE_HANDLER) {
+            fault=GetExceptionCode();residentOkay=false;
+        }
+        Log("PT_REFLECTION_P2_DEFERRED_RECORD_SLOT index=%u slot=0x%zX readable=1 descriptor=%p stage=%u id=%d bytes=%llu resident=%p resident_ok=%u sha256=%s head=%s exception=0x%08lX",
             i,slots[i],reinterpret_cast<void*>(d.shaderBase),d.stage,d.identifier,
             static_cast<unsigned long long>(d.size),resident,unsigned(residentOkay),sha,head,fault);
     }
@@ -498,6 +557,16 @@ static bool PTReflectionInstallStorageGetHooks(HMODULE d3d) noexcept {
 static void* PTReflectionHookVariantLookup(void* technique,unsigned key) {
     void* nativeResult=ptReflectionOriginalVariantLookup(technique,key);
     void* result=nativeResult;
+
+    if(technique&&technique==ptReflectionDeferredTechniqueObject){
+        const auto call=++ptReflectionDeferredVariantLookups;
+        PTReflectionLogDeferredRecordMap(nativeResult);
+        Log("PT_REFLECTION_P2_DEFERRED_VARIANT call=%llu technique=%p key=0x%X shader=%p composite_probe=1 replacement=disabled native_result_preserved=1",
+            call,technique,key,nativeResult);
+        ptReflectionDeferredTechniqueObject=nullptr;
+        return nativeResult;
+    }
+
     if(technique&&technique==ptReflectionTechniqueObject){
         const auto call=++ptReflectionVariantLookups;
         PTReflectionRayIdentity identity{};
@@ -545,7 +614,6 @@ static void* PTReflectionHookVariantLookup(void* technique,unsigned key) {
     }
     return result;
 }
-
 
 static void PTReflectionLogShaderCodeStorageGetterBytes(HMODULE d3d) noexcept {
     if(!d3d||d3d!=verifiedD3d)return;
@@ -839,6 +907,7 @@ static bool PTReflectionInstallShaderLookupHooks(HMODULE renderer,HMODULE d3d) n
     PTReflectionLoadP2Sidecar();
     ptReflectionP1ShaderRecordReady=false;
     ptReflectionRecordMapLogged.store(0,std::memory_order_release);
+    ptReflectionDeferredRecordMapLogged.store(0,std::memory_order_release);
     ptReflectionP1GetIntercepts.store(0,std::memory_order_release);
     const bool storageGetHooksReady=PTReflectionInstallStorageGetHooks(d3d);
     wchar_t p1EnableValue[8]{};
@@ -878,13 +947,25 @@ static bool PTReflectionInstallShaderLookupHooks(HMODULE renderer,HMODULE d3d) n
         reinterpret_cast<void*>(ptReflectionOriginalVariantLookup),
         reinterpret_cast<void*>(&PTReflectionHookVariantLookup),
         &ptReflectionLookupPatches[2]))return false;
+    if(!RRAlbedoPrepareCallPatch(base+0x1296B8,
+        reinterpret_cast<void*>(ptReflectionOriginalRfxLookup),
+        reinterpret_cast<void*>(&PTReflectionHookRfxLookup),
+        &ptReflectionLookupPatches[3]))return false;
+    if(!RRAlbedoPrepareCallPatch(base+0x1296C7,
+        reinterpret_cast<void*>(ptReflectionOriginalTechniqueLookup),
+        reinterpret_cast<void*>(&PTReflectionHookTechniqueLookup),
+        &ptReflectionLookupPatches[4]))return false;
+    if(!RRAlbedoPrepareCallPatch(base+0x1296E8,
+        reinterpret_cast<void*>(ptReflectionOriginalVariantLookup),
+        reinterpret_cast<void*>(&PTReflectionHookVariantLookup),
+        &ptReflectionLookupPatches[5]))return false;
 
     unsigned applied=0;
-    for(;applied<3;++applied){
+    for(;applied<6;++applied){
         if(!RRAlbedoExchangeCall(&ptReflectionLookupPatches[applied],true))break;
         if(!ptReflectionLookupPatches[applied].writeHealthy){++applied;break;}
     }
-    if(applied!=3){
+    if(applied!=6){
         while(applied){
             --applied;
             if(!RRAlbedoExchangeCall(&ptReflectionLookupPatches[applied],false))
@@ -892,7 +973,7 @@ static bool PTReflectionInstallShaderLookupHooks(HMODULE renderer,HMODULE d3d) n
         }
         return false;
     }
-    Log("PT_REFLECTION_P1_LOOKUP_HOOKS ready=1 rfx_callsite=0x12953C technique_callsite=0x12954B variant_callsite=0x12956C rfx_helper=0x1D9960 technique_helper=0x1D2CE0 variant_helper=0x1DD450 native_hashes=32 native_swap_probe=%s forced_variant=%d gpu_work=%s",
+    Log("PT_REFLECTION_P1_LOOKUP_HOOKS ready=1 ray_calls=12953C,12954B,12956C deferred_calls=1296B8,1296C7,1296E8 rfx_helper=0x1D9960 technique_helper=0x1D2CE0 variant_helper=0x1DD450 native_hashes=32 native_swap_probe=%s forced_variant=%d gpu_work=%s",
         ptReflectionForcedNativeVariant>=0?"enabled":"disabled",ptReflectionForcedNativeVariant,
         ptReflectionForcedNativeVariant>=0?"native_reflection_permutation_may_change":"unchanged");
     return true;
