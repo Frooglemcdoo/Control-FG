@@ -133,6 +133,7 @@ static bool HashMatches(HMODULE module, const char* expected) {
 #include "fg_pixel_capture.h"
 #include "fg_native_source.h"
 #include "rr_clamp_strength.h"
+static bool PTReflectionInstallComputePsoHookOnDevice(ID3D12Device* device) noexcept;
 #include "streamline_bridge.h"
 static HRESULT SubmitFGUIRecompositionBeforePresent(unsigned long long present) noexcept;
 #include "hdr10_bridge.h"
