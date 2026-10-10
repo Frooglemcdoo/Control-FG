@@ -634,6 +634,179 @@ static bool PTReflectionPrepareP1ShaderRecord(void* nativeShader,
     return true;
 }
 
+
+static bool PTReflectionCloneShaderRecord(void* nativeShader,size_t descriptorSlot,
+    unsigned stage,int syntheticId,size_t shaderBytes,
+    unsigned char (&record)[0xA8],unsigned char (&descriptor)[0x80]) noexcept {
+    if(!nativeShader||descriptorSlot+sizeof(std::uintptr_t)>sizeof(record)||
+       shaderBytes<32||shaderBytes>RRAlbedoShader::kMaximumBlobBytes)return false;
+    std::uintptr_t nativeDescriptorAddress=0;
+    DWORD fault=0;
+    __try {
+        memcpy(record,nativeShader,sizeof(record));
+        memcpy(&nativeDescriptorAddress,
+            reinterpret_cast<unsigned char*>(nativeShader)+descriptorSlot,
+            sizeof(nativeDescriptorAddress));
+        if(nativeDescriptorAddress<=0xFFFFu)return false;
+        auto* nativeDescriptor=reinterpret_cast<unsigned char*>(nativeDescriptorAddress);
+        memcpy(descriptor,nativeDescriptor,sizeof(descriptor));
+
+        const auto nativeBegin=nativeDescriptorAddress;
+        const auto nativeEnd=nativeBegin+sizeof(descriptor);
+        const auto cloneBegin=reinterpret_cast<std::uintptr_t>(descriptor);
+        for(size_t off=0;off+sizeof(std::uintptr_t)<=sizeof(descriptor);off+=sizeof(std::uintptr_t)){
+            std::uintptr_t value=0;
+            memcpy(&value,descriptor+off,sizeof(value));
+            if(value>=nativeBegin&&value<nativeEnd){
+                const std::uintptr_t relocated=cloneBegin+(value-nativeBegin);
+                memcpy(descriptor+off,&relocated,sizeof(relocated));
+            }
+        }
+
+        const unsigned long long bytes=static_cast<unsigned long long>(shaderBytes);
+        memcpy(descriptor+8,&stage,sizeof(stage));
+        memcpy(descriptor+12,&syntheticId,sizeof(syntheticId));
+        memcpy(descriptor+16,&bytes,sizeof(bytes));
+        const auto cloneDescriptorAddress=reinterpret_cast<std::uintptr_t>(descriptor);
+        memcpy(record+descriptorSlot,&cloneDescriptorAddress,sizeof(cloneDescriptorAddress));
+    } __except(EXCEPTION_EXECUTE_HANDLER) {
+        fault=GetExceptionCode();
+    }
+    if(fault){
+        Log("PT_REFLECTION_P2_RECORD_CLONE ready=0 slot=0x%zX stage=%u synthetic_id=%d exception=0x%08lX",
+            descriptorSlot,stage,syntheticId,fault);
+        return false;
+    }
+    return true;
+}
+
+static bool PTReflectionPrepareP2RayShaderRecord(void* nativeShader,
+    const PTReflectionRayIdentity& identity) noexcept {
+    ptReflectionP2RayShaderRecordReady=false;
+    if(!nativeShader||identity.variant!=0||!ptReflectionP2Loaded||
+       ptReflectionP2Bytes.empty())return false;
+    if(!PTReflectionCloneShaderRecord(nativeShader,0x70u,6u,
+        kPTReflectionP2RaySyntheticStorageId,ptReflectionP2Bytes.size(),
+        ptReflectionP2RayShaderRecord,ptReflectionP2RayShaderDescriptor))return false;
+    ptReflectionP2RayShaderRecordReady=true;
+    Log("PT_REFLECTION_P2_RAY_RECORD_PREPARE ready=1 native_shader=%p clone_shader=%p native_descriptor=%p clone_descriptor=%p native_id=%d synthetic_id=%d native_bytes=%llu p2_bytes=%llu native_sha256=%s p2_sha256=%s variant=%03d",
+        nativeShader,ptReflectionP2RayShaderRecord,
+        reinterpret_cast<void*>(identity.descriptor.shaderBase),ptReflectionP2RayShaderDescriptor,
+        identity.descriptor.identifier,kPTReflectionP2RaySyntheticStorageId,
+        static_cast<unsigned long long>(identity.descriptor.size),
+        static_cast<unsigned long long>(ptReflectionP2Bytes.size()),
+        identity.sha256,ptReflectionP2Sha256,identity.variant);
+    return true;
+}
+
+static bool PTReflectionPrepareP2CompositeShaderRecord(void* nativeShader) noexcept {
+    ptReflectionP2CompositeShaderRecordReady=false;
+    if(!nativeShader||!ptReflectionP2CompositeLoaded||
+       ptReflectionP2CompositeBytes.empty()||!RRAlbedoShader::residentGetter)return false;
+
+    RRAlbedoShader::NativeDescriptor d{};
+    if(!RRAlbedoShader::ReadDescriptor(reinterpret_cast<std::uintptr_t>(nativeShader),0x60u,&d)||
+       d.stage!=5u||d.identifier<0||d.size!=42408ull)return false;
+
+    char sha[65]{};
+    bool exact=false;
+    __try {
+        const char* resident=RRAlbedoShader::residentGetter(d.identifier);
+        exact=resident&&PTReflectionSha256(reinterpret_cast<const unsigned char*>(resident),
+            static_cast<size_t>(d.size),sha)&&
+            strcmp(sha,"4fc0a0e9cd3706bcb86e29444d86fa32616138e1712c53b1b5103b30d7a1ecc9")==0;
+    } __except(EXCEPTION_EXECUTE_HANDLER) {
+        exact=false;
+    }
+    if(!exact)return false;
+
+    if(!PTReflectionCloneShaderRecord(nativeShader,0x60u,5u,
+        kPTReflectionP2CompositeSyntheticStorageId,ptReflectionP2CompositeBytes.size(),
+        ptReflectionP2CompositeShaderRecord,ptReflectionP2CompositeShaderDescriptor))return false;
+
+    ptReflectionNativeDeferredShaderRecord=nativeShader;
+    ptReflectionP2CompositeShaderRecordReady=true;
+    Log("PT_REFLECTION_P2_COMPOSITE_RECORD_PREPARE ready=1 native_shader=%p clone_shader=%p native_descriptor=%p clone_descriptor=%p native_id=%d synthetic_id=%d native_bytes=%llu p2_bytes=%llu native_sha256=%s p2_sha256=%s descriptor_slot=0x60 stage=5",
+        nativeShader,ptReflectionP2CompositeShaderRecord,
+        reinterpret_cast<void*>(d.shaderBase),ptReflectionP2CompositeShaderDescriptor,
+        d.identifier,kPTReflectionP2CompositeSyntheticStorageId,
+        static_cast<unsigned long long>(d.size),
+        static_cast<unsigned long long>(ptReflectionP2CompositeBytes.size()),
+        sha,ptReflectionP2CompositeSha256);
+    return true;
+}
+
+static bool PTReflectionInsertReflectionUavBarrier() noexcept {
+    using GetNativeTextureFn=void* (*)(void*);
+    auto getter=reinterpret_cast<GetNativeTextureFn>(
+        verifiedD3d?GetProcAddress(verifiedD3d,kRRGetNativeTextureSymbol):nullptr);
+    if(!getter||!verifiedRenderer)return false;
+
+    void* wrapper=nullptr;
+    void* raw=nullptr;
+    D3D12_RESOURCE_DESC desc{};
+    DWORD describeFault=0;
+    __try {
+        auto* object=reinterpret_cast<unsigned char*>(verifiedRenderer)+kRRShaderReflectionTargetRva;
+        wrapper=getter(object);
+    } __except(EXCEPTION_EXECUTE_HANDLER) {
+        return false;
+    }
+    if(!wrapper||!Describe(wrapper,&raw,&desc,&describeFault)||!raw)return false;
+
+    EngineCommandContextSnapshot command{};
+    auto* resource=static_cast<ID3D12Resource*>(raw);
+    if(!ReadEngineCommandContext(resource,&command)||!command.commandList)return false;
+
+    bool good=false;
+    __try {
+        D3D12_RESOURCE_BARRIER barrier{};
+        barrier.Type=D3D12_RESOURCE_BARRIER_TYPE_UAV;
+        barrier.Flags=D3D12_RESOURCE_BARRIER_FLAG_NONE;
+        barrier.UAV.pResource=resource;
+        static_cast<ID3D12GraphicsCommandList*>(command.commandList)->ResourceBarrier(1,&barrier);
+        good=true;
+    } __except(EXCEPTION_EXECUTE_HANDLER) {
+        good=false;
+    }
+    return good;
+}
+
+static void PTReflectionHookDeferredDispatch(void* state,const void* dimensions) {
+    if(!ptReflectionOriginalDispatch)return;
+    ptReflectionOriginalDispatch(state,dimensions);
+
+    if(!ptReflectionP2InjectionEnabled||!ptReflectionP2CompositeShaderRecordReady||
+       !ptReflectionBindCompute||!ptReflectionNativeDeferredShaderRecord)return;
+
+    const auto call=ptReflectionP2PostDispatches.fetch_add(1,std::memory_order_relaxed)+1;
+    const bool barrier=PTReflectionInsertReflectionUavBarrier();
+    DWORD fault=0,restoreFault=0;
+    bool dispatched=false;
+    __try {
+        ptReflectionBindCompute(ptReflectionP2CompositeShaderRecord);
+        ptReflectionOriginalDispatch(state,dimensions);
+        dispatched=true;
+    } __except(EXCEPTION_EXECUTE_HANDLER) {
+        fault=GetExceptionCode();
+    }
+    __try {
+        ptReflectionBindCompute(ptReflectionNativeDeferredShaderRecord);
+    } __except(EXCEPTION_EXECUTE_HANDLER) {
+        restoreFault=GetExceptionCode();
+    }
+
+    if(fault||restoreFault){
+        ptReflectionP2InjectionEnabled=false;
+        Log("PT_REFLECTION_P2_POST_DISPATCH_DISABLE call=%llu barrier=%u dispatched=%u exception=0x%08lX restore_exception=0x%08lX fallback=p1_native_composite",
+            call,unsigned(barrier),unsigned(dispatched),fault,restoreFault);
+        return;
+    }
+    if(call<=16 || (call%240)==0)
+        Log("PT_REFLECTION_P2_POST_DISPATCH call=%llu barrier=%u dispatched=%u composite_record=%p native_restored=1",
+            call,unsigned(barrier),unsigned(dispatched),ptReflectionP2CompositeShaderRecord);
+}
+
 static bool PTReflectionInstallStorageGetHooks(HMODULE d3d) noexcept {
     if(!d3d||d3d!=verifiedD3d)return false;
     ptReflectionOriginalStorageGet=reinterpret_cast<PTShaderCodeStorageGetFn>(
