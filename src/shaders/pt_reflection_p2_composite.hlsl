@@ -91,6 +91,11 @@ RWTexture2D<float4> g_rwtReflectionTarget : register(u0);
 // specular/diffuse secondary shading.
 #define PT_REFLECTION_P2_VISUAL_PROOF 0
 #define PT_REFLECTION_P2_VALIDATION_GAIN 1.0f
+// Separate cs_5_1 variant with the same native root/descriptor ABI.
+// This is a deliberately destructive diagnostic shader, never production.
+#ifndef PT_REFLECTION_VERIFY_VARIANT
+#define PT_REFLECTION_VERIFY_VARIANT 0
+#endif
 
 float3 PTViewToWorldPoint(float3 p)
 {
@@ -216,6 +221,42 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
         totalWeight+=weight;
     }
 
+#if PT_REFLECTION_VERIFY_VARIANT == 1
+    // Four-screen-quadrant output; *actual* render target contents are changed,
+    // so any absence in the final image is a downstream consumption issue.
+    // TL: native Control reflection (no P2 write).
+    // TR: green=valid secondary hit, magenta=missing secondary hit.
+    // BL: heatmap of computed bounce-2 radiance, no arbitrary fake light.
+    // BR: native reflection plus deliberately boosted P2 radiance.
+    const uint halfW=((uint)g_vScreenRes.x)/2u;
+    const uint halfH=((uint)g_vScreenRes.y)/2u;
+    const bool right=pixel.x>=halfW;
+    const bool bottom=pixel.y>=halfH;
+    if(!right&&!bottom)return;
+    if(right&&!bottom){
+        g_rwtReflectionTarget[pixel]=
+            totalWeight>0.0f?float4(0.02f,6.0f,0.02f,1.0f):
+                             float4(6.0f,0.02f,5.0f,1.0f);
+        return;
+    }
+    const float3 unboundedRadiance=bounce2/2.0f;
+    if(!right&&bottom){
+        const float lum=max(dot(max(unboundedRadiance,0.0f),
+                        float3(0.2126f,0.7152f,0.0722f)),0.0f);
+        const float mapped=saturate(lum/(lum+0.02f));
+        // blue=weak, yellow/red=bright; invalid paths are black.
+        float3 heat=(totalWeight>0.0f)?
+            float3(4.0f*mapped*mapped,4.0f*mapped*(1.0f-mapped),
+                   2.0f*(1.0f-mapped)):float3(0.0f,0.0f,0.0f);
+        g_rwtReflectionTarget[pixel]=float4(heat,1.0f);
+        return;
+    }
+    if(totalWeight<=0.0f)return;
+    float4 amplified=g_rwtReflectionTarget[pixel];
+    amplified.rgb+=max(unboundedRadiance,0.0f)*16.0f;
+    g_rwtReflectionTarget[pixel]=amplified;
+    return;
+#endif
     if(totalWeight<=0.0f)return;
 
     float3 secondary=(bounce2/2.0f)*PT_REFLECTION_P2_VALIDATION_GAIN;
