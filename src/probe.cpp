@@ -732,6 +732,7 @@ static void HookRRRaytrace(int a, int b) {
         }
         QueryPerformanceCounter(&before);
     }
+    if(ptReflection) PTReflectionInstallComputePsoHook(verifiedD3d);
     originalRRRaytrace(a, b);
     RRGuideTryCapture(aaCount.load(), rrCurrentRayGeneration);
     if (sample) {
