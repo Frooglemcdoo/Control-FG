@@ -8,6 +8,11 @@ static bool Binding(ID3D12ShaderReflection* r,const char* name,D3D_SHADER_INPUT_
     return r && SUCCEEDED(r->GetResourceBindingDescByName(name,&d)) &&
         d.Type==type && d.BindPoint==slot && d.BindCount==count && d.Space==space;
 }
+static bool BindingAnyCount(ID3D12ShaderReflection* r,const char* name,D3D_SHADER_INPUT_TYPE type,UINT slot,UINT space) {
+    D3D12_SHADER_INPUT_BIND_DESC d{};
+    return r && SUCCEEDED(r->GetResourceBindingDescByName(name,&d)) &&
+        d.Type==type && d.BindPoint==slot && d.BindCount>=1 && d.Space==space;
+}
 static bool Variable(ID3D12ShaderReflection* r,const char* cbName,const char* varName,UINT offset,UINT size) {
     auto* cb=r?r->GetConstantBufferByName(cbName):nullptr;
     auto* v=cb?cb->GetVariableByName(varName):nullptr;
@@ -17,7 +22,8 @@ static bool Variable(ID3D12ShaderReflection* r,const char* cbName,const char* va
 int main() {
     ID3DBlob* code=nullptr;
     ID3DBlob* errors=nullptr;
-    const UINT flags=D3DCOMPILE_OPTIMIZATION_LEVEL3|D3DCOMPILE_WARNINGS_ARE_ERRORS;
+    const UINT flags=D3DCOMPILE_OPTIMIZATION_LEVEL3|D3DCOMPILE_WARNINGS_ARE_ERRORS|
+        D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES;
     HRESULT hr=D3DCompileFromFile(
         L"src/shaders/pt_reflection_p2_composite.hlsl",
         nullptr,D3D_COMPILE_STANDARD_FILE_INCLUDE,
@@ -41,6 +47,7 @@ int main() {
     bool ok=x==8&&y==16&&z==1;
     ok=ok&&Binding(r,"g_sbMaterialDataPart3",D3D_SIT_STRUCTURED,4,0);
     ok=ok&&Binding(r,"g_sEnvironmentCube",D3D_SIT_TEXTURE,8,0);
+    ok=ok&&BindingAnyCount(r,"g_sMaterialTextureArray",D3D_SIT_TEXTURE,0,1);
     ok=ok&&Binding(r,"g_tMaterialId",D3D_SIT_TEXTURE,26,0);
     ok=ok&&Binding(r,"g_tNormal_TexcoordX",D3D_SIT_TEXTURE,27,0);
     ok=ok&&Binding(r,"g_tPosition_TexcoordY",D3D_SIT_TEXTURE,28,0);
@@ -66,7 +73,7 @@ int main() {
     }
     const size_t written=std::fwrite(code->GetBufferPointer(),1,code->GetBufferSize(),file);
     const bool good=written==code->GetBufferSize()&&std::fclose(file)==0;
-    std::printf("PASS: P2 composite cs_5_1 bytes=%zu threads=8x16x1 native bindings t4,t8,t26,t27,t28/s5(space1)/u0/b0,b2,b6\n",
+    std::printf("PASS: P2 composite cs_5_1 bytes=%zu threads=8x16x1 native bindings t4,t8,t26,t27,t28,t0[](space1)/s5(space1)/u0/b0,b2,b6\n",
         code->GetBufferSize());
     code->Release();
     return good?0:5;
