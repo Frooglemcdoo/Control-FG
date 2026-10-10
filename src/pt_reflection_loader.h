@@ -34,6 +34,7 @@ static unsigned char ptReflectionP1ShaderRecord[0xA8]{};
 static unsigned char ptReflectionP1ShaderDescriptor[0x80]{};
 static bool ptReflectionP1ShaderRecordReady=false;
 static bool ptReflectionP1InjectionEnabled=false;
+static std::atomic<unsigned int> ptReflectionRecordMapLogged{0};
 static std::atomic<unsigned int> ptReflectionStorageRoundtripDone{0};
 static int ptReflectionStorageRoundtripPersistResult=-0x7fffffff;
 static int ptReflectionStorageRoundtripNativeId=-1;
@@ -375,9 +376,45 @@ static const char* PTReflectionHookShaderStorageGet(int id) {
     return ptReflectionOriginalStorageGet?ptReflectionOriginalStorageGet(id):nullptr;
 }
 
+
+static void PTReflectionLogNativeRecordMap(void* nativeShader) noexcept {
+    if(!nativeShader||ptReflectionRecordMapLogged.exchange(1u,std::memory_order_acq_rel))return;
+    const size_t slots[5]{0x10,0x30,0x50,0x70,0x90};
+    for(unsigned i=0;i<5;++i){
+        RRAlbedoShader::NativeDescriptor d{};
+        if(!RRAlbedoShader::ReadDescriptor(reinterpret_cast<std::uintptr_t>(nativeShader),slots[i],&d)){
+            Log("PT_REFLECTION_P2_RECORD_SLOT index=%u slot=0x%zX readable=0",i,slots[i]);
+            continue;
+        }
+        char sha[65]{};
+        char head[65]{};
+        DWORD fault=0;
+        bool residentOkay=false;
+        const char* resident=nullptr;
+        __try {
+            resident=RRAlbedoShader::residentGetter&&d.identifier>=0?
+                RRAlbedoShader::residentGetter(d.identifier):nullptr;
+            if(resident&&d.size>=32&&d.size<=RRAlbedoShader::kMaximumBlobBytes){
+                const size_t n=(std::min)(static_cast<size_t>(d.size),size_t(32));
+                for(size_t b=0;b<n;++b)
+                    sprintf_s(head+b*2,3,"%02X",static_cast<unsigned char>(resident[b]));
+                residentOkay=PTReflectionSha256(
+                    reinterpret_cast<const unsigned char*>(resident),
+                    static_cast<size_t>(d.size),sha);
+            }
+        } __except(EXCEPTION_EXECUTE_HANDLER) {
+            fault=GetExceptionCode();residentOkay=false;
+        }
+        Log("PT_REFLECTION_P2_RECORD_SLOT index=%u slot=0x%zX readable=1 descriptor=%p stage=%u id=%d bytes=%llu resident=%p resident_ok=%u sha256=%s head=%s exception=0x%08lX",
+            i,slots[i],reinterpret_cast<void*>(d.shaderBase),d.stage,d.identifier,
+            static_cast<unsigned long long>(d.size),resident,unsigned(residentOkay),sha,head,fault);
+    }
+}
+
 static bool PTReflectionPrepareP1ShaderRecord(void* nativeShader,
     const PTReflectionRayIdentity& identity) noexcept {
     ptReflectionP1ShaderRecordReady=false;
+    PTReflectionLogNativeRecordMap(nativeShader);
     if(!nativeShader||identity.variant!=0||!ptReflectionP1Loaded||
        ptReflectionP1Bytes.empty()||!ptReflectionOriginalStorageGet)return false;
     auto* nativeRecord=reinterpret_cast<unsigned char*>(nativeShader);
@@ -801,6 +838,7 @@ static bool PTReflectionInstallShaderLookupHooks(HMODULE renderer,HMODULE d3d) n
     PTReflectionLoadP1Sidecar();
     PTReflectionLoadP2Sidecar();
     ptReflectionP1ShaderRecordReady=false;
+    ptReflectionRecordMapLogged.store(0,std::memory_order_release);
     ptReflectionP1GetIntercepts.store(0,std::memory_order_release);
     const bool storageGetHooksReady=PTReflectionInstallStorageGetHooks(d3d);
     wchar_t p1EnableValue[8]{};
