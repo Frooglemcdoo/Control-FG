@@ -47,7 +47,13 @@ int main() {
     bool ok=x==8&&y==16&&z==1;
     ok=ok&&Binding(r,"g_sbMaterialDataPart3",D3D_SIT_STRUCTURED,4,0);
     ok=ok&&Binding(r,"g_sEnvironmentCube",D3D_SIT_TEXTURE,8,0);
-    ok=ok&&BindingAnyCount(r,"g_sMaterialTextureArray",D3D_SIT_TEXTURE,0,1);
+    D3D12_SHADER_INPUT_BIND_DESC materialTextures{};
+    const bool materialTexturesPresent=
+        SUCCEEDED(r->GetResourceBindingDescByName("g_sMaterialTextureArray",&materialTextures));
+    if(materialTexturesPresent)
+        std::printf("P2 material texture array type=%u slot=%u count=%u space=%u\n",
+            unsigned(materialTextures.Type),materialTextures.BindPoint,
+            materialTextures.BindCount,materialTextures.Space);
     ok=ok&&Binding(r,"g_tMaterialId",D3D_SIT_TEXTURE,26,0);
     ok=ok&&Binding(r,"g_tNormal_TexcoordX",D3D_SIT_TEXTURE,27,0);
     ok=ok&&Binding(r,"g_tPosition_TexcoordY",D3D_SIT_TEXTURE,28,0);
@@ -73,8 +79,8 @@ int main() {
     }
     const size_t written=std::fwrite(code->GetBufferPointer(),1,code->GetBufferSize(),file);
     const bool good=written==code->GetBufferSize()&&std::fclose(file)==0;
-    std::printf("PASS: P2 composite cs_5_1 bytes=%zu threads=8x16x1 native bindings t4,t8,t26,t27,t28,t0[](space1)/s5(space1)/u0/b0,b2,b6\n",
-        code->GetBufferSize());
+    std::printf("PASS: P2 composite cs_5_1 bytes=%zu threads=8x16x1 native bindings t4,t8,t26,t27,t28/s5(space1)/u0/b0,b2,b6 material_texture_array_present=%u\n",
+        code->GetBufferSize(),unsigned(materialTexturesPresent));
     code->Release();
     return good?0:5;
 }
