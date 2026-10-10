@@ -1267,9 +1267,22 @@ static void PTReflectionHookDeferredDispatch(void* state,const void* dimensions)
         return;
     }
 
+    const bool reusedCustomCache=ptReflectionP2CompositeCacheTailReady;
+    const bool cachePrepared=reusedCustomCache?
+        PTReflectionRestoreCompositeCacheTail(true):
+        PTReflectionInvalidateCompositeCacheForCustomBind();
+    if(!cachePrepared){
+        PTReflectionRestoreNativeCompositeDescriptor(snapshot);
+        ptReflectionP2InjectionEnabled=false;
+        Log("PT_REFLECTION_P2_POST_DISPATCH_DISABLE call=%llu reason=custom_cache_prepare_failed reused_custom_cache=%u fallback=p1",
+            call,unsigned(reusedCustomCache));
+        return;
+    }
+
     const auto getterBefore=ptReflectionP2CompositeGetIntercepts.load(std::memory_order_acquire);
     DWORD bindFault=0,dispatchFault=0,restoreBindFault=0;
-    bool customBound=false,dispatched=false,restoredDescriptor=false,restoredNativeBind=false;
+    bool customBound=false,dispatched=false,customCacheCaptured=reusedCustomCache;
+    bool restoredDescriptor=false,restoredNativeCache=false,restoredNativeBind=false;
 
     AcquireSRWLockExclusive(&ptReflectionCompositePsoLock);
     __try {
@@ -1280,7 +1293,12 @@ static void PTReflectionHookDeferredDispatch(void* state,const void* dimensions)
     }
 
     const auto getterAfterBind=ptReflectionP2CompositeGetIntercepts.load(std::memory_order_acquire);
-    if(customBound){
+    const auto getterDelta=getterAfterBind-getterBefore;
+
+    if(customBound&&!reusedCustomCache&&getterDelta>0)
+        customCacheCaptured=PTReflectionSnapshotCompositeCacheTail(true);
+
+    if(customBound&&customCacheCaptured){
         __try {
             ptReflectionOriginalDispatch(state,dimensions);
             dispatched=true;
@@ -1290,7 +1308,8 @@ static void PTReflectionHookDeferredDispatch(void* state,const void* dimensions)
     }
 
     restoredDescriptor=PTReflectionRestoreNativeCompositeDescriptor(snapshot);
-    if(restoredDescriptor){
+    restoredNativeCache=PTReflectionRestoreCompositeCacheTail(false);
+    if(restoredDescriptor&&restoredNativeCache){
         __try {
             ptReflectionBindCompute(ptReflectionNativeDeferredShaderRecord);
             restoredNativeBind=true;
@@ -1300,27 +1319,22 @@ static void PTReflectionHookDeferredDispatch(void* state,const void* dimensions)
     }
     ReleaseSRWLockExclusive(&ptReflectionCompositePsoLock);
 
-    const auto getterDelta=getterAfterBind-getterBefore;
-    static std::atomic<unsigned int> customBinderProven{0};
-    if(!customBinderProven.load(std::memory_order_acquire)&&getterDelta>0)
-        customBinderProven.store(1u,std::memory_order_release);
-
-    if(bindFault||dispatchFault||restoreBindFault||!customBound||!dispatched||
-       !restoredDescriptor||!restoredNativeBind||
-       (!customBinderProven.load(std::memory_order_acquire)&&call<=4)){
+    const bool firstBuildProven=reusedCustomCache||(getterDelta>0&&customCacheCaptured);
+    if(bindFault||dispatchFault||restoreBindFault||!customBound||!firstBuildProven||
+       !dispatched||!restoredDescriptor||!restoredNativeCache||!restoredNativeBind){
         ptReflectionP2InjectionEnabled=false;
-        Log("PT_REFLECTION_P2_POST_DISPATCH_DISABLE call=%llu reason=native_descriptor_bind_failed custom_bound=%u dispatched=%u restored_descriptor=%u restored_native_bind=%u getter_before=%llu getter_after=%llu getter_delta=%llu binder_proven=%u bind_exception=0x%08lX dispatch_exception=0x%08lX restore_bind_exception=0x%08lX fallback=p1",
-            call,unsigned(customBound),unsigned(dispatched),unsigned(restoredDescriptor),
+        Log("PT_REFLECTION_P2_POST_DISPATCH_DISABLE call=%llu reason=native_cache_rebuild_failed custom_bound=%u dispatched=%u reused_custom_cache=%u custom_cache_captured=%u restored_descriptor=%u restored_native_cache=%u restored_native_bind=%u getter_before=%llu getter_after=%llu getter_delta=%llu bind_exception=0x%08lX dispatch_exception=0x%08lX restore_bind_exception=0x%08lX fallback=p1",
+            call,unsigned(customBound),unsigned(dispatched),unsigned(reusedCustomCache),
+            unsigned(customCacheCaptured),unsigned(restoredDescriptor),unsigned(restoredNativeCache),
             unsigned(restoredNativeBind),getterBefore,getterAfterBind,getterDelta,
-            customBinderProven.load(std::memory_order_acquire),bindFault,dispatchFault,restoreBindFault);
+            bindFault,dispatchFault,restoreBindFault);
         return;
     }
 
     if(call<=16 || (call%240)==0)
-        Log("PT_REFLECTION_P2_POST_DISPATCH call=%llu path=native_descriptor_swap dispatched=1 restored=1 getter_before=%llu getter_after=%llu getter_delta=%llu binder_proven=%u native_record=%p",
-            call,getterBefore,getterAfterBind,getterDelta,
-            customBinderProven.load(std::memory_order_acquire),
-            ptReflectionNativeDeferredShaderRecord);
+        Log("PT_REFLECTION_P2_POST_DISPATCH call=%llu path=native_cache_swap dispatched=1 restored=1 reused_custom_cache=%u custom_cache_captured=%u getter_before=%llu getter_after=%llu getter_delta=%llu native_record=%p",
+            call,unsigned(reusedCustomCache),unsigned(customCacheCaptured),
+            getterBefore,getterAfterBind,getterDelta,ptReflectionNativeDeferredShaderRecord);
 }
 
 static bool PTReflectionInstallStorageGetHooks(HMODULE d3d) noexcept {
@@ -1739,6 +1753,10 @@ static bool PTReflectionInstallShaderLookupHooks(HMODULE renderer,HMODULE d3d) n
     ptReflectionP2RayGetIntercepts.store(0,std::memory_order_release);
     ptReflectionP2CompositeGetIntercepts.store(0,std::memory_order_release);
     ptReflectionP2PostDispatches.store(0,std::memory_order_release);
+    memset(ptReflectionNativeCompositeCacheTail,0,sizeof(ptReflectionNativeCompositeCacheTail));
+    memset(ptReflectionP2CompositeCacheTail,0,sizeof(ptReflectionP2CompositeCacheTail));
+    ptReflectionNativeCompositeCacheTailReady=false;
+    ptReflectionP2CompositeCacheTailReady=false;
     ptReflectionP2InjectionEnabled=false;
     const bool storageGetHooksReady=PTReflectionInstallStorageGetHooks(d3d);
     wchar_t p1EnableValue[8]{};
