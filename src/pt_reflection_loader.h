@@ -850,8 +850,8 @@ static void* PTReflectionHookVariantLookup(void* technique,unsigned key) {
     if(technique&&technique==ptReflectionDeferredTechniqueObject){
         const auto call=++ptReflectionDeferredVariantLookups;
         PTReflectionLogDeferredRecordMap(nativeResult);
-        Log("PT_REFLECTION_P2_DEFERRED_VARIANT call=%llu technique=%p key=0x%X shader=%p composite_probe=1 replacement=disabled native_result_preserved=1",
-            call,technique,key,nativeResult);
+        Log("PT_REFLECTION_P2_DEFERRED_VARIANT call=%llu technique=%p key=0x%X shader=%p composite_record_ready=%u replacement=native_then_post_add native_result_preserved=1",
+            call,technique,key,nativeResult,unsigned(ptReflectionP2CompositeShaderRecordReady));
         ptReflectionDeferredTechniqueObject=nullptr;
         return nativeResult;
     }
@@ -863,16 +863,27 @@ static void* PTReflectionHookVariantLookup(void* technique,unsigned key) {
         const bool admitted=identityKnown&&identity.variant>=0;
         if(admitted) PTReflectionInspectRayLibrary(technique,nativeResult,key);
 
+        bool p2Injected=false;
         bool p1Injected=false;
         bool nativeSwapped=false;
-        if(admitted&&ptReflectionP1InjectionEnabled&&identity.variant==0){
+
+        if(admitted&&identity.variant==0&&ptReflectionP2InjectionEnabled){
+            if(!ptReflectionP2RayShaderRecordReady)
+                PTReflectionPrepareP2RayShaderRecord(nativeResult,identity);
+            if(ptReflectionP2RayShaderRecordReady){
+                result=ptReflectionP2RayShaderRecord;
+                p2Injected=true;
+            }
+        }
+
+        if(!p2Injected&&admitted&&ptReflectionP1InjectionEnabled&&identity.variant==0){
             if(!ptReflectionP1ShaderRecordReady)
                 PTReflectionPrepareP1ShaderRecord(nativeResult,identity);
             if(ptReflectionP1ShaderRecordReady){
                 result=ptReflectionP1ShaderRecord;
                 p1Injected=true;
             }
-        } else if(admitted&&ptReflectionForcedNativeVariant>=0){
+        } else if(!p2Injected&&!p1Injected&&admitted&&ptReflectionForcedNativeVariant>=0){
             if(ptReflectionSwapTechnique!=technique||
                ptReflectionSwapVariant!=ptReflectionForcedNativeVariant||
                !ptReflectionSwapShader){
@@ -893,11 +904,13 @@ static void* PTReflectionHookVariantLookup(void* technique,unsigned key) {
                 nativeSwapped=result!=nativeResult;
             }
         }
-        Log("PT_REFLECTION_P1_VARIANT call=%llu technique=%p key=0x%X native_shader=%p returned_shader=%p admitted=%u variant=%d p1_requested=%u p1_record_ready=%u p1_injected=%u native_swapped=%u forced_native_variant=%d mode=%s native_result_preserved=%u",
+        Log("PT_REFLECTION_P1_VARIANT call=%llu technique=%p key=0x%X native_shader=%p returned_shader=%p admitted=%u variant=%d p2_requested=%u p2_record_ready=%u p2_injected=%u p1_requested=%u p1_record_ready=%u p1_injected=%u native_swapped=%u forced_native_variant=%d mode=%s native_result_preserved=%u",
             call,technique,key,nativeResult,result,unsigned(admitted),identityKnown?identity.variant:-1,
-            unsigned(ptReflectionP1InjectionEnabled),unsigned(ptReflectionP1ShaderRecordReady),
-            unsigned(p1Injected),unsigned(nativeSwapped),ptReflectionForcedNativeVariant,
-            p1Injected?"p1_raw_get_bridge":(nativeSwapped?"native_variant_swap_probe":"observe_only"),
+            unsigned(ptReflectionP2InjectionEnabled),unsigned(ptReflectionP2RayShaderRecordReady),
+            unsigned(p2Injected),unsigned(ptReflectionP1InjectionEnabled),
+            unsigned(ptReflectionP1ShaderRecordReady),unsigned(p1Injected),
+            unsigned(nativeSwapped),ptReflectionForcedNativeVariant,
+            p2Injected?"p2_paired_ray_bridge":(p1Injected?"p1_raw_get_bridge":(nativeSwapped?"native_variant_swap_probe":"observe_only")),
             unsigned(result==nativeResult));
         ptReflectionTechniqueObject=nullptr;
     }
