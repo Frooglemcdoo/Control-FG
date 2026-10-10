@@ -24,7 +24,8 @@ struct PTMaterialDataPart3 {
     float fPAD1;
     float fEmissionIntensity;
     float4 vColorMultiplier;
-    float tail[67];
+    float2 vSmoothnessRange;
+    float tail[65];
 };
 
 cbuffer sys_constants : register(b0)
@@ -159,6 +160,26 @@ float3 PTSampleGGXVNDF(float3 n, float3 viewToCamera, float roughness, float2 u)
     return normalize(hLocal.x*t + hLocal.y*b + hLocal.z*n);
 }
 
+
+float3 PTSampleCosineHemisphere(float3 n, float2 u)
+{
+    float3 t,b;
+    PTBasis(n,t,b);
+    float r=sqrt(saturate(u.x));
+    float phi=2.0f*PT_PI*u.y;
+    float x=r*cos(phi);
+    float y=r*sin(phi);
+    float z=sqrt(saturate(1.0f-u.x));
+    return normalize(x*t+y*b+z*n);
+}
+
+float PTMaterialSmoothness(uint materialId)
+{
+    if(materialId>=65534u)return 0.0f;
+    float2 range=g_sbMaterialDataPart3[materialId].vSmoothnessRange;
+    return saturate(0.5f*(range.x+range.y));
+}
+
 bool PTPrimary(uint2 pixel, out float3 positionView, out float3 positionWorld,
                out float3 normalWorld, out float roughness)
 {
@@ -222,7 +243,11 @@ void reflectionRayGeneration()
     float3 primaryView,primaryWorld,normalWorld;
     float roughness;
     if(!PTPrimary(pixel,primaryView,primaryWorld,normalWorld,roughness)) return;
-    if(roughness>g_fRTMaxRayRoughness) return;
+    // Native Control rejects very rough primary surfaces early. P2 intentionally
+    // extends the glossy lobe so concrete/plaster can still carry a broad,
+    // low-frequency reflection/bounce signal into RR instead of disappearing.
+    const float p2MaxPrimaryRoughness=max(g_fRTMaxRayRoughness,0.92f);
+    if(roughness>p2MaxPrimaryRoughness) return;
 
     float3 cameraWorld=PTCameraWorld();
     float3 viewToCamera=normalize(cameraWorld-primaryWorld);
@@ -254,12 +279,25 @@ void reflectionRayGeneration()
         float3 firstHitNormal=normalize(firstNormalUV.xyz);
         if(!all(isfinite(firstHitWorld)) || !all(isfinite(firstHitNormal))) continue;
 
-        // P2 proof: second bounce is mirror at the secondary surface. The
-        // secondary material roughness/BRDF weighting is intentionally deferred
-        // until the second-hit material guide path is validated.
         if(dot(firstHitNormal,firstDirection)>0.0f) firstHitNormal=-firstHitNormal;
-        float3 secondDirection=reflect(firstDirection,firstHitNormal);
-        if(dot(secondDirection,firstHitNormal)<=0.0f) continue;
+
+        // Mixed second-bounce BSDF. Smooth materials keep the GGX/specular
+        // path; rough surfaces increasingly use a cosine diffuse hemisphere.
+        const float firstSmoothness=PTMaterialSmoothness(firstMaterial);
+        const float firstRoughness=1.0f-firstSmoothness;
+        float2 secondRandom=PTRandom2(pixel,path+11u);
+        float3 diffuseDirection=PTSampleCosineHemisphere(firstHitNormal,secondRandom);
+        float3 viewBack=normalize(-firstDirection);
+        float3 h2=PTSampleGGXVNDF(firstHitNormal,viewBack,firstRoughness,frac(secondRandom+0.371f));
+        float3 specDirection=reflect(-viewBack,h2);
+        if(dot(specDirection,firstHitNormal)<=0.0f)
+            specDirection=reflect(firstDirection,firstHitNormal);
+
+        // Start transitioning around roughness 0.35; concrete lands strongly
+        // on the diffuse side while polished metal/glass remains specular.
+        float diffuseMix=saturate((firstRoughness-0.35f)/0.45f);
+        float3 secondDirection=normalize(lerp(specDirection,diffuseDirection,diffuseMix));
+        if(dot(secondDirection,firstHitNormal)<=0.0f)continue;
 
         HitData secondPayload;
         PTTrace(secondLayer,firstHitWorld+firstHitNormal*0.01f,secondDirection,secondPayload);
@@ -369,7 +407,9 @@ void reflectionClosestHit(inout HitData payload, in BuiltInTriangleIntersectionA
         // normal.w for the P2 add pass instead.
         g_rwtMaterialId[uint3(pixel,layer)]=65534u;
         g_rwtNormal_TexcoordX[uint3(pixel,layer)]=float4(normalWorld,asfloat(uMaterialID));
-        g_rwtPosition_TexcoordY[uint3(pixel,layer)]=float4(viewHit,0.0f);
+        uint2 uv16=(uint2)round(saturate(frac(texcoord))*65535.0f);
+        uint packedUv=(uv16.x&0xffffu)|((uv16.y&0xffffu)<<16u);
+        g_rwtPosition_TexcoordY[uint3(pixel,layer)]=float4(viewHit,asfloat(packedUv));
     } else {
         g_rwtMaterialId[uint3(pixel,layer)]=uMaterialID;
         g_rwtNormal_TexcoordX[uint3(pixel,layer)]=float4(normalWorld,texcoord.x);
