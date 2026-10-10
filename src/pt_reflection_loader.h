@@ -1435,6 +1435,11 @@ static bool PTReflectionInstallShaderLookupHooks(HMODULE renderer,HMODULE d3d) n
     PTReflectionLoadP1Sidecar();
     PTReflectionLoadP2Sidecar();
     PTReflectionLoadP2CompositeSidecar();
+    ptReflectionCompositePsoCaptured.store(0u,std::memory_order_release);
+    ptReflectionNativeCompositePso=nullptr;
+    ptReflectionP2CompositePso=nullptr;
+    ptReflectionCompositeRoot=nullptr;
+    const bool psoHookReady=PTReflectionInstallComputePsoHook(d3d);
     ptReflectionP1ShaderRecordReady=false;
     ptReflectionP2RayShaderRecordReady=false;
     ptReflectionP2CompositeShaderRecordReady=false;
@@ -1491,11 +1496,11 @@ static bool PTReflectionInstallShaderLookupHooks(HMODULE renderer,HMODULE d3d) n
         L"CONTROLFG_PT_REFLECTION_P2",p2EnableValue,_countof(p2EnableValue));
     const bool p2ExplicitDisable=p2EnableLength>0&&p2EnableLength<_countof(p2EnableValue)&&p2EnableValue[0]==L'0';
     ptReflectionP2InjectionEnabled=ptReflectionP2Loaded&&ptReflectionP2CompositeLoaded&&
-        storageGetHooksReady&&p2DispatchHookReady&&!p2ExplicitDisable;
-    Log("PT_REFLECTION_P2_INJECTION_CONFIG enabled=%u ray_sidecar=%u composite_sidecar=%u get_hooks=%u dispatch_hook=%u variant_gate=000 native_composite_sha=4fc0a0e9cd3706bcb86e29444d86fa32616138e1712c53b1b5103b30d7a1ecc9 env=CONTROLFG_PT_REFLECTION_P2 default=enabled disable_with_0 fail_closed=1",
+        storageGetHooksReady&&p2DispatchHookReady&&psoHookReady&&!p2ExplicitDisable;
+    Log("PT_REFLECTION_P2_INJECTION_CONFIG enabled=%u ray_sidecar=%u composite_sidecar=%u get_hooks=%u dispatch_hook=%u pso_hook=%u variant_gate=000 native_composite_sha=4fc0a0e9cd3706bcb86e29444d86fa32616138e1712c53b1b5103b30d7a1ecc9 env=CONTROLFG_PT_REFLECTION_P2 default=enabled disable_with_0 fail_closed=1",
         unsigned(ptReflectionP2InjectionEnabled),unsigned(ptReflectionP2Loaded),
         unsigned(ptReflectionP2CompositeLoaded),unsigned(storageGetHooksReady),
-        unsigned(p2DispatchHookReady));
+        unsigned(p2DispatchHookReady),unsigned(psoHookReady));
 
     if(!RRAlbedoPrepareCallPatch(base+0x12953C,
         reinterpret_cast<void*>(ptReflectionOriginalRfxLookup),
