@@ -51,6 +51,35 @@ static bool PTDiffuseGIReadShaderTexture(size_t rva,PTDiffuseGIBorrowed* out) no
     return fault==0&&out->native&&out->tracker&&out->resource;
 }
 
+static const char* PTDiffuseGIResourceShapeReason(
+    const D3D12_RESOURCE_DESC& d,bool uav) noexcept {
+    if(d.Dimension!=D3D12_RESOURCE_DIMENSION_TEXTURE2D)return "not_texture2d";
+    if(!d.Width||!d.Height||d.Width>8192||d.Height>8192)
+        return "invalid_extent";
+    if(d.DepthOrArraySize!=1)return "array_or_depth_not_one";
+    if(d.MipLevels!=1)return "mip_count_not_one";
+    if(d.SampleDesc.Count!=1)return "multisampled";
+    if(d.Format==DXGI_FORMAT_UNKNOWN)return "unknown_format";
+    if(uav&&!(d.Flags&D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS))
+        return "missing_uav_flag";
+    if(!uav&&(d.Flags&D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE))
+        return "srv_denied";
+    return "ready";
+}
+static void PTDiffuseGILogResourceShape(
+    unsigned long long call,unsigned long long frame,unsigned mode,
+    const char* label,const PTDiffuseGIBorrowed& resource,
+    const char* verdict,bool uav) noexcept {
+    const auto& d=resource.desc;
+    Log("PT_REFLECTION_P2_DGI_RESOURCE_DESC call=%llu frame=%llu verify_mode=%u name=%s result=%s expected_uav=%u native=%p resource=%p tracker=%p tracked_state=0x%X dim=%u width=%llu height=%u array=%u mips=%u sample_count=%u sample_quality=%u format=%u flags=0x%X layout=%u alignment=%llu",
+        call,frame,mode,label,verdict,unsigned(uav),
+        resource.native,resource.resource,resource.tracker,resource.state,
+        unsigned(d.Dimension),static_cast<unsigned long long>(d.Width),d.Height,
+        unsigned(d.DepthOrArraySize),unsigned(d.MipLevels),
+        d.SampleDesc.Count,d.SampleDesc.Quality,unsigned(d.Format),unsigned(d.Flags),
+        unsigned(d.Layout),static_cast<unsigned long long>(d.Alignment));
+}
+
 static bool PTDiffuseGIResourceShape(const D3D12_RESOURCE_DESC& d,bool uav) noexcept {
     if(d.Dimension!=D3D12_RESOURCE_DIMENSION_TEXTURE2D||!d.Width||!d.Height||
        d.Width>8192||d.Height>8192||d.DepthOrArraySize!=1||d.MipLevels!=1||
@@ -204,9 +233,42 @@ static bool PTReflectionBridgeDiffuseGI() noexcept {
         reason="dgi_texture";
         if(!PTDiffuseGIReadShaderTexture(kRRShaderDiffuseGIColorRva,&dgi))__leave;
         reason="resource_shape";
-        if(!PTDiffuseGIResourceShape(reflection.desc,false)||
-           !PTDiffuseGIResourceShape(input.gbuffer1.desc,false)||
-           !PTDiffuseGIResourceShape(dgi.desc,true))__leave;
+        const char* reflectionShape=PTDiffuseGIResourceShapeReason(reflection.desc,false);
+        const char* gbufferShape=PTDiffuseGIResourceShapeReason(input.gbuffer1.desc,false);
+        const char* dgiShape=PTDiffuseGIResourceShapeReason(dgi.desc,true);
+        if(call<=4u||(call%240u)==0u||
+           strcmp(reflectionShape,"ready")!=0||
+           strcmp(gbufferShape,"ready")!=0||
+           strcmp(dgiShape,"ready")!=0){
+            // Only log the first six failures and the periodic sample, not
+            // thousands of copies of the same descriptor every frame.
+            static std::atomic<unsigned> shapeLogs{0};
+            const auto n=shapeLogs.fetch_add(1u,std::memory_order_relaxed);
+            if(n<6u||(n%512u)==0u||
+                (verifyMode==2u&&((n%128u)==0u))){
+                PTDiffuseGILogResourceShape(call,input.engineFrame,verifyMode,
+                    "reflection",reflection,reflectionShape,false);
+                PTDiffuseGIBorrowed gb{};
+                gb.resource=input.gbuffer1.resource;
+                gb.native=input.gbuffer1.nativeTexture;
+                gb.tracker=input.gbuffer1.stateTracker;
+                gb.state=input.gbuffer1.trackedState;
+                gb.desc=input.gbuffer1.desc;
+                PTDiffuseGILogResourceShape(call,input.engineFrame,verifyMode,
+                    "gbuffer1",gb,gbufferShape,false);
+                PTDiffuseGILogResourceShape(call,input.engineFrame,verifyMode,
+                    "diffuse_gi",dgi,dgiShape,true);
+            }
+        }
+        if(strcmp(reflectionShape,"ready")!=0){
+            reason="reflection_resource_shape";__leave;
+        }
+        if(strcmp(gbufferShape,"ready")!=0){
+            reason="gbuffer_resource_shape";__leave;
+        }
+        if(strcmp(dgiShape,"ready")!=0){
+            reason="dgi_resource_shape";__leave;
+        }
         reason="device";
         if(FAILED(input.commandList->GetDevice(IID_PPV_ARGS(&device)))||!device)__leave;
         owner=PTDiffuseGIGetOwner(device);
