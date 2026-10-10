@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - experiment/pt-reflections-p0
+      - experiment/pt-verify-stages-20261010
   workflow_dispatch:
   pull_request:
     branches:
@@ -174,21 +175,40 @@ jobs:
           Copy-Item build/pt_reflection_p1.dxil "$out/pt_reflection_p1.dxil"
           Copy-Item build/pt_reflection_p2.dxil "$out/pt_reflection_p2.dxil"
           Copy-Item build/pt_reflection_p2_composite.dxbc "$out/pt_reflection_p2_composite.dxbc"
+          Copy-Item build/pt_reflection_p2_verify.dxbc "$out/pt_reflection_p2_verify.dxbc"
           Copy-Item build/pt_reflection_p2_diffuse_bridge.dxbc "$out/pt_reflection_p2_diffuse_bridge.dxbc"
           @'
-          PT Reflections experimental
-          ---------------------------
-          The runtime reflection hooks are still fail-closed.
-          pt_reflection_p1.dxil is stock-composite-compatible and staged for the first visual test.
-          pt_reflection_p2.dxil contains the paired two-bounce ray path.
-          pt_reflection_p2_composite.dxbc adds bounce-2 radiance after Control's native first-bounce composite.
-          pt_reflection_p2_diffuse_bridge.dxbc routes rough-surface P2 radiance into Control's raw diffuse-GI color path.
-          Run normal gameplay with Ray Traced Reflections enabled, then collect compact logs.
-          Relevant records:
-            PT_REFLECTION_P0_DISPATCH
-            PT_REFLECTION_P1_VARIANT_ADMIT
-            PT_REFLECTION_P1_SHADER_STORAGE_EXPORT_*
-            PT_REFLECTION_P2_SIDECAR
+          PT Reflections — VISUAL PIPELINE VERIFICATION
+          ===========================================
+          TEST BUILD (NOT FOR REGULAR PLAY). Steam / DX12 / RR enabled.
+          Back up previous DLL and sidecars. Copy ALL SIX binaries beside Control_DX12.exe.
+
+          Stand still in one indoor scene, then tap F11 once per mode.
+          Take a screenshot in each mode and collect the Compact Logs.
+          F11 cycles 0 -> 1 -> 2 -> 0.
+
+          Mode 0 — NORMAL: native reflection + P2; regular diffuse-GI bridge.
+          Mode 1 — P2 QUADRANTS in the REFLECTION target:
+             TOP LEFT = native first-bounce reflection only (baseline).
+             TOP RIGHT = bright GREEN valid second hit, MAGENTA missing hit.
+             BOTTOM LEFT = actual bounce-2 radiance heatmap (black if no hit).
+             BOTTOM RIGHT = native reflection + bounce-2 energy x16.
+             GI bridge is disabled in this mode to isolate reflections.
+          Mode 2 — DIFFUSE GI MARKER:
+             Normal reflection+P2, but a strong CYAN/MAGENTA checker writes
+             directly into raw diffuse-GI for rough surfaces (concrete/plaster).
+             This marker is independent of P2 hits or radiance.
+
+          Expected logs:
+             PT_REFLECTION_VERIFY_INIT
+             PT_REFLECTION_VERIFY_PSO_CREATE ready=1
+             PT_REFLECTION_VERIFY_SWITCH
+             PT_REFLECTION_P2_POST_DISPATCH ... verify_mode=1
+             PT_REFLECTION_P2_DGI_BRIDGE ... verify_mode=2 marker=1
+          If GI mode skips, inspect PT_REFLECTION_P2_DGI_BRIDGE_SKIP reason=...
+          GPU PSO dispatch logs prove submission, not downstream image visibility.
+          Screenshots are required to interpret whether the signal survives
+          Control's reflection weighting, GI filtering, RR and final composite.
           '@ | Set-Content "$out/README.txt" -Encoding ASCII
           Compress-Archive -Path "$out/*" -DestinationPath "$out.zip" -Force
           (Get-FileHash "$out.zip" -Algorithm SHA256).Hash | Set-Content "$out.sha256" -Encoding ASCII
@@ -208,6 +228,7 @@ jobs:
             build/pt_reflection_p2.dxil
             build/pt_reflection_p2.sha256
             build/pt_reflection_p2_composite.dxbc
+            build/pt_reflection_p2_verify.dxbc
             build/pt_reflection_p2_diffuse_bridge.dxbc
             build/pt_reflection_p2.dump.txt
             build/pt-reflection-native-audit.json
