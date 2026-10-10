@@ -193,6 +193,235 @@ static bool PTDiffuseGIReadBridgeInputs(RRGuideInputSnapshot* out,
     return true;
 }
 
+
+// Forward-only DGI transport proof. This path preserves the engine's bound
+// descriptor heaps, compute root signature, root arguments and pipeline.
+// A small immutable UPLOAD buffer is copied into mip 0 of Control's native
+// diffuse-GI target at the exact reviewed GI boundary. No custom compute PSO
+// or descriptor/root changes occur.
+//
+// This intentionally REPLACES a 512x512 area of native GI as a diagnostic;
+// it is not bounce lighting, and it only runs in explicit F11 mode 2.
+struct PTDiffuseGICopyProofOwner {
+    ID3D12Device* device=nullptr;
+    ID3D12Resource* upload=nullptr;
+    UINT width=512u;
+    UINT height=512u;
+    UINT rowPitch=4096u;
+    bool stopped=false;
+};
+static SRWLOCK ptDiffuseGICopyProofLock=SRWLOCK_INIT;
+static std::vector<PTDiffuseGICopyProofOwner*> ptDiffuseGICopyProofOwners;
+static std::atomic<unsigned long long> ptDiffuseGICopyProofCopies{0};
+static std::atomic<unsigned long long> ptDiffuseGICopyProofSkips{0};
+
+static PTDiffuseGICopyProofOwner* PTDiffuseGIFindCopyProof(ID3D12Device* device) noexcept {
+    for(auto* owner:ptDiffuseGICopyProofOwners)
+        if(owner&&owner->device==device&&!owner->stopped&&owner->upload)
+            return owner;
+    return nullptr;
+}
+
+static PTDiffuseGICopyProofOwner* PTDiffuseGICreateCopyProof(ID3D12Device* device) noexcept {
+    if(!device)return nullptr;
+    auto* owner=new(std::nothrow) PTDiffuseGICopyProofOwner;
+    if(!owner)return nullptr;
+    owner->device=device;
+    device->AddRef();
+    // 512x512 RGBA16_FLOAT; each row is 4096 bytes (256-byte aligned).
+    D3D12_HEAP_PROPERTIES properties{};
+    properties.Type=D3D12_HEAP_TYPE_UPLOAD;
+    D3D12_RESOURCE_DESC desc{};
+    desc.Dimension=D3D12_RESOURCE_DIMENSION_BUFFER;
+    desc.Width=static_cast<UINT64>(owner->rowPitch)*owner->height;
+    desc.Height=1u;
+    desc.DepthOrArraySize=1u;
+    desc.MipLevels=1u;
+    desc.Format=DXGI_FORMAT_UNKNOWN;
+    desc.SampleDesc.Count=1u;
+    desc.Layout=D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+    HRESULT hr=device->CreateCommittedResource(
+        &properties,D3D12_HEAP_FLAG_NONE,&desc,
+        D3D12_RESOURCE_STATE_GENERIC_READ,nullptr,
+        IID_PPV_ARGS(&owner->upload));
+
+    if(SUCCEEDED(hr)&&owner->upload){
+        D3D12_RANGE readRange{0,0};
+        unsigned char* mapped=nullptr;
+        hr=owner->upload->Map(0,&readRange,reinterpret_cast<void**>(&mapped));
+        if(SUCCEEDED(hr)&&mapped){
+            // Half-float constants: 12.0 = 0x4A00, 10.0 = 0x4900,
+            // 1.0 = 0x3C00. Strong alternating magenta/cyan checker.
+            constexpr unsigned short cyan[4]{0x0000,0x4A00,0x4900,0x3C00};
+            constexpr unsigned short magenta[4]{0x4A00,0x0000,0x4900,0x3C00};
+            for(UINT y=0;y<owner->height;++y){
+                auto* dst=mapped+static_cast<size_t>(y)*owner->rowPitch;
+                for(UINT x=0;x<owner->width;++x){
+                    const bool chooseCyan=((x/64u+y/64u)&1u)!=0u;
+                    memcpy(dst+static_cast<size_t>(x)*sizeof(cyan),
+                           chooseCyan?cyan:magenta,sizeof(cyan));
+                }
+            }
+            D3D12_RANGE writtenRange{
+                0,static_cast<SIZE_T>(desc.Width)};
+            owner->upload->Unmap(0,&writtenRange);
+        }
+    }
+    if(FAILED(hr)||!owner->upload){
+        owner->stopped=true;
+        ptDiffuseGICopyProofOwners.push_back(owner);
+        Log("PT_REFLECTION_P2_DGI_COPY_OWNER ready=0 hr=0x%08lX device=%p no_gpu_copy=1",
+            static_cast<unsigned long>(hr),device);
+        return nullptr;
+    }
+    ptDiffuseGICopyProofOwners.push_back(owner);
+    Log("PT_REFLECTION_P2_DGI_COPY_OWNER ready=1 device=%p upload=%p width=%u height=%u row_pitch=%u rgba16f=1 immutable_upload=1",
+        device,owner->upload,owner->width,owner->height,owner->rowPitch);
+    return owner;
+}
+
+static PTDiffuseGICopyProofOwner* PTDiffuseGIGetCopyProof(ID3D12Device* device) noexcept {
+    AcquireSRWLockExclusive(&ptDiffuseGICopyProofLock);
+    auto* owner=PTDiffuseGIFindCopyProof(device);
+    if(!owner)owner=PTDiffuseGICreateCopyProof(device);
+    ReleaseSRWLockExclusive(&ptDiffuseGICopyProofLock);
+    return owner;
+}
+
+static bool PTDiffuseGICopyMarkerProof(unsigned long long call) noexcept {
+    const char* reason="unavailable";
+    RRGuideInputSnapshot ctx{},again{};
+    PTDiffuseGIBorrowed dgi{},current{};
+    ID3D12Device* device=nullptr;
+    PTDiffuseGICopyProofOwner* owner=nullptr;
+    void* locks[2]{};
+    unsigned locked=0;
+    bool begun=false,restored=false,copied=false;
+    DWORD fault=0,restoreFault=0;
+    D3D12_RESOURCE_BARRIER before{},after{};
+    UINT x=0,y=0;
+
+    __try {
+        reason="renderer_context";
+        if(!RRGuideReadRendererContext(&ctx,&reason)||!ctx.commandList||
+           !ctx.commandContext||!ctx.recordingLock)__leave;
+        reason="gi_texture";
+        if(!PTDiffuseGIReadShaderTexture(kRRShaderDiffuseGIColorRva,&dgi))__leave;
+        reason="gi_format_or_state";
+        if(!PTDiffuseGIResourceShape(dgi.desc,true)||
+           dgi.desc.Format!=DXGI_FORMAT_R16G16B16A16_FLOAT||
+           dgi.state!=static_cast<unsigned>(D3D12_RESOURCE_STATE_UNORDERED_ACCESS)||
+           dgi.desc.Width<512u||dgi.desc.Height<512u||!dgi.tracker)__leave;
+
+        reason="device";
+        if(FAILED(ctx.commandList->GetDevice(IID_PPV_ARGS(&device)))||!device)
+            __leave;
+        reason="immutable_upload";
+        owner=PTDiffuseGIGetCopyProof(device);
+        if(!owner||!owner->upload)__leave;
+
+        locks[0]=ctx.recordingLock;
+        locks[1]=dgi.tracker;
+        if(locks[0]==locks[1])locks[1]=nullptr;
+        if(locks[1]&&reinterpret_cast<std::uintptr_t>(locks[1])<
+                     reinterpret_cast<std::uintptr_t>(locks[0])){
+            void* tmp=locks[0];locks[0]=locks[1];locks[1]=tmp;
+        }
+        reason="native_locks";
+        for(unsigned i=0;i<2u;++i){
+            if(!locks[i])continue;
+            if(!RRGuideTryAcquireNativeLock(locks[i]))__leave;
+            locked=i+1u;
+        }
+
+        reason="revalidate_context";
+        if(!RRGuideReadRendererContext(&again,&reason)||
+           again.commandList!=ctx.commandList||
+           again.commandContext!=ctx.commandContext||
+           again.recordingLock!=ctx.recordingLock||
+           again.engineFrame!=ctx.engineFrame)__leave;
+        reason="revalidate_dgi";
+        if(!PTDiffuseGIReadShaderTexture(kRRShaderDiffuseGIColorRva,&current)||
+           current.resource!=dgi.resource||current.tracker!=dgi.tracker||
+           current.state!=dgi.state)__leave;
+
+        // Center the checker on screen so it is visible in the chosen scene.
+        x=static_cast<UINT>((dgi.desc.Width-owner->width)/2u);
+        y=(dgi.desc.Height-owner->height)/2u;
+        D3D12_TEXTURE_COPY_LOCATION src{},dest{};
+        src.pResource=owner->upload;
+        src.Type=D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
+        src.PlacedFootprint.Offset=0;
+        src.PlacedFootprint.Footprint.Format=DXGI_FORMAT_R16G16B16A16_FLOAT;
+        src.PlacedFootprint.Footprint.Width=owner->width;
+        src.PlacedFootprint.Footprint.Height=owner->height;
+        src.PlacedFootprint.Footprint.Depth=1u;
+        src.PlacedFootprint.Footprint.RowPitch=owner->rowPitch;
+        dest.pResource=dgi.resource;
+        dest.Type=D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+        dest.SubresourceIndex=0u;
+
+        before.Type=D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+        before.Transition.pResource=dgi.resource;
+        before.Transition.Subresource=0u;
+        before.Transition.StateBefore=D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+        before.Transition.StateAfter=D3D12_RESOURCE_STATE_COPY_DEST;
+        after=before;
+        after.Transition.StateBefore=D3D12_RESOURCE_STATE_COPY_DEST;
+        after.Transition.StateAfter=D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+
+        // All three commands run on Control's *existing* renderer list.
+        // No descriptor heap, root signature, root arguments or PSO changed.
+        // Count them as native renderer commands for its recording bookkeeping.
+        reason="record_commands";
+        auto* commands=reinterpret_cast<unsigned long long*>(
+            reinterpret_cast<unsigned char*>(ctx.commandContext)+8);
+        ++*commands;
+        ctx.commandList->ResourceBarrier(1u,&before);
+        begun=true;
+        ++*commands;
+        ctx.commandList->CopyTextureRegion(&dest,x,y,0,&src,nullptr);
+        ++*commands;
+        ctx.commandList->ResourceBarrier(1u,&after);
+        restored=true;
+        copied=true;
+    } __except(EXCEPTION_EXECUTE_HANDLER) {
+        fault=GetExceptionCode();
+        reason="exception";
+    }
+    if(begun&&!restored&&ctx.commandList){
+        __try {
+            auto* commands=reinterpret_cast<unsigned long long*>(
+                reinterpret_cast<unsigned char*>(ctx.commandContext)+8);
+            ++*commands;
+            ctx.commandList->ResourceBarrier(1u,&after);
+            restored=true;
+        } __except(EXCEPTION_EXECUTE_HANDLER) {
+            restoreFault=GetExceptionCode();
+        }
+    }
+
+    // Acquire in increasing address order; release in reverse.
+    while(locked){
+        --locked;
+        if(locks[locked])RRGuideReleaseNativeLock(locks[locked]);
+    }
+    if(device)device->Release();
+    if(copied&&restored){
+        const auto n=ptDiffuseGICopyProofCopies.fetch_add(1u,std::memory_order_relaxed)+1u;
+        if(n<=8u||(n%240u)==0u)
+            Log("PT_REFLECTION_P2_DGI_COPY_PROOF call=%llu copy=%llu frame=%llu x=%u y=%u width=%u height=%u dgi_mips=%u dgi_format=%u native_state_restored=1 engine_root_heap_pso_unchanged=1 mip0_only=1 verify_mode=2",
+                call,n,ctx.engineFrame,x,y,owner->width,owner->height,
+                unsigned(dgi.desc.MipLevels),unsigned(dgi.desc.Format));
+        return true;
+    }
+    const auto skip=ptDiffuseGICopyProofSkips.fetch_add(1u,std::memory_order_relaxed)+1u;
+    if(skip<=8u||(skip&(skip-1ull))==0ull)
+        Log("PT_REFLECTION_P2_DGI_COPY_PROOF_SKIP call=%llu skip=%llu frame=%llu reason=%s exception=0x%08lX restored=%u restore_exception=0x%08lX no_custom_compute=1 verify_mode=2",
+            call,skip,ctx.engineFrame,reason?reason:"unknown",fault,unsigned(restored),restoreFault);
+    return false;
+}
+
 static bool PTReflectionBridgeDiffuseGI() noexcept {
     const auto call=ptDiffuseGIBridgeCalls.fetch_add(1,std::memory_order_relaxed)+1;
     const unsigned verifyMode=ptReflectionVerifyMode.load(std::memory_order_acquire);
@@ -210,6 +439,10 @@ static bool PTReflectionBridgeDiffuseGI() noexcept {
     // no PSO, heap or UAV and records no D3D12 commands.
     constexpr bool kPTDiffuseGIReadOnlyRecovery=true;
     if(kPTDiffuseGIReadOnlyRecovery){
+        // Move FORWARD without changing Control's compute bindings.
+        // Mode 2 copies a diagnostic patch into raw GI on the native list.
+        // Other modes keep the previous read-only audit.
+        if(verifyMode==2u)return PTDiffuseGICopyMarkerProof(call);
         RRGuideInputSnapshot ctx{};
         PTDiffuseGIBorrowed reflection{},dgi{};
         const char* reason="unknown";
