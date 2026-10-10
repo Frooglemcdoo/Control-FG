@@ -165,10 +165,13 @@ static bool PTReflectionBridgeDiffuseGI() noexcept {
     UINT barrierCount=0;
 
     __try {
-        reason="renderer_context";
-        if(!RRGuideReadRendererContext(&input,&reason)||!input.commandList||
-           !input.commandContext||!input.recordingLock||!input.gbuffer1.resource||
-           !input.gbuffer1.stateTracker)__leave;
+        reason="renderer_inputs";
+        if(!RRGuideReadInputs(&input,&reason))__leave;
+        if(!input.commandList||!input.commandContext||!input.recordingLock||
+           !input.gbuffer1.resource||!input.gbuffer1.stateTracker){
+            reason="incomplete_renderer_inputs";
+            __leave;
+        }
 
         reason="reflection_texture";
         if(!PTDiffuseGIReadShaderTexture(kRRShaderReflectionTargetRva,&reflection))__leave;
@@ -206,11 +209,15 @@ static bool PTReflectionBridgeDiffuseGI() noexcept {
         }
 
         reason="context_changed";
-        if(!RRGuideReadRendererContext(&again,&reason)||
-           again.commandList!=input.commandList||again.commandContext!=input.commandContext||
+        if(!RRGuideReadInputs(&again,&reason))__leave;
+        if(again.commandList!=input.commandList||
+           again.commandContext!=input.commandContext||
            again.engineFrame!=input.engineFrame||
            again.gbuffer1.resource!=input.gbuffer1.resource||
-           again.gbuffer1.stateTracker!=input.gbuffer1.stateTracker)__leave;
+           again.gbuffer1.stateTracker!=input.gbuffer1.stateTracker){
+            reason="renderer_inputs_changed";
+            __leave;
+        }
         PTDiffuseGIBorrowed reflection2{},dgi2{};
         if(!PTDiffuseGIReadShaderTexture(kRRShaderReflectionTargetRva,&reflection2)||
            !PTDiffuseGIReadShaderTexture(kRRShaderDiffuseGIColorRva,&dgi2)||
