@@ -1088,11 +1088,10 @@ static bool PTReflectionInsertReflectionUavBarrier() noexcept {
 
 static void PTReflectionHookDeferredDispatch(void* state,const void* dimensions) {
     if(!ptReflectionOriginalDispatch)return;
+    ptReflectionAwaitingCompositeBind=false;
     ptReflectionOriginalDispatch(state,dimensions);
 
-    if(!ptReflectionP2InjectionEnabled||
-       !ptReflectionCompositePsoCaptured.load(std::memory_order_acquire)||
-       !ptReflectionP2CompositePso||!ptReflectionNativeCompositePso)return;
+    if(!ptReflectionP2InjectionEnabled)return;
 
     const auto call=ptReflectionP2PostDispatches.fetch_add(1,std::memory_order_relaxed)+1;
 
@@ -1133,9 +1132,31 @@ static void PTReflectionHookDeferredDispatch(void* state,const void* dimensions)
         return;
     }
 
-    EngineCommandContextSnapshot command{};
     auto* resource=static_cast<ID3D12Resource*>(raw);
+    ID3D12Device* device=nullptr;
+    const HRESULT deviceHr=resource->GetDevice(
+        __uuidof(ID3D12Device),reinterpret_cast<void**>(&device));
+    if(FAILED(deviceHr)||!device){
+        ptReflectionP2InjectionEnabled=false;
+        Log("PT_REFLECTION_P2_POST_DISPATCH_DISABLE call=%llu reason=device_unavailable hr=0x%08lX fallback=p1",
+            call,static_cast<unsigned long>(deviceHr));
+        return;
+    }
+
+    const bool bindCaptured=ptReflectionCompositePsoCaptured.load(std::memory_order_acquire)!=0u;
+    const bool customReady=bindCaptured&&PTReflectionEnsureLiveCompositePso(device);
+    if(!customReady){
+        if(call<=16 || (call%240)==0)
+            Log("PT_REFLECTION_P2_POST_DISPATCH_WAIT call=%llu bind_captured=%u root=%p native_pso=%p p2_pso=%p",
+                call,unsigned(bindCaptured),ptReflectionCompositeRoot,
+                ptReflectionNativeCompositePso,ptReflectionP2CompositePso);
+        device->Release();
+        return;
+    }
+
+    EngineCommandContextSnapshot command{};
     if(!ReadEngineCommandContext(resource,&command)||!command.commandList){
+        device->Release();
         ptReflectionP2InjectionEnabled=false;
         Log("PT_REFLECTION_P2_POST_DISPATCH_DISABLE call=%llu reason=command_context_unavailable fault=0x%08lX fallback=p1",
             call,command.fault);
@@ -1167,6 +1188,7 @@ static void PTReflectionHookDeferredDispatch(void* state,const void* dimensions)
             restored=false;
         }
     }
+    device->Release();
 
     if(fault||!dispatched||!restored){
         ptReflectionP2InjectionEnabled=false;
@@ -1176,7 +1198,7 @@ static void PTReflectionHookDeferredDispatch(void* state,const void* dimensions)
     }
 
     if(call<=16 || (call%240)==0)
-        Log("PT_REFLECTION_P2_POST_DISPATCH call=%llu path=direct_pso dispatched=1 restored=1 x=%u y=%u z=%u native_pso=%p p2_pso=%p root=%p command_list=%p",
+        Log("PT_REFLECTION_P2_POST_DISPATCH call=%llu path=live_captured_pso dispatched=1 restored=1 x=%u y=%u z=%u native_pso=%p p2_pso=%p root=%p command_list=%p",
             call,x,y,z,ptReflectionNativeCompositePso,ptReflectionP2CompositePso,
             ptReflectionCompositeRoot,list);
 }
@@ -1222,9 +1244,11 @@ static void* PTReflectionHookVariantLookup(void* technique,unsigned key) {
     if(technique&&technique==ptReflectionDeferredTechniqueObject){
         const auto call=++ptReflectionDeferredVariantLookups;
         PTReflectionLogDeferredRecordMap(nativeResult);
-        Log("PT_REFLECTION_P2_DEFERRED_VARIANT call=%llu technique=%p key=0x%X shader=%p pso_captured=%u replacement=native_then_direct_pso_add native_result_preserved=1",
+        ptReflectionAwaitingCompositeBind=ptReflectionP2InjectionEnabled;
+        Log("PT_REFLECTION_P2_DEFERRED_VARIANT call=%llu technique=%p key=0x%X shader=%p pso_captured=%u bind_capture_armed=%u replacement=native_then_direct_pso_add native_result_preserved=1",
             call,technique,key,nativeResult,
-            ptReflectionCompositePsoCaptured.load(std::memory_order_acquire));
+            ptReflectionCompositePsoCaptured.load(std::memory_order_acquire),
+            unsigned(ptReflectionAwaitingCompositeBind));
         ptReflectionDeferredTechniqueObject=nullptr;
         return nativeResult;
     }
@@ -1585,7 +1609,6 @@ static bool PTReflectionInstallShaderLookupHooks(HMODULE renderer,HMODULE d3d) n
     ptReflectionNativeCompositePso=nullptr;
     ptReflectionP2CompositePso=nullptr;
     ptReflectionCompositeRoot=nullptr;
-    const bool psoHookReady=PTReflectionInstallComputePsoHook(d3d);
     ptReflectionP1ShaderRecordReady=false;
     ptReflectionP2RayShaderRecordReady=false;
     ptReflectionP2CompositeShaderRecordReady=false;
@@ -1643,10 +1666,10 @@ static bool PTReflectionInstallShaderLookupHooks(HMODULE renderer,HMODULE d3d) n
     const bool p2ExplicitDisable=p2EnableLength>0&&p2EnableLength<_countof(p2EnableValue)&&p2EnableValue[0]==L'0';
     ptReflectionP2InjectionEnabled=ptReflectionP2Loaded&&ptReflectionP2CompositeLoaded&&
         storageGetHooksReady&&p2DispatchHookReady&&!p2ExplicitDisable;
-    Log("PT_REFLECTION_P2_INJECTION_CONFIG enabled=%u ray_sidecar=%u composite_sidecar=%u get_hooks=%u dispatch_hook=%u pso_hook_initial=%u pso_hook_lazy_first_reflection=1 variant_gate=000 native_composite_sha=4fc0a0e9cd3706bcb86e29444d86fa32616138e1712c53b1b5103b30d7a1ecc9 env=CONTROLFG_PT_REFLECTION_P2 default=enabled disable_with_0 fail_closed=1",
+    Log("PT_REFLECTION_P2_INJECTION_CONFIG enabled=%u ray_sidecar=%u composite_sidecar=%u get_hooks=%u dispatch_hook=%u live_command_list_capture=1 variant_gate=000 native_composite_sha=4fc0a0e9cd3706bcb86e29444d86fa32616138e1712c53b1b5103b30d7a1ecc9 env=CONTROLFG_PT_REFLECTION_P2 default=enabled disable_with_0 fail_closed=1",
         unsigned(ptReflectionP2InjectionEnabled),unsigned(ptReflectionP2Loaded),
         unsigned(ptReflectionP2CompositeLoaded),unsigned(storageGetHooksReady),
-        unsigned(p2DispatchHookReady),unsigned(psoHookReady));
+        unsigned(p2DispatchHookReady));
 
     if(!RRAlbedoPrepareCallPatch(base+0x12953C,
         reinterpret_cast<void*>(ptReflectionOriginalRfxLookup),
