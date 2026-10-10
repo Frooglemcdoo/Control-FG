@@ -734,11 +734,6 @@ static void HookRRRaytrace(int a, int b) {
         }
         QueryPerformanceCounter(&before);
     }
-    if(ptReflection){
-        if(!commandKnown) commandKnown=ReadEngineCommandContext(nullptr,&command);
-        if(commandKnown&&command.commandList)
-            PTReflectionInstallCommandListCaptureHooks(command.commandList);
-    }
     originalRRRaytrace(a, b);
     RRGuideTryCapture(aaCount.load(), rrCurrentRayGeneration);
     if (sample) {
