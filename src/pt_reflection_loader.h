@@ -1337,6 +1337,22 @@ static void PTReflectionHookDeferredDispatch(void* state,const void* dimensions)
 
     if(!ptReflectionP2InjectionEnabled)return;
 
+    // F11 advances on key-down edge only. No overlay, screen-size changes or
+    // tool dependency. Only this experimental test DLL reads the key.
+    const unsigned pressed=(GetAsyncKeyState(VK_F11)&0x8000)?1u:0u;
+    if(pressed){
+        if(ptReflectionVerifyKeyDown.exchange(1u,std::memory_order_acq_rel)==0u){
+            const unsigned prior=ptReflectionVerifyMode.load(std::memory_order_acquire);
+            const unsigned next=(prior+1u)%3u;
+            ptReflectionVerifyMode.store(next,std::memory_order_release);
+            Log("PT_REFLECTION_VERIFY_SWITCH from=%u to=%u hotkey=F11 label=%s",
+                prior,next,next==0u?"normal":next==1u?
+                    "P2_quadrant_coverage_radiance_gain":"GI_rough_marker");
+        }
+    }else{
+        ptReflectionVerifyKeyDown.store(0u,std::memory_order_release);
+    }
+
     const auto call=ptReflectionP2PostDispatches.fetch_add(1,std::memory_order_relaxed)+1;
     const bool psoCaptured=ptReflectionCompositePsoCaptured.load(std::memory_order_acquire)!=0u;
     const bool customReady=psoCaptured&&PTReflectionEnsureCapturedCompositePso();
@@ -1397,6 +1413,15 @@ static void PTReflectionHookDeferredDispatch(void* state,const void* dimensions)
     }
 
     auto* list=static_cast<ID3D12GraphicsCommandList*>(command.commandList);
+    const unsigned verifyMode=ptReflectionVerifyMode.load(std::memory_order_acquire);
+    ID3D12PipelineState* activeP2Pso=verifyMode==1u?
+        ptReflectionP2VerifyPso:ptReflectionP2CompositePso;
+    if(!activeP2Pso){
+        if(call<=16 || (call%240)==0)
+            Log("PT_REFLECTION_VERIFY_MISSING_PSO call=%llu mode=%u verify_sidecar=%u",
+                call,verifyMode,unsigned(ptReflectionP2VerifyLoaded));
+        return;
+    }
     DWORD fault=0,restoreFault=0;
     bool dispatched=false,restored=false;
     __try {
@@ -1408,7 +1433,7 @@ static void PTReflectionHookDeferredDispatch(void* state,const void* dimensions)
         // Control's native composite just established the correct root signature,
         // descriptor heaps/tables, CBVs/SRVs/UAV and dimensions. Swap only the PSO.
         list->ResourceBarrier(1,&barrier);
-        list->SetPipelineState(ptReflectionP2CompositePso);
+        list->SetPipelineState(activeP2Pso);
         list->Dispatch(x,y,z);
         list->ResourceBarrier(1,&barrier);
         list->SetPipelineState(ptReflectionNativeCompositePso);
@@ -1433,9 +1458,9 @@ static void PTReflectionHookDeferredDispatch(void* state,const void* dimensions)
     }
 
     if(call<=16 || (call%240)==0)
-        Log("PT_REFLECTION_P2_POST_DISPATCH call=%llu path=early_captured_direct_pso dispatched=1 restored=1 x=%u y=%u z=%u native_pso=%p p2_pso=%p root=%p command_list=%p visual_proof=magenta_blue gain=4x",
-            call,x,y,z,ptReflectionNativeCompositePso,ptReflectionP2CompositePso,
-            ptReflectionCompositeRoot,list);
+        Log("PT_REFLECTION_P2_POST_DISPATCH call=%llu path=early_captured_direct_pso dispatched=1 restored=1 x=%u y=%u z=%u native_pso=%p p2_pso=%p root=%p command_list=%p verify_mode=%u verify_pso=%u",
+            call,x,y,z,ptReflectionNativeCompositePso,activeP2Pso,
+            ptReflectionCompositeRoot,list,verifyMode,unsigned(verifyMode==1u));
 }
 
 static bool PTReflectionInstallStorageGetHooks(HMODULE d3d) noexcept {
