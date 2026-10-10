@@ -1209,11 +1209,19 @@ static bool PTReflectionInstallShaderLookupHooks(HMODULE renderer,HMODULE d3d) n
         unsigned(ptReflectionStoragePersist&&ptReflectionStorageIsPersisted));
     PTReflectionLoadP1Sidecar();
     PTReflectionLoadP2Sidecar();
+    PTReflectionLoadP2CompositeSidecar();
     ptReflectionP1ShaderRecordReady=false;
+    ptReflectionP2RayShaderRecordReady=false;
+    ptReflectionP2CompositeShaderRecordReady=false;
+    ptReflectionNativeDeferredShaderRecord=nullptr;
     ptReflectionRecordMapLogged.store(0,std::memory_order_release);
     ptReflectionDeferredRecordMapLogged.store(0,std::memory_order_release);
     ptReflectionDeferredDxbcDumped.store(0,std::memory_order_release);
     ptReflectionP1GetIntercepts.store(0,std::memory_order_release);
+    ptReflectionP2RayGetIntercepts.store(0,std::memory_order_release);
+    ptReflectionP2CompositeGetIntercepts.store(0,std::memory_order_release);
+    ptReflectionP2PostDispatches.store(0,std::memory_order_release);
+    ptReflectionP2InjectionEnabled=false;
     const bool storageGetHooksReady=PTReflectionInstallStorageGetHooks(d3d);
     wchar_t p1EnableValue[8]{};
     const DWORD p1EnableLength=GetEnvironmentVariableW(
@@ -1239,6 +1247,30 @@ static bool PTReflectionInstallShaderLookupHooks(HMODULE renderer,HMODULE d3d) n
     ptReflectionOriginalRfxLookup=reinterpret_cast<PTReflectionRfxLookupFn>(base+0x1D9960);
     ptReflectionOriginalTechniqueLookup=reinterpret_cast<PTReflectionTechniqueLookupFn>(base+0x1D2CE0);
     ptReflectionOriginalVariantLookup=reinterpret_cast<PTReflectionVariantLookupFn>(base+0x1DD450);
+    ptReflectionBindCompute=reinterpret_cast<PTReflectionBindComputeFn>(base+0x1DB750);
+    ptReflectionOriginalDispatch=reinterpret_cast<PTReflectionDispatchFn>(
+        GetProcAddress(d3d,"?dispatch@DeviceUtil@d3d@@SAXAEAVDeviceState@2@V?$Vector3Template@H@m@@@Z"));
+
+    bool p2DispatchHookReady=false;
+    auto** dispatchSlot=reinterpret_cast<void**>(base+0x5DFCC0);
+    if(ptReflectionOriginalDispatch&&dispatchSlot&&
+       ptReflectionDeferredDispatchPatch.Prepare(base+0x129714,dispatchSlot,
+            reinterpret_cast<void*>(ptReflectionOriginalDispatch),
+            reinterpret_cast<void*>(&PTReflectionHookDeferredDispatch))&&
+       ptReflectionDeferredDispatchPatch.Exchange(true)&&
+       ptReflectionDeferredDispatchPatch.healthy){
+        p2DispatchHookReady=true;
+    }
+    wchar_t p2EnableValue[8]{};
+    const DWORD p2EnableLength=GetEnvironmentVariableW(
+        L"CONTROLFG_PT_REFLECTION_P2",p2EnableValue,_countof(p2EnableValue));
+    const bool p2ExplicitDisable=p2EnableLength>0&&p2EnableLength<_countof(p2EnableValue)&&p2EnableValue[0]==L'0';
+    ptReflectionP2InjectionEnabled=ptReflectionP2Loaded&&ptReflectionP2CompositeLoaded&&
+        storageGetHooksReady&&p2DispatchHookReady&&!p2ExplicitDisable;
+    Log("PT_REFLECTION_P2_INJECTION_CONFIG enabled=%u ray_sidecar=%u composite_sidecar=%u get_hooks=%u dispatch_hook=%u variant_gate=000 native_composite_sha=4fc0a0e9cd3706bcb86e29444d86fa32616138e1712c53b1b5103b30d7a1ecc9 env=CONTROLFG_PT_REFLECTION_P2 default=enabled disable_with_0 fail_closed=1",
+        unsigned(ptReflectionP2InjectionEnabled),unsigned(ptReflectionP2Loaded),
+        unsigned(ptReflectionP2CompositeLoaded),unsigned(storageGetHooksReady),
+        unsigned(p2DispatchHookReady));
 
     if(!RRAlbedoPrepareCallPatch(base+0x12953C,
         reinterpret_cast<void*>(ptReflectionOriginalRfxLookup),
