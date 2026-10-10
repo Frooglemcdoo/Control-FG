@@ -1,0 +1,70 @@
+name: Export PT Reflections Source
+on:
+  push:
+    branches:
+      - export/pt-reflections-source-20261010
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout current PT development source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Make full source archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          SOURCE_ROOT="Control-FG-PT-Reflections-Source"
+          ZIP="Control-FG-PT-Reflections-Source-20261010.zip"
+          mkdir -p "$SOURCE_ROOT"
+          git archive --format=tar HEAD | tar -xf - -C "$SOURCE_ROOT"
+          for path in \
+            src/probe.cpp \
+            src/pt_reflection_loader.h \
+            src/pt_reflection_diffuse_bridge_runtime.h \
+            src/shaders/pt_reflection_p1.hlsl \
+            src/shaders/pt_reflection_p2.hlsl \
+            src/shaders/pt_reflection_p2_composite.hlsl \
+            src/shaders/pt_reflection_p2_diffuse_bridge.hlsl \
+            tools/compile-pt-reflection-p2-composite.cpp \
+            Build.cmd \
+            Fetch-Streamline.ps1; do
+            test -s "$SOURCE_ROOT/$path" || { echo "Missing required source: $path"; exit 1; }
+          done
+          cat > "$SOURCE_ROOT/SOURCE_SNAPSHOT.txt" <<'EOF'
+          CONTROL-FG — PT Reflections and Diffuse GI Development Source
+          Project: Frooglemcdoo/Control-FG
+          Source branch: experiment/pt-reflections-p0
+          Source commit: a44a19e42dcf9f24794aff91cfe248faa83ec317
+          Export branch: export/pt-reflections-source-20261010
+          Scope: Full tracked source tree, including P1/P2 raytracing HLSL,
+          deferred composite and diffuse bridge, runtime hooks, build scripts,
+          verification workflow, and supporting research.
+
+          This is experimental development source, not a validated release.
+          Build dependencies (Windows SDK, MSVC and Streamline) are not bundled;
+          see Build.cmd and Fetch-Streamline.ps1.
+          EOF
+          zip -q -r "$ZIP" "$SOURCE_ROOT"
+          unzip -t "$ZIP" | tail -1
+          sha256sum "$ZIP" > "$ZIP.sha256"
+          echo "Archived files: $(find "$SOURCE_ROOT" -type f | wc -l)"
+          du -h "$ZIP"
+
+      - name: Upload source ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: Control-FG-PT-Reflections-Source-20261010
+          path: |
+            Control-FG-PT-Reflections-Source-20261010.zip
+            Control-FG-PT-Reflections-Source-20261010.zip.sha256
+          retention-days: 7
+          if-no-files-found: error
