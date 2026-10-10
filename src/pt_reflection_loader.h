@@ -97,6 +97,9 @@ static bool ptReflectionP2Loaded=false;
 static std::vector<unsigned char> ptReflectionP2CompositeBytes;
 static char ptReflectionP2CompositeSha256[65]{};
 static bool ptReflectionP2CompositeLoaded=false;
+static std::vector<unsigned char> ptReflectionP2DiffuseBridgeBytes;
+static char ptReflectionP2DiffuseBridgeSha256[65]{};
+static bool ptReflectionP2DiffuseBridgeLoaded=false;
 
 using PTReflectionBindComputeFn=void (*)(void*);
 using PTReflectionDispatchFn=void (*)(void*,const void*);
@@ -183,6 +186,10 @@ static bool PTReflectionLoadP2CompositeSidecar() noexcept {
         ptReflectionP2CompositeBytes,ptReflectionP2CompositeSha256,ptReflectionP2CompositeLoaded);
     if(loaded)PTReflectionEnsureCapturedCompositePso();
     return loaded;
+}
+static bool PTReflectionLoadP2DiffuseBridgeSidecar() noexcept {
+    return PTReflectionLoadSidecar(L"pt_reflection_p2_diffuse_bridge.dxbc","P2_DIFFUSE_BRIDGE",
+        ptReflectionP2DiffuseBridgeBytes,ptReflectionP2DiffuseBridgeSha256,ptReflectionP2DiffuseBridgeLoaded);
 }
 
 static constexpr const char* kPTReflectionNativeHashes[32]={
@@ -1807,6 +1814,7 @@ static bool PTReflectionInstallShaderLookupHooks(HMODULE renderer,HMODULE d3d) n
     PTReflectionLoadP1Sidecar();
     PTReflectionLoadP2Sidecar();
     PTReflectionLoadP2CompositeSidecar();
+    PTReflectionLoadP2DiffuseBridgeSidecar();
     ptReflectionCompositePsoCaptured.store(0u,std::memory_order_release);
     ptReflectionNativeCompositePso=nullptr;
     ptReflectionP2CompositePso=nullptr;
@@ -1871,11 +1879,11 @@ static bool PTReflectionInstallShaderLookupHooks(HMODULE renderer,HMODULE d3d) n
         L"CONTROLFG_PT_REFLECTION_P2",p2EnableValue,_countof(p2EnableValue));
     const bool p2ExplicitDisable=p2EnableLength>0&&p2EnableLength<_countof(p2EnableValue)&&p2EnableValue[0]==L'0';
     ptReflectionP2InjectionEnabled=ptReflectionP2Loaded&&ptReflectionP2CompositeLoaded&&
-        storageGetHooksReady&&p2DispatchHookReady&&!p2ExplicitDisable;
-    Log("PT_REFLECTION_P2_INJECTION_CONFIG enabled=%u ray_sidecar=%u composite_sidecar=%u get_hooks=%u dispatch_hook=%u native_descriptor_swap=1 variant_gate=000 native_composite_sha=4fc0a0e9cd3706bcb86e29444d86fa32616138e1712c53b1b5103b30d7a1ecc9 env=CONTROLFG_PT_REFLECTION_P2 default=enabled disable_with_0 fail_closed=1",
+        ptReflectionP2DiffuseBridgeLoaded&&storageGetHooksReady&&p2DispatchHookReady&&!p2ExplicitDisable;
+    Log("PT_REFLECTION_P2_INJECTION_CONFIG enabled=%u ray_sidecar=%u composite_sidecar=%u diffuse_bridge_sidecar=%u get_hooks=%u dispatch_hook=%u rough_route=diffuse_gi variant_gate=000 native_composite_sha=4fc0a0e9cd3706bcb86e29444d86fa32616138e1712c53b1b5103b30d7a1ecc9 env=CONTROLFG_PT_REFLECTION_P2 default=enabled disable_with_0 fail_closed=1",
         unsigned(ptReflectionP2InjectionEnabled),unsigned(ptReflectionP2Loaded),
-        unsigned(ptReflectionP2CompositeLoaded),unsigned(storageGetHooksReady),
-        unsigned(p2DispatchHookReady));
+        unsigned(ptReflectionP2CompositeLoaded),unsigned(ptReflectionP2DiffuseBridgeLoaded),
+        unsigned(storageGetHooksReady),unsigned(p2DispatchHookReady));
 
     if(!RRAlbedoPrepareCallPatch(base+0x12953C,
         reinterpret_cast<void*>(ptReflectionOriginalRfxLookup),
