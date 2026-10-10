@@ -595,12 +595,6 @@ static void PTReflectionLogDeferredRecordMap(void* nativeShader) noexcept {
 
     Log("PT_REFLECTION_P2_DEFERRED_DESCRIPTOR_SUMMARY shader=%p valid_pointer=%u valid_inline=%u scan_bytes=168 stride=8",
         nativeShader,validPointers,validInline);
-    if(ptReflectionP2InjectionEnabled&&!ptReflectionP2CompositeShaderRecordReady){
-        if(!PTReflectionPrepareP2CompositeShaderRecord(nativeShader)){
-            ptReflectionP2InjectionEnabled=false;
-            Log("PT_REFLECTION_P2_DISABLE reason=composite_record_prepare_failed fallback=p1");
-        }
-    }
 }
 
 static bool PTReflectionPrepareP1ShaderRecord(void* nativeShader,
@@ -950,41 +944,95 @@ static void PTReflectionHookDeferredDispatch(void* state,const void* dimensions)
     if(!ptReflectionOriginalDispatch)return;
     ptReflectionOriginalDispatch(state,dimensions);
 
-    if(!ptReflectionP2InjectionEnabled||!ptReflectionP2CompositeShaderRecordReady||
-       !ptReflectionBindCompute||!ptReflectionNativeDeferredShaderRecord)return;
+    if(!ptReflectionP2InjectionEnabled||
+       !ptReflectionCompositePsoCaptured.load(std::memory_order_acquire)||
+       !ptReflectionP2CompositePso||!ptReflectionNativeCompositePso)return;
 
     const auto call=ptReflectionP2PostDispatches.fetch_add(1,std::memory_order_relaxed)+1;
-    const bool barrier=PTReflectionInsertReflectionUavBarrier();
-    if(!barrier){
+
+    unsigned x=0,y=0,z=0;
+    DWORD dimFault=0;
+    __try {
+        const auto* d=static_cast<const int*>(dimensions);
+        if(d){x=d[0]>0?static_cast<unsigned>(d[0]):0u;
+              y=d[1]>0?static_cast<unsigned>(d[1]):0u;
+              z=d[2]>0?static_cast<unsigned>(d[2]):0u;}
+    } __except(EXCEPTION_EXECUTE_HANDLER) {
+        dimFault=GetExceptionCode();
+    }
+    if(dimFault||!x||!y||!z||x>16384u||y>16384u||z>64u){
         ptReflectionP2InjectionEnabled=false;
-        Log("PT_REFLECTION_P2_POST_DISPATCH_DISABLE call=%llu barrier=0 dispatched=0 reason=uav_barrier_unavailable fallback=p1",
-            call);
+        Log("PT_REFLECTION_P2_POST_DISPATCH_DISABLE call=%llu reason=invalid_dimensions x=%u y=%u z=%u exception=0x%08lX fallback=p1",
+            call,x,y,z,dimFault);
         return;
-    }
-    DWORD fault=0,restoreFault=0;
-    bool dispatched=false;
-    __try {
-        ptReflectionBindCompute(ptReflectionP2CompositeShaderRecord);
-        ptReflectionOriginalDispatch(state,dimensions);
-        dispatched=true;
-    } __except(EXCEPTION_EXECUTE_HANDLER) {
-        fault=GetExceptionCode();
-    }
-    __try {
-        ptReflectionBindCompute(ptReflectionNativeDeferredShaderRecord);
-    } __except(EXCEPTION_EXECUTE_HANDLER) {
-        restoreFault=GetExceptionCode();
     }
 
-    if(fault||restoreFault){
+    using GetNativeTextureFn=void* (*)(void*);
+    auto getter=reinterpret_cast<GetNativeTextureFn>(
+        verifiedD3d?GetProcAddress(verifiedD3d,kRRGetNativeTextureSymbol):nullptr);
+    void* wrapper=nullptr;void* raw=nullptr;D3D12_RESOURCE_DESC resourceDesc{};
+    DWORD describeFault=0;
+    if(getter&&verifiedRenderer){
+        __try {
+            auto* object=reinterpret_cast<unsigned char*>(verifiedRenderer)+kRRShaderReflectionTargetRva;
+            wrapper=getter(object);
+        } __except(EXCEPTION_EXECUTE_HANDLER) {
+            wrapper=nullptr;
+        }
+    }
+    if(!wrapper||!Describe(wrapper,&raw,&resourceDesc,&describeFault)||!raw){
         ptReflectionP2InjectionEnabled=false;
-        Log("PT_REFLECTION_P2_POST_DISPATCH_DISABLE call=%llu barrier=%u dispatched=%u exception=0x%08lX restore_exception=0x%08lX fallback=p1_native_composite",
-            call,unsigned(barrier),unsigned(dispatched),fault,restoreFault);
+        Log("PT_REFLECTION_P2_POST_DISPATCH_DISABLE call=%llu reason=reflection_target_unavailable describe_fault=0x%08lX fallback=p1",
+            call,describeFault);
         return;
     }
+
+    EngineCommandContextSnapshot command{};
+    auto* resource=static_cast<ID3D12Resource*>(raw);
+    if(!ReadEngineCommandContext(resource,&command)||!command.commandList){
+        ptReflectionP2InjectionEnabled=false;
+        Log("PT_REFLECTION_P2_POST_DISPATCH_DISABLE call=%llu reason=command_context_unavailable fault=0x%08lX fallback=p1",
+            call,command.fault);
+        return;
+    }
+
+    auto* list=static_cast<ID3D12GraphicsCommandList*>(command.commandList);
+    DWORD fault=0;
+    bool dispatched=false,restored=false;
+    __try {
+        D3D12_RESOURCE_BARRIER barrier{};
+        barrier.Type=D3D12_RESOURCE_BARRIER_TYPE_UAV;
+        barrier.Flags=D3D12_RESOURCE_BARRIER_FLAG_NONE;
+        barrier.UAV.pResource=resource;
+
+        list->ResourceBarrier(1,&barrier);
+        list->SetPipelineState(ptReflectionP2CompositePso);
+        list->Dispatch(x,y,z);
+        list->ResourceBarrier(1,&barrier);
+        list->SetPipelineState(ptReflectionNativeCompositePso);
+        dispatched=true;
+        restored=true;
+    } __except(EXCEPTION_EXECUTE_HANDLER) {
+        fault=GetExceptionCode();
+        __try {
+            list->SetPipelineState(ptReflectionNativeCompositePso);
+            restored=true;
+        } __except(EXCEPTION_EXECUTE_HANDLER) {
+            restored=false;
+        }
+    }
+
+    if(fault||!dispatched||!restored){
+        ptReflectionP2InjectionEnabled=false;
+        Log("PT_REFLECTION_P2_POST_DISPATCH_DISABLE call=%llu reason=direct_pso_dispatch_failed dispatched=%u restored=%u exception=0x%08lX x=%u y=%u z=%u fallback=p1",
+            call,unsigned(dispatched),unsigned(restored),fault,x,y,z);
+        return;
+    }
+
     if(call<=16 || (call%240)==0)
-        Log("PT_REFLECTION_P2_POST_DISPATCH call=%llu barrier=%u dispatched=%u composite_record=%p native_restored=1",
-            call,unsigned(barrier),unsigned(dispatched),ptReflectionP2CompositeShaderRecord);
+        Log("PT_REFLECTION_P2_POST_DISPATCH call=%llu path=direct_pso dispatched=1 restored=1 x=%u y=%u z=%u native_pso=%p p2_pso=%p root=%p command_list=%p",
+            call,x,y,z,ptReflectionNativeCompositePso,ptReflectionP2CompositePso,
+            ptReflectionCompositeRoot,list);
 }
 
 static bool PTReflectionInstallStorageGetHooks(HMODULE d3d) noexcept {
@@ -1028,8 +1076,9 @@ static void* PTReflectionHookVariantLookup(void* technique,unsigned key) {
     if(technique&&technique==ptReflectionDeferredTechniqueObject){
         const auto call=++ptReflectionDeferredVariantLookups;
         PTReflectionLogDeferredRecordMap(nativeResult);
-        Log("PT_REFLECTION_P2_DEFERRED_VARIANT call=%llu technique=%p key=0x%X shader=%p composite_record_ready=%u replacement=native_then_post_add native_result_preserved=1",
-            call,technique,key,nativeResult,unsigned(ptReflectionP2CompositeShaderRecordReady));
+        Log("PT_REFLECTION_P2_DEFERRED_VARIANT call=%llu technique=%p key=0x%X shader=%p pso_captured=%u replacement=native_then_direct_pso_add native_result_preserved=1",
+            call,technique,key,nativeResult,
+            ptReflectionCompositePsoCaptured.load(std::memory_order_acquire));
         ptReflectionDeferredTechniqueObject=nullptr;
         return nativeResult;
     }
