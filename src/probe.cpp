@@ -629,6 +629,7 @@ static std::atomic<unsigned long long> ptReflectionMissBindCount{0};
 static std::atomic<unsigned long long> ptReflectionHitGroupBindCount{0};
 static void PTReflectionProbeCachedTechniqueOnce(HMODULE renderer,HMODULE d3d) noexcept;
 static bool PTReflectionInstallComputePsoHook(HMODULE d3d) noexcept;
+static bool PTReflectionInstallCommandListCaptureHooks(void* commandList) noexcept;
 static thread_local int rrCurrentPipelineArg0 = -1;
 static thread_local int rrCurrentPipelineArg1 = -1;
 static thread_local char rrCurrentRayGeneration[128] = "<unset>";
@@ -733,7 +734,11 @@ static void HookRRRaytrace(int a, int b) {
         }
         QueryPerformanceCounter(&before);
     }
-    if(ptReflection) PTReflectionInstallComputePsoHook(verifiedD3d);
+    if(ptReflection){
+        if(!commandKnown) commandKnown=ReadEngineCommandContext(nullptr,&command);
+        if(commandKnown&&command.commandList)
+            PTReflectionInstallCommandListCaptureHooks(command.commandList);
+    }
     originalRRRaytrace(a, b);
     RRGuideTryCapture(aaCount.load(), rrCurrentRayGeneration);
     if (sample) {
