@@ -55,6 +55,7 @@ static char ptReflectionP1Sha256[65]{};
 static bool ptReflectionP1Loaded=false;
 static int ptReflectionP1StorageId=-1;
 static bool ptReflectionP1StorageVerified=false;
+static bool ptReflectionP1StorageAttempted=false;
 static std::vector<unsigned char> ptReflectionP2Bytes;
 static char ptReflectionP2Sha256[65]{};
 static bool ptReflectionP2Loaded=false;
@@ -500,33 +501,72 @@ static unsigned PTReflectionLogShaderCodeStorageExports(HMODULE d3d) noexcept {
 
 
 
+static void PTReflectionDescribeStoredBlob(const unsigned char* source,size_t bytes,
+    const char* sourceSha,const char* resolved,int id,const char* label) noexcept {
+    char resolvedSha[65]{};
+    char sourceHead[65]{};
+    char resolvedHead[65]{};
+    unsigned long long firstDiff=~0ull;
+    uint32_t resolvedDeclared=0;
+    bool resolvedDxbc=false;
+    bool hashOkay=false;
+    DWORD fault=0;
+    __try {
+        const size_t head=(std::min)(bytes,size_t(32));
+        for(size_t i=0;i<head;++i){
+            sprintf_s(sourceHead+i*2,3,"%02X",source[i]);
+            sprintf_s(resolvedHead+i*2,3,"%02X",static_cast<unsigned char>(resolved[i]));
+        }
+        if(bytes>=28){
+            memcpy(&resolvedDeclared,resolved+24,sizeof(resolvedDeclared));
+            resolvedDxbc=memcmp(resolved,"DXBC",4)==0;
+        }
+        for(size_t i=0;i<bytes;++i){
+            if(static_cast<unsigned char>(resolved[i])!=source[i]){firstDiff=i;break;}
+        }
+        hashOkay=PTReflectionSha256(reinterpret_cast<const unsigned char*>(resolved),bytes,resolvedSha);
+    } __except(EXCEPTION_EXECUTE_HANDLER) {
+        fault=GetExceptionCode();
+    }
+    Log("PT_REFLECTION_%s_STORAGE_RESOLVE id=%d resident=%p bytes=%llu source_sha256=%s resolved_sha256=%s hash_ok=%u exact=%u first_diff=%llu source_head=%s resolved_head=%s resolved_dxbc=%u resolved_declared=%u exception=0x%08lX",
+        label,id,resolved,static_cast<unsigned long long>(bytes),sourceSha?sourceSha:"",resolvedSha,
+        unsigned(hashOkay),unsigned(hashOkay&&sourceSha&&strcmp(sourceSha,resolvedSha)==0),
+        firstDiff,sourceHead,resolvedHead,unsigned(resolvedDxbc),resolvedDeclared,fault);
+}
+
 static void PTReflectionRegisterP1InNativeStorage() noexcept {
-    if(ptReflectionP1StorageVerified||ptReflectionP1StorageId>=0||
+    if(ptReflectionP1StorageVerified||ptReflectionP1StorageAttempted||
        !ptReflectionP1Loaded||ptReflectionP1Bytes.empty()||
        !ptReflectionStoragePersist||!RRAlbedoShader::residentGetter)return;
 
+    ptReflectionP1StorageAttempted=true;
     int id=-1;const char* resident=nullptr;DWORD fault=0;
-    char resolvedSha[65]{};
-    bool exact=false;
     __try {
         id=ptReflectionStoragePersist(
             reinterpret_cast<const char*>(ptReflectionP1Bytes.data()),
             static_cast<unsigned long long>(ptReflectionP1Bytes.size()),6u);
         if(id>=0)resident=RRAlbedoShader::residentGetter(id);
-        if(resident){
-            exact=memcmp(resident,ptReflectionP1Bytes.data(),ptReflectionP1Bytes.size())==0 &&
-                PTReflectionSha256(reinterpret_cast<const unsigned char*>(resident),
-                    ptReflectionP1Bytes.size(),resolvedSha) &&
-                strcmp(resolvedSha,ptReflectionP1Sha256)==0;
-        }
     } __except(EXCEPTION_EXECUTE_HANDLER) {
-        fault=GetExceptionCode();id=-1;resident=nullptr;exact=false;
+        fault=GetExceptionCode();id=-1;resident=nullptr;
     }
     ptReflectionP1StorageId=id;
+    bool exact=false;
+    if(id>=0&&resident&&fault==0){
+        char resolvedSha[65]{};
+        __try {
+            exact=PTReflectionSha256(reinterpret_cast<const unsigned char*>(resident),
+                ptReflectionP1Bytes.size(),resolvedSha)&&
+                strcmp(resolvedSha,ptReflectionP1Sha256)==0;
+        } __except(EXCEPTION_EXECUTE_HANDLER) {
+            fault=GetExceptionCode();exact=false;
+        }
+        PTReflectionDescribeStoredBlob(ptReflectionP1Bytes.data(),ptReflectionP1Bytes.size(),
+            ptReflectionP1Sha256,resident,id,"P1");
+    }
     ptReflectionP1StorageVerified=id>=0&&resident&&exact&&fault==0;
-    Log("PT_REFLECTION_P1_STORAGE_REGISTER id=%d resident=%p bytes=%llu source_sha256=%s resolved_sha256=%s exact=%u verified=%u exception=0x%08lX activation=disabled",
+    Log("PT_REFLECTION_P1_STORAGE_REGISTER id=%d resident=%p bytes=%llu source_sha256=%s exact=%u verified=%u exception=0x%08lX activation=disabled delayed_dispatch_gate=240",
         id,resident,static_cast<unsigned long long>(ptReflectionP1Bytes.size()),
-        ptReflectionP1Sha256,resolvedSha,unsigned(exact),unsigned(ptReflectionP1StorageVerified),fault);
+        ptReflectionP1Sha256,unsigned(exact),unsigned(ptReflectionP1StorageVerified),fault);
 }
 
 static void PTReflectionProbeCachedTechniqueOnce(HMODULE renderer,HMODULE d3d) noexcept {
@@ -540,7 +580,7 @@ static void PTReflectionProbeCachedTechniqueOnce(HMODULE renderer,HMODULE d3d) n
                 unsigned(ptReflectionStorageRoundtripSame),unsigned(ptReflectionStorageRoundtripValid),
                 ptReflectionStorageRoundtripVariant,unsigned(ptReflectionP2Loaded),
                 static_cast<unsigned long long>(ptReflectionP2Bytes.size()),ptReflectionP2Sha256);
-        if(ptReflectionStorageRoundtripValid) PTReflectionRegisterP1InNativeStorage();
+        if(dispatch>=240ull) PTReflectionRegisterP1InNativeStorage();
         return;
     }
     if(!renderer||renderer!=verifiedRenderer||!d3d||d3d!=verifiedD3d||!RRAlbedoShader::residentGetter||
@@ -586,6 +626,24 @@ static void PTReflectionProbeCachedTechniqueOnce(HMODULE renderer,HMODULE d3d) n
 
         const bool same=persisted==d.identifier;
         const bool valid=persisted>=0&&fault==0;
+        if(valid){
+            const char* persistedResident=nullptr;
+            __try { persistedResident=RRAlbedoShader::residentGetter(persisted); }
+            __except(EXCEPTION_EXECUTE_HANDLER) { persistedResident=nullptr; }
+            if(persistedResident){
+                unsigned char* nativeCopy=static_cast<unsigned char*>(HeapAlloc(GetProcessHeap(),0,static_cast<size_t>(d.size)));
+                if(nativeCopy){
+                    bool copied=false;
+                    __try {
+                        memcpy(nativeCopy,resident,static_cast<size_t>(d.size));
+                        copied=true;
+                    } __except(EXCEPTION_EXECUTE_HANDLER) { copied=false; }
+                    if(copied) PTReflectionDescribeStoredBlob(nativeCopy,static_cast<size_t>(d.size),
+                        identity.sha256,persistedResident,persisted,"NATIVE");
+                    HeapFree(GetProcessHeap(),0,nativeCopy);
+                }
+            }
+        }
         ptReflectionStorageRoundtripPersistResult=persisted;
         ptReflectionStorageRoundtripNativeId=d.identifier;
         ptReflectionStorageRoundtripStage=d.stage;
@@ -601,7 +659,6 @@ static void PTReflectionProbeCachedTechniqueOnce(HMODULE renderer,HMODULE d3d) n
             static_cast<unsigned long long>(d.size),resident,unsigned(before),persisted,unsigned(same),unsigned(valid),
             fault,descriptorHex,identity.sha256,identity.variant,unsigned(ptReflectionP2Loaded),
             static_cast<unsigned long long>(ptReflectionP2Bytes.size()),ptReflectionP2Sha256);
-        if(valid) PTReflectionRegisterP1InNativeStorage();
         return;
     }
 }
@@ -632,6 +689,7 @@ static bool PTReflectionInstallShaderLookupHooks(HMODULE renderer,HMODULE d3d) n
     PTReflectionLoadP2Sidecar();
     ptReflectionP1StorageId=-1;
     ptReflectionP1StorageVerified=false;
+    ptReflectionP1StorageAttempted=false;
     ptReflectionForcedNativeVariant=PTReflectionReadForcedNativeVariant();
     ptReflectionSwapTechnique=nullptr;
     ptReflectionSwapShader=nullptr;
