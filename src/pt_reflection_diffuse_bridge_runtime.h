@@ -144,6 +144,23 @@ static PTDiffuseGIBridgeOwner* PTDiffuseGIGetOwner(ID3D12Device* device) noexcep
     return c;
 }
 
+// The broad RR guide reader requires GBuffer2 and a matching camera frame.
+// This DGI bridge consumes neither: only the active native command context
+// and GBuffer1 are required. Capture exactly those inputs at the GI boundary,
+// and repeat that same read after taking the engine locks.
+static bool PTDiffuseGIReadBridgeInputs(RRGuideInputSnapshot* out,
+                                       const char** reason) noexcept {
+    if(!out||!reason)return false;
+    *out={};
+    *reason="renderer_context";
+    if(!RRGuideReadRendererContext(out,reason))return false;
+    *reason="gbuffer1";
+    if(!RRGuideReadTexture(kRRGuideGBuffer1ShaderRva,
+                           &out->gbuffer1,reason,&out->fault))return false;
+    *reason="ready";
+    return true;
+}
+
 static bool PTReflectionBridgeDiffuseGI() noexcept {
     const auto call=ptDiffuseGIBridgeCalls.fetch_add(1,std::memory_order_relaxed)+1;
     if(!ptReflectionP2InjectionEnabled||!ptReflectionP2DiffuseBridgeLoaded||
@@ -166,7 +183,7 @@ static bool PTReflectionBridgeDiffuseGI() noexcept {
 
     __try {
         reason="renderer_inputs";
-        if(!RRGuideReadInputs(&input,&reason))__leave;
+        if(!PTDiffuseGIReadBridgeInputs(&input,&reason))__leave;
         if(!input.commandList||!input.commandContext||!input.recordingLock||
            !input.gbuffer1.resource||!input.gbuffer1.stateTracker){
             reason="incomplete_renderer_inputs";
@@ -209,7 +226,7 @@ static bool PTReflectionBridgeDiffuseGI() noexcept {
         }
 
         reason="context_changed";
-        if(!RRGuideReadInputs(&again,&reason))__leave;
+        if(!PTDiffuseGIReadBridgeInputs(&again,&reason))__leave;
         if(again.commandList!=input.commandList||
            again.commandContext!=input.commandContext||
            again.engineFrame!=input.engineFrame||
