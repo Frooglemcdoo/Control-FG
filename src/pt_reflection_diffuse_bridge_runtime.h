@@ -198,6 +198,50 @@ static bool PTReflectionBridgeDiffuseGI() noexcept {
     const unsigned verifyMode=ptReflectionVerifyMode.load(std::memory_order_acquire);
     if(!ptReflectionP2InjectionEnabled||!ptReflectionP2DiffuseBridgeLoaded||
        !(rrNativeRTFrame.effects&control_rr::RTDiffuseGI))return false;
+
+    // Recovery R1: fail closed. The first successful native DGI bridge
+    // dispatch at engine frame 2793 was immediately followed by a GPU
+    // stall. This path changes the engine's native descriptor heap, compute
+    // root signature and PSO but cannot restore its root arguments.
+    // Do not execute it again until a state-preserving native PSO path
+    // has been built and independently validated.
+    //
+    // CPU-only telemetry reads already-bound native objects. It creates
+    // no PSO, heap or UAV and records no D3D12 commands.
+    constexpr bool kPTDiffuseGIReadOnlyRecovery=true;
+    if(kPTDiffuseGIReadOnlyRecovery){
+        RRGuideInputSnapshot ctx{};
+        PTDiffuseGIBorrowed reflection{},dgi{};
+        const char* reason="unknown";
+        bool ctxOkay=PTDiffuseGIReadBridgeInputs(&ctx,&reason);
+        const bool reflectionOkay=ctxOkay&&
+            PTDiffuseGIReadShaderTexture(kRRShaderReflectionTargetRva,&reflection);
+        const bool dgiOkay=reflectionOkay&&
+            PTDiffuseGIReadShaderTexture(kRRShaderDiffuseGIColorRva,&dgi);
+        const bool allReady=dgiOkay&&
+            PTDiffuseGIResourceShape(reflection.desc,false)&&
+            PTDiffuseGIResourceShape(ctx.gbuffer1.desc,false)&&
+            PTDiffuseGIResourceShape(dgi.desc,true);
+        if(call<=8u||(call%240u)==0u||(!allReady&&(call&(call-1ull))==0ull)){
+            unsigned long long nativeCommands=0;
+            DWORD countFault=0;
+            if(ctx.commandContext){
+                __try {
+                    nativeCommands=*reinterpret_cast<const unsigned long long*>(
+                        reinterpret_cast<const unsigned char*>(ctx.commandContext)+8);
+                } __except(EXCEPTION_EXECUTE_HANDLER) {
+                    countFault=GetExceptionCode();
+                }
+            }
+            Log("PT_REFLECTION_P2_DGI_SAFE_BYPASS call=%llu frame=%llu verify_mode=%u cause=unsafe_compute_state_mutation gpu_commands=0 shader_dispatch=0 context_ok=%u reflection_ok=%u dgi_ok=%u resource_shape_ok=%u context_reason=%s reflection_state=0x%X dgi_state=0x%X reflection_mips=%u dgi_mips=%u native_command_count=%llu count_fault=0x%08lX action=keep_p2_reflections_enabled",
+                call,ctx.engineFrame,verifyMode,unsigned(ctxOkay),
+                unsigned(reflectionOkay),unsigned(dgiOkay),unsigned(allReady),
+                reason?reason:"unknown",reflection.state,dgi.state,
+                reflection.desc.MipLevels,dgi.desc.MipLevels,
+                nativeCommands,countFault);
+        }
+        return false;
+    }
     // While displaying raw P2 hit/energy quadrants, do not feed the deliberately
     // colored reflection buffer into diffuse GI and confuse the stage test.
     if(verifyMode==1u){
