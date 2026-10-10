@@ -163,8 +163,17 @@ static bool PTDiffuseGIReadBridgeInputs(RRGuideInputSnapshot* out,
 
 static bool PTReflectionBridgeDiffuseGI() noexcept {
     const auto call=ptDiffuseGIBridgeCalls.fetch_add(1,std::memory_order_relaxed)+1;
+    const unsigned verifyMode=ptReflectionVerifyMode.load(std::memory_order_acquire);
     if(!ptReflectionP2InjectionEnabled||!ptReflectionP2DiffuseBridgeLoaded||
        !(rrNativeRTFrame.effects&control_rr::RTDiffuseGI))return false;
+    // While displaying raw P2 hit/energy quadrants, do not feed the deliberately
+    // colored reflection buffer into diffuse GI and confuse the stage test.
+    if(verifyMode==1u){
+        if(call<=3u||(call%240u)==0u)
+            Log("PT_REFLECTION_VERIFY_GI_SKIP call=%llu mode=1 reason=isolate_composite_output",
+                call);
+        return false;
+    }
 
     const char* reason="unknown";
     RRGuideInputSnapshot input{},again{};
@@ -294,7 +303,9 @@ static bool PTReflectionBridgeDiffuseGI() noexcept {
             static_cast<unsigned>(reflection.desc.Width),reflection.desc.Height,
             static_cast<unsigned>(input.gbuffer1.desc.Width),input.gbuffer1.desc.Height,0,0};
         const float strength=0.45f;
+        const float diagnostic=verifyMode==2u?2.0f:0.0f;
         memcpy(&constants[6],&strength,sizeof(strength));
+        memcpy(&constants[7],&diagnostic,sizeof(diagnostic));
         input.commandList->SetComputeRoot32BitConstants(1,8,constants,0);
         input.commandList->Dispatch((constants[0]+7u)/8u,(constants[1]+7u)/8u,1);
         D3D12_RESOURCE_BARRIER u{};
@@ -327,16 +338,17 @@ static bool PTReflectionBridgeDiffuseGI() noexcept {
     if(dispatched){
         const auto n=ptDiffuseGIBridgeDispatches.fetch_add(1,std::memory_order_relaxed)+1;
         if(n<=16||(n%240)==0)
-            Log("PT_REFLECTION_P2_DGI_BRIDGE call=%llu dispatch=%llu frame=%llu output=%llux%u reflection=%llux%u gbuffer=%llux%u strength=0.45 roughness_gate=0.42_0.88 destination=raw_diffuse_gi_color state_restored=1",
+            Log("PT_REFLECTION_P2_DGI_BRIDGE call=%llu dispatch=%llu frame=%llu output=%llux%u reflection=%llux%u gbuffer=%llux%u strength=0.45 roughness_gate=0.42_0.88 destination=raw_diffuse_gi_color resource_states_restored=1 verify_mode=%u marker=%u",
                 call,n,input.engineFrame,
                 static_cast<unsigned long long>(dgi.desc.Width),dgi.desc.Height,
                 static_cast<unsigned long long>(reflection.desc.Width),reflection.desc.Height,
-                static_cast<unsigned long long>(input.gbuffer1.desc.Width),input.gbuffer1.desc.Height);
+                static_cast<unsigned long long>(input.gbuffer1.desc.Width),input.gbuffer1.desc.Height,
+                verifyMode,unsigned(verifyMode==2u));
         return true;
     }
     const auto reject=ptDiffuseGIBridgeRejects.fetch_add(1,std::memory_order_relaxed)+1;
     if(reject<=16||(reject&(reject-1))==0)
-        Log("PT_REFLECTION_P2_DGI_BRIDGE_SKIP call=%llu reject=%llu frame=%llu reason=%s exception=0x%08lX",
-            call,reject,input.engineFrame,reason?reason:"unknown",fault);
+        Log("PT_REFLECTION_P2_DGI_BRIDGE_SKIP call=%llu reject=%llu frame=%llu reason=%s exception=0x%08lX verify_mode=%u",
+            call,reject,input.engineFrame,reason?reason:"unknown",fault,verifyMode);
     return false;
 }
