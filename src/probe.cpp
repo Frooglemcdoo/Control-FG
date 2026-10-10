@@ -628,6 +628,7 @@ static std::atomic<unsigned long long> ptReflectionContextFailures{0};
 static std::atomic<unsigned long long> ptReflectionMissBindCount{0};
 static std::atomic<unsigned long long> ptReflectionHitGroupBindCount{0};
 static void PTReflectionProbeCachedTechniqueOnce(HMODULE renderer,HMODULE d3d) noexcept;
+static bool PTReflectionInstallComputePsoHook(HMODULE d3d) noexcept;
 static thread_local int rrCurrentPipelineArg0 = -1;
 static thread_local int rrCurrentPipelineArg1 = -1;
 static thread_local char rrCurrentRayGeneration[128] = "<unset>";
