@@ -821,12 +821,6 @@ static bool PTReflectionInstallComputePsoHookOnDevice(ID3D12Device* device) noex
 
 static bool PTReflectionInstallComputePsoHook(HMODULE d3d) noexcept {
     if(!d3d||d3d!=verifiedD3d)return false;
-    if(ptReflectionCreateComputePipelineStateSlot&&ptReflectionOriginalCreateComputePipelineState){
-        void* current=nullptr;
-        __try {current=*ptReflectionCreateComputePipelineStateSlot;}
-        __except(EXCEPTION_EXECUTE_HANDLER){current=nullptr;}
-        if(current==reinterpret_cast<void*>(&PTReflectionHookCreateComputePipelineState))return true;
-    }
     ID3D12Device* device=nullptr;
     __try {
         device=*reinterpret_cast<ID3D12Device**>(
@@ -834,48 +828,8 @@ static bool PTReflectionInstallComputePsoHook(HMODULE d3d) noexcept {
     } __except(EXCEPTION_EXECUTE_HANDLER) {
         device=nullptr;
     }
-    if(!device)return false;
-
-    void** vtable=nullptr;
-    __try {vtable=*reinterpret_cast<void***>(device);}
-    __except(EXCEPTION_EXECUTE_HANDLER){vtable=nullptr;}
-    if(!vtable)return false;
-
-    constexpr size_t slotIndex=11u; // ID3D12Device::CreateComputePipelineState
-    auto** slot=&vtable[slotIndex];
-    auto original=reinterpret_cast<PTCreateComputePipelineStateFn>(*slot);
-    if(!original)return false;
-
-    DWORD old=0;
-    if(!VirtualProtect(slot,sizeof(void*),PAGE_EXECUTE_READWRITE,&old))return false;
-    void* previous=InterlockedCompareExchangePointer(
-        slot,reinterpret_cast<void*>(&PTReflectionHookCreateComputePipelineState),
-        reinterpret_cast<void*>(original));
-    const DWORD exchangeError=GetLastError();
-    DWORD ignored=0;
-    const BOOL restored=VirtualProtect(slot,sizeof(void*),old,&ignored);
-    if(previous!=reinterpret_cast<void*>(original)||!restored){
-        if(previous==reinterpret_cast<void*>(original)){
-            DWORD retryOld=0;
-            if(VirtualProtect(slot,sizeof(void*),PAGE_EXECUTE_READWRITE,&retryOld)){
-                InterlockedCompareExchangePointer(slot,reinterpret_cast<void*>(original),
-                    reinterpret_cast<void*>(&PTReflectionHookCreateComputePipelineState));
-                DWORD retryIgnored=0;VirtualProtect(slot,sizeof(void*),retryOld,&retryIgnored);
-            }
-        }
-        return false;
-    }
-
-    ptReflectionOriginalCreateComputePipelineState=original;
-    ptReflectionCreateComputePipelineStateSlot=slot;
-    Log("PT_REFLECTION_P2_PSO_HOOK ready=1 device=%p vtable=%p slot_index=%llu slot=%p original=%p hook=%p exchange_error=%lu",
-        device,vtable,static_cast<unsigned long long>(slotIndex),slot,
-        reinterpret_cast<void*>(original),
-        reinterpret_cast<void*>(&PTReflectionHookCreateComputePipelineState),
-        exchangeError);
-    return true;
+    return device&&PTReflectionInstallComputePsoHookOnDevice(device);
 }
-
 
 static void STDMETHODCALLTYPE PTReflectionHookSetComputeRootSignature(
     ID3D12GraphicsCommandList* list,ID3D12RootSignature* root) {
