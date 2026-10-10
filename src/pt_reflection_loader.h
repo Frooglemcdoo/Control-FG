@@ -666,6 +666,59 @@ static bool PTReflectionPrepareP1ShaderRecord(void* nativeShader,
 
 
 
+static bool PTReflectionCreateCapturedP2PsoLocked(ID3D12Device* device) noexcept {
+    if(ptReflectionP2CompositePso)return true;
+    if(!device||!ptReflectionCompositeRoot||!ptReflectionNativeCompositePso||
+       !ptReflectionP2CompositeLoaded||ptReflectionP2CompositeBytes.empty()||
+       !ptReflectionOriginalCreateComputePipelineState)return false;
+
+    D3D12_COMPUTE_PIPELINE_STATE_DESC custom{};
+    custom.pRootSignature=ptReflectionCompositeRoot;
+    custom.CS.pShaderBytecode=ptReflectionP2CompositeBytes.data();
+    custom.CS.BytecodeLength=ptReflectionP2CompositeBytes.size();
+    custom.NodeMask=ptReflectionCompositeNodeMask;
+    custom.CachedPSO={nullptr,0};
+    custom.Flags=ptReflectionCompositeFlags;
+
+    ID3D12PipelineState* customPso=nullptr;
+    const HRESULT hr=ptReflectionOriginalCreateComputePipelineState(
+        device,&custom,__uuidof(ID3D12PipelineState),
+        reinterpret_cast<void**>(&customPso));
+    if(FAILED(hr)||!customPso){
+        Log("PT_REFLECTION_P2_PSO_CREATE ready=0 hr=0x%08lX device=%p root=%p native_pso=%p p2_bytes=%llu node_mask=%u flags=%u",
+            static_cast<unsigned long>(hr),device,ptReflectionCompositeRoot,
+            ptReflectionNativeCompositePso,
+            static_cast<unsigned long long>(ptReflectionP2CompositeBytes.size()),
+            ptReflectionCompositeNodeMask,unsigned(ptReflectionCompositeFlags));
+        return false;
+    }
+
+    ptReflectionP2CompositePso=customPso;
+    Log("PT_REFLECTION_P2_PSO_CREATE ready=1 device=%p root=%p native_pso=%p p2_pso=%p p2_sha256=%s p2_bytes=%llu node_mask=%u flags=%u",
+        device,ptReflectionCompositeRoot,ptReflectionNativeCompositePso,customPso,
+        ptReflectionP2CompositeSha256,
+        static_cast<unsigned long long>(ptReflectionP2CompositeBytes.size()),
+        ptReflectionCompositeNodeMask,unsigned(ptReflectionCompositeFlags));
+    return true;
+}
+
+static bool PTReflectionEnsureCapturedCompositePso() noexcept {
+    if(ptReflectionP2CompositePso)return true;
+    if(!ptReflectionNativeCompositePso||!ptReflectionCompositeRoot||
+       !ptReflectionP2CompositeLoaded)return false;
+
+    ID3D12Device* device=nullptr;
+    const HRESULT hr=ptReflectionNativeCompositePso->GetDevice(
+        __uuidof(ID3D12Device),reinterpret_cast<void**>(&device));
+    if(FAILED(hr)||!device)return false;
+
+    AcquireSRWLockExclusive(&ptReflectionCompositePsoLock);
+    const bool ready=PTReflectionCreateCapturedP2PsoLocked(device);
+    ReleaseSRWLockExclusive(&ptReflectionCompositePsoLock);
+    device->Release();
+    return ready;
+}
+
 static HRESULT STDMETHODCALLTYPE PTReflectionHookCreateComputePipelineState(
     ID3D12Device* device,const D3D12_COMPUTE_PIPELINE_STATE_DESC* desc,
     REFIID riid,void** out) {
@@ -687,44 +740,83 @@ static HRESULT STDMETHODCALLTYPE PTReflectionHookCreateComputePipelineState(
     AcquireSRWLockExclusive(&ptReflectionCompositePsoLock);
     if(!ptReflectionCompositePsoCaptured.load(std::memory_order_acquire)){
         ID3D12PipelineState* nativePso=nullptr;
-        HRESULT nativeQi=reinterpret_cast<IUnknown*>(*out)->QueryInterface(
+        const HRESULT nativeQi=reinterpret_cast<IUnknown*>(*out)->QueryInterface(
             __uuidof(ID3D12PipelineState),reinterpret_cast<void**>(&nativePso));
-        ID3D12PipelineState* customPso=nullptr;
-        HRESULT customHr=E_FAIL;
-
-        if(SUCCEEDED(nativeQi)&&nativePso&&ptReflectionP2CompositeLoaded&&
-           !ptReflectionP2CompositeBytes.empty()&&desc->pRootSignature){
-            D3D12_COMPUTE_PIPELINE_STATE_DESC custom=*desc;
-            custom.CS.pShaderBytecode=ptReflectionP2CompositeBytes.data();
-            custom.CS.BytecodeLength=ptReflectionP2CompositeBytes.size();
-            custom.CachedPSO={nullptr,0};
-            customHr=ptReflectionOriginalCreateComputePipelineState(
-                device,&custom,__uuidof(ID3D12PipelineState),
-                reinterpret_cast<void**>(&customPso));
-        }
-
-        if(SUCCEEDED(nativeQi)&&nativePso&&SUCCEEDED(customHr)&&customPso&&desc->pRootSignature){
+        if(SUCCEEDED(nativeQi)&&nativePso&&desc->pRootSignature){
             desc->pRootSignature->AddRef();
             ptReflectionCompositeRoot=desc->pRootSignature;
             ptReflectionNativeCompositePso=nativePso;
-            ptReflectionP2CompositePso=customPso;
+            ptReflectionCompositeNodeMask=desc->NodeMask;
+            ptReflectionCompositeFlags=desc->Flags;
             ptReflectionCompositePsoCaptured.store(1u,std::memory_order_release);
-            Log("PT_REFLECTION_P2_PSO_CAPTURE ready=1 native_pso=%p p2_pso=%p root=%p native_sha256=%s p2_sha256=%s native_bytes=%llu p2_bytes=%llu node_mask=%u flags=%u",
-                nativePso,customPso,desc->pRootSignature,sha,ptReflectionP2CompositeSha256,
+            const bool customReady=PTReflectionCreateCapturedP2PsoLocked(device);
+            Log("PT_REFLECTION_P2_PSO_CAPTURE ready=1 native_pso=%p p2_pso=%p custom_ready=%u root=%p native_sha256=%s native_bytes=%llu node_mask=%u flags=%u composite_sidecar_loaded=%u",
+                nativePso,ptReflectionP2CompositePso,unsigned(customReady),
+                desc->pRootSignature,sha,
                 static_cast<unsigned long long>(desc->CS.BytecodeLength),
-                static_cast<unsigned long long>(ptReflectionP2CompositeBytes.size()),
-                desc->NodeMask,unsigned(desc->Flags));
+                desc->NodeMask,unsigned(desc->Flags),
+                unsigned(ptReflectionP2CompositeLoaded));
         }else{
             if(nativePso)nativePso->Release();
-            if(customPso)customPso->Release();
-            Log("PT_REFLECTION_P2_PSO_CAPTURE ready=0 native_hr=0x%08lX native_qi=0x%08lX custom_hr=0x%08lX composite_loaded=%u root=%p fallback=p1",
+            Log("PT_REFLECTION_P2_PSO_CAPTURE ready=0 native_hr=0x%08lX native_qi=0x%08lX root=%p",
                 static_cast<unsigned long>(nativeHr),static_cast<unsigned long>(nativeQi),
-                static_cast<unsigned long>(customHr),unsigned(ptReflectionP2CompositeLoaded),
                 desc->pRootSignature);
         }
     }
     ReleaseSRWLockExclusive(&ptReflectionCompositePsoLock);
     return nativeHr;
+}
+
+static bool PTReflectionInstallComputePsoHookOnDevice(ID3D12Device* device) noexcept {
+    if(!device)return false;
+
+    void** vtable=nullptr;
+    __try {vtable=*reinterpret_cast<void***>(device);}
+    __except(EXCEPTION_EXECUTE_HANDLER){vtable=nullptr;}
+    if(!vtable)return false;
+
+    constexpr size_t slotIndex=11u; // ID3D12Device::CreateComputePipelineState
+    auto** slot=&vtable[slotIndex];
+    void* current=nullptr;
+    __try {current=*slot;} __except(EXCEPTION_EXECUTE_HANDLER){current=nullptr;}
+    if(!current)return false;
+
+    if(current==reinterpret_cast<void*>(&PTReflectionHookCreateComputePipelineState)){
+        if(!ptReflectionOriginalCreateComputePipelineState)return false;
+        ptReflectionCreateComputePipelineStateSlot=slot;
+        return true;
+    }
+
+    auto original=reinterpret_cast<PTCreateComputePipelineStateFn>(current);
+    DWORD old=0;
+    if(!VirtualProtect(slot,sizeof(void*),PAGE_EXECUTE_READWRITE,&old))return false;
+    void* previous=InterlockedCompareExchangePointer(
+        slot,reinterpret_cast<void*>(&PTReflectionHookCreateComputePipelineState),
+        reinterpret_cast<void*>(original));
+    const DWORD exchangeError=GetLastError();
+    DWORD ignored=0;
+    const BOOL restored=VirtualProtect(slot,sizeof(void*),old,&ignored);
+    if(previous!=reinterpret_cast<void*>(original)||!restored){
+        if(previous==reinterpret_cast<void*>(original)){
+            DWORD retryOld=0;
+            if(VirtualProtect(slot,sizeof(void*),PAGE_EXECUTE_READWRITE,&retryOld)){
+                InterlockedCompareExchangePointer(slot,reinterpret_cast<void*>(original),
+                    reinterpret_cast<void*>(&PTReflectionHookCreateComputePipelineState));
+                DWORD retryIgnored=0;
+                VirtualProtect(slot,sizeof(void*),retryOld,&retryIgnored);
+            }
+        }
+        return false;
+    }
+
+    ptReflectionOriginalCreateComputePipelineState=original;
+    ptReflectionCreateComputePipelineStateSlot=slot;
+    Log("PT_REFLECTION_P2_PSO_HOOK ready=1 source=device_create device=%p vtable=%p slot_index=%llu slot=%p original=%p hook=%p exchange_error=%lu",
+        device,vtable,static_cast<unsigned long long>(slotIndex),slot,
+        reinterpret_cast<void*>(original),
+        reinterpret_cast<void*>(&PTReflectionHookCreateComputePipelineState),
+        exchangeError);
+    return true;
 }
 
 static bool PTReflectionInstallComputePsoHook(HMODULE d3d) noexcept {
