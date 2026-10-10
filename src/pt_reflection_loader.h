@@ -1050,6 +1050,90 @@ static bool PTReflectionPrepareP2CompositeShaderRecord(void* nativeShader) noexc
     return true;
 }
 
+
+struct PTReflectionCompositeDescriptorSnapshot {
+    unsigned char* base=nullptr;
+    unsigned char* secondary=nullptr;
+    unsigned stage0=0; int id0=-1; unsigned long long bytes0=0;
+    unsigned stage1=0; int id1=-1; unsigned long long bytes1=0;
+    bool secondaryMatches=false;
+};
+
+static bool PTReflectionPatchNativeCompositeDescriptor(
+    PTReflectionCompositeDescriptorSnapshot* snapshot,bool custom) noexcept {
+    if(!snapshot||!ptReflectionNativeDeferredShaderRecord)return false;
+    DWORD fault=0;
+    bool good=false;
+    __try {
+        auto* record=reinterpret_cast<unsigned char*>(ptReflectionNativeDeferredShaderRecord);
+        std::uintptr_t baseAddress=0,secondaryAddress=0;
+        memcpy(&baseAddress,record+0x60,sizeof(baseAddress));
+        memcpy(&secondaryAddress,record+0x68,sizeof(secondaryAddress));
+        if(baseAddress<=0xFFFFu||secondaryAddress<=0xFFFFu)return false;
+        snapshot->base=reinterpret_cast<unsigned char*>(baseAddress);
+        snapshot->secondary=reinterpret_cast<unsigned char*>(secondaryAddress);
+        memcpy(&snapshot->stage0,snapshot->base+8,sizeof(snapshot->stage0));
+        memcpy(&snapshot->id0,snapshot->base+12,sizeof(snapshot->id0));
+        memcpy(&snapshot->bytes0,snapshot->base+16,sizeof(snapshot->bytes0));
+        memcpy(&snapshot->stage1,snapshot->secondary+8,sizeof(snapshot->stage1));
+        memcpy(&snapshot->id1,snapshot->secondary+12,sizeof(snapshot->id1));
+        memcpy(&snapshot->bytes1,snapshot->secondary+16,sizeof(snapshot->bytes1));
+        snapshot->secondaryMatches=
+            secondaryAddress==baseAddress+0xC0u &&
+            snapshot->stage1==snapshot->stage0 &&
+            snapshot->id1==snapshot->id0 &&
+            snapshot->bytes1==snapshot->bytes0;
+
+        if(!custom){
+            good=true;
+        }else{
+            if(snapshot->stage0!=5u||snapshot->id0!=9248336||
+               snapshot->bytes0!=42408ull||!snapshot->secondaryMatches||
+               !ptReflectionP2CompositeLoaded||ptReflectionP2CompositeBytes.empty())
+                return false;
+            const unsigned stage=5u;
+            const int id=kPTReflectionP2CompositeSyntheticStorageId;
+            const unsigned long long bytes=
+                static_cast<unsigned long long>(ptReflectionP2CompositeBytes.size());
+            memcpy(snapshot->base+8,&stage,sizeof(stage));
+            memcpy(snapshot->base+12,&id,sizeof(id));
+            memcpy(snapshot->base+16,&bytes,sizeof(bytes));
+            memcpy(snapshot->secondary+8,&stage,sizeof(stage));
+            memcpy(snapshot->secondary+12,&id,sizeof(id));
+            memcpy(snapshot->secondary+16,&bytes,sizeof(bytes));
+            MemoryBarrier();
+            good=true;
+        }
+    } __except(EXCEPTION_EXECUTE_HANDLER) {
+        fault=GetExceptionCode();
+        good=false;
+    }
+    if(fault)
+        Log("PT_REFLECTION_P2_DESCRIPTOR_PATCH custom=%u ready=0 exception=0x%08lX",
+            unsigned(custom),fault);
+    return good;
+}
+
+static bool PTReflectionRestoreNativeCompositeDescriptor(
+    const PTReflectionCompositeDescriptorSnapshot& snapshot) noexcept {
+    if(!snapshot.base||!snapshot.secondary)return false;
+    DWORD fault=0;
+    __try {
+        memcpy(snapshot.base+8,&snapshot.stage0,sizeof(snapshot.stage0));
+        memcpy(snapshot.base+12,&snapshot.id0,sizeof(snapshot.id0));
+        memcpy(snapshot.base+16,&snapshot.bytes0,sizeof(snapshot.bytes0));
+        memcpy(snapshot.secondary+8,&snapshot.stage1,sizeof(snapshot.stage1));
+        memcpy(snapshot.secondary+12,&snapshot.id1,sizeof(snapshot.id1));
+        memcpy(snapshot.secondary+16,&snapshot.bytes1,sizeof(snapshot.bytes1));
+        MemoryBarrier();
+    } __except(EXCEPTION_EXECUTE_HANDLER) {
+        fault=GetExceptionCode();
+    }
+    if(fault)
+        Log("PT_REFLECTION_P2_DESCRIPTOR_RESTORE ready=0 exception=0x%08lX",fault);
+    return fault==0;
+}
+
 static bool PTReflectionInsertReflectionUavBarrier() noexcept {
     using GetNativeTextureFn=void* (*)(void*);
     auto getter=reinterpret_cast<GetNativeTextureFn>(
