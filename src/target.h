@@ -98,6 +98,10 @@ inline constexpr char kRRBeginPipelineSetupSymbol[] =
     "?beginPipelineSetup@DeviceUtilRaytracing@d3d@@SAXHH@Z";
 inline constexpr char kRRSetRayGenerationSymbol[] =
     "?setRayGeneration@DeviceUtilRaytracing@d3d@@SAXPEBD@Z";
+inline constexpr char kRRSetMissSymbol[] =
+    "?setMiss@DeviceUtilRaytracing@d3d@@SAXHPEBD@Z";
+inline constexpr char kRRSetHitGroupSymbol[] =
+    "?setHitGroup@DeviceUtilRaytracing@d3d@@SAXHHPEBD00@Z";
 inline constexpr char kRRRaytraceSymbol[] =
     "?raytrace@DeviceUtilRaytracing@d3d@@SAXHH@Z";
 

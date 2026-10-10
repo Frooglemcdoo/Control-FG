@@ -282,6 +282,15 @@ static bool RRNativeReadRTSettings(unsigned* enabledBits) noexcept {
  } __except(EXCEPTION_EXECUTE_HANDLER){return false;}
 }
 static void RRNativeHookGIRelease(void* history) {
+ // P2 rough-surface energy belongs in diffuse GI, not the specular reflection
+ // target. This reviewed callsite is after the native DGI producer and before
+ // the later filter/history branch, so inject before the ownership release.
+ const DWORD bridgeSaved=GetLastError();
+ if(rrNativeFrameEnabled&&rrNativeFrame.Selected()&&
+    (rrNativeRTFrame.effects&control_rr::RTDiffuseGI))
+  PTReflectionBridgeDiffuseGI();
+ SetLastError(bridgeSaved);
+
  // Preserve the native ownership operation exactly once, including exceptions.
  rrNativeGIReleaseOriginal(history);
  const DWORD saved=GetLastError();
