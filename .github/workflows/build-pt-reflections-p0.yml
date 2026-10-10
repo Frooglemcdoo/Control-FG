@@ -178,40 +178,48 @@ jobs:
           Copy-Item build/pt_reflection_p2_verify.dxbc "$out/pt_reflection_p2_verify.dxbc"
           Copy-Item build/pt_reflection_p2_diffuse_bridge.dxbc "$out/pt_reflection_p2_diffuse_bridge.dxbc"
           @'
-          PT Reflections — FREEZE RECOVERY / SAFE BINDING AUDIT
-          ====================================================
-          TEST BUILD (NOT FOR REGULAR PLAY). Steam / DX12 / RR enabled.
+          PT Reflections — FORWARD DIFFUSE-GI MIP0 COPY PROOF
+          ===================================================
+          TEST BUILD, NOT FOR REGULAR PLAY. Steam DX12 / RR enabled.
           Source: experiment/pt-verify-stages-20261010
           Back up previous DLL and sidecars. Copy ALL SIX binaries beside Control_DX12.exe.
 
-          CRITICAL SAFETY CHANGE:
-          The previous mip-0 GI bridge caused a freeze immediately after
-          its first successful dispatch (frame 2793). The current bridge
-          is ALWAYS READ ONLY. It does not create descriptor heaps, bind
-          another root signature, mutate the native GI target, or dispatch
-          its custom compute PSO. P2 reflection raytrace/composite remains on.
-          Do not expect extra diffuse lighting or a cyan/magenta GI checker.
+          Fix objective:
+          Control froze after the first custom diffuse-GI compute pass.
+          That pass replaced the engine's bound descriptor heap, root
+          signature and PSO without restoring native root arguments.
+          This test preserves all engine compute bindings and instead
+          writes a deliberately visible checker to the raw diffuse-GI
+          texture with only native-list barriers + CopyTextureRegion.
+          The current P2 ray tracing and reflection composite remain ON.
 
           F11 modes:
-          0 = normal native + P2 reflections; read-only GI audit.
-          1 = four P2 reflection quadrants (same as previous test):
-              upper left native / upper right hit coverage /
-              lower left actual bounce-2 radiance / lower right 16x.
-          2 = normal P2 reflections + CPU-only GI resource/state audit.
+          0 = normal native + P2 reflections; read-only GI telemetry.
+          1 = four P2 reflection quadrants: native, hit coverage,
+              bounce-2 radiance, and native+P2 at 16x.
+          2 = normal P2 reflections plus native mip-0 GI checker COPY:
+              a 512x512 magenta/cyan pattern centered on the screen.
+              It uses NO new descriptor heap, compute PSO, root signature
+              or GPU compute dispatch. The other GI mip levels are untouched.
           F11 cycles 0 -> 1 -> 2 -> 0.
 
-          Test Steam for at least 45 seconds with RR, RT reflections
-          and same settings where the previous build froze. If stable,
-          send compact logs; no screenshots needed for this recovery test.
+          TEST:
+          Load Steam with identical RR, RT Reflections and FG settings.
+          Stand in the same room for 30 seconds in mode 0 first, then
+          press F11 twice to enter mode 2. Stay 10-15 seconds. Capture
+          a screenshot, close game and send compact logs.
 
-          Expected:
-            PT_REFLECTION_P2_DGI_SAFE_BYPASS ... gpu_commands=0
+          Expected markers:
             PT_REFLECTION_P2_POST_DISPATCH ... dispatched=1
-          No PT_REFLECTION_P2_DGI_BRIDGE dispatch=1 should occur.
+            PT_REFLECTION_P2_DGI_COPY_OWNER ready=1
+            PT_REFLECTION_P2_DGI_COPY_PROOF ... engine_root_heap_pso_unchanged=1
+          Failure markers:
+            PT_REFLECTION_P2_DGI_COPY_PROOF_SKIP reason=...
 
-          Successful startup would isolate the freeze to the added GI
-          GPU command recording path. A state-preserving native DGI
-          integration is required before re-enabling the bridge.
+          A successful texture copy proves recording, not necessarily
+          that subsequent GI filtering / RR / final composite consumes
+          the injected mip-0 data. Screenshot required. This is not
+          a completed diffuse PT bounce-lighting implementation.
           '@ | Set-Content "$out/README.txt" -Encoding ASCII
           Compress-Archive -Path "$out/*" -DestinationPath "$out.zip" -Force
           (Get-FileHash "$out.zip" -Algorithm SHA256).Hash | Set-Content "$out.sha256" -Encoding ASCII
