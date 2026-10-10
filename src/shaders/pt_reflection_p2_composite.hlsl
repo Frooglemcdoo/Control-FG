@@ -86,6 +86,11 @@ Texture2DArray<float4> g_tPosition_TexcoordY : register(t28);
 SamplerState g_sLinearWrap : register(s5, space1);
 RWTexture2D<float4> g_rwtReflectionTarget : register(u0);
 
+// Temporary validation signature. Remove after runtime composite execution is
+// proven in a user capture.
+#define PT_REFLECTION_P2_VISUAL_PROOF 1
+#define PT_REFLECTION_P2_VALIDATION_GAIN 4.0f
+
 float3 PTViewToWorldPoint(float3 p)
 {
     float4 w=mul(g_mViewToWorld,float4(p,1.0f));
@@ -123,6 +128,14 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
     uint2 pixel=dispatchThreadId.xy;
     if(pixel.x>=(uint)g_vScreenRes.x||pixel.y>=(uint)g_vScreenRes.y)return;
 
+    float4 proofBase=g_rwtReflectionTarget[pixel];
+#if PT_REFLECTION_P2_VISUAL_PROOF
+    // Deliberately obvious on reflective pixels after Control consumes this
+    // target: magenta/blue bias proves this compute shader actually executed.
+    proofBase.rgb=proofBase.rgb*float3(1.10f,0.72f,1.25f)+float3(0.08f,0.0f,0.12f);
+    g_rwtReflectionTarget[pixel]=proofBase;
+#endif
+
     float3 bounce2=0.0f;
     float totalWeight=0.0f;
 
@@ -159,7 +172,7 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
 
     if(totalWeight<=0.0f)return;
 
-    float3 secondary=bounce2/2.0f;
+    float3 secondary=(bounce2/2.0f)*PT_REFLECTION_P2_VALIDATION_GAIN;
     float luminance=max(dot(secondary,float3(0.2126f,0.7152f,0.0722f)),1.0e-5f);
     float clampValue=max(g_fClampReflectionIntensity,0.0f);
     if(clampValue>0.0f&&luminance>clampValue)
