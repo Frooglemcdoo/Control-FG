@@ -39,6 +39,20 @@ void main(uint3 id : SV_DispatchThreadID)
     float diffuseGate=smoothstep(0.42f,0.88f,roughness);
     if(diffuseGate<=1.0e-4f)return;
 
+    // GI proof mode: write *known* large cyan/magenta patches into the raw
+    // diffuse-GI target. Does not depend on PT rays, cubemap or local lights.
+    // If the bridge dispatches yet these patches vanish in the final frame,
+    // the post-GI filter/composite discards or replaces this target.
+    if(g_fPad>1.5f){
+        float4 current=g_rwDiffuseGI[id.xy];
+        bool checker=(((id.x/64u)+(id.y/64u))&1u)!=0u;
+        float3 marker=checker?float3(0.0f,12.0f,10.0f):
+                              float3(12.0f,0.0f,10.0f);
+        current.rgb=lerp(current.rgb,marker,saturate(diffuseGate*0.95f));
+        g_rwDiffuseGI[id.xy]=current;
+        return;
+    }
+
     float3 incoming=max(g_tP2Reflection.Load(int3(rp,0)).rgb,0.0f);
 
     // Reflections can contain isolated hot samples. A soft luminance limiter
