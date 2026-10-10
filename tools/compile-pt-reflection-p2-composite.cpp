@@ -20,13 +20,15 @@ static bool Variable(ID3D12ShaderReflection* r,const char* cbName,const char* va
     return v&&SUCCEEDED(v->GetDesc(&d))&&d.StartOffset==offset&&d.Size==size;
 }
 int main() {
+    for(unsigned diagnostic=0;diagnostic<=1;diagnostic++){
+    const D3D_SHADER_MACRO verifyMacros[]={{"PT_REFLECTION_VERIFY_VARIANT","1"},{nullptr,nullptr}};
     ID3DBlob* code=nullptr;
     ID3DBlob* errors=nullptr;
     const UINT flags=D3DCOMPILE_OPTIMIZATION_LEVEL3|D3DCOMPILE_WARNINGS_ARE_ERRORS|
         D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES;
     HRESULT hr=D3DCompileFromFile(
         L"src/shaders/pt_reflection_p2_composite.hlsl",
-        nullptr,D3D_COMPILE_STANDARD_FILE_INCLUDE,
+        diagnostic?verifyMacros:nullptr,D3D_COMPILE_STANDARD_FILE_INCLUDE,
         "main","cs_5_1",flags,0,&code,&errors);
     if(errors){
         std::fwrite(errors->GetBufferPointer(),1,errors->GetBufferSize(),stderr);
@@ -73,14 +75,18 @@ int main() {
     }
 
     FILE* file=nullptr;
-    if(fopen_s(&file,"build/pt_reflection_p2_composite.dxbc","wb")||!file){
+    const char* output=diagnostic?
+        "build/pt_reflection_p2_verify.dxbc":"build/pt_reflection_p2_composite.dxbc";
+    if(fopen_s(&file,output,"wb")||!file){
         code->Release();
         return 4;
     }
     const size_t written=std::fwrite(code->GetBufferPointer(),1,code->GetBufferSize(),file);
     const bool good=written==code->GetBufferSize()&&std::fclose(file)==0;
-    std::printf("PASS: P2 composite cs_5_1 bytes=%zu threads=8x16x1 native bindings t4,t8,t26,t27,t28/s5(space1)/u0/b0,b2,b6 material_texture_array_present=%u\n",
-        code->GetBufferSize(),unsigned(materialTexturesPresent));
+    std::printf("PASS: P2 composite verify=%u output=%s bytes=%zu threads=8x16x1 native bindings t4,t8,t26,t27,t28/s5(space1)/u0/b0,b2,b6 material_texture_array_present=%u\n",
+        diagnostic,output,code->GetBufferSize(),unsigned(materialTexturesPresent));
     code->Release();
-    return good?0:5;
+    if(!good)return 5;
+    }
+    return 0;
 }
