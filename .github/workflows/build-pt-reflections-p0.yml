@@ -178,37 +178,40 @@ jobs:
           Copy-Item build/pt_reflection_p2_verify.dxbc "$out/pt_reflection_p2_verify.dxbc"
           Copy-Item build/pt_reflection_p2_diffuse_bridge.dxbc "$out/pt_reflection_p2_diffuse_bridge.dxbc"
           @'
-          PT Reflections — VISUAL PIPELINE VERIFICATION
-          ===========================================
+          PT Reflections — FREEZE RECOVERY / SAFE BINDING AUDIT
+          ====================================================
           TEST BUILD (NOT FOR REGULAR PLAY). Steam / DX12 / RR enabled.
+          Source: experiment/pt-verify-stages-20261010
           Back up previous DLL and sidecars. Copy ALL SIX binaries beside Control_DX12.exe.
 
-          Stand still in one indoor scene, then tap F11 once per mode.
-          Take a screenshot in each mode and collect the Compact Logs.
+          CRITICAL SAFETY CHANGE:
+          The previous mip-0 GI bridge caused a freeze immediately after
+          its first successful dispatch (frame 2793). The current bridge
+          is ALWAYS READ ONLY. It does not create descriptor heaps, bind
+          another root signature, mutate the native GI target, or dispatch
+          its custom compute PSO. P2 reflection raytrace/composite remains on.
+          Do not expect extra diffuse lighting or a cyan/magenta GI checker.
+
+          F11 modes:
+          0 = normal native + P2 reflections; read-only GI audit.
+          1 = four P2 reflection quadrants (same as previous test):
+              upper left native / upper right hit coverage /
+              lower left actual bounce-2 radiance / lower right 16x.
+          2 = normal P2 reflections + CPU-only GI resource/state audit.
           F11 cycles 0 -> 1 -> 2 -> 0.
 
-          Mode 0 — NORMAL: native reflection + P2; regular diffuse-GI bridge.
-          Mode 1 — P2 QUADRANTS in the REFLECTION target:
-             TOP LEFT = native first-bounce reflection only (baseline).
-             TOP RIGHT = bright GREEN valid second hit, MAGENTA missing hit.
-             BOTTOM LEFT = actual bounce-2 radiance heatmap (black if no hit).
-             BOTTOM RIGHT = native reflection + bounce-2 energy x16.
-             GI bridge is disabled in this mode to isolate reflections.
-          Mode 2 — DIFFUSE GI MARKER:
-             Normal reflection+P2, but a strong CYAN/MAGENTA checker writes
-             directly into raw diffuse-GI for rough surfaces (concrete/plaster).
-             This marker is independent of P2 hits or radiance.
+          Test Steam for at least 45 seconds with RR, RT reflections
+          and same settings where the previous build froze. If stable,
+          send compact logs; no screenshots needed for this recovery test.
 
-          Expected logs:
-             PT_REFLECTION_VERIFY_INIT
-             PT_REFLECTION_VERIFY_PSO_CREATE ready=1
-             PT_REFLECTION_VERIFY_SWITCH
-             PT_REFLECTION_P2_POST_DISPATCH ... verify_mode=1
-             PT_REFLECTION_P2_DGI_BRIDGE ... verify_mode=2 marker=1
-          If GI mode skips, inspect PT_REFLECTION_P2_DGI_BRIDGE_SKIP reason=...
-          GPU PSO dispatch logs prove submission, not downstream image visibility.
-          Screenshots are required to interpret whether the signal survives
-          Control's reflection weighting, GI filtering, RR and final composite.
+          Expected:
+            PT_REFLECTION_P2_DGI_SAFE_BYPASS ... gpu_commands=0
+            PT_REFLECTION_P2_POST_DISPATCH ... dispatched=1
+          No PT_REFLECTION_P2_DGI_BRIDGE dispatch=1 should occur.
+
+          Successful startup would isolate the freeze to the added GI
+          GPU command recording path. A state-preserving native DGI
+          integration is required before re-enabling the bridge.
           '@ | Set-Content "$out/README.txt" -Encoding ASCII
           Compress-Archive -Path "$out/*" -DestinationPath "$out.zip" -Force
           (Get-FileHash "$out.zip" -Algorithm SHA256).Hash | Set-Content "$out.sha256" -Encoding ASCII
