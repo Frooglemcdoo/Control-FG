@@ -582,6 +582,8 @@ static void PTReflectionLogDeferredRecordMap(void* nativeShader) noexcept {
 
     Log("PT_REFLECTION_P2_DEFERRED_DESCRIPTOR_SUMMARY shader=%p valid_pointer=%u valid_inline=%u scan_bytes=168 stride=8",
         nativeShader,validPointers,validInline);
+    if(ptReflectionP2InjectionEnabled&&!ptReflectionP2CompositeShaderRecordReady)
+        PTReflectionPrepareP2CompositeShaderRecord(nativeShader);
 }
 
 static bool PTReflectionPrepareP1ShaderRecord(void* nativeShader,
