@@ -10,6 +10,7 @@ on:
       - experiment/pt-local-light-gates-p1
       - experiment/pt-local-light-hit-validation-p1
       - experiment/pt-secondary-normal-proof-v7
+      - experiment/pt-two-layer-bounce-proof
   workflow_dispatch:
   pull_request:
     branches:
@@ -184,62 +185,62 @@ jobs:
           Copy-Item build/pt_reflection_p2_local_light_probe.dxbc "$out/pt_reflection_p2_local_light_probe.dxbc"
           Copy-Item build/pt_reflection_p2_diffuse_bridge.dxbc "$out/pt_reflection_p2_diffuse_bridge.dxbc"
           @'
-          CONTROL-FG PT - SECONDARY-HIT NORMAL PROOF V7
-          =============================================
+          CONTROL-FG - P2 TWO-LAYER REAL SECOND HIT PROOF
+          ================================================
           EXPERIMENTAL STEAM DX12 TEST. NOT PRODUCTION.
-          Source branch: experiment/pt-secondary-normal-proof-v7
-          Back up files; install ALL SEVEN binaries beside Control_DX12.exe.
+          Branch: experiment/pt-two-layer-bounce-proof
+          Copy ALL SEVEN binaries beside Control_DX12.exe, backing up old ones.
 
-          V6 confirmed real native point/spotlight source power is
-          present and first/second material IDs + second-hit POSITION
-          are valid. Normal-validation band was entirely BLACK:
-          SECONDARY WORLD NORMAL IS INVALID OR ZERO. The final local
-          lighting was consequently rejected before evaluation.
+          ROOT CAUSE:
+          Control's native material/position/normal hit texture arrays have
+          TWO layers, not four. Previous P2 tried to store two independent
+          secondary hits in OUT-OF-BOUNDS array layers 2 and 3. The output
+          normals/materials could not survive into the P2 compute shader.
+          Previous material ID and UV encoding also used raw asfloat(bitcast)
+          which cannot round-trip through RGBA16_FLOAT hit textures.
 
-          V7 is an ISOLATED mode-3 test of the secondary-hit normal.
-          When the raw normal fails, it temporarily substitutes the
-          direction from second-hit position BACK TO first-hit position,
-          both already recorded in VIEW SPACE. This is NOT A SURFACE
-          NORMAL and is never enabled in normal gameplay. It proves
-          whether getting past normal validation revives local light.
+          THIS PROOF FITS IN THE ACTUAL TWO NATIVE ARRAY SLICES:
+          Layer 0: ONE native first-bounce reflection hit.
+          Layer 1: ONE real secondary hit, materialId native sentinel 65534.
+          P2 compute reads position/normal from layer 1 and adds bounce.
+          Secondary material ID uses exact numeric FP16 integer 0..2047,
+          with -1 for miss/unsupported; 2D UV uses 5+5 bits exactly
+          representable in half float. This is a temporary tradeoff:
+          ONE first-bounce sample, not the earlier TWO. A dedicated
+          private P2 UAV path is still needed for the final 2-path version.
 
-          F11 cycle: 0 normal P2; 1 P2 quadrants; 2 working GI checker;
-          3 V7 native normal-source proof; next press returns to 0.
-          No GI shader dispatch and no change to production P2 code.
+          SAFETY:
+          Read-only runtime audit confirms native material/normal/position
+          resources are TWO-layer arrays, width/height and expected formats
+          (R16_UINT, RGBA16_FLOAT, RGBA16_FLOAT). Mismatch fails closed.
+          No native GI custom compute/root/heap mutation. The stable
+          GI checker COPY diagnostic is preserved in F11 mode 2.
+          Normal P2 now uses actual second-hit position/material/normal,
+          but fully shadowed native LOCAL lighting is not yet integrated.
 
-          MODE 3 FOUR QUADRANTS:
-            UPPER LEFT: unchanged native Control reflections.
-            UPPER RIGHT: 8 HEX rows from V6 (native point/spot counts,
-                        strides, record counts and record-health masks).
-            LOWER LEFT: top 24-pixel resource safety status strip, then
-                        four horizontal diagnostic bands:
-               BAND 1: point/spot source power (YELLOW if both valid).
-               BAND 2: valid first/second material, finite hit POSITION
-                       (WHITE if all pass).
-               BAND 3: SPLIT INTO TWO EQUAL SUB-BANDS:
-                 UPPER: RED = raw normal components finite,
-                        GREEN = raw normal length nonzero,
-                        BLUE = raw normal survives world->view transform.
-                        If components are finite but length zero,
-                        only RED shows. If payload contains NaNs,
-                        this row will be completely BLACK.
-                 LOWER: RED = first/second positions give finite segment,
-                        GREEN = segment length nonzero,
-                        BLUE = diagnostic fallback was used.
-                        WHITE means all three pass.
-               BAND 4: RED = evaluated point-light potential,
-                       GREEN = spotlight, faint BLUE = normal helper ran.
-            LOWER RIGHT: TOP half MAGENTA raw source-light proof;
-                         BOTTOM half YELLOW when fully gated candidate
-                         produces energy with the V7 diagnostic fallback.
+          F11 cycle:
+          0 = one-path two-bounce reflections (normal experimental mode)
+          1 = four quadrant ray validity/second-bounce radiance/16x proof
+          2 = known visible 512x512 GI copy checker proof
+          3 = V7 native-light + stored-normal diagnostic on corrected layer 1
+          next F11 returns to 0.
 
-          TEST: With RT Reflections and RR ON, enter the same lobby.
-          Stay mode 0 for 15s, press F11 THREE times to mode 3,
-          capture a screenshot of ALL QUADRANTS and collect compact logs.
-          Do not linger in mode 3: extra light scans cost GPU time.
-          The stored shading normal is NOT FIXED by V7. If this
-          fallback works, next fix is actual surface-normal geometry
-          reconstruction and proper shadowed local illumination.
+          TEST:
+          Start in normal mode, stand in a concrete/bright lighting scene,
+          confirm it renders for 20 seconds. Press F11 ONCE to mode 1;
+          screenshot all four quadrants and look for green valid second hits
+          and non-blue bounce heat. Press F11 twice more to mode 3 if desired,
+          screenshot second-hit normal validation. Collect compact logs.
+          Exit diagnostic mode before extended play.
+
+          Log evidence:
+            PT_REFLECTION_TWO_LAYER_PROOF_CONFIG
+            PT_REFLECTION_P2_TWO_LAYER_CONTRACT ready=1 ...
+              material_layers=2 normal_layers=2 position_layers=2
+            PT_REFLECTION_P2_POST_DISPATCH ... dispatched=1
+          If contract logs incompatible or device hangs, revert binaries
+          and send compact logs. Do not treat successful dispatch alone as
+          proof of visible correct PT/GI. This build is a geometry/data proof.
           '@ | Set-Content "$out/README.txt" -Encoding ASCII
           Compress-Archive -Path "$out/*" -DestinationPath "$out.zip" -Force
           (Get-FileHash "$out.zip" -Algorithm SHA256).Hash | Set-Content "$out.sha256" -Encoding ASCII
