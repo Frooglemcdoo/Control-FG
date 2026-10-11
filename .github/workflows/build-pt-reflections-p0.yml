@@ -5,6 +5,7 @@ on:
     branches:
       - experiment/pt-reflections-p0
       - experiment/pt-verify-stages-20261010
+      - experiment/pt-local-light-probe-p1
   workflow_dispatch:
   pull_request:
     branches:
@@ -176,9 +177,10 @@ jobs:
           Copy-Item build/pt_reflection_p2.dxil "$out/pt_reflection_p2.dxil"
           Copy-Item build/pt_reflection_p2_composite.dxbc "$out/pt_reflection_p2_composite.dxbc"
           Copy-Item build/pt_reflection_p2_verify.dxbc "$out/pt_reflection_p2_verify.dxbc"
+          Copy-Item build/pt_reflection_p2_local_light_probe.dxbc "$out/pt_reflection_p2_local_light_probe.dxbc"
           Copy-Item build/pt_reflection_p2_diffuse_bridge.dxbc "$out/pt_reflection_p2_diffuse_bridge.dxbc"
           @'
-          PT Reflections — FORWARD DIFFUSE-GI MIP0 COPY PROOF
+          PT Reflections — NATIVE POINT-LIGHT DATA VALIDATION PROBE
           ===================================================
           TEST BUILD, NOT FOR REGULAR PLAY. Steam DX12 / RR enabled.
           Source: experiment/pt-verify-stages-20261010
@@ -197,22 +199,31 @@ jobs:
           0 = normal native + P2 reflections; read-only GI telemetry.
           1 = four P2 reflection quadrants: native, hit coverage,
               bounce-2 radiance, and native+P2 at 16x.
-          2 = normal P2 reflections plus native mip-0 GI checker COPY:
-              a 512x512 magenta/cyan pattern centered on the screen.
-              It uses NO new descriptor heap, compute PSO, root signature
-              or GPU compute dispatch. The other GI mip levels are untouched.
-          F11 cycles 0 -> 1 -> 2 -> 0.
+          2 = native mip-0 GI checker copy (proven visible).
+          3 = local point-light data diagnostic in REFLECTION target.
+              Top-left native. Top-right valid point count/cell.
+              Bottom-left second-hit unshadowed point-light potential.
+              Bottom-right native plus potential x8 (DIAGNOSTIC ONLY).
+              This is NOT shadow-aware GI; point/spot shadow semantics,
+              light-cell indexing and local illumination are still
+              being verified. Does NOT modify normal mode output.
+          F11 cycles 0 -> 1 -> 2 -> 3 -> 0.
 
           TEST:
-          Load Steam with identical RR, RT Reflections and FG settings.
-          Stand in the same room for 30 seconds in mode 0 first, then
-          press F11 twice to enter mode 2. Stay 10-15 seconds. Capture
-          a screenshot, close game and send compact logs.
+          Load Steam with RR and RT Reflections enabled.
+          Confirm 20 seconds of normal mode, then press F11 three times
+          for mode 3. Take a screenshot of the same concrete interior
+          with bright local light fixtures. Wait 10 seconds, then send
+          screenshot and compact logs.
+          For comparison, press F11 twice more after mode 3 to enter
+          mode 1 and capture the previous bounce-2 heatmap.
 
           Expected markers:
             PT_REFLECTION_P2_POST_DISPATCH ... dispatched=1
             PT_REFLECTION_P2_DGI_COPY_OWNER ready=1
             PT_REFLECTION_P2_DGI_COPY_PROOF ... engine_root_heap_pso_unchanged=1
+            PT_REFLECTION_P2_NATIVE_LIGHT_PROBE_PSO ready=1
+            PT_REFLECTION_P2_POST_DISPATCH ... verify_mode=3
           Failure markers:
             PT_REFLECTION_P2_DGI_COPY_PROOF_SKIP reason=...
 
@@ -240,6 +251,7 @@ jobs:
             build/pt_reflection_p2.sha256
             build/pt_reflection_p2_composite.dxbc
             build/pt_reflection_p2_verify.dxbc
+            build/pt_reflection_p2_local_light_probe.dxbc
             build/pt_reflection_p2_diffuse_bridge.dxbc
             build/pt_reflection_p2.dump.txt
             build/pt-reflection-native-audit.json
