@@ -2,12 +2,14 @@
 #include <d3dcompiler.h>
 #include <d3d12shader.h>
 #include <cstdio>
+#include <dxgi1_6.h>
+#include "pt-glass-native-root-fixture.h"
 static bool Binding(ID3D12ShaderReflection* r,const char* name,D3D_SHADER_INPUT_TYPE type,UINT slot,D3D_SRV_DIMENSION dimension) {
     D3D12_SHADER_INPUT_BIND_DESC d{};
     return SUCCEEDED(r->GetResourceBindingDescByName(name,&d)) && d.Type==type &&
         d.BindPoint==slot && d.Space==0 && d.BindCount==1 && d.Dimension==dimension;
 }
-static int Compile(bool secondary) {
+static int Compile(bool secondary,ID3D12Device* device,ID3D12RootSignature* root) {
     D3D_SHADER_MACRO macros[]={{"PT_GLASS_SECONDARY_EVALUATION",secondary?"1":"0"},{nullptr,nullptr}};
     ID3DBlob* code=nullptr;ID3DBlob* errors=nullptr;
     const HRESULT hr=D3DCompileFromFile(L"src/shaders/pt_glass_native.generated.hlsl",macros,
@@ -34,11 +36,25 @@ static int Compile(bool secondary) {
     }
     r->Release();
     if(!good){code->Release();fputs("FAIL: glass shader binding contract\n",stderr);return 3;}
+    D3D12_COMPUTE_PIPELINE_STATE_DESC pipeline{};pipeline.pRootSignature=root;
+    pipeline.CS={code->GetBufferPointer(),code->GetBufferSize()};
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> pso;
+    const HRESULT pipelineHr=device->CreateComputePipelineState(&pipeline,IID_PPV_ARGS(&pso));
+    if(FAILED(pipelineHr)){printf("FAIL: glass native-root PSO creation 0x%08lX\n",static_cast<unsigned long>(pipelineHr));code->Release();return 6;}
     FILE* out=nullptr;
     if(fopen_s(&out,secondary?"build/pt_glass_secondary.dxbc":"build/pt_glass_native.dxbc","wb")||!out){code->Release();return 4;}
     good=fwrite(code->GetBufferPointer(),1,code->GetBufferSize(),out)==code->GetBufferSize();
     good=fclose(out)==0&&good;
-    printf("PASS: glass %s cs_5_1; 8x16x1 threads and resource contract verified; %zu bytes\n",secondary?"secondary":"native",code->GetBufferSize());
+    printf("PASS: glass %s cs_5_1; 8x16x1 threads, resource contract, and WARP PSO with recovered native root verified; %zu bytes\n",secondary?"secondary":"native",code->GetBufferSize());
     code->Release();return good?0:5;
 }
-int main(){int result=Compile(false);return result?result:Compile(true);}
+int main(){
+    using Microsoft::WRL::ComPtr;
+    ComPtr<IDXGIFactory4> factory;ComPtr<IDXGIAdapter> adapter;
+    ComPtr<ID3D12Device> device;ComPtr<ID3D12RootSignature> root;
+    if(FAILED(CreateDXGIFactory1(IID_PPV_ARGS(&factory)))||
+       FAILED(factory->EnumWarpAdapter(IID_PPV_ARGS(&adapter)))||
+       FAILED(D3D12CreateDevice(adapter.Get(),D3D_FEATURE_LEVEL_11_0,IID_PPV_ARGS(&device)))||
+       FAILED(CreateGlassNativeRootFixture(device.Get(),&root)))return 7;
+    int result=Compile(false,device.Get(),root.Get());return result?result:Compile(true,device.Get(),root.Get());
+}
