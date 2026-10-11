@@ -3,6 +3,8 @@
 #include "pt_native_secondary.generated.hlsli"
 #include "ControlPrimaryGuideDecode.hlsli"
 #include "pt_private_hits.hlsli"
+#include "pt_optional_third.hlsli"
+cbuffer PTThirdValidity : register(b0,space99) { uint ptThirdFresh; };
 float3 PTWorldToView(float3 p) {
     return asfloat(ptCB0[2]).xyz*p.x+asfloat(ptCB0[3]).xyz*p.y+asfloat(ptCB0[4]).xyz*p.z+asfloat(ptCB0[5]).xyz;
 }
@@ -19,8 +21,6 @@ float3 PTPrimaryView(uint2 pixel) {
 float3 PTWorldDirection(float3 d) {
     return normalize(asfloat(ptCB0[6]).xyz*d.x+asfloat(ptCB0[7]).xyz*d.y+asfloat(ptCB0[8]).xyz*d.z);
 }
-bool PTFinite3(float3 v) { return !any((asuint(v)&0x7f800000u)==0x7f800000u); }
-bool PTFinite1(float v) { return (asuint(v)&0x7f800000u)!=0x7f800000u; }
 float PTG1(float nd,float alpha2) {
     return 2.0f*nd/max(nd+sqrt(alpha2+(1.0f-alpha2)*nd*nd),1.0e-7f);
 }
@@ -74,12 +74,8 @@ void main(uint3 dispatchThreadId:SV_DispatchThreadID) {
     if(stride!=336u)count=0u;
     uint first=g_tMaterialId.Load(int4(pixel,0,0)).x;
     float4 firstPos=g_tPosition_TexcoordY.Load(int4(pixel,0,0));
-    uint privatePixel=pixel.y*size.x+pixel.x;
-    if(privatePixel>=PT_PRIVATE_PIXEL_CAPACITY)return;
-    PTPrivateHit hit2=g_ptPrivateHits[privatePixel*2u];
-    PTPrivateHit hit3=g_ptPrivateHits[privatePixel*2u+1u];
-    float4 secondPos=float4(PTWorldToView(hit2.worldPosition),0.0f);
-    float4 normal=float4(PTUnpackNormal(hit2.packedNormal),(float)hit2.material);
+    float4 secondPos=g_tPosition_TexcoordY.Load(int4(pixel,1,0));
+    float4 normal=g_tNormal_TexcoordX.Load(int4(pixel,1,0));
     uint rejection=1u;
     float3 bounce=0.0f;
     float3 replacement=0.0f;
@@ -90,46 +86,29 @@ void main(uint3 dispatchThreadId:SV_DispatchThreadID) {
         rejection=5u;
         if(first<count){
             rejection=2u;
-            if(hit2.material<65534u){
-                uint second=hit2.material;
+            if(normal.w>=0.0f&&normal.w<2048.0f){
+                uint second=(uint)round(normal.w);
                 rejection=5u;
                 if(second<count){
                     rejection=3u;
                     float n2=dot(normal.xyz,normal.xyz);
-                    if(PTFinite3(normal.xyz)&&n2>1.0e-6f){
+                    if(all(isfinite(normal.xyz))&&n2>1.0e-6f){
                         rejection=4u;
                         float3 delta=secondPos.xyz-firstPos.xyz;
                         float d2=dot(delta,delta);
-                        if(PTFinite3(firstPos.xyz)&&PTFinite3(secondPos.xyz)&&
-                           PTFinite1(d2)&&d2>1.0e-6f){
+                        if(all(isfinite(firstPos.xyz))&&all(isfinite(secondPos.xyz))&&
+                           isfinite(d2)&&d2>1.0e-6f&&isfinite(secondPos.w)){
                             rejection=0u;
-                            float3 hitWorld=hit2.worldPosition;
+                            float3 hitWorld=PTNativeViewToWorld(secondPos.xyz);
                             float3 worldDelta=hitWorld-PTNativeViewToWorld(firstPos.xyz);
                             float3 incoming=normalize(worldDelta);
                             float3 n=normal.xyz*rsqrt(n2);
                             if(dot(n,incoming)>0.0f)n=-n;
-                            float2 uv=hit2.uv;
+                            uint packed=(uint)round(clamp(secondPos.w,0.0f,1023.0f));
+                            float2 uv=float2(packed&31u,(packed>>5u)&31u)/31.0f;
                             float3 secondRetained;
                             float3 radiance=PTNativeSecondHit(second,uv,secondPos.xyz,hitWorld,
-                                n,incoming,delta*rsqrt(d2),firstPos.xyz,pixel,false,1.0f,secondRetained);
-                            // At vertex two, preserve diffuse GI/direct/emission, and
-                            // replace its indirect specular lobe only when hit three is valid.
-                            if(hit3.material<count&&hit3.material<65534u){
-                                float3 thirdDelta=hit3.worldPosition-hitWorld;
-                                float thirdD2=dot(thirdDelta,thirdDelta);
-                                if(PTFinite3(hit3.worldPosition)&&thirdD2>1.0e-6f){
-                                    float3 incoming3=thirdDelta*rsqrt(thirdD2);
-                                    float3 normal3=PTUnpackNormal(hit3.packedNormal);
-                                    if(dot(normal3,incoming3)>0.0f)normal3=-normal3;
-                                    float3 view3=PTWorldToView(hit3.worldPosition);
-                                    float3 ignoredRetained;
-                                    float3 radiance3=PTNativeSecondHit(hit3.material,hit3.uv,view3,hit3.worldPosition,
-                                        normal3,incoming3,normalize(view3-secondPos.xyz),secondPos.xyz,pixel,false,1.0f,ignoredRetained);
-                                    float3 weight2=PTFirstHitThroughput(second,uv,n,-incoming,incoming3);
-                                    float3 candidate=secondRetained+weight2*radiance3;
-                                    if(PTFinite3(candidate))radiance=max(candidate,0.0f);
-                                }
-                            }
+                                n,incoming,delta*rsqrt(d2),firstPos.xyz,pixel,true,1.0f,secondRetained);
                             float4 firstNormal=g_tNormal_TexcoordX.Load(int4(pixel,0,0));
                             float3 primaryView=PTPrimaryView(pixel);
                             float3 firstIncomingView=normalize(firstPos.xyz-primaryView);
@@ -149,7 +128,33 @@ void main(uint3 dispatchThreadId:SV_DispatchThreadID) {
                                 primaryView,pixel,false,nativeLod,retained);
                             reference=PTNativeOutput(nativeFull,pixel);
                             replacement=PTNativeOutput(retained+bounce,pixel);
-                            if(!PTFinite3(replacement)||!PTFinite3(reference))rejection=4u;
+                            // The original two-bounce output is established above.
+                            // All third-hit work is optional; never change rejection here.
+                            uint privatePixel=pixel.y*size.x+pixel.x;
+                            if(ptThirdFresh!=0u&&privatePixel<PT_PRIVATE_PIXEL_CAPACITY){
+                                PTPrivateHit third=g_ptPrivateHits[privatePixel*2u+1u];
+                                PTPrivateHit secondExact=g_ptPrivateHits[privatePixel*2u];
+                                if(third.material<min(count,65534u)&&secondExact.material==second){
+                                    float3 thirdDelta=third.worldPosition-secondExact.worldPosition;
+                                    float thirdD2=dot(thirdDelta,thirdDelta);
+                                    if(PTThirdFinite(thirdDelta)&&thirdD2>1.0e-6f&&PTThirdFinite(third.uv.xyx)){
+                                        float3 incoming3=thirdDelta*rsqrt(thirdD2);
+                                        float3 normal3=PTUnpackNormal(third.packedNormal);
+                                        if(dot(normal3,incoming3)>0.0f)normal3=-normal3;
+                                        float3 thirdView=PTWorldToView(third.worldPosition);
+                                        float3 unusedThirdRetained;
+                                        float3 radiance3=PTNativeSecondHit(third.material,third.uv,thirdView,third.worldPosition,
+                                            normal3,incoming3,normalize(thirdView-secondPos.xyz),secondPos.xyz,
+                                            pixel,false,1.0f,unusedThirdRetained);
+                                        float3 weight2=PTFirstHitThroughput(second,uv,n,-incoming,incoming3);
+                                        float3 candidateRadiance=secondRetained+weight2*radiance3;
+                                        float3 candidate=PTNativeOutput(retained+throughput*candidateRadiance,pixel);
+                                        replacement=PTOptionalThirdOutput(replacement,candidate,
+                                            PTThirdFinite(radiance3)&&PTThirdFinite(candidateRadiance)&&dot(n,incoming3)>0.0f);
+                                    }
+                                }
+                            }
+                            if(!all(isfinite(replacement))||!all(isfinite(reference)))rejection=4u;
                             // A port mismatch must never erase native illumination.
                             // This is a parity admission check, not an intensity adjustment.
                             float3 tolerance=0.001f+0.05f*max(abs(base.rgb),abs(reference));
