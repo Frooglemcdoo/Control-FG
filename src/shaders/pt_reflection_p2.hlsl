@@ -173,11 +173,12 @@ float3 PTSampleCosineHemisphere(float3 n, float2 u)
     return normalize(x*t+y*b+z*n);
 }
 
-float PTMaterialSmoothness(uint materialId)
+float PTMaterialSmoothness(uint materialId,float2 uv)
 {
     if(materialId>=65534u)return 0.0f;
     float2 range=g_sbMaterialDataPart3[materialId].vSmoothnessRange;
-    return saturate(0.5f*(range.x+range.y));
+    float tex=g_sMaterialTextureArray[NonUniformResourceIndex(materialId*35u+2u)].SampleLevel(g_sLinearWrap,uv,0.0f).x;
+    return saturate(lerp(range.x,range.y,tex));
 }
 
 bool PTPrimary(uint2 pixel, out float3 positionView, out float3 positionWorld,
@@ -290,20 +291,21 @@ void reflectionRayGeneration()
 
         // Mixed second-bounce BSDF. Smooth materials keep the GGX/specular
         // path; rough surfaces increasingly use a cosine diffuse hemisphere.
-        const float firstSmoothness=PTMaterialSmoothness(firstMaterial);
+        const float firstSmoothness=PTMaterialSmoothness(firstMaterial,float2(firstNormalUV.w,g_rwtPosition_TexcoordY[uint3(pixel,firstLayer)].w));
         const float firstRoughness=1.0f-firstSmoothness;
         float2 secondRandom=PTRandom2(pixel,path+11u);
-        float3 diffuseDirection=PTSampleCosineHemisphere(firstHitNormal,secondRandom);
         float3 viewBack=normalize(-firstDirection);
-        float3 h2=PTSampleGGXVNDF(firstHitNormal,viewBack,firstRoughness,frac(secondRandom+0.371f));
-        float3 specDirection=reflect(-viewBack,h2);
-        if(dot(specDirection,firstHitNormal)<=0.0f)
-            specDirection=reflect(firstDirection,firstHitNormal);
-
-        // Start transitioning around roughness 0.35; concrete lands strongly
-        // on the diffuse side while polished metal/glass remains specular.
-        float diffuseMix=saturate((firstRoughness-0.35f)/0.45f);
-        float3 secondDirection=normalize(lerp(specDirection,diffuseDirection,diffuseMix));
+        // Sample a true lobe mixture. Interpolating directions has no matching
+        // mixture PDF and cannot be used with BSDF throughput weighting.
+        float diffuseMix=clamp((firstRoughness-0.35f)/0.45f,0.1f,0.9f);
+        float choose=PTRandom2(pixel,path+23u).x;
+        float3 secondDirection;
+        if(choose<diffuseMix){
+            secondDirection=PTSampleCosineHemisphere(firstHitNormal,secondRandom);
+        }else{
+            float3 h2=PTSampleGGXVNDF(firstHitNormal,viewBack,firstRoughness,secondRandom);
+            secondDirection=normalize(reflect(-viewBack,h2));
+        }
         if(dot(secondDirection,firstHitNormal)<=0.0f)continue;
 
         HitData secondPayload;
