@@ -29,7 +29,8 @@ int main() {
     const UINT flags=D3DCOMPILE_OPTIMIZATION_LEVEL3|D3DCOMPILE_WARNINGS_ARE_ERRORS|
         D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES;
     HRESULT hr=D3DCompileFromFile(
-        L"src/shaders/pt_reflection_p2_composite.hlsl",
+        diagnostic==2u?L"src/shaders/pt_reflection_p2_composite.hlsl":
+            L"src/shaders/pt_reflection_p2_native_composite.hlsl",
         diagnostic?verifyMacros:nullptr,D3D_COMPILE_STANDARD_FILE_INCLUDE,
         "main","cs_5_1",flags,0,&code,&errors);
     if(errors){
@@ -73,8 +74,34 @@ int main() {
     // reference b6 after replacing the unused material-count field.
     if(diagnostic==0u)ok=ok&&Binding(r,"rtreflection",D3D_SIT_CBUFFER,6,0);
     if(diagnostic!=2u){
-        ok=ok&&Variable(r,"sys_constants","g_mViewToWorld",96,64);
-        ok=ok&&Variable(r,"env_general","g_fEnvReflectionMipCount",4,4);
+        const struct {const char* name;UINT slot;D3D_SHADER_INPUT_TYPE type;UINT stride;} required[]={
+            {"g_sbMaterialDataPart1",3,D3D_SIT_STRUCTURED,8},
+            {"g_tRaytracingLightCellPointLights",5,D3D_SIT_TEXTURE,0},
+            {"g_tRaytracingLightCellSpotLights",6,D3D_SIT_TEXTURE,0},
+            {"g_tPointLightShadowAtlas",9,D3D_SIT_TEXTURE,0},
+            {"g_sbDeferredLightPointData",10,D3D_SIT_STRUCTURED,160},
+            {"g_tSpotLightPCFShadowAtlas",11,D3D_SIT_TEXTURE,0},
+            {"g_tSpotLightVSMShadowAtlas",12,D3D_SIT_TEXTURE,0},
+            {"g_tSpotLightProjectionAtlas",13,D3D_SIT_TEXTURE,0},
+            {"g_sbDeferredLightSpotData",14,D3D_SIT_STRUCTURED,320},
+            {"g_tEnvBRDF",15,D3D_SIT_TEXTURE,0},
+            {"g_sbActiveVolumeSamplingInfoArray",16,D3D_SIT_STRUCTURED,80}
+        };
+        for(const auto& requiredBinding:required){
+            D3D12_SHADER_INPUT_BIND_DESC desc{};
+            const bool present=SUCCEEDED(r->GetResourceBindingDescByName(requiredBinding.name,&desc));
+            const bool valid=present&&desc.BindPoint==requiredBinding.slot&&desc.Space==0&&
+                desc.Type==requiredBinding.type&&(!requiredBinding.stride||desc.NumSamples==requiredBinding.stride);
+            std::printf("PT NATIVE SHADING ABI variant=%u resource=%s valid=%u\n",diagnostic,requiredBinding.name,unsigned(valid));
+            ok=ok&&valid;
+        }
+        ok=ok&&Binding(r,"g_sLinearClamp",D3D_SIT_SAMPLER,6,1);
+        ok=ok&&Binding(r,"g_sMaterialArrayGlobal",D3D_SIT_SAMPLER,19,1);
+        ok=ok&&Binding(r,"g_tGIBrickTextures",D3D_SIT_TEXTURE,19,0,6);
+        ok=ok&&Binding(r,"deferredlight_constants",D3D_SIT_CBUFFER,1,0);
+        ok=ok&&Binding(r,"illuminationvolume",D3D_SIT_CBUFFER,3,0);
+        ok=ok&&Binding(r,"ManualUpdateCB_ActiveVolumeTopLevelInfoArray",D3D_SIT_CBUFFER,4,0);
+        ok=ok&&Variable(r,"sys_constants","ptCB0",0,1136);
     }
     // All variants must query the actual material SRV, never rely on the
     // unused native b6+12 constant. Check the compiled bytecode and reflection.
