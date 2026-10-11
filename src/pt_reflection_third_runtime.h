@@ -66,14 +66,17 @@ static ID3D12RootSignature* PTThirdGetRoot(ID3D12Device* device,ID3D12RootSignat
         const D3D12_VERSIONED_ROOT_SIGNATURE_DESC* original=nullptr;
         if(FAILED(hr)||!decoder||FAILED(decoder->GetRootSignatureDescAtVersion(D3D_ROOT_SIGNATURE_VERSION_1_1,&original)))throw 5;
         if(original->Desc_1_1.NumParameters!=8u)throw 6;
-        D3D12_ROOT_PARAMETER1 params[9]{};
+        D3D12_ROOT_PARAMETER1 params[10]{};
         memcpy(params,original->Desc_1_1.pParameters,8*sizeof(params[0]));
         params[8].ParameterType=D3D12_ROOT_PARAMETER_TYPE_UAV;
         params[8].ShaderVisibility=D3D12_SHADER_VISIBILITY_ALL;
         params[8].Descriptor.ShaderRegister=0;
         params[8].Descriptor.RegisterSpace=99;
         params[8].Descriptor.Flags=D3D12_ROOT_DESCRIPTOR_FLAG_DATA_VOLATILE;
-        auto desc=*original;desc.Desc_1_1.NumParameters=9;desc.Desc_1_1.pParameters=params;
+        params[9].ParameterType=D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
+        params[9].ShaderVisibility=D3D12_SHADER_VISIBILITY_ALL;
+        params[9].Constants={0,99,1};
+        auto desc=*original;desc.Desc_1_1.NumParameters=10;desc.Desc_1_1.pParameters=params;
         hr=encode(&desc,&blob,&errors);
         if(FAILED(hr)||!blob)throw 7;
         hr=device->CreateRootSignature(0,blob->GetBufferPointer(),blob->GetBufferSize(),__uuidof(ID3D12RootSignature),reinterpret_cast<void**>(&ptThirdRoot));
@@ -82,7 +85,7 @@ static ID3D12RootSignature* PTThirdGetRoot(ID3D12Device* device,ID3D12RootSignat
     if(errors)errors->Release();if(blob)blob->Release();if(decoder)decoder->Release();
     auto* result=ptThirdRoot;
     ReleaseSRWLockExclusive(&ptThirdLock);
-    Log("PT_THIRD_PRIVATE_ROOT ready=%u native=%p custom=%p hr=0x%08lX parameters=9 root_dwords=14 uav=u0_space99",unsigned(result!=nullptr),native,result,hr);
+    Log("PT_THIRD_PRIVATE_ROOT ready=%u native=%p custom=%p hr=0x%08lX parameters=10 root_dwords=15 uav=u0_space99",unsigned(result!=nullptr),native,result,hr);
     return result;
 }
 
@@ -330,20 +333,7 @@ static HRESULT PTThirdCreateState(ID3D12Device5* device,const D3D12_STATE_OBJECT
             }
         }catch(...){return E_OUTOFMEMORY;}
     }
-    if(!target){
-        static std::atomic<unsigned> nativeStates{0};const auto n=nativeStates.fetch_add(1)+1;
-        HRESULT hr=ptAuditCreateState(device,desc,iid,out);
-        if(n<=32&&desc&&desc->pSubobjects){
-            Log("PT_THIRD_NATIVE_STATE call=%u object=%p hr=0x%08lX subobjects=%u",n,out?*out:nullptr,hr,desc->NumSubobjects);
-            for(UINT i=0;i<desc->NumSubobjects;++i)if(desc->pSubobjects[i].Type==D3D12_STATE_SUBOBJECT_TYPE_DXIL_LIBRARY&&desc->pSubobjects[i].pDesc){
-                const auto& code=static_cast<const D3D12_DXIL_LIBRARY_DESC*>(desc->pSubobjects[i].pDesc)->DXILLibrary;
-                char sha[65]{};
-                if(code.pShaderBytecode&&code.BytecodeLength<=16777216u&&PTReflectionSha256(static_cast<const unsigned char*>(code.pShaderBytecode),code.BytecodeLength,sha))
-                    Log("PT_THIRD_NATIVE_LIBRARY state=%u bytes=%llu sha256=%s",n,static_cast<unsigned long long>(code.BytecodeLength),sha);
-            }
-        }
-        return hr;
-    }
+    if(!target)return ptAuditCreateState(device,desc,iid,out);
     try {
         if(!ptThirdDirectReady.load()||ptThirdCaptureFailures.load()){
             Log("PT_THIRD_ACTIVATION blocked=1 direct_ready=%u capture_failures=%u fallback=p1",
