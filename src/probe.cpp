@@ -486,6 +486,9 @@ static void CaptureTextureArguments(unsigned long long call, void* const* textur
     }
 }
 
+// P3-A does not install any new D3D12 hooks or alter the native renderer.
+#include "pt_p3_native_observer.h"
+
 static bool HookAA(void* t1, void* t2, void* t3, void* t4, void* t5, void* t6,
                    void* t7, void* t8, void* t9, bool flag, double d1, double d2,
                    float f1, float f2, float f3) {
@@ -540,6 +543,9 @@ static bool HookAA(void* t1, void* t2, void* t3, void* t4, void* t5, void* t6,
             call,currentPresent,double(f3),double(appliedF3));
     }
     const bool result = argumentsReady&&originalAA(t1,t2,t3,t4,t5,t6,t7,t8,t9,flag,d1,d2,f1,f2,appliedF3);
+    // Read-only P3-A observer: sample bound native reflection textures and
+    // renderer context at the existing AA boundary. No GPU writes/commands.
+    P3AObserveAfterAA(call,currentPresent,engineFrame);
     MarkControlDLSSReady(call, result);
 
     // Reset is an NGX input populated inside the original DLSS wrapper, so read
@@ -1268,6 +1274,9 @@ static BOOL CALLBACK Configure(PINIT_ONCE, PVOID, PVOID*) noexcept {
         Log("TARGET_HASHES_MATCH storefront=%s", targetLabel);
         verifiedD3d = d3d;
         verifiedRenderer = renderer;
+        // P3-A traces no secondary rays and composites nothing.
+        // Observation uses the existing AA hook; base FG/RR remain intact.
+        P3AObserverConfigure();
         if (!ResolveSemanticGetters(d3d)) {
             Log("PROBE_DISABLED semantic_getter_missing"); return TRUE;
         }
