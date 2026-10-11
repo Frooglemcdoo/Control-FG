@@ -109,6 +109,7 @@ public:
         const SIZE_T index=(destination.ptr-base.ptr)/step;
         return index<5&&Constant(recording,static_cast<UINT>(index),cb);
     }
+    std::uint64_t Observed() const noexcept {return seen;}
     bool Has(std::uint64_t recording,std::uint64_t mask) const noexcept {return recording==epoch&&epoch&&(seen&mask)==mask;}
     bool PublishChecked(std::uint64_t recording,const DescriptorRange& fresh,std::uint64_t required,
                         D3D12_GPU_DESCRIPTOR_HANDLE* customTable) noexcept {

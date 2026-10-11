@@ -22,15 +22,15 @@ void ptGlassRayGeneration() {
     float2 uv=(float2(pixel)+0.5f)/float2(DispatchRaysDimensions().xy);
     float z=saturate(clipDepth.Load(int3(pixel,0)).x);
     float2 clip=uv*float2(2,-2)+float2(-1,1);
-    float4 world=mad(sys[22],clip.x,sys[23]*clip.y);
+    float4 world=mad(sys[23],clip.y,sys[22]*clip.x);
     world=mad(sys[24],z,world)+sys[25];
     float3 delta=world.xyz/world.w-sys[54].xyz;
     float distance=length(delta);
     RayDesc primary;primary.Origin=sys[54].xyz;primary.Direction=delta/distance;
     primary.TMin=1.0f/sys[55].x;primary.TMax=distance;
     float y0=(z*sys[16].y+sys[17].y)/(z*sys[16].w+sys[17].w);
-    float y1=(mad(2.0f/sys[0].y,sys[15].y,z*sys[16].y)+sys[17].y)/
-             (mad(2.0f/sys[0].y,sys[15].w,z*sys[16].w)+sys[17].w);
+    float y1=(mad(z,sys[16].y,(2.0f/sys[0].y)*sys[15].y)+sys[17].y)/
+             (mad(z,sys[16].w,(2.0f/sys[0].y)*sys[15].w)+sys[17].w);
     Payload payload;payload.value=abs(y1-y0)/distance;
     TraceRay(scene,RAY_FLAG_NONE,2,0,2,0,primary,payload);
     DeviceMemoryBarrier();

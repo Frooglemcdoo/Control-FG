@@ -85,3 +85,27 @@ narrow native descriptor-write adapter, actual list-generation/submission
 callbacks, secondary ray production, and transport/composition into glass.
 The source and CI checks preserve the active rendering baseline. Passing WARP
 and PSO checks is not visual proof of the final glass effect.
+
+## G1 runtime integration
+
+`pt_glass_runtime.h` now connects the verified Steam call sites to the descriptor
+shadow and fence-owned resource pool. The native DXR state object receives an
+additional ray-generation export; existing hit/miss exports and hit tables are
+retained. Only the glass ray-generation record is selected per prepared dispatch.
+The added continuation saves/restores the native first-hit textures and records
+its second hit separately. Lighting evaluates that record with the full native
+port, then replaces native indirect specular at dword 6737 before the original
+BRDF weighting. Direct specular, diffuse, and emission remain native expressions.
+
+The ray-tracing global root factory is `0x191c0` (installed via `0x2ad8e`), with
+the same eight-parameter descriptor layout as the compute fixture. DXR uses
+context `+0x20` (SetPipelineState1/DispatchRays); base graphics commands use
+`+0x18`. Queue wrapper TLS `+0x18`, fallback `0x111c38`, contains queue `+0x10`.
+Both full module hashes gate installation. Incomplete snapshots or unsupported
+contexts retain the native dispatch. First implementation is glossy-only
+(smoothness >= 0.8), single extra opaque continuation, not rough path tracing.
+
+Windows full DLL compilation, all three native-root compute PSOs on WARP,
+resource-fence lifecycle, descriptor restoration, and opaque baseline guards
+passed on initial integrated commit 7d9bb5a. These checks do not establish DXR
+state-object creation on the target NVIDIA driver or in-game image correctness.
