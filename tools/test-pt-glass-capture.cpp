@@ -8,7 +8,13 @@
 static void Put(std::vector<unsigned char>& b, size_t offset, std::uint32_t v) {
     std::memcpy(b.data()+offset,&v,4);
 }
-int main() {
+int main(int argc, char** argv) {
+    if (argc > 1) {
+        std::ifstream stream(argv[1],std::ios::binary);assert(stream.good());
+        std::vector<unsigned char> b((std::istreambuf_iterator<char>(stream)),{});
+        assert(PTGlassCapture::IsHitLighting(b.data(),b.size()));
+        std::puts("PASS: real native hit-lighting reference accepted.");
+    }
     for (unsigned i=0;i<32;++i) {
         char name[256]{};
         std::snprintf(name,sizeof(name),

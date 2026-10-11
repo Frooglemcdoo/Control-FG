@@ -105,6 +105,15 @@ jobs:
           build\test-pt-glass-capture.exe
           if errorlevel 1 exit /b 1
 
+      - name: Check production compute capture path
+        shell: cmd
+        run: |
+          call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-pt-glass-pipeline-capture.cpp /Febuild\test-pt-glass-pipeline-capture.exe /link bcrypt.lib
+          if errorlevel 1 exit /b 1
+          build\test-pt-glass-pipeline-capture.exe
+          if errorlevel 1 exit /b 1
+
       - name: Check glass collector retains middle records
         shell: powershell
         run: tools/test-pt-glass-collector.ps1
@@ -224,17 +233,19 @@ jobs:
           Copy-Item Collect-ControlFG-Compact-Logs.ps1 "$out/Collect-ControlFG-Compact-Logs.ps1"
           Copy-Item Collect-ControlFG-Compact-Logs.cmd "$out/Collect-ControlFG-Compact-Logs.cmd"
           @'
-          CONTROL-FG - GLASS LIGHTING CAPTURE C2
+          CONTROL-FG - GLASS LIGHTING CAPTURE C3
           ===================================
           Diagnostic prerequisite, NOT a reflection quality fix.
           Close Control and replace all seven binaries beside Control_DX12.exe.
           All six shader binaries are unchanged from Sharper Materials S1.
           No third bounce. Native/PT rendering behavior remains S1.
-          The DLL observes glass ray and hit-lighting shaders through the existing loading hook.
+          The DLL observes glass rays through storage-get and lighting through the existing compute-pipeline hook.
           It does not replace the glass shader or add pipeline/command-list hooks.
 
           Load the glass scene and play for approximately 20 seconds, then exit.
-          C1 recovered the glass rays. C2 also captures matching lighting candidates.
+          C2 missed lighting because its storage-get capture did not observe the lighting load path.
+          C3 captures bytecode supplied directly to compute pipeline creation.
+          The known opaque lighting shader is the positive capture control.
           Run the INCLUDED Collect-ControlFG-Compact-Logs.cmd and send its ZIP.
           This collector preserves glass records that the old collector can trim.
           F10 PT toggle and F11 diagnostics remain unchanged; no F11 test needed.

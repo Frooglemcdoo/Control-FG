@@ -797,6 +797,8 @@ static HRESULT STDMETHODCALLTYPE PTReflectionHookCreateComputePipelineState(
             strcmp(sha,"4fc0a0e9cd3706bcb86e29444d86fa32616138e1712c53b1b5103b30d7a1ecc9")==0;
     }
 
+    if(desc) PTGlassCaptureCompute(desc->CS.pShaderBytecode,desc->CS.BytecodeLength);
+
     const HRESULT nativeHr=ptReflectionOriginalCreateComputePipelineState(device,desc,riid,out);
     if(!target||FAILED(nativeHr)||!out||!*out||!desc)return nativeHr;
 
