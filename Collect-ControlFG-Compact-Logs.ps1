@@ -180,7 +180,7 @@ try {
         }
         if (-not @($script:records | Where-Object { $_.File -like 'probe/*' }).Count) { throw 'No probe log could be copied.' }
         $script:notes.Add('Release support bundle: probe logs, performance summary, Streamline logs, settings, installation/build validation, and ReShade logs when present. the build transcript, SDK staging metadata, retired RR capture metadata, raw images, videos and DLLs are excluded. This diagnostic collector includes bounded PT_GLASS shader capture records.')
-        [ordered]@{Schema='ControlFG.CompactLogs.v2';Version=$version;CollectedUtc=[DateTime]::UtcNow.ToString('o');ProbeLogs=@($logs.Name);MatchingProcessIds=@($runPids.Keys);DataLimitBytes=10MB;IncludedDataBytes=(24MB-$script:remaining);RawImagesIncluded=$false;Files=@($script:records.ToArray());Notes=@($script:notes.ToArray())} |
+        [ordered]@{Schema='ControlFG.CompactLogs.v2';Version=$version;CollectedUtc=[DateTime]::UtcNow.ToString('o');ProbeLogs=@($logs.Name);MatchingProcessIds=@($runPids.Keys);DataLimitBytes=24MB;IncludedDataBytes=(24MB-$script:remaining);RawImagesIncluded=$false;Files=@($script:records.ToArray());Notes=@($script:notes.ToArray())} |
             ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $script:stage 'collection-report.json') -Encoding UTF8
         Compress-Archive -Path (Join-Path $script:stage '*') -DestinationPath $zip -CompressionLevel Optimal
         if ((Get-Item -LiteralPath $zip).Length -gt 12MB) { Remove-Item -LiteralPath $zip -Force; throw 'Compact ZIP exceeded the 12 MiB sharing limit.' }

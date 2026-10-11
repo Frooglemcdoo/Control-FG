@@ -37,5 +37,20 @@ int main() {
     invalid=glass;Put(invalid,28,0xffffffff); // offset table overflow
     assert(!PTGlassCapture::IsGlassLibrary(invalid.data(),invalid.size()));
     assert(!PTGlassCapture::IsGlassLibrary(nullptr,100));
+    std::vector<unsigned char> lighting(200,0);
+    std::memcpy(lighting.data(),"DXBC",4);Put(lighting,24,200);Put(lighting,28,2);
+    Put(lighting,32,40);Put(lighting,36,52);
+    std::memcpy(lighting.data()+40,"SHEX",4);Put(lighting,44,4);Put(lighting,48,0x00050050);
+    std::memcpy(lighting.data()+52,"RDEF",4);Put(lighting,56,140);
+    std::memcpy(lighting.data()+60,"g_tMaterialId",14);
+    std::memcpy(lighting.data()+80,"g_tNormal_TexcoordX",20);
+    std::memcpy(lighting.data()+110,"g_tPosition_TexcoordY",22);
+    assert(PTGlassCapture::IsHitLighting(lighting.data(),lighting.size()));
+    auto rejected=lighting;Put(rejected,48,0x00010050);
+    assert(!PTGlassCapture::IsHitLighting(rejected.data(),rejected.size()));
+    rejected=lighting;rejected[80]='x';
+    assert(!PTGlassCapture::IsHitLighting(rejected.data(),rejected.size()));
+    rejected=lighting;Put(rejected,56,0xffffffff);
+    assert(!PTGlassCapture::IsHitLighting(rejected.data(),rejected.size()));
     std::puts("PASS: 32 native libraries excluded; glass export selected; malformed bounds rejected.");
 }

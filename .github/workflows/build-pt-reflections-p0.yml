@@ -224,16 +224,17 @@ jobs:
           Copy-Item Collect-ControlFG-Compact-Logs.ps1 "$out/Collect-ControlFG-Compact-Logs.ps1"
           Copy-Item Collect-ControlFG-Compact-Logs.cmd "$out/Collect-ControlFG-Compact-Logs.cmd"
           @'
-          CONTROL-FG - GLASS SHADER CAPTURE C1
+          CONTROL-FG - GLASS LIGHTING CAPTURE C2
           ===================================
           Diagnostic prerequisite, NOT a reflection quality fix.
           Close Control and replace all seven binaries beside Control_DX12.exe.
           All six shader binaries are unchanged from Sharper Materials S1.
           No third bounce. Native/PT rendering behavior remains S1.
-          The DLL observes glass shader bytes through the existing loading hook.
+          The DLL observes glass ray and hit-lighting shaders through the existing loading hook.
           It does not replace the glass shader or add pipeline/command-list hooks.
 
           Load the glass scene and play for approximately 20 seconds, then exit.
+          C1 recovered the glass rays. C2 also captures matching lighting candidates.
           Run the INCLUDED Collect-ControlFG-Compact-Logs.cmd and send its ZIP.
           This collector preserves glass records that the old collector can trim.
           F10 PT toggle and F11 diagnostics remain unchanged; no F11 test needed.
