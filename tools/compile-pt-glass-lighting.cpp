@@ -12,7 +12,7 @@ static int Compile(bool secondary) {
     ID3DBlob* code=nullptr;ID3DBlob* errors=nullptr;
     const HRESULT hr=D3DCompileFromFile(L"src/shaders/pt_glass_native.generated.hlsl",macros,
         D3D_COMPILE_STANDARD_FILE_INCLUDE,"main","cs_5_1",
-        D3DCOMPILE_OPTIMIZATION_LEVEL3|D3DCOMPILE_IEEE_STRICTNESS|D3DCOMPILE_WARNINGS_ARE_ERRORS,0,&code,&errors);
+        D3DCOMPILE_OPTIMIZATION_LEVEL3|D3DCOMPILE_IEEE_STRICTNESS|D3DCOMPILE_WARNINGS_ARE_ERRORS|D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES,0,&code,&errors);
     if(errors){fwrite(errors->GetBufferPointer(),1,errors->GetBufferSize(),stderr);errors->Release();}
     if(FAILED(hr)||!code)return 1;
     ID3D12ShaderReflection* r=nullptr;
