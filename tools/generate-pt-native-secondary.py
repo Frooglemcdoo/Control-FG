@@ -91,12 +91,13 @@ float PTNativeMaterialMip(uint index,bool quantized) {
 }
 float3 PTNativeSecondHit(uint materialId,float2 uv,float3 hitView,float3 hitWorld,
                         float3 normalWorld,float3 incomingWorld,float3 incomingView,
-                        float3 firstView,uint2 pixel,bool quantized,out float3 directEmission) {
-    directEmission=0.0f;
+                        float3 firstView,uint2 pixel,bool quantized,float lodNormalFactor,
+                        out float3 retainedLighting) {
+    retainedLighting=0.0f;
 ''']
 out += ['    uint4 r'+str(i)+'=0u;' for i in range(43)]
 out += ['''    r2=asuint(float4(firstView,1.0f));
-    r3.y=asuint(1.0f); // volume LOD uses actual segment distance
+    r3.y=asuint(lodNormalFactor);
     r5.w=materialId;
     r14.z=0u;
     r15=asuint(float4(hitWorld,1.0f));
@@ -121,7 +122,9 @@ for ins in selected:
  counts[op]=counts.get(op,0)+1
  def emit(s):out.append('    '+s+' // native dword '+str(at))
  if at==7186:
-  emit('directEmission=asfloat(r17.xyz)*asfloat(r16.xyz)+asfloat(r34.xyz)+asfloat(r19.xyz);')
+  # r14 already includes native diffuse GI + diffuse direct at 7090.
+  # Keep this entire term; remove ONLY probe/environment indirect specular.
+  emit('retainedLighting=asfloat(r14.xyw)*asfloat(r16.xyz)+asfloat(r34.xyz)+asfloat(r19.xyz);')
  if at in (3319,3328):continue
  if at==3333:
   emit('r19.xyz=asuint(-incomingView);');continue
