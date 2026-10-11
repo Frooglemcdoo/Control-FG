@@ -187,6 +187,77 @@ float3 PTLocalUnshadowedPotential(float3 hitPosView,float3 hitNormalView,
     return total;
 }
 
+
+// Progressive local-light stage audit, diagnostic ONLY:
+//   x: raw native light color luminance (no geometry gating)
+//   y: light within distance/range, normal/cone ignored
+//   z: range + second-hit NdotL
+//   w: range + NdotL + spotlight cone (points retain z)
+// These values never enter the normal P2 shader variant.
+float4 PTPointGateAudit(float3 hitPosView,float3 normalView,uint count)
+{
+    float4 stages=0.0f;
+    [loop]
+    for(uint i=0u;i<count;++i){
+        PTNativePointLight l=ptNativePointLights[i];
+        float3 c=l.color;
+        if(!all(isfinite(c))||any(c<0.0f)||any(c>10000.0f)||
+           !all(isfinite(l.positionView))||
+           !isfinite(l.boundsRadius)||l.boundsRadius<=0.01f||
+           l.boundsRadius>5000.0f)continue;
+        const float power=max(dot(c,float3(0.2126f,0.7152f,0.0722f)),0.0f);
+        stages.x+=power;
+        const float3 toLight=l.positionView-hitPosView;
+        const float d2=dot(toLight,toLight);
+        if(!isfinite(d2)||d2<1.0e-6f)continue;
+        const float dist=sqrt(d2);
+        const float w=saturate((l.boundsRadius-dist)/max(l.boundsRadius,0.01f));
+        const float atten=w*w/(1.0f+0.0025f*d2);
+        const float atRange=power*atten;
+        stages.y+=atRange;
+        const float facing=saturate(dot(normalView,toLight/dist));
+        stages.z+=atRange*facing;
+        stages.w+=atRange*facing;
+    }
+    return stages;
+}
+
+float4 PTSpotGateAudit(float3 hitPosView,float3 normalView,uint count)
+{
+    float4 stages=0.0f;
+    [loop]
+    for(uint i=0u;i<count;++i){
+        PTNativeSpotLightRaw l=ptNativeSpotLights[i];
+        float3 color=l.words[3].xyz;
+        float3 lightPos=l.words[0].xyz;
+        float3 direction=l.words[2].xyz;
+        float farDist=l.words[1].w;
+        if(!all(isfinite(color))||any(color<0.0f)||any(color>10000.0f)||
+           !all(isfinite(lightPos))||!all(isfinite(direction))||
+           !isfinite(farDist)||farDist<=0.01f||farDist>5000.0f||
+           dot(direction,direction)<1.0e-8f)continue;
+        const float power=max(dot(color,float3(0.2126f,0.7152f,0.0722f)),0.0f);
+        stages.x+=power;
+        const float3 toLight=lightPos-hitPosView;
+        const float d2=dot(toLight,toLight);
+        if(!isfinite(d2)||d2<1.0e-6f)continue;
+        const float dist=sqrt(d2);
+        const float range=saturate((farDist-dist)/max(farDist,0.01f));
+        const float atten=range*range/(1.0f+0.0025f*d2);
+        const float atRange=power*atten;
+        stages.y+=atRange;
+        const float facing=saturate(dot(normalView,toLight/dist));
+        const float atFace=atRange*facing;
+        stages.z+=atFace;
+        const float cosine=dot(normalize(direction),-toLight/dist);
+        const float sinHalf2=l.words[4].w;
+        const float cosHalf=sqrt(saturate(1.0f-saturate(sinHalf2)));
+        const float cone=saturate((cosine-cosHalf)/max(1.0f-cosHalf,0.001f));
+        stages.w+=atFace*cone;
+    }
+    return stages;
+}
+
 float3 PTLocalUnshadowedSpotPotential(float3 hitPosView,float3 hitNormalView,
                                      uint numLights)
 {
@@ -418,8 +489,11 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
         pointElements<=65536u;
     const bool spotViewSafe=spotStrideValid&&spotElements>0u&&
         spotElements<=65536u;
-    const uint pointSampleCount=pointViewSafe?min(pointElements,12u):0u;
-    const uint spotSampleCount=spotViewSafe?min(spotElements,12u):0u;
+    // V4 record-health masks still scan the first 12, while stage audit
+    // checks up to 32 native records from each resource. The light counts
+    // stored in b1 remain untrusted and are never used as loop bounds.
+    const uint pointSampleCount=pointViewSafe?min(pointElements,32u):0u;
+    const uint spotSampleCount=spotViewSafe?min(spotElements,32u):0u;
     if(right&&!bottom){
         uint tileW=0u,tileH=0u,spotW=0u,spotH=0u;
         ptNativePointCellIds.GetDimensions(tileW,tileH);
@@ -525,8 +599,8 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
         return;
     }
 
-    float3 pointPotential=0.0f;
-    float3 spotPotential=0.0f;
+    float4 pointGate=0.0f;
+    float4 spotGate=0.0f;
     bool foundSecondHit=false;
     [unroll]
     for(uint probePath=0u;probePath<2u;++probePath){
@@ -536,47 +610,69 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
         uint secondMat=asuint(n.w);
         if(secondMat>=65534u||secondMat>=g_uMaterialIDCount)continue;
         foundSecondHit=true;
-        float3 normalView=PTWorldNormalToView(normalize(n.xyz));
-        float3 hitPosView=g_tPosition_TexcoordY.Load(int4(pixel,probePath+2u,0)).xyz;
-        if(!all(isfinite(hitPosView))||!all(isfinite(normalView)))continue;
-        // Bounded fallback scans native SRV records independent of the
-        // rejected b1 counts. This is proof-only; real tile-list selection
-        // and shadow atlas visibility are still missing.
-        pointPotential+=PTLocalUnshadowedPotential(
+
+        const float3 normalWorld=n.xyz;
+        const float normalLength2=dot(normalWorld,normalWorld);
+        const float3 hitPosView=g_tPosition_TexcoordY.Load(
+            int4(pixel,probePath+2u,0)).xyz;
+        if(!all(isfinite(hitPosView))||
+           !all(isfinite(normalWorld))||
+           !isfinite(normalLength2)||normalLength2<1.0e-6f)continue;
+        const float3 normalView=PTWorldNormalToView(
+            normalWorld*rsqrt(normalLength2));
+        if(!all(isfinite(normalView)))continue;
+
+        pointGate+=PTPointGateAudit(
             hitPosView,normalView,pointSampleCount)*0.5f;
-        spotPotential+=PTLocalUnshadowedSpotPotential(
+        spotGate+=PTSpotGateAudit(
             hitPosView,normalView,spotSampleCount)*0.5f;
     }
-    const float3 lightPotential=pointPotential+spotPotential;
-    const float pointLum=max(dot(pointPotential,float3(0.2126f,0.7152f,0.0722f)),0.0f);
-    const float spotLum=max(dot(spotPotential,float3(0.2126f,0.7152f,0.0722f)),0.0f);
-    const float pointHeat=saturate(pointLum/(pointLum+0.04f));
-    const float spotHeat=saturate(spotLum/(spotLum+0.04f));
+
     if(!right&&bottom){
         if(pixel.y<halfH+24u){
-            // Three constant-color bar segments: RED means point SRV is
-            // safe to sample, GREEN means spot SRV is safe to sample,
-            // BLUE means secondary hit geometry exists. The rest of
-            // this quadrant displays actual unshadowed potential.
+            // unchanged resource/valid-hit status strip
             const uint dx=(pixel.x*3u)/max(halfW,1u);
             const bool barOn=dx==0u?pointViewSafe:
                 dx==1u?spotViewSafe:foundSecondHit;
-            const float3 channelColor=dx==0u?float3(4.0f,0.0f,0.0f):
+            const float3 channel=dx==0u?float3(4.0f,0.0f,0.0f):
                 dx==1u?float3(0.0f,4.0f,0.0f):
                         float3(0.0f,0.0f,4.0f);
             g_rwtReflectionTarget[pixel]=float4(
-                barOn?channelColor:float3(0.0f,0.0f,0.0f),1.0f);
+                barOn?channel:float3(0.0f,0.0f,0.0f),1.0f);
             return;
         }
-        // RED = point-light contribution, GREEN = spotlight, BLUE =
-        // confirmed secondary-hit coverage (weak constant baseline).
+
+        const uint bottomHeight=max((uint)g_vScreenRes.y-halfH-24u,1u);
+        const uint dy=pixel.y-halfH-24u;
+        const uint stage=min(3u,dy*4u/bottomHeight);
+        const float pointValue=stage==0u?pointGate.x:
+            stage==1u?pointGate.y:stage==2u?pointGate.z:pointGate.w;
+        const float spotValue=stage==0u?spotGate.x:
+            stage==1u?spotGate.y:stage==2u?spotGate.z:spotGate.w;
+        // Normalize for visualization; do NOT use these gains or values
+        // in the production PT reflectance path. Red is point, green spot.
+        const float pointHeat=saturate(pointValue/(pointValue+0.03f));
+        const float spotHeat=saturate(spotValue/(spotValue+0.03f));
         g_rwtReflectionTarget[pixel]=float4(foundSecondHit?
-            float3(pointHeat*4.0f,spotHeat*4.0f,0.12f):
+            float3(4.0f*pointHeat,4.0f*spotHeat,0.12f):
             float3(0.0f,0.0f,0.0f),1.0f);
         return;
     }
+
+    // Bottom-right is split vertically. The TOP half shows a bright
+    // diagnostic based only on native color and hit existence; the
+    // BOTTOM half shows the fully gated unshadowed candidate x8. This
+    // prevents a zero-gate result from resembling "shader never ran."
     float4 candidateBase=g_rwtReflectionTarget[pixel];
-    candidateBase.rgb=max(candidateBase.rgb+lightPotential*8.0f,0.0f);
+    if(pixel.y<halfH+((uint)g_vScreenRes.y-halfH)/2u){
+        const float rawEnergy=pointGate.x+spotGate.x;
+        const float heat=saturate(rawEnergy/(rawEnergy+0.1f));
+        candidateBase.rgb+=float3(3.0f*heat,0.35f*heat,3.0f*heat);
+    }else{
+        const float fullyGated=pointGate.w+spotGate.w;
+        const float heat=saturate(fullyGated/(fullyGated+0.03f));
+        candidateBase.rgb+=float3(3.0f*heat,3.0f*heat,0.0f);
+    }
     g_rwtReflectionTarget[pixel]=candidateBase;
     return;
 #endif
