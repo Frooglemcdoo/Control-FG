@@ -1,0 +1,24 @@
+name: Check glass lighting integration components
+on:
+  push:
+    branches: [experiment/pt-glass-integration]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  compile:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile native and dedicated secondary lighting
+        shell: cmd
+        run: |
+          for /f "usebackq tokens=*" %%I in (`"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath`) do set "VSROOT=%%I"
+          call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
+          if not exist build mkdir build
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\compile-pt-glass-lighting.cpp /Febuild\compile-pt-glass-lighting.exe /link d3dcompiler.lib
+          if errorlevel 1 exit /b 1
+          build\compile-pt-glass-lighting.exe
+          if errorlevel 1 exit /b 1
+      - name: Verify existing rendering runtime stays unchanged
+        run: python tools/test-pt-secondary-encoding.py
