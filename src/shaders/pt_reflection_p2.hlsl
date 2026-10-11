@@ -229,16 +229,17 @@ void reflectionRayGeneration()
 {
     uint2 pixel=DispatchRaysIndex().xy;
 
-    // Explicitly initialize the four native layers. Native deferred shading uses
-    // 65534 as "no ray"; miss shaders change this to 65535.
+    // Native reflection targets have exactly TWO array slices.
+    // In the previous P2 shader, layers 2/3 were written out-of-bounds,
+    // silently losing second-hit position, normal, material and UV.
+    // The one-path proof uses layer 0 for the native first hit and layer 1
+    // for a secondary hit, hidden from native composite via material sentinel.
     [unroll]
-    for(uint layer=0;layer<4;++layer) {
+    for(uint layer=0;layer<2u;++layer) {
         g_rwtMaterialId[uint3(pixel,layer)]=65534u;
-        // P2 reserves layers 2/3 for secondary hits. normal.w carries the
-        // secondary material ID as raw uint bits for the post-composite pass.
-        if(layer>=2u)
-            g_rwtNormal_TexcoordX[uint3(pixel,layer)]=float4(0,0,1,asfloat(65534u));
     }
+    g_rwtNormal_TexcoordX[uint3(pixel,1u)]=float4(0.0f,0.0f,0.0f,-1.0f);
+    g_rwtPosition_TexcoordY[uint3(pixel,1u)]=float4(0.0f,0.0f,0.0f,0.0f);
 
     float3 primaryView,primaryWorld,normalWorld;
     float roughness;
@@ -252,14 +253,14 @@ void reflectionRayGeneration()
     float3 cameraWorld=PTCameraWorld();
     float3 viewToCamera=normalize(cameraWorld-primaryWorld);
 
-    // Keep both first-bounce hits contiguous so Control's stock deferred
-    // composite shades layers 0/1 normally. Layers 2/3 are secondary hits and
-    // remain sentinel material IDs for the native composite.
-    // path 0 => first 0, second 2; path 1 => first 1, second 3.
+    // Native layer 0 shades ONE stock first-bounce reflection.
+    // Layer 1 is a true secondary hit; its material slot remains 65534
+    // so Control does not mistake it for a second first-bounce ray.
+    // This is a temporary 1-path proof pending dedicated P2 private UAVs.
     [unroll]
-    for(uint path=0;path<2;++path) {
-        uint firstLayer=path;
-        uint secondLayer=path+2u;
+    for(uint path=0;path<1u;++path) {
+        uint firstLayer=0u;
+        uint secondLayer=1u;
 
         float2 random=PTRandom2(pixel,path);
         float3 h=PTSampleGGXVNDF(normalWorld,viewToCamera,roughness,random);
@@ -304,8 +305,11 @@ void reflectionRayGeneration()
     }
 }
 
-// Layers 0/1 remain stock-composite-compatible first hits. Layers 2/3 carry
-// secondary geometry and are consumed only by the post-native P2 add pass.
+// Exactly TWO native UAV array layers exist: 0=native first-hit,
+// 1=secondary P2 hit (native material sentinel 65534). Only one
+// first-bounce sample is retained in this proof; private four-layer UAV
+// resources are needed for a full two-path implementation.
+#define PT_REFLECTION_P2_NATIVE_LAYER_COUNT 2
 #define PT_REFLECTION_P2_POST_COMPOSITE_READY 1
 
 float3 PTWorldToViewPoint(float3 p)
@@ -401,15 +405,21 @@ void reflectionClosestHit(inout HitData payload, in BuiltInTriangleIntersectionA
     float3 worldHit=WorldRayOrigin()+WorldRayDirection()*RayTCurrent();
     float3 viewHit=PTWorldToViewPoint(worldHit);
 
-    if(layer>=2u) {
-        // Do not let Control's stock deferred composite shade the secondary
-        // surface as an independent primary ray. Preserve its material ID in
-        // normal.w for the P2 add pass instead.
+    if(layer==1u) {
+        // Keep the native second material slot invalid for the stock
+        // deferred composite, but encode secondary material+UV in half
+        // float-compatible numeric values (NEVER asfloat(raw uint)).
+        // Native normal/position textures use RGBA16_FLOAT.
+        // Integers 0..2048 are exactly representable by binary16.
         g_rwtMaterialId[uint3(pixel,layer)]=65534u;
-        g_rwtNormal_TexcoordX[uint3(pixel,layer)]=float4(normalWorld,asfloat(uMaterialID));
-        uint2 uv16=(uint2)round(saturate(frac(texcoord))*65535.0f);
-        uint packedUv=(uv16.x&0xffffu)|((uv16.y&0xffffu)<<16u);
-        g_rwtPosition_TexcoordY[uint3(pixel,layer)]=float4(viewHit,asfloat(packedUv));
+        const bool materialEncodable=uMaterialID<2048u;
+        const float encodedMaterial=materialEncodable?(float)uMaterialID:-1.0f;
+        g_rwtNormal_TexcoordX[uint3(pixel,layer)]=
+            float4(normalWorld,encodedMaterial);
+        const uint2 uv5=(uint2)round(saturate(frac(texcoord))*31.0f);
+        const uint packedUV=(uv5.x&31u)|((uv5.y&31u)<<5u);
+        g_rwtPosition_TexcoordY[uint3(pixel,layer)]=
+            float4(viewHit,(float)packedUV);
     } else {
         g_rwtMaterialId[uint3(pixel,layer)]=uMaterialID;
         g_rwtNormal_TexcoordX[uint3(pixel,layer)]=float4(normalWorld,texcoord.x);
@@ -439,9 +449,10 @@ void reflectionMiss(inout HitData payload)
     uint layer=payload.value;
     uint2 pixel=DispatchRaysIndex().xy;
     float3 worldEnd=WorldRayOrigin()+WorldRayDirection()*RayTCurrent();
-    if(layer>=2u) {
+    if(layer==1u) {
         g_rwtMaterialId[uint3(pixel,layer)]=65534u;
-        g_rwtNormal_TexcoordX[uint3(pixel,layer)]=float4(0,0,1,asfloat(65535u));
+        g_rwtNormal_TexcoordX[uint3(pixel,layer)]=
+            float4(0.0f,0.0f,0.0f,-1.0f);
     } else {
         g_rwtMaterialId[uint3(pixel,layer)]=65535u;
     }
