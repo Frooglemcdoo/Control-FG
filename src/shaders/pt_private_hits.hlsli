@@ -1,6 +1,6 @@
 #ifndef PT_PRIVATE_HITS
 #define PT_PRIVATE_HITS
-// Two 32-byte records per pixel. Fixed 512 MiB allocation covers up to 4K.
+// Three 32-byte records per pixel (two hits + native backup). Fixed 768 MiB allocation covers up to 4K.
 // This avoids replacing/freeing a resource while submitted frames still use it.
 static const uint PT_PRIVATE_PIXEL_CAPACITY=8388608u;
 struct PTPrivateHit {
