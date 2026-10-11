@@ -89,6 +89,7 @@ static bool PTThirdEnsureBuffer(ID3D12Device* device) {
     AcquireSRWLockExclusive(&ptThirdLock);
     if(ptThirdHits){ReleaseSRWLockExclusive(&ptThirdLock);return true;}
     D3D12_HEAP_PROPERTIES heap{};heap.Type=D3D12_HEAP_TYPE_DEFAULT;
+    heap.CreationNodeMask=1;heap.VisibleNodeMask=1;
     D3D12_RESOURCE_DESC desc{};desc.Dimension=D3D12_RESOURCE_DIMENSION_BUFFER;
     desc.Width=kPTThirdBytes;desc.Height=1;desc.DepthOrArraySize=1;desc.MipLevels=1;
     desc.SampleDesc.Count=1;desc.Layout=D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
@@ -229,6 +230,7 @@ static HRESULT PTThirdCreateState(ID3D12Device5* device,const D3D12_STATE_OBJECT
             }
         }
         if(!replaced)throw 3;
+        if(!PTThirdEnsureBuffer(device))throw 10;
         auto custom=*desc;custom.pSubobjects=subs.data();
         HRESULT hr=ptAuditCreateState(device,&custom,iid,out);
         if(SUCCEEDED(hr)&&out&&*out){
