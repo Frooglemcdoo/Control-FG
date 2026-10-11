@@ -4,6 +4,7 @@
 
 #include "ControlPrimaryGuideDecode.hlsli"
 #include "rr_hit_origin_shared.h"
+#include "pt_secondary_encoding.hlsli"
 
 static const float PT_PI = 3.14159265358979323846f;
 
@@ -411,14 +412,13 @@ void reflectionClosestHit(inout HitData payload, in BuiltInTriangleIntersectionA
         // Native normal/position textures use RGBA16_FLOAT.
         // Integers 0..2048 are exactly representable by binary16.
         g_rwtMaterialId[uint3(pixel,layer)]=65534u;
-        const bool materialEncodable=uMaterialID<2048u;
+        const bool materialEncodable=uMaterialID<2048u&&dot(normalWorld,normalWorld)>1.0e-6f;
         const float encodedMaterial=materialEncodable?(float)uMaterialID:-1.0f;
+        const float2 wrappedUV=frac(texcoord);
         g_rwtNormal_TexcoordX[uint3(pixel,layer)]=
-            float4(normalWorld,encodedMaterial);
-        const uint2 uv5=(uint2)round(saturate(frac(texcoord))*31.0f);
-        const uint packedUV=(uv5.x&31u)|((uv5.y&31u)<<5u);
+            float4(PTSecondaryEncodeNormal(normalWorld),wrappedUV.x,encodedMaterial);
         g_rwtPosition_TexcoordY[uint3(pixel,layer)]=
-            float4(viewHit,(float)packedUV);
+            float4(viewHit,wrappedUV.y);
     } else {
         g_rwtMaterialId[uint3(pixel,layer)]=uMaterialID;
         g_rwtNormal_TexcoordX[uint3(pixel,layer)]=float4(normalWorld,texcoord.x);
