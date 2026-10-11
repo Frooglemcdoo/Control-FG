@@ -143,6 +143,8 @@ static thread_local bool ptReflectionAwaitingCompositeBind=false;
 static std::atomic<unsigned long long> ptReflectionCompositeBindCaptures{0};
 
 
+#include "pt_reflection_binding_audit.h"
+
 static bool PTReflectionLoadSidecar(const wchar_t* fileName,const char* label,
     std::vector<unsigned char>& bytes,char (&sha)[65],bool& loaded) noexcept {
     bytes.clear();sha[0]=0;loaded=false;
@@ -795,6 +797,8 @@ static HRESULT STDMETHODCALLTYPE PTReflectionHookCreateComputePipelineState(
 
     const HRESULT nativeHr=ptReflectionOriginalCreateComputePipelineState(device,desc,riid,out);
     if(!target||FAILED(nativeHr)||!out||!*out||!desc)return nativeHr;
+    try { PTAuditDescribeRoot(desc->pRootSignature,"composite",0u); }
+    catch(...) { Log("PT_THIRD_AUDIT exception=composite_capture native_result_preserved=1"); }
 
     AcquireSRWLockExclusive(&ptReflectionCompositePsoLock);
     if(!ptReflectionCompositePsoCaptured.load(std::memory_order_acquire)){
@@ -828,6 +832,7 @@ static HRESULT STDMETHODCALLTYPE PTReflectionHookCreateComputePipelineState(
 
 static bool PTReflectionInstallComputePsoHookOnDevice(ID3D12Device* device) noexcept {
     if(!device)return false;
+    PTAuditInstall(device);
 
     void** vtable=nullptr;
     __try {vtable=*reinterpret_cast<void***>(device);}
