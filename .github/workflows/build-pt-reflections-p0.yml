@@ -22,6 +22,7 @@ on:
       - experiment/pt-preserve-diffuse
       - experiment/pt-sharper-materials
       - experiment/pt-glass-capture
+      - experiment/pt-glass-integration
   workflow_dispatch:
   pull_request:
     branches:
@@ -152,6 +153,8 @@ jobs:
           }
           if(-not $dxc){throw 'dxc.exe was not found in the Windows SDK / Visual Studio installation.'}
           Write-Host "DXC: $dxc"
+          & $dxc -T lib_6_3 -HV 2021 -O3 -I src/shaders -Fo build/pt_glass_raygen.dxil src/shaders/pt_glass_raygen.hlsl
+          if($LASTEXITCODE -ne 0){throw "Glass DXC compile failed: $LASTEXITCODE"}
           & $dxc -T lib_6_3 -HV 2021 -O3 -I src/shaders -Fo build/pt_reflection_p2.dxil src/shaders/pt_reflection_p2.hlsl
           if($LASTEXITCODE -ne 0){throw "DXC compile failed: $LASTEXITCODE"}
           & $dxc -dumpbin build/pt_reflection_p2.dxil | Set-Content -LiteralPath build/pt_reflection_p2.dump.txt -Encoding UTF8
@@ -208,6 +211,15 @@ jobs:
           }
           (Get-FileHash -LiteralPath build/pt_reflection_p1.dxil -Algorithm SHA256).Hash.ToLowerInvariant() |
             Set-Content -LiteralPath build/pt_reflection_p1.sha256 -Encoding ASCII
+      - name: Compile glass lighting and validate native root on WARP
+        shell: cmd
+        run: |
+          call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\compile-pt-glass-lighting.cpp /Febuild\compile-pt-glass-lighting.exe /link d3dcompiler.lib d3d12.lib dxgi.lib
+          if errorlevel 1 exit /b 1
+          build\compile-pt-glass-lighting.exe
+          if errorlevel 1 exit /b 1
+
       - name: Compile experimental proxy
         shell: cmd
         run: |
@@ -217,12 +229,15 @@ jobs:
           dumpbin /exports build\dxgi.dll > build\exports.txt
           dumpbin /imports build\dxgi.dll > build\imports.txt
 
-      - name: Package P0
+      - name: Package glass integration G1
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-PT-Reflections-P0'
+          $out='Control-FG-PT-Glass-G1'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
+          Copy-Item build/pt_glass_raygen.dxil "$out/pt_glass_raygen.dxil"
+          Copy-Item build/pt_glass_secondary.dxbc "$out/pt_glass_secondary.dxbc"
+          Copy-Item build/pt_glass_composite.dxbc "$out/pt_glass_composite.dxbc"
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
           Copy-Item build/pt_reflection_p1.dxil "$out/pt_reflection_p1.dxil"
           Copy-Item build/pt_reflection_p2.dxil "$out/pt_reflection_p2.dxil"
@@ -233,24 +248,26 @@ jobs:
           Copy-Item Collect-ControlFG-Compact-Logs.ps1 "$out/Collect-ControlFG-Compact-Logs.ps1"
           Copy-Item Collect-ControlFG-Compact-Logs.cmd "$out/Collect-ControlFG-Compact-Logs.cmd"
           @'
-          CONTROL-FG - GLASS LIGHTING CAPTURE C3
-          ===================================
-          Diagnostic prerequisite, NOT a reflection quality fix.
-          Close Control and replace all seven binaries beside Control_DX12.exe.
-          All six shader binaries are unchanged from Sharper Materials S1.
-          No third bounce. Native/PT rendering behavior remains S1.
-          The DLL observes glass rays through storage-get and lighting through the existing compute-pipeline hook.
-          It does not replace the glass shader or add pipeline/command-list hooks.
+          CONTROL-FG - GLASS CONTINUATION G1 (EXPERIMENTAL)
+          ===============================================
+          Close Control. Back up your current dxgi.dll and PT shader sidecars.
+          Extract every file here beside Control_DX12.exe, replacing matching files.
+          Requires the existing Control FG installation and verified Steam game DLLs.
+          Keep ray-traced transparent reflections enabled. F10 controls PT.
 
-          Load the glass scene and play for approximately 20 seconds, then exit.
-          C2 missed lighting because its storage-get capture did not observe the lighting load path.
-          C3 captures bytecode supplied directly to compute pipeline creation.
-          The known opaque lighting shader is the positive capture control.
-          Run the INCLUDED Collect-ControlFG-Compact-Logs.cmd and send its ZIP.
-          This collector preserves glass records that the old collector can trim.
-          F10 PT toggle and F11 diagnostics remain unchanged; no F11 test needed.
-          We need the capture to implement native-detail preservation and glass
-          integration against the actual shader bindings, without guessing.
+          Adds one opaque reflection continuation inside glass reflections, for
+          glossy surfaces with smoothness >= 0.8. Native glass hit shaders, alpha
+          tests, material detail, direct lighting, diffuse and emission are retained.
+          Rough surfaces and misses retain the native indirect reflection.
+          Existing opaque PT shaders are unchanged; no third opaque bounce.
+          Additional GPU cost and memory are expected (bounded resource pool).
+
+          Build/PSO/resource checks passed before packaging. In-game appearance
+          and driver compatibility still require testing on the target RTX GPU.
+          Compare F10 on/off at the same glass view. If the result is wrong or
+          absent, run the included log collector after exiting and send its ZIP.
+          Logs PT_GLASS_INSTALL / STATE_READY / RAYS / LIGHTING identify activation.
+          Restore your backed-up binaries to roll back.
           '@ | Set-Content "$out/README.txt" -Encoding ASCII
           Compress-Archive -Path "$out/*" -DestinationPath "$out.zip" -Force
           (Get-FileHash "$out.zip" -Algorithm SHA256).Hash | Set-Content "$out.sha256" -Encoding ASCII
@@ -258,10 +275,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-PT-Reflections-P0
+          name: Control-FG-PT-Glass-G1
           path: |
-            Control-FG-PT-Reflections-P0.zip
-            Control-FG-PT-Reflections-P0.sha256
+            Control-FG-PT-Glass-G1.zip
+            Control-FG-PT-Glass-G1.sha256
             build/exports.txt
             build/imports.txt
             build/pt_reflection_p1.dxil

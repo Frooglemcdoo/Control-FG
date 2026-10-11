@@ -1,0 +1,269 @@
+#pragma once
+#include "pt_glass_resources.h"
+#include "pt_glass_descriptors.h"
+#include <intrin.h>
+#include <unordered_map>
+#include <memory>
+// G1: Steam hash-locked glass continuation. Original exports and native passes
+// remain present; only a fully prepared dispatch selects the additional raygen.
+namespace PTGlassRuntime {
+using Microsoft::WRL::ComPtr;
+using CreateState=HRESULT(STDMETHODCALLTYPE*)(ID3D12Device5*,const D3D12_STATE_OBJECT_DESC*,REFIID,void**);
+using CopySimple=void(STDMETHODCALLTYPE*)(ID3D12Device*,UINT,D3D12_CPU_DESCRIPTOR_HANDLE,D3D12_CPU_DESCRIPTOR_HANDLE,D3D12_DESCRIPTOR_HEAP_TYPE);
+using CreateCbv=void(STDMETHODCALLTYPE*)(ID3D12Device*,const D3D12_CONSTANT_BUFFER_VIEW_DESC*,D3D12_CPU_DESCRIPTOR_HANDLE);
+using SetRayPso=void(STDMETHODCALLTYPE*)(ID3D12GraphicsCommandList4*,ID3D12StateObject*);
+using DispatchRays=void(STDMETHODCALLTYPE*)(ID3D12GraphicsCommandList4*,const D3D12_DISPATCH_RAYS_DESC*);
+using Execute=void(STDMETHODCALLTYPE*)(ID3D12CommandQueue*,UINT,ID3D12CommandList*const*);
+using Reset=HRESULT(STDMETHODCALLTYPE*)(ID3D12GraphicsCommandList*,ID3D12CommandAllocator*,ID3D12PipelineState*);
+static CreateState createState=nullptr;static CopySimple copySimple=nullptr;static CreateCbv createCbv=nullptr;
+static SetRayPso setRayPso=nullptr;static DispatchRays dispatchRays=nullptr;static Execute execute=nullptr;static Reset reset=nullptr;
+static ComPtr<ID3D12Device> device;static ComPtr<ID3D12CommandQueue> queue;
+static ComPtr<ID3D12RootSignature> lightingRoot;static ComPtr<ID3D12PipelineState> nativeLighting,secondaryLighting,compositeLighting;
+static std::vector<unsigned char> rayBytes,secondaryBytes,compositeBytes;
+static std::mutex lock;static PTGlass::Resources resources;
+struct Pipeline {ComPtr<ID3D12StateObject> owner;unsigned char raygen[32]{};};
+static std::unordered_map<ID3D12StateObject*,Pipeline> pipelines;
+struct Pending {ID3D12CommandList* list;UINT64 serial;};static std::vector<Pending> pending;
+static std::atomic<UINT64> sequence{1},dispatchCount{0};static std::atomic<bool> enabled{false},queueReady{false};
+static thread_local bool mirrorGuard=false,rayScope=false;static thread_local unsigned captureKind=0;
+static thread_local ID3D12StateObject* currentRayPso=nullptr;
+struct Context {void* manager=nullptr;ID3D12GraphicsCommandList* list=nullptr;ID3D12GraphicsCommandList4* rays=nullptr;ID3D12CommandQueue* queue=nullptr;PTGlass::DescriptorRange table;D3D12_GPU_DESCRIPTOR_HANDLE gpu{};};
+struct Pass {UINT64 serial=0;Context rayContext{},lightingContext{};std::unique_ptr<PTGlass::LightingTableShadow> ray,light;PTGlass::Resources::Slot* slot=nullptr;bool traced=false;};
+static thread_local Pass pass;
+static bool ReadContext(Context* out) noexcept {
+    *out={};if(!verifiedD3d)return false;
+    __try {
+        auto* b=reinterpret_cast<unsigned char*>(verifiedD3d);
+        const DWORD index=*reinterpret_cast<DWORD*>(b+0x1115fc);
+        auto** vector=reinterpret_cast<unsigned char**>(__readgsqword(0x58));
+        auto* tls=vector[index];if(!tls)return false;
+        auto* manager=*reinterpret_cast<unsigned char**>(tls+0x20);
+        if(!manager)manager=*reinterpret_cast<unsigned char**>(b+0x111c10);
+        auto* context=*reinterpret_cast<unsigned char**>(tls+8);
+        if(!context)context=*reinterpret_cast<unsigned char**>(b+0x111c18);
+        auto* nativeQueue=*reinterpret_cast<unsigned char**>(tls+0x18);
+        if(!nativeQueue)nativeQueue=*reinterpret_cast<unsigned char**>(b+0x111c38);
+        if(!manager||!context||!nativeQueue)return false;
+        auto* provider=*reinterpret_cast<unsigned char**>(manager+0x50);if(!provider)return false;
+        out->list=*reinterpret_cast<ID3D12GraphicsCommandList**>(context+0x18);
+        out->rays=*reinterpret_cast<ID3D12GraphicsCommandList4**>(context+0x20);
+        out->queue=*reinterpret_cast<ID3D12CommandQueue**>(nativeQueue+0x10);
+        out->table.heap=*reinterpret_cast<ID3D12DescriptorHeap**>(provider);
+        out->gpu=*reinterpret_cast<D3D12_GPU_DESCRIPTOR_HANDLE*>(manager+0x30);
+        const auto base=*reinterpret_cast<UINT64*>(provider+0x10);
+        const UINT step=device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+        if(!out->list||!out->queue||!out->table.heap||out->gpu.ptr<base||(out->gpu.ptr-base)%step)return false;
+        const auto at=(out->gpu.ptr-base)/step;if(at>UINT32_MAX)return false;
+        out->table.first=static_cast<UINT>(at);out->table.count=49;out->manager=manager;
+        return out->list->GetType()==D3D12_COMMAND_LIST_TYPE_DIRECT&&out->queue->GetDesc().Type==D3D12_COMMAND_LIST_TYPE_DIRECT;
+    }__except(EXCEPTION_EXECUTE_HANDLER){return false;}
+}
+static bool Fresh(const Context& context,PTGlass::DescriptorRange* out) noexcept {
+    *out={};
+    __try {
+        D3D12_GPU_DESCRIPTOR_HANDLE gpu{};D3D12_CPU_DESCRIPTOR_HANDLE cpu{};unsigned char* provider=nullptr;
+        using Allocate=void(*)(void*,UINT64,D3D12_GPU_DESCRIPTOR_HANDLE*,D3D12_CPU_DESCRIPTOR_HANDLE*,unsigned char**);
+        auto fn=reinterpret_cast<Allocate>(reinterpret_cast<unsigned char*>(verifiedD3d)+0x1aa00);
+        fn(context.manager,49,&gpu,&cpu,&provider);
+        if(!provider||*reinterpret_cast<ID3D12DescriptorHeap**>(provider)!=context.table.heap)return false;
+        const UINT step=device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+        const UINT64 base=*reinterpret_cast<UINT64*>(provider+0x10);
+        if(gpu.ptr<base||(gpu.ptr-base)%step||(gpu.ptr-base)/step>UINT32_MAX)return false;
+        *out={context.table.heap,static_cast<UINT>((gpu.ptr-base)/step),49};return true;
+    }__except(EXCEPTION_EXECUTE_HANDLER){return false;}
+}
+static bool Patch(void* object,UINT index,void* hook,void** original) noexcept {
+    if(!object)return false;auto** slot=&(*reinterpret_cast<void***>(object))[index];
+    if(*slot==hook)return *original!=nullptr;
+    if(*original&&*original!=*slot)return false;
+    DWORD old=0;if(!VirtualProtect(slot,sizeof(void*),PAGE_EXECUTE_READWRITE,&old))return false;
+    *original=*slot;InterlockedExchangePointer(slot,hook);DWORD ignored=0;
+    return VirtualProtect(slot,sizeof(void*),old,&ignored)!=FALSE;
+}
+static PTGlass::LightingTableShadow* ActiveShadow() {
+    if(!captureKind||mirrorGuard||!enabled)return nullptr;
+    auto& holder=captureKind==1?pass.ray:pass.light;
+    auto& context=captureKind==1?pass.rayContext:pass.lightingContext;
+    if(!holder){
+        if(!ReadContext(&context))return nullptr;
+        mirrorGuard=true;holder=std::make_unique<PTGlass::LightingTableShadow>();
+        const bool good=SUCCEEDED(holder->Initialize(device.Get()))&&holder->Begin(pass.serial,context.table);
+        mirrorGuard=false;if(!good){holder.reset();return nullptr;}
+    }
+    return holder.get();
+}
+static void STDMETHODCALLTYPE CopyHook(ID3D12Device* d,UINT count,D3D12_CPU_DESCRIPTOR_HANDLE dst,D3D12_CPU_DESCRIPTOR_HANDLE src,D3D12_DESCRIPTOR_HEAP_TYPE type){
+    copySimple(d,count,dst,src,type);
+    if(type!=D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV)return;
+    if(auto* s=ActiveShadow()){mirrorGuard=true;s->ObserveNativeCopy(pass.serial,dst,count,src);mirrorGuard=false;}
+}
+static void STDMETHODCALLTYPE CbvHook(ID3D12Device* d,const D3D12_CONSTANT_BUFFER_VIEW_DESC* cb,D3D12_CPU_DESCRIPTOR_HANDLE dst){
+    createCbv(d,cb,dst);if(!cb)return;
+    if(auto* s=ActiveShadow()){mirrorGuard=true;s->ObserveNativeConstant(pass.serial,dst,*cb);mirrorGuard=false;}
+}
+static HRESULT STDMETHODCALLTYPE StateHook(ID3D12Device5* d,const D3D12_STATE_OBJECT_DESC* desc,REFIID iid,void** out){
+    if(!desc||desc->Type!=D3D12_STATE_OBJECT_TYPE_RAYTRACING_PIPELINE||!enabled)return createState(d,desc,iid,out);
+    bool target=false;
+    for(UINT i=0;i<desc->NumSubobjects;++i)if(desc->pSubobjects[i].Type==D3D12_STATE_SUBOBJECT_TYPE_DXIL_LIBRARY){
+        const auto* lib=static_cast<const D3D12_DXIL_LIBRARY_DESC*>(desc->pSubobjects[i].pDesc);char sha[65]{};
+        if(lib&&lib->DXILLibrary.BytecodeLength==29328&&PTReflectionSha256(static_cast<const unsigned char*>(lib->DXILLibrary.pShaderBytecode),29328,sha)&&strcmp(sha,"66ec0c29541de1f4aa59636ce6e4415de440a12315b983839d0de0c0a2bab9a8")==0)target=true;
+    }
+    if(!target)return createState(d,desc,iid,out);
+    std::vector<D3D12_STATE_SUBOBJECT> objects(desc->pSubobjects,desc->pSubobjects+desc->NumSubobjects);objects.reserve(desc->NumSubobjects+1);
+    std::vector<D3D12_SUBOBJECT_TO_EXPORTS_ASSOCIATION> associations(desc->NumSubobjects);
+    std::vector<std::vector<LPCWSTR>> exportNames(desc->NumSubobjects);
+    for(UINT i=0;i<desc->NumSubobjects;++i)if(objects[i].Type==D3D12_STATE_SUBOBJECT_TYPE_SUBOBJECT_TO_EXPORTS_ASSOCIATION){
+        associations[i]=*static_cast<const D3D12_SUBOBJECT_TO_EXPORTS_ASSOCIATION*>(objects[i].pDesc);
+        const auto n=associations[i].pSubobjectToAssociate-desc->pSubobjects;
+        if(n<0||static_cast<UINT>(n)>=desc->NumSubobjects)return createState(d,desc,iid,out);
+        const auto type=objects[static_cast<size_t>(n)].Type;
+        bool primary=false;
+        for(UINT j=0;j<associations[i].NumExports;++j)primary=primary||wcscmp(associations[i].pExports[j],L"transparentRayGeneration")==0;
+        if(primary&&(type==D3D12_STATE_SUBOBJECT_TYPE_GLOBAL_ROOT_SIGNATURE||type==D3D12_STATE_SUBOBJECT_TYPE_RAYTRACING_SHADER_CONFIG)){
+            exportNames[i].assign(associations[i].pExports,associations[i].pExports+associations[i].NumExports);
+            exportNames[i].push_back(L"ptGlassRayGeneration");associations[i].NumExports=static_cast<UINT>(exportNames[i].size());associations[i].pExports=exportNames[i].data();
+        }
+        associations[i].pSubobjectToAssociate=&objects[static_cast<size_t>(n)];objects[i].pDesc=&associations[i];
+    }
+    D3D12_EXPORT_DESC exportDesc{L"ptGlassRayGeneration",nullptr,D3D12_EXPORT_FLAG_NONE};
+    D3D12_DXIL_LIBRARY_DESC extra{{rayBytes.data(),rayBytes.size()},1,&exportDesc};
+    objects.push_back({D3D12_STATE_SUBOBJECT_TYPE_DXIL_LIBRARY,&extra});
+    D3D12_STATE_OBJECT_DESC custom=*desc;custom.NumSubobjects=static_cast<UINT>(objects.size());custom.pSubobjects=objects.data();
+    HRESULT hr=createState(d,&custom,iid,out);
+    if(FAILED(hr)){Log("PT_GLASS_STATE_FALLBACK hr=0x%08lX",static_cast<unsigned long>(hr));return createState(d,desc,iid,out);}
+    ComPtr<ID3D12StateObject> object;ComPtr<ID3D12StateObjectProperties> props;
+    if(out&&*out&&SUCCEEDED(static_cast<IUnknown*>(*out)->QueryInterface(IID_PPV_ARGS(&object)))&&SUCCEEDED(object.As(&props))){
+        const void* identifier=props->GetShaderIdentifier(L"ptGlassRayGeneration");
+        if(identifier){Pipeline p;p.owner=object;memcpy(p.raygen,identifier,32);std::lock_guard<std::mutex> guard(lock);pipelines.emplace(object.Get(),std::move(p));Log("PT_GLASS_STATE_READY native_exports_retained=1 extra_raygen=1 recursion_unchanged=1");}
+    }
+    return hr;
+}
+static void STDMETHODCALLTYPE ExecuteHook(ID3D12CommandQueue* q,UINT count,ID3D12CommandList*const* lists){
+    execute(q,count,lists);std::lock_guard<std::mutex> guard(lock);
+    if(q!=queue.Get())return;
+    for(auto it=pending.begin();it!=pending.end();){bool submitted=false;for(UINT i=0;i<count;++i)submitted=submitted||lists[i]==it->list;
+        if(submitted){if(FAILED(resources.Submitted(it->serial)))enabled=false;it=pending.erase(it);}else ++it;}
+}
+static HRESULT STDMETHODCALLTYPE ResetHook(ID3D12GraphicsCommandList* list,ID3D12CommandAllocator* allocator,ID3D12PipelineState* pso){
+    const HRESULT hr=reset(list,allocator,pso);if(SUCCEEDED(hr)){std::lock_guard<std::mutex> guard(lock);
+        for(auto it=pending.begin();it!=pending.end();)if(it->list==list){resources.Discarded(it->serial);it=pending.erase(it);}else ++it;}
+    return hr;
+}
+static void STDMETHODCALLTYPE SetRayPsoHook(ID3D12GraphicsCommandList4* list,ID3D12StateObject* pso){currentRayPso=pso;setRayPso(list,pso);}
+static void STDMETHODCALLTYPE RaysHook(ID3D12GraphicsCommandList4* list,const D3D12_DISPATCH_RAYS_DESC* desc){
+    if(!enabled||!rayScope||!pass.ray||!desc||desc->Depth!=1||(ptReflectionUserState.load()&1u)==0){dispatchRays(list,desc);return;}
+    Context context{};unsigned char identifier[32]{};
+    {std::lock_guard<std::mutex> guard(lock);auto it=pipelines.find(currentRayPso);if(it==pipelines.end()){dispatchRays(list,desc);return;}memcpy(identifier,it->second.raygen,32);}
+    if(!ReadContext(&context)||context.rays!=list||context.manager!=pass.rayContext.manager||context.gpu.ptr!=pass.rayContext.gpu.ptr){dispatchRays(list,desc);return;}
+    if(!queueReady){std::lock_guard<std::mutex> guard(lock);
+        if(!queueReady&&Patch(context.queue,10,reinterpret_cast<void*>(&ExecuteHook),reinterpret_cast<void**>(&execute))&&SUCCEEDED(resources.Initialize(device.Get(),context.queue,2ull*1024*1024*1024))){queue=context.queue;queueReady=true;}}
+    if(!queueReady||queue.Get()!=context.queue||pass.serial>UINT32_MAX||FAILED(resources.Acquire(pass.serial,desc->Width,desc->Height,&pass.slot))){dispatchRays(list,desc);return;}
+    auto* slot=pass.slot;void* mapped=nullptr;
+    if(FAILED(slot->dispatch->Map(0,nullptr,&mapped))){resources.Discarded(pass.serial);pass.slot=nullptr;dispatchRays(list,desc);return;}
+    memset(mapped,0,512);UINT constants[4]{static_cast<UINT>(pass.serial),65534,desc->Width,desc->Height};memcpy(mapped,constants,16);memcpy(static_cast<unsigned char*>(mapped)+256,identifier,32);slot->dispatch->Unmap(0,nullptr);
+    mirrorGuard=true;
+    const bool ready=pass.ray->Copy(pass.serial,2,{slot->descriptors.Get(),4,1})&&pass.ray->Copy(pass.serial,45,{slot->descriptors.Get(),0,1});
+    PTGlass::DescriptorRange fresh;D3D12_GPU_DESCRIPTOR_HANDLE table{};
+    constexpr UINT64 required=(7ull<<5)|(15ull<<41)|(1ull<<2)|(1ull<<45);
+    const bool published=ready&&Fresh(context,&fresh)&&pass.ray->PublishChecked(pass.serial,fresh,required,&table);mirrorGuard=false;
+    if(!published){resources.Discarded(pass.serial);pass.slot=nullptr;dispatchRays(list,desc);return;}
+    // Slot resources finish each successful lighting pass in UAV state.
+    D3D12_DISPATCH_RAYS_DESC custom=*desc;custom.RayGenerationShaderRecord={slot->dispatch->GetGPUVirtualAddress()+256,32};
+    {std::lock_guard<std::mutex> guard(lock);pending.push_back({context.list,pass.serial});}
+    list->SetComputeRootDescriptorTable(0,table);dispatchRays(list,&custom);list->SetComputeRootDescriptorTable(0,context.gpu);
+    pass.traced=true;const auto n=++dispatchCount;if(n<=4||n%240==0)Log("PT_GLASS_RAYS dispatch=%llu extent=%ux%u native_hits_restored=1 additional_opaque_reflection=1",n,desc->Width,desc->Height);
+}
+using UseFn=void(*)(void*,void*);using RayFn=void(*)(int,int);using BindFn=void(*)(void*);using LightFn=void(*)(void*,const void*);
+static UseFn useNative=nullptr;static RayFn rayNative=nullptr;static BindFn bindNative=nullptr;static LightFn lightNative=nullptr;
+static RRIndirectCallPatch usePatch,rayPatch,lightPatch;static RRAlbedoCallPatch bindPatch{};
+static void UseHook(void* table,void* state){
+    pass=Pass{};pass.serial=sequence.fetch_add(1);captureKind=enabled?1u:0u;
+    useNative(table,state);captureKind=0;
+}
+static void RayHook(int a,int b){
+    Context c{};if(enabled&&ReadContext(&c)&&c.rays){
+        ComPtr<ID3D12GraphicsCommandList4> checked;
+        if(SUCCEEDED(c.rays->QueryInterface(IID_PPV_ARGS(&checked)))){
+            Patch(checked.Get(),75,reinterpret_cast<void*>(&SetRayPsoHook),reinterpret_cast<void**>(&setRayPso));
+            Patch(checked.Get(),76,reinterpret_cast<void*>(&RaysHook),reinterpret_cast<void**>(&dispatchRays));
+            Patch(c.list,10,reinterpret_cast<void*>(&ResetHook),reinterpret_cast<void**>(&reset));
+        }
+    }
+    rayScope=enabled&&dispatchRays&&setRayPso&&reset;rayNative(a,b);rayScope=false;
+}
+static void BindHook(void* shader){captureKind=enabled&&pass.traced?2u:0u;bindNative(shader);captureKind=0;}
+static void Barrier(ID3D12GraphicsCommandList* list,ID3D12Resource* resource,D3D12_RESOURCE_STATES from,D3D12_RESOURCE_STATES to){
+    D3D12_RESOURCE_BARRIER b{};b.Type=D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;b.Transition={resource,D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,from,to};list->ResourceBarrier(1,&b);
+}
+static bool LightingStateMatches(void* state) noexcept {
+    __try {
+        auto* s=static_cast<unsigned char*>(state);
+        auto* shader=*reinterpret_cast<unsigned char**>(s+0x1068);
+        return *reinterpret_cast<ID3D12RootSignature**>(s+0x878)==lightingRoot.Get()&&shader&&
+            *reinterpret_cast<ID3D12PipelineState**>(shader+0x78)==nativeLighting.Get();
+    }__except(EXCEPTION_EXECUTE_HANDLER){return false;}
+}
+static void LightHook(void* state,const void* dimensions){
+    lightNative(state,dimensions);
+    if(!enabled||!pass.traced||!pass.slot||!pass.light||!secondaryLighting||!compositeLighting||!nativeLighting||!LightingStateMatches(state))return;
+    constexpr UINT64 fullNative=3ull|(((1ull<<28)-1)<<5)|(1ull<<41);
+    if(!pass.light->Has(pass.serial,fullNative))return;
+    Context context{};if(!ReadContext(&context)||context.list!=pass.rayContext.list||context.gpu.ptr!=pass.lightingContext.gpu.ptr)return;
+    const auto* dims=static_cast<const UINT*>(dimensions);if(!dims||dims[2]!=1)return;
+    auto* slot=pass.slot;PTGlass::LightingTableShadow composite;
+    mirrorGuard=true;
+    bool good=SUCCEEDED(composite.Initialize(device.Get()))&&composite.Begin(pass.serial,context.table)&&composite.Copy(pass.serial,0,pass.light->Snapshot());
+    D3D12_CONSTANT_BUFFER_VIEW_DESC cb{slot->dispatch->GetGPUVirtualAddress(),256};
+    good=good&&pass.light->ConfigureSecondary(pass.serial,cb,{slot->descriptors.Get(),1,1},{slot->descriptors.Get(),2,1});
+    good=good&&composite.Copy(pass.serial,2,{slot->descriptors.Get(),4,1})&&composite.Copy(pass.serial,33,{slot->descriptors.Get(),1,1})&&composite.Copy(pass.serial,34,{slot->descriptors.Get(),3,1});
+    PTGlass::DescriptorRange secondaryRange{},compositeRange{};D3D12_GPU_DESCRIPTOR_HANDLE secondaryTable{},compositeTable{};
+    good=good&&Fresh(context,&secondaryRange)&&pass.light->Publish(pass.serial,secondaryRange,&secondaryTable)&&Fresh(context,&compositeRange)&&composite.PublishChecked(pass.serial,compositeRange,PTGlass::LightingTableLayout::NativeRequired|(1ull<<2)|(1ull<<33)|(1ull<<34)|(1ull<<41),&compositeTable);
+    mirrorGuard=false;if(!good)return;
+    auto* list=context.list;D3D12_RESOURCE_BARRIER uav{};uav.Type=D3D12_RESOURCE_BARRIER_TYPE_UAV;list->ResourceBarrier(1,&uav);
+    Barrier(list,slot->hits.Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+    {PTGlass::ScopedLightingBinding binding(list,nativeLighting.Get(),context.gpu,secondaryLighting.Get(),secondaryTable);list->Dispatch(dims[0],dims[1],dims[2]);}
+    Barrier(list,slot->radiance.Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+    {PTGlass::ScopedLightingBinding binding(list,nativeLighting.Get(),context.gpu,compositeLighting.Get(),compositeTable);list->Dispatch(dims[0],dims[1],dims[2]);}
+    list->ResourceBarrier(1,&uav);
+    Barrier(list,slot->hits.Get(),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+    Barrier(list,slot->radiance.Get(),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+    const auto n=dispatchCount.load();if(n<=4||n%240==0)Log("PT_GLASS_LIGHTING dispatch=%llu secondary=1 composite=1 native_diffuse_direct_emission_retained=1",n);
+}
+static void ObserveCompute(ID3D12Device* d,const D3D12_COMPUTE_PIPELINE_STATE_DESC* desc,void* result){
+    if(!enabled||!desc||!result||desc->CS.BytecodeLength!=39720)return;char sha[65]{};
+    if(!PTReflectionSha256(static_cast<const unsigned char*>(desc->CS.pShaderBytecode),desc->CS.BytecodeLength,sha)||strcmp(sha,"b19de5e0b8a216076b6800790b100b91caa83814abdad3ad276736ba72b5e762"))return;
+    std::lock_guard<std::mutex> guard(lock);if(nativeLighting)return;
+    static_cast<IUnknown*>(result)->QueryInterface(IID_PPV_ARGS(&nativeLighting));lightingRoot=desc->pRootSignature;
+    D3D12_COMPUTE_PIPELINE_STATE_DESC p=*desc;p.CachedPSO={};p.CS={secondaryBytes.data(),secondaryBytes.size()};
+    const HRESULT a=ptReflectionOriginalCreateComputePipelineState(d,&p,IID_PPV_ARGS(&secondaryLighting));p.CS={compositeBytes.data(),compositeBytes.size()};
+    const HRESULT b=ptReflectionOriginalCreateComputePipelineState(d,&p,IID_PPV_ARGS(&compositeLighting));
+    Log("PT_GLASS_LIGHTING_PSO secondary_hr=0x%08lX composite_hr=0x%08lX",static_cast<unsigned long>(a),static_cast<unsigned long>(b));
+}
+static void InstallDevice(ID3D12Device* d){
+    if(device||!enabled)return;device=d;ComPtr<ID3D12Device5> rayDevice;
+    if(FAILED(d->QueryInterface(IID_PPV_ARGS(&rayDevice)))||
+       !Patch(d,24,reinterpret_cast<void*>(&CopyHook),reinterpret_cast<void**>(&copySimple))||
+       !Patch(d,17,reinterpret_cast<void*>(&CbvHook),reinterpret_cast<void**>(&createCbv))||
+       !Patch(rayDevice.Get(),62,reinterpret_cast<void*>(&StateHook),reinterpret_cast<void**>(&createState)))enabled=false;
+    Log("PT_GLASS_DEVICE_HOOKS ready=%u",unsigned(enabled.load()));
+}
+static bool Install(HMODULE renderer,HMODULE d3d){
+    if(!HashMatches(renderer,"ebfb5b47cebc2d4482e912b8090bd343f717bab8a178b5a6385dec9105e7c433")||!HashMatches(d3d,"cceb99cbd9c019af907c24c44701a53c8d230965c1fb31c325233e4c80214aa5"))return false;
+    char sha[65]{};bool loaded=false;
+    if(!PTReflectionLoadSidecar(L"pt_glass_raygen.dxil","GLASS_RAY",rayBytes,sha,loaded)||
+       !PTReflectionLoadSidecar(L"pt_glass_secondary.dxbc","GLASS_LIGHT",secondaryBytes,sha,loaded)||
+       !PTReflectionLoadSidecar(L"pt_glass_composite.dxbc","GLASS_COMPOSITE",compositeBytes,sha,loaded))return false;
+    auto* b=reinterpret_cast<unsigned char*>(renderer);
+    useNative=reinterpret_cast<UseFn>(*reinterpret_cast<void**>(b+0x5dfb18));rayNative=reinterpret_cast<RayFn>(*reinterpret_cast<void**>(b+0x5df4c8));
+    bindNative=reinterpret_cast<BindFn>(b+0x1db750);lightNative=reinterpret_cast<LightFn>(*reinterpret_cast<void**>(b+0x5dfcc0));
+    bool ready=usePatch.Prepare(b+0xa5440,reinterpret_cast<void**>(b+0x5dfb18),reinterpret_cast<void*>(useNative),reinterpret_cast<void*>(&UseHook))&&
+       rayPatch.Prepare(b+0xa557e,reinterpret_cast<void**>(b+0x5df4c8),reinterpret_cast<void*>(rayNative),reinterpret_cast<void*>(&RayHook))&&
+       lightPatch.Prepare(b+0xa5682,reinterpret_cast<void**>(b+0x5dfcc0),reinterpret_cast<void*>(lightNative),reinterpret_cast<void*>(&LightHook))&&
+       RRAlbedoPrepareCallPatch(b+0xa562e,reinterpret_cast<void*>(bindNative),reinterpret_cast<void*>(&BindHook),&bindPatch);
+    if(ready)ready=usePatch.Exchange(true)&&rayPatch.Exchange(true)&&lightPatch.Exchange(true)&&RRAlbedoExchangeCall(&bindPatch,true);
+    if(!ready){usePatch.Exchange(false);rayPatch.Exchange(false);lightPatch.Exchange(false);RRAlbedoExchangeCall(&bindPatch,false);}
+    enabled=ready;Log("PT_GLASS_INSTALL ready=%u build=G1 glossy_only=1 smoothness_min=0.8",unsigned(ready));
+    if(ready){ID3D12Device* existing=nullptr;memcpy(&existing,reinterpret_cast<unsigned char*>(d3d)+kControlGlobalD3D12DevicePointerRva,sizeof(existing));if(existing)InstallDevice(existing);}
+    return ready;
+}
+}

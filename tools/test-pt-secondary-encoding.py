@@ -16,6 +16,9 @@ for name,expected in locked.items():
   source=re.sub(r'static std::atomic<unsigned long long> ptGlass(?:Miss|HitGroup)BindCount\{0\};\n','',source)
   source=re.sub(r'    if\(strcmp\(rrCurrentRayGeneration,"transparentRayGeneration"\)==0\) \{\n        const auto n=\+\+ptGlass(?:Miss|HitGroup)BindCount;\n        if\(n<=\d+\) Log\("PT_GLASS_[^\n]+\n    \}\n','',source)
  if name=='src/pt_reflection_loader.h':
+  for addition in ['#include "pt_glass_runtime.h"\n','    if(SUCCEEDED(nativeHr)&&out&&*out) PTGlassRuntime::ObserveCompute(device,desc,*out);\n','    PTGlassRuntime::InstallDevice(device);\n','    PTGlassRuntime::Install(renderer,d3d);\n']:
+   assert source.count(addition)==1,addition
+   source=source.replace(addition,'')
   source=source.replace('    if(desc) PTGlassCaptureCompute(desc->CS.pShaderBytecode,desc->CS.BytecodeLength);\n\n','')
   source=source.replace('#include "pt_glass_capture.h"\n\n','')
   source=source.replace('    const char* resident=ptReflectionOriginalStorageGet?ptReflectionOriginalStorageGet(id):nullptr;\n    PTGlassCaptureResident(id,resident);\n    return resident;',
@@ -56,4 +59,4 @@ assert 'PTSecondaryDecodeNormal(packedSecondary.xy)' in comp
 assert 'float2 uv=float2(packedSecondary.z,secondPos.w)' in comp
 for name in ['src/shaders/pt_native_secondary.generated.hlsli','tools/generate-pt-native-secondary.py']:
  assert '/2048.0f' in (root/name).read_text()
-print(f'PASS: confirmed rendering runtime unchanged except glass capture logging; half UV max error {uv_error:.8f} vs old {old_error:.8f}; normal max error {worst:.6f} degrees; material IDs exact; texture mip floor checked')
+print(f'PASS: confirmed rendering runtime unchanged except explicit glass capture/integration entry points; half UV max error {uv_error:.8f} vs old {old_error:.8f}; normal max error {worst:.6f} degrees; material IDs exact; texture mip floor checked')

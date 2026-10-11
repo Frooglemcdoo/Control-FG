@@ -9,8 +9,9 @@ static bool Binding(ID3D12ShaderReflection* r,const char* name,D3D_SHADER_INPUT_
     return SUCCEEDED(r->GetResourceBindingDescByName(name,&d)) && d.Type==type &&
         d.BindPoint==slot && d.Space==0 && d.BindCount==1 && d.Dimension==dimension;
 }
-static int Compile(bool secondary,ID3D12Device* device,ID3D12RootSignature* root) {
-    D3D_SHADER_MACRO macros[]={{"PT_GLASS_SECONDARY_EVALUATION",secondary?"1":"0"},{nullptr,nullptr}};
+static int Compile(int mode,ID3D12Device* device,ID3D12RootSignature* root) {
+    const bool secondary=mode==1,composite=mode==2;
+    D3D_SHADER_MACRO macros[]={{"PT_GLASS_SECONDARY_EVALUATION",secondary?"1":"0"},{"PT_GLASS_COMPOSITE",composite?"1":"0"},{nullptr,nullptr}};
     ID3DBlob* code=nullptr;ID3DBlob* errors=nullptr;
     const HRESULT hr=D3DCompileFromFile(L"src/shaders/pt_glass_native.generated.hlsl",macros,
         D3D_COMPILE_STANDARD_FILE_INCLUDE,"main","cs_5_1",
@@ -34,6 +35,7 @@ static int Compile(bool secondary,ID3D12Device* device,ID3D12RootSignature* root
         good=good&&Binding(r,"g_tNormal_TexcoordX",D3D_SIT_TEXTURE,26,D3D_SRV_DIMENSION_TEXTURE2D);
         good=good&&Binding(r,"g_tPosition_TexcoordY",D3D_SIT_TEXTURE,27,D3D_SRV_DIMENSION_TEXTURE2D);
     }
+    if(composite)good=good&&Binding(r,"ptGlassRadiance",D3D_SIT_TEXTURE,29,D3D_SRV_DIMENSION_TEXTURE2D)&&Binding(r,"ptGlassSecondaryHits",D3D_SIT_STRUCTURED,28,D3D_SRV_DIMENSION_BUFFER)&&Binding(r,"PTGlassDispatch",D3D_SIT_CBUFFER,6,D3D_SRV_DIMENSION_UNKNOWN);
     r->Release();
     if(!good){code->Release();fputs("FAIL: glass shader binding contract\n",stderr);return 3;}
     D3D12_COMPUTE_PIPELINE_STATE_DESC pipeline{};pipeline.pRootSignature=root;
@@ -42,10 +44,10 @@ static int Compile(bool secondary,ID3D12Device* device,ID3D12RootSignature* root
     const HRESULT pipelineHr=device->CreateComputePipelineState(&pipeline,IID_PPV_ARGS(&pso));
     if(FAILED(pipelineHr)){printf("FAIL: glass native-root PSO creation 0x%08lX\n",static_cast<unsigned long>(pipelineHr));code->Release();return 6;}
     FILE* out=nullptr;
-    if(fopen_s(&out,secondary?"build/pt_glass_secondary.dxbc":"build/pt_glass_native.dxbc","wb")||!out){code->Release();return 4;}
+    if(fopen_s(&out,secondary?"build/pt_glass_secondary.dxbc":composite?"build/pt_glass_composite.dxbc":"build/pt_glass_native.dxbc","wb")||!out){code->Release();return 4;}
     good=fwrite(code->GetBufferPointer(),1,code->GetBufferSize(),out)==code->GetBufferSize();
     good=fclose(out)==0&&good;
-    printf("PASS: glass %s cs_5_1; 8x16x1 threads, resource contract, and WARP PSO with recovered native root verified; %zu bytes\n",secondary?"secondary":"native",code->GetBufferSize());
+    printf("PASS: glass %s cs_5_1; 8x16x1 threads, resource contract, and WARP PSO with recovered native root verified; %zu bytes\n",secondary?"secondary":composite?"composite":"native",code->GetBufferSize());
     code->Release();return good?0:5;
 }
 int main(){
@@ -56,5 +58,5 @@ int main(){
        FAILED(factory->EnumWarpAdapter(IID_PPV_ARGS(&adapter)))||
        FAILED(D3D12CreateDevice(adapter.Get(),D3D_FEATURE_LEVEL_11_0,IID_PPV_ARGS(&device)))||
        FAILED(CreateGlassNativeRootFixture(device.Get(),&root)))return 7;
-    int result=Compile(false,device.Get(),root.Get());return result?result:Compile(true,device.Get(),root.Get());
+    for(int mode=0;mode<3;++mode){int result=Compile(mode,device.Get(),root.Get());if(result)return result;}return 0;
 }

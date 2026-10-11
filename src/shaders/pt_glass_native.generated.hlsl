@@ -46,10 +46,16 @@ cbuffer distancefield_CS : register(b5) { uint4 ptCB5[2]; };
 #ifndef PT_GLASS_SECONDARY_EVALUATION
 #define PT_GLASS_SECONDARY_EVALUATION 0
 #endif
-#if PT_GLASS_SECONDARY_EVALUATION
+#ifndef PT_GLASS_COMPOSITE
+#define PT_GLASS_COMPOSITE 0
+#endif
+#if PT_GLASS_SECONDARY_EVALUATION || PT_GLASS_COMPOSITE
 #include "pt_glass_secondary_layout.hlsli"
 StructuredBuffer<PTGlassSecondaryHit> ptGlassSecondaryHits : register(t28, space0);
 cbuffer PTGlassDispatch : register(b6) { uint ptGlassEpoch; uint ptGlassMaterialCount; uint2 ptGlassExtent; };
+#endif
+#if PT_GLASS_COMPOSITE
+Texture2D<float4> ptGlassRadiance : register(t29);
 #endif
 
 uint4 PTBitExtract(uint4 width,uint4 offset,uint4 value) {
@@ -971,6 +977,15 @@ void main(uint3 groupId : SV_GroupID, uint3 groupThreadId : SV_GroupThreadID) {
     r2.xyzw=(r13.xzwx).xyzw; // native dword 6718
     r3.xyzw=(r18.xyzx).xyzw; // native dword 6723
     r2.xyzw=(asuint(mad(asfloat(r12.xyzw),asfloat(r10.xyzx),asfloat(r2.xyzw)))).xyzw; // native dword 6728
+#if PT_GLASS_COMPOSITE
+    if (all(r1.xy < ptGlassExtent)) {
+        PTGlassSecondaryHit bounce=ptGlassSecondaryHits[r1.y*ptGlassExtent.x+r1.x];
+        if (PTGlassValidHit(bounce,ptGlassEpoch,ptGlassMaterialCount)) {
+            float3 traced=ptGlassRadiance.Load(int3(r1.xy,0)).xyz;
+            if (all(isfinite(traced))) r11.xyz=asuint(max(traced,0.0f));
+        }
+    }
+#endif
     r3.xyzw=(asuint(mad(asfloat(r9.xyzw),asfloat(r11.xyzx),asfloat(r3.xyzw)))).xyzw; // native dword 6737
     r0.xyz=(asuint(g_sMaterialTextureArray[NonUniformResourceIndex((r1.wwww).x-0u)].SampleLevel(g_sLinearWrap,asfloat(r8.xyxx).xy,asfloat(uint4(0x0u,0x0u,0x0u,0x0u)).x))).xyzw.xyz; // native dword 6746
     r4.xyzw=(asuint((asfloat(r5.yzwy)*asfloat(r0.xyzx)))).xyzw; // native dword 6761

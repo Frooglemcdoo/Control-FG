@@ -88,6 +88,39 @@ public:
            !Copy(recording,LightingTableLayout::Hits,hits)||!Copy(recording,LightingTableLayout::Output,output))return false;
         configured=true;return true;
     }
+    DescriptorRange Snapshot() const noexcept {return {staging.Get(),0,49};}
+    bool ObserveNativeCopy(std::uint64_t recording,D3D12_CPU_DESCRIPTOR_HANDLE destination,
+                           UINT count,D3D12_CPU_DESCRIPTOR_HANDLE source) noexcept {
+        if(recording!=epoch||!epoch||published||!count||!source.ptr)return false;
+        auto base=native.heap->GetCPUDescriptorHandleForHeapStart();base.ptr+=SIZE_T(native.first)*step;
+        if(destination.ptr<base.ptr||(destination.ptr-base.ptr)%step)return false;
+        const SIZE_T index=(destination.ptr-base.ptr)/step;
+        if(index>=49||count>49-index)return false;
+        // Only called by the build-locked native CopyDescriptorsSimple adapter.
+        // Its source is already a valid CPU descriptor under the native API contract.
+        device->CopyDescriptorsSimple(count,At(static_cast<UINT>(index)),source,D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+        seen|=((1ull<<count)-1)<<index;configured=false;return true;
+    }
+    bool ObserveNativeConstant(std::uint64_t recording,D3D12_CPU_DESCRIPTOR_HANDLE destination,
+                               const D3D12_CONSTANT_BUFFER_VIEW_DESC& cb) noexcept {
+        if(!epoch)return false;
+        auto base=native.heap->GetCPUDescriptorHandleForHeapStart();base.ptr+=SIZE_T(native.first)*step;
+        if(destination.ptr<base.ptr||(destination.ptr-base.ptr)%step)return false;
+        const SIZE_T index=(destination.ptr-base.ptr)/step;
+        return index<5&&Constant(recording,static_cast<UINT>(index),cb);
+    }
+    bool Has(std::uint64_t recording,std::uint64_t mask) const noexcept {return recording==epoch&&epoch&&(seen&mask)==mask;}
+    bool PublishChecked(std::uint64_t recording,const DescriptorRange& fresh,std::uint64_t required,
+                        D3D12_GPU_DESCRIPTOR_HANDLE* customTable) noexcept {
+        if(!customTable)return false;customTable->ptr=0;
+        if(!Has(recording,required)||published||!Valid(fresh,true)||fresh.heap!=native.heap||fresh.count!=49||
+           fresh.first<LightingTableLayout::NativeMaterialPrefix||
+           (fresh.first<native.first+native.count&&native.first<fresh.first+fresh.count))return false;
+        auto dst=fresh.heap->GetCPUDescriptorHandleForHeapStart();dst.ptr+=SIZE_T(fresh.first)*step;
+        device->CopyDescriptorsSimple(49,dst,At(0),D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+        *customTable=fresh.heap->GetGPUDescriptorHandleForHeapStart();customTable->ptr+=UINT64(fresh.first)*step;
+        published=true;return true;
+    }
     bool Ready(std::uint64_t recording) const noexcept {
         constexpr auto required=LightingTableLayout::NativeRequired|LightingTableLayout::CustomRequired;
         return epoch&&recording==epoch&&!published&&configured&&(seen&required)==required;
@@ -97,14 +130,8 @@ public:
     // Reject heap rollover: preserving native root 7 requires the SAME heap.
     bool Publish(std::uint64_t recording,const DescriptorRange& fresh,
                  D3D12_GPU_DESCRIPTOR_HANDLE* customTable) noexcept {
-        if(!customTable)return false;customTable->ptr=0;
-        if(!Ready(recording)||!Valid(fresh,true)||fresh.heap!=native.heap||fresh.count!=49||
-           fresh.first<LightingTableLayout::NativeMaterialPrefix||
-           (fresh.first<native.first+native.count&&native.first<fresh.first+fresh.count))return false;
-        auto dst=fresh.heap->GetCPUDescriptorHandleForHeapStart();dst.ptr+=SIZE_T(fresh.first)*step;
-        device->CopyDescriptorsSimple(49,dst,At(0),D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-        *customTable=fresh.heap->GetGPUDescriptorHandleForHeapStart();customTable->ptr+=UINT64(fresh.first)*step;
-        published=true;return true;
+        if(!Ready(recording)){if(customTable)customTable->ptr=0;return false;}
+        return PublishChecked(recording,fresh,LightingTableLayout::NativeRequired|LightingTableLayout::CustomRequired,customTable);
     }
 };
 

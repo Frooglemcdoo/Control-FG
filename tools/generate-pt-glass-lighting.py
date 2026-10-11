@@ -76,9 +76,13 @@ for b in j['bindings']:
  arr='' if b['count']==1 else '['+(str(b['count']) if b['count'] else '')+']'
  out.append(decl+' '+b['name']+arr+' : register('+('u' if b['kind']==4 else 't')+str(b['slot'])+', space'+str(b['space'])+');')
 out += ['#ifndef PT_GLASS_SECONDARY_EVALUATION', '#define PT_GLASS_SECONDARY_EVALUATION 0', '#endif',
-        '#if PT_GLASS_SECONDARY_EVALUATION', '#include "pt_glass_secondary_layout.hlsli"',
+        '#ifndef PT_GLASS_COMPOSITE', '#define PT_GLASS_COMPOSITE 0', '#endif',
+        '#if PT_GLASS_SECONDARY_EVALUATION || PT_GLASS_COMPOSITE', '#include "pt_glass_secondary_layout.hlsli"',
         'StructuredBuffer<PTGlassSecondaryHit> ptGlassSecondaryHits : register(t28, space0);',
         'cbuffer PTGlassDispatch : register(b6) { uint ptGlassEpoch; uint ptGlassMaterialCount; uint2 ptGlassExtent; };',
+        '#endif',
+        '#if PT_GLASS_COMPOSITE',
+        'Texture2D<float4> ptGlassRadiance : register(t29);',
         '#endif']
 out += ['''
 uint4 PTBitExtract(uint4 width,uint4 offset,uint4 value) {
@@ -119,6 +123,16 @@ for ins in selected:
           '    r4=asuint(ptHit.normalWorld_texcoordX);',
           '#else']
  if at==680:out.append('#endif')
+ if at==6737:
+  out += ['#if PT_GLASS_COMPOSITE',
+          '    if (all(r1.xy < ptGlassExtent)) {',
+          '        PTGlassSecondaryHit bounce=ptGlassSecondaryHits[r1.y*ptGlassExtent.x+r1.x];',
+          '        if (PTGlassValidHit(bounce,ptGlassEpoch,ptGlassMaterialCount)) {',
+          '            float3 traced=ptGlassRadiance.Load(int3(r1.xy,0)).xyz;',
+          '            if (all(isfinite(traced))) r11.xyz=asuint(max(traced,0.0f));',
+          '        }',
+          '    }',
+          '#endif']
  if op=='ret':
   emit('return;');continue
  if op=='store_uav_typed':

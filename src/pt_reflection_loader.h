@@ -475,6 +475,7 @@ static void* PTReflectionHookTechniqueLookup(void* rfx,const char* technique) {
 }
 
 #include "pt_glass_capture.h"
+#include "pt_glass_runtime.h"
 
 static const char* PTReflectionHookShaderStorageGet(int id) {
     if(id==kPTReflectionP2RaySyntheticStorageId&&ptReflectionP2InjectionEnabled&&
@@ -800,6 +801,7 @@ static HRESULT STDMETHODCALLTYPE PTReflectionHookCreateComputePipelineState(
     if(desc) PTGlassCaptureCompute(desc->CS.pShaderBytecode,desc->CS.BytecodeLength);
 
     const HRESULT nativeHr=ptReflectionOriginalCreateComputePipelineState(device,desc,riid,out);
+    if(SUCCEEDED(nativeHr)&&out&&*out) PTGlassRuntime::ObserveCompute(device,desc,*out);
     if(!target||FAILED(nativeHr)||!out||!*out||!desc)return nativeHr;
 
     AcquireSRWLockExclusive(&ptReflectionCompositePsoLock);
@@ -875,6 +877,7 @@ static bool PTReflectionInstallComputePsoHookOnDevice(ID3D12Device* device) noex
     }
 
     ptReflectionOriginalCreateComputePipelineState=original;
+    PTGlassRuntime::InstallDevice(device);
     ptReflectionCreateComputePipelineStateSlot=slot;
     Log("PT_REFLECTION_P2_PSO_HOOK ready=1 source=device_create device=%p vtable=%p slot_index=%llu slot=%p original=%p hook=%p exchange_error=%lu",
         device,vtable,static_cast<unsigned long long>(slotIndex),slot,
@@ -2100,6 +2103,7 @@ static bool PTReflectionInstallShaderLookupHooks(HMODULE renderer,HMODULE d3d) n
         }
         return false;
     }
+    PTGlassRuntime::Install(renderer,d3d);
     Log("PT_REFLECTION_P1_LOOKUP_HOOKS ready=1 ray_calls=12953C,12954B,12956C deferred_calls=1296B8,1296C7,1296E8 rfx_helper=0x1D9960 technique_helper=0x1D2CE0 variant_helper=0x1DD450 native_hashes=32 native_swap_probe=%s forced_variant=%d gpu_work=%s",
         ptReflectionForcedNativeVariant>=0?"enabled":"disabled",ptReflectionForcedNativeVariant,
         ptReflectionForcedNativeVariant>=0?"native_reflection_permutation_may_change":"unchanged");
