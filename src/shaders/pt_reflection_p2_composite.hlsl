@@ -607,15 +607,15 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
     float rawPointPower=0.0f;
     float rawSpotPower=0.0f;
     [loop]
-    for(uint i=0u;i<min(pointSampleCount,12u);++i){
-        const float3 c=ptNativePointLights[i].color;
+    for(uint pointProbeIndex=0u;pointProbeIndex<min(pointSampleCount,12u);++pointProbeIndex){
+        const float3 c=ptNativePointLights[pointProbeIndex].color;
         if(all(isfinite(c))&&all(c>=0.0f)&&
            all(c<10000.0f))
             rawPointPower+=max(dot(c,float3(0.2126f,0.7152f,0.0722f)),0.0f);
     }
     [loop]
-    for(uint i=0u;i<min(spotSampleCount,12u);++i){
-        const float3 c=ptNativeSpotLights[i].words[3].xyz;
+    for(uint spotProbeIndex=0u;spotProbeIndex<min(spotSampleCount,12u);++spotProbeIndex){
+        const float3 c=ptNativeSpotLights[spotProbeIndex].words[3].xyz;
         if(all(isfinite(c))&&all(c>=0.0f)&&
            all(c<10000.0f))
             rawSpotPower+=max(dot(c,float3(0.2126f,0.7152f,0.0722f)),0.0f);
