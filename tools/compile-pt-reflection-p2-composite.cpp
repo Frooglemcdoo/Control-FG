@@ -74,6 +74,7 @@ int main() {
     // reference b6 after replacing the unused material-count field.
     if(diagnostic!=2u)ok=ok&&Binding(r,"rtreflection",D3D_SIT_CBUFFER,6,0);
     if(diagnostic!=2u){
+        ok=ok&&Binding(r,"g_ptPrivateHits",D3D_SIT_UAV_RWSTRUCTURED,0,99);
         const struct {const char* name;UINT slot;D3D_SHADER_INPUT_TYPE type;UINT stride;} required[]={
             {"g_sbMaterialDataPart1",3,D3D_SIT_STRUCTURED,8},
             {"g_tRaytracingLightCellPointLights",5,D3D_SIT_TEXTURE,0},
