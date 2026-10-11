@@ -168,7 +168,9 @@ float3 PTLocalUnshadowedPotential(float3 hitPosView,float3 hitNormalView,
     for(uint i=0u;i<numLights;++i){
         PTNativePointLight l=ptNativePointLights[i];
         if(!all(isfinite(l.positionView)) || !all(isfinite(l.color)) ||
-            !isfinite(l.boundsRadius))continue;
+            !isfinite(l.boundsRadius) || l.boundsRadius<=0.01f ||
+            l.boundsRadius>5000.0f ||
+            any(l.color<0.0f) || any(l.color>10000.0f))continue;
         float3 toLight=l.positionView-hitPosView;
         float d2=dot(toLight,toLight);
         if(d2<1.0e-3f)continue;
@@ -198,7 +200,10 @@ float3 PTLocalUnshadowedSpotPotential(float3 hitPosView,float3 hitNormalView,
         float3 color=l.words[3].xyz;         // +48
         float sinConeHalfSq=l.words[4].w;    // +76
         if(!all(isfinite(lightPosView))||!all(isfinite(directionView))||
-           !all(isfinite(color))||!isfinite(farDistance))continue;
+           !all(isfinite(color))||!isfinite(farDistance)||
+           farDistance<=0.01f||farDistance>5000.0f||
+           dot(directionView,directionView)<1.0e-8f||
+           any(color<0.0f)||any(color>10000.0f))continue;
         float3 toLight=lightPosView-hitPosView;
         float d2=dot(toLight,toLight);
         if(d2<1.0e-3f||farDistance<=0.01f)continue;
@@ -405,8 +410,16 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
         rawCount<=pointElements&&rawCount<=8192u;
     const bool spotCountValid=spotStrideValid&&spotElements<1048576u&&
         rawSpots<=spotElements&&rawSpots<=8192u;
-    const uint pointCount=pointCountValid?rawCount:0u;
-    const uint spotCount=spotCountValid?rawSpots:0u;
+    // Keep the questionable CBV counts for the HEX display, but do not
+    // let them suppress independent SRV diagnostics. Sample only the
+    // first 12 buffer records, guarded by the *actual SRV dimensions*.
+    // This is NOT scene light-list decoding and never runs in normal P2.
+    const bool pointViewSafe=pointStrideValid&&pointElements>0u&&
+        pointElements<=65536u;
+    const bool spotViewSafe=spotStrideValid&&spotElements>0u&&
+        spotElements<=65536u;
+    const uint pointSampleCount=pointViewSafe?min(pointElements,12u):0u;
+    const uint spotSampleCount=spotViewSafe?min(spotElements,12u):0u;
     if(right&&!bottom){
         uint tileW=0u,tileH=0u,spotW=0u,spotH=0u;
         ptNativePointCellIds.GetDimensions(tileW,tileH);
@@ -466,7 +479,8 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
         return;
     }
 
-    float3 lightPotential=0.0f;
+    float3 pointPotential=0.0f;
+    float3 spotPotential=0.0f;
     bool foundSecondHit=false;
     [unroll]
     for(uint probePath=0u;probePath<2u;++probePath){
@@ -479,21 +493,40 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
         float3 normalView=PTWorldNormalToView(normalize(n.xyz));
         float3 hitPosView=g_tPosition_TexcoordY.Load(int4(pixel,probePath+2u,0)).xyz;
         if(!all(isfinite(hitPosView))||!all(isfinite(normalView)))continue;
-        // 16 light records per valid secondary hit, deterministic and bounded.
-        // This samples only an initial subset; tiled selection comes next.
-        const uint evalCount=min(pointCount,16u);
-        const uint spotEvalCount=min(spotCount,16u);
-        lightPotential+=(
-            PTLocalUnshadowedPotential(hitPosView,normalView,evalCount)+
-            PTLocalUnshadowedSpotPotential(hitPosView,normalView,spotEvalCount))*0.5f;
+        // Bounded fallback scans native SRV records independent of the
+        // rejected b1 counts. This is proof-only; real tile-list selection
+        // and shadow atlas visibility are still missing.
+        pointPotential+=PTLocalUnshadowedPotential(
+            hitPosView,normalView,pointSampleCount)*0.5f;
+        spotPotential+=PTLocalUnshadowedSpotPotential(
+            hitPosView,normalView,spotSampleCount)*0.5f;
     }
-    const float lum=max(dot(lightPotential,float3(0.2126f,0.7152f,0.0722f)),0.0f);
-    const float heat=saturate(lum/(lum+0.08f));
+    const float3 lightPotential=pointPotential+spotPotential;
+    const float pointLum=max(dot(pointPotential,float3(0.2126f,0.7152f,0.0722f)),0.0f);
+    const float spotLum=max(dot(spotPotential,float3(0.2126f,0.7152f,0.0722f)),0.0f);
+    const float pointHeat=saturate(pointLum/(pointLum+0.04f));
+    const float spotHeat=saturate(spotLum/(spotLum+0.04f));
     if(!right&&bottom){
-        g_rwtReflectionTarget[pixel]=foundSecondHit?
-            float4(heat*4.0f,heat*(1.0f-heat)*4.0f,
-                (1.0f-heat)*0.6f,1.0f):
-            float4(0.0f,0.0f,0.0f,1.0f);
+        if(pixel.y<halfH+24u){
+            // Three constant-color bar segments: RED means point SRV is
+            // safe to sample, GREEN means spot SRV is safe to sample,
+            // BLUE means secondary hit geometry exists. The rest of
+            // this quadrant displays actual unshadowed potential.
+            const uint dx=(pixel.x*3u)/max(halfW,1u);
+            const bool barOn=dx==0u?pointViewSafe:
+                dx==1u?spotViewSafe:foundSecondHit;
+            const float3 channelColor=dx==0u?float3(4.0f,0.0f,0.0f):
+                dx==1u?float3(0.0f,4.0f,0.0f):
+                        float3(0.0f,0.0f,4.0f);
+            g_rwtReflectionTarget[pixel]=float4(
+                barOn?channelColor:float3(0.0f,0.0f,0.0f),1.0f);
+            return;
+        }
+        // RED = point-light contribution, GREEN = spotlight, BLUE =
+        // confirmed secondary-hit coverage (weak constant baseline).
+        g_rwtReflectionTarget[pixel]=float4(foundSecondHit?
+            float3(pointHeat*4.0f,spotHeat*4.0f,0.12f):
+            float3(0.0f,0.0f,0.0f),1.0f);
         return;
     }
     float4 candidateBase=g_rwtReflectionTarget[pixel];
