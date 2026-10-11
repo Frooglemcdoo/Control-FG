@@ -1398,7 +1398,7 @@ static void PTReflectionHookDeferredDispatch(void* state,const void* dimensions)
     // stabilized ray library/first-hit sampling remain identical in both views.
     static std::atomic<unsigned int> lastUserEnabled{2u};
     if(lastUserEnabled.exchange(unsigned(userEnabled),std::memory_order_acq_rel)!=unsigned(userEnabled))
-        Log("PT_REFLECTION_AB_APPLIED enabled=%u native_composite=1 added_composite=%u ray_tracing_unchanged=1 verify_mode=%u",
+        Log("PT_REFLECTION_AB_APPLIED enabled=%u native_composite=1 added_composite=%u extra_rays_follow_toggle=1 verify_mode=%u",
             unsigned(userEnabled),unsigned(userEnabled),userState>>1u);
     if(!userEnabled)return;
     if(!PTReflectionAuditTwoLayerHitTextures())return;
@@ -1589,43 +1589,8 @@ static void* PTReflectionHookVariantLookup(void* technique,unsigned key) {
         bool p1Injected=false;
         bool nativeSwapped=false;
 
-        if(admitted&&identity.variant==0&&ptReflectionP2InjectionEnabled){
-            if(!ptReflectionP2RayShaderRecordReady)
-                PTReflectionPrepareP2RayShaderRecord(nativeResult,identity);
-            if(ptReflectionP2RayShaderRecordReady){
-                result=ptReflectionP2RayShaderRecord;
-                p2Injected=true;
-            }
-        }
-
-        if(!p2Injected&&admitted&&ptReflectionP1InjectionEnabled&&identity.variant==0){
-            if(!ptReflectionP1ShaderRecordReady)
-                PTReflectionPrepareP1ShaderRecord(nativeResult,identity);
-            if(ptReflectionP1ShaderRecordReady){
-                result=ptReflectionP1ShaderRecord;
-                p1Injected=true;
-            }
-        } else if(!p2Injected&&!p1Injected&&admitted&&ptReflectionForcedNativeVariant>=0){
-            if(ptReflectionSwapTechnique!=technique||
-               ptReflectionSwapVariant!=ptReflectionForcedNativeVariant||
-               !ptReflectionSwapShader){
-                void* candidate=nullptr;PTReflectionRayIdentity swapIdentity{};
-                if(PTReflectionFindNativeVariant(technique,ptReflectionForcedNativeVariant,
-                    &candidate,&swapIdentity)){
-                    ptReflectionSwapTechnique=technique;
-                    ptReflectionSwapVariant=ptReflectionForcedNativeVariant;
-                    ptReflectionSwapShader=candidate;
-                }else{
-                    ptReflectionSwapTechnique=technique;
-                    ptReflectionSwapVariant=ptReflectionForcedNativeVariant;
-                    ptReflectionSwapShader=nullptr;
-                }
-            }
-            if(ptReflectionSwapShader){
-                result=ptReflectionSwapShader;
-                nativeSwapped=result!=nativeResult;
-            }
-        }
+        // R6: retain the game's exact shader record. PTThirdCreateState adds
+        // an extra raygen export without replacing ANY native DXIL export.
         Log("PT_REFLECTION_P1_VARIANT call=%llu technique=%p key=0x%X native_shader=%p returned_shader=%p admitted=%u variant=%d p2_requested=%u p2_record_ready=%u p2_injected=%u p1_requested=%u p1_record_ready=%u p1_injected=%u native_swapped=%u forced_native_variant=%d mode=%s native_result_preserved=%u",
             call,technique,key,nativeResult,result,unsigned(admitted),identityKnown?identity.variant:-1,
             unsigned(ptReflectionP2InjectionEnabled),unsigned(ptReflectionP2RayShaderRecordReady),
@@ -1942,7 +1907,7 @@ static bool PTReflectionInstallShaderLookupHooks(HMODULE renderer,HMODULE d3d) n
     ptReflectionTwoLayerAttempts.store(0u,std::memory_order_release);
     ptReflectionUserState.fetch_and(1u,std::memory_order_acq_rel);
     ptReflectionVerifyKeyDown.store(0u,std::memory_order_release);
-    Log("PT_THIRD_HOOK_FIX revision=5 native_pipeline_rebuild=1 freshness_gate=1 immutable_hook_chain=1 per_vtable_originals=1 direct_capture_required=1");
+    Log("PT_THIRD_HOOK_FIX revision=6 native_preserved_extra_pass=1 freshness_gate=1 immutable_hook_chain=1 per_vtable_originals=1 direct_capture_required=1");
     Log("PT_THIRD_CONFIG bounces=3 private_records=2 hit_stride=32 buffer_mib=512 full_precision_uv=1 full_precision_position=1 native_arrays=2");
     Log("PT_REFLECTION_DIFFUSE_PRESERVATION native_diffuse_gi=1 native_direct_emission=1 specular_only_replacement=1 vndf_weight=F_G1 native_parity_gate=1");
     Log("PT_REFLECTION_NATIVE_SECONDARY_SHADING enabled=1 material_brdf=1 light_cells=1 point_shadow_atlas=1 spot_shadow_atlases=1 gi_volumes=1 native_shader_sha=4fc0a0e9cd3706bcb86e29444d86fa32616138e1712c53b1b5103b30d7a1ecc9");
