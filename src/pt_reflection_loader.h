@@ -136,9 +136,6 @@ static SRWLOCK ptReflectionCompositePsoLock=SRWLOCK_INIT;
 
 using PTSetPipelineStateFn=void (STDMETHODCALLTYPE*)(ID3D12GraphicsCommandList*,ID3D12PipelineState*);
 using PTSetComputeRootSignatureFn=void (STDMETHODCALLTYPE*)(ID3D12GraphicsCommandList*,ID3D12RootSignature*);
-static PTSetPipelineStateFn ptReflectionOriginalSetPipelineState=nullptr;
-static PTSetComputeRootSignatureFn ptReflectionOriginalSetComputeRootSignature=nullptr;
-static void** ptReflectionCommandListVtable=nullptr;
 static thread_local bool ptReflectionAwaitingCompositeBind=false;
 static std::atomic<unsigned long long> ptReflectionCompositeBindCaptures{0};
 
@@ -910,8 +907,8 @@ static void STDMETHODCALLTYPE PTReflectionHookSetComputeRootSignature(
         }
         ReleaseSRWLockExclusive(&ptReflectionCompositePsoLock);
     }
-    if(ptReflectionOriginalSetComputeRootSignature)
-        ptReflectionOriginalSetComputeRootSignature(list,root);
+    if(auto original=reinterpret_cast<PTSetComputeRootSignatureFn>(PTThirdOriginal(list,29)))
+        original(list,root);
 }
 
 static void STDMETHODCALLTYPE PTReflectionHookSetPipelineState(
@@ -929,68 +926,12 @@ static void STDMETHODCALLTYPE PTReflectionHookSetPipelineState(
             ptReflectionCompositePsoCaptured.store(1u,std::memory_order_release);
         ReleaseSRWLockExclusive(&ptReflectionCompositePsoLock);
     }
-    if(ptReflectionOriginalSetPipelineState)
-        ptReflectionOriginalSetPipelineState(list,pso);
+    if(auto original=reinterpret_cast<PTSetPipelineStateFn>(PTThirdOriginal(list,25)))
+        original(list,pso);
 }
 
 static bool PTReflectionInstallCommandListCaptureHooks(void* commandList) noexcept {
-    auto* list=static_cast<ID3D12GraphicsCommandList*>(commandList);
-    if(!list)return false;
-    void** vtable=nullptr;
-    __try {vtable=*reinterpret_cast<void***>(list);}
-    __except(EXCEPTION_EXECUTE_HANDLER){vtable=nullptr;}
-    if(!vtable)return false;
-
-    if(ptReflectionCommandListVtable==vtable&&
-       ptReflectionOriginalSetPipelineState&&ptReflectionOriginalSetComputeRootSignature)
-        return true;
-    if(ptReflectionCommandListVtable&&ptReflectionCommandListVtable!=vtable)
-        return false;
-
-    constexpr size_t kSetPipelineStateSlot=25u;
-    constexpr size_t kSetComputeRootSignatureSlot=29u;
-    auto* originalPso=reinterpret_cast<PTSetPipelineStateFn>(vtable[kSetPipelineStateSlot]);
-    auto* originalRoot=reinterpret_cast<PTSetComputeRootSignatureFn>(vtable[kSetComputeRootSignatureSlot]);
-    if(!originalPso||!originalRoot)return false;
-
-    DWORD oldPso=0,oldRoot=0;
-    if(!VirtualProtect(&vtable[kSetPipelineStateSlot],sizeof(void*),PAGE_EXECUTE_READWRITE,&oldPso))
-        return false;
-    void* previousPso=InterlockedCompareExchangePointer(
-        &vtable[kSetPipelineStateSlot],
-        reinterpret_cast<void*>(&PTReflectionHookSetPipelineState),
-        reinterpret_cast<void*>(originalPso));
-    DWORD ignoredPso=0;
-    const BOOL psoProtect=VirtualProtect(&vtable[kSetPipelineStateSlot],sizeof(void*),oldPso,&ignoredPso);
-    if(previousPso!=reinterpret_cast<void*>(originalPso)||!psoProtect)return false;
-
-    if(!VirtualProtect(&vtable[kSetComputeRootSignatureSlot],sizeof(void*),PAGE_EXECUTE_READWRITE,&oldRoot)){
-        DWORD rollbackOld=0;
-        if(VirtualProtect(&vtable[kSetPipelineStateSlot],sizeof(void*),PAGE_EXECUTE_READWRITE,&rollbackOld)){
-            InterlockedCompareExchangePointer(&vtable[kSetPipelineStateSlot],
-                reinterpret_cast<void*>(originalPso),
-                reinterpret_cast<void*>(&PTReflectionHookSetPipelineState));
-            DWORD rollbackIgnored=0;
-            VirtualProtect(&vtable[kSetPipelineStateSlot],sizeof(void*),rollbackOld,&rollbackIgnored);
-        }
-        return false;
-    }
-    void* previousRoot=InterlockedCompareExchangePointer(
-        &vtable[kSetComputeRootSignatureSlot],
-        reinterpret_cast<void*>(&PTReflectionHookSetComputeRootSignature),
-        reinterpret_cast<void*>(originalRoot));
-    DWORD ignoredRoot=0;
-    const BOOL rootProtect=VirtualProtect(&vtable[kSetComputeRootSignatureSlot],sizeof(void*),oldRoot,&ignoredRoot);
-    if(previousRoot!=reinterpret_cast<void*>(originalRoot)||!rootProtect)return false;
-
-    ptReflectionOriginalSetPipelineState=originalPso;
-    ptReflectionOriginalSetComputeRootSignature=originalRoot;
-    ptReflectionCommandListVtable=vtable;
-    Log("PT_REFLECTION_P2_COMMAND_LIST_HOOKS ready=1 list=%p vtable=%p set_pso_slot=%llu set_root_slot=%llu original_pso=%p original_root=%p",
-        list,vtable,static_cast<unsigned long long>(kSetPipelineStateSlot),
-        static_cast<unsigned long long>(kSetComputeRootSignatureSlot),
-        reinterpret_cast<void*>(originalPso),reinterpret_cast<void*>(originalRoot));
-    return true;
+    return PTThirdInstallList(static_cast<ID3D12GraphicsCommandList*>(commandList));
 }
 
 static bool PTReflectionEnsureLiveCompositePso(ID3D12Device* device) noexcept {
@@ -1996,6 +1937,7 @@ static bool PTReflectionInstallShaderLookupHooks(HMODULE renderer,HMODULE d3d) n
     ptReflectionTwoLayerAttempts.store(0u,std::memory_order_release);
     ptReflectionUserState.fetch_and(1u,std::memory_order_acq_rel);
     ptReflectionVerifyKeyDown.store(0u,std::memory_order_release);
+    Log("PT_THIRD_HOOK_FIX revision=2 per_vtable_originals=1 direct_capture_required=1");
     Log("PT_THIRD_CONFIG bounces=3 private_records=2 hit_stride=32 buffer_mib=512 full_precision_uv=1 full_precision_position=1 native_arrays=2");
     Log("PT_REFLECTION_DIFFUSE_PRESERVATION native_diffuse_gi=1 native_direct_emission=1 specular_only_replacement=1 vndf_weight=F_G1 native_parity_gate=1");
     Log("PT_REFLECTION_NATIVE_SECONDARY_SHADING enabled=1 material_brdf=1 light_cells=1 point_shadow_atlas=1 spot_shadow_atlases=1 gi_volumes=1 native_shader_sha=4fc0a0e9cd3706bcb86e29444d86fa32616138e1712c53b1b5103b30d7a1ecc9");
