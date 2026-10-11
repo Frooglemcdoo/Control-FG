@@ -1,0 +1,163 @@
+name: Build PT P3-A Native Observer
+
+on:
+  push:
+    branches:
+      - experiment/pt-native-preserving-p3
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  native-observer:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - name: Disable checkout newline conversion
+        shell: pwsh
+        run: git config --global core.autocrlf false
+
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Verify baseline source isolation and zero-GPU-work contract
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          python validation/pt-p3-native/verify.py
+          if ($LASTEXITCODE -ne 0) { throw "Native-preserving static check failed." }
+
+      - name: Fetch pinned Streamline headers and check RR runtime
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File Fetch-Streamline.ps1
+          if ($LASTEXITCODE -ne 0) { throw "Fetch-Streamline failed." }
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File Verify-Streamline.ps1
+          if ($LASTEXITCODE -ne 0) { throw "Verify-Streamline failed." }
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File Verify-RRRuntime.ps1
+          if ($LASTEXITCODE -ne 0) { throw "Verify-RRRuntime failed." }
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File Patch-OverlayStability.ps1
+          if ($LASTEXITCODE -ne 0) { throw "Patch-OverlayStability failed." }
+
+      - name: Compile native-preserving proxy DLL and smoke test
+        shell: cmd
+        run: |
+          @echo off
+          setlocal
+          set "VSWHERE=%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe"
+          if not exist "%VSWHERE%" exit /b 1
+          set "VSROOT="
+          for /f "delims=" %%V in ('"%VSWHERE%" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath') do set "VSROOT=%%V"
+          if not defined VSROOT exit /b 2
+          call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
+          if errorlevel 1 exit /b 3
+          if not exist build mkdir build
+          pushd src
+          rc /nologo /fo ..\build\control_fg_logo.res control_fg_logo.rc
+          if errorlevel 1 exit /b 4
+          popd
+          cl /nologo /std:c++17 /EHsc /W4 /O2 /MT /LD /guard:cf /DUNICODE /D_UNICODE /I "third_party\streamline\include" src\probe.cpp build\control_fg_logo.res /Fobuild\probe.obj /Febuild\dxgi.dll /link /DEF:src\dxgi.def /INCREMENTAL:NO /DYNAMICBASE /NXCOMPAT /GUARD:CF bcrypt.lib wintrust.lib user32.lib gdi32.lib msimg32.lib
+          if errorlevel 1 exit /b 5
+          dumpbin /exports build\dxgi.dll > build\p3-exports.txt
+          if errorlevel 1 exit /b 6
+          dumpbin /imports build\dxgi.dll > build\p3-imports.txt
+          if errorlevel 1 exit /b 7
+          cl /nologo /std:c++17 /EHsc /W4 /O2 /MT src\smoke.cpp /Fobuild\p3-smoke.obj /Febuild\p3-smoke.exe
+          if errorlevel 1 exit /b 8
+          build\p3-smoke.exe "%CD%\build\dxgi.dll"
+          if errorlevel 1 exit /b 9
+
+      - name: Check P3-A binary markers and package DLL-only test
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $dll = 'build/dxgi.dll'
+          if (-not (Test-Path -LiteralPath $dll)) { throw 'P3-A DLL missing.' }
+          $hash = (Get-FileHash -LiteralPath $dll -Algorithm SHA256).Hash.ToLowerInvariant()
+          $exports = Get-Content -LiteralPath 'build/p3-exports.txt' -Raw
+          foreach ($symbol in @('CreateDXGIFactory1','CreateDXGIFactory2','DXGIDeclareAdapterRemovalSupport')) {
+            if (-not $exports.Contains($symbol)) { throw "Missing DXGI proxy export: $symbol" }
+          }
+          $package = 'Control-FG-P3-A-Native-Observer'
+          New-Item -Force -ItemType Directory $package | Out-Null
+          Copy-Item -LiteralPath $dll -Destination "$package/dxgi.dll"
+          @"
+          CONTROL-FG — P3-A Native-Preserving Observer (EXPERIMENTAL)
+          Source branch: experiment/pt-native-preserving-p3
+          Source commit: $env:GITHUB_SHA
+          Stable base: v2.1.2
+          DXGI SHA256: $hash
+
+          BACK UP existing dxgi.dll BEFORE REPLACING IT.
+          Start from a VERIFIED CLEAN and stable Control FG v2.1.2 installation.
+          Copy ONLY dxgi.dll from this package beside Control_DX12.exe.
+          Leave the complete ControlFGStreamline directory, RR runtimes,
+          FG support files and other v2.1.2 release files untouched.
+
+          Native Control first-bounce reflections, shader selection,
+          PSOs and both hit array layers are untouched by P3-A.
+          P3-A has NO custom PT ray shader and NO custom PT composite.
+          No experimental PT DXIL/DXBC sidecars should be present.
+          If old pt_reflection_p1.dxil / pt_reflection_p2.dxil or P2
+          composites remain in the install directory, remove them
+          before running this stable-baseline test.
+
+          P3 observer is ON by default only for this experimental DLL.
+          CONTROLFG_P3_OBSERVE=0 disables additional P3 observation.
+          CONTROLFG_P3_TRACE=1 and CONTROLFG_P3_COMPOSITE=1 have
+          NO EFFECT: those actions are unimplemented/fail-closed.
+
+          TEST: Run the same reflective-floor area with FG/RR settings
+          that were stable in the clean A/B test. Run 45-60 seconds,
+          move the camera and collect compact logs.
+
+          REQUIRED LOGS:
+          P3_A_CONFIG observer=1 trace_enabled=0 composite_enabled=0
+          P3_A_NATIVE_SNAPSHOT ... material_found=1 normal_found=1
+             position_found=1 native_two_layer_shape=1
+          P3_A_COMMAND_CONTEXT ...
+          RR_NATIVE_* or normal FG/RR logs as in stock v2.1.2.
+
+          This build is NOT PT lighting. It proves whether passive
+          native resource observation can coexist with stable reflections.
+          If the game freezes or flickers, reinstall the previous
+          known-good v2.1.2 dxgi.dll and send logs.
+          "@ | Set-Content -LiteralPath "$package/README-P3A.txt" -Encoding utf8
+          @{
+            branch='experiment/pt-native-preserving-p3'
+            source_sha=$env:GITHUB_SHA
+            base_tag='v2.1.2'
+            dxgi_sha256=$hash
+            trace_enabled=$false
+            composite_enabled=$false
+            observation_only=$true
+            gpu_dispatches_added=0
+            native_raygen_modifications=0
+          } | ConvertTo-Json | Set-Content "$package/P3-A-MANIFEST.json" -Encoding utf8
+          Compress-Archive -Force -Path "$package/*" -DestinationPath "Control-FG-P3-A-Native-Observer.zip"
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $zip = [System.IO.Compression.ZipFile]::OpenRead(
+            (Resolve-Path "Control-FG-P3-A-Native-Observer.zip").Path)
+          try {
+            foreach($name in @('dxgi.dll','README-P3A.txt','P3-A-MANIFEST.json')){
+              if (-not ($zip.Entries | Where-Object FullName -EQ $name)) { throw "ZIP missing: $name" }
+            }
+          } finally { $zip.Dispose() }
+          $hash | Set-Content -LiteralPath "Control-FG-P3-A-Native-Observer.dll.sha256" -Encoding ascii
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Control-FG-P3-A-Native-Observer
+          path: |
+            Control-FG-P3-A-Native-Observer.zip
+            Control-FG-P3-A-Native-Observer.dll.sha256
+            build/p3-exports.txt
+          if-no-files-found: error
+          retention-days: 14
