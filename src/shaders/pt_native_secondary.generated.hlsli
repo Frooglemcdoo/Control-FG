@@ -62,7 +62,7 @@ float PTNativeMaterialMip(uint index,bool quantized) {
     if(!quantized)return 0.0f;
     uint width,height,levels;
     g_sMaterialTextureArray[NonUniformResourceIndex(index)].GetDimensions(0,width,height,levels);
-    return min(log2(max((float)max(width,height)/31.0f,1.0f)),(float)(max(levels,1u)-1u));
+    return min(log2(max((float)max(width,height)/2048.0f,1.0f)),(float)(max(levels,1u)-1u));
 }
 float3 PTNativeSecondHit(uint materialId,float2 uv,float3 hitView,float3 hitWorld,
                         float3 normalWorld,float3 incomingWorld,float3 incomingView,
