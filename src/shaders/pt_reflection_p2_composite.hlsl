@@ -648,11 +648,11 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
 
         const float3 normalWorld=n.xyz;
         const bool thisRawFinite=all(isfinite(normalWorld));
-        normalComponentsFinite|=thisRawFinite;
+        normalComponentsFinite=normalComponentsFinite||thisRawFinite;
         const float normalLength2=dot(normalWorld,normalWorld);
         const bool thisRawUsable=thisRawFinite&&
             isfinite(normalLength2)&&normalLength2>1.0e-6f;
-        normalLengthUsable|=thisRawUsable;
+        normalLengthUsable=normalLengthUsable||thisRawUsable;
 
         float3 candidateViewNormal=float3(0.0f,0.0f,0.0f);
         bool sourceNormalReady=false;
@@ -662,7 +662,7 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
             const float convertedLength2=dot(candidateViewNormal,candidateViewNormal);
             sourceNormalReady=all(isfinite(candidateViewNormal))&&
                 isfinite(convertedLength2)&&convertedLength2>1.0e-6f;
-            normalViewFinite|=sourceNormalReady;
+            normalViewFinite=normalViewFinite||sourceNormalReady;
         }
 
         // DIAGNOSTIC ONLY: the direction opposing the segment that
@@ -674,11 +674,11 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
         const float3 approach=firstPosView-hitPosView;
         const bool thisSegmentFinite=all(isfinite(firstPosView))&&
             all(isfinite(approach));
-        segmentFinite|=thisSegmentFinite;
+        segmentFinite=segmentFinite||thisSegmentFinite;
         const float approachLength2=dot(approach,approach);
         const bool thisSegmentUsable=thisSegmentFinite&&
             isfinite(approachLength2)&&approachLength2>1.0e-6f;
-        segmentLengthUsable|=thisSegmentUsable;
+        segmentLengthUsable=segmentLengthUsable||thisSegmentUsable;
         if(!sourceNormalReady&&thisSegmentUsable){
             candidateViewNormal=approach*rsqrt(approachLength2);
             sourceNormalReady=true;
