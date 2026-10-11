@@ -139,17 +139,20 @@ StructuredBuffer<PTNativeSpotLightRaw> ptNativeSpotLights : register(t14);
 Texture2D<uint4> ptNativeSpotCellIds : register(t6);
 cbuffer deferredlight_constants : register(b1)
 {
-    float4 ptNativeDeferredConstants[26]; // 416 byte native b1 ABI
+    float4 ptNativeDeferredPrefix[16]; // byte 0-255; native pre-count area
+    uint ptNativePointLightTotalCount; // byte 256; native UINT, not float bits
+    uint ptNativeSpotLightTotalCount;  // byte 260
+    uint ptNativeSunLightTotalCount;   // byte 264
+    uint ptNativeAmbientLightEnabled; // byte 268
+    float4 ptNativeDeferredTail[9];   // byte 272-415; total b1 = 416
 }
 uint PTNativePointCount()
 {
-    // Native b1 offset +256 = g_uPointLightTotalCount.
-    return asuint(ptNativeDeferredConstants[16].x);
+    return ptNativePointLightTotalCount;
 }
 uint PTNativeSpotCount()
 {
-    // Native b1 offset +260 = g_uSpotLightTotalCount.
-    return asuint(ptNativeDeferredConstants[16].y);
+    return ptNativeSpotLightTotalCount;
 }
 float3 PTWorldNormalToView(float3 n)
 {
