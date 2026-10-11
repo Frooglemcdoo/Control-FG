@@ -1355,7 +1355,7 @@ static bool PTReflectionAuditTwoLayerHitTextures() noexcept {
         m.Height==n.Height&&n.Height==p.Height&&
         m.SampleDesc.Count==1u&&n.SampleDesc.Count==1u&&p.SampleDesc.Count==1u;
     ptReflectionTwoLayerContract.store(valid?1u:2u,std::memory_order_release);
-    Log("PT_REFLECTION_P2_TWO_LAYER_CONTRACT ready=%u result=%s layout=native_first_layer_0_secondary_layer_1 material_layers=%u normal_layers=%u position_layers=%u material_format=%u normal_format=%u position_format=%u width=%llu height=%u second_id_encoding=fp16_numeric_0_to_2047 uv_encoding=numeric_5x5 native_first_samples=1",
+    Log("PT_REFLECTION_P2_TWO_LAYER_CONTRACT ready=%u result=%s layout=two_native_first_hit_layers_preserved material_layers=%u normal_layers=%u position_layers=%u material_format=%u normal_format=%u position_format=%u width=%llu height=%u extra_hits=private_records extra_uv_precision=native_fp16 native_first_samples=unchanged",
         unsigned(valid),valid?"pass":"incompatible_resource_shape",
         unsigned(m.DepthOrArraySize),unsigned(n.DepthOrArraySize),
         unsigned(p.DepthOrArraySize),unsigned(m.Format),unsigned(n.Format),
@@ -1394,8 +1394,7 @@ static void PTReflectionHookDeferredDispatch(void* state,const void* dimensions)
 
     const unsigned userState=ptReflectionUserState.load(std::memory_order_acquire);
     const bool userEnabled=(userState&1u)!=0u;
-    // A/B only the added lighting: native composite above always runs, and the
-    // stabilized ray library/first-hit sampling remain identical in both views.
+    // Native tracing/composite always run. OFF also skips the extra ray dispatch.
     static std::atomic<unsigned int> lastUserEnabled{2u};
     if(lastUserEnabled.exchange(unsigned(userEnabled),std::memory_order_acq_rel)!=unsigned(userEnabled))
         Log("PT_REFLECTION_AB_APPLIED enabled=%u native_composite=1 added_composite=%u extra_rays_follow_toggle=1 verify_mode=%u",
