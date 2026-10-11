@@ -18,6 +18,7 @@ on:
       - experiment/pt-material-buffer-bounds
       - experiment/pt-overlay-toggle
       - experiment/pt-native-secondary-shading
+      - experiment/pt-bounce-energy
   workflow_dispatch:
   pull_request:
     branches:
@@ -199,27 +200,24 @@ jobs:
           Copy-Item build/pt_reflection_p2_local_light_probe.dxbc "$out/pt_reflection_p2_local_light_probe.dxbc"
           Copy-Item build/pt_reflection_p2_diffuse_bridge.dxbc "$out/pt_reflection_p2_diffuse_bridge.dxbc"
           @'
-          CONTROL-FG - NATIVE SECONDARY-HIT SHADING
+          CONTROL-FG - PT BOUNCE ENERGY CORRECTION
           ================================================
           EXPERIMENTAL STEAM DX12 TEST.
-          Branch: experiment/pt-native-secondary-shading
-          Replaces simplified unshadowed P2 environment shading with Control's
-          native material BRDF, point/spot light-cell lookup, point/VSM/PCF
-          shadow evaluation, spotlight projection, ambient SH and GI volumes.
-          Generated from the exact captured native deferred reflection shader.
-          Adapts view direction to the previous bounce, not the player camera.
-          Preserves the stable ray library, material buffer bounds and overlay.
+          Branch: experiment/pt-bounce-energy
+          Corrects two composition errors left in the prior native-shading test:
+          1. RGB first-hit BSDF*cos/PDF replaces colorless arbitrary weight.
+          2. Explicit bounce replaces first-hit probe indirect lighting; it is
+             no longer added on top of the same native indirect contribution.
+          Native first-hit direct lights and emission are retained once.
+          Ray sampling chooses a cosine/GGX lobe with a matching mixture PDF.
+          First-hit texture smoothness is used by both raygen and the evaluator.
+          Missing/unsupported second hits retain the native reflection fallback.
+          No private UAVs or hit-layout changes; coherency/bounds fixes retained.
           Copy ALL SEVEN binaries beside Control_DX12.exe with Control closed.
-          F10 -> PT REFLECTIONS compares added second-bounce lighting ON/OFF.
-          Compare the same dark hallway/reflected walls. Allow RR to settle.
-          Native shadow maps retain their original coverage limitations.
-          Secondary UVs still use the two-layer 5+5-bit encoding and filtering;
-          first-bounce path weighting remains the earlier approximation.
-          This is a native-shading integration test, not a finished PT renderer.
-          Windows compilation and resource ABI validation are required; actual
-          visual shading/shadow correctness still requires the in-game test.
-          Normal mode and F11 mode 1 use the new evaluator; F11 mode 3 remains
-          the older explicitly unshadowed light diagnostic.
+          F10 -> PT REFLECTIONS compares traced bounce ON vs native indirect OFF.
+          Test normal mode, same camera, RR allowed time to settle.
+          Native shadow-map coverage and quantized secondary UV limits remain.
+          This is an integration test; final visual correctness needs game QA.
 
           ROOT CAUSE:
           Control's native material/position/normal hit texture arrays have
