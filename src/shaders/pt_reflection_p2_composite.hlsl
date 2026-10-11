@@ -334,11 +334,24 @@ uint PTDecodeSecondaryMaterial(float packed)
     return valid?id:65535u;
 }
 
+float3 PTSecondaryTexture(uint materialId,uint slot,float2 uv)
+{
+    // Stored UVs have a 1/31-wide quantization cell. Mip 0 cannot resolve
+    // where the hit lies inside that cell (66 texels at 2048 resolution).
+    // Filter at least that footprint instead of aliasing fine texture detail.
+    uint textureIndex=NonUniformResourceIndex(materialId*35u+slot);
+    uint width=0u,height=0u,levels=0u;
+    g_sMaterialTextureArray[textureIndex].GetDimensions(0u,width,height,levels);
+    float footprint=max((float)max(width,height)/31.0f,1.0f);
+    float mip=min(log2(footprint),(float)(max(levels,1u)-1u));
+    float3 value=g_sMaterialTextureArray[textureIndex].SampleLevel(g_sLinearWrap,uv,mip).rgb;
+    return all(isfinite(value))?max(value,0.0f):float3(0.0f,0.0f,0.0f);
+}
+
 float3 PTMaterialBaseColor(uint materialId,float2 uv)
 {
     PTMaterialDataPart3 m=g_sbMaterialDataPart3[materialId];
-    uint textureIndex=NonUniformResourceIndex(materialId*35u);
-    float3 tex=max(g_sMaterialTextureArray[textureIndex].SampleLevel(g_sLinearWrap,uv,0.0f).rgb,0.0f);
+    float3 tex=PTSecondaryTexture(materialId,0u,uv);
     return max(tex*max(m.vColorMultiplier.rgb,0.0f),0.0f);
 }
 
@@ -381,6 +394,9 @@ float3 PTSecondaryRadiance(uint materialId,float2 uv,float3 hitNormalWorld,float
     float3 diffuse=diffuseEnv*baseColor*diffuseWeight;
 
     float3 emission=max(m.vEmissionMultiplier,0.0f)*max(m.fEmissionIntensity,0.0f);
+    // Native deferred shader: material*35+5 is the emission texture.
+    // Applying only its multiplier makes the entire material emit.
+    if(any(emission>0.0f)) emission*=PTSecondaryTexture(materialId,5u,uv);
     return specular+diffuse+emission;
 }
 
