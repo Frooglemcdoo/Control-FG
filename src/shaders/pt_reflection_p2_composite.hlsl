@@ -624,8 +624,11 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
     float4 pointGate=0.0f;
     float4 spotGate=0.0f;
     bool firstHitValid=false,secondHitValid=false;
-    bool positionFinite=false,normalRawFinite=false;
-    bool normalViewFinite=false,fullyEligible=false;
+    bool positionFinite=false;
+    bool normalComponentsFinite=false,normalLengthUsable=false;
+    bool normalViewFinite=false;
+    bool segmentFinite=false,segmentLengthUsable=false;
+    bool fallbackUsed=false,fullyEligible=false;
     [unroll]
     for(uint probePath=0u;probePath<2u;++probePath){
         const uint firstMaterial=g_tMaterialId.Load(int4(pixel,probePath,0));
@@ -644,21 +647,50 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
         positionFinite=true;
 
         const float3 normalWorld=n.xyz;
+        const bool thisRawFinite=all(isfinite(normalWorld));
+        normalComponentsFinite|=thisRawFinite;
         const float normalLength2=dot(normalWorld,normalWorld);
-        if(!all(isfinite(normalWorld))||
-           !isfinite(normalLength2)||normalLength2<1.0e-6f)continue;
-        normalRawFinite=true;
+        const bool thisRawUsable=thisRawFinite&&
+            isfinite(normalLength2)&&normalLength2>1.0e-6f;
+        normalLengthUsable|=thisRawUsable;
 
-        const float3 normalView=PTWorldNormalToView(
-            normalWorld*rsqrt(normalLength2));
-        if(!all(isfinite(normalView)))continue;
-        normalViewFinite=true;
+        float3 candidateViewNormal=float3(0.0f,0.0f,0.0f);
+        bool sourceNormalReady=false;
+        if(thisRawUsable){
+            candidateViewNormal=PTWorldNormalToView(
+                normalWorld*rsqrt(normalLength2));
+            const float convertedLength2=dot(candidateViewNormal,candidateViewNormal);
+            sourceNormalReady=all(isfinite(candidateViewNormal))&&
+                isfinite(convertedLength2)&&convertedLength2>1.0e-6f;
+            normalViewFinite|=sourceNormalReady;
+        }
+
+        // DIAGNOSTIC ONLY: the direction opposing the segment that
+        // travels from first-hit to second-hit is a robust *proxy*
+        // when the stored surface normal is invalid. It is not a
+        // geometric/shading normal and must NEVER reach normal P2.
+        const float3 firstPosView=g_tPosition_TexcoordY.Load(
+            int4(pixel,probePath,0)).xyz;
+        const float3 approach=firstPosView-hitPosView;
+        const bool thisSegmentFinite=all(isfinite(firstPosView))&&
+            all(isfinite(approach));
+        segmentFinite|=thisSegmentFinite;
+        const float approachLength2=dot(approach,approach);
+        const bool thisSegmentUsable=thisSegmentFinite&&
+            isfinite(approachLength2)&&approachLength2>1.0e-6f;
+        segmentLengthUsable|=thisSegmentUsable;
+        if(!sourceNormalReady&&thisSegmentUsable){
+            candidateViewNormal=approach*rsqrt(approachLength2);
+            sourceNormalReady=true;
+            fallbackUsed=true;
+        }
+        if(!sourceNormalReady)continue;
         fullyEligible=true;
 
         pointGate+=PTPointGateAudit(
-            hitPosView,normalView,pointSampleCount)*0.5f;
+            hitPosView,candidateViewNormal,pointSampleCount)*0.5f;
         spotGate+=PTSpotGateAudit(
-            hitPosView,normalView,spotSampleCount)*0.5f;
+            hitPosView,candidateViewNormal,spotSampleCount)*0.5f;
     }
 
     if(!right&&bottom){
@@ -699,16 +731,34 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
             return;
         }
         if(stage==2u){
-            // RED: finite nonzero raw world normal;
-            // GREEN: finite transformed view-space normal;
-            // BLUE: every gate to the light-evaluation helper passed.
-            g_rwtReflectionTarget[pixel]=float4(
-                normalRawFinite?4.0f:0.0f,
-                normalViewFinite?4.0f:0.0f,
-                fullyEligible?4.0f:0.0f,1.0f);
+            // Stage 3 is deliberately split into two sub-bands.
+            // Upper: raw float3 normals; lower: view-space ray-segment
+            // proxy. This distinguishes NaN payloads from zero normals
+            // and proves whether an input-independent fallback can
+            // actually call the light evaluator.
+            const uint stageY=dy-(bottomHeight*2u)/4u;
+            const bool upper=stageY<max(bottomHeight/8u,1u);
+            if(upper){
+                // RED: raw normal XYZ finite (zero is still finite).
+                // GREEN: raw normal finite AND nonzero length.
+                // BLUE: raw normal survives world->view transform.
+                g_rwtReflectionTarget[pixel]=float4(
+                    normalComponentsFinite?4.0f:0.0f,
+                    normalLengthUsable?4.0f:0.0f,
+                    normalViewFinite?4.0f:0.0f,1.0f);
+            }else{
+                // RED: first+second position define finite segment.
+                // GREEN: nonzero segment length.
+                // BLUE: diagnostic proxy actually used.
+                g_rwtReflectionTarget[pixel]=float4(
+                    segmentFinite?4.0f:0.0f,
+                    segmentLengthUsable?4.0f:0.0f,
+                    fallbackUsed?4.0f:0.0f,1.0f);
+            }
             return;
         }
-        // Bottom stage: actually evaluated unshadowed local radiance.
+        // Stage 4: computed local potential using a ray-direction
+        // proxy ONLY if the actual stored normal is unusable.
         // Red=point, green=spot, dark blue=valid helper call.
         const float pointHeat=saturate(pointGate.w/(pointGate.w+0.004f));
         const float spotHeat=saturate(spotGate.w/(spotGate.w+0.004f));
