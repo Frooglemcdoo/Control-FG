@@ -344,7 +344,7 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
         uint4 cellData=uint4(0u,0u,0u,0u);
         if(tileW>0u&&tileH>0u){
             uint2 cellCoord=min(uint2(float2(pixel+uint2(1u,1u))*
-                float2(tileW,tileH)/max(g_vScreenRes,1.0f.xx)),
+                float2(tileW,tileH)/max(g_vScreenRes,float2(1.0f,1.0f))),
                 uint2(tileW-1u,tileH-1u));
             cellData=ptNativePointCellIds.Load(int3(cellCoord,0));
         }
