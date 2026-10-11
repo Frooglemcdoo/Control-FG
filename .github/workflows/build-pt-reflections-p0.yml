@@ -11,6 +11,7 @@ on:
       - experiment/pt-local-light-hit-validation-p1
       - experiment/pt-secondary-normal-proof-v7
       - experiment/pt-two-layer-bounce-proof
+      - experiment/pt-secondary-origin-precision
   workflow_dispatch:
   pull_request:
     branches:
@@ -84,6 +85,9 @@ jobs:
           set "RC_RESULT=%ERRORLEVEL%"
           popd
           if not "%RC_RESULT%"=="0" exit /b %RC_RESULT%
+
+      - name: Check secondary ray origin precision
+        run: python tools/test-pt-secondary-origin.py
 
       - name: Audit native PT reflection contract
         shell: powershell
@@ -185,10 +189,15 @@ jobs:
           Copy-Item build/pt_reflection_p2_local_light_probe.dxbc "$out/pt_reflection_p2_local_light_probe.dxbc"
           Copy-Item build/pt_reflection_p2_diffuse_bridge.dxbc "$out/pt_reflection_p2_diffuse_bridge.dxbc"
           @'
-          CONTROL-FG - P2 TWO-LAYER REAL SECOND HIT PROOF
+          CONTROL-FG - P2 SECONDARY ORIGIN PRECISION TEST
           ================================================
           EXPERIMENTAL STEAM DX12 TEST. NOT PRODUCTION.
-          Branch: experiment/pt-two-layer-bounce-proof
+          Branch: experiment/pt-secondary-origin-precision
+          NEW CHANGE: reconstruct the second ray origin from the original
+          first ray and distance payload, avoiding FP16 position round-trip.
+          This targets self-intersection caused by position rounding exceeding
+          the 1 cm bias. It is NOT an in-game verified flicker fix.
+          Native first-hit sample count remains one; no private UAVs added.
           Copy ALL SEVEN binaries beside Control_DX12.exe, backing up old ones.
 
           ROOT CAUSE:
