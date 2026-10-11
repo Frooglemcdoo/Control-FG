@@ -292,7 +292,7 @@ void reflectionRayGeneration()
     PTPrivateHit second;
     if(!PTTracePreserved(pixel,first.worldPosition+firstNormal*0.01f,secondDirection,second))return;
     if(second.material>=count)return;
-    ptExtra_ptPrivateHits[privatePixel*2u]=second;
+    g_ptPrivateHits[privatePixel*2u]=second;
     float3 secondNormal=PTUnpackNormal(second.packedNormal);
     if(dot(secondNormal,secondDirection)>0.0f)secondNormal=-secondNormal;
     float secondRoughness=1.0f-PTMaterialSmoothness(second.material,second.uv);
@@ -301,7 +301,7 @@ void reflectionRayGeneration()
     if(dot(thirdDirection,secondNormal)<=0.0f)return;
     PTPrivateHit third;
     if(PTTracePreserved(pixel,second.worldPosition+secondNormal*0.01f,thirdDirection,third)&&third.material<count)
-        ptExtra_ptPrivateHits[privatePixel*2u+1u]=third;
+        g_ptPrivateHits[privatePixel*2u+1u]=third;
 }
 
 // Exactly TWO native layers are preserved by the extra raygen. The following
