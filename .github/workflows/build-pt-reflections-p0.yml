@@ -25,6 +25,7 @@ on:
       - experiment/pt-third-bounce-hook-fix
       - experiment/pt-third-bounce-freshness
       - experiment/pt-third-bounce-chain-fix
+      - experiment/pt-third-bounce-pipeline-rebuild
   workflow_dispatch:
   pull_request:
     branches:
@@ -104,6 +105,8 @@ jobs:
         run: |
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
           python tools/test-pt-command-list-hooks.py
+          if errorlevel 1 exit /b 1
+          python tools/test-pt-pipeline-rebuild.py
           if errorlevel 1 exit /b 1
 
       - name: Check private hit storage
@@ -219,25 +222,26 @@ jobs:
           Copy-Item build/pt_reflection_p2_local_light_probe.dxbc "$out/pt_reflection_p2_local_light_probe.dxbc"
           Copy-Item build/pt_reflection_p2_diffuse_bridge.dxbc "$out/pt_reflection_p2_diffuse_bridge.dxbc"
           @'
-          CONTROL-FG - THREE-BOUNCE HOOK CHAIN FIX 4
+          CONTROL-FG - THREE-BOUNCE PIPELINE REBUILD FIX 5
           =======================================
           Experimental Steam DX12 build for the captured native root layout.
           Close Control and replace ALL SEVEN binaries beside Control_DX12.exe.
           Existing F10 PT ON/OFF comparison remains available.
 
-          CRASH FIX:
-          Removes live hook replacement that could recurse through the RR clamp.
-          Original method pointers are immutable after installation.
-          Existing wrappers remain at the top of their hook chains.
-          Reflection-boundary checks only log; they do not modify vtables.
+          PIPELINE REBUILD FIX:
+          Replaces the exact audited native reflection library when the engine
+          recreates its pipeline from a cached native record after frame one.
+          Replacement occurs during creation, before shader identifiers and tables
+          are built; no native pipeline is blindly tagged or swapped at dispatch.
+          Other shader variants and non-reflection pipelines remain untouched.
+          Preserves the immutable RR hook chain and current-frame freshness guard.
+          Six shader binaries remain unchanged; this is a pipeline integration fix.
 
-          STALE DATA GUARD:
-          Private hits need a captured producer in the current engine frame.
-          Each producer is consumed once; stale data leaves native reflections intact.
-          If capture loses the third-bounce tag, compositing is skipped and logged.
-          Added state-binding logs to diagnose that remaining issue.
-          Six shaders are unchanged. This is a crash correction, not confirmation
-          that continuous three-bounce rendering is fixed.
+          CHECK LOGS:
+          PT_THIRD_NATIVE_REBUILD matched=1
+          PT_THIRD_DISPATCH must advance beyond call=1.
+          PT_REFLECTION_P2_POST_DISPATCH dispatched=1 must advance with it.
+          Visual correctness still requires in-game testing.
 
           THREE BOUNCES:
           First reflection hit remains in native layer 0.
