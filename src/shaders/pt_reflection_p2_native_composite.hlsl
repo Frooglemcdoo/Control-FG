@@ -19,7 +19,6 @@ float PTG1(float nd,float alpha2) {
 }
 float3 PTFirstHitThroughput(uint id,float2 uv,float3 n,float3 wo,float3 wi) {
     float nv=saturate(dot(n,wo)),nl=saturate(dot(n,wi));
-    if(nv<=0.0f||nl<=0.0f)return 0.0f;
     uint ti=NonUniformResourceIndex(id*35u);
     float3 albedo=saturate(g_sMaterialTextureArray[ti].SampleLevel(g_sLinearWrap,uv,0).rgb*
         asfloat(uint3(g_sbMaterialDataPart3[id].d[13],g_sbMaterialDataPart3[id].d[14],g_sbMaterialDataPart3[id].d[15])));
@@ -30,7 +29,8 @@ float3 PTFirstHitThroughput(uint id,float2 uv,float3 n,float3 wo,float3 wi) {
     float smoothness=saturate(lerp(asfloat(g_sbMaterialDataPart3[id].d[17]),asfloat(g_sbMaterialDataPart3[id].d[18]),smoothTex));
     float roughness=1.0f-smoothness;
     float alpha=max(roughness*roughness,0.02f),a2=alpha*alpha;
-    float3 h=normalize(wo+wi);
+    float3 halfVector=wo+wi;
+    float3 h=halfVector*rsqrt(max(dot(halfVector,halfVector),1.0e-12f));
     float nh=saturate(dot(n,h)),vh=saturate(dot(wo,h));
     float den=nh*nh*(a2-1.0f)+1.0f;
     float D=a2/max(3.14159265359f*den*den,1.0e-10f);
@@ -40,7 +40,8 @@ float3 PTFirstHitThroughput(uint id,float2 uv,float3 n,float3 wo,float3 wi) {
     float diffuseMix=clamp((roughness-0.35f)/0.45f,0.1f,0.9f);
     float pdf=diffuseMix*nl/3.14159265359f+(1.0f-diffuseMix)*D*gv/max(4.0f*nv,1.0e-7f);
     float3 throughput=f*nl/max(pdf,1.0e-10f);
-    return all(isfinite(throughput))?max(throughput,0.0f):0.0f;
+    bool finiteWeight=!any((asuint(throughput)&0x7f800000u)==0x7f800000u);
+    return (nv>0.0f&&nl>0.0f&&finiteWeight)?max(throughput,0.0f):0.0f;
 }
 [numthreads(8,16,1)]
 void main(uint3 dispatchThreadId:SV_DispatchThreadID) {
