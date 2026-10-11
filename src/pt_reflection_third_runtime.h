@@ -8,6 +8,7 @@ static ID3D12RootSignature* ptThirdNativeRoot=nullptr;
 static ID3D12RootSignature* ptThirdRoot=nullptr;
 static ID3D12Resource* ptThirdHits=nullptr;
 static std::atomic<unsigned long long> ptThirdDispatches{0};
+static std::atomic<unsigned long long> ptThirdWrittenFrame{~0ull},ptThirdConsumed{0},ptThirdRawDispatches{0};
 static constexpr UINT64 kPTThirdBytes=8388608ull*64ull;
 
 struct PTThirdListState {
@@ -163,9 +164,11 @@ static void STDMETHODCALLTYPE PTThirdHookSetState(ID3D12GraphicsCommandList4* li
     reinterpret_cast<PTThirdSetStateFn>(PTThirdOriginal(list,75))(list,state);
 }
 static void STDMETHODCALLTYPE PTThirdHookDispatch(ID3D12GraphicsCommandList4* list,const D3D12_DISPATCH_RAYS_DESC* desc) {
+    const auto raw=ptThirdRawDispatches.fetch_add(1)+1;
     PTThirdListState s{};
     bool target=false;
     AcquireSRWLockShared(&ptThirdLock);auto* tracked=PTThirdFindLocked(list,false);if(tracked)target=tracked->target;ReleaseSRWLockShared(&ptThirdLock);
+    if(raw<=8||(raw%960)==0)Log("PT_THIRD_RAW_DISPATCH call=%llu tagged=%u list=%p",raw,unsigned(target),list);
     if(!target){reinterpret_cast<PTThirdDispatchFn>(PTThirdOriginal(list,76))(list,desc);return;}
     if(!desc||!PTThirdSnapshot(list,&s,0xcdu)){
         Log("PT_THIRD_DISPATCH blocked=1 reason=incomplete_root_snapshot");return;
@@ -176,6 +179,9 @@ static void STDMETHODCALLTYPE PTThirdHookDispatch(ID3D12GraphicsCommandList4* li
     PTThirdBarrier(list);PTThirdBind(list,s,true);
     reinterpret_cast<PTThirdDispatchFn>(PTThirdOriginal(list,76))(list,desc);
     PTThirdBarrier(list);PTThirdBind(list,s,false);
+    unsigned long long frame=~0ull;DWORD fault=0;
+    if(!ReadEngineFrameSafe(&frame,&fault))frame=~0ull;
+    ptThirdWrittenFrame.store(frame);
     auto call=ptThirdDispatches.fetch_add(1)+1;
     if(call<=4||(call%240)==0)Log("PT_THIRD_DISPATCH call=%llu ready=1 width=%u height=%u root_restored=1 bytes=%llu",call,desc->Width,desc->Height,kPTThirdBytes);
 }
@@ -183,11 +189,9 @@ static void STDMETHODCALLTYPE PTThirdHookDispatch(ID3D12GraphicsCommandList4* li
 static bool PTThirdInstallVtable(void** table,bool extended) {
     AcquireSRWLockExclusive(&ptThirdVtableLock);
     PTThirdVtable* entry=nullptr;
+    bool existing=false;
     for(auto& v:ptThirdVtables){
-        if(v.table==table){
-            if(extended&&!v.extended){entry=&v;break;}
-            bool ready=v.ready;ReleaseSRWLockExclusive(&ptThirdVtableLock);return ready;
-        }
+        if(v.table==table){entry=&v;existing=true;break;}
         if(!v.table&&!entry)entry=&v;
     }
     if(!entry){ReleaseSRWLockExclusive(&ptThirdVtableLock);return false;}
@@ -200,14 +204,25 @@ static bool PTThirdInstallVtable(void** table,bool extended) {
     // Capture every original before publishing any hook. Readers wait on this
     // lock until the entry is complete, including on a partial install failure.
     entry->table=table;
+    extended=extended||entry->extended;
     unsigned count=extended?7u:5u;
+    bool intact=existing&&entry->ready;
+    for(unsigned i=0;i<count;++i)intact=intact&&table[slots[i]]==hooks[i];
+    if(intact){ReleaseSRWLockExclusive(&ptThirdVtableLock);return true;}
+    unsigned replaced=0;
+    for(unsigned i=0;i<count;++i){
+        auto slot=slots[i];
+        if(table[slot]!=hooks[i]&&entry->original[slot]){
+            entry->original[slot]=table[slot];++replaced;
+        }
+    }
     for(unsigned i=0;i<count;++i)if(!entry->original[slots[i]])entry->original[slots[i]]=table[slots[i]];
     bool okay=true;
     for(unsigned i=0;i<count;++i)
         okay=PTAuditPatch(&table[slots[i]],hooks[i],&entry->original[slots[i]])&&okay;
     entry->ready=okay;entry->extended=extended;
     ReleaseSRWLockExclusive(&ptThirdVtableLock);
-    Log("PT_THIRD_VTABLE_CAPTURE ready=%u vtable=%p slots=%u per_vtable_originals=1",unsigned(okay),table,count);
+    Log("PT_THIRD_VTABLE_CAPTURE ready=%u vtable=%p slots=%u per_vtable_originals=1 replaced=%u",unsigned(okay),table,count,replaced);
     return okay;
 }
 static bool PTThirdInstallList(ID3D12GraphicsCommandList* list) {
@@ -229,6 +244,21 @@ static bool PTThirdInstallList(ID3D12GraphicsCommandList* list) {
     else if(type==D3D12_COMMAND_LIST_TYPE_DIRECT)ptThirdDirectReady.store(1);
     return okay;
 }
+// Recheck at the engine's reflection boundary: a runtime/wrapper may change
+// dispatch entries after lazy initialization, despite successful startup capture.
+static void PTThirdPrepareRayCapture() noexcept {
+    EngineCommandContextSnapshot command{};
+    if(ReadEngineCommandContext(nullptr,&command)&&command.commandList)
+        PTThirdInstallList(static_cast<ID3D12GraphicsCommandList*>(command.commandList));
+}
+static bool PTThirdConsumeFresh() {
+    unsigned long long frame=~0ull;DWORD fault=0;
+    if(!ReadEngineFrameSafe(&frame,&fault)||frame!=ptThirdWrittenFrame.load())return false;
+    const auto produced=ptThirdDispatches.load();
+    auto consumed=ptThirdConsumed.load();
+    return produced>consumed&&ptThirdConsumed.compare_exchange_strong(consumed,produced);
+}
+
 static HRESULT STDMETHODCALLTYPE PTThirdHookCreateList(ID3D12Device* device,UINT node,D3D12_COMMAND_LIST_TYPE type,
     ID3D12CommandAllocator* allocator,ID3D12PipelineState* pso,REFIID iid,void** out) {
     HRESULT hr=ptThirdCreateList(device,node,type,allocator,pso,iid,out);
