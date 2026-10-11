@@ -26,6 +26,7 @@ on:
       - experiment/pt-third-bounce-freshness
       - experiment/pt-third-bounce-chain-fix
       - experiment/pt-third-bounce-pipeline-rebuild
+      - experiment/pt-third-preserve-two
   workflow_dispatch:
   pull_request:
     branches:
@@ -105,6 +106,8 @@ jobs:
         run: |
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
           python tools/test-pt-command-list-hooks.py
+          if errorlevel 1 exit /b 1
+          python tools/test-pt-two-baseline.py
           if errorlevel 1 exit /b 1
           python tools/test-pt-pipeline-rebuild.py
           if errorlevel 1 exit /b 1
@@ -222,64 +225,32 @@ jobs:
           Copy-Item build/pt_reflection_p2_local_light_probe.dxbc "$out/pt_reflection_p2_local_light_probe.dxbc"
           Copy-Item build/pt_reflection_p2_diffuse_bridge.dxbc "$out/pt_reflection_p2_diffuse_bridge.dxbc"
           @'
-          CONTROL-FG - THREE-BOUNCE PIPELINE REBUILD FIX 5
-          =======================================
-          Experimental Steam DX12 build for the captured native root layout.
-          Close Control and replace ALL SEVEN binaries beside Control_DX12.exe.
-          Existing F10 PT ON/OFF comparison remains available.
+          CONTROL-FG - TWO-BOUNCE BASELINE + OPTIONAL THIRD - R8
+          ======================================================
+          Close Control and replace all seven binaries beside Control_DX12.exe.
+          Keep the confirmed two-bounce ZIP available for comparison/rollback.
 
-          PIPELINE REBUILD FIX:
-          Replaces the exact audited native reflection library when the engine
-          recreates its pipeline from a cached native record after frame one.
-          Replacement occurs during creation, before shader identifiers and tables
-          are built; no native pipeline is blindly tagged or swapped at dispatch.
-          Other shader variants and non-reflection pipelines remain untouched.
-          Preserves the immutable RR hook chain and current-frame freshness guard.
-          Six shader binaries remain unchanged; this is a pipeline integration fix.
+          Restores the confirmed two-bounce primary sampling, native layer 1
+          material/UV encoding, quantized material filtering and composite.
+          Additional private records are used only for the optional third hit.
+          Missing/invalid/out-of-range/non-finite third hits retain two-bounce output.
+          Stale private data disables only bounce three, not the PT composite.
+          No native re-intersection or two-native-sample averaging was retained.
 
-          CHECK LOGS:
-          PT_THIRD_NATIVE_REBUILD matched=1
-          PT_THIRD_DISPATCH must advance beyond call=1.
-          PT_REFLECTION_P2_POST_DISPATCH dispatched=1 must advance with it.
-          Visual correctness still requires in-game testing.
+          PT ON/OFF remains in the overlay. F11 diagnostics remain available.
+          Existing OFF behavior is the confirmed two-bounce baseline behavior:
+          OFF skips added lighting; the first ray sampling remains modified.
+          It is not an exact comparison against an unmodified native pipeline.
 
-          THREE BOUNCES:
-          First reflection hit remains in native layer 0.
-          Second and third hits use two private 32-byte records per pixel.
-          Native texture arrays stay at two layers; layer 2 is never accessed.
-          A valid third hit replaces only vertex-two indirect specular lighting.
-          Native diffuse GI, direct lighting and emission remain at each vertex.
-          A missing/invalid third hit retains the two-bounce result.
-          This is hybrid specular transport, not full diffuse path tracing.
+          LOGS
+          PT_TWO_BASELINE_THIRD_OPTIONAL revision=8 two_bounce=1 third_fresh=1
+          indicates a fresh third-hit producer was submitted. Pixel acceptance
+          and visible third-bounce lighting still require in-game verification.
+          third_fresh=0 must leave the two-bounce composite running.
+          PT_THIRD_DISPATCH counts should advance while playing.
 
-          HIT QUALITY:
-          Full float UVs and world positions for secondary and third hits.
-          Octahedral 16+16-bit normal encoding; full uint material IDs.
-          Removes the old 5-bit UV and material-ID-below-2048 constraints.
-          Normal-map shading is still future work.
-
-          MEMORY / SCOPE:
-          One fixed 512 MiB GPU UAV, allocated once, retained until game exit.
-          Capacity: 8,388,608 pixels (up to 3840x2160). Test at 4K or below.
-          No per-resolution replacement/retirement or descriptor heap changes.
-          Native root arguments are replayed after each temporary root switch.
-          Root creation is gated by the captured SHA; unsupported layouts use P1.
-
-          TEST:
-          Load the same lobby, leave PT ON for 20 seconds, then compare OFF/ON.
-          Check lit concrete stays lit. Look for nested reflections on metal/glass.
-          Send compact logs and a normal-mode screenshot; report any new flicker.
-          Existing F11 diagnostics remain available if needed.
-          A third bounce need not strongly affect diffuse concrete.
-
-          Log markers:
-          PT_THIRD_PRIVATE_ROOT ready=1
-          PT_THIRD_STATE_CREATE ready=1
-          PT_THIRD_PRIVATE_BUFFER ready=1
-          PT_THIRD_DISPATCH ready=1 root_restored=1
-          PT_REFLECTION_P2_POST_DISPATCH dispatched=1 restored=1
-
-          Windows compilation and static/numerical tests do not prove GPU visuals.
+          Fixed 512 MiB private buffer, up to 3840x2160.
+          Windows compilation and CPU regression checks do not prove GPU visuals.
           '@ | Set-Content "$out/README.txt" -Encoding ASCII
           Compress-Archive -Path "$out/*" -DestinationPath "$out.zip" -Force
           (Get-FileHash "$out.zip" -Algorithm SHA256).Hash | Set-Content "$out.sha256" -Encoding ASCII
