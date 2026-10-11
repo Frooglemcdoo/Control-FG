@@ -19,6 +19,8 @@ float3 PTPrimaryView(uint2 pixel) {
 float3 PTWorldDirection(float3 d) {
     return normalize(asfloat(ptCB0[6]).xyz*d.x+asfloat(ptCB0[7]).xyz*d.y+asfloat(ptCB0[8]).xyz*d.z);
 }
+bool PTFinite3(float3 v) { return !any((asuint(v)&0x7f800000u)==0x7f800000u); }
+bool PTFinite1(float v) { return (asuint(v)&0x7f800000u)!=0x7f800000u; }
 float PTG1(float nd,float alpha2) {
     return 2.0f*nd/max(nd+sqrt(alpha2+(1.0f-alpha2)*nd*nd),1.0e-7f);
 }
@@ -94,12 +96,12 @@ void main(uint3 dispatchThreadId:SV_DispatchThreadID) {
                 if(second<count){
                     rejection=3u;
                     float n2=dot(normal.xyz,normal.xyz);
-                    if(all(isfinite(normal.xyz))&&n2>1.0e-6f){
+                    if(PTFinite3(normal.xyz)&&n2>1.0e-6f){
                         rejection=4u;
                         float3 delta=secondPos.xyz-firstPos.xyz;
                         float d2=dot(delta,delta);
-                        if(all(isfinite(firstPos.xyz))&&all(isfinite(secondPos.xyz))&&
-                           isfinite(d2)&&d2>1.0e-6f&&isfinite(secondPos.w)){
+                        if(PTFinite3(firstPos.xyz)&&PTFinite3(secondPos.xyz)&&
+                           PTFinite1(d2)&&d2>1.0e-6f){
                             rejection=0u;
                             float3 hitWorld=hit2.worldPosition;
                             float3 worldDelta=hitWorld-PTNativeViewToWorld(firstPos.xyz);
@@ -115,7 +117,7 @@ void main(uint3 dispatchThreadId:SV_DispatchThreadID) {
                             if(hit3.material<count&&hit3.material<65534u){
                                 float3 thirdDelta=hit3.worldPosition-hitWorld;
                                 float thirdD2=dot(thirdDelta,thirdDelta);
-                                if(all(isfinite(hit3.worldPosition))&&thirdD2>1.0e-6f){
+                                if(PTFinite3(hit3.worldPosition)&&thirdD2>1.0e-6f){
                                     float3 incoming3=thirdDelta*rsqrt(thirdD2);
                                     float3 normal3=PTUnpackNormal(hit3.packedNormal);
                                     if(dot(normal3,incoming3)>0.0f)normal3=-normal3;
@@ -125,7 +127,7 @@ void main(uint3 dispatchThreadId:SV_DispatchThreadID) {
                                         normal3,incoming3,normalize(view3-secondPos.xyz),secondPos.xyz,pixel,false,1.0f,ignoredRetained);
                                     float3 weight2=PTFirstHitThroughput(second,uv,n,-incoming,incoming3);
                                     float3 candidate=secondRetained+weight2*radiance3;
-                                    if(all(isfinite(candidate)))radiance=max(candidate,0.0f);
+                                    if(PTFinite3(candidate))radiance=max(candidate,0.0f);
                                 }
                             }
                             float4 firstNormal=g_tNormal_TexcoordX.Load(int4(pixel,0,0));
@@ -147,7 +149,7 @@ void main(uint3 dispatchThreadId:SV_DispatchThreadID) {
                                 primaryView,pixel,false,nativeLod,retained);
                             reference=PTNativeOutput(nativeFull,pixel);
                             replacement=PTNativeOutput(retained+bounce,pixel);
-                            if(!all(isfinite(replacement))||!all(isfinite(reference)))rejection=4u;
+                            if(!PTFinite3(replacement)||!PTFinite3(reference))rejection=4u;
                             // A port mismatch must never erase native illumination.
                             // This is a parity admission check, not an intensity adjustment.
                             float3 tolerance=0.001f+0.05f*max(abs(base.rgb),abs(reference));
