@@ -1436,7 +1436,7 @@ static void PTReflectionHookDeferredDispatch(void* state,const void* dimensions)
             const unsigned next=PTReflectionUserCycleDiagnostic();
             Log("PT_REFLECTION_VERIFY_SWITCH from=%u to=%u hotkey=F11 label=%s",
                 prior,next,next==0u?"normal":next==1u?
-                    "P2_quadrant_coverage_radiance_gain":next==2u?
+                    "P2_quadrant_native_admission_specular_retained":next==2u?
                     "GI_native_texture_copy_proof":"native_point_light_probe");
         }
     }else{
@@ -1979,10 +1979,10 @@ static bool PTReflectionInstallShaderLookupHooks(HMODULE renderer,HMODULE d3d) n
     ptReflectionTwoLayerAttempts.store(0u,std::memory_order_release);
     ptReflectionUserState.fetch_and(1u,std::memory_order_acq_rel);
     ptReflectionVerifyKeyDown.store(0u,std::memory_order_release);
-    Log("PT_REFLECTION_BOUNCE_ENERGY rgb_bsdf_over_pdf=1 native_indirect_replaced=1 direct_emission_preserved=1 second_direction_lobe_mixture=1");
+    Log("PT_REFLECTION_DIFFUSE_PRESERVATION native_diffuse_gi=1 native_direct_emission=1 specular_only_replacement=1 vndf_weight=F_G1 native_parity_gate=1");
     Log("PT_REFLECTION_NATIVE_SECONDARY_SHADING enabled=1 material_brdf=1 light_cells=1 point_shadow_atlas=1 spot_shadow_atlases=1 gi_volumes=1 native_shader_sha=4fc0a0e9cd3706bcb86e29444d86fa32616138e1712c53b1b5103b30d7a1ecc9");
     Log("PT_REFLECTION_MATERIAL_BOUNDS source=bound_t4_GetDimensions native_b6_count_ignored=1 expected_stride=336");
-    Log("PT_REFLECTION_REJECTION_DIAGNOSTIC enabled=1 F11_mode=1 red=first_hit magenta=second_hit yellow=normal cyan=segment white=material_range green=accepted");
+    Log("PT_REFLECTION_REJECTION_DIAGNOSTIC enabled=1 F11_mode=1 red=first_hit magenta=second_hit yellow=normal cyan=segment white=material_range orange=native_parity green=accepted");
     Log("PT_REFLECTION_HIT_UAV_COHERENCE enabled=1 globallycoherent_uavs=3 raygen_publish=1 closesthit_publish=1 miss_publish=1");
     Log("PT_REFLECTION_SECONDARY_MATERIAL_FILTER enabled=1 uv_steps=31 footprint_mip=1 emission_texture_slot=5 primary_ray_change=0");
     Log("PT_REFLECTION_SECONDARY_ORIGIN_PRECISION enabled=1 source=ray_origin_direction_payload distance_quantum_m=0.0001 fp16_position_reuse=0 native_samples=1");
