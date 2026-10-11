@@ -29,35 +29,35 @@ struct PTMaterialDataPart3 {
     float tail[65];
 };
 
-cbuffer sys_constants : register(b0)
+cbuffer PTExtraSysConstants : register(b0)
 {
-    float2 g_vScreenRes;
-    float2 g_vInvScreenRes;
-    float2 g_vOutputRes;
-    float2 g_vInvOutputRes;
+    float2 ptExtra_vScreenRes;
+    float2 ptExtra_vInvScreenRes;
+    float2 ptExtra_vOutputRes;
+    float2 ptExtra_vInvOutputRes;
 
-    float4 g_mWorldToView0;
-    float4 g_mWorldToView1;
-    float4 g_mWorldToView2;
-    float4 g_mWorldToView3;
+    float4 ptExtra_mWorldToView0;
+    float4 ptExtra_mWorldToView1;
+    float4 ptExtra_mWorldToView2;
+    float4 ptExtra_mWorldToView3;
 
-    float4 g_mViewToWorld0;
-    float4 g_mViewToWorld1;
-    float4 g_mViewToWorld2;
-    float4 g_mViewToWorld3;
+    float4 ptExtra_mViewToWorld0;
+    float4 ptExtra_mViewToWorld1;
+    float4 ptExtra_mViewToWorld2;
+    float4 ptExtra_mViewToWorld3;
 
-    float4 g_mViewToClip0;
-    float4 g_mViewToClip1;
-    float4 g_mViewToClip2;
-    float4 g_mViewToClip3;
+    float4 ptExtra_mViewToClip0;
+    float4 ptExtra_mViewToClip1;
+    float4 ptExtra_mViewToClip2;
+    float4 ptExtra_mViewToClip3;
 
-    float4 g_mClipToView0;
-    float4 g_mClipToView1;
-    float4 g_mClipToView2;
-    float4 g_mClipToView3;
+    float4 ptExtra_mClipToView0;
+    float4 ptExtra_mClipToView1;
+    float4 ptExtra_mClipToView2;
+    float4 ptExtra_mClipToView3;
 };
 
-cbuffer g_cbRaytracingHit : register(b0, space3)
+cbuffer ptExtra_cbRaytracingHit : register(b0, space3)
 {
     uint uIndexOffset;
     uint uIndexStride;
@@ -71,31 +71,31 @@ cbuffer g_cbRaytracingHit : register(b0, space3)
     uint uVertexBuffer1Size;
 };
 
-cbuffer rtreflection : register(b1)
+cbuffer PTExtraReflectionConstants : register(b1)
 {
-    float g_fClampReflectionIntensity;
-    float g_fRTReflectionAddRays;
-    uint  g_uRTReflectionRayCount;
-    float g_fRTZeroRayReflectance;
-    float g_fRTMaxRayReflectance;
-    float g_fRTMaxRayRoughness;
+    float ptExtra_fClampReflectionIntensity;
+    float ptExtra_fRTReflectionAddRays;
+    uint  ptExtra_uRTReflectionRayCount;
+    float ptExtra_fRTZeroRayReflectance;
+    float ptExtra_fRTMaxRayReflectance;
+    float ptExtra_fRTMaxRayRoughness;
 };
 
-Texture2D<float4> g_tGBuffer1 : register(t0);
-Texture2D<float4> g_tLinearDepth : register(t1);
-Texture2D<float4> g_tClipDepth : register(t2);
-StructuredBuffer<PTMaterialDataPart3> g_sbMaterialDataPart3 : register(t3);
-Texture2D<float4> g_tStaticBlueNoiseRGBA_0 : register(t4);
-RaytracingAccelerationStructure g_rtScene : register(t5);
-Texture2D<float4> g_sMaterialTextureArray[] : register(t0, space1);
-SamplerState g_sLinearWrap : register(s5, space1);
-ByteAddressBuffer g_bRaytracingIndexBuffer : register(t0, space3);
-ByteAddressBuffer g_bRaytracingVertexBuffer1 : register(t1, space3);
+Texture2D<float4> ptExtra_tGBuffer1 : register(t0);
+Texture2D<float4> ptExtra_tLinearDepth : register(t1);
+Texture2D<float4> ptExtra_tClipDepth : register(t2);
+StructuredBuffer<PTMaterialDataPart3> ptExtra_sbMaterialDataPart3 : register(t3);
+Texture2D<float4> ptExtra_tStaticBlueNoiseRGBA_0 : register(t4);
+RaytracingAccelerationStructure ptExtra_rtScene : register(t5);
+Texture2D<float4> ptExtra_sMaterialTextureArray[] : register(t0, space1);
+SamplerState ptExtra_sLinearWrap : register(s5, space1);
+ByteAddressBuffer ptExtra_bRaytracingIndexBuffer : register(t0, space3);
+ByteAddressBuffer ptExtra_bRaytracingVertexBuffer1 : register(t1, space3);
 
-globallycoherent RWTexture2DArray<uint>   g_rwtMaterialId : register(u0);
-globallycoherent RWTexture2DArray<float4> g_rwtNormal_TexcoordX : register(u1);
-globallycoherent RWTexture2DArray<float4> g_rwtPosition_TexcoordY : register(u2);
-RWTexture2DArray<uint>   g_rwtShadow : register(u3);
+globallycoherent RWTexture2DArray<uint>   ptExtra_rwtMaterialId : register(u0);
+globallycoherent RWTexture2DArray<float4> ptExtra_rwtNormal_TexcoordX : register(u1);
+globallycoherent RWTexture2DArray<float4> ptExtra_rwtPosition_TexcoordY : register(u2);
+RWTexture2DArray<uint>   ptExtra_rwtShadow : register(u3);
 
 float3 PTTransformPointColumns(float3 p, float4 c0, float4 c1, float4 c2, float4 c3)
 {
@@ -116,10 +116,10 @@ float3 PTTransformVectorColumns(float3 v, float4 c0, float4 c1, float4 c2)
 float2 PTRandom2(uint2 pixel, uint path)
 {
     uint w=0,h=0;
-    g_tStaticBlueNoiseRGBA_0.GetDimensions(w,h);
+    ptExtra_tStaticBlueNoiseRGBA_0.GetDimensions(w,h);
     uint2 p = uint2((pixel.x + path*73u) % max(w,1u),
                     (pixel.y + path*151u) % max(h,1u));
-    float4 n = g_tStaticBlueNoiseRGBA_0.Load(int3(p,0));
+    float4 n = ptExtra_tStaticBlueNoiseRGBA_0.Load(int3(p,0));
     // Decorrelate the two paths and temporal frame without changing resources.
     float frame = frac((float)(path*17u + pixel.x*3u + pixel.y*5u) * 0.61803398875f);
     return frac(n.xy + float2(frame, frame*0.754877666f));
@@ -177,24 +177,24 @@ float3 PTSampleCosineHemisphere(float3 n, float2 u)
 float PTMaterialSmoothness(uint materialId,float2 uv)
 {
     if(materialId>=65534u)return 0.0f;
-    float2 range=g_sbMaterialDataPart3[materialId].vSmoothnessRange;
-    float tex=g_sMaterialTextureArray[NonUniformResourceIndex(materialId*35u+2u)].SampleLevel(g_sLinearWrap,uv,0.0f).x;
+    float2 range=ptExtra_sbMaterialDataPart3[materialId].vSmoothnessRange;
+    float tex=ptExtra_sMaterialTextureArray[NonUniformResourceIndex(materialId*35u+2u)].SampleLevel(ptExtra_sLinearWrap,uv,0.0f).x;
     return saturate(lerp(range.x,range.y,tex));
 }
 
 bool PTPrimary(uint2 pixel, out float3 positionView, out float3 positionWorld,
                out float3 normalWorld, out float roughness)
 {
-    float4 g1 = g_tGBuffer1.Load(int3(pixel,0));
-    float clipDepth = g_tClipDepth.Load(int3(pixel,0)).x;
+    float4 g1 = ptExtra_tGBuffer1.Load(int3(pixel,0));
+    float clipDepth = ptExtra_tClipDepth.Load(int3(pixel,0)).x;
 
     RRHDClipToView m;
-    m.column0.x=g_mClipToView0.x; m.column0.y=g_mClipToView0.y; m.column0.z=g_mClipToView0.z; m.column0.w=g_mClipToView0.w;
-    m.column1.x=g_mClipToView1.x; m.column1.y=g_mClipToView1.y; m.column1.z=g_mClipToView1.z; m.column1.w=g_mClipToView1.w;
-    m.column2.x=g_mClipToView2.x; m.column2.y=g_mClipToView2.y; m.column2.z=g_mClipToView2.z; m.column2.w=g_mClipToView2.w;
-    m.column3.x=g_mClipToView3.x; m.column3.y=g_mClipToView3.y; m.column3.z=g_mClipToView3.z; m.column3.w=g_mClipToView3.w;
+    m.column0.x=ptExtra_mClipToView0.x; m.column0.y=ptExtra_mClipToView0.y; m.column0.z=ptExtra_mClipToView0.z; m.column0.w=ptExtra_mClipToView0.w;
+    m.column1.x=ptExtra_mClipToView1.x; m.column1.y=ptExtra_mClipToView1.y; m.column1.z=ptExtra_mClipToView1.z; m.column1.w=ptExtra_mClipToView1.w;
+    m.column2.x=ptExtra_mClipToView2.x; m.column2.y=ptExtra_mClipToView2.y; m.column2.z=ptExtra_mClipToView2.z; m.column2.w=ptExtra_mClipToView2.w;
+    m.column3.x=ptExtra_mClipToView3.x; m.column3.y=ptExtra_mClipToView3.y; m.column3.z=ptExtra_mClipToView3.z; m.column3.w=ptExtra_mClipToView3.w;
     RRHDPrimary p = RRHDPrimaryFromClip(pixel.x,pixel.y,
-        g_vInvOutputRes.x,g_vInvOutputRes.y,clipDepth,m);
+        ptExtra_vInvOutputRes.x,ptExtra_vInvOutputRes.y,clipDepth,m);
     if(p.valid==0u) {
         positionView=0;positionWorld=0;normalWorld=float3(0,0,1);roughness=1;
         return false;
@@ -202,17 +202,17 @@ bool PTPrimary(uint2 pixel, out float3 positionView, out float3 positionWorld,
 
     positionView=float3(p.position.x,p.position.y,p.position.z);
     positionWorld=PTTransformPointColumns(positionView,
-        g_mViewToWorld0,g_mViewToWorld1,g_mViewToWorld2,g_mViewToWorld3);
+        ptExtra_mViewToWorld0,ptExtra_mViewToWorld1,ptExtra_mViewToWorld2,ptExtra_mViewToWorld3);
     float3 normalView=ControlDecodeNormalView(g1);
     normalWorld=ControlNormalViewToWorld(normalView,
-        g_mViewToWorld0.xyz,g_mViewToWorld1.xyz,g_mViewToWorld2.xyz);
+        ptExtra_mViewToWorld0.xyz,ptExtra_mViewToWorld1.xyz,ptExtra_mViewToWorld2.xyz);
     roughness=saturate(ControlDecodeMaterialRoughness(g1));
     return true;
 }
 
 float3 PTCameraWorld()
 {
-    return g_mViewToWorld3.xyz;
+    return ptExtra_mViewToWorld3.xyz;
 }
 
 void PTTrace(uint layer, float3 origin, float3 direction, out HitData payload)
@@ -225,7 +225,7 @@ void PTTrace(uint layer, float3 origin, float3 direction, out HitData payload)
     payload.value=layer;
     // Publish raygen clears before a callee overwrites the same texels.
     DeviceMemoryBarrier();
-    TraceRay(g_rtScene,RAY_FLAG_NONE,0x1,0,2,0,ray,payload);
+    TraceRay(ptExtra_rtScene,RAY_FLAG_NONE,0x1,0,2,0,ray,payload);
 }
 
 // Use the native hit/miss shaders with a temporary layer-0 scratch write.
@@ -234,19 +234,19 @@ void PTTrace(uint layer, float3 origin, float3 direction, out HitData payload)
 bool PTTracePreserved(uint2 pixel,float3 origin,float3 direction,out PTPrivateHit hit)
 {
     const uint3 slot=uint3(pixel,0u);
-    const uint savedMaterial=g_rwtMaterialId[slot];
-    const float4 savedNormal=g_rwtNormal_TexcoordX[slot];
-    const float4 savedPosition=g_rwtPosition_TexcoordY[slot];
+    const uint savedMaterial=ptExtra_rwtMaterialId[slot];
+    const float4 savedNormal=ptExtra_rwtNormal_TexcoordX[slot];
+    const float4 savedPosition=ptExtra_rwtPosition_TexcoordY[slot];
     HitData payload;
     PTTrace(0u,origin,direction,payload);
     DeviceMemoryBarrier();
-    const uint material=g_rwtMaterialId[slot];
-    const float4 normal=g_rwtNormal_TexcoordX[slot];
-    const float4 position=g_rwtPosition_TexcoordY[slot];
+    const uint material=ptExtra_rwtMaterialId[slot];
+    const float4 normal=ptExtra_rwtNormal_TexcoordX[slot];
+    const float4 position=ptExtra_rwtPosition_TexcoordY[slot];
     // Restore unconditionally BEFORE testing the hit or returning.
-    g_rwtMaterialId[slot]=savedMaterial;
-    g_rwtNormal_TexcoordX[slot]=savedNormal;
-    g_rwtPosition_TexcoordY[slot]=savedPosition;
+    ptExtra_rwtMaterialId[slot]=savedMaterial;
+    ptExtra_rwtNormal_TexcoordX[slot]=savedNormal;
+    ptExtra_rwtPosition_TexcoordY[slot]=savedPosition;
     DeviceMemoryBarrier();
     hit.worldPosition=origin+normalize(direction)*((float)payload.value*0.0001f);
     hit.material=material;hit.uv=float2(normal.w,position.w);
@@ -262,20 +262,20 @@ void reflectionRayGeneration()
     uint privatePixel=pixel.y*DispatchRaysDimensions().x+pixel.x;
     if(privatePixel>=PT_PRIVATE_PIXEL_CAPACITY)return;
     PTClearPrivate(privatePixel*2u);PTClearPrivate(privatePixel*2u+1u);
-    uint width,height,layers;g_rwtMaterialId.GetDimensions(width,height,layers);
-    if(any(pixel>=uint2(width,height))||layers!=2u||g_uRTReflectionRayCount==0u)return;
-    uint count,stride;g_sbMaterialDataPart3.GetDimensions(count,stride);
-    uint firstMaterial=g_rwtMaterialId[uint3(pixel,0u)];
+    uint width,height,layers;ptExtra_rwtMaterialId.GetDimensions(width,height,layers);
+    if(any(pixel>=uint2(width,height))||layers!=2u||ptExtra_uRTReflectionRayCount==0u)return;
+    uint count,stride;ptExtra_sbMaterialDataPart3.GetDimensions(count,stride);
+    uint firstMaterial=ptExtra_rwtMaterialId[uint3(pixel,0u)];
     if(stride!=336u||firstMaterial>=min(count,65534u))return;
-    float4 firstPosition=g_rwtPosition_TexcoordY[uint3(pixel,0u)];
+    float4 firstPosition=ptExtra_rwtPosition_TexcoordY[uint3(pixel,0u)];
     if(!all(isfinite(firstPosition.xyz)))return;
     float3 primaryView,primaryWorld,normalWorld;float roughness;
     if(!PTPrimary(pixel,primaryView,primaryWorld,normalWorld,roughness))return;
     float3 nativeFirstWorld=PTTransformPointColumns(firstPosition.xyz,
-        g_mViewToWorld0,g_mViewToWorld1,g_mViewToWorld2,g_mViewToWorld3);
+        ptExtra_mViewToWorld0,ptExtra_mViewToWorld1,ptExtra_mViewToWorld2,ptExtra_mViewToWorld3);
     // Re-intersect the first surface to recover a sub-millimetre endpoint.
     // The native half-float position is a direction guide, NEVER a new origin.
-    float depth=g_tLinearDepth.Load(int3(pixel,0)).x;
+    float depth=ptExtra_tLinearDepth.Load(int3(pixel,0)).x;
     const float3 firstOrigin=primaryWorld+(normalWorld-normalize(primaryWorld-PTCameraWorld()))*(0.001f*depth);
     float3 firstDirection=normalize(nativeFirstWorld-firstOrigin);
     PTPrivateHit first;
@@ -292,7 +292,7 @@ void reflectionRayGeneration()
     PTPrivateHit second;
     if(!PTTracePreserved(pixel,first.worldPosition+firstNormal*0.01f,secondDirection,second))return;
     if(second.material>=count)return;
-    g_ptPrivateHits[privatePixel*2u]=second;
+    ptExtra_ptPrivateHits[privatePixel*2u]=second;
     float3 secondNormal=PTUnpackNormal(second.packedNormal);
     if(dot(secondNormal,secondDirection)>0.0f)secondNormal=-secondNormal;
     float secondRoughness=1.0f-PTMaterialSmoothness(second.material,second.uv);
@@ -301,7 +301,7 @@ void reflectionRayGeneration()
     if(dot(thirdDirection,secondNormal)<=0.0f)return;
     PTPrivateHit third;
     if(PTTracePreserved(pixel,second.worldPosition+secondNormal*0.01f,thirdDirection,third)&&third.material<count)
-        g_ptPrivateHits[privatePixel*2u+1u]=third;
+        ptExtra_ptPrivateHits[privatePixel*2u+1u]=third;
 }
 
 // Exactly TWO native layers are preserved by the extra raygen. The following
