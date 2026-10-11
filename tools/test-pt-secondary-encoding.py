@@ -1,5 +1,5 @@
 """Measure binary16 secondary-hit encoding and lock the confirmed runtime."""
-import hashlib, math, random, struct
+import hashlib, math, random, struct, re
 from pathlib import Path
 root=Path(__file__).resolve().parents[1]
 locked={
@@ -9,7 +9,17 @@ locked={
  'src/pt_reflection_user_control.h':'53c854c79a852ba04b69b0b77f770f1a745d29f25b951444d8af3963a7a6f4bd',
 }
 for name,expected in locked.items():
- assert hashlib.sha256((root/name).read_text().encode()).hexdigest()==expected,name
+ source=(root/name).read_text()
+ # C1 adds observation only. Remove those explicit additions, then require
+ # the entire remaining runtime to match the confirmed S1 source hashes.
+ if name=='src/probe.cpp':
+  source=re.sub(r'static std::atomic<unsigned long long> ptGlass(?:Miss|HitGroup)BindCount\{0\};\n','',source)
+  source=re.sub(r'    if\(strcmp\(rrCurrentRayGeneration,"transparentRayGeneration"\)==0\) \{\n        const auto n=\+\+ptGlass(?:Miss|HitGroup)BindCount;\n        if\(n<=\d+\) Log\("PT_GLASS_[^\n]+\n    \}\n','',source)
+ if name=='src/pt_reflection_loader.h':
+  source=source.replace('#include "pt_glass_capture.h"\n\n','')
+  source=source.replace('    const char* resident=ptReflectionOriginalStorageGet?ptReflectionOriginalStorageGet(id):nullptr;\n    PTGlassCaptureResident(id,resident);\n    return resident;',
+      '    return ptReflectionOriginalStorageGet?ptReflectionOriginalStorageGet(id):nullptr;')
+ assert hashlib.sha256(source.encode()).hexdigest()==expected,name
 def half(v): return struct.unpack('<e',struct.pack('<e',v))[0]
 def sign(v): return 1 if v>=0 else -1
 def unit(v):
@@ -45,4 +55,4 @@ assert 'PTSecondaryDecodeNormal(packedSecondary.xy)' in comp
 assert 'float2 uv=float2(packedSecondary.z,secondPos.w)' in comp
 for name in ['src/shaders/pt_native_secondary.generated.hlsli','tools/generate-pt-native-secondary.py']:
  assert '/2048.0f' in (root/name).read_text()
-print(f'PASS: confirmed runtime unchanged; half UV max error {uv_error:.8f} vs old {old_error:.8f}; normal max error {worst:.6f} degrees; material IDs exact; texture mip floor checked')
+print(f'PASS: confirmed rendering runtime unchanged except C1 capture logging; half UV max error {uv_error:.8f} vs old {old_error:.8f}; normal max error {worst:.6f} degrees; material IDs exact; texture mip floor checked')

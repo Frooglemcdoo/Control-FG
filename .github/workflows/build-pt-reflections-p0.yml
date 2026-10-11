@@ -105,6 +105,10 @@ jobs:
           build\test-pt-glass-capture.exe
           if errorlevel 1 exit /b 1
 
+      - name: Check glass collector retains middle records
+        shell: powershell
+        run: tools/test-pt-glass-collector.ps1
+
       - name: Check specular energy and diffuse preservation
         run: python tools/test-pt-specular-preservation.py
 
