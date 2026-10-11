@@ -91,15 +91,18 @@ int main() {
         auto* cb=r->GetConstantBufferByName("deferredlight_constants");
         D3D12_SHADER_BUFFER_DESC cbdesc{};
         const bool cbSizeOkay=cb&&SUCCEEDED(cb->GetDesc(&cbdesc))&&cbdesc.Size==416u;
-        const bool countOffsetOkay=
-            Variable(r,"deferredlight_constants","ptNativePointLightTotalCount",256,4)&&
-            Variable(r,"deferredlight_constants","ptNativeSpotLightTotalCount",260,4)&&
-            Variable(r,"deferredlight_constants","ptNativeSunLightTotalCount",264,4)&&
-            Variable(r,"deferredlight_constants","ptNativeAmbientLightEnabled",268,4);
-        std::printf("PT LOCAL LIGHT ABI point_cell_t5=%u point_data_t10=%u point_stride160=%u spot_cell_t6=%u spot_data_t14=%u spot_stride320=%u deferred_b1=%u cb416=%u count_offset256_260=%u\n",
+        // Only the two used native UINT light-count members are mandatory.
+        // D3DCompile can strip unused sun/ambient symbols at optimization 3.
+        const bool pointOffsetOkay=
+            Variable(r,"deferredlight_constants","ptNativePointLightTotalCount",256,4);
+        const bool spotOffsetOkay=
+            Variable(r,"deferredlight_constants","ptNativeSpotLightTotalCount",260,4);
+        const bool countOffsetOkay=pointOffsetOkay&&spotOffsetOkay;
+        std::printf("PT LOCAL LIGHT ABI point_cell_t5=%u point_data_t10=%u point_stride160=%u spot_cell_t6=%u spot_data_t14=%u spot_stride320=%u deferred_b1=%u cb416=%u point_uint_at256=%u spot_uint_at260=%u\n",
             unsigned(cellOkay),unsigned(lightOkay),unsigned(strideOkay),
             unsigned(spotCellOkay),unsigned(spotLightOkay),unsigned(spotStrideOkay),
-            unsigned(constantsOkay),unsigned(cbSizeOkay),unsigned(countOffsetOkay));
+            unsigned(constantsOkay),unsigned(cbSizeOkay),
+            unsigned(pointOffsetOkay),unsigned(spotOffsetOkay));
         ok=ok&&cellOkay&&lightOkay&&strideOkay&&spotCellOkay&&spotLightOkay&&
             spotStrideOkay&&constantsOkay&&cbSizeOkay&&countOffsetOkay;
     }
