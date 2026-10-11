@@ -20,6 +20,7 @@ on:
       - experiment/pt-native-secondary-shading
       - experiment/pt-bounce-energy
       - experiment/pt-preserve-diffuse
+      - experiment/pt-third-bounce-bindings
   workflow_dispatch:
   pull_request:
     branches:
@@ -204,50 +205,30 @@ jobs:
           Copy-Item build/pt_reflection_p2_local_light_probe.dxbc "$out/pt_reflection_p2_local_light_probe.dxbc"
           Copy-Item build/pt_reflection_p2_diffuse_bridge.dxbc "$out/pt_reflection_p2_diffuse_bridge.dxbc"
           @'
-          CONTROL-FG - PT DIFFUSE LIGHTING PRESERVATION
-          ============================================
-          Experimental Steam DX12 integration build.
-          Branch: experiment/pt-preserve-diffuse
+          CONTROL-FG - THIRD-BOUNCE BINDING CAPTURE
+          =======================================
+          THIS BUILD DOES NOT ENABLE A THIRD BOUNCE YET.
+          It captures the missing native DXR and compute root layouts needed
+          to add private hit storage. The working two-bounce shaders are unchanged.
+          No shader, descriptor-table, GPU-resource or render-pass modifications.
 
-          INSTALL: Close Control. Replace ALL SEVEN binaries beside Control_DX12.exe.
-          Requires your existing Control-FG installation. No BAT or build needed.
-          F10 -> PT REFLECTIONS toggles this composite against native lighting.
-          Compare the same camera in normal mode and allow RR to settle.
+          Close Control. Replace ALL SEVEN binaries beside Control_DX12.exe.
+          Start the game, load the lobby and leave PT ON for about 20 seconds.
+          Exit and run your normal compact-log collector. Send the log ZIP.
+          No F11 mode, screenshots or repeated ON/OFF tests are needed.
 
-          CHANGE:
-          Retains native diffuse GI, direct light and emission at the first hit.
-          Only indirect specular lighting is replaced by the real secondary hit.
-          Secondary rays sample GGX visible normals; matching RGB weight is F*G1.
-          The second hit still receives native material, lights, shadows and GI.
-          This is hybrid reflection transport, NOT a full diffuse path tracer.
-          It removes the all-indirect replacement that blackened concrete walls.
+          Captured CPU metadata:
+          - Global/local raytracing and deferred-composite root layouts.
+          - Descriptor ranges, register spaces, root DWORD budget and samplers.
+          - Raytracing payload/attribute sizes and recursion configuration.
+          Log prefixes: PT_THIRD_AUDIT_INSTALL, PT_THIRD_STATE, PT_THIRD_ROOT.
+          The capture preserves native API descriptors and HRESULTs.
 
-          NATIVE PARITY GUARD:
-          Reconstructs original first-hit lighting before applying the difference.
-          Uses native primary offset, GI LOD normal factor and local-light view.
-          If the port differs from actual native output by more than 5 percent
-          plus 0.001 linear intensity per channel, it leaves native output intact.
-          Missing/unsupported second hits also retain native output.
-          No arbitrary brightness multiplier or additive double-counted diffuse GI.
-
-          F11 diagnostics (PT ON):
-          Press once for four quadrants:
-            Top left: native reflection.
-            Top right: admission map. Green accepted; orange native-parity mismatch;
-                       red first hit; magenta second hit; yellow normal;
-                       cyan invalid lighting/segment; white material range.
-            Bottom left: transported second-hit SPECULAR radiance, no gain.
-            Bottom right: retained native diffuse GI + direct + emission.
-          Other F11 modes retain the earlier GI-copy and normal diagnostics.
-          Toggle PT OFF then ON in F10 to return to normal mode.
-
-          VALIDATION / LIMITS:
-          Windows compiler, shader ABI and UAV coherency checks run in CI.
-          Local numerical tests cover specular sampling and diffuse preservation.
-          In-game visual validation is still required; dispatch is not proof of it.
-          Native shadow-map coverage, quantized secondary UV and FP16 positions
-          remain limitations. First-hit ray origin precision fix is retained.
-          Log marker: PT_REFLECTION_DIFFUSE_PRESERVATION.
+          Existing behavior retained:
+          Native diffuse GI, direct lighting and emission remain intact.
+          The existing second bounce replaces only indirect specular lighting.
+          Native-parity guard and previously confirmed flicker fixes are retained.
+          This remains hybrid reflection transport; full diffuse PT is not enabled.
           '@ | Set-Content "$out/README.txt" -Encoding ASCII
           Compress-Archive -Path "$out/*" -DestinationPath "$out.zip" -Force
           (Get-FileHash "$out.zip" -Algorithm SHA256).Hash | Set-Content "$out.sha256" -Encoding ASCII
