@@ -323,17 +323,21 @@ void PTBasis(float3 n,out float3 t,out float3 b)
 // validated sideband buffer. Do not sample random UVs or invent texture data.
 uint PTDecodeSecondaryMaterial(float4 normalPacked,float4 positionPacked)
 {
-    if(!isfinite(normalPacked.w)||!isfinite(positionPacked.w)||
-       normalPacked.w<1.0f||normalPacked.w>256.0f||
-       positionPacked.w<0.0f||positionPacked.w>255.0f)
-        return 65535u;
-    uint low=(uint)round(normalPacked.w);
-    uint high=(uint)round(positionPacked.w);
-    if(abs(normalPacked.w-float(low))>0.125f||
-       abs(positionPacked.w-float(high))>0.125f)
-        return 65535u;
-    uint id=(high<<8u)|(low-1u);
-    return id<65534u?id:65535u;
+    uint decoded=65535u; // fail-closed even if a branch is optimized away
+    const float loValue=normalPacked.w;
+    const float hiValue=positionPacked.w;
+    const bool numerical=all(isfinite(float2(loValue,hiValue)));
+    const bool inRange=loValue>=1.0f&&loValue<=256.0f&&
+                       hiValue>=0.0f&&hiValue<=255.0f;
+    if(numerical&&inRange){
+        const uint low=(uint)round(loValue);
+        const uint high=(uint)round(hiValue);
+        const bool exact=abs(loValue-float(low))<=0.125f&&
+                         abs(hiValue-float(high))<=0.125f;
+        const uint id=(high<<8u)|(low-1u);
+        if(exact&&id<65534u)decoded=id;
+    }
+    return decoded;
 }
 
 float3 PTMaterialBaseColor(uint materialId)
