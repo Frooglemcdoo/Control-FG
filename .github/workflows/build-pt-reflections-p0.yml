@@ -17,6 +17,7 @@ on:
       - experiment/pt-hit-rejection-diagnostic
       - experiment/pt-material-buffer-bounds
       - experiment/pt-overlay-toggle
+      - experiment/pt-native-secondary-shading
   workflow_dispatch:
   pull_request:
     branches:
@@ -198,25 +199,27 @@ jobs:
           Copy-Item build/pt_reflection_p2_local_light_probe.dxbc "$out/pt_reflection_p2_local_light_probe.dxbc"
           Copy-Item build/pt_reflection_p2_diffuse_bridge.dxbc "$out/pt_reflection_p2_diffuse_bridge.dxbc"
           @'
-          CONTROL-FG - PT REFLECTIONS OVERLAY TOGGLE
+          CONTROL-FG - NATIVE SECONDARY-HIT SHADING
           ================================================
           EXPERIMENTAL STEAM DX12 TEST.
-          Branch: experiment/pt-overlay-toggle
-          Includes the material-buffer bounds fix confirmed flicker-free by user.
-          With Control closed, copy ALL SEVEN binaries beside Control_DX12.exe.
-          Open the FG overlay (F10 by default). PT REFLECTIONS is below RR.
-          ON = native first-reflection lighting plus added second-bounce lighting.
-          OFF = native first-reflection lighting only.
-          This is a visual A/B switch: both modes keep the same ray tracing and
-          first-hit sampling. OFF is not a stock-renderer or performance baseline.
-          Both toggle directions exit F11 diagnostics. F11 has no effect while OFF.
-          The choice applies at the next reflection composite and saves to
-          [PTReflections] Enabled in the existing settings.ini. Default is ON.
-          Keep the camera still and allow a moment for RR history to settle.
-          No shader changes: all six sidecars match the flicker-free build.
-          Logs: PT_REFLECTION_UI_TOGGLE (request), PT_REFLECTION_AB_APPLIED
-          (render path), PT_REFLECTION_SETTINGS (loaded selection).
-          Windows build validated; live overlay interaction awaits in-game test.
+          Branch: experiment/pt-native-secondary-shading
+          Replaces simplified unshadowed P2 environment shading with Control's
+          native material BRDF, point/spot light-cell lookup, point/VSM/PCF
+          shadow evaluation, spotlight projection, ambient SH and GI volumes.
+          Generated from the exact captured native deferred reflection shader.
+          Adapts view direction to the previous bounce, not the player camera.
+          Preserves the stable ray library, material buffer bounds and overlay.
+          Copy ALL SEVEN binaries beside Control_DX12.exe with Control closed.
+          F10 -> PT REFLECTIONS compares added second-bounce lighting ON/OFF.
+          Compare the same dark hallway/reflected walls. Allow RR to settle.
+          Native shadow maps retain their original coverage limitations.
+          Secondary UVs still use the two-layer 5+5-bit encoding and filtering;
+          first-bounce path weighting remains the earlier approximation.
+          This is a native-shading integration test, not a finished PT renderer.
+          Windows compilation and resource ABI validation are required; actual
+          visual shading/shadow correctness still requires the in-game test.
+          Normal mode and F11 mode 1 use the new evaluator; F11 mode 3 remains
+          the older explicitly unshadowed light diagnostic.
 
           ROOT CAUSE:
           Control's native material/position/normal hit texture arrays have
