@@ -96,6 +96,70 @@ RWTexture2D<float4> g_rwtReflectionTarget : register(u0);
 #ifndef PT_REFLECTION_VERIFY_VARIANT
 #define PT_REFLECTION_VERIFY_VARIANT 0
 #endif
+// Native Control rt_deferredReflection RDEF:
+// t10 has exactly 160-byte structured point-light elements,
+// t5 is a UINT4 tile/cell index texture, and b1 is 416 bytes.
+// These are bound by Control's original composite root signature.
+// Diagnostic only until shadow visibility and cell-index packing are proven.
+#if PT_REFLECTION_VERIFY_VARIANT == 2
+struct PTNativePointLight {
+    float3 positionView;
+    float shadowMapShrink;
+    float3 color;
+    float clipRange;
+    float4 falloff;
+    float3 directionView;
+    float invShadowMapRange;
+    column_major float4x4 viewToShadowClip;
+    float4 shadowAtlasOffsetScale;
+    float radius;
+    float boundsRadius;
+    float scatterIntensity;
+    uint techniqueProperties;
+};
+StructuredBuffer<PTNativePointLight> ptNativePointLights : register(t10);
+Texture2D<uint4> ptNativePointCellIds : register(t5);
+cbuffer deferredlight_constants : register(b1)
+{
+    float4 ptNativeDeferredConstants[26]; // 416 byte native b1 ABI
+}
+uint PTNativePointCount()
+{
+    // Native b1 offset +256 = g_uPointLightTotalCount.
+    return asuint(ptNativeDeferredConstants[16].x);
+}
+float3 PTWorldNormalToView(float3 n)
+{
+    return normalize(mul((float3x3)g_mWorldToView,n));
+}
+float3 PTLocalUnshadowedPotential(float3 hitPosView,float3 hitNormalView,
+                                  uint numLights)
+{
+    float3 total=0.0f;
+    // Only used in the debug quadrant. This is NOT final PT lighting:
+    // shadow visibility and tiled-cell decoding are not yet validated.
+    [loop]
+    for(uint i=0u;i<numLights;++i){
+        PTNativePointLight l=ptNativePointLights[i];
+        if(!all(isfinite(l.positionView)) || !all(isfinite(l.color)) ||
+            !isfinite(l.boundsRadius))continue;
+        float3 toLight=l.positionView-hitPosView;
+        float d2=dot(toLight,toLight);
+        if(d2<1.0e-3f)continue;
+        float distance=sqrt(d2);
+        float ndotl=saturate(dot(hitNormalView,toLight/distance));
+        // Range and distance weighting; source scale remains intentionally
+        // uncalibrated. Nonzero diagnostic proves the *actual bound light
+        // records* can illuminate a secondary hit, not shadow correctness.
+        float radius=max(l.boundsRadius,0.01f);
+        float range=saturate((radius-distance)/max(radius,0.01f));
+        float attenuation=(range*range)/(1.0f+0.0025f*d2);
+        total+=max(l.color,0.0f)*ndotl*attenuation;
+    }
+    return total;
+}
+#endif
+
 
 float3 PTViewToWorldPoint(float3 p)
 {
@@ -255,6 +319,75 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
     float4 amplified=g_rwtReflectionTarget[pixel];
     amplified.rgb+=max(unboundedRadiance,0.0f)*16.0f;
     g_rwtReflectionTarget[pixel]=amplified;
+    return;
+#endif
+#if PT_REFLECTION_VERIFY_VARIANT == 2
+    // Four quadrants for native local-light data validation:
+    // TL = native reflection (unchanged);
+    // TR = point-light count / tile-cell occupancy (not decoded);
+    // BL = actual point-light *potential* at secondary hit (unshadowed);
+    // BR = candidate potential x8 over native, diagnostic only.
+    // Normal mode 0 and P2 radiance mode 1 are unaffected.
+    const uint halfW=((uint)g_vScreenRes.x)/2u;
+    const uint halfH=((uint)g_vScreenRes.y)/2u;
+    const bool right=pixel.x>=halfW;
+    const bool bottom=pixel.y>=halfH;
+    if(!right&&!bottom)return;
+    uint pointElements=0u,pointStride=0u;
+    ptNativePointLights.GetDimensions(pointElements,pointStride);
+    const uint rawCount=PTNativePointCount();
+    const bool countValid=rawCount<=1024u&&pointStride==160u;
+    const uint pointCount=countValid?min(rawCount,pointElements):0u;
+    if(right&&!bottom){
+        uint tileW=0u,tileH=0u;
+        ptNativePointCellIds.GetDimensions(tileW,tileH);
+        uint4 cellData=uint4(0u,0u,0u,0u);
+        if(tileW>0u&&tileH>0u){
+            uint2 cellCoord=min(uint2(float2(pixel+uint2(1u,1u))*
+                float2(tileW,tileH)/max(g_vScreenRes,1.0f.xx)),
+                uint2(tileW-1u,tileH-1u));
+            cellData=ptNativePointCellIds.Load(int3(cellCoord,0));
+        }
+        // green means a valid nonzero native light count, red means invalid
+        // count/stride, blue channel shows raw tile-cell low bytes.
+        float3 diagnostic=countValid?
+            float3(0.02f,pointCount>0u?4.0f:0.0f,
+                   saturate(float(cellData.x&255u)/32.0f)*2.0f):
+            float3(5.0f,0.0f,0.0f);
+        g_rwtReflectionTarget[pixel]=float4(diagnostic,1.0f);
+        return;
+    }
+
+    float3 lightPotential=0.0f;
+    bool foundSecondHit=false;
+    [unroll]
+    for(uint path=0u;path<2u;++path){
+        const uint firstMaterial=g_tMaterialId.Load(int4(pixel,path,0));
+        if(firstMaterial>=65534u||firstMaterial>=g_uMaterialIDCount)continue;
+        float4 n=g_tNormal_TexcoordX.Load(int4(pixel,path+2u,0));
+        uint secondMat=asuint(n.w);
+        if(secondMat>=65534u||secondMat>=g_uMaterialIDCount)continue;
+        foundSecondHit=true;
+        float3 normalView=PTWorldNormalToView(normalize(n.xyz));
+        float3 hitPosView=g_tPosition_TexcoordY.Load(int4(pixel,path+2u,0)).xyz;
+        if(!all(isfinite(hitPosView))||!all(isfinite(normalView)))continue;
+        // 16 light records per valid secondary hit, deterministic and bounded.
+        // This samples only an initial subset; tiled selection comes next.
+        const uint evalCount=min(pointCount,16u);
+        lightPotential+=PTLocalUnshadowedPotential(hitPosView,normalView,evalCount)*0.5f;
+    }
+    const float lum=max(dot(lightPotential,float3(0.2126f,0.7152f,0.0722f)),0.0f);
+    const float heat=saturate(lum/(lum+0.08f));
+    if(!right&&bottom){
+        g_rwtReflectionTarget[pixel]=foundSecondHit?
+            float4(heat*4.0f,heat*(1.0f-heat)*4.0f,
+                (1.0f-heat)*0.6f,1.0f):
+            float4(0.0f,0.0f,0.0f,1.0f);
+        return;
+    }
+    float4 base=g_rwtReflectionTarget[pixel];
+    base.rgb=max(base.rgb+lightPotential*8.0f,0.0f);
+    g_rwtReflectionTarget[pixel]=base;
     return;
 #endif
     if(totalWeight<=0.0f)return;
