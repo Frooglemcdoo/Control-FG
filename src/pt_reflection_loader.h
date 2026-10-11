@@ -1970,6 +1970,7 @@ static bool PTReflectionInstallShaderLookupHooks(HMODULE renderer,HMODULE d3d) n
     ptReflectionTwoLayerAttempts.store(0u,std::memory_order_release);
     ptReflectionVerifyMode.store(0u,std::memory_order_release);
     ptReflectionVerifyKeyDown.store(0u,std::memory_order_release);
+    Log("PT_REFLECTION_MATERIAL_BOUNDS source=bound_t4_GetDimensions native_b6_count_ignored=1 expected_stride=336");
     Log("PT_REFLECTION_REJECTION_DIAGNOSTIC enabled=1 F11_mode=1 red=first_hit magenta=second_hit yellow=normal cyan=segment white=material_range green=accepted");
     Log("PT_REFLECTION_HIT_UAV_COHERENCE enabled=1 globallycoherent_uavs=3 raygen_publish=1 closesthit_publish=1 miss_publish=1");
     Log("PT_REFLECTION_SECONDARY_MATERIAL_FILTER enabled=1 uv_steps=31 footprint_mip=1 emission_texture_slot=5 primary_ray_change=0");
