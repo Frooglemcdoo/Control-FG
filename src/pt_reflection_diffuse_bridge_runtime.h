@@ -424,7 +424,9 @@ static bool PTDiffuseGICopyMarkerProof(unsigned long long call) noexcept {
 
 static bool PTReflectionBridgeDiffuseGI() noexcept {
     const auto call=ptDiffuseGIBridgeCalls.fetch_add(1,std::memory_order_relaxed)+1;
-    const unsigned verifyMode=ptReflectionVerifyMode.load(std::memory_order_acquire);
+    const unsigned userState=ptReflectionUserState.load(std::memory_order_acquire);
+    if(!(userState&1u))return false;
+    const unsigned verifyMode=userState>>1u;
     if(!ptReflectionP2InjectionEnabled||!ptReflectionP2DiffuseBridgeLoaded||
        !(rrNativeRTFrame.effects&control_rr::RTDiffuseGI))return false;
 
