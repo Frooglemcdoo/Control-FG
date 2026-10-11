@@ -309,7 +309,8 @@ void reflectionRayGeneration()
         PTTrace(secondLayer,firstHitWorld+firstHitNormal*0.01f,secondDirection,secondPayload);
         if(privatePixel>=PT_PRIVATE_PIXEL_CAPACITY||secondPayload.value==0u)continue;
         PTPrivateHit second=g_ptPrivateHits[privatePixel*2u];
-        if(second.material>=65534u)continue;
+        uint materialCount,materialStride;g_sbMaterialDataPart3.GetDimensions(materialCount,materialStride);
+        if(materialStride!=336u||second.material>=min(materialCount,65534u))continue;
         float3 secondNormal=PTUnpackNormal(second.packedNormal);
         if(dot(secondNormal,secondDirection)>0.0f)secondNormal=-secondNormal;
         float secondRoughness=1.0f-PTMaterialSmoothness(second.material,second.uv);
