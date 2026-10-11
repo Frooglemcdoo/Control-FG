@@ -12,6 +12,7 @@ on:
       - experiment/pt-secondary-normal-proof-v7
       - experiment/pt-two-layer-bounce-proof
       - experiment/pt-secondary-origin-precision
+      - experiment/pt-secondary-material-filter
   workflow_dispatch:
   pull_request:
     branches:
@@ -189,15 +190,14 @@ jobs:
           Copy-Item build/pt_reflection_p2_local_light_probe.dxbc "$out/pt_reflection_p2_local_light_probe.dxbc"
           Copy-Item build/pt_reflection_p2_diffuse_bridge.dxbc "$out/pt_reflection_p2_diffuse_bridge.dxbc"
           @'
-          CONTROL-FG - P2 SECONDARY ORIGIN PRECISION TEST
+          CONTROL-FG - P2 SECONDARY MATERIAL FILTER TEST
           ================================================
           EXPERIMENTAL STEAM DX12 TEST. NOT PRODUCTION.
-          Branch: experiment/pt-secondary-origin-precision
-          NEW CHANGE: reconstruct the second ray origin from the original
-          first ray and distance payload, avoiding FP16 position round-trip.
-          This targets self-intersection caused by position rounding exceeding
-          the 1 cm bias. It is NOT an in-game verified flicker fix.
-          Native first-hit sample count remains one; no private UAVs added.
+          Branch: experiment/pt-secondary-material-filter
+          Filters material textures to match the stored 5-bit UV footprint.
+          Restores the native emission texture mask (material slot 5).
+          Primary rays and the native composite are unchanged from the
+          precision test. This is NOT an in-game verified flicker fix.
           Copy ALL SEVEN binaries beside Control_DX12.exe, backing up old ones.
 
           ROOT CAUSE:
