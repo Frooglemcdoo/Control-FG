@@ -16,6 +16,7 @@ on:
       - experiment/pt-hit-uav-coherence
       - experiment/pt-hit-rejection-diagnostic
       - experiment/pt-material-buffer-bounds
+      - experiment/pt-overlay-toggle
   workflow_dispatch:
   pull_request:
     branches:
@@ -197,19 +198,25 @@ jobs:
           Copy-Item build/pt_reflection_p2_local_light_probe.dxbc "$out/pt_reflection_p2_local_light_probe.dxbc"
           Copy-Item build/pt_reflection_p2_diffuse_bridge.dxbc "$out/pt_reflection_p2_diffuse_bridge.dxbc"
           @'
-          CONTROL-FG - P2 MATERIAL BUFFER BOUNDS FIX
+          CONTROL-FG - PT REFLECTIONS OVERLAY TOGGLE
           ================================================
           EXPERIMENTAL STEAM DX12 TEST.
-          Branch: experiment/pt-material-buffer-bounds
-          The rejection diagnostic flashed WHITE during the lighting dropout:
-          material bounds rejected hit IDs. The prior shader trusted b6+12,
-          a constant not consumed by the native deferred shader.
-          This build queries the bound t4 material buffer size directly and
-          validates its 336-byte stride. All three composite variants use it.
-          Ray tracing and the coherency fix are unchanged.
-          Test NORMAL MODE first. F11 diagnostics remain available.
-          In-game flicker resolution remains to be verified.
-          Copy ALL SEVEN binaries beside Control_DX12.exe, backing up old ones.
+          Branch: experiment/pt-overlay-toggle
+          Includes the material-buffer bounds fix confirmed flicker-free by user.
+          With Control closed, copy ALL SEVEN binaries beside Control_DX12.exe.
+          Open the FG overlay (F10 by default). PT REFLECTIONS is below RR.
+          ON = native first-reflection lighting plus added second-bounce lighting.
+          OFF = native first-reflection lighting only.
+          This is a visual A/B switch: both modes keep the same ray tracing and
+          first-hit sampling. OFF is not a stock-renderer or performance baseline.
+          Both toggle directions exit F11 diagnostics. F11 has no effect while OFF.
+          The choice applies at the next reflection composite and saves to
+          [PTReflections] Enabled in the existing settings.ini. Default is ON.
+          Keep the camera still and allow a moment for RR history to settle.
+          No shader changes: all six sidecars match the flicker-free build.
+          Logs: PT_REFLECTION_UI_TOGGLE (request), PT_REFLECTION_AB_APPLIED
+          (render path), PT_REFLECTION_SETTINGS (loaded selection).
+          Windows build validated; live overlay interaction awaits in-game test.
 
           ROOT CAUSE:
           Control's native material/position/normal hit texture arrays have
