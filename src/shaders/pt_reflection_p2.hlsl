@@ -91,9 +91,9 @@ SamplerState g_sLinearWrap : register(s5, space1);
 ByteAddressBuffer g_bRaytracingIndexBuffer : register(t0, space3);
 ByteAddressBuffer g_bRaytracingVertexBuffer1 : register(t1, space3);
 
-RWTexture2DArray<uint>   g_rwtMaterialId : register(u0);
-RWTexture2DArray<float4> g_rwtNormal_TexcoordX : register(u1);
-RWTexture2DArray<float4> g_rwtPosition_TexcoordY : register(u2);
+globallycoherent RWTexture2DArray<uint>   g_rwtMaterialId : register(u0);
+globallycoherent RWTexture2DArray<float4> g_rwtNormal_TexcoordX : register(u1);
+globallycoherent RWTexture2DArray<float4> g_rwtPosition_TexcoordY : register(u2);
 RWTexture2DArray<uint>   g_rwtShadow : register(u3);
 
 float3 PTTransformPointColumns(float3 p, float4 c0, float4 c1, float4 c2, float4 c3)
@@ -221,6 +221,8 @@ void PTTrace(uint layer, float3 origin, float3 direction, out HitData payload)
     ray.Direction=normalize(direction);
     ray.TMax=10000.0f;
     payload.value=layer;
+    // Publish raygen clears before a callee overwrites the same texels.
+    DeviceMemoryBarrier();
     TraceRay(g_rtScene,RAY_FLAG_NONE,0x1,0,2,0,ray,payload);
 }
 
@@ -429,6 +431,8 @@ void reflectionClosestHit(inout HitData payload, in BuiltInTriangleIntersectionA
         g_rwtNormal_TexcoordX[uint3(pixel,layer)]=float4(normalWorld,texcoord.x);
         g_rwtPosition_TexcoordY[uint3(pixel,layer)]=float4(viewHit,texcoord.y);
     }
+    // Publish hit attributes before raygen consumes them after TraceRay.
+    DeviceMemoryBarrier();
     payload.value=(uint)(RayTCurrent()*10000.0f);
 }
 
@@ -461,6 +465,7 @@ void reflectionMiss(inout HitData payload)
         g_rwtMaterialId[uint3(pixel,layer)]=65535u;
     }
     g_rwtPosition_TexcoordY[uint3(pixel,layer)]=float4(PTWorldToViewPoint(worldEnd),0.0f);
+    DeviceMemoryBarrier();
     payload.value=0u;
 }
 
