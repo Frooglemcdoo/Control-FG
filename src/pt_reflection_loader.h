@@ -1970,6 +1970,7 @@ static bool PTReflectionInstallShaderLookupHooks(HMODULE renderer,HMODULE d3d) n
     ptReflectionTwoLayerAttempts.store(0u,std::memory_order_release);
     ptReflectionVerifyMode.store(0u,std::memory_order_release);
     ptReflectionVerifyKeyDown.store(0u,std::memory_order_release);
+    Log("PT_REFLECTION_SECONDARY_ORIGIN_PRECISION enabled=1 source=ray_origin_direction_payload distance_quantum_m=0.0001 fp16_position_reuse=0 native_samples=1");
     Log("PT_REFLECTION_TWO_LAYER_PROOF_CONFIG ray_paths=1 first_layer=0 second_layer=1 native_material_sentinel=65534 secondary_id_storage=numeric_half secondary_uv_storage=numeric_5bit_each native_first_sample_tradeoff=1 experimental=1");
     Log("PT_REFLECTION_VERIFY_INIT mode=0 hotkey=F11 cycle=normal,composite_quadrants,diffuse_gi_native_copy_proof,native_point_light_probe verify_sidecar=%u local_probe_sidecar=%u",
         unsigned(ptReflectionP2VerifyLoaded),unsigned(ptReflectionP2LocalLightProbeLoaded));
