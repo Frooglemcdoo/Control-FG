@@ -418,15 +418,15 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
     float3 lightPotential=0.0f;
     bool foundSecondHit=false;
     [unroll]
-    for(uint path=0u;path<2u;++path){
-        const uint firstMaterial=g_tMaterialId.Load(int4(pixel,path,0));
+    for(uint probePath=0u;probePath<2u;++probePath){
+        const uint firstMaterial=g_tMaterialId.Load(int4(pixel,probePath,0));
         if(firstMaterial>=65534u||firstMaterial>=g_uMaterialIDCount)continue;
-        float4 n=g_tNormal_TexcoordX.Load(int4(pixel,path+2u,0));
+        float4 n=g_tNormal_TexcoordX.Load(int4(pixel,probePath+2u,0));
         uint secondMat=asuint(n.w);
         if(secondMat>=65534u||secondMat>=g_uMaterialIDCount)continue;
         foundSecondHit=true;
         float3 normalView=PTWorldNormalToView(normalize(n.xyz));
-        float3 hitPosView=g_tPosition_TexcoordY.Load(int4(pixel,path+2u,0)).xyz;
+        float3 hitPosView=g_tPosition_TexcoordY.Load(int4(pixel,probePath+2u,0)).xyz;
         if(!all(isfinite(hitPosView))||!all(isfinite(normalView)))continue;
         // 16 light records per valid secondary hit, deterministic and bounded.
         // This samples only an initial subset; tiled selection comes next.
@@ -445,9 +445,9 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
             float4(0.0f,0.0f,0.0f,1.0f);
         return;
     }
-    float4 base=g_rwtReflectionTarget[pixel];
-    base.rgb=max(base.rgb+lightPotential*8.0f,0.0f);
-    g_rwtReflectionTarget[pixel]=base;
+    float4 candidateBase=g_rwtReflectionTarget[pixel];
+    candidateBase.rgb=max(candidateBase.rgb+lightPotential*8.0f,0.0f);
+    g_rwtReflectionTarget[pixel]=candidateBase;
     return;
 #endif
     if(totalWeight<=0.0f)return;
