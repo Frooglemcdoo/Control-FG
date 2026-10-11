@@ -330,7 +330,20 @@ static HRESULT PTThirdCreateState(ID3D12Device5* device,const D3D12_STATE_OBJECT
             }
         }catch(...){return E_OUTOFMEMORY;}
     }
-    if(!target)return ptAuditCreateState(device,desc,iid,out);
+    if(!target){
+        static std::atomic<unsigned> nativeStates{0};const auto n=nativeStates.fetch_add(1)+1;
+        HRESULT hr=ptAuditCreateState(device,desc,iid,out);
+        if(n<=32&&desc&&desc->pSubobjects){
+            Log("PT_THIRD_NATIVE_STATE call=%u object=%p hr=0x%08lX subobjects=%u",n,out?*out:nullptr,hr,desc->NumSubobjects);
+            for(UINT i=0;i<desc->NumSubobjects;++i)if(desc->pSubobjects[i].Type==D3D12_STATE_SUBOBJECT_TYPE_DXIL_LIBRARY&&desc->pSubobjects[i].pDesc){
+                const auto& code=static_cast<const D3D12_DXIL_LIBRARY_DESC*>(desc->pSubobjects[i].pDesc)->DXILLibrary;
+                char sha[65]{};
+                if(code.pShaderBytecode&&code.BytecodeLength<=16777216u&&PTReflectionSha256(static_cast<const unsigned char*>(code.pShaderBytecode),code.BytecodeLength,sha))
+                    Log("PT_THIRD_NATIVE_LIBRARY state=%u bytes=%llu sha256=%s",n,static_cast<unsigned long long>(code.BytecodeLength),sha);
+            }
+        }
+        return hr;
+    }
     try {
         if(!ptThirdDirectReady.load()||ptThirdCaptureFailures.load()){
             Log("PT_THIRD_ACTIVATION blocked=1 direct_ready=%u capture_failures=%u fallback=p1",
