@@ -871,7 +871,7 @@ static void PaintFGOverlay(HWND hwnd) noexcept {
     PaintFGButton(dc, ptToggle, ptEnabled ? L"PT REFLECTIONS ON" : L"PT REFLECTIONS OFF", ptEnabled, true);
     SelectObject(dc, smallFont); SetTextColor(dc, RGB(169, 169, 169));
     RECT ptDescription{304, 794 + lowerSectionOffset, 710, 846 + lowerSectionOffset};
-    DrawTextW(dc, L"Compare added second-bounce lighting.\nNative reflections stay visible.", -1, &ptDescription,
+    DrawTextW(dc, L"Compare traced second-bounce lighting.\nNative reflections stay visible.", -1, &ptDescription,
         DT_LEFT | DT_WORDBREAK);
 
 
