@@ -2,6 +2,7 @@
 #include <d3dcompiler.h>
 #include <d3d12shader.h>
 #include <cstdio>
+#include <cstring>
 
 static bool Binding(ID3D12ShaderReflection* r,const char* name,D3D_SHADER_INPUT_TYPE type,UINT slot,UINT space,UINT count=1) {
     D3D12_SHADER_INPUT_BIND_DESC d{};
@@ -68,12 +69,29 @@ int main() {
     ok=ok&&Binding(r,"sys_constants",D3D_SIT_CBUFFER,0,0);
     if(diagnostic!=2u)
         ok=ok&&Binding(r,"env_general",D3D_SIT_CBUFFER,2,0);
-    ok=ok&&Binding(r,"rtreflection",D3D_SIT_CBUFFER,6,0);
+    if(diagnostic!=2u)ok=ok&&Binding(r,"rtreflection",D3D_SIT_CBUFFER,6,0);
     if(diagnostic!=2u){
         ok=ok&&Variable(r,"sys_constants","g_mViewToWorld",96,64);
         ok=ok&&Variable(r,"env_general","g_fEnvReflectionMipCount",4,4);
     }
-    ok=ok&&Variable(r,"rtreflection","g_uMaterialIDCount",12,4);
+    // All variants must query the actual material SRV, never rely on the
+    // unused native b6+12 constant. Check the compiled bytecode and reflection.
+    D3D12_SHADER_INPUT_BIND_DESC materialBuffer{};
+    const bool materialBufferOkay=SUCCEEDED(r->GetResourceBindingDescByName(
+        "g_sbMaterialDataPart3",&materialBuffer))&&materialBuffer.BindPoint==4u&&
+        materialBuffer.Space==0u&&materialBuffer.NumSamples==336u;
+    auto* unusedVar=r->GetConstantBufferByName("rtreflection")->GetVariableByName("g_rtUnusedMaterialCount");
+    D3D12_SHADER_VARIABLE_DESC unusedDesc{};
+    const bool unusedCountOkay=FAILED(unusedVar->GetDesc(&unusedDesc))||
+        (unusedDesc.uFlags&D3D_SVF_USED)==0u;
+    ID3DBlob* assembly=nullptr;
+    const bool hasBufferQuery=SUCCEEDED(D3DDisassemble(code->GetBufferPointer(),
+        code->GetBufferSize(),0,nullptr,&assembly))&&assembly&&
+        std::strstr(static_cast<const char*>(assembly->GetBufferPointer()),"bufinfo")!=nullptr;
+    if(assembly)assembly->Release();
+    std::printf("P2 MATERIAL BOUNDS variant=%u srv_stride336=%u native_count_unused=%u compiled_buffer_query=%u\n",
+        diagnostic,unsigned(materialBufferOkay),unsigned(unusedCountOkay),unsigned(hasBufferQuery));
+    ok=ok&&materialBufferOkay&&unusedCountOkay&&hasBufferQuery;
     if(diagnostic==2u){
         // The native shader RDEF identifies these exact bindings. Verify
         // no untested descriptor/root ABI gets into the game package.
