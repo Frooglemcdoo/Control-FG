@@ -6,7 +6,7 @@ import tempfile, subprocess, os, shutil
 root=Path(__file__).resolve().parents[1]
 s=(root/'src/pt_reflection_third_runtime.h').read_text()
 a=s.index('    if(!target&&desc&&desc->pSubobjects')
-b=s.index('    if(!target)return ptAuditCreateState',a)
+b=s.index('    if(!target){',a)
 block=s[a:b]
 source=r'''
 #include <vector>
