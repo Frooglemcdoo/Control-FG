@@ -289,23 +289,14 @@ void reflectionRayGeneration()
 
         if(dot(firstHitNormal,firstDirection)>0.0f) firstHitNormal=-firstHitNormal;
 
-        // Mixed second-bounce BSDF. Smooth materials keep the GGX/specular
-        // path; rough surfaces increasingly use a cosine diffuse hemisphere.
+        // Native diffuse GI is retained by the composite. Trace only the
+        // indirect specular lobe that this second hit will replace.
         const float firstSmoothness=PTMaterialSmoothness(firstMaterial,float2(firstNormalUV.w,g_rwtPosition_TexcoordY[uint3(pixel,firstLayer)].w));
         const float firstRoughness=1.0f-firstSmoothness;
         float2 secondRandom=PTRandom2(pixel,path+11u);
         float3 viewBack=normalize(-firstDirection);
-        // Sample a true lobe mixture. Interpolating directions has no matching
-        // mixture PDF and cannot be used with BSDF throughput weighting.
-        float diffuseMix=clamp((firstRoughness-0.35f)/0.45f,0.1f,0.9f);
-        float choose=PTRandom2(pixel,path+23u).x;
-        float3 secondDirection;
-        if(choose<diffuseMix){
-            secondDirection=PTSampleCosineHemisphere(firstHitNormal,secondRandom);
-        }else{
-            float3 h2=PTSampleGGXVNDF(firstHitNormal,viewBack,firstRoughness,secondRandom);
-            secondDirection=normalize(reflect(-viewBack,h2));
-        }
+        float3 h2=PTSampleGGXVNDF(firstHitNormal,viewBack,firstRoughness,secondRandom);
+        float3 secondDirection=normalize(reflect(-viewBack,h2));
         if(dot(secondDirection,firstHitNormal)<=0.0f)continue;
 
         HitData secondPayload;
