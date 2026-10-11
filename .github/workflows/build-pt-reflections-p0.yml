@@ -26,7 +26,6 @@ on:
       - experiment/pt-third-bounce-freshness
       - experiment/pt-third-bounce-chain-fix
       - experiment/pt-third-bounce-pipeline-rebuild
-      - experiment/pt-native-preserved-extra-pass
   workflow_dispatch:
   pull_request:
     branches:
@@ -151,7 +150,7 @@ jobs:
           & $dxc -dumpbin build/pt_reflection_p2.dxil | Set-Content -LiteralPath build/pt_reflection_p2.dump.txt -Encoding UTF8
           if($LASTEXITCODE -ne 0){throw "DXC dump failed: $LASTEXITCODE"}
           $dump=Get-Content -LiteralPath build/pt_reflection_p2.dump.txt -Raw
-          if(([regex]::Matches($dump,'call void @dx.op.barrier\(i32 80, i32 2\)')).Count -lt 3){
+          if(([regex]::Matches($dump,'call void @dx.op.barrier\(i32 80, i32 2\)')).Count -lt 1){
             throw 'P2 DXIL is missing device-wide UAV memory barriers.'
           }
 
@@ -226,9 +225,11 @@ jobs:
 
           NATIVE OUTPUT PRESERVATION:
           Additional traces temporarily use native layer 0 as hit-shader scratch.
-          Every trace saves and restores material, normal, position and UV before
-          returning, including misses. Layer 1 is never touched by extra rays.
-          Only two private records per pixel survive the extra dispatch.
+          Four extra dispatch stages have API UAV barriers between them.
+          This makes original native hit-shader writes visible before reading them.
+          The final stage restores material, normal, position and UV, even after
+          misses. Layer 1 is never touched by extra rays.
+          Two private hit records plus one lossless native backup are stored per pixel.
           The first surface is re-intersected for a precise ray origin.
           UVs now retain native half-float precision; positions use ray distance.
           Extra bounces extend the first native sample. The second stays native.
@@ -252,7 +253,7 @@ jobs:
 
           SCOPE:
           Hybrid specular extension through a third hit, not full diffuse PT.
-          Fixed 512 MiB private hit buffer, up to 3840x2160; no descriptor swaps.
+          Fixed 768 MiB private hit/backup buffer, up to 3840x2160; no descriptor swaps.
           Existing immutable hook chain and current-frame freshness checks remain.
           CI compile and CPU checks cannot validate driver execution or visuals.
           '@ | Set-Content "$out/README.txt" -Encoding ASCII
