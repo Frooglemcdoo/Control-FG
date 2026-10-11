@@ -1475,15 +1475,16 @@ static void PTReflectionHookDeferredDispatch(void* state,const void* dimensions)
         return;
     }
     PTThirdListState savedRoot{};
-    if(!ptThirdHits||ptThirdDispatches.load()==0||!PTThirdSnapshot(list,&savedRoot)){
+    if(!ptThirdHits||!PTThirdSnapshot(list,&savedRoot)){
         if(call<=16||(call%240)==0)Log("PT_THIRD_COMPOSITE ready=0 reason=private_ray_or_root_unavailable");
         return;
     }
-    if(!PTThirdConsumeFresh()){
-        if(call<=16||(call%240)==0)Log("PT_THIRD_STALE_REJECT call=%llu produced=%llu consumed=%llu written_frame=%llu raw_dispatches=%llu native_preserved=1",
-            call,ptThirdDispatches.load(),ptThirdConsumed.load(),ptThirdWrittenFrame.load(),ptThirdRawDispatches.load());
-        return;
-    }
+    // Freshness applies ONLY to the optional third hit. The proven second-hit
+    // composite must still run when no private third-hit producer is available.
+    const bool thirdFresh=PTThirdConsumeFresh();
+    if(call<=16||(call%240)==0)
+        Log("PT_TWO_BASELINE_THIRD_OPTIONAL revision=8 call=%llu two_bounce=1 third_fresh=%u produced=%llu consumed=%llu",
+            call,unsigned(thirdFresh),ptThirdDispatches.load(),ptThirdConsumed.load());
     DWORD fault=0,restoreFault=0;
     bool dispatched=false,restored=false;
     __try {
@@ -1497,6 +1498,7 @@ static void PTReflectionHookDeferredDispatch(void* state,const void* dimensions)
         list->ResourceBarrier(1,&barrier);
         PTThirdBarrier(list);
         PTThirdBind(list,savedRoot,true);
+        list->SetComputeRoot32BitConstant(9,thirdFresh?1u:0u,0);
         list->SetPipelineState(activeP2Pso);
         list->Dispatch(x,y,z);
         list->ResourceBarrier(1,&barrier);
