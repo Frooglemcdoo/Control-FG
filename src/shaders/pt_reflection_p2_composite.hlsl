@@ -1,6 +1,7 @@
 // Experimental P2 secondary-bounce add pass for Control.
 // Runs immediately after Control's native rt_deferredReflection composite.
 // Native first-bounce shading remains untouched; this adds paired bounce-2 radiance.
+#include "pt_secondary_encoding.hlsli"
 
 struct PTMaterialDataPart3 {
     float fClothDiffScatterAmount;
@@ -317,13 +318,7 @@ void PTBasis(float3 n,out float3 t,out float3 b)
 }
 
 // Native hit textures are RGBA16_FLOAT with exactly two array slices.
-// Numeric encodings, not raw IEEE bitcasts, are required for secondary
-// material IDs and packed 5+5 bit UVs to survive the FP16 target.
-float2 PTUnpackUV(float packed)
-{
-    uint value=(uint)round(clamp(packed,0.0f,1023.0f));
-    return float2(value&31u,(value>>5u)&31u)*(1.0f/31.0f);
-}
+// Secondary U/V have individual half-float channels; material IDs remain numeric.
 
 uint PTDecodeSecondaryMaterial(float packed)
 {
@@ -342,7 +337,7 @@ float3 PTSecondaryTexture(uint materialId,uint slot,float2 uv)
     uint textureIndex=NonUniformResourceIndex(materialId*35u+slot);
     uint width=0u,height=0u,levels=0u;
     g_sMaterialTextureArray[textureIndex].GetDimensions(0u,width,height,levels);
-    float footprint=max((float)max(width,height)/31.0f,1.0f);
+    float footprint=max((float)max(width,height)/2048.0f,1.0f);
     float mip=min(log2(footprint),(float)(max(levels,1u)-1u));
     float3 value=g_sMaterialTextureArray[textureIndex].SampleLevel(g_sLinearWrap,uv,mip).rgb;
     return all(isfinite(value))?max(value,0.0f):float3(0.0f,0.0f,0.0f);
@@ -433,6 +428,8 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
         float4 firstPosPacked=g_tPosition_TexcoordY.Load(int4(pixel,firstLayer,0));
         float4 secondPosPacked=g_tPosition_TexcoordY.Load(int4(pixel,secondLayer,0));
         float4 secondNormalPacked=g_tNormal_TexcoordX.Load(int4(pixel,secondLayer,0));
+        float2 secondUv=float2(secondNormalPacked.z,secondPosPacked.w);
+        secondNormalPacked.xyz=PTSecondaryDecodeNormal(secondNormalPacked.xy);
         uint secondMaterial=PTDecodeSecondaryMaterial(secondNormalPacked.w);
         if(secondMaterial>=65534u)continue;
         if(secondMaterial>=materialCount){rejection=5u;continue;}
@@ -459,7 +456,6 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
             +0.38f*firstRoughness*firstRoughness;
         float distanceAttenuation=rsqrt(1.0f+0.0025f*segmentLength2);
         float weight=firstThroughput*distanceAttenuation;
-        float2 secondUv=PTUnpackUV(secondPosPacked.w);
 
         bounce2+=PTSecondaryRadiance(secondMaterial,secondUv,secondNormalPacked.xyz,incomingWorld)*weight;
         totalWeight+=weight;
@@ -698,7 +694,7 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
         if(!all(isfinite(hitPosView)))continue;
         positionFinite=true;
 
-        const float3 normalWorld=n.xyz;
+        const float3 normalWorld=PTSecondaryDecodeNormal(n.xy);
         const bool thisRawFinite=all(isfinite(normalWorld));
         normalComponentsFinite=normalComponentsFinite||thisRawFinite;
         const float normalLength2=dot(normalWorld,normalWorld);
