@@ -73,7 +73,7 @@ cbuffer rtreflection : register(b6)
     float g_fClampReflectionIntensity;
     float g_fRTReflectionAddRays;
     uint  g_uRTReflectionRayCount;
-    uint  g_uMaterialIDCount;
+    uint  g_rtUnusedMaterialCount; // Native shader does not consume this field.
     float g_fMissSamplingPoint;
     float3 g_rtreflectionPad;
 };
@@ -406,6 +406,12 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
     uint2 pixel=dispatchThreadId.xy;
     if(pixel.x>=(uint)g_vScreenRes.x||pixel.y>=(uint)g_vScreenRes.y)return;
 
+    // Native b6+12 is unused by Control's compiled composite and is not
+    // a trustworthy material count. Query the bound t4 SRV instead.
+    uint materialCount=0u,materialStride=0u;
+    g_sbMaterialDataPart3.GetDimensions(materialCount,materialStride);
+    if(materialStride!=336u)materialCount=0u;
+
     float3 bounce2=0.0f;
     float totalWeight=0.0f;
     uint rejection=1u; // red=first hit; magenta=second; yellow=normal; cyan=segment
@@ -421,7 +427,7 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
 
         uint firstMaterial=g_tMaterialId.Load(int4(pixel,firstLayer,0));
         if(firstMaterial>=65534u)continue;
-        if(firstMaterial>=g_uMaterialIDCount){rejection=5u;continue;}
+        if(firstMaterial>=materialCount){rejection=5u;continue;}
 
         rejection=2u;
         float4 firstPosPacked=g_tPosition_TexcoordY.Load(int4(pixel,firstLayer,0));
@@ -429,7 +435,7 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
         float4 secondNormalPacked=g_tNormal_TexcoordX.Load(int4(pixel,secondLayer,0));
         uint secondMaterial=PTDecodeSecondaryMaterial(secondNormalPacked.w);
         if(secondMaterial>=65534u)continue;
-        if(secondMaterial>=g_uMaterialIDCount){rejection=5u;continue;}
+        if(secondMaterial>=materialCount){rejection=5u;continue;}
         rejection=3u;
         float normalLength2=dot(secondNormalPacked.xyz,secondNormalPacked.xyz);
         if(!all(isfinite(secondNormalPacked.xyz))||
@@ -678,13 +684,13 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
     [unroll]
     for(uint probePath=0u;probePath<1u;++probePath){
         const uint firstMaterial=g_tMaterialId.Load(int4(pixel,probePath,0));
-        if(firstMaterial>=65534u||firstMaterial>=g_uMaterialIDCount)continue;
+        if(firstMaterial>=65534u||firstMaterial>=materialCount)continue;
         firstHitValid=true;
 
         const float4 n=g_tNormal_TexcoordX.Load(
             int4(pixel,1u,0));
         const uint secondMat=PTDecodeSecondaryMaterial(n.w);
-        if(secondMat>=65534u||secondMat>=g_uMaterialIDCount)continue;
+        if(secondMat>=65534u||secondMat>=materialCount)continue;
         secondHitValid=true;
 
         const float3 hitPosView=g_tPosition_TexcoordY.Load(
