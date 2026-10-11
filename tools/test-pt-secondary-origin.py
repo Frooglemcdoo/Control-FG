@@ -1,6 +1,7 @@
 """Reproduce FP16 endpoint error and bound distance-payload reconstruction."""
 from pathlib import Path
 import math
+import re
 import struct
 
 def fp16(x):
@@ -24,6 +25,8 @@ root = Path(__file__).resolve().parents[1]
 s = (root/'src/shaders/pt_reflection_p2.hlsl').read_text()
 raygen = s.split('void reflectionRayGeneration()', 1)[1].split('// Exactly TWO', 1)[0]
 assert 'firstOrigin+normalize(firstDirection)*firstDistance' in raygen
-assert 'g_rwtPosition_TexcoordY[uint3(pixel,firstLayer)]' not in raygen
+# Reading packed UV.y from .w is safe; xyz must never reconstruct the ray origin.
+position_reads = re.findall(r'g_rwtPosition_TexcoordY\[uint3\(pixel,firstLayer\)\]\s*(\.\w+)?', raygen)
+assert all(component == '.w' for component in position_reads), position_reads
 assert 'for(uint path=0;path<1u;++path)' in raygen
 print(f'PASS: FP16 error exceeds bias; payload reconstruction error <= {worst:.7f} m over 0..997.3 m; shader uses payload endpoint.')
