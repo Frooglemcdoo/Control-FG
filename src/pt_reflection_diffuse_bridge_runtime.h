@@ -443,6 +443,36 @@ static bool PTReflectionBridgeDiffuseGI() noexcept {
         // Mode 2 copies a diagnostic patch into raw GI on the native list.
         // Other modes keep the previous read-only audit.
         if(verifyMode==2u)return PTDiffuseGICopyMarkerProof(call);
+        if(verifyMode==3u&&(call<=8u||(call%600u)==0u)){
+            // The native renderer binding audit identifies these exact
+            // ShaderTexture slots. Inspect physical native D3D12 texture
+            // capacity/format before trusting two extra P2 array layers.
+            // NO GPU commands, transitions, or descriptor mutations.
+            static const struct {
+                const char* label;
+                size_t rva;
+            } nativeTargets[3]{
+                {"material",0x01291888u},
+                {"normal_texcoordx",0x012918B0u},
+                {"position_texcoordy",0x012918D8u}
+            };
+            for(const auto& target:nativeTargets){
+                PTDiffuseGIBorrowed texture{};
+                const bool ready=PTDiffuseGIReadShaderTexture(
+                    target.rva,&texture);
+                const auto& desc=texture.desc;
+                Log("PT_REFLECTION_P2_NATIVE_HIT_TEXTURE call=%llu frame=%llu label=%s rva=0x%zX ready=%u texture=%p d3d_resource=%p dimension=%u format=%u width=%llu height=%u layers=%u mips=%u flags=0x%X state=0x%X supports_4_layers=%u",
+                    call,rrNativeRTFrame.engineFrame,target.label,target.rva,
+                    unsigned(ready),texture.native,texture.resource,
+                    unsigned(desc.Dimension),
+                    unsigned(desc.Format),
+                    static_cast<unsigned long long>(desc.Width),
+                    desc.Height,unsigned(desc.DepthOrArraySize),
+                    unsigned(desc.MipLevels),unsigned(desc.Flags),
+                    texture.state,
+                    unsigned(ready&&desc.DepthOrArraySize>=4u));
+            }
+        }
         RRGuideInputSnapshot ctx{};
         PTDiffuseGIBorrowed reflection{},dgi{};
         const char* reason="unknown";
