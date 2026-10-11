@@ -102,6 +102,19 @@ RWTexture2D<float4> g_rwtReflectionTarget : register(u0);
 // These are bound by Control's original composite root signature.
 // Diagnostic only until shadow visibility and cell-index packing are proven.
 #if PT_REFLECTION_VERIFY_VARIANT == 2
+// Small native-GPU-readable hexadecimal font (3x5 pixels per digit).
+// Rows are packed low to high, with bit (row*3+column). Displays the
+// *unmodified raw* 32-bit native constants and SRV dimensions on-screen.
+uint PTLightProbeHexFont(uint nibble)
+{
+    static const uint glyph[16] = {
+        0x7b6fu,0x749au,0x73e7u,0x79e7u,
+        0x49edu,0x79cfu,0x7bcfu,0x4927u,
+        0x7befu,0x79efu,0x5befu,0x3aebu,
+        0x724fu,0x3b6bu,0x73cfu,0x13cfu
+    };
+    return glyph[nibble & 15u];
+}
 struct PTNativePointLight {
     float3 positionView;
     float shadowMapShrink;
@@ -380,38 +393,73 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
     ptNativeSpotLights.GetDimensions(spotElements,spotStride);
     const uint rawCount=PTNativePointCount();
     const uint rawSpots=PTNativeSpotCount();
-    const bool countValid=rawCount<=1024u&&pointStride==160u&&
-        rawSpots<=1024u&&spotStride==320u;
-    const uint pointCount=countValid?min(rawCount,pointElements):0u;
-    const uint spotCount=countValid?min(rawSpots,spotElements):0u;
+    // Independently validate both native light views: one bad light
+    // category must not suppress the other. Do not assume a hardcoded
+    // 1024-light count before checking actual per-scene buffer capacity.
+    const bool pointStrideValid=pointStride==160u;
+    const bool spotStrideValid=spotStride==320u;
+    const bool pointCountValid=pointStrideValid&&pointElements<1048576u&&
+        rawCount<=pointElements&&rawCount<=8192u;
+    const bool spotCountValid=spotStrideValid&&spotElements<1048576u&&
+        rawSpots<=spotElements&&rawSpots<=8192u;
+    const uint pointCount=pointCountValid?rawCount:0u;
+    const uint spotCount=spotCountValid?rawSpots:0u;
     if(right&&!bottom){
-        uint tileW=0u,tileH=0u;
-        uint spotW=0u,spotH=0u;
+        uint tileW=0u,tileH=0u,spotW=0u,spotH=0u;
         ptNativePointCellIds.GetDimensions(tileW,tileH);
         ptNativeSpotCellIds.GetDimensions(spotW,spotH);
-        uint4 cellData=uint4(0u,0u,0u,0u);
-        uint4 spotCell=uint4(0u,0u,0u,0u);
-        if(tileW>0u&&tileH>0u){
-            uint2 cellCoord=min(uint2(float2(pixel+uint2(1u,1u))*
-                float2(tileW,tileH)/max(g_vScreenRes,float2(1.0f,1.0f))),
-                uint2(tileW-1u,tileH-1u));
-            cellData=ptNativePointCellIds.Load(int3(cellCoord,0));
+
+        // Eight colored HEX telemetry rows, with a left-hand green/red
+        // status strip. The previous all-red screen discarded the values
+        // that were needed to identify which native resource failed.
+        //
+        // Row 0: raw native point count at b1+256 (GREEN)
+        // Row 1: raw native spot count at b1+260 (BLUE)
+        // Row 2: point SRV stride (ORANGE; expect 0x000000A0)
+        // Row 3: spot SRV stride (PURPLE; expect 0x00000140)
+        // Row 4: point SRV element capacity (GREEN)
+        // Row 5: spot SRV element capacity (BLUE)
+        // Row 6: point tile texture width:height as two 16-bit hex halves
+        // Row 7: spot tile texture width:height as two 16-bit hex halves
+        const uint localX=pixel.x-halfW;
+        const uint screenQuarterWidth=max((uint)g_vScreenRes.x-halfW,1u);
+        const uint topHeight=max(halfH,1u);
+        const uint band=min(7u,pixel.y*8u/topHeight);
+        uint displayValue=rawCount;
+        if(band==1u)displayValue=rawSpots;
+        if(band==2u)displayValue=pointStride;
+        if(band==3u)displayValue=spotStride;
+        if(band==4u)displayValue=pointElements;
+        if(band==5u)displayValue=spotElements;
+        if(band==6u)displayValue=((tileW&65535u)<<16u)|(tileH&65535u);
+        if(band==7u)displayValue=((spotW&65535u)<<16u)|(spotH&65535u);
+        const uint digit=min(7u,localX*8u/screenQuarterWidth);
+        const uint glyphX=((localX*8u)%screenQuarterWidth)*3u/screenQuarterWidth;
+        const uint glyphY=((pixel.y*8u)%topHeight)*5u/topHeight;
+        const uint glyphBits=PTLightProbeHexFont(
+            (displayValue>>((7u-digit)*4u))&15u);
+        const bool glyphOn=((glyphBits>>(glyphY*3u+glyphX))&1u)!=0u;
+        const bool statusOkay=band==0u?pointCountValid:
+            band==1u?spotCountValid:
+            band==2u?pointStrideValid:
+            band==3u?spotStrideValid:
+            band==4u?(pointElements>0u&&pointElements<1048576u):
+            band==5u?(spotElements>0u&&spotElements<1048576u):
+            band==6u?(tileW>0u&&tileH>0u):
+                       (spotW>0u&&spotH>0u);
+        if(localX<12u){
+            g_rwtReflectionTarget[pixel]=float4(
+                statusOkay?float3(0.0f,6.0f,0.0f):float3(6.0f,0.0f,0.0f),1.0f);
+            return;
         }
-        if(spotW>0u&&spotH>0u){
-            uint2 spotCoord=min(uint2(float2(pixel+uint2(1u,1u))*
-                float2(spotW,spotH)/max(g_vScreenRes,float2(1.0f,1.0f))),
-                uint2(spotW-1u,spotH-1u));
-            spotCell=ptNativeSpotCellIds.Load(int3(spotCoord,0));
-        }
-        // green=count of native point lights; blue=spot count, red=invalid ABI.
-        // Raw cell low-byte occupancy gently modulates the channels.
-        float3 diagnostic=countValid?
-            float3(0.02f,(pointCount>0u?3.0f:0.0f)+
-                    saturate(float(cellData.x&255u)/32.0f)*0.5f,
-                    (spotCount>0u?3.0f:0.0f)+
-                    saturate(float(spotCell.x&255u)/32.0f)*0.5f):
-            float3(6.0f,0.0f,0.0f);
-        g_rwtReflectionTarget[pixel]=float4(diagnostic,1.0f);
+        float3 glyphColor=band==0u||band==4u?float3(0.0f,5.0f,0.3f):
+            band==1u||band==5u?float3(0.3f,2.0f,5.0f):
+            band==2u?float3(6.0f,2.0f,0.0f):
+            band==3u?float3(4.0f,1.0f,5.0f):
+            band==6u?float3(4.0f,4.0f,0.0f):
+                      float3(3.0f,0.5f,4.0f);
+        g_rwtReflectionTarget[pixel]=
+            float4(glyphOn?glyphColor:float3(0.02f,0.025f,0.03f),1.0f);
         return;
     }
 
