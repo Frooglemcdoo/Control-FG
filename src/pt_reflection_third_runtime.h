@@ -294,6 +294,42 @@ static HRESULT PTThirdCreateState(ID3D12Device5* device,const D3D12_STATE_OBJECT
                 !memcmp(lib.DXILLibrary.pShaderBytecode,ptReflectionP2Bytes.data(),ptReflectionP2Bytes.size()))target=true;
         }
     }
+    if(!target&&desc&&desc->pSubobjects&&!ptReflectionP2Bytes.empty()){
+        // The engine can later rebuild from its cached NATIVE shader record,
+        // bypassing the one-time technique lookup substitution. Replace only
+        // the exact audited variant-000 library, before shader IDs/SBTs exist.
+        // Never mark or switch an already-created native pipeline at dispatch.
+        try {
+            std::vector<D3D12_STATE_SUBOBJECT> subs(desc->pSubobjects,desc->pSubobjects+desc->NumSubobjects);
+            std::vector<D3D12_DXIL_LIBRARY_DESC> libs(desc->NumSubobjects);
+            std::vector<D3D12_SUBOBJECT_TO_EXPORTS_ASSOCIATION> associations(desc->NumSubobjects);
+            bool replaced=false;
+            for(UINT i=0;i<desc->NumSubobjects;++i){
+                if(subs[i].Type==D3D12_STATE_SUBOBJECT_TYPE_DXIL_LIBRARY&&subs[i].pDesc){
+                    libs[i]=*static_cast<const D3D12_DXIL_LIBRARY_DESC*>(subs[i].pDesc);
+                    const auto& code=libs[i].DXILLibrary;
+                    if(code.BytecodeLength==39008u&&code.pShaderBytecode){
+                        char sha[65]{};
+                        if(PTReflectionSha256(static_cast<const unsigned char*>(code.pShaderBytecode),code.BytecodeLength,sha)&&
+                           !strcmp(sha,"c2e4c0c4b48b191ba281595dcf11c7962c5c05c615cbe036ca6e8616c09fd30e")){
+                            libs[i].DXILLibrary={ptReflectionP2Bytes.data(),ptReflectionP2Bytes.size()};
+                            subs[i].pDesc=&libs[i];replaced=true;
+                        }
+                    }
+                }else if(subs[i].Type==D3D12_STATE_SUBOBJECT_TYPE_SUBOBJECT_TO_EXPORTS_ASSOCIATION&&subs[i].pDesc){
+                    associations[i]=*static_cast<const D3D12_SUBOBJECT_TO_EXPORTS_ASSOCIATION*>(subs[i].pDesc);
+                    auto idx=associations[i].pSubobjectToAssociate-desc->pSubobjects;
+                    if(idx<0||static_cast<UINT>(idx)>=desc->NumSubobjects)return E_INVALIDARG;
+                    associations[i].pSubobjectToAssociate=&subs[static_cast<size_t>(idx)];subs[i].pDesc=&associations[i];
+                }
+            }
+            if(replaced){
+                auto patched=*desc;patched.pSubobjects=subs.data();
+                Log("PT_THIRD_NATIVE_REBUILD matched=1 native_bytes=39008 variant=0 replacement=p2 shader_ids_created_after_replacement=1");
+                return PTThirdCreateState(device,&patched,iid,out);
+            }
+        }catch(...){return E_OUTOFMEMORY;}
+    }
     if(!target)return ptAuditCreateState(device,desc,iid,out);
     try {
         if(!ptThirdDirectReady.load()||ptThirdCaptureFailures.load()){
