@@ -25,9 +25,9 @@ for material in (0,2048,32767,65533,65535):
     result=struct.unpack(fmt,struct.pack(fmt,*values))
     assert result[3:]==values[3:]
     assert max(abs(a-b) for a,b in zip(result[:3],values[:3]))<.00001
-capacity=8388608;size=capacity*64
-assert size==512*1024*1024
+capacity=8388608;size=capacity*96
+assert size==768*1024*1024
 for width,height in [(1920,1080),(2560,1440),(3840,2160)]:
-    last=width*height*2-1
+    last=width*height*3-1
     assert last*32+32<=size
 print(f'PASS: 32-byte hits; full UV/material round trip; oct normal error {worst:.6f} degrees; 4K bounds.')
