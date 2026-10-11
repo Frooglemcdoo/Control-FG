@@ -7,6 +7,7 @@ on:
       - experiment/pt-verify-stages-20261010
       - experiment/pt-local-light-probe-p1
       - experiment/pt-local-light-record-audit
+      - experiment/pt-local-light-gates-p1
   workflow_dispatch:
   pull_request:
     branches:
@@ -181,69 +182,59 @@ jobs:
           Copy-Item build/pt_reflection_p2_local_light_probe.dxbc "$out/pt_reflection_p2_local_light_probe.dxbc"
           Copy-Item build/pt_reflection_p2_diffuse_bridge.dxbc "$out/pt_reflection_p2_diffuse_bridge.dxbc"
           @'
-          PT REFLECTIONS - NATIVE LIGHT RECORD AUDIT (V4)
-          ===============================================
-          THIS IS AN EXPERIMENTAL DIAGNOSTIC BUILD, NOT PRODUCTION.
-          Steam DX12, RR and RT Reflections ON.
-          Source: experiment/pt-local-light-record-audit
-          Back up old binaries. Copy ALL SEVEN binaries beside Control_DX12.exe.
+          CONTROL-FG PT - NATIVE LIGHT GATE AUDIT V5
+          ==========================================
+          Experimental Steam DX12 TEST only. RR + RT reflections ON.
+          Branch: experiment/pt-local-light-gates-p1
+          Copy all SEVEN binaries beside Control_DX12.exe.
 
-          CURRENT DIAGNOSIS:
-          P2 reflection and the GI-copy visual transport proof are working.
-          The shader can access point/spot SRV buffers (stride 160/320).
-          But the native deferred-light b1 count values fail runtime
-          validation, and the previous bounded scan shows little actual
-          secondary-hit local-light radiance.
+          The V4 screenshot decoded to:
+          POINT RECORD MASK 01EF01EF (8 valid color+spatial records
+              out of 10 records bound in the point SRV).
+          SPOT RECORD MASK  0FFF0FFF (all first 12 spotlight records
+              valid; spot SRV capacity 28).
+          The input light source records are NOT empty or broken.
+          The custom second-hit evaluation still gives near-zero light.
 
-          V4 MODE 3 INSPECTS THE FIRST 12 RAW NATIVE LIGHT RECORDS:
-          The upper-right quadrant contains eight horizontal HEX rows.
-          Each has a narrow status bar at the left (green OK/red reject).
-            Row 1 green: raw point count at native b1+256
-            Row 2 blue: raw spot count at native b1+260
-            Row 3 amber: point StructuredBuffer stride (expect 000000A0)
-            Row 4 purple: spot StructuredBuffer stride (expect 00000140)
-            Row 5 green: point SRV record capacity
-            Row 6 blue: spot SRV record capacity
-            Row 7 yellow: point RECORD HEALTH
-            Row 8 purple: spot RECORD HEALTH
+          V5 identifies which PHYSICAL/GEOMETRIC GATE loses the signal:
+          Hit geometry is validated first; first 32 native records per
+          point/spot resource are sampled without trusting invalid
+          b1 count words. Probe uses REAL color data, positions and
+          range/angle fields and intentionally ignores shadow maps.
 
-          RECORD HEALTH is an eight-character hexadecimal bitfield:
-            0x0FFF0000 means all first 12 records have plausible,
-                       nonzero, finite colors, but NO valid spatial
-                       attributes (position or radius/range).
-            0x00000FFF means all first 12 have valid color AND
-                       position/range; the upper color bits should
-                       normally also be set if this is true.
-            0x0FFF0FFF means all first 12 sampled records have
-                       plausible color AND position/range.
-            0x00000000 means none have usable light color;
-                       buffers may be empty, uninitialized, or
-                       unrelated despite correct SRV structure.
-          Bits 0-11 = combined color + spatial validity per record;
-          bits 16-27 = plausible nonzero color independently.
-          This scan DOES NOT trust b1's suspect light counts.
+          F11 MODE 3:
+          TOP LEFT = unchanged native reflections.
+          TOP RIGHT = V4 eight native count / stride / capacity / record
+                      health HEX rows, unchanged.
+          BOTTOM LEFT = four HORIZONTAL BANDS below status strip:
+            BAND 1 (uppermost): raw native light COLOR only.
+            BAND 2: light color times native DISTANCE/RANGE.
+            BAND 3: distance/range plus surface-facing NdotL.
+            BAND 4 (bottom): add spotlight cone attenuation.
+            RED shows point-light signal; GREEN shows spotlights;
+            faint BLUE means second-hit geometry is present.
+            If a band suddenly loses color, that gate is the culprit.
+          BOTTOM RIGHT = upper half raw native source proof
+                         (magenta if nonzero light data).
+                         Lower half fully gated candidate (yellow if
+                         geometrically applicable). Both are visual
+                         diagnostics, never production lighting.
 
-          Lower-left: RED point candidate, GREEN spotlight candidate,
-                      low BLUE secondary-hit coverage. Status strip:
-                      RED=point view safe; GREEN=spot view safe;
-                      BLUE=second hit exists at strip pixel.
-          Lower-right: original native plus x8 unshadowed diagnostic
-                       candidate. This is not final shadowed PT lighting.
+          F11 cycle: mode 0 normal P2 reflections, mode 1 prior PT
+          quadrants, mode 2 proven native GI checker COPY, mode 3 V5
+          four-gate native point+spot debug. Press F11 once more to
+          return to normal.
 
-          F11 MODE CYCLE:
-            0 normal P2 reflections + read-only GI audit
-            1 prior P2 hit/radiance quadrants
-            2 proven visible 512x512 raw GI COPY checker
-            3 native light record audit + diagnostic potential
-            4th press returns to 0
+          TEST: Launch the same lobby with its overhead ceiling lights.
+          Stay in mode 0 for 15 seconds, tap F11 three times, take a
+          clear screenshot of all four quadrants, collect compact logs.
+          Do not retest the GI checker and do not use mode 3 during
+          extended gameplay. This may cost extra GPU time.
 
-          TEST: Launch same scene. Confirm normal rendering for 15sec,
-          press F11 THREE times, wait ~5sec, send a FULL screenshot with
-          all eight HEX rows visible plus compact logs. No need to test
-          GI mode again. Exit mode 3 with one extra F11 press.
-
-          NO production light-bounce changes, no shadow bypass,
-          and NO unsafe custom GI compute dispatch are made here.
+          SHADOW WARNING: real light/shadow selection, local light
+          cells, physically-correct bounce transport, and RR injection
+          have NOT been enabled in normal mode. The production P2
+          composite and GI-copy path remain byte-for-byte unchanged.
           '@ | Set-Content "$out/README.txt" -Encoding ASCII
           Compress-Archive -Path "$out/*" -DestinationPath "$out.zip" -Force
           (Get-FileHash "$out.zip" -Algorithm SHA256).Hash | Set-Content "$out.sha256" -Encoding ASCII
