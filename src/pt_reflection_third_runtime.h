@@ -159,7 +159,10 @@ static HRESULT STDMETHODCALLTYPE PTThirdHookReset(ID3D12GraphicsCommandList* lis
     return hr;
 }
 static void STDMETHODCALLTYPE PTThirdHookSetState(ID3D12GraphicsCommandList4* list,ID3D12StateObject* state) {
-    UINT tag=0,bytes=sizeof(tag);if(state)state->GetPrivateData(kPTThirdState,&bytes,&tag);
+    UINT tag=0,bytes=sizeof(tag);HRESULT tagHr=E_POINTER;
+    if(state)tagHr=state->GetPrivateData(kPTThirdState,&bytes,&tag);
+    static std::atomic<unsigned long long> binds{0};const auto bind=binds.fetch_add(1)+1;
+    if(bind<=16||(bind%240)==0)Log("PT_THIRD_STATE_BIND call=%llu list=%p state=%p tag=%u tag_hr=0x%08lX",bind,list,state,tag,tagHr);
     AcquireSRWLockExclusive(&ptThirdLock);auto* s=PTThirdFindLocked(list,true);if(s)s->target=tag==1;ReleaseSRWLockExclusive(&ptThirdLock);
     reinterpret_cast<PTThirdSetStateFn>(PTThirdOriginal(list,75))(list,state);
 }
@@ -189,9 +192,13 @@ static void STDMETHODCALLTYPE PTThirdHookDispatch(ID3D12GraphicsCommandList4* li
 static bool PTThirdInstallVtable(void** table,bool extended) {
     AcquireSRWLockExclusive(&ptThirdVtableLock);
     PTThirdVtable* entry=nullptr;
-    bool existing=false;
+
     for(auto& v:ptThirdVtables){
-        if(v.table==table){entry=&v;existing=true;break;}
+        if(v.table==table){
+            // Another feature may wrap our hook and keep it as its next call.
+            // Never adopt that wrapper as our original: that creates a cycle.
+            bool ready=v.ready;ReleaseSRWLockExclusive(&ptThirdVtableLock);return ready;
+        }
         if(!v.table&&!entry)entry=&v;
     }
     if(!entry){ReleaseSRWLockExclusive(&ptThirdVtableLock);return false;}
@@ -206,23 +213,13 @@ static bool PTThirdInstallVtable(void** table,bool extended) {
     entry->table=table;
     extended=extended||entry->extended;
     unsigned count=extended?7u:5u;
-    bool intact=existing&&entry->ready;
-    for(unsigned i=0;i<count;++i)intact=intact&&table[slots[i]]==hooks[i];
-    if(intact){ReleaseSRWLockExclusive(&ptThirdVtableLock);return true;}
-    unsigned replaced=0;
-    for(unsigned i=0;i<count;++i){
-        auto slot=slots[i];
-        if(table[slot]!=hooks[i]&&entry->original[slot]){
-            entry->original[slot]=table[slot];++replaced;
-        }
-    }
     for(unsigned i=0;i<count;++i)if(!entry->original[slots[i]])entry->original[slots[i]]=table[slots[i]];
     bool okay=true;
     for(unsigned i=0;i<count;++i)
         okay=PTAuditPatch(&table[slots[i]],hooks[i],&entry->original[slots[i]])&&okay;
     entry->ready=okay;entry->extended=extended;
     ReleaseSRWLockExclusive(&ptThirdVtableLock);
-    Log("PT_THIRD_VTABLE_CAPTURE ready=%u vtable=%p slots=%u per_vtable_originals=1 replaced=%u",unsigned(okay),table,count,replaced);
+    Log("PT_THIRD_VTABLE_CAPTURE ready=%u vtable=%p slots=%u per_vtable_originals=1 immutable_originals=1",unsigned(okay),table,count);
     return okay;
 }
 static bool PTThirdInstallList(ID3D12GraphicsCommandList* list) {
@@ -244,12 +241,21 @@ static bool PTThirdInstallList(ID3D12GraphicsCommandList* list) {
     else if(type==D3D12_COMMAND_LIST_TYPE_DIRECT)ptThirdDirectReady.store(1);
     return okay;
 }
-// Recheck at the engine's reflection boundary: a runtime/wrapper may change
-// dispatch entries after lazy initialization, despite successful startup capture.
+// Existing hook chains are owned by all cooperating features. Inspect only;
+// in particular RRClampStrength::Set forwards into our original slot-25 hook.
 static void PTThirdPrepareRayCapture() noexcept {
+    static std::atomic<unsigned long long> checks{0};
+    const auto call=checks.fetch_add(1)+1;
+    if(call>8&&(call%240)!=0)return;
     EngineCommandContextSnapshot command{};
-    if(ReadEngineCommandContext(nullptr,&command)&&command.commandList)
-        PTThirdInstallList(static_cast<ID3D12GraphicsCommandList*>(command.commandList));
+    if(!ReadEngineCommandContext(nullptr,&command)||!command.commandList)return;
+    auto* list=static_cast<ID3D12GraphicsCommandList*>(command.commandList);
+    auto table=*reinterpret_cast<void***>(list);
+    Log("PT_THIRD_CHAIN_AUDIT call=%llu list=%p root_hook=%u state_hook=%u dispatch_hook=%u pso_hook=%u mutation=0",
+        call,list,unsigned(table[29]==reinterpret_cast<void*>(&PTReflectionHookSetComputeRootSignature)),
+        unsigned(table[75]==reinterpret_cast<void*>(&PTThirdHookSetState)),
+        unsigned(table[76]==reinterpret_cast<void*>(&PTThirdHookDispatch)),
+        unsigned(table[25]==reinterpret_cast<void*>(&PTReflectionHookSetPipelineState)));
 }
 static bool PTThirdConsumeFresh() {
     unsigned long long frame=~0ull;DWORD fault=0;
