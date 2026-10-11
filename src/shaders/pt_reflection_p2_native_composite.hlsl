@@ -76,8 +76,8 @@ void main(uint3 dispatchThreadId:SV_DispatchThreadID) {
     float4 firstPos=g_tPosition_TexcoordY.Load(int4(pixel,0,0));
     uint privatePixel=pixel.y*size.x+pixel.x;
     if(privatePixel>=PT_PRIVATE_PIXEL_CAPACITY)return;
-    PTPrivateHit hit2=g_ptPrivateHits[privatePixel*2u];
-    PTPrivateHit hit3=g_ptPrivateHits[privatePixel*2u+1u];
+    PTPrivateHit hit2=g_ptPrivateHits[privatePixel*3u];
+    PTPrivateHit hit3=g_ptPrivateHits[privatePixel*3u+1u];
     float4 secondPos=float4(PTWorldToView(hit2.worldPosition),0.0f);
     float4 normal=float4(PTUnpackNormal(hit2.packedNormal),(float)hit2.material);
     uint rejection=1u;
