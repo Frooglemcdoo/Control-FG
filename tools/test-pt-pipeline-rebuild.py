@@ -10,6 +10,9 @@ admit=s[s.index('static bool PTThirdIsNative('):s.index('static HRESULT PTThirdC
 a=s.index('        const UINT n=desc->NumSubobjects;')
 b=s.index('        if(!rootReady||!PTThirdEnsureBuffer',a)
 block=s[a:b]
+x=s.index('        UINT globalIndex=0;')
+y=s.index('        auto custom=*desc;',x)
+root_association=s[x:y]
 pre=r'''
 #include <vector>
 #include <cstring>
@@ -33,7 +36,21 @@ exercise=r'''
 void Exercise(const D3D12_STATE_OBJECT_DESC* desc){
  void* device=nullptr;
 '''+block+r'''
+ LPCWSTR extraName=L"PTExtraRayGeneration";
+'''+root_association+r'''
  assert(rootReady);
+ // Evaluate default/explicit export coverage from actual produced descriptors.
+ for(LPCWSTR shader:{L"reflectionRayGeneration",L"reflectionClosestHit",L"shadowClosestHit",L"PTExtraRayGeneration"}){
+  bool bound=false;
+  for(const auto& sub:subs)if(sub.Type==D3D12_STATE_SUBOBJECT_TYPE_SUBOBJECT_TO_EXPORTS_ASSOCIATION&&sub.pDesc){
+   auto* assoc=(const D3D12_SUBOBJECT_TO_EXPORTS_ASSOCIATION*)sub.pDesc;
+   if(assoc->pSubobjectToAssociate!=&subs[1])continue;
+   if(assoc->NumExports==0)bound=true;
+   for(UINT e=0;e<assoc->NumExports;++e)if(!wcscmp(assoc->pExports[e],shader))bound=true;
+  }
+  assert(bound);
+ }
+ assert(globalAssoc.NumExports==0&&globalAssoc.pExports==nullptr);
  assert(subs[0].pDesc==desc->pSubobjects[0].pDesc); // original DXIL descriptor untouched
  auto* a=(const D3D12_SUBOBJECT_TO_EXPORTS_ASSOCIATION*)subs[2].pDesc;
  assert(a->pSubobjectToAssociate==&subs[3]);
@@ -60,7 +77,7 @@ int main(){
  bytes[0]=1;lib.DXILLibrary.BytecodeLength=39007;assert(!PTThirdIsNative(&desc));
  lib.DXILLibrary.BytecodeLength=39008;desc.Type=0;assert(!PTThirdIsNative(&desc));
  assert(!PTThirdIsNative(nullptr));
- puts("PASS: exact native admission; native DXIL descriptor preserved; relocated association; extra shader config; original input immutable");
+ puts("PASS: exact native admission; native DXIL descriptor preserved; relocated association; extra shader config; default global root covers native and added shaders; original input immutable");
 }
 '''
 source=pre+'\n#include <cwchar>\n'+admit+exercise
