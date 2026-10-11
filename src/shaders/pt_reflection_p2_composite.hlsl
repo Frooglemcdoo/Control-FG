@@ -327,9 +327,11 @@ float2 PTUnpackUV(float packed)
 
 uint PTDecodeSecondaryMaterial(float packed)
 {
-    if(!isfinite(packed)||packed<0.0f||packed>=2048.0f)
-        return 65535u;
-    return (uint)round(packed);
+    // Only the finite numeric values 0..2047 represent material IDs.
+    // NaN fails both ordered comparisons and is treated as a miss.
+    const bool valid=(packed>=0.0f)&&(packed<2048.0f);
+    const uint id=(uint)round(valid?packed:0.0f);
+    return valid?id:65535u;
 }
 
 float3 PTMaterialBaseColor(uint materialId,float2 uv)
