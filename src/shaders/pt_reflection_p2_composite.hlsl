@@ -425,6 +425,49 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
         ptNativePointCellIds.GetDimensions(tileW,tileH);
         ptNativeSpotCellIds.GetDimensions(spotW,spotH);
 
+        // Inspect the actual first 12 SRV records independently of b1.
+        // Upper 12 bits (shifted 16) = records with finite, nonzero
+        // diffuse light color; lower 12 bits = color AND plausible range
+        // and position. This is *resource content* auditing, not an
+        // assertion about the native cell-list encoding or visibility.
+        uint pointRecordHealth=0u,spotRecordHealth=0u;
+        if(pointViewSafe){
+            [loop]
+            for(uint p=0u;p<min(pointElements,12u);++p){
+                PTNativePointLight l=ptNativePointLights[p];
+                const bool colorOk=all(isfinite(l.color))&&
+                    all(l.color>=0.0f)&&all(l.color<10000.0f)&&
+                    any(l.color>0.001f);
+                const bool spatialOk=all(isfinite(l.positionView))&&
+                    all(abs(l.positionView)<100000.0f)&&
+                    isfinite(l.boundsRadius)&&l.boundsRadius>0.01f&&
+                    l.boundsRadius<5000.0f;
+                if(colorOk)pointRecordHealth|=(1u<<(16u+p));
+                if(colorOk&&spatialOk)pointRecordHealth|=(1u<<p);
+            }
+        }
+        if(spotViewSafe){
+            [loop]
+            for(uint p=0u;p<min(spotElements,12u);++p){
+                PTNativeSpotLightRaw l=ptNativeSpotLights[p];
+                const float3 pos=l.words[0].xyz;
+                const float3 color=l.words[3].xyz;
+                const float farDistance=l.words[1].w;
+                const float3 direction=l.words[2].xyz;
+                const bool colorOk=all(isfinite(color))&&
+                    all(color>=0.0f)&&all(color<10000.0f)&&
+                    any(color>0.001f);
+                const bool spatialOk=all(isfinite(pos))&&
+                    all(abs(pos)<100000.0f)&&
+                    all(isfinite(direction))&&
+                    dot(direction,direction)>1.0e-8f&&
+                    isfinite(farDistance)&&farDistance>0.01f&&
+                    farDistance<5000.0f;
+                if(colorOk)spotRecordHealth|=(1u<<(16u+p));
+                if(colorOk&&spatialOk)spotRecordHealth|=(1u<<p);
+            }
+        }
+
         // Eight colored HEX telemetry rows, with a left-hand green/red
         // status strip. The previous all-red screen discarded the values
         // that were needed to identify which native resource failed.
@@ -435,8 +478,9 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
         // Row 3: spot SRV stride (PURPLE; expect 0x00000140)
         // Row 4: point SRV element capacity (GREEN)
         // Row 5: spot SRV element capacity (BLUE)
-        // Row 6: point tile texture width:height as two 16-bit hex halves
-        // Row 7: spot tile texture width:height as two 16-bit hex halves
+        // Row 6: point record health (upper 12 bits color / low 12 spatial)
+        // Row 7: spot record health (same encoding); 00000000 means
+        //        all 12 sampled records had empty/implausible light data.
         const uint localX=pixel.x-halfW;
         const uint screenQuarterWidth=max((uint)g_vScreenRes.x-halfW,1u);
         const uint topHeight=max(halfH,1u);
@@ -447,8 +491,8 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
         if(band==3u)displayValue=spotStride;
         if(band==4u)displayValue=pointElements;
         if(band==5u)displayValue=spotElements;
-        if(band==6u)displayValue=((tileW&65535u)<<16u)|(tileH&65535u);
-        if(band==7u)displayValue=((spotW&65535u)<<16u)|(spotH&65535u);
+        if(band==6u)displayValue=pointRecordHealth;
+        if(band==7u)displayValue=spotRecordHealth;
         const uint digit=min(7u,localX*8u/screenQuarterWidth);
         const uint glyphX=((localX*8u)%screenQuarterWidth)*3u/screenQuarterWidth;
         const uint glyphY=((pixel.y*8u)%topHeight)*5u/topHeight;
@@ -461,8 +505,10 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
             band==3u?spotStrideValid:
             band==4u?(pointElements>0u&&pointElements<1048576u):
             band==5u?(spotElements>0u&&spotElements<1048576u):
-            band==6u?(tileW>0u&&tileH>0u):
-                       (spotW>0u&&spotH>0u);
+            band==6u?(tileW>0u&&tileH>0u&&
+                        (pointRecordHealth&0xFFFu)!=0u):
+                       (spotW>0u&&spotH>0u&&
+                        (spotRecordHealth&0xFFFu)!=0u);
         if(localX<12u){
             g_rwtReflectionTarget[pixel]=float4(
                 statusOkay?float3(0.0f,6.0f,0.0f):float3(6.0f,0.0f,0.0f),1.0f);
