@@ -27,6 +27,7 @@ on:
       - experiment/pt-third-bounce-chain-fix
       - experiment/pt-third-bounce-pipeline-rebuild
       - experiment/pt-native-preserved-extra-pass
+      - experiment/pt-native-root-default-fix
   workflow_dispatch:
   pull_request:
     branches:
@@ -211,10 +212,19 @@ jobs:
           Copy-Item build/pt_reflection_p2_local_light_probe.dxbc "$out/pt_reflection_p2_local_light_probe.dxbc"
           Copy-Item build/pt_reflection_p2_diffuse_bridge.dxbc "$out/pt_reflection_p2_diffuse_bridge.dxbc"
           @'
-          CONTROL-FG - NATIVE PRESERVATION FIX R6
+          CONTROL-FG - NATIVE PRESERVATION FIX R7
           =====================================
           Close Control and replace ALL SEVEN binaries beside Control_DX12.exe.
           This is an experimental Windows DX12 build, not GPU-verified here.
+
+          R7 PIPELINE ACTIVATION FIX:
+          R6's extra-only global-root association removed the implicit default
+          from native shaders. R7 explicitly preserves the default association
+          for all shaders. This targets CreateStateObject E_INVALIDARG fallback.
+          Six shader binaries are unchanged from R6.
+          PT_NATIVE_ROOT_ASSOCIATION revision=7 appended_default=1
+          PT_NATIVE_EXTRA_STATE ready=1 and advancing PT_THIRD_DISPATCH counts
+          are required to confirm activation. A compiling DLL alone is not proof.
 
           CHANGE:
           The exact original native reflection DXIL and all native exports remain.
