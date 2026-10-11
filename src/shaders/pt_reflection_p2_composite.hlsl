@@ -316,10 +316,20 @@ void PTBasis(float3 n,out float3 t,out float3 b)
     b=normalize(float3(c,signZ+n.y*n.y*a,-n.y));
 }
 
+// Native hit textures are RGBA16_FLOAT with exactly two array slices.
+// Numeric encodings, not raw IEEE bitcasts, are required for secondary
+// material IDs and packed 5+5 bit UVs to survive the FP16 target.
 float2 PTUnpackUV(float packed)
 {
-    uint value=asuint(packed);
-    return float2(value&0xffffu,value>>16u)*(1.0f/65535.0f);
+    uint value=(uint)round(clamp(packed,0.0f,1023.0f));
+    return float2(value&31u,(value>>5u)&31u)*(1.0f/31.0f);
+}
+
+uint PTDecodeSecondaryMaterial(float packed)
+{
+    if(!isfinite(packed)||packed<0.0f||packed>=2048.0f)
+        return 65535u;
+    return (uint)round(packed);
 }
 
 float3 PTMaterialBaseColor(uint materialId,float2 uv)
@@ -381,11 +391,13 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
     float3 bounce2=0.0f;
     float totalWeight=0.0f;
 
+    // Native first reflection uses layer 0; layer 1 stores the
+    // true second hit with native material sentinel 65534.
     [unroll]
-    for(uint path=0;path<2u;++path)
+    for(uint path=0;path<1u;++path)
     {
-        uint firstLayer=path;
-        uint secondLayer=path+2u;
+        uint firstLayer=0u;
+        uint secondLayer=1u;
 
         uint firstMaterial=g_tMaterialId.Load(int4(pixel,firstLayer,0));
         if(firstMaterial>=65534u||firstMaterial>=g_uMaterialIDCount)continue;
@@ -393,14 +405,17 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
         float4 firstPosPacked=g_tPosition_TexcoordY.Load(int4(pixel,firstLayer,0));
         float4 secondPosPacked=g_tPosition_TexcoordY.Load(int4(pixel,secondLayer,0));
         float4 secondNormalPacked=g_tNormal_TexcoordX.Load(int4(pixel,secondLayer,0));
-        uint secondMaterial=asuint(secondNormalPacked.w);
+        uint secondMaterial=PTDecodeSecondaryMaterial(secondNormalPacked.w);
         if(secondMaterial>=65534u||secondMaterial>=g_uMaterialIDCount)continue;
+        float normalLength2=dot(secondNormalPacked.xyz,secondNormalPacked.xyz);
+        if(!all(isfinite(secondNormalPacked.xyz))||
+           !isfinite(normalLength2)||normalLength2<1.0e-6f)continue;
 
         float3 firstWorld=PTViewToWorldPoint(firstPosPacked.xyz);
         float3 secondWorld=PTViewToWorldPoint(secondPosPacked.xyz);
         float3 segment=secondWorld-firstWorld;
         float segmentLength2=dot(segment,segment);
-        if(segmentLength2<1.0e-6f)continue;
+        if(!isfinite(segmentLength2)||segmentLength2<1.0e-6f)continue;
         float3 incomingWorld=segment*rsqrt(segmentLength2);
 
         float firstSmoothness=PTSmoothness(firstMaterial);
@@ -436,7 +451,7 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
                              float4(6.0f,0.02f,5.0f,1.0f);
         return;
     }
-    const float3 unboundedRadiance=bounce2/2.0f;
+    const float3 unboundedRadiance=bounce2;
     if(!right&&bottom){
         const float lum=max(dot(max(unboundedRadiance,0.0f),
                         float3(0.2126f,0.7152f,0.0722f)),0.0f);
@@ -630,19 +645,19 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
     bool segmentFinite=false,segmentLengthUsable=false;
     bool fallbackUsed=false,fullyEligible=false;
     [unroll]
-    for(uint probePath=0u;probePath<2u;++probePath){
+    for(uint probePath=0u;probePath<1u;++probePath){
         const uint firstMaterial=g_tMaterialId.Load(int4(pixel,probePath,0));
         if(firstMaterial>=65534u||firstMaterial>=g_uMaterialIDCount)continue;
         firstHitValid=true;
 
         const float4 n=g_tNormal_TexcoordX.Load(
-            int4(pixel,probePath+2u,0));
-        const uint secondMat=asuint(n.w);
+            int4(pixel,1u,0));
+        const uint secondMat=PTDecodeSecondaryMaterial(n.w);
         if(secondMat>=65534u||secondMat>=g_uMaterialIDCount)continue;
         secondHitValid=true;
 
         const float3 hitPosView=g_tPosition_TexcoordY.Load(
-            int4(pixel,probePath+2u,0)).xyz;
+            int4(pixel,1u,0)).xyz;
         if(!all(isfinite(hitPosView)))continue;
         positionFinite=true;
 
@@ -786,7 +801,7 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
 #endif
     if(totalWeight<=0.0f)return;
 
-    float3 secondary=(bounce2/2.0f)*PT_REFLECTION_P2_VALIDATION_GAIN;
+    float3 secondary=bounce2*PT_REFLECTION_P2_VALIDATION_GAIN;
     float luminance=max(dot(secondary,float3(0.2126f,0.7152f,0.0722f)),1.0e-5f);
     float clampValue=max(g_fClampReflectionIntensity,0.0f);
     if(clampValue>0.0f&&luminance>clampValue)
