@@ -2,6 +2,7 @@
 // Same root signature/descriptors, hit layout, and ON/OFF A/B boundary.
 #include "pt_native_secondary.generated.hlsli"
 #include "ControlPrimaryGuideDecode.hlsli"
+#include "pt_secondary_encoding.hlsli"
 float3 PTNativeViewToWorld(float3 p) {
     return asfloat(ptCB0[6]).xyz*p.x+asfloat(ptCB0[7]).xyz*p.y+
            asfloat(ptCB0[8]).xyz*p.z+asfloat(ptCB0[9]).xyz;
@@ -69,7 +70,8 @@ void main(uint3 dispatchThreadId:SV_DispatchThreadID) {
     uint first=g_tMaterialId.Load(int4(pixel,0,0)).x;
     float4 firstPos=g_tPosition_TexcoordY.Load(int4(pixel,0,0));
     float4 secondPos=g_tPosition_TexcoordY.Load(int4(pixel,1,0));
-    float4 normal=g_tNormal_TexcoordX.Load(int4(pixel,1,0));
+    float4 packedSecondary=g_tNormal_TexcoordX.Load(int4(pixel,1,0));
+    float4 normal=float4(PTSecondaryDecodeNormal(packedSecondary.xy),packedSecondary.w);
     uint rejection=1u;
     float3 bounce=0.0f;
     float3 replacement=0.0f;
@@ -98,8 +100,7 @@ void main(uint3 dispatchThreadId:SV_DispatchThreadID) {
                             float3 incoming=normalize(worldDelta);
                             float3 n=normal.xyz*rsqrt(n2);
                             if(dot(n,incoming)>0.0f)n=-n;
-                            uint packed=(uint)round(clamp(secondPos.w,0.0f,1023.0f));
-                            float2 uv=float2(packed&31u,(packed>>5u)&31u)/31.0f;
+                            float2 uv=float2(packedSecondary.z,secondPos.w);
                             float3 unusedDirect;
                             float3 radiance=PTNativeSecondHit(second,uv,secondPos.xyz,hitWorld,
                                 n,incoming,delta*rsqrt(d2),firstPos.xyz,pixel,true,1.0f,unusedDirect);
