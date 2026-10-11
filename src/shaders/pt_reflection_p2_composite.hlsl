@@ -599,28 +599,61 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
         return;
     }
 
+    // V6: decouple source radiance from *all* ray-hit validity checks.
+    // V5 reported nearly zero even in its "raw" band, but that band was
+    // actually gated by finite hit position, world normal and world->view
+    // transformed normal before the helper ever ran. Thus V5 could not
+    // distinguish missing source radiance from invalid hit attributes.
+    float rawPointPower=0.0f;
+    float rawSpotPower=0.0f;
+    [loop]
+    for(uint i=0u;i<min(pointSampleCount,12u);++i){
+        const float3 c=ptNativePointLights[i].color;
+        if(all(isfinite(c))&&all(c>=0.0f)&&
+           all(c<10000.0f))
+            rawPointPower+=max(dot(c,float3(0.2126f,0.7152f,0.0722f)),0.0f);
+    }
+    [loop]
+    for(uint i=0u;i<min(spotSampleCount,12u);++i){
+        const float3 c=ptNativeSpotLights[i].words[3].xyz;
+        if(all(isfinite(c))&&all(c>=0.0f)&&
+           all(c<10000.0f))
+            rawSpotPower+=max(dot(c,float3(0.2126f,0.7152f,0.0722f)),0.0f);
+    }
+
     float4 pointGate=0.0f;
     float4 spotGate=0.0f;
-    bool foundSecondHit=false;
+    bool firstHitValid=false,secondHitValid=false;
+    bool positionFinite=false,normalRawFinite=false;
+    bool normalViewFinite=false,fullyEligible=false;
     [unroll]
     for(uint probePath=0u;probePath<2u;++probePath){
         const uint firstMaterial=g_tMaterialId.Load(int4(pixel,probePath,0));
         if(firstMaterial>=65534u||firstMaterial>=g_uMaterialIDCount)continue;
-        float4 n=g_tNormal_TexcoordX.Load(int4(pixel,probePath+2u,0));
-        uint secondMat=asuint(n.w);
+        firstHitValid=true;
+
+        const float4 n=g_tNormal_TexcoordX.Load(
+            int4(pixel,probePath+2u,0));
+        const uint secondMat=asuint(n.w);
         if(secondMat>=65534u||secondMat>=g_uMaterialIDCount)continue;
-        foundSecondHit=true;
+        secondHitValid=true;
+
+        const float3 hitPosView=g_tPosition_TexcoordY.Load(
+            int4(pixel,probePath+2u,0)).xyz;
+        if(!all(isfinite(hitPosView)))continue;
+        positionFinite=true;
 
         const float3 normalWorld=n.xyz;
         const float normalLength2=dot(normalWorld,normalWorld);
-        const float3 hitPosView=g_tPosition_TexcoordY.Load(
-            int4(pixel,probePath+2u,0)).xyz;
-        if(!all(isfinite(hitPosView))||
-           !all(isfinite(normalWorld))||
+        if(!all(isfinite(normalWorld))||
            !isfinite(normalLength2)||normalLength2<1.0e-6f)continue;
+        normalRawFinite=true;
+
         const float3 normalView=PTWorldNormalToView(
             normalWorld*rsqrt(normalLength2));
         if(!all(isfinite(normalView)))continue;
+        normalViewFinite=true;
+        fullyEligible=true;
 
         pointGate+=PTPointGateAudit(
             hitPosView,normalView,pointSampleCount)*0.5f;
@@ -630,10 +663,10 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
 
     if(!right&&bottom){
         if(pixel.y<halfH+24u){
-            // unchanged resource/valid-hit status strip
+            // Resource safety + traced second-hit indicator, as in V5.
             const uint dx=(pixel.x*3u)/max(halfW,1u);
             const bool barOn=dx==0u?pointViewSafe:
-                dx==1u?spotViewSafe:foundSecondHit;
+                dx==1u?spotViewSafe:secondHitValid;
             const float3 channel=dx==0u?float3(4.0f,0.0f,0.0f):
                 dx==1u?float3(0.0f,4.0f,0.0f):
                         float3(0.0f,0.0f,4.0f);
@@ -645,32 +678,57 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
         const uint bottomHeight=max((uint)g_vScreenRes.y-halfH-24u,1u);
         const uint dy=pixel.y-halfH-24u;
         const uint stage=min(3u,dy*4u/bottomHeight);
-        const float pointValue=stage==0u?pointGate.x:
-            stage==1u?pointGate.y:stage==2u?pointGate.z:pointGate.w;
-        const float spotValue=stage==0u?spotGate.x:
-            stage==1u?spotGate.y:stage==2u?spotGate.z:spotGate.w;
-        // Normalize for visualization; do NOT use these gains or values
-        // in the production PT reflectance path. Red is point, green spot.
-        const float pointHeat=saturate(pointValue/(pointValue+0.03f));
-        const float spotHeat=saturate(spotValue/(spotValue+0.03f));
-        g_rwtReflectionTarget[pixel]=float4(foundSecondHit?
-            float3(4.0f*pointHeat,4.0f*spotHeat,0.12f):
-            float3(0.0f,0.0f,0.0f),1.0f);
+        if(stage==0u){
+            // RED: real point-buffer source light energy;
+            // GREEN: real spot-buffer source energy.
+            // This is fully INDEPENDENT of secondary hit geometry.
+            const float pr=saturate(rawPointPower/(rawPointPower+0.002f));
+            const float sg=saturate(rawSpotPower/(rawSpotPower+0.002f));
+            g_rwtReflectionTarget[pixel]=float4(
+                4.0f*pr,4.0f*sg,0.02f,1.0f);
+            return;
+        }
+        if(stage==1u){
+            // RED: native first-hit material valid;
+            // GREEN: secondary-hit material valid;
+            // BLUE: secondary hit view-space position is finite.
+            g_rwtReflectionTarget[pixel]=float4(
+                firstHitValid?4.0f:0.0f,
+                secondHitValid?4.0f:0.0f,
+                positionFinite?4.0f:0.0f,1.0f);
+            return;
+        }
+        if(stage==2u){
+            // RED: finite nonzero raw world normal;
+            // GREEN: finite transformed view-space normal;
+            // BLUE: every gate to the light-evaluation helper passed.
+            g_rwtReflectionTarget[pixel]=float4(
+                normalRawFinite?4.0f:0.0f,
+                normalViewFinite?4.0f:0.0f,
+                fullyEligible?4.0f:0.0f,1.0f);
+            return;
+        }
+        // Bottom stage: actually evaluated unshadowed local radiance.
+        // Red=point, green=spot, dark blue=valid helper call.
+        const float pointHeat=saturate(pointGate.w/(pointGate.w+0.004f));
+        const float spotHeat=saturate(spotGate.w/(spotGate.w+0.004f));
+        g_rwtReflectionTarget[pixel]=float4(
+            4.0f*pointHeat,4.0f*spotHeat,
+            fullyEligible?0.12f:0.0f,1.0f);
         return;
     }
 
-    // Bottom-right is split vertically. The TOP half shows a bright
-    // diagnostic based only on native color and hit existence; the
-    // BOTTOM half shows the fully gated unshadowed candidate x8. This
-    // prevents a zero-gate result from resembling "shader never ran."
+    // BR upper half: independent native raw-light proof (magenta),
+    // without second-hit validity. BR lower half: fully gated candidate
+    // (yellow). Normal P2 mode 0 remains untouched.
     float4 candidateBase=g_rwtReflectionTarget[pixel];
     if(pixel.y<halfH+((uint)g_vScreenRes.y-halfH)/2u){
-        const float rawEnergy=pointGate.x+spotGate.x;
-        const float heat=saturate(rawEnergy/(rawEnergy+0.1f));
-        candidateBase.rgb+=float3(3.0f*heat,0.35f*heat,3.0f*heat);
+        const float totalSource=rawPointPower+rawSpotPower;
+        const float heat=saturate(totalSource/(totalSource+0.002f));
+        candidateBase.rgb+=float3(3.0f*heat,0.3f*heat,3.0f*heat);
     }else{
         const float fullyGated=pointGate.w+spotGate.w;
-        const float heat=saturate(fullyGated/(fullyGated+0.03f));
+        const float heat=saturate(fullyGated/(fullyGated+0.004f));
         candidateBase.rgb+=float3(3.0f*heat,3.0f*heat,0.0f);
     }
     g_rwtReflectionTarget[pixel]=candidateBase;
