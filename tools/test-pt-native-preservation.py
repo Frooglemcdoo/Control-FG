@@ -14,13 +14,13 @@ source=r'''
 #include <cassert>
 #include <cstdio>
 #include <vector>
-using UINT64=unsigned long long;using DWORD=unsigned long;
+using UINT=unsigned;using UINT64=unsigned long long;using DWORD=unsigned long;
 constexpr unsigned D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES=32,D3D12_RESOURCE_BARRIER_TYPE_UAV=1;
 struct Range{UINT64 StartAddress,SizeInBytes;};
 struct D3D12_DISPATCH_RAYS_DESC{Range RayGenerationShaderRecord;unsigned Width,Height,Depth;UINT64 HitGroupTable,MissShaderTable;};
 struct D3D12_RESOURCE_BARRIER{unsigned Type;};
 std::vector<int> events;std::vector<D3D12_DISPATCH_RAYS_DESC> calls;
-struct ID3D12GraphicsCommandList4{void ResourceBarrier(unsigned,const D3D12_RESOURCE_BARRIER*){events.push_back(3);}};
+struct ID3D12GraphicsCommandList4{void SetComputeRoot32BitConstant(unsigned i,unsigned v,unsigned offset){assert(i==9&&offset==0);events.push_back(10+v);} void ResourceBarrier(unsigned,const D3D12_RESOURCE_BARRIER*){events.push_back(3);}};
 struct PTThirdListState{UINT64 extraRecord;};
 bool enabled=true;
 bool PTReflectionUserRequested(){return enabled;}
@@ -44,16 +44,16 @@ int main(){
   Exercise(&list,&d,s);
   assert(calls[0].RayGenerationShaderRecord.StartAddress==100);
   bool extra=test==1;
-  assert(calls.size()==(extra?2u:1u));
+  assert(calls.size()==(extra?5u:1u));
   assert(events.front()==1&&events.back()==4);
   if(extra){assert(calls[1].RayGenerationShaderRecord.StartAddress==400);
    assert(calls[1].HitGroupTable==200&&calls[1].MissShaderTable==300);
    assert(calls[1].Width==d.Width&&calls[1].Height==d.Height);
-   assert(events==std::vector<int>({1,2,3,2,3,4}));}
+   assert(events==std::vector<int>({1,2,3,10,2,3,11,2,3,12,2,3,13,2,3,4}));}
   assert(ptThirdDispatches.load()==before+(extra?1:0));
   assert(d.RayGenerationShaderRecord.StartAddress==100);
  }
- puts("PASS: original native dispatch first; OFF skips extra work; barriers order both dispatches; original SBT unchanged; capacity/depth gates");
+ puts("PASS: original native dispatch first; OFF skips extra work; barriers order native and all four extra stages; original SBT unchanged; capacity/depth gates");
 }
 '''
 with tempfile.TemporaryDirectory() as td:
@@ -65,15 +65,18 @@ with tempfile.TemporaryDirectory() as td:
         subprocess.run([shutil.which('g++') or 'clang++','-std=c++17',str(cpp),'-o',str(exe)],check=True)
     subprocess.run([str(exe)],check=True)
 hlsl=(root/'src/shaders/pt_reflection_p2.hlsl').read_text()
-helper=hlsl.split('bool PTTracePreserved(',1)[1].split('[shader("raygeneration")]',1)[0]
+helper=hlsl.split('PTPrivateHit PTTracePending(',1)[1].split('bool PTReadPending(',1)[0]
 assert 'PTTrace(0u,origin,direction,payload)' in helper
-for name,saved in [('ptExtra_rwtMaterialId','savedMaterial'),('ptExtra_rwtNormal_TexcoordX','savedNormal'),('ptExtra_rwtPosition_TexcoordY','savedPosition')]:
-    assert f'{name}[slot]={saved};' in helper
-    assert helper.index(f'{name}[slot]={saved};')<helper.index('return payload')
-assert helper.count('return ')==1
+assert 'rwt' not in helper, 'Native hit textures must never be read in the writing dispatch'
+restore=hlsl.split('void PTRestoreNative(',1)[1].split('[shader("raygeneration")]',1)[0]
+for field in ('MaterialId','Normal_TexcoordX','Position_TexcoordY'):
+    assert f'ptExtra_rwt{field}[uint3(pixel,0u)]=' in restore
+last=hlsl.split('if(ptExtraStage==3u){',1)[1]
+assert 'return;' not in last
+assert 'PTRestoreNative(pixel,g_ptPrivateHits[base+2u]);' in last
 assert hlsl.count('[shader(')==1
 assert '[uint3(pixel,1' not in hlsl
 for bits in range(65536):
     raw=struct.pack('<H',bits);value=struct.unpack('<e',raw)[0]
     if math.isfinite(value):assert struct.pack('<e',value)==raw
-print('PASS: native scratch restores all fields before return; no layer-1 writes; every finite half-float value round-trips exactly.')
+print('PASS: final stage restores all native fields even after misses; no layer-1 writes; every finite half-float value round-trips exactly.')
