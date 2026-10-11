@@ -67,7 +67,7 @@ with tempfile.TemporaryDirectory() as td:
 hlsl=(root/'src/shaders/pt_reflection_p2.hlsl').read_text()
 helper=hlsl.split('bool PTTracePreserved(',1)[1].split('[shader("raygeneration")]',1)[0]
 assert 'PTTrace(0u,origin,direction,payload)' in helper
-for name,saved in [('g_rwtMaterialId','savedMaterial'),('g_rwtNormal_TexcoordX','savedNormal'),('g_rwtPosition_TexcoordY','savedPosition')]:
+for name,saved in [('ptExtra_rwtMaterialId','savedMaterial'),('ptExtra_rwtNormal_TexcoordX','savedNormal'),('ptExtra_rwtPosition_TexcoordY','savedPosition')]:
     assert f'{name}[slot]={saved};' in helper
     assert helper.index(f'{name}[slot]={saved};')<helper.index('return payload')
 assert helper.count('return ')==1
