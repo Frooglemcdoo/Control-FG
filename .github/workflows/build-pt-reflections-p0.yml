@@ -22,6 +22,7 @@ on:
       - experiment/pt-preserve-diffuse
       - experiment/pt-third-bounce-bindings
       - experiment/pt-third-bounce
+      - experiment/pt-third-bounce-hook-fix
   workflow_dispatch:
   pull_request:
     branches:
@@ -95,6 +96,13 @@ jobs:
           set "RC_RESULT=%ERRORLEVEL%"
           popd
           if not "%RC_RESULT%"=="0" exit /b %RC_RESULT%
+
+      - name: Check distinct compute and direct command-list hooks
+        shell: cmd
+        run: |
+          call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
+          python tools/test-pt-command-list-hooks.py
+          if errorlevel 1 exit /b 1
 
       - name: Check private hit storage
         run: python tools/test-pt-private-hits.py
@@ -209,11 +217,19 @@ jobs:
           Copy-Item build/pt_reflection_p2_local_light_probe.dxbc "$out/pt_reflection_p2_local_light_probe.dxbc"
           Copy-Item build/pt_reflection_p2_diffuse_bridge.dxbc "$out/pt_reflection_p2_diffuse_bridge.dxbc"
           @'
-          CONTROL-FG - THREE-BOUNCE REFLECTION TEST
+          CONTROL-FG - THREE-BOUNCE HOOK FIX 2
           =======================================
           Experimental Steam DX12 build for the captured native root layout.
           Close Control and replace ALL SEVEN binaries beside Control_DX12.exe.
           Existing F10 PT ON/OFF comparison remains available.
+
+          BLACK-SCREEN FIX:
+          Captures direct and compute command-list implementations separately.
+          Replays each implementation through its own original methods.
+          Custom ray pipeline requires direct capture and no setup failures.
+          The six shader binaries are unchanged from the first three-bounce test.
+          This corrects the capture failure seen before GPU device removal.
+          In-game validation is still required.
 
           THREE BOUNCES:
           First reflection hit remains in native layer 0.
