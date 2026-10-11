@@ -119,6 +119,11 @@ struct PTNativePointLight {
 };
 StructuredBuffer<PTNativePointLight> ptNativePointLights : register(t10);
 Texture2D<uint4> ptNativePointCellIds : register(t5);
+// Native spotlight records are 320 bytes, with fixed RDEF field offsets.
+// float4[20] avoids depending on HLSL matrix array packing conventions.
+struct PTNativeSpotLightRaw { float4 words[20]; };
+StructuredBuffer<PTNativeSpotLightRaw> ptNativeSpotLights : register(t14);
+Texture2D<uint4> ptNativeSpotCellIds : register(t6);
 cbuffer deferredlight_constants : register(b1)
 {
     float4 ptNativeDeferredConstants[26]; // 416 byte native b1 ABI
@@ -127,6 +132,11 @@ uint PTNativePointCount()
 {
     // Native b1 offset +256 = g_uPointLightTotalCount.
     return asuint(ptNativeDeferredConstants[16].x);
+}
+uint PTNativeSpotCount()
+{
+    // Native b1 offset +260 = g_uSpotLightTotalCount.
+    return asuint(ptNativeDeferredConstants[16].y);
 }
 float3 PTWorldNormalToView(float3 n)
 {
@@ -158,6 +168,37 @@ float3 PTLocalUnshadowedPotential(float3 hitPosView,float3 hitNormalView,
     }
     return total;
 }
+
+float3 PTLocalUnshadowedSpotPotential(float3 hitPosView,float3 hitNormalView,
+                                     uint numLights)
+{
+    float3 total=0.0f;
+    [loop]
+    for(uint i=0u;i<numLights;++i){
+        PTNativeSpotLightRaw l=ptNativeSpotLights[i];
+        float3 lightPosView=l.words[0].xyz;   // RDEF offset +0
+        float farDistance=l.words[1].w;       // +28
+        float3 directionView=l.words[2].xyz; // +32
+        float3 color=l.words[3].xyz;         // +48
+        float sinConeHalfSq=l.words[4].w;    // +76
+        if(!all(isfinite(lightPosView))||!all(isfinite(directionView))||
+           !all(isfinite(color))||!isfinite(farDistance))continue;
+        float3 toLight=lightPosView-hitPosView;
+        float d2=dot(toLight,toLight);
+        if(d2<1.0e-3f||farDistance<=0.01f)continue;
+        float dist=sqrt(d2);
+        float3 fromLight=-toLight/dist;
+        float cosine=dot(normalize(directionView),fromLight);
+        float cosHalf=sqrt(saturate(1.0f-saturate(sinConeHalfSq)));
+        float cone=saturate((cosine-cosHalf)/max(1.0f-cosHalf,0.001f));
+        float ndotl=saturate(dot(hitNormalView,toLight/dist));
+        float distanceWeight=saturate((farDistance-dist)/max(farDistance,0.01f));
+        float attenuation=(distanceWeight*distanceWeight)/(1.0f+0.0025f*d2);
+        total+=max(color,0.0f)*cone*ndotl*attenuation;
+    }
+    return total;
+}
+
 #endif
 
 
@@ -334,26 +375,42 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
     const bool bottom=pixel.y>=halfH;
     if(!right&&!bottom)return;
     uint pointElements=0u,pointStride=0u;
+    uint spotElements=0u,spotStride=0u;
     ptNativePointLights.GetDimensions(pointElements,pointStride);
+    ptNativeSpotLights.GetDimensions(spotElements,spotStride);
     const uint rawCount=PTNativePointCount();
-    const bool countValid=rawCount<=1024u&&pointStride==160u;
+    const uint rawSpots=PTNativeSpotCount();
+    const bool countValid=rawCount<=1024u&&pointStride==160u&&
+        rawSpots<=1024u&&spotStride==320u;
     const uint pointCount=countValid?min(rawCount,pointElements):0u;
+    const uint spotCount=countValid?min(rawSpots,spotElements):0u;
     if(right&&!bottom){
         uint tileW=0u,tileH=0u;
+        uint spotW=0u,spotH=0u;
         ptNativePointCellIds.GetDimensions(tileW,tileH);
+        ptNativeSpotCellIds.GetDimensions(spotW,spotH);
         uint4 cellData=uint4(0u,0u,0u,0u);
+        uint4 spotCell=uint4(0u,0u,0u,0u);
         if(tileW>0u&&tileH>0u){
             uint2 cellCoord=min(uint2(float2(pixel+uint2(1u,1u))*
                 float2(tileW,tileH)/max(g_vScreenRes,float2(1.0f,1.0f))),
                 uint2(tileW-1u,tileH-1u));
             cellData=ptNativePointCellIds.Load(int3(cellCoord,0));
         }
-        // green means a valid nonzero native light count, red means invalid
-        // count/stride, blue channel shows raw tile-cell low bytes.
+        if(spotW>0u&&spotH>0u){
+            uint2 spotCoord=min(uint2(float2(pixel+uint2(1u,1u))*
+                float2(spotW,spotH)/max(g_vScreenRes,float2(1.0f,1.0f))),
+                uint2(spotW-1u,spotH-1u));
+            spotCell=ptNativeSpotCellIds.Load(int3(spotCoord,0));
+        }
+        // green=count of native point lights; blue=spot count, red=invalid ABI.
+        // Raw cell low-byte occupancy gently modulates the channels.
         float3 diagnostic=countValid?
-            float3(0.02f,pointCount>0u?4.0f:0.0f,
-                   saturate(float(cellData.x&255u)/32.0f)*2.0f):
-            float3(5.0f,0.0f,0.0f);
+            float3(0.02f,(pointCount>0u?3.0f:0.0f)+
+                    saturate(float(cellData.x&255u)/32.0f)*0.5f,
+                    (spotCount>0u?3.0f:0.0f)+
+                    saturate(float(spotCell.x&255u)/32.0f)*0.5f):
+            float3(6.0f,0.0f,0.0f);
         g_rwtReflectionTarget[pixel]=float4(diagnostic,1.0f);
         return;
     }
@@ -374,7 +431,10 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
         // 16 light records per valid secondary hit, deterministic and bounded.
         // This samples only an initial subset; tiled selection comes next.
         const uint evalCount=min(pointCount,16u);
-        lightPotential+=PTLocalUnshadowedPotential(hitPosView,normalView,evalCount)*0.5f;
+        const uint spotEvalCount=min(spotCount,16u);
+        lightPotential+=(
+            PTLocalUnshadowedPotential(hitPosView,normalView,evalCount)+
+            PTLocalUnshadowedSpotPotential(hitPosView,normalView,spotEvalCount))*0.5f;
     }
     const float lum=max(dot(lightPotential,float3(0.2126f,0.7152f,0.0722f)),0.0f);
     const float heat=saturate(lum/(lum+0.08f));
