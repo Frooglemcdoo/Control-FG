@@ -264,19 +264,23 @@ void reflectionRayGeneration()
 
         float2 random=PTRandom2(pixel,path);
         float3 h=PTSampleGGXVNDF(normalWorld,viewToCamera,roughness,random);
-        float3 firstDirection=reflect(-viewToCamera,h);
+        float3 firstDirection=normalize(reflect(-viewToCamera,h));
         if(dot(firstDirection,normalWorld)<=0.0f) continue;
 
         HitData firstPayload;
-        PTTrace(firstLayer,primaryWorld+normalWorld*0.01f,firstDirection,firstPayload);
+        const float3 firstOrigin=primaryWorld+normalWorld*0.01f;
+        PTTrace(firstLayer,firstOrigin,firstDirection,firstPayload);
 
         uint firstMaterial=g_rwtMaterialId[uint3(pixel,firstLayer)];
         if(firstPayload.value==0u || firstMaterial>=65534u) continue;
 
-        float4 firstPositionViewUV=g_rwtPosition_TexcoordY[uint3(pixel,firstLayer)];
+        // Do not reconstruct a new ray origin from RGBA16F view position.
+        // Its quantization can exceed the 1 cm bias and place us inside geometry.
+        // The native 4-byte payload retains distance to 0.1 mm (floor).
+        // Normalize exactly as PTTrace does before reconstructing its endpoint.
+        const float firstDistance=(float)firstPayload.value*0.0001f;
+        float3 firstHitWorld=firstOrigin+normalize(firstDirection)*firstDistance;
         float4 firstNormalUV=g_rwtNormal_TexcoordX[uint3(pixel,firstLayer)];
-        float3 firstHitWorld=PTTransformPointColumns(firstPositionViewUV.xyz,
-            g_mViewToWorld0,g_mViewToWorld1,g_mViewToWorld2,g_mViewToWorld3);
         float3 firstHitNormal=normalize(firstNormalUV.xyz);
         if(!all(isfinite(firstHitWorld)) || !all(isfinite(firstHitNormal))) continue;
 
