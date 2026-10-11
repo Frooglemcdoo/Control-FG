@@ -4,6 +4,7 @@
 
 #include "ControlPrimaryGuideDecode.hlsli"
 #include "rr_hit_origin_shared.h"
+#include "pt_private_hits.hlsli"
 
 static const float PT_PI = 3.14159265358979323846f;
 
@@ -231,6 +232,11 @@ void PTTrace(uint layer, float3 origin, float3 direction, out HitData payload)
 void reflectionRayGeneration()
 {
     uint2 pixel=DispatchRaysIndex().xy;
+    uint privatePixel=pixel.y*DispatchRaysDimensions().x+pixel.x;
+    if(privatePixel<PT_PRIVATE_PIXEL_CAPACITY){
+        PTClearPrivate(privatePixel*2u);
+        PTClearPrivate(privatePixel*2u+1u);
+    }
 
     // Native reflection targets have exactly TWO array slices.
     // In the previous P2 shader, layers 2/3 were written out-of-bounds,
@@ -301,6 +307,19 @@ void reflectionRayGeneration()
 
         HitData secondPayload;
         PTTrace(secondLayer,firstHitWorld+firstHitNormal*0.01f,secondDirection,secondPayload);
+        if(privatePixel>=PT_PRIVATE_PIXEL_CAPACITY||secondPayload.value==0u)continue;
+        PTPrivateHit second=g_ptPrivateHits[privatePixel*2u];
+        if(second.material>=65534u)continue;
+        float3 secondNormal=PTUnpackNormal(second.packedNormal);
+        if(dot(secondNormal,secondDirection)>0.0f)secondNormal=-secondNormal;
+        float secondRoughness=1.0f-PTMaterialSmoothness(second.material,second.uv);
+        float3 thirdHalf=PTSampleGGXVNDF(secondNormal,-secondDirection,secondRoughness,PTRandom2(pixel,path+29u));
+        float3 thirdDirection=normalize(reflect(secondDirection,thirdHalf));
+        if(dot(thirdDirection,secondNormal)<=0.0f)continue;
+        HitData thirdPayload;
+        // Full-precision position from the hit shader, not the native FP16 texture.
+        PTTrace(2u,second.worldPosition+secondNormal*0.01f,thirdDirection,thirdPayload);
+
     }
 }
 
@@ -403,6 +422,21 @@ void reflectionClosestHit(inout HitData payload, in BuiltInTriangleIntersectionA
 
     float3 worldHit=WorldRayOrigin()+WorldRayDirection()*RayTCurrent();
     float3 viewHit=PTWorldToViewPoint(worldHit);
+    if(layer>=1u){
+        uint privatePixel=pixel.y*DispatchRaysDimensions().x+pixel.x;
+        if(privatePixel<PT_PRIVATE_PIXEL_CAPACITY&&layer<=2u){
+            PTPrivateHit h;
+            h.worldPosition=worldHit;h.material=uMaterialID;h.uv=texcoord;
+            h.packedNormal=PTPackNormal(normalWorld);h.reserved=0u;
+            g_ptPrivateHits[privatePixel*2u+(layer-1u)]=h;
+        }
+        if(layer==2u){
+            DeviceMemoryBarrier();
+            payload.value=(uint)(RayTCurrent()*10000.0f);
+            return;
+        }
+    }
+
 
     if(layer==1u) {
         // Keep the native second material slot invalid for the stock
@@ -450,6 +484,12 @@ void reflectionMiss(inout HitData payload)
     uint layer=payload.value;
     uint2 pixel=DispatchRaysIndex().xy;
     float3 worldEnd=WorldRayOrigin()+WorldRayDirection()*RayTCurrent();
+    if(layer==2u){
+        uint privatePixel=pixel.y*DispatchRaysDimensions().x+pixel.x;
+        if(privatePixel<PT_PRIVATE_PIXEL_CAPACITY)PTClearPrivate(privatePixel*2u+1u);
+        DeviceMemoryBarrier();payload.value=0u;return;
+    }
+
     if(layer==1u) {
         g_rwtMaterialId[uint3(pixel,layer)]=65534u;
         g_rwtNormal_TexcoordX[uint3(pixel,layer)]=
