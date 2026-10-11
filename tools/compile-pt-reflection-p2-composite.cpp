@@ -20,8 +20,9 @@ static bool Variable(ID3D12ShaderReflection* r,const char* cbName,const char* va
     return v&&SUCCEEDED(v->GetDesc(&d))&&d.StartOffset==offset&&d.Size==size;
 }
 int main() {
-    for(unsigned diagnostic=0;diagnostic<=1;diagnostic++){
-    const D3D_SHADER_MACRO verifyMacros[]={{"PT_REFLECTION_VERIFY_VARIANT","1"},{nullptr,nullptr}};
+    for(unsigned diagnostic=0;diagnostic<=2;diagnostic++){
+    const char* diagnosticValue=diagnostic==2u?"2":"1";
+    const D3D_SHADER_MACRO verifyMacros[]={{"PT_REFLECTION_VERIFY_VARIANT",diagnosticValue},{nullptr,nullptr}};
     ID3DBlob* code=nullptr;
     ID3DBlob* errors=nullptr;
     const UINT flags=D3DCOMPILE_OPTIMIZATION_LEVEL3|D3DCOMPILE_WARNINGS_ARE_ERRORS|
@@ -67,6 +68,24 @@ int main() {
     ok=ok&&Variable(r,"sys_constants","g_mViewToWorld",96,64);
     ok=ok&&Variable(r,"env_general","g_fEnvReflectionMipCount",4,4);
     ok=ok&&Variable(r,"rtreflection","g_uMaterialIDCount",12,4);
+    if(diagnostic==2u){
+        // The native shader RDEF identifies these exact bindings. Verify
+        // no untested descriptor/root ABI gets into the game package.
+        const bool cellOkay=Binding(r,"ptNativePointCellIds",D3D_SIT_TEXTURE,5,0);
+        const bool lightOkay=Binding(r,"ptNativePointLights",D3D_SIT_STRUCTURED,10,0);
+        const bool constantsOkay=Binding(r,"deferredlight_constants",D3D_SIT_CBUFFER,1,0);
+        D3D12_SHADER_INPUT_BIND_DESC light{};
+        const bool reflection=SUCCEEDED(r->GetResourceBindingDescByName("ptNativePointLights",&light));
+        const bool strideOkay=reflection&&light.NumSamples==160u;
+        auto* cb=r->GetConstantBufferByName("deferredlight_constants");
+        D3D12_SHADER_BUFFER_DESC cbdesc{};
+        const bool cbSizeOkay=cb&&SUCCEEDED(cb->GetDesc(&cbdesc))&&cbdesc.Size==416u;
+        const bool countOffsetOkay=Variable(r,"deferredlight_constants","ptNativeDeferredConstants",0,416);
+        std::printf("PT LOCAL LIGHT ABI point_cell_t5=%u point_data_t10=%u point_stride160=%u deferred_b1=%u cb416=%u offset256_count=%u\n",
+            unsigned(cellOkay),unsigned(lightOkay),unsigned(strideOkay),
+            unsigned(constantsOkay),unsigned(cbSizeOkay),unsigned(countOffsetOkay));
+        ok=ok&&cellOkay&&lightOkay&&strideOkay&&constantsOkay&&cbSizeOkay&&countOffsetOkay;
+    }
     r->Release();
     if(!ok){
         code->Release();
@@ -75,8 +94,10 @@ int main() {
     }
 
     FILE* file=nullptr;
-    const char* output=diagnostic?
-        "build/pt_reflection_p2_verify.dxbc":"build/pt_reflection_p2_composite.dxbc";
+    const char* output=diagnostic==2u?
+        "build/pt_reflection_p2_local_light_probe.dxbc":
+        (diagnostic==1u?"build/pt_reflection_p2_verify.dxbc":
+                        "build/pt_reflection_p2_composite.dxbc");
     if(fopen_s(&file,output,"wb")||!file){
         code->Release();
         return 4;
