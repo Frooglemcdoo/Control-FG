@@ -8,6 +8,7 @@ root=Path(__file__).resolve().parents[1]
 s=(root/'src/pt_reflection_third_runtime.h').read_text()
 registry=s[s.index('struct PTThirdVtable {'):s.index('static PTThirdCreateListFn ptThirdCreateList')]
 installer=s[s.index('static bool PTThirdInstallVtable('):s.index('static bool PTThirdInstallList(')]
+fresh=s[s.index('static bool PTThirdConsumeFresh()'):s.index('static HRESULT STDMETHODCALLTYPE PTThirdHookCreateList')]
 preamble=r'''
 #include <atomic>
 #include <cassert>
@@ -21,6 +22,10 @@ void PTThirdHookReset(){} void PTReflectionHookSetPipelineState(){}
 void PTReflectionHookSetComputeRootSignature(){} void PTThirdHookTable(){}
 void PTThirdHookCBV(){} void PTThirdHookSetState(){} void PTThirdHookDispatch(){}
 void Log(const char*,...){}
+using DWORD=unsigned long;
+unsigned long long currentFrame=1;
+bool ReadEngineFrameSafe(unsigned long long* out,DWORD*){*out=currentFrame;return true;}
+std::atomic<unsigned long long> ptThirdWrittenFrame{0},ptThirdConsumed{0},ptThirdDispatches{0};
 int computeCalls=0,directCalls=0;
 void ComputeOriginal(){++computeCalls;} void DirectOriginal(){++directCalls;}
 void** failSlot=nullptr;
@@ -33,6 +38,13 @@ bool PTAuditPatch(void** slot,void* hook,void** original){
 '''
 main=r'''
 int main(){
+    assert(!PTThirdConsumeFresh());
+    ptThirdWrittenFrame=1;ptThirdDispatches=1;
+    assert(PTThirdConsumeFresh());assert(!PTThirdConsumeFresh());
+    currentFrame=2;assert(!PTThirdConsumeFresh());
+    ptThirdDispatches=2;assert(!PTThirdConsumeFresh());
+    ptThirdWrittenFrame=2;assert(PTThirdConsumeFresh());
+    assert(!PTThirdConsumeFresh());
     void* compute[77];void* direct[77];
     for(int i=0;i<77;++i){compute[i]=(void*)&ComputeOriginal;direct[i]=(void*)&DirectOriginal;}
     ID3D12GraphicsCommandList c{compute},d{direct};
@@ -49,6 +61,11 @@ int main(){
     // Repeat installation must never record our hook as its own original.
     assert(PTThirdInstallVtable(direct,true));
     assert(PTThirdOriginal(&d,76)==(void*)&DirectOriginal);
+    // Simulate runtime lazy initialization replacing dispatch after first use.
+    direct[76]=(void*)&ComputeOriginal;
+    assert(PTThirdInstallVtable(direct,true));
+    assert(direct[76]==(void*)&PTThirdHookDispatch);
+    assert(PTThirdOriginal(&d,76)==(void*)&ComputeOriginal);
     // A base interface must not require extension slots; support later upgrade.
     void* base[77];for(auto& x:base)x=(void*)&DirectOriginal;
     assert(PTThirdInstallVtable(base,false));assert(base[75]==(void*)&DirectOriginal);
@@ -58,11 +75,11 @@ int main(){
     failSlot=&failed[29];assert(!PTThirdInstallVtable(failed,true));
     assert(!PTThirdInstallVtable(failed,true));
     ID3D12GraphicsCommandList f{failed};assert(PTThirdOriginal(&f,10)==(void*)&ComputeOriginal);
-    puts("PASS: compute-first/direct-second, distinct original routing, repeat install, interface upgrade, partial failure");
+    puts("PASS: compute-first/direct-second, distinct original routing, repeat install, interface upgrade, dispatch replacement repair, stale-frame and duplicate-consumer rejection, partial failure");
 }
 '''
 # initializer_list is required by the braced range in main.
-source=preamble+'\n#include <initializer_list>\n'+registry+installer+main
+source=preamble+'\n#include <initializer_list>\n'+registry+installer+fresh+main
 with tempfile.TemporaryDirectory() as td:
     td=Path(td);cpp=td/'hooks.cpp';cpp.write_text(source)
     exe=td/('hooks.exe' if os.name=='nt' else 'hooks')
