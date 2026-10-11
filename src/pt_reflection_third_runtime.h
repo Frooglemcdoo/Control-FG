@@ -18,6 +18,7 @@ struct PTThirdListState {
     UINT64 args[8]{};
     unsigned valid=0;
     bool target=false;
+    UINT64 extraRecord=0;
 };
 // Reset invalidates entries before a recycled command list can use old values.
 static PTThirdListState ptThirdLists[2048]{};
@@ -159,11 +160,11 @@ static HRESULT STDMETHODCALLTYPE PTThirdHookReset(ID3D12GraphicsCommandList* lis
     return hr;
 }
 static void STDMETHODCALLTYPE PTThirdHookSetState(ID3D12GraphicsCommandList4* list,ID3D12StateObject* state) {
-    UINT tag=0,bytes=sizeof(tag);HRESULT tagHr=E_POINTER;
+    UINT64 tag=0;UINT bytes=sizeof(tag);HRESULT tagHr=E_POINTER;
     if(state)tagHr=state->GetPrivateData(kPTThirdState,&bytes,&tag);
     static std::atomic<unsigned long long> binds{0};const auto bind=binds.fetch_add(1)+1;
-    if(bind<=16||(bind%240)==0)Log("PT_THIRD_STATE_BIND call=%llu list=%p state=%p tag=%u tag_hr=0x%08lX",bind,list,state,tag,tagHr);
-    AcquireSRWLockExclusive(&ptThirdLock);auto* s=PTThirdFindLocked(list,true);if(s)s->target=tag==1;ReleaseSRWLockExclusive(&ptThirdLock);
+    if(bind<=16||(bind%240)==0)Log("PT_THIRD_STATE_BIND call=%llu list=%p state=%p extra_record=%llu tag_hr=0x%08lX",bind,list,state,tag,tagHr);
+    AcquireSRWLockExclusive(&ptThirdLock);auto* s=PTThirdFindLocked(list,true);if(s){s->target=SUCCEEDED(tagHr)&&tag!=0;s->extraRecord=tag;}ReleaseSRWLockExclusive(&ptThirdLock);
     reinterpret_cast<PTThirdSetStateFn>(PTThirdOriginal(list,75))(list,state);
 }
 static void STDMETHODCALLTYPE PTThirdHookDispatch(ID3D12GraphicsCommandList4* list,const D3D12_DISPATCH_RAYS_DESC* desc) {
@@ -179,14 +180,30 @@ static void STDMETHODCALLTYPE PTThirdHookDispatch(ID3D12GraphicsCommandList4* li
     ID3D12Device* device=nullptr;list->GetDevice(__uuidof(ID3D12Device),reinterpret_cast<void**>(&device));
     bool ready=device&&PTThirdEnsureBuffer(device);if(device)device->Release();
     if(!ready){Log("PT_THIRD_DISPATCH blocked=1 reason=buffer_allocation");return;}
-    PTThirdBarrier(list);PTThirdBind(list,s,true);
+    PTThirdBind(list,s,true);
+    // The engine's original shader identifier executes the ORIGINAL native
+    // raygen, closest-hit, any-hit, miss, and shadow exports in this same state.
     reinterpret_cast<PTThirdDispatchFn>(PTThirdOriginal(list,76))(list,desc);
-    PTThirdBarrier(list);PTThirdBind(list,s,false);
-    unsigned long long frame=~0ull;DWORD fault=0;
-    if(!ReadEngineFrameSafe(&frame,&fault))frame=~0ull;
-    ptThirdWrittenFrame.store(frame);
-    auto call=ptThirdDispatches.fetch_add(1)+1;
-    if(call<=4||(call%240)==0)Log("PT_THIRD_DISPATCH call=%llu ready=1 width=%u height=%u root_restored=1 bytes=%llu",call,desc->Width,desc->Height,kPTThirdBytes);
+    const bool extra=PTReflectionUserRequested()&&s.extraRecord&&desc->Depth==1u&&
+        static_cast<UINT64>(desc->Width)*desc->Height<=8388608ull;
+    if(extra){
+        // Order all native UAVs, not only the private hit buffer.
+        D3D12_RESOURCE_BARRIER barrier{};barrier.Type=D3D12_RESOURCE_BARRIER_TYPE_UAV;
+        list->ResourceBarrier(1,&barrier);
+        auto additional=*desc;
+        additional.RayGenerationShaderRecord.StartAddress=s.extraRecord;
+        additional.RayGenerationShaderRecord.SizeInBytes=D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES;
+        // Hit/miss tables and their local-root records belong to this SAME state.
+        reinterpret_cast<PTThirdDispatchFn>(PTThirdOriginal(list,76))(list,&additional);
+        list->ResourceBarrier(1,&barrier);
+        unsigned long long frame=~0ull;DWORD fault=0;
+        if(!ReadEngineFrameSafe(&frame,&fault))frame=~0ull;
+        ptThirdWrittenFrame.store(frame);
+        auto call=ptThirdDispatches.fetch_add(1)+1;
+        if(call<=4||(call%240)==0)Log("PT_THIRD_DISPATCH call=%llu ready=1 width=%u height=%u native_first=1 extra_pass=1 native_layers_restored=1",call,desc->Width,desc->Height);
+    }
+    PTThirdBind(list,s,false);
+    if(raw<=8||(raw%960)==0)Log("PT_NATIVE_PRESERVED_DISPATCH native=1 extra=%u root_restored=1",unsigned(extra));
 }
 
 static bool PTThirdInstallVtable(void** table,bool extended) {
@@ -284,122 +301,104 @@ static void PTThirdInstallDevice(ID3D12Device* device) {
     Log("PT_THIRD_DEVICE_CAPTURE ready=%u",unsigned(okay));
 }
 
-static HRESULT PTThirdCreateState(ID3D12Device5* device,const D3D12_STATE_OBJECT_DESC* desc,REFIID iid,void** out) {
-    bool target=false;
-    if(desc&&desc->pSubobjects)for(UINT i=0;i<desc->NumSubobjects;++i){
+// R6: native bytes and native exports are retained. Only a separately named
+// raygen is appended. All shader identifiers are obtained from the SAME state.
+static bool PTThirdIsNative(const D3D12_STATE_OBJECT_DESC* desc) {
+    if(!desc||!desc->pSubobjects||desc->Type!=D3D12_STATE_OBJECT_TYPE_RAYTRACING_PIPELINE)return false;
+    for(UINT i=0;i<desc->NumSubobjects;++i){
         const auto& sub=desc->pSubobjects[i];
-        if(sub.Type==D3D12_STATE_SUBOBJECT_TYPE_DXIL_LIBRARY&&sub.pDesc){
-            const auto& lib=*static_cast<const D3D12_DXIL_LIBRARY_DESC*>(sub.pDesc);
-            if(!ptReflectionP2Bytes.empty()&&lib.DXILLibrary.BytecodeLength==ptReflectionP2Bytes.size()&&
-                !memcmp(lib.DXILLibrary.pShaderBytecode,ptReflectionP2Bytes.data(),ptReflectionP2Bytes.size()))target=true;
-        }
+        if(sub.Type!=D3D12_STATE_SUBOBJECT_TYPE_DXIL_LIBRARY||!sub.pDesc)continue;
+        const auto& code=static_cast<const D3D12_DXIL_LIBRARY_DESC*>(sub.pDesc)->DXILLibrary;
+        char sha[65]{};
+        if(code.BytecodeLength==39008u&&code.pShaderBytecode&&
+           PTReflectionSha256(static_cast<const unsigned char*>(code.pShaderBytecode),code.BytecodeLength,sha)&&
+           !strcmp(sha,"c2e4c0c4b48b191ba281595dcf11c7962c5c05c615cbe036ca6e8616c09fd30e"))return true;
     }
-    if(!target&&desc&&desc->pSubobjects&&!ptReflectionP2Bytes.empty()){
-        // The engine can later rebuild from its cached NATIVE shader record,
-        // bypassing the one-time technique lookup substitution. Replace only
-        // the exact audited variant-000 library, before shader IDs/SBTs exist.
-        // Never mark or switch an already-created native pipeline at dispatch.
-        try {
-            std::vector<D3D12_STATE_SUBOBJECT> subs(desc->pSubobjects,desc->pSubobjects+desc->NumSubobjects);
-            std::vector<D3D12_DXIL_LIBRARY_DESC> libs(desc->NumSubobjects);
-            std::vector<D3D12_SUBOBJECT_TO_EXPORTS_ASSOCIATION> associations(desc->NumSubobjects);
-            bool replaced=false;
-            for(UINT i=0;i<desc->NumSubobjects;++i){
-                if(subs[i].Type==D3D12_STATE_SUBOBJECT_TYPE_DXIL_LIBRARY&&subs[i].pDesc){
-                    libs[i]=*static_cast<const D3D12_DXIL_LIBRARY_DESC*>(subs[i].pDesc);
-                    const auto& code=libs[i].DXILLibrary;
-                    if(code.BytecodeLength==39008u&&code.pShaderBytecode){
-                        char sha[65]{};
-                        if(PTReflectionSha256(static_cast<const unsigned char*>(code.pShaderBytecode),code.BytecodeLength,sha)&&
-                           !strcmp(sha,"c2e4c0c4b48b191ba281595dcf11c7962c5c05c615cbe036ca6e8616c09fd30e")){
-                            libs[i].DXILLibrary={ptReflectionP2Bytes.data(),ptReflectionP2Bytes.size()};
-                            subs[i].pDesc=&libs[i];replaced=true;
-                        }
-                    }
-                }else if(subs[i].Type==D3D12_STATE_SUBOBJECT_TYPE_SUBOBJECT_TO_EXPORTS_ASSOCIATION&&subs[i].pDesc){
-                    associations[i]=*static_cast<const D3D12_SUBOBJECT_TO_EXPORTS_ASSOCIATION*>(subs[i].pDesc);
-                    auto idx=associations[i].pSubobjectToAssociate-desc->pSubobjects;
-                    if(idx<0||static_cast<UINT>(idx)>=desc->NumSubobjects)return E_INVALIDARG;
-                    associations[i].pSubobjectToAssociate=&subs[static_cast<size_t>(idx)];subs[i].pDesc=&associations[i];
-                }
-            }
-            if(replaced){
-                auto patched=*desc;patched.pSubobjects=subs.data();
-                Log("PT_THIRD_NATIVE_REBUILD matched=1 native_bytes=39008 variant=0 replacement=p2 shader_ids_created_after_replacement=1");
-                return PTThirdCreateState(device,&patched,iid,out);
-            }
-        }catch(...){return E_OUTOFMEMORY;}
-    }
-    if(!target){
-        static std::atomic<unsigned> nativeStates{0};const auto n=nativeStates.fetch_add(1)+1;
-        HRESULT hr=ptAuditCreateState(device,desc,iid,out);
-        if(n<=32&&desc&&desc->pSubobjects){
-            Log("PT_THIRD_NATIVE_STATE call=%u object=%p hr=0x%08lX subobjects=%u",n,out?*out:nullptr,hr,desc->NumSubobjects);
-            for(UINT i=0;i<desc->NumSubobjects;++i)if(desc->pSubobjects[i].Type==D3D12_STATE_SUBOBJECT_TYPE_DXIL_LIBRARY&&desc->pSubobjects[i].pDesc){
-                const auto& code=static_cast<const D3D12_DXIL_LIBRARY_DESC*>(desc->pSubobjects[i].pDesc)->DXILLibrary;
-                char sha[65]{};
-                if(code.pShaderBytecode&&code.BytecodeLength<=16777216u&&PTReflectionSha256(static_cast<const unsigned char*>(code.pShaderBytecode),code.BytecodeLength,sha))
-                    Log("PT_THIRD_NATIVE_LIBRARY state=%u bytes=%llu sha256=%s",n,static_cast<unsigned long long>(code.BytecodeLength),sha);
-            }
-        }
-        return hr;
-    }
+    return false;
+}
+static HRESULT PTThirdCreateState(ID3D12Device5* device,const D3D12_STATE_OBJECT_DESC* desc,REFIID iid,void** out) {
+    if(!PTThirdIsNative(desc)||!ptReflectionP2InjectionEnabled||ptReflectionP2Bytes.empty()||
+       !ptThirdDirectReady.load()||ptThirdCaptureFailures.load())return ptAuditCreateState(device,desc,iid,out);
+    ID3D12StateObject* object=nullptr;
+    ID3D12Resource* record=nullptr;
+    ID3D12RootSignature* emptyLocal=nullptr;
+    ID3D12StateObjectProperties* props=nullptr;
+    ID3DBlob* blob=nullptr;
     try {
-        if(!ptThirdDirectReady.load()||ptThirdCaptureFailures.load()){
-            Log("PT_THIRD_ACTIVATION blocked=1 direct_ready=%u capture_failures=%u fallback=p1",
-                ptThirdDirectReady.load(),ptThirdCaptureFailures.load());throw 9;
-        }
-        std::vector<D3D12_STATE_SUBOBJECT> subs(desc->pSubobjects,desc->pSubobjects+desc->NumSubobjects);
-        std::vector<D3D12_GLOBAL_ROOT_SIGNATURE> globals(desc->NumSubobjects);
-        std::vector<D3D12_SUBOBJECT_TO_EXPORTS_ASSOCIATION> associations(desc->NumSubobjects);
-        bool replaced=false;
-        for(UINT i=0;i<desc->NumSubobjects;++i){
-            auto& sub=subs[i];
-            if(sub.Type==D3D12_STATE_SUBOBJECT_TYPE_GLOBAL_ROOT_SIGNATURE){
-                globals[i]=*static_cast<const D3D12_GLOBAL_ROOT_SIGNATURE*>(sub.pDesc);
+        const UINT n=desc->NumSubobjects;
+        // Allocate at final size before relocating pointers into the array.
+        std::vector<D3D12_STATE_SUBOBJECT> subs(n+4);
+        memcpy(subs.data(),desc->pSubobjects,n*sizeof(subs[0]));
+        std::vector<D3D12_GLOBAL_ROOT_SIGNATURE> globals(n);
+        std::vector<D3D12_SUBOBJECT_TO_EXPORTS_ASSOCIATION> associations(n);
+        std::vector<std::vector<LPCWSTR>> names(n);
+        bool rootReady=false;
+        for(UINT i=0;i<n;++i){
+            if(subs[i].Type==D3D12_STATE_SUBOBJECT_TYPE_GLOBAL_ROOT_SIGNATURE){
+                globals[i]=*static_cast<const D3D12_GLOBAL_ROOT_SIGNATURE*>(subs[i].pDesc);
                 globals[i].pGlobalRootSignature=PTThirdGetRoot(device,globals[i].pGlobalRootSignature);
                 if(!globals[i].pGlobalRootSignature)throw 1;
-                sub.pDesc=&globals[i];replaced=true;
-            }else if(sub.Type==D3D12_STATE_SUBOBJECT_TYPE_SUBOBJECT_TO_EXPORTS_ASSOCIATION){
-                associations[i]=*static_cast<const D3D12_SUBOBJECT_TO_EXPORTS_ASSOCIATION*>(sub.pDesc);
-                auto idx=associations[i].pSubobjectToAssociate-desc->pSubobjects;
-                if(idx<0||static_cast<UINT>(idx)>=desc->NumSubobjects)throw 2;
-                associations[i].pSubobjectToAssociate=&subs[static_cast<size_t>(idx)];sub.pDesc=&associations[i];
-            }
-        }
-        if(!replaced)throw 3;
-        if(!PTThirdEnsureBuffer(device))throw 10;
-        auto custom=*desc;custom.pSubobjects=subs.data();
-        HRESULT hr=ptAuditCreateState(device,&custom,iid,out);
-        if(SUCCEEDED(hr)&&out&&*out){
-            ID3D12StateObject* object=nullptr;
-            if(SUCCEEDED(static_cast<IUnknown*>(*out)->QueryInterface(__uuidof(ID3D12StateObject),reinterpret_cast<void**>(&object)))){
-                UINT one=1;object->SetPrivateData(kPTThirdState,sizeof(one),&one);object->Release();
-            }
-            Log("PT_THIRD_STATE_CREATE ready=1 global_root_replaced=1 local_root_unchanged=1 payload=4");return hr;
-        }
-        Log("PT_THIRD_STATE_CREATE ready=0 hr=0x%08lX fallback=p1",hr);
-    }catch(...){Log("PT_THIRD_STATE_CREATE ready=0 reason=root_clone fallback=p1");}
-    // If root integration fails, compile the known native-root P1 library.
-    // The post-composite stays disabled until a private-buffer ray dispatch ran.
-    if(ptReflectionP1Bytes.empty())return E_FAIL;
-    try {
-        std::vector<D3D12_STATE_SUBOBJECT> subs(desc->pSubobjects,desc->pSubobjects+desc->NumSubobjects);
-        std::vector<D3D12_DXIL_LIBRARY_DESC> libs(desc->NumSubobjects);
-        std::vector<D3D12_SUBOBJECT_TO_EXPORTS_ASSOCIATION> associations(desc->NumSubobjects);
-        for(UINT i=0;i<desc->NumSubobjects;++i){
-            if(subs[i].Type==D3D12_STATE_SUBOBJECT_TYPE_DXIL_LIBRARY){
-                libs[i]=*static_cast<const D3D12_DXIL_LIBRARY_DESC*>(subs[i].pDesc);
-                if(libs[i].DXILLibrary.BytecodeLength==ptReflectionP2Bytes.size()){
-                    libs[i].DXILLibrary={ptReflectionP1Bytes.data(),ptReflectionP1Bytes.size()};subs[i].pDesc=&libs[i];
-                }
+                subs[i].pDesc=&globals[i];rootReady=true;
             }else if(subs[i].Type==D3D12_STATE_SUBOBJECT_TYPE_SUBOBJECT_TO_EXPORTS_ASSOCIATION){
                 associations[i]=*static_cast<const D3D12_SUBOBJECT_TO_EXPORTS_ASSOCIATION*>(subs[i].pDesc);
                 auto idx=associations[i].pSubobjectToAssociate-desc->pSubobjects;
-                if(idx<0||static_cast<UINT>(idx)>=desc->NumSubobjects)return E_INVALIDARG;
+                if(idx<0||static_cast<UINT>(idx)>=n)throw 2;
+                const auto kind=desc->pSubobjects[idx].Type;
+                if(kind==D3D12_STATE_SUBOBJECT_TYPE_RAYTRACING_SHADER_CONFIG&&associations[i].NumExports){
+                    names[i].assign(associations[i].pExports,associations[i].pExports+associations[i].NumExports);
+                    names[i].push_back(L"PTExtraRayGeneration");
+                    associations[i].pExports=names[i].data();associations[i].NumExports=static_cast<UINT>(names[i].size());
+                }
                 associations[i].pSubobjectToAssociate=&subs[static_cast<size_t>(idx)];subs[i].pDesc=&associations[i];
             }
         }
-        auto fallback=*desc;fallback.pSubobjects=subs.data();return ptAuditCreateState(device,&fallback,iid,out);
-    }catch(...){return E_OUTOFMEMORY;}
+        if(!rootReady||!PTThirdEnsureBuffer(device))throw 3;
+        D3D12_EXPORT_DESC extraExport{L"PTExtraRayGeneration",L"reflectionRayGeneration",D3D12_EXPORT_FLAG_NONE};
+        D3D12_DXIL_LIBRARY_DESC extraLib{{ptReflectionP2Bytes.data(),ptReflectionP2Bytes.size()},1,&extraExport};
+        subs[n]={D3D12_STATE_SUBOBJECT_TYPE_DXIL_LIBRARY,&extraLib};
+        // No local-root arguments are required for the additional raygen.
+        D3D12_ROOT_SIGNATURE_DESC localDesc{};localDesc.Flags=D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE;
+        using Serialize=HRESULT(WINAPI*)(const D3D12_ROOT_SIGNATURE_DESC*,D3D_ROOT_SIGNATURE_VERSION,ID3DBlob**,ID3DBlob**);
+        auto serialize=reinterpret_cast<Serialize>(GetProcAddress(GetModuleHandleW(L"d3d12.dll"),"D3D12SerializeRootSignature"));
+        if(!serialize||FAILED(serialize(&localDesc,D3D_ROOT_SIGNATURE_VERSION_1,&blob,nullptr)))throw 4;
+        HRESULT hr=device->CreateRootSignature(0,blob->GetBufferPointer(),blob->GetBufferSize(),__uuidof(ID3D12RootSignature),reinterpret_cast<void**>(&emptyLocal));
+        blob->Release();blob=nullptr;if(FAILED(hr))throw 5;
+        D3D12_LOCAL_ROOT_SIGNATURE local{emptyLocal};
+        subs[n+1]={D3D12_STATE_SUBOBJECT_TYPE_LOCAL_ROOT_SIGNATURE,&local};
+        LPCWSTR extraName=L"PTExtraRayGeneration";
+        D3D12_SUBOBJECT_TO_EXPORTS_ASSOCIATION localAssoc{&subs[n+1],1,&extraName};
+        subs[n+2]={D3D12_STATE_SUBOBJECT_TYPE_SUBOBJECT_TO_EXPORTS_ASSOCIATION,&localAssoc};
+        // Explicitly associate the cloned global root with the extra export;
+        // this also covers native descriptions with no global association.
+        UINT globalIndex=0;for(UINT i=0;i<n;++i)if(subs[i].Type==D3D12_STATE_SUBOBJECT_TYPE_GLOBAL_ROOT_SIGNATURE)globalIndex=i;
+        D3D12_SUBOBJECT_TO_EXPORTS_ASSOCIATION globalAssoc{&subs[globalIndex],1,&extraName};
+        subs[n+3]={D3D12_STATE_SUBOBJECT_TYPE_SUBOBJECT_TO_EXPORTS_ASSOCIATION,&globalAssoc};
+        auto custom=*desc;custom.NumSubobjects=n+4;custom.pSubobjects=subs.data();
+        hr=ptAuditCreateState(device,&custom,__uuidof(ID3D12StateObject),reinterpret_cast<void**>(&object));
+        if(FAILED(hr)||!object){Log("PT_NATIVE_EXTRA_STATE ready=0 hr=0x%08lX fallback=original_native",hr);throw 6;}
+        if(FAILED(object->QueryInterface(__uuidof(ID3D12StateObjectProperties),reinterpret_cast<void**>(&props))))throw 7;
+        const void* identifier=props->GetShaderIdentifier(extraName);if(!identifier)throw 8;
+        D3D12_HEAP_PROPERTIES heap{};heap.Type=D3D12_HEAP_TYPE_UPLOAD;heap.CreationNodeMask=heap.VisibleNodeMask=1;
+        D3D12_RESOURCE_DESC rd{};rd.Dimension=D3D12_RESOURCE_DIMENSION_BUFFER;rd.Width=64;rd.Height=1;
+        rd.DepthOrArraySize=1;rd.MipLevels=1;rd.SampleDesc.Count=1;rd.Layout=D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+        hr=device->CreateCommittedResource(&heap,D3D12_HEAP_FLAG_NONE,&rd,D3D12_RESOURCE_STATE_GENERIC_READ,
+            nullptr,__uuidof(ID3D12Resource),reinterpret_cast<void**>(&record));
+        if(FAILED(hr))throw 9;
+        void* mapped=nullptr;D3D12_RANGE noRead{0,0};
+        if(FAILED(record->Map(0,&noRead,&mapped)))throw 10;
+        memset(mapped,0,64);memcpy(mapped,identifier,D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES);record->Unmap(0,nullptr);
+        props->Release();props=nullptr;
+        UINT64 address=record->GetGPUVirtualAddress();
+        if((address% D3D12_RAYTRACING_SHADER_TABLE_BYTE_ALIGNMENT)!=0||FAILED(object->SetPrivateData(kPTThirdState,sizeof(address),&address)))throw 11;
+        hr=object->QueryInterface(iid,out);if(FAILED(hr))throw 12;
+        // Retain GPU-visible record for process lifetime: no in-flight retirement.
+        record=nullptr;emptyLocal->Release();emptyLocal=nullptr;object->Release();object=nullptr;
+        Log("PT_NATIVE_EXTRA_STATE ready=1 native_dxil_unchanged=1 native_exports_unchanged=1 same_state_shader_tables=1");
+        return hr;
+    }catch(...){
+        if(props)props->Release();if(blob)blob->Release();if(record)record->Release();
+        if(emptyLocal)emptyLocal->Release();if(object)object->Release();
+        Log("PT_NATIVE_EXTRA_STATE fallback=original_native no_p1_replacement=1");
+        return ptAuditCreateState(device,desc,iid,out);
+    }
 }
