@@ -1,5 +1,6 @@
 #pragma once
 #include "rr_indirect_call_windows.h"
+#include "pt_reflection_user_control.h"
 // Experimental PT reflection P1/P2 runtime bridge.
 //
 // Scope is deliberately limited to the three build-locked direct calls in the
@@ -103,7 +104,6 @@ static bool ptReflectionP2VerifyLoaded=false;
 static std::vector<unsigned char> ptReflectionP2LocalLightProbeBytes;
 static char ptReflectionP2LocalLightProbeSha256[65]{};
 static bool ptReflectionP2LocalLightProbeLoaded=false;
-static std::atomic<unsigned int> ptReflectionVerifyMode{0u};
 static std::atomic<unsigned int> ptReflectionVerifyKeyDown{0u};
 static std::vector<unsigned char> ptReflectionP2DiffuseBridgeBytes;
 static char ptReflectionP2DiffuseBridgeSha256[65]{};
@@ -1426,16 +1426,14 @@ static void PTReflectionHookDeferredDispatch(void* state,const void* dimensions)
     ptReflectionOriginalDispatch(state,dimensions);
 
     if(!ptReflectionP2InjectionEnabled)return;
-    if(!PTReflectionAuditTwoLayerHitTextures())return;
 
     // F11 advances on key-down edge only. No overlay, screen-size changes or
     // tool dependency. Only this experimental test DLL reads the key.
     const unsigned pressed=(GetAsyncKeyState(VK_F11)&0x8000)?1u:0u;
     if(pressed){
         if(ptReflectionVerifyKeyDown.exchange(1u,std::memory_order_acq_rel)==0u){
-            const unsigned prior=ptReflectionVerifyMode.load(std::memory_order_acquire);
-            const unsigned next=(prior+1u)%4u;
-            ptReflectionVerifyMode.store(next,std::memory_order_release);
+            const unsigned prior=ptReflectionUserState.load(std::memory_order_acquire)>>1u;
+            const unsigned next=PTReflectionUserCycleDiagnostic();
             Log("PT_REFLECTION_VERIFY_SWITCH from=%u to=%u hotkey=F11 label=%s",
                 prior,next,next==0u?"normal":next==1u?
                     "P2_quadrant_coverage_radiance_gain":next==2u?
@@ -1444,6 +1442,17 @@ static void PTReflectionHookDeferredDispatch(void* state,const void* dimensions)
     }else{
         ptReflectionVerifyKeyDown.store(0u,std::memory_order_release);
     }
+
+    const unsigned userState=ptReflectionUserState.load(std::memory_order_acquire);
+    const bool userEnabled=(userState&1u)!=0u;
+    // A/B only the added lighting: native composite above always runs, and the
+    // stabilized ray library/first-hit sampling remain identical in both views.
+    static std::atomic<unsigned int> lastUserEnabled{2u};
+    if(lastUserEnabled.exchange(unsigned(userEnabled),std::memory_order_acq_rel)!=unsigned(userEnabled))
+        Log("PT_REFLECTION_AB_APPLIED enabled=%u native_composite=1 added_composite=%u ray_tracing_unchanged=1 verify_mode=%u",
+            unsigned(userEnabled),unsigned(userEnabled),userState>>1u);
+    if(!userEnabled)return;
+    if(!PTReflectionAuditTwoLayerHitTextures())return;
 
     const auto call=ptReflectionP2PostDispatches.fetch_add(1,std::memory_order_relaxed)+1;
     const bool psoCaptured=ptReflectionCompositePsoCaptured.load(std::memory_order_acquire)!=0u;
@@ -1505,7 +1514,7 @@ static void PTReflectionHookDeferredDispatch(void* state,const void* dimensions)
     }
 
     auto* list=static_cast<ID3D12GraphicsCommandList*>(command.commandList);
-    const unsigned verifyMode=ptReflectionVerifyMode.load(std::memory_order_acquire);
+    const unsigned verifyMode=userState>>1u;
     ID3D12PipelineState* activeP2Pso=verifyMode==1u?
         ptReflectionP2VerifyPso:verifyMode==3u?
         ptReflectionP2LocalLightProbePso:ptReflectionP2CompositePso;
@@ -1968,7 +1977,7 @@ static bool PTReflectionInstallShaderLookupHooks(HMODULE renderer,HMODULE d3d) n
     ptReflectionP2LocalLightProbePso=nullptr;
     ptReflectionTwoLayerContract.store(0u,std::memory_order_release);
     ptReflectionTwoLayerAttempts.store(0u,std::memory_order_release);
-    ptReflectionVerifyMode.store(0u,std::memory_order_release);
+    ptReflectionUserState.fetch_and(1u,std::memory_order_acq_rel);
     ptReflectionVerifyKeyDown.store(0u,std::memory_order_release);
     Log("PT_REFLECTION_MATERIAL_BOUNDS source=bound_t4_GetDimensions native_b6_count_ignored=1 expected_stride=336");
     Log("PT_REFLECTION_REJECTION_DIAGNOSTIC enabled=1 F11_mode=1 red=first_hit magenta=second_hit yellow=normal cyan=segment white=material_range green=accepted");
