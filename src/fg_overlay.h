@@ -3,6 +3,7 @@
 #include "control_fg_logo_resource.h"
 #include "settings_cog_image.h"
 #include "rr_user_control.h"
+#include "pt_reflection_user_control.h"
 
 // Process-local Control FG overlay for v2.1.2.
 // The v0.8.26 generation path is intentionally untouched. This layer owns only
@@ -16,8 +17,8 @@ static constexpr wchar_t kFGVramProbeClassName[] = L"ControlFGVramLifecycle_R1";
 static constexpr int kFGVramProbeWidth = 390;
 static constexpr int kFGVramProbeHeight = 86;
 static constexpr int kFGOverlayWidth = 740;
-static constexpr int kFGOverlayHeight = 762;
-static constexpr int kFGOverlayCompactHeight = 542;
+static constexpr int kFGOverlayHeight = 886;
+static constexpr int kFGOverlayCompactHeight = 666;
 static constexpr int kFGOverlayDynamicSectionHeight = 220;
 static constexpr UINT_PTR kFGOverlayTimer = 0xCF32;
 static constexpr ULONGLONG kFGSettingsDebounceMs = 350;
@@ -219,6 +220,8 @@ static void FGOverlayLoadSettings() noexcept {
     control_rr::RRUserRequest(rrEnabled);
     SetFGTextureStreamingBudgetMs(textureStreamingMs);
     SetFGVramMonitorEnabled(vramMonitorEnabled);
+    PTReflectionUserRequest(GetPrivateProfileIntW(L"PTReflections", L"Enabled", 1, fgOverlaySettingsPath.c_str()) != 0);
+    Log("PT_REFLECTION_SETTINGS enabled=%u source=settings default=on", unsigned(PTReflectionUserRequested()));
     Log("FG_SETTINGS_LOAD success=1 path=%ls selection=%s selected_code=%u target_policy=%s manual_target_fps=%u rr_enabled=%u rr_preset=%s rr_preset_value=%u texture_streaming_ms=%u vram_monitor=%u skin_mode=off schema=10 ui=fg_full_rr_toggle_model_E_F",
         fgOverlaySettingsPath.c_str(), GetFGSelectionName(selection), selection, manualTarget ? "manual" : "auto", manualTarget, unsigned(rrEnabled), control_rr::RRUserPresetLabel(), control_rr::RRUserPresetValue(), textureStreamingMs, unsigned(vramMonitorEnabled));
 }
@@ -242,6 +245,8 @@ static bool FGOverlaySaveSettingsNow() noexcept {
     wchar_t modeText[16]{};
     wchar_t targetText[16]{};
     wchar_t rrEnabledText[8]{};
+    wchar_t ptEnabledText[8]{};
+    swprintf_s(ptEnabledText, L"%u", PTReflectionUserRequested() ? 1u : 0u);
     wchar_t rrPresetText[8]{};
     swprintf_s(modeText, L"%u", GetFGUserMultiplier());
     swprintf_s(targetText, L"%u", GetFGDynamicManualTargetFps());
@@ -258,6 +263,7 @@ static bool FGOverlaySaveSettingsNow() noexcept {
     ok = (WritePrivateProfileStringW(L"Overlay", L"VramMonitorEnabled", vramMonitorText, fgOverlaySettingsPath.c_str()) != FALSE) && ok;
     ok = (WritePrivateProfileStringW(L"Experimental", L"RTX40MultiFG", experimentalText, fgOverlaySettingsPath.c_str()) != FALSE) && ok;
     ok = (WritePrivateProfileStringW(L"Experimental", L"TextureStreamingBudgetMs", textureStreamingText, fgOverlaySettingsPath.c_str()) != FALSE) && ok;
+    ok = (WritePrivateProfileStringW(L"PTReflections", L"Enabled", ptEnabledText, fgOverlaySettingsPath.c_str()) != FALSE) && ok;
     // Old experimental RR/AA settings are intentionally removed; FG settings remain intact.
     WritePrivateProfileStringW(L"AntiAliasing", nullptr, nullptr, fgOverlaySettingsPath.c_str());
     WritePrivateProfileStringW(L"RayReconstruction", L"SkinResponsivity", nullptr, fgOverlaySettingsPath.c_str());
@@ -855,6 +861,20 @@ static void PaintFGOverlay(HWND hwnd) noexcept {
     SelectObject(dc, rrPreset == control_rr::RRPresetF ? buttonSelectedFont : buttonFont);
     PaintFGButton(dc, rrPresetF, L"F", rrPreset == control_rr::RRPresetF, true);
 
+    PaintFGDivider(dc, left, 734 + lowerSectionOffset, right);
+    SelectObject(dc, sectionFont); SetTextColor(dc, RGB(210, 32, 32));
+    RECT ptTitle{30, 752 + lowerSectionOffset, 710, 780 + lowerSectionOffset};
+    DrawTextW(dc, L"PT REFLECTIONS", -1, &ptTitle, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+    const bool ptEnabled = PTReflectionUserRequested();
+    const RECT ptToggle{30, 794 + lowerSectionOffset, 280, 846 + lowerSectionOffset};
+    SelectObject(dc, ptEnabled ? buttonSelectedFont : buttonFont);
+    PaintFGButton(dc, ptToggle, ptEnabled ? L"PT REFLECTIONS ON" : L"PT REFLECTIONS OFF", ptEnabled, true);
+    SelectObject(dc, smallFont); SetTextColor(dc, RGB(169, 169, 169));
+    RECT ptDescription{304, 794 + lowerSectionOffset, 710, 846 + lowerSectionOffset};
+    DrawTextW(dc, L"Compare added second-bounce lighting.\nNative reflections stay visible.", -1, &ptDescription,
+        DT_LEFT | DT_WORDBREAK);
+
+
 
     }
     SelectObject(dc, oldFont);
@@ -896,6 +916,7 @@ static void FGOverlayResizeWindowForCurrentSelection(HWND hwnd) noexcept {
         SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
     fgOverlayLastPlacementValid = false;
 }
+static bool FGOverlayPTToggleFromPoint(int x,int y) noexcept { const int y0=794+FGOverlayLowerSectionOffset(); return y>=y0&&y<y0+52&&x>=30&&x<280; }
 static bool FGOverlayRRToggleFromPoint(int x,int y) noexcept { const int y0=656+FGOverlayLowerSectionOffset(); return y>=y0&&y<y0+52&&x>=30&&x<280; }
 static unsigned int FGOverlayRRPresetFromPoint(int x,int y) noexcept {
     const int y0=656+FGOverlayLowerSectionOffset();
@@ -1025,6 +1046,14 @@ static LRESULT CALLBACK FGOverlayWndProc(HWND hwnd, UINT message, WPARAM wParam,
             FGOverlayResizeWindowForCurrentSelection(hwnd);
             InvalidateRect(hwnd,nullptr,FALSE);
             return 0;
+        }
+        if(FGOverlayPTToggleFromPoint(x,y)){
+            const bool previous=PTReflectionUserRequested();
+            PTReflectionUserRequest(!previous);
+            FGOverlayMarkSettingsDirty();
+            Log("PT_REFLECTION_UI_TOGGLE previous=%u enabled=%u verify_mode=0 scope=added_second_bounce apply=next_reflection_composite persistence=dirty",
+                unsigned(previous),unsigned(!previous));
+            InvalidateRect(hwnd,nullptr,FALSE);return 0;
         }
         if(FGOverlayRRToggleFromPoint(x,y)){
             const bool previous=control_rr::RRUserRequested();
