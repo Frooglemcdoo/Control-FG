@@ -10,6 +10,7 @@ on:
       - experiment/pt-local-light-gates-p1
       - experiment/pt-local-light-hit-validation-p1
       - experiment/pt-secondary-normal-proof-v7
+      - experiment/pt-p2-hit-payload-fix-v8
   workflow_dispatch:
   pull_request:
     branches:
@@ -90,6 +91,12 @@ jobs:
           $ErrorActionPreference='Stop'
           python tools/audit-pt-reflection-native.py build/pt-reflection-native-audit.json
           if($LASTEXITCODE -ne 0){throw "Native reflection audit failed: $LASTEXITCODE"}
+      - name: Verify FP16-safe secondary-hit material payload
+        shell: powershell
+        run: |
+          python tools/test_pt_reflection_secondary_id.py
+          if($LASTEXITCODE -ne 0){throw "P2 16-bit material ID round-trip contract FAILED"}
+
       - name: Compile PT reflection DXIL libraries
         shell: powershell
         run: |
@@ -184,62 +191,63 @@ jobs:
           Copy-Item build/pt_reflection_p2_local_light_probe.dxbc "$out/pt_reflection_p2_local_light_probe.dxbc"
           Copy-Item build/pt_reflection_p2_diffuse_bridge.dxbc "$out/pt_reflection_p2_diffuse_bridge.dxbc"
           @'
-          CONTROL-FG PT - SECONDARY-HIT NORMAL PROOF V7
-          =============================================
-          EXPERIMENTAL STEAM DX12 TEST. NOT PRODUCTION.
-          Source branch: experiment/pt-secondary-normal-proof-v7
-          Back up files; install ALL SEVEN binaries beside Control_DX12.exe.
+          CONTROL-FG PT - LOSSLESS SECONDARY-HIT PAYLOAD V8
+          ================================================
+          EXPERIMENTAL STEAM DX12 TEST BUILD (not production).
+          Branch: experiment/pt-p2-hit-payload-fix-v8
+          Back up old files. Install ALL SEVEN binaries beside Control_DX12.exe.
 
-          V6 confirmed real native point/spotlight source power is
-          present and first/second material IDs + second-hit POSITION
-          are valid. Normal-validation band was entirely BLACK:
-          SECONDARY WORLD NORMAL IS INVALID OR ZERO. The final local
-          lighting was consequently rejected before evaluation.
+          IMPORTANT ROOT-CAUSE FIX
+          P2 previously used asfloat(materialID) to pack its second-hit
+          material in normal.w, and packed UV bits in position.w. These
+          subnormal float bit patterns are NOT valid transport in native
+          reduced-precision floating textures. Material 0 or an invalid
+          ray could look identical; zero normal data was accepted as a
+          second hit and then lighting was silently discarded.
+          V8 encodes the UINT material ID in two EXACT FP16 numeric bytes:
+             normal.w = (materialID & 255) + 1
+             position.w = (materialID >> 8) & 255
+          0 in normal.w means no second hit. All 65534 legal 16-bit IDs
+          round-trip losslessly; checked by an exhaustive 65534-case
+          standalone Python test. Native material ID layers 2/3 remain
+          sentinel 65534 so Control does NOT composite bounce 2 as bounce 1.
 
-          V7 is an ISOLATED mode-3 test of the secondary-hit normal.
-          When the raw normal fails, it temporarily substitutes the
-          direction from second-hit position BACK TO first-hit position,
-          both already recorded in VIEW SPACE. This is NOT A SURFACE
-          NORMAL and is never enabled in normal gameplay. It proves
-          whether getting past normal validation revives local light.
+          TEMPORARY MATERIAL LIMITATION
+          The two channels are now dedicated to the 16-bit material ID
+          and cannot hold secondary UV. Until we allocate independent
+          sideband storage, the P2 composite uses the native material
+          COLOR MULTIPLIER (not the texture-albedo sample). This avoids
+          sampling arbitrary UVs. Normal render mode remains environment
+          + emissive approximate PT, not final local-light transport.
 
-          F11 cycle: 0 normal P2; 1 P2 quadrants; 2 working GI checker;
-          3 V7 native normal-source proof; next press returns to 0.
-          No GI shader dispatch and no change to production P2 code.
+          F11 mode 3 retains V7 hit/normal diagnostic:
+          TL native baseline. TR raw point/spot count/stride/health HEX.
+          BL first band raw light; second valid first/second material and
+          finite hit position; third normal/segment validity (two halves);
+          fourth unshadowed point/spot candidate. BR source vs gated.
+          Now the valid second-hit check is based on FP16-safe IDs and
+          explicit zero/miss sentinel, NOT on a bit-cast integer.
 
-          MODE 3 FOUR QUADRANTS:
-            UPPER LEFT: unchanged native Control reflections.
-            UPPER RIGHT: 8 HEX rows from V6 (native point/spot counts,
-                        strides, record counts and record-health masks).
-            LOWER LEFT: top 24-pixel resource safety status strip, then
-                        four horizontal diagnostic bands:
-               BAND 1: point/spot source power (YELLOW if both valid).
-               BAND 2: valid first/second material, finite hit POSITION
-                       (WHITE if all pass).
-               BAND 3: SPLIT INTO TWO EQUAL SUB-BANDS:
-                 UPPER: RED = raw normal components finite,
-                        GREEN = raw normal length nonzero,
-                        BLUE = raw normal survives world->view transform.
-                        If components are finite but length zero,
-                        only RED shows. If payload contains NaNs,
-                        this row will be completely BLACK.
-                 LOWER: RED = first/second positions give finite segment,
-                        GREEN = segment length nonzero,
-                        BLUE = diagnostic fallback was used.
-                        WHITE means all three pass.
-               BAND 4: RED = evaluated point-light potential,
-                       GREEN = spotlight, faint BLUE = normal helper ran.
-            LOWER RIGHT: TOP half MAGENTA raw source-light proof;
-                         BOTTOM half YELLOW when fully gated candidate
-                         produces energy with the V7 diagnostic fallback.
+          TEST:
+          1. With RT Reflections and RR ON, run normal F11 mode 0 15sec.
+          2. Press F11 ONCE for mode 1 P2 hit/radiance proof, screenshot.
+          3. Press F11 TWICE more for mode 3 second-hit/normal proof,
+             screenshot. Collect Compact Logs and send both screenshots.
+          4. Return to normal with F11 once before continuing gameplay.
 
-          TEST: With RT Reflections and RR ON, enter the same lobby.
-          Stay mode 0 for 15s, press F11 THREE times to mode 3,
-          capture a screenshot of ALL QUADRANTS and collect compact logs.
-          Do not linger in mode 3: extra light scans cost GPU time.
-          The stored shading normal is NOT FIXED by V7. If this
-          fallback works, next fix is actual surface-normal geometry
-          reconstruction and proper shadowed local illumination.
+          WATCH:
+          - Mode 1 top right coverage should now represent ACTUAL valid
+            second-hit IDs, not false "material 0" from bitcasts.
+          - Mode 3 band 2 tests REAL secondary hits.
+          - Mode 3 band 3 reveals whether raw normal xyz are still
+            invalid on those real hits. Its ray-direction fallback
+            is for DIAGNOSTIC only; normal P2 rejects invalid normals.
+
+          This is NOT an implementation of local shadow visibility,
+          native tiled-light selection, textured secondary albedo or
+          physically-correct diffuse GI. The previously freezing
+          custom GI compute bridge stays disabled; native-copy checker
+          remains available in F11 mode 2.
           '@ | Set-Content "$out/README.txt" -Encoding ASCII
           Compress-Archive -Path "$out/*" -DestinationPath "$out.zip" -Force
           (Get-FileHash "$out.zip" -Algorithm SHA256).Hash | Set-Content "$out.sha256" -Encoding ASCII
