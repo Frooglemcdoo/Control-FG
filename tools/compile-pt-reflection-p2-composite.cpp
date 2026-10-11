@@ -72,7 +72,7 @@ int main() {
         ok=ok&&Binding(r,"env_general",D3D_SIT_CBUFFER,2,0);
     // Only normal mode uses the native intensity clamp; diagnostics no longer
     // reference b6 after replacing the unused material-count field.
-    if(diagnostic==0u)ok=ok&&Binding(r,"rtreflection",D3D_SIT_CBUFFER,6,0);
+    if(diagnostic!=2u)ok=ok&&Binding(r,"rtreflection",D3D_SIT_CBUFFER,6,0);
     if(diagnostic!=2u){
         const struct {const char* name;UINT slot;D3D_SHADER_INPUT_TYPE type;UINT stride;} required[]={
             {"g_sbMaterialDataPart1",3,D3D_SIT_STRUCTURED,8},
