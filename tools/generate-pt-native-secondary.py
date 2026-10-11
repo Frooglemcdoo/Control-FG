@@ -83,14 +83,16 @@ uint4 PTBitInsert(uint4 width,uint4 offset,uint4 value,uint4 target) {
     uint4 mask=((1u<<width)-1u)<<offset;
     return (target&~mask)|((value<<offset)&mask);
 }
-float PTNativeMaterialMip(uint index) {
+float PTNativeMaterialMip(uint index,bool quantized) {
+    if(!quantized)return 0.0f;
     uint width,height,levels;
     g_sMaterialTextureArray[NonUniformResourceIndex(index)].GetDimensions(0,width,height,levels);
     return min(log2(max((float)max(width,height)/31.0f,1.0f)),(float)(max(levels,1u)-1u));
 }
 float3 PTNativeSecondHit(uint materialId,float2 uv,float3 hitView,float3 hitWorld,
                         float3 normalWorld,float3 incomingWorld,float3 incomingView,
-                        float3 firstView,uint2 pixel) {
+                        float3 firstView,uint2 pixel,bool quantized,out float3 directEmission) {
+    directEmission=0.0f;
 ''']
 out += ['    uint4 r'+str(i)+'=0u;' for i in range(43)]
 out += ['''    r2=asuint(float4(firstView,1.0f));
@@ -118,6 +120,8 @@ for ins in selected:
  assert pos==end
  counts[op]=counts.get(op,0)+1
  def emit(s):out.append('    '+s+' // native dword '+str(at))
+ if at==7186:
+  emit('directEmission=asfloat(r17.xyz)*asfloat(r16.xyz)+asfloat(r34.xyz)+asfloat(r19.xyz);')
  if at in (3319,3328):continue
  if at==3333:
   emit('r19.xyz=asuint(-incomingView);');continue
@@ -141,7 +145,7 @@ for ins in selected:
    expr=resource(res)+'.Load(asint('+coord+').'+('xyzw'[:coordn])+')'
   else:
    lod='asfloat('+src(args[4])+').x'
-   if b['space']==1:lod='PTNativeMaterialMip('+res['idx'][1]+')'
+   if b['space']==1:lod='PTNativeMaterialMip('+res['idx'][1]+',quantized)'
    expr=resource(res)+'.SampleLevel('+samplers[rid(args[3])]+',asfloat('+coord+').'+('xyz'[:coordn])+','+lod+')'
   if b['return_type']==5:expr='asuint('+expr+')'
   emit(lhs+'=('+expr+').'+swiz(res)+'.'+mask+';');continue
