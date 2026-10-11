@@ -228,298 +228,84 @@ void PTTrace(uint layer, float3 origin, float3 direction, out HitData payload)
     TraceRay(g_rtScene,RAY_FLAG_NONE,0x1,0,2,0,ray,payload);
 }
 
+// Use the native hit/miss shaders with a temporary layer-0 scratch write.
+// Save/restore every field inside this helper, including on misses. Layer 1
+// is never touched. Only the private records survive the additional dispatch.
+bool PTTracePreserved(uint2 pixel,float3 origin,float3 direction,out PTPrivateHit hit)
+{
+    const uint3 slot=uint3(pixel,0u);
+    const uint savedMaterial=g_rwtMaterialId[slot];
+    const float4 savedNormal=g_rwtNormal_TexcoordX[slot];
+    const float4 savedPosition=g_rwtPosition_TexcoordY[slot];
+    HitData payload;
+    PTTrace(0u,origin,direction,payload);
+    DeviceMemoryBarrier();
+    const uint material=g_rwtMaterialId[slot];
+    const float4 normal=g_rwtNormal_TexcoordX[slot];
+    const float4 position=g_rwtPosition_TexcoordY[slot];
+    // Restore unconditionally BEFORE testing the hit or returning.
+    g_rwtMaterialId[slot]=savedMaterial;
+    g_rwtNormal_TexcoordX[slot]=savedNormal;
+    g_rwtPosition_TexcoordY[slot]=savedPosition;
+    DeviceMemoryBarrier();
+    hit.worldPosition=origin+normalize(direction)*((float)payload.value*0.0001f);
+    hit.material=material;hit.uv=float2(normal.w,position.w);
+    hit.packedNormal=PTPackNormal(normal.xyz);hit.reserved=0u;
+    return payload.value!=0u&&material<65534u&&all(isfinite(hit.worldPosition))&&
+        all(isfinite(normal.xyz))&&dot(normal.xyz,normal.xyz)>1.0e-6f;
+}
+
 [shader("raygeneration")]
 void reflectionRayGeneration()
 {
     uint2 pixel=DispatchRaysIndex().xy;
     uint privatePixel=pixel.y*DispatchRaysDimensions().x+pixel.x;
-    if(privatePixel<PT_PRIVATE_PIXEL_CAPACITY){
-        PTClearPrivate(privatePixel*2u);
-        PTClearPrivate(privatePixel*2u+1u);
-    }
-
-    // Native reflection targets have exactly TWO array slices.
-    // In the previous P2 shader, layers 2/3 were written out-of-bounds,
-    // silently losing second-hit position, normal, material and UV.
-    // The one-path proof uses layer 0 for the native first hit and layer 1
-    // for a secondary hit, hidden from native composite via material sentinel.
-    [unroll]
-    for(uint layer=0;layer<2u;++layer) {
-        g_rwtMaterialId[uint3(pixel,layer)]=65534u;
-    }
-    g_rwtNormal_TexcoordX[uint3(pixel,1u)]=float4(0.0f,0.0f,0.0f,-1.0f);
-    g_rwtPosition_TexcoordY[uint3(pixel,1u)]=float4(0.0f,0.0f,0.0f,0.0f);
-
-    float3 primaryView,primaryWorld,normalWorld;
-    float roughness;
-    if(!PTPrimary(pixel,primaryView,primaryWorld,normalWorld,roughness)) return;
-    // Native Control rejects very rough primary surfaces early. P2 intentionally
-    // extends the glossy lobe so concrete/plaster can still carry a broad,
-    // low-frequency reflection/bounce signal into RR instead of disappearing.
-    const float p2MaxPrimaryRoughness=max(g_fRTMaxRayRoughness,0.92f);
-    if(roughness>p2MaxPrimaryRoughness) return;
-
-    float3 cameraWorld=PTCameraWorld();
-    float3 viewToCamera=normalize(cameraWorld-primaryWorld);
-
-    // Native layer 0 shades ONE stock first-bounce reflection.
-    // Layer 1 is a true secondary hit; its material slot remains 65534
-    // so Control does not mistake it for a second first-bounce ray.
-    // This is a temporary 1-path proof pending dedicated P2 private UAVs.
-    [unroll]
-    for(uint path=0;path<1u;++path) {
-        uint firstLayer=0u;
-        uint secondLayer=1u;
-
-        float2 random=PTRandom2(pixel,path);
-        float3 h=PTSampleGGXVNDF(normalWorld,viewToCamera,roughness,random);
-        float3 firstDirection=normalize(reflect(-viewToCamera,h));
-        if(dot(firstDirection,normalWorld)<=0.0f) continue;
-
-        HitData firstPayload;
-        const float3 firstOrigin=primaryWorld+normalWorld*0.01f;
-        PTTrace(firstLayer,firstOrigin,firstDirection,firstPayload);
-
-        uint firstMaterial=g_rwtMaterialId[uint3(pixel,firstLayer)];
-        if(firstPayload.value==0u || firstMaterial>=65534u) continue;
-
-        // Do not reconstruct a new ray origin from RGBA16F view position.
-        // Its quantization can exceed the 1 cm bias and place us inside geometry.
-        // The native 4-byte payload retains distance to 0.1 mm (floor).
-        // Normalize exactly as PTTrace does before reconstructing its endpoint.
-        const float firstDistance=(float)firstPayload.value*0.0001f;
-        float3 firstHitWorld=firstOrigin+normalize(firstDirection)*firstDistance;
-        float4 firstNormalUV=g_rwtNormal_TexcoordX[uint3(pixel,firstLayer)];
-        float3 firstHitNormal=normalize(firstNormalUV.xyz);
-        if(!all(isfinite(firstHitWorld)) || !all(isfinite(firstHitNormal))) continue;
-
-        if(dot(firstHitNormal,firstDirection)>0.0f) firstHitNormal=-firstHitNormal;
-
-        // Native diffuse GI is retained by the composite. Trace only the
-        // indirect specular lobe that this second hit will replace.
-        const float firstSmoothness=PTMaterialSmoothness(firstMaterial,float2(firstNormalUV.w,g_rwtPosition_TexcoordY[uint3(pixel,firstLayer)].w));
-        const float firstRoughness=1.0f-firstSmoothness;
-        float2 secondRandom=PTRandom2(pixel,path+11u);
-        float3 viewBack=normalize(-firstDirection);
-        float3 h2=PTSampleGGXVNDF(firstHitNormal,viewBack,firstRoughness,secondRandom);
-        float3 secondDirection=normalize(reflect(-viewBack,h2));
-        if(dot(secondDirection,firstHitNormal)<=0.0f)continue;
-
-        HitData secondPayload;
-        PTTrace(secondLayer,firstHitWorld+firstHitNormal*0.01f,secondDirection,secondPayload);
-        if(privatePixel>=PT_PRIVATE_PIXEL_CAPACITY||secondPayload.value==0u)continue;
-        PTPrivateHit second=g_ptPrivateHits[privatePixel*2u];
-        if(second.material>=65534u)continue;
-        float3 secondNormal=PTUnpackNormal(second.packedNormal);
-        if(dot(secondNormal,secondDirection)>0.0f)secondNormal=-secondNormal;
-        float secondRoughness=1.0f-PTMaterialSmoothness(second.material,second.uv);
-        float3 thirdHalf=PTSampleGGXVNDF(secondNormal,-secondDirection,secondRoughness,PTRandom2(pixel,path+29u));
-        float3 thirdDirection=normalize(reflect(secondDirection,thirdHalf));
-        if(dot(thirdDirection,secondNormal)<=0.0f)continue;
-        HitData thirdPayload;
-        // Full-precision position from the hit shader, not the native FP16 texture.
-        PTTrace(2u,second.worldPosition+secondNormal*0.01f,thirdDirection,thirdPayload);
-
-    }
+    if(privatePixel>=PT_PRIVATE_PIXEL_CAPACITY)return;
+    PTClearPrivate(privatePixel*2u);PTClearPrivate(privatePixel*2u+1u);
+    uint width,height,layers;g_rwtMaterialId.GetDimensions(width,height,layers);
+    if(any(pixel>=uint2(width,height))||layers!=2u||g_uRTReflectionRayCount==0u)return;
+    uint count,stride;g_sbMaterialDataPart3.GetDimensions(count,stride);
+    uint firstMaterial=g_rwtMaterialId[uint3(pixel,0u)];
+    if(stride!=336u||firstMaterial>=min(count,65534u))return;
+    float4 firstPosition=g_rwtPosition_TexcoordY[uint3(pixel,0u)];
+    if(!all(isfinite(firstPosition.xyz)))return;
+    float3 primaryView,primaryWorld,normalWorld;float roughness;
+    if(!PTPrimary(pixel,primaryView,primaryWorld,normalWorld,roughness))return;
+    float3 nativeFirstWorld=PTTransformPointColumns(firstPosition.xyz,
+        g_mViewToWorld0,g_mViewToWorld1,g_mViewToWorld2,g_mViewToWorld3);
+    // Re-intersect the first surface to recover a sub-millimetre endpoint.
+    // The native half-float position is a direction guide, NEVER a new origin.
+    float depth=g_tLinearDepth.Load(int3(pixel,0)).x;
+    const float3 firstOrigin=primaryWorld+(normalWorld-normalize(primaryWorld-PTCameraWorld()))*(0.001f*depth);
+    float3 firstDirection=normalize(nativeFirstWorld-firstOrigin);
+    PTPrivateHit first;
+    if(!PTTracePreserved(pixel,firstOrigin,firstDirection,first))return;
+    if(first.material!=firstMaterial)return;
+    float tolerance=0.003f+0.002f*max(max(abs(firstPosition.x),abs(firstPosition.y)),abs(firstPosition.z));
+    if(distance(first.worldPosition,nativeFirstWorld)>tolerance)return;
+    float3 firstNormal=PTUnpackNormal(first.packedNormal);
+    if(dot(firstNormal,firstDirection)>0.0f)firstNormal=-firstNormal;
+    float firstRoughness=1.0f-PTMaterialSmoothness(first.material,first.uv);
+    float3 h2=PTSampleGGXVNDF(firstNormal,-firstDirection,firstRoughness,PTRandom2(pixel,11u));
+    float3 secondDirection=normalize(reflect(firstDirection,h2));
+    if(dot(secondDirection,firstNormal)<=0.0f)return;
+    PTPrivateHit second;
+    if(!PTTracePreserved(pixel,first.worldPosition+firstNormal*0.01f,secondDirection,second))return;
+    if(second.material>=count)return;
+    g_ptPrivateHits[privatePixel*2u]=second;
+    float3 secondNormal=PTUnpackNormal(second.packedNormal);
+    if(dot(secondNormal,secondDirection)>0.0f)secondNormal=-secondNormal;
+    float secondRoughness=1.0f-PTMaterialSmoothness(second.material,second.uv);
+    float3 h3=PTSampleGGXVNDF(secondNormal,-secondDirection,secondRoughness,PTRandom2(pixel,29u));
+    float3 thirdDirection=normalize(reflect(secondDirection,h3));
+    if(dot(thirdDirection,secondNormal)<=0.0f)return;
+    PTPrivateHit third;
+    if(PTTracePreserved(pixel,second.worldPosition+secondNormal*0.01f,thirdDirection,third)&&third.material<count)
+        g_ptPrivateHits[privatePixel*2u+1u]=third;
 }
 
-// Exactly TWO native UAV array layers exist: 0=native first-hit,
-// 1=secondary P2 hit (native material sentinel 65534). Only one
-// first-bounce sample is retained in this proof; private four-layer UAV
-// resources are needed for a full two-path implementation.
+// Exactly TWO native layers are preserved by the extra raygen. The following
+// sidecar exports ONLY reflectionRayGeneration into the combined state.
+// All actual hit/miss/shadow exports are the game's original DXIL.
 #define PT_REFLECTION_P2_NATIVE_LAYER_COUNT 2
 #define PT_REFLECTION_P2_POST_COMPOSITE_READY 1
-
-float3 PTWorldToViewPoint(float3 p)
-{
-    return PTTransformPointColumns(p,
-        g_mWorldToView0,g_mWorldToView1,g_mWorldToView2,g_mWorldToView3);
-}
-
-
-uint3 PTLoadTriangleIndices(uint primitive)
-{
-    uint baseOffset=uIndexOffset + primitive*3u*uIndexStride;
-    if(uIndexStride==2u) {
-        uint maxOffset=uIndexBufferSize>=8u ? uIndexBufferSize-8u : 0u;
-        uint aligned=min(baseOffset & ~3u,maxOffset);
-        uint2 packed=g_bRaytracingIndexBuffer.Load2(aligned);
-        if(aligned==baseOffset)
-            return uint3(packed.x & 0xffffu,packed.x >> 16u,packed.y & 0xffffu);
-        return uint3(packed.x >> 16u,packed.y & 0xffffu,packed.y >> 16u);
-    }
-    uint maxOffset=uIndexBufferSize>=12u ? uIndexBufferSize-12u : 0u;
-    uint offset=min(baseOffset,maxOffset);
-    return g_bRaytracingIndexBuffer.Load3(offset);
-}
-
-int2 PTUnpackS16x2(uint packed)
-{
-    return int2((int)(packed << 16u) >> 16,(int)packed >> 16);
-}
-
-int3 PTUnpackS16x3(uint2 packed)
-{
-    return int3((int)(packed.x << 16u) >> 16,
-                (int)packed.x >> 16,
-                (int)(packed.y << 16u) >> 16);
-}
-
-float2 PTLoadTexcoord(uint vertex)
-{
-    uint address=vertex*uVertexStride1 + uTexcoordOffset;
-    uint maxOffset=uVertexBuffer1Size>=4u ? uVertexBuffer1Size-4u : 0u;
-    uint packed=g_bRaytracingVertexBuffer1.Load(min(address,maxOffset));
-    return float2(PTUnpackS16x2(packed))*(1.0f/4095.0f);
-}
-
-float3 PTLoadNormal(uint vertex)
-{
-    uint address=vertex*uVertexStride1 + uNormalOffset;
-    uint maxOffset=uVertexBuffer1Size>=8u ? uVertexBuffer1Size-8u : 0u;
-    uint2 packed=g_bRaytracingVertexBuffer1.Load2(min(address,maxOffset));
-    return float3(PTUnpackS16x3(packed))*(1.0f/32767.0f);
-}
-
-float2 PTNativeTexcoord(in BuiltInTriangleIntersectionAttributes attribs)
-{
-    uint3 indices=PTLoadTriangleIndices(PrimitiveIndex());
-    float3 weights=float3(1.0f-attribs.barycentrics.x-attribs.barycentrics.y,
-                          attribs.barycentrics.x,
-                          attribs.barycentrics.y);
-    return PTLoadTexcoord(indices.x)*weights.x
-          +PTLoadTexcoord(indices.y)*weights.y
-          +PTLoadTexcoord(indices.z)*weights.z;
-}
-
-void PTNativeHitAttributes(in BuiltInTriangleIntersectionAttributes attribs,
-                           out float2 texcoord,out float3 normalWorld)
-{
-    uint3 indices=PTLoadTriangleIndices(PrimitiveIndex());
-    float3 weights=float3(1.0f-attribs.barycentrics.x-attribs.barycentrics.y,
-                          attribs.barycentrics.x,
-                          attribs.barycentrics.y);
-    texcoord=PTNativeTexcoord(attribs);
-    float3 normalObject=PTLoadNormal(indices.x)*weights.x
-                       +PTLoadNormal(indices.y)*weights.y
-                       +PTLoadNormal(indices.z)*weights.z;
-    float3x4 worldToObject=WorldToObject3x4();
-    normalWorld=float3(
-        dot(normalObject,float3(worldToObject[0][0],worldToObject[1][0],worldToObject[2][0])),
-        dot(normalObject,float3(worldToObject[0][1],worldToObject[1][1],worldToObject[2][1])),
-        dot(normalObject,float3(worldToObject[0][2],worldToObject[1][2],worldToObject[2][2])));
-}
-
-[shader("closesthit")]
-void reflectionClosestHit(inout HitData payload, in BuiltInTriangleIntersectionAttributes attribs)
-{
-    uint layer=payload.value;
-    uint2 pixel=DispatchRaysIndex().xy;
-
-    float2 texcoord;
-    float3 normalWorld;
-    PTNativeHitAttributes(attribs,texcoord,normalWorld);
-
-    float3 worldHit=WorldRayOrigin()+WorldRayDirection()*RayTCurrent();
-    float3 viewHit=PTWorldToViewPoint(worldHit);
-    if(layer>=1u){
-        uint privatePixel=pixel.y*DispatchRaysDimensions().x+pixel.x;
-        if(privatePixel<PT_PRIVATE_PIXEL_CAPACITY&&layer<=2u){
-            PTPrivateHit h;
-            h.worldPosition=worldHit;h.material=uMaterialID;h.uv=texcoord;
-            h.packedNormal=PTPackNormal(normalWorld);h.reserved=0u;
-            g_ptPrivateHits[privatePixel*2u+(layer-1u)]=h;
-        }
-        if(layer==2u){
-            DeviceMemoryBarrier();
-            payload.value=(uint)(RayTCurrent()*10000.0f);
-            return;
-        }
-    }
-
-
-    if(layer==1u) {
-        // Keep the native second material slot invalid for the stock
-        // deferred composite, but encode secondary material+UV in half
-        // float-compatible numeric values (NEVER asfloat(raw uint)).
-        // Native normal/position textures use RGBA16_FLOAT.
-        // Integers 0..2048 are exactly representable by binary16.
-        g_rwtMaterialId[uint3(pixel,layer)]=65534u;
-        const bool materialEncodable=uMaterialID<2048u;
-        const float encodedMaterial=materialEncodable?(float)uMaterialID:-1.0f;
-        g_rwtNormal_TexcoordX[uint3(pixel,layer)]=
-            float4(normalWorld,encodedMaterial);
-        const uint2 uv5=(uint2)round(saturate(frac(texcoord))*31.0f);
-        const uint packedUV=(uv5.x&31u)|((uv5.y&31u)<<5u);
-        g_rwtPosition_TexcoordY[uint3(pixel,layer)]=
-            float4(viewHit,(float)packedUV);
-    } else {
-        g_rwtMaterialId[uint3(pixel,layer)]=uMaterialID;
-        g_rwtNormal_TexcoordX[uint3(pixel,layer)]=float4(normalWorld,texcoord.x);
-        g_rwtPosition_TexcoordY[uint3(pixel,layer)]=float4(viewHit,texcoord.y);
-    }
-    // Publish hit attributes before raygen consumes them after TraceRay.
-    DeviceMemoryBarrier();
-    payload.value=(uint)(RayTCurrent()*10000.0f);
-}
-
-bool PTAlphaPass(in BuiltInTriangleIntersectionAttributes attribs)
-{
-    float2 texcoord=PTNativeTexcoord(attribs);
-    uint textureIndex=NonUniformResourceIndex(uMaterialID*35u);
-    float textureAlpha=g_sMaterialTextureArray[textureIndex].SampleLevel(g_sLinearWrap,texcoord,0.0f).a;
-    float multiplierAlpha=g_sbMaterialDataPart3[uMaterialID].vColorMultiplier.w;
-    return textureAlpha*multiplierAlpha>=0.5f;
-}
-
-[shader("anyhit")]
-void reflectionAlphaTestAnyHit(inout HitData payload, in BuiltInTriangleIntersectionAttributes attribs)
-{
-    if(!PTAlphaPass(attribs)) IgnoreHit();
-}
-
-[shader("miss")]
-void reflectionMiss(inout HitData payload)
-{
-    uint layer=payload.value;
-    uint2 pixel=DispatchRaysIndex().xy;
-    float3 worldEnd=WorldRayOrigin()+WorldRayDirection()*RayTCurrent();
-    if(layer==2u){
-        uint privatePixel=pixel.y*DispatchRaysDimensions().x+pixel.x;
-        if(privatePixel<PT_PRIVATE_PIXEL_CAPACITY)PTClearPrivate(privatePixel*2u+1u);
-        DeviceMemoryBarrier();payload.value=0u;return;
-    }
-
-    if(layer==1u) {
-        g_rwtMaterialId[uint3(pixel,layer)]=65534u;
-        g_rwtNormal_TexcoordX[uint3(pixel,layer)]=
-            float4(0.0f,0.0f,0.0f,-1.0f);
-    } else {
-        g_rwtMaterialId[uint3(pixel,layer)]=65535u;
-    }
-    g_rwtPosition_TexcoordY[uint3(pixel,layer)]=float4(PTWorldToViewPoint(worldEnd),0.0f);
-    DeviceMemoryBarrier();
-    payload.value=0u;
-}
-
-[shader("closesthit")]
-void shadowClosestHit(inout HitData payload, in BuiltInTriangleIntersectionAttributes attribs)
-{
-    uint2 pixel=DispatchRaysIndex().xy;
-    uint layer=payload.value;
-    g_rwtShadow[uint3(pixel,layer)]=0u;
-}
-
-[shader("anyhit")]
-void shadowAlphaTestAnyHit(inout HitData payload, in BuiltInTriangleIntersectionAttributes attribs)
-{
-    if(!PTAlphaPass(attribs)) IgnoreHit();
-}
-
-[shader("miss")]
-void shadowMiss(inout HitData payload)
-{
-    uint2 pixel=DispatchRaysIndex().xy;
-    uint layer=payload.value;
-    g_rwtShadow[uint3(pixel,layer)]=1u;
-}
