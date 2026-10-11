@@ -6,6 +6,7 @@ on:
       - experiment/pt-reflections-p0
       - experiment/pt-verify-stages-20261010
       - experiment/pt-local-light-probe-p1
+      - experiment/pt-local-light-record-audit
   workflow_dispatch:
   pull_request:
     branches:
@@ -180,76 +181,69 @@ jobs:
           Copy-Item build/pt_reflection_p2_local_light_probe.dxbc "$out/pt_reflection_p2_local_light_probe.dxbc"
           Copy-Item build/pt_reflection_p2_diffuse_bridge.dxbc "$out/pt_reflection_p2_diffuse_bridge.dxbc"
           @'
-          PT Reflections - LOCAL-LIGHT RUNTIME VALUE PROBE V2
-          ==================================================
-          DEBUG BUILD, NOT FOR REGULAR PLAY.
-          Steam DX12, RT Reflections and RR enabled.
-          Branch: experiment/pt-local-light-probe-p1
-          Copy ALL SEVEN binaries beside Control_DX12.exe.
-          Back up the old files first.
+          PT REFLECTIONS - NATIVE LIGHT RECORD AUDIT (V4)
+          ===============================================
+          THIS IS AN EXPERIMENTAL DIAGNOSTIC BUILD, NOT PRODUCTION.
+          Steam DX12, RR and RT Reflections ON.
+          Source: experiment/pt-local-light-record-audit
+          Back up old binaries. Copy ALL SEVEN binaries beside Control_DX12.exe.
 
-          The preceding screenshot confirms correct native point and spot
-          SRV strides (160/320). But b1's spotlight count is the invalid
-          UINT 40E00000 (the float7.0 bit pattern). This makes the
-          previous count-based light loop run zero iterations.
+          CURRENT DIAGNOSIS:
+          P2 reflection and the GI-copy visual transport proof are working.
+          The shader can access point/spot SRV buffers (stride 160/320).
+          But the native deferred-light b1 count values fail runtime
+          validation, and the previous bounded scan shows little actual
+          secondary-hit local-light radiance.
 
-          This probe displays the raw counts without trusting them,
-          and separately reads the first 12 records in each native
-          light SRV, bounded by the real resource GetDimensions. It
-          never exposes potentially huge raw b1 values as loop bounds.
-          This is a diagnostic candidate-record scan, NOT a complete
-          engine light list or shadow-aware light integrator.
+          V4 MODE 3 INSPECTS THE FIRST 12 RAW NATIVE LIGHT RECORDS:
+          The upper-right quadrant contains eight horizontal HEX rows.
+          Each has a narrow status bar at the left (green OK/red reject).
+            Row 1 green: raw point count at native b1+256
+            Row 2 blue: raw spot count at native b1+260
+            Row 3 amber: point StructuredBuffer stride (expect 000000A0)
+            Row 4 purple: spot StructuredBuffer stride (expect 00000140)
+            Row 5 green: point SRV record capacity
+            Row 6 blue: spot SRV record capacity
+            Row 7 yellow: point RECORD HEALTH
+            Row 8 purple: spot RECORD HEALTH
 
-          NEW MODE 3, UPPER-RIGHT: EIGHT ROWS OF HEXADECIMAL DATA
-          Each row is eight huge hexadecimal digits (0..9, A..F).
-          GREEN vertical strip = this particular field is valid;
-          RED vertical strip = this specific field failed.
+          RECORD HEALTH is an eight-character hexadecimal bitfield:
+            0x0FFF0000 means all first 12 records have plausible,
+                       nonzero, finite colors, but NO valid spatial
+                       attributes (position or radius/range).
+            0x00000FFF means all first 12 have valid color AND
+                       position/range; the upper color bits should
+                       normally also be set if this is true.
+            0x0FFF0FFF means all first 12 sampled records have
+                       plausible color AND position/range.
+            0x00000000 means none have usable light color;
+                       buffers may be empty, uninitialized, or
+                       unrelated despite correct SRV structure.
+          Bits 0-11 = combined color + spatial validity per record;
+          bits 16-27 = plausible nonzero color independently.
+          This scan DOES NOT trust b1's suspect light counts.
 
-            Row 1 (GREEN)  = raw native point-light count at b1+256
-            Row 2 (BLUE)   = raw native spotlight count at b1+260
-            Row 3 (ORANGE) = point StructuredBuffer stride
-                            expect 000000A0 (160 bytes)
-            Row 4 (PURPLE) = spot StructuredBuffer stride
-                            expect 00000140 (320 bytes)
-            Row 5 (GREEN)  = point buffer element capacity
-            Row 6 (BLUE)   = spotlight buffer element capacity
-            Row 7 (YELLOW) = point cell texture WIDTH:HEIGHT, 4 hex
-                             digits each
-            Row 8 (PURPLE) = spot cell texture WIDTH:HEIGHT, same
+          Lower-left: RED point candidate, GREEN spotlight candidate,
+                      low BLUE secondary-hit coverage. Status strip:
+                      RED=point view safe; GREEN=spot view safe;
+                      BLUE=second hit exists at strip pixel.
+          Lower-right: original native plus x8 unshadowed diagnostic
+                       candidate. This is not final shadowed PT lighting.
 
-          Counts are read as native UINTs; each category validates
-          independently so an invalid spotlight binding does not zero
-          otherwise valid point-light diagnostics, or vice versa.
+          F11 MODE CYCLE:
+            0 normal P2 reflections + read-only GI audit
+            1 prior P2 hit/radiance quadrants
+            2 proven visible 512x512 raw GI COPY checker
+            3 native light record audit + diagnostic potential
+            4th press returns to 0
 
-          OTHER QUADRANTS IN MODE 3:
-          Top-left     unchanged native reflection.
-          Bottom-left  red = unshadowed point potential from up to 12
-                       valid SRV elements; green = spotlight potential;
-                       dark blue = secondary-hit coverage only.
-                       The first 24 pixel rows show status blocks:
-                       RED=point view safe, GREEN=spot view safe,
-                       BLUE=valid secondary hit.
-          Bottom-right native reflection plus x8 candidate (diagnostic).
-                       This is not occlusion/shadow-correct lighting.
+          TEST: Launch same scene. Confirm normal rendering for 15sec,
+          press F11 THREE times, wait ~5sec, send a FULL screenshot with
+          all eight HEX rows visible plus compact logs. No need to test
+          GI mode again. Exit mode 3 with one extra F11 press.
 
-          F11 MODES: 0 normal P2, 1 P2 radiance quadrants,
-          2 known working native GI checker-copy, 3 light-value probe.
-          Each F11 press advances to the next mode, then wraps to 0.
-
-          TEST: Start in normal mode for 15-20 sec. Press F11 three
-          times, take ONE clear screenshot of all quadrants after a
-          few seconds, and collect compact logs. Check for RED/GREEN
-          energy in the lower left and any brightening in the lower
-          right. No need to retest the GI checker mode.
-
-          Expected:
-            PT_REFLECTION_P2_NATIVE_LIGHT_PROBE_PSO ready=1
-            PT_REFLECTION_VERIFY_SWITCH from=2 to=3
-            PT_REFLECTION_P2_POST_DISPATCH ... verify_mode=3
-
-          Native shadow visibility, full cell indexing, and physically
-          correct secondary bounce remain future work. The working
-          production P2 composite and native-copy GI path are unchanged.
+          NO production light-bounce changes, no shadow bypass,
+          and NO unsafe custom GI compute dispatch are made here.
           '@ | Set-Content "$out/README.txt" -Encoding ASCII
           Compress-Archive -Path "$out/*" -DestinationPath "$out.zip" -Force
           (Get-FileHash "$out.zip" -Algorithm SHA256).Hash | Set-Content "$out.sha256" -Encoding ASCII
