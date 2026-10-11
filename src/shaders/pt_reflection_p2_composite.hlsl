@@ -394,6 +394,7 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
 
     float3 bounce2=0.0f;
     float totalWeight=0.0f;
+    bool decodedSecondHitSeen=false;
 
     [unroll]
     for(uint path=0;path<2u;++path)
@@ -409,6 +410,7 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
         float4 secondNormalPacked=g_tNormal_TexcoordX.Load(int4(pixel,secondLayer,0));
         uint secondMaterial=PTDecodeSecondaryMaterial(secondNormalPacked,secondPosPacked);
         if(secondMaterial>=65534u||secondMaterial>=g_uMaterialIDCount)continue;
+        decodedSecondHitSeen=true; // Count hits BEFORE normal/lighting checks.
         // Bad normals or finite-hit metadata must never produce NaNs in
         // the normal P2 composite. V8 mode 3 separately diagnoses WHY a
         // valid material hit has unusable surface-normal components.
@@ -450,9 +452,12 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
     const bool bottom=pixel.y>=halfH;
     if(!right&&!bottom)return;
     if(right&&!bottom){
+        // Actual material hit coverage, independent of normal validity.
+        // GREEN = at least one decoded secondary hit.
+        // MAGENTA = no valid decoded second-hit ID (not traced / miss).
         g_rwtReflectionTarget[pixel]=
-            totalWeight>0.0f?float4(0.02f,6.0f,0.02f,1.0f):
-                             float4(6.0f,0.02f,5.0f,1.0f);
+            decodedSecondHitSeen?float4(0.02f,6.0f,0.02f,1.0f):
+                                 float4(6.0f,0.02f,5.0f,1.0f);
         return;
     }
     const float3 unboundedRadiance=bounce2/2.0f;
