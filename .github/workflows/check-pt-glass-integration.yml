@@ -10,6 +10,8 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Verify glass installation compatibility gate
+        run: python tools/test-pt-glass-install.py
       - name: Compile native and dedicated secondary lighting
         shell: cmd
         run: |
