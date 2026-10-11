@@ -8,6 +8,7 @@ on:
       - experiment/pt-local-light-probe-p1
       - experiment/pt-local-light-record-audit
       - experiment/pt-local-light-gates-p1
+      - experiment/pt-local-light-hit-validation-p1
   workflow_dispatch:
   pull_request:
     branches:
@@ -182,59 +183,61 @@ jobs:
           Copy-Item build/pt_reflection_p2_local_light_probe.dxbc "$out/pt_reflection_p2_local_light_probe.dxbc"
           Copy-Item build/pt_reflection_p2_diffuse_bridge.dxbc "$out/pt_reflection_p2_diffuse_bridge.dxbc"
           @'
-          CONTROL-FG PT - NATIVE LIGHT GATE AUDIT V5
-          ==========================================
-          Experimental Steam DX12 TEST only. RR + RT reflections ON.
-          Branch: experiment/pt-local-light-gates-p1
+          CONTROL-FG PT - LIGHT/HIT VALIDATION V6
+          =======================================
+          EXPERIMENTAL STEAM DX12 TEST, NOT PRODUCTION.
+          Source: experiment/pt-local-light-hit-validation-p1
           Copy all SEVEN binaries beside Control_DX12.exe.
 
-          The V4 screenshot decoded to:
-          POINT RECORD MASK 01EF01EF (8 valid color+spatial records
-              out of 10 records bound in the point SRV).
-          SPOT RECORD MASK  0FFF0FFF (all first 12 spotlight records
-              valid; spot SRV capacity 28).
-          The input light source records are NOT empty or broken.
-          The custom second-hit evaluation still gives near-zero light.
+          V4 confirmed native point/spot light buffer records with
+          plausible color, position, and range. V5's lower-left first
+          band STILL showed no visible source energy even though it
+          was advertised as ungated. Code review found the flaw:
+          V5's RAW light energy was only accumulated after a second
+          ray hit passed finite view POSITION and NORMAL checks.
+          Thus it did NOT independently prove raw source energy.
+          V6 removes that dependency and explicitly audits hit gates.
 
-          V5 identifies which PHYSICAL/GEOMETRIC GATE loses the signal:
-          Hit geometry is validated first; first 32 native records per
-          point/spot resource are sampled without trusting invalid
-          b1 count words. Probe uses REAL color data, positions and
-          range/angle fields and intentionally ignores shadow maps.
+          F11 cycle: 0 normal P2, 1 prior P2 hit/radiance quadrants,
+          2 known working native GI copy checker, 3 V6 gate proof.
 
           F11 MODE 3:
-          TOP LEFT = unchanged native reflections.
-          TOP RIGHT = V4 eight native count / stride / capacity / record
-                      health HEX rows, unchanged.
-          BOTTOM LEFT = four HORIZONTAL BANDS below status strip:
-            BAND 1 (uppermost): raw native light COLOR only.
-            BAND 2: light color times native DISTANCE/RANGE.
-            BAND 3: distance/range plus surface-facing NdotL.
-            BAND 4 (bottom): add spotlight cone attenuation.
-            RED shows point-light signal; GREEN shows spotlights;
-            faint BLUE means second-hit geometry is present.
-            If a band suddenly loses color, that gate is the culprit.
-          BOTTOM RIGHT = upper half raw native source proof
-                         (magenta if nonzero light data).
-                         Lower half fully gated candidate (yellow if
-                         geometrically applicable). Both are visual
-                         diagnostics, never production lighting.
+          TOP LEFT: unchanged native reflections.
+          TOP RIGHT: eight familiar native count, light stride,
+                     buffer capacity, and record-health HEX rows.
+          BOTTOM LEFT: thin status strip + FOUR HORIZONTAL BANDS:
+            BAND 1 (top): RAW native light energy, independent of
+                          ray hits or normals. RED = point sources,
+                          GREEN = spotlights.
+            BAND 2: RED = valid first-hit material;
+                    GREEN = valid second-hit material;
+                    BLUE = finite secondary-hit view-space position.
+                    White means all three conditions pass.
+            BAND 3: RED = finite, nonzero SECOND-HIT WORLD NORMAL;
+                    GREEN = finite view-space transformed normal;
+                    BLUE = all helper admission gates pass.
+            BAND 4 (bottom): RED = point-light contribution after
+                             range + NdotL;
+                             GREEN = spotlight after range + NdotL
+                             + cone; DARK BLUE = helper was called.
+          BOTTOM RIGHT: top half boosted MAGENTA native RAW energy
+                        independent of second-hit input validity.
+                        Bottom half YELLOW fully gated contribution.
+          These are DIAGNOSTIC COLORS, not physical lighting.
 
-          F11 cycle: mode 0 normal P2 reflections, mode 1 prior PT
-          quadrants, mode 2 proven native GI checker COPY, mode 3 V5
-          four-gate native point+spot debug. Press F11 once more to
-          return to normal.
+          If band 1 is bright but band 2/3 drops out, focus on
+          secondary-hit UAV data or camera/normal space. If bands
+          1..3 pass and band 4 is dark, focus on distance/normal/
+          cone light evaluation or nearest light selection.
 
-          TEST: Launch the same lobby with its overhead ceiling lights.
-          Stay in mode 0 for 15 seconds, tap F11 three times, take a
-          clear screenshot of all four quadrants, collect compact logs.
-          Do not retest the GI checker and do not use mode 3 during
-          extended gameplay. This may cost extra GPU time.
+          TEST: Load the same lobby, wait 15s in mode 0, press F11
+          three times into mode 3, take ONE full screenshot, collect
+          compact logs and close. Do not need to retest GI checker.
+          Mode 3 scans up to 32 raw native light records per second
+          hit and may be slow; don't stay in mode 3 long.
 
-          SHADOW WARNING: real light/shadow selection, local light
-          cells, physically-correct bounce transport, and RR injection
-          have NOT been enabled in normal mode. The production P2
-          composite and GI-copy path remain byte-for-byte unchanged.
+          No production P2 lighting changes, no shadow bypass,
+          and no unsafe custom diffuse-GI compute pass.
           '@ | Set-Content "$out/README.txt" -Encoding ASCII
           Compress-Archive -Path "$out/*" -DestinationPath "$out.zip" -Force
           (Get-FileHash "$out.zip" -Algorithm SHA256).Hash | Set-Content "$out.sha256" -Encoding ASCII
