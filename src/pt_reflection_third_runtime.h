@@ -376,12 +376,20 @@ static HRESULT PTThirdCreateState(ID3D12Device5* device,const D3D12_STATE_OBJECT
         LPCWSTR extraName=L"PTExtraRayGeneration";
         D3D12_SUBOBJECT_TO_EXPORTS_ASSOCIATION localAssoc{&subs[n+1],1,&extraName};
         subs[n+2]={D3D12_STATE_SUBOBJECT_TYPE_SUBOBJECT_TO_EXPORTS_ASSOCIATION,&localAssoc};
-        // Explicitly associate the cloned global root with the extra export;
-        // this also covers native descriptions with no global association.
+        // R7: preserve a DEFAULT global association. An explicit association
+        // only to PTExtraRayGeneration removes the implicit default, leaving
+        // the game's original shaders without their required resource bindings.
         UINT globalIndex=0;for(UINT i=0;i<n;++i)if(subs[i].Type==D3D12_STATE_SUBOBJECT_TYPE_GLOBAL_ROOT_SIGNATURE)globalIndex=i;
-        D3D12_SUBOBJECT_TO_EXPORTS_ASSOCIATION globalAssoc{&subs[globalIndex],1,&extraName};
+        D3D12_SUBOBJECT_TO_EXPORTS_ASSOCIATION globalAssoc{&subs[globalIndex],0,nullptr};
         subs[n+3]={D3D12_STATE_SUBOBJECT_TYPE_SUBOBJECT_TO_EXPORTS_ASSOCIATION,&globalAssoc};
         auto custom=*desc;custom.NumSubobjects=n+4;custom.pSubobjects=subs.data();
+        unsigned nativeGlobalAssociations=0;
+        for(UINT i=0;i<n;++i)if(desc->pSubobjects[i].Type==D3D12_STATE_SUBOBJECT_TYPE_SUBOBJECT_TO_EXPORTS_ASSOCIATION){
+            const auto* a=static_cast<const D3D12_SUBOBJECT_TO_EXPORTS_ASSOCIATION*>(desc->pSubobjects[i].pDesc);
+            if(a&&a->pSubobjectToAssociate&&a->pSubobjectToAssociate->Type==D3D12_STATE_SUBOBJECT_TYPE_GLOBAL_ROOT_SIGNATURE)
+                ++nativeGlobalAssociations;
+        }
+        Log("PT_NATIVE_ROOT_ASSOCIATION revision=7 native_associations=%u appended_default=1 all_unassigned_exports_covered=1 subobjects=%u",nativeGlobalAssociations,custom.NumSubobjects);
         hr=ptAuditCreateState(device,&custom,__uuidof(ID3D12StateObject),reinterpret_cast<void**>(&object));
         if(FAILED(hr)||!object){Log("PT_NATIVE_EXTRA_STATE ready=0 hr=0x%08lX fallback=original_native",hr);throw 6;}
         if(FAILED(object->QueryInterface(__uuidof(ID3D12StateObjectProperties),reinterpret_cast<void**>(&props))))throw 7;
