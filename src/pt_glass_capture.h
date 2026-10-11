@@ -10,8 +10,28 @@ static char ptGlassCaptureHashes[8][65]{};
 static unsigned ptGlassCaptureCount = 0;
 static size_t ptGlassCaptureBytes = 0;
 
+static bool PTGlassResidentIsLibrary(const char* resident) noexcept {
+    __try {
+        const auto* b = reinterpret_cast<const unsigned char*>(resident);
+        if (!b || memcmp(b, "DXBC", 4)) return false;
+        const auto size = PTGlassCapture::Word(b + 24);
+        if (size < 32 || size > PTGlassCapture::kMaximumBytes) return false;
+        const auto count = PTGlassCapture::Word(b + 28);
+        if (!count || count > (size - 32) / 4) return false;
+        for (unsigned i = 0; i < count; ++i) {
+            const auto offset = PTGlassCapture::Word(b + 32 + i * 4);
+            if (offset < 32 + count * 4 || offset > size - 8) return false;
+            const auto length = PTGlassCapture::Word(b + offset + 4);
+            if (length > size - offset - 8) return false;
+            if (!memcmp(b + offset, "DXIL", 4) && length >= 16)
+                return (PTGlassCapture::Word(b + offset + 8) >> 16) == 6u;
+        }
+    } __except (EXCEPTION_EXECUTE_HANDLER) { return false; }
+    return false;
+}
+
 static void PTGlassCaptureResident(int id, const char* resident) noexcept {
-    if (id < 0 || !resident) return;
+    if (id < 0 || !PTGlassResidentIsLibrary(resident)) return;
     bool inspect = true;
     AcquireSRWLockExclusive(&ptGlassCaptureLock);
     for (unsigned i = 0; i < ptGlassCaptureSeenCount; ++i)
