@@ -462,7 +462,7 @@ static bool PTReflectionBridgeDiffuseGI() noexcept {
                     target.rva,&texture);
                 const auto& desc=texture.desc;
                 Log("PT_REFLECTION_P2_NATIVE_HIT_TEXTURE call=%llu frame=%llu label=%s rva=0x%zX ready=%u texture=%p d3d_resource=%p dimension=%u format=%u width=%llu height=%u layers=%u mips=%u flags=0x%X state=0x%X supports_4_layers=%u",
-                    call,rrNativeRTFrame.engineFrame,target.label,target.rva,
+                    call,rrNativeRTFrame.frame,target.label,target.rva,
                     unsigned(ready),texture.native,texture.resource,
                     unsigned(desc.Dimension),
                     unsigned(desc.Format),
