@@ -2,6 +2,10 @@
 // Same root signature/descriptors, hit layout, and ON/OFF A/B boundary.
 #include "pt_native_secondary.generated.hlsli"
 #include "ControlPrimaryGuideDecode.hlsli"
+#include "pt_private_hits.hlsli"
+float3 PTWorldToView(float3 p) {
+    return asfloat(ptCB0[2]).xyz*p.x+asfloat(ptCB0[3]).xyz*p.y+asfloat(ptCB0[4]).xyz*p.z+asfloat(ptCB0[5]).xyz;
+}
 float3 PTNativeViewToWorld(float3 p) {
     return asfloat(ptCB0[6]).xyz*p.x+asfloat(ptCB0[7]).xyz*p.y+
            asfloat(ptCB0[8]).xyz*p.z+asfloat(ptCB0[9]).xyz;
@@ -68,8 +72,12 @@ void main(uint3 dispatchThreadId:SV_DispatchThreadID) {
     if(stride!=336u)count=0u;
     uint first=g_tMaterialId.Load(int4(pixel,0,0)).x;
     float4 firstPos=g_tPosition_TexcoordY.Load(int4(pixel,0,0));
-    float4 secondPos=g_tPosition_TexcoordY.Load(int4(pixel,1,0));
-    float4 normal=g_tNormal_TexcoordX.Load(int4(pixel,1,0));
+    uint privatePixel=pixel.y*size.x+pixel.x;
+    if(privatePixel>=PT_PRIVATE_PIXEL_CAPACITY)return;
+    PTPrivateHit hit2=g_ptPrivateHits[privatePixel*2u];
+    PTPrivateHit hit3=g_ptPrivateHits[privatePixel*2u+1u];
+    float4 secondPos=float4(PTWorldToView(hit2.worldPosition),0.0f);
+    float4 normal=float4(PTUnpackNormal(hit2.packedNormal),(float)hit2.material);
     uint rejection=1u;
     float3 bounce=0.0f;
     float3 replacement=0.0f;
@@ -80,8 +88,8 @@ void main(uint3 dispatchThreadId:SV_DispatchThreadID) {
         rejection=5u;
         if(first<count){
             rejection=2u;
-            if(normal.w>=0.0f&&normal.w<2048.0f){
-                uint second=(uint)round(normal.w);
+            if(hit2.material<65534u){
+                uint second=hit2.material;
                 rejection=5u;
                 if(second<count){
                     rejection=3u;
@@ -93,16 +101,33 @@ void main(uint3 dispatchThreadId:SV_DispatchThreadID) {
                         if(all(isfinite(firstPos.xyz))&&all(isfinite(secondPos.xyz))&&
                            isfinite(d2)&&d2>1.0e-6f&&isfinite(secondPos.w)){
                             rejection=0u;
-                            float3 hitWorld=PTNativeViewToWorld(secondPos.xyz);
+                            float3 hitWorld=hit2.worldPosition;
                             float3 worldDelta=hitWorld-PTNativeViewToWorld(firstPos.xyz);
                             float3 incoming=normalize(worldDelta);
                             float3 n=normal.xyz*rsqrt(n2);
                             if(dot(n,incoming)>0.0f)n=-n;
-                            uint packed=(uint)round(clamp(secondPos.w,0.0f,1023.0f));
-                            float2 uv=float2(packed&31u,(packed>>5u)&31u)/31.0f;
-                            float3 unusedDirect;
+                            float2 uv=hit2.uv;
+                            float3 secondRetained;
                             float3 radiance=PTNativeSecondHit(second,uv,secondPos.xyz,hitWorld,
-                                n,incoming,delta*rsqrt(d2),firstPos.xyz,pixel,true,1.0f,unusedDirect);
+                                n,incoming,delta*rsqrt(d2),firstPos.xyz,pixel,false,1.0f,secondRetained);
+                            // At vertex two, preserve diffuse GI/direct/emission, and
+                            // replace its indirect specular lobe only when hit three is valid.
+                            if(hit3.material<count&&hit3.material<65534u){
+                                float3 thirdDelta=hit3.worldPosition-hitWorld;
+                                float thirdD2=dot(thirdDelta,thirdDelta);
+                                if(all(isfinite(hit3.worldPosition))&&thirdD2>1.0e-6f){
+                                    float3 incoming3=thirdDelta*rsqrt(thirdD2);
+                                    float3 normal3=PTUnpackNormal(hit3.packedNormal);
+                                    if(dot(normal3,incoming3)>0.0f)normal3=-normal3;
+                                    float3 view3=PTWorldToView(hit3.worldPosition);
+                                    float3 ignoredRetained;
+                                    float3 radiance3=PTNativeSecondHit(hit3.material,hit3.uv,view3,hit3.worldPosition,
+                                        normal3,incoming3,normalize(view3-secondPos.xyz),secondPos.xyz,pixel,false,1.0f,ignoredRetained);
+                                    float3 weight2=PTFirstHitThroughput(second,uv,n,-incoming,incoming3);
+                                    float3 candidate=secondRetained+weight2*radiance3;
+                                    if(all(isfinite(candidate)))radiance=max(candidate,0.0f);
+                                }
+                            }
                             float4 firstNormal=g_tNormal_TexcoordX.Load(int4(pixel,0,0));
                             float3 primaryView=PTPrimaryView(pixel);
                             float3 firstIncomingView=normalize(firstPos.xyz-primaryView);
