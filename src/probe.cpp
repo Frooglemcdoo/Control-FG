@@ -626,6 +626,8 @@ static std::atomic<unsigned long long> rrRayGenerationCount{0};
 static std::atomic<unsigned long long> rrRaytraceDispatchCount{0};
 static std::atomic<unsigned long long> ptReflectionDispatchCount{0};
 static std::atomic<unsigned long long> ptReflectionContextFailures{0};
+static std::atomic<unsigned long long> ptGlassMissBindCount{0};
+static std::atomic<unsigned long long> ptGlassHitGroupBindCount{0};
 static std::atomic<unsigned long long> ptReflectionMissBindCount{0};
 static std::atomic<unsigned long long> ptReflectionHitGroupBindCount{0};
 static void PTReflectionProbeCachedTechniqueOnce(HMODULE renderer,HMODULE d3d) noexcept;
@@ -687,6 +689,10 @@ static void HookRRSetMiss(int slot, const char* name) {
         if(n<=12 || (n%480)==0)
             Log("PT_REFLECTION_P05_MISS count=%llu slot=%d name=%s pipeline_arg0=%d pipeline_arg1=%d",n,slot,safeName,rrCurrentPipelineArg0,rrCurrentPipelineArg1);
     }
+    if(strcmp(rrCurrentRayGeneration,"transparentRayGeneration")==0) {
+        const auto n=++ptGlassMissBindCount;
+        if(n<=16) Log("PT_GLASS_MISS count=%llu slot=%d name=%s pipeline_arg0=%d pipeline_arg1=%d native_passthrough=1",n,slot,safeName,rrCurrentPipelineArg0,rrCurrentPipelineArg1);
+    }
     originalRRSetMiss(slot,name);
 }
 
@@ -700,6 +706,10 @@ static void HookRRSetHitGroup(int rayType,int geometryType,const char* intersect
         if(n<=24 || (n%960)==0)
             Log("PT_REFLECTION_P05_HITGROUP count=%llu ray_type=%d geometry_type=%d intersection=%s anyhit=%s closesthit=%s pipeline_arg0=%d pipeline_arg1=%d",
                 n,rayType,geometryType,i,a,c,rrCurrentPipelineArg0,rrCurrentPipelineArg1);
+    }
+    if(strcmp(rrCurrentRayGeneration,"transparentRayGeneration")==0) {
+        const auto n=++ptGlassHitGroupBindCount;
+        if(n<=32) Log("PT_GLASS_HITGROUP count=%llu ray_type=%d geometry_type=%d intersection=%s anyhit=%s closesthit=%s native_passthrough=1",n,rayType,geometryType,i,a,c);
     }
     originalRRSetHitGroup(rayType,geometryType,intersection,anyHit,closestHit);
 }

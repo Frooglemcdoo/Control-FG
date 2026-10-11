@@ -474,6 +474,8 @@ static void* PTReflectionHookTechniqueLookup(void* rfx,const char* technique) {
     return result;
 }
 
+#include "pt_glass_capture.h"
+
 static const char* PTReflectionHookShaderStorageGet(int id) {
     if(id==kPTReflectionP2RaySyntheticStorageId&&ptReflectionP2InjectionEnabled&&
        ptReflectionP2Loaded&&!ptReflectionP2Bytes.empty()){
@@ -502,7 +504,9 @@ static const char* PTReflectionHookShaderStorageGet(int id) {
                 ptReflectionP1Bytes.data(),ptReflectionP1Sha256);
         return reinterpret_cast<const char*>(ptReflectionP1Bytes.data());
     }
-    return ptReflectionOriginalStorageGet?ptReflectionOriginalStorageGet(id):nullptr;
+    const char* resident=ptReflectionOriginalStorageGet?ptReflectionOriginalStorageGet(id):nullptr;
+    PTGlassCaptureResident(id,resident);
+    return resident;
 }
 
 static void PTReflectionLogNativeRecordMap(void* nativeShader) noexcept {

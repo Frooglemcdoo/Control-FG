@@ -2,7 +2,7 @@
 [CmdletBinding()]
 param([string]$LogDirectory='', [string]$ProjectDirectory='', [string]$OutputDirectory='')
 $ErrorActionPreference='Stop'
-$script:remaining=10MB
+$script:remaining=24MB # Diagnostic capture budget; bytecode records are bounded in the DLL.
 $script:records=New-Object 'System.Collections.Generic.List[object]'
 $script:notes=New-Object 'System.Collections.Generic.List[string]'
 function Resolve-CollectorDirectory([string]$Path,[string]$Default,[string]$Label) {
@@ -105,6 +105,30 @@ try {
     $zip=Join-Path $OutputDirectory ('Control-FG-Compact-Logs-'+(Get-Date -Format 'yyyyMMdd-HHmmss')+'-'+$suffix+'.zip')
     try {
         [void][IO.Directory]::CreateDirectory($script:stage)
+        # Preserve glass records before compacting startup/middle log sections.
+        foreach ($file in $logs) {
+            $capture=Join-Path ([IO.Path]::GetTempPath()) ('ControlFG-Glass-'+$suffix+'-'+$file.BaseName+'.log')
+            $reader=$null; $writer=$null
+            try {
+                $reader=New-Object IO.StreamReader($file.FullName)
+                $writer=New-Object IO.StreamWriter($capture,$false,[Text.Encoding]::UTF8)
+                [long]$captureChars=0
+                while ($null -ne ($line=$reader.ReadLine())) {
+                    if ($line.Contains('PT_GLASS_')) {
+                        $captureChars += $line.Length+2
+                        if ($captureChars -gt 10MB) { throw 'Glass capture exceeds diagnostic budget.' }
+                        $writer.WriteLine($line)
+                    }
+                }
+                $writer.Dispose(); $writer=$null
+                if ($captureChars -gt 0) { Copy-CompactFile (Get-Item -LiteralPath $capture) ('glass/'+$file.BaseName+'.log') 10MB }
+            } catch { $script:notes.Add(('Glass capture unavailable: '+$_.Exception.Message)) }
+            finally {
+                if ($null -ne $reader) { $reader.Dispose() }
+                if ($null -ne $writer) { $writer.Dispose() }
+                if (Test-Path -LiteralPath $capture) { Remove-Item -LiteralPath $capture -Force }
+            }
+        }
         foreach ($file in $logs) { Copy-CompactFile $file ('probe/'+$file.Name) 3MB $true }
         $summaryScript=Join-Path $PSScriptRoot 'Summarize-ControlFG-Performance.ps1'
         if (Test-Path -LiteralPath $summaryScript -PathType Leaf) {
@@ -155,7 +179,7 @@ try {
             if (Test-RegularFile $settings) { Copy-CompactFile $settings 'package/settings.ini' 64KB }
         }
         if (-not @($script:records | Where-Object { $_.File -like 'probe/*' }).Count) { throw 'No probe log could be copied.' }
-        $script:notes.Add('Release support bundle: probe logs, performance summary, Streamline logs, settings, installation/build validation, and ReShade logs when present. the build transcript, SDK staging metadata, retired RR capture metadata, raw images, shader bytecode, videos and DLLs are excluded.')
+        $script:notes.Add('Release support bundle: probe logs, performance summary, Streamline logs, settings, installation/build validation, and ReShade logs when present. the build transcript, SDK staging metadata, retired RR capture metadata, raw images, videos and DLLs are excluded. This diagnostic collector includes bounded PT_GLASS shader capture records.')
         [ordered]@{Schema='ControlFG.CompactLogs.v2';Version=$version;CollectedUtc=[DateTime]::UtcNow.ToString('o');ProbeLogs=@($logs.Name);MatchingProcessIds=@($runPids.Keys);DataLimitBytes=10MB;IncludedDataBytes=(10MB-$script:remaining);RawImagesIncluded=$false;Files=@($script:records.ToArray());Notes=@($script:notes.ToArray())} |
             ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $script:stage 'collection-report.json') -Encoding UTF8
         Compress-Archive -Path (Join-Path $script:stage '*') -DestinationPath $zip -CompressionLevel Optimal

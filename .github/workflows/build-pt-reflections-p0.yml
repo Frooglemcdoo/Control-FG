@@ -21,6 +21,7 @@ on:
       - experiment/pt-bounce-energy
       - experiment/pt-preserve-diffuse
       - experiment/pt-sharper-materials
+      - experiment/pt-glass-capture
   workflow_dispatch:
   pull_request:
     branches:
@@ -94,6 +95,15 @@ jobs:
           set "RC_RESULT=%ERRORLEVEL%"
           popd
           if not "%RC_RESULT%"=="0" exit /b %RC_RESULT%
+
+      - name: Check glass capture parser
+        shell: cmd
+        run: |
+          call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-pt-glass-capture.cpp /Febuild\test-pt-glass-capture.exe
+          if errorlevel 1 exit /b 1
+          build\test-pt-glass-capture.exe
+          if errorlevel 1 exit /b 1
 
       - name: Check specular energy and diffuse preservation
         run: python tools/test-pt-specular-preservation.py
@@ -207,31 +217,24 @@ jobs:
           Copy-Item build/pt_reflection_p2_verify.dxbc "$out/pt_reflection_p2_verify.dxbc"
           Copy-Item build/pt_reflection_p2_local_light_probe.dxbc "$out/pt_reflection_p2_local_light_probe.dxbc"
           Copy-Item build/pt_reflection_p2_diffuse_bridge.dxbc "$out/pt_reflection_p2_diffuse_bridge.dxbc"
+          Copy-Item Collect-ControlFG-Compact-Logs.ps1 "$out/Collect-ControlFG-Compact-Logs.ps1"
+          Copy-Item Collect-ControlFG-Compact-Logs.cmd "$out/Collect-ControlFG-Compact-Logs.cmd"
           @'
-          CONTROL-FG - SHARPER SECONDARY MATERIALS S1
-          ==========================================
+          CONTROL-FG - GLASS SHADER CAPTURE C1
+          ===================================
+          Diagnostic prerequisite, NOT a reflection quality fix.
           Close Control and replace all seven binaries beside Control_DX12.exe.
-          Based on the user-confirmed two-bounce diffuse-preservation package.
-          No third bounce. DLL/runtime unchanged from that confirmed source.
+          All six shader binaries are unchanged from Sharper Materials S1.
+          No third bounce. Native/PT rendering behavior remains S1.
+          The DLL observes glass shader bytes through the existing loading hook.
+          It does not replace the glass shader or add pipeline/command-list hooks.
 
-          Second-hit UVs now use individual half-float channels instead of
-          packing two 5-bit coordinates into one channel. The secondary normal
-          uses octahedral encoding to make room, with the same two texture layers.
-          Texture filtering now accounts for a 2048-step UV precision floor,
-          replacing the previous 31-step floor. Textures up to 2048 use mip 0;
-          larger textures retain a conservative mip floor to reduce aliasing.
-          First-hit encoding, primary sampling, lighting and diffuse preservation
-          are unchanged. No new GPU allocations, roots or pipeline hooks.
-
-          Compare reflected surface patterns, paint and fine material detail
-          against the confirmed two-bounce package in the same scene.
-          This targets material detail in the second-bounce contribution, not
-          sharper geometry, mirror-like rough surfaces, or added bounce count.
-          More detailed texture sampling can reveal shimmer; check camera motion.
-          F10 PT toggle and F11 diagnostics are unchanged.
-          Keep the confirmed package for rollback. Send logs and a comparison.
-
-          Windows compilation and encoding checks cannot validate in-game visuals.
+          Load the glass scene and play for approximately 20 seconds, then exit.
+          Run the INCLUDED Collect-ControlFG-Compact-Logs.cmd and send its ZIP.
+          This collector preserves glass records that the old collector can trim.
+          F10 PT toggle and F11 diagnostics remain unchanged; no F11 test needed.
+          We need the capture to implement native-detail preservation and glass
+          integration against the actual shader bindings, without guessing.
           '@ | Set-Content "$out/README.txt" -Encoding ASCII
           Compress-Archive -Path "$out/*" -DestinationPath "$out.zip" -Force
           (Get-FileHash "$out.zip" -Algorithm SHA256).Hash | Set-Content "$out.sha256" -Encoding ASCII
