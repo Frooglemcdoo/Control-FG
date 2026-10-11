@@ -408,6 +408,8 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
 
     float3 bounce2=0.0f;
     float totalWeight=0.0f;
+    uint rejection=1u; // red=first hit; magenta=second; yellow=normal; cyan=segment
+
 
     // Native first reflection uses layer 0; layer 1 stores the
     // true second hit with native material sentinel 65534.
@@ -418,22 +420,28 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
         uint secondLayer=1u;
 
         uint firstMaterial=g_tMaterialId.Load(int4(pixel,firstLayer,0));
-        if(firstMaterial>=65534u||firstMaterial>=g_uMaterialIDCount)continue;
+        if(firstMaterial>=65534u)continue;
+        if(firstMaterial>=g_uMaterialIDCount){rejection=5u;continue;}
 
+        rejection=2u;
         float4 firstPosPacked=g_tPosition_TexcoordY.Load(int4(pixel,firstLayer,0));
         float4 secondPosPacked=g_tPosition_TexcoordY.Load(int4(pixel,secondLayer,0));
         float4 secondNormalPacked=g_tNormal_TexcoordX.Load(int4(pixel,secondLayer,0));
         uint secondMaterial=PTDecodeSecondaryMaterial(secondNormalPacked.w);
-        if(secondMaterial>=65534u||secondMaterial>=g_uMaterialIDCount)continue;
+        if(secondMaterial>=65534u)continue;
+        if(secondMaterial>=g_uMaterialIDCount){rejection=5u;continue;}
+        rejection=3u;
         float normalLength2=dot(secondNormalPacked.xyz,secondNormalPacked.xyz);
         if(!all(isfinite(secondNormalPacked.xyz))||
            !isfinite(normalLength2)||normalLength2<1.0e-6f)continue;
 
+        rejection=4u;
         float3 firstWorld=PTViewToWorldPoint(firstPosPacked.xyz);
         float3 secondWorld=PTViewToWorldPoint(secondPosPacked.xyz);
         float3 segment=secondWorld-firstWorld;
         float segmentLength2=dot(segment,segment);
         if(!isfinite(segmentLength2)||segmentLength2<1.0e-6f)continue;
+        rejection=0u;
         float3 incomingWorld=segment*rsqrt(segmentLength2);
 
         float firstSmoothness=PTSmoothness(firstMaterial);
@@ -464,9 +472,14 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
     const bool bottom=pixel.y>=halfH;
     if(!right&&!bottom)return;
     if(right&&!bottom){
-        g_rwtReflectionTarget[pixel]=
-            totalWeight>0.0f?float4(0.02f,6.0f,0.02f,1.0f):
-                             float4(6.0f,0.02f,5.0f,1.0f);
+        // Distinguish the exact gate that rejects secondary contribution.
+        float3 gateColor=rejection==0u?float3(0.02f,6.0f,0.02f):
+            rejection==1u?float3(6.0f,0.02f,0.02f):
+            rejection==2u?float3(6.0f,0.02f,5.0f):
+            rejection==3u?float3(6.0f,6.0f,0.02f):
+            rejection==4u?float3(0.02f,6.0f,6.0f):
+                          float3(6.0f,6.0f,6.0f);
+        g_rwtReflectionTarget[pixel]=float4(gateColor,1.0f);
         return;
     }
     const float3 unboundedRadiance=bounce2;
