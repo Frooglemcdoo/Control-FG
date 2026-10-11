@@ -704,6 +704,8 @@ static void HookRRSetHitGroup(int rayType,int geometryType,const char* intersect
     originalRRSetHitGroup(rayType,geometryType,intersection,anyHit,closestHit);
 }
 
+static void PTThirdPrepareRayCapture() noexcept;
+
 static void HookRRRaytrace(int a, int b) {
     const auto call = ++rrRaytraceDispatchCount;
     const bool sample = call <= 32 || (call % 240) == 0;
@@ -735,6 +737,7 @@ static void HookRRRaytrace(int a, int b) {
         }
         QueryPerformanceCounter(&before);
     }
+    if(ptReflection)PTThirdPrepareRayCapture();
     originalRRRaytrace(a, b);
     RRGuideTryCapture(aaCount.load(), rrCurrentRayGeneration);
     if (sample) {
