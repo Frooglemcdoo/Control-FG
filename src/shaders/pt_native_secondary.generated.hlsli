@@ -66,8 +66,9 @@ float PTNativeMaterialMip(uint index,bool quantized) {
 }
 float3 PTNativeSecondHit(uint materialId,float2 uv,float3 hitView,float3 hitWorld,
                         float3 normalWorld,float3 incomingWorld,float3 incomingView,
-                        float3 firstView,uint2 pixel,bool quantized,out float3 directEmission) {
-    directEmission=0.0f;
+                        float3 firstView,uint2 pixel,bool quantized,float lodNormalFactor,
+                        out float3 retainedLighting) {
+    retainedLighting=0.0f;
 
     uint4 r0=0u;
     uint4 r1=0u;
@@ -113,7 +114,7 @@ float3 PTNativeSecondHit(uint materialId,float2 uv,float3 hitView,float3 hitWorl
     uint4 r41=0u;
     uint4 r42=0u;
     r2=asuint(float4(firstView,1.0f));
-    r3.y=asuint(1.0f); // volume LOD uses actual segment distance
+    r3.y=asuint(lodNormalFactor);
     r5.w=materialId;
     r14.z=0u;
     r15=asuint(float4(hitWorld,1.0f));
@@ -926,7 +927,7 @@ float3 PTNativeSecondHit(uint materialId,float2 uv,float3 hitView,float3 hitWorl
     r20.xyz=(asuint(g_sMaterialTextureArray[NonUniformResourceIndex((r6.wwww).x-0u)].SampleLevel(g_sLinearWrap,asfloat(r30.xyxx).xy,PTNativeMaterialMip((r6.wwww).x,quantized)))).xyzw.xyz; // native dword 7163
     r19.xyz=(asuint((asfloat(r19.xyzx)*asfloat(r20.xyzx)))).xyz; // native dword 7178
     } // native dword 7185
-    directEmission=asfloat(r17.xyz)*asfloat(r16.xyz)+asfloat(r34.xyz)+asfloat(r19.xyz); // native dword 7186
+    retainedLighting=asfloat(r14.xyw)*asfloat(r16.xyz)+asfloat(r34.xyz)+asfloat(r19.xyz); // native dword 7186
     r14.xyw=(asuint(mad(asfloat(r14.xyxw),asfloat(r16.xyxz),asfloat(r15.xyxz)))).xyw; // native dword 7186
     r29.xyz=(asuint((asfloat(r19.xyzx)+asfloat(r14.xywx)))).xyz; // native dword 7195
     } // native dword 7202
