@@ -9,7 +9,7 @@ static ID3D12RootSignature* ptThirdRoot=nullptr;
 static ID3D12Resource* ptThirdHits=nullptr;
 static std::atomic<unsigned long long> ptThirdDispatches{0};
 static std::atomic<unsigned long long> ptThirdWrittenFrame{~0ull},ptThirdConsumed{0},ptThirdRawDispatches{0};
-static constexpr UINT64 kPTThirdBytes=8388608ull*64ull;
+static constexpr UINT64 kPTThirdBytes=8388608ull*96ull;
 
 struct PTThirdListState {
     ID3D12GraphicsCommandList* list=nullptr;
@@ -67,14 +67,17 @@ static ID3D12RootSignature* PTThirdGetRoot(ID3D12Device* device,ID3D12RootSignat
         const D3D12_VERSIONED_ROOT_SIGNATURE_DESC* original=nullptr;
         if(FAILED(hr)||!decoder||FAILED(decoder->GetRootSignatureDescAtVersion(D3D_ROOT_SIGNATURE_VERSION_1_1,&original)))throw 5;
         if(original->Desc_1_1.NumParameters!=8u)throw 6;
-        D3D12_ROOT_PARAMETER1 params[9]{};
+        D3D12_ROOT_PARAMETER1 params[10]{};
         memcpy(params,original->Desc_1_1.pParameters,8*sizeof(params[0]));
         params[8].ParameterType=D3D12_ROOT_PARAMETER_TYPE_UAV;
         params[8].ShaderVisibility=D3D12_SHADER_VISIBILITY_ALL;
         params[8].Descriptor.ShaderRegister=0;
         params[8].Descriptor.RegisterSpace=99;
         params[8].Descriptor.Flags=D3D12_ROOT_DESCRIPTOR_FLAG_DATA_VOLATILE;
-        auto desc=*original;desc.Desc_1_1.NumParameters=9;desc.Desc_1_1.pParameters=params;
+        params[9].ParameterType=D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
+        params[9].ShaderVisibility=D3D12_SHADER_VISIBILITY_ALL;
+        params[9].Constants={0,99,1};
+        auto desc=*original;desc.Desc_1_1.NumParameters=10;desc.Desc_1_1.pParameters=params;
         hr=encode(&desc,&blob,&errors);
         if(FAILED(hr)||!blob)throw 7;
         hr=device->CreateRootSignature(0,blob->GetBufferPointer(),blob->GetBufferSize(),__uuidof(ID3D12RootSignature),reinterpret_cast<void**>(&ptThirdRoot));
@@ -83,7 +86,7 @@ static ID3D12RootSignature* PTThirdGetRoot(ID3D12Device* device,ID3D12RootSignat
     if(errors)errors->Release();if(blob)blob->Release();if(decoder)decoder->Release();
     auto* result=ptThirdRoot;
     ReleaseSRWLockExclusive(&ptThirdLock);
-    Log("PT_THIRD_PRIVATE_ROOT ready=%u native=%p custom=%p hr=0x%08lX parameters=9 root_dwords=14 uav=u0_space99",unsigned(result!=nullptr),native,result,hr);
+    Log("PT_THIRD_PRIVATE_ROOT ready=%u native=%p custom=%p hr=0x%08lX parameters=10 root_dwords=15 uav=u0_space99",unsigned(result!=nullptr),native,result,hr);
     return result;
 }
 
@@ -101,7 +104,7 @@ static bool PTThirdEnsureBuffer(ID3D12Device* device) {
     if(ptThirdHits)ptThirdHits->SetName(L"Control-FG private secondary and third reflection hits");
     bool ready=ptThirdHits!=nullptr;
     ReleaseSRWLockExclusive(&ptThirdLock);
-    Log("PT_THIRD_PRIVATE_BUFFER ready=%u hr=0x%08lX bytes=%llu stride=32 records_per_pixel=2 resize_reallocation=0",unsigned(ready),hr,kPTThirdBytes);
+    Log("PT_THIRD_PRIVATE_BUFFER ready=%u hr=0x%08lX bytes=%llu stride=32 records_per_pixel=3 resize_reallocation=0",unsigned(ready),hr,kPTThirdBytes);
     return ready;
 }
 
@@ -194,13 +197,18 @@ static void STDMETHODCALLTYPE PTThirdHookDispatch(ID3D12GraphicsCommandList4* li
         additional.RayGenerationShaderRecord.StartAddress=s.extraRecord;
         additional.RayGenerationShaderRecord.SizeInBytes=D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES;
         // Hit/miss tables and their local-root records belong to this SAME state.
-        reinterpret_cast<PTThirdDispatchFn>(PTThirdOriginal(list,76))(list,&additional);
-        list->ResourceBarrier(1,&barrier);
+        // Native hit shaders do not publish UAV writes with shader barriers.
+        // Separate dispatches provide the required API memory boundary.
+        for(UINT stage=0;stage<4u;++stage){
+            list->SetComputeRoot32BitConstant(9,stage,0);
+            reinterpret_cast<PTThirdDispatchFn>(PTThirdOriginal(list,76))(list,&additional);
+            list->ResourceBarrier(1,&barrier);
+        }
         unsigned long long frame=~0ull;DWORD fault=0;
         if(!ReadEngineFrameSafe(&frame,&fault))frame=~0ull;
         ptThirdWrittenFrame.store(frame);
         auto call=ptThirdDispatches.fetch_add(1)+1;
-        if(call<=4||(call%240)==0)Log("PT_THIRD_DISPATCH call=%llu ready=1 width=%u height=%u native_first=1 extra_pass=1 native_layers_restored=1",call,desc->Width,desc->Height);
+        if(call<=4||(call%240)==0)Log("PT_THIRD_DISPATCH call=%llu ready=1 width=%u height=%u native_first=1 extra_stages=4 native_layers_restored=1",call,desc->Width,desc->Height);
     }
     PTThirdBind(list,s,false);
     if(raw<=8||(raw%960)==0)Log("PT_NATIVE_PRESERVED_DISPATCH native=1 extra=%u root_restored=1",unsigned(extra));
