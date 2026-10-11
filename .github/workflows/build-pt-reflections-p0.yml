@@ -24,6 +24,7 @@ on:
       - experiment/pt-third-bounce
       - experiment/pt-third-bounce-hook-fix
       - experiment/pt-third-bounce-freshness
+      - experiment/pt-third-bounce-chain-fix
   workflow_dispatch:
   pull_request:
     branches:
@@ -218,27 +219,25 @@ jobs:
           Copy-Item build/pt_reflection_p2_local_light_probe.dxbc "$out/pt_reflection_p2_local_light_probe.dxbc"
           Copy-Item build/pt_reflection_p2_diffuse_bridge.dxbc "$out/pt_reflection_p2_diffuse_bridge.dxbc"
           @'
-          CONTROL-FG - THREE-BOUNCE FRESHNESS FIX 3
+          CONTROL-FG - THREE-BOUNCE HOOK CHAIN FIX 4
           =======================================
           Experimental Steam DX12 build for the captured native root layout.
           Close Control and replace ALL SEVEN binaries beside Control_DX12.exe.
           Existing F10 PT ON/OFF comparison remains available.
 
-          FLICKER / COLORED-SPARKLE FIX:
-          Private hits must have a captured producer in the current engine frame.
-          Each producer is consumed once; stale data leaves native reflections intact.
-          Rechecks command-list hooks at each engine reflection dispatch boundary.
-          Repairs replaced dispatch entries and logs actual producer/consumer counts.
-          If fresh capture fails, third-bounce compositing is skipped and logged.
-          The six shaders remain unchanged to isolate the capture/lifetime failure.
+          CRASH FIX:
+          Removes live hook replacement that could recurse through the RR clamp.
+          Original method pointers are immutable after installation.
+          Existing wrappers remain at the top of their hook chains.
+          Reflection-boundary checks only log; they do not modify vtables.
 
-          BLACK-SCREEN FIX:
-          Captures direct and compute command-list implementations separately.
-          Replays each implementation through its own original methods.
-          Custom ray pipeline requires direct capture and no setup failures.
-          The six shader binaries are unchanged from the first three-bounce test.
-          This corrects the capture failure seen before GPU device removal.
-          In-game validation is still required.
+          STALE DATA GUARD:
+          Private hits need a captured producer in the current engine frame.
+          Each producer is consumed once; stale data leaves native reflections intact.
+          If capture loses the third-bounce tag, compositing is skipped and logged.
+          Added state-binding logs to diagnose that remaining issue.
+          Six shaders are unchanged. This is a crash correction, not confirmation
+          that continuous three-bounce rendering is fixed.
 
           THREE BOUNCES:
           First reflection hit remains in native layer 0.
