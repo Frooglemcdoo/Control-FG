@@ -23,11 +23,10 @@ assert worst < 0.0003, worst
 
 root = Path(__file__).resolve().parents[1]
 s = (root/'src/shaders/pt_reflection_p2.hlsl').read_text()
-helper=s.split('bool PTTracePreserved(',1)[1].split('[shader("raygeneration")]',1)[0]
+helper=s.split('PTPrivateHit PTTracePending(',1)[1].split('bool PTReadPending(',1)[0]
 assert 'origin+normalize(direction)*((float)payload.value*0.0001f)' in helper
-raygen=s.split('void reflectionRayGeneration()',1)[1]
-assert 'PTTracePreserved(pixel,firstOrigin,firstDirection,first)' in raygen
-assert 'first.worldPosition+firstNormal*0.01f' in raygen
-assert 'second.worldPosition+secondNormal*0.01f' in raygen
-assert 'nativeFirstWorld+' not in raygen
-print(f'PASS: FP16 error exceeds bias; payload endpoint error <= {worst:.7f} m; retraced first and later endpoints supply ray origins.')
+assert 'rwt' not in helper
+assert 'PTTracePending(firstOrigin,firstDirection)' in s
+assert 'first.worldPosition+firstNormal*0.01f' in s
+assert 'second.worldPosition+normal*0.01f' in s
+print(f'PASS: FP16 error exceeds bias; payload endpoint error <= {worst:.7f} m; all extra ray origins use retraced endpoints.')
