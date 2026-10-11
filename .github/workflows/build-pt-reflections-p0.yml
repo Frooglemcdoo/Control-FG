@@ -15,6 +15,7 @@ on:
       - experiment/pt-secondary-material-filter
       - experiment/pt-hit-uav-coherence
       - experiment/pt-hit-rejection-diagnostic
+      - experiment/pt-material-buffer-bounds
   workflow_dispatch:
   pull_request:
     branches:
@@ -196,21 +197,18 @@ jobs:
           Copy-Item build/pt_reflection_p2_local_light_probe.dxbc "$out/pt_reflection_p2_local_light_probe.dxbc"
           Copy-Item build/pt_reflection_p2_diffuse_bridge.dxbc "$out/pt_reflection_p2_diffuse_bridge.dxbc"
           @'
-          CONTROL-FG - P2 HIT REJECTION DIAGNOSTIC
+          CONTROL-FG - P2 MATERIAL BUFFER BOUNDS FIX
           ================================================
-          EXPERIMENTAL STEAM DX12 TEST. NOT A FLICKER FIX.
-          Branch: experiment/pt-hit-rejection-diagnostic
-          Normal mode and ray tracing are unchanged from the coherence test.
-          From normal mode press F11 ONCE and record 10 seconds.
-          Top-right color now identifies the failed gate:
-          RED: first hit missing.
-          MAGENTA: second hit missing or unencodable.
-          YELLOW: second-hit normal invalid.
-          CYAN: first-to-second position segment invalid.
-          WHITE: material ID outside the current material count.
-          GREEN: all gates accepted.
-          Watch the color of the intermittent whole-view flash.
-          Other diagnostic quadrants retain their previous meanings.
+          EXPERIMENTAL STEAM DX12 TEST.
+          Branch: experiment/pt-material-buffer-bounds
+          The rejection diagnostic flashed WHITE during the lighting dropout:
+          material bounds rejected hit IDs. The prior shader trusted b6+12,
+          a constant not consumed by the native deferred shader.
+          This build queries the bound t4 material buffer size directly and
+          validates its 336-byte stride. All three composite variants use it.
+          Ray tracing and the coherency fix are unchanged.
+          Test NORMAL MODE first. F11 diagnostics remain available.
+          In-game flicker resolution remains to be verified.
           Copy ALL SEVEN binaries beside Control_DX12.exe, backing up old ones.
 
           ROOT CAUSE:
