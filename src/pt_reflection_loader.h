@@ -1353,6 +1353,71 @@ static bool PTReflectionInsertReflectionUavBarrier() noexcept {
     return good;
 }
 
+// Renderer ShaderTexture identities from the hash-locked native bind asm.
+// The source buffer pair was independently captured as EXACTLY two layers
+// by the RR reflection capture. Check material, normal and position live
+// GPU resources rather than assuming that the additional layers exist.
+static std::atomic<unsigned int> ptReflectionTwoLayerContract{0u};
+static std::atomic<unsigned int> ptReflectionTwoLayerAttempts{0u};
+static bool PTReflectionAuditTwoLayerHitTextures() noexcept {
+    const unsigned state=ptReflectionTwoLayerContract.load(std::memory_order_acquire);
+    if(state==1u)return true;
+    if(state==2u)return false;
+    constexpr std::uintptr_t kMaterial=0x1291888u;
+    constexpr std::uintptr_t kNormal=0x12918B0u;
+    constexpr std::uintptr_t kPosition=0x12918D8u;
+    using Getter=void* (*)(void*);
+    Getter get=reinterpret_cast<Getter>(
+        verifiedD3d?GetProcAddress(verifiedD3d,kRRGetNativeTextureSymbol):nullptr);
+    const unsigned attempt=ptReflectionTwoLayerAttempts.fetch_add(1u,std::memory_order_relaxed)+1u;
+    if(!verifiedRenderer||!get)return false;
+    D3D12_RESOURCE_DESC descriptions[3]{};
+    bool known[3]{};
+    DWORD faults[3]{};
+    const std::uintptr_t offsets[3]{kMaterial,kNormal,kPosition};
+    for(unsigned i=0u;i<3u;++i){
+        void* wrapper=nullptr;
+        __try {
+            wrapper=get(reinterpret_cast<unsigned char*>(verifiedRenderer)+offsets[i]);
+        } __except(EXCEPTION_EXECUTE_HANDLER) {faults[i]=GetExceptionCode();}
+        void* raw=nullptr;
+        if(wrapper)
+            known[i]=Describe(wrapper,&raw,&descriptions[i],&faults[i])&&raw!=nullptr;
+    }
+    if(!known[0]||!known[1]||!known[2]){
+        if(attempt<=4u || (attempt%240u)==0u)
+            Log("PT_REFLECTION_P2_TWO_LAYER_CONTRACT pending=1 attempt=%u material_found=%u normal_found=%u position_found=%u faults=0x%08lX_0x%08lX_0x%08lX",
+                attempt,unsigned(known[0]),unsigned(known[1]),unsigned(known[2]),
+                faults[0],faults[1],faults[2]);
+        return false;
+    }
+    const auto& m=descriptions[0];
+    const auto& n=descriptions[1];
+    const auto& p=descriptions[2];
+    const bool valid=
+        m.Dimension==D3D12_RESOURCE_DIMENSION_TEXTURE2D&&
+        n.Dimension==D3D12_RESOURCE_DIMENSION_TEXTURE2D&&
+        p.Dimension==D3D12_RESOURCE_DIMENSION_TEXTURE2D&&
+        m.Format==DXGI_FORMAT_R16_UINT&&
+        n.Format==DXGI_FORMAT_R16G16B16A16_FLOAT&&
+        p.Format==DXGI_FORMAT_R16G16B16A16_FLOAT&&
+        m.DepthOrArraySize==2u&&n.DepthOrArraySize==2u&&p.DepthOrArraySize==2u&&
+        m.Width==n.Width&&n.Width==p.Width&&
+        m.Height==n.Height&&n.Height==p.Height&&
+        m.SampleDesc.Count==1u&&n.SampleDesc.Count==1u&&p.SampleDesc.Count==1u;
+    ptReflectionTwoLayerContract.store(valid?1u:2u,std::memory_order_release);
+    Log("PT_REFLECTION_P2_TWO_LAYER_CONTRACT ready=%u result=%s layout=native_first_layer_0_secondary_layer_1 material_layers=%u normal_layers=%u position_layers=%u material_format=%u normal_format=%u position_format=%u width=%llu height=%u second_id_encoding=fp16_numeric_0_to_2047 uv_encoding=numeric_5x5 native_first_samples=1",
+        unsigned(valid),valid?"pass":"incompatible_resource_shape",
+        unsigned(m.DepthOrArraySize),unsigned(n.DepthOrArraySize),
+        unsigned(p.DepthOrArraySize),unsigned(m.Format),unsigned(n.Format),
+        unsigned(p.Format),static_cast<unsigned long long>(m.Width),m.Height);
+    if(!valid){
+        ptReflectionP2InjectionEnabled=false;
+        Log("PT_REFLECTION_P2_DISABLE reason=two_layer_contract_mismatch fallback=native");
+    }
+    return valid;
+}
+
 static void PTReflectionHookDeferredDispatch(void* state,const void* dimensions) {
     if(!ptReflectionOriginalDispatch)return;
     ptReflectionAwaitingCompositeBind=false;
@@ -1361,6 +1426,7 @@ static void PTReflectionHookDeferredDispatch(void* state,const void* dimensions)
     ptReflectionOriginalDispatch(state,dimensions);
 
     if(!ptReflectionP2InjectionEnabled)return;
+    if(!PTReflectionAuditTwoLayerHitTextures())return;
 
     // F11 advances on key-down edge only. No overlay, screen-size changes or
     // tool dependency. Only this experimental test DLL reads the key.
@@ -1900,8 +1966,11 @@ static bool PTReflectionInstallShaderLookupHooks(HMODULE renderer,HMODULE d3d) n
     ptReflectionP2CompositePso=nullptr;
     ptReflectionP2VerifyPso=nullptr;
     ptReflectionP2LocalLightProbePso=nullptr;
+    ptReflectionTwoLayerContract.store(0u,std::memory_order_release);
+    ptReflectionTwoLayerAttempts.store(0u,std::memory_order_release);
     ptReflectionVerifyMode.store(0u,std::memory_order_release);
     ptReflectionVerifyKeyDown.store(0u,std::memory_order_release);
+    Log("PT_REFLECTION_TWO_LAYER_PROOF_CONFIG ray_paths=1 first_layer=0 second_layer=1 native_material_sentinel=65534 secondary_id_storage=numeric_half secondary_uv_storage=numeric_5bit_each native_first_sample_tradeoff=1 experimental=1");
     Log("PT_REFLECTION_VERIFY_INIT mode=0 hotkey=F11 cycle=normal,composite_quadrants,diffuse_gi_native_copy_proof,native_point_light_probe verify_sidecar=%u local_probe_sidecar=%u",
         unsigned(ptReflectionP2VerifyLoaded),unsigned(ptReflectionP2LocalLightProbeLoaded));
     ptReflectionCompositeRoot=nullptr;
