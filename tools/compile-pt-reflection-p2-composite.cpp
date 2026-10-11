@@ -69,7 +69,9 @@ int main() {
     ok=ok&&Binding(r,"sys_constants",D3D_SIT_CBUFFER,0,0);
     if(diagnostic!=2u)
         ok=ok&&Binding(r,"env_general",D3D_SIT_CBUFFER,2,0);
-    if(diagnostic!=2u)ok=ok&&Binding(r,"rtreflection",D3D_SIT_CBUFFER,6,0);
+    // Only normal mode uses the native intensity clamp; diagnostics no longer
+    // reference b6 after replacing the unused material-count field.
+    if(diagnostic==0u)ok=ok&&Binding(r,"rtreflection",D3D_SIT_CBUFFER,6,0);
     if(diagnostic!=2u){
         ok=ok&&Variable(r,"sys_constants","g_mViewToWorld",96,64);
         ok=ok&&Variable(r,"env_general","g_fEnvReflectionMipCount",4,4);
