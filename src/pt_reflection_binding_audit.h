@@ -85,9 +85,12 @@ static HRESULT STDMETHODCALLTYPE PTAuditHookCreateRoot(ID3D12Device* device,UINT
     return hr;
 }
 
+static HRESULT PTThirdCreateState(ID3D12Device5*,const D3D12_STATE_OBJECT_DESC*,REFIID,void**);
+static void PTThirdInstallDevice(ID3D12Device*);
+
 static HRESULT STDMETHODCALLTYPE PTAuditHookCreateState(ID3D12Device5* device,
     const D3D12_STATE_OBJECT_DESC* desc,REFIID iid,void** out) {
-    const HRESULT hr=ptAuditCreateState(device,desc,iid,out);
+    const HRESULT hr=PTThirdCreateState(device,desc,iid,out);
     // State creation uses the same unmodified descriptor, even on audit failure.
     try {
         bool target=false;
@@ -116,7 +119,7 @@ static HRESULT STDMETHODCALLTYPE PTAuditHookCreateState(ID3D12Device5* device,
             }
             const unsigned state=ptAuditStates.fetch_add(1)+1u;
             if(state<=8u){
-                Log("PT_THIRD_STATE state=%u hr=0x%08lX object=%p type=%u subobjects=%u third_bounce_enabled=0 gpu_mutation=0",state,hr,(out?*out:nullptr),unsigned(desc->Type),desc->NumSubobjects);
+                Log("PT_THIRD_STATE state=%u hr=0x%08lX object=%p type=%u subobjects=%u third_bounce_requested=1",state,hr,(out?*out:nullptr),unsigned(desc->Type),desc->NumSubobjects);
                 for(UINT i=0;i<desc->NumSubobjects;++i){
                     const auto& s=desc->pSubobjects[i];if(!s.pDesc)continue;
                     if(s.Type==D3D12_STATE_SUBOBJECT_TYPE_GLOBAL_ROOT_SIGNATURE)
@@ -163,5 +166,6 @@ static void PTAuditInstall(ID3D12Device* device) {
         rayDevice->Release();
     }
     ReleaseSRWLockExclusive(&ptAuditInstallLock);
-    Log("PT_THIRD_AUDIT_INSTALL root_capture=%u state_capture=%u third_bounce_enabled=0 gpu_mutation=0",unsigned(rootReady),unsigned(rayReady));
+    PTThirdInstallDevice(device);
+    Log("PT_THIRD_AUDIT_INSTALL root_capture=%u state_capture=%u third_bounce_requested=1",unsigned(rootReady),unsigned(rayReady));
 }
