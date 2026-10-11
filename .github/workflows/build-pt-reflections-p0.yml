@@ -26,6 +26,7 @@ on:
       - experiment/pt-third-bounce-freshness
       - experiment/pt-third-bounce-chain-fix
       - experiment/pt-third-bounce-pipeline-rebuild
+      - experiment/pt-native-preserved-extra-pass
   workflow_dispatch:
   pull_request:
     branches:
