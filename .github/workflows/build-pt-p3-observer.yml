@@ -63,6 +63,21 @@ jobs:
           rc /nologo /fo ..\build\control_fg_logo.res control_fg_logo.rc
           if errorlevel 1 exit /b 4
           popd
+          rem v2.1.2 embeds generated shader bytecode headers during the proxy build.
+          for %%N in (distance live skin-mask reflectance fg-ui-alpha) do (
+            cl /nologo /std:c++17 /EHsc /W4 /O2 /MT tools\compile-%%N.cpp /Fobuild\compile-%%N.obj /Febuild\compile-%%N.exe /link d3dcompiler.lib
+            if errorlevel 1 exit /b 10
+            build\compile-%%N.exe
+            if errorlevel 1 exit /b 11
+          )
+          cl /nologo /std:c++17 /EHsc /W4 /O2 /MT tools\compile-clamp-strength.cpp /Fobuild\compile-clamp-strength.obj /Febuild\compile-clamp-strength.exe /link d3dcompiler.lib
+          if errorlevel 1 exit /b 12
+          for /l %%S in (25,1,75) do (
+            build\compile-clamp-strength.exe %%S
+            if errorlevel 1 exit /b 13
+          )
+          copy /y src\rr_clamp_variants.in.h build\rr_clamp_variants.h >nul
+          if errorlevel 1 exit /b 14
           cl /nologo /std:c++17 /EHsc /W4 /O2 /MT /LD /guard:cf /DUNICODE /D_UNICODE /I "third_party\streamline\include" src\probe.cpp build\control_fg_logo.res /Fobuild\probe.obj /Febuild\dxgi.dll /link /DEF:src\dxgi.def /INCREMENTAL:NO /DYNAMICBASE /NXCOMPAT /GUARD:CF bcrypt.lib wintrust.lib user32.lib gdi32.lib msimg32.lib
           if errorlevel 1 exit /b 5
           dumpbin /exports build\dxgi.dll > build\p3-exports.txt
