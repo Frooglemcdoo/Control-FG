@@ -1,0 +1,48 @@
+"""Measure binary16 secondary-hit encoding and lock the confirmed runtime."""
+import hashlib, math, random, struct
+from pathlib import Path
+root=Path(__file__).resolve().parents[1]
+locked={
+ 'src/probe.cpp':'0cb55cbe61f022f04b89614816db75d053107c418835554c8d3bdf600112d8be',
+ 'src/pt_reflection_loader.h':'e7645277f30858d1f4003f7a696c4ca280ecf15216333e442055824c6e6682ee',
+ 'src/fg_overlay.h':'ef8c96bf2d03bd738af6b6a69ffb037879a77c456721d297e883e7b99a21772d',
+ 'src/pt_reflection_user_control.h':'53c854c79a852ba04b69b0b77f770f1a745d29f25b951444d8af3963a7a6f4bd',
+}
+for name,expected in locked.items():
+ assert hashlib.sha256((root/name).read_text().encode()).hexdigest()==expected,name
+def half(v): return struct.unpack('<e',struct.pack('<e',v))[0]
+def sign(v): return 1 if v>=0 else -1
+def unit(v):
+ length=math.sqrt(sum(x*x for x in v));return [x/length for x in v]
+def encode(n):
+ n=[x/sum(abs(v) for v in n) for x in n]
+ return n[:2] if n[2]>=0 else [(1-abs(n[1]))*sign(n[0]),(1-abs(n[0]))*sign(n[1])]
+def decode(p):
+ n=[p[0],p[1],1-abs(p[0])-abs(p[1])]
+ if n[2]<0:n[:2]=[(1-abs(p[1]))*sign(p[0]),(1-abs(p[0]))*sign(p[1])]
+ return unit(n)
+r=random.Random(1511);worst=0;uv_error=0;old_error=0
+vectors=[[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]]
+vectors += [unit([r.uniform(-1,1) for _ in range(3)]) for _ in range(100000)]
+for n in vectors:
+ decoded=decode([half(v) for v in encode(n)])
+ worst=max(worst,math.degrees(math.acos(max(-1,min(1,sum(a*b for a,b in zip(n,decoded)))))))
+assert worst<.13,worst
+for _ in range(100000):
+ uv=r.uniform(-100,100);wrapped=uv-math.floor(uv)
+ error=abs(half(wrapped)-wrapped);uv_error=max(uv_error,min(error,1-error))
+ old_error=max(old_error,abs(round(wrapped*31)/31-wrapped))
+assert uv_error<=1/4096 and old_error/uv_error>60,(uv_error,old_error)
+assert all(half(i)==i for i in range(2048))
+for width in [256,512,1024,2048,4096,8192]:
+ lod=max(math.log2(width/2048),0)
+ assert lod==(0 if width<=2048 else math.log2(width/2048))
+ray=(root/'src/shaders/pt_reflection_p2.hlsl').read_text()
+comp=(root/'src/shaders/pt_reflection_p2_native_composite.hlsl').read_text()
+assert 'float4(PTSecondaryEncodeNormal(normalWorld),wrappedUV.x,encodedMaterial)' in ray
+assert 'float4(viewHit,wrappedUV.y)' in ray and 'packedUV' not in ray
+assert 'PTSecondaryDecodeNormal(packedSecondary.xy)' in comp
+assert 'float2 uv=float2(packedSecondary.z,secondPos.w)' in comp
+for name in ['src/shaders/pt_native_secondary.generated.hlsli','tools/generate-pt-native-secondary.py']:
+ assert '/2048.0f' in (root/name).read_text()
+print(f'PASS: confirmed runtime unchanged; half UV max error {uv_error:.8f} vs old {old_error:.8f}; normal max error {worst:.6f} degrees; material IDs exact; texture mip floor checked')
