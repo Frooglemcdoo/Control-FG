@@ -144,6 +144,7 @@ static std::atomic<unsigned long long> ptReflectionCompositeBindCaptures{0};
 
 
 #include "pt_reflection_binding_audit.h"
+#include "pt_reflection_third_runtime.h"
 
 static bool PTReflectionLoadSidecar(const wchar_t* fileName,const char* label,
     std::vector<unsigned char>& bytes,char (&sha)[65],bool& loaded) noexcept {
@@ -703,7 +704,8 @@ static bool PTReflectionCreateCapturedP2PsoLocked(ID3D12Device* device) noexcept
        !ptReflectionOriginalCreateComputePipelineState)return false;
 
     D3D12_COMPUTE_PIPELINE_STATE_DESC custom{};
-    custom.pRootSignature=ptReflectionCompositeRoot;
+    custom.pRootSignature=PTThirdGetRoot(device,ptReflectionCompositeRoot);
+    if(!custom.pRootSignature)return false;
     custom.CS.pShaderBytecode=ptReflectionP2CompositeBytes.data();
     custom.CS.BytecodeLength=ptReflectionP2CompositeBytes.size();
     custom.NodeMask=ptReflectionCompositeNodeMask;
@@ -897,6 +899,7 @@ static bool PTReflectionInstallComputePsoHook(HMODULE d3d) noexcept {
 
 static void STDMETHODCALLTYPE PTReflectionHookSetComputeRootSignature(
     ID3D12GraphicsCommandList* list,ID3D12RootSignature* root) {
+    PTThirdTrackRoot(list,root);
     if(ptReflectionAwaitingCompositeBind&&root){
         AcquireSRWLockExclusive(&ptReflectionCompositePsoLock);
         if(!ptReflectionCompositeRoot){
@@ -998,7 +1001,7 @@ static bool PTReflectionEnsureLiveCompositePso(ID3D12Device* device) noexcept {
     AcquireSRWLockExclusive(&ptReflectionCompositePsoLock);
     if(!ptReflectionP2CompositePso&&ptReflectionCompositeRoot&&ptReflectionNativeCompositePso){
         D3D12_COMPUTE_PIPELINE_STATE_DESC pd{};
-        pd.pRootSignature=ptReflectionCompositeRoot;
+        pd.pRootSignature=PTThirdGetRoot(device,ptReflectionCompositeRoot);
         pd.CS.pShaderBytecode=ptReflectionP2CompositeBytes.data();
         pd.CS.BytecodeLength=ptReflectionP2CompositeBytes.size();
         pd.NodeMask=0;
@@ -1530,6 +1533,11 @@ static void PTReflectionHookDeferredDispatch(void* state,const void* dimensions)
                 unsigned(ptReflectionP2LocalLightProbeLoaded));
         return;
     }
+    PTThirdListState savedRoot{};
+    if(!ptThirdHits||ptThirdDispatches.load()==0||!PTThirdSnapshot(list,&savedRoot)){
+        if(call<=16||(call%240)==0)Log("PT_THIRD_COMPOSITE ready=0 reason=private_ray_or_root_unavailable");
+        return;
+    }
     DWORD fault=0,restoreFault=0;
     bool dispatched=false,restored=false;
     __try {
@@ -1541,16 +1549,20 @@ static void PTReflectionHookDeferredDispatch(void* state,const void* dimensions)
         // Control's native composite just established the correct root signature,
         // descriptor heaps/tables, CBVs/SRVs/UAV and dimensions. Swap only the PSO.
         list->ResourceBarrier(1,&barrier);
+        PTThirdBarrier(list);
+        PTThirdBind(list,savedRoot,true);
         list->SetPipelineState(activeP2Pso);
         list->Dispatch(x,y,z);
         list->ResourceBarrier(1,&barrier);
         list->SetPipelineState(ptReflectionNativeCompositePso);
+        PTThirdBind(list,savedRoot,false);
         dispatched=true;
         restored=true;
     } __except(EXCEPTION_EXECUTE_HANDLER) {
         fault=GetExceptionCode();
         __try {
             list->SetPipelineState(ptReflectionNativeCompositePso);
+            PTThirdBind(list,savedRoot,false);
             restored=true;
         } __except(EXCEPTION_EXECUTE_HANDLER) {
             restoreFault=GetExceptionCode();
@@ -1984,6 +1996,7 @@ static bool PTReflectionInstallShaderLookupHooks(HMODULE renderer,HMODULE d3d) n
     ptReflectionTwoLayerAttempts.store(0u,std::memory_order_release);
     ptReflectionUserState.fetch_and(1u,std::memory_order_acq_rel);
     ptReflectionVerifyKeyDown.store(0u,std::memory_order_release);
+    Log("PT_THIRD_CONFIG bounces=3 private_records=2 hit_stride=32 buffer_mib=512 full_precision_uv=1 full_precision_position=1 native_arrays=2");
     Log("PT_REFLECTION_DIFFUSE_PRESERVATION native_diffuse_gi=1 native_direct_emission=1 specular_only_replacement=1 vndf_weight=F_G1 native_parity_gate=1");
     Log("PT_REFLECTION_NATIVE_SECONDARY_SHADING enabled=1 material_brdf=1 light_cells=1 point_shadow_atlas=1 spot_shadow_atlases=1 gi_volumes=1 native_shader_sha=4fc0a0e9cd3706bcb86e29444d86fa32616138e1712c53b1b5103b30d7a1ecc9");
     Log("PT_REFLECTION_MATERIAL_BOUNDS source=bound_t4_GetDimensions native_b6_count_ignored=1 expected_stride=336");
