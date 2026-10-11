@@ -234,10 +234,14 @@ void reflectionRayGeneration()
     [unroll]
     for(uint layer=0;layer<4;++layer) {
         g_rwtMaterialId[uint3(pixel,layer)]=65534u;
-        // P2 reserves layers 2/3 for secondary hits. normal.w carries the
-        // secondary material ID as raw uint bits for the post-composite pass.
-        if(layer>=2u)
-            g_rwtNormal_TexcoordX[uint3(pixel,layer)]=float4(0,0,1,asfloat(65534u));
+        // P2 layers 2/3 are sideband data, not native composite rays.
+        // A zero numeric normal.w is the INVALID secondary-hit sentinel.
+        // Never bit-cast an integer to float here: native floating UAVs
+        // may be FP16 and will flush such subnormal bit patterns to zero.
+        if(layer>=2u){
+            g_rwtNormal_TexcoordX[uint3(pixel,layer)]=float4(0,0,0,0);
+            g_rwtPosition_TexcoordY[uint3(pixel,layer)]=float4(0,0,0,0);
+        }
     }
 
     float3 primaryView,primaryWorld,normalWorld;
@@ -402,14 +406,25 @@ void reflectionClosestHit(inout HitData payload, in BuiltInTriangleIntersectionA
     float3 viewHit=PTWorldToViewPoint(worldHit);
 
     if(layer>=2u) {
-        // Do not let Control's stock deferred composite shade the secondary
-        // surface as an independent primary ray. Preserve its material ID in
-        // normal.w for the P2 add pass instead.
+        // Leave materialID[u0] as native sentinel to prevent the stock
+        // deferred reflection composite from shading this secondary ray
+        // as if it were an independent first bounce.
         g_rwtMaterialId[uint3(pixel,layer)]=65534u;
-        g_rwtNormal_TexcoordX[uint3(pixel,layer)]=float4(normalWorld,asfloat(uMaterialID));
-        uint2 uv16=(uint2)round(saturate(frac(texcoord))*65535.0f);
-        uint packedUv=(uv16.x&0xffffu)|((uv16.y&0xffffu)<<16u);
-        g_rwtPosition_TexcoordY[uint3(pixel,layer)]=float4(viewHit,asfloat(packedUv));
+        // Sideband material ID is losslessly split across two native
+        // floating channels as exact NUMERIC bytes (0..256).
+        // normal.w = (id low byte)+1; zero means MISS / NOT TRACED.
+        // position.w = id high byte. Both survive FP16 or FP32 storage.
+        // This deliberately replaces the old broken bit-cast UV packing;
+        // real secondary UVs require a separate validated resource later.
+        if(uMaterialID<65534u){
+            float materialLow=float((uMaterialID&255u)+1u);
+            float materialHigh=float((uMaterialID>>8u)&255u);
+            g_rwtNormal_TexcoordX[uint3(pixel,layer)]=float4(normalWorld,materialLow);
+            g_rwtPosition_TexcoordY[uint3(pixel,layer)]=float4(viewHit,materialHigh);
+        }else{
+            g_rwtNormal_TexcoordX[uint3(pixel,layer)]=float4(0,0,0,0);
+            g_rwtPosition_TexcoordY[uint3(pixel,layer)]=float4(0,0,0,0);
+        }
     } else {
         g_rwtMaterialId[uint3(pixel,layer)]=uMaterialID;
         g_rwtNormal_TexcoordX[uint3(pixel,layer)]=float4(normalWorld,texcoord.x);
@@ -441,7 +456,8 @@ void reflectionMiss(inout HitData payload)
     float3 worldEnd=WorldRayOrigin()+WorldRayDirection()*RayTCurrent();
     if(layer>=2u) {
         g_rwtMaterialId[uint3(pixel,layer)]=65534u;
-        g_rwtNormal_TexcoordX[uint3(pixel,layer)]=float4(0,0,1,asfloat(65535u));
+        // Miss and untraced use the SAME numeric 0/0 sentinel.
+        g_rwtNormal_TexcoordX[uint3(pixel,layer)]=float4(0,0,0,0);
     } else {
         g_rwtMaterialId[uint3(pixel,layer)]=65535u;
     }
