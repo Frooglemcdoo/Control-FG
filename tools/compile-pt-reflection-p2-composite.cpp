@@ -48,8 +48,10 @@ int main() {
     UINT x=0,y=0,z=0;
     r->GetThreadGroupSize(&x,&y,&z);
     bool ok=x==8&&y==16&&z==1;
-    ok=ok&&Binding(r,"g_sbMaterialDataPart3",D3D_SIT_STRUCTURED,4,0);
-    ok=ok&&Binding(r,"g_sEnvironmentCube",D3D_SIT_TEXTURE,8,0);
+    if(diagnostic!=2u){
+        ok=ok&&Binding(r,"g_sbMaterialDataPart3",D3D_SIT_STRUCTURED,4,0);
+        ok=ok&&Binding(r,"g_sEnvironmentCube",D3D_SIT_TEXTURE,8,0);
+    }
     D3D12_SHADER_INPUT_BIND_DESC materialTextures{};
     const bool materialTexturesPresent=
         SUCCEEDED(r->GetResourceBindingDescByName("g_sMaterialTextureArray",&materialTextures));
@@ -60,13 +62,17 @@ int main() {
     ok=ok&&Binding(r,"g_tMaterialId",D3D_SIT_TEXTURE,26,0);
     ok=ok&&Binding(r,"g_tNormal_TexcoordX",D3D_SIT_TEXTURE,27,0);
     ok=ok&&Binding(r,"g_tPosition_TexcoordY",D3D_SIT_TEXTURE,28,0);
-    ok=ok&&Binding(r,"g_sLinearWrap",D3D_SIT_SAMPLER,5,1);
+    if(diagnostic!=2u)
+        ok=ok&&Binding(r,"g_sLinearWrap",D3D_SIT_SAMPLER,5,1);
     ok=ok&&Binding(r,"g_rwtReflectionTarget",D3D_SIT_UAV_RWTYPED,0,0);
     ok=ok&&Binding(r,"sys_constants",D3D_SIT_CBUFFER,0,0);
-    ok=ok&&Binding(r,"env_general",D3D_SIT_CBUFFER,2,0);
+    if(diagnostic!=2u)
+        ok=ok&&Binding(r,"env_general",D3D_SIT_CBUFFER,2,0);
     ok=ok&&Binding(r,"rtreflection",D3D_SIT_CBUFFER,6,0);
-    ok=ok&&Variable(r,"sys_constants","g_mViewToWorld",96,64);
-    ok=ok&&Variable(r,"env_general","g_fEnvReflectionMipCount",4,4);
+    if(diagnostic!=2u){
+        ok=ok&&Variable(r,"sys_constants","g_mViewToWorld",96,64);
+        ok=ok&&Variable(r,"env_general","g_fEnvReflectionMipCount",4,4);
+    }
     ok=ok&&Variable(r,"rtreflection","g_uMaterialIDCount",12,4);
     if(diagnostic==2u){
         // The native shader RDEF identifies these exact bindings. Verify
