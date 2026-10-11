@@ -18,7 +18,6 @@ static bool PTGlassResidentIsCandidate(const char* resident, size_t available = 
         if (size < 32 || size > PTGlassCapture::kMaximumBytes || (available && size != available)) return false;
         return PTGlassCapture::IsGlassLibrary(b,size)||PTGlassCapture::IsHitLighting(b,size);
     } __except (EXCEPTION_EXECUTE_HANDLER) { return false; }
-    return false;
 }
 
 static void PTGlassCaptureBytes(int id, const char* resident, size_t available, const char* source) noexcept {
