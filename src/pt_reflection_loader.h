@@ -100,6 +100,9 @@ static bool ptReflectionP2CompositeLoaded=false;
 static std::vector<unsigned char> ptReflectionP2VerifyBytes;
 static char ptReflectionP2VerifySha256[65]{};
 static bool ptReflectionP2VerifyLoaded=false;
+static std::vector<unsigned char> ptReflectionP2LocalLightProbeBytes;
+static char ptReflectionP2LocalLightProbeSha256[65]{};
+static bool ptReflectionP2LocalLightProbeLoaded=false;
 static std::atomic<unsigned int> ptReflectionVerifyMode{0u};
 static std::atomic<unsigned int> ptReflectionVerifyKeyDown{0u};
 static std::vector<unsigned char> ptReflectionP2DiffuseBridgeBytes;
@@ -124,6 +127,7 @@ static void** ptReflectionCreateComputePipelineStateSlot=nullptr;
 static ID3D12PipelineState* ptReflectionNativeCompositePso=nullptr;
 static ID3D12PipelineState* ptReflectionP2CompositePso=nullptr;
 static ID3D12PipelineState* ptReflectionP2VerifyPso=nullptr;
+static ID3D12PipelineState* ptReflectionP2LocalLightProbePso=nullptr;
 static ID3D12RootSignature* ptReflectionCompositeRoot=nullptr;
 static UINT ptReflectionCompositeNodeMask=0;
 static D3D12_PIPELINE_STATE_FLAGS ptReflectionCompositeFlags=D3D12_PIPELINE_STATE_FLAG_NONE;
@@ -190,6 +194,11 @@ static bool PTReflectionLoadP2Sidecar() noexcept {
 static bool PTReflectionLoadP2VerifySidecar() noexcept {
     return PTReflectionLoadSidecar(L"pt_reflection_p2_verify.dxbc","P2_VERIFY",
         ptReflectionP2VerifyBytes,ptReflectionP2VerifySha256,ptReflectionP2VerifyLoaded);
+}
+static bool PTReflectionLoadP2LocalLightProbeSidecar() noexcept {
+    return PTReflectionLoadSidecar(L"pt_reflection_p2_local_light_probe.dxbc","P2_NATIVE_LIGHT_PROBE",
+        ptReflectionP2LocalLightProbeBytes,ptReflectionP2LocalLightProbeSha256,
+        ptReflectionP2LocalLightProbeLoaded);
 }
 static bool PTReflectionLoadP2CompositeSidecar() noexcept {
     const bool loaded=PTReflectionLoadSidecar(L"pt_reflection_p2_composite.dxbc","P2_COMPOSITE",
@@ -726,6 +735,22 @@ static bool PTReflectionCreateCapturedP2PsoLocked(ID3D12Device* device) noexcept
             unsigned(ptReflectionP2VerifyPso!=nullptr),static_cast<unsigned long>(verifyHr),
             ptReflectionP2VerifyPso,ptReflectionP2VerifySha256,
             static_cast<unsigned long long>(ptReflectionP2VerifyBytes.size()),
+            ptReflectionCompositeRoot);
+    }
+    if(ptReflectionP2LocalLightProbeLoaded&&!ptReflectionP2LocalLightProbeBytes.empty()){
+        D3D12_COMPUTE_PIPELINE_STATE_DESC local=custom;
+        local.CS.pShaderBytecode=ptReflectionP2LocalLightProbeBytes.data();
+        local.CS.BytecodeLength=ptReflectionP2LocalLightProbeBytes.size();
+        ID3D12PipelineState* localPso=nullptr;
+        const HRESULT localHr=ptReflectionOriginalCreateComputePipelineState(
+            device,&local,__uuidof(ID3D12PipelineState),
+            reinterpret_cast<void**>(&localPso));
+        if(SUCCEEDED(localHr)&&localPso)ptReflectionP2LocalLightProbePso=localPso;
+        Log("PT_REFLECTION_P2_NATIVE_LIGHT_PROBE_PSO ready=%u hr=0x%08lX pso=%p shader_sha256=%s bytes=%llu native_root=%p",
+            unsigned(ptReflectionP2LocalLightProbePso!=nullptr),
+            static_cast<unsigned long>(localHr),ptReflectionP2LocalLightProbePso,
+            ptReflectionP2LocalLightProbeSha256,
+            static_cast<unsigned long long>(ptReflectionP2LocalLightProbeBytes.size()),
             ptReflectionCompositeRoot);
     }
     Log("PT_REFLECTION_P2_PSO_CREATE ready=1 device=%p root=%p native_pso=%p p2_pso=%p p2_sha256=%s p2_bytes=%llu node_mask=%u flags=%u",
@@ -1343,11 +1368,12 @@ static void PTReflectionHookDeferredDispatch(void* state,const void* dimensions)
     if(pressed){
         if(ptReflectionVerifyKeyDown.exchange(1u,std::memory_order_acq_rel)==0u){
             const unsigned prior=ptReflectionVerifyMode.load(std::memory_order_acquire);
-            const unsigned next=(prior+1u)%3u;
+            const unsigned next=(prior+1u)%4u;
             ptReflectionVerifyMode.store(next,std::memory_order_release);
             Log("PT_REFLECTION_VERIFY_SWITCH from=%u to=%u hotkey=F11 label=%s",
                 prior,next,next==0u?"normal":next==1u?
-                    "P2_quadrant_coverage_radiance_gain":"GI_native_texture_copy_proof");
+                    "P2_quadrant_coverage_radiance_gain":next==2u?
+                    "GI_native_texture_copy_proof":"native_point_light_probe");
         }
     }else{
         ptReflectionVerifyKeyDown.store(0u,std::memory_order_release);
@@ -1415,11 +1441,13 @@ static void PTReflectionHookDeferredDispatch(void* state,const void* dimensions)
     auto* list=static_cast<ID3D12GraphicsCommandList*>(command.commandList);
     const unsigned verifyMode=ptReflectionVerifyMode.load(std::memory_order_acquire);
     ID3D12PipelineState* activeP2Pso=verifyMode==1u?
-        ptReflectionP2VerifyPso:ptReflectionP2CompositePso;
+        ptReflectionP2VerifyPso:verifyMode==3u?
+        ptReflectionP2LocalLightProbePso:ptReflectionP2CompositePso;
     if(!activeP2Pso){
         if(call<=16 || (call%240)==0)
-            Log("PT_REFLECTION_VERIFY_MISSING_PSO call=%llu mode=%u verify_sidecar=%u",
-                call,verifyMode,unsigned(ptReflectionP2VerifyLoaded));
+            Log("PT_REFLECTION_VERIFY_MISSING_PSO call=%llu mode=%u verify_sidecar=%u native_light_probe_sidecar=%u",
+                call,verifyMode,unsigned(ptReflectionP2VerifyLoaded),
+                unsigned(ptReflectionP2LocalLightProbeLoaded));
         return;
     }
     DWORD fault=0,restoreFault=0;
@@ -1864,16 +1892,18 @@ static bool PTReflectionInstallShaderLookupHooks(HMODULE renderer,HMODULE d3d) n
     PTReflectionLoadP1Sidecar();
     PTReflectionLoadP2Sidecar();
     PTReflectionLoadP2VerifySidecar();
+    PTReflectionLoadP2LocalLightProbeSidecar();
     PTReflectionLoadP2CompositeSidecar();
     PTReflectionLoadP2DiffuseBridgeSidecar();
     ptReflectionCompositePsoCaptured.store(0u,std::memory_order_release);
     ptReflectionNativeCompositePso=nullptr;
     ptReflectionP2CompositePso=nullptr;
     ptReflectionP2VerifyPso=nullptr;
+    ptReflectionP2LocalLightProbePso=nullptr;
     ptReflectionVerifyMode.store(0u,std::memory_order_release);
     ptReflectionVerifyKeyDown.store(0u,std::memory_order_release);
-    Log("PT_REFLECTION_VERIFY_INIT mode=0 hotkey=F11 cycle=normal,composite_quadrants,diffuse_gi_native_copy_proof verify_sidecar=%u",
-        unsigned(ptReflectionP2VerifyLoaded));
+    Log("PT_REFLECTION_VERIFY_INIT mode=0 hotkey=F11 cycle=normal,composite_quadrants,diffuse_gi_native_copy_proof,native_point_light_probe verify_sidecar=%u local_probe_sidecar=%u",
+        unsigned(ptReflectionP2VerifyLoaded),unsigned(ptReflectionP2LocalLightProbeLoaded));
     ptReflectionCompositeRoot=nullptr;
     ptReflectionP1ShaderRecordReady=false;
     ptReflectionP2RayShaderRecordReady=false;
