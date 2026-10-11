@@ -21,6 +21,7 @@ on:
       - experiment/pt-bounce-energy
       - experiment/pt-preserve-diffuse
       - experiment/pt-third-bounce-bindings
+      - experiment/pt-third-bounce
   workflow_dispatch:
   pull_request:
     branches:
@@ -94,6 +95,9 @@ jobs:
           set "RC_RESULT=%ERRORLEVEL%"
           popd
           if not "%RC_RESULT%"=="0" exit /b %RC_RESULT%
+
+      - name: Check private hit storage
+        run: python tools/test-pt-private-hits.py
 
       - name: Check specular energy and diffuse preservation
         run: python tools/test-pt-specular-preservation.py
@@ -205,30 +209,49 @@ jobs:
           Copy-Item build/pt_reflection_p2_local_light_probe.dxbc "$out/pt_reflection_p2_local_light_probe.dxbc"
           Copy-Item build/pt_reflection_p2_diffuse_bridge.dxbc "$out/pt_reflection_p2_diffuse_bridge.dxbc"
           @'
-          CONTROL-FG - THIRD-BOUNCE BINDING CAPTURE
+          CONTROL-FG - THREE-BOUNCE REFLECTION TEST
           =======================================
-          THIS BUILD DOES NOT ENABLE A THIRD BOUNCE YET.
-          It captures the missing native DXR and compute root layouts needed
-          to add private hit storage. The working two-bounce shaders are unchanged.
-          No shader, descriptor-table, GPU-resource or render-pass modifications.
+          Experimental Steam DX12 build for the captured native root layout.
+          Close Control and replace ALL SEVEN binaries beside Control_DX12.exe.
+          Existing F10 PT ON/OFF comparison remains available.
 
-          Close Control. Replace ALL SEVEN binaries beside Control_DX12.exe.
-          Start the game, load the lobby and leave PT ON for about 20 seconds.
-          Exit and run your normal compact-log collector. Send the log ZIP.
-          No F11 mode, screenshots or repeated ON/OFF tests are needed.
+          THREE BOUNCES:
+          First reflection hit remains in native layer 0.
+          Second and third hits use two private 32-byte records per pixel.
+          Native texture arrays stay at two layers; layer 2 is never accessed.
+          A valid third hit replaces only vertex-two indirect specular lighting.
+          Native diffuse GI, direct lighting and emission remain at each vertex.
+          A missing/invalid third hit retains the two-bounce result.
+          This is hybrid specular transport, not full diffuse path tracing.
 
-          Captured CPU metadata:
-          - Global/local raytracing and deferred-composite root layouts.
-          - Descriptor ranges, register spaces, root DWORD budget and samplers.
-          - Raytracing payload/attribute sizes and recursion configuration.
-          Log prefixes: PT_THIRD_AUDIT_INSTALL, PT_THIRD_STATE, PT_THIRD_ROOT.
-          The capture preserves native API descriptors and HRESULTs.
+          HIT QUALITY:
+          Full float UVs and world positions for secondary and third hits.
+          Octahedral 16+16-bit normal encoding; full uint material IDs.
+          Removes the old 5-bit UV and material-ID-below-2048 constraints.
+          Normal-map shading is still future work.
 
-          Existing behavior retained:
-          Native diffuse GI, direct lighting and emission remain intact.
-          The existing second bounce replaces only indirect specular lighting.
-          Native-parity guard and previously confirmed flicker fixes are retained.
-          This remains hybrid reflection transport; full diffuse PT is not enabled.
+          MEMORY / SCOPE:
+          One fixed 512 MiB GPU UAV, allocated once, retained until game exit.
+          Capacity: 8,388,608 pixels (up to 3840x2160). Test at 4K or below.
+          No per-resolution replacement/retirement or descriptor heap changes.
+          Native root arguments are replayed after each temporary root switch.
+          Root creation is gated by the captured SHA; unsupported layouts use P1.
+
+          TEST:
+          Load the same lobby, leave PT ON for 20 seconds, then compare OFF/ON.
+          Check lit concrete stays lit. Look for nested reflections on metal/glass.
+          Send compact logs and a normal-mode screenshot; report any new flicker.
+          Existing F11 diagnostics remain available if needed.
+          A third bounce need not strongly affect diffuse concrete.
+
+          Log markers:
+          PT_THIRD_PRIVATE_ROOT ready=1
+          PT_THIRD_STATE_CREATE ready=1
+          PT_THIRD_PRIVATE_BUFFER ready=1
+          PT_THIRD_DISPATCH ready=1 root_restored=1
+          PT_REFLECTION_P2_POST_DISPATCH dispatched=1 restored=1
+
+          Windows compilation and static/numerical tests do not prove GPU visuals.
           '@ | Set-Content "$out/README.txt" -Encoding ASCII
           Compress-Archive -Path "$out/*" -DestinationPath "$out.zip" -Force
           (Get-FileHash "$out.zip" -Algorithm SHA256).Hash | Set-Content "$out.sha256" -Encoding ASCII
