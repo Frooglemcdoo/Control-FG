@@ -13,6 +13,7 @@ on:
       - experiment/pt-two-layer-bounce-proof
       - experiment/pt-secondary-origin-precision
       - experiment/pt-secondary-material-filter
+      - experiment/pt-hit-uav-coherence
   workflow_dispatch:
   pull_request:
     branches:
@@ -120,6 +121,10 @@ jobs:
           & $dxc -dumpbin build/pt_reflection_p2.dxil | Set-Content -LiteralPath build/pt_reflection_p2.dump.txt -Encoding UTF8
           if($LASTEXITCODE -ne 0){throw "DXC dump failed: $LASTEXITCODE"}
           $dump=Get-Content -LiteralPath build/pt_reflection_p2.dump.txt -Raw
+          if(([regex]::Matches($dump,'call void @dx.op.barrier\(i32 80, i32 2\)')).Count -lt 3){
+            throw 'P2 DXIL is missing device-wide UAV memory barriers.'
+          }
+
           foreach($name in @(
             'reflectionRayGeneration',
             'reflectionClosestHit',
@@ -190,14 +195,16 @@ jobs:
           Copy-Item build/pt_reflection_p2_local_light_probe.dxbc "$out/pt_reflection_p2_local_light_probe.dxbc"
           Copy-Item build/pt_reflection_p2_diffuse_bridge.dxbc "$out/pt_reflection_p2_diffuse_bridge.dxbc"
           @'
-          CONTROL-FG - P2 SECONDARY MATERIAL FILTER TEST
+          CONTROL-FG - P2 HIT UAV COHERENCE TEST
           ================================================
           EXPERIMENTAL STEAM DX12 TEST. NOT PRODUCTION.
-          Branch: experiment/pt-secondary-material-filter
-          Filters material textures to match the stored 5-bit UV footprint.
-          Restores the native emission texture mask (material slot 5).
-          Primary rays and the native composite are unchanged from the
-          precision test. This is NOT an in-game verified flicker fix.
+          Branch: experiment/pt-hit-uav-coherence
+          Adds globallycoherent declarations to all three hit UAVs and
+          DeviceMemoryBarrier publication before TraceRay and before
+          closesthit/miss return. This fixes a missing DXR memory-visibility
+          contract when raygen reads hit attributes to launch bounce two.
+          Material filtering and emission masks are retained.
+          In-game flicker resolution remains to be verified.
           Copy ALL SEVEN binaries beside Control_DX12.exe, backing up old ones.
 
           ROOT CAUSE:
