@@ -73,18 +73,25 @@ int main() {
         // no untested descriptor/root ABI gets into the game package.
         const bool cellOkay=Binding(r,"ptNativePointCellIds",D3D_SIT_TEXTURE,5,0);
         const bool lightOkay=Binding(r,"ptNativePointLights",D3D_SIT_STRUCTURED,10,0);
+        const bool spotCellOkay=Binding(r,"ptNativeSpotCellIds",D3D_SIT_TEXTURE,6,0);
+        const bool spotLightOkay=Binding(r,"ptNativeSpotLights",D3D_SIT_STRUCTURED,14,0);
         const bool constantsOkay=Binding(r,"deferredlight_constants",D3D_SIT_CBUFFER,1,0);
         D3D12_SHADER_INPUT_BIND_DESC light{};
         const bool reflection=SUCCEEDED(r->GetResourceBindingDescByName("ptNativePointLights",&light));
         const bool strideOkay=reflection&&light.NumSamples==160u;
+        D3D12_SHADER_INPUT_BIND_DESC spot{};
+        const bool spotReflection=SUCCEEDED(r->GetResourceBindingDescByName("ptNativeSpotLights",&spot));
+        const bool spotStrideOkay=spotReflection&&spot.NumSamples==320u;
         auto* cb=r->GetConstantBufferByName("deferredlight_constants");
         D3D12_SHADER_BUFFER_DESC cbdesc{};
         const bool cbSizeOkay=cb&&SUCCEEDED(cb->GetDesc(&cbdesc))&&cbdesc.Size==416u;
         const bool countOffsetOkay=Variable(r,"deferredlight_constants","ptNativeDeferredConstants",0,416);
-        std::printf("PT LOCAL LIGHT ABI point_cell_t5=%u point_data_t10=%u point_stride160=%u deferred_b1=%u cb416=%u offset256_count=%u\n",
+        std::printf("PT LOCAL LIGHT ABI point_cell_t5=%u point_data_t10=%u point_stride160=%u spot_cell_t6=%u spot_data_t14=%u spot_stride320=%u deferred_b1=%u cb416=%u count_offset256_260=%u\n",
             unsigned(cellOkay),unsigned(lightOkay),unsigned(strideOkay),
+            unsigned(spotCellOkay),unsigned(spotLightOkay),unsigned(spotStrideOkay),
             unsigned(constantsOkay),unsigned(cbSizeOkay),unsigned(countOffsetOkay));
-        ok=ok&&cellOkay&&lightOkay&&strideOkay&&constantsOkay&&cbSizeOkay&&countOffsetOkay;
+        ok=ok&&cellOkay&&lightOkay&&strideOkay&&spotCellOkay&&spotLightOkay&&
+            spotStrideOkay&&constantsOkay&&cbSizeOkay&&countOffsetOkay;
     }
     r->Release();
     if(!ok){
