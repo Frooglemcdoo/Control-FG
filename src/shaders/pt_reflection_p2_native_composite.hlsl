@@ -149,6 +149,28 @@ void main(uint3 dispatchThreadId:SV_DispatchThreadID) {
                                 primaryView,pixel,false,nativeLod,retained);
                             reference=PTNativeOutput(nativeFull,pixel);
                             replacement=PTNativeOutput(retained+bounce,pixel);
+                            // Native averages all active first-bounce samples AFTER
+                            // clamping each sample. Keep sample one entirely native.
+                            // A miss needs the native environment evaluator, which
+                            // this port does not reproduce; reject that pixel safely.
+                            uint rayCount=ptCB6[0].z;
+                            uint other=g_tMaterialId.Load(int4(pixel,1,0)).x;
+                            if(rayCount>2u||rayCount==0u)rejection=6u;
+                            if(rayCount>1u&&other!=65534u){
+                                if(other>=min(count,65534u))rejection=6u;
+                                else {
+                                    float4 otherPos=g_tPosition_TexcoordY.Load(int4(pixel,1,0));
+                                    float4 otherNormal=g_tNormal_TexcoordX.Load(int4(pixel,1,0));
+                                    float3 otherWorld=PTNativeViewToWorld(otherPos.xyz);
+                                    float3 ignored;
+                                    float3 otherFull=PTNativeSecondHit(other,float2(otherNormal.w,otherPos.w),otherPos.xyz,
+                                        otherWorld,otherNormal.xyz,normalize(otherWorld-nativeOrigin),normalize(otherPos.xyz),
+                                        primaryView,pixel,false,nativeLod,ignored);
+                                    float3 otherOutput=PTNativeOutput(otherFull,pixel);
+                                    reference=(reference+otherOutput)*0.5f;
+                                    replacement=(replacement+otherOutput)*0.5f;
+                                }
+                            }
                             if(!PTFinite3(replacement)||!PTFinite3(reference))rejection=4u;
                             // A port mismatch must never erase native illumination.
                             // This is a parity admission check, not an intensity adjustment.
