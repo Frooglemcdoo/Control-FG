@@ -180,57 +180,64 @@ jobs:
           Copy-Item build/pt_reflection_p2_local_light_probe.dxbc "$out/pt_reflection_p2_local_light_probe.dxbc"
           Copy-Item build/pt_reflection_p2_diffuse_bridge.dxbc "$out/pt_reflection_p2_diffuse_bridge.dxbc"
           @'
-          PT Reflections — NATIVE POINT-LIGHT DATA VALIDATION PROBE
-          ===================================================
-          TEST BUILD, NOT FOR REGULAR PLAY. Steam DX12 / RR enabled.
-          Source: experiment/pt-verify-stages-20261010
-          Back up previous DLL and sidecars. Copy ALL SIX binaries beside Control_DX12.exe.
+          PT Reflections - LOCAL-LIGHT RUNTIME VALUE PROBE V2
+          ==================================================
+          DEBUG BUILD, NOT FOR REGULAR PLAY.
+          Steam DX12, RT Reflections and RR enabled.
+          Branch: experiment/pt-local-light-probe-p1
+          Copy ALL SEVEN binaries beside Control_DX12.exe.
+          Back up the old files first.
 
-          Fix objective:
-          Control froze after the first custom diffuse-GI compute pass.
-          That pass replaced the engine's bound descriptor heap, root
-          signature and PSO without restoring native root arguments.
-          This test preserves all engine compute bindings and instead
-          writes a deliberately visible checker to the raw diffuse-GI
-          texture with only native-list barriers + CopyTextureRegion.
-          The current P2 ray tracing and reflection composite remain ON.
+          Earlier mode 3 rendered SOLID RED: the native count/stride
+          guard rejected at least one bound resource. The native DXBC
+          verifies UINT count fields at bytes 256/260 (b1), not which
+          values the extra shader observes during runtime.
 
-          F11 modes:
-          0 = normal native + P2 reflections; read-only GI telemetry.
-          1 = four P2 reflection quadrants: native, hit coverage,
-              bounce-2 radiance, and native+P2 at 16x.
-          2 = native mip-0 GI checker copy (proven visible).
-          3 = local point-light data diagnostic in REFLECTION target.
-              Top-left native. Top-right valid point count/cell.
-              Bottom-left second-hit unshadowed point-light potential.
-              Bottom-right native plus potential x8 (DIAGNOSTIC ONLY).
-              This is NOT shadow-aware GI; point/spot shadow semantics,
-              light-cell indexing and local illumination are still
-              being verified. Does NOT modify normal mode output.
-          F11 cycles 0 -> 1 -> 2 -> 3 -> 0.
+          NEW MODE 3, UPPER-RIGHT: EIGHT ROWS OF HEXADECIMAL DATA
+          Each row is eight huge hexadecimal digits (0..9, A..F).
+          GREEN vertical strip = this particular field is valid;
+          RED vertical strip = this specific field failed.
 
-          TEST:
-          Load Steam with RR and RT Reflections enabled.
-          Confirm 20 seconds of normal mode, then press F11 three times
-          for mode 3. Take a screenshot of the same concrete interior
-          with bright local light fixtures. Wait 10 seconds, then send
-          screenshot and compact logs.
-          For comparison, press F11 twice more after mode 3 to enter
-          mode 1 and capture the previous bounce-2 heatmap.
+            Row 1 (GREEN)  = raw native point-light count at b1+256
+            Row 2 (BLUE)   = raw native spotlight count at b1+260
+            Row 3 (ORANGE) = point StructuredBuffer stride
+                            expect 000000A0 (160 bytes)
+            Row 4 (PURPLE) = spot StructuredBuffer stride
+                            expect 00000140 (320 bytes)
+            Row 5 (GREEN)  = point buffer element capacity
+            Row 6 (BLUE)   = spotlight buffer element capacity
+            Row 7 (YELLOW) = point cell texture WIDTH:HEIGHT, 4 hex
+                             digits each
+            Row 8 (PURPLE) = spot cell texture WIDTH:HEIGHT, same
 
-          Expected markers:
-            PT_REFLECTION_P2_POST_DISPATCH ... dispatched=1
-            PT_REFLECTION_P2_DGI_COPY_OWNER ready=1
-            PT_REFLECTION_P2_DGI_COPY_PROOF ... engine_root_heap_pso_unchanged=1
+          Counts are read as native UINTs; each category validates
+          independently so an invalid spotlight binding does not zero
+          otherwise valid point-light diagnostics, or vice versa.
+
+          OTHER QUADRANTS IN MODE 3:
+          Top-left     unchanged native reflection.
+          Bottom-left  unshadowed secondary-hit local-light potential;
+                       blue means weak or rejected values.
+          Bottom-right native reflection plus x8 *diagnostic* candidate.
+                       Not shadow aware. Do not interpret as PT lighting.
+
+          F11 MODES: 0 normal P2, 1 P2 radiance quadrants,
+          2 known working native GI checker-copy, 3 light-value probe.
+          Each F11 press advances to the next mode, then wraps to 0.
+
+          TEST: Start in normal mode for 15-20 sec. Press F11 three
+          times, take ONE clear screenshot of all quadrants after a
+          few seconds, and collect compact logs. No need to repeat the
+          other GI checker test.
+
+          Expected:
             PT_REFLECTION_P2_NATIVE_LIGHT_PROBE_PSO ready=1
+            PT_REFLECTION_VERIFY_SWITCH from=2 to=3
             PT_REFLECTION_P2_POST_DISPATCH ... verify_mode=3
-          Failure markers:
-            PT_REFLECTION_P2_DGI_COPY_PROOF_SKIP reason=...
 
-          A successful texture copy proves recording, not necessarily
-          that subsequent GI filtering / RR / final composite consumes
-          the injected mip-0 data. Screenshot required. This is not
-          a completed diffuse PT bounce-lighting implementation.
+          Native shadow visibility, full cell indexing, and physically
+          correct secondary bounce remain future work. The working
+          production P2 composite and native-copy GI path are unchanged.
           '@ | Set-Content "$out/README.txt" -Encoding ASCII
           Compress-Archive -Path "$out/*" -DestinationPath "$out.zip" -Force
           (Get-FileHash "$out.zip" -Algorithm SHA256).Hash | Set-Content "$out.sha256" -Encoding ASCII
