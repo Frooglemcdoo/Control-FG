@@ -58,14 +58,16 @@ uint4 PTBitInsert(uint4 width,uint4 offset,uint4 value,uint4 target) {
     uint4 mask=((1u<<width)-1u)<<offset;
     return (target&~mask)|((value<<offset)&mask);
 }
-float PTNativeMaterialMip(uint index) {
+float PTNativeMaterialMip(uint index,bool quantized) {
+    if(!quantized)return 0.0f;
     uint width,height,levels;
     g_sMaterialTextureArray[NonUniformResourceIndex(index)].GetDimensions(0,width,height,levels);
     return min(log2(max((float)max(width,height)/31.0f,1.0f)),(float)(max(levels,1u)-1u));
 }
 float3 PTNativeSecondHit(uint materialId,float2 uv,float3 hitView,float3 hitWorld,
                         float3 normalWorld,float3 incomingWorld,float3 incomingView,
-                        float3 firstView,uint2 pixel) {
+                        float3 firstView,uint2 pixel,bool quantized,out float3 directEmission) {
+    directEmission=0.0f;
 
     uint4 r0=0u;
     uint4 r1=0u;
@@ -137,7 +139,7 @@ float3 PTNativeSecondHit(uint materialId,float2 uv,float3 hitView,float3 hitWorl
     r7.w=((r5.wwww*uint4(0x23u,0x23u,0x23u,0x23u)+uint4(0x2u,0x2u,0x2u,0x2u))).w; // native dword 1232
     r23.x=(r20.wwww).x; // native dword 1241
     r23.y=(r19.wwww).y; // native dword 1246
-    r7.w=(asuint(g_sMaterialTextureArray[NonUniformResourceIndex((r7.wwww).x-0u)].SampleLevel(g_sMaterialArrayGlobal,asfloat(r23.xyxx).xy,PTNativeMaterialMip((r7.wwww).x)))).yzwx.w; // native dword 1251
+    r7.w=(asuint(g_sMaterialTextureArray[NonUniformResourceIndex((r7.wwww).x-0u)].SampleLevel(g_sMaterialArrayGlobal,asfloat(r23.xyxx).xy,PTNativeMaterialMip((r7.wwww).x,quantized)))).yzwx.w; // native dword 1251
     r8.w=(asuint((asfloat(asuint(-asfloat(r22.xxxx)))+asfloat(r22.yyyy)))).w; // native dword 1266
     r22.y=(asuint(mad(asfloat(r7.wwww),asfloat(r8.wwww),asfloat(r22.xxxx)))).y; // native dword 1274
     r7.w=(asuint(dot(asfloat(r21.xyzx).xyz,asfloat(r20.xyzx).xyz).xxxx)).w; // native dword 1283
@@ -384,7 +386,7 @@ float3 PTNativeSecondHit(uint materialId,float2 uv,float3 hitView,float3 hitWorl
     r7.w=((r5.wwww*uint4(0x23u,0x23u,0x23u,0x23u)+uint4(0x4u,0x4u,0x4u,0x4u))).w; // native dword 3003
     r30.x=(r20.wwww).x; // native dword 3012
     r30.y=(r19.wwww).y; // native dword 3017
-    r7.w=(asuint(g_sMaterialTextureArray[NonUniformResourceIndex((r7.wwww).x-0u)].SampleLevel(g_sMaterialArrayGlobal,asfloat(r30.xyxx).xy,PTNativeMaterialMip((r7.wwww).x)))).yzwx.w; // native dword 3022
+    r7.w=(asuint(g_sMaterialTextureArray[NonUniformResourceIndex((r7.wwww).x-0u)].SampleLevel(g_sMaterialArrayGlobal,asfloat(r30.xyxx).xy,PTNativeMaterialMip((r7.wwww).x,quantized)))).yzwx.w; // native dword 3022
     r10.w=g_sbMaterialDataPart1[(r5.wwww).x].d[(uint4(0x0u,0x0u,0x0u,0x0u)).x/4u+0u]; // native dword 3037
     r11.w=((r10.wwww>>(uint4(0x18u,0x18u,0x18u,0x18u)&31u))).w; // native dword 3047
     r22.zw=(PTBitExtract(uint4(0x0u,0x0u,0x8u,0x8u),uint4(0x0u,0x0u,0x10u,0x8u),r10.wwww)).zw; // native dword 3054
@@ -914,16 +916,17 @@ float3 PTNativeSecondHit(uint materialId,float2 uv,float3 hitView,float3 hitWorl
     } // native dword 7089
     r14.xyw=(asuint(mad(asfloat(r22.xzxw),asfloat(r27.xyxz),asfloat(r17.xyxz)))).xyw; // native dword 7090
     r15.xyz=(asuint(mad(asfloat(r21.xywx),asfloat(r29.xyzx),asfloat(r34.xyzx)))).xyz; // native dword 7099
-    r16.xyz=(asuint(g_sMaterialTextureArray[NonUniformResourceIndex((r6.wwww).x-0u)].SampleLevel(g_sLinearWrap,asfloat(r30.xyxx).xy,PTNativeMaterialMip((r6.wwww).x)))).xyzw.xyz; // native dword 7108
+    r16.xyz=(asuint(g_sMaterialTextureArray[NonUniformResourceIndex((r6.wwww).x-0u)].SampleLevel(g_sLinearWrap,asfloat(r30.xyxx).xy,PTNativeMaterialMip((r6.wwww).x,quantized)))).xyzw.xyz; // native dword 7108
     r16.xyz=(asuint((asfloat(r23.yzwy)*asfloat(r16.xyzx)))).xyz; // native dword 7123
     r19.xyz=(asuint((asfloat(r23.xxxx)*asfloat(r24.xyzx)))).xyz; // native dword 7130
     r6.w=(asuint(dot(asfloat(r19.xyzx).xyz,asfloat(r19.xyzx).xyz).xxxx)).w; // native dword 7137
     r6.w=((uint4(asfloat(r6.wwww)!=asfloat(uint4(0x0u,0x0u,0x0u,0x0u)))*0xffffffffu)).w; // native dword 7144
     if((r6.wwww).x != 0u) { // native dword 7151
     r6.w=((r5.wwww*uint4(0x23u,0x23u,0x23u,0x23u)+uint4(0x5u,0x5u,0x5u,0x5u))).w; // native dword 7154
-    r20.xyz=(asuint(g_sMaterialTextureArray[NonUniformResourceIndex((r6.wwww).x-0u)].SampleLevel(g_sLinearWrap,asfloat(r30.xyxx).xy,PTNativeMaterialMip((r6.wwww).x)))).xyzw.xyz; // native dword 7163
+    r20.xyz=(asuint(g_sMaterialTextureArray[NonUniformResourceIndex((r6.wwww).x-0u)].SampleLevel(g_sLinearWrap,asfloat(r30.xyxx).xy,PTNativeMaterialMip((r6.wwww).x,quantized)))).xyzw.xyz; // native dword 7163
     r19.xyz=(asuint((asfloat(r19.xyzx)*asfloat(r20.xyzx)))).xyz; // native dword 7178
     } // native dword 7185
+    directEmission=asfloat(r17.xyz)*asfloat(r16.xyz)+asfloat(r34.xyz)+asfloat(r19.xyz); // native dword 7186
     r14.xyw=(asuint(mad(asfloat(r14.xyxw),asfloat(r16.xyxz),asfloat(r15.xyxz)))).xyw; // native dword 7186
     r29.xyz=(asuint((asfloat(r19.xyzx)+asfloat(r14.xywx)))).xyz; // native dword 7195
     } // native dword 7202
