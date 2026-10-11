@@ -23,6 +23,7 @@ on:
       - experiment/pt-third-bounce-bindings
       - experiment/pt-third-bounce
       - experiment/pt-third-bounce-hook-fix
+      - experiment/pt-third-bounce-freshness
   workflow_dispatch:
   pull_request:
     branches:
@@ -217,11 +218,19 @@ jobs:
           Copy-Item build/pt_reflection_p2_local_light_probe.dxbc "$out/pt_reflection_p2_local_light_probe.dxbc"
           Copy-Item build/pt_reflection_p2_diffuse_bridge.dxbc "$out/pt_reflection_p2_diffuse_bridge.dxbc"
           @'
-          CONTROL-FG - THREE-BOUNCE HOOK FIX 2
+          CONTROL-FG - THREE-BOUNCE FRESHNESS FIX 3
           =======================================
           Experimental Steam DX12 build for the captured native root layout.
           Close Control and replace ALL SEVEN binaries beside Control_DX12.exe.
           Existing F10 PT ON/OFF comparison remains available.
+
+          FLICKER / COLORED-SPARKLE FIX:
+          Private hits must have a captured producer in the current engine frame.
+          Each producer is consumed once; stale data leaves native reflections intact.
+          Rechecks command-list hooks at each engine reflection dispatch boundary.
+          Repairs replaced dispatch entries and logs actual producer/consumer counts.
+          If fresh capture fails, third-bounce compositing is skipped and logged.
+          The six shaders remain unchanged to isolate the capture/lifetime failure.
 
           BLACK-SCREEN FIX:
           Captures direct and compute command-list implementations separately.
