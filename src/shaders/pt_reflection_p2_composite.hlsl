@@ -409,12 +409,19 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
         float4 secondNormalPacked=g_tNormal_TexcoordX.Load(int4(pixel,secondLayer,0));
         uint secondMaterial=PTDecodeSecondaryMaterial(secondNormalPacked,secondPosPacked);
         if(secondMaterial>=65534u||secondMaterial>=g_uMaterialIDCount)continue;
+        // Bad normals or finite-hit metadata must never produce NaNs in
+        // the normal P2 composite. V8 mode 3 separately diagnoses WHY a
+        // valid material hit has unusable surface-normal components.
+        const float normalLen2=dot(secondNormalPacked.xyz,secondNormalPacked.xyz);
+        if(!all(isfinite(secondNormalPacked.xyz))||
+           !isfinite(normalLen2)||normalLen2<1.0e-6f)continue;
 
         float3 firstWorld=PTViewToWorldPoint(firstPosPacked.xyz);
         float3 secondWorld=PTViewToWorldPoint(secondPosPacked.xyz);
         float3 segment=secondWorld-firstWorld;
         float segmentLength2=dot(segment,segment);
-        if(segmentLength2<1.0e-6f)continue;
+        if(!all(isfinite(firstWorld))||!all(isfinite(secondWorld))||
+           !isfinite(segmentLength2)||segmentLength2<1.0e-6f)continue;
         float3 incomingWorld=segment*rsqrt(segmentLength2);
 
         float firstSmoothness=PTSmoothness(firstMaterial);
