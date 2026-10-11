@@ -316,18 +316,32 @@ void PTBasis(float3 n,out float3 t,out float3 b)
     b=normalize(float3(c,signZ+n.y*n.y*a,-n.y));
 }
 
-float2 PTUnpackUV(float packed)
+// Both secondary sideband components are *numeric* in floating textures,
+// not raw asfloat(uint) bit patterns. They can round-trip FP16 precisely.
+// normal.w=material low byte+1 (0 means no hit), position.w=high byte.
+// No secondary UV is stored in V8; future textured albedo needs an extra
+// validated sideband buffer. Do not sample random UVs or invent texture data.
+uint PTDecodeSecondaryMaterial(float4 normalPacked,float4 positionPacked)
 {
-    uint value=asuint(packed);
-    return float2(value&0xffffu,value>>16u)*(1.0f/65535.0f);
+    if(!isfinite(normalPacked.w)||!isfinite(positionPacked.w)||
+       normalPacked.w<1.0f||normalPacked.w>256.0f||
+       positionPacked.w<0.0f||positionPacked.w>255.0f)
+        return 65535u;
+    uint low=(uint)round(normalPacked.w);
+    uint high=(uint)round(positionPacked.w);
+    if(abs(normalPacked.w-float(low))>0.125f||
+       abs(positionPacked.w-float(high))>0.125f)
+        return 65535u;
+    uint id=(high<<8u)|(low-1u);
+    return id<65534u?id:65535u;
 }
 
-float3 PTMaterialBaseColor(uint materialId,float2 uv)
+float3 PTMaterialBaseColor(uint materialId)
 {
-    PTMaterialDataPart3 m=g_sbMaterialDataPart3[materialId];
-    uint textureIndex=NonUniformResourceIndex(materialId*35u);
-    float3 tex=max(g_sMaterialTextureArray[textureIndex].SampleLevel(g_sLinearWrap,uv,0.0f).rgb,0.0f);
-    return max(tex*max(m.vColorMultiplier.rgb,0.0f),0.0f);
+    // In the absence of a valid secondary UV sideband, use the native
+    // material RGB multiplier only. This is conservative untextured albedo,
+    // not a finished diffuse PT material sampling solution.
+    return max(g_sbMaterialDataPart3[materialId].vColorMultiplier.rgb,0.0f);
 }
 
 float3 PTDiffuseEnvironment(float3 n)
@@ -344,7 +358,7 @@ float3 PTDiffuseEnvironment(float3 n)
     return sum;
 }
 
-float3 PTSecondaryRadiance(uint materialId,float2 uv,float3 hitNormalWorld,float3 incomingWorld)
+float3 PTSecondaryRadiance(uint materialId,float3 hitNormalWorld,float3 incomingWorld)
 {
     PTMaterialDataPart3 m=g_sbMaterialDataPart3[materialId];
     float3 n=normalize(hitNormalWorld);
@@ -363,7 +377,7 @@ float3 PTSecondaryRadiance(uint materialId,float2 uv,float3 hitNormalWorld,float
     // Rough surfaces such as concrete/plaster contribute diffuse indirect
     // radiance instead of disappearing from the path. This is intentionally
     // broad/low-frequency so they do not become mirror-like.
-    float3 baseColor=PTMaterialBaseColor(materialId,uv);
+    float3 baseColor=PTMaterialBaseColor(materialId);
     float3 diffuseEnv=PTDiffuseEnvironment(n);
     float diffuseWeight=roughness*roughness*0.70f;
     float3 diffuse=diffuseEnv*baseColor*diffuseWeight;
@@ -393,7 +407,7 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
         float4 firstPosPacked=g_tPosition_TexcoordY.Load(int4(pixel,firstLayer,0));
         float4 secondPosPacked=g_tPosition_TexcoordY.Load(int4(pixel,secondLayer,0));
         float4 secondNormalPacked=g_tNormal_TexcoordX.Load(int4(pixel,secondLayer,0));
-        uint secondMaterial=asuint(secondNormalPacked.w);
+        uint secondMaterial=PTDecodeSecondaryMaterial(secondNormalPacked,secondPosPacked);
         if(secondMaterial>=65534u||secondMaterial>=g_uMaterialIDCount)continue;
 
         float3 firstWorld=PTViewToWorldPoint(firstPosPacked.xyz);
@@ -412,9 +426,7 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
             +0.38f*firstRoughness*firstRoughness;
         float distanceAttenuation=rsqrt(1.0f+0.0025f*segmentLength2);
         float weight=firstThroughput*distanceAttenuation;
-        float2 secondUv=PTUnpackUV(secondPosPacked.w);
-
-        bounce2+=PTSecondaryRadiance(secondMaterial,secondUv,secondNormalPacked.xyz,incomingWorld)*weight;
+        bounce2+=PTSecondaryRadiance(secondMaterial,secondNormalPacked.xyz,incomingWorld)*weight;
         totalWeight+=weight;
     }
 
@@ -637,12 +649,13 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
 
         const float4 n=g_tNormal_TexcoordX.Load(
             int4(pixel,probePath+2u,0));
-        const uint secondMat=asuint(n.w);
+        const float4 secondaryPosPacked=g_tPosition_TexcoordY.Load(
+            int4(pixel,probePath+2u,0));
+        const uint secondMat=PTDecodeSecondaryMaterial(n,secondaryPosPacked);
         if(secondMat>=65534u||secondMat>=g_uMaterialIDCount)continue;
         secondHitValid=true;
 
-        const float3 hitPosView=g_tPosition_TexcoordY.Load(
-            int4(pixel,probePath+2u,0)).xyz;
+        const float3 hitPosView=secondaryPosPacked.xyz;
         if(!all(isfinite(hitPosView)))continue;
         positionFinite=true;
 
