@@ -61,21 +61,22 @@ int main(){
     // Repeat installation must never record our hook as its own original.
     assert(PTThirdInstallVtable(direct,true));
     assert(PTThirdOriginal(&d,76)==(void*)&DirectOriginal);
-    // Simulate runtime lazy initialization replacing dispatch after first use.
-    direct[76]=(void*)&ComputeOriginal;
+    // A later wrapper keeps our hook as its next call. Never repoint our
+    // original to that wrapper or replace the top of its chain.
+    void* original=PTThirdOriginal(&d,25);
+    direct[25]=(void*)&ComputeOriginal;
     assert(PTThirdInstallVtable(direct,true));
-    assert(direct[76]==(void*)&PTThirdHookDispatch);
-    assert(PTThirdOriginal(&d,76)==(void*)&ComputeOriginal);
-    // A base interface must not require extension slots; support later upgrade.
-    void* base[77];for(auto& x:base)x=(void*)&DirectOriginal;
-    assert(PTThirdInstallVtable(base,false));assert(base[75]==(void*)&DirectOriginal);
-    assert(PTThirdInstallVtable(base,true));assert(base[75]==(void*)&PTThirdHookSetState);
+    assert(direct[25]==(void*)&ComputeOriginal);
+    assert(PTThirdOriginal(&d,25)==original);
+    // A distinct base interface only exposes base slots.
+    void* base[60];for(auto& x:base)x=(void*)&DirectOriginal;
+    assert(PTThirdInstallVtable(base,false));
     // Failed patching stays failed, while any published hooks retain originals.
     void* failed[77];for(auto& x:failed)x=(void*)&ComputeOriginal;
     failSlot=&failed[29];assert(!PTThirdInstallVtable(failed,true));
     assert(!PTThirdInstallVtable(failed,true));
     ID3D12GraphicsCommandList f{failed};assert(PTThirdOriginal(&f,10)==(void*)&ComputeOriginal);
-    puts("PASS: compute-first/direct-second, distinct original routing, repeat install, interface upgrade, dispatch replacement repair, stale-frame and duplicate-consumer rejection, partial failure");
+    puts("PASS: compute-first/direct-second, distinct original routing, repeat install, external hook-chain preservation, stale-frame and duplicate-consumer rejection, partial failure");
 }
 '''
 # initializer_list is required by the braced range in main.
