@@ -48,6 +48,16 @@ int main(){
 #endif
     auto prepare=[&](){return Prepare(selected,scene,table,owners,exports,plan);};
     assert(prepare().status==Status::prepared&&plan.records.size()==2&&plan.allocationTokens.size()==5);
+    assert(!SameDispatch(plan,plan)); // Unversioned fixture cannot authorize a later submission.
+    scene.blas[0xb000].version=17;assert(prepare().status==Status::prepared);
+    const auto preparedAtRayPass=plan;assert(SameDispatch(preparedAtRayPass,plan));
+    ++scene.blas[0xb000].version;assert(prepare().status==Status::prepared);
+    assert(plan.records==preparedAtRayPass.records&&!SameDispatch(preparedAtRayPass,plan)); // In-place AS update, same SBT.
+    --scene.blas[0xb000].version;assert(prepare().status==Status::prepared);
+    auto different=plan;++different.selection.sceneVersion;assert(!SameDispatch(plan,different));
+    different=plan;++different.records[0][32];assert(!SameDispatch(plan,different));
+    different=plan;++different.allocationTokens[0];assert(!SameDispatch(plan,different));
+    different=plan;++different.privatePipeline;assert(!SameDispatch(plan,different));
     owners.Remove(10);owners.Insert({12,0xa000,256});
     assert(prepare().status==Status::allocation&&plan.records.empty());
     scene.tlas.token=12;assert(prepare().status==Status::prepared);

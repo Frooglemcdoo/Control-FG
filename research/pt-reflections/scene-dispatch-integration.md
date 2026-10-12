@@ -335,3 +335,35 @@ compacted source survives until its last dependent geometry is replaced.
 Continuous GPU backlog can delay reclamation; the archive still refuses new
 copies at its fixed budget instead of freeing live data. This remains distinct
 from renderer activation and does not make the PT lighting/composition ready.
+
+### Immutable private dispatch and later-submission validation
+
+`pt_scene_pipeline.h` now creates the production private 60-byte-payload state
+object and maps native opaque/alpha identifiers to its four private hit groups.
+The M4/M5 host uses this factory; its Windows builds pass. GitHub does not execute
+DXR hardware tests, so successful fixture compilation is not a game rendering
+result.
+
+`pt_scene_dispatch.h` prepares the complete upload SBT before recording GPU use,
+retaining the private pipeline, descriptor heap and frozen geometry. Its record
+operation preserves the admitted global root and restores the native compute
+PSO and table. Both 49-descriptor ranges must be in the retained heap, correctly
+aligned, disjoint, and in bounds. A scene lease can now own this dispatch through
+its submission fence. The renderer must still prove descriptor contents, all
+other root arguments, and the current native pass before calling it.
+
+The handoff can retain an immutable `Prepared` proof after consuming the original
+native-writer ticket. A later lighting-pass ticket is checked after catalog
+submission and before forwarding Execute. Validation regenerates the complete
+plan under the owner lock and compares the TLAS version, every referenced BLAS
+version, allocation identities, pipeline identities and all private SBT bytes.
+An in-place BLAS update is rejected even when its table bytes do not change.
+Missing or unresolved queue history never authorizes dispatch. This removes the
+need to keep the original historical ticket alive solely for revalidation.
+
+This is an API for a later-pass integration, not an active consumer. The host
+must still connect actual submission callbacks and solve cancellation/replay
+without changing an upload enable flag that an earlier GPU execution may still
+read. Simply writing such a flag to zero on replay is not a valid solution.
+Native lighting/material adapters, composition and renderer activation remain
+unfinished. No user game run is requested by this checkpoint.

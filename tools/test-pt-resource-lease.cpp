@@ -10,6 +10,7 @@
 #include "../src/pt_scene_live_owner.h"
 #include "../src/pt_scene_queue_runtime.h"
 #include "../src/pt_scene_handoff.h"
+#include "../src/pt_scene_dispatch.h"
 #include "../src/pt_scene_topology_runtime.h"
 using Microsoft::WRL::ComPtr;
 static void TestGeometrySnapshot(ID3D12Device* device){
@@ -149,7 +150,9 @@ int main(){
     ComPtr<ID3D12Fence> gate,done;assert(SUCCEEDED(d->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&gate))));
     assert(SUCCEEDED(d->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&done))));
     PTOwnedScene::Submissions submissions;assert(submissions.Initialize(queue.Get()));
-    assert(submissions.Hold(100,first)&&!first.Count());
+    auto additional=std::make_shared<int>(12);std::weak_ptr<int> additionalLifetime=additional;
+    assert(first.Attach(additional));additional.reset();
+    assert(submissions.Hold(100,first)&&!first.Count());assert(!additionalLifetime.expired());
     assert(submissions.Hold(101,second));submissions.Discarded(101);assert(ledger->Held()==rd.Width);
     assert(SUCCEEDED(queue->Wait(gate.Get(),1)));
     // No resource work is needed to prove retirement cannot pass a queued wait.
@@ -163,7 +166,7 @@ int main(){
     assert(SUCCEEDED(queue->Signal(done.Get(),1)));assert(SUCCEEDED(gate->Signal(1)));
     HANDLE ready=CreateEventW(nullptr,FALSE,FALSE,nullptr);assert(ready);
     assert(SUCCEEDED(done->SetEventOnCompletion(1,ready)));assert(WaitForSingleObject(ready,30000)==WAIT_OBJECT_0);CloseHandle(ready);
-    submissions.Poll();assert(ledger->Held()==0);
+    submissions.Poll();assert(ledger->Held()==0&&additionalLifetime.expired());
     std::puts("PASS dispatch leases: exact atomic retention, deduplicated bytes, bounded batches, unsubmitted discard, owner shutdown and actual queue-fence retirement.");
     PTSceneLive::Owner live;assert(live.Start(d->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV),false));
     assert(SUCCEEDED(d->CreateCommittedResource(&hp,D3D12_HEAP_FLAG_NONE,&rd,D3D12_RESOURCE_STATE_COMMON,nullptr,IID_PPV_ARGS(&resource))));

@@ -41,6 +41,9 @@ public:
     LeaseBatch& operator=(LeaseBatch&&) noexcept=default;
     LeaseBatch(const LeaseBatch&)=delete;
     LeaseBatch& operator=(const LeaseBatch&)=delete;
+    // Attach immutable SBT/pipeline/output owners to the same GPU retirement
+    // fence as the scene. Attach before handing the lease to Submissions.
+    bool Attach(std::shared_ptr<void> owner){if(!payload||!owner)return false;payload->keepAlive.push_back(std::move(owner));return true;}
     std::size_t Count() const noexcept {return payload?payload->resources.size():0;}
     std::uint64_t Bytes() const noexcept {return payload?payload->bytes:0;}
 };

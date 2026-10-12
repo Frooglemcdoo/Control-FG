@@ -67,7 +67,7 @@ public:
         std::lock_guard<std::mutex> guard(mutex);if(!active){record={};return Status::missingAllocation;}
         const auto status=index.Resolve(binding,record);++stats.resolved[static_cast<unsigned>(status)];return status;
     }
-    bool Alive(U64 token){std::lock_guard<std::mutex> guard(mutex);for(const auto& item:owners)if(item.second.token==token)return true;return false;}
+    std::set<U64> LiveTokens(){std::lock_guard<std::mutex> guard(mutex);std::set<U64> tokens;for(const auto& item:owners)tokens.insert(item.second.token);return tokens;}
     bool Identify(U64 address,U64 bytes,Allocation& allocation){
         allocation={};std::lock_guard<std::mutex> guard(mutex);if(!active)return false;
         const auto token=index.Find(address,bytes);if(!token)return false;
@@ -149,6 +149,16 @@ public:
         }
         if(!leaseBudget->Acquire(bytes))return false;
         payload->bytes=bytes;payload->keepAlive=candidate.keepAlive;batch.payload=std::move(payload);plan=std::move(candidate);return true;
+    }
+    // Recheck under the allocation lock without acquiring a second GPU lease.
+    // The caller must keep the original lease through this submission's fence.
+    bool Revalidate(const PTSceneDispatch::Scene& scene,const PTSceneDispatch::Table& table,
+                    const PTSceneDispatch::ExportSet& exports,const PTSceneDispatch::Plan& prepared){
+        std::lock_guard<std::mutex> guard(mutex);if(!active)return false;
+        const PTSceneDispatch::Selection selected{scene.address,scene.version,table.address,table.version,table.pipeline};
+        PTSceneDispatch::Plan current;
+        return PTSceneDispatch::Prepare(selected,scene,table,index,exports,current).status==PTSceneDispatch::Status::prepared&&
+            PTSceneDispatch::SameDispatch(prepared,current);
     }
     Stats Stop(){std::unique_lock<std::mutex> guard(mutex);active=false;completed.wait(guard,[this]{return pending==0;});index.Clear();owners.clear();held=0;return stats;}
 };

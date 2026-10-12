@@ -15,7 +15,7 @@ struct Selection {
 struct Scene {
     U64 address=0,version=0;
     // Captured with the AS build/version, never recovered from a latest-VA lookup.
-    struct Acceleration {U64 token=0,bytes=0;};
+    struct Acceleration {U64 token=0,bytes=0,version=0;};
     Acceleration tlas;
     std::map<U64,Acceleration> blas;
     PTSceneTopology::Index topology;
@@ -34,6 +34,7 @@ struct Plan {
     U64 privatePipeline=0;
     std::vector<PTShaderTableAdapter::Bytes> records;
     std::vector<U64> allocationTokens;
+    std::map<U64,U64> bottomVersions;
     std::vector<std::shared_ptr<void>> keepAlive;
 };
 struct ExportSet {
@@ -42,6 +43,17 @@ struct ExportSet {
 };
 enum class Status {prepared,selection,size,topology,unreferenced,allocation,binding,conversion};
 struct Failure {Status status=Status::prepared;std::size_t record=0;};
+// A later submission may reuse the prepared SBT only if every referenced AS
+// version is still the same. Identical records alone do not detect an in-place
+// BLAS update that leaves its addresses and local-root constants unchanged.
+inline bool SameDispatch(const Plan& a,const Plan& b){
+    const auto& x=a.selection;const auto& y=b.selection;
+    if(!x.tlas||!x.sceneVersion||!x.hitTable||!x.tableVersion||!x.pipeline||!a.privatePipeline||a.records.empty()||a.bottomVersions.empty())return false;
+    for(const auto& bottom:a.bottomVersions)if(!bottom.first||!bottom.second)return false;
+    return x.tlas==y.tlas&&x.sceneVersion==y.sceneVersion&&x.hitTable==y.hitTable&&x.tableVersion==y.tableVersion&&
+        x.pipeline==y.pipeline&&a.privatePipeline==b.privatePipeline&&a.records==b.records&&
+        a.allocationTokens==b.allocationTokens&&a.bottomVersions==b.bottomVersions;
+}
 inline Failure Prepare(const Selection& selected,const Scene& scene,const Table& table,
                        const PTOwnedScene::Index& owners,const ExportSet& exports,
                        Plan& output){
@@ -65,6 +77,7 @@ inline Failure Prepare(const Selection& selected,const Scene& scene,const Table&
         if(!(instance.idMask>>24))continue;
         const auto found=scene.blas.find(instance.blas);
         if(found==scene.blas.end()||!retainAS(instance.blas,found->second))return {Status::allocation,0};
+        pending.bottomVersions.emplace(instance.blas,found->second.version);
     }
     pending.selection=selected;pending.privatePipeline=exports.privatePipeline;pending.records.resize(table.bindings.size()*table.rays);
     for(std::size_t i=0;i<table.bindings.size();++i){

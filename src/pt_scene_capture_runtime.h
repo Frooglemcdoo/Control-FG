@@ -156,7 +156,8 @@ public:
             if(completed==UINT64_MAX){catalog.Invalidate();return;}
             if(completed<item.second.value)return;
         }
-        if(catalog.CompletedCheckpoint([this](U64 token){return resources.Alive(token);}))checkpointOperations=0;
+        const auto live=resources.LiveTokens();
+        if(catalog.CompletedCheckpoint([&live](U64 token){return live.count(token)!=0;}))checkpointOperations=0;
     }
     bool Signal(IUnknown* queue,IUnknown* fence,U64 value){
         std::lock_guard<std::mutex> guard(mutex);auto* q=Identify(queue);auto* f=Identify(fence);

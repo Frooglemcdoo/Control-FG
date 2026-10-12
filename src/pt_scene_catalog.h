@@ -135,9 +135,10 @@ public:
             if(resolved->kind==Snapshot::Kind::copy){std::set<U64> visiting;
                 if(Resolve(current->second.before,resolved->source.key,resolved,visiting)!=Status::ready)return false;
             }
-            auto materialized=std::make_shared<Snapshot>(*resolved);
-            materialized->destination=current->second.snapshot->destination;
-            materialized->source={};
+            auto materialized=current->second.snapshot;
+            if(materialized->kind==Snapshot::Kind::copy){auto copy=std::make_shared<Snapshot>(*resolved);
+                copy->destination=materialized->destination;copy->source={};materialized=std::move(copy);
+            }
             retainedRows+=Rows(*materialized);
             retained.emplace(item.second.version,Version{std::move(materialized),0});baseline.emplace(item.first,item.second.version);
         }
@@ -162,7 +163,8 @@ public:
             const auto a=top->bottom.find(instance.blas);if(a==top->bottom.end())return Status::missing;
             const Snapshot* bottom=nullptr;status=Resolve(c->second,a->second.key,bottom,visiting);if(status!=Status::ready)return status;
             if(bottom->kind!=Snapshot::Kind::blas||!scene.topology.Build(instance.blas,bottom->geometry))return Status::missing;
-            scene.blas.emplace(instance.blas,PTSceneDispatch::Scene::Acceleration{a->second.key.token,a->second.bytes});
+            PTSceneOrder::Selection bottomVersion;status=graph.Select(c->second,a->second.key,bottomVersion);if(status!=Status::ready)return status;
+            scene.blas.emplace(instance.blas,PTSceneDispatch::Scene::Acceleration{a->second.key.token,a->second.bytes,bottomVersion.version});
         }
         output=std::move(scene);return Status::ready;
     }

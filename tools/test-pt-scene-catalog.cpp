@@ -37,12 +37,15 @@ int main(){
     assert(c.Wait(2,1,1));assert(c.Submit(2,{{2,ray}}));
     assert(c.Scene(100,top,scene)==Status::ready&&Position(scene)==0x2000);
     assert(scene.blas.at(compact.key.address).token==compact.key.token);
+    const auto raySceneVersion=scene.version,rayBottomVersion=scene.blas.at(compact.key.address).version;
+    assert(rayBottomVersion);
     assert(c.Scene(100,{{99,top.key.address},256},scene)==Status::missing&&scene.instances.empty());
     // Updating compact's geometry is visible only beyond the new fence cut.
     producer=c.Begin(1);assert(c.Record(1,producer,Blas(compact,0x4000)));
     assert(c.Submit(1,{{1,producer}}));assert(c.Signal(1,1,2));
     ray=c.Begin(2);assert(c.Mark(2,ray,101));assert(c.Wait(2,1,2));assert(c.Submit(2,{{2,ray}}));
     assert(c.Scene(101,top,scene)==Status::ready&&Position(scene)==0x4000);
+    assert(scene.version==raySceneVersion&&scene.blas.at(compact.key.address).version!=rayBottomVersion);
     // A submitted unsupported build must invalidate the old good geometry.
     producer=c.Begin(1);auto bad=Blas(compact,0x5000);bad.geometry[0].positionToken=0;
     assert(c.Record(1,producer,bad));assert(c.Submit(1,{{1,producer}}));assert(c.Signal(1,1,3));

@@ -1,11 +1,20 @@
 #pragma once
 #include "pt_scene_live_owner.h"
 // Joins the native writer's CPU snapshot with the exact submitted scene cut.
-// A prepared result remains CPU preflight: the renderer still owns the private
-// GPU gate, geometry content/state proof, output resources and fence retirement.
+// A prepared result remains CPU preflight: the renderer still owns submission
+// admission, descriptor/state proof, output resources and fence retirement.
 namespace PTSceneHandoff {
 using Ticket=PTNativeJobRoute::Ticket;
 enum class Status {pending,prepared,rejected,missing};
+class Prepared {
+    friend class Runtime;
+    PTSceneLive::Owner* owner=nullptr;
+    PTSceneDescriptors::Acceleration acceleration;
+    Microsoft::WRL::ComPtr<ID3D12StateObject> nativePipeline;
+    PTSceneDispatch::Table table;
+    PTSceneDispatch::ExportSet exports;
+    PTSceneDispatch::Plan plan;
+};
 class Runtime {
     struct Entry {
         Ticket ticket;
@@ -78,8 +87,19 @@ public:
         }
         entry.written=true;return true;
     }
+    // Non-consuming inspection for private-pipeline export mapping. Preparation
+    // repeats all identity checks; cancellation cannot revive a stale snapshot.
+    bool ReadyIdentifiers(std::uint64_t serial,PTNativeShaderTable::Identifiers& output){
+        output={};std::lock_guard<std::mutex> guard(mutex);const auto found=pending.find(serial);
+        if(found==pending.end()||!found->second.written||!found->second.submitted)return false;
+        output=found->second.identifiers;return true;
+    }
     void Cancelled(std::uint64_t serial){std::lock_guard<std::mutex> guard(mutex);const auto found=pending.find(serial);if(found!=pending.end())Erase(found);}
-    Status Prepare(std::uint64_t serial,const PTSceneDispatch::ExportSet& exports,PTSceneDispatch::Plan& plan,PTOwnedScene::LeaseBatch& lease){
+    // Optional immutable proof permits checking the same writer snapshot at a
+    // later lighting submission. The original ray ticket can then be retired.
+    Status Prepare(std::uint64_t serial,const PTSceneDispatch::ExportSet& exports,PTSceneDispatch::Plan& plan,PTOwnedScene::LeaseBatch& lease,
+                   std::shared_ptr<const Prepared>* proof=nullptr){
+        if(proof)proof->reset();
         plan={};std::lock_guard<std::mutex> guard(mutex);const auto found=pending.find(serial);
         if(found==pending.end())return Status::missing;
         auto& entry=found->second;if(!entry.written||!entry.submitted)return Status::pending;
@@ -93,7 +113,23 @@ public:
         if(selected!=PTSceneOrder::Status::ready){Erase(found);return Status::rejected;}
         const PTSceneDispatch::Selection selection{scene.address,scene.version,entry.table.address,entry.table.version,entry.table.pipeline};
         const bool prepared=owner.Resources().PrepareLease(selection,scene,entry.table,exports,plan,lease);
+        if(prepared&&proof){
+            auto snapshot=std::make_shared<Prepared>();snapshot->owner=&owner;snapshot->acceleration=entry.acceleration;
+            snapshot->nativePipeline=entry.pipeline;snapshot->table=std::move(entry.table);snapshot->exports=exports;snapshot->plan=plan;
+            *proof=std::move(snapshot);
+        }
         Erase(found);return prepared?Status::prepared:Status::rejected;
+    }
+    // The renderer marks a distinct ticket at the actual private DispatchRays
+    // position and calls this AFTER catalog Submit, BEFORE native Execute.
+    // Pending is disabled for this submission; this method never waits for a
+    // native writer or queues a GPU wait. Caller must Forget the later ticket.
+    Status Revalidate(std::uint64_t submissionTicket,const std::shared_ptr<const Prepared>& proof){
+        if(!submissionTicket||!proof||proof->owner!=&owner||!owner.Active())return Status::rejected;
+        PTSceneDispatch::Scene scene;const auto selected=owner.Scenes().Scene(submissionTicket,proof->acceleration,scene);
+        if(selected==PTSceneOrder::Status::pending)return Status::pending;
+        if(selected!=PTSceneOrder::Status::ready)return Status::rejected;
+        return owner.Resources().Revalidate(scene,proof->table,proof->exports,proof->plan)?Status::prepared:Status::rejected;
     }
 };
 }
