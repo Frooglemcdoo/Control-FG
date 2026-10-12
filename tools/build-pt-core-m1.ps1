@@ -11,7 +11,7 @@ foreach ($root in @("${env:ProgramFiles(x86)}\Windows Kits\10\bin", "${env:Progr
     if ($candidate) { $dxc = $candidate.FullName; break }
 }
 if (-not $dxc) { throw 'DXC x64 was not found in the installed SDK.' }
-foreach ($name in @('surface-transport','geometry-bounds','direct-light')) {
+foreach ($name in @('surface-transport','geometry-bounds','direct-light','scene-admission')) {
     & cl.exe /nologo /std:c++17 /EHsc /O2 /W4 /MT "tools\test-pt-$name.cpp" "/Fo$out\test-$name.obj" "/Fe$out\test-$name.exe"
     if ($LASTEXITCODE -ne 0) { throw "C++ build failed: $name" }
     & "$out\test-$name.exe" | Tee-Object -FilePath "$out\test-$name.txt"

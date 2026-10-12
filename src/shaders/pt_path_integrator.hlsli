@@ -6,7 +6,7 @@
 // not admitted. Emitters/environment are BSDF-only; NEE accepts DELTA lights only,
 // preventing duplicate non-delta light energy until emitter MIS is implemented.
 struct PTPathSurface {
-    float3 position, normal, emission;
+    float3 position, normal, emission, spawnOrigin;
     PTSurfaceMaterial material;
 };
 // Adapter supplies these functions before including this file's implementation.
@@ -54,7 +54,8 @@ PTPathResult PTIntegratePath(RayDesc ray,uint maxHits,uint rouletteStart,uint se
         PTSurfaceSample sample=PTSampleSurface(surface.material,wo,choose,u,v);
         path=PTContinue(path,sample,rr,rouletteStart);
         if(path.alive==0) break;
-        ray.Origin=surface.position+n*originOffset;
+        ray.Origin=surface.spawnOrigin;
+        if(!all(isfinite(ray.Origin))){path.valid=0;break;}
         ray.Direction=normalize(tangent*sample.wi.x+bitangent*sample.wi.y+n*sample.wi.z);
         ray.TMin=0;
     }

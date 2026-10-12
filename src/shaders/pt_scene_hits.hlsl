@@ -1,16 +1,29 @@
 // Private DXR scene-query library. Requires a NEW state object and rebuilt SBT.
 // Never substitute into native 4-byte payload shaders or native output UAVs.
 #include "pt_geometry_bounds.hlsli"
-struct PTSceneHit { float distance; float2 uv; float3 shadingNormal; uint material; uint status; };
+#ifdef PT_GEOMETRY_SPAWN
+#include "vendor/SelfIntersectionAvoidance.hlsl"
+#endif
+struct PTSceneHit { float distance; float2 uv; float3 shadingNormal; uint material; uint status;
+#ifdef PT_GEOMETRY_SPAWN
+    float3 worldPosition; float3 geometricNormal; float spawnOffset;
+#endif
+};
 struct PTVisibility { uint status; }; // 0=occluded, 1=visible, 2=invalid
 // Hit status: 0=miss, 1=valid attributes, 2=invalid record/geometry/material.
 cbuffer PTHitRecord : register(b0,space3) {
     uint indexOffset,indexStride,vertexStride,materialID;
     uint tangentOffset,normalOffset,texcoordOffset,colorOffset;
     uint indexBytes,vertexBytes;
+#ifdef PT_GEOMETRY_SPAWN
+    uint positionStride,positionBytes;
+#endif
 };
 ByteAddressBuffer PTIndices : register(t0,space3);
 ByteAddressBuffer PTVertices : register(t1,space3);
+#ifdef PT_GEOMETRY_SPAWN
+ByteAddressBuffer PTPositions : register(t2,space3);
+#endif
 struct PTNativeMaterial { uint words[84]; };
 StructuredBuffer<PTNativeMaterial> PTMaterials : register(t3);
 Texture2D<float4> PTTextures[] : register(t0,space1);
@@ -71,6 +84,23 @@ void PTSceneClosestHit(inout PTSceneHit p,in BuiltInTriangleIntersectionAttribut
                         dot(n,float3(m[0][2],m[1][2],m[2][2])));
     float len2=dot(world,world);
     if(!all(isfinite(world))||len2<1e-12) {p.status=2;return;}
+#ifdef PT_GEOMETRY_SPAWN
+    uint3 indices;float3 vertices[3];
+    if(!PTReadIndices(PrimitiveIndex(),indices)){p.status=2;return;}
+    [unroll] for(uint i=0;i<3;++i){
+        PTByteAddress a=PTCheckedField(indices[i],positionStride,0,12,positionBytes);
+        if(a.valid==0){p.status=2;return;}
+        vertices[i]=asfloat(PTPositions.Load3(a.address));
+        if(!all(isfinite(vertices[i]))){p.status=2;return;}
+    }
+    float3 geometric=cross(vertices[1]-vertices[0],vertices[2]-vertices[0]);
+    if(!all(isfinite(geometric))||dot(geometric,geometric)<1e-20){p.status=2;return;}
+    float3 objectPosition,objectNormal;
+    safeSpawnPoint(objectPosition,p.worldPosition,objectNormal,p.geometricNormal,p.spawnOffset,
+        vertices[0],vertices[1],vertices[2],attr.barycentrics,ObjectToWorld3x4(),WorldToObject3x4());
+    if(dot(p.geometricNormal,WorldRayDirection())>0)p.geometricNormal=-p.geometricNormal;
+    if(!all(isfinite(p.worldPosition))||!all(isfinite(p.geometricNormal))||!isfinite(p.spawnOffset)||p.spawnOffset<=0){p.status=2;return;}
+#endif
     p.distance=RayTCurrent();p.uv=uv;p.shadingNormal=world*rsqrt(len2);p.material=materialID;p.status=1;
 }
 [shader("anyhit")]

@@ -11,6 +11,12 @@ PTSceneHit PTPathTrace(RayDesc ray) {
 }
 PTPathSurface PTPathDecode(PTSceneHit hit,RayDesc ray) {
     PTPathSurface s;s.position=ray.Origin+ray.Direction*hit.distance;s.normal=hit.shadingNormal;
+#ifdef PT_GEOMETRY_SPAWN
+    s.position=hit.worldPosition;s.normal=hit.geometricNormal;
+    s.spawnOrigin=safeSpawnPoint(s.position,s.normal,hit.spawnOffset);
+#else
+    s.spawnOrigin=s.position+s.normal*.001;
+#endif
     s.material.kd=float3(.5,.25,.75);s.material.f0=0;s.material.roughness=.5;s.material.lobes=1;
     s.emission=DispatchRaysIndex().x<4?float3(1,.5,.25):float3(0,0,0);return s;
 }
@@ -18,10 +24,10 @@ float3 PTPathEnvironment(float3 direction){return float3(.2,.4,.8);}
 bool PTPathLight(PTPathSurface s,out PTDirectSample light,out uint visibility) {
     uint i=DispatchRaysIndex().x;light=(PTDirectSample)0;visibility=1;
     if(i!=4&&i!=5)return false;
-    float3 target=i==4?float3(0,0,0):float3(0,0,-4);
+    float3 target=PTTestRays[i].origin+(i==4?float3(0,0,0):float3(0,0,-4));
     float3 delta=target-s.position;float distance=length(delta);
     light.wi=delta/distance;light.incidentRadiance=4/(distance*distance);light.pdf=1;light.delta=1;
-    RayDesc ray;ray.Origin=s.position+s.normal*.001;ray.Direction=normalize(target-ray.Origin);ray.TMin=0;ray.TMax=length(target-ray.Origin)-.001;
+    RayDesc ray;ray.Origin=s.spawnOrigin;ray.Direction=normalize(target-ray.Origin);ray.TMin=0;ray.TMax=length(target-ray.Origin)-.001;
     PTVisibility v;v.status=0;TraceRay(PTTestScene,RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH,1,1,2,1,ray,v);visibility=v.status;return true;
 }
 [shader("raygeneration")]

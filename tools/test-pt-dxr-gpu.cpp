@@ -14,6 +14,7 @@
 #include <cmath>
 #include <stdexcept>
 #include <climits>
+#include "../src/pt_scene_admission.h"
 using Microsoft::WRL::ComPtr;
 static void ok(HRESULT hr,const char* name){if(FAILED(hr)){std::printf("FAIL %s HRESULT=0x%08lx\n",name,(unsigned long)hr);throw std::runtime_error(name);}}
 static void need(bool b,const char* name){if(!b)throw std::runtime_error(name);}
@@ -70,6 +71,11 @@ static ComPtr<ID3D12RootSignature> root(ID3D12Device* d,D3D12_ROOT_SIGNATURE_DES
     ComPtr<ID3D12RootSignature> r;ok(d->CreateRootSignature(0,b->GetBufferPointer(),b->GetBufferSize(),IID_PPV_ARGS(&r)),"Create root");return r;
 }
 int main(int argc,char** argv){try{
+    bool translated=false,scaled=false;
+#ifdef PT_GEOMETRY_SPAWN
+    for(int a=1;a<argc;++a){translated|=strcmp(argv[a],"--translated")==0;scaled|=strcmp(argv[a],"--scaled")==0;}
+    std::printf("Geometry adapter fixture: large triangles, translation=%u mirrored_nonuniform_scale=%u\n",translated,scaled);
+#endif
     const bool allowSkip=argc>1&&strcmp(argv[1],"--allow-no-dxr")==0;
     ComPtr<ID3D12Debug> debug;if(SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&debug)))){debug->EnableDebugLayer();std::puts("D3D12 debug layer enabled");}
     ComPtr<IDXGIFactory6> factory;ok(CreateDXGIFactory1(IID_PPV_ARGS(&factory)),"DXGI factory");GPU g;
@@ -83,7 +89,11 @@ int main(int argc,char** argv){try{
     }
     if(!g.device){std::puts("SKIP: No hardware DXR adapter. GPU tests did NOT run.");return allowSkip?0:2;}
     #ifdef PT_PATH_TEST
+#ifdef PT_GEOMETRY_SPAWN
+    std::ifstream file("pt-geometry-query-test.dxil",std::ios::binary);
+#else
     std::ifstream file("pt-path-query-test.dxil",std::ios::binary);
+#endif
 #else
     std::ifstream file("pt-scene-query-test.dxil",std::ios::binary);
 #endif
@@ -98,8 +108,12 @@ int main(int argc,char** argv){try{
     // Large facing triangles approximate two infinite planes for a bounded test.
     // Packed normals exactly match these planes; this does not admit native
     // shading normals as geometric normals in production.
-    for(UINT i=0;i<4;++i){float z=i==2?-2.0f:2.0f;float x=(i==0||i==2)?0.0f:10000.0f*i;
-        float p[3][3]={{x-1024.0f,-1024.0f,z},{x+1024.0f,-1024.0f,z},{x,1024.0f,z}};
+    float extent=1024;
+#ifdef PT_GEOMETRY_SPAWN
+    extent=100000; // Reproduce the scale that failed with a fixed .001 offset.
+#endif
+    for(UINT i=0;i<4;++i){float z=i==2?-2.0f:2.0f;float x=(i==0||i==2)?0.0f:1e7f*i;
+        float p[3][3]={{x-extent,-extent,z},{x+extent,-extent,z},{x,extent,z}};
         for(UINT j=0;j<3;++j){memcpy(positions[i*3+j],p[j],12);attributes[i*3+j].normal[2]=i==2?32767:-32767;}}
 #endif
     auto pos=g.buffer(sizeof(positions),D3D12_HEAP_TYPE_UPLOAD,D3D12_RESOURCE_STATE_GENERIC_READ,D3D12_RESOURCE_FLAG_NONE,positions);
@@ -113,6 +127,10 @@ int main(int argc,char** argv){try{
     D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS inputs{};inputs.Type=D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL;inputs.DescsLayout=D3D12_ELEMENTS_LAYOUT_ARRAY;inputs.NumDescs=4;inputs.pGeometryDescs=geometry;
     auto blas=g.acceleration(inputs);
     D3D12_RAYTRACING_INSTANCE_DESC instance{};instance.Transform[0][0]=instance.Transform[1][1]=instance.Transform[2][2]=1;instance.InstanceMask=1;instance.AccelerationStructure=blas->GetGPUVirtualAddress();
+#ifdef PT_GEOMETRY_SPAWN
+    if(translated){instance.Transform[0][3]=100000;instance.Transform[2][3]=100000;}
+    if(scaled){instance.Transform[0][0]=-2;instance.Transform[1][1]=.5f;}
+#endif
     auto inst=g.buffer(sizeof(instance),D3D12_HEAP_TYPE_UPLOAD,D3D12_RESOURCE_STATE_GENERIC_READ,D3D12_RESOURCE_FLAG_NONE,&instance);
     inputs={};inputs.Type=D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL;inputs.DescsLayout=D3D12_ELEMENTS_LAYOUT_ARRAY;inputs.NumDescs=1;inputs.InstanceDescs=inst->GetGPUVirtualAddress();auto tlas=g.acceleration(inputs);
     UINT material[3][84]{};float one=1;for(auto& m:material)memcpy(&m[16],&one,4);
@@ -128,24 +146,46 @@ int main(int argc,char** argv){try{
     rp[2].ParameterType=D3D12_ROOT_PARAMETER_TYPE_SRV;rp[2].Descriptor={5,0};rp[3].ParameterType=D3D12_ROOT_PARAMETER_TYPE_SRV;rp[3].Descriptor={0,4};rp[4].ParameterType=D3D12_ROOT_PARAMETER_TYPE_UAV;rp[4].Descriptor={0,4};
     D3D12_STATIC_SAMPLER_DESC sampler{};sampler.Filter=D3D12_FILTER_MIN_MAG_MIP_LINEAR;sampler.AddressU=sampler.AddressV=sampler.AddressW=D3D12_TEXTURE_ADDRESS_MODE_WRAP;sampler.MaxLOD=D3D12_FLOAT32_MAX;sampler.ShaderRegister=5;sampler.RegisterSpace=1;sampler.MaxAnisotropy=1;sampler.ComparisonFunc=D3D12_COMPARISON_FUNC_ALWAYS;
     D3D12_ROOT_SIGNATURE_DESC rd{};rd.NumParameters=5;rd.pParameters=rp;rd.NumStaticSamplers=1;rd.pStaticSamplers=&sampler;auto global=root(g.device.Get(),rd);
+#ifdef PT_GEOMETRY_SPAWN
+    D3D12_ROOT_PARAMETER localParams[4]{};
+    for(UINT i=0;i<3;++i){localParams[i].ParameterType=D3D12_ROOT_PARAMETER_TYPE_SRV;localParams[i].Descriptor={i,3};}
+    localParams[3].ParameterType=D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;localParams[3].Constants={0,3,12};
+    rd={};rd.NumParameters=4;rd.pParameters=localParams;rd.Flags=D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE;auto local=root(g.device.Get(),rd);
+    constexpr UINT recordStride=128,constantOffset=56,payloadBytes=60;
+#else
     D3D12_ROOT_PARAMETER localParams[3]{};localParams[0].ParameterType=localParams[1].ParameterType=D3D12_ROOT_PARAMETER_TYPE_SRV;localParams[0].Descriptor={0,3};localParams[1].Descriptor={1,3};localParams[2].ParameterType=D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;localParams[2].Constants={0,3,10};
     rd={};rd.NumParameters=3;rd.pParameters=localParams;rd.Flags=D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE;auto local=root(g.device.Get(),rd);
+    constexpr UINT recordStride=96,constantOffset=48,payloadBytes=32;
+#endif
     const wchar_t* groupNames[]={L"SurfaceOpaque",L"ShadowOpaque",L"SurfaceAlpha",L"ShadowAlpha"};D3D12_HIT_GROUP_DESC groups[4]{};
     for(UINT i=0;i<4;++i){groups[i].HitGroupExport=groupNames[i];groups[i].Type=D3D12_HIT_GROUP_TYPE_TRIANGLES;groups[i].ClosestHitShaderImport=(i%2)==0?L"PTSceneClosestHit":L"PTVisibilityClosestHit";if(i>=2)groups[i].AnyHitShaderImport=(i%2)==0?L"PTSceneAlphaHit":L"PTVisibilityAlphaHit";}
-    D3D12_DXIL_LIBRARY_DESC library{};library.DXILLibrary={bytecode.data(),bytecode.size()};D3D12_RAYTRACING_SHADER_CONFIG config{32,8};D3D12_RAYTRACING_PIPELINE_CONFIG pipeline{1};
+    D3D12_DXIL_LIBRARY_DESC library{};library.DXILLibrary={bytecode.data(),bytecode.size()};D3D12_RAYTRACING_SHADER_CONFIG config{payloadBytes,8};D3D12_RAYTRACING_PIPELINE_CONFIG pipeline{1};
     ID3D12RootSignature* globalPtr=global.Get();ID3D12RootSignature* localPtr=local.Get();std::vector<D3D12_STATE_SUBOBJECT> objects;objects.reserve(12);
     objects.push_back({D3D12_STATE_SUBOBJECT_TYPE_DXIL_LIBRARY,&library});for(auto& group:groups)objects.push_back({D3D12_STATE_SUBOBJECT_TYPE_HIT_GROUP,&group});
     objects.push_back({D3D12_STATE_SUBOBJECT_TYPE_RAYTRACING_SHADER_CONFIG,&config});objects.push_back({D3D12_STATE_SUBOBJECT_TYPE_GLOBAL_ROOT_SIGNATURE,&globalPtr});
     objects.push_back({D3D12_STATE_SUBOBJECT_TYPE_LOCAL_ROOT_SIGNATURE,&localPtr});D3D12_SUBOBJECT_TO_EXPORTS_ASSOCIATION association{&objects.back(),4,groupNames};objects.push_back({D3D12_STATE_SUBOBJECT_TYPE_SUBOBJECT_TO_EXPORTS_ASSOCIATION,&association});objects.push_back({D3D12_STATE_SUBOBJECT_TYPE_RAYTRACING_PIPELINE_CONFIG,&pipeline});
     D3D12_STATE_OBJECT_DESC stateDesc{D3D12_STATE_OBJECT_TYPE_RAYTRACING_PIPELINE,(UINT)objects.size(),objects.data()};ComPtr<ID3D12StateObject> state;ok(g.device->CreateStateObject(&stateDesc,IID_PPV_ARGS(&state)),"Create private DXR state object");
     ComPtr<ID3D12StateObjectProperties> properties;ok(state.As(&properties),"State object properties");
-    std::array<unsigned char,960> records{};
+    std::array<unsigned char,192+8*recordStride> records{};
     auto identifier=[&](UINT offset,const wchar_t* name){const void* id=properties->GetShaderIdentifier(name);need(id!=nullptr,"Missing shader identifier");memcpy(records.data()+offset,id,32);};
     identifier(0,L"PTSceneQueryRayGeneration");identifier(64,L"PTSceneMiss");identifier(96,L"PTVisibilityMiss");
-    for(UINT i=0;i<4;++i)for(UINT type=0;type<2;++type){UINT offset=192+(2*i+type)*96;identifier(offset,groupNames[(i==0?0:2)+type]);
+    for(UINT i=0;i<4;++i)for(UINT type=0;type<2;++type){UINT offset=192+(2*i+type)*recordStride;identifier(offset,groupNames[(i==0?0:2)+type]);
         bool shortIndex=i==0;UINT64 addr=(shortIndex?idx16:idx32)->GetGPUVirtualAddress();memcpy(records.data()+offset+32,&addr,8);addr=verts->GetGPUVirtualAddress();memcpy(records.data()+offset+40,&addr,8);
-        UINT constants[10]={i*3*(shortIndex?2u:4u),shortIndex?2u:4u,12,i==3?99u:i,0,0,8,0,shortIndex?(UINT)sizeof(indices16):(UINT)sizeof(indices32),(UINT)sizeof(attributes)};
-        memcpy(records.data()+offset+48,constants,sizeof(constants));}
+        UINT constants[12]={i*3*(shortIndex?2u:4u),shortIndex?2u:4u,12,i==3?99u:i,0,0,8,0,shortIndex?(UINT)sizeof(indices16):(UINT)sizeof(indices32),(UINT)sizeof(attributes),12,(UINT)sizeof(positions)};
+        #ifdef PT_GEOMETRY_SPAWN
+        PTSceneAdmission::Geometry admitted{};
+        admitted.indices={{(shortIndex?idx16:idx32)->GetGPUVirtualAddress(),shortIndex?sizeof(indices16):sizeof(indices32),1},addr= (shortIndex?idx16:idx32)->GetGPUVirtualAddress()+i*3*(shortIndex?2:4)};
+        admitted.positions={{pos->GetGPUVirtualAddress(),sizeof(positions),1},pos->GetGPUVirtualAddress()};
+        admitted.attributes={{verts->GetGPUVirtualAddress(),sizeof(attributes),1},verts->GetGPUVirtualAddress()};
+        admitted.indexStride=shortIndex?2:4;admitted.indexCount=3;admitted.vertexCount=12;admitted.positionStride=admitted.attributeStride=12;
+        admitted.normalOffset=0;admitted.uvOffset=8;admitted.material=i==3?0:i;admitted.materialCount=3;admitted.epoch=1;
+        admitted.float3Positions=admitted.sharedVertexIndexing=admitted.noGeometryTransform=true;
+        PTSceneAdmission::Record record;
+        need(PTSceneAdmission::Admit(admitted,record)==PTSceneAdmission::Error::none,"Geometry record admission");
+        memcpy(records.data()+offset+32,&record.indices,8);memcpy(records.data()+offset+40,&record.attributes,8);
+        memcpy(records.data()+offset+48,&record.positions,8);memcpy(constants,record.constants,sizeof(constants));
+#endif
+        memcpy(records.data()+offset+constantOffset,constants,payloadBytes==60?48:40);}
     auto sbt=g.buffer(records.size(),D3D12_HEAP_TYPE_UPLOAD,D3D12_RESOURCE_STATE_GENERIC_READ,D3D12_RESOURCE_FLAG_NONE,records.data());
     Ray rays[]={{{0,0,0},0,{0,0,1},10},{{12,0,0},0,{0,0,1},10},{{3,0,0},0,{0,0,1},10},{{6,0,0},0,{0,0,1},10},{{0,0,0},0,{0,0,1},1},{{0,0,0},2.1f,{0,0,1},10},{{0,0,0},0,{0,0,0},10},{{9,0,0},0,{0,0,1},10}};
 #ifdef PT_PATH_TEST
@@ -153,10 +193,13 @@ int main(int argc,char** argv){try{
     rays[6]=Ray{{1e6f,0,0},0,{0,0,1},1e8f};
     rays[7].direction[2]=0;
 #endif
+#ifdef PT_GEOMETRY_SPAWN
+    if(translated)for(auto& ray:rays){ray.origin[0]+=100000;ray.origin[2]+=100000;}
+#endif
     auto rayBuffer=g.buffer(sizeof(rays),D3D12_HEAP_TYPE_UPLOAD,D3D12_RESOURCE_STATE_GENERIC_READ,D3D12_RESOURCE_FLAG_NONE,rays);auto output=g.buffer(8*sizeof(Result),D3D12_HEAP_TYPE_DEFAULT,D3D12_RESOURCE_STATE_UNORDERED_ACCESS,D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);auto readback=g.buffer(8*sizeof(Result),D3D12_HEAP_TYPE_READBACK,D3D12_RESOURCE_STATE_COPY_DEST);
     ID3D12DescriptorHeap* heaps[]={heap.Get()};g.list->SetDescriptorHeaps(1,heaps);g.list->SetComputeRootSignature(global.Get());auto gpu=heap->GetGPUDescriptorHandleForHeapStart();g.list->SetComputeRootDescriptorTable(0,gpu);gpu.ptr+=step;g.list->SetComputeRootDescriptorTable(1,gpu);
     g.list->SetComputeRootShaderResourceView(2,tlas->GetGPUVirtualAddress());g.list->SetComputeRootShaderResourceView(3,rayBuffer->GetGPUVirtualAddress());g.list->SetComputeRootUnorderedAccessView(4,output->GetGPUVirtualAddress());g.list->SetPipelineState1(state.Get());
-    auto base=sbt->GetGPUVirtualAddress();D3D12_DISPATCH_RAYS_DESC dispatch{};dispatch.RayGenerationShaderRecord={base,32};dispatch.MissShaderTable={base+64,64,32};dispatch.HitGroupTable={base+192,8*96,96};dispatch.Width=8;dispatch.Height=dispatch.Depth=1;g.list->DispatchRays(&dispatch);
+    auto base=sbt->GetGPUVirtualAddress();D3D12_DISPATCH_RAYS_DESC dispatch{};dispatch.RayGenerationShaderRecord={base,32};dispatch.MissShaderTable={base+64,64,32};dispatch.HitGroupTable={base+192,8*recordStride,recordStride};dispatch.Width=8;dispatch.Height=dispatch.Depth=1;g.list->DispatchRays(&dispatch);
     g.barrier(output.Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS,D3D12_RESOURCE_STATE_COPY_SOURCE);g.list->CopyBufferRegion(readback.Get(),0,output.Get(),0,8*sizeof(Result));g.execute();
     Result* results;D3D12_RANGE range{0,8*sizeof(Result)};ok(readback->Map(0,&range,(void**)&results),"Read GPU results");
 #ifdef PT_PATH_TEST
