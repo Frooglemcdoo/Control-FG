@@ -6,6 +6,7 @@ on:
       - 'src/shaders/pt*.hlsl*'
       - 'src/shaders/vendor/*'
       - 'src/pt_scene_admission.h'
+      - 'src/pt_scene_pipeline.h'
       - 'src/pt_shader_table_adapter.h'
       - 'src/pt_scene_dispatch_plan.h'
       - 'src/pt_native_shader_table.h'

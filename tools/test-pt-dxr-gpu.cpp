@@ -18,6 +18,9 @@
 #include <thread>
 #include <exception>
 #include "../src/pt_scene_admission.h"
+#ifdef PT_GEOMETRY_SPAWN
+#include "../src/pt_scene_pipeline.h"
+#endif
 #include "../src/pt_native_shader_table.h"
 using Microsoft::WRL::ComPtr;
 static void ok(HRESULT hr,const char* name){if(FAILED(hr)){std::printf("FAIL %s HRESULT=0x%08lx\n",name,(unsigned long)hr);throw std::runtime_error(name);}}
@@ -169,17 +172,20 @@ int main(int argc,char** argv){try{
     D3D12_STATIC_SAMPLER_DESC sampler{};sampler.Filter=D3D12_FILTER_MIN_MAG_MIP_LINEAR;sampler.AddressU=sampler.AddressV=sampler.AddressW=D3D12_TEXTURE_ADDRESS_MODE_WRAP;sampler.MaxLOD=D3D12_FLOAT32_MAX;sampler.ShaderRegister=5;sampler.RegisterSpace=1;sampler.MaxAnisotropy=1;sampler.ComparisonFunc=D3D12_COMPARISON_FUNC_ALWAYS;
     D3D12_ROOT_SIGNATURE_DESC rd{};rd.NumParameters=5;rd.pParameters=rp;rd.NumStaticSamplers=1;rd.pStaticSamplers=&sampler;auto global=root(g.device.Get(),rd);
 #ifdef PT_GEOMETRY_SPAWN
-    D3D12_ROOT_PARAMETER localParams[4]{};
-    for(UINT i=0;i<3;++i){localParams[i].ParameterType=D3D12_ROOT_PARAMETER_TYPE_SRV;localParams[i].Descriptor={i,3};}
-    localParams[3].ParameterType=D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;localParams[3].Constants={0,3,12};
-    rd={};rd.NumParameters=4;rd.pParameters=localParams;rd.Flags=D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE;auto local=root(g.device.Get(),rd);
-    constexpr UINT recordStride=128,payloadBytes=60;
+    constexpr UINT recordStride=128;
 #else
     D3D12_ROOT_PARAMETER localParams[3]{};localParams[0].ParameterType=localParams[1].ParameterType=D3D12_ROOT_PARAMETER_TYPE_SRV;localParams[0].Descriptor={0,3};localParams[1].Descriptor={1,3};localParams[2].ParameterType=D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;localParams[2].Constants={0,3,10};
     rd={};rd.NumParameters=3;rd.pParameters=localParams;rd.Flags=D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE;auto local=root(g.device.Get(),rd);
     constexpr UINT recordStride=96,constantOffset=48,payloadBytes=32;
 #endif
-    const wchar_t* groupNames[]={L"SurfaceOpaque",L"ShadowOpaque",L"SurfaceAlpha",L"ShadowAlpha"};D3D12_HIT_GROUP_DESC groups[4]{};
+    const wchar_t* groupNames[]={L"SurfaceOpaque",L"ShadowOpaque",L"SurfaceAlpha",L"ShadowAlpha"};
+#ifdef PT_GEOMETRY_SPAWN
+    PTScenePipeline::Pipeline privatePipeline;
+    ok(privatePipeline.Initialize(g.device.Get(),global.Get(),bytecode.data(),bytecode.size(),L"PTSceneQueryRayGeneration"),"Create production private DXR state object");
+    ComPtr<ID3D12StateObject> state=privatePipeline.State();
+    ComPtr<ID3D12StateObjectProperties> properties;ok(state.As(&properties),"State object properties");
+#else
+D3D12_HIT_GROUP_DESC groups[4]{};
     for(UINT i=0;i<4;++i){groups[i].HitGroupExport=groupNames[i];groups[i].Type=D3D12_HIT_GROUP_TYPE_TRIANGLES;groups[i].ClosestHitShaderImport=(i%2)==0?L"PTSceneClosestHit":L"PTVisibilityClosestHit";if(i>=2)groups[i].AnyHitShaderImport=(i%2)==0?L"PTSceneAlphaHit":L"PTVisibilityAlphaHit";}
     D3D12_DXIL_LIBRARY_DESC library{};library.DXILLibrary={bytecode.data(),bytecode.size()};D3D12_RAYTRACING_SHADER_CONFIG config{payloadBytes,8};D3D12_RAYTRACING_PIPELINE_CONFIG pipeline{1};
     ID3D12RootSignature* globalPtr=global.Get();ID3D12RootSignature* localPtr=local.Get();std::vector<D3D12_STATE_SUBOBJECT> objects;objects.reserve(12);
@@ -188,6 +194,7 @@ int main(int argc,char** argv){try{
     objects.push_back({D3D12_STATE_SUBOBJECT_TYPE_LOCAL_ROOT_SIGNATURE,&localPtr});D3D12_SUBOBJECT_TO_EXPORTS_ASSOCIATION association{&objects.back(),4,groupNames};objects.push_back({D3D12_STATE_SUBOBJECT_TYPE_SUBOBJECT_TO_EXPORTS_ASSOCIATION,&association});objects.push_back({D3D12_STATE_SUBOBJECT_TYPE_RAYTRACING_PIPELINE_CONFIG,&pipeline});
     D3D12_STATE_OBJECT_DESC stateDesc{D3D12_STATE_OBJECT_TYPE_RAYTRACING_PIPELINE,(UINT)objects.size(),objects.data()};ComPtr<ID3D12StateObject> state;ok(g.device->CreateStateObject(&stateDesc,IID_PPV_ARGS(&state)),"Create private DXR state object");
     ComPtr<ID3D12StateObjectProperties> properties;ok(state.As(&properties),"State object properties");
+#endif
     std::array<unsigned char,192+8*recordStride> records{};
     auto identifier=[&](UINT offset,const wchar_t* name){const void* id=properties->GetShaderIdentifier(name);need(id!=nullptr,"Missing shader identifier");memcpy(records.data()+offset,id,32);};
     identifier(0,L"PTSceneQueryRayGeneration");identifier(64,L"PTSceneMiss");identifier(96,L"PTVisibilityMiss");
@@ -212,11 +219,10 @@ int main(int argc,char** argv){try{
     need(scene.topology.Build(blas->GetGPUVirtualAddress(),std::move(selectedGeometry)),"Freeze fixture BLAS");
     PTSceneDispatch::Table nativeTable;nativeTable.version=1;nativeTable.pipeline=reinterpret_cast<UINT_PTR>(state.Get());nativeTable.rays=2;
     nativeTable.bytes.resize(8*96);nativeTable.bindings.resize(4);nativeTable.allocationTokens.resize(4);
-    PTSceneDispatch::ExportSet exportMaps{nativeTable.pipeline,reinterpret_cast<UINT_PTR>(state.Get()),std::vector<PTShaderTableAdapter::Exports>(2)};
-    for(UINT type=0;type<2;++type){auto& e=exportMaps.rays[type];e.nativeOpaque[0]=static_cast<unsigned char>(1+type);e.nativeAlpha[0]=static_cast<unsigned char>(3+type);
-        memcpy(e.privateOpaque.data(),properties->GetShaderIdentifier(groupNames[type]),32);
-        memcpy(e.privateAlpha.data(),properties->GetShaderIdentifier(groupNames[2+type]),32);
-    }
+    std::array<PTShaderTableAdapter::Identifier,4> nativeIds{};
+    for(UINT i=0;i<4;++i)nativeIds[i][0]=static_cast<unsigned char>(i+1);
+    PTSceneDispatch::ExportSet exportMaps;
+    need(privatePipeline.Exports(nativeTable.pipeline,nativeIds,exportMaps),"Private state object export mapping");
 #endif
     for(UINT i=0;i<4;++i)for(UINT type=0;type<2;++type){UINT offset=192+(2*i+type)*recordStride;identifier(offset,groupNames[(i==0?0:2)+type]);
         bool shortIndex=i==0;UINT64 addr=(shortIndex?idx16:idx32)->GetGPUVirtualAddress();memcpy(records.data()+offset+32,&addr,8);addr=verts->GetGPUVirtualAddress();memcpy(records.data()+offset+40,&addr,8);
