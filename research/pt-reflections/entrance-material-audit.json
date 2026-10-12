@@ -1,0 +1,1429 @@
+{
+  "schema": 1,
+  "runtime_enabled": false,
+  "scope": "Captured pixel shaders declaring both native light buffers; not all game materials.",
+  "variants": {
+    "0cd8a4b8144f1add1eac28edb815477ad7e3b42291735aa361e2f8e77b20bb96": {
+      "group": "character",
+      "uses": [
+        {
+          "view": "01-overview",
+          "pipeline": "6379"
+        },
+        {
+          "view": "02-floor",
+          "pipeline": "6327"
+        },
+        {
+          "view": "03-glass",
+          "pipeline": "6382"
+        },
+        {
+          "view": "04-reverse",
+          "pipeline": "6329"
+        },
+        {
+          "view": "04-reverse",
+          "pipeline": "6335"
+        },
+        {
+          "view": "05-rr-off",
+          "pipeline": "6225"
+        },
+        {
+          "view": "06-composite-off",
+          "pipeline": "6165"
+        }
+      ],
+      "instruction_count": 612,
+      "status": "separate_semantic_review_required",
+      "custom_data_blocks": 0,
+      "discard_offsets": [],
+      "output_writes": [
+        {
+          "dword": 4680,
+          "name": "mad",
+          "operands": [
+            "o[0].xyz",
+            "r[0].xyzx",
+            "r[1].wwww",
+            "r[1].xyzx"
+          ]
+        },
+        {
+          "dword": 4689,
+          "name": "mov",
+          "operands": [
+            "o[0].w",
+            "r[3].w"
+          ]
+        }
+      ],
+      "evidence": null
+    },
+    "11f146abfdc0f5d65f05244666214f835be98c80c557cdcea17921b547244a5d": {
+      "group": "general_surface",
+      "uses": [
+        {
+          "view": "01-overview",
+          "pipeline": "6370"
+        },
+        {
+          "view": "01-overview",
+          "pipeline": "6375"
+        },
+        {
+          "view": "02-floor",
+          "pipeline": "6318"
+        },
+        {
+          "view": "02-floor",
+          "pipeline": "6323"
+        },
+        {
+          "view": "03-glass",
+          "pipeline": "6373"
+        },
+        {
+          "view": "03-glass",
+          "pipeline": "6378"
+        },
+        {
+          "view": "04-reverse",
+          "pipeline": "6317"
+        },
+        {
+          "view": "05-rr-off",
+          "pipeline": "6214"
+        },
+        {
+          "view": "05-rr-off",
+          "pipeline": "6219"
+        },
+        {
+          "view": "06-composite-off",
+          "pipeline": "6149"
+        },
+        {
+          "view": "06-composite-off",
+          "pipeline": "6155"
+        }
+      ],
+      "instruction_count": 182,
+      "status": "reviewed_offline_candidate",
+      "custom_data_blocks": 0,
+      "discard_offsets": [],
+      "output_writes": [
+        {
+          "dword": 1393,
+          "name": "mad",
+          "operands": [
+            "o[0].xyz",
+            "r[0].xyzx",
+            "r[1].wwww",
+            "r[1].xyzx"
+          ]
+        },
+        {
+          "dword": 1402,
+          "name": "mov",
+          "operands": [
+            "o[0].w",
+            "r[2].w"
+          ]
+        }
+      ],
+      "evidence": {
+        "combine": {
+          "dword": 544,
+          "name": "mad",
+          "operands": [
+            "r[0].xyz",
+            "r[1].xyzx",
+            "r[2].xyzx",
+            "r[0].xyzx"
+          ]
+        },
+        "fog_start": {
+          "dword": 553,
+          "name": "dp3",
+          "operands": [
+            "r[0].w",
+            "v[0].xyzx",
+            "v[0].xyzx"
+          ]
+        },
+        "between": [],
+        "contract": {
+          "combine_dword": 544,
+          "fog_start_dword": 553,
+          "combine_operands": [
+            "r[0].xyz",
+            "r[1].xyzx",
+            "r[2].xyzx",
+            "r[0].xyzx"
+          ],
+          "primary_emission_after_combine": false,
+          "status": "offline_candidate_not_runtime_enabled"
+        }
+      }
+    },
+    "33fde7037525c2b9aa6cca58bd45d3151ecc8f1f91bfa4ff6529909179dc41ca": {
+      "group": "character",
+      "uses": [
+        {
+          "view": "01-overview",
+          "pipeline": "6388"
+        },
+        {
+          "view": "02-floor",
+          "pipeline": "6333"
+        },
+        {
+          "view": "03-glass",
+          "pipeline": "6388"
+        },
+        {
+          "view": "04-reverse",
+          "pipeline": "6334"
+        },
+        {
+          "view": "04-reverse",
+          "pipeline": "6338"
+        },
+        {
+          "view": "05-rr-off",
+          "pipeline": "6231"
+        },
+        {
+          "view": "06-composite-off",
+          "pipeline": "6170"
+        }
+      ],
+      "instruction_count": 680,
+      "status": "separate_semantic_review_required",
+      "custom_data_blocks": 1,
+      "discard_offsets": [],
+      "output_writes": [
+        {
+          "dword": 5222,
+          "name": "mad",
+          "operands": [
+            "o[0].xyz",
+            "r[0].xyzx",
+            "r[1].wwww",
+            "r[1].xyzx"
+          ]
+        }
+      ],
+      "evidence": null
+    },
+    "3407009bbdc53544484144b097a697f110ab0db8f0184e2362e439a077ab13ad": {
+      "group": "decal",
+      "uses": [
+        {
+          "view": "06-composite-off",
+          "pipeline": "6176"
+        }
+      ],
+      "instruction_count": 257,
+      "status": "separate_semantic_review_required",
+      "custom_data_blocks": 0,
+      "discard_offsets": [
+        1052
+      ],
+      "output_writes": [
+        {
+          "dword": 1958,
+          "name": "mad",
+          "operands": [
+            "o[0].xyz",
+            "r[0].yzwy",
+            "r[1].wwww",
+            "r[1].xyzx"
+          ]
+        },
+        {
+          "dword": 1967,
+          "name": "mul",
+          "operands": [
+            "o[0].w",
+            "r[2].w",
+            "cb[4][4][0].z"
+          ]
+        }
+      ],
+      "evidence": null
+    },
+    "3755ae5f574c639ee79de158a309414dec754dcc4964ccfa477322f7ef1f658a": {
+      "group": "general_surface",
+      "uses": [
+        {
+          "view": "01-overview",
+          "pipeline": "6377"
+        },
+        {
+          "view": "02-floor",
+          "pipeline": "6325"
+        },
+        {
+          "view": "03-glass",
+          "pipeline": "6380"
+        },
+        {
+          "view": "04-reverse",
+          "pipeline": "6327"
+        },
+        {
+          "view": "05-rr-off",
+          "pipeline": "6221"
+        },
+        {
+          "view": "06-composite-off",
+          "pipeline": "6161"
+        }
+      ],
+      "instruction_count": 163,
+      "status": "reviewed_offline_candidate",
+      "custom_data_blocks": 0,
+      "discard_offsets": [],
+      "output_writes": [
+        {
+          "dword": 1227,
+          "name": "mad",
+          "operands": [
+            "o[0].xyz",
+            "r[0].xyzx",
+            "r[1].wwww",
+            "r[1].xyzx"
+          ]
+        }
+      ],
+      "evidence": {
+        "combine": {
+          "dword": 440,
+          "name": "mad",
+          "operands": [
+            "r[0].xyz",
+            "r[1].xyzx",
+            "r[2].xyzx",
+            "r[0].xyzx"
+          ]
+        },
+        "fog_start": {
+          "dword": 449,
+          "name": "add",
+          "operands": [
+            "r[0].w",
+            "v[0].w",
+            "-cb[1][1][24].z"
+          ]
+        },
+        "between": [],
+        "contract": {
+          "combine_dword": 440,
+          "fog_start_dword": 449,
+          "combine_operands": [
+            "r[0].xyz",
+            "r[1].xyzx",
+            "r[2].xyzx",
+            "r[0].xyzx"
+          ],
+          "primary_emission_after_combine": false,
+          "status": "offline_candidate_not_runtime_enabled"
+        }
+      }
+    },
+    "68b095104f50891b21ebd4ff28c3ec038f1d6062c84f4f4568929a5037bc16a7": {
+      "group": "general_surface",
+      "uses": [
+        {
+          "view": "01-overview",
+          "pipeline": "6378"
+        },
+        {
+          "view": "02-floor",
+          "pipeline": "6326"
+        },
+        {
+          "view": "03-glass",
+          "pipeline": "6381"
+        },
+        {
+          "view": "04-reverse",
+          "pipeline": "6328"
+        },
+        {
+          "view": "05-rr-off",
+          "pipeline": "6223"
+        },
+        {
+          "view": "06-composite-off",
+          "pipeline": "6163"
+        }
+      ],
+      "instruction_count": 280,
+      "status": "reviewed_offline_candidate",
+      "custom_data_blocks": 1,
+      "discard_offsets": [],
+      "output_writes": [
+        {
+          "dword": 2112,
+          "name": "mad",
+          "operands": [
+            "o[0].xyz",
+            "r[0].xyzx",
+            "r[1].wwww",
+            "r[1].xyzx"
+          ]
+        }
+      ],
+      "evidence": {
+        "combine": {
+          "dword": 1325,
+          "name": "mad",
+          "operands": [
+            "r[0].xyz",
+            "r[0].yzwy",
+            "r[2].xyzx",
+            "r[1].xyzx"
+          ]
+        },
+        "fog_start": {
+          "dword": 1334,
+          "name": "add",
+          "operands": [
+            "r[0].w",
+            "v[0].w",
+            "-cb[1][1][24].z"
+          ]
+        },
+        "between": [],
+        "contract": {
+          "combine_dword": 1325,
+          "fog_start_dword": 1334,
+          "combine_operands": [
+            "r[0].xyz",
+            "r[0].yzwy",
+            "r[2].xyzx",
+            "r[1].xyzx"
+          ],
+          "primary_emission_after_combine": false,
+          "status": "offline_candidate_not_runtime_enabled"
+        }
+      }
+    },
+    "7518cf8fa5becc5bef03f7e3b0a87f910c1c93ce7e178e81413f6402da96b939": {
+      "group": "general_surface",
+      "uses": [
+        {
+          "view": "01-overview",
+          "pipeline": "6362"
+        },
+        {
+          "view": "01-overview",
+          "pipeline": "6363"
+        },
+        {
+          "view": "01-overview",
+          "pipeline": "6364"
+        },
+        {
+          "view": "01-overview",
+          "pipeline": "6365"
+        },
+        {
+          "view": "01-overview",
+          "pipeline": "6366"
+        },
+        {
+          "view": "02-floor",
+          "pipeline": "6310"
+        },
+        {
+          "view": "02-floor",
+          "pipeline": "6311"
+        },
+        {
+          "view": "02-floor",
+          "pipeline": "6312"
+        },
+        {
+          "view": "02-floor",
+          "pipeline": "6313"
+        },
+        {
+          "view": "02-floor",
+          "pipeline": "6314"
+        },
+        {
+          "view": "03-glass",
+          "pipeline": "6365"
+        },
+        {
+          "view": "03-glass",
+          "pipeline": "6366"
+        },
+        {
+          "view": "03-glass",
+          "pipeline": "6367"
+        },
+        {
+          "view": "03-glass",
+          "pipeline": "6368"
+        },
+        {
+          "view": "03-glass",
+          "pipeline": "6369"
+        },
+        {
+          "view": "04-reverse",
+          "pipeline": "6315"
+        },
+        {
+          "view": "04-reverse",
+          "pipeline": "6318"
+        },
+        {
+          "view": "04-reverse",
+          "pipeline": "6319"
+        },
+        {
+          "view": "05-rr-off",
+          "pipeline": "6206"
+        },
+        {
+          "view": "05-rr-off",
+          "pipeline": "6207"
+        },
+        {
+          "view": "05-rr-off",
+          "pipeline": "6208"
+        },
+        {
+          "view": "05-rr-off",
+          "pipeline": "6209"
+        },
+        {
+          "view": "05-rr-off",
+          "pipeline": "6210"
+        },
+        {
+          "view": "06-composite-off",
+          "pipeline": "6150"
+        },
+        {
+          "view": "06-composite-off",
+          "pipeline": "6151"
+        },
+        {
+          "view": "06-composite-off",
+          "pipeline": "6152"
+        },
+        {
+          "view": "06-composite-off",
+          "pipeline": "6157"
+        }
+      ],
+      "instruction_count": 174,
+      "status": "reviewed_offline_candidate",
+      "custom_data_blocks": 0,
+      "discard_offsets": [],
+      "output_writes": [
+        {
+          "dword": 1315,
+          "name": "mad",
+          "operands": [
+            "o[0].xyz",
+            "r[0].xyzx",
+            "r[1].wwww",
+            "r[1].xyzx"
+          ]
+        },
+        {
+          "dword": 1324,
+          "name": "mov",
+          "operands": [
+            "o[0].w",
+            "r[2].w"
+          ]
+        }
+      ],
+      "evidence": {
+        "combine": {
+          "dword": 466,
+          "name": "mad",
+          "operands": [
+            "r[0].xyz",
+            "r[1].xyzx",
+            "r[2].xyzx",
+            "r[0].xyzx"
+          ]
+        },
+        "fog_start": {
+          "dword": 475,
+          "name": "dp3",
+          "operands": [
+            "r[0].w",
+            "v[0].xyzx",
+            "v[0].xyzx"
+          ]
+        },
+        "between": [],
+        "contract": {
+          "combine_dword": 466,
+          "fog_start_dword": 475,
+          "combine_operands": [
+            "r[0].xyz",
+            "r[1].xyzx",
+            "r[2].xyzx",
+            "r[0].xyzx"
+          ],
+          "primary_emission_after_combine": false,
+          "status": "offline_candidate_not_runtime_enabled"
+        }
+      }
+    },
+    "77ee9ce88a8dc91e6dfcc272722395ee422641f79caa630fa75475c512cc0f1e": {
+      "group": "general_surface",
+      "uses": [
+        {
+          "view": "01-overview",
+          "pipeline": "6376"
+        },
+        {
+          "view": "02-floor",
+          "pipeline": "6324"
+        },
+        {
+          "view": "03-glass",
+          "pipeline": "6379"
+        },
+        {
+          "view": "04-reverse",
+          "pipeline": "6322"
+        },
+        {
+          "view": "05-rr-off",
+          "pipeline": "6220"
+        },
+        {
+          "view": "06-composite-off",
+          "pipeline": "6156"
+        }
+      ],
+      "instruction_count": 204,
+      "status": "reviewed_offline_candidate",
+      "custom_data_blocks": 0,
+      "discard_offsets": [],
+      "output_writes": [
+        {
+          "dword": 1591,
+          "name": "mad",
+          "operands": [
+            "o[0].xyz",
+            "r[0].xyzx",
+            "r[1].wwww",
+            "r[1].xyzx"
+          ]
+        },
+        {
+          "dword": 1600,
+          "name": "mov",
+          "operands": [
+            "o[0].w",
+            "r[2].w"
+          ]
+        }
+      ],
+      "evidence": {
+        "combine": {
+          "dword": 742,
+          "name": "mad",
+          "operands": [
+            "r[0].xyz",
+            "r[1].xyzx",
+            "r[2].xyzx",
+            "r[0].xyzx"
+          ]
+        },
+        "fog_start": {
+          "dword": 751,
+          "name": "dp3",
+          "operands": [
+            "r[0].w",
+            "v[0].xyzx",
+            "v[0].xyzx"
+          ]
+        },
+        "between": [],
+        "contract": {
+          "combine_dword": 742,
+          "fog_start_dword": 751,
+          "combine_operands": [
+            "r[0].xyz",
+            "r[1].xyzx",
+            "r[2].xyzx",
+            "r[0].xyzx"
+          ],
+          "primary_emission_after_combine": false,
+          "status": "offline_candidate_not_runtime_enabled"
+        }
+      }
+    },
+    "c2b52240500620f87ebb7c87615221923328504a34e5e8ae1123f9c0b47f7d82": {
+      "group": "general_surface",
+      "uses": [
+        {
+          "view": "01-overview",
+          "pipeline": "6369"
+        },
+        {
+          "view": "02-floor",
+          "pipeline": "6317"
+        },
+        {
+          "view": "03-glass",
+          "pipeline": "6372"
+        },
+        {
+          "view": "04-reverse",
+          "pipeline": "6316"
+        },
+        {
+          "view": "05-rr-off",
+          "pipeline": "6213"
+        },
+        {
+          "view": "06-composite-off",
+          "pipeline": "6148"
+        }
+      ],
+      "instruction_count": 192,
+      "status": "reviewed_offline_candidate",
+      "custom_data_blocks": 0,
+      "discard_offsets": [],
+      "output_writes": [
+        {
+          "dword": 1475,
+          "name": "mad",
+          "operands": [
+            "o[0].xyz",
+            "r[0].xyzx",
+            "r[1].wwww",
+            "r[1].xyzx"
+          ]
+        },
+        {
+          "dword": 1484,
+          "name": "mov",
+          "operands": [
+            "o[0].w",
+            "r[2].w"
+          ]
+        }
+      ],
+      "evidence": {
+        "combine": {
+          "dword": 626,
+          "name": "mad",
+          "operands": [
+            "r[0].xyz",
+            "r[1].xyzx",
+            "r[2].xyzx",
+            "r[0].xyzx"
+          ]
+        },
+        "fog_start": {
+          "dword": 635,
+          "name": "dp3",
+          "operands": [
+            "r[0].w",
+            "v[0].xyzx",
+            "v[0].xyzx"
+          ]
+        },
+        "between": [],
+        "contract": {
+          "combine_dword": 626,
+          "fog_start_dword": 635,
+          "combine_operands": [
+            "r[0].xyz",
+            "r[1].xyzx",
+            "r[2].xyzx",
+            "r[0].xyzx"
+          ],
+          "primary_emission_after_combine": false,
+          "status": "offline_candidate_not_runtime_enabled"
+        }
+      }
+    },
+    "c34237b987bd2941440aec035499f7c21be953373c646509dc6353a244501d64": {
+      "group": "character",
+      "uses": [
+        {
+          "view": "01-overview",
+          "pipeline": "6380"
+        },
+        {
+          "view": "02-floor",
+          "pipeline": "6328"
+        },
+        {
+          "view": "03-glass",
+          "pipeline": "6383"
+        },
+        {
+          "view": "04-reverse",
+          "pipeline": "6330"
+        },
+        {
+          "view": "04-reverse",
+          "pipeline": "6337"
+        },
+        {
+          "view": "05-rr-off",
+          "pipeline": "6226"
+        },
+        {
+          "view": "06-composite-off",
+          "pipeline": "6166"
+        }
+      ],
+      "instruction_count": 590,
+      "status": "separate_semantic_review_required",
+      "custom_data_blocks": 0,
+      "discard_offsets": [],
+      "output_writes": [
+        {
+          "dword": 4417,
+          "name": "mad",
+          "operands": [
+            "o[0].xyz",
+            "r[0].xyzx",
+            "r[1].wwww",
+            "r[1].xyzx"
+          ]
+        }
+      ],
+      "evidence": null
+    },
+    "cf68e7a8831c24b45c9c0fd54f03cb3c1defd0f99fe0bf68f0771333d888cb66": {
+      "group": "character",
+      "uses": [
+        {
+          "view": "01-overview",
+          "pipeline": "6383"
+        },
+        {
+          "view": "02-floor",
+          "pipeline": "6332"
+        },
+        {
+          "view": "03-glass",
+          "pipeline": "6387"
+        },
+        {
+          "view": "04-reverse",
+          "pipeline": "6333"
+        },
+        {
+          "view": "04-reverse",
+          "pipeline": "6336"
+        },
+        {
+          "view": "05-rr-off",
+          "pipeline": "6230"
+        },
+        {
+          "view": "06-composite-off",
+          "pipeline": "6169"
+        }
+      ],
+      "instruction_count": 612,
+      "status": "separate_semantic_review_required",
+      "custom_data_blocks": 0,
+      "discard_offsets": [],
+      "output_writes": [
+        {
+          "dword": 4680,
+          "name": "mad",
+          "operands": [
+            "o[0].xyz",
+            "r[0].xyzx",
+            "r[1].wwww",
+            "r[1].xyzx"
+          ]
+        },
+        {
+          "dword": 4689,
+          "name": "mov",
+          "operands": [
+            "o[0].w",
+            "r[3].w"
+          ]
+        }
+      ],
+      "evidence": null
+    },
+    "de308e5501bd971d1f195241d61b1f67556af8c5fa35d9d57620759ee7388a13": {
+      "group": "general_surface",
+      "uses": [
+        {
+          "view": "01-overview",
+          "pipeline": "6373"
+        },
+        {
+          "view": "01-overview",
+          "pipeline": "6374"
+        },
+        {
+          "view": "01-overview",
+          "pipeline": "6382"
+        },
+        {
+          "view": "01-overview",
+          "pipeline": "6384"
+        },
+        {
+          "view": "02-floor",
+          "pipeline": "6321"
+        },
+        {
+          "view": "02-floor",
+          "pipeline": "6322"
+        },
+        {
+          "view": "02-floor",
+          "pipeline": "6331"
+        },
+        {
+          "view": "02-floor",
+          "pipeline": "6334"
+        },
+        {
+          "view": "03-glass",
+          "pipeline": "6376"
+        },
+        {
+          "view": "03-glass",
+          "pipeline": "6377"
+        },
+        {
+          "view": "03-glass",
+          "pipeline": "6386"
+        },
+        {
+          "view": "03-glass",
+          "pipeline": "6389"
+        },
+        {
+          "view": "04-reverse",
+          "pipeline": "6325"
+        },
+        {
+          "view": "04-reverse",
+          "pipeline": "6326"
+        },
+        {
+          "view": "05-rr-off",
+          "pipeline": "6217"
+        },
+        {
+          "view": "05-rr-off",
+          "pipeline": "6218"
+        },
+        {
+          "view": "05-rr-off",
+          "pipeline": "6222"
+        },
+        {
+          "view": "05-rr-off",
+          "pipeline": "6224"
+        },
+        {
+          "view": "05-rr-off",
+          "pipeline": "6229"
+        },
+        {
+          "view": "06-composite-off",
+          "pipeline": "6160"
+        },
+        {
+          "view": "06-composite-off",
+          "pipeline": "6162"
+        },
+        {
+          "view": "06-composite-off",
+          "pipeline": "6164"
+        }
+      ],
+      "instruction_count": 291,
+      "status": "reviewed_offline_candidate",
+      "custom_data_blocks": 1,
+      "discard_offsets": [],
+      "output_writes": [
+        {
+          "dword": 2200,
+          "name": "mad",
+          "operands": [
+            "o[0].xyz",
+            "r[0].xyzx",
+            "r[1].wwww",
+            "r[1].xyzx"
+          ]
+        },
+        {
+          "dword": 2209,
+          "name": "mov",
+          "operands": [
+            "o[0].w",
+            "r[2].w"
+          ]
+        }
+      ],
+      "evidence": {
+        "combine": {
+          "dword": 1351,
+          "name": "mad",
+          "operands": [
+            "r[0].xyz",
+            "r[0].yzwy",
+            "r[2].xyzx",
+            "r[1].xyzx"
+          ]
+        },
+        "fog_start": {
+          "dword": 1360,
+          "name": "dp3",
+          "operands": [
+            "r[0].w",
+            "v[0].xyzx",
+            "v[0].xyzx"
+          ]
+        },
+        "between": [],
+        "contract": {
+          "combine_dword": 1351,
+          "fog_start_dword": 1360,
+          "combine_operands": [
+            "r[0].xyz",
+            "r[0].yzwy",
+            "r[2].xyzx",
+            "r[1].xyzx"
+          ],
+          "primary_emission_after_combine": false,
+          "status": "offline_candidate_not_runtime_enabled"
+        }
+      }
+    },
+    "de9416928ae45558496f659a62d32e797f252c6fea48a2130f4d7a992eebf26d": {
+      "group": "general_surface",
+      "uses": [
+        {
+          "view": "01-overview",
+          "pipeline": "6392"
+        },
+        {
+          "view": "01-overview",
+          "pipeline": "6393"
+        },
+        {
+          "view": "02-floor",
+          "pipeline": "6338"
+        },
+        {
+          "view": "02-floor",
+          "pipeline": "6339"
+        },
+        {
+          "view": "03-glass",
+          "pipeline": "6394"
+        },
+        {
+          "view": "03-glass",
+          "pipeline": "6395"
+        },
+        {
+          "view": "04-reverse",
+          "pipeline": "6342"
+        },
+        {
+          "view": "04-reverse",
+          "pipeline": "6343"
+        },
+        {
+          "view": "05-rr-off",
+          "pipeline": "6235"
+        },
+        {
+          "view": "05-rr-off",
+          "pipeline": "6236"
+        },
+        {
+          "view": "06-composite-off",
+          "pipeline": "6174"
+        },
+        {
+          "view": "06-composite-off",
+          "pipeline": "6175"
+        }
+      ],
+      "instruction_count": 190,
+      "status": "reviewed_offline_candidate",
+      "custom_data_blocks": 0,
+      "discard_offsets": [],
+      "output_writes": [
+        {
+          "dword": 1456,
+          "name": "mad",
+          "operands": [
+            "o[0].xyz",
+            "r[0].xyzx",
+            "r[1].wwww",
+            "r[1].xyzx"
+          ]
+        },
+        {
+          "dword": 1465,
+          "name": "mul",
+          "operands": [
+            "o[0].w",
+            "r[3].y",
+            "r[0].w"
+          ]
+        }
+      ],
+      "evidence": {
+        "combine": {
+          "dword": 614,
+          "name": "mad",
+          "operands": [
+            "r[0].xyz",
+            "r[1].xyzx",
+            "r[2].xyzx",
+            "r[0].xyzx"
+          ]
+        },
+        "fog_start": {
+          "dword": 623,
+          "name": "dp3",
+          "operands": [
+            "r[1].x",
+            "v[0].xyzx",
+            "v[0].xyzx"
+          ]
+        },
+        "between": [],
+        "contract": {
+          "combine_dword": 614,
+          "fog_start_dword": 623,
+          "combine_operands": [
+            "r[0].xyz",
+            "r[1].xyzx",
+            "r[2].xyzx",
+            "r[0].xyzx"
+          ],
+          "primary_emission_after_combine": false,
+          "status": "offline_candidate_not_runtime_enabled"
+        }
+      }
+    },
+    "e82cbbb52d209394aa584770134d188e256628cb9d1d1019c1dfb412c27133e0": {
+      "group": "decal",
+      "uses": [
+        {
+          "view": "01-overview",
+          "pipeline": "6391"
+        },
+        {
+          "view": "02-floor",
+          "pipeline": "6337"
+        },
+        {
+          "view": "03-glass",
+          "pipeline": "6393"
+        },
+        {
+          "view": "04-reverse",
+          "pipeline": "6341"
+        },
+        {
+          "view": "05-rr-off",
+          "pipeline": "6234"
+        },
+        {
+          "view": "06-composite-off",
+          "pipeline": "6173"
+        }
+      ],
+      "instruction_count": 253,
+      "status": "separate_semantic_review_required",
+      "custom_data_blocks": 0,
+      "discard_offsets": [
+        1055
+      ],
+      "output_writes": [
+        {
+          "dword": 1914,
+          "name": "mad",
+          "operands": [
+            "o[0].xyz",
+            "r[0].yzwy",
+            "r[1].wwww",
+            "r[1].xyzx"
+          ]
+        },
+        {
+          "dword": 1923,
+          "name": "mul",
+          "operands": [
+            "o[0].w",
+            "r[2].w",
+            "cb[4][4][0].z"
+          ]
+        }
+      ],
+      "evidence": null
+    },
+    "f13bd19019bfd15cd222e74732d07b27736e613c10876314ef12524311dbfe59": {
+      "group": "character",
+      "uses": [
+        {
+          "view": "01-overview",
+          "pipeline": "6387"
+        },
+        {
+          "view": "02-floor",
+          "pipeline": "6329"
+        },
+        {
+          "view": "03-glass",
+          "pipeline": "6384"
+        },
+        {
+          "view": "04-reverse",
+          "pipeline": "6331"
+        },
+        {
+          "view": "05-rr-off",
+          "pipeline": "6227"
+        },
+        {
+          "view": "06-composite-off",
+          "pipeline": "6167"
+        }
+      ],
+      "instruction_count": 727,
+      "status": "separate_semantic_review_required",
+      "custom_data_blocks": 1,
+      "discard_offsets": [],
+      "output_writes": [
+        {
+          "dword": 5555,
+          "name": "mad",
+          "operands": [
+            "o[0].xyz",
+            "r[0].xyzx",
+            "r[1].wwww",
+            "r[1].xyzx"
+          ]
+        },
+        {
+          "dword": 5564,
+          "name": "mov",
+          "operands": [
+            "o[0].w",
+            "r[3].w"
+          ]
+        }
+      ],
+      "evidence": null
+    },
+    "f4b9c2b4dfeebdba90724f803ba236211bb1fbb72755f789dab03268d3df26b1": {
+      "group": "general_surface",
+      "uses": [
+        {
+          "view": "01-overview",
+          "pipeline": "6371"
+        },
+        {
+          "view": "02-floor",
+          "pipeline": "6319"
+        },
+        {
+          "view": "03-glass",
+          "pipeline": "6374"
+        },
+        {
+          "view": "03-glass",
+          "pipeline": "6390"
+        },
+        {
+          "view": "04-reverse",
+          "pipeline": "6320"
+        },
+        {
+          "view": "05-rr-off",
+          "pipeline": "6215"
+        },
+        {
+          "view": "06-composite-off",
+          "pipeline": "6153"
+        }
+      ],
+      "instruction_count": 181,
+      "status": "reviewed_offline_candidate",
+      "custom_data_blocks": 0,
+      "discard_offsets": [],
+      "output_writes": [
+        {
+          "dword": 1384,
+          "name": "mad",
+          "operands": [
+            "o[0].xyz",
+            "r[0].xyzx",
+            "r[1].wwww",
+            "r[1].xyzx"
+          ]
+        },
+        {
+          "dword": 1393,
+          "name": "mov",
+          "operands": [
+            "o[0].w",
+            "r[3].w"
+          ]
+        }
+      ],
+      "evidence": {
+        "combine": {
+          "dword": 495,
+          "name": "mad",
+          "operands": [
+            "r[0].xyz",
+            "r[1].xyzx",
+            "r[3].xyzx",
+            "r[0].xyzx"
+          ]
+        },
+        "fog_start": {
+          "dword": 544,
+          "name": "dp3",
+          "operands": [
+            "r[0].w",
+            "v[0].xyzx",
+            "v[0].xyzx"
+          ]
+        },
+        "between": [
+          {
+            "dword": 504,
+            "name": "imad",
+            "operands": [
+              "r[0].w",
+              "cb[3][3][0].x",
+              "l(35)",
+              "l(5)"
+            ]
+          },
+          {
+            "dword": 515,
+            "name": "sample",
+            "operands": [
+              "r[1].xyz",
+              "v[4].xyxx",
+              "t[7][r[0].w].xyzw",
+              "s[1][19]"
+            ]
+          },
+          {
+            "dword": 528,
+            "name": "mul",
+            "operands": [
+              "r[1].xyz",
+              "r[4].xyzx",
+              "r[1].xyzx"
+            ]
+          },
+          {
+            "dword": 535,
+            "name": "mad",
+            "operands": [
+              "r[0].xyz",
+              "r[1].xyzx",
+              "r[2].xxxx",
+              "r[0].xyzx"
+            ]
+          }
+        ],
+        "contract": {
+          "combine_dword": 495,
+          "fog_start_dword": 544,
+          "combine_operands": [
+            "r[0].xyz",
+            "r[1].xyzx",
+            "r[3].xyzx",
+            "r[0].xyzx"
+          ],
+          "primary_emission_after_combine": true,
+          "status": "offline_candidate_not_runtime_enabled"
+        }
+      }
+    },
+    "f9e3ee28fdb7a483789036fc41df8ed73b06daf1411326f4d1dafadfbb6e3487": {
+      "group": "character",
+      "uses": [
+        {
+          "view": "01-overview",
+          "pipeline": "6381"
+        },
+        {
+          "view": "02-floor",
+          "pipeline": "6330"
+        },
+        {
+          "view": "03-glass",
+          "pipeline": "6385"
+        },
+        {
+          "view": "04-reverse",
+          "pipeline": "6332"
+        },
+        {
+          "view": "05-rr-off",
+          "pipeline": "6228"
+        },
+        {
+          "view": "06-composite-off",
+          "pipeline": "6168"
+        }
+      ],
+      "instruction_count": 573,
+      "status": "separate_semantic_review_required",
+      "custom_data_blocks": 0,
+      "discard_offsets": [],
+      "output_writes": [
+        {
+          "dword": 4450,
+          "name": "mad",
+          "operands": [
+            "o[0].xyz",
+            "r[0].xyzx",
+            "r[1].wwww",
+            "r[1].xyzx"
+          ]
+        },
+        {
+          "dword": 4459,
+          "name": "mov",
+          "operands": [
+            "o[0].w",
+            "r[3].w"
+          ]
+        }
+      ],
+      "evidence": null
+    }
+  }
+}

@@ -1,0 +1,113 @@
+{
+  "schema": 1,
+  "variants": {
+    "7518cf8fa5becc5bef03f7e3b0a87f910c1c93ce7e178e81413f6402da96b939": {
+      "combine_dword": 466,
+      "fog_start_dword": 475,
+      "combine_operands": [
+        "r[0].xyz",
+        "r[1].xyzx",
+        "r[2].xyzx",
+        "r[0].xyzx"
+      ],
+      "primary_emission_after_combine": false,
+      "status": "offline_candidate_not_runtime_enabled"
+    },
+    "c2b52240500620f87ebb7c87615221923328504a34e5e8ae1123f9c0b47f7d82": {
+      "combine_dword": 626,
+      "fog_start_dword": 635,
+      "combine_operands": [
+        "r[0].xyz",
+        "r[1].xyzx",
+        "r[2].xyzx",
+        "r[0].xyzx"
+      ],
+      "primary_emission_after_combine": false,
+      "status": "offline_candidate_not_runtime_enabled"
+    },
+    "11f146abfdc0f5d65f05244666214f835be98c80c557cdcea17921b547244a5d": {
+      "combine_dword": 544,
+      "fog_start_dword": 553,
+      "combine_operands": [
+        "r[0].xyz",
+        "r[1].xyzx",
+        "r[2].xyzx",
+        "r[0].xyzx"
+      ],
+      "primary_emission_after_combine": false,
+      "status": "offline_candidate_not_runtime_enabled"
+    },
+    "f4b9c2b4dfeebdba90724f803ba236211bb1fbb72755f789dab03268d3df26b1": {
+      "combine_dword": 495,
+      "fog_start_dword": 544,
+      "combine_operands": [
+        "r[0].xyz",
+        "r[1].xyzx",
+        "r[3].xyzx",
+        "r[0].xyzx"
+      ],
+      "primary_emission_after_combine": true,
+      "status": "offline_candidate_not_runtime_enabled"
+    },
+    "de308e5501bd971d1f195241d61b1f67556af8c5fa35d9d57620759ee7388a13": {
+      "combine_dword": 1351,
+      "fog_start_dword": 1360,
+      "combine_operands": [
+        "r[0].xyz",
+        "r[0].yzwy",
+        "r[2].xyzx",
+        "r[1].xyzx"
+      ],
+      "primary_emission_after_combine": false,
+      "status": "offline_candidate_not_runtime_enabled"
+    },
+    "77ee9ce88a8dc91e6dfcc272722395ee422641f79caa630fa75475c512cc0f1e": {
+      "combine_dword": 742,
+      "fog_start_dword": 751,
+      "combine_operands": [
+        "r[0].xyz",
+        "r[1].xyzx",
+        "r[2].xyzx",
+        "r[0].xyzx"
+      ],
+      "primary_emission_after_combine": false,
+      "status": "offline_candidate_not_runtime_enabled"
+    },
+    "3755ae5f574c639ee79de158a309414dec754dcc4964ccfa477322f7ef1f658a": {
+      "combine_dword": 440,
+      "fog_start_dword": 449,
+      "combine_operands": [
+        "r[0].xyz",
+        "r[1].xyzx",
+        "r[2].xyzx",
+        "r[0].xyzx"
+      ],
+      "primary_emission_after_combine": false,
+      "status": "offline_candidate_not_runtime_enabled"
+    },
+    "68b095104f50891b21ebd4ff28c3ec038f1d6062c84f4f4568929a5037bc16a7": {
+      "combine_dword": 1325,
+      "fog_start_dword": 1334,
+      "combine_operands": [
+        "r[0].xyz",
+        "r[0].yzwy",
+        "r[2].xyzx",
+        "r[1].xyzx"
+      ],
+      "primary_emission_after_combine": false,
+      "status": "offline_candidate_not_runtime_enabled"
+    },
+    "de9416928ae45558496f659a62d32e797f252c6fea48a2130f4d7a992eebf26d": {
+      "combine_dword": 614,
+      "fog_start_dword": 623,
+      "combine_operands": [
+        "r[0].xyz",
+        "r[1].xyzx",
+        "r[2].xyzx",
+        "r[0].xyzx"
+      ],
+      "primary_emission_after_combine": false,
+      "status": "offline_candidate_not_runtime_enabled"
+    }
+  }
+}

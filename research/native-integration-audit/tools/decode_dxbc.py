@@ -56,7 +56,17 @@ def decode(p):
   cbs.append(cb)
  w=list(struct.unpack('<'+'I'*(len(chunks['SHEX'])//4),chunks['SHEX']));ins=[];pos=2
  while pos<len(w):
-  start=pos;t=w[pos];op=t&2047;ln=(t>>24)&127;name=opnames[op];end=pos+ln;pos+=1
+  start=pos;t=w[pos];op=t&2047;ln=(t>>24)&127;name=opnames[op]
+  # CUSTOMDATA uses a second DWORD length, including both header DWORDs.
+  # Its high opcode bits encode the data class, not extension/length flags.
+  if name=='customdata':
+   if pos+1>=len(w):raise ValueError('Truncated custom-data header')
+   ln=w[pos+1];end=pos+ln
+   if ln<2 or end>len(w):raise ValueError('Invalid custom-data length')
+   ins.append(dict(dword=start,name=name,operands=[],data_class=t>>11,data_words=w[pos+2:end]))
+   pos=end;continue
+  if ln<1 or pos+ln>len(w):raise ValueError('Invalid instruction length')
+  end=pos+ln;pos+=1
   ex=t>>31
   while ex:ex=w[pos]>>31;pos+=1
   vals=[]

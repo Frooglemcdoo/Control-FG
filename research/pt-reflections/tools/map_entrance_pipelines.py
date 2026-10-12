@@ -44,7 +44,9 @@ def stage(data):
     return 'dxil'
 
 
-def inventory(source, prefixes):
+def inventory(source, prefixes, shader_dir=None):
+    if shader_dir is not None:
+        shader_dir.mkdir(parents=True, exist_ok=True)
     views = {}
     with zipfile.ZipFile(source) as src, zipfile.ZipFile(prefixes) as packed:
         for name in sorted(src.namelist()):
@@ -78,6 +80,8 @@ def inventory(source, prefixes):
                         if length < 32 or position + length > len(decoded):
                             raise ValueError('Invalid shader length')
                         shader = decoded[position:position + length]
+                        if shader_dir is not None:
+                            (shader_dir / (hashlib.sha256(shader).hexdigest() + '.dxbc')).write_bytes(shader)
                         shaders.append(dict(sha256=hashlib.sha256(shader).hexdigest(),
                                             bytes=length, stage=stage(shader), bindings=bindings(shader)))
                         position += length
@@ -105,5 +109,6 @@ if __name__ == '__main__':
     parser.add_argument('source', type=Path)
     parser.add_argument('prefixes', type=Path)
     parser.add_argument('output', type=Path)
+    parser.add_argument('--shader-dir', type=Path, help='Optional cache of individual shader containers named by SHA256')
     args = parser.parse_args()
-    args.output.write_text(json.dumps(inventory(args.source, args.prefixes), indent=2) + '\n')
+    args.output.write_text(json.dumps(inventory(args.source, args.prefixes, args.shader_dir), indent=2) + '\n')
