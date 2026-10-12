@@ -8,6 +8,7 @@ on:
       - 'src/pt_scene_admission.h'
       - 'src/pt_shader_table_adapter.h'
       - 'src/pt_scene_dispatch_plan.h'
+      - 'src/pt_native_shader_table.h'
       - 'src/pt_owned_scene.h'
       - 'src/pt_scene_topology.h'
       - 'tools/test-pt-scene-dispatch-plan.cpp'

@@ -14,8 +14,11 @@
 #include <cmath>
 #include <stdexcept>
 #include <climits>
+#include <functional>
+#include <thread>
+#include <exception>
 #include "../src/pt_scene_admission.h"
-#include "../src/pt_scene_dispatch_plan.h"
+#include "../src/pt_native_shader_table.h"
 using Microsoft::WRL::ComPtr;
 static void ok(HRESULT hr,const char* name){if(FAILED(hr)){std::printf("FAIL %s HRESULT=0x%08lx\n",name,(unsigned long)hr);throw std::runtime_error(name);}}
 static void need(bool b,const char* name){if(!b)throw std::runtime_error(name);}
@@ -57,8 +60,25 @@ struct GPU {
         src.pResource=upload.Get();src.Type=D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;src.PlacedFootprint.Footprint={d.Format,1,1,1,256};
         list->CopyTextureRegion(&dst,0,0,0,&src,nullptr);barrier(t.Get(),D3D12_RESOURCE_STATE_COPY_DEST,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);return t;
     }
-    void execute(){
-        ok(list->Close(),"Close");ID3D12CommandList* lists[]={list.Get()};queue->ExecuteCommandLists(1,lists);
+    void execute(const std::function<void()>& lateFill={}){
+        ok(list->Close(),"Close");
+        ComPtr<ID3D12Fence> ready;
+        if(lateFill){ok(device->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&ready)),"Worker ready fence");ok(queue->Wait(ready.Get(),1),"Queue wait for worker");}
+        ID3D12CommandList* lists[]={list.Get()};queue->ExecuteCommandLists(1,lists);
+        if(lateFill){
+            // Deliberately fill only AFTER submission, on a worker. Native
+            // Control similarly records DispatchRays before its SBT worker.
+            // The GPU wait protects every private upload write in this test.
+            std::exception_ptr failure;
+            std::thread worker([&](){try{lateFill();}catch(...){failure=std::current_exception();}});worker.join();
+            ok(ready->Signal(1),"Publish worker table");
+            // Always release the wait and retire the queue before propagating
+            // a fixture failure; otherwise teardown could strand queued work.
+            if(failure){ComPtr<ID3D12Fence> failed;ok(device->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&failed)),"Failure fence");
+                ok(queue->Signal(failed.Get(),1),"Failure retirement");HANDLE done=CreateEventW(nullptr,FALSE,FALSE,nullptr);need(done!=nullptr,"Failure event");
+                const HRESULT eventHr=failed->SetEventOnCompletion(1,done);DWORD waited=FAILED(eventHr)?WAIT_FAILED:WaitForSingleObject(done,30000);CloseHandle(done);
+                need(waited==WAIT_OBJECT_0,"Failure retirement timeout");std::rethrow_exception(failure);}
+        }
         ComPtr<ID3D12Fence> f;ok(device->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&f)),"Fence");ok(queue->Signal(f.Get(),1),"Signal");
         HANDLE e=CreateEventW(nullptr,FALSE,FALSE,nullptr);need(e!=nullptr,"Fence event");HRESULT hr=f->SetEventOnCompletion(1,e);
         if(FAILED(hr)){CloseHandle(e);ok(hr,"Set fence event");}
@@ -210,14 +230,16 @@ int main(int argc,char** argv){try{
 #endif
     }
 #ifdef PT_GEOMETRY_SPAWN
-    auto nativeSbt=g.buffer(nativeTable.bytes.size(),D3D12_HEAP_TYPE_UPLOAD,D3D12_RESOURCE_STATE_GENERIC_READ,D3D12_RESOURCE_FLAG_NONE,nativeTable.bytes.data());
-    nativeTable.address=nativeSbt->GetGPUVirtualAddress();
+    std::vector<unsigned char> nativeStorage(128+nativeTable.bytes.size());memcpy(nativeStorage.data()+128,nativeTable.bytes.data(),nativeTable.bytes.size());
+    auto nativeSbt=g.buffer(nativeStorage.size(),D3D12_HEAP_TYPE_UPLOAD,D3D12_RESOURCE_STATE_GENERIC_READ,D3D12_RESOURCE_FLAG_NONE,nativeStorage.data());
+    nativeTable.address=nativeSbt->GetGPUVirtualAddress()+128;
     PTSceneDispatch::Selection selection{scene.address,scene.version,nativeTable.address,nativeTable.version,nativeTable.pipeline};
-    PTSceneDispatch::Plan plan;
-    need(PTSceneDispatch::Prepare(selection,scene,nativeTable,owners,exportMaps,plan).status==PTSceneDispatch::Status::prepared,"Complete scene-to-dispatch preflight");
-    need(plan.records.size()==8&&plan.allocationTokens.size()==4,"Complete scene leases and table");
-    for(size_t i=0;i<plan.records.size();++i)memcpy(records.data()+192+i*recordStride,plan.records[i].data(),recordStride);
-    std::puts("Scene transaction: exact TLAS geometry, allocation generations and both ray types converted together");
+    // Reserve the private hit table now; fill its records on the worker after
+    // submission. Raygen/miss identifiers are already valid in this buffer.
+
+#endif
+#ifdef PT_GEOMETRY_SPAWN
+    memset(records.data()+192,0,8*recordStride);
 #endif
     auto sbt=g.buffer(records.size(),D3D12_HEAP_TYPE_UPLOAD,D3D12_RESOURCE_STATE_GENERIC_READ,D3D12_RESOURCE_FLAG_NONE,records.data());
     Ray rays[]={{{0,0,0},0,{0,0,1},10},{{12,0,0},0,{0,0,1},10},{{3,0,0},0,{0,0,1},10},{{6,0,0},0,{0,0,1},10},{{0,0,0},0,{0,0,1},1},{{0,0,0},2.1f,{0,0,1},10},{{0,0,0},0,{0,0,0},10},{{9,0,0},0,{0,0,1},10}};
@@ -229,11 +251,41 @@ int main(int argc,char** argv){try{
 #ifdef PT_GEOMETRY_SPAWN
     if(translated)for(auto& ray:rays){ray.origin[0]+=100000;ray.origin[2]+=100000;}
 #endif
-    auto rayBuffer=g.buffer(sizeof(rays),D3D12_HEAP_TYPE_UPLOAD,D3D12_RESOURCE_STATE_GENERIC_READ,D3D12_RESOURCE_FLAG_NONE,rays);auto output=g.buffer(8*sizeof(Result),D3D12_HEAP_TYPE_DEFAULT,D3D12_RESOURCE_STATE_UNORDERED_ACCESS,D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);auto readback=g.buffer(8*sizeof(Result),D3D12_HEAP_TYPE_READBACK,D3D12_RESOURCE_STATE_COPY_DEST);
+    const void* initialRays=rays;
+#ifdef PT_GEOMETRY_SPAWN
+    // Invalid rays cannot call TraceRay. A failed worker leaves this disabled
+    // fallback in place, so an uninitialized hit table is never dereferenced.
+    Ray disabledRays[8]{};initialRays=disabledRays;
+#endif
+    auto rayBuffer=g.buffer(sizeof(rays),D3D12_HEAP_TYPE_UPLOAD,D3D12_RESOURCE_STATE_GENERIC_READ,D3D12_RESOURCE_FLAG_NONE,initialRays);auto output=g.buffer(8*sizeof(Result),D3D12_HEAP_TYPE_DEFAULT,D3D12_RESOURCE_STATE_UNORDERED_ACCESS,D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);auto readback=g.buffer(8*sizeof(Result),D3D12_HEAP_TYPE_READBACK,D3D12_RESOURCE_STATE_COPY_DEST);
     ID3D12DescriptorHeap* heaps[]={heap.Get()};g.list->SetDescriptorHeaps(1,heaps);g.list->SetComputeRootSignature(global.Get());auto gpu=heap->GetGPUDescriptorHandleForHeapStart();g.list->SetComputeRootDescriptorTable(0,gpu);gpu.ptr+=step;g.list->SetComputeRootDescriptorTable(1,gpu);
     g.list->SetComputeRootShaderResourceView(2,tlas->GetGPUVirtualAddress());g.list->SetComputeRootShaderResourceView(3,rayBuffer->GetGPUVirtualAddress());g.list->SetComputeRootUnorderedAccessView(4,output->GetGPUVirtualAddress());g.list->SetPipelineState1(state.Get());
     auto base=sbt->GetGPUVirtualAddress();D3D12_DISPATCH_RAYS_DESC dispatch{};dispatch.RayGenerationShaderRecord={base,32};dispatch.MissShaderTable={base+64,64,32};dispatch.HitGroupTable={base+192,8*recordStride,recordStride};dispatch.Width=8;dispatch.Height=dispatch.Depth=1;g.list->DispatchRays(&dispatch);
-    g.barrier(output.Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS,D3D12_RESOURCE_STATE_COPY_SOURCE);g.list->CopyBufferRegion(readback.Get(),0,output.Get(),0,8*sizeof(Result));g.execute();
+    g.barrier(output.Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS,D3D12_RESOURCE_STATE_COPY_SOURCE);g.list->CopyBufferRegion(readback.Get(),0,output.Get(),0,8*sizeof(Result));
+#ifdef PT_GEOMETRY_SPAWN
+    g.execute([&](){
+        PTNativeShaderTable::Identifiers ids;ids.pipeline=nativeTable.pipeline;
+        ids.hit={exportMaps.rays[0].nativeOpaque,exportMaps.rays[1].nativeOpaque,exportMaps.rays[0].nativeAlpha,exportMaps.rays[1].nativeAlpha};
+        auto bindings=nativeTable.bindings;for(UINT i=0;i<4;++i)bindings[i].type=i==0?0u:1u;
+        PTNativeShaderTable::Layout layout{nativeSbt->GetGPUVirtualAddress(),nativeStorage.size(),32,64,32,64,96,8};
+        PTSceneDispatch::Table captured;
+        need(PTNativeShaderTable::Build(layout,ids,nativeTable.version,2,bindings,owners,captured),"Native writer CPU snapshot");
+        need(captured.bytes==nativeTable.bytes,"Native writer snapshot matches fixture source");
+        PTSceneDispatch::Plan plan;
+        need(PTSceneDispatch::Prepare(selection,scene,captured,owners,exportMaps,plan).status==PTSceneDispatch::Status::prepared,"Complete scene-to-dispatch preflight");
+        need(plan.records.size()==8&&plan.allocationTokens.size()==4,"Complete scene leases and table");
+        void* mapped=nullptr;D3D12_RANGE empty{0,0};ok(sbt->Map(0,&empty,&mapped),"Private worker SBT map");
+        for(size_t i=0;i<plan.records.size();++i)memcpy(static_cast<unsigned char*>(mapped)+192+i*recordStride,plan.records[i].data(),recordStride);
+        D3D12_RANGE written{192,records.size()};sbt->Unmap(0,&written);
+        // Publish valid rays only after every table byte is ready. On failure,
+        // queue retirement still runs safely through the disabled fallback.
+        mapped=nullptr;ok(rayBuffer->Map(0,&empty,&mapped),"Publish worker rays");memcpy(mapped,rays,sizeof(rays));
+        D3D12_RANGE rayWritten{0,sizeof(rays)};rayBuffer->Unmap(0,&rayWritten);
+        std::puts("Scene transaction: native writer snapshot -> exact scene -> private SBT, filled after submission behind GPU fence");
+    });
+#else
+    g.execute();
+#endif
     Result* results;D3D12_RANGE range{0,8*sizeof(Result)};ok(readback->Map(0,&range,(void**)&results),"Read GPU results");
 #ifdef PT_PATH_TEST
     const char* names[]={"one surface", "two surfaces", "four surfaces", "eight surfaces", "visible direct light", "occluded direct light", "environment miss", "invalid input"};

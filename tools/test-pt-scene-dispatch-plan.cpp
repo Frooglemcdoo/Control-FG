@@ -2,7 +2,7 @@
 #define NOMINMAX
 #include <windows.h>
 #endif
-#include "../src/pt_scene_dispatch_plan.h"
+#include "../src/pt_native_shader_table.h"
 #include <cassert>
 #include <cstdio>
 using namespace PTSceneDispatch;
@@ -25,6 +25,25 @@ int main(){
         std::memcpy(p+32,&b.indices,8);std::memcpy(p+40,&b.attributes,8);std::memcpy(p+48,b.constants,40);
     }
     Selection selected{scene.address,scene.version,table.address,table.version,table.pipeline};Plan plan;
+    PTNativeShaderTable::Layout layout{0xbf80,320,32,64,32,64,96,2};
+    PTNativeShaderTable::Identifiers identifiers;identifiers.pipeline=3;
+    identifiers.hit={exports.rays[0].nativeOpaque,exports.rays[1].nativeOpaque,exports.rays[0].nativeAlpha,exports.rays[1].nativeAlpha};
+    const auto expected=table;
+    assert(PTNativeShaderTable::Build(layout,identifiers,2,2,{b},owners,table));
+    assert(table.address==expected.address&&table.bytes==expected.bytes&&table.allocationTokens==expected.allocationTokens);
+    auto invalidLayout=layout;invalidLayout.bytes=319;
+    assert(!PTNativeShaderTable::Build(invalidLayout,identifiers,2,2,{b},owners,table)&&table.bytes.empty());
+    assert(!PTNativeShaderTable::Build(layout,identifiers,2,1,{b},owners,table));
+    auto alpha=b;alpha.type=1;
+    assert(PTNativeShaderTable::Build(layout,identifiers,2,2,{alpha},owners,table)&&table.bytes[0]==3&&table.bytes[96]==4);
+    assert(PTNativeShaderTable::Build(layout,identifiers,2,2,{b},owners,table));
+#ifdef _WIN32
+    std::array<unsigned char,64> nativeState{};std::memcpy(nativeState.data(),&identifiers.pipeline,8);
+    for(unsigned i=0;i<4;++i){const void* id=identifiers.hit[i].data();std::memcpy(nativeState.data()+0x20+i*8,&id,8);}
+    PTNativeShaderTable::Identifiers read{};
+    assert(PTNativeShaderTable::ReadIdentifiers(nativeState.data(),read)&&read.hit==identifiers.hit&&read.pipeline==3);
+    assert(!PTNativeShaderTable::ReadIdentifiers(reinterpret_cast<void*>(1),read)&&read.pipeline==0);
+#endif
     auto prepare=[&](){return Prepare(selected,scene,table,owners,exports,plan);};
     assert(prepare().status==Status::prepared&&plan.records.size()==2&&plan.allocationTokens.size()==3);
     std::uint32_t limit=0;std::memcpy(&limit,plan.records[0].data()+56+8*4,4);assert(limit==8);

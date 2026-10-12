@@ -54,3 +54,45 @@ late-record failure, reused allocations and halfword-tail padding. Existing
 admission/converter/topology tests and the confirmed runtime hash gate also pass.
 Windows build and DXR execution status must be checked separately; a no-DXR skip
 is never a GPU pass.
+
+The first combined path was validated at remote commit
+`3c891ab045fc81a5e2b4f11aeaf11716306b59b5`: all six Windows workflows passed.
+Run 38308605681 executed the geometry cases on Microsoft Basic Render Driver,
+including translated and mirrored/nonuniform-scaled instances. This was reference
+driver execution, not RTX hardware or Control integration validation.
+
+## Native writer ordering and the next connection
+
+Inspection of the existing hash-locked Steam d3d DLL establishes:
+
+| RVA | Native operation |
+| --- | --- |
+| 354A2 / 354A5 | Load the state object's first pointer and SetPipelineState1 |
+| 357C6 | Optional inline table writer |
+| 358E4 | Record DispatchRays |
+| 359D9 | runJob through import 5D650, after dispatch recording |
+| 35A14 | Ray queue Wait (slot 15) for the table-copy fence |
+| 374A1 | Worker calls the same table writer 33A40 |
+| 313FB | waitJob through import 5D648 |
+| 314C9 | Copy queue Signal (slot 14), after the job join and copy submission |
+
+Thus the SBT is not necessarily CPU-ready at DispatchRays, or even at its queue
+submission. A latest-ready-table lookup would select the wrong generation. The
+live connection needs a dispatch reservation whose worker publishes before its
+job returns, with the reservation linked to that exact job and buffer generation.
+The native wait protects the native copy work; it must not be assumed to protect
+arbitrary extra GPU work without matching its queue position and resource states.
+
+`pt_native_shader_table.h` now reconstructs the 96-byte native hit records from
+CPU writer inputs. State+0 identifies the PSO; state+20 holds four identifier
+pointers indexed by `2 * geometryType + rayType`. The next 56 bytes are copied
+from binding+8. Only the recovered two-ray layout is admitted. The one-ray writer
+still reserves a second row, so treating it as a compact one-ray table is wrong.
+No native upload buffer mapping or GPU readback is needed for this decoder.
+
+The DXR fixture now reserves a table, submits behind a ready fence, then has a
+worker construct and upload the private records. Valid test rays are published
+last; failure leaves invalid rays that cannot execute TraceRay. This models late
+publication and safe failure. It does not yet install the live job/reservation
+connection or change Control rendering. Windows validation of this extension is
+separate from the earlier commit's results above.
