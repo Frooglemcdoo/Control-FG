@@ -10,7 +10,8 @@
 #include <mutex>
 #include <condition_variable>
 // Retain at the verified native creation boundary, while its owner is present.
-// Bounded CPU-only integration: no GPU work, resource-state changes or waits.
+// GPU geometry preservation is explicit at the native build boundary; ordinary
+// ownership/lookup calls do not record commands or infer immutable contents.
 namespace PTOwnedScene {
 class Runtime {
     using Resource=Microsoft::WRL::ComPtr<ID3D12Resource>;
@@ -146,7 +147,7 @@ public:
             bytes+=entry.bytes;payload->resources.push_back(entry.resource);
         }
         if(!leaseBudget->Acquire(bytes))return false;
-        payload->keepAlive=candidate.keepAlive;payload->bytes=bytes;batch.payload=std::move(payload);plan=std::move(candidate);return true;
+        payload->bytes=bytes;payload->keepAlive=candidate.keepAlive;batch.payload=std::move(payload);plan=std::move(candidate);return true;
     }
     Stats Stop(){std::unique_lock<std::mutex> guard(mutex);active=false;completed.wait(guard,[this]{return pending==0;});index.Clear();owners.clear();held=0;return stats;}
 };

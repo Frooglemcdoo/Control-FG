@@ -273,3 +273,46 @@ unblocking private GPU gate, private PSO/SBT/output ownership and retirement.
 Native primary material/light adapters and final material composition remain
 unfinished. The session owner is not started and no new rendering consumer is
 registered. No full-PT user test package has been released by these changes.
+
+## Build-time GPU geometry preservation (October 12)
+
+The verified native buffer wrapper stores `D3D12_RESOURCE_STATES` at `+0x20`.
+This is established by the native buffer creation paths (RVA `26101`, `26130`,
+`26514`) and, more directly, the native buffer copy routine at RVA `26990`:
+`26AD6` reads the source state, `26B28` records its transition to COPY_SOURCE,
+`26B93` copies the buffer, and `26BCF` restores the exact saved state. This is
+specific to the already hash-gated Steam module, not a portable inferred ABI.
+
+`pt_geometry_snapshot.h` now records private GPU copies of index/position
+allocations at the intercepted BLAS build boundary. Native wrapper identity,
+allocation generation, default-heap properties and readable state are validated
+under the resource-owner lock. Unsupported states/queues and exhausted budgets
+reject before recording any GPU commands. Each distinct backing allocation is
+copied once per build; the source state is restored exactly, and private buffers
+finish in COMMON for subsequent buffer read promotion. No PSO, descriptor heap,
+root argument or native shader table is changed by this operation.
+
+Frozen geometry metadata carries the copies through AS compaction and submitted
+scene selection. Private-table conversion first validates the original native
+root layout, then redirects index/position addresses to the retained copies.
+Released/reused source position addresses therefore cannot substitute new data.
+Original source geometry is not retained as a dispatch dependency; attributes
+and acceleration structures still require exact live allocation identities.
+
+Copy-source references survive recording until Reset, and submitted copies also
+retain their sources through a private fence signalled after the actual native
+ExecuteCommandLists. Failed completion proof quarantines ownership. Native list
+replay remains rejected for scene admission. Private destination references are
+also retained by dispatch plans and fence-owned lease batches.
+
+Validation includes an actual WARP copy followed by overwriting/releasing the
+source, delayed queue execution behind a fence, and readback comparison with the
+original bytes. Pure table tests exercise original GPU-address reuse, redirected
+private roots, exact index generation, missing ownership and R16 padding.
+
+This closes the allocation-lifetime-versus-content distinction for admitted
+BLAS geometry copies, but does not enable the full renderer. The copy archive
+currently has a 512 MiB bound and catalog history still needs retirement for
+sustained scenes with dynamic BLAS updates. Private dispatch gating, primary
+lighting bindings, material composition and renderer activation remain separate
+unfinished work. There is no newly approved in-game test build from these checks.
