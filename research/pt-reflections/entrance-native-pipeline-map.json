@@ -1,0 +1,2173 @@
+{
+  "schema": 1,
+  "limitations": "Static source locations and declared shader bindings; not GPU execution order or resource-value validation.",
+  "capture_settings": "All six captures are proxy-disabled native. Filenames are not verified RR/PT comparisons.",
+  "views": {
+    "01-overview": {
+      "prefix_bytes_consumed": 926626,
+      "pipeline_count": 171,
+      "dispatch_count": 83,
+      "pipelines": {
+        "6328": {
+          "function": "CreateComputePipelineState_6328",
+          "shader_hashes": [
+            "4fc0a0e9cd3706bcb86e29444d86fa32616138e1712c53b1b5103b30d7a1ecc9"
+          ]
+        },
+        "6336": {
+          "function": "CreateComputePipelineState_6336",
+          "shader_hashes": [
+            "b19de5e0b8a216076b6800790b100b91caa83814abdad3ad276736ba72b5e762"
+          ]
+        },
+        "6340": {
+          "function": "CreateComputePipelineState_6340",
+          "shader_hashes": [
+            "a9e5b544d5ec48e9b439b36aafc5346645f0261d3b1df65dc09e6cce290c164f"
+          ]
+        },
+        "6341": {
+          "function": "CreateComputePipelineState_6341",
+          "shader_hashes": [
+            "40df59b42a5d30db4f2ad7f84bfcf02e3b743de6664a05aab9d8917f1fd58d4c"
+          ]
+        },
+        "6342": {
+          "function": "CreateComputePipelineState_6342",
+          "shader_hashes": [
+            "80af0f6bec196ab7d0816589246b19ffbaf92b07cb10aecdfa9da4acb0c66cb3"
+          ]
+        },
+        "6347": {
+          "function": "CreateComputePipelineState_6347",
+          "shader_hashes": [
+            "a7d3ef4e5416b9c099d1afa512ea83ae9cd4d69359149b68afbd97889289ee08"
+          ]
+        },
+        "5886": {
+          "function": "CreateStateObject_5886",
+          "shader_hashes": [
+            "c2e4c0c4b48b191ba281595dcf11c7962c5c05c615cbe036ca6e8616c09fd30e"
+          ]
+        },
+        "6329": {
+          "function": "CreateStateObject_6329",
+          "shader_hashes": [
+            "66ec0c29541de1f4aa59636ce6e4415de440a12315b983839d0de0c0a2bab9a8"
+          ]
+        },
+        "6337": {
+          "function": "CreateStateObject_6337",
+          "shader_hashes": [
+            "6297319e1fec315c06ee75993e797b51def658e7d41f1588d7df3feb41a1ea2f"
+          ]
+        },
+        "6349": {
+          "function": "CreateStateObject_6349",
+          "shader_hashes": [
+            "d5efe2c2219257e2a7b51bbd65a7fa3b80cdb56fb7e6444223f8b4d7ee45a1a9"
+          ]
+        }
+      },
+      "dispatches": [
+        {
+          "file": "CommandLists_000.cpp",
+          "line": 29955,
+          "command_list": "5884",
+          "kind": "DispatchRays",
+          "arguments": "&dispatchRaysDesc",
+          "pipeline": "5886"
+        },
+        {
+          "file": "CommandLists_000.cpp",
+          "line": 30064,
+          "command_list": "6319",
+          "kind": "Dispatch",
+          "arguments": "320, 90, 1",
+          "pipeline": "6328"
+        },
+        {
+          "file": "CommandLists_000.cpp",
+          "line": 30712,
+          "command_list": "6319",
+          "kind": "DispatchRays",
+          "arguments": "&dispatchRaysDesc",
+          "pipeline": "6329"
+        },
+        {
+          "file": "CommandLists_000.cpp",
+          "line": 30873,
+          "command_list": "6334",
+          "kind": "Dispatch",
+          "arguments": "320, 90, 1",
+          "pipeline": "6336"
+        },
+        {
+          "file": "CommandLists_000.cpp",
+          "line": 31017,
+          "command_list": "6334",
+          "kind": "DispatchRays",
+          "arguments": "&dispatchRaysDesc",
+          "pipeline": "6337"
+        },
+        {
+          "file": "CommandLists_000.cpp",
+          "line": 31386,
+          "command_list": "6338",
+          "kind": "Dispatch",
+          "arguments": "320, 180, 1",
+          "pipeline": "6341"
+        },
+        {
+          "file": "CommandLists_000.cpp",
+          "line": 31410,
+          "command_list": "6338",
+          "kind": "Dispatch",
+          "arguments": "320, 180, 1",
+          "pipeline": "6342"
+        },
+        {
+          "file": "CommandLists_000.cpp",
+          "line": 31434,
+          "command_list": "6338",
+          "kind": "Dispatch",
+          "arguments": "320, 180, 1",
+          "pipeline": "6341"
+        },
+        {
+          "file": "CommandLists_000.cpp",
+          "line": 31458,
+          "command_list": "6338",
+          "kind": "Dispatch",
+          "arguments": "320, 180, 1",
+          "pipeline": "6342"
+        },
+        {
+          "file": "CommandLists_000.cpp",
+          "line": 31482,
+          "command_list": "6338",
+          "kind": "Dispatch",
+          "arguments": "320, 180, 1",
+          "pipeline": "6341"
+        },
+        {
+          "file": "CommandLists_000.cpp",
+          "line": 31506,
+          "command_list": "6338",
+          "kind": "Dispatch",
+          "arguments": "320, 180, 1",
+          "pipeline": "6342"
+        },
+        {
+          "file": "CommandLists_000.cpp",
+          "line": 31808,
+          "command_list": "6338",
+          "kind": "Dispatch",
+          "arguments": "320, 180, 1",
+          "pipeline": "6347"
+        },
+        {
+          "file": "CommandLists_000.cpp",
+          "line": 32017,
+          "command_list": "6338",
+          "kind": "Dispatch",
+          "arguments": "320, 180, 1",
+          "pipeline": "6340"
+        },
+        {
+          "file": "CommandLists_000.cpp",
+          "line": 32159,
+          "command_list": "6338",
+          "kind": "DispatchRays",
+          "arguments": "&dispatchRaysDesc",
+          "pipeline": "6349"
+        }
+      ]
+    },
+    "02-floor": {
+      "prefix_bytes_consumed": 921776,
+      "pipeline_count": 167,
+      "dispatch_count": 74,
+      "pipelines": {
+        "6278": {
+          "function": "CreateComputePipelineState_6278",
+          "shader_hashes": [
+            "4fc0a0e9cd3706bcb86e29444d86fa32616138e1712c53b1b5103b30d7a1ecc9"
+          ]
+        },
+        "6282": {
+          "function": "CreateComputePipelineState_6282",
+          "shader_hashes": [
+            "b19de5e0b8a216076b6800790b100b91caa83814abdad3ad276736ba72b5e762"
+          ]
+        },
+        "6288": {
+          "function": "CreateComputePipelineState_6288",
+          "shader_hashes": [
+            "a9e5b544d5ec48e9b439b36aafc5346645f0261d3b1df65dc09e6cce290c164f"
+          ]
+        },
+        "6289": {
+          "function": "CreateComputePipelineState_6289",
+          "shader_hashes": [
+            "40df59b42a5d30db4f2ad7f84bfcf02e3b743de6664a05aab9d8917f1fd58d4c"
+          ]
+        },
+        "6290": {
+          "function": "CreateComputePipelineState_6290",
+          "shader_hashes": [
+            "80af0f6bec196ab7d0816589246b19ffbaf92b07cb10aecdfa9da4acb0c66cb3"
+          ]
+        },
+        "6295": {
+          "function": "CreateComputePipelineState_6295",
+          "shader_hashes": [
+            "a7d3ef4e5416b9c099d1afa512ea83ae9cd4d69359149b68afbd97889289ee08"
+          ]
+        },
+        "5801": {
+          "function": "CreateStateObject_5801",
+          "shader_hashes": [
+            "c2e4c0c4b48b191ba281595dcf11c7962c5c05c615cbe036ca6e8616c09fd30e"
+          ]
+        },
+        "6279": {
+          "function": "CreateStateObject_6279",
+          "shader_hashes": [
+            "66ec0c29541de1f4aa59636ce6e4415de440a12315b983839d0de0c0a2bab9a8"
+          ]
+        },
+        "6283": {
+          "function": "CreateStateObject_6283",
+          "shader_hashes": [
+            "6297319e1fec315c06ee75993e797b51def658e7d41f1588d7df3feb41a1ea2f"
+          ]
+        },
+        "6297": {
+          "function": "CreateStateObject_6297",
+          "shader_hashes": [
+            "d5efe2c2219257e2a7b51bbd65a7fa3b80cdb56fb7e6444223f8b4d7ee45a1a9"
+          ]
+        }
+      },
+      "dispatches": [
+        {
+          "file": "CommandLists_000.cpp",
+          "line": 28516,
+          "command_list": "5799",
+          "kind": "DispatchRays",
+          "arguments": "&dispatchRaysDesc",
+          "pipeline": "5801"
+        },
+        {
+          "file": "CommandLists_000.cpp",
+          "line": 28635,
+          "command_list": "6269",
+          "kind": "Dispatch",
+          "arguments": "320, 90, 1",
+          "pipeline": "6278"
+        },
+        {
+          "file": "CommandLists_000.cpp",
+          "line": 29302,
+          "command_list": "6269",
+          "kind": "DispatchRays",
+          "arguments": "&dispatchRaysDesc",
+          "pipeline": "6279"
+        },
+        {
+          "file": "CommandLists_000.cpp",
+          "line": 29443,
+          "command_list": "6280",
+          "kind": "Dispatch",
+          "arguments": "320, 90, 1",
+          "pipeline": "6282"
+        },
+        {
+          "file": "CommandLists_000.cpp",
+          "line": 29598,
+          "command_list": "6280",
+          "kind": "DispatchRays",
+          "arguments": "&dispatchRaysDesc",
+          "pipeline": "6283"
+        },
+        {
+          "file": "CommandLists_000.cpp",
+          "line": 29977,
+          "command_list": "6286",
+          "kind": "Dispatch",
+          "arguments": "320, 180, 1",
+          "pipeline": "6289"
+        },
+        {
+          "file": "CommandLists_000.cpp",
+          "line": 30001,
+          "command_list": "6286",
+          "kind": "Dispatch",
+          "arguments": "320, 180, 1",
+          "pipeline": "6290"
+        },
+        {
+          "file": "CommandLists_000.cpp",
+          "line": 30025,
+          "command_list": "6286",
+          "kind": "Dispatch",
+          "arguments": "320, 180, 1",
+          "pipeline": "6289"
+        },
+        {
+          "file": "CommandLists_000.cpp",
+          "line": 30049,
+          "command_list": "6286",
+          "kind": "Dispatch",
+          "arguments": "320, 180, 1",
+          "pipeline": "6290"
+        },
+        {
+          "file": "CommandLists_000.cpp",
+          "line": 30073,
+          "command_list": "6286",
+          "kind": "Dispatch",
+          "arguments": "320, 180, 1",
+          "pipeline": "6289"
+        },
+        {
+          "file": "CommandLists_000.cpp",
+          "line": 30097,
+          "command_list": "6286",
+          "kind": "Dispatch",
+          "arguments": "320, 180, 1",
+          "pipeline": "6290"
+        },
+        {
+          "file": "CommandLists_000.cpp",
+          "line": 30399,
+          "command_list": "6286",
+          "kind": "Dispatch",
+          "arguments": "320, 180, 1",
+          "pipeline": "6295"
+        },
+        {
+          "file": "CommandLists_000.cpp",
+          "line": 30608,
+          "command_list": "6286",
+          "kind": "Dispatch",
+          "arguments": "320, 180, 1",
+          "pipeline": "6288"
+        },
+        {
+          "file": "CommandLists_000.cpp",
+          "line": 30764,
+          "command_list": "6286",
+          "kind": "DispatchRays",
+          "arguments": "&dispatchRaysDesc",
+          "pipeline": "6297"
+        }
+      ]
+    },
+    "03-glass": {
+      "prefix_bytes_consumed": 934552,
+      "pipeline_count": 172,
+      "dispatch_count": 85,
+      "pipelines": {
+        "6331": {
+          "function": "CreateComputePipelineState_6331",
+          "shader_hashes": [
+            "4fc0a0e9cd3706bcb86e29444d86fa32616138e1712c53b1b5103b30d7a1ecc9"
+          ]
+        },
+        "6339": {
+          "function": "CreateComputePipelineState_6339",
+          "shader_hashes": [
+            "b19de5e0b8a216076b6800790b100b91caa83814abdad3ad276736ba72b5e762"
+          ]
+        },
+        "6343": {
+          "function": "CreateComputePipelineState_6343",
+          "shader_hashes": [
+            "a9e5b544d5ec48e9b439b36aafc5346645f0261d3b1df65dc09e6cce290c164f"
+          ]
+        },
+        "6344": {
+          "function": "CreateComputePipelineState_6344",
+          "shader_hashes": [
+            "40df59b42a5d30db4f2ad7f84bfcf02e3b743de6664a05aab9d8917f1fd58d4c"
+          ]
+        },
+        "6345": {
+          "function": "CreateComputePipelineState_6345",
+          "shader_hashes": [
+            "80af0f6bec196ab7d0816589246b19ffbaf92b07cb10aecdfa9da4acb0c66cb3"
+          ]
+        },
+        "6350": {
+          "function": "CreateComputePipelineState_6350",
+          "shader_hashes": [
+            "a7d3ef4e5416b9c099d1afa512ea83ae9cd4d69359149b68afbd97889289ee08"
+          ]
+        },
+        "5856": {
+          "function": "CreateStateObject_5856",
+          "shader_hashes": [
+            "c2e4c0c4b48b191ba281595dcf11c7962c5c05c615cbe036ca6e8616c09fd30e"
+          ]
+        },
+        "6332": {
+          "function": "CreateStateObject_6332",
+          "shader_hashes": [
+            "66ec0c29541de1f4aa59636ce6e4415de440a12315b983839d0de0c0a2bab9a8"
+          ]
+        },
+        "6340": {
+          "function": "CreateStateObject_6340",
+          "shader_hashes": [
+            "6297319e1fec315c06ee75993e797b51def658e7d41f1588d7df3feb41a1ea2f"
+          ]
+        },
+        "6352": {
+          "function": "CreateStateObject_6352",
+          "shader_hashes": [
+            "d5efe2c2219257e2a7b51bbd65a7fa3b80cdb56fb7e6444223f8b4d7ee45a1a9"
+          ]
+        }
+      },
+      "dispatches": [
+        {
+          "file": "CommandLists_000.cpp",
+          "line": 29408,
+          "command_list": "5854",
+          "kind": "DispatchRays",
+          "arguments": "&dispatchRaysDesc",
+          "pipeline": "5856"
+        },
+        {
+          "file": "CommandLists_000.cpp",
+          "line": 29517,
+          "command_list": "6322",
+          "kind": "Dispatch",
+          "arguments": "320, 90, 1",
+          "pipeline": "6331"
+        },
+        {
+          "file": "CommandLists_000.cpp",
+          "line": 30184,
+          "command_list": "6322",
+          "kind": "DispatchRays",
+          "arguments": "&dispatchRaysDesc",
+          "pipeline": "6332"
+        },
+        {
+          "file": "CommandLists_000.cpp",
+          "line": 30345,
+          "command_list": "6337",
+          "kind": "Dispatch",
+          "arguments": "320, 90, 1",
+          "pipeline": "6339"
+        },
+        {
+          "file": "CommandLists_000.cpp",
+          "line": 30501,
+          "command_list": "6337",
+          "kind": "DispatchRays",
+          "arguments": "&dispatchRaysDesc",
+          "pipeline": "6340"
+        },
+        {
+          "file": "CommandLists_000.cpp",
+          "line": 30870,
+          "command_list": "6341",
+          "kind": "Dispatch",
+          "arguments": "320, 180, 1",
+          "pipeline": "6344"
+        },
+        {
+          "file": "CommandLists_000.cpp",
+          "line": 30894,
+          "command_list": "6341",
+          "kind": "Dispatch",
+          "arguments": "320, 180, 1",
+          "pipeline": "6345"
+        },
+        {
+          "file": "CommandLists_000.cpp",
+          "line": 30918,
+          "command_list": "6341",
+          "kind": "Dispatch",
+          "arguments": "320, 180, 1",
+          "pipeline": "6344"
+        },
+        {
+          "file": "CommandLists_000.cpp",
+          "line": 30942,
+          "command_list": "6341",
+          "kind": "Dispatch",
+          "arguments": "320, 180, 1",
+          "pipeline": "6345"
+        },
+        {
+          "file": "CommandLists_000.cpp",
+          "line": 30966,
+          "command_list": "6341",
+          "kind": "Dispatch",
+          "arguments": "320, 180, 1",
+          "pipeline": "6344"
+        },
+        {
+          "file": "CommandLists_000.cpp",
+          "line": 30990,
+          "command_list": "6341",
+          "kind": "Dispatch",
+          "arguments": "320, 180, 1",
+          "pipeline": "6345"
+        },
+        {
+          "file": "CommandLists_000.cpp",
+          "line": 31292,
+          "command_list": "6341",
+          "kind": "Dispatch",
+          "arguments": "320, 180, 1",
+          "pipeline": "6350"
+        },
+        {
+          "file": "CommandLists_000.cpp",
+          "line": 31501,
+          "command_list": "6341",
+          "kind": "Dispatch",
+          "arguments": "320, 180, 1",
+          "pipeline": "6343"
+        },
+        {
+          "file": "CommandLists_000.cpp",
+          "line": 31658,
+          "command_list": "6341",
+          "kind": "DispatchRays",
+          "arguments": "&dispatchRaysDesc",
+          "pipeline": "6352"
+        }
+      ]
+    },
+    "04-reverse": {
+      "prefix_bytes_consumed": 986979,
+      "pipeline_count": 174,
+      "dispatch_count": 77,
+      "pipelines": {
+        "6281": {
+          "function": "CreateComputePipelineState_6281",
+          "shader_hashes": [
+            "4fc0a0e9cd3706bcb86e29444d86fa32616138e1712c53b1b5103b30d7a1ecc9"
+          ]
+        },
+        "6289": {
+          "function": "CreateComputePipelineState_6289",
+          "shader_hashes": [
+            "b19de5e0b8a216076b6800790b100b91caa83814abdad3ad276736ba72b5e762"
+          ]
+        },
+        "6293": {
+          "function": "CreateComputePipelineState_6293",
+          "shader_hashes": [
+            "a9e5b544d5ec48e9b439b36aafc5346645f0261d3b1df65dc09e6cce290c164f"
+          ]
+        },
+        "6294": {
+          "function": "CreateComputePipelineState_6294",
+          "shader_hashes": [
+            "40df59b42a5d30db4f2ad7f84bfcf02e3b743de6664a05aab9d8917f1fd58d4c"
+          ]
+        },
+        "6295": {
+          "function": "CreateComputePipelineState_6295",
+          "shader_hashes": [
+            "80af0f6bec196ab7d0816589246b19ffbaf92b07cb10aecdfa9da4acb0c66cb3"
+          ]
+        },
+        "6300": {
+          "function": "CreateComputePipelineState_6300",
+          "shader_hashes": [
+            "a7d3ef4e5416b9c099d1afa512ea83ae9cd4d69359149b68afbd97889289ee08"
+          ]
+        },
+        "5780": {
+          "function": "CreateStateObject_5780",
+          "shader_hashes": [
+            "c2e4c0c4b48b191ba281595dcf11c7962c5c05c615cbe036ca6e8616c09fd30e"
+          ]
+        },
+        "6282": {
+          "function": "CreateStateObject_6282",
+          "shader_hashes": [
+            "66ec0c29541de1f4aa59636ce6e4415de440a12315b983839d0de0c0a2bab9a8"
+          ]
+        },
+        "6290": {
+          "function": "CreateStateObject_6290",
+          "shader_hashes": [
+            "6297319e1fec315c06ee75993e797b51def658e7d41f1588d7df3feb41a1ea2f"
+          ]
+        },
+        "6302": {
+          "function": "CreateStateObject_6302",
+          "shader_hashes": [
+            "d5efe2c2219257e2a7b51bbd65a7fa3b80cdb56fb7e6444223f8b4d7ee45a1a9"
+          ]
+        }
+      },
+      "dispatches": [
+        {
+          "file": "CommandLists_000.cpp",
+          "line": 27928,
+          "command_list": "5778",
+          "kind": "DispatchRays",
+          "arguments": "&dispatchRaysDesc",
+          "pipeline": "5780"
+        },
+        {
+          "file": "CommandLists_000.cpp",
+          "line": 28037,
+          "command_list": "6272",
+          "kind": "Dispatch",
+          "arguments": "320, 90, 1",
+          "pipeline": "6281"
+        },
+        {
+          "file": "CommandLists_000.cpp",
+          "line": 28702,
+          "command_list": "6272",
+          "kind": "DispatchRays",
+          "arguments": "&dispatchRaysDesc",
+          "pipeline": "6282"
+        },
+        {
+          "file": "CommandLists_000.cpp",
+          "line": 28863,
+          "command_list": "6287",
+          "kind": "Dispatch",
+          "arguments": "320, 90, 1",
+          "pipeline": "6289"
+        },
+        {
+          "file": "CommandLists_000.cpp",
+          "line": 29023,
+          "command_list": "6287",
+          "kind": "DispatchRays",
+          "arguments": "&dispatchRaysDesc",
+          "pipeline": "6290"
+        },
+        {
+          "file": "CommandLists_000.cpp",
+          "line": 29392,
+          "command_list": "6291",
+          "kind": "Dispatch",
+          "arguments": "320, 180, 1",
+          "pipeline": "6294"
+        },
+        {
+          "file": "CommandLists_000.cpp",
+          "line": 29416,
+          "command_list": "6291",
+          "kind": "Dispatch",
+          "arguments": "320, 180, 1",
+          "pipeline": "6295"
+        },
+        {
+          "file": "CommandLists_000.cpp",
+          "line": 29440,
+          "command_list": "6291",
+          "kind": "Dispatch",
+          "arguments": "320, 180, 1",
+          "pipeline": "6294"
+        },
+        {
+          "file": "CommandLists_000.cpp",
+          "line": 29464,
+          "command_list": "6291",
+          "kind": "Dispatch",
+          "arguments": "320, 180, 1",
+          "pipeline": "6295"
+        },
+        {
+          "file": "CommandLists_000.cpp",
+          "line": 29488,
+          "command_list": "6291",
+          "kind": "Dispatch",
+          "arguments": "320, 180, 1",
+          "pipeline": "6294"
+        },
+        {
+          "file": "CommandLists_000.cpp",
+          "line": 29512,
+          "command_list": "6291",
+          "kind": "Dispatch",
+          "arguments": "320, 180, 1",
+          "pipeline": "6295"
+        },
+        {
+          "file": "CommandLists_000.cpp",
+          "line": 29814,
+          "command_list": "6291",
+          "kind": "Dispatch",
+          "arguments": "320, 180, 1",
+          "pipeline": "6300"
+        },
+        {
+          "file": "CommandLists_000.cpp",
+          "line": 30023,
+          "command_list": "6291",
+          "kind": "Dispatch",
+          "arguments": "320, 180, 1",
+          "pipeline": "6293"
+        },
+        {
+          "file": "CommandLists_000.cpp",
+          "line": 30179,
+          "command_list": "6291",
+          "kind": "DispatchRays",
+          "arguments": "&dispatchRaysDesc",
+          "pipeline": "6302"
+        }
+      ]
+    },
+    "05-rr-off": {
+      "prefix_bytes_consumed": 937272,
+      "pipeline_count": 167,
+      "dispatch_count": 76,
+      "pipelines": {
+        "6166": {
+          "function": "CreateComputePipelineState_6166",
+          "shader_hashes": [
+            "4fc0a0e9cd3706bcb86e29444d86fa32616138e1712c53b1b5103b30d7a1ecc9"
+          ]
+        },
+        "6170": {
+          "function": "CreateComputePipelineState_6170",
+          "shader_hashes": [
+            "b19de5e0b8a216076b6800790b100b91caa83814abdad3ad276736ba72b5e762"
+          ]
+        },
+        "6184": {
+          "function": "CreateComputePipelineState_6184",
+          "shader_hashes": [
+            "a9e5b544d5ec48e9b439b36aafc5346645f0261d3b1df65dc09e6cce290c164f"
+          ]
+        },
+        "6185": {
+          "function": "CreateComputePipelineState_6185",
+          "shader_hashes": [
+            "40df59b42a5d30db4f2ad7f84bfcf02e3b743de6664a05aab9d8917f1fd58d4c"
+          ]
+        },
+        "6186": {
+          "function": "CreateComputePipelineState_6186",
+          "shader_hashes": [
+            "80af0f6bec196ab7d0816589246b19ffbaf92b07cb10aecdfa9da4acb0c66cb3"
+          ]
+        },
+        "6191": {
+          "function": "CreateComputePipelineState_6191",
+          "shader_hashes": [
+            "a7d3ef4e5416b9c099d1afa512ea83ae9cd4d69359149b68afbd97889289ee08"
+          ]
+        },
+        "5713": {
+          "function": "CreateStateObject_5713",
+          "shader_hashes": [
+            "c2e4c0c4b48b191ba281595dcf11c7962c5c05c615cbe036ca6e8616c09fd30e"
+          ]
+        },
+        "6167": {
+          "function": "CreateStateObject_6167",
+          "shader_hashes": [
+            "66ec0c29541de1f4aa59636ce6e4415de440a12315b983839d0de0c0a2bab9a8"
+          ]
+        },
+        "6171": {
+          "function": "CreateStateObject_6171",
+          "shader_hashes": [
+            "6297319e1fec315c06ee75993e797b51def658e7d41f1588d7df3feb41a1ea2f"
+          ]
+        },
+        "6193": {
+          "function": "CreateStateObject_6193",
+          "shader_hashes": [
+            "d5efe2c2219257e2a7b51bbd65a7fa3b80cdb56fb7e6444223f8b4d7ee45a1a9"
+          ]
+        }
+      },
+      "dispatches": [
+        {
+          "file": "CommandLists_000.cpp",
+          "line": 26476,
+          "command_list": "5711",
+          "kind": "DispatchRays",
+          "arguments": "&dispatchRaysDesc",
+          "pipeline": "5713"
+        },
+        {
+          "file": "CommandLists_000.cpp",
+          "line": 26595,
+          "command_list": "6157",
+          "kind": "Dispatch",
+          "arguments": "320, 90, 1",
+          "pipeline": "6166"
+        },
+        {
+          "file": "CommandLists_000.cpp",
+          "line": 27247,
+          "command_list": "6157",
+          "kind": "DispatchRays",
+          "arguments": "&dispatchRaysDesc",
+          "pipeline": "6167"
+        },
+        {
+          "file": "CommandLists_000.cpp",
+          "line": 27388,
+          "command_list": "6168",
+          "kind": "Dispatch",
+          "arguments": "320, 90, 1",
+          "pipeline": "6170"
+        },
+        {
+          "file": "CommandLists_000.cpp",
+          "line": 27549,
+          "command_list": "6168",
+          "kind": "DispatchRays",
+          "arguments": "&dispatchRaysDesc",
+          "pipeline": "6171"
+        },
+        {
+          "file": "CommandLists_000.cpp",
+          "line": 27928,
+          "command_list": "6182",
+          "kind": "Dispatch",
+          "arguments": "320, 180, 1",
+          "pipeline": "6185"
+        },
+        {
+          "file": "CommandLists_000.cpp",
+          "line": 27952,
+          "command_list": "6182",
+          "kind": "Dispatch",
+          "arguments": "320, 180, 1",
+          "pipeline": "6186"
+        },
+        {
+          "file": "CommandLists_000.cpp",
+          "line": 27976,
+          "command_list": "6182",
+          "kind": "Dispatch",
+          "arguments": "320, 180, 1",
+          "pipeline": "6185"
+        },
+        {
+          "file": "CommandLists_000.cpp",
+          "line": 28000,
+          "command_list": "6182",
+          "kind": "Dispatch",
+          "arguments": "320, 180, 1",
+          "pipeline": "6186"
+        },
+        {
+          "file": "CommandLists_000.cpp",
+          "line": 28024,
+          "command_list": "6182",
+          "kind": "Dispatch",
+          "arguments": "320, 180, 1",
+          "pipeline": "6185"
+        },
+        {
+          "file": "CommandLists_000.cpp",
+          "line": 28048,
+          "command_list": "6182",
+          "kind": "Dispatch",
+          "arguments": "320, 180, 1",
+          "pipeline": "6186"
+        },
+        {
+          "file": "CommandLists_000.cpp",
+          "line": 28350,
+          "command_list": "6182",
+          "kind": "Dispatch",
+          "arguments": "320, 180, 1",
+          "pipeline": "6191"
+        },
+        {
+          "file": "CommandLists_000.cpp",
+          "line": 28559,
+          "command_list": "6182",
+          "kind": "Dispatch",
+          "arguments": "320, 180, 1",
+          "pipeline": "6184"
+        },
+        {
+          "file": "CommandLists_000.cpp",
+          "line": 28716,
+          "command_list": "6182",
+          "kind": "DispatchRays",
+          "arguments": "&dispatchRaysDesc",
+          "pipeline": "6193"
+        }
+      ]
+    },
+    "06-composite-off": {
+      "prefix_bytes_consumed": 958487,
+      "pipeline_count": 167,
+      "dispatch_count": 76,
+      "pipelines": {
+        "6110": {
+          "function": "CreateComputePipelineState_6110",
+          "shader_hashes": [
+            "4fc0a0e9cd3706bcb86e29444d86fa32616138e1712c53b1b5103b30d7a1ecc9"
+          ]
+        },
+        "6118": {
+          "function": "CreateComputePipelineState_6118",
+          "shader_hashes": [
+            "b19de5e0b8a216076b6800790b100b91caa83814abdad3ad276736ba72b5e762"
+          ]
+        },
+        "6126": {
+          "function": "CreateComputePipelineState_6126",
+          "shader_hashes": [
+            "a9e5b544d5ec48e9b439b36aafc5346645f0261d3b1df65dc09e6cce290c164f"
+          ]
+        },
+        "6127": {
+          "function": "CreateComputePipelineState_6127",
+          "shader_hashes": [
+            "40df59b42a5d30db4f2ad7f84bfcf02e3b743de6664a05aab9d8917f1fd58d4c"
+          ]
+        },
+        "6128": {
+          "function": "CreateComputePipelineState_6128",
+          "shader_hashes": [
+            "80af0f6bec196ab7d0816589246b19ffbaf92b07cb10aecdfa9da4acb0c66cb3"
+          ]
+        },
+        "6133": {
+          "function": "CreateComputePipelineState_6133",
+          "shader_hashes": [
+            "a7d3ef4e5416b9c099d1afa512ea83ae9cd4d69359149b68afbd97889289ee08"
+          ]
+        },
+        "5600": {
+          "function": "CreateStateObject_5600",
+          "shader_hashes": [
+            "c2e4c0c4b48b191ba281595dcf11c7962c5c05c615cbe036ca6e8616c09fd30e"
+          ]
+        },
+        "6111": {
+          "function": "CreateStateObject_6111",
+          "shader_hashes": [
+            "66ec0c29541de1f4aa59636ce6e4415de440a12315b983839d0de0c0a2bab9a8"
+          ]
+        },
+        "6119": {
+          "function": "CreateStateObject_6119",
+          "shader_hashes": [
+            "6297319e1fec315c06ee75993e797b51def658e7d41f1588d7df3feb41a1ea2f"
+          ]
+        },
+        "6135": {
+          "function": "CreateStateObject_6135",
+          "shader_hashes": [
+            "d5efe2c2219257e2a7b51bbd65a7fa3b80cdb56fb7e6444223f8b4d7ee45a1a9"
+          ]
+        }
+      },
+      "dispatches": [
+        {
+          "file": "CommandLists_000.cpp",
+          "line": 25019,
+          "command_list": "5598",
+          "kind": "DispatchRays",
+          "arguments": "&dispatchRaysDesc",
+          "pipeline": "5600"
+        },
+        {
+          "file": "CommandLists_000.cpp",
+          "line": 25128,
+          "command_list": "6101",
+          "kind": "Dispatch",
+          "arguments": "320, 90, 1",
+          "pipeline": "6110"
+        },
+        {
+          "file": "CommandLists_000.cpp",
+          "line": 25782,
+          "command_list": "6101",
+          "kind": "DispatchRays",
+          "arguments": "&dispatchRaysDesc",
+          "pipeline": "6111"
+        },
+        {
+          "file": "CommandLists_000.cpp",
+          "line": 25943,
+          "command_list": "6116",
+          "kind": "Dispatch",
+          "arguments": "320, 90, 1",
+          "pipeline": "6118"
+        },
+        {
+          "file": "CommandLists_000.cpp",
+          "line": 26103,
+          "command_list": "6116",
+          "kind": "DispatchRays",
+          "arguments": "&dispatchRaysDesc",
+          "pipeline": "6119"
+        },
+        {
+          "file": "CommandLists_000.cpp",
+          "line": 26472,
+          "command_list": "6124",
+          "kind": "Dispatch",
+          "arguments": "320, 180, 1",
+          "pipeline": "6127"
+        },
+        {
+          "file": "CommandLists_000.cpp",
+          "line": 26496,
+          "command_list": "6124",
+          "kind": "Dispatch",
+          "arguments": "320, 180, 1",
+          "pipeline": "6128"
+        },
+        {
+          "file": "CommandLists_000.cpp",
+          "line": 26520,
+          "command_list": "6124",
+          "kind": "Dispatch",
+          "arguments": "320, 180, 1",
+          "pipeline": "6127"
+        },
+        {
+          "file": "CommandLists_000.cpp",
+          "line": 26544,
+          "command_list": "6124",
+          "kind": "Dispatch",
+          "arguments": "320, 180, 1",
+          "pipeline": "6128"
+        },
+        {
+          "file": "CommandLists_000.cpp",
+          "line": 26568,
+          "command_list": "6124",
+          "kind": "Dispatch",
+          "arguments": "320, 180, 1",
+          "pipeline": "6127"
+        },
+        {
+          "file": "CommandLists_000.cpp",
+          "line": 26592,
+          "command_list": "6124",
+          "kind": "Dispatch",
+          "arguments": "320, 180, 1",
+          "pipeline": "6128"
+        },
+        {
+          "file": "CommandLists_000.cpp",
+          "line": 26894,
+          "command_list": "6124",
+          "kind": "Dispatch",
+          "arguments": "320, 180, 1",
+          "pipeline": "6133"
+        },
+        {
+          "file": "CommandLists_000.cpp",
+          "line": 27103,
+          "command_list": "6124",
+          "kind": "Dispatch",
+          "arguments": "320, 180, 1",
+          "pipeline": "6126"
+        },
+        {
+          "file": "CommandLists_000.cpp",
+          "line": 27264,
+          "command_list": "6124",
+          "kind": "DispatchRays",
+          "arguments": "&dispatchRaysDesc",
+          "pipeline": "6135"
+        }
+      ]
+    }
+  },
+  "shaders": {
+    "4fc0a0e9cd3706bcb86e29444d86fa32616138e1712c53b1b5103b30d7a1ecc9": {
+      "sha256": "4fc0a0e9cd3706bcb86e29444d86fa32616138e1712c53b1b5103b30d7a1ecc9",
+      "bytes": 42408,
+      "bindings": [
+        {
+          "name": "g_sLinearWrap",
+          "kind": 3,
+          "slot": 5,
+          "count": 1,
+          "space": 1
+        },
+        {
+          "name": "g_sLinearClamp",
+          "kind": 3,
+          "slot": 6,
+          "count": 1,
+          "space": 1
+        },
+        {
+          "name": "g_sLinearMipLinearWrap",
+          "kind": 3,
+          "slot": 10,
+          "count": 1,
+          "space": 1
+        },
+        {
+          "name": "g_sLinearMipLinearClamp",
+          "kind": 3,
+          "slot": 11,
+          "count": 1,
+          "space": 1
+        },
+        {
+          "name": "g_sMaterialArrayGlobal",
+          "kind": 3,
+          "slot": 19,
+          "count": 1,
+          "space": 1
+        },
+        {
+          "name": "g_tGBuffer1",
+          "kind": 2,
+          "slot": 0,
+          "count": 1,
+          "space": 0
+        },
+        {
+          "name": "g_tLinearDepth",
+          "kind": 2,
+          "slot": 1,
+          "count": 1,
+          "space": 0
+        },
+        {
+          "name": "g_tClipDepth",
+          "kind": 2,
+          "slot": 2,
+          "count": 1,
+          "space": 0
+        },
+        {
+          "name": "g_sbMaterialDataPart1",
+          "kind": 5,
+          "slot": 3,
+          "count": 1,
+          "space": 0
+        },
+        {
+          "name": "g_sbMaterialDataPart3",
+          "kind": 5,
+          "slot": 4,
+          "count": 1,
+          "space": 0
+        },
+        {
+          "name": "g_tRaytracingLightCellPointLights",
+          "kind": 2,
+          "slot": 5,
+          "count": 1,
+          "space": 0
+        },
+        {
+          "name": "g_tRaytracingLightCellSpotLights",
+          "kind": 2,
+          "slot": 6,
+          "count": 1,
+          "space": 0
+        },
+        {
+          "name": "g_tAmbientSHTerms",
+          "kind": 2,
+          "slot": 7,
+          "count": 1,
+          "space": 0
+        },
+        {
+          "name": "g_sEnvironmentCube",
+          "kind": 2,
+          "slot": 8,
+          "count": 1,
+          "space": 0
+        },
+        {
+          "name": "g_tPointLightShadowAtlas",
+          "kind": 2,
+          "slot": 9,
+          "count": 1,
+          "space": 0
+        },
+        {
+          "name": "g_sbDeferredLightPointData",
+          "kind": 5,
+          "slot": 10,
+          "count": 1,
+          "space": 0
+        },
+        {
+          "name": "g_tSpotLightPCFShadowAtlas",
+          "kind": 2,
+          "slot": 11,
+          "count": 1,
+          "space": 0
+        },
+        {
+          "name": "g_tSpotLightVSMShadowAtlas",
+          "kind": 2,
+          "slot": 12,
+          "count": 1,
+          "space": 0
+        },
+        {
+          "name": "g_tSpotLightProjectionAtlas",
+          "kind": 2,
+          "slot": 13,
+          "count": 1,
+          "space": 0
+        },
+        {
+          "name": "g_sbDeferredLightSpotData",
+          "kind": 5,
+          "slot": 14,
+          "count": 1,
+          "space": 0
+        },
+        {
+          "name": "g_tEnvBRDF",
+          "kind": 2,
+          "slot": 15,
+          "count": 1,
+          "space": 0
+        },
+        {
+          "name": "g_sbActiveVolumeSamplingInfoArray",
+          "kind": 5,
+          "slot": 16,
+          "count": 1,
+          "space": 0
+        },
+        {
+          "name": "g_sbTopLevelNodeIndicesBuffer",
+          "kind": 5,
+          "slot": 17,
+          "count": 1,
+          "space": 0
+        },
+        {
+          "name": "g_sbInternalNodesBuffer",
+          "kind": 5,
+          "slot": 18,
+          "count": 1,
+          "space": 0
+        },
+        {
+          "name": "g_tGIBrickTextures",
+          "kind": 2,
+          "slot": 19,
+          "count": 6,
+          "space": 0
+        },
+        {
+          "name": "g_tTemporalBlueNoiseRGBA",
+          "kind": 2,
+          "slot": 25,
+          "count": 1,
+          "space": 0
+        },
+        {
+          "name": "g_tMaterialId",
+          "kind": 2,
+          "slot": 26,
+          "count": 1,
+          "space": 0
+        },
+        {
+          "name": "g_tNormal_TexcoordX",
+          "kind": 2,
+          "slot": 27,
+          "count": 1,
+          "space": 0
+        },
+        {
+          "name": "g_tPosition_TexcoordY",
+          "kind": 2,
+          "slot": 28,
+          "count": 1,
+          "space": 0
+        },
+        {
+          "name": "g_sMaterialTextureArray",
+          "kind": 2,
+          "slot": 0,
+          "count": 0,
+          "space": 1
+        },
+        {
+          "name": "g_rwtReflectionTarget",
+          "kind": 4,
+          "slot": 0,
+          "count": 1,
+          "space": 0
+        },
+        {
+          "name": "sys_constants",
+          "kind": 0,
+          "slot": 0,
+          "count": 1,
+          "space": 0
+        },
+        {
+          "name": "deferredlight_constants",
+          "kind": 0,
+          "slot": 1,
+          "count": 1,
+          "space": 0
+        },
+        {
+          "name": "env_general",
+          "kind": 0,
+          "slot": 2,
+          "count": 1,
+          "space": 0
+        },
+        {
+          "name": "illuminationvolume",
+          "kind": 0,
+          "slot": 3,
+          "count": 1,
+          "space": 0
+        },
+        {
+          "name": "ManualUpdateCB_ActiveVolumeTopLevelInfoArray",
+          "kind": 0,
+          "slot": 4,
+          "count": 1,
+          "space": 0
+        },
+        {
+          "name": "distancefield_CS",
+          "kind": 0,
+          "slot": 5,
+          "count": 1,
+          "space": 0
+        },
+        {
+          "name": "rtreflection",
+          "kind": 0,
+          "slot": 6,
+          "count": 1,
+          "space": 0
+        }
+      ]
+    },
+    "b19de5e0b8a216076b6800790b100b91caa83814abdad3ad276736ba72b5e762": {
+      "sha256": "b19de5e0b8a216076b6800790b100b91caa83814abdad3ad276736ba72b5e762",
+      "bytes": 39720,
+      "bindings": [
+        {
+          "name": "g_sLinearWrap",
+          "kind": 3,
+          "slot": 5,
+          "count": 1,
+          "space": 1
+        },
+        {
+          "name": "g_sLinearClamp",
+          "kind": 3,
+          "slot": 6,
+          "count": 1,
+          "space": 1
+        },
+        {
+          "name": "g_sLinearMipLinearWrap",
+          "kind": 3,
+          "slot": 10,
+          "count": 1,
+          "space": 1
+        },
+        {
+          "name": "g_sLinearMipLinearClamp",
+          "kind": 3,
+          "slot": 11,
+          "count": 1,
+          "space": 1
+        },
+        {
+          "name": "g_sMaterialArrayGlobal",
+          "kind": 3,
+          "slot": 19,
+          "count": 1,
+          "space": 1
+        },
+        {
+          "name": "g_tClipDepth",
+          "kind": 2,
+          "slot": 0,
+          "count": 1,
+          "space": 0
+        },
+        {
+          "name": "g_sbMaterialDataPart1",
+          "kind": 5,
+          "slot": 1,
+          "count": 1,
+          "space": 0
+        },
+        {
+          "name": "g_sbMaterialDataPart3",
+          "kind": 5,
+          "slot": 2,
+          "count": 1,
+          "space": 0
+        },
+        {
+          "name": "g_tAmbientSHTerms",
+          "kind": 2,
+          "slot": 3,
+          "count": 1,
+          "space": 0
+        },
+        {
+          "name": "g_sEnvironmentCube",
+          "kind": 2,
+          "slot": 4,
+          "count": 1,
+          "space": 0
+        },
+        {
+          "name": "g_tPointLightShadowAtlas",
+          "kind": 2,
+          "slot": 5,
+          "count": 1,
+          "space": 0
+        },
+        {
+          "name": "g_sbDeferredLightPointData",
+          "kind": 5,
+          "slot": 6,
+          "count": 1,
+          "space": 0
+        },
+        {
+          "name": "g_tSpotLightPCFShadowAtlas",
+          "kind": 2,
+          "slot": 7,
+          "count": 1,
+          "space": 0
+        },
+        {
+          "name": "g_tSpotLightVSMShadowAtlas",
+          "kind": 2,
+          "slot": 8,
+          "count": 1,
+          "space": 0
+        },
+        {
+          "name": "g_tSpotLightProjectionAtlas",
+          "kind": 2,
+          "slot": 9,
+          "count": 1,
+          "space": 0
+        },
+        {
+          "name": "g_sbDeferredLightSpotData",
+          "kind": 5,
+          "slot": 10,
+          "count": 1,
+          "space": 0
+        },
+        {
+          "name": "g_tEnvBRDF",
+          "kind": 2,
+          "slot": 11,
+          "count": 1,
+          "space": 0
+        },
+        {
+          "name": "g_sbActiveVolumeSamplingInfoArray",
+          "kind": 5,
+          "slot": 12,
+          "count": 1,
+          "space": 0
+        },
+        {
+          "name": "g_sbTopLevelNodeIndicesBuffer",
+          "kind": 5,
+          "slot": 13,
+          "count": 1,
+          "space": 0
+        },
+        {
+          "name": "g_sbInternalNodesBuffer",
+          "kind": 5,
+          "slot": 14,
+          "count": 1,
+          "space": 0
+        },
+        {
+          "name": "g_tGIBrickTextures",
+          "kind": 2,
+          "slot": 15,
+          "count": 6,
+          "space": 0
+        },
+        {
+          "name": "g_tRaytracingLightCellPointLights",
+          "kind": 2,
+          "slot": 21,
+          "count": 1,
+          "space": 0
+        },
+        {
+          "name": "g_tRaytracingLightCellSpotLights",
+          "kind": 2,
+          "slot": 22,
+          "count": 1,
+          "space": 0
+        },
+        {
+          "name": "g_tTemporalBlueNoiseRGBA",
+          "kind": 2,
+          "slot": 23,
+          "count": 1,
+          "space": 0
+        },
+        {
+          "name": "g_tLinearDepth_HitT",
+          "kind": 2,
+          "slot": 24,
+          "count": 1,
+          "space": 0
+        },
+        {
+          "name": "g_tMaterialId",
+          "kind": 2,
+          "slot": 25,
+          "count": 1,
+          "space": 0
+        },
+        {
+          "name": "g_tNormal_TexcoordX",
+          "kind": 2,
+          "slot": 26,
+          "count": 1,
+          "space": 0
+        },
+        {
+          "name": "g_tPosition_TexcoordY",
+          "kind": 2,
+          "slot": 27,
+          "count": 1,
+          "space": 0
+        },
+        {
+          "name": "g_sMaterialTextureArray",
+          "kind": 2,
+          "slot": 0,
+          "count": 0,
+          "space": 1
+        },
+        {
+          "name": "g_rwtRadiance",
+          "kind": 4,
+          "slot": 0,
+          "count": 1,
+          "space": 0
+        },
+        {
+          "name": "sys_constants",
+          "kind": 0,
+          "slot": 0,
+          "count": 1,
+          "space": 0
+        },
+        {
+          "name": "deferredlight_constants",
+          "kind": 0,
+          "slot": 1,
+          "count": 1,
+          "space": 0
+        },
+        {
+          "name": "env_general",
+          "kind": 0,
+          "slot": 2,
+          "count": 1,
+          "space": 0
+        },
+        {
+          "name": "illuminationvolume",
+          "kind": 0,
+          "slot": 3,
+          "count": 1,
+          "space": 0
+        },
+        {
+          "name": "ManualUpdateCB_ActiveVolumeTopLevelInfoArray",
+          "kind": 0,
+          "slot": 4,
+          "count": 1,
+          "space": 0
+        },
+        {
+          "name": "distancefield_CS",
+          "kind": 0,
+          "slot": 5,
+          "count": 1,
+          "space": 0
+        }
+      ]
+    },
+    "a9e5b544d5ec48e9b439b36aafc5346645f0261d3b1df65dc09e6cce290c164f": {
+      "sha256": "a9e5b544d5ec48e9b439b36aafc5346645f0261d3b1df65dc09e6cce290c164f",
+      "bytes": 71144,
+      "bindings": [
+        {
+          "name": "g_sNearestWrap",
+          "kind": 3,
+          "slot": 0,
+          "count": 1,
+          "space": 1
+        },
+        {
+          "name": "g_sLinearClamp",
+          "kind": 3,
+          "slot": 6,
+          "count": 1,
+          "space": 1
+        },
+        {
+          "name": "g_sLinearMipNearestWrap",
+          "kind": 3,
+          "slot": 8,
+          "count": 1,
+          "space": 1
+        },
+        {
+          "name": "g_sLinearMipLinearClamp",
+          "kind": 3,
+          "slot": 11,
+          "count": 1,
+          "space": 1
+        },
+        {
+          "name": "g_tGBuffer1",
+          "kind": 2,
+          "slot": 0,
+          "count": 1,
+          "space": 0
+        },
+        {
+          "name": "g_tGBuffer2",
+          "kind": 2,
+          "slot": 1,
+          "count": 1,
+          "space": 0
+        },
+        {
+          "name": "g_tShadowBuffer",
+          "kind": 2,
+          "slot": 2,
+          "count": 1,
+          "space": 0
+        },
+        {
+          "name": "g_tClipDepth",
+          "kind": 2,
+          "slot": 3,
+          "count": 1,
+          "space": 0
+        },
+        {
+          "name": "g_tBlueNoiseOutputDither",
+          "kind": 2,
+          "slot": 4,
+          "count": 1,
+          "space": 0
+        },
+        {
+          "name": "g_tBlueNoiseShadowJitter",
+          "kind": 2,
+          "slot": 5,
+          "count": 1,
+          "space": 0
+        },
+        {
+          "name": "g_tTranslucencyKernelSource",
+          "kind": 2,
+          "slot": 6,
+          "count": 1,
+          "space": 0
+        },
+        {
+          "name": "g_sbMaterialDataPart1",
+          "kind": 5,
+          "slot": 7,
+          "count": 1,
+          "space": 0
+        },
+        {
+          "name": "g_sbMaterialDataPart3",
+          "kind": 5,
+          "slot": 8,
+          "count": 1,
+          "space": 0
+        },
+        {
+          "name": "g_tPointLightShadowAtlas",
+          "kind": 2,
+          "slot": 9,
+          "count": 1,
+          "space": 0
+        },
+        {
+          "name": "g_sbDeferredLightPointData",
+          "kind": 5,
+          "slot": 10,
+          "count": 1,
+          "space": 0
+        },
+        {
+          "name": "g_tDeferredLightTilePointLights",
+          "kind": 2,
+          "slot": 11,
+          "count": 1,
+          "space": 0
+        },
+        {
+          "name": "g_tSpotLightPCFShadowAtlas",
+          "kind": 2,
+          "slot": 12,
+          "count": 1,
+          "space": 0
+        },
+        {
+          "name": "g_tSpotLightVSMShadowAtlas",
+          "kind": 2,
+          "slot": 13,
+          "count": 1,
+          "space": 0
+        },
+        {
+          "name": "g_tSpotLightProjectionAtlas",
+          "kind": 2,
+          "slot": 14,
+          "count": 1,
+          "space": 0
+        },
+        {
+          "name": "g_sbDeferredLightSpotData",
+          "kind": 5,
+          "slot": 15,
+          "count": 1,
+          "space": 0
+        },
+        {
+          "name": "g_tDeferredLightTileSpotLights",
+          "kind": 2,
+          "slot": 16,
+          "count": 1,
+          "space": 0
+        },
+        {
+          "name": "g_tSunLightProjectionTexture",
+          "kind": 2,
+          "slot": 17,
+          "count": 1,
+          "space": 0
+        },
+        {
+          "name": "g_sbDeferredLightSunData",
+          "kind": 5,
+          "slot": 18,
+          "count": 1,
+          "space": 0
+        },
+        {
+          "name": "g_tBentNormals",
+          "kind": 2,
+          "slot": 19,
+          "count": 1,
+          "space": 0
+        },
+        {
+          "name": "g_tFillSpecular",
+          "kind": 2,
+          "slot": 20,
+          "count": 1,
+          "space": 0
+        },
+        {
+          "name": "g_rwtLightBufferDiffuse",
+          "kind": 4,
+          "slot": 0,
+          "count": 1,
+          "space": 0
+        },
+        {
+          "name": "g_rwtLightBufferSpecular",
+          "kind": 4,
+          "slot": 1,
+          "count": 1,
+          "space": 0
+        },
+        {
+          "name": "g_rwtSingleSpot",
+          "kind": 4,
+          "slot": 2,
+          "count": 1,
+          "space": 0
+        },
+        {
+          "name": "sys_constants",
+          "kind": 0,
+          "slot": 0,
+          "count": 1,
+          "space": 0
+        },
+        {
+          "name": "mid_translucency",
+          "kind": 0,
+          "slot": 1,
+          "count": 1,
+          "space": 0
+        },
+        {
+          "name": "deferredlight_constants",
+          "kind": 0,
+          "slot": 2,
+          "count": 1,
+          "space": 0
+        },
+        {
+          "name": "common_depth_general",
+          "kind": 0,
+          "slot": 3,
+          "count": 1,
+          "space": 0
+        }
+      ]
+    },
+    "40df59b42a5d30db4f2ad7f84bfcf02e3b743de6664a05aab9d8917f1fd58d4c": {
+      "sha256": "40df59b42a5d30db4f2ad7f84bfcf02e3b743de6664a05aab9d8917f1fd58d4c",
+      "bytes": 12212,
+      "bindings": [
+        {
+          "name": "g_sLinearClamp",
+          "kind": 3,
+          "slot": 6,
+          "count": 1,
+          "space": 1
+        },
+        {
+          "name": "g_tGBuffer1",
+          "kind": 2,
+          "slot": 0,
+          "count": 1,
+          "space": 0
+        },
+        {
+          "name": "g_tGBuffer2",
+          "kind": 2,
+          "slot": 1,
+          "count": 1,
+          "space": 0
+        },
+        {
+          "name": "g_tLinearDepth",
+          "kind": 2,
+          "slot": 2,
+          "count": 1,
+          "space": 0
+        },
+        {
+          "name": "g_tPreviousLinearDepth",
+          "kind": 2,
+          "slot": 3,
+          "count": 1,
+          "space": 0
+        },
+        {
+          "name": "g_tGeometryVelocityTexture",
+          "kind": 2,
+          "slot": 4,
+          "count": 1,
+          "space": 0
+        },
+        {
+          "name": "g_DLF_rwtColorSource",
+          "kind": 2,
+          "slot": 5,
+          "count": 1,
+          "space": 0
+        },
+        {
+          "name": "g_DLF_tOutputHistory",
+          "kind": 2,
+          "slot": 6,
+          "count": 1,
+          "space": 0
+        },
+        {
+          "name": "g_tHitInfo",
+          "kind": 2,
+          "slot": 7,
+          "count": 1,
+          "space": 0
+        },
+        {
+          "name": "g_DLF_rwtColorTarget",
+          "kind": 4,
+          "slot": 0,
+          "count": 1,
+          "space": 0
+        },
+        {
+          "name": "sys_constants",
+          "kind": 0,
+          "slot": 0,
+          "count": 1,
+          "space": 0
+        },
+        {
+          "name": "deferredlight_filtering",
+          "kind": 0,
+          "slot": 1,
+          "count": 1,
+          "space": 0
+        }
+      ]
+    },
+    "80af0f6bec196ab7d0816589246b19ffbaf92b07cb10aecdfa9da4acb0c66cb3": {
+      "sha256": "80af0f6bec196ab7d0816589246b19ffbaf92b07cb10aecdfa9da4acb0c66cb3",
+      "bytes": 12212,
+      "bindings": [
+        {
+          "name": "g_sLinearClamp",
+          "kind": 3,
+          "slot": 6,
+          "count": 1,
+          "space": 1
+        },
+        {
+          "name": "g_tGBuffer1",
+          "kind": 2,
+          "slot": 0,
+          "count": 1,
+          "space": 0
+        },
+        {
+          "name": "g_tGBuffer2",
+          "kind": 2,
+          "slot": 1,
+          "count": 1,
+          "space": 0
+        },
+        {
+          "name": "g_tLinearDepth",
+          "kind": 2,
+          "slot": 2,
+          "count": 1,
+          "space": 0
+        },
+        {
+          "name": "g_tPreviousLinearDepth",
+          "kind": 2,
+          "slot": 3,
+          "count": 1,
+          "space": 0
+        },
+        {
+          "name": "g_tGeometryVelocityTexture",
+          "kind": 2,
+          "slot": 4,
+          "count": 1,
+          "space": 0
+        },
+        {
+          "name": "g_DLF_rwtColorSource",
+          "kind": 2,
+          "slot": 5,
+          "count": 1,
+          "space": 0
+        },
+        {
+          "name": "g_DLF_tOutputHistory",
+          "kind": 2,
+          "slot": 6,
+          "count": 1,
+          "space": 0
+        },
+        {
+          "name": "g_tHitInfo",
+          "kind": 2,
+          "slot": 7,
+          "count": 1,
+          "space": 0
+        },
+        {
+          "name": "g_DLF_rwtColorTarget",
+          "kind": 4,
+          "slot": 0,
+          "count": 1,
+          "space": 0
+        },
+        {
+          "name": "sys_constants",
+          "kind": 0,
+          "slot": 0,
+          "count": 1,
+          "space": 0
+        },
+        {
+          "name": "deferredlight_filtering",
+          "kind": 0,
+          "slot": 1,
+          "count": 1,
+          "space": 0
+        }
+      ]
+    },
+    "a7d3ef4e5416b9c099d1afa512ea83ae9cd4d69359149b68afbd97889289ee08": {
+      "sha256": "a7d3ef4e5416b9c099d1afa512ea83ae9cd4d69359149b68afbd97889289ee08",
+      "bytes": 11588,
+      "bindings": [
+        {
+          "name": "g_sLinearClamp",
+          "kind": 3,
+          "slot": 6,
+          "count": 1,
+          "space": 1
+        },
+        {
+          "name": "g_tGBuffer1",
+          "kind": 2,
+          "slot": 0,
+          "count": 1,
+          "space": 0
+        },
+        {
+          "name": "g_tPreviousLinearDepth",
+          "kind": 2,
+          "slot": 1,
+          "count": 1,
+          "space": 0
+        },
+        {
+          "name": "g_tGeometryVelocityTexture",
+          "kind": 2,
+          "slot": 2,
+          "count": 1,
+          "space": 0
+        },
+        {
+          "name": "g_tNewShadowTexture",
+          "kind": 2,
+          "slot": 3,
+          "count": 1,
+          "space": 0
+        },
+        {
+          "name": "g_tOldShadowTexture",
+          "kind": 2,
+          "slot": 4,
+          "count": 1,
+          "space": 0
+        },
+        {
+          "name": "g_tReflectionNew",
+          "kind": 2,
+          "slot": 5,
+          "count": 1,
+          "space": 0
+        },
+        {
+          "name": "g_tReflectionOld",
+          "kind": 2,
+          "slot": 6,
+          "count": 1,
+          "space": 0
+        },
+        {
+          "name": "g_tBentNormals",
+          "kind": 2,
+          "slot": 7,
+          "count": 1,
+          "space": 0
+        },
+        {
+          "name": "g_rwtBentNormals",
+          "kind": 4,
+          "slot": 0,
+          "count": 1,
+          "space": 0
+        },
+        {
+          "name": "g_rwtReflections",
+          "kind": 4,
+          "slot": 1,
+          "count": 1,
+          "space": 0
+        },
+        {
+          "name": "g_rwtNewShadow",
+          "kind": 4,
+          "slot": 2,
+          "count": 1,
+          "space": 0
+        },
+        {
+          "name": "sys_constants",
+          "kind": 0,
+          "slot": 0,
+          "count": 1,
+          "space": 0
+        },
+        {
+          "name": "common_depth_general",
+          "kind": 0,
+          "slot": 1,
+          "count": 1,
+          "space": 0
+        },
+        {
+          "name": "lsao",
+          "kind": 0,
+          "slot": 2,
+          "count": 1,
+          "space": 0
+        },
+        {
+          "name": "filter_options",
+          "kind": 0,
+          "slot": 3,
+          "count": 1,
+          "space": 0
+        }
+      ]
+    },
+    "c2e4c0c4b48b191ba281595dcf11c7962c5c05c615cbe036ca6e8616c09fd30e": {
+      "sha256": "c2e4c0c4b48b191ba281595dcf11c7962c5c05c615cbe036ca6e8616c09fd30e",
+      "bytes": 39008,
+      "bindings": null
+    },
+    "66ec0c29541de1f4aa59636ce6e4415de440a12315b983839d0de0c0a2bab9a8": {
+      "sha256": "66ec0c29541de1f4aa59636ce6e4415de440a12315b983839d0de0c0a2bab9a8",
+      "bytes": 29328,
+      "bindings": null
+    },
+    "6297319e1fec315c06ee75993e797b51def658e7d41f1588d7df3feb41a1ea2f": {
+      "sha256": "6297319e1fec315c06ee75993e797b51def658e7d41f1588d7df3feb41a1ea2f",
+      "bytes": 24472,
+      "bindings": null
+    },
+    "d5efe2c2219257e2a7b51bbd65a7fa3b80cdb56fb7e6444223f8b4d7ee45a1a9": {
+      "sha256": "d5efe2c2219257e2a7b51bbd65a7fa3b80cdb56fb7e6444223f8b4d7ee45a1a9",
+      "bytes": 29900,
+      "bindings": null
+    }
+  }
+}
