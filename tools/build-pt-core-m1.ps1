@@ -19,6 +19,7 @@ foreach ($name in @('surface-transport','geometry-bounds','direct-light')) {
 }
 foreach ($shader in @(
     @{Source='src/shaders/pt_scene_hits.hlsl';Profile='lib_6_3';Name='pt-scene-hits'},
+    @{Source='tools/test-pt-path-query.hlsl';Profile='lib_6_3';Name='pt-path-query-test'},
     @{Source='tools/test-pt-scene-query.hlsl';Profile='lib_6_3';Name='pt-scene-query-test'},
     @{Source='tools/test-pt-surface-transport.hlsl';Profile='cs_6_0';Name='pt-transport-test'}
 )) {

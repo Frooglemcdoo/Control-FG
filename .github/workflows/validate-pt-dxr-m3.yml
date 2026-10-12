@@ -1,0 +1,40 @@
+name: Build PT DXR GPU test M3
+on:
+  push:
+    branches: [experiment/pt-glass-integration]
+    paths:
+      - 'src/shaders/pt*.hlsl*'
+      - 'tools/test-pt-path-query.hlsl'
+      - 'tools/build-pt-core-m1.ps1'
+      - 'src/shaders/pt_geometry_bounds.hlsli'
+      - 'tools/test-pt-dxr-gpu.cpp'
+      - 'tools/test-pt-scene-query.hlsl'
+      - 'tools/build-pt-dxr-m3.ps1'
+      - 'tools/Run-PT-Path-Test.cmd'
+      - '.github/workflows/validate-pt-dxr-m3.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build standalone DXR host and shaders
+        shell: cmd
+        run: |
+          for /f "usebackq tokens=*" %%I in (`"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath`) do set "VSPATH=%%I"
+          call "%VSPATH%\VC\Auxiliary\Build\vcvars64.bat"
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools\build-pt-dxr-m3.ps1
+          if errorlevel 1 exit /b 1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PT-DXR-GPU-Test-M3
+          path: |
+            build/pt-dxr-m3/*.exe
+            build/pt-dxr-m3/*.dxil
+            build/pt-dxr-m3/*.cmd
+            build/pt-dxr-m3/*.txt
+            build/pt-dxr-m3/*.json
+          if-no-files-found: error

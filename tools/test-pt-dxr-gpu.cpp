@@ -18,7 +18,11 @@ using Microsoft::WRL::ComPtr;
 static void ok(HRESULT hr,const char* name){if(FAILED(hr)){std::printf("FAIL %s HRESULT=0x%08lx\n",name,(unsigned long)hr);throw std::runtime_error(name);}}
 static void need(bool b,const char* name){if(!b)throw std::runtime_error(name);}
 struct Ray {float origin[3],tmin,direction[3],tmax;};
+#ifdef PT_PATH_TEST
+struct Result {float radiance[3],reserved[3];UINT hits,valid,samples;};
+#else
 struct Result {float distance,uv[2],normal[3];UINT material,status,visibility;};
+#endif
 static_assert(sizeof(Ray)==32&&sizeof(Result)==36,"Shader ABI");
 struct Vertex {short normal[4];short uv[2];};
 static_assert(sizeof(Vertex)==12,"Packed native-style fixture");
@@ -78,13 +82,25 @@ int main(int argc,char** argv){try{
         g.device=d;std::printf("DXR adapter: %ls, tier %u, execution=%s\n",desc.Description,(UINT)options.RaytracingTier,reference?"reference driver (NOT hardware validation)":"hardware");break;
     }
     if(!g.device){std::puts("SKIP: No hardware DXR adapter. GPU tests did NOT run.");return allowSkip?0:2;}
-    std::ifstream file("pt-scene-query-test.dxil",std::ios::binary);need(bool(file),"Missing pt-scene-query-test.dxil; run beside the shader");
+    #ifdef PT_PATH_TEST
+    std::ifstream file("pt-path-query-test.dxil",std::ios::binary);
+#else
+    std::ifstream file("pt-scene-query-test.dxil",std::ios::binary);
+#endifneed(bool(file),"Missing pt-scene-query-test.dxil; run beside the shader");
     std::vector<char> bytecode((std::istreambuf_iterator<char>(file)),std::istreambuf_iterator<char>());need(!bytecode.empty(),"Empty shader library");
     D3D12_COMMAND_QUEUE_DESC q{};q.Type=D3D12_COMMAND_LIST_TYPE_DIRECT;ok(g.device->CreateCommandQueue(&q,IID_PPV_ARGS(&g.queue)),"Queue");
     ok(g.device->CreateCommandAllocator(q.Type,IID_PPV_ARGS(&g.allocator)),"Allocator");ok(g.device->CreateCommandList(0,q.Type,g.allocator.Get(),nullptr,IID_PPV_ARGS(&g.list)),"Command list");
     float positions[12][3]{};Vertex attributes[12]{};UINT indices32[12]{};unsigned short indices16[12]{};
     for(UINT i=0;i<4;++i){float x=3.0f*i;float p[3][3]={{x-1,-1,2},{x+1,-1,2},{x,1,2}};
         for(UINT j=0;j<3;++j){UINT n=i*3+j;memcpy(positions[n],p[j],12);indices32[n]=n;indices16[n]=(unsigned short)n;attributes[n].normal[2]=-32767;attributes[n].uv[0]=j==1?4095:0;attributes[n].uv[1]=j==2?4095:0;}}
+#ifdef PT_PATH_TEST
+    // Large facing triangles approximate two infinite planes for a bounded test.
+    // Packed normals exactly match these planes; this does not admit native
+    // shading normals as geometric normals in production.
+    for(UINT i=0;i<4;++i){float z=i==2?-2.0f:2.0f;float x=(i==0||i==2)?0.0f:1e7f*i;
+        float p[3][3]={{x-1e5f,-1e5f,z},{x+1e5f,-1e5f,z},{x,1e5f,z}};
+        for(UINT j=0;j<3;++j){memcpy(positions[i*3+j],p[j],12);attributes[i*3+j].normal[2]=i==2?32767:-32767;}}
+#endif
     auto pos=g.buffer(sizeof(positions),D3D12_HEAP_TYPE_UPLOAD,D3D12_RESOURCE_STATE_GENERIC_READ,D3D12_RESOURCE_FLAG_NONE,positions);
     auto verts=g.buffer(sizeof(attributes),D3D12_HEAP_TYPE_UPLOAD,D3D12_RESOURCE_STATE_GENERIC_READ,D3D12_RESOURCE_FLAG_NONE,attributes);
     auto idx32=g.buffer(sizeof(indices32),D3D12_HEAP_TYPE_UPLOAD,D3D12_RESOURCE_STATE_GENERIC_READ,D3D12_RESOURCE_FLAG_NONE,indices32);
@@ -131,15 +147,32 @@ int main(int argc,char** argv){try{
         memcpy(records.data()+offset+48,constants,sizeof(constants));}
     auto sbt=g.buffer(records.size(),D3D12_HEAP_TYPE_UPLOAD,D3D12_RESOURCE_STATE_GENERIC_READ,D3D12_RESOURCE_FLAG_NONE,records.data());
     Ray rays[]={{{0,0,0},0,{0,0,1},10},{{12,0,0},0,{0,0,1},10},{{3,0,0},0,{0,0,1},10},{{6,0,0},0,{0,0,1},10},{{0,0,0},0,{0,0,1},1},{{0,0,0},2.1f,{0,0,1},10},{{0,0,0},0,{0,0,0},10},{{9,0,0},0,{0,0,1},10}};
+#ifdef PT_PATH_TEST
+    for(auto& ray:rays)ray=Ray{{0,0,0},0,{0,0,1},1e8f};
+    rays[6]=Ray{{1e6f,0,0},0,{0,0,1},1e8f};
+    rays[7].direction[2]=0;
+#endif
     auto rayBuffer=g.buffer(sizeof(rays),D3D12_HEAP_TYPE_UPLOAD,D3D12_RESOURCE_STATE_GENERIC_READ,D3D12_RESOURCE_FLAG_NONE,rays);auto output=g.buffer(8*sizeof(Result),D3D12_HEAP_TYPE_DEFAULT,D3D12_RESOURCE_STATE_UNORDERED_ACCESS,D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);auto readback=g.buffer(8*sizeof(Result),D3D12_HEAP_TYPE_READBACK,D3D12_RESOURCE_STATE_COPY_DEST);
     ID3D12DescriptorHeap* heaps[]={heap.Get()};g.list->SetDescriptorHeaps(1,heaps);g.list->SetComputeRootSignature(global.Get());auto gpu=heap->GetGPUDescriptorHandleForHeapStart();g.list->SetComputeRootDescriptorTable(0,gpu);gpu.ptr+=step;g.list->SetComputeRootDescriptorTable(1,gpu);
     g.list->SetComputeRootShaderResourceView(2,tlas->GetGPUVirtualAddress());g.list->SetComputeRootShaderResourceView(3,rayBuffer->GetGPUVirtualAddress());g.list->SetComputeRootUnorderedAccessView(4,output->GetGPUVirtualAddress());g.list->SetPipelineState1(state.Get());
     auto base=sbt->GetGPUVirtualAddress();D3D12_DISPATCH_RAYS_DESC dispatch{};dispatch.RayGenerationShaderRecord={base,32};dispatch.MissShaderTable={base+64,64,32};dispatch.HitGroupTable={base+192,8*96,96};dispatch.Width=8;dispatch.Height=dispatch.Depth=1;g.list->DispatchRays(&dispatch);
     g.barrier(output.Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS,D3D12_RESOURCE_STATE_COPY_SOURCE);g.list->CopyBufferRegion(readback.Get(),0,output.Get(),0,8*sizeof(Result));g.execute();
     Result* results;D3D12_RANGE range{0,8*sizeof(Result)};ok(readback->Map(0,&range,(void**)&results),"Read GPU results");
+#ifdef PT_PATH_TEST
+    const char* names[]={"one surface", "two surfaces", "four surfaces", "eight surfaces", "visible direct light", "occluded direct light", "environment miss", "invalid input"};
+    const UINT depths[]={1,2,4,8,1,1,0,0};const float kd[]={.5f,.25f,.75f},emission[]={1,.5f,.25f};bool pass=true;
+    for(UINT i=0;i<8;++i){auto& r=results[i];float expected[3]{};
+        for(UINT c=0;c<3;++c){if(i<4){float throughput=1;for(UINT d=0;d<depths[i];++d){expected[c]+=throughput*emission[c];throughput*=kd[c];}}
+            else if(i==4)expected[c]=kd[c]/3.14159265358979323846f;
+            else if(i==6)expected[c]=c==0?.2f:c==1?.4f:.8f;}
+        bool match=r.valid==(i==7?0u:1u)&&r.hits==depths[i]&&r.samples==64;
+        for(UINT c=0;c<3;++c)match=match&&std::isfinite(r.radiance[c])&&std::fabs(r.radiance[c]-expected[c])<2e-4f;
+        std::printf("%s: %s RGB=(%.6f,%.6f,%.6f) expected=(%.6f,%.6f,%.6f) hits=%u valid=%u\n",match?"PASS":"FAIL",names[i],r.radiance[0],r.radiance[1],r.radiance[2],expected[0],expected[1],expected[2],r.hits,r.valid);pass=pass&&match;}
+#else
     const char* names[]={"opaque hit 16-bit","geometric miss","alpha cutout 32-bit","solid alpha 32-bit","short shadow segment","near clip","invalid ray","invalid material"};UINT expected[]={1,0,0,1,0,0,2,2};UINT vis[]={0,1,1,0,1,1,2,2};bool pass=true;
     for(UINT i=0;i<8;++i){auto& r=results[i];bool match=r.status==expected[i]&&r.visibility==vis[i];if(r.status==1)match=match&&std::fabs(r.distance-2)<1e-4f&&std::fabs(r.normal[2]+1)<1e-4f&&std::fabs(r.uv[0]-.25f)<1e-4f&&std::fabs(r.uv[1]-.5f)<1e-4f;
         std::printf("%s: %s hit=%u visibility=%u distance=%.6f material=%u uv=(%.6f,%.6f) normal=(%.4f,%.4f,%.4f)\n",match?"PASS":"FAIL",names[i],r.status,r.visibility,r.distance,r.material,r.uv[0],r.uv[1],r.normal[0],r.normal[1],r.normal[2]);pass=pass&&match;}
+#endif
     D3D12_RANGE noWrite{0,0};readback->Unmap(0,&noWrite);
     ComPtr<ID3D12InfoQueue> messages;
     if(SUCCEEDED(g.device.As(&messages)))for(UINT64 i=0;i<messages->GetNumStoredMessages();++i){SIZE_T size=0;messages->GetMessage(i,nullptr,&size);std::vector<unsigned char> bytes(size);auto m=(D3D12_MESSAGE*)bytes.data();
