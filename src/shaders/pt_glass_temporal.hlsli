@@ -3,8 +3,8 @@
 // treating the front glass depth/motion as reflected-surface motion.
 struct PTGlassHistory {
     float4 illumination_count;
-    float4 position_material;
-    float4 normal_serial;
+    float3 position; uint material;
+    float3 normal; uint serial;
 };
 RWStructuredBuffer<PTGlassHistory> ptGlassHistory : register(u1);
 
@@ -17,14 +17,14 @@ void PTGlassAccumulate(uint2 pixel,float3 worldPosition,float3 normal,uint mater
     // has been recorded and its slot has retired through the actual GPU fence.
     if(ptGlassHistorySerial!=0u) {
         PTGlassHistory previous=ptGlassHistory[index];
-        float3 delta=previous.position_material.xyz-worldPosition;
-        bool compatible=asuint(previous.normal_serial.w)==ptGlassHistorySerial&&
-            asuint(previous.position_material.w)==material&&
-            all(isfinite(previous.position_material.xyz))&&
-            all(isfinite(previous.normal_serial.xyz))&&
+        float3 delta=previous.position-worldPosition;
+        bool compatible=previous.serial==ptGlassHistorySerial&&
+            previous.material==material&&
+            all(isfinite(previous.position))&&
+            all(isfinite(previous.normal))&&
             all(isfinite(previous.illumination_count))&&
             previous.illumination_count.w>=1.0f&&previous.illumination_count.w<=16.0f&&
-            dot(delta,delta)<=0.0004f&&dot(previous.normal_serial.xyz,normal)>=0.995f;
+            dot(delta,delta)<=0.0004f&&dot(previous.normal,normal)>=0.995f;
         if(compatible) {
             count=min(previous.illumination_count.w+1.0f,16.0f);
             // Limit stale lighting after a large lighting change. The broad
@@ -36,8 +36,8 @@ void PTGlassAccumulate(uint2 pixel,float3 worldPosition,float3 normal,uint mater
     }
     PTGlassHistory current;
     current.illumination_count=float4(resolved,count);
-    current.position_material=float4(worldPosition,asfloat(material));
-    current.normal_serial=float4(normal,asfloat(ptGlassEpoch));
+    current.position=worldPosition;current.material=material;
+    current.normal=normal;current.serial=ptGlassEpoch;
     ptGlassHistory[index]=current;
     // New/disoccluded surfaces stay on native GI while evidence builds.
     illumination=lerp(fallback,resolved,saturate((count-1.0f)/7.0f));
