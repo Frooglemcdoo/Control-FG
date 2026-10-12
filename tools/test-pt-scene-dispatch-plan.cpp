@@ -11,6 +11,8 @@ int main(){
     owners.Insert({1,0x1000,8});owners.Insert({2,0x2000,36});owners.Insert({3,0x3000,64});
     PTOwnedScene::Triangle tri{0x1000,0x2000,12,0,0,2,3,3};assert(owners.Observe(tri));
     Scene scene;scene.address=0xa000;scene.version=1;
+    owners.Insert({10,0xa000,256});owners.Insert({11,0xb000,256});
+    scene.tlas={10,256};scene.blas[0xb000]={11,256};
     assert(scene.topology.Build(0xb000,{{0x1000,0x2000,12,2,3,3,1,2}}));
     PTSceneTopology::Instance instance{};instance.idMask=0xff000001;instance.blas=0xb000;scene.instances={instance};
     Table table;table.address=0xc000;table.version=2;table.pipeline=3;table.rays=2;
@@ -45,7 +47,20 @@ int main(){
     assert(!PTNativeShaderTable::ReadIdentifiers(reinterpret_cast<void*>(1),read)&&read.pipeline==0);
 #endif
     auto prepare=[&](){return Prepare(selected,scene,table,owners,exports,plan);};
-    assert(prepare().status==Status::prepared&&plan.records.size()==2&&plan.allocationTokens.size()==3);
+    assert(prepare().status==Status::prepared&&plan.records.size()==2&&plan.allocationTokens.size()==5);
+    owners.Remove(10);owners.Insert({12,0xa000,256});
+    assert(prepare().status==Status::allocation&&plan.records.empty());
+    scene.tlas.token=12;assert(prepare().status==Status::prepared);
+    owners.Remove(11);owners.Insert({13,0xb000,256});
+    assert(prepare().status==Status::allocation&&plan.records.empty());
+    scene.blas[0xb000].token=13;assert(prepare().status==Status::prepared);
+    scene.blas[0xb000].bytes=257;assert(prepare().status==Status::allocation);
+    scene.blas[0xb000].bytes=256;
+    scene.tlas.bytes=0;assert(prepare().status==Status::allocation);scene.tlas.bytes=256;
+    auto masked=instance;masked.idMask=0;masked.blas=0xdead;scene.instances.push_back(masked);
+    assert(prepare().status==Status::prepared);scene.instances.pop_back();
+    scene.blas.clear();assert(prepare().status==Status::allocation);scene.blas[0xb000]={13,256};
+    assert(prepare().status==Status::prepared);
     std::uint32_t limit=0;std::memcpy(&limit,plan.records[0].data()+56+8*4,4);assert(limit==8);
     std::memcpy(&limit,plan.records[0].data()+56+9*4,4);assert(limit==64);
     assert(plan.records[0][0]==5&&plan.records[1][0]==6);

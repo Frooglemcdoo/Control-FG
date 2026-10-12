@@ -199,7 +199,10 @@ int main(int argc,char** argv){try{
     owners.Insert({2,idx32->GetGPUVirtualAddress(),sizeof(indices32)});
     owners.Insert({3,pos->GetGPUVirtualAddress(),sizeof(positions)});
     owners.Insert({4,verts->GetGPUVirtualAddress(),sizeof(attributes)});
+    owners.Insert({5,blas->GetGPUVirtualAddress(),blas->GetDesc().Width});
+    owners.Insert({6,tlas->GetGPUVirtualAddress(),tlas->GetDesc().Width});
     PTSceneDispatch::Scene scene;scene.address=tlas->GetGPUVirtualAddress();scene.version=1;
+    scene.tlas={6,tlas->GetDesc().Width};scene.blas[blas->GetGPUVirtualAddress()]={5,blas->GetDesc().Width};
     PTSceneTopology::Instance selectedInstance{};memcpy(&selectedInstance,&instance,sizeof(instance));scene.instances={selectedInstance};
     std::vector<PTSceneTopology::Geometry> selectedGeometry;
     for(UINT i=0;i<4;++i){const auto& t=geometry[i].Triangles;const UINT stride=i==0?2u:4u;
@@ -274,7 +277,7 @@ int main(int argc,char** argv){try{
         need(captured.bytes==nativeTable.bytes,"Native writer snapshot matches fixture source");
         PTSceneDispatch::Plan plan;
         need(PTSceneDispatch::Prepare(selection,scene,captured,owners,exportMaps,plan).status==PTSceneDispatch::Status::prepared,"Complete scene-to-dispatch preflight");
-        need(plan.records.size()==8&&plan.allocationTokens.size()==4,"Complete scene leases and table");
+        need(plan.records.size()==8&&plan.allocationTokens.size()==6,"Complete scene leases and table");
         void* mapped=nullptr;D3D12_RANGE empty{0,0};ok(sbt->Map(0,&empty,&mapped),"Private worker SBT map");
         for(size_t i=0;i<plan.records.size();++i)memcpy(static_cast<unsigned char*>(mapped)+192+i*recordStride,plan.records[i].data(),recordStride);
         D3D12_RANGE written{192,records.size()};sbt->Unmap(0,&written);

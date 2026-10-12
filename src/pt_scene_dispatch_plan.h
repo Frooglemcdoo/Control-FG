@@ -14,6 +14,10 @@ struct Selection {
 };
 struct Scene {
     U64 address=0,version=0;
+    // Captured with the AS build/version, never recovered from a latest-VA lookup.
+    struct Acceleration {U64 token=0,bytes=0;};
+    Acceleration tlas;
+    std::map<U64,Acceleration> blas;
     PTSceneTopology::Index topology;
     std::vector<PTSceneTopology::Instance> instances;
 };
@@ -50,7 +54,18 @@ inline Failure Prepare(const Selection& selected,const Scene& scene,const Table&
     std::vector<PTSceneTopology::Mapping> mappings;
     scene.topology.Check(scene.instances,table.bindings,table.rays,&mappings);
     if(mappings.size()!=table.bindings.size())return {Status::topology,0};
-    Plan pending;pending.selection=selected;pending.privatePipeline=exports.privatePipeline;pending.records.resize(table.bindings.size()*table.rays);
+    Plan pending;
+    const auto retainAS=[&](U64 address,const Scene::Acceleration& as){
+        if(!as.token||!as.bytes||owners.Find(address,as.bytes)!=as.token)return false;
+        pending.allocationTokens.push_back(as.token);return true;
+    };
+    if(!retainAS(scene.address,scene.tlas))return {Status::allocation,0};
+    for(const auto& instance:scene.instances){
+        if(!(instance.idMask>>24))continue;
+        const auto found=scene.blas.find(instance.blas);
+        if(found==scene.blas.end()||!retainAS(instance.blas,found->second))return {Status::allocation,0};
+    }
+    pending.selection=selected;pending.privatePipeline=exports.privatePipeline;pending.records.resize(table.bindings.size()*table.rays);
     for(std::size_t i=0;i<table.bindings.size();++i){
         if(!mappings[i].referenced)return {Status::unreferenced,i*table.rays};
         const auto& g=mappings[i].geometry;const auto& binding=table.bindings[i];

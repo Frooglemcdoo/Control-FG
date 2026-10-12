@@ -1,5 +1,7 @@
 #pragma once
 #include "pt_owned_scene.h"
+#include "pt_scene_dispatch_plan.h"
+#include "pt_scene_leases.h"
 #include "pt_scene_observer.h"
 #include <wrl/client.h>
 #include <mutex>
@@ -16,7 +18,10 @@ public:
     struct Stats {U64 retained=0,rejected=0,budget=0,observed=0,unownedGeometry=0,validatedRelease=0,mismatchedRelease=0,peakBytes=0;U64 resolved[6]{};};
 private:
     Stats stats{};
+    std::shared_ptr<LeaseBudget> leaseBudget;
 public:
+    explicit Runtime(std::shared_ptr<LeaseBudget> budget=std::make_shared<LeaseBudget>())
+        :leaseBudget(std::move(budget)){}
     static constexpr U64 MaximumBytes=1024ull*1024*1024,MaximumResource=64ull*1024*1024;
     // Own references are movable so release validation happens without holding
     // the registry mutex across the native call (which can recurse).
@@ -57,6 +62,27 @@ public:
     Status Resolve(const PTNativeBinding::Binding& binding,PTSceneAdmission::Record& record){
         std::lock_guard<std::mutex> guard(mutex);if(!active){record={};return Status::missingAllocation;}
         const auto status=index.Resolve(binding,record);++stats.resolved[static_cast<unsigned>(status)];return status;
+    }
+    // Resolve and AddRef in the same owner transaction. A release/reuse cannot
+    // occur between validating an allocation token and retaining its resource.
+    bool PrepareLease(const PTSceneDispatch::Selection& selected,const PTSceneDispatch::Scene& scene,
+                      const PTSceneDispatch::Table& table,const PTSceneDispatch::ExportSet& exports,
+                      PTSceneDispatch::Plan& plan,LeaseBatch& batch){
+        plan={};if(batch.Count()||!leaseBudget)return false;
+        std::lock_guard<std::mutex> guard(mutex);if(!active)return false;
+        PTSceneDispatch::Plan candidate;
+        if(PTSceneDispatch::Prepare(selected,scene,table,index,exports,candidate).status!=PTSceneDispatch::Status::prepared)return false;
+        std::map<U64,const Entry*> tokens;for(const auto& owner:owners)tokens.emplace(owner.second.token,&owner.second);
+        auto payload=std::make_unique<LeaseBatch::Payload>();payload->budget=leaseBudget;
+        U64 bytes=0;
+        for(const auto token:candidate.allocationTokens){
+            const auto found=tokens.find(token);if(found==tokens.end())return false;
+            const auto& entry=*found->second;
+            if(entry.bytes>UINT64_MAX-bytes)return false;
+            bytes+=entry.bytes;payload->resources.push_back(entry.resource);
+        }
+        if(!leaseBudget->Acquire(bytes))return false;
+        payload->bytes=bytes;batch.payload=std::move(payload);plan=std::move(candidate);return true;
     }
     Stats Stop(){std::unique_lock<std::mutex> guard(mutex);active=false;completed.wait(guard,[this]{return pending==0;});index.Clear();owners.clear();held=0;return stats;}
 };

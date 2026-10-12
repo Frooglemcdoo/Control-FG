@@ -123,3 +123,36 @@ table using the writer callback, publish behind the correct queue dependency,
 and retire resources on a real fence. The native observer's 120-second registry
 is not a production resource owner. Final lighting composition also remains
 unimplemented. Do not enable private rendering solely because routing tests pass.
+
+
+## Exact allocation leases and queue retirement
+
+Scene snapshots now require frozen allocation tokens and byte ranges for the
+selected TLAS and every reachable unmasked BLAS. Preflight rejects missing,
+reused, overlapping, or undersized allocations and includes the AS backing
+resources in the deduplicated lease list. The DXR fixture supplies its actual
+BLAS/TLAS resource identities; geometry-only ownership is no longer sufficient.
+
+`Runtime::PrepareLease` validates the complete dispatch plan and retains its
+resources under one registry mutex. `LeaseBatch` keeps an independent shared
+budget charge until its final references are released. Registry removal or
+Stop cannot refund that charge. Whole backing buffer widths are charged once
+per batch, conservatively again across batches, with a default 2 GiB cap in
+addition to the diagnostic registry cap.
+
+`pt_scene_submissions.h` accepts up to 16 retained batches. Its host must call
+Submitted after the actual ExecuteCommandLists on the initialized queue and
+serialize this boundary with command-list reset. Multiple batches for one
+recording share a retirement fence. Unsubmitted reset can discard a batch;
+submitted reset cannot. Failed signaling or device removal prevents reuse.
+Destruction without completion proof intentionally quarantines references and
+their budget charge for process lifetime. Recording generations must never be
+reused or executed a second time.
+
+The WARP test exercises an actual blocked queue fence, native-owner removal,
+registry shutdown, budget rejection, deduplication, and unsubmitted discard.
+This component is not yet wired into the renderer consumer or native queue
+callbacks. COM retention does not make contents immutable, establish AS build
+ordering, or retain the PSO, descriptor heaps, textures and output dependencies.
+The production owner still needs a session lifetime and exact live snapshots.
+Rendering remains disabled; M11 remains on hold and no user run is requested.
