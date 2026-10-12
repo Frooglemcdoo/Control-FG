@@ -84,6 +84,10 @@ jobs:
           if errorlevel 1 exit /b 1
           build\test-pt-scene-topology.exe
           if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-pt-scene-dispatch-plan.cpp /Febuild\test-pt-scene-dispatch-plan.exe
+          if errorlevel 1 exit /b 1
+          build\test-pt-scene-dispatch-plan.exe
+          if errorlevel 1 exit /b 1
           python tools/test-pt-scene-correlation.py
           if errorlevel 1 exit /b 1
 

@@ -31,8 +31,24 @@ inline Status Convert(const unsigned char* source,std::size_t bytes,const Export
     for(unsigned i=0;i<10;++i){
         // Tangent/color fields are unused by the admitted geometric+UV decoder.
         if(i==4||i==7)continue;
+        // Native R16 views can end at a halfword. The private raw Load needs
+        // the final DWORD, whose backing bytes were proved by Admit. Only the
+        // exact round-up is permitted; never silently enlarge an arbitrary view.
+        if(i==8){
+            const auto logical=std::uint64_t(constants[i]);
+            const auto required=std::uint64_t(admitted.constants[0])+std::uint64_t(mapping->indexCount)*mapping->indexStride;
+            if(logical<required||((logical+3)&~std::uint64_t(3))!=admitted.constants[i])return Status::native_mismatch;
+            continue;
+        }
+        // Native attribute views may contain vertices unused by this BLAS.
+        // Preserve the declared bound only after checking the backing view.
+        if(i==9){
+            if(constants[i]<admitted.constants[i]||!PTSceneAdmission::Contains(mapping->attributes,constants[i]))return Status::native_mismatch;
+            continue;
+        }
         if(constants[i]!=admitted.constants[i])return Status::native_mismatch;
     }
+    admitted.constants[4]=constants[4];admitted.constants[7]=constants[7];admitted.constants[9]=constants[9];
     std::memcpy(output.data(),identifier->data(),32);
     std::memcpy(output.data()+32,&admitted.indices,8);
     std::memcpy(output.data()+40,&admitted.attributes,8);

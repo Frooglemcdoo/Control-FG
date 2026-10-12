@@ -15,7 +15,7 @@
 #include <stdexcept>
 #include <climits>
 #include "../src/pt_scene_admission.h"
-#include "../src/pt_shader_table_adapter.h"
+#include "../src/pt_scene_dispatch_plan.h"
 using Microsoft::WRL::ComPtr;
 static void ok(HRESULT hr,const char* name){if(FAILED(hr)){std::printf("FAIL %s HRESULT=0x%08lx\n",name,(unsigned long)hr);throw std::runtime_error(name);}}
 static void need(bool b,const char* name){if(!b)throw std::runtime_error(name);}
@@ -124,7 +124,8 @@ int main(int argc,char** argv){try{
     D3D12_RAYTRACING_GEOMETRY_DESC geometry[4]{};
     for(UINT i=0;i<4;++i){auto& d=geometry[i];d.Type=D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES;d.Flags=i==0?D3D12_RAYTRACING_GEOMETRY_FLAG_OPAQUE:D3D12_RAYTRACING_GEOMETRY_FLAG_NONE;
         d.Triangles.IndexFormat=DXGI_FORMAT_R32_UINT;d.Triangles.VertexFormat=DXGI_FORMAT_R32G32B32_FLOAT;d.Triangles.IndexCount=3;d.Triangles.VertexCount=12;
-        d.Triangles.IndexBuffer=idx32->GetGPUVirtualAddress()+i*12;d.Triangles.VertexBuffer={pos->GetGPUVirtualAddress(),12};}
+        d.Triangles.IndexBuffer=idx32->GetGPUVirtualAddress()+i*12;d.Triangles.VertexBuffer={pos->GetGPUVirtualAddress(),12};
+        if(i==0){d.Triangles.IndexFormat=DXGI_FORMAT_R16_UINT;d.Triangles.IndexBuffer=idx16->GetGPUVirtualAddress();}}
     D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS inputs{};inputs.Type=D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL;inputs.DescsLayout=D3D12_ELEMENTS_LAYOUT_ARRAY;inputs.NumDescs=4;inputs.pGeometryDescs=geometry;
     auto blas=g.acceleration(inputs);
     D3D12_RAYTRACING_INSTANCE_DESC instance{};instance.Transform[0][0]=instance.Transform[1][1]=instance.Transform[2][2]=1;instance.InstanceMask=1;instance.AccelerationStructure=blas->GetGPUVirtualAddress();
@@ -152,7 +153,7 @@ int main(int argc,char** argv){try{
     for(UINT i=0;i<3;++i){localParams[i].ParameterType=D3D12_ROOT_PARAMETER_TYPE_SRV;localParams[i].Descriptor={i,3};}
     localParams[3].ParameterType=D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;localParams[3].Constants={0,3,12};
     rd={};rd.NumParameters=4;rd.pParameters=localParams;rd.Flags=D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE;auto local=root(g.device.Get(),rd);
-    constexpr UINT recordStride=128,constantOffset=56,payloadBytes=60;
+    constexpr UINT recordStride=128,payloadBytes=60;
 #else
     D3D12_ROOT_PARAMETER localParams[3]{};localParams[0].ParameterType=localParams[1].ParameterType=D3D12_ROOT_PARAMETER_TYPE_SRV;localParams[0].Descriptor={0,3};localParams[1].Descriptor={1,3};localParams[2].ParameterType=D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;localParams[2].Constants={0,3,10};
     rd={};rd.NumParameters=3;rd.pParameters=localParams;rd.Flags=D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE;auto local=root(g.device.Get(),rd);
@@ -170,41 +171,54 @@ int main(int argc,char** argv){try{
     std::array<unsigned char,192+8*recordStride> records{};
     auto identifier=[&](UINT offset,const wchar_t* name){const void* id=properties->GetShaderIdentifier(name);need(id!=nullptr,"Missing shader identifier");memcpy(records.data()+offset,id,32);};
     identifier(0,L"PTSceneQueryRayGeneration");identifier(64,L"PTSceneMiss");identifier(96,L"PTVisibilityMiss");
+#ifdef PT_GEOMETRY_SPAWN
+    // One transaction: actual fixture BLAS/TLAS -> frozen relation -> owned
+    // allocations -> complete native-style SBT -> private SBT -> DXR dispatch.
+    PTOwnedScene::Index owners;
+    owners.Insert({1,idx16->GetGPUVirtualAddress(),sizeof(indices16)});
+    owners.Insert({2,idx32->GetGPUVirtualAddress(),sizeof(indices32)});
+    owners.Insert({3,pos->GetGPUVirtualAddress(),sizeof(positions)});
+    owners.Insert({4,verts->GetGPUVirtualAddress(),sizeof(attributes)});
+    PTSceneDispatch::Scene scene;scene.address=tlas->GetGPUVirtualAddress();scene.version=1;
+    PTSceneTopology::Instance selectedInstance{};memcpy(&selectedInstance,&instance,sizeof(instance));scene.instances={selectedInstance};
+    std::vector<PTSceneTopology::Geometry> selectedGeometry;
+    for(UINT i=0;i<4;++i){const auto& t=geometry[i].Triangles;const UINT stride=i==0?2u:4u;
+        need(owners.Observe({t.IndexBuffer,t.VertexBuffer.StartAddress,t.VertexBuffer.StrideInBytes,0,0,stride,t.IndexCount,t.VertexCount}),"Observe fixture geometry");
+        selectedGeometry.push_back({t.IndexBuffer,t.VertexBuffer.StartAddress,t.VertexBuffer.StrideInBytes,stride,t.IndexCount,t.VertexCount,i==0?1ull:2ull,3});
+    }
+    need(scene.topology.Build(blas->GetGPUVirtualAddress(),std::move(selectedGeometry)),"Freeze fixture BLAS");
+    PTSceneDispatch::Table nativeTable;nativeTable.version=1;nativeTable.pipeline=reinterpret_cast<UINT_PTR>(state.Get());nativeTable.rays=2;
+    nativeTable.bytes.resize(8*96);nativeTable.bindings.resize(4);nativeTable.allocationTokens.resize(4);
+    PTSceneDispatch::ExportSet exportMaps{nativeTable.pipeline,reinterpret_cast<UINT_PTR>(state.Get()),std::vector<PTShaderTableAdapter::Exports>(2)};
+    for(UINT type=0;type<2;++type){auto& e=exportMaps.rays[type];e.nativeOpaque[0]=static_cast<unsigned char>(1+type);e.nativeAlpha[0]=static_cast<unsigned char>(3+type);
+        memcpy(e.privateOpaque.data(),properties->GetShaderIdentifier(groupNames[type]),32);
+        memcpy(e.privateAlpha.data(),properties->GetShaderIdentifier(groupNames[2+type]),32);
+    }
+#endif
     for(UINT i=0;i<4;++i)for(UINT type=0;type<2;++type){UINT offset=192+(2*i+type)*recordStride;identifier(offset,groupNames[(i==0?0:2)+type]);
         bool shortIndex=i==0;UINT64 addr=(shortIndex?idx16:idx32)->GetGPUVirtualAddress();memcpy(records.data()+offset+32,&addr,8);addr=verts->GetGPUVirtualAddress();memcpy(records.data()+offset+40,&addr,8);
         UINT constants[12]={i*3*(shortIndex?2u:4u),shortIndex?2u:4u,12,i==3?99u:i,0,0,8,0,shortIndex?(UINT)sizeof(indices16):(UINT)sizeof(indices32),(UINT)sizeof(attributes),12,(UINT)sizeof(positions)};
-        #ifdef PT_GEOMETRY_SPAWN
-        PTSceneAdmission::Geometry admitted{};
-        admitted.indices={{(shortIndex?idx16:idx32)->GetGPUVirtualAddress(),shortIndex?sizeof(indices16):sizeof(indices32),1},addr= (shortIndex?idx16:idx32)->GetGPUVirtualAddress()+i*3*(shortIndex?2:4)};
-        admitted.positions={{pos->GetGPUVirtualAddress(),sizeof(positions),1},pos->GetGPUVirtualAddress()};
-        admitted.attributes={{verts->GetGPUVirtualAddress(),sizeof(attributes),1},verts->GetGPUVirtualAddress()};
-        admitted.indexStride=shortIndex?2:4;admitted.indexCount=3;admitted.vertexCount=12;admitted.positionStride=admitted.attributeStride=12;
-        admitted.normalOffset=0;admitted.uvOffset=8;admitted.material=i==3?0:i;admitted.materialCount=3;admitted.epoch=1;
-        admitted.float3Positions=admitted.sharedVertexIndexing=admitted.noGeometryTransform=true;
-        PTSceneAdmission::Record record;
-        need(PTSceneAdmission::Admit(admitted,record)==PTSceneAdmission::Error::none,"Geometry record admission");
-        memcpy(records.data()+offset+32,&record.indices,8);memcpy(records.data()+offset+40,&record.attributes,8);
-        memcpy(records.data()+offset+48,&record.positions,8);memcpy(constants,record.constants,sizeof(constants));
-#endif
 #ifdef PT_GEOMETRY_SPAWN
-        // Exercise the native 96-byte -> private 128-byte conversion in the
-        // existing GPU fixture. Source identifiers are synthetic; bindings and
-        // limits correspond to the actual fixture resources.
-        unsigned char nativeRecord[96]{};
-        PTShaderTableAdapter::Exports exportMap{};
-        exportMap.nativeOpaque[0]=1;exportMap.nativeAlpha[0]=2;
-        std::memcpy(exportMap.privateOpaque.data(),properties->GetShaderIdentifier(groupNames[type]),32);
-        std::memcpy(exportMap.privateAlpha.data(),properties->GetShaderIdentifier(groupNames[2+type]),32);
-        nativeRecord[0]=i==0?1:2;
-        std::memcpy(nativeRecord+32,&record.indices,8);std::memcpy(nativeRecord+40,&record.attributes,8);
-        std::memcpy(nativeRecord+48,record.constants,40);
-        PTShaderTableAdapter::Bytes converted;
-        need(PTShaderTableAdapter::Convert(nativeRecord,96,exportMap,&admitted,converted)==PTShaderTableAdapter::Status::ready,"Native SBT conversion");
-        std::memcpy(records.data()+offset,converted.data(),converted.size());
+        constants[3]=i==3?0:i;
+        auto& binding=nativeTable.bindings[i];binding.indices=(shortIndex?idx16:idx32)->GetGPUVirtualAddress();binding.attributes=verts->GetGPUVirtualAddress();
+        memcpy(binding.constants,constants,40);nativeTable.allocationTokens[i]={shortIndex?1ull:2ull,4};
+        auto* nativeRecord=nativeTable.bytes.data()+(i*2+type)*96;
+        memcpy(nativeRecord,(i==0?exportMaps.rays[type].nativeOpaque:exportMaps.rays[type].nativeAlpha).data(),32);
+        memcpy(nativeRecord+32,&binding.indices,8);memcpy(nativeRecord+40,&binding.attributes,8);memcpy(nativeRecord+48,binding.constants,40);
 #else
         memcpy(records.data()+offset+constantOffset,constants,40);
 #endif
     }
+#ifdef PT_GEOMETRY_SPAWN
+    auto nativeSbt=g.buffer(nativeTable.bytes.size(),D3D12_HEAP_TYPE_UPLOAD,D3D12_RESOURCE_STATE_GENERIC_READ,D3D12_RESOURCE_FLAG_NONE,nativeTable.bytes.data());
+    nativeTable.address=nativeSbt->GetGPUVirtualAddress();
+    PTSceneDispatch::Selection selection{scene.address,scene.version,nativeTable.address,nativeTable.version,nativeTable.pipeline};
+    PTSceneDispatch::Plan plan;
+    need(PTSceneDispatch::Prepare(selection,scene,nativeTable,owners,exportMaps,plan).status==PTSceneDispatch::Status::prepared,"Complete scene-to-dispatch preflight");
+    need(plan.records.size()==8&&plan.allocationTokens.size()==4,"Complete scene leases and table");
+    for(size_t i=0;i<plan.records.size();++i)memcpy(records.data()+192+i*recordStride,plan.records[i].data(),recordStride);
+    std::puts("Scene transaction: exact TLAS geometry, allocation generations and both ray types converted together");
+#endif
     auto sbt=g.buffer(records.size(),D3D12_HEAP_TYPE_UPLOAD,D3D12_RESOURCE_STATE_GENERIC_READ,D3D12_RESOURCE_FLAG_NONE,records.data());
     Ray rays[]={{{0,0,0},0,{0,0,1},10},{{12,0,0},0,{0,0,1},10},{{3,0,0},0,{0,0,1},10},{{6,0,0},0,{0,0,1},10},{{0,0,0},0,{0,0,1},1},{{0,0,0},2.1f,{0,0,1},10},{{0,0,0},0,{0,0,0},10},{{9,0,0},0,{0,0,1},10}};
 #ifdef PT_PATH_TEST

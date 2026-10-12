@@ -7,8 +7,9 @@ namespace PTSceneTopology {
 using U64=std::uint64_t;
 struct Instance {float transform[12];std::uint32_t idMask,contributionFlags;U64 blas;};
 static_assert(sizeof(Instance)==64,"DXR instance ABI");
-struct Geometry {U64 indices,positions,stride;std::uint32_t indexStride,indexCount,vertexCount;};
+struct Geometry {U64 indices,positions,stride;std::uint32_t indexStride,indexCount,vertexCount;U64 indexToken=0,positionToken=0;};
 struct Result {U64 instances=0,matched=0,missingBlas=0,outOfRange=0,mismatch=0,conflict=0,masked=0;};
+struct Mapping {Geometry geometry{};bool referenced=false;};
 // CPU relation checks only. A caller must separately prove submission ordering,
 // allocation identity, resource states and vertex/attribute correspondence.
 class Index {
@@ -29,7 +30,9 @@ public:
         for(auto i=blas.lower_bound(address);i!=blas.end()&&i->first-address<bytes;){rows-=i->second.size();i=blas.erase(i);}
     }
     void Clear(){blas.clear();rows=0;}
-    Result Check(const std::vector<Instance>& instances,const std::vector<PTNativeBinding::Binding>& bindings,unsigned rays)const {
+    Result Check(const std::vector<Instance>& instances,const std::vector<PTNativeBinding::Binding>& bindings,unsigned rays,
+                 std::vector<Mapping>* mapping=nullptr)const {
+        if(mapping)mapping->clear();
         Result out{};std::map<U64,Geometry> assigned;
         for(const auto& instance:instances){
             ++out.instances;if(!(instance.idMask>>24)){++out.masked;continue;}
@@ -43,9 +46,13 @@ public:
                 if(!PTNativeBinding::IndexAddress(b,address)||address!=geometry.indices||b.constants[1]!=geometry.indexStride||
                    b.constants[0]>=b.constants[8]||U64(geometry.indexCount)*geometry.indexStride>U64(b.constants[8])-b.constants[0]){++out.mismatch;continue;}
                 const auto old=assigned.find(row);
-                if(old!=assigned.end()&&(old->second.positions!=geometry.positions||old->second.stride!=geometry.stride||old->second.indexCount!=geometry.indexCount||old->second.vertexCount!=geometry.vertexCount)){++out.conflict;continue;}
+                if(old!=assigned.end()&&(old->second.positions!=geometry.positions||old->second.stride!=geometry.stride||old->second.indexCount!=geometry.indexCount||old->second.vertexCount!=geometry.vertexCount||old->second.indexToken!=geometry.indexToken||old->second.positionToken!=geometry.positionToken)){++out.conflict;continue;}
                 assigned[row]=geometry;++out.matched;
             }
+        }
+        if(mapping&&out.matched&&!out.missingBlas&&!out.outOfRange&&!out.mismatch&&!out.conflict){
+            mapping->resize(bindings.size());
+            for(const auto& entry:assigned)(*mapping)[static_cast<std::size_t>(entry.first)]={entry.second,true};
         }
         return out;
     }
