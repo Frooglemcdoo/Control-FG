@@ -395,3 +395,31 @@ view proof: the live pass adapter must still correlate camera/root bindings.
 
 These callback APIs are implemented, but no complete PT renderer consumer is
 registered yet. Lighting and graphics pass hookup remains unfinished.
+
+### Native graphics pipeline companions and root-layout proof
+
+The device's native CreateGraphicsPipelineState path now has an optional
+companion creation observer. It returns the original native HRESULT, object and
+Win32 error state unchanged. Once the scene owner is active, possible reviewed
+pixel shaders are SHA256-verified and patched into a separate graphics PSO with
+all original shaders, root signature, fixed-function state and target formats
+preserved. Only the pixel bytecode changes; the native cached-PSO blob is cleared.
+The companion registry owns canonical COM identities and is bounded to 512 PSOs.
+A companion is never selected merely because creation succeeded.
+
+CreateRootSignature now records the exact reviewed native graphics and compute
+layouts from their serialized version-1.0 descriptions. Graphics root 1 is the
+pixel 49-slot table; root 0 is the vertex table. The 18-parameter graphics layout
+also has hull/domain b0-based tables, unlike the vertex/pixel b4-based tables.
+Every range, register space, visibility, append offset, root CBV and signature
+flag must match. Unknown versions/layouts and signatures created before the
+observer was installed are not admitted. The graphics companion factory requires
+an owned layout proof for the exact root identity supplied in its PSO description.
+This avoids using a matching pixel shader as evidence of root-parameter order.
+
+The Windows root-layout fixture mutates every binding, checks serialized roots
+on WARP and verifies that proofs retain their root objects. These checks do not
+execute the nine captured pixel shaders on WARP: those private bytecodes are not
+published to the repository. Shader-container/token verification remains a local
+check against the captured originals. Draw binding, output ownership and the
+private light transport producer still need to be connected before activation.

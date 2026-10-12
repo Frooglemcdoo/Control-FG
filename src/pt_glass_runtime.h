@@ -5,6 +5,7 @@
 #include "pt_native_job_runtime.h"
 #include "pt_scene_live_owner.h"
 #include "pt_scene_queue_runtime.h"
+#include "pt_surface_pipeline.h"
 #include <intrin.h>
 #include <unordered_map>
 #include <memory>
@@ -25,6 +26,11 @@ using CreateHeap=HRESULT(STDMETHODCALLTYPE*)(ID3D12Device*,const D3D12_DESCRIPTO
 using CopyAll=void(STDMETHODCALLTYPE*)(ID3D12Device*,UINT,const D3D12_CPU_DESCRIPTOR_HANDLE*,const UINT*,UINT,const D3D12_CPU_DESCRIPTOR_HANDLE*,const UINT*,D3D12_DESCRIPTOR_HEAP_TYPE);
 static CreateSrv createSrv=nullptr;static CreateUav createUav=nullptr;static CreateHeap createHeap=nullptr;static CopyAll copyAll=nullptr;
 static CreateState createState=nullptr;static CopySimple copySimple=nullptr;static CreateCbv createCbv=nullptr;
+static PTSurfaceComposition::CreateGraphics createGraphics=nullptr;
+static PTSurfaceComposition::Pipelines surfacePipelines;
+using CreateRoot=HRESULT(STDMETHODCALLTYPE*)(ID3D12Device*,UINT,const void*,SIZE_T,REFIID,void**);
+static CreateRoot createRoot=nullptr;
+static PTNativeRoot::Registry nativeRoots;
 // Invoke the exact interface supplied by the native call site. A QueryInterface
 // result can be a different interposer object and must not select the hook target.
 static void NativeSetRayPso(ID3D12GraphicsCommandList4* list,ID3D12StateObject* pso){
@@ -347,6 +353,37 @@ static void ObserveCompute(ID3D12Device* d,const D3D12_COMPUTE_PIPELINE_STATE_DE
     const HRESULT b=ptReflectionOriginalCreateComputePipelineState(d,&p,IID_PPV_ARGS(&compositeLighting));
     Log("PT_GLASS_LIGHTING_PSO secondary_hr=0x%08lX composite_hr=0x%08lX",static_cast<unsigned long>(a),static_cast<unsigned long>(b));
 }
+static HRESULT STDMETHODCALLTYPE GraphicsHook(ID3D12Device* d,const D3D12_GRAPHICS_PIPELINE_STATE_DESC* desc,REFIID iid,void** out){
+    const HRESULT nativeResult=createGraphics(d,desc,iid,out);
+    const DWORD nativeError=GetLastError();
+    if(SUCCEEDED(nativeResult)&&desc&&out&&*out&&PTSceneLive::owner.Active()){
+        // Hash only possible reviewed sizes. Creating a companion never selects
+        // it for a draw: the renderer must separately admit its output/bindings.
+        bool candidate=false;for(const auto& profile:PTSurfaceComposition::Profiles)candidate=candidate||desc->PS.BytecodeLength==profile.bytes;
+        if(candidate&&desc->PS.pShaderBytecode){
+            try {
+                char sha[65]{};
+                if(PTReflectionSha256(static_cast<const unsigned char*>(desc->PS.pShaderBytecode),desc->PS.BytecodeLength,sha)){
+                    std::shared_ptr<PTSurfaceComposition::Pipeline> companion;
+                    const HRESULT hr=PTSurfaceComposition::Pipeline::Create(d,desc,static_cast<IUnknown*>(*out),sha,nativeRoots.Find(desc->pRootSignature),createGraphics,companion);
+                    if(hr==S_OK&&surfacePipelines.Insert(companion))Log("PT_SURFACE_PSO_READY sha256=%s native_returned=1",sha);
+                    else if(FAILED(hr))Log("PT_SURFACE_PSO_REJECT sha256=%s hr=0x%08lX native_returned=1",sha,static_cast<unsigned long>(hr));
+                }
+            }catch(...){Log("PT_SURFACE_PSO_REJECT reason=allocation native_returned=1");}
+        }
+    }
+    SetLastError(nativeError);return nativeResult;
+}
+static HRESULT STDMETHODCALLTYPE RootHook(ID3D12Device* d,UINT node,const void* blob,SIZE_T bytes,REFIID iid,void** out){
+    const HRESULT hr=createRoot(d,node,blob,bytes,iid,out);const DWORD nativeError=GetLastError();
+    if(SUCCEEDED(hr)&&out&&*out){
+        try {
+            const auto deserialize=reinterpret_cast<PTNativeRoot::Registry::Deserialize>(GetProcAddress(GetModuleHandleW(L"d3d12.dll"),"D3D12CreateVersionedRootSignatureDeserializer"));
+            nativeRoots.Observe(blob,bytes,static_cast<IUnknown*>(*out),deserialize);
+        }catch(...){Log("PT_ROOT_REJECT reason=allocation native_returned=1");}
+    }
+    SetLastError(nativeError);return hr;
+}
 static void InstallDevice(ID3D12Device* d){
     if(device||!enabled)return;device=d;ComPtr<ID3D12Device5> rayDevice;
     if(FAILED(d->QueryInterface(IID_PPV_ARGS(&rayDevice)))||
@@ -356,6 +393,8 @@ static void InstallDevice(ID3D12Device* d){
        !Patch(d,19,reinterpret_cast<void*>(&UavHook),reinterpret_cast<void**>(&createUav))||
        !Patch(d,14,reinterpret_cast<void*>(&HeapHook),reinterpret_cast<void**>(&createHeap))||
        !Patch(d,23,reinterpret_cast<void*>(&CopyAllHook),reinterpret_cast<void**>(&copyAll))||
+       !Patch(d,10,reinterpret_cast<void*>(&GraphicsHook),reinterpret_cast<void**>(&createGraphics))||
+       !Patch(d,16,reinterpret_cast<void*>(&RootHook),reinterpret_cast<void**>(&createRoot))||
        !Patch(rayDevice.Get(),62,reinterpret_cast<void*>(&StateHook),reinterpret_cast<void**>(&createState)))enabled=false;
     Log("PT_GLASS_DEVICE_HOOKS ready=%u",unsigned(enabled.load()));
 }

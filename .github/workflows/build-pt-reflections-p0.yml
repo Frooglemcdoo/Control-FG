@@ -72,6 +72,10 @@ jobs:
           if errorlevel 1 exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-pt-surface-composition.cpp /Febuild\test-pt-surface-composition.exe
           if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-pt-native-root-layout.cpp /Febuild\test-pt-native-root-layout.exe /link d3d12.lib dxgi.lib
+          if errorlevel 1 exit /b 1
+          build\test-pt-native-root-layout.exe
+          if errorlevel 1 exit /b 1
 
       - name: Test M6 results collector
         shell: powershell
