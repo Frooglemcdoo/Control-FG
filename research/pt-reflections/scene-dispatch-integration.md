@@ -423,3 +423,31 @@ execute the nine captured pixel shaders on WARP: those private bytecodes are not
 published to the repository. Shader-container/token verification remains a local
 check against the captured originals. Draw binding, output ownership and the
 private light transport producer still need to be connected before activation.
+
+### Queue-ordered surface output and replay fallback
+
+`pt_surface_output.h` owns a separate RGBA32F output for one frame/view, CPU
+SRV/UAV descriptors, a private clear heap, immutable command lists, dependencies
+and a retirement fence. Creation enqueues a GPU clear before any consumer. An
+unproduced pixel has zero admission, so the composition adapter keeps native
+radiance. A private producer records into its own command list with explicit
+read/UAV/read transitions. Recording failure never executes partial commands.
+The producer submits at most once, after the renderer has verified its scene cut.
+
+Replay fallback clears that output on its pinned direct queue before the replay.
+Previous consumers complete before the clear; later consumers see zero admission.
+The clear command list is immutable and does not reset an in-flight allocator.
+Invalidation also prevents a prepared but not-yet-submitted producer from writing
+late. This addresses the earlier unsafe proposal to edit a CPU upload flag while
+GPU consumers might still read it. It does not authorize a consumer on another
+queue: admission must establish the actual pinned queue and native frame/view.
+
+Each output is capped at 256 MiB. The renderer must additionally bound the number
+of outstanding outputs and retain each through BOTH native recording lifetime
+(until Reset) and submitted GPU completion. The output's own fence covers its
+private clear/producer commands; consumer leases must cover native draws. Failed
+signals or destruction before private completion quarantine all dependencies.
+The WARP fixture queues all operations behind a gate, reads back zero/produced/
+invalidated pixels in order, and checks wrong-queue, duplicate/late-producer and
+retained-dependency behavior. Live draw binding and the light transport encoder
+are still required; this class alone is not a playable integration.
