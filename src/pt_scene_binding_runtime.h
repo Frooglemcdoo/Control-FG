@@ -20,7 +20,7 @@ static std::atomic<bool> recording{false};
 static HANDLE output=INVALID_HANDLE_VALUE;
 static PTGlassRuntime::NativeCallPatch buildCall[2];
 static void Sink(const Event& e) noexcept {
-    if(e.kind==3&&recording.load(std::memory_order_relaxed))ownedScene.Geometry(e);
+    if(e.kind==3){PTSceneLive::owner.Geometry(e);if(recording.load(std::memory_order_relaxed))ownedScene.Geometry(e);}
     AcquireSRWLockExclusive(&eventLock);
     if(recording.load(std::memory_order_relaxed)){
         unsigned& quota=e.kind>=8?resourceRows:(e.kind>=5?bindingRows:geometryRows);
@@ -30,7 +30,8 @@ static void Sink(const Event& e) noexcept {
 }
 static void Hook(UINT site,ID3D12GraphicsCommandList4* list,const D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC* desc,UINT count,const D3D12_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO_DESC* info){
     const DWORD error=GetLastError();
-    if(recording.load(std::memory_order_relaxed)){topology.Build(desc);PTSceneObserver::Observe(list,desc,site,++calls,&Sink);}
+    if(recording.load(std::memory_order_relaxed))topology.Build(desc);
+    if(recording.load(std::memory_order_relaxed)||PTSceneLive::owner.Active())PTSceneObserver::Observe(list,desc,site,++calls,&Sink);
     SetLastError(error);PTSceneObserver::Forward(list,desc,count,info);
 }
 static void STDMETHODCALLTYPE Hook0(ID3D12GraphicsCommandList4* l,const D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC* d,UINT n,const D3D12_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO_DESC* p){Hook(0x33593,l,d,n,p);}
@@ -127,18 +128,19 @@ static void ObserveResource(void* buffer,UINT kind,UINT site) noexcept {
 }
 static void CreateGeneralHook(std::uint64_t bytes,std::uint64_t stride,unsigned flags,unsigned format,std::uint64_t unused0,std::uint64_t unused1,void* buffer){
     PTNativeBufferObserver::ForwardGeneral(createGeneral,bytes,stride,flags,format,unused0,unused1,buffer);
-    const DWORD error=GetLastError();ObserveResource(buffer,8,0x26030);SetLastError(error);
+    const DWORD error=GetLastError();PTSceneLive::owner.Created(buffer,false);ObserveResource(buffer,8,0x26030);SetLastError(error);
 }
 static void CreateRayHook(int bytes,int type,void* buffer,int flags){
     PTNativeBufferObserver::ForwardRay(createRay,bytes,type,buffer,flags);
-    const DWORD error=GetLastError();ObserveResource(buffer,8,0x26360);SetLastError(error);
+    const DWORD error=GetLastError();PTSceneLive::owner.Created(buffer,type==1);ObserveResource(buffer,8,0x26360);SetLastError(error);
 }
 static void ReleaseHook(void* buffer){
     const DWORD error=GetLastError();ObserveResource(buffer,9,0x25f00);
+    auto liveLease=PTSceneLive::owner.BeforeRelease(buffer);
     auto lease=ownedScene.BeforeRelease(reinterpret_cast<UINT_PTR>(buffer));
     if(lease.resource)topology.Invalidate(lease.address,lease.bytes);
     SetLastError(error);releaseBuffer(buffer);
-    const DWORD afterError=GetLastError();const auto status=ownedScene.AfterRelease(lease);
+    const DWORD afterError=GetLastError();PTSceneLive::owner.AfterRelease(liveLease);const auto status=ownedScene.AfterRelease(lease);
     if(status){
         Event e{};e.kind=11;e.site=0x25f00;e.sequence=++resourceCalls;e.list=reinterpret_cast<UINT_PTR>(buffer);
         e.index=lease.address;e.stride=lease.bytes;e.geometryFlags=status;Sink(e);

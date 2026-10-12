@@ -3,6 +3,7 @@
 #include "pt_glass_descriptors.h"
 #include "pt_glass_vtable_call.h"
 #include "pt_native_job_runtime.h"
+#include "pt_scene_live_owner.h"
 #include <intrin.h>
 #include <unordered_map>
 #include <memory>
@@ -17,6 +18,11 @@ using SetRayPso=void(STDMETHODCALLTYPE*)(ID3D12GraphicsCommandList4*,ID3D12State
 using DispatchRays=void(STDMETHODCALLTYPE*)(ID3D12GraphicsCommandList4*,const D3D12_DISPATCH_RAYS_DESC*);
 using Execute=void(STDMETHODCALLTYPE*)(ID3D12CommandQueue*,UINT,ID3D12CommandList*const*);
 using Reset=HRESULT(STDMETHODCALLTYPE*)(ID3D12GraphicsCommandList*,ID3D12CommandAllocator*,ID3D12PipelineState*);
+using CreateSrv=void(STDMETHODCALLTYPE*)(ID3D12Device*,ID3D12Resource*,const D3D12_SHADER_RESOURCE_VIEW_DESC*,D3D12_CPU_DESCRIPTOR_HANDLE);
+using CreateUav=void(STDMETHODCALLTYPE*)(ID3D12Device*,ID3D12Resource*,ID3D12Resource*,const D3D12_UNORDERED_ACCESS_VIEW_DESC*,D3D12_CPU_DESCRIPTOR_HANDLE);
+using CreateHeap=HRESULT(STDMETHODCALLTYPE*)(ID3D12Device*,const D3D12_DESCRIPTOR_HEAP_DESC*,REFIID,void**);
+using CopyAll=void(STDMETHODCALLTYPE*)(ID3D12Device*,UINT,const D3D12_CPU_DESCRIPTOR_HANDLE*,const UINT*,UINT,const D3D12_CPU_DESCRIPTOR_HANDLE*,const UINT*,D3D12_DESCRIPTOR_HEAP_TYPE);
+static CreateSrv createSrv=nullptr;static CreateUav createUav=nullptr;static CreateHeap createHeap=nullptr;static CopyAll copyAll=nullptr;
 static CreateState createState=nullptr;static CopySimple copySimple=nullptr;static CreateCbv createCbv=nullptr;
 // Invoke the exact interface supplied by the native call site. A QueryInterface
 // result can be a different interposer object and must not select the hook target.
@@ -109,11 +115,36 @@ static PTGlass::LightingTableShadow* ActiveShadow() {
 static void STDMETHODCALLTYPE CopyHook(ID3D12Device* d,UINT count,D3D12_CPU_DESCRIPTOR_HANDLE dst,D3D12_CPU_DESCRIPTOR_HANDLE src,D3D12_DESCRIPTOR_HEAP_TYPE type){
     copySimple(d,count,dst,src,type);
     if(type!=D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV)return;
+    if(PTSceneLive::owner.Active()&&count)PTSceneLive::owner.Copy({{dst.ptr,count}},{{src.ptr,count}});
     if(auto* s=ActiveShadow()){mirrorGuard=true;s->ObserveNativeCopy(pass.serial,dst,count,src);mirrorGuard=false;}
 }
 static void STDMETHODCALLTYPE CbvHook(ID3D12Device* d,const D3D12_CONSTANT_BUFFER_VIEW_DESC* cb,D3D12_CPU_DESCRIPTOR_HANDLE dst){
-    createCbv(d,cb,dst);if(!cb)return;
+    createCbv(d,cb,dst);PTSceneLive::owner.Overwrite(dst);if(!cb)return;
     if(auto* s=ActiveShadow()){mirrorGuard=true;s->ObserveNativeConstant(pass.serial,dst,*cb);mirrorGuard=false;}
+}
+static void STDMETHODCALLTYPE SrvHook(ID3D12Device* d,ID3D12Resource* resource,const D3D12_SHADER_RESOURCE_VIEW_DESC* desc,D3D12_CPU_DESCRIPTOR_HANDLE dst){
+    createSrv(d,resource,desc,dst);PTSceneLive::owner.Overwrite(dst,desc);
+}
+static void STDMETHODCALLTYPE UavHook(ID3D12Device* d,ID3D12Resource* resource,ID3D12Resource* counter,const D3D12_UNORDERED_ACCESS_VIEW_DESC* desc,D3D12_CPU_DESCRIPTOR_HANDLE dst){
+    createUav(d,resource,counter,desc,dst);PTSceneLive::owner.Overwrite(dst);
+}
+static HRESULT STDMETHODCALLTYPE HeapHook(ID3D12Device* d,const D3D12_DESCRIPTOR_HEAP_DESC* desc,REFIID iid,void** out){
+    const HRESULT hr=createHeap(d,desc,iid,out);
+    if(SUCCEEDED(hr)&&out&&*out&&PTSceneLive::owner.Active()){
+        ComPtr<ID3D12DescriptorHeap> heap;
+        if(SUCCEEDED(static_cast<IUnknown*>(*out)->QueryInterface(IID_PPV_ARGS(&heap))))PTSceneLive::owner.Heap(heap.Get());
+    }
+    return hr;
+}
+static void STDMETHODCALLTYPE CopyAllHook(ID3D12Device* d,UINT dstCount,const D3D12_CPU_DESCRIPTOR_HANDLE* dst,const UINT* dstSizes,
+    UINT srcCount,const D3D12_CPU_DESCRIPTOR_HANDLE* src,const UINT* srcSizes,D3D12_DESCRIPTOR_HEAP_TYPE type){
+    copyAll(d,dstCount,dst,dstSizes,srcCount,src,srcSizes,type);
+    if(!PTSceneLive::owner.Active()||type!=D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV)return;
+    if((dstCount&&!dst)||(srcCount&&!src)||dstCount>8192||srcCount>8192){PTSceneLive::owner.InvalidateDescriptors();return;}
+    std::vector<PTSceneDescriptors::Range> destinations,sources;
+    for(UINT i=0;i<dstCount;++i){const UINT n=dstSizes?dstSizes[i]:1;if(n)destinations.push_back({dst[i].ptr,n});}
+    for(UINT i=0;i<srcCount;++i){const UINT n=srcSizes?srcSizes[i]:1;if(n)sources.push_back({src[i].ptr,n});}
+    if(!destinations.empty()||!sources.empty())PTSceneLive::owner.Copy(destinations,sources);
 }
 static HRESULT STDMETHODCALLTYPE StateHook(ID3D12Device5* d,const D3D12_STATE_OBJECT_DESC* desc,REFIID iid,void** out){
     if(!desc||desc->Type!=D3D12_STATE_OBJECT_TYPE_RAYTRACING_PIPELINE||!enabled)return createState(d,desc,iid,out);
@@ -316,6 +347,10 @@ static void InstallDevice(ID3D12Device* d){
     if(FAILED(d->QueryInterface(IID_PPV_ARGS(&rayDevice)))||
        !Patch(d,24,reinterpret_cast<void*>(&CopyHook),reinterpret_cast<void**>(&copySimple))||
        !Patch(d,17,reinterpret_cast<void*>(&CbvHook),reinterpret_cast<void**>(&createCbv))||
+       !Patch(d,18,reinterpret_cast<void*>(&SrvHook),reinterpret_cast<void**>(&createSrv))||
+       !Patch(d,19,reinterpret_cast<void*>(&UavHook),reinterpret_cast<void**>(&createUav))||
+       !Patch(d,14,reinterpret_cast<void*>(&HeapHook),reinterpret_cast<void**>(&createHeap))||
+       !Patch(d,23,reinterpret_cast<void*>(&CopyAllHook),reinterpret_cast<void**>(&copyAll))||
        !Patch(rayDevice.Get(),62,reinterpret_cast<void*>(&StateHook),reinterpret_cast<void**>(&createState)))enabled=false;
     Log("PT_GLASS_DEVICE_HOOKS ready=%u",unsigned(enabled.load()));
 }

@@ -63,6 +63,14 @@ public:
         std::lock_guard<std::mutex> guard(mutex);if(!active){record={};return Status::missingAllocation;}
         const auto status=index.Resolve(binding,record);++stats.resolved[static_cast<unsigned>(status)];return status;
     }
+    bool Identify(U64 address,U64 bytes,Allocation& allocation){
+        allocation={};std::lock_guard<std::mutex> guard(mutex);if(!active)return false;
+        const auto token=index.Find(address,bytes);if(!token)return false;
+        for(const auto& owner:owners)if(owner.second.token==token){
+            const auto& e=owner.second;allocation={token,address,e.bytes-(address-e.address)};return true;
+        }
+        return false;
+    }
     // Resolve and AddRef in the same owner transaction. A release/reuse cannot
     // occur between validating an allocation token and retaining its resource.
     bool PrepareLease(const PTSceneDispatch::Selection& selected,const PTSceneDispatch::Scene& scene,

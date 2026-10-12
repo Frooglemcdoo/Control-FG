@@ -156,3 +156,36 @@ callbacks. COM retention does not make contents immutable, establish AS build
 ordering, or retain the PSO, descriptor heaps, textures and output dependencies.
 The production owner still needs a session lifetime and exact live snapshots.
 Rendering remains disabled; M11 remains on hold and no user run is requested.
+
+
+## Submitted bindings and session owner
+
+The offline descriptor trace now follows the exported RenderFrame submission
+sequence and applies ModifyDescriptors calls. All six views bind their opaque
+reflection scene at t5 (DXIL SHA256
+`c2e4c0c4b48b191ba281595dcf11c7962c5c05c615cbe036ca6e8616c09fd30e`).
+Other ray libraries use different slots; stale unused AS descriptors elsewhere
+in a table must not choose the scene. The corrected six-view evidence is in
+`entrance-submitted-bindings.json`.
+
+`pt_scene_live_owner.h` separates the future session owner from M11's timed
+registry. Native resource creation/release and geometry hooks forward to it only
+when explicitly started. No Start or renderer registration is issued yet.
+`pt_scene_descriptors.h` tracks sparse AS descriptor identities across both copy
+APIs, non-AS overwrites, and heap range reuse. Selection verifies the copied
+allocation token remains current. Device hooks cover SRV/UAV/CBV writes, heap
+creation, CopyDescriptors and CopyDescriptorsSimple.
+
+The verified native CreateRay routine creates its AS SRV at 26581 BEFORE it
+returns to our wrapper-level creation hook. Resolving its owner in the SRV hook
+alone would always miss first creation. For native type 1, the post-create hook
+seeds the descriptor at wrapper+10 only after retaining the new allocation.
+This follows the hash-locked DLL's actual order; it does not revive old copied
+identities when a VA is reused.
+
+WARP coverage exercises this post-create seeding, actual heap slot selection,
+copying, native-owner release/recreation at an identical VA, and heap invalidation.
+The owner remains dormant pending exact AS build-version selection and the
+renderer consumer. A CPU-current allocation token is NOT an AS content version
+or proof of GPU dependency ordering. Neither this checkpoint nor successful
+compilation makes the project ready for a user rendering test.

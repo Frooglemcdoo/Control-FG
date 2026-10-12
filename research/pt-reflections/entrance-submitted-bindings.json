@@ -1,0 +1,4068 @@
+{
+  "schema": 2,
+  "status": "exported_submission_bindings_not_live_runtime_validation",
+  "views": {
+    "01-overview": {
+      "targets": {
+        "3557": [
+          "g_rwtLightBufferDiffuse"
+        ],
+        "3553": [
+          "g_rwtLightBufferSpecular"
+        ],
+        "3415": [
+          "g_rwtSingleSpot"
+        ]
+      },
+      "primary_output_aliases": {},
+      "primary": {
+        "file": "CommandLists_000.cpp",
+        "line": 32017,
+        "command_list": "6338",
+        "submission": 16,
+        "queue": "1",
+        "submit_file": "RenderFrameWorker_000.cpp",
+        "submit_line": 2909,
+        "pipeline": "6340",
+        "operation": "Dispatch",
+        "rtvs": [],
+        "bindings": [
+          {
+            "name": "g_tGBuffer1",
+            "stage": "compute",
+            "slot": 0,
+            "kind": "srv",
+            "resource": "3564",
+            "dimension": "TEXTURE2D",
+            "heap": "4918",
+            "index": 367681
+          },
+          {
+            "name": "g_tGBuffer2",
+            "stage": "compute",
+            "slot": 1,
+            "kind": "srv",
+            "resource": "3571",
+            "dimension": "TEXTURE2D",
+            "heap": "4918",
+            "index": 367682
+          },
+          {
+            "name": "g_tShadowBuffer",
+            "stage": "compute",
+            "slot": 2,
+            "kind": "srv",
+            "resource": "3565",
+            "dimension": "TEXTURE2D",
+            "heap": "4918",
+            "index": 367683
+          },
+          {
+            "name": "g_tClipDepth",
+            "stage": "compute",
+            "slot": 3,
+            "kind": "srv",
+            "resource": "3572",
+            "dimension": "TEXTURE2D",
+            "heap": "4918",
+            "index": 367684
+          },
+          {
+            "name": "g_tBlueNoiseOutputDither",
+            "stage": "compute",
+            "slot": 4,
+            "kind": "srv",
+            "resource": "2316",
+            "dimension": "TEXTURE2D",
+            "heap": "4918",
+            "index": 367685
+          },
+          {
+            "name": "g_tBlueNoiseShadowJitter",
+            "stage": "compute",
+            "slot": 5,
+            "kind": "srv",
+            "resource": "2544",
+            "dimension": "TEXTURE2D",
+            "heap": "4918",
+            "index": 367686
+          },
+          {
+            "name": "g_tTranslucencyKernelSource",
+            "stage": "compute",
+            "slot": 6,
+            "kind": "srv",
+            "resource": "1489",
+            "dimension": "TEXTURE2D",
+            "heap": "4918",
+            "index": 367687
+          },
+          {
+            "name": "g_sbMaterialDataPart1",
+            "stage": "compute",
+            "slot": 7,
+            "kind": "srv",
+            "resource": "3677",
+            "dimension": "BUFFER",
+            "heap": "4918",
+            "index": 367688
+          },
+          {
+            "name": "g_sbMaterialDataPart3",
+            "stage": "compute",
+            "slot": 8,
+            "kind": "srv",
+            "resource": "3687",
+            "dimension": "BUFFER",
+            "heap": "4918",
+            "index": 367689
+          },
+          {
+            "name": "g_tPointLightShadowAtlas",
+            "stage": "compute",
+            "slot": 9,
+            "kind": "srv",
+            "resource": "4068",
+            "dimension": "TEXTURE2D",
+            "heap": "4918",
+            "index": 367690
+          },
+          {
+            "name": "g_sbDeferredLightPointData",
+            "stage": "compute",
+            "slot": 10,
+            "kind": "srv",
+            "resource": "3676",
+            "dimension": "BUFFER",
+            "heap": "4918",
+            "index": 367691
+          },
+          {
+            "name": "g_tDeferredLightTilePointLights",
+            "stage": "compute",
+            "slot": 11,
+            "kind": "srv",
+            "resource": "3555",
+            "dimension": "TEXTURE2D",
+            "heap": "4918",
+            "index": 367692
+          },
+          {
+            "name": "g_tSpotLightPCFShadowAtlas",
+            "stage": "compute",
+            "slot": 12,
+            "kind": "srv",
+            "resource": "4067",
+            "dimension": "TEXTURE2D",
+            "heap": "4918",
+            "index": 367693
+          },
+          {
+            "name": "g_tSpotLightVSMShadowAtlas",
+            "stage": "compute",
+            "slot": 13,
+            "kind": "srv",
+            "resource": "4068",
+            "dimension": "TEXTURE2D",
+            "heap": "4918",
+            "index": 367694
+          },
+          {
+            "name": "g_tSpotLightProjectionAtlas",
+            "stage": "compute",
+            "slot": 14,
+            "kind": "srv",
+            "resource": "2320",
+            "dimension": "TEXTURE2D",
+            "heap": "4918",
+            "index": 367695
+          },
+          {
+            "name": "g_sbDeferredLightSpotData",
+            "stage": "compute",
+            "slot": 15,
+            "kind": "srv",
+            "resource": "3788",
+            "dimension": "BUFFER",
+            "heap": "4918",
+            "index": 367696
+          },
+          {
+            "name": "g_tDeferredLightTileSpotLights",
+            "stage": "compute",
+            "slot": 16,
+            "kind": "srv",
+            "resource": "3556",
+            "dimension": "TEXTURE2D",
+            "heap": "4918",
+            "index": 367697
+          },
+          {
+            "name": "g_sbDeferredLightSunData",
+            "stage": "compute",
+            "slot": 18,
+            "kind": "srv",
+            "resource": "3554",
+            "dimension": "BUFFER",
+            "heap": "4918",
+            "index": 367699
+          },
+          {
+            "name": "g_tBentNormals",
+            "stage": "compute",
+            "slot": 19,
+            "kind": "srv",
+            "resource": "2317",
+            "dimension": "TEXTURE2D",
+            "heap": "4918",
+            "index": 367700
+          },
+          {
+            "name": "g_tFillSpecular",
+            "stage": "compute",
+            "slot": 20,
+            "kind": "srv",
+            "resource": "10",
+            "dimension": "TEXTURE2D",
+            "heap": "4918",
+            "index": 367701
+          },
+          {
+            "name": "g_rwtLightBufferDiffuse",
+            "stage": "compute",
+            "slot": 0,
+            "kind": "uav",
+            "resource": "3557",
+            "dimension": "TEXTURE2D",
+            "heap": "4918",
+            "index": 367717
+          },
+          {
+            "name": "g_rwtLightBufferSpecular",
+            "stage": "compute",
+            "slot": 1,
+            "kind": "uav",
+            "resource": "3553",
+            "dimension": "TEXTURE2D",
+            "heap": "4918",
+            "index": 367718
+          },
+          {
+            "name": "g_rwtSingleSpot",
+            "stage": "compute",
+            "slot": 2,
+            "kind": "uav",
+            "resource": "3415",
+            "dimension": "TEXTURE2D",
+            "heap": "4918",
+            "index": 367719
+          }
+        ],
+        "unresolved": [
+          {
+            "name": "g_tSunLightProjectionTexture",
+            "kind": "srv",
+            "heap": "4918",
+            "index": 367698
+          }
+        ]
+      },
+      "ray_dispatches": [
+        {
+          "file": "CommandLists_000.cpp",
+          "line": 29955,
+          "command_list": "5884",
+          "submission": 11,
+          "queue": "1",
+          "submit_file": "RenderFrameWorker_000.cpp",
+          "submit_line": 2831,
+          "pipeline": "5886",
+          "root": "4877",
+          "heap": "4918",
+          "first": 363511,
+          "shader_hashes": [
+            "c2e4c0c4b48b191ba281595dcf11c7962c5c05c615cbe036ca6e8616c09fd30e"
+          ],
+          "as_bindings": [
+            {
+              "slot": 5,
+              "resource": "4827",
+              "kind": "srv",
+              "dimension": "RAYTRACING_ACCELERATION_STRUCTURE",
+              "offset": 0
+            }
+          ]
+        },
+        {
+          "file": "CommandLists_000.cpp",
+          "line": 30712,
+          "command_list": "6319",
+          "submission": 12,
+          "queue": "1",
+          "submit_file": "RenderFrameWorker_000.cpp",
+          "submit_line": 2849,
+          "pipeline": "6329",
+          "root": "4877",
+          "heap": "4918",
+          "first": 366549,
+          "shader_hashes": [
+            "66ec0c29541de1f4aa59636ce6e4415de440a12315b983839d0de0c0a2bab9a8"
+          ],
+          "as_bindings": [
+            {
+              "slot": 2,
+              "resource": "4827",
+              "kind": "srv",
+              "dimension": "RAYTRACING_ACCELERATION_STRUCTURE",
+              "offset": 0
+            },
+            {
+              "slot": 4,
+              "resource": "4827",
+              "kind": "srv",
+              "dimension": "RAYTRACING_ACCELERATION_STRUCTURE",
+              "offset": 0
+            }
+          ]
+        },
+        {
+          "file": "CommandLists_000.cpp",
+          "line": 31017,
+          "command_list": "6334",
+          "submission": 15,
+          "queue": "1",
+          "submit_file": "RenderFrameWorker_000.cpp",
+          "submit_line": 2888,
+          "pipeline": "6337",
+          "root": "4877",
+          "heap": "4918",
+          "first": 366647,
+          "shader_hashes": [
+            "6297319e1fec315c06ee75993e797b51def658e7d41f1588d7df3feb41a1ea2f"
+          ],
+          "as_bindings": [
+            {
+              "slot": 4,
+              "resource": "4827",
+              "kind": "srv",
+              "dimension": "RAYTRACING_ACCELERATION_STRUCTURE",
+              "offset": 0
+            }
+          ]
+        },
+        {
+          "file": "CommandLists_000.cpp",
+          "line": 32159,
+          "command_list": "6338",
+          "submission": 16,
+          "queue": "1",
+          "submit_file": "RenderFrameWorker_000.cpp",
+          "submit_line": 2909,
+          "pipeline": "6349",
+          "root": "4877",
+          "heap": "4918",
+          "first": 367725,
+          "shader_hashes": [
+            "d5efe2c2219257e2a7b51bbd65a7fa3b80cdb56fb7e6444223f8b4d7ee45a1a9"
+          ],
+          "as_bindings": [
+            {
+              "slot": 6,
+              "resource": "4827",
+              "kind": "srv",
+              "dimension": "RAYTRACING_ACCELERATION_STRUCTURE",
+              "offset": 0
+            }
+          ]
+        }
+      ],
+      "material_consumers": [
+        {
+          "pipeline": "6362",
+          "command_list": "6360",
+          "submission": 17,
+          "queue": "1",
+          "line": 32826,
+          "rtvs": [
+            "3071"
+          ],
+          "draws": 12
+        },
+        {
+          "pipeline": "6364",
+          "command_list": "6360",
+          "submission": 17,
+          "queue": "1",
+          "line": 32895,
+          "rtvs": [
+            "3071"
+          ],
+          "draws": 6
+        },
+        {
+          "pipeline": "6363",
+          "command_list": "6360",
+          "submission": 17,
+          "queue": "1",
+          "line": 32922,
+          "rtvs": [
+            "3071"
+          ],
+          "draws": 103
+        },
+        {
+          "pipeline": "6366",
+          "command_list": "6360",
+          "submission": 17,
+          "queue": "1",
+          "line": 33126,
+          "rtvs": [
+            "3071"
+          ],
+          "draws": 1
+        },
+        {
+          "pipeline": "6365",
+          "command_list": "6360",
+          "submission": 17,
+          "queue": "1",
+          "line": 33232,
+          "rtvs": [
+            "3071"
+          ],
+          "draws": 6
+        },
+        {
+          "pipeline": "6363",
+          "command_list": "6367",
+          "submission": 17,
+          "queue": "1",
+          "line": 36078,
+          "rtvs": [
+            "3071"
+          ],
+          "draws": 53
+        },
+        {
+          "pipeline": "6365",
+          "command_list": "6367",
+          "submission": 17,
+          "queue": "1",
+          "line": 36428,
+          "rtvs": [
+            "3071"
+          ],
+          "draws": 2
+        },
+        {
+          "pipeline": "6366",
+          "command_list": "6367",
+          "submission": 17,
+          "queue": "1",
+          "line": 37041,
+          "rtvs": [
+            "3071"
+          ],
+          "draws": 3
+        },
+        {
+          "pipeline": "6369",
+          "command_list": "6367",
+          "submission": 17,
+          "queue": "1",
+          "line": 37508,
+          "rtvs": [
+            "3071"
+          ],
+          "draws": 3
+        },
+        {
+          "pipeline": "6371",
+          "command_list": "6367",
+          "submission": 17,
+          "queue": "1",
+          "line": 37577,
+          "rtvs": [
+            "3071"
+          ],
+          "draws": 25
+        },
+        {
+          "pipeline": "6370",
+          "command_list": "6367",
+          "submission": 17,
+          "queue": "1",
+          "line": 38254,
+          "rtvs": [
+            "3071"
+          ],
+          "draws": 3
+        },
+        {
+          "pipeline": "6375",
+          "command_list": "6367",
+          "submission": 17,
+          "queue": "1",
+          "line": 38307,
+          "rtvs": [
+            "3071"
+          ],
+          "draws": 11
+        },
+        {
+          "pipeline": "6376",
+          "command_list": "6367",
+          "submission": 17,
+          "queue": "1",
+          "line": 38617,
+          "rtvs": [
+            "3071"
+          ],
+          "draws": 5
+        },
+        {
+          "pipeline": "6377",
+          "command_list": "6367",
+          "submission": 17,
+          "queue": "1",
+          "line": 38736,
+          "rtvs": [
+            "3071"
+          ],
+          "draws": 3
+        },
+        {
+          "pipeline": "6379",
+          "command_list": "6367",
+          "submission": 17,
+          "queue": "1",
+          "line": 38823,
+          "rtvs": [
+            "3071"
+          ],
+          "draws": 3
+        },
+        {
+          "pipeline": "6380",
+          "command_list": "6367",
+          "submission": 17,
+          "queue": "1",
+          "line": 38864,
+          "rtvs": [
+            "3071"
+          ],
+          "draws": 1
+        },
+        {
+          "pipeline": "6383",
+          "command_list": "6367",
+          "submission": 17,
+          "queue": "1",
+          "line": 38890,
+          "rtvs": [
+            "3071"
+          ],
+          "draws": 3
+        },
+        {
+          "pipeline": "6381",
+          "command_list": "6367",
+          "submission": 17,
+          "queue": "1",
+          "line": 38970,
+          "rtvs": [
+            "3071"
+          ],
+          "draws": 2
+        },
+        {
+          "pipeline": "6374",
+          "command_list": "6367",
+          "submission": 17,
+          "queue": "1",
+          "line": 39020,
+          "rtvs": [
+            "3071"
+          ],
+          "draws": 1
+        },
+        {
+          "pipeline": "6373",
+          "command_list": "6367",
+          "submission": 17,
+          "queue": "1",
+          "line": 39045,
+          "rtvs": [
+            "3071"
+          ],
+          "draws": 2
+        },
+        {
+          "pipeline": "6382",
+          "command_list": "6367",
+          "submission": 17,
+          "queue": "1",
+          "line": 39094,
+          "rtvs": [
+            "3071"
+          ],
+          "draws": 1
+        },
+        {
+          "pipeline": "6384",
+          "command_list": "6367",
+          "submission": 17,
+          "queue": "1",
+          "line": 39119,
+          "rtvs": [
+            "3071"
+          ],
+          "draws": 1
+        },
+        {
+          "pipeline": "6378",
+          "command_list": "6367",
+          "submission": 17,
+          "queue": "1",
+          "line": 39150,
+          "rtvs": [
+            "3071"
+          ],
+          "draws": 5
+        },
+        {
+          "pipeline": "6378",
+          "command_list": "6385",
+          "submission": 17,
+          "queue": "1",
+          "line": 39376,
+          "rtvs": [
+            "3071"
+          ],
+          "draws": 3
+        },
+        {
+          "pipeline": "6388",
+          "command_list": "6385",
+          "submission": 17,
+          "queue": "1",
+          "line": 39457,
+          "rtvs": [
+            "3071"
+          ],
+          "draws": 1
+        },
+        {
+          "pipeline": "6387",
+          "command_list": "6385",
+          "submission": 17,
+          "queue": "1",
+          "line": 39477,
+          "rtvs": [
+            "3071"
+          ],
+          "draws": 1
+        },
+        {
+          "pipeline": "6393",
+          "command_list": "6389",
+          "submission": 17,
+          "queue": "1",
+          "line": 39652,
+          "rtvs": [
+            "3071"
+          ],
+          "draws": 12
+        },
+        {
+          "pipeline": "6392",
+          "command_list": "6389",
+          "submission": 17,
+          "queue": "1",
+          "line": 39913,
+          "rtvs": [
+            "3071"
+          ],
+          "draws": 5
+        },
+        {
+          "pipeline": "6391",
+          "command_list": "6389",
+          "submission": 17,
+          "queue": "1",
+          "line": 40083,
+          "rtvs": [
+            "3071"
+          ],
+          "draws": 25
+        }
+      ],
+      "unresolved_call_count": 283
+    },
+    "02-floor": {
+      "targets": {
+        "3585": [
+          "g_rwtLightBufferDiffuse"
+        ],
+        "3581": [
+          "g_rwtLightBufferSpecular"
+        ],
+        "3452": [
+          "g_rwtSingleSpot"
+        ]
+      },
+      "primary_output_aliases": {},
+      "primary": {
+        "file": "CommandLists_000.cpp",
+        "line": 30608,
+        "command_list": "6286",
+        "submission": 16,
+        "queue": "1",
+        "submit_file": "RenderFrameWorker_000.cpp",
+        "submit_line": 2408,
+        "pipeline": "6288",
+        "operation": "Dispatch",
+        "rtvs": [],
+        "bindings": [
+          {
+            "name": "g_tGBuffer1",
+            "stage": "compute",
+            "slot": 0,
+            "kind": "srv",
+            "resource": "3593",
+            "dimension": "TEXTURE2D",
+            "heap": "4882",
+            "index": 360037
+          },
+          {
+            "name": "g_tGBuffer2",
+            "stage": "compute",
+            "slot": 1,
+            "kind": "srv",
+            "resource": "3600",
+            "dimension": "TEXTURE2D",
+            "heap": "4882",
+            "index": 360038
+          },
+          {
+            "name": "g_tShadowBuffer",
+            "stage": "compute",
+            "slot": 2,
+            "kind": "srv",
+            "resource": "3591",
+            "dimension": "TEXTURE2D",
+            "heap": "4882",
+            "index": 360039
+          },
+          {
+            "name": "g_tClipDepth",
+            "stage": "compute",
+            "slot": 3,
+            "kind": "srv",
+            "resource": "3601",
+            "dimension": "TEXTURE2D",
+            "heap": "4882",
+            "index": 360040
+          },
+          {
+            "name": "g_tBlueNoiseOutputDither",
+            "stage": "compute",
+            "slot": 4,
+            "kind": "srv",
+            "resource": "2323",
+            "dimension": "TEXTURE2D",
+            "heap": "4882",
+            "index": 360041
+          },
+          {
+            "name": "g_tBlueNoiseShadowJitter",
+            "stage": "compute",
+            "slot": 5,
+            "kind": "srv",
+            "resource": "2512",
+            "dimension": "TEXTURE2D",
+            "heap": "4882",
+            "index": 360042
+          },
+          {
+            "name": "g_tTranslucencyKernelSource",
+            "stage": "compute",
+            "slot": 6,
+            "kind": "srv",
+            "resource": "1488",
+            "dimension": "TEXTURE2D",
+            "heap": "4882",
+            "index": 360043
+          },
+          {
+            "name": "g_sbMaterialDataPart1",
+            "stage": "compute",
+            "slot": 7,
+            "kind": "srv",
+            "resource": "3709",
+            "dimension": "BUFFER",
+            "heap": "4882",
+            "index": 360044
+          },
+          {
+            "name": "g_sbMaterialDataPart3",
+            "stage": "compute",
+            "slot": 8,
+            "kind": "srv",
+            "resource": "3719",
+            "dimension": "BUFFER",
+            "heap": "4882",
+            "index": 360045
+          },
+          {
+            "name": "g_tPointLightShadowAtlas",
+            "stage": "compute",
+            "slot": 9,
+            "kind": "srv",
+            "resource": "3592",
+            "dimension": "TEXTURE2D",
+            "heap": "4882",
+            "index": 360046
+          },
+          {
+            "name": "g_sbDeferredLightPointData",
+            "stage": "compute",
+            "slot": 10,
+            "kind": "srv",
+            "resource": "3708",
+            "dimension": "BUFFER",
+            "heap": "4882",
+            "index": 360047
+          },
+          {
+            "name": "g_tDeferredLightTilePointLights",
+            "stage": "compute",
+            "slot": 11,
+            "kind": "srv",
+            "resource": "3583",
+            "dimension": "TEXTURE2D",
+            "heap": "4882",
+            "index": 360048
+          },
+          {
+            "name": "g_tSpotLightPCFShadowAtlas",
+            "stage": "compute",
+            "slot": 12,
+            "kind": "srv",
+            "resource": "3605",
+            "dimension": "TEXTURE2D",
+            "heap": "4882",
+            "index": 360049
+          },
+          {
+            "name": "g_tSpotLightVSMShadowAtlas",
+            "stage": "compute",
+            "slot": 13,
+            "kind": "srv",
+            "resource": "3592",
+            "dimension": "TEXTURE2D",
+            "heap": "4882",
+            "index": 360050
+          },
+          {
+            "name": "g_tSpotLightProjectionAtlas",
+            "stage": "compute",
+            "slot": 14,
+            "kind": "srv",
+            "resource": "2327",
+            "dimension": "TEXTURE2D",
+            "heap": "4882",
+            "index": 360051
+          },
+          {
+            "name": "g_sbDeferredLightSpotData",
+            "stage": "compute",
+            "slot": 15,
+            "kind": "srv",
+            "resource": "3815",
+            "dimension": "BUFFER",
+            "heap": "4882",
+            "index": 360052
+          },
+          {
+            "name": "g_tDeferredLightTileSpotLights",
+            "stage": "compute",
+            "slot": 16,
+            "kind": "srv",
+            "resource": "3584",
+            "dimension": "TEXTURE2D",
+            "heap": "4882",
+            "index": 360053
+          },
+          {
+            "name": "g_sbDeferredLightSunData",
+            "stage": "compute",
+            "slot": 18,
+            "kind": "srv",
+            "resource": "3582",
+            "dimension": "BUFFER",
+            "heap": "4882",
+            "index": 360055
+          },
+          {
+            "name": "g_tBentNormals",
+            "stage": "compute",
+            "slot": 19,
+            "kind": "srv",
+            "resource": "2324",
+            "dimension": "TEXTURE2D",
+            "heap": "4882",
+            "index": 360056
+          },
+          {
+            "name": "g_tFillSpecular",
+            "stage": "compute",
+            "slot": 20,
+            "kind": "srv",
+            "resource": "10",
+            "dimension": "TEXTURE2D",
+            "heap": "4882",
+            "index": 360057
+          },
+          {
+            "name": "g_rwtLightBufferDiffuse",
+            "stage": "compute",
+            "slot": 0,
+            "kind": "uav",
+            "resource": "3585",
+            "dimension": "TEXTURE2D",
+            "heap": "4882",
+            "index": 360073
+          },
+          {
+            "name": "g_rwtLightBufferSpecular",
+            "stage": "compute",
+            "slot": 1,
+            "kind": "uav",
+            "resource": "3581",
+            "dimension": "TEXTURE2D",
+            "heap": "4882",
+            "index": 360074
+          },
+          {
+            "name": "g_rwtSingleSpot",
+            "stage": "compute",
+            "slot": 2,
+            "kind": "uav",
+            "resource": "3452",
+            "dimension": "TEXTURE2D",
+            "heap": "4882",
+            "index": 360075
+          }
+        ],
+        "unresolved": [
+          {
+            "name": "g_tSunLightProjectionTexture",
+            "kind": "srv",
+            "heap": "4882",
+            "index": 360054
+          }
+        ]
+      },
+      "ray_dispatches": [
+        {
+          "file": "CommandLists_000.cpp",
+          "line": 28516,
+          "command_list": "5799",
+          "submission": 11,
+          "queue": "1",
+          "submit_file": "RenderFrameWorker_000.cpp",
+          "submit_line": 2336,
+          "pipeline": "5801",
+          "root": "4854",
+          "heap": "4882",
+          "first": 358317,
+          "shader_hashes": [
+            "c2e4c0c4b48b191ba281595dcf11c7962c5c05c615cbe036ca6e8616c09fd30e"
+          ],
+          "as_bindings": [
+            {
+              "slot": 5,
+              "resource": "4796",
+              "kind": "srv",
+              "dimension": "RAYTRACING_ACCELERATION_STRUCTURE",
+              "offset": 0
+            }
+          ]
+        },
+        {
+          "file": "CommandLists_000.cpp",
+          "line": 29302,
+          "command_list": "6269",
+          "submission": 13,
+          "queue": "1",
+          "submit_file": "RenderFrameWorker_000.cpp",
+          "submit_line": 2365,
+          "pipeline": "6279",
+          "root": "4854",
+          "heap": "4882",
+          "first": 358905,
+          "shader_hashes": [
+            "66ec0c29541de1f4aa59636ce6e4415de440a12315b983839d0de0c0a2bab9a8"
+          ],
+          "as_bindings": [
+            {
+              "slot": 2,
+              "resource": "4796",
+              "kind": "srv",
+              "dimension": "RAYTRACING_ACCELERATION_STRUCTURE",
+              "offset": 0
+            }
+          ]
+        },
+        {
+          "file": "CommandLists_000.cpp",
+          "line": 29598,
+          "command_list": "6280",
+          "submission": 14,
+          "queue": "1",
+          "submit_file": "RenderFrameWorker_000.cpp",
+          "submit_line": 2379,
+          "pipeline": "6283",
+          "root": "4854",
+          "heap": "4882",
+          "first": 359003,
+          "shader_hashes": [
+            "6297319e1fec315c06ee75993e797b51def658e7d41f1588d7df3feb41a1ea2f"
+          ],
+          "as_bindings": [
+            {
+              "slot": 4,
+              "resource": "4796",
+              "kind": "srv",
+              "dimension": "RAYTRACING_ACCELERATION_STRUCTURE",
+              "offset": 0
+            }
+          ]
+        },
+        {
+          "file": "CommandLists_000.cpp",
+          "line": 30764,
+          "command_list": "6286",
+          "submission": 16,
+          "queue": "1",
+          "submit_file": "RenderFrameWorker_000.cpp",
+          "submit_line": 2408,
+          "pipeline": "6297",
+          "root": "4854",
+          "heap": "4882",
+          "first": 360081,
+          "shader_hashes": [
+            "d5efe2c2219257e2a7b51bbd65a7fa3b80cdb56fb7e6444223f8b4d7ee45a1a9"
+          ],
+          "as_bindings": [
+            {
+              "slot": 6,
+              "resource": "4796",
+              "kind": "srv",
+              "dimension": "RAYTRACING_ACCELERATION_STRUCTURE",
+              "offset": 0
+            }
+          ]
+        }
+      ],
+      "material_consumers": [
+        {
+          "pipeline": "6310",
+          "command_list": "6308",
+          "submission": 17,
+          "queue": "1",
+          "line": 31431,
+          "rtvs": [
+            "3041"
+          ],
+          "draws": 13
+        },
+        {
+          "pipeline": "6311",
+          "command_list": "6308",
+          "submission": 17,
+          "queue": "1",
+          "line": 31563,
+          "rtvs": [
+            "3041"
+          ],
+          "draws": 104
+        },
+        {
+          "pipeline": "6314",
+          "command_list": "6308",
+          "submission": 17,
+          "queue": "1",
+          "line": 31720,
+          "rtvs": [
+            "3041"
+          ],
+          "draws": 1
+        },
+        {
+          "pipeline": "6313",
+          "command_list": "6308",
+          "submission": 17,
+          "queue": "1",
+          "line": 31826,
+          "rtvs": [
+            "3041"
+          ],
+          "draws": 5
+        },
+        {
+          "pipeline": "6312",
+          "command_list": "6308",
+          "submission": 17,
+          "queue": "1",
+          "line": 32960,
+          "rtvs": [
+            "3041"
+          ],
+          "draws": 5
+        },
+        {
+          "pipeline": "6311",
+          "command_list": "6315",
+          "submission": 17,
+          "queue": "1",
+          "line": 34692,
+          "rtvs": [
+            "3041"
+          ],
+          "draws": 24
+        },
+        {
+          "pipeline": "6314",
+          "command_list": "6315",
+          "submission": 17,
+          "queue": "1",
+          "line": 34922,
+          "rtvs": [
+            "3041"
+          ],
+          "draws": 3
+        },
+        {
+          "pipeline": "6313",
+          "command_list": "6315",
+          "submission": 17,
+          "queue": "1",
+          "line": 35281,
+          "rtvs": [
+            "3041"
+          ],
+          "draws": 2
+        },
+        {
+          "pipeline": "6317",
+          "command_list": "6315",
+          "submission": 17,
+          "queue": "1",
+          "line": 35412,
+          "rtvs": [
+            "3041"
+          ],
+          "draws": 3
+        },
+        {
+          "pipeline": "6319",
+          "command_list": "6315",
+          "submission": 17,
+          "queue": "1",
+          "line": 35481,
+          "rtvs": [
+            "3041"
+          ],
+          "draws": 18
+        },
+        {
+          "pipeline": "6318",
+          "command_list": "6315",
+          "submission": 17,
+          "queue": "1",
+          "line": 35972,
+          "rtvs": [
+            "3041"
+          ],
+          "draws": 3
+        },
+        {
+          "pipeline": "6323",
+          "command_list": "6315",
+          "submission": 17,
+          "queue": "1",
+          "line": 36029,
+          "rtvs": [
+            "3041"
+          ],
+          "draws": 10
+        },
+        {
+          "pipeline": "6324",
+          "command_list": "6315",
+          "submission": 17,
+          "queue": "1",
+          "line": 36318,
+          "rtvs": [
+            "3041"
+          ],
+          "draws": 5
+        },
+        {
+          "pipeline": "6325",
+          "command_list": "6315",
+          "submission": 17,
+          "queue": "1",
+          "line": 36437,
+          "rtvs": [
+            "3041"
+          ],
+          "draws": 1
+        },
+        {
+          "pipeline": "6327",
+          "command_list": "6315",
+          "submission": 17,
+          "queue": "1",
+          "line": 36468,
+          "rtvs": [
+            "3041"
+          ],
+          "draws": 3
+        },
+        {
+          "pipeline": "6328",
+          "command_list": "6315",
+          "submission": 17,
+          "queue": "1",
+          "line": 36509,
+          "rtvs": [
+            "3041"
+          ],
+          "draws": 1
+        },
+        {
+          "pipeline": "6332",
+          "command_list": "6315",
+          "submission": 17,
+          "queue": "1",
+          "line": 36531,
+          "rtvs": [
+            "3041"
+          ],
+          "draws": 3
+        },
+        {
+          "pipeline": "6330",
+          "command_list": "6315",
+          "submission": 17,
+          "queue": "1",
+          "line": 36611,
+          "rtvs": [
+            "3041"
+          ],
+          "draws": 2
+        },
+        {
+          "pipeline": "6322",
+          "command_list": "6315",
+          "submission": 17,
+          "queue": "1",
+          "line": 36661,
+          "rtvs": [
+            "3041"
+          ],
+          "draws": 1
+        },
+        {
+          "pipeline": "6321",
+          "command_list": "6315",
+          "submission": 17,
+          "queue": "1",
+          "line": 36686,
+          "rtvs": [
+            "3041"
+          ],
+          "draws": 2
+        },
+        {
+          "pipeline": "6331",
+          "command_list": "6315",
+          "submission": 17,
+          "queue": "1",
+          "line": 36735,
+          "rtvs": [
+            "3041"
+          ],
+          "draws": 1
+        },
+        {
+          "pipeline": "6334",
+          "command_list": "6315",
+          "submission": 17,
+          "queue": "1",
+          "line": 36764,
+          "rtvs": [
+            "3041"
+          ],
+          "draws": 1
+        },
+        {
+          "pipeline": "6326",
+          "command_list": "6315",
+          "submission": 17,
+          "queue": "1",
+          "line": 36795,
+          "rtvs": [
+            "3041"
+          ],
+          "draws": 4
+        },
+        {
+          "pipeline": "6333",
+          "command_list": "6315",
+          "submission": 17,
+          "queue": "1",
+          "line": 36897,
+          "rtvs": [
+            "3041"
+          ],
+          "draws": 1
+        },
+        {
+          "pipeline": "6329",
+          "command_list": "6315",
+          "submission": 17,
+          "queue": "1",
+          "line": 36917,
+          "rtvs": [
+            "3041"
+          ],
+          "draws": 1
+        },
+        {
+          "pipeline": "6339",
+          "command_list": "6335",
+          "submission": 17,
+          "queue": "1",
+          "line": 37092,
+          "rtvs": [
+            "3041"
+          ],
+          "draws": 12
+        },
+        {
+          "pipeline": "6338",
+          "command_list": "6335",
+          "submission": 17,
+          "queue": "1",
+          "line": 37353,
+          "rtvs": [
+            "3041"
+          ],
+          "draws": 5
+        },
+        {
+          "pipeline": "6337",
+          "command_list": "6335",
+          "submission": 17,
+          "queue": "1",
+          "line": 37523,
+          "rtvs": [
+            "3041"
+          ],
+          "draws": 23
+        }
+      ],
+      "unresolved_call_count": 240
+    },
+    "03-glass": {
+      "targets": {
+        "3637": [
+          "g_rwtLightBufferDiffuse"
+        ],
+        "3633": [
+          "g_rwtLightBufferSpecular"
+        ],
+        "3493": [
+          "g_rwtSingleSpot"
+        ]
+      },
+      "primary_output_aliases": {},
+      "primary": {
+        "file": "CommandLists_000.cpp",
+        "line": 31501,
+        "command_list": "6341",
+        "submission": 15,
+        "queue": "1",
+        "submit_file": "RenderFrameWorker_000.cpp",
+        "submit_line": 2729,
+        "pipeline": "6343",
+        "operation": "Dispatch",
+        "rtvs": [],
+        "bindings": [
+          {
+            "name": "g_tGBuffer1",
+            "stage": "compute",
+            "slot": 0,
+            "kind": "srv",
+            "resource": "3644",
+            "dimension": "TEXTURE2D",
+            "heap": "4897",
+            "index": 362879
+          },
+          {
+            "name": "g_tGBuffer2",
+            "stage": "compute",
+            "slot": 1,
+            "kind": "srv",
+            "resource": "3651",
+            "dimension": "TEXTURE2D",
+            "heap": "4897",
+            "index": 362880
+          },
+          {
+            "name": "g_tShadowBuffer",
+            "stage": "compute",
+            "slot": 2,
+            "kind": "srv",
+            "resource": "3645",
+            "dimension": "TEXTURE2D",
+            "heap": "4897",
+            "index": 362881
+          },
+          {
+            "name": "g_tClipDepth",
+            "stage": "compute",
+            "slot": 3,
+            "kind": "srv",
+            "resource": "3652",
+            "dimension": "TEXTURE2D",
+            "heap": "4897",
+            "index": 362882
+          },
+          {
+            "name": "g_tBlueNoiseOutputDither",
+            "stage": "compute",
+            "slot": 4,
+            "kind": "srv",
+            "resource": "2296",
+            "dimension": "TEXTURE2D",
+            "heap": "4897",
+            "index": 362883
+          },
+          {
+            "name": "g_tBlueNoiseShadowJitter",
+            "stage": "compute",
+            "slot": 5,
+            "kind": "srv",
+            "resource": "2479",
+            "dimension": "TEXTURE2D",
+            "heap": "4897",
+            "index": 362884
+          },
+          {
+            "name": "g_tTranslucencyKernelSource",
+            "stage": "compute",
+            "slot": 6,
+            "kind": "srv",
+            "resource": "1486",
+            "dimension": "TEXTURE2D",
+            "heap": "4897",
+            "index": 362885
+          },
+          {
+            "name": "g_sbMaterialDataPart1",
+            "stage": "compute",
+            "slot": 7,
+            "kind": "srv",
+            "resource": "3753",
+            "dimension": "BUFFER",
+            "heap": "4897",
+            "index": 362886
+          },
+          {
+            "name": "g_sbMaterialDataPart3",
+            "stage": "compute",
+            "slot": 8,
+            "kind": "srv",
+            "resource": "3763",
+            "dimension": "BUFFER",
+            "heap": "4897",
+            "index": 362887
+          },
+          {
+            "name": "g_tPointLightShadowAtlas",
+            "stage": "compute",
+            "slot": 9,
+            "kind": "srv",
+            "resource": "4556",
+            "dimension": "TEXTURE2D",
+            "heap": "4897",
+            "index": 362888
+          },
+          {
+            "name": "g_sbDeferredLightPointData",
+            "stage": "compute",
+            "slot": 10,
+            "kind": "srv",
+            "resource": "3752",
+            "dimension": "BUFFER",
+            "heap": "4897",
+            "index": 362889
+          },
+          {
+            "name": "g_tDeferredLightTilePointLights",
+            "stage": "compute",
+            "slot": 11,
+            "kind": "srv",
+            "resource": "3635",
+            "dimension": "TEXTURE2D",
+            "heap": "4897",
+            "index": 362890
+          },
+          {
+            "name": "g_tSpotLightPCFShadowAtlas",
+            "stage": "compute",
+            "slot": 12,
+            "kind": "srv",
+            "resource": "4555",
+            "dimension": "TEXTURE2D",
+            "heap": "4897",
+            "index": 362891
+          },
+          {
+            "name": "g_tSpotLightVSMShadowAtlas",
+            "stage": "compute",
+            "slot": 13,
+            "kind": "srv",
+            "resource": "4556",
+            "dimension": "TEXTURE2D",
+            "heap": "4897",
+            "index": 362892
+          },
+          {
+            "name": "g_tSpotLightProjectionAtlas",
+            "stage": "compute",
+            "slot": 14,
+            "kind": "srv",
+            "resource": "2300",
+            "dimension": "TEXTURE2D",
+            "heap": "4897",
+            "index": 362893
+          },
+          {
+            "name": "g_sbDeferredLightSpotData",
+            "stage": "compute",
+            "slot": 15,
+            "kind": "srv",
+            "resource": "3857",
+            "dimension": "BUFFER",
+            "heap": "4897",
+            "index": 362894
+          },
+          {
+            "name": "g_tDeferredLightTileSpotLights",
+            "stage": "compute",
+            "slot": 16,
+            "kind": "srv",
+            "resource": "3636",
+            "dimension": "TEXTURE2D",
+            "heap": "4897",
+            "index": 362895
+          },
+          {
+            "name": "g_sbDeferredLightSunData",
+            "stage": "compute",
+            "slot": 18,
+            "kind": "srv",
+            "resource": "3634",
+            "dimension": "BUFFER",
+            "heap": "4897",
+            "index": 362897
+          },
+          {
+            "name": "g_tBentNormals",
+            "stage": "compute",
+            "slot": 19,
+            "kind": "srv",
+            "resource": "2297",
+            "dimension": "TEXTURE2D",
+            "heap": "4897",
+            "index": 362898
+          },
+          {
+            "name": "g_tFillSpecular",
+            "stage": "compute",
+            "slot": 20,
+            "kind": "srv",
+            "resource": "9",
+            "dimension": "TEXTURE2D",
+            "heap": "4897",
+            "index": 362899
+          },
+          {
+            "name": "g_rwtLightBufferDiffuse",
+            "stage": "compute",
+            "slot": 0,
+            "kind": "uav",
+            "resource": "3637",
+            "dimension": "TEXTURE2D",
+            "heap": "4897",
+            "index": 362915
+          },
+          {
+            "name": "g_rwtLightBufferSpecular",
+            "stage": "compute",
+            "slot": 1,
+            "kind": "uav",
+            "resource": "3633",
+            "dimension": "TEXTURE2D",
+            "heap": "4897",
+            "index": 362916
+          },
+          {
+            "name": "g_rwtSingleSpot",
+            "stage": "compute",
+            "slot": 2,
+            "kind": "uav",
+            "resource": "3493",
+            "dimension": "TEXTURE2D",
+            "heap": "4897",
+            "index": 362917
+          }
+        ],
+        "unresolved": [
+          {
+            "name": "g_tSunLightProjectionTexture",
+            "kind": "srv",
+            "heap": "4897",
+            "index": 362896
+          }
+        ]
+      },
+      "ray_dispatches": [
+        {
+          "file": "CommandLists_000.cpp",
+          "line": 29408,
+          "command_list": "5854",
+          "submission": 10,
+          "queue": "1",
+          "submit_file": "RenderFrameWorker_000.cpp",
+          "submit_line": 2657,
+          "pipeline": "5856",
+          "root": "4855",
+          "heap": "4897",
+          "first": 361159,
+          "shader_hashes": [
+            "c2e4c0c4b48b191ba281595dcf11c7962c5c05c615cbe036ca6e8616c09fd30e"
+          ],
+          "as_bindings": [
+            {
+              "slot": 5,
+              "resource": "4804",
+              "kind": "srv",
+              "dimension": "RAYTRACING_ACCELERATION_STRUCTURE",
+              "offset": 0
+            }
+          ]
+        },
+        {
+          "file": "CommandLists_000.cpp",
+          "line": 30184,
+          "command_list": "6322",
+          "submission": 11,
+          "queue": "1",
+          "submit_file": "RenderFrameWorker_000.cpp",
+          "submit_line": 2675,
+          "pipeline": "6332",
+          "root": "4855",
+          "heap": "4897",
+          "first": 361747,
+          "shader_hashes": [
+            "66ec0c29541de1f4aa59636ce6e4415de440a12315b983839d0de0c0a2bab9a8"
+          ],
+          "as_bindings": [
+            {
+              "slot": 2,
+              "resource": "4804",
+              "kind": "srv",
+              "dimension": "RAYTRACING_ACCELERATION_STRUCTURE",
+              "offset": 0
+            }
+          ]
+        },
+        {
+          "file": "CommandLists_000.cpp",
+          "line": 30501,
+          "command_list": "6337",
+          "submission": 14,
+          "queue": "1",
+          "submit_file": "RenderFrameWorker_000.cpp",
+          "submit_line": 2714,
+          "pipeline": "6340",
+          "root": "4855",
+          "heap": "4897",
+          "first": 361845,
+          "shader_hashes": [
+            "6297319e1fec315c06ee75993e797b51def658e7d41f1588d7df3feb41a1ea2f"
+          ],
+          "as_bindings": [
+            {
+              "slot": 4,
+              "resource": "4804",
+              "kind": "srv",
+              "dimension": "RAYTRACING_ACCELERATION_STRUCTURE",
+              "offset": 0
+            }
+          ]
+        },
+        {
+          "file": "CommandLists_000.cpp",
+          "line": 31658,
+          "command_list": "6341",
+          "submission": 15,
+          "queue": "1",
+          "submit_file": "RenderFrameWorker_000.cpp",
+          "submit_line": 2729,
+          "pipeline": "6352",
+          "root": "4855",
+          "heap": "4897",
+          "first": 362923,
+          "shader_hashes": [
+            "d5efe2c2219257e2a7b51bbd65a7fa3b80cdb56fb7e6444223f8b4d7ee45a1a9"
+          ],
+          "as_bindings": [
+            {
+              "slot": 6,
+              "resource": "4804",
+              "kind": "srv",
+              "dimension": "RAYTRACING_ACCELERATION_STRUCTURE",
+              "offset": 0
+            }
+          ]
+        }
+      ],
+      "material_consumers": [
+        {
+          "pipeline": "6365",
+          "command_list": "6363",
+          "submission": 16,
+          "queue": "1",
+          "line": 32325,
+          "rtvs": [
+            "3062"
+          ],
+          "draws": 13
+        },
+        {
+          "pipeline": "6366",
+          "command_list": "6363",
+          "submission": 16,
+          "queue": "1",
+          "line": 32457,
+          "rtvs": [
+            "3062"
+          ],
+          "draws": 103
+        },
+        {
+          "pipeline": "6369",
+          "command_list": "6363",
+          "submission": 16,
+          "queue": "1",
+          "line": 32614,
+          "rtvs": [
+            "3062"
+          ],
+          "draws": 1
+        },
+        {
+          "pipeline": "6368",
+          "command_list": "6363",
+          "submission": 16,
+          "queue": "1",
+          "line": 32720,
+          "rtvs": [
+            "3062"
+          ],
+          "draws": 6
+        },
+        {
+          "pipeline": "6367",
+          "command_list": "6363",
+          "submission": 16,
+          "queue": "1",
+          "line": 33934,
+          "rtvs": [
+            "3062"
+          ],
+          "draws": 5
+        },
+        {
+          "pipeline": "6366",
+          "command_list": "6370",
+          "submission": 16,
+          "queue": "1",
+          "line": 35588,
+          "rtvs": [
+            "3062"
+          ],
+          "draws": 27
+        },
+        {
+          "pipeline": "6369",
+          "command_list": "6370",
+          "submission": 16,
+          "queue": "1",
+          "line": 35896,
+          "rtvs": [
+            "3062"
+          ],
+          "draws": 3
+        },
+        {
+          "pipeline": "6368",
+          "command_list": "6370",
+          "submission": 16,
+          "queue": "1",
+          "line": 36259,
+          "rtvs": [
+            "3062"
+          ],
+          "draws": 2
+        },
+        {
+          "pipeline": "6372",
+          "command_list": "6370",
+          "submission": 16,
+          "queue": "1",
+          "line": 36386,
+          "rtvs": [
+            "3062"
+          ],
+          "draws": 3
+        },
+        {
+          "pipeline": "6390",
+          "command_list": "6370",
+          "submission": 16,
+          "queue": "1",
+          "line": 36455,
+          "rtvs": [
+            "3062"
+          ],
+          "draws": 1
+        },
+        {
+          "pipeline": "6374",
+          "command_list": "6370",
+          "submission": 16,
+          "queue": "1",
+          "line": 36482,
+          "rtvs": [
+            "3062"
+          ],
+          "draws": 18
+        },
+        {
+          "pipeline": "6373",
+          "command_list": "6370",
+          "submission": 16,
+          "queue": "1",
+          "line": 36977,
+          "rtvs": [
+            "3062"
+          ],
+          "draws": 3
+        },
+        {
+          "pipeline": "6378",
+          "command_list": "6370",
+          "submission": 16,
+          "queue": "1",
+          "line": 37030,
+          "rtvs": [
+            "3062"
+          ],
+          "draws": 10
+        },
+        {
+          "pipeline": "6379",
+          "command_list": "6370",
+          "submission": 16,
+          "queue": "1",
+          "line": 37319,
+          "rtvs": [
+            "3062"
+          ],
+          "draws": 5
+        },
+        {
+          "pipeline": "6380",
+          "command_list": "6370",
+          "submission": 16,
+          "queue": "1",
+          "line": 37438,
+          "rtvs": [
+            "3062"
+          ],
+          "draws": 2
+        },
+        {
+          "pipeline": "6382",
+          "command_list": "6370",
+          "submission": 16,
+          "queue": "1",
+          "line": 37497,
+          "rtvs": [
+            "3062"
+          ],
+          "draws": 3
+        },
+        {
+          "pipeline": "6383",
+          "command_list": "6370",
+          "submission": 16,
+          "queue": "1",
+          "line": 37538,
+          "rtvs": [
+            "3062"
+          ],
+          "draws": 1
+        },
+        {
+          "pipeline": "6387",
+          "command_list": "6370",
+          "submission": 16,
+          "queue": "1",
+          "line": 37560,
+          "rtvs": [
+            "3062"
+          ],
+          "draws": 3
+        },
+        {
+          "pipeline": "6385",
+          "command_list": "6370",
+          "submission": 16,
+          "queue": "1",
+          "line": 37640,
+          "rtvs": [
+            "3062"
+          ],
+          "draws": 2
+        },
+        {
+          "pipeline": "6377",
+          "command_list": "6370",
+          "submission": 16,
+          "queue": "1",
+          "line": 37694,
+          "rtvs": [
+            "3062"
+          ],
+          "draws": 8
+        },
+        {
+          "pipeline": "6376",
+          "command_list": "6370",
+          "submission": 16,
+          "queue": "1",
+          "line": 37719,
+          "rtvs": [
+            "3062"
+          ],
+          "draws": 2
+        },
+        {
+          "pipeline": "6386",
+          "command_list": "6370",
+          "submission": 16,
+          "queue": "1",
+          "line": 37768,
+          "rtvs": [
+            "3062"
+          ],
+          "draws": 1
+        },
+        {
+          "pipeline": "6389",
+          "command_list": "6370",
+          "submission": 16,
+          "queue": "1",
+          "line": 37793,
+          "rtvs": [
+            "3062"
+          ],
+          "draws": 1
+        },
+        {
+          "pipeline": "6381",
+          "command_list": "6370",
+          "submission": 16,
+          "queue": "1",
+          "line": 37963,
+          "rtvs": [
+            "3062"
+          ],
+          "draws": 7
+        },
+        {
+          "pipeline": "6388",
+          "command_list": "6370",
+          "submission": 16,
+          "queue": "1",
+          "line": 38143,
+          "rtvs": [
+            "3062"
+          ],
+          "draws": 1
+        },
+        {
+          "pipeline": "6384",
+          "command_list": "6370",
+          "submission": 16,
+          "queue": "1",
+          "line": 38163,
+          "rtvs": [
+            "3062"
+          ],
+          "draws": 1
+        },
+        {
+          "pipeline": "6395",
+          "command_list": "6391",
+          "submission": 16,
+          "queue": "1",
+          "line": 38338,
+          "rtvs": [
+            "3062"
+          ],
+          "draws": 12
+        },
+        {
+          "pipeline": "6394",
+          "command_list": "6391",
+          "submission": 16,
+          "queue": "1",
+          "line": 38599,
+          "rtvs": [
+            "3062"
+          ],
+          "draws": 5
+        },
+        {
+          "pipeline": "6393",
+          "command_list": "6391",
+          "submission": 16,
+          "queue": "1",
+          "line": 38769,
+          "rtvs": [
+            "3062"
+          ],
+          "draws": 24
+        }
+      ],
+      "unresolved_call_count": 255
+    },
+    "04-reverse": {
+      "targets": {
+        "3541": [
+          "g_rwtLightBufferDiffuse"
+        ],
+        "3537": [
+          "g_rwtLightBufferSpecular"
+        ],
+        "3414": [
+          "g_rwtSingleSpot"
+        ]
+      },
+      "primary_output_aliases": {},
+      "primary": {
+        "file": "CommandLists_000.cpp",
+        "line": 30023,
+        "command_list": "6291",
+        "submission": 15,
+        "queue": "1",
+        "submit_file": "RenderFrameWorker_000.cpp",
+        "submit_line": 3715,
+        "pipeline": "6293",
+        "operation": "Dispatch",
+        "rtvs": [],
+        "bindings": [
+          {
+            "name": "g_tGBuffer1",
+            "stage": "compute",
+            "slot": 0,
+            "kind": "srv",
+            "resource": "3548",
+            "dimension": "TEXTURE2D",
+            "heap": "4760",
+            "index": 367142
+          },
+          {
+            "name": "g_tGBuffer2",
+            "stage": "compute",
+            "slot": 1,
+            "kind": "srv",
+            "resource": "3555",
+            "dimension": "TEXTURE2D",
+            "heap": "4760",
+            "index": 367143
+          },
+          {
+            "name": "g_tShadowBuffer",
+            "stage": "compute",
+            "slot": 2,
+            "kind": "srv",
+            "resource": "3547",
+            "dimension": "TEXTURE2D",
+            "heap": "4760",
+            "index": 367144
+          },
+          {
+            "name": "g_tClipDepth",
+            "stage": "compute",
+            "slot": 3,
+            "kind": "srv",
+            "resource": "3556",
+            "dimension": "TEXTURE2D",
+            "heap": "4760",
+            "index": 367145
+          },
+          {
+            "name": "g_tBlueNoiseOutputDither",
+            "stage": "compute",
+            "slot": 4,
+            "kind": "srv",
+            "resource": "2151",
+            "dimension": "TEXTURE2D",
+            "heap": "4760",
+            "index": 367146
+          },
+          {
+            "name": "g_tBlueNoiseShadowJitter",
+            "stage": "compute",
+            "slot": 5,
+            "kind": "srv",
+            "resource": "2295",
+            "dimension": "TEXTURE2D",
+            "heap": "4760",
+            "index": 367147
+          },
+          {
+            "name": "g_tTranslucencyKernelSource",
+            "stage": "compute",
+            "slot": 6,
+            "kind": "srv",
+            "resource": "1449",
+            "dimension": "TEXTURE2D",
+            "heap": "4760",
+            "index": 367148
+          },
+          {
+            "name": "g_sbMaterialDataPart1",
+            "stage": "compute",
+            "slot": 7,
+            "kind": "srv",
+            "resource": "3671",
+            "dimension": "BUFFER",
+            "heap": "4760",
+            "index": 367149
+          },
+          {
+            "name": "g_sbMaterialDataPart3",
+            "stage": "compute",
+            "slot": 8,
+            "kind": "srv",
+            "resource": "3680",
+            "dimension": "BUFFER",
+            "heap": "4760",
+            "index": 367150
+          },
+          {
+            "name": "g_tPointLightShadowAtlas",
+            "stage": "compute",
+            "slot": 9,
+            "kind": "srv",
+            "resource": "2458",
+            "dimension": "TEXTURE2D",
+            "heap": "4760",
+            "index": 367151
+          },
+          {
+            "name": "g_sbDeferredLightPointData",
+            "stage": "compute",
+            "slot": 10,
+            "kind": "srv",
+            "resource": "3670",
+            "dimension": "BUFFER",
+            "heap": "4760",
+            "index": 367152
+          },
+          {
+            "name": "g_tDeferredLightTilePointLights",
+            "stage": "compute",
+            "slot": 11,
+            "kind": "srv",
+            "resource": "3539",
+            "dimension": "TEXTURE2D",
+            "heap": "4760",
+            "index": 367153
+          },
+          {
+            "name": "g_tSpotLightPCFShadowAtlas",
+            "stage": "compute",
+            "slot": 12,
+            "kind": "srv",
+            "resource": "2418",
+            "dimension": "TEXTURE2D",
+            "heap": "4760",
+            "index": 367154
+          },
+          {
+            "name": "g_tSpotLightVSMShadowAtlas",
+            "stage": "compute",
+            "slot": 13,
+            "kind": "srv",
+            "resource": "2458",
+            "dimension": "TEXTURE2D",
+            "heap": "4760",
+            "index": 367155
+          },
+          {
+            "name": "g_tSpotLightProjectionAtlas",
+            "stage": "compute",
+            "slot": 14,
+            "kind": "srv",
+            "resource": "2155",
+            "dimension": "TEXTURE2D",
+            "heap": "4760",
+            "index": 367156
+          },
+          {
+            "name": "g_sbDeferredLightSpotData",
+            "stage": "compute",
+            "slot": 15,
+            "kind": "srv",
+            "resource": "3766",
+            "dimension": "BUFFER",
+            "heap": "4760",
+            "index": 367157
+          },
+          {
+            "name": "g_tDeferredLightTileSpotLights",
+            "stage": "compute",
+            "slot": 16,
+            "kind": "srv",
+            "resource": "3540",
+            "dimension": "TEXTURE2D",
+            "heap": "4760",
+            "index": 367158
+          },
+          {
+            "name": "g_sbDeferredLightSunData",
+            "stage": "compute",
+            "slot": 18,
+            "kind": "srv",
+            "resource": "3538",
+            "dimension": "BUFFER",
+            "heap": "4760",
+            "index": 367160
+          },
+          {
+            "name": "g_tBentNormals",
+            "stage": "compute",
+            "slot": 19,
+            "kind": "srv",
+            "resource": "2152",
+            "dimension": "TEXTURE2D",
+            "heap": "4760",
+            "index": 367161
+          },
+          {
+            "name": "g_tFillSpecular",
+            "stage": "compute",
+            "slot": 20,
+            "kind": "srv",
+            "resource": "8",
+            "dimension": "TEXTURE2D",
+            "heap": "4760",
+            "index": 367162
+          },
+          {
+            "name": "g_rwtLightBufferDiffuse",
+            "stage": "compute",
+            "slot": 0,
+            "kind": "uav",
+            "resource": "3541",
+            "dimension": "TEXTURE2D",
+            "heap": "4760",
+            "index": 367178
+          },
+          {
+            "name": "g_rwtLightBufferSpecular",
+            "stage": "compute",
+            "slot": 1,
+            "kind": "uav",
+            "resource": "3537",
+            "dimension": "TEXTURE2D",
+            "heap": "4760",
+            "index": 367179
+          },
+          {
+            "name": "g_rwtSingleSpot",
+            "stage": "compute",
+            "slot": 2,
+            "kind": "uav",
+            "resource": "3414",
+            "dimension": "TEXTURE2D",
+            "heap": "4760",
+            "index": 367180
+          }
+        ],
+        "unresolved": [
+          {
+            "name": "g_tSunLightProjectionTexture",
+            "kind": "srv",
+            "heap": "4760",
+            "index": 367159
+          }
+        ]
+      },
+      "ray_dispatches": [
+        {
+          "file": "CommandLists_000.cpp",
+          "line": 27928,
+          "command_list": "5778",
+          "submission": 10,
+          "queue": "1",
+          "submit_file": "RenderFrameWorker_000.cpp",
+          "submit_line": 3640,
+          "pipeline": "5780",
+          "root": "4726",
+          "heap": "4760",
+          "first": 354054,
+          "shader_hashes": [
+            "c2e4c0c4b48b191ba281595dcf11c7962c5c05c615cbe036ca6e8616c09fd30e"
+          ],
+          "as_bindings": [
+            {
+              "slot": 5,
+              "resource": "4669",
+              "kind": "srv",
+              "dimension": "RAYTRACING_ACCELERATION_STRUCTURE",
+              "offset": 0
+            }
+          ]
+        },
+        {
+          "file": "CommandLists_000.cpp",
+          "line": 28702,
+          "command_list": "6272",
+          "submission": 11,
+          "queue": "1",
+          "submit_file": "RenderFrameWorker_000.cpp",
+          "submit_line": 3661,
+          "pipeline": "6282",
+          "root": "4726",
+          "heap": "4760",
+          "first": 357876,
+          "shader_hashes": [
+            "66ec0c29541de1f4aa59636ce6e4415de440a12315b983839d0de0c0a2bab9a8"
+          ],
+          "as_bindings": [
+            {
+              "slot": 2,
+              "resource": "4669",
+              "kind": "srv",
+              "dimension": "RAYTRACING_ACCELERATION_STRUCTURE",
+              "offset": 0
+            },
+            {
+              "slot": 5,
+              "resource": "4669",
+              "kind": "srv",
+              "dimension": "RAYTRACING_ACCELERATION_STRUCTURE",
+              "offset": 0
+            }
+          ]
+        },
+        {
+          "file": "CommandLists_000.cpp",
+          "line": 29023,
+          "command_list": "6287",
+          "submission": 14,
+          "queue": "1",
+          "submit_file": "RenderFrameWorker_000.cpp",
+          "submit_line": 3700,
+          "pipeline": "6290",
+          "root": "4726",
+          "heap": "4760",
+          "first": 360228,
+          "shader_hashes": [
+            "6297319e1fec315c06ee75993e797b51def658e7d41f1588d7df3feb41a1ea2f"
+          ],
+          "as_bindings": [
+            {
+              "slot": 4,
+              "resource": "4669",
+              "kind": "srv",
+              "dimension": "RAYTRACING_ACCELERATION_STRUCTURE",
+              "offset": 0
+            }
+          ]
+        },
+        {
+          "file": "CommandLists_000.cpp",
+          "line": 30179,
+          "command_list": "6291",
+          "submission": 15,
+          "queue": "1",
+          "submit_file": "RenderFrameWorker_000.cpp",
+          "submit_line": 3715,
+          "pipeline": "6302",
+          "root": "4726",
+          "heap": "4760",
+          "first": 367186,
+          "shader_hashes": [
+            "d5efe2c2219257e2a7b51bbd65a7fa3b80cdb56fb7e6444223f8b4d7ee45a1a9"
+          ],
+          "as_bindings": [
+            {
+              "slot": 6,
+              "resource": "4669",
+              "kind": "srv",
+              "dimension": "RAYTRACING_ACCELERATION_STRUCTURE",
+              "offset": 0
+            }
+          ]
+        }
+      ],
+      "material_consumers": [
+        {
+          "pipeline": "6318",
+          "command_list": "6313",
+          "submission": 16,
+          "queue": "1",
+          "line": 30846,
+          "rtvs": [
+            "2932"
+          ],
+          "draws": 91
+        },
+        {
+          "pipeline": "6315",
+          "command_list": "6313",
+          "submission": 16,
+          "queue": "1",
+          "line": 31300,
+          "rtvs": [
+            "2932"
+          ],
+          "draws": 4
+        },
+        {
+          "pipeline": "6319",
+          "command_list": "6313",
+          "submission": 16,
+          "queue": "1",
+          "line": 31551,
+          "rtvs": [
+            "2932"
+          ],
+          "draws": 8
+        },
+        {
+          "pipeline": "6316",
+          "command_list": "6313",
+          "submission": 16,
+          "queue": "1",
+          "line": 33365,
+          "rtvs": [
+            "2932"
+          ],
+          "draws": 3
+        },
+        {
+          "pipeline": "6320",
+          "command_list": "6313",
+          "submission": 16,
+          "queue": "1",
+          "line": 33434,
+          "rtvs": [
+            "2932"
+          ],
+          "draws": 16
+        },
+        {
+          "pipeline": "6317",
+          "command_list": "6313",
+          "submission": 16,
+          "queue": "1",
+          "line": 33861,
+          "rtvs": [
+            "2932"
+          ],
+          "draws": 2
+        },
+        {
+          "pipeline": "6322",
+          "command_list": "6313",
+          "submission": 16,
+          "queue": "1",
+          "line": 33914,
+          "rtvs": [
+            "2932"
+          ],
+          "draws": 3
+        },
+        {
+          "pipeline": "6322",
+          "command_list": "6323",
+          "submission": 16,
+          "queue": "1",
+          "line": 34083,
+          "rtvs": [
+            "2932"
+          ],
+          "draws": 2
+        },
+        {
+          "pipeline": "6329",
+          "command_list": "6323",
+          "submission": 16,
+          "queue": "1",
+          "line": 34133,
+          "rtvs": [
+            "2932"
+          ],
+          "draws": 3
+        },
+        {
+          "pipeline": "6330",
+          "command_list": "6323",
+          "submission": 16,
+          "queue": "1",
+          "line": 34174,
+          "rtvs": [
+            "2932"
+          ],
+          "draws": 1
+        },
+        {
+          "pipeline": "6333",
+          "command_list": "6323",
+          "submission": 16,
+          "queue": "1",
+          "line": 34196,
+          "rtvs": [
+            "2932"
+          ],
+          "draws": 3
+        },
+        {
+          "pipeline": "6335",
+          "command_list": "6323",
+          "submission": 16,
+          "queue": "1",
+          "line": 34259,
+          "rtvs": [
+            "2932"
+          ],
+          "draws": 2
+        },
+        {
+          "pipeline": "6337",
+          "command_list": "6323",
+          "submission": 16,
+          "queue": "1",
+          "line": 34300,
+          "rtvs": [
+            "2932"
+          ],
+          "draws": 1
+        },
+        {
+          "pipeline": "6336",
+          "command_list": "6323",
+          "submission": 16,
+          "queue": "1",
+          "line": 34322,
+          "rtvs": [
+            "2932"
+          ],
+          "draws": 5
+        },
+        {
+          "pipeline": "6332",
+          "command_list": "6323",
+          "submission": 16,
+          "queue": "1",
+          "line": 34445,
+          "rtvs": [
+            "2932"
+          ],
+          "draws": 2
+        },
+        {
+          "pipeline": "6326",
+          "command_list": "6323",
+          "submission": 16,
+          "queue": "1",
+          "line": 34495,
+          "rtvs": [
+            "2932"
+          ],
+          "draws": 9
+        },
+        {
+          "pipeline": "6325",
+          "command_list": "6323",
+          "submission": 16,
+          "queue": "1",
+          "line": 34640,
+          "rtvs": [
+            "2932"
+          ],
+          "draws": 1
+        },
+        {
+          "pipeline": "6327",
+          "command_list": "6323",
+          "submission": 16,
+          "queue": "1",
+          "line": 34752,
+          "rtvs": [
+            "2932"
+          ],
+          "draws": 1
+        },
+        {
+          "pipeline": "6328",
+          "command_list": "6323",
+          "submission": 16,
+          "queue": "1",
+          "line": 34783,
+          "rtvs": [
+            "2932"
+          ],
+          "draws": 12
+        },
+        {
+          "pipeline": "6334",
+          "command_list": "6323",
+          "submission": 16,
+          "queue": "1",
+          "line": 35088,
+          "rtvs": [
+            "2932"
+          ],
+          "draws": 1
+        },
+        {
+          "pipeline": "6331",
+          "command_list": "6323",
+          "submission": 16,
+          "queue": "1",
+          "line": 35108,
+          "rtvs": [
+            "2932"
+          ],
+          "draws": 1
+        },
+        {
+          "pipeline": "6338",
+          "command_list": "6323",
+          "submission": 16,
+          "queue": "1",
+          "line": 35133,
+          "rtvs": [
+            "2932"
+          ],
+          "draws": 1
+        },
+        {
+          "pipeline": "6343",
+          "command_list": "6339",
+          "submission": 16,
+          "queue": "1",
+          "line": 35308,
+          "rtvs": [
+            "2932"
+          ],
+          "draws": 1
+        },
+        {
+          "pipeline": "6342",
+          "command_list": "6339",
+          "submission": 16,
+          "queue": "1",
+          "line": 35335,
+          "rtvs": [
+            "2932"
+          ],
+          "draws": 5
+        },
+        {
+          "pipeline": "6341",
+          "command_list": "6339",
+          "submission": 16,
+          "queue": "1",
+          "line": 35457,
+          "rtvs": [
+            "2932"
+          ],
+          "draws": 49
+        }
+      ],
+      "unresolved_call_count": 181
+    },
+    "05-rr-off": {
+      "targets": {
+        "3522": [
+          "g_rwtLightBufferDiffuse"
+        ],
+        "3518": [
+          "g_rwtLightBufferSpecular"
+        ],
+        "3413": [
+          "g_rwtSingleSpot"
+        ]
+      },
+      "primary_output_aliases": {},
+      "primary": {
+        "file": "CommandLists_000.cpp",
+        "line": 28559,
+        "command_list": "6182",
+        "submission": 15,
+        "queue": "1",
+        "submit_file": "RenderFrameWorker_000.cpp",
+        "submit_line": 2830,
+        "pipeline": "6184",
+        "operation": "Dispatch",
+        "rtvs": [],
+        "bindings": [
+          {
+            "name": "g_tGBuffer1",
+            "stage": "compute",
+            "slot": 0,
+            "kind": "srv",
+            "resource": "3529",
+            "dimension": "TEXTURE2D",
+            "heap": "4751",
+            "index": 353569
+          },
+          {
+            "name": "g_tGBuffer2",
+            "stage": "compute",
+            "slot": 1,
+            "kind": "srv",
+            "resource": "3536",
+            "dimension": "TEXTURE2D",
+            "heap": "4751",
+            "index": 353570
+          },
+          {
+            "name": "g_tShadowBuffer",
+            "stage": "compute",
+            "slot": 2,
+            "kind": "srv",
+            "resource": "3528",
+            "dimension": "TEXTURE2D",
+            "heap": "4751",
+            "index": 353571
+          },
+          {
+            "name": "g_tClipDepth",
+            "stage": "compute",
+            "slot": 3,
+            "kind": "srv",
+            "resource": "3537",
+            "dimension": "TEXTURE2D",
+            "heap": "4751",
+            "index": 353572
+          },
+          {
+            "name": "g_tBlueNoiseOutputDither",
+            "stage": "compute",
+            "slot": 4,
+            "kind": "srv",
+            "resource": "2148",
+            "dimension": "TEXTURE2D",
+            "heap": "4751",
+            "index": 353573
+          },
+          {
+            "name": "g_tBlueNoiseShadowJitter",
+            "stage": "compute",
+            "slot": 5,
+            "kind": "srv",
+            "resource": "2283",
+            "dimension": "TEXTURE2D",
+            "heap": "4751",
+            "index": 353574
+          },
+          {
+            "name": "g_tTranslucencyKernelSource",
+            "stage": "compute",
+            "slot": 6,
+            "kind": "srv",
+            "resource": "1446",
+            "dimension": "TEXTURE2D",
+            "heap": "4751",
+            "index": 353575
+          },
+          {
+            "name": "g_sbMaterialDataPart1",
+            "stage": "compute",
+            "slot": 7,
+            "kind": "srv",
+            "resource": "3650",
+            "dimension": "BUFFER",
+            "heap": "4751",
+            "index": 353576
+          },
+          {
+            "name": "g_sbMaterialDataPart3",
+            "stage": "compute",
+            "slot": 8,
+            "kind": "srv",
+            "resource": "3660",
+            "dimension": "BUFFER",
+            "heap": "4751",
+            "index": 353577
+          },
+          {
+            "name": "g_tPointLightShadowAtlas",
+            "stage": "compute",
+            "slot": 9,
+            "kind": "srv",
+            "resource": "2919",
+            "dimension": "TEXTURE2D",
+            "heap": "4751",
+            "index": 353578
+          },
+          {
+            "name": "g_sbDeferredLightPointData",
+            "stage": "compute",
+            "slot": 10,
+            "kind": "srv",
+            "resource": "3649",
+            "dimension": "BUFFER",
+            "heap": "4751",
+            "index": 353579
+          },
+          {
+            "name": "g_tDeferredLightTilePointLights",
+            "stage": "compute",
+            "slot": 11,
+            "kind": "srv",
+            "resource": "3520",
+            "dimension": "TEXTURE2D",
+            "heap": "4751",
+            "index": 353580
+          },
+          {
+            "name": "g_tSpotLightPCFShadowAtlas",
+            "stage": "compute",
+            "slot": 12,
+            "kind": "srv",
+            "resource": "2935",
+            "dimension": "TEXTURE2D",
+            "heap": "4751",
+            "index": 353581
+          },
+          {
+            "name": "g_tSpotLightVSMShadowAtlas",
+            "stage": "compute",
+            "slot": 13,
+            "kind": "srv",
+            "resource": "2919",
+            "dimension": "TEXTURE2D",
+            "heap": "4751",
+            "index": 353582
+          },
+          {
+            "name": "g_tSpotLightProjectionAtlas",
+            "stage": "compute",
+            "slot": 14,
+            "kind": "srv",
+            "resource": "2152",
+            "dimension": "TEXTURE2D",
+            "heap": "4751",
+            "index": 353583
+          },
+          {
+            "name": "g_sbDeferredLightSpotData",
+            "stage": "compute",
+            "slot": 15,
+            "kind": "srv",
+            "resource": "3752",
+            "dimension": "BUFFER",
+            "heap": "4751",
+            "index": 353584
+          },
+          {
+            "name": "g_tDeferredLightTileSpotLights",
+            "stage": "compute",
+            "slot": 16,
+            "kind": "srv",
+            "resource": "3521",
+            "dimension": "TEXTURE2D",
+            "heap": "4751",
+            "index": 353585
+          },
+          {
+            "name": "g_sbDeferredLightSunData",
+            "stage": "compute",
+            "slot": 18,
+            "kind": "srv",
+            "resource": "3519",
+            "dimension": "BUFFER",
+            "heap": "4751",
+            "index": 353587
+          },
+          {
+            "name": "g_tBentNormals",
+            "stage": "compute",
+            "slot": 19,
+            "kind": "srv",
+            "resource": "2149",
+            "dimension": "TEXTURE2D",
+            "heap": "4751",
+            "index": 353588
+          },
+          {
+            "name": "g_tFillSpecular",
+            "stage": "compute",
+            "slot": 20,
+            "kind": "srv",
+            "resource": "12",
+            "dimension": "TEXTURE2D",
+            "heap": "4751",
+            "index": 353589
+          },
+          {
+            "name": "g_rwtLightBufferDiffuse",
+            "stage": "compute",
+            "slot": 0,
+            "kind": "uav",
+            "resource": "3522",
+            "dimension": "TEXTURE2D",
+            "heap": "4751",
+            "index": 353605
+          },
+          {
+            "name": "g_rwtLightBufferSpecular",
+            "stage": "compute",
+            "slot": 1,
+            "kind": "uav",
+            "resource": "3518",
+            "dimension": "TEXTURE2D",
+            "heap": "4751",
+            "index": 353606
+          },
+          {
+            "name": "g_rwtSingleSpot",
+            "stage": "compute",
+            "slot": 2,
+            "kind": "uav",
+            "resource": "3413",
+            "dimension": "TEXTURE2D",
+            "heap": "4751",
+            "index": 353607
+          }
+        ],
+        "unresolved": [
+          {
+            "name": "g_tSunLightProjectionTexture",
+            "kind": "srv",
+            "heap": "4751",
+            "index": 353586
+          }
+        ]
+      },
+      "ray_dispatches": [
+        {
+          "file": "CommandLists_000.cpp",
+          "line": 26476,
+          "command_list": "5711",
+          "submission": 10,
+          "queue": "1",
+          "submit_file": "RenderFrameWorker_000.cpp",
+          "submit_line": 2758,
+          "pipeline": "5713",
+          "root": "4719",
+          "heap": "4751",
+          "first": 348615,
+          "shader_hashes": [
+            "c2e4c0c4b48b191ba281595dcf11c7962c5c05c615cbe036ca6e8616c09fd30e"
+          ],
+          "as_bindings": [
+            {
+              "slot": 5,
+              "resource": "4663",
+              "kind": "srv",
+              "dimension": "RAYTRACING_ACCELERATION_STRUCTURE",
+              "offset": 0
+            }
+          ]
+        },
+        {
+          "file": "CommandLists_000.cpp",
+          "line": 27247,
+          "command_list": "6157",
+          "submission": 12,
+          "queue": "1",
+          "submit_file": "RenderFrameWorker_000.cpp",
+          "submit_line": 2787,
+          "pipeline": "6167",
+          "root": "4719",
+          "heap": "4751",
+          "first": 351555,
+          "shader_hashes": [
+            "66ec0c29541de1f4aa59636ce6e4415de440a12315b983839d0de0c0a2bab9a8"
+          ],
+          "as_bindings": [
+            {
+              "slot": 2,
+              "resource": "4663",
+              "kind": "srv",
+              "dimension": "RAYTRACING_ACCELERATION_STRUCTURE",
+              "offset": 0
+            },
+            {
+              "slot": 5,
+              "resource": "4663",
+              "kind": "srv",
+              "dimension": "RAYTRACING_ACCELERATION_STRUCTURE",
+              "offset": 0
+            }
+          ]
+        },
+        {
+          "file": "CommandLists_000.cpp",
+          "line": 27549,
+          "command_list": "6168",
+          "submission": 13,
+          "queue": "1",
+          "submit_file": "RenderFrameWorker_000.cpp",
+          "submit_line": 2801,
+          "pipeline": "6171",
+          "root": "4719",
+          "heap": "4751",
+          "first": 352143,
+          "shader_hashes": [
+            "6297319e1fec315c06ee75993e797b51def658e7d41f1588d7df3feb41a1ea2f"
+          ],
+          "as_bindings": [
+            {
+              "slot": 4,
+              "resource": "4663",
+              "kind": "srv",
+              "dimension": "RAYTRACING_ACCELERATION_STRUCTURE",
+              "offset": 0
+            }
+          ]
+        },
+        {
+          "file": "CommandLists_000.cpp",
+          "line": 28716,
+          "command_list": "6182",
+          "submission": 15,
+          "queue": "1",
+          "submit_file": "RenderFrameWorker_000.cpp",
+          "submit_line": 2830,
+          "pipeline": "6193",
+          "root": "4719",
+          "heap": "4751",
+          "first": 353613,
+          "shader_hashes": [
+            "d5efe2c2219257e2a7b51bbd65a7fa3b80cdb56fb7e6444223f8b4d7ee45a1a9"
+          ],
+          "as_bindings": [
+            {
+              "slot": 6,
+              "resource": "4663",
+              "kind": "srv",
+              "dimension": "RAYTRACING_ACCELERATION_STRUCTURE",
+              "offset": 0
+            }
+          ]
+        }
+      ],
+      "material_consumers": [
+        {
+          "pipeline": "6206",
+          "command_list": "6204",
+          "submission": 16,
+          "queue": "1",
+          "line": 29383,
+          "rtvs": [
+            "2912"
+          ],
+          "draws": 15
+        },
+        {
+          "pipeline": "6208",
+          "command_list": "6204",
+          "submission": 16,
+          "queue": "1",
+          "line": 29452,
+          "rtvs": [
+            "2912"
+          ],
+          "draws": 7
+        },
+        {
+          "pipeline": "6207",
+          "command_list": "6204",
+          "submission": 16,
+          "queue": "1",
+          "line": 29479,
+          "rtvs": [
+            "2912"
+          ],
+          "draws": 97
+        },
+        {
+          "pipeline": "6210",
+          "command_list": "6204",
+          "submission": 16,
+          "queue": "1",
+          "line": 29605,
+          "rtvs": [
+            "2912"
+          ],
+          "draws": 1
+        },
+        {
+          "pipeline": "6209",
+          "command_list": "6204",
+          "submission": 16,
+          "queue": "1",
+          "line": 30024,
+          "rtvs": [
+            "2912"
+          ],
+          "draws": 8
+        },
+        {
+          "pipeline": "6207",
+          "command_list": "6211",
+          "submission": 16,
+          "queue": "1",
+          "line": 32676,
+          "rtvs": [
+            "2912"
+          ],
+          "draws": 15
+        },
+        {
+          "pipeline": "6209",
+          "command_list": "6211",
+          "submission": 16,
+          "queue": "1",
+          "line": 32755,
+          "rtvs": [
+            "2912"
+          ],
+          "draws": 3
+        },
+        {
+          "pipeline": "6210",
+          "command_list": "6211",
+          "submission": 16,
+          "queue": "1",
+          "line": 33019,
+          "rtvs": [
+            "2912"
+          ],
+          "draws": 1
+        },
+        {
+          "pipeline": "6213",
+          "command_list": "6211",
+          "submission": 16,
+          "queue": "1",
+          "line": 33167,
+          "rtvs": [
+            "2912"
+          ],
+          "draws": 4
+        },
+        {
+          "pipeline": "6215",
+          "command_list": "6211",
+          "submission": 16,
+          "queue": "1",
+          "line": 33262,
+          "rtvs": [
+            "2912"
+          ],
+          "draws": 16
+        },
+        {
+          "pipeline": "6219",
+          "command_list": "6211",
+          "submission": 16,
+          "queue": "1",
+          "line": 33710,
+          "rtvs": [
+            "2912"
+          ],
+          "draws": 12
+        },
+        {
+          "pipeline": "6214",
+          "command_list": "6211",
+          "submission": 16,
+          "queue": "1",
+          "line": 33737,
+          "rtvs": [
+            "2912"
+          ],
+          "draws": 4
+        },
+        {
+          "pipeline": "6220",
+          "command_list": "6211",
+          "submission": 16,
+          "queue": "1",
+          "line": 34138,
+          "rtvs": [
+            "2912"
+          ],
+          "draws": 5
+        },
+        {
+          "pipeline": "6221",
+          "command_list": "6211",
+          "submission": 16,
+          "queue": "1",
+          "line": 34257,
+          "rtvs": [
+            "2912"
+          ],
+          "draws": 7
+        },
+        {
+          "pipeline": "6225",
+          "command_list": "6211",
+          "submission": 16,
+          "queue": "1",
+          "line": 34446,
+          "rtvs": [
+            "2912"
+          ],
+          "draws": 3
+        },
+        {
+          "pipeline": "6226",
+          "command_list": "6211",
+          "submission": 16,
+          "queue": "1",
+          "line": 34487,
+          "rtvs": [
+            "2912"
+          ],
+          "draws": 1
+        },
+        {
+          "pipeline": "6230",
+          "command_list": "6211",
+          "submission": 16,
+          "queue": "1",
+          "line": 34509,
+          "rtvs": [
+            "2912"
+          ],
+          "draws": 3
+        },
+        {
+          "pipeline": "6228",
+          "command_list": "6211",
+          "submission": 16,
+          "queue": "1",
+          "line": 34589,
+          "rtvs": [
+            "2912"
+          ],
+          "draws": 2
+        },
+        {
+          "pipeline": "6224",
+          "command_list": "6211",
+          "submission": 16,
+          "queue": "1",
+          "line": 34639,
+          "rtvs": [
+            "2912"
+          ],
+          "draws": 1
+        },
+        {
+          "pipeline": "6218",
+          "command_list": "6211",
+          "submission": 16,
+          "queue": "1",
+          "line": 34664,
+          "rtvs": [
+            "2912"
+          ],
+          "draws": 5
+        },
+        {
+          "pipeline": "6217",
+          "command_list": "6211",
+          "submission": 16,
+          "queue": "1",
+          "line": 34784,
+          "rtvs": [
+            "2912"
+          ],
+          "draws": 1
+        },
+        {
+          "pipeline": "6222",
+          "command_list": "6211",
+          "submission": 16,
+          "queue": "1",
+          "line": 34809,
+          "rtvs": [
+            "2912"
+          ],
+          "draws": 1
+        },
+        {
+          "pipeline": "6229",
+          "command_list": "6211",
+          "submission": 16,
+          "queue": "1",
+          "line": 34834,
+          "rtvs": [
+            "2912"
+          ],
+          "draws": 1
+        },
+        {
+          "pipeline": "6223",
+          "command_list": "6211",
+          "submission": 16,
+          "queue": "1",
+          "line": 34865,
+          "rtvs": [
+            "2912"
+          ],
+          "draws": 16
+        },
+        {
+          "pipeline": "6231",
+          "command_list": "6211",
+          "submission": 16,
+          "queue": "1",
+          "line": 35254,
+          "rtvs": [
+            "2912"
+          ],
+          "draws": 1
+        },
+        {
+          "pipeline": "6227",
+          "command_list": "6211",
+          "submission": 16,
+          "queue": "1",
+          "line": 35274,
+          "rtvs": [
+            "2912"
+          ],
+          "draws": 1
+        },
+        {
+          "pipeline": "6236",
+          "command_list": "6232",
+          "submission": 16,
+          "queue": "1",
+          "line": 35449,
+          "rtvs": [
+            "2912"
+          ],
+          "draws": 12
+        },
+        {
+          "pipeline": "6235",
+          "command_list": "6232",
+          "submission": 16,
+          "queue": "1",
+          "line": 35684,
+          "rtvs": [
+            "2912"
+          ],
+          "draws": 5
+        },
+        {
+          "pipeline": "6234",
+          "command_list": "6232",
+          "submission": 16,
+          "queue": "1",
+          "line": 35882,
+          "rtvs": [
+            "2912"
+          ],
+          "draws": 20
+        }
+      ],
+      "unresolved_call_count": 251
+    },
+    "06-composite-off": {
+      "targets": {
+        "3458": [
+          "g_rwtLightBufferDiffuse"
+        ],
+        "3454": [
+          "g_rwtLightBufferSpecular"
+        ],
+        "3350": [
+          "g_rwtSingleSpot"
+        ]
+      },
+      "primary_output_aliases": {},
+      "primary": {
+        "file": "CommandLists_000.cpp",
+        "line": 27103,
+        "command_list": "6124",
+        "submission": 15,
+        "queue": "1",
+        "submit_file": "RenderFrameWorker_000.cpp",
+        "submit_line": 2622,
+        "pipeline": "6126",
+        "operation": "Dispatch",
+        "rtvs": [],
+        "bindings": [
+          {
+            "name": "g_tGBuffer1",
+            "stage": "compute",
+            "slot": 0,
+            "kind": "srv",
+            "resource": "3474",
+            "dimension": "TEXTURE2D",
+            "heap": "4746",
+            "index": 344161
+          },
+          {
+            "name": "g_tGBuffer2",
+            "stage": "compute",
+            "slot": 1,
+            "kind": "srv",
+            "resource": "3481",
+            "dimension": "TEXTURE2D",
+            "heap": "4746",
+            "index": 344162
+          },
+          {
+            "name": "g_tShadowBuffer",
+            "stage": "compute",
+            "slot": 2,
+            "kind": "srv",
+            "resource": "3464",
+            "dimension": "TEXTURE2D",
+            "heap": "4746",
+            "index": 344163
+          },
+          {
+            "name": "g_tClipDepth",
+            "stage": "compute",
+            "slot": 3,
+            "kind": "srv",
+            "resource": "3482",
+            "dimension": "TEXTURE2D",
+            "heap": "4746",
+            "index": 344164
+          },
+          {
+            "name": "g_tBlueNoiseOutputDither",
+            "stage": "compute",
+            "slot": 4,
+            "kind": "srv",
+            "resource": "2215",
+            "dimension": "TEXTURE2D",
+            "heap": "4746",
+            "index": 344165
+          },
+          {
+            "name": "g_tBlueNoiseShadowJitter",
+            "stage": "compute",
+            "slot": 5,
+            "kind": "srv",
+            "resource": "2350",
+            "dimension": "TEXTURE2D",
+            "heap": "4746",
+            "index": 344166
+          },
+          {
+            "name": "g_tTranslucencyKernelSource",
+            "stage": "compute",
+            "slot": 6,
+            "kind": "srv",
+            "resource": "1473",
+            "dimension": "TEXTURE2D",
+            "heap": "4746",
+            "index": 344167
+          },
+          {
+            "name": "g_sbMaterialDataPart1",
+            "stage": "compute",
+            "slot": 7,
+            "kind": "srv",
+            "resource": "3594",
+            "dimension": "BUFFER",
+            "heap": "4746",
+            "index": 344168
+          },
+          {
+            "name": "g_sbMaterialDataPart3",
+            "stage": "compute",
+            "slot": 8,
+            "kind": "srv",
+            "resource": "3605",
+            "dimension": "BUFFER",
+            "heap": "4746",
+            "index": 344169
+          },
+          {
+            "name": "g_tPointLightShadowAtlas",
+            "stage": "compute",
+            "slot": 9,
+            "kind": "srv",
+            "resource": "4510",
+            "dimension": "TEXTURE2D",
+            "heap": "4746",
+            "index": 344170
+          },
+          {
+            "name": "g_sbDeferredLightPointData",
+            "stage": "compute",
+            "slot": 10,
+            "kind": "srv",
+            "resource": "3593",
+            "dimension": "BUFFER",
+            "heap": "4746",
+            "index": 344171
+          },
+          {
+            "name": "g_tDeferredLightTilePointLights",
+            "stage": "compute",
+            "slot": 11,
+            "kind": "srv",
+            "resource": "3456",
+            "dimension": "TEXTURE2D",
+            "heap": "4746",
+            "index": 344172
+          },
+          {
+            "name": "g_tSpotLightPCFShadowAtlas",
+            "stage": "compute",
+            "slot": 12,
+            "kind": "srv",
+            "resource": "4505",
+            "dimension": "TEXTURE2D",
+            "heap": "4746",
+            "index": 344173
+          },
+          {
+            "name": "g_tSpotLightVSMShadowAtlas",
+            "stage": "compute",
+            "slot": 13,
+            "kind": "srv",
+            "resource": "4510",
+            "dimension": "TEXTURE2D",
+            "heap": "4746",
+            "index": 344174
+          },
+          {
+            "name": "g_tSpotLightProjectionAtlas",
+            "stage": "compute",
+            "slot": 14,
+            "kind": "srv",
+            "resource": "2219",
+            "dimension": "TEXTURE2D",
+            "heap": "4746",
+            "index": 344175
+          },
+          {
+            "name": "g_sbDeferredLightSpotData",
+            "stage": "compute",
+            "slot": 15,
+            "kind": "srv",
+            "resource": "3700",
+            "dimension": "BUFFER",
+            "heap": "4746",
+            "index": 344176
+          },
+          {
+            "name": "g_tDeferredLightTileSpotLights",
+            "stage": "compute",
+            "slot": 16,
+            "kind": "srv",
+            "resource": "3457",
+            "dimension": "TEXTURE2D",
+            "heap": "4746",
+            "index": 344177
+          },
+          {
+            "name": "g_sbDeferredLightSunData",
+            "stage": "compute",
+            "slot": 18,
+            "kind": "srv",
+            "resource": "3455",
+            "dimension": "BUFFER",
+            "heap": "4746",
+            "index": 344179
+          },
+          {
+            "name": "g_tBentNormals",
+            "stage": "compute",
+            "slot": 19,
+            "kind": "srv",
+            "resource": "2216",
+            "dimension": "TEXTURE2D",
+            "heap": "4746",
+            "index": 344180
+          },
+          {
+            "name": "g_tFillSpecular",
+            "stage": "compute",
+            "slot": 20,
+            "kind": "srv",
+            "resource": "12",
+            "dimension": "TEXTURE2D",
+            "heap": "4746",
+            "index": 344181
+          },
+          {
+            "name": "g_rwtLightBufferDiffuse",
+            "stage": "compute",
+            "slot": 0,
+            "kind": "uav",
+            "resource": "3458",
+            "dimension": "TEXTURE2D",
+            "heap": "4746",
+            "index": 344197
+          },
+          {
+            "name": "g_rwtLightBufferSpecular",
+            "stage": "compute",
+            "slot": 1,
+            "kind": "uav",
+            "resource": "3454",
+            "dimension": "TEXTURE2D",
+            "heap": "4746",
+            "index": 344198
+          },
+          {
+            "name": "g_rwtSingleSpot",
+            "stage": "compute",
+            "slot": 2,
+            "kind": "uav",
+            "resource": "3350",
+            "dimension": "TEXTURE2D",
+            "heap": "4746",
+            "index": 344199
+          }
+        ],
+        "unresolved": [
+          {
+            "name": "g_tSunLightProjectionTexture",
+            "kind": "srv",
+            "heap": "4746",
+            "index": 344178
+          }
+        ]
+      },
+      "ray_dispatches": [
+        {
+          "file": "CommandLists_000.cpp",
+          "line": 25019,
+          "command_list": "5598",
+          "submission": 10,
+          "queue": "1",
+          "submit_file": "RenderFrameWorker_000.cpp",
+          "submit_line": 2544,
+          "pipeline": "5600",
+          "root": "4712",
+          "heap": "4746",
+          "first": 340971,
+          "shader_hashes": [
+            "c2e4c0c4b48b191ba281595dcf11c7962c5c05c615cbe036ca6e8616c09fd30e"
+          ],
+          "as_bindings": [
+            {
+              "slot": 5,
+              "resource": "4656",
+              "kind": "srv",
+              "dimension": "RAYTRACING_ACCELERATION_STRUCTURE",
+              "offset": 0
+            }
+          ]
+        },
+        {
+          "file": "CommandLists_000.cpp",
+          "line": 25782,
+          "command_list": "6101",
+          "submission": 11,
+          "queue": "1",
+          "submit_file": "RenderFrameWorker_000.cpp",
+          "submit_line": 2562,
+          "pipeline": "6111",
+          "root": "4712",
+          "heap": "4746",
+          "first": 343029,
+          "shader_hashes": [
+            "66ec0c29541de1f4aa59636ce6e4415de440a12315b983839d0de0c0a2bab9a8"
+          ],
+          "as_bindings": [
+            {
+              "slot": 2,
+              "resource": "4656",
+              "kind": "srv",
+              "dimension": "RAYTRACING_ACCELERATION_STRUCTURE",
+              "offset": 0
+            }
+          ]
+        },
+        {
+          "file": "CommandLists_000.cpp",
+          "line": 26103,
+          "command_list": "6116",
+          "submission": 14,
+          "queue": "1",
+          "submit_file": "RenderFrameWorker_000.cpp",
+          "submit_line": 2601,
+          "pipeline": "6119",
+          "root": "4712",
+          "heap": "4746",
+          "first": 343127,
+          "shader_hashes": [
+            "6297319e1fec315c06ee75993e797b51def658e7d41f1588d7df3feb41a1ea2f"
+          ],
+          "as_bindings": [
+            {
+              "slot": 4,
+              "resource": "4656",
+              "kind": "srv",
+              "dimension": "RAYTRACING_ACCELERATION_STRUCTURE",
+              "offset": 0
+            }
+          ]
+        },
+        {
+          "file": "CommandLists_000.cpp",
+          "line": 27264,
+          "command_list": "6124",
+          "submission": 15,
+          "queue": "1",
+          "submit_file": "RenderFrameWorker_000.cpp",
+          "submit_line": 2622,
+          "pipeline": "6135",
+          "root": "4712",
+          "heap": "4746",
+          "first": 344205,
+          "shader_hashes": [
+            "d5efe2c2219257e2a7b51bbd65a7fa3b80cdb56fb7e6444223f8b4d7ee45a1a9"
+          ],
+          "as_bindings": [
+            {
+              "slot": 6,
+              "resource": "4656",
+              "kind": "srv",
+              "dimension": "RAYTRACING_ACCELERATION_STRUCTURE",
+              "offset": 0
+            }
+          ]
+        }
+      ],
+      "material_consumers": [
+        {
+          "pipeline": "6150",
+          "command_list": "6146",
+          "submission": 16,
+          "queue": "1",
+          "line": 27931,
+          "rtvs": [
+            "2919"
+          ],
+          "draws": 86
+        },
+        {
+          "pipeline": "6157",
+          "command_list": "6146",
+          "submission": 16,
+          "queue": "1",
+          "line": 28213,
+          "rtvs": [
+            "2919"
+          ],
+          "draws": 1
+        },
+        {
+          "pipeline": "6152",
+          "command_list": "6146",
+          "submission": 16,
+          "queue": "1",
+          "line": 28293,
+          "rtvs": [
+            "2919"
+          ],
+          "draws": 1
+        },
+        {
+          "pipeline": "6151",
+          "command_list": "6146",
+          "submission": 16,
+          "queue": "1",
+          "line": 28737,
+          "rtvs": [
+            "2919"
+          ],
+          "draws": 7
+        },
+        {
+          "pipeline": "6148",
+          "command_list": "6146",
+          "submission": 16,
+          "queue": "1",
+          "line": 30254,
+          "rtvs": [
+            "2919"
+          ],
+          "draws": 4
+        },
+        {
+          "pipeline": "6153",
+          "command_list": "6146",
+          "submission": 16,
+          "queue": "1",
+          "line": 30349,
+          "rtvs": [
+            "2919"
+          ],
+          "draws": 18
+        },
+        {
+          "pipeline": "6149",
+          "command_list": "6146",
+          "submission": 16,
+          "queue": "1",
+          "line": 30834,
+          "rtvs": [
+            "2919"
+          ],
+          "draws": 4
+        },
+        {
+          "pipeline": "6155",
+          "command_list": "6146",
+          "submission": 16,
+          "queue": "1",
+          "line": 30861,
+          "rtvs": [
+            "2919"
+          ],
+          "draws": 2
+        },
+        {
+          "pipeline": "6156",
+          "command_list": "6146",
+          "submission": 16,
+          "queue": "1",
+          "line": 30995,
+          "rtvs": [
+            "2919"
+          ],
+          "draws": 4
+        },
+        {
+          "pipeline": "6156",
+          "command_list": "6158",
+          "submission": 16,
+          "queue": "1",
+          "line": 31185,
+          "rtvs": [
+            "2919"
+          ],
+          "draws": 1
+        },
+        {
+          "pipeline": "6161",
+          "command_list": "6158",
+          "submission": 16,
+          "queue": "1",
+          "line": 31220,
+          "rtvs": [
+            "2919"
+          ],
+          "draws": 4
+        },
+        {
+          "pipeline": "6165",
+          "command_list": "6158",
+          "submission": 16,
+          "queue": "1",
+          "line": 31307,
+          "rtvs": [
+            "2919"
+          ],
+          "draws": 3
+        },
+        {
+          "pipeline": "6166",
+          "command_list": "6158",
+          "submission": 16,
+          "queue": "1",
+          "line": 31348,
+          "rtvs": [
+            "2919"
+          ],
+          "draws": 1
+        },
+        {
+          "pipeline": "6169",
+          "command_list": "6158",
+          "submission": 16,
+          "queue": "1",
+          "line": 31370,
+          "rtvs": [
+            "2919"
+          ],
+          "draws": 3
+        },
+        {
+          "pipeline": "6168",
+          "command_list": "6158",
+          "submission": 16,
+          "queue": "1",
+          "line": 31450,
+          "rtvs": [
+            "2919"
+          ],
+          "draws": 2
+        },
+        {
+          "pipeline": "6164",
+          "command_list": "6158",
+          "submission": 16,
+          "queue": "1",
+          "line": 31500,
+          "rtvs": [
+            "2919"
+          ],
+          "draws": 1
+        },
+        {
+          "pipeline": "6160",
+          "command_list": "6158",
+          "submission": 16,
+          "queue": "1",
+          "line": 31525,
+          "rtvs": [
+            "2919"
+          ],
+          "draws": 3
+        },
+        {
+          "pipeline": "6162",
+          "command_list": "6158",
+          "submission": 16,
+          "queue": "1",
+          "line": 31598,
+          "rtvs": [
+            "2919"
+          ],
+          "draws": 1
+        },
+        {
+          "pipeline": "6163",
+          "command_list": "6158",
+          "submission": 16,
+          "queue": "1",
+          "line": 31662,
+          "rtvs": [
+            "2919"
+          ],
+          "draws": 16
+        },
+        {
+          "pipeline": "6170",
+          "command_list": "6158",
+          "submission": 16,
+          "queue": "1",
+          "line": 32070,
+          "rtvs": [
+            "2919"
+          ],
+          "draws": 1
+        },
+        {
+          "pipeline": "6167",
+          "command_list": "6158",
+          "submission": 16,
+          "queue": "1",
+          "line": 32090,
+          "rtvs": [
+            "2919"
+          ],
+          "draws": 1
+        },
+        {
+          "pipeline": "6175",
+          "command_list": "6171",
+          "submission": 16,
+          "queue": "1",
+          "line": 32265,
+          "rtvs": [
+            "2919"
+          ],
+          "draws": 6
+        },
+        {
+          "pipeline": "6174",
+          "command_list": "6171",
+          "submission": 16,
+          "queue": "1",
+          "line": 32318,
+          "rtvs": [
+            "2919"
+          ],
+          "draws": 5
+        },
+        {
+          "pipeline": "6173",
+          "command_list": "6171",
+          "submission": 16,
+          "queue": "1",
+          "line": 32542,
+          "rtvs": [
+            "2919"
+          ],
+          "draws": 45
+        },
+        {
+          "pipeline": "6176",
+          "command_list": "6171",
+          "submission": 16,
+          "queue": "1",
+          "line": 32696,
+          "rtvs": [
+            "2919"
+          ],
+          "draws": 1
+        }
+      ],
+      "unresolved_call_count": 178
+    }
+  }
+}

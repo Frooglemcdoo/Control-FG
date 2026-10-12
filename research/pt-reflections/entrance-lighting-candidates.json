@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "status": "static_candidates_not_runtime_validated",
+  "status": "superseded_initial_snapshot_missing_descriptor_updates",
   "views": {
     "01-overview": {
       "targets": {
@@ -2610,5 +2610,6 @@
       "primary_output_aliases": {},
       "unresolved_call_count": 169
     }
-  }
+  },
+  "superseded_by": "entrance-submitted-bindings.json"
 }

@@ -7,6 +7,7 @@
 #include "../src/pt_resource_lease_probe.h"
 #include "../src/pt_owned_scene_runtime.h"
 #include "../src/pt_scene_submissions.h"
+#include "../src/pt_scene_live_owner.h"
 #include "../src/pt_scene_topology_runtime.h"
 using Microsoft::WRL::ComPtr;
 int main(){
@@ -90,6 +91,27 @@ int main(){
     assert(SUCCEEDED(done->SetEventOnCompletion(1,ready)));assert(WaitForSingleObject(ready,30000)==WAIT_OBJECT_0);CloseHandle(ready);
     submissions.Poll();assert(ledger->Held()==0);
     std::puts("PASS dispatch leases: exact atomic retention, deduplicated bytes, bounded batches, unsubmitted discard, owner shutdown and actual queue-fence retirement.");
+    PTSceneLive::Owner live;assert(live.Start(d->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV)));
+    assert(SUCCEEDED(d->CreateCommittedResource(&hp,D3D12_HEAP_FLAG_NONE,&rd,D3D12_RESOURCE_STATE_COMMON,nullptr,IID_PPV_ARGS(&resource))));
+    D3D12_DESCRIPTOR_HEAP_DESC heapDesc{};heapDesc.NumDescriptors=64;heapDesc.Flags=D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+    ComPtr<ID3D12DescriptorHeap> heap;assert(SUCCEEDED(d->CreateDescriptorHeap(&heapDesc,IID_PPV_ARGS(&heap))));
+    const UINT step=d->GetDescriptorHandleIncrementSize(heapDesc.Type);
+    const auto handle=heap->GetCPUDescriptorHandleForHeapStart();
+    const UINT64 asHandle=handle.ptr+10ull*step,liveAddress=resource->GetGPUVirtualAddress();
+    std::array<unsigned char,80> wrapper{};auto* pointer=resource.Get();
+    std::memcpy(wrapper.data(),&pointer,8);std::memcpy(wrapper.data()+0x10,&asHandle,8);
+    std::memcpy(wrapper.data()+0x30,&rd.Width,8);std::memcpy(wrapper.data()+0x48,&liveAddress,8);
+    live.Created(wrapper.data(),true);PTSceneDescriptors::Acceleration selectedAS;
+    assert(live.Select(heap.Get(),0,5,selectedAS)&&selectedAS.address==liveAddress);
+    const auto originalToken=selectedAS.token;
+    live.Copy({{handle.ptr+11ull*step,1}},{{asHandle,1}});assert(live.Select(heap.Get(),1,5,selectedAS));
+    auto oldOwner=live.BeforeRelease(wrapper.data());live.AfterRelease(oldOwner);
+    assert(!live.Select(heap.Get(),1,5,selectedAS));
+    live.Created(wrapper.data(),true);assert(live.Select(heap.Get(),0,5,selectedAS)&&selectedAS.token!=originalToken);
+    assert(!live.Select(heap.Get(),1,5,selectedAS)); // Identical VA cannot revive copied old identity.
+    live.Overwrite({static_cast<SIZE_T>(asHandle)});assert(!live.Select(heap.Get(),0,5,selectedAS));
+    live.Created(wrapper.data(),true);live.Heap(heap.Get());assert(!live.Select(heap.Get(),0,5,selectedAS));
+    std::puts("PASS session owner: native AS descriptor seeding, exact slot selection, release/reuse rejection and heap invalidation.");
     PTSceneTopology::Runtime topology;
     PTSceneTopology::Instance instance{};instance.idMask=0xff000001;instance.blas=0xa000;
     topology.UploadInstances(0x5000,&instance,sizeof(instance));

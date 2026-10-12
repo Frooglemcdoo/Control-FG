@@ -58,19 +58,22 @@ shader's diffuse/specular/atmosphere arithmetic is stronger evidence than a
 resource-name inference. Additive and SSS contributors mean that a replacement
 inserted only at PSO 6340 is not the final diffuse result.
 
-## Cross-view limitations found
+## Cross-view descriptor correction
 
-All six shader inventories parse, but the exported descriptor snapshots do not
-yet form six independently verified binding graphs. Some shader-declared
-descriptors are absent/null. Several other views resolve distinct primary
-outputs to the same exported resource; some resource-role matches are implausible.
-The tool records these as candidates and explicit aliases/unresolved bindings.
-It does not hide them or claim successful replay validation. The cause could be
-export/snapshot semantics or unsupported tracing state and is not established.
+The initial trace used only `Descriptors_*.cpp` and missed the exported
+`ModifyDescriptors_*` calls. It therefore resolved some draws against stale
+initial heap contents. `replay_descriptor_events.py` now applies modifications
+in `RenderFrame` replay order and resolves each list at ExecuteCommandLists,
+including changes made after command-list population. Null and non-SRV writes
+invalidate the previous descriptor rather than retaining it.
 
-The overview's inspected material/light path is useful evidence; arbitrary
-matches elsewhere in entrance-lighting-candidates.json must not become runtime
-disable rules. Resource IDs and descriptor offsets are capture-local.
+All six views now have distinct diffuse, specular and SingleSpot outputs. The
+impossible instance/material-buffer associations from the initial trace are
+removed. `entrance-submitted-bindings.json` supersedes the initial resource
+candidates. Shader-declared null/absent bindings are still reported; declaration
+alone does not prove an executed load. The original native GPU dependency graph
+is not established by replay order: PIX injects queue flushes and comments out
+native Wait calls. Resource values remain outside this source-only export.
 
 ## Concrete integration decision
 

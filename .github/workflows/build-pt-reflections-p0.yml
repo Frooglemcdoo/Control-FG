@@ -172,6 +172,18 @@ jobs:
           build\test-pt-glass-capture.exe
           if errorlevel 1 exit /b 1
 
+      - name: Test exact AS descriptor copies
+        shell: cmd
+        run: |
+          call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-pt-scene-descriptors.cpp /Febuild\test-pt-scene-descriptors.exe
+          if errorlevel 1 exit /b 1
+          build\test-pt-scene-descriptors.exe
+          if errorlevel 1 exit /b 1
+
+      - name: Test exported descriptor submission order
+        run: python -m unittest discover -s research/pt-reflections/tools -p test_replay_descriptor_events.py
+
       - name: Test M11 retained native resource ownership on WARP
         shell: cmd
         run: |
