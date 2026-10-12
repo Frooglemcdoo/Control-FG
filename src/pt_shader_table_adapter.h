@@ -44,7 +44,7 @@ struct Binding {const Exports* exports;const PTSceneAdmission::Geometry* geometr
 inline Status ConvertTable(const unsigned char* source,std::size_t bytes,const std::vector<Binding>& bindings,
                            std::vector<Bytes>& output,std::size_t& failedRecord){
     output.clear();failedRecord=0;
-    if(!source||!bytes||bytes%NativeStride||bytes/NativeStride!=bindings.size()||bindings.size()>65536)return Status::record_size;
+    if(!source||!bytes||bytes%NativeStride||bytes/NativeStride!=bindings.size()||bindings.size()>131072)return Status::record_size;
     std::vector<Bytes> pending(bindings.size());
     for(std::size_t i=0;i<bindings.size();++i){
         failedRecord=i;if(!bindings[i].exports)return Status::invalid_exports;
