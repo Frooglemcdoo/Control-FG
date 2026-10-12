@@ -1,0 +1,27 @@
+name: Validate entrance capture package
+on:
+  push:
+    branches: [experiment/pt-glass-integration]
+    paths: ['tools/entrance-capture/**', '.github/workflows/validate-entrance-capture.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Python compilation and capture integrity tests
+        run: |
+          python -m compileall -q tools/entrance-capture
+          python tools/entrance-capture/test_capture.py
+      - name: Parse launcher with Windows PowerShell 5.1
+        shell: powershell
+        run: |
+          $tokens = $null
+          $errors = $null
+          [void][System.Management.Automation.Language.Parser]::ParseFile((Join-Path $PWD 'tools/entrance-capture/Start-Entrance-Capture.ps1'), [ref]$tokens, [ref]$errors)
+          if ($errors.Count) { $errors | Format-List; exit 1 }

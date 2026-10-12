@@ -1,0 +1,15 @@
+{
+  "schema": 1,
+  "meaning": "Review checklist, not an assertion that captured resources have been decoded.",
+  "requirements": [
+    {"name":"Camera, jitter, depth and motion", "evidence":"Constant buffers, G-buffer producers and reconstruction inputs in complete GPU capture", "status":"needs_semantic_validation"},
+    {"name":"Geometry, instances, TLAS/BLAS and shader tables", "evidence":"DXR dispatch and acceleration structure data in PIX capture", "status":"needs_PIX_DXR_inspection"},
+    {"name":"Materials, textures, normals, roughness, metalness and opacity", "evidence":"Hit shader libraries, geometry/material buffers and descriptors in capture", "status":"needs_semantic_validation"},
+    {"name":"Lights, emissives, environment and shadow visibility", "evidence":"Native lighting and shadow passes, buffers and resources in capture", "status":"needs_semantic_validation"},
+    {"name":"Native lighting composition and exposure", "evidence":"Pass order, shader code, input/output resources and constants in capture", "status":"needs_semantic_validation"},
+    {"name":"RR inputs and output", "evidence":"RR-on and RR-off captures; proprietary implementation may not replay", "status":"needs_semantic_validation"},
+    {"name":"Proxy-disabled native reference", "evidence":"Two separate-launch views with known R1/R2 proxy temporarily disabled; verify baseline-session.json and retained installation hashes", "status":"check_baseline_session_not_pristine_installation"},
+    {"name":"Temporal behavior", "evidence":"Each capture is one frame with its incoming history resources; no continuous temporal sequence", "status":"limited"},
+    {"name":"Other rooms, streaming, characters and effects", "evidence":"Only content present in the entrance frames is covered", "status":"outside_first_scene_scope"}
+  ]
+}
