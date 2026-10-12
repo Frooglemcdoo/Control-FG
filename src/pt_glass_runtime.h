@@ -41,7 +41,7 @@ static void Skip(const char* stage,UINT64 mask=0,HRESULT hr=S_OK) {
     if(n<=12||n%600==0)Log("PT_GLASS_SKIP stage=%s observed=%llx hr=0x%08lX count=%llu",stage,mask,static_cast<unsigned long>(hr),n);
 }
 struct Context {void* manager=nullptr;ID3D12GraphicsCommandList* list=nullptr;ID3D12GraphicsCommandList4* rays=nullptr;ID3D12CommandQueue* queue=nullptr;PTGlass::DescriptorRange table;D3D12_GPU_DESCRIPTOR_HANDLE gpu{};};
-struct Pass {UINT64 serial=0;Context rayContext{},lightingContext{};std::unique_ptr<PTGlass::LightingTableShadow> ray,light;PTGlass::Resources::Slot* slot=nullptr;bool traced=false;};
+struct Pass {UINT64 serial=0;unsigned mode=1;Context rayContext{},lightingContext{};std::unique_ptr<PTGlass::LightingTableShadow> ray,light;PTGlass::Resources::Slot* slot=nullptr;bool traced=false;};
 static thread_local Pass pass;
 static bool ReadContext(Context* out) noexcept {
     *out={};if(!verifiedD3d)return false;
@@ -168,7 +168,7 @@ static HRESULT STDMETHODCALLTYPE ResetHook(ID3D12GraphicsCommandList* list,ID3D1
 }
 static void STDMETHODCALLTYPE SetRayPsoHook(ID3D12GraphicsCommandList4* list,ID3D12StateObject* pso){currentRayPso=pso;setRayPso(list,pso);}
 static void STDMETHODCALLTYPE RaysHook(ID3D12GraphicsCommandList4* list,const D3D12_DISPATCH_RAYS_DESC* desc){
-    if(!enabled||!rayScope||!desc||desc->Depth!=1||(ptReflectionUserState.load()&1u)==0){if(enabled&&rayScope)Skip("dispatch_disabled_or_shape");dispatchRays(list,desc);return;}
+    if(!enabled||!rayScope||!desc||desc->Depth!=1||pass.mode==0||(ptReflectionUserState.load()&1u)==0){if(enabled&&rayScope)Skip("dispatch_disabled_or_shape");dispatchRays(list,desc);return;}
     if(!pass.ray){Skip("ray_descriptor_snapshot");dispatchRays(list,desc);return;}
     Context context{};unsigned char identifier[32]{};
     {std::lock_guard<std::mutex> guard(lock);auto it=pipelines.find(currentRayPso);if(it==pipelines.end()){Skip("ray_pipeline");dispatchRays(list,desc);return;}memcpy(identifier,it->second.raygen,32);}
@@ -198,7 +198,7 @@ static void STDMETHODCALLTYPE RaysHook(ID3D12GraphicsCommandList4* list,const D3
     if(FAILED(acquireHr)){Skip("resource_acquire",(UINT64(desc->Width)<<32)|desc->Height,acquireHr);dispatchRays(list,desc);return;}
     auto* slot=pass.slot;void* mapped=nullptr;
     if(FAILED(slot->dispatch->Map(0,nullptr,&mapped))){Skip("dispatch_upload_map");resources.Discarded(pass.serial);pass.slot=nullptr;dispatchRays(list,desc);return;}
-    memset(mapped,0,512);UINT constants[4]{static_cast<UINT>(pass.serial),65534,desc->Width,desc->Height};memcpy(mapped,constants,16);memcpy(static_cast<unsigned char*>(mapped)+256,identifier,32);slot->dispatch->Unmap(0,nullptr);
+    memset(mapped,0,512);UINT constants[8]{static_cast<UINT>(pass.serial),65534,desc->Width,desc->Height,pass.mode,0,0,0};memcpy(mapped,constants,sizeof(constants));memcpy(static_cast<unsigned char*>(mapped)+256,identifier,32);slot->dispatch->Unmap(0,nullptr);
     mirrorGuard=true;
     const bool ready=pass.ray->Copy(pass.serial,2,{slot->descriptors.Get(),4,1})&&pass.ray->Copy(pass.serial,45,{slot->descriptors.Get(),0,1});
     PTGlass::DescriptorRange fresh;D3D12_GPU_DESCRIPTOR_HANDLE table{};
@@ -215,7 +215,7 @@ using UseFn=void(*)(void*,void*);using RayFn=void(*)(int,int);using BindFn=void(
 static UseFn useNative=nullptr;static RayFn rayNative=nullptr;static BindFn bindNative=nullptr;static LightFn lightNative=nullptr;
 static RRIndirectCallPatch usePatch,rayPatch,lightPatch;static RRAlbedoCallPatch bindPatch{};
 static void UseHook(void* table,void* state){
-    pass=Pass{};pass.serial=sequence.fetch_add(1);captureKind=enabled?1u:0u;
+    pass=Pass{};pass.serial=sequence.fetch_add(1);pass.mode=ptGlassUserMode.load(std::memory_order_acquire);captureKind=enabled?1u:0u;
     useNative(table,state);captureKind=0;
     if(enabled&&!pass.ray)Skip("native_constant_use");
 }
@@ -354,7 +354,7 @@ static bool Install(HMODULE renderer,HMODULE d3d){
        RRAlbedoPrepareCallPatch(b+0xa562e,reinterpret_cast<void*>(bindNative),reinterpret_cast<void*>(&BindHook),&bindPatch);
     if(ready)ready=nativeSetCall.Exchange(true)&&nativeDispatchCall.Exchange(true)&&usePatch.Exchange(true)&&rayPatch.Exchange(true)&&lightPatch.Exchange(true)&&RRAlbedoExchangeCall(&bindPatch,true);
     if(!ready){nativeSetCall.Exchange(false);nativeDispatchCall.Exchange(false);usePatch.Exchange(false);rayPatch.Exchange(false);lightPatch.Exchange(false);RRAlbedoExchangeCall(&bindPatch,false);}
-    enabled=ready;Log("PT_GLASS_INSTALL ready=%u build=G2D2 diffuse_bounce=1 smoothness_min=0.8",unsigned(ready));
+    enabled=ready;Log("PT_GLASS_INSTALL ready=%u build=G2D3 glass_mode_default=glossy diffuse_default=0 smoothness_min=0.8",unsigned(ready));
     if(ready){ID3D12Device* existing=nullptr;memcpy(&existing,reinterpret_cast<unsigned char*>(d3d)+kControlGlobalD3D12DevicePointerRva,sizeof(existing));if(existing)InstallDevice(existing);}
     return ready;
 }

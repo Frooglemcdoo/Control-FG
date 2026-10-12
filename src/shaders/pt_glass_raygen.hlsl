@@ -2,7 +2,7 @@
 // Native primary trace reconstructed from the hash-locked glass DXIL.
 #include "pt_glass_secondary_layout.hlsli"
 cbuffer PTGlassSys : register(b0) { float4 sys[71]; }
-cbuffer PTGlassDispatch : register(b6) { uint epoch; uint materialCount; uint2 extent; }
+cbuffer PTGlassDispatch : register(b6) { uint epoch; uint materialCount; uint2 extent; uint ptGlassMode; }
 Texture2D<float4> clipDepth : register(t0);
 struct Material { float d[84]; };
 StructuredBuffer<Material> materials : register(t1);
@@ -65,6 +65,7 @@ void ptGlassRayGeneration() {
     float3 incoming=normalize(surfacePoint-glass),normal=normalize(firstNormal.xyz);
     if(dot(incoming,normal)>0)normal=-normal;
     [unroll] for(uint layer=0;layer<2;++layer) {
+    if(layer==1&&ptGlassMode!=2u)continue;
     if(layer==0&&smoothness<0.8f)continue;
     float3 outgoing=layer==0?normalize(reflect(incoming,normal)):DiffuseDirection(pixel,normal);
     if(!all(isfinite(outgoing))||dot(outgoing,normal)<=0.001f)continue;

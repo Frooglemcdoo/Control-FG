@@ -1,6 +1,7 @@
 // Cosine-weighted samples estimate irradiance/pi directly. Keep native material
 // and Fresnel factors at dword 6728; replace only part of the indirect term.
 void PTGlassApplyDiffuse(uint2 pixel,inout float3 illumination) {
+    if(ptGlassMode!=2u)return;
     float3 fallback=illumination;
     if(any(pixel>=ptGlassExtent))return;
     float3 centerP=g_tPosition_TexcoordY.Load(int3(pixel,0)).xyz;

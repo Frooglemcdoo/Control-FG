@@ -871,8 +871,9 @@ static void PaintFGOverlay(HWND hwnd) noexcept {
     PaintFGButton(dc, ptToggle, ptEnabled ? L"PT REFLECTIONS ON" : L"PT REFLECTIONS OFF", ptEnabled, true);
     SelectObject(dc, smallFont); SetTextColor(dc, RGB(169, 169, 169));
     RECT ptDescription{304, 794 + lowerSectionOffset, 710, 846 + lowerSectionOffset};
-    DrawTextW(dc, L"Compare traced second-bounce lighting.\nNative reflections stay visible.", -1, &ptDescription,
-        DT_LEFT | DT_WORDBREAK);
+    const unsigned glassMode=ptGlassUserMode.load(std::memory_order_acquire);
+    const wchar_t* glassLabel=glassMode==0?L"GLASS: NATIVE":glassMode==1?L"GLASS: GLOSSY":L"GLASS: GLOSSY + DIFFUSE";
+    PaintFGButton(dc, ptDescription, glassLabel, glassMode==2, ptEnabled);
 
 
 
@@ -1046,6 +1047,16 @@ static LRESULT CALLBACK FGOverlayWndProc(HWND hwnd, UINT message, WPARAM wParam,
             FGOverlayResizeWindowForCurrentSelection(hwnd);
             InvalidateRect(hwnd,nullptr,FALSE);
             return 0;
+        }
+        const int glassToggleY=794+FGOverlayLowerSectionOffset();
+        if(x>=304&&x<710&&y>=glassToggleY&&y<glassToggleY+52){
+            if(PTReflectionUserRequested()){
+                const unsigned mode=(ptGlassUserMode.load(std::memory_order_acquire)+1u)%3u;
+                ptGlassUserMode.store(mode,std::memory_order_release);
+                Log("PT_GLASS_UI_MODE mode=%u label=%s opaque_pt_unchanged=1",mode,
+                    mode==0?"native":mode==1?"glossy":"glossy_diffuse");
+            }
+            InvalidateRect(hwnd,nullptr,FALSE);return 0;
         }
         if(FGOverlayPTToggleFromPoint(x,y)){
             const bool previous=PTReflectionUserRequested();

@@ -52,7 +52,7 @@ cbuffer distancefield_CS : register(b5) { uint4 ptCB5[2]; };
 #if PT_GLASS_SECONDARY_EVALUATION || PT_GLASS_COMPOSITE
 #include "pt_glass_secondary_layout.hlsli"
 StructuredBuffer<PTGlassSecondaryHit> ptGlassSecondaryHits : register(t28, space0);
-cbuffer PTGlassDispatch : register(b6) { uint ptGlassEpoch; uint ptGlassMaterialCount; uint2 ptGlassExtent; };
+cbuffer PTGlassDispatch : register(b6) { uint ptGlassEpoch; uint ptGlassMaterialCount; uint2 ptGlassExtent; uint ptGlassMode; };
 #endif
 #if PT_GLASS_COMPOSITE
 Texture2D<float4> ptGlassRadiance : register(t29);
