@@ -16,7 +16,7 @@ Copy-Item tools/Run-PT-Geometry-Test.cmd $out
 Copy-Item research/pt-reflections/PT-Geometry-M4-README.txt "$out\README.txt"
 Push-Location $out
 try {
-    foreach ($scenario in @('', '--translated', '--scaled')) {
+    foreach ($scenario in @('', '--translated', '--scaled', '--worker-reject')) {
         & .\PT-Geometry-GPU-Test.exe --allow-no-dxr $scenario | Tee-Object -FilePath CI-GPU-Test-Results.txt -Append
         if ($LASTEXITCODE -ne 0) { throw "Geometry test failed: $scenario" }
     }

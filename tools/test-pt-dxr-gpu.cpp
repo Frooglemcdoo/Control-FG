@@ -92,9 +92,9 @@ static ComPtr<ID3D12RootSignature> root(ID3D12Device* d,D3D12_ROOT_SIGNATURE_DES
     ComPtr<ID3D12RootSignature> r;ok(d->CreateRootSignature(0,b->GetBufferPointer(),b->GetBufferSize(),IID_PPV_ARGS(&r)),"Create root");return r;
 }
 int main(int argc,char** argv){try{
-    bool translated=false,scaled=false;
 #ifdef PT_GEOMETRY_SPAWN
-    for(int a=1;a<argc;++a){translated|=strcmp(argv[a],"--translated")==0;scaled|=strcmp(argv[a],"--scaled")==0;}
+    bool translated=false,scaled=false,workerReject=false;
+    for(int a=1;a<argc;++a){translated|=strcmp(argv[a],"--translated")==0;scaled|=strcmp(argv[a],"--scaled")==0;workerReject|=strcmp(argv[a],"--worker-reject")==0;}
     std::printf("Geometry adapter fixture: large triangles, translation=%u mirrored_nonuniform_scale=%u\n",translated,scaled);
 #endif
     const bool allowSkip=argc>1&&strcmp(argv[1],"--allow-no-dxr")==0;
@@ -264,6 +264,7 @@ int main(int argc,char** argv){try{
     g.barrier(output.Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS,D3D12_RESOURCE_STATE_COPY_SOURCE);g.list->CopyBufferRegion(readback.Get(),0,output.Get(),0,8*sizeof(Result));
 #ifdef PT_GEOMETRY_SPAWN
     g.execute([&](){
+        if(workerReject){std::puts("Worker rejected: leave tracing disabled and table uninitialized");return;}
         PTNativeShaderTable::Identifiers ids;ids.pipeline=nativeTable.pipeline;
         ids.hit={exportMaps.rays[0].nativeOpaque,exportMaps.rays[1].nativeOpaque,exportMaps.rays[0].nativeAlpha,exportMaps.rays[1].nativeAlpha};
         auto bindings=nativeTable.bindings;for(UINT i=0;i<4;++i)bindings[i].type=i==0?0u:1u;
@@ -294,7 +295,11 @@ int main(int argc,char** argv){try{
         for(UINT c=0;c<3;++c){if(i<4){float throughput=1;for(UINT d=0;d<depths[i];++d){expected[c]+=throughput*emission[c];throughput*=kd[c];}}
             else if(i==4)expected[c]=kd[c]/3.14159265358979323846f;
             else if(i==6)expected[c]=c==0?.2f:c==1?.4f:.8f;}
-        bool match=r.valid==(i==7?0u:1u)&&r.hits==depths[i]&&r.samples==64;
+        UINT wantedValid=i==7?0u:1u,wantedHits=depths[i];
+#ifdef PT_GEOMETRY_SPAWN
+        if(workerReject){wantedValid=wantedHits=0;for(auto& c:expected)c=0;}
+#endif
+        bool match=r.valid==wantedValid&&r.hits==wantedHits&&r.samples==64;
         for(UINT c=0;c<3;++c)match=match&&std::isfinite(r.radiance[c])&&std::fabs(r.radiance[c]-expected[c])<2e-4f;
         std::printf("%s: %s RGB=(%.6f,%.6f,%.6f) expected=(%.6f,%.6f,%.6f) hits=%u valid=%u fault=%.0f\n",match?"PASS":"FAIL",names[i],r.radiance[0],r.radiance[1],r.radiance[2],expected[0],expected[1],expected[2],r.hits,r.valid,r.reserved[0]);pass=pass&&match;}
 #else

@@ -16,7 +16,7 @@ inline bool HitRange(const Layout& l,std::size_t bindings,U64& address,U64& byte
     // one-ray writer still reserves two rows; do not compact those row numbers.
     const U64 offset=U64(l.missOffset)+l.hitRelative;
     const U64 size=U64(l.hitRecords)*l.hitStride;
-    if(!l.buffer||!bindings||bindings>65536||l.raygenBytes!=32||l.missOffset<32||l.missOffset%64||
+    if(!l.buffer||l.buffer%64||!bindings||bindings>65536||l.raygenBytes!=32||l.missOffset<32||l.missOffset%64||
        l.missStride!=32||l.hitRelative<64||offset%64||l.hitStride!=96||l.hitRecords!=bindings*2||
        offset>l.bytes||size>l.bytes-offset||offset>UINT64_MAX-l.buffer||size>UINT64_MAX-(l.buffer+offset))return false;
     address=l.buffer+offset;bytes=size;return true;
@@ -37,7 +37,7 @@ inline bool Build(const Layout& layout,const Identifiers& identifiers,U64 versio
         for(unsigned ray=0;ray<2;++ray){
             const auto& id=identifiers.hit[2*b.type+ray];if(id==Identifier{})return false;
             auto* record=pending.bytes.data()+(i*2+ray)*96;
-            std::memcpy(record,id.data(),32);std::memcpy(record+32,&b.indices,56);
+            std::memcpy(record,id.data(),32);std::memcpy(record+32,reinterpret_cast<const unsigned char*>(&b)+8,56);
         }
     }
     output=std::move(pending);return true;
