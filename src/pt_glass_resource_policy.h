@@ -5,6 +5,17 @@ namespace PTGlass {
 constexpr std::uint64_t HitStride=64;
 constexpr unsigned SlotCount=3;
 enum class Phase { Empty, Idle, Recording, Submitted, Quarantined };
+// Hold a slot across the native ray submission until its lighting consumer
+// has been recorded and submitted. Producer completion alone is insufficient.
+struct SubmissionHold {
+    bool submitted=false,anySubmitted=false,finalized=false;
+    void Submitted() noexcept {submitted=true;anySubmitted=true;}
+    bool Finish(bool differentConsumer) noexcept {
+        if(differentConsumer&&!submitted)return false;
+        finalized=true;if(differentConsumer)submitted=false;return true;
+    }
+    bool Ready() const noexcept {return finalized&&submitted;}
+};
 struct Ticket {
     Phase phase=Phase::Empty;
     std::uint64_t recording=0, fence=0;

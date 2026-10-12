@@ -5,6 +5,14 @@
 #include "../src/pt_glass_resources.h"
 using Microsoft::WRL::ComPtr;
 int main(){
+    PTGlass::SubmissionHold handoff;
+    assert(!handoff.Finish(true));assert(!handoff.Ready());
+    handoff.Submitted();assert(!handoff.Ready());
+    assert(handoff.Finish(true));assert(!handoff.Ready());
+    handoff.Submitted();assert(handoff.Ready());
+    PTGlass::SubmissionHold skipped;
+    assert(skipped.Finish(false));assert(!skipped.Ready());
+    skipped.Submitted();assert(skipped.Ready());
     PTGlass::Ticket ticket;
     assert(!ticket.Lease(0));assert(ticket.Lease(17));assert(!ticket.Lease(18));
     assert(!ticket.Submit(18,1));assert(ticket.Submit(17,9));

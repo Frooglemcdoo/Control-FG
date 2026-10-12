@@ -32,7 +32,7 @@ static std::vector<unsigned char> rayBytes,secondaryBytes,compositeBytes;
 static std::mutex lock;static PTGlass::Resources resources;
 struct Pipeline {ComPtr<ID3D12StateObject> owner;unsigned char raygen[32]{};};
 static std::unordered_map<ID3D12StateObject*,Pipeline> pipelines;
-struct Pending {ID3D12CommandList* list;UINT64 serial;};static std::vector<Pending> pending;
+struct Pending {ID3D12CommandList* list;UINT64 serial;PTGlass::SubmissionHold hold{};};static std::vector<Pending> pending;
 static std::atomic<UINT64> sequence{1},dispatchCount{0};static std::atomic<bool> enabled{false},queueReady{false};
 static thread_local bool mirrorGuard=false,rayScope=false;static thread_local unsigned captureKind=0;
 static thread_local ID3D12StateObject* currentRayPso=nullptr;
@@ -155,11 +155,15 @@ static void STDMETHODCALLTYPE ExecuteHook(ID3D12CommandQueue* q,UINT count,ID3D1
     execute(q,count,lists);std::lock_guard<std::mutex> guard(lock);
     if(q!=queue.Get())return;
     for(auto it=pending.begin();it!=pending.end();){bool submitted=false;for(UINT i=0;i<count;++i)submitted=submitted||lists[i]==it->list;
-        if(submitted){if(FAILED(resources.Submitted(it->serial)))enabled=false;it=pending.erase(it);}else ++it;}
+        if(submitted)it->hold.Submitted();
+        if(it->hold.Ready()){if(FAILED(resources.Submitted(it->serial)))enabled=false;it=pending.erase(it);}else ++it;}
 }
 static HRESULT STDMETHODCALLTYPE ResetHook(ID3D12GraphicsCommandList* list,ID3D12CommandAllocator* allocator,ID3D12PipelineState* pso){
     const HRESULT hr=reset(list,allocator,pso);if(SUCCEEDED(hr)){std::lock_guard<std::mutex> guard(lock);
-        for(auto it=pending.begin();it!=pending.end();)if(it->list==list){resources.Discarded(it->serial);it=pending.erase(it);}else ++it;}
+        for(auto it=pending.begin();it!=pending.end();)if(it->list==list&&!it->hold.submitted){
+            if(it->hold.anySubmitted){if(FAILED(resources.Submitted(it->serial)))enabled=false;}
+            else resources.Discarded(it->serial);it=pending.erase(it);
+        }else ++it;}
     return hr;
 }
 static void STDMETHODCALLTYPE SetRayPsoHook(ID3D12GraphicsCommandList4* list,ID3D12StateObject* pso){currentRayPso=pso;setRayPso(list,pso);}
@@ -237,13 +241,43 @@ static bool LightingStateMatches(void* state) noexcept {
             *reinterpret_cast<ID3D12PipelineState**>(shader+0x78)==nativeLighting.Get();
     }__except(EXCEPTION_EXECUTE_HANDLER){return false;}
 }
+// Finalize only after deciding whether a lighting consumer was recorded.
+// Early returns retain the ray submission until a real queue fence retires it.
+struct FinishLighting {
+    UINT64 serial;ID3D12CommandList* consumer=nullptr;
+    ~FinishLighting(){std::lock_guard<std::mutex> guard(lock);
+        for(auto it=pending.begin();it!=pending.end();++it)if(it->serial==serial){
+            const bool different=consumer&&consumer!=it->list;
+            if(!it->hold.Finish(different)){enabled=false;Skip("consumer_submission_order");return;}
+            if(consumer)it->list=consumer;
+            if(it->hold.Ready()){if(FAILED(resources.Submitted(serial)))enabled=false;pending.erase(it);}
+            return;
+        }
+    }
+};
+static bool ConsumerOrdered(UINT64 serial,ID3D12CommandList* consumer){
+    std::lock_guard<std::mutex> guard(lock);
+    for(const auto& p:pending)if(p.serial==serial)return p.list==consumer||p.hold.submitted;
+    return false;
+}
 static void LightHook(void* state,const void* dimensions){
+    FinishLighting finish{pass.traced?pass.serial:0};
     lightNative(state,dimensions);
     if(!enabled||!pass.traced)return;
     if(!pass.slot||!pass.light||!secondaryLighting||!compositeLighting||!nativeLighting||!LightingStateMatches(state)){Skip("lighting_state_or_snapshot");return;}
     constexpr UINT64 fullNative=3ull|(((1ull<<28)-1)<<5)|(1ull<<41);
     if(!pass.light->Has(pass.serial,fullNative)){Skip("lighting_inputs",pass.light->Observed());return;}
-    Context context{};if(!ReadContext(&context)||context.list!=pass.rayContext.list||context.gpu.ptr!=pass.lightingContext.gpu.ptr){Skip("lighting_context");return;}
+    Context context{};if(!ReadContext(&context)){Skip("lighting_context_read");return;}
+    if(context.list!=pass.lightingContext.list||context.manager!=pass.lightingContext.manager||
+       context.queue!=pass.rayContext.queue||context.gpu.ptr!=pass.lightingContext.gpu.ptr){
+        const UINT64 mismatch=(context.list!=pass.lightingContext.list?1ull:0ull)|
+            (context.manager!=pass.lightingContext.manager?2ull:0ull)|
+            (context.queue!=pass.rayContext.queue?4ull:0ull)|
+            (context.gpu.ptr!=pass.lightingContext.gpu.ptr?8ull:0ull);
+        Skip("lighting_context",mismatch);return;
+    }
+    if(!ConsumerOrdered(pass.serial,context.list)){Skip("lighting_producer_not_submitted");return;}
+    if(!Patch(context.list,10,reinterpret_cast<void*>(&ResetHook),reinterpret_cast<void**>(&reset))){Skip("lighting_reset_hook");return;}
     const auto* dims=static_cast<const UINT*>(dimensions);if(!dims||dims[2]!=1){Skip("lighting_dimensions");return;}
     auto* slot=pass.slot;PTGlass::LightingTableShadow composite;
     mirrorGuard=true;
@@ -262,6 +296,7 @@ static void LightHook(void* state,const void* dimensions){
     list->ResourceBarrier(1,&uav);
     Barrier(list,slot->hits.Get(),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
     Barrier(list,slot->radiance.Get(),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+    finish.consumer=context.list;
     const auto n=dispatchCount.load();if(n<=4||n%240==0)Log("PT_GLASS_LIGHTING dispatch=%llu secondary=1 composite=1 native_diffuse_direct_emission_retained=1",n);
 }
 static void ObserveCompute(ID3D12Device* d,const D3D12_COMPUTE_PIPELINE_STATE_DESC* desc,void* result){
@@ -302,7 +337,7 @@ struct NativeCallPatch {
 static NativeCallPatch nativeSetCall,nativeDispatchCall;
 static bool Install(HMODULE renderer,HMODULE d3d){
     if(!HashMatches(renderer,kRendererHash)||!HashMatches(d3d,kD3dHash)){
-        Log("PT_GLASS_INSTALL ready=0 build=G1R3 reason=unsupported_module_hash");return false;
+        Log("PT_GLASS_INSTALL ready=0 build=G1R4 reason=unsupported_module_hash");return false;
     }
     char sha[65]{};bool loaded=false;
     if(!PTReflectionLoadSidecar(L"pt_glass_raygen.dxil","GLASS_RAY",rayBytes,sha,loaded)||
@@ -319,7 +354,7 @@ static bool Install(HMODULE renderer,HMODULE d3d){
        RRAlbedoPrepareCallPatch(b+0xa562e,reinterpret_cast<void*>(bindNative),reinterpret_cast<void*>(&BindHook),&bindPatch);
     if(ready)ready=nativeSetCall.Exchange(true)&&nativeDispatchCall.Exchange(true)&&usePatch.Exchange(true)&&rayPatch.Exchange(true)&&lightPatch.Exchange(true)&&RRAlbedoExchangeCall(&bindPatch,true);
     if(!ready){nativeSetCall.Exchange(false);nativeDispatchCall.Exchange(false);usePatch.Exchange(false);rayPatch.Exchange(false);lightPatch.Exchange(false);RRAlbedoExchangeCall(&bindPatch,false);}
-    enabled=ready;Log("PT_GLASS_INSTALL ready=%u build=G1R3 glossy_only=1 smoothness_min=0.8",unsigned(ready));
+    enabled=ready;Log("PT_GLASS_INSTALL ready=%u build=G1R4 glossy_only=1 smoothness_min=0.8",unsigned(ready));
     if(ready){ID3D12Device* existing=nullptr;memcpy(&existing,reinterpret_cast<unsigned char*>(d3d)+kControlGlobalD3D12DevicePointerRva,sizeof(existing));if(existing)InstallDevice(existing);}
     return ready;
 }
