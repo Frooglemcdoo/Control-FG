@@ -127,7 +127,7 @@ for ins in selected:
           '#else']
  if at==680:out.append('#endif')
  if at==6728:
-  out += ['#if PT_GLASS_COMPOSITE', '    r10.xyz=asuint(PTGlassFilteredDiffuse(r1.xy,max(asfloat(r10.xyz),0.0f)));', '#endif']
+  out += ['#if PT_GLASS_COMPOSITE', '    float3 diffuseIndirect=max(asfloat(r10.xyz),0.0f);', '    PTGlassApplyDiffuse(r1.xy,diffuseIndirect);', '    r10.xyz=asuint(diffuseIndirect);', '#endif']
  if at==6737:
   out += ['#if PT_GLASS_COMPOSITE',
           '    if (all(r1.xy < ptGlassExtent)) {',

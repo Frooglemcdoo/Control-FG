@@ -19,7 +19,7 @@ for width,height in [(1,1),(129,33),(2560,1440),(3840,2160)]:
     assert count-1<count and (count-1)+count==2*count-1
     assert 2*height<=16384
 shader=(root/'src/shaders/pt_glass_native.generated.hlsl').read_text()
-assert shader.index('PTGlassFilteredDiffuse(r1.xy')<shader.index('// native dword 6728')
+assert shader.index('PTGlassApplyDiffuse(r1.xy')<shader.index('// native dword 6728')
 assert 'layer*ptGlassExtent.x*ptGlassExtent.y' in shader
 assert 'uint2(0,layer*ptGlassExtent.y)' in shader
 runtime=(root/'src/pt_glass_runtime.h').read_text()

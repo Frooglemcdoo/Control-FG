@@ -980,7 +980,9 @@ void main(uint3 groupId : SV_GroupID, uint3 groupThreadId : SV_GroupThreadID) {
     r2.xyzw=(r13.xzwx).xyzw; // native dword 6718
     r3.xyzw=(r18.xyzx).xyzw; // native dword 6723
 #if PT_GLASS_COMPOSITE
-    r10.xyz=asuint(PTGlassFilteredDiffuse(r1.xy,max(asfloat(r10.xyz),0.0f)));
+    float3 diffuseIndirect=max(asfloat(r10.xyz),0.0f);
+    PTGlassApplyDiffuse(r1.xy,diffuseIndirect);
+    r10.xyz=asuint(diffuseIndirect);
 #endif
     r2.xyzw=(asuint(mad(asfloat(r12.xyzw),asfloat(r10.xyzx),asfloat(r2.xyzw)))).xyzw; // native dword 6728
 #if PT_GLASS_COMPOSITE

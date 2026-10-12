@@ -1,10 +1,11 @@
 // Cosine-weighted samples estimate irradiance/pi directly. Keep native material
 // and Fresnel factors at dword 6728; replace only part of the indirect term.
-float3 PTGlassFilteredDiffuse(uint2 pixel,float3 fallback) {
-    if(any(pixel>=ptGlassExtent))return fallback;
+void PTGlassApplyDiffuse(uint2 pixel,inout float3 illumination) {
+    float3 fallback=illumination;
+    if(any(pixel>=ptGlassExtent))return;
     float3 centerP=g_tPosition_TexcoordY.Load(int3(pixel,0)).xyz;
     float3 centerN=g_tNormal_TexcoordX.Load(int3(pixel,0)).xyz;
-    if(!all(isfinite(centerP))||dot(centerN,centerN)<0.5f)return fallback;
+    if(!all(isfinite(centerP))||dot(centerN,centerN)<0.5f)return;
     centerN=normalize(centerN);
     uint material=g_tMaterialId.Load(int3(pixel,0)).x;
     float3 sum=0;float weights=0;
@@ -24,5 +25,5 @@ float3 PTGlassFilteredDiffuse(uint2 pixel,float3 fallback) {
         float3 value=(sample.w>0.5f&&all(isfinite(sample.xyz)))?max(sample.xyz,0.0f):fallback;
         sum+=value*w;weights+=w;
     }
-    return weights>0?lerp(fallback,sum/weights,0.5f):fallback;
+    if(weights>0.0f)illumination=lerp(fallback,sum/max(weights,1e-6f),0.5f);
 }
