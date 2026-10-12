@@ -8,6 +8,7 @@ struct Event {
     std::uint64_t sequence=0,list=0,dest=0,source=0,index=0,position=0,transform=0,stride=0;
     UINT site=0,kind=0,buildFlags=0,ordinal=0,count=0,geometryType=0,geometryFlags=0;
     UINT indexFormat=0,vertexFormat=0,indexCount=0,vertexCount=0,layout=0;
+    std::uint64_t attributes=0;UINT constants[10]{};
 };
 using Sink=void(*)(const Event&) noexcept;
 inline bool ReadBuild(const D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC* desc,D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC& out) noexcept {
