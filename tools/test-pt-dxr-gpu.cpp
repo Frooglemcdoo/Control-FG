@@ -203,7 +203,8 @@ int main(int argc,char** argv){try{
         std::memcpy(records.data()+offset,converted.data(),converted.size());
 #else
         memcpy(records.data()+offset+constantOffset,constants,40);
-#endif}
+#endif
+    }
     auto sbt=g.buffer(records.size(),D3D12_HEAP_TYPE_UPLOAD,D3D12_RESOURCE_STATE_GENERIC_READ,D3D12_RESOURCE_FLAG_NONE,records.data());
     Ray rays[]={{{0,0,0},0,{0,0,1},10},{{12,0,0},0,{0,0,1},10},{{3,0,0},0,{0,0,1},10},{{6,0,0},0,{0,0,1},10},{{0,0,0},0,{0,0,1},1},{{0,0,0},2.1f,{0,0,1},10},{{0,0,0},0,{0,0,0},10},{{9,0,0},0,{0,0,1},10}};
 #ifdef PT_PATH_TEST
