@@ -660,7 +660,1172 @@ static bool PTReflectionPrepareP1ShaderRecord(void* nativeShader,
     DWORD fault=0;
     __try {
         memcpy(ptReflectionP1ShaderRecord,nativeRecord,sizeof(ptReflectionP1ShaderRecord));
-        memcpy(ptReflectionP1ShaderDescriptor,nativeDescriptor,sizeof(ptReflectionP1ShaderDescrip…15145 tokens truncated…nP1StorageAttempted||
+        memcpy(ptReflectionP1ShaderDescriptor,nativeDescriptor,sizeof(ptReflectionP1ShaderDescriptor));
+
+        const auto nativeBegin=reinterpret_cast<std::uintptr_t>(nativeDescriptor);
+        const auto nativeEnd=nativeBegin+sizeof(ptReflectionP1ShaderDescriptor);
+        const auto cloneBegin=reinterpret_cast<std::uintptr_t>(ptReflectionP1ShaderDescriptor);
+        for(size_t off=0;off+sizeof(std::uintptr_t)<=sizeof(ptReflectionP1ShaderDescriptor);off+=sizeof(std::uintptr_t)){
+            std::uintptr_t value=0;
+            memcpy(&value,ptReflectionP1ShaderDescriptor+off,sizeof(value));
+            if(value>=nativeBegin&&value<nativeEnd){
+                const std::uintptr_t relocated=cloneBegin+(value-nativeBegin);
+                memcpy(ptReflectionP1ShaderDescriptor+off,&relocated,sizeof(relocated));
+            }
+        }
+
+        const unsigned stage=identity.descriptor.stage;
+        const int id=kPTReflectionP1SyntheticStorageId;
+        const unsigned long long bytes=static_cast<unsigned long long>(ptReflectionP1Bytes.size());
+        memcpy(ptReflectionP1ShaderDescriptor+8,&stage,sizeof(stage));
+        memcpy(ptReflectionP1ShaderDescriptor+12,&id,sizeof(id));
+        memcpy(ptReflectionP1ShaderDescriptor+16,&bytes,sizeof(bytes));
+        const auto descriptorPtr=reinterpret_cast<std::uintptr_t>(ptReflectionP1ShaderDescriptor);
+        memcpy(ptReflectionP1ShaderRecord+0x70,&descriptorPtr,sizeof(descriptorPtr));
+    } __except(EXCEPTION_EXECUTE_HANDLER) {
+        fault=GetExceptionCode();
+    }
+    if(fault){
+        Log("PT_REFLECTION_P1_RECORD_PREPARE ready=0 exception=0x%08lX action=native_fallback",fault);
+        return false;
+    }
+    ptReflectionP1ShaderRecordReady=true;
+    Log("PT_REFLECTION_P1_RECORD_PREPARE ready=1 native_shader=%p clone_shader=%p native_descriptor=%p clone_descriptor=%p stage=%u native_id=%d synthetic_id=%d native_bytes=%llu p1_bytes=%llu native_sha256=%s p1_sha256=%s variant=%03d record_bytes=168 descriptor_bytes=128 self_pointers_relocated=1",
+        nativeShader,ptReflectionP1ShaderRecord,reinterpret_cast<void*>(identity.descriptor.shaderBase),
+        ptReflectionP1ShaderDescriptor,identity.descriptor.stage,identity.descriptor.identifier,
+        kPTReflectionP1SyntheticStorageId,static_cast<unsigned long long>(identity.descriptor.size),
+        static_cast<unsigned long long>(ptReflectionP1Bytes.size()),identity.sha256,ptReflectionP1Sha256,identity.variant);
+    return true;
+}
+
+
+
+static bool PTReflectionCreateCapturedP2PsoLocked(ID3D12Device* device) noexcept {
+    if(ptReflectionP2CompositePso)return true;
+    if(!device||!ptReflectionCompositeRoot||!ptReflectionNativeCompositePso||
+       !ptReflectionP2CompositeLoaded||ptReflectionP2CompositeBytes.empty()||
+       !ptReflectionOriginalCreateComputePipelineState)return false;
+
+    D3D12_COMPUTE_PIPELINE_STATE_DESC custom{};
+    custom.pRootSignature=ptReflectionCompositeRoot;
+    custom.CS.pShaderBytecode=ptReflectionP2CompositeBytes.data();
+    custom.CS.BytecodeLength=ptReflectionP2CompositeBytes.size();
+    custom.NodeMask=ptReflectionCompositeNodeMask;
+    custom.CachedPSO={nullptr,0};
+    custom.Flags=ptReflectionCompositeFlags;
+
+    ID3D12PipelineState* customPso=nullptr;
+    const HRESULT hr=ptReflectionOriginalCreateComputePipelineState(
+        device,&custom,__uuidof(ID3D12PipelineState),
+        reinterpret_cast<void**>(&customPso));
+    if(FAILED(hr)||!customPso){
+        Log("PT_REFLECTION_P2_PSO_CREATE ready=0 hr=0x%08lX device=%p root=%p native_pso=%p p2_bytes=%llu node_mask=%u flags=%u",
+            static_cast<unsigned long>(hr),device,ptReflectionCompositeRoot,
+            ptReflectionNativeCompositePso,
+            static_cast<unsigned long long>(ptReflectionP2CompositeBytes.size()),
+            ptReflectionCompositeNodeMask,unsigned(ptReflectionCompositeFlags));
+        return false;
+    }
+
+    ptReflectionP2CompositePso=customPso;
+    if(ptReflectionP2VerifyLoaded&&!ptReflectionP2VerifyBytes.empty()){
+        D3D12_COMPUTE_PIPELINE_STATE_DESC verify=custom;
+        verify.CS.pShaderBytecode=ptReflectionP2VerifyBytes.data();
+        verify.CS.BytecodeLength=ptReflectionP2VerifyBytes.size();
+        ID3D12PipelineState* verifyPso=nullptr;
+        const HRESULT verifyHr=ptReflectionOriginalCreateComputePipelineState(
+            device,&verify,__uuidof(ID3D12PipelineState),
+            reinterpret_cast<void**>(&verifyPso));
+        if(SUCCEEDED(verifyHr)&&verifyPso)ptReflectionP2VerifyPso=verifyPso;
+        Log("PT_REFLECTION_VERIFY_PSO_CREATE ready=%u hr=0x%08lX pso=%p shader_sha256=%s bytes=%llu native_root=%p",
+            unsigned(ptReflectionP2VerifyPso!=nullptr),static_cast<unsigned long>(verifyHr),
+            ptReflectionP2VerifyPso,ptReflectionP2VerifySha256,
+            static_cast<unsigned long long>(ptReflectionP2VerifyBytes.size()),
+            ptReflectionCompositeRoot);
+    }
+    if(ptReflectionP2LocalLightProbeLoaded&&!ptReflectionP2LocalLightProbeBytes.empty()){
+        D3D12_COMPUTE_PIPELINE_STATE_DESC local=custom;
+        local.CS.pShaderBytecode=ptReflectionP2LocalLightProbeBytes.data();
+        local.CS.BytecodeLength=ptReflectionP2LocalLightProbeBytes.size();
+        ID3D12PipelineState* localPso=nullptr;
+        const HRESULT localHr=ptReflectionOriginalCreateComputePipelineState(
+            device,&local,__uuidof(ID3D12PipelineState),
+            reinterpret_cast<void**>(&localPso));
+        if(SUCCEEDED(localHr)&&localPso)ptReflectionP2LocalLightProbePso=localPso;
+        Log("PT_REFLECTION_P2_NATIVE_LIGHT_PROBE_PSO ready=%u hr=0x%08lX pso=%p shader_sha256=%s bytes=%llu native_root=%p",
+            unsigned(ptReflectionP2LocalLightProbePso!=nullptr),
+            static_cast<unsigned long>(localHr),ptReflectionP2LocalLightProbePso,
+            ptReflectionP2LocalLightProbeSha256,
+            static_cast<unsigned long long>(ptReflectionP2LocalLightProbeBytes.size()),
+            ptReflectionCompositeRoot);
+    }
+    Log("PT_REFLECTION_P2_PSO_CREATE ready=1 device=%p root=%p native_pso=%p p2_pso=%p p2_sha256=%s p2_bytes=%llu node_mask=%u flags=%u",
+        device,ptReflectionCompositeRoot,ptReflectionNativeCompositePso,customPso,
+        ptReflectionP2CompositeSha256,
+        static_cast<unsigned long long>(ptReflectionP2CompositeBytes.size()),
+        ptReflectionCompositeNodeMask,unsigned(ptReflectionCompositeFlags));
+    return true;
+}
+
+static bool PTReflectionEnsureCapturedCompositePso() noexcept {
+    if(ptReflectionP2CompositePso)return true;
+    if(!ptReflectionNativeCompositePso||!ptReflectionCompositeRoot||
+       !ptReflectionP2CompositeLoaded)return false;
+
+    ID3D12Device* device=nullptr;
+    const HRESULT hr=ptReflectionNativeCompositePso->GetDevice(
+        __uuidof(ID3D12Device),reinterpret_cast<void**>(&device));
+    if(FAILED(hr)||!device)return false;
+
+    AcquireSRWLockExclusive(&ptReflectionCompositePsoLock);
+    const bool ready=PTReflectionCreateCapturedP2PsoLocked(device);
+    ReleaseSRWLockExclusive(&ptReflectionCompositePsoLock);
+    device->Release();
+    return ready;
+}
+
+static HRESULT STDMETHODCALLTYPE PTReflectionHookCreateComputePipelineState(
+    ID3D12Device* device,const D3D12_COMPUTE_PIPELINE_STATE_DESC* desc,
+    REFIID riid,void** out) {
+    if(!ptReflectionOriginalCreateComputePipelineState)
+        return E_UNEXPECTED;
+
+    char sha[65]{};
+    bool target=false;
+    if(desc&&desc->CS.pShaderBytecode&&desc->CS.BytecodeLength==42408u){
+        target=PTReflectionSha256(
+            static_cast<const unsigned char*>(desc->CS.pShaderBytecode),
+            desc->CS.BytecodeLength,sha)&&
+            strcmp(sha,"4fc0a0e9cd3706bcb86e29444d86fa32616138e1712c53b1b5103b30d7a1ecc9")==0;
+    }
+
+    if(desc) PTGlassCaptureCompute(desc->CS.pShaderBytecode,desc->CS.BytecodeLength);
+
+    const HRESULT nativeHr=ptReflectionOriginalCreateComputePipelineState(device,desc,riid,out);
+    if(SUCCEEDED(nativeHr)&&out&&*out) PTGlassRuntime::ObserveCompute(device,desc,*out);
+    if(!target||FAILED(nativeHr)||!out||!*out||!desc)return nativeHr;
+
+    AcquireSRWLockExclusive(&ptReflectionCompositePsoLock);
+    if(!ptReflectionCompositePsoCaptured.load(std::memory_order_acquire)){
+        ID3D12PipelineState* nativePso=nullptr;
+        const HRESULT nativeQi=reinterpret_cast<IUnknown*>(*out)->QueryInterface(
+            __uuidof(ID3D12PipelineState),reinterpret_cast<void**>(&nativePso));
+        if(SUCCEEDED(nativeQi)&&nativePso&&desc->pRootSignature){
+            desc->pRootSignature->AddRef();
+            ptReflectionCompositeRoot=desc->pRootSignature;
+            ptReflectionNativeCompositePso=nativePso;
+            ptReflectionCompositeNodeMask=desc->NodeMask;
+            ptReflectionCompositeFlags=desc->Flags;
+            ptReflectionCompositePsoCaptured.store(1u,std::memory_order_release);
+            const bool customReady=PTReflectionCreateCapturedP2PsoLocked(device);
+            Log("PT_REFLECTION_P2_PSO_CAPTURE ready=1 native_pso=%p p2_pso=%p custom_ready=%u root=%p native_sha256=%s native_bytes=%llu node_mask=%u flags=%u composite_sidecar_loaded=%u",
+                nativePso,ptReflectionP2CompositePso,unsigned(customReady),
+                desc->pRootSignature,sha,
+                static_cast<unsigned long long>(desc->CS.BytecodeLength),
+                desc->NodeMask,unsigned(desc->Flags),
+                unsigned(ptReflectionP2CompositeLoaded));
+        }else{
+            if(nativePso)nativePso->Release();
+            Log("PT_REFLECTION_P2_PSO_CAPTURE ready=0 native_hr=0x%08lX native_qi=0x%08lX root=%p",
+                static_cast<unsigned long>(nativeHr),static_cast<unsigned long>(nativeQi),
+                desc->pRootSignature);
+        }
+    }
+    ReleaseSRWLockExclusive(&ptReflectionCompositePsoLock);
+    return nativeHr;
+}
+
+static bool PTReflectionInstallComputePsoHookOnDevice(ID3D12Device* device) noexcept {
+    if(!device)return false;
+
+    void** vtable=nullptr;
+    __try {vtable=*reinterpret_cast<void***>(device);}
+    __except(EXCEPTION_EXECUTE_HANDLER){vtable=nullptr;}
+    if(!vtable)return false;
+
+    constexpr size_t slotIndex=11u; // ID3D12Device::CreateComputePipelineState
+    auto** slot=&vtable[slotIndex];
+    void* current=nullptr;
+    __try {current=*slot;} __except(EXCEPTION_EXECUTE_HANDLER){current=nullptr;}
+    if(!current)return false;
+
+    if(current==reinterpret_cast<void*>(&PTReflectionHookCreateComputePipelineState)){
+        if(!ptReflectionOriginalCreateComputePipelineState)return false;
+        ptReflectionCreateComputePipelineStateSlot=slot;
+        return true;
+    }
+
+    auto original=reinterpret_cast<PTCreateComputePipelineStateFn>(current);
+    DWORD old=0;
+    if(!VirtualProtect(slot,sizeof(void*),PAGE_EXECUTE_READWRITE,&old))return false;
+    void* previous=InterlockedCompareExchangePointer(
+        slot,reinterpret_cast<void*>(&PTReflectionHookCreateComputePipelineState),
+        reinterpret_cast<void*>(original));
+    const DWORD exchangeError=GetLastError();
+    DWORD ignored=0;
+    const BOOL restored=VirtualProtect(slot,sizeof(void*),old,&ignored);
+    if(previous!=reinterpret_cast<void*>(original)||!restored){
+        if(previous==reinterpret_cast<void*>(original)){
+            DWORD retryOld=0;
+            if(VirtualProtect(slot,sizeof(void*),PAGE_EXECUTE_READWRITE,&retryOld)){
+                InterlockedCompareExchangePointer(slot,reinterpret_cast<void*>(original),
+                    reinterpret_cast<void*>(&PTReflectionHookCreateComputePipelineState));
+                DWORD retryIgnored=0;
+                VirtualProtect(slot,sizeof(void*),retryOld,&retryIgnored);
+            }
+        }
+        return false;
+    }
+
+    ptReflectionOriginalCreateComputePipelineState=original;
+    PTGlassRuntime::InstallDevice(device);
+    ptReflectionCreateComputePipelineStateSlot=slot;
+    Log("PT_REFLECTION_P2_PSO_HOOK ready=1 source=device_create device=%p vtable=%p slot_index=%llu slot=%p original=%p hook=%p exchange_error=%lu",
+        device,vtable,static_cast<unsigned long long>(slotIndex),slot,
+        reinterpret_cast<void*>(original),
+        reinterpret_cast<void*>(&PTReflectionHookCreateComputePipelineState),
+        exchangeError);
+    return true;
+}
+
+static bool PTReflectionInstallComputePsoHook(HMODULE d3d) noexcept {
+    if(!d3d||d3d!=verifiedD3d)return false;
+    ID3D12Device* device=nullptr;
+    __try {
+        device=*reinterpret_cast<ID3D12Device**>(
+            reinterpret_cast<unsigned char*>(d3d)+kControlGlobalD3D12DevicePointerRva);
+    } __except(EXCEPTION_EXECUTE_HANDLER) {
+        device=nullptr;
+    }
+    return device&&PTReflectionInstallComputePsoHookOnDevice(device);
+}
+
+static void STDMETHODCALLTYPE PTReflectionHookSetComputeRootSignature(
+    ID3D12GraphicsCommandList* list,ID3D12RootSignature* root) {
+    if(ptReflectionAwaitingCompositeBind&&root){
+        AcquireSRWLockExclusive(&ptReflectionCompositePsoLock);
+        if(!ptReflectionCompositeRoot){
+            root->AddRef();
+            ptReflectionCompositeRoot=root;
+            const auto n=ptReflectionCompositeBindCaptures.fetch_add(1,std::memory_order_relaxed)+1;
+            Log("PT_REFLECTION_P2_LIVE_ROOT_CAPTURE count=%llu list=%p root=%p",n,list,root);
+        }
+        ReleaseSRWLockExclusive(&ptReflectionCompositePsoLock);
+    }
+    if(ptReflectionOriginalSetComputeRootSignature)
+        ptReflectionOriginalSetComputeRootSignature(list,root);
+}
+
+static void STDMETHODCALLTYPE PTReflectionHookSetPipelineState(
+    ID3D12GraphicsCommandList* list,ID3D12PipelineState* pso) {
+    if(ptReflectionAwaitingCompositeBind&&pso){
+        AcquireSRWLockExclusive(&ptReflectionCompositePsoLock);
+        if(!ptReflectionNativeCompositePso){
+            pso->AddRef();
+            ptReflectionNativeCompositePso=pso;
+            const auto n=ptReflectionCompositeBindCaptures.fetch_add(1,std::memory_order_relaxed)+1;
+            Log("PT_REFLECTION_P2_LIVE_PSO_CAPTURE count=%llu list=%p native_pso=%p root=%p",
+                n,list,pso,ptReflectionCompositeRoot);
+        }
+        if(ptReflectionCompositeRoot&&ptReflectionNativeCompositePso)
+            ptReflectionCompositePsoCaptured.store(1u,std::memory_order_release);
+        ReleaseSRWLockExclusive(&ptReflectionCompositePsoLock);
+    }
+    if(ptReflectionOriginalSetPipelineState)
+        ptReflectionOriginalSetPipelineState(list,pso);
+}
+
+static bool PTReflectionInstallCommandListCaptureHooks(void* commandList) noexcept {
+    auto* list=static_cast<ID3D12GraphicsCommandList*>(commandList);
+    if(!list)return false;
+    void** vtable=nullptr;
+    __try {vtable=*reinterpret_cast<void***>(list);}
+    __except(EXCEPTION_EXECUTE_HANDLER){vtable=nullptr;}
+    if(!vtable)return false;
+
+    if(ptReflectionCommandListVtable==vtable&&
+       ptReflectionOriginalSetPipelineState&&ptReflectionOriginalSetComputeRootSignature)
+        return true;
+    if(ptReflectionCommandListVtable&&ptReflectionCommandListVtable!=vtable)
+        return false;
+
+    constexpr size_t kSetPipelineStateSlot=25u;
+    constexpr size_t kSetComputeRootSignatureSlot=29u;
+    auto* originalPso=reinterpret_cast<PTSetPipelineStateFn>(vtable[kSetPipelineStateSlot]);
+    auto* originalRoot=reinterpret_cast<PTSetComputeRootSignatureFn>(vtable[kSetComputeRootSignatureSlot]);
+    if(!originalPso||!originalRoot)return false;
+
+    DWORD oldPso=0,oldRoot=0;
+    if(!VirtualProtect(&vtable[kSetPipelineStateSlot],sizeof(void*),PAGE_EXECUTE_READWRITE,&oldPso))
+        return false;
+    void* previousPso=InterlockedCompareExchangePointer(
+        &vtable[kSetPipelineStateSlot],
+        reinterpret_cast<void*>(&PTReflectionHookSetPipelineState),
+        reinterpret_cast<void*>(originalPso));
+    DWORD ignoredPso=0;
+    const BOOL psoProtect=VirtualProtect(&vtable[kSetPipelineStateSlot],sizeof(void*),oldPso,&ignoredPso);
+    if(previousPso!=reinterpret_cast<void*>(originalPso)||!psoProtect)return false;
+
+    if(!VirtualProtect(&vtable[kSetComputeRootSignatureSlot],sizeof(void*),PAGE_EXECUTE_READWRITE,&oldRoot)){
+        DWORD rollbackOld=0;
+        if(VirtualProtect(&vtable[kSetPipelineStateSlot],sizeof(void*),PAGE_EXECUTE_READWRITE,&rollbackOld)){
+            InterlockedCompareExchangePointer(&vtable[kSetPipelineStateSlot],
+                reinterpret_cast<void*>(originalPso),
+                reinterpret_cast<void*>(&PTReflectionHookSetPipelineState));
+            DWORD rollbackIgnored=0;
+            VirtualProtect(&vtable[kSetPipelineStateSlot],sizeof(void*),rollbackOld,&rollbackIgnored);
+        }
+        return false;
+    }
+    void* previousRoot=InterlockedCompareExchangePointer(
+        &vtable[kSetComputeRootSignatureSlot],
+        reinterpret_cast<void*>(&PTReflectionHookSetComputeRootSignature),
+        reinterpret_cast<void*>(originalRoot));
+    DWORD ignoredRoot=0;
+    const BOOL rootProtect=VirtualProtect(&vtable[kSetComputeRootSignatureSlot],sizeof(void*),oldRoot,&ignoredRoot);
+    if(previousRoot!=reinterpret_cast<void*>(originalRoot)||!rootProtect)return false;
+
+    ptReflectionOriginalSetPipelineState=originalPso;
+    ptReflectionOriginalSetComputeRootSignature=originalRoot;
+    ptReflectionCommandListVtable=vtable;
+    Log("PT_REFLECTION_P2_COMMAND_LIST_HOOKS ready=1 list=%p vtable=%p set_pso_slot=%llu set_root_slot=%llu original_pso=%p original_root=%p",
+        list,vtable,static_cast<unsigned long long>(kSetPipelineStateSlot),
+        static_cast<unsigned long long>(kSetComputeRootSignatureSlot),
+        reinterpret_cast<void*>(originalPso),reinterpret_cast<void*>(originalRoot));
+    return true;
+}
+
+static bool PTReflectionEnsureLiveCompositePso(ID3D12Device* device) noexcept {
+    if(!device||!ptReflectionP2CompositeLoaded||ptReflectionP2CompositeBytes.empty())
+        return false;
+    if(ptReflectionP2CompositePso)return true;
+
+    AcquireSRWLockExclusive(&ptReflectionCompositePsoLock);
+    if(!ptReflectionP2CompositePso&&ptReflectionCompositeRoot&&ptReflectionNativeCompositePso){
+        D3D12_COMPUTE_PIPELINE_STATE_DESC pd{};
+        pd.pRootSignature=ptReflectionCompositeRoot;
+        pd.CS.pShaderBytecode=ptReflectionP2CompositeBytes.data();
+        pd.CS.BytecodeLength=ptReflectionP2CompositeBytes.size();
+        pd.NodeMask=0;
+        pd.CachedPSO={nullptr,0};
+        pd.Flags=D3D12_PIPELINE_STATE_FLAG_NONE;
+        ID3D12PipelineState* custom=nullptr;
+        const HRESULT hr=device->CreateComputePipelineState(
+            &pd,__uuidof(ID3D12PipelineState),reinterpret_cast<void**>(&custom));
+        if(SUCCEEDED(hr)&&custom){
+            ptReflectionP2CompositePso=custom;
+            Log("PT_REFLECTION_P2_LIVE_PSO_CREATE ready=1 device=%p root=%p native_pso=%p p2_pso=%p p2_sha256=%s p2_bytes=%llu hr=0x%08lX",
+                device,ptReflectionCompositeRoot,ptReflectionNativeCompositePso,custom,
+                ptReflectionP2CompositeSha256,
+                static_cast<unsigned long long>(ptReflectionP2CompositeBytes.size()),
+                static_cast<unsigned long>(hr));
+        }else{
+            Log("PT_REFLECTION_P2_LIVE_PSO_CREATE ready=0 device=%p root=%p native_pso=%p hr=0x%08lX",
+                device,ptReflectionCompositeRoot,ptReflectionNativeCompositePso,
+                static_cast<unsigned long>(hr));
+        }
+    }
+    const bool ready=ptReflectionP2CompositePso!=nullptr;
+    ReleaseSRWLockExclusive(&ptReflectionCompositePsoLock);
+    return ready;
+}
+
+static bool PTReflectionCloneShaderRecord(void* nativeShader,size_t descriptorSlot,
+    unsigned stage,int syntheticId,size_t shaderBytes,
+    unsigned char (&record)[0xA8],unsigned char (&descriptor)[0x100]) noexcept {
+    if(!nativeShader||descriptorSlot+sizeof(std::uintptr_t)>sizeof(record)||
+       shaderBytes<32||shaderBytes>RRAlbedoShader::kMaximumBlobBytes)return false;
+    std::uintptr_t nativeDescriptorAddress=0;
+    DWORD fault=0;
+    __try {
+        auto* nativeRecord=reinterpret_cast<unsigned char*>(nativeShader);
+        memcpy(record,nativeRecord,sizeof(record));
+        memcpy(&nativeDescriptorAddress,nativeRecord+descriptorSlot,
+            sizeof(nativeDescriptorAddress));
+        if(nativeDescriptorAddress<=0xFFFFu)return false;
+        auto* nativeDescriptor=reinterpret_cast<unsigned char*>(nativeDescriptorAddress);
+        memcpy(descriptor,nativeDescriptor,sizeof(descriptor));
+
+        const auto nativeRecordBegin=reinterpret_cast<std::uintptr_t>(nativeRecord);
+        const auto nativeRecordEnd=nativeRecordBegin+sizeof(record);
+        const auto cloneRecordBegin=reinterpret_cast<std::uintptr_t>(record);
+        const auto nativeDescriptorBegin=nativeDescriptorAddress;
+        const auto nativeDescriptorEnd=nativeDescriptorBegin+sizeof(descriptor);
+        const auto cloneDescriptorBegin=reinterpret_cast<std::uintptr_t>(descriptor);
+
+        // Relocate every pointer in the 0xA8 shader record that refers either
+        // to the record itself or into the descriptor object. Compute records
+        // use both descriptor+0x00 and descriptor+0xC0, plus an embedded
+        // self-pointer at record+0x88.
+        for(size_t off=0;off+sizeof(std::uintptr_t)<=sizeof(record);off+=sizeof(std::uintptr_t)){
+            std::uintptr_t value=0;
+            memcpy(&value,record+off,sizeof(value));
+            if(value>=nativeRecordBegin&&value<nativeRecordEnd){
+                value=cloneRecordBegin+(value-nativeRecordBegin);
+                memcpy(record+off,&value,sizeof(value));
+            }else if(value>=nativeDescriptorBegin&&value<nativeDescriptorEnd){
+                value=cloneDescriptorBegin+(value-nativeDescriptorBegin);
+                memcpy(record+off,&value,sizeof(value));
+            }
+        }
+
+        // Relocate descriptor-internal pointers as well.
+        for(size_t off=0;off+sizeof(std::uintptr_t)<=sizeof(descriptor);off+=sizeof(std::uintptr_t)){
+            std::uintptr_t value=0;
+            memcpy(&value,descriptor+off,sizeof(value));
+            if(value>=nativeDescriptorBegin&&value<nativeDescriptorEnd){
+                value=cloneDescriptorBegin+(value-nativeDescriptorBegin);
+                memcpy(descriptor+off,&value,sizeof(value));
+            }else if(value>=nativeRecordBegin&&value<nativeRecordEnd){
+                value=cloneRecordBegin+(value-nativeRecordBegin);
+                memcpy(descriptor+off,&value,sizeof(value));
+            }
+        }
+
+        unsigned nativeStage=0;int nativeId=-1;unsigned long long nativeBytes=0;
+        memcpy(&nativeStage,nativeDescriptor+8,sizeof(nativeStage));
+        memcpy(&nativeId,nativeDescriptor+12,sizeof(nativeId));
+        memcpy(&nativeBytes,nativeDescriptor+16,sizeof(nativeBytes));
+
+        const unsigned long long bytes=static_cast<unsigned long long>(shaderBytes);
+        unsigned patchedDescriptors=0;
+        for(size_t off=0;off+24u<=sizeof(descriptor);off+=8u){
+            unsigned candidateStage=0;int candidateId=-1;unsigned long long candidateBytes=0;
+            memcpy(&candidateStage,descriptor+off+8,sizeof(candidateStage));
+            memcpy(&candidateId,descriptor+off+12,sizeof(candidateId));
+            memcpy(&candidateBytes,descriptor+off+16,sizeof(candidateBytes));
+            if(candidateStage==nativeStage&&candidateId==nativeId&&candidateBytes==nativeBytes){
+                memcpy(descriptor+off+8,&stage,sizeof(stage));
+                memcpy(descriptor+off+12,&syntheticId,sizeof(syntheticId));
+                memcpy(descriptor+off+16,&bytes,sizeof(bytes));
+                ++patchedDescriptors;
+            }
+        }
+        if(!patchedDescriptors){
+            memcpy(descriptor+8,&stage,sizeof(stage));
+            memcpy(descriptor+12,&syntheticId,sizeof(syntheticId));
+            memcpy(descriptor+16,&bytes,sizeof(bytes));
+        }
+    } __except(EXCEPTION_EXECUTE_HANDLER) {
+        fault=GetExceptionCode();
+    }
+    if(fault){
+        Log("PT_REFLECTION_P2_RECORD_CLONE ready=0 slot=0x%zX stage=%u synthetic_id=%d exception=0x%08lX",
+            descriptorSlot,stage,syntheticId,fault);
+        return false;
+    }
+    return true;
+}
+
+static bool PTReflectionPrepareP2RayShaderRecord(void* nativeShader,
+    const PTReflectionRayIdentity& identity) noexcept {
+    ptReflectionP2RayShaderRecordReady=false;
+    if(!nativeShader||identity.variant!=0||!ptReflectionP2Loaded||
+       ptReflectionP2Bytes.empty())return false;
+    if(!PTReflectionCloneShaderRecord(nativeShader,0x70u,6u,
+        kPTReflectionP2RaySyntheticStorageId,ptReflectionP2Bytes.size(),
+        ptReflectionP2RayShaderRecord,ptReflectionP2RayShaderDescriptor))return false;
+    ptReflectionP2RayShaderRecordReady=true;
+    Log("PT_REFLECTION_P2_RAY_RECORD_PREPARE ready=1 native_shader=%p clone_shader=%p native_descriptor=%p clone_descriptor=%p native_id=%d synthetic_id=%d native_bytes=%llu p2_bytes=%llu native_sha256=%s p2_sha256=%s variant=%03d",
+        nativeShader,ptReflectionP2RayShaderRecord,
+        reinterpret_cast<void*>(identity.descriptor.shaderBase),ptReflectionP2RayShaderDescriptor,
+        identity.descriptor.identifier,kPTReflectionP2RaySyntheticStorageId,
+        static_cast<unsigned long long>(identity.descriptor.size),
+        static_cast<unsigned long long>(ptReflectionP2Bytes.size()),
+        identity.sha256,ptReflectionP2Sha256,identity.variant);
+    return true;
+}
+
+static bool PTReflectionPrepareP2CompositeShaderRecord(void* nativeShader) noexcept {
+    ptReflectionP2CompositeShaderRecordReady=false;
+    if(!nativeShader||!ptReflectionP2CompositeLoaded||
+       ptReflectionP2CompositeBytes.empty()||!RRAlbedoShader::residentGetter)return false;
+
+    RRAlbedoShader::NativeDescriptor d{};
+    if(!RRAlbedoShader::ReadDescriptor(reinterpret_cast<std::uintptr_t>(nativeShader),0x60u,&d)||
+       d.stage!=5u||d.identifier<0||d.size!=42408ull)return false;
+
+    char sha[65]{};
+    bool exact=false;
+    __try {
+        const char* resident=RRAlbedoShader::residentGetter(d.identifier);
+        exact=resident&&PTReflectionSha256(reinterpret_cast<const unsigned char*>(resident),
+            static_cast<size_t>(d.size),sha)&&
+            strcmp(sha,"4fc0a0e9cd3706bcb86e29444d86fa32616138e1712c53b1b5103b30d7a1ecc9")==0;
+    } __except(EXCEPTION_EXECUTE_HANDLER) {
+        exact=false;
+    }
+    if(!exact)return false;
+
+    if(!PTReflectionCloneShaderRecord(nativeShader,0x60u,5u,
+        kPTReflectionP2CompositeSyntheticStorageId,ptReflectionP2CompositeBytes.size(),
+        ptReflectionP2CompositeShaderRecord,ptReflectionP2CompositeShaderDescriptor))return false;
+
+    ptReflectionNativeDeferredShaderRecord=nativeShader;
+    ptReflectionP2CompositeShaderRecordReady=true;
+    Log("PT_REFLECTION_P2_COMPOSITE_RECORD_PREPARE ready=1 native_shader=%p clone_shader=%p native_descriptor=%p clone_descriptor=%p native_id=%d synthetic_id=%d native_bytes=%llu p2_bytes=%llu native_sha256=%s p2_sha256=%s descriptor_slot=0x60 stage=5",
+        nativeShader,ptReflectionP2CompositeShaderRecord,
+        reinterpret_cast<void*>(d.shaderBase),ptReflectionP2CompositeShaderDescriptor,
+        d.identifier,kPTReflectionP2CompositeSyntheticStorageId,
+        static_cast<unsigned long long>(d.size),
+        static_cast<unsigned long long>(ptReflectionP2CompositeBytes.size()),
+        sha,ptReflectionP2CompositeSha256);
+    return true;
+}
+
+
+struct PTReflectionCompositeDescriptorSnapshot {
+    unsigned char* base=nullptr;
+    unsigned stage0=0;
+    int id0=-1;
+    unsigned long long bytes0=0;
+    std::uintptr_t secondaryAddress=0;
+};
+
+static bool PTReflectionPatchNativeCompositeDescriptor(
+    PTReflectionCompositeDescriptorSnapshot* snapshot,bool custom) noexcept {
+    if(!snapshot||!ptReflectionNativeDeferredShaderRecord)return false;
+    DWORD fault=0;
+    bool good=false;
+    __try {
+        auto* record=reinterpret_cast<unsigned char*>(ptReflectionNativeDeferredShaderRecord);
+        std::uintptr_t baseAddress=0,secondaryAddress=0;
+        memcpy(&baseAddress,record+0x60,sizeof(baseAddress));
+        memcpy(&secondaryAddress,record+0x68,sizeof(secondaryAddress));
+        if(baseAddress<=0xFFFFu)return false;
+
+        snapshot->base=reinterpret_cast<unsigned char*>(baseAddress);
+        snapshot->secondaryAddress=secondaryAddress;
+        memcpy(&snapshot->stage0,snapshot->base+8,sizeof(snapshot->stage0));
+        memcpy(&snapshot->id0,snapshot->base+12,sizeof(snapshot->id0));
+        memcpy(&snapshot->bytes0,snapshot->base+16,sizeof(snapshot->bytes0));
+
+        if(snapshot->stage0!=5u||snapshot->id0!=9248336||
+           snapshot->bytes0!=42408ull||
+           secondaryAddress!=baseAddress+0xC0u||
+           !ptReflectionP2CompositeLoaded||ptReflectionP2CompositeBytes.empty()){
+            Log("PT_REFLECTION_P2_DESCRIPTOR_PATCH custom=%u ready=0 reason=contract stage=%u id=%d bytes=%llu base=%p secondary=%p secondary_delta=0x%llX expected_secondary_delta=0xC0 composite_loaded=%u",
+                unsigned(custom),snapshot->stage0,snapshot->id0,snapshot->bytes0,
+                snapshot->base,reinterpret_cast<void*>(secondaryAddress),
+                secondaryAddress>=baseAddress?
+                    static_cast<unsigned long long>(secondaryAddress-baseAddress):~0ull,
+                unsigned(ptReflectionP2CompositeLoaded));
+            return false;
+        }
+
+        if(!custom){
+            good=true;
+        }else{
+            const unsigned stage=5u;
+            const int id=kPTReflectionP2CompositeSyntheticStorageId;
+            const unsigned long long bytes=
+                static_cast<unsigned long long>(ptReflectionP2CompositeBytes.size());
+            memcpy(snapshot->base+8,&stage,sizeof(stage));
+            memcpy(snapshot->base+12,&id,sizeof(id));
+            memcpy(snapshot->base+16,&bytes,sizeof(bytes));
+            MemoryBarrier();
+
+            unsigned verifyStage=0;int verifyId=-1;unsigned long long verifyBytes=0;
+            memcpy(&verifyStage,snapshot->base+8,sizeof(verifyStage));
+            memcpy(&verifyId,snapshot->base+12,sizeof(verifyId));
+            memcpy(&verifyBytes,snapshot->base+16,sizeof(verifyBytes));
+            good=verifyStage==stage&&verifyId==id&&verifyBytes==bytes;
+            Log("PT_REFLECTION_P2_DESCRIPTOR_PATCH custom=1 ready=%u base=%p secondary=%p secondary_delta=0x%llX native_stage=%u native_id=%d native_bytes=%llu custom_stage=%u custom_id=%d custom_bytes=%llu secondary_untouched=1",
+                unsigned(good),snapshot->base,reinterpret_cast<void*>(secondaryAddress),
+                static_cast<unsigned long long>(secondaryAddress-baseAddress),
+                snapshot->stage0,snapshot->id0,snapshot->bytes0,
+                verifyStage,verifyId,verifyBytes);
+        }
+    } __except(EXCEPTION_EXECUTE_HANDLER) {
+        fault=GetExceptionCode();
+        good=false;
+    }
+    if(fault)
+        Log("PT_REFLECTION_P2_DESCRIPTOR_PATCH custom=%u ready=0 exception=0x%08lX",
+            unsigned(custom),fault);
+    return good;
+}
+
+static bool PTReflectionRestoreNativeCompositeDescriptor(
+    const PTReflectionCompositeDescriptorSnapshot& snapshot) noexcept {
+    if(!snapshot.base)return false;
+    DWORD fault=0;
+    bool restored=false;
+    __try {
+        memcpy(snapshot.base+8,&snapshot.stage0,sizeof(snapshot.stage0));
+        memcpy(snapshot.base+12,&snapshot.id0,sizeof(snapshot.id0));
+        memcpy(snapshot.base+16,&snapshot.bytes0,sizeof(snapshot.bytes0));
+        MemoryBarrier();
+
+        unsigned stage=0;int id=-1;unsigned long long bytes=0;
+        memcpy(&stage,snapshot.base+8,sizeof(stage));
+        memcpy(&id,snapshot.base+12,sizeof(id));
+        memcpy(&bytes,snapshot.base+16,sizeof(bytes));
+        restored=stage==snapshot.stage0&&id==snapshot.id0&&bytes==snapshot.bytes0;
+    } __except(EXCEPTION_EXECUTE_HANDLER) {
+        fault=GetExceptionCode();
+        restored=false;
+    }
+    Log("PT_REFLECTION_P2_DESCRIPTOR_RESTORE ready=%u base=%p stage=%u id=%d bytes=%llu secondary_untouched=1 exception=0x%08lX",
+        unsigned(restored),snapshot.base,snapshot.stage0,snapshot.id0,snapshot.bytes0,fault);
+    return restored;
+}
+
+
+static bool PTReflectionSnapshotCompositeCacheTail(bool custom) noexcept {
+    if(!ptReflectionNativeDeferredShaderRecord)return false;
+    DWORD fault=0;
+    __try {
+        auto* record=reinterpret_cast<unsigned char*>(ptReflectionNativeDeferredShaderRecord);
+        auto* target=custom?ptReflectionP2CompositeCacheTail:ptReflectionNativeCompositeCacheTail;
+        memcpy(target,record+0x80,0x28);
+    } __except(EXCEPTION_EXECUTE_HANDLER) {
+        fault=GetExceptionCode();
+    }
+    if(fault)return false;
+    if(custom)ptReflectionP2CompositeCacheTailReady=true;
+    else ptReflectionNativeCompositeCacheTailReady=true;
+    return true;
+}
+
+static bool PTReflectionRestoreCompositeCacheTail(bool custom) noexcept {
+    if(!ptReflectionNativeDeferredShaderRecord)return false;
+    const bool ready=custom?ptReflectionP2CompositeCacheTailReady:ptReflectionNativeCompositeCacheTailReady;
+    if(!ready)return false;
+    DWORD fault=0;
+    __try {
+        auto* record=reinterpret_cast<unsigned char*>(ptReflectionNativeDeferredShaderRecord);
+        const auto* source=custom?ptReflectionP2CompositeCacheTail:ptReflectionNativeCompositeCacheTail;
+        memcpy(record+0x80,source,0x28);
+        MemoryBarrier();
+    } __except(EXCEPTION_EXECUTE_HANDLER) {
+        fault=GetExceptionCode();
+    }
+    return fault==0;
+}
+
+static bool PTReflectionInvalidateCompositeCacheForCustomBind() noexcept {
+    if(!ptReflectionNativeDeferredShaderRecord)return false;
+    DWORD fault=0;
+    __try {
+        auto* record=reinterpret_cast<unsigned char*>(ptReflectionNativeDeferredShaderRecord);
+        if(!ptReflectionNativeCompositeCacheTailReady){
+            memcpy(ptReflectionNativeCompositeCacheTail,record+0x80,0x28);
+            ptReflectionNativeCompositeCacheTailReady=true;
+        }
+        // Preserve every engine-private flag/self pointer. Clear only the
+        // external cached shader-state pointer at record+0x80 so the native
+        // binder must materialize state from the now-patched descriptor.
+        std::uintptr_t nullCache=0;
+        memcpy(record+0x80,&nullCache,sizeof(nullCache));
+        MemoryBarrier();
+    } __except(EXCEPTION_EXECUTE_HANDLER) {
+        fault=GetExceptionCode();
+    }
+    if(fault)
+        Log("PT_REFLECTION_P2_CACHE_INVALIDATE ready=0 exception=0x%08lX",fault);
+    return fault==0;
+}
+
+static bool PTReflectionInsertReflectionUavBarrier() noexcept {
+    using GetNativeTextureFn=void* (*)(void*);
+    auto getter=reinterpret_cast<GetNativeTextureFn>(
+        verifiedD3d?GetProcAddress(verifiedD3d,kRRGetNativeTextureSymbol):nullptr);
+    if(!getter||!verifiedRenderer)return false;
+
+    void* wrapper=nullptr;
+    void* raw=nullptr;
+    D3D12_RESOURCE_DESC desc{};
+    DWORD describeFault=0;
+    __try {
+        auto* object=reinterpret_cast<unsigned char*>(verifiedRenderer)+kRRShaderReflectionTargetRva;
+        wrapper=getter(object);
+    } __except(EXCEPTION_EXECUTE_HANDLER) {
+        return false;
+    }
+    if(!wrapper||!Describe(wrapper,&raw,&desc,&describeFault)||!raw)return false;
+
+    EngineCommandContextSnapshot command{};
+    auto* resource=static_cast<ID3D12Resource*>(raw);
+    if(!ReadEngineCommandContext(resource,&command)||!command.commandList)return false;
+
+    bool good=false;
+    __try {
+        D3D12_RESOURCE_BARRIER barrier{};
+        barrier.Type=D3D12_RESOURCE_BARRIER_TYPE_UAV;
+        barrier.Flags=D3D12_RESOURCE_BARRIER_FLAG_NONE;
+        barrier.UAV.pResource=resource;
+        static_cast<ID3D12GraphicsCommandList*>(command.commandList)->ResourceBarrier(1,&barrier);
+        good=true;
+    } __except(EXCEPTION_EXECUTE_HANDLER) {
+        good=false;
+    }
+    return good;
+}
+
+// Renderer ShaderTexture identities from the hash-locked native bind asm.
+// The source buffer pair was independently captured as EXACTLY two layers
+// by the RR reflection capture. Check material, normal and position live
+// GPU resources rather than assuming that the additional layers exist.
+static std::atomic<unsigned int> ptReflectionTwoLayerContract{0u};
+static std::atomic<unsigned int> ptReflectionTwoLayerAttempts{0u};
+static bool PTReflectionAuditTwoLayerHitTextures() noexcept {
+    const unsigned state=ptReflectionTwoLayerContract.load(std::memory_order_acquire);
+    if(state==1u)return true;
+    if(state==2u)return false;
+    constexpr std::uintptr_t kMaterial=0x1291888u;
+    constexpr std::uintptr_t kNormal=0x12918B0u;
+    constexpr std::uintptr_t kPosition=0x12918D8u;
+    using Getter=void* (*)(void*);
+    Getter get=reinterpret_cast<Getter>(
+        verifiedD3d?GetProcAddress(verifiedD3d,kRRGetNativeTextureSymbol):nullptr);
+    const unsigned attempt=ptReflectionTwoLayerAttempts.fetch_add(1u,std::memory_order_relaxed)+1u;
+    if(!verifiedRenderer||!get)return false;
+    D3D12_RESOURCE_DESC descriptions[3]{};
+    bool known[3]{};
+    DWORD faults[3]{};
+    const std::uintptr_t offsets[3]{kMaterial,kNormal,kPosition};
+    for(unsigned i=0u;i<3u;++i){
+        void* wrapper=nullptr;
+        __try {
+            wrapper=get(reinterpret_cast<unsigned char*>(verifiedRenderer)+offsets[i]);
+        } __except(EXCEPTION_EXECUTE_HANDLER) {faults[i]=GetExceptionCode();}
+        void* raw=nullptr;
+        if(wrapper)
+            known[i]=Describe(wrapper,&raw,&descriptions[i],&faults[i])&&raw!=nullptr;
+    }
+    if(!known[0]||!known[1]||!known[2]){
+        if(attempt<=4u || (attempt%240u)==0u)
+            Log("PT_REFLECTION_P2_TWO_LAYER_CONTRACT pending=1 attempt=%u material_found=%u normal_found=%u position_found=%u faults=0x%08lX_0x%08lX_0x%08lX",
+                attempt,unsigned(known[0]),unsigned(known[1]),unsigned(known[2]),
+                faults[0],faults[1],faults[2]);
+        return false;
+    }
+    const auto& m=descriptions[0];
+    const auto& n=descriptions[1];
+    const auto& p=descriptions[2];
+    const bool valid=
+        m.Dimension==D3D12_RESOURCE_DIMENSION_TEXTURE2D&&
+        n.Dimension==D3D12_RESOURCE_DIMENSION_TEXTURE2D&&
+        p.Dimension==D3D12_RESOURCE_DIMENSION_TEXTURE2D&&
+        m.Format==DXGI_FORMAT_R16_UINT&&
+        n.Format==DXGI_FORMAT_R16G16B16A16_FLOAT&&
+        p.Format==DXGI_FORMAT_R16G16B16A16_FLOAT&&
+        m.DepthOrArraySize==2u&&n.DepthOrArraySize==2u&&p.DepthOrArraySize==2u&&
+        m.Width==n.Width&&n.Width==p.Width&&
+        m.Height==n.Height&&n.Height==p.Height&&
+        m.SampleDesc.Count==1u&&n.SampleDesc.Count==1u&&p.SampleDesc.Count==1u;
+    ptReflectionTwoLayerContract.store(valid?1u:2u,std::memory_order_release);
+    Log("PT_REFLECTION_P2_TWO_LAYER_CONTRACT ready=%u result=%s layout=native_first_layer_0_secondary_layer_1 material_layers=%u normal_layers=%u position_layers=%u material_format=%u normal_format=%u position_format=%u width=%llu height=%u second_id_encoding=fp16_numeric_0_to_2047 uv_encoding=numeric_5x5 native_first_samples=1",
+        unsigned(valid),valid?"pass":"incompatible_resource_shape",
+        unsigned(m.DepthOrArraySize),unsigned(n.DepthOrArraySize),
+        unsigned(p.DepthOrArraySize),unsigned(m.Format),unsigned(n.Format),
+        unsigned(p.Format),static_cast<unsigned long long>(m.Width),m.Height);
+    if(!valid){
+        ptReflectionP2InjectionEnabled=false;
+        Log("PT_REFLECTION_P2_DISABLE reason=two_layer_contract_mismatch fallback=native");
+    }
+    return valid;
+}
+
+static void PTReflectionHookDeferredDispatch(void* state,const void* dimensions) {
+    if(!ptReflectionOriginalDispatch)return;
+    ptReflectionAwaitingCompositeBind=false;
+
+    // First execute Control's native rt_deferredReflection composite exactly as-is.
+    ptReflectionOriginalDispatch(state,dimensions);
+
+    if(!ptReflectionP2InjectionEnabled)return;
+
+    // F11 advances on key-down edge only. No overlay, screen-size changes or
+    // tool dependency. Only this experimental test DLL reads the key.
+    const unsigned pressed=(GetAsyncKeyState(VK_F11)&0x8000)?1u:0u;
+    if(pressed){
+        if(ptReflectionVerifyKeyDown.exchange(1u,std::memory_order_acq_rel)==0u){
+            const unsigned prior=ptReflectionUserState.load(std::memory_order_acquire)>>1u;
+            const unsigned next=PTReflectionUserCycleDiagnostic();
+            Log("PT_REFLECTION_VERIFY_SWITCH from=%u to=%u hotkey=F11 label=%s",
+                prior,next,next==0u?"normal":next==1u?
+                    "P2_quadrant_native_admission_specular_retained":next==2u?
+                    "GI_native_texture_copy_proof":"native_point_light_probe");
+        }
+    }else{
+        ptReflectionVerifyKeyDown.store(0u,std::memory_order_release);
+    }
+
+    const unsigned userState=ptReflectionUserState.load(std::memory_order_acquire);
+    const bool userEnabled=(userState&1u)!=0u;
+    // A/B only the added lighting: native composite above always runs, and the
+    // stabilized ray library/first-hit sampling remain identical in both views.
+    static std::atomic<unsigned int> lastUserEnabled{2u};
+    if(lastUserEnabled.exchange(unsigned(userEnabled),std::memory_order_acq_rel)!=unsigned(userEnabled))
+        Log("PT_REFLECTION_AB_APPLIED enabled=%u native_composite=1 added_composite=%u ray_tracing_unchanged=1 verify_mode=%u",
+            unsigned(userEnabled),unsigned(userEnabled),userState>>1u);
+    if(!userEnabled)return;
+    if(!PTReflectionAuditTwoLayerHitTextures())return;
+
+    const auto call=ptReflectionP2PostDispatches.fetch_add(1,std::memory_order_relaxed)+1;
+    const bool psoCaptured=ptReflectionCompositePsoCaptured.load(std::memory_order_acquire)!=0u;
+    const bool customReady=psoCaptured&&PTReflectionEnsureCapturedCompositePso();
+    if(!customReady){
+        if(call<=16 || (call%240)==0)
+            Log("PT_REFLECTION_P2_POST_DISPATCH_WAIT call=%llu reason=pso_not_ready pso_captured=%u native_pso=%p p2_pso=%p root=%p",
+                call,unsigned(psoCaptured),ptReflectionNativeCompositePso,
+                ptReflectionP2CompositePso,ptReflectionCompositeRoot);
+        return;
+    }
+
+    unsigned x=0,y=0,z=0;
+    DWORD dimFault=0;
+    __try {
+        const auto* d=static_cast<const int*>(dimensions);
+        if(d){
+            x=d[0]>0?static_cast<unsigned>(d[0]):0u;
+            y=d[1]>0?static_cast<unsigned>(d[1]):0u;
+            z=d[2]>0?static_cast<unsigned>(d[2]):0u;
+        }
+    } __except(EXCEPTION_EXECUTE_HANDLER) {
+        dimFault=GetExceptionCode();
+    }
+    if(dimFault||!x||!y||!z||x>16384u||y>16384u||z>64u){
+        ptReflectionP2InjectionEnabled=false;
+        Log("PT_REFLECTION_P2_POST_DISPATCH_DISABLE call=%llu reason=invalid_dimensions x=%u y=%u z=%u exception=0x%08lX fallback=p1",
+            call,x,y,z,dimFault);
+        return;
+    }
+
+    using GetNativeTextureFn=void* (*)(void*);
+    auto getter=reinterpret_cast<GetNativeTextureFn>(
+        verifiedD3d?GetProcAddress(verifiedD3d,kRRGetNativeTextureSymbol):nullptr);
+    void* wrapper=nullptr;void* raw=nullptr;D3D12_RESOURCE_DESC resourceDesc{};
+    DWORD describeFault=0;
+    if(getter&&verifiedRenderer){
+        __try {
+            auto* object=reinterpret_cast<unsigned char*>(verifiedRenderer)+kRRShaderReflectionTargetRva;
+            wrapper=getter(object);
+        } __except(EXCEPTION_EXECUTE_HANDLER) {
+            wrapper=nullptr;
+        }
+    }
+    if(!wrapper||!Describe(wrapper,&raw,&resourceDesc,&describeFault)||!raw){
+        ptReflectionP2InjectionEnabled=false;
+        Log("PT_REFLECTION_P2_POST_DISPATCH_DISABLE call=%llu reason=reflection_target_unavailable describe_fault=0x%08lX fallback=p1",
+            call,describeFault);
+        return;
+    }
+
+    EngineCommandContextSnapshot command{};
+    auto* resource=static_cast<ID3D12Resource*>(raw);
+    if(!ReadEngineCommandContext(resource,&command)||!command.commandList){
+        ptReflectionP2InjectionEnabled=false;
+        Log("PT_REFLECTION_P2_POST_DISPATCH_DISABLE call=%llu reason=command_context_unavailable fault=0x%08lX fallback=p1",
+            call,command.fault);
+        return;
+    }
+
+    auto* list=static_cast<ID3D12GraphicsCommandList*>(command.commandList);
+    const unsigned verifyMode=userState>>1u;
+    ID3D12PipelineState* activeP2Pso=verifyMode==1u?
+        ptReflectionP2VerifyPso:verifyMode==3u?
+        ptReflectionP2LocalLightProbePso:ptReflectionP2CompositePso;
+    if(!activeP2Pso){
+        if(call<=16 || (call%240)==0)
+            Log("PT_REFLECTION_VERIFY_MISSING_PSO call=%llu mode=%u verify_sidecar=%u native_light_probe_sidecar=%u",
+                call,verifyMode,unsigned(ptReflectionP2VerifyLoaded),
+                unsigned(ptReflectionP2LocalLightProbeLoaded));
+        return;
+    }
+    DWORD fault=0,restoreFault=0;
+    bool dispatched=false,restored=false;
+    __try {
+        D3D12_RESOURCE_BARRIER barrier{};
+        barrier.Type=D3D12_RESOURCE_BARRIER_TYPE_UAV;
+        barrier.Flags=D3D12_RESOURCE_BARRIER_FLAG_NONE;
+        barrier.UAV.pResource=resource;
+
+        // Control's native composite just established the correct root signature,
+        // descriptor heaps/tables, CBVs/SRVs/UAV and dimensions. Swap only the PSO.
+        list->ResourceBarrier(1,&barrier);
+        list->SetPipelineState(activeP2Pso);
+        list->Dispatch(x,y,z);
+        list->ResourceBarrier(1,&barrier);
+        list->SetPipelineState(ptReflectionNativeCompositePso);
+        dispatched=true;
+        restored=true;
+    } __except(EXCEPTION_EXECUTE_HANDLER) {
+        fault=GetExceptionCode();
+        __try {
+            list->SetPipelineState(ptReflectionNativeCompositePso);
+            restored=true;
+        } __except(EXCEPTION_EXECUTE_HANDLER) {
+            restoreFault=GetExceptionCode();
+            restored=false;
+        }
+    }
+
+    if(fault||restoreFault||!dispatched||!restored){
+        ptReflectionP2InjectionEnabled=false;
+        Log("PT_REFLECTION_P2_POST_DISPATCH_DISABLE call=%llu reason=direct_pso_dispatch_failed dispatched=%u restored=%u exception=0x%08lX restore_exception=0x%08lX x=%u y=%u z=%u fallback=p1",
+            call,unsigned(dispatched),unsigned(restored),fault,restoreFault,x,y,z);
+        return;
+    }
+
+    if(call<=16 || (call%240)==0)
+        Log("PT_REFLECTION_P2_POST_DISPATCH call=%llu path=early_captured_direct_pso dispatched=1 restored=1 x=%u y=%u z=%u native_pso=%p p2_pso=%p root=%p command_list=%p verify_mode=%u verify_pso=%u",
+            call,x,y,z,ptReflectionNativeCompositePso,activeP2Pso,
+            ptReflectionCompositeRoot,list,verifyMode,unsigned(verifyMode==1u));
+}
+
+static bool PTReflectionInstallStorageGetHooks(HMODULE d3d) noexcept {
+    if(!d3d||d3d!=verifiedD3d)return false;
+    ptReflectionOriginalStorageGet=reinterpret_cast<PTShaderCodeStorageGetFn>(
+        GetProcAddress(d3d,"?get@ShaderCodeStorage@d3d@@YAPEBDH@Z"));
+    if(!ptReflectionOriginalStorageGet||
+       reinterpret_cast<std::uintptr_t>(ptReflectionOriginalStorageGet)!=
+       reinterpret_cast<std::uintptr_t>(d3d)+0x40820u)return false;
+    auto* base=reinterpret_cast<unsigned char*>(d3d);
+    const size_t sites[6]{0x2D44F,0x2D46C,0x2D492,0x2D4B8,0x2D4DE,0x348DC};
+    for(unsigned i=0;i<6;++i){
+        if(!RRAlbedoPrepareCallPatch(base+sites[i],reinterpret_cast<void*>(ptReflectionOriginalStorageGet),
+            reinterpret_cast<void*>(&PTReflectionHookShaderStorageGet),&ptReflectionStorageGetPatches[i])){
+            Log("PT_REFLECTION_P1_GET_HOOK_PREPARE ready=0 index=%u rva=0x%zX",i,sites[i]);
+            return false;
+        }
+    }
+    unsigned applied=0;
+    for(;applied<6;++applied){
+        if(!RRAlbedoExchangeCall(&ptReflectionStorageGetPatches[applied],true))break;
+        if(!ptReflectionStorageGetPatches[applied].writeHealthy){++applied;break;}
+    }
+    if(applied!=6){
+        while(applied){
+            --applied;
+            RRAlbedoExchangeCall(&ptReflectionStorageGetPatches[applied],false);
+        }
+        Log("PT_REFLECTION_P1_GET_HOOKS ready=0 applied=%u expected=6",applied);
+        return false;
+    }
+    Log("PT_REFLECTION_P1_GET_HOOKS ready=1 count=6 sentinel_id=%d rvas=2D44F,2D46C,2D492,2D4B8,2D4DE,348DC native_passthrough=1",
+        kPTReflectionP1SyntheticStorageId);
+    return true;
+}
+
+static void* PTReflectionHookVariantLookup(void* technique,unsigned key) {
+    void* nativeResult=ptReflectionOriginalVariantLookup(technique,key);
+    void* result=nativeResult;
+
+    if(technique&&technique==ptReflectionDeferredTechniqueObject){
+        const auto call=++ptReflectionDeferredVariantLookups;
+        PTReflectionLogDeferredRecordMap(nativeResult);
+        ptReflectionNativeDeferredShaderRecord=nativeResult;
+        ptReflectionAwaitingCompositeBind=false;
+        Log("PT_REFLECTION_P2_DEFERRED_VARIANT call=%llu technique=%p key=0x%X shader=%p native_record_captured=1 replacement=native_then_descriptor_swap_add native_result_preserved=1",
+            call,technique,key,nativeResult);
+        ptReflectionDeferredTechniqueObject=nullptr;
+        return nativeResult;
+    }
+
+    if(technique&&technique==ptReflectionTechniqueObject){
+        const auto call=++ptReflectionVariantLookups;
+        PTReflectionRayIdentity identity{};
+        const bool identityKnown=PTReflectionReadRayIdentity(technique,nativeResult,&identity);
+        const bool admitted=identityKnown&&identity.variant>=0;
+        if(admitted) PTReflectionInspectRayLibrary(technique,nativeResult,key);
+
+        bool p2Injected=false;
+        bool p1Injected=false;
+        bool nativeSwapped=false;
+
+        if(admitted&&identity.variant==0&&ptReflectionP2InjectionEnabled){
+            if(!ptReflectionP2RayShaderRecordReady)
+                PTReflectionPrepareP2RayShaderRecord(nativeResult,identity);
+            if(ptReflectionP2RayShaderRecordReady){
+                result=ptReflectionP2RayShaderRecord;
+                p2Injected=true;
+            }
+        }
+
+        if(!p2Injected&&admitted&&ptReflectionP1InjectionEnabled&&identity.variant==0){
+            if(!ptReflectionP1ShaderRecordReady)
+                PTReflectionPrepareP1ShaderRecord(nativeResult,identity);
+            if(ptReflectionP1ShaderRecordReady){
+                result=ptReflectionP1ShaderRecord;
+                p1Injected=true;
+            }
+        } else if(!p2Injected&&!p1Injected&&admitted&&ptReflectionForcedNativeVariant>=0){
+            if(ptReflectionSwapTechnique!=technique||
+               ptReflectionSwapVariant!=ptReflectionForcedNativeVariant||
+               !ptReflectionSwapShader){
+                void* candidate=nullptr;PTReflectionRayIdentity swapIdentity{};
+                if(PTReflectionFindNativeVariant(technique,ptReflectionForcedNativeVariant,
+                    &candidate,&swapIdentity)){
+                    ptReflectionSwapTechnique=technique;
+                    ptReflectionSwapVariant=ptReflectionForcedNativeVariant;
+                    ptReflectionSwapShader=candidate;
+                }else{
+                    ptReflectionSwapTechnique=technique;
+                    ptReflectionSwapVariant=ptReflectionForcedNativeVariant;
+                    ptReflectionSwapShader=nullptr;
+                }
+            }
+            if(ptReflectionSwapShader){
+                result=ptReflectionSwapShader;
+                nativeSwapped=result!=nativeResult;
+            }
+        }
+        Log("PT_REFLECTION_P1_VARIANT call=%llu technique=%p key=0x%X native_shader=%p returned_shader=%p admitted=%u variant=%d p2_requested=%u p2_record_ready=%u p2_injected=%u p1_requested=%u p1_record_ready=%u p1_injected=%u native_swapped=%u forced_native_variant=%d mode=%s native_result_preserved=%u",
+            call,technique,key,nativeResult,result,unsigned(admitted),identityKnown?identity.variant:-1,
+            unsigned(ptReflectionP2InjectionEnabled),unsigned(ptReflectionP2RayShaderRecordReady),
+            unsigned(p2Injected),unsigned(ptReflectionP1InjectionEnabled),
+            unsigned(ptReflectionP1ShaderRecordReady),unsigned(p1Injected),
+            unsigned(nativeSwapped),ptReflectionForcedNativeVariant,
+            p2Injected?"p2_paired_ray_bridge":(p1Injected?"p1_raw_get_bridge":(nativeSwapped?"native_variant_swap_probe":"observe_only")),
+            unsigned(result==nativeResult));
+        ptReflectionTechniqueObject=nullptr;
+    }
+    return result;
+}
+
+static void PTReflectionLogShaderCodeStorageGetterBytes(HMODULE d3d) noexcept {
+    if(!d3d||d3d!=verifiedD3d)return;
+    char hex[65]{};
+    DWORD fault=0;
+    __try {
+        auto* p=reinterpret_cast<const unsigned char*>(d3d)+0x40820u;
+        for(unsigned i=0;i<32;++i)sprintf_s(hex+i*2,3,"%02X",p[i]);
+    } __except(EXCEPTION_EXECUTE_HANDLER) {
+        fault=GetExceptionCode();
+        hex[0]=0;
+    }
+    Log("PT_REFLECTION_P1_SHADER_STORAGE_GET_BYTES rva=0x40820 bytes=%s fault=0x%08lX",hex,fault);
+}
+
+static unsigned PTReflectionLogShaderCodeStorageGetterCallsites(HMODULE d3d) noexcept {
+    if(!d3d||d3d!=verifiedD3d)return 0;
+    unsigned matches=0;
+    __try {
+        auto* base=reinterpret_cast<unsigned char*>(d3d);
+        auto* dos=reinterpret_cast<IMAGE_DOS_HEADER*>(base);
+        if(dos->e_magic!=IMAGE_DOS_SIGNATURE)return 0;
+        auto* nt=reinterpret_cast<IMAGE_NT_HEADERS64*>(base+dos->e_lfanew);
+        if(nt->Signature!=IMAGE_NT_SIGNATURE||nt->OptionalHeader.Magic!=IMAGE_NT_OPTIONAL_HDR64_MAGIC)return 0;
+        auto* section=IMAGE_FIRST_SECTION(nt);
+        const auto target=reinterpret_cast<std::uintptr_t>(base)+0x40820u;
+        const std::uintptr_t rtEntries[5]{
+            reinterpret_cast<std::uintptr_t>(GetProcAddress(d3d,kRRBeginPipelineSetupSymbol)),
+            reinterpret_cast<std::uintptr_t>(GetProcAddress(d3d,kRRSetRayGenerationSymbol)),
+            reinterpret_cast<std::uintptr_t>(GetProcAddress(d3d,kRRSetMissSymbol)),
+            reinterpret_cast<std::uintptr_t>(GetProcAddress(d3d,kRRSetHitGroupSymbol)),
+            reinterpret_cast<std::uintptr_t>(GetProcAddress(d3d,kRRRaytraceSymbol))
+        };
+        const char* rtNames[5]{"begin_pipeline","set_raygen","set_miss","set_hitgroup","raytrace"};
+        for(unsigned si=0;si<nt->FileHeader.NumberOfSections;++si){
+            const auto& sh=section[si];
+            if(!(sh.Characteristics&IMAGE_SCN_CNT_CODE))continue;
+            auto* start=base+sh.VirtualAddress;
+            const size_t bytes=sh.Misc.VirtualSize;
+            if(bytes<5)continue;
+            for(size_t i=0;i+5<=bytes;++i){
+                if(start[i]!=0xE8)continue;
+                int32_t rel=0;memcpy(&rel,start+i+1,sizeof(rel));
+                const auto destination=reinterpret_cast<std::uintptr_t>(start+i+5)+static_cast<std::intptr_t>(rel);
+                if(destination!=target)continue;
+                ++matches;
+                if(matches<=64){
+                    const auto callAddress=reinterpret_cast<std::uintptr_t>(start+i);
+                    size_t nearest=0;std::uintptr_t best=~std::uintptr_t(0);
+                    for(size_t e=0;e<_countof(rtEntries);++e){
+                        if(!rtEntries[e])continue;
+                        const auto distance=callAddress>rtEntries[e]?callAddress-rtEntries[e]:rtEntries[e]-callAddress;
+                        if(distance<best){best=distance;nearest=e;}
+                    }
+                    Log("PT_REFLECTION_P1_SHADER_STORAGE_GET_CALLSITE index=%u rva=0x%zX address=%p nearest_rt=%s distance=0x%llX",
+                        matches,static_cast<size_t>(sh.VirtualAddress+i),start+i,rtNames[nearest],
+                        static_cast<unsigned long long>(best));
+                }
+            }
+        }
+    } __except(EXCEPTION_EXECUTE_HANDLER) {
+        Log("PT_REFLECTION_P1_SHADER_STORAGE_GET_CALLSITE_SCAN exception=0x%08lX matches=%u",
+            GetExceptionCode(),matches);
+    }
+    Log("PT_REFLECTION_P1_SHADER_STORAGE_GET_CALLSITE_SUMMARY matches=%u target_rva=0x40820",matches);
+    return matches;
+}
+
+static unsigned PTReflectionLogShaderCodeStorageExports(HMODULE d3d) noexcept {
+    if(!d3d||d3d!=verifiedD3d)return 0;
+    unsigned matches=0;
+    __try {
+        auto* base=reinterpret_cast<unsigned char*>(d3d);
+        auto* dos=reinterpret_cast<IMAGE_DOS_HEADER*>(base);
+        if(dos->e_magic!=IMAGE_DOS_SIGNATURE)return 0;
+        auto* nt=reinterpret_cast<IMAGE_NT_HEADERS64*>(base+dos->e_lfanew);
+        if(nt->Signature!=IMAGE_NT_SIGNATURE||
+           nt->OptionalHeader.Magic!=IMAGE_NT_OPTIONAL_HDR64_MAGIC)return 0;
+        const auto& dir=nt->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_EXPORT];
+        if(!dir.VirtualAddress||dir.Size<sizeof(IMAGE_EXPORT_DIRECTORY))return 0;
+        auto* exports=reinterpret_cast<IMAGE_EXPORT_DIRECTORY*>(base+dir.VirtualAddress);
+        if(!exports->AddressOfNames||!exports->AddressOfNameOrdinals||
+           !exports->AddressOfFunctions||exports->NumberOfNames>65536)return 0;
+        auto* names=reinterpret_cast<DWORD*>(base+exports->AddressOfNames);
+        auto* ordinals=reinterpret_cast<WORD*>(base+exports->AddressOfNameOrdinals);
+        auto* functions=reinterpret_cast<DWORD*>(base+exports->AddressOfFunctions);
+        for(DWORD i=0;i<exports->NumberOfNames && matches<32;++i){
+            const char* name=reinterpret_cast<const char*>(base+names[i]);
+            if(!name||!strstr(name,"ShaderCodeStorage"))continue;
+            const WORD ordinalIndex=ordinals[i];
+            if(ordinalIndex>=exports->NumberOfFunctions)continue;
+            const DWORD rva=functions[ordinalIndex];
+            ++matches;
+            Log("PT_REFLECTION_P1_SHADER_STORAGE_EXPORT index=%u name=%s rva=0x%X address=%p",
+                matches,name,rva,base+rva);
+        }
+    } __except(EXCEPTION_EXECUTE_HANDLER) {
+        Log("PT_REFLECTION_P1_SHADER_STORAGE_EXPORT_SCAN exception=0x%08lX matches=%u",
+            GetExceptionCode(),matches);
+    }
+    Log("PT_REFLECTION_P1_SHADER_STORAGE_EXPORT_SUMMARY matches=%u known_get_rva=0x40820",matches);
+    return matches;
+}
+
+
+
+static void PTReflectionDescribeStoredBlob(const unsigned char* source,size_t bytes,
+    const char* sourceSha,const char* resolved,int id,const char* label) noexcept {
+    char resolvedSha[65]{};
+    char sourceHead[65]{};
+    char resolvedHead[65]{};
+    unsigned long long firstDiff=~0ull;
+    uint32_t resolvedDeclared=0;
+    bool resolvedDxbc=false;
+    bool hashOkay=false;
+    DWORD fault=0;
+    __try {
+        const size_t head=(std::min)(bytes,size_t(32));
+        for(size_t i=0;i<head;++i){
+            sprintf_s(sourceHead+i*2,3,"%02X",source[i]);
+            sprintf_s(resolvedHead+i*2,3,"%02X",static_cast<unsigned char>(resolved[i]));
+        }
+        if(bytes>=28){
+            memcpy(&resolvedDeclared,resolved+24,sizeof(resolvedDeclared));
+            resolvedDxbc=memcmp(resolved,"DXBC",4)==0;
+        }
+        for(size_t i=0;i<bytes;++i){
+            if(static_cast<unsigned char>(resolved[i])!=source[i]){firstDiff=i;break;}
+        }
+        hashOkay=PTReflectionSha256(reinterpret_cast<const unsigned char*>(resolved),bytes,resolvedSha);
+    } __except(EXCEPTION_EXECUTE_HANDLER) {
+        fault=GetExceptionCode();
+    }
+    Log("PT_REFLECTION_%s_STORAGE_RESOLVE id=%d resident=%p bytes=%llu source_sha256=%s resolved_sha256=%s hash_ok=%u exact=%u first_diff=%llu source_head=%s resolved_head=%s resolved_dxbc=%u resolved_declared=%u exception=0x%08lX",
+        label,id,resolved,static_cast<unsigned long long>(bytes),sourceSha?sourceSha:"",resolvedSha,
+        unsigned(hashOkay),unsigned(hashOkay&&sourceSha&&strcmp(sourceSha,resolvedSha)==0),
+        firstDiff,sourceHead,resolvedHead,unsigned(resolvedDxbc),resolvedDeclared,fault);
+}
+
+static void PTReflectionRegisterP1InNativeStorage() noexcept {
+    if(ptReflectionP1StorageVerified||ptReflectionP1StorageAttempted||
        !ptReflectionP1Loaded||ptReflectionP1Bytes.empty()||
        !ptReflectionStoragePersist||!RRAlbedoShader::residentGetter)return;
 
