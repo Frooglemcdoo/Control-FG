@@ -1,13 +1,13 @@
 #pragma once
 #include "pt_scene_observer.h"
 #include "pt_native_binding.h"
-// M7 diagnostics are never used as rendering bindings.
+// M7R1 diagnostics are never used as rendering bindings.
 namespace PTSceneBindingRuntime {
 using PTSceneObserver::Event;
 constexpr unsigned Capacity=131072;
 static Event* events=nullptr;
 static unsigned stored=0,flushed=0,geometryRows=0,bindingRows=0;
-static std::atomic<UINT64> bindingCalls{0};
+static std::atomic<UINT64> bindingCalls{0},fillCalls[2]{},invalidCounts{0};
 static ULONGLONG lastTableTick=0;static unsigned tables=0;
 static SRWLOCK eventLock=SRWLOCK_INIT;
 static std::atomic<UINT64> calls{0},dropped{0};
@@ -46,21 +46,22 @@ static DWORD WINAPI Worker(void*) {
     while(GetTickCount64()-start<180000){Sleep(250);if(!(good=Flush()))break;}
     AcquireSRWLockExclusive(&eventLock);recording=false;ReleaseSRWLockExclusive(&eventLock);
     good=Flush()&&good;
-    char end[256];const int n=_snprintf_s(end,sizeof(end),_TRUNCATE,"{\"kind\":\"end\",\"calls\":%llu,\"records\":%u,\"dropped\":%llu,\"write_ok\":%s,\"scope\":\"recording_only_not_gpu_completion\"}\n",calls.load(),flushed,dropped.load(),good?"true":"false");
+    char end[512];const int n=_snprintf_s(end,sizeof(end),_TRUNCATE,"{\"kind\":\"end\",\"inline_calls\":%llu,\"worker_calls\":%llu,\"invalid_counts\":%llu,\"calls\":%llu,\"records\":%u,\"dropped\":%llu,\"write_ok\":%s,\"scope\":\"recording_only_not_gpu_completion\"}\n",fillCalls[0].load(),fillCalls[1].load(),invalidCounts.load(),calls.load(),flushed,dropped.load(),good?"true":"false");
     if(n>0)good=Write(end,static_cast<DWORD>(n))&&good;
     FlushFileBuffers(output);CloseHandle(output);output=INVALID_HANDLE_VALUE;
-    Log("PT_SCENE_M7_FINISHED calls=%llu records=%u dropped=%llu write_ok=%u recording_only=1",calls.load(),flushed,dropped.load(),unsigned(good));return 0;
+    Log("PT_SCENE_M7R1_FINISHED calls=%llu records=%u dropped=%llu write_ok=%u recording_only=1 inline_calls=%llu worker_calls=%llu invalid_counts=%llu",calls.load(),flushed,dropped.load(),unsigned(good),fillCalls[0].load(),fillCalls[1].load(),invalidCounts.load());return 0;
 }
 // Exact internal writer call at d3d+357c6, seven native arguments.
 using Fill=PTNativeBinding::Fill;
-static Fill nativeFill=nullptr;static RRAlbedoCallPatch fillPatch{};
-static void ObserveBindings(void* buffer,void* state,int bytes,int rays,int count,const void* bindings) noexcept {
-    if(!recording||count<=0||count>131072)return;
+static Fill nativeFill=nullptr;static RRAlbedoCallPatch fillPatch[2]{};
+static void ObserveBindings(UINT site,void* buffer,void* state,int bytes,int rays,int count,const void* bindings) noexcept {
+    if(!recording)return;
+    if(count<=0){++invalidCounts;return;}
     const auto now=GetTickCount64();bool capture=false;
     AcquireSRWLockExclusive(&eventLock);
     if(tables<8&&(tables==0||now-lastTableTick>=15000)){lastTableTick=now;++tables;capture=true;}
     ReleaseSRWLockExclusive(&eventLock);if(!capture)return;
-    Event h{};h.kind=5;h.sequence=++bindingCalls;h.site=0x357c6;h.list=reinterpret_cast<UINT_PTR>(buffer);
+    Event h{};h.kind=5;h.sequence=++bindingCalls;h.site=site;h.list=reinterpret_cast<UINT_PTR>(buffer);
     h.dest=reinterpret_cast<UINT_PTR>(state);h.count=static_cast<UINT>(count);h.stride=static_cast<UINT>(bytes);h.layout=static_cast<UINT>(rays);
     h.vertexCount=(std::min)(h.count,8191u);Sink(h);
     for(UINT i=0;i<h.vertexCount;++i){
@@ -70,26 +71,41 @@ static void ObserveBindings(void* buffer,void* state,int bytes,int rays,int coun
         std::memcpy(e.constants,b.constants,sizeof(b.constants));Sink(e);
     }
 }
-static void FillHook(int mode,void* buffer,void* state,int bytes,int rays,int count,const void* bindings){
-    const DWORD error=GetLastError();ObserveBindings(buffer,state,bytes,rays,count,bindings);SetLastError(error);
+static void FillHook(unsigned route,int mode,void* buffer,void* state,int bytes,int rays,int count,const void* bindings){
+    const DWORD error=GetLastError();
+    if(recording.load(std::memory_order_relaxed)){
+        ++fillCalls[route];ObserveBindings(route==0?0x357c6u:0x374a1u,buffer,state,bytes,rays,count,bindings);
+    }
+    SetLastError(error);
     PTNativeBinding::Forward(nativeFill,mode,buffer,state,bytes,rays,count,bindings);
 }
+static void FillInline(int mode,void* buffer,void* state,int bytes,int rays,int count,const void* bindings){
+    FillHook(0,mode,buffer,state,bytes,rays,count,bindings);
+}
+static void FillWorker(int mode,void* buffer,void* state,int bytes,int rays,int count,const void* bindings){
+    FillHook(1,mode,buffer,state,bytes,rays,count,bindings);
+}
+static void RestoreCalls(){
+    for(auto& p:fillPatch)if(p.site)RRAlbedoExchangeCall(&p,false);
+    buildCall[1].Exchange(false);buildCall[0].Exchange(false);
+}
 static bool Install(HMODULE d3d){
-    if(!HashMatches(d3d,kD3dHash)){Log("PT_SCENE_M7_INSTALL ready=0 reason=unsupported_module_hash");return false;}
+    if(!HashMatches(d3d,kD3dHash)){Log("PT_SCENE_M7R1_INSTALL ready=0 reason=unsupported_module_hash");return false;}
     wchar_t dir[32768]{};const DWORD len=GetEnvironmentVariableW(L"LOCALAPPDATA",dir,_countof(dir));if(!len||len>=_countof(dir))return false;
-    wchar_t name[160]{};swprintf_s(name,L"\\ControlFGProbe\\pt-scene-m7-%llu-%lu.jsonl",GetTickCount64(),GetCurrentProcessId());
+    wchar_t name[160]{};swprintf_s(name,L"\\ControlFGProbe\\pt-scene-m7r1-%llu-%lu.jsonl",GetTickCount64(),GetCurrentProcessId());
     output=CreateFileW((std::wstring(dir)+name).c_str(),GENERIC_WRITE,FILE_SHARE_READ,nullptr,CREATE_NEW,FILE_ATTRIBUTE_NORMAL,nullptr);
     if(output==INVALID_HANDLE_VALUE)return false;
     events=new(std::nothrow) Event[Capacity];if(!events){CloseHandle(output);output=INVALID_HANDLE_VALUE;return false;}
-    const char header[]="{\"kind\":\"header\",\"schema\":1,\"build\":\"M7\",\"limit\":131072,\"geometry_limit\":65536,\"binding_limit\":65536,\"seconds\":180,\"scope\":\"recording_only_not_gpu_completion\"}\n";
+    const char header[]="{\"kind\":\"header\",\"schema\":1,\"build\":\"M7R1\",\"limit\":131072,\"geometry_limit\":65536,\"binding_limit\":65536,\"seconds\":180,\"scope\":\"recording_only_not_gpu_completion\"}\n";
     bool ready=Write(header,static_cast<DWORD>(sizeof(header)-1));auto* b=reinterpret_cast<unsigned char*>(d3d);
     nativeFill=reinterpret_cast<Fill>(b+0x33a40);
-    ready=ready&&RRAlbedoPrepareCallPatch(b+0x357c6,reinterpret_cast<void*>(nativeFill),reinterpret_cast<void*>(&FillHook),&fillPatch);
+    ready=ready&&RRAlbedoPrepareCallPatch(b+0x357c6,reinterpret_cast<void*>(nativeFill),reinterpret_cast<void*>(&FillInline),&fillPatch[0]);
+    ready=ready&&RRAlbedoPrepareCallPatch(b+0x374a1,reinterpret_cast<void*>(nativeFill),reinterpret_cast<void*>(&FillWorker),&fillPatch[1]);
     ready=ready&&buildCall[0].Prepare(b+0x33593,72,reinterpret_cast<void*>(&Hook0))&&buildCall[1].Prepare(b+0x337cc,72,reinterpret_cast<void*>(&Hook1));
-    if(ready)ready=buildCall[0].Exchange(true)&&buildCall[1].Exchange(true)&&RRAlbedoExchangeCall(&fillPatch,true);
-    if(!ready){if(fillPatch.site)RRAlbedoExchangeCall(&fillPatch,false);buildCall[1].Exchange(false);buildCall[0].Exchange(false);CloseHandle(output);output=INVALID_HANDLE_VALUE;Log("PT_SCENE_M7_INSTALL ready=0 reason=call_patch");return false;}
+    if(ready)ready=buildCall[0].Exchange(true)&&buildCall[1].Exchange(true)&&RRAlbedoExchangeCall(&fillPatch[0],true)&&RRAlbedoExchangeCall(&fillPatch[1],true);
+    if(!ready){RestoreCalls();CloseHandle(output);output=INVALID_HANDLE_VALUE;Log("PT_SCENE_M7R1_INSTALL ready=0 reason=call_patch");return false;}
     recording=true;HANDLE thread=CreateThread(nullptr,0,&Worker,nullptr,0,nullptr);
-    if(!thread){recording=false;RRAlbedoExchangeCall(&fillPatch,false);buildCall[1].Exchange(false);buildCall[0].Exchange(false);CloseHandle(output);output=INVALID_HANDLE_VALUE;Log("PT_SCENE_M7_INSTALL ready=0 reason=writer_thread");return false;}
-    CloseHandle(thread);Log("PT_SCENE_M7_INSTALL ready=1 sites=33593,337cc,357c6 gpu_changes=0 duration_seconds=180 record_limit=%u",Capacity);return true;
+    if(!thread){recording=false;RestoreCalls();CloseHandle(output);output=INVALID_HANDLE_VALUE;Log("PT_SCENE_M7R1_INSTALL ready=0 reason=writer_thread");return false;}
+    CloseHandle(thread);Log("PT_SCENE_M7R1_INSTALL ready=1 sites=33593,337cc,357c6,374a1 gpu_changes=0 duration_seconds=180 record_limit=%u",Capacity);return true;
 }
 }

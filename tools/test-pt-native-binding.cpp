@@ -5,10 +5,10 @@
 #include "../src/pt_native_binding.h"
 #include <cassert>
 #include <cstdio>
-static int calls=0;
+static int calls=0,expectedMode=-1;
 static PTNativeBinding::Binding rows[2]{};
 static void Mock(int mode,void* buffer,void* state,int bytes,int rays,int count,const void* bindings) {
-    ++calls;assert(mode==-1&&buffer==rows&&state==rows+1&&bytes==1728&&rays==2&&count==2&&bindings==rows);
+    ++calls;assert(mode==expectedMode&&buffer==rows&&state==rows+1&&bytes==1728&&rays==2&&count==2&&bindings==rows);
 }
 int main() {
     using namespace PTNativeBinding;
@@ -21,6 +21,7 @@ int main() {
     b.constants[0]=8;b.indices=UINT64_MAX-3;assert(!IndexAddress(b,address));
     b.indices=0;assert(!IndexAddress(b,address));
     Forward(&Mock,-1,rows,rows+1,1728,2,2,rows);assert(calls==1);
+    expectedMode=7;Forward(&Mock,7,rows,rows+1,1728,2,2,rows);assert(calls==2);
 #ifdef _WIN32
     assert(Read(rows,1,b)&&std::memcmp(&b,&rows[1],64)==0);
     assert(!Read(nullptr,0,b)&&!Read(rows,131072,b));

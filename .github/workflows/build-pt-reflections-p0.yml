@@ -282,21 +282,21 @@ jobs:
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-PT-Scene-M7'
+          $out='Control-FG-PT-Scene-M7R1'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
-          Copy-Item tools/Collect-PT-Scene-M7.cmd,tools/Collect-PT-Scene-M7.ps1 $out
-          Copy-Item research/pt-reflections/PT-Scene-M7-README.txt "$out/README.txt"
+          Copy-Item tools/Collect-PT-Scene-M7R1.cmd,tools/Collect-PT-Scene-M7R1.ps1 $out
+          Copy-Item research/pt-reflections/PT-Scene-M7R1-README.txt "$out/README.txt"
           Compress-Archive -Path "$out/*" -DestinationPath "$out.zip" -Force
           (Get-FileHash "$out.zip" -Algorithm SHA256).Hash | Set-Content "$out.sha256" -Encoding ASCII
 
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-PT-Scene-M7
+          name: Control-FG-PT-Scene-M7R1
           path: |
-            Control-FG-PT-Scene-M7.zip
-            Control-FG-PT-Scene-M7.sha256
+            Control-FG-PT-Scene-M7R1.zip
+            Control-FG-PT-Scene-M7R1.sha256
             build/exports.txt
             build/imports.txt
             build/pt_reflection_p1.dxil
