@@ -47,20 +47,8 @@ jobs:
           if errorlevel 1 exit /b 1
           build\test-glass-call.exe
           if errorlevel 1 exit /b 1
-      - name: Execute temporal history regression on WARP
-        shell: cmd
-        run: |
-          for /f "usebackq tokens=*" %%I in (`"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath`) do set "VSPATH=%%I"
-          call "%VSPATH%\VC\Auxiliary\Build\vcvars64.bat"
-          if not exist build mkdir build
-          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-pt-glass-temporal.cpp /Febuild\test-glass-temporal.exe /link d3dcompiler.lib d3d12.lib dxgi.lib
-          if errorlevel 1 exit /b 1
-          build\test-glass-temporal.exe
-          if errorlevel 1 exit /b 1
-      - name: Verify diffuse transport and layout
-        run: python tools/test-pt-glass-diffuse.py
-      - name: Verify diffuse noise suppression
-        run: python tools/test-pt-glass-noise.py
+      - name: Verify glossy-only removal and native fallback
+        run: python tools/test-pt-glass-glossy-only.py
       - name: Verify glass installation compatibility gate
         run: python tools/test-pt-glass-install.py
 
@@ -255,11 +243,11 @@ jobs:
           dumpbin /exports build\dxgi.dll > build\exports.txt
           dumpbin /imports build\dxgi.dll > build\imports.txt
 
-      - name: Package glass integration G2D5
+      - name: Package glass integration G3
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-PT-Glass-G2D5'
+          $out='Control-FG-PT-Glass-G3'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/pt_glass_raygen.dxil "$out/pt_glass_raygen.dxil"
           Copy-Item build/pt_glass_secondary.dxbc "$out/pt_glass_secondary.dxbc"
@@ -274,36 +262,29 @@ jobs:
           Copy-Item Collect-ControlFG-Compact-Logs.ps1 "$out/Collect-ControlFG-Compact-Logs.ps1"
           Copy-Item Collect-ControlFG-Compact-Logs.cmd "$out/Collect-ControlFG-Compact-Logs.cmd"
           @'
-          CONTROL-FG - GLASS CONTINUATION G2D5 (EXPERIMENTAL)
+          CONTROL-FG - GLASS CONTINUATION G3 (EXPERIMENTAL)
           ===============================================
           Close Control. Back up your current dxgi.dll and PT shader sidecars.
           Extract every file here beside Control_DX12.exe, replacing matching files.
           Requires the existing Control FG installation and verified Steam game DLLs.
           Keep ray-traced transparent reflections enabled. F10 opens the overlay.
 
-          DIFFUSE / REFLECTED SHADOW DIAGNOSTICS. Starts in GLOSSY each launch.
-          F10 opens the overlay. Leave PT REFLECTIONS ON. The GLASS button
-          cycles GLOSSY -> GLOSSY + DIFFUSE -> NATIVE -> GLOSSY.
-          At a view with missing reflected shadows, stay still for 10 seconds
-          in GLOSSY, then 10 seconds in GLOSSY + DIFFUSE. Move briefly and
-          stop for another 10 seconds. Exit and run the included log collector.
-          Send the ZIP plus a screenshot showing the missing shadow location.
+          GLOSSY ONLY. The GLASS button now cycles GLOSSY <-> NATIVE.
+          PT REFLECTIONS remains the global PT toggle. Starts in GLOSSY.
+          Removed the added diffuse bounce, 11x11 filter, temporal history,
+          second hit/radiance layer, and G2D5 GPU diagnostic buffers/readbacks.
+          Native diffuse lighting remains part of the game's own shading.
+          Opaque PT is unchanged. The working glass glossy path is retained.
 
-          GPU captures every 120 glass recording serials, sampling a 32-pixel
-          grid. PT_GLASS_GPU reports native/raw/filtered/resolved diffuse,
-          actual per-pixel history acceptance/warmup, and material-weighted
-          changes. PT_GLASS_GPU_SHADOW reports native point/spot shadow tests
-          and attenuation, separately for the reflected surface (layer 0),
-          glossy continuation (1), and diffuse continuation (2).
-          Readback happens only when both submissions have completed. No
-          per-frame GPU wait. Diagnostic memory is about 18 MiB across all
-          three slots at 4K. The existing 6 GiB glass pool cap still applies.
+          A secondary-lighting validity marker now prevents an unshaded or
+          invalid radiance result from replacing native environment lighting.
+          Valid dark hits are still allowed; no brightness floor or tint boost.
+          This does not claim to resolve all missing PT color/information.
 
-          This build measures the G2D4 lighting; it does not yet add missing
-          shadow casters, ray-traced contact shadows, or increase diffuse gain.
-          Native shadow atlases are already evaluated at reflected surfaces.
-          Diffuse remains optional and keeps its existing temporal filtering.
-          Opaque PT shader binaries are unchanged.
+          To identify the remaining difference, keep the camera fixed and
+          capture PT OFF, PT ON + GLASS NATIVE, and PT ON + GLASS GLOSSY.
+          Keep RR, FG, exposure/view, and all other settings the same.
+          These separate opaque PT changes from the added glass continuation.
 
           Build/PSO/resource checks passed before packaging. In-game appearance
           and driver compatibility still require testing on the target RTX GPU.
@@ -318,10 +299,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-PT-Glass-G2D5
+          name: Control-FG-PT-Glass-G3
           path: |
-            Control-FG-PT-Glass-G2D5.zip
-            Control-FG-PT-Glass-G2D5.sha256
+            Control-FG-PT-Glass-G3.zip
+            Control-FG-PT-Glass-G3.sha256
             build/exports.txt
             build/imports.txt
             build/pt_reflection_p1.dxil

@@ -20,20 +20,8 @@ jobs:
           if errorlevel 1 exit /b 1
           build\test-glass-call.exe
           if errorlevel 1 exit /b 1
-      - name: Execute temporal history regression on WARP
-        shell: cmd
-        run: |
-          for /f "usebackq tokens=*" %%I in (`"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath`) do set "VSPATH=%%I"
-          call "%VSPATH%\VC\Auxiliary\Build\vcvars64.bat"
-          if not exist build mkdir build
-          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-pt-glass-temporal.cpp /Febuild\test-glass-temporal.exe /link d3dcompiler.lib d3d12.lib dxgi.lib
-          if errorlevel 1 exit /b 1
-          build\test-glass-temporal.exe
-          if errorlevel 1 exit /b 1
-      - name: Verify diffuse transport and layout
-        run: python tools/test-pt-glass-diffuse.py
-      - name: Verify diffuse noise suppression
-        run: python tools/test-pt-glass-noise.py
+      - name: Verify glossy-only removal and native fallback
+        run: python tools/test-pt-glass-glossy-only.py
       - name: Verify glass installation compatibility gate
         run: python tools/test-pt-glass-install.py
       - name: Compile native and dedicated secondary lighting

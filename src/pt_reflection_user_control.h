@@ -5,7 +5,7 @@
 // always returns to normal shading, even if F11 is pressed concurrently.
 // Bit 0 = added PT reflection lighting enabled; bits 1..2 = F11 mode.
 static std::atomic<unsigned int> ptReflectionUserState{1u};
-// Session-only glass comparison: native=0, working glossy=1, diffuse=2.
+// Session-only glass comparison: native=0, working glossy=1.
 // Start from the visually confirmed glossy path; opaque PT is independent.
 static std::atomic<unsigned int> ptGlassUserMode{1u};
 

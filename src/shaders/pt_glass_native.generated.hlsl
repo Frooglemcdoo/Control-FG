@@ -52,12 +52,10 @@ cbuffer distancefield_CS : register(b5) { uint4 ptCB5[2]; };
 #if PT_GLASS_SECONDARY_EVALUATION || PT_GLASS_COMPOSITE
 #include "pt_glass_secondary_layout.hlsli"
 StructuredBuffer<PTGlassSecondaryHit> ptGlassSecondaryHits : register(t28, space0);
-cbuffer PTGlassDispatch : register(b6) { uint ptGlassEpoch; uint ptGlassMaterialCount; uint2 ptGlassExtent; uint ptGlassMode; uint ptGlassHistorySerial; uint ptGlassCapture; };
-#include "pt_glass_diagnostics.hlsli"
+cbuffer PTGlassDispatch : register(b6) { uint ptGlassEpoch; uint ptGlassMaterialCount; uint2 ptGlassExtent; };
 #endif
 #if PT_GLASS_COMPOSITE
 Texture2D<float4> ptGlassRadiance : register(t29);
-#include "pt_glass_diffuse_filter.hlsli"
 #endif
 
 uint4 PTBitExtract(uint4 width,uint4 offset,uint4 value) {
@@ -133,18 +131,10 @@ void main(uint3 groupId : SV_GroupID, uint3 groupThreadId : SV_GroupThreadID) {
     return; // native dword 425
     } // native dword 426
     r1.zw=(uint4(0x0u,0x0u,0x0u,0x0u)).zw; // native dword 427
-#if PT_GLASS_SECONDARY_EVALUATION || PT_GLASS_COMPOSITE
-    PTGlassDiagnostic diagnostic=(PTGlassDiagnostic)0;
-    diagnostic.identity=uint4(ptGlassEpoch,0u,ptGlassMode,0u);
-    uint diagnosticLayer=PT_GLASS_SECONDARY_EVALUATION ? groupId.z+1u : 0u;
-    PTGlassDiagnosticStore(r1.xy,diagnosticLayer,diagnostic);
-#endif
 #if PT_GLASS_SECONDARY_EVALUATION
     if (any(r1.xy >= ptGlassExtent)) return;
-    uint layer=groupId.z;
-    uint2 outputPixel=r1.xy+uint2(0,layer*ptGlassExtent.y);
-    g_rwtRadiance[outputPixel]=0.0f;
-    PTGlassSecondaryHit ptHit=ptGlassSecondaryHits[r1.y*ptGlassExtent.x+r1.x+layer*ptGlassExtent.x*ptGlassExtent.y];
+    g_rwtRadiance[r1.xy]=0.0f;
+    PTGlassSecondaryHit ptHit=ptGlassSecondaryHits[r1.y*ptGlassExtent.x+r1.x];
     if (!PTGlassValidHit(ptHit,ptGlassEpoch,ptGlassMaterialCount)) return;
     r0=uint4(asuint(ptHit.incomingWorld_hitDistance.xyz),ptHit.metadata.x);
     r1.z=asuint(ptHit.incomingWorld_hitDistance.w*ptHit.incomingWorld_hitDistance.w);
@@ -533,9 +523,6 @@ void main(uint3 groupId : SV_GroupID, uint3 groupThreadId : SV_GroupThreadID) {
     r8.w=(asuint((asfloat(r8.wwww)*asfloat(r8.wwww)))).w; // native dword 3268
     r19.xyz=(asuint((asfloat(r8.wwww)*asfloat(r18.xyzx)))).xyz; // native dword 3275
     r18.xyz=((r22.xxxx!=0u?r19.xyzx:r18.xyzx)).xyz; // native dword 3282
-#if PT_GLASS_SECONDARY_EVALUATION || PT_GLASS_COMPOSITE
-    if(PTGlassDiagnosticPixel(r1.xy)) diagnostic.pointStats.w+=1.0f;
-#endif
     if((r22.yyyy).x != 0u) { // native dword 3291
     r19.xy=uint2(g_sbDeferredLightPointData[(r7.wwww).x].d[(uint4(0x44u,0x44u,0x44u,0x44u)).x/4u+0u],g_sbDeferredLightPointData[(r7.wwww).x].d[(uint4(0x44u,0x44u,0x44u,0x44u)).x/4u+1u]); // native dword 3294
     r22.xyz=uint3(g_sbDeferredLightPointData[(r7.wwww).x].d[(uint4(0x50u,0x50u,0x50u,0x50u)).x/4u+0u],g_sbDeferredLightPointData[(r7.wwww).x].d[(uint4(0x50u,0x50u,0x50u,0x50u)).x/4u+1u],g_sbDeferredLightPointData[(r7.wwww).x].d[(uint4(0x50u,0x50u,0x50u,0x50u)).x/4u+2u]); // native dword 3304
@@ -608,9 +595,6 @@ void main(uint3 groupId : SV_GroupID, uint3 groupThreadId : SV_GroupThreadID) {
     r8.w=(asuint(min(asfloat(r8.wwww),asfloat(uint4(0x3f800000u,0x3f800000u,0x3f800000u,0x3f800000u))))).w; // native dword 3814
     r16.w=((uint4(asfloat(r16.wwww)<asfloat(r19.xxxx))*0xffffffffu)).w; // native dword 3821
     r8.w=((r16.wwww!=0u?uint4(0x3f800000u,0x3f800000u,0x3f800000u,0x3f800000u):r8.wwww)).w; // native dword 3828
-#if PT_GLASS_SECONDARY_EVALUATION || PT_GLASS_COMPOSITE
-    if(PTGlassDiagnosticPixel(r1.xy)) diagnostic.pointStats+=float4(1.0f,asfloat(r8.w)<0.99f?1.0f:0.0f,asfloat(r8.w),0.0f);
-#endif
     r18.xyz=(asuint((asfloat(r8.wwww)*asfloat(r18.xyzx)))).xyz; // native dword 3837
     } // native dword 3844
     r8.w=(asuint(dot(asfloat(r21.xyzx).xyz,asfloat(r3.xyzx).xyz).xxxx)).w; // native dword 3845
@@ -859,9 +843,6 @@ void main(uint3 groupId : SV_GroupID, uint3 groupThreadId : SV_GroupThreadID) {
     r16.w=(asuint((asfloat(asuint(-asfloat(r22.yyyy)))+asfloat(r16.wwww)))).w; // native dword 5720
     r15.w=(asuint(min(asfloat(r15.wwww),asfloat(r16.wwww)))).w; // native dword 5728
     r10.w=((r10.wwww!=0u?r17.yyyy:r15.wwww)).w; // native dword 5735
-#if PT_GLASS_SECONDARY_EVALUATION || PT_GLASS_COMPOSITE
-    if(PTGlassDiagnosticPixel(r1.xy)) diagnostic.spot+=float4(1.0f,asfloat(r10.w)<0.99f?1.0f:0.0f,asfloat(r10.w),((r24.x!=0u||r24.y!=0u)?1.0f:0.0f));
-#endif
     r15.w=((uint4(asfloat(r10.wwww)!=asfloat(uint4(0x0u,0x0u,0x0u,0x0u)))*0xffffffffu)).w; // native dword 5744
     if((r15.wwww).x != 0u) { // native dword 5751
     r23.xyz=uint3(g_sbDeferredLightSpotData[(r7.wwww).x].d[(uint4(0x10u,0x10u,0x10u,0x10u)).x/4u+0u],g_sbDeferredLightSpotData[(r7.wwww).x].d[(uint4(0x10u,0x10u,0x10u,0x10u)).x/4u+1u],g_sbDeferredLightSpotData[(r7.wwww).x].d[(uint4(0x10u,0x10u,0x10u,0x10u)).x/4u+2u]); // native dword 5754
@@ -995,20 +976,13 @@ void main(uint3 groupId : SV_GroupID, uint3 groupThreadId : SV_GroupThreadID) {
     } // native dword 6717
     r2.xyzw=(r13.xzwx).xyzw; // native dword 6718
     r3.xyzw=(r18.xyzx).xyzw; // native dword 6723
-#if PT_GLASS_COMPOSITE
-    float3 diffuseIndirect=max(asfloat(r10.xyz),0.0f);
-    float3 originalDiffuse=diffuseIndirect;
-    PTGlassApplyDiffuse(r1.xy,diffuseIndirect,diagnostic);
-    diagnostic.reserved.xyz=(diffuseIndirect-originalDiffuse)*asfloat(r12.xyz);
-    r10.xyz=asuint(diffuseIndirect);
-#endif
     r2.xyzw=(asuint(mad(asfloat(r12.xyzw),asfloat(r10.xyzx),asfloat(r2.xyzw)))).xyzw; // native dword 6728
 #if PT_GLASS_COMPOSITE
     if (all(r1.xy < ptGlassExtent)) {
         PTGlassSecondaryHit bounce=ptGlassSecondaryHits[r1.y*ptGlassExtent.x+r1.x];
         if (PTGlassValidHit(bounce,ptGlassEpoch,ptGlassMaterialCount)) {
-            float3 traced=ptGlassRadiance.Load(int3(r1.xy,0)).xyz;
-            if (all(isfinite(traced))) r11.xyz=asuint(max(traced,0.0f));
+            float4 traced=ptGlassRadiance.Load(int3(r1.xy,0));
+            if (traced.w>0.5f && all(isfinite(traced.xyz))) r11.xyz=asuint(max(traced.xyz,0.0f));
         }
     }
 #endif
@@ -1023,20 +997,10 @@ void main(uint3 groupId : SV_GroupID, uint3 groupThreadId : SV_GroupThreadID) {
     r5.xyz=(asuint(g_sMaterialTextureArray[NonUniformResourceIndex((r0.wwww).x-0u)].SampleLevel(g_sLinearWrap,asfloat(r8.xyxx).xy,asfloat(uint4(0x0u,0x0u,0x0u,0x0u)).x))).xyzw.xyz; // native dword 6801
     r0.xyz=(asuint((asfloat(r0.xyzx)*asfloat(r5.xyzx)))).xyz; // native dword 6816
     } // native dword 6823
-#if PT_GLASS_COMPOSITE
-    diagnostic.reserved.xyz*=asfloat(r4.xyz);
-    diagnostic.output.y=PTGlassLuma(diagnostic.reserved.xyz);
-    diagnostic.output.z=PTGlassLuma(abs(diagnostic.reserved.xyz));
-#endif
     r2.xyzw=(asuint(mad(asfloat(r2.xyzw),asfloat(r4.xyzw),asfloat(r3.xyzw)))).xyzw; // native dword 6824
     r0.xyzw=(asuint((asfloat(r0.xyzx)+asfloat(r2.xyzw)))).xyzw; // native dword 6833
-#if PT_GLASS_SECONDARY_EVALUATION || PT_GLASS_COMPOSITE
-    diagnostic.identity.y=1u;
-    diagnostic.output.x=PTGlassLuma(max(asfloat(r0.xyz),0.0f));
-    PTGlassDiagnosticStore(r1.xy,diagnosticLayer,diagnostic);
-#endif
 #if PT_GLASS_SECONDARY_EVALUATION
-    g_rwtRadiance[outputPixel]=float4(max(asfloat(r0.xyz),0.0f),1.0f);
+    g_rwtRadiance[r1.xy]=float4(max(asfloat(r0.xyz),0.0f),1.0f);
 #else
     g_rwtRadiance[(r1.xyyy).xy]=asfloat(r0.xyzw); // native dword 6840
 #endif

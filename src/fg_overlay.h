@@ -872,8 +872,8 @@ static void PaintFGOverlay(HWND hwnd) noexcept {
     SelectObject(dc, smallFont); SetTextColor(dc, RGB(169, 169, 169));
     RECT ptDescription{304, 794 + lowerSectionOffset, 710, 846 + lowerSectionOffset};
     const unsigned glassMode=ptGlassUserMode.load(std::memory_order_acquire);
-    const wchar_t* glassLabel=glassMode==0?L"GLASS: NATIVE":glassMode==1?L"GLASS: GLOSSY":L"GLASS: GLOSSY + DIFFUSE";
-    PaintFGButton(dc, ptDescription, glassLabel, glassMode==2, ptEnabled);
+    const wchar_t* glassLabel=glassMode==0?L"GLASS: NATIVE":L"GLASS: GLOSSY";
+    PaintFGButton(dc, ptDescription, glassLabel, glassMode==1, ptEnabled);
 
 
 
@@ -1051,10 +1051,10 @@ static LRESULT CALLBACK FGOverlayWndProc(HWND hwnd, UINT message, WPARAM wParam,
         const int glassToggleY=794+FGOverlayLowerSectionOffset();
         if(x>=304&&x<710&&y>=glassToggleY&&y<glassToggleY+52){
             if(PTReflectionUserRequested()){
-                const unsigned mode=(ptGlassUserMode.load(std::memory_order_acquire)+1u)%3u;
+                const unsigned mode=(ptGlassUserMode.load(std::memory_order_acquire)+1u)%2u;
                 ptGlassUserMode.store(mode,std::memory_order_release);
                 Log("PT_GLASS_UI_MODE mode=%u label=%s opaque_pt_unchanged=1",mode,
-                    mode==0?"native":mode==1?"glossy":"glossy_diffuse");
+                    mode==0?"native":"glossy");
             }
             InvalidateRect(hwnd,nullptr,FALSE);return 0;
         }

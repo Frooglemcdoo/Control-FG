@@ -2,8 +2,7 @@
 #define PT_GLASS_SECONDARY_LAYOUT_HLSLI
 // Dedicated mod-owned storage. Never alias the native glass hit textures or
 // either opaque reflection sample layer. All values are full float precision.
-// Two 64-byte records per pixel: glossy layer 0 and diffuse layer 1.
-// Writers invalidate both layers for every pixel per dispatch.
+// One 64-byte glossy record per pixel, invalidated every dispatch.
 struct PTGlassSecondaryHit {
     float4 positionView_texcoordY;
     float4 normalWorld_texcoordX;

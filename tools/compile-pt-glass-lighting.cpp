@@ -36,8 +36,9 @@ static int Compile(int mode,ID3D12Device* device,ID3D12RootSignature* root) {
         good=good&&Binding(r,"g_tPosition_TexcoordY",D3D_SIT_TEXTURE,27,D3D_SRV_DIMENSION_TEXTURE2D);
     }
     if(composite)good=good&&Binding(r,"ptGlassRadiance",D3D_SIT_TEXTURE,29,D3D_SRV_DIMENSION_TEXTURE2D)&&Binding(r,"ptGlassSecondaryHits",D3D_SIT_STRUCTURED,28,D3D_SRV_DIMENSION_BUFFER)&&Binding(r,"PTGlassDispatch",D3D_SIT_CBUFFER,6,D3D_SRV_DIMENSION_UNKNOWN);
-    if(secondary||composite)good=good&&Binding(r,"ptGlassDiagnostics",D3D_SIT_UAV_RWSTRUCTURED,2,D3D_SRV_DIMENSION_BUFFER);
-    if(composite)good=good&&Binding(r,"ptGlassHistory",D3D_SIT_UAV_RWSTRUCTURED,1,D3D_SRV_DIMENSION_BUFFER);
+    D3D12_SHADER_INPUT_BIND_DESC removed{};
+    good=good&&FAILED(r->GetResourceBindingDescByName("ptGlassHistory",&removed))&&
+        FAILED(r->GetResourceBindingDescByName("ptGlassDiagnostics",&removed));
     r->Release();
     if(!good){code->Release();fputs("FAIL: glass shader binding contract\n",stderr);return 3;}
     D3D12_COMPUTE_PIPELINE_STATE_DESC pipeline{};pipeline.pRootSignature=root;
