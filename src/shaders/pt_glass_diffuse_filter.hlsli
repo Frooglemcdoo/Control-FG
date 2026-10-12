@@ -1,9 +1,10 @@
 // Cosine-weighted samples estimate irradiance/pi directly. Keep native material
 // and Fresnel factors at dword 6728; replace only part of the indirect term.
 #include "pt_glass_temporal.hlsli"
-void PTGlassApplyDiffuse(uint2 pixel,inout float3 illumination) {
+void PTGlassApplyDiffuse(uint2 pixel,inout float3 illumination,inout PTGlassDiagnostic diagnostic) {
     if(ptGlassMode!=2u)return;
     float3 fallback=illumination;
+    diagnostic.levels=PTGlassLuma(fallback).xxxx;
     if(any(pixel>=ptGlassExtent))return;
     float3 centerP=g_tPosition_TexcoordY.Load(int3(pixel,0)).xyz;
     float3 centerN=g_tNormal_TexcoordX.Load(int3(pixel,0)).xyz;
@@ -13,7 +14,7 @@ void PTGlassApplyDiffuse(uint2 pixel,inout float3 illumination) {
     // Broader support is confined to this low-frequency indirect term.
     // Track the effective sample count and variance so a few bright paths
     // cannot receive the same confidence as well-supported soft illumination.
-    float3 sum=0;float3 squares=0;float weights=0;float squaredWeights=0;
+    float3 sum=0;float3 squares=0;float weights=0;float squaredWeights=0;float hitWeights=0;
     [loop] for(int y=-5;y<=5;++y) [loop] for(int x=-5;x<=5;++x) {
         int2 q=int2(pixel)+int2(x,y);
         if(any(q<0)||any(q>=int2(ptGlassExtent)))continue;
@@ -28,6 +29,7 @@ void PTGlassApplyDiffuse(uint2 pixel,inout float3 illumination) {
         // A miss or rejected hit retains native GI; do not average only hits,
         // which would bias the estimate toward visible bright geometry.
         float3 value=(sample.w>0.5f&&all(isfinite(sample.xyz)))?max(sample.xyz,0.0f):fallback;
+        if(sample.w>0.5f&&all(isfinite(sample.xyz)))hitWeights+=w;
         sum+=value*w;squares+=value*value*w;weights+=w;squaredWeights+=w*w;
     }
     if(weights>0.0f) {
@@ -41,11 +43,18 @@ void PTGlassApplyDiffuse(uint2 pixel,inout float3 illumination) {
         float3 confidence=tolerance*tolerance/(tolerance*tolerance+errorVariance);
         float stable=min(confidence.x,min(confidence.y,confidence.z));
         float support=saturate((effectiveSamples-4.0f)/12.0f);
-        if(all(isfinite(mean))&&isfinite(stable))
+        if(all(isfinite(mean))&&isfinite(stable)) {
             illumination=lerp(fallback,mean,0.5f*stable*support);
+            diagnostic.levels.y=PTGlassLuma(mean);
+            diagnostic.filter=float4(0.5f*stable*support,effectiveSamples,hitWeights/max(weights,1e-6f),support);
+        }
     }
     float3 worldPosition=asfloat(ptCB0[6]).xyz*centerP.x+
         asfloat(ptCB0[7]).xyz*centerP.y+asfloat(ptCB0[8]).xyz*centerP.z+asfloat(ptCB0[9]).xyz;
-    if(all(isfinite(worldPosition))&&all(isfinite(illumination)))
-        PTGlassAccumulate(pixel,worldPosition,centerN,material,fallback,illumination);
+    diagnostic.levels.z=PTGlassLuma(illumination);
+    if(all(isfinite(worldPosition))&&all(isfinite(illumination))) {
+        float count=PTGlassAccumulate(pixel,worldPosition,centerN,material,fallback,illumination);
+        diagnostic.history=float4(count,count>1.0f?1.0f:0.0f,saturate((count-1.0f)/7.0f),1.0f);
+    }
+    diagnostic.levels.w=PTGlassLuma(illumination);
 }

@@ -79,7 +79,8 @@ out += ['#ifndef PT_GLASS_SECONDARY_EVALUATION', '#define PT_GLASS_SECONDARY_EVA
         '#ifndef PT_GLASS_COMPOSITE', '#define PT_GLASS_COMPOSITE 0', '#endif',
         '#if PT_GLASS_SECONDARY_EVALUATION || PT_GLASS_COMPOSITE', '#include "pt_glass_secondary_layout.hlsli"',
         'StructuredBuffer<PTGlassSecondaryHit> ptGlassSecondaryHits : register(t28, space0);',
-        'cbuffer PTGlassDispatch : register(b6) { uint ptGlassEpoch; uint ptGlassMaterialCount; uint2 ptGlassExtent; uint ptGlassMode; uint ptGlassHistorySerial; };',
+        'cbuffer PTGlassDispatch : register(b6) { uint ptGlassEpoch; uint ptGlassMaterialCount; uint2 ptGlassExtent; uint ptGlassMode; uint ptGlassHistorySerial; uint ptGlassCapture; };',
+        '#include "pt_glass_diagnostics.hlsli"',
         '#endif',
         '#if PT_GLASS_COMPOSITE',
         'Texture2D<float4> ptGlassRadiance : register(t29);',
@@ -110,6 +111,12 @@ for ins in selected:
  counts[op]=counts.get(op,0)+1
  def emit(s):out.append('    '+s+' // native dword '+str(at))
  if at==435:
+  out += ['#if PT_GLASS_SECONDARY_EVALUATION || PT_GLASS_COMPOSITE',
+          '    PTGlassDiagnostic diagnostic=(PTGlassDiagnostic)0;',
+          '    diagnostic.identity=uint4(ptGlassEpoch,0u,ptGlassMode,0u);',
+          '    uint diagnosticLayer=PT_GLASS_SECONDARY_EVALUATION ? groupId.z+1u : 0u;',
+          '    PTGlassDiagnosticStore(r1.xy,diagnosticLayer,diagnostic);',
+          '#endif']
   out += ['#if PT_GLASS_SECONDARY_EVALUATION',
           '    if (any(r1.xy >= ptGlassExtent)) return;',
           '    uint layer=groupId.z;',
@@ -126,8 +133,25 @@ for ins in selected:
           '    r4=asuint(ptHit.normalWorld_texcoordX);',
           '#else']
  if at==680:out.append('#endif')
+ # Visibility is observed immediately before native attenuation. The spot
+ # branch also includes unshadowed lights, so report eligibility separately.
+ if at==3291:
+  out += ['#if PT_GLASS_SECONDARY_EVALUATION || PT_GLASS_COMPOSITE',
+          '    if(PTGlassDiagnosticPixel(r1.xy)) diagnostic.pointStats.w+=1.0f;', '#endif']
+ if at in (3837,5744):
+  value='asfloat(r8.w)' if at==3837 else 'asfloat(r10.w)'
+  field='pointStats' if at==3837 else 'spot'
+  eligible='0.0f' if at==3837 else '((r24.x!=0u||r24.y!=0u)?1.0f:0.0f)'
+  out += ['#if PT_GLASS_SECONDARY_EVALUATION || PT_GLASS_COMPOSITE',
+          '    if(PTGlassDiagnosticPixel(r1.xy)) diagnostic.'+field+'+=float4(1.0f,'+value+'<0.99f?1.0f:0.0f,'+value+','+eligible+');',
+          '#endif']
  if at==6728:
-  out += ['#if PT_GLASS_COMPOSITE', '    float3 diffuseIndirect=max(asfloat(r10.xyz),0.0f);', '    PTGlassApplyDiffuse(r1.xy,diffuseIndirect);', '    r10.xyz=asuint(diffuseIndirect);', '#endif']
+  out += ['#if PT_GLASS_COMPOSITE', '    float3 diffuseIndirect=max(asfloat(r10.xyz),0.0f);', '    PTGlassApplyDiffuse(r1.xy,diffuseIndirect,diagnostic);', '    diagnostic.reserved.xyz=(diffuseIndirect-asfloat(r10.xyz))*asfloat(r12.xyz);', '    r10.xyz=asuint(diffuseIndirect);', '#endif']
+ if at==6824:
+  out += ['#if PT_GLASS_COMPOSITE',
+          '    diagnostic.reserved.xyz*=asfloat(r4.xyz);',
+          '    diagnostic.output.y=PTGlassLuma(diagnostic.reserved.xyz);',
+          '    diagnostic.output.z=PTGlassLuma(abs(diagnostic.reserved.xyz));', '#endif']
  if at==6737:
   out += ['#if PT_GLASS_COMPOSITE',
           '    if (all(r1.xy < ptGlassExtent)) {',
@@ -142,6 +166,11 @@ for ins in selected:
   emit('return;');continue
  if op=='store_uav_typed':
   assert rid(args[0])==0
+  out += ['#if PT_GLASS_SECONDARY_EVALUATION || PT_GLASS_COMPOSITE',
+          '    diagnostic.identity.y=1u;',
+          '    diagnostic.output.x=PTGlassLuma(max(asfloat(r0.xyz),0.0f));',
+          '    PTGlassDiagnosticStore(r1.xy,diagnosticLayer,diagnostic);',
+          '#endif']
   out.append('#if PT_GLASS_SECONDARY_EVALUATION')
   out.append('    g_rwtRadiance[outputPixel]=float4(max(asfloat(r0.xyz),0.0f),1.0f);')
   out.append('#else')

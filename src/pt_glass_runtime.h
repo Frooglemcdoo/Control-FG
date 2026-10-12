@@ -1,5 +1,6 @@
 #pragma once
 #include "pt_glass_resources.h"
+#include "pt_glass_diagnostics.h"
 #include "pt_glass_descriptors.h"
 #include "pt_glass_vtable_call.h"
 #include <intrin.h>
@@ -41,7 +42,7 @@ static void Skip(const char* stage,UINT64 mask=0,HRESULT hr=S_OK) {
     if(n<=12||n%600==0)Log("PT_GLASS_SKIP stage=%s observed=%llx hr=0x%08lX count=%llu",stage,mask,static_cast<unsigned long>(hr),n);
 }
 struct Context {void* manager=nullptr;ID3D12GraphicsCommandList* list=nullptr;ID3D12GraphicsCommandList4* rays=nullptr;ID3D12CommandQueue* queue=nullptr;PTGlass::DescriptorRange table;D3D12_GPU_DESCRIPTOR_HANDLE gpu{};};
-struct Pass {UINT64 serial=0;unsigned mode=1;UINT64 historyGeneration=0;UINT historyPrevious=0;Context rayContext{},lightingContext{};std::unique_ptr<PTGlass::LightingTableShadow> ray,light;PTGlass::Resources::Slot* slot=nullptr;bool traced=false;};
+struct Pass {UINT64 serial=0;unsigned mode=1;UINT64 historyGeneration=0;UINT historyPrevious=0;Context rayContext{},lightingContext{};std::unique_ptr<PTGlass::LightingTableShadow> ray,light;PTGlass::Resources::Slot* slot=nullptr;bool traced=false,capture=false;};
 static thread_local Pass pass;
 static bool ReadContext(Context* out) noexcept {
     *out={};if(!verifiedD3d)return false;
@@ -161,10 +162,29 @@ static void STDMETHODCALLTYPE ExecuteHook(ID3D12CommandQueue* q,UINT count,ID3D1
 static HRESULT STDMETHODCALLTYPE ResetHook(ID3D12GraphicsCommandList* list,ID3D12CommandAllocator* allocator,ID3D12PipelineState* pso){
     const HRESULT hr=reset(list,allocator,pso);if(SUCCEEDED(hr)){std::lock_guard<std::mutex> guard(lock);
         for(auto it=pending.begin();it!=pending.end();)if(it->list==list&&!it->hold.submitted){
+            resources.InvalidateDiagnostics(it->serial);
             if(it->hold.anySubmitted){if(FAILED(resources.Submitted(it->serial)))enabled=false;}
             else resources.Discarded(it->serial);it=pending.erase(it);
         }else ++it;}
     return hr;
+}
+// Acquire has already observed both real queue fences before this readback.
+static void ReadDiagnostics(PTGlass::Resources::Slot* slot) {
+    const UINT serial=slot->diagnosticSerial,mode=slot->diagnosticMode;
+    slot->diagnosticSerial=0;if(!serial)return;
+    const SIZE_T samples=SIZE_T((slot->width+31)/32)*((slot->height+31)/32);
+    D3D12_RANGE range{0,samples*3*sizeof(PTGlass::Diagnostic)};void* mapped=nullptr;
+    const HRESULT hr=slot->diagnosticReadback->Map(0,&range,&mapped);
+    if(FAILED(hr)){Skip("diagnostic_readback",serial,hr);return;}
+    const auto* records=static_cast<const PTGlass::Diagnostic*>(mapped);
+    for(UINT layer=0;layer<3;++layer){
+        PTGlass::DiagnosticSummary s;
+        for(SIZE_T i=0;i<samples;++i)s.Add(records[layer*samples+i],serial,mode);
+        const double n=s.diffuse?double(s.diffuse):1.0;
+        Log("PT_GLASS_GPU serial=%u mode=%u layer=%u sampled=%u shaded=%u invalid=%u diffuse=%u accepted=%u rejected=%u warm=%u changed_gt_1pct=%u native=%.6g raw=%.6g spatial=%.6g resolved=%.6g filter_weight=%.5f effective_samples=%.3f hit_fraction=%.4f history_count=%.3f material_delta=%.6g material_abs_delta=%.6g final_luma=%.6g",serial,mode,layer,s.sampled,s.shaded,s.invalid,s.diffuse,s.accepted,s.rejected,s.warm,s.changed,s.native/n,s.raw/n,s.spatial/n,s.resolved/n,s.weight/n,s.samples/n,s.hits/n,s.count/n,s.delta/n,s.absoluteDelta/n,s.finalLight/n);
+        Log("PT_GLASS_GPU_SHADOW serial=%u mode=%u layer=%u point_lights=%.0f point_shadow_tests=%.0f point_occluded=%.0f point_visibility=%.5f spot_lights=%.0f spot_shadow_eligible=%.0f spot_occluded=%.0f spot_visibility=%.5f",serial,mode,layer,s.point[3],s.point[0],s.point[1],s.point[0]?s.point[2]/s.point[0]:1.0,s.spot[0],s.spot[3],s.spot[1],s.spot[0]?s.spot[2]/s.spot[0]:1.0);
+    }
+    D3D12_RANGE written{0,0};slot->diagnosticReadback->Unmap(0,&written);
 }
 static void STDMETHODCALLTYPE SetRayPsoHook(ID3D12GraphicsCommandList4* list,ID3D12StateObject* pso){currentRayPso=pso;setRayPso(list,pso);}
 static void STDMETHODCALLTYPE RaysHook(ID3D12GraphicsCommandList4* list,const D3D12_DISPATCH_RAYS_DESC* desc){
@@ -196,7 +216,7 @@ static void STDMETHODCALLTYPE RaysHook(ID3D12GraphicsCommandList4* list,const D3
     if(pass.serial>UINT32_MAX){Skip("recording_serial");dispatchRays(list,desc);return;}
     const HRESULT acquireHr=resources.Acquire(pass.serial,desc->Width,desc->Height,&pass.slot);
     if(FAILED(acquireHr)){Skip("resource_acquire",(UINT64(desc->Width)<<32)|desc->Height,acquireHr);dispatchRays(list,desc);return;}
-    auto* slot=pass.slot;void* mapped=nullptr;
+    auto* slot=pass.slot;ReadDiagnostics(slot);void* mapped=nullptr;
     if(FAILED(slot->dispatch->Map(0,nullptr,&mapped))){Skip("dispatch_upload_map");resources.Discarded(pass.serial);pass.slot=nullptr;dispatchRays(list,desc);return;}
     const UINT64 now=GetTickCount64();
     const UINT historySerial=slot->historyGeneration==pass.historyGeneration&&
@@ -204,7 +224,8 @@ static void STDMETHODCALLTYPE RaysHook(ID3D12GraphicsCommandList4* list,const D3
         now-slot->historyTime<=250?static_cast<UINT>(slot->historySerial):0u;
     // An aborted/discarded consumer must not advertise unwritten history.
     slot->historySerial=0;pass.historyPrevious=historySerial;
-    memset(mapped,0,512);UINT constants[8]{static_cast<UINT>(pass.serial),65534,desc->Width,desc->Height,pass.mode,historySerial,0,0};memcpy(mapped,constants,sizeof(constants));memcpy(static_cast<unsigned char*>(mapped)+256,identifier,32);slot->dispatch->Unmap(0,nullptr);
+    pass.capture=pass.serial%120==0;
+    memset(mapped,0,512);UINT constants[8]{static_cast<UINT>(pass.serial),65534,desc->Width,desc->Height,pass.mode,historySerial,pass.capture?1u:0u,0};memcpy(mapped,constants,sizeof(constants));memcpy(static_cast<unsigned char*>(mapped)+256,identifier,32);slot->dispatch->Unmap(0,nullptr);
     mirrorGuard=true;
     const bool ready=pass.ray->Copy(pass.serial,2,{slot->descriptors.Get(),4,1})&&pass.ray->Copy(pass.serial,45,{slot->descriptors.Get(),0,1});
     PTGlass::DescriptorRange fresh;D3D12_GPU_DESCRIPTOR_HANDLE table{};
@@ -297,10 +318,11 @@ static void LightHook(void* state,const void* dimensions){
     mirrorGuard=true;
     bool good=SUCCEEDED(composite.Initialize(device.Get()))&&composite.Begin(pass.serial,context.table)&&composite.Copy(pass.serial,0,pass.light->Snapshot());
     D3D12_CONSTANT_BUFFER_VIEW_DESC cb{slot->dispatch->GetGPUVirtualAddress(),256};
+    good=good&&pass.light->Copy(pass.serial,43,{slot->descriptors.Get(),6,1});
     good=good&&pass.light->ConfigureSecondary(pass.serial,cb,{slot->descriptors.Get(),1,1},{slot->descriptors.Get(),2,1});
-    good=good&&composite.Copy(pass.serial,2,{slot->descriptors.Get(),4,1})&&composite.Copy(pass.serial,33,{slot->descriptors.Get(),1,1})&&composite.Copy(pass.serial,34,{slot->descriptors.Get(),3,1})&&composite.Copy(pass.serial,42,{slot->descriptors.Get(),5,1});
+    good=good&&composite.Copy(pass.serial,2,{slot->descriptors.Get(),4,1})&&composite.Copy(pass.serial,33,{slot->descriptors.Get(),1,1})&&composite.Copy(pass.serial,34,{slot->descriptors.Get(),3,1})&&composite.Copy(pass.serial,42,{slot->descriptors.Get(),5,1})&&composite.Copy(pass.serial,43,{slot->descriptors.Get(),6,1});
     PTGlass::DescriptorRange secondaryRange{},compositeRange{};D3D12_GPU_DESCRIPTOR_HANDLE secondaryTable{},compositeTable{};
-    good=good&&Fresh(context,&secondaryRange)&&pass.light->Publish(pass.serial,secondaryRange,&secondaryTable)&&Fresh(context,&compositeRange)&&composite.PublishChecked(pass.serial,compositeRange,PTGlass::LightingTableLayout::NativeRequired|(1ull<<2)|(1ull<<33)|(1ull<<34)|(1ull<<41)|(1ull<<42),&compositeTable);
+    good=good&&Fresh(context,&secondaryRange)&&pass.light->Has(pass.serial,1ull<<43)&&pass.light->Publish(pass.serial,secondaryRange,&secondaryTable)&&Fresh(context,&compositeRange)&&composite.PublishChecked(pass.serial,compositeRange,PTGlass::LightingTableLayout::NativeRequired|(1ull<<2)|(1ull<<33)|(1ull<<34)|(1ull<<41)|(1ull<<42)|(1ull<<43),&compositeTable);
     mirrorGuard=false;if(!good){Skip("lighting_tables");return;}
     auto* list=context.list;D3D12_RESOURCE_BARRIER uav{};uav.Type=D3D12_RESOURCE_BARRIER_TYPE_UAV;list->ResourceBarrier(1,&uav);
     Barrier(list,slot->hits.Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
@@ -310,6 +332,12 @@ static void LightHook(void* state,const void* dimensions){
     list->ResourceBarrier(1,&uav);
     Barrier(list,slot->hits.Get(),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
     Barrier(list,slot->radiance.Get(),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+    if(pass.capture){
+        Barrier(list,slot->diagnostics.Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS,D3D12_RESOURCE_STATE_COPY_SOURCE);
+        list->CopyResource(slot->diagnosticReadback.Get(),slot->diagnostics.Get());
+        Barrier(list,slot->diagnostics.Get(),D3D12_RESOURCE_STATE_COPY_SOURCE,D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+        slot->diagnosticSerial=static_cast<UINT>(pass.serial);slot->diagnosticMode=pass.mode;
+    }
     if(pass.mode==2){slot->historySerial=pass.serial;slot->historyGeneration=pass.historyGeneration;slot->historyTime=GetTickCount64();}
     finish.consumer=context.list;
     const auto n=dispatchCount.load();if(n<=4||n%240==0)Log("PT_GLASS_LIGHTING dispatch=%llu secondary=1 composite=1 native_diffuse_direct_emission_retained=1 mode=%u history_previous=%u",n,pass.mode,pass.historyPrevious);
@@ -369,7 +397,7 @@ static bool Install(HMODULE renderer,HMODULE d3d){
        RRAlbedoPrepareCallPatch(b+0xa562e,reinterpret_cast<void*>(bindNative),reinterpret_cast<void*>(&BindHook),&bindPatch);
     if(ready)ready=nativeSetCall.Exchange(true)&&nativeDispatchCall.Exchange(true)&&usePatch.Exchange(true)&&rayPatch.Exchange(true)&&lightPatch.Exchange(true)&&RRAlbedoExchangeCall(&bindPatch,true);
     if(!ready){nativeSetCall.Exchange(false);nativeDispatchCall.Exchange(false);usePatch.Exchange(false);rayPatch.Exchange(false);lightPatch.Exchange(false);RRAlbedoExchangeCall(&bindPatch,false);}
-    enabled=ready;Log("PT_GLASS_INSTALL ready=%u build=G2D4 temporal_diffuse=1 glass_mode_default=glossy diffuse_default=0 smoothness_min=0.8",unsigned(ready));
+    enabled=ready;Log("PT_GLASS_INSTALL ready=%u build=G2D5 gpu_diagnostics=1 shadow_diagnostics=1 temporal_diffuse=1 glass_mode_default=glossy diffuse_default=0 smoothness_min=0.8",unsigned(ready));
     if(ready){ID3D12Device* existing=nullptr;memcpy(&existing,reinterpret_cast<unsigned char*>(d3d)+kControlGlobalD3D12DevicePointerRva,sizeof(existing));if(existing)InstallDevice(existing);}
     return ready;
 }

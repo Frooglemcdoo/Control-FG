@@ -34,6 +34,9 @@ int main(){
     assert(first->radiance->GetDesc().Height==128*PTGlass::HitLayers);
     assert(first->history->GetDesc().Width==128ull*128*48);
     assert(first->historySerial==0&&first->historyGeneration==0);
+    assert(first->diagnostics->GetDesc().Width==((first->width+31)/32)*((first->height+31)/32)*3ull*128);
+    assert(first->diagnosticReadback->GetDesc().Width==first->diagnostics->GetDesc().Width);
+    assert(first->diagnosticSerial==0);
     const auto one=pool.ResidentBytes();assert(one>0);
     PTGlass::Resources::Slot* duplicate=nullptr;assert(FAILED(pool.Acquire(1,128,128,&duplicate)));
     // Hold real GPU execution behind an unsignalled fence, then queue the pool's
@@ -61,9 +64,13 @@ int main(){
     assert(SUCCEEDED(resize.Acquire(10,128,128,&first)));first->historySerial=10;first->historyGeneration=2;assert(resize.Discarded(10));
     assert(SUCCEEDED(resize.Acquire(11,256,256,&first)));
     assert(first->historySerial==0&&first->historyGeneration==0);
+    assert(first->diagnostics->GetDesc().Width==((first->width+31)/32)*((first->height+31)/32)*3ull*128);
+    assert(first->diagnosticReadback->GetDesc().Width==first->diagnostics->GetDesc().Width);
+    assert(first->diagnosticSerial==0);
     assert(first->history->GetDesc().Width==256ull*256*48);
     assert(first->hits->GetDesc().Width==256ull*256*64*PTGlass::HitLayers);
-    assert(resize.Discarded(11));assert(resize.StopAndTrim());assert(resize.ResidentBytes()==0);
+    first->diagnosticSerial=11;resize.InvalidateDiagnostics(11);assert(first->diagnosticSerial==0);
+    first->diagnosticSerial=11;assert(resize.Discarded(11));assert(first->diagnosticSerial==0);assert(resize.StopAndTrim());assert(resize.ResidentBytes()==0);
     PTGlass::Resources limited;assert(SUCCEEDED(limited.Initialize(device.Get(),queue.Get(),1)));
     assert(limited.Acquire(12,128,128,&first)==E_OUTOFMEMORY);assert(limited.ResidentBytes()==0);
     assert(limited.StopAndTrim());

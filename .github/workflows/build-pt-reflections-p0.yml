@@ -255,11 +255,11 @@ jobs:
           dumpbin /exports build\dxgi.dll > build\exports.txt
           dumpbin /imports build\dxgi.dll > build\imports.txt
 
-      - name: Package glass integration G2D4
+      - name: Package glass integration G2D5
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-PT-Glass-G2D4'
+          $out='Control-FG-PT-Glass-G2D5'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/pt_glass_raygen.dxil "$out/pt_glass_raygen.dxil"
           Copy-Item build/pt_glass_secondary.dxbc "$out/pt_glass_secondary.dxbc"
@@ -274,28 +274,36 @@ jobs:
           Copy-Item Collect-ControlFG-Compact-Logs.ps1 "$out/Collect-ControlFG-Compact-Logs.ps1"
           Copy-Item Collect-ControlFG-Compact-Logs.cmd "$out/Collect-ControlFG-Compact-Logs.cmd"
           @'
-          CONTROL-FG - GLASS CONTINUATION G2D4 (EXPERIMENTAL)
+          CONTROL-FG - GLASS CONTINUATION G2D5 (EXPERIMENTAL)
           ===============================================
           Close Control. Back up your current dxgi.dll and PT shader sidecars.
           Extract every file here beside Control_DX12.exe, replacing matching files.
           Requires the existing Control FG installation and verified Steam game DLLs.
-          Keep ray-traced transparent reflections enabled. F10 controls PT.
+          Keep ray-traced transparent reflections enabled. F10 opens the overlay.
 
-          DIFFUSE TEMPORAL TEST: starts in GLOSSY mode every launch.
-          Open F10 overlay. Leave PT REFLECTIONS ON. The GLASS button beside
-          it cycles GLOSSY -> GLOSSY + DIFFUSE -> NATIVE -> GLOSSY.
-          Select GLOSSY + DIFFUSE to test the new temporal accumulation.
-          Diffuse directions change each dispatch. Up to 16 visits accumulate
-          per fenced slot; new history fades in across its first 8 visits.
-          History requires matching reflected position (2 cm), normal and
-          material. Stale slots, mode changes and resolution changes reset it.
-          This conservatively reuses the same pixel, without motion reprojection:
-          moving views can fall back to native GI until stable history rebuilds.
-          Glossy detail and opaque PT shaders are unchanged.
-          Added history costs about 0.5 GiB at 1440p / 1.1 GiB at 4K for 3 slots.
-          The full glass resource pool is now bounded to 6 GiB.
-          Compare still and moving views; check for trails, grain and FPS cost.
-          Mode changes are recorded as PT_GLASS_UI_MODE in collected logs.
+          DIFFUSE / REFLECTED SHADOW DIAGNOSTICS. Starts in GLOSSY each launch.
+          F10 opens the overlay. Leave PT REFLECTIONS ON. The GLASS button
+          cycles GLOSSY -> GLOSSY + DIFFUSE -> NATIVE -> GLOSSY.
+          At a view with missing reflected shadows, stay still for 10 seconds
+          in GLOSSY, then 10 seconds in GLOSSY + DIFFUSE. Move briefly and
+          stop for another 10 seconds. Exit and run the included log collector.
+          Send the ZIP plus a screenshot showing the missing shadow location.
+
+          GPU captures every 120 glass recording serials, sampling a 32-pixel
+          grid. PT_GLASS_GPU reports native/raw/filtered/resolved diffuse,
+          actual per-pixel history acceptance/warmup, and material-weighted
+          changes. PT_GLASS_GPU_SHADOW reports native point/spot shadow tests
+          and attenuation, separately for the reflected surface (layer 0),
+          glossy continuation (1), and diffuse continuation (2).
+          Readback happens only when both submissions have completed. No
+          per-frame GPU wait. Diagnostic memory is about 6 MiB across all
+          three slots at 4K. The existing 6 GiB glass pool cap still applies.
+
+          This build measures the G2D4 lighting; it does not yet add missing
+          shadow casters, ray-traced contact shadows, or increase diffuse gain.
+          Native shadow atlases are already evaluated at reflected surfaces.
+          Diffuse remains optional and keeps its existing temporal filtering.
+          Opaque PT shader binaries are unchanged.
 
           Build/PSO/resource checks passed before packaging. In-game appearance
           and driver compatibility still require testing on the target RTX GPU.
@@ -310,10 +318,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-PT-Glass-G2D4
+          name: Control-FG-PT-Glass-G2D5
           path: |
-            Control-FG-PT-Glass-G2D4.zip
-            Control-FG-PT-Glass-G2D4.sha256
+            Control-FG-PT-Glass-G2D5.zip
+            Control-FG-PT-Glass-G2D5.sha256
             build/exports.txt
             build/imports.txt
             build/pt_reflection_p1.dxil

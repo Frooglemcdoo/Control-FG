@@ -12,11 +12,12 @@ class Resources {
 public:
     struct Slot {
         Ticket ticket;
-        Microsoft::WRL::ComPtr<ID3D12Resource> hits, radiance, dispatch, history;
+        Microsoft::WRL::ComPtr<ID3D12Resource> hits, radiance, dispatch, history, diagnostics, diagnosticReadback;
         Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> descriptors;
         std::uint32_t width=0,height=0;
         std::uint64_t allocationBytes=0;
         std::uint64_t historySerial=0,historyGeneration=0,historyTime=0;
+        std::uint32_t diagnosticSerial=0,diagnosticMode=0;
     };
 private:
     std::mutex mutex;
@@ -33,13 +34,15 @@ private:
         for(auto& slot:slots)slot.ticket.Complete(completed);
     }
     static void Release(Slot& slot) noexcept {
-        slot.descriptors.Reset();slot.hits.Reset();slot.radiance.Reset();slot.dispatch.Reset();slot.history.Reset();
+        slot.descriptors.Reset();slot.hits.Reset();slot.radiance.Reset();slot.dispatch.Reset();slot.history.Reset();slot.diagnostics.Reset();slot.diagnosticReadback.Reset();
         slot.width=slot.height=0;slot.allocationBytes=0;slot.ticket={};
         slot.historySerial=slot.historyGeneration=slot.historyTime=0;
+        slot.diagnosticSerial=slot.diagnosticMode=0;
+        std::uint32_t diagnosticSerial=0,diagnosticMode=0;
     }
     HRESULT Allocate(Slot& slot,UINT width,UINT height) noexcept {
         UINT64 hitBytes=0;if(!HitBytes(width,height,&hitBytes))return E_INVALIDARG;
-        D3D12_RESOURCE_DESC desc[4]{};
+        D3D12_RESOURCE_DESC desc[6]{};
         desc[0].Dimension=D3D12_RESOURCE_DIMENSION_BUFFER;
         desc[0].Width=hitBytes;desc[0].Height=1;desc[0].DepthOrArraySize=1;
         desc[0].MipLevels=1;desc[0].SampleDesc.Count=1;
@@ -52,7 +55,9 @@ private:
         desc[1].Flags=D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
         desc[2]=desc[0];desc[2].Width=512;desc[2].Flags=D3D12_RESOURCE_FLAG_NONE;
         desc[3]=desc[0];desc[3].Width=UINT64(width)*height*48;
-        const auto info=device->GetResourceAllocationInfo(0,4,desc);
+        desc[4]=desc[0];desc[4].Width=UINT64((width+31)/32)*((height+31)/32)*3*128;
+        desc[5]=desc[4];desc[5].Flags=D3D12_RESOURCE_FLAG_NONE;
+        const auto info=device->GetResourceAllocationInfo(0,6,desc);
         if(info.SizeInBytes==UINT64_MAX || info.SizeInBytes>budget)return E_OUTOFMEMORY;
         UINT64 used=0;for(const auto& other:slots)used+=other.allocationBytes;
         if(used>budget-info.SizeInBytes)return E_OUTOFMEMORY;
@@ -65,11 +70,16 @@ private:
             D3D12_RESOURCE_STATE_UNORDERED_ACCESS,nullptr,IID_PPV_ARGS(&fresh.radiance));
         if(SUCCEEDED(hr))hr=device->CreateCommittedResource(&heap,D3D12_HEAP_FLAG_NONE,&desc[3],
             D3D12_RESOURCE_STATE_UNORDERED_ACCESS,nullptr,IID_PPV_ARGS(&fresh.history));
+        if(SUCCEEDED(hr))hr=device->CreateCommittedResource(&heap,D3D12_HEAP_FLAG_NONE,&desc[4],
+            D3D12_RESOURCE_STATE_UNORDERED_ACCESS,nullptr,IID_PPV_ARGS(&fresh.diagnostics));
+        heap.Type=D3D12_HEAP_TYPE_READBACK;
+        if(SUCCEEDED(hr))hr=device->CreateCommittedResource(&heap,D3D12_HEAP_FLAG_NONE,&desc[5],
+            D3D12_RESOURCE_STATE_COPY_DEST,nullptr,IID_PPV_ARGS(&fresh.diagnosticReadback));
         heap.Type=D3D12_HEAP_TYPE_UPLOAD;
         if(SUCCEEDED(hr))hr=device->CreateCommittedResource(&heap,D3D12_HEAP_FLAG_NONE,&desc[2],
             D3D12_RESOURCE_STATE_GENERIC_READ,nullptr,IID_PPV_ARGS(&fresh.dispatch));
         D3D12_DESCRIPTOR_HEAP_DESC hd{};hd.Type=D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-        hd.NumDescriptors=6; // hits UAV/SRV, radiance UAV/SRV, CBV, history UAV.
+        hd.NumDescriptors=7; // hits UAV/SRV, radiance UAV/SRV, CBV, history and diagnostic UAVs.
         if(SUCCEEDED(hr))hr=device->CreateDescriptorHeap(&hd,IID_PPV_ARGS(&fresh.descriptors));
         if(FAILED(hr))return hr;
         const UINT step=device->GetDescriptorHandleIncrementSize(hd.Type);
@@ -93,6 +103,9 @@ private:
         uav={};uav.ViewDimension=D3D12_UAV_DIMENSION_BUFFER;
         uav.Buffer.NumElements=width*height;uav.Buffer.StructureByteStride=48;
         device->CreateUnorderedAccessView(fresh.history.Get(),nullptr,&uav,cpu);
+        cpu.ptr+=step;uav.Buffer.NumElements=((width+31)/32)*((height+31)/32)*3;uav.Buffer.StructureByteStride=128;
+        device->CreateUnorderedAccessView(fresh.diagnostics.Get(),nullptr,&uav,cpu);
+        slot.diagnostics=std::move(fresh.diagnostics);slot.diagnosticReadback=std::move(fresh.diagnosticReadback);
         slot.history=std::move(fresh.history);
         slot.dispatch=std::move(fresh.dispatch);
         slot.hits=std::move(fresh.hits);slot.radiance=std::move(fresh.radiance);
@@ -108,7 +121,7 @@ public:
         // Normal teardown requires StopAndTrim()==true. If the owner violates
         // that contract, retain pending COM references instead of freeing GPU work.
         for(auto& slot:slots)if(!slot.ticket.Releasable()){
-            slot.hits.Detach();slot.radiance.Detach();slot.descriptors.Detach();slot.dispatch.Detach();slot.history.Detach();
+            slot.hits.Detach();slot.radiance.Detach();slot.descriptors.Detach();slot.dispatch.Detach();slot.history.Detach();slot.diagnostics.Detach();slot.diagnosticReadback.Detach();
         }
     }
     HRESULT Initialize(ID3D12Device* d,ID3D12CommandQueue* q,UINT64 byteBudget) noexcept {
@@ -154,10 +167,14 @@ public:
         if(FAILED(hr)){found->ticket.phase=Phase::Quarantined;failed=true;return hr;}
         return found->ticket.Submit(recording,value)?S_OK:E_UNEXPECTED;
     }
+    void InvalidateDiagnostics(UINT64 recording) noexcept {
+        std::lock_guard<std::mutex> lock(mutex);
+        for(auto& slot:slots)if(slot.ticket.recording==recording)slot.diagnosticSerial=0;
+    }
     // Only after a recorded list is RESET/DISCARDED without submission.
     bool Discarded(UINT64 recording) noexcept {
         std::lock_guard<std::mutex> lock(mutex);
-        for(auto& slot:slots)if(slot.ticket.Discard(recording))return true;
+        for(auto& slot:slots)if(slot.ticket.Discard(recording)){slot.diagnosticSerial=0;return true;}
         return false;
     }
     bool StopAndTrim() noexcept {

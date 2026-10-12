@@ -8,7 +8,7 @@ struct PTGlassHistory {
 };
 RWStructuredBuffer<PTGlassHistory> ptGlassHistory : register(u1);
 
-void PTGlassAccumulate(uint2 pixel,float3 worldPosition,float3 normal,uint material,
+float PTGlassAccumulate(uint2 pixel,float3 worldPosition,float3 normal,uint material,
                        float3 fallback,inout float3 illumination) {
     uint index=pixel.y*ptGlassExtent.x+pixel.x;
     float count=1.0f;
@@ -41,4 +41,5 @@ void PTGlassAccumulate(uint2 pixel,float3 worldPosition,float3 normal,uint mater
     ptGlassHistory[index]=current;
     // New/disoccluded surfaces stay on native GI while evidence builds.
     illumination=lerp(fallback,resolved,saturate((count-1.0f)/7.0f));
+    return count;
 }
