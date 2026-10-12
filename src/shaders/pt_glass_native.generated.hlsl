@@ -56,6 +56,7 @@ cbuffer PTGlassDispatch : register(b6) { uint ptGlassEpoch; uint ptGlassMaterial
 #endif
 #if PT_GLASS_COMPOSITE
 Texture2D<float4> ptGlassRadiance : register(t29);
+#include "pt_glass_diffuse_filter.hlsli"
 #endif
 
 uint4 PTBitExtract(uint4 width,uint4 offset,uint4 value) {
@@ -133,8 +134,10 @@ void main(uint3 groupId : SV_GroupID, uint3 groupThreadId : SV_GroupThreadID) {
     r1.zw=(uint4(0x0u,0x0u,0x0u,0x0u)).zw; // native dword 427
 #if PT_GLASS_SECONDARY_EVALUATION
     if (any(r1.xy >= ptGlassExtent)) return;
-    g_rwtRadiance[r1.xy]=0.0f;
-    PTGlassSecondaryHit ptHit=ptGlassSecondaryHits[r1.y*ptGlassExtent.x+r1.x];
+    uint layer=groupId.z;
+    uint2 outputPixel=r1.xy+uint2(0,layer*ptGlassExtent.y);
+    g_rwtRadiance[outputPixel]=0.0f;
+    PTGlassSecondaryHit ptHit=ptGlassSecondaryHits[r1.y*ptGlassExtent.x+r1.x+layer*ptGlassExtent.x*ptGlassExtent.y];
     if (!PTGlassValidHit(ptHit,ptGlassEpoch,ptGlassMaterialCount)) return;
     r0=uint4(asuint(ptHit.incomingWorld_hitDistance.xyz),ptHit.metadata.x);
     r1.z=asuint(ptHit.incomingWorld_hitDistance.w*ptHit.incomingWorld_hitDistance.w);
@@ -976,6 +979,9 @@ void main(uint3 groupId : SV_GroupID, uint3 groupThreadId : SV_GroupThreadID) {
     } // native dword 6717
     r2.xyzw=(r13.xzwx).xyzw; // native dword 6718
     r3.xyzw=(r18.xyzx).xyzw; // native dword 6723
+#if PT_GLASS_COMPOSITE
+    r10.xyz=asuint(PTGlassFilteredDiffuse(r1.xy,max(asfloat(r10.xyz),0.0f)));
+#endif
     r2.xyzw=(asuint(mad(asfloat(r12.xyzw),asfloat(r10.xyzx),asfloat(r2.xyzw)))).xyzw; // native dword 6728
 #if PT_GLASS_COMPOSITE
     if (all(r1.xy < ptGlassExtent)) {
@@ -999,6 +1005,10 @@ void main(uint3 groupId : SV_GroupID, uint3 groupThreadId : SV_GroupThreadID) {
     } // native dword 6823
     r2.xyzw=(asuint(mad(asfloat(r2.xyzw),asfloat(r4.xyzw),asfloat(r3.xyzw)))).xyzw; // native dword 6824
     r0.xyzw=(asuint((asfloat(r0.xyzx)+asfloat(r2.xyzw)))).xyzw; // native dword 6833
+#if PT_GLASS_SECONDARY_EVALUATION
+    g_rwtRadiance[outputPixel]=float4(max(asfloat(r0.xyz),0.0f),1.0f);
+#else
     g_rwtRadiance[(r1.xyyy).xy]=asfloat(r0.xyzw); // native dword 6840
+#endif
     return; // native dword 6848
 }

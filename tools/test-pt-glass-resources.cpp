@@ -20,7 +20,7 @@ int main(){
     assert(!ticket.Discard(17));assert(ticket.Complete(9));assert(ticket.Releasable());
     UINT64 bytes=123;assert(!PTGlass::HitBytes(0,1,&bytes)&&bytes==0);
     assert(!PTGlass::HitBytes(UINT32_MAX,UINT32_MAX,&bytes));
-    assert(PTGlass::HitBytes(3840,2160,&bytes)&&bytes==530841600ull);
+    assert(PTGlass::HitBytes(3840,2160,&bytes)&&bytes==1061683200ull);
     ComPtr<IDXGIFactory4> factory;assert(SUCCEEDED(CreateDXGIFactory1(IID_PPV_ARGS(&factory))));
     ComPtr<IDXGIAdapter> adapter;assert(SUCCEEDED(factory->EnumWarpAdapter(IID_PPV_ARGS(&adapter))));
     ComPtr<ID3D12Device> device;assert(SUCCEEDED(D3D12CreateDevice(adapter.Get(),D3D_FEATURE_LEVEL_11_0,IID_PPV_ARGS(&device))));
@@ -29,8 +29,9 @@ int main(){
     ComPtr<ID3D12Fence> gate;assert(SUCCEEDED(device->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&gate))));
     PTGlass::Resources pool;assert(SUCCEEDED(pool.Initialize(device.Get(),queue.Get(),16ull*1024*1024)));
     PTGlass::Resources::Slot* first=nullptr;assert(SUCCEEDED(pool.Acquire(1,128,128,&first)));
-    assert(first->hits->GetDesc().Width==128ull*128*64);
+    assert(first->hits->GetDesc().Width==128ull*128*64*PTGlass::HitLayers);
     assert(first->radiance->GetDesc().Format==DXGI_FORMAT_R16G16B16A16_FLOAT);
+    assert(first->radiance->GetDesc().Height==128*PTGlass::HitLayers);
     const auto one=pool.ResidentBytes();assert(one>0);
     PTGlass::Resources::Slot* duplicate=nullptr;assert(FAILED(pool.Acquire(1,128,128,&duplicate)));
     // Hold real GPU execution behind an unsignalled fence, then queue the pool's
@@ -57,7 +58,7 @@ int main(){
     PTGlass::Resources resize;assert(SUCCEEDED(resize.Initialize(device.Get(),queue.Get(),16ull*1024*1024)));
     assert(SUCCEEDED(resize.Acquire(10,128,128,&first)));assert(resize.Discarded(10));
     assert(SUCCEEDED(resize.Acquire(11,256,256,&first)));
-    assert(first->hits->GetDesc().Width==256ull*256*64);
+    assert(first->hits->GetDesc().Width==256ull*256*64*PTGlass::HitLayers);
     assert(resize.Discarded(11));assert(resize.StopAndTrim());assert(resize.ResidentBytes()==0);
     PTGlass::Resources limited;assert(SUCCEEDED(limited.Initialize(device.Get(),queue.Get(),1)));
     assert(limited.Acquire(12,128,128,&first)==E_OUTOFMEMORY);assert(limited.ResidentBytes()==0);

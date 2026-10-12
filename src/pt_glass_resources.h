@@ -44,7 +44,7 @@ private:
         desc[0].Layout=D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
         desc[0].Flags=D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
         desc[1].Dimension=D3D12_RESOURCE_DIMENSION_TEXTURE2D;
-        desc[1].Width=width;desc[1].Height=height;desc[1].DepthOrArraySize=1;
+        desc[1].Width=width;desc[1].Height=height*HitLayers;desc[1].DepthOrArraySize=1;
         desc[1].MipLevels=1;desc[1].SampleDesc.Count=1;
         desc[1].Format=DXGI_FORMAT_R16G16B16A16_FLOAT;
         desc[1].Flags=D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
@@ -70,11 +70,11 @@ private:
         const UINT step=device->GetDescriptorHandleIncrementSize(hd.Type);
         auto cpu=fresh.descriptors->GetCPUDescriptorHandleForHeapStart();
         D3D12_UNORDERED_ACCESS_VIEW_DESC uav{};uav.ViewDimension=D3D12_UAV_DIMENSION_BUFFER;
-        uav.Buffer.NumElements=width*height;uav.Buffer.StructureByteStride=static_cast<UINT>(HitStride);
+        uav.Buffer.NumElements=width*height*HitLayers;uav.Buffer.StructureByteStride=static_cast<UINT>(HitStride);
         device->CreateUnorderedAccessView(fresh.hits.Get(),nullptr,&uav,cpu);cpu.ptr+=step;
         D3D12_SHADER_RESOURCE_VIEW_DESC srv{};srv.ViewDimension=D3D12_SRV_DIMENSION_BUFFER;
         srv.Shader4ComponentMapping=D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-        srv.Buffer.NumElements=width*height;srv.Buffer.StructureByteStride=static_cast<UINT>(HitStride);
+        srv.Buffer.NumElements=width*height*HitLayers;srv.Buffer.StructureByteStride=static_cast<UINT>(HitStride);
         device->CreateShaderResourceView(fresh.hits.Get(),&srv,cpu);cpu.ptr+=step;
         uav={};uav.ViewDimension=D3D12_UAV_DIMENSION_TEXTURE2D;uav.Format=desc[1].Format;
         device->CreateUnorderedAccessView(fresh.radiance.Get(),nullptr,&uav,cpu);cpu.ptr+=step;

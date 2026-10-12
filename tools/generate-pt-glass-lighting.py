@@ -83,6 +83,7 @@ out += ['#ifndef PT_GLASS_SECONDARY_EVALUATION', '#define PT_GLASS_SECONDARY_EVA
         '#endif',
         '#if PT_GLASS_COMPOSITE',
         'Texture2D<float4> ptGlassRadiance : register(t29);',
+        '#include "pt_glass_diffuse_filter.hlsli"',
         '#endif']
 out += ['''
 uint4 PTBitExtract(uint4 width,uint4 offset,uint4 value) {
@@ -111,8 +112,10 @@ for ins in selected:
  if at==435:
   out += ['#if PT_GLASS_SECONDARY_EVALUATION',
           '    if (any(r1.xy >= ptGlassExtent)) return;',
-          '    g_rwtRadiance[r1.xy]=0.0f;',
-          '    PTGlassSecondaryHit ptHit=ptGlassSecondaryHits[r1.y*ptGlassExtent.x+r1.x];',
+          '    uint layer=groupId.z;',
+          '    uint2 outputPixel=r1.xy+uint2(0,layer*ptGlassExtent.y);',
+          '    g_rwtRadiance[outputPixel]=0.0f;',
+          '    PTGlassSecondaryHit ptHit=ptGlassSecondaryHits[r1.y*ptGlassExtent.x+r1.x+layer*ptGlassExtent.x*ptGlassExtent.y];',
           '    if (!PTGlassValidHit(ptHit,ptGlassEpoch,ptGlassMaterialCount)) return;',
           '    r0=uint4(asuint(ptHit.incomingWorld_hitDistance.xyz),ptHit.metadata.x);',
           '    r1.z=asuint(ptHit.incomingWorld_hitDistance.w*ptHit.incomingWorld_hitDistance.w);',
@@ -123,6 +126,8 @@ for ins in selected:
           '    r4=asuint(ptHit.normalWorld_texcoordX);',
           '#else']
  if at==680:out.append('#endif')
+ if at==6728:
+  out += ['#if PT_GLASS_COMPOSITE', '    r10.xyz=asuint(PTGlassFilteredDiffuse(r1.xy,max(asfloat(r10.xyz),0.0f)));', '#endif']
  if at==6737:
   out += ['#if PT_GLASS_COMPOSITE',
           '    if (all(r1.xy < ptGlassExtent)) {',
@@ -137,7 +142,11 @@ for ins in selected:
   emit('return;');continue
  if op=='store_uav_typed':
   assert rid(args[0])==0
-  emit('g_rwtRadiance[('+src(args[1])+').xy]=asfloat('+src(args[2])+');');continue
+  out.append('#if PT_GLASS_SECONDARY_EVALUATION')
+  out.append('    g_rwtRadiance[outputPixel]=float4(max(asfloat(r0.xyz),0.0f),1.0f);')
+  out.append('#else')
+  emit('g_rwtRadiance[('+src(args[1])+').xy]=asfloat('+src(args[2])+');')
+  out.append('#endif');continue
  if op=='udiv':
   numerator='divNumerator'+str(at);denominator='divDenominator'+str(at)
   emit('uint4 '+numerator+'='+src(args[2])+';')

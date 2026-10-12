@@ -16,6 +16,15 @@ globallycoherent RWTexture2D<float4> nativePosition : register(u3);
 globallycoherent RWStructuredBuffer<PTGlassSecondaryHit> secondary : register(u4);
 struct Payload { float value; };
 float3 ViewToWorld(float3 p) {return p.x*sys[6].xyz+p.y*sys[7].xyz+p.z*sys[8].xyz+sys[9].xyz;}
+uint DiffuseHash(uint x) {x^=x>>16;x*=0x7feb352du;x^=x>>15;x*=0x846ca68bu;return x^(x>>16);}
+float3 DiffuseDirection(uint2 pixel,float3 n) {
+    uint seed=DiffuseHash(pixel.x+pixel.y*extent.x);
+    float u=(float(seed&65535u)+0.5f)/65536.0f;
+    float v=(float(seed>>16)+0.5f)/65536.0f;
+    float3 t=normalize(cross(abs(n.z)<0.999f?float3(0,0,1):float3(0,1,0),n));
+    float3 b=cross(n,t);float phi=6.28318530718f*v;
+    return normalize(t*(sqrt(u)*cos(phi))+b*(sqrt(u)*sin(phi))+n*sqrt(1-u));
+}
 [shader("raygeneration")]
 void ptGlassRayGeneration() {
     uint2 pixel=DispatchRaysIndex().xy;
@@ -37,6 +46,7 @@ void ptGlassRayGeneration() {
     if(any(pixel>=extent))return;
     uint index=pixel.y*extent.x+pixel.x;
     secondary[index]=PTGlassInvalidHit(epoch);
+    secondary[index+extent.x*extent.y]=PTGlassInvalidHit(epoch);
     float2 firstDepth=nativeDepth[pixel];
     if(!all(isfinite(firstDepth))||firstDepth.x<=0||firstDepth.x>40000||firstDepth.y<=0||firstDepth.y>60)return;
     uint firstMaterial=nativeMaterial[pixel];
@@ -49,13 +59,15 @@ void ptGlassRayGeneration() {
     // reflection is not an estimator for rough or diffuse reflection.
     float2 range=float2(materials[firstMaterial].d[17],materials[firstMaterial].d[18]);
     float smoothness=saturate(lerp(range.x,range.y,materialTextures[NonUniformResourceIndex(firstMaterial*35+2)].SampleLevel(linearWrap,float2(firstNormal.w,firstPosition.w),0).x));
-    if(smoothness<0.8f)return;
+
     float3 surfacePoint=ViewToWorld(firstPosition.xyz);
     float3 glass=primary.Origin+primary.Direction*firstDepth.x;
     float3 incoming=normalize(surfacePoint-glass),normal=normalize(firstNormal.xyz);
     if(dot(incoming,normal)>0)normal=-normal;
-    float3 outgoing=normalize(reflect(incoming,normal));
-    if(!all(isfinite(outgoing))||dot(outgoing,normal)<=0.001f)return;
+    [unroll] for(uint layer=0;layer<2;++layer) {
+    if(layer==0&&smoothness<0.8f)continue;
+    float3 outgoing=layer==0?normalize(reflect(incoming,normal)):DiffuseDirection(pixel,normal);
+    if(!all(isfinite(outgoing))||dot(outgoing,normal)<=0.001f)continue;
     RayDesc continuation;continuation.Origin=surfacePoint+normal*0.01f;
     continuation.Direction=outgoing;continuation.TMin=0.01f;continuation.TMax=60;
     // Reflection hit/miss exports stay native, including alpha tests, tangent
@@ -70,10 +82,11 @@ void ptGlassRayGeneration() {
         hit.positionView_texcoordY=nativePosition[pixel];
         hit.normalWorld_texcoordX=nativeNormal[pixel];
         hit.incomingWorld_hitDistance=float4(outgoing,secondDepth.y);
-        hit.metadata=uint4(nativeMaterial[pixel],1,epoch,0);
-        if(PTGlassValidHit(hit,epoch,safeCount))secondary[index]=hit;
+        hit.metadata=uint4(nativeMaterial[pixel],1,epoch,layer);
+        if(PTGlassValidHit(hit,epoch,safeCount))secondary[index+layer*extent.x*extent.y]=hit;
     }
     nativeDepth[pixel]=firstDepth;nativeMaterial[pixel]=firstMaterial;
     nativeNormal[pixel]=firstNormal;nativePosition[pixel]=firstPosition;
     DeviceMemoryBarrier();
+    }
 }

@@ -2,12 +2,13 @@
 #define PT_GLASS_SECONDARY_LAYOUT_HLSLI
 // Dedicated mod-owned storage. Never alias the native glass hit textures or
 // either opaque reflection sample layer. All values are full float precision.
-// One 64-byte record per pixel; writers must invalidate every pixel per dispatch.
+// Two 64-byte records per pixel: glossy layer 0 and diffuse layer 1.
+// Writers invalidate both layers for every pixel per dispatch.
 struct PTGlassSecondaryHit {
     float4 positionView_texcoordY;
     float4 normalWorld_texcoordX;
     float4 incomingWorld_hitDistance;
-    uint4 metadata; // material ID, valid flag, dispatch epoch, reserved
+    uint4 metadata; // material ID, valid flag, dispatch epoch, sample layer
 };
 PTGlassSecondaryHit PTGlassInvalidHit(uint dispatchEpoch) {
     PTGlassSecondaryHit hit = (PTGlassSecondaryHit)0;

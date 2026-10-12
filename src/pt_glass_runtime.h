@@ -186,7 +186,7 @@ static void STDMETHODCALLTYPE RaysHook(ID3D12GraphicsCommandList4* list,const D3
             if(resolved&&raw)static_cast<IUnknown*>(raw)->QueryInterface(IID_PPV_ARGS(&nativeQueue));
             if(raw)static_cast<IUnknown*>(raw)->Release();
             if(!nativeQueue){Skip("queue_native_interface");dispatchRays(list,desc);return;}
-            const HRESULT hr=resources.Initialize(device.Get(),nativeQueue.Get(),2ull*1024*1024*1024);
+            const HRESULT hr=resources.Initialize(device.Get(),nativeQueue.Get(),4ull*1024*1024*1024);
             if(FAILED(hr)){Skip("queue_resource_init",0,hr);dispatchRays(list,desc);return;}
             queue=context.queue;queueReady=true;
             Log("PT_GLASS_QUEUE_READY submitted_queue=%p native_queue=%p native_device=%p",queue.Get(),nativeQueue.Get(),device.Get());
@@ -290,7 +290,7 @@ static void LightHook(void* state,const void* dimensions){
     mirrorGuard=false;if(!good){Skip("lighting_tables");return;}
     auto* list=context.list;D3D12_RESOURCE_BARRIER uav{};uav.Type=D3D12_RESOURCE_BARRIER_TYPE_UAV;list->ResourceBarrier(1,&uav);
     Barrier(list,slot->hits.Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-    {PTGlass::ScopedLightingBinding binding(list,nativeLighting.Get(),context.gpu,secondaryLighting.Get(),secondaryTable);list->Dispatch(dims[0],dims[1],dims[2]);}
+    {PTGlass::ScopedLightingBinding binding(list,nativeLighting.Get(),context.gpu,secondaryLighting.Get(),secondaryTable);list->Dispatch(dims[0],dims[1],PTGlass::HitLayers);}
     Barrier(list,slot->radiance.Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
     {PTGlass::ScopedLightingBinding binding(list,nativeLighting.Get(),context.gpu,compositeLighting.Get(),compositeTable);list->Dispatch(dims[0],dims[1],dims[2]);}
     list->ResourceBarrier(1,&uav);
@@ -337,7 +337,7 @@ struct NativeCallPatch {
 static NativeCallPatch nativeSetCall,nativeDispatchCall;
 static bool Install(HMODULE renderer,HMODULE d3d){
     if(!HashMatches(renderer,kRendererHash)||!HashMatches(d3d,kD3dHash)){
-        Log("PT_GLASS_INSTALL ready=0 build=G1R4 reason=unsupported_module_hash");return false;
+        Log("PT_GLASS_INSTALL ready=0 build=G2D1 reason=unsupported_module_hash");return false;
     }
     char sha[65]{};bool loaded=false;
     if(!PTReflectionLoadSidecar(L"pt_glass_raygen.dxil","GLASS_RAY",rayBytes,sha,loaded)||
@@ -354,7 +354,7 @@ static bool Install(HMODULE renderer,HMODULE d3d){
        RRAlbedoPrepareCallPatch(b+0xa562e,reinterpret_cast<void*>(bindNative),reinterpret_cast<void*>(&BindHook),&bindPatch);
     if(ready)ready=nativeSetCall.Exchange(true)&&nativeDispatchCall.Exchange(true)&&usePatch.Exchange(true)&&rayPatch.Exchange(true)&&lightPatch.Exchange(true)&&RRAlbedoExchangeCall(&bindPatch,true);
     if(!ready){nativeSetCall.Exchange(false);nativeDispatchCall.Exchange(false);usePatch.Exchange(false);rayPatch.Exchange(false);lightPatch.Exchange(false);RRAlbedoExchangeCall(&bindPatch,false);}
-    enabled=ready;Log("PT_GLASS_INSTALL ready=%u build=G1R4 glossy_only=1 smoothness_min=0.8",unsigned(ready));
+    enabled=ready;Log("PT_GLASS_INSTALL ready=%u build=G2D1 diffuse_bounce=1 smoothness_min=0.8",unsigned(ready));
     if(ready){ID3D12Device* existing=nullptr;memcpy(&existing,reinterpret_cast<unsigned char*>(d3d)+kControlGlobalD3D12DevicePointerRva,sizeof(existing));if(existing)InstallDevice(existing);}
     return ready;
 }

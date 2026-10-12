@@ -4,6 +4,7 @@
 namespace PTGlass {
 constexpr std::uint64_t HitStride=64;
 constexpr unsigned SlotCount=3;
+constexpr unsigned HitLayers=2;
 enum class Phase { Empty, Idle, Recording, Submitted, Quarantined };
 // Hold a slot across the native ray submission until its lighting consumer
 // has been recorded and submitted. Producer completion alone is insufficient.
@@ -41,8 +42,8 @@ struct Ticket {
 inline bool HitBytes(std::uint32_t width,std::uint32_t height,std::uint64_t* bytes) noexcept {
     if(!bytes)return false;
     *bytes=0;
-    if(!width || !height || width>16384 || height>16384)return false;
-    *bytes=std::uint64_t(width)*height*HitStride;
+    if(!width || !height || width>16384 || height>8192)return false;
+    *bytes=std::uint64_t(width)*height*HitStride*HitLayers;
     return true;
 }
 }
