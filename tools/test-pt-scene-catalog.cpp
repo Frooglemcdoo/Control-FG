@@ -67,5 +67,9 @@ int main(){
     // Ownership preflight must subsequently reject that token if released. This
     // catalog cannot turn an address into a new allocation identity.
     assert(!late.Submit(2,{{2,ray}}));assert(late.Scene(300,top,scene)==Status::invalid);
+    Catalog cancelled;const auto cancelledGeneration=cancelled.Begin(1);
+    assert(cancelled.Mark(1,cancelledGeneration,400));cancelled.Forget(400);
+    assert(cancelled.Submit(1,{{1,cancelledGeneration}}));
+    assert(cancelled.Scene(400,top,scene)==Status::missing); // Submission cannot resurrect cancellation.
     std::puts("PASS scene catalog: submitted build/copy cuts, exact allocations, late signals, unknown writes, reset and replay rejection.");
 }

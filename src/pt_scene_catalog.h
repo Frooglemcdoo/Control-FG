@@ -107,7 +107,7 @@ public:
         }
         for(const auto& item:lists){auto& r=recordings[item.first];r.submitted=true;
             for(const auto& op:r.operations){
-                if(op.ticket){const auto cut=graph.Mark(queue);if(!cut){valid=false;return false;}cuts[op.ticket]=cut;continue;}
+                if(op.ticket){const auto cut=graph.Mark(queue);if(!cut){valid=false;return false;}auto selected=cuts.find(op.ticket);if(selected!=cuts.end())selected->second=cut;continue;}
                 const auto before=graph.Mark(queue);if(!before){valid=false;return false;}
                 const U64 version=op.snapshot->kind==Snapshot::Kind::unknown?0:++serial;
                 if(version)versions.emplace(version,Version{op.snapshot,before});
@@ -120,6 +120,7 @@ public:
     }
     bool Signal(U64 queue,U64 fence,U64 value){std::lock_guard<std::mutex> guard(mutex);if(!valid)return false;return valid=graph.Signal(queue,fence,value)!=0;}
     bool Wait(U64 queue,U64 fence,U64 value){std::lock_guard<std::mutex> guard(mutex);if(!valid)return false;return valid=graph.Wait(queue,fence,value)!=0;}
+    void Forget(U64 ticket){std::lock_guard<std::mutex> guard(mutex);cuts.erase(ticket);}
     void Invalidate(){std::lock_guard<std::mutex> guard(mutex);valid=false;}
     Status Scene(U64 ticket,Allocation selected,PTSceneDispatch::Scene& output)const {
         output={};std::lock_guard<std::mutex> guard(mutex);if(!valid)return Status::invalid;

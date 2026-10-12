@@ -21,6 +21,10 @@ class Runtime {
     PTSceneLive::Owner& owner;
     std::mutex mutex;
     std::map<std::uint64_t,Entry> pending;
+    auto Erase(std::map<std::uint64_t,Entry>::iterator it){
+        owner.Scenes().Forget(it->first);return pending.erase(it);
+    }
+    void Clear(){for(const auto& entry:pending)owner.Scenes().Forget(entry.first);pending.clear();}
     static bool Same(const Ticket& a,const Ticket& b){
         return a.serial==b.serial&&a.list==b.list&&a.pipeline==b.pipeline&&a.counter==b.counter&&a.hitTable==b.hitTable&&
             a.hitBytes==b.hitBytes&&a.width==b.width&&a.height==b.height&&a.writer==b.writer&&
@@ -53,14 +57,14 @@ public:
     // and exact shader slot choose the AS; unused stale slots are never scanned.
     void Submitting(UINT count,ID3D12CommandList*const* lists){
         std::lock_guard<std::mutex> guard(mutex);
-        if(!count||count>256||!lists){pending.clear();return;}
+        if(!count||count>256||!lists){Clear();return;}
         for(UINT n=0;n<count;++n){
             Microsoft::WRL::ComPtr<IUnknown> identity;
-            if(!lists[n]||FAILED(lists[n]->QueryInterface(IID_PPV_ARGS(&identity)))){pending.clear();return;}
+            if(!lists[n]||FAILED(lists[n]->QueryInterface(IID_PPV_ARGS(&identity)))){Clear();return;}
             for(auto it=pending.begin();it!=pending.end();){
                 auto& e=it->second;
                 if(e.list.Get()!=identity.Get()){++it;continue;}
-                if(e.submitted||!owner.Select(e.heap.Get(),e.tableFirst,e.srvSlot,e.acceleration)){it=pending.erase(it);continue;}
+                if(e.submitted||!owner.Select(e.heap.Get(),e.tableFirst,e.srvSlot,e.acceleration)){it=Erase(it);continue;}
                 e.submitted=true;++it;
             }
         }
@@ -70,26 +74,26 @@ public:
         if(found==pending.end())return false;
         auto& entry=found->second;
         if(!Same(entry.ticket,ticket)||entry.written||!owner.Resources().SnapshotWriter(ticket,entry.identifiers,entry.table)){
-            pending.erase(found);return false;
+            Erase(found);return false;
         }
         entry.written=true;return true;
     }
-    void Cancelled(std::uint64_t serial){std::lock_guard<std::mutex> guard(mutex);pending.erase(serial);}
+    void Cancelled(std::uint64_t serial){std::lock_guard<std::mutex> guard(mutex);const auto found=pending.find(serial);if(found!=pending.end())Erase(found);}
     Status Prepare(std::uint64_t serial,const PTSceneDispatch::ExportSet& exports,PTSceneDispatch::Plan& plan,PTOwnedScene::LeaseBatch& lease){
         plan={};std::lock_guard<std::mutex> guard(mutex);const auto found=pending.find(serial);
         if(found==pending.end())return Status::missing;
         auto& entry=found->second;if(!entry.written||!entry.submitted)return Status::pending;
         if(lease.Count())return Status::rejected;
-        if(exports.nativePipeline!=entry.ticket.pipeline||exports.rays.size()!=2){pending.erase(found);return Status::rejected;}
+        if(exports.nativePipeline!=entry.ticket.pipeline||exports.rays.size()!=2){Erase(found);return Status::rejected;}
         for(unsigned ray=0;ray<2;++ray)if(exports.rays[ray].nativeOpaque!=entry.identifiers.hit[ray]||exports.rays[ray].nativeAlpha!=entry.identifiers.hit[2+ray]){
-            pending.erase(found);return Status::rejected;
+            Erase(found);return Status::rejected;
         }
         PTSceneDispatch::Scene scene;const auto selected=owner.Scenes().Scene(serial,entry.acceleration,scene);
         if(selected==PTSceneOrder::Status::pending)return Status::pending;
-        if(selected!=PTSceneOrder::Status::ready){pending.erase(found);return Status::rejected;}
+        if(selected!=PTSceneOrder::Status::ready){Erase(found);return Status::rejected;}
         const PTSceneDispatch::Selection selection{scene.address,scene.version,entry.table.address,entry.table.version,entry.table.pipeline};
         const bool prepared=owner.Resources().PrepareLease(selection,scene,entry.table,exports,plan,lease);
-        pending.erase(found);return prepared?Status::prepared:Status::rejected;
+        Erase(found);return prepared?Status::prepared:Status::rejected;
     }
 };
 }

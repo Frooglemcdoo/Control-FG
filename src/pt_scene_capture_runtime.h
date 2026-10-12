@@ -116,6 +116,7 @@ public:
     PTSceneOrder::Status Scene(U64 ticket,const PTSceneDescriptors::Acceleration& selected,PTSceneDispatch::Scene& scene){
         return catalog.Scene(ticket,{{selected.token,selected.address},selected.bytes},scene);
     }
+    void Forget(U64 ticket){catalog.Forget(ticket);}
     void Invalidate(){catalog.Invalidate();}
 };
 }

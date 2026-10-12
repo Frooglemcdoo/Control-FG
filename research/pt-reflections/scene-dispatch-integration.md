@@ -223,3 +223,53 @@ private storage with correct states and ordering. The current leases do neither.
 Do not enable rendering or infer readiness from a valid CPU plan and retained
 pointers alone. Primary-light integration and the material compositor are also
 still absent. No user test package is ready at this checkpoint.
+
+## Submitted scene catalog and writer handoff
+
+The following implementation now exists, still dormant until an integrated
+renderer explicitly starts the session owner:
+
+- `pt_scene_catalog.h`: immutable BLAS/TLAS build records, unknown-write
+  tombstones, compaction/clone source selection at the copy's own queue cut,
+  command-list recording generations, and dispatch-cut scene assembly. Reset
+  discards unsubmitted records; repeated execution is rejected. Exact allocation
+  identities travel with geometry and each TLAS instance's BLAS address.
+- `pt_scene_capture_runtime.h`: native build/instance-upload/AS-copy adapters.
+  Instance rows are copied before the native memcpy, not read back from upload
+  memory. Canonical COM identity joins interfaces and retains their lifetime.
+- `pt_scene_queue_runtime.h`: ExecuteCommandLists, Signal, Wait and successful
+  Reset observation on the actual supplied interfaces. Nested proxy forwarding
+  is observed once. Queue operations and observation share a serialization
+  boundary; failed fence operations invalidate admission.
+- Native queue flush interception covers all 26 direct calls to the verified
+  `d3d+434a0` function. Each exact E8 target was checked against the private
+  native DLL. The queue at wrapper+10 is watched before a flush, including an
+  empty flush before the caller issues a fence dependency. No alternate native
+  queue is substituted for the submitted proxy.
+- Native job tickets now preserve the complete dispatch-time shader-table
+  layout. `SnapshotWriter` copies matching native identifiers, binding rows and
+  current allocation generations inside the resource-owner transaction while
+  the native worker owns the source pointers.
+- `pt_scene_handoff.h` joins recording, writer readiness and submission-time AS
+  descriptor selection. It retains the native state object and descriptor heap,
+  freezes the exact AS slot at submission (not recording), and prepares a
+  complete private table plus leases only after the scene cut resolves. The
+  renderer must call its Submitting callback inside the queue interception;
+  this consumer registration is not active yet.
+
+Windows CI for the queue change passed, including actual WARP Reset, Execute,
+Signal and Wait forwarding and scene selection. The native capture fixture also
+passed immutable instance-copy, compaction, geometry-token and submission-cut
+checks. Those synthetic build descriptors are observed only; they are not sent
+as AS builds to WARP. The original rendering hash gate still passes.
+
+These modules do not solve geometry-content ownership. COM references still do
+not freeze position/index/attribute data. Before dispatch, preserve required
+build inputs or establish their content version and GPU states. The graph also
+needs retirement/checkpointing rather than eventually exhausting bounded
+history, and CPU-signaled/preexisting fence timelines need explicit admission.
+The live handoff needs cancellation/queue callbacks connected to an always-
+unblocking private GPU gate, private PSO/SBT/output ownership and retirement.
+Native primary material/light adapters and final material composition remain
+unfinished. The session owner is not started and no new rendering consumer is
+registered. No full-PT user test package has been released by these changes.
