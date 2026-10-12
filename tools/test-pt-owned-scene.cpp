@@ -1,3 +1,7 @@
+#ifdef _WIN32
+#define NOMINMAX
+#include <windows.h>
+#endif
 #include "../src/pt_owned_scene.h"
 #include <cassert>
 #include <cstdio>
