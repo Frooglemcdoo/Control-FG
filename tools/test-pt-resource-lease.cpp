@@ -5,6 +5,7 @@
 #include <cassert>
 #include <cstdio>
 #include "../src/pt_resource_lease_probe.h"
+#include "../src/pt_owned_scene_runtime.h"
 using Microsoft::WRL::ComPtr;
 int main(){
     ComPtr<IDXGIFactory4> f;assert(SUCCEEDED(CreateDXGIFactory1(IID_PPV_ARGS(&f))));
@@ -31,5 +32,15 @@ int main(){
     for(auto& l:held)l=budget.Before(resource.Get(),resource->GetGPUVirtualAddress(),rd.Width);
     assert(budget.HeldBytes()==PTResourceLeaseProbe::Probe::MaximumHeld&&held[8].status==4);
     resource.Reset();for(auto& l:held)budget.After(l);assert(budget.HeldBytes()==0);
+    PTOwnedScene::Runtime scene;
+    assert(SUCCEEDED(d->CreateCommittedResource(&hp,D3D12_HEAP_FLAG_NONE,&rd,D3D12_RESOURCE_STATE_COMMON,nullptr,IID_PPV_ARGS(&resource))));
+    const auto address=resource->GetGPUVirtualAddress();
+    assert(scene.Created(123,resource.Get(),address,rd.Width)==1);
+    auto retained=scene.BeforeRelease(123);
+    resource.Reset(); // Metadata can now be cleared; retained identity is independent.
+    assert(scene.AfterRelease(retained)==5);
+    assert(scene.AfterRelease(retained)==0);
+    const auto stats=scene.Stop();assert(stats.retained==1&&stats.validatedRelease==1&&stats.mismatchedRelease==0);
+    assert(scene.Created(124,nullptr,0,0)==0); // Closed capture cannot acquire references.
     std::puts("PASS M9 WARP: owned reference survives native-owner release; address mismatch, byte budget and duplicate cleanup rejected.");
 }

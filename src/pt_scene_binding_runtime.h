@@ -2,10 +2,11 @@
 #include "pt_scene_observer.h"
 #include "pt_native_binding.h"
 #include "pt_native_buffer_observer.h"
-#include "pt_resource_lease_probe.h"
-// M9 diagnostics are never used as rendering bindings.
+#include "pt_owned_scene_runtime.h"
+// M10 diagnostics are never used as rendering bindings.
 namespace PTSceneBindingRuntime {
 using PTSceneObserver::Event;
+static PTOwnedScene::Runtime ownedScene;
 constexpr unsigned Capacity=196608;
 static Event* events=nullptr;
 static unsigned stored=0,flushed=0,geometryRows=0,bindingRows=0,resourceRows=0;
@@ -17,6 +18,7 @@ static std::atomic<bool> recording{false};
 static HANDLE output=INVALID_HANDLE_VALUE;
 static PTGlassRuntime::NativeCallPatch buildCall[2];
 static void Sink(const Event& e) noexcept {
+    if(e.kind==3&&recording.load(std::memory_order_relaxed))ownedScene.Geometry(e);
     AcquireSRWLockExclusive(&eventLock);
     if(recording.load(std::memory_order_relaxed)){
         unsigned& quota=e.kind>=8?resourceRows:(e.kind>=5?bindingRows:geometryRows);
@@ -47,11 +49,18 @@ static DWORD WINAPI Worker(void*) {
     const ULONGLONG start=GetTickCount64();bool good=true;
     while(GetTickCount64()-start<120000){Sleep(250);if(!(good=Flush()))break;}
     AcquireSRWLockExclusive(&eventLock);recording=false;ReleaseSRWLockExclusive(&eventLock);
+    const auto stats=ownedScene.Stop();
     good=Flush()&&good;
+    char registry[1024];const int rn=_snprintf_s(registry,sizeof(registry),_TRUNCATE,
+        "{\"kind\":\"registry\",\"retained\":%llu,\"rejected\":%llu,\"budget\":%llu,\"observed\":%llu,\"unowned_geometry\":%llu,\"validated_release\":%llu,\"mismatched_release\":%llu,\"peak_bytes\":%llu,\"candidate\":%llu,\"missing_allocation\":%llu,\"missing_geometry\":%llu,\"ambiguous_geometry\":%llu,\"invalid_binding\":%llu,\"invalid_geometry\":%llu,\"gpu_work\":false,\"renderer_ready\":false}\n",
+        stats.retained,stats.rejected,stats.budget,stats.observed,stats.unownedGeometry,stats.validatedRelease,stats.mismatchedRelease,stats.peakBytes,
+        stats.resolved[0],stats.resolved[1],stats.resolved[2],stats.resolved[3],stats.resolved[4],stats.resolved[5]);
+    if(rn<=0||!Write(registry,static_cast<DWORD>(rn)))good=false;
+    Log("PT_SCENE_M10_REGISTRY retained=%llu candidates=%llu missing_allocation=%llu ambiguous=%llu peak_bytes=%llu renderer_ready=0",stats.retained,stats.resolved[0],stats.resolved[1],stats.resolved[3],stats.peakBytes);
     char end[512];const int n=_snprintf_s(end,sizeof(end),_TRUNCATE,"{\"kind\":\"end\",\"inline_calls\":%llu,\"worker_calls\":%llu,\"invalid_counts\":%llu,\"calls\":%llu,\"records\":%u,\"dropped\":%llu,\"write_ok\":%s,\"scope\":\"recording_only_not_gpu_completion\"}\n",fillCalls[0].load(),fillCalls[1].load(),invalidCounts.load(),calls.load(),flushed,dropped.load(),good?"true":"false");
     if(n>0)good=Write(end,static_cast<DWORD>(n))&&good;
     FlushFileBuffers(output);CloseHandle(output);output=INVALID_HANDLE_VALUE;
-    Log("PT_SCENE_M9_FINISHED calls=%llu records=%u dropped=%llu write_ok=%u recording_only=1 inline_calls=%llu worker_calls=%llu invalid_counts=%llu",calls.load(),flushed,dropped.load(),unsigned(good),fillCalls[0].load(),fillCalls[1].load(),invalidCounts.load());return 0;
+    Log("PT_SCENE_M10_FINISHED calls=%llu records=%u dropped=%llu write_ok=%u recording_only=1 inline_calls=%llu worker_calls=%llu invalid_counts=%llu",calls.load(),flushed,dropped.load(),unsigned(good),fillCalls[0].load(),fillCalls[1].load(),invalidCounts.load());return 0;
 }
 // Exact internal writer call at d3d+357c6, seven native arguments.
 using Fill=PTNativeBinding::Fill;
@@ -71,6 +80,8 @@ static void ObserveBindings(UINT site,void* buffer,void* state,int bytes,int ray
         if(!PTNativeBinding::Read(bindings,i,b)){e.kind=7;Sink(e);break;}
         e.geometryType=b.type;e.geometryFlags=b.tag;e.index=b.indices;e.attributes=b.attributes;
         std::memcpy(e.constants,b.constants,sizeof(b.constants));Sink(e);
+        PTSceneAdmission::Record candidate{};const auto status=ownedScene.Resolve(b,candidate);
+        (void)status; // Aggregate resolution counts are written independently of event quotas.
     }
 }
 static void FillHook(unsigned route,int mode,void* buffer,void* state,int bytes,int rays,int count,const void* bindings){
@@ -96,7 +107,10 @@ static void ObserveResource(void* buffer,UINT kind,UINT site) noexcept {
     Event e{};e.kind=kind;e.site=site;e.sequence=++resourceCalls;e.list=reinterpret_cast<UINT_PTR>(buffer);
     PTNativeBufferObserver::Snapshot b{};
     if(!PTNativeBufferObserver::Read(buffer,b))e.kind=10;
-    else {e.dest=b.resource;e.index=b.address;e.stride=b.bytes;}
+    else {e.dest=b.resource;e.index=b.address;e.stride=b.bytes;
+        if(kind==8){const auto status=ownedScene.Created(reinterpret_cast<UINT_PTR>(buffer),reinterpret_cast<IUnknown*>(b.resource),b.address,b.bytes);
+            Event owned=e;owned.kind=12;owned.geometryFlags=status;Sink(owned);}
+    }
     Sink(e);
 }
 static void CreateGeneralHook(std::uint64_t bytes,std::uint64_t stride,unsigned flags,unsigned format,std::uint64_t unused0,std::uint64_t unused1,void* buffer){
@@ -107,18 +121,14 @@ static void CreateRayHook(int bytes,int type,void* buffer,int flags){
     PTNativeBufferObserver::ForwardRay(createRay,bytes,type,buffer,flags);
     const DWORD error=GetLastError();ObserveResource(buffer,8,0x26360);SetLastError(error);
 }
-static PTResourceLeaseProbe::Probe leaseProbe;
 static void ReleaseHook(void* buffer){
     const DWORD error=GetLastError();ObserveResource(buffer,9,0x25f00);
-    PTResourceLeaseProbe::Lease lease{};PTNativeBufferObserver::Snapshot snap{};
-    if(recording.load(std::memory_order_relaxed)&&PTNativeBufferObserver::Read(buffer,snap))
-        lease=leaseProbe.Before(reinterpret_cast<IUnknown*>(snap.resource),snap.address,snap.bytes);
+    auto lease=ownedScene.BeforeRelease(reinterpret_cast<UINT_PTR>(buffer));
     SetLastError(error);releaseBuffer(buffer);
-    const DWORD afterError=GetLastError();const auto result=leaseProbe.After(lease);
-    if(result.status){
+    const DWORD afterError=GetLastError();const auto status=ownedScene.AfterRelease(lease);
+    if(status){
         Event e{};e.kind=11;e.site=0x25f00;e.sequence=++resourceCalls;e.list=reinterpret_cast<UINT_PTR>(buffer);
-        e.index=result.address;e.stride=result.bytes;e.geometryFlags=result.status;Sink(e);
-        Log("PT_SCENE_M9_LEASE status=%u address=%llx bytes=%llu held_bytes=%llu gpu_work=0",result.status,result.address,result.bytes,leaseProbe.HeldBytes());
+        e.index=lease.address;e.stride=lease.bytes;e.geometryFlags=status;Sink(e);
     }
     SetLastError(afterError);
 }
@@ -142,13 +152,13 @@ static void RestoreCalls(){
     buildCall[1].Exchange(false);buildCall[0].Exchange(false);
 }
 static bool Install(HMODULE d3d){
-    if(!HashMatches(d3d,kD3dHash)){Log("PT_SCENE_M9_INSTALL ready=0 reason=unsupported_module_hash");return false;}
+    if(!HashMatches(d3d,kD3dHash)){Log("PT_SCENE_M10_INSTALL ready=0 reason=unsupported_module_hash");return false;}
     wchar_t dir[32768]{};const DWORD len=GetEnvironmentVariableW(L"LOCALAPPDATA",dir,_countof(dir));if(!len||len>=_countof(dir))return false;
-    wchar_t name[160]{};swprintf_s(name,L"\\ControlFGProbe\\pt-scene-m9-%llu-%lu.jsonl",GetTickCount64(),GetCurrentProcessId());
+    wchar_t name[160]{};swprintf_s(name,L"\\ControlFGProbe\\pt-scene-m10-%llu-%lu.jsonl",GetTickCount64(),GetCurrentProcessId());
     output=CreateFileW((std::wstring(dir)+name).c_str(),GENERIC_WRITE,FILE_SHARE_READ,nullptr,CREATE_NEW,FILE_ATTRIBUTE_NORMAL,nullptr);
     if(output==INVALID_HANDLE_VALUE)return false;
     events=new(std::nothrow) Event[Capacity];if(!events){CloseHandle(output);output=INVALID_HANDLE_VALUE;return false;}
-    const char header[]="{\"kind\":\"header\",\"schema\":1,\"build\":\"M9\",\"limit\":196608,\"geometry_limit\":65536,\"binding_limit\":65536,\"resource_limit\":65536,\"seconds\":120,\"scope\":\"recording_only_not_gpu_completion\"}\n";
+    const char header[]="{\"kind\":\"header\",\"schema\":1,\"build\":\"M10\",\"limit\":196608,\"geometry_limit\":65536,\"binding_limit\":65536,\"resource_limit\":65536,\"seconds\":120,\"scope\":\"recording_only_not_gpu_completion\"}\n";
     bool ready=Write(header,static_cast<DWORD>(sizeof(header)-1));auto* b=reinterpret_cast<unsigned char*>(d3d);
     nativeFill=reinterpret_cast<Fill>(b+0x33a40);
     ready=ready&&RRAlbedoPrepareCallPatch(b+0x357c6,reinterpret_cast<void*>(nativeFill),reinterpret_cast<void*>(&FillInline),&fillPatch[0]);
@@ -156,9 +166,9 @@ static bool Install(HMODULE d3d){
     ready=ready&&buildCall[0].Prepare(b+0x33593,72,reinterpret_cast<void*>(&Hook0))&&buildCall[1].Prepare(b+0x337cc,72,reinterpret_cast<void*>(&Hook1));
     ready=ready&&PrepareResources(b);
     if(ready)ready=InstallResources()&&buildCall[0].Exchange(true)&&buildCall[1].Exchange(true)&&RRAlbedoExchangeCall(&fillPatch[0],true)&&RRAlbedoExchangeCall(&fillPatch[1],true);
-    if(!ready){RestoreCalls();CloseHandle(output);output=INVALID_HANDLE_VALUE;Log("PT_SCENE_M9_INSTALL ready=0 reason=call_patch");return false;}
+    if(!ready){RestoreCalls();CloseHandle(output);output=INVALID_HANDLE_VALUE;Log("PT_SCENE_M10_INSTALL ready=0 reason=call_patch");return false;}
     recording=true;HANDLE thread=CreateThread(nullptr,0,&Worker,nullptr,0,nullptr);
-    if(!thread){recording=false;RestoreCalls();CloseHandle(output);output=INVALID_HANDLE_VALUE;Log("PT_SCENE_M9_INSTALL ready=0 reason=writer_thread");return false;}
-    CloseHandle(thread);Log("PT_SCENE_M9_INSTALL ready=1 sites=33593,337cc,357c6,374a1 resource_sites=27 gpu_changes=0 duration_seconds=120 record_limit=%u",Capacity);return true;
+    if(!thread){recording=false;RestoreCalls();CloseHandle(output);output=INVALID_HANDLE_VALUE;Log("PT_SCENE_M10_INSTALL ready=0 reason=writer_thread");return false;}
+    CloseHandle(thread);Log("PT_SCENE_M10_INSTALL ready=1 sites=33593,337cc,357c6,374a1 resource_sites=27 gpu_changes=0 duration_seconds=120 record_limit=%u",Capacity);return true;
 }
 }
