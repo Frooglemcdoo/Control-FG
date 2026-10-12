@@ -15,6 +15,7 @@
 #include <stdexcept>
 #include <climits>
 #include "../src/pt_scene_admission.h"
+#include "../src/pt_shader_table_adapter.h"
 using Microsoft::WRL::ComPtr;
 static void ok(HRESULT hr,const char* name){if(FAILED(hr)){std::printf("FAIL %s HRESULT=0x%08lx\n",name,(unsigned long)hr);throw std::runtime_error(name);}}
 static void need(bool b,const char* name){if(!b)throw std::runtime_error(name);}
@@ -185,7 +186,24 @@ int main(int argc,char** argv){try{
         memcpy(records.data()+offset+32,&record.indices,8);memcpy(records.data()+offset+40,&record.attributes,8);
         memcpy(records.data()+offset+48,&record.positions,8);memcpy(constants,record.constants,sizeof(constants));
 #endif
-        memcpy(records.data()+offset+constantOffset,constants,payloadBytes==60?48:40);}
+#ifdef PT_GEOMETRY_SPAWN
+        // Exercise the native 96-byte -> private 128-byte conversion in the
+        // existing GPU fixture. Source identifiers are synthetic; bindings and
+        // limits correspond to the actual fixture resources.
+        unsigned char nativeRecord[96]{};
+        PTShaderTableAdapter::Exports exportMap{};
+        exportMap.nativeOpaque[0]=1;exportMap.nativeAlpha[0]=2;
+        std::memcpy(exportMap.privateOpaque.data(),properties->GetShaderIdentifier(groupNames[type]),32);
+        std::memcpy(exportMap.privateAlpha.data(),properties->GetShaderIdentifier(groupNames[2+type]),32);
+        nativeRecord[0]=i==0?1:2;
+        std::memcpy(nativeRecord+32,&record.indices,8);std::memcpy(nativeRecord+40,&record.attributes,8);
+        std::memcpy(nativeRecord+48,record.constants,40);
+        PTShaderTableAdapter::Bytes converted;
+        need(PTShaderTableAdapter::Convert(nativeRecord,96,exportMap,&admitted,converted)==PTShaderTableAdapter::Status::ready,"Native SBT conversion");
+        std::memcpy(records.data()+offset,converted.data(),converted.size());
+#else
+        memcpy(records.data()+offset+constantOffset,constants,40);
+#endif}
     auto sbt=g.buffer(records.size(),D3D12_HEAP_TYPE_UPLOAD,D3D12_RESOURCE_STATE_GENERIC_READ,D3D12_RESOURCE_FLAG_NONE,records.data());
     Ray rays[]={{{0,0,0},0,{0,0,1},10},{{12,0,0},0,{0,0,1},10},{{3,0,0},0,{0,0,1},10},{{6,0,0},0,{0,0,1},10},{{0,0,0},0,{0,0,1},1},{{0,0,0},2.1f,{0,0,1},10},{{0,0,0},0,{0,0,0},10},{{9,0,0},0,{0,0,1},10}};
 #ifdef PT_PATH_TEST

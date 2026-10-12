@@ -1,0 +1,31 @@
+{
+  "schema": 1,
+  "source_hashes": {
+    "ShaderTableReconstruction_000.cpp": "ec4e15fe2ff3b805513b36ef2ed010be195ca286c3d43da143c86856f11bc806",
+    "ShaderTableReconstruction_001.cpp": "6ed764ba528a72f290a6a75d4c514c78ef936ccec52cead13e9530cb0e11da44",
+    "ShaderTableReconstruction_002.cpp": "3b508c879b9842f0837d93b384fefae2d7bc53207c5350fa84a7482d6e6f5b7b",
+    "ShaderTableReconstruction_003.cpp": "6e1dd71b23f57947877cf943af6e8b48dc69909c92b8ea4b22fb4989b9e67d0d",
+    "ShaderTableReconstruction_004.cpp": "a3ef19a851c132ff165d582391ff0f91f96a1fbae2ecc69eef4d9de4341002e2",
+    "ShaderTableReconstruction_005.cpp": "35ab148bef9343060338a9b6d89ca00ef0d91244225faef466d2fbc5b2e8abb3",
+    "ShaderTableReconstruction_006.cpp": "4492a5a4745e357fb3764ad773f4676d3057de2a75257053abf83d104ca976f7",
+    "ShaderTableReconstruction_007.cpp": "baef5a7d28c8b829eafb3407443b1342e443633c1e8ca372fa2b2ff6c7d8bc5f",
+    "ShaderTableReconstruction_008.cpp": "497192a5b6e5728e11eb8ece13ee94eb22b6ae2b1eeb993179f4f1609cec5771"
+  },
+  "record_count": 27750,
+  "unique_count": 2418,
+  "material_count": 508,
+  "index_strides": {
+    "2": 27750
+  },
+  "attribute_strides": {
+    "16": 23976,
+    "20": 3774
+  },
+  "exports": {
+    "HitGroup_0_0": 16956,
+    "HitGroup_0_1": 8478,
+    "HitGroup_1_0": 1544,
+    "HitGroup_1_1": 772
+  },
+  "position_mapping": "UNRESOLVED: local roots contain index and attribute addresses only; never guess a position stream"
+}
