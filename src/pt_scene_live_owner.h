@@ -5,7 +5,7 @@
 #include "pt_native_buffer_observer.h"
 #include <atomic>
 // Session owner, independent of the timed M11 diagnostic. Dormant until the
-// renderer starts it BEFORE scene loading. No GPU work or latest-scene selection.
+// renderer starts it BEFORE scene loading. Geometry copies are opt-in at session start; no latest-scene selection.
 namespace PTSceneLive {
 using U64=std::uint64_t;
 using Microsoft::WRL::ComPtr;
@@ -20,8 +20,9 @@ class Owner {
         __except(EXCEPTION_EXECUTE_HANDLER){return false;}
     }
 public:
-    bool Start(UINT increment){
+    bool Start(UINT increment,bool preserveGeometry=true){
         if(active||descriptors||!increment)return false;
+        if(preserveGeometry&&!capture.PreserveGeometry())return false;
         step=increment;descriptors=std::make_unique<PTSceneDescriptors::Index>(step);
         active.store(true,std::memory_order_release);return true;
     }

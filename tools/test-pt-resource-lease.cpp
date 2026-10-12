@@ -12,10 +12,67 @@
 #include "../src/pt_scene_handoff.h"
 #include "../src/pt_scene_topology_runtime.h"
 using Microsoft::WRL::ComPtr;
+static void TestGeometrySnapshot(ID3D12Device* device){
+    D3D12_RESOURCE_DESC desc{};desc.Dimension=D3D12_RESOURCE_DIMENSION_BUFFER;desc.Width=1024;desc.Height=1;
+    desc.DepthOrArraySize=desc.MipLevels=1;desc.SampleDesc.Count=1;desc.Layout=D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+    const auto make=[&](D3D12_HEAP_TYPE type,D3D12_RESOURCE_STATES state){
+        D3D12_HEAP_PROPERTIES heap{};heap.Type=type;ComPtr<ID3D12Resource> r;
+        assert(SUCCEEDED(device->CreateCommittedResource(&heap,D3D12_HEAP_FLAG_NONE,&desc,state,nullptr,IID_PPV_ARGS(&r))));return r;
+    };
+    auto source=make(D3D12_HEAP_TYPE_DEFAULT,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+    auto upload=make(D3D12_HEAP_TYPE_UPLOAD,D3D12_RESOURCE_STATE_GENERIC_READ);
+    auto readback=make(D3D12_HEAP_TYPE_READBACK,D3D12_RESOURCE_STATE_COPY_DEST);
+    unsigned char* mapped=nullptr;D3D12_RANGE empty{};assert(SUCCEEDED(upload->Map(0,&empty,reinterpret_cast<void**>(&mapped))));
+    for(unsigned n=0;n<512;++n){mapped[n]=static_cast<unsigned char>(n);mapped[n+512]=0xee;}upload->Unmap(0,nullptr);
+    ComPtr<ID3D12CommandAllocator> allocator;ComPtr<ID3D12GraphicsCommandList> list;ComPtr<ID3D12CommandQueue> queue;
+    D3D12_COMMAND_QUEUE_DESC qd{};assert(SUCCEEDED(device->CreateCommandQueue(&qd,IID_PPV_ARGS(&queue))));
+    assert(SUCCEEDED(device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT,IID_PPV_ARGS(&allocator))));
+    assert(SUCCEEDED(device->CreateCommandList(0,D3D12_COMMAND_LIST_TYPE_DIRECT,allocator.Get(),nullptr,IID_PPV_ARGS(&list))));
+    const auto transition=[&](ID3D12Resource* r,D3D12_RESOURCE_STATES from,D3D12_RESOURCE_STATES to){
+        D3D12_RESOURCE_BARRIER b{};b.Type=D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;b.Transition={r,D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,from,to};list->ResourceBarrier(1,&b);
+    };
+    transition(source.Get(),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,D3D12_RESOURCE_STATE_COPY_DEST);
+    list->CopyBufferRegion(source.Get(),0,upload.Get(),0,512);
+    transition(source.Get(),D3D12_RESOURCE_STATE_COPY_DEST,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+    std::array<unsigned char,80> wrapper{};const auto address=source->GetGPUVirtualAddress();auto* raw=source.Get();
+    const UINT state=D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+    std::memcpy(wrapper.data(),&raw,8);std::memcpy(wrapper.data()+0x20,&state,4);std::memcpy(wrapper.data()+0x30,&desc.Width,8);std::memcpy(wrapper.data()+0x48,&address,8);
+    PTOwnedScene::Runtime bank;assert(bank.Created(reinterpret_cast<UINT_PTR>(wrapper.data()),source.Get(),address,desc.Width)==1);
+    std::vector<PTSceneTopology::Geometry> geometry{{address,address+256,12,2,3,3,1,1}};
+    auto budget=std::make_shared<PTOwnedScene::LeaseBudget>(desc.Width);
+    std::shared_ptr<PTGeometrySnapshot::Transfer> transfer;
+    assert(bank.FreezeGeometry(list.Get(),geometry,budget,transfer)&&budget->Held()==desc.Width);
+    assert(transfer->storage->copies.size()==1&&geometry[0].frozen); // Same backing copied once.
+    std::shared_ptr<PTGeometrySnapshot::Transfer> rejected;
+    assert(!bank.FreezeGeometry(list.Get(),geometry,budget,rejected)&&!rejected); // No commands on budget failure.
+    transition(source.Get(),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,D3D12_RESOURCE_STATE_COPY_DEST);
+    list->CopyBufferRegion(source.Get(),0,upload.Get(),512,512); // Overwrite the ORIGINAL after its build-time copy.
+    transition(source.Get(),D3D12_RESOURCE_STATE_COPY_DEST,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+    auto* frozen=transfer->storage->copies.at(1).Get();
+    transition(frozen,D3D12_RESOURCE_STATE_COMMON,D3D12_RESOURCE_STATE_COPY_SOURCE);
+    list->CopyBufferRegion(readback.Get(),0,frozen,0,512);
+    transition(frozen,D3D12_RESOURCE_STATE_COPY_SOURCE,D3D12_RESOURCE_STATE_COMMON);
+    assert(SUCCEEDED(list->Close()));
+    auto released=bank.BeforeRelease(reinterpret_cast<UINT_PTR>(wrapper.data()));source.Reset();assert(bank.AfterRelease(released)==5);
+    PTGeometrySnapshot::Retirement retirement;PTGeometrySnapshot::Retirement::Batch batch;
+    assert(retirement.Before(queue.Get(),{transfer},batch));
+    ComPtr<ID3D12Fence> gate,done;assert(SUCCEEDED(device->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&gate))));
+    assert(SUCCEEDED(device->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&done))));
+    assert(SUCCEEDED(queue->Wait(gate.Get(),1)));ID3D12CommandList* commands=list.Get();queue->ExecuteCommandLists(1,&commands);
+    assert(retirement.After(queue.Get(),batch));transfer.reset();geometry.clear();retirement.Poll();assert(budget->Held()==desc.Width);
+    assert(SUCCEEDED(queue->Signal(done.Get(),1)));assert(SUCCEEDED(gate->Signal(1)));
+    HANDLE event=CreateEventW(nullptr,FALSE,FALSE,nullptr);assert(event&&SUCCEEDED(done->SetEventOnCompletion(1,event)));
+    assert(WaitForSingleObject(event,30000)==WAIT_OBJECT_0);CloseHandle(event);
+    D3D12_RANGE range{0,512};assert(SUCCEEDED(readback->Map(0,&range,reinterpret_cast<void**>(&mapped))));
+    for(unsigned n=0;n<512;++n)assert(mapped[n]==static_cast<unsigned char>(n));readback->Unmap(0,&empty);
+    retirement.Poll();assert(budget->Held()==0);
+    std::puts("PASS GPU geometry snapshot: build-time bytes survive later source overwrite/release, shared backing copied once, budget failure emits no copy, fence prevents early retirement.");
+}
 int main(){
     ComPtr<IDXGIFactory4> f;assert(SUCCEEDED(CreateDXGIFactory1(IID_PPV_ARGS(&f))));
     ComPtr<IDXGIAdapter> a;assert(SUCCEEDED(f->EnumWarpAdapter(IID_PPV_ARGS(&a))));
     ComPtr<ID3D12Device> d;assert(SUCCEEDED(D3D12CreateDevice(a.Get(),D3D_FEATURE_LEVEL_11_0,IID_PPV_ARGS(&d))));
+    TestGeometrySnapshot(d.Get());
     D3D12_HEAP_PROPERTIES hp{};hp.Type=D3D12_HEAP_TYPE_DEFAULT;
     D3D12_RESOURCE_DESC rd{};rd.Dimension=D3D12_RESOURCE_DIMENSION_BUFFER;rd.Width=65536;rd.Height=1;
     rd.DepthOrArraySize=1;rd.MipLevels=1;rd.SampleDesc.Count=1;rd.Layout=D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
@@ -108,7 +165,7 @@ int main(){
     assert(SUCCEEDED(done->SetEventOnCompletion(1,ready)));assert(WaitForSingleObject(ready,30000)==WAIT_OBJECT_0);CloseHandle(ready);
     submissions.Poll();assert(ledger->Held()==0);
     std::puts("PASS dispatch leases: exact atomic retention, deduplicated bytes, bounded batches, unsubmitted discard, owner shutdown and actual queue-fence retirement.");
-    PTSceneLive::Owner live;assert(live.Start(d->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV)));
+    PTSceneLive::Owner live;assert(live.Start(d->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV),false));
     assert(SUCCEEDED(d->CreateCommittedResource(&hp,D3D12_HEAP_FLAG_NONE,&rd,D3D12_RESOURCE_STATE_COMMON,nullptr,IID_PPV_ARGS(&resource))));
     D3D12_DESCRIPTOR_HEAP_DESC heapDesc{};heapDesc.NumDescriptors=64;heapDesc.Flags=D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
     ComPtr<ID3D12DescriptorHeap> heap;assert(SUCCEEDED(d->CreateDescriptorHeap(&heapDesc,IID_PPV_ARGS(&heap))));

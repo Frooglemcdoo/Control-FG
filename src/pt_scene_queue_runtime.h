@@ -24,6 +24,7 @@ inline void STDMETHODCALLTYPE ExecuteHook(ID3D12CommandQueue* q,UINT n,ID3D12Com
     std::lock_guard<std::recursive_mutex> guard(queueMutex);
     const DWORD before=GetLastError();
     capture->Submit(q,n,input);SetLastError(before);original(q,n,input);
+    const DWORD after=GetLastError();capture->Submitted(q);SetLastError(after);
 }
 inline HRESULT FenceHook(ID3D12CommandQueue* q,ID3D12Fence* fence,UINT64 value,bool signal){
     FenceOperation original=nullptr;{std::lock_guard<std::mutex> guard(hooksMutex);const auto& methods=queues.at(*reinterpret_cast<void***>(q));original=signal?methods.signal:methods.wait;}

@@ -31,6 +31,7 @@ class LeaseBatch {
         std::shared_ptr<LeaseBudget> budget;
         std::uint64_t bytes=0;
         std::vector<Microsoft::WRL::ComPtr<ID3D12Resource>> resources;
+        std::vector<std::shared_ptr<void>> keepAlive;
         ~Payload(){resources.clear();if(bytes)budget->Release(bytes);}
     };
     std::unique_ptr<Payload> payload;

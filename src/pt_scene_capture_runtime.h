@@ -18,6 +18,11 @@ class Capture {
     std::map<IUnknown*,Identity> identities;
     std::map<U64,Upload> uploads;
     U64 serial=0;
+    bool preserveGeometry=false;
+    std::shared_ptr<PTOwnedScene::LeaseBudget> copyBudget=std::make_shared<PTOwnedScene::LeaseBudget>(512ull*1024*1024);
+    std::map<U64,std::vector<std::shared_ptr<PTGeometrySnapshot::Transfer>>> recordedCopies;
+    std::map<U64,PTGeometrySnapshot::Retirement::Batch> submittingCopies;
+    PTGeometrySnapshot::Retirement retirement;
     Identity* Identify(IUnknown* object){
         if(!object)return nullptr;
         ComPtr<IUnknown> canonical;if(FAILED(object->QueryInterface(IID_PPV_ARGS(&canonical))))return nullptr;
@@ -41,6 +46,7 @@ class Capture {
     }
 public:
     explicit Capture(PTOwnedScene::Runtime& bank):resources(bank){}
+    bool PreserveGeometry(){std::lock_guard<std::mutex> guard(mutex);if(!identities.empty())return false;preserveGeometry=true;return true;}
     void UploadInstances(U64 address,const void* data,U64 bytes){
         std::lock_guard<std::mutex> guard(mutex);
         // Erase the preceding snapshot even when the new upload is rejected.
@@ -81,6 +87,14 @@ public:
                 s.geometry.push_back({t.IndexBuffer,t.VertexBuffer.StartAddress,t.VertexBuffer.StrideInBytes,stride,t.IndexCount,t.VertexCount,index.key.token,position.key.token});
             }
         }
+        if(preserveGeometry&&s.kind==PTSceneCatalog::Snapshot::Kind::blas){
+            auto* id=List(list);ComPtr<ID3D12GraphicsCommandList> commands;
+            if(!id||FAILED(list->QueryInterface(IID_PPV_ARGS(&commands)))){catalog.Invalidate();return;}
+            auto& copies=recordedCopies[id->id];copies.emplace_back();
+            if(!resources.FreezeGeometry(commands.Get(),s.geometry,copyBudget,copies.back())){
+                copies.pop_back();s.kind=PTSceneCatalog::Snapshot::Kind::unknown;
+            }
+        }
         Record(list,std::move(s));
     }
     void Compact(IUnknown* list,U64 dst,U64 src,D3D12_RAYTRACING_ACCELERATION_STRUCTURE_COPY_MODE mode){
@@ -92,7 +106,7 @@ public:
     }
     void Reset(IUnknown* list){
         std::lock_guard<std::mutex> guard(mutex);auto* id=Identify(list);
-        if(!id){catalog.Invalidate();return;}id->generation=catalog.Begin(id->id);
+        if(!id){catalog.Invalidate();return;}retirement.Poll();recordedCopies.erase(id->id);id->generation=catalog.Begin(id->id);
     }
     bool Mark(IUnknown* list,U64 ticket){
         std::lock_guard<std::mutex> guard(mutex);auto* id=List(list);
@@ -103,7 +117,23 @@ public:
         if(!q||!count||count>256||!lists){catalog.Invalidate();return false;}
         std::vector<std::pair<U64,U64>> ordered;ordered.reserve(count);
         for(UINT n=0;n<count;++n){auto* l=List(lists[n]);if(!l){catalog.Invalidate();return false;}ordered.push_back({l->id,l->generation});}
+        std::vector<std::shared_ptr<PTGeometrySnapshot::Transfer>> transfers;
+        for(const auto& item:ordered){auto found=recordedCopies.find(item.first);if(found!=recordedCopies.end())transfers.insert(transfers.end(),found->second.begin(),found->second.end());}
+        if(!transfers.empty()){
+            ComPtr<ID3D12CommandQueue> native;if(FAILED(queue->QueryInterface(IID_PPV_ARGS(&native)))){catalog.Invalidate();return false;}
+            if(!retirement.Before(native.Get(),transfers,submittingCopies[q->id])){
+                // Native submission still forwards. No fence can prove these
+                // references safe to release, including after list Reset.
+                (void)new std::vector<std::shared_ptr<PTGeometrySnapshot::Transfer>>(std::move(transfers));
+                catalog.Invalidate();return false;
+            }
+        }
         return catalog.Submit(q->id,ordered);
+    }
+    void Submitted(ID3D12CommandQueue* queue){
+        std::lock_guard<std::mutex> guard(mutex);auto* q=Identify(queue);if(!q){catalog.Invalidate();return;}
+        auto batch=submittingCopies.find(q->id);if(batch==submittingCopies.end())return;
+        if(!retirement.After(queue,batch->second))catalog.Invalidate();submittingCopies.erase(batch);
     }
     bool Signal(IUnknown* queue,IUnknown* fence,U64 value){
         std::lock_guard<std::mutex> guard(mutex);auto* q=Identify(queue);auto* f=Identify(fence);

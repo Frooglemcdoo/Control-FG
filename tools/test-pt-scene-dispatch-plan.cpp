@@ -92,5 +92,17 @@ int main(){
     table.allocationTokens[0][1]=7;++table.version;selected.tableVersion=table.version;assert(prepare().status==Status::prepared);
     owners.Remove(1);owners.Insert({6,0x1000,6});assert(owners.Observe(tri));
     assert(prepare().status==Status::allocation&&plan.records.empty()); // No final DWORD padding.
+    // A build-time GPU copy is authoritative even after original VA reuse.
+    auto copy=std::make_shared<PTSceneTopology::FrozenGeometry>();
+    copy->indexBase=0x1000;copy->indexBytes=8;copy->positionBase=0x2000;copy->positionBytes=36;
+    copy->privateIndex=0x5000;copy->privatePosition=0x6000;copy->owner=std::make_shared<int>(1);
+    assert(scene.topology.Build(0xb000,{{0x1000,0x2000,12,2,3,3,1,2,copy}}));
+    assert(prepare().status==Status::prepared&&plan.keepAlive.size()==1&&plan.allocationTokens.size()==3);
+    U64 copiedAddress=0;std::memcpy(&copiedAddress,plan.records[0].data()+32,8);assert(copiedAddress==0x5000);
+    std::memcpy(&copiedAddress,plan.records[0].data()+48,8);assert(copiedAddress==0x6000);
+    assert(plan.allocationTokens==std::vector<U64>({7,12,13})); // Only live attributes and AS allocations.
+    copy->indexBytes=6;assert(prepare().status==Status::allocation&&plan.records.empty());copy->indexBytes=8;
+    table.allocationTokens[0][0]=6;assert(prepare().status==Status::allocation);table.allocationTokens[0][0]=1;
+    copy->owner.reset();assert(prepare().status==Status::allocation&&plan.records.empty());
     std::puts("PASS dispatch preflight: selected scene/table/PSO, frozen topology, complete SBT, exact geometry, allocation generations and padded bounds.");
 }

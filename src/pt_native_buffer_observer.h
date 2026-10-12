@@ -4,12 +4,13 @@
 // Verified Steam NativeBuffer layout. Raw CPU metadata only; no COM calls,
 // AddRef, lifetime guarantee or GPU completion inference.
 namespace PTNativeBufferObserver {
-struct Snapshot {std::uint64_t resource=0,bytes=0,address=0;};
+struct Snapshot {std::uint64_t resource=0,bytes=0,address=0;std::uint32_t state=0;};
 using CreateGeneral=void(*)(std::uint64_t,std::uint64_t,unsigned,unsigned,std::uint64_t,std::uint64_t,void*);
 using CreateRay=void(*)(int,int,void*,int);
 using Release=void(*)(void*);
 inline void Decode(const unsigned char* bytes,Snapshot& out) noexcept {
     std::memcpy(&out.resource,bytes,8);
+    std::memcpy(&out.state,bytes+0x20,4);
     std::memcpy(&out.bytes,bytes+0x30,8);
     std::memcpy(&out.address,bytes+0x48,8);
 }

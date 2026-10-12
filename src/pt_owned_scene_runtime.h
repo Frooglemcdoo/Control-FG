@@ -2,6 +2,7 @@
 #include "pt_owned_scene.h"
 #include "pt_scene_dispatch_plan.h"
 #include "pt_scene_leases.h"
+#include "pt_geometry_snapshot.h"
 #include "pt_scene_observer.h"
 #include "pt_native_shader_table.h"
 #include "pt_native_buffer_observer.h"
@@ -73,6 +74,39 @@ public:
         }
         return false;
     }
+    // The caller is at the native AS build boundary and holds its recording
+    // context. The owner mutex prevents release/reuse during metadata capture.
+    bool FreezeGeometry(ID3D12GraphicsCommandList* list,std::vector<PTSceneTopology::Geometry>& geometry,
+                        const std::shared_ptr<LeaseBudget>& budget,std::shared_ptr<PTGeometrySnapshot::Transfer>& transfer){
+        transfer.reset();std::lock_guard<std::mutex> guard(mutex);if(!active||geometry.empty())return false;
+        std::map<U64,PTGeometrySnapshot::Source> sources;
+        for(const auto& g:geometry)for(const U64 token:{g.indexToken,g.positionToken}){
+            if(sources.count(token))continue;
+            const Entry* entry=nullptr;U64 wrapper=0;
+            for(const auto& item:owners)if(item.second.token==token){entry=&item.second;wrapper=item.first;break;}
+            PTNativeBufferObserver::Snapshot native{};
+            if(!entry||!PTNativeBufferObserver::Read(reinterpret_cast<const void*>(wrapper),native)||
+               native.resource!=reinterpret_cast<UINT_PTR>(entry->resource.Get())||native.address!=entry->address||native.bytes>entry->bytes)return false;
+            sources.emplace(token,PTGeometrySnapshot::Source{{token,entry->address,entry->bytes},entry->resource,static_cast<D3D12_RESOURCE_STATES>(native.state)});
+        }
+        // Allocate metadata before recording; no failure may drop resources
+        // once a copy references them in the command list.
+        std::vector<std::shared_ptr<PTSceneTopology::FrozenGeometry>> frozen;
+        for(const auto& g:geometry){
+            auto f=std::make_shared<PTSceneTopology::FrozenGeometry>();
+            const auto& i=sources.at(g.indexToken).allocation;const auto& p=sources.at(g.positionToken).allocation;
+            f->indexBase=i.address;f->indexBytes=i.bytes;f->positionBase=p.address;f->positionBytes=p.bytes;frozen.push_back(std::move(f));
+        }
+        std::vector<PTGeometrySnapshot::Source> ordered;for(const auto& item:sources)ordered.push_back(item.second);
+        if(!PTGeometrySnapshot::Record(list,ordered,budget,transfer))return false;
+        for(std::size_t n=0;n<geometry.size();++n){
+            auto& f=*frozen[n];f.owner=transfer->storage;
+            f.privateIndex=transfer->storage->copies.at(geometry[n].indexToken)->GetGPUVirtualAddress();
+            f.privatePosition=transfer->storage->copies.at(geometry[n].positionToken)->GetGPUVirtualAddress();
+            geometry[n].frozen=std::move(frozen[n]);
+        }
+        return true;
+    }
     // Called inside the matching writerReady callback, before native waitJob
     // can reclaim its CPU rows. Freeze identifiers, roots and allocation tokens
     // together; a later preparation cannot bind replacement allocations.
@@ -112,7 +146,7 @@ public:
             bytes+=entry.bytes;payload->resources.push_back(entry.resource);
         }
         if(!leaseBudget->Acquire(bytes))return false;
-        payload->bytes=bytes;batch.payload=std::move(payload);plan=std::move(candidate);return true;
+        payload->keepAlive=candidate.keepAlive;payload->bytes=bytes;batch.payload=std::move(payload);plan=std::move(candidate);return true;
     }
     Stats Stop(){std::unique_lock<std::mutex> guard(mutex);active=false;completed.wait(guard,[this]{return pending==0;});index.Clear();owners.clear();held=0;return stats;}
 };

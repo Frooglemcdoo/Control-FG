@@ -3,11 +3,17 @@
 #include <map>
 #include <vector>
 #include <cstdint>
+#include <memory>
 namespace PTSceneTopology {
 using U64=std::uint64_t;
 struct Instance {float transform[12];std::uint32_t idMask,contributionFlags;U64 blas;};
 static_assert(sizeof(Instance)==64,"DXR instance ABI");
-struct Geometry {U64 indices,positions,stride;std::uint32_t indexStride,indexCount,vertexCount;U64 indexToken=0,positionToken=0;};
+struct FrozenGeometry {
+    U64 indexBase=0,indexBytes=0,positionBase=0,positionBytes=0;
+    U64 privateIndex=0,privatePosition=0;
+    std::shared_ptr<void> owner;
+};
+struct Geometry {U64 indices,positions,stride;std::uint32_t indexStride,indexCount,vertexCount;U64 indexToken=0,positionToken=0;std::shared_ptr<const FrozenGeometry> frozen{};};
 struct Result {U64 instances=0,matched=0,missingBlas=0,outOfRange=0,mismatch=0,conflict=0,masked=0;};
 struct Mapping {Geometry geometry{};bool referenced=false;};
 // CPU relation checks only. A caller must separately prove submission ordering,
@@ -46,7 +52,7 @@ public:
                 if(!PTNativeBinding::IndexAddress(b,address)||address!=geometry.indices||b.constants[1]!=geometry.indexStride||
                    b.constants[0]>=b.constants[8]||U64(geometry.indexCount)*geometry.indexStride>U64(b.constants[8])-b.constants[0]){++out.mismatch;continue;}
                 const auto old=assigned.find(row);
-                if(old!=assigned.end()&&(old->second.positions!=geometry.positions||old->second.stride!=geometry.stride||old->second.indexCount!=geometry.indexCount||old->second.vertexCount!=geometry.vertexCount||old->second.indexToken!=geometry.indexToken||old->second.positionToken!=geometry.positionToken)){++out.conflict;continue;}
+                if(old!=assigned.end()&&(old->second.positions!=geometry.positions||old->second.stride!=geometry.stride||old->second.indexCount!=geometry.indexCount||old->second.vertexCount!=geometry.vertexCount||old->second.indexToken!=geometry.indexToken||old->second.positionToken!=geometry.positionToken||old->second.frozen!=geometry.frozen)){++out.conflict;continue;}
                 assigned[row]=geometry;++out.matched;
             }
         }

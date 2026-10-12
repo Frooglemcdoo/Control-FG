@@ -34,6 +34,7 @@ struct Plan {
     U64 privatePipeline=0;
     std::vector<PTShaderTableAdapter::Bytes> records;
     std::vector<U64> allocationTokens;
+    std::vector<std::shared_ptr<void>> keepAlive;
 };
 struct ExportSet {
     U64 nativePipeline=0,privatePipeline=0;
@@ -71,9 +72,28 @@ inline Failure Prepare(const Selection& selected,const Scene& scene,const Table&
         const auto& g=mappings[i].geometry;const auto& binding=table.bindings[i];
         PTOwnedScene::Index::Resolved resolved;
         const PTOwnedScene::Triangle triangle{g.indices,g.positions,g.stride,g.indexToken,g.positionToken,g.indexStride,g.indexCount,g.vertexCount};
-        if(owners.ResolveExact(binding,triangle,scene.version,resolved)!=PTOwnedScene::Status::candidate)return {Status::allocation,i*table.rays};
+        if(g.frozen){
+            const auto& f=*g.frozen;
+            if(!f.owner||!f.privateIndex||!f.privatePosition||g.stride>UINT32_MAX)return {Status::allocation,i*table.rays};
+            // Reconstruct the ORIGINAL build inputs for validation. The current
+            // GPU address may now name a different allocation; never use it to
+            // recover released positions. Attribute identity remains live.
+            const auto attributeToken=owners.Find(binding.attributes,binding.constants[9]);
+            if(!attributeToken||attributeToken!=table.allocationTokens[i][1]||g.indexToken!=table.allocationTokens[i][0])return {Status::allocation,i*table.rays};
+            const auto& c=binding.constants;U64 indexAddress=0;
+            const U64 padded=(U64(c[8])+3)&~U64(3);
+            if(!PTNativeBinding::IndexAddress(binding,indexAddress)||indexAddress!=g.indices||
+               binding.indices<f.indexBase||binding.indices-f.indexBase>f.indexBytes||padded>f.indexBytes-(binding.indices-f.indexBase))return {Status::allocation,i*table.rays};
+            resolved.geometry={{{binding.indices,padded,scene.version},g.indices},{{f.positionBase,f.positionBytes,scene.version},g.positions},
+                {{binding.attributes,c[9],scene.version},binding.attributes},g.indexStride,g.indexCount,g.vertexCount,
+                static_cast<std::uint32_t>(g.stride),c[2],c[5],c[6],c[3],244000u/35u,scene.version,true,true,true};
+            resolved.tokens[0]=g.indexToken;resolved.tokens[1]=g.positionToken;resolved.tokens[2]=attributeToken;
+            pending.keepAlive.push_back(f.owner);pending.allocationTokens.push_back(attributeToken);
+        }else{
+            if(owners.ResolveExact(binding,triangle,scene.version,resolved)!=PTOwnedScene::Status::candidate)return {Status::allocation,i*table.rays};
+            pending.allocationTokens.insert(pending.allocationTokens.end(),std::begin(resolved.tokens),std::end(resolved.tokens));
+        }
         if(resolved.tokens[0]!=table.allocationTokens[i][0]||resolved.tokens[2]!=table.allocationTokens[i][1])return {Status::allocation,i*table.rays};
-        pending.allocationTokens.insert(pending.allocationTokens.end(),std::begin(resolved.tokens),std::end(resolved.tokens));
         for(unsigned ray=0;ray<table.rays;++ray){
             const std::size_t record=i*table.rays+ray;
             const auto* source=table.bytes.data()+record*PTShaderTableAdapter::NativeStride;
@@ -83,6 +103,12 @@ inline Failure Prepare(const Selection& selected,const Scene& scene,const Table&
                std::memcmp(source+48,binding.constants,40))return {Status::binding,record};
             if(PTShaderTableAdapter::Convert(source,PTShaderTableAdapter::NativeStride,exports.rays[ray],&resolved.geometry,pending.records[record])!=PTShaderTableAdapter::Status::ready)
                 return {Status::conversion,record};
+            if(g.frozen){
+                const auto& f=*g.frozen;
+                const U64 indices=f.privateIndex+(binding.indices-f.indexBase),positions=f.privatePosition+(g.positions-f.positionBase);
+                std::memcpy(pending.records[record].data()+32,&indices,8);
+                std::memcpy(pending.records[record].data()+48,&positions,8);
+            }
         }
     }
     std::sort(pending.allocationTokens.begin(),pending.allocationTokens.end());
