@@ -16,7 +16,7 @@ for name,expected in locked.items():
   source=re.sub(r'static std::atomic<unsigned long long> ptGlass(?:Miss|HitGroup)BindCount\{0\};\n','',source)
   source=re.sub(r'    if\(strcmp\(rrCurrentRayGeneration,"transparentRayGeneration"\)==0\) \{\n        const auto n=\+\+ptGlass(?:Miss|HitGroup)BindCount;\n        if\(n<=\d+\) Log\("PT_GLASS_[^\n]+\n    \}\n','',source)
  if name=='src/pt_reflection_loader.h':
-  for addition in ['#include "pt_glass_runtime.h"\n','    if(SUCCEEDED(nativeHr)&&out&&*out) PTGlassRuntime::ObserveCompute(device,desc,*out);\n','    PTGlassRuntime::InstallDevice(device);\n','    PTGlassRuntime::Install(renderer,d3d);\n']:
+  for addition in ['#include "pt_scene_observer_runtime.h"\n','    PTSceneObserverRuntime::Install(d3d);\n','#include "pt_glass_runtime.h"\n','    if(SUCCEEDED(nativeHr)&&out&&*out) PTGlassRuntime::ObserveCompute(device,desc,*out);\n','    PTGlassRuntime::InstallDevice(device);\n','    PTGlassRuntime::Install(renderer,d3d);\n']:
    assert source.count(addition)==1,addition
    source=source.replace(addition,'')
   source=source.replace('    if(desc) PTGlassCaptureCompute(desc->CS.pShaderBytecode,desc->CS.BytecodeLength);\n\n','')
