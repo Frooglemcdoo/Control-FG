@@ -5,6 +5,7 @@
 int main(){
     using namespace PTNativeJobRoute;
     Router router;Ticket ticket;ticket.serial=1;ticket.list=2;ticket.pipeline=3;ticket.counter=4;
+    ticket.engineFrame=91;
     ticket.writer={5,6,7,320,2,1};ticket.layout={0x1000,320,32,64,32,64,96,2};Ticket out;
     assert(!router.Schedule(16,ticket));assert(router.Schedule(0,ticket));
     assert(!router.Schedule(0,ticket));auto wrong=ticket.writer;wrong.buffer++;

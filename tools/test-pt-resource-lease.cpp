@@ -13,6 +13,28 @@
 #include "../src/pt_scene_dispatch.h"
 #include "../src/pt_scene_topology_runtime.h"
 using Microsoft::WRL::ComPtr;
+struct QueueConsumerTest {
+    PTSceneLive::Capture* capture=nullptr;
+    PTSceneDescriptors::Acceleration acceleration{};
+    unsigned phase=0,resets=0;
+    ComPtr<ID3D12Fence> privateFence;
+    static void Before(void* context,ID3D12CommandQueue*,UINT count,ID3D12CommandList*const*)noexcept{
+        auto& self=*static_cast<QueueConsumerTest*>(context);assert(count==1&&self.phase==0);
+        PTSceneDispatch::Scene scene;assert(self.capture->Scene(2,self.acceleration,scene)==PTSceneOrder::Status::pending);self.phase=1;
+        SetLastError(0x1234); // Observers must not leak their Win32 error state.
+    }
+    static void Selected(void* context,ID3D12CommandQueue*,UINT count,ID3D12CommandList*const*,bool admitted)noexcept{
+        auto& self=*static_cast<QueueConsumerTest*>(context);assert(count==1&&admitted&&self.phase==1);
+        PTSceneDispatch::Scene scene;assert(self.capture->Scene(2,self.acceleration,scene)==PTSceneOrder::Status::ready);self.phase=2;
+    }
+    static void Submitted(void* context,ID3D12CommandQueue* queue,UINT count,ID3D12CommandList*const*,bool admitted)noexcept{
+        auto& self=*static_cast<QueueConsumerTest*>(context);assert(count==1&&admitted&&self.phase==2);
+        assert(SUCCEEDED(queue->Signal(self.privateFence.Get(),1)));self.phase=3;
+    }
+    static void Reset(void* context,ID3D12GraphicsCommandList*)noexcept{
+        auto& self=*static_cast<QueueConsumerTest*>(context);++self.resets;
+    }
+};
 static void TestGeometrySnapshot(ID3D12Device* device){
     D3D12_RESOURCE_DESC desc{};desc.Dimension=D3D12_RESOURCE_DIMENSION_BUFFER;desc.Width=1024;desc.Height=1;
     desc.DepthOrArraySize=desc.MipLevels=1;desc.SampleDesc.Count=1;desc.Layout=D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
@@ -213,16 +235,24 @@ int main(){
     assert(SUCCEEDED(list->Close()));
     std::puts("PASS native scene capture: immutable instance upload, geometry identities, compaction source and submitted list selection.");
     assert(PTSceneQueues::Start(&capture)&&PTSceneQueues::WatchQueue(queue.Get())&&PTSceneQueues::WatchList(list.Get()));
+    QueueConsumerTest client;client.capture=&capture;client.acceleration=selectedAS;
+    assert(SUCCEEDED(d->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&client.privateFence))));
+    const PTSceneQueues::Consumer callbacks{&client,&QueueConsumerTest::Before,&QueueConsumerTest::Selected,&QueueConsumerTest::Submitted,&QueueConsumerTest::Reset};
+    assert(PTSceneQueues::Register(&capture,&callbacks));assert(!PTSceneQueues::Register(&capture,&callbacks));
     assert(SUCCEEDED(list->Reset(allocator.Get(),nullptr))); // Real Reset invokes the generation observer.
+    assert(client.resets==1);
     capture.Build(list.Get(),&nativeBuild);assert(capture.Mark(list.Get(),2));
     assert(SUCCEEDED(list->Close()));queue->ExecuteCommandLists(1,&submittedList);
+    assert(client.phase==3);
     assert(SUCCEEDED(queue->Signal(done.Get(),2)));assert(SUCCEEDED(queue->Wait(done.Get(),2)));
     assert(capture.Scene(2,selectedAS,selectedScene)==PTSceneOrder::Status::ready);
     ready=CreateEventW(nullptr,FALSE,FALSE,nullptr);assert(ready);
     assert(SUCCEEDED(done->SetEventOnCompletion(2,ready)));assert(WaitForSingleObject(ready,30000)==WAIT_OBJECT_0);CloseHandle(ready);
+    assert(client.privateFence->GetCompletedValue()==1);
     // Stop observing before this stack-owned fixture ends. Production capture
     // has process lifetime; installed forwarding hooks remain valid either way.
-    PTSceneQueues::observer.store(nullptr);
+    PTSceneQueues::consumer.store(nullptr);PTSceneQueues::observer.store(nullptr);
+    std::puts("PASS renderer queue callbacks: descriptor selection before catalog submission, scene ready before Execute, retirement after Execute, Reset notification, single registration and nested private fence forwarding.");
     std::puts("PASS scene queue interception: real WARP Reset, ExecuteCommandLists, Signal and Wait preserve forwarding and select the submitted scene.");
     live.Copy({{handle.ptr+11ull*step,1}},{{asHandle,1}});assert(live.Select(heap.Get(),1,5,selectedAS));
     auto oldOwner=live.BeforeRelease(wrapper.data());live.AfterRelease(oldOwner);

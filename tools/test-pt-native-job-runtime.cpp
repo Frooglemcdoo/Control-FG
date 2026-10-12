@@ -23,6 +23,7 @@ int main(){
     auto* list=reinterpret_cast<ID3D12GraphicsCommandList4*>(0x1111);
     auto* pipeline=reinterpret_cast<ID3D12StateObject*>(0x2222);
     Put(module.data()+0x136d28,state.data());module[0xf6c30]=1;
+    Put(module.data()+0x136c68,UINT64(91));
     Put(state.data()+0x220,buffers.data());Put(buffers.data()+0xa8,&counter);Put(state.data()+0x240,shader.data());Put(shader.data(),pipeline);
     Put(buffer+0x30,UINT64(320));Put(buffer+0x48,UINT64(0x1000));
     Put(state.data()+0x200,UINT(32));Put(state.data()+0x204,UINT(64));Put(state.data()+0x208,UINT(32));
@@ -32,15 +33,16 @@ int main(){
     Recorded(list,&desc,pipeline);assert(!pending.serial); // No consumer is inert.
     assert(!Register(&Receive));workerHooksReady=true;assert(!Register(&Receive));dispatchHookReady=true;
     assert(Register(&Receive));assert(!Register(&Receive));SetLastError(1234);
-    Recorded(list,&desc,pipeline);assert(recorded==1&&received.hitTable==0x1080&&received.width==1280);
+    Recorded(list,&desc,pipeline);assert(recorded==1&&received.hitTable==0x1080&&received.width==1280&&received.engineFrame==91&&received.counter==1);
     auto first=received;auto* job=module.data()+0x136d30;
     Put(job+0x10,first.writer.buffer);Put(job+0x18,first.writer.state);Put(job+0x20,first.writer.bytes);
     Put(job+0x24,first.writer.rays);Put(job+0x28,first.writer.count);Put(job+0x30,first.writer.bindings);
     Scheduling(job);assert(!pending.serial);
+    Put(module.data()+0x136c68,UINT64(92)); // Worker completion must retain the recording frame.
     auto wrong=first.writer;wrong.bindings++;assert(!Begin(0,wrong).serial);
-    auto claimed=Begin(0,first.writer);assert(claimed.serial==first.serial);Finish(0,claimed);assert(ready==1);
+    auto claimed=Begin(0,first.writer);assert(claimed.serial==first.serial&&claimed.engineFrame==91);Finish(0,claimed);assert(ready==1&&received.engineFrame==91);
     Finish(0,claimed);assert(ready==1&&GetLastError()==1234);
-    Recorded(list,&desc,pipeline);auto second=received;assert(second.serial!=first.serial);
+    Recorded(list,&desc,pipeline);auto second=received;assert(second.serial!=first.serial&&second.engineFrame==92);
     Scheduling(job);claimed=Begin(0,second.writer);Finish(0,first);assert(ready==1);Finish(0,claimed);assert(ready==2);
     Recorded(list,&desc,pipeline);Put(job+0x30,UINT64(0x4444));Scheduling(job);assert(cancelled==1&&!Begin(0,first.writer).serial);
     module[0x1371e0]=1;Recorded(list,&desc,pipeline);assert(!pending.serial);module[0x1371e0]=0;

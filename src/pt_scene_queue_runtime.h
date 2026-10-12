@@ -13,6 +13,17 @@ inline std::recursive_mutex queueMutex;
 inline std::map<void**,QueueMethods> queues;
 inline std::map<void**,Reset> lists;
 inline std::atomic<PTSceneLive::Capture*> observer{nullptr};
+// Register once, before rendering. The callbacks and their context must outlive
+// installed hooks. They execute under queueMutex, never the catalog's own lock.
+// Native forwarding remains unconditional, including rejected scene admission.
+struct Consumer {
+    void* context=nullptr;
+    void (*submitting)(void*,ID3D12CommandQueue*,UINT,ID3D12CommandList*const*) noexcept=nullptr;
+    void (*selected)(void*,ID3D12CommandQueue*,UINT,ID3D12CommandList*const*,bool) noexcept=nullptr;
+    void (*submitted)(void*,ID3D12CommandQueue*,UINT,ID3D12CommandList*const*,bool) noexcept=nullptr;
+    void (*reset)(void*,ID3D12GraphicsCommandList*) noexcept=nullptr;
+};
+inline std::atomic<const Consumer*> consumer{nullptr};
 inline bool hooksValid=true;
 inline thread_local unsigned nesting=0;
 struct Scope {bool outer;Scope():outer(nesting++==0){}~Scope(){--nesting;}};
@@ -23,15 +34,22 @@ inline void STDMETHODCALLTYPE ExecuteHook(ID3D12CommandQueue* q,UINT n,ID3D12Com
     // Keep the observation order identical to calls reaching the native API.
     std::lock_guard<std::recursive_mutex> guard(queueMutex);
     const DWORD before=GetLastError();
-    capture->Checkpoint();capture->Submit(q,n,input);SetLastError(before);original(q,n,input);
-    const DWORD after=GetLastError();capture->Submitted(q);capture->Tail(q);SetLastError(after);
+    const auto client=consumer.load(std::memory_order_acquire);
+    capture->Checkpoint();
+    if(client&&client->submitting)client->submitting(client->context,q,n,input);
+    const bool admitted=capture->Submit(q,n,input);
+    if(client&&client->selected)client->selected(client->context,q,n,input,admitted);
+    SetLastError(before);original(q,n,input);
+    const DWORD after=GetLastError();capture->Submitted(q);
+    if(client&&client->submitted)client->submitted(client->context,q,n,input,admitted);
+    capture->Tail(q);SetLastError(after);
 }
 inline HRESULT FenceHook(ID3D12CommandQueue* q,ID3D12Fence* fence,UINT64 value,bool signal){
     FenceOperation original=nullptr;{std::lock_guard<std::mutex> guard(hooksMutex);const auto& methods=queues.at(*reinterpret_cast<void***>(q));original=signal?methods.signal:methods.wait;}
     Scope scope;const auto capture=observer.load(std::memory_order_acquire);
     if(!scope.outer||!capture)return original(q,fence,value);
     std::lock_guard<std::recursive_mutex> guard(queueMutex);
-    capture->Checkpoint();
+    const DWORD before=GetLastError();capture->Checkpoint();SetLastError(before);
     const HRESULT hr=original(q,fence,value);const DWORD error=GetLastError();
     if(FAILED(hr))capture->Invalidate();
     else {if(signal)capture->Signal(q,fence,value);else capture->Wait(q,fence,value);capture->Tail(q);}
@@ -42,8 +60,16 @@ inline HRESULT STDMETHODCALLTYPE WaitHook(ID3D12CommandQueue* q,ID3D12Fence* f,U
 inline HRESULT STDMETHODCALLTYPE ResetHook(ID3D12GraphicsCommandList* list,ID3D12CommandAllocator* allocator,ID3D12PipelineState* pso){
     Reset original=nullptr;{std::lock_guard<std::mutex> guard(hooksMutex);original=lists.at(*reinterpret_cast<void***>(list));}
     Scope scope;const auto capture=observer.load(std::memory_order_acquire);
+    if(!scope.outer||!capture)return original(list,allocator,pso);
+    // Reset cancels an unsent recording. Serialize it with the entire observed
+    // Execute boundary so cancellation cannot release resources being submitted.
+    std::lock_guard<std::recursive_mutex> guard(queueMutex);
     const HRESULT hr=original(list,allocator,pso);const DWORD error=GetLastError();
-    if(scope.outer&&capture&&SUCCEEDED(hr))capture->Reset(list);
+    if(SUCCEEDED(hr)){
+        capture->Reset(list);
+        const auto client=consumer.load(std::memory_order_acquire);
+        if(client&&client->reset)client->reset(client->context,list);
+    }
     SetLastError(error);return hr;
 }
 inline bool Exchange(void** entry,void* expected,void* replacement){
@@ -81,5 +107,9 @@ inline bool WatchList(ID3D12GraphicsCommandList* list){
 }
 inline bool Start(PTSceneLive::Capture* capture){
     PTSceneLive::Capture* empty=nullptr;return capture&&(observer.compare_exchange_strong(empty,capture,std::memory_order_release)||empty==capture);
+}
+inline bool Register(PTSceneLive::Capture* capture,const Consumer* client){
+    if(!capture||!client||!client->context||observer.load(std::memory_order_acquire)!=capture)return false;
+    const Consumer* empty=nullptr;return consumer.compare_exchange_strong(empty,client,std::memory_order_release);
 }
 }

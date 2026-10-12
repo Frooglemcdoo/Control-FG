@@ -26,6 +26,11 @@ static bool ReadDispatch(ID3D12GraphicsCommandList4* list,const D3D12_DISPATCH_R
     __try {
         if(!verifiedD3d||!list||!source||!pipeline)return false;
         auto* module=reinterpret_cast<unsigned char*>(verifiedD3d);
+        // The SBT counter advances at each native ray dispatch (RVA 3570f),
+        // not once per frame. Use the established engine frame counter also
+        // consumed by the camera/RR capture paths; freeze it before scheduling.
+        auto* frameAddress=reinterpret_cast<volatile const UINT64*>(module+0x136c68);
+        const auto frame=*frameAddress;if(!frame)return false;
         if(!module[0xf6c30]||module[0x1371e0])return false; // Worker path, real identifiers.
         auto* state=*reinterpret_cast<unsigned char**>(module+0x136d28);if(!state)return false;
         auto* buffers=*reinterpret_cast<unsigned char**>(state+0x220);if(!buffers)return false;
@@ -47,7 +52,8 @@ static bool ReadDispatch(ID3D12GraphicsCommandList4* list,const D3D12_DISPATCH_R
            desc.MissShaderTable.StartAddress!=layout.buffer+layout.missOffset||desc.MissShaderTable.SizeInBytes!=64||desc.MissShaderTable.StrideInBytes!=32||
            desc.HitGroupTable.StartAddress!=hit||desc.HitGroupTable.SizeInBytes!=size||desc.HitGroupTable.StrideInBytes!=96||
            !desc.Width||!desc.Height||desc.Depth!=1)return false;
-        out.list=reinterpret_cast<UINT_PTR>(list);out.pipeline=reinterpret_cast<UINT_PTR>(pipeline);out.counter=*counter;
+        if(*frameAddress!=frame)return false;
+        out.engineFrame=frame;out.list=reinterpret_cast<UINT_PTR>(list);out.pipeline=reinterpret_cast<UINT_PTR>(pipeline);out.counter=*counter;
         out.hitTable=hit;out.hitBytes=size;out.width=desc.Width;out.height=desc.Height;out.layout=layout;
         out.writer={reinterpret_cast<UINT_PTR>(buffer),reinterpret_cast<UINT_PTR>(shader),bindings,bytes,2,count};return true;
     }__except(EXCEPTION_EXECUTE_HANDLER){out={};return false;}

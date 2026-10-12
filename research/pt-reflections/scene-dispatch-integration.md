@@ -367,3 +367,31 @@ without changing an upload enable flag that an earlier GPU execution may still
 read. Simply writing such a flag to zero on replay is not a valid solution.
 Native lighting/material adapters, composition and renderer activation remain
 unfinished. No user game run is requested by this checkpoint.
+
+### Renderer submission callbacks and engine-frame identity
+
+The queue interceptor now supports one session-lifetime renderer consumer. Its
+callbacks run before catalog submission (descriptor selection), after catalog
+submission but before native Execute (scene validation), after native Execute
+(retirement), and after successful Reset (cancellation). Native execution is
+forwarded even if scene admission fails. Nested private fence signals forward
+without recursively observing another native queue operation. Reset and the
+complete submission boundary share the queue mutex.
+
+The WARP fixture exercises these callback phases against a real queue/list and
+checks that the selected scene changes from pending to ready at the correct
+boundary. Its private retirement signal runs after Execute. Registration is
+single-owner; callbacks must have session lifetime in production.
+
+Native RVA 3570f increments the shader-table counter on a ray dispatch. That
+counter is therefore not a frame ID. Tickets now separately freeze the established
+engine frame value at d3d RVA 136c68 (the same field used by camera and RR capture;
+native setter/getter RVAs 239b0/239c0). A guarded double read rejects a frame change
+during capture. Worker completion carries the recording frame, even when the
+engine has already advanced. Later-submission proof checking additionally requires
+the same frame and dimensions. Candidate lookup rejects duplicates instead of
+selecting the newest ticket. Frame/pipeline/extent discovery is not sufficient
+view proof: the live pass adapter must still correlate camera/root bindings.
+
+These callback APIs are implemented, but no complete PT renderer consumer is
+registered yet. Lighting and graphics pass hookup remains unfinished.

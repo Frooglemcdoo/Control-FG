@@ -9,6 +9,8 @@ enum class Status {pending,prepared,rejected,missing};
 class Prepared {
     friend class Runtime;
     PTSceneLive::Owner* owner=nullptr;
+    std::uint64_t engineFrame=0;
+    UINT width=0,height=0;
     PTSceneDescriptors::Acceleration acceleration;
     Microsoft::WRL::ComPtr<ID3D12StateObject> nativePipeline;
     PTSceneDispatch::Table table;
@@ -35,7 +37,7 @@ class Runtime {
     }
     void Clear(){for(const auto& entry:pending)owner.Scenes().Forget(entry.first);pending.clear();}
     static bool Same(const Ticket& a,const Ticket& b){
-        return a.serial==b.serial&&a.list==b.list&&a.pipeline==b.pipeline&&a.counter==b.counter&&a.hitTable==b.hitTable&&
+        return a.serial==b.serial&&a.engineFrame==b.engineFrame&&a.list==b.list&&a.pipeline==b.pipeline&&a.counter==b.counter&&a.hitTable==b.hitTable&&
             a.hitBytes==b.hitBytes&&a.width==b.width&&a.height==b.height&&a.writer==b.writer&&
             a.layout.buffer==b.layout.buffer&&a.layout.bytes==b.layout.bytes&&a.layout.raygenBytes==b.layout.raygenBytes&&
             a.layout.missOffset==b.layout.missOffset&&a.layout.missStride==b.layout.missStride&&a.layout.hitRelative==b.layout.hitRelative&&
@@ -45,7 +47,7 @@ public:
     explicit Runtime(PTSceneLive::Owner& session):owner(session){}
     bool Recorded(const Ticket& ticket,ID3D12DescriptorHeap* heap,UINT tableFirst,UINT srvSlot){
         std::lock_guard<std::mutex> guard(mutex);
-        if(!owner.Active()||!ticket.serial||!ticket.list||!ticket.pipeline||!ticket.width||!ticket.height||
+        if(!owner.Active()||!ticket.serial||!ticket.engineFrame||!ticket.list||!ticket.pipeline||!ticket.width||!ticket.height||
            !heap||srvSlot>=36||pending.size()>=16||pending.count(ticket.serial))return false;
         const auto description=heap->GetDesc();
         if(description.Type!=D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV||!(description.Flags&D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE)||
@@ -94,7 +96,29 @@ public:
         if(found==pending.end()||!found->second.written||!found->second.submitted)return false;
         output=found->second.identifiers;return true;
     }
+    // Discovery only: the pass adapter must also match the native view/root
+    // bindings. Multiple candidates are rejected, never resolved by newest ID.
+    bool FindReady(std::uint64_t engineFrame,UINT width,UINT height,std::uint64_t nativePipeline,std::uint64_t& serial){
+        serial=0;if(!engineFrame||!width||!height||!nativePipeline)return false;
+        std::lock_guard<std::mutex> guard(mutex);const Entry* candidate=nullptr;
+        for(const auto& item:pending){const auto& entry=item.second;const auto& ticket=entry.ticket;
+            if(ticket.engineFrame!=engineFrame||ticket.width!=width||ticket.height!=height||ticket.pipeline!=nativePipeline)continue;
+            if(candidate)return false;candidate=&entry;
+        }
+        if(!candidate||!candidate->written||!candidate->submitted)return false;
+        serial=candidate->ticket.serial;return true;
+    }
     void Cancelled(std::uint64_t serial){std::lock_guard<std::mutex> guard(mutex);const auto found=pending.find(serial);if(found!=pending.end())Erase(found);}
+    void Reset(IUnknown* list){
+        Microsoft::WRL::ComPtr<IUnknown> identity;
+        std::lock_guard<std::mutex> guard(mutex);
+        if(!list||FAILED(list->QueryInterface(IID_PPV_ARGS(&identity)))){Clear();return;}
+        for(auto it=pending.begin();it!=pending.end();){
+            // A submitted writer snapshot belongs to the old immutable cut and
+            // can still be consumed after the command list starts its next use.
+            if(it->second.list.Get()==identity.Get()&&!it->second.submitted)it=Erase(it);else ++it;
+        }
+    }
     // Optional immutable proof permits checking the same writer snapshot at a
     // later lighting submission. The original ray ticket can then be retired.
     Status Prepare(std::uint64_t serial,const PTSceneDispatch::ExportSet& exports,PTSceneDispatch::Plan& plan,PTOwnedScene::LeaseBatch& lease,
@@ -115,6 +139,7 @@ public:
         const bool prepared=owner.Resources().PrepareLease(selection,scene,entry.table,exports,plan,lease);
         if(prepared&&proof){
             auto snapshot=std::make_shared<Prepared>();snapshot->owner=&owner;snapshot->acceleration=entry.acceleration;
+            snapshot->engineFrame=entry.ticket.engineFrame;snapshot->width=entry.ticket.width;snapshot->height=entry.ticket.height;
             snapshot->nativePipeline=entry.pipeline;snapshot->table=std::move(entry.table);snapshot->exports=exports;snapshot->plan=plan;
             *proof=std::move(snapshot);
         }
@@ -124,8 +149,9 @@ public:
     // position and calls this AFTER catalog Submit, BEFORE native Execute.
     // Pending is disabled for this submission; this method never waits for a
     // native writer or queues a GPU wait. Caller must Forget the later ticket.
-    Status Revalidate(std::uint64_t submissionTicket,const std::shared_ptr<const Prepared>& proof){
-        if(!submissionTicket||!proof||proof->owner!=&owner||!owner.Active())return Status::rejected;
+    Status Revalidate(std::uint64_t submissionTicket,std::uint64_t engineFrame,UINT width,UINT height,const std::shared_ptr<const Prepared>& proof){
+        if(!submissionTicket||!proof||proof->owner!=&owner||!owner.Active()||!engineFrame||proof->engineFrame!=engineFrame||
+           proof->width!=width||proof->height!=height)return Status::rejected;
         PTSceneDispatch::Scene scene;const auto selected=owner.Scenes().Scene(submissionTicket,proof->acceleration,scene);
         if(selected==PTSceneOrder::Status::pending)return Status::pending;
         if(selected!=PTSceneOrder::Status::ready)return Status::rejected;
