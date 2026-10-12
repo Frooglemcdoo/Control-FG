@@ -241,11 +241,11 @@ jobs:
           dumpbin /exports build\dxgi.dll > build\exports.txt
           dumpbin /imports build\dxgi.dll > build\imports.txt
 
-      - name: Package glass integration G1R2
+      - name: Package glass integration G1R3
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-PT-Glass-G1R2'
+          $out='Control-FG-PT-Glass-G1R3'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/pt_glass_raygen.dxil "$out/pt_glass_raygen.dxil"
           Copy-Item build/pt_glass_secondary.dxbc "$out/pt_glass_secondary.dxbc"
@@ -260,15 +260,16 @@ jobs:
           Copy-Item Collect-ControlFG-Compact-Logs.ps1 "$out/Collect-ControlFG-Compact-Logs.ps1"
           Copy-Item Collect-ControlFG-Compact-Logs.cmd "$out/Collect-ControlFG-Compact-Logs.cmd"
           @'
-          CONTROL-FG - GLASS CONTINUATION G1R2 (EXPERIMENTAL)
+          CONTROL-FG - GLASS CONTINUATION G1R3 (EXPERIMENTAL)
           ===============================================
           Close Control. Back up your current dxgi.dll and PT shader sidecars.
           Extract every file here beside Control_DX12.exe, replacing matching files.
           Requires the existing Control FG installation and verified Steam game DLLs.
           Keep ray-traced transparent reflections enabled. F10 controls PT.
 
-          Retains the G1R1 activation fix. Routes the exact native DXR call
-          sites through the glass handler, forwarding the actual engine interface.
+          Retains the activation and native dispatch routing fixes. Initializes
+          resources on the native queue behind the Streamline submission proxy,
+          preserving actual submission tracking and strict device validation.
 
           Adds one opaque reflection continuation inside glass reflections, for
           glossy surfaces with smoothness >= 0.8. Native glass hit shaders, alpha
@@ -290,10 +291,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-PT-Glass-G1R2
+          name: Control-FG-PT-Glass-G1R3
           path: |
-            Control-FG-PT-Glass-G1R2.zip
-            Control-FG-PT-Glass-G1R2.sha256
+            Control-FG-PT-Glass-G1R3.zip
+            Control-FG-PT-Glass-G1R3.sha256
             build/exports.txt
             build/imports.txt
             build/pt_reflection_p1.dxil
