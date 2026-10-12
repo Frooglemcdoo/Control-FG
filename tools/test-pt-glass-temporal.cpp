@@ -65,6 +65,8 @@ int main() {
     assert(SUCCEEDED(queue->Signal(fence.Get(),1)));HANDLE event=CreateEventW(nullptr,FALSE,FALSE,nullptr);assert(event);
     assert(SUCCEEDED(fence->SetEventOnCompletion(1,event)));assert(WaitForSingleObject(event,10000)==WAIT_OBJECT_0);CloseHandle(event);
     void* mapped=nullptr;assert(SUCCEEDED(readback->Map(0,nullptr,&mapped)));const float* values=static_cast<const float*>(mapped);
+    for(UINT i=0;i<37;++i)printf("history step=%u light=%.6f count=%.1f\n",i+1,values[i*4],values[i*4+3]);
+    fflush(stdout);
     assert(values[0]==1.0f&&values[3]==1.0f); // Fresh history is not displayed.
     assert(std::abs(values[7*4]-3.0f)<0.001f&&values[7*4+3]==8.0f);
     assert(std::abs(values[31*4]-3.0f)<0.08f&&values[31*4+3]==16.0f);
