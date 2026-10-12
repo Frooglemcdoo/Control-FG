@@ -41,7 +41,7 @@ static void Skip(const char* stage,UINT64 mask=0,HRESULT hr=S_OK) {
     if(n<=12||n%600==0)Log("PT_GLASS_SKIP stage=%s observed=%llx hr=0x%08lX count=%llu",stage,mask,static_cast<unsigned long>(hr),n);
 }
 struct Context {void* manager=nullptr;ID3D12GraphicsCommandList* list=nullptr;ID3D12GraphicsCommandList4* rays=nullptr;ID3D12CommandQueue* queue=nullptr;PTGlass::DescriptorRange table;D3D12_GPU_DESCRIPTOR_HANDLE gpu{};};
-struct Pass {UINT64 serial=0;unsigned mode=1;Context rayContext{},lightingContext{};std::unique_ptr<PTGlass::LightingTableShadow> ray,light;PTGlass::Resources::Slot* slot=nullptr;bool traced=false;};
+struct Pass {UINT64 serial=0;unsigned mode=1;UINT64 historyGeneration=0;UINT historyPrevious=0;Context rayContext{},lightingContext{};std::unique_ptr<PTGlass::LightingTableShadow> ray,light;PTGlass::Resources::Slot* slot=nullptr;bool traced=false;};
 static thread_local Pass pass;
 static bool ReadContext(Context* out) noexcept {
     *out={};if(!verifiedD3d)return false;
@@ -186,7 +186,7 @@ static void STDMETHODCALLTYPE RaysHook(ID3D12GraphicsCommandList4* list,const D3
             if(resolved&&raw)static_cast<IUnknown*>(raw)->QueryInterface(IID_PPV_ARGS(&nativeQueue));
             if(raw)static_cast<IUnknown*>(raw)->Release();
             if(!nativeQueue){Skip("queue_native_interface");dispatchRays(list,desc);return;}
-            const HRESULT hr=resources.Initialize(device.Get(),nativeQueue.Get(),4ull*1024*1024*1024);
+            const HRESULT hr=resources.Initialize(device.Get(),nativeQueue.Get(),6ull*1024*1024*1024);
             if(FAILED(hr)){Skip("queue_resource_init",0,hr);dispatchRays(list,desc);return;}
             queue=context.queue;queueReady=true;
             Log("PT_GLASS_QUEUE_READY submitted_queue=%p native_queue=%p native_device=%p",queue.Get(),nativeQueue.Get(),device.Get());
@@ -198,7 +198,13 @@ static void STDMETHODCALLTYPE RaysHook(ID3D12GraphicsCommandList4* list,const D3
     if(FAILED(acquireHr)){Skip("resource_acquire",(UINT64(desc->Width)<<32)|desc->Height,acquireHr);dispatchRays(list,desc);return;}
     auto* slot=pass.slot;void* mapped=nullptr;
     if(FAILED(slot->dispatch->Map(0,nullptr,&mapped))){Skip("dispatch_upload_map");resources.Discarded(pass.serial);pass.slot=nullptr;dispatchRays(list,desc);return;}
-    memset(mapped,0,512);UINT constants[8]{static_cast<UINT>(pass.serial),65534,desc->Width,desc->Height,pass.mode,0,0,0};memcpy(mapped,constants,sizeof(constants));memcpy(static_cast<unsigned char*>(mapped)+256,identifier,32);slot->dispatch->Unmap(0,nullptr);
+    const UINT64 now=GetTickCount64();
+    const UINT historySerial=slot->historyGeneration==pass.historyGeneration&&
+        slot->historySerial>0&&pass.serial>slot->historySerial&&pass.serial-slot->historySerial<=8&&
+        now-slot->historyTime<=250?static_cast<UINT>(slot->historySerial):0u;
+    // An aborted/discarded consumer must not advertise unwritten history.
+    slot->historySerial=0;pass.historyPrevious=historySerial;
+    memset(mapped,0,512);UINT constants[8]{static_cast<UINT>(pass.serial),65534,desc->Width,desc->Height,pass.mode,historySerial,0,0};memcpy(mapped,constants,sizeof(constants));memcpy(static_cast<unsigned char*>(mapped)+256,identifier,32);slot->dispatch->Unmap(0,nullptr);
     mirrorGuard=true;
     const bool ready=pass.ray->Copy(pass.serial,2,{slot->descriptors.Get(),4,1})&&pass.ray->Copy(pass.serial,45,{slot->descriptors.Get(),0,1});
     PTGlass::DescriptorRange fresh;D3D12_GPU_DESCRIPTOR_HANDLE table{};
@@ -215,7 +221,15 @@ using UseFn=void(*)(void*,void*);using RayFn=void(*)(int,int);using BindFn=void(
 static UseFn useNative=nullptr;static RayFn rayNative=nullptr;static BindFn bindNative=nullptr;static LightFn lightNative=nullptr;
 static RRIndirectCallPatch usePatch,rayPatch,lightPatch;static RRAlbedoCallPatch bindPatch{};
 static void UseHook(void* table,void* state){
-    pass=Pass{};pass.serial=sequence.fetch_add(1);pass.mode=ptGlassUserMode.load(std::memory_order_acquire);captureKind=enabled?1u:0u;
+    pass=Pass{};pass.serial=sequence.fetch_add(1);pass.mode=ptGlassUserMode.load(std::memory_order_acquire);
+    {
+        std::lock_guard<std::mutex> guard(lock);
+        static unsigned previousControl=UINT_MAX;static UINT64 generation=0;
+        const unsigned control=pass.mode|((ptReflectionUserState.load(std::memory_order_acquire)&1u)<<2);
+        if(control!=previousControl){previousControl=control;++generation;}
+        pass.historyGeneration=generation;
+    }
+    captureKind=enabled?1u:0u;
     useNative(table,state);captureKind=0;
     if(enabled&&!pass.ray)Skip("native_constant_use");
 }
@@ -284,9 +298,9 @@ static void LightHook(void* state,const void* dimensions){
     bool good=SUCCEEDED(composite.Initialize(device.Get()))&&composite.Begin(pass.serial,context.table)&&composite.Copy(pass.serial,0,pass.light->Snapshot());
     D3D12_CONSTANT_BUFFER_VIEW_DESC cb{slot->dispatch->GetGPUVirtualAddress(),256};
     good=good&&pass.light->ConfigureSecondary(pass.serial,cb,{slot->descriptors.Get(),1,1},{slot->descriptors.Get(),2,1});
-    good=good&&composite.Copy(pass.serial,2,{slot->descriptors.Get(),4,1})&&composite.Copy(pass.serial,33,{slot->descriptors.Get(),1,1})&&composite.Copy(pass.serial,34,{slot->descriptors.Get(),3,1});
+    good=good&&composite.Copy(pass.serial,2,{slot->descriptors.Get(),4,1})&&composite.Copy(pass.serial,33,{slot->descriptors.Get(),1,1})&&composite.Copy(pass.serial,34,{slot->descriptors.Get(),3,1})&&composite.Copy(pass.serial,42,{slot->descriptors.Get(),5,1});
     PTGlass::DescriptorRange secondaryRange{},compositeRange{};D3D12_GPU_DESCRIPTOR_HANDLE secondaryTable{},compositeTable{};
-    good=good&&Fresh(context,&secondaryRange)&&pass.light->Publish(pass.serial,secondaryRange,&secondaryTable)&&Fresh(context,&compositeRange)&&composite.PublishChecked(pass.serial,compositeRange,PTGlass::LightingTableLayout::NativeRequired|(1ull<<2)|(1ull<<33)|(1ull<<34)|(1ull<<41),&compositeTable);
+    good=good&&Fresh(context,&secondaryRange)&&pass.light->Publish(pass.serial,secondaryRange,&secondaryTable)&&Fresh(context,&compositeRange)&&composite.PublishChecked(pass.serial,compositeRange,PTGlass::LightingTableLayout::NativeRequired|(1ull<<2)|(1ull<<33)|(1ull<<34)|(1ull<<41)|(1ull<<42),&compositeTable);
     mirrorGuard=false;if(!good){Skip("lighting_tables");return;}
     auto* list=context.list;D3D12_RESOURCE_BARRIER uav{};uav.Type=D3D12_RESOURCE_BARRIER_TYPE_UAV;list->ResourceBarrier(1,&uav);
     Barrier(list,slot->hits.Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
@@ -296,8 +310,9 @@ static void LightHook(void* state,const void* dimensions){
     list->ResourceBarrier(1,&uav);
     Barrier(list,slot->hits.Get(),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
     Barrier(list,slot->radiance.Get(),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+    if(pass.mode==2){slot->historySerial=pass.serial;slot->historyGeneration=pass.historyGeneration;slot->historyTime=GetTickCount64();}
     finish.consumer=context.list;
-    const auto n=dispatchCount.load();if(n<=4||n%240==0)Log("PT_GLASS_LIGHTING dispatch=%llu secondary=1 composite=1 native_diffuse_direct_emission_retained=1",n);
+    const auto n=dispatchCount.load();if(n<=4||n%240==0)Log("PT_GLASS_LIGHTING dispatch=%llu secondary=1 composite=1 native_diffuse_direct_emission_retained=1 mode=%u history_previous=%u",n,pass.mode,pass.historyPrevious);
 }
 static void ObserveCompute(ID3D12Device* d,const D3D12_COMPUTE_PIPELINE_STATE_DESC* desc,void* result){
     if(!enabled||!desc||!result||desc->CS.BytecodeLength!=39720)return;char sha[65]{};
@@ -354,7 +369,7 @@ static bool Install(HMODULE renderer,HMODULE d3d){
        RRAlbedoPrepareCallPatch(b+0xa562e,reinterpret_cast<void*>(bindNative),reinterpret_cast<void*>(&BindHook),&bindPatch);
     if(ready)ready=nativeSetCall.Exchange(true)&&nativeDispatchCall.Exchange(true)&&usePatch.Exchange(true)&&rayPatch.Exchange(true)&&lightPatch.Exchange(true)&&RRAlbedoExchangeCall(&bindPatch,true);
     if(!ready){nativeSetCall.Exchange(false);nativeDispatchCall.Exchange(false);usePatch.Exchange(false);rayPatch.Exchange(false);lightPatch.Exchange(false);RRAlbedoExchangeCall(&bindPatch,false);}
-    enabled=ready;Log("PT_GLASS_INSTALL ready=%u build=G2D3 glass_mode_default=glossy diffuse_default=0 smoothness_min=0.8",unsigned(ready));
+    enabled=ready;Log("PT_GLASS_INSTALL ready=%u build=G2D4 temporal_diffuse=1 glass_mode_default=glossy diffuse_default=0 smoothness_min=0.8",unsigned(ready));
     if(ready){ID3D12Device* existing=nullptr;memcpy(&existing,reinterpret_cast<unsigned char*>(d3d)+kControlGlobalD3D12DevicePointerRva,sizeof(existing));if(existing)InstallDevice(existing);}
     return ready;
 }

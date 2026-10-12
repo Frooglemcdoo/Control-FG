@@ -14,6 +14,14 @@ for i in range(65536):
     assert abs((1/math.pi)*z/(z/math.pi)-1)<1e-12
     sx+=x;sy+=y;sz+=z
 assert abs(sx/65536)<.01 and abs(sy/65536)<.01 and abs(sz/65536-2/3)<.01
+# A static pixel must see different directions across dispatches, with the
+# same uniform hemisphere parameter distribution as the spatial population.
+seeds=[h(12345^h(epoch)) for epoch in range(1,4097)]
+assert len(set(seeds))==4096
+assert abs(sum((v&65535)/65536 for v in seeds)/4096-.5)<.02
+assert abs(sum((v>>16)/65536 for v in seeds)/4096-.5)<.02
+ray=(root/'src/shaders/pt_glass_raygen.hlsl').read_text()
+assert 'DiffuseHash((pixel.x+pixel.y*extent.x)^DiffuseHash(epoch))' in ray
 for width,height in [(1,1),(129,33),(2560,1440),(3840,2160)]:
     count=width*height
     assert count-1<count and (count-1)+count==2*count-1

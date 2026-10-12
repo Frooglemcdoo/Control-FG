@@ -1,5 +1,6 @@
 // Cosine-weighted samples estimate irradiance/pi directly. Keep native material
 // and Fresnel factors at dword 6728; replace only part of the indirect term.
+#include "pt_glass_temporal.hlsli"
 void PTGlassApplyDiffuse(uint2 pixel,inout float3 illumination) {
     if(ptGlassMode!=2u)return;
     float3 fallback=illumination;
@@ -43,4 +44,8 @@ void PTGlassApplyDiffuse(uint2 pixel,inout float3 illumination) {
         if(all(isfinite(mean))&&isfinite(stable))
             illumination=lerp(fallback,mean,0.5f*stable*support);
     }
+    float3 worldPosition=asfloat(ptCB0[6]).xyz*centerP.x+
+        asfloat(ptCB0[7]).xyz*centerP.y+asfloat(ptCB0[8]).xyz*centerP.z+asfloat(ptCB0[9]).xyz;
+    if(all(isfinite(worldPosition))&&all(isfinite(illumination)))
+        PTGlassAccumulate(pixel,worldPosition,centerN,material,fallback,illumination);
 }

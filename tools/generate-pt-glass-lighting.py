@@ -79,7 +79,7 @@ out += ['#ifndef PT_GLASS_SECONDARY_EVALUATION', '#define PT_GLASS_SECONDARY_EVA
         '#ifndef PT_GLASS_COMPOSITE', '#define PT_GLASS_COMPOSITE 0', '#endif',
         '#if PT_GLASS_SECONDARY_EVALUATION || PT_GLASS_COMPOSITE', '#include "pt_glass_secondary_layout.hlsli"',
         'StructuredBuffer<PTGlassSecondaryHit> ptGlassSecondaryHits : register(t28, space0);',
-        'cbuffer PTGlassDispatch : register(b6) { uint ptGlassEpoch; uint ptGlassMaterialCount; uint2 ptGlassExtent; uint ptGlassMode; };',
+        'cbuffer PTGlassDispatch : register(b6) { uint ptGlassEpoch; uint ptGlassMaterialCount; uint2 ptGlassExtent; uint ptGlassMode; uint ptGlassHistorySerial; };',
         '#endif',
         '#if PT_GLASS_COMPOSITE',
         'Texture2D<float4> ptGlassRadiance : register(t29);',

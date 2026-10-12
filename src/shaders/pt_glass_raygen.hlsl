@@ -18,7 +18,7 @@ struct Payload { float value; };
 float3 ViewToWorld(float3 p) {return p.x*sys[6].xyz+p.y*sys[7].xyz+p.z*sys[8].xyz+sys[9].xyz;}
 uint DiffuseHash(uint x) {x^=x>>16;x*=0x7feb352du;x^=x>>15;x*=0x846ca68bu;return x^(x>>16);}
 float3 DiffuseDirection(uint2 pixel,float3 n) {
-    uint seed=DiffuseHash(pixel.x+pixel.y*extent.x);
+    uint seed=DiffuseHash((pixel.x+pixel.y*extent.x)^DiffuseHash(epoch));
     float u=(float(seed&65535u)+0.5f)/65536.0f;
     float v=(float(seed>>16)+0.5f)/65536.0f;
     float3 t=normalize(cross(abs(n.z)<0.999f?float3(0,0,1):float3(0,1,0),n));

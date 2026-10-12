@@ -47,6 +47,16 @@ jobs:
           if errorlevel 1 exit /b 1
           build\test-glass-call.exe
           if errorlevel 1 exit /b 1
+      - name: Execute temporal history regression on WARP
+        shell: cmd
+        run: |
+          for /f "usebackq tokens=*" %%I in (`"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath`) do set "VSPATH=%%I"
+          call "%VSPATH%\VC\Auxiliary\Build\vcvars64.bat"
+          if not exist build mkdir build
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-pt-glass-temporal.cpp /Febuild\test-glass-temporal.exe /link d3dcompiler.lib d3d12.lib dxgi.lib
+          if errorlevel 1 exit /b 1
+          build\test-glass-temporal.exe
+          if errorlevel 1 exit /b 1
       - name: Verify diffuse transport and layout
         run: python tools/test-pt-glass-diffuse.py
       - name: Verify diffuse noise suppression
@@ -245,11 +255,11 @@ jobs:
           dumpbin /exports build\dxgi.dll > build\exports.txt
           dumpbin /imports build\dxgi.dll > build\imports.txt
 
-      - name: Package glass integration G2D3
+      - name: Package glass integration G2D4
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-PT-Glass-G2D3'
+          $out='Control-FG-PT-Glass-G2D4'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/pt_glass_raygen.dxil "$out/pt_glass_raygen.dxil"
           Copy-Item build/pt_glass_secondary.dxbc "$out/pt_glass_secondary.dxbc"
@@ -264,29 +274,32 @@ jobs:
           Copy-Item Collect-ControlFG-Compact-Logs.ps1 "$out/Collect-ControlFG-Compact-Logs.ps1"
           Copy-Item Collect-ControlFG-Compact-Logs.cmd "$out/Collect-ControlFG-Compact-Logs.cmd"
           @'
-          CONTROL-FG - GLASS CONTINUATION G2D3 (EXPERIMENTAL)
+          CONTROL-FG - GLASS CONTINUATION G2D4 (EXPERIMENTAL)
           ===============================================
           Close Control. Back up your current dxgi.dll and PT shader sidecars.
           Extract every file here beside Control_DX12.exe, replacing matching files.
           Requires the existing Control FG installation and verified Steam game DLLs.
           Keep ray-traced transparent reflections enabled. F10 controls PT.
 
-          GLASS NOISE ISOLATION BUILD: starts in GLOSSY mode every launch.
+          DIFFUSE TEMPORAL TEST: starts in GLOSSY mode every launch.
           Open F10 overlay. Leave PT REFLECTIONS ON. The GLASS button beside
           it cycles GLOSSY -> GLOSSY + DIFFUSE -> NATIVE -> GLOSSY.
-          Compare the same wall for a few seconds in each mode; close the
-          overlay for each comparison. These modes only change glass lighting.
-          Opaque PT, RR and FG settings remain unchanged.
-          GLOSSY retains the working G1R4 lighting behavior. DIFFUSE enables
-          the G2D2 filtered diffuse continuation. NATIVE uses the game's
-          original glass ray and lighting passes, with opaque PT still on.
+          Select GLOSSY + DIFFUSE to test the new temporal accumulation.
+          Diffuse directions change each dispatch. Up to 16 visits accumulate
+          per fenced slot; new history fades in across its first 8 visits.
+          History requires matching reflected position (2 cm), normal and
+          material. Stale slots, mode changes and resolution changes reset it.
+          This conservatively reuses the same pixel, without motion reprojection:
+          moving views can fall back to native GI until stable history rebuilds.
+          Glossy detail and opaque PT shaders are unchanged.
+          Added history costs about 0.5 GiB at 1440p / 1.1 GiB at 4K for 3 slots.
+          The full glass resource pool is now bounded to 6 GiB.
+          Compare still and moving views; check for trails, grain and FPS cost.
           Mode changes are recorded as PT_GLASS_UI_MODE in collected logs.
-          This isolates the source of noise; it is not a new denoiser fix.
-          Extra storage retains the existing 4 GiB pool cap.
 
           Build/PSO/resource checks passed before packaging. In-game appearance
           and driver compatibility still require testing on the target RTX GPU.
-          Compare F10 on/off at the same glass view. If the result is wrong or
+          Compare the GLASS modes at the same view. If the result is wrong or
           absent, run the included log collector after exiting and send its ZIP.
           Logs PT_GLASS_INSTALL / STATE_READY / RAYS / LIGHTING identify activation.
           Restore your backed-up binaries to roll back.
@@ -297,10 +310,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-PT-Glass-G2D3
+          name: Control-FG-PT-Glass-G2D4
           path: |
-            Control-FG-PT-Glass-G2D3.zip
-            Control-FG-PT-Glass-G2D3.sha256
+            Control-FG-PT-Glass-G2D4.zip
+            Control-FG-PT-Glass-G2D4.sha256
             build/exports.txt
             build/imports.txt
             build/pt_reflection_p1.dxil
