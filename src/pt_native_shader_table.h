@@ -1,15 +1,13 @@
 #pragma once
 #include "pt_scene_dispatch_plan.h"
+#include "pt_native_job_route.h"
 // Hash-locked d3d writer 33a40: CPU identifiers at state+20 + 8*(2*type+ray),
 // followed by the 56 local-root bytes from binding+8. Never map the native SBT.
 namespace PTNativeShaderTable {
 using U64=std::uint64_t;
 using Identifier=PTShaderTableAdapter::Identifier;
 struct Identifiers {U64 pipeline=0;std::array<Identifier,4> hit{};};
-struct Layout {
-    U64 buffer=0,bytes=0;
-    std::uint32_t raygenBytes=0,missOffset=0,missStride=0,hitRelative=0,hitStride=0,hitRecords=0;
-};
+using Layout=PTNativeJobRoute::TableLayout;
 inline bool HitRange(const Layout& l,std::size_t bindings,U64& address,U64& bytes){
     address=bytes=0;
     // Only the recovered two-ray reflection layout is admitted. The native

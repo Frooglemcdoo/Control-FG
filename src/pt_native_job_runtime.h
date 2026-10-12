@@ -48,7 +48,7 @@ static bool ReadDispatch(ID3D12GraphicsCommandList4* list,const D3D12_DISPATCH_R
            desc.HitGroupTable.StartAddress!=hit||desc.HitGroupTable.SizeInBytes!=size||desc.HitGroupTable.StrideInBytes!=96||
            !desc.Width||!desc.Height||desc.Depth!=1)return false;
         out.list=reinterpret_cast<UINT_PTR>(list);out.pipeline=reinterpret_cast<UINT_PTR>(pipeline);out.counter=*counter;
-        out.hitTable=hit;out.hitBytes=size;out.width=desc.Width;out.height=desc.Height;
+        out.hitTable=hit;out.hitBytes=size;out.width=desc.Width;out.height=desc.Height;out.layout=layout;
         out.writer={reinterpret_cast<UINT_PTR>(buffer),reinterpret_cast<UINT_PTR>(shader),bindings,bytes,2,count};return true;
     }__except(EXCEPTION_EXECUTE_HANDLER){out={};return false;}
 }

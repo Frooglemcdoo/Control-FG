@@ -11,7 +11,11 @@ struct Writer {
         return buffer==b.buffer&&state==b.state&&bindings==b.bindings&&bytes==b.bytes&&rays==b.rays&&count==b.count;
     }
 };
-struct Ticket {U64 serial=0,list=0,pipeline=0,counter=0,hitTable=0,hitBytes=0;std::uint32_t width=0,height=0;Writer writer{};};
+struct TableLayout {
+    U64 buffer=0,bytes=0;
+    std::uint32_t raygenBytes=0,missOffset=0,missStride=0,hitRelative=0,hitStride=0,hitRecords=0;
+};
+struct Ticket {U64 serial=0,list=0,pipeline=0,counter=0,hitTable=0,hitBytes=0;std::uint32_t width=0,height=0;Writer writer{};TableLayout layout{};};
 // Native job slots are reused. A slot number alone is never a lifetime token.
 // The live host must register BEFORE runJob and finish BEFORE the worker returns.
 class Router {

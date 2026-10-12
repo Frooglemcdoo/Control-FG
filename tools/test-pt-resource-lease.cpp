@@ -9,6 +9,7 @@
 #include "../src/pt_scene_submissions.h"
 #include "../src/pt_scene_live_owner.h"
 #include "../src/pt_scene_queue_runtime.h"
+#include "../src/pt_scene_handoff.h"
 #include "../src/pt_scene_topology_runtime.h"
 using Microsoft::WRL::ComPtr;
 int main(){
@@ -65,6 +66,21 @@ int main(){
     PTSceneDispatch::ExportSet exports{3,4,std::vector<PTShaderTableAdapter::Exports>(2)};
     for(unsigned ray=0;ray<2;++ray){auto& e=exports.rays[ray];e.nativeOpaque[0]=1;e.nativeAlpha[0]=2;e.privateOpaque[0]=3;e.privateAlpha[0]=4;
         auto* out=table.bytes.data()+ray*96;std::memcpy(out,e.nativeOpaque.data(),32);std::memcpy(out+32,&row.indices,56);}
+    // Reconstruct actual native writer bytes while its CPU pointers are live.
+    std::array<unsigned char,80> writerBuffer{};auto* writerResource=resource.Get();
+    std::memcpy(writerBuffer.data(),&writerResource,8);std::memcpy(writerBuffer.data()+0x30,&rd.Width,8);std::memcpy(writerBuffer.data()+0x48,&base,8);
+    std::array<unsigned char,64> writerState{};const UINT64 writerPipeline=3;std::memcpy(writerState.data(),&writerPipeline,8);
+    std::array<PTShaderTableAdapter::Identifier,4> writerIds{exports.rays[0].nativeOpaque,exports.rays[1].nativeOpaque,exports.rays[0].nativeAlpha,exports.rays[1].nativeAlpha};
+    for(unsigned i=0;i<4;++i){const void* id=writerIds[i].data();std::memcpy(writerState.data()+0x20+i*8,&id,8);}
+    PTNativeJobRoute::Ticket writerTicket;writerTicket.serial=17;writerTicket.pipeline=writerPipeline;
+    writerTicket.writer={reinterpret_cast<UINT_PTR>(writerBuffer.data()),reinterpret_cast<UINT_PTR>(writerState.data()),reinterpret_cast<UINT_PTR>(&row),320,2,1};
+    writerTicket.layout={base,rd.Width,32,64,32,64,96,2};writerTicket.hitTable=base+128;writerTicket.hitBytes=192;
+    PTNativeShaderTable::Identifiers writerIdentifiers;PTSceneDispatch::Table writerTable;
+    assert(bank.SnapshotWriter(writerTicket,writerIdentifiers,writerTable));
+    assert(writerTable.bytes==table.bytes&&writerTable.allocationTokens==table.allocationTokens&&writerIdentifiers.hit==writerIds);
+    writerIds[0][0]=88;assert(writerIdentifiers.hit[0][0]==1); // Immutable ID snapshot.
+    writerTicket.hitBytes=191;assert(!bank.SnapshotWriter(writerTicket,writerIdentifiers,writerTable)&&writerTable.bytes.empty());
+    std::puts("PASS writer snapshot: exact recorded layout, native identifiers, local-root bytes and allocation generations frozen inside owner transaction.");
     PTSceneDispatch::Selection selection{frozen.address,1,table.address,1,3};PTSceneDispatch::Plan plan;
     PTOwnedScene::LeaseBatch first,second,third;
     assert(bank.PrepareLease(selection,frozen,table,exports,plan,first)&&first.Count()==1&&first.Bytes()==rd.Width);
