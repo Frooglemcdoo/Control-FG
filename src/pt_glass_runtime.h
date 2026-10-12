@@ -337,7 +337,7 @@ struct NativeCallPatch {
 static NativeCallPatch nativeSetCall,nativeDispatchCall;
 static bool Install(HMODULE renderer,HMODULE d3d){
     if(!HashMatches(renderer,kRendererHash)||!HashMatches(d3d,kD3dHash)){
-        Log("PT_GLASS_INSTALL ready=0 build=G2D1 reason=unsupported_module_hash");return false;
+        Log("PT_GLASS_INSTALL ready=0 build=G2D2 reason=unsupported_module_hash");return false;
     }
     char sha[65]{};bool loaded=false;
     if(!PTReflectionLoadSidecar(L"pt_glass_raygen.dxil","GLASS_RAY",rayBytes,sha,loaded)||
@@ -354,7 +354,7 @@ static bool Install(HMODULE renderer,HMODULE d3d){
        RRAlbedoPrepareCallPatch(b+0xa562e,reinterpret_cast<void*>(bindNative),reinterpret_cast<void*>(&BindHook),&bindPatch);
     if(ready)ready=nativeSetCall.Exchange(true)&&nativeDispatchCall.Exchange(true)&&usePatch.Exchange(true)&&rayPatch.Exchange(true)&&lightPatch.Exchange(true)&&RRAlbedoExchangeCall(&bindPatch,true);
     if(!ready){nativeSetCall.Exchange(false);nativeDispatchCall.Exchange(false);usePatch.Exchange(false);rayPatch.Exchange(false);lightPatch.Exchange(false);RRAlbedoExchangeCall(&bindPatch,false);}
-    enabled=ready;Log("PT_GLASS_INSTALL ready=%u build=G2D1 diffuse_bounce=1 smoothness_min=0.8",unsigned(ready));
+    enabled=ready;Log("PT_GLASS_INSTALL ready=%u build=G2D2 diffuse_bounce=1 smoothness_min=0.8",unsigned(ready));
     if(ready){ID3D12Device* existing=nullptr;memcpy(&existing,reinterpret_cast<unsigned char*>(d3d)+kControlGlobalD3D12DevicePointerRva,sizeof(existing));if(existing)InstallDevice(existing);}
     return ready;
 }
