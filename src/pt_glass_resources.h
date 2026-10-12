@@ -38,7 +38,6 @@ private:
         slot.width=slot.height=0;slot.allocationBytes=0;slot.ticket={};
         slot.historySerial=slot.historyGeneration=slot.historyTime=0;
         slot.diagnosticSerial=slot.diagnosticMode=0;
-        std::uint32_t diagnosticSerial=0,diagnosticMode=0;
     }
     HRESULT Allocate(Slot& slot,UINT width,UINT height) noexcept {
         UINT64 hitBytes=0;if(!HitBytes(width,height,&hitBytes))return E_INVALIDARG;

@@ -296,7 +296,7 @@ jobs:
           and attenuation, separately for the reflected surface (layer 0),
           glossy continuation (1), and diffuse continuation (2).
           Readback happens only when both submissions have completed. No
-          per-frame GPU wait. Diagnostic memory is about 6 MiB across all
+          per-frame GPU wait. Diagnostic memory is about 18 MiB across all
           three slots at 4K. The existing 6 GiB glass pool cap still applies.
 
           This build measures the G2D4 lighting; it does not yet add missing
