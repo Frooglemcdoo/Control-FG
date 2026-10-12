@@ -189,3 +189,37 @@ The owner remains dormant pending exact AS build-version selection and the
 renderer consumer. A CPU-current allocation token is NOT an AS content version
 or proof of GPU dependency ordering. Neither this checkpoint nor successful
 compilation makes the project ready for a user rendering test.
+
+
+## Queue ordering model and remaining hard boundary
+
+`pt_scene_order.h` models submitted AS writes, queue ordering and fence
+signal/wait dependencies. A wait issued before its signal remains pending until
+that exact dependency can be resolved. A dispatch cannot select a later CPU
+build merely because it was most recently recorded. Multiple unordered writers
+are rejected; an unknown write invalidates the older metadata. Fence signals
+must form one ordered timeline even when producer queues change. Increasing
+CPU-observed fence values alone do not prove that timeline: a larger signal on
+an unrelated queue can satisfy a wait before the desired producer completes.
+
+This follows Microsoft's fence synchronization contract:
+https://learn.microsoft.com/en-us/windows/win32/direct3d12/user-mode-heap-synchronization
+The portable tests include a late signal, an ordered producer handoff, a racing
+higher signal, a cyclic wait, and allocation identity changes.
+
+The saved overview has seven AS builds on queue 5831/list 5832, a signal of
+fence 4873 to 942, and a matching wait on queue 1 before its ray dispatches.
+PIX comments out that native Wait and inserts flushes for replay. These concrete
+cross-queue operations rule out using CPU recording order as the live version
+selector. The graph is not wired to live queue events yet. Its bounded history
+also needs fence-proven checkpoint/retirement before long-running production use.
+
+A further distinction must remain explicit: retained COM resources preserve
+allocation lifetime, not immutable geometry content. Source position/index
+buffers can in principle be rewritten or suballocated again without destroying
+the backing resource. The live scene adapter must either establish their content
+version through the relevant GPU use or preserve the needed build inputs in
+private storage with correct states and ordering. The current leases do neither.
+Do not enable rendering or infer readiness from a valid CPU plan and retained
+pointers alone. Primary-light integration and the material compositor are also
+still absent. No user test package is ready at this checkpoint.

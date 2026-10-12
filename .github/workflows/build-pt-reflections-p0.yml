@@ -172,6 +172,15 @@ jobs:
           build\test-pt-glass-capture.exe
           if errorlevel 1 exit /b 1
 
+      - name: Test scene version queue ordering
+        shell: cmd
+        run: |
+          call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-pt-scene-order.cpp /Febuild\test-pt-scene-order.exe
+          if errorlevel 1 exit /b 1
+          build\test-pt-scene-order.exe
+          if errorlevel 1 exit /b 1
+
       - name: Test exact AS descriptor copies
         shell: cmd
         run: |
