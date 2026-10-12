@@ -18,6 +18,7 @@ jobs:
         run: |
           python -m compileall -q tools/entrance-capture
           python tools/entrance-capture/test_capture.py
+          python tools/entrance-capture/test_export_saved.py
       - name: Parse launcher with Windows PowerShell 5.1
         shell: powershell
         run: |
