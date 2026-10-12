@@ -73,5 +73,45 @@ class AcquisitionTests(unittest.TestCase):
             except OSError: self.skipTest('Symlink creation unavailable')
             self.assertEqual(list(capture.regular_files(root)), [])
 
+
+class FailureHandlingTests(unittest.TestCase):
+    def test_empty_filename_never_becomes_current_directory(self):
+        for value in (None, '', '   '):
+            with self.subTest(value=value):
+                with self.assertRaisesRegex(RuntimeError, 'empty capture filename'):
+                    capture.capture_filename(value)
+
+    def test_valid_capture_is_preserved(self):
+        with tempfile.TemporaryDirectory() as temp:
+            p = Path(temp) / 'frame.wpix'; p.write_bytes(b'PIX fixture')
+            self.assertEqual(capture.capture_filename(str(p)), p)
+            self.assertEqual(p.read_bytes(), b'PIX fixture')
+
+    def test_watchdog_stops_only_worker_and_creates_diagnostics(self):
+        import supervise
+        import sys
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            class Worker:
+                returncode = None
+                def __init__(self, command):
+                    self.out = Path(command[command.index('--out') + 1]); self.out.mkdir()
+                    capture.write_json(self.out / 'progress.json', {'phase':'capturing', 'started':0, 'baseline':False})
+                    capture.write_json(self.out / 'session.json', {'captures':[{'name':'01-overview','status':'capturing'}]})
+                    (self.out / 'untouched.wpix').write_bytes(b'retain this')
+                def poll(self): return self.returncode
+                def terminate(self): self.returncode = -15
+                def wait(self, timeout): return self.returncode
+                def kill(self): raise AssertionError('terminate should suffice')
+            with patch.object(supervise, 'HERE', root), patch.object(supervise.subprocess, 'Popen', Worker), \
+                 patch.object(supervise, 'collect_logs'), patch.object(sys, 'argv', ['supervise.py','--exe',str(root/'Control_DX12.exe')]):
+                self.assertEqual(supervise.main(), 1)
+            out = next(p for p in root.iterdir() if p.is_dir())
+            self.assertEqual(json.loads((out/'session.json').read_text())['captures'][0]['status'], 'timed_out')
+            self.assertEqual((out/'untouched.wpix').read_bytes(), b'retain this')
+            with zipfile.ZipFile(next(root.glob('*-Diagnostics.zip'))) as z:
+                self.assertIn('watchdog-timeout.json', z.namelist())
+                self.assertNotIn('untouched.wpix', z.namelist())
+
 if __name__ == '__main__':
     unittest.main()

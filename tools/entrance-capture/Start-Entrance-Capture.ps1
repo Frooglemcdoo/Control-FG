@@ -24,13 +24,13 @@ try {
         & $python.Source -3.12 -m venv $venv
         if ($LASTEXITCODE -ne 0) { throw 'Could not create the private Python environment.' }
     }
-    & $runner -c "import pythonnet"
+    & $runner -c "import importlib.util,sys; sys.exit(0 if importlib.util.find_spec('pythonnet') else 1)"
     if ($LASTEXITCODE -ne 0) {
         Write-Host 'Installing pythonnet into this tool folder only...'
         & $runner -m pip install 'pythonnet==3.0.5'
         if ($LASTEXITCODE -ne 0) { throw 'pythonnet installation failed.' }
     }
-    & $runner (Join-Path $PSScriptRoot 'capture.py') --exe $GameExe "--game-args=$GameArguments"
+    & $runner (Join-Path $PSScriptRoot 'supervise.py') --exe $GameExe "--game-args=$GameArguments"
     if ($LASTEXITCODE -ne 0) { throw 'Capture did not finish. Existing data was retained; see the output folder and console error.' }
 } catch {
     Write-Host $_.Exception.Message -ForegroundColor Red

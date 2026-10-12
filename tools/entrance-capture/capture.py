@@ -195,6 +195,32 @@ def collect_logs(exe, out, started):
                 errors.append({'file': str(p), 'error': str(e)})
     write_json(out / 'log-copy-errors.json', errors)
 
+def progress(out, phase, **details):
+    write_json(out / 'progress.json', dict(phase=phase, started=time.time(), **details))
+
+def capture_filename(value):
+    if value is None or not str(value).strip():
+        raise RuntimeError('PIX returned an empty capture filename. No capture was saved; session stopped.')
+    source = Path(str(value))
+    if not source.is_file() or source.stat().st_size == 0:
+        raise RuntimeError('PIX returned a missing or empty capture file: ' + str(source))
+    return source
+
+def result_diagnostics(result, interface):
+    # Enumerate the installed interface rather than guessing version-specific API names.
+    import clr
+    details = {'interface': str(interface), 'methods': [], 'values': {}}
+    for method in clr.GetClrType(interface).GetMethods():
+        details['methods'].append(str(method))
+        name = str(method.Name)
+        if name.startswith('Get') and len(method.GetParameters()) == 0 and not method.IsGenericMethod:
+            try:
+                value = getattr(result, name)()
+                details['values'][name] = None if value is None else str(value)
+            except Exception as error:
+                details['values'][name] = {'error': str(error), 'hresult': getattr(error, 'HResult', None)}
+    return details
+
 def launch_capture(exe, out, game_args, baseline=False):
     import Microsoft.PIX as pix
     import Microsoft.PIX.Extension as ext
@@ -236,6 +262,7 @@ def launch_capture(exe, out, game_args, baseline=False):
             manifest['captures'].append(item)
             write_json(session_file, manifest)
             print('\n' + instruction, flush=True)
+            progress(out, 'waiting', capture=name, baseline=baseline)
             input('Press Enter to arm, then return to the game. ')
             if not wait_key(pid):
                 item['status'] = 'skipped'
@@ -244,12 +271,21 @@ def launch_capture(exe, out, game_args, baseline=False):
             try:
                 require_space(out, 8 * 1024**3)
                 require_space(tempfile.gettempdir(), 8 * 1024**3)
-                result = dc.PixApiExtensionsDeviceConnection.TakeGpuCaptureResult(conn, pid)
-                source = Path(str(result.GetFilename()))
-                item['pix_original'] = str(source)
+                item.update(status='capturing', requested_utc=datetime.datetime.now(datetime.timezone.utc).isoformat())
                 write_json(session_file, manifest)
-                if not source.is_file() or source.stat().st_size == 0:
-                    raise RuntimeError('PIX returned no nonempty capture file.')
+                progress(out, 'capturing', capture=name, pid=pid, baseline=baseline)
+                print(f'CAPTURE STARTED: {name}. Waiting for PIX; watchdog limit 180 seconds.', flush=True)
+                result = dc.PixApiExtensionsDeviceConnection.TakeGpuCaptureResult(conn, pid)
+                print('PIX request returned. Reading capture result...', flush=True)
+                raw_filename = result.GetFilename()
+                item['pix_original'] = None if raw_filename is None else str(raw_filename)
+                write_json(session_file, manifest)
+                try:
+                    write_json(out / (name + '-pix-result.json'), result_diagnostics(result, pix.IPixGpuCaptureResult))
+                except Exception as diagnostic_error:
+                    write_json(out / (name + '-pix-result.json'), {'diagnostic_error': str(diagnostic_error)})
+                source = capture_filename(raw_filename)
+                progress(out, 'saving', capture=name, baseline=baseline)
                 require_space(out, source.stat().st_size + 1024**3)
                 target = out / (name + '.wpix')
                 shutil.copy2(source, target)  # Original kept even if copy/export fails.
@@ -259,12 +295,22 @@ def launch_capture(exe, out, game_args, baseline=False):
                 import winsound
                 winsound.Beep(1200, 200)
             except Exception as e:
-                item.update(status='failed', error=str(e))
-                print('Capture failed: ' + str(e), flush=True)
+                item.update(status='failed', error=str(e), hresult=getattr(e, 'HResult', None),
+                            traceback=traceback.format_exc())
+                write_json(session_file, manifest)
+                progress(out, 'failed', capture=name, baseline=baseline)
+                print('CAPTURE FAILED; stopping this session: ' + str(e), flush=True)
+                raise
             write_json(session_file, manifest)
     finally:
         write_json(session_file, manifest)
-        conn.DetachFromAllProcesses(wf.BOOL(True))
+        progress(out, 'detaching', baseline=baseline)
+        try:
+            conn.DetachFromAllProcesses(wf.BOOL(True))
+        except Exception:
+            (out / 'detach-error.txt').write_text(traceback.format_exc(), encoding='utf-8')
+        finally:
+            progress(out, 'idle', baseline=baseline)
 
 def analyze_all(out):
     results = []
@@ -287,7 +333,7 @@ def report(out):
     baseline_file = out / 'baseline-session.json'
     if baseline_file.exists():
         data['captures'] += json.loads(baseline_file.read_text(encoding='utf-8'))['captures']
-    lines = ['CONTROL MAIN ENTRANCE E1 - ACQUISITION REPORT', '',
+    lines = ['CONTROL MAIN ENTRANCE E2 - ACQUISITION REPORT', '',
              'Raw .wpix files contain the GPU capture. JSON files index a subset of its contents.',
              'This report checks acquisition/export; it does not certify decoded PT requirements.', '']
     for name, _ in POSES + BASELINE_POSES:
@@ -346,7 +392,7 @@ def main():
     try:
         require_space(out, 40 * 1024**3)
         require_space(tempfile.gettempdir(), 8 * 1024**3)
-        write_json(out / 'tool.json', {'version': 'E1', 'pix_dir': pix_dir})
+        write_json(out / 'tool.json', {'version': 'E2', 'pix_dir': pix_dir})
         shutil.copy2(HERE / 'requirements.json', out / 'requirements.json')
         environment_snapshot(args.exe.resolve(), out)
         if (args.exe.parent / 'dxgi.dll.entrance-e1-backup').exists():
@@ -356,12 +402,14 @@ def main():
         ensure_game_closed()
         try:
             with disabled_proxy(args.exe.resolve().parent):
+                progress(out, 'starting_baseline', baseline=True)
                 launch_capture(args.exe.resolve(), out, args.game_args, baseline=True)
                 input('EXIT the baseline game, then press Enter to restore the mod and export. ')
                 ensure_game_closed()
         except Exception:
             (out / 'baseline-error.txt').write_text(traceback.format_exc(), encoding='utf-8')
-            print('Baseline incomplete; see baseline-error.txt. The proxy restoration was attempted.', flush=True)
+            print('Baseline failed; session stopped. See baseline-error.txt.', flush=True)
+            raise
         ensure_game_closed()
         analyze_all(out)
     except BaseException:

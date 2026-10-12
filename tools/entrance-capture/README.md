@@ -1,4 +1,33 @@
-# Control Main Entrance Capture E1
+# E2 update: stop and diagnose failed captures
+
+Extract E2 over the existing capture-tool folder; retain .venv and older Entrance folders.
+Use Start-Entrance-Capture.cmd as before. Python/.NET do not need reinstalling.
+Keep PIX_DIR set to the installed 2606.18-preview directory.
+
+E2 prints CAPTURE STARTED, reports elapsed time every 10 seconds, and stops the
+collector worker after 180 seconds inside the capture request (30 seconds for detach).
+The external watchdog remains independent of Python/.NET/PIX calls in that worker.
+It does not forcibly terminate Control or claim to cancel PIX cleanly. Close Control
+manually if it remains frozen. A long capture can also reach this limit; timeout alone
+is not proof of a deadlock. Keep any original PIX capture files.
+
+Empty filenames are preserved as empty/null, never converted to '.'. A failed capture
+stops the sequence. Get-method diagnostics exposed by the installed PIX capture-result
+interface, exceptions/HRESULTs and progress state are retained. If PIX exposes no
+underlying error, the report does not invent one.
+
+On failure send Entrance-<timestamp>-Diagnostics.zip. Raw GPU captures remain separate
+and are never discarded to make that archive smaller. This release fixes collector
+failure handling; it has NOT established or fixed the underlying Control/PIX stall.
+
+For Steam direct launches, retain the temporary steam_appid.txt containing 870780
+beside Control_DX12.exe during both passes. Keep Steam running. Remove only the file
+you created after finishing. This prevents SteamAPI_RestartAppIfNecessary's relaunch;
+other launch mechanisms may still require investigation.
+
+---
+
+# Control Main Entrance Capture E2
 
 One reusable acquisition tool; eight entrance views across two game launches. No new mod DLL
 or shader build is needed. This is a diagnostic capture package, not the new PT renderer.
