@@ -23,6 +23,19 @@ for name,expected in locked.items():
   source=source.replace('#include "pt_glass_capture.h"\n\n','')
   source=source.replace('    const char* resident=ptReflectionOriginalStorageGet?ptReflectionOriginalStorageGet(id):nullptr;\n    PTGlassCaptureResident(id,resident);\n    return resident;',
       '    return ptReflectionOriginalStorageGet?ptReflectionOriginalStorageGet(id):nullptr;')
+ # G2D3 explicitly adds a session-only glass mode and its overlay button.
+ # Remove only these exact additions/replacement before checking the ORIGINAL
+ # hashes; do not bless changes to existing opaque PT controls or rendering.
+ if name=='src/pt_reflection_user_control.h':
+  addition='// Session-only glass comparison: native=0, working glossy=1, diffuse=2.\n// Start from the visually confirmed glossy path; opaque PT is independent.\nstatic std::atomic<unsigned int> ptGlassUserMode{1u};'
+  assert source.count(addition)==1
+  source=source.replace(addition+'\n','')
+ if name=='src/fg_overlay.h':
+  click='        const int glassToggleY=794+FGOverlayLowerSectionOffset();\n        if(x>=304&&x<710&&y>=glassToggleY&&y<glassToggleY+52){\n            if(PTReflectionUserRequested()){\n                const unsigned mode=(ptGlassUserMode.load(std::memory_order_acquire)+1u)%3u;\n                ptGlassUserMode.store(mode,std::memory_order_release);\n                Log("PT_GLASS_UI_MODE mode=%u label=%s opaque_pt_unchanged=1",mode,\n                    mode==0?"native":mode==1?"glossy":"glossy_diffuse");\n            }\n            InvalidateRect(hwnd,nullptr,FALSE);return 0;\n        }\n'
+  paint='    const unsigned glassMode=ptGlassUserMode.load(std::memory_order_acquire);\n    const wchar_t* glassLabel=glassMode==0?L"GLASS: NATIVE":glassMode==1?L"GLASS: GLOSSY":L"GLASS: GLOSSY + DIFFUSE";\n    PaintFGButton(dc, ptDescription, glassLabel, glassMode==2, ptEnabled);'
+  original='    DrawTextW(dc, L"Compare traced second-bounce lighting.\\nNative reflections stay visible.", -1, &ptDescription,\n        DT_LEFT | DT_WORDBREAK);'
+  assert source.count(click)==1 and source.count(paint)==1
+  source=source.replace(click,'').replace(paint,original)
  assert hashlib.sha256(source.encode()).hexdigest()==expected,name
 def half(v): return struct.unpack('<e',struct.pack('<e',v))[0]
 def sign(v): return 1 if v>=0 else -1
