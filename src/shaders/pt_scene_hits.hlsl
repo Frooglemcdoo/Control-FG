@@ -17,7 +17,9 @@ Texture2D<float4> PTTextures[] : register(t0,space1);
 SamplerState PTLinearWrap : register(s5,space1);
 
 bool PTReadIndices(uint primitive,out uint3 indices) {
-    indices=0;uint physical;PTIndices.GetDimensions(physical);
+    // Root SRVs contain GPU addresses, not buffer-view lengths. The host must
+    // validate these record byte limits against each backing allocation.
+    indices=0;uint physical=indexBytes;
     PTByteAddress tri=PTCheckedTriangle(primitive,indexOffset,indexStride,min(indexBytes,physical));
     if(tri.valid==0) return false;
     [unroll] for(uint i=0;i<3;++i) {
@@ -32,7 +34,7 @@ bool PTReadAttributes(BuiltInTriangleIntersectionAttributes attr,out float2 uv,o
     uv=0;normalObject=0;uint3 indices;
     if(!PTReadIndices(PrimitiveIndex(),indices)) return false;
     float3 w=float3(1-attr.barycentrics.x-attr.barycentrics.y,attr.barycentrics);
-    uint physical;PTVertices.GetDimensions(physical);uint limit=min(physical,vertexBytes);
+    uint limit=vertexBytes;
     [unroll] for(uint i=0;i<3;++i) {
         PTByteAddress t=PTCheckedField(indices[i],vertexStride,texcoordOffset,4,limit);
         PTByteAddress n=PTCheckedField(indices[i],vertexStride,normalOffset,8,limit);
