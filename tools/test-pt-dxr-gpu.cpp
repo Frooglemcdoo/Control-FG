@@ -70,10 +70,12 @@ int main(int argc,char** argv){try{
     ComPtr<ID3D12Debug> debug;if(SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&debug)))){debug->EnableDebugLayer();std::puts("D3D12 debug layer enabled");}
     ComPtr<IDXGIFactory6> factory;ok(CreateDXGIFactory1(IID_PPV_ARGS(&factory)),"DXGI factory");GPU g;
     for(UINT i=0;;++i){ComPtr<IDXGIAdapter1> a;if(factory->EnumAdapterByGpuPreference(i,DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE,IID_PPV_ARGS(&a))==DXGI_ERROR_NOT_FOUND)break;
-        DXGI_ADAPTER_DESC1 desc{};a->GetDesc1(&desc);if(desc.Flags&DXGI_ADAPTER_FLAG_SOFTWARE)continue;
+        DXGI_ADAPTER_DESC1 desc{};ok(a->GetDesc1(&desc),"Adapter description");
+        const bool reference=(desc.Flags&DXGI_ADAPTER_FLAG_SOFTWARE)!=0||desc.VendorId==0x1414||wcsstr(desc.Description,L"Microsoft Basic")!=nullptr;
+        if(reference&&!allowSkip)continue;
         ComPtr<ID3D12Device5> d;if(FAILED(D3D12CreateDevice(a.Get(),D3D_FEATURE_LEVEL_12_0,IID_PPV_ARGS(&d))))continue;
         D3D12_FEATURE_DATA_D3D12_OPTIONS5 options{};if(FAILED(d->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS5,&options,sizeof(options)))||options.RaytracingTier==D3D12_RAYTRACING_TIER_NOT_SUPPORTED)continue;
-        g.device=d;std::printf("GPU: %ls, DXR tier %u\n",desc.Description,(UINT)options.RaytracingTier);break;
+        g.device=d;std::printf("DXR adapter: %ls, tier %u, execution=%s\n",desc.Description,(UINT)options.RaytracingTier,reference?"reference driver (NOT hardware validation)":"hardware");break;
     }
     if(!g.device){std::puts("SKIP: No hardware DXR adapter. GPU tests did NOT run.");return allowSkip?0:2;}
     std::ifstream file("pt-scene-query-test.dxil",std::ios::binary);need(bool(file),"Missing pt-scene-query-test.dxil; run beside the shader");

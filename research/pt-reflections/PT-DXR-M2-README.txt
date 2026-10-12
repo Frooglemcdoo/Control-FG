@@ -17,7 +17,9 @@ uses the same scene-hit shader source developed for the future Control adapter.
 PASS establishes these synthetic-scene DXR cases on the selected adapter. It does
 not establish Control scene compatibility, full path tracing or image quality.
 SKIP means no compatible hardware DXR adapter was available; it is not a pass.
-CI may report SKIP because hosted Windows build machines lack a hardware GPU.
+CI may report SKIP or execute on a Microsoft reference adapter. Neither validates
+RTX hardware. The normal launcher requires a hardware adapter; the CI-only
+--allow-no-dxr option permits reference execution or an explicit SKIP.
 
 The GPU test uses private state objects, shader tables, resources and a tiny
 synthetic scene. It renders no window and writes the results to a text file.
