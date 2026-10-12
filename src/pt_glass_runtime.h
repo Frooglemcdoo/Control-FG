@@ -1,6 +1,7 @@
 #pragma once
 #include "pt_glass_resources.h"
 #include "pt_glass_descriptors.h"
+#include "pt_glass_vtable_call.h"
 #include <intrin.h>
 #include <unordered_map>
 #include <memory>
@@ -16,7 +17,15 @@ using DispatchRays=void(STDMETHODCALLTYPE*)(ID3D12GraphicsCommandList4*,const D3
 using Execute=void(STDMETHODCALLTYPE*)(ID3D12CommandQueue*,UINT,ID3D12CommandList*const*);
 using Reset=HRESULT(STDMETHODCALLTYPE*)(ID3D12GraphicsCommandList*,ID3D12CommandAllocator*,ID3D12PipelineState*);
 static CreateState createState=nullptr;static CopySimple copySimple=nullptr;static CreateCbv createCbv=nullptr;
-static SetRayPso setRayPso=nullptr;static DispatchRays dispatchRays=nullptr;static Execute execute=nullptr;static Reset reset=nullptr;
+// Invoke the exact interface supplied by the native call site. A QueryInterface
+// result can be a different interposer object and must not select the hook target.
+static void NativeSetRayPso(ID3D12GraphicsCommandList4* list,ID3D12StateObject* pso){
+    reinterpret_cast<SetRayPso>((*reinterpret_cast<void***>(list))[75])(list,pso);
+}
+static void NativeDispatchRays(ID3D12GraphicsCommandList4* list,const D3D12_DISPATCH_RAYS_DESC* desc){
+    reinterpret_cast<DispatchRays>((*reinterpret_cast<void***>(list))[76])(list,desc);
+}
+static auto setRayPso=&NativeSetRayPso;static auto dispatchRays=&NativeDispatchRays;static Execute execute=nullptr;static Reset reset=nullptr;
 static ComPtr<ID3D12Device> device;static ComPtr<ID3D12CommandQueue> queue;
 static ComPtr<ID3D12RootSignature> lightingRoot;static ComPtr<ID3D12PipelineState> nativeLighting,secondaryLighting,compositeLighting;
 static std::vector<unsigned char> rayBytes,secondaryBytes,compositeBytes;
@@ -138,7 +147,7 @@ static HRESULT STDMETHODCALLTYPE StateHook(ID3D12Device5* d,const D3D12_STATE_OB
     ComPtr<ID3D12StateObject> object;ComPtr<ID3D12StateObjectProperties> props;
     if(out&&*out&&SUCCEEDED(static_cast<IUnknown*>(*out)->QueryInterface(IID_PPV_ARGS(&object)))&&SUCCEEDED(object.As(&props))){
         const void* identifier=props->GetShaderIdentifier(L"ptGlassRayGeneration");
-        if(identifier){Pipeline p;p.owner=object;memcpy(p.raygen,identifier,32);std::lock_guard<std::mutex> guard(lock);pipelines.emplace(object.Get(),std::move(p));Log("PT_GLASS_STATE_READY native_exports_retained=1 extra_raygen=1 recursion_unchanged=1");}
+        if(identifier){Pipeline p;p.owner=object;memcpy(p.raygen,identifier,32);std::lock_guard<std::mutex> guard(lock);pipelines.emplace(object.Get(),p);if(iid==__uuidof(ID3D12StateObject))pipelines.emplace(static_cast<ID3D12StateObject*>(*out),p);Log("PT_GLASS_STATE_READY native_exports_retained=1 extra_raygen=1 recursion_unchanged=1");}
     }
     return hr;
 }
@@ -155,16 +164,16 @@ static HRESULT STDMETHODCALLTYPE ResetHook(ID3D12GraphicsCommandList* list,ID3D1
 }
 static void STDMETHODCALLTYPE SetRayPsoHook(ID3D12GraphicsCommandList4* list,ID3D12StateObject* pso){currentRayPso=pso;setRayPso(list,pso);}
 static void STDMETHODCALLTYPE RaysHook(ID3D12GraphicsCommandList4* list,const D3D12_DISPATCH_RAYS_DESC* desc){
-    if(!enabled||!rayScope||!desc||desc->Depth!=1||(ptReflectionUserState.load()&1u)==0){dispatchRays(list,desc);return;}
+    if(!enabled||!rayScope||!desc||desc->Depth!=1||(ptReflectionUserState.load()&1u)==0){if(enabled&&rayScope)Skip("dispatch_disabled_or_shape");dispatchRays(list,desc);return;}
     if(!pass.ray){Skip("ray_descriptor_snapshot");dispatchRays(list,desc);return;}
     Context context{};unsigned char identifier[32]{};
     {std::lock_guard<std::mutex> guard(lock);auto it=pipelines.find(currentRayPso);if(it==pipelines.end()){Skip("ray_pipeline");dispatchRays(list,desc);return;}memcpy(identifier,it->second.raygen,32);}
-    if(!ReadContext(&context)||context.rays!=list||context.manager!=pass.rayContext.manager||context.gpu.ptr!=pass.rayContext.gpu.ptr){dispatchRays(list,desc);return;}
+    if(!ReadContext(&context)||context.rays!=list||context.manager!=pass.rayContext.manager||context.gpu.ptr!=pass.rayContext.gpu.ptr){Skip("dispatch_context");dispatchRays(list,desc);return;}
     if(!queueReady){std::lock_guard<std::mutex> guard(lock);
         if(!queueReady&&Patch(context.queue,10,reinterpret_cast<void*>(&ExecuteHook),reinterpret_cast<void**>(&execute))&&SUCCEEDED(resources.Initialize(device.Get(),context.queue,2ull*1024*1024*1024))){queue=context.queue;queueReady=true;}}
-    if(!queueReady||queue.Get()!=context.queue||pass.serial>UINT32_MAX||FAILED(resources.Acquire(pass.serial,desc->Width,desc->Height,&pass.slot))){dispatchRays(list,desc);return;}
+    if(!queueReady||queue.Get()!=context.queue||pass.serial>UINT32_MAX||FAILED(resources.Acquire(pass.serial,desc->Width,desc->Height,&pass.slot))){Skip("queue_or_resource_acquire");dispatchRays(list,desc);return;}
     auto* slot=pass.slot;void* mapped=nullptr;
-    if(FAILED(slot->dispatch->Map(0,nullptr,&mapped))){resources.Discarded(pass.serial);pass.slot=nullptr;dispatchRays(list,desc);return;}
+    if(FAILED(slot->dispatch->Map(0,nullptr,&mapped))){Skip("dispatch_upload_map");resources.Discarded(pass.serial);pass.slot=nullptr;dispatchRays(list,desc);return;}
     memset(mapped,0,512);UINT constants[4]{static_cast<UINT>(pass.serial),65534,desc->Width,desc->Height};memcpy(mapped,constants,16);memcpy(static_cast<unsigned char*>(mapped)+256,identifier,32);slot->dispatch->Unmap(0,nullptr);
     mirrorGuard=true;
     const bool ready=pass.ray->Copy(pass.serial,2,{slot->descriptors.Get(),4,1})&&pass.ray->Copy(pass.serial,45,{slot->descriptors.Get(),0,1});
@@ -187,15 +196,14 @@ static void UseHook(void* table,void* state){
     if(enabled&&!pass.ray)Skip("native_constant_use");
 }
 static void RayHook(int a,int b){
-    Context c{};if(enabled&&ReadContext(&c)&&c.rays){
-        ComPtr<ID3D12GraphicsCommandList4> checked;
-        if(SUCCEEDED(c.rays->QueryInterface(IID_PPV_ARGS(&checked)))){
-            Patch(checked.Get(),75,reinterpret_cast<void*>(&SetRayPsoHook),reinterpret_cast<void**>(&setRayPso));
-            Patch(checked.Get(),76,reinterpret_cast<void*>(&RaysHook),reinterpret_cast<void**>(&dispatchRays));
-            Patch(c.list,10,reinterpret_cast<void*>(&ResetHook),reinterpret_cast<void**>(&reset));
-        }
-    }
-    rayScope=enabled&&dispatchRays&&setRayPso&&reset;rayNative(a,b);rayScope=false;
+    Context c{};bool ready=false;
+    if(enabled&&ReadContext(&c)&&c.rays){
+        ready=Patch(c.list,10,reinterpret_cast<void*>(&ResetHook),reinterpret_cast<void**>(&reset));
+        if(!ready)Skip("list_reset_hook");
+    }else if(enabled)Skip("ray_context");
+    rayScope=enabled&&ready;static std::atomic<UINT64> entries{0};const auto n=++entries;
+    if(n<=4)Log("PT_GLASS_NATIVE_ENTER call=%llu enabled=%u scope=%u snapshot=%u",n,unsigned(enabled.load()),unsigned(rayScope),unsigned(pass.ray!=nullptr));
+    rayNative(a,b);rayScope=false;
 }
 static void BindHook(void* shader){captureKind=enabled&&pass.traced?2u:0u;bindNative(shader);captureKind=0;}
 static void Barrier(ID3D12GraphicsCommandList* list,ID3D12Resource* resource,D3D12_RESOURCE_STATES from,D3D12_RESOURCE_STATES to){
@@ -211,11 +219,12 @@ static bool LightingStateMatches(void* state) noexcept {
 }
 static void LightHook(void* state,const void* dimensions){
     lightNative(state,dimensions);
-    if(!enabled||!pass.traced||!pass.slot||!pass.light||!secondaryLighting||!compositeLighting||!nativeLighting||!LightingStateMatches(state))return;
+    if(!enabled||!pass.traced)return;
+    if(!pass.slot||!pass.light||!secondaryLighting||!compositeLighting||!nativeLighting||!LightingStateMatches(state)){Skip("lighting_state_or_snapshot");return;}
     constexpr UINT64 fullNative=3ull|(((1ull<<28)-1)<<5)|(1ull<<41);
     if(!pass.light->Has(pass.serial,fullNative)){Skip("lighting_inputs",pass.light->Observed());return;}
-    Context context{};if(!ReadContext(&context)||context.list!=pass.rayContext.list||context.gpu.ptr!=pass.lightingContext.gpu.ptr)return;
-    const auto* dims=static_cast<const UINT*>(dimensions);if(!dims||dims[2]!=1)return;
+    Context context{};if(!ReadContext(&context)||context.list!=pass.rayContext.list||context.gpu.ptr!=pass.lightingContext.gpu.ptr){Skip("lighting_context");return;}
+    const auto* dims=static_cast<const UINT*>(dimensions);if(!dims||dims[2]!=1){Skip("lighting_dimensions");return;}
     auto* slot=pass.slot;PTGlass::LightingTableShadow composite;
     mirrorGuard=true;
     bool good=SUCCEEDED(composite.Initialize(device.Get()))&&composite.Begin(pass.serial,context.table)&&composite.Copy(pass.serial,0,pass.light->Snapshot());
@@ -253,9 +262,27 @@ static void InstallDevice(ID3D12Device* d){
        !Patch(rayDevice.Get(),62,reinterpret_cast<void*>(&StateHook),reinterpret_cast<void**>(&createState)))enabled=false;
     Log("PT_GLASS_DEVICE_HOOKS ready=%u",unsigned(enabled.load()));
 }
+struct NativeCallPatch {
+    unsigned char* site=nullptr;unsigned char original[6]{},replacement[6]{};bool installed=false;
+    bool Prepare(unsigned char* at,unsigned slot,void* hook){
+        site=at;memcpy(original,at,6);void* relay=AllocateExecutableRelayNear(at);if(!relay)return false;
+        if(!PTGlass::EncodeVtableCall6(original,reinterpret_cast<UINT_PTR>(at),slot,reinterpret_cast<UINT_PTR>(relay),replacement))return false;
+        unsigned char stub[14]{0xff,0x25,0,0,0,0};memcpy(stub+6,&hook,8);memcpy(relay,stub,14);
+        DWORD old=0;return VirtualProtect(relay,4096,PAGE_EXECUTE_READ,&old)&&FlushInstructionCache(GetCurrentProcess(),relay,14);
+    }
+    bool Exchange(bool install){
+        if(!site||(!install&&!installed))return !install;
+        if(memcmp(site,install?original:replacement,6))return false;
+        DWORD old=0;if(!VirtualProtect(site,6,PAGE_EXECUTE_READWRITE,&old))return false;
+        memcpy(site,install?replacement:original,6);installed=install;
+        const bool flushed=FlushInstructionCache(GetCurrentProcess(),site,6)!=FALSE;
+        DWORD ignored=0;return VirtualProtect(site,6,old,&ignored)!=FALSE&&flushed;
+    }
+};
+static NativeCallPatch nativeSetCall,nativeDispatchCall;
 static bool Install(HMODULE renderer,HMODULE d3d){
     if(!HashMatches(renderer,kRendererHash)||!HashMatches(d3d,kD3dHash)){
-        Log("PT_GLASS_INSTALL ready=0 build=G1R1 reason=unsupported_module_hash");return false;
+        Log("PT_GLASS_INSTALL ready=0 build=G1R2 reason=unsupported_module_hash");return false;
     }
     char sha[65]{};bool loaded=false;
     if(!PTReflectionLoadSidecar(L"pt_glass_raygen.dxil","GLASS_RAY",rayBytes,sha,loaded)||
@@ -264,13 +291,15 @@ static bool Install(HMODULE renderer,HMODULE d3d){
     auto* b=reinterpret_cast<unsigned char*>(renderer);
     useNative=reinterpret_cast<UseFn>(*reinterpret_cast<void**>(b+0x5dfb18));rayNative=reinterpret_cast<RayFn>(*reinterpret_cast<void**>(b+0x5df4c8));
     bindNative=reinterpret_cast<BindFn>(b+0x1db750);lightNative=reinterpret_cast<LightFn>(*reinterpret_cast<void**>(b+0x5dfcc0));
-    bool ready=usePatch.Prepare(b+0xa5440,reinterpret_cast<void**>(b+0x5dfb18),reinterpret_cast<void*>(useNative),reinterpret_cast<void*>(&UseHook))&&
+    auto* db=reinterpret_cast<unsigned char*>(d3d);
+    bool ready=nativeSetCall.Prepare(db+0x354a5,75,reinterpret_cast<void*>(&SetRayPsoHook))&&
+       nativeDispatchCall.Prepare(db+0x358e4,76,reinterpret_cast<void*>(&RaysHook))&&usePatch.Prepare(b+0xa5440,reinterpret_cast<void**>(b+0x5dfb18),reinterpret_cast<void*>(useNative),reinterpret_cast<void*>(&UseHook))&&
        rayPatch.Prepare(b+0xa557e,reinterpret_cast<void**>(b+0x5df4c8),reinterpret_cast<void*>(rayNative),reinterpret_cast<void*>(&RayHook))&&
        lightPatch.Prepare(b+0xa5682,reinterpret_cast<void**>(b+0x5dfcc0),reinterpret_cast<void*>(lightNative),reinterpret_cast<void*>(&LightHook))&&
        RRAlbedoPrepareCallPatch(b+0xa562e,reinterpret_cast<void*>(bindNative),reinterpret_cast<void*>(&BindHook),&bindPatch);
-    if(ready)ready=usePatch.Exchange(true)&&rayPatch.Exchange(true)&&lightPatch.Exchange(true)&&RRAlbedoExchangeCall(&bindPatch,true);
-    if(!ready){usePatch.Exchange(false);rayPatch.Exchange(false);lightPatch.Exchange(false);RRAlbedoExchangeCall(&bindPatch,false);}
-    enabled=ready;Log("PT_GLASS_INSTALL ready=%u build=G1R1 glossy_only=1 smoothness_min=0.8",unsigned(ready));
+    if(ready)ready=nativeSetCall.Exchange(true)&&nativeDispatchCall.Exchange(true)&&usePatch.Exchange(true)&&rayPatch.Exchange(true)&&lightPatch.Exchange(true)&&RRAlbedoExchangeCall(&bindPatch,true);
+    if(!ready){nativeSetCall.Exchange(false);nativeDispatchCall.Exchange(false);usePatch.Exchange(false);rayPatch.Exchange(false);lightPatch.Exchange(false);RRAlbedoExchangeCall(&bindPatch,false);}
+    enabled=ready;Log("PT_GLASS_INSTALL ready=%u build=G1R2 glossy_only=1 smoothness_min=0.8",unsigned(ready));
     if(ready){ID3D12Device* existing=nullptr;memcpy(&existing,reinterpret_cast<unsigned char*>(d3d)+kControlGlobalD3D12DevicePointerRva,sizeof(existing));if(existing)InstallDevice(existing);}
     return ready;
 }
