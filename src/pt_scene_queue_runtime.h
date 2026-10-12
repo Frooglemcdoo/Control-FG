@@ -23,17 +23,18 @@ inline void STDMETHODCALLTYPE ExecuteHook(ID3D12CommandQueue* q,UINT n,ID3D12Com
     // Keep the observation order identical to calls reaching the native API.
     std::lock_guard<std::recursive_mutex> guard(queueMutex);
     const DWORD before=GetLastError();
-    capture->Submit(q,n,input);SetLastError(before);original(q,n,input);
-    const DWORD after=GetLastError();capture->Submitted(q);SetLastError(after);
+    capture->Checkpoint();capture->Submit(q,n,input);SetLastError(before);original(q,n,input);
+    const DWORD after=GetLastError();capture->Submitted(q);capture->Tail(q);SetLastError(after);
 }
 inline HRESULT FenceHook(ID3D12CommandQueue* q,ID3D12Fence* fence,UINT64 value,bool signal){
     FenceOperation original=nullptr;{std::lock_guard<std::mutex> guard(hooksMutex);const auto& methods=queues.at(*reinterpret_cast<void***>(q));original=signal?methods.signal:methods.wait;}
     Scope scope;const auto capture=observer.load(std::memory_order_acquire);
     if(!scope.outer||!capture)return original(q,fence,value);
     std::lock_guard<std::recursive_mutex> guard(queueMutex);
+    capture->Checkpoint();
     const HRESULT hr=original(q,fence,value);const DWORD error=GetLastError();
     if(FAILED(hr))capture->Invalidate();
-    else if(signal)capture->Signal(q,fence,value);else capture->Wait(q,fence,value);
+    else {if(signal)capture->Signal(q,fence,value);else capture->Wait(q,fence,value);capture->Tail(q);}
     SetLastError(error);return hr;
 }
 inline HRESULT STDMETHODCALLTYPE SignalHook(ID3D12CommandQueue* q,ID3D12Fence* f,UINT64 n){return FenceHook(q,f,n,true);}

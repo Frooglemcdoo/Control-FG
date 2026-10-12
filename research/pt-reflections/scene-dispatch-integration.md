@@ -316,3 +316,22 @@ currently has a 512 MiB bound and catalog history still needs retirement for
 sustained scenes with dynamic BLAS updates. Private dispatch gating, primary
 lighting bindings, material composition and renderer activation remain separate
 unfinished work. There is no newly approved in-game test build from these checks.
+
+### Completed-queue history checkpoints
+
+The queue observer now fences every forwarded queue tail and polls those fences
+before later queue operations. After 128 observed operations, a checkpoint is
+eligible only when all tracked queue tails have actually completed and no
+submitted handoff ticket still needs an old cut. It never stalls a queue or
+waits on a native writer. Completed fence values survive the graph rebase, and
+new queues inherit the same CPU-proven completed prefix.
+
+The catalog materializes compaction sources at their original source cuts before
+removing older versions. It keeps current snapshots for live allocation tokens,
+retains unsubmitted recording snapshots, and releases obsolete GPU-copy owners.
+A regression performs 20,000 update/checkpoint cycles, verifies old signal waits
+and newly encountered queues, protects outstanding tickets, and checks that a
+compacted source survives until its last dependent geometry is replaced.
+Continuous GPU backlog can delay reclamation; the archive still refuses new
+copies at its fixed budget instead of freeing live data. This remains distinct
+from renderer activation and does not make the PT lighting/composition ready.

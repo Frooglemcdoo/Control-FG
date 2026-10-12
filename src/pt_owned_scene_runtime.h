@@ -67,6 +67,7 @@ public:
         std::lock_guard<std::mutex> guard(mutex);if(!active){record={};return Status::missingAllocation;}
         const auto status=index.Resolve(binding,record);++stats.resolved[static_cast<unsigned>(status)];return status;
     }
+    bool Alive(U64 token){std::lock_guard<std::mutex> guard(mutex);for(const auto& item:owners)if(item.second.token==token)return true;return false;}
     bool Identify(U64 address,U64 bytes,Allocation& allocation){
         allocation={};std::lock_guard<std::mutex> guard(mutex);if(!active)return false;
         const auto token=index.Find(address,bytes);if(!token)return false;

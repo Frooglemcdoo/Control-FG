@@ -120,6 +120,31 @@ public:
     }
     bool Signal(U64 queue,U64 fence,U64 value){std::lock_guard<std::mutex> guard(mutex);if(!valid)return false;return valid=graph.Signal(queue,fence,value)!=0;}
     bool Wait(U64 queue,U64 fence,U64 value){std::lock_guard<std::mutex> guard(mutex);if(!valid)return false;return valid=graph.Wait(queue,fence,value)!=0;}
+    // Host supplies live allocation identities after proving all queue tails
+    // complete. Old compaction sources are resolved BEFORE pruning versions.
+    template<class Alive> bool CompletedCheckpoint(Alive alive){
+        std::lock_guard<std::mutex> guard(mutex);if(!valid)return false;
+        for(const auto& c:cuts)if(c.second)return false;
+        std::map<Key,PTSceneOrder::Selection> latest;if(!graph.CompletedCheckpoint(latest))return false;
+        std::map<U64,Version> retained;std::map<Key,U64> baseline;std::size_t retainedRows=0;
+        for(const auto& item:latest){
+            if(!alive(item.first.token))continue;
+            if(!item.second.version){baseline.emplace(item.first,0);continue;}
+            const auto current=versions.find(item.second.version);if(current==versions.end())return false;
+            const Snapshot* resolved=current->second.snapshot.get();
+            if(resolved->kind==Snapshot::Kind::copy){std::set<U64> visiting;
+                if(Resolve(current->second.before,resolved->source.key,resolved,visiting)!=Status::ready)return false;
+            }
+            auto materialized=std::make_shared<Snapshot>(*resolved);
+            materialized->destination=current->second.snapshot->destination;
+            materialized->source={};
+            retainedRows+=Rows(*materialized);
+            retained.emplace(item.second.version,Version{std::move(materialized),0});baseline.emplace(item.first,item.second.version);
+        }
+        for(const auto& r:recordings)if(!r.second.submitted)for(const auto& op:r.second.operations)if(op.snapshot)retainedRows+=Rows(*op.snapshot);
+        if(retainedRows>MaximumRows||!graph.RebaseCompleted(baseline))return false;
+        versions=std::move(retained);rows=retainedRows;return true;
+    }
     void Forget(U64 ticket){std::lock_guard<std::mutex> guard(mutex);cuts.erase(ticket);}
     void Invalidate(){std::lock_guard<std::mutex> guard(mutex);valid=false;}
     Status Scene(U64 ticket,Allocation selected,PTSceneDispatch::Scene& output)const {

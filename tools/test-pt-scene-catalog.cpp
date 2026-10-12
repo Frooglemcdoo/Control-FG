@@ -71,5 +71,29 @@ int main(){
     assert(cancelled.Mark(1,cancelledGeneration,400));cancelled.Forget(400);
     assert(cancelled.Submit(1,{{1,cancelledGeneration}}));
     assert(cancelled.Scene(400,top,scene)==Status::missing); // Submission cannot resurrect cancellation.
+    Catalog prune;auto generation=prune.Begin(1);
+    auto storage=std::make_shared<int>(17);std::weak_ptr<int> released=storage;
+    auto frozen=std::make_shared<PTSceneTopology::FrozenGeometry>();frozen->owner=storage;
+    auto initial=Blas(bottom,0x8000);initial.geometry[0].frozen=frozen;
+    assert(prune.Record(1,generation,initial));initial.geometry.clear();frozen.reset();storage.reset();
+    assert(prune.Record(1,generation,copy));assert(prune.Record(1,generation,Tlas(compact)));
+    assert(prune.Submit(1,{{1,generation}}));assert(prune.Signal(1,99,1));
+    generation=prune.Begin(2);assert(prune.Wait(2,99,1));assert(prune.Mark(2,generation,500));assert(prune.Submit(2,{{2,generation}}));
+    assert(!prune.CompletedCheckpoint([](U64){return true;})); // Pending historical consumers prohibit pruning.
+    prune.Forget(500);
+    assert(prune.CompletedCheckpoint([](U64 token){return token!=bottom.key.token;}));
+    assert(!released.expired()); // Compaction still needs its source geometry.
+    generation=prune.Begin(3);assert(prune.Wait(3,99,1));assert(prune.Mark(3,generation,501));assert(prune.Submit(3,{{3,generation}}));
+    assert(prune.Scene(501,top,scene)==Status::ready&&Position(scene)==0x8000);scene={};prune.Forget(501);
+    generation=prune.Begin(1);assert(prune.Record(1,generation,Blas(compact,0x9000)));assert(prune.Submit(1,{{1,generation}}));
+    assert(prune.CompletedCheckpoint([](U64){return true;}));assert(released.expired());
+    // Repeated completion checkpoints retain the current scene without growing
+    // graph history until its fixed node limit. Old fence waits remain valid.
+    for(unsigned n=0;n<20000;++n){
+        generation=prune.Begin(1);assert(prune.Record(1,generation,Blas(compact,0x9000+n*4)));
+        assert(prune.Submit(1,{{1,generation}}));assert(prune.CompletedCheckpoint([](U64){return true;}));
+    }
+    generation=prune.Begin(9);assert(prune.Wait(9,99,1));assert(prune.Mark(9,generation,502));assert(prune.Submit(9,{{9,generation}}));
+    assert(prune.Scene(502,top,scene)==Status::ready&&Position(scene)==0x9000+19999*4);
     std::puts("PASS scene catalog: submitted build/copy cuts, exact allocations, late signals, unknown writes, reset and replay rejection.");
 }

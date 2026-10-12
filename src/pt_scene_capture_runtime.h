@@ -17,6 +17,9 @@ class Capture {
     std::mutex mutex;
     std::map<IUnknown*,Identity> identities;
     std::map<U64,Upload> uploads;
+    struct Progress {ComPtr<ID3D12Fence> fence;U64 value=0;};
+    std::map<U64,Progress> progress;
+    U64 checkpointOperations=0;
     U64 serial=0;
     bool preserveGeometry=false;
     std::shared_ptr<PTOwnedScene::LeaseBudget> copyBudget=std::make_shared<PTOwnedScene::LeaseBudget>(512ull*1024*1024);
@@ -134,6 +137,26 @@ public:
         std::lock_guard<std::mutex> guard(mutex);auto* q=Identify(queue);if(!q){catalog.Invalidate();return;}
         auto batch=submittingCopies.find(q->id);if(batch==submittingCopies.end())return;
         if(!retirement.After(queue,batch->second))catalog.Invalidate();submittingCopies.erase(batch);
+    }
+    // Called after each forwarded queue operation, under the interception
+    // queue mutex. The nested private Signal is excluded from native ordering.
+    void Tail(ID3D12CommandQueue* queue){
+        std::lock_guard<std::mutex> guard(mutex);auto* id=Identify(queue);if(!id){catalog.Invalidate();return;}
+        auto& p=progress[id->id];
+        if(!p.fence){ComPtr<ID3D12Device> device;
+            if(FAILED(queue->GetDevice(IID_PPV_ARGS(&device)))||FAILED(device->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&p.fence)))){catalog.Invalidate();return;}
+        }
+        if(p.value>=UINT64_MAX-1||FAILED(queue->Signal(p.fence.Get(),++p.value))){catalog.Invalidate();return;}
+        ++checkpointOperations;retirement.Poll();
+    }
+    void Checkpoint(){
+        std::lock_guard<std::mutex> guard(mutex);
+        if(checkpointOperations<128)return;
+        for(const auto& item:progress){const auto completed=item.second.fence->GetCompletedValue();
+            if(completed==UINT64_MAX){catalog.Invalidate();return;}
+            if(completed<item.second.value)return;
+        }
+        if(catalog.CompletedCheckpoint([this](U64 token){return resources.Alive(token);}))checkpointOperations=0;
     }
     bool Signal(IUnknown* queue,IUnknown* fence,U64 value){
         std::lock_guard<std::mutex> guard(mutex);auto* q=Identify(queue);auto* f=Identify(fence);

@@ -14,15 +14,15 @@ struct Key {U64 token=0,address=0;bool operator<(const Key& b)const{return token
 struct Selection {U64 version=0,node=0;};
 class Graph {
     struct Node {U64 previous=0,waitFence=0,waitValue=0;Key target{};U64 version=0;};
-    struct Fence {U64 last=0;std::map<U64,U64> signals;};
+    struct Fence {U64 last=0,completed=0;std::map<U64,U64> signals;};
     std::vector<Node> nodes{Node{}};
     std::map<U64,U64> queues;
     std::map<U64,Fence> fences;
-    bool valid=true;
+    bool valid=true;U64 completedPrefix=0;
     static constexpr std::size_t MaximumNodes=65536,MaximumQueues=16,MaximumFences=256;
     U64 Append(U64 queue,Node node){
         if(!valid||!queue||nodes.size()>=MaximumNodes||(!queues.count(queue)&&queues.size()>=MaximumQueues)){valid=false;return 0;}
-        node.previous=queues[queue];nodes.push_back(node);queues[queue]=nodes.size()-1;return nodes.size()-1;
+        node.previous=queues.count(queue)?queues.at(queue):completedPrefix;nodes.push_back(node);queues[queue]=nodes.size()-1;return nodes.size()-1;
     }
     Status Ancestors(U64 at,std::set<U64>& complete)const {
         complete.clear();if(!valid||!at||at>=nodes.size())return Status::invalid;
@@ -37,6 +37,7 @@ class Graph {
             if(n.waitFence){
                 const auto f=fences.find(n.waitFence);
                 if(f==fences.end())return Status::pending;
+                if(n.waitValue<=f->second.completed){if(n.previous)todo.push_back({n.previous,false});continue;}
                 const auto signal=f->second.signals.lower_bound(n.waitValue);
                 if(signal==f->second.signals.end())return Status::pending;
                 todo.push_back({signal->second,false});
@@ -60,8 +61,41 @@ public:
         f.last=value;f.signals.emplace(value,node);return node;
     }
     U64 Wait(U64 queue,U64 fence,U64 value){
-        if(!fence||!value||value==UINT64_MAX){valid=false;return 0;}
+        if(!fence||value==UINT64_MAX){valid=false;return 0;}
+        if(!value)return Mark(queue);
         Node node;node.waitFence=fence;node.waitValue=value;return Append(queue,node);
+    }
+    // Only after the host proves EVERY observed queue tail has completed,
+    // with no submitted ticket still referring to a historical cut. Completion
+    // is an explicit CPU happens-before edge for all subsequent queue calls.
+    bool CompletedCheckpoint(std::map<Key,Selection>& latest){
+        latest.clear();if(!valid)return false;
+        std::map<Key,std::vector<U64>> writes;
+        for(U64 n=1;n<nodes.size();++n)if(nodes[static_cast<std::size_t>(n)].target.token)writes[nodes[static_cast<std::size_t>(n)].target].push_back(n);
+        std::map<Key,Selection> candidate;
+        for(const auto& entry:writes){
+            std::set<U64> maximal(entry.second.begin(),entry.second.end());
+            if(entry.second.size()>1)for(const U64 n:entry.second){
+                std::set<U64> ancestors;if(Ancestors(n,ancestors)!=Status::ready)return false;
+                for(const U64 a:ancestors)if(a!=n)maximal.erase(a);
+            }
+            if(maximal.size()!=1)return false;
+            const U64 n=*maximal.begin();candidate.emplace(entry.first,Selection{nodes[static_cast<std::size_t>(n)].version,n});
+        }
+        latest=std::move(candidate);return true;
+    }
+    // Latest versions have already been materialized by the catalog. Give all
+    // existing AND future queues the same completed prefix, preserving fence
+    // high-water marks so waits on old signals cannot become unresolved.
+    bool RebaseCompleted(const std::map<Key,U64>& versions){
+        if(!valid||versions.size()+2>=MaximumNodes)return false;
+        std::vector<Node> baseline{Node{}};U64 tail=0;
+        for(const auto& entry:versions){Node n;n.previous=tail;n.target=entry.first;n.version=entry.second;baseline.push_back(n);tail=baseline.size()-1;}
+        if(!tail){baseline.push_back(Node{});tail=1;}
+        nodes=std::move(baseline);completedPrefix=tail;
+        for(auto& q:queues)q.second=tail;
+        for(auto& f:fences){f.second.completed=f.second.last;f.second.signals.clear();}
+        return true;
     }
     Status Select(U64 dispatch,Key target,Selection& result)const {
         result={};std::set<U64> reachable;const auto state=Ancestors(dispatch,reachable);
