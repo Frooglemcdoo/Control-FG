@@ -93,6 +93,33 @@ No native upload buffer mapping or GPU readback is needed for this decoder.
 The DXR fixture now reserves a table, submits behind a ready fence, then has a
 worker construct and upload the private records. Valid test rays are published
 last; failure leaves invalid rays that cannot execute TraceRay. This models late
-publication and safe failure. It does not yet install the live job/reservation
-connection or change Control rendering. Windows validation of this extension is
-separate from the earlier commit's results above.
+publication and safe failure. The late-write and rejected-worker cases passed on
+the reference DXR driver at remote commit
+`794b90c83692e82c33d876cf67ae87f4b7bdaa45` (run 38309859057). All six workflows
+passed. Neither result is a live Control rendering test.
+
+## Dispatch/job routing hooks
+
+`pt_native_job_runtime.h` now connects the existing native dispatch hook to the
+exact runJob call at 359D9 and the existing worker writer hook. The dispatch
+reader validates the native PSO, double-buffer selection/counter, complete table
+layout, two-ray shape, and writer arguments. Scheduling registers a unique
+ticket before the original runJob call. Writer publication happens after the
+native fill returns but before the worker returns to the job system.
+
+`pt_native_job_route.h` tracks the 16 native job slots with a monotonically
+assigned ticket serial, exact writer arguments and one claim per job. A stale
+completion cannot clear a reused slot. The routing mutex is never held while a
+consumer callback executes. Error-state preservation applies at each boundary.
+
+This bridge is inert until a session-lifetime renderer consumer registers. No
+consumer is registered yet. The inline writer and native zero-identifier debug
+mode are intentionally unsupported and retain native behavior. The public
+registration contract does not allow replacing a consumer with pending jobs.
+
+Still required: the consumer must reserve its private dispatch/output resources,
+capture the selected TLAS and descriptors, retain all GPU dependencies, build the
+table using the writer callback, publish behind the correct queue dependency,
+and retire resources on a real fence. The native observer's 120-second registry
+is not a production resource owner. Final lighting composition also remains
+unimplemented. Do not enable private rendering solely because routing tests pass.

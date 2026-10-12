@@ -95,12 +95,14 @@ static void ObserveBindings(UINT site,void* buffer,void* state,int bytes,int ray
     if(snapshot.size()==h.count)topology.Table(snapshot,static_cast<unsigned>(rays));
 }
 static void FillHook(unsigned route,int mode,void* buffer,void* state,int bytes,int rays,int count,const void* bindings){
+    const auto ticket=PTNativeJobRuntime::Begin(mode,{reinterpret_cast<UINT_PTR>(buffer),reinterpret_cast<UINT_PTR>(state),reinterpret_cast<UINT_PTR>(bindings),bytes,rays,count});
     const DWORD error=GetLastError();
     if(recording.load(std::memory_order_relaxed)){
         ++fillCalls[route];ObserveBindings(route==0?0x357c6u:0x374a1u,buffer,state,bytes,rays,count,bindings);
     }
     SetLastError(error);
     PTNativeBinding::Forward(nativeFill,mode,buffer,state,bytes,rays,count,bindings);
+    PTNativeJobRuntime::Finish(mode,ticket);
 }
 static void FillInline(int mode,void* buffer,void* state,int bytes,int rays,int count,const void* bindings){
     FillHook(0,mode,buffer,state,bytes,rays,count,bindings);
@@ -150,6 +152,9 @@ using CopyInstances=void*(*)(void*,const void*,std::size_t);
 static LockInstances lockInstances=nullptr;static CopyInstances copyInstances=nullptr;
 static RRIndirectCallPatch instanceLockPatch;static RRAlbedoCallPatch instanceCopyPatch{};
 static PTGlassRuntime::NativeCallPatch compactPatch;
+using RunJob=void(*)(void*,void*);
+static RunJob runJob=nullptr;static RRIndirectCallPatch runJobPatch;
+static void RunJobHook(void* system,void* handle){PTNativeJobRuntime::Scheduling(handle);runJob(system,handle);}
 struct LockedInstances {void* mapped=nullptr;UINT64 address=0,bytes=0;};
 static thread_local LockedInstances instanceUpload;
 static bool ReadMapped(void** mapped,void*& out)noexcept{
@@ -173,12 +178,14 @@ static void STDMETHODCALLTYPE CompactHook(ID3D12GraphicsCommandList4* list,UINT6
     SetLastError(error);reinterpret_cast<Compact>((*reinterpret_cast<void***>(list))[74])(list,dst,src,mode);
 }
 static bool PrepareTopology(unsigned char* d3d){
+    runJob=reinterpret_cast<RunJob>(*reinterpret_cast<void**>(d3d+0x5d650));
     auto* renderer=reinterpret_cast<unsigned char*>(verifiedRenderer);
     lockInstances=reinterpret_cast<LockInstances>(*reinterpret_cast<void**>(renderer+0x5dfe70));
     copyInstances=reinterpret_cast<CopyInstances>(renderer+0x588e0e);
     return instanceLockPatch.Prepare(renderer+0xa8972,reinterpret_cast<void**>(renderer+0x5dfe70),reinterpret_cast<void*>(lockInstances),reinterpret_cast<void*>(&LockInstancesHook))&&
         RRAlbedoPrepareCallPatch(renderer+0xa8987,reinterpret_cast<void*>(copyInstances),reinterpret_cast<void*>(&CopyInstancesHook),&instanceCopyPatch)&&
-        compactPatch.Prepare(d3d+0x3369d,74,reinterpret_cast<void*>(&CompactHook));
+        compactPatch.Prepare(d3d+0x3369d,74,reinterpret_cast<void*>(&CompactHook))&&
+        runJobPatch.Prepare(d3d+0x359d9,reinterpret_cast<void**>(d3d+0x5d650),reinterpret_cast<void*>(runJob),reinterpret_cast<void*>(&RunJobHook));
 }
 static bool PrepareResources(unsigned char* b){
     createGeneral=reinterpret_cast<PTNativeBufferObserver::CreateGeneral>(b+0x26030);
@@ -195,6 +202,7 @@ static bool PrepareResources(unsigned char* b){
 }
 static bool InstallResources(){for(auto& p:resourcePatch)if(!RRAlbedoExchangeCall(&p,true))return false;return true;}
 static void RestoreCalls(){
+    if(runJobPatch.changed)runJobPatch.Exchange(false);
     if(instanceLockPatch.changed)instanceLockPatch.Exchange(false);
     if(instanceCopyPatch.site)RRAlbedoExchangeCall(&instanceCopyPatch,false);compactPatch.Exchange(false);
     for(auto& p:resourcePatch)if(p.site)RRAlbedoExchangeCall(&p,false);
@@ -215,7 +223,7 @@ static bool Install(HMODULE d3d){
     ready=ready&&RRAlbedoPrepareCallPatch(b+0x374a1,reinterpret_cast<void*>(nativeFill),reinterpret_cast<void*>(&FillWorker),&fillPatch[1]);
     ready=ready&&buildCall[0].Prepare(b+0x33593,72,reinterpret_cast<void*>(&Hook0))&&buildCall[1].Prepare(b+0x337cc,72,reinterpret_cast<void*>(&Hook1));
     ready=ready&&PrepareResources(b)&&PrepareTopology(b);
-    if(ready)ready=instanceLockPatch.Exchange(true)&&RRAlbedoExchangeCall(&instanceCopyPatch,true)&&compactPatch.Exchange(true)&&InstallResources()&&buildCall[0].Exchange(true)&&buildCall[1].Exchange(true)&&RRAlbedoExchangeCall(&fillPatch[0],true)&&RRAlbedoExchangeCall(&fillPatch[1],true);
+    if(ready)ready=runJobPatch.Exchange(true)&&instanceLockPatch.Exchange(true)&&RRAlbedoExchangeCall(&instanceCopyPatch,true)&&compactPatch.Exchange(true)&&InstallResources()&&buildCall[0].Exchange(true)&&buildCall[1].Exchange(true)&&RRAlbedoExchangeCall(&fillPatch[0],true)&&RRAlbedoExchangeCall(&fillPatch[1],true);
     if(!ready){RestoreCalls();CloseHandle(output);output=INVALID_HANDLE_VALUE;Log("PT_SCENE_M11_INSTALL ready=0 reason=call_patch");return false;}
     recording=true;HANDLE thread=CreateThread(nullptr,0,&Worker,nullptr,0,nullptr);
     if(!thread){recording=false;RestoreCalls();CloseHandle(output);output=INVALID_HANDLE_VALUE;Log("PT_SCENE_M11_INSTALL ready=0 reason=writer_thread");return false;}

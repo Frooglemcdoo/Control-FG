@@ -2,6 +2,7 @@
 #include "pt_glass_resources.h"
 #include "pt_glass_descriptors.h"
 #include "pt_glass_vtable_call.h"
+#include "pt_native_job_runtime.h"
 #include <intrin.h>
 #include <unordered_map>
 #include <memory>
@@ -168,6 +169,7 @@ static HRESULT STDMETHODCALLTYPE ResetHook(ID3D12GraphicsCommandList* list,ID3D1
 }
 static void STDMETHODCALLTYPE SetRayPsoHook(ID3D12GraphicsCommandList4* list,ID3D12StateObject* pso){currentRayPso=pso;setRayPso(list,pso);}
 static void STDMETHODCALLTYPE RaysHook(ID3D12GraphicsCommandList4* list,const D3D12_DISPATCH_RAYS_DESC* desc){
+    PTNativeJobRuntime::Recorded(list,desc,currentRayPso);
     if(!enabled||!rayScope||!desc||desc->Depth!=1||pass.mode==0||(ptReflectionUserState.load()&1u)==0){if(enabled&&rayScope)Skip("dispatch_disabled_or_shape");dispatchRays(list,desc);return;}
     if(!pass.ray){Skip("ray_descriptor_snapshot");dispatchRays(list,desc);return;}
     Context context{};unsigned char identifier[32]{};
