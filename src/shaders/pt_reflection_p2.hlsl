@@ -161,6 +161,28 @@ float3 PTSampleGGXVNDF(float3 n, float3 viewToCamera, float roughness, float2 u)
     return normalize(hLocal.x*t + hLocal.y*b + hLocal.z*n);
 }
 
+// Control's first-reflection sampler is a truncated GGX NDF, not the full
+// VNDF used for the extra PT bounce. Its native deferred shading/filtering
+// expects this narrower primary lobe (native Frc64 * 0.4, roughness^4).
+float3 PTNativePrimaryDirection(float3 n,float3 incoming,float roughness,float2 u)
+{
+    float3 t,b;
+    if(n.z < -0.9999999f) {
+        t=float3(0,-1,0); b=float3(-1,0,0);
+    } else {
+        float a=1.0f/(1.0f+n.z),xy=-n.x*n.y*a;
+        t=float3(1.0f-n.x*n.x*a,xy,-n.x);
+        b=float3(xy,1.0f-n.y*n.y*a,-n.y);
+    }
+    float alpha=roughness*roughness;
+    float v=frac(u.y)*0.4f;
+    float cosTheta=sqrt(saturate((1.0f-v)/(1.0f+v*(alpha*alpha-1.0f))));
+    float sinTheta=sqrt(saturate(1.0f-cosTheta*cosTheta));
+    float phi=2.0f*PT_PI*frac(u.x);
+    float3 h=t*(cos(phi)*sinTheta)+b*(sin(phi)*sinTheta)+n*cosTheta;
+    return normalize(reflect(incoming,h));
+}
+
 
 float3 PTSampleCosineHemisphere(float3 n, float2 u)
 {
@@ -219,7 +241,9 @@ void PTTrace(uint layer, float3 origin, float3 direction, out HitData payload)
 {
     RayDesc ray;
     ray.Origin=origin;
-    ray.TMin=0.01f;
+    // The native primary ray starts at its already biased origin with TMin=0.
+    // Keep the existing extra-bounce self-intersection guard on layer 1.
+    ray.TMin=layer==0u?0.0f:0.01f;
     ray.Direction=normalize(direction);
     ray.TMax=10000.0f;
     payload.value=layer;
@@ -267,12 +291,22 @@ void reflectionRayGeneration()
         uint secondLayer=1u;
 
         float2 random=PTRandom2(pixel,path);
-        float3 h=PTSampleGGXVNDF(normalWorld,viewToCamera,roughness,random);
-        float3 firstDirection=normalize(reflect(-viewToCamera,h));
-        if(dot(firstDirection,normalWorld)<=0.0f) continue;
+        float3 normalView=ControlDecodeNormalView(g_tGBuffer1.Load(int3(pixel,0)));
+        float3 incomingView=normalize(primaryView);
+        float3 firstViewDirection=PTNativePrimaryDirection(normalView,incomingView,roughness,random);
+        // Native retries below-horizon samples instead of leaving a missing
+        // first hit. Retries change only the sample, and do not trace extra rays.
+        [loop]
+        for(uint retry=1u;dot(firstViewDirection,normalView)<0.005f&&retry<=100u;++retry) {
+            float2 retryRandom=random+(float)(retry*10u)*float2(0.754877666f,0.569840296f);
+            firstViewDirection=PTNativePrimaryDirection(normalView,incomingView,roughness,retryRandom);
+        }
+        float3 firstDirection=PTTransformVectorColumns(firstViewDirection,
+            g_mViewToWorld0,g_mViewToWorld1,g_mViewToWorld2);
 
         HitData firstPayload;
-        const float3 firstOrigin=primaryWorld+normalWorld*0.01f;
+        const float linearDepth=g_tLinearDepth.Load(int3(pixel,0)).x;
+        const float3 firstOrigin=primaryWorld+(normalWorld+viewToCamera)*(0.001f*linearDepth);
         PTTrace(firstLayer,firstOrigin,firstDirection,firstPayload);
 
         uint firstMaterial=g_rwtMaterialId[uint3(pixel,firstLayer)];

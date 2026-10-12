@@ -136,6 +136,9 @@ jobs:
       - name: Check specular energy and diffuse preservation
         run: python tools/test-pt-specular-preservation.py
 
+      - name: Check native primary reflection fidelity
+        run: python tools/test-pt-primary-native.py
+
       - name: Check secondary material encoding
         run: python tools/test-pt-secondary-encoding.py
 
@@ -247,7 +250,7 @@ jobs:
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-PT-Glass-G3'
+          $out='Control-FG-PT-Opaque-R1'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/pt_glass_raygen.dxil "$out/pt_glass_raygen.dxil"
           Copy-Item build/pt_glass_secondary.dxbc "$out/pt_glass_secondary.dxbc"
@@ -262,35 +265,32 @@ jobs:
           Copy-Item Collect-ControlFG-Compact-Logs.ps1 "$out/Collect-ControlFG-Compact-Logs.ps1"
           Copy-Item Collect-ControlFG-Compact-Logs.cmd "$out/Collect-ControlFG-Compact-Logs.cmd"
           @'
-          CONTROL-FG - GLASS CONTINUATION G3 (EXPERIMENTAL)
-          ===============================================
+          CONTROL-FG - OPAQUE REFLECTION FIDELITY R1 (EXPERIMENTAL)
+          =======================================================
           Close Control. Back up your current dxgi.dll and PT shader sidecars.
           Extract every file here beside Control_DX12.exe, replacing matching files.
           Requires the existing Control FG installation and verified Steam game DLLs.
-          Keep ray-traced transparent reflections enabled. F10 opens the overlay.
+          F10 opens the overlay. PT REFLECTIONS remains the global PT toggle.
 
-          GLOSSY ONLY. The GLASS button now cycles GLOSSY <-> NATIVE.
-          PT REFLECTIONS remains the global PT toggle. Starts in GLOSSY.
-          Removed the added diffuse bounce, 11x11 filter, temporal history,
-          second hit/radiance layer, and G2D5 GPU diagnostic buffers/readbacks.
-          Native diffuse lighting remains part of the game's own shading.
-          Opaque PT is unchanged. The working glass glossy path is retained.
+          Corrects the opaque first-reflection ray distribution to the captured
+          native truncated GGX lobe, removing its forced mirror roughness floor.
+          Restores native below-horizon sample retries and depth-scaled origin.
+          Retries compute directions only; they do not trace additional rays.
+          The PT second bounce and native material/lighting evaluation remain.
 
-          A secondary-lighting validity marker now prevents an unshaded or
-          invalid radiance result from replacing native environment lighting.
-          Valid dark hits are still allowed; no brightness floor or tint boost.
-          This does not claim to resolve all missing PT color/information.
+          G3 glass glossy is retained. Added glass diffuse remains removed.
+          No color/brightness boost, new diffuse bounce, or new GPU buffers.
 
-          To identify the remaining difference, keep the camera fixed and
-          capture PT OFF, PT ON + GLASS NATIVE, and PT ON + GLASS GLOSSY.
-          Keep RR, FG, exposure/view, and all other settings the same.
-          These separate opaque PT changes from the added glass continuation.
+          Validation: native shader contract, angular-support/origin checks,
+          secondary precision/encoding/energy tests, DXC and Windows build.
+          This corrects a verified ray-footprint mismatch, but in-game impact
+          on the original missing-color report still needs visual verification.
+          One primary sample and the existing noise seed/ray range remain.
 
-          Build/PSO/resource checks passed before packaging. In-game appearance
-          and driver compatibility still require testing on the target RTX GPU.
-          Compare the GLASS modes at the same view. If the result is wrong or
-          absent, run the included log collector after exiting and send its ZIP.
-          Logs PT_GLASS_INSTALL / STATE_READY / RAYS / LIGHTING identify activation.
+          Compare PT OFF and PT ON at the original opaque reflection scene,
+          keeping camera, exposure, RR and FG settings the same.
+          The glass installation log still identifies its unchanged G3 module.
+          If needed, exit and run the included compact log collector.
           Restore your backed-up binaries to roll back.
           '@ | Set-Content "$out/README.txt" -Encoding ASCII
           Compress-Archive -Path "$out/*" -DestinationPath "$out.zip" -Force
@@ -299,10 +299,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-PT-Glass-G3
+          name: Control-FG-PT-Opaque-R1
           path: |
-            Control-FG-PT-Glass-G3.zip
-            Control-FG-PT-Glass-G3.sha256
+            Control-FG-PT-Opaque-R1.zip
+            Control-FG-PT-Opaque-R1.sha256
             build/exports.txt
             build/imports.txt
             build/pt_reflection_p1.dxil
