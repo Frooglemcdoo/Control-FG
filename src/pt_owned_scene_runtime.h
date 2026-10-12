@@ -1,4 +1,5 @@
 #pragma once
+#include <set>
 #include "pt_owned_scene.h"
 #include "pt_scene_dispatch_plan.h"
 #include "pt_scene_leases.h"

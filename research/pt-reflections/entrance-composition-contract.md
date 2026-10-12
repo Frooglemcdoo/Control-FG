@@ -103,3 +103,37 @@ python research/pt-reflections/tools/trace_entrance_lighting.py ALLSOURCE.zip in
 ```
 
 This uses the existing source archive only. No new game run is required.
+
+## Offline bytecode adapter implemented (October 12)
+
+`pt_surface_composition.h` now patches the nine SHA256-reviewed general-surface
+variants listed in `pt_surface_profiles.in.h`. The caller must verify the original
+SHA256; the adapter additionally checks the original container checksum, size,
+shader model, instruction boundaries and reviewed instruction shapes. Unknown,
+corrupt and unsupported inputs leave the output empty.
+
+The adapter adds a float4 t35 declaration and one temporary. It loads the private
+PT texture using the native diffuse-light load's original integer coordinates,
+before the native code reuses that coordinate register. Immediately after the
+reviewed diffuse-times-albedo-plus-specular instruction, a conditional move selects
+PT RGB when its alpha admission mask is nonzero. Native alpha zero falls back to
+the exact original surface term. The producer must emit only mask zero/one and
+finite RGB, clear uncovered pixels, and exclude primary emission.
+
+All native instructions remain byte-identical except the incremented temporary
+count. Input/output signatures and retained non-code chunks are unchanged. Stale
+reflection and statistics chunks are removed. A retail DXBC checksum is generated
+using the documented Microsoft final-block layout; the implementation matched all
+160 reconstructed shader containers from the existing six-view capture.
+
+The local nine-variant patch test passed. Independent token comparison confirmed
+exact preservation of the original instruction stream, with only one declaration,
+one load, and one conditional move inserted. This includes the two variants whose
+integer coordinates occupy r1 instead of r0 and the variant with primary emission
+after the combine. Captured shader binaries remain local and are not committed.
+
+This is not yet a native graphics PSO/draw hook. Descriptor staging, per-frame
+output ownership, producer-to-compositor queue ordering, target dimensions and
+raster sample compatibility must be established by the live renderer before
+activation. Character/decal shaders remain excluded. Offline patch success does
+not establish D3D12 PSO creation or in-game image correctness for these binaries.
