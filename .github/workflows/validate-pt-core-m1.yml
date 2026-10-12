@@ -1,0 +1,40 @@
+name: Build and test PT Core M1
+on:
+  push:
+    branches: [experiment/pt-glass-integration]
+    paths:
+      - 'src/shaders/pt_surface_transport.hlsli'
+      - 'src/shaders/pt_geometry_bounds.hlsli'
+      - 'src/shaders/pt_scene_hits.hlsl'
+      - 'src/shaders/pt_direct_light.hlsli'
+      - 'tools/test-pt-surface-transport.*'
+      - 'tools/test-pt-geometry-bounds.cpp'
+      - 'tools/test-pt-direct-light.cpp'
+      - 'tools/test-pt-scene-query.hlsl'
+      - 'tools/build-pt-core-m1.ps1'
+      - '.github/workflows/validate-pt-core-m1.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and execute shared math and geometry tests
+        shell: cmd
+        run: |
+          for /f "usebackq tokens=*" %%I in (`"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath`) do set "VSPATH=%%I"
+          call "%VSPATH%\VC\Auxiliary\Build\vcvars64.bat"
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools\build-pt-core-m1.ps1
+          if errorlevel 1 exit /b 1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PT-Core-M1-Components
+          path: |
+            build/pt-core-m1/*.exe
+            build/pt-core-m1/*.dxil
+            build/pt-core-m1/*.txt
+            build/pt-core-m1/hashes.json
+          if-no-files-found: error

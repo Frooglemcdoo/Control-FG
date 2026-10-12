@@ -1,5 +1,5 @@
 // Compile fixture only; resource layout is not a proposed Control binding ABI.
-#include "../src/shaders/pt_surface_transport.hlsli"
+#include "../src/shaders/pt_direct_light.hlsli"
 StructuredBuffer<float4> inputs : register(t0);
 RWStructuredBuffer<float4> outputs : register(u0);
 [numthreads(64,1,1)]
@@ -9,5 +9,8 @@ void main(uint3 id:SV_DispatchThreadID) {
     PTSurfaceSample s=PTSampleSurface(m,float3(0,0,1),a.x,a.y,a.z);
     PTTransportState p=PTContinue(PTBeginTransport(),s,a.z,3);
     p=PTAccumulate(p,float3(1,1,1));
+    PTDirectSample light;light.wi=float3(0,0,1);light.incidentRadiance=float3(1,1,1);light.pdf=.25;light.delta=0;
+    PTDirectResult direct=PTEvaluateDirect(m,float3(0,0,1),light,1);
+    p=PTAccumulate(p,direct.radiance);
     outputs[id.x]=float4(p.radiance,(float)p.alive);
 }
