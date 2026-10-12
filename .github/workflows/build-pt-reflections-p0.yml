@@ -61,6 +61,10 @@ jobs:
           build\test-pt-scene-observer.exe
           if errorlevel 1 exit /b 1
 
+      - name: Test M6 results collector
+        shell: powershell
+        run: tools/test-pt-scene-collector.ps1
+
       - name: Verify glossy-only removal and native fallback
         run: python tools/test-pt-glass-glossy-only.py
       - name: Verify glass installation compatibility gate
@@ -260,7 +264,7 @@ jobs:
           dumpbin /exports build\dxgi.dll > build\exports.txt
           dumpbin /imports build\dxgi.dll > build\imports.txt
 
-      - name: Package opaque reflection R2
+      - name: Package in-game geometry diagnostic M6
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'

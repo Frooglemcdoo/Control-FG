@@ -10,7 +10,7 @@ rendering code and sidecars are unchanged; the added observer reads CPU metadata
    Leave every shader sidecar and other game file in place.
 3. Launch Control normally. Load the entrance scene promptly, with ray tracing
    enabled. Leave PT OFF for this diagnostic. Move around for about 30 seconds,
-   then wait until at least THREE MINUTES after launch before closing the game.
+   then keep the scene open for THREE MINUTES before closing the game.
 4. Double-click Collect-PT-Scene-M6.cmd in this extracted package folder.
 5. Send the PT-Scene-M6-Results-*.zip it creates beside the collector.
 

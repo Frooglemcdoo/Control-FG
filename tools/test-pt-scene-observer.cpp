@@ -1,3 +1,4 @@
+#define NOMINMAX
 #include <windows.h>
 #include "../src/pt_scene_observer.h"
 #include "../src/pt_glass_vtable_call.h"
