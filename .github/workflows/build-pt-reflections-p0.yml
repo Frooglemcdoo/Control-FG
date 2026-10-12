@@ -180,6 +180,10 @@ jobs:
           if errorlevel 1 exit /b 1
           build\test-pt-scene-order.exe
           if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-pt-scene-catalog.cpp /Febuild\test-pt-scene-catalog.exe
+          if errorlevel 1 exit /b 1
+          build\test-pt-scene-catalog.exe
+          if errorlevel 1 exit /b 1
 
       - name: Test exact AS descriptor copies
         shell: cmd

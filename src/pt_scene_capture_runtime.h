@@ -1,0 +1,121 @@
+#pragma once
+#include "pt_scene_catalog.h"
+#include "pt_scene_descriptors.h"
+#include "pt_owned_scene_runtime.h"
+#include <wrl/client.h>
+// Captures native build inputs into the submitted-scene catalog. The host must
+// serialize Submit/Signal/Wait with the corresponding native queue operations.
+// No dispatch is enabled merely by constructing this observer.
+namespace PTSceneLive {
+class Capture {
+    using U64=std::uint64_t;
+    template<class T> using ComPtr=Microsoft::WRL::ComPtr<T>;
+    struct Identity {ComPtr<IUnknown> owner;U64 id=0,generation=0;};
+    struct Upload {U64 token=0;std::vector<PTSceneTopology::Instance> instances;};
+    PTOwnedScene::Runtime& resources;
+    PTSceneCatalog::Catalog catalog;
+    std::mutex mutex;
+    std::map<IUnknown*,Identity> identities;
+    std::map<U64,Upload> uploads;
+    U64 serial=0;
+    Identity* Identify(IUnknown* object){
+        if(!object)return nullptr;
+        ComPtr<IUnknown> canonical;if(FAILED(object->QueryInterface(IID_PPV_ARGS(&canonical))))return nullptr;
+        auto old=identities.find(canonical.Get());if(old!=identities.end())return &old->second;
+        if(identities.size()>=1024)return nullptr;
+        auto* key=canonical.Get();return &identities.emplace(key,Identity{std::move(canonical),++serial,0}).first->second;
+    }
+    Identity* List(IUnknown* object){
+        auto* id=Identify(object);if(id&&!id->generation)id->generation=catalog.Begin(id->id);return id;
+    }
+    PTSceneCatalog::Allocation Allocation(U64 address,U64 bytes=256){
+        PTOwnedScene::Allocation a{};if(!resources.Identify(address,bytes,a))return {};
+        return {{a.token,a.address},a.bytes};
+    }
+    static bool Copy(void* dst,const void* src,std::size_t bytes)noexcept{
+        __try{if(!src)return false;std::memcpy(dst,src,bytes);return true;}__except(EXCEPTION_EXECUTE_HANDLER){return false;}
+    }
+    void Record(IUnknown* list,PTSceneCatalog::Snapshot snapshot){
+        auto* id=List(list);
+        if(!id||!catalog.Record(id->id,id->generation,std::move(snapshot)))catalog.Invalidate();
+    }
+public:
+    explicit Capture(PTOwnedScene::Runtime& bank):resources(bank){}
+    void UploadInstances(U64 address,const void* data,U64 bytes){
+        std::lock_guard<std::mutex> guard(mutex);
+        // Erase the preceding snapshot even when the new upload is rejected.
+        uploads.erase(address);
+        if(!address||!bytes||bytes%64||bytes>2ull*1024*1024||uploads.size()>=64)return;
+        const auto a=Allocation(address,bytes);if(!a.key.token)return;
+        Upload upload;upload.token=a.key.token;upload.instances.resize(static_cast<std::size_t>(bytes/64));
+        if(Copy(upload.instances.data(),data,static_cast<std::size_t>(bytes)))uploads.emplace(address,std::move(upload));
+    }
+    void Build(IUnknown* list,const D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC* desc){
+        std::lock_guard<std::mutex> guard(mutex);
+        D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC d{};
+        if(!PTSceneObserver::ReadBuild(desc,d)){catalog.Invalidate();return;}
+        PTSceneCatalog::Snapshot s;s.destination=Allocation(d.DestAccelerationStructureData);
+        if(d.Inputs.Type==D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL){
+            const auto u=uploads.find(d.Inputs.InstanceDescs);
+            const auto a=Allocation(d.Inputs.InstanceDescs,U64(d.Inputs.NumDescs)*64);
+            if(d.Inputs.DescsLayout==D3D12_ELEMENTS_LAYOUT_ARRAY&&d.Inputs.NumDescs&&d.Inputs.NumDescs<=32768&&
+               u!=uploads.end()&&u->second.token==a.key.token&&u->second.instances.size()==d.Inputs.NumDescs){
+                s.kind=PTSceneCatalog::Snapshot::Kind::tlas;s.instances=u->second.instances;
+                for(const auto& i:s.instances)if(i.idMask>>24)s.bottom.emplace(i.blas,Allocation(i.blas));
+            }
+        }else if(d.Inputs.Type==D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL&&d.Inputs.NumDescs&&d.Inputs.NumDescs<=4096){
+            s.kind=PTSceneCatalog::Snapshot::Kind::blas;
+            for(UINT n=0;n<d.Inputs.NumDescs;++n){
+                D3D12_RAYTRACING_GEOMETRY_DESC g{};
+                if(!PTSceneObserver::ReadGeometry(d.Inputs,n,g)||g.Type!=D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES||
+                   g.Triangles.Transform3x4||g.Triangles.VertexFormat!=DXGI_FORMAT_R32G32B32_FLOAT||
+                   (g.Triangles.IndexFormat!=DXGI_FORMAT_R16_UINT&&g.Triangles.IndexFormat!=DXGI_FORMAT_R32_UINT)){
+                    s.kind=PTSceneCatalog::Snapshot::Kind::unknown;break;
+                }
+                const auto& t=g.Triangles;const UINT stride=t.IndexFormat==DXGI_FORMAT_R16_UINT?2u:4u;
+                const U64 indexBytes=U64(t.IndexCount)*stride;
+                if(!t.VertexCount||t.VertexBuffer.StrideInBytes<12||
+                   U64(t.VertexCount-1)>(UINT64_MAX-12)/t.VertexBuffer.StrideInBytes){s.kind=PTSceneCatalog::Snapshot::Kind::unknown;break;}
+                const U64 positionBytes=U64(t.VertexCount-1)*t.VertexBuffer.StrideInBytes+12;
+                const auto index=Allocation(t.IndexBuffer,indexBytes),position=Allocation(t.VertexBuffer.StartAddress,positionBytes);
+                s.geometry.push_back({t.IndexBuffer,t.VertexBuffer.StartAddress,t.VertexBuffer.StrideInBytes,stride,t.IndexCount,t.VertexCount,index.key.token,position.key.token});
+            }
+        }
+        Record(list,std::move(s));
+    }
+    void Compact(IUnknown* list,U64 dst,U64 src,D3D12_RAYTRACING_ACCELERATION_STRUCTURE_COPY_MODE mode){
+        std::lock_guard<std::mutex> guard(mutex);PTSceneCatalog::Snapshot s;s.destination=Allocation(dst);
+        if(mode==D3D12_RAYTRACING_ACCELERATION_STRUCTURE_COPY_MODE_COMPACT||mode==D3D12_RAYTRACING_ACCELERATION_STRUCTURE_COPY_MODE_CLONE){
+            s.kind=PTSceneCatalog::Snapshot::Kind::copy;s.source=Allocation(src);
+        }
+        Record(list,std::move(s));
+    }
+    void Reset(IUnknown* list){
+        std::lock_guard<std::mutex> guard(mutex);auto* id=Identify(list);
+        if(!id){catalog.Invalidate();return;}id->generation=catalog.Begin(id->id);
+    }
+    bool Mark(IUnknown* list,U64 ticket){
+        std::lock_guard<std::mutex> guard(mutex);auto* id=List(list);
+        if(!id||!catalog.Mark(id->id,id->generation,ticket)){catalog.Invalidate();return false;}return true;
+    }
+    bool Submit(IUnknown* queue,UINT count,ID3D12CommandList*const* lists){
+        std::lock_guard<std::mutex> guard(mutex);auto* q=Identify(queue);
+        if(!q||!count||count>256||!lists){catalog.Invalidate();return false;}
+        std::vector<std::pair<U64,U64>> ordered;ordered.reserve(count);
+        for(UINT n=0;n<count;++n){auto* l=List(lists[n]);if(!l){catalog.Invalidate();return false;}ordered.push_back({l->id,l->generation});}
+        return catalog.Submit(q->id,ordered);
+    }
+    bool Signal(IUnknown* queue,IUnknown* fence,U64 value){
+        std::lock_guard<std::mutex> guard(mutex);auto* q=Identify(queue);auto* f=Identify(fence);
+        if(!q||!f){catalog.Invalidate();return false;}return catalog.Signal(q->id,f->id,value);
+    }
+    bool Wait(IUnknown* queue,IUnknown* fence,U64 value){
+        std::lock_guard<std::mutex> guard(mutex);auto* q=Identify(queue);auto* f=Identify(fence);
+        if(!q||!f){catalog.Invalidate();return false;}return catalog.Wait(q->id,f->id,value);
+    }
+    PTSceneOrder::Status Scene(U64 ticket,const PTSceneDescriptors::Acceleration& selected,PTSceneDispatch::Scene& scene){
+        return catalog.Scene(ticket,{{selected.token,selected.address},selected.bytes},scene);
+    }
+    void Invalidate(){catalog.Invalidate();}
+};
+}

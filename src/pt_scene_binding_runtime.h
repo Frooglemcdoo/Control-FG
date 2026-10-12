@@ -31,6 +31,7 @@ static void Sink(const Event& e) noexcept {
 static void Hook(UINT site,ID3D12GraphicsCommandList4* list,const D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC* desc,UINT count,const D3D12_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO_DESC* info){
     const DWORD error=GetLastError();
     if(recording.load(std::memory_order_relaxed))topology.Build(desc);
+    if(PTSceneLive::owner.Active())PTSceneLive::owner.Scenes().Build(list,desc);
     if(recording.load(std::memory_order_relaxed)||PTSceneLive::owner.Active())PTSceneObserver::Observe(list,desc,site,++calls,&Sink);
     SetLastError(error);PTSceneObserver::Forward(list,desc,count,info);
 }
@@ -165,18 +166,22 @@ static bool ReadMapped(void** mapped,void*& out)noexcept{
 static void LockInstancesHook(void* buffer,UINT64 offset,UINT64 bytes,unsigned mode,void** mapped){
     lockInstances(buffer,offset,bytes,mode,mapped);const DWORD error=GetLastError();instanceUpload={};
     PTNativeBufferObserver::Snapshot b{};void* pointer=nullptr;
-    if(recording&&offset==0&&bytes&&bytes<=2ull*1024*1024&&bytes%64==0&&
+    if((recording||PTSceneLive::owner.Active())&&offset==0&&bytes&&bytes<=2ull*1024*1024&&bytes%64==0&&
        PTNativeBufferObserver::Read(buffer,b)&&bytes<=b.bytes&&ReadMapped(mapped,pointer))instanceUpload={pointer,b.address,bytes};
     SetLastError(error);
 }
 static void* CopyInstancesHook(void* dst,const void* src,std::size_t bytes){
     const DWORD error=GetLastError();
-    if(recording&&dst==instanceUpload.mapped&&bytes==instanceUpload.bytes)topology.UploadInstances(instanceUpload.address,src,bytes);
+    if(dst==instanceUpload.mapped&&bytes==instanceUpload.bytes){
+        if(recording)topology.UploadInstances(instanceUpload.address,src,bytes);
+        if(PTSceneLive::owner.Active())PTSceneLive::owner.Scenes().UploadInstances(instanceUpload.address,src,bytes);
+    }
     instanceUpload={};SetLastError(error);return copyInstances(dst,src,bytes);
 }
 using Compact=void(STDMETHODCALLTYPE*)(ID3D12GraphicsCommandList4*,UINT64,UINT64,D3D12_RAYTRACING_ACCELERATION_STRUCTURE_COPY_MODE);
 static void STDMETHODCALLTYPE CompactHook(ID3D12GraphicsCommandList4* list,UINT64 dst,UINT64 src,D3D12_RAYTRACING_ACCELERATION_STRUCTURE_COPY_MODE mode){
     const DWORD error=GetLastError();if(recording&&mode==D3D12_RAYTRACING_ACCELERATION_STRUCTURE_COPY_MODE_COMPACT)topology.Compact(dst,src);
+    if(PTSceneLive::owner.Active())PTSceneLive::owner.Scenes().Compact(list,dst,src,mode);
     SetLastError(error);reinterpret_cast<Compact>((*reinterpret_cast<void***>(list))[74])(list,dst,src,mode);
 }
 static bool PrepareTopology(unsigned char* d3d){

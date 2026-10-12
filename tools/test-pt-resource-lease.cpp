@@ -104,6 +104,37 @@ int main(){
     live.Created(wrapper.data(),true);PTSceneDescriptors::Acceleration selectedAS;
     assert(live.Select(heap.Get(),0,5,selectedAS)&&selectedAS.address==liveAddress);
     const auto originalToken=selectedAS.token;
+    // Native capture adapter uses canonical COM list identity, snapshots CPU
+    // instance rows, and joins them only when the observed list is submitted.
+    ComPtr<ID3D12CommandAllocator> allocator;ComPtr<ID3D12GraphicsCommandList> list;
+    assert(SUCCEEDED(d->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT,IID_PPV_ARGS(&allocator))));
+    assert(SUCCEEDED(d->CreateCommandList(0,D3D12_COMMAND_LIST_TYPE_DIRECT,allocator.Get(),nullptr,IID_PPV_ARGS(&list))));
+    auto& capture=live.Scenes();capture.Reset(list.Get());
+    D3D12_RAYTRACING_GEOMETRY_DESC nativeGeometry{};nativeGeometry.Type=D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES;
+    nativeGeometry.Triangles.IndexBuffer=liveAddress+256;nativeGeometry.Triangles.IndexFormat=DXGI_FORMAT_R16_UINT;nativeGeometry.Triangles.IndexCount=3;
+    nativeGeometry.Triangles.VertexBuffer={liveAddress+512,12};nativeGeometry.Triangles.VertexFormat=DXGI_FORMAT_R32G32B32_FLOAT;nativeGeometry.Triangles.VertexCount=3;
+    D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC nativeBuild{};nativeBuild.DestAccelerationStructureData=liveAddress+2048;
+    nativeBuild.Inputs.Type=D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL;nativeBuild.Inputs.NumDescs=1;nativeBuild.Inputs.pGeometryDescs=&nativeGeometry;
+    capture.Build(list.Get(),&nativeBuild);
+    capture.Compact(list.Get(),liveAddress+4096,liveAddress+2048,D3D12_RAYTRACING_ACCELERATION_STRUCTURE_COPY_MODE_COMPACT);
+    PTSceneTopology::Instance nativeInstance{};nativeInstance.idMask=0xff000001;nativeInstance.blas=liveAddress+4096;nativeInstance.transform[0]=1;
+    capture.UploadInstances(liveAddress+8192,&nativeInstance,sizeof(nativeInstance));
+    nativeBuild={};nativeBuild.DestAccelerationStructureData=liveAddress;
+    nativeBuild.Inputs.Type=D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL;nativeBuild.Inputs.NumDescs=1;nativeBuild.Inputs.InstanceDescs=liveAddress+8192;
+    capture.Build(list.Get(),&nativeBuild);assert(capture.Mark(list.Get(),1));
+    nativeInstance.transform[0]=99; // Copying source rows must not change the build snapshot.
+    PTSceneDispatch::Scene selectedScene;assert(capture.Scene(1,selectedAS,selectedScene)==PTSceneOrder::Status::pending);
+    ID3D12CommandList* submittedList=list.Get();assert(capture.Submit(queue.Get(),1,&submittedList));
+    assert(capture.Scene(1,selectedAS,selectedScene)==PTSceneOrder::Status::ready);
+    assert(selectedScene.instances.size()==1&&selectedScene.instances[0].transform[0]==1);
+    assert(selectedScene.blas.at(liveAddress+4096).token==originalToken);
+    PTNativeBinding::Binding selectedBinding{};selectedBinding.indices=liveAddress+256;selectedBinding.constants[1]=2;selectedBinding.constants[8]=6;
+    std::vector<PTSceneTopology::Mapping> selectedMapping;
+    selectedScene.topology.Check(selectedScene.instances,{selectedBinding},2,&selectedMapping);
+    assert(selectedMapping.size()==1&&selectedMapping[0].geometry.positions==liveAddress+512&&selectedMapping[0].geometry.positionToken==originalToken);
+    // This checks the observer, not AS execution: no synthetic build is sent to WARP.
+    assert(SUCCEEDED(list->Close()));
+    std::puts("PASS native scene capture: immutable instance upload, geometry identities, compaction source and submitted list selection.");
     live.Copy({{handle.ptr+11ull*step,1}},{{asHandle,1}});assert(live.Select(heap.Get(),1,5,selectedAS));
     auto oldOwner=live.BeforeRelease(wrapper.data());live.AfterRelease(oldOwner);
     assert(!live.Select(heap.Get(),1,5,selectedAS));

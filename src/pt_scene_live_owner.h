@@ -1,5 +1,6 @@
 #pragma once
 #include "pt_owned_scene_runtime.h"
+#include "pt_scene_capture_runtime.h"
 #include "pt_scene_descriptors.h"
 #include "pt_native_buffer_observer.h"
 #include <atomic>
@@ -10,6 +11,7 @@ using U64=std::uint64_t;
 using Microsoft::WRL::ComPtr;
 class Owner {
     PTOwnedScene::Runtime resources;
+    Capture capture{resources};
     std::unique_ptr<PTSceneDescriptors::Index> descriptors;
     std::atomic<bool> active{false};
     UINT step=0;
@@ -66,6 +68,7 @@ public:
         result=selected;return true;
     }
     PTOwnedScene::Runtime& Resources(){return resources;}
+    Capture& Scenes(){return capture;}
 };
 inline Owner owner;
 }
