@@ -19,7 +19,7 @@ uint PTPathRandomBits(inout uint state) {
     state ^= state << 13; state ^= state >> 17; state ^= state << 5; return state;
 }
 float PTPathRandom(inout uint state) { return (PTPathRandomBits(state)>>8)*(1.0/16777216.0); }
-struct PTPathResult { float3 radiance; uint hits; uint valid; };
+struct PTPathResult { float3 radiance; uint hits; uint valid; uint fault; };
 PTPathResult PTIntegratePath(RayDesc ray,uint maxHits,uint rouletteStart,uint seed,float originOffset) {
     PTTransportState path=PTBeginTransport();PTPathResult result=(PTPathResult)0;
     if(maxHits==0||maxHits>32||!all(isfinite(ray.Origin))||!all(isfinite(ray.Direction))||
@@ -28,18 +28,18 @@ PTPathResult PTIntegratePath(RayDesc ray,uint maxHits,uint rouletteStart,uint se
     uint rng=seed==0?1:seed;
     for(uint depth=0;depth<maxHits&&path.alive!=0;++depth) {
         PTSceneHit hit=PTPathTrace(ray);
-        if(hit.status==2){path.valid=0;break;}
+        if(hit.status==2){path.valid=0;result.fault=2;break;}
         if(hit.status==0){path=PTAccumulate(path,PTPathEnvironment(ray.Direction));break;}
         PTPathSurface surface=PTPathDecode(hit,ray);result.hits++;
         PTSurfaceMaterial m=surface.material;
         if(!PTValid(m.kd)||!PTValid(m.f0)||!PTFinite(m.roughness)||m.roughness<0||m.roughness>1||
-           any(m.kd<0)||any(m.kd>1)||any(m.f0<0)||any(m.f0>1)||(m.lobes&~3u)!=0||m.lobes==0){path.valid=0;break;}
+           any(m.kd<0)||any(m.kd>1)||any(m.f0<0)||any(m.f0>1)||(m.lobes&~3u)!=0||m.lobes==0){path.valid=0;result.fault=3;break;}
         float3 n=surface.normal;
-        if(!all(isfinite(surface.position))||!all(isfinite(n))||abs(dot(n,n)-1)>1e-4){path.valid=0;break;}
+        if(!all(isfinite(surface.position))||!all(isfinite(n))||abs(dot(n,n)-1)>1e-4){path.valid=0;result.fault=4;break;}
         float3 tangent=normalize(cross(abs(n.z)<0.9?float3(0,0,1):float3(0,1,0),n));
         float3 bitangent=cross(n,tangent);
         float3 wo=float3(dot(-ray.Direction,tangent),dot(-ray.Direction,bitangent),dot(-ray.Direction,n));
-        if(wo.z<=0){path.valid=0;break;}
+        if(wo.z<=0){path.valid=0;result.fault=5;break;}
         path=PTAccumulate(path,surface.emission);
         PTDirectSample light;uint visibility;
         if(PTPathLight(surface,light,visibility)) {

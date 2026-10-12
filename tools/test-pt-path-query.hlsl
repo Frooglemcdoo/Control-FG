@@ -32,7 +32,7 @@ void PTSceneQueryRayGeneration() {
     PTTestResult output=(PTTestResult)0;output.valid=1;output.samples=64;
     for(uint s=0;s<output.samples;++s){
         PTPathResult p=PTIntegratePath(ray,depths[i],33,1234+s*7919,.001);
-        output.radiance+=p.radiance/output.samples;output.hits=max(output.hits,p.hits);output.valid&=p.valid;
+        output.radiance+=p.radiance/output.samples;output.hits=max(output.hits,p.hits);output.valid&=p.valid;output.expected.x=max(output.expected.x,(float)p.fault);
     }
     // Expected values are independently checked by the CPU; never accepted from
     // this shader. Keep ABI reserved fields zero.

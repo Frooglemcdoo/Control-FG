@@ -98,8 +98,8 @@ int main(int argc,char** argv){try{
     // Large facing triangles approximate two infinite planes for a bounded test.
     // Packed normals exactly match these planes; this does not admit native
     // shading normals as geometric normals in production.
-    for(UINT i=0;i<4;++i){float z=i==2?-2.0f:2.0f;float x=(i==0||i==2)?0.0f:1e7f*i;
-        float p[3][3]={{x-1e5f,-1e5f,z},{x+1e5f,-1e5f,z},{x,1e5f,z}};
+    for(UINT i=0;i<4;++i){float z=i==2?-2.0f:2.0f;float x=(i==0||i==2)?0.0f:10000.0f*i;
+        float p[3][3]={{x-1024.0f,-1024.0f,z},{x+1024.0f,-1024.0f,z},{x,1024.0f,z}};
         for(UINT j=0;j<3;++j){memcpy(positions[i*3+j],p[j],12);attributes[i*3+j].normal[2]=i==2?32767:-32767;}}
 #endif
     auto pos=g.buffer(sizeof(positions),D3D12_HEAP_TYPE_UPLOAD,D3D12_RESOURCE_STATE_GENERIC_READ,D3D12_RESOURCE_FLAG_NONE,positions);
@@ -168,7 +168,7 @@ int main(int argc,char** argv){try{
             else if(i==6)expected[c]=c==0?.2f:c==1?.4f:.8f;}
         bool match=r.valid==(i==7?0u:1u)&&r.hits==depths[i]&&r.samples==64;
         for(UINT c=0;c<3;++c)match=match&&std::isfinite(r.radiance[c])&&std::fabs(r.radiance[c]-expected[c])<2e-4f;
-        std::printf("%s: %s RGB=(%.6f,%.6f,%.6f) expected=(%.6f,%.6f,%.6f) hits=%u valid=%u\n",match?"PASS":"FAIL",names[i],r.radiance[0],r.radiance[1],r.radiance[2],expected[0],expected[1],expected[2],r.hits,r.valid);pass=pass&&match;}
+        std::printf("%s: %s RGB=(%.6f,%.6f,%.6f) expected=(%.6f,%.6f,%.6f) hits=%u valid=%u fault=%.0f\n",match?"PASS":"FAIL",names[i],r.radiance[0],r.radiance[1],r.radiance[2],expected[0],expected[1],expected[2],r.hits,r.valid,r.reserved[0]);pass=pass&&match;}
 #else
     const char* names[]={"opaque hit 16-bit","geometric miss","alpha cutout 32-bit","solid alpha 32-bit","short shadow segment","near clip","invalid ray","invalid material"};UINT expected[]={1,0,0,1,0,0,2,2};UINT vis[]={0,1,1,0,1,1,2,2};bool pass=true;
     for(UINT i=0;i<8;++i){auto& r=results[i];bool match=r.status==expected[i]&&r.visibility==vis[i];if(r.status==1)match=match&&std::fabs(r.distance-2)<1e-4f&&std::fabs(r.normal[2]+1)<1e-4f&&std::fabs(r.uv[0]-.25f)<1e-4f&&std::fabs(r.uv[1]-.5f)<1e-4f;
