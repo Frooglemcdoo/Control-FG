@@ -8,6 +8,7 @@
 #include "../src/pt_owned_scene_runtime.h"
 #include "../src/pt_scene_submissions.h"
 #include "../src/pt_scene_live_owner.h"
+#include "../src/pt_scene_queue_runtime.h"
 #include "../src/pt_scene_topology_runtime.h"
 using Microsoft::WRL::ComPtr;
 int main(){
@@ -135,6 +136,18 @@ int main(){
     // This checks the observer, not AS execution: no synthetic build is sent to WARP.
     assert(SUCCEEDED(list->Close()));
     std::puts("PASS native scene capture: immutable instance upload, geometry identities, compaction source and submitted list selection.");
+    assert(PTSceneQueues::Start(&capture)&&PTSceneQueues::WatchQueue(queue.Get())&&PTSceneQueues::WatchList(list.Get()));
+    assert(SUCCEEDED(list->Reset(allocator.Get(),nullptr))); // Real Reset invokes the generation observer.
+    capture.Build(list.Get(),&nativeBuild);assert(capture.Mark(list.Get(),2));
+    assert(SUCCEEDED(list->Close()));queue->ExecuteCommandLists(1,&submittedList);
+    assert(SUCCEEDED(queue->Signal(done.Get(),2)));assert(SUCCEEDED(queue->Wait(done.Get(),2)));
+    assert(capture.Scene(2,selectedAS,selectedScene)==PTSceneOrder::Status::ready);
+    ready=CreateEventW(nullptr,FALSE,FALSE,nullptr);assert(ready);
+    assert(SUCCEEDED(done->SetEventOnCompletion(2,ready)));assert(WaitForSingleObject(ready,30000)==WAIT_OBJECT_0);CloseHandle(ready);
+    // Stop observing before this stack-owned fixture ends. Production capture
+    // has process lifetime; installed forwarding hooks remain valid either way.
+    PTSceneQueues::observer.store(nullptr);
+    std::puts("PASS scene queue interception: real WARP Reset, ExecuteCommandLists, Signal and Wait preserve forwarding and select the submitted scene.");
     live.Copy({{handle.ptr+11ull*step,1}},{{asHandle,1}});assert(live.Select(heap.Get(),1,5,selectedAS));
     auto oldOwner=live.BeforeRelease(wrapper.data());live.AfterRelease(oldOwner);
     assert(!live.Select(heap.Get(),1,5,selectedAS));

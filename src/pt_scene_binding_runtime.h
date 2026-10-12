@@ -31,7 +31,11 @@ static void Sink(const Event& e) noexcept {
 static void Hook(UINT site,ID3D12GraphicsCommandList4* list,const D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC* desc,UINT count,const D3D12_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO_DESC* info){
     const DWORD error=GetLastError();
     if(recording.load(std::memory_order_relaxed))topology.Build(desc);
-    if(PTSceneLive::owner.Active())PTSceneLive::owner.Scenes().Build(list,desc);
+    if(PTSceneLive::owner.Active()){
+        auto& capture=PTSceneLive::owner.Scenes();
+        if(!PTSceneQueues::Start(&capture)||!PTSceneQueues::WatchList(list))capture.Invalidate();
+        capture.Build(list,desc);
+    }
     if(recording.load(std::memory_order_relaxed)||PTSceneLive::owner.Active())PTSceneObserver::Observe(list,desc,site,++calls,&Sink);
     SetLastError(error);PTSceneObserver::Forward(list,desc,count,info);
 }
@@ -194,6 +198,31 @@ static bool PrepareTopology(unsigned char* d3d){
         compactPatch.Prepare(d3d+0x3369d,74,reinterpret_cast<void*>(&CompactHook))&&
         runJobPatch.Prepare(d3d+0x359d9,reinterpret_cast<void**>(d3d+0x5d650),reinterpret_cast<void*>(runJob),reinterpret_cast<void*>(&RunJobHook));
 }
+// All direct callers of the hash-verified native queue flush at d3d+434a0.
+// Observe the exact queue at wrapper+10 BEFORE it submits or the caller enqueues
+// its following Signal/Wait. This includes empty flushes before dependencies.
+using FlushQueue=void(*)(void*);
+static FlushQueue flushQueue=nullptr;
+static RRAlbedoCallPatch queueFlushPatch[26]{};
+static bool ReadQueue(void* wrapper,ID3D12CommandQueue*& queue)noexcept{
+    __try{if(!wrapper)return false;queue=*reinterpret_cast<ID3D12CommandQueue**>(static_cast<unsigned char*>(wrapper)+0x10);return queue!=nullptr;}
+    __except(EXCEPTION_EXECUTE_HANDLER){return false;}
+}
+static void FlushQueueHook(void* wrapper){
+    const DWORD error=GetLastError();
+    if(PTSceneLive::owner.Active()){
+        auto& capture=PTSceneLive::owner.Scenes();ID3D12CommandQueue* queue=nullptr;
+        if(!PTSceneQueues::Start(&capture)||!ReadQueue(wrapper,queue)||!PTSceneQueues::WatchQueue(queue))capture.Invalidate();
+    }
+    SetLastError(error);flushQueue(wrapper);
+}
+static bool PrepareQueues(unsigned char* b){
+    flushQueue=reinterpret_cast<FlushQueue>(b+0x434a0);unsigned i=0;
+    for(unsigned rva:{0x22f59u,0x23880u,0x238e0u,0x23948u,0x248edu,0x2c328u,0x2e310u,0x2e7f9u,0x313b7u,0x3147bu,0x314b6u,0x31627u,0x316ccu,0x31724u,0x31c5eu,0x31de7u,0x328ebu,0x329a8u,0x32a4cu,0x35a01u,0x35a63u,0x35ab1u,0x3c560u,0x3e585u,0x43244u,0x4470fu})
+        if(!RRAlbedoPrepareCallPatch(b+rva,b+0x434a0,reinterpret_cast<void*>(&FlushQueueHook),&queueFlushPatch[i++]))return false;
+    return i==26;
+}
+static bool InstallQueues(){for(auto& p:queueFlushPatch)if(!RRAlbedoExchangeCall(&p,true))return false;return true;}
 static bool PrepareResources(unsigned char* b){
     createGeneral=reinterpret_cast<PTNativeBufferObserver::CreateGeneral>(b+0x26030);
     createRay=reinterpret_cast<PTNativeBufferObserver::CreateRay>(b+0x26360);
@@ -210,6 +239,7 @@ static bool PrepareResources(unsigned char* b){
 static bool InstallResources(){for(auto& p:resourcePatch)if(!RRAlbedoExchangeCall(&p,true))return false;return true;}
 static void RestoreCalls(){
     PTNativeJobRuntime::workerHooksReady=false;
+    for(auto& p:queueFlushPatch)if(p.site)RRAlbedoExchangeCall(&p,false);
     if(runJobPatch.changed)runJobPatch.Exchange(false);
     if(instanceLockPatch.changed)instanceLockPatch.Exchange(false);
     if(instanceCopyPatch.site)RRAlbedoExchangeCall(&instanceCopyPatch,false);compactPatch.Exchange(false);
@@ -230,8 +260,8 @@ static bool Install(HMODULE d3d){
     ready=ready&&RRAlbedoPrepareCallPatch(b+0x357c6,reinterpret_cast<void*>(nativeFill),reinterpret_cast<void*>(&FillInline),&fillPatch[0]);
     ready=ready&&RRAlbedoPrepareCallPatch(b+0x374a1,reinterpret_cast<void*>(nativeFill),reinterpret_cast<void*>(&FillWorker),&fillPatch[1]);
     ready=ready&&buildCall[0].Prepare(b+0x33593,72,reinterpret_cast<void*>(&Hook0))&&buildCall[1].Prepare(b+0x337cc,72,reinterpret_cast<void*>(&Hook1));
-    ready=ready&&PrepareResources(b)&&PrepareTopology(b);
-    if(ready)ready=runJobPatch.Exchange(true)&&instanceLockPatch.Exchange(true)&&RRAlbedoExchangeCall(&instanceCopyPatch,true)&&compactPatch.Exchange(true)&&InstallResources()&&buildCall[0].Exchange(true)&&buildCall[1].Exchange(true)&&RRAlbedoExchangeCall(&fillPatch[0],true)&&RRAlbedoExchangeCall(&fillPatch[1],true);
+    ready=ready&&PrepareResources(b)&&PrepareTopology(b)&&PrepareQueues(b);
+    if(ready)ready=runJobPatch.Exchange(true)&&instanceLockPatch.Exchange(true)&&RRAlbedoExchangeCall(&instanceCopyPatch,true)&&compactPatch.Exchange(true)&&InstallResources()&&InstallQueues()&&buildCall[0].Exchange(true)&&buildCall[1].Exchange(true)&&RRAlbedoExchangeCall(&fillPatch[0],true)&&RRAlbedoExchangeCall(&fillPatch[1],true);
     if(!ready){RestoreCalls();CloseHandle(output);output=INVALID_HANDLE_VALUE;Log("PT_SCENE_M11_INSTALL ready=0 reason=call_patch");return false;}
     recording=true;HANDLE thread=CreateThread(nullptr,0,&Worker,nullptr,0,nullptr);
     if(!thread){recording=false;RestoreCalls();CloseHandle(output);output=INVALID_HANDLE_VALUE;Log("PT_SCENE_M11_INSTALL ready=0 reason=writer_thread");return false;}
