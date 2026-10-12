@@ -3,6 +3,7 @@
 #include "pt_native_secondary.generated.hlsli"
 #include "ControlPrimaryGuideDecode.hlsli"
 #include "pt_secondary_encoding.hlsli"
+#include "pt_reflection_energy.hlsli"
 float3 PTNativeViewToWorld(float3 p) {
     return asfloat(ptCB0[6]).xyz*p.x+asfloat(ptCB0[7]).xyz*p.y+
            asfloat(ptCB0[8]).xyz*p.z+asfloat(ptCB0[9]).xyz;
@@ -49,15 +50,27 @@ float3 PTNativePrimaryOrigin(uint2 pixel,out float lodNormalFactor) {
     float depth=g_tLinearDepth.Load(int3(pixel,0)).x;
     return world+(n-normalize(world-asfloat(ptCB0[54]).xyz))*(0.001f*depth);
 }
-float3 PTNativeOutput(float3 radiance,uint2 pixel) {
-    float luminance=max(dot(radiance,float3(0.3333f,0.3333f,0.3333f)),1.0e-5f);
-    float clampValue=asfloat(ptCB6[0].x);
-    if(clampValue>=0.0f&&luminance>clampValue)radiance*=clampValue/luminance;
+float PTNativeDepthScale(uint2 pixel) {
     float4 fade=asfloat(ptCB1[17]);
     float linearDepth=g_tLinearDepth.Load(int3(pixel,0)).x;
     float blend=saturate((linearDepth-(fade.x-fade.y))/max(2.0f*fade.y,1.0e-6f));
     float scale=fade.z+(fade.w-fade.z)*blend*blend*(3.0f-2.0f*blend);
-    return max(radiance,0.0f)*max(scale,0.0f);
+    return max(scale,0.0f);
+}
+float3 PTNativeOutput(float3 radiance,uint2 pixel) {
+    float luminance=dot(radiance,float3(0.3333f,0.3333f,0.3333f));
+    float scale=PTReflectionNativeScale(luminance,asfloat(ptCB6[0].x));
+    return max(radiance*scale,0.0f)*PTNativeDepthScale(pixel);
+}
+float3 PTReplacementOutput(float3 nativeFull,float3 retained,float3 bounce,uint2 pixel) {
+    float3 weights=float3(0.3333f,0.3333f,0.3333f);
+    float limit=asfloat(ptCB6[0].x);
+    float nativeScale=PTReflectionNativeScale(dot(nativeFull,weights),limit);
+    // Keep the native clamp coefficient on all retained lighting. Re-clamping
+    // retained+bounce as one RGB value darkened those terms on bright samples.
+    float bounceScale=PTReflectionReplacementScale(dot(retained,weights),
+        dot(bounce,weights),nativeScale,limit);
+    return max(retained*nativeScale+bounce*bounceScale,0.0f)*PTNativeDepthScale(pixel);
 }
 [numthreads(8,16,1)]
 void main(uint3 dispatchThreadId:SV_DispatchThreadID) {
@@ -122,7 +135,7 @@ void main(uint3 dispatchThreadId:SV_DispatchThreadID) {
                                 firstNormal.xyz,normalize(firstWorld-nativeOrigin),normalize(firstPos.xyz),
                                 primaryView,pixel,false,nativeLod,retained);
                             reference=PTNativeOutput(nativeFull,pixel);
-                            replacement=PTNativeOutput(retained+bounce,pixel);
+                            replacement=PTReplacementOutput(nativeFull,retained,bounce,pixel);
                             if(!all(isfinite(replacement))||!all(isfinite(reference)))rejection=4u;
                             // A port mismatch must never erase native illumination.
                             // This is a parity admission check, not an intensity adjustment.
