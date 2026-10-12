@@ -67,9 +67,11 @@ public:
         if(!candidates)return Status::missingGeometry;
         if(candidates!=1)return Status::ambiguousGeometry;
         const auto& t=*selected;const auto& p=allocations.at(t.positionToken);
+        const U64 padded=(U64(c[8])+3)&~U64(3);
+        if(padded>UINT32_MAX||!Contains(indexToken,b.indices,padded))return Status::invalidGeometry;
         // One CPU resolution transaction uses epoch 1. Allocation identity is
         // separately checked through monotonically increasing owner tokens.
-        PTSceneAdmission::Geometry g{{{b.indices,c[8],1},address},{{p.address,p.bytes,1},t.positions},
+        PTSceneAdmission::Geometry g{{{b.indices,padded,1},address},{{p.address,p.bytes,1},t.positions},
             {{b.attributes,c[9],1},b.attributes},t.indexStride,t.indexCount,t.vertexCount,static_cast<std::uint32_t>(t.positionStride),c[2],c[5],c[6],c[3],244000u/35u,1,true,true,true};
         if(PTSceneAdmission::Admit(g,out)!=PTSceneAdmission::Error::none){out={};return Status::invalidGeometry;}
         // Preserve native tangent/color and declared attribute bounds. Admission

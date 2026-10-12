@@ -17,7 +17,7 @@ public:
 private:
     Stats stats{};
 public:
-    static constexpr U64 MaximumBytes=512ull*1024*1024,MaximumResource=64ull*1024*1024;
+    static constexpr U64 MaximumBytes=1024ull*1024*1024,MaximumResource=64ull*1024*1024;
     // Own references are movable so release validation happens without holding
     // the registry mutex across the native call (which can recurse).
     struct Release {Resource resource;U64 address=0,bytes=0;};

@@ -6,6 +6,7 @@
 #include <cstdio>
 #include "../src/pt_resource_lease_probe.h"
 #include "../src/pt_owned_scene_runtime.h"
+#include "../src/pt_scene_topology_runtime.h"
 using Microsoft::WRL::ComPtr;
 int main(){
     ComPtr<IDXGIFactory4> f;assert(SUCCEEDED(CreateDXGIFactory1(IID_PPV_ARGS(&f))));
@@ -42,5 +43,18 @@ int main(){
     assert(scene.AfterRelease(retained)==0);
     const auto stats=scene.Stop();assert(stats.retained==1&&stats.validatedRelease==1&&stats.mismatchedRelease==0);
     assert(scene.Created(124,nullptr,0,0)==0); // Closed capture cannot acquire references.
-    std::puts("PASS M9 WARP: owned reference survives native-owner release; address mismatch, byte budget and duplicate cleanup rejected.");
+    PTSceneTopology::Runtime topology;
+    PTSceneTopology::Instance instance{};instance.idMask=0xff000001;instance.blas=0xa000;
+    topology.UploadInstances(0x5000,&instance,sizeof(instance));
+    D3D12_RAYTRACING_GEOMETRY_DESC triangle{};triangle.Type=D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES;
+    triangle.Triangles.IndexBuffer=0x1000;triangle.Triangles.IndexFormat=DXGI_FORMAT_R16_UINT;triangle.Triangles.IndexCount=3;
+    triangle.Triangles.VertexBuffer={0x2000,12};triangle.Triangles.VertexFormat=DXGI_FORMAT_R32G32B32_FLOAT;triangle.Triangles.VertexCount=3;
+    D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC build{};build.DestAccelerationStructureData=0xa000;
+    build.Inputs.Type=D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL;build.Inputs.NumDescs=1;build.Inputs.pGeometryDescs=&triangle;
+    topology.Build(&build);build={};build.DestAccelerationStructureData=0xb000;
+    build.Inputs.Type=D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL;build.Inputs.NumDescs=1;build.Inputs.InstanceDescs=0x5000;
+    topology.Build(&build);PTNativeBinding::Binding binding{};binding.indices=0x1000;binding.constants[1]=2;binding.constants[8]=8;
+    topology.Table({binding},2);topology.UploadInstances(0x6000,reinterpret_cast<void*>(1),64);
+    const auto topologyStats=topology.Stop();assert(topologyStats.relation.matched==1&&topologyStats.uploads==1&&topologyStats.readErrors==1);
+    std::puts("PASS M11 WARP and topology: owned reference survives native-owner release; address mismatch, byte budget and duplicate cleanup rejected.");
 }

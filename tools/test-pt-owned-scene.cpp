@@ -26,7 +26,10 @@ int main(){
     binding.constants[0]=0;binding.constants[9]=16;
     assert(index.Resolve(binding,record)==Status::invalidGeometry&&record.positions==0);
     binding.constants[9]=48;binding.constants[8]=6; // R16 raw final fetch needs padding.
-    assert(index.Resolve(binding,record)==Status::invalidGeometry);
+    assert(index.Resolve(binding,record)==Status::candidate&&record.constants[8]==8);
+    index.Remove(1);index.Insert({6,0x1000,6});assert(index.Observe(triangle));
+    assert(index.Resolve(binding,record)==Status::invalidGeometry); // No backing padding.
+    index.Remove(6);index.Insert({7,0x1000,0x100});assert(index.Observe(triangle));
     binding.constants[8]=8;index.Remove(3);
     assert(index.Resolve(binding,record)==Status::missingAllocation);
     std::puts("PASS owned scene: candidate bounds, repeated updates, ambiguity, generation reuse, overlapping owners and R16 padding.");

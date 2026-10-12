@@ -80,6 +80,10 @@ jobs:
           if errorlevel 1 exit /b 1
           build\test-pt-owned-scene.exe
           if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-pt-scene-topology.cpp /Febuild\test-pt-scene-topology.exe
+          if errorlevel 1 exit /b 1
+          build\test-pt-scene-topology.exe
+          if errorlevel 1 exit /b 1
           python tools/test-pt-scene-correlation.py
           if errorlevel 1 exit /b 1
 
@@ -156,7 +160,7 @@ jobs:
           build\test-pt-glass-capture.exe
           if errorlevel 1 exit /b 1
 
-      - name: Test M10 retained native resource ownership on WARP
+      - name: Test M11 retained native resource ownership on WARP
         shell: cmd
         run: |
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
@@ -291,25 +295,25 @@ jobs:
           dumpbin /exports build\dxgi.dll > build\exports.txt
           dumpbin /imports build\dxgi.dll > build\imports.txt
 
-      - name: Package retained scene integration M10
+      - name: Package retained scene integration M11
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-PT-Scene-M10'
+          $out='Control-FG-PT-Scene-M11'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
-          Copy-Item tools/Collect-PT-Scene-M10.cmd,tools/Collect-PT-Scene-M10.ps1 $out
-          Copy-Item research/pt-reflections/PT-Scene-M10-README.txt "$out/README.txt"
+          Copy-Item tools/Collect-PT-Scene-M11.cmd,tools/Collect-PT-Scene-M11.ps1 $out
+          Copy-Item research/pt-reflections/PT-Scene-M11-README.txt "$out/README.txt"
           Compress-Archive -Path "$out/*" -DestinationPath "$out.zip" -Force
           (Get-FileHash "$out.zip" -Algorithm SHA256).Hash | Set-Content "$out.sha256" -Encoding ASCII
 
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-PT-Scene-M10
+          name: Control-FG-PT-Scene-M11
           path: |
-            Control-FG-PT-Scene-M10.zip
-            Control-FG-PT-Scene-M10.sha256
+            Control-FG-PT-Scene-M11.zip
+            Control-FG-PT-Scene-M11.sha256
             build/exports.txt
             build/imports.txt
             build/pt_reflection_p1.dxil
