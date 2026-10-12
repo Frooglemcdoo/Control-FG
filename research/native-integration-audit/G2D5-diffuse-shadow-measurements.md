@@ -12,8 +12,8 @@ Every 120th glass recording, a 32-pixel grid writes 128-byte records to a dedica
 
 The hash-locked native shader already evaluates shadow maps at the reflected hit, and the same lighting instructions are reused for extra hits:
 
-- Point light flags at native dword 3231: bit 2 enables point VSM. Atlas t5 is sampled at 3744; visibility is finalized at 3828 and multiplies light RGB at 3837. G2D5 observes immediately before 3837, plus lights considered at 3291.
-- Spotlight shadow flags at 4885: bit 2 and mask 0x300 select shadow paths. t8 VSM is sampled at 4917/5558; t7 PCF has eight depth comparisons at 5098 through 5517. Combined visibility is selected at 5735. G2D5 observes it at 5744, before the native fully-shadowed-light early branch at 5751.
+- Point light flags at native dword 3231: flag 0x2 enables point VSM. Atlas t5 is sampled at 3744; visibility is finalized at 3828 and multiplies light RGB at 3837. G2D5 observes immediately before 3837, plus lights considered at 3291.
+- Spotlight shadow flags at 4885: flag 0x2 and mask 0x300 select shadow paths. t8 VSM is sampled at 4917/5558; t7 PCF has eight depth comparisons at 5098 through 5517. Combined visibility is selected at 5735. G2D5 observes it at 5744, before the native fully-shadowed-light early branch at 5751.
 - `point_lights` counts point-light candidates reaching the shadow flag branch; `point_shadow_tests` counts enabled point VSM evaluations. Point mean visibility uses tested lights only.
 - `spot_lights` counts spotlights reaching the combined shadow result; `spot_shadow_eligible` counts flags requesting shadow maps. Spotlight mean visibility includes unshadowed candidates. Occluded means visibility < 0.99, not a count of shadowed pixels, and is not energy weighted.
 

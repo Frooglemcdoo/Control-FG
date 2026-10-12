@@ -997,8 +997,9 @@ void main(uint3 groupId : SV_GroupID, uint3 groupThreadId : SV_GroupThreadID) {
     r3.xyzw=(r18.xyzx).xyzw; // native dword 6723
 #if PT_GLASS_COMPOSITE
     float3 diffuseIndirect=max(asfloat(r10.xyz),0.0f);
+    float3 originalDiffuse=diffuseIndirect;
     PTGlassApplyDiffuse(r1.xy,diffuseIndirect,diagnostic);
-    diagnostic.reserved.xyz=(diffuseIndirect-asfloat(r10.xyz))*asfloat(r12.xyz);
+    diagnostic.reserved.xyz=(diffuseIndirect-originalDiffuse)*asfloat(r12.xyz);
     r10.xyz=asuint(diffuseIndirect);
 #endif
     r2.xyzw=(asuint(mad(asfloat(r12.xyzw),asfloat(r10.xyzx),asfloat(r2.xyzw)))).xyzw; // native dword 6728

@@ -146,7 +146,7 @@ for ins in selected:
           '    if(PTGlassDiagnosticPixel(r1.xy)) diagnostic.'+field+'+=float4(1.0f,'+value+'<0.99f?1.0f:0.0f,'+value+','+eligible+');',
           '#endif']
  if at==6728:
-  out += ['#if PT_GLASS_COMPOSITE', '    float3 diffuseIndirect=max(asfloat(r10.xyz),0.0f);', '    PTGlassApplyDiffuse(r1.xy,diffuseIndirect,diagnostic);', '    diagnostic.reserved.xyz=(diffuseIndirect-asfloat(r10.xyz))*asfloat(r12.xyz);', '    r10.xyz=asuint(diffuseIndirect);', '#endif']
+  out += ['#if PT_GLASS_COMPOSITE', '    float3 diffuseIndirect=max(asfloat(r10.xyz),0.0f);', '    float3 originalDiffuse=diffuseIndirect;', '    PTGlassApplyDiffuse(r1.xy,diffuseIndirect,diagnostic);', '    diagnostic.reserved.xyz=(diffuseIndirect-originalDiffuse)*asfloat(r12.xyz);', '    r10.xyz=asuint(diffuseIndirect);', '#endif']
  if at==6824:
   out += ['#if PT_GLASS_COMPOSITE',
           '    diagnostic.reserved.xyz*=asfloat(r4.xyz);',
