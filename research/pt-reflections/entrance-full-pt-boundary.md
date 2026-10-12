@@ -1,5 +1,11 @@
 # Entrance full-PT replacement boundary
 
+Follow-up: `entrance-composition-contract.md` establishes that one inspected
+material variant multiplies native diffuse by its material color and then applies
+fog/media. Its proposed PT insertion point is the surface composition operation,
+not a blind radiance overwrite of the native diffuse UAV. The follow-up also
+records descriptor snapshot inconsistencies found after this initial inventory.
+
 Evidence: six native, proxy-disabled captures from Entrance-20261012-100912-390040,
 E3 AllSource export and ShaderBlocks prefixes. Names 05-rr-off and
 06-composite-off are pose labels, not verified mod comparisons.

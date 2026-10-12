@@ -1,0 +1,2614 @@
+{
+  "schema": 1,
+  "status": "static_candidates_not_runtime_validated",
+  "views": {
+    "01-overview": {
+      "targets": {
+        "3557": [
+          "g_rwtLightBufferDiffuse"
+        ],
+        "3553": [
+          "g_rwtLightBufferSpecular"
+        ],
+        "3415": [
+          "g_rwtSingleSpot"
+        ]
+      },
+      "primary_output_aliases": {},
+      "unresolved_call_count": 284,
+      "pipelines": {
+        "5852": {
+          "first_source_line": 27790,
+          "command_list": "5843",
+          "operation": "DrawIndexedInstanced",
+          "rtvs": [
+            "3564",
+            "3571",
+            "1449"
+          ],
+          "bindings": [
+            {
+              "name": "g_sbInstanceObjectData",
+              "stage": "pixel",
+              "slot": 0,
+              "kind": "srv",
+              "resource": "3557",
+              "heap": "4918",
+              "index": 350580
+            },
+            {
+              "name": "g_sbMaterialDataPart1",
+              "stage": "pixel",
+              "slot": 1,
+              "kind": "srv",
+              "resource": "3553",
+              "heap": "4918",
+              "index": 350581
+            },
+            {
+              "name": "g_sbMaterialDataPart3",
+              "stage": "pixel",
+              "slot": 2,
+              "kind": "srv",
+              "resource": "482",
+              "heap": "4918",
+              "index": 350582
+            }
+          ],
+          "unresolved": [],
+          "occurrences": 5,
+          "shader_hashes": [
+            "8f21de7c3ac1ef35b827756c7ac33bd3fdbf2bba98936e0029bfd96c833704af",
+            "cca1c9b89120cb53982fd688af6e94ad02de156bc5c5fb2569e2793ce80dc8de"
+          ]
+        },
+        "5853": {
+          "first_source_line": 27851,
+          "command_list": "5843",
+          "operation": "DrawIndexedInstanced",
+          "rtvs": [
+            "3564",
+            "3571",
+            "1449"
+          ],
+          "bindings": [
+            {
+              "name": "g_sbInstanceObjectData",
+              "stage": "pixel",
+              "slot": 0,
+              "kind": "srv",
+              "resource": "3557",
+              "heap": "4918",
+              "index": 350972
+            },
+            {
+              "name": "g_sbMaterialDataPart1",
+              "stage": "pixel",
+              "slot": 1,
+              "kind": "srv",
+              "resource": "3553",
+              "heap": "4918",
+              "index": 350973
+            },
+            {
+              "name": "g_sbMaterialDataPart3",
+              "stage": "pixel",
+              "slot": 2,
+              "kind": "srv",
+              "resource": "482",
+              "heap": "4918",
+              "index": 350974
+            }
+          ],
+          "unresolved": [],
+          "occurrences": 5,
+          "shader_hashes": [
+            "8f21de7c3ac1ef35b827756c7ac33bd3fdbf2bba98936e0029bfd96c833704af",
+            "cca1c9b89120cb53982fd688af6e94ad02de156bc5c5fb2569e2793ce80dc8de"
+          ]
+        },
+        "5854": {
+          "first_source_line": 28079,
+          "command_list": "5843",
+          "operation": "DrawIndexedInstanced",
+          "rtvs": [
+            "3564",
+            "3571",
+            "1449"
+          ],
+          "bindings": [
+            {
+              "name": "g_sbInstanceObjectData",
+              "stage": "pixel",
+              "slot": 0,
+              "kind": "srv",
+              "resource": "3557",
+              "heap": "4918",
+              "index": 352540
+            },
+            {
+              "name": "g_sbMaterialDataPart1",
+              "stage": "pixel",
+              "slot": 1,
+              "kind": "srv",
+              "resource": "3553",
+              "heap": "4918",
+              "index": 352541
+            },
+            {
+              "name": "g_sbMaterialDataPart3",
+              "stage": "pixel",
+              "slot": 2,
+              "kind": "srv",
+              "resource": "482",
+              "heap": "4918",
+              "index": 352542
+            }
+          ],
+          "unresolved": [],
+          "occurrences": 5,
+          "shader_hashes": [
+            "8f21de7c3ac1ef35b827756c7ac33bd3fdbf2bba98936e0029bfd96c833704af",
+            "cca1c9b89120cb53982fd688af6e94ad02de156bc5c5fb2569e2793ce80dc8de"
+          ]
+        },
+        "5857": {
+          "first_source_line": 28207,
+          "command_list": "5843",
+          "operation": "DrawIndexedInstanced",
+          "rtvs": [
+            "3564",
+            "3571",
+            "1449"
+          ],
+          "bindings": [
+            {
+              "name": "g_tLinearDepth",
+              "stage": "pixel",
+              "slot": 0,
+              "kind": "srv",
+              "resource": "3557",
+              "heap": "4918",
+              "index": 353324
+            },
+            {
+              "name": "g_sDecalColorMap",
+              "stage": "pixel",
+              "slot": 1,
+              "kind": "srv",
+              "resource": "3553",
+              "heap": "4918",
+              "index": 353325
+            },
+            {
+              "name": "g_sDecalNormalMap",
+              "stage": "pixel",
+              "slot": 2,
+              "kind": "srv",
+              "resource": "482",
+              "heap": "4918",
+              "index": 353326
+            },
+            {
+              "name": "g_sDecalSmoothnessMap",
+              "stage": "pixel",
+              "slot": 3,
+              "kind": "srv",
+              "resource": "3569",
+              "heap": "4918",
+              "index": 353327
+            },
+            {
+              "name": "g_sDecalSpecularColorMap",
+              "stage": "pixel",
+              "slot": 4,
+              "kind": "srv",
+              "resource": "3573",
+              "heap": "4918",
+              "index": 353328
+            },
+            {
+              "name": "g_sDecalInstanceBuffer",
+              "stage": "pixel",
+              "slot": 6,
+              "kind": "srv",
+              "resource": "3687",
+              "heap": "4918",
+              "index": 353330
+            }
+          ],
+          "unresolved": [
+            {
+              "name": "g_tGBuffer1Copy",
+              "kind": "srv",
+              "heap": "4918",
+              "index": 353329
+            }
+          ],
+          "occurrences": 16,
+          "shader_hashes": [
+            "b748e5502d2bc57045794c1e961d1f7cfeee20b05912f93338e59dc226ada0cb",
+            "e8bed669804c4e727955d1adcf4c219dcb679bfe64930b3b3f1c3e8d0cabf4f7"
+          ]
+        },
+        "5856": {
+          "first_source_line": 28242,
+          "command_list": "5843",
+          "operation": "DrawIndexedInstanced",
+          "rtvs": [
+            "3564",
+            "3571",
+            "1449"
+          ],
+          "bindings": [
+            {
+              "name": "g_tLinearDepth",
+              "stage": "pixel",
+              "slot": 0,
+              "kind": "srv",
+              "resource": "3557",
+              "heap": "4918",
+              "index": 354402
+            },
+            {
+              "name": "g_sDecalColorMap",
+              "stage": "pixel",
+              "slot": 1,
+              "kind": "srv",
+              "resource": "3553",
+              "heap": "4918",
+              "index": 354403
+            },
+            {
+              "name": "g_sDecalNormalMap",
+              "stage": "pixel",
+              "slot": 2,
+              "kind": "srv",
+              "resource": "482",
+              "heap": "4918",
+              "index": 354404
+            },
+            {
+              "name": "g_sDecalSmoothnessMap",
+              "stage": "pixel",
+              "slot": 3,
+              "kind": "srv",
+              "resource": "3569",
+              "heap": "4918",
+              "index": 354405
+            },
+            {
+              "name": "g_sDecalSpecularColorMap",
+              "stage": "pixel",
+              "slot": 4,
+              "kind": "srv",
+              "resource": "3573",
+              "heap": "4918",
+              "index": 354406
+            },
+            {
+              "name": "g_sDecalInstanceBuffer",
+              "stage": "pixel",
+              "slot": 6,
+              "kind": "srv",
+              "resource": "3687",
+              "heap": "4918",
+              "index": 354408
+            }
+          ],
+          "unresolved": [
+            {
+              "name": "g_tGBuffer1Copy",
+              "kind": "srv",
+              "heap": "4918",
+              "index": 354407
+            }
+          ],
+          "occurrences": 3,
+          "shader_hashes": [
+            "b748e5502d2bc57045794c1e961d1f7cfeee20b05912f93338e59dc226ada0cb",
+            "e8bed669804c4e727955d1adcf4c219dcb679bfe64930b3b3f1c3e8d0cabf4f7"
+          ]
+        },
+        "6340": {
+          "first_source_line": 32017,
+          "command_list": "6338",
+          "operation": "Dispatch",
+          "rtvs": [],
+          "bindings": [
+            {
+              "name": "g_tGBuffer1",
+              "stage": "compute",
+              "slot": 0,
+              "kind": "srv",
+              "resource": "3564",
+              "heap": "4918",
+              "index": 367681
+            },
+            {
+              "name": "g_tGBuffer2",
+              "stage": "compute",
+              "slot": 1,
+              "kind": "srv",
+              "resource": "3571",
+              "heap": "4918",
+              "index": 367682
+            },
+            {
+              "name": "g_tShadowBuffer",
+              "stage": "compute",
+              "slot": 2,
+              "kind": "srv",
+              "resource": "3565",
+              "heap": "4918",
+              "index": 367683
+            },
+            {
+              "name": "g_tClipDepth",
+              "stage": "compute",
+              "slot": 3,
+              "kind": "srv",
+              "resource": "3572",
+              "heap": "4918",
+              "index": 367684
+            },
+            {
+              "name": "g_tBlueNoiseOutputDither",
+              "stage": "compute",
+              "slot": 4,
+              "kind": "srv",
+              "resource": "2316",
+              "heap": "4918",
+              "index": 367685
+            },
+            {
+              "name": "g_tBlueNoiseShadowJitter",
+              "stage": "compute",
+              "slot": 5,
+              "kind": "srv",
+              "resource": "2578",
+              "heap": "4918",
+              "index": 367686
+            },
+            {
+              "name": "g_tTranslucencyKernelSource",
+              "stage": "compute",
+              "slot": 6,
+              "kind": "srv",
+              "resource": "1489",
+              "heap": "4918",
+              "index": 367687
+            },
+            {
+              "name": "g_sbMaterialDataPart1",
+              "stage": "compute",
+              "slot": 7,
+              "kind": "srv",
+              "resource": "3677",
+              "heap": "4918",
+              "index": 367688
+            },
+            {
+              "name": "g_sbMaterialDataPart3",
+              "stage": "compute",
+              "slot": 8,
+              "kind": "srv",
+              "resource": "3687",
+              "heap": "4918",
+              "index": 367689
+            },
+            {
+              "name": "g_tPointLightShadowAtlas",
+              "stage": "compute",
+              "slot": 9,
+              "kind": "srv",
+              "resource": "4068",
+              "heap": "4918",
+              "index": 367690
+            },
+            {
+              "name": "g_sbDeferredLightPointData",
+              "stage": "compute",
+              "slot": 10,
+              "kind": "srv",
+              "resource": "3676",
+              "heap": "4918",
+              "index": 367691
+            },
+            {
+              "name": "g_tDeferredLightTilePointLights",
+              "stage": "compute",
+              "slot": 11,
+              "kind": "srv",
+              "resource": "3555",
+              "heap": "4918",
+              "index": 367692
+            },
+            {
+              "name": "g_tSpotLightPCFShadowAtlas",
+              "stage": "compute",
+              "slot": 12,
+              "kind": "srv",
+              "resource": "4067",
+              "heap": "4918",
+              "index": 367693
+            },
+            {
+              "name": "g_tSpotLightVSMShadowAtlas",
+              "stage": "compute",
+              "slot": 13,
+              "kind": "srv",
+              "resource": "4068",
+              "heap": "4918",
+              "index": 367694
+            },
+            {
+              "name": "g_tSpotLightProjectionAtlas",
+              "stage": "compute",
+              "slot": 14,
+              "kind": "srv",
+              "resource": "2320",
+              "heap": "4918",
+              "index": 367695
+            },
+            {
+              "name": "g_sbDeferredLightSpotData",
+              "stage": "compute",
+              "slot": 15,
+              "kind": "srv",
+              "resource": "3788",
+              "heap": "4918",
+              "index": 367696
+            },
+            {
+              "name": "g_tDeferredLightTileSpotLights",
+              "stage": "compute",
+              "slot": 16,
+              "kind": "srv",
+              "resource": "3556",
+              "heap": "4918",
+              "index": 367697
+            },
+            {
+              "name": "g_sbDeferredLightSunData",
+              "stage": "compute",
+              "slot": 18,
+              "kind": "srv",
+              "resource": "3554",
+              "heap": "4918",
+              "index": 367699
+            },
+            {
+              "name": "g_tBentNormals",
+              "stage": "compute",
+              "slot": 19,
+              "kind": "srv",
+              "resource": "2317",
+              "heap": "4918",
+              "index": 367700
+            },
+            {
+              "name": "g_tFillSpecular",
+              "stage": "compute",
+              "slot": 20,
+              "kind": "srv",
+              "resource": "10",
+              "heap": "4918",
+              "index": 367701
+            },
+            {
+              "name": "g_rwtLightBufferDiffuse",
+              "stage": "compute",
+              "slot": 0,
+              "kind": "uav",
+              "resource": "3557",
+              "heap": "4918",
+              "index": 367717
+            },
+            {
+              "name": "g_rwtLightBufferSpecular",
+              "stage": "compute",
+              "slot": 1,
+              "kind": "uav",
+              "resource": "3553",
+              "heap": "4918",
+              "index": 367718
+            },
+            {
+              "name": "g_rwtSingleSpot",
+              "stage": "compute",
+              "slot": 2,
+              "kind": "uav",
+              "resource": "3415",
+              "heap": "4918",
+              "index": 367719
+            }
+          ],
+          "unresolved": [
+            {
+              "name": "g_tSunLightProjectionTexture",
+              "kind": "srv",
+              "heap": "4918",
+              "index": 367698
+            }
+          ],
+          "occurrences": 1,
+          "shader_hashes": [
+            "a9e5b544d5ec48e9b439b36aafc5346645f0261d3b1df65dc09e6cce290c164f"
+          ]
+        },
+        "6353": {
+          "first_source_line": 32294,
+          "command_list": "6350",
+          "operation": "Dispatch",
+          "rtvs": [],
+          "bindings": [
+            {
+              "name": "g_tLinearDepth",
+              "stage": "compute",
+              "slot": 0,
+              "kind": "srv",
+              "resource": "3566",
+              "heap": "4918",
+              "index": 367828
+            },
+            {
+              "name": "g_tClipDepth",
+              "stage": "compute",
+              "slot": 1,
+              "kind": "srv",
+              "resource": "3572",
+              "heap": "4918",
+              "index": 367829
+            },
+            {
+              "name": "g_sbDeferredLightSpotData",
+              "stage": "compute",
+              "slot": 2,
+              "kind": "srv",
+              "resource": "3788",
+              "heap": "4918",
+              "index": 367830
+            },
+            {
+              "name": "g_sbDeferredLightPointData",
+              "stage": "compute",
+              "slot": 3,
+              "kind": "srv",
+              "resource": "3676",
+              "heap": "4918",
+              "index": 367831
+            },
+            {
+              "name": "g_tSingleSpot",
+              "stage": "compute",
+              "slot": 4,
+              "kind": "srv",
+              "resource": "3415",
+              "heap": "4918",
+              "index": 367832
+            },
+            {
+              "name": "g_DLF_rwtColorSource",
+              "stage": "compute",
+              "slot": 5,
+              "kind": "srv",
+              "resource": "3416",
+              "heap": "4918",
+              "index": 367833
+            },
+            {
+              "name": "g_DLF_tSpotPointShadowHitT",
+              "stage": "compute",
+              "slot": 6,
+              "kind": "srv",
+              "resource": "3405",
+              "heap": "4918",
+              "index": 367834
+            },
+            {
+              "name": "g_DLF_rwtColorTarget",
+              "stage": "compute",
+              "slot": 0,
+              "kind": "uav",
+              "resource": "3420",
+              "heap": "4918",
+              "index": 367864
+            }
+          ],
+          "unresolved": [],
+          "occurrences": 1,
+          "shader_hashes": [
+            "584d4085443970868fe903d10bcdacb18c4c82490d08b742b5219648da437ab3"
+          ]
+        },
+        "6354": {
+          "first_source_line": 32316,
+          "command_list": "6350",
+          "operation": "Dispatch",
+          "rtvs": [],
+          "bindings": [
+            {
+              "name": "g_tLinearDepth",
+              "stage": "compute",
+              "slot": 0,
+              "kind": "srv",
+              "resource": "3566",
+              "heap": "4918",
+              "index": 367877
+            },
+            {
+              "name": "g_tClipDepth",
+              "stage": "compute",
+              "slot": 1,
+              "kind": "srv",
+              "resource": "3572",
+              "heap": "4918",
+              "index": 367878
+            },
+            {
+              "name": "g_sbDeferredLightSpotData",
+              "stage": "compute",
+              "slot": 2,
+              "kind": "srv",
+              "resource": "3788",
+              "heap": "4918",
+              "index": 367879
+            },
+            {
+              "name": "g_sbDeferredLightPointData",
+              "stage": "compute",
+              "slot": 3,
+              "kind": "srv",
+              "resource": "3676",
+              "heap": "4918",
+              "index": 367880
+            },
+            {
+              "name": "g_tSingleSpot",
+              "stage": "compute",
+              "slot": 4,
+              "kind": "srv",
+              "resource": "3415",
+              "heap": "4918",
+              "index": 367881
+            },
+            {
+              "name": "g_DLF_rwtColorSource",
+              "stage": "compute",
+              "slot": 5,
+              "kind": "srv",
+              "resource": "3420",
+              "heap": "4918",
+              "index": 367882
+            },
+            {
+              "name": "g_DLF_tSpotPointShadowHitT",
+              "stage": "compute",
+              "slot": 6,
+              "kind": "srv",
+              "resource": "3405",
+              "heap": "4918",
+              "index": 367883
+            },
+            {
+              "name": "g_DLF_rwtColorTarget",
+              "stage": "compute",
+              "slot": 0,
+              "kind": "uav",
+              "resource": "3414",
+              "heap": "4918",
+              "index": 367913
+            }
+          ],
+          "unresolved": [],
+          "occurrences": 1,
+          "shader_hashes": [
+            "e1a78e01b31559354cd8d474c22d117c444dd008a0067881d44836a23b0a459b"
+          ]
+        },
+        "6356": {
+          "first_source_line": 32335,
+          "command_list": "6350",
+          "operation": "Dispatch",
+          "rtvs": [],
+          "bindings": [
+            {
+              "name": "g_tGBuffer1",
+              "stage": "compute",
+              "slot": 0,
+              "kind": "srv",
+              "resource": "3564",
+              "heap": "4918",
+              "index": 367926
+            },
+            {
+              "name": "g_tGBuffer2",
+              "stage": "compute",
+              "slot": 1,
+              "kind": "srv",
+              "resource": "3571",
+              "heap": "4918",
+              "index": 367927
+            },
+            {
+              "name": "g_tShadowBuffer",
+              "stage": "compute",
+              "slot": 2,
+              "kind": "srv",
+              "resource": "3565",
+              "heap": "4918",
+              "index": 367928
+            },
+            {
+              "name": "g_tClipDepth",
+              "stage": "compute",
+              "slot": 3,
+              "kind": "srv",
+              "resource": "3572",
+              "heap": "4918",
+              "index": 367929
+            },
+            {
+              "name": "g_tBlueNoiseShadowJitter",
+              "stage": "compute",
+              "slot": 4,
+              "kind": "srv",
+              "resource": "2578",
+              "heap": "4918",
+              "index": 367930
+            },
+            {
+              "name": "g_tTranslucencyKernelSource",
+              "stage": "compute",
+              "slot": 5,
+              "kind": "srv",
+              "resource": "1489",
+              "heap": "4918",
+              "index": 367931
+            },
+            {
+              "name": "g_sbMaterialDataPart1",
+              "stage": "compute",
+              "slot": 6,
+              "kind": "srv",
+              "resource": "3677",
+              "heap": "4918",
+              "index": 367932
+            },
+            {
+              "name": "g_sbMaterialDataPart3",
+              "stage": "compute",
+              "slot": 7,
+              "kind": "srv",
+              "resource": "3687",
+              "heap": "4918",
+              "index": 367933
+            },
+            {
+              "name": "g_tPointLightShadowAtlas",
+              "stage": "compute",
+              "slot": 8,
+              "kind": "srv",
+              "resource": "4068",
+              "heap": "4918",
+              "index": 367934
+            },
+            {
+              "name": "g_sbDeferredLightPointData",
+              "stage": "compute",
+              "slot": 9,
+              "kind": "srv",
+              "resource": "3676",
+              "heap": "4918",
+              "index": 367935
+            },
+            {
+              "name": "g_tSpotLightPCFShadowAtlas",
+              "stage": "compute",
+              "slot": 10,
+              "kind": "srv",
+              "resource": "4067",
+              "heap": "4918",
+              "index": 367936
+            },
+            {
+              "name": "g_tSpotLightVSMShadowAtlas",
+              "stage": "compute",
+              "slot": 11,
+              "kind": "srv",
+              "resource": "4068",
+              "heap": "4918",
+              "index": 367937
+            },
+            {
+              "name": "g_tSpotLightProjectionAtlas",
+              "stage": "compute",
+              "slot": 12,
+              "kind": "srv",
+              "resource": "2320",
+              "heap": "4918",
+              "index": 367938
+            },
+            {
+              "name": "g_sbDeferredLightSpotData",
+              "stage": "compute",
+              "slot": 13,
+              "kind": "srv",
+              "resource": "3788",
+              "heap": "4918",
+              "index": 367939
+            },
+            {
+              "name": "g_tSingleSpot",
+              "stage": "compute",
+              "slot": 14,
+              "kind": "srv",
+              "resource": "3415",
+              "heap": "4918",
+              "index": 367940
+            },
+            {
+              "name": "g_tSingleSpotShadow",
+              "stage": "compute",
+              "slot": 15,
+              "kind": "srv",
+              "resource": "3414",
+              "heap": "4918",
+              "index": 367941
+            },
+            {
+              "name": "g_tBentNormals",
+              "stage": "compute",
+              "slot": 16,
+              "kind": "srv",
+              "resource": "2317",
+              "heap": "4918",
+              "index": 367942
+            },
+            {
+              "name": "g_rwtLightBufferDiffuse",
+              "stage": "compute",
+              "slot": 0,
+              "kind": "uav",
+              "resource": "3557",
+              "heap": "4918",
+              "index": 367962
+            },
+            {
+              "name": "g_rwtLightBufferSpecular",
+              "stage": "compute",
+              "slot": 1,
+              "kind": "uav",
+              "resource": "3553",
+              "heap": "4918",
+              "index": 367963
+            }
+          ],
+          "unresolved": [],
+          "occurrences": 1,
+          "shader_hashes": [
+            "6af3f7403a4e33ef1c478c386de8d0f6534ba9b852a75a9302c9b760c926b621"
+          ]
+        },
+        "6357": {
+          "first_source_line": 32427,
+          "command_list": "6350",
+          "operation": "DrawInstanced",
+          "rtvs": [
+            "3557"
+          ],
+          "bindings": [
+            {
+              "name": "g_tDrawSource",
+              "stage": "pixel",
+              "slot": 0,
+              "kind": "srv",
+              "resource": "3411",
+              "heap": "4918",
+              "index": 368024
+            }
+          ],
+          "unresolved": [],
+          "occurrences": 1,
+          "shader_hashes": [
+            "eb70175a40f55e2d195fdf62665ea4bc821e2b52f8dd4d1ed3f307b80f3496ac",
+            "cfa9eb471d49677dfbe54938b0e977c151550d439729e96597077871989694d8"
+          ]
+        },
+        "6359": {
+          "first_source_line": 32597,
+          "command_list": "6350",
+          "operation": "DrawInstanced",
+          "rtvs": [
+            "3421"
+          ],
+          "bindings": [
+            {
+              "name": "g_tGBuffer2",
+              "stage": "pixel",
+              "slot": 0,
+              "kind": "srv",
+              "resource": "3571",
+              "heap": "4918",
+              "index": 368220
+            },
+            {
+              "name": "g_tLinearDepth",
+              "stage": "pixel",
+              "slot": 1,
+              "kind": "srv",
+              "resource": "3566",
+              "heap": "4918",
+              "index": 368221
+            },
+            {
+              "name": "g_sbMaterialDataPart1",
+              "stage": "pixel",
+              "slot": 2,
+              "kind": "srv",
+              "resource": "3677",
+              "heap": "4918",
+              "index": 368222
+            },
+            {
+              "name": "g_sbMaterialDataPart3",
+              "stage": "pixel",
+              "slot": 3,
+              "kind": "srv",
+              "resource": "3687",
+              "heap": "4918",
+              "index": 368223
+            },
+            {
+              "name": "g_ssssSource",
+              "stage": "pixel",
+              "slot": 4,
+              "kind": "srv",
+              "resource": "3557",
+              "heap": "4918",
+              "index": 368224
+            },
+            {
+              "name": "g_kernelSource",
+              "stage": "pixel",
+              "slot": 5,
+              "kind": "srv",
+              "resource": "1488",
+              "heap": "4918",
+              "index": 368225
+            },
+            {
+              "name": "g_sSSSNoiseMap",
+              "stage": "pixel",
+              "slot": 6,
+              "kind": "srv",
+              "resource": "524",
+              "heap": "4918",
+              "index": 368226
+            }
+          ],
+          "unresolved": [],
+          "occurrences": 2,
+          "shader_hashes": [
+            "22cb8f01e927845481fdcaf1aa52138601072bf8fc19901524f3d2616ee49243",
+            "6cc1491d32ab2cfd80c14a4fcc6a02e603dcde9da8d1fae9461b7e0d1a143fc9"
+          ]
+        },
+        "6362": {
+          "first_source_line": 32826,
+          "command_list": "6360",
+          "operation": "DrawIndexedInstanced",
+          "rtvs": [
+            "3071"
+          ],
+          "bindings": [
+            {
+              "name": "g_tLightBufferDiffuse",
+              "stage": "pixel",
+              "slot": 0,
+              "kind": "srv",
+              "resource": "3557",
+              "heap": "4918",
+              "index": 245475
+            },
+            {
+              "name": "g_tLightBufferSpecular",
+              "stage": "pixel",
+              "slot": 1,
+              "kind": "srv",
+              "resource": "3553",
+              "heap": "4918",
+              "index": 245476
+            },
+            {
+              "name": "g_tAmbientSHTerms",
+              "stage": "pixel",
+              "slot": 2,
+              "kind": "srv",
+              "resource": "482",
+              "heap": "4918",
+              "index": 245477
+            },
+            {
+              "name": "g_tParticipatingMedia",
+              "stage": "pixel",
+              "slot": 3,
+              "kind": "srv",
+              "resource": "3569",
+              "heap": "4918",
+              "index": 245478
+            },
+            {
+              "name": "g_sGBufferReconstruction",
+              "stage": "pixel",
+              "slot": 4,
+              "kind": "srv",
+              "resource": "3573",
+              "heap": "4918",
+              "index": 245479
+            },
+            {
+              "name": "g_sbMaterialDataPart3",
+              "stage": "pixel",
+              "slot": 6,
+              "kind": "srv",
+              "resource": "3687",
+              "heap": "4918",
+              "index": 245481
+            }
+          ],
+          "unresolved": [
+            {
+              "name": "g_tDepthCopy",
+              "kind": "srv",
+              "heap": "4918",
+              "index": 245480
+            }
+          ],
+          "occurrences": 12,
+          "shader_hashes": [
+            "2fc7c9f3682b9d3cf6c548fc5137eacebf25e453e666ef37b994ba8bf3024170",
+            "7518cf8fa5becc5bef03f7e3b0a87f910c1c93ce7e178e81413f6402da96b939"
+          ]
+        },
+        "6364": {
+          "first_source_line": 32895,
+          "command_list": "6360",
+          "operation": "DrawIndexedInstanced",
+          "rtvs": [
+            "3071"
+          ],
+          "bindings": [
+            {
+              "name": "g_tLightBufferDiffuse",
+              "stage": "pixel",
+              "slot": 0,
+              "kind": "srv",
+              "resource": "3557",
+              "heap": "4918",
+              "index": 261106
+            },
+            {
+              "name": "g_tLightBufferSpecular",
+              "stage": "pixel",
+              "slot": 1,
+              "kind": "srv",
+              "resource": "3553",
+              "heap": "4918",
+              "index": 261107
+            },
+            {
+              "name": "g_tAmbientSHTerms",
+              "stage": "pixel",
+              "slot": 2,
+              "kind": "srv",
+              "resource": "482",
+              "heap": "4918",
+              "index": 261108
+            },
+            {
+              "name": "g_tParticipatingMedia",
+              "stage": "pixel",
+              "slot": 3,
+              "kind": "srv",
+              "resource": "3569",
+              "heap": "4918",
+              "index": 261109
+            },
+            {
+              "name": "g_sGBufferReconstruction",
+              "stage": "pixel",
+              "slot": 4,
+              "kind": "srv",
+              "resource": "3573",
+              "heap": "4918",
+              "index": 261110
+            },
+            {
+              "name": "g_sbMaterialDataPart3",
+              "stage": "pixel",
+              "slot": 6,
+              "kind": "srv",
+              "resource": "3687",
+              "heap": "4918",
+              "index": 261112
+            }
+          ],
+          "unresolved": [
+            {
+              "name": "g_tDepthCopy",
+              "kind": "srv",
+              "heap": "4918",
+              "index": 261111
+            }
+          ],
+          "occurrences": 6,
+          "shader_hashes": [
+            "2fc7c9f3682b9d3cf6c548fc5137eacebf25e453e666ef37b994ba8bf3024170",
+            "7518cf8fa5becc5bef03f7e3b0a87f910c1c93ce7e178e81413f6402da96b939"
+          ]
+        },
+        "6363": {
+          "first_source_line": 32922,
+          "command_list": "6360",
+          "operation": "DrawIndexedInstanced",
+          "rtvs": [
+            "3071"
+          ],
+          "bindings": [
+            {
+              "name": "g_tLightBufferDiffuse",
+              "stage": "pixel",
+              "slot": 0,
+              "kind": "srv",
+              "resource": "3557",
+              "heap": "4918",
+              "index": 268554
+            },
+            {
+              "name": "g_tLightBufferSpecular",
+              "stage": "pixel",
+              "slot": 1,
+              "kind": "srv",
+              "resource": "3553",
+              "heap": "4918",
+              "index": 268555
+            },
+            {
+              "name": "g_tAmbientSHTerms",
+              "stage": "pixel",
+              "slot": 2,
+              "kind": "srv",
+              "resource": "482",
+              "heap": "4918",
+              "index": 268556
+            },
+            {
+              "name": "g_tParticipatingMedia",
+              "stage": "pixel",
+              "slot": 3,
+              "kind": "srv",
+              "resource": "3569",
+              "heap": "4918",
+              "index": 268557
+            },
+            {
+              "name": "g_sGBufferReconstruction",
+              "stage": "pixel",
+              "slot": 4,
+              "kind": "srv",
+              "resource": "3573",
+              "heap": "4918",
+              "index": 268558
+            },
+            {
+              "name": "g_sbMaterialDataPart3",
+              "stage": "pixel",
+              "slot": 6,
+              "kind": "srv",
+              "resource": "3687",
+              "heap": "4918",
+              "index": 268560
+            }
+          ],
+          "unresolved": [
+            {
+              "name": "g_tDepthCopy",
+              "kind": "srv",
+              "heap": "4918",
+              "index": 268559
+            }
+          ],
+          "occurrences": 123,
+          "shader_hashes": [
+            "2fc7c9f3682b9d3cf6c548fc5137eacebf25e453e666ef37b994ba8bf3024170",
+            "7518cf8fa5becc5bef03f7e3b0a87f910c1c93ce7e178e81413f6402da96b939"
+          ]
+        },
+        "6366": {
+          "first_source_line": 33126,
+          "command_list": "6360",
+          "operation": "DrawIndexedInstanced",
+          "rtvs": [
+            "3071"
+          ],
+          "bindings": [
+            {
+              "name": "g_tLightBufferDiffuse",
+              "stage": "pixel",
+              "slot": 0,
+              "kind": "srv",
+              "resource": "3557",
+              "heap": "4918",
+              "index": 308930
+            },
+            {
+              "name": "g_tLightBufferSpecular",
+              "stage": "pixel",
+              "slot": 1,
+              "kind": "srv",
+              "resource": "3553",
+              "heap": "4918",
+              "index": 308931
+            },
+            {
+              "name": "g_tAmbientSHTerms",
+              "stage": "pixel",
+              "slot": 2,
+              "kind": "srv",
+              "resource": "482",
+              "heap": "4918",
+              "index": 308932
+            },
+            {
+              "name": "g_tParticipatingMedia",
+              "stage": "pixel",
+              "slot": 3,
+              "kind": "srv",
+              "resource": "3569",
+              "heap": "4918",
+              "index": 308933
+            },
+            {
+              "name": "g_sGBufferReconstruction",
+              "stage": "pixel",
+              "slot": 4,
+              "kind": "srv",
+              "resource": "3573",
+              "heap": "4918",
+              "index": 308934
+            },
+            {
+              "name": "g_sbMaterialDataPart3",
+              "stage": "pixel",
+              "slot": 6,
+              "kind": "srv",
+              "resource": "3687",
+              "heap": "4918",
+              "index": 308936
+            }
+          ],
+          "unresolved": [
+            {
+              "name": "g_tDepthCopy",
+              "kind": "srv",
+              "heap": "4918",
+              "index": 308935
+            }
+          ],
+          "occurrences": 4,
+          "shader_hashes": [
+            "68f263a7be7a36414f0a5ae51e0f69a4bd3cfe54c9c284fcde0df47d1ab49570",
+            "7518cf8fa5becc5bef03f7e3b0a87f910c1c93ce7e178e81413f6402da96b939"
+          ]
+        },
+        "6365": {
+          "first_source_line": 33232,
+          "command_list": "6360",
+          "operation": "DrawIndexedInstanced",
+          "rtvs": [
+            "3071"
+          ],
+          "bindings": [
+            {
+              "name": "g_tLightBufferDiffuse",
+              "stage": "pixel",
+              "slot": 0,
+              "kind": "srv",
+              "resource": "3557",
+              "heap": "4918",
+              "index": 314712
+            },
+            {
+              "name": "g_tLightBufferSpecular",
+              "stage": "pixel",
+              "slot": 1,
+              "kind": "srv",
+              "resource": "3553",
+              "heap": "4918",
+              "index": 314713
+            },
+            {
+              "name": "g_tAmbientSHTerms",
+              "stage": "pixel",
+              "slot": 2,
+              "kind": "srv",
+              "resource": "482",
+              "heap": "4918",
+              "index": 314714
+            },
+            {
+              "name": "g_tParticipatingMedia",
+              "stage": "pixel",
+              "slot": 3,
+              "kind": "srv",
+              "resource": "3569",
+              "heap": "4918",
+              "index": 314715
+            },
+            {
+              "name": "g_sGBufferReconstruction",
+              "stage": "pixel",
+              "slot": 4,
+              "kind": "srv",
+              "resource": "3573",
+              "heap": "4918",
+              "index": 314716
+            },
+            {
+              "name": "g_sbMaterialDataPart3",
+              "stage": "pixel",
+              "slot": 6,
+              "kind": "srv",
+              "resource": "3687",
+              "heap": "4918",
+              "index": 314718
+            }
+          ],
+          "unresolved": [
+            {
+              "name": "g_tDepthCopy",
+              "kind": "srv",
+              "heap": "4918",
+              "index": 314717
+            }
+          ],
+          "occurrences": 8,
+          "shader_hashes": [
+            "21352f8910f6a6cdf5c09e96e56b1c1e8ab610ffc703b378e15ec65a62febba6",
+            "7518cf8fa5becc5bef03f7e3b0a87f910c1c93ce7e178e81413f6402da96b939"
+          ]
+        },
+        "6369": {
+          "first_source_line": 37508,
+          "command_list": "6367",
+          "operation": "DrawIndexedInstanced",
+          "rtvs": [
+            "3071"
+          ],
+          "bindings": [
+            {
+              "name": "g_tLightBufferDiffuse",
+              "stage": "pixel",
+              "slot": 0,
+              "kind": "srv",
+              "resource": "3557",
+              "heap": "4918",
+              "index": 343524
+            },
+            {
+              "name": "g_tLightBufferSpecular",
+              "stage": "pixel",
+              "slot": 1,
+              "kind": "srv",
+              "resource": "3553",
+              "heap": "4918",
+              "index": 343525
+            },
+            {
+              "name": "g_tAmbientSHTerms",
+              "stage": "pixel",
+              "slot": 2,
+              "kind": "srv",
+              "resource": "482",
+              "heap": "4918",
+              "index": 343526
+            },
+            {
+              "name": "g_tParticipatingMedia",
+              "stage": "pixel",
+              "slot": 3,
+              "kind": "srv",
+              "resource": "3569",
+              "heap": "4918",
+              "index": 343527
+            },
+            {
+              "name": "g_sGBufferReconstruction",
+              "stage": "pixel",
+              "slot": 4,
+              "kind": "srv",
+              "resource": "3573",
+              "heap": "4918",
+              "index": 343528
+            },
+            {
+              "name": "g_sbMaterialDataPart3",
+              "stage": "pixel",
+              "slot": 6,
+              "kind": "srv",
+              "resource": "3687",
+              "heap": "4918",
+              "index": 343530
+            }
+          ],
+          "unresolved": [
+            {
+              "name": "g_tDepthCopy",
+              "kind": "srv",
+              "heap": "4918",
+              "index": 343529
+            }
+          ],
+          "occurrences": 3,
+          "shader_hashes": [
+            "24ddca37e42e34f7a3a04554496deda937a4f98c5afa416b579310b3242ef133",
+            "c2b52240500620f87ebb7c87615221923328504a34e5e8ae1123f9c0b47f7d82"
+          ]
+        },
+        "6371": {
+          "first_source_line": 37577,
+          "command_list": "6367",
+          "operation": "DrawIndexedInstanced",
+          "rtvs": [
+            "3071"
+          ],
+          "bindings": [
+            {
+              "name": "g_tLightBufferDiffuse",
+              "stage": "pixel",
+              "slot": 0,
+              "kind": "srv",
+              "resource": "3557",
+              "heap": "4918",
+              "index": 345876
+            },
+            {
+              "name": "g_tLightBufferSpecular",
+              "stage": "pixel",
+              "slot": 1,
+              "kind": "srv",
+              "resource": "3553",
+              "heap": "4918",
+              "index": 345877
+            },
+            {
+              "name": "g_tAmbientSHTerms",
+              "stage": "pixel",
+              "slot": 2,
+              "kind": "srv",
+              "resource": "482",
+              "heap": "4918",
+              "index": 345878
+            },
+            {
+              "name": "g_tParticipatingMedia",
+              "stage": "pixel",
+              "slot": 3,
+              "kind": "srv",
+              "resource": "3569",
+              "heap": "4918",
+              "index": 345879
+            },
+            {
+              "name": "g_sGBufferReconstruction",
+              "stage": "pixel",
+              "slot": 4,
+              "kind": "srv",
+              "resource": "3573",
+              "heap": "4918",
+              "index": 345880
+            },
+            {
+              "name": "g_sbMaterialDataPart3",
+              "stage": "pixel",
+              "slot": 6,
+              "kind": "srv",
+              "resource": "3687",
+              "heap": "4918",
+              "index": 345882
+            }
+          ],
+          "unresolved": [
+            {
+              "name": "g_tDepthCopy",
+              "kind": "srv",
+              "heap": "4918",
+              "index": 345881
+            }
+          ],
+          "occurrences": 20,
+          "shader_hashes": [
+            "2fc7c9f3682b9d3cf6c548fc5137eacebf25e453e666ef37b994ba8bf3024170",
+            "f4b9c2b4dfeebdba90724f803ba236211bb1fbb72755f789dab03268d3df26b1"
+          ]
+        },
+        "6372": {
+          "first_source_line": 38116,
+          "command_list": "6367",
+          "operation": "DrawIndexedInstanced",
+          "rtvs": [
+            "3071"
+          ],
+          "bindings": [
+            {
+              "name": "g_tAmbientSHTerms",
+              "stage": "pixel",
+              "slot": 0,
+              "kind": "srv",
+              "resource": "3557",
+              "heap": "4918",
+              "index": 354500
+            },
+            {
+              "name": "g_tParticipatingMedia",
+              "stage": "pixel",
+              "slot": 1,
+              "kind": "srv",
+              "resource": "3553",
+              "heap": "4918",
+              "index": 354501
+            },
+            {
+              "name": "g_sbMaterialDataPart3",
+              "stage": "pixel",
+              "slot": 2,
+              "kind": "srv",
+              "resource": "482",
+              "heap": "4918",
+              "index": 354502
+            }
+          ],
+          "unresolved": [],
+          "occurrences": 1,
+          "shader_hashes": [
+            "f8ffa8fcc46d4ea862442bdc151772738e502eccc98823aaf5680924ba4d53f0",
+            "e6e1091718f518af519716885e189f0d5cd80073e0232c2cea2afbd2a3a6794b"
+          ]
+        },
+        "6370": {
+          "first_source_line": 38254,
+          "command_list": "6367",
+          "operation": "DrawIndexedInstanced",
+          "rtvs": [
+            "3071"
+          ],
+          "bindings": [
+            {
+              "name": "g_tLightBufferDiffuse",
+              "stage": "pixel",
+              "slot": 0,
+              "kind": "srv",
+              "resource": "3557",
+              "heap": "4918",
+              "index": 355088
+            },
+            {
+              "name": "g_tLightBufferSpecular",
+              "stage": "pixel",
+              "slot": 1,
+              "kind": "srv",
+              "resource": "3553",
+              "heap": "4918",
+              "index": 355089
+            },
+            {
+              "name": "g_tAmbientSHTerms",
+              "stage": "pixel",
+              "slot": 2,
+              "kind": "srv",
+              "resource": "482",
+              "heap": "4918",
+              "index": 355090
+            },
+            {
+              "name": "g_tParticipatingMedia",
+              "stage": "pixel",
+              "slot": 3,
+              "kind": "srv",
+              "resource": "3569",
+              "heap": "4918",
+              "index": 355091
+            },
+            {
+              "name": "g_sGBufferReconstruction",
+              "stage": "pixel",
+              "slot": 4,
+              "kind": "srv",
+              "resource": "3573",
+              "heap": "4918",
+              "index": 355092
+            },
+            {
+              "name": "g_sbMaterialDataPart3",
+              "stage": "pixel",
+              "slot": 6,
+              "kind": "srv",
+              "resource": "3687",
+              "heap": "4918",
+              "index": 355094
+            }
+          ],
+          "unresolved": [
+            {
+              "name": "g_tDepthCopy",
+              "kind": "srv",
+              "heap": "4918",
+              "index": 355093
+            }
+          ],
+          "occurrences": 3,
+          "shader_hashes": [
+            "2fc7c9f3682b9d3cf6c548fc5137eacebf25e453e666ef37b994ba8bf3024170",
+            "11f146abfdc0f5d65f05244666214f835be98c80c557cdcea17921b547244a5d"
+          ]
+        },
+        "6375": {
+          "first_source_line": 38307,
+          "command_list": "6367",
+          "operation": "DrawIndexedInstanced",
+          "rtvs": [
+            "3071"
+          ],
+          "bindings": [
+            {
+              "name": "g_tLightBufferDiffuse",
+              "stage": "pixel",
+              "slot": 0,
+              "kind": "srv",
+              "resource": "3557",
+              "heap": "4918",
+              "index": 355676
+            },
+            {
+              "name": "g_tLightBufferSpecular",
+              "stage": "pixel",
+              "slot": 1,
+              "kind": "srv",
+              "resource": "3553",
+              "heap": "4918",
+              "index": 355677
+            },
+            {
+              "name": "g_tAmbientSHTerms",
+              "stage": "pixel",
+              "slot": 2,
+              "kind": "srv",
+              "resource": "482",
+              "heap": "4918",
+              "index": 355678
+            },
+            {
+              "name": "g_tParticipatingMedia",
+              "stage": "pixel",
+              "slot": 3,
+              "kind": "srv",
+              "resource": "3569",
+              "heap": "4918",
+              "index": 355679
+            },
+            {
+              "name": "g_sGBufferReconstruction",
+              "stage": "pixel",
+              "slot": 4,
+              "kind": "srv",
+              "resource": "3573",
+              "heap": "4918",
+              "index": 355680
+            },
+            {
+              "name": "g_sbMaterialDataPart3",
+              "stage": "pixel",
+              "slot": 6,
+              "kind": "srv",
+              "resource": "3687",
+              "heap": "4918",
+              "index": 355682
+            }
+          ],
+          "unresolved": [
+            {
+              "name": "g_tDepthCopy",
+              "kind": "srv",
+              "heap": "4918",
+              "index": 355681
+            }
+          ],
+          "occurrences": 10,
+          "shader_hashes": [
+            "2fc7c9f3682b9d3cf6c548fc5137eacebf25e453e666ef37b994ba8bf3024170",
+            "11f146abfdc0f5d65f05244666214f835be98c80c557cdcea17921b547244a5d"
+          ]
+        },
+        "6376": {
+          "first_source_line": 38617,
+          "command_list": "6367",
+          "operation": "DrawIndexedInstanced",
+          "rtvs": [
+            "3071"
+          ],
+          "bindings": [
+            {
+              "name": "g_tLightBufferDiffuse",
+              "stage": "pixel",
+              "slot": 0,
+              "kind": "srv",
+              "resource": "3549",
+              "heap": "4918",
+              "index": 358714
+            },
+            {
+              "name": "g_tLightBufferSpecular",
+              "stage": "pixel",
+              "slot": 1,
+              "kind": "srv",
+              "resource": "3549",
+              "heap": "4918",
+              "index": 358715
+            },
+            {
+              "name": "g_tAmbientSHTerms",
+              "stage": "pixel",
+              "slot": 2,
+              "kind": "srv",
+              "resource": "3565",
+              "heap": "4918",
+              "index": 358716
+            },
+            {
+              "name": "g_tParticipatingMedia",
+              "stage": "pixel",
+              "slot": 3,
+              "kind": "srv",
+              "resource": "3557",
+              "heap": "4918",
+              "index": 358717
+            },
+            {
+              "name": "g_sGBufferReconstruction",
+              "stage": "pixel",
+              "slot": 4,
+              "kind": "srv",
+              "resource": "3553",
+              "heap": "4918",
+              "index": 358718
+            },
+            {
+              "name": "g_tDepthCopy",
+              "stage": "pixel",
+              "slot": 5,
+              "kind": "srv",
+              "resource": "482",
+              "heap": "4918",
+              "index": 358719
+            },
+            {
+              "name": "g_sbMaterialDataPart3",
+              "stage": "pixel",
+              "slot": 6,
+              "kind": "srv",
+              "resource": "26",
+              "heap": "4918",
+              "index": 358720
+            }
+          ],
+          "unresolved": [],
+          "occurrences": 2,
+          "shader_hashes": [
+            "24ddca37e42e34f7a3a04554496deda937a4f98c5afa416b579310b3242ef133",
+            "77ee9ce88a8dc91e6dfcc272722395ee422641f79caa630fa75475c512cc0f1e"
+          ]
+        },
+        "6378": {
+          "first_source_line": 39376,
+          "command_list": "6385",
+          "operation": "DrawIndexedInstanced",
+          "rtvs": [
+            "3071"
+          ],
+          "bindings": [
+            {
+              "name": "g_tLightBufferDiffuse",
+              "stage": "pixel",
+              "slot": 0,
+              "kind": "srv",
+              "resource": "3557",
+              "heap": "4918",
+              "index": 247778
+            },
+            {
+              "name": "g_tLightBufferSpecular",
+              "stage": "pixel",
+              "slot": 1,
+              "kind": "srv",
+              "resource": "3553",
+              "heap": "4918",
+              "index": 247779
+            },
+            {
+              "name": "g_tAmbientSHTerms",
+              "stage": "pixel",
+              "slot": 2,
+              "kind": "srv",
+              "resource": "482",
+              "heap": "4918",
+              "index": 247780
+            },
+            {
+              "name": "g_tParticipatingMedia",
+              "stage": "pixel",
+              "slot": 3,
+              "kind": "srv",
+              "resource": "3569",
+              "heap": "4918",
+              "index": 247781
+            },
+            {
+              "name": "g_sGBufferReconstruction",
+              "stage": "pixel",
+              "slot": 4,
+              "kind": "srv",
+              "resource": "3573",
+              "heap": "4918",
+              "index": 247782
+            },
+            {
+              "name": "g_sbInstanceObjectData",
+              "stage": "pixel",
+              "slot": 6,
+              "kind": "srv",
+              "resource": "26",
+              "heap": "4918",
+              "index": 247784
+            },
+            {
+              "name": "g_tUniformNoise64x64",
+              "stage": "pixel",
+              "slot": 7,
+              "kind": "srv",
+              "resource": "520",
+              "heap": "4918",
+              "index": 247785
+            },
+            {
+              "name": "g_tBlueNoisesMSAA",
+              "stage": "pixel",
+              "slot": 8,
+              "kind": "srv",
+              "resource": "2539",
+              "heap": "4918",
+              "index": 247786
+            }
+          ],
+          "unresolved": [
+            {
+              "name": "g_tDepthCopy",
+              "kind": "srv",
+              "heap": "4918",
+              "index": 247783
+            }
+          ],
+          "occurrences": 3,
+          "shader_hashes": [
+            "a954d6e56122c5c0008775c37371d1bf240c6349c89c3397c455df655cdc1ea1",
+            "68b095104f50891b21ebd4ff28c3ec038f1d6062c84f4f4568929a5037bc16a7"
+          ]
+        },
+        "6388": {
+          "first_source_line": 39457,
+          "command_list": "6385",
+          "operation": "DrawIndexedInstanced",
+          "rtvs": [
+            "3071"
+          ],
+          "bindings": [
+            {
+              "name": "g_tGBuffer1",
+              "stage": "pixel",
+              "slot": 0,
+              "kind": "srv",
+              "resource": "3564",
+              "heap": "4918",
+              "index": 281539
+            },
+            {
+              "name": "g_tGBuffer2",
+              "stage": "pixel",
+              "slot": 1,
+              "kind": "srv",
+              "resource": "3571",
+              "heap": "4918",
+              "index": 281540
+            },
+            {
+              "name": "g_tShadowBuffer",
+              "stage": "pixel",
+              "slot": 2,
+              "kind": "srv",
+              "resource": "3565",
+              "heap": "4918",
+              "index": 281541
+            },
+            {
+              "name": "g_tLightBufferDiffuse",
+              "stage": "pixel",
+              "slot": 3,
+              "kind": "srv",
+              "resource": "3557",
+              "heap": "4918",
+              "index": 281542
+            },
+            {
+              "name": "g_tLightBufferSpecular",
+              "stage": "pixel",
+              "slot": 4,
+              "kind": "srv",
+              "resource": "3553",
+              "heap": "4918",
+              "index": 281543
+            },
+            {
+              "name": "g_tAmbientSHTerms",
+              "stage": "pixel",
+              "slot": 5,
+              "kind": "srv",
+              "resource": "482",
+              "heap": "4918",
+              "index": 281544
+            },
+            {
+              "name": "g_sbInstanceObjectData",
+              "stage": "pixel",
+              "slot": 6,
+              "kind": "srv",
+              "resource": "26",
+              "heap": "4918",
+              "index": 281545
+            },
+            {
+              "name": "g_tBrightness",
+              "stage": "pixel",
+              "slot": 7,
+              "kind": "srv",
+              "resource": "3545",
+              "heap": "4918",
+              "index": 281546
+            },
+            {
+              "name": "g_tViewVolumeLighting",
+              "stage": "pixel",
+              "slot": 8,
+              "kind": "srv",
+              "resource": "3558",
+              "heap": "4918",
+              "index": 281547
+            },
+            {
+              "name": "g_tParticipatingMedia",
+              "stage": "pixel",
+              "slot": 10,
+              "kind": "srv",
+              "resource": "3569",
+              "heap": "4918",
+              "index": 281549
+            },
+            {
+              "name": "g_sGBufferReconstruction",
+              "stage": "pixel",
+              "slot": 11,
+              "kind": "srv",
+              "resource": "3573",
+              "heap": "4918",
+              "index": 281550
+            },
+            {
+              "name": "g_tUniformNoise64x64",
+              "stage": "pixel",
+              "slot": 13,
+              "kind": "srv",
+              "resource": "520",
+              "heap": "4918",
+              "index": 281552
+            },
+            {
+              "name": "g_sbMaterialDataPart1",
+              "stage": "pixel",
+              "slot": 14,
+              "kind": "srv",
+              "resource": "3677",
+              "heap": "4918",
+              "index": 281553
+            },
+            {
+              "name": "g_sbMaterialDataPart3",
+              "stage": "pixel",
+              "slot": 15,
+              "kind": "srv",
+              "resource": "3687",
+              "heap": "4918",
+              "index": 281554
+            },
+            {
+              "name": "g_tBlueNoisesMSAA",
+              "stage": "pixel",
+              "slot": 16,
+              "kind": "srv",
+              "resource": "2539",
+              "heap": "4918",
+              "index": 281555
+            },
+            {
+              "name": "g_bCharacterLightRigs",
+              "stage": "pixel",
+              "slot": 17,
+              "kind": "srv",
+              "resource": "480",
+              "heap": "4918",
+              "index": 281556
+            }
+          ],
+          "unresolved": [
+            {
+              "name": "g_tDepthCopy",
+              "kind": "srv",
+              "heap": "4918",
+              "index": 281551
+            }
+          ],
+          "occurrences": 1,
+          "shader_hashes": [
+            "b24490571c2e94eae4ac6db7ec5a972506c4eb135ee881a265eac8090b3566b8",
+            "33fde7037525c2b9aa6cca58bd45d3151ecc8f1f91bfa4ff6529909179dc41ca"
+          ]
+        },
+        "6387": {
+          "first_source_line": 39477,
+          "command_list": "6385",
+          "operation": "DrawIndexedInstanced",
+          "rtvs": [
+            "3071"
+          ],
+          "bindings": [
+            {
+              "name": "g_tGBuffer1",
+              "stage": "pixel",
+              "slot": 0,
+              "kind": "srv",
+              "resource": "3564",
+              "heap": "4918",
+              "index": 289918
+            },
+            {
+              "name": "g_tGBuffer2",
+              "stage": "pixel",
+              "slot": 1,
+              "kind": "srv",
+              "resource": "3571",
+              "heap": "4918",
+              "index": 289919
+            },
+            {
+              "name": "g_tShadowBuffer",
+              "stage": "pixel",
+              "slot": 2,
+              "kind": "srv",
+              "resource": "3565",
+              "heap": "4918",
+              "index": 289920
+            },
+            {
+              "name": "g_tLightBufferDiffuse",
+              "stage": "pixel",
+              "slot": 3,
+              "kind": "srv",
+              "resource": "3557",
+              "heap": "4918",
+              "index": 289921
+            },
+            {
+              "name": "g_tLightBufferSpecular",
+              "stage": "pixel",
+              "slot": 4,
+              "kind": "srv",
+              "resource": "3553",
+              "heap": "4918",
+              "index": 289922
+            },
+            {
+              "name": "g_tAmbientSHTerms",
+              "stage": "pixel",
+              "slot": 5,
+              "kind": "srv",
+              "resource": "482",
+              "heap": "4918",
+              "index": 289923
+            },
+            {
+              "name": "g_sbInstanceObjectData",
+              "stage": "pixel",
+              "slot": 6,
+              "kind": "srv",
+              "resource": "26",
+              "heap": "4918",
+              "index": 289924
+            },
+            {
+              "name": "g_tBrightness",
+              "stage": "pixel",
+              "slot": 7,
+              "kind": "srv",
+              "resource": "3545",
+              "heap": "4918",
+              "index": 289925
+            },
+            {
+              "name": "g_tViewVolumeLighting",
+              "stage": "pixel",
+              "slot": 8,
+              "kind": "srv",
+              "resource": "3558",
+              "heap": "4918",
+              "index": 289926
+            },
+            {
+              "name": "g_tParticipatingMedia",
+              "stage": "pixel",
+              "slot": 10,
+              "kind": "srv",
+              "resource": "3569",
+              "heap": "4918",
+              "index": 289928
+            },
+            {
+              "name": "g_sGBufferReconstruction",
+              "stage": "pixel",
+              "slot": 11,
+              "kind": "srv",
+              "resource": "3573",
+              "heap": "4918",
+              "index": 289929
+            },
+            {
+              "name": "g_tUniformNoise64x64",
+              "stage": "pixel",
+              "slot": 13,
+              "kind": "srv",
+              "resource": "520",
+              "heap": "4918",
+              "index": 289931
+            },
+            {
+              "name": "g_tTranslucencyKernelSource",
+              "stage": "pixel",
+              "slot": 14,
+              "kind": "srv",
+              "resource": "1489",
+              "heap": "4918",
+              "index": 289932
+            },
+            {
+              "name": "g_sbMaterialDataPart1",
+              "stage": "pixel",
+              "slot": 15,
+              "kind": "srv",
+              "resource": "3677",
+              "heap": "4918",
+              "index": 289933
+            },
+            {
+              "name": "g_sbMaterialDataPart3",
+              "stage": "pixel",
+              "slot": 16,
+              "kind": "srv",
+              "resource": "3687",
+              "heap": "4918",
+              "index": 289934
+            },
+            {
+              "name": "g_tBlueNoisesMSAA",
+              "stage": "pixel",
+              "slot": 17,
+              "kind": "srv",
+              "resource": "2539",
+              "heap": "4918",
+              "index": 289935
+            },
+            {
+              "name": "g_tBentNormals",
+              "stage": "pixel",
+              "slot": 18,
+              "kind": "srv",
+              "resource": "2317",
+              "heap": "4918",
+              "index": 289936
+            },
+            {
+              "name": "g_bCharacterLightRigs",
+              "stage": "pixel",
+              "slot": 19,
+              "kind": "srv",
+              "resource": "480",
+              "heap": "4918",
+              "index": 289937
+            }
+          ],
+          "unresolved": [
+            {
+              "name": "g_tDepthCopy",
+              "kind": "srv",
+              "heap": "4918",
+              "index": 289930
+            }
+          ],
+          "occurrences": 1,
+          "shader_hashes": [
+            "edf31fe6754712f61f7c3567c2a487e9603eba2589789e108a8d8a9fee60677b",
+            "f13bd19019bfd15cd222e74732d07b27736e613c10876314ef12524311dbfe59"
+          ]
+        },
+        "6393": {
+          "first_source_line": 39652,
+          "command_list": "6389",
+          "operation": "DrawIndexedInstanced",
+          "rtvs": [
+            "3071"
+          ],
+          "bindings": [
+            {
+              "name": "g_tLightBufferDiffuse",
+              "stage": "pixel",
+              "slot": 0,
+              "kind": "srv",
+              "resource": "3557",
+              "heap": "4918",
+              "index": 368416
+            },
+            {
+              "name": "g_tLightBufferSpecular",
+              "stage": "pixel",
+              "slot": 1,
+              "kind": "srv",
+              "resource": "3553",
+              "heap": "4918",
+              "index": 368417
+            },
+            {
+              "name": "g_tAmbientSHTerms",
+              "stage": "pixel",
+              "slot": 2,
+              "kind": "srv",
+              "resource": "482",
+              "heap": "4918",
+              "index": 368418
+            },
+            {
+              "name": "g_sbInstanceObjectData",
+              "stage": "pixel",
+              "slot": 3,
+              "kind": "srv",
+              "resource": "26",
+              "heap": "4918",
+              "index": 368419
+            },
+            {
+              "name": "g_tParticipatingMedia",
+              "stage": "pixel",
+              "slot": 4,
+              "kind": "srv",
+              "resource": "3569",
+              "heap": "4918",
+              "index": 368420
+            },
+            {
+              "name": "g_sGBufferReconstruction",
+              "stage": "pixel",
+              "slot": 5,
+              "kind": "srv",
+              "resource": "3573",
+              "heap": "4918",
+              "index": 368421
+            },
+            {
+              "name": "g_sbMaterialDataPart3",
+              "stage": "pixel",
+              "slot": 7,
+              "kind": "srv",
+              "resource": "3687",
+              "heap": "4918",
+              "index": 368423
+            }
+          ],
+          "unresolved": [
+            {
+              "name": "g_tDepthCopy",
+              "kind": "srv",
+              "heap": "4918",
+              "index": 368422
+            }
+          ],
+          "occurrences": 12,
+          "shader_hashes": [
+            "2fc7c9f3682b9d3cf6c548fc5137eacebf25e453e666ef37b994ba8bf3024170",
+            "de9416928ae45558496f659a62d32e797f252c6fea48a2130f4d7a992eebf26d"
+          ]
+        },
+        "6392": {
+          "first_source_line": 39913,
+          "command_list": "6389",
+          "operation": "DrawIndexedInstanced",
+          "rtvs": [
+            "3071"
+          ],
+          "bindings": [
+            {
+              "name": "g_tLightBufferDiffuse",
+              "stage": "pixel",
+              "slot": 0,
+              "kind": "srv",
+              "resource": "3557",
+              "heap": "4918",
+              "index": 369396
+            },
+            {
+              "name": "g_tLightBufferSpecular",
+              "stage": "pixel",
+              "slot": 1,
+              "kind": "srv",
+              "resource": "3553",
+              "heap": "4918",
+              "index": 369397
+            },
+            {
+              "name": "g_tAmbientSHTerms",
+              "stage": "pixel",
+              "slot": 2,
+              "kind": "srv",
+              "resource": "482",
+              "heap": "4918",
+              "index": 369398
+            },
+            {
+              "name": "g_sbInstanceObjectData",
+              "stage": "pixel",
+              "slot": 3,
+              "kind": "srv",
+              "resource": "26",
+              "heap": "4918",
+              "index": 369399
+            },
+            {
+              "name": "g_tParticipatingMedia",
+              "stage": "pixel",
+              "slot": 4,
+              "kind": "srv",
+              "resource": "3569",
+              "heap": "4918",
+              "index": 369400
+            },
+            {
+              "name": "g_sGBufferReconstruction",
+              "stage": "pixel",
+              "slot": 5,
+              "kind": "srv",
+              "resource": "3573",
+              "heap": "4918",
+              "index": 369401
+            },
+            {
+              "name": "g_sbMaterialDataPart3",
+              "stage": "pixel",
+              "slot": 7,
+              "kind": "srv",
+              "resource": "3687",
+              "heap": "4918",
+              "index": 369403
+            }
+          ],
+          "unresolved": [
+            {
+              "name": "g_tDepthCopy",
+              "kind": "srv",
+              "heap": "4918",
+              "index": 369402
+            }
+          ],
+          "occurrences": 5,
+          "shader_hashes": [
+            "2fc7c9f3682b9d3cf6c548fc5137eacebf25e453e666ef37b994ba8bf3024170",
+            "de9416928ae45558496f659a62d32e797f252c6fea48a2130f4d7a992eebf26d"
+          ]
+        },
+        "6391": {
+          "first_source_line": 40083,
+          "command_list": "6389",
+          "operation": "DrawIndexedInstanced",
+          "rtvs": [
+            "3071"
+          ],
+          "bindings": [
+            {
+              "name": "g_tLinearDepth",
+              "stage": "pixel",
+              "slot": 0,
+              "kind": "srv",
+              "resource": "3566",
+              "heap": "4918",
+              "index": 370082
+            },
+            {
+              "name": "g_tLightBufferDiffuse",
+              "stage": "pixel",
+              "slot": 1,
+              "kind": "srv",
+              "resource": "3557",
+              "heap": "4918",
+              "index": 370083
+            },
+            {
+              "name": "g_tLightBufferSpecular",
+              "stage": "pixel",
+              "slot": 2,
+              "kind": "srv",
+              "resource": "3553",
+              "heap": "4918",
+              "index": 370084
+            },
+            {
+              "name": "g_tAmbientSHTerms",
+              "stage": "pixel",
+              "slot": 3,
+              "kind": "srv",
+              "resource": "482",
+              "heap": "4918",
+              "index": 370085
+            },
+            {
+              "name": "g_tParticipatingMedia",
+              "stage": "pixel",
+              "slot": 4,
+              "kind": "srv",
+              "resource": "3569",
+              "heap": "4918",
+              "index": 370086
+            },
+            {
+              "name": "g_sGBufferReconstruction",
+              "stage": "pixel",
+              "slot": 5,
+              "kind": "srv",
+              "resource": "3573",
+              "heap": "4918",
+              "index": 370087
+            },
+            {
+              "name": "g_sDecalColorMap",
+              "stage": "pixel",
+              "slot": 6,
+              "kind": "srv",
+              "resource": "3790",
+              "heap": "4918",
+              "index": 370088
+            },
+            {
+              "name": "g_tGBuffer1Copy",
+              "stage": "pixel",
+              "slot": 7,
+              "kind": "srv",
+              "resource": "1454",
+              "heap": "4918",
+              "index": 370089
+            },
+            {
+              "name": "g_sDecalInstanceBuffer",
+              "stage": "pixel",
+              "slot": 8,
+              "kind": "srv",
+              "resource": "476",
+              "heap": "4918",
+              "index": 370090
+            }
+          ],
+          "unresolved": [],
+          "occurrences": 25,
+          "shader_hashes": [
+            "b748e5502d2bc57045794c1e961d1f7cfeee20b05912f93338e59dc226ada0cb",
+            "e82cbbb52d209394aa584770134d188e256628cb9d1d1019c1dfb412c27133e0"
+          ]
+        }
+      }
+    },
+    "02-floor": {
+      "targets": {
+        "3451": [
+          "g_rwtLightBufferDiffuse"
+        ],
+        "3448": [
+          "g_rwtLightBufferSpecular",
+          "g_rwtSingleSpot"
+        ]
+      },
+      "primary_output_aliases": {
+        "3448": [
+          "g_rwtLightBufferSpecular",
+          "g_rwtSingleSpot"
+        ]
+      },
+      "unresolved_call_count": 246
+    },
+    "03-glass": {
+      "targets": {
+        "3637": [
+          "g_rwtLightBufferDiffuse"
+        ],
+        "3633": [
+          "g_rwtLightBufferSpecular"
+        ],
+        "3493": [
+          "g_rwtSingleSpot"
+        ]
+      },
+      "primary_output_aliases": {},
+      "unresolved_call_count": 228
+    },
+    "04-reverse": {
+      "targets": {
+        "2153": [
+          "g_rwtLightBufferDiffuse",
+          "g_rwtLightBufferSpecular",
+          "g_rwtSingleSpot"
+        ]
+      },
+      "primary_output_aliases": {
+        "2153": [
+          "g_rwtLightBufferDiffuse",
+          "g_rwtLightBufferSpecular",
+          "g_rwtSingleSpot"
+        ]
+      },
+      "unresolved_call_count": 176
+    },
+    "05-rr-off": {
+      "targets": {
+        "3387": [
+          "g_rwtLightBufferDiffuse",
+          "g_rwtLightBufferSpecular",
+          "g_rwtSingleSpot"
+        ]
+      },
+      "primary_output_aliases": {
+        "3387": [
+          "g_rwtLightBufferDiffuse",
+          "g_rwtLightBufferSpecular",
+          "g_rwtSingleSpot"
+        ]
+      },
+      "unresolved_call_count": 265
+    },
+    "06-composite-off": {
+      "targets": {
+        "2216": [
+          "g_rwtLightBufferDiffuse"
+        ],
+        "12": [
+          "g_rwtLightBufferSpecular"
+        ],
+        "3464": [
+          "g_rwtSingleSpot"
+        ]
+      },
+      "primary_output_aliases": {},
+      "unresolved_call_count": 169
+    }
+  }
+}

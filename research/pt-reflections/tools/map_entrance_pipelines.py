@@ -34,6 +34,16 @@ def bindings(data):
     return None  # DXIL reflection is a separate analysis, not a failed RDEF.
 
 
+def stage(data):
+    count = struct.unpack_from('<I', data, 28)[0]
+    for offset in struct.unpack_from('<' + 'I' * count, data, 32):
+        if data[offset:offset + 4] in (b'SHEX', b'SHDR'):
+            program = struct.unpack_from('<I', data, offset + 8)[0] >> 16
+            return {0: 'pixel', 1: 'vertex', 2: 'geometry', 3: 'hull',
+                    4: 'domain', 5: 'compute'}.get(program, 'unknown')
+    return 'dxil'
+
+
 def inventory(source, prefixes):
     views = {}
     with zipfile.ZipFile(source) as src, zipfile.ZipFile(prefixes) as packed:
@@ -69,7 +79,7 @@ def inventory(source, prefixes):
                             raise ValueError('Invalid shader length')
                         shader = decoded[position:position + length]
                         shaders.append(dict(sha256=hashlib.sha256(shader).hexdigest(),
-                                            bytes=length, bindings=bindings(shader)))
+                                            bytes=length, stage=stage(shader), bindings=bindings(shader)))
                         position += length
                 pipelines[function.rsplit('_', 1)[1]] = dict(function=function, shaders=shaders)
             dispatches = []

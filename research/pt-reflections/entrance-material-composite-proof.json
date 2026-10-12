@@ -1,0 +1,214 @@
+{
+  "sha256": "7518cf8fa5becc5bef03f7e3b0a87f910c1c93ce7e178e81413f6402da96b939",
+  "instruction_count": 174,
+  "instruction_excerpt": [
+    {
+      "dword": 400,
+      "name": "mov",
+      "operands": [
+        "r[0].zw",
+        "l(0,0,0,0)"
+      ]
+    },
+    {
+      "dword": 408,
+      "name": "ld",
+      "operands": [
+        "r[1].xyz",
+        "r[0].xyww",
+        "t[0][0].xyzw"
+      ]
+    },
+    {
+      "dword": 416,
+      "name": "ld",
+      "operands": [
+        "r[0].xyz",
+        "r[0].xyzw",
+        "t[1][1].xyzw"
+      ]
+    },
+    {
+      "dword": 424,
+      "name": "ld_structured",
+      "operands": [
+        "r[2].xyzw",
+        "cb[3][3][0].x",
+        "l(52)",
+        "t[6][6].xyzw"
+      ]
+    },
+    {
+      "dword": 436,
+      "name": "imul",
+      "operands": [
+        "null",
+        "r[0].w",
+        "cb[3][3][0].x",
+        "l(35)"
+      ]
+    },
+    {
+      "dword": 446,
+      "name": "sample",
+      "operands": [
+        "r[3].xyzw",
+        "v[4].xyxx",
+        "t[7][r[0].w].xyzw",
+        "s[1][19]"
+      ]
+    },
+    {
+      "dword": 459,
+      "name": "mul",
+      "operands": [
+        "r[2].xyzw",
+        "r[2].xyzw",
+        "r[3].xyzw"
+      ]
+    },
+    {
+      "dword": 466,
+      "name": "mad",
+      "operands": [
+        "r[0].xyz",
+        "r[1].xyzx",
+        "r[2].xyzx",
+        "r[0].xyzx"
+      ]
+    },
+    {
+      "dword": 1212,
+      "name": "mad",
+      "operands": [
+        "r[0].xyz",
+        "r[0].xyzx",
+        "r[1].xyzx",
+        "r[2].xyzx"
+      ]
+    },
+    {
+      "dword": 1221,
+      "name": "mul",
+      "operands": [
+        "r[1].xy",
+        "v[6].xyxx",
+        "cb[0][0][0].zwzz"
+      ]
+    },
+    {
+      "dword": 1230,
+      "name": "lt",
+      "operands": [
+        "r[0].w",
+        "cb[1][1][24].y",
+        "v[6].w"
+      ]
+    },
+    {
+      "dword": 1239,
+      "name": "log",
+      "operands": [
+        "r[1].w",
+        "v[6].w"
+      ]
+    },
+    {
+      "dword": 1244,
+      "name": "mad",
+      "operands": [
+        "r[1].w",
+        "-r[1].w",
+        "l(0.693147182)",
+        "cb[1][1][23].y"
+      ]
+    },
+    {
+      "dword": 1256,
+      "name": "mul",
+      "operands": [
+        "r[1].w",
+        "r[1].w",
+        "cb[1][1][23].x"
+      ]
+    },
+    {
+      "dword": 1265,
+      "name": "and",
+      "operands": [
+        "r[0].w",
+        "r[0].w",
+        "r[1].w"
+      ]
+    },
+    {
+      "dword": 1272,
+      "name": "add",
+      "operands": [
+        "r[0].w",
+        "r[0].w",
+        "cb[1][1][25].x"
+      ]
+    },
+    {
+      "dword": 1281,
+      "name": "add",
+      "operands": [
+        "r[0].w",
+        "r[0].w",
+        "l(0.5)"
+      ]
+    },
+    {
+      "dword": 1288,
+      "name": "utof",
+      "operands": [
+        "r[1].w",
+        "cb[1][1][18].z"
+      ]
+    },
+    {
+      "dword": 1295,
+      "name": "div",
+      "operands": [
+        "r[1].z",
+        "r[0].w",
+        "r[1].w"
+      ]
+    },
+    {
+      "dword": 1302,
+      "name": "sample_l",
+      "operands": [
+        "r[1].xyzw",
+        "r[1].xyzx",
+        "t[3][3].xyzw",
+        "s[0][6]",
+        "l(0)"
+      ]
+    },
+    {
+      "dword": 1315,
+      "name": "mad",
+      "operands": [
+        "o[0].xyz",
+        "r[0].xyzx",
+        "r[1].wwww",
+        "r[1].xyzx"
+      ]
+    },
+    {
+      "dword": 1324,
+      "name": "mov",
+      "operands": [
+        "o[0].w",
+        "r[2].w"
+      ]
+    },
+    {
+      "dword": 1329,
+      "name": "ret",
+      "operands": []
+    }
+  ]
+}
