@@ -10,13 +10,17 @@ using PTNativeJobRoute::Ticket;using PTNativeJobRoute::Writer;
 enum class Phase {recorded,writerReady,cancelled};
 using Consumer=void(*)(Phase,const Ticket&) noexcept;
 static std::atomic<Consumer> consumer{nullptr};
+static std::atomic<bool> workerHooksReady{false},dispatchHookReady{false};
 static std::atomic<UINT64> serial{1};
 static PTNativeJobRoute::Router router;
 static thread_local Ticket pending;
 // Consumer is a session-lifetime static callback. Register before the first
 // dispatch; do not replace it while jobs are pending. It must copy writer input
 // data / acquire ownership inside writerReady, before the native job returns.
-[[maybe_unused]] static bool Register(Consumer fn)noexcept {Consumer empty=nullptr;return fn&&consumer.compare_exchange_strong(empty,fn);}
+[[maybe_unused]] static bool Register(Consumer fn)noexcept {
+    Consumer empty=nullptr;
+    return workerHooksReady.load(std::memory_order_acquire)&&dispatchHookReady.load(std::memory_order_acquire)&&fn&&consumer.compare_exchange_strong(empty,fn);
+}
 static bool ReadDispatch(ID3D12GraphicsCommandList4* list,const D3D12_DISPATCH_RAYS_DESC* source,ID3D12StateObject* pipeline,Ticket& out)noexcept {
     out={};
     __try {

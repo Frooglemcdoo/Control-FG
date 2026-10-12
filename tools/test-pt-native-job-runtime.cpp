@@ -30,6 +30,7 @@ int main(){
     Put(state.data()+0x228,int(320));Put(state.data()+0x22c,int(1));Put(state.data()+0x230,UINT64(0x3333));
     D3D12_DISPATCH_RAYS_DESC desc{};desc.RayGenerationShaderRecord={0x1000,32};desc.MissShaderTable={0x1040,64,32};desc.HitGroupTable={0x1080,192,96};desc.Width=1280;desc.Height=720;desc.Depth=1;
     Recorded(list,&desc,pipeline);assert(!pending.serial); // No consumer is inert.
+    assert(!Register(&Receive));workerHooksReady=true;assert(!Register(&Receive));dispatchHookReady=true;
     assert(Register(&Receive));assert(!Register(&Receive));SetLastError(1234);
     Recorded(list,&desc,pipeline);assert(recorded==1&&received.hitTable==0x1080&&received.width==1280);
     auto first=received;auto* job=module.data()+0x136d30;

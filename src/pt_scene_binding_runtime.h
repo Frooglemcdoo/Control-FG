@@ -202,6 +202,7 @@ static bool PrepareResources(unsigned char* b){
 }
 static bool InstallResources(){for(auto& p:resourcePatch)if(!RRAlbedoExchangeCall(&p,true))return false;return true;}
 static void RestoreCalls(){
+    PTNativeJobRuntime::workerHooksReady=false;
     if(runJobPatch.changed)runJobPatch.Exchange(false);
     if(instanceLockPatch.changed)instanceLockPatch.Exchange(false);
     if(instanceCopyPatch.site)RRAlbedoExchangeCall(&instanceCopyPatch,false);compactPatch.Exchange(false);
@@ -227,6 +228,7 @@ static bool Install(HMODULE d3d){
     if(!ready){RestoreCalls();CloseHandle(output);output=INVALID_HANDLE_VALUE;Log("PT_SCENE_M11_INSTALL ready=0 reason=call_patch");return false;}
     recording=true;HANDLE thread=CreateThread(nullptr,0,&Worker,nullptr,0,nullptr);
     if(!thread){recording=false;RestoreCalls();CloseHandle(output);output=INVALID_HANDLE_VALUE;Log("PT_SCENE_M11_INSTALL ready=0 reason=writer_thread");return false;}
+    PTNativeJobRuntime::workerHooksReady=true;
     CloseHandle(thread);Log("PT_SCENE_M11_INSTALL ready=1 sites=33593,337cc,357c6,374a1 resource_sites=27 gpu_changes=0 duration_seconds=120 record_limit=%u",Capacity);return true;
 }
 }
