@@ -1,0 +1,28 @@
+M6 source checkpoint - Windows build BLOCKED pending push authorization
+
+Base: e4a0148f839fdf00627517455843357592f137ed
+New observer: src/pt_scene_observer.h and src/pt_scene_observer_runtime.h
+Integration: src/pt_reflection_loader.h
+
+Verified local native Steam d3d_rmdwin10_f.dll SHA-256:
+cceb99cbd9c019af907c24c44701a53c8d230965c1fb31c325233e4c80214aa5
+Both RVA 0x33593 and 0x337cc contain FF 90 40 02 00 00 (vtable slot 72).
+
+Passed locally (g++ -std=c++17 -Wall -Wextra -Werror -O2):
+- Existing exact DXR call encoding and relay tests
+- Scene admission bounds and allocation epoch tests
+- Shader-table conversion and fail-closed publication tests
+- Geometry range/alignment/overflow tests
+- Transport: 12 numerical cases, accumulation, roulette
+- Direct light: selection probability, occlusion, invalid visibility, MIS
+Passed Python: existing glass install gate and glossy-only preservation checks.
+
+NOT RUN: new Windows observer unit tests, production MSVC DLL compilation,
+PowerShell collector execution, in-game observation. No new DLL exists yet.
+The new unit test is wired into the existing production Windows workflow.
+No new GPU tests are claimed.
+
+Observer observations are CPU command recording evidence only. No completed
+GPU submission, lifetime, SBT association or full PT integration is asserted.
+The bounded stream stops after 180 seconds or 65,536 records. An absent end
+record means an incomplete diagnostic. LimitReached and Dropped expose caps.

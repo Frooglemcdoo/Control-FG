@@ -476,6 +476,7 @@ static void* PTReflectionHookTechniqueLookup(void* rfx,const char* technique) {
 
 #include "pt_glass_capture.h"
 #include "pt_glass_runtime.h"
+#include "pt_scene_observer_runtime.h"
 
 static const char* PTReflectionHookShaderStorageGet(int id) {
     if(id==kPTReflectionP2RaySyntheticStorageId&&ptReflectionP2InjectionEnabled&&
@@ -2103,6 +2104,7 @@ static bool PTReflectionInstallShaderLookupHooks(HMODULE renderer,HMODULE d3d) n
         }
         return false;
     }
+    PTSceneObserverRuntime::Install(d3d);
     PTGlassRuntime::Install(renderer,d3d);
     Log("PT_REFLECTION_P1_LOOKUP_HOOKS ready=1 ray_calls=12953C,12954B,12956C deferred_calls=1296B8,1296C7,1296E8 rfx_helper=0x1D9960 technique_helper=0x1D2CE0 variant_helper=0x1DD450 native_hashes=32 native_swap_probe=%s forced_variant=%d gpu_work=%s",
         ptReflectionForcedNativeVariant>=0?"enabled":"disabled",ptReflectionForcedNativeVariant,
