@@ -152,6 +152,15 @@ jobs:
           build\test-pt-glass-capture.exe
           if errorlevel 1 exit /b 1
 
+      - name: Test M9 retained native resource ownership on WARP
+        shell: cmd
+        run: |
+          call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-pt-resource-lease.cpp /Febuild\test-pt-resource-lease.exe /link d3d12.lib dxgi.lib
+          if errorlevel 1 exit /b 1
+          build\test-pt-resource-lease.exe
+          if errorlevel 1 exit /b 1
+
       - name: Check production compute capture path
         shell: cmd
         run: |
@@ -282,21 +291,21 @@ jobs:
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-PT-Scene-M8'
+          $out='Control-FG-PT-Scene-M9'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
-          Copy-Item tools/Collect-PT-Scene-M8.cmd,tools/Collect-PT-Scene-M8.ps1 $out
-          Copy-Item research/pt-reflections/PT-Scene-M8-README.txt "$out/README.txt"
+          Copy-Item tools/Collect-PT-Scene-M9.cmd,tools/Collect-PT-Scene-M9.ps1 $out
+          Copy-Item research/pt-reflections/PT-Scene-M9-README.txt "$out/README.txt"
           Compress-Archive -Path "$out/*" -DestinationPath "$out.zip" -Force
           (Get-FileHash "$out.zip" -Algorithm SHA256).Hash | Set-Content "$out.sha256" -Encoding ASCII
 
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-PT-Scene-M8
+          name: Control-FG-PT-Scene-M9
           path: |
-            Control-FG-PT-Scene-M8.zip
-            Control-FG-PT-Scene-M8.sha256
+            Control-FG-PT-Scene-M9.zip
+            Control-FG-PT-Scene-M9.sha256
             build/exports.txt
             build/imports.txt
             build/pt_reflection_p1.dxil
