@@ -86,7 +86,8 @@ int main(int argc,char** argv){try{
     std::ifstream file("pt-path-query-test.dxil",std::ios::binary);
 #else
     std::ifstream file("pt-scene-query-test.dxil",std::ios::binary);
-#endifneed(bool(file),"Missing pt-scene-query-test.dxil; run beside the shader");
+#endif
+    need(bool(file),"Missing shader DXIL; run beside the extracted shader files");
     std::vector<char> bytecode((std::istreambuf_iterator<char>(file)),std::istreambuf_iterator<char>());need(!bytecode.empty(),"Empty shader library");
     D3D12_COMMAND_QUEUE_DESC q{};q.Type=D3D12_COMMAND_LIST_TYPE_DIRECT;ok(g.device->CreateCommandQueue(&q,IID_PPV_ARGS(&g.queue)),"Queue");
     ok(g.device->CreateCommandAllocator(q.Type,IID_PPV_ARGS(&g.allocator)),"Allocator");ok(g.device->CreateCommandList(0,q.Type,g.allocator.Get(),nullptr,IID_PPV_ARGS(&g.list)),"Command list");
