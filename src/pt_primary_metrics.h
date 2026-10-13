@@ -3,11 +3,12 @@
 #include <wrl/client.h>
 #include <array>
 #include <cstring>
-// Sparse GPU coverage counters, sampled at one pixel per 16x16 block. Own these
+// Sparse GPU coverage counters, sampled at one pixel per 64x64 block. Own these
 // through the producer's native fence; Read is valid ONLY after that fence.
 namespace PTPrimaryMetrics {
 class Counters {
     Microsoft::WRL::ComPtr<ID3D12Resource> gpu,readback,upload;
+    Microsoft::WRL::ComPtr<ID3D12QueryHeap> timing;
     struct Copy {Microsoft::WRL::ComPtr<ID3D12CommandAllocator> allocator;Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> list;};
     std::array<Copy,5> copies;bool enabled=false,cancelled=false;
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> cpu;
@@ -18,7 +19,7 @@ public:
         desc.DepthOrArraySize=desc.MipLevels=1;desc.SampleDesc.Count=1;desc.Layout=D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
         desc.Flags=D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;D3D12_HEAP_PROPERTIES hp{};hp.Type=D3D12_HEAP_TYPE_DEFAULT;
         if(FAILED(device->CreateCommittedResource(&hp,D3D12_HEAP_FLAG_NONE,&desc,D3D12_RESOURCE_STATE_COMMON,nullptr,IID_PPV_ARGS(&gpu))))return false;
-        hp.Type=D3D12_HEAP_TYPE_READBACK;desc.Flags=D3D12_RESOURCE_FLAG_NONE;
+        hp.Type=D3D12_HEAP_TYPE_READBACK;desc.Flags=D3D12_RESOURCE_FLAG_NONE;desc.Width=144;
         if(FAILED(device->CreateCommittedResource(&hp,D3D12_HEAP_FLAG_NONE,&desc,D3D12_RESOURCE_STATE_COPY_DEST,nullptr,IID_PPV_ARGS(&readback))))return false;
         hp.Type=D3D12_HEAP_TYPE_UPLOAD;desc.Width=136;
         if(FAILED(device->CreateCommittedResource(&hp,D3D12_HEAP_FLAG_NONE,&desc,D3D12_RESOURCE_STATE_GENERIC_READ,nullptr,IID_PPV_ARGS(&upload))))return false;
@@ -32,6 +33,8 @@ public:
             copy.list->CopyBufferRegion(gpu.Get(),32,upload.Get(),i?(i>=3?132:128):0,4);
             if(FAILED(copy.list->Close()))return false;
         }
+        D3D12_QUERY_HEAP_DESC qh{};qh.Type=D3D12_QUERY_HEAP_TYPE_TIMESTAMP;qh.Count=2;
+        if(FAILED(device->CreateQueryHeap(&qh,IID_PPV_ARGS(&timing))))return false;
         D3D12_DESCRIPTOR_HEAP_DESC hd{};hd.Type=D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;hd.NumDescriptors=1;
         if(FAILED(device->CreateDescriptorHeap(&hd,IID_PPV_ARGS(&cpu))))return false;
         D3D12_UNORDERED_ACCESS_VIEW_DESC uav{};uav.Format=DXGI_FORMAT_R32_TYPELESS;uav.ViewDimension=D3D12_UAV_DIMENSION_BUFFER;
@@ -60,12 +63,24 @@ public:
         list->CopyBufferRegion(gpu.Get(),0,upload.Get(),0,32);
         list->CopyBufferRegion(gpu.Get(),36,upload.Get(),0,92);
         b.Transition.StateBefore=D3D12_RESOURCE_STATE_COPY_DEST;b.Transition.StateAfter=D3D12_RESOURCE_STATE_UNORDERED_ACCESS;list->ResourceBarrier(1,&b);
+        list->EndQuery(timing.Get(),D3D12_QUERY_TYPE_TIMESTAMP,0);
     }
     void End(ID3D12GraphicsCommandList* list){
+        list->EndQuery(timing.Get(),D3D12_QUERY_TYPE_TIMESTAMP,1);
+        list->ResolveQueryData(timing.Get(),D3D12_QUERY_TYPE_TIMESTAMP,0,2,readback.Get(),128);
         D3D12_RESOURCE_BARRIER b{};b.Type=D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
         b.Transition={gpu.Get(),0,D3D12_RESOURCE_STATE_UNORDERED_ACCESS,D3D12_RESOURCE_STATE_COPY_SOURCE};list->ResourceBarrier(1,&b);
         list->CopyBufferRegion(readback.Get(),0,gpu.Get(),0,128);
         b.Transition.StateBefore=D3D12_RESOURCE_STATE_COPY_SOURCE;b.Transition.StateAfter=D3D12_RESOURCE_STATE_COMMON;list->ResourceBarrier(1,&b);
+    }
+    bool ReadMilliseconds(UINT64 frequency,double& milliseconds){
+        milliseconds=0;if(!frequency||!readback)return false;
+        void* data=nullptr;const D3D12_RANGE read{128,144};
+        if(FAILED(readback->Map(0,&read,&data))||!data)return false;
+        UINT64 stamps[2]{};std::memcpy(stamps,static_cast<unsigned char*>(data)+128,16);
+        const D3D12_RANGE noWrite{};readback->Unmap(0,&noWrite);
+        if(stamps[1]<stamps[0])return false;
+        milliseconds=double(stamps[1]-stamps[0])*1000.0/double(frequency);return true;
     }
     bool ReadFaults(std::array<UINT,16>& values){
         values={};void* data=nullptr;const D3D12_RANGE read{36,100};

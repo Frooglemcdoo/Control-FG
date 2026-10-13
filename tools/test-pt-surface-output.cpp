@@ -164,6 +164,8 @@ int main(){
     assert(SUCCEEDED(queue->Signal(done.Get(),2)));event=CreateEventW(nullptr,FALSE,FALSE,nullptr);assert(event);
     assert(SUCCEEDED(done->SetEventOnCompletion(2,event)));assert(WaitForSingleObject(event,10000)==WAIT_OBJECT_0);CloseHandle(event);
     std::array<UINT,8> probeCounts{};assert(probe->metrics.Read(probeCounts));assert(probeCounts[0]==1&&probeCounts[1]==12);
+    UINT64 frequency=0;double elapsed=0;assert(SUCCEEDED(queue->GetTimestampFrequency(&frequency)));
+    assert(probe->metrics.ReadMilliseconds(frequency,elapsed)&&elapsed>=0&&elapsed<10000);
     std::array<UINT,16> probeFaults{};assert(probe->metrics.ReadFaults(probeFaults));for(auto v:probeFaults)assert(v==0);
     probeOutput.reset();probe.reset();
     original.reset();cancelled.reset();PTSurfaceComposition::Output::Poll();assert(inlineRetained.expired());assert(PTSurfaceComposition::Output::ResidentBytes()==0);assert(retained.expired());assert(SUCCEEDED(device->GetDeviceRemovedReason()));

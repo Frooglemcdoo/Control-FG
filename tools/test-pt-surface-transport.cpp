@@ -49,5 +49,18 @@ int main(){
     auto absorbed=PTSampleSurface(diffuse,PTV(0,0,-1),.5f,.5f,.5f);
     auto ended=PTContinue(PTBeginTransport(),absorbed,.5f,3);
     require(ended.valid&&!ended.alive,"Physical termination preserves valid accumulated radiance");
+    // Early roulette preserves the expected four-hit sum while reducing work.
+    // Include direct light before termination, just as the production integrator.
+    double radiance=0;unsigned continuations=0;unsigned rng=1234567;
+    for(unsigned i=0;i<200000;++i){auto q=PTBeginTransport();
+        for(unsigned depth=0;depth<4;++depth){q=PTAccumulate(q,PTV(1,1,1));if(depth==3)break;
+            PTSurfaceSample step{};step.valid=1;step.weight=PTV(.3f,.3f,.3f);
+            rng^=rng<<13;rng^=rng>>17;rng^=rng<<5;
+            q=PTContinue(q,step,float(rng>>8)*(1.0f/16777216.0f),1);
+            if(!q.alive)break;++continuations;
+        }radiance+=q.radiance.x;
+    }
+    require(std::abs(radiance/200000-(1+.3+.09+.027))<.01,"Early roulette preserves four-hit energy");
+    require(continuations<200000,"Early roulette reduces secondary traversal work");
     std::puts("PASS: shared transport math, 12 integration cases, accumulation and roulette");
 }

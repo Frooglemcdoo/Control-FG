@@ -106,7 +106,9 @@ void PTPrimaryPathRayGeneration(){
     if(abs(first.distance-distance)>max(.002,distance*2e-4))return;PTMeasure(4,pixel);
     uint seed=(pixel.x+pixel.y*width)*747796405u+asuint(PTSystem[69].z)*2891336453u+277803737u;
     seed=(seed^(seed>>16))*2246822519u;seed^=seed>>13;
-    PTPathResult result=PTIntegratePathFirst(ray,4,3,seed,.001,first,1,0);
+    // Terminate low-throughput continuations from the first bounce. Surviving
+    // paths keep the reciprocal survival weight; all four hits remain reachable.
+    PTPathResult result=PTIntegratePathFirst(ray,4,1,seed,.001,first,1,0);
     PTMeasure(5,pixel);
     if(result.valid!=0&&all(isfinite(result.radiance))&&all(result.radiance>=0)){if(admission==1)PTOutput[pixel]=float4(result.radiance,1);PTMeasure(6,pixel);}
     else {PTMeasure(7,pixel);if(((pixel.x|pixel.y)&63)==0){uint old;PTMetrics.InterlockedAdd(36+4*min(result.fault,15u),1,old);}}
