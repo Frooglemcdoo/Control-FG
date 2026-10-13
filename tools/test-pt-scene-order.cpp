@@ -2,6 +2,7 @@
 #include <cassert>
 #include <cstdio>
 #include <chrono>
+#include <cstring>
 using namespace PTSceneOrder;
 static void TestLiveCompaction(){
     using namespace PTSceneOrder;
@@ -64,6 +65,40 @@ int main(){
     TestStaticSceneCompaction();
     TestLiveCompaction();
     const Key as{10,0xa000};Selection chosen;
+    // R13: checking every future fence signal's complete clock blocked an
+    // already-ready scene whenever an unrelated queue awaited a later signal.
+    Graph unrelated;
+    unrelated.Write(1,as,10);const auto readyCut=unrelated.Mark(1);
+    unrelated.Signal(2,201,1);unrelated.Wait(2,202,1);unrelated.Signal(2,201,2);
+    assert(unrelated.Select(readyCut,as,chosen)==Status::ready&&chosen.version==10);
+    assert(!unrelated.ClosedDependencies()); // We did not invent the signal.
+    // A future same-queue AS overwrite is also provably after this cut, even
+    // when the overwrite cannot run until a not-yet-submitted signal arrives.
+    unrelated.Wait(1,203,1);unrelated.Write(1,as,11);
+    assert(unrelated.Select(readyCut,as,chosen)==Status::ready&&chosen.version==10);
+    auto blockedCut=unrelated.Mark(1);const char* reason=nullptr;
+    assert(unrelated.Select(blockedCut,as,chosen,&reason)==Status::pending);
+    assert(std::strcmp(reason,"scene_dispatch_wait_pending")==0);
+    unrelated.Signal(3,203,1);
+    assert(unrelated.Select(blockedCut,as,chosen)==Status::ready&&chosen.version==11);
+    // FIFO cannot excuse a pending competing write on another queue.
+    Graph pendingRace;
+    pendingRace.Write(1,as,20);const auto raceCut=pendingRace.Mark(1);
+    pendingRace.Wait(2,204,1);pendingRace.Write(2,as,21);
+    assert(pendingRace.Select(raceCut,as,chosen,&reason)==Status::pending);
+    assert(std::strcmp(reason,"scene_competing_write_pending")==0);
+    pendingRace.Signal(3,204,1);
+    assert(pendingRace.Select(raceCut,as,chosen)==Status::unordered);
+    // Nor can it excuse a higher signal from a different queue releasing a
+    // scene wait before its intended producer has completed.
+    Graph pendingFenceRace;
+    pendingFenceRace.Write(1,as,30);pendingFenceRace.Signal(1,205,1);
+    pendingFenceRace.Wait(2,205,1);const auto fenceCut=pendingFenceRace.Mark(2);
+    pendingFenceRace.Wait(3,206,1);pendingFenceRace.Signal(3,205,2);
+    assert(pendingFenceRace.Select(fenceCut,as,chosen,&reason)==Status::pending);
+    assert(std::strcmp(reason,"scene_fence_order_pending")==0);
+    pendingFenceRace.Signal(4,206,1);
+    assert(pendingFenceRace.Select(fenceCut,as,chosen)==Status::unordered);
     Graph graph;
     graph.Write(1,as,100);graph.Signal(1,20,1);
     graph.Write(1,as,200); // Not ordered with queue 2: the older cut cannot freeze the AS.

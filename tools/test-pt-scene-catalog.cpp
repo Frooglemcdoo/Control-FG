@@ -5,6 +5,7 @@
 #include "../src/pt_scene_catalog.h"
 #include <cassert>
 #include <cstdio>
+#include <cstring>
 using namespace PTSceneCatalog;
 static const Allocation bottom{{10,0xb000},256},compact{{11,0xc000},256},top{{12,0xa000},256};
 static Snapshot Blas(Allocation allocation,U64 positions){
@@ -23,6 +24,21 @@ static U64 Position(const PTSceneDispatch::Scene& scene){
 }
 int main(){
     Catalog c;PTSceneDispatch::Scene scene;
+    // A ready TLAS/BLAS cut survives unrelated future queued waits. The real
+    // waiting cut must still be pending, with a reason reaching the caller.
+    Catalog future;auto futureGeneration=future.Begin(1);const char* reason=nullptr;
+    assert(future.Record(1,futureGeneration,Blas(bottom,0x2000)));
+    assert(future.Record(1,futureGeneration,Tlas(bottom)));
+    assert(future.Mark(1,futureGeneration,700));
+    assert(future.Scene(700,top,scene,&reason)==Status::pending);
+    assert(std::strcmp(reason,"scene_submission_pending")==0);
+    assert(future.Submit(1,{{1,futureGeneration}}));
+    assert(future.Signal(2,201,1));assert(future.Wait(2,202,1));assert(future.Signal(2,201,2));
+    assert(future.Scene(700,top,scene,&reason)==Status::ready&&Position(scene)==0x2000);
+    futureGeneration=future.Begin(2);assert(future.Mark(2,futureGeneration,701));
+    assert(future.Submit(2,{{2,futureGeneration}}));
+    assert(future.Scene(701,top,scene,&reason)==Status::pending);
+    assert(std::strcmp(reason,"scene_dispatch_wait_pending")==0);
     auto producer=c.Begin(1);assert(producer);
     assert(c.Record(1,producer,Blas(bottom,0x2000)));
     Snapshot copy;copy.kind=Snapshot::Kind::copy;copy.destination=compact;copy.source=bottom;

@@ -220,8 +220,8 @@ public:
         std::lock_guard<std::mutex> guard(mutex);auto* q=Identify(queue);auto* f=Identify(fence);
         if(!q||!f){catalog.Invalidate();return false;}return catalog.Wait(q->id,f->id,value);
     }
-    PTSceneOrder::Status Scene(U64 ticket,const PTSceneDescriptors::Acceleration& selected,PTSceneDispatch::Scene& scene){
-        return catalog.Scene(ticket,{{selected.token,selected.address},selected.bytes},scene);
+    PTSceneOrder::Status Scene(U64 ticket,const PTSceneDescriptors::Acceleration& selected,PTSceneDispatch::Scene& scene,const char** pendingReason=nullptr){
+        return catalog.Scene(ticket,{{selected.token,selected.address},selected.bytes},scene,pendingReason);
     }
     void Forget(U64 ticket){catalog.Forget(ticket);}
     void Invalidate(){catalog.Invalidate("capture_external");}

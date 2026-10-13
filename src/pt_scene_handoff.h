@@ -28,6 +28,7 @@ class Runtime {
         PTNativeShaderTable::Identifiers identifiers;
         PTSceneDispatch::Table table;
         bool written=false,submitted=false;
+        const char* scenePending=nullptr;
     };
     PTSceneLive::Owner& owner;
     std::mutex mutex;
@@ -132,6 +133,7 @@ public:
         if(!entry->second.written&&!entry->second.submitted)return "handoff_writer_and_submission_pending";
         if(!entry->second.written)return "handoff_writer_pending";
         if(!entry->second.submitted)return "handoff_submission_pending";
+        if(entry->second.scenePending)return entry->second.scenePending;
         return "handoff_ambiguous_or_mismatch";
     }
     void Cancelled(std::uint64_t serial){std::lock_guard<std::mutex> guard(mutex);const auto found=pending.find(serial);if(found!=pending.end())Erase(found);}
@@ -158,8 +160,10 @@ public:
         for(unsigned ray=0;ray<2;++ray)if(exports.rays[ray].nativeOpaque!=entry.identifiers.hit[ray]||exports.rays[ray].nativeAlpha!=entry.identifiers.hit[2+ray]){
             Erase(found);return Status::rejected;
         }
-        PTSceneDispatch::Scene scene;const auto selected=owner.Scenes().Scene(serial,entry.acceleration,scene);
-        if(selected==PTSceneOrder::Status::pending)return Status::pending;
+        PTSceneDispatch::Scene scene;const char* pendingReason=nullptr;
+        const auto selected=owner.Scenes().Scene(serial,entry.acceleration,scene,&pendingReason);
+        entry.scenePending=selected==PTSceneOrder::Status::pending?pendingReason:nullptr;
+        if(entry.scenePending)return Status::pending;
         if(selected!=PTSceneOrder::Status::ready){Erase(found,selected==PTSceneOrder::Status::missing?"scene_catalog_missing":"scene_catalog_rejected");return Status::rejected;}
         const PTSceneDispatch::Selection selection{scene.address,scene.version,entry.table.address,entry.table.version,entry.table.pipeline};
         PTSceneDispatch::Failure failure;

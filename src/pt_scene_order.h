@@ -54,6 +54,13 @@ class Graph {
         return clockState[at]==2?Status::ready:Status::pending;
     }
     bool Before(U64 a,U64 b)const {return clocks[b][nodes[a].lane]>=nodes[a].stamp;}
+    // Queue FIFO and baked completion edges remain true even when b has a
+    // later unresolved wait. Do not require b's entire ancestry merely to
+    // prove that an older scene use precedes it.
+    bool KnownBefore(U64 a,U64 b)const {
+        return (nodes[a].lane==nodes[b].lane&&nodes[a].stamp<=nodes[b].stamp)||
+            nodes[b].base[nodes[a].lane]>=nodes[a].stamp;
+    }
 
     static constexpr std::size_t MaximumNodes=65536,MaximumQueues=16,MaximumFences=256;
     U64 Append(U64 queue,Node node){
@@ -223,17 +230,20 @@ public:
         nodes=std::move(compact);fences=std::move(newFences);observedComplete=done;completedPrefix=0;clockDirty=true;
         return true;
     }
-    Status Select(U64 dispatch,Key target,Selection& result)const {
-        result={};const auto state=ClockAt(dispatch);if(state!=Status::ready)return state;
+    Status Select(U64 dispatch,Key target,Selection& result,const char** pendingReason=nullptr)const {
+        if(pendingReason)*pendingReason="none";
+        const auto report=[&](Status status,const char* reason){if(status==Status::pending&&pendingReason)*pendingReason=reason;return status;};
+        result={};const auto state=ClockAt(dispatch);if(state!=Status::ready)return report(state,"scene_dispatch_wait_pending");
         for(U64 id=1;id<nodes.size();++id){const auto& n=nodes[static_cast<std::size_t>(id)];
             if(n.target.token!=target.token||n.target.address!=target.address||Before(id,dispatch))continue;
-            const auto status=ClockAt(id);if(status!=Status::ready)return status;
+            if(KnownBefore(dispatch,id))continue;
+            const auto status=ClockAt(id);if(status!=Status::ready)return report(status,"scene_competing_write_pending");
             if(!Before(dispatch,id))return Status::unordered;
         }
         // Increasing CPU fence values alone do not prove a queue handoff.
         for(const auto& fence:fences){U64 previous=0;
             for(const auto& signal:fence.second.signals){
-                if(previous){const auto status=ClockAt(signal.second);if(status!=Status::ready)return status;
+                if(previous&&!KnownBefore(previous,signal.second)){const auto status=ClockAt(signal.second);if(status!=Status::ready)return report(status,"scene_fence_order_pending");
                     if(!Before(previous,signal.second))return Status::unordered;}
                 previous=signal.second;
             }
