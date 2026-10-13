@@ -30,7 +30,9 @@ static bool ReadView(UINT64 address,View& view,PTNativeView::Pass pass=PTNativeV
     if(!viewProviders.Read(view,pass)){
         static std::atomic<UINT64> failures{0};const auto n=++failures;
         if(n<=8||n%24000==0){float inverse[2]{};std::memcpy(inverse,view.bytes.data()+8,8);
-            Log("PT_PRIMARY_VIEW_INVALID reason=%s offset=%u inverse=%.9g,%.9g dimensions=%ux%u frame=%u count=%llu",view.failure,view.failureOffset,inverse[0],inverse[1],view.width,view.height,view.frame,n);}
+            UINT boundValue=0,providerValue=0;
+            if(view.failureOffset<=view.bytes.size()-4){std::memcpy(&boundValue,view.bound.data()+view.failureOffset,4);std::memcpy(&providerValue,view.bytes.data()+view.failureOffset,4);}
+            Log("PT_PRIMARY_VIEW_INVALID reason=%s pass=%u offset=%u bound=0x%08X provider=0x%08X inverse=%.9g,%.9g dimensions=%ux%u frame=%u count=%llu",view.failure,unsigned(pass),view.failureOffset,boundValue,providerValue,inverse[0],inverse[1],view.width,view.height,view.frame,n);}
         Reject("view_constants_invalid");return false;
     }return true;
 }
@@ -134,6 +136,9 @@ static void Job(PTNativeJobRuntime::Phase phase,const PTNativeJobRoute::Ticket& 
         std::lock_guard<std::recursive_mutex> ordered(PTSceneQueues::queueMutex);
         std::lock_guard<std::recursive_mutex> guard(mutex);
         if(phase==PTNativeJobRuntime::Phase::cancelled){handoff.Cancelled(ticket.serial);candidates.erase(ticket.serial);return;}
+        if(ptReflectionUserState.load(std::memory_order_acquire)!=1){
+            for(const auto& c:candidates)handoff.Cancelled(c.first);candidates.clear();return;
+        }
         if(!PTSceneLive::owner.Scenes().Healthy())return;
         auto pipeline=opaquePipelines.Find(reinterpret_cast<ID3D12StateObject*>(ticket.pipeline));if(!pipeline)return;
         auto* list=reinterpret_cast<ID3D12GraphicsCommandList4*>(ticket.list);Bindings bindings;View view;Context context;
@@ -234,6 +239,13 @@ static void Drawing(void*,ID3D12GraphicsCommandList* list) noexcept {
     if(!active||ptReflectionUserState.load(std::memory_order_acquire)!=1||!PTSceneLive::owner.Scenes().Healthy())return;
     try {
         if(restore.list)return;
+        // No surface can consume PT before a producer exists. Avoid mapping
+        // camera buffers and allocating descriptors for every native draw
+        // when opaque/lighting admission has already failed this frame.
+        {std::lock_guard<std::recursive_mutex> guard(mutex);
+            bool produced=false;for(const auto& weak:frames){const auto frame=weak.lock();if(frame&&frame->producerRecorded){produced=true;break;}}
+            if(!produced)return;
+        }
         const auto pso=PTCommandBindings::tracker.PipelineFor(list);
         auto pipeline=surfacePipelines.Find(pso.Get());if(!pipeline)return;
         std::lock_guard<std::recursive_mutex> ordered(PTSceneQueues::queueMutex);PTSceneQueues::Scope privateQueues;
@@ -366,6 +378,6 @@ static bool Start(){
     if(FAILED(device->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&sceneUseFence))))return false;
     if(!PTSceneQueues::Start(&PTSceneLive::owner.Scenes())||!PTSceneQueues::Register(&PTSceneLive::owner.Scenes(),&queueConsumer)||
        !PTCommandBindings::Register(&commandConsumer)||!PTNativeJobRuntime::Register(&Job)||!PTSceneLive::owner.Start(step,true))return false;
-    active=true;Log("PT_PRIMARY_SESSION_READY build=M12R4 ready=1 hits=4 spp=1 material=opaque_general geometric_normals=1 native_fallback=1");return true;
+    active=true;Log("PT_PRIMARY_SESSION_READY build=M12R5 ready=1 hits=4 spp=1 material=opaque_general geometric_normals=1 native_fallback=1");return true;
 }
 }

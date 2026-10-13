@@ -23,6 +23,7 @@ class Capture {
     U64 lastCheckpointAttempt=0;
     U64 serial=0;
     bool preserveGeometry=false;
+    std::atomic<bool> renderingRequested{true};
     std::shared_ptr<PTOwnedScene::LeaseBudget> copyBudget=std::make_shared<PTOwnedScene::LeaseBudget>(512ull*1024*1024);
     std::map<U64,std::vector<std::shared_ptr<PTGeometrySnapshot::Transfer>>> recordedCopies;
     std::map<U64,PTGeometrySnapshot::Retirement::Batch> submittingCopies;
@@ -57,6 +58,7 @@ private:
 public:
     Stats Statistics(){std::lock_guard<std::mutex> guard(mutex);stats.healthy=catalog.Healthy();stats.failure=catalog.Failure();const auto history=catalog.StatisticsNow();stats.historyVersions=history.versions;stats.historyRows=history.rows;stats.historyNodes=history.nodes;stats.copyBytes=copyBudget->Held();return stats;}
     explicit Capture(PTOwnedScene::Runtime& bank):resources(bank){}
+    void RenderingRequested(bool value) noexcept {renderingRequested.store(value,std::memory_order_relaxed);}
     bool PreserveGeometry(){std::lock_guard<std::mutex> guard(mutex);if(!identities.empty())return false;preserveGeometry=true;return true;}
     void UploadInstances(U64 address,const void* data,U64 bytes){
         std::lock_guard<std::mutex> guard(mutex);
@@ -99,6 +101,13 @@ public:
                 s.geometry.push_back({t.IndexBuffer,t.VertexBuffer.StartAddress,t.VertexBuffer.StrideInBytes,stride,t.IndexCount,t.VertexCount,index.key.token,position.key.token});
             }
         }
+        // Static first builds must be preserved even while the toggle is off:
+        // the engine may never rebuild them. Dynamic updates are tombstoned
+        // while off, so re-enabling cannot reuse an obsolete deformation.
+        const bool dormantUpdate=!renderingRequested.load(std::memory_order_relaxed)&&
+            (d.Inputs.Flags&D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PERFORM_UPDATE);
+        if(preserveGeometry&&s.kind==PTSceneCatalog::Snapshot::Kind::blas&&dormantUpdate)
+            s.kind=PTSceneCatalog::Snapshot::Kind::unknown;
         if(preserveGeometry&&s.kind==PTSceneCatalog::Snapshot::Kind::blas){
             auto* id=List(list);ComPtr<ID3D12GraphicsCommandList> commands;
             if(!id||FAILED(list->QueryInterface(IID_PPV_ARGS(&commands)))){catalog.Invalidate();return;}
@@ -173,7 +182,7 @@ public:
     }
     void Checkpoint(){
         std::lock_guard<std::mutex> guard(mutex);
-        if(!catalog.Healthy()||checkpointOperations-lastCheckpointAttempt<32)return;
+        if(!catalog.Healthy()||checkpointOperations-lastCheckpointAttempt<256)return;
         lastCheckpointAttempt=checkpointOperations;Measure timing{stats.checkpoints};
         std::map<U64,U64> completed;
         for(auto& item:progress){auto& p=item.second;const auto done=p.fence->GetCompletedValue();

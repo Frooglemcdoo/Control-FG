@@ -2,6 +2,7 @@
 #include "../src/pt_native_uploads.h"
 #include <windows.h>
 #include <dxgi1_6.h>
+#include <d3d12sdklayers.h>
 #include <wrl/client.h>
 #include <cassert>
 #include <cstdio>
@@ -36,8 +37,8 @@ struct QueueConsumerTest {
         auto& self=*static_cast<QueueConsumerTest*>(context);++self.resets;
     }
 };
-static void TestGeometrySnapshot(ID3D12Device* device,bool common=false,bool temporary=false){
-    const auto sourceState=common?D3D12_RESOURCE_STATE_COMMON:D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+static void TestGeometrySnapshot(ID3D12Device* device,bool common=false,bool temporary=false,bool decayedIndex=false){
+    const auto sourceState=(common||decayedIndex)?D3D12_RESOURCE_STATE_COMMON:D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
     D3D12_RESOURCE_DESC desc{};desc.Dimension=D3D12_RESOURCE_DIMENSION_BUFFER;desc.Width=1024;desc.Height=1;
     desc.DepthOrArraySize=desc.MipLevels=1;desc.SampleDesc.Count=1;desc.Layout=D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
     const auto make=[&](D3D12_HEAP_TYPE type,D3D12_RESOURCE_STATES state){
@@ -70,7 +71,7 @@ static void TestGeometrySnapshot(ID3D12Device* device,bool common=false,bool tem
     assert(uploads.Created(901,source.Get(),source->GetGPUVirtualAddress(),desc.Width)==1);
     assert(!uploads.ReadUpload(source->GetGPUVirtualAddress(),slice,sizeof(slice))); // Never map GPU-only memory.
     ComPtr<ID3D12CommandAllocator> allocator;ComPtr<ID3D12GraphicsCommandList> list;ComPtr<ID3D12CommandQueue> queue;
-    const auto commandType=temporary?D3D12_COMMAND_LIST_TYPE_COMPUTE:D3D12_COMMAND_LIST_TYPE_DIRECT;
+    const auto commandType=(temporary||decayedIndex)?D3D12_COMMAND_LIST_TYPE_COMPUTE:D3D12_COMMAND_LIST_TYPE_DIRECT;
     D3D12_COMMAND_QUEUE_DESC qd{};qd.Type=commandType;assert(SUCCEEDED(device->CreateCommandQueue(&qd,IID_PPV_ARGS(&queue))));
     assert(SUCCEEDED(device->CreateCommandAllocator(commandType,IID_PPV_ARGS(&allocator))));
     assert(SUCCEEDED(device->CreateCommandList(0,commandType,allocator.Get(),nullptr,IID_PPV_ARGS(&list))));
@@ -81,8 +82,15 @@ static void TestGeometrySnapshot(ID3D12Device* device,bool common=false,bool tem
     transition(source.Get(),sourceState,D3D12_RESOURCE_STATE_COPY_DEST);
     list->CopyBufferRegion(source.Get(),0,upload.Get(),0,512);
     transition(source.Get(),D3D12_RESOURCE_STATE_COPY_DEST,sourceState);
+    if(decayedIndex){
+        assert(SUCCEEDED(list->Close()));ID3D12CommandList* init=list.Get();queue->ExecuteCommandLists(1,&init);
+        ComPtr<ID3D12Fence> initialized;assert(SUCCEEDED(device->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&initialized))));
+        assert(SUCCEEDED(queue->Signal(initialized.Get(),1)));HANDLE complete=CreateEventW(nullptr,FALSE,FALSE,nullptr);
+        assert(complete&&SUCCEEDED(initialized->SetEventOnCompletion(1,complete))&&WaitForSingleObject(complete,30000)==WAIT_OBJECT_0);CloseHandle(complete);
+        assert(SUCCEEDED(allocator->Reset()));assert(SUCCEEDED(list->Reset(allocator.Get(),nullptr)));
+    }
     std::array<unsigned char,80> wrapper{};const auto address=source->GetGPUVirtualAddress();auto* raw=source.Get();
-    const UINT state=temporary?D3D12_RESOURCE_STATE_UNORDERED_ACCESS:sourceState; // Native default differs from the recorded transition.
+    const UINT state=decayedIndex?(D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE|D3D12_RESOURCE_STATE_INDEX_BUFFER):(temporary?D3D12_RESOURCE_STATE_UNORDERED_ACCESS:sourceState); // Native default differs from the recorded transition.
     std::memcpy(wrapper.data(),&raw,8);std::memcpy(wrapper.data()+0x20,&state,4);std::memcpy(wrapper.data()+0x30,&desc.Width,8);std::memcpy(wrapper.data()+0x48,&address,8);
     PTOwnedScene::Runtime bank;assert(bank.Created(reinterpret_cast<UINT_PTR>(wrapper.data()),source.Get(),address,desc.Width)==1);
     std::vector<PTSceneTopology::Geometry> geometry{{address,address+256,12,2,3,3,1,1}};
@@ -92,7 +100,7 @@ static void TestGeometrySnapshot(ID3D12Device* device,bool common=false,bool tem
     assert(transfer->storage->copies.size()==1&&geometry[0].frozen); // Same backing copied once.
     std::shared_ptr<PTGeometrySnapshot::Transfer> rejected;
     assert(!bank.FreezeGeometry(list.Get(),geometry,budget,rejected)&&!rejected); // No commands on budget failure.
-    transition(source.Get(),common?D3D12_RESOURCE_STATE_COPY_SOURCE:sourceState,D3D12_RESOURCE_STATE_COPY_DEST);
+    transition(source.Get(),(common||decayedIndex)?D3D12_RESOURCE_STATE_COPY_SOURCE:sourceState,D3D12_RESOURCE_STATE_COPY_DEST);
     list->CopyBufferRegion(source.Get(),0,upload.Get(),512,512); // Overwrite the ORIGINAL after its build-time copy.
     transition(source.Get(),D3D12_RESOURCE_STATE_COPY_DEST,sourceState);
     auto* frozen=transfer->storage->copies.at(1).Get();
@@ -147,11 +155,22 @@ static void TestUnrelatedSceneLists(ID3D12Device* device){
 }
 
 int main(){
+    ComPtr<ID3D12Debug> debug;const bool debugEnabled=SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&debug)));
+    if(debugEnabled)debug->EnableDebugLayer();
     ComPtr<IDXGIFactory4> f;assert(SUCCEEDED(CreateDXGIFactory1(IID_PPV_ARGS(&f))));
     ComPtr<IDXGIAdapter> a;assert(SUCCEEDED(f->EnumWarpAdapter(IID_PPV_ARGS(&a))));
     ComPtr<ID3D12Device> d;assert(SUCCEEDED(D3D12CreateDevice(a.Get(),D3D_FEATURE_LEVEL_11_0,IID_PPV_ARGS(&d))));
     TestUnrelatedSceneLists(d.Get());
-    TestGeometrySnapshot(d.Get());TestGeometrySnapshot(d.Get(),true);TestGeometrySnapshot(d.Get(),false,true);
+    TestGeometrySnapshot(d.Get());TestGeometrySnapshot(d.Get(),true);TestGeometrySnapshot(d.Get(),false,true);TestGeometrySnapshot(d.Get(),false,false,true);
+    if(debugEnabled){
+        ComPtr<ID3D12InfoQueue> messages;assert(SUCCEEDED(d.As(&messages)));
+        for(UINT64 n=0;n<messages->GetNumStoredMessages();++n){SIZE_T bytes=0;messages->GetMessage(n,nullptr,&bytes);
+            std::vector<unsigned char> storage(bytes);auto* message=reinterpret_cast<D3D12_MESSAGE*>(storage.data());
+            assert(SUCCEEDED(messages->GetMessage(n,message,&bytes)));
+            if(message->Severity<=D3D12_MESSAGE_SEVERITY_ERROR){std::puts(message->pDescription);assert(false);}
+        }
+        std::puts("PASS: geometry snapshots produced no D3D12 debug-layer errors.");
+    }else std::puts("D3D12 debug layer unavailable; byte preservation and fence tests still executed.");
     D3D12_HEAP_PROPERTIES hp{};hp.Type=D3D12_HEAP_TYPE_DEFAULT;
     D3D12_RESOURCE_DESC rd{};rd.Dimension=D3D12_RESOURCE_DIMENSION_BUFFER;rd.Width=65536;rd.Height=1;
     rd.DepthOrArraySize=1;rd.MipLevels=1;rd.SampleDesc.Count=1;rd.Layout=D3D12_TEXTURE_LAYOUT_ROW_MAJOR;

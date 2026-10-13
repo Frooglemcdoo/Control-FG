@@ -44,7 +44,24 @@ static void TestLiveCompaction(){
     const auto after=concurrent.Mark(2);assert(concurrent.Select(after,{1,0x1000},selected)==Status::ready);
     std::puts("PASS live compaction: differential queue ordering, old cuts, concurrent writes and 20,000 busy-queue updates.");
 }
+static void TestStaticSceneCompaction(){
+    Graph graph;std::map<U64,U64> remap;std::set<U64> versions;
+    // Many immutable BLAS allocations plus many uncompleted fence signals:
+    // the old key-by-root scan repeatedly searched the same one-write vector.
+    for(U64 key=1;key<=1500;++key)assert(graph.Write(1,{key,key*256},key));
+    for(U64 n=1;n<=3000;++n)assert(graph.Signal(1,1,n));
+    const auto start=std::chrono::steady_clock::now();
+    assert(graph.Compact({}, {}, remap,versions));
+    const auto elapsed=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-start).count();
+    assert(versions.size()==1500);
+    const auto cut=graph.Mark(1);
+    for(U64 key:{1ull,750ull,1500ull}){Selection out;
+        assert(graph.Select(cut,{key,key*256},out)==Status::ready&&out.version==key);
+    }
+    std::printf("Static scene compaction: %.3f ms for 1,500 BLAS and 3,000 pending signals (informational)\n",elapsed);
+}
 int main(){
+    TestStaticSceneCompaction();
     TestLiveCompaction();
     const Key as{10,0xa000};Selection chosen;
     Graph graph;

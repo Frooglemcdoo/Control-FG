@@ -30,6 +30,7 @@ class Graph {
         if(!valid||!at||at>=nodes.size())return Status::invalid;
         if(clockDirty){clocks.assign(nodes.size(),{});clockState.assign(nodes.size(),0);clockDirty=false;clockCycle=false;}
         if(clockCycle)return Status::invalid;
+        if(clockState[at]>=2)return clockState[at]==2?Status::ready:Status::pending;
         std::vector<std::pair<U64,bool>> todo{{at,false}};
         while(!todo.empty()){
             const auto task=todo.back();todo.pop_back();const U64 id=task.first;
@@ -186,10 +187,16 @@ public:
         std::set<U64> keep=roots;
         for(const auto& key:writes)for(const auto& lane:key.second){
             const auto& sequence=lane.second;keep.insert(sequence.back());
-            for(const U64 threshold:thresholds[lane.first]){
-                const auto upper=std::upper_bound(sequence.begin(),sequence.end(),threshold,[&](U64 stamp,U64 id){return stamp<nodes[id].stamp;});
-                if(upper!=sequence.begin())keep.insert(*std::prev(upper));
-                if(upper!=sequence.end())keep.insert(*upper); // Earliest concurrent/future write must still reject an old cut.
+            // Invert the query: a write is a predecessor/successor iff a
+            // root threshold lies in its neighbouring stamp interval. Static
+            // geometry now costs O(writes log roots), not O(keys * roots).
+            const auto& points=thresholds[lane.first];
+            for(std::size_t i=0;i<sequence.size();++i){
+                const U64 stamp=nodes[sequence[i]].stamp;
+                const auto predecessor=points.lower_bound(stamp);
+                const auto successor=points.lower_bound(i?nodes[sequence[i-1]].stamp:0);
+                if((predecessor!=points.end()&&(i+1==sequence.size()||*predecessor<nodes[sequence[i+1]].stamp))||
+                   (successor!=points.end()&&*successor<stamp))keep.insert(sequence[i]);
             }
         }
         std::vector<Node> compact{Node{}};

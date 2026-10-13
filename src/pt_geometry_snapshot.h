@@ -65,17 +65,22 @@ inline bool Record(ID3D12GraphicsCommandList* list,const std::vector<Source>& so
     std::map<U64,Source> unique;U64 total=0;
     ComPtr<ID3D12Device> device;if(FAILED(list->GetDevice(IID_PPV_ARGS(&device))))return false;
     for(const auto& s:sources){
-        if(failure)*failure="copy_source_descriptor_heap_or_state";
+        if(failure)*failure="copy_source_identity";
         if(!s.resource||!s.allocation.token||!s.allocation.address||!s.allocation.bytes)return false;
         const auto desc=s.resource->GetDesc();D3D12_HEAP_PROPERTIES heap{};D3D12_HEAP_FLAGS flags{};
-        if(FAILED(s.resource->GetHeapProperties(&heap,&flags))||heap.Type!=D3D12_HEAP_TYPE_DEFAULT||
-           desc.Dimension!=D3D12_RESOURCE_DIMENSION_BUFFER||desc.Width!=s.allocation.bytes||
-           s.resource->GetGPUVirtualAddress()!=s.allocation.address||
-           (s.state!=D3D12_RESOURCE_STATE_COMMON&&!(s.state&D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE))||
+        if(desc.Dimension!=D3D12_RESOURCE_DIMENSION_BUFFER||desc.Width!=s.allocation.bytes||
+           s.resource->GetGPUVirtualAddress()!=s.allocation.address)return false;
+        if(failure)*failure="copy_source_heap";
+        if(FAILED(s.resource->GetHeapProperties(&heap,&flags))||heap.Type!=D3D12_HEAP_TYPE_DEFAULT)return false;
+        if(failure)*failure="copy_source_read_state";
+        if((s.state!=D3D12_RESOURCE_STATE_COMMON&&!(s.state&D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE))||
            (unsigned(s.state)&~unsigned(D3D12_RESOURCE_STATE_GENERIC_READ)))return false;
-        // Compute lists cannot transition graphics-only resource states.
-        if(list->GetType()==D3D12_COMMAND_LIST_TYPE_COMPUTE&&
-           (s.state&(D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE|D3D12_RESOURCE_STATE_INDEX_BUFFER)))return false;
+        // No transition is needed when COPY_SOURCE is already present. Queue
+        // restrictions apply to explicit barriers, not extra idle read flags.
+        if(failure)*failure="copy_source_compute_transition";
+        if(list->GetType()==D3D12_COMMAND_LIST_TYPE_COMPUTE&&!(s.state&D3D12_RESOURCE_STATE_COPY_SOURCE)&&
+           (s.state&(D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE|D3D12_RESOURCE_STATE_INDEX_BUFFER|
+                     D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER)))return false;
         auto old=unique.find(s.allocation.token);
         if(old!=unique.end()){
             if(old->second.resource.Get()!=s.resource.Get()||old->second.state!=s.state)return false;

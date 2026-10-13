@@ -63,13 +63,19 @@ struct View {
         std::memcpy(&frame,bytes.data()+1112,4);if(!frame)return false;
         failure="none";failureOffset=0;return true;
     }
-    bool MatchesBound(const std::array<unsigned char,1136>& other)const {
+    unsigned Mismatch(const std::array<unsigned char,1136>& other)const {
         const auto same=[&](unsigned offset,unsigned count){return !std::memcmp(bound.data()+offset,other.data()+offset,count);};
-        if(pass==Pass::surface)return same(8,8)&&same(96,64);
-        if(pass==Pass::primary)return same(8,8)&&same(224,64)&&same(1112,4);
-        if(pass==Pass::environment)return same(0,8)&&same(32,128)&&same(224,64);
-        return same(8,8)&&same(32,128)&&same(224,64)&&same(1112,4);
+        if(pass==Pass::environment){if(!same(0,8))return 0;}
+        else if(!same(8,8))return 8;
+        if(pass==Pass::surface||pass==Pass::opaque||pass==Pass::environment){
+            const unsigned first=pass==Pass::surface?96:32;
+            for(unsigned offset=first;offset<160;offset+=16)if(!same(offset,12))return offset;
+        }
+        if(pass!=Pass::surface&&!same(224,64))return 224;
+        if((pass==Pass::primary||pass==Pass::opaque)&&!same(1112,4))return 1112;
+        return UINT32_MAX;
     }
+    bool MatchesBound(const std::array<unsigned char,1136>& other)const {return Mismatch(other)==UINT32_MAX;}
     bool Same(const View& other)const {
         if(engineFrame!=other.engineFrame||!frame||frame!=other.frame||width!=other.width||height!=other.height||
            std::memcmp(bytes.data()+8,other.bytes.data()+8,8)||

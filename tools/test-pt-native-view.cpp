@@ -19,6 +19,9 @@ int main(){
     b=a;std::memset(b.bytes.data()+1112,0,4);assert(!b.Decode());
     b=a;b.bound=a.bytes;b.pass=PTNativeView::Pass::surface;
     auto raw=a.bytes;raw[32]^=1;assert(b.MatchesBound(raw));raw[96]^=1;assert(!b.MatchesBound(raw));
+    raw=a.bytes;raw[108]^=1;raw[124]^=1;raw[140]^=1;raw[156]^=1;
+    assert(b.MatchesBound(raw)); // Optimized native CBV omits unused affine .w lanes.
+    raw=a.bytes;raw[112]^=1;assert(b.Mismatch(raw)==112);
     b.pass=PTNativeView::Pass::primary;raw=a.bytes;raw[32]^=1;assert(b.MatchesBound(raw));raw[224]^=1;assert(!b.MatchesBound(raw));
     raw=a.bytes;raw[1112]^=1;assert(!b.MatchesBound(raw));
     b=a;b.engineFrame=123;assert(!a.Same(b));

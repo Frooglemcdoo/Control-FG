@@ -61,16 +61,25 @@ public:
         view.pass=pass;view.bound=view.bytes;DWORD fault=0;unsigned long long before=0,after=0;
         view.failure="provider_frame";
         if(!ReadEngineFrameSafe(&before,&fault)||!before)return false;
-        const unsigned count=pass==Pass::environment?6u:5u;
-        for(unsigned n=0;n<count;++n){view.failure="provider_snapshot";view.failureOffset=offsets[n];
+        const unsigned count=5u;
+        for(unsigned n=1;n<count;++n){view.failure="provider_snapshot";view.failureOffset=offsets[n];
             if(!Snapshot(n,view.bytes.data()+offsets[n]))return false;}
         view.failure="provider_binding_mismatch";
-        if(!view.MatchesBound(view.bytes))return false;
+        view.failureOffset=view.Mismatch(view.bytes);
+        if(view.failureOffset!=UINT32_MAX)return false;
         // Re-read each provider after the complete set, not just an individual
         // matrix. TLS/frame changes cannot silently mix separate cameras.
-        for(unsigned n=0;n<count;++n){std::array<unsigned char,64> check{};
+        for(unsigned n=1;n<count;++n){std::array<unsigned char,64> check{};
             if(!Snapshot(n,check.data())||std::memcmp(check.data(),view.bytes.data()+offsets[n],sizes[n]))return false;}
         if(!ReadEngineFrameSafe(&after,&fault)||before!=after)return false;
+        // Rendering passes have their own resolution. TLS inverse screen
+        // resolution can already refer to output/UI dimensions. It is not a
+        // camera identity field. Keep the actual bound value; the environment
+        // pass supplies screen resolution instead of its inverse.
+        if(pass==Pass::environment){float extent[2]{};std::memcpy(extent,view.bound.data(),8);
+            if(!std::isfinite(extent[0])||!std::isfinite(extent[1])||extent[0]<1||extent[1]<1)return false;
+            extent[0]=1.f/extent[0];extent[1]=1.f/extent[1];std::memcpy(view.bytes.data()+8,extent,8);
+        }
         view.engineFrame=before;return view.Decode();
     }
 };

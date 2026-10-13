@@ -34,6 +34,7 @@ static void Hook(UINT site,ID3D12GraphicsCommandList4* list,const D3D12_BUILD_RA
     if(PTSceneLive::owner.Active()){
         auto& capture=PTSceneLive::owner.Scenes();
         if(!PTSceneQueues::Start(&capture)||!PTSceneQueues::WatchList(list)||!PTCommandBindings::Watch(list))capture.Invalidate();
+        capture.RenderingRequested(ptReflectionUserState.load(std::memory_order_acquire)==1);
         capture.Build(list,desc);
     }
     if(recording.load(std::memory_order_relaxed)||PTSceneLive::owner.Active())PTSceneObserver::Observe(list,desc,site,++calls,&Sink);

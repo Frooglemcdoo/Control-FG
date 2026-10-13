@@ -76,7 +76,18 @@ public:
         if(!healthy.load())return false;std::lock_guard<std::mutex> guard(mutex);
         const auto found=aliases.find(list);if(found==aliases.end())return false;
         const auto buffer=found->second->buffers.find(resource);
-        if(buffer==found->second->buffers.end()){state=fallback;return true;}
+        if(buffer==found->second->buffers.end()){
+            // Native static vertex/index wrappers keep their creation-time
+            // read flags after ExecuteCommandLists has decayed the buffer.
+            // A local explicit transition (including a split) always wins.
+            // Restrict this normalization to the verified native read defaults;
+            // UAV/COPY_DEST are never guessed to have completed.
+            const unsigned bits=unsigned(fallback);
+            const unsigned nativeReads=unsigned(D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER|
+                D3D12_RESOURCE_STATE_INDEX_BUFFER|D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE|
+                D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+            state=(bits&&!(bits&~nativeReads))?D3D12_RESOURCE_STATE_COMMON:fallback;return true;
+        }
         if(buffer->second.pending)return false;state=buffer->second.state;return true;
     }
     void Pipeline(ID3D12GraphicsCommandList* list,ID3D12PipelineState* value){Change(list,[&](Entry& e){e.pipeline=value;});}
