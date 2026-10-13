@@ -130,6 +130,14 @@ int main(){
     assert(plan.allocationTokens==std::vector<U64>({7,12,13})); // Only live attributes and AS allocations.
     copy->indexBytes=6;assert(prepare().status==Status::allocation&&plan.records.empty());copy->indexBytes=8;
     table.allocationTokens[0][0]=6;assert(prepare().status==Status::allocation);table.allocationTokens[0][0]=1;
+    // Odd triangle count: six native bytes, eight private raw-load bytes.
+    copy->indexBytes=6;copy->indexCapacity=8;
+    assert(PTNativeShaderTable::Build(layout,identifiers,table.version,2,{b},owners,table));
+    assert(table.allocationTokens[0][0]==6);
+    assert(scene.topology.Build(0xb000,{{0x1000,0x2000,12,2,3,3,6,2,copy}}));
+    assert(prepare().status==Status::prepared);
+    copy->indexCapacity=6;assert(prepare().status==Status::allocation);copy->indexCapacity=8;
+    copy->indexBytes=5;assert(prepare().status==Status::allocation);copy->indexBytes=6;
     copy->owner.reset();assert(prepare().status==Status::allocation&&plan.records.empty());
     std::puts("PASS dispatch preflight: selected scene/table/PSO, frozen topology, complete SBT, exact geometry, allocation generations and padded bounds.");
 }

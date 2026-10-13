@@ -121,6 +121,22 @@ static void TestGeometrySnapshot(ID3D12Device* device,bool common=false,bool tem
     assert(rangeTransfer->storage->copies.at(1)->GetDesc().Width==100);
     auto invalidRange=rangedGeometry;invalidRange[0].positions=address+desc.Width-4;
     assert(!rangedBank.FreezeGeometry(list.Get(),invalidRange,rangeBudget,rejected)&&!rejected);
+    // An exact six-byte native index resource must never be read as eight bytes.
+    desc.Width=6;auto shortIndex=make(D3D12_HEAP_TYPE_DEFAULT,D3D12_RESOURCE_STATE_COPY_DEST);
+    desc.Width=8;auto shortReadback=make(D3D12_HEAP_TYPE_READBACK,D3D12_RESOURCE_STATE_COPY_DEST);desc.Width=1024;
+    list->CopyBufferRegion(shortIndex.Get(),0,upload.Get(),0,6);
+    transition(shortIndex.Get(),D3D12_RESOURCE_STATE_COPY_DEST,D3D12_RESOURCE_STATE_COMMON);
+    PTGeometrySnapshot::Source shortSource{{77,shortIndex->GetGPUVirtualAddress(),6},shortIndex,D3D12_RESOURCE_STATE_COMMON};
+    auto shortBudget=std::make_shared<PTOwnedScene::LeaseBudget>(8);
+    auto tooSmall=std::make_shared<PTOwnedScene::LeaseBudget>(6);
+    std::shared_ptr<PTGeometrySnapshot::Transfer> shortTransfer;
+    assert(!PTGeometrySnapshot::Record(list.Get(),{shortSource},tooSmall,shortTransfer));
+    assert(PTGeometrySnapshot::Record(list.Get(),{shortSource},shortBudget,shortTransfer));
+    auto* shortCopy=shortTransfer->storage->copies.at(77).Get();
+    assert(shortCopy->GetDesc().Width==8&&shortBudget->Held()==8&&shortTransfer->sources[0].bytes==6);
+    transition(shortCopy,D3D12_RESOURCE_STATE_COMMON,D3D12_RESOURCE_STATE_COPY_SOURCE);
+    list->CopyBufferRegion(shortReadback.Get(),0,shortCopy,0,8);
+    transition(shortCopy,D3D12_RESOURCE_STATE_COPY_SOURCE,D3D12_RESOURCE_STATE_COMMON);
     transition(source.Get(),(common||decayedIndex)?D3D12_RESOURCE_STATE_COPY_SOURCE:sourceState,D3D12_RESOURCE_STATE_COPY_DEST);
     list->CopyBufferRegion(source.Get(),0,upload.Get(),512,512); // Overwrite the ORIGINAL after its build-time copy.
     transition(source.Get(),D3D12_RESOURCE_STATE_COPY_DEST,sourceState);
@@ -147,6 +163,10 @@ static void TestGeometrySnapshot(ID3D12Device* device,bool common=false,bool tem
     for(unsigned n=0;n<512;++n)assert(mapped[n]==static_cast<unsigned char>(n));readback->Unmap(0,&empty);
     D3D12_RANGE rangedRead{0,100};assert(SUCCEEDED(rangeReadback->Map(0,&rangedRead,reinterpret_cast<void**>(&mapped))));
     for(unsigned n=0;n<100;++n)assert(mapped[n]==static_cast<unsigned char>(n+256));rangeReadback->Unmap(0,&empty);
+    D3D12_RANGE shortRange{0,8};assert(SUCCEEDED(shortReadback->Map(0,&shortRange,reinterpret_cast<void**>(&mapped))));
+    for(unsigned n=0;n<6;++n)assert(mapped[n]==n);
+    unsigned lastWord=0;std::memcpy(&lastWord,mapped+4,4);assert((lastWord&0xffffu)==0x0504u);
+    shortReadback->Unmap(0,&empty);shortTransfer.reset();assert(shortBudget->Held()==0);
     rangeTransfer.reset();rangedGeometry.clear();invalidRange.clear();assert(rangeBudget->Held()==0);
     retirement.Poll();assert(budget->Held()==0);
     const auto idle=bank.GeometryStatistics();assert(idle.bytes==desc.Width&&idle.allocations==1&&idle.reuses==0);

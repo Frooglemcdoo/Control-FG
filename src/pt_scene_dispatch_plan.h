@@ -122,8 +122,11 @@ inline Failure Prepare(const Selection& selected,const Scene& scene,const Table&
             if(!attributeToken||attributeToken!=table.allocationTokens[i][1]||g.indexToken!=table.allocationTokens[i][0])return {Status::allocation,i*table.rays};
             const auto& c=binding.constants;U64 indexAddress=0;
             const U64 padded=(U64(c[8])+3)&~U64(3);
+            const U64 capacity=f.indexCapacity?f.indexCapacity:f.indexBytes;
             if(!PTNativeBinding::IndexAddress(binding,indexAddress)||indexAddress!=g.indices||
-               binding.indices<f.indexBase||binding.indices-f.indexBase>f.indexBytes||padded>f.indexBytes-(binding.indices-f.indexBase))return {Status::allocation,i*table.rays};
+               binding.indices<f.indexBase||binding.indices-f.indexBase>f.indexBytes||
+               c[8]>f.indexBytes-(binding.indices-f.indexBase)||
+               binding.indices-f.indexBase>capacity||padded>capacity-(binding.indices-f.indexBase))return {Status::allocation,i*table.rays};
             resolved.geometry={{{binding.indices,padded,scene.version},g.indices},{{f.positionBase,f.positionBytes,scene.version},g.positions},
                 {{binding.attributes,c[9],scene.version},binding.attributes},g.indexStride,g.indexCount,g.vertexCount,
                 static_cast<std::uint32_t>(g.stride),c[2],c[5],c[6],c[3],244000u/35u,scene.version,true,true,true};

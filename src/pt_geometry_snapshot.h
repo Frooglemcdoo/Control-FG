@@ -89,8 +89,10 @@ inline bool Record(ID3D12GraphicsCommandList* list,const std::vector<Source>& so
             if(old->second.resource.Get()!=s.resource.Get()||old->second.state!=s.state||old->second.offset!=s.offset||old->second.bytes!=bytes)return false;
             continue;
         }
-        if(bytes>UINT64_MAX-total)return false;
-        total+=bytes;auto ranged=s;ranged.bytes=bytes;unique.emplace(s.allocation.token,std::move(ranged));
+        if(bytes>UINT64_MAX-3)return false;
+        const U64 capacity=(bytes+3)&~U64(3);
+        if(capacity>UINT64_MAX-total)return false;
+        total+=capacity;auto ranged=s;ranged.bytes=bytes;unique.emplace(s.allocation.token,std::move(ranged));
     }
     if(failure)*failure="copy_active_budget";
     if(!budget->Acquire(total))return false;storage.bytes=total;
@@ -98,7 +100,8 @@ inline bool Record(ID3D12GraphicsCommandList* list,const std::vector<Source>& so
     D3D12_HEAP_PROPERTIES heap{};heap.Type=D3D12_HEAP_TYPE_DEFAULT;
     for(const auto& entry:unique){
         auto desc=entry.second.resource->GetDesc();desc.Flags=D3D12_RESOURCE_FLAG_NONE;
-        desc.Width=entry.second.bytes;
+        // Copy only valid source bytes; the last raw DWORD may need private padding.
+        desc.Width=(entry.second.bytes+3)&~U64(3);
         ComPtr<ID3D12Resource> copy;
         if(pool)copy=pool->Take(device.Get(),desc.Width);
         else if(FAILED(device->CreateCommittedResource(&heap,D3D12_HEAP_FLAG_NONE,&desc,D3D12_RESOURCE_STATE_COMMON,nullptr,IID_PPV_ARGS(&copy))))return false;

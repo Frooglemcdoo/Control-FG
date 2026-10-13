@@ -173,6 +173,7 @@ public:
         for(std::size_t n=0;n<geometry.size();++n){
             auto& f=*frozen[n];f.owner=transfer->storage;
             f.privateIndex=transfer->storage->copies.at(geometry[n].indexToken)->GetGPUVirtualAddress();
+            f.indexCapacity=transfer->storage->copies.at(geometry[n].indexToken)->GetDesc().Width;
             f.privatePosition=transfer->storage->copies.at(geometry[n].positionToken)->GetGPUVirtualAddress();
             geometry[n].frozen=std::move(frozen[n]);
         }

@@ -31,8 +31,8 @@ inline bool Build(const Layout& layout,const Identifiers& identifiers,U64 versio
         if(failedRow)*failedRow=i;
         if(failure)*failure="writer_binding_type";
         const auto& b=bindings[i];if(b.type>1)return false;
-        const U64 padded=(U64(b.constants[8])+3)&~U64(3);
-        const U64 index=owners.Find(b.indices,padded),attributes=owners.Find(b.attributes,b.constants[9]);
+        // Capture the logical native allocation; DWORD padding belongs to the private copy.
+        const U64 index=owners.Find(b.indices,b.constants[8]),attributes=owners.Find(b.attributes,b.constants[9]);
         // Freeze missing identities as zero. The writer includes rows outside
         // the selected TLAS; only scene preflight can prove reachability. Never
         // replace a zero with a later allocation at the same GPU address.

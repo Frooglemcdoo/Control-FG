@@ -11,6 +11,7 @@ static_assert(sizeof(Instance)==64,"DXR instance ABI");
 struct FrozenGeometry {
     U64 indexBase=0,indexBytes=0,positionBase=0,positionBytes=0;
     U64 privateIndex=0,privatePosition=0;
+    U64 indexCapacity=0; // Private raw-load capacity; zero means legacy indexBytes.
     std::shared_ptr<void> owner;
 };
 struct Geometry {U64 indices,positions,stride;std::uint32_t indexStride,indexCount,vertexCount;U64 indexToken=0,positionToken=0;std::shared_ptr<const FrozenGeometry> frozen{};};
