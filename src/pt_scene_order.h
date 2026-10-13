@@ -18,7 +18,7 @@ struct Key {U64 token=0,address=0;bool operator<(const Key& b)const{return token
 struct Selection {U64 version=0,node=0;};
 class Graph {
     using Clock=std::array<U64,17>;
-    struct Node {U64 previous=0,waitFence=0,waitValue=0;Key target{};U64 version=0;unsigned lane=0;U64 stamp=0;Clock base{};};
+    struct Node {U64 previous=0,waitFence=0,waitValue=0;Key target{};U64 version=0;const char* unknownReason="scene_unknown_build";unsigned lane=0;U64 stamp=0;Clock base{};};
     struct Fence {U64 last=0,completed=0;std::map<U64,U64> signals;};
     std::vector<Node> nodes{Node{}};
     std::map<U64,U64> queues;
@@ -99,9 +99,9 @@ class Graph {
 public:
     // Zero version records a known write with unknown/unadmitted metadata. It
     // must invalidate an older snapshot rather than making that old one usable.
-    U64 Write(U64 queue,Key target,U64 version){
+    U64 Write(U64 queue,Key target,U64 version,const char* unknownReason="scene_unknown_build"){
         if(!target.token||!target.address){valid=false;return 0;}
-        Node n;n.target=target;n.version=version;return Append(queue,n);
+        Node n;n.target=target;n.version=version;n.unknownReason=unknownReason;return Append(queue,n);
     }
     U64 Mark(U64 queue){return Append(queue,{});}
     U64 Signal(U64 queue,U64 fence,U64 value){
@@ -266,10 +266,10 @@ public:
             }
             if(!dominated)maximal.insert(id);
         }
-        if(maximal.empty())return Status::missing;
+        if(maximal.empty()){if(pendingReason)*pendingReason="scene_no_ordered_build";return Status::missing;}
         if(maximal.size()!=1)return Status::unordered;
         const U64 selected=*maximal.begin();
-        if(!nodes[selected].version)return Status::missing;
+        if(!nodes[selected].version){if(pendingReason)*pendingReason=nodes[selected].unknownReason;return Status::missing;}
         result={nodes[selected].version,selected};return Status::ready;
     }
 };

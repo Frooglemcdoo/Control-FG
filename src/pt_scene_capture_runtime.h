@@ -90,7 +90,7 @@ public:
         if(!catalog.Healthy()){++stats.skippedInvalid;return;}
         D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC d{};
         if(!PTSceneObserver::ReadBuild(desc,d)){catalog.Invalidate();return;}
-        PTSceneCatalog::Snapshot s;if(!Destination(list,d.DestAccelerationStructureData,s))return;
+        PTSceneCatalog::Snapshot s;s.unavailable="scene_build_input_unsupported";if(!Destination(list,d.DestAccelerationStructureData,s))return;
         if(d.Inputs.Type==D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL){
             const auto u=uploads.find(d.Inputs.InstanceDescs);
             const auto a=Allocation(d.Inputs.InstanceDescs,U64(d.Inputs.NumDescs)*64);
@@ -100,13 +100,13 @@ public:
                 for(const auto& i:s.instances)if(i.idMask>>24)s.bottom.emplace(i.blas,Allocation(i.blas));
             }
         }else if(d.Inputs.Type==D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL&&d.Inputs.NumDescs&&d.Inputs.NumDescs<=4096){
-            s.kind=PTSceneCatalog::Snapshot::Kind::blas;
+            s.kind=PTSceneCatalog::Snapshot::Kind::blas;s.unavailable="scene_geometry_owner_missing";
             for(UINT n=0;n<d.Inputs.NumDescs;++n){
                 D3D12_RAYTRACING_GEOMETRY_DESC g{};
                 if(!PTSceneObserver::ReadGeometry(d.Inputs,n,g)||g.Type!=D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES||
                    g.Triangles.Transform3x4||g.Triangles.VertexFormat!=DXGI_FORMAT_R32G32B32_FLOAT||
                    (g.Triangles.IndexFormat!=DXGI_FORMAT_R16_UINT&&g.Triangles.IndexFormat!=DXGI_FORMAT_R32_UINT)){
-                    s.kind=PTSceneCatalog::Snapshot::Kind::unknown;break;
+                    s.kind=PTSceneCatalog::Snapshot::Kind::unknown;s.unavailable="scene_geometry_format_unsupported";break;
                 }
                 const auto& t=g.Triangles;const UINT stride=t.IndexFormat==DXGI_FORMAT_R16_UINT?2u:4u;
                 const U64 indexBytes=U64(t.IndexCount)*stride;
@@ -122,14 +122,15 @@ public:
         // while off, so re-enabling cannot reuse an obsolete deformation.
         const bool dormantUpdate=!renderingRequested.load(std::memory_order_relaxed)&&
             (d.Inputs.Flags&D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PERFORM_UPDATE);
-        if(preserveGeometry&&s.kind==PTSceneCatalog::Snapshot::Kind::blas&&dormantUpdate)
-            s.kind=PTSceneCatalog::Snapshot::Kind::unknown;
+        if(preserveGeometry&&s.kind==PTSceneCatalog::Snapshot::Kind::blas&&dormantUpdate){
+            s.kind=PTSceneCatalog::Snapshot::Kind::unknown;s.unavailable="scene_update_while_pt_off";
+        }
         if(preserveGeometry&&s.kind==PTSceneCatalog::Snapshot::Kind::blas){
             auto* id=List(list);ComPtr<ID3D12GraphicsCommandList> commands;
             if(!id||FAILED(list->QueryInterface(IID_PPV_ARGS(&commands)))){catalog.Invalidate();return;}
             auto& copies=recordedCopies[id->id];copies.emplace_back();
             if(!resources.FreezeGeometry(commands.Get(),s.geometry,copyBudget,copies.back())){
-                ++stats.copyFailures;copies.pop_back();s.kind=PTSceneCatalog::Snapshot::Kind::unknown;
+                ++stats.copyFailures;copies.pop_back();s.kind=PTSceneCatalog::Snapshot::Kind::unknown;s.unavailable=resources.GeometryFailure();
             }
         }
         Record(list,std::move(s));
@@ -220,13 +221,13 @@ public:
         std::lock_guard<std::mutex> guard(mutex);auto* q=Identify(queue);auto* f=Identify(fence);
         if(!q||!f){catalog.Invalidate();return false;}return catalog.Wait(q->id,f->id,value);
     }
-    PTSceneOrder::Status Scene(U64 ticket,const PTSceneDescriptors::Acceleration& selected,PTSceneDispatch::Scene& scene,const char** pendingReason=nullptr){
-        return catalog.Scene(ticket,{{selected.token,selected.address},selected.bytes},scene,pendingReason);
+    PTSceneOrder::Status Scene(U64 ticket,const PTSceneDescriptors::Acceleration& selected,PTSceneDispatch::Scene& scene,const char** pendingReason=nullptr,unsigned rayMask=0xff){
+        return catalog.Scene(ticket,{{selected.token,selected.address},selected.bytes},scene,pendingReason,PTSceneOrder::Purpose::submission,rayMask);
     }
     // Recording only: the output remains disarmed until Scene succeeds at
     // actual queue submission and its exact versions match the prepared plan.
-    PTSceneOrder::Status PreviewScene(U64 ticket,const PTSceneDescriptors::Acceleration& selected,PTSceneDispatch::Scene& scene,const char** pendingReason=nullptr){
-        return catalog.Scene(ticket,{{selected.token,selected.address},selected.bytes},scene,pendingReason,PTSceneOrder::Purpose::recordingPreview);
+    PTSceneOrder::Status PreviewScene(U64 ticket,const PTSceneDescriptors::Acceleration& selected,PTSceneDispatch::Scene& scene,const char** pendingReason=nullptr,unsigned rayMask=0xff){
+        return catalog.Scene(ticket,{{selected.token,selected.address},selected.bytes},scene,pendingReason,PTSceneOrder::Purpose::recordingPreview,rayMask);
     }
     void Forget(U64 ticket){catalog.Forget(ticket);}
     void Invalidate(){catalog.Invalidate("capture_external");}

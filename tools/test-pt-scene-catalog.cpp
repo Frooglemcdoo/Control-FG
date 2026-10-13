@@ -24,6 +24,42 @@ static U64 Position(const PTSceneDispatch::Scene& scene){
 }
 int main(){
     Catalog c;PTSceneDispatch::Scene scene;
+    // PT rays use inclusion mask 1. Mask-2 objects cannot reach their SBT, so
+    // unavailable geometry/owners there must not disable visible mask-1 data.
+    Catalog maskedScene;auto maskedGeneration=maskedScene.Begin(1);
+    assert(maskedScene.Record(1,maskedGeneration,Blas(bottom,0x2000)));
+    auto maskedTop=Tlas(bottom);maskedTop.instances[0].idMask=0x01000001;
+    auto excluded=maskedTop.instances[0];excluded.idMask=0x02000002;excluded.blas=0xd000;excluded.contributionFlags=8;
+    maskedTop.instances.push_back(excluded);maskedTop.bottom.emplace(0xd000,Allocation{{99,0xd000},256});
+    auto unowned=excluded;unowned.blas=0xe000;maskedTop.instances.push_back(unowned);maskedTop.bottom.emplace(0xe000,Allocation{});
+    assert(maskedScene.Record(1,maskedGeneration,maskedTop));assert(maskedScene.Mark(1,maskedGeneration,800));
+    assert(maskedScene.Submit(1,{{1,maskedGeneration}}));
+    const char* maskedReason=nullptr;
+    assert(maskedScene.Scene(800,top,scene,&maskedReason)==Status::missing);
+    assert(maskedScene.Scene(800,top,scene,&maskedReason,PTSceneOrder::Purpose::submission,1)==Status::ready);
+    assert(scene.instances.size()==1&&scene.blas.size()==1&&Position(scene)==0x2000);
+    assert(maskedScene.Scene(800,top,scene,&maskedReason,PTSceneOrder::Purpose::recordingPreview,1)==Status::ready);
+    // Making the unavailable geometry reachable must block both stages.
+    maskedGeneration=maskedScene.Begin(1);maskedTop.instances[1].idMask=0x03000002;
+    assert(maskedScene.Record(1,maskedGeneration,maskedTop));assert(maskedScene.Mark(1,maskedGeneration,801));
+    assert(maskedScene.Submit(1,{{1,maskedGeneration}}));
+    assert(maskedScene.Scene(801,top,scene,&maskedReason,PTSceneOrder::Purpose::submission,1)==Status::missing);
+    assert(std::strcmp(maskedReason,"scene_no_ordered_build")==0);
+    assert(maskedScene.Scene(801,top,scene,&maskedReason,PTSceneOrder::Purpose::recordingPreview,1)==Status::missing);
+    Snapshot rejectedBuild;rejectedBuild.destination={{99,0xd000},256};rejectedBuild.unavailable="scene_update_while_pt_off";
+    maskedGeneration=maskedScene.Begin(1);assert(maskedScene.Record(1,maskedGeneration,rejectedBuild));
+    assert(maskedScene.Mark(1,maskedGeneration,802));assert(maskedScene.Submit(1,{{1,maskedGeneration}}));
+    assert(maskedScene.Scene(802,top,scene,&maskedReason,PTSceneOrder::Purpose::submission,1)==Status::missing);
+    assert(std::strcmp(maskedReason,"scene_update_while_pt_off")==0);
+    assert(maskedScene.RetireHistory({}));
+    assert(maskedScene.Scene(802,top,scene,&maskedReason,PTSceneOrder::Purpose::submission,1)==Status::missing);
+    assert(std::strcmp(maskedReason,"scene_update_while_pt_off")==0);
+    maskedTop.instances[1].idMask=0x02000002;maskedTop.instances[2].idMask=0x01000003;
+    maskedGeneration=maskedScene.Begin(1);assert(maskedScene.Record(1,maskedGeneration,maskedTop));
+    assert(maskedScene.Record(1,maskedGeneration,Blas({{100,0xe000},256},0x4000))); // Later owner cannot repair captured zero.
+    assert(maskedScene.Mark(1,maskedGeneration,803));assert(maskedScene.Submit(1,{{1,maskedGeneration}}));
+    assert(maskedScene.Scene(803,top,scene,&maskedReason,PTSceneOrder::Purpose::submission,1)==Status::missing);
+    assert(std::strcmp(maskedReason,"scene_blas_owner_missing")==0);
     // A ready TLAS/BLAS cut survives unrelated future queued waits. The real
     // waiting cut must still be pending, with a reason reaching the caller.
     Catalog future;auto futureGeneration=future.Begin(1);const char* reason=nullptr;

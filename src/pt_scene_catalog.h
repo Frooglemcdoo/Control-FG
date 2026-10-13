@@ -4,6 +4,7 @@
 #include <memory>
 #include <mutex>
 #include <atomic>
+#include <cstring>
 // Immutable recording snapshots joined to queue execution order. Allocation
 // identities are captured by the host while observing the native build. This
 // catalog never interprets CPU recording order as GPU execution order.
@@ -15,6 +16,7 @@ struct Allocation {Key key{};U64 bytes=0;};
 struct Snapshot {
     enum class Kind {unknown,blas,tlas,copy};
     Kind kind=Kind::unknown;
+    const char* unavailable="scene_unknown_build";
     Allocation destination{},source{};
     std::vector<PTSceneTopology::Geometry> geometry;
     std::vector<PTSceneTopology::Instance> instances;
@@ -86,7 +88,10 @@ public:
             for(const auto& i:snapshot.instances){
                 if(!(i.idMask>>24))continue;
                 const auto b=snapshot.bottom.find(i.blas);
-                admitted=admitted&&b!=snapshot.bottom.end()&&Known(b->second)&&b->second.key.address==i.blas;
+                // Freeze missing identities as missing. A particular ray mask
+                // may exclude this instance; Scene validates every included
+                // owner without resolving a missing token to a later owner.
+                admitted=admitted&&i.blas&&b!=snapshot.bottom.end()&&(!Known(b->second)||b->second.key.address==i.blas);
             }
             break;
         case Snapshot::Kind::copy:admitted=Known(snapshot.source);break;
@@ -118,7 +123,7 @@ public:
                 const auto before=graph.Mark(queue);if(!before){Fail("graph_capacity");return false;}
                 const U64 version=op.snapshot->kind==Snapshot::Kind::unknown?0:++serial;
                 if(version)versions.emplace(version,Version{op.snapshot,before});
-                if(!graph.Write(queue,op.snapshot->destination.key,version)){Fail("graph_write");return false;}
+                if(!graph.Write(queue,op.snapshot->destination.key,version,op.snapshot->unavailable)){Fail("graph_write");return false;}
                 if(!version)rows-=Rows(*op.snapshot);
             }
             recordedOperations-=r.operations.size();r.operations.clear();
@@ -190,20 +195,24 @@ public:
     bool Healthy()const {return valid.load(std::memory_order_acquire);}
     const char* Failure()const {std::lock_guard<std::mutex> guard(mutex);return failure;}
     void Invalidate(const char* reason="external"){std::lock_guard<std::mutex> guard(mutex);Fail(reason);}
-    Status Scene(U64 ticket,Allocation selected,PTSceneDispatch::Scene& output,const char** pendingReason=nullptr,PTSceneOrder::Purpose purpose=PTSceneOrder::Purpose::submission)const {
+    Status Scene(U64 ticket,Allocation selected,PTSceneDispatch::Scene& output,const char** pendingReason=nullptr,PTSceneOrder::Purpose purpose=PTSceneOrder::Purpose::submission,unsigned rayMask=0xff)const {
         output={};if(pendingReason)*pendingReason="scene_submission_pending";std::lock_guard<std::mutex> guard(mutex);if(!valid)return Status::invalid;
         const auto c=cuts.find(ticket);if(c==cuts.end())return Status::missing;if(!c->second)return Status::pending;
-        if(!Known(selected))return Status::missing;
+        if(!Known(selected)||!rayMask||rayMask>0xff)return Status::missing;
         const Snapshot* top=nullptr;std::set<U64> visiting;
         auto status=Resolve(c->second,selected.key,top,visiting,pendingReason,purpose);if(status!=Status::ready){if(status==Status::missing&&pendingReason)*pendingReason="scene_tlas_unavailable";return status;}
         if(top->kind!=Snapshot::Kind::tlas){if(pendingReason)*pendingReason="scene_tlas_invalid";return Status::missing;}
         PTSceneOrder::Selection version;status=graph.Select(c->second,selected.key,version,pendingReason,purpose);if(status!=Status::ready)return status;
         PTSceneDispatch::Scene scene;scene.address=selected.key.address;scene.version=version.version;
-        scene.tlas={selected.key.token,selected.bytes};scene.instances=top->instances;
-        for(const auto& instance:top->instances){
+        scene.tlas={selected.key.token,selected.bytes};
+        // Only instances intersecting the actual TraceRay inclusion mask can
+        // reach this private SBT. Preserve original contributions/row numbers.
+        for(const auto& instance:top->instances)if((instance.idMask>>24)&rayMask)scene.instances.push_back(instance);
+        for(const auto& instance:scene.instances){
             if(!(instance.idMask>>24)||scene.blas.count(instance.blas))continue;
             const auto a=top->bottom.find(instance.blas);if(a==top->bottom.end())return Status::missing;
-            const Snapshot* bottom=nullptr;status=Resolve(c->second,a->second.key,bottom,visiting,pendingReason,purpose);if(status!=Status::ready){if(status==Status::missing&&pendingReason)*pendingReason="scene_blas_unavailable";return status;}
+            if(!Known(a->second)){if(pendingReason)*pendingReason="scene_blas_owner_missing";return Status::missing;}
+            const Snapshot* bottom=nullptr;status=Resolve(c->second,a->second.key,bottom,visiting,pendingReason,purpose);if(status!=Status::ready){if(status==Status::missing&&pendingReason&&(!*pendingReason||std::strcmp(*pendingReason,"none")==0))*pendingReason="scene_blas_unavailable";return status;}
             if(bottom->kind!=Snapshot::Kind::blas||!scene.topology.Build(instance.blas,bottom->geometry)){if(pendingReason)*pendingReason="scene_blas_invalid";return Status::missing;}
             PTSceneOrder::Selection bottomVersion;status=graph.Select(c->second,a->second.key,bottomVersion,pendingReason,purpose);if(status!=Status::ready)return status;
             scene.blas.emplace(instance.blas,PTSceneDispatch::Scene::Acceleration{a->second.key.token,a->second.bytes,bottomVersion.version});

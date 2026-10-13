@@ -162,7 +162,7 @@ public:
             Erase(found);return Status::rejected;
         }
         PTSceneDispatch::Scene scene;const char* pendingReason=nullptr;
-        const auto selected=owner.Scenes().PreviewScene(serial,entry.acceleration,scene,&pendingReason);
+        const auto selected=owner.Scenes().PreviewScene(serial,entry.acceleration,scene,&pendingReason,1);
         entry.scenePending=selected==PTSceneOrder::Status::pending?pendingReason:nullptr;
         if(entry.scenePending)return Status::pending;
         if(selected!=PTSceneOrder::Status::ready){Erase(found,selected==PTSceneOrder::Status::missing?(pendingReason?pendingReason:"scene_catalog_missing"):"scene_catalog_rejected");return Status::rejected;}
@@ -189,7 +189,7 @@ public:
         if(reason)*reason="submission_proof_mismatch";
         if(!submissionTicket||!proof||proof->owner!=&owner||!owner.Active()||!engineFrame||proof->engineFrame!=engineFrame||
            proof->width!=width||proof->height!=height)return Status::rejected;
-        PTSceneDispatch::Scene scene;const auto selected=owner.Scenes().Scene(submissionTicket,proof->acceleration,scene,reason);
+        PTSceneDispatch::Scene scene;const auto selected=owner.Scenes().Scene(submissionTicket,proof->acceleration,scene,reason,1);
         if(selected==PTSceneOrder::Status::pending)return Status::pending;
         if(selected!=PTSceneOrder::Status::ready){if(reason)*reason="submission_scene_rejected";return Status::rejected;}
         const bool same=owner.Resources().Revalidate(scene,proof->table,proof->exports,proof->plan);
