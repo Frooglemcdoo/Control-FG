@@ -95,9 +95,9 @@ The captured native primary DXBC RDEF marks inverse-screen (+8), inverse-output
 unused. R2 derives integral render extents from inverse-screen, ignores unused
 screen/output fields for view equality and uses current frame for its private RNG.
 RDEF unused does **not** prove bytes are absent: captured shader metadata alone
-cannot establish the runtime contents of these upload slices. Therefore world and
-projection matrices still must be finite, form inverse pairs and match across
-passes; missing transforms cannot silently admit an incorrect camera. Exact field
+cannot establish the runtime contents of these upload slices. Therefore consumed world-transform components still must be finite and form an affine
+inverse pair; ClipToView must be finite and nonsingular. These consumed fields
+must match across passes (unused world .w lanes and ViewToClip are ignored); missing transforms cannot silently admit an incorrect camera. Exact field
 failure reasons are now logged. If those guards reject, additional provider/camera
 integration remains necessary; R2 must not be described as confirmed primary PT.
 

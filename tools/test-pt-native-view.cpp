@@ -9,6 +9,7 @@ int main(){
     const std::uint32_t frame=45;std::memcpy(a.bytes.data()+1112,&frame,4);
     assert(a.Decode()&&a.width==2560&&a.height==1440); // Unused screen/output fields may be zero.
     auto b=a;Write(b,0,std::numeric_limits<float>::quiet_NaN());Write(b,16,3840);Write(b,20,2160);
+    Write(b,44,std::numeric_limits<float>::quiet_NaN());Write(b,160,std::numeric_limits<float>::quiet_NaN());
     assert(b.Decode()&&a.Same(b));b.bytes[1000]^=1;assert(b.Decode()&&a.Same(b));
     b=a;Write(b,80,1);Write(b,144,-1);assert(b.Decode()&&!a.Same(b));
     b=a;b.bytes[1112]^=1;assert(b.Decode()&&!a.Same(b));

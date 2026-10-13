@@ -57,7 +57,7 @@ M12R2 CHANGES
   This preserves native rendering; it does not claim to repair invalid history.
 - Derive render dimensions from the inverse-screen fields actually referenced by
   the native shaders. Ignore unused screen/output fields when comparing views.
-- Validate camera matrix inverse pairs before private tracing. Unpopulated camera
+- Validate the consumed world-transform pair and projection before tracing. Missing
   matrices still reject PT; unused native fields are not assumed to be valid.
 - Log exact view rejection, catalog health, copy failures, allocation/reuse counts.
 
