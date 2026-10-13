@@ -137,11 +137,21 @@ inline Failure Prepare(const Selection& selected,const Scene& scene,const Table&
             if(!attributeToken||attributeToken!=table.allocationTokens[i][1]||g.indexToken!=table.allocationTokens[i][0])return {Status::allocation,i*table.rays};
             const auto& c=binding.constants;U64 indexAddress=0;
             const U64 padded=(U64(c[8])+3)&~U64(3);
-            const U64 capacity=f.indexCapacity?f.indexCapacity:f.indexBytes;
+            if(f.indexCopyBase&&f.indexBytes>UINT64_MAX-3)return {Status::allocation,i*table.rays};
+            const U64 capacity=f.indexCopyBase?((f.indexBytes+3)&~U64(3)):(f.indexCapacity?f.indexCapacity:f.indexBytes);
             if(!PTNativeBinding::IndexAddress(binding,indexAddress)||indexAddress!=g.indices||
                binding.indices<f.indexBase||binding.indices-f.indexBase>f.indexBytes||
                c[8]>f.indexBytes-(binding.indices-f.indexBase)||
                binding.indices-f.indexBase>capacity||padded>capacity-(binding.indices-f.indexBase))return {Status::allocation,i*table.rays};
+            if(f.indexCopyBase){
+                const U64 needed=U64(g.indexCount)*g.indexStride;
+                if(!f.indexCopyBytes||!f.indexCapacity||f.indexCopyBase%4||f.indexCopyBase<f.indexBase||
+                   f.indexCopyBase-f.indexBase>f.indexBytes||f.indexCopyBytes>f.indexBytes-(f.indexCopyBase-f.indexBase)||g.indices<f.indexCopyBase||
+                   g.indices-f.indexCopyBase>f.indexCopyBytes||needed>f.indexCopyBytes-(g.indices-f.indexCopyBase)||
+                   g.indices-f.indexCopyBase>UINT32_MAX||f.indexCapacity>UINT32_MAX||
+                   f.indexCopyBytes>f.indexCapacity||f.indexCopyBytes>UINT64_MAX-3||
+                   ((f.indexCopyBytes+3)&~U64(3))>f.indexCapacity)return {Status::allocation,i*table.rays};
+            }
             resolved.geometry={{{binding.indices,padded,scene.version},g.indices},{{f.positionBase,f.positionBytes,scene.version},g.positions},
                 {{binding.attributes,c[9],scene.version},binding.attributes},g.indexStride,g.indexCount,g.vertexCount,
                 static_cast<std::uint32_t>(g.stride),c[2],c[5],c[6],c[3],244000u/35u,scene.version,true,true,true};
@@ -163,9 +173,15 @@ inline Failure Prepare(const Selection& selected,const Scene& scene,const Table&
                 return {Status::conversion,record};
             if(g.frozen){
                 const auto& f=*g.frozen;
-                const U64 indices=f.privateIndex+(binding.indices-f.indexBase),positions=f.privatePosition+(g.positions-f.positionBase);
+                const U64 indices=f.indexCopyBase?f.privateIndex:f.privateIndex+(binding.indices-f.indexBase),positions=f.privatePosition+(g.positions-f.positionBase);
                 std::memcpy(pending.records[record].data()+32,&indices,8);
                 std::memcpy(pending.records[record].data()+48,&positions,8);
+                if(f.indexCopyBase){
+                    const auto offset=static_cast<std::uint32_t>(g.indices-f.indexCopyBase);
+                    const auto bytes=static_cast<std::uint32_t>(f.indexCapacity);
+                    std::memcpy(pending.records[record].data()+56,&offset,4);
+                    std::memcpy(pending.records[record].data()+56+8*4,&bytes,4);
+                }
             }
         }
     }

@@ -22,7 +22,7 @@ class Runtime {
     std::shared_ptr<PTGeometrySnapshot::Pool> geometryPool=std::make_shared<PTGeometrySnapshot::Pool>();
     U64 nextToken=0,held=0;bool active=true;
 public:
-    struct Stats {U64 retained=0,rejected=0,budget=0,observed=0,unownedGeometry=0,validatedRelease=0,mismatchedRelease=0,peakBytes=0;U64 resolved[6]{};};
+    struct Stats {U64 retained=0,rejected=0,budget=0,observed=0,unownedGeometry=0,validatedRelease=0,mismatchedRelease=0,peakBytes=0,geometryCopyBytes=0,geometryWholeIndexBytes=0;U64 resolved[6]{};};
 private:
     Stats stats{};const char* geometryFailure="none";
     std::shared_ptr<LeaseBudget> leaseBudget;
@@ -145,17 +145,17 @@ public:
                bytes>allocation.bytes-(address-allocation.address))return false;
             const U64 first=(address-allocation.address)&~U64(3),end=address-allocation.address+bytes;
             if(end>UINT64_MAX-3)return false;
-            const U64 last=(end+3)&~U64(3);if(last>allocation.bytes)return false;
+            const U64 last=(std::min)((end+3)&~U64(3),allocation.bytes);
             auto inserted=ranges.emplace(token,std::make_pair(first,last));
             if(!inserted.second){auto& span=inserted.first->second;span.first=(std::min)(span.first,first);span.second=(std::max)(span.second,last);}
             return true;
         };
         geometryFailure="geometry_copy_range";
         for(const auto& g:geometry){
-            // Native SBT index roots cover their complete index allocation,
-            // including offsets/padded raw loads. Preserve that contract.
-            const auto& indices=sources.at(g.indexToken).allocation;
-            ranges[g.indexToken]={0,indices.bytes};
+            // Preserve only the indices read by this BLAS. The private SBT
+            // rebases its index root/offset and narrows the raw-load bounds.
+            // Original allocation bounds are retained separately for validation.
+            if(!include(g.indexToken,g.indices,U64(g.indexCount)*g.indexStride))return false;
             if(!g.vertexCount||g.stride<12||
                U64(g.vertexCount-1)>(UINT64_MAX-12)/g.stride||
                !include(g.positionToken,g.positions,U64(g.vertexCount-1)*g.stride+12))return false;
@@ -165,11 +165,15 @@ public:
         for(const auto& g:geometry){
             auto f=std::make_shared<PTSceneTopology::FrozenGeometry>();
             const auto& i=sources.at(g.indexToken);const auto& p=sources.at(g.positionToken);
-            f->indexBase=i.allocation.address+i.offset;f->indexBytes=i.bytes;f->positionBase=p.allocation.address+p.offset;f->positionBytes=p.bytes;frozen.push_back(std::move(f));
+            f->indexBase=i.allocation.address;f->indexBytes=i.allocation.bytes;
+            f->indexCopyBase=i.allocation.address+i.offset;f->indexCopyBytes=i.bytes;f->positionBase=p.allocation.address+p.offset;f->positionBytes=p.bytes;frozen.push_back(std::move(f));
         }
         std::vector<PTGeometrySnapshot::Source> ordered;for(const auto& item:sources)ordered.push_back(item.second);
         PTCommandBindings::Mute privateCopies;
         if(!PTGeometrySnapshot::Record(list,ordered,budget,transfer,geometryPool,&geometryFailure))return false;
+        for(const auto& source:ordered)stats.geometryCopyBytes+=source.bytes;
+        std::set<U64> indexTokens;for(const auto& g:geometry)indexTokens.insert(g.indexToken);
+        for(const auto token:indexTokens)stats.geometryWholeIndexBytes+=sources.at(token).allocation.bytes;
         for(std::size_t n=0;n<geometry.size();++n){
             auto& f=*frozen[n];f.owner=transfer->storage;
             f.privateIndex=transfer->storage->copies.at(geometry[n].indexToken)->GetGPUVirtualAddress();

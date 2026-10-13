@@ -154,6 +154,22 @@ int main(){
     assert(prepare().status==Status::prepared);
     copy->indexCapacity=6;assert(prepare().status==Status::allocation);copy->indexCapacity=8;
     copy->indexBytes=5;assert(prepare().status==Status::allocation);copy->indexBytes=6;
+    // Large original SBT range, small R16 slice starting on the high halfword.
+    // Private roots must not point before the allocated copy or retain the old offset.
+    copy->indexBase=0x1000;copy->indexBytes=4096;copy->indexCopyBase=0x1080;copy->indexCopyBytes=8;copy->indexCapacity=8;
+    owners.Remove(6);owners.Insert({6,0x1000,4096});
+    b.constants[0]=0x82;b.constants[8]=4096;
+    assert(PTNativeShaderTable::Build(layout,identifiers,table.version,2,{b},owners,table));
+    assert(scene.topology.Build(0xb000,{{0x1082,0x2000,12,2,3,3,6,2,copy}}));
+    assert(prepare().status==Status::prepared);
+    for(const auto& r:plan.records){
+        std::memcpy(&copiedAddress,r.data()+32,8);assert(copiedAddress==0x5000);
+        std::memcpy(&limit,r.data()+56,4);assert(limit==2);
+        std::memcpy(&limit,r.data()+56+8*4,4);assert(limit==8);
+    }
+    copy->indexCopyBytes=7;assert(prepare().status==Status::allocation);copy->indexCopyBytes=8;
+    copy->indexCopyBase=0x1084;assert(prepare().status==Status::allocation);copy->indexCopyBase=0x1080;
+    copy->indexCapacity=7;assert(prepare().status==Status::allocation);copy->indexCapacity=8;
     copy->owner.reset();assert(prepare().status==Status::allocation&&plan.records.empty());
     std::puts("PASS dispatch preflight: selected scene/table/PSO, frozen topology, complete SBT, exact geometry, allocation generations and padded bounds.");
 }

@@ -140,14 +140,14 @@ static void TestGeometrySnapshot(ID3D12Device* device,bool common=false,bool tem
     std::memcpy(wrapper.data(),&raw,8);std::memcpy(wrapper.data()+0x20,&state,4);std::memcpy(wrapper.data()+0x30,&desc.Width,8);std::memcpy(wrapper.data()+0x48,&address,8);
     PTOwnedScene::Runtime bank;assert(bank.Created(reinterpret_cast<UINT_PTR>(wrapper.data()),source.Get(),address,desc.Width)==1);
     std::vector<PTSceneTopology::Geometry> geometry{{address,address+256,12,2,3,3,1,1}};
-    auto budget=std::make_shared<PTOwnedScene::LeaseBudget>(desc.Width);
+    auto budget=std::make_shared<PTOwnedScene::LeaseBudget>(292);
     std::shared_ptr<PTGeometrySnapshot::Transfer> transfer;
-    assert(bank.FreezeGeometry(list.Get(),geometry,budget,transfer)&&budget->Held()==desc.Width);
+    assert(bank.FreezeGeometry(list.Get(),geometry,budget,transfer)&&budget->Held()==292);
     assert(transfer->storage->copies.size()==1&&geometry[0].frozen); // Same backing copied once.
     std::shared_ptr<PTGeometrySnapshot::Transfer> rejected;
     assert(!bank.FreezeGeometry(list.Get(),geometry,budget,rejected)&&!rejected); // No commands on budget failure.
     // Separate index/vertex allocations: copy the union of needed vertices,
-    // preserving complete native index roots. The old whole-buffer copies
+    // rebasing bounded index roots. The old whole-buffer copies
     // cannot fit this deliberately exact range budget.
     PTOwnedScene::Runtime rangedBank;
     auto indexSource=make(D3D12_HEAP_TYPE_DEFAULT,sourceState);
@@ -159,10 +159,13 @@ static void TestGeometrySnapshot(ID3D12Device* device,bool common=false,bool tem
     assert(rangedBank.Created(reinterpret_cast<UINT_PTR>(wrapper.data()),source.Get(),address,desc.Width)==1);
     assert(rangedBank.Created(reinterpret_cast<UINT_PTR>(indexWrapper.data()),indexSource.Get(),indexAddress,desc.Width)==1);
     std::vector<PTSceneTopology::Geometry> rangedGeometry{{indexAddress,address+256,12,2,3,3,2,1},{indexAddress+8,address+320,12,2,3,3,2,1}};
-    auto rangeBudget=std::make_shared<PTOwnedScene::LeaseBudget>(desc.Width+100);
+    auto rangeBudget=std::make_shared<PTOwnedScene::LeaseBudget>(116);
     std::shared_ptr<PTGeometrySnapshot::Transfer> rangeTransfer;
     assert(rangedBank.FreezeGeometry(list.Get(),rangedGeometry,rangeBudget,rangeTransfer));
-    assert(rangeBudget->Held()==desc.Width+100);
+    assert(rangeBudget->Held()==116);
+    assert(rangeTransfer->storage->copies.at(2)->GetDesc().Width==16);
+    assert(rangedGeometry[0].frozen->indexCopyBase==indexAddress&&rangedGeometry[0].frozen->indexCopyBytes==16);
+    assert(rangedGeometry[0].frozen->indexBase==indexAddress&&rangedGeometry[0].frozen->indexBytes==desc.Width);
     assert(rangedGeometry[0].frozen->positionBase==address+256&&rangedGeometry[0].frozen->positionBytes==100);
     assert(rangeTransfer->storage->copies.at(1)->GetDesc().Width==100);
     auto invalidRange=rangedGeometry;invalidRange[0].positions=address+desc.Width-4;
@@ -188,7 +191,7 @@ static void TestGeometrySnapshot(ID3D12Device* device,bool common=false,bool tem
     transition(source.Get(),D3D12_RESOURCE_STATE_COPY_DEST,sourceState);
     auto* frozen=transfer->storage->copies.at(1).Get();
     transition(frozen,D3D12_RESOURCE_STATE_COMMON,D3D12_RESOURCE_STATE_COPY_SOURCE);
-    list->CopyBufferRegion(readback.Get(),0,frozen,0,512);
+    list->CopyBufferRegion(readback.Get(),0,frozen,0,292);
     transition(frozen,D3D12_RESOURCE_STATE_COPY_SOURCE,D3D12_RESOURCE_STATE_COMMON);
     auto* rangeFrozen=rangeTransfer->storage->copies.at(1).Get();
     transition(rangeFrozen,D3D12_RESOURCE_STATE_COMMON,D3D12_RESOURCE_STATE_COPY_SOURCE);
@@ -201,12 +204,12 @@ static void TestGeometrySnapshot(ID3D12Device* device,bool common=false,bool tem
     ComPtr<ID3D12Fence> gate,done;assert(SUCCEEDED(device->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&gate))));
     assert(SUCCEEDED(device->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&done))));
     assert(SUCCEEDED(queue->Wait(gate.Get(),1)));ID3D12CommandList* commands=list.Get();queue->ExecuteCommandLists(1,&commands);
-    assert(retirement.After(queue.Get(),batch));transfer.reset();geometry.clear();retirement.Poll();assert(budget->Held()==desc.Width);
+    assert(retirement.After(queue.Get(),batch));transfer.reset();geometry.clear();retirement.Poll();assert(budget->Held()==292);
     assert(SUCCEEDED(queue->Signal(done.Get(),1)));assert(SUCCEEDED(gate->Signal(1)));
     HANDLE event=CreateEventW(nullptr,FALSE,FALSE,nullptr);assert(event&&SUCCEEDED(done->SetEventOnCompletion(1,event)));
     assert(WaitForSingleObject(event,30000)==WAIT_OBJECT_0);CloseHandle(event);
-    D3D12_RANGE range{0,512};assert(SUCCEEDED(readback->Map(0,&range,reinterpret_cast<void**>(&mapped))));
-    for(unsigned n=0;n<512;++n)assert(mapped[n]==static_cast<unsigned char>(n));readback->Unmap(0,&empty);
+    D3D12_RANGE range{0,292};assert(SUCCEEDED(readback->Map(0,&range,reinterpret_cast<void**>(&mapped))));
+    for(unsigned n=0;n<292;++n)assert(mapped[n]==static_cast<unsigned char>(n));readback->Unmap(0,&empty);
     D3D12_RANGE rangedRead{0,100};assert(SUCCEEDED(rangeReadback->Map(0,&rangedRead,reinterpret_cast<void**>(&mapped))));
     for(unsigned n=0;n<100;++n)assert(mapped[n]==static_cast<unsigned char>(n+256));rangeReadback->Unmap(0,&empty);
     D3D12_RANGE shortRange{0,8};assert(SUCCEEDED(shortReadback->Map(0,&shortRange,reinterpret_cast<void**>(&mapped))));
@@ -215,7 +218,7 @@ static void TestGeometrySnapshot(ID3D12Device* device,bool common=false,bool tem
     shortReadback->Unmap(0,&empty);shortTransfer.reset();assert(shortBudget->Held()==0);
     rangeTransfer.reset();rangedGeometry.clear();invalidRange.clear();assert(rangeBudget->Held()==0);
     retirement.Poll();assert(budget->Held()==0);
-    const auto idle=bank.GeometryStatistics();assert(idle.bytes==desc.Width&&idle.allocations==1&&idle.reuses==0);
+    const auto idle=bank.GeometryStatistics();assert(idle.bytes==292&&idle.allocations==1&&idle.reuses==0);
     assert(SUCCEEDED(allocator->Reset()));assert(SUCCEEDED(list->Reset(allocator.Get(),nullptr)));
     source=make(D3D12_HEAP_TYPE_DEFAULT,sourceState);
     raw=source.Get();const auto nextAddress=source->GetGPUVirtualAddress();
@@ -229,7 +232,7 @@ static void TestGeometrySnapshot(ID3D12Device* device,bool common=false,bool tem
     assert(bank.GeometryStatistics().reuses==1&&bank.GeometryStatistics().bytes==0);
     assert(SUCCEEDED(list->Close()));assert(SUCCEEDED(list->Reset(allocator.Get(),nullptr)));
     transfer.reset();geometry.clear();assert(budget->Held()==0);
-    assert(bank.GeometryStatistics().bytes==desc.Width);
+    assert(bank.GeometryStatistics().bytes==292);
     std::puts("PASS GPU geometry snapshot: build-time bytes survive later source overwrite/release, shared backing copied once, budget failure emits no copy, fence prevents early retirement.");
 }
 static void TestUntrackedSceneDestinations(ID3D12Device* device){
