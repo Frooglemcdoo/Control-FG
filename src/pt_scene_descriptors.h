@@ -11,6 +11,17 @@ namespace PTSceneDescriptors {
 using U64=std::uint64_t;
 struct Acceleration {U64 address=0,token=0,bytes=0;};
 struct Range {U64 start=0,count=0;};
+// Native copy range counts are not descriptor counts. In particular, Control
+// can copy its large bindless table from thousands of one-descriptor ranges.
+// Preserve all ranges; do not impose a small pass-table limit on this API.
+template<class Handle>
+bool CopyRanges(unsigned count,const Handle* handles,const unsigned* sizes,std::vector<Range>& output){
+    output.clear();if(count&&!handles)return false;
+    output.reserve(count);
+    for(unsigned n=0;n<count;++n){const auto size=sizes?sizes[n]:1u;
+        if(size)output.push_back({static_cast<U64>(handles[n].ptr),size});}
+    return true;
+}
 class Index {
     std::mutex mutex;
     std::map<U64,Acceleration> entries;
@@ -34,6 +45,7 @@ public:
         ++asWrites;
         entries.emplace(handle,as);return true;
     }
+    bool InvalidateAll(const char* reason){std::lock_guard<std::mutex> guard(mutex);return Fail(reason);}
     bool Invalidate(Range range){
         std::lock_guard<std::mutex> guard(mutex);if(!valid)return false;
         if(!Span(range))return Fail("descriptor_invalidate_span");

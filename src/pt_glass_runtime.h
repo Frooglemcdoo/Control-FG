@@ -179,10 +179,11 @@ static void STDMETHODCALLTYPE CopyAllHook(ID3D12Device* d,UINT dstCount,const D3
     PTTableMirror::Scope tableScope(PTSceneLive::owner.Active());
     copyAll(d,dstCount,dst,dstSizes,srcCount,src,srcSizes,type);
     if(!PTSceneLive::owner.Active()||type!=D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV)return;
-    if((dstCount&&!dst)||(srcCount&&!src)||dstCount>8192||srcCount>8192){PTSceneLive::owner.InvalidateDescriptors();if(tableScope.capture)PTTableMirror::bank.Invalidate();return;}
     std::vector<PTSceneDescriptors::Range> destinations,sources;
-    for(UINT i=0;i<dstCount;++i){const UINT n=dstSizes?dstSizes[i]:1;if(n)destinations.push_back({dst[i].ptr,n});}
-    for(UINT i=0;i<srcCount;++i){const UINT n=srcSizes?srcSizes[i]:1;if(n)sources.push_back({src[i].ptr,n});}
+    if(!PTSceneDescriptors::CopyRanges(dstCount,dst,dstSizes,destinations)||
+       !PTSceneDescriptors::CopyRanges(srcCount,src,srcSizes,sources)){
+        PTSceneLive::owner.InvalidateDescriptors();if(tableScope.capture)PTTableMirror::bank.Invalidate();return;
+    }
     if(!destinations.empty()||!sources.empty())PTSceneLive::owner.Copy(destinations,sources);
     if(tableScope.capture){
         std::vector<PTTableMirror::Range> to,from;

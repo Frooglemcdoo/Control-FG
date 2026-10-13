@@ -27,6 +27,25 @@ int main(){
     Index alignment(32);assert(alignment.Write(1001,{0x10000,10,256}));
     assert(!alignment.Copy({{2000,1}},{{1000,1}}));
     assert(std::string(alignment.Statistics().failure)=="descriptor_copy_alignment");
+    // Reproduce the native bindless initialization shape that the former 8192
+    // range-count guard rejected. Unknown sources must still erase stale AS
+    // entries; a known descriptor at the far end must retain its exact token.
+    struct Handle {U64 ptr;};const unsigned count=244000;
+    std::vector<Handle> handles(count);for(unsigned n=0;n<count;++n)handles[n]={1000+U64(n)*64};
+    const Handle destination{32000000};const unsigned destinationSize=count;
+    std::vector<Range> to,from;
+    assert(CopyRanges(1,&destination,&destinationSize,to));
+    assert(CopyRanges(count,handles.data(),nullptr,from)&&from.size()==count);
+    Index large(32);assert(large.Write(handles.back().ptr,{0x10000,19,256}));
+    assert(large.Write(destination.ptr,{0x20000,20,256}));
+    assert(large.Copy(to,from)&&large.Statistics().healthy);
+    assert(!large.Read(destination.ptr).token);
+    assert(large.Read(destination.ptr+U64(count-1)*32).token==19);
+    assert(CopyRanges(0,static_cast<const Handle*>(nullptr),nullptr,to)&&to.empty());
+    assert(!CopyRanges(1,static_cast<const Handle*>(nullptr),nullptr,to));
+    const unsigned zero=0;assert(CopyRanges(1,&destination,&zero,to)&&to.empty());
+    assert(!large.InvalidateAll("descriptor_copy_null_ranges"));
+    assert(std::string(large.Statistics().failure)=="descriptor_copy_null_ranges");
     Index overflow(32);assert(!overflow.Invalidate({UINT64_MAX-16,1}));
     std::puts("PASS AS descriptor identities: sparse copies, split ranges, overwrite, heap reuse, generation preservation and fail-closed bounds.");
 }
