@@ -46,9 +46,9 @@ try {
     $logs=Join-Path $root 'ControlFGProbe';New-Item -ItemType Directory -Path $logs | Out-Null
     $log=Join-Path $logs 'probe-20261013-232951-021-44300.log'
     'PT_PRIMARY_STARTUP build=M12R41 capture=1 restart_only=1' | Set-Content $log
-    $script:fakeGame=[pscustomobject]@{Id=44300;StartTime=(Get-Date);HasExited=$false;Modules=@([pscustomobject]@{ModuleName='dxgi.dll';FileName=(Join-Path $root 'dxgi.dll')})}
-    $script:fakeGame | Add-Member -MemberType ScriptMethod -Name Refresh -Value {}
-    $script:fakeWpr=Join-Path $root 'wpr-test.cmd'
+    $fakeGame=[pscustomobject]@{Id=44300;StartTime=(Get-Date);HasExited=$false;Modules=@([pscustomobject]@{ModuleName='dxgi.dll';FileName=(Join-Path $root 'dxgi.dll')})}
+    $fakeGame | Add-Member -MemberType ScriptMethod -Name Refresh -Value {}
+    $fakeWpr=Join-Path $root 'wpr-test.cmd'
     @'
 @echo off
 if "%1"=="-profiles" (
@@ -70,9 +70,9 @@ if "%1"=="-stop" (
 )
 echo unexpected>>"%~dp0calls.txt"
 exit /b 1
-'@ | Set-Content $script:fakeWpr -Encoding ASCII
-    function Get-Command { [CmdletBinding()]param($Name) if($Name -ne 'wpr.exe'){throw 'Unexpected command lookup'};[pscustomobject]@{Source=$script:fakeWpr} }
-    function Get-Process { [CmdletBinding()]param($Name) $script:fakeGame }
+'@ | Set-Content $fakeWpr -Encoding ASCII
+    function Get-Command { [CmdletBinding()]param($Name) if($Name -ne 'wpr.exe'){throw 'Unexpected command lookup'};[pscustomobject]@{Source=$fakeWpr} }
+    function Get-Process { [CmdletBinding()]param($Name) $fakeGame }
     function Start-Sleep { param($Seconds) }
     function Read-Host { param($Prompt) '' }
     & (Join-Path $root 'PT-Profile.ps1') -Mode PT-Off -Resolution Quality -OutputDirectory (Join-Path $root 'out') -Seconds 10
@@ -87,7 +87,7 @@ exit /b 1
     try {& (Join-Path $root 'PT-Profile.ps1') -Mode Bypass -Resolution DLAA -OutputDirectory (Join-Path $root 'out')} catch {$rejected=$_.Exception.Message -match 'disagrees'}
     if(-not $rejected -or @(Get-Content (Join-Path $root 'calls.txt')).Count -ne 2){throw 'Wrong startup mode was not safely rejected'}
     # An active recorder must be left alone, not stopped or cancelled.
-    (Get-Content $script:fakeWpr -Raw).Replace('WPR is not recording.','WPR recording is in progress...') | Set-Content $script:fakeWpr -Encoding ASCII
+    (Get-Content $fakeWpr -Raw).Replace('WPR is not recording.','WPR recording is in progress...') | Set-Content $fakeWpr -Encoding ASCII
     $rejected=$false
     try {& (Join-Path $root 'PT-Profile.ps1') -Mode PT-Off -Resolution DLAA -OutputDirectory (Join-Path $root 'out')} catch {$rejected=$_.Exception.Message -match 'active or its status'}
     if(-not $rejected -or @(Get-Content (Join-Path $root 'calls.txt')).Count -ne 2){throw 'Existing recorder was not left untouched'}

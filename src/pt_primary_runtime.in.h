@@ -207,7 +207,7 @@ static void Dispatched(void*,ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT 
         if(!pso){++computeNoPipeline;return;}
         if(!environmentPass&&!primary){++computeOtherPipeline;return;}
         if(environmentPass)++environmentSeen;else ++primarySeen;
-        PTHotpathTiming::Sample profile(PTHotpathTiming::Kind::primary_queue_wait);
+        PTHotpathTiming::Sample profile(PTHotpathTiming::Kind::primary_queue_wait,!environmentPass);
         std::lock_guard<std::recursive_mutex> ordered(PTSceneQueues::queueMutex);PTSceneQueues::Scope privateQueues;
         profile.Next(PTHotpathTiming::Kind::primary_guard_wait);
         std::lock_guard<std::recursive_mutex> guard(mutex);PTTableMirror::Scope descriptorLock(true);PTTableMirror::Mute privateWrites;
