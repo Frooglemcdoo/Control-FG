@@ -172,6 +172,7 @@ struct Consumer {
     void (*dispatched)(void*,ID3D12GraphicsCommandList*,UINT,UINT,UINT) noexcept=nullptr;
     void (*drawing)(void*,ID3D12GraphicsCommandList*) noexcept=nullptr;
     void (*drawn)(void*,ID3D12GraphicsCommandList*) noexcept=nullptr;
+    void (*pipeline)(void*,ID3D12GraphicsCommandList*,ID3D12PipelineState*) noexcept=nullptr;
 };
 inline std::atomic<const Consumer*> consumer{nullptr};
 inline bool Register(const Consumer* client){
@@ -185,11 +186,17 @@ inline Methods Original(ID3D12GraphicsCommandList* list){std::lock_guard<std::mu
 template<class F> inline void Observe(F&& f)noexcept{try{f();}catch(...){tracker.Fail();}}
 inline HRESULT STDMETHODCALLTYPE ResetHook(ID3D12GraphicsCommandList* l,ID3D12CommandAllocator* a,ID3D12PipelineState* p){
     const auto original=Original(l);Mute mute;const HRESULT hr=original.reset(l,a,p);const DWORD error=GetLastError();
-    if(mute.outer&&SUCCEEDED(hr))Observe([&]{tracker.Reset(l,p);});SetLastError(error);return hr;
+    if(mute.outer&&SUCCEEDED(hr)){
+        Observe([&]{tracker.Reset(l,p);});
+        if(const auto client=consumer.load(std::memory_order_acquire))if(client->pipeline)client->pipeline(client->context,l,p);
+    }SetLastError(error);return hr;
 }
 inline void STDMETHODCALLTYPE PipelineHook(ID3D12GraphicsCommandList* l,ID3D12PipelineState* p){
     const auto original=Original(l);Mute mute;original.pipeline(l,p);const DWORD error=GetLastError();
-    if(mute.outer)Observe([&]{tracker.Pipeline(l,p);});SetLastError(error);
+    if(mute.outer){
+        Observe([&]{tracker.Pipeline(l,p);});
+        if(const auto client=consumer.load(std::memory_order_acquire))if(client->pipeline)client->pipeline(client->context,l,p);
+    }SetLastError(error);
 }
 inline void STDMETHODCALLTYPE HeapsHook(ID3D12GraphicsCommandList* l,UINT n,ID3D12DescriptorHeap*const* h){
     const auto original=Original(l);Mute mute;original.heaps(l,n,h);const DWORD error=GetLastError();

@@ -21,7 +21,7 @@ inline bool Candidate(const unsigned char* bytes,std::size_t size){
 struct Entry {
     Microsoft::WRL::ComPtr<IUnknown> identity;
     char sha[65]{};UINT index=0;std::size_t bytes=0;
-    bool candidate=false,used=false;std::vector<unsigned char> code;
+    bool candidate=false,used=false,bound=false;std::vector<unsigned char> code;
 };
 static std::mutex mutex;
 static std::map<IUnknown*,std::shared_ptr<Entry>> entries;
@@ -41,14 +41,14 @@ static void Created(const D3D12_COMPUTE_PIPELINE_STATE_DESC* desc,IUnknown* obje
     Log("PT_PRIMARY_PSO_CREATED index=%u identity=%p sha256=%s bytes=%llu candidate=%u retained=%u",e->index,e->identity.Get(),e->sha,static_cast<unsigned long long>(e->bytes),unsigned(e->candidate),unsigned(!e->code.empty()));
     entries.emplace(e->identity.Get(),e);
 }
-static void Used(ID3D12PipelineState* pipeline,UINT x,UINT y,UINT z){
+static void Used(ID3D12PipelineState* pipeline,UINT x,UINT y,UINT z,bool dispatched=true){
     if(!pipeline)return;Microsoft::WRL::ComPtr<IUnknown> identity;
     if(FAILED(pipeline->QueryInterface(IID_PPV_ARGS(&identity))))return;
     std::shared_ptr<Entry> e;std::vector<unsigned char> code;
     {std::lock_guard<std::mutex> guard(mutex);const auto found=entries.find(identity.Get());
         if(found==entries.end()){if(++unknown<=8)Log("PT_PRIMARY_PSO_UNTRACKED identity=%p groups=%ux%ux%u",identity.Get(),x,y,z);return;}
-        e=found->second;if(e->used)return;e->used=true;code.swap(e->code);held-=code.size();}
-    Log("PT_PRIMARY_PSO_USED index=%u identity=%p sha256=%s bytes=%llu candidate=%u groups=%ux%ux%u",e->index,identity.Get(),e->sha,static_cast<unsigned long long>(e->bytes),unsigned(e->candidate),x,y,z);
+        e=found->second;auto& seen=dispatched?e->used:e->bound;if(seen)return;seen=true;code.swap(e->code);held-=code.size();}
+    Log("%s index=%u identity=%p sha256=%s bytes=%llu candidate=%u groups=%ux%ux%u",dispatched?"PT_PRIMARY_PSO_USED":"PT_PRIMARY_PSO_BOUND",e->index,identity.Get(),e->sha,static_cast<unsigned long long>(e->bytes),unsigned(e->candidate),x,y,z);
     if(code.empty())return;
     Log("PT_PRIMARY_SHADER_BEGIN index=%u bytes=%llu sha256=%s",e->index,static_cast<unsigned long long>(code.size()),e->sha);
     constexpr std::size_t chunk=384;

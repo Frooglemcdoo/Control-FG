@@ -380,7 +380,12 @@ static void Reset(void*,ID3D12GraphicsCommandList* list) noexcept {
     }catch(...){Reject("reset_exception");}
 }
 static const PTSceneQueues::Consumer queueConsumer{&handoff,&Submitting,&Selected,&Submitted,&Reset};
-static const PTCommandBindings::Consumer commandConsumer{&handoff,&Dispatched,&Drawing,&Drawn};
+static void PipelineBound(void*,ID3D12GraphicsCommandList*,ID3D12PipelineState* pipeline) noexcept {
+    if(!active||ptReflectionUserState.load(std::memory_order_acquire)!=1)return;
+    try{PTPrimaryPipelineProbe::Used(pipeline,0,0,0,false);}
+    catch(...){Log("PT_PRIMARY_PSO_PROBE_FAILED stage=binding");}
+}
+static const PTCommandBindings::Consumer commandConsumer{&handoff,&Dispatched,&Drawing,&Drawn,&PipelineBound};
 static bool Start(){
     if(active||!device||!enabled||!PTNativeJobRuntime::workerHooksReady||!PTNativeJobRuntime::dispatchHookReady)return false;
     if(!viewProviders.Initialize(verifiedRenderer,verifiedD3d)){Log("PT_PRIMARY_PROVIDER_INIT_FAILED");return false;}

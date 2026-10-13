@@ -10,7 +10,9 @@ Load the same scene. F10 opens the overlay: turn PT Reflections ON and play
 for about 30 seconds. Leave F11 unchanged. Close Control and run
 Collect-PT-Primary-M12R7.cmd, then upload its results ZIP.
 
-The first use of a lighting candidate exports its shader bytes to the log.
+The first binding of a lighting candidate exports its shader bytes to the log.
+Binding and direct-dispatch records are separate, so a shader bound without
+a matching direct Dispatch can be identified too.
 A brief first-use logging hitch is possible. No Nsight capture is required.
 The capture uses CPU shader bytes; it records no extra GPU readback or wait.
 Shader copies are bounded to 12 MiB and released after export.

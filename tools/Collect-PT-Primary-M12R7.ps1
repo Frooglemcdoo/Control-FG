@@ -25,6 +25,7 @@ try {
         LastRouteRecord=($primary | Where-Object {$_ -match 'PT_PRIMARY_ROUTE '} | Select-Object -Last 1)
         LastNativeRouteRecord=($primary | Where-Object {$_ -match 'PT_PRIMARY_NATIVE_ROUTE '} | Select-Object -Last 1)
         LastViewFailure=($primary | Where-Object {$_ -match 'PT_PRIMARY_VIEW_INVALID '} | Select-Object -Last 1)
+        BoundLightingCandidates=@($primary | Where-Object {$_ -match 'PT_PRIMARY_PSO_BOUND .*candidate=1'})
         ExecutedPipelineCount=(@($primary | Where-Object {$_ -match 'PT_PRIMARY_PSO_USED '}).Count)
         ExecutedLightingCandidates=@($primary | Where-Object {$_ -match 'PT_PRIMARY_PSO_USED .*candidate=1'})
         CapturedLightingShaders=(@($primary | Where-Object {$_ -match 'PT_PRIMARY_SHADER_END '}).Count)

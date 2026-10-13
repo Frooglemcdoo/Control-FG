@@ -9,11 +9,12 @@ It does not establish a shader variant, proxy identity mismatch, or alternate
 command path as the cause. The R6 interface fix alone was insufficient.
 
 M12R7 records SHA-256 and canonical identity for at most 1,024 created compute
-PSOs, and marks their first observed ON-mode dispatch. It retains at most
+PSOs, and separately marks their first observed ON-mode binding and direct
+dispatch. This also identifies a bound PSO missing the direct-dispatch path. It retains at most
 12 MiB of bytecode for compute shaders whose RDEF contains both GBuffer inputs
-and deferredlight_constants. Executed candidates emit chunked bytecode with
+and deferredlight_constants. Bound candidates emit chunked bytecode with
 size/hash delimiters; unexecuted candidates remain bounded in memory.
-Each executed candidate's retained bytes are released after export.
+Each exported candidate's retained bytes are released after export.
 
 Candidate selection is capture-only. It cannot add a PSO to primaryPipelines
 or change roots, descriptors, shader selection or rendering admission.
