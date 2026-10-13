@@ -76,6 +76,12 @@ struct View {
         return UINT32_MAX;
     }
     bool MatchesBound(const std::array<unsigned char,1136>& other)const {return Mismatch(other)==UINT32_MAX;}
+    bool MatchesSurface(const std::array<unsigned char,1136>& raw)const {
+        // Surface shaders consume inverse extent and affine ViewToWorld, not a
+        // complete primary camera. Compare against the retained producer camera.
+        View surface=*this;surface.pass=Pass::surface;surface.bound=bytes;
+        return surface.MatchesBound(raw);
+    }
     bool Same(const View& other)const {
         if(engineFrame!=other.engineFrame||!frame||frame!=other.frame||width!=other.width||height!=other.height||
            std::memcmp(bytes.data()+8,other.bytes.data()+8,8)||

@@ -98,7 +98,11 @@ static std::vector<std::shared_ptr<Frame>> pendingMetrics;
 static void PollMetrics(){
     for(auto it=pendingMetrics.begin();it!=pendingMetrics.end();){auto& f=**it;
         if(!f.producerSubmitted||!f.output->Completed()){++it;continue;}
-        if(f.deferred&&f.assets){f.deferred=false;f.cancelled=true;PTSceneLive::owner.Scenes().Forget(f.assets->ticket);}
+        if(f.deferred&&f.assets){
+            static UINT64 expired=0;if(++expired<=8||expired%240==0)
+                Log("PT_PRIMARY_LATE_EXPIRED ticket=%llu fence=%llu required=%llu",f.assets->ticket,f.wait.graph.fence,f.wait.graph.value);
+            f.deferred=false;f.cancelled=true;PTSceneLive::owner.Scenes().Forget(f.assets->ticket);
+        }
         std::array<UINT,8> counts{};const bool good=f.assets&&f.assets->metrics.Read(counts);
         static UINT64 samples=0;const auto n=++samples;
         if(n<=8||n%240==0)Log("PT_PRIMARY_GPU frame=%u readback=%u armed=%u sampled=%u dimensions=%u primary_hit=%u material_match=%u depth_match=%u integrated=%u covered=%u fault=%u sparse_step=16",f.view.frame,unsigned(good),unsigned(f.armed),counts[0],counts[1],counts[2],counts[3],counts[4],counts[5],counts[6],counts[7]);
@@ -289,13 +293,27 @@ static void Drawing(void*,ID3D12GraphicsCommandList* list) noexcept {
         Bindings bindings;
         if(!PTCommandBindings::tracker.Read(list,nativeRoots,true,0x31002,bindings)){Reject("surface_bindings");return;}
         if(!bindings.layout->Matches(pipeline->Root()))return;
-        View view;Context context;if(!ReadView(bindings.arguments[12].value,view,PTNativeView::Pass::surface)||!ContextFor(list,bindings,1,context)){Reject("surface_view_or_context");return;}
+        // Match the draw's actual CBV to a retained producer before consulting
+        // allocator TLS or cloning descriptors. Worker TLS may already describe
+        // another view; it is not the authority for this recorded surface.
+        View view;std::array<unsigned char,1136> raw{};UINT64 engineFrame=0;DWORD fault=0;
+        if(!ReadEngineFrameSafe(&engineFrame,&fault)||
+           (!PTNativeView::uploads.Read(bindings.arguments[12].value,raw.data(),raw.size())&&
+            !PTSceneLive::owner.Resources().ReadUpload(bindings.arguments[12].value,raw.data(),raw.size())))return;
+        std::shared_ptr<Frame> matched;
+        for(const auto& weak:frames){const auto f=weak.lock();
+            if(!f||!f->producerRecorded||f->cancelled||f->view.engineFrame!=engineFrame||!f->view.MatchesSurface(raw))continue;
+            if(matched)return;matched=f;
+        }
+        if(!matched)return;
+        view=matched->view;view.pass=PTNativeView::Pass::surface;view.bound=raw;
+        Context context;if(!ContextFor(list,bindings,1,context)){Reject("surface_context");return;}
         auto* recording=RecordingFor(list);if(!recording||recording->submitted||recording->draws.size()>=4096)return;
         std::shared_ptr<Draw> draw;
         for(const auto& d:recording->draws)if(d->pipeline==pipeline&&d->viewAddress==bindings.arguments[12].value&&
             d->original.native.Get()==bindings.resources.Get()&&d->original.first==context.table.first&&d->frame->view.Same(view)){draw=d;break;}
         if(!draw){
-            auto frame=FrameFor(view,context.queue);if(!frame){Reject("surface_frame_budget");return;}
+            auto frame=matched;
             draw=std::make_shared<Draw>();draw->frame=frame;draw->pipeline=pipeline;draw->viewAddress=bindings.arguments[12].value;draw->boundView=view;
             if(!PTTableMirror::bank.Read(bindings.resources.Get(),context.table.first,pipeline->Required(),draw->original)||
                !Fresh(context,&draw->privateTable)||!Disjoint(draw->privateTable,context.table.first)){Reject("surface_descriptor_allocation");return;}
@@ -354,15 +372,17 @@ static void Signalling(void*,ID3D12CommandQueue* queue,ID3D12Fence* fence,UINT64
     if(!active)return;
     try {
         std::lock_guard<std::recursive_mutex> guard(mutex);PTTableMirror::Scope descriptorLock(true);
-        const auto identity=Identity(fence);
         for(const auto& frame:pendingMetrics){
             if(!frame->deferred||!frame->producerSubmitted||!frame->assets)continue;
             const auto& a=frame->assets;const auto blocked=frame->wait;
-            if(blocked.identity!=identity.Get()||value<blocked.graph.value)continue;
+            if(value<blocked.graph.value||!PTSceneLive::owner.Scenes().MatchesFence(blocked.graph.fence,fence))continue;
             const bool release=fence->GetCompletedValue()<blocked.graph.value&&queue->GetDesc().Type==D3D12_COMMAND_LIST_TYPE_COPY;
             const char* reason="late_submission_inputs_changed";
             const auto status=InputsUnchanged(frame)?handoff.Revalidate(a->ticket,a->engineFrame,frame->view.width,frame->view.height,a->proof,&reason):PTSceneHandoff::Status::rejected;
-            if(status==PTSceneHandoff::Status::pending){frame->wait=PTSceneLive::owner.Scenes().PendingWait(a->ticket);continue;}
+            if(status==PTSceneHandoff::Status::pending){frame->wait=PTSceneLive::owner.Scenes().PendingWait(a->ticket);
+                static UINT64 pending=0;if(++pending<=8||pending%240==0)
+                    Log("PT_PRIMARY_LATE_PENDING ticket=%llu reason=%s fence=%llu required=%llu",a->ticket,reason,frame->wait.graph.fence,frame->wait.graph.value);
+                continue;}
             if(status!=PTSceneHandoff::Status::prepared||!release||!frame->sceneUse||!AdmitFrame(frame,queue,true)){
                 // The flag is still zero: do not enqueue work on the blocked
                 // direct queue from this producer callback.
@@ -492,6 +512,6 @@ static bool Start(){
     if(FAILED(device->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&sceneUseFence))))return false;
     if(!PTSceneQueues::Start(&PTSceneLive::owner.Scenes())||!PTSceneQueues::Register(&PTSceneLive::owner.Scenes(),&queueConsumer)||
        !PTCommandBindings::Register(&commandConsumer)||!PTNativeJobRuntime::Register(&Job)||!PTSceneLive::owner.Start(step,true))return false;
-    active=true;Log("PT_PRIMARY_SESSION_READY build=M12R23 ready=1 hits=4 spp=1 material=opaque_general geometric_normals=1 native_fallback=1");return true;
+    active=true;Log("PT_PRIMARY_SESSION_READY build=M12R24 ready=1 hits=4 spp=1 material=opaque_general geometric_normals=1 native_fallback=1");return true;
 }
 }

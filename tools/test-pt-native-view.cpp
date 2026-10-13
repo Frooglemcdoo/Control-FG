@@ -22,6 +22,10 @@ int main(){
     raw=a.bytes;raw[108]^=1;raw[124]^=1;raw[140]^=1;raw[156]^=1;
     assert(b.MatchesBound(raw)); // Optimized native CBV omits unused affine .w lanes.
     raw=a.bytes;raw[112]^=1;assert(b.Mismatch(raw)==112);
+    raw=a.bytes;assert(a.MatchesSurface(raw));
+    raw[32]^=1;raw[224]^=1;raw[1112]^=1;assert(a.MatchesSurface(raw)); // Surface does not populate these.
+    raw[96]^=1;assert(!a.MatchesSurface(raw)); // Another camera must still be rejected.
+    raw=a.bytes;raw[8]^=1;assert(!a.MatchesSurface(raw));
     b.pass=PTNativeView::Pass::primary;raw=a.bytes;raw[32]^=1;assert(b.MatchesBound(raw));raw[224]^=1;assert(!b.MatchesBound(raw));
     raw=a.bytes;raw[1112]^=1;assert(!b.MatchesBound(raw));
     b=a;b.engineFrame=123;assert(!a.Same(b));

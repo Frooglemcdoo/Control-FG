@@ -15,6 +15,47 @@
 #include "../src/pt_scene_dispatch.h"
 #include "../src/pt_scene_topology_runtime.h"
 using Microsoft::WRL::ComPtr;
+// COM permits ID3D12Fence and canonical IUnknown to have different addresses.
+// This fixture reproduces the interface-key lookup that missed R23 admission.
+struct FenceAlias final:ID3D12Fence {
+    struct Canonical final:IUnknown {
+        FenceAlias* owner=nullptr;
+        HRESULT STDMETHODCALLTYPE QueryInterface(REFIID iid,void** out) override{return owner->QueryInterface(iid,out);}
+        ULONG STDMETHODCALLTYPE AddRef() override{return 1;}
+        ULONG STDMETHODCALLTYPE Release() override{return 1;}
+    } canonical;
+    FenceAlias(){canonical.owner=this;}
+    HRESULT STDMETHODCALLTYPE QueryInterface(REFIID iid,void** out) override{
+        if(!out)return E_POINTER;*out=nullptr;
+        if(iid==__uuidof(IUnknown))*out=static_cast<IUnknown*>(&canonical);
+        else if(iid==__uuidof(ID3D12Fence))*out=static_cast<ID3D12Fence*>(this);
+        else return E_NOINTERFACE;return S_OK;
+    }
+    ULONG STDMETHODCALLTYPE AddRef() override{return 1;}
+    ULONG STDMETHODCALLTYPE Release() override{return 1;}
+    HRESULT STDMETHODCALLTYPE GetPrivateData(REFGUID,UINT*,void*) override{return E_NOTIMPL;}
+    HRESULT STDMETHODCALLTYPE SetPrivateData(REFGUID,UINT,const void*) override{return E_NOTIMPL;}
+    HRESULT STDMETHODCALLTYPE SetPrivateDataInterface(REFGUID,const IUnknown*) override{return E_NOTIMPL;}
+    HRESULT STDMETHODCALLTYPE SetName(LPCWSTR) override{return S_OK;}
+    HRESULT STDMETHODCALLTYPE GetDevice(REFIID,void**) override{return E_NOTIMPL;}
+    UINT64 STDMETHODCALLTYPE GetCompletedValue() override{return 0;}
+    HRESULT STDMETHODCALLTYPE SetEventOnCompletion(UINT64,HANDLE) override{return E_NOTIMPL;}
+    HRESULT STDMETHODCALLTYPE Signal(UINT64) override{return E_NOTIMPL;}
+};
+static void TestFenceIdentity(PTOwnedScene::Runtime& resources,ID3D12CommandQueue* queue,ID3D12GraphicsCommandList* list){
+    FenceAlias alias,other;PTSceneLive::Capture capture(resources);
+    assert(static_cast<IUnknown*>(static_cast<ID3D12Fence*>(&alias))!=static_cast<IUnknown*>(&alias.canonical));
+    assert(capture.Wait(queue,&alias,2));assert(capture.Mark(list,123456));
+    ID3D12CommandList* native=list;assert(capture.Submit(queue,1,&native));
+    const auto wait=capture.PendingWait(123456);
+    assert(wait.polled&&wait.graph.value==2&&wait.actual==0);
+    assert(wait.identity==static_cast<IUnknown*>(&alias.canonical));
+    assert(capture.MatchesFence(wait.graph.fence,&alias));
+    assert(capture.MatchesFence(wait.graph.fence,&alias.canonical));
+    assert(!capture.MatchesFence(wait.graph.fence,&other));
+    assert(capture.Signal(queue,&alias,2));
+    puts("PASS: separate fence interface/canonical identity matches the exact deferred wait; other fence rejected");
+}
 struct QueueConsumerTest {
     PTSceneLive::Capture* capture=nullptr;
     PTSceneDescriptors::Acceleration acceleration{};
@@ -537,6 +578,7 @@ int main(){
     ready=CreateEventW(nullptr,FALSE,FALSE,nullptr);assert(ready);
     assert(SUCCEEDED(done->SetEventOnCompletion(2,ready)));assert(WaitForSingleObject(ready,30000)==WAIT_OBJECT_0);CloseHandle(ready);
     assert(client.privateFence->GetCompletedValue()==1&&client.signals==1);
+    TestFenceIdentity(live.Resources(),queue.Get(),list.Get());
     // Stop observing before this stack-owned fixture ends. Production capture
     // has process lifetime; installed forwarding hooks remain valid either way.
     PTSceneQueues::consumer.store(nullptr);PTSceneQueues::observer.store(nullptr);

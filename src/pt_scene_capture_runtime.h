@@ -235,11 +235,15 @@ public:
         return true;
     }
     struct PendingFence {PTSceneOrder::Graph::PendingFence graph;U64 actual=0;bool polled=false;IUnknown* identity=nullptr;};
+    bool MatchesFence(U64 id,IUnknown* fence){
+        std::lock_guard<std::mutex> guard(mutex);const auto known=Existing(fence);
+        return id&&known&&known->id==id;
+    }
     PendingFence PendingWait(U64 ticket){
         std::lock_guard<std::mutex> guard(mutex);RefreshWaitFences();PendingFence out;out.graph=catalog.PendingWait(ticket);
         const auto f=waitFences.find(out.graph.fence);
-        if(f!=waitFences.end()){out.actual=f->second.fence->GetCompletedValue();out.polled=true;const auto identity=identities.find(f->second.fence.Get());
-            out.identity=identity==identities.end()?f->second.fence.Get():identity->second.owner.Get();}
+        if(f!=waitFences.end()){out.actual=f->second.fence->GetCompletedValue();out.polled=true;const auto identity=Existing(f->second.fence.Get());
+            out.identity=identity?identity->owner.Get():nullptr;}
         return out;
     }
     PTSceneOrder::Status Scene(U64 ticket,const PTSceneDescriptors::Acceleration& selected,PTSceneDispatch::Scene& scene,const char** pendingReason=nullptr,unsigned rayMask=0xff){
