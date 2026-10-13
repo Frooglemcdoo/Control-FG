@@ -66,9 +66,13 @@ public:
         }
         r={++serial,false,{}};return r.generation;
     }
-    bool Record(U64 list,U64 generation,Snapshot snapshot){
+    bool Record(U64 list,U64 generation,Snapshot snapshot,const char** reason=nullptr){
         std::lock_guard<std::mutex> guard(mutex);auto r=recordings.find(list);
-        if(!valid||r==recordings.end()||r->second.generation!=generation||r->second.submitted||!Known(snapshot.destination))return false;
+        const char* rejected=!valid?failure:r==recordings.end()?"build_list_missing":
+            r->second.generation!=generation?"build_generation_mismatch":r->second.submitted?"build_after_submission":
+            !Known(snapshot.destination)?"build_destination_unknown":nullptr;
+        if(rejected){if(reason)*reason=rejected;return false;}
+        if(reason)*reason="none";
         // An unsupported build is a tombstone, not permission to reuse metadata
         // from an older valid build at this destination.
         bool admitted=false;

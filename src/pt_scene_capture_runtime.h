@@ -47,11 +47,27 @@ class Capture {
     }
     void Record(IUnknown* list,PTSceneCatalog::Snapshot snapshot){
         auto* id=List(list);
-        if(!id||!catalog.Record(id->id,id->generation,std::move(snapshot)))catalog.Invalidate("build_record_or_destination");
+        if(!id){catalog.Invalidate("build_list_identity");return;}
+        const char* reason="build_record_failed";
+        if(!catalog.Record(id->id,id->generation,std::move(snapshot),&reason))catalog.Invalidate(reason);
+    }
+    bool Destination(IUnknown* list,U64 address,PTSceneCatalog::Snapshot& snapshot){
+        // A registry miss is local to this write, not loss of queue ordering.
+        // Never guess an owner: invalidate ALL live aliases at this address.
+        // With no live owner, no old token can pass dispatch lease validation;
+        // a later registration receives a fresh token and requires a new build.
+        const auto owners=resources.DestinationOwners(address);
+        if(owners.size()==1&&owners.front().bytes>=256){const auto& a=owners.front();
+            snapshot.destination={{a.token,a.address},a.bytes};return true;
+        }
+        ++stats.untrackedDestinations;stats.lastUntrackedDestination=address;
+        for(const auto& a:owners){PTSceneCatalog::Snapshot unknown;unknown.destination={{a.token,a.address},a.bytes};
+            Record(list,std::move(unknown));++stats.destinationTombstones;}
+        return false;
     }
 public:
     struct Timing {U64 calls=0,totalMs=0,maxMs=0;};
-    struct Stats {Timing builds,checkpoints;U64 skippedInvalid=0,copyFailures=0,historyVersions=0,historyRows=0,historyNodes=0,copyBytes=0;bool healthy=true;const char* failure="none";};
+    struct Stats {Timing builds,checkpoints;U64 skippedInvalid=0,untrackedDestinations=0,destinationTombstones=0,lastUntrackedDestination=0,copyFailures=0,historyVersions=0,historyRows=0,historyNodes=0,copyBytes=0;bool healthy=true;const char* failure="none";};
 private:
     Stats stats;
     struct Measure {Timing& value;ULONGLONG start=GetTickCount64();~Measure(){const U64 ms=GetTickCount64()-start;++value.calls;value.totalMs+=ms;value.maxMs=(std::max)(value.maxMs,ms);}};
@@ -74,7 +90,7 @@ public:
         if(!catalog.Healthy()){++stats.skippedInvalid;return;}
         D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC d{};
         if(!PTSceneObserver::ReadBuild(desc,d)){catalog.Invalidate();return;}
-        PTSceneCatalog::Snapshot s;s.destination=Allocation(d.DestAccelerationStructureData);
+        PTSceneCatalog::Snapshot s;if(!Destination(list,d.DestAccelerationStructureData,s))return;
         if(d.Inputs.Type==D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL){
             const auto u=uploads.find(d.Inputs.InstanceDescs);
             const auto a=Allocation(d.Inputs.InstanceDescs,U64(d.Inputs.NumDescs)*64);
@@ -119,7 +135,8 @@ public:
         Record(list,std::move(s));
     }
     void Compact(IUnknown* list,U64 dst,U64 src,D3D12_RAYTRACING_ACCELERATION_STRUCTURE_COPY_MODE mode){
-        std::lock_guard<std::mutex> guard(mutex);PTSceneCatalog::Snapshot s;s.destination=Allocation(dst);
+        std::lock_guard<std::mutex> guard(mutex);if(!catalog.Healthy()){++stats.skippedInvalid;return;}
+        PTSceneCatalog::Snapshot s;if(!Destination(list,dst,s))return;
         if(mode==D3D12_RAYTRACING_ACCELERATION_STRUCTURE_COPY_MODE_COMPACT||mode==D3D12_RAYTRACING_ACCELERATION_STRUCTURE_COPY_MODE_CLONE){
             s.kind=PTSceneCatalog::Snapshot::Kind::copy;s.source=Allocation(src);
         }

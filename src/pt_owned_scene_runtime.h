@@ -79,6 +79,20 @@ public:
         }
         return false;
     }
+    // Return every live owner covering the destination byte, including aliases.
+    // Used only to tombstone a write that cannot be uniquely admitted.
+    std::vector<Allocation> DestinationOwners(U64 address){
+        std::lock_guard<std::mutex> guard(mutex);std::vector<Allocation> result;if(!active)return result;
+        const auto token=index.Find(address,1);
+        if(token){const auto& e=owners.at(wrappers.at(token));
+            result.push_back({e.token,address,e.bytes-(address-e.address)});return result;}
+        for(const auto& item:owners){const auto& e=item.second;
+            if(address>=e.address&&address-e.address<e.bytes)
+                result.push_back({e.token,address,e.bytes-(address-e.address)});
+        }
+        return result;
+    }
+    Stats Statistics(){std::lock_guard<std::mutex> guard(mutex);return stats;}
     // Native root CBVs use different upload slices in each pass. Read only an
     // owned UPLOAD allocation at the recording/submission boundary; never map
     // arbitrary GPU addresses or assume equal addresses mean equal camera data.
@@ -107,10 +121,15 @@ public:
             const Entry* entry=nullptr;U64 wrapper=0;
             const auto found=wrappers.find(token);
             if(found!=wrappers.end()){wrapper=found->second;entry=&owners.at(wrapper);}
-            geometryFailure="geometry_native_owner";
+            geometryFailure=token?"geometry_owner_retired":"geometry_owner_untracked";
+            if(!entry)return false;
             PTNativeBufferObserver::Snapshot native{};
-            if(!entry||!PTNativeBufferObserver::Read(reinterpret_cast<const void*>(wrapper),native)||
-               native.resource!=reinterpret_cast<UINT_PTR>(entry->resource.Get())||native.address!=entry->address||native.bytes>entry->bytes)return false;
+            geometryFailure="geometry_wrapper_unreadable";
+            if(!PTNativeBufferObserver::Read(reinterpret_cast<const void*>(wrapper),native))return false;
+            geometryFailure="geometry_wrapper_resource";
+            if(native.resource!=reinterpret_cast<UINT_PTR>(entry->resource.Get()))return false;
+            geometryFailure="geometry_wrapper_address";if(native.address!=entry->address)return false;
+            geometryFailure="geometry_wrapper_size";if(!native.bytes||native.bytes>entry->bytes)return false;
             D3D12_RESOURCE_STATES state{};geometryFailure="geometry_recorded_state";
             if(!PTCommandBindings::tracker.BufferState(list,entry->resource.Get(),static_cast<D3D12_RESOURCE_STATES>(native.state),state))return false;
             sources.emplace(token,PTGeometrySnapshot::Source{{token,entry->address,entry->bytes},entry->resource,state});

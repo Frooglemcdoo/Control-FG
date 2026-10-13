@@ -138,6 +138,52 @@ static void TestGeometrySnapshot(ID3D12Device* device,bool common=false,bool tem
     assert(bank.GeometryStatistics().bytes==desc.Width);
     std::puts("PASS GPU geometry snapshot: build-time bytes survive later source overwrite/release, shared backing copied once, budget failure emits no copy, fence prevents early retirement.");
 }
+static void TestUntrackedSceneDestinations(ID3D12Device* device){
+    PTOwnedScene::Runtime bank;PTSceneLive::Capture capture(bank);
+    ComPtr<ID3D12CommandAllocator> allocator;ComPtr<ID3D12GraphicsCommandList> list;
+    ComPtr<ID3D12CommandQueue> queue;D3D12_COMMAND_QUEUE_DESC qd{};
+    assert(SUCCEEDED(device->CreateCommandQueue(&qd,IID_PPV_ARGS(&queue))));
+    assert(SUCCEEDED(device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT,IID_PPV_ARGS(&allocator))));
+    assert(SUCCEEDED(device->CreateCommandList(0,D3D12_COMMAND_LIST_TYPE_DIRECT,allocator.Get(),nullptr,IID_PPV_ARGS(&list))));
+    D3D12_RESOURCE_DESC rd{};rd.Dimension=D3D12_RESOURCE_DIMENSION_BUFFER;rd.Width=1024;rd.Height=1;
+    rd.DepthOrArraySize=rd.MipLevels=1;rd.SampleDesc.Count=1;rd.Layout=D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+    D3D12_HEAP_PROPERTIES hp{};hp.Type=D3D12_HEAP_TYPE_DEFAULT;ComPtr<ID3D12Resource> resource;
+    assert(SUCCEEDED(device->CreateCommittedResource(&hp,D3D12_HEAP_FLAG_NONE,&rd,D3D12_RESOURCE_STATE_COMMON,nullptr,IID_PPV_ARGS(&resource))));
+    const auto address=resource->GetGPUVirtualAddress();
+    D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC build{};build.DestAccelerationStructureData=address;
+    // Metadata-only observer calls: no actual AS build or GPU submission.
+    capture.Build(list.Get(),&build);capture.Compact(list.Get(),address,address,D3D12_RAYTRACING_ACCELERATION_STRUCTURE_COPY_MODE_CLONE);
+    assert(capture.Healthy()&&capture.Statistics().untrackedDestinations==2);
+    assert(bank.Created(1,resource.Get(),address,1024)==1);
+    PTOwnedScene::Allocation allocation{};assert(bank.Identify(address,256,allocation));
+    D3D12_RAYTRACING_GEOMETRY_DESC geometry{};geometry.Type=D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES;
+    geometry.Triangles.IndexBuffer=address+512;geometry.Triangles.IndexFormat=DXGI_FORMAT_R16_UINT;geometry.Triangles.IndexCount=3;
+    geometry.Triangles.VertexBuffer={address+600,12};geometry.Triangles.VertexCount=3;geometry.Triangles.VertexFormat=DXGI_FORMAT_R32G32B32_FLOAT;
+    build.Inputs.Type=D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL;build.Inputs.NumDescs=1;
+    build.Inputs.DescsLayout=D3D12_ELEMENTS_LAYOUT_ARRAY;build.Inputs.pGeometryDescs=&geometry;
+    capture.Build(list.Get(),&build);
+    PTSceneTopology::Instance instance{};instance.idMask=0xff000001;instance.blas=address;instance.transform[0]=1;
+    capture.UploadInstances(address+800,&instance,sizeof(instance));
+    auto top=build;top.DestAccelerationStructureData=address+256;top.Inputs.Type=D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL;top.Inputs.InstanceDescs=address+800;
+    capture.Build(list.Get(),&top);assert(capture.Mark(list.Get(),1));ID3D12CommandList* raw=list.Get();
+    assert(capture.Submit(queue.Get(),1,&raw));PTSceneDispatch::Scene scene;
+    PTSceneDescriptors::Acceleration selected{address+256,allocation.token,768};
+    assert(capture.Scene(1,selected,scene)==PTSceneOrder::Status::ready);
+    // Ambiguous destination must tombstone every candidate, never expose the
+    // preceding geometry and never globally disable unrelated capture.
+    capture.Reset(list.Get());assert(bank.Created(2,resource.Get(),address,1024)==1);
+    capture.Build(list.Get(),&build);assert(capture.Mark(list.Get(),2));assert(capture.Submit(queue.Get(),1,&raw));
+    assert(capture.Healthy()&&capture.Statistics().destinationTombstones==2);
+    assert(capture.Scene(2,selected,scene)==PTSceneOrder::Status::missing);
+    auto released=bank.BeforeRelease(2);assert(bank.AfterRelease(released)==5);
+    capture.Reset(list.Get());capture.Build(list.Get(),&build);assert(capture.Mark(list.Get(),3));assert(capture.Submit(queue.Get(),1,&raw));
+    assert(capture.Scene(3,selected,scene)==PTSceneOrder::Status::ready);
+    // A tracked but undersized destination is also tombstoned, not ignored.
+    capture.Reset(list.Get());auto shortBuild=build;shortBuild.DestAccelerationStructureData=address+1000;
+    capture.Build(list.Get(),&shortBuild);assert(capture.Healthy()&&capture.Statistics().destinationTombstones==3);
+    std::puts("PASS: untracked AS writes stay local; aliases and short destinations tombstone; later valid builds recover");
+}
+
 static void TestUnrelatedSceneLists(ID3D12Device* device){
     PTOwnedScene::Runtime bank;PTSceneLive::Capture capture(bank);
     ComPtr<ID3D12CommandQueue> queue;D3D12_COMMAND_QUEUE_DESC desc{};
@@ -197,6 +243,7 @@ int main(){
     ComPtr<ID3D12Device> d;assert(SUCCEEDED(D3D12CreateDevice(a.Get(),D3D_FEATURE_LEVEL_11_0,IID_PPV_ARGS(&d))));
     TestBindingFirstObservation(d.Get());
     TestUnrelatedSceneLists(d.Get());
+    TestUntrackedSceneDestinations(d.Get());
     TestGeometrySnapshot(d.Get());TestGeometrySnapshot(d.Get(),true);TestGeometrySnapshot(d.Get(),false,true);TestGeometrySnapshot(d.Get(),false,false,true);
     if(debugEnabled){
         ComPtr<ID3D12InfoQueue> messages;assert(SUCCEEDED(d.As(&messages)));
