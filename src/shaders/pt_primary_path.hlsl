@@ -29,9 +29,9 @@ PTPathSurface PTPathDecode(PTSceneHit hit,RayDesc ray){
     PTPathSurface s=(PTPathSurface)0;s.position=hit.worldPosition;s.normal=hit.geometricNormal;
     s.spawnOrigin=safeSpawnPoint(s.position,s.normal,hit.spawnOffset);
     uint count,stride;PTMaterialFlags.GetDimensions(count,stride);
-    if(stride!=8||hit.material>=count)return s; // lobes==0 rejects the whole path.
+    if(stride!=8||hit.material>=count){s.decodeFault=11;return s;} // lobes==0 rejects the whole path.
     uint packed=PTMaterialFlags[hit.material].x;
-    if((packed&255)!=0)return s; // Cloth/hair/special BRDFs stay native.
+    if((packed&255)!=0){s.decodeFault=12;return s;} // Cloth/hair/special BRDFs stay native.
     PTNativeMaterial m=PTMaterials[hit.material];uint base=hit.material*35;
     float3 color=asfloat(uint3(m.words[13],m.words[14],m.words[15]))*
         PTTextures[NonUniformResourceIndex(base)].SampleLevel(PTLinearWrap,hit.uv,0).rgb;
@@ -45,7 +45,7 @@ PTPathSurface PTPathDecode(PTSceneHit hit,RayDesc ray){
     // diffuse coefficient = texture color * (1-F0), GGX/VNDF specular.
     // Do not clamp invalid colors into an apparently valid path.
     if(!all(isfinite(color))||any(color<0)||any(color>1)||!all(isfinite(f0))||any(f0<0)||any(f0>1)||
-       !isfinite(smoothness)||smoothness<0||smoothness>1)return s;
+       !isfinite(smoothness)||smoothness<0||smoothness>1){s.decodeFault=13;return s;}
     s.material.kd=color*(1-f0);s.material.f0=f0;s.material.roughness=1-smoothness;s.material.lobes=3;return s;
 }
 float3 PTPathEnvironment(float3 direction){
@@ -80,7 +80,8 @@ void PTPrimaryPathRayGeneration(){
     uint2 pixel=DispatchRaysIndex().xy;
     // A four-byte copy precedes the native signal releasing this dispatch.
     // Rejected/replayed lists must never traverse their old acceleration data.
-    [branch] if(PTMetrics.Load(32)!=1){PTOutput[pixel]=0;return;}
+    uint admission=PTMetrics.Load(32);
+    [branch] if(admission==0||(admission==2&&((pixel.x|pixel.y)&15)!=0)){PTOutput[pixel]=0;return;}
     PTOutput[pixel]=0;PTMeasure(0,pixel);
     uint width,height,g2w,g2h,zw,zh;PTGBuffer1.GetDimensions(width,height);PTGBuffer2.GetDimensions(g2w,g2h);PTClipDepth.GetDimensions(zw,zh);
     if(any(uint2(width,height)!=DispatchRaysDimensions().xy)||width!=g2w||height!=g2h||width!=zw||height!=zh||
@@ -107,6 +108,6 @@ void PTPrimaryPathRayGeneration(){
     seed=(seed^(seed>>16))*2246822519u;seed^=seed>>13;
     PTPathResult result=PTIntegratePathFirst(ray,4,3,seed,.001,first,1,0);
     PTMeasure(5,pixel);
-    if(result.valid!=0&&all(isfinite(result.radiance))&&all(result.radiance>=0)){PTOutput[pixel]=float4(result.radiance,1);PTMeasure(6,pixel);}
-    else PTMeasure(7,pixel);
+    if(result.valid!=0&&all(isfinite(result.radiance))&&all(result.radiance>=0)){if(admission==1)PTOutput[pixel]=float4(result.radiance,1);PTMeasure(6,pixel);}
+    else {PTMeasure(7,pixel);if(((pixel.x|pixel.y)&15)==0){uint old;PTMetrics.InterlockedAdd(36+4*min(result.fault,15u),1,old);}}
 }

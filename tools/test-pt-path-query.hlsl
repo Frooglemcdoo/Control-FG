@@ -10,7 +10,7 @@ PTSceneHit PTPathTrace(RayDesc ray) {
     TraceRay(PTTestScene,RAY_FLAG_NONE,1,0,2,0,ray,hit);return hit;
 }
 PTPathSurface PTPathDecode(PTSceneHit hit,RayDesc ray) {
-    PTPathSurface s;s.position=ray.Origin+ray.Direction*hit.distance;s.normal=hit.shadingNormal;
+    PTPathSurface s=(PTPathSurface)0;s.position=ray.Origin+ray.Direction*hit.distance;s.normal=hit.shadingNormal;
 #ifdef PT_GEOMETRY_SPAWN
     s.position=hit.worldPosition;s.normal=hit.geometricNormal;
     s.spawnOrigin=safeSpawnPoint(s.position,s.normal,hit.spawnOffset);

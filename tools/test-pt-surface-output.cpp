@@ -103,7 +103,7 @@ int main(){
     ComPtr<ID3DBlob> blob,error,shader;
     assert(SUCCEEDED(D3D12SerializeRootSignature(&rootDesc,D3D_ROOT_SIGNATURE_VERSION_1,&blob,&error)));
     assert(SUCCEEDED(device->CreateRootSignature(0,blob->GetBufferPointer(),blob->GetBufferSize(),IID_PPV_ARGS(&guarded->root))));
-    const char source[]="RWTexture2D<float4> output:register(u0);RWByteAddressBuffer counters:register(u1);[numthreads(1,1,1)]void main(uint3 id:SV_DispatchThreadID){uint old;counters.InterlockedAdd(4,1,old);[branch]if(counters.Load(32)!=1){output[id.xy]=0;return;}output[id.xy]=float4(.25,.5,.75,1);counters.InterlockedAdd(0,1,old);}";
+    const char source[]="RWTexture2D<float4> output:register(u0);RWByteAddressBuffer counters:register(u1);[numthreads(1,1,1)]void main(uint3 id:SV_DispatchThreadID){uint old;counters.InterlockedAdd(4,1,old);[branch]if(counters.Load(32)==0|| (counters.Load(32)==2&&((id.x|id.y)&15)!=0)){output[id.xy]=0;return;}output[id.xy]=float4(.25,.5,.75,1);counters.InterlockedAdd(0,1,old);}";
     assert(SUCCEEDED(D3DCompile(source,sizeof(source)-1,nullptr,nullptr,nullptr,"main","cs_5_1",D3DCOMPILE_ENABLE_STRICTNESS,0,&shader,&error)));
     D3D12_COMPUTE_PIPELINE_STATE_DESC pd{};pd.pRootSignature=guarded->root.Get();pd.CS={shader->GetBufferPointer(),shader->GetBufferSize()};
     assert(SUCCEEDED(device->CreateComputePipelineState(&pd,IID_PPV_ARGS(&guarded->pipeline))));
@@ -146,6 +146,26 @@ int main(){
     const D3D12_RANGE empty{};readback->Unmap(0,&empty);
     {auto measured=inlineRetained.lock();assert(measured);std::array<UINT,8> counters{};assert(measured->metrics.Read(counters));
         assert(counters[0]==0&&counters[1]==12);for(UINT c=2;c<8;++c)assert(counters[c]==0);}
+    // Probe admission performs one sample per 16x16 block, then replay returns
+    // to zero. A second owner cannot inherit the previous full-frame admission.
+    auto probe=std::make_shared<GuardedWriter>();probe->device=device;
+    {auto prior=inlineRetained.lock();assert(prior);probe->root=prior->root;probe->pipeline=prior->pipeline;}
+    assert(probe->metrics.Initialize(device.Get()));
+    assert(SUCCEEDED(device->CreateDescriptorHeap(&hd,IID_PPV_ARGS(&probe->heap))));
+    std::shared_ptr<PTSurfaceComposition::Output> probeOutput;
+    assert(SUCCEEDED(PTSurfaceComposition::Output::Create(queue.Get(),4,3,probeOutput)));
+    ComPtr<ID3D12CommandAllocator> probeAllocator;ComPtr<ID3D12GraphicsCommandList> probeList;
+    assert(SUCCEEDED(device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT,IID_PPV_ARGS(&probeAllocator))));
+    assert(SUCCEEDED(device->CreateCommandList(0,D3D12_COMMAND_LIST_TYPE_DIRECT,probeAllocator.Get(),nullptr,IID_PPV_ARGS(&probeList))));
+    assert(probeOutput->RecordInline(probeList.Get(),probe.get(),&GuardedWriter::Encode,probe));assert(SUCCEEDED(probeList->Close()));
+    assert(SUCCEEDED(queue->Wait(lateGate.Get(),3)));ID3D12CommandList* probeLists[]={probeList.Get()};queue->ExecuteCommandLists(1,probeLists);
+    assert(probeOutput->NativeSubmitted(queue.Get()));assert(probeOutput->AdmitInline());
+    assert(probe->metrics.SetAdmission(copyQueue.Get(),true,true));assert(SUCCEEDED(copyQueue->Signal(lateGate.Get(),3)));
+    assert(SUCCEEDED(queue->Signal(done.Get(),2)));event=CreateEventW(nullptr,FALSE,FALSE,nullptr);assert(event);
+    assert(SUCCEEDED(done->SetEventOnCompletion(2,event)));assert(WaitForSingleObject(event,10000)==WAIT_OBJECT_0);CloseHandle(event);
+    std::array<UINT,8> probeCounts{};assert(probe->metrics.Read(probeCounts));assert(probeCounts[0]==1&&probeCounts[1]==12);
+    std::array<UINT,16> probeFaults{};assert(probe->metrics.ReadFaults(probeFaults));for(auto v:probeFaults)assert(v==0);
+    probeOutput.reset();probe.reset();
     original.reset();cancelled.reset();PTSurfaceComposition::Output::Poll();assert(inlineRetained.expired());assert(PTSurfaceComposition::Output::ResidentBytes()==0);assert(retained.expired());assert(SUCCEEDED(device->GetDeviceRemovedReason()));
     puts("PASS: GPU-zero initialization, one-shot producer, queued replay clear, wrong-queue/late-producer rejection late COPY signal admission, rejected zero guard, replay cancellation, bounded deferred retirement and fence-owned dependencies");
 }

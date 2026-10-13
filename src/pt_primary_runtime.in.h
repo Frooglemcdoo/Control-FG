@@ -7,6 +7,7 @@ using Table=PTTableMirror::Bank::Snapshot;
 using Output=PTSurfaceComposition::Output;
 static PTSceneHandoff::Runtime handoff{PTSceneLive::owner};
 static std::atomic<bool> active{false};
+static bool transportValidated=false;
 static std::recursive_mutex mutex;
 static std::vector<unsigned char> library;
 static PTNativeView::Providers viewProviders;
@@ -77,12 +78,13 @@ struct Assets {
     std::shared_ptr<const PTSceneHandoff::Prepared> proof;
     std::shared_ptr<PTScenePipeline::Dispatch> dispatch;
     PTGlass::DescriptorRange privateTable;
-    UINT64 ticket=0,engineFrame=0;
+    UINT64 ticket=0,engineFrame=0;bool probe=true;
 };
 struct Frame {
     View view;std::shared_ptr<Output> output;ComPtr<ID3D12CommandQueue> queue;
     std::shared_ptr<Assets> assets;bool producerRecorded=false,producerSubmitted=false,armed=false,deferred=false,cancelled=false;
     PTSceneLive::Capture::PendingFence wait;UINT64 sceneUse=0;
+    PTGlass::DescriptorRange surfaceTables;UINT surfaceUsed=0;
 };
 struct Draw {
     std::shared_ptr<Frame> frame;std::shared_ptr<PTSurfaceComposition::Pipeline> pipeline;
@@ -104,8 +106,14 @@ static void PollMetrics(){
             f.deferred=false;f.cancelled=true;PTSceneLive::owner.Scenes().Forget(f.assets->ticket);
         }
         std::array<UINT,8> counts{};const bool good=f.assets&&f.assets->metrics.Read(counts);
+        if(good&&f.armed&&f.assets->probe&&counts[6]){transportValidated=true;Log("PT_PRIMARY_TRANSPORT_READY frame=%u covered=%u",f.view.frame,counts[6]);}
+        if(good&&f.armed&&counts[5]&&!counts[6])transportValidated=false;
         static UINT64 samples=0;const auto n=++samples;
         if(n<=8||n%240==0)Log("PT_PRIMARY_GPU frame=%u readback=%u armed=%u sampled=%u dimensions=%u primary_hit=%u material_match=%u depth_match=%u integrated=%u covered=%u fault=%u sparse_step=16",f.view.frame,unsigned(good),unsigned(f.armed),counts[0],counts[1],counts[2],counts[3],counts[4],counts[5],counts[6],counts[7]);
+        if(good&&counts[7]){std::array<UINT,16> faults{};
+            if(f.assets->metrics.ReadFaults(faults)&&(n<=8||n%240==0))
+                Log("PT_PRIMARY_FAULTS frame=%u probe=%u input=%u hit=%u material=%u normal=%u facing=%u light=%u direct=%u sample=%u spawn=%u radiance=%u material_bounds=%u brdf=%u material_values=%u",f.view.frame,unsigned(f.assets->probe),faults[1],faults[2],faults[3],faults[4],faults[5],faults[6],faults[7],faults[8],faults[9],faults[10],faults[11],faults[12],faults[13]);
+        }
         it=pendingMetrics.erase(it);
     }
 }
@@ -220,7 +228,7 @@ static void Dispatched(void*,ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT 
         }
         auto* recording=RecordingFor(list);
         if(!recording||recording->submitted){Reject("frame_budget_or_duplicate");return;}
-        auto a=std::make_shared<Assets>();a->bindings=bindings;a->boundView=view;a->environment=environment;a->engineFrame=candidate->ticket.engineFrame;
+        auto a=std::make_shared<Assets>();a->bindings=bindings;a->boundView=view;a->environment=environment;a->engineFrame=candidate->ticket.engineFrame;a->probe=!transportValidated;
         // t0,t1,t3,t7,t8,t10,t14,t15,t17,t18. Private t34/t35/u7 are installed below.
         constexpr UINT64 required=(1ull<<5)|(1ull<<6)|(1ull<<8)|(1ull<<12)|(1ull<<13)|(1ull<<15)|(1ull<<19)|(1ull<<20)|(1ull<<22)|(1ull<<23);
         if(!PTTableMirror::bank.Read(bindings.resources.Get(),context.table.first,required,a->primary)||
@@ -247,6 +255,9 @@ static void Dispatched(void*,ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT 
         }
         auto frame=FrameFor(view,context.queue);
         if(!frame||frame->producerRecorded){Reject("frame_budget_or_duplicate");return;}
+        // Reserve all surface tables while the verified lighting allocator is
+        // current. Graphics recording never needs the compute TLS context.
+        if(!Fresh(context,&frame->surfaceTables,49*64)){Reject("surface_table_reservation");return;}
         if(FAILED(PTScenePipeline::Dispatch::Create(device.Get(),pipeline,plan,view.width,view.height,bindings.resources.Get(),a->dispatch))){Reject("private_sbt");return;}
         D3D12_HEAP_PROPERTIES cameraHeap{};cameraHeap.Type=D3D12_HEAP_TYPE_UPLOAD;
         D3D12_RESOURCE_DESC cameraDesc{};cameraDesc.Dimension=D3D12_RESOURCE_DIMENSION_BUFFER;cameraDesc.Width=1280;
@@ -307,19 +318,28 @@ static void Drawing(void*,ID3D12GraphicsCommandList* list) noexcept {
         }
         if(!matched)return;
         view=matched->view;view.pass=PTNativeView::Pass::surface;view.bound=raw;
-        Context context;if(!ContextFor(list,bindings,1,context)){Reject("surface_context");return;}
+        const auto base=bindings.resources->GetGPUDescriptorHandleForHeapStart().ptr;
+        const auto step=device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+        const auto address=bindings.arguments[1].value;
+        if(!step||address<base||(address-base)%step||
+           (address-base)/step+49>bindings.resources->GetDesc().NumDescriptors||
+           Identity(bindings.resources.Get()).Get()!=Identity(matched->surfaceTables.heap).Get()||!PTSceneQueues::WatchList(list))return;
+        const UINT first=static_cast<UINT>((address-base)/step);
         auto* recording=RecordingFor(list);if(!recording||recording->submitted||recording->draws.size()>=4096)return;
         std::shared_ptr<Draw> draw;
         for(const auto& d:recording->draws)if(d->pipeline==pipeline&&d->viewAddress==bindings.arguments[12].value&&
-            d->original.native.Get()==bindings.resources.Get()&&d->original.first==context.table.first&&d->frame->view.Same(view)){draw=d;break;}
+            d->original.native.Get()==bindings.resources.Get()&&d->original.first==first&&d->frame->view.Same(view)){draw=d;break;}
         if(!draw){
             auto frame=matched;
             draw=std::make_shared<Draw>();draw->frame=frame;draw->pipeline=pipeline;draw->viewAddress=bindings.arguments[12].value;draw->boundView=view;
-            if(!PTTableMirror::bank.Read(bindings.resources.Get(),context.table.first,pipeline->Required(),draw->original)||
-               !Fresh(context,&draw->privateTable)||!Disjoint(draw->privateTable,context.table.first)){Reject("surface_descriptor_allocation");return;}
+            if(frame->surfaceUsed>=64)return;
+            draw->privateTable={frame->surfaceTables.heap,frame->surfaceTables.first+49*frame->surfaceUsed,49};
+            if(!Disjoint(draw->privateTable,first)||!PTTableMirror::bank.Read(bindings.resources.Get(),first,pipeline->Required(),draw->original)){Reject("surface_descriptor_allocation");return;}
+            ++frame->surfaceUsed;
             device->CopyDescriptorsSimple(49,Cpu(draw->privateTable),draw->original.At(0),D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
             device->CopyDescriptorsSimple(1,Cpu(draw->privateTable,40),frame->output->Srv(),D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
             recording->draws.push_back(draw);
+            static UINT64 composed=0;if(++composed<=8||composed%600==0)Log("PT_PRIMARY_SURFACE_RECORDED frame=%u count=%llu",frame->view.frame,composed);
         }
         restore={list,bindings.pipeline,{bindings.arguments[1].value}};
         list->SetPipelineState(pipeline->Composed());list->SetGraphicsRootDescriptorTable(1,Gpu(draw->privateTable));
@@ -359,7 +379,7 @@ static void CancelFrame(const std::shared_ptr<Frame>& frame,ID3D12CommandQueue* 
     if(frame->producerSubmitted&&frame->assets)PTSceneLive::owner.Scenes().Forget(frame->assets->ticket);
 }
 static bool AdmitFrame(const std::shared_ptr<Frame>& frame,ID3D12CommandQueue* queue,bool late){
-    if(!frame->output->AdmitInline()||!frame->assets->metrics.SetAdmission(queue,true))return false;
+    if(!frame->output->AdmitInline()||!frame->assets->metrics.SetAdmission(queue,true,frame->assets->probe))return false;
     frame->armed=true;frame->deferred=false;
     if(late)sceneUseValue=(std::max)(sceneUseValue,frame->sceneUse);
     static UINT64 submitted=0;if(++submitted<=8||submitted%240==0)
@@ -512,6 +532,6 @@ static bool Start(){
     if(FAILED(device->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&sceneUseFence))))return false;
     if(!PTSceneQueues::Start(&PTSceneLive::owner.Scenes())||!PTSceneQueues::Register(&PTSceneLive::owner.Scenes(),&queueConsumer)||
        !PTCommandBindings::Register(&commandConsumer)||!PTNativeJobRuntime::Register(&Job)||!PTSceneLive::owner.Start(step,true))return false;
-    active=true;Log("PT_PRIMARY_SESSION_READY build=M12R24 ready=1 hits=4 spp=1 material=opaque_general geometric_normals=1 native_fallback=1");return true;
+    active=true;Log("PT_PRIMARY_SESSION_READY build=M12R25 ready=1 hits=4 spp=1 material=opaque_general geometric_normals=1 native_fallback=1");return true;
 }
 }

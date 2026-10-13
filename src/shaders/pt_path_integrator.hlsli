@@ -8,6 +8,7 @@
 struct PTPathSurface {
     float3 position, normal, emission, spawnOrigin;
     PTSurfaceMaterial material;
+    uint decodeFault;
 };
 // Adapter supplies these functions before including this file's implementation.
 PTSceneHit PTPathTrace(RayDesc ray);
@@ -25,7 +26,7 @@ PTPathResult PTIntegratePathFirst(RayDesc ray,uint maxHits,uint rouletteStart,ui
     PTTransportState path=PTBeginTransport();PTPathResult result=(PTPathResult)0;
     if(maxHits==0||maxHits>32||!all(isfinite(ray.Origin))||!all(isfinite(ray.Direction))||
        abs(dot(ray.Direction,ray.Direction)-1)>1e-4||!isfinite(ray.TMin)||!isfinite(ray.TMax)||
-       ray.TMin<0||ray.TMax<=ray.TMin||!isfinite(originOffset)||originOffset<=0) return result;
+       ray.TMin<0||ray.TMax<=ray.TMin||!isfinite(originOffset)||originOffset<=0){result.fault=1;return result;}
     uint rng=seed==0?1:seed;
     for(uint depth=0;depth<maxHits&&path.alive!=0;++depth) {
         PTSceneHit hit;
@@ -35,7 +36,7 @@ PTPathResult PTIntegratePathFirst(RayDesc ray,uint maxHits,uint rouletteStart,ui
         PTPathSurface surface=PTPathDecode(hit,ray);result.hits++;
         PTSurfaceMaterial m=surface.material;
         if(!PTValid(m.kd)||!PTValid(m.f0)||!PTFinite(m.roughness)||m.roughness<0||m.roughness>1||
-           any(m.kd<0)||any(m.kd>1)||any(m.f0<0)||any(m.f0>1)||(m.lobes&~3u)!=0||m.lobes==0){path.valid=0;result.fault=3;break;}
+           any(m.kd<0)||any(m.kd>1)||any(m.f0<0)||any(m.f0>1)||(m.lobes&~3u)!=0||m.lobes==0){path.valid=0;result.fault=surface.decodeFault!=0?surface.decodeFault:3;break;}
         float3 n=surface.normal;
         if(!all(isfinite(surface.position))||!all(isfinite(n))||abs(dot(n,n)-1)>1e-4){path.valid=0;result.fault=4;break;}
         float3 tangent=normalize(cross(abs(n.z)<0.9?float3(0,0,1):float3(0,1,0),n));
@@ -45,22 +46,23 @@ PTPathResult PTIntegratePathFirst(RayDesc ray,uint maxHits,uint rouletteStart,ui
         if(depth!=0||includePrimaryEmission!=0)path=PTAccumulate(path,surface.emission);
         PTDirectSample light;uint visibility;
         if(PTPathLight(surface,rng,light,visibility)) {
-            if(light.delta!=1){path.valid=0;break;}
+            if(light.delta!=1||visibility>1){path.valid=0;result.fault=6;break;}
             light.wi=float3(dot(light.wi,tangent),dot(light.wi,bitangent),dot(light.wi,n));
             PTDirectResult direct=PTEvaluateDirect(surface.material,wo,light,visibility);
-            if(direct.valid==0){path.valid=0;break;}
+            if(direct.valid==0){path.valid=0;result.fault=7;break;}
             path=PTAccumulate(path,direct.radiance);
         }
         if(depth+1==maxHits) break;
         float choose=PTPathRandom(rng),u=PTPathRandom(rng),v=PTPathRandom(rng),rr=PTPathRandom(rng);
         PTSurfaceSample sample=PTSampleSurface(surface.material,wo,choose,u,v);
         path=PTContinue(path,sample,rr,rouletteStart);
-        if(path.alive==0) break;
+        if(path.alive==0){if(path.valid==0)result.fault=8;break;}
         ray.Origin=surface.spawnOrigin;
-        if(!all(isfinite(ray.Origin))){path.valid=0;break;}
+        if(!all(isfinite(ray.Origin))){path.valid=0;result.fault=9;break;}
         ray.Direction=normalize(tangent*sample.wi.x+bitangent*sample.wi.y+n*sample.wi.z);
         ray.TMin=0;
     }
+    if(path.valid==0&&result.fault==0)result.fault=10;
     result.radiance=path.radiance;result.valid=path.valid;return result;
 }
 PTPathResult PTIntegratePath(RayDesc ray,uint maxHits,uint rouletteStart,uint seed,float originOffset) {

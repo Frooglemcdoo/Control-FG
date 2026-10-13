@@ -104,18 +104,20 @@ static bool ReadContext(Context* out) noexcept {
         return out->list->GetType()==D3D12_COMMAND_LIST_TYPE_DIRECT&&out->queue->GetDesc().Type==D3D12_COMMAND_LIST_TYPE_DIRECT;
     }__except(EXCEPTION_EXECUTE_HANDLER){return false;}
 }
-static bool Fresh(const Context& context,PTGlass::DescriptorRange* out) noexcept {
+static bool Fresh(const Context& context,PTGlass::DescriptorRange* out,UINT count=49) noexcept {
     *out={};
     __try {
         D3D12_GPU_DESCRIPTOR_HANDLE gpu{};D3D12_CPU_DESCRIPTOR_HANDLE cpu{};unsigned char* provider=nullptr;
         using Allocate=void(*)(void*,UINT64,D3D12_GPU_DESCRIPTOR_HANDLE*,D3D12_CPU_DESCRIPTOR_HANDLE*,unsigned char**);
         auto fn=reinterpret_cast<Allocate>(reinterpret_cast<unsigned char*>(verifiedD3d)+0x1aa00);
-        fn(context.manager,49,&gpu,&cpu,&provider);
+        fn(context.manager,count,&gpu,&cpu,&provider);
         if(!provider||*reinterpret_cast<ID3D12DescriptorHeap**>(provider)!=context.table.heap)return false;
         const UINT step=device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
         const UINT64 base=*reinterpret_cast<UINT64*>(provider+0x10);
         if(gpu.ptr<base||(gpu.ptr-base)%step||(gpu.ptr-base)/step>UINT32_MAX)return false;
-        *out={context.table.heap,static_cast<UINT>((gpu.ptr-base)/step),49};return true;
+        const UINT64 first=(gpu.ptr-base)/step;
+        if(!count||first+count>context.table.heap->GetDesc().NumDescriptors)return false;
+        *out={context.table.heap,static_cast<UINT>(first),count};return true;
     }__except(EXCEPTION_EXECUTE_HANDLER){return false;}
 }
 static bool Patch(void* object,UINT index,void* hook,void** original) noexcept {
