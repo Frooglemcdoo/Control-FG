@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <array>
 #include <algorithm>
+#include "pt_hotpath_timing.h"
 // Native descriptors cannot be copied out of a shader-visible heap. Mirror their
 // CPU-source writes as they happen; snapshots copy only from this CPU-only heap.
 // This preserves descriptor VALUES, not resource ownership or image contents.
@@ -17,9 +18,10 @@ inline std::recursive_mutex gate;
 inline thread_local unsigned privateWrites=0;
 struct Mute {Mute(){++privateWrites;}~Mute(){--privateWrites;}};
 struct Scope {
+    PTHotpathTiming::Sample timing;
     std::unique_lock<std::recursive_mutex> lock;
     bool capture;
-    explicit Scope(bool enabled):lock(gate,std::defer_lock),capture(enabled&&!privateWrites){if(capture)lock.lock();}
+    explicit Scope(bool enabled):timing(PTHotpathTiming::Kind::descriptors,enabled&&!privateWrites),lock(gate,std::defer_lock),capture(enabled&&!privateWrites){if(capture)lock.lock();}
 };
 struct Range {D3D12_CPU_DESCRIPTOR_HANDLE first{};UINT count=0;};
 class Bank {

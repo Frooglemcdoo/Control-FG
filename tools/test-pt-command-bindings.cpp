@@ -3,6 +3,9 @@
 #include <dxgi1_6.h>
 #include <cassert>
 #include <cstdio>
+#include <future>
+#include <thread>
+#include <chrono>
 #include "../src/pt_command_bindings.h"
 #include "../src/pt_scene_queue_runtime.h"
 #include "pt-native-root-fixture.h"
@@ -11,7 +14,8 @@ struct ForwardingFixture {
     void** table=nullptr;
     void* slots[40]{};
     UINT phase=0,nested=0;
-    static HRESULT STDMETHODCALLTYPE Query(IUnknown* self,REFIID,void** out){*out=self;return S_OK;}
+    IUnknown* identity=nullptr;
+    static HRESULT STDMETHODCALLTYPE Query(IUnknown* self,REFIID,void** out){auto* f=reinterpret_cast<ForwardingFixture*>(self);*out=f->identity?f->identity:self;return S_OK;}
     static ULONG STDMETHODCALLTYPE Ref(IUnknown*){return 1;}
     static void STDMETHODCALLTYPE Dispatch(ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT z){
         auto& f=*reinterpret_cast<ForwardingFixture*>(list);assert(x==7&&y==8&&z==9&&f.phase==0);f.phase=1;SetLastError(0x555);
@@ -67,7 +71,42 @@ static void TestComputeOnlyHooks(){
     list->Dispatch(7,8,9);assert(f->phase==3&&GetLastError()==0x555);
     PTCommandBindings::consumer.store(nullptr);
 }
+struct BlockingPipeline {
+    void** table=nullptr;void* slots[3]{};
+    HANDLE entered=CreateEventW(nullptr,TRUE,FALSE,nullptr),release=CreateEventW(nullptr,TRUE,FALSE,nullptr);
+    std::atomic<bool> block{true};
+    static ULONG STDMETHODCALLTYPE Add(IUnknown* self){
+        auto* p=reinterpret_cast<BlockingPipeline*>(self);
+        if(p->block.exchange(false)){SetEvent(p->entered);WaitForSingleObject(p->release,INFINITE);}
+        return 1;
+    }
+    static ULONG STDMETHODCALLTYPE Release(IUnknown*){return 1;}
+};
+static void TestIndependentRecording(){
+    PTCommandBindings::Tracker tracker;
+    const auto make=[](){auto* f=new ForwardingFixture();f->table=f->slots;
+        f->slots[0]=reinterpret_cast<void*>(&ForwardingFixture::Query);
+        f->slots[1]=f->slots[2]=reinterpret_cast<void*>(&ForwardingFixture::Ref);return f;};
+    auto* a=make();auto* b=make();auto* alias=make();alias->identity=reinterpret_cast<IUnknown*>(a);
+    auto* first=reinterpret_cast<ID3D12GraphicsCommandList*>(a);
+    auto* second=reinterpret_cast<ID3D12GraphicsCommandList*>(b);
+    auto* otherAlias=reinterpret_cast<ID3D12GraphicsCommandList*>(alias);
+    assert(tracker.Watch(first)&&tracker.Watch(second)&&tracker.Watch(otherAlias));
+    auto* p=new BlockingPipeline();assert(p->entered&&p->release);p->table=p->slots;
+    p->slots[1]=reinterpret_cast<void*>(&BlockingPipeline::Add);p->slots[2]=reinterpret_cast<void*>(&BlockingPipeline::Release);
+    auto* pipeline=reinterpret_cast<ID3D12PipelineState*>(p);
+    std::thread blocked([&]{tracker.Pipeline(first,pipeline);});
+    assert(WaitForSingleObject(p->entered,5000)==WAIT_OBJECT_0);
+    auto independent=std::async(std::launch::async,[&]{tracker.ArgumentValue(second,2,PTCommandBindings::ArgumentKind::constant,256,false);});
+    const bool progressed=independent.wait_for(std::chrono::seconds(3))==std::future_status::ready;
+    SetEvent(p->release);blocked.join();independent.get();assert(progressed);
+    assert(tracker.PipelineFor(otherAlias).Get()==pipeline);
+    tracker.Reset(otherAlias,nullptr);assert(!tracker.PipelineFor(first));
+    CloseHandle(p->entered);CloseHandle(p->release);
+    puts("PASS: independent recording progresses while another list is blocked; aliases share pipeline and Reset state");
+}
 int main(){
+    TestIndependentRecording();
     TestForwarding();
     TestComputeOnlyHooks();
     ComPtr<IDXGIFactory4> factory;ComPtr<IDXGIAdapter> adapter;ComPtr<ID3D12Device> device;

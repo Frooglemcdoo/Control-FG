@@ -2,6 +2,7 @@
 #include "pt_native_root_layout.h"
 #include <array>
 #include <atomic>
+#include "pt_hotpath_timing.h"
 // Records API arguments on the exact native command-list interfaces. Snapshots
 // contain owned root/heap identities and GPU addresses, never CPU guesses about
 // the engine's cached state. Resource contents/lifetimes require separate proof.
@@ -18,6 +19,7 @@ struct Snapshot {
 };
 class Tracker {
     struct Entry {
+        std::mutex mutex; // Aliases share this recording state, independent lists do not.
         ComPtr<IUnknown> identity;
         ComPtr<ID3D12PipelineState> pipeline;
         ComPtr<ID3D12DescriptorHeap> resources,samplers;
@@ -29,16 +31,29 @@ class Tracker {
     std::map<IUnknown*,std::shared_ptr<Entry>> entries;
     std::map<ID3D12GraphicsCommandList*,std::shared_ptr<Entry>> aliases;
     std::atomic<bool> healthy{true};
-    template<class F> void Change(ID3D12GraphicsCommandList* list,F&& fn){
-        // A hooked vtable is shared by command lists and COM interface aliases.
-        // Observing its creation interface does not register every interface
-        // subsequently used by the engine. Resolve an unseen caller before
-        // recording its FIRST setter; silently dropping it loses the PSO/root.
-        if(!healthy.load())return;
+    inline static std::atomic<std::uint64_t> nextCacheId{0};
+    const std::uint64_t cacheId=++nextCacheId;
+    std::shared_ptr<Entry> FindEntry(ID3D12GraphicsCommandList* list){
+        // Entries and aliases are never removed during a tracker lifetime.
+        // A generation prevents reuse when a test/local Tracker occupies the
+        // same address. The cached shared_ptr owns the entry on this thread.
+        struct Cache {std::uint64_t owner=0;ID3D12GraphicsCommandList* list=nullptr;std::shared_ptr<Entry> entry;};
+        static thread_local Cache cache;
+        if(!list||!healthy.load())return {};
+        if(cache.owner==cacheId&&cache.list==list)return cache.entry;
+        std::shared_ptr<Entry> entry;
         {std::lock_guard<std::mutex> guard(mutex);const auto found=aliases.find(list);
-            if(found!=aliases.end()){fn(*found->second);return;}}
-        if(!Ensure(list))return;std::lock_guard<std::mutex> guard(mutex);
-        const auto found=aliases.find(list);if(found!=aliases.end())fn(*found->second);
+            if(found!=aliases.end())entry=found->second;}
+        if(!entry){
+            if(!Watch(list)){Fail();return {};}
+            std::lock_guard<std::mutex> guard(mutex);entry=aliases.at(list);
+        }
+        cache={cacheId,list,entry};return entry;
+    }
+    template<class F> void Change(ID3D12GraphicsCommandList* list,F&& fn){
+        PTHotpathTiming::Sample timing(PTHotpathTiming::Kind::bindings);
+        auto entry=FindEntry(list);if(!entry)return;
+        std::lock_guard<std::mutex> guard(entry->mutex);fn(*entry);
     }
     static void Tables(RootState& state){for(auto& a:state.arguments)if(a.kind==ArgumentKind::table)a={};}
     static bool Inside(ID3D12DescriptorHeap* heap,UINT64 address,UINT count){
@@ -53,9 +68,7 @@ public:
     void Fail()noexcept{healthy=false;}
     bool Healthy()const noexcept{return healthy.load();}
     bool Ensure(ID3D12GraphicsCommandList* list){
-        if(!list||!healthy.load())return false;
-        {std::lock_guard<std::mutex> guard(mutex);if(aliases.count(list))return true;}
-        if(Watch(list))return true;Fail();return false;
+        return bool(FindEntry(list));
     }
     bool Watch(ID3D12GraphicsCommandList* list){
         if(!list||!healthy.load())return false;ComPtr<IUnknown> identity;
@@ -86,10 +99,9 @@ public:
         });
     }
     bool BufferState(ID3D12GraphicsCommandList* list,ID3D12Resource* resource,D3D12_RESOURCE_STATES fallback,D3D12_RESOURCE_STATES& state){
-        if(!Ensure(list))return false;std::lock_guard<std::mutex> guard(mutex);
-        const auto found=aliases.find(list);if(found==aliases.end())return false;
-        const auto buffer=found->second->buffers.find(resource);
-        if(buffer==found->second->buffers.end()){
+        auto entry=FindEntry(list);if(!entry)return false;std::lock_guard<std::mutex> guard(entry->mutex);
+        const auto buffer=entry->buffers.find(resource);
+        if(buffer==entry->buffers.end()){
             // Native static vertex/index wrappers keep their creation-time
             // read flags after ExecuteCommandLists has decayed the buffer.
             // A local explicit transition (including a split) always wins.
@@ -127,13 +139,13 @@ public:
         });
     }
     ComPtr<ID3D12PipelineState> PipelineFor(ID3D12GraphicsCommandList* list){
-        if(!Ensure(list))return {};std::lock_guard<std::mutex> guard(mutex);
-        const auto found=aliases.find(list);return found==aliases.end()?ComPtr<ID3D12PipelineState>{}:found->second->pipeline;
+        auto entry=FindEntry(list);if(!entry)return {};std::lock_guard<std::mutex> guard(entry->mutex);
+        return entry->pipeline;
     }
     bool Read(ID3D12GraphicsCommandList* list,PTNativeRoot::Registry& roots,bool graphics,UINT required,Snapshot& result){
-        result={};if(!Ensure(list)||!required||required>=(1u<<(graphics?18:8)))return false;
-        std::lock_guard<std::mutex> guard(mutex);const auto found=aliases.find(list);if(found==aliases.end())return false;
-        const auto& e=*found->second;const auto& s=graphics?e.graphics:e.compute;auto layout=roots.Find(s.root.Get());
+        result={};if(!required||required>=(1u<<(graphics?18:8)))return false;
+        auto entry=FindEntry(list);if(!entry)return false;std::lock_guard<std::mutex> guard(entry->mutex);
+        const auto& e=*entry;const auto& s=graphics?e.graphics:e.compute;auto layout=roots.Find(s.root.Get());
         if(!layout||layout->Type()!=(graphics?PTNativeRoot::Kind::graphics:PTNativeRoot::Kind::compute))return false;
         for(UINT n=0;n<(graphics?18u:8u);++n)if(required&(1u<<n)){
             const bool constant=graphics?(n>=8&&n<16):(n>=2&&n<6);const auto& a=s.arguments[n];
@@ -186,7 +198,14 @@ inline bool GraphicsRequired(){const auto client=consumer.load(std::memory_order
 inline std::mutex hookMutex;
 inline std::map<void**,Methods> methods;
 inline bool installed=true;
-inline Methods Original(ID3D12GraphicsCommandList* list){std::lock_guard<std::mutex> guard(hookMutex);return methods.at(*reinterpret_cast<void***>(list));}
+inline Methods Original(ID3D12GraphicsCommandList* list){
+    // Published original methods are immutable; only cold vtables need the map lock.
+    static thread_local void** cachedTable=nullptr;
+    static thread_local Methods cached{};
+    auto** table=*reinterpret_cast<void***>(list);
+    if(table!=cachedTable){std::lock_guard<std::mutex> guard(hookMutex);cached=methods.at(table);cachedTable=table;}
+    return cached;
+}
 template<class F> inline void Observe(F&& f)noexcept{try{f();}catch(...){tracker.Fail();}}
 inline HRESULT STDMETHODCALLTYPE ResetHook(ID3D12GraphicsCommandList* l,ID3D12CommandAllocator* a,ID3D12PipelineState* p){
     const auto original=Original(l);Mute mute;const HRESULT hr=original.reset(l,a,p);const DWORD error=GetLastError();

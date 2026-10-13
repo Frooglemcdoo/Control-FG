@@ -542,6 +542,12 @@ static void Submitted(void*,ID3D12CommandQueue* queue,UINT count,ID3D12CommandLi
             Log("PT_PRIMARY_CPU submissions=%llu builds=%llu build_total_ms=%llu build_max_ms=%llu checkpoints=%llu checkpoint_total_ms=%llu checkpoint_max_ms=%llu blocking_checkpoint_waits=0",sequence,t.builds.calls,t.builds.totalMs,t.builds.maxMs,t.checkpoints.calls,t.checkpoints.totalMs,t.checkpoints.maxMs);
             Log("PT_PRIMARY_PROGRESS signals=%llu skipped=%llu interval=64",t.progressSignals,t.progressSkipped);
             LARGE_INTEGER frequency{};QueryPerformanceFrequency(&frequency);const double ms=1000.0/static_cast<double>(frequency.QuadPart);
+            for(unsigned kind=0;kind<static_cast<unsigned>(PTHotpathTiming::Kind::count);++kind){
+                const auto& hot=PTHotpathTiming::counters[kind];
+                Log("PT_PRIMARY_HOT_CPU kind=%s samples=%llu sampled_ms=%.6f sampled_max_ms=%.6f interval=64 cumulative=1 scope=%s",kind?"descriptors":"bindings",
+                    hot.samples.load(std::memory_order_relaxed),hot.ticks.load(std::memory_order_relaxed)*ms,hot.maximum.load(std::memory_order_relaxed)*ms,
+                    kind?"native_and_observer":"tracker");
+            }
             for(unsigned on=0;on<2;++on)for(unsigned execute=0;execute<2;++execute){const auto& q=t.queues[on][execute];
                 Log("PT_PRIMARY_QUEUE_CPU pt=%u operation=%s calls=%llu lock_ms=%.6f observer_ms=%.6f native_ms=%.6f observer_max_ms=%.6f native_max_ms=%.6f cumulative=1",on,execute?"execute":"fence",q.calls,q.lockTicks*ms,q.observerTicks*ms,q.nativeTicks*ms,q.maxObserverTicks*ms,q.maxNativeTicks*ms);
             }
@@ -587,6 +593,6 @@ static bool Start(){
     if(FAILED(device->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&sceneUseFence))))return false;
     if(!PTSceneQueues::Start(&PTSceneLive::owner.Scenes())||!PTSceneQueues::Register(&PTSceneLive::owner.Scenes(),&queueConsumer)||
        !PTCommandBindings::Register(&commandConsumer)||!PTNativeJobRuntime::Register(&Job)||!PTSceneLive::owner.Start(step,true))return false;
-    active=true;Log("PT_PRIMARY_SESSION_READY build=M12R37 ready=1 hits=4 spp=1 roulette_start=3 material=opaque_general geometric_normals=1 native_fallback=1 primary_lighting=native diffuse_bounces=pt_indirect readiness=per_material graphics_tracking=0");return true;
+    active=true;Log("PT_PRIMARY_SESSION_READY build=M12R38 ready=1 hits=4 spp=1 roulette_start=3 material=opaque_general geometric_normals=1 native_fallback=1 primary_lighting=native diffuse_bounces=pt_indirect readiness=per_material graphics_tracking=0");return true;
 }
 }
