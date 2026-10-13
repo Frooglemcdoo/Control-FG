@@ -14,11 +14,11 @@ struct Source {PTOwnedScene::Allocation allocation{};ComPtr<ID3D12Resource> reso
 // 64 MiB idle cache is separate from the 512 MiB active snapshot budget.
 class Pool {
     struct Idle {ComPtr<ID3D12Resource> resource;ComPtr<IUnknown> device;U64 bytes;};
-    std::mutex mutex;std::vector<Idle> idle;U64 held=0,created=0,reused=0;
+    std::mutex mutex;std::vector<Idle> idle;U64 held=0,created=0,reused=0,evicted=0;
 public:
     static constexpr U64 MaximumIdleBytes=64ull*1024*1024;
-    struct Stats {U64 bytes,allocations,reuses;};
-    Stats Statistics(){std::lock_guard<std::mutex> lock(mutex);return {held,created,reused};}
+    struct Stats {U64 bytes,allocations,reuses,evictions;};
+    Stats Statistics(){std::lock_guard<std::mutex> lock(mutex);return {held,created,reused,evicted};}
     ComPtr<ID3D12Resource> Take(ID3D12Device* device,U64 bytes){
         ComPtr<IUnknown> identity;if(!device||FAILED(device->QueryInterface(IID_PPV_ARGS(&identity))))return {};
         std::lock_guard<std::mutex> lock(mutex);
@@ -38,7 +38,14 @@ public:
             if(!resource)return;const auto bytes=resource->GetDesc().Width;
             ComPtr<IUnknown> device;if(FAILED(resource->GetDevice(IID_PPV_ARGS(&device))))return;
             std::lock_guard<std::mutex> lock(mutex);
-            if(bytes>MaximumIdleBytes-held||idle.size()>=1024)return;
+            if(bytes>MaximumIdleBytes)return;
+            // A full cache must adapt to the current scene. Previously old
+            // sizes occupied it forever, so every new size was destroyed on
+            // return and allocated again on the following frame.
+            // Only idle, fully retired storage is eligible for eviction.
+            while(!idle.empty()&&(bytes>MaximumIdleBytes-held||idle.size()>=1024)){
+                held-=idle.front().bytes;idle.erase(idle.begin());++evicted;
+            }
             idle.push_back({std::move(resource),std::move(device),bytes});held+=bytes;
         }catch(...){}
     }

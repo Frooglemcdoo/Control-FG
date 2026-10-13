@@ -235,6 +235,25 @@ static void TestGeometrySnapshot(ID3D12Device* device,bool common=false,bool tem
     assert(bank.GeometryStatistics().bytes==292);
     std::puts("PASS GPU geometry snapshot: build-time bytes survive later source overwrite/release, shared backing copied once, budget failure emits no copy, fence prevents early retirement.");
 }
+static void TestGeometryPoolPressure(ID3D12Device* device){
+    PTGeometrySnapshot::Pool pool;
+    constexpr UINT64 half=PTGeometrySnapshot::Pool::MaximumIdleBytes/2,small=4ull*1024*1024;
+    auto a=pool.Take(device,half),b=pool.Take(device,half);assert(a&&b&&a.Get()!=b.Get());
+    pool.Return(std::move(a));pool.Return(std::move(b));
+    assert(pool.Statistics().bytes==2*half);
+    auto changed=pool.Take(device,small);assert(changed);auto* identity=changed.Get();
+    pool.Return(std::move(changed));
+    auto stats=pool.Statistics();assert(stats.evictions==1&&stats.bytes==half+small);
+    // Current-scene sizes must enter a full cache instead of being destroyed
+    // on every return. All resources in this test are idle and unsubmitted.
+    for(unsigned n=0;n<100;++n){
+        changed=pool.Take(device,small);assert(changed.Get()==identity);
+        assert(pool.Statistics().allocations==3);pool.Return(std::move(changed));
+    }
+    assert(pool.Statistics().reuses==100&&pool.Statistics().evictions==1);
+    auto stillIdle=pool.Take(device,half);assert(stillIdle&&pool.Statistics().allocations==3);
+    std::puts("PASS geometry pool pressure: old idle sizes evicted; current size reused for 100 frames without allocation.");
+}
 static void TestUntrackedSceneDestinations(ID3D12Device* device){
     PTOwnedScene::Runtime bank;PTSceneLive::Capture capture(bank);
     ComPtr<ID3D12CommandAllocator> allocator;ComPtr<ID3D12GraphicsCommandList> list;
@@ -401,6 +420,7 @@ int main(){
     ComPtr<ID3D12Device> d;assert(SUCCEEDED(D3D12CreateDevice(a.Get(),D3D_FEATURE_LEVEL_11_0,IID_PPV_ARGS(&d))));
     TestBindingFirstObservation(d.Get());
     TestUnrelatedSceneLists(d.Get());
+    TestGeometryPoolPressure(d.Get());
     TestUntrackedSceneDestinations(d.Get());
     TestGeometrySnapshot(d.Get());TestGeometrySnapshot(d.Get(),true);TestGeometrySnapshot(d.Get(),false,true);TestGeometrySnapshot(d.Get(),false,false,true);
     TestOffUpdateCapture(d.Get());
