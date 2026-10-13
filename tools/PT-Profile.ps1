@@ -19,12 +19,23 @@ if(-not $Resolution){
     $Resolution=switch($choice){'1'{'DLAA'} '2'{'Quality'} default{throw 'Choose 1 or 2.'}}
 }
 $wpr=(Get-Command wpr.exe -ErrorAction Stop).Source
-$profiles=(& $wpr -profiles 2>&1 | Out-String)
-if($LASTEXITCODE -ne 0 -or $profiles -notmatch '\bGeneralProfile\b' -or $profiles -notmatch '\bGPU\b'){
+function Invoke-Recorder {
+    param([string[]]$Arguments)
+    $saved=$ErrorActionPreference
+    try {
+        $ErrorActionPreference='Continue'
+        $output=(& $wpr @Arguments 2>&1 | Out-String)
+        $code=$LASTEXITCODE
+    } finally {$ErrorActionPreference=$saved}
+    [pscustomobject]@{Output=$output;Code=$code}
+}
+$result=Invoke-Recorder -Arguments @('-profiles')
+$profiles=$result.Output
+if($result.Code -ne 0 -or $profiles -notmatch '\bGeneralProfile\b' -or $profiles -notmatch '\bGPU\b'){
     throw 'This Windows recorder lacks GeneralProfile or GPU. Send the output of wpr -profiles; no trace was started.'
 }
 # Refuse existing OR unrecognized status. Never cancel someone else's capture.
-$status=(& $wpr -status 2>&1 | Out-String)
+$status=(Invoke-Recorder -Arguments @('-status')).Output
 if($status -notmatch '(?i)not recording'){
     throw "Recorder is active or its status is unrecognized. Finish any existing recording first. Status: $status"
 }
@@ -57,8 +68,9 @@ Start-Sleep -Seconds 10
 $trace=Join-Path $dir 'CPU-GPU.etl'
 $started=$false
 try {
-    $output=(& $wpr -start GeneralProfile -start GPU -filemode 2>&1 | Out-String)
-    $code=$LASTEXITCODE
+    $result=Invoke-Recorder -Arguments @('-start','GeneralProfile','-start','GPU','-filemode')
+    $output=$result.Output;$code=$result.Code
+    if($code -eq 0){$started=$true}
     $output | Set-Content -LiteralPath (Join-Path $dir 'WPR-start.txt')
     if($code -ne 0){throw "WPR could not start ($code). No existing recording will be cancelled. $output"}
     $started=$true
@@ -66,9 +78,11 @@ try {
     Start-Sleep -Seconds $Seconds
 } finally {
     if($started){
-        (& $wpr -status collectors -details 2>&1 | Out-String) | Set-Content -LiteralPath (Join-Path $dir 'WPR-status.txt')
-        $output=(& $wpr -stop $trace ('Control R41 '+$Mode+' '+$Resolution) -skipPdbGen -compress 2>&1 | Out-String)
-        $code=$LASTEXITCODE
+        $statusResult=Invoke-Recorder -Arguments @('-status','collectors','-details')
+        # Save/stop before writing status: a status-file error must not leave recording active.
+        $result=Invoke-Recorder -Arguments @('-stop',$trace,('Control R41 '+$Mode+' '+$Resolution),'-skipPdbGen','-compress')
+        $output=$result.Output;$code=$result.Code
+        $statusResult.Output | Set-Content -LiteralPath (Join-Path $dir 'WPR-status.txt')
         $output | Set-Content -LiteralPath (Join-Path $dir 'WPR-stop.txt')
         if($code -ne 0){throw "WPR stop failed ($code). Output is in $dir. In an elevated prompt run: wpr -stop `"$trace`""}
         $meta['EndUtc']=[DateTime]::UtcNow.ToString('o')
