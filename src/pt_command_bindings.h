@@ -30,7 +30,14 @@ class Tracker {
     std::map<ID3D12GraphicsCommandList*,std::shared_ptr<Entry>> aliases;
     std::atomic<bool> healthy{true};
     template<class F> void Change(ID3D12GraphicsCommandList* list,F&& fn){
-        if(!healthy.load())return;std::lock_guard<std::mutex> guard(mutex);
+        // A hooked vtable is shared by command lists and COM interface aliases.
+        // Observing its creation interface does not register every interface
+        // subsequently used by the engine. Resolve an unseen caller before
+        // recording its FIRST setter; silently dropping it loses the PSO/root.
+        if(!healthy.load())return;
+        {std::lock_guard<std::mutex> guard(mutex);const auto found=aliases.find(list);
+            if(found!=aliases.end()){fn(*found->second);return;}}
+        if(!Ensure(list))return;std::lock_guard<std::mutex> guard(mutex);
         const auto found=aliases.find(list);if(found!=aliases.end())fn(*found->second);
     }
     static void Tables(RootState& state){for(auto& a:state.arguments)if(a.kind==ArgumentKind::table)a={};}
@@ -44,6 +51,12 @@ class Tracker {
     }
 public:
     void Fail()noexcept{healthy=false;}
+    bool Healthy()const noexcept{return healthy.load();}
+    bool Ensure(ID3D12GraphicsCommandList* list){
+        if(!list||!healthy.load())return false;
+        {std::lock_guard<std::mutex> guard(mutex);if(aliases.count(list))return true;}
+        if(Watch(list))return true;Fail();return false;
+    }
     bool Watch(ID3D12GraphicsCommandList* list){
         if(!list||!healthy.load())return false;ComPtr<IUnknown> identity;
         if(FAILED(list->QueryInterface(IID_PPV_ARGS(&identity))))return false;
@@ -73,7 +86,7 @@ public:
         });
     }
     bool BufferState(ID3D12GraphicsCommandList* list,ID3D12Resource* resource,D3D12_RESOURCE_STATES fallback,D3D12_RESOURCE_STATES& state){
-        if(!healthy.load())return false;std::lock_guard<std::mutex> guard(mutex);
+        if(!Ensure(list))return false;std::lock_guard<std::mutex> guard(mutex);
         const auto found=aliases.find(list);if(found==aliases.end())return false;
         const auto buffer=found->second->buffers.find(resource);
         if(buffer==found->second->buffers.end()){
@@ -114,11 +127,11 @@ public:
         });
     }
     ComPtr<ID3D12PipelineState> PipelineFor(ID3D12GraphicsCommandList* list){
-        if(!healthy.load())return {};std::lock_guard<std::mutex> guard(mutex);
+        if(!Ensure(list))return {};std::lock_guard<std::mutex> guard(mutex);
         const auto found=aliases.find(list);return found==aliases.end()?ComPtr<ID3D12PipelineState>{}:found->second->pipeline;
     }
     bool Read(ID3D12GraphicsCommandList* list,PTNativeRoot::Registry& roots,bool graphics,UINT required,Snapshot& result){
-        result={};if(!healthy.load()||!required||required>=(1u<<(graphics?18:8)))return false;
+        result={};if(!Ensure(list)||!required||required>=(1u<<(graphics?18:8)))return false;
         std::lock_guard<std::mutex> guard(mutex);const auto found=aliases.find(list);if(found==aliases.end())return false;
         const auto& e=*found->second;const auto& s=graphics?e.graphics:e.compute;auto layout=roots.Find(s.root.Get());
         if(!layout||layout->Type()!=(graphics?PTNativeRoot::Kind::graphics:PTNativeRoot::Kind::compute))return false;

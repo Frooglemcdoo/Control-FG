@@ -154,12 +154,48 @@ static void TestUnrelatedSceneLists(ID3D12Device* device){
     std::puts("PASS: 320 unrelated native lists do not exhaust the scene journal");
 }
 
+// Model a second COM interface address with the SAME controlling IUnknown.
+// Tracker only calls IUnknown on it; no fake command ever reaches the device.
+struct BindingAlias final : IUnknown {
+    IUnknown* owner;unsigned queries=0;
+    explicit BindingAlias(IUnknown* value):owner(value){}
+    HRESULT STDMETHODCALLTYPE QueryInterface(REFIID iid,void** out) override {++queries;return owner->QueryInterface(iid,out);}
+    ULONG STDMETHODCALLTYPE AddRef() override {return 2;}
+    ULONG STDMETHODCALLTYPE Release() override {return 1;}
+};
+static void TestBindingFirstObservation(ID3D12Device* device){
+    ComPtr<ID3D12CommandAllocator> allocator;ComPtr<ID3D12GraphicsCommandList> list;
+    assert(SUCCEEDED(device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT,IID_PPV_ARGS(&allocator))));
+    assert(SUCCEEDED(device->CreateCommandList(0,D3D12_COMMAND_LIST_TYPE_DIRECT,allocator.Get(),nullptr,IID_PPV_ARGS(&list))));
+    D3D12_HEAP_PROPERTIES heap{};heap.Type=D3D12_HEAP_TYPE_DEFAULT;
+    D3D12_RESOURCE_DESC desc{};desc.Dimension=D3D12_RESOURCE_DIMENSION_BUFFER;desc.Width=256;desc.Height=1;
+    desc.DepthOrArraySize=desc.MipLevels=1;desc.SampleDesc.Count=1;desc.Layout=D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+    ComPtr<ID3D12Resource> buffer;assert(SUCCEEDED(device->CreateCommittedResource(&heap,D3D12_HEAP_FLAG_NONE,&desc,D3D12_RESOURCE_STATE_COMMON,nullptr,IID_PPV_ARGS(&buffer))));
+    PTCommandBindings::Tracker tracker;
+    // No explicit Watch: the first native setter must establish the entry.
+    D3D12_RESOURCE_BARRIER barrier{};barrier.Type=D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    barrier.Transition={buffer.Get(),D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,D3D12_RESOURCE_STATE_COMMON,D3D12_RESOURCE_STATE_COPY_DEST};
+    tracker.Barriers(list.Get(),1,&barrier);
+    D3D12_RESOURCE_STATES state{};
+    assert(tracker.BufferState(list.Get(),buffer.Get(),D3D12_RESOURCE_STATE_COMMON,state)&&state==D3D12_RESOURCE_STATE_COPY_DEST);
+    BindingAlias alias(list.Get());auto* other=reinterpret_cast<ID3D12GraphicsCommandList*>(&alias);
+    assert(tracker.BufferState(other,buffer.Get(),D3D12_RESOURCE_STATE_COMMON,state)&&state==D3D12_RESOURCE_STATE_COPY_DEST);
+    assert(alias.queries==1);
+    barrier.Transition.StateAfter=D3D12_RESOURCE_STATE_COPY_SOURCE;tracker.Barriers(other,1,&barrier);
+    assert(tracker.BufferState(list.Get(),buffer.Get(),D3D12_RESOURCE_STATE_COMMON,state)&&state==D3D12_RESOURCE_STATE_COPY_SOURCE);
+    assert(alias.queries==1); // Registered interfaces stay on the no-QI hot path.
+    tracker.Reset(other,nullptr);
+    assert(tracker.BufferState(list.Get(),buffer.Get(),D3D12_RESOURCE_STATE_COMMON,state)&&state==D3D12_RESOURCE_STATE_COMMON);
+    assert(SUCCEEDED(list->Close()));
+    std::puts("PASS binding first observation: unregistered setters retained, alternate COM interface shares state and Reset, no repeated QueryInterface.");
+}
 int main(){
     ComPtr<ID3D12Debug> debug;const bool debugEnabled=SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&debug)));
     if(debugEnabled)debug->EnableDebugLayer();
     ComPtr<IDXGIFactory4> f;assert(SUCCEEDED(CreateDXGIFactory1(IID_PPV_ARGS(&f))));
     ComPtr<IDXGIAdapter> a;assert(SUCCEEDED(f->EnumWarpAdapter(IID_PPV_ARGS(&a))));
     ComPtr<ID3D12Device> d;assert(SUCCEEDED(D3D12CreateDevice(a.Get(),D3D_FEATURE_LEVEL_11_0,IID_PPV_ARGS(&d))));
+    TestBindingFirstObservation(d.Get());
     TestUnrelatedSceneLists(d.Get());
     TestGeometrySnapshot(d.Get());TestGeometrySnapshot(d.Get(),true);TestGeometrySnapshot(d.Get(),false,true);TestGeometrySnapshot(d.Get(),false,false,true);
     if(debugEnabled){

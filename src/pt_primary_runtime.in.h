@@ -19,6 +19,8 @@ static ComPtr<ID3D12Fence> sceneUseFence;
 static UINT64 sceneUseValue=0;
 static std::map<IUnknown*,std::pair<ComPtr<IUnknown>,UINT64>> sceneWaits;
 static std::map<ID3D12RootSignature*,std::shared_ptr<PTScenePipeline::Pipeline>> privatePipelines;
+static std::atomic<UINT64> jobCallbacks{0},jobOff{0},jobUnknownPipeline{0},opaqueAccepted{0};
+static std::atomic<UINT64> computeCallbacks{0},computeOff{0},computeNoPipeline{0},computeOtherPipeline{0},primarySeen{0},environmentSeen{0};
 static void Reject(const char* reason){
     static std::atomic<UINT64> count{0};const auto n=++count;
     if(n<=32||n%600==0)Log("PT_PRIMARY_SKIP reason=%s count=%llu native_surface=retained",reason,n);
@@ -136,12 +138,13 @@ static void Job(PTNativeJobRuntime::Phase phase,const PTNativeJobRoute::Ticket& 
         std::lock_guard<std::recursive_mutex> ordered(PTSceneQueues::queueMutex);
         std::lock_guard<std::recursive_mutex> guard(mutex);
         if(phase==PTNativeJobRuntime::Phase::cancelled){handoff.Cancelled(ticket.serial);candidates.erase(ticket.serial);return;}
-        if(ptReflectionUserState.load(std::memory_order_acquire)!=1){
+        ++jobCallbacks;
+        if(ptReflectionUserState.load(std::memory_order_acquire)!=1){++jobOff;
             for(const auto& c:candidates)handoff.Cancelled(c.first);candidates.clear();return;
         }
         if(!PTSceneLive::owner.Scenes().Healthy())return;
-        auto pipeline=opaquePipelines.Find(reinterpret_cast<ID3D12StateObject*>(ticket.pipeline));if(!pipeline)return;
-        auto* list=reinterpret_cast<ID3D12GraphicsCommandList4*>(ticket.list);Bindings bindings;View view;Context context;
+        auto pipeline=opaquePipelines.Find(reinterpret_cast<ID3D12StateObject*>(ticket.pipeline));if(!pipeline){++jobUnknownPipeline;return;}
+        ++opaqueAccepted;auto* list=reinterpret_cast<ID3D12GraphicsCommandList4*>(ticket.list);Bindings bindings;View view;Context context;
         if(!PTCommandBindings::tracker.Read(list,nativeRoots,false,0xc5,bindings)||!pipeline->root->Matches(bindings.layout->Root())||
            !ReadView(bindings.arguments[2].value,view)||view.engineFrame!=ticket.engineFrame||view.width!=ticket.width||view.height!=ticket.height||
            !ContextFor(list,bindings,0,context)){Reject("opaque_view_or_context");return;}
@@ -154,11 +157,16 @@ static void Job(PTNativeJobRuntime::Phase phase,const PTNativeJobRoute::Ticket& 
     }catch(...){Reject("job_allocation");}
 }
 static void Dispatched(void*,ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT z) noexcept {
-    if(!active||ptReflectionUserState.load(std::memory_order_acquire)!=1||!PTSceneLive::owner.Scenes().Healthy())return;
+    if(!active)return;++computeCallbacks;
+    if(ptReflectionUserState.load(std::memory_order_acquire)!=1){++computeOff;return;}
+    if(!PTSceneLive::owner.Scenes().Healthy())return;
     try {
         const auto pso=PTCommandBindings::tracker.PipelineFor(list);
         const bool environmentPass=pso.Get()==ptReflectionNativeCompositePso||pso.Get()==ptReflectionP2CompositePso;
-        const auto primary=primaryPipelines.Find(pso.Get());if(!pso||(!environmentPass&&!primary))return;
+        const auto primary=primaryPipelines.Find(pso.Get());
+        if(!pso){++computeNoPipeline;return;}
+        if(!environmentPass&&!primary){++computeOtherPipeline;return;}
+        if(environmentPass)++environmentSeen;else ++primarySeen;
         std::lock_guard<std::recursive_mutex> ordered(PTSceneQueues::queueMutex);PTSceneQueues::Scope privateQueues;
         std::lock_guard<std::recursive_mutex> guard(mutex);PTTableMirror::Scope descriptorLock(true);PTTableMirror::Mute privateWrites;
         Bindings bindings;if(!PTCommandBindings::tracker.Read(list,nativeRoots,false,0xd5,bindings)){Reject("lighting_bindings");return;}
@@ -172,7 +180,7 @@ static void Dispatched(void*,ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT 
             if(!PTTableMirror::bank.Read(bindings.resources.Get(),context.table.first,1ull<<13,e->table)){Reject("environment_descriptor");return;}
             while(environments.size()>=16)environments.erase(environments.begin());environments.push_back(std::move(e));return;
         }
-        if(z!=1||x!=(view.width+7)/8||y!=(view.height+7)/8||!primary->root->Matches(bindings.layout->Root()))return;
+        if(z!=1||x!=(view.width+7)/8||y!=(view.height+7)/8||!primary->root->Matches(bindings.layout->Root())){Reject("primary_dispatch_shape_or_root");return;}
         struct RetireAttempt {
             const View& view;
             ~RetireAttempt(){for(auto it=candidates.begin();it!=candidates.end();){
@@ -348,6 +356,11 @@ static void Submitted(void*,ID3D12CommandQueue* queue,UINT count,ID3D12CommandLi
             const auto pool=PTSceneLive::owner.Resources().GeometryStatistics();
             Log("PT_PRIMARY_CAPTURE healthy=%u failure=%s skipped_invalid=%llu copy_failures=%llu copy_failure=%s pooled_idle_bytes=%llu buffer_allocations=%llu buffer_reuses=%llu history_versions=%llu history_rows=%llu history_nodes=%llu copy_bytes=%llu",unsigned(t.healthy),t.failure,t.skippedInvalid,t.copyFailures,PTSceneLive::owner.Resources().GeometryFailure(),pool.bytes,pool.allocations,pool.reuses,t.historyVersions,t.historyRows,t.historyNodes,t.copyBytes);
             Log("PT_PRIMARY_CPU submissions=%llu builds=%llu build_total_ms=%llu build_max_ms=%llu checkpoints=%llu checkpoint_total_ms=%llu checkpoint_max_ms=%llu blocking_checkpoint_waits=0",sequence,t.builds.calls,t.builds.totalMs,t.builds.maxMs,t.checkpoints.calls,t.checkpoints.totalMs,t.checkpoints.maxMs);}
+        if(sequence%240==0){
+            Log("PT_PRIMARY_ROUTE bindings_healthy=%u jobs=%llu job_off=%llu job_unknown_pso=%llu opaque=%llu compute=%llu compute_off=%llu no_pso=%llu other_pso=%llu primary=%llu environment=%llu",
+                unsigned(PTCommandBindings::tracker.Healthy()),jobCallbacks.load(),jobOff.load(),jobUnknownPipeline.load(),opaqueAccepted.load(),computeCallbacks.load(),computeOff.load(),computeNoPipeline.load(),computeOtherPipeline.load(),primarySeen.load(),environmentSeen.load());
+            PTNativeJobRuntime::Diagnostics();
+        }
         PollMetrics();Output::Poll();
     }catch(...){Reject("retirement_exception");}
 }
@@ -378,6 +391,6 @@ static bool Start(){
     if(FAILED(device->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&sceneUseFence))))return false;
     if(!PTSceneQueues::Start(&PTSceneLive::owner.Scenes())||!PTSceneQueues::Register(&PTSceneLive::owner.Scenes(),&queueConsumer)||
        !PTCommandBindings::Register(&commandConsumer)||!PTNativeJobRuntime::Register(&Job)||!PTSceneLive::owner.Start(step,true))return false;
-    active=true;Log("PT_PRIMARY_SESSION_READY build=M12R5 ready=1 hits=4 spp=1 material=opaque_general geometric_normals=1 native_fallback=1");return true;
+    active=true;Log("PT_PRIMARY_SESSION_READY build=M12R6 ready=1 hits=4 spp=1 material=opaque_general geometric_normals=1 native_fallback=1");return true;
 }
 }
