@@ -1,6 +1,7 @@
 #pragma once
 #include "pt_scene_catalog.h"
 #include "pt_progress_sampling.h"
+#include "pt_hotpath_timing.h"
 #include "pt_scene_descriptors.h"
 #include "pt_owned_scene_runtime.h"
 #include <wrl/client.h>
@@ -101,7 +102,8 @@ public:
         if(Copy(upload.instances.data(),data,static_cast<std::size_t>(bytes)))uploads.emplace(address,std::move(upload));
     }
     void Build(IUnknown* list,const D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC* desc){
-        std::lock_guard<std::mutex> guard(mutex);Measure timing{stats.builds};
+        PTHotpathTiming::Sample profile(PTHotpathTiming::Kind::build_wait);
+        std::lock_guard<std::mutex> guard(mutex);profile.Next(PTHotpathTiming::Kind::build_inputs);Measure timing{stats.builds};
         if(!catalog.Healthy()){++stats.skippedInvalid;return;}
         D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC d{};
         if(!PTSceneObserver::ReadBuild(desc,d)){catalog.Invalidate();return;}
@@ -141,10 +143,12 @@ public:
             auto* id=List(list);ComPtr<ID3D12GraphicsCommandList> commands;
             if(!id||FAILED(list->QueryInterface(IID_PPV_ARGS(&commands)))){catalog.Invalidate();return;}
             auto& copies=recordedCopies[id->id];copies.emplace_back();
+            profile.Next(PTHotpathTiming::Kind::geometry_snapshot);
             if(!resources.FreezeGeometry(commands.Get(),s.geometry,copyBudget,copies.back())){
                 ++stats.copyFailures;copies.pop_back();s.kind=PTSceneCatalog::Snapshot::Kind::unknown;s.unavailable=resources.GeometryFailure();
             }else if(offUpdate)++stats.offUpdatesPreserved;
         }
+        profile.Next(PTHotpathTiming::Kind::build_record);
         Record(list,std::move(s));
     }
     void Compact(IUnknown* list,U64 dst,U64 src,D3D12_RAYTRACING_ACCELERATION_STRUCTURE_COPY_MODE mode){

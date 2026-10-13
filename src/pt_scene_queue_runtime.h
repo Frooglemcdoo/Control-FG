@@ -72,13 +72,17 @@ inline HRESULT FenceHook(ID3D12CommandQueue* q,ID3D12Fence* fence,UINT64 value,b
 inline HRESULT STDMETHODCALLTYPE SignalHook(ID3D12CommandQueue* q,ID3D12Fence* f,UINT64 n){return FenceHook(q,f,n,true);}
 inline HRESULT STDMETHODCALLTYPE WaitHook(ID3D12CommandQueue* q,ID3D12Fence* f,UINT64 n){return FenceHook(q,f,n,false);}
 inline HRESULT STDMETHODCALLTYPE ResetHook(ID3D12GraphicsCommandList* list,ID3D12CommandAllocator* allocator,ID3D12PipelineState* pso){
+    PTHotpathTiming::Sample profile(PTHotpathTiming::Kind::reset_lookup);
     Reset original=nullptr;{std::lock_guard<std::mutex> guard(hooksMutex);original=lists.at(*reinterpret_cast<void***>(list));}
     Scope scope;const auto capture=observer.load(std::memory_order_acquire);
     if(!scope.outer||!capture)return original(list,allocator,pso);
     // Reset cancels an unsent recording. Serialize it with the entire observed
     // Execute boundary so cancellation cannot release resources being submitted.
+    profile.Next(PTHotpathTiming::Kind::reset_wait);
     std::lock_guard<std::recursive_mutex> guard(queueMutex);
+    profile.Next(PTHotpathTiming::Kind::reset_native);
     const HRESULT hr=original(list,allocator,pso);const DWORD error=GetLastError();
+    profile.Next(PTHotpathTiming::Kind::reset_observer);
     if(SUCCEEDED(hr)){
         capture->Reset(list);
         const auto client=consumer.load(std::memory_order_acquire);

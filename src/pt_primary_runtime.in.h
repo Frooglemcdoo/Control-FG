@@ -207,8 +207,11 @@ static void Dispatched(void*,ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT 
         if(!pso){++computeNoPipeline;return;}
         if(!environmentPass&&!primary){++computeOtherPipeline;return;}
         if(environmentPass)++environmentSeen;else ++primarySeen;
+        PTHotpathTiming::Sample profile(PTHotpathTiming::Kind::primary_queue_wait);
         std::lock_guard<std::recursive_mutex> ordered(PTSceneQueues::queueMutex);PTSceneQueues::Scope privateQueues;
+        profile.Next(PTHotpathTiming::Kind::primary_guard_wait);
         std::lock_guard<std::recursive_mutex> guard(mutex);PTTableMirror::Scope descriptorLock(true);PTTableMirror::Mute privateWrites;
+        profile.Next(PTHotpathTiming::Kind::primary_setup);
         Bindings bindings;if(!PTCommandBindings::tracker.Read(list,nativeRoots,false,0xd5,bindings)){Reject("lighting_bindings");return;}
         View view;Context context;
         if(!ReadView(bindings.arguments[2].value,view,environmentPass?PTNativeView::Pass::environment:PTNativeView::Pass::primary)||!ContextFor(list,bindings,0,context)){Reject("lighting_view_or_context");return;}
@@ -270,9 +273,9 @@ static void Dispatched(void*,ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT 
         }
         PTNativeShaderTable::Identifiers identifiers;PTSceneDispatch::ExportSet exports;PTSceneDispatch::Plan plan;
         if(!handoff.ReadyIdentifiers(serial,identifiers)||!pipeline->Exports(candidate->ticket.pipeline,identifiers.hit,exports)){Reject("private_exports");return;}
-        QueryPerformanceCounter(&leaseStart);
+        profile.Next(PTHotpathTiming::Kind::primary_lease);QueryPerformanceCounter(&leaseStart);
         const auto status=handoff.PrepareRecording(serial,exports,plan,a->scene,&a->proof);
-        QueryPerformanceCounter(&leaseDone);
+        QueryPerformanceCounter(&leaseDone);profile.Next(PTHotpathTiming::Kind::primary_setup);
         if(status!=PTSceneHandoff::Status::pending)candidates.erase(serial);
         if(status!=PTSceneHandoff::Status::prepared){
             std::size_t row=0;const char* reason=handoff.NotReady(serial,row);
@@ -287,7 +290,9 @@ static void Dispatched(void*,ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT 
         if(!frame||frame->producerRecorded){Reject("frame_budget_or_duplicate");return;}
         // Native light buffers carry the result; this owner only retains the
         // private scene/dependencies and final submission fence.
+        profile.Next(PTHotpathTiming::Kind::primary_sbt);
         if(FAILED(PTScenePipeline::Dispatch::Create(device.Get(),pipeline,plan,view.width,view.height,bindings.resources.Get(),a->dispatch))){Reject("private_sbt");return;}
+        profile.Next(PTHotpathTiming::Kind::primary_camera);
         D3D12_HEAP_PROPERTIES cameraHeap{};cameraHeap.Type=D3D12_HEAP_TYPE_UPLOAD;
         D3D12_RESOURCE_DESC cameraDesc{};cameraDesc.Dimension=D3D12_RESOURCE_DIMENSION_BUFFER;cameraDesc.Width=1792;
         cameraDesc.Height=1;cameraDesc.DepthOrArraySize=cameraDesc.MipLevels=1;cameraDesc.SampleDesc.Count=1;cameraDesc.Layout=D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
@@ -296,7 +301,9 @@ static void Dispatched(void*,ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT 
         if(FAILED(a->camera->Map(0,&noRead,&cameraData))||!cameraData){Reject("camera_map");return;}
         std::memcpy(cameraData,view.bytes.data(),view.bytes.size());
         std::memcpy(static_cast<unsigned char*>(cameraData)+1280,a->lightConstants.data(),a->lightConstants.size());a->camera->Unmap(0,nullptr);
+        profile.Next(PTHotpathTiming::Kind::primary_metrics);
         if(!a->metrics.Initialize(device.Get())){Reject("coverage_allocation");return;}
+        profile.Next(PTHotpathTiming::Kind::primary_record);
         device->CopyDescriptorsSimple(49,Cpu(a->privateTable),a->primary.At(0),D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
         device->CopyDescriptorsSimple(1,Cpu(a->privateTable,47),a->metrics.Uav(),D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
         device->CopyDescriptorsSimple(1,Cpu(a->privateTable,39),environment->table.At(13),D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
@@ -546,9 +553,9 @@ static void Submitted(void*,ID3D12CommandQueue* queue,UINT count,ID3D12CommandLi
             LARGE_INTEGER frequency{};QueryPerformanceFrequency(&frequency);const double ms=1000.0/static_cast<double>(frequency.QuadPart);
             for(unsigned kind=0;kind<static_cast<unsigned>(PTHotpathTiming::Kind::count);++kind){
                 const auto& hot=PTHotpathTiming::counters[kind];
-                Log("PT_PRIMARY_HOT_CPU kind=%s samples=%llu sampled_ms=%.6f sampled_max_ms=%.6f interval=64 cumulative=1 scope=%s",kind?"descriptors":"bindings",
+                Log("PT_PRIMARY_HOT_CPU kind=%s samples=%llu sampled_ms=%.6f sampled_max_ms=%.6f interval=64 cumulative=1 scope=%s",PTHotpathTiming::Name(kind),
                     hot.samples.load(std::memory_order_relaxed),hot.ticks.load(std::memory_order_relaxed)*ms,hot.maximum.load(std::memory_order_relaxed)*ms,
-                    kind?"native_and_observer":"tracker");
+                    "inclusive_wall_cross_thread_not_frame_time");
             }
             for(unsigned on=0;on<2;++on)for(unsigned execute=0;execute<2;++execute){const auto& q=t.queues[on][execute];
                 Log("PT_PRIMARY_QUEUE_CPU pt=%u operation=%s calls=%llu lock_ms=%.6f observer_ms=%.6f native_ms=%.6f observer_max_ms=%.6f native_max_ms=%.6f cumulative=1",on,execute?"execute":"fence",q.calls,q.lockTicks*ms,q.observerTicks*ms,q.nativeTicks*ms,q.maxObserverTicks*ms,q.maxNativeTicks*ms);
@@ -595,6 +602,6 @@ static bool Start(){
     if(FAILED(device->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&sceneUseFence))))return false;
     if(!PTSceneQueues::Start(&PTSceneLive::owner.Scenes())||!PTSceneQueues::Register(&PTSceneLive::owner.Scenes(),&queueConsumer)||
        !PTCommandBindings::Register(&commandConsumer)||!PTNativeJobRuntime::Register(&Job)||!PTSceneLive::owner.Start(step,true))return false;
-    active=true;Log("PT_PRIMARY_SESSION_READY build=M12R40 ready=1 hits=4 spp=1 roulette_start=3 material=opaque_general geometric_normals=1 native_fallback=1 primary_lighting=native diffuse_bounces=pt_indirect readiness=per_material graphics_tracking=0");return true;
+    active=true;Log("PT_PRIMARY_SESSION_READY build=M12R41 ready=1 hits=4 spp=1 roulette_start=3 material=opaque_general geometric_normals=1 native_fallback=1 primary_lighting=native diffuse_bounces=pt_indirect readiness=per_material graphics_tracking=0");return true;
 }
 }

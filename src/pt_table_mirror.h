@@ -18,10 +18,16 @@ inline std::recursive_mutex gate;
 inline thread_local unsigned privateWrites=0;
 struct Mute {Mute(){++privateWrites;}~Mute(){--privateWrites;}};
 struct Scope {
-    PTHotpathTiming::Sample timing;
+    PTHotpathTiming::Sample timing,phase;
     std::unique_lock<std::recursive_mutex> lock;
     bool capture;
-    explicit Scope(bool enabled):timing(PTHotpathTiming::Kind::descriptors,enabled&&!privateWrites),lock(gate,std::defer_lock),capture(enabled&&!privateWrites){if(capture)lock.lock();}
+    explicit Scope(bool enabled,bool descriptorWrite=false):timing(PTHotpathTiming::Kind::descriptors,enabled&&!privateWrites),
+        phase(descriptorWrite?PTHotpathTiming::Kind::descriptor_wait:PTHotpathTiming::Kind::snapshot_wait,enabled&&!privateWrites),
+        lock(gate,std::defer_lock),capture(enabled&&!privateWrites){
+        if(capture)lock.lock();
+        phase.Next(descriptorWrite?PTHotpathTiming::Kind::descriptor_native:PTHotpathTiming::Kind::snapshot_work);
+    }
+    void Observing(){phase.Next(PTHotpathTiming::Kind::descriptor_observer);}
 };
 struct Range {D3D12_CPU_DESCRIPTOR_HANDLE first{};UINT count=0;};
 class Bank {

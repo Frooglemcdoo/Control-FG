@@ -130,6 +130,7 @@ static bool Patch(void* object,UINT index,void* hook,void** original) noexcept {
 }
 static PTGlass::LightingTableShadow* ActiveShadow() {
     if(!captureKind||mirrorGuard||!enabled)return nullptr;
+    PTHotpathTiming::Sample timing(PTHotpathTiming::Kind::glass_capture);
     auto& holder=captureKind==1?pass.ray:pass.light;
     auto& context=captureKind==1?pass.rayContext:pass.lightingContext;
     if(!holder){
@@ -141,8 +142,9 @@ static PTGlass::LightingTableShadow* ActiveShadow() {
     return holder.get();
 }
 static void STDMETHODCALLTYPE CopyHook(ID3D12Device* d,UINT count,D3D12_CPU_DESCRIPTOR_HANDLE dst,D3D12_CPU_DESCRIPTOR_HANDLE src,D3D12_DESCRIPTOR_HEAP_TYPE type){
-    PTTableMirror::Scope tableScope(PTSceneLive::owner.Active()&&type==D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+    PTTableMirror::Scope tableScope(PTSceneLive::owner.Active()&&type==D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,true);
     {PTTableMirror::Mute forwarding;copySimple(d,count,dst,src,type);}
+    tableScope.Observing();
     if(PTTableMirror::privateWrites)return;
     if(type!=D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV)return;
     if(tableScope.capture&&count)PTSceneLive::owner.CopySimple(dst.ptr,src.ptr,count);
@@ -150,8 +152,9 @@ static void STDMETHODCALLTYPE CopyHook(ID3D12Device* d,UINT count,D3D12_CPU_DESC
     if(auto* s=ActiveShadow()){mirrorGuard=true;s->ObserveNativeCopy(pass.serial,dst,count,src);mirrorGuard=false;}
 }
 static void STDMETHODCALLTYPE CbvHook(ID3D12Device* d,const D3D12_CONSTANT_BUFFER_VIEW_DESC* cb,D3D12_CPU_DESCRIPTOR_HANDLE dst){
-    PTTableMirror::Scope tableScope(PTSceneLive::owner.Active());
+    PTTableMirror::Scope tableScope(PTSceneLive::owner.Active(),true);
     {PTTableMirror::Mute forwarding;createCbv(d,cb,dst);}
+    tableScope.Observing();
     if(PTTableMirror::privateWrites)return;
     if(tableScope.capture)PTSceneLive::owner.Overwrite(dst);
     if(tableScope.capture)PTTableMirror::bank.Constant(cb,dst);
@@ -159,22 +162,25 @@ static void STDMETHODCALLTYPE CbvHook(ID3D12Device* d,const D3D12_CONSTANT_BUFFE
     if(auto* s=ActiveShadow()){mirrorGuard=true;s->ObserveNativeConstant(pass.serial,dst,*cb);mirrorGuard=false;}
 }
 static void STDMETHODCALLTYPE SrvHook(ID3D12Device* d,ID3D12Resource* resource,const D3D12_SHADER_RESOURCE_VIEW_DESC* desc,D3D12_CPU_DESCRIPTOR_HANDLE dst){
-    PTTableMirror::Scope tableScope(PTSceneLive::owner.Active());
+    PTTableMirror::Scope tableScope(PTSceneLive::owner.Active(),true);
     {PTTableMirror::Mute forwarding;createSrv(d,resource,desc,dst);}
+    tableScope.Observing();
     if(PTTableMirror::privateWrites)return;
     if(tableScope.capture)PTSceneLive::owner.Overwrite(dst,desc);
     if(tableScope.capture)PTTableMirror::bank.ShaderResource(resource,desc,dst);
 }
 static void STDMETHODCALLTYPE UavHook(ID3D12Device* d,ID3D12Resource* resource,ID3D12Resource* counter,const D3D12_UNORDERED_ACCESS_VIEW_DESC* desc,D3D12_CPU_DESCRIPTOR_HANDLE dst){
-    PTTableMirror::Scope tableScope(PTSceneLive::owner.Active());
+    PTTableMirror::Scope tableScope(PTSceneLive::owner.Active(),true);
     {PTTableMirror::Mute forwarding;createUav(d,resource,counter,desc,dst);}
+    tableScope.Observing();
     if(PTTableMirror::privateWrites)return;
     if(tableScope.capture)PTSceneLive::owner.Overwrite(dst);
     if(tableScope.capture)PTTableMirror::bank.UnorderedAccess(resource,counter,desc,dst);
 }
 static HRESULT STDMETHODCALLTYPE HeapHook(ID3D12Device* d,const D3D12_DESCRIPTOR_HEAP_DESC* desc,REFIID iid,void** out){
-    PTTableMirror::Scope tableScope(PTSceneLive::owner.Active());
+    PTTableMirror::Scope tableScope(PTSceneLive::owner.Active(),true);
     HRESULT hr;{PTTableMirror::Mute forwarding;hr=createHeap(d,desc,iid,out);}
+    tableScope.Observing();
     if(SUCCEEDED(hr)&&out&&*out&&tableScope.capture){
         ComPtr<ID3D12DescriptorHeap> heap;
         if(SUCCEEDED(static_cast<IUnknown*>(*out)->QueryInterface(IID_PPV_ARGS(&heap)))){
@@ -185,8 +191,9 @@ static HRESULT STDMETHODCALLTYPE HeapHook(ID3D12Device* d,const D3D12_DESCRIPTOR
 }
 static void STDMETHODCALLTYPE CopyAllHook(ID3D12Device* d,UINT dstCount,const D3D12_CPU_DESCRIPTOR_HANDLE* dst,const UINT* dstSizes,
     UINT srcCount,const D3D12_CPU_DESCRIPTOR_HANDLE* src,const UINT* srcSizes,D3D12_DESCRIPTOR_HEAP_TYPE type){
-    PTTableMirror::Scope tableScope(PTSceneLive::owner.Active()&&type==D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+    PTTableMirror::Scope tableScope(PTSceneLive::owner.Active()&&type==D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,true);
     {PTTableMirror::Mute forwarding;copyAll(d,dstCount,dst,dstSizes,srcCount,src,srcSizes,type);}
+    tableScope.Observing();
     if(!tableScope.capture||type!=D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV)return;
     std::vector<PTSceneDescriptors::Range> destinations,sources;
     if(!PTSceneDescriptors::CopyRanges(dstCount,dst,dstSizes,destinations)||
