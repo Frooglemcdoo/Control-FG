@@ -97,6 +97,21 @@ static std::wstring ModulePath(HMODULE module) {
     return std::wstring(path.data(), n);
 }
 
+// Read once before any PT installation, including early device creation.
+// This is a restart-only diagnostic; never tear down in-flight PT ownership.
+static bool PTStartupCaptureEnabled() {
+    static const bool enabled=[](){
+        const DWORD error=GetLastError();auto path=ModulePath(selfModule);
+        const auto slash=path.find_last_of(L"\\/");
+        if(slash==std::wstring::npos){SetLastError(error);return true;}
+        path.resize(slash+1);path+=L"ControlFG-PT-Capture-Off.txt";
+        const DWORD attributes=GetFileAttributesW(path.c_str());
+        const bool disabled=attributes!=INVALID_FILE_ATTRIBUTES&&!(attributes&FILE_ATTRIBUTE_DIRECTORY);
+        SetLastError(error);return !disabled;
+    }();
+    return enabled;
+}
+
 static bool HashMatches(HMODULE module, const char* expected) {
     std::wstring path = ModulePath(module);
     if (path.empty()) return false;
@@ -1437,7 +1452,9 @@ static BOOL CALLBACK Configure(PINIT_ONCE, PVOID, PVOID*) noexcept {
         }
         Log("HOOK_INSTALLED label=CONTROL_COMMAND_QUEUE_CTOR");
         const bool guideInputsReady = RRGuideInitializeInputs(d3d);
-        const unsigned int rrObserverHooks = InstallRRObservationHooks(renderer,d3d);
+        const bool ptCaptureEnabled=PTStartupCaptureEnabled();
+        Log("PT_PRIMARY_STARTUP build=M12R37 capture=%u restart_only=1 rr_fg_available=1",unsigned(ptCaptureEnabled));
+        const unsigned int rrObserverHooks = ptCaptureEnabled?InstallRRObservationHooks(renderer,d3d):0;
         Log("PT_REFLECTION_P0_OBSERVER ready=%u expected=5 scope=reflection_dispatch_identification gpu_work=unchanged allocations=0",rrObserverHooks);
         const bool ptReflectionLookupReady=PTReflectionInstallShaderLookupHooks(renderer,d3d);
         Log("PT_REFLECTION_P1_LOOKUP_INSTALL ready=%u replacement=disabled fail_closed=1",unsigned(ptReflectionLookupReady));

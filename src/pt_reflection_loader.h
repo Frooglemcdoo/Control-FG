@@ -836,6 +836,7 @@ static HRESULT STDMETHODCALLTYPE PTReflectionHookCreateComputePipelineState(
 }
 
 static bool PTReflectionInstallComputePsoHookOnDevice(ID3D12Device* device) noexcept {
+    if(!PTStartupCaptureEnabled())return false;
     if(!device)return false;
 
     void** vtable=nullptr;
@@ -936,6 +937,7 @@ static void STDMETHODCALLTYPE PTReflectionHookSetPipelineState(
 }
 
 static bool PTReflectionInstallCommandListCaptureHooks(void* commandList) noexcept {
+    if(!PTStartupCaptureEnabled())return false;
     auto* list=static_cast<ID3D12GraphicsCommandList*>(commandList);
     if(!list)return false;
     void** vtable=nullptr;
@@ -1953,6 +1955,7 @@ static void PTReflectionProbeCachedTechniqueOnce(HMODULE renderer,HMODULE d3d) n
 }
 
 static bool PTReflectionInstallShaderLookupHooks(HMODULE renderer,HMODULE d3d) noexcept {
+    if(!PTStartupCaptureEnabled())return false;
     if(!renderer||renderer!=verifiedRenderer||!d3d||d3d!=verifiedD3d)return false;
     PTReflectionLogShaderCodeStorageExports(d3d);
     PTReflectionLogShaderCodeStorageGetterBytes(d3d);

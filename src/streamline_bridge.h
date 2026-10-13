@@ -1032,11 +1032,21 @@ static void PrepareSLFrameToken(unsigned long long present) noexcept {
     ++slFrameTokenSuccesses;
 
     sl::Result sleepResult = sl::Result::eErrorNotInitialized;
+    LARGE_INTEGER sleepStart{},sleepEnd{},sleepFrequency{};QueryPerformanceCounter(&sleepStart);
     if (slReflexSleepApi) {
         sleepResult = slReflexSleepApi(*token);
         ++slReflexSleepCalls;
     }
+    QueryPerformanceCounter(&sleepEnd);
+    static std::atomic<UINT64> sleepTotalTicks{0},sleepMaxTicks{0};
+    QueryPerformanceFrequency(&sleepFrequency);
+    const double sleepMs=1000.0*static_cast<double>(sleepEnd.QuadPart-sleepStart.QuadPart)/static_cast<double>(sleepFrequency.QuadPart);
+    const auto ticks=static_cast<UINT64>(sleepEnd.QuadPart-sleepStart.QuadPart);
+    sleepTotalTicks.fetch_add(ticks,std::memory_order_relaxed);
+    auto maximum=sleepMaxTicks.load(std::memory_order_relaxed);
+    while(maximum<ticks&&!sleepMaxTicks.compare_exchange_weak(maximum,ticks,std::memory_order_relaxed)){}
     if (present <= 8 || (present % 240) == 0) {
+        Log("PT_PRIMARY_REFLEX_CPU present=%llu sleep_ms=%.6f total_ms=%.6f max_ms=%.6f calls=%llu capture=%u",present,sleepMs,1000.0*sleepTotalTicks.load()/sleepFrequency.QuadPart,1000.0*sleepMaxTicks.load()/sleepFrequency.QuadPart,slReflexSleepCalls.load(),unsigned(PTStartupCaptureEnabled()));
         Log("SL_FRAME_TOKEN present=%llu frame_index=%u result=%lld token=%p success=1 reflex_sleep_result=%lld token_successes=%llu sleep_calls=%llu",
             present, frameIndex, SLResultCode(result), token, SLResultCode(sleepResult), slFrameTokenSuccesses.load(), slReflexSleepCalls.load());
     }
