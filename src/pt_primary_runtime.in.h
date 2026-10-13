@@ -109,7 +109,7 @@ static void PollMetrics(){
         if(good&&f.armed&&f.assets->probe&&counts[6]){transportValidated=true;Log("PT_PRIMARY_TRANSPORT_READY frame=%u covered=%u",f.view.frame,counts[6]);}
         if(good&&f.armed&&counts[5]&&!counts[6])transportValidated=false;
         static UINT64 samples=0;const auto n=++samples;
-        if(n<=8||n%240==0)Log("PT_PRIMARY_GPU frame=%u readback=%u armed=%u sampled=%u dimensions=%u primary_hit=%u material_match=%u depth_match=%u integrated=%u covered=%u fault=%u sparse_step=16",f.view.frame,unsigned(good),unsigned(f.armed),counts[0],counts[1],counts[2],counts[3],counts[4],counts[5],counts[6],counts[7]);
+        if(n<=8||n%240==0)Log("PT_PRIMARY_GPU frame=%u readback=%u armed=%u sampled=%u dimensions=%u primary_hit=%u material_match=%u depth_match=%u integrated=%u covered=%u fault=%u probe=%u sparse_step=16",f.view.frame,unsigned(good),unsigned(f.armed),counts[0],counts[1],counts[2],counts[3],counts[4],counts[5],counts[6],counts[7],unsigned(f.assets->probe));
         if(good&&counts[7]){std::array<UINT,16> faults{};
             if(f.assets->metrics.ReadFaults(faults)&&(n<=8||n%240==0))
                 Log("PT_PRIMARY_FAULTS frame=%u probe=%u input=%u hit=%u material=%u normal=%u facing=%u light=%u direct=%u sample=%u spawn=%u radiance=%u material_bounds=%u brdf=%u material_values=%u",f.view.frame,unsigned(f.assets->probe),faults[1],faults[2],faults[3],faults[4],faults[5],faults[6],faults[7],faults[8],faults[9],faults[10],faults[11],faults[12],faults[13]);

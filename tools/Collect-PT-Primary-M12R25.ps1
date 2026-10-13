@@ -12,7 +12,7 @@ try {
     $primary=@($lines | Where-Object {$_ -match 'PT_PRIMARY_'})
     if (@($primary | Where-Object {$_ -match 'PT_PRIMARY_SESSION_READY build=M12R25 ready=1'}).Count -eq 0) {throw 'The latest probe log has no M12R25 primary renderer records. Check that the M12R25 dxgi.dll and shader sidecars were installed together.'}
     $gpu=@($primary | Where-Object {$_ -match 'PT_PRIMARY_GPU '})
-    $coverage=@($gpu | Where-Object {$_ -match 'covered=([1-9][0-9]*)\b'})
+    $coverage=@($gpu | Where-Object {$_ -match 'covered=([1-9][0-9]*)\b' -and $_ -notmatch 'probe=1\b'})
     $skips=@($primary | Where-Object {$_ -match 'PT_PRIMARY_SKIP '})
     $summary=[ordered]@{
         Build='M12R25';Log=$record.Name

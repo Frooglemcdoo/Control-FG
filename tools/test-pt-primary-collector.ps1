@@ -27,6 +27,10 @@ try {
     & "$PSScriptRoot/Collect-PT-Primary-M12R25.ps1" -LogDirectory $logs -OutputDirectory $out
     $zero=Summary
     if($zero.SawGPUCoveredSamples){throw 'Zero GPU coverage was reported as success.'}
+    Add-Content -LiteralPath $log 'PT_PRIMARY_GPU frame=34 readback=1 armed=1 sampled=20 integrated=18 covered=17 fault=1 probe=1 sparse_step=16'
+    & "$PSScriptRoot/Collect-PT-Primary-M12R25.ps1" -LogDirectory $logs -OutputDirectory $out
+    $probe=Summary
+    if($probe.SawGPUCoveredSamples){throw 'Sparse validation was reported as displayed PT coverage.'}
     Add-Content -LiteralPath $log 'PT_PRIMARY_GPU frame=34 readback=1 armed=1 sampled=20 dimensions=20 primary_hit=19 material_match=18 depth_match=18 integrated=18 covered=17 fault=1 sparse_step=16'
     & "$PSScriptRoot/Collect-PT-Primary-M12R25.ps1" -LogDirectory $logs -OutputDirectory $out
     $gpu=Summary
