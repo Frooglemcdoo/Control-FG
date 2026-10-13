@@ -539,7 +539,13 @@ static void Submitted(void*,ID3D12CommandQueue* queue,UINT count,ID3D12CommandLi
             Log("PT_PRIMARY_OWNERS retained=%llu rejected=%llu budget_rejected=%llu peak_bytes=%llu untracked_destinations=%llu destination_tombstones=%llu last_untracked_destination=%llx",owners.retained,owners.rejected,owners.budget,owners.peakBytes,t.untrackedDestinations,t.destinationTombstones,t.lastUntrackedDestination);
             Log("PT_PRIMARY_CAPTURE healthy=%u failure=%s skipped_invalid=%llu copy_failures=%llu copy_failure=%s pooled_idle_bytes=%llu buffer_allocations=%llu buffer_reuses=%llu pool_evictions=%llu history_versions=%llu history_rows=%llu history_nodes=%llu copy_bytes=%llu off_updates_preserved=%llu completed_waits=%llu",unsigned(t.healthy),t.failure,t.skippedInvalid,t.copyFailures,PTSceneLive::owner.Resources().GeometryFailure(),pool.bytes,pool.allocations,pool.reuses,pool.evictions,t.historyVersions,t.historyRows,t.historyNodes,t.copyBytes,t.offUpdatesPreserved,t.completedWaits);
             Log("PT_PRIMARY_COPY_TOTAL copied_bytes=%llu whole_index_bytes=%llu",owners.geometryCopyBytes,owners.geometryWholeIndexBytes);
-            Log("PT_PRIMARY_CPU submissions=%llu builds=%llu build_total_ms=%llu build_max_ms=%llu checkpoints=%llu checkpoint_total_ms=%llu checkpoint_max_ms=%llu blocking_checkpoint_waits=0",sequence,t.builds.calls,t.builds.totalMs,t.builds.maxMs,t.checkpoints.calls,t.checkpoints.totalMs,t.checkpoints.maxMs);}
+            Log("PT_PRIMARY_CPU submissions=%llu builds=%llu build_total_ms=%llu build_max_ms=%llu checkpoints=%llu checkpoint_total_ms=%llu checkpoint_max_ms=%llu blocking_checkpoint_waits=0",sequence,t.builds.calls,t.builds.totalMs,t.builds.maxMs,t.checkpoints.calls,t.checkpoints.totalMs,t.checkpoints.maxMs);
+            Log("PT_PRIMARY_PROGRESS signals=%llu skipped=%llu interval=64",t.progressSignals,t.progressSkipped);
+            LARGE_INTEGER frequency{};QueryPerformanceFrequency(&frequency);const double ms=1000.0/static_cast<double>(frequency.QuadPart);
+            for(unsigned on=0;on<2;++on)for(unsigned execute=0;execute<2;++execute){const auto& q=t.queues[on][execute];
+                Log("PT_PRIMARY_QUEUE_CPU pt=%u operation=%s calls=%llu lock_ms=%.6f observer_ms=%.6f native_ms=%.6f observer_max_ms=%.6f native_max_ms=%.6f cumulative=1",on,execute?"execute":"fence",q.calls,q.lockTicks*ms,q.observerTicks*ms,q.nativeTicks*ms,q.maxObserverTicks*ms,q.maxNativeTicks*ms);
+            }
+        }
         if(sequence%240==0){
             Log("PT_PRIMARY_ROUTE bindings_healthy=%u jobs=%llu job_off=%llu job_unknown_pso=%llu opaque=%llu compute=%llu compute_off=%llu no_pso=%llu other_pso=%llu primary=%llu environment=%llu",
                 unsigned(PTCommandBindings::tracker.Healthy()),jobCallbacks.load(),jobOff.load(),jobUnknownPipeline.load(),opaqueAccepted.load(),computeCallbacks.load(),computeOff.load(),computeNoPipeline.load(),computeOtherPipeline.load(),primarySeen.load(),environmentSeen.load());
@@ -562,7 +568,8 @@ static void Reset(void*,ID3D12GraphicsCommandList* list) noexcept {
         PollMetrics();Output::Poll();
     }catch(...){Reject("reset_exception");}
 }
-static const PTSceneQueues::Consumer queueConsumer{&handoff,&Submitting,&Selected,&Submitted,&Reset,&Signalling,&FenceObserved};
+static bool RenderingRequested(void*) noexcept {return ptReflectionUserState.load(std::memory_order_acquire)==1;}
+static const PTSceneQueues::Consumer queueConsumer{&handoff,&Submitting,&Selected,&Submitted,&Reset,&Signalling,&FenceObserved,&RenderingRequested};
 static void PipelineBound(void*,ID3D12GraphicsCommandList*,ID3D12PipelineState* pipeline) noexcept {
     if(!active||ptReflectionUserState.load(std::memory_order_acquire)!=1)return;
     try{PTPrimaryPipelineProbe::Used(pipeline,0,0,0,false);}
@@ -580,6 +587,6 @@ static bool Start(){
     if(FAILED(device->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&sceneUseFence))))return false;
     if(!PTSceneQueues::Start(&PTSceneLive::owner.Scenes())||!PTSceneQueues::Register(&PTSceneLive::owner.Scenes(),&queueConsumer)||
        !PTCommandBindings::Register(&commandConsumer)||!PTNativeJobRuntime::Register(&Job)||!PTSceneLive::owner.Start(step,true))return false;
-    active=true;Log("PT_PRIMARY_SESSION_READY build=M12R35 ready=1 hits=4 spp=1 roulette_start=3 material=opaque_general geometric_normals=1 native_fallback=1 primary_lighting=native diffuse_bounces=pt_indirect readiness=per_material graphics_tracking=0");return true;
+    active=true;Log("PT_PRIMARY_SESSION_READY build=M12R36 ready=1 hits=4 spp=1 roulette_start=3 material=opaque_general geometric_normals=1 native_fallback=1 primary_lighting=native diffuse_bounces=pt_indirect readiness=per_material graphics_tracking=0");return true;
 }
 }

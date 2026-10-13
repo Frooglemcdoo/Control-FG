@@ -412,12 +412,35 @@ static void TestBindingFirstObservation(ID3D12Device* device){
     assert(SUCCEEDED(list->Close()));
     std::puts("PASS binding first observation: unregistered setters retained, alternate COM interface shares state and Reset, no repeated QueryInterface.");
 }
+static void TestSampledCleanup(ID3D12Device* device){
+    PTOwnedScene::Runtime bank;PTSceneLive::Capture capture(bank);
+    D3D12_COMMAND_QUEUE_DESC desc{};ComPtr<ID3D12CommandQueue> queue;
+    ComPtr<ID3D12Fence> fence;
+    assert(SUCCEEDED(device->CreateCommandQueue(&desc,IID_PPV_ARGS(&queue))));
+    assert(SUCCEEDED(device->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&fence))));
+    // Empty native submissions have no graph stamp and create no progress
+    // fence. Checkpoint must tolerate this entry without dereferencing null.
+    for(unsigned n=0;n<256;++n)capture.Tail(queue.Get());
+    capture.Checkpoint();assert(capture.Statistics().progressSignals==0);
+    for(UINT64 n=1;n<=512;++n){
+        assert(capture.Signal(queue.Get(),fence.Get(),n));
+        assert(SUCCEEDED(queue->Signal(fence.Get(),n)));
+        capture.Tail(queue.Get());capture.Checkpoint();
+    }
+    const auto stats=capture.Statistics();assert(stats.healthy&&stats.progressSignals==8&&stats.progressSkipped==760);
+    assert(SUCCEEDED(queue->Signal(fence.Get(),513)));
+    HANDLE ready=CreateEventW(nullptr,FALSE,FALSE,nullptr);assert(ready);
+    assert(SUCCEEDED(fence->SetEventOnCompletion(513,ready)));
+    assert(WaitForSingleObject(ready,30000)==WAIT_OBJECT_0);CloseHandle(ready);
+    puts("PASS sampled cleanup WARP: empty queue checkpoint, 512 native signals, eight private cleanup signals.");
+}
 int main(){
     ComPtr<ID3D12Debug> debug;const bool debugEnabled=SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&debug)));
     if(debugEnabled)debug->EnableDebugLayer();
     ComPtr<IDXGIFactory4> f;assert(SUCCEEDED(CreateDXGIFactory1(IID_PPV_ARGS(&f))));
     ComPtr<IDXGIAdapter> a;assert(SUCCEEDED(f->EnumWarpAdapter(IID_PPV_ARGS(&a))));
     ComPtr<ID3D12Device> d;assert(SUCCEEDED(D3D12CreateDevice(a.Get(),D3D_FEATURE_LEVEL_11_0,IID_PPV_ARGS(&d))));
+    TestSampledCleanup(d.Get());
     TestBindingFirstObservation(d.Get());
     TestUnrelatedSceneLists(d.Get());
     TestGeometryPoolPressure(d.Get());
@@ -601,6 +624,8 @@ int main(){
     ready=CreateEventW(nullptr,FALSE,FALSE,nullptr);assert(ready);
     assert(SUCCEEDED(done->SetEventOnCompletion(2,ready)));assert(WaitForSingleObject(ready,30000)==WAIT_OBJECT_0);CloseHandle(ready);
     assert(client.privateFence->GetCompletedValue()==1&&client.signals==1);
+    const auto queueStats=capture.Statistics();
+    assert(queueStats.queues[1][1].calls>=1&&queueStats.queues[1][0].calls>=2);
     TestFenceIdentity(live.Resources(),queue.Get(),list.Get());
     // Stop observing before this stack-owned fixture ends. Production capture
     // has process lifetime; installed forwarding hooks remain valid either way.

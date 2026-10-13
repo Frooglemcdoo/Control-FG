@@ -24,43 +24,49 @@ struct Consumer {
     void (*reset)(void*,ID3D12GraphicsCommandList*) noexcept=nullptr;
     void (*signalling)(void*,ID3D12CommandQueue*,ID3D12Fence*,UINT64) noexcept=nullptr;
     void (*fence)(void*,ID3D12CommandQueue*,ID3D12Fence*,UINT64,bool,HRESULT) noexcept=nullptr;
+    bool (*rendering)(void*) noexcept=nullptr;
 };
 inline std::atomic<const Consumer*> consumer{nullptr};
 inline bool hooksValid=true;
 inline thread_local unsigned nesting=0;
 struct Scope {bool outer;Scope():outer(nesting++==0){}~Scope(){--nesting;}};
+inline UINT64 Tick(){LARGE_INTEGER value{};QueryPerformanceCounter(&value);return static_cast<UINT64>(value.QuadPart);}
 inline void STDMETHODCALLTYPE ExecuteHook(ID3D12CommandQueue* q,UINT n,ID3D12CommandList*const* input){
     Execute original=nullptr;{std::lock_guard<std::mutex> guard(hooksMutex);original=queues.at(*reinterpret_cast<void***>(q)).execute;}
     Scope scope;const auto capture=observer.load(std::memory_order_acquire);
     if(!scope.outer||!capture){original(q,n,input);return;}
     // Keep the observation order identical to calls reaching the native API.
-    std::lock_guard<std::recursive_mutex> guard(queueMutex);
-    const DWORD before=GetLastError();
+    const DWORD before=GetLastError();const auto start=Tick();
+    std::lock_guard<std::recursive_mutex> guard(queueMutex);const auto locked=Tick();
     const auto client=consumer.load(std::memory_order_acquire);
+    const bool requested=client&&client->rendering?client->rendering(client->context):true;
     capture->Checkpoint();
     if(client&&client->submitting)client->submitting(client->context,q,n,input);
     const bool admitted=capture->Submit(q,n,input);
     if(client&&client->selected)client->selected(client->context,q,n,input,admitted);
-    SetLastError(before);original(q,n,input);
-    const DWORD after=GetLastError();capture->Submitted(q);
+    const auto nativeStart=Tick();SetLastError(before);original(q,n,input);
+    const DWORD after=GetLastError();const auto nativeEnd=Tick();capture->Submitted(q);
     if(client&&client->submitted)client->submitted(client->context,q,n,input,admitted);
-    capture->Tail(q);SetLastError(after);
+    capture->Tail(q);const auto end=Tick();
+    capture->QueueObserved(requested,true,locked-start,(nativeStart-locked)+(end-nativeEnd),nativeEnd-nativeStart);SetLastError(after);
 }
 inline HRESULT FenceHook(ID3D12CommandQueue* q,ID3D12Fence* fence,UINT64 value,bool signal){
     FenceOperation original=nullptr;{std::lock_guard<std::mutex> guard(hooksMutex);const auto& methods=queues.at(*reinterpret_cast<void***>(q));original=signal?methods.signal:methods.wait;}
     Scope scope;const auto capture=observer.load(std::memory_order_acquire);
     if(!scope.outer||!capture)return original(q,fence,value);
-    std::lock_guard<std::recursive_mutex> guard(queueMutex);
-    const DWORD before=GetLastError();capture->Checkpoint();
+    const DWORD before=GetLastError();const auto start=Tick();
+    std::lock_guard<std::recursive_mutex> guard(queueMutex);const auto locked=Tick();capture->Checkpoint();
     const auto client=consumer.load(std::memory_order_acquire);
+    const bool requested=client&&client->rendering?client->rendering(client->context):true;
     // Serialize prospective signal metadata and private admission copies before
     // forwarding the releasing native signal. Failure poisons the catalog.
     if(signal){capture->Signal(q,fence,value);if(client&&client->signalling)client->signalling(client->context,q,fence,value);}
-    SetLastError(before);
-    const HRESULT hr=original(q,fence,value);const DWORD error=GetLastError();
+    const auto nativeStart=Tick();SetLastError(before);
+    const HRESULT hr=original(q,fence,value);const DWORD error=GetLastError();const auto nativeEnd=Tick();
     if(FAILED(hr))capture->Invalidate();
     else {if(!signal)capture->Wait(q,fence,value);capture->Tail(q);}
     if(client&&client->fence)client->fence(client->context,q,fence,value,signal,hr);
+    const auto end=Tick();capture->QueueObserved(requested,false,locked-start,(nativeStart-locked)+(end-nativeEnd),nativeEnd-nativeStart);
     SetLastError(error);return hr;
 }
 inline HRESULT STDMETHODCALLTYPE SignalHook(ID3D12CommandQueue* q,ID3D12Fence* f,UINT64 n){return FenceHook(q,f,n,true);}

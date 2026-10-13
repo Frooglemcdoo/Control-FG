@@ -1,9 +1,37 @@
 #include "../src/pt_scene_order.h"
+#include "../src/pt_progress_sampling.h"
 #include <cassert>
 #include <cstdio>
 #include <chrono>
 #include <cstring>
 using namespace PTSceneOrder;
+static void TestSampledProgress(){
+    PTSceneProgress::Sampling sampling;
+    assert(!sampling.Due(0));assert(sampling.Due(10));sampling.Signalled(10);
+    for(unsigned n=1;n<64;++n)assert(!sampling.Due(10+n));
+    assert(sampling.Due(74)); // Failure to signal must not advance the proof.
+    assert(sampling.signalledStamp==10);assert(sampling.Due(75));sampling.Signalled(75);
+    for(unsigned n=0;n<1000;++n)assert(!sampling.Due(75));
+    assert(sampling.Due(76));
+    Graph graph;PTSceneProgress::Sampling busy;U64 pending=0,completed=0,signals=0;
+    std::map<U64,U64> remap;std::set<U64> versions;
+    for(U64 n=1;n<=20000;++n){
+        assert(graph.Write(1,{1,0x1000},n));const auto stamp=graph.TailStamp(1);
+        if(busy.Due(stamp)){completed=pending;pending=stamp;busy.Signalled(stamp);++signals;}
+        if(n%256==0){assert(graph.Compact({},{{1,completed}},remap,versions));assert(graph.Size()<200);}
+    }
+    assert(signals==313);Selection selected;
+    assert(graph.Select(graph.Mark(1),{1,0x1000},selected)==Status::ready&&selected.version==20000);
+    // A sampled fence must not imply completion of later writes. A new queue
+    // remains unordered until that newer write is actually covered by a poll.
+    Graph delayed;assert(delayed.Write(1,{1,0x1000},1));const auto old=delayed.TailStamp(1);
+    assert(delayed.Write(1,{1,0x1000},2));const auto fresh=delayed.TailStamp(1);
+    assert(delayed.Compact({},{{1,old}},remap,versions));
+    assert(delayed.Select(delayed.Mark(2),{1,0x1000},selected)==Status::unordered);
+    assert(delayed.Compact({},{{1,fresh}},remap,versions));
+    assert(delayed.Select(delayed.Mark(2),{1,0x1000},selected)==Status::ready&&selected.version==2);
+    puts("PASS sampled progress: 20,000 writes, 313 cleanup signals, bounded metadata and no inferred future completion.");
+}
 static void TestLiveCompaction(){
     using namespace PTSceneOrder;
     Graph reference,compact;
@@ -97,6 +125,7 @@ static void TestIndexedSceneSelection(){
     assert(graph.Select(cut,{4354,4354*4096},selected)==Status::missing);
 }
 int main(){
+    TestSampledProgress();
     TestIndexedSceneSelection();
     TestObservedFenceCompletion();
     TestStaticSceneCompaction();

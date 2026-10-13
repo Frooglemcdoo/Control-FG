@@ -1,5 +1,6 @@
 #pragma once
 #include "pt_scene_catalog.h"
+#include "pt_progress_sampling.h"
 #include "pt_scene_descriptors.h"
 #include "pt_owned_scene_runtime.h"
 #include <wrl/client.h>
@@ -17,7 +18,7 @@ class Capture {
     std::mutex mutex;
     std::map<IUnknown*,Identity> identities;
     std::map<U64,Upload> uploads;
-    struct Progress {ComPtr<ID3D12Fence> fence;U64 value=0,completedStamp=0;std::map<U64,U64> stamps;};
+    struct Progress {ComPtr<ID3D12Fence> fence;U64 value=0,completedStamp=0;PTSceneProgress::Sampling sampling;std::map<U64,U64> stamps;};
     std::map<U64,Progress> progress;
     struct WaitFence {ComPtr<ID3D12Fence> fence;U64 completed=0;};
     std::map<U64,WaitFence> waitFences;
@@ -75,11 +76,17 @@ class Capture {
     }
 public:
     struct Timing {U64 calls=0,totalMs=0,maxMs=0;};
-    struct Stats {Timing builds,checkpoints;U64 skippedInvalid=0,untrackedDestinations=0,destinationTombstones=0,lastUntrackedDestination=0,copyFailures=0,offUpdatesPreserved=0,completedWaits=0,historyVersions=0,historyRows=0,historyNodes=0,copyBytes=0;bool healthy=true;const char* failure="none";};
+    struct QueueTiming {U64 calls=0,lockTicks=0,observerTicks=0,nativeTicks=0,maxObserverTicks=0,maxNativeTicks=0;};
+    struct Stats {QueueTiming queues[2][2]{};U64 progressSignals=0,progressSkipped=0;Timing builds,checkpoints;U64 skippedInvalid=0,untrackedDestinations=0,destinationTombstones=0,lastUntrackedDestination=0,copyFailures=0,offUpdatesPreserved=0,completedWaits=0,historyVersions=0,historyRows=0,historyNodes=0,copyBytes=0;bool healthy=true;const char* failure="none";};
 private:
     Stats stats;
     struct Measure {Timing& value;ULONGLONG start=GetTickCount64();~Measure(){const U64 ms=GetTickCount64()-start;++value.calls;value.totalMs+=ms;value.maxMs=(std::max)(value.maxMs,ms);}};
 public:
+    void QueueObserved(bool requested,bool execute,U64 lockTicks,U64 observerTicks,U64 nativeTicks){
+        std::lock_guard<std::mutex> guard(mutex);auto& t=stats.queues[requested?1:0][execute?1:0];
+        ++t.calls;t.lockTicks+=lockTicks;t.observerTicks+=observerTicks;t.nativeTicks+=nativeTicks;
+        t.maxObserverTicks=(std::max)(t.maxObserverTicks,observerTicks);t.maxNativeTicks=(std::max)(t.maxNativeTicks,nativeTicks);
+    }
     Stats Statistics(){std::lock_guard<std::mutex> guard(mutex);stats.healthy=catalog.Healthy();stats.failure=catalog.Failure();const auto history=catalog.StatisticsNow();stats.historyVersions=history.versions;stats.historyRows=history.rows;stats.historyNodes=history.nodes;stats.copyBytes=copyBudget->Held();return stats;}
     explicit Capture(PTOwnedScene::Runtime& bank):resources(bank){}
     void RenderingRequested(bool value) noexcept {renderingRequested.store(value,std::memory_order_relaxed);}
@@ -197,19 +204,21 @@ public:
     void Tail(ID3D12CommandQueue* queue){
         std::lock_guard<std::mutex> guard(mutex);if(!catalog.Healthy()){retirement.Poll();return;}auto* id=Identify(queue);if(!id){catalog.Invalidate();return;}
         auto& p=progress[id->id];
+        ++checkpointOperations;retirement.Poll();
+        const auto stamp=catalog.TailStamp(id->id);
+        if(!p.sampling.Due(stamp)){++stats.progressSkipped;return;}
         if(!p.fence){ComPtr<ID3D12Device> device;
             if(FAILED(queue->GetDevice(IID_PPV_ARGS(&device)))||FAILED(device->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&p.fence)))){catalog.Invalidate();return;}
         }
         if(p.value>=UINT64_MAX-1||FAILED(queue->Signal(p.fence.Get(),++p.value))){catalog.Invalidate();return;}
-        p.stamps.emplace(p.value,catalog.TailStamp(id->id));
-        ++checkpointOperations;retirement.Poll();
+        p.stamps.emplace(p.value,stamp);p.sampling.Signalled(stamp);++stats.progressSignals;
     }
     void Checkpoint(){
         std::lock_guard<std::mutex> guard(mutex);
         if(!catalog.Healthy()||checkpointOperations-lastCheckpointAttempt<256)return;
         lastCheckpointAttempt=checkpointOperations;Measure timing{stats.checkpoints};
         std::map<U64,U64> completed;
-        for(auto& item:progress){auto& p=item.second;const auto done=p.fence->GetCompletedValue();
+        for(auto& item:progress){auto& p=item.second;if(!p.fence)continue;const auto done=p.fence->GetCompletedValue();
             if(done==UINT64_MAX){catalog.Invalidate();return;}
             auto end=p.stamps.upper_bound(done);
             if(end!=p.stamps.begin())p.completedStamp=std::max(p.completedStamp,std::prev(end)->second);
