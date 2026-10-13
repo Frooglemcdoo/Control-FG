@@ -1,3 +1,4 @@
+#include "../src/pt_native_uploads.h"
 #define NOMINMAX
 #include <windows.h>
 #include <dxgi1_6.h>
@@ -49,6 +50,17 @@ static void TestGeometrySnapshot(ID3D12Device* device){
     for(unsigned n=0;n<512;++n){mapped[n]=static_cast<unsigned char>(n);mapped[n+512]=0xee;}upload->Unmap(0,nullptr);
     PTOwnedScene::Runtime uploads;const auto uploadAddress=upload->GetGPUVirtualAddress();
     assert(uploads.Created(900,upload.Get(),uploadAddress,desc.Width)==1);
+    PTNativeView::Uploads constants;
+    auto savedWidth=desc.Width;desc.Width=65536;auto constant=make(D3D12_HEAP_TYPE_UPLOAD,D3D12_RESOURCE_STATE_GENERIC_READ);desc.Width=savedWidth;
+    assert(constants.Created(constant.Get()));assert(constants.Created(constant.Get()));
+    void* constantData=nullptr;assert(SUCCEEDED(constant->Map(0,nullptr,&constantData)));
+    std::memset(constantData,0x5a,65536);constant->Unmap(0,nullptr);
+    unsigned char constantSlice[16]{};const auto constantAddress=constant->GetGPUVirtualAddress();
+    assert(constants.Read(constantAddress+3584,constantSlice,sizeof(constantSlice)));
+    for(auto byte:constantSlice)assert(byte==0x5a);
+    assert(!constants.Read(constantAddress+65530,constantSlice,sizeof(constantSlice)));
+    assert(!constants.Created(source.Get()));constant.Reset();
+    assert(constants.Read(constantAddress+3584,constantSlice,sizeof(constantSlice))); // Registry owns allocation.
     unsigned char slice[16]{};assert(uploads.ReadUpload(uploadAddress+17,slice,sizeof(slice)));
     for(unsigned n=0;n<16;++n)assert(slice[n]==n+17);
     assert(!uploads.ReadUpload(uploadAddress+desc.Width-8,slice,sizeof(slice)));

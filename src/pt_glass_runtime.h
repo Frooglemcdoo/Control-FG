@@ -13,6 +13,7 @@
 #include "pt_scene_dispatch.h"
 #include "pt_surface_output.h"
 #include "pt_native_view.h"
+#include "pt_native_uploads.h"
 #include "pt_primary_metrics.h"
 #include <intrin.h>
 #include <unordered_map>
@@ -263,6 +264,7 @@ static void STDMETHODCALLTYPE RaysHook(ID3D12GraphicsCommandList4* list,const D3
         if(!PTCommandBindings::Watch(list))PTCommandBindings::tracker.Fail();
     }
     PTNativeJobRuntime::Recorded(list,desc,currentRayPso);
+    if(PTSceneLive::owner.Active()&&opaquePipelines.Find(currentRayPso)&&!PTNativeJobRuntime::pending.serial)Skip("opaque_native_job_route");
     if(!enabled||!rayScope||!desc||desc->Depth!=1||pass.mode==0||(ptReflectionUserState.load()&1u)==0){if(enabled&&rayScope)Skip("dispatch_disabled_or_shape");dispatchRays(list,desc);return;}
     if(!pass.ray){Skip("ray_descriptor_snapshot");dispatchRays(list,desc);return;}
     Context context{};unsigned char identifier[32]{};
@@ -461,6 +463,21 @@ static HRESULT STDMETHODCALLTYPE ListHook(ID3D12Device* d,UINT node,D3D12_COMMAN
     }
     SetLastError(nativeError);return hr;
 }
+using CreateCommitted=HRESULT(STDMETHODCALLTYPE*)(ID3D12Device*,const D3D12_HEAP_PROPERTIES*,D3D12_HEAP_FLAGS,const D3D12_RESOURCE_DESC*,D3D12_RESOURCE_STATES,const D3D12_CLEAR_VALUE*,REFIID,void**);
+static CreateCommitted createCommitted=nullptr;
+static HRESULT STDMETHODCALLTYPE CommittedHook(ID3D12Device* d,const D3D12_HEAP_PROPERTIES* heap,D3D12_HEAP_FLAGS flags,const D3D12_RESOURCE_DESC* desc,D3D12_RESOURCE_STATES state,const D3D12_CLEAR_VALUE* clear,REFIID iid,void** out){
+    const HRESULT hr=createCommitted(d,heap,flags,desc,state,clear,iid,out);const DWORD error=GetLastError();
+    if(SUCCEEDED(hr)&&out&&*out&&heap&&desc&&heap->Type==D3D12_HEAP_TYPE_UPLOAD&&
+       desc->Dimension==D3D12_RESOURCE_DIMENSION_BUFFER&&desc->Width==65536&&!PTCommandBindings::nesting){
+        try{ComPtr<ID3D12Resource> resource;
+            if(SUCCEEDED(static_cast<IUnknown*>(*out)->QueryInterface(IID_PPV_ARGS(&resource)))){
+                const bool tracked=PTNativeView::uploads.Created(resource.Get());static std::atomic<UINT64> count{0};const auto n=++count;
+                if(n<=4||!tracked)Log("PT_PRIMARY_UPLOAD_POOL tracked=%u count=%llu bytes=65536",unsigned(tracked),n);
+            }
+        }catch(...){Log("PT_PRIMARY_UPLOAD_POOL tracked=0 reason=allocation");}
+    }
+    SetLastError(error);return hr;
+}
 static void InstallDevice(ID3D12Device* d){
     if(device||!enabled)return;device=d;ComPtr<ID3D12Device5> rayDevice;
     if(FAILED(d->QueryInterface(IID_PPV_ARGS(&rayDevice)))||
@@ -473,6 +490,7 @@ static void InstallDevice(ID3D12Device* d){
        !Patch(d,10,reinterpret_cast<void*>(&GraphicsHook),reinterpret_cast<void**>(&createGraphics))||
        !Patch(d,16,reinterpret_cast<void*>(&RootHook),reinterpret_cast<void**>(&createRoot))||
        !Patch(d,12,reinterpret_cast<void*>(&ListHook),reinterpret_cast<void**>(&createList))||
+       !Patch(d,27,reinterpret_cast<void*>(&CommittedHook),reinterpret_cast<void**>(&createCommitted))||
        !Patch(rayDevice.Get(),62,reinterpret_cast<void*>(&StateHook),reinterpret_cast<void**>(&createState)))enabled=false;
     Log("PT_GLASS_DEVICE_HOOKS ready=%u",unsigned(enabled.load()));
     if(enabled&&!Primary::Start())Log("PT_PRIMARY_SESSION_READY ready=0 fallback=approved_P2_G3");

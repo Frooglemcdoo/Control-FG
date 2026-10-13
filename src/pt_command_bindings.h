@@ -77,6 +77,10 @@ public:
             e.resources=std::move(resources);e.samplers=std::move(samplers);
         });
     }
+    ComPtr<ID3D12PipelineState> PipelineFor(ID3D12GraphicsCommandList* list){
+        if(!healthy.load())return {};std::lock_guard<std::mutex> guard(mutex);
+        const auto found=aliases.find(list);return found==aliases.end()?ComPtr<ID3D12PipelineState>{}:found->second->pipeline;
+    }
     bool Read(ID3D12GraphicsCommandList* list,PTNativeRoot::Registry& roots,bool graphics,UINT required,Snapshot& result){
         result={};if(!healthy.load()||!required||required>=(1u<<(graphics?18:8)))return false;
         std::lock_guard<std::mutex> guard(mutex);const auto found=aliases.find(list);if(found==aliases.end())return false;

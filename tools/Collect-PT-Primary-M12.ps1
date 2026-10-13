@@ -8,7 +8,7 @@ New-Item -ItemType Directory -Path $stage | Out-Null
 try {
     $copy=Join-Path $stage $record.Name
     Copy-Item -LiteralPath $record.FullName -Destination $copy
-    $lines=@(Get-Content -LiteralPath $copy)
+    $lines=@(Get-Content -LiteralPath $copy | ForEach-Object { [string]::Copy($_) })
     $primary=@($lines | Where-Object {$_ -match 'PT_PRIMARY_'})
     if ($primary.Count -eq 0) {throw 'The latest probe log has no M12 primary renderer records. Check that the M12 dxgi.dll and shader sidecars were installed together.'}
     $gpu=@($primary | Where-Object {$_ -match 'PT_PRIMARY_GPU '})

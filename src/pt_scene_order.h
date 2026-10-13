@@ -4,6 +4,7 @@
 #include <set>
 #include <vector>
 #include <algorithm>
+#include <array>
 // CPU model of OBSERVED queue operations, not a replacement for GPU fences.
 // Hosts append command-list operations in submission/list order, never recording
 // thread order. Queue/fence IDs must be lifetime identities, not reusable pointers.
@@ -13,15 +14,50 @@ enum class Status {ready,pending,missing,unordered,invalid};
 struct Key {U64 token=0,address=0;bool operator<(const Key& b)const{return token<b.token||(token==b.token&&address<b.address);}};
 struct Selection {U64 version=0,node=0;};
 class Graph {
-    struct Node {U64 previous=0,waitFence=0,waitValue=0;Key target{};U64 version=0;};
+    struct Node {U64 previous=0,waitFence=0,waitValue=0;Key target{};U64 version=0;unsigned lane=0;};
     struct Fence {U64 last=0,completed=0;std::map<U64,U64> signals;};
     std::vector<Node> nodes{Node{}};
     std::map<U64,U64> queues;
     std::map<U64,Fence> fences;
     bool valid=true;U64 completedPrefix=0;
+    std::map<U64,unsigned> lanes;
+    using Clock=std::array<U64,17>; // lane 0 is the completed prefix
+    mutable std::vector<Clock> clocks;
+    mutable std::vector<unsigned char> clockState;
+    mutable bool clockDirty=true,clockCycle=false;
+    Status ClockAt(U64 at)const {
+        if(!valid||!at||at>=nodes.size())return Status::invalid;
+        if(clockDirty){clocks.assign(nodes.size(),{});clockState.assign(nodes.size(),0);clockDirty=false;clockCycle=false;}
+        if(clockCycle)return Status::invalid;
+        std::vector<std::pair<U64,bool>> todo{{at,false}};
+        while(!todo.empty()){
+            const auto task=todo.back();todo.pop_back();const U64 id=task.first;
+            if(!id||clockState[id]>=2)continue;
+            const auto& n=nodes[id];U64 signal=0;
+            if(n.waitFence){const auto f=fences.find(n.waitFence);
+                if(f==fences.end()){clockState[id]=3;continue;}
+                if(n.waitValue>f->second.completed){const auto found=f->second.signals.lower_bound(n.waitValue);
+                    if(found==f->second.signals.end()){clockState[id]=3;continue;}signal=found->second;}
+            }
+            if(!task.second){
+                if(clockState[id]==1){clockCycle=true;return Status::invalid;}
+                clockState[id]=1;todo.push_back({id,true});
+                if(signal)todo.push_back({signal,false});if(n.previous)todo.push_back({n.previous,false});continue;
+            }
+            if((n.previous&&clockState[n.previous]!=2)||(signal&&clockState[signal]!=2)){clockState[id]=3;continue;}
+            auto& c=clocks[id];if(n.previous)c=clocks[n.previous];
+            if(signal)for(unsigned lane=0;lane<c.size();++lane)c[lane]=std::max(c[lane],clocks[signal][lane]);
+            c[n.lane]=id;clockState[id]=2;
+        }
+        return clockState[at]==2?Status::ready:Status::pending;
+    }
+    bool Before(U64 a,U64 b)const {return clocks[b][nodes[a].lane]>=a;}
+
     static constexpr std::size_t MaximumNodes=65536,MaximumQueues=16,MaximumFences=256;
     U64 Append(U64 queue,Node node){
         if(!valid||!queue||nodes.size()>=MaximumNodes||(!queues.count(queue)&&queues.size()>=MaximumQueues)){valid=false;return 0;}
+        if(!lanes.count(queue))lanes.emplace(queue,static_cast<unsigned>(lanes.size()+1));
+        node.lane=lanes.at(queue);clockDirty=true;
         node.previous=queues.count(queue)?queues.at(queue):completedPrefix;nodes.push_back(node);queues[queue]=nodes.size()-1;return nodes.size()-1;
     }
     Status Ancestors(U64 at,std::set<U64>& complete)const {
@@ -69,7 +105,7 @@ public:
     // queued work has a queued signal. Never block waiting for future CPU work.
     bool ClosedDependencies()const {
         if(!valid)return false;
-        for(const auto& q:queues){std::set<U64> ancestors;if(Ancestors(q.second,ancestors)!=Status::ready)return false;}
+        for(const auto& q:queues)if(ClockAt(q.second)!=Status::ready)return false;
         return true;
     }
     // Only after the host proves EVERY observed queue tail has completed,
@@ -81,10 +117,15 @@ public:
         for(U64 n=1;n<nodes.size();++n)if(nodes[static_cast<std::size_t>(n)].target.token)writes[nodes[static_cast<std::size_t>(n)].target].push_back(n);
         std::map<Key,Selection> candidate;
         for(const auto& entry:writes){
-            std::set<U64> maximal(entry.second.begin(),entry.second.end());
-            if(entry.second.size()>1)for(const U64 n:entry.second){
-                std::set<U64> ancestors;if(Ancestors(n,ancestors)!=Status::ready)return false;
-                for(const U64 a:ancestors)if(a!=n)maximal.erase(a);
+            std::set<U64> maximal;
+            for(const U64 n:entry.second){
+                if(ClockAt(n)!=Status::ready)return false;
+                bool dominated=false;
+                for(auto it=maximal.begin();it!=maximal.end();){
+                    if(Before(n,*it)){dominated=true;break;}
+                    if(Before(*it,n))it=maximal.erase(it);else ++it;
+                }
+                if(!dominated)maximal.insert(n);
             }
             if(maximal.size()!=1)return false;
             const U64 n=*maximal.begin();candidate.emplace(entry.first,Selection{nodes[static_cast<std::size_t>(n)].version,n});
@@ -99,46 +140,38 @@ public:
         std::vector<Node> baseline{Node{}};U64 tail=0;
         for(const auto& entry:versions){Node n;n.previous=tail;n.target=entry.first;n.version=entry.second;baseline.push_back(n);tail=baseline.size()-1;}
         if(!tail){baseline.push_back(Node{});tail=1;}
-        nodes=std::move(baseline);completedPrefix=tail;
+        nodes=std::move(baseline);completedPrefix=tail;clockDirty=true;
         for(auto& q:queues)q.second=tail;
         for(auto& f:fences){f.second.completed=f.second.last;f.second.signals.clear();}
         return true;
     }
     Status Select(U64 dispatch,Key target,Selection& result)const {
-        result={};std::set<U64> reachable;const auto state=Ancestors(dispatch,reachable);
-        if(state!=Status::ready)return state;
-        // A reachable old version is insufficient when another queue has an
-        // unordered write to the same AS. Writes already submitted after this
-        // cut must be provably descendants, not merely absent from its history.
+        result={};const auto state=ClockAt(dispatch);if(state!=Status::ready)return state;
         for(U64 id=1;id<nodes.size();++id){const auto& n=nodes[static_cast<std::size_t>(id)];
-            if(n.target.token!=target.token||n.target.address!=target.address||reachable.count(id))continue;
-            std::set<U64> later;const auto s=Ancestors(id,later);if(s!=Status::ready)return s;
-            if(!later.count(dispatch))return Status::unordered;
+            if(n.target.token!=target.token||n.target.address!=target.address||Before(id,dispatch))continue;
+            const auto status=ClockAt(id);if(status!=Status::ready)return status;
+            if(!Before(dispatch,id))return Status::unordered;
         }
-        // A larger signal on another queue can satisfy the same wait first.
-        // Require a single ordered timeline for every observed fence, including
-        // queue handoffs; increasing CPU-side values alone are insufficient.
-        for(const auto& fence:fences){
-            U64 previous=0;
+        // Increasing CPU fence values alone do not prove a queue handoff.
+        for(const auto& fence:fences){U64 previous=0;
             for(const auto& signal:fence.second.signals){
-                if(previous){
-                    std::set<U64> history;const auto s=Ancestors(signal.second,history);
-                    if(s!=Status::ready)return s;
-                    if(!history.count(previous))return Status::unordered;
-                }
+                if(previous){const auto status=ClockAt(signal.second);if(status!=Status::ready)return status;
+                    if(!Before(previous,signal.second))return Status::unordered;}
                 previous=signal.second;
             }
         }
         std::set<U64> maximal;
-        for(const auto id:reachable){const auto& n=nodes[id];
-            if(n.target.token==target.token&&n.target.address==target.address)maximal.insert(id);
+        for(U64 id=1;id<nodes.size();++id){const auto& n=nodes[static_cast<std::size_t>(id)];
+            if(n.target.token!=target.token||n.target.address!=target.address||!Before(id,dispatch))continue;
+            const auto status=ClockAt(id);if(status!=Status::ready)return status;
+            bool dominated=false;
+            for(auto it=maximal.begin();it!=maximal.end();){
+                if(Before(id,*it)){dominated=true;break;}
+                if(Before(*it,id))it=maximal.erase(it);else ++it;
+            }
+            if(!dominated)maximal.insert(id);
         }
         if(maximal.empty())return Status::missing;
-        const auto candidates=maximal;
-        for(const auto candidate:candidates){
-            std::set<U64> prior;const auto s=Ancestors(candidate,prior);if(s!=Status::ready)return s;
-            for(const auto ancestor:prior)if(ancestor!=candidate)maximal.erase(ancestor);
-        }
         if(maximal.size()!=1)return Status::unordered;
         const U64 selected=*maximal.begin();
         if(!nodes[selected].version)return Status::missing;

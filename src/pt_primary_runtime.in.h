@@ -24,7 +24,9 @@ static void Reject(const char* reason){
 }
 static ComPtr<IUnknown> Identity(IUnknown* object){ComPtr<IUnknown> result;if(object)object->QueryInterface(IID_PPV_ARGS(&result));return result;}
 static bool ReadView(UINT64 address,View& view){
-    return PTSceneLive::owner.Resources().ReadUpload(address,view.bytes.data(),view.bytes.size())&&view.Decode();
+    if(!PTNativeView::uploads.Read(address,view.bytes.data(),view.bytes.size())&&
+       !PTSceneLive::owner.Resources().ReadUpload(address,view.bytes.data(),view.bytes.size())){Reject("view_upload_untracked");return false;}
+    if(!view.Decode()){Reject("view_constants_invalid");return false;}return true;
 }
 static bool SameView(UINT64 address,const View& expected){View current;return ReadView(address,current)&&expected.Same(current);}
 static bool ContextFor(ID3D12GraphicsCommandList* list,const Bindings& bindings,UINT tableParameter,Context& context){
@@ -136,11 +138,12 @@ static void Job(PTNativeJobRuntime::Phase phase,const PTNativeJobRoute::Ticket& 
 static void Dispatched(void*,ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT z) noexcept {
     if(!active)return;
     try {
+        const auto pso=PTCommandBindings::tracker.PipelineFor(list);
+        const bool environmentPass=pso.Get()==ptReflectionNativeCompositePso||pso.Get()==ptReflectionP2CompositePso;
+        const auto primary=primaryPipelines.Find(pso.Get());if(!pso||(!environmentPass&&!primary))return;
         std::lock_guard<std::recursive_mutex> ordered(PTSceneQueues::queueMutex);PTSceneQueues::Scope privateQueues;
         std::lock_guard<std::recursive_mutex> guard(mutex);PTTableMirror::Scope descriptorLock(true);PTTableMirror::Mute privateWrites;
-        Bindings bindings;if(!PTCommandBindings::tracker.Read(list,nativeRoots,false,0xd5,bindings))return;
-        const bool environmentPass=bindings.pipeline.Get()==ptReflectionNativeCompositePso||bindings.pipeline.Get()==ptReflectionP2CompositePso;
-        const auto primary=primaryPipelines.Find(bindings.pipeline.Get());if(!environmentPass&&!primary)return;
+        Bindings bindings;if(!PTCommandBindings::tracker.Read(list,nativeRoots,false,0xd5,bindings)){Reject("lighting_bindings");return;}
         View view;Context context;
         if(!ReadView(bindings.arguments[2].value,view)||!ContextFor(list,bindings,0,context)){Reject("lighting_view_or_context");return;}
         if(environmentPass){
@@ -210,11 +213,14 @@ static thread_local Restore restore;
 static void Drawing(void*,ID3D12GraphicsCommandList* list) noexcept {
     if(!active)return;
     try {
+        if(restore.list)return;
+        const auto pso=PTCommandBindings::tracker.PipelineFor(list);
+        auto pipeline=surfacePipelines.Find(pso.Get());if(!pipeline)return;
         std::lock_guard<std::recursive_mutex> ordered(PTSceneQueues::queueMutex);PTSceneQueues::Scope privateQueues;
         std::lock_guard<std::recursive_mutex> guard(mutex);PTTableMirror::Scope descriptorLock(true);PTTableMirror::Mute privateWrites;
-        if(restore.list)return;Bindings bindings;
-        if(!PTCommandBindings::tracker.Read(list,nativeRoots,true,0x31002,bindings))return;
-        auto pipeline=surfacePipelines.Find(bindings.pipeline.Get());if(!pipeline||!bindings.layout->Matches(pipeline->Root()))return;
+        Bindings bindings;
+        if(!PTCommandBindings::tracker.Read(list,nativeRoots,true,0x31002,bindings)){Reject("surface_bindings");return;}
+        if(!bindings.layout->Matches(pipeline->Root()))return;
         View view;Context context;if(!ReadView(bindings.arguments[12].value,view)||!ContextFor(list,bindings,1,context)){Reject("surface_view_or_context");return;}
         auto* recording=RecordingFor(list);if(!recording||recording->submitted||recording->draws.size()>=4096)return;
         std::shared_ptr<Draw> draw;
@@ -305,6 +311,9 @@ static void Submitted(void*,ID3D12CommandQueue* queue,UINT count,ID3D12CommandLi
                 if(!PTSceneLive::owner.Scenes().Signal(queue,sceneUseFence.Get(),value))PTSceneLive::owner.Scenes().Invalidate();
             }
         }
+        static UINT64 submissions=0;const auto sequence=++submissions;
+        if(sequence<=4||sequence%240==0){const auto t=PTSceneLive::owner.Scenes().Statistics();
+            Log("PT_PRIMARY_CPU submissions=%llu builds=%llu build_total_ms=%llu build_max_ms=%llu checkpoints=%llu checkpoint_total_ms=%llu checkpoint_max_ms=%llu blocking_checkpoint_waits=0",sequence,t.builds.calls,t.builds.totalMs,t.builds.maxMs,t.checkpoints.calls,t.checkpoints.totalMs,t.checkpoints.maxMs);}
         PollMetrics();Output::Poll();
     }catch(...){Reject("retirement_exception");}
 }
@@ -334,6 +343,6 @@ static bool Start(){
     if(FAILED(device->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&sceneUseFence))))return false;
     if(!PTSceneQueues::Start(&PTSceneLive::owner.Scenes())||!PTSceneQueues::Register(&PTSceneLive::owner.Scenes(),&queueConsumer)||
        !PTCommandBindings::Register(&commandConsumer)||!PTNativeJobRuntime::Register(&Job)||!PTSceneLive::owner.Start(step,true))return false;
-    active=true;Log("PT_PRIMARY_SESSION_READY build=M12 ready=1 hits=4 spp=1 material=opaque_general geometric_normals=1 native_fallback=1");return true;
+    active=true;Log("PT_PRIMARY_SESSION_READY build=M12R1 ready=1 hits=4 spp=1 material=opaque_general geometric_normals=1 native_fallback=1");return true;
 }
 }

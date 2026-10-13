@@ -84,11 +84,11 @@ void PTPrimaryPathRayGeneration(){
     PTOutput[pixel]=0;PTMeasure(0,pixel);
     uint width,height,g2w,g2h,zw,zh;PTGBuffer1.GetDimensions(width,height);PTGBuffer2.GetDimensions(g2w,g2h);PTClipDepth.GetDimensions(zw,zh);
     if(any(uint2(width,height)!=DispatchRaysDimensions().xy)||width!=g2w||height!=g2h||width!=zw||height!=zh||
-       !all(isfinite(PTSystem[1]))||any(abs(PTSystem[1].xy-float2(width,height))>.01))return;
+       !all(isfinite(PTSystem[0]))||any(abs(PTSystem[0].xy-float2(width,height))>.01))return;
     PTMeasure(1,pixel);
     float depth=PTClipDepth.Load(int3(pixel,0)).x;
     if(!isfinite(depth)||depth<0||depth>1)return;
-    float2 screen=(float2(pixel)+.5)*PTSystem[1].zw;
+    float2 screen=(float2(pixel)+.5)*PTSystem[0].zw;
     float4 view=(screen.x*2-1)*PTSystem[14]+(1-screen.y*2)*PTSystem[15]+depth*PTSystem[16]+PTSystem[17];
     if(!all(isfinite(view))||view.w==0)return;
     float3 primaryPosition=PTViewToWorldPoint(view.xyz/view.w),origin=PTSystem[9].xyz;

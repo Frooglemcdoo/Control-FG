@@ -621,3 +621,37 @@ shader sidecars, build provenance, checksums, instructions and one log collector
 It replaces the held M11 diagnostic package in this branch's workflow artifacts.
 The M11 timed recording stays disabled. The next user test is a single in-game
 F10 comparison with GPU coverage reporting, not another CPU-only diagnostic.
+
+### M12R1: response to failed M12 game run
+
+The uploaded M12 run reported 3–5 FPS with SessionReady=true but no submitted
+primary dispatch or GPU coverage. It logged repeated surface_view_or_context
+rejections. FG was off. Do not call M12 an in-game rendering success.
+
+A local sustained-history fixture (100 updates of 32 AS keys, 3,200 writes)
+reproduced a 957.7 ms CompletedCheckpoint scan. Cached per-queue vector clocks
+reduced the identical case to 0.36 ms locally. 32,000 selections and 200
+checkpoint histories matched the old implementation in differential testing.
+This is an identified CPU bottleneck, not a proven attribution of all in-game
+frame time. The blocking checkpoint wait was removed; idle-only checkpoint
+retries are bounded to once per 128 queue operations, including failed attempts.
+Long continuously busy sessions may hit the catalog limit and fall back; partial
+completed-prefix retirement remains future work. Safety rejection is retained.
+
+The captured source creates the 64-KiB constant pool directly through committed
+UPLOAD resources (e.g. resource 4753); NativeBuffer-only ownership cannot cover
+that pool. M12R1 observes committed 64-KiB UPLOAD buffers at device creation,
+retains a bounded 128-MiB session pool, and resolves exact root-CBV slices from
+those owned buffers. WARP validates mapped slices, bounds, and ownership.
+Unrelated draw/dispatch PSOs are filtered before taking the queue lock. Specific
+view/binding/native-job failures and CPU build/checkpoint timings are logged.
+
+F10 opens the overlay; the PT Reflections overlay toggle controls admission.
+M12 instructions claiming F10 directly toggles PT were wrong. The collector now
+uses plain strings, preventing Get-Content provider metadata from inflating JSON.
+In-game GPU coverage, image quality, and performance remain unverified for R1.
+
+The native primary DXBC unprojects pixels using b0[0].zw (InvScreenRes).
+M12 incorrectly used b0[1] (OutputRes/InvOutputRes) for host dimensions and ray
+unprojection. The uploaded log confirms 2560x1440 render / 3840x2160 output.
+R1 uses ScreenRes/InvScreenRes and tests unequal render/output extents.

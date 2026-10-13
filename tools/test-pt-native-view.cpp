@@ -4,12 +4,13 @@
 #include <limits>
 static void Write(PTNativeView::View& v,unsigned offset,float value){std::memcpy(v.bytes.data()+offset,&value,4);}
 int main(){
-    PTNativeView::View a;Write(a,16,2560);Write(a,20,1440);Write(a,24,1.0f/2560);Write(a,28,1.0f/1440);
-    const std::uint32_t frame=45;std::memcpy(a.bytes.data()+1112,&frame,4);assert(a.Decode());
+    PTNativeView::View a;Write(a,0,2560);Write(a,4,1440);Write(a,8,1.0f/2560);Write(a,12,1.0f/1440);
+    Write(a,16,3840);Write(a,20,2160);Write(a,24,1.0f/3840);Write(a,28,1.0f/2160);
+    const std::uint32_t frame=45;std::memcpy(a.bytes.data()+1112,&frame,4);assert(a.Decode()&&a.width==2560&&a.height==1440);
     auto b=a;assert(b.Decode()&&a.Same(b));b.bytes[1000]^=1;assert(b.Decode()&&a.Same(b));
     b=a;b.bytes[32]^=1;assert(b.Decode()&&!a.Same(b));
     b=a;b.bytes[1112]^=1;assert(b.Decode()&&!a.Same(b));
-    b=a;Write(b,16,0);assert(!b.Decode());b=a;Write(b,20,1440.5f);assert(!b.Decode());
-    b=a;Write(b,28,1);assert(!b.Decode());b=a;Write(b,32,std::numeric_limits<float>::quiet_NaN());assert(!b.Decode());
+    b=a;Write(b,0,0);assert(!b.Decode());b=a;Write(b,4,1440.5f);assert(!b.Decode());
+    b=a;Write(b,12,1);assert(!b.Decode());b=a;Write(b,32,std::numeric_limits<float>::quiet_NaN());assert(!b.Decode());
     puts("PASS: per-pass view contents, frame/dimension changes and invalid camera rejection");
 }

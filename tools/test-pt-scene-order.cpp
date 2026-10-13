@@ -1,6 +1,7 @@
 #include "../src/pt_scene_order.h"
 #include <cassert>
 #include <cstdio>
+#include <chrono>
 using namespace PTSceneOrder;
 int main(){
     const Key as{10,0xa000};Selection chosen;
@@ -48,5 +49,15 @@ int main(){
     assert(protectedUse.Select(ray,as,chosen)==Status::ready&&chosen.version==100);
     Graph rewind;assert(rewind.Signal(1,80,2));assert(!rewind.Signal(1,80,1));
     assert(rewind.Select(1,as,chosen)==Status::invalid);
+    // Regression: M12 repeatedly walked the entire ancestry for every write,
+    // making this modest sustained-update journal take roughly a second.
+    Graph sustained;
+    for(U64 frame=0;frame<100;++frame){for(U64 b=1;b<=32;++b)sustained.Write(1,{b,b*4096},frame*32+b);sustained.Signal(1,1,frame+1);}
+    const auto begin=std::chrono::steady_clock::now();std::map<Key,Selection> latest;
+    assert(sustained.CompletedCheckpoint(latest)&&latest.size()==32);
+    for(U64 b=1;b<=32;++b)assert(latest.at({b,b*4096}).version==99*32+b);
+    std::printf("Scene history retirement: %.3f ms for 3,200 writes (informational timing)\n",std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-begin).count());
+    std::map<Key,Selection> invalid;
+    cycle.Write(2,as,999);assert(!cycle.CompletedCheckpoint(invalid));
     std::puts("PASS AS queue ordering: exact fence cuts, late signals, allocation identity, unknown writes, unordered producers and cycles.");
 }
