@@ -17,8 +17,8 @@ static thread_local Ticket pending;
 enum class RouteFailure : unsigned {none,input,frame,worker,state,buffers,counter,pipeline,layout,raygen,miss,hit,shape,frameChanged,exception,count};
 static std::atomic<UINT64> routes[static_cast<unsigned>(RouteFailure::count)]{};
 static std::atomic<UINT64> scheduled{0},scheduleRejected{0},writerFinished{0};
-static void Diagnostics(){
-    Log("PT_PRIMARY_NATIVE_ROUTE accepted=%llu input=%llu frame=%llu worker=%llu state=%llu buffers=%llu counter=%llu pipeline=%llu layout=%llu raygen=%llu miss=%llu hit=%llu shape=%llu frame_changed=%llu exception=%llu scheduled=%llu schedule_rejected=%llu writer_finished=%llu",
+template<class F> static void Diagnostics(F&& log){
+    log("PT_PRIMARY_NATIVE_ROUTE accepted=%llu input=%llu frame=%llu worker=%llu state=%llu buffers=%llu counter=%llu pipeline=%llu layout=%llu raygen=%llu miss=%llu hit=%llu shape=%llu frame_changed=%llu exception=%llu scheduled=%llu schedule_rejected=%llu writer_finished=%llu",
         routes[0].load(),routes[1].load(),routes[2].load(),routes[3].load(),routes[4].load(),routes[5].load(),routes[6].load(),routes[7].load(),routes[8].load(),routes[9].load(),routes[10].load(),routes[11].load(),routes[12].load(),routes[13].load(),routes[14].load(),scheduled.load(),scheduleRejected.load(),writerFinished.load());
 }
 // Consumer is a session-lifetime static callback. Register before the first

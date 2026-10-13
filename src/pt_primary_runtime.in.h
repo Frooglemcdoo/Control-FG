@@ -359,7 +359,7 @@ static void Submitted(void*,ID3D12CommandQueue* queue,UINT count,ID3D12CommandLi
         if(sequence%240==0){
             Log("PT_PRIMARY_ROUTE bindings_healthy=%u jobs=%llu job_off=%llu job_unknown_pso=%llu opaque=%llu compute=%llu compute_off=%llu no_pso=%llu other_pso=%llu primary=%llu environment=%llu",
                 unsigned(PTCommandBindings::tracker.Healthy()),jobCallbacks.load(),jobOff.load(),jobUnknownPipeline.load(),opaqueAccepted.load(),computeCallbacks.load(),computeOff.load(),computeNoPipeline.load(),computeOtherPipeline.load(),primarySeen.load(),environmentSeen.load());
-            PTNativeJobRuntime::Diagnostics();
+            PTNativeJobRuntime::Diagnostics([](const char* format,auto... args){Log(format,args...);});
         }
         PollMetrics();Output::Poll();
     }catch(...){Reject("retirement_exception");}
