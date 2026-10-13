@@ -7,6 +7,7 @@
 #include "pt_scene_queue_runtime.h"
 #include "pt_surface_pipeline.h"
 #include "pt_command_bindings.h"
+#include "pt_native_pass_pipeline.h"
 #include <intrin.h>
 #include <unordered_map>
 #include <memory>
@@ -32,6 +33,8 @@ static PTSurfaceComposition::Pipelines surfacePipelines;
 using CreateRoot=HRESULT(STDMETHODCALLTYPE*)(ID3D12Device*,UINT,const void*,SIZE_T,REFIID,void**);
 static CreateRoot createRoot=nullptr;
 static PTNativeRoot::Registry nativeRoots;
+static PTNativePass::Pipelines<ID3D12StateObject> opaquePipelines;
+static PTNativePass::Pipelines<ID3D12PipelineState> primaryPipelines;
 using CreateList=HRESULT(STDMETHODCALLTYPE*)(ID3D12Device*,UINT,D3D12_COMMAND_LIST_TYPE,ID3D12CommandAllocator*,ID3D12PipelineState*,REFIID,void**);
 static CreateList createList=nullptr;
 // Invoke the exact interface supplied by the native call site. A QueryInterface
@@ -156,14 +159,33 @@ static void STDMETHODCALLTYPE CopyAllHook(ID3D12Device* d,UINT dstCount,const D3
     for(UINT i=0;i<srcCount;++i){const UINT n=srcSizes?srcSizes[i]:1;if(n)sources.push_back({src[i].ptr,n});}
     if(!destinations.empty()||!sources.empty())PTSceneLive::owner.Copy(destinations,sources);
 }
+static HRESULT NativeState(ID3D12Device5* d,const D3D12_STATE_OBJECT_DESC* desc,REFIID iid,void** out){
+    const HRESULT hr=createState(d,desc,iid,out);const DWORD nativeError=GetLastError();
+    if(SUCCEEDED(hr)&&out&&*out&&desc&&desc->Type==D3D12_STATE_OBJECT_TYPE_RAYTRACING_PIPELINE&&PTSceneLive::owner.Active()){
+        try {
+            ID3D12RootSignature* root=nullptr;UINT roots=0;bool opaque=false;
+            for(UINT n=0;n<desc->NumSubobjects;++n){const auto& sub=desc->pSubobjects[n];
+                if(sub.Type==D3D12_STATE_SUBOBJECT_TYPE_GLOBAL_ROOT_SIGNATURE&&sub.pDesc){
+                    root=static_cast<const D3D12_GLOBAL_ROOT_SIGNATURE*>(sub.pDesc)->pGlobalRootSignature;++roots;
+                }else if(sub.Type==D3D12_STATE_SUBOBJECT_TYPE_DXIL_LIBRARY&&sub.pDesc){
+                    const auto& shader=static_cast<const D3D12_DXIL_LIBRARY_DESC*>(sub.pDesc)->DXILLibrary;char sha[65]{};
+                    if(shader.BytecodeLength==39008&&shader.pShaderBytecode&&PTReflectionSha256(static_cast<const unsigned char*>(shader.pShaderBytecode),shader.BytecodeLength,sha)&&
+                       !strcmp(sha,"c2e4c0c4b48b191ba281595dcf11c7962c5c05c615cbe036ca6e8616c09fd30e"))opaque=true;
+                }
+            }
+            if(opaque&&roots==1&&opaquePipelines.Insert(static_cast<IUnknown*>(*out),nativeRoots.Find(root)))Log("PT_OPAQUE_PIPELINE_READY root_layout=verified native_returned=1");
+        }catch(...){Log("PT_OPAQUE_PIPELINE_REJECT reason=allocation native_returned=1");}
+    }
+    SetLastError(nativeError);return hr;
+}
 static HRESULT STDMETHODCALLTYPE StateHook(ID3D12Device5* d,const D3D12_STATE_OBJECT_DESC* desc,REFIID iid,void** out){
-    if(!desc||desc->Type!=D3D12_STATE_OBJECT_TYPE_RAYTRACING_PIPELINE||!enabled)return createState(d,desc,iid,out);
+    if(!desc||desc->Type!=D3D12_STATE_OBJECT_TYPE_RAYTRACING_PIPELINE||!enabled)return NativeState(d,desc,iid,out);
     bool target=false;
     for(UINT i=0;i<desc->NumSubobjects;++i)if(desc->pSubobjects[i].Type==D3D12_STATE_SUBOBJECT_TYPE_DXIL_LIBRARY){
         const auto* lib=static_cast<const D3D12_DXIL_LIBRARY_DESC*>(desc->pSubobjects[i].pDesc);char sha[65]{};
         if(lib&&lib->DXILLibrary.BytecodeLength==29328&&PTReflectionSha256(static_cast<const unsigned char*>(lib->DXILLibrary.pShaderBytecode),29328,sha)&&strcmp(sha,"66ec0c29541de1f4aa59636ce6e4415de440a12315b983839d0de0c0a2bab9a8")==0)target=true;
     }
-    if(!target)return createState(d,desc,iid,out);
+    if(!target)return NativeState(d,desc,iid,out);
     std::vector<D3D12_STATE_SUBOBJECT> objects(desc->pSubobjects,desc->pSubobjects+desc->NumSubobjects);objects.reserve(desc->NumSubobjects+1);
     std::vector<D3D12_SUBOBJECT_TO_EXPORTS_ASSOCIATION> associations(desc->NumSubobjects);
     std::vector<std::vector<LPCWSTR>> exportNames(desc->NumSubobjects);
@@ -213,6 +235,7 @@ static void STDMETHODCALLTYPE RaysHook(ID3D12GraphicsCommandList4* list,const D3
     if(PTSceneLive::owner.Active()){
         auto& capture=PTSceneLive::owner.Scenes();
         if(!PTSceneQueues::Start(&capture)||!PTSceneQueues::WatchList(list))capture.Invalidate();
+        if(!PTCommandBindings::Watch(list))PTCommandBindings::tracker.Fail();
     }
     PTNativeJobRuntime::Recorded(list,desc,currentRayPso);
     if(!enabled||!rayScope||!desc||desc->Depth!=1||pass.mode==0||(ptReflectionUserState.load()&1u)==0){if(enabled&&rayScope)Skip("dispatch_disabled_or_shape");dispatchRays(list,desc);return;}
@@ -347,6 +370,14 @@ static void LightHook(void* state,const void* dimensions){
     const auto n=dispatchCount.load();if(n<=4||n%240==0)Log("PT_GLASS_LIGHTING dispatch=%llu secondary=1 composite=1 native_diffuse_direct_emission_retained=1",n);
 }
 static void ObserveCompute(ID3D12Device* d,const D3D12_COMPUTE_PIPELINE_STATE_DESC* desc,void* result){
+    if(PTSceneLive::owner.Active()&&desc&&result&&desc->CS.BytecodeLength==71144&&desc->CS.pShaderBytecode){
+        try {char primarySha[65]{};
+            if(PTReflectionSha256(static_cast<const unsigned char*>(desc->CS.pShaderBytecode),desc->CS.BytecodeLength,primarySha)&&
+               !strcmp(primarySha,"a9e5b544d5ec48e9b439b36aafc5346645f0261d3b1df65dc09e6cce290c164f")&&
+               primaryPipelines.Insert(static_cast<IUnknown*>(result),nativeRoots.Find(desc->pRootSignature)))
+                Log("PT_PRIMARY_PIPELINE_READY root_layout=verified constants=b2 native_returned=1");
+        }catch(...){Log("PT_PRIMARY_PIPELINE_REJECT reason=allocation native_returned=1");}
+    }
     if(!enabled||!desc||!result||desc->CS.BytecodeLength!=39720)return;char sha[65]{};
     if(!PTReflectionSha256(static_cast<const unsigned char*>(desc->CS.pShaderBytecode),desc->CS.BytecodeLength,sha)||strcmp(sha,"b19de5e0b8a216076b6800790b100b91caa83814abdad3ad276736ba72b5e762"))return;
     std::lock_guard<std::mutex> guard(lock);if(nativeLighting)return;

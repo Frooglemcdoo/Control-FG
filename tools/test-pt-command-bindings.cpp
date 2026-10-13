@@ -7,7 +7,47 @@
 #include "../src/pt_scene_queue_runtime.h"
 #include "pt-native-root-fixture.h"
 using Microsoft::WRL::ComPtr;
+struct ForwardingFixture {
+    void** table=nullptr;
+    void* slots[40]{};
+    UINT phase=0,nested=0;
+    static HRESULT STDMETHODCALLTYPE Query(IUnknown* self,REFIID,void** out){*out=self;return S_OK;}
+    static ULONG STDMETHODCALLTYPE Ref(IUnknown*){return 1;}
+    static void STDMETHODCALLTYPE Dispatch(ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT z){
+        auto& f=*reinterpret_cast<ForwardingFixture*>(list);assert(x==7&&y==8&&z==9&&f.phase==0);f.phase=1;SetLastError(0x555);
+    }
+    static void STDMETHODCALLTYPE Draw(ID3D12GraphicsCommandList* list,UINT vertices,UINT instances,UINT firstVertex,UINT firstInstance){
+        auto& f=*reinterpret_cast<ForwardingFixture*>(list);if(!vertices&&!instances){++f.nested;return;}
+        assert(vertices==3&&instances==4&&firstVertex==5&&firstInstance==6&&f.phase==1&&GetLastError()==0x444);f.phase=2;SetLastError(0x555);
+    }
+    static void STDMETHODCALLTYPE Indexed(ID3D12GraphicsCommandList* list,UINT indices,UINT instances,UINT firstIndex,INT baseVertex,UINT firstInstance){
+        auto& f=*reinterpret_cast<ForwardingFixture*>(list);assert(indices==3&&instances==4&&firstIndex==5&&baseVertex==-7&&firstInstance==6&&f.phase==1&&GetLastError()==0x444);f.phase=2;SetLastError(0x555);
+    }
+    static void Dispatched(void* context,ID3D12GraphicsCommandList*,UINT x,UINT y,UINT z)noexcept{
+        auto& f=*static_cast<ForwardingFixture*>(context);assert(x==7&&y==8&&z==9&&f.phase==1);f.phase=3;SetLastError(0x666);
+    }
+    static void Drawing(void* context,ID3D12GraphicsCommandList* list)noexcept{
+        auto& f=*static_cast<ForwardingFixture*>(context);assert(f.phase==0);f.phase=1;list->DrawInstanced(0,0,0,0);SetLastError(0x777);
+    }
+    static void Drawn(void* context,ID3D12GraphicsCommandList*)noexcept{
+        auto& f=*static_cast<ForwardingFixture*>(context);assert(f.phase==2);f.phase=3;SetLastError(0x666);
+    }
+};
+static void TestForwarding(){
+    // Process-lifetime COM ABI fixture: installed hooks retain its identity.
+    auto* f=new ForwardingFixture();f->table=f->slots;
+    f->slots[0]=reinterpret_cast<void*>(&ForwardingFixture::Query);f->slots[1]=f->slots[2]=reinterpret_cast<void*>(&ForwardingFixture::Ref);
+    f->slots[12]=reinterpret_cast<void*>(&ForwardingFixture::Draw);f->slots[13]=reinterpret_cast<void*>(&ForwardingFixture::Indexed);f->slots[14]=reinterpret_cast<void*>(&ForwardingFixture::Dispatch);
+    auto* list=reinterpret_cast<ID3D12GraphicsCommandList*>(f);assert(PTCommandBindings::Watch(list));
+    PTCommandBindings::Consumer consumer{f,&ForwardingFixture::Dispatched,&ForwardingFixture::Drawing,&ForwardingFixture::Drawn};
+    assert(PTCommandBindings::Register(&consumer));assert(!PTCommandBindings::Register(&consumer));
+    list->Dispatch(7,8,9);assert(f->phase==3&&GetLastError()==0x555);f->phase=0;
+    SetLastError(0x444);list->DrawInstanced(3,4,5,6);assert(f->phase==3&&f->nested==1&&GetLastError()==0x555);f->phase=0;
+    SetLastError(0x444);list->DrawIndexedInstanced(3,4,5,-7,6);assert(f->phase==3&&f->nested==2&&GetLastError()==0x555);
+    PTCommandBindings::consumer.store(nullptr);
+}
 int main(){
+    TestForwarding();
     ComPtr<IDXGIFactory4> factory;ComPtr<IDXGIAdapter> adapter;ComPtr<ID3D12Device> device;
     assert(SUCCEEDED(CreateDXGIFactory1(IID_PPV_ARGS(&factory))));assert(SUCCEEDED(factory->EnumWarpAdapter(IID_PPV_ARGS(&adapter))));
     assert(SUCCEEDED(D3D12CreateDevice(adapter.Get(),D3D_FEATURE_LEVEL_11_0,IID_PPV_ARGS(&device))));

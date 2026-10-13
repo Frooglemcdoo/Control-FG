@@ -104,7 +104,26 @@ using HeapsFn=void(STDMETHODCALLTYPE*)(ID3D12GraphicsCommandList*,UINT,ID3D12Des
 using RootFn=void(STDMETHODCALLTYPE*)(ID3D12GraphicsCommandList*,ID3D12RootSignature*);
 using TableFn=void(STDMETHODCALLTYPE*)(ID3D12GraphicsCommandList*,UINT,D3D12_GPU_DESCRIPTOR_HANDLE);
 using ConstantFn=void(STDMETHODCALLTYPE*)(ID3D12GraphicsCommandList*,UINT,D3D12_GPU_VIRTUAL_ADDRESS);
-struct Methods {ResetFn reset;PipelineFn pipeline;HeapsFn heaps;RootFn computeRoot,graphicsRoot;TableFn computeTable,graphicsTable;ConstantFn computeConstant,graphicsConstant;};
+using DispatchFn=void(STDMETHODCALLTYPE*)(ID3D12GraphicsCommandList*,UINT,UINT,UINT);
+using DrawFn=void(STDMETHODCALLTYPE*)(ID3D12GraphicsCommandList*,UINT,UINT,UINT,UINT);
+using DrawIndexedFn=void(STDMETHODCALLTYPE*)(ID3D12GraphicsCommandList*,UINT,UINT,UINT,INT,UINT);
+struct Methods {ResetFn reset;PipelineFn pipeline;HeapsFn heaps;RootFn computeRoot,graphicsRoot;TableFn computeTable,graphicsTable;ConstantFn computeConstant,graphicsConstant;
+    DispatchFn dispatch;DrawFn draw;DrawIndexedFn drawIndexed;};
+// One session-lifetime renderer. Callbacks see the native snapshot; injected
+// setters stay excluded by the enclosing Mute. Native dispatch/draw always
+// forwards once, even when the callback declines a pass. Drawn restores any
+// temporary PSO/table chosen by drawing. No callback may wait on a native job.
+struct Consumer {
+    void* context=nullptr;
+    void (*dispatched)(void*,ID3D12GraphicsCommandList*,UINT,UINT,UINT) noexcept=nullptr;
+    void (*drawing)(void*,ID3D12GraphicsCommandList*) noexcept=nullptr;
+    void (*drawn)(void*,ID3D12GraphicsCommandList*) noexcept=nullptr;
+};
+inline std::atomic<const Consumer*> consumer{nullptr};
+inline bool Register(const Consumer* client){
+    if(!client||!client->context||bool(client->drawing)!=bool(client->drawn))return false;
+    const Consumer* empty=nullptr;return consumer.compare_exchange_strong(empty,client,std::memory_order_release);
+}
 inline std::mutex hookMutex;
 inline std::map<void**,Methods> methods;
 inline bool installed=true;
@@ -134,6 +153,23 @@ template<bool Graphics> inline void STDMETHODCALLTYPE ConstantHook(ID3D12Graphic
     const auto original=Original(l);Mute mute;(Graphics?original.graphicsConstant:original.computeConstant)(l,n,v);const DWORD error=GetLastError();
     if(mute.outer)Observe([&]{tracker.ArgumentValue(l,n,ArgumentKind::constant,v,Graphics);});SetLastError(error);
 }
+inline void STDMETHODCALLTYPE DispatchHook(ID3D12GraphicsCommandList* l,UINT x,UINT y,UINT z){
+    const auto original=Original(l);Mute mute;original.dispatch(l,x,y,z);const DWORD error=GetLastError();
+    if(mute.outer)if(const auto client=consumer.load(std::memory_order_acquire))if(client->dispatched)client->dispatched(client->context,l,x,y,z);
+    SetLastError(error);
+}
+inline void STDMETHODCALLTYPE DrawHook(ID3D12GraphicsCommandList* l,UINT vertices,UINT instances,UINT firstVertex,UINT firstInstance){
+    const auto original=Original(l);Mute mute;const auto client=mute.outer?consumer.load(std::memory_order_acquire):nullptr;
+    const DWORD before=GetLastError();if(client&&client->drawing)client->drawing(client->context,l);SetLastError(before);
+    original.draw(l,vertices,instances,firstVertex,firstInstance);const DWORD after=GetLastError();
+    if(client&&client->drawn)client->drawn(client->context,l);SetLastError(after);
+}
+inline void STDMETHODCALLTYPE DrawIndexedHook(ID3D12GraphicsCommandList* l,UINT indices,UINT instances,UINT firstIndex,INT baseVertex,UINT firstInstance){
+    const auto original=Original(l);Mute mute;const auto client=mute.outer?consumer.load(std::memory_order_acquire):nullptr;
+    const DWORD before=GetLastError();if(client&&client->drawing)client->drawing(client->context,l);SetLastError(before);
+    original.drawIndexed(l,indices,instances,firstIndex,baseVertex,firstInstance);const DWORD after=GetLastError();
+    if(client&&client->drawn)client->drawn(client->context,l);SetLastError(after);
+}
 inline bool Patch(void** slot,void* original,void* hook){
     if(*slot!=original)return false;DWORD protection=0;if(!VirtualProtect(slot,sizeof(void*),PAGE_READWRITE,&protection))return false;
     const bool changed=InterlockedCompareExchangePointer(reinterpret_cast<void*volatile*>(slot),hook,original)==original;
@@ -144,13 +180,15 @@ inline bool WatchInterface(ID3D12GraphicsCommandList* list){
     if(!installed)return false;auto** table=*reinterpret_cast<void***>(list);if(methods.count(table))return true;if(methods.size()>=32)return false;
     Methods m{reinterpret_cast<ResetFn>(table[10]),reinterpret_cast<PipelineFn>(table[25]),reinterpret_cast<HeapsFn>(table[28]),
         reinterpret_cast<RootFn>(table[29]),reinterpret_cast<RootFn>(table[30]),reinterpret_cast<TableFn>(table[31]),reinterpret_cast<TableFn>(table[32]),
-        reinterpret_cast<ConstantFn>(table[37]),reinterpret_cast<ConstantFn>(table[38])};methods.emplace(table,m);
-    const UINT slots[]={10,25,28,29,30,31,32,37,38};
+        reinterpret_cast<ConstantFn>(table[37]),reinterpret_cast<ConstantFn>(table[38]),reinterpret_cast<DispatchFn>(table[14]),reinterpret_cast<DrawFn>(table[12]),reinterpret_cast<DrawIndexedFn>(table[13])};methods.emplace(table,m);
+    const UINT slots[]={10,25,28,29,30,31,32,37,38,14,12,13};
     void* const before[]={reinterpret_cast<void*>(m.reset),reinterpret_cast<void*>(m.pipeline),reinterpret_cast<void*>(m.heaps),reinterpret_cast<void*>(m.computeRoot),reinterpret_cast<void*>(m.graphicsRoot),
-        reinterpret_cast<void*>(m.computeTable),reinterpret_cast<void*>(m.graphicsTable),reinterpret_cast<void*>(m.computeConstant),reinterpret_cast<void*>(m.graphicsConstant)};
+        reinterpret_cast<void*>(m.computeTable),reinterpret_cast<void*>(m.graphicsTable),reinterpret_cast<void*>(m.computeConstant),reinterpret_cast<void*>(m.graphicsConstant),
+        reinterpret_cast<void*>(m.dispatch),reinterpret_cast<void*>(m.draw),reinterpret_cast<void*>(m.drawIndexed)};
     void* const after[]={reinterpret_cast<void*>(&ResetHook),reinterpret_cast<void*>(&PipelineHook),reinterpret_cast<void*>(&HeapsHook),reinterpret_cast<void*>(&RootHook<false>),reinterpret_cast<void*>(&RootHook<true>),
-        reinterpret_cast<void*>(&TableHook<false>),reinterpret_cast<void*>(&TableHook<true>),reinterpret_cast<void*>(&ConstantHook<false>),reinterpret_cast<void*>(&ConstantHook<true>)};
-    for(UINT n=0;n<9;++n)if(!Patch(table+slots[n],before[n],after[n])){installed=false;tracker.Fail();return false;}
+        reinterpret_cast<void*>(&TableHook<false>),reinterpret_cast<void*>(&TableHook<true>),reinterpret_cast<void*>(&ConstantHook<false>),reinterpret_cast<void*>(&ConstantHook<true>),
+        reinterpret_cast<void*>(&DispatchHook),reinterpret_cast<void*>(&DrawHook),reinterpret_cast<void*>(&DrawIndexedHook)};
+    for(UINT n=0;n<12;++n)if(!Patch(table+slots[n],before[n],after[n])){installed=false;tracker.Fail();return false;}
     return true;
 }
 inline bool Watch(ID3D12GraphicsCommandList* list){

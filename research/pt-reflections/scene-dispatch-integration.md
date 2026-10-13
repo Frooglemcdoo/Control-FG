@@ -475,3 +475,19 @@ real intercepted setter calls, aliases, exact root layouts, heap replacement,
 bounded table addresses, preserved CBVs, private-call exclusion and chained
 Reset. Native lists created before activation remain unadmitted until explicitly
 watched and rebound. No renderer consumer is enabled by this observer alone.
+
+The binding observer now also provides actual Dispatch/DrawInstanced/
+DrawIndexedInstanced callbacks. Native calls always forward with their original
+arguments, including signed base-vertex offsets. Draw callbacks bracket the
+native call so a renderer can restore its temporary pixel table/PSO immediately.
+Nested private draw/setter calls do not recurse into the consumer. A separate
+COM-ABI forwarding fixture checks callback order, original arguments, nested
+exclusion and Win32 error preservation without issuing invalid GPU draws.
+
+The state-object/compute creation observers now identify the exact native opaque
+DXR library (39008 bytes, c2e4c0c4...) and primary lighting program (71144 bytes,
+a9e5b544...). Their registries join canonical PSO identity to the verified compute
+root layout and retain both. Unknown roots, collections without a directly
+verified global root, unknown shaders and excess entries remain unadmitted.
+These are the pass selectors for the pending renderer consumer; the active P2/G3
+selection and native return objects are unchanged.
