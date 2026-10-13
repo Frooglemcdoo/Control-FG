@@ -115,6 +115,24 @@ public:
         if(!value)return Mark(queue);
         Node node;node.waitFence=fence;node.waitValue=value;return Append(queue,node);
     }
+    struct PendingFence {U64 fence=0,value=0,signalValue=0,completed=0,lane=0,stamp=0;};
+    PendingFence PendingWait(U64 cut)const {
+        if(ClockAt(cut)!=Status::pending)return {};
+        std::vector<U64> todo{cut};std::set<U64> seen;
+        while(!todo.empty()){
+            const auto id=todo.back();todo.pop_back();if(!id||!seen.insert(id).second)continue;
+            const auto& n=nodes[id];
+            if(n.waitFence){const auto f=fences.find(n.waitFence);
+                if(f==fences.end())return {n.waitFence,n.waitValue,0,0,n.lane,n.stamp};
+                if(n.waitValue>f->second.completed){const auto signal=f->second.signals.lower_bound(n.waitValue);
+                    if(signal==f->second.signals.end())return {n.waitFence,n.waitValue,f->second.last,f->second.completed,n.lane,n.stamp};
+                    todo.push_back(signal->second);
+                }
+            }
+            if(n.previous)todo.push_back(n.previous);
+        }
+        return {};
+    }
     // Host polled the real fence. Resolve only waits with NO observed queue
     // signal: retaining known producer edges is essential for scene selection.
     // This adds no guessed cross-queue ancestry and never resolves a future value.

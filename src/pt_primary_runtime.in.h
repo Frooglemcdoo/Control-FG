@@ -206,8 +206,8 @@ static void Dispatched(void*,ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT 
             }
             Reject(reason);return;
         }
-        auto frame=FrameFor(view,context.queue);auto* recording=RecordingFor(list);
-        if(!frame||!recording||frame->producerRecorded||recording->submitted){Reject("frame_budget_or_duplicate");return;}
+        auto* recording=RecordingFor(list);
+        if(!recording||recording->submitted){Reject("frame_budget_or_duplicate");return;}
         auto a=std::make_shared<Assets>();a->bindings=bindings;a->boundView=view;a->environment=environment;a->engineFrame=candidate->ticket.engineFrame;
         // t0,t1,t3,t7,t8,t10,t14,t15,t17,t18. Private t34/t35/u7 are installed below.
         constexpr UINT64 required=(1ull<<5)|(1ull<<6)|(1ull<<8)|(1ull<<12)|(1ull<<13)|(1ull<<15)|(1ull<<19)|(1ull<<20)|(1ull<<22)|(1ull<<23);
@@ -227,9 +227,14 @@ static void Dispatched(void*,ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT 
         if(status!=PTSceneHandoff::Status::prepared){
             std::size_t row=0;const char* reason=handoff.NotReady(serial,row);
             static UINT64 failures=0;if(++failures<=16||failures%600==0){const auto b=handoff.BindingFailure(serial);
-                Log("PT_PRIMARY_PREFLIGHT ticket=%llu reason=%s row=%llu indices=%llx attributes=%llx index_bytes=%u attribute_bytes=%u",serial,reason,static_cast<UINT64>(row),b.indices,b.attributes,b.constants[8],b.constants[9]);}
+                Log("PT_PRIMARY_PREFLIGHT ticket=%llu reason=%s row=%llu indices=%llx attributes=%llx index_bytes=%u attribute_bytes=%u",serial,reason,static_cast<UINT64>(row),b.indices,b.attributes,b.constants[8],b.constants[9]);
+                const auto wait=PTSceneLive::owner.Scenes().PendingWait(serial);
+                Log("PT_PRIMARY_PENDING_FENCE ticket=%llu fence=%llu required=%llu last_signal=%llu graph_completed=%llu actual_completed=%llu polled=%u lane=%llu stamp=%llu",serial,wait.graph.fence,wait.graph.value,wait.graph.signalValue,wait.graph.completed,wait.actual,unsigned(wait.polled),wait.graph.lane,wait.graph.stamp);
+            }
             Reject(reason);return;
         }
+        auto frame=FrameFor(view,context.queue);
+        if(!frame||frame->producerRecorded){Reject("frame_budget_or_duplicate");return;}
         if(FAILED(PTScenePipeline::Dispatch::Create(device.Get(),pipeline,plan,view.width,view.height,bindings.resources.Get(),a->dispatch))){Reject("private_sbt");return;}
         D3D12_HEAP_PROPERTIES cameraHeap{};cameraHeap.Type=D3D12_HEAP_TYPE_UPLOAD;
         D3D12_RESOURCE_DESC cameraDesc{};cameraDesc.Dimension=D3D12_RESOURCE_DIMENSION_BUFFER;cameraDesc.Width=1280;
@@ -421,6 +426,6 @@ static bool Start(){
     if(FAILED(device->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&sceneUseFence))))return false;
     if(!PTSceneQueues::Start(&PTSceneLive::owner.Scenes())||!PTSceneQueues::Register(&PTSceneLive::owner.Scenes(),&queueConsumer)||
        !PTCommandBindings::Register(&commandConsumer)||!PTNativeJobRuntime::Register(&Job)||!PTSceneLive::owner.Start(step,true))return false;
-    active=true;Log("PT_PRIMARY_SESSION_READY build=M12R20 ready=1 hits=4 spp=1 material=opaque_general geometric_normals=1 native_fallback=1");return true;
+    active=true;Log("PT_PRIMARY_SESSION_READY build=M12R21 ready=1 hits=4 spp=1 material=opaque_general geometric_normals=1 native_fallback=1");return true;
 }
 }

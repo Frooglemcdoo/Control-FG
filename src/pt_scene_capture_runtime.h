@@ -234,7 +234,15 @@ public:
         tracked.completed=done;stats.completedWaits+=catalog.ObserveFenceCompletion(f->id,done);
         return true;
     }
+    struct PendingFence {PTSceneOrder::Graph::PendingFence graph;U64 actual=0;bool polled=false;};
+    PendingFence PendingWait(U64 ticket){
+        std::lock_guard<std::mutex> guard(mutex);PendingFence out;out.graph=catalog.PendingWait(ticket);
+        const auto f=waitFences.find(out.graph.fence);
+        if(f!=waitFences.end()){out.actual=f->second.fence->GetCompletedValue();out.polled=true;}
+        return out;
+    }
     PTSceneOrder::Status Scene(U64 ticket,const PTSceneDescriptors::Acceleration& selected,PTSceneDispatch::Scene& scene,const char** pendingReason=nullptr,unsigned rayMask=0xff){
+        std::lock_guard<std::mutex> guard(mutex);RefreshWaitFences();
         return catalog.Scene(ticket,{{selected.token,selected.address},selected.bytes},scene,pendingReason,PTSceneOrder::Purpose::submission,rayMask);
     }
     // Recording only: the output remains disarmed until Scene succeeds at

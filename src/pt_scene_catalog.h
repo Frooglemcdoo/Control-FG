@@ -198,6 +198,10 @@ public:
     bool Healthy()const {return valid.load(std::memory_order_acquire);}
     const char* Failure()const {std::lock_guard<std::mutex> guard(mutex);return failure;}
     void Invalidate(const char* reason="external"){std::lock_guard<std::mutex> guard(mutex);Fail(reason);}
+    PTSceneOrder::Graph::PendingFence PendingWait(U64 ticket)const {
+        std::lock_guard<std::mutex> guard(mutex);const auto c=cuts.find(ticket);
+        return c==cuts.end()||!c->second?PTSceneOrder::Graph::PendingFence{}:graph.PendingWait(c->second);
+    }
     Status Scene(U64 ticket,Allocation selected,PTSceneDispatch::Scene& output,const char** pendingReason=nullptr,PTSceneOrder::Purpose purpose=PTSceneOrder::Purpose::submission,unsigned rayMask=0xff)const {
         output={};if(pendingReason)*pendingReason="scene_submission_pending";std::lock_guard<std::mutex> guard(mutex);if(!valid)return Status::invalid;
         const auto c=cuts.find(ticket);if(c==cuts.end())return Status::missing;if(!c->second)return Status::pending;
