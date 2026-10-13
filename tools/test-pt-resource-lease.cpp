@@ -270,6 +270,12 @@ int main(){
     assert(bank.SnapshotWriter(writerTicket,writerIdentifiers,writerTable));
     assert(writerTable.bytes==table.bytes&&writerTable.allocationTokens==table.allocationTokens&&writerIdentifiers.hit==writerIds);
     writerIds[0][0]=88;assert(writerIdentifiers.hit[0][0]==1); // Immutable ID snapshot.
+    const char* writerFailure="none";std::size_t writerRow=999;
+    auto missingRow=row;missingRow.attributes=0;
+    writerTicket.writer.bindings=reinterpret_cast<UINT_PTR>(&missingRow);
+    assert(!bank.SnapshotWriter(writerTicket,writerIdentifiers,writerTable,&writerFailure,&writerRow));
+    assert(!std::strcmp(writerFailure,"writer_attribute_owner")&&writerRow==0&&writerTable.bytes.empty());
+    writerTicket.writer.bindings=reinterpret_cast<UINT_PTR>(&row);
     writerTicket.hitBytes=191;assert(!bank.SnapshotWriter(writerTicket,writerIdentifiers,writerTable)&&writerTable.bytes.empty());
     std::puts("PASS writer snapshot: exact recorded layout, native identifiers, local-root bytes and allocation generations frozen inside owner transaction.");
     PTSceneDispatch::Selection selection{frozen.address,1,table.address,1,3};PTSceneDispatch::Plan plan;

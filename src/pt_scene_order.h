@@ -154,7 +154,7 @@ public:
     // appends acquire edges from completion fences polled by the host.
     // External roots are active dispatch cuts and unresolved compaction cuts.
     bool Compact(const std::set<U64>& external,const std::map<U64,U64>& completed,
-                 std::map<U64,U64>& remap,std::set<U64>& retainedVersions){
+                 std::map<U64,U64>& remap,std::set<U64>& retainedVersions,const std::set<U64>* liveTokens=nullptr){
         remap.clear();retainedVersions.clear();if(!valid)return false;
         for(U64 id=1;id<nodes.size();++id)if(ClockAt(id)!=Status::ready)return false;
         // Preserve rejection of non-monotonic cross-queue fence ownership.
@@ -184,8 +184,20 @@ public:
         for(const U64 root:roots)for(unsigned lane=0;lane<thresholds.size();++lane)thresholds[lane].insert(clocks[root][lane]);
         std::map<Key,std::map<unsigned,std::vector<U64>>> writes;
         for(U64 id=1;id<nodes.size();++id)if(nodes[id].target.token)writes[nodes[id].target][nodes[id].lane].push_back(id);
+        // Dead allocation generations cannot be selected by a future dispatch.
+        // Keep them while any historical consumer exists or any write is still
+        // in flight. Queue/fence root nodes survive with their baked clocks.
+        std::set<Key> retired;
+        if(liveTokens&&external.empty())for(const auto& key:writes){
+            if(liveTokens->count(key.first.token))continue;
+            bool finished=true;
+            for(const auto& lane:key.second)for(const U64 id:lane.second)
+                if(done[nodes[id].lane]<nodes[id].stamp)finished=false;
+            if(finished)retired.insert(key.first);
+        }
         std::set<U64> keep=roots;
         for(const auto& key:writes)for(const auto& lane:key.second){
+            if(retired.count(key.first))continue;
             const auto& sequence=lane.second;keep.insert(sequence.back());
             // Invert the query: a write is a predecessor/successor iff a
             // root threshold lies in its neighbouring stamp interval. Static
@@ -201,6 +213,7 @@ public:
         }
         std::vector<Node> compact{Node{}};
         for(const U64 id:keep){auto node=nodes[id];node.previous=node.waitFence=node.waitValue=0;node.base=clocks[id];
+            if(retired.count(node.target)){node.target={};node.version=0;}
             remap.emplace(id,compact.size());compact.push_back(node);if(node.target.token&&node.version)retainedVersions.insert(node.version);
         }
         for(auto& q:queues)q.second=remap.at(q.second);

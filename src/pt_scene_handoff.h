@@ -32,7 +32,10 @@ class Runtime {
     PTSceneLive::Owner& owner;
     std::mutex mutex;
     std::map<std::uint64_t,Entry> pending;
-    auto Erase(std::map<std::uint64_t,Entry>::iterator it){
+    struct Failure {const char* reason;std::size_t row;};
+    std::map<std::uint64_t,Failure> failures;
+    auto Erase(std::map<std::uint64_t,Entry>::iterator it,const char* reason="handoff_retired",std::size_t row=0){
+        failures[it->first]={reason,row};while(failures.size()>64)failures.erase(failures.begin());
         owner.Scenes().Forget(it->first);return pending.erase(it);
     }
     void Clear(){for(const auto& entry:pending)owner.Scenes().Forget(entry.first);pending.clear();}
@@ -75,7 +78,8 @@ public:
             for(auto it=pending.begin();it!=pending.end();){
                 auto& e=it->second;
                 if(e.list.Get()!=identity.Get()){++it;continue;}
-                if(e.submitted||!owner.Select(e.heap.Get(),e.tableFirst,e.srvSlot,e.acceleration)){it=Erase(it);continue;}
+                if(e.submitted){it=Erase(it,"handoff_replayed");continue;}
+                if(!owner.Select(e.heap.Get(),e.tableFirst,e.srvSlot,e.acceleration)){it=Erase(it,"handoff_scene_descriptor");continue;}
                 e.submitted=true;++it;
             }
         }
@@ -84,8 +88,10 @@ public:
         std::lock_guard<std::mutex> guard(mutex);const auto found=pending.find(ticket.serial);
         if(found==pending.end())return false;
         auto& entry=found->second;
-        if(!Same(entry.ticket,ticket)||entry.written||!owner.Resources().SnapshotWriter(ticket,entry.identifiers,entry.table)){
-            Erase(found);return false;
+        if(!Same(entry.ticket,ticket)||entry.written){Erase(found,"handoff_writer_identity");return false;}
+        const char* failure="writer_unknown";std::size_t row=0;
+        if(!owner.Resources().SnapshotWriter(ticket,entry.identifiers,entry.table,&failure,&row)){
+            Erase(found,failure,row);return false;
         }
         entry.written=true;return true;
     }
@@ -108,6 +114,15 @@ public:
         if(!candidate||!candidate->written||!candidate->submitted)return false;
         serial=candidate->ticket.serial;return true;
     }
+    const char* NotReady(std::uint64_t serial,std::size_t& row){
+        row=0;std::lock_guard<std::mutex> guard(mutex);
+        const auto lost=failures.find(serial);if(lost!=failures.end()){row=lost->second.row;return lost->second.reason;}
+        const auto entry=pending.find(serial);if(entry==pending.end())return "handoff_missing";
+        if(!entry->second.written&&!entry->second.submitted)return "handoff_writer_and_submission_pending";
+        if(!entry->second.written)return "handoff_writer_pending";
+        if(!entry->second.submitted)return "handoff_submission_pending";
+        return "handoff_ambiguous_or_mismatch";
+    }
     void Cancelled(std::uint64_t serial){std::lock_guard<std::mutex> guard(mutex);const auto found=pending.find(serial);if(found!=pending.end())Erase(found);}
     void Reset(IUnknown* list){
         Microsoft::WRL::ComPtr<IUnknown> identity;
@@ -116,7 +131,7 @@ public:
         for(auto it=pending.begin();it!=pending.end();){
             // A submitted writer snapshot belongs to the old immutable cut and
             // can still be consumed after the command list starts its next use.
-            if(it->second.list.Get()==identity.Get()&&!it->second.submitted)it=Erase(it);else ++it;
+            if(it->second.list.Get()==identity.Get()&&!it->second.submitted)it=Erase(it,"handoff_reset_before_submission");else ++it;
         }
     }
     // Optional immutable proof permits checking the same writer snapshot at a

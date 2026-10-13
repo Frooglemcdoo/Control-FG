@@ -157,7 +157,7 @@ public:
     U64 TailStamp(U64 queue)const {std::lock_guard<std::mutex> guard(mutex);return graph.TailStamp(queue);}
     struct Statistics {std::size_t versions,rows,nodes;};
     Statistics StatisticsNow()const {std::lock_guard<std::mutex> guard(mutex);return {versions.size(),rows,graph.Size()};}
-    bool RetireHistory(const std::map<U64,U64>& completed){
+    bool RetireHistory(const std::map<U64,U64>& completed,const std::set<U64>* liveTokens=nullptr){
         std::lock_guard<std::mutex> guard(mutex);if(!valid)return false;
         // Resolve compaction once while its source history exists. Its own
         // destination version remains unchanged, and shared geometry retains
@@ -174,7 +174,7 @@ public:
         std::set<U64> roots;for(const auto& cut:cuts)if(cut.second)roots.insert(cut.second);
         for(const auto& v:versions)if(v.second.snapshot->kind==Snapshot::Kind::copy&&v.second.before)roots.insert(v.second.before);
         std::map<U64,U64> remap;std::set<U64> keep;
-        if(!graph.Compact(roots,completed,remap,keep))return false;
+        if(!graph.Compact(roots,completed,remap,keep,liveTokens))return false;
         for(auto& cut:cuts)if(cut.second)cut.second=remap.at(cut.second);
         for(auto it=versions.begin();it!=versions.end();){
             if(!keep.count(it->first)){rows-=Rows(*it->second.snapshot);it=versions.erase(it);}

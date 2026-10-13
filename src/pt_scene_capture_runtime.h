@@ -193,7 +193,7 @@ public:
         }
         // Metadata can retire while newer GPU work remains in flight. Geometry
         // storage still has independent recording/submission/dispatch leases.
-        catalog.RetireHistory(completed);
+        const auto live=resources.LiveTokens();catalog.RetireHistory(completed,&live);
     }
     bool Signal(IUnknown* queue,IUnknown* fence,U64 value){
         std::lock_guard<std::mutex> guard(mutex);auto* q=Identify(queue);auto* f=Identify(fence);

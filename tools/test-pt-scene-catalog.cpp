@@ -109,5 +109,13 @@ int main(){
     generation=busy.Begin(1);assert(busy.Mark(1,generation,600));assert(busy.Submit(1,{{1,generation}}));
     assert(busy.RetireHistory({{1,completed}}));
     assert(busy.Scene(600,top,scene)==Status::ready&&Position(scene)==0x2000); // Compacted static source remains exact.
+    Catalog deadHistory;auto deadStorage=std::make_shared<int>(9);std::weak_ptr<int> deadWeak=deadStorage;
+    auto deadFrozen=std::make_shared<PTSceneTopology::FrozenGeometry>();deadFrozen->owner=deadStorage;
+    auto deadBlas=Blas(bottom,0x9000);deadBlas.geometry[0].frozen=deadFrozen;
+    generation=deadHistory.Begin(1);assert(deadHistory.Record(1,generation,deadBlas));
+    assert(deadHistory.Submit(1,{{1,generation}}));
+    deadBlas.geometry.clear();deadFrozen.reset();deadStorage.reset();std::set<U64> noLive;
+    assert(deadHistory.RetireHistory({{1,0}},&noLive));assert(!deadWeak.expired());
+    assert(deadHistory.RetireHistory({{1,deadHistory.TailStamp(1)}},&noLive));assert(deadWeak.expired());
     std::puts("PASS scene catalog: submitted build/copy cuts, exact allocations, late signals, unknown writes, reset and replay rejection.");
 }

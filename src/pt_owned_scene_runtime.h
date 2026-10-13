@@ -137,22 +137,29 @@ public:
     // Called inside the matching writerReady callback, before native waitJob
     // can reclaim its CPU rows. Freeze identifiers, roots and allocation tokens
     // together; a later preparation cannot bind replacement allocations.
-    bool SnapshotWriter(const PTNativeJobRoute::Ticket& ticket,PTNativeShaderTable::Identifiers& identifiers,PTSceneDispatch::Table& table){
+    bool SnapshotWriter(const PTNativeJobRoute::Ticket& ticket,PTNativeShaderTable::Identifiers& identifiers,PTSceneDispatch::Table& table,
+                        const char** failure=nullptr,std::size_t* failedRow=nullptr){
         identifiers={};table={};
+        if(failure)*failure="writer_input";if(failedRow)*failedRow=0;
         if(!ticket.serial||ticket.writer.rays!=2||ticket.writer.count<=0||ticket.writer.count>65536)return false;
-        std::lock_guard<std::mutex> guard(mutex);if(!active)return false;
+        std::lock_guard<std::mutex> guard(mutex);if(failure)*failure="writer_owner_inactive";if(!active)return false;
         PTNativeBufferObserver::Snapshot buffer{};PTNativeShaderTable::Identifiers ids{};
+        if(failure)*failure="writer_buffer_identity";
         if(!PTNativeBufferObserver::Read(reinterpret_cast<void*>(ticket.writer.buffer),buffer)||
-           buffer.address!=ticket.layout.buffer||buffer.bytes!=ticket.layout.bytes||
-           !PTNativeShaderTable::ReadIdentifiers(reinterpret_cast<const void*>(ticket.writer.state),ids)||ids.pipeline!=ticket.pipeline)return false;
+           buffer.address!=ticket.layout.buffer||buffer.bytes!=ticket.layout.bytes)return false;
+        if(failure)*failure="writer_pipeline_identifiers";
+        if(!PTNativeShaderTable::ReadIdentifiers(reinterpret_cast<const void*>(ticket.writer.state),ids)||ids.pipeline!=ticket.pipeline)return false;
         std::vector<PTNativeBinding::Binding> bindings;bindings.reserve(static_cast<std::size_t>(ticket.writer.count));
         for(int n=0;n<ticket.writer.count;++n){PTNativeBinding::Binding b{};
+            if(failure)*failure="writer_binding_read";if(failedRow)*failedRow=static_cast<std::size_t>(n);
             if(!PTNativeBinding::Read(reinterpret_cast<const void*>(ticket.writer.bindings),static_cast<unsigned>(n),b))return false;
             bindings.push_back(b);
         }
         PTSceneDispatch::Table snapshot;
-        if(!PTNativeShaderTable::Build(ticket.layout,ids,ticket.serial,2,bindings,index,snapshot)||snapshot.address!=ticket.hitTable||snapshot.bytes.size()!=ticket.hitBytes)return false;
-        identifiers=ids;table=std::move(snapshot);return true;
+        if(!PTNativeShaderTable::Build(ticket.layout,ids,ticket.serial,2,bindings,index,snapshot,failure,failedRow))return false;
+        if(failure)*failure="writer_hit_range";
+        if(snapshot.address!=ticket.hitTable||snapshot.bytes.size()!=ticket.hitBytes)return false;
+        identifiers=ids;table=std::move(snapshot);if(failure)*failure="none";return true;
     }
     // Resolve and AddRef in the same owner transaction. A release/reuse cannot
     // occur between validating an allocation token and retaining its resource.

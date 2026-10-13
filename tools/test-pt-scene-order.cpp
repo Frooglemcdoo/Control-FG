@@ -118,5 +118,18 @@ int main(){
     std::printf("Scene history retirement: %.3f ms for 3,200 writes (informational timing)\n",std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-begin).count());
     std::map<Key,Selection> invalid;
     cycle.Write(2,as,999);assert(!cycle.CompletedCheckpoint(invalid));
+    // Released allocations retire only after GPU completion and without cuts.
+    Graph dead;const Key oldKey{51,0x9000},newKey{52,0x9000};
+    dead.Write(1,oldKey,51);const auto doneStamp=dead.TailStamp(1);
+    auto oldCut=dead.Mark(1);std::map<U64,U64> deadRemap;std::set<U64> versions,live{52};
+    assert(dead.Compact({oldCut},{{1,doneStamp}},deadRemap,versions,&live)&&versions.count(51));
+    oldCut=deadRemap.at(oldCut);assert(dead.Select(oldCut,oldKey,chosen)==Status::ready);
+    assert(dead.Compact({},{{1,doneStamp}},deadRemap,versions,&live)&&!versions.count(51));
+    dead.Write(1,newKey,52);auto fresh=dead.Mark(1);
+    assert(dead.Select(fresh,newKey,chosen)==Status::ready&&chosen.version==52);
+    assert(dead.Select(fresh,oldKey,chosen)==Status::missing);
+    Graph inFlight;inFlight.Write(1,oldKey,77);
+    assert(inFlight.Compact({},{{1,0}},deadRemap,versions,&live)&&versions.count(77));
+    assert(inFlight.Compact({},{{1,inFlight.TailStamp(1)}},deadRemap,versions,&live)&&!versions.count(77));
     std::puts("PASS AS queue ordering: exact fence cuts, late signals, allocation identity, unknown writes, unordered producers and cycles.");
 }

@@ -21,24 +21,28 @@ inline bool HitRange(const Layout& l,std::size_t bindings,U64& address,U64& byte
 }
 inline bool Build(const Layout& layout,const Identifiers& identifiers,U64 version,unsigned rays,
                   const std::vector<PTNativeBinding::Binding>& bindings,const PTOwnedScene::Index& owners,
-                  PTSceneDispatch::Table& output){
+                  PTSceneDispatch::Table& output,const char** failure=nullptr,std::size_t* failedRow=nullptr){
     output={};U64 address=0,bytes=0;
+    if(failure)*failure="writer_layout";if(failedRow)*failedRow=0;
     if(rays!=2||!version||!identifiers.pipeline||!HitRange(layout,bindings.size(),address,bytes))return false;
     PTSceneDispatch::Table pending;pending.address=address;pending.version=version;pending.pipeline=identifiers.pipeline;pending.rays=rays;
     pending.bindings=bindings;pending.bytes.resize(static_cast<std::size_t>(bytes));pending.allocationTokens.reserve(bindings.size());
     for(std::size_t i=0;i<bindings.size();++i){
+        if(failedRow)*failedRow=i;
+        if(failure)*failure="writer_binding_type";
         const auto& b=bindings[i];if(b.type>1)return false;
         const U64 padded=(U64(b.constants[8])+3)&~U64(3);
         const U64 index=owners.Find(b.indices,padded),attributes=owners.Find(b.attributes,b.constants[9]);
-        if(!index||!attributes)return false;
+        if(!index||!attributes){if(failure)*failure=!index?"writer_index_owner":"writer_attribute_owner";return false;}
         pending.allocationTokens.push_back({index,attributes});
         for(unsigned ray=0;ray<2;++ray){
+            if(failure)*failure="writer_identifier_zero";
             const auto& id=identifiers.hit[2*b.type+ray];if(id==Identifier{})return false;
             auto* record=pending.bytes.data()+(i*2+ray)*96;
             std::memcpy(record,id.data(),32);std::memcpy(record+32,reinterpret_cast<const unsigned char*>(&b)+8,56);
         }
     }
-    output=std::move(pending);return true;
+    output=std::move(pending);if(failure)*failure="none";return true;
 }
 #ifdef _WIN32
 // Call only while Control's native writer owns these pointers. Hash gating and
