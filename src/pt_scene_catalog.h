@@ -195,16 +195,16 @@ public:
         const auto c=cuts.find(ticket);if(c==cuts.end())return Status::missing;if(!c->second)return Status::pending;
         if(!Known(selected))return Status::missing;
         const Snapshot* top=nullptr;std::set<U64> visiting;
-        auto status=Resolve(c->second,selected.key,top,visiting,pendingReason,purpose);if(status!=Status::ready)return status;
-        if(top->kind!=Snapshot::Kind::tlas)return Status::missing;
+        auto status=Resolve(c->second,selected.key,top,visiting,pendingReason,purpose);if(status!=Status::ready){if(status==Status::missing&&pendingReason)*pendingReason="scene_tlas_unavailable";return status;}
+        if(top->kind!=Snapshot::Kind::tlas){if(pendingReason)*pendingReason="scene_tlas_invalid";return Status::missing;}
         PTSceneOrder::Selection version;status=graph.Select(c->second,selected.key,version,pendingReason,purpose);if(status!=Status::ready)return status;
         PTSceneDispatch::Scene scene;scene.address=selected.key.address;scene.version=version.version;
         scene.tlas={selected.key.token,selected.bytes};scene.instances=top->instances;
         for(const auto& instance:top->instances){
             if(!(instance.idMask>>24)||scene.blas.count(instance.blas))continue;
             const auto a=top->bottom.find(instance.blas);if(a==top->bottom.end())return Status::missing;
-            const Snapshot* bottom=nullptr;status=Resolve(c->second,a->second.key,bottom,visiting,pendingReason,purpose);if(status!=Status::ready)return status;
-            if(bottom->kind!=Snapshot::Kind::blas||!scene.topology.Build(instance.blas,bottom->geometry))return Status::missing;
+            const Snapshot* bottom=nullptr;status=Resolve(c->second,a->second.key,bottom,visiting,pendingReason,purpose);if(status!=Status::ready){if(status==Status::missing&&pendingReason)*pendingReason="scene_blas_unavailable";return status;}
+            if(bottom->kind!=Snapshot::Kind::blas||!scene.topology.Build(instance.blas,bottom->geometry)){if(pendingReason)*pendingReason="scene_blas_invalid";return Status::missing;}
             PTSceneOrder::Selection bottomVersion;status=graph.Select(c->second,a->second.key,bottomVersion,pendingReason,purpose);if(status!=Status::ready)return status;
             scene.blas.emplace(instance.blas,PTSceneDispatch::Scene::Acceleration{a->second.key.token,a->second.bytes,bottomVersion.version});
         }

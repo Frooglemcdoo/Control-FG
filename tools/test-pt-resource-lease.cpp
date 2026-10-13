@@ -100,6 +100,27 @@ static void TestGeometrySnapshot(ID3D12Device* device,bool common=false,bool tem
     assert(transfer->storage->copies.size()==1&&geometry[0].frozen); // Same backing copied once.
     std::shared_ptr<PTGeometrySnapshot::Transfer> rejected;
     assert(!bank.FreezeGeometry(list.Get(),geometry,budget,rejected)&&!rejected); // No commands on budget failure.
+    // Separate index/vertex allocations: copy the union of needed vertices,
+    // preserving complete native index roots. The old whole-buffer copies
+    // cannot fit this deliberately exact range budget.
+    PTOwnedScene::Runtime rangedBank;
+    auto indexSource=make(D3D12_HEAP_TYPE_DEFAULT,sourceState);
+    auto rangeReadback=make(D3D12_HEAP_TYPE_READBACK,D3D12_RESOURCE_STATE_COPY_DEST);
+    std::array<unsigned char,80> indexWrapper{};auto* indexRaw=indexSource.Get();
+    const auto indexAddress=indexSource->GetGPUVirtualAddress();const UINT indexState=sourceState;
+    std::memcpy(indexWrapper.data(),&indexRaw,8);std::memcpy(indexWrapper.data()+0x20,&indexState,4);
+    std::memcpy(indexWrapper.data()+0x30,&desc.Width,8);std::memcpy(indexWrapper.data()+0x48,&indexAddress,8);
+    assert(rangedBank.Created(reinterpret_cast<UINT_PTR>(wrapper.data()),source.Get(),address,desc.Width)==1);
+    assert(rangedBank.Created(reinterpret_cast<UINT_PTR>(indexWrapper.data()),indexSource.Get(),indexAddress,desc.Width)==1);
+    std::vector<PTSceneTopology::Geometry> rangedGeometry{{indexAddress,address+256,12,2,3,3,2,1},{indexAddress+8,address+320,12,2,3,3,2,1}};
+    auto rangeBudget=std::make_shared<PTOwnedScene::LeaseBudget>(desc.Width+100);
+    std::shared_ptr<PTGeometrySnapshot::Transfer> rangeTransfer;
+    assert(rangedBank.FreezeGeometry(list.Get(),rangedGeometry,rangeBudget,rangeTransfer));
+    assert(rangeBudget->Held()==desc.Width+100);
+    assert(rangedGeometry[0].frozen->positionBase==address+256&&rangedGeometry[0].frozen->positionBytes==100);
+    assert(rangeTransfer->storage->copies.at(1)->GetDesc().Width==100);
+    auto invalidRange=rangedGeometry;invalidRange[0].positions=address+desc.Width-4;
+    assert(!rangedBank.FreezeGeometry(list.Get(),invalidRange,rangeBudget,rejected)&&!rejected);
     transition(source.Get(),(common||decayedIndex)?D3D12_RESOURCE_STATE_COPY_SOURCE:sourceState,D3D12_RESOURCE_STATE_COPY_DEST);
     list->CopyBufferRegion(source.Get(),0,upload.Get(),512,512); // Overwrite the ORIGINAL after its build-time copy.
     transition(source.Get(),D3D12_RESOURCE_STATE_COPY_DEST,sourceState);
@@ -107,6 +128,10 @@ static void TestGeometrySnapshot(ID3D12Device* device,bool common=false,bool tem
     transition(frozen,D3D12_RESOURCE_STATE_COMMON,D3D12_RESOURCE_STATE_COPY_SOURCE);
     list->CopyBufferRegion(readback.Get(),0,frozen,0,512);
     transition(frozen,D3D12_RESOURCE_STATE_COPY_SOURCE,D3D12_RESOURCE_STATE_COMMON);
+    auto* rangeFrozen=rangeTransfer->storage->copies.at(1).Get();
+    transition(rangeFrozen,D3D12_RESOURCE_STATE_COMMON,D3D12_RESOURCE_STATE_COPY_SOURCE);
+    list->CopyBufferRegion(rangeReadback.Get(),0,rangeFrozen,0,100);
+    transition(rangeFrozen,D3D12_RESOURCE_STATE_COPY_SOURCE,D3D12_RESOURCE_STATE_COMMON);
     assert(SUCCEEDED(list->Close()));
     auto released=bank.BeforeRelease(reinterpret_cast<UINT_PTR>(wrapper.data()));source.Reset();assert(bank.AfterRelease(released)==5);
     PTGeometrySnapshot::Retirement retirement;PTGeometrySnapshot::Retirement::Batch batch;
@@ -120,6 +145,9 @@ static void TestGeometrySnapshot(ID3D12Device* device,bool common=false,bool tem
     assert(WaitForSingleObject(event,30000)==WAIT_OBJECT_0);CloseHandle(event);
     D3D12_RANGE range{0,512};assert(SUCCEEDED(readback->Map(0,&range,reinterpret_cast<void**>(&mapped))));
     for(unsigned n=0;n<512;++n)assert(mapped[n]==static_cast<unsigned char>(n));readback->Unmap(0,&empty);
+    D3D12_RANGE rangedRead{0,100};assert(SUCCEEDED(rangeReadback->Map(0,&rangedRead,reinterpret_cast<void**>(&mapped))));
+    for(unsigned n=0;n<100;++n)assert(mapped[n]==static_cast<unsigned char>(n+256));rangeReadback->Unmap(0,&empty);
+    rangeTransfer.reset();rangedGeometry.clear();invalidRange.clear();assert(rangeBudget->Held()==0);
     retirement.Poll();assert(budget->Held()==0);
     const auto idle=bank.GeometryStatistics();assert(idle.bytes==desc.Width&&idle.allocations==1&&idle.reuses==0);
     assert(SUCCEEDED(allocator->Reset()));assert(SUCCEEDED(list->Reset(allocator.Get(),nullptr)));

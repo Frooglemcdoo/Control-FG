@@ -165,7 +165,7 @@ public:
         const auto selected=owner.Scenes().PreviewScene(serial,entry.acceleration,scene,&pendingReason);
         entry.scenePending=selected==PTSceneOrder::Status::pending?pendingReason:nullptr;
         if(entry.scenePending)return Status::pending;
-        if(selected!=PTSceneOrder::Status::ready){Erase(found,selected==PTSceneOrder::Status::missing?"scene_catalog_missing":"scene_catalog_rejected");return Status::rejected;}
+        if(selected!=PTSceneOrder::Status::ready){Erase(found,selected==PTSceneOrder::Status::missing?(pendingReason?pendingReason:"scene_catalog_missing"):"scene_catalog_rejected");return Status::rejected;}
         const PTSceneDispatch::Selection selection{scene.address,scene.version,entry.table.address,entry.table.version,entry.table.pipeline};
         PTSceneDispatch::Failure failure;
         const bool prepared=owner.Resources().PrepareLease(selection,scene,entry.table,exports,plan,lease,&failure);

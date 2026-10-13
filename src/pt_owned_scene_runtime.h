@@ -29,7 +29,9 @@ private:
 public:
     explicit Runtime(std::shared_ptr<LeaseBudget> budget=std::make_shared<LeaseBudget>())
         :leaseBudget(std::move(budget)){}
-    static constexpr U64 MaximumBytes=1024ull*1024*1024,MaximumResource=64ull*1024*1024;
+    // This registry references existing native buffers; it does not allocate
+    // their contents. Private geometry copies have a separate, smaller budget.
+    static constexpr U64 MaximumBytes=4ull*1024*1024*1024,MaximumResource=64ull*1024*1024;
     // Own references are movable so release validation happens without holding
     // the registry mutex across the native call (which can recurse).
     struct Release {Resource resource;U64 address=0,bytes=0;};
@@ -136,11 +138,34 @@ public:
         }
         // Allocate metadata before recording; no failure may drop resources
         // once a copy references them in the command list.
+        std::map<U64,std::pair<U64,U64>> ranges;
+        const auto include=[&](U64 token,U64 address,U64 bytes){
+            const auto& allocation=sources.at(token).allocation;
+            if(address<allocation.address||address-allocation.address>allocation.bytes||
+               bytes>allocation.bytes-(address-allocation.address))return false;
+            const U64 first=(address-allocation.address)&~U64(3),end=address-allocation.address+bytes;
+            if(end>UINT64_MAX-3)return false;
+            const U64 last=(end+3)&~U64(3);if(last>allocation.bytes)return false;
+            auto inserted=ranges.emplace(token,std::make_pair(first,last));
+            if(!inserted.second){auto& span=inserted.first->second;span.first=(std::min)(span.first,first);span.second=(std::max)(span.second,last);}
+            return true;
+        };
+        geometryFailure="geometry_copy_range";
+        for(const auto& g:geometry){
+            // Native SBT index roots cover their complete index allocation,
+            // including offsets/padded raw loads. Preserve that contract.
+            const auto& indices=sources.at(g.indexToken).allocation;
+            ranges[g.indexToken]={0,indices.bytes};
+            if(!g.vertexCount||g.stride<12||
+               U64(g.vertexCount-1)>(UINT64_MAX-12)/g.stride||
+               !include(g.positionToken,g.positions,U64(g.vertexCount-1)*g.stride+12))return false;
+        }
+        for(auto& source:sources){const auto& span=ranges.at(source.first);source.second.offset=span.first;source.second.bytes=span.second-span.first;}
         std::vector<std::shared_ptr<PTSceneTopology::FrozenGeometry>> frozen;
         for(const auto& g:geometry){
             auto f=std::make_shared<PTSceneTopology::FrozenGeometry>();
-            const auto& i=sources.at(g.indexToken).allocation;const auto& p=sources.at(g.positionToken).allocation;
-            f->indexBase=i.address;f->indexBytes=i.bytes;f->positionBase=p.address;f->positionBytes=p.bytes;frozen.push_back(std::move(f));
+            const auto& i=sources.at(g.indexToken);const auto& p=sources.at(g.positionToken);
+            f->indexBase=i.allocation.address+i.offset;f->indexBytes=i.bytes;f->positionBase=p.allocation.address+p.offset;f->positionBytes=p.bytes;frozen.push_back(std::move(f));
         }
         std::vector<PTGeometrySnapshot::Source> ordered;for(const auto& item:sources)ordered.push_back(item.second);
         PTCommandBindings::Mute privateCopies;

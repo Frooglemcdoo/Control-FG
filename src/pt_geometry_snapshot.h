@@ -8,7 +8,7 @@
 namespace PTGeometrySnapshot {
 using U64=std::uint64_t;
 using Microsoft::WRL::ComPtr;
-struct Source {PTOwnedScene::Allocation allocation{};ComPtr<ID3D12Resource> resource;D3D12_RESOURCE_STATES state{};};
+struct Source {PTOwnedScene::Allocation allocation{};ComPtr<ID3D12Resource> resource;D3D12_RESOURCE_STATES state{};U64 offset=0,bytes=0;};
 // Idle resources are reusable only after every recording, flight and scene
 // owner has released Storage. Contents are ALWAYS freshly copied on checkout.
 // 64 MiB idle cache is separate from the 512 MiB active snapshot budget.
@@ -70,6 +70,9 @@ inline bool Record(ID3D12GraphicsCommandList* list,const std::vector<Source>& so
         const auto desc=s.resource->GetDesc();D3D12_HEAP_PROPERTIES heap{};D3D12_HEAP_FLAGS flags{};
         if(desc.Dimension!=D3D12_RESOURCE_DIMENSION_BUFFER||desc.Width!=s.allocation.bytes||
            s.resource->GetGPUVirtualAddress()!=s.allocation.address)return false;
+        const U64 bytes=s.bytes?s.bytes:s.allocation.bytes;
+        if(failure)*failure="copy_source_range";
+        if(s.offset>s.allocation.bytes||bytes>s.allocation.bytes-s.offset||s.offset%4)return false;
         if(failure)*failure="copy_source_heap";
         if(FAILED(s.resource->GetHeapProperties(&heap,&flags))||heap.Type!=D3D12_HEAP_TYPE_DEFAULT)return false;
         if(failure)*failure="copy_source_read_state";
@@ -83,11 +86,11 @@ inline bool Record(ID3D12GraphicsCommandList* list,const std::vector<Source>& so
                      D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER)))return false;
         auto old=unique.find(s.allocation.token);
         if(old!=unique.end()){
-            if(old->second.resource.Get()!=s.resource.Get()||old->second.state!=s.state)return false;
+            if(old->second.resource.Get()!=s.resource.Get()||old->second.state!=s.state||old->second.offset!=s.offset||old->second.bytes!=bytes)return false;
             continue;
         }
-        if(s.allocation.bytes>UINT64_MAX-total)return false;
-        total+=s.allocation.bytes;unique.emplace(s.allocation.token,s);
+        if(bytes>UINT64_MAX-total)return false;
+        total+=bytes;auto ranged=s;ranged.bytes=bytes;unique.emplace(s.allocation.token,std::move(ranged));
     }
     if(failure)*failure="copy_active_budget";
     if(!budget->Acquire(total))return false;storage.bytes=total;
@@ -95,6 +98,7 @@ inline bool Record(ID3D12GraphicsCommandList* list,const std::vector<Source>& so
     D3D12_HEAP_PROPERTIES heap{};heap.Type=D3D12_HEAP_TYPE_DEFAULT;
     for(const auto& entry:unique){
         auto desc=entry.second.resource->GetDesc();desc.Flags=D3D12_RESOURCE_FLAG_NONE;
+        desc.Width=entry.second.bytes;
         ComPtr<ID3D12Resource> copy;
         if(pool)copy=pool->Take(device.Get(),desc.Width);
         else if(FAILED(device->CreateCommittedResource(&heap,D3D12_HEAP_FLAG_NONE,&desc,D3D12_RESOURCE_STATE_COMMON,nullptr,IID_PPV_ARGS(&copy))))return false;
@@ -114,7 +118,7 @@ inline bool Record(ID3D12GraphicsCommandList* list,const std::vector<Source>& so
         D3D12_RESOURCE_BARRIER destination{};destination.Type=D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
         destination.Transition={dst,D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,D3D12_RESOURCE_STATE_COMMON,D3D12_RESOURCE_STATE_COPY_DEST};
         list->ResourceBarrier(1,&destination);
-        list->CopyBufferRegion(dst,0,s.resource.Get(),0,s.allocation.bytes);
+        list->CopyBufferRegion(dst,0,s.resource.Get(),s.offset,s.bytes);
         if(transition){std::swap(barrier.Transition.StateBefore,barrier.Transition.StateAfter);list->ResourceBarrier(1,&barrier);}
         barrier.Transition={dst,D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,D3D12_RESOURCE_STATE_COPY_DEST,D3D12_RESOURCE_STATE_COMMON};
         list->ResourceBarrier(1,&barrier);
