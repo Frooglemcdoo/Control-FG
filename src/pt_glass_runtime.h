@@ -20,6 +20,9 @@
 #include <intrin.h>
 #include <unordered_map>
 #include <memory>
+#define PT_PRIMARY_PROBE_HOST 1
+#include "pt_primary_pipeline_probe.h"
+#undef PT_PRIMARY_PROBE_HOST
 // G1: Steam hash-locked glass continuation. Original exports and native passes
 // remain present; only a fully prepared dispatch selects the additional raygen.
 namespace PTGlassRuntime {
@@ -400,6 +403,10 @@ static void LightHook(void* state,const void* dimensions){
 }
 #include "pt_primary_runtime.in.h"
 static void ObserveCompute(ID3D12Device* d,const D3D12_COMPUTE_PIPELINE_STATE_DESC* desc,void* result){
+    if(PTSceneLive::owner.Active()&&!PTCommandBindings::nesting){
+        try{PTPrimaryPipelineProbe::Created(desc,static_cast<IUnknown*>(result));}
+        catch(...){Log("PT_PRIMARY_PSO_PROBE_FAILED stage=creation");}
+    }
     if(PTSceneLive::owner.Active()&&desc&&result&&desc->CS.BytecodeLength==71144&&desc->CS.pShaderBytecode){
         try {char primarySha[65]{};
             if(PTReflectionSha256(static_cast<const unsigned char*>(desc->CS.pShaderBytecode),desc->CS.BytecodeLength,primarySha)&&
