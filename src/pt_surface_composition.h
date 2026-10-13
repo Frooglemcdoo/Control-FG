@@ -9,7 +9,7 @@
 // No original shader, heap, root, render target, or game file is modified here.
 namespace PTSurfaceComposition {
 using U32=std::uint32_t;
-struct Profile {const char* sha;std::array<unsigned char,16> checksum;U32 bytes,load,combine,temps,resource;};
+struct Profile {const char* sha;std::array<unsigned char,16> checksum;U32 bytes,load,combine,temps,resource;std::uint64_t required;};
 #include "pt_surface_profiles.in.h"
 inline bool Patch(const unsigned char* input,std::size_t bytes,const char* verifiedSha,std::vector<unsigned char>& output){
     output.clear();if(!input||!verifiedSha||bytes<32||bytes>256*1024)return false;

@@ -16,6 +16,7 @@ class Pipeline {
     Microsoft::WRL::ComPtr<ID3D12PipelineState> native,composed;
     Microsoft::WRL::ComPtr<ID3D12RootSignature> root;
     std::shared_ptr<const PTNativeRoot::Layout> layout;
+    std::uint64_t required=0;
 public:
     static HRESULT Create(ID3D12Device* device,const D3D12_GRAPHICS_PIPELINE_STATE_DESC* description,
                           IUnknown* original,const char* verifiedSha,const std::shared_ptr<const PTNativeRoot::Layout>& rootLayout,
@@ -26,6 +27,7 @@ public:
         std::vector<unsigned char> program;
         if(!Patch(static_cast<const unsigned char*>(description->PS.pShaderBytecode),description->PS.BytecodeLength,verifiedSha,program))return S_FALSE;
         auto pending=std::make_shared<Pipeline>();
+        for(const auto& profile:Profiles)if(!std::strcmp(profile.sha,verifiedSha))pending->required=profile.required;
         HRESULT hr=original->QueryInterface(IID_PPV_ARGS(&pending->native));if(FAILED(hr))return hr;
         Microsoft::WRL::ComPtr<ID3D12Device> owner;
         Microsoft::WRL::ComPtr<IUnknown> expected,observed;
@@ -39,6 +41,7 @@ public:
     ID3D12PipelineState* Native()const noexcept{return native.Get();}
     ID3D12PipelineState* Composed()const noexcept{return composed.Get();}
     ID3D12RootSignature* Root()const noexcept{return root.Get();}
+    std::uint64_t Required()const noexcept{return required;}
 };
 
 // Native pipeline identities remain owned, so a destroyed/reused raw address

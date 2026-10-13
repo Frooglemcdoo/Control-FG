@@ -491,3 +491,35 @@ root layout and retain both. Unknown roots, collections without a directly
 verified global root, unknown shaders and excess entries remain unadmitted.
 These are the pass selectors for the pending renderer consumer; the active P2/G3
 selection and native return objects are unchanged.
+
+### CPU-source descriptor mirrors
+
+`pt_table_mirror.h` mirrors the native 49-slot table suffix after the 244000-entry
+material prefix. It observes native CopyDescriptorsSimple/CopyDescriptors and
+direct CBV/SRV/UAV creation under one serialization gate. It never copies from a
+shader-visible source heap. Private mirror/snapshot writes are excluded from
+observation. Unsupported aggregate copies invalidate observed slots rather than
+leaving stale values eligible for a snapshot.
+
+The mirror is bounded to 16 heaps and 2097152 suffix descriptors. Each admitted
+snapshot owns a separate CPU descriptor heap, fills unused slots from typed null
+defaults, and requires every shader-used native slot to have an observed write.
+Per-slot versions detect later native destination changes; changing only the
+original CPU source does not alter an existing snapshot. Required masks for all
+nine surface profiles were extracted from their captured RDEF bindings and are
+stored with the reviewed shader identities.
+
+The WARP fixture covers a bulk copy crossing the material/table boundary,
+multiple destination/source ranges, direct view creation, old/new snapshots,
+private-write exclusion and GPU reads through both copied tables. Descriptor
+mirroring proves descriptor values, not backing-resource lifetime or resource
+states. The renderer still must establish those at its admitted native pass and
+must not reuse a copied graphics table across native descriptor mutation.
+
+The reviewed allocator at native RVA 1aa00 starts each heap's dynamic suffix at
+0x3b920 and caps the heap at 0x7b920 entries. It advances the global allocation
+cursor and associates the allocation with the native fence token. On rollover
+it creates/recycles a heap and copies the material prefix. Inspection through
+RVA 1acea shows no command-list SetDescriptorHeaps call in the allocator itself;
+rejecting a returned different heap therefore does not change the command list's
+currently bound heaps. The private table still requires the same native heap.

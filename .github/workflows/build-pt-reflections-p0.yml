@@ -80,6 +80,10 @@ jobs:
           if errorlevel 1 exit /b 1
           build\test-pt-command-bindings.exe
           if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-pt-table-mirror.cpp /Febuild\test-pt-table-mirror.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
+          if errorlevel 1 exit /b 1
+          build\test-pt-table-mirror.exe
+          if errorlevel 1 exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-pt-surface-output.cpp /Febuild\test-pt-surface-output.exe /link d3d12.lib dxgi.lib
           if errorlevel 1 exit /b 1
           build\test-pt-surface-output.exe
