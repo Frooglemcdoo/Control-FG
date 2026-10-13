@@ -237,17 +237,17 @@ static void TestGeometrySnapshot(ID3D12Device* device,bool common=false,bool tem
 }
 static void TestGeometryPoolPressure(ID3D12Device* device){
     PTGeometrySnapshot::Pool pool;
-    constexpr UINT64 half=PTGeometrySnapshot::Pool::MaximumIdleBytes/2,small=4ull*1024*1024;
+    constexpr UINT64 half=PTGeometrySnapshot::Pool::MaximumIdleBytes/2,smallBytes=4ull*1024*1024;
     auto a=pool.Take(device,half),b=pool.Take(device,half);assert(a&&b&&a.Get()!=b.Get());
     pool.Return(std::move(a));pool.Return(std::move(b));
     assert(pool.Statistics().bytes==2*half);
-    auto changed=pool.Take(device,small);assert(changed);auto* identity=changed.Get();
+    auto changed=pool.Take(device,smallBytes);assert(changed);auto* identity=changed.Get();
     pool.Return(std::move(changed));
-    auto stats=pool.Statistics();assert(stats.evictions==1&&stats.bytes==half+small);
+    auto stats=pool.Statistics();assert(stats.evictions==1&&stats.bytes==half+smallBytes);
     // Current-scene sizes must enter a full cache instead of being destroyed
     // on every return. All resources in this test are idle and unsubmitted.
     for(unsigned n=0;n<100;++n){
-        changed=pool.Take(device,small);assert(changed.Get()==identity);
+        changed=pool.Take(device,smallBytes);assert(changed.Get()==identity);
         assert(pool.Statistics().allocations==3);pool.Return(std::move(changed));
     }
     assert(pool.Statistics().reuses==100&&pool.Statistics().evictions==1);
