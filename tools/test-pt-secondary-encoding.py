@@ -36,6 +36,18 @@ for name,expected in locked.items():
   original='    DrawTextW(dc, L"Compare traced second-bounce lighting.\\nNative reflections stay visible.", -1, &ptDescription,\n        DT_LEFT | DT_WORDBREAK);'
   assert source.count(click)==1 and source.count(paint)==1
   source=source.replace(click,'').replace(paint,original)
+ # R37 adds a restart-only baseline gate. Verify its exact additions, then
+ # retain the original S1 hashes for all enabled-mode runtime code.
+ if name=='src/probe.cpp':
+  startup='// Read once before any PT installation, including early device creation.\n// This is a restart-only diagnostic; never tear down in-flight PT ownership.\nstatic bool PTStartupCaptureEnabled() {\n    static const bool enabled=[](){\n        const DWORD error=GetLastError();auto path=ModulePath(selfModule);\n        const auto slash=path.find_last_of(L"\\\\/");\n        if(slash==std::wstring::npos){SetLastError(error);return true;}\n        path.resize(slash+1);path+=L"ControlFG-PT-Capture-Off.txt";\n        const DWORD attributes=GetFileAttributesW(path.c_str());\n        const bool disabled=attributes!=INVALID_FILE_ATTRIBUTES&&!(attributes&FILE_ATTRIBUTE_DIRECTORY);\n        SetLastError(error);return !disabled;\n    }();\n    return enabled;\n}\n\n'
+  setup='        const bool ptCaptureEnabled=PTStartupCaptureEnabled();\n        Log("PT_PRIMARY_STARTUP build=M12R37 capture=%u restart_only=1 rr_fg_available=1",unsigned(ptCaptureEnabled));\n        const unsigned int rrObserverHooks = ptCaptureEnabled?InstallRRObservationHooks(renderer,d3d):0;'
+  assert source.count(startup)==1 and source.count(setup)==1
+  source=source.replace(startup,'').replace(setup,'        const unsigned int rrObserverHooks = InstallRRObservationHooks(renderer,d3d);')
+ if name=='src/pt_reflection_loader.h':
+  gate='    if(!PTStartupCaptureEnabled())return false;\n'
+  for signature in ['static bool PTReflectionInstallComputePsoHookOnDevice(ID3D12Device* device) noexcept {','static bool PTReflectionInstallCommandListCaptureHooks(void* commandList) noexcept {','static bool PTReflectionInstallShaderLookupHooks(HMODULE renderer,HMODULE d3d) noexcept {']:
+   assert source.count(signature+'\n'+gate)==1
+   source=source.replace(signature+'\n'+gate,signature+'\n')
  assert hashlib.sha256(source.encode()).hexdigest()==expected,name
 def half(v): return struct.unpack('<e',struct.pack('<e',v))[0]
 def sign(v): return 1 if v>=0 else -1
