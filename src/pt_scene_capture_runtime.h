@@ -46,16 +46,16 @@ class Capture {
     }
     void Record(IUnknown* list,PTSceneCatalog::Snapshot snapshot){
         auto* id=List(list);
-        if(!id||!catalog.Record(id->id,id->generation,std::move(snapshot)))catalog.Invalidate();
+        if(!id||!catalog.Record(id->id,id->generation,std::move(snapshot)))catalog.Invalidate("build_record_or_destination");
     }
 public:
     struct Timing {U64 calls=0,totalMs=0,maxMs=0;};
-    struct Stats {Timing builds,checkpoints;U64 skippedInvalid=0,copyFailures=0;bool healthy=true;};
+    struct Stats {Timing builds,checkpoints;U64 skippedInvalid=0,copyFailures=0;bool healthy=true;const char* failure="none";};
 private:
     Stats stats;
     struct Measure {Timing& value;ULONGLONG start=GetTickCount64();~Measure(){const U64 ms=GetTickCount64()-start;++value.calls;value.totalMs+=ms;value.maxMs=(std::max)(value.maxMs,ms);}};
 public:
-    Stats Statistics(){std::lock_guard<std::mutex> guard(mutex);stats.healthy=catalog.Healthy();return stats;}
+    Stats Statistics(){std::lock_guard<std::mutex> guard(mutex);stats.healthy=catalog.Healthy();stats.failure=catalog.Failure();return stats;}
     explicit Capture(PTOwnedScene::Runtime& bank):resources(bank){}
     bool PreserveGeometry(){std::lock_guard<std::mutex> guard(mutex);if(!identities.empty())return false;preserveGeometry=true;return true;}
     void UploadInstances(U64 address,const void* data,U64 bytes){
@@ -116,9 +116,17 @@ public:
         }
         Record(list,std::move(s));
     }
+    bool Healthy()const {return catalog.Healthy();}
+    Identity* Existing(IUnknown* object){
+        ComPtr<IUnknown> canonical;if(!object||FAILED(object->QueryInterface(IID_PPV_ARGS(&canonical))))return nullptr;
+        const auto found=identities.find(canonical.Get());return found==identities.end()?nullptr:&found->second;
+    }
     void Reset(IUnknown* list){
-        std::lock_guard<std::mutex> guard(mutex);auto* id=Identify(list);
-        if(!id){catalog.Invalidate();return;}retirement.Poll();recordedCopies.erase(id->id);id->generation=catalog.Begin(id->id);
+        std::lock_guard<std::mutex> guard(mutex);auto* id=Existing(list);
+        // Ordinary graphics/copy lists have no AS metadata to reset. Creating
+        // entries for them could exhaust the small scene-only journal during play.
+        if(!id)return;
+        retirement.Poll();recordedCopies.erase(id->id);id->generation=catalog.Begin(id->id);
     }
     bool Mark(IUnknown* list,U64 ticket){
         std::lock_guard<std::mutex> guard(mutex);auto* id=List(list);
@@ -128,7 +136,11 @@ public:
         std::lock_guard<std::mutex> guard(mutex);auto* q=Identify(queue);
         if(!q||!count||count>256||!lists){catalog.Invalidate();return false;}
         std::vector<std::pair<U64,U64>> ordered;ordered.reserve(count);
-        for(UINT n=0;n<count;++n){auto* l=List(lists[n]);if(!l){catalog.Invalidate();return false;}ordered.push_back({l->id,l->generation});}
+        for(UINT n=0;n<count;++n){
+            if(!lists[n]){catalog.Invalidate("null_submission_list");return false;}
+            auto* l=Existing(lists[n]);if(!l||!l->generation)continue;
+            ordered.push_back({l->id,l->generation});
+        }
         std::vector<std::shared_ptr<PTGeometrySnapshot::Transfer>> transfers;
         for(const auto& item:ordered){auto found=recordedCopies.find(item.first);if(found!=recordedCopies.end())transfers.insert(transfers.end(),found->second.begin(),found->second.end());}
         if(!transfers.empty()){
@@ -184,6 +196,6 @@ public:
         return catalog.Scene(ticket,{{selected.token,selected.address},selected.bytes},scene);
     }
     void Forget(U64 ticket){catalog.Forget(ticket);}
-    void Invalidate(){catalog.Invalidate();}
+    void Invalidate(){catalog.Invalidate("capture_external");}
 };
 }

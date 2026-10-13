@@ -105,3 +105,43 @@ Validation includes the inverse-extent/matrix fixture and Windows WARP GPU-copy
 retirement checks extended to cover pooled reuse only after completion, plus the
 existing protected P2/G3 encoding checks. In-game FPS/coverage remain unverified
 until this package is tested.
+
+## M12R3: repair after confirmed R2 failure
+
+R2 game results (2026-10-12 21:54 Chicago): user 75–85 FPS OFF / 40–46 ON,
+no visible change. Correct R2 commit/run confirmed. No recorded/submitted primary
+dispatch or GPU coverage. The log ends with 3050 copy failures, zero copy-buffer
+allocations/reuses, catalog unhealthy, 28,336 skipped-invalid builds. Repeated
+world_inverse failures occur in surface validation. The P2 two-layer guard sees
+one layer at 3840x2160 and disables P2. The FPS split cannot be attributed to useful
+primary tracing; this log does not measure CPU/GPU contributions separately.
+
+R3 addresses concrete source mismatches without removing safety conditions:
+- Captured index resource 5608 is a DEFAULT buffer initialized in COMMON with no
+  recorded explicit transitions before BLAS consumption. Support implicit read
+  promotion for COMMON buffers. Preserve existing explicit-state handling.
+  Microsoft D3D12 resource-barrier documentation permits COMMON -> COPY_SOURCE
+  and expansion to additional read states for buffers.
+- Stop allocating journal generations for unrelated list resets/submissions.
+  Only observed AS operations and PT tickets require list metadata; native queue
+  signals/waits remain tracked. The R2 log did not expose the first invalidation
+  cause, so list exhaustion is a repaired risk, not a proven sole R2 root cause.
+- Read named camera providers using the existing hash-gated Steam resolver, TLS
+  arena and compare-provider ABI already used by RR. Verify provider metadata,
+  current-thread bytes, stable engine frame and the entire set twice. Match each
+  reviewed native pass's actually consumed CBV fields to the provider snapshot.
+  Keep complete canonical camera identity across passes; submission compares the
+  original bound subset, never the submission thread's unrelated TLS camera.
+- Private tracing owns a 1280-byte UPLOAD CBV containing its authenticated camera.
+  It replaces compute b0 only across private recording and restores the native
+  root CBV. Assets retain the upload through the existing GPU/output fences.
+- An atomic unhealthy-catalog check avoids per-draw queue locks and repeated
+  mapping/validation when primary admission cannot succeed. Cleanup and fence
+  retirement still run. First invalidation/copy-stage diagnostics are included.
+
+Validation: local view matching, scene ordering/catalog/ownership and protected
+P2/G3 encoding tests pass. Windows WARP adds COMMON-source copying with preserved
+bytes and 320 unrelated list resets/submissions without consuming scene entries.
+Full Windows build and game outcome are separate gates; R3 in-game coverage and
+performance are not established by these fixtures. The one-layer P2 guard remains
+unchanged; it is independent of the private primary scene/output path.

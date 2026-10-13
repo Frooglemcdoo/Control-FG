@@ -6,8 +6,12 @@
 // sys_constants b0: reviewed native byte offsets. Compare camera contents, not
 // upload addresses: Control allocates distinct slices for each rendering pass.
 namespace PTNativeView {
+enum class Pass {opaque,primary,environment,surface};
 struct View {
     std::array<unsigned char,1136> bytes{};
+    std::array<unsigned char,1136> bound{};
+    Pass pass=Pass::opaque;
+    std::uint64_t engineFrame=0;
     std::uint32_t frame=0,width=0,height=0;
     const char* failure="undecoded";
     unsigned failureOffset=0;
@@ -59,8 +63,15 @@ struct View {
         std::memcpy(&frame,bytes.data()+1112,4);if(!frame)return false;
         failure="none";failureOffset=0;return true;
     }
+    bool MatchesBound(const std::array<unsigned char,1136>& other)const {
+        const auto same=[&](unsigned offset,unsigned count){return !std::memcmp(bound.data()+offset,other.data()+offset,count);};
+        if(pass==Pass::surface)return same(8,8)&&same(96,64);
+        if(pass==Pass::primary)return same(8,8)&&same(224,64)&&same(1112,4);
+        if(pass==Pass::environment)return same(0,8)&&same(32,128)&&same(224,64);
+        return same(8,8)&&same(32,128)&&same(224,64)&&same(1112,4);
+    }
     bool Same(const View& other)const {
-        if(!frame||frame!=other.frame||width!=other.width||height!=other.height||
+        if(engineFrame!=other.engineFrame||!frame||frame!=other.frame||width!=other.width||height!=other.height||
            std::memcmp(bytes.data()+8,other.bytes.data()+8,8)||
            std::memcmp(bytes.data()+224,other.bytes.data()+224,64))return false;
         for(unsigned offset=32;offset<160;offset+=16)

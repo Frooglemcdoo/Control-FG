@@ -23,7 +23,7 @@ class Runtime {
 public:
     struct Stats {U64 retained=0,rejected=0,budget=0,observed=0,unownedGeometry=0,validatedRelease=0,mismatchedRelease=0,peakBytes=0;U64 resolved[6]{};};
 private:
-    Stats stats{};
+    Stats stats{};const char* geometryFailure="none";
     std::shared_ptr<LeaseBudget> leaseBudget;
 public:
     explicit Runtime(std::shared_ptr<LeaseBudget> budget=std::make_shared<LeaseBudget>())
@@ -99,13 +99,14 @@ public:
     // context. The owner mutex prevents release/reuse during metadata capture.
     bool FreezeGeometry(ID3D12GraphicsCommandList* list,std::vector<PTSceneTopology::Geometry>& geometry,
                         const std::shared_ptr<LeaseBudget>& budget,std::shared_ptr<PTGeometrySnapshot::Transfer>& transfer){
-        transfer.reset();std::lock_guard<std::mutex> guard(mutex);if(!active||geometry.empty())return false;
+        transfer.reset();std::lock_guard<std::mutex> guard(mutex);geometryFailure="geometry_input";if(!active||geometry.empty())return false;
         std::map<U64,PTGeometrySnapshot::Source> sources;
         for(const auto& g:geometry)for(const U64 token:{g.indexToken,g.positionToken}){
             if(sources.count(token))continue;
             const Entry* entry=nullptr;U64 wrapper=0;
             const auto found=wrappers.find(token);
             if(found!=wrappers.end()){wrapper=found->second;entry=&owners.at(wrapper);}
+            geometryFailure="geometry_native_owner";
             PTNativeBufferObserver::Snapshot native{};
             if(!entry||!PTNativeBufferObserver::Read(reinterpret_cast<const void*>(wrapper),native)||
                native.resource!=reinterpret_cast<UINT_PTR>(entry->resource.Get())||native.address!=entry->address||native.bytes>entry->bytes)return false;
@@ -120,7 +121,7 @@ public:
             f->indexBase=i.address;f->indexBytes=i.bytes;f->positionBase=p.address;f->positionBytes=p.bytes;frozen.push_back(std::move(f));
         }
         std::vector<PTGeometrySnapshot::Source> ordered;for(const auto& item:sources)ordered.push_back(item.second);
-        if(!PTGeometrySnapshot::Record(list,ordered,budget,transfer,geometryPool))return false;
+        if(!PTGeometrySnapshot::Record(list,ordered,budget,transfer,geometryPool,&geometryFailure))return false;
         for(std::size_t n=0;n<geometry.size();++n){
             auto& f=*frozen[n];f.owner=transfer->storage;
             f.privateIndex=transfer->storage->copies.at(geometry[n].indexToken)->GetGPUVirtualAddress();
@@ -180,6 +181,7 @@ public:
         return PTSceneDispatch::Prepare(selected,scene,table,index,exports,current).status==PTSceneDispatch::Status::prepared&&
             PTSceneDispatch::SameDispatch(prepared,current);
     }
+    const char* GeometryFailure(){std::lock_guard<std::mutex> guard(mutex);return geometryFailure;}
     PTGeometrySnapshot::Pool::Stats GeometryStatistics(){return geometryPool->Statistics();}
     Stats Stop(){std::unique_lock<std::mutex> guard(mutex);active=false;completed.wait(guard,[this]{return pending==0;});index.Clear();wrappers.clear();owners.clear();held=0;return stats;}
 };

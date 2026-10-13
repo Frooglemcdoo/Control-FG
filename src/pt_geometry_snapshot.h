@@ -56,7 +56,8 @@ struct Transfer {
 };
 inline bool Record(ID3D12GraphicsCommandList* list,const std::vector<Source>& sources,
                    const std::shared_ptr<PTOwnedScene::LeaseBudget>& budget,std::shared_ptr<Transfer>& out,
-                   const std::shared_ptr<Pool>& pool={}){
+                   const std::shared_ptr<Pool>& pool={},const char** failure=nullptr){
+    if(failure)*failure="copy_input";
     out.reset();if(!list||!budget||sources.empty()||sources.size()>8192)return false;
     if(list->GetType()!=D3D12_COMMAND_LIST_TYPE_DIRECT&&list->GetType()!=D3D12_COMMAND_LIST_TYPE_COMPUTE)return false;
     auto transfer=std::make_shared<Transfer>();transfer->storage=std::make_shared<Storage>();
@@ -64,12 +65,13 @@ inline bool Record(ID3D12GraphicsCommandList* list,const std::vector<Source>& so
     std::map<U64,Source> unique;U64 total=0;
     ComPtr<ID3D12Device> device;if(FAILED(list->GetDevice(IID_PPV_ARGS(&device))))return false;
     for(const auto& s:sources){
+        if(failure)*failure="copy_source_descriptor_heap_or_state";
         if(!s.resource||!s.allocation.token||!s.allocation.address||!s.allocation.bytes)return false;
         const auto desc=s.resource->GetDesc();D3D12_HEAP_PROPERTIES heap{};D3D12_HEAP_FLAGS flags{};
         if(FAILED(s.resource->GetHeapProperties(&heap,&flags))||heap.Type!=D3D12_HEAP_TYPE_DEFAULT||
            desc.Dimension!=D3D12_RESOURCE_DIMENSION_BUFFER||desc.Width!=s.allocation.bytes||
            s.resource->GetGPUVirtualAddress()!=s.allocation.address||
-           !(s.state&D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE)||
+           (s.state!=D3D12_RESOURCE_STATE_COMMON&&!(s.state&D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE))||
            (unsigned(s.state)&~unsigned(D3D12_RESOURCE_STATE_GENERIC_READ)))return false;
         // Compute lists cannot transition graphics-only resource states.
         if(list->GetType()==D3D12_COMMAND_LIST_TYPE_COMPUTE&&
@@ -82,7 +84,9 @@ inline bool Record(ID3D12GraphicsCommandList* list,const std::vector<Source>& so
         if(s.allocation.bytes>UINT64_MAX-total)return false;
         total+=s.allocation.bytes;unique.emplace(s.allocation.token,s);
     }
+    if(failure)*failure="copy_active_budget";
     if(!budget->Acquire(total))return false;storage.bytes=total;
+    if(failure)*failure="copy_allocation";
     D3D12_HEAP_PROPERTIES heap{};heap.Type=D3D12_HEAP_TYPE_DEFAULT;
     for(const auto& entry:unique){
         auto desc=entry.second.resource->GetDesc();desc.Flags=D3D12_RESOURCE_FLAG_NONE;
@@ -97,7 +101,10 @@ inline bool Record(ID3D12GraphicsCommandList* list,const std::vector<Source>& so
         auto* dst=storage.copies.at(s.allocation.token).Get();
         D3D12_RESOURCE_BARRIER barrier{};barrier.Type=D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
         barrier.Transition={s.resource.Get(),D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,s.state,D3D12_RESOURCE_STATE_COPY_SOURCE};
-        const bool transition=!(s.state&D3D12_RESOURCE_STATE_COPY_SOURCE);
+        // COMMON buffers promote to COPY_SOURCE, then may promote to additional
+        // read states for the native BLAS input. Do not insert a false explicit
+        // COMMON barrier after earlier implicit reads in the same list.
+        const bool transition=s.state!=D3D12_RESOURCE_STATE_COMMON&&!(s.state&D3D12_RESOURCE_STATE_COPY_SOURCE);
         if(transition)list->ResourceBarrier(1,&barrier);
         D3D12_RESOURCE_BARRIER destination{};destination.Type=D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
         destination.Transition={dst,D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,D3D12_RESOURCE_STATE_COMMON,D3D12_RESOURCE_STATE_COPY_DEST};
@@ -107,6 +114,7 @@ inline bool Record(ID3D12GraphicsCommandList* list,const std::vector<Source>& so
         barrier.Transition={dst,D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,D3D12_RESOURCE_STATE_COPY_DEST,D3D12_RESOURCE_STATE_COMMON};
         list->ResourceBarrier(1,&barrier);
     }
+    if(failure)*failure="none";
     out=std::move(transfer);return true;
 }
 // Each submitted generation owns its sources until a fence after the real

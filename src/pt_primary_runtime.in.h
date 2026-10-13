@@ -9,6 +9,7 @@ static PTSceneHandoff::Runtime handoff{PTSceneLive::owner};
 static std::atomic<bool> active{false};
 static std::recursive_mutex mutex;
 static std::vector<unsigned char> library;
+static PTNativeView::Providers viewProviders;
 static std::uint64_t nextTicket=1ull<<63;
 static ComPtr<IUnknown> pinnedQueue;
 // Extend native AS/attribute read lifetime through the private traversal. Every
@@ -23,17 +24,20 @@ static void Reject(const char* reason){
     if(n<=32||n%600==0)Log("PT_PRIMARY_SKIP reason=%s count=%llu native_surface=retained",reason,n);
 }
 static ComPtr<IUnknown> Identity(IUnknown* object){ComPtr<IUnknown> result;if(object)object->QueryInterface(IID_PPV_ARGS(&result));return result;}
-static bool ReadView(UINT64 address,View& view){
+static bool ReadView(UINT64 address,View& view,PTNativeView::Pass pass=PTNativeView::Pass::opaque){
     if(!PTNativeView::uploads.Read(address,view.bytes.data(),view.bytes.size())&&
        !PTSceneLive::owner.Resources().ReadUpload(address,view.bytes.data(),view.bytes.size())){Reject("view_upload_untracked");return false;}
-    if(!view.Decode()){
+    if(!viewProviders.Read(view,pass)){
         static std::atomic<UINT64> failures{0};const auto n=++failures;
         if(n<=8||n%24000==0){float inverse[2]{};std::memcpy(inverse,view.bytes.data()+8,8);
             Log("PT_PRIMARY_VIEW_INVALID reason=%s offset=%u inverse=%.9g,%.9g dimensions=%ux%u frame=%u count=%llu",view.failure,view.failureOffset,inverse[0],inverse[1],view.width,view.height,view.frame,n);}
         Reject("view_constants_invalid");return false;
     }return true;
 }
-static bool SameView(UINT64 address,const View& expected){View current;return ReadView(address,current)&&expected.Same(current);}
+static bool SameView(UINT64 address,const View& expected){std::array<unsigned char,1136> current{};
+    return (PTNativeView::uploads.Read(address,current.data(),current.size())||
+        PTSceneLive::owner.Resources().ReadUpload(address,current.data(),current.size()))&&expected.MatchesBound(current);
+}
 static bool ContextFor(ID3D12GraphicsCommandList* list,const Bindings& bindings,UINT tableParameter,Context& context){
     if(!ReadContext(&context)||Identity(context.list).Get()!=Identity(list).Get()||
        Identity(context.table.heap).Get()!=Identity(bindings.resources.Get()).Get())return false;
@@ -57,6 +61,7 @@ struct Environment {
 static std::vector<std::shared_ptr<Environment>> environments;
 struct Assets {
     PTPrimaryMetrics::Counters metrics;
+    ComPtr<ID3D12Resource> camera;View boundView;
     Bindings bindings;Table primary;std::shared_ptr<Environment> environment;
     PTOwnedScene::LeaseBatch scene;
     std::shared_ptr<const PTSceneHandoff::Prepared> proof;
@@ -70,7 +75,7 @@ struct Frame {
 };
 struct Draw {
     std::shared_ptr<Frame> frame;std::shared_ptr<PTSurfaceComposition::Pipeline> pipeline;
-    Table original;PTGlass::DescriptorRange privateTable;UINT64 viewAddress=0;
+    Table original;PTGlass::DescriptorRange privateTable;UINT64 viewAddress=0;View boundView;
 };
 struct Recording {
     ComPtr<IUnknown> identity;std::vector<std::shared_ptr<Draw>> draws;
@@ -115,7 +120,9 @@ static bool Encode(void* context,ID3D12GraphicsCommandList* list,ID3D12Resource*
     auto& a=*static_cast<Assets*>(context);ComPtr<ID3D12GraphicsCommandList4> rays;if(FAILED(list->QueryInterface(IID_PPV_ARGS(&rays))))return false;
     auto counter=Gpu(a.privateTable);counter.ptr+=47ull*device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
     a.metrics.Begin(list,counter);
+    list->SetComputeRootConstantBufferView(2,a.camera->GetGPUVirtualAddress());
     const bool recorded=a.dispatch->Record(rays.Get(),a.bindings.layout->Root(),a.bindings.pipeline.Get(),{a.bindings.arguments[0].value},Gpu(a.privateTable));
+    list->SetComputeRootConstantBufferView(2,a.bindings.arguments[2].value);
     a.metrics.End(list);return recorded;
 }
 static void Job(PTNativeJobRuntime::Phase phase,const PTNativeJobRoute::Ticket& ticket) noexcept {
@@ -127,10 +134,11 @@ static void Job(PTNativeJobRuntime::Phase phase,const PTNativeJobRoute::Ticket& 
         std::lock_guard<std::recursive_mutex> ordered(PTSceneQueues::queueMutex);
         std::lock_guard<std::recursive_mutex> guard(mutex);
         if(phase==PTNativeJobRuntime::Phase::cancelled){handoff.Cancelled(ticket.serial);candidates.erase(ticket.serial);return;}
+        if(!PTSceneLive::owner.Scenes().Healthy())return;
         auto pipeline=opaquePipelines.Find(reinterpret_cast<ID3D12StateObject*>(ticket.pipeline));if(!pipeline)return;
         auto* list=reinterpret_cast<ID3D12GraphicsCommandList4*>(ticket.list);Bindings bindings;View view;Context context;
         if(!PTCommandBindings::tracker.Read(list,nativeRoots,false,0xc5,bindings)||!pipeline->root->Matches(bindings.layout->Root())||
-           !ReadView(bindings.arguments[2].value,view)||view.width!=ticket.width||view.height!=ticket.height||
+           !ReadView(bindings.arguments[2].value,view)||view.engineFrame!=ticket.engineFrame||view.width!=ticket.width||view.height!=ticket.height||
            !ContextFor(list,bindings,0,context)){Reject("opaque_view_or_context");return;}
         for(auto it=candidates.begin();it!=candidates.end();){
             if(it->second.ticket.engineFrame<ticket.engineFrame&&ticket.engineFrame-it->second.ticket.engineFrame>2){handoff.Cancelled(it->first);it=candidates.erase(it);}else ++it;
@@ -141,7 +149,7 @@ static void Job(PTNativeJobRuntime::Phase phase,const PTNativeJobRoute::Ticket& 
     }catch(...){Reject("job_allocation");}
 }
 static void Dispatched(void*,ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT z) noexcept {
-    if(!active||ptReflectionUserState.load(std::memory_order_acquire)!=1)return;
+    if(!active||ptReflectionUserState.load(std::memory_order_acquire)!=1||!PTSceneLive::owner.Scenes().Healthy())return;
     try {
         const auto pso=PTCommandBindings::tracker.PipelineFor(list);
         const bool environmentPass=pso.Get()==ptReflectionNativeCompositePso||pso.Get()==ptReflectionP2CompositePso;
@@ -150,7 +158,7 @@ static void Dispatched(void*,ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT 
         std::lock_guard<std::recursive_mutex> guard(mutex);PTTableMirror::Scope descriptorLock(true);PTTableMirror::Mute privateWrites;
         Bindings bindings;if(!PTCommandBindings::tracker.Read(list,nativeRoots,false,0xd5,bindings)){Reject("lighting_bindings");return;}
         View view;Context context;
-        if(!ReadView(bindings.arguments[2].value,view)||!ContextFor(list,bindings,0,context)){Reject("lighting_view_or_context");return;}
+        if(!ReadView(bindings.arguments[2].value,view,environmentPass?PTNativeView::Pass::environment:PTNativeView::Pass::primary)||!ContextFor(list,bindings,0,context)){Reject("lighting_view_or_context");return;}
         if(environmentPass){
             // Prefer the first observed native/P2 dispatch for this immutable
             // table/view, not a guessed globally most recent environment.
@@ -177,7 +185,7 @@ static void Dispatched(void*,ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT 
         if(!handoff.FindReady(candidate->ticket.engineFrame,view.width,view.height,candidate->ticket.pipeline,serial)){Reject("writer_or_submission_not_ready");return;}
         auto frame=FrameFor(view,context.queue);auto* recording=RecordingFor(list);
         if(!frame||!recording||frame->producerRecorded||recording->submitted){Reject("frame_budget_or_duplicate");return;}
-        auto a=std::make_shared<Assets>();a->bindings=bindings;a->environment=environment;a->engineFrame=candidate->ticket.engineFrame;
+        auto a=std::make_shared<Assets>();a->bindings=bindings;a->boundView=view;a->environment=environment;a->engineFrame=candidate->ticket.engineFrame;
         // t0,t1,t3,t7,t8,t10,t14,t15,t17,t18. Private t34/t35/u7 are installed below.
         constexpr UINT64 required=(1ull<<5)|(1ull<<6)|(1ull<<8)|(1ull<<12)|(1ull<<13)|(1ull<<15)|(1ull<<19)|(1ull<<20)|(1ull<<22)|(1ull<<23);
         if(!PTTableMirror::bank.Read(bindings.resources.Get(),context.table.first,required,a->primary)||
@@ -195,6 +203,13 @@ static void Dispatched(void*,ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT 
         if(status!=PTSceneHandoff::Status::pending)candidates.erase(serial);
         if(status!=PTSceneHandoff::Status::prepared){Reject("scene_prepare");return;}
         if(FAILED(PTScenePipeline::Dispatch::Create(device.Get(),pipeline,plan,view.width,view.height,bindings.resources.Get(),a->dispatch))){Reject("private_sbt");return;}
+        D3D12_HEAP_PROPERTIES cameraHeap{};cameraHeap.Type=D3D12_HEAP_TYPE_UPLOAD;
+        D3D12_RESOURCE_DESC cameraDesc{};cameraDesc.Dimension=D3D12_RESOURCE_DIMENSION_BUFFER;cameraDesc.Width=1280;
+        cameraDesc.Height=1;cameraDesc.DepthOrArraySize=cameraDesc.MipLevels=1;cameraDesc.SampleDesc.Count=1;cameraDesc.Layout=D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+        if(FAILED(device->CreateCommittedResource(&cameraHeap,D3D12_HEAP_FLAG_NONE,&cameraDesc,D3D12_RESOURCE_STATE_GENERIC_READ,nullptr,IID_PPV_ARGS(&a->camera)))){Reject("camera_upload");return;}
+        void* cameraData=nullptr;const D3D12_RANGE noRead{};
+        if(FAILED(a->camera->Map(0,&noRead,&cameraData))||!cameraData){Reject("camera_map");return;}
+        std::memcpy(cameraData,view.bytes.data(),view.bytes.size());a->camera->Unmap(0,nullptr);
         if(!a->metrics.Initialize(device.Get())){Reject("coverage_allocation");return;}
         device->CopyDescriptorsSimple(49,Cpu(a->privateTable),a->primary.At(0),D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
         device->CopyDescriptorsSimple(1,Cpu(a->privateTable,47),a->metrics.Uav(),D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
@@ -216,7 +231,7 @@ static void Dispatched(void*,ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT 
 struct Restore {ID3D12GraphicsCommandList* list=nullptr;ComPtr<ID3D12PipelineState> pipeline;D3D12_GPU_DESCRIPTOR_HANDLE table{};};
 static thread_local Restore restore;
 static void Drawing(void*,ID3D12GraphicsCommandList* list) noexcept {
-    if(!active||ptReflectionUserState.load(std::memory_order_acquire)!=1)return;
+    if(!active||ptReflectionUserState.load(std::memory_order_acquire)!=1||!PTSceneLive::owner.Scenes().Healthy())return;
     try {
         if(restore.list)return;
         const auto pso=PTCommandBindings::tracker.PipelineFor(list);
@@ -226,14 +241,14 @@ static void Drawing(void*,ID3D12GraphicsCommandList* list) noexcept {
         Bindings bindings;
         if(!PTCommandBindings::tracker.Read(list,nativeRoots,true,0x31002,bindings)){Reject("surface_bindings");return;}
         if(!bindings.layout->Matches(pipeline->Root()))return;
-        View view;Context context;if(!ReadView(bindings.arguments[12].value,view)||!ContextFor(list,bindings,1,context)){Reject("surface_view_or_context");return;}
+        View view;Context context;if(!ReadView(bindings.arguments[12].value,view,PTNativeView::Pass::surface)||!ContextFor(list,bindings,1,context)){Reject("surface_view_or_context");return;}
         auto* recording=RecordingFor(list);if(!recording||recording->submitted||recording->draws.size()>=4096)return;
         std::shared_ptr<Draw> draw;
         for(const auto& d:recording->draws)if(d->pipeline==pipeline&&d->viewAddress==bindings.arguments[12].value&&
             d->original.native.Get()==bindings.resources.Get()&&d->original.first==context.table.first&&d->frame->view.Same(view)){draw=d;break;}
         if(!draw){
             auto frame=FrameFor(view,context.queue);if(!frame){Reject("surface_frame_budget");return;}
-            draw=std::make_shared<Draw>();draw->frame=frame;draw->pipeline=pipeline;draw->viewAddress=bindings.arguments[12].value;
+            draw=std::make_shared<Draw>();draw->frame=frame;draw->pipeline=pipeline;draw->viewAddress=bindings.arguments[12].value;draw->boundView=view;
             if(!PTTableMirror::bank.Read(bindings.resources.Get(),context.table.first,pipeline->Required(),draw->original)||
                !Fresh(context,&draw->privateTable)||!Disjoint(draw->privateTable,context.table.first)){Reject("surface_descriptor_allocation");return;}
             device->CopyDescriptorsSimple(49,Cpu(draw->privateTable),draw->original.At(0),D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
@@ -275,7 +290,7 @@ static void Selected(void*,ID3D12CommandQueue* queue,UINT count,ID3D12CommandLis
             for(const auto& frame:recording.producers){const auto& a=frame->assets;
                 const bool good=admitted&&!recording.submitted&&!frame->producerSubmitted&&(ptReflectionUserState.load()==1u)&&a&&
                     queueIdentity.Get()==pinnedQueue.Get()&&a->environment->submitted&&
-                    SameView(a->bindings.arguments[2].value,frame->view)&&PTTableMirror::bank.Unchanged(a->primary)&&
+                    SameView(a->bindings.arguments[2].value,a->boundView)&&PTTableMirror::bank.Unchanged(a->primary)&&
                     PTTableMirror::bank.Unchanged(a->environment->table)&&
                     handoff.Revalidate(a->ticket,a->engineFrame,frame->view.width,frame->view.height,a->proof)==PTSceneHandoff::Status::prepared;
                 if(!good||!frame->output->Arm(queue)){frame->output->Invalidate(queue);Reject("submission_rejected");}
@@ -287,7 +302,7 @@ static void Selected(void*,ID3D12CommandQueue* queue,UINT count,ID3D12CommandLis
                     device->CopyDescriptorsSimple(49,Cpu(draw->privateTable),draw->original.At(0),D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
                     device->CopyDescriptorsSimple(1,Cpu(draw->privateTable,40),draw->frame->output->Srv(),D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
                 }
-                if(recording.submitted||queueIdentity.Get()!=pinnedQueue.Get()||!SameView(draw->viewAddress,draw->frame->view)||changed){
+                if(recording.submitted||queueIdentity.Get()!=pinnedQueue.Get()||!SameView(draw->viewAddress,draw->boundView)||changed){
                     draw->frame->output->Invalidate(queue);Reject("surface_submission_changed");
                 }
             }
@@ -319,7 +334,7 @@ static void Submitted(void*,ID3D12CommandQueue* queue,UINT count,ID3D12CommandLi
         static UINT64 submissions=0;const auto sequence=++submissions;
         if(sequence<=4||sequence%240==0){const auto t=PTSceneLive::owner.Scenes().Statistics();
             const auto pool=PTSceneLive::owner.Resources().GeometryStatistics();
-            Log("PT_PRIMARY_CAPTURE healthy=%u skipped_invalid=%llu copy_failures=%llu pooled_idle_bytes=%llu buffer_allocations=%llu buffer_reuses=%llu",unsigned(t.healthy),t.skippedInvalid,t.copyFailures,pool.bytes,pool.allocations,pool.reuses);
+            Log("PT_PRIMARY_CAPTURE healthy=%u failure=%s skipped_invalid=%llu copy_failures=%llu copy_failure=%s pooled_idle_bytes=%llu buffer_allocations=%llu buffer_reuses=%llu",unsigned(t.healthy),t.failure,t.skippedInvalid,t.copyFailures,PTSceneLive::owner.Resources().GeometryFailure(),pool.bytes,pool.allocations,pool.reuses);
             Log("PT_PRIMARY_CPU submissions=%llu builds=%llu build_total_ms=%llu build_max_ms=%llu checkpoints=%llu checkpoint_total_ms=%llu checkpoint_max_ms=%llu blocking_checkpoint_waits=0",sequence,t.builds.calls,t.builds.totalMs,t.builds.maxMs,t.checkpoints.calls,t.checkpoints.totalMs,t.checkpoints.maxMs);}
         PollMetrics();Output::Poll();
     }catch(...){Reject("retirement_exception");}
@@ -342,6 +357,7 @@ static const PTSceneQueues::Consumer queueConsumer{&handoff,&Submitting,&Selecte
 static const PTCommandBindings::Consumer commandConsumer{&handoff,&Dispatched,&Drawing,&Drawn};
 static bool Start(){
     if(active||!device||!enabled||!PTNativeJobRuntime::workerHooksReady||!PTNativeJobRuntime::dispatchHookReady)return false;
+    if(!viewProviders.Initialize(verifiedRenderer,verifiedD3d)){Log("PT_PRIMARY_PROVIDER_INIT_FAILED");return false;}
     char sha[65]{};bool loaded=false;
     if(!PTReflectionLoadSidecar(L"pt_primary_path.dxil","PRIMARY_PATH",library,sha,loaded))return false;
     pendingMetrics.reserve(8);
@@ -350,6 +366,6 @@ static bool Start(){
     if(FAILED(device->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&sceneUseFence))))return false;
     if(!PTSceneQueues::Start(&PTSceneLive::owner.Scenes())||!PTSceneQueues::Register(&PTSceneLive::owner.Scenes(),&queueConsumer)||
        !PTCommandBindings::Register(&commandConsumer)||!PTNativeJobRuntime::Register(&Job)||!PTSceneLive::owner.Start(step,true))return false;
-    active=true;Log("PT_PRIMARY_SESSION_READY build=M12R2 ready=1 hits=4 spp=1 material=opaque_general geometric_normals=1 native_fallback=1");return true;
+    active=true;Log("PT_PRIMARY_SESSION_READY build=M12R3 ready=1 hits=4 spp=1 material=opaque_general geometric_normals=1 native_fallback=1");return true;
 }
 }

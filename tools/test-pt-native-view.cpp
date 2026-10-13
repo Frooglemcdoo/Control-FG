@@ -17,5 +17,10 @@ int main(){
     b=a;Write(b,32,std::numeric_limits<float>::quiet_NaN());assert(!b.Decode()&&b.failureOffset==32);
     b=a;Write(b,32,0);assert(!b.Decode());b=a;Write(b,224,0);assert(!b.Decode());
     b=a;std::memset(b.bytes.data()+1112,0,4);assert(!b.Decode());
+    b=a;b.bound=a.bytes;b.pass=PTNativeView::Pass::surface;
+    auto raw=a.bytes;raw[32]^=1;assert(b.MatchesBound(raw));raw[96]^=1;assert(!b.MatchesBound(raw));
+    b.pass=PTNativeView::Pass::primary;raw=a.bytes;raw[32]^=1;assert(b.MatchesBound(raw));raw[224]^=1;assert(!b.MatchesBound(raw));
+    raw=a.bytes;raw[1112]^=1;assert(!b.MatchesBound(raw));
+    b=a;b.engineFrame=123;assert(!a.Same(b));
     puts("PASS: inverse render extents, unused fields ignored, frame/camera changes and missing transforms rejected");
 }

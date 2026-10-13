@@ -13,6 +13,8 @@
 #include "pt_scene_dispatch.h"
 #include "pt_surface_output.h"
 #include "pt_native_view.h"
+#include <intrin.h>
+#include "pt_view_providers.h"
 #include "pt_native_uploads.h"
 #include "pt_primary_metrics.h"
 #include <intrin.h>

@@ -3,6 +3,7 @@
 #include "pt_scene_order.h"
 #include <memory>
 #include <mutex>
+#include <atomic>
 // Immutable recording snapshots joined to queue execution order. Allocation
 // identities are captured by the host while observing the native build. This
 // catalog never interprets CPU recording order as GPU execution order.
@@ -31,7 +32,9 @@ class Catalog {
     std::map<U64,U64> cuts;
     U64 serial=0;
     std::size_t recordedOperations=0,rows=0;
-    bool valid=true;
+    std::atomic<bool> valid{true};
+    const char* failure="none";
+    void Fail(const char* reason){if(valid.exchange(false))failure=reason;}
     static constexpr std::size_t MaximumLists=256,MaximumOperations=65536,MaximumRows=1048576;
     static bool Equal(Key a,Key b){return a.token==b.token&&a.address==b.address;}
     static bool Known(const Allocation& a){return a.key.token&&a.key.address&&a.bytes;}
@@ -54,7 +57,7 @@ public:
     // a newly created list must also call Begin. IDs belong to object lifetimes.
     U64 Begin(U64 list){
         std::lock_guard<std::mutex> guard(mutex);
-        if(!valid||!list||(!recordings.count(list)&&recordings.size()>=MaximumLists)){valid=false;return 0;}
+        if(!valid||!list||(!recordings.count(list)&&recordings.size()>=MaximumLists)){Fail("recording_limit");return 0;}
         auto& r=recordings[list];
         recordedOperations-=r.operations.size();
         for(const auto& op:r.operations){
@@ -87,7 +90,7 @@ public:
         }
         if(!admitted){snapshot.kind=Snapshot::Kind::unknown;snapshot.geometry.clear();snapshot.instances.clear();snapshot.bottom.clear();}
         const auto count=Rows(snapshot);
-        if(recordedOperations>=MaximumOperations||count>MaximumRows-rows){valid=false;return false;}
+        if(recordedOperations>=MaximumOperations||count>MaximumRows-rows){Fail("recording_rows_limit");return false;}
         rows+=count;++recordedOperations;
         r->second.operations.push_back({std::make_shared<const Snapshot>(std::move(snapshot)),0});return true;
     }
@@ -103,23 +106,23 @@ public:
         std::set<U64> unique;
         // Validate the entire submission before exposing any of its operations.
         for(const auto& item:lists){const auto r=recordings.find(item.first);
-            if(r==recordings.end()||r->second.generation!=item.second||r->second.submitted||!unique.insert(item.first).second){valid=false;return false;}
+            if(r==recordings.end()||r->second.generation!=item.second||r->second.submitted||!unique.insert(item.first).second){Fail("submission_generation_or_replay");return false;}
         }
         for(const auto& item:lists){auto& r=recordings[item.first];r.submitted=true;
             for(const auto& op:r.operations){
-                if(op.ticket){const auto cut=graph.Mark(queue);if(!cut){valid=false;return false;}auto selected=cuts.find(op.ticket);if(selected!=cuts.end())selected->second=cut;continue;}
-                const auto before=graph.Mark(queue);if(!before){valid=false;return false;}
+                if(op.ticket){const auto cut=graph.Mark(queue);if(!cut){Fail("graph_capacity");return false;}auto selected=cuts.find(op.ticket);if(selected!=cuts.end())selected->second=cut;continue;}
+                const auto before=graph.Mark(queue);if(!before){Fail("graph_capacity");return false;}
                 const U64 version=op.snapshot->kind==Snapshot::Kind::unknown?0:++serial;
                 if(version)versions.emplace(version,Version{op.snapshot,before});
-                if(!graph.Write(queue,op.snapshot->destination.key,version)){valid=false;return false;}
+                if(!graph.Write(queue,op.snapshot->destination.key,version)){Fail("graph_write");return false;}
                 if(!version)rows-=Rows(*op.snapshot);
             }
             recordedOperations-=r.operations.size();r.operations.clear();
         }
         return true;
     }
-    bool Signal(U64 queue,U64 fence,U64 value){std::lock_guard<std::mutex> guard(mutex);if(!valid)return false;return valid=graph.Signal(queue,fence,value)!=0;}
-    bool Wait(U64 queue,U64 fence,U64 value){std::lock_guard<std::mutex> guard(mutex);if(!valid)return false;return valid=graph.Wait(queue,fence,value)!=0;}
+    bool Signal(U64 queue,U64 fence,U64 value){std::lock_guard<std::mutex> guard(mutex);if(!valid)return false;if(!graph.Signal(queue,fence,value)){Fail("graph_signal");return false;}return true;}
+    bool Wait(U64 queue,U64 fence,U64 value){std::lock_guard<std::mutex> guard(mutex);if(!valid)return false;if(!graph.Wait(queue,fence,value)){Fail("graph_wait");return false;}return true;}
     bool CanDrain()const {
         std::lock_guard<std::mutex> guard(mutex);if(!valid)return false;
         for(const auto& c:cuts)if(c.second)return false;
@@ -152,8 +155,9 @@ public:
         versions=std::move(retained);rows=retainedRows;return true;
     }
     void Forget(U64 ticket){std::lock_guard<std::mutex> guard(mutex);cuts.erase(ticket);}
-    bool Healthy()const {std::lock_guard<std::mutex> guard(mutex);return valid;}
-    void Invalidate(){std::lock_guard<std::mutex> guard(mutex);valid=false;}
+    bool Healthy()const {return valid.load(std::memory_order_acquire);}
+    const char* Failure()const {std::lock_guard<std::mutex> guard(mutex);return failure;}
+    void Invalidate(const char* reason="external"){std::lock_guard<std::mutex> guard(mutex);Fail(reason);}
     Status Scene(U64 ticket,Allocation selected,PTSceneDispatch::Scene& output)const {
         output={};std::lock_guard<std::mutex> guard(mutex);if(!valid)return Status::invalid;
         const auto c=cuts.find(ticket);if(c==cuts.end())return Status::missing;if(!c->second)return Status::pending;
