@@ -173,12 +173,16 @@ struct Consumer {
     void (*drawing)(void*,ID3D12GraphicsCommandList*) noexcept=nullptr;
     void (*drawn)(void*,ID3D12GraphicsCommandList*) noexcept=nullptr;
     void (*pipeline)(void*,ID3D12GraphicsCommandList*,ID3D12PipelineState*) noexcept=nullptr;
+    bool computeOnly=false;
 };
 inline std::atomic<const Consumer*> consumer{nullptr};
 inline bool Register(const Consumer* client){
-    if(!client||!client->context||bool(client->drawing)!=bool(client->drawn))return false;
+    if(!client||!client->context||bool(client->drawing)!=bool(client->drawn)||(client->computeOnly&&(client->drawing||client->drawn)))return false;
     const Consumer* empty=nullptr;return consumer.compare_exchange_strong(empty,client,std::memory_order_release);
 }
+// A registered consumer is immutable for the session. Early installations
+// retain forwarding hooks, but no longer collect unused graphics arguments.
+inline bool GraphicsRequired(){const auto client=consumer.load(std::memory_order_acquire);return !client||!client->computeOnly;}
 inline std::mutex hookMutex;
 inline std::map<void**,Methods> methods;
 inline bool installed=true;
@@ -204,19 +208,19 @@ inline void STDMETHODCALLTYPE HeapsHook(ID3D12GraphicsCommandList* l,UINT n,ID3D
 }
 template<bool Graphics> inline void STDMETHODCALLTYPE RootHook(ID3D12GraphicsCommandList* l,ID3D12RootSignature* r){
     const auto original=Original(l);Mute mute;(Graphics?original.graphicsRoot:original.computeRoot)(l,r);const DWORD error=GetLastError();
-    if(mute.outer)Observe([&]{tracker.Root(l,r,Graphics);});SetLastError(error);
+    if(mute.outer&&(!Graphics||GraphicsRequired()))Observe([&]{tracker.Root(l,r,Graphics);});SetLastError(error);
 }
 template<bool Graphics> inline void STDMETHODCALLTYPE TableHook(ID3D12GraphicsCommandList* l,UINT n,D3D12_GPU_DESCRIPTOR_HANDLE h){
     const auto original=Original(l);Mute mute;(Graphics?original.graphicsTable:original.computeTable)(l,n,h);const DWORD error=GetLastError();
-    if(mute.outer)Observe([&]{tracker.ArgumentValue(l,n,ArgumentKind::table,h.ptr,Graphics);});SetLastError(error);
+    if(mute.outer&&(!Graphics||GraphicsRequired()))Observe([&]{tracker.ArgumentValue(l,n,ArgumentKind::table,h.ptr,Graphics);});SetLastError(error);
 }
 template<bool Graphics> inline void STDMETHODCALLTYPE ConstantHook(ID3D12GraphicsCommandList* l,UINT n,D3D12_GPU_VIRTUAL_ADDRESS v){
     const auto original=Original(l);Mute mute;(Graphics?original.graphicsConstant:original.computeConstant)(l,n,v);const DWORD error=GetLastError();
-    if(mute.outer)Observe([&]{tracker.ArgumentValue(l,n,ArgumentKind::constant,v,Graphics);});SetLastError(error);
+    if(mute.outer&&(!Graphics||GraphicsRequired()))Observe([&]{tracker.ArgumentValue(l,n,ArgumentKind::constant,v,Graphics);});SetLastError(error);
 }
 inline void STDMETHODCALLTYPE BarriersHook(ID3D12GraphicsCommandList* l,UINT count,const D3D12_RESOURCE_BARRIER* barriers){
     const auto original=Original(l);Mute mute;original.barriers(l,count,barriers);const DWORD error=GetLastError();
-    if(mute.outer)Observe([&]{if(!tracker.Watch(l)){tracker.Fail();return;}tracker.Barriers(l,count,barriers);});SetLastError(error);
+    if(mute.outer)Observe([&]{tracker.Barriers(l,count,barriers);});SetLastError(error);
 }
 inline void STDMETHODCALLTYPE DispatchHook(ID3D12GraphicsCommandList* l,UINT x,UINT y,UINT z){
     const auto original=Original(l);Mute mute;original.dispatch(l,x,y,z);const DWORD error=GetLastError();
@@ -253,7 +257,13 @@ inline bool WatchInterface(ID3D12GraphicsCommandList* list){
     void* const after[]={reinterpret_cast<void*>(&ResetHook),reinterpret_cast<void*>(&PipelineHook),reinterpret_cast<void*>(&HeapsHook),reinterpret_cast<void*>(&RootHook<false>),reinterpret_cast<void*>(&RootHook<true>),
         reinterpret_cast<void*>(&TableHook<false>),reinterpret_cast<void*>(&TableHook<true>),reinterpret_cast<void*>(&ConstantHook<false>),reinterpret_cast<void*>(&ConstantHook<true>),
         reinterpret_cast<void*>(&DispatchHook),reinterpret_cast<void*>(&DrawHook),reinterpret_cast<void*>(&DrawIndexedHook),reinterpret_cast<void*>(&BarriersHook)};
-    for(UINT n=0;n<13;++n)if(!Patch(table+slots[n],before[n],after[n])){installed=false;tracker.Fail();return false;}
+    const bool graphics=GraphicsRequired();
+    for(UINT n=0;n<13;++n){
+        // The direct light-buffer route consumes compute state only. Leave
+        // native graphics root setters and draws completely unhooked.
+        if(!graphics&&(slots[n]==30||slots[n]==32||slots[n]==38||slots[n]==12||slots[n]==13))continue;
+        if(!Patch(table+slots[n],before[n],after[n])){installed=false;tracker.Fail();return false;}
+    }
     return true;
 }
 inline bool Watch(ID3D12GraphicsCommandList* list){

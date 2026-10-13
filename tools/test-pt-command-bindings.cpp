@@ -46,8 +46,30 @@ static void TestForwarding(){
     SetLastError(0x444);list->DrawIndexedInstanced(3,4,5,-7,6);assert(f->phase==3&&f->nested==2&&GetLastError()==0x555);
     PTCommandBindings::consumer.store(nullptr);
 }
+static void TestComputeOnlyHooks(){
+    auto* f=new ForwardingFixture();f->table=f->slots;
+    f->slots[0]=reinterpret_cast<void*>(&ForwardingFixture::Query);f->slots[1]=f->slots[2]=reinterpret_cast<void*>(&ForwardingFixture::Ref);
+    f->slots[12]=reinterpret_cast<void*>(&ForwardingFixture::Draw);f->slots[13]=reinterpret_cast<void*>(&ForwardingFixture::Indexed);f->slots[14]=reinterpret_cast<void*>(&ForwardingFixture::Dispatch);
+    // Sentinel graphics setters must remain untouched; they are never called.
+    for(UINT slot:{30u,32u,38u})f->slots[slot]=reinterpret_cast<void*>(&ForwardingFixture::Ref);
+    PTCommandBindings::Consumer invalid{f,&ForwardingFixture::Dispatched,&ForwardingFixture::Drawing,&ForwardingFixture::Drawn,nullptr,true};
+    assert(!PTCommandBindings::Register(&invalid));
+    PTCommandBindings::Consumer compute{f,&ForwardingFixture::Dispatched,nullptr,nullptr,nullptr,true};
+    assert(PTCommandBindings::Register(&compute));
+    auto* list=reinterpret_cast<ID3D12GraphicsCommandList*>(f);assert(PTCommandBindings::Watch(list));
+    assert(f->slots[12]==reinterpret_cast<void*>(&ForwardingFixture::Draw));
+    assert(f->slots[13]==reinterpret_cast<void*>(&ForwardingFixture::Indexed));
+    for(UINT slot:{30u,32u,38u})assert(f->slots[slot]==reinterpret_cast<void*>(&ForwardingFixture::Ref));
+    assert(f->slots[29]==reinterpret_cast<void*>(&PTCommandBindings::RootHook<false>));
+    assert(f->slots[31]==reinterpret_cast<void*>(&PTCommandBindings::TableHook<false>));
+    assert(f->slots[37]==reinterpret_cast<void*>(&PTCommandBindings::ConstantHook<false>));
+    assert(f->slots[26]==reinterpret_cast<void*>(&PTCommandBindings::BarriersHook));
+    list->Dispatch(7,8,9);assert(f->phase==3&&GetLastError()==0x555);
+    PTCommandBindings::consumer.store(nullptr);
+}
 int main(){
     TestForwarding();
+    TestComputeOnlyHooks();
     ComPtr<IDXGIFactory4> factory;ComPtr<IDXGIAdapter> adapter;ComPtr<ID3D12Device> device;
     assert(SUCCEEDED(CreateDXGIFactory1(IID_PPV_ARGS(&factory))));assert(SUCCEEDED(factory->EnumWarpAdapter(IID_PPV_ARGS(&adapter))));
     assert(SUCCEEDED(D3D12CreateDevice(adapter.Get(),D3D_FEATURE_LEVEL_11_0,IID_PPV_ARGS(&device))));

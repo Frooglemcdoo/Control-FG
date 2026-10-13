@@ -220,12 +220,11 @@ public:
         PTSceneDispatch::Plan candidate;
         const auto checked=PTSceneDispatch::Prepare(selected,scene,table,index,exports,candidate);
         if(checked.status!=PTSceneDispatch::Status::prepared){if(failure)*failure=checked;return false;}
-        std::map<U64,const Entry*> tokens;for(const auto& owner:owners)tokens.emplace(owner.second.token,&owner.second);
         auto payload=std::make_unique<LeaseBatch::Payload>();payload->budget=leaseBudget;
         U64 bytes=0;
         for(const auto token:candidate.allocationTokens){
-            const auto found=tokens.find(token);if(found==tokens.end())return false;
-            const auto& entry=*found->second;
+            const auto found=wrappers.find(token);if(found==wrappers.end())return false;
+            const auto& entry=owners.at(found->second);
             if(entry.bytes>UINT64_MAX-bytes)return false;
             bytes+=entry.bytes;payload->resources.push_back(entry.resource);
         }
