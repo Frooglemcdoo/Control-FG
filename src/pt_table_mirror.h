@@ -37,6 +37,17 @@ class Bank {
     std::map<SIZE_T,std::shared_ptr<Heap>> heaps;
     UINT slots=0,step=0;
     std::uint64_t version=1;
+    std::map<SIZE_T,DXGI_FORMAT> uavFormats;
+    std::map<DXGI_FORMAT,bool> readableFormats;
+    void CopyFormats(UINT count,SIZE_T destination,SIZE_T source){
+        const SIZE_T bytes=SIZE_T(count)*step;if(source+bytes<source||destination+bytes<destination)return;
+        std::vector<std::pair<SIZE_T,DXGI_FORMAT>> copied;
+        for(auto it=uavFormats.lower_bound(source);it!=uavFormats.end()&&it->first-source<bytes;++it)
+            copied.emplace_back(destination+(it->first-source),it->second);
+        auto first=uavFormats.lower_bound(destination),last=uavFormats.lower_bound(destination+bytes);uavFormats.erase(first,last);
+        if(uavFormats.size()+copied.size()>65536){uavFormats.clear();return;}
+        for(const auto& entry:copied)uavFormats.insert(entry);
+    }
     std::shared_ptr<Heap> Find(SIZE_T address){
         auto it=heaps.upper_bound(address);if(it==heaps.begin())return {};--it;auto h=it->second;
         if(address<h->begin||(address-h->begin)%h->step||(address-h->begin)/h->step>=h->count)return {};return h;
@@ -64,7 +75,7 @@ class Bank {
         for(UINT n=0;n<count;++n){h.seen[first+n]=true;h.versions[first+n]=stamp;}
     }
 public:
-    void Invalidate(){std::lock_guard<std::recursive_mutex> lock(gate);for(auto& entry:heaps)std::fill(entry.second->seen.begin(),entry.second->seen.end(),false);}
+    void Invalidate(){std::lock_guard<std::recursive_mutex> lock(gate);uavFormats.clear();for(auto& entry:heaps)std::fill(entry.second->seen.begin(),entry.second->seen.end(),false);}
     struct Snapshot {
         ComPtr<ID3D12DescriptorHeap> native,descriptors;
         UINT first=0,step=0;
@@ -88,6 +99,7 @@ public:
     }
     void Copy(UINT count,D3D12_CPU_DESCRIPTOR_HANDLE destination,D3D12_CPU_DESCRIPTOR_HANDLE source){
         std::lock_guard<std::recursive_mutex> lock(gate);if(privateWrites||!count||!device||!source.ptr)return;
+        CopyFormats(count,destination.ptr,source.ptr);
         // A bulk native copy can begin in the material prefix and cross into the
         // fixed 49-slot tables. Clip only the mirrored destination portion.
         const SIZE_T end=destination.ptr+SIZE_T(count)*step;if(end<destination.ptr)return;
@@ -111,16 +123,36 @@ public:
         }
     }
     void Constant(const D3D12_CONSTANT_BUFFER_VIEW_DESC* desc,D3D12_CPU_DESCRIPTOR_HANDLE destination){
-        std::lock_guard<std::recursive_mutex> lock(gate);if(privateWrites)return;auto h=Find(destination.ptr);if(!h)return;
+        std::lock_guard<std::recursive_mutex> lock(gate);if(privateWrites)return;uavFormats.erase(destination.ptr);auto h=Find(destination.ptr);if(!h)return;
         const UINT index=static_cast<UINT>((destination.ptr-h->begin)/h->step);Mute mute;device->CreateConstantBufferView(desc,At(*h,index));Mark(*h,index,1);
     }
     void ShaderResource(ID3D12Resource* resource,const D3D12_SHADER_RESOURCE_VIEW_DESC* desc,D3D12_CPU_DESCRIPTOR_HANDLE destination){
-        std::lock_guard<std::recursive_mutex> lock(gate);if(privateWrites)return;auto h=Find(destination.ptr);if(!h)return;
+        std::lock_guard<std::recursive_mutex> lock(gate);if(privateWrites)return;uavFormats.erase(destination.ptr);auto h=Find(destination.ptr);if(!h)return;
         const UINT index=static_cast<UINT>((destination.ptr-h->begin)/h->step);Mute mute;device->CreateShaderResourceView(resource,desc,At(*h,index));Mark(*h,index,1);
     }
     void UnorderedAccess(ID3D12Resource* resource,ID3D12Resource* counter,const D3D12_UNORDERED_ACCESS_VIEW_DESC* desc,D3D12_CPU_DESCRIPTOR_HANDLE destination){
-        std::lock_guard<std::recursive_mutex> lock(gate);if(privateWrites)return;auto h=Find(destination.ptr);if(!h)return;
+        std::lock_guard<std::recursive_mutex> lock(gate);if(privateWrites)return;
+        uavFormats.erase(destination.ptr);
+        if(resource&&!counter){const auto rd=resource->GetDesc();
+            if(rd.Dimension==D3D12_RESOURCE_DIMENSION_TEXTURE2D&&rd.DepthOrArraySize==1&&
+               (!desc||desc->ViewDimension==D3D12_UAV_DIMENSION_TEXTURE2D)){
+                if(uavFormats.size()>=65536)uavFormats.clear();
+                uavFormats[destination.ptr]=desc?desc->Format:rd.Format;
+            }
+        }
+        auto h=Find(destination.ptr);if(!h)return;
         const UINT index=static_cast<UINT>((destination.ptr-h->begin)/h->step);Mute mute;device->CreateUnorderedAccessView(resource,counter,desc,At(*h,index));Mark(*h,index,1);
+    }
+    bool TypedLoadSupported(const Snapshot& snapshot,UINT slot){
+        std::lock_guard<std::recursive_mutex> lock(gate);
+        if(!device||!snapshot.native||slot>=49||!Unchanged(snapshot))return false;
+        const SIZE_T address=snapshot.native->GetCPUDescriptorHandleForHeapStart().ptr+SIZE_T(snapshot.first+slot)*step;
+        const auto format=uavFormats.find(address);if(format==uavFormats.end()||format->second==DXGI_FORMAT_UNKNOWN)return false;
+        const auto known=readableFormats.find(format->second);if(known!=readableFormats.end())return known->second;
+        D3D12_FEATURE_DATA_FORMAT_SUPPORT support{};support.Format=format->second;
+        const bool supported=SUCCEEDED(device->CheckFeatureSupport(D3D12_FEATURE_FORMAT_SUPPORT,&support,sizeof(support)))&&
+            (support.Support2&D3D12_FORMAT_SUPPORT2_UAV_TYPED_LOAD)!=0;
+        readableFormats.emplace(format->second,supported);return supported;
     }
     bool Read(ID3D12DescriptorHeap* native,UINT first,std::uint64_t required,Snapshot& output){
         output={};std::lock_guard<std::recursive_mutex> lock(gate);

@@ -27,6 +27,21 @@ int main(){
     const auto gpu=[&](UINT n){auto h=native->GetGPUDescriptorHandleForHeapStart();h.ptr+=UINT64(n)*step;return h;};
     PTTableMirror::Bank bank;assert(bank.HeapCreated(device.Get(),native.Get()));assert(!bank.HeapCreated(device.Get(),native.Get()));
     PTTableMirror::Bank::Snapshot oldSnapshot,newSnapshot,refreshed;assert(!bank.Read(native.Get(),prefix,mask,oldSnapshot));
+    // Track the exact typed UAV format through CPU-source and native copies.
+    D3D12_RESOURCE_DESC image{};image.Dimension=D3D12_RESOURCE_DIMENSION_TEXTURE2D;image.Width=8;image.Height=1;
+    image.DepthOrArraySize=image.MipLevels=1;image.SampleDesc.Count=1;image.Format=DXGI_FORMAT_R32G32B32A32_FLOAT;image.Flags=D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+    D3D12_HEAP_PROPERTIES imageHeap{};imageHeap.Type=D3D12_HEAP_TYPE_DEFAULT;ComPtr<ID3D12Resource> imageResource;
+    assert(SUCCEEDED(device->CreateCommittedResource(&imageHeap,D3D12_HEAP_FLAG_NONE,&image,D3D12_RESOURCE_STATE_UNORDERED_ACCESS,nullptr,IID_PPV_ARGS(&imageResource))));
+    D3D12_UNORDERED_ACCESS_VIEW_DESC imageView{};imageView.Format=image.Format;imageView.ViewDimension=D3D12_UAV_DIMENSION_TEXTURE2D;
+    device->CreateUnorderedAccessView(imageResource.Get(),nullptr,&imageView,source(3));
+    bank.UnorderedAccess(imageResource.Get(),nullptr,&imageView,source(3));
+    device->CopyDescriptorsSimple(1,destination(prefix+42),source(3),D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+    bank.Copy(1,destination(prefix+42),source(3));PTTableMirror::Bank::Snapshot typed;
+    assert(bank.Read(native.Get(),prefix,1ull<<42,typed)&&bank.TypedLoadSupported(typed,42));
+    // Overwriting the CPU source must not change a previously copied descriptor.
+    bank.Constant(nullptr,source(3));assert(bank.TypedLoadSupported(typed,42));
+    bank.Copy(1,destination(prefix+42),source(3));
+    assert(bank.Read(native.Get(),prefix,1ull<<42,typed)&&!bank.TypedLoadSupported(typed,42));
     std::array<UINT,128> constants{};constants[0]=constants[64]=11;constants[65]=1;
     const UINT valueA=42,valueB=100;
     auto a=Buffer(device.Get(),4,D3D12_HEAP_TYPE_UPLOAD,D3D12_RESOURCE_STATE_GENERIC_READ,&valueA);

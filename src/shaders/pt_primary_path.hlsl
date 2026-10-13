@@ -1,7 +1,7 @@
 // Private full-surface path producer for the reviewed primary lighting pass.
 // Host supplies an immutable scene/SBT, cloned primary table, same-frame native
-// environment at t34 and TLAS at t35. Validated standard-output pixels replace
-// the native light-buffer pair. Never bind to a native 4-byte payload state object.
+// environment at t34 and TLAS at t35. Validated standard-output pixels add
+// diffuse-first indirect transport to the native specular buffer. Never bind to a native 4-byte payload state object.
 #define PT_GEOMETRY_SPAWN 1
 #define PT_SCENE_MATERIAL_REGISTER t8
 #include "pt_scene_hits.hlsl"
@@ -9,6 +9,7 @@
 #include "pt_native_primary_lights.hlsli"
 #define PT_PATH_PRIMARY_DECODE 1
 #define PT_PATH_PRIMARY_FILL 1
+#define PT_PATH_PRIMARY_INDIRECT 1
 #include "pt_path_integrator.hlsli"
 #include "pt_primary_commit.hlsli"
 cbuffer PTPrimarySystem : register(b0) { float4 PTSystem[71]; };
@@ -16,10 +17,6 @@ Texture2D<float4> PTGBuffer1 : register(t0);
 Texture2D<float4> PTGBuffer2 : register(t1);
 Texture2D<float4> PTClipDepth : register(t3);
 StructuredBuffer<uint2> PTMaterialFlags : register(t7);
-// Exact native g_tFillSpecular input. It includes reflection transport that
-// this opaque diffuse-bounce adapter cannot yet replace (notably glass).
-Texture2D<float4> PTNativeFillSpecular : register(t20);
-SamplerState PTNativeFillSampler : register(s6,space1);
 TextureCube<float4> PTEnvironment : register(t34);
 SamplerState PTEnvironmentSampler : register(s10,space1);
 RaytracingAccelerationStructure PTScene : register(t35);
@@ -36,8 +33,8 @@ PTPathSurface PTDecodeSurface(PTSceneHit hit,RayDesc ray,bool primary){
     s.spawnOrigin=safeSpawnPoint(s.position,s.normal,hit.spawnOffset);
     uint count,stride;PTMaterialFlags.GetDimensions(count,stride);
     if(stride!=8||hit.material>=count){s.decodeFault=11;return s;} // lobes==0 rejects the whole path.
-    uint packed=PTMaterialFlags[hit.material].x;
-    if((packed&255)!=0){s.decodeFault=12;return s;} // Cloth/hair/special BRDFs stay native.
+    uint2 flags=PTMaterialFlags[hit.material];uint packed=flags.x;
+    if((packed&255)!=0||(flags.y&65535u)!=0){s.decodeFault=12;return s;} // Special BRDFs and translucency/scattering stay native.
     PTNativeMaterial m=PTMaterials[hit.material];uint base=hit.material*35;
     float3 color=asfloat(uint3(m.words[13],m.words[14],m.words[15]))*
         PTTextures[NonUniformResourceIndex(base)].SampleLevel(PTLinearWrap,hit.uv,0).rgb;
@@ -99,7 +96,6 @@ void PTPrimaryPathRayGeneration(){
     uint width,height,g2w,g2h,zw,zh;PTGBuffer1.GetDimensions(width,height);PTGBuffer2.GetDimensions(g2w,g2h);PTClipDepth.GetDimensions(zw,zh);
     if(any(uint2(width,height)!=DispatchRaysDimensions().xy)||width!=g2w||height!=g2h||width!=zw||height!=zh||
        !all(isfinite(PTSystem[0].zw))||any(PTSystem[0].zw<=0)||
-       !all(isfinite(PTSystem[1].zw))||any(PTSystem[1].zw<=0)||
        any(abs(PTSystem[0].zw*float2(width,height)-1)>1e-6))return;
     PTMeasure(1,pixel);
     float depth=PTClipDepth.Load(int3(pixel,0)).x;
@@ -123,12 +119,10 @@ void PTPrimaryPathRayGeneration(){
     // Keep the first two continuations before roulette to reduce reflection variance.
     PTPathResult result=PTIntegratePathFirst(ray,4,3,seed,.001,first,1,0);
     PTMeasure(5,pixel);
-    // Match native sample_l coordinates and sampler exactly. This is a separate
-    // native specular contribution, never a PT bounce or an invented environment.
-    float3 fill=PTNativeFillSpecular.SampleLevel(PTNativeFillSampler,(float2(pixel)+.5)*PTSystem[1].zw,0).rgb;
+    // Native direct lighting and specular fill remain in their original buffers.
+    // The integrator excludes first-hit direct/emission and specular continuation.
     if(result.valid!=0&&all(isfinite(result.radiance))&&all(result.radiance>=0)){
-        if(admission==2){if(all(isfinite(fill))&&all(fill>=0))PTMeasure(6,pixel);}
-        else if(PTCommitPrimaryWithFill(pixel,uint2(width,height),result.radiance,fill,admission))PTMeasure(6,pixel);
+        if(admission==2||PTCommitIndirect(pixel,uint2(width,height),result.radiance,admission))PTMeasure(6,pixel);
     }
     else {PTMeasure(7,pixel);if(((pixel.x|pixel.y)&63)==0){uint old;PTMetrics.InterlockedAdd(36+4*min(result.fault,15u),1,old);}}
 }

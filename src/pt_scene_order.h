@@ -36,9 +36,11 @@ class Graph {
     mutable std::vector<Clock> clocks;
     mutable std::vector<unsigned char> clockState;
     mutable bool clockDirty=true,clockCycle=false;
+    mutable std::array<bool,2> fenceOrderKnown{};
+    mutable std::array<Status,2> fenceOrder{};
     Status ClockAt(U64 at)const {
         if(!valid||!at||at>=nodes.size())return Status::invalid;
-        if(clockDirty){clocks.assign(nodes.size(),{});clockState.assign(nodes.size(),0);clockDirty=false;clockCycle=false;}
+        if(clockDirty){clocks.assign(nodes.size(),{});clockState.assign(nodes.size(),0);clockDirty=false;clockCycle=false;fenceOrderKnown={};}
         if(clockCycle)return Status::invalid;
         if(clockState[at]>=2)return clockState[at]==2?Status::ready:Status::pending;
         std::vector<std::pair<U64,bool>> todo{{at,false}};
@@ -289,14 +291,22 @@ public:
             const auto status=ClockAt(id);if(!usable(status))return report(status,"scene_competing_write_pending");
             if(!Before(dispatch,id))return report(state==Status::pending||status==Status::pending?Status::pending:Status::unordered,"scene_competing_write_pending");
         }
-        // Increasing CPU fence values alone do not prove a queue handoff.
+        // The fence sequence check is independent of the selected allocation.
+        // Cache only for this exact graph revision and admission purpose.
+        const unsigned purposeIndex=preview?1u:0u;
+        if(!fenceOrderKnown[purposeIndex]){
+        Status order=Status::ready;
         for(const auto& fence:fences){U64 previous=0;
             for(const auto& signal:fence.second.signals){
-                if(previous&&!KnownBefore(previous,signal.second)){const auto status=ClockAt(signal.second);if(!usable(status))return report(status,"scene_fence_order_pending");
-                    if(!Before(previous,signal.second))return report(status==Status::pending?Status::pending:Status::unordered,"scene_fence_order_pending");}
+                if(previous&&!KnownBefore(previous,signal.second)){const auto status=ClockAt(signal.second);if(!usable(status)){order=status;break;}
+                    if(!Before(previous,signal.second)){order=status==Status::pending?Status::pending:Status::unordered;break;}}
                 previous=signal.second;
             }
+            if(order!=Status::ready)break;
         }
+        fenceOrder[purposeIndex]=order;fenceOrderKnown[purposeIndex]=true;
+        }
+        if(fenceOrder[purposeIndex]!=Status::ready)return report(fenceOrder[purposeIndex],"scene_fence_order_pending");
         std::set<U64> maximal;
         for(const U64 id:writes){
             if(!Before(id,dispatch))continue;

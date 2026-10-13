@@ -54,7 +54,11 @@ PTPathResult PTIntegratePathFirst(RayDesc ray,uint maxHits,uint rouletteStart,ui
         if(wo.z<=0){path.valid=0;result.fault=5;break;}
         if(depth!=0||includePrimaryEmission!=0)path=PTAccumulate(path,surface.emission);
         PTDirectSample light;uint visibility;
-        if(PTPathLight(surface,rng,light,visibility)) {
+        bool sampleDirect=true;
+#ifdef PT_PATH_PRIMARY_INDIRECT
+        sampleDirect=depth!=0||useFirst==0;
+#endif
+        if(sampleDirect&&PTPathLight(surface,rng,light,visibility)) {
             if(light.delta!=1||visibility>1){path.valid=0;result.fault=visibility==3?14:6;break;}
             light.wi=float3(dot(light.wi,tangent),dot(light.wi,bitangent),dot(light.wi,n));
             PTDirectResult direct=PTEvaluateDirect(surface.material,wo,light,visibility);

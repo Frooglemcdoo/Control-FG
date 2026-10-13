@@ -256,10 +256,11 @@ static void Dispatched(void*,ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT 
         static UINT64 lightSnapshots=0;if(++lightSnapshots<=8||lightSnapshots%240==0){UINT totals[3]{};float scale=0;
             std::memcpy(totals,a->lightConstants.data()+256,12);std::memcpy(&scale,a->lightConstants.data()+244,4);
             Log("PT_PRIMARY_LIGHTS frame=%u points=%u spots=%u suns=%u environment=%.9g source=authenticated_provider",view.frame,totals[0],totals[1],totals[2],scale);}
-        // t0,t1,t3,t7,t8,t10,t14,t15,t17,t18,t20. Private t34/t35/u7 follow.
-        constexpr UINT64 required=(1ull<<5)|(1ull<<6)|(1ull<<8)|(1ull<<12)|(1ull<<13)|(1ull<<15)|(1ull<<19)|(1ull<<20)|(1ull<<22)|(1ull<<23)|(1ull<<25)|(1ull<<41)|(1ull<<42);
+        // t0,t1,t3,t7,t8,t10,t14,t15,t17,t18 and native outputs.
+        constexpr UINT64 required=(1ull<<5)|(1ull<<6)|(1ull<<8)|(1ull<<12)|(1ull<<13)|(1ull<<15)|(1ull<<19)|(1ull<<20)|(1ull<<22)|(1ull<<23)|(1ull<<41)|(1ull<<42);
         if(!PTTableMirror::bank.Read(bindings.resources.Get(),context.table.first,required,a->primary)||
            !PTTableMirror::bank.Unchanged(environment->table)||!Fresh(context,&a->privateTable)||!Disjoint(a->privateTable,context.table.first)){Reject("primary_descriptor_allocation");return;}
+        if(!PTTableMirror::bank.TypedLoadSupported(a->primary,42)){Reject("native_specular_typed_load_unproven");return;}
         auto& pipeline=privatePipelines[bindings.layout->Root()];
         if(!pipeline){
             if(privatePipelines.size()>8){Reject("pipeline_budget");return;}ComPtr<ID3D12Device5> rayDevice;
@@ -578,6 +579,6 @@ static bool Start(){
     if(FAILED(device->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&sceneUseFence))))return false;
     if(!PTSceneQueues::Start(&PTSceneLive::owner.Scenes())||!PTSceneQueues::Register(&PTSceneLive::owner.Scenes(),&queueConsumer)||
        !PTCommandBindings::Register(&commandConsumer)||!PTNativeJobRuntime::Register(&Job)||!PTSceneLive::owner.Start(step,true))return false;
-    active=true;Log("PT_PRIMARY_SESSION_READY build=M12R30 ready=1 hits=4 spp=1 roulette_start=3 material=opaque_general geometric_normals=1 native_fallback=1 primary_specular=native_fill diffuse_bounces=pt readiness=per_material");return true;
+    active=true;Log("PT_PRIMARY_SESSION_READY build=M12R31 ready=1 hits=4 spp=1 roulette_start=3 material=opaque_general geometric_normals=1 native_fallback=1 primary_lighting=native diffuse_bounces=pt_indirect readiness=per_material");return true;
 }
 }

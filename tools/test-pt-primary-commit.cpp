@@ -58,8 +58,8 @@ int main(){
     void* data=nullptr;D3D12_RANGE read{0,1024};assert(SUCCEEDED(readback->Map(0,&read,&data)));
     for(UINT i=0;i<2;++i){const auto* values=reinterpret_cast<const float*>(static_cast<const unsigned char*>(data)+512*i);
         for(UINT x=0;x<16;++x)for(UINT c=0;c<4;++c){const float initial[]={2,3,4,2},pt[]={.25f,.5f,.75f,.25f};
-            const bool committed=x==3||x==6||x==7||x==11;const float fill[]={1,2,4,1};
-            const float expected=!committed?initial[c]:(i==0||x==6?0:x==11?fill[c]:pt[c]+(x==7?fill[c]:0));assert(values[x*4+c]==expected);}}
+            const bool committed=x==3||x==7;const float expected=initial[c]+(committed&&i==1?pt[c]:0);assert(values[x*4+c]==expected);}}
+
     const D3D12_RANGE noWrite{};readback->Unmap(0,&noWrite);assert(SUCCEEDED(device->GetDeviceRemovedReason()));
-    puts("PASS: native light-buffer commit, RGBR encoding, rejected/probe/invalid/dimension fallback zero radiance, native fill preservation, invalid fill and overflow");
+    puts("PASS: indirect addition preserves native diffuse/direct/specular; invalid and zero samples leave native output intact");
 }

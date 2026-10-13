@@ -56,3 +56,8 @@ assert instructions[pos]['operands']==['r[3].xyz','r[0].zwzz','t[20][20].xyzw','
 assert instructions[pos-1]['operands']==['r[0].zw','r[0].zzzw','cb[0][0][1].zzzw']
 assert instructions[pos+1]['name']=='add' and instructions[pos+1]['operands']==['r[2].xyzw','r[2].xyzw','r[3].xyzx']
 print('PASS: native specular fill uses t20, s6 space1, pixel-center inverse-output UV and one radiance addition.')
+
+material=next(c for c in active['constant_buffers'] if c['name']=='g_sbMaterialDataPart1')
+fields=material['variables'][0]['type']['members']
+assert any(f['name']=='uScatterIndex_vTranslucencyDepthRange' and f['byte_offset']==4 for f in fields)
+print('PASS: material translucency range occupies the second material word; unsupported scattering retains native shading.')
