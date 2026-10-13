@@ -40,7 +40,7 @@ for name,expected in locked.items():
  # retain the original S1 hashes for all enabled-mode runtime code.
  if name=='src/probe.cpp':
   startup='// Read once before any PT installation, including early device creation.\n// This is a restart-only diagnostic; never tear down in-flight PT ownership.\nstatic bool PTStartupCaptureEnabled() {\n    static const bool enabled=[](){\n        const DWORD error=GetLastError();auto path=ModulePath(selfModule);\n        const auto slash=path.find_last_of(L"\\\\/");\n        if(slash==std::wstring::npos){SetLastError(error);return true;}\n        path.resize(slash+1);path+=L"ControlFG-PT-Capture-Off.txt";\n        const DWORD attributes=GetFileAttributesW(path.c_str());\n        const bool disabled=attributes!=INVALID_FILE_ATTRIBUTES&&!(attributes&FILE_ATTRIBUTE_DIRECTORY);\n        SetLastError(error);return !disabled;\n    }();\n    return enabled;\n}\n\n'
-  setup='        const bool ptCaptureEnabled=PTStartupCaptureEnabled();\n        Log("PT_PRIMARY_STARTUP build=M12R39 capture=%u restart_only=1 rr_fg_available=1",unsigned(ptCaptureEnabled));\n        const unsigned int rrObserverHooks = ptCaptureEnabled?InstallRRObservationHooks(renderer,d3d):0;'
+  setup='        const bool ptCaptureEnabled=PTStartupCaptureEnabled();\n        Log("PT_PRIMARY_STARTUP build=M12R40 capture=%u restart_only=1 rr_fg_available=1",unsigned(ptCaptureEnabled));\n        const unsigned int rrObserverHooks = ptCaptureEnabled?InstallRRObservationHooks(renderer,d3d):0;'
   assert source.count(startup)==1 and source.count(setup)==1
   source=source.replace(startup,'').replace(setup,'        const unsigned int rrObserverHooks = InstallRRObservationHooks(renderer,d3d);')
  if name=='src/pt_reflection_loader.h':

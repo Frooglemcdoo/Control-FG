@@ -83,6 +83,26 @@ int main(){
     assert(bank.Read(native.Get(),prefix,(1ull<<43)|(1ull<<44),bulkTyped));
     assert(!bank.TypedLoadSupported(bulkTyped,43)&&!bank.TypedLoadSupported(bulkTyped,44));
     puts("PASS: 4145 fragmented sources clipped to 49 mirrored descriptors in one batch; typed-UAV metadata invalidation");
+    const auto copyOne=[&]{device->CopyDescriptorsSimple(1,destination(prefix+5),source(0),hd.Type);bank.Copy(1,destination(prefix+5),source(0));};
+    copyOne();PTTableMirror::Bank::Snapshot stable;assert(bank.Read(native.Get(),prefix,mask,stable));
+    const auto beforeRepeat=bank.Statistics();
+    for(UINT n=0;n<1024;++n)copyOne();
+    const auto afterRepeat=bank.Statistics();
+    assert(afterRepeat.single==beforeRepeat.single&&afterRepeat.redundant==beforeRepeat.redundant+1024);
+    assert(bank.Unchanged(stable));
+    // Reuse the SAME source handle with a different resource. Address-only
+    // deduplication would leave the old value in the mirrored table.
+    device->CreateShaderResourceView(b.Get(),&srv,source(0));bank.ShaderResource(b.Get(),&srv,source(0));
+    copyOne();assert(bank.Statistics().single==afterRepeat.single+1&&!bank.Unchanged(stable));
+    PTTableMirror::Bank::Snapshot rewritten;assert(bank.Read(native.Get(),prefix,mask,rewritten));
+    // Both simple and multi-range CPU destination copies revoke source proof.
+    device->CopyDescriptorsSimple(1,source(0),source(2),hd.Type);bank.Copy(1,source(0),source(2));
+    copyOne();assert(bank.Statistics().single==afterRepeat.single+2);
+    bank.Copy({{source(0),1}},{{source(2),1}});copyOne();assert(bank.Statistics().single==afterRepeat.single+3);
+    // A heap creation notification at a reused range must revoke old tags.
+    assert(!bank.HeapCreated(device.Get(),cpu.Get()));copyOne();assert(bank.Statistics().single==afterRepeat.single+4);
+    assert(bank.Read(native.Get(),prefix,mask,oldSnapshot));
+    puts("PASS: 1024 repeated copies skipped; same-address source rewrite, CPU copies and heap generation force fresh mirrors");
     assert(bank.Read(native.Get(),prefix,mask,refreshed));auto* retainedCpu=refreshed.descriptors.Get();
     device->CreateShaderResourceView(b.Get(),&srv,source(2));assert(bank.Unchanged(oldSnapshot)); // CPU source changed; native table did not.
     device->CreateShaderResourceView(b.Get(),&srv,destination(prefix+5));bank.ShaderResource(b.Get(),&srv,destination(prefix+5));
@@ -94,6 +114,7 @@ int main(){
         PTTableMirror::Mute privateWrites;
         device->CopyDescriptorsSimple(49,destination(prefix+49),oldSnapshot.At(0),hd.Type);bank.Copy(49,destination(prefix+49),oldSnapshot.At(0));
         device->CopyDescriptorsSimple(49,destination(prefix+98),refreshed.At(0),hd.Type);bank.Copy(49,destination(prefix+98),refreshed.At(0));
+        device->CopyDescriptorsSimple(1,destination(prefix+98+5),rewritten.At(5),hd.Type);
     }
     PTTableMirror::Bank::Snapshot excluded;assert(!bank.Read(native.Get(),prefix+49,mask,excluded));
     bank.Invalidate();assert(!bank.Refresh(refreshed));assert(!bank.Unchanged(newSnapshot));assert(!bank.Read(native.Get(),prefix,mask,excluded));

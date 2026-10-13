@@ -32,14 +32,30 @@ class Bank {
         SIZE_T begin=0;
         UINT count=0,step=0;
         std::vector<bool> seen;
-        std::vector<std::uint64_t> versions;
+        std::vector<std::uint64_t> versions,sourceTokens;
     };
     ComPtr<ID3D12Device> device;
     ComPtr<ID3D12DescriptorHeap> defaults;
     std::map<SIZE_T,std::shared_ptr<Heap>> heaps;
     UINT slots=0,step=0;
     std::uint64_t version=1;
-    std::uint64_t singleCopies=0,batchCopies=0,mirroredDescriptors=0;
+    std::uint64_t singleCopies=0,batchCopies=0,mirroredDescriptors=0,redundantCopies=0;
+    std::uint64_t nextSourceToken=1;
+    std::map<SIZE_T,std::uint64_t> sourceTokens;
+    void SourceWritten(SIZE_T first,UINT count){
+        if(!step||!count)return;
+        if(count>(SIZE_MAX-first)/step){sourceTokens.clear();return;}
+        sourceTokens.erase(sourceTokens.lower_bound(first),sourceTokens.lower_bound(first+SIZE_T(count)*step));
+    }
+    std::uint64_t SourceToken(SIZE_T address){
+        const auto known=sourceTokens.find(address);if(known!=sourceTokens.end())return known->second;
+        // Unknown sources are captured immediately before assigning a token.
+        // Every later observed write erases that token. Capacity eviction uses
+        // fresh monotonically increasing tokens, never recycled generations.
+        if(nextSourceToken==UINT64_MAX)return 0;
+        if(sourceTokens.size()>=65536)sourceTokens.clear();
+        const auto token=nextSourceToken++;sourceTokens.emplace(address,token);return token;
+    }
     std::map<SIZE_T,DXGI_FORMAT> uavFormats;
     std::map<DXGI_FORMAT,bool> readableFormats;
     void CopyFormats(UINT count,SIZE_T destination,SIZE_T source){
@@ -75,10 +91,11 @@ class Bank {
     void Mark(Heap& h,UINT first,UINT count){
         if(version==UINT64_MAX){for(auto& entry:heaps)std::fill(entry.second->seen.begin(),entry.second->seen.end(),false);return;}
         const auto stamp=version++;
-        for(UINT n=0;n<count;++n){h.seen[first+n]=true;h.versions[first+n]=stamp;}
+        SourceWritten(At(h,first).ptr,count);
+        for(UINT n=0;n<count;++n){h.seen[first+n]=true;h.versions[first+n]=stamp;h.sourceTokens[first+n]=0;}
     }
 public:
-    void Invalidate(){std::lock_guard<std::recursive_mutex> lock(gate);uavFormats.clear();for(auto& entry:heaps)std::fill(entry.second->seen.begin(),entry.second->seen.end(),false);}
+    void Invalidate(){std::lock_guard<std::recursive_mutex> lock(gate);sourceTokens.clear();uavFormats.clear();for(auto& entry:heaps)std::fill(entry.second->seen.begin(),entry.second->seen.end(),false);}
     struct Snapshot {
         ComPtr<ID3D12DescriptorHeap> native,descriptors;
         UINT first=0,step=0;
@@ -91,6 +108,8 @@ public:
     bool HeapCreated(ID3D12Device* d,ID3D12DescriptorHeap* native){
         std::lock_guard<std::recursive_mutex> lock(gate);if(!native||privateWrites)return false;
         const auto desc=native->GetDesc();
+        // CPU heap address reuse must invalidate cached source identities too.
+        if(desc.Type==D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV)SourceWritten(native->GetCPUDescriptorHandleForHeapStart().ptr,desc.NumDescriptors);
         if(desc.Type!=D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV||!(desc.Flags&D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE)||
            desc.NumDescriptors<Prefix+49||desc.NumDescriptors-Prefix>MaximumSlots-slots||heaps.size()>=16||!Initialize(d))return false;
         const SIZE_T base=native->GetCPUDescriptorHandleForHeapStart().ptr+SIZE_T(Prefix)*step;
@@ -98,10 +117,22 @@ public:
         if(FAILED(native->QueryInterface(IID_PPV_ARGS(&h->identity))))return false;
         D3D12_DESCRIPTOR_HEAP_DESC hd{};hd.Type=desc.Type;hd.NumDescriptors=h->count;Mute mute;
         if(FAILED(d->CreateDescriptorHeap(&hd,IID_PPV_ARGS(&h->shadow))))return false;
-        h->seen.resize(h->count,false);h->versions.resize(h->count,0);slots+=h->count;heaps.emplace(base,std::move(h));return true;
+        h->seen.resize(h->count,false);h->versions.resize(h->count,0);h->sourceTokens.resize(h->count,0);slots+=h->count;heaps.emplace(base,std::move(h));return true;
     }
     void Copy(UINT count,D3D12_CPU_DESCRIPTOR_HANDLE destination,D3D12_CPU_DESCRIPTOR_HANDLE source){
         std::lock_guard<std::recursive_mutex> lock(gate);if(privateWrites||!count||!device||!source.ptr)return;
+        SourceWritten(destination.ptr,count);
+        if(count==1){
+            auto h=Find(destination.ptr);
+            if(h){
+                const UINT index=static_cast<UINT>((destination.ptr-h->begin)/step);
+                const auto token=SourceToken(source.ptr);
+                if(token&&h->seen[index]&&h->sourceTokens[index]==token){++redundantCopies;return;}
+                CopyFormats(1,destination.ptr,source.ptr);Mute mute;
+                device->CopyDescriptorsSimple(1,At(*h,index),source,D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+                ++singleCopies;++mirroredDescriptors;Mark(*h,index,1);h->sourceTokens[index]=token;return;
+            }
+        }
         CopyFormats(count,destination.ptr,source.ptr);
         // A bulk native copy can begin in the material prefix and cross into the
         // fixed 49-slot tables. Clip only the mirrored destination portion.
@@ -115,14 +146,15 @@ public:
             ++singleCopies;mirroredDescriptors+=n;Mark(h,index,n);
         }
     }
-    struct CopyStats {std::uint64_t single,batch,descriptors;};
-    CopyStats Statistics(){std::lock_guard<std::recursive_mutex> lock(gate);return {singleCopies,batchCopies,mirroredDescriptors};}
+    struct CopyStats {std::uint64_t single,batch,descriptors,redundant;};
+    CopyStats Statistics(){std::lock_guard<std::recursive_mutex> lock(gate);return {singleCopies,batchCopies,mirroredDescriptors,redundantCopies};}
     void Copy(const std::vector<Range>& destinations,const std::vector<Range>& sources){
         std::lock_guard<std::recursive_mutex> lock(gate);if(privateWrites||!device)return;
         std::uint64_t a=0,b=0;
         for(const auto& r:destinations){if(r.count>(SIZE_MAX-r.first.ptr)/step){Invalidate();return;}a+=r.count;}
         for(const auto& r:sources){if(r.count>(SIZE_MAX-r.first.ptr)/step){Invalidate();return;}b+=r.count;}
         if(a!=b||a>1048576){Invalidate();return;}
+        for(const auto& r:destinations)SourceWritten(r.first.ptr,r.count);
         // Preserve sparse typed-UAV metadata as ONE transaction. The old path
         // allocated a temporary vector and repeatedly searched destination
         // heaps for every single source range, including the bindless prefix.
@@ -180,16 +212,16 @@ public:
         }
     }
     void Constant(const D3D12_CONSTANT_BUFFER_VIEW_DESC* desc,D3D12_CPU_DESCRIPTOR_HANDLE destination){
-        std::lock_guard<std::recursive_mutex> lock(gate);if(privateWrites)return;uavFormats.erase(destination.ptr);auto h=Find(destination.ptr);if(!h)return;
+        std::lock_guard<std::recursive_mutex> lock(gate);if(privateWrites)return;SourceWritten(destination.ptr,1);uavFormats.erase(destination.ptr);auto h=Find(destination.ptr);if(!h)return;
         const UINT index=static_cast<UINT>((destination.ptr-h->begin)/h->step);Mute mute;device->CreateConstantBufferView(desc,At(*h,index));Mark(*h,index,1);
     }
     void ShaderResource(ID3D12Resource* resource,const D3D12_SHADER_RESOURCE_VIEW_DESC* desc,D3D12_CPU_DESCRIPTOR_HANDLE destination){
-        std::lock_guard<std::recursive_mutex> lock(gate);if(privateWrites)return;uavFormats.erase(destination.ptr);auto h=Find(destination.ptr);if(!h)return;
+        std::lock_guard<std::recursive_mutex> lock(gate);if(privateWrites)return;SourceWritten(destination.ptr,1);uavFormats.erase(destination.ptr);auto h=Find(destination.ptr);if(!h)return;
         const UINT index=static_cast<UINT>((destination.ptr-h->begin)/h->step);Mute mute;device->CreateShaderResourceView(resource,desc,At(*h,index));Mark(*h,index,1);
     }
     void UnorderedAccess(ID3D12Resource* resource,ID3D12Resource* counter,const D3D12_UNORDERED_ACCESS_VIEW_DESC* desc,D3D12_CPU_DESCRIPTOR_HANDLE destination){
         std::lock_guard<std::recursive_mutex> lock(gate);if(privateWrites)return;
-        uavFormats.erase(destination.ptr);
+        SourceWritten(destination.ptr,1);uavFormats.erase(destination.ptr);
         if(resource&&!counter){const auto rd=resource->GetDesc();
             if(rd.Dimension==D3D12_RESOURCE_DIMENSION_TEXTURE2D&&rd.DepthOrArraySize==1&&
                (!desc||desc->ViewDimension==D3D12_UAV_DIMENSION_TEXTURE2D)){
@@ -221,6 +253,7 @@ public:
         Snapshot result;result.native=native;result.first=first;result.step=step;result.required=required;
         D3D12_DESCRIPTOR_HEAP_DESC hd{};hd.Type=D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;hd.NumDescriptors=49;Mute mute;
         if(FAILED(device->CreateDescriptorHeap(&hd,IID_PPV_ARGS(&result.descriptors))))return false;
+        SourceWritten(result.At(0).ptr,49);
         device->CopyDescriptorsSimple(49,result.At(0),defaults->GetCPUDescriptorHandleForHeapStart(),hd.Type);
         for(UINT n=0;n<49;){if(!h->seen[index+n]){++n;continue;}const UINT start=n;
             while(n<49&&h->seen[index+n]){result.versions[n]=h->versions[index+n];++n;}
@@ -238,6 +271,7 @@ public:
         ComPtr<IUnknown> identity;if(FAILED(snapshot.native.As(&identity))||identity.Get()!=h->identity.Get())return false;
         const UINT index=snapshot.first-Prefix;if(index>h->count||49>h->count-index)return false;
         for(UINT n=0;n<49;++n)if((snapshot.required&(1ull<<n))&&!h->seen[index+n])return false;
+        SourceWritten(snapshot.At(0).ptr,49);
         Mute mute;device->CopyDescriptorsSimple(49,snapshot.At(0),defaults->GetCPUDescriptorHandleForHeapStart(),D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
         snapshot.versions={};
         for(UINT n=0;n<49;){if(!h->seen[index+n]){++n;continue;}const UINT first=n;

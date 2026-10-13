@@ -541,7 +541,7 @@ static void Submitted(void*,ID3D12CommandQueue* queue,UINT count,ID3D12CommandLi
             Log("PT_PRIMARY_COPY_TOTAL copied_bytes=%llu whole_index_bytes=%llu",owners.geometryCopyBytes,owners.geometryWholeIndexBytes);
             Log("PT_PRIMARY_CPU submissions=%llu builds=%llu build_total_ms=%llu build_max_ms=%llu checkpoints=%llu checkpoint_total_ms=%llu checkpoint_max_ms=%llu blocking_checkpoint_waits=0",sequence,t.builds.calls,t.builds.totalMs,t.builds.maxMs,t.checkpoints.calls,t.checkpoints.totalMs,t.checkpoints.maxMs);
             const auto mirror=PTTableMirror::bank.Statistics();
-            Log("PT_PRIMARY_MIRROR_COPY single_calls=%llu batch_calls=%llu descriptors=%llu",mirror.single,mirror.batch,mirror.descriptors);
+            Log("PT_PRIMARY_MIRROR_COPY single_calls=%llu batch_calls=%llu descriptors=%llu redundant_skipped=%llu",mirror.single,mirror.batch,mirror.descriptors,mirror.redundant);
             Log("PT_PRIMARY_PROGRESS signals=%llu skipped=%llu interval=64",t.progressSignals,t.progressSkipped);
             LARGE_INTEGER frequency{};QueryPerformanceFrequency(&frequency);const double ms=1000.0/static_cast<double>(frequency.QuadPart);
             for(unsigned kind=0;kind<static_cast<unsigned>(PTHotpathTiming::Kind::count);++kind){
@@ -595,6 +595,6 @@ static bool Start(){
     if(FAILED(device->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&sceneUseFence))))return false;
     if(!PTSceneQueues::Start(&PTSceneLive::owner.Scenes())||!PTSceneQueues::Register(&PTSceneLive::owner.Scenes(),&queueConsumer)||
        !PTCommandBindings::Register(&commandConsumer)||!PTNativeJobRuntime::Register(&Job)||!PTSceneLive::owner.Start(step,true))return false;
-    active=true;Log("PT_PRIMARY_SESSION_READY build=M12R39 ready=1 hits=4 spp=1 roulette_start=3 material=opaque_general geometric_normals=1 native_fallback=1 primary_lighting=native diffuse_bounces=pt_indirect readiness=per_material graphics_tracking=0");return true;
+    active=true;Log("PT_PRIMARY_SESSION_READY build=M12R40 ready=1 hits=4 spp=1 roulette_start=3 material=opaque_general geometric_normals=1 native_fallback=1 primary_lighting=native diffuse_bounces=pt_indirect readiness=per_material graphics_tracking=0");return true;
 }
 }
