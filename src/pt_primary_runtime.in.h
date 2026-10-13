@@ -8,6 +8,7 @@ using Output=PTSurfaceComposition::Output;
 static PTSceneHandoff::Runtime handoff{PTSceneLive::owner};
 static std::atomic<bool> active{false};
 static bool transportValidated=false;
+static unsigned transportGoodFrames=0;
 static std::recursive_mutex mutex;
 static std::vector<unsigned char> library;
 static PTNativeView::Providers viewProviders;
@@ -73,6 +74,7 @@ static std::vector<std::shared_ptr<Environment>> environments;
 struct Assets {
     PTPrimaryMetrics::Counters metrics;
     ComPtr<ID3D12Resource> camera;View boundView;
+    std::array<unsigned char,416> boundLights{},lightConstants{};
     Bindings bindings;Table primary;std::shared_ptr<Environment> environment;
     PTOwnedScene::LeaseBatch scene;
     std::shared_ptr<const PTSceneHandoff::Prepared> proof;
@@ -106,13 +108,17 @@ static void PollMetrics(){
             f.deferred=false;f.cancelled=true;PTSceneLive::owner.Scenes().Forget(f.assets->ticket);
         }
         std::array<UINT,8> counts{};const bool good=f.assets&&f.assets->metrics.Read(counts);
-        if(good&&f.armed&&f.assets->probe&&counts[6]){transportValidated=true;Log("PT_PRIMARY_TRANSPORT_READY frame=%u covered=%u",f.view.frame,counts[6]);}
-        if(good&&f.armed&&counts[5]&&!counts[6])transportValidated=false;
+        if(good&&f.armed&&counts[5]){
+            const bool healthy=counts[6]>=counts[5]-counts[5]/20; // >=95%, including unsupported BRDFs.
+            if(!healthy){transportGoodFrames=0;transportValidated=false;}
+            else if(f.assets->probe&&!transportValidated&&++transportGoodFrames>=3){
+                transportValidated=true;Log("PT_PRIMARY_TRANSPORT_READY frame=%u covered=%u stable_frames=%u",f.view.frame,counts[6],transportGoodFrames);}
+        }
         static UINT64 samples=0;const auto n=++samples;
-        if(n<=8||n%240==0)Log("PT_PRIMARY_GPU frame=%u readback=%u armed=%u sampled=%u dimensions=%u primary_hit=%u material_match=%u depth_match=%u integrated=%u covered=%u fault=%u probe=%u sparse_step=16",f.view.frame,unsigned(good),unsigned(f.armed),counts[0],counts[1],counts[2],counts[3],counts[4],counts[5],counts[6],counts[7],unsigned(f.assets->probe));
+        if(n<=8||n%240==0)Log("PT_PRIMARY_GPU frame=%u readback=%u armed=%u sampled=%u dimensions=%u primary_hit=%u material_match=%u depth_match=%u integrated=%u covered=%u fault=%u probe=%u sparse_step=64",f.view.frame,unsigned(good),unsigned(f.armed),counts[0],counts[1],counts[2],counts[3],counts[4],counts[5],counts[6],counts[7],unsigned(f.assets->probe));
         if(good&&counts[7]){std::array<UINT,16> faults{};
             if(f.assets->metrics.ReadFaults(faults)&&(n<=8||n%240==0))
-                Log("PT_PRIMARY_FAULTS frame=%u probe=%u input=%u hit=%u material=%u normal=%u facing=%u light=%u direct=%u sample=%u spawn=%u radiance=%u material_bounds=%u brdf=%u material_values=%u",f.view.frame,unsigned(f.assets->probe),faults[1],faults[2],faults[3],faults[4],faults[5],faults[6],faults[7],faults[8],faults[9],faults[10],faults[11],faults[12],faults[13]);
+                Log("PT_PRIMARY_FAULTS frame=%u probe=%u input=%u hit=%u material=%u normal=%u facing=%u light=%u direct=%u sample=%u spawn=%u radiance=%u material_bounds=%u brdf=%u material_values=%u native_light=%u",f.view.frame,unsigned(f.assets->probe),faults[1],faults[2],faults[3],faults[4],faults[5],faults[6],faults[7],faults[8],faults[9],faults[10],faults[11],faults[12],faults[13],faults[14]);
         }
         it=pendingMetrics.erase(it);
     }
@@ -128,7 +134,7 @@ static std::shared_ptr<Frame> FrameFor(const View& view,ID3D12CommandQueue* queu
     }
     if(frames.size()>=8)return {};
     auto f=std::make_shared<Frame>();f->view=view;f->queue=queue;
-    if(FAILED(Output::Create(queue,view.width,view.height,f->output)))return {};
+    if(FAILED(Output::Create(queue,view.width,view.height,f->output,true)))return {};
     frames.push_back(f);return f;
 }
 static D3D12_CPU_DESCRIPTOR_HANDLE Cpu(const PTGlass::DescriptorRange& range,UINT slot=0){
@@ -145,8 +151,10 @@ static bool Encode(void* context,ID3D12GraphicsCommandList* list,ID3D12Resource*
     auto counter=Gpu(a.privateTable);counter.ptr+=47ull*device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
     a.metrics.Begin(list,counter);
     list->SetComputeRootConstantBufferView(2,a.camera->GetGPUVirtualAddress());
+    list->SetComputeRootConstantBufferView(4,a.camera->GetGPUVirtualAddress()+1280);
     const bool recorded=a.dispatch->Record(rays.Get(),a.bindings.layout->Root(),a.bindings.pipeline.Get(),{a.bindings.arguments[0].value},Gpu(a.privateTable));
     list->SetComputeRootConstantBufferView(2,a.bindings.arguments[2].value);
+    list->SetComputeRootConstantBufferView(4,a.bindings.arguments[4].value);
     a.metrics.End(list);return recorded;
 }
 static void Job(PTNativeJobRuntime::Phase phase,const PTNativeJobRoute::Ticket& ticket) noexcept {
@@ -229,6 +237,12 @@ static void Dispatched(void*,ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT 
         auto* recording=RecordingFor(list);
         if(!recording||recording->submitted){Reject("frame_budget_or_duplicate");return;}
         auto a=std::make_shared<Assets>();a->bindings=bindings;a->boundView=view;a->environment=environment;a->engineFrame=candidate->ticket.engineFrame;a->probe=!transportValidated;
+        if((!PTNativeView::uploads.Read(bindings.arguments[4].value,a->boundLights.data(),a->boundLights.size())&&
+            !PTSceneLive::owner.Resources().ReadUpload(bindings.arguments[4].value,a->boundLights.data(),a->boundLights.size()))||
+            !viewProviders.ReadLights(view,a->boundLights,a->lightConstants)){Reject("light_provider_snapshot");return;}
+        static UINT64 lightSnapshots=0;if(++lightSnapshots<=8||lightSnapshots%240==0){UINT totals[3]{};float scale=0;
+            std::memcpy(totals,a->lightConstants.data()+256,12);std::memcpy(&scale,a->lightConstants.data()+244,4);
+            Log("PT_PRIMARY_LIGHTS frame=%u points=%u spots=%u suns=%u environment=%.9g source=authenticated_provider",view.frame,totals[0],totals[1],totals[2],scale);}
         // t0,t1,t3,t7,t8,t10,t14,t15,t17,t18. Private t34/t35/u7 are installed below.
         constexpr UINT64 required=(1ull<<5)|(1ull<<6)|(1ull<<8)|(1ull<<12)|(1ull<<13)|(1ull<<15)|(1ull<<19)|(1ull<<20)|(1ull<<22)|(1ull<<23);
         if(!PTTableMirror::bank.Read(bindings.resources.Get(),context.table.first,required,a->primary)||
@@ -260,12 +274,13 @@ static void Dispatched(void*,ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT 
         if(!Fresh(context,&frame->surfaceTables,49*64)){Reject("surface_table_reservation");return;}
         if(FAILED(PTScenePipeline::Dispatch::Create(device.Get(),pipeline,plan,view.width,view.height,bindings.resources.Get(),a->dispatch))){Reject("private_sbt");return;}
         D3D12_HEAP_PROPERTIES cameraHeap{};cameraHeap.Type=D3D12_HEAP_TYPE_UPLOAD;
-        D3D12_RESOURCE_DESC cameraDesc{};cameraDesc.Dimension=D3D12_RESOURCE_DIMENSION_BUFFER;cameraDesc.Width=1280;
+        D3D12_RESOURCE_DESC cameraDesc{};cameraDesc.Dimension=D3D12_RESOURCE_DIMENSION_BUFFER;cameraDesc.Width=1792;
         cameraDesc.Height=1;cameraDesc.DepthOrArraySize=cameraDesc.MipLevels=1;cameraDesc.SampleDesc.Count=1;cameraDesc.Layout=D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
         if(FAILED(device->CreateCommittedResource(&cameraHeap,D3D12_HEAP_FLAG_NONE,&cameraDesc,D3D12_RESOURCE_STATE_GENERIC_READ,nullptr,IID_PPV_ARGS(&a->camera)))){Reject("camera_upload");return;}
         void* cameraData=nullptr;const D3D12_RANGE noRead{};
         if(FAILED(a->camera->Map(0,&noRead,&cameraData))||!cameraData){Reject("camera_map");return;}
-        std::memcpy(cameraData,view.bytes.data(),view.bytes.size());a->camera->Unmap(0,nullptr);
+        std::memcpy(cameraData,view.bytes.data(),view.bytes.size());
+        std::memcpy(static_cast<unsigned char*>(cameraData)+1280,a->lightConstants.data(),a->lightConstants.size());a->camera->Unmap(0,nullptr);
         if(!a->metrics.Initialize(device.Get())){Reject("coverage_allocation");return;}
         device->CopyDescriptorsSimple(49,Cpu(a->privateTable),a->primary.At(0),D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
         device->CopyDescriptorsSimple(1,Cpu(a->privateTable,47),a->metrics.Uav(),D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
@@ -366,10 +381,21 @@ static void Submitting(void*,ID3D12CommandQueue* queue,UINT count,ID3D12CommandL
         handoff.Submitting(count,lists);
     }catch(...){PTSceneLive::owner.Scenes().Invalidate();}
 }
+static bool SameLights(const Assets& a){
+    std::array<unsigned char,416> current{};
+    if(!PTNativeView::uploads.Read(a.bindings.arguments[4].value,current.data(),current.size())&&
+       !PTSceneLive::owner.Resources().ReadUpload(a.bindings.arguments[4].value,current.data(),current.size()))return false;
+    // Actual b2 reads of both native primary shader variants, as decoded from
+    // their instruction streams. Unrequested point/spot/ambient lanes are absent.
+    return !std::memcmp(current.data()+160,a.boundLights.data()+160,12)&&
+        !std::memcmp(current.data()+192,a.boundLights.data()+192,12)&&
+        !std::memcmp(current.data()+216,a.boundLights.data()+216,16)&&
+        !std::memcmp(current.data()+264,a.boundLights.data()+264,4);
+}
 static bool InputsUnchanged(const std::shared_ptr<Frame>& frame){
     const auto& a=frame->assets;
     return !frame->cancelled&&ptReflectionUserState.load()==1u&&a&&a->environment->submitted&&
-        SameView(a->bindings.arguments[2].value,a->boundView)&&PTTableMirror::bank.Unchanged(a->primary)&&
+        SameView(a->bindings.arguments[2].value,a->boundView)&&SameLights(*a)&&PTTableMirror::bank.Unchanged(a->primary)&&
         PTTableMirror::bank.Unchanged(a->environment->table);
 }
 static void CancelFrame(const std::shared_ptr<Frame>& frame,ID3D12CommandQueue* queue){
@@ -532,6 +558,6 @@ static bool Start(){
     if(FAILED(device->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&sceneUseFence))))return false;
     if(!PTSceneQueues::Start(&PTSceneLive::owner.Scenes())||!PTSceneQueues::Register(&PTSceneLive::owner.Scenes(),&queueConsumer)||
        !PTCommandBindings::Register(&commandConsumer)||!PTNativeJobRuntime::Register(&Job)||!PTSceneLive::owner.Start(step,true))return false;
-    active=true;Log("PT_PRIMARY_SESSION_READY build=M12R25 ready=1 hits=4 spp=1 material=opaque_general geometric_normals=1 native_fallback=1");return true;
+    active=true;Log("PT_PRIMARY_SESSION_READY build=M12R26 ready=1 hits=4 spp=1 material=opaque_general geometric_normals=1 native_fallback=1");return true;
 }
 }

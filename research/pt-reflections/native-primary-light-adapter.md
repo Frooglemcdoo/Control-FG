@@ -10,7 +10,9 @@ its safe spawn point, and evaluate the BSDF with the returned selection PDF.
 | Input | Primary binding | Evidence |
 | --- | --- | --- |
 | Light constants | b2 | RDEF `deferredlight_constants`, 416 bytes |
-| Point/spot/sun totals | b2 bytes 256/260/264 | RDEF fields and DWORD 514 sun-count load |
+| Point/spot totals | private b2 bytes 256/260 | Authenticated engine providers; native primary CBV lanes are unused |
+| Sun total | b2 byte 264 | RDEF used flag and DWORD 514 sun-count load; provider must match bound value |
+| Environment intensity | private b2 byte 244 | Authenticated engine provider; native primary CBV lane is unused |
 | Point records | t10 | 160-byte structured elements |
 | Spot records | t15 | 320-byte structured elements |
 | Sun records | t18 | 576-byte structured elements |
@@ -49,3 +51,9 @@ nonfinite and count-overrun cases. This proves shader execution against those
 fixtures, not live native descriptor capture or lighting/material parity in game.
 The native primary pass/root bindings and traced-visibility caller still need to
 be connected before the renderer can use this adapter.
+
+M12R26 correction: RDEF declarations alone do not prove CBV population. Both
+bee42ac... and a9e5b544... mark point/spot totals and ambient intensity unused.
+The host now completes those values from named, hash-gated providers, verifies
+the current camera/frame and sun count, snapshots b2 in the retained camera
+upload at offset 1280, and restores root parameter 4 after DispatchRays.

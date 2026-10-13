@@ -30,6 +30,15 @@ assert [b for b in old['bindings'] if b['name'] != 'g_rwtSingleSpot'] == active[
 extra = [b for b in old['bindings'] if b['name'] == 'g_rwtSingleSpot']
 assert len(extra) == 1 and extra[0]['kind'] == 4 and extra[0]['slot'] == 2
 for shader in decoded:
+    light_cb = next(c for c in shader['constant_buffers'] if c['name']=='deferredlight_constants')
+    fields = {v['name']:v for v in light_cb['variables']}
+    for name, offset in (('g_uPointLightTotalCount',256),('g_uSpotLightTotalCount',260),
+                         ('g_fAmbientEnvSpecularIntensityOnOpaque',244)):
+        assert fields[name]['offset']==offset and fields[name]['size']==4
+        assert not fields[name]['flags']&2, 'These lanes need providers, not native CBV reads'
+    assert fields['g_uSunLightTotalCount']['offset']==264 and fields['g_uSunLightTotalCount']['flags']&2
+    used = {(v['offset'],v['size']) for v in light_cb['variables'] if v['flags']&2}
+    assert used=={(160,8),(168,4),(192,12),(216,8),(224,4),(228,4),(264,4)}
     groups = [i['operands'] for i in shader['instructions'] if i['name'] == 'dcl_thread_group']
     assert groups == [['raw:0x8,0x8,0x1']]
 print('PASS: both captured shaders match exact profiles; all consumed bindings, constant layouts and 8x8 groups agree.')

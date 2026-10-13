@@ -5,6 +5,7 @@
 #include <memory>
 #include <mutex>
 #include <cstdint>
+#include <vector>
 // One immutable frame/view output. Native draw recordings and their submitted
 // leases must both retain this owner. Never recycle by frame count or resize an
 // output still referenced by a recorded list. All GPU use is on the pinned queue.
@@ -28,10 +29,19 @@ class Output {
         ~Storage(){residentBytes.fetch_sub(budget);}
         UINT increment=0,width=0,height=0;
         std::uint64_t nextFence=1,lastFence=0;
+        bool reusable=false;
         bool failed=false,invalidated=false,recorded=false,produced=false,inlineRecording=false;
     };
     inline static std::mutex retirementMutex;
     inline static Storage* retired=nullptr;
+    inline static std::vector<std::unique_ptr<Storage>> idle;
+    // Called only after all recording owners have released Output AND its last
+    // GPU fence has completed. Keep allocations, never old scene dependencies.
+    static void Reclaim(Storage* s){
+        s->dependencies.reset();s->producerList.Reset();s->producerAllocator.Reset();
+        if(s->reusable&&idle.size()<3){s->retiredNext=nullptr;idle.emplace_back(s);}
+        else delete s;
+    }
     std::unique_ptr<Storage> storage;
     std::mutex mutex;
     static constexpr D3D12_RESOURCE_STATES ReadState=static_cast<D3D12_RESOURCE_STATES>(D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE|D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
@@ -57,12 +67,28 @@ class Output {
 public:
     // Called under the renderer's submission serialization. Hook adapters must
     // suppress recursive observation of these private queue operations.
-    static HRESULT Create(ID3D12CommandQueue* queue,UINT width,UINT height,std::shared_ptr<Output>& result){
+    static HRESULT Create(ID3D12CommandQueue* queue,UINT width,UINT height,std::shared_ptr<Output>& result,bool reusable=false){
         PTCommandBindings::Mute privateRecording;
         result.reset();Poll();
         if(!queue||queue->GetDesc().Type!=D3D12_COMMAND_LIST_TYPE_DIRECT||!width||!height||
            width>16384||height>16384||std::uint64_t(width)*height*16>256ull*1024*1024)return E_INVALIDARG;
-        auto pending=std::make_shared<Output>();pending->storage=std::make_unique<Storage>();auto& s=*pending->storage;
+        auto pending=std::make_shared<Output>();
+        if(reusable){
+            Microsoft::WRL::ComPtr<IUnknown> identity;
+            if(FAILED(queue->QueryInterface(IID_PPV_ARGS(&identity))))return E_INVALIDARG;
+            {std::lock_guard<std::mutex> guard(retirementMutex);
+                for(auto it=idle.begin();it!=idle.end();++it)if((*it)->queueIdentity.Get()==identity.Get()&&(*it)->width==width&&(*it)->height==height){
+                    pending->storage=std::move(*it);idle.erase(it);break;}
+                // A resolution/queue change must not strand the output budget.
+                if(!pending->storage)idle.clear();
+            }
+            if(pending->storage){auto& reused=*pending->storage;
+                reused.invalidated=reused.recorded=reused.produced=reused.inlineRecording=false;
+                if(!pending->Execute(reused.clearList.Get()))return E_FAIL;
+                result=std::move(pending);return S_OK;
+            }
+        }
+        pending->storage=std::make_unique<Storage>();auto& s=*pending->storage;
         const std::uint64_t bytes=std::uint64_t(width)*height*16;
         auto used=residentBytes.load();
         do {if(used>MaximumBytes-bytes)return E_OUTOFMEMORY;}while(!residentBytes.compare_exchange_weak(used,used+bytes));
@@ -103,6 +129,7 @@ public:
         s.armList->ClearUnorderedAccessViewFloat(s.gpu->GetGPUDescriptorHandleForHeapStart(),s.cpu->GetCPUDescriptorHandleForHeapStart(),s.texture.Get(),armed,0,nullptr);
         Transition(s.armList.Get(),s.texture.Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS,ReadState);
         hr=s.armList->Close();if(FAILED(hr))return hr;
+        s.reusable=reusable;
         // Initialize every pixel on the GPU before any possible native draw.
         if(!pending->Execute(s.clearList.Get()))return E_FAIL;
         result=std::move(pending);return S_OK;
@@ -168,10 +195,11 @@ public:
     static void Poll(){
         std::lock_guard<std::mutex> guard(retirementMutex);auto** at=&retired;
         while(*at){auto* s=*at;const auto done=s->fence?s->fence->GetCompletedValue():0;
-            if(!s->failed&&done!=UINT64_MAX&&done>=s->lastFence){*at=s->retiredNext;delete s;}
+            if(!s->failed&&done!=UINT64_MAX&&done>=s->lastFence){*at=s->retiredNext;Reclaim(s);}
             else at=&s->retiredNext;
         }
     }
+    static void TrimIdle(){std::lock_guard<std::mutex> guard(retirementMutex);idle.clear();}
     static std::uint64_t ResidentBytes(){Poll();return residentBytes.load();}
     // Caller verifies the exact scene and current frame/view under the queue
     // submission lock immediately before this method. This API does not infer it.
@@ -199,6 +227,8 @@ public:
             // within the shared memory budget rather than silently freeing use.
             std::lock_guard<std::mutex> guard(retirementMutex);
             storage->retiredNext=retired;retired=storage.release();
+        }else if(storage->reusable){
+            std::lock_guard<std::mutex> guard(retirementMutex);Reclaim(storage.release());
         }
     }
 };

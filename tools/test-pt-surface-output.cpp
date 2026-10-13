@@ -167,5 +167,28 @@ int main(){
     std::array<UINT,16> probeFaults{};assert(probe->metrics.ReadFaults(probeFaults));for(auto v:probeFaults)assert(v==0);
     probeOutput.reset();probe.reset();
     original.reset();cancelled.reset();PTSurfaceComposition::Output::Poll();assert(inlineRetained.expired());assert(PTSurfaceComposition::Output::ResidentBytes()==0);assert(retained.expired());assert(SUCCEEDED(device->GetDeviceRemovedReason()));
+    // Reuse is forbidden while the final queue fence is blocked, even when the
+    // last CPU owner is gone. After retirement it reuses storage and clears it.
+    assert(SUCCEEDED(queue->Wait(lateGate.Get(),4)));
+    assert(SUCCEEDED(PTSurfaceComposition::Output::Create(queue.Get(),4,3,output,true)));
+    ComPtr<ID3D12Resource> blockedTexture=output->Texture();output.reset();
+    assert(SUCCEEDED(PTSurfaceComposition::Output::Create(queue.Get(),4,3,output,true)));
+    assert(output->Texture()!=blockedTexture.Get());
+    assert(output->Record(lateWriter.get(),&Writer::Encode,lateWriter));assert(output->Produce(queue.Get()));
+    ComPtr<ID3D12Resource> reusableTexture=output->Texture();
+    assert(SUCCEEDED(lateGate->Signal(4)));assert(SUCCEEDED(queue->Signal(done.Get(),3)));
+    event=CreateEventW(nullptr,FALSE,FALSE,nullptr);assert(event);
+    assert(SUCCEEDED(done->SetEventOnCompletion(3,event)));assert(WaitForSingleObject(event,10000)==WAIT_OBJECT_0);CloseHandle(event);
+    output.reset();
+    assert(SUCCEEDED(PTSurfaceComposition::Output::Create(queue.Get(),4,3,output,true)));
+    assert(output->Texture()==reusableTexture.Get());capture(0);
+    assert(output->NativeSubmitted(queue.Get()));assert(SUCCEEDED(queue->Signal(done.Get(),4)));
+    event=CreateEventW(nullptr,FALSE,FALSE,nullptr);assert(event);
+    assert(SUCCEEDED(done->SetEventOnCompletion(4,event)));assert(WaitForSingleObject(event,10000)==WAIT_OBJECT_0);CloseHandle(event);
+    void* recycledData=nullptr;D3D12_RANGE recycleRange{0,1024};assert(SUCCEEDED(readback->Map(0,&recycleRange,&recycledData)));
+    for(unsigned y=0;y<3;++y)for(unsigned x=0;x<16;++x)assert(reinterpret_cast<float*>(static_cast<unsigned char*>(recycledData)+y*256)[x]==0);
+    D3D12_RANGE noWrite{0,0};readback->Unmap(0,&noWrite);
+    output.reset();PTSurfaceComposition::Output::Poll();PTSurfaceComposition::Output::TrimIdle();
+    assert(PTSurfaceComposition::Output::ResidentBytes()==0);
     puts("PASS: GPU-zero initialization, one-shot producer, queued replay clear, wrong-queue/late-producer rejection late COPY signal admission, rejected zero guard, replay cancellation, bounded deferred retirement and fence-owned dependencies");
 }

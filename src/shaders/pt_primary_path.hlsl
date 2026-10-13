@@ -18,7 +18,7 @@ SamplerState PTEnvironmentSampler : register(s10,space1);
 RaytracingAccelerationStructure PTScene : register(t35);
 RWTexture2D<float4> PTOutput : register(u7);
 RWByteAddressBuffer PTMetrics : register(u6);
-void PTMeasure(uint stage,uint2 pixel){if(((pixel.x|pixel.y)&15)==0){uint previous;PTMetrics.InterlockedAdd(stage*4,1,previous);}}
+void PTMeasure(uint stage,uint2 pixel){if(((pixel.x|pixel.y)&63)==0){uint previous;PTMetrics.InterlockedAdd(stage*4,1,previous);}}
 float3 PTViewToWorldVector(float3 v){return v.x*PTSystem[6].xyz+v.y*PTSystem[7].xyz+v.z*PTSystem[8].xyz;}
 float3 PTViewToWorldPoint(float3 v){return PTViewToWorldVector(v)+PTSystem[9].xyz;}
 float3 PTWorldToViewPoint(float3 v){return v.x*PTSystem[2].xyz+v.y*PTSystem[3].xyz+v.z*PTSystem[4].xyz+PTSystem[5].xyz;}
@@ -57,7 +57,7 @@ bool PTPathLight(PTPathSurface surface,inout uint rng,out PTDirectSample light,o
     light=(PTDirectSample)0;visibility=1;
     PTPrimaryLightSample native;PTSamplePrimaryLight(PTWorldToViewPoint(surface.position),PTPathRandom(rng),native);
     // Invalid native data must invalidate the path, not become a dark sample.
-    if(native.valid==0){light.pdf=1;light.delta=1;visibility=2;return true;}
+    if(native.valid==0){light.pdf=1;light.delta=1;visibility=3;return true;}
     if(native.active==0)return false;
     light.wi=normalize(PTViewToWorldVector(native.directionView));light.incidentRadiance=native.radiance;
     light.pdf=native.selectionPdf;light.delta=1;
@@ -109,5 +109,5 @@ void PTPrimaryPathRayGeneration(){
     PTPathResult result=PTIntegratePathFirst(ray,4,3,seed,.001,first,1,0);
     PTMeasure(5,pixel);
     if(result.valid!=0&&all(isfinite(result.radiance))&&all(result.radiance>=0)){if(admission==1)PTOutput[pixel]=float4(result.radiance,1);PTMeasure(6,pixel);}
-    else {PTMeasure(7,pixel);if(((pixel.x|pixel.y)&15)==0){uint old;PTMetrics.InterlockedAdd(36+4*min(result.fault,15u),1,old);}}
+    else {PTMeasure(7,pixel);if(((pixel.x|pixel.y)&63)==0){uint old;PTMetrics.InterlockedAdd(36+4*min(result.fault,15u),1,old);}}
 }
