@@ -77,6 +77,23 @@ public:
         }
         return false;
     }
+    // Native root CBVs use different upload slices in each pass. Read only an
+    // owned UPLOAD allocation at the recording/submission boundary; never map
+    // arbitrary GPU addresses or assume equal addresses mean equal camera data.
+    bool ReadUpload(U64 address,void* destination,std::size_t bytes){
+        if(!destination||!address||!bytes||bytes>4096)return false;
+        std::lock_guard<std::mutex> guard(mutex);if(!active)return false;
+        const auto token=index.Find(address,bytes);if(!token)return false;
+        for(const auto& item:owners){const auto& e=item.second;if(e.token!=token)continue;
+            D3D12_HEAP_PROPERTIES properties{};D3D12_HEAP_FLAGS flags{};
+            if(FAILED(e.resource->GetHeapProperties(&properties,&flags))||properties.Type!=D3D12_HEAP_TYPE_UPLOAD)return false;
+            const SIZE_T offset=static_cast<SIZE_T>(address-e.address);const D3D12_RANGE range{offset,offset+bytes};void* mapped=nullptr;
+            if(FAILED(e.resource->Map(0,&range,&mapped))||!mapped)return false;
+            std::memcpy(destination,static_cast<const unsigned char*>(mapped)+offset,bytes);
+            const D3D12_RANGE noWrite{};e.resource->Unmap(0,&noWrite);return true;
+        }
+        return false;
+    }
     // The caller is at the native AS build boundary and holds its recording
     // context. The owner mutex prevents release/reuse during metadata capture.
     bool FreezeGeometry(ID3D12GraphicsCommandList* list,std::vector<PTSceneTopology::Geometry>& geometry,

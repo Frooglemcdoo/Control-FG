@@ -11,20 +11,27 @@
 namespace PTSurfaceComposition {
 class Output {
     using MicrosoftResource=Microsoft::WRL::ComPtr<ID3D12Resource>;
+    inline static std::atomic<std::uint64_t> residentBytes{0};
+    static constexpr std::uint64_t MaximumBytes=1024ull*1024*1024;
     struct Storage {
         Microsoft::WRL::ComPtr<ID3D12Device> device;
         Microsoft::WRL::ComPtr<ID3D12CommandQueue> queue;
         Microsoft::WRL::ComPtr<IUnknown> queueIdentity;
         MicrosoftResource texture;
         Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> cpu,gpu;
-        Microsoft::WRL::ComPtr<ID3D12CommandAllocator> clearAllocator,producerAllocator;
-        Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> clearList,producerList;
+        Microsoft::WRL::ComPtr<ID3D12CommandAllocator> clearAllocator,armAllocator,producerAllocator;
+        Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> clearList,armList,producerList;
         Microsoft::WRL::ComPtr<ID3D12Fence> fence;
         std::shared_ptr<void> dependencies;
+        Storage* retiredNext=nullptr;
+        std::uint64_t budget=0;
+        ~Storage(){residentBytes.fetch_sub(budget);}
         UINT increment=0,width=0,height=0;
         std::uint64_t nextFence=1,lastFence=0;
-        bool failed=false,invalidated=false,recorded=false,produced=false;
+        bool failed=false,invalidated=false,recorded=false,produced=false,inlineRecording=false;
     };
+    inline static std::mutex retirementMutex;
+    inline static Storage* retired=nullptr;
     std::unique_ptr<Storage> storage;
     std::mutex mutex;
     static constexpr D3D12_RESOURCE_STATES ReadState=static_cast<D3D12_RESOURCE_STATES>(D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE|D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
@@ -37,8 +44,12 @@ class Output {
         return SUCCEEDED(q->QueryInterface(IID_PPV_ARGS(&key)))&&key.Get()==storage->queueIdentity.Get();
     }
     bool Execute(ID3D12GraphicsCommandList* list){
-        auto& s=*storage;if(s.failed||s.nextFence==UINT64_MAX)return false;
+        auto& s=*storage;if(s.failed||s.nextFence==UINT64_MAX){s.failed=true;return false;}
         ID3D12CommandList* lists[]={list};s.queue->ExecuteCommandLists(1,lists);
+        return Signal();
+    }
+    bool Signal(){
+        auto& s=*storage;if(s.failed||s.nextFence==UINT64_MAX){s.failed=true;return false;}
         const auto value=s.nextFence++;
         if(FAILED(s.queue->Signal(s.fence.Get(),value))){s.failed=true;return false;}
         s.lastFence=value;return true;
@@ -48,11 +59,14 @@ public:
     // suppress recursive observation of these private queue operations.
     static HRESULT Create(ID3D12CommandQueue* queue,UINT width,UINT height,std::shared_ptr<Output>& result){
         PTCommandBindings::Mute privateRecording;
-        result.reset();
+        result.reset();Poll();
         if(!queue||queue->GetDesc().Type!=D3D12_COMMAND_LIST_TYPE_DIRECT||!width||!height||
            width>16384||height>16384||std::uint64_t(width)*height*16>256ull*1024*1024)return E_INVALIDARG;
         auto pending=std::make_shared<Output>();pending->storage=std::make_unique<Storage>();auto& s=*pending->storage;
-        s.queue=queue;s.width=width;s.height=height;
+        const std::uint64_t bytes=std::uint64_t(width)*height*16;
+        auto used=residentBytes.load();
+        do {if(used>MaximumBytes-bytes)return E_OUTOFMEMORY;}while(!residentBytes.compare_exchange_weak(used,used+bytes));
+        s.budget=bytes;s.queue=queue;s.width=width;s.height=height;
         HRESULT hr=queue->QueryInterface(IID_PPV_ARGS(&s.queueIdentity));if(FAILED(hr))return hr;
         hr=queue->GetDevice(IID_PPV_ARGS(&s.device));if(FAILED(hr))return hr;
         D3D12_RESOURCE_DESC td{};td.Dimension=D3D12_RESOURCE_DIMENSION_TEXTURE2D;td.Width=width;td.Height=height;
@@ -81,6 +95,14 @@ public:
         s.clearList->ClearUnorderedAccessViewFloat(s.gpu->GetGPUDescriptorHandleForHeapStart(),s.cpu->GetCPUDescriptorHandleForHeapStart(),s.texture.Get(),zero,0,nullptr);
         Transition(s.clearList.Get(),s.texture.Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS,ReadState);
         hr=s.clearList->Close();if(FAILED(hr))return hr;
+        hr=s.device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT,IID_PPV_ARGS(&s.armAllocator));if(FAILED(hr))return hr;
+        hr=s.device->CreateCommandList(0,D3D12_COMMAND_LIST_TYPE_DIRECT,s.armAllocator.Get(),nullptr,IID_PPV_ARGS(&s.armList));if(FAILED(hr))return hr;
+        s.armList->SetDescriptorHeaps(1,heaps);
+        Transition(s.armList.Get(),s.texture.Get(),ReadState,D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+        const float armed[4]={0,0,0,1};
+        s.armList->ClearUnorderedAccessViewFloat(s.gpu->GetGPUDescriptorHandleForHeapStart(),s.cpu->GetCPUDescriptorHandleForHeapStart(),s.texture.Get(),armed,0,nullptr);
+        Transition(s.armList.Get(),s.texture.Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS,ReadState);
+        hr=s.armList->Close();if(FAILED(hr))return hr;
         // Initialize every pixel on the GPU before any possible native draw.
         if(!pending->Execute(s.clearList.Get()))return E_FAIL;
         result=std::move(pending);return S_OK;
@@ -107,11 +129,44 @@ public:
         if(FAILED(list->Close()))return false;
         s.producerAllocator=std::move(allocator);s.producerList=std::move(list);s.dependencies=std::move(dependencies);s.recorded=true;return true;
     }
+    // Encoder records between native lighting and its next barrier, preserving
+    // roots/heaps/PSO. Its raygen MUST branch on alpha==1 before tracing and clear
+    // alpha on every rejected pixel. Arm is allowed only at the verified submit.
+    bool RecordInline(ID3D12GraphicsCommandList* list,void* context,Encoder encode,std::shared_ptr<void> dependencies){
+        PTCommandBindings::Mute privateRecording;
+        std::lock_guard<std::mutex> guard(mutex);
+        if(!storage||!list||!encode||!dependencies||storage->failed||storage->invalidated||storage->recorded||
+           list->GetType()!=D3D12_COMMAND_LIST_TYPE_DIRECT)return false;
+        auto& s=*storage;s.dependencies=std::move(dependencies);s.recorded=true;s.inlineRecording=true;
+        Transition(list,s.texture.Get(),ReadState,D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+        const bool success=encode(context,list,s.texture.Get(),Uav());
+        Transition(list,s.texture.Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS,ReadState);
+        if(!success)s.invalidated=true;return success;
+    }
+    bool Arm(ID3D12CommandQueue* queue){
+        std::lock_guard<std::mutex> guard(mutex);
+        if(!Queue(queue)||storage->failed||storage->invalidated||!storage->recorded||!storage->inlineRecording||storage->produced)return false;
+        storage->produced=true;return Execute(storage->armList.Get());
+    }
+    // Call after EVERY native submission referencing this output, including a
+    // rejected/replayed consumer. This extends retirement beyond private clears.
+    bool NativeSubmitted(ID3D12CommandQueue* queue){
+        std::lock_guard<std::mutex> guard(mutex);
+        if(!Queue(queue)){if(storage)storage->failed=true;return false;}return Signal();
+    }
+    static void Poll(){
+        std::lock_guard<std::mutex> guard(retirementMutex);auto** at=&retired;
+        while(*at){auto* s=*at;const auto done=s->fence?s->fence->GetCompletedValue():0;
+            if(!s->failed&&done!=UINT64_MAX&&done>=s->lastFence){*at=s->retiredNext;delete s;}
+            else at=&s->retiredNext;
+        }
+    }
+    static std::uint64_t ResidentBytes(){Poll();return residentBytes.load();}
     // Caller verifies the exact scene and current frame/view under the queue
     // submission lock immediately before this method. This API does not infer it.
     bool Produce(ID3D12CommandQueue* queue){
         std::lock_guard<std::mutex> guard(mutex);
-        if(!Queue(queue)||storage->failed||storage->invalidated||!storage->recorded||storage->produced)return false;
+        if(!Queue(queue)||storage->failed||storage->invalidated||!storage->recorded||storage->inlineRecording||storage->produced)return false;
         storage->produced=true;return Execute(storage->producerList.Get());
     }
     // Before replaying a consumer list, clear in the SAME queue. Earlier reads
@@ -129,7 +184,10 @@ public:
         if(storage->failed||completed==UINT64_MAX||completed<storage->lastFence){
             // Never free GPU-referenced texture, lists, heaps or scene resources
             // after a missing/failed retirement proof (including device removal).
-            (void)storage.release();
+            // Pending healthy objects retire on Poll; unknown fences quarantine
+            // within the shared memory budget rather than silently freeing use.
+            std::lock_guard<std::mutex> guard(retirementMutex);
+            storage->retiredNext=retired;retired=storage.release();
         }
     }
 };

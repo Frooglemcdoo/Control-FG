@@ -72,6 +72,10 @@ jobs:
           if errorlevel 1 exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-pt-surface-composition.cpp /Febuild\test-pt-surface-composition.exe
           if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-pt-native-view.cpp /Febuild\test-pt-native-view.exe
+          if errorlevel 1 exit /b 1
+          build\test-pt-native-view.exe
+          if errorlevel 1 exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-pt-native-root-layout.cpp /Febuild\test-pt-native-root-layout.exe /link d3d12.lib dxgi.lib
           if errorlevel 1 exit /b 1
           build\test-pt-native-root-layout.exe
@@ -84,7 +88,7 @@ jobs:
           if errorlevel 1 exit /b 1
           build\test-pt-table-mirror.exe
           if errorlevel 1 exit /b 1
-          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-pt-surface-output.cpp /Febuild\test-pt-surface-output.exe /link d3d12.lib dxgi.lib
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-pt-surface-output.cpp /Febuild\test-pt-surface-output.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
           if errorlevel 1 exit /b 1
           build\test-pt-surface-output.exe
           if errorlevel 1 exit /b 1
@@ -288,6 +292,8 @@ jobs:
           }
           if(-not $dxc){throw 'dxc.exe was not found in the Windows SDK / Visual Studio installation.'}
           Write-Host "DXC: $dxc"
+          & $dxc -T lib_6_3 -HV 2021 -O3 -WX -I src/shaders -Fo build/pt_primary_path.dxil src/shaders/pt_primary_path.hlsl
+          if($LASTEXITCODE -ne 0){throw "Primary path DXC compile failed: $LASTEXITCODE"}
           & $dxc -T lib_6_3 -HV 2021 -O3 -I src/shaders -Fo build/pt_glass_raygen.dxil src/shaders/pt_glass_raygen.hlsl
           if($LASTEXITCODE -ne 0){throw "Glass DXC compile failed: $LASTEXITCODE"}
           & $dxc -T lib_6_3 -HV 2021 -O3 -I src/shaders -Fo build/pt_reflection_p2.dxil src/shaders/pt_reflection_p2.hlsl

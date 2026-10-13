@@ -523,3 +523,34 @@ it creates/recycles a heap and copies the material prefix. Inspection through
 RVA 1acea shows no command-list SetDescriptorHeaps call in the allocator itself;
 rejecting a returned different heap therefore does not change the command list's
 currently bound heaps. The private table still requires the same native heap.
+
+### Inline producer, view identity and primary shader
+
+The output owner now supports a producer recorded inline immediately after the
+native primary lighting dispatch. A separate immutable queue-ordered clear arms
+alpha one only at an admitted submission; a rejected/replayed producer sees alpha
+zero and its raygen returns before TraceRay. Native consumer submissions extend
+the output's own retirement fence. Pending healthy outputs retire from an
+intrusive deferred list; failed/unknown fences quarantine within a shared 1 GiB
+budget. No frame-count retirement or allocator reset is used.
+
+The new `pt_primary_path.hlsl` compiles as a separate 60-byte payload library. It
+uses four surface hits, delta-light NEE with traced alpha-aware visibility,
+GGX/VNDF plus Lambert sampling, Russian roulette, safe geometry spawn points,
+secondary emission and sharp environment misses. The primary material/depth must
+match the raster GBuffer. Primary emission is excluded for the composition patch.
+Special BRDFs and invalid materials reject the whole pixel. The initial transport
+uses geometric normals and `kd = textureColor * (1-F0)`; this is a new material
+model, not a claim of native material/normal-map parity. Point/spot/sun remain
+delta sources, not area emitters. No denoising or temporal accumulation is added
+by this library alone. Environment t34 must come from the same native view; it is
+not a substitute ambient constant.
+
+The capture establishes different b0 upload addresses for opaque rays
+(4787+9728), primary lighting (4716+20736) and material drawing (4753+3584).
+Comparing addresses would reject these valid same-view passes. `pt_native_view.h`
+therefore compares the first 288 bytes of native camera/resolution data and the
+current-frame field at byte1112. Reading these requires a retained UPLOAD
+allocation at the boundary; arbitrary GPU memory is never dereferenced. Missing
+ownership, dimensions or camera data reject the match. The runtime consumer and
+activation still must connect these pieces before this becomes a playable build.

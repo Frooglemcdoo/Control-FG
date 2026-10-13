@@ -20,14 +20,16 @@ uint PTPathRandomBits(inout uint state) {
 }
 float PTPathRandom(inout uint state) { return (PTPathRandomBits(state)>>8)*(1.0/16777216.0); }
 struct PTPathResult { float3 radiance; uint hits; uint valid; uint fault; };
-PTPathResult PTIntegratePath(RayDesc ray,uint maxHits,uint rouletteStart,uint seed,float originOffset) {
+PTPathResult PTIntegratePathFirst(RayDesc ray,uint maxHits,uint rouletteStart,uint seed,float originOffset,
+                                  PTSceneHit first,uint useFirst,uint includePrimaryEmission) {
     PTTransportState path=PTBeginTransport();PTPathResult result=(PTPathResult)0;
     if(maxHits==0||maxHits>32||!all(isfinite(ray.Origin))||!all(isfinite(ray.Direction))||
        abs(dot(ray.Direction,ray.Direction)-1)>1e-4||!isfinite(ray.TMin)||!isfinite(ray.TMax)||
        ray.TMin<0||ray.TMax<=ray.TMin||!isfinite(originOffset)||originOffset<=0) return result;
     uint rng=seed==0?1:seed;
     for(uint depth=0;depth<maxHits&&path.alive!=0;++depth) {
-        PTSceneHit hit=PTPathTrace(ray);
+        PTSceneHit hit;
+        if(depth==0&&useFirst!=0)hit=first;else hit=PTPathTrace(ray);
         if(hit.status==2){path.valid=0;result.fault=2;break;}
         if(hit.status==0){path=PTAccumulate(path,PTPathEnvironment(ray.Direction));break;}
         PTPathSurface surface=PTPathDecode(hit,ray);result.hits++;
@@ -40,7 +42,7 @@ PTPathResult PTIntegratePath(RayDesc ray,uint maxHits,uint rouletteStart,uint se
         float3 bitangent=cross(n,tangent);
         float3 wo=float3(dot(-ray.Direction,tangent),dot(-ray.Direction,bitangent),dot(-ray.Direction,n));
         if(wo.z<=0){path.valid=0;result.fault=5;break;}
-        path=PTAccumulate(path,surface.emission);
+        if(depth!=0||includePrimaryEmission!=0)path=PTAccumulate(path,surface.emission);
         PTDirectSample light;uint visibility;
         if(PTPathLight(surface,rng,light,visibility)) {
             if(light.delta!=1){path.valid=0;break;}
@@ -60,5 +62,9 @@ PTPathResult PTIntegratePath(RayDesc ray,uint maxHits,uint rouletteStart,uint se
         ray.TMin=0;
     }
     result.radiance=path.radiance;result.valid=path.valid;return result;
+}
+PTPathResult PTIntegratePath(RayDesc ray,uint maxHits,uint rouletteStart,uint seed,float originOffset) {
+    PTSceneHit unused=(PTSceneHit)0;
+    return PTIntegratePathFirst(ray,maxHits,rouletteStart,seed,originOffset,unused,0,1);
 }
 #endif
