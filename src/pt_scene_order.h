@@ -14,14 +14,15 @@ enum class Status {ready,pending,missing,unordered,invalid};
 struct Key {U64 token=0,address=0;bool operator<(const Key& b)const{return token<b.token||(token==b.token&&address<b.address);}};
 struct Selection {U64 version=0,node=0;};
 class Graph {
-    struct Node {U64 previous=0,waitFence=0,waitValue=0;Key target{};U64 version=0;unsigned lane=0;};
+    using Clock=std::array<U64,17>;
+    struct Node {U64 previous=0,waitFence=0,waitValue=0;Key target{};U64 version=0;unsigned lane=0;U64 stamp=0;Clock base{};};
     struct Fence {U64 last=0,completed=0;std::map<U64,U64> signals;};
     std::vector<Node> nodes{Node{}};
     std::map<U64,U64> queues;
     std::map<U64,Fence> fences;
     bool valid=true;U64 completedPrefix=0;
     std::map<U64,unsigned> lanes;
-    using Clock=std::array<U64,17>; // lane 0 is the completed prefix
+    U64 serial=0;Clock observedComplete{}; // Actual polled GPU completion, never a guessed queue edge.
     mutable std::vector<Clock> clocks;
     mutable std::vector<unsigned char> clockState;
     mutable bool clockDirty=true,clockCycle=false;
@@ -45,19 +46,19 @@ class Graph {
                 if(signal)todo.push_back({signal,false});if(n.previous)todo.push_back({n.previous,false});continue;
             }
             if((n.previous&&clockState[n.previous]!=2)||(signal&&clockState[signal]!=2)){clockState[id]=3;continue;}
-            auto& c=clocks[id];if(n.previous)c=clocks[n.previous];
+            auto& c=clocks[id];c=n.base;if(n.previous)for(unsigned lane=0;lane<c.size();++lane)c[lane]=std::max(c[lane],clocks[n.previous][lane]);
             if(signal)for(unsigned lane=0;lane<c.size();++lane)c[lane]=std::max(c[lane],clocks[signal][lane]);
-            c[n.lane]=id;clockState[id]=2;
+            c[n.lane]=std::max(c[n.lane],n.stamp);clockState[id]=2;
         }
         return clockState[at]==2?Status::ready:Status::pending;
     }
-    bool Before(U64 a,U64 b)const {return clocks[b][nodes[a].lane]>=a;}
+    bool Before(U64 a,U64 b)const {return clocks[b][nodes[a].lane]>=nodes[a].stamp;}
 
     static constexpr std::size_t MaximumNodes=65536,MaximumQueues=16,MaximumFences=256;
     U64 Append(U64 queue,Node node){
         if(!valid||!queue||nodes.size()>=MaximumNodes||(!queues.count(queue)&&queues.size()>=MaximumQueues)){valid=false;return 0;}
         if(!lanes.count(queue))lanes.emplace(queue,static_cast<unsigned>(lanes.size()+1));
-        node.lane=lanes.at(queue);clockDirty=true;
+        node.lane=lanes.at(queue);node.stamp=++serial;node.base=observedComplete;clockDirty=true;
         node.previous=queues.count(queue)?queues.at(queue):completedPrefix;nodes.push_back(node);queues[queue]=nodes.size()-1;return nodes.size()-1;
     }
     Status Ancestors(U64 at,std::set<U64>& complete)const {
@@ -138,11 +139,68 @@ public:
     bool RebaseCompleted(const std::map<Key,U64>& versions){
         if(!valid||versions.size()+2>=MaximumNodes)return false;
         std::vector<Node> baseline{Node{}};U64 tail=0;
-        for(const auto& entry:versions){Node n;n.previous=tail;n.target=entry.first;n.version=entry.second;baseline.push_back(n);tail=baseline.size()-1;}
-        if(!tail){baseline.push_back(Node{});tail=1;}
+        for(const auto& entry:versions){Node n;n.previous=tail;n.target=entry.first;n.version=entry.second;n.stamp=++serial;baseline.push_back(n);tail=baseline.size()-1;}
+        if(!tail){Node n;n.stamp=++serial;baseline.push_back(n);tail=1;}
         nodes=std::move(baseline);completedPrefix=tail;clockDirty=true;
         for(auto& q:queues)q.second=tail;
         for(auto& f:fences){f.second.completed=f.second.last;f.second.signals.clear();}
+        return true;
+    }
+    U64 TailStamp(U64 queue)const {const auto q=queues.find(queue);return q==queues.end()?0:nodes[q->second].stamp;}
+    std::size_t Size()const{return nodes.size();}
+    // Compact immutable CPU metadata without draining the GPU. Baked vector
+    // clocks preserve EXACT ordering of existing operations. Only *future*
+    // appends acquire edges from completion fences polled by the host.
+    // External roots are active dispatch cuts and unresolved compaction cuts.
+    bool Compact(const std::set<U64>& external,const std::map<U64,U64>& completed,
+                 std::map<U64,U64>& remap,std::set<U64>& retainedVersions){
+        remap.clear();retainedVersions.clear();if(!valid)return false;
+        for(U64 id=1;id<nodes.size();++id)if(ClockAt(id)!=Status::ready)return false;
+        // Preserve rejection of non-monotonic cross-queue fence ownership.
+        for(const auto& f:fences){U64 previous=0;
+            for(const auto& signal:f.second.signals){if(previous&&!Before(previous,signal.second))return false;previous=signal.second;}
+        }
+        Clock done=observedComplete;
+        for(const auto& proof:completed){const auto lane=lanes.find(proof.first);if(lane==lanes.end())continue;
+            for(U64 id=1;id<nodes.size();++id)if(nodes[id].lane==lane->second&&nodes[id].stamp<=proof.second)
+                for(unsigned n=0;n<done.size();++n)done[n]=std::max(done[n],clocks[id][n]);
+        }
+        std::set<U64> roots=external;
+        for(const auto& q:queues)roots.insert(q.second);
+        auto newFences=fences;
+        for(auto& f:newFences){
+            auto& signals=f.second.signals;
+            for(auto it=signals.begin();it!=signals.end();){const auto& node=nodes[it->second];
+                if(done[node.lane]>=node.stamp){f.second.completed=std::max(f.second.completed,it->first);it=signals.erase(it);}
+                else {roots.insert(it->second);++it;}
+            }
+        }
+        roots.erase(0);for(const U64 id:roots)if(id>=nodes.size())return false;
+        // For each key/lane keep its last write at every root, plus its latest
+        // write. The latter preserves concurrent-write rejection even when no
+        // current dispatch can reach that lane. Tombstones remain writes.
+        std::array<std::set<U64>,17> thresholds;
+        for(const U64 root:roots)for(unsigned lane=0;lane<thresholds.size();++lane)thresholds[lane].insert(clocks[root][lane]);
+        std::map<Key,std::map<unsigned,std::vector<U64>>> writes;
+        for(U64 id=1;id<nodes.size();++id)if(nodes[id].target.token)writes[nodes[id].target][nodes[id].lane].push_back(id);
+        std::set<U64> keep=roots;
+        for(const auto& key:writes)for(const auto& lane:key.second){
+            const auto& sequence=lane.second;keep.insert(sequence.back());
+            for(const U64 threshold:thresholds[lane.first]){
+                const auto upper=std::upper_bound(sequence.begin(),sequence.end(),threshold,[&](U64 stamp,U64 id){return stamp<nodes[id].stamp;});
+                if(upper!=sequence.begin())keep.insert(*std::prev(upper));
+                if(upper!=sequence.end())keep.insert(*upper); // Earliest concurrent/future write must still reject an old cut.
+            }
+        }
+        std::vector<Node> compact{Node{}};
+        for(const U64 id:keep){auto node=nodes[id];node.previous=node.waitFence=node.waitValue=0;node.base=clocks[id];
+            remap.emplace(id,compact.size());compact.push_back(node);if(node.target.token&&node.version)retainedVersions.insert(node.version);
+        }
+        for(auto& q:queues)q.second=remap.at(q.second);
+        for(auto& f:newFences)for(auto& signal:f.second.signals)signal.second=remap.at(signal.second);
+        // Existing nodes have baked clocks; no rewritten dependency can acquire
+        // a future signal or lose the original cross-queue ordering.
+        nodes=std::move(compact);fences=std::move(newFences);observedComplete=done;completedPrefix=0;clockDirty=true;
         return true;
     }
     Status Select(U64 dispatch,Key target,Selection& result)const {

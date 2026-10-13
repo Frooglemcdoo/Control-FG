@@ -4,6 +4,7 @@
 #include "pt_scene_dispatch_plan.h"
 #include "pt_scene_leases.h"
 #include "pt_geometry_snapshot.h"
+#include "pt_command_bindings.h"
 #include "pt_scene_observer.h"
 #include "pt_native_shader_table.h"
 #include "pt_native_buffer_observer.h"
@@ -110,7 +111,9 @@ public:
             PTNativeBufferObserver::Snapshot native{};
             if(!entry||!PTNativeBufferObserver::Read(reinterpret_cast<const void*>(wrapper),native)||
                native.resource!=reinterpret_cast<UINT_PTR>(entry->resource.Get())||native.address!=entry->address||native.bytes>entry->bytes)return false;
-            sources.emplace(token,PTGeometrySnapshot::Source{{token,entry->address,entry->bytes},entry->resource,static_cast<D3D12_RESOURCE_STATES>(native.state)});
+            D3D12_RESOURCE_STATES state{};geometryFailure="geometry_recorded_state";
+            if(!PTCommandBindings::tracker.BufferState(list,entry->resource.Get(),static_cast<D3D12_RESOURCE_STATES>(native.state),state))return false;
+            sources.emplace(token,PTGeometrySnapshot::Source{{token,entry->address,entry->bytes},entry->resource,state});
         }
         // Allocate metadata before recording; no failure may drop resources
         // once a copy references them in the command list.
@@ -121,6 +124,7 @@ public:
             f->indexBase=i.address;f->indexBytes=i.bytes;f->positionBase=p.address;f->positionBytes=p.bytes;frozen.push_back(std::move(f));
         }
         std::vector<PTGeometrySnapshot::Source> ordered;for(const auto& item:sources)ordered.push_back(item.second);
+        PTCommandBindings::Mute privateCopies;
         if(!PTGeometrySnapshot::Record(list,ordered,budget,transfer,geometryPool,&geometryFailure))return false;
         for(std::size_t n=0;n<geometry.size();++n){
             auto& f=*frozen[n];f.owner=transfer->storage;

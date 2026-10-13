@@ -36,7 +36,7 @@ struct QueueConsumerTest {
         auto& self=*static_cast<QueueConsumerTest*>(context);++self.resets;
     }
 };
-static void TestGeometrySnapshot(ID3D12Device* device,bool common=false){
+static void TestGeometrySnapshot(ID3D12Device* device,bool common=false,bool temporary=false){
     const auto sourceState=common?D3D12_RESOURCE_STATE_COMMON:D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
     D3D12_RESOURCE_DESC desc{};desc.Dimension=D3D12_RESOURCE_DIMENSION_BUFFER;desc.Width=1024;desc.Height=1;
     desc.DepthOrArraySize=desc.MipLevels=1;desc.SampleDesc.Count=1;desc.Layout=D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
@@ -73,6 +73,7 @@ static void TestGeometrySnapshot(ID3D12Device* device,bool common=false){
     D3D12_COMMAND_QUEUE_DESC qd{};assert(SUCCEEDED(device->CreateCommandQueue(&qd,IID_PPV_ARGS(&queue))));
     assert(SUCCEEDED(device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT,IID_PPV_ARGS(&allocator))));
     assert(SUCCEEDED(device->CreateCommandList(0,D3D12_COMMAND_LIST_TYPE_DIRECT,allocator.Get(),nullptr,IID_PPV_ARGS(&list))));
+    assert(PTCommandBindings::Watch(list.Get()));PTCommandBindings::tracker.Reset(list.Get(),nullptr);
     const auto transition=[&](ID3D12Resource* r,D3D12_RESOURCE_STATES from,D3D12_RESOURCE_STATES to){
         D3D12_RESOURCE_BARRIER b{};b.Type=D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;b.Transition={r,D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,from,to};list->ResourceBarrier(1,&b);
     };
@@ -80,7 +81,7 @@ static void TestGeometrySnapshot(ID3D12Device* device,bool common=false){
     list->CopyBufferRegion(source.Get(),0,upload.Get(),0,512);
     transition(source.Get(),D3D12_RESOURCE_STATE_COPY_DEST,sourceState);
     std::array<unsigned char,80> wrapper{};const auto address=source->GetGPUVirtualAddress();auto* raw=source.Get();
-    const UINT state=sourceState;
+    const UINT state=temporary?D3D12_RESOURCE_STATE_UNORDERED_ACCESS:sourceState; // Native default differs from the recorded transition.
     std::memcpy(wrapper.data(),&raw,8);std::memcpy(wrapper.data()+0x20,&state,4);std::memcpy(wrapper.data()+0x30,&desc.Width,8);std::memcpy(wrapper.data()+0x48,&address,8);
     PTOwnedScene::Runtime bank;assert(bank.Created(reinterpret_cast<UINT_PTR>(wrapper.data()),source.Get(),address,desc.Width)==1);
     std::vector<PTSceneTopology::Geometry> geometry{{address,address+256,12,2,3,3,1,1}};
@@ -117,6 +118,8 @@ static void TestGeometrySnapshot(ID3D12Device* device,bool common=false){
     raw=source.Get();const auto nextAddress=source->GetGPUVirtualAddress();
     std::memcpy(wrapper.data(),&raw,8);std::memcpy(wrapper.data()+0x48,&nextAddress,8);
     assert(bank.Created(reinterpret_cast<UINT_PTR>(wrapper.data()),source.Get(),nextAddress,desc.Width)==1);
+    transition(source.Get(),sourceState,D3D12_RESOURCE_STATE_COPY_DEST);
+    transition(source.Get(),D3D12_RESOURCE_STATE_COPY_DEST,sourceState);
     geometry={{nextAddress,nextAddress+256,12,2,3,3,2,2}};
     assert(bank.FreezeGeometry(list.Get(),geometry,budget,transfer));
     assert(transfer->storage->copies.at(2).Get()==frozen); // Only retired storage re-enters the pool.
@@ -147,7 +150,7 @@ int main(){
     ComPtr<IDXGIAdapter> a;assert(SUCCEEDED(f->EnumWarpAdapter(IID_PPV_ARGS(&a))));
     ComPtr<ID3D12Device> d;assert(SUCCEEDED(D3D12CreateDevice(a.Get(),D3D_FEATURE_LEVEL_11_0,IID_PPV_ARGS(&d))));
     TestUnrelatedSceneLists(d.Get());
-    TestGeometrySnapshot(d.Get());TestGeometrySnapshot(d.Get(),true);
+    TestGeometrySnapshot(d.Get());TestGeometrySnapshot(d.Get(),true);TestGeometrySnapshot(d.Get(),false,true);
     D3D12_HEAP_PROPERTIES hp{};hp.Type=D3D12_HEAP_TYPE_DEFAULT;
     D3D12_RESOURCE_DESC rd{};rd.Dimension=D3D12_RESOURCE_DIMENSION_BUFFER;rd.Width=65536;rd.Height=1;
     rd.DepthOrArraySize=1;rd.MipLevels=1;rd.SampleDesc.Count=1;rd.Layout=D3D12_TEXTURE_LAYOUT_ROW_MAJOR;

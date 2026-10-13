@@ -17,7 +17,7 @@ class Capture {
     std::mutex mutex;
     std::map<IUnknown*,Identity> identities;
     std::map<U64,Upload> uploads;
-    struct Progress {ComPtr<ID3D12Fence> fence;U64 value=0;};
+    struct Progress {ComPtr<ID3D12Fence> fence;U64 value=0,completedStamp=0;std::map<U64,U64> stamps;};
     std::map<U64,Progress> progress;
     U64 checkpointOperations=0;
     U64 lastCheckpointAttempt=0;
@@ -50,12 +50,12 @@ class Capture {
     }
 public:
     struct Timing {U64 calls=0,totalMs=0,maxMs=0;};
-    struct Stats {Timing builds,checkpoints;U64 skippedInvalid=0,copyFailures=0;bool healthy=true;const char* failure="none";};
+    struct Stats {Timing builds,checkpoints;U64 skippedInvalid=0,copyFailures=0,historyVersions=0,historyRows=0,historyNodes=0,copyBytes=0;bool healthy=true;const char* failure="none";};
 private:
     Stats stats;
     struct Measure {Timing& value;ULONGLONG start=GetTickCount64();~Measure(){const U64 ms=GetTickCount64()-start;++value.calls;value.totalMs+=ms;value.maxMs=(std::max)(value.maxMs,ms);}};
 public:
-    Stats Statistics(){std::lock_guard<std::mutex> guard(mutex);stats.healthy=catalog.Healthy();stats.failure=catalog.Failure();return stats;}
+    Stats Statistics(){std::lock_guard<std::mutex> guard(mutex);stats.healthy=catalog.Healthy();stats.failure=catalog.Failure();const auto history=catalog.StatisticsNow();stats.historyVersions=history.versions;stats.historyRows=history.rows;stats.historyNodes=history.nodes;stats.copyBytes=copyBudget->Held();return stats;}
     explicit Capture(PTOwnedScene::Runtime& bank):resources(bank){}
     bool PreserveGeometry(){std::lock_guard<std::mutex> guard(mutex);if(!identities.empty())return false;preserveGeometry=true;return true;}
     void UploadInstances(U64 address,const void* data,U64 bytes){
@@ -162,27 +162,29 @@ public:
     // Called after each forwarded queue operation, under the interception
     // queue mutex. The nested private Signal is excluded from native ordering.
     void Tail(ID3D12CommandQueue* queue){
-        std::lock_guard<std::mutex> guard(mutex);auto* id=Identify(queue);if(!id){catalog.Invalidate();return;}
+        std::lock_guard<std::mutex> guard(mutex);if(!catalog.Healthy()){retirement.Poll();return;}auto* id=Identify(queue);if(!id){catalog.Invalidate();return;}
         auto& p=progress[id->id];
         if(!p.fence){ComPtr<ID3D12Device> device;
             if(FAILED(queue->GetDevice(IID_PPV_ARGS(&device)))||FAILED(device->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&p.fence)))){catalog.Invalidate();return;}
         }
         if(p.value>=UINT64_MAX-1||FAILED(queue->Signal(p.fence.Get(),++p.value))){catalog.Invalidate();return;}
+        p.stamps.emplace(p.value,catalog.TailStamp(id->id));
         ++checkpointOperations;retirement.Poll();
     }
     void Checkpoint(){
         std::lock_guard<std::mutex> guard(mutex);
-        if(checkpointOperations-lastCheckpointAttempt<128)return;
+        if(!catalog.Healthy()||checkpointOperations-lastCheckpointAttempt<32)return;
         lastCheckpointAttempt=checkpointOperations;Measure timing{stats.checkpoints};
-        bool pending=false;
-        for(const auto& item:progress){const auto done=item.second.fence->GetCompletedValue();
-            if(done==UINT64_MAX){catalog.Invalidate();return;}pending=pending||done<item.second.value;
+        std::map<U64,U64> completed;
+        for(auto& item:progress){auto& p=item.second;const auto done=p.fence->GetCompletedValue();
+            if(done==UINT64_MAX){catalog.Invalidate();return;}
+            auto end=p.stamps.upper_bound(done);
+            if(end!=p.stamps.begin())p.completedStamp=std::max(p.completedStamp,std::prev(end)->second);
+            p.stamps.erase(p.stamps.begin(),end);completed.emplace(item.first,p.completedStamp);
         }
-        // Never block native queue submission for housekeeping. Retry at a
-        // bounded cadence; an exhausted journal rejects PT instead of stalling.
-        if(pending)return;
-        const auto live=resources.LiveTokens();
-        if(catalog.CompletedCheckpoint([&live](U64 token){return live.count(token)!=0;})){checkpointOperations=0;lastCheckpointAttempt=0;}
+        // Metadata can retire while newer GPU work remains in flight. Geometry
+        // storage still has independent recording/submission/dispatch leases.
+        catalog.RetireHistory(completed);
     }
     bool Signal(IUnknown* queue,IUnknown* fence,U64 value){
         std::lock_guard<std::mutex> guard(mutex);auto* q=Identify(queue);auto* f=Identify(fence);

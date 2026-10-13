@@ -3,7 +3,49 @@
 #include <cstdio>
 #include <chrono>
 using namespace PTSceneOrder;
+static void TestLiveCompaction(){
+    using namespace PTSceneOrder;
+    Graph reference,compact;
+    std::vector<std::pair<U64,U64>> cuts;
+    std::map<U64,U64> signalled,completed;
+    unsigned random=0x19347u;U64 version=1;
+    const auto next=[&](){random=random*1664525u+1013904223u;return random;};
+    for(unsigned step=0;step<3000;++step){
+        const U64 queue=1+next()%3,key=1+next()%7;
+        switch(next()%4){
+        case 0: assert(reference.Write(queue,{key,0x1000+key*256},version));assert(compact.Write(queue,{key,0x1000+key*256},version));++version;break;
+        case 1: ++signalled[queue];assert(reference.Signal(queue,queue,signalled[queue]));assert(compact.Signal(queue,queue,signalled[queue]));break;
+        case 2: {const U64 producer=1+next()%3;if(signalled[producer]){assert(reference.Wait(queue,producer,signalled[producer]));assert(compact.Wait(queue,producer,signalled[producer]));}break;}
+        default: cuts.emplace_back(reference.Mark(queue),compact.Mark(queue));break;
+        }
+        if(cuts.size()>12)cuts.erase(cuts.begin());
+        if(step%32)continue;
+        std::set<U64> roots;for(const auto& cut:cuts)roots.insert(cut.second);
+        std::map<U64,U64> remap;std::set<U64> versions;
+        assert(compact.Compact(roots,{},remap,versions));
+        for(auto& cut:cuts)cut.second=remap.at(cut.second);
+        for(const auto& cut:cuts)for(U64 k=1;k<=7;++k){Selection a,b;
+            const auto sa=reference.Select(cut.first,{k,0x1000+k*256},a),sb=compact.Select(cut.second,{k,0x1000+k*256},b);
+            assert(sa==sb);if(sa==Status::ready)assert(a.version==b.version);
+        }
+    }
+    // Continuous submissions: completion lags the current tail. No idle point
+    // is supplied, yet metadata stays bounded and future CPU submissions may
+    // safely observe polled completion. Old cuts do not acquire that new edge.
+    Graph busy;U64 done=0;std::map<U64,U64> remap;std::set<U64> versions;
+    for(U64 n=1;n<=20000;++n){
+        assert(busy.Write(1,{1,0x1000},n));assert(busy.Signal(1,1,n));const auto stamp=busy.TailStamp(1);
+        assert(busy.Compact({},{{1,done}},remap,versions));done=stamp;assert(busy.Size()<12);
+    }
+    const auto final=busy.Mark(1);Selection selected;assert(busy.Select(final,{1,0x1000},selected)==Status::ready&&selected.version==20000);
+    Graph concurrent;assert(concurrent.Write(1,{1,0x1000},1));const auto before=concurrent.Mark(2);
+    assert(concurrent.Compact({before},{{1,concurrent.TailStamp(1)}},remap,versions));
+    assert(concurrent.Select(remap.at(before),{1,0x1000},selected)==Status::unordered);
+    const auto after=concurrent.Mark(2);assert(concurrent.Select(after,{1,0x1000},selected)==Status::ready);
+    std::puts("PASS live compaction: differential queue ordering, old cuts, concurrent writes and 20,000 busy-queue updates.");
+}
 int main(){
+    TestLiveCompaction();
     const Key as{10,0xa000};Selection chosen;
     Graph graph;
     graph.Write(1,as,100);graph.Signal(1,20,1);

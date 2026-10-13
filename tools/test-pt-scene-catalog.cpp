@@ -98,5 +98,16 @@ int main(){
     }
     generation=prune.Begin(9);assert(prune.Wait(9,99,1));assert(prune.Mark(9,generation,502));assert(prune.Submit(9,{{9,generation}}));
     assert(prune.Scene(502,top,scene)==Status::ready&&Position(scene)==0x9000+19999*4);
+    Catalog busy;U64 completed=0;
+    generation=busy.Begin(1);assert(busy.Record(1,generation,Blas(bottom,0x2000)));
+    assert(busy.Record(1,generation,copy));assert(busy.Record(1,generation,Tlas(compact)));assert(busy.Submit(1,{{1,generation}}));
+    for(U64 n=0;n<20000;++n){
+        generation=busy.Begin(1);assert(busy.Record(1,generation,Blas(bottom,0x3000+n*4)));assert(busy.Submit(1,{{1,generation}}));
+        const auto stamp=busy.TailStamp(1);assert(busy.RetireHistory({{1,completed}}));completed=stamp;
+        const auto stats=busy.StatisticsNow();assert(stats.rows<32&&stats.nodes<32&&stats.versions<10);
+    }
+    generation=busy.Begin(1);assert(busy.Mark(1,generation,600));assert(busy.Submit(1,{{1,generation}}));
+    assert(busy.RetireHistory({{1,completed}}));
+    assert(busy.Scene(600,top,scene)==Status::ready&&Position(scene)==0x2000); // Compacted static source remains exact.
     std::puts("PASS scene catalog: submitted build/copy cuts, exact allocations, late signals, unknown writes, reset and replay rejection.");
 }

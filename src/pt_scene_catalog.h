@@ -154,6 +154,34 @@ public:
         if(retainedRows>MaximumRows||!graph.RebaseCompleted(baseline))return false;
         versions=std::move(retained);rows=retainedRows;return true;
     }
+    U64 TailStamp(U64 queue)const {std::lock_guard<std::mutex> guard(mutex);return graph.TailStamp(queue);}
+    struct Statistics {std::size_t versions,rows,nodes;};
+    Statistics StatisticsNow()const {std::lock_guard<std::mutex> guard(mutex);return {versions.size(),rows,graph.Size()};}
+    bool RetireHistory(const std::map<U64,U64>& completed){
+        std::lock_guard<std::mutex> guard(mutex);if(!valid)return false;
+        // Resolve compaction once while its source history exists. Its own
+        // destination version remains unchanged, and shared geometry retains
+        // its independent GPU storage owner.
+        for(auto& v:versions)if(v.second.snapshot->kind==Snapshot::Kind::copy){
+            const Snapshot* source=nullptr;std::set<U64> visiting;
+            if(Resolve(v.second.before,v.second.snapshot->source.key,source,visiting)==Status::ready){
+                auto concrete=std::make_shared<Snapshot>(*source);concrete->destination=v.second.snapshot->destination;concrete->source={};
+                const auto previous=Rows(*v.second.snapshot),next=Rows(*concrete);
+                if(next>previous&&next-previous>MaximumRows-rows)return false;
+                rows=rows-previous+next;v.second.snapshot=std::move(concrete);v.second.before=0;
+            }
+        }
+        std::set<U64> roots;for(const auto& cut:cuts)if(cut.second)roots.insert(cut.second);
+        for(const auto& v:versions)if(v.second.snapshot->kind==Snapshot::Kind::copy&&v.second.before)roots.insert(v.second.before);
+        std::map<U64,U64> remap;std::set<U64> keep;
+        if(!graph.Compact(roots,completed,remap,keep))return false;
+        for(auto& cut:cuts)if(cut.second)cut.second=remap.at(cut.second);
+        for(auto it=versions.begin();it!=versions.end();){
+            if(!keep.count(it->first)){rows-=Rows(*it->second.snapshot);it=versions.erase(it);}
+            else {if(it->second.snapshot->kind==Snapshot::Kind::copy&&it->second.before)it->second.before=remap.at(it->second.before);else it->second.before=0;++it;}
+        }
+        return true;
+    }
     void Forget(U64 ticket){std::lock_guard<std::mutex> guard(mutex);cuts.erase(ticket);}
     bool Healthy()const {return valid.load(std::memory_order_acquire);}
     const char* Failure()const {std::lock_guard<std::mutex> guard(mutex);return failure;}
