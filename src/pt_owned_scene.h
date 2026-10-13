@@ -31,7 +31,8 @@ public:
         const auto key=std::make_pair(address,bytes);const auto cached=lookup.find(key);
         if(cached!=lookup.end())return cached->second;
         U64 found=0;
-        for(const auto& entry:allocations)if(Contains(entry.first,address,bytes)){
+        for(const auto& entry:allocations){const auto& a=entry.second;
+            if(!bytes||address<a.address||address-a.address>a.bytes||bytes>a.bytes-(address-a.address))continue;
             if(found){found=0;break;} // Overlapping retained allocations are not guessed.
             found=entry.first;
         }

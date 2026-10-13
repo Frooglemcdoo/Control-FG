@@ -152,6 +152,7 @@ public:
         versions=std::move(retained);rows=retainedRows;return true;
     }
     void Forget(U64 ticket){std::lock_guard<std::mutex> guard(mutex);cuts.erase(ticket);}
+    bool Healthy()const {std::lock_guard<std::mutex> guard(mutex);return valid;}
     void Invalidate(){std::lock_guard<std::mutex> guard(mutex);valid=false;}
     Status Scene(U64 ticket,Allocation selected,PTSceneDispatch::Scene& output)const {
         output={};std::lock_guard<std::mutex> guard(mutex);if(!valid)return Status::invalid;

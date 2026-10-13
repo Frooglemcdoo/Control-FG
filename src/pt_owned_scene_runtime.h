@@ -17,7 +17,8 @@ namespace PTOwnedScene {
 class Runtime {
     using Resource=Microsoft::WRL::ComPtr<ID3D12Resource>;
     struct Entry {Resource resource;U64 token,address,bytes;};
-    std::mutex mutex;std::condition_variable completed;U64 pending=0;Index index;std::map<U64,Entry> owners;
+    std::mutex mutex;std::condition_variable completed;U64 pending=0;Index index;std::map<U64,Entry> owners;std::map<U64,U64> wrappers;
+    std::shared_ptr<PTGeometrySnapshot::Pool> geometryPool=std::make_shared<PTGeometrySnapshot::Pool>();
     U64 nextToken=0,held=0;bool active=true;
 public:
     struct Stats {U64 retained=0,rejected=0,budget=0,observed=0,unownedGeometry=0,validatedRelease=0,mismatchedRelease=0,peakBytes=0;U64 resolved[6]{};};
@@ -33,7 +34,7 @@ public:
     struct Release {Resource resource;U64 address=0,bytes=0;};
     unsigned Created(U64 wrapper,IUnknown* native,U64 address,U64 bytes){
         std::lock_guard<std::mutex> guard(mutex);if(!active)return 0;
-        auto old=owners.find(wrapper);if(old!=owners.end()){index.Remove(old->second.token);held-=old->second.bytes;owners.erase(old);}
+        auto old=owners.find(wrapper);if(old!=owners.end()){index.Remove(old->second.token);wrappers.erase(old->second.token);held-=old->second.bytes;owners.erase(old);}
         if(!native||!address||!bytes||bytes>MaximumResource){++stats.rejected;return 2;}
         if(owners.size()>=8192||bytes>MaximumBytes-held){++stats.budget;return 3;}
         Resource r;if(FAILED(native->QueryInterface(IID_PPV_ARGS(&r)))){++stats.rejected;return 2;}
@@ -41,12 +42,12 @@ public:
         if(d.Dimension!=D3D12_RESOURCE_DIMENSION_BUFFER||d.Width<bytes||d.Width>MaximumResource||r->GetGPUVirtualAddress()!=address){++stats.rejected;return 2;}
         if(d.Width>MaximumBytes-held){++stats.budget;return 3;}
         const auto token=++nextToken;held+=d.Width;stats.peakBytes=(std::max)(stats.peakBytes,held);++stats.retained;
-        index.Insert({token,address,d.Width});owners.emplace(wrapper,Entry{std::move(r),token,address,d.Width});return 1;
+        index.Insert({token,address,d.Width});owners.emplace(wrapper,Entry{std::move(r),token,address,d.Width});wrappers.emplace(token,wrapper);return 1;
     }
     Release BeforeRelease(U64 wrapper){
         std::lock_guard<std::mutex> guard(mutex);Release out{};
         if(!active)return out;auto it=owners.find(wrapper);if(it==owners.end())return out;
-        auto& e=it->second;index.Remove(e.token);++pending;
+        auto& e=it->second;index.Remove(e.token);wrappers.erase(e.token);++pending;
         out={std::move(e.resource),e.address,e.bytes};owners.erase(it);return out;
     }
     unsigned AfterRelease(Release& r){
@@ -72,8 +73,8 @@ public:
     bool Identify(U64 address,U64 bytes,Allocation& allocation){
         allocation={};std::lock_guard<std::mutex> guard(mutex);if(!active)return false;
         const auto token=index.Find(address,bytes);if(!token)return false;
-        for(const auto& owner:owners)if(owner.second.token==token){
-            const auto& e=owner.second;allocation={token,address,e.bytes-(address-e.address)};return true;
+        const auto found=wrappers.find(token);if(found!=wrappers.end()){
+            const auto& e=owners.at(found->second);allocation={token,address,e.bytes-(address-e.address)};return true;
         }
         return false;
     }
@@ -84,7 +85,7 @@ public:
         if(!destination||!address||!bytes||bytes>4096)return false;
         std::lock_guard<std::mutex> guard(mutex);if(!active)return false;
         const auto token=index.Find(address,bytes);if(!token)return false;
-        for(const auto& item:owners){const auto& e=item.second;if(e.token!=token)continue;
+        const auto found=wrappers.find(token);if(found!=wrappers.end()){const auto& e=owners.at(found->second);
             D3D12_HEAP_PROPERTIES properties{};D3D12_HEAP_FLAGS flags{};
             if(FAILED(e.resource->GetHeapProperties(&properties,&flags))||properties.Type!=D3D12_HEAP_TYPE_UPLOAD)return false;
             const SIZE_T offset=static_cast<SIZE_T>(address-e.address);const D3D12_RANGE range{offset,offset+bytes};void* mapped=nullptr;
@@ -103,7 +104,8 @@ public:
         for(const auto& g:geometry)for(const U64 token:{g.indexToken,g.positionToken}){
             if(sources.count(token))continue;
             const Entry* entry=nullptr;U64 wrapper=0;
-            for(const auto& item:owners)if(item.second.token==token){entry=&item.second;wrapper=item.first;break;}
+            const auto found=wrappers.find(token);
+            if(found!=wrappers.end()){wrapper=found->second;entry=&owners.at(wrapper);}
             PTNativeBufferObserver::Snapshot native{};
             if(!entry||!PTNativeBufferObserver::Read(reinterpret_cast<const void*>(wrapper),native)||
                native.resource!=reinterpret_cast<UINT_PTR>(entry->resource.Get())||native.address!=entry->address||native.bytes>entry->bytes)return false;
@@ -118,7 +120,7 @@ public:
             f->indexBase=i.address;f->indexBytes=i.bytes;f->positionBase=p.address;f->positionBytes=p.bytes;frozen.push_back(std::move(f));
         }
         std::vector<PTGeometrySnapshot::Source> ordered;for(const auto& item:sources)ordered.push_back(item.second);
-        if(!PTGeometrySnapshot::Record(list,ordered,budget,transfer))return false;
+        if(!PTGeometrySnapshot::Record(list,ordered,budget,transfer,geometryPool))return false;
         for(std::size_t n=0;n<geometry.size();++n){
             auto& f=*frozen[n];f.owner=transfer->storage;
             f.privateIndex=transfer->storage->copies.at(geometry[n].indexToken)->GetGPUVirtualAddress();
@@ -178,6 +180,7 @@ public:
         return PTSceneDispatch::Prepare(selected,scene,table,index,exports,current).status==PTSceneDispatch::Status::prepared&&
             PTSceneDispatch::SameDispatch(prepared,current);
     }
-    Stats Stop(){std::unique_lock<std::mutex> guard(mutex);active=false;completed.wait(guard,[this]{return pending==0;});index.Clear();owners.clear();held=0;return stats;}
+    PTGeometrySnapshot::Pool::Stats GeometryStatistics(){return geometryPool->Statistics();}
+    Stats Stop(){std::unique_lock<std::mutex> guard(mutex);active=false;completed.wait(guard,[this]{return pending==0;});index.Clear();wrappers.clear();owners.clear();held=0;return stats;}
 };
 }

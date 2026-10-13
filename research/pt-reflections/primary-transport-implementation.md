@@ -74,3 +74,34 @@ barriers, history/denoiser guides, and the reviewed composition adapter are stil
 required. The existing native four-byte payload and hit-table side effects must
 not be silently reinterpreted as this path state. This module does not change the
 installed mod or provide a playable full-PT build.
+
+## M12R2 follow-up to the failed M12R1 game run
+
+R1's user-reported ~20 FPS is an improvement over 3–5 FPS, but its captured log
+contains no PT_PRIMARY_RECORDED/SUBMITTED/GPU evidence. The final CPU totals were
+11,570 build callbacks / 45,854 ms aggregate / 188 ms maximum, with nonblocking
+checkpoint callbacks. This is cumulative CPU time, not GPU time or per-frame cost.
+
+R2 adds a bounded 64 MiB idle geometry-buffer pool in addition to the existing
+512 MiB active snapshot budget. Storage returns resources only after all recording,
+scene and submitted-flight owners release it. Each checkout records a fresh copy,
+with the same source-state checks and restoration. Retirement now shares one fence
+across a native submission batch. Token lookups use a maintained reverse owner map.
+An invalid catalog skips new expensive build capture while native calls continue.
+R2 logs catalog health, skipped work, copy failures and pool allocation/reuse counts.
+
+The captured native primary DXBC RDEF marks inverse-screen (+8), inverse-output
+(+24), ClipToView (+224) and current frame (+1112) as used. Screen XY (+0) is
+unused. R2 derives integral render extents from inverse-screen, ignores unused
+screen/output fields for view equality and uses current frame for its private RNG.
+RDEF unused does **not** prove bytes are absent: captured shader metadata alone
+cannot establish the runtime contents of these upload slices. Therefore world and
+projection matrices still must be finite, form inverse pairs and match across
+passes; missing transforms cannot silently admit an incorrect camera. Exact field
+failure reasons are now logged. If those guards reject, additional provider/camera
+integration remains necessary; R2 must not be described as confirmed primary PT.
+
+Validation includes the inverse-extent/matrix fixture and Windows WARP GPU-copy
+retirement checks extended to cover pooled reuse only after completion, plus the
+existing protected P2/G3 encoding checks. In-game FPS/coverage remain unverified
+until this package is tested.

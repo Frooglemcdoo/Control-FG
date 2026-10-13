@@ -26,7 +26,12 @@ static ComPtr<IUnknown> Identity(IUnknown* object){ComPtr<IUnknown> result;if(ob
 static bool ReadView(UINT64 address,View& view){
     if(!PTNativeView::uploads.Read(address,view.bytes.data(),view.bytes.size())&&
        !PTSceneLive::owner.Resources().ReadUpload(address,view.bytes.data(),view.bytes.size())){Reject("view_upload_untracked");return false;}
-    if(!view.Decode()){Reject("view_constants_invalid");return false;}return true;
+    if(!view.Decode()){
+        static std::atomic<UINT64> failures{0};const auto n=++failures;
+        if(n<=8||n%24000==0){float inverse[2]{};std::memcpy(inverse,view.bytes.data()+8,8);
+            Log("PT_PRIMARY_VIEW_INVALID reason=%s offset=%u inverse=%.9g,%.9g dimensions=%ux%u frame=%u count=%llu",view.failure,view.failureOffset,inverse[0],inverse[1],view.width,view.height,view.frame,n);}
+        Reject("view_constants_invalid");return false;
+    }return true;
 }
 static bool SameView(UINT64 address,const View& expected){View current;return ReadView(address,current)&&expected.Same(current);}
 static bool ContextFor(ID3D12GraphicsCommandList* list,const Bindings& bindings,UINT tableParameter,Context& context){
@@ -313,6 +318,8 @@ static void Submitted(void*,ID3D12CommandQueue* queue,UINT count,ID3D12CommandLi
         }
         static UINT64 submissions=0;const auto sequence=++submissions;
         if(sequence<=4||sequence%240==0){const auto t=PTSceneLive::owner.Scenes().Statistics();
+            const auto pool=PTSceneLive::owner.Resources().GeometryStatistics();
+            Log("PT_PRIMARY_CAPTURE healthy=%u skipped_invalid=%llu copy_failures=%llu pooled_idle_bytes=%llu buffer_allocations=%llu buffer_reuses=%llu",unsigned(t.healthy),t.skippedInvalid,t.copyFailures,pool.bytes,pool.allocations,pool.reuses);
             Log("PT_PRIMARY_CPU submissions=%llu builds=%llu build_total_ms=%llu build_max_ms=%llu checkpoints=%llu checkpoint_total_ms=%llu checkpoint_max_ms=%llu blocking_checkpoint_waits=0",sequence,t.builds.calls,t.builds.totalMs,t.builds.maxMs,t.checkpoints.calls,t.checkpoints.totalMs,t.checkpoints.maxMs);}
         PollMetrics();Output::Poll();
     }catch(...){Reject("retirement_exception");}
@@ -343,6 +350,6 @@ static bool Start(){
     if(FAILED(device->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&sceneUseFence))))return false;
     if(!PTSceneQueues::Start(&PTSceneLive::owner.Scenes())||!PTSceneQueues::Register(&PTSceneLive::owner.Scenes(),&queueConsumer)||
        !PTCommandBindings::Register(&commandConsumer)||!PTNativeJobRuntime::Register(&Job)||!PTSceneLive::owner.Start(step,true))return false;
-    active=true;Log("PT_PRIMARY_SESSION_READY build=M12R1 ready=1 hits=4 spp=1 material=opaque_general geometric_normals=1 native_fallback=1");return true;
+    active=true;Log("PT_PRIMARY_SESSION_READY build=M12R2 ready=1 hits=4 spp=1 material=opaque_general geometric_normals=1 native_fallback=1");return true;
 }
 }

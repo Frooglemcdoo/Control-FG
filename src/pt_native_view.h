@@ -9,20 +9,44 @@ namespace PTNativeView {
 struct View {
     std::array<unsigned char,1136> bytes{};
     std::uint32_t frame=0,width=0,height=0;
+    const char* failure="undecoded";
+    unsigned failureOffset=0;
+    static bool Extent(float inverse,std::uint32_t& extent){
+        if(!std::isfinite(inverse)||inverse<=0)return false;
+        const double pixels=std::round(1.0/double(inverse));
+        if(pixels<1||pixels>16384||std::abs(pixels*inverse-1)>1e-6)return false;
+        extent=static_cast<std::uint32_t>(pixels);return true;
+    }
     bool Decode(){
-        frame=width=height=0;float values[72]{};std::memcpy(values,bytes.data(),sizeof(values));
-        for(float v:values)if(!std::isfinite(v))return false;
-        // Native primary unprojection uses g_vInvScreenRes (b0+8), not
-        // g_vInvOutputRes (b0+24); DLSS render/output extents differ.
-        if(values[0]<1||values[0]>16384||values[1]<1||values[1]>16384||
-           std::floor(values[0])!=values[0]||std::floor(values[1])!=values[1]||
-           std::abs(values[0]*values[2]-1)>1e-5f||std::abs(values[1]*values[3]-1)>1e-5f)return false;
+        frame=width=height=0;failure="inverse_extent";failureOffset=8;
+        float values[72]{};std::memcpy(values,bytes.data(),sizeof(values));
+        // RDEF and instructions use g_vInvScreenRes at +8. g_vScreenRes.xy
+        // and the output resolution are not reliable per-pass identity fields.
+        if(!Extent(values[2],width)||!Extent(values[3],height))return false;
+        failure="camera_nonfinite";
+        for(unsigned n=8;n<72;++n)if(!std::isfinite(values[n])){failureOffset=n*4;return false;}
+        // Private rays need BOTH world transforms even when a native shader
+        // does not reference them. Never admit zero/unpopulated camera bytes.
+        failure="world_inverse";failureOffset=32;
+        for(unsigned row=0;row<4;++row)for(unsigned col=0;col<4;++col){
+            double sum=0;
+            for(unsigned k=0;k<4;++k)sum+=double(values[8+row*4+k])*values[24+k*4+col];
+            if(std::abs(sum-(row==col?1.0:0.0))>0.01)return false;
+        }
+        failure="projection_inverse";failureOffset=160;
+        for(unsigned row=0;row<4;++row)for(unsigned col=0;col<4;++col){
+            double sum=0;
+            for(unsigned k=0;k<4;++k)sum+=double(values[40+row*4+k])*values[56+k*4+col];
+            if(std::abs(sum-(row==col?1.0:0.0))>0.01)return false;
+        }
+        failure="frame_zero";failureOffset=1112;
         std::memcpy(&frame,bytes.data()+1112,4);if(!frame)return false;
-        width=static_cast<std::uint32_t>(values[0]);height=static_cast<std::uint32_t>(values[1]);return true;
+        failure="none";failureOffset=0;return true;
     }
     bool Same(const View& other)const {
         return frame&&frame==other.frame&&width==other.width&&height==other.height&&
-            !std::memcmp(bytes.data(),other.bytes.data(),288);
+            !std::memcmp(bytes.data()+8,other.bytes.data()+8,8)&&
+            !std::memcmp(bytes.data()+32,other.bytes.data()+32,256);
     }
 };
 }

@@ -99,7 +99,7 @@ static void TestGeometrySnapshot(ID3D12Device* device){
     assert(SUCCEEDED(list->Close()));
     auto released=bank.BeforeRelease(reinterpret_cast<UINT_PTR>(wrapper.data()));source.Reset();assert(bank.AfterRelease(released)==5);
     PTGeometrySnapshot::Retirement retirement;PTGeometrySnapshot::Retirement::Batch batch;
-    assert(retirement.Before(queue.Get(),{transfer},batch));
+    assert(retirement.Before(queue.Get(),{transfer,transfer},batch)&&batch.size()==1);
     ComPtr<ID3D12Fence> gate,done;assert(SUCCEEDED(device->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&gate))));
     assert(SUCCEEDED(device->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&done))));
     assert(SUCCEEDED(queue->Wait(gate.Get(),1)));ID3D12CommandList* commands=list.Get();queue->ExecuteCommandLists(1,&commands);
@@ -110,6 +110,19 @@ static void TestGeometrySnapshot(ID3D12Device* device){
     D3D12_RANGE range{0,512};assert(SUCCEEDED(readback->Map(0,&range,reinterpret_cast<void**>(&mapped))));
     for(unsigned n=0;n<512;++n)assert(mapped[n]==static_cast<unsigned char>(n));readback->Unmap(0,&empty);
     retirement.Poll();assert(budget->Held()==0);
+    const auto idle=bank.GeometryStatistics();assert(idle.bytes==desc.Width&&idle.allocations==1&&idle.reuses==0);
+    assert(SUCCEEDED(allocator->Reset()));assert(SUCCEEDED(list->Reset(allocator.Get(),nullptr)));
+    source=make(D3D12_HEAP_TYPE_DEFAULT,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+    raw=source.Get();const auto nextAddress=source->GetGPUVirtualAddress();
+    std::memcpy(wrapper.data(),&raw,8);std::memcpy(wrapper.data()+0x48,&nextAddress,8);
+    assert(bank.Created(reinterpret_cast<UINT_PTR>(wrapper.data()),source.Get(),nextAddress,desc.Width)==1);
+    geometry={{nextAddress,nextAddress+256,12,2,3,3,2,2}};
+    assert(bank.FreezeGeometry(list.Get(),geometry,budget,transfer));
+    assert(transfer->storage->copies.at(2).Get()==frozen); // Only retired storage re-enters the pool.
+    assert(bank.GeometryStatistics().reuses==1&&bank.GeometryStatistics().bytes==0);
+    assert(SUCCEEDED(list->Close()));assert(SUCCEEDED(list->Reset(allocator.Get(),nullptr)));
+    transfer.reset();geometry.clear();assert(budget->Held()==0);
+    assert(bank.GeometryStatistics().bytes==desc.Width);
     std::puts("PASS GPU geometry snapshot: build-time bytes survive later source overwrite/release, shared backing copied once, budget failure emits no copy, fence prevents early retirement.");
 }
 int main(){

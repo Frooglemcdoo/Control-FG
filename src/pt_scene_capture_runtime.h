@@ -50,12 +50,12 @@ class Capture {
     }
 public:
     struct Timing {U64 calls=0,totalMs=0,maxMs=0;};
-    struct Stats {Timing builds,checkpoints;};
+    struct Stats {Timing builds,checkpoints;U64 skippedInvalid=0,copyFailures=0;bool healthy=true;};
 private:
     Stats stats;
     struct Measure {Timing& value;ULONGLONG start=GetTickCount64();~Measure(){const U64 ms=GetTickCount64()-start;++value.calls;value.totalMs+=ms;value.maxMs=(std::max)(value.maxMs,ms);}};
 public:
-    Stats Statistics(){std::lock_guard<std::mutex> guard(mutex);return stats;}
+    Stats Statistics(){std::lock_guard<std::mutex> guard(mutex);stats.healthy=catalog.Healthy();return stats;}
     explicit Capture(PTOwnedScene::Runtime& bank):resources(bank){}
     bool PreserveGeometry(){std::lock_guard<std::mutex> guard(mutex);if(!identities.empty())return false;preserveGeometry=true;return true;}
     void UploadInstances(U64 address,const void* data,U64 bytes){
@@ -69,6 +69,7 @@ public:
     }
     void Build(IUnknown* list,const D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC* desc){
         std::lock_guard<std::mutex> guard(mutex);Measure timing{stats.builds};
+        if(!catalog.Healthy()){++stats.skippedInvalid;return;}
         D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC d{};
         if(!PTSceneObserver::ReadBuild(desc,d)){catalog.Invalidate();return;}
         PTSceneCatalog::Snapshot s;s.destination=Allocation(d.DestAccelerationStructureData);
@@ -103,7 +104,7 @@ public:
             if(!id||FAILED(list->QueryInterface(IID_PPV_ARGS(&commands)))){catalog.Invalidate();return;}
             auto& copies=recordedCopies[id->id];copies.emplace_back();
             if(!resources.FreezeGeometry(commands.Get(),s.geometry,copyBudget,copies.back())){
-                copies.pop_back();s.kind=PTSceneCatalog::Snapshot::Kind::unknown;
+                ++stats.copyFailures;copies.pop_back();s.kind=PTSceneCatalog::Snapshot::Kind::unknown;
             }
         }
         Record(list,std::move(s));
