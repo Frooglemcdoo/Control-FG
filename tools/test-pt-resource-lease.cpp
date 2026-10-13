@@ -212,6 +212,60 @@ static void TestUntrackedSceneDestinations(ID3D12Device* device){
     std::puts("PASS: untracked AS writes stay local; aliases and short destinations tombstone; later valid builds recover");
 }
 
+static void TestOffUpdateCapture(ID3D12Device* device){
+    PTOwnedScene::Runtime bank;PTSceneLive::Capture capture(bank);
+    assert(capture.PreserveGeometry());capture.RenderingRequested(false);
+    D3D12_RESOURCE_DESC desc{};desc.Dimension=D3D12_RESOURCE_DIMENSION_BUFFER;desc.Width=1024;desc.Height=1;
+    desc.DepthOrArraySize=desc.MipLevels=1;desc.SampleDesc.Count=1;desc.Layout=D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+    const auto make=[&](D3D12_HEAP_TYPE type,D3D12_RESOURCE_STATES state){
+        D3D12_HEAP_PROPERTIES heap{};heap.Type=type;ComPtr<ID3D12Resource> out;
+        assert(SUCCEEDED(device->CreateCommittedResource(&heap,D3D12_HEAP_FLAG_NONE,&desc,state,nullptr,IID_PPV_ARGS(&out))));return out;
+    };
+    auto source=make(D3D12_HEAP_TYPE_DEFAULT,D3D12_RESOURCE_STATE_COMMON);
+    auto upload=make(D3D12_HEAP_TYPE_UPLOAD,D3D12_RESOURCE_STATE_GENERIC_READ);
+    unsigned char* bytes=nullptr;assert(SUCCEEDED(upload->Map(0,nullptr,reinterpret_cast<void**>(&bytes))));
+    for(unsigned n=0;n<1024;++n)bytes[n]=static_cast<unsigned char>(n);upload->Unmap(0,nullptr);
+    const auto address=source->GetGPUVirtualAddress();auto* resource=source.Get();std::array<unsigned char,80> wrapper{};
+    std::memcpy(wrapper.data(),&resource,8);std::memcpy(wrapper.data()+0x30,&desc.Width,8);std::memcpy(wrapper.data()+0x48,&address,8);
+    assert(bank.Created(reinterpret_cast<UINT_PTR>(wrapper.data()),source.Get(),address,desc.Width)==1);
+    ComPtr<ID3D12CommandQueue> queue;D3D12_COMMAND_QUEUE_DESC qd{};
+    ComPtr<ID3D12CommandAllocator> allocator;ComPtr<ID3D12GraphicsCommandList> list;
+    assert(SUCCEEDED(device->CreateCommandQueue(&qd,IID_PPV_ARGS(&queue))));
+    assert(SUCCEEDED(device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT,IID_PPV_ARGS(&allocator))));
+    assert(SUCCEEDED(device->CreateCommandList(0,D3D12_COMMAND_LIST_TYPE_DIRECT,allocator.Get(),nullptr,IID_PPV_ARGS(&list))));
+    list->CopyBufferRegion(source.Get(),0,upload.Get(),0,1024);
+    D3D12_RESOURCE_BARRIER barrier{};barrier.Type=D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    barrier.Transition={source.Get(),D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,D3D12_RESOURCE_STATE_COPY_DEST,D3D12_RESOURCE_STATE_COMMON};list->ResourceBarrier(1,&barrier);
+    assert(PTCommandBindings::Watch(list.Get()));PTCommandBindings::tracker.Reset(list.Get(),nullptr);
+    D3D12_RAYTRACING_GEOMETRY_DESC geometry{};geometry.Type=D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES;
+    geometry.Triangles.IndexBuffer=address;geometry.Triangles.IndexFormat=DXGI_FORMAT_R16_UINT;geometry.Triangles.IndexCount=3;
+    geometry.Triangles.VertexBuffer={address+256,12};geometry.Triangles.VertexCount=3;geometry.Triangles.VertexFormat=DXGI_FORMAT_R32G32B32_FLOAT;
+    D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC build{};build.DestAccelerationStructureData=address+512;
+    build.Inputs.Type=D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL;build.Inputs.NumDescs=1;
+    build.Inputs.DescsLayout=D3D12_ELEMENTS_LAYOUT_ARRAY;build.Inputs.pGeometryDescs=&geometry;
+    capture.Build(list.Get(),&build);
+    geometry.Triangles.VertexBuffer.StartAddress=address+320;build.SourceAccelerationStructureData=build.DestAccelerationStructureData;
+    build.Inputs.Flags=D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PERFORM_UPDATE;
+    capture.Build(list.Get(),&build); // Last update happens while PT is off.
+    PTSceneTopology::Instance instance{};instance.idMask=0x01000001;instance.blas=address+512;instance.transform[0]=1;
+    capture.UploadInstances(address+128,&instance,sizeof(instance));
+    auto top=build;top.DestAccelerationStructureData=address+768;top.Inputs.Type=D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL;top.Inputs.InstanceDescs=address+128;
+    capture.Build(list.Get(),&top);assert(capture.Mark(list.Get(),1));
+    capture.RenderingRequested(true); // No subsequent geometry update/rebuild.
+    ID3D12CommandList* raw=list.Get();assert(capture.Submit(queue.Get(),1,&raw));
+    PTOwnedScene::Allocation allocation;assert(bank.Identify(address+768,256,allocation));PTSceneDispatch::Scene scene;
+    assert(capture.Scene(1,{address+768,allocation.token,256},scene)==PTSceneOrder::Status::ready);
+    PTNativeBinding::Binding binding{};binding.indices=address;binding.constants[1]=2;binding.constants[8]=6;
+    std::vector<PTSceneTopology::Mapping> mapping;scene.topology.Check(scene.instances,{binding},2,&mapping);
+    assert(mapping.size()==1&&mapping[0].referenced&&mapping[0].geometry.positions==address+320);
+    const auto frozen=mapping[0].geometry.frozen;assert(frozen&&capture.Statistics().offUpdatesPreserved==1&&capture.Statistics().copyFailures==0);
+    assert(SUCCEEDED(list->Close()));queue->ExecuteCommandLists(1,&raw);capture.Submitted(queue.Get());
+    ComPtr<ID3D12Fence> done;assert(SUCCEEDED(device->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&done))));
+    assert(SUCCEEDED(queue->Signal(done.Get(),1)));HANDLE event=CreateEventW(nullptr,FALSE,FALSE,nullptr);
+    assert(event&&SUCCEEDED(done->SetEventOnCompletion(1,event))&&WaitForSingleObject(event,30000)==WAIT_OBJECT_0);CloseHandle(event);
+    capture.Reset(list.Get());assert(SUCCEEDED(device->GetDeviceRemovedReason()));
+    std::puts("PASS: last BLAS update while PT off stays frozen and selectable after enabling without another build");
+}
 static void TestUnrelatedSceneLists(ID3D12Device* device){
     PTOwnedScene::Runtime bank;PTSceneLive::Capture capture(bank);
     ComPtr<ID3D12CommandQueue> queue;D3D12_COMMAND_QUEUE_DESC desc{};
@@ -273,6 +327,7 @@ int main(){
     TestUnrelatedSceneLists(d.Get());
     TestUntrackedSceneDestinations(d.Get());
     TestGeometrySnapshot(d.Get());TestGeometrySnapshot(d.Get(),true);TestGeometrySnapshot(d.Get(),false,true);TestGeometrySnapshot(d.Get(),false,false,true);
+    TestOffUpdateCapture(d.Get());
     if(debugEnabled){
         ComPtr<ID3D12InfoQueue> messages;assert(SUCCEEDED(d.As(&messages)));
         for(UINT64 n=0;n<messages->GetNumStoredMessages();++n){SIZE_T bytes=0;messages->GetMessage(n,nullptr,&bytes);

@@ -67,7 +67,7 @@ class Capture {
     }
 public:
     struct Timing {U64 calls=0,totalMs=0,maxMs=0;};
-    struct Stats {Timing builds,checkpoints;U64 skippedInvalid=0,untrackedDestinations=0,destinationTombstones=0,lastUntrackedDestination=0,copyFailures=0,historyVersions=0,historyRows=0,historyNodes=0,copyBytes=0;bool healthy=true;const char* failure="none";};
+    struct Stats {Timing builds,checkpoints;U64 skippedInvalid=0,untrackedDestinations=0,destinationTombstones=0,lastUntrackedDestination=0,copyFailures=0,offUpdatesPreserved=0,historyVersions=0,historyRows=0,historyNodes=0,copyBytes=0;bool healthy=true;const char* failure="none";};
 private:
     Stats stats;
     struct Measure {Timing& value;ULONGLONG start=GetTickCount64();~Measure(){const U64 ms=GetTickCount64()-start;++value.calls;value.totalMs+=ms;value.maxMs=(std::max)(value.maxMs,ms);}};
@@ -117,21 +117,18 @@ public:
                 s.geometry.push_back({t.IndexBuffer,t.VertexBuffer.StartAddress,t.VertexBuffer.StrideInBytes,stride,t.IndexCount,t.VertexCount,index.key.token,position.key.token});
             }
         }
-        // Static first builds must be preserved even while the toggle is off:
-        // the engine may never rebuild them. Dynamic updates are tombstoned
-        // while off, so re-enabling cannot reuse an obsolete deformation.
-        const bool dormantUpdate=!renderingRequested.load(std::memory_order_relaxed)&&
+        // An off-mode update can be the LAST update of an object that then
+        // sleeps. Preserve it now: toggling PT on cannot request a native
+        // rebuild, and reusing its older deformation would be incorrect.
+        const bool offUpdate=!renderingRequested.load(std::memory_order_relaxed)&&
             (d.Inputs.Flags&D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PERFORM_UPDATE);
-        if(preserveGeometry&&s.kind==PTSceneCatalog::Snapshot::Kind::blas&&dormantUpdate){
-            s.kind=PTSceneCatalog::Snapshot::Kind::unknown;s.unavailable="scene_update_while_pt_off";
-        }
         if(preserveGeometry&&s.kind==PTSceneCatalog::Snapshot::Kind::blas){
             auto* id=List(list);ComPtr<ID3D12GraphicsCommandList> commands;
             if(!id||FAILED(list->QueryInterface(IID_PPV_ARGS(&commands)))){catalog.Invalidate();return;}
             auto& copies=recordedCopies[id->id];copies.emplace_back();
             if(!resources.FreezeGeometry(commands.Get(),s.geometry,copyBudget,copies.back())){
                 ++stats.copyFailures;copies.pop_back();s.kind=PTSceneCatalog::Snapshot::Kind::unknown;s.unavailable=resources.GeometryFailure();
-            }
+            }else if(offUpdate)++stats.offUpdatesPreserved;
         }
         Record(list,std::move(s));
     }
