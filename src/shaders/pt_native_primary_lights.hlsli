@@ -14,9 +14,13 @@ SamplerState PTPrimaryProjectionClamp : register(s11,space1);
 SamplerState PTPrimaryProjectionWrap : register(s8,space1);
 cbuffer PTPrimaryLightConstants : register(b2) { float4 PTPrimaryLightWords[26]; };
 struct PTPrimaryLightSample {
-    float3 directionView,radiance,targetView;
+    float3 directionView;
+    float3 radiance;
+    float3 targetView;
     float selectionPdf;
-    uint valid,active,directional;
+    uint valid;
+    uint active;
+    uint directional;
 };
 float PTPrimaryRangeFade(float range,float distance) {
     float t=saturate((range-distance)/(0.2*range));return t*t*(3-2*t);
@@ -26,7 +30,9 @@ float PTPrimaryRangeFade(float range,float distance) {
 // Point/spot/sun are treated as delta sources here, with native attenuation and
 // projection. The caller MUST TraceRay for visibility from its safe spawn point.
 PTPrimaryLightSample PTSamplePrimaryLight(float3 positionView,float choose) {
-    PTPrimaryLightSample result=(PTPrimaryLightSample)0;
+    PTPrimaryLightSample result;
+    result.directionView=0;result.radiance=0;result.targetView=0;result.selectionPdf=0;
+    result.valid=0;result.active=0;result.directional=0;
     if(!all(isfinite(positionView))||!isfinite(choose)||choose<0||choose>=1)return result;
     uint3 counts=asuint(PTPrimaryLightWords[16].xyz);
     uint pointCount,pointStride,spotCount,spotStride,sunCount,sunStride;
