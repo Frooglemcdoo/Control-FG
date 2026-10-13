@@ -11,6 +11,12 @@ static std::recursive_mutex mutex;
 static std::vector<unsigned char> library;
 static PTNativeView::Providers viewProviders;
 static std::uint64_t nextTicket=1ull<<63;
+static std::atomic<unsigned> scheduleTrace{0};
+static bool TraceSchedule(){auto remaining=scheduleTrace.load();while(remaining&& !scheduleTrace.compare_exchange_weak(remaining,remaining-1)){}return remaining!=0;}
+static void FenceObserved(void*,ID3D12CommandQueue* queue,ID3D12Fence* fence,UINT64 value,bool signal,HRESULT hr) noexcept {
+    if(!active||!TraceSchedule())return;
+    Log("PT_PRIMARY_SCHEDULE operation=%s queue=%p type=%u fence=%p value=%llu completed=%llu hr=0x%08lX",signal?"signal":"wait",queue,unsigned(queue->GetDesc().Type),fence,value,fence->GetCompletedValue(),static_cast<unsigned long>(hr));
+}
 static ComPtr<IUnknown> pinnedQueue;
 // Extend native AS/attribute read lifetime through the private traversal. Every
 // later submission on another native queue waits for the latest PT use. The
@@ -206,6 +212,17 @@ static void Dispatched(void*,ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT 
             }
             Reject(reason);return;
         }
+        // An unresolved predecessor cannot pass PrepareRecording. Reject it
+        // before touching descriptor allocation, camera, pipeline or output.
+        const auto blocked=PTSceneLive::owner.Scenes().PendingWait(serial);
+        if(blocked.graph.fence){
+            static UINT64 failures=0;if(++failures<=8||failures%600==0){
+                Log("PT_PRIMARY_PREFLIGHT ticket=%llu reason=scene_dispatch_wait_pending row=0 indices=0 attributes=0 index_bytes=0 attribute_bytes=0",serial);
+                Log("PT_PRIMARY_PENDING_FENCE ticket=%llu fence=%llu identity=%p required=%llu last_signal=%llu graph_completed=%llu actual_completed=%llu polled=%u lane=%llu stamp=%llu",serial,blocked.graph.fence,blocked.identity,blocked.graph.value,blocked.graph.signalValue,blocked.graph.completed,blocked.actual,unsigned(blocked.polled),blocked.graph.lane,blocked.graph.stamp);
+                if(failures==1||failures%600==0)scheduleTrace.store(64);
+            }
+            Reject("scene_dispatch_wait_pending");return;
+        }
         auto* recording=RecordingFor(list);
         if(!recording||recording->submitted){Reject("frame_budget_or_duplicate");return;}
         auto a=std::make_shared<Assets>();a->bindings=bindings;a->boundView=view;a->environment=environment;a->engineFrame=candidate->ticket.engineFrame;
@@ -306,6 +323,7 @@ static void Submitting(void*,ID3D12CommandQueue* queue,UINT count,ID3D12CommandL
     if(!active)return;
     try {
         std::lock_guard<std::recursive_mutex> guard(mutex);auto key=Identity(queue);
+        if(TraceSchedule())Log("PT_PRIMARY_SCHEDULE operation=execute queue=%p type=%u lists=%u",queue,unsigned(queue->GetDesc().Type),count);
         if(sceneUseValue&&key&&key.Get()!=pinnedQueue.Get()){
             auto& waited=sceneWaits[key.Get()];
             if(waited.second<sceneUseValue){
@@ -408,7 +426,7 @@ static void Reset(void*,ID3D12GraphicsCommandList* list) noexcept {
         PollMetrics();Output::Poll();
     }catch(...){Reject("reset_exception");}
 }
-static const PTSceneQueues::Consumer queueConsumer{&handoff,&Submitting,&Selected,&Submitted,&Reset};
+static const PTSceneQueues::Consumer queueConsumer{&handoff,&Submitting,&Selected,&Submitted,&Reset,&FenceObserved};
 static void PipelineBound(void*,ID3D12GraphicsCommandList*,ID3D12PipelineState* pipeline) noexcept {
     if(!active||ptReflectionUserState.load(std::memory_order_acquire)!=1)return;
     try{PTPrimaryPipelineProbe::Used(pipeline,0,0,0,false);}
@@ -426,6 +444,6 @@ static bool Start(){
     if(FAILED(device->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&sceneUseFence))))return false;
     if(!PTSceneQueues::Start(&PTSceneLive::owner.Scenes())||!PTSceneQueues::Register(&PTSceneLive::owner.Scenes(),&queueConsumer)||
        !PTCommandBindings::Register(&commandConsumer)||!PTNativeJobRuntime::Register(&Job)||!PTSceneLive::owner.Start(step,true))return false;
-    active=true;Log("PT_PRIMARY_SESSION_READY build=M12R21 ready=1 hits=4 spp=1 material=opaque_general geometric_normals=1 native_fallback=1");return true;
+    active=true;Log("PT_PRIMARY_SESSION_READY build=M12R22 ready=1 hits=4 spp=1 material=opaque_general geometric_normals=1 native_fallback=1");return true;
 }
 }

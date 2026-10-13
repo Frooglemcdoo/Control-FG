@@ -22,6 +22,7 @@ struct Consumer {
     void (*selected)(void*,ID3D12CommandQueue*,UINT,ID3D12CommandList*const*,bool) noexcept=nullptr;
     void (*submitted)(void*,ID3D12CommandQueue*,UINT,ID3D12CommandList*const*,bool) noexcept=nullptr;
     void (*reset)(void*,ID3D12GraphicsCommandList*) noexcept=nullptr;
+    void (*fence)(void*,ID3D12CommandQueue*,ID3D12Fence*,UINT64,bool,HRESULT) noexcept=nullptr;
 };
 inline std::atomic<const Consumer*> consumer{nullptr};
 inline bool hooksValid=true;
@@ -53,6 +54,8 @@ inline HRESULT FenceHook(ID3D12CommandQueue* q,ID3D12Fence* fence,UINT64 value,b
     const HRESULT hr=original(q,fence,value);const DWORD error=GetLastError();
     if(FAILED(hr))capture->Invalidate();
     else {if(signal)capture->Signal(q,fence,value);else capture->Wait(q,fence,value);capture->Tail(q);}
+    const auto client=consumer.load(std::memory_order_acquire);
+    if(client&&client->fence)client->fence(client->context,q,fence,value,signal,hr);
     SetLastError(error);return hr;
 }
 inline HRESULT STDMETHODCALLTYPE SignalHook(ID3D12CommandQueue* q,ID3D12Fence* f,UINT64 n){return FenceHook(q,f,n,true);}
