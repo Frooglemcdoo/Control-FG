@@ -65,6 +65,24 @@ int main(){
     TestStaticSceneCompaction();
     TestLiveCompaction();
     const Key as{10,0xa000};Selection chosen;
+    // Native submission can precede the CPU producer of a queued wait. Keep
+    // known scene metadata for disarmed recording, but never arm from it.
+    Graph preview;
+    preview.Write(1,as,90);preview.Wait(1,301,1);const auto previewCut=preview.Mark(1);
+    assert(preview.Select(previewCut,as,chosen)==Status::pending);
+    assert(preview.Select(previewCut,as,chosen,nullptr,Purpose::recordingPreview)==Status::ready&&chosen.version==90);
+    assert(preview.Select(previewCut,as,chosen)==Status::pending); // Preview cannot upgrade the strict cache.
+    preview.Signal(2,301,1);
+    assert(preview.Select(previewCut,as,chosen)==Status::ready&&chosen.version==90);
+    Graph changedPreview;
+    changedPreview.Write(1,as,100);changedPreview.Signal(1,302,1);
+    changedPreview.Wait(1,303,1);const auto changedCut=changedPreview.Mark(1);
+    assert(changedPreview.Select(changedCut,as,chosen,nullptr,Purpose::recordingPreview)==Status::ready&&chosen.version==100);
+    changedPreview.Wait(2,302,1);changedPreview.Write(2,as,101);changedPreview.Signal(2,303,1);
+    assert(changedPreview.Select(changedCut,as,chosen)==Status::ready&&chosen.version==101); // Old preview must fail version revalidation.
+    Graph unknownPreview;
+    unknownPreview.Write(1,as,0);unknownPreview.Wait(1,304,1);const auto unknownCut=unknownPreview.Mark(1);
+    assert(unknownPreview.Select(unknownCut,as,chosen,nullptr,Purpose::recordingPreview)==Status::missing);
     // R13: checking every future fence signal's complete clock blocked an
     // already-ready scene whenever an unrelated queue awaited a later signal.
     Graph unrelated;
@@ -87,6 +105,7 @@ int main(){
     pendingRace.Wait(2,204,1);pendingRace.Write(2,as,21);
     assert(pendingRace.Select(raceCut,as,chosen,&reason)==Status::pending);
     assert(std::strcmp(reason,"scene_competing_write_pending")==0);
+    assert(pendingRace.Select(raceCut,as,chosen,nullptr,Purpose::recordingPreview)==Status::pending);
     pendingRace.Signal(3,204,1);
     assert(pendingRace.Select(raceCut,as,chosen)==Status::unordered);
     // Nor can it excuse a higher signal from a different queue releasing a
@@ -97,6 +116,7 @@ int main(){
     pendingFenceRace.Wait(3,206,1);pendingFenceRace.Signal(3,205,2);
     assert(pendingFenceRace.Select(fenceCut,as,chosen,&reason)==Status::pending);
     assert(std::strcmp(reason,"scene_fence_order_pending")==0);
+    assert(pendingFenceRace.Select(fenceCut,as,chosen,nullptr,Purpose::recordingPreview)==Status::pending);
     pendingFenceRace.Signal(4,206,1);
     assert(pendingFenceRace.Select(fenceCut,as,chosen)==Status::unordered);
     Graph graph;

@@ -147,9 +147,10 @@ public:
             if(it->second.list.Get()==identity.Get()&&!it->second.submitted)it=Erase(it,"handoff_reset_before_submission");else ++it;
         }
     }
-    // Optional immutable proof permits checking the same writer snapshot at a
-    // later lighting submission. The original ray ticket can then be retired.
-    Status Prepare(std::uint64_t serial,const PTSceneDispatch::ExportSet& exports,PTSceneDispatch::Plan& plan,PTOwnedScene::LeaseBatch& lease,
+    // Provisional CPU metadata permits recording a disarmed dispatch while
+    // native queue dependencies are still arriving. Revalidate MUST succeed
+    // at the later lighting submission before arming GPU traversal.
+    Status PrepareRecording(std::uint64_t serial,const PTSceneDispatch::ExportSet& exports,PTSceneDispatch::Plan& plan,PTOwnedScene::LeaseBatch& lease,
                    std::shared_ptr<const Prepared>* proof=nullptr){
         if(proof)proof->reset();
         plan={};std::lock_guard<std::mutex> guard(mutex);const auto found=pending.find(serial);
@@ -161,7 +162,7 @@ public:
             Erase(found);return Status::rejected;
         }
         PTSceneDispatch::Scene scene;const char* pendingReason=nullptr;
-        const auto selected=owner.Scenes().Scene(serial,entry.acceleration,scene,&pendingReason);
+        const auto selected=owner.Scenes().PreviewScene(serial,entry.acceleration,scene,&pendingReason);
         entry.scenePending=selected==PTSceneOrder::Status::pending?pendingReason:nullptr;
         if(entry.scenePending)return Status::pending;
         if(selected!=PTSceneOrder::Status::ready){Erase(found,selected==PTSceneOrder::Status::missing?"scene_catalog_missing":"scene_catalog_rejected");return Status::rejected;}
@@ -184,13 +185,16 @@ public:
     // position and calls this AFTER catalog Submit, BEFORE native Execute.
     // Pending is disabled for this submission; this method never waits for a
     // native writer or queues a GPU wait. Caller must Forget the later ticket.
-    Status Revalidate(std::uint64_t submissionTicket,std::uint64_t engineFrame,UINT width,UINT height,const std::shared_ptr<const Prepared>& proof){
+    Status Revalidate(std::uint64_t submissionTicket,std::uint64_t engineFrame,UINT width,UINT height,const std::shared_ptr<const Prepared>& proof,const char** reason=nullptr){
+        if(reason)*reason="submission_proof_mismatch";
         if(!submissionTicket||!proof||proof->owner!=&owner||!owner.Active()||!engineFrame||proof->engineFrame!=engineFrame||
            proof->width!=width||proof->height!=height)return Status::rejected;
-        PTSceneDispatch::Scene scene;const auto selected=owner.Scenes().Scene(submissionTicket,proof->acceleration,scene);
+        PTSceneDispatch::Scene scene;const auto selected=owner.Scenes().Scene(submissionTicket,proof->acceleration,scene,reason);
         if(selected==PTSceneOrder::Status::pending)return Status::pending;
-        if(selected!=PTSceneOrder::Status::ready)return Status::rejected;
-        return owner.Resources().Revalidate(scene,proof->table,proof->exports,proof->plan)?Status::prepared:Status::rejected;
+        if(selected!=PTSceneOrder::Status::ready){if(reason)*reason="submission_scene_rejected";return Status::rejected;}
+        const bool same=owner.Resources().Revalidate(scene,proof->table,proof->exports,proof->plan);
+        if(reason)*reason=same?"none":"submission_scene_changed";
+        return same?Status::prepared:Status::rejected;
     }
 };
 }

@@ -223,6 +223,11 @@ public:
     PTSceneOrder::Status Scene(U64 ticket,const PTSceneDescriptors::Acceleration& selected,PTSceneDispatch::Scene& scene,const char** pendingReason=nullptr){
         return catalog.Scene(ticket,{{selected.token,selected.address},selected.bytes},scene,pendingReason);
     }
+    // Recording only: the output remains disarmed until Scene succeeds at
+    // actual queue submission and its exact versions match the prepared plan.
+    PTSceneOrder::Status PreviewScene(U64 ticket,const PTSceneDescriptors::Acceleration& selected,PTSceneDispatch::Scene& scene,const char** pendingReason=nullptr){
+        return catalog.Scene(ticket,{{selected.token,selected.address},selected.bytes},scene,pendingReason,PTSceneOrder::Purpose::recordingPreview);
+    }
     void Forget(U64 ticket){catalog.Forget(ticket);}
     void Invalidate(){catalog.Invalidate("capture_external");}
 };

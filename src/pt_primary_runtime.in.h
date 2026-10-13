@@ -222,7 +222,7 @@ static void Dispatched(void*,ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT 
         }
         PTNativeShaderTable::Identifiers identifiers;PTSceneDispatch::ExportSet exports;PTSceneDispatch::Plan plan;
         if(!handoff.ReadyIdentifiers(serial,identifiers)||!pipeline->Exports(candidate->ticket.pipeline,identifiers.hit,exports)){Reject("private_exports");return;}
-        const auto status=handoff.Prepare(serial,exports,plan,a->scene,&a->proof);
+        const auto status=handoff.PrepareRecording(serial,exports,plan,a->scene,&a->proof);
         if(status!=PTSceneHandoff::Status::pending)candidates.erase(serial);
         if(status!=PTSceneHandoff::Status::prepared){
             std::size_t row=0;const char* reason=handoff.NotReady(serial,row);
@@ -323,12 +323,18 @@ static void Selected(void*,ID3D12CommandQueue* queue,UINT count,ID3D12CommandLis
             for(auto& e:environments)if(e->list.Get()==key.Get()&&e->queue.Get()==queueIdentity.Get())e->submitted=true;
             auto found=recordings.find(key.Get());if(found==recordings.end())continue;auto& recording=found->second;
             for(const auto& frame:recording.producers){const auto& a=frame->assets;
+                const char* admissionReason="submission_inputs_changed";
                 const bool good=admitted&&!recording.submitted&&!frame->producerSubmitted&&(ptReflectionUserState.load()==1u)&&a&&
                     queueIdentity.Get()==pinnedQueue.Get()&&a->environment->submitted&&
                     SameView(a->bindings.arguments[2].value,a->boundView)&&PTTableMirror::bank.Unchanged(a->primary)&&
                     PTTableMirror::bank.Unchanged(a->environment->table)&&
-                    handoff.Revalidate(a->ticket,a->engineFrame,frame->view.width,frame->view.height,a->proof)==PTSceneHandoff::Status::prepared;
-                if(!good||!frame->output->Arm(queue)){frame->output->Invalidate(queue);Reject("submission_rejected");}
+                    handoff.Revalidate(a->ticket,a->engineFrame,frame->view.width,frame->view.height,a->proof,&admissionReason)==PTSceneHandoff::Status::prepared;
+                if(!good||!frame->output->Arm(queue)){
+                    if(good)admissionReason="submission_arm_failed";
+                    static UINT64 failures=0;if(++failures<=16||failures%600==0)
+                        Log("PT_PRIMARY_ADMISSION ticket=%llu reason=%s",a?a->ticket:0,admissionReason);
+                    frame->output->Invalidate(queue);Reject(admissionReason);
+                }
                 else {frame->armed=true;static UINT64 submitted=0;if(++submitted<=8||submitted%240==0)Log("PT_PRIMARY_SUBMITTED count=%llu frame=%u scene=exact alpha_guard=armed",submitted,frame->view.frame);}
             }
             for(const auto& draw:recording.draws){
@@ -415,6 +421,6 @@ static bool Start(){
     if(FAILED(device->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&sceneUseFence))))return false;
     if(!PTSceneQueues::Start(&PTSceneLive::owner.Scenes())||!PTSceneQueues::Register(&PTSceneLive::owner.Scenes(),&queueConsumer)||
        !PTCommandBindings::Register(&commandConsumer)||!PTNativeJobRuntime::Register(&Job)||!PTSceneLive::owner.Start(step,true))return false;
-    active=true;Log("PT_PRIMARY_SESSION_READY build=M12R14 ready=1 hits=4 spp=1 material=opaque_general geometric_normals=1 native_fallback=1");return true;
+    active=true;Log("PT_PRIMARY_SESSION_READY build=M12R15 ready=1 hits=4 spp=1 material=opaque_general geometric_normals=1 native_fallback=1");return true;
 }
 }

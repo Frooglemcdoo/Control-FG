@@ -11,6 +11,9 @@
 namespace PTSceneOrder {
 using U64=std::uint64_t;
 enum class Status {ready,pending,missing,unordered,invalid};
+// A preview is CPU metadata for recording an UNARMED dispatch. It must pass a
+// fresh submission selection before any GPU traversal is enabled.
+enum class Purpose {submission,recordingPreview};
 struct Key {U64 token=0,address=0;bool operator<(const Key& b)const{return token<b.token||(token==b.token&&address<b.address);}};
 struct Selection {U64 version=0,node=0;};
 class Graph {
@@ -35,21 +38,23 @@ class Graph {
         while(!todo.empty()){
             const auto task=todo.back();todo.pop_back();const U64 id=task.first;
             if(!id||clockState[id]>=2)continue;
-            const auto& n=nodes[id];U64 signal=0;
+            const auto& n=nodes[id];U64 signal=0;bool unresolved=false;
             if(n.waitFence){const auto f=fences.find(n.waitFence);
-                if(f==fences.end()){clockState[id]=3;continue;}
-                if(n.waitValue>f->second.completed){const auto found=f->second.signals.lower_bound(n.waitValue);
-                    if(found==f->second.signals.end()){clockState[id]=3;continue;}signal=found->second;}
+                if(f==fences.end())unresolved=true;
+                else if(n.waitValue>f->second.completed){const auto found=f->second.signals.lower_bound(n.waitValue);
+                    if(found==f->second.signals.end())unresolved=true;else signal=found->second;}
             }
             if(!task.second){
                 if(clockState[id]==1){clockCycle=true;return Status::invalid;}
                 clockState[id]=1;todo.push_back({id,true});
                 if(signal)todo.push_back({signal,false});if(n.previous)todo.push_back({n.previous,false});continue;
             }
-            if((n.previous&&clockState[n.previous]!=2)||(signal&&clockState[signal]!=2)){clockState[id]=3;continue;}
+            unresolved=unresolved||(n.previous&&clockState[n.previous]!=2)||(signal&&clockState[signal]!=2);
             auto& c=clocks[id];c=n.base;if(n.previous)for(unsigned lane=0;lane<c.size();++lane)c[lane]=std::max(c[lane],clocks[n.previous][lane]);
             if(signal)for(unsigned lane=0;lane<c.size();++lane)c[lane]=std::max(c[lane],clocks[signal][lane]);
-            c[n.lane]=std::max(c[n.lane],n.stamp);clockState[id]=2;
+            // Preserve known predecessor edges even when another dependency
+            // is unresolved. Strict admission still requires state==ready.
+            c[n.lane]=std::max(c[n.lane],n.stamp);clockState[id]=unresolved?3:2;
         }
         return clockState[at]==2?Status::ready:Status::pending;
     }
@@ -230,28 +235,30 @@ public:
         nodes=std::move(compact);fences=std::move(newFences);observedComplete=done;completedPrefix=0;clockDirty=true;
         return true;
     }
-    Status Select(U64 dispatch,Key target,Selection& result,const char** pendingReason=nullptr)const {
+    Status Select(U64 dispatch,Key target,Selection& result,const char** pendingReason=nullptr,Purpose purpose=Purpose::submission)const {
         if(pendingReason)*pendingReason="none";
         const auto report=[&](Status status,const char* reason){if(status==Status::pending&&pendingReason)*pendingReason=reason;return status;};
-        result={};const auto state=ClockAt(dispatch);if(state!=Status::ready)return report(state,"scene_dispatch_wait_pending");
+        const bool preview=purpose==Purpose::recordingPreview;
+        const auto usable=[&](Status status){return status==Status::ready||(preview&&status==Status::pending);};
+        result={};const auto state=ClockAt(dispatch);if(!usable(state))return report(state,"scene_dispatch_wait_pending");
         for(U64 id=1;id<nodes.size();++id){const auto& n=nodes[static_cast<std::size_t>(id)];
             if(n.target.token!=target.token||n.target.address!=target.address||Before(id,dispatch))continue;
             if(KnownBefore(dispatch,id))continue;
-            const auto status=ClockAt(id);if(status!=Status::ready)return report(status,"scene_competing_write_pending");
-            if(!Before(dispatch,id))return Status::unordered;
+            const auto status=ClockAt(id);if(!usable(status))return report(status,"scene_competing_write_pending");
+            if(!Before(dispatch,id))return report(state==Status::pending||status==Status::pending?Status::pending:Status::unordered,"scene_competing_write_pending");
         }
         // Increasing CPU fence values alone do not prove a queue handoff.
         for(const auto& fence:fences){U64 previous=0;
             for(const auto& signal:fence.second.signals){
-                if(previous&&!KnownBefore(previous,signal.second)){const auto status=ClockAt(signal.second);if(status!=Status::ready)return report(status,"scene_fence_order_pending");
-                    if(!Before(previous,signal.second))return Status::unordered;}
+                if(previous&&!KnownBefore(previous,signal.second)){const auto status=ClockAt(signal.second);if(!usable(status))return report(status,"scene_fence_order_pending");
+                    if(!Before(previous,signal.second))return report(status==Status::pending?Status::pending:Status::unordered,"scene_fence_order_pending");}
                 previous=signal.second;
             }
         }
         std::set<U64> maximal;
         for(U64 id=1;id<nodes.size();++id){const auto& n=nodes[static_cast<std::size_t>(id)];
             if(n.target.token!=target.token||n.target.address!=target.address||!Before(id,dispatch))continue;
-            const auto status=ClockAt(id);if(status!=Status::ready)return status;
+            const auto status=ClockAt(id);if(!usable(status))return status;
             bool dominated=false;
             for(auto it=maximal.begin();it!=maximal.end();){
                 if(Before(id,*it)){dominated=true;break;}

@@ -39,6 +39,24 @@ int main(){
     assert(future.Submit(2,{{2,futureGeneration}}));
     assert(future.Scene(701,top,scene,&reason)==Status::pending);
     assert(std::strcmp(reason,"scene_dispatch_wait_pending")==0);
+    Catalog preview;auto previewGeneration=preview.Begin(1);
+    assert(preview.Record(1,previewGeneration,Blas(bottom,0x2000)));
+    assert(preview.Record(1,previewGeneration,Tlas(bottom)));
+    assert(preview.Submit(1,{{1,previewGeneration}}));assert(preview.Signal(1,301,1));
+    assert(preview.Wait(1,302,1));previewGeneration=preview.Begin(1);
+    assert(preview.Mark(1,previewGeneration,702));assert(preview.Submit(1,{{1,previewGeneration}}));
+    assert(preview.Scene(702,top,scene)==Status::pending);
+    assert(preview.Scene(702,top,scene,nullptr,PTSceneOrder::Purpose::recordingPreview)==Status::ready);
+    const auto previewBottom=scene.blas.at(bottom.key.address).version;
+    assert(Position(scene)==0x2000);
+    assert(preview.Scene(702,top,scene)==Status::pending&&scene.instances.empty());
+    // A producer that arrives later can change BLAS contents while keeping the
+    // TLAS unchanged. Strict admission must expose the changed BLAS version.
+    assert(preview.Wait(2,301,1));previewGeneration=preview.Begin(2);
+    assert(preview.Record(2,previewGeneration,Blas(bottom,0x3000)));
+    assert(preview.Submit(2,{{2,previewGeneration}}));assert(preview.Signal(2,302,1));
+    assert(preview.Scene(702,top,scene)==Status::ready&&Position(scene)==0x3000);
+    assert(scene.blas.at(bottom.key.address).version!=previewBottom);
     auto producer=c.Begin(1);assert(producer);
     assert(c.Record(1,producer,Blas(bottom,0x2000)));
     Snapshot copy;copy.kind=Snapshot::Kind::copy;copy.destination=compact;copy.source=bottom;
