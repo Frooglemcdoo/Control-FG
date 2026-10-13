@@ -1,0 +1,160 @@
+#pragma once
+#include "pt_native_root_layout.h"
+#include <array>
+#include <atomic>
+// Records API arguments on the exact native command-list interfaces. Snapshots
+// contain owned root/heap identities and GPU addresses, never CPU guesses about
+// the engine's cached state. Resource contents/lifetimes require separate proof.
+namespace PTCommandBindings {
+using Microsoft::WRL::ComPtr;
+enum class ArgumentKind {none,table,constant};
+struct Argument {ArgumentKind kind=ArgumentKind::none;UINT64 value=0;};
+struct RootState {ComPtr<ID3D12RootSignature> root;std::array<Argument,18> arguments{};};
+struct Snapshot {
+    std::shared_ptr<const PTNativeRoot::Layout> layout;
+    ComPtr<ID3D12PipelineState> pipeline;
+    ComPtr<ID3D12DescriptorHeap> resources,samplers;
+    std::array<Argument,18> arguments{};
+};
+class Tracker {
+    struct Entry {
+        ComPtr<IUnknown> identity;
+        ComPtr<ID3D12PipelineState> pipeline;
+        ComPtr<ID3D12DescriptorHeap> resources,samplers;
+        RootState compute,graphics;
+    };
+    std::mutex mutex;
+    std::map<IUnknown*,std::shared_ptr<Entry>> entries;
+    std::map<ID3D12GraphicsCommandList*,std::shared_ptr<Entry>> aliases;
+    std::atomic<bool> healthy{true};
+    template<class F> void Change(ID3D12GraphicsCommandList* list,F&& fn){
+        if(!healthy.load())return;std::lock_guard<std::mutex> guard(mutex);
+        const auto found=aliases.find(list);if(found!=aliases.end())fn(*found->second);
+    }
+    static void Tables(RootState& state){for(auto& a:state.arguments)if(a.kind==ArgumentKind::table)a={};}
+    static bool Inside(ID3D12DescriptorHeap* heap,UINT64 address,UINT count){
+        if(!heap||!address||!count)return false;const auto d=heap->GetDesc();
+        if(!(d.Flags&D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE)||count>d.NumDescriptors)return false;
+        ComPtr<ID3D12Device> device;if(FAILED(heap->GetDevice(IID_PPV_ARGS(&device))))return false;
+        const auto step=device->GetDescriptorHandleIncrementSize(d.Type);
+        const auto base=heap->GetGPUDescriptorHandleForHeapStart().ptr;
+        return step&&address>=base&&(address-base)%step==0&&(address-base)/step<=d.NumDescriptors-count;
+    }
+public:
+    void Fail()noexcept{healthy=false;}
+    bool Watch(ID3D12GraphicsCommandList* list){
+        if(!list||!healthy.load())return false;ComPtr<IUnknown> identity;
+        if(FAILED(list->QueryInterface(IID_PPV_ARGS(&identity))))return false;
+        std::lock_guard<std::mutex> guard(mutex);if(aliases.count(list))return true;
+        auto found=entries.find(identity.Get());std::shared_ptr<Entry> entry;
+        if(found!=entries.end())entry=found->second;
+        else {if(entries.size()>=4096)return false;entry=std::make_shared<Entry>();entry->identity=identity;entries.emplace(identity.Get(),entry);}
+        if(aliases.size()>=8192)return false;aliases.emplace(list,std::move(entry));return true;
+    }
+    void Reset(ID3D12GraphicsCommandList* list,ID3D12PipelineState* initial){
+        Change(list,[&](Entry& e){e.pipeline=initial;e.resources.Reset();e.samplers.Reset();e.compute={};e.graphics={};});
+    }
+    void Pipeline(ID3D12GraphicsCommandList* list,ID3D12PipelineState* value){Change(list,[&](Entry& e){e.pipeline=value;});}
+    void Root(ID3D12GraphicsCommandList* list,ID3D12RootSignature* value,bool graphics){
+        Change(list,[&](Entry& e){auto& s=graphics?e.graphics:e.compute;
+            // Same root pointer does not invalidate D3D12 arguments. A different
+            // interface alias is conservatively treated as a change until rebound.
+            if(s.root.Get()!=value){s={};s.root=value;}});
+    }
+    void ArgumentValue(ID3D12GraphicsCommandList* list,UINT parameter,ArgumentKind kind,UINT64 value,bool graphics){
+        Change(list,[&](Entry& e){auto& s=graphics?e.graphics:e.compute;
+            if(parameter>=s.arguments.size()){s={};return;}s.arguments[parameter]={kind,value};});
+    }
+    void Heaps(ID3D12GraphicsCommandList* list,UINT count,ID3D12DescriptorHeap*const* values){
+        Change(list,[&](Entry& e){ComPtr<ID3D12DescriptorHeap> resources,samplers;bool valid=count<=2&&(!count||values);
+            if(valid)for(UINT n=0;n<count;++n){if(!values[n]){valid=false;break;}const auto d=values[n]->GetDesc();
+                if(d.Type==D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV&&!resources)resources=values[n];
+                else if(d.Type==D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER&&!samplers)samplers=values[n];else {valid=false;break;}}
+            if(!valid){resources.Reset();samplers.Reset();}
+            // Clearing all tables when either heap changes is conservative;
+            // existing root CBVs remain valid. A later setter must rebind tables.
+            if(resources.Get()!=e.resources.Get()||samplers.Get()!=e.samplers.Get()){Tables(e.compute);Tables(e.graphics);}
+            e.resources=std::move(resources);e.samplers=std::move(samplers);
+        });
+    }
+    bool Read(ID3D12GraphicsCommandList* list,PTNativeRoot::Registry& roots,bool graphics,UINT required,Snapshot& result){
+        result={};if(!healthy.load()||!required||required>=(1u<<(graphics?18:8)))return false;
+        std::lock_guard<std::mutex> guard(mutex);const auto found=aliases.find(list);if(found==aliases.end())return false;
+        const auto& e=*found->second;const auto& s=graphics?e.graphics:e.compute;auto layout=roots.Find(s.root.Get());
+        if(!layout||layout->Type()!=(graphics?PTNativeRoot::Kind::graphics:PTNativeRoot::Kind::compute))return false;
+        for(UINT n=0;n<(graphics?18u:8u);++n)if(required&(1u<<n)){
+            const bool constant=graphics?(n>=8&&n<16):(n>=2&&n<6);const auto& a=s.arguments[n];
+            if(a.kind!=(constant?ArgumentKind::constant:ArgumentKind::table)||!a.value)return false;
+            if(constant){if(a.value%256)return false;continue;}
+            const bool sampler=graphics?((n>=4&&n<8)||n==16):(n==1||n==6);
+            const UINT count=sampler?((graphics?n==16:n==6)?64:4):((graphics?n==17:n==7)?244000:49);
+            if(!Inside(sampler?e.samplers.Get():e.resources.Get(),a.value,count))return false;
+        }
+        result.layout=std::move(layout);result.pipeline=e.pipeline;result.resources=e.resources;result.samplers=e.samplers;result.arguments=s.arguments;return true;
+    }
+};
+inline Tracker tracker;
+// Private command recording must use Mute around creation AND recording. Hooks
+// remain forwarding but cannot confuse private state with the native bindings.
+inline thread_local unsigned nesting=0;
+struct Mute {bool outer;Mute():outer(nesting++==0){}~Mute(){--nesting;}};
+using ResetFn=HRESULT(STDMETHODCALLTYPE*)(ID3D12GraphicsCommandList*,ID3D12CommandAllocator*,ID3D12PipelineState*);
+using PipelineFn=void(STDMETHODCALLTYPE*)(ID3D12GraphicsCommandList*,ID3D12PipelineState*);
+using HeapsFn=void(STDMETHODCALLTYPE*)(ID3D12GraphicsCommandList*,UINT,ID3D12DescriptorHeap*const*);
+using RootFn=void(STDMETHODCALLTYPE*)(ID3D12GraphicsCommandList*,ID3D12RootSignature*);
+using TableFn=void(STDMETHODCALLTYPE*)(ID3D12GraphicsCommandList*,UINT,D3D12_GPU_DESCRIPTOR_HANDLE);
+using ConstantFn=void(STDMETHODCALLTYPE*)(ID3D12GraphicsCommandList*,UINT,D3D12_GPU_VIRTUAL_ADDRESS);
+struct Methods {ResetFn reset;PipelineFn pipeline;HeapsFn heaps;RootFn computeRoot,graphicsRoot;TableFn computeTable,graphicsTable;ConstantFn computeConstant,graphicsConstant;};
+inline std::mutex hookMutex;
+inline std::map<void**,Methods> methods;
+inline bool installed=true;
+inline Methods Original(ID3D12GraphicsCommandList* list){std::lock_guard<std::mutex> guard(hookMutex);return methods.at(*reinterpret_cast<void***>(list));}
+template<class F> inline void Observe(F&& f)noexcept{try{f();}catch(...){tracker.Fail();}}
+inline HRESULT STDMETHODCALLTYPE ResetHook(ID3D12GraphicsCommandList* l,ID3D12CommandAllocator* a,ID3D12PipelineState* p){
+    const auto original=Original(l);Mute mute;const HRESULT hr=original.reset(l,a,p);const DWORD error=GetLastError();
+    if(mute.outer&&SUCCEEDED(hr))Observe([&]{tracker.Reset(l,p);});SetLastError(error);return hr;
+}
+inline void STDMETHODCALLTYPE PipelineHook(ID3D12GraphicsCommandList* l,ID3D12PipelineState* p){
+    const auto original=Original(l);Mute mute;original.pipeline(l,p);const DWORD error=GetLastError();
+    if(mute.outer)Observe([&]{tracker.Pipeline(l,p);});SetLastError(error);
+}
+inline void STDMETHODCALLTYPE HeapsHook(ID3D12GraphicsCommandList* l,UINT n,ID3D12DescriptorHeap*const* h){
+    const auto original=Original(l);Mute mute;original.heaps(l,n,h);const DWORD error=GetLastError();
+    if(mute.outer)Observe([&]{tracker.Heaps(l,n,h);});SetLastError(error);
+}
+template<bool Graphics> inline void STDMETHODCALLTYPE RootHook(ID3D12GraphicsCommandList* l,ID3D12RootSignature* r){
+    const auto original=Original(l);Mute mute;(Graphics?original.graphicsRoot:original.computeRoot)(l,r);const DWORD error=GetLastError();
+    if(mute.outer)Observe([&]{tracker.Root(l,r,Graphics);});SetLastError(error);
+}
+template<bool Graphics> inline void STDMETHODCALLTYPE TableHook(ID3D12GraphicsCommandList* l,UINT n,D3D12_GPU_DESCRIPTOR_HANDLE h){
+    const auto original=Original(l);Mute mute;(Graphics?original.graphicsTable:original.computeTable)(l,n,h);const DWORD error=GetLastError();
+    if(mute.outer)Observe([&]{tracker.ArgumentValue(l,n,ArgumentKind::table,h.ptr,Graphics);});SetLastError(error);
+}
+template<bool Graphics> inline void STDMETHODCALLTYPE ConstantHook(ID3D12GraphicsCommandList* l,UINT n,D3D12_GPU_VIRTUAL_ADDRESS v){
+    const auto original=Original(l);Mute mute;(Graphics?original.graphicsConstant:original.computeConstant)(l,n,v);const DWORD error=GetLastError();
+    if(mute.outer)Observe([&]{tracker.ArgumentValue(l,n,ArgumentKind::constant,v,Graphics);});SetLastError(error);
+}
+inline bool Patch(void** slot,void* original,void* hook){
+    if(*slot!=original)return false;DWORD protection=0;if(!VirtualProtect(slot,sizeof(void*),PAGE_READWRITE,&protection))return false;
+    const bool changed=InterlockedCompareExchangePointer(reinterpret_cast<void*volatile*>(slot),hook,original)==original;
+    DWORD ignored=0;return VirtualProtect(slot,sizeof(void*),protection,&ignored)!=FALSE&&changed;
+}
+inline bool WatchInterface(ID3D12GraphicsCommandList* list){
+    if(!list||!tracker.Watch(list))return false;std::lock_guard<std::mutex> guard(hookMutex);
+    if(!installed)return false;auto** table=*reinterpret_cast<void***>(list);if(methods.count(table))return true;if(methods.size()>=32)return false;
+    Methods m{reinterpret_cast<ResetFn>(table[10]),reinterpret_cast<PipelineFn>(table[25]),reinterpret_cast<HeapsFn>(table[28]),
+        reinterpret_cast<RootFn>(table[29]),reinterpret_cast<RootFn>(table[30]),reinterpret_cast<TableFn>(table[31]),reinterpret_cast<TableFn>(table[32]),
+        reinterpret_cast<ConstantFn>(table[37]),reinterpret_cast<ConstantFn>(table[38])};methods.emplace(table,m);
+    const UINT slots[]={10,25,28,29,30,31,32,37,38};
+    void* const before[]={reinterpret_cast<void*>(m.reset),reinterpret_cast<void*>(m.pipeline),reinterpret_cast<void*>(m.heaps),reinterpret_cast<void*>(m.computeRoot),reinterpret_cast<void*>(m.graphicsRoot),
+        reinterpret_cast<void*>(m.computeTable),reinterpret_cast<void*>(m.graphicsTable),reinterpret_cast<void*>(m.computeConstant),reinterpret_cast<void*>(m.graphicsConstant)};
+    void* const after[]={reinterpret_cast<void*>(&ResetHook),reinterpret_cast<void*>(&PipelineHook),reinterpret_cast<void*>(&HeapsHook),reinterpret_cast<void*>(&RootHook<false>),reinterpret_cast<void*>(&RootHook<true>),
+        reinterpret_cast<void*>(&TableHook<false>),reinterpret_cast<void*>(&TableHook<true>),reinterpret_cast<void*>(&ConstantHook<false>),reinterpret_cast<void*>(&ConstantHook<true>)};
+    for(UINT n=0;n<9;++n)if(!Patch(table+slots[n],before[n],after[n])){installed=false;tracker.Fail();return false;}
+    return true;
+}
+inline bool Watch(ID3D12GraphicsCommandList* list){
+    if(nesting||!WatchInterface(list))return false;ComPtr<ID3D12GraphicsCommandList> base;
+    return SUCCEEDED(list->QueryInterface(IID_PPV_ARGS(&base)))&&WatchInterface(base.Get());
+}
+}

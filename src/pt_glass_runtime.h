@@ -6,6 +6,7 @@
 #include "pt_scene_live_owner.h"
 #include "pt_scene_queue_runtime.h"
 #include "pt_surface_pipeline.h"
+#include "pt_command_bindings.h"
 #include <intrin.h>
 #include <unordered_map>
 #include <memory>
@@ -31,6 +32,8 @@ static PTSurfaceComposition::Pipelines surfacePipelines;
 using CreateRoot=HRESULT(STDMETHODCALLTYPE*)(ID3D12Device*,UINT,const void*,SIZE_T,REFIID,void**);
 static CreateRoot createRoot=nullptr;
 static PTNativeRoot::Registry nativeRoots;
+using CreateList=HRESULT(STDMETHODCALLTYPE*)(ID3D12Device*,UINT,D3D12_COMMAND_LIST_TYPE,ID3D12CommandAllocator*,ID3D12PipelineState*,REFIID,void**);
+static CreateList createList=nullptr;
 // Invoke the exact interface supplied by the native call site. A QueryInterface
 // result can be a different interposer object and must not select the hook target.
 static void NativeSetRayPso(ID3D12GraphicsCommandList4* list,ID3D12StateObject* pso){
@@ -384,6 +387,19 @@ static HRESULT STDMETHODCALLTYPE RootHook(ID3D12Device* d,UINT node,const void* 
     }
     SetLastError(nativeError);return hr;
 }
+static HRESULT STDMETHODCALLTYPE ListHook(ID3D12Device* d,UINT node,D3D12_COMMAND_LIST_TYPE type,ID3D12CommandAllocator* allocator,ID3D12PipelineState* initial,REFIID iid,void** out){
+    const HRESULT hr=createList(d,node,type,allocator,initial,iid,out);const DWORD nativeError=GetLastError();
+    if(SUCCEEDED(hr)&&out&&*out&&PTSceneLive::owner.Active()&&!PTCommandBindings::nesting&&
+       (type==D3D12_COMMAND_LIST_TYPE_DIRECT||type==D3D12_COMMAND_LIST_TYPE_COMPUTE)){
+        try {
+            ComPtr<ID3D12GraphicsCommandList> list;
+            if(SUCCEEDED(static_cast<IUnknown*>(*out)->QueryInterface(IID_PPV_ARGS(&list)))&&PTCommandBindings::Watch(list.Get()))
+                PTCommandBindings::tracker.Reset(list.Get(),initial);
+            else PTCommandBindings::tracker.Fail();
+        }catch(...){PTCommandBindings::tracker.Fail();}
+    }
+    SetLastError(nativeError);return hr;
+}
 static void InstallDevice(ID3D12Device* d){
     if(device||!enabled)return;device=d;ComPtr<ID3D12Device5> rayDevice;
     if(FAILED(d->QueryInterface(IID_PPV_ARGS(&rayDevice)))||
@@ -395,6 +411,7 @@ static void InstallDevice(ID3D12Device* d){
        !Patch(d,23,reinterpret_cast<void*>(&CopyAllHook),reinterpret_cast<void**>(&copyAll))||
        !Patch(d,10,reinterpret_cast<void*>(&GraphicsHook),reinterpret_cast<void**>(&createGraphics))||
        !Patch(d,16,reinterpret_cast<void*>(&RootHook),reinterpret_cast<void**>(&createRoot))||
+       !Patch(d,12,reinterpret_cast<void*>(&ListHook),reinterpret_cast<void**>(&createList))||
        !Patch(rayDevice.Get(),62,reinterpret_cast<void*>(&StateHook),reinterpret_cast<void**>(&createState)))enabled=false;
     Log("PT_GLASS_DEVICE_HOOKS ready=%u",unsigned(enabled.load()));
 }

@@ -1,4 +1,5 @@
 #pragma once
+#include "pt_command_bindings.h"
 #include <d3d12.h>
 #include <wrl/client.h>
 #include <memory>
@@ -46,6 +47,7 @@ public:
     // Called under the renderer's submission serialization. Hook adapters must
     // suppress recursive observation of these private queue operations.
     static HRESULT Create(ID3D12CommandQueue* queue,UINT width,UINT height,std::shared_ptr<Output>& result){
+        PTCommandBindings::Mute privateRecording;
         result.reset();
         if(!queue||queue->GetDesc().Type!=D3D12_COMMAND_LIST_TYPE_DIRECT||!width||!height||
            width>16384||height>16384||std::uint64_t(width)*height*16>256ull*1024*1024)return E_INVALIDARG;
@@ -93,6 +95,7 @@ public:
     // Failed recording is discarded without executing partial GPU commands.
     using Encoder=bool(*)(void*,ID3D12GraphicsCommandList*,ID3D12Resource*,D3D12_CPU_DESCRIPTOR_HANDLE);
     bool Record(void* context,Encoder encode,std::shared_ptr<void> dependencies){
+        PTCommandBindings::Mute privateRecording;
         std::lock_guard<std::mutex> guard(mutex);
         if(!storage||!encode||!dependencies||storage->failed||storage->invalidated||storage->recorded)return false;
         auto& s=*storage;Microsoft::WRL::ComPtr<ID3D12CommandAllocator> allocator;Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> list;

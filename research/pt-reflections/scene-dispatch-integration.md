@@ -451,3 +451,27 @@ The WARP fixture queues all operations behind a gate, reads back zero/produced/
 invalidated pixels in order, and checks wrong-queue, duplicate/late-producer and
 retained-dependency behavior. Live draw binding and the light transport encoder
 are still required; this class alone is not a playable integration.
+
+### Actual command-list root arguments
+
+`pt_command_bindings.h` intercepts native SetPipelineState, descriptor heaps,
+compute/graphics root signatures, root descriptor tables and root CBVs. The
+CreateCommandList observer installs it on native direct/compute lists while the
+scene owner is active. Canonical COM identity joins interface aliases. Reset
+clears both graphics and compute state; it chains with the scene observer's
+existing Reset interceptor. Heap changes invalidate recorded table arguments,
+while root CBVs survive. Repeating the same root signature preserves arguments.
+
+Snapshots require an owned, exact native root-layout proof, a caller-specified
+set of populated arguments, aligned CBVs, and complete descriptor ranges inside
+the currently bound heaps (including all 244000 material descriptors). This
+provides the actual b0 GPU address for matching the ray pass, primary lighting,
+and pixel pass; frame number alone is not view identity. It does not prove CBV
+contents, descriptor contents, native texture lifetime, or GPU ordering.
+
+Private output-list creation/recording uses a thread-local exclusion scope so
+private bindings cannot overwrite native state. The WARP binding fixture covers
+real intercepted setter calls, aliases, exact root layouts, heap replacement,
+bounded table addresses, preserved CBVs, private-call exclusion and chained
+Reset. Native lists created before activation remain unadmitted until explicitly
+watched and rebound. No renderer consumer is enabled by this observer alone.
