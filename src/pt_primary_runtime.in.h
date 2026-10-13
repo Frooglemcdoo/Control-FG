@@ -46,6 +46,10 @@ static bool ReadView(UINT64 address,View& view,PTNativeView::Pass pass=PTNativeV
         Reject("view_constants_invalid");return false;
     }return true;
 }
+static double CpuMilliseconds(LARGE_INTEGER before,LARGE_INTEGER after){
+    LARGE_INTEGER frequency{};if(!QueryPerformanceFrequency(&frequency)||!frequency.QuadPart)return 0;
+    return double(after.QuadPart-before.QuadPart)*1000.0/double(frequency.QuadPart);
+}
 static bool SameView(UINT64 address,const View& expected){std::array<unsigned char,1136> current{};
     return (PTNativeView::uploads.Read(address,current.data(),current.size())||
         PTSceneLive::owner.Resources().ReadUpload(address,current.data(),current.size()))&&expected.MatchesBound(current);
@@ -115,7 +119,7 @@ static void PollMetrics(){
                 transportValidated=true;Log("PT_PRIMARY_TRANSPORT_READY frame=%u covered=%u stable_frames=%u",f.view.frame,counts[6],transportGoodFrames);}
         }
         static UINT64 samples=0;const auto n=++samples;
-        if(n<=8||n%240==0)Log("PT_PRIMARY_GPU frame=%u readback=%u armed=%u sampled=%u dimensions=%u primary_hit=%u material_match=%u depth_match=%u integrated=%u covered=%u fault=%u probe=%u sparse_step=64",f.view.frame,unsigned(good),unsigned(f.armed),counts[0],counts[1],counts[2],counts[3],counts[4],counts[5],counts[6],counts[7],unsigned(f.assets->probe));
+        if(n<=8||n%240==0)Log("PT_PRIMARY_GPU frame=%u readback=%u armed=%u sampled=%u dimensions=%u primary_hit=%u material_match=%u depth_match=%u integrated=%u covered=%u fault=%u probe=%u sparse_step=64 output=native_light_buffers",f.view.frame,unsigned(good),unsigned(f.armed),counts[0],counts[1],counts[2],counts[3],counts[4],counts[5],counts[6],counts[7],unsigned(f.assets->probe));
         if(good&&(n<=8||n%240==0)){UINT64 frequency=0;double ms=0;
             const bool timed=SUCCEEDED(f.queue->GetTimestampFrequency(&frequency))&&f.assets->metrics.ReadMilliseconds(frequency,ms);
             Log("PT_PRIMARY_TIMING frame=%u valid=%u dispatch_gpu_ms=%.6f probe=%u roulette_start=1 max_hits=4",f.view.frame,unsigned(timed),ms,unsigned(f.assets->probe));}
@@ -137,7 +141,7 @@ static std::shared_ptr<Frame> FrameFor(const View& view,ID3D12CommandQueue* queu
     }
     if(frames.size()>=8)return {};
     auto f=std::make_shared<Frame>();f->view=view;f->queue=queue;
-    if(FAILED(Output::Create(queue,view.width,view.height,f->output,true)))return {};
+    if(FAILED(Output::Create(queue,1,1,f->output,true)))return {};
     frames.push_back(f);return f;
 }
 static D3D12_CPU_DESCRIPTOR_HANDLE Cpu(const PTGlass::DescriptorRange& range,UINT slot=0){
@@ -152,12 +156,15 @@ static bool Disjoint(const PTGlass::DescriptorRange& a,UINT original){return a.f
 static bool Encode(void* context,ID3D12GraphicsCommandList* list,ID3D12Resource*,D3D12_CPU_DESCRIPTOR_HANDLE){
     auto& a=*static_cast<Assets*>(context);ComPtr<ID3D12GraphicsCommandList4> rays;if(FAILED(list->QueryInterface(IID_PPV_ARGS(&rays))))return false;
     auto counter=Gpu(a.privateTable);counter.ptr+=47ull*device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+    D3D12_RESOURCE_BARRIER ordered{};ordered.Type=D3D12_RESOURCE_BARRIER_TYPE_UAV;
+    list->ResourceBarrier(1,&ordered); // Native u0/u1 writes precede the private overwrite.
     a.metrics.Begin(list,counter);
     list->SetComputeRootConstantBufferView(2,a.camera->GetGPUVirtualAddress());
     list->SetComputeRootConstantBufferView(4,a.camera->GetGPUVirtualAddress()+1280);
     const bool recorded=a.dispatch->Record(rays.Get(),a.bindings.layout->Root(),a.bindings.pipeline.Get(),{a.bindings.arguments[0].value},Gpu(a.privateTable));
     list->SetComputeRootConstantBufferView(2,a.bindings.arguments[2].value);
     list->SetComputeRootConstantBufferView(4,a.bindings.arguments[4].value);
+    list->ResourceBarrier(1,&ordered); // Surface consumers observe both committed outputs.
     a.metrics.End(list);return recorded;
 }
 static void Job(PTNativeJobRuntime::Phase phase,const PTNativeJobRoute::Ticket& ticket) noexcept {
@@ -226,6 +233,7 @@ static void Dispatched(void*,ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT 
             if(environment){Reject("ambiguous_environment_view");return;}environment=e;
         }
         if(!candidate||!environment){Reject("scene_or_environment_not_ready");return;}
+        LARGE_INTEGER prepareStart{},readyDone{},leaseStart{},leaseDone{},recordDone{};QueryPerformanceCounter(&prepareStart);
         UINT64 serial=0;
         if(!handoff.FindReady(candidate->ticket.engineFrame,view.width,view.height,candidate->ticket.pipeline,serial)){
             std::size_t row=0;const char* reason=handoff.NotReady(candidate->ticket.serial,row);
@@ -237,6 +245,7 @@ static void Dispatched(void*,ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT 
             }
             Reject(reason);return;
         }
+        QueryPerformanceCounter(&readyDone);
         auto* recording=RecordingFor(list);
         if(!recording||recording->submitted){Reject("frame_budget_or_duplicate");return;}
         auto a=std::make_shared<Assets>();a->bindings=bindings;a->boundView=view;a->environment=environment;a->engineFrame=candidate->ticket.engineFrame;a->probe=!transportValidated;
@@ -247,7 +256,7 @@ static void Dispatched(void*,ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT 
             std::memcpy(totals,a->lightConstants.data()+256,12);std::memcpy(&scale,a->lightConstants.data()+244,4);
             Log("PT_PRIMARY_LIGHTS frame=%u points=%u spots=%u suns=%u environment=%.9g source=authenticated_provider",view.frame,totals[0],totals[1],totals[2],scale);}
         // t0,t1,t3,t7,t8,t10,t14,t15,t17,t18. Private t34/t35/u7 are installed below.
-        constexpr UINT64 required=(1ull<<5)|(1ull<<6)|(1ull<<8)|(1ull<<12)|(1ull<<13)|(1ull<<15)|(1ull<<19)|(1ull<<20)|(1ull<<22)|(1ull<<23);
+        constexpr UINT64 required=(1ull<<5)|(1ull<<6)|(1ull<<8)|(1ull<<12)|(1ull<<13)|(1ull<<15)|(1ull<<19)|(1ull<<20)|(1ull<<22)|(1ull<<23)|(1ull<<41)|(1ull<<42);
         if(!PTTableMirror::bank.Read(bindings.resources.Get(),context.table.first,required,a->primary)||
            !PTTableMirror::bank.Unchanged(environment->table)||!Fresh(context,&a->privateTable)||!Disjoint(a->privateTable,context.table.first)){Reject("primary_descriptor_allocation");return;}
         auto& pipeline=privatePipelines[bindings.layout->Root()];
@@ -259,7 +268,9 @@ static void Dispatched(void*,ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT 
         }
         PTNativeShaderTable::Identifiers identifiers;PTSceneDispatch::ExportSet exports;PTSceneDispatch::Plan plan;
         if(!handoff.ReadyIdentifiers(serial,identifiers)||!pipeline->Exports(candidate->ticket.pipeline,identifiers.hit,exports)){Reject("private_exports");return;}
+        QueryPerformanceCounter(&leaseStart);
         const auto status=handoff.PrepareRecording(serial,exports,plan,a->scene,&a->proof);
+        QueryPerformanceCounter(&leaseDone);
         if(status!=PTSceneHandoff::Status::pending)candidates.erase(serial);
         if(status!=PTSceneHandoff::Status::prepared){
             std::size_t row=0;const char* reason=handoff.NotReady(serial,row);
@@ -272,9 +283,8 @@ static void Dispatched(void*,ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT 
         }
         auto frame=FrameFor(view,context.queue);
         if(!frame||frame->producerRecorded){Reject("frame_budget_or_duplicate");return;}
-        // Reserve all surface tables while the verified lighting allocator is
-        // current. Graphics recording never needs the compute TLS context.
-        if(!Fresh(context,&frame->surfaceTables,49*64)){Reject("surface_table_reservation");return;}
+        // Native light buffers carry the result; this owner only retains the
+        // private scene/dependencies and final submission fence.
         if(FAILED(PTScenePipeline::Dispatch::Create(device.Get(),pipeline,plan,view.width,view.height,bindings.resources.Get(),a->dispatch))){Reject("private_sbt");return;}
         D3D12_HEAP_PROPERTIES cameraHeap{};cameraHeap.Type=D3D12_HEAP_TYPE_UPLOAD;
         D3D12_RESOURCE_DESC cameraDesc{};cameraDesc.Dimension=D3D12_RESOURCE_DIMENSION_BUFFER;cameraDesc.Width=1792;
@@ -298,8 +308,10 @@ static void Dispatched(void*,ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT 
         // failed encoder retains these through the list's native submission.
         recording->producers.push_back(frame);frame->assets=a;frame->producerRecorded=true;
         if(!frame->output->RecordInline(list,a.get(),&Encode,a)){frame->output->Invalidate(context.queue);Reject("inline_record");return;}
-        pendingMetrics.push_back(frame);
-        static UINT64 recorded=0;if(++recorded<=8||recorded%240==0)Log("PT_PRIMARY_RECORDED count=%llu frame=%u dimensions=%ux%u hits=4 spp=1",recorded,view.frame,view.width,view.height);
+        pendingMetrics.push_back(frame);QueryPerformanceCounter(&recordDone);
+        static UINT64 cpuRecorded=0;if(++cpuRecorded<=8||cpuRecorded%240==0)
+            Log("PT_PRIMARY_PREPARE_CPU frame=%u total_ms=%.6f find_ready_ms=%.6f lease_ms=%.6f",view.frame,CpuMilliseconds(prepareStart,recordDone),CpuMilliseconds(prepareStart,readyDone),CpuMilliseconds(leaseStart,leaseDone));
+        static UINT64 recorded=0;if(++recorded<=8||recorded%240==0)Log("PT_PRIMARY_RECORDED count=%llu frame=%u dimensions=%ux%u hits=4 spp=1 output=native_light_buffers",recorded,view.frame,view.width,view.height);
     }catch(...){Reject("dispatch_allocation");}
 }
 struct Restore {ID3D12GraphicsCommandList* list=nullptr;ComPtr<ID3D12PipelineState> pipeline;D3D12_GPU_DESCRIPTOR_HANDLE table{};};
@@ -427,7 +439,11 @@ static void Signalling(void*,ID3D12CommandQueue* queue,ID3D12Fence* fence,UINT64
             if(value<blocked.graph.value||!PTSceneLive::owner.Scenes().MatchesFence(blocked.graph.fence,fence))continue;
             const bool release=fence->GetCompletedValue()<blocked.graph.value&&queue->GetDesc().Type==D3D12_COMMAND_LIST_TYPE_COPY;
             const char* reason="late_submission_inputs_changed";
+            LARGE_INTEGER validateStart{},validateEnd{};QueryPerformanceCounter(&validateStart);
             const auto status=InputsUnchanged(frame)?handoff.Revalidate(a->ticket,a->engineFrame,frame->view.width,frame->view.height,a->proof,&reason):PTSceneHandoff::Status::rejected;
+            QueryPerformanceCounter(&validateEnd);
+            static UINT64 validated=0;if(++validated<=8||validated%240==0)
+                Log("PT_PRIMARY_VALIDATE_CPU frame=%u ms=%.6f",frame->view.frame,CpuMilliseconds(validateStart,validateEnd));
             if(status==PTSceneHandoff::Status::pending){frame->wait=PTSceneLive::owner.Scenes().PendingWait(a->ticket);
                 static UINT64 pending=0;if(++pending<=8||pending%240==0)
                     Log("PT_PRIMARY_LATE_PENDING ticket=%llu reason=%s fence=%llu required=%llu",a->ticket,reason,frame->wait.graph.fence,frame->wait.graph.value);
@@ -549,7 +565,7 @@ static void PipelineBound(void*,ID3D12GraphicsCommandList*,ID3D12PipelineState* 
     try{PTPrimaryPipelineProbe::Used(pipeline,0,0,0,false);}
     catch(...){Log("PT_PRIMARY_PSO_PROBE_FAILED stage=binding");}
 }
-static const PTCommandBindings::Consumer commandConsumer{&handoff,&Dispatched,&Drawing,&Drawn,&PipelineBound};
+static const PTCommandBindings::Consumer commandConsumer{&handoff,&Dispatched,nullptr,nullptr,&PipelineBound};
 static bool Start(){
     if(active||!device||!enabled||!PTNativeJobRuntime::workerHooksReady||!PTNativeJobRuntime::dispatchHookReady)return false;
     if(!viewProviders.Initialize(verifiedRenderer,verifiedD3d)){Log("PT_PRIMARY_PROVIDER_INIT_FAILED");return false;}
@@ -561,6 +577,6 @@ static bool Start(){
     if(FAILED(device->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&sceneUseFence))))return false;
     if(!PTSceneQueues::Start(&PTSceneLive::owner.Scenes())||!PTSceneQueues::Register(&PTSceneLive::owner.Scenes(),&queueConsumer)||
        !PTCommandBindings::Register(&commandConsumer)||!PTNativeJobRuntime::Register(&Job)||!PTSceneLive::owner.Start(step,true))return false;
-    active=true;Log("PT_PRIMARY_SESSION_READY build=M12R27 ready=1 hits=4 spp=1 roulette_start=1 material=opaque_general geometric_normals=1 native_fallback=1");return true;
+    active=true;Log("PT_PRIMARY_SESSION_READY build=M12R28 ready=1 hits=4 spp=1 roulette_start=1 material=opaque_general geometric_normals=1 native_fallback=1");return true;
 }
 }

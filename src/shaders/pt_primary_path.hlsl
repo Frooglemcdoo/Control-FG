@@ -1,13 +1,14 @@
 // Private full-surface path producer for the reviewed primary lighting pass.
 // Host supplies an immutable scene/SBT, cloned primary table, same-frame native
-// environment at t34, TLAS at t35 and private RGBA32F output at u7. Never bind to
-// a native 4-byte payload state object or native lighting UAV.
+// environment at t34 and TLAS at t35. Validated standard-output pixels replace
+// the native light-buffer pair. Never bind to a native 4-byte payload state object.
 #define PT_GEOMETRY_SPAWN 1
 #define PT_SCENE_MATERIAL_REGISTER t8
 #include "pt_scene_hits.hlsl"
 #include "ControlPrimaryGuideDecode.hlsli"
 #include "pt_native_primary_lights.hlsli"
 #include "pt_path_integrator.hlsli"
+#include "pt_primary_commit.hlsli"
 cbuffer PTPrimarySystem : register(b0) { float4 PTSystem[71]; };
 Texture2D<float4> PTGBuffer1 : register(t0);
 Texture2D<float4> PTGBuffer2 : register(t1);
@@ -16,7 +17,6 @@ StructuredBuffer<uint2> PTMaterialFlags : register(t7);
 TextureCube<float4> PTEnvironment : register(t34);
 SamplerState PTEnvironmentSampler : register(s10,space1);
 RaytracingAccelerationStructure PTScene : register(t35);
-RWTexture2D<float4> PTOutput : register(u7);
 RWByteAddressBuffer PTMetrics : register(u6);
 void PTMeasure(uint stage,uint2 pixel){if(((pixel.x|pixel.y)&63)==0){uint previous;PTMetrics.InterlockedAdd(stage*4,1,previous);}}
 float3 PTViewToWorldVector(float3 v){return v.x*PTSystem[6].xyz+v.y*PTSystem[7].xyz+v.z*PTSystem[8].xyz;}
@@ -81,8 +81,8 @@ void PTPrimaryPathRayGeneration(){
     // A four-byte copy precedes the native signal releasing this dispatch.
     // Rejected/replayed lists must never traverse their old acceleration data.
     uint admission=PTMetrics.Load(32);
-    [branch] if(admission==0||(admission==2&&((pixel.x|pixel.y)&15)!=0)){PTOutput[pixel]=0;return;}
-    PTOutput[pixel]=0;PTMeasure(0,pixel);
+    [branch] if(admission==0||(admission==2&&((pixel.x|pixel.y)&15)!=0))return;
+    PTMeasure(0,pixel);
     uint width,height,g2w,g2h,zw,zh;PTGBuffer1.GetDimensions(width,height);PTGBuffer2.GetDimensions(g2w,g2h);PTClipDepth.GetDimensions(zw,zh);
     if(any(uint2(width,height)!=DispatchRaysDimensions().xy)||width!=g2w||height!=g2h||width!=zw||height!=zh||
        !all(isfinite(PTSystem[0].zw))||any(PTSystem[0].zw<=0)||
@@ -110,6 +110,6 @@ void PTPrimaryPathRayGeneration(){
     // paths keep the reciprocal survival weight; all four hits remain reachable.
     PTPathResult result=PTIntegratePathFirst(ray,4,1,seed,.001,first,1,0);
     PTMeasure(5,pixel);
-    if(result.valid!=0&&all(isfinite(result.radiance))&&all(result.radiance>=0)){if(admission==1)PTOutput[pixel]=float4(result.radiance,1);PTMeasure(6,pixel);}
+    if(result.valid!=0&&all(isfinite(result.radiance))&&all(result.radiance>=0)){if(admission==2||PTCommitPrimary(pixel,uint2(width,height),result.radiance,admission))PTMeasure(6,pixel);}
     else {PTMeasure(7,pixel);if(((pixel.x|pixel.y)&63)==0){uint old;PTMetrics.InterlockedAdd(36+4*min(result.fault,15u),1,old);}}
 }

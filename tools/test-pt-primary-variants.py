@@ -30,6 +30,9 @@ assert [b for b in old['bindings'] if b['name'] != 'g_rwtSingleSpot'] == active[
 extra = [b for b in old['bindings'] if b['name'] == 'g_rwtSingleSpot']
 assert len(extra) == 1 and extra[0]['kind'] == 4 and extra[0]['slot'] == 2
 for shader in decoded:
+    outputs={b['name']:(b['kind'],b['slot'],b['return_type'],b['dimension']) for b in shader['bindings'] if b['kind']==4}
+    assert outputs['g_rwtLightBufferDiffuse']==(4,0,5,4)
+    assert outputs['g_rwtLightBufferSpecular']==(4,1,5,4)
     light_cb = next(c for c in shader['constant_buffers'] if c['name']=='deferredlight_constants')
     fields = {v['name']:v for v in light_cb['variables']}
     for name, offset in (('g_uPointLightTotalCount',256),('g_uSpotLightTotalCount',260),
