@@ -18,7 +18,7 @@ using Microsoft::WRL::ComPtr;
 struct QueueConsumerTest {
     PTSceneLive::Capture* capture=nullptr;
     PTSceneDescriptors::Acceleration acceleration{};
-    unsigned phase=0,resets=0;
+    unsigned phase=0,resets=0,signals=0;
     ComPtr<ID3D12Fence> privateFence;
     static void Before(void* context,ID3D12CommandQueue*,UINT count,ID3D12CommandList*const*)noexcept{
         auto& self=*static_cast<QueueConsumerTest*>(context);assert(count==1&&self.phase==0);
@@ -32,6 +32,11 @@ struct QueueConsumerTest {
     static void Submitted(void* context,ID3D12CommandQueue* queue,UINT count,ID3D12CommandList*const*,bool admitted)noexcept{
         auto& self=*static_cast<QueueConsumerTest*>(context);assert(count==1&&admitted&&self.phase==2);
         assert(SUCCEEDED(queue->Signal(self.privateFence.Get(),1)));self.phase=3;
+    }
+    static void Signalling(void* context,ID3D12CommandQueue*,ID3D12Fence* fence,UINT64 value)noexcept{
+        auto& self=*static_cast<QueueConsumerTest*>(context);
+        assert(self.phase==3&&value==2&&fence->GetCompletedValue()<value);++self.signals;
+        SetLastError(0x9876);
     }
     static void Reset(void* context,ID3D12GraphicsCommandList*)noexcept{
         auto& self=*static_cast<QueueConsumerTest*>(context);++self.resets;
@@ -520,7 +525,7 @@ int main(){
     assert(PTSceneQueues::Start(&capture)&&PTSceneQueues::WatchQueue(queue.Get())&&PTSceneQueues::WatchList(list.Get()));
     QueueConsumerTest client;client.capture=&capture;client.acceleration=selectedAS;
     assert(SUCCEEDED(d->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&client.privateFence))));
-    const PTSceneQueues::Consumer callbacks{&client,&QueueConsumerTest::Before,&QueueConsumerTest::Selected,&QueueConsumerTest::Submitted,&QueueConsumerTest::Reset};
+    const PTSceneQueues::Consumer callbacks{&client,&QueueConsumerTest::Before,&QueueConsumerTest::Selected,&QueueConsumerTest::Submitted,&QueueConsumerTest::Reset,&QueueConsumerTest::Signalling};
     assert(PTSceneQueues::Register(&capture,&callbacks));assert(!PTSceneQueues::Register(&capture,&callbacks));
     assert(SUCCEEDED(list->Reset(allocator.Get(),nullptr))); // Real Reset invokes the generation observer.
     assert(client.resets==1);
@@ -531,7 +536,7 @@ int main(){
     assert(capture.Scene(2,selectedAS,selectedScene)==PTSceneOrder::Status::ready);
     ready=CreateEventW(nullptr,FALSE,FALSE,nullptr);assert(ready);
     assert(SUCCEEDED(done->SetEventOnCompletion(2,ready)));assert(WaitForSingleObject(ready,30000)==WAIT_OBJECT_0);CloseHandle(ready);
-    assert(client.privateFence->GetCompletedValue()==1);
+    assert(client.privateFence->GetCompletedValue()==1&&client.signals==1);
     // Stop observing before this stack-owned fixture ends. Production capture
     // has process lifetime; installed forwarding hooks remain valid either way.
     PTSceneQueues::consumer.store(nullptr);PTSceneQueues::observer.store(nullptr);

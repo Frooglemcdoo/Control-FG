@@ -22,7 +22,7 @@ static ComPtr<IUnknown> pinnedQueue;
 // later submission on another native queue waits for the latest PT use. The
 // scene cut rejects ALREADY submitted unordered AS writes before arming rays.
 static ComPtr<ID3D12Fence> sceneUseFence;
-static UINT64 sceneUseValue=0;
+static UINT64 sceneUseValue=0,sceneUseNext=0;
 static std::map<IUnknown*,std::pair<ComPtr<IUnknown>,UINT64>> sceneWaits;
 static std::map<ID3D12RootSignature*,std::shared_ptr<PTScenePipeline::Pipeline>> privatePipelines;
 static std::atomic<UINT64> jobCallbacks{0},jobOff{0},jobUnknownPipeline{0},opaqueAccepted{0};
@@ -81,7 +81,8 @@ struct Assets {
 };
 struct Frame {
     View view;std::shared_ptr<Output> output;ComPtr<ID3D12CommandQueue> queue;
-    std::shared_ptr<Assets> assets;bool producerRecorded=false,producerSubmitted=false,armed=false;
+    std::shared_ptr<Assets> assets;bool producerRecorded=false,producerSubmitted=false,armed=false,deferred=false,cancelled=false;
+    PTSceneLive::Capture::PendingFence wait;UINT64 sceneUse=0;
 };
 struct Draw {
     std::shared_ptr<Frame> frame;std::shared_ptr<PTSurfaceComposition::Pipeline> pipeline;
@@ -97,6 +98,7 @@ static std::vector<std::shared_ptr<Frame>> pendingMetrics;
 static void PollMetrics(){
     for(auto it=pendingMetrics.begin();it!=pendingMetrics.end();){auto& f=**it;
         if(!f.producerSubmitted||!f.output->Completed()){++it;continue;}
+        if(f.deferred&&f.assets){f.deferred=false;f.cancelled=true;PTSceneLive::owner.Scenes().Forget(f.assets->ticket);}
         std::array<UINT,8> counts{};const bool good=f.assets&&f.assets->metrics.Read(counts);
         static UINT64 samples=0;const auto n=++samples;
         if(n<=8||n%240==0)Log("PT_PRIMARY_GPU frame=%u readback=%u armed=%u sampled=%u dimensions=%u primary_hit=%u material_match=%u depth_match=%u integrated=%u covered=%u fault=%u sparse_step=16",f.view.frame,unsigned(good),unsigned(f.armed),counts[0],counts[1],counts[2],counts[3],counts[4],counts[5],counts[6],counts[7]);
@@ -212,17 +214,6 @@ static void Dispatched(void*,ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT 
             }
             Reject(reason);return;
         }
-        // An unresolved predecessor cannot pass PrepareRecording. Reject it
-        // before touching descriptor allocation, camera, pipeline or output.
-        const auto blocked=PTSceneLive::owner.Scenes().PendingWait(serial);
-        if(blocked.graph.fence){
-            static UINT64 failures=0;if(++failures<=8||failures%600==0){
-                Log("PT_PRIMARY_PREFLIGHT ticket=%llu reason=scene_dispatch_wait_pending row=0 indices=0 attributes=0 index_bytes=0 attribute_bytes=0",serial);
-                Log("PT_PRIMARY_PENDING_FENCE ticket=%llu fence=%llu identity=%p required=%llu last_signal=%llu graph_completed=%llu actual_completed=%llu polled=%u lane=%llu stamp=%llu",serial,blocked.graph.fence,blocked.identity,blocked.graph.value,blocked.graph.signalValue,blocked.graph.completed,blocked.actual,unsigned(blocked.polled),blocked.graph.lane,blocked.graph.stamp);
-                if(failures==1||failures%600==0)scheduleTrace.store(64);
-            }
-            Reject("scene_dispatch_wait_pending");return;
-        }
         auto* recording=RecordingFor(list);
         if(!recording||recording->submitted){Reject("frame_budget_or_duplicate");return;}
         auto a=std::make_shared<Assets>();a->bindings=bindings;a->boundView=view;a->environment=environment;a->engineFrame=candidate->ticket.engineFrame;
@@ -288,7 +279,7 @@ static void Drawing(void*,ID3D12GraphicsCommandList* list) noexcept {
         // camera buffers and allocating descriptors for every native draw
         // when opaque/lighting admission has already failed this frame.
         {std::lock_guard<std::recursive_mutex> guard(mutex);
-            bool produced=false;for(const auto& weak:frames){const auto frame=weak.lock();if(frame&&frame->producerRecorded&&(!frame->producerSubmitted||frame->armed)){produced=true;break;}}
+            bool produced=false;for(const auto& weak:frames){const auto frame=weak.lock();if(frame&&frame->producerRecorded&&(!frame->producerSubmitted||frame->armed||frame->deferred)){produced=true;break;}}
             if(!produced)return;
         }
         const auto pso=PTCommandBindings::tracker.PipelineFor(list);
@@ -337,6 +328,52 @@ static void Submitting(void*,ID3D12CommandQueue* queue,UINT count,ID3D12CommandL
         handoff.Submitting(count,lists);
     }catch(...){PTSceneLive::owner.Scenes().Invalidate();}
 }
+static bool InputsUnchanged(const std::shared_ptr<Frame>& frame){
+    const auto& a=frame->assets;
+    return !frame->cancelled&&ptReflectionUserState.load()==1u&&a&&a->environment->submitted&&
+        SameView(a->bindings.arguments[2].value,a->boundView)&&PTTableMirror::bank.Unchanged(a->primary)&&
+        PTTableMirror::bank.Unchanged(a->environment->table);
+}
+static void CancelFrame(const std::shared_ptr<Frame>& frame,ID3D12CommandQueue* queue){
+    frame->cancelled=true;frame->deferred=false;
+    if(frame->assets&&!frame->assets->metrics.SetAdmission(queue,false))PTSceneLive::owner.Scenes().Invalidate();
+    frame->output->Invalidate(queue);
+    if(frame->producerSubmitted&&frame->assets)PTSceneLive::owner.Scenes().Forget(frame->assets->ticket);
+}
+static bool AdmitFrame(const std::shared_ptr<Frame>& frame,ID3D12CommandQueue* queue,bool late){
+    if(!frame->output->AdmitInline()||!frame->assets->metrics.SetAdmission(queue,true))return false;
+    frame->armed=true;frame->deferred=false;
+    if(late)sceneUseValue=(std::max)(sceneUseValue,frame->sceneUse);
+    static UINT64 submitted=0;if(++submitted<=8||submitted%240==0)
+        Log("PT_PRIMARY_SUBMITTED count=%llu frame=%u scene=exact admission_word=armed late_signal=%u",submitted,frame->view.frame,unsigned(late));
+    return true;
+}
+// Called under queueMutex after prospective Signal metadata, but BEFORE native
+// Signal. The exact unsatisfied fence must still block this graphics consumer.
+static void Signalling(void*,ID3D12CommandQueue* queue,ID3D12Fence* fence,UINT64 value) noexcept {
+    if(!active)return;
+    try {
+        std::lock_guard<std::recursive_mutex> guard(mutex);PTTableMirror::Scope descriptorLock(true);
+        const auto identity=Identity(fence);
+        for(const auto& frame:pendingMetrics){
+            if(!frame->deferred||!frame->producerSubmitted||!frame->assets)continue;
+            const auto& a=frame->assets;const auto blocked=frame->wait;
+            if(blocked.identity!=identity.Get()||value<blocked.graph.value)continue;
+            const bool release=fence->GetCompletedValue()<blocked.graph.value&&queue->GetDesc().Type==D3D12_COMMAND_LIST_TYPE_COPY;
+            const char* reason="late_submission_inputs_changed";
+            const auto status=InputsUnchanged(frame)?handoff.Revalidate(a->ticket,a->engineFrame,frame->view.width,frame->view.height,a->proof,&reason):PTSceneHandoff::Status::rejected;
+            if(status==PTSceneHandoff::Status::pending){frame->wait=PTSceneLive::owner.Scenes().PendingWait(a->ticket);continue;}
+            if(status!=PTSceneHandoff::Status::prepared||!release||!frame->sceneUse||!AdmitFrame(frame,queue,true)){
+                // The flag is still zero: do not enqueue work on the blocked
+                // direct queue from this producer callback.
+                frame->deferred=false;frame->cancelled=true;
+                static UINT64 rejected=0;if(++rejected<=16||rejected%600==0)
+                    Log("PT_PRIMARY_LATE_REJECT ticket=%llu reason=%s release=%u",a->ticket,reason,unsigned(release));
+            }
+            PTSceneLive::owner.Scenes().Forget(a->ticket);
+        }
+    }catch(...){PTSceneLive::owner.Scenes().Invalidate();Reject("late_admission_exception");}
+}
 static void Selected(void*,ID3D12CommandQueue* queue,UINT count,ID3D12CommandList*const* lists,bool admitted) noexcept {
     if(!active)return;
     try {
@@ -347,18 +384,24 @@ static void Selected(void*,ID3D12CommandQueue* queue,UINT count,ID3D12CommandLis
             auto found=recordings.find(key.Get());if(found==recordings.end())continue;auto& recording=found->second;
             for(const auto& frame:recording.producers){const auto& a=frame->assets;
                 const char* admissionReason="submission_inputs_changed";
-                const bool good=admitted&&!recording.submitted&&!frame->producerSubmitted&&(ptReflectionUserState.load()==1u)&&a&&
-                    queueIdentity.Get()==pinnedQueue.Get()&&a->environment->submitted&&
-                    SameView(a->bindings.arguments[2].value,a->boundView)&&PTTableMirror::bank.Unchanged(a->primary)&&
-                    PTTableMirror::bank.Unchanged(a->environment->table)&&
-                    handoff.Revalidate(a->ticket,a->engineFrame,frame->view.width,frame->view.height,a->proof,&admissionReason)==PTSceneHandoff::Status::prepared;
-                if(!good||!frame->output->Arm(queue)){
-                    if(good)admissionReason="submission_arm_failed";
+                const bool inputs=admitted&&!recording.submitted&&!frame->producerSubmitted&&
+                    queueIdentity.Get()==pinnedQueue.Get()&&InputsUnchanged(frame);
+                const auto status=inputs?handoff.Revalidate(a->ticket,a->engineFrame,frame->view.width,frame->view.height,a->proof,&admissionReason):PTSceneHandoff::Status::rejected;
+                if(status==PTSceneHandoff::Status::pending){
+                    frame->wait=PTSceneLive::owner.Scenes().PendingWait(a->ticket);
+                    if(frame->wait.identity&&frame->wait.polled&&frame->wait.actual<frame->wait.graph.value){
+                        frame->deferred=true;
+                        static UINT64 deferred=0;if(++deferred<=8||deferred%240==0)
+                            Log("PT_PRIMARY_DEFERRED ticket=%llu fence=%p required=%llu completed=%llu",a->ticket,frame->wait.identity,frame->wait.graph.value,frame->wait.actual);
+                        continue;
+                    }
+                }
+                if(status!=PTSceneHandoff::Status::prepared||!AdmitFrame(frame,queue,false)){
+                    if(status==PTSceneHandoff::Status::prepared)admissionReason="submission_arm_failed";
                     static UINT64 failures=0;if(++failures<=16||failures%600==0)
                         Log("PT_PRIMARY_ADMISSION ticket=%llu reason=%s",a?a->ticket:0,admissionReason);
-                    frame->output->Invalidate(queue);Reject(admissionReason);
+                    CancelFrame(frame,queue);Reject(admissionReason);
                 }
-                else {frame->armed=true;static UINT64 submitted=0;if(++submitted<=8||submitted%240==0)Log("PT_PRIMARY_SUBMITTED count=%llu frame=%u scene=exact alpha_guard=armed",submitted,frame->view.frame);}
             }
             for(const auto& draw:recording.draws){
                 const bool changed=!PTTableMirror::bank.Unchanged(draw->original);
@@ -367,7 +410,7 @@ static void Selected(void*,ID3D12CommandQueue* queue,UINT count,ID3D12CommandLis
                     device->CopyDescriptorsSimple(1,Cpu(draw->privateTable,40),draw->frame->output->Srv(),D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
                 }
                 if(recording.submitted||queueIdentity.Get()!=pinnedQueue.Get()||!SameView(draw->viewAddress,draw->boundView)||changed){
-                    draw->frame->output->Invalidate(queue);Reject("surface_submission_changed");
+                    CancelFrame(draw->frame,queue);Reject("surface_submission_changed");
                 }
             }
         }
@@ -377,21 +420,26 @@ static void Submitted(void*,ID3D12CommandQueue* queue,UINT count,ID3D12CommandLi
     if(!active)return;
     try {
         std::lock_guard<std::recursive_mutex> guard(mutex);if(!lists||count>256)return;
-        std::array<Output*,8> signalled{};UINT signals=0;bool traversed=false;
+        std::array<Output*,8> signalled{};UINT signals=0;bool traversed=false;std::vector<std::shared_ptr<Frame>> uses;
         const auto signal=[&](const std::shared_ptr<Output>& output){
             for(UINT i=0;i<signals;++i)if(signalled[i]==output.get())return;
             output->NativeSubmitted(queue);if(signals<signalled.size())signalled[signals++]=output.get();
         };
         for(UINT n=0;n<count;++n){auto key=Identity(lists[n]);auto found=recordings.find(key.Get());if(found==recordings.end())continue;
-            auto& r=found->second;for(const auto& f:r.producers){f->producerSubmitted=true;traversed=traversed||f->armed;signal(f->output);if(f->assets)PTSceneLive::owner.Scenes().Forget(f->assets->ticket);}
+            auto& r=found->second;for(const auto& f:r.producers){f->producerSubmitted=true;traversed=traversed||f->armed;
+                if((f->armed||f->deferred)&&!f->sceneUse)uses.push_back(f);
+                signal(f->output);if(f->assets&&!f->deferred)PTSceneLive::owner.Scenes().Forget(f->assets->ticket);}
             for(const auto& d:r.draws)signal(d->frame->output);r.submitted=true;
         }
-        if(traversed){
-            const auto value=sceneUseValue+1;
-            if(sceneUseValue>=UINT64_MAX-1||FAILED(queue->Signal(sceneUseFence.Get(),value))){
+        if(!uses.empty()){
+            const auto value=sceneUseNext+1;
+            if(sceneUseNext>=UINT64_MAX-1||FAILED(queue->Signal(sceneUseFence.Get(),value))){
                 PTSceneLive::owner.Scenes().Invalidate();Reject("scene_use_signal");
             }else {
-                sceneUseValue=value;
+                sceneUseNext=value;for(const auto& f:uses)f->sceneUse=value;
+                // Reserve retirement now, but protect later queues only AFTER
+                // admission. Waiting here would deadlock the late copy producer.
+                if(traversed)sceneUseValue=value;
                 if(!PTSceneLive::owner.Scenes().Signal(queue,sceneUseFence.Get(),value))PTSceneLive::owner.Scenes().Invalidate();
             }
         }
@@ -418,7 +466,7 @@ static void Reset(void*,ID3D12GraphicsCommandList* list) noexcept {
         std::lock_guard<std::recursive_mutex> guard(mutex);handoff.Reset(list);auto key=Identity(list);auto found=recordings.find(key.Get());
         if(found!=recordings.end()){
             for(const auto& f:found->second.producers){
-                if(f->assets)PTSceneLive::owner.Scenes().Forget(f->assets->ticket);
+                if(f->assets&&!f->deferred)PTSceneLive::owner.Scenes().Forget(f->assets->ticket);
                 if(!f->producerSubmitted)pendingMetrics.erase(std::remove(pendingMetrics.begin(),pendingMetrics.end(),f),pendingMetrics.end());
             }
             recordings.erase(found);
@@ -426,7 +474,7 @@ static void Reset(void*,ID3D12GraphicsCommandList* list) noexcept {
         PollMetrics();Output::Poll();
     }catch(...){Reject("reset_exception");}
 }
-static const PTSceneQueues::Consumer queueConsumer{&handoff,&Submitting,&Selected,&Submitted,&Reset,&FenceObserved};
+static const PTSceneQueues::Consumer queueConsumer{&handoff,&Submitting,&Selected,&Submitted,&Reset,&Signalling,&FenceObserved};
 static void PipelineBound(void*,ID3D12GraphicsCommandList*,ID3D12PipelineState* pipeline) noexcept {
     if(!active||ptReflectionUserState.load(std::memory_order_acquire)!=1)return;
     try{PTPrimaryPipelineProbe::Used(pipeline,0,0,0,false);}
@@ -444,6 +492,6 @@ static bool Start(){
     if(FAILED(device->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&sceneUseFence))))return false;
     if(!PTSceneQueues::Start(&PTSceneLive::owner.Scenes())||!PTSceneQueues::Register(&PTSceneLive::owner.Scenes(),&queueConsumer)||
        !PTCommandBindings::Register(&commandConsumer)||!PTNativeJobRuntime::Register(&Job)||!PTSceneLive::owner.Start(step,true))return false;
-    active=true;Log("PT_PRIMARY_SESSION_READY build=M12R22 ready=1 hits=4 spp=1 material=opaque_general geometric_normals=1 native_fallback=1");return true;
+    active=true;Log("PT_PRIMARY_SESSION_READY build=M12R23 ready=1 hits=4 spp=1 material=opaque_general geometric_normals=1 native_fallback=1");return true;
 }
 }

@@ -42,9 +42,11 @@ int main(){
     assert(SUCCEEDED(CreateDXGIFactory1(IID_PPV_ARGS(&factory))));
     assert(SUCCEEDED(factory->EnumWarpAdapter(IID_PPV_ARGS(&adapter))));
     assert(SUCCEEDED(D3D12CreateDevice(adapter.Get(),D3D_FEATURE_LEVEL_11_0,IID_PPV_ARGS(&device))));
-    ComPtr<ID3D12CommandQueue> queue,wrongQueue;D3D12_COMMAND_QUEUE_DESC qd{};
+    ComPtr<ID3D12CommandQueue> queue,wrongQueue,copyQueue;D3D12_COMMAND_QUEUE_DESC qd{};
     assert(SUCCEEDED(device->CreateCommandQueue(&qd,IID_PPV_ARGS(&queue))));
     assert(SUCCEEDED(device->CreateCommandQueue(&qd,IID_PPV_ARGS(&wrongQueue))));
+    qd.Type=D3D12_COMMAND_LIST_TYPE_COPY;assert(SUCCEEDED(device->CreateCommandQueue(&qd,IID_PPV_ARGS(&copyQueue))));
+    ComPtr<ID3D12Fence> lateGate;assert(SUCCEEDED(device->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&lateGate))));
     ComPtr<ID3D12Fence> gate,done;assert(SUCCEEDED(device->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&gate))));
     assert(SUCCEEDED(device->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&done))));
     assert(SUCCEEDED(queue->Wait(gate.Get(),1))); // Everything below remains in flight until CPU release.
@@ -89,7 +91,7 @@ int main(){
     assert(SUCCEEDED(device->CreateDescriptorHeap(&hd,IID_PPV_ARGS(&lateWriter->heap))));
     assert(cancelled->Record(lateWriter.get(),&Writer::Encode,lateWriter));
     assert(cancelled->Invalidate(queue.Get()));assert(!cancelled->Produce(queue.Get()));
-    // Inline producer is gated entirely by ordered GPU clears. Replay executes
+    // Inline producer is gated by a separately ordered admission DWORD. Replay executes
     // the same recorded shader, but sees zero and must select the native result.
     auto original=std::move(output);
     assert(SUCCEEDED(PTSurfaceComposition::Output::Create(queue.Get(),4,3,output)));
@@ -101,7 +103,7 @@ int main(){
     ComPtr<ID3DBlob> blob,error,shader;
     assert(SUCCEEDED(D3D12SerializeRootSignature(&rootDesc,D3D_ROOT_SIGNATURE_VERSION_1,&blob,&error)));
     assert(SUCCEEDED(device->CreateRootSignature(0,blob->GetBufferPointer(),blob->GetBufferSize(),IID_PPV_ARGS(&guarded->root))));
-    const char source[]="RWTexture2D<float4> output:register(u0);RWByteAddressBuffer counters:register(u1);[numthreads(1,1,1)]void main(uint3 id:SV_DispatchThreadID){uint old;counters.InterlockedAdd(4,1,old);[branch]if(output[id.xy].a!=1){output[id.xy]=0;return;}output[id.xy]=float4(.25,.5,.75,1);counters.InterlockedAdd(0,1,old);}";
+    const char source[]="RWTexture2D<float4> output:register(u0);RWByteAddressBuffer counters:register(u1);[numthreads(1,1,1)]void main(uint3 id:SV_DispatchThreadID){uint old;counters.InterlockedAdd(4,1,old);[branch]if(counters.Load(32)!=1){output[id.xy]=0;return;}output[id.xy]=float4(.25,.5,.75,1);counters.InterlockedAdd(0,1,old);}";
     assert(SUCCEEDED(D3DCompile(source,sizeof(source)-1,nullptr,nullptr,nullptr,"main","cs_5_1",D3DCOMPILE_ENABLE_STRICTNESS,0,&shader,&error)));
     D3D12_COMPUTE_PIPELINE_STATE_DESC pd{};pd.pRootSignature=guarded->root.Get();pd.CS={shader->GetBufferPointer(),shader->GetBufferSize()};
     assert(SUCCEEDED(device->CreateComputePipelineState(&pd,IID_PPV_ARGS(&guarded->pipeline))));
@@ -112,8 +114,22 @@ int main(){
     assert(SUCCEEDED(nativeList->Close()));ID3D12CommandList* inlineLists[]={nativeList.Get()};
     assert(!output->Arm(wrongQueue.Get()));assert(!output->Produce(queue.Get()));
     queue->ExecuteCommandLists(1,inlineLists);assert(output->NativeSubmitted(queue.Get()));capture(3);
-    assert(output->Arm(queue.Get()));assert(!output->Arm(queue.Get()));
+    ComPtr<ID3D12Fence> firstDone;assert(SUCCEEDED(device->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&firstDone))));
+    assert(SUCCEEDED(queue->Signal(firstDone.Get(),1)));
+    // No CPU wait: the consumer is submitted before the late COPY producer.
+    assert(SUCCEEDED(queue->Wait(lateGate.Get(),2)));
     queue->ExecuteCommandLists(1,inlineLists);assert(output->NativeSubmitted(queue.Get()));capture(4);
+    // Let the initial zero-flag dispatch/capture complete before releasing the
+    // copy that changes the same buffer, using an ordinary GPU dependency.
+
+    assert(SUCCEEDED(copyQueue->Wait(firstDone.Get(),1)));
+    assert(SUCCEEDED(copyQueue->Signal(lateGate.Get(),1))); // Insufficient signal cannot release PT.
+    assert(output->AdmitInline());assert(!output->AdmitInline());
+    assert(guarded->metrics.SetAdmission(copyQueue.Get(),true));
+    assert(!guarded->metrics.SetAdmission(copyQueue.Get(),true));
+    assert(SUCCEEDED(copyQueue->Signal(lateGate.Get(),2)));
+    assert(guarded->metrics.SetAdmission(queue.Get(),false));
+    assert(!guarded->metrics.SetAdmission(copyQueue.Get(),true)); // Cancellation is terminal.
     assert(output->Invalidate(queue.Get()));assert(!output->Arm(queue.Get()));
     queue->ExecuteCommandLists(1,inlineLists);capture(5);assert(output->NativeSubmitted(queue.Get()));
     std::weak_ptr<GuardedWriter> inlineRetained=guarded;guarded.reset();output.reset();
@@ -131,5 +147,5 @@ int main(){
     {auto measured=inlineRetained.lock();assert(measured);std::array<UINT,8> counters{};assert(measured->metrics.Read(counters));
         assert(counters[0]==0&&counters[1]==12);for(UINT c=2;c<8;++c)assert(counters[c]==0);}
     original.reset();cancelled.reset();PTSurfaceComposition::Output::Poll();assert(inlineRetained.expired());assert(PTSurfaceComposition::Output::ResidentBytes()==0);assert(retained.expired());assert(SUCCEEDED(device->GetDeviceRemovedReason()));
-    puts("PASS: GPU-zero initialization, one-shot producer, queued replay clear, wrong-queue/late-producer rejection inline arm/dispatch/replay guard, bounded deferred retirement and fence-owned dependencies");
+    puts("PASS: GPU-zero initialization, one-shot producer, queued replay clear, wrong-queue/late-producer rejection late COPY signal admission, rejected zero guard, replay cancellation, bounded deferred retirement and fence-owned dependencies");
 }

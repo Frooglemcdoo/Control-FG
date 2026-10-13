@@ -130,8 +130,8 @@ public:
         s.producerAllocator=std::move(allocator);s.producerList=std::move(list);s.dependencies=std::move(dependencies);s.recorded=true;return true;
     }
     // Encoder records between native lighting and its next barrier, preserving
-    // roots/heaps/PSO. Its raygen MUST branch on alpha==1 before tracing and clear
-    // alpha on every rejected pixel. Arm is allowed only at the verified submit.
+    // roots/heaps/PSO. The encoder must test its GPU admission guard before
+    // tracing and clear output alpha on every rejected pixel.
     bool RecordInline(ID3D12GraphicsCommandList* list,void* context,Encoder encode,std::shared_ptr<void> dependencies){
         PTCommandBindings::Mute privateRecording;
         std::lock_guard<std::mutex> guard(mutex);
@@ -148,8 +148,15 @@ public:
         if(!Queue(queue)||storage->failed||storage->invalidated||!storage->recorded||!storage->inlineRecording||storage->produced)return false;
         storage->produced=true;return Execute(storage->armList.Get());
     }
-    // Call after EVERY native submission referencing this output, including a
-    // rejected/replayed consumer. This extends retirement beyond private clears.
+    // The separate admission buffer supplies GPU authorization for inline PT.
+    // This changes lifecycle state only; no texture clear is legal on COPY.
+    bool AdmitInline(){
+        std::lock_guard<std::mutex> guard(mutex);
+        if(!storage)return false;auto& s=*storage;
+        if(s.failed||s.invalidated||!s.recorded||!s.inlineRecording||s.produced)return false;
+        s.produced=true;return true;
+    }
+    // Extend retirement after every native submission, including replay.
     bool NativeSubmitted(ID3D12CommandQueue* queue){
         std::lock_guard<std::mutex> guard(mutex);
         if(!Queue(queue)){if(storage)storage->failed=true;return false;}return Signal();

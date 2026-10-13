@@ -93,6 +93,18 @@ int main(){
     assert(preview.Submit(2,{{2,previewGeneration}}));assert(preview.Signal(2,302,1));
     assert(preview.Scene(702,top,scene)==Status::ready&&Position(scene)==0x3000);
     assert(scene.blas.at(bottom.key.address).version!=previewBottom);
+    Catalog lateUnchanged;auto lg=lateUnchanged.Begin(1);
+    assert(lateUnchanged.Record(1,lg,Blas(bottom,0x2000))&&lateUnchanged.Record(1,lg,Tlas(bottom)));
+    assert(lateUnchanged.Submit(1,{{1,lg}}));assert(lateUnchanged.Signal(1,400,1));
+    assert(lateUnchanged.Wait(1,401,1)&&lateUnchanged.Wait(1,401,2));
+    lg=lateUnchanged.Begin(1);assert(lateUnchanged.Mark(1,lg,703)&&lateUnchanged.Submit(1,{{1,lg}}));
+    assert(lateUnchanged.Scene(703,top,scene,nullptr,PTSceneOrder::Purpose::recordingPreview)==Status::ready);
+    const auto unchangedVersion=scene.blas.at(bottom.key.address).version;
+    assert(lateUnchanged.Scene(703,top,scene)==Status::pending);
+    assert(lateUnchanged.Wait(2,400,1)&&lateUnchanged.Signal(2,401,1));
+    assert(lateUnchanged.Scene(703,top,scene)==Status::pending);
+    assert(lateUnchanged.Signal(2,401,2));
+    assert(lateUnchanged.Scene(703,top,scene)==Status::ready&&scene.blas.at(bottom.key.address).version==unchangedVersion);
     auto producer=c.Begin(1);assert(producer);
     assert(c.Record(1,producer,Blas(bottom,0x2000)));
     Snapshot copy;copy.kind=Snapshot::Kind::copy;copy.destination=compact;copy.source=bottom;

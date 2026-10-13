@@ -22,6 +22,7 @@ struct Consumer {
     void (*selected)(void*,ID3D12CommandQueue*,UINT,ID3D12CommandList*const*,bool) noexcept=nullptr;
     void (*submitted)(void*,ID3D12CommandQueue*,UINT,ID3D12CommandList*const*,bool) noexcept=nullptr;
     void (*reset)(void*,ID3D12GraphicsCommandList*) noexcept=nullptr;
+    void (*signalling)(void*,ID3D12CommandQueue*,ID3D12Fence*,UINT64) noexcept=nullptr;
     void (*fence)(void*,ID3D12CommandQueue*,ID3D12Fence*,UINT64,bool,HRESULT) noexcept=nullptr;
 };
 inline std::atomic<const Consumer*> consumer{nullptr};
@@ -50,11 +51,15 @@ inline HRESULT FenceHook(ID3D12CommandQueue* q,ID3D12Fence* fence,UINT64 value,b
     Scope scope;const auto capture=observer.load(std::memory_order_acquire);
     if(!scope.outer||!capture)return original(q,fence,value);
     std::lock_guard<std::recursive_mutex> guard(queueMutex);
-    const DWORD before=GetLastError();capture->Checkpoint();SetLastError(before);
+    const DWORD before=GetLastError();capture->Checkpoint();
+    const auto client=consumer.load(std::memory_order_acquire);
+    // Serialize prospective signal metadata and private admission copies before
+    // forwarding the releasing native signal. Failure poisons the catalog.
+    if(signal){capture->Signal(q,fence,value);if(client&&client->signalling)client->signalling(client->context,q,fence,value);}
+    SetLastError(before);
     const HRESULT hr=original(q,fence,value);const DWORD error=GetLastError();
     if(FAILED(hr))capture->Invalidate();
-    else {if(signal)capture->Signal(q,fence,value);else capture->Wait(q,fence,value);capture->Tail(q);}
-    const auto client=consumer.load(std::memory_order_acquire);
+    else {if(!signal)capture->Wait(q,fence,value);capture->Tail(q);}
     if(client&&client->fence)client->fence(client->context,q,fence,value,signal,hr);
     SetLastError(error);return hr;
 }

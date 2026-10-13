@@ -78,9 +78,9 @@ bool PTPathLight(PTPathSurface surface,inout uint rng,out PTDirectSample light,o
 [shader("raygeneration")]
 void PTPrimaryPathRayGeneration(){
     uint2 pixel=DispatchRaysIndex().xy;
-    // Selected only by a queue-ordered clear after exact scene/frame admission.
+    // A four-byte copy precedes the native signal releasing this dispatch.
     // Rejected/replayed lists must never traverse their old acceleration data.
-    [branch] if(PTOutput[pixel].a!=1){PTOutput[pixel]=0;return;}
+    [branch] if(PTMetrics.Load(32)!=1){PTOutput[pixel]=0;return;}
     PTOutput[pixel]=0;PTMeasure(0,pixel);
     uint width,height,g2w,g2h,zw,zh;PTGBuffer1.GetDimensions(width,height);PTGBuffer2.GetDimensions(g2w,g2h);PTClipDepth.GetDimensions(zw,zh);
     if(any(uint2(width,height)!=DispatchRaysDimensions().xy)||width!=g2w||height!=g2h||width!=zw||height!=zh||

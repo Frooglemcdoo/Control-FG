@@ -147,8 +147,7 @@ public:
             if(it->second.list.Get()==identity.Get()&&!it->second.submitted)it=Erase(it,"handoff_reset_before_submission");else ++it;
         }
     }
-    // Reject unresolved ordering before allocating/recording private GPU work.
-    // Revalidate still checks the exact scene again at lighting submission.
+    // Preview freezes a disarmed recording; only strict Revalidate may admit it.
     Status PrepareRecording(std::uint64_t serial,const PTSceneDispatch::ExportSet& exports,PTSceneDispatch::Plan& plan,PTOwnedScene::LeaseBatch& lease,
                    std::shared_ptr<const Prepared>* proof=nullptr){
         if(proof)proof->reset();
@@ -161,7 +160,7 @@ public:
             Erase(found);return Status::rejected;
         }
         PTSceneDispatch::Scene scene;const char* pendingReason=nullptr;
-        const auto selected=owner.Scenes().Scene(serial,entry.acceleration,scene,&pendingReason,1);
+        const auto selected=owner.Scenes().PreviewScene(serial,entry.acceleration,scene,&pendingReason,1);
         entry.scenePending=selected==PTSceneOrder::Status::pending?pendingReason:nullptr;
         if(entry.scenePending)return Status::pending;
         if(selected!=PTSceneOrder::Status::ready){Erase(found,selected==PTSceneOrder::Status::missing?(pendingReason?pendingReason:"scene_catalog_missing"):"scene_catalog_rejected");return Status::rejected;}
