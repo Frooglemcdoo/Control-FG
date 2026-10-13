@@ -13,6 +13,9 @@ struct PTPathSurface {
 // Adapter supplies these functions before including this file's implementation.
 PTSceneHit PTPathTrace(RayDesc ray);
 PTPathSurface PTPathDecode(PTSceneHit hit, RayDesc ray);
+#ifdef PT_PATH_PRIMARY_DECODE
+PTPathSurface PTPathDecodePrimary(PTSceneHit hit,RayDesc ray);
+#endif
 float3 PTPathEnvironment(float3 direction);
 bool PTPathLight(PTPathSurface surface, inout uint rng, out PTDirectSample light, out uint visibility);
 
@@ -33,7 +36,13 @@ PTPathResult PTIntegratePathFirst(RayDesc ray,uint maxHits,uint rouletteStart,ui
         if(depth==0&&useFirst!=0)hit=first;else hit=PTPathTrace(ray);
         if(hit.status==2){path.valid=0;result.fault=2;break;}
         if(hit.status==0){path=PTAccumulate(path,PTPathEnvironment(ray.Direction));break;}
-        PTPathSurface surface=PTPathDecode(hit,ray);result.hits++;
+        PTPathSurface surface;
+#ifdef PT_PATH_PRIMARY_DECODE
+        if(depth==0&&useFirst!=0)surface=PTPathDecodePrimary(hit,ray);else surface=PTPathDecode(hit,ray);
+#else
+        surface=PTPathDecode(hit,ray);
+#endif
+        result.hits++;
         PTSurfaceMaterial m=surface.material;
         if(!PTValid(m.kd)||!PTValid(m.f0)||!PTFinite(m.roughness)||m.roughness<0||m.roughness>1||
            any(m.kd<0)||any(m.kd>1)||any(m.f0<0)||any(m.f0>1)||(m.lobes&~3u)!=0||m.lobes==0){path.valid=0;result.fault=surface.decodeFault!=0?surface.decodeFault:3;break;}

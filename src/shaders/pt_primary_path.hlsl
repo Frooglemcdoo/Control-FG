@@ -7,6 +7,7 @@
 #include "pt_scene_hits.hlsl"
 #include "ControlPrimaryGuideDecode.hlsli"
 #include "pt_native_primary_lights.hlsli"
+#define PT_PATH_PRIMARY_DECODE 1
 #include "pt_path_integrator.hlsli"
 #include "pt_primary_commit.hlsli"
 cbuffer PTPrimarySystem : register(b0) { float4 PTSystem[71]; };
@@ -25,7 +26,7 @@ float3 PTWorldToViewPoint(float3 v){return v.x*PTSystem[2].xyz+v.y*PTSystem[3].x
 PTSceneHit PTPathTrace(RayDesc ray){
     PTSceneHit hit=(PTSceneHit)0;TraceRay(PTScene,RAY_FLAG_NONE,1,0,2,0,ray,hit);return hit;
 }
-PTPathSurface PTPathDecode(PTSceneHit hit,RayDesc ray){
+PTPathSurface PTDecodeSurface(PTSceneHit hit,RayDesc ray,bool primary){
     PTPathSurface s=(PTPathSurface)0;s.position=hit.worldPosition;s.normal=hit.geometricNormal;
     s.spawnOrigin=safeSpawnPoint(s.position,s.normal,hit.spawnOffset);
     uint count,stride;PTMaterialFlags.GetDimensions(count,stride);
@@ -39,6 +40,11 @@ PTPathSurface PTPathDecode(PTSceneHit hit,RayDesc ray){
     float3 f0=float3((packed>>24)&255,(packed>>16)&255,(packed>>8)&255)*(specular/255.0);
     float smoothness=lerp(asfloat(m.words[17]),asfloat(m.words[18]),
         PTTextures[NonUniformResourceIndex(base+2)].SampleLevel(PTLinearWrap,hit.uv,0).x);
+    if(primary){
+        uint2 pixel=DispatchRaysIndex().xy;
+        f0=ControlDecodeMaterialF0(packed,PTGBuffer2.Load(int3(pixel,0)).g);
+        smoothness=1-ControlDecodeMaterialRoughness(PTGBuffer1.Load(int3(pixel,0)));
+    }
     s.emission=asfloat(m.words[12])*asfloat(uint3(m.words[25],m.words[26],m.words[27]))*
         PTTextures[NonUniformResourceIndex(base+5)].SampleLevel(PTLinearWrap,hit.uv,0).rgb;
     // New transport material model, not a claim of native BRDF equivalence:
@@ -48,6 +54,8 @@ PTPathSurface PTPathDecode(PTSceneHit hit,RayDesc ray){
        !isfinite(smoothness)||smoothness<0||smoothness>1){s.decodeFault=13;return s;}
     s.material.kd=color*(1-f0);s.material.f0=f0;s.material.roughness=1-smoothness;s.material.lobes=3;return s;
 }
+PTPathSurface PTPathDecode(PTSceneHit hit,RayDesc ray){return PTDecodeSurface(hit,ray,false);}
+PTPathSurface PTPathDecodePrimary(PTSceneHit hit,RayDesc ray){return PTDecodeSurface(hit,ray,true);}
 float3 PTPathEnvironment(float3 direction){
     // Physical miss uses the sharp cube; no roughness-dependent convolution
     // inside path sampling. Native specular environment scale is b2 byte244.
@@ -106,9 +114,8 @@ void PTPrimaryPathRayGeneration(){
     if(abs(first.distance-distance)>max(.002,distance*2e-4))return;PTMeasure(4,pixel);
     uint seed=(pixel.x+pixel.y*width)*747796405u+asuint(PTSystem[69].z)*2891336453u+277803737u;
     seed=(seed^(seed>>16))*2246822519u;seed^=seed>>13;
-    // Terminate low-throughput continuations from the first bounce. Surviving
-    // paths keep the reciprocal survival weight; all four hits remain reachable.
-    PTPathResult result=PTIntegratePathFirst(ray,4,1,seed,.001,first,1,0);
+    // Keep the first two continuations before roulette to reduce reflection variance.
+    PTPathResult result=PTIntegratePathFirst(ray,4,3,seed,.001,first,1,0);
     PTMeasure(5,pixel);
     if(result.valid!=0&&all(isfinite(result.radiance))&&all(result.radiance>=0)){if(admission==2||PTCommitPrimary(pixel,uint2(width,height),result.radiance,admission))PTMeasure(6,pixel);}
     else {PTMeasure(7,pixel);if(((pixel.x|pixel.y)&63)==0){uint old;PTMetrics.InterlockedAdd(36+4*min(result.fault,15u),1,old);}}

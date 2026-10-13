@@ -16,12 +16,26 @@ class Index {
     std::map<U64,std::vector<Triangle>> triangles;
     std::size_t triangleCount=0;
     mutable std::map<std::pair<U64,U64>,U64> lookup;
+    mutable bool addressDirty=true;
+    mutable std::vector<Allocation> byAddress;
+    mutable std::vector<U64> prefixLast;
+    void AddressIndex()const {
+        if(!addressDirty)return;
+        byAddress.clear();prefixLast.clear();byAddress.reserve(allocations.size());prefixLast.reserve(allocations.size());
+        for(const auto& entry:allocations)if(entry.second.bytes)byAddress.push_back(entry.second);
+        std::sort(byAddress.begin(),byAddress.end(),[](const Allocation& a,const Allocation& b){return a.address<b.address;});
+        U64 last=0;for(const auto& a:byAddress){
+            const U64 end=a.address+(std::min)(a.bytes-1,UINT64_MAX-a.address);
+            last=(std::max)(last,end);prefixLast.push_back(last);
+        }
+        addressDirty=false;
+    }
 public:
     struct Resolved {PTSceneAdmission::Geometry geometry{};U64 tokens[3]{};};
     static constexpr std::size_t MaximumTriangles=65536;
-    void Clear(){allocations.clear();triangles.clear();triangleCount=0;lookup.clear();}
-    void Insert(Allocation a){lookup.clear();allocations[a.token]=a;}
-    void Remove(U64 token){lookup.clear();allocations.erase(token);}
+    void Clear(){allocations.clear();triangles.clear();triangleCount=0;lookup.clear();byAddress.clear();prefixLast.clear();addressDirty=true;}
+    void Insert(Allocation a){lookup.clear();addressDirty=true;allocations[a.token]=a;}
+    void Remove(U64 token){lookup.clear();addressDirty=true;allocations.erase(token);}
     bool Contains(U64 token,U64 address,U64 bytes)const {
         auto it=allocations.find(token);if(it==allocations.end())return false;
         const auto& a=it->second;
@@ -30,11 +44,13 @@ public:
     U64 Find(U64 address,U64 bytes)const {
         const auto key=std::make_pair(address,bytes);const auto cached=lookup.find(key);
         if(cached!=lookup.end())return cached->second;
-        U64 found=0;
-        for(const auto& entry:allocations){const auto& a=entry.second;
-            if(!bytes||address<a.address||address-a.address>a.bytes||bytes>a.bytes-(address-a.address))continue;
-            if(found){found=0;break;} // Overlapping retained allocations are not guessed.
-            found=entry.first;
+        U64 found=0;AddressIndex();
+        auto upper=std::upper_bound(byAddress.begin(),byAddress.end(),address,[](U64 value,const Allocation& a){return value<a.address;});
+        std::size_t n=static_cast<std::size_t>(upper-byAddress.begin());
+        while(bytes&&n){--n;if(prefixLast[n]<address)break;const auto& a=byAddress[n];
+            if(address-a.address>a.bytes||bytes>a.bytes-(address-a.address))continue;
+            if(found){found=0;break;} // Preserve rejection of ALL overlapping owners.
+            found=a.token;
         }
         if(lookup.size()<65536)lookup.emplace(key,found);
         return found;

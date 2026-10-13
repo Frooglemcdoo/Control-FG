@@ -122,7 +122,7 @@ static void PollMetrics(){
         if(n<=8||n%240==0)Log("PT_PRIMARY_GPU frame=%u readback=%u armed=%u sampled=%u dimensions=%u primary_hit=%u material_match=%u depth_match=%u integrated=%u covered=%u fault=%u probe=%u sparse_step=64 output=native_light_buffers",f.view.frame,unsigned(good),unsigned(f.armed),counts[0],counts[1],counts[2],counts[3],counts[4],counts[5],counts[6],counts[7],unsigned(f.assets->probe));
         if(good&&(n<=8||n%240==0)){UINT64 frequency=0;double ms=0;
             const bool timed=SUCCEEDED(f.queue->GetTimestampFrequency(&frequency))&&f.assets->metrics.ReadMilliseconds(frequency,ms);
-            Log("PT_PRIMARY_TIMING frame=%u valid=%u dispatch_gpu_ms=%.6f probe=%u roulette_start=1 max_hits=4",f.view.frame,unsigned(timed),ms,unsigned(f.assets->probe));}
+            Log("PT_PRIMARY_TIMING frame=%u valid=%u dispatch_gpu_ms=%.6f probe=%u roulette_start=3 max_hits=4",f.view.frame,unsigned(timed),ms,unsigned(f.assets->probe));}
         if(good&&counts[7]){std::array<UINT,16> faults{};
             if(f.assets->metrics.ReadFaults(faults)&&(n<=8||n%240==0))
                 Log("PT_PRIMARY_FAULTS frame=%u probe=%u input=%u hit=%u material=%u normal=%u facing=%u light=%u direct=%u sample=%u spawn=%u radiance=%u material_bounds=%u brdf=%u material_values=%u native_light=%u",f.view.frame,unsigned(f.assets->probe),faults[1],faults[2],faults[3],faults[4],faults[5],faults[6],faults[7],faults[8],faults[9],faults[10],faults[11],faults[12],faults[13],faults[14]);
@@ -577,6 +577,6 @@ static bool Start(){
     if(FAILED(device->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&sceneUseFence))))return false;
     if(!PTSceneQueues::Start(&PTSceneLive::owner.Scenes())||!PTSceneQueues::Register(&PTSceneLive::owner.Scenes(),&queueConsumer)||
        !PTCommandBindings::Register(&commandConsumer)||!PTNativeJobRuntime::Register(&Job)||!PTSceneLive::owner.Start(step,true))return false;
-    active=true;Log("PT_PRIMARY_SESSION_READY build=M12R28 ready=1 hits=4 spp=1 roulette_start=1 material=opaque_general geometric_normals=1 native_fallback=1");return true;
+    active=true;Log("PT_PRIMARY_SESSION_READY build=M12R29 ready=1 hits=4 spp=1 roulette_start=3 material=opaque_general geometric_normals=1 native_fallback=1");return true;
 }
 }

@@ -32,5 +32,14 @@ int main(){
     index.Remove(6);index.Insert({7,0x1000,0x100});assert(index.Observe(triangle));
     binding.constants[8]=8;index.Remove(3);
     assert(index.Resolve(binding,record)==Status::missingAllocation);
+    // A long earlier interval must still create ambiguity past many short ones.
+    Index ranges;for(U64 n=1;n<=10000;++n)ranges.Insert({n,n*4096,1024});
+    for(U64 n=1;n<=10000;++n){assert(ranges.Find(n*4096+1023,1)==n);assert(ranges.Find(n*4096+1023,2)==0);}
+    ranges.Insert({10001,4096,10000*4096});assert(ranges.Find(9999*4096,4)==0);
+    ranges.Remove(9999);assert(ranges.Find(9999*4096,4)==10001);
+    ranges.Remove(10001);assert(ranges.Find(9999*4096,4)==0);
+    ranges.Insert({9999,9999*4096,1024});assert(ranges.Find(9999*4096,4)==9999);
+    ranges.Insert({10002,UINT64_MAX-3,4});assert(ranges.Find(UINT64_MAX,1)==10002);assert(ranges.Find(UINT64_MAX,2)==0);
+    ranges.Clear();assert(ranges.Find(UINT64_MAX,1)==0);
     std::puts("PASS owned scene: candidate bounds, repeated updates, ambiguity, generation reuse, overlapping owners and R16 padding.");
 }
