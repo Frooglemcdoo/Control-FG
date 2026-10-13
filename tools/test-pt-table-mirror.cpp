@@ -38,6 +38,10 @@ int main(){
     device->CopyDescriptorsSimple(1,destination(prefix+42),source(3),D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
     bank.Copy(1,destination(prefix+42),source(3));PTTableMirror::Bank::Snapshot typed;
     assert(bank.Read(native.Get(),prefix,1ull<<42,typed)&&bank.TypedLoadSupported(typed,42));
+    bank.Copy({{destination(prefix+43),1},{destination(prefix+44),1}},{{source(3),1},{source(3),1}});
+    PTTableMirror::Bank::Snapshot bulkTyped;
+    assert(bank.Read(native.Get(),prefix,(1ull<<43)|(1ull<<44),bulkTyped));
+    assert(bank.TypedLoadSupported(bulkTyped,43)&&bank.TypedLoadSupported(bulkTyped,44));
     // Overwriting the CPU source must not change a previously copied descriptor.
     bank.Constant(nullptr,source(3));assert(bank.TypedLoadSupported(typed,42));
     bank.Copy(1,destination(prefix+42),source(3));
@@ -59,6 +63,26 @@ int main(){
     D3D12_CPU_DESCRIPTOR_HANDLE to[]={destination(prefix+5),destination(prefix+41)},from=source(2);const UINT two=2;
     device->CopyDescriptors(2,to,nullptr,1,&from,&two,hd.Type);bank.Copy({{to[0],1},{to[1],1}},{{from,2}});
     assert(bank.Read(native.Get(),prefix,mask,oldSnapshot));assert(bank.Unchanged(oldSnapshot));
+    // A large bindless prefix must not be shadow-copied. Fragmented CPU
+    // sources still produce one native mirror batch, with exact source offset.
+    constexpr UINT ignored=4096;
+    std::vector<D3D12_CPU_DESCRIPTOR_HANDLE> fragments(ignored,source(0));
+    std::vector<PTTableMirror::Range> fragmentRanges(ignored,{source(0),1});
+    for(UINT n=0;n<49;++n){fragments.push_back(oldSnapshot.At(n));fragmentRanges.push_back({oldSnapshot.At(n),1});}
+    D3D12_CPU_DESCRIPTOR_HANDLE bulkTo[]={destination(prefix-ignored),destination(prefix+7)};
+    UINT bulkSizes[]={ignored+7,42};
+    const auto beforeBulk=bank.Statistics();
+    device->CopyDescriptors(2,bulkTo,bulkSizes,static_cast<UINT>(fragments.size()),fragments.data(),nullptr,hd.Type);
+    bank.Copy({{bulkTo[0],bulkSizes[0]},{bulkTo[1],bulkSizes[1]}},fragmentRanges);
+    const auto afterBulk=bank.Statistics();
+    assert(afterBulk.batch==beforeBulk.batch+1&&afterBulk.single==beforeBulk.single);
+    assert(afterBulk.descriptors==beforeBulk.descriptors+49);
+    PTTableMirror::Bank::Snapshot bulkSnapshot;assert(bank.Read(native.Get(),prefix,mask,bulkSnapshot));
+    oldSnapshot=std::move(bulkSnapshot); // The final WARP readback exercises the batched contents.
+    // An unknown format copied over typed UAV slots must invalidate their proof.
+    assert(bank.Read(native.Get(),prefix,(1ull<<43)|(1ull<<44),bulkTyped));
+    assert(!bank.TypedLoadSupported(bulkTyped,43)&&!bank.TypedLoadSupported(bulkTyped,44));
+    puts("PASS: 4145 fragmented sources clipped to 49 mirrored descriptors in one batch; typed-UAV metadata invalidation");
     assert(bank.Read(native.Get(),prefix,mask,refreshed));auto* retainedCpu=refreshed.descriptors.Get();
     device->CreateShaderResourceView(b.Get(),&srv,source(2));assert(bank.Unchanged(oldSnapshot)); // CPU source changed; native table did not.
     device->CreateShaderResourceView(b.Get(),&srv,destination(prefix+5));bank.ShaderResource(b.Get(),&srv,destination(prefix+5));

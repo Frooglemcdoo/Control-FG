@@ -39,6 +39,7 @@ class Bank {
     std::map<SIZE_T,std::shared_ptr<Heap>> heaps;
     UINT slots=0,step=0;
     std::uint64_t version=1;
+    std::uint64_t singleCopies=0,batchCopies=0,mirroredDescriptors=0;
     std::map<SIZE_T,DXGI_FORMAT> uavFormats;
     std::map<DXGI_FORMAT,bool> readableFormats;
     void CopyFormats(UINT count,SIZE_T destination,SIZE_T source){
@@ -110,18 +111,72 @@ public:
             if(first>=last||(first-h.begin)%step||(first-destination.ptr)%step||(last-first)%step)continue;
             const UINT index=static_cast<UINT>((first-h.begin)/step),n=static_cast<UINT>((last-first)/step);
             auto src=source;src.ptr+=first-destination.ptr;Mute mute;
-            device->CopyDescriptorsSimple(n,At(h,index),src,D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);Mark(h,index,n);
+            device->CopyDescriptorsSimple(n,At(h,index),src,D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+            ++singleCopies;mirroredDescriptors+=n;Mark(h,index,n);
         }
     }
+    struct CopyStats {std::uint64_t single,batch,descriptors;};
+    CopyStats Statistics(){std::lock_guard<std::recursive_mutex> lock(gate);return {singleCopies,batchCopies,mirroredDescriptors};}
     void Copy(const std::vector<Range>& destinations,const std::vector<Range>& sources){
         std::lock_guard<std::recursive_mutex> lock(gate);if(privateWrites||!device)return;
-        std::uint64_t a=0,b=0;for(const auto& r:destinations)a+=r.count;for(const auto& r:sources)b+=r.count;
+        std::uint64_t a=0,b=0;
+        for(const auto& r:destinations){if(r.count>(SIZE_MAX-r.first.ptr)/step){Invalidate();return;}a+=r.count;}
+        for(const auto& r:sources){if(r.count>(SIZE_MAX-r.first.ptr)/step){Invalidate();return;}b+=r.count;}
         if(a!=b||a>1048576){Invalidate();return;}
-        std::size_t di=0,si=0;UINT dn=0,sn=0;
-        while(di<destinations.size()&&si<sources.size()){
-            const auto& d=destinations[di];const auto& s=sources[si];const UINT n=std::min(d.count-dn,s.count-sn);
-            auto dst=d.first,src=s.first;dst.ptr+=SIZE_T(dn)*step;src.ptr+=SIZE_T(sn)*step;if(n)Copy(n,dst,src);
-            dn+=n;sn+=n;if(dn==d.count){++di;dn=0;}if(sn==s.count){++si;sn=0;}
+        // Preserve sparse typed-UAV metadata as ONE transaction. The old path
+        // allocated a temporary vector and repeatedly searched destination
+        // heaps for every single source range, including the bindless prefix.
+        std::vector<std::pair<std::uint64_t,DXGI_FORMAT>> formats;
+        std::uint64_t offset=0;bool overflow=false;
+        for(const auto& r:sources){
+            const SIZE_T bytes=SIZE_T(r.count)*step;
+            for(auto it=uavFormats.lower_bound(r.first.ptr);it!=uavFormats.end()&&it->first-r.first.ptr<bytes;++it){
+                if(formats.size()>=65536){overflow=true;break;}
+                formats.emplace_back(offset+(it->first-r.first.ptr)/step,it->second);
+            }
+            if(overflow)break;offset+=r.count;
+        }
+        if(overflow)uavFormats.clear();
+        else {
+            for(const auto& r:destinations)uavFormats.erase(uavFormats.lower_bound(r.first.ptr),uavFormats.lower_bound(r.first.ptr+SIZE_T(r.count)*step));
+            std::size_t di=0;offset=0;
+            for(const auto& f:formats){
+                while(di<destinations.size()&&f.first-offset>=destinations[di].count){offset+=destinations[di].count;++di;}
+                if(di==destinations.size()){uavFormats.clear();break;}
+                const auto address=destinations[di].first.ptr+SIZE_T(f.first-offset)*step;
+                if(uavFormats.size()>=65536&&!uavFormats.count(address)){uavFormats.clear();break;}
+                uavFormats[address]=f.second;
+            }
+        }
+        // Clip destination ranges BEFORE walking source fragments. Only the
+        // fixed-table suffix is mirrored. One native batch per intersected
+        // heap replaces potentially thousands of tiny native copy calls.
+        for(auto& entry:heaps){auto& h=*entry.second;const SIZE_T heapEnd=h.begin+SIZE_T(h.count)*step;
+            std::vector<D3D12_CPU_DESCRIPTOR_HANDLE> to,from;
+            std::vector<UINT> toSizes,fromSizes,indices;
+            std::size_t si=0;std::uint64_t sourceOffset=0,destinationOffset=0;
+            for(const auto& d:destinations){
+                const SIZE_T end=d.first.ptr+SIZE_T(d.count)*step;
+                const SIZE_T first=std::max(d.first.ptr,h.begin),last=std::min(end,heapEnd);
+                if(first<last&&(first-h.begin)%step==0&&(first-d.first.ptr)%step==0&&(last-first)%step==0){
+                    const UINT index=static_cast<UINT>((first-h.begin)/step),count=static_cast<UINT>((last-first)/step);
+                    to.push_back(At(h,index));toSizes.push_back(count);indices.push_back(index);
+                    std::uint64_t position=destinationOffset+(first-d.first.ptr)/step;UINT left=count;
+                    while(left){
+                        while(si<sources.size()&&sourceOffset+sources[si].count<=position){sourceOffset+=sources[si].count;++si;}
+                        if(si==sources.size()){Invalidate();return;}
+                        const auto& source=sources[si];const UINT skip=static_cast<UINT>(position-sourceOffset);
+                        const UINT n=std::min(left,source.count-skip);auto handle=source.first;handle.ptr+=SIZE_T(skip)*step;
+                        from.push_back(handle);fromSizes.push_back(n);position+=n;left-=n;
+                    }
+                }
+                destinationOffset+=d.count;
+            }
+            if(to.empty())continue;Mute mute;
+            device->CopyDescriptors(static_cast<UINT>(to.size()),to.data(),toSizes.data(),
+                static_cast<UINT>(from.size()),from.data(),fromSizes.data(),D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+            ++batchCopies;
+            for(std::size_t n=0;n<to.size();++n){mirroredDescriptors+=toSizes[n];Mark(h,indices[n],toSizes[n]);}
         }
     }
     void Constant(const D3D12_CONSTANT_BUFFER_VIEW_DESC* desc,D3D12_CPU_DESCRIPTOR_HANDLE destination){

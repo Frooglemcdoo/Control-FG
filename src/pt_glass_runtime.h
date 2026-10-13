@@ -141,7 +141,7 @@ static PTGlass::LightingTableShadow* ActiveShadow() {
     return holder.get();
 }
 static void STDMETHODCALLTYPE CopyHook(ID3D12Device* d,UINT count,D3D12_CPU_DESCRIPTOR_HANDLE dst,D3D12_CPU_DESCRIPTOR_HANDLE src,D3D12_DESCRIPTOR_HEAP_TYPE type){
-    PTTableMirror::Scope tableScope(PTSceneLive::owner.Active());
+    PTTableMirror::Scope tableScope(PTSceneLive::owner.Active()&&type==D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
     {PTTableMirror::Mute forwarding;copySimple(d,count,dst,src,type);}
     if(PTTableMirror::privateWrites)return;
     if(type!=D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV)return;
@@ -185,7 +185,7 @@ static HRESULT STDMETHODCALLTYPE HeapHook(ID3D12Device* d,const D3D12_DESCRIPTOR
 }
 static void STDMETHODCALLTYPE CopyAllHook(ID3D12Device* d,UINT dstCount,const D3D12_CPU_DESCRIPTOR_HANDLE* dst,const UINT* dstSizes,
     UINT srcCount,const D3D12_CPU_DESCRIPTOR_HANDLE* src,const UINT* srcSizes,D3D12_DESCRIPTOR_HEAP_TYPE type){
-    PTTableMirror::Scope tableScope(PTSceneLive::owner.Active());
+    PTTableMirror::Scope tableScope(PTSceneLive::owner.Active()&&type==D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
     {PTTableMirror::Mute forwarding;copyAll(d,dstCount,dst,dstSizes,srcCount,src,srcSizes,type);}
     if(!tableScope.capture||type!=D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV)return;
     std::vector<PTSceneDescriptors::Range> destinations,sources;
