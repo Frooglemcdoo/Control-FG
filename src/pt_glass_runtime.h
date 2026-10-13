@@ -17,6 +17,7 @@
 #include "pt_view_providers.h"
 #include "pt_native_uploads.h"
 #include "pt_primary_metrics.h"
+#include "pt_primary_profiles.h"
 #include <intrin.h>
 #include <unordered_map>
 #include <memory>
@@ -407,12 +408,16 @@ static void ObserveCompute(ID3D12Device* d,const D3D12_COMPUTE_PIPELINE_STATE_DE
         try{PTPrimaryPipelineProbe::Created(desc,static_cast<IUnknown*>(result));}
         catch(...){Log("PT_PRIMARY_PSO_PROBE_FAILED stage=creation");}
     }
-    if(PTSceneLive::owner.Active()&&desc&&result&&desc->CS.BytecodeLength==71144&&desc->CS.pShaderBytecode){
+    if(PTSceneLive::owner.Active()&&desc&&result&&PTPrimaryProfiles::CandidateSize(desc->CS.BytecodeLength)&&desc->CS.pShaderBytecode){
         try {char primarySha[65]{};
-            if(PTReflectionSha256(static_cast<const unsigned char*>(desc->CS.pShaderBytecode),desc->CS.BytecodeLength,primarySha)&&
-               !strcmp(primarySha,"a9e5b544d5ec48e9b439b36aafc5346645f0261d3b1df65dc09e6cce290c164f")&&
-               primaryPipelines.Insert(static_cast<IUnknown*>(result),nativeRoots.Find(desc->pRootSignature)))
-                Log("PT_PRIMARY_PIPELINE_READY root_layout=verified constants=b2 native_returned=1");
+            if(PTReflectionSha256(static_cast<const unsigned char*>(desc->CS.pShaderBytecode),desc->CS.BytecodeLength,primarySha)){
+                const auto* profile=PTPrimaryProfiles::Find(desc->CS.BytecodeLength,primarySha);
+                if(profile){
+                    if(primaryPipelines.Insert(static_cast<IUnknown*>(result),nativeRoots.Find(desc->pRootSignature)))
+                        Log("PT_PRIMARY_PIPELINE_READY root_layout=verified constants=b2 native_returned=1 variant=%s sha256=%s",profile->name,primarySha);
+                    else Log("PT_PRIMARY_PIPELINE_REJECT reason=root_or_identity variant=%s sha256=%s",profile->name,primarySha);
+                }
+            }
         }catch(...){Log("PT_PRIMARY_PIPELINE_REJECT reason=allocation native_returned=1");}
     }
     if(!enabled||!desc||!result||desc->CS.BytecodeLength!=39720)return;char sha[65]{};
