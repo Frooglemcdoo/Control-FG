@@ -70,9 +70,10 @@ static void TestGeometrySnapshot(ID3D12Device* device,bool common=false,bool tem
     assert(uploads.Created(901,source.Get(),source->GetGPUVirtualAddress(),desc.Width)==1);
     assert(!uploads.ReadUpload(source->GetGPUVirtualAddress(),slice,sizeof(slice))); // Never map GPU-only memory.
     ComPtr<ID3D12CommandAllocator> allocator;ComPtr<ID3D12GraphicsCommandList> list;ComPtr<ID3D12CommandQueue> queue;
-    D3D12_COMMAND_QUEUE_DESC qd{};assert(SUCCEEDED(device->CreateCommandQueue(&qd,IID_PPV_ARGS(&queue))));
-    assert(SUCCEEDED(device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT,IID_PPV_ARGS(&allocator))));
-    assert(SUCCEEDED(device->CreateCommandList(0,D3D12_COMMAND_LIST_TYPE_DIRECT,allocator.Get(),nullptr,IID_PPV_ARGS(&list))));
+    const auto commandType=temporary?D3D12_COMMAND_LIST_TYPE_COMPUTE:D3D12_COMMAND_LIST_TYPE_DIRECT;
+    D3D12_COMMAND_QUEUE_DESC qd{};qd.Type=commandType;assert(SUCCEEDED(device->CreateCommandQueue(&qd,IID_PPV_ARGS(&queue))));
+    assert(SUCCEEDED(device->CreateCommandAllocator(commandType,IID_PPV_ARGS(&allocator))));
+    assert(SUCCEEDED(device->CreateCommandList(0,commandType,allocator.Get(),nullptr,IID_PPV_ARGS(&list))));
     assert(PTCommandBindings::Watch(list.Get()));PTCommandBindings::tracker.Reset(list.Get(),nullptr);
     const auto transition=[&](ID3D12Resource* r,D3D12_RESOURCE_STATES from,D3D12_RESOURCE_STATES to){
         D3D12_RESOURCE_BARRIER b{};b.Type=D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;b.Transition={r,D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,from,to};list->ResourceBarrier(1,&b);
