@@ -115,6 +115,19 @@ public:
         if(!value)return Mark(queue);
         Node node;node.waitFence=fence;node.waitValue=value;return Append(queue,node);
     }
+    // Host polled the real fence. Resolve only waits with NO observed queue
+    // signal: retaining known producer edges is essential for scene selection.
+    // This adds no guessed cross-queue ancestry and never resolves a future value.
+    U64 ObserveFenceCompletion(U64 fence,U64 completed){
+        if(!valid||!fence||completed==UINT64_MAX)return 0;
+        const auto f=fences.find(fence);U64 resolved=0;
+        for(auto& node:nodes)if(node.waitFence==fence&&node.waitValue<=completed&&
+            (f==fences.end()||f->second.signals.lower_bound(node.waitValue)==f->second.signals.end())){
+            node.waitFence=node.waitValue=0;++resolved;
+        }
+        if(resolved)clockDirty=true;
+        return resolved;
+    }
     // A CPU drain is allowed only when every dependency needed by already
     // queued work has a queued signal. Never block waiting for future CPU work.
     bool ClosedDependencies()const {

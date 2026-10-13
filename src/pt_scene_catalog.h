@@ -132,6 +132,9 @@ public:
     }
     bool Signal(U64 queue,U64 fence,U64 value){std::lock_guard<std::mutex> guard(mutex);if(!valid)return false;if(!graph.Signal(queue,fence,value)){Fail("graph_signal");return false;}return true;}
     bool Wait(U64 queue,U64 fence,U64 value){std::lock_guard<std::mutex> guard(mutex);if(!valid)return false;if(!graph.Wait(queue,fence,value)){Fail("graph_wait");return false;}return true;}
+    U64 ObserveFenceCompletion(U64 fence,U64 completed){
+        std::lock_guard<std::mutex> guard(mutex);return valid?graph.ObserveFenceCompletion(fence,completed):0;
+    }
     bool CanDrain()const {
         std::lock_guard<std::mutex> guard(mutex);if(!valid)return false;
         for(const auto& c:cuts)if(c.second)return false;

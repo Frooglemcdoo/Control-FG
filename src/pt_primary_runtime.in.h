@@ -266,7 +266,7 @@ static void Drawing(void*,ID3D12GraphicsCommandList* list) noexcept {
         // camera buffers and allocating descriptors for every native draw
         // when opaque/lighting admission has already failed this frame.
         {std::lock_guard<std::recursive_mutex> guard(mutex);
-            bool produced=false;for(const auto& weak:frames){const auto frame=weak.lock();if(frame&&frame->producerRecorded){produced=true;break;}}
+            bool produced=false;for(const auto& weak:frames){const auto frame=weak.lock();if(frame&&frame->producerRecorded&&(!frame->producerSubmitted||frame->armed)){produced=true;break;}}
             if(!produced)return;
         }
         const auto pso=PTCommandBindings::tracker.PipelineFor(list);
@@ -379,7 +379,7 @@ static void Submitted(void*,ID3D12CommandQueue* queue,UINT count,ID3D12CommandLi
             const auto descriptorStats=PTSceneLive::owner.DescriptorStatistics();
             Log("PT_PRIMARY_DESCRIPTOR_STATS healthy=%u failure=%s entries=%llu writes=%llu as_writes=%llu copies=%llu",unsigned(descriptorStats.healthy),descriptorStats.failure,descriptorStats.entries,descriptorStats.writes,descriptorStats.asWrites,descriptorStats.copies);
             Log("PT_PRIMARY_OWNERS retained=%llu rejected=%llu budget_rejected=%llu peak_bytes=%llu untracked_destinations=%llu destination_tombstones=%llu last_untracked_destination=%llx",owners.retained,owners.rejected,owners.budget,owners.peakBytes,t.untrackedDestinations,t.destinationTombstones,t.lastUntrackedDestination);
-            Log("PT_PRIMARY_CAPTURE healthy=%u failure=%s skipped_invalid=%llu copy_failures=%llu copy_failure=%s pooled_idle_bytes=%llu buffer_allocations=%llu buffer_reuses=%llu history_versions=%llu history_rows=%llu history_nodes=%llu copy_bytes=%llu off_updates_preserved=%llu",unsigned(t.healthy),t.failure,t.skippedInvalid,t.copyFailures,PTSceneLive::owner.Resources().GeometryFailure(),pool.bytes,pool.allocations,pool.reuses,t.historyVersions,t.historyRows,t.historyNodes,t.copyBytes,t.offUpdatesPreserved);
+            Log("PT_PRIMARY_CAPTURE healthy=%u failure=%s skipped_invalid=%llu copy_failures=%llu copy_failure=%s pooled_idle_bytes=%llu buffer_allocations=%llu buffer_reuses=%llu history_versions=%llu history_rows=%llu history_nodes=%llu copy_bytes=%llu off_updates_preserved=%llu completed_waits=%llu",unsigned(t.healthy),t.failure,t.skippedInvalid,t.copyFailures,PTSceneLive::owner.Resources().GeometryFailure(),pool.bytes,pool.allocations,pool.reuses,t.historyVersions,t.historyRows,t.historyNodes,t.copyBytes,t.offUpdatesPreserved,t.completedWaits);
             Log("PT_PRIMARY_CPU submissions=%llu builds=%llu build_total_ms=%llu build_max_ms=%llu checkpoints=%llu checkpoint_total_ms=%llu checkpoint_max_ms=%llu blocking_checkpoint_waits=0",sequence,t.builds.calls,t.builds.totalMs,t.builds.maxMs,t.checkpoints.calls,t.checkpoints.totalMs,t.checkpoints.maxMs);}
         if(sequence%240==0){
             Log("PT_PRIMARY_ROUTE bindings_healthy=%u jobs=%llu job_off=%llu job_unknown_pso=%llu opaque=%llu compute=%llu compute_off=%llu no_pso=%llu other_pso=%llu primary=%llu environment=%llu",
@@ -421,6 +421,6 @@ static bool Start(){
     if(FAILED(device->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&sceneUseFence))))return false;
     if(!PTSceneQueues::Start(&PTSceneLive::owner.Scenes())||!PTSceneQueues::Register(&PTSceneLive::owner.Scenes(),&queueConsumer)||
        !PTCommandBindings::Register(&commandConsumer)||!PTNativeJobRuntime::Register(&Job)||!PTSceneLive::owner.Start(step,true))return false;
-    active=true;Log("PT_PRIMARY_SESSION_READY build=M12R19 ready=1 hits=4 spp=1 material=opaque_general geometric_normals=1 native_fallback=1");return true;
+    active=true;Log("PT_PRIMARY_SESSION_READY build=M12R20 ready=1 hits=4 spp=1 material=opaque_general geometric_normals=1 native_fallback=1");return true;
 }
 }

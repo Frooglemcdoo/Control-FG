@@ -61,7 +61,24 @@ static void TestStaticSceneCompaction(){
     }
     std::printf("Static scene compaction: %.3f ms for 1,500 BLAS and 3,000 pending signals (informational)\n",elapsed);
 }
+static void TestObservedFenceCompletion(){
+    const Key as{1,0x1000};Selection selected;
+    Graph cpu;cpu.Write(1,as,1);cpu.Wait(1,90,5);const auto cut=cpu.Mark(1);
+    assert(cpu.Select(cut,as,selected)==Status::pending);
+    assert(cpu.ObserveFenceCompletion(90,4)==0&&cpu.Select(cut,as,selected)==Status::pending);
+    assert(cpu.ObserveFenceCompletion(90,UINT64_MAX)==0);
+    assert(cpu.ObserveFenceCompletion(90,5)==1&&cpu.Select(cut,as,selected)==Status::ready&&selected.version==1);
+    cpu.Wait(1,90,6);const auto later=cpu.Mark(1);
+    assert(cpu.ObserveFenceCompletion(90,5)==0&&cpu.Select(later,as,selected)==Status::pending);
+    Graph queued;queued.Write(1,as,2);queued.Signal(1,91,7);queued.Wait(2,91,7);const auto cross=queued.Mark(2);
+    assert(queued.ObserveFenceCompletion(91,7)==0);
+    assert(queued.Select(cross,as,selected)==Status::ready&&selected.version==2);
+    Graph unrelated;unrelated.Write(1,as,3);unrelated.Wait(2,92,1);const auto unknown=unrelated.Mark(2);
+    assert(unrelated.ObserveFenceCompletion(92,1)==1);
+    assert(unrelated.Select(unknown,as,selected)==Status::unordered); // No invented producer edge.
+}
 int main(){
+    TestObservedFenceCompletion();
     TestStaticSceneCompaction();
     TestLiveCompaction();
     const Key as{10,0xa000};Selection chosen;

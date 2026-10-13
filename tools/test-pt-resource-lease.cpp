@@ -272,9 +272,16 @@ static void TestOffUpdateCapture(ID3D12Device* device){
     auto top=build;top.DestAccelerationStructureData=address+768;top.Inputs.Type=D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL;top.Inputs.InstanceDescs=address+128;
     capture.Build(list.Get(),&top);assert(capture.Mark(list.Get(),1));
     capture.RenderingRequested(true); // No subsequent geometry update/rebuild.
+    ComPtr<ID3D12Fence> cpuFence;assert(SUCCEEDED(device->CreateFence(5,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&cpuFence))));
+    assert(SUCCEEDED(queue->Wait(cpuFence.Get(),5))&&capture.Wait(queue.Get(),cpuFence.Get(),5));
+    assert(capture.Statistics().completedWaits==1); // Initial value, no queue Signal.
+    assert(SUCCEEDED(queue->Wait(cpuFence.Get(),6))&&capture.Wait(queue.Get(),cpuFence.Get(),6));
+    assert(capture.Statistics().completedWaits==1);
+    assert(SUCCEEDED(cpuFence->Signal(6))); // CPU signal is discovered non-blockingly by Submit.
     ID3D12CommandList* raw=list.Get();assert(capture.Submit(queue.Get(),1,&raw));
     PTOwnedScene::Allocation allocation;assert(bank.Identify(address+768,256,allocation));PTSceneDispatch::Scene scene;
     assert(capture.Scene(1,{address+768,allocation.token,256},scene)==PTSceneOrder::Status::ready);
+    assert(capture.Statistics().completedWaits==2);
     PTNativeBinding::Binding binding{};binding.indices=address;binding.constants[1]=2;binding.constants[8]=6;
     std::vector<PTSceneTopology::Mapping> mapping;scene.topology.Check(scene.instances,{binding},2,&mapping);
     assert(mapping.size()==1&&mapping[0].referenced&&mapping[0].geometry.positions==address+320);

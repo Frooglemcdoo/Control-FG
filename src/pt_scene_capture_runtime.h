@@ -19,6 +19,14 @@ class Capture {
     std::map<U64,Upload> uploads;
     struct Progress {ComPtr<ID3D12Fence> fence;U64 value=0,completedStamp=0;std::map<U64,U64> stamps;};
     std::map<U64,Progress> progress;
+    struct WaitFence {ComPtr<ID3D12Fence> fence;U64 completed=0;};
+    std::map<U64,WaitFence> waitFences;
+    void RefreshWaitFences(){
+        for(auto& item:waitFences){auto& f=item.second;const auto done=f.fence->GetCompletedValue();
+            if(done==UINT64_MAX){catalog.Invalidate("wait_fence_device_removed");return;}
+            if(done!=f.completed){f.completed=done;stats.completedWaits+=catalog.ObserveFenceCompletion(item.first,done);}
+        }
+    }
     U64 checkpointOperations=0;
     U64 lastCheckpointAttempt=0;
     U64 serial=0;
@@ -67,7 +75,7 @@ class Capture {
     }
 public:
     struct Timing {U64 calls=0,totalMs=0,maxMs=0;};
-    struct Stats {Timing builds,checkpoints;U64 skippedInvalid=0,untrackedDestinations=0,destinationTombstones=0,lastUntrackedDestination=0,copyFailures=0,offUpdatesPreserved=0,historyVersions=0,historyRows=0,historyNodes=0,copyBytes=0;bool healthy=true;const char* failure="none";};
+    struct Stats {Timing builds,checkpoints;U64 skippedInvalid=0,untrackedDestinations=0,destinationTombstones=0,lastUntrackedDestination=0,copyFailures=0,offUpdatesPreserved=0,completedWaits=0,historyVersions=0,historyRows=0,historyNodes=0,copyBytes=0;bool healthy=true;const char* failure="none";};
 private:
     Stats stats;
     struct Measure {Timing& value;ULONGLONG start=GetTickCount64();~Measure(){const U64 ms=GetTickCount64()-start;++value.calls;value.totalMs+=ms;value.maxMs=(std::max)(value.maxMs,ms);}};
@@ -159,6 +167,7 @@ public:
     bool Submit(IUnknown* queue,UINT count,ID3D12CommandList*const* lists){
         std::lock_guard<std::mutex> guard(mutex);auto* q=Identify(queue);
         if(!q||!count||count>256||!lists){catalog.Invalidate();return false;}
+        RefreshWaitFences();
         std::vector<std::pair<U64,U64>> ordered;ordered.reserve(count);
         for(UINT n=0;n<count;++n){
             if(!lists[n]){catalog.Invalidate("null_submission_list");return false;}
@@ -216,7 +225,14 @@ public:
     }
     bool Wait(IUnknown* queue,IUnknown* fence,U64 value){
         std::lock_guard<std::mutex> guard(mutex);auto* q=Identify(queue);auto* f=Identify(fence);
-        if(!q||!f){catalog.Invalidate();return false;}return catalog.Wait(q->id,f->id,value);
+        if(!q||!f){catalog.Invalidate();return false;}
+        auto& tracked=waitFences[f->id];
+        if(!tracked.fence&&FAILED(fence->QueryInterface(IID_PPV_ARGS(&tracked.fence)))){catalog.Invalidate("wait_fence_identity");return false;}
+        if(!catalog.Wait(q->id,f->id,value))return false;
+        const auto done=tracked.fence->GetCompletedValue();
+        if(done==UINT64_MAX){catalog.Invalidate("wait_fence_device_removed");return false;}
+        tracked.completed=done;stats.completedWaits+=catalog.ObserveFenceCompletion(f->id,done);
+        return true;
     }
     PTSceneOrder::Status Scene(U64 ticket,const PTSceneDescriptors::Acceleration& selected,PTSceneDispatch::Scene& scene,const char** pendingReason=nullptr,unsigned rayMask=0xff){
         return catalog.Scene(ticket,{{selected.token,selected.address},selected.bytes},scene,pendingReason,PTSceneOrder::Purpose::submission,rayMask);
