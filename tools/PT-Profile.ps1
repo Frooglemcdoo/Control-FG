@@ -42,14 +42,19 @@ if($status -notmatch '(?i)not recording'){
 $game=@(Get-Process -Name Control_DX12 -ErrorAction SilentlyContinue)
 if($game.Count -ne 1){throw 'Run one instance of Control_DX12.exe and load the test scene first.'}
 $game=$game[0]
-$loaded=@($game.Modules | Where-Object {$_.ModuleName -ieq 'dxgi.dll' -and (Split-Path $_.FileName -Parent) -eq $PSScriptRoot})
-if($loaded.Count -ne 1){throw ('Run this script beside the dxgi.dll actually loaded by Control. Expected directory: '+$PSScriptRoot+'; observed modules: '+($game.Modules | ConvertTo-Json -Compress))}
 $buildPath=Join-Path $PSScriptRoot 'Build.json'
 $build=Get-Content -LiteralPath $buildPath -Raw | ConvertFrom-Json
 if($build.Build -ne 'M12R41'){throw 'This capture script requires the M12R41 profiling package.'}
-$hash=(Get-FileHash -LiteralPath $loaded[0].FileName -Algorithm SHA256).Hash.ToLowerInvariant()
 $manifest=Get-Content -LiteralPath (Join-Path $PSScriptRoot 'SHA256SUMS.txt')
-if(@($manifest | Where-Object {$_ -match ('^'+$hash+'\s+dxgi\.dll$')}).Count -ne 1){throw 'Installed DLL does not match the package hash.'}
+$expected=@($manifest | Where-Object {$_ -match '^[0-9a-fA-F]{64}\s+dxgi\.dll$'})
+if($expected.Count -ne 1){throw 'Package must contain exactly one dxgi.dll hash.'}
+$hash=($expected[0] -split '\s+')[0].ToLowerInvariant()
+# Windows may report the same path in long or 8.3 form. Match the loaded
+# module's bytes, not its spelling; the system dxgi.dll will not match.
+$loaded=@($game.Modules | Where-Object {$_.ModuleName -ieq 'dxgi.dll'} | Where-Object {
+    (Get-FileHash -LiteralPath $_.FileName -Algorithm SHA256).Hash.ToLowerInvariant() -eq $hash
+})
+if($loaded.Count -ne 1){throw 'The running game has no unique dxgi.dll matching this R41 package. Install together and restart Control.'}
 $logDir=Join-Path $env:LOCALAPPDATA 'ControlFGProbe'
 $record=Get-ChildItem -LiteralPath $logDir -Filter ('probe-*-'+$game.Id+'.log') -File | Sort-Object LastWriteTimeUtc -Descending | Select-Object -First 1
 if(-not $record){throw 'Cannot find a probe log for this game process. Restart Control after installing R41.'}
@@ -60,7 +65,7 @@ if(($Mode -eq 'Bypass') -ne $actualBypass){throw 'Selected mode disagrees with t
 $dir=Join-Path $OutputDirectory ($Mode+'-'+$Resolution+'-'+(Get-Date -Format 'yyyyMMdd-HHmmss-fff'))
 New-Item -ItemType Directory -Path $dir -Force | Out-Null
 $profiles | Set-Content -LiteralPath (Join-Path $dir 'WPR-profiles.txt')
-$meta=[ordered]@{Build='M12R41';Commit=$build.Commit;DllSHA256=$hash;ProcessId=$game.Id;ProcessStartUtc=$game.StartTime.ToUniversalTime().ToString('o');RequestedMode=$Mode;RequestedResolution=$Resolution;StartupCaptureDisabled=$actualBypass;Seconds=$Seconds;Profile='GeneralProfile+GPU';SettingsAreUserLabels=$true;StartupRecord=$startup[0]}
+$meta=[ordered]@{Build='M12R41';Commit=$build.Commit;DllSHA256=$hash;LoadedDll=$loaded[0].FileName;ProcessId=$game.Id;ProcessStartUtc=$game.StartTime.ToUniversalTime().ToString('o');RequestedMode=$Mode;RequestedResolution=$Resolution;StartupCaptureDisabled=$actualBypass;Seconds=$Seconds;Profile='GeneralProfile+GPU';SettingsAreUserLabels=$true;StartupRecord=$startup[0]}
 Write-Host 'Keep the same scene and camera, FG OFF, VSync/frame cap OFF, RR unchanged.'
 Write-Host 'Set the selected PT/DLSS state and wait for it to settle before continuing.'
 Read-Host 'Press Enter when ready. You then have 10 seconds to return to the game' | Out-Null
