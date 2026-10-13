@@ -1,5 +1,5 @@
-#include "../src/pt_native_uploads.h"
 #define NOMINMAX
+#include "../src/pt_native_uploads.h"
 #include <windows.h>
 #include <dxgi1_6.h>
 #include <wrl/client.h>
