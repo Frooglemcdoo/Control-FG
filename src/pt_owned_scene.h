@@ -15,6 +15,8 @@ class Index {
     std::map<U64,Allocation> allocations;
     std::map<U64,std::vector<Triangle>> triangles;
     std::size_t triangleCount=0;
+    U64 revision=1;
+    void Changed(){if(revision)revision=revision==UINT64_MAX?0:revision+1;}
     mutable std::map<std::pair<U64,U64>,U64> lookup;
     mutable bool addressDirty=true;
     mutable std::vector<Allocation> byAddress;
@@ -33,9 +35,10 @@ class Index {
 public:
     struct Resolved {PTSceneAdmission::Geometry geometry{};U64 tokens[3]{};};
     static constexpr std::size_t MaximumTriangles=65536;
-    void Clear(){allocations.clear();triangles.clear();triangleCount=0;lookup.clear();byAddress.clear();prefixLast.clear();addressDirty=true;}
-    void Insert(Allocation a){lookup.clear();addressDirty=true;allocations[a.token]=a;}
-    void Remove(U64 token){lookup.clear();addressDirty=true;allocations.erase(token);}
+    U64 Revision()const{return revision;} // Zero permanently disables reuse after overflow.
+    void Clear(){Changed();allocations.clear();triangles.clear();triangleCount=0;lookup.clear();byAddress.clear();prefixLast.clear();addressDirty=true;}
+    void Insert(Allocation a){Changed();lookup.clear();addressDirty=true;allocations[a.token]=a;}
+    void Remove(U64 token){Changed();lookup.clear();addressDirty=true;allocations.erase(token);}
     bool Contains(U64 token,U64 address,U64 bytes)const {
         auto it=allocations.find(token);if(it==allocations.end())return false;
         const auto& a=it->second;
@@ -56,6 +59,7 @@ public:
         return found;
     }
     bool Observe(Triangle t){
+        Changed(); // Even failed observations may prune an old bucket.
         if(!t.indices||!t.positions||(t.indexStride!=2&&t.indexStride!=4)||!t.indexCount||t.indexCount%3||!t.vertexCount||t.positionStride<12||t.positionStride>UINT32_MAX)return false;
         t.indexToken=Find(t.indices,U64(t.indexCount)*t.indexStride);
         t.positionToken=Find(t.positions,U64(t.vertexCount-1)*t.positionStride+12);

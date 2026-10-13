@@ -21,6 +21,20 @@ struct Scene {
     PTSceneTopology::Index topology;
     std::vector<PTSceneTopology::Instance> instances;
 };
+// Exact immutable-input comparison, not merely a version-number shortcut.
+// Frozen geometry is shared_ptr<const> and retained by the prepared scene.
+inline bool SameScene(const Scene& a,const Scene& b){
+    const auto sameAS=[](const Scene::Acceleration& x,const Scene::Acceleration& y){
+        return x.token==y.token&&x.bytes==y.bytes&&x.version==y.version;
+    };
+    if(!a.address||!a.version||a.address!=b.address||a.version!=b.version||!sameAS(a.tlas,b.tlas)||
+       a.instances.size()!=b.instances.size()||a.blas.size()!=b.blas.size())return false;
+    if(!a.instances.empty()&&std::memcmp(a.instances.data(),b.instances.data(),a.instances.size()*sizeof(PTSceneTopology::Instance)))return false;
+    auto next=b.blas.begin();for(const auto& item:a.blas){
+        if(item.first!=next->first||!sameAS(item.second,next->second))return false;++next;
+    }
+    return a.topology.Same(b.topology);
+}
 struct Table {
     U64 address=0,version=0,pipeline=0;
     unsigned rays=0;
@@ -32,6 +46,7 @@ struct Table {
 struct Plan {
     Selection selection{};
     U64 privatePipeline=0;
+    U64 ownerRevision=0; // Set only by the locked resource owner after successful preflight.
     std::vector<PTShaderTableAdapter::Bytes> records;
     std::vector<U64> allocationTokens;
     std::map<U64,U64> bottomVersions;

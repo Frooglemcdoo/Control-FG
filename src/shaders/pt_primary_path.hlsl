@@ -10,6 +10,7 @@
 #define PT_PATH_PRIMARY_DECODE 1
 #define PT_PATH_PRIMARY_FILL 1
 #define PT_PATH_PRIMARY_INDIRECT 1
+#define PT_PATH_PRIMARY_SHADING_NORMAL 1
 #include "pt_path_integrator.hlsli"
 #include "pt_primary_commit.hlsli"
 cbuffer PTPrimarySystem : register(b0) { float4 PTSystem[71]; };
@@ -44,6 +45,10 @@ PTPathSurface PTDecodeSurface(PTSceneHit hit,RayDesc ray,bool primary){
         PTTextures[NonUniformResourceIndex(base+2)].SampleLevel(PTLinearWrap,hit.uv,0).x);
     if(primary){
         uint2 pixel=DispatchRaysIndex().xy;
+        float3 shading=ControlNormalViewToWorld(ControlDecodeNormalView(PTGBuffer1.Load(int3(pixel,0))),
+            PTSystem[6].xyz,PTSystem[7].xyz,PTSystem[8].xyz);
+        if(!PTValidPrimaryShadingNormal(shading,hit.geometricNormal,-ray.Direction)){s.decodeFault=4;return s;}
+        s.normal=shading; // Spawn offset above deliberately keeps the geometric normal.
         f0=ControlDecodeMaterialF0(packed,PTGBuffer2.Load(int3(pixel,0)).g);
         smoothness=1-ControlDecodeMaterialRoughness(PTGBuffer1.Load(int3(pixel,0)));
     }

@@ -16,6 +16,7 @@ class Prepared {
     PTSceneDispatch::Table table;
     PTSceneDispatch::ExportSet exports;
     PTSceneDispatch::Plan plan;
+    PTSceneDispatch::Scene scene;
 };
 class Runtime {
     struct Entry {
@@ -174,7 +175,7 @@ public:
         if(prepared&&proof){
             auto snapshot=std::make_shared<Prepared>();snapshot->owner=&owner;snapshot->acceleration=entry.acceleration;
             snapshot->engineFrame=entry.ticket.engineFrame;snapshot->width=entry.ticket.width;snapshot->height=entry.ticket.height;
-            snapshot->nativePipeline=entry.pipeline;snapshot->table=std::move(entry.table);snapshot->exports=exports;snapshot->plan=plan;
+            snapshot->nativePipeline=entry.pipeline;snapshot->table=std::move(entry.table);snapshot->exports=exports;snapshot->plan=plan;snapshot->scene=std::move(scene);
             *proof=std::move(snapshot);
         }
         Erase(found);return prepared?Status::prepared:Status::rejected;
@@ -190,8 +191,9 @@ public:
         PTSceneDispatch::Scene scene;const auto selected=owner.Scenes().Scene(submissionTicket,proof->acceleration,scene,reason,1);
         if(selected==PTSceneOrder::Status::pending)return Status::pending;
         if(selected!=PTSceneOrder::Status::ready){if(reason)*reason="submission_scene_rejected";return Status::rejected;}
-        const bool same=owner.Resources().Revalidate(scene,proof->table,proof->exports,proof->plan);
-        if(reason)*reason=same?"none":"submission_scene_changed";
+        bool reused=false;
+        const bool same=owner.Resources().Revalidate(scene,proof->table,proof->exports,proof->plan,proof->scene,&reused);
+        if(reason)*reason=same?(reused?"submission_preflight_reused":"submission_preflight_rebuilt"):"submission_scene_changed";
         return same?Status::prepared:Status::rejected;
     }
 };

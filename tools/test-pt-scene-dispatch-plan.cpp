@@ -67,6 +67,22 @@ int main(){
     assert(Prepare(selected,scene,sparse,owners,exports,sparsePlan).status==Status::rowAttributeOwner);
     assert(!SameDispatch(plan,plan)); // Unversioned fixture cannot authorize a later submission.
     scene.blas[0xb000].version=17;assert(prepare().status==Status::prepared);
+    // Reuse requires exact scene inputs, including changes that leave versions
+    // and shader-table bytes unchanged. Do not rely on a version-only shortcut.
+    assert(SameScene(scene,scene));
+    auto alteredScene=scene;alteredScene.instances[0].transform[0]=1;assert(!SameScene(scene,alteredScene));
+    alteredScene=scene;alteredScene.instances[0].contributionFlags=2;assert(!SameScene(scene,alteredScene));
+    alteredScene=scene;alteredScene.instances[0].idMask=0;assert(!SameScene(scene,alteredScene));
+    alteredScene=scene;++alteredScene.tlas.token;assert(!SameScene(scene,alteredScene));
+    alteredScene=scene;++alteredScene.tlas.bytes;assert(!SameScene(scene,alteredScene));
+    alteredScene=scene;++alteredScene.version;assert(!SameScene(scene,alteredScene));
+    alteredScene=scene;++alteredScene.blas[0xb000].version;assert(!SameScene(scene,alteredScene));
+    alteredScene=scene;++alteredScene.blas[0xb000].token;assert(!SameScene(scene,alteredScene));
+    alteredScene=scene;alteredScene.blas.clear();assert(!SameScene(scene,alteredScene));
+    alteredScene=scene;assert(alteredScene.topology.Build(0xb000,{{0x1000,0x2010,12,2,3,3,1,2}}));
+    assert(!SameScene(scene,alteredScene));
+    alteredScene=scene;assert(alteredScene.topology.Build(0xb000,{{0x1000,0x2000,12,2,3,3,1,99}}));
+    assert(!SameScene(scene,alteredScene));
     const auto preparedAtRayPass=plan;assert(SameDispatch(preparedAtRayPass,plan));
     ++scene.blas[0xb000].version;assert(prepare().status==Status::prepared);
     assert(plan.records==preparedAtRayPass.records&&!SameDispatch(preparedAtRayPass,plan)); // In-place AS update, same SBT.

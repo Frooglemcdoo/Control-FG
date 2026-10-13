@@ -41,9 +41,10 @@ class Catalog {
     static bool Equal(Key a,Key b){return a.token==b.token&&a.address==b.address;}
     static bool Known(const Allocation& a){return a.key.token&&a.key.address&&a.bytes;}
     static std::size_t Rows(const Snapshot& s){return s.geometry.size()+s.instances.size()+s.bottom.size();}
-    Status Resolve(U64 cut,Key key,const Snapshot*& out,std::set<U64>& visiting,const char** pendingReason=nullptr,PTSceneOrder::Purpose purpose=PTSceneOrder::Purpose::submission)const {
+    Status Resolve(U64 cut,Key key,const Snapshot*& out,std::set<U64>& visiting,const char** pendingReason=nullptr,PTSceneOrder::Purpose purpose=PTSceneOrder::Purpose::submission,U64* selectedVersion=nullptr)const {
         out=nullptr;PTSceneOrder::Selection selected;
         const auto status=graph.Select(cut,key,selected,pendingReason,purpose);if(status!=Status::ready)return status;
+        if(selectedVersion)*selectedVersion=selected.version;
         const auto version=versions.find(selected.version);
         if(version==versions.end()||visiting.size()>=256||!visiting.insert(selected.version).second)return Status::invalid;
         const auto& v=version->second;const auto& s=*v.snapshot;
@@ -207,10 +208,9 @@ public:
         const auto c=cuts.find(ticket);if(c==cuts.end())return Status::missing;if(!c->second)return Status::pending;
         if(!Known(selected)||!rayMask||rayMask>0xff)return Status::missing;
         const Snapshot* top=nullptr;std::set<U64> visiting;
-        auto status=Resolve(c->second,selected.key,top,visiting,pendingReason,purpose);if(status!=Status::ready){if(status==Status::missing&&pendingReason)*pendingReason="scene_tlas_unavailable";return status;}
+        U64 topVersion=0;auto status=Resolve(c->second,selected.key,top,visiting,pendingReason,purpose,&topVersion);if(status!=Status::ready){if(status==Status::missing&&pendingReason)*pendingReason="scene_tlas_unavailable";return status;}
         if(top->kind!=Snapshot::Kind::tlas){if(pendingReason)*pendingReason="scene_tlas_invalid";return Status::missing;}
-        PTSceneOrder::Selection version;status=graph.Select(c->second,selected.key,version,pendingReason,purpose);if(status!=Status::ready)return status;
-        PTSceneDispatch::Scene scene;scene.address=selected.key.address;scene.version=version.version;
+        PTSceneDispatch::Scene scene;scene.address=selected.key.address;scene.version=topVersion;
         scene.tlas={selected.key.token,selected.bytes};
         // Only instances intersecting the actual TraceRay inclusion mask can
         // reach this private SBT. Preserve original contributions/row numbers.
@@ -219,10 +219,9 @@ public:
             if(!(instance.idMask>>24)||scene.blas.count(instance.blas))continue;
             const auto a=top->bottom.find(instance.blas);if(a==top->bottom.end())return Status::missing;
             if(!Known(a->second)){if(pendingReason)*pendingReason="scene_blas_owner_missing";return Status::missing;}
-            const Snapshot* bottom=nullptr;status=Resolve(c->second,a->second.key,bottom,visiting,pendingReason,purpose);if(status!=Status::ready){if(status==Status::missing&&pendingReason&&(!*pendingReason||std::strcmp(*pendingReason,"none")==0))*pendingReason="scene_blas_unavailable";return status;}
+            U64 bottomVersion=0;const Snapshot* bottom=nullptr;status=Resolve(c->second,a->second.key,bottom,visiting,pendingReason,purpose,&bottomVersion);if(status!=Status::ready){if(status==Status::missing&&pendingReason&&(!*pendingReason||std::strcmp(*pendingReason,"none")==0))*pendingReason="scene_blas_unavailable";return status;}
             if(bottom->kind!=Snapshot::Kind::blas||!scene.topology.Build(instance.blas,bottom->geometry)){if(pendingReason)*pendingReason="scene_blas_invalid";return Status::missing;}
-            PTSceneOrder::Selection bottomVersion;status=graph.Select(c->second,a->second.key,bottomVersion,pendingReason,purpose);if(status!=Status::ready)return status;
-            scene.blas.emplace(instance.blas,PTSceneDispatch::Scene::Acceleration{a->second.key.token,a->second.bytes,bottomVersion.version});
+            scene.blas.emplace(instance.blas,PTSceneDispatch::Scene::Acceleration{a->second.key.token,a->second.bytes,bottomVersion});
         }
         output=std::move(scene);return Status::ready;
     }

@@ -1,9 +1,9 @@
 #ifndef CONTROL_PT_PATH_INTEGRATOR
 #define CONTROL_PT_PATH_INTEGRATOR
 #include "pt_direct_light.hlsli"
-// Adapter contract: geometric and shading normals must coincide for this initial
-// opaque/diffuse/GGX integrator. Transmission and shading-normal correction are
-// not admitted. Emitters/environment are BSDF-only; NEE accepts DELTA lights only,
+// Secondary adapters use coincident geometric/shading normals. Primary camera
+// radiance transport may use the raster shading normal with geometric hemisphere
+// rejection below. Transmission and importance-mode correction are not admitted. Emitters/environment are BSDF-only; NEE accepts DELTA lights only,
 // preventing duplicate non-delta light energy until emitter MIS is implemented.
 struct PTPathSurface {
     float3 position, normal, emission, spawnOrigin;
@@ -77,6 +77,9 @@ PTPathResult PTIntegratePathFirst(RayDesc ray,uint maxHits,uint rouletteStart,ui
         ray.Origin=surface.spawnOrigin;
         if(!all(isfinite(ray.Origin))){path.valid=0;result.fault=9;break;}
         ray.Direction=normalize(tangent*sample.wi.x+bitangent*sample.wi.y+n*sample.wi.z);
+#ifdef PT_PATH_PRIMARY_SHADING_NORMAL
+        if(depth==0&&useFirst!=0&&!PTPrimaryReflectionAboveGeometry(first.geometricNormal,ray.Direction))break;
+#endif
         ray.TMin=0;
     }
     if(path.valid==0&&result.fault==0)result.fault=10;

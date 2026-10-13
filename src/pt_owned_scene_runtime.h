@@ -226,13 +226,23 @@ public:
             bytes+=entry.bytes;payload->resources.push_back(entry.resource);
         }
         if(!leaseBudget->Acquire(bytes))return false;
+        candidate.ownerRevision=index.Revision();
         payload->bytes=bytes;payload->keepAlive=candidate.keepAlive;batch.payload=std::move(payload);plan=std::move(candidate);return true;
     }
     // Recheck under the allocation lock without acquiring a second GPU lease.
     // The caller must keep the original lease through this submission's fence.
     bool Revalidate(const PTSceneDispatch::Scene& scene,const PTSceneDispatch::Table& table,
-                    const PTSceneDispatch::ExportSet& exports,const PTSceneDispatch::Plan& prepared){
+                    const PTSceneDispatch::ExportSet& exports,const PTSceneDispatch::Plan& prepared,
+                    const PTSceneDispatch::Scene& preparedScene,bool* reused=nullptr){
+        if(reused)*reused=false;
         std::lock_guard<std::mutex> guard(mutex);if(!active)return false;
+        // Table/exports are the original private immutable proof. Reuse only
+        // while every owner/geometry mutation and every scene input is unchanged.
+        // Otherwise execute the original complete preflight and record comparison.
+        if(prepared.ownerRevision&&prepared.ownerRevision==index.Revision()&&
+           PTSceneDispatch::SameDispatch(prepared,prepared)&&PTSceneDispatch::SameScene(preparedScene,scene)){
+            if(reused)*reused=true;return true;
+        }
         const PTSceneDispatch::Selection selected{scene.address,scene.version,table.address,table.version,table.pipeline};
         PTSceneDispatch::Plan current;
         return PTSceneDispatch::Prepare(selected,scene,table,index,exports,current).status==PTSceneDispatch::Status::prepared&&

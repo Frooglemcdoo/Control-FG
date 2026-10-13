@@ -33,6 +33,14 @@ PT_INLINE bool PTFinite(float a) {
 PT_INLINE bool PTValid(PTVec3 a) { return PTFinite(a.x)&&PTFinite(a.y)&&PTFinite(a.z); }
 PT_INLINE PTVec3 PTUnit(PTVec3 a) { return PTScale(a,1.0f/sqrt(max(PTDot(a,a),1.0e-30f))); }
 PT_INLINE PTVec3 PTCross(PTVec3 a,PTVec3 b) { return PTV(a.y*b.z-a.z*b.y,a.z*b.x-a.x*b.z,a.x*b.y-a.y*b.x); }
+// Camera/radiance transport uses the raster shading frame. Reflection must
+// still stay on the front geometric hemisphere; never resample rejected rays
+// (resampling without changing the PDF would brighten grazing surfaces).
+PT_INLINE bool PTValidPrimaryShadingNormal(PTVec3 ns,PTVec3 ng,PTVec3 wo){
+    return PTValid(ns)&&PTValid(ng)&&PTValid(wo)&&PTDot(ns,ns)>1-1e-4f&&PTDot(ns,ns)<1+1e-4f&&
+        PTDot(ns,ng)>0&&PTDot(ns,wo)>0&&PTDot(ng,wo)>0;
+}
+PT_INLINE bool PTPrimaryReflectionAboveGeometry(PTVec3 ng,PTVec3 wi){return PTValid(wi)&&PTDot(ng,wi)>0;}
 static const float PTTransportPi=3.14159265358979323846f;
 
 // Directions are normalized, point away from the surface, and are in its local

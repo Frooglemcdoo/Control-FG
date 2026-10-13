@@ -7,6 +7,13 @@
 #include <cstdio>
 int main(){
     using namespace PTOwnedScene;
+    Index revisions;auto revision=revisions.Revision();assert(revision);
+    revisions.Insert({1,4096,256});assert(revisions.Revision()!=revision);revision=revisions.Revision();
+    assert(revisions.Find(4096,8)==1);assert(revisions.Revision()==revision);
+    revisions.Insert({1,4096,256});assert(revisions.Revision()!=revision);revision=revisions.Revision();
+    revisions.Remove(1);assert(revisions.Revision()!=revision);revision=revisions.Revision();
+    assert(!revisions.Observe({}));assert(revisions.Revision()!=revision);revision=revisions.Revision();
+    revisions.Clear();assert(revisions.Revision()!=revision);
     Index index;index.Insert({1,0x1000,0x100});index.Insert({2,0x2000,0x100});index.Insert({3,0x3000,0x100});
     Triangle triangle{0x1000,0x2000,12,0,0,2,3,3};assert(index.Observe(triangle));
     PTNativeBinding::Binding binding{};binding.indices=0x1000;binding.attributes=0x3000;

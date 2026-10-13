@@ -16,6 +16,17 @@ static float integrate(PTSurfaceMaterial m,PTVec3 wo) {
     return float(sum*(2*PTTransportPi)/(nz*np));
 }
 int main(){
+    const auto ng=PTV(0,0,1),ns=PTV(.6f,0,.8f),view=PTV(0,0,1);
+    require(PTValidPrimaryShadingNormal(ns,ng,view),"Tilted native shading normal accepted");
+    require(!PTValidPrimaryShadingNormal(PTV(0,0,-1),ng,view),"Reversed raster normal rejected");
+    require(!PTValidPrimaryShadingNormal(PTV(0,0,2),ng,view),"Non-unit shading normal rejected");
+    require(!PTValidPrimaryShadingNormal(ns,ng,PTV(0,0,-1)),"Back-side camera rejected");
+    // This ray is above the shading normal but below the triangle. It must
+    // terminate as zero contribution rather than leaking through the surface.
+    const auto leak=PTUnit(PTV(1,0,-.1f));require(PTDot(ns,leak)>0,"Leak fixture above shading normal");
+    require(!PTPrimaryReflectionAboveGeometry(ng,leak),"Geometric back hemisphere clipped");
+    require(PTPrimaryReflectionAboveGeometry(ng,view),"Front reflection retained");
+
     // Retaining native specular fill must remove that lobe only from the first
     // continuation, while preserving its diffuse throughput and direct BSDF.
     PTSurfaceMaterial original={PTV(.4f,.2f,.1f),PTV(.9f,.9f,.9f),.2f,3u};

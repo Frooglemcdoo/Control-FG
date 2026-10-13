@@ -445,7 +445,7 @@ static void Signalling(void*,ID3D12CommandQueue* queue,ID3D12Fence* fence,UINT64
             const auto status=InputsUnchanged(frame)?handoff.Revalidate(a->ticket,a->engineFrame,frame->view.width,frame->view.height,a->proof,&reason):PTSceneHandoff::Status::rejected;
             QueryPerformanceCounter(&validateEnd);
             static UINT64 validated=0;if(++validated<=8||validated%240==0)
-                Log("PT_PRIMARY_VALIDATE_CPU frame=%u ms=%.6f",frame->view.frame,CpuMilliseconds(validateStart,validateEnd));
+                Log("PT_PRIMARY_VALIDATE_CPU frame=%u ms=%.6f proof=%s",frame->view.frame,CpuMilliseconds(validateStart,validateEnd),reason);
             if(status==PTSceneHandoff::Status::pending){frame->wait=PTSceneLive::owner.Scenes().PendingWait(a->ticket);
                 static UINT64 pending=0;if(++pending<=8||pending%240==0)
                     Log("PT_PRIMARY_LATE_PENDING ticket=%llu reason=%s fence=%llu required=%llu",a->ticket,reason,frame->wait.graph.fence,frame->wait.graph.value);
@@ -579,6 +579,6 @@ static bool Start(){
     if(FAILED(device->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&sceneUseFence))))return false;
     if(!PTSceneQueues::Start(&PTSceneLive::owner.Scenes())||!PTSceneQueues::Register(&PTSceneLive::owner.Scenes(),&queueConsumer)||
        !PTCommandBindings::Register(&commandConsumer)||!PTNativeJobRuntime::Register(&Job)||!PTSceneLive::owner.Start(step,true))return false;
-    active=true;Log("PT_PRIMARY_SESSION_READY build=M12R31 ready=1 hits=4 spp=1 roulette_start=3 material=opaque_general geometric_normals=1 native_fallback=1 primary_lighting=native diffuse_bounces=pt_indirect readiness=per_material");return true;
+    active=true;Log("PT_PRIMARY_SESSION_READY build=M12R32 ready=1 hits=4 spp=1 roulette_start=3 material=opaque_general geometric_normals=1 native_fallback=1 primary_lighting=native diffuse_bounces=pt_indirect readiness=per_material");return true;
 }
 }
