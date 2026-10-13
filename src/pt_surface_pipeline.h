@@ -23,6 +23,7 @@ public:
                           CreateGraphics create,std::shared_ptr<Pipeline>& output){
         output.reset();
         if(!device||!description||!original||!create||!description->pRootSignature)return E_INVALIDARG;
+        if(description->SampleDesc.Count!=1)return S_FALSE;
         if(!rootLayout||rootLayout->Type()!=PTNativeRoot::Kind::graphics||!rootLayout->Matches(description->pRootSignature))return E_INVALIDARG;
         std::vector<unsigned char> program;
         if(!Patch(static_cast<const unsigned char*>(description->PS.pShaderBytecode),description->PS.BytecodeLength,verifiedSha,program))return S_FALSE;

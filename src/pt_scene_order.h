@@ -100,6 +100,14 @@ public:
     Status Select(U64 dispatch,Key target,Selection& result)const {
         result={};std::set<U64> reachable;const auto state=Ancestors(dispatch,reachable);
         if(state!=Status::ready)return state;
+        // A reachable old version is insufficient when another queue has an
+        // unordered write to the same AS. Writes already submitted after this
+        // cut must be provably descendants, not merely absent from its history.
+        for(U64 id=1;id<nodes.size();++id){const auto& n=nodes[static_cast<std::size_t>(id)];
+            if(n.target.token!=target.token||n.target.address!=target.address||reachable.count(id))continue;
+            std::set<U64> later;const auto s=Ancestors(id,later);if(s!=Status::ready)return s;
+            if(!later.count(dispatch))return Status::unordered;
+        }
         // A larger signal on another queue can satisfy the same wait first.
         // Require a single ordered timeline for every observed fence, including
         // queue handoffs; increasing CPU-side values alone are insufficient.

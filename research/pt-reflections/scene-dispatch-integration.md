@@ -554,3 +554,40 @@ current-frame field at byte1112. Reading these requires a retained UPLOAD
 allocation at the boundary; arbitrary GPU memory is never dereferenced. Missing
 ownership, dimensions or camera data reject the match. The runtime consumer and
 activation still must connect these pieces before this becomes a playable build.
+
+### Connected session consumer (M12 work in progress)
+
+`pt_primary_runtime.in.h` now connects native job completion, verified opaque and
+primary pass identities, camera-content matching, environment capture, private
+SBT preparation, inline ray dispatch, companion surface draws and native queue
+retirement. An output can be allocated by a material recording before the
+lighting recording, so worker recording order does not choose GPU order. The
+native direct queue is pinned from the hash-locked TLS context. Eight outputs
+maximum and a 1 GiB output allocation budget bound retention. Every modified
+draw restores its native PSO and pixel table immediately afterward. Native PSOs,
+unknown/special materials, alpha, fog, media and primary emission remain native.
+M11 timed capture is disabled; the session hooks persist without capture files.
+
+Submission revalidates the exact AS cut, writer SBT, view data, descriptor versions
+and F10 state. Output alpha is armed only before an admitted native submission.
+A replay clears alpha in the same queue before executing. Changed surface table
+values refresh the private clone from the CPU mirror, including for native
+fallback. Resource use is fenced after native producer/consumer execution, with
+one signal per output per submission rather than one per draw.
+
+An additional lifetime correction is essential: selecting an old reachable AS
+version does not exclude a later unordered write on another queue. The order
+graph now rejects such a cut; a future write must be a proven descendant. After
+an armed private dispatch submission, a session fence on the native direct queue
+extends the scene read lifetime. Subsequent submissions on other native queues
+wait for that fence; these private Signal/Wait edges are also entered into the
+scene catalog. This serializes later native AS/attribute writes behind PT use and
+may reduce asynchronous overlap. It does not copy or rebuild native acceleration
+structures. All native DIRECT/COMPUTE/COPY list resets must be observed, including
+lists without scene operations, to keep generations correct on subsequent reuse.
+
+This wiring is under compilation/integration verification. It is not a measured
+in-game image, performance, coverage or RR-guide equivalence result. The session
+requires the new primary sidecar and exact supported native modules. Missing
+prerequisites leave approved P2/G3 available rather than producing a fake PT
+success. No component-only result is advertised as the completed playable build.

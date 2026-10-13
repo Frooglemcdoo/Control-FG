@@ -249,13 +249,17 @@ static void RestoreCalls(){
 }
 static bool Install(HMODULE d3d){
     if(!HashMatches(d3d,kD3dHash)||!HashMatches(verifiedRenderer,kRendererHash)){Log("PT_SCENE_M11_INSTALL ready=0 reason=unsupported_module_hash");return false;}
+    constexpr bool diagnostics=false;bool ready=true;
+    if(diagnostics){
     wchar_t dir[32768]{};const DWORD len=GetEnvironmentVariableW(L"LOCALAPPDATA",dir,_countof(dir));if(!len||len>=_countof(dir))return false;
     wchar_t name[160]{};swprintf_s(name,L"\\ControlFGProbe\\pt-scene-m11-%llu-%lu.jsonl",GetTickCount64(),GetCurrentProcessId());
     output=CreateFileW((std::wstring(dir)+name).c_str(),GENERIC_WRITE,FILE_SHARE_READ,nullptr,CREATE_NEW,FILE_ATTRIBUTE_NORMAL,nullptr);
     if(output==INVALID_HANDLE_VALUE)return false;
     events=new(std::nothrow) Event[Capacity];if(!events){CloseHandle(output);output=INVALID_HANDLE_VALUE;return false;}
     const char header[]="{\"kind\":\"header\",\"schema\":1,\"build\":\"M11\",\"limit\":196608,\"geometry_limit\":65536,\"binding_limit\":65536,\"resource_limit\":65536,\"seconds\":120,\"scope\":\"recording_only_not_gpu_completion\"}\n";
-    bool ready=Write(header,static_cast<DWORD>(sizeof(header)-1));auto* b=reinterpret_cast<unsigned char*>(d3d);
+    ready=Write(header,static_cast<DWORD>(sizeof(header)-1));
+    }
+    auto* b=reinterpret_cast<unsigned char*>(d3d);
     nativeFill=reinterpret_cast<Fill>(b+0x33a40);
     ready=ready&&RRAlbedoPrepareCallPatch(b+0x357c6,reinterpret_cast<void*>(nativeFill),reinterpret_cast<void*>(&FillInline),&fillPatch[0]);
     ready=ready&&RRAlbedoPrepareCallPatch(b+0x374a1,reinterpret_cast<void*>(nativeFill),reinterpret_cast<void*>(&FillWorker),&fillPatch[1]);
@@ -263,6 +267,7 @@ static bool Install(HMODULE d3d){
     ready=ready&&PrepareResources(b)&&PrepareTopology(b)&&PrepareQueues(b);
     if(ready)ready=runJobPatch.Exchange(true)&&instanceLockPatch.Exchange(true)&&RRAlbedoExchangeCall(&instanceCopyPatch,true)&&compactPatch.Exchange(true)&&InstallResources()&&InstallQueues()&&buildCall[0].Exchange(true)&&buildCall[1].Exchange(true)&&RRAlbedoExchangeCall(&fillPatch[0],true)&&RRAlbedoExchangeCall(&fillPatch[1],true);
     if(!ready){RestoreCalls();CloseHandle(output);output=INVALID_HANDLE_VALUE;Log("PT_SCENE_M11_INSTALL ready=0 reason=call_patch");return false;}
+    if(!diagnostics){PTNativeJobRuntime::workerHooksReady=true;Log("PT_SCENE_SESSION_INSTALL ready=1 timed_capture=0 native_forwarding=1");return true;}
     recording=true;HANDLE thread=CreateThread(nullptr,0,&Worker,nullptr,0,nullptr);
     if(!thread){recording=false;RestoreCalls();CloseHandle(output);output=INVALID_HANDLE_VALUE;Log("PT_SCENE_M11_INSTALL ready=0 reason=writer_thread");return false;}
     PTNativeJobRuntime::workerHooksReady=true;

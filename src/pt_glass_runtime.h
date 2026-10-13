@@ -9,6 +9,10 @@
 #include "pt_command_bindings.h"
 #include "pt_native_pass_pipeline.h"
 #include "pt_table_mirror.h"
+#include "pt_scene_handoff.h"
+#include "pt_scene_dispatch.h"
+#include "pt_surface_output.h"
+#include "pt_native_view.h"
 #include <intrin.h>
 #include <unordered_map>
 #include <memory>
@@ -389,6 +393,7 @@ static void LightHook(void* state,const void* dimensions){
     finish.consumer=context.list;
     const auto n=dispatchCount.load();if(n<=4||n%240==0)Log("PT_GLASS_LIGHTING dispatch=%llu secondary=1 composite=1 native_diffuse_direct_emission_retained=1",n);
 }
+#include "pt_primary_runtime.in.h"
 static void ObserveCompute(ID3D12Device* d,const D3D12_COMPUTE_PIPELINE_STATE_DESC* desc,void* result){
     if(PTSceneLive::owner.Active()&&desc&&result&&desc->CS.BytecodeLength==71144&&desc->CS.pShaderBytecode){
         try {char primarySha[65]{};
@@ -441,13 +446,17 @@ static HRESULT STDMETHODCALLTYPE RootHook(ID3D12Device* d,UINT node,const void* 
 static HRESULT STDMETHODCALLTYPE ListHook(ID3D12Device* d,UINT node,D3D12_COMMAND_LIST_TYPE type,ID3D12CommandAllocator* allocator,ID3D12PipelineState* initial,REFIID iid,void** out){
     const HRESULT hr=createList(d,node,type,allocator,initial,iid,out);const DWORD nativeError=GetLastError();
     if(SUCCEEDED(hr)&&out&&*out&&PTSceneLive::owner.Active()&&!PTCommandBindings::nesting&&
-       (type==D3D12_COMMAND_LIST_TYPE_DIRECT||type==D3D12_COMMAND_LIST_TYPE_COMPUTE)){
+       (type==D3D12_COMMAND_LIST_TYPE_DIRECT||type==D3D12_COMMAND_LIST_TYPE_COMPUTE||type==D3D12_COMMAND_LIST_TYPE_COPY)){
         try {
-            ComPtr<ID3D12GraphicsCommandList> list;
-            if(SUCCEEDED(static_cast<IUnknown*>(*out)->QueryInterface(IID_PPV_ARGS(&list)))&&PTCommandBindings::Watch(list.Get()))
-                PTCommandBindings::tracker.Reset(list.Get(),initial);
-            else PTCommandBindings::tracker.Fail();
-        }catch(...){PTCommandBindings::tracker.Fail();}
+            ComPtr<ID3D12GraphicsCommandList> list;ComPtr<ID3D12GraphicsCommandList4> rays;
+            bool good=SUCCEEDED(static_cast<IUnknown*>(*out)->QueryInterface(IID_PPV_ARGS(&list)))&&PTSceneQueues::WatchList(list.Get());
+            if(good&&SUCCEEDED(list.As(&rays)))good=PTSceneQueues::WatchList(rays.Get());
+            if(good&&type!=D3D12_COMMAND_LIST_TYPE_COPY){
+                good=PTCommandBindings::Watch(list.Get())&&(!rays||PTCommandBindings::Watch(rays.Get()));
+                if(good)PTCommandBindings::tracker.Reset(list.Get(),initial);
+            }
+            if(!good){PTCommandBindings::tracker.Fail();PTSceneLive::owner.Scenes().Invalidate();}
+        }catch(...){PTCommandBindings::tracker.Fail();PTSceneLive::owner.Scenes().Invalidate();}
     }
     SetLastError(nativeError);return hr;
 }
@@ -465,6 +474,7 @@ static void InstallDevice(ID3D12Device* d){
        !Patch(d,12,reinterpret_cast<void*>(&ListHook),reinterpret_cast<void**>(&createList))||
        !Patch(rayDevice.Get(),62,reinterpret_cast<void*>(&StateHook),reinterpret_cast<void**>(&createState)))enabled=false;
     Log("PT_GLASS_DEVICE_HOOKS ready=%u",unsigned(enabled.load()));
+    if(enabled&&!Primary::Start())Log("PT_PRIMARY_SESSION_READY ready=0 fallback=approved_P2_G3");
 }
 struct NativeCallPatch {
     unsigned char* site=nullptr;unsigned char original[6]{},replacement[6]{};bool installed=false;

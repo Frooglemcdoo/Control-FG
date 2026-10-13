@@ -47,6 +47,15 @@ static void TestGeometrySnapshot(ID3D12Device* device){
     auto readback=make(D3D12_HEAP_TYPE_READBACK,D3D12_RESOURCE_STATE_COPY_DEST);
     unsigned char* mapped=nullptr;D3D12_RANGE empty{};assert(SUCCEEDED(upload->Map(0,&empty,reinterpret_cast<void**>(&mapped))));
     for(unsigned n=0;n<512;++n){mapped[n]=static_cast<unsigned char>(n);mapped[n+512]=0xee;}upload->Unmap(0,nullptr);
+    PTOwnedScene::Runtime uploads;const auto uploadAddress=upload->GetGPUVirtualAddress();
+    assert(uploads.Created(900,upload.Get(),uploadAddress,desc.Width)==1);
+    unsigned char slice[16]{};assert(uploads.ReadUpload(uploadAddress+17,slice,sizeof(slice)));
+    for(unsigned n=0;n<16;++n)assert(slice[n]==n+17);
+    assert(!uploads.ReadUpload(uploadAddress+desc.Width-8,slice,sizeof(slice)));
+    assert(!uploads.ReadUpload(uploadAddress,nullptr,sizeof(slice)));
+    auto uploadRelease=uploads.BeforeRelease(900);assert(!uploads.ReadUpload(uploadAddress,slice,sizeof(slice)));assert(uploads.AfterRelease(uploadRelease)==5);
+    assert(uploads.Created(901,source.Get(),source->GetGPUVirtualAddress(),desc.Width)==1);
+    assert(!uploads.ReadUpload(source->GetGPUVirtualAddress(),slice,sizeof(slice))); // Never map GPU-only memory.
     ComPtr<ID3D12CommandAllocator> allocator;ComPtr<ID3D12GraphicsCommandList> list;ComPtr<ID3D12CommandQueue> queue;
     D3D12_COMMAND_QUEUE_DESC qd{};assert(SUCCEEDED(device->CreateCommandQueue(&qd,IID_PPV_ARGS(&queue))));
     assert(SUCCEEDED(device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT,IID_PPV_ARGS(&allocator))));

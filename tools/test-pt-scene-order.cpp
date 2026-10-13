@@ -6,9 +6,9 @@ int main(){
     const Key as{10,0xa000};Selection chosen;
     Graph graph;
     graph.Write(1,as,100);graph.Signal(1,20,1);
-    graph.Write(1,as,200); // Later CPU/GPU build is NOT included in the wait below.
+    graph.Write(1,as,200); // Not ordered with queue 2: the older cut cannot freeze the AS.
     graph.Wait(2,20,1);auto ray=graph.Mark(2);
-    assert(graph.Select(ray,as,chosen)==Status::ready&&chosen.version==100);
+    assert(graph.Select(ray,as,chosen)==Status::unordered);
     graph.Signal(1,20,2);graph.Wait(2,20,2);ray=graph.Mark(2);
     assert(graph.Select(ray,as,chosen)==Status::ready&&chosen.version==200);
     assert(graph.Select(ray,{11,as.address},chosen)==Status::missing&&chosen.version==0);
@@ -41,6 +41,11 @@ int main(){
     overwrite.Write(2,as,2);overwrite.Signal(2,120,1);
     overwrite.Wait(3,110,1);overwrite.Wait(3,120,1);overwrite.Write(3,as,3);ray=overwrite.Mark(3);
     assert(overwrite.Select(ray,as,chosen)==Status::ready&&chosen.version==3);
+    Graph protectedUse;
+    protectedUse.Write(1,as,100);protectedUse.Signal(1,130,1);
+    protectedUse.Wait(2,130,1);ray=protectedUse.Mark(2);
+    protectedUse.Signal(2,140,1);protectedUse.Wait(1,140,1);protectedUse.Write(1,as,200);
+    assert(protectedUse.Select(ray,as,chosen)==Status::ready&&chosen.version==100);
     Graph rewind;assert(rewind.Signal(1,80,2));assert(!rewind.Signal(1,80,1));
     assert(rewind.Select(1,as,chosen)==Status::invalid);
     std::puts("PASS AS queue ordering: exact fence cuts, late signals, allocation identity, unknown writes, unordered producers and cycles.");

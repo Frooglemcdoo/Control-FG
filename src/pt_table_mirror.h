@@ -139,6 +139,24 @@ public:
         }
         output=std::move(result);return true;
     }
+    // Refresh an already-owned CPU snapshot without allocation. A cloned native
+    // draw table must follow native descriptor edits even when PT is rejected;
+    // clearing PT alpha alone would leave its fallback using stale inputs.
+    bool Refresh(Snapshot& snapshot){
+        std::lock_guard<std::recursive_mutex> lock(gate);
+        if(!device||!snapshot.native||!snapshot.descriptors||snapshot.first<Prefix||snapshot.step!=step)return false;
+        auto h=Find(snapshot.native->GetCPUDescriptorHandleForHeapStart().ptr+SIZE_T(snapshot.first)*step);if(!h)return false;
+        ComPtr<IUnknown> identity;if(FAILED(snapshot.native.As(&identity))||identity.Get()!=h->identity.Get())return false;
+        const UINT index=snapshot.first-Prefix;if(index>h->count||49>h->count-index)return false;
+        for(UINT n=0;n<49;++n)if((snapshot.required&(1ull<<n))&&!h->seen[index+n])return false;
+        Mute mute;device->CopyDescriptorsSimple(49,snapshot.At(0),defaults->GetCPUDescriptorHandleForHeapStart(),D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+        snapshot.versions={};
+        for(UINT n=0;n<49;){if(!h->seen[index+n]){++n;continue;}const UINT first=n;
+            while(n<49&&h->seen[index+n]){snapshot.versions[n]=h->versions[index+n];++n;}
+            device->CopyDescriptorsSimple(n-first,snapshot.At(first),At(*h,index+first),D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+        }
+        return true;
+    }
     bool Unchanged(const Snapshot& snapshot){
         std::lock_guard<std::recursive_mutex> lock(gate);if(!snapshot.native||!snapshot.descriptors||snapshot.first<Prefix)return false;
         auto h=Find(snapshot.native->GetCPUDescriptorHandleForHeapStart().ptr+SIZE_T(snapshot.first)*step);if(!h)return false;
