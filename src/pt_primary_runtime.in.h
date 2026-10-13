@@ -112,10 +112,11 @@ static void PollMetrics(){
             f.deferred=false;f.cancelled=true;PTSceneLive::owner.Scenes().Forget(f.assets->ticket);
         }
         std::array<UINT,8> counts{};const bool good=f.assets&&f.assets->metrics.Read(counts);
+        std::array<UINT,16> faults{};const bool faultRead=good&&(!counts[7]||f.assets->metrics.ReadFaults(faults));
         if(good&&f.armed&&counts[5]){
-            const bool healthy=counts[6]>=counts[5]-counts[5]/20; // >=95%, including unsupported BRDFs.
-            if(!healthy){transportGoodFrames=0;transportValidated=false;}
-            else if(f.assets->probe&&!transportValidated&&++transportGoodFrames>=3){
+            const auto health=faultRead?PTPrimaryReadiness::Check(counts[5],counts[6],counts[7],faults[12]):PTPrimaryReadiness::Result::unhealthy;
+            if(health==PTPrimaryReadiness::Result::unhealthy){transportGoodFrames=0;transportValidated=false;}
+            else if(health==PTPrimaryReadiness::Result::healthy&&f.assets->probe&&!transportValidated&&++transportGoodFrames>=3){
                 transportValidated=true;Log("PT_PRIMARY_TRANSPORT_READY frame=%u covered=%u stable_frames=%u",f.view.frame,counts[6],transportGoodFrames);}
         }
         static UINT64 samples=0;const auto n=++samples;
@@ -123,8 +124,8 @@ static void PollMetrics(){
         if(good&&(n<=8||n%240==0)){UINT64 frequency=0;double ms=0;
             const bool timed=SUCCEEDED(f.queue->GetTimestampFrequency(&frequency))&&f.assets->metrics.ReadMilliseconds(frequency,ms);
             Log("PT_PRIMARY_TIMING frame=%u valid=%u dispatch_gpu_ms=%.6f probe=%u roulette_start=3 max_hits=4",f.view.frame,unsigned(timed),ms,unsigned(f.assets->probe));}
-        if(good&&counts[7]){std::array<UINT,16> faults{};
-            if(f.assets->metrics.ReadFaults(faults)&&(n<=8||n%240==0))
+        if(good&&counts[7]){
+            if(faultRead&&(n<=8||n%240==0))
                 Log("PT_PRIMARY_FAULTS frame=%u probe=%u input=%u hit=%u material=%u normal=%u facing=%u light=%u direct=%u sample=%u spawn=%u radiance=%u material_bounds=%u brdf=%u material_values=%u native_light=%u",f.view.frame,unsigned(f.assets->probe),faults[1],faults[2],faults[3],faults[4],faults[5],faults[6],faults[7],faults[8],faults[9],faults[10],faults[11],faults[12],faults[13],faults[14]);
         }
         it=pendingMetrics.erase(it);
@@ -255,8 +256,8 @@ static void Dispatched(void*,ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT 
         static UINT64 lightSnapshots=0;if(++lightSnapshots<=8||lightSnapshots%240==0){UINT totals[3]{};float scale=0;
             std::memcpy(totals,a->lightConstants.data()+256,12);std::memcpy(&scale,a->lightConstants.data()+244,4);
             Log("PT_PRIMARY_LIGHTS frame=%u points=%u spots=%u suns=%u environment=%.9g source=authenticated_provider",view.frame,totals[0],totals[1],totals[2],scale);}
-        // t0,t1,t3,t7,t8,t10,t14,t15,t17,t18. Private t34/t35/u7 are installed below.
-        constexpr UINT64 required=(1ull<<5)|(1ull<<6)|(1ull<<8)|(1ull<<12)|(1ull<<13)|(1ull<<15)|(1ull<<19)|(1ull<<20)|(1ull<<22)|(1ull<<23)|(1ull<<41)|(1ull<<42);
+        // t0,t1,t3,t7,t8,t10,t14,t15,t17,t18,t20. Private t34/t35/u7 follow.
+        constexpr UINT64 required=(1ull<<5)|(1ull<<6)|(1ull<<8)|(1ull<<12)|(1ull<<13)|(1ull<<15)|(1ull<<19)|(1ull<<20)|(1ull<<22)|(1ull<<23)|(1ull<<25)|(1ull<<41)|(1ull<<42);
         if(!PTTableMirror::bank.Read(bindings.resources.Get(),context.table.first,required,a->primary)||
            !PTTableMirror::bank.Unchanged(environment->table)||!Fresh(context,&a->privateTable)||!Disjoint(a->privateTable,context.table.first)){Reject("primary_descriptor_allocation");return;}
         auto& pipeline=privatePipelines[bindings.layout->Root()];
@@ -577,6 +578,6 @@ static bool Start(){
     if(FAILED(device->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&sceneUseFence))))return false;
     if(!PTSceneQueues::Start(&PTSceneLive::owner.Scenes())||!PTSceneQueues::Register(&PTSceneLive::owner.Scenes(),&queueConsumer)||
        !PTCommandBindings::Register(&commandConsumer)||!PTNativeJobRuntime::Register(&Job)||!PTSceneLive::owner.Start(step,true))return false;
-    active=true;Log("PT_PRIMARY_SESSION_READY build=M12R29 ready=1 hits=4 spp=1 roulette_start=3 material=opaque_general geometric_normals=1 native_fallback=1");return true;
+    active=true;Log("PT_PRIMARY_SESSION_READY build=M12R30 ready=1 hits=4 spp=1 roulette_start=3 material=opaque_general geometric_normals=1 native_fallback=1 primary_specular=native_fill diffuse_bounces=pt readiness=per_material");return true;
 }
 }

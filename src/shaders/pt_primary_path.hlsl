@@ -8,6 +8,7 @@
 #include "ControlPrimaryGuideDecode.hlsli"
 #include "pt_native_primary_lights.hlsli"
 #define PT_PATH_PRIMARY_DECODE 1
+#define PT_PATH_PRIMARY_FILL 1
 #include "pt_path_integrator.hlsli"
 #include "pt_primary_commit.hlsli"
 cbuffer PTPrimarySystem : register(b0) { float4 PTSystem[71]; };
@@ -15,6 +16,10 @@ Texture2D<float4> PTGBuffer1 : register(t0);
 Texture2D<float4> PTGBuffer2 : register(t1);
 Texture2D<float4> PTClipDepth : register(t3);
 StructuredBuffer<uint2> PTMaterialFlags : register(t7);
+// Exact native g_tFillSpecular input. It includes reflection transport that
+// this opaque diffuse-bounce adapter cannot yet replace (notably glass).
+Texture2D<float4> PTNativeFillSpecular : register(t20);
+SamplerState PTNativeFillSampler : register(s6,space1);
 TextureCube<float4> PTEnvironment : register(t34);
 SamplerState PTEnvironmentSampler : register(s10,space1);
 RaytracingAccelerationStructure PTScene : register(t35);
@@ -94,6 +99,7 @@ void PTPrimaryPathRayGeneration(){
     uint width,height,g2w,g2h,zw,zh;PTGBuffer1.GetDimensions(width,height);PTGBuffer2.GetDimensions(g2w,g2h);PTClipDepth.GetDimensions(zw,zh);
     if(any(uint2(width,height)!=DispatchRaysDimensions().xy)||width!=g2w||height!=g2h||width!=zw||height!=zh||
        !all(isfinite(PTSystem[0].zw))||any(PTSystem[0].zw<=0)||
+       !all(isfinite(PTSystem[1].zw))||any(PTSystem[1].zw<=0)||
        any(abs(PTSystem[0].zw*float2(width,height)-1)>1e-6))return;
     PTMeasure(1,pixel);
     float depth=PTClipDepth.Load(int3(pixel,0)).x;
@@ -117,6 +123,12 @@ void PTPrimaryPathRayGeneration(){
     // Keep the first two continuations before roulette to reduce reflection variance.
     PTPathResult result=PTIntegratePathFirst(ray,4,3,seed,.001,first,1,0);
     PTMeasure(5,pixel);
-    if(result.valid!=0&&all(isfinite(result.radiance))&&all(result.radiance>=0)){if(admission==2||PTCommitPrimary(pixel,uint2(width,height),result.radiance,admission))PTMeasure(6,pixel);}
+    // Match native sample_l coordinates and sampler exactly. This is a separate
+    // native specular contribution, never a PT bounce or an invented environment.
+    float3 fill=PTNativeFillSpecular.SampleLevel(PTNativeFillSampler,(float2(pixel)+.5)*PTSystem[1].zw,0).rgb;
+    if(result.valid!=0&&all(isfinite(result.radiance))&&all(result.radiance>=0)){
+        if(admission==2){if(all(isfinite(fill))&&all(fill>=0))PTMeasure(6,pixel);}
+        else if(PTCommitPrimaryWithFill(pixel,uint2(width,height),result.radiance,fill,admission))PTMeasure(6,pixel);
+    }
     else {PTMeasure(7,pixel);if(((pixel.x|pixel.y)&63)==0){uint old;PTMetrics.InterlockedAdd(36+4*min(result.fault,15u),1,old);}}
 }

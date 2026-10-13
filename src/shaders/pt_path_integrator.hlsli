@@ -63,7 +63,11 @@ PTPathResult PTIntegratePathFirst(RayDesc ray,uint maxHits,uint rouletteStart,ui
         }
         if(depth+1==maxHits) break;
         float choose=PTPathRandom(rng),u=PTPathRandom(rng),v=PTPathRandom(rng),rr=PTPathRandom(rng);
-        PTSurfaceSample sample=PTSampleSurface(surface.material,wo,choose,u,v);
+        PTSurfaceMaterial continuation=surface.material;
+#ifdef PT_PATH_PRIMARY_FILL
+        if(depth==0&&useFirst!=0)continuation=PTPrimaryDiffuseContinuation(continuation);
+#endif
+        PTSurfaceSample sample=PTSampleSurface(continuation,wo,choose,u,v);
         path=PTContinue(path,sample,rr,rouletteStart);
         if(path.alive==0){if(path.valid==0)result.fault=8;break;}
         ray.Origin=surface.spawnOrigin;

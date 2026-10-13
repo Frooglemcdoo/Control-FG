@@ -45,3 +45,14 @@ for shader in decoded:
     groups = [i['operands'] for i in shader['instructions'] if i['name'] == 'dcl_thread_group']
     assert groups == [['raw:0x8,0x8,0x1']]
 print('PASS: both captured shaders match exact profiles; all consumed bindings, constant layouts and 8x8 groups agree.')
+
+# Standard primary adds g_tFillSpecular once, in radiance units, after the
+# point/spot/sun lighting. Pin the actual instructions behind R30's restore.
+fill=next(b for b in active['bindings'] if b['name']=='g_tFillSpecular')
+assert (fill['kind'],fill['slot'],fill['space'],fill['dimension'])==(2,20,0,4)
+instructions=active['instructions']
+pos=next(i for i,v in enumerate(instructions) if v['name']=='sample_l' and 't[20][20].xyzw' in v['operands'])
+assert instructions[pos]['operands']==['r[3].xyz','r[0].zwzz','t[20][20].xyzw','s[1][6]','l(0)']
+assert instructions[pos-1]['operands']==['r[0].zw','r[0].zzzw','cb[0][0][1].zzzw']
+assert instructions[pos+1]['name']=='add' and instructions[pos+1]['operands']==['r[2].xyzw','r[2].xyzw','r[3].xyzx']
+print('PASS: native specular fill uses t20, s6 space1, pixel-center inverse-output UV and one radiance addition.')

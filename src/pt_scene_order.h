@@ -21,6 +21,13 @@ class Graph {
     struct Node {U64 previous=0,waitFence=0,waitValue=0;Key target{};U64 version=0;const char* unknownReason="scene_unknown_build";unsigned lane=0;U64 stamp=0;Clock base{};};
     struct Fence {U64 last=0,completed=0;std::map<U64,U64> signals;};
     std::vector<Node> nodes{Node{}};
+    // Exact write history by allocation identity; entries remain in node order.
+    // This changes lookup cost, never the ordering or competing-write rules.
+    std::map<Key,std::vector<U64>> targetWrites;
+    void ReindexWrites(){
+        targetWrites.clear();
+        for(U64 id=1;id<nodes.size();++id)if(nodes[id].target.token)targetWrites[nodes[id].target].push_back(id);
+    }
     std::map<U64,U64> queues;
     std::map<U64,Fence> fences;
     bool valid=true;U64 completedPrefix=0;
@@ -72,7 +79,9 @@ class Graph {
         if(!valid||!queue||nodes.size()>=MaximumNodes||(!queues.count(queue)&&queues.size()>=MaximumQueues)){valid=false;return 0;}
         if(!lanes.count(queue))lanes.emplace(queue,static_cast<unsigned>(lanes.size()+1));
         node.lane=lanes.at(queue);node.stamp=++serial;node.base=observedComplete;clockDirty=true;
-        node.previous=queues.count(queue)?queues.at(queue):completedPrefix;nodes.push_back(node);queues[queue]=nodes.size()-1;return nodes.size()-1;
+        node.previous=queues.count(queue)?queues.at(queue):completedPrefix;nodes.push_back(node);queues[queue]=nodes.size()-1;
+        if(node.target.token)targetWrites[node.target].push_back(nodes.size()-1);
+        return nodes.size()-1;
     }
     Status Ancestors(U64 at,std::set<U64>& complete)const {
         complete.clear();if(!valid||!at||at>=nodes.size())return Status::invalid;
@@ -185,7 +194,7 @@ public:
         std::vector<Node> baseline{Node{}};U64 tail=0;
         for(const auto& entry:versions){Node n;n.previous=tail;n.target=entry.first;n.version=entry.second;n.stamp=++serial;baseline.push_back(n);tail=baseline.size()-1;}
         if(!tail){Node n;n.stamp=++serial;baseline.push_back(n);tail=1;}
-        nodes=std::move(baseline);completedPrefix=tail;clockDirty=true;
+        nodes=std::move(baseline);ReindexWrites();completedPrefix=tail;clockDirty=true;
         for(auto& q:queues)q.second=tail;
         for(auto& f:fences){f.second.completed=f.second.last;f.second.signals.clear();}
         return true;
@@ -263,7 +272,7 @@ public:
         for(auto& f:newFences)for(auto& signal:f.second.signals)signal.second=remap.at(signal.second);
         // Existing nodes have baked clocks; no rewritten dependency can acquire
         // a future signal or lose the original cross-queue ordering.
-        nodes=std::move(compact);fences=std::move(newFences);observedComplete=done;completedPrefix=0;clockDirty=true;
+        nodes=std::move(compact);ReindexWrites();fences=std::move(newFences);observedComplete=done;completedPrefix=0;clockDirty=true;
         return true;
     }
     Status Select(U64 dispatch,Key target,Selection& result,const char** pendingReason=nullptr,Purpose purpose=Purpose::submission)const {
@@ -272,8 +281,10 @@ public:
         const bool preview=purpose==Purpose::recordingPreview;
         const auto usable=[&](Status status){return status==Status::ready||(preview&&status==Status::pending);};
         result={};const auto state=ClockAt(dispatch);if(!usable(state))return report(state,"scene_dispatch_wait_pending");
-        for(U64 id=1;id<nodes.size();++id){const auto& n=nodes[static_cast<std::size_t>(id)];
-            if(n.target.token!=target.token||n.target.address!=target.address||Before(id,dispatch))continue;
+        const auto history=targetWrites.find(target);const std::vector<U64> empty;
+        const auto& writes=history==targetWrites.end()?empty:history->second;
+        for(const U64 id:writes){
+            if(Before(id,dispatch))continue;
             if(KnownBefore(dispatch,id))continue;
             const auto status=ClockAt(id);if(!usable(status))return report(status,"scene_competing_write_pending");
             if(!Before(dispatch,id))return report(state==Status::pending||status==Status::pending?Status::pending:Status::unordered,"scene_competing_write_pending");
@@ -287,8 +298,8 @@ public:
             }
         }
         std::set<U64> maximal;
-        for(U64 id=1;id<nodes.size();++id){const auto& n=nodes[static_cast<std::size_t>(id)];
-            if(n.target.token!=target.token||n.target.address!=target.address||!Before(id,dispatch))continue;
+        for(const U64 id:writes){
+            if(!Before(id,dispatch))continue;
             const auto status=ClockAt(id);if(!usable(status))return status;
             bool dominated=false;
             for(auto it=maximal.begin();it!=maximal.end();){

@@ -14,4 +14,8 @@ bool PTCommitPrimary(uint2 pixel,uint2 extent,float3 radiance,uint admission){
     // Native primary stores RGBR, not opacity, in these light buffers.
     PTNativeSpecular[pixel]=float4(radiance,radiance.x);return true;
 }
+bool PTCommitPrimaryWithFill(uint2 pixel,uint2 extent,float3 radiance,float3 fill,uint admission){
+    if(!all(isfinite(fill))||any(fill<0)||!all(isfinite(radiance))||any(radiance<0))return false;
+    return PTCommitPrimary(pixel,extent,radiance+fill,admission);
+}
 #endif

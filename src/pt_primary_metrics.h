@@ -3,6 +3,7 @@
 #include <wrl/client.h>
 #include <array>
 #include <cstring>
+#include "pt_primary_readiness.h"
 // Sparse GPU coverage counters, sampled at one pixel per 64x64 block. Own these
 // through the producer's native fence; Read is valid ONLY after that fence.
 namespace PTPrimaryMetrics {

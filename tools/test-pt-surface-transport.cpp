@@ -16,6 +16,14 @@ static float integrate(PTSurfaceMaterial m,PTVec3 wo) {
     return float(sum*(2*PTTransportPi)/(nz*np));
 }
 int main(){
+    // Retaining native specular fill must remove that lobe only from the first
+    // continuation, while preserving its diffuse throughput and direct BSDF.
+    PTSurfaceMaterial original={PTV(.4f,.2f,.1f),PTV(.9f,.9f,.9f),.2f,3u};
+    const auto first=PTPrimaryDiffuseContinuation(original);
+    require(original.lobes==3&&first.lobes==1,"Primary continuation leaves direct material intact");
+    for(int i=0;i<10000;++i){auto sample=PTSampleSurface(first,PTV(0,0,1),random01(),random01(),random01());
+        require(sample.valid&&fabs(sample.weight.x-.4f)<1e-5f&&fabs(sample.weight.y-.2f)<1e-5f,"Native fill adds no duplicated first specular bounce");}
+
     PTSurfaceMaterial diffuse={PTV(.7f,.3f,.1f),PTV(0,0,0),.5f,1u};
     for(int i=0;i<10000;++i){
         auto s=PTSampleSurface(diffuse,PTV(0,0,1),random01(),random01(),random01());

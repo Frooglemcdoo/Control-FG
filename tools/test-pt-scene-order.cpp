@@ -79,7 +79,25 @@ static void TestObservedFenceCompletion(){
     assert(unrelated.ObserveFenceCompletion(92,1)==1);
     assert(unrelated.Select(unknown,as,selected)==Status::unordered); // No invented producer edge.
 }
+static void TestIndexedSceneSelection(){
+    Graph graph;Selection selected;
+    for(U64 k=1;k<=4354;++k)assert(graph.Write(1,{k,k*4096},k));
+    auto cut=graph.Mark(1);
+    for(U64 k=1;k<=4354;++k)assert(graph.Select(cut,{k,k*4096},selected)==Status::ready&&selected.version==k);
+    // New writes, tombstones and reused addresses must enter the index.
+    graph.Write(1,{4354,4354*4096},0);cut=graph.Mark(1);
+    assert(graph.Select(cut,{4354,4354*4096},selected)==Status::missing);
+    graph.Write(1,{5000,4354*4096},5000);cut=graph.Mark(1);
+    assert(graph.Select(cut,{5000,4354*4096},selected)==Status::ready&&selected.version==5000);
+    assert(graph.Select(cut,{4354,4354*4096},selected)==Status::missing);
+    std::map<Key,Selection> latest;assert(graph.CompletedCheckpoint(latest));
+    std::map<Key,U64> versions;for(const auto& item:latest)versions[item.first]=item.second.version;
+    assert(graph.RebaseCompleted(versions));cut=graph.Mark(2);
+    assert(graph.Select(cut,{5000,4354*4096},selected)==Status::ready&&selected.version==5000);
+    assert(graph.Select(cut,{4354,4354*4096},selected)==Status::missing);
+}
 int main(){
+    TestIndexedSceneSelection();
     TestObservedFenceCompletion();
     TestStaticSceneCompaction();
     TestLiveCompaction();

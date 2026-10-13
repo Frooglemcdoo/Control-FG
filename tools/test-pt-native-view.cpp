@@ -28,6 +28,7 @@ int main(){
     raw=a.bytes;raw[8]^=1;assert(!a.MatchesSurface(raw));
     b.pass=PTNativeView::Pass::primary;raw=a.bytes;raw[32]^=1;assert(b.MatchesBound(raw));raw[224]^=1;assert(!b.MatchesBound(raw));
     raw=a.bytes;raw[1112]^=1;assert(!b.MatchesBound(raw));
+    raw=a.bytes;raw[24]^=1;assert(b.Mismatch(raw)==24);
     b=a;b.engineFrame=123;assert(!a.Same(b));
     puts("PASS: inverse render extents, unused fields ignored, frame/camera changes and missing transforms rejected");
 }

@@ -27,7 +27,7 @@ int main(){
     hd.Flags=D3D12_DESCRIPTOR_HEAP_FLAG_NONE;assert(SUCCEEDED(device->CreateDescriptorHeap(&hd,IID_PPV_ARGS(&cpu))));
     const UINT step=device->GetDescriptorHandleIncrementSize(hd.Type);
     std::array<ComPtr<ID3D12Resource>,2> textures;
-    D3D12_RESOURCE_DESC td{};td.Dimension=D3D12_RESOURCE_DIMENSION_TEXTURE2D;td.Width=8;td.Height=1;
+    D3D12_RESOURCE_DESC td{};td.Dimension=D3D12_RESOURCE_DIMENSION_TEXTURE2D;td.Width=16;td.Height=1;
     td.DepthOrArraySize=td.MipLevels=1;td.SampleDesc.Count=1;td.Format=DXGI_FORMAT_R32G32B32A32_FLOAT;td.Flags=D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
     D3D12_HEAP_PROPERTIES hp{};hp.Type=D3D12_HEAP_TYPE_DEFAULT;
     for(UINT i=0;i<2;++i){assert(SUCCEEDED(device->CreateCommittedResource(&hp,D3D12_HEAP_FLAG_NONE,&td,D3D12_RESOURCE_STATE_UNORDERED_ACCESS,nullptr,IID_PPV_ARGS(&textures[i]))));
@@ -51,14 +51,15 @@ int main(){
         barrier.Transition={textures[i].Get(),0,D3D12_RESOURCE_STATE_UNORDERED_ACCESS,D3D12_RESOURCE_STATE_COPY_SOURCE};list->ResourceBarrier(1,&barrier);
         D3D12_TEXTURE_COPY_LOCATION src{},dst{};src.pResource=textures[i].Get();src.Type=D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
         dst.pResource=readback.Get();dst.Type=D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;dst.PlacedFootprint.Offset=512ull*i;
-        dst.PlacedFootprint.Footprint={td.Format,8,1,1,256};list->CopyTextureRegion(&dst,0,0,0,&src,nullptr);}
+        dst.PlacedFootprint.Footprint={td.Format,16,1,1,256};list->CopyTextureRegion(&dst,0,0,0,&src,nullptr);}
     assert(SUCCEEDED(list->Close()));ID3D12CommandList* lists[]={list.Get()};queue->ExecuteCommandLists(1,lists);
     ComPtr<ID3D12Fence> fence;assert(SUCCEEDED(device->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&fence))));assert(SUCCEEDED(queue->Signal(fence.Get(),1)));
     HANDLE event=CreateEventW(nullptr,FALSE,FALSE,nullptr);assert(event);assert(SUCCEEDED(fence->SetEventOnCompletion(1,event)));assert(WaitForSingleObject(event,10000)==WAIT_OBJECT_0);CloseHandle(event);
     void* data=nullptr;D3D12_RANGE read{0,1024};assert(SUCCEEDED(readback->Map(0,&read,&data)));
     for(UINT i=0;i<2;++i){const auto* values=reinterpret_cast<const float*>(static_cast<const unsigned char*>(data)+512*i);
-        for(UINT x=0;x<8;++x)for(UINT c=0;c<4;++c){const float initial[]={2,3,4,2},pt[]={.25f,.5f,.75f,.25f};
-            const bool committed=x==3||x==6||x==7;const float expected=!committed?initial[c]:(i==0||x==6?0:pt[c]);assert(values[x*4+c]==expected);}}
+        for(UINT x=0;x<16;++x)for(UINT c=0;c<4;++c){const float initial[]={2,3,4,2},pt[]={.25f,.5f,.75f,.25f};
+            const bool committed=x==3||x==6||x==7||x==11;const float fill[]={1,2,4,1};
+            const float expected=!committed?initial[c]:(i==0||x==6?0:x==11?fill[c]:pt[c]+(x==7?fill[c]:0));assert(values[x*4+c]==expected);}}
     const D3D12_RANGE noWrite{};readback->Unmap(0,&noWrite);assert(SUCCEEDED(device->GetDeviceRemovedReason()));
-    puts("PASS: native light-buffer commit, RGBR encoding, rejected/probe/invalid/dimension fallback and zero radiance");
+    puts("PASS: native light-buffer commit, RGBR encoding, rejected/probe/invalid/dimension fallback zero radiance, native fill preservation, invalid fill and overflow");
 }

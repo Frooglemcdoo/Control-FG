@@ -67,6 +67,7 @@ struct View {
         const auto same=[&](unsigned offset,unsigned count){return !std::memcmp(bound.data()+offset,other.data()+offset,count);};
         if(pass==Pass::environment){if(!same(0,8))return 0;}
         else if(!same(8,8))return 8;
+        if(pass==Pass::primary&&!same(24,8))return 24; // Native specular-fill UV scale.
         if(pass==Pass::surface||pass==Pass::opaque||pass==Pass::environment){
             const unsigned first=pass==Pass::surface?96:32;
             for(unsigned offset=first;offset<160;offset+=16)if(!same(offset,12))return offset;

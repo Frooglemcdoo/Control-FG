@@ -39,6 +39,10 @@ static const float PTTransportPi=3.14159265358979323846f;
 // shading frame (+Z normal). kd is a diffuse BRDF coefficient, not raw albedo
 // inferred from a G-buffer. Material admission/energy partition is caller-owned.
 struct PTSurfaceMaterial { PTVec3 kd; PTVec3 f0; float roughness; uint lobes; };
+// Used only when the native primary specular-fill term is retained separately.
+// Direct lighting still evaluates the original material; continuation samples
+// only the diffuse lobe so the retained specular transport is not counted twice.
+PT_INLINE PTSurfaceMaterial PTPrimaryDiffuseContinuation(PTSurfaceMaterial m) { m.lobes=1u;return m; }
 struct PTSurfaceEvaluation { PTVec3 f; float pdf; };
 struct PTSurfaceSample { PTVec3 wi; PTVec3 weight; float pdf; uint valid; uint fault; };
 PT_INLINE float PTSpecularProbability(PTSurfaceMaterial m) {
