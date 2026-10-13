@@ -37,6 +37,9 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
+      - name: Validate profiling collector early
+        shell: powershell
+        run: tools/test-pt-profile.ps1
       - name: Test native DXR call routing
         shell: cmd
         run: |
@@ -389,8 +392,6 @@ jobs:
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-pt-hotpath-timing.cpp /Febuild\test-pt-hotpath-timing.exe
           if errorlevel 1 exit /b 1
           build\test-pt-hotpath-timing.exe
-          if errorlevel 1 exit /b 1
-          powershell -NoProfile -ExecutionPolicy Bypass -File tools\test-pt-profile.ps1
           if errorlevel 1 exit /b 1
 
       - name: Compile experimental proxy

@@ -43,7 +43,7 @@ $game=@(Get-Process -Name Control_DX12 -ErrorAction SilentlyContinue)
 if($game.Count -ne 1){throw 'Run one instance of Control_DX12.exe and load the test scene first.'}
 $game=$game[0]
 $loaded=@($game.Modules | Where-Object {$_.ModuleName -ieq 'dxgi.dll' -and (Split-Path $_.FileName -Parent) -eq $PSScriptRoot})
-if($loaded.Count -ne 1){throw 'Run this script beside the dxgi.dll actually loaded by Control. Install the whole R41 package together.'}
+if($loaded.Count -ne 1){throw ('Run this script beside the dxgi.dll actually loaded by Control. Expected directory: '+$PSScriptRoot+'; observed modules: '+($game.Modules | ConvertTo-Json -Compress))}
 $buildPath=Join-Path $PSScriptRoot 'Build.json'
 $build=Get-Content -LiteralPath $buildPath -Raw | ConvertFrom-Json
 if($build.Build -ne 'M12R41'){throw 'This capture script requires the M12R41 profiling package.'}
