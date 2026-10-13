@@ -32,10 +32,10 @@ class Runtime {
     PTSceneLive::Owner& owner;
     std::mutex mutex;
     std::map<std::uint64_t,Entry> pending;
-    struct Failure {const char* reason;std::size_t row;};
+    struct Failure {const char* reason;std::size_t row;PTSceneLive::Owner::SelectionDiagnostic descriptor;};
     std::map<std::uint64_t,Failure> failures;
     auto Erase(std::map<std::uint64_t,Entry>::iterator it,const char* reason="handoff_retired",std::size_t row=0){
-        failures[it->first]={reason,row};while(failures.size()>64)failures.erase(failures.begin());
+        failures[it->first]={reason,row,{}};while(failures.size()>64)failures.erase(failures.begin());
         owner.Scenes().Forget(it->first);return pending.erase(it);
     }
     void Clear(){for(const auto& entry:pending)owner.Scenes().Forget(entry.first);pending.clear();}
@@ -79,7 +79,10 @@ public:
                 auto& e=it->second;
                 if(e.list.Get()!=identity.Get()){++it;continue;}
                 if(e.submitted){it=Erase(it,"handoff_replayed");continue;}
-                if(!owner.Select(e.heap.Get(),e.tableFirst,e.srvSlot,e.acceleration)){it=Erase(it,"handoff_scene_descriptor");continue;}
+                PTSceneLive::Owner::SelectionDiagnostic descriptor;
+                if(!owner.Select(e.heap.Get(),e.tableFirst,e.srvSlot,e.acceleration,&descriptor)){
+                    const auto serial=it->first;it=Erase(it,descriptor.reason);failures.at(serial).descriptor=descriptor;continue;
+                }
                 e.submitted=true;++it;
             }
         }
@@ -113,6 +116,10 @@ public:
         }
         if(!candidate||!candidate->written||!candidate->submitted)return false;
         serial=candidate->ticket.serial;return true;
+    }
+    PTSceneLive::Owner::SelectionDiagnostic DescriptorFailure(std::uint64_t serial){
+        std::lock_guard<std::mutex> guard(mutex);const auto found=failures.find(serial);
+        return found==failures.end()?PTSceneLive::Owner::SelectionDiagnostic{}:found->second.descriptor;
     }
     const char* NotReady(std::uint64_t serial,std::size_t& row){
         row=0;std::lock_guard<std::mutex> guard(mutex);

@@ -57,16 +57,26 @@ public:
     }
     void InvalidateDescriptors(){if(Active())descriptors->Invalidate({});}
     void Copy(const std::vector<PTSceneDescriptors::Range>& dst,const std::vector<PTSceneDescriptors::Range>& src){if(Active())descriptors->Copy(dst,src);}
-    bool Select(ID3D12DescriptorHeap* heap,UINT tableFirst,UINT srvSlot,PTSceneDescriptors::Acceleration& result){
+    struct SelectionDiagnostic {const char* reason="descriptor_input";U64 handle=0,address=0,token=0,bytes=0,currentToken=0;};
+    PTSceneDescriptors::Index::Stats DescriptorStatistics(){return descriptors?descriptors->Statistics():PTSceneDescriptors::Index::Stats{false,"descriptor_inactive",0,0,0,0};}
+    bool Select(ID3D12DescriptorHeap* heap,UINT tableFirst,UINT srvSlot,PTSceneDescriptors::Acceleration& result,SelectionDiagnostic* diagnostic=nullptr){
+        SelectionDiagnostic local;auto& info=diagnostic?*diagnostic:local;info={};
         result={};if(!Active()||!heap||srvSlot>=36)return false;
         const auto d=heap->GetDesc();const U64 index=U64(tableFirst)+5+srvSlot;
+        info.reason="descriptor_heap_or_slot";
         if(d.Type!=D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV||!(d.Flags&D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE)||index>=d.NumDescriptors)return false;
         const U64 base=heap->GetCPUDescriptorHandleForHeapStart().ptr;
-        if(index>(UINT64_MAX-base)/step)return false;
-        const auto selected=descriptors->Read(base+index*step);
+        info.reason="descriptor_handle_overflow";if(index>(UINT64_MAX-base)/step)return false;
+        info.handle=base+index*step;
+        const auto selected=descriptors->Read(info.handle,&info.reason);
+        info.address=selected.address;info.token=selected.token;info.bytes=selected.bytes;
+        if(!selected.token)return false;
         PTOwnedScene::Allocation allocation{};
-        if(!selected.token||!resources.Identify(selected.address,selected.bytes,allocation)||allocation.token!=selected.token)return false;
-        result=selected;return true;
+        info.reason="descriptor_owner_missing";
+        if(!resources.Identify(selected.address,selected.bytes,allocation))return false;
+        info.currentToken=allocation.token;info.reason="descriptor_owner_generation";
+        if(allocation.token!=selected.token)return false;
+        info.reason="none";result=selected;return true;
     }
     PTOwnedScene::Runtime& Resources(){return resources;}
     Capture& Scenes(){return capture;}

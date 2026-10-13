@@ -16,38 +16,43 @@ class Index {
     std::map<U64,Acceleration> entries;
     U64 step;
     bool valid=true;
+    const char* failure="none";
+    U64 writes=0,copies=0,asWrites=0;
     static constexpr std::size_t Maximum=65536;
     bool Span(Range r) const {return step&&r.start&&r.count&&r.count<=(UINT64_MAX-r.start)/step;}
     void Erase(Range r){entries.erase(entries.lower_bound(r.start),entries.lower_bound(r.start+r.count*step));}
-    bool Fail(){entries.clear();valid=false;return false;}
+    bool Fail(const char* reason){entries.clear();valid=false;failure=reason;return false;}
 public:
     explicit Index(U64 increment):step(increment){}
     bool Write(U64 handle,Acceleration as={}){
         std::lock_guard<std::mutex> guard(mutex);if(!valid)return false;
-        if(!Span({handle,1}))return Fail();
+        if(!Span({handle,1}))return Fail("descriptor_write_span");
+        ++writes;
         entries.erase(handle);
         if(!as.address||!as.token||!as.bytes)return true;
-        if(entries.size()>=Maximum)return Fail();
+        if(entries.size()>=Maximum)return Fail("descriptor_write_capacity");
+        ++asWrites;
         entries.emplace(handle,as);return true;
     }
     bool Invalidate(Range range){
         std::lock_guard<std::mutex> guard(mutex);if(!valid)return false;
-        if(!Span(range))return Fail();
+        if(!Span(range))return Fail("descriptor_invalidate_span");
         Erase(range);return true;
     }
     bool Copy(const std::vector<Range>& destinations,const std::vector<Range>& sources){
         std::lock_guard<std::mutex> guard(mutex);if(!valid)return false;
         U64 totalDst=0,totalSrc=0;
-        for(const auto& r:destinations){if(!Span(r)||r.count>UINT64_MAX-totalDst)return Fail();totalDst+=r.count;}
-        for(const auto& r:sources){if(!Span(r)||r.count>UINT64_MAX-totalSrc)return Fail();totalSrc+=r.count;}
-        if(!totalDst||totalDst!=totalSrc)return Fail();
+        for(const auto& r:destinations){if(!Span(r)||r.count>UINT64_MAX-totalDst)return Fail("descriptor_copy_destination_span");totalDst+=r.count;}
+        for(const auto& r:sources){if(!Span(r)||r.count>UINT64_MAX-totalSrc)return Fail("descriptor_copy_source_span");totalSrc+=r.count;}
+        if(!totalDst||totalDst!=totalSrc)return Fail("descriptor_copy_count");
+        ++copies;
         // Snapshot before erasing destinations. Native API disallows overlap,
         // but the metadata transaction also handles aliases without stale reads.
         std::vector<std::pair<U64,Acceleration>> snapshot;U64 offset=0;
         for(const auto& r:sources){
             for(auto it=entries.lower_bound(r.start);it!=entries.end()&&it->first<r.start+r.count*step;++it){
-                if((it->first-r.start)%step)return Fail();
-                if(snapshot.size()>=Maximum)return Fail();
+                if((it->first-r.start)%step)return Fail("descriptor_copy_alignment");
+                if(snapshot.size()>=Maximum)return Fail("descriptor_copy_snapshot_capacity");
                 snapshot.push_back({offset+(it->first-r.start)/step,it->second});
             }
             offset+=r.count;
@@ -57,10 +62,16 @@ public:
         for(const auto& s:snapshot){
             while(s.first-offset>=destinations[range].count){offset+=destinations[range].count;++range;}
             entries[destinations[range].start+(s.first-offset)*step]=s.second;
-            if(entries.size()>Maximum)return Fail();
+            if(entries.size()>Maximum)return Fail("descriptor_copy_capacity");
         }
         return true;
     }
-    Acceleration Read(U64 handle){std::lock_guard<std::mutex> guard(mutex);auto it=entries.find(handle);return valid&&it!=entries.end()?it->second:Acceleration{};}
+    struct Stats {bool healthy;const char* failure;U64 entries,writes,copies,asWrites;};
+    Stats Statistics(){std::lock_guard<std::mutex> guard(mutex);return {valid,failure,static_cast<U64>(entries.size()),writes,copies,asWrites};}
+    Acceleration Read(U64 handle,const char** reason=nullptr){
+        std::lock_guard<std::mutex> guard(mutex);auto it=entries.find(handle);
+        if(reason)*reason=!valid?failure:it==entries.end()?"descriptor_missing":"none";
+        return valid&&it!=entries.end()?it->second:Acceleration{};
+    }
 };
 }

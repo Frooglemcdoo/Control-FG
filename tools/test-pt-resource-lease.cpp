@@ -367,6 +367,11 @@ int main(){
     live.Created(wrapper.data(),true);PTSceneDescriptors::Acceleration selectedAS;
     assert(live.Select(heap.Get(),0,5,selectedAS)&&selectedAS.address==liveAddress);
     const auto originalToken=selectedAS.token;
+    PTSceneLive::Owner::SelectionDiagnostic selectionDetail;
+    assert(!live.Select(heap.Get(),20,5,selectedAS,&selectionDetail));
+    assert(std::strcmp(selectionDetail.reason,"descriptor_missing")==0&&selectionDetail.handle==handle.ptr+30ull*step);
+    assert(live.Select(heap.Get(),0,5,selectedAS,&selectionDetail));
+    assert(selectionDetail.token==originalToken&&selectionDetail.currentToken==originalToken&&std::strcmp(selectionDetail.reason,"none")==0);
     // Native capture adapter uses canonical COM list identity, snapshots CPU
     // instance rows, and joins them only when the observed list is submitted.
     ComPtr<ID3D12CommandAllocator> allocator;ComPtr<ID3D12GraphicsCommandList> list;

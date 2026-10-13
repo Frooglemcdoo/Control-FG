@@ -198,8 +198,12 @@ static void Dispatched(void*,ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT 
         UINT64 serial=0;
         if(!handoff.FindReady(candidate->ticket.engineFrame,view.width,view.height,candidate->ticket.pipeline,serial)){
             std::size_t row=0;const char* reason=handoff.NotReady(candidate->ticket.serial,row);
-            static UINT64 failures=0;if(++failures<=16||failures%600==0)
+            static UINT64 failures=0;if(++failures<=16||failures%600==0){
                 Log("PT_PRIMARY_HANDOFF ticket=%llu frame=%llu reason=%s row=%llu native_list=%p lighting_list=%p",candidate->ticket.serial,candidate->ticket.engineFrame,reason,static_cast<UINT64>(row),reinterpret_cast<void*>(candidate->ticket.list),list);
+                const auto detail=handoff.DescriptorFailure(candidate->ticket.serial);
+                const auto index=PTSceneLive::owner.DescriptorStatistics();
+                Log("PT_PRIMARY_DESCRIPTOR reason=%s handle=%llx address=%llx token=%llu bytes=%llu current_token=%llu index_healthy=%u index_failure=%s index_entries=%llu writes=%llu as_writes=%llu copies=%llu",detail.reason,detail.handle,detail.address,detail.token,detail.bytes,detail.currentToken,unsigned(index.healthy),index.failure,index.entries,index.writes,index.asWrites,index.copies);
+            }
             Reject(reason);return;
         }
         auto frame=FrameFor(view,context.queue);auto* recording=RecordingFor(list);
@@ -404,6 +408,6 @@ static bool Start(){
     if(FAILED(device->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&sceneUseFence))))return false;
     if(!PTSceneQueues::Start(&PTSceneLive::owner.Scenes())||!PTSceneQueues::Register(&PTSceneLive::owner.Scenes(),&queueConsumer)||
        !PTCommandBindings::Register(&commandConsumer)||!PTNativeJobRuntime::Register(&Job)||!PTSceneLive::owner.Start(step,true))return false;
-    active=true;Log("PT_PRIMARY_SESSION_READY build=M12R10 ready=1 hits=4 spp=1 material=opaque_general geometric_normals=1 native_fallback=1");return true;
+    active=true;Log("PT_PRIMARY_SESSION_READY build=M12R11 ready=1 hits=4 spp=1 material=opaque_general geometric_normals=1 native_fallback=1");return true;
 }
 }
