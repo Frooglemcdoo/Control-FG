@@ -136,7 +136,7 @@ static void Job(PTNativeJobRuntime::Phase phase,const PTNativeJobRoute::Ticket& 
     }catch(...){Reject("job_allocation");}
 }
 static void Dispatched(void*,ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT z) noexcept {
-    if(!active)return;
+    if(!active||ptReflectionUserState.load(std::memory_order_acquire)!=1)return;
     try {
         const auto pso=PTCommandBindings::tracker.PipelineFor(list);
         const bool environmentPass=pso.Get()==ptReflectionNativeCompositePso||pso.Get()==ptReflectionP2CompositePso;
@@ -211,7 +211,7 @@ static void Dispatched(void*,ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT 
 struct Restore {ID3D12GraphicsCommandList* list=nullptr;ComPtr<ID3D12PipelineState> pipeline;D3D12_GPU_DESCRIPTOR_HANDLE table{};};
 static thread_local Restore restore;
 static void Drawing(void*,ID3D12GraphicsCommandList* list) noexcept {
-    if(!active)return;
+    if(!active||ptReflectionUserState.load(std::memory_order_acquire)!=1)return;
     try {
         if(restore.list)return;
         const auto pso=PTCommandBindings::tracker.PipelineFor(list);

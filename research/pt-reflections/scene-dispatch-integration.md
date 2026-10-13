@@ -655,3 +655,7 @@ The native primary DXBC unprojects pixels using b0[0].zw (InvScreenRes).
 M12 incorrectly used b0[1] (OutputRes/InvOutputRes) for host dimensions and ray
 unprojection. The uploaded log confirms 2560x1440 render / 3840x2160 output.
 R1 uses ScreenRes/InvScreenRes and tests unequal render/output extents.
+
+R1 also skips private draw/dispatch preparation while the PT Reflections toggle
+is off or a diagnostic mode is selected. Native scene observation stays active
+for later admission; OFF no longer allocates unused primary outputs/tables.
