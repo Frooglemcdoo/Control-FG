@@ -6,6 +6,7 @@
 #include <cstdio>
 #include <array>
 #include "../src/pt_surface_output.h"
+#include "../src/pt_primary_metrics.h"
 using Microsoft::WRL::ComPtr;
 struct Writer {
     ComPtr<ID3D12Device> device;
@@ -19,6 +20,7 @@ struct Writer {
     }
 };
 struct GuardedWriter {
+    PTPrimaryMetrics::Counters metrics;
     ComPtr<ID3D12Device> device;
     ComPtr<ID3D12DescriptorHeap> heap;
     ComPtr<ID3D12RootSignature> root;
@@ -27,8 +29,12 @@ struct GuardedWriter {
         auto& w=*static_cast<GuardedWriter*>(context);
         w.device->CopyDescriptorsSimple(1,w.heap->GetCPUDescriptorHandleForHeapStart(),cpu,D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
         ID3D12DescriptorHeap* heaps[]={w.heap.Get()};list->SetDescriptorHeaps(1,heaps);
+        const auto step=w.device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+        auto cpuCounter=w.heap->GetCPUDescriptorHandleForHeapStart();cpuCounter.ptr+=step;
+        auto gpuCounter=w.heap->GetGPUDescriptorHandleForHeapStart();gpuCounter.ptr+=step;
+        w.device->CopyDescriptorsSimple(1,cpuCounter,w.metrics.Uav(),D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);w.metrics.Begin(list,gpuCounter);
         list->SetComputeRootSignature(w.root.Get());list->SetPipelineState(w.pipeline.Get());
-        list->SetComputeRootDescriptorTable(0,w.heap->GetGPUDescriptorHandleForHeapStart());list->Dispatch(4,3,1);return true;
+        list->SetComputeRootDescriptorTable(0,w.heap->GetGPUDescriptorHandleForHeapStart());list->Dispatch(4,3,1);w.metrics.End(list);return true;
     }
 };
 int main(){
@@ -87,15 +93,15 @@ int main(){
     // the same recorded shader, but sees zero and must select the native result.
     auto original=std::move(output);
     assert(SUCCEEDED(PTSurfaceComposition::Output::Create(queue.Get(),4,3,output)));
-    auto guarded=std::make_shared<GuardedWriter>();guarded->device=device;
+    auto guarded=std::make_shared<GuardedWriter>();guarded->device=device;assert(guarded->metrics.Initialize(device.Get()));hd.NumDescriptors=2;
     assert(SUCCEEDED(device->CreateDescriptorHeap(&hd,IID_PPV_ARGS(&guarded->heap))));
-    D3D12_DESCRIPTOR_RANGE uav{D3D12_DESCRIPTOR_RANGE_TYPE_UAV,1,0,0,0};
+    D3D12_DESCRIPTOR_RANGE uav{D3D12_DESCRIPTOR_RANGE_TYPE_UAV,2,0,0,0};
     D3D12_ROOT_PARAMETER param{};param.ParameterType=D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;param.DescriptorTable={1,&uav};
     D3D12_ROOT_SIGNATURE_DESC rootDesc{};rootDesc.NumParameters=1;rootDesc.pParameters=&param;
     ComPtr<ID3DBlob> blob,error,shader;
     assert(SUCCEEDED(D3D12SerializeRootSignature(&rootDesc,D3D_ROOT_SIGNATURE_VERSION_1,&blob,&error)));
     assert(SUCCEEDED(device->CreateRootSignature(0,blob->GetBufferPointer(),blob->GetBufferSize(),IID_PPV_ARGS(&guarded->root))));
-    const char source[]="RWTexture2D<float4> output:register(u0);[numthreads(1,1,1)]void main(uint3 id:SV_DispatchThreadID){[branch]if(output[id.xy].a!=1){output[id.xy]=0;return;}output[id.xy]=float4(.25,.5,.75,1);}";
+    const char source[]="RWTexture2D<float4> output:register(u0);RWByteAddressBuffer counters:register(u1);[numthreads(1,1,1)]void main(uint3 id:SV_DispatchThreadID){uint old;counters.InterlockedAdd(4,1,old);[branch]if(output[id.xy].a!=1){output[id.xy]=0;return;}output[id.xy]=float4(.25,.5,.75,1);counters.InterlockedAdd(0,1,old);}";
     assert(SUCCEEDED(D3DCompile(source,sizeof(source)-1,nullptr,nullptr,nullptr,"main","cs_5_1",D3DCOMPILE_ENABLE_STRICTNESS,0,&shader,&error)));
     D3D12_COMPUTE_PIPELINE_STATE_DESC pd{};pd.pRootSignature=guarded->root.Get();pd.CS={shader->GetBufferPointer(),shader->GetBufferSize()};
     assert(SUCCEEDED(device->CreateComputePipelineState(&pd,IID_PPV_ARGS(&guarded->pipeline))));
@@ -122,6 +128,8 @@ int main(){
         for(unsigned c=0;c<4;++c)assert(value[c]==((snapshot==1||snapshot==4)?float(c+1)*.25f:0));
     }
     const D3D12_RANGE empty{};readback->Unmap(0,&empty);
+    {auto measured=inlineRetained.lock();assert(measured);std::array<UINT,8> counters{};assert(measured->metrics.Read(counters));
+        assert(counters[0]==0&&counters[1]==12);for(UINT c=2;c<8;++c)assert(counters[c]==0);}
     original.reset();cancelled.reset();PTSurfaceComposition::Output::Poll();assert(inlineRetained.expired());assert(PTSurfaceComposition::Output::ResidentBytes()==0);assert(retained.expired());assert(SUCCEEDED(device->GetDeviceRemovedReason()));
     puts("PASS: GPU-zero initialization, one-shot producer, queued replay clear, wrong-queue/late-producer rejection inline arm/dispatch/replay guard, bounded deferred retirement and fence-owned dependencies");
 }

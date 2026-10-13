@@ -49,6 +49,7 @@ struct Environment {
 };
 static std::vector<std::shared_ptr<Environment>> environments;
 struct Assets {
+    PTPrimaryMetrics::Counters metrics;
     Bindings bindings;Table primary;std::shared_ptr<Environment> environment;
     PTOwnedScene::LeaseBatch scene;
     std::shared_ptr<const PTSceneHandoff::Prepared> proof;
@@ -70,6 +71,16 @@ struct Recording {
 };
 static std::map<IUnknown*,Recording> recordings;
 static std::vector<std::weak_ptr<Frame>> frames;
+static std::vector<std::shared_ptr<Frame>> pendingMetrics;
+static void PollMetrics(){
+    for(auto it=pendingMetrics.begin();it!=pendingMetrics.end();){auto& f=**it;
+        if(!f.producerSubmitted||!f.output->Completed()){++it;continue;}
+        std::array<UINT,8> counts{};const bool good=f.assets&&f.assets->metrics.Read(counts);
+        static UINT64 samples=0;const auto n=++samples;
+        if(n<=8||n%240==0)Log("PT_PRIMARY_GPU frame=%u readback=%u armed=%u sampled=%u dimensions=%u primary_hit=%u material_match=%u depth_match=%u integrated=%u covered=%u fault=%u sparse_step=16",f.view.frame,unsigned(good),unsigned(f.armed),counts[0],counts[1],counts[2],counts[3],counts[4],counts[5],counts[6],counts[7]);
+        it=pendingMetrics.erase(it);
+    }
+}
 static Recording* RecordingFor(ID3D12GraphicsCommandList* list){
     auto key=Identity(list);if(!key)return nullptr;auto it=recordings.find(key.Get());
     if(it!=recordings.end())return &it->second;if(recordings.size()>=4096)return nullptr;
@@ -95,7 +106,10 @@ static D3D12_GPU_DESCRIPTOR_HANDLE Gpu(const PTGlass::DescriptorRange& range){
 static bool Disjoint(const PTGlass::DescriptorRange& a,UINT original){return a.first+49<=original||original+49<=a.first;}
 static bool Encode(void* context,ID3D12GraphicsCommandList* list,ID3D12Resource*,D3D12_CPU_DESCRIPTOR_HANDLE){
     auto& a=*static_cast<Assets*>(context);ComPtr<ID3D12GraphicsCommandList4> rays;if(FAILED(list->QueryInterface(IID_PPV_ARGS(&rays))))return false;
-    return a.dispatch->Record(rays.Get(),a.bindings.layout->Root(),a.bindings.pipeline.Get(),{a.bindings.arguments[0].value},Gpu(a.privateTable));
+    auto counter=Gpu(a.privateTable);counter.ptr+=47ull*device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+    a.metrics.Begin(list,counter);
+    const bool recorded=a.dispatch->Record(rays.Get(),a.bindings.layout->Root(),a.bindings.pipeline.Get(),{a.bindings.arguments[0].value},Gpu(a.privateTable));
+    a.metrics.End(list);return recorded;
 }
 static void Job(PTNativeJobRuntime::Phase phase,const PTNativeJobRoute::Ticket& ticket) noexcept {
     if(!active)return;
@@ -111,6 +125,9 @@ static void Job(PTNativeJobRuntime::Phase phase,const PTNativeJobRoute::Ticket& 
         if(!PTCommandBindings::tracker.Read(list,nativeRoots,false,0xc5,bindings)||!pipeline->root->Matches(bindings.layout->Root())||
            !ReadView(bindings.arguments[2].value,view)||view.width!=ticket.width||view.height!=ticket.height||
            !ContextFor(list,bindings,0,context)){Reject("opaque_view_or_context");return;}
+        for(auto it=candidates.begin();it!=candidates.end();){
+            if(it->second.ticket.engineFrame<ticket.engineFrame&&ticket.engineFrame-it->second.ticket.engineFrame>2){handoff.Cancelled(it->first);it=candidates.erase(it);}else ++it;
+        }
         while(candidates.size()>=8){handoff.Cancelled(candidates.begin()->first);candidates.erase(candidates.begin());}
         if(handoff.Recorded(ticket,bindings.resources.Get(),context.table.first,5))candidates.emplace(ticket.serial,Candidate{ticket,view});
         else Reject("opaque_handoff");
@@ -135,6 +152,12 @@ static void Dispatched(void*,ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT 
             while(environments.size()>=16)environments.erase(environments.begin());environments.push_back(std::move(e));return;
         }
         if(z!=1||x!=(view.width+7)/8||y!=(view.height+7)/8||!primary->root->Matches(bindings.layout->Root()))return;
+        struct RetireAttempt {
+            const View& view;
+            ~RetireAttempt(){for(auto it=candidates.begin();it!=candidates.end();){
+                if(it->second.view.Same(view)){handoff.Cancelled(it->first);it=candidates.erase(it);}else ++it;
+            }}
+        } retire{view};
         Candidate* candidate=nullptr;
         for(auto& c:candidates)if(c.second.view.Same(view)){if(candidate){Reject("ambiguous_scene_view");return;}candidate=&c.second;}
         std::shared_ptr<Environment> environment;
@@ -164,7 +187,9 @@ static void Dispatched(void*,ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT 
         if(status!=PTSceneHandoff::Status::pending)candidates.erase(serial);
         if(status!=PTSceneHandoff::Status::prepared){Reject("scene_prepare");return;}
         if(FAILED(PTScenePipeline::Dispatch::Create(device.Get(),pipeline,plan,view.width,view.height,bindings.resources.Get(),a->dispatch))){Reject("private_sbt");return;}
+        if(!a->metrics.Initialize(device.Get())){Reject("coverage_allocation");return;}
         device->CopyDescriptorsSimple(49,Cpu(a->privateTable),a->primary.At(0),D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+        device->CopyDescriptorsSimple(1,Cpu(a->privateTable,47),a->metrics.Uav(),D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
         device->CopyDescriptorsSimple(1,Cpu(a->privateTable,39),environment->table.At(13),D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
         D3D12_SHADER_RESOURCE_VIEW_DESC as{};as.ViewDimension=D3D12_SRV_DIMENSION_RAYTRACING_ACCELERATION_STRUCTURE;
         as.Shader4ComponentMapping=D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;as.RaytracingAccelerationStructure.Location=plan.selection.tlas;
@@ -176,6 +201,7 @@ static void Dispatched(void*,ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT 
         // failed encoder retains these through the list's native submission.
         recording->producers.push_back(frame);frame->assets=a;frame->producerRecorded=true;
         if(!frame->output->RecordInline(list,a.get(),&Encode,a)){frame->output->Invalidate(context.queue);Reject("inline_record");return;}
+        pendingMetrics.push_back(frame);
         static UINT64 recorded=0;if(++recorded<=8||recorded%240==0)Log("PT_PRIMARY_RECORDED count=%llu frame=%u dimensions=%ux%u hits=4 spp=1",recorded,view.frame,view.width,view.height);
     }catch(...){Reject("dispatch_allocation");}
 }
@@ -236,7 +262,7 @@ static void Selected(void*,ID3D12CommandQueue* queue,UINT count,ID3D12CommandLis
             for(auto& e:environments)if(e->list.Get()==key.Get()&&e->queue.Get()==queueIdentity.Get())e->submitted=true;
             auto found=recordings.find(key.Get());if(found==recordings.end())continue;auto& recording=found->second;
             for(const auto& frame:recording.producers){const auto& a=frame->assets;
-                const bool good=admitted&&!recording.submitted&&!frame->producerSubmitted&&(ptReflectionUserState.load()&1u)&&a&&
+                const bool good=admitted&&!recording.submitted&&!frame->producerSubmitted&&(ptReflectionUserState.load()==1u)&&a&&
                     queueIdentity.Get()==pinnedQueue.Get()&&a->environment->submitted&&
                     SameView(a->bindings.arguments[2].value,frame->view)&&PTTableMirror::bank.Unchanged(a->primary)&&
                     PTTableMirror::bank.Unchanged(a->environment->table)&&
@@ -279,7 +305,7 @@ static void Submitted(void*,ID3D12CommandQueue* queue,UINT count,ID3D12CommandLi
                 if(!PTSceneLive::owner.Scenes().Signal(queue,sceneUseFence.Get(),value))PTSceneLive::owner.Scenes().Invalidate();
             }
         }
-        Output::Poll();
+        PollMetrics();Output::Poll();
     }catch(...){Reject("retirement_exception");}
 }
 static void Reset(void*,ID3D12GraphicsCommandList* list) noexcept {
@@ -287,10 +313,13 @@ static void Reset(void*,ID3D12GraphicsCommandList* list) noexcept {
     try {
         std::lock_guard<std::recursive_mutex> guard(mutex);handoff.Reset(list);auto key=Identity(list);auto found=recordings.find(key.Get());
         if(found!=recordings.end()){
-            for(const auto& f:found->second.producers)if(f->assets)PTSceneLive::owner.Scenes().Forget(f->assets->ticket);
+            for(const auto& f:found->second.producers){
+                if(f->assets)PTSceneLive::owner.Scenes().Forget(f->assets->ticket);
+                if(!f->producerSubmitted)pendingMetrics.erase(std::remove(pendingMetrics.begin(),pendingMetrics.end(),f),pendingMetrics.end());
+            }
             recordings.erase(found);
         }
-        Output::Poll();
+        PollMetrics();Output::Poll();
     }catch(...){Reject("reset_exception");}
 }
 static const PTSceneQueues::Consumer queueConsumer{&handoff,&Submitting,&Selected,&Submitted,&Reset};
@@ -299,11 +328,12 @@ static bool Start(){
     if(active||!device||!enabled||!PTNativeJobRuntime::workerHooksReady||!PTNativeJobRuntime::dispatchHookReady)return false;
     char sha[65]{};bool loaded=false;
     if(!PTReflectionLoadSidecar(L"pt_primary_path.dxil","PRIMARY_PATH",library,sha,loaded))return false;
+    pendingMetrics.reserve(8);
     PTCommandBindings::Mute privateRecording;PTTableMirror::Mute privateWrites;
     const auto step=device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
     if(FAILED(device->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&sceneUseFence))))return false;
     if(!PTSceneQueues::Start(&PTSceneLive::owner.Scenes())||!PTSceneQueues::Register(&PTSceneLive::owner.Scenes(),&queueConsumer)||
        !PTCommandBindings::Register(&commandConsumer)||!PTNativeJobRuntime::Register(&Job)||!PTSceneLive::owner.Start(step,true))return false;
-    active=true;Log("PT_PRIMARY_SESSION_READY hits=4 spp=1 material=opaque_general geometric_normals=1 native_fallback=1");return true;
+    active=true;Log("PT_PRIMARY_SESSION_READY build=M12 ready=1 hits=4 spp=1 material=opaque_general geometric_normals=1 native_fallback=1");return true;
 }
 }

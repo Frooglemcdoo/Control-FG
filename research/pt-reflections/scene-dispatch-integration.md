@@ -591,3 +591,33 @@ in-game image, performance, coverage or RR-guide equivalence result. The session
 requires the new primary sidecar and exact supported native modules. Missing
 prerequisites leave approved P2/G3 available rather than producing a fake PT
 success. No component-only result is advertised as the completed playable build.
+
+### M12 packaging and runtime verification
+
+The connected consumer compiled successfully in Windows workflow 38330989467
+(commit f7f696ad161615463c152b7c0d8999bfd28a0d40). The preceding WARP tests also
+passed actual inline arm/dispatch/replay behavior and deferred output retirement.
+No game rendering result is claimed from these checks.
+
+M12 now carries sparse GPU counters in private u6. One pixel per 16x16 block
+reports progression through dimensions, primary hit, material/depth match and
+valid path completion. The counter buffer is cleared and copied on the native
+producer list and read only after the output's native submission fence completes.
+The collector distinguishes a CPU dispatch log from actual covered GPU samples.
+This telemetry is part of the integrated rendering build, not a separate capture
+run, and it is not an exact full-frame coverage percentage.
+
+At sustained GPU load, idle-only journal retirement could fail to run. After
+4096 queue operations, capture may drain already-queued tails for at most one
+second, but only when all waits have queued signals and no submitted scene ticket
+needs its historical cut. It never waits on an unscheduled writer or signal. A
+session-lifetime event handles delayed completion notifications safely. This
+bounded housekeeping may cause a periodic stall in this experimental build.
+Failed primary attempts release their native handoff tickets so they cannot keep
+old history alive indefinitely.
+
+The M12 package includes the proxy, primary library, all matching approved P2/G3
+shader sidecars, build provenance, checksums, instructions and one log collector.
+It replaces the held M11 diagnostic package in this branch's workflow artifacts.
+The M11 timed recording stays disabled. The next user test is a single in-game
+F10 comparison with GPU coverage reporting, not another CPU-only diagnostic.

@@ -20,6 +20,7 @@ class Capture {
     struct Progress {ComPtr<ID3D12Fence> fence;U64 value=0;};
     std::map<U64,Progress> progress;
     U64 checkpointOperations=0;
+    HANDLE checkpointEvent=nullptr; // Session-lifetime event; timeout notifications may still be pending.
     U64 serial=0;
     bool preserveGeometry=false;
     std::shared_ptr<PTOwnedScene::LeaseBudget> copyBudget=std::make_shared<PTOwnedScene::LeaseBudget>(512ull*1024*1024);
@@ -152,9 +153,29 @@ public:
     void Checkpoint(){
         std::lock_guard<std::mutex> guard(mutex);
         if(checkpointOperations<128)return;
-        for(const auto& item:progress){const auto completed=item.second.fence->GetCompletedValue();
-            if(completed==UINT64_MAX){catalog.Invalidate();return;}
-            if(completed<item.second.value)return;
+        bool pending=false;
+        for(const auto& item:progress){const auto done=item.second.fence->GetCompletedValue();
+            if(done==UINT64_MAX){catalog.Invalidate();return;}pending=pending||done<item.second.value;
+        }
+        if(pending){
+            // Under sustained GPU load there may never be an idle callback.
+            // At a bounded journal interval drain only ALREADY-QUEUED, closed
+            // dependencies. This avoids exhausting history after a few seconds
+            // without waiting for an unscheduled native writer/signal.
+            if(checkpointOperations<4096||!catalog.CanDrain())return;
+            if(!checkpointEvent)checkpointEvent=CreateEventW(nullptr,FALSE,FALSE,nullptr);if(!checkpointEvent)return;
+            const HANDLE event=checkpointEvent;
+            bool ready=true;const auto start=GetTickCount64();
+            for(const auto& item:progress){
+                if(item.second.fence->GetCompletedValue()>=item.second.value)continue;
+                const auto elapsed=GetTickCount64()-start;
+                if(elapsed>=1000||FAILED(item.second.fence->SetEventOnCompletion(item.second.value,event))||
+                   WaitForSingleObject(event,static_cast<DWORD>(1000-elapsed))!=WAIT_OBJECT_0){ready=false;break;}
+            }
+            if(!ready)return;
+            for(const auto& item:progress){const auto done=item.second.fence->GetCompletedValue();
+                if(done==UINT64_MAX){catalog.Invalidate();return;}if(done<item.second.value)return;
+            }
         }
         const auto live=resources.LiveTokens();
         if(catalog.CompletedCheckpoint([&live](U64 token){return live.count(token)!=0;}))checkpointOperations=0;

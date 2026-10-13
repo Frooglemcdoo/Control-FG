@@ -17,6 +17,8 @@ TextureCube<float4> PTEnvironment : register(t34);
 SamplerState PTEnvironmentSampler : register(s10,space1);
 RaytracingAccelerationStructure PTScene : register(t35);
 RWTexture2D<float4> PTOutput : register(u7);
+RWByteAddressBuffer PTMetrics : register(u6);
+void PTMeasure(uint stage,uint2 pixel){if(((pixel.x|pixel.y)&15)==0){uint previous;PTMetrics.InterlockedAdd(stage*4,1,previous);}}
 float3 PTViewToWorldVector(float3 v){return v.x*PTSystem[6].xyz+v.y*PTSystem[7].xyz+v.z*PTSystem[8].xyz;}
 float3 PTViewToWorldPoint(float3 v){return PTViewToWorldVector(v)+PTSystem[9].xyz;}
 float3 PTWorldToViewPoint(float3 v){return v.x*PTSystem[2].xyz+v.y*PTSystem[3].xyz+v.z*PTSystem[4].xyz+PTSystem[5].xyz;}
@@ -79,10 +81,11 @@ void PTPrimaryPathRayGeneration(){
     // Selected only by a queue-ordered clear after exact scene/frame admission.
     // Rejected/replayed lists must never traverse their old acceleration data.
     [branch] if(PTOutput[pixel].a!=1){PTOutput[pixel]=0;return;}
-    PTOutput[pixel]=0;
+    PTOutput[pixel]=0;PTMeasure(0,pixel);
     uint width,height,g2w,g2h,zw,zh;PTGBuffer1.GetDimensions(width,height);PTGBuffer2.GetDimensions(g2w,g2h);PTClipDepth.GetDimensions(zw,zh);
     if(any(uint2(width,height)!=DispatchRaysDimensions().xy)||width!=g2w||height!=g2h||width!=zw||height!=zh||
        !all(isfinite(PTSystem[1]))||any(abs(PTSystem[1].xy-float2(width,height))>.01))return;
+    PTMeasure(1,pixel);
     float depth=PTClipDepth.Load(int3(pixel,0)).x;
     if(!isfinite(depth)||depth<0||depth>1)return;
     float2 screen=(float2(pixel)+.5)*PTSystem[1].zw;
@@ -96,9 +99,13 @@ void PTPrimaryPathRayGeneration(){
     // Raster visibility may include unsupported geometry. Require its exact
     // material and a close depth before selecting any PT radiance for that pixel.
     uint material=ControlDecodeMaterialID(PTGBuffer2.Load(int3(pixel,0)));
-    if(first.status!=1||first.material!=material||abs(first.distance-distance)>max(.002,distance*2e-4))return;
+    if(first.status!=1)return;PTMeasure(2,pixel);
+    if(first.material!=material)return;PTMeasure(3,pixel);
+    if(abs(first.distance-distance)>max(.002,distance*2e-4))return;PTMeasure(4,pixel);
     uint seed=(pixel.x+pixel.y*width)*747796405u+asuint(PTSystem[69].y)*2891336453u+277803737u;
     seed=(seed^(seed>>16))*2246822519u;seed^=seed>>13;
     PTPathResult result=PTIntegratePathFirst(ray,4,3,seed,.001,first,1,0);
-    if(result.valid!=0&&all(isfinite(result.radiance))&&all(result.radiance>=0))PTOutput[pixel]=float4(result.radiance,1);
+    PTMeasure(5,pixel);
+    if(result.valid!=0&&all(isfinite(result.radiance))&&all(result.radiance>=0)){PTOutput[pixel]=float4(result.radiance,1);PTMeasure(6,pixel);}
+    else PTMeasure(7,pixel);
 }

@@ -14,9 +14,9 @@ int main(){
     assert(graph.Select(ray,{11,as.address},chosen)==Status::missing&&chosen.version==0);
     graph.Write(2,as,0);ray=graph.Mark(2);assert(graph.Select(ray,as,chosen)==Status::missing);
     Graph late;
-    late.Wait(2,30,1);ray=late.Mark(2);
+    late.Wait(2,30,1);ray=late.Mark(2);assert(!late.ClosedDependencies());
     assert(late.Select(ray,as,chosen)==Status::pending);
-    late.Write(1,as,300);late.Signal(1,30,1);
+    late.Write(1,as,300);late.Signal(1,30,1);assert(late.ClosedDependencies());
     assert(late.Select(ray,as,chosen)==Status::ready&&chosen.version==300);
     Graph race;
     race.Write(1,as,400);race.Signal(1,40,1);

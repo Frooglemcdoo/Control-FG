@@ -120,6 +120,11 @@ public:
     }
     bool Signal(U64 queue,U64 fence,U64 value){std::lock_guard<std::mutex> guard(mutex);if(!valid)return false;return valid=graph.Signal(queue,fence,value)!=0;}
     bool Wait(U64 queue,U64 fence,U64 value){std::lock_guard<std::mutex> guard(mutex);if(!valid)return false;return valid=graph.Wait(queue,fence,value)!=0;}
+    bool CanDrain()const {
+        std::lock_guard<std::mutex> guard(mutex);if(!valid)return false;
+        for(const auto& c:cuts)if(c.second)return false;
+        return graph.ClosedDependencies();
+    }
     // Host supplies live allocation identities after proving all queue tails
     // complete. Old compaction sources are resolved BEFORE pruning versions.
     template<class Alive> bool CompletedCheckpoint(Alive alive){

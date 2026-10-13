@@ -65,6 +65,13 @@ public:
         if(!value)return Mark(queue);
         Node node;node.waitFence=fence;node.waitValue=value;return Append(queue,node);
     }
+    // A CPU drain is allowed only when every dependency needed by already
+    // queued work has a queued signal. Never block waiting for future CPU work.
+    bool ClosedDependencies()const {
+        if(!valid)return false;
+        for(const auto& q:queues){std::set<U64> ancestors;if(Ancestors(q.second,ancestors)!=Status::ready)return false;}
+        return true;
+    }
     // Only after the host proves EVERY observed queue tail has completed,
     // with no submitted ticket still referring to a historical cut. Completion
     // is an explicit CPU happens-before edge for all subsequent queue calls.

@@ -154,6 +154,10 @@ public:
         std::lock_guard<std::mutex> guard(mutex);
         if(!Queue(queue)){if(storage)storage->failed=true;return false;}return Signal();
     }
+    bool Completed(){
+        std::lock_guard<std::mutex> guard(mutex);if(!storage||storage->failed||!storage->lastFence)return false;
+        const auto done=storage->fence->GetCompletedValue();return done!=UINT64_MAX&&done>=storage->lastFence;
+    }
     static void Poll(){
         std::lock_guard<std::mutex> guard(retirementMutex);auto** at=&retired;
         while(*at){auto* s=*at;const auto done=s->fence?s->fence->GetCompletedValue():0;

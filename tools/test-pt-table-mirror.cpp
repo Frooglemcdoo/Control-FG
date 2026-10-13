@@ -26,7 +26,7 @@ int main(){
     const auto destination=[&](UINT n){auto h=native->GetCPUDescriptorHandleForHeapStart();h.ptr+=SIZE_T(n)*step;return h;};
     const auto gpu=[&](UINT n){auto h=native->GetGPUDescriptorHandleForHeapStart();h.ptr+=UINT64(n)*step;return h;};
     PTTableMirror::Bank bank;assert(bank.HeapCreated(device.Get(),native.Get()));assert(!bank.HeapCreated(device.Get(),native.Get()));
-    PTTableMirror::Bank::Snapshot oldSnapshot,newSnapshot;assert(!bank.Read(native.Get(),prefix,mask,oldSnapshot));
+    PTTableMirror::Bank::Snapshot oldSnapshot,newSnapshot,refreshed;assert(!bank.Read(native.Get(),prefix,mask,oldSnapshot));
     std::array<UINT,128> constants{};constants[0]=constants[64]=11;constants[65]=1;
     const UINT valueA=42,valueB=100;
     auto a=Buffer(device.Get(),4,D3D12_HEAP_TYPE_UPLOAD,D3D12_RESOURCE_STATE_GENERIC_READ,&valueA);
@@ -44,18 +44,20 @@ int main(){
     D3D12_CPU_DESCRIPTOR_HANDLE to[]={destination(prefix+5),destination(prefix+41)},from=source(2);const UINT two=2;
     device->CopyDescriptors(2,to,nullptr,1,&from,&two,hd.Type);bank.Copy({{to[0],1},{to[1],1}},{{from,2}});
     assert(bank.Read(native.Get(),prefix,mask,oldSnapshot));assert(bank.Unchanged(oldSnapshot));
+    assert(bank.Read(native.Get(),prefix,mask,refreshed));auto* retainedCpu=refreshed.descriptors.Get();
     device->CreateShaderResourceView(b.Get(),&srv,source(2));assert(bank.Unchanged(oldSnapshot)); // CPU source changed; native table did not.
     device->CreateShaderResourceView(b.Get(),&srv,destination(prefix+5));bank.ShaderResource(b.Get(),&srv,destination(prefix+5));
     cv.BufferLocation+=256;device->CreateConstantBufferView(&cv,destination(prefix));bank.Constant(&cv,destination(prefix));
     device->CreateUnorderedAccessView(out.Get(),nullptr,&uav,destination(prefix+41));bank.UnorderedAccess(out.Get(),nullptr,&uav,destination(prefix+41));
     assert(!bank.Unchanged(oldSnapshot));assert(bank.Read(native.Get(),prefix,mask,newSnapshot));assert(bank.Unchanged(newSnapshot));
+    assert(bank.Refresh(refreshed)&&refreshed.descriptors.Get()==retainedCpu&&bank.Unchanged(refreshed));
     {
         PTTableMirror::Mute privateWrites;
         device->CopyDescriptorsSimple(49,destination(prefix+49),oldSnapshot.At(0),hd.Type);bank.Copy(49,destination(prefix+49),oldSnapshot.At(0));
-        device->CopyDescriptorsSimple(49,destination(prefix+98),newSnapshot.At(0),hd.Type);bank.Copy(49,destination(prefix+98),newSnapshot.At(0));
+        device->CopyDescriptorsSimple(49,destination(prefix+98),refreshed.At(0),hd.Type);bank.Copy(49,destination(prefix+98),refreshed.At(0));
     }
     PTTableMirror::Bank::Snapshot excluded;assert(!bank.Read(native.Get(),prefix+49,mask,excluded));
-    bank.Invalidate();assert(!bank.Unchanged(newSnapshot));assert(!bank.Read(native.Get(),prefix,mask,excluded));
+    bank.Invalidate();assert(!bank.Refresh(refreshed));assert(!bank.Unchanged(newSnapshot));assert(!bank.Read(native.Get(),prefix,mask,excluded));
     const char code[]="cbuffer C:register(b4){uint addend,index;};StructuredBuffer<uint> Input:register(t0);RWStructuredBuffer<uint> Output:register(u0);[numthreads(1,1,1)]void main(){Output[index]=Input[0]+addend;}";
     ComPtr<ID3DBlob> shader,error,signature;assert(SUCCEEDED(D3DCompile(code,sizeof(code)-1,nullptr,nullptr,nullptr,"main","cs_5_1",D3DCOMPILE_ENABLE_STRICTNESS,0,&shader,&error)));
     D3D12_DESCRIPTOR_RANGE ranges[]={{D3D12_DESCRIPTOR_RANGE_TYPE_CBV,5,4,0,D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND},{D3D12_DESCRIPTOR_RANGE_TYPE_SRV,36,0,0,D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND},{D3D12_DESCRIPTOR_RANGE_TYPE_UAV,8,0,0,D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND}};
