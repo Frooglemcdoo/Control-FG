@@ -41,8 +41,23 @@ struct ExportSet {
     U64 nativePipeline=0,privatePipeline=0;
     std::vector<PTShaderTableAdapter::Exports> rays;
 };
-enum class Status {prepared,selection,size,topology,unreferenced,allocation,binding,conversion};
+enum class Status {prepared,selection,size,topology,unreferenced,allocation,binding,conversion,rowIndexOwner,rowAttributeOwner};
 struct Failure {Status status=Status::prepared;std::size_t record=0;};
+inline const char* FailureName(Status status){
+    switch(status){
+    case Status::prepared:return "scene_prepared";
+    case Status::selection:return "scene_selection";
+    case Status::size:return "scene_table_size";
+    case Status::topology:return "scene_topology";
+    case Status::unreferenced:return "scene_unreferenced";
+    case Status::allocation:return "scene_allocation";
+    case Status::binding:return "scene_binding";
+    case Status::conversion:return "scene_conversion";
+    case Status::rowIndexOwner:return "scene_row_index_owner";
+    case Status::rowAttributeOwner:return "scene_row_attribute_owner";
+    }
+    return "scene_preflight_unknown";
+}
 // A later submission may reuse the prepared SBT only if every referenced AS
 // version is still the same. Identical records alone do not detect an in-place
 // BLAS update that leaves its addresses and local-root constants unchanged.
@@ -81,7 +96,19 @@ inline Failure Prepare(const Selection& selected,const Scene& scene,const Table&
     }
     pending.selection=selected;pending.privatePipeline=exports.privatePipeline;pending.records.resize(table.bindings.size()*table.rays);
     for(std::size_t i=0;i<table.bindings.size();++i){
-        if(!mappings[i].referenced)return {Status::unreferenced,i*table.rays};
+        if(!mappings[i].referenced){
+            // Check() proved every visible instance and geometry maps elsewhere.
+            // Keep row numbers intact with valid private identifiers and zero
+            // roots; these rows cannot execute for this immutable scene cut.
+            for(unsigned ray=0;ray<table.rays;++ray){const auto& e=exports.rays[ray];
+                if(e.privateOpaque==PTShaderTableAdapter::Identifier{})return {Status::conversion,i*table.rays+ray};
+                auto& record=pending.records[i*table.rays+ray];record.fill(0);
+                std::memcpy(record.data(),e.privateOpaque.data(),32);
+            }
+            continue;
+        }
+        if(!table.allocationTokens[i][0])return {Status::rowIndexOwner,i*table.rays};
+        if(!table.allocationTokens[i][1])return {Status::rowAttributeOwner,i*table.rays};
         const auto& g=mappings[i].geometry;const auto& binding=table.bindings[i];
         PTOwnedScene::Index::Resolved resolved;
         const PTOwnedScene::Triangle triangle{g.indices,g.positions,g.stride,g.indexToken,g.positionToken,g.indexStride,g.indexCount,g.vertexCount};

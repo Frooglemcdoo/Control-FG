@@ -33,7 +33,9 @@ inline bool Build(const Layout& layout,const Identifiers& identifiers,U64 versio
         const auto& b=bindings[i];if(b.type>1)return false;
         const U64 padded=(U64(b.constants[8])+3)&~U64(3);
         const U64 index=owners.Find(b.indices,padded),attributes=owners.Find(b.attributes,b.constants[9]);
-        if(!index||!attributes){if(failure)*failure=!index?"writer_index_owner":"writer_attribute_owner";return false;}
+        // Freeze missing identities as zero. The writer includes rows outside
+        // the selected TLAS; only scene preflight can prove reachability. Never
+        // replace a zero with a later allocation at the same GPU address.
         pending.allocationTokens.push_back({index,attributes});
         for(unsigned ray=0;ray<2;++ray){
             if(failure)*failure="writer_identifier_zero";

@@ -140,33 +140,40 @@ static PTGlass::LightingTableShadow* ActiveShadow() {
 }
 static void STDMETHODCALLTYPE CopyHook(ID3D12Device* d,UINT count,D3D12_CPU_DESCRIPTOR_HANDLE dst,D3D12_CPU_DESCRIPTOR_HANDLE src,D3D12_DESCRIPTOR_HEAP_TYPE type){
     PTTableMirror::Scope tableScope(PTSceneLive::owner.Active());
-    copySimple(d,count,dst,src,type);
+    {PTTableMirror::Mute forwarding;copySimple(d,count,dst,src,type);}
+    if(PTTableMirror::privateWrites)return;
     if(type!=D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV)return;
-    if(PTSceneLive::owner.Active()&&count)PTSceneLive::owner.Copy({{dst.ptr,count}},{{src.ptr,count}});
+    if(tableScope.capture&&count)PTSceneLive::owner.CopySimple(dst.ptr,src.ptr,count);
     if(tableScope.capture)PTTableMirror::bank.Copy(count,dst,src);
     if(auto* s=ActiveShadow()){mirrorGuard=true;s->ObserveNativeCopy(pass.serial,dst,count,src);mirrorGuard=false;}
 }
 static void STDMETHODCALLTYPE CbvHook(ID3D12Device* d,const D3D12_CONSTANT_BUFFER_VIEW_DESC* cb,D3D12_CPU_DESCRIPTOR_HANDLE dst){
     PTTableMirror::Scope tableScope(PTSceneLive::owner.Active());
-    createCbv(d,cb,dst);PTSceneLive::owner.Overwrite(dst);
+    {PTTableMirror::Mute forwarding;createCbv(d,cb,dst);}
+    if(PTTableMirror::privateWrites)return;
+    if(tableScope.capture)PTSceneLive::owner.Overwrite(dst);
     if(tableScope.capture)PTTableMirror::bank.Constant(cb,dst);
     if(!cb)return;
     if(auto* s=ActiveShadow()){mirrorGuard=true;s->ObserveNativeConstant(pass.serial,dst,*cb);mirrorGuard=false;}
 }
 static void STDMETHODCALLTYPE SrvHook(ID3D12Device* d,ID3D12Resource* resource,const D3D12_SHADER_RESOURCE_VIEW_DESC* desc,D3D12_CPU_DESCRIPTOR_HANDLE dst){
     PTTableMirror::Scope tableScope(PTSceneLive::owner.Active());
-    createSrv(d,resource,desc,dst);PTSceneLive::owner.Overwrite(dst,desc);
+    {PTTableMirror::Mute forwarding;createSrv(d,resource,desc,dst);}
+    if(PTTableMirror::privateWrites)return;
+    if(tableScope.capture)PTSceneLive::owner.Overwrite(dst,desc);
     if(tableScope.capture)PTTableMirror::bank.ShaderResource(resource,desc,dst);
 }
 static void STDMETHODCALLTYPE UavHook(ID3D12Device* d,ID3D12Resource* resource,ID3D12Resource* counter,const D3D12_UNORDERED_ACCESS_VIEW_DESC* desc,D3D12_CPU_DESCRIPTOR_HANDLE dst){
     PTTableMirror::Scope tableScope(PTSceneLive::owner.Active());
-    createUav(d,resource,counter,desc,dst);PTSceneLive::owner.Overwrite(dst);
+    {PTTableMirror::Mute forwarding;createUav(d,resource,counter,desc,dst);}
+    if(PTTableMirror::privateWrites)return;
+    if(tableScope.capture)PTSceneLive::owner.Overwrite(dst);
     if(tableScope.capture)PTTableMirror::bank.UnorderedAccess(resource,counter,desc,dst);
 }
 static HRESULT STDMETHODCALLTYPE HeapHook(ID3D12Device* d,const D3D12_DESCRIPTOR_HEAP_DESC* desc,REFIID iid,void** out){
     PTTableMirror::Scope tableScope(PTSceneLive::owner.Active());
-    const HRESULT hr=createHeap(d,desc,iid,out);
-    if(SUCCEEDED(hr)&&out&&*out&&PTSceneLive::owner.Active()){
+    HRESULT hr;{PTTableMirror::Mute forwarding;hr=createHeap(d,desc,iid,out);}
+    if(SUCCEEDED(hr)&&out&&*out&&tableScope.capture){
         ComPtr<ID3D12DescriptorHeap> heap;
         if(SUCCEEDED(static_cast<IUnknown*>(*out)->QueryInterface(IID_PPV_ARGS(&heap)))){
             PTSceneLive::owner.Heap(heap.Get());if(tableScope.capture)PTTableMirror::bank.HeapCreated(d,heap.Get());
@@ -177,8 +184,8 @@ static HRESULT STDMETHODCALLTYPE HeapHook(ID3D12Device* d,const D3D12_DESCRIPTOR
 static void STDMETHODCALLTYPE CopyAllHook(ID3D12Device* d,UINT dstCount,const D3D12_CPU_DESCRIPTOR_HANDLE* dst,const UINT* dstSizes,
     UINT srcCount,const D3D12_CPU_DESCRIPTOR_HANDLE* src,const UINT* srcSizes,D3D12_DESCRIPTOR_HEAP_TYPE type){
     PTTableMirror::Scope tableScope(PTSceneLive::owner.Active());
-    copyAll(d,dstCount,dst,dstSizes,srcCount,src,srcSizes,type);
-    if(!PTSceneLive::owner.Active()||type!=D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV)return;
+    {PTTableMirror::Mute forwarding;copyAll(d,dstCount,dst,dstSizes,srcCount,src,srcSizes,type);}
+    if(!tableScope.capture||type!=D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV)return;
     std::vector<PTSceneDescriptors::Range> destinations,sources;
     if(!PTSceneDescriptors::CopyRanges(dstCount,dst,dstSizes,destinations)||
        !PTSceneDescriptors::CopyRanges(srcCount,src,srcSizes,sources)){

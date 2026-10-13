@@ -224,7 +224,12 @@ static void Dispatched(void*,ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT 
         if(!handoff.ReadyIdentifiers(serial,identifiers)||!pipeline->Exports(candidate->ticket.pipeline,identifiers.hit,exports)){Reject("private_exports");return;}
         const auto status=handoff.Prepare(serial,exports,plan,a->scene,&a->proof);
         if(status!=PTSceneHandoff::Status::pending)candidates.erase(serial);
-        if(status!=PTSceneHandoff::Status::prepared){Reject("scene_prepare");return;}
+        if(status!=PTSceneHandoff::Status::prepared){
+            std::size_t row=0;const char* reason=handoff.NotReady(serial,row);
+            static UINT64 failures=0;if(++failures<=16||failures%600==0){const auto b=handoff.BindingFailure(serial);
+                Log("PT_PRIMARY_PREFLIGHT ticket=%llu reason=%s row=%llu indices=%llx attributes=%llx index_bytes=%u attribute_bytes=%u",serial,reason,static_cast<UINT64>(row),b.indices,b.attributes,b.constants[8],b.constants[9]);}
+            Reject(reason);return;
+        }
         if(FAILED(PTScenePipeline::Dispatch::Create(device.Get(),pipeline,plan,view.width,view.height,bindings.resources.Get(),a->dispatch))){Reject("private_sbt");return;}
         D3D12_HEAP_PROPERTIES cameraHeap{};cameraHeap.Type=D3D12_HEAP_TYPE_UPLOAD;
         D3D12_RESOURCE_DESC cameraDesc{};cameraDesc.Dimension=D3D12_RESOURCE_DIMENSION_BUFFER;cameraDesc.Width=1280;
@@ -365,6 +370,8 @@ static void Submitted(void*,ID3D12CommandQueue* queue,UINT count,ID3D12CommandLi
         if(sequence<=4||sequence%240==0){const auto t=PTSceneLive::owner.Scenes().Statistics();
             const auto pool=PTSceneLive::owner.Resources().GeometryStatistics();
             const auto owners=PTSceneLive::owner.Resources().Statistics();
+            const auto descriptorStats=PTSceneLive::owner.DescriptorStatistics();
+            Log("PT_PRIMARY_DESCRIPTOR_STATS healthy=%u failure=%s entries=%llu writes=%llu as_writes=%llu copies=%llu",unsigned(descriptorStats.healthy),descriptorStats.failure,descriptorStats.entries,descriptorStats.writes,descriptorStats.asWrites,descriptorStats.copies);
             Log("PT_PRIMARY_OWNERS retained=%llu rejected=%llu budget_rejected=%llu peak_bytes=%llu untracked_destinations=%llu destination_tombstones=%llu last_untracked_destination=%llx",owners.retained,owners.rejected,owners.budget,owners.peakBytes,t.untrackedDestinations,t.destinationTombstones,t.lastUntrackedDestination);
             Log("PT_PRIMARY_CAPTURE healthy=%u failure=%s skipped_invalid=%llu copy_failures=%llu copy_failure=%s pooled_idle_bytes=%llu buffer_allocations=%llu buffer_reuses=%llu history_versions=%llu history_rows=%llu history_nodes=%llu copy_bytes=%llu",unsigned(t.healthy),t.failure,t.skippedInvalid,t.copyFailures,PTSceneLive::owner.Resources().GeometryFailure(),pool.bytes,pool.allocations,pool.reuses,t.historyVersions,t.historyRows,t.historyNodes,t.copyBytes);
             Log("PT_PRIMARY_CPU submissions=%llu builds=%llu build_total_ms=%llu build_max_ms=%llu checkpoints=%llu checkpoint_total_ms=%llu checkpoint_max_ms=%llu blocking_checkpoint_waits=0",sequence,t.builds.calls,t.builds.totalMs,t.builds.maxMs,t.checkpoints.calls,t.checkpoints.totalMs,t.checkpoints.maxMs);}
@@ -408,6 +415,6 @@ static bool Start(){
     if(FAILED(device->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&sceneUseFence))))return false;
     if(!PTSceneQueues::Start(&PTSceneLive::owner.Scenes())||!PTSceneQueues::Register(&PTSceneLive::owner.Scenes(),&queueConsumer)||
        !PTCommandBindings::Register(&commandConsumer)||!PTNativeJobRuntime::Register(&Job)||!PTSceneLive::owner.Start(step,true))return false;
-    active=true;Log("PT_PRIMARY_SESSION_READY build=M12R12 ready=1 hits=4 spp=1 material=opaque_general geometric_normals=1 native_fallback=1");return true;
+    active=true;Log("PT_PRIMARY_SESSION_READY build=M12R13 ready=1 hits=4 spp=1 material=opaque_general geometric_normals=1 native_fallback=1");return true;
 }
 }

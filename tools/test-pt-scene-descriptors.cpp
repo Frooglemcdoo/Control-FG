@@ -46,6 +46,11 @@ int main(){
     const unsigned zero=0;assert(CopyRanges(1,&destination,&zero,to)&&to.empty());
     assert(!large.InvalidateAll("descriptor_copy_null_ranges"));
     assert(std::string(large.Statistics().failure)=="descriptor_copy_null_ranges");
+    Index single(32);assert(single.Write(1000,{0x10000,33,256}));
+    assert(single.CopySimple(2000,1000,1)&&single.Read(2000).token==33);
+    assert(single.CopySimple(2000,2000,1)&&single.Read(2000).token==33);
+    assert(single.CopySimple(2000,3000,1)&&!single.Read(2000).token);
+    assert(single.CopySimple(4000,1000,2)&&single.Read(4000).token==33);
     Index overflow(32);assert(!overflow.Invalidate({UINT64_MAX-16,1}));
     std::puts("PASS AS descriptor identities: sparse copies, split ranges, overwrite, heap reuse, generation preservation and fail-closed bounds.");
 }

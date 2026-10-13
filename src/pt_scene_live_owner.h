@@ -56,6 +56,7 @@ public:
         if(d.Type==D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV)descriptors->Invalidate({heap->GetCPUDescriptorHandleForHeapStart().ptr,d.NumDescriptors});
     }
     void InvalidateDescriptors(){if(Active())descriptors->InvalidateAll("descriptor_copy_null_ranges");}
+    void CopySimple(U64 destination,U64 source,U64 count){if(Active())descriptors->CopySimple(destination,source,count);}
     void Copy(const std::vector<PTSceneDescriptors::Range>& dst,const std::vector<PTSceneDescriptors::Range>& src){if(Active())descriptors->Copy(dst,src);}
     struct SelectionDiagnostic {const char* reason="descriptor_input";U64 handle=0,address=0,token=0,bytes=0,currentToken=0;};
     PTSceneDescriptors::Index::Stats DescriptorStatistics(){return descriptors?descriptors->Statistics():PTSceneDescriptors::Index::Stats{false,"descriptor_inactive",0,0,0,0};}

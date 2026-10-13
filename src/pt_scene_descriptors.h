@@ -51,6 +51,18 @@ public:
         if(!Span(range))return Fail("descriptor_invalidate_span");
         Erase(range);return true;
     }
+    // The overwhelmingly common one-slot copy needs no temporary vectors.
+    bool CopySimple(U64 destination,U64 source,U64 count){
+        if(count!=1)return Copy({{destination,count}},{{source,count}});
+        std::lock_guard<std::mutex> guard(mutex);if(!valid)return false;
+        if(!Span({destination,1}))return Fail("descriptor_copy_destination_span");
+        if(!Span({source,1}))return Fail("descriptor_copy_source_span");
+        ++copies;const auto found=entries.find(source);
+        const auto value=found==entries.end()?Acceleration{}:found->second;
+        entries.erase(destination);
+        if(value.token){if(entries.size()>=Maximum)return Fail("descriptor_copy_capacity");entries.emplace(destination,value);}
+        return true;
+    }
     bool Copy(const std::vector<Range>& destinations,const std::vector<Range>& sources){
         std::lock_guard<std::mutex> guard(mutex);if(!valid)return false;
         U64 totalDst=0,totalSrc=0;

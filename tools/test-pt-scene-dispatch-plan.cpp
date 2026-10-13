@@ -48,6 +48,23 @@ int main(){
 #endif
     auto prepare=[&](){return Prepare(selected,scene,table,owners,exports,plan);};
     assert(prepare().status==Status::prepared&&plan.records.size()==2&&plan.allocationTokens.size()==5);
+    // An unowned row is harmless only if the exact submitted TLAS cannot reach
+    // it. A later registration must not repair the zero captured owner token.
+    auto sparseLayout=layout;sparseLayout.bytes=512;sparseLayout.hitRecords=4;
+    auto missing=b;missing.indices=0x7000;missing.attributes=0x8000;
+    Table sparse;assert(PTNativeShaderTable::Build(sparseLayout,identifiers,2,2,{b,missing},owners,sparse));
+    assert(!sparse.allocationTokens[1][0]&&!sparse.allocationTokens[1][1]);
+    Plan sparsePlan;assert(Prepare(selected,scene,sparse,owners,exports,sparsePlan).status==Status::prepared);
+    assert(sparsePlan.records.size()==4&&sparsePlan.records[2][0]==5);
+    for(std::size_t n=32;n<sparsePlan.records[2].size();++n)assert(!sparsePlan.records[2][n]);
+    auto reachable=scene;reachable.instances[0].contributionFlags=2;
+    assert(reachable.topology.Build(0xb000,{{0x7000,0x2000,12,2,3,3,99,2}}));
+    assert(Prepare(selected,reachable,sparse,owners,exports,sparsePlan).status==Status::rowIndexOwner&&sparsePlan.records.empty());
+    owners.Insert({99,0x7000,8});owners.Insert({100,0x8000,64});
+    assert(Prepare(selected,reachable,sparse,owners,exports,sparsePlan).status==Status::rowIndexOwner);
+    owners.Remove(99);owners.Remove(100);
+    sparse.allocationTokens[0][1]=0;
+    assert(Prepare(selected,scene,sparse,owners,exports,sparsePlan).status==Status::rowAttributeOwner);
     assert(!SameDispatch(plan,plan)); // Unversioned fixture cannot authorize a later submission.
     scene.blas[0xb000].version=17;assert(prepare().status==Status::prepared);
     const auto preparedAtRayPass=plan;assert(SameDispatch(preparedAtRayPass,plan));

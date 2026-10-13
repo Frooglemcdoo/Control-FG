@@ -184,11 +184,12 @@ public:
     // occur between validating an allocation token and retaining its resource.
     bool PrepareLease(const PTSceneDispatch::Selection& selected,const PTSceneDispatch::Scene& scene,
                       const PTSceneDispatch::Table& table,const PTSceneDispatch::ExportSet& exports,
-                      PTSceneDispatch::Plan& plan,LeaseBatch& batch){
-        plan={};if(batch.Count()||!leaseBudget)return false;
+                      PTSceneDispatch::Plan& plan,LeaseBatch& batch,PTSceneDispatch::Failure* failure=nullptr){
+        plan={};if(failure)*failure={PTSceneDispatch::Status::allocation,0};if(batch.Count()||!leaseBudget)return false;
         std::lock_guard<std::mutex> guard(mutex);if(!active)return false;
         PTSceneDispatch::Plan candidate;
-        if(PTSceneDispatch::Prepare(selected,scene,table,index,exports,candidate).status!=PTSceneDispatch::Status::prepared)return false;
+        const auto checked=PTSceneDispatch::Prepare(selected,scene,table,index,exports,candidate);
+        if(checked.status!=PTSceneDispatch::Status::prepared){if(failure)*failure=checked;return false;}
         std::map<U64,const Entry*> tokens;for(const auto& owner:owners)tokens.emplace(owner.second.token,&owner.second);
         auto payload=std::make_unique<LeaseBatch::Payload>();payload->budget=leaseBudget;
         U64 bytes=0;

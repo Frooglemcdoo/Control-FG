@@ -320,8 +320,12 @@ int main(){
     const char* writerFailure="none";std::size_t writerRow=999;
     auto missingRow=row;missingRow.attributes=0;
     writerTicket.writer.bindings=reinterpret_cast<UINT_PTR>(&missingRow);
-    assert(!bank.SnapshotWriter(writerTicket,writerIdentifiers,writerTable,&writerFailure,&writerRow));
-    assert(!std::strcmp(writerFailure,"writer_attribute_owner")&&writerRow==0&&writerTable.bytes.empty());
+    assert(bank.SnapshotWriter(writerTicket,writerIdentifiers,writerTable,&writerFailure,&writerRow));
+    assert(!std::strcmp(writerFailure,"none")&&writerTable.allocationTokens[0][1]==0);
+    PTSceneDispatch::Plan missingPlan;
+    const PTSceneDispatch::Selection missingSelection{frozen.address,frozen.version,writerTable.address,writerTable.version,writerTable.pipeline};
+    PTOwnedScene::LeaseBatch missingLease;
+    assert(!bank.PrepareLease(missingSelection,frozen,writerTable,exports,missingPlan,missingLease)&&!missingLease.Count());
     writerTicket.writer.bindings=reinterpret_cast<UINT_PTR>(&row);
     writerTicket.hitBytes=191;assert(!bank.SnapshotWriter(writerTicket,writerIdentifiers,writerTable)&&writerTable.bytes.empty());
     std::puts("PASS writer snapshot: exact recorded layout, native identifiers, local-root bytes and allocation generations frozen inside owner transaction.");

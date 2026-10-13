@@ -32,10 +32,10 @@ class Runtime {
     PTSceneLive::Owner& owner;
     std::mutex mutex;
     std::map<std::uint64_t,Entry> pending;
-    struct Failure {const char* reason;std::size_t row;PTSceneLive::Owner::SelectionDiagnostic descriptor;};
+    struct Failure {const char* reason;std::size_t row;PTSceneLive::Owner::SelectionDiagnostic descriptor;PTNativeBinding::Binding binding{};};
     std::map<std::uint64_t,Failure> failures;
     auto Erase(std::map<std::uint64_t,Entry>::iterator it,const char* reason="handoff_retired",std::size_t row=0){
-        failures[it->first]={reason,row,{}};while(failures.size()>64)failures.erase(failures.begin());
+        failures[it->first]={reason,row,{}, {}};while(failures.size()>64)failures.erase(failures.begin());
         owner.Scenes().Forget(it->first);return pending.erase(it);
     }
     void Clear(){for(const auto& entry:pending)owner.Scenes().Forget(entry.first);pending.clear();}
@@ -117,6 +117,10 @@ public:
         if(!candidate||!candidate->written||!candidate->submitted)return false;
         serial=candidate->ticket.serial;return true;
     }
+    PTNativeBinding::Binding BindingFailure(std::uint64_t serial){
+        std::lock_guard<std::mutex> guard(mutex);const auto found=failures.find(serial);
+        return found==failures.end()?PTNativeBinding::Binding{}:found->second.binding;
+    }
     PTSceneLive::Owner::SelectionDiagnostic DescriptorFailure(std::uint64_t serial){
         std::lock_guard<std::mutex> guard(mutex);const auto found=failures.find(serial);
         return found==failures.end()?PTSceneLive::Owner::SelectionDiagnostic{}:found->second.descriptor;
@@ -156,9 +160,14 @@ public:
         }
         PTSceneDispatch::Scene scene;const auto selected=owner.Scenes().Scene(serial,entry.acceleration,scene);
         if(selected==PTSceneOrder::Status::pending)return Status::pending;
-        if(selected!=PTSceneOrder::Status::ready){Erase(found);return Status::rejected;}
+        if(selected!=PTSceneOrder::Status::ready){Erase(found,selected==PTSceneOrder::Status::missing?"scene_catalog_missing":"scene_catalog_rejected");return Status::rejected;}
         const PTSceneDispatch::Selection selection{scene.address,scene.version,entry.table.address,entry.table.version,entry.table.pipeline};
-        const bool prepared=owner.Resources().PrepareLease(selection,scene,entry.table,exports,plan,lease);
+        PTSceneDispatch::Failure failure;
+        const bool prepared=owner.Resources().PrepareLease(selection,scene,entry.table,exports,plan,lease,&failure);
+        if(!prepared){const auto row=failure.record/entry.table.rays;
+            const auto binding=row<entry.table.bindings.size()?entry.table.bindings[row]:PTNativeBinding::Binding{};
+            Erase(found,PTSceneDispatch::FailureName(failure.status),row);failures.at(serial).binding=binding;return Status::rejected;
+        }
         if(prepared&&proof){
             auto snapshot=std::make_shared<Prepared>();snapshot->owner=&owner;snapshot->acceleration=entry.acceleration;
             snapshot->engineFrame=entry.ticket.engineFrame;snapshot->width=entry.ticket.width;snapshot->height=entry.ticket.height;
