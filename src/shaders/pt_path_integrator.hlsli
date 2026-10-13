@@ -13,7 +13,7 @@ struct PTPathSurface {
 PTSceneHit PTPathTrace(RayDesc ray);
 PTPathSurface PTPathDecode(PTSceneHit hit, RayDesc ray);
 float3 PTPathEnvironment(float3 direction);
-bool PTPathLight(PTPathSurface surface, out PTDirectSample light, out uint visibility);
+bool PTPathLight(PTPathSurface surface, inout uint rng, out PTDirectSample light, out uint visibility);
 
 uint PTPathRandomBits(inout uint state) {
     state ^= state << 13; state ^= state >> 17; state ^= state << 5; return state;
@@ -42,7 +42,7 @@ PTPathResult PTIntegratePath(RayDesc ray,uint maxHits,uint rouletteStart,uint se
         if(wo.z<=0){path.valid=0;result.fault=5;break;}
         path=PTAccumulate(path,surface.emission);
         PTDirectSample light;uint visibility;
-        if(PTPathLight(surface,light,visibility)) {
+        if(PTPathLight(surface,rng,light,visibility)) {
             if(light.delta!=1){path.valid=0;break;}
             light.wi=float3(dot(light.wi,tangent),dot(light.wi,bitangent),dot(light.wi,n));
             PTDirectResult direct=PTEvaluateDirect(surface.material,wo,light,visibility);

@@ -25,7 +25,10 @@ ByteAddressBuffer PTVertices : register(t1,space3);
 ByteAddressBuffer PTPositions : register(t2,space3);
 #endif
 struct PTNativeMaterial { uint words[84]; };
-StructuredBuffer<PTNativeMaterial> PTMaterials : register(t3);
+#ifndef PT_SCENE_MATERIAL_REGISTER
+#define PT_SCENE_MATERIAL_REGISTER t3
+#endif
+StructuredBuffer<PTNativeMaterial> PTMaterials : register(PT_SCENE_MATERIAL_REGISTER);
 Texture2D<float4> PTTextures[] : register(t0,space1);
 SamplerState PTLinearWrap : register(s5,space1);
 

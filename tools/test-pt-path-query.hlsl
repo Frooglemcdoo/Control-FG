@@ -21,7 +21,7 @@ PTPathSurface PTPathDecode(PTSceneHit hit,RayDesc ray) {
     s.emission=DispatchRaysIndex().x<4?float3(1,.5,.25):float3(0,0,0);return s;
 }
 float3 PTPathEnvironment(float3 direction){return float3(.2,.4,.8);}
-bool PTPathLight(PTPathSurface s,out PTDirectSample light,out uint visibility) {
+bool PTPathLight(PTPathSurface s,inout uint rng,out PTDirectSample light,out uint visibility) {
     uint i=DispatchRaysIndex().x;light=(PTDirectSample)0;visibility=1;
     if(i!=4&&i!=5)return false;
     float3 target=PTTestRays[i].origin+(i==4?float3(0,0,0):float3(0,0,-4));
