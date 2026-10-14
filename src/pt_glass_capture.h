@@ -10,6 +10,17 @@ static char ptGlassCaptureHashes[24][65]{};
 static unsigned ptGlassCaptureCount = 0;
 static size_t ptGlassCaptureBytes = 0;
 
+// Shader byte dumps are diagnostics, never an input to the renderer. Read the
+// opt-in once, before touching resident shader bytes on any capture path.
+static bool PTGlassShaderDumpEnabled() noexcept {
+    static const bool enabled=[](){
+        const DWORD error=GetLastError();wchar_t value[2]{};
+        const DWORD length=GetEnvironmentVariableW(L"CONTROLFG_PT_SHADER_DUMP",value,2);
+        SetLastError(error);return length==1&&value[0]==L'1';
+    }();
+    return enabled;
+}
+
 static bool PTGlassResidentIsCandidate(const char* resident, size_t available = 0) noexcept {
     __try {
         const auto* b = reinterpret_cast<const unsigned char*>(resident);
@@ -21,6 +32,7 @@ static bool PTGlassResidentIsCandidate(const char* resident, size_t available = 
 }
 
 static void PTGlassCaptureBytes(int id, const char* resident, size_t available, const char* source) noexcept {
+    if (!PTGlassShaderDumpEnabled()) return;
     if (!PTGlassResidentIsCandidate(resident,available)) return;
     bool inspect = true;
     AcquireSRWLockExclusive(&ptGlassCaptureLock);

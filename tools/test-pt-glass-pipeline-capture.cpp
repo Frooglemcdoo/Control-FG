@@ -43,7 +43,20 @@ static std::vector<unsigned char> Fixture() {
     memcpy(b.data()+110,"g_tPosition_TexcoordY",22);
     return b;
 }
-int main() {
+int main(int argc,char**) {
+    SetEnvironmentVariableW(L"CONTROLFG_PT_SHADER_DUMP",argc>1?L"1":nullptr);
+    if(argc==1){
+        SetLastError(1234);
+        // Off must return before reading even an invalid resident address.
+        PTGlassCaptureResident(123,reinterpret_cast<const char*>(1));
+        PTGlassCaptureCompute(reinterpret_cast<const void*>(1),200);
+        assert(GetLastError()==1234&&records.empty()&&ptGlassCaptureCount==0);
+        // The switch is restart-only: later environment edits do not enable it.
+        SetEnvironmentVariableW(L"CONTROLFG_PT_SHADER_DUMP",L"1");
+        assert(!PTGlassShaderDumpEnabled());
+        puts("PASS: shader dumps default off, no resident bytes read, last error preserved, startup setting immutable");
+        return 0;
+    }
     auto first=Fixture(),second=first;second[190]=1;
     PTGlassCaptureCompute(nullptr,first.size());
     PTGlassCaptureCompute(first.data(),0);
