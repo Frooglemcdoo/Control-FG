@@ -8,9 +8,9 @@ versus 90-95 normal capture with PT off, DLAA about 80-85 in either mode.
 
 32279 game CPU samples in the 8-second analysis window. 1908 instruction
 samples map inside TryParallelCopy, including 650 at function offset 0x44f,
-362 at 0x454 and 73 at 0x413. Exact R44 local PDB function RVA 0xcfc0;
+362 at 0x454 and 70 at 0x45a. Exact R44 local PDB function RVA 0xcfc0;
 these locations correspond to the shared mirrored-descriptor increment,
-global version fetch-add and boundary following the two statistic increments.
+global version fetch-add and the instruction immediately after that fetch-add.
 These are sampled instruction locations (including possible sampling skid),
 not exact elapsed time or a whole-frame CPU accounting. The CPU-only profile
 contains no DXGI Present events; no Present FPS is derived from it.

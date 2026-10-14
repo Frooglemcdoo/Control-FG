@@ -50,7 +50,11 @@ class Bank {
     UINT slots=0,step=0;
     // Snapshot validity compares the same heap/slot, never stamps from different
     // slots. Per-slot generations avoid a global atomic on every parallel copy.
-    struct alignas(64) CopyCounter {std::atomic<std::uint64_t> value{0};};
+    struct alignas(64) CopyCounter {
+        std::atomic<std::uint64_t> value{0};
+        unsigned char padding[64-sizeof(std::atomic<std::uint64_t>)]{};
+    };
+    static_assert(sizeof(CopyCounter)==64,"copy counter cache-line stride");
     std::array<CopyCounter,128> parallelCopies{};
     static unsigned CounterShard(){
         static std::atomic<unsigned> next{0};
