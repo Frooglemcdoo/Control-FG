@@ -22,7 +22,7 @@ try {
     $backups=@(Get-ChildItem (Join-Path $game 'ControlFG-Settings-Backups') -Directory)
     if($backups.Count -ne 1){throw 'Backup missing'}
     if((Get-FileHash (Join-Path $backups[0].FullName 'renderer.ini')).Hash -ne $before[0]){throw 'Recovery copy differs'}
-    $manifest=@(Get-Content (Join-Path $backups[0].FullName 'Settings-Hashes.json') -Raw | ConvertFrom-Json)
+    $manifest=Get-Content (Join-Path $backups[0].FullName 'Settings-Hashes.json') -Raw | ConvertFrom-Json
     if($manifest.Count -ne 2 -or @($manifest | Where-Object {$_.BeforeSHA256 -ne $_.AfterSHA256}).Count){throw 'Hash evidence invalid'}
     $script:fakeRunning=$true
     $rejected=$false
