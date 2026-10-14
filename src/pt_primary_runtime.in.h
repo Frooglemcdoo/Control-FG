@@ -597,7 +597,7 @@ static void PipelineBound(void*,ID3D12GraphicsCommandList*,ID3D12PipelineState* 
 }
 static const PTCommandBindings::Consumer commandConsumer{&handoff,&Dispatched,nullptr,nullptr,&PipelineBound,true};
 static void MirrorModeChanged(bool) noexcept {
-    try {PTTableMirror::Scope transition(true);
+    try {std::lock_guard<PTTableMirror::DescriptorGate> transition(PTTableMirror::gate);
         const bool requested=PTReflectionUserRequested();
         PTTableMirror::bank.SetCopying(requested);
         Log("PT_PRIMARY_MIRROR_MODE copying=%u fresh_tables_required=1 geometry_retained=1",unsigned(requested));

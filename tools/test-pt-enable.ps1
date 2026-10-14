@@ -1,8 +1,7 @@
 $ErrorActionPreference='Stop'
 $root=Join-Path $env:TEMP ('PT-Enable-Test-'+[guid]::NewGuid().ToString('N'))
 $oldLocal=$env:LOCALAPPDATA
-$script:fakeRunning=$false
-function Get-Process {param($Name,$ErrorAction) if($script:fakeRunning){[pscustomobject]@{Id=123}}}
+function Get-Process {param($Name,$ErrorAction)}
 try {
     $game=Join-Path $root 'Game With Spaces'
     New-Item -ItemType Directory -Path $game | Out-Null
@@ -24,7 +23,7 @@ try {
     if((Get-FileHash (Join-Path $backups[0].FullName 'renderer.ini')).Hash -ne $before[0]){throw 'Recovery copy differs'}
     $manifest=Get-Content (Join-Path $backups[0].FullName 'Settings-Hashes.json') -Raw | ConvertFrom-Json
     if($manifest.Count -ne 2 -or @($manifest | Where-Object {$_.BeforeSHA256 -ne $_.AfterSHA256}).Count){throw 'Hash evidence invalid'}
-    $script:fakeRunning=$true
+    function Get-Process {param($Name,$ErrorAction) [pscustomobject]@{Id=123}}
     $rejected=$false
     try {& (Join-Path $PSScriptRoot 'PT-Enable.ps1') -GameDirectory $game} catch {$rejected=$true}
     if(-not $rejected){throw 'Running-game mode change was allowed'}
