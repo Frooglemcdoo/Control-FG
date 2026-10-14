@@ -139,28 +139,71 @@ inline bool Record(ID3D12GraphicsCommandList* list,const std::vector<Source>& so
 // Each submitted generation owns its sources until a fence after the real
 // ExecuteCommandLists completes. Recording ownership additionally survives to
 // Reset, because D3D12 permits replaying a closed list.
+// Caller serializes Before/After/Poll with capture's mutex and the queue hook.
+// Each exact submitted queue interface owns one independent fence timeline.
 class Retirement {
-    struct Flight {std::vector<std::shared_ptr<Transfer>> transfers;ComPtr<ID3D12Fence> fence;bool signalled=false;};
+    struct Timeline {
+        ComPtr<ID3D12CommandQueue> queue;
+        ComPtr<ID3D12Fence> fence;
+        U64 last=0,completed=0;
+        bool failed=false;
+    };
+    struct Flight {
+        std::vector<std::shared_ptr<Transfer>> transfers;
+        std::shared_ptr<Timeline> timeline;
+        U64 required=0;
+        bool signalled=false;
+    };
+    std::map<ID3D12CommandQueue*,std::shared_ptr<Timeline>> timelines;
     std::vector<std::shared_ptr<Flight>> flights;
+    U64 created=0,signals=0,retired=0,failures=0;
 public:
+    struct Stats {U64 fences,signals,retired,pending,failures;};
+    Stats Statistics() const {return {created,signals,retired,static_cast<U64>(flights.size()),failures};}
     using Batch=std::vector<std::shared_ptr<Flight>>;
     void Poll(){
-        flights.erase(std::remove_if(flights.begin(),flights.end(),[](const auto& f){
-            const U64 value=f->fence->GetCompletedValue();return f->signalled&&value!=UINT64_MAX&&value>=1;
+        // Query each queue once, not once per outstanding transfer batch.
+        for(auto& item:timelines)item.second->completed=item.second->fence->GetCompletedValue();
+        flights.erase(std::remove_if(flights.begin(),flights.end(),[this](const auto& f){
+            const U64 value=f->timeline->completed;
+            const bool done=f->signalled&&value!=UINT64_MAX&&value>=f->required;
+            if(done)++retired;return done;
         }),flights.end());
     }
     bool Before(ID3D12CommandQueue* queue,const std::vector<std::shared_ptr<Transfer>>& transfers,Batch& batch){
-        batch.clear();Poll();if(transfers.empty())return true;
-        ComPtr<ID3D12Device> device;if(!queue||FAILED(queue->GetDevice(IID_PPV_ARGS(&device))))return false;
-        auto f=std::make_shared<Flight>();f->transfers=transfers;
-        if(FAILED(device->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&f->fence))))return false;
-        batch.push_back(std::move(f));
-        flights.insert(flights.end(),batch.begin(),batch.end());return true;
+        if(!batch.empty())return false;
+        Poll();if(transfers.empty())return true;
+        if(!queue)return false;
+        auto found=timelines.find(queue);
+        if(found==timelines.end()){
+            ComPtr<ID3D12Device> device;if(FAILED(queue->GetDevice(IID_PPV_ARGS(&device))))return false;
+            auto timeline=std::make_shared<Timeline>();timeline->queue=queue;
+            if(FAILED(device->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&timeline->fence))))return false;
+            found=timelines.emplace(queue,std::move(timeline)).first;++created;
+        }
+        const auto& timeline=found->second;
+        // UINT64_MAX is the device-removal sentinel; never signal or wrap to it.
+        if(timeline->failed||timeline->last>=UINT64_MAX-1)return false;
+        auto f=std::make_shared<Flight>();f->transfers=transfers;f->timeline=timeline;
+        batch.push_back(f);flights.push_back(std::move(f));return true;
     }
     bool After(ID3D12CommandQueue* queue,Batch& batch){
-        bool ok=true;for(auto& f:batch){f->signalled=SUCCEEDED(queue->Signal(f->fence.Get(),1));ok=ok&&f->signalled;}
+        bool ok=true;
+        for(auto& f:batch){
+            auto& timeline=*f->timeline;
+            // Never signal another queue's timeline or reuse a failed proof.
+            if(queue!=timeline.queue.Get()||timeline.failed||timeline.last>=UINT64_MAX-1){
+                timeline.failed=true;++failures;ok=false;continue;
+            }
+            const U64 value=timeline.last+1;
+            if(FAILED(queue->Signal(timeline.fence.Get(),value))){
+                timeline.failed=true;++failures;ok=false;continue;
+            }
+            timeline.last=value;f->required=value;f->signalled=true;++signals;
+        }
         batch.clear();Poll();return ok;
     }
+    // Unproven flights remain retained on failure, as before this optimization.
     ~Retirement(){Poll();for(auto& f:flights)(void)new std::shared_ptr<Flight>(std::move(f));}
 };
 }

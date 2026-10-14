@@ -434,6 +434,57 @@ static void TestSampledCleanup(ID3D12Device* device){
     assert(WaitForSingleObject(ready,30000)==WAIT_OBJECT_0);CloseHandle(ready);
     puts("PASS sampled cleanup WARP: empty queue checkpoint, 512 native signals, eight private cleanup signals.");
 }
+static void TestRetirementTimelines(ID3D12Device* device){
+    ComPtr<ID3D12CommandQueue> a,b;D3D12_COMMAND_QUEUE_DESC desc{};
+    assert(SUCCEEDED(device->CreateCommandQueue(&desc,IID_PPV_ARGS(&a))));
+    assert(SUCCEEDED(device->CreateCommandQueue(&desc,IID_PPV_ARGS(&b))));
+    ComPtr<ID3D12Fence> ga,gb,da,db;
+    for(auto* f:{&ga,&gb,&da,&db})assert(SUCCEEDED(device->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(f))));
+    auto wait=[](ID3D12Fence* f,UINT64 value){
+        HANDLE e=CreateEventW(nullptr,FALSE,FALSE,nullptr);assert(e);
+        assert(SUCCEEDED(f->SetEventOnCompletion(value,e)));
+        assert(WaitForSingleObject(e,30000)==WAIT_OBJECT_0);CloseHandle(e);
+    };
+    PTGeometrySnapshot::Retirement r;PTGeometrySnapshot::Retirement::Batch batch;
+    assert(r.Before(a.Get(),{},batch)&&r.Statistics().fences==0);
+    auto first=std::make_shared<PTGeometrySnapshot::Transfer>();
+    auto second=std::make_shared<PTGeometrySnapshot::Transfer>();
+    auto other=std::make_shared<PTGeometrySnapshot::Transfer>();
+    std::weak_ptr<PTGeometrySnapshot::Transfer> w1=first,w2=second,w3=other;
+    assert(SUCCEEDED(a->Wait(ga.Get(),1)));
+    assert(r.Before(a.Get(),{first},batch)&&r.After(a.Get(),batch));first.reset();
+    assert(SUCCEEDED(a->Signal(da.Get(),1)));
+    assert(SUCCEEDED(a->Wait(ga.Get(),2)));
+    assert(r.Before(a.Get(),{second},batch)&&r.After(a.Get(),batch));second.reset();
+    assert(SUCCEEDED(a->Signal(da.Get(),2)));
+    assert(SUCCEEDED(b->Wait(gb.Get(),1)));
+    assert(r.Before(b.Get(),{other},batch)&&r.After(b.Get(),batch));other.reset();
+    assert(SUCCEEDED(b->Signal(db.Get(),1)));
+    r.Poll();assert(!w1.expired()&&!w2.expired()&&!w3.expired());
+    assert(r.Statistics().fences==2&&r.Statistics().signals==3);
+    assert(SUCCEEDED(ga->Signal(1)));wait(da.Get(),1);r.Poll();
+    assert(w1.expired()&&!w2.expired()&&!w3.expired());
+    assert(SUCCEEDED(gb->Signal(1)));wait(db.Get(),1);r.Poll();
+    assert(w3.expired()&&!w2.expired());
+    assert(SUCCEEDED(ga->Signal(2)));wait(da.Get(),2);r.Poll();assert(w2.expired());
+    // The recording owner survives retirement and may submit the same transfer again.
+    auto recording=std::make_shared<PTGeometrySnapshot::Transfer>();
+    std::weak_ptr<PTGeometrySnapshot::Transfer> replay=recording;
+    for(unsigned n=0;n<64;++n)assert(r.Before(a.Get(),{recording},batch)&&r.After(a.Get(),batch));
+    assert(SUCCEEDED(a->Signal(da.Get(),3)));wait(da.Get(),3);r.Poll();
+    assert(!replay.expired()&&r.Statistics().pending==0);
+    assert(r.Statistics().fences==2&&r.Statistics().signals==67&&r.Statistics().retired==67&&r.Statistics().failures==0);
+    recording.reset();assert(replay.expired());
+    // A mismatched queue cannot signal or retire a batch owned by another queue.
+    PTGeometrySnapshot::Retirement rejected;
+    auto held=std::make_shared<PTGeometrySnapshot::Transfer>();
+    std::weak_ptr<PTGeometrySnapshot::Transfer> unsafe=held;
+    assert(rejected.Before(a.Get(),{held},batch));held.reset();
+    assert(!rejected.After(b.Get(),batch));rejected.Poll();
+    assert(!unsafe.expired()&&rejected.Statistics().failures==1&&rejected.Statistics().signals==0);
+    assert(!rejected.Before(a.Get(),{std::make_shared<PTGeometrySnapshot::Transfer>()},batch));
+    std::puts("PASS retirement timelines: two queues, independently gated values, 67 batches / 2 fences, replay ownership and mismatched-queue retention.");
+}
 int main(){
     ComPtr<ID3D12Debug> debug;const bool debugEnabled=SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&debug)));
     if(debugEnabled)debug->EnableDebugLayer();
@@ -443,6 +494,7 @@ int main(){
     TestSampledCleanup(d.Get());
     TestBindingFirstObservation(d.Get());
     TestUnrelatedSceneLists(d.Get());
+    TestRetirementTimelines(d.Get());
     TestGeometryPoolPressure(d.Get());
     TestUntrackedSceneDestinations(d.Get());
     TestGeometrySnapshot(d.Get());TestGeometrySnapshot(d.Get(),true);TestGeometrySnapshot(d.Get(),false,true);TestGeometrySnapshot(d.Get(),false,false,true);

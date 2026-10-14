@@ -78,7 +78,7 @@ class Capture {
 public:
     struct Timing {U64 calls=0,totalMs=0,maxMs=0;};
     struct QueueTiming {U64 calls=0,lockTicks=0,observerTicks=0,nativeTicks=0,maxObserverTicks=0,maxNativeTicks=0;};
-    struct Stats {QueueTiming queues[2][2]{};U64 progressSignals=0,progressSkipped=0;Timing builds,checkpoints;U64 skippedInvalid=0,untrackedDestinations=0,destinationTombstones=0,lastUntrackedDestination=0,copyFailures=0,offUpdatesPreserved=0,completedWaits=0,historyVersions=0,historyRows=0,historyNodes=0,copyBytes=0;bool healthy=true;const char* failure="none";};
+    struct Stats {PTGeometrySnapshot::Retirement::Stats retirement{};QueueTiming queues[2][2]{};U64 progressSignals=0,progressSkipped=0;Timing builds,checkpoints;U64 skippedInvalid=0,untrackedDestinations=0,destinationTombstones=0,lastUntrackedDestination=0,copyFailures=0,offUpdatesPreserved=0,completedWaits=0,historyVersions=0,historyRows=0,historyNodes=0,copyBytes=0;bool healthy=true;const char* failure="none";};
 private:
     Stats stats;
     struct Measure {Timing& value;ULONGLONG start=GetTickCount64();~Measure(){const U64 ms=GetTickCount64()-start;++value.calls;value.totalMs+=ms;value.maxMs=(std::max)(value.maxMs,ms);}};
@@ -88,7 +88,7 @@ public:
         ++t.calls;t.lockTicks+=lockTicks;t.observerTicks+=observerTicks;t.nativeTicks+=nativeTicks;
         t.maxObserverTicks=(std::max)(t.maxObserverTicks,observerTicks);t.maxNativeTicks=(std::max)(t.maxNativeTicks,nativeTicks);
     }
-    Stats Statistics(){std::lock_guard<std::mutex> guard(mutex);stats.healthy=catalog.Healthy();stats.failure=catalog.Failure();const auto history=catalog.StatisticsNow();stats.historyVersions=history.versions;stats.historyRows=history.rows;stats.historyNodes=history.nodes;stats.copyBytes=copyBudget->Held();return stats;}
+    Stats Statistics(){std::lock_guard<std::mutex> guard(mutex);stats.healthy=catalog.Healthy();stats.failure=catalog.Failure();const auto history=catalog.StatisticsNow();stats.historyVersions=history.versions;stats.historyRows=history.rows;stats.historyNodes=history.nodes;stats.copyBytes=copyBudget->Held();stats.retirement=retirement.Statistics();return stats;}
     explicit Capture(PTOwnedScene::Runtime& bank):resources(bank){}
     void RenderingRequested(bool value) noexcept {renderingRequested.store(value,std::memory_order_relaxed);}
     bool PreserveGeometry(){std::lock_guard<std::mutex> guard(mutex);if(!identities.empty())return false;preserveGeometry=true;return true;}
@@ -175,7 +175,7 @@ public:
         std::lock_guard<std::mutex> guard(mutex);auto* id=List(list);
         if(!id||!catalog.Mark(id->id,id->generation,ticket)){catalog.Invalidate();return false;}return true;
     }
-    bool Submit(IUnknown* queue,UINT count,ID3D12CommandList*const* lists){
+    bool Submit(ID3D12CommandQueue* queue,UINT count,ID3D12CommandList*const* lists){
         std::lock_guard<std::mutex> guard(mutex);auto* q=Identify(queue);
         if(!q||!count||count>256||!lists){catalog.Invalidate();return false;}
         RefreshWaitFences();
@@ -188,8 +188,7 @@ public:
         std::vector<std::shared_ptr<PTGeometrySnapshot::Transfer>> transfers;
         for(const auto& item:ordered){auto found=recordedCopies.find(item.first);if(found!=recordedCopies.end())transfers.insert(transfers.end(),found->second.begin(),found->second.end());}
         if(!transfers.empty()){
-            ComPtr<ID3D12CommandQueue> native;if(FAILED(queue->QueryInterface(IID_PPV_ARGS(&native)))){catalog.Invalidate();return false;}
-            if(!retirement.Before(native.Get(),transfers,submittingCopies[q->id])){
+            if(!retirement.Before(queue,transfers,submittingCopies[q->id])){
                 // Native submission still forwards. No fence can prove these
                 // references safe to release, including after list Reset.
                 (void)new std::vector<std::shared_ptr<PTGeometrySnapshot::Transfer>>(std::move(transfers));

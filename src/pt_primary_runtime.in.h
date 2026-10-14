@@ -549,6 +549,7 @@ static void Submitted(void*,ID3D12CommandQueue* queue,UINT count,ID3D12CommandLi
             Log("PT_PRIMARY_DESCRIPTOR_STATS healthy=%u failure=%s entries=%llu writes=%llu as_writes=%llu copies=%llu",unsigned(descriptorStats.healthy),descriptorStats.failure,descriptorStats.entries,descriptorStats.writes,descriptorStats.asWrites,descriptorStats.copies);
             Log("PT_PRIMARY_OWNERS retained=%llu rejected=%llu budget_rejected=%llu peak_bytes=%llu untracked_destinations=%llu destination_tombstones=%llu last_untracked_destination=%llx",owners.retained,owners.rejected,owners.budget,owners.peakBytes,t.untrackedDestinations,t.destinationTombstones,t.lastUntrackedDestination);
             Log("PT_PRIMARY_CAPTURE healthy=%u failure=%s skipped_invalid=%llu copy_failures=%llu copy_failure=%s pooled_idle_bytes=%llu buffer_allocations=%llu buffer_reuses=%llu pool_evictions=%llu history_versions=%llu history_rows=%llu history_nodes=%llu copy_bytes=%llu off_updates_preserved=%llu completed_waits=%llu",unsigned(t.healthy),t.failure,t.skippedInvalid,t.copyFailures,PTSceneLive::owner.Resources().GeometryFailure(),pool.bytes,pool.allocations,pool.reuses,pool.evictions,t.historyVersions,t.historyRows,t.historyNodes,t.copyBytes,t.offUpdatesPreserved,t.completedWaits);
+            Log("PT_PRIMARY_RETIREMENT fences=%llu signals=%llu retired=%llu pending=%llu failures=%llu",t.retirement.fences,t.retirement.signals,t.retirement.retired,t.retirement.pending,t.retirement.failures);
             Log("PT_PRIMARY_COPY_TOTAL copied_bytes=%llu whole_index_bytes=%llu",owners.geometryCopyBytes,owners.geometryWholeIndexBytes);
             Log("PT_PRIMARY_CPU submissions=%llu builds=%llu build_total_ms=%llu build_max_ms=%llu checkpoints=%llu checkpoint_total_ms=%llu checkpoint_max_ms=%llu blocking_checkpoint_waits=0",sequence,t.builds.calls,t.builds.totalMs,t.builds.maxMs,t.checkpoints.calls,t.checkpoints.totalMs,t.checkpoints.maxMs);
             const auto mirror=PTTableMirror::bank.Statistics();
@@ -606,6 +607,6 @@ static bool Start(){
     if(FAILED(device->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&sceneUseFence))))return false;
     if(!PTSceneQueues::Start(&PTSceneLive::owner.Scenes())||!PTSceneQueues::Register(&PTSceneLive::owner.Scenes(),&queueConsumer)||
        !PTCommandBindings::Register(&commandConsumer)||!PTNativeJobRuntime::Register(&Job)||!PTSceneLive::owner.Start(step,true))return false;
-    active=true;Log("PT_PRIMARY_SESSION_READY build=M12R47 ready=1 hits=4 spp=1 roulette_start=3 material=opaque_general geometric_normals=1 native_fallback=1 primary_lighting=native diffuse_bounces=pt_indirect readiness=per_material graphics_tracking=0");return true;
+    active=true;Log("PT_PRIMARY_SESSION_READY build=M12R48 ready=1 hits=4 spp=1 roulette_start=3 material=opaque_general geometric_normals=1 native_fallback=1 primary_lighting=native diffuse_bounces=pt_indirect readiness=per_material graphics_tracking=0");return true;
 }
 }
