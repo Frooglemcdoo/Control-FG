@@ -151,6 +151,7 @@ int main(){
     }));
     assert(cachedForwarded==1); // Reading a cached source does not invalidate its token.
     puts("PASS: cached sources, erased UAV history and equal typed formats remain parallel; new typed metadata falls back without forwarding");
+    assert(interest.NeedsOverwrite(source(0).ptr));
     assert(interest.Contains(source(0).ptr)); // Cached source-token invalidation must never be skipped.
     assert(interest.NeedsSimpleCopy(source(0).ptr,source(2).ptr));
     const auto beforeRepeat=bank.Statistics();
@@ -174,6 +175,7 @@ int main(){
     assert(bank.Read(native.Get(),prefix,mask,refreshed));auto* retainedCpu=refreshed.descriptors.Get();
     device->CreateShaderResourceView(b.Get(),&srv,source(2));assert(bank.Unchanged(oldSnapshot)); // CPU source changed; native table did not.
     device->CreateShaderResourceView(b.Get(),&srv,destination(prefix+5));bank.ShaderResource(b.Get(),&srv,destination(prefix+5));
+    assert(interest.NeedsOverwrite(destination(prefix).ptr));
     cv.BufferLocation+=256;device->CreateConstantBufferView(&cv,destination(prefix));bank.Constant(&cv,destination(prefix));
     device->CreateUnorderedAccessView(out.Get(),nullptr,&uav,destination(prefix+41));bank.UnorderedAccess(out.Get(),nullptr,&uav,destination(prefix+41));
     assert(!bank.Unchanged(oldSnapshot));assert(bank.Read(native.Get(),prefix,mask,newSnapshot));assert(bank.Unchanged(newSnapshot));

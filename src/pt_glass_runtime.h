@@ -161,7 +161,11 @@ static void STDMETHODCALLTYPE CopyHook(ID3D12Device* d,UINT count,D3D12_CPU_DESC
 }
 
 static void STDMETHODCALLTYPE CbvHook(ID3D12Device* d,const D3D12_CONSTANT_BUFFER_VIEW_DESC* cb,D3D12_CPU_DESCRIPTOR_HANDLE dst){
-    PTTableMirror::Scope tableScope(PTSceneLive::owner.Active(),true);
+    // Untracked CPU CBVs cannot invalidate any capture state. The next copy
+    // reads their current native descriptor. Previously these writes took the
+    // global exclusive gate and stalled unrelated parallel descriptor copies.
+    const bool track=PTSceneLive::owner.Active()&&PTDescriptorInterest::filter.NeedsOverwrite(dst.ptr);
+    PTTableMirror::Scope tableScope(track,true);
     {PTTableMirror::Mute forwarding;createCbv(d,cb,dst);}
     tableScope.Observing();
     if(PTTableMirror::privateWrites)return;

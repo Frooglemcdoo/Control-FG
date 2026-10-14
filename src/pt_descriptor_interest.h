@@ -34,6 +34,14 @@ public:
         value=first.load(std::memory_order_relaxed);
         while(value>begin&&!first.compare_exchange_weak(value,begin,std::memory_order_release,std::memory_order_relaxed)){}
     }
+    // A CBV write creates no AS identity or typed-UAV metadata. It only needs
+    // observation when replacing existing proof or writing a mirrored heap.
+    // Marks and heap bounds are monotonic; false positives stay conservative.
+    bool NeedsOverwrite(U64 destination) const noexcept {
+        if(!destination)return true;
+        if(destination>=first.load(std::memory_order_acquire)&&destination<last.load(std::memory_order_acquire))return true;
+        return Contains(destination);
+    }
     bool NeedsSimpleCopy(U64 destination,U64 source) const noexcept {
         if(!destination||!source)return true;
         if(destination>=first.load(std::memory_order_acquire)&&destination<last.load(std::memory_order_acquire))return true;

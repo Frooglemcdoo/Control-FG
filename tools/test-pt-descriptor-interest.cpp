@@ -24,12 +24,14 @@ int main(){
     using namespace PTDescriptorInterest;
     auto isolated=std::make_unique<Filter>();
     assert(!isolated->NeedsSimpleCopy(64,128));
+    assert(!isolated->NeedsOverwrite(64)&&isolated->NeedsOverwrite(0));
     assert(isolated->NeedsSimpleCopy(0,128));
-    isolated->Mark(128);assert(isolated->NeedsSimpleCopy(64,128));
+    isolated->Mark(128);assert(isolated->NeedsOverwrite(128));assert(isolated->NeedsSimpleCopy(64,128));
     assert(isolated->NeedsSimpleCopy(128,256));
     isolated->IncludeMirror(4096,8192);
     assert(isolated->NeedsSimpleCopy(4096,256)&&isolated->NeedsSimpleCopy(8191,256));
     isolated->IncludeMirror(16384,32768);
+    assert(isolated->NeedsOverwrite(4096)&&isolated->NeedsOverwrite(8191)&&isolated->NeedsOverwrite(12000));
     assert(isolated->NeedsSimpleCopy(12000,256)); // Conservative enclosing gap.
     std::vector<std::thread> workers;
     for(unsigned t=0;t<8;++t)workers.emplace_back([&,t]{
@@ -49,7 +51,11 @@ int main(){
         if(action==0){
             const PTSceneDescriptors::Acceleration value{0x10000,n+1,256};
             assert(index.Write(dst,value));expected[dst]=value;
-        }else if(action==1){assert(index.Write(dst));expected.erase(dst);}
+        }else if(action==1){
+            if(filter.NeedsOverwrite(dst))assert(index.Write(dst));
+            else {++skipped;assert(expected.find(dst)==expected.end());}
+            expected.erase(dst);
+        }
         else {
             const auto it=expected.find(src);
             const auto value=it==expected.end()?PTSceneDescriptors::Acceleration{}:it->second;
