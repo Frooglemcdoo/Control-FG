@@ -1,10 +1,26 @@
 #include "../src/pt_scene_descriptors.h"
+#include "../src/pt_descriptor_gate.h"
 #include <cassert>
 #include <cstdio>
 #include <memory>
 #include <random>
 #include <thread>
 int main(){
+    // Snapshot exclusivity must wait for all independent copies, and exclusive
+    // Bank calls must remain recursive. Exercise the same single gate contract.
+    PTTableMirror::DescriptorGate gate;
+    {std::unique_lock<PTTableMirror::DescriptorGate> outer(gate);
+     std::unique_lock<PTTableMirror::DescriptorGate> nested(gate);}
+    std::atomic<unsigned> entered{0};std::atomic<bool> release{false},snapshotStarted{false},snapshotDone{false};
+    std::vector<std::thread> copies;
+    for(unsigned n=0;n<8;++n)copies.emplace_back([&]{std::shared_lock<PTTableMirror::DescriptorGate> lock(gate);
+        ++entered;while(!release.load())std::this_thread::yield();});
+    while(entered.load()!=8)std::this_thread::yield();
+    std::thread snapshot([&]{snapshotStarted=true;std::unique_lock<PTTableMirror::DescriptorGate> lock(gate);assert(release.load());snapshotDone=true;});
+    while(!snapshotStarted.load()){std::this_thread::yield();}
+    assert(!snapshotDone.load());release=true;
+    for(auto& copy:copies){copy.join();}
+    snapshot.join();assert(snapshotDone.load());
     using namespace PTDescriptorInterest;
     auto isolated=std::make_unique<Filter>();
     assert(!isolated->NeedsSimpleCopy(64,128));

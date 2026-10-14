@@ -142,23 +142,24 @@ static PTGlass::LightingTableShadow* ActiveShadow() {
     return holder.get();
 }
 static void STDMETHODCALLTYPE CopyHook(ID3D12Device* d,UINT count,D3D12_CPU_DESCRIPTOR_HANDLE dst,D3D12_CPU_DESCRIPTOR_HANDLE src,D3D12_DESCRIPTOR_HEAP_TYPE type){
-    // Valid native descriptor copies already synchronize conflicting source/
-    // destination access. Before the native call, reject only pairs that have
-    // never held tracked metadata and cannot write a mirrored table. Relevant
-    // copies keep the original native+observer transaction and lock ordering.
     const bool observe=PTSceneLive::owner.Active()&&!PTTableMirror::privateWrites&&type==D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-    const bool track=observe&&
-        (count!=1||PTDescriptorInterest::filter.NeedsSimpleCopy(dst.ptr,src.ptr));
-    PTHotpathTiming::Sample untracked(PTHotpathTiming::Kind::descriptor_untracked,observe&&!track);
-    PTTableMirror::Scope tableScope(track,true);
-    {PTTableMirror::Mute forwarding;copySimple(d,count,dst,src,type);}
-    tableScope.Observing();
-    if(PTTableMirror::privateWrites)return;
-    if(type!=D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV)return;
-    if(tableScope.capture&&count)PTSceneLive::owner.CopySimple(dst.ptr,src.ptr,count);
-    if(tableScope.capture)PTTableMirror::bank.Copy(count,dst,src);
+    const bool parallel=observe&&count==1&&PTTableMirror::bank.TryParallelCopy(dst,src,[&]{copySimple(d,count,dst,src,type);});
+    if(!parallel){
+        const bool track=observe&&(count!=1||PTDescriptorInterest::filter.NeedsSimpleCopy(dst.ptr,src.ptr));
+        PTHotpathTiming::Sample untracked(PTHotpathTiming::Kind::descriptor_untracked,observe&&!track);
+        PTTableMirror::Scope tableScope(track,true);
+        {PTTableMirror::Mute forwarding;copySimple(d,count,dst,src,type);}
+        tableScope.Observing();
+        if(PTTableMirror::privateWrites)return;
+        if(type!=D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV)return;
+        if(tableScope.capture&&count)PTSceneLive::owner.CopySimple(dst.ptr,src.ptr,count);
+        if(tableScope.capture)PTTableMirror::bank.Copy(count,dst,src);
+    }
+    // Legacy capture may allocate descriptors. It must run AFTER releasing
+    // shared ownership, never attempt a shared-to-exclusive lock upgrade.
     if(auto* s=ActiveShadow()){mirrorGuard=true;s->ObserveNativeCopy(pass.serial,dst,count,src);mirrorGuard=false;}
 }
+
 static void STDMETHODCALLTYPE CbvHook(ID3D12Device* d,const D3D12_CONSTANT_BUFFER_VIEW_DESC* cb,D3D12_CPU_DESCRIPTOR_HANDLE dst){
     PTTableMirror::Scope tableScope(PTSceneLive::owner.Active(),true);
     {PTTableMirror::Mute forwarding;createCbv(d,cb,dst);}

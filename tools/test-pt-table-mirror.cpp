@@ -5,6 +5,7 @@
 #include <cassert>
 #include <cstdio>
 #include <cstring>
+#include <thread>
 #include "../src/pt_table_mirror.h"
 using Microsoft::WRL::ComPtr;
 static ComPtr<ID3D12Resource> Buffer(ID3D12Device* device,UINT64 bytes,D3D12_HEAP_TYPE type,D3D12_RESOURCE_STATES state,const void* data=nullptr,D3D12_RESOURCE_FLAGS flags=D3D12_RESOURCE_FLAG_NONE){
@@ -62,6 +63,27 @@ int main(){
     auto readback=Buffer(device.Get(),8,D3D12_HEAP_TYPE_READBACK,D3D12_RESOURCE_STATE_COPY_DEST);
     D3D12_SHADER_RESOURCE_VIEW_DESC srv{};srv.ViewDimension=D3D12_SRV_DIMENSION_BUFFER;srv.Shader4ComponentMapping=D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;srv.Buffer.NumElements=1;srv.Buffer.StructureByteStride=4;
     device->CreateShaderResourceView(a.Get(),&srv,source(0));device->CreateShaderResourceView(a.Get(),&srv,source(2));
+    // Ordinary fixed-table SRVs must take the parallel path, unlike R42's
+    // ineffective untracked-only bypass. Adjacent slots used to share a bit
+    // in vector<bool>; concurrent writes now have separate byte storage.
+    std::array<std::thread,8> writers;
+    std::atomic<unsigned> forwarded{0};
+    for(UINT n=0;n<writers.size();++n)writers[n]=std::thread([&,n]{
+        for(UINT k=0;k<2000;++k){const auto dst=destination(prefix+5+n);
+            assert(bank.TryParallelCopy(dst,source(0),[&]{
+                assert(PTTableMirror::privateWrites);++forwarded;
+                // Reentrant hooks suppress observation while forwarding.
+                PTTableMirror::Scope reentrant(true,true);assert(!reentrant.capture);
+                device->CopyDescriptorsSimple(1,dst,source(0),hd.Type);
+            }));
+        }
+    });
+    for(auto& writer:writers)writer.join();assert(forwarded==16000);
+    PTTableMirror::Bank::Snapshot parallelSnapshot;
+    assert(bank.Read(native.Get(),prefix,0xffull<<5,parallelSnapshot));
+    for(UINT n=5;n<13;++n)assert(parallelSnapshot.versions[n]);
+    assert(bank.Unchanged(parallelSnapshot));
+    puts("PASS: 16000 parallel native/mirror copies to adjacent slots, reentrant hook exclusion and complete snapshot");
     D3D12_CONSTANT_BUFFER_VIEW_DESC cv{cb->GetGPUVirtualAddress(),256};device->CreateConstantBufferView(&cv,source(1));
     D3D12_UNORDERED_ACCESS_VIEW_DESC uav{};uav.ViewDimension=D3D12_UAV_DIMENSION_BUFFER;uav.Buffer.NumElements=2;uav.Buffer.StructureByteStride=4;
     device->CreateUnorderedAccessView(out.Get(),nullptr,&uav,source(3));
@@ -92,6 +114,9 @@ int main(){
     puts("PASS: 4145 fragmented sources clipped to 49 mirrored descriptors in one batch; typed-UAV metadata invalidation");
     const auto copyOne=[&]{device->CopyDescriptorsSimple(1,destination(prefix+5),source(0),hd.Type);bank.Copy(1,destination(prefix+5),source(0));};
     copyOne();PTTableMirror::Bank::Snapshot stable;assert(bank.Read(native.Get(),prefix,mask,stable));
+    bool wronglyForwarded=false;
+    assert(!bank.TryParallelCopy(destination(prefix+5),source(0),[&]{wronglyForwarded=true;}));
+    assert(!wronglyForwarded); // Known cached source takes the original transaction exactly once.
     assert(interest.Contains(source(0).ptr)); // Cached source-token invalidation must never be skipped.
     assert(interest.NeedsSimpleCopy(source(0).ptr,source(2).ptr));
     const auto beforeRepeat=bank.Statistics();

@@ -441,7 +441,9 @@ static bool AdmitFrame(const std::shared_ptr<Frame>& frame,ID3D12CommandQueue* q
 static void Signalling(void*,ID3D12CommandQueue* queue,ID3D12Fence* fence,UINT64 value) noexcept {
     if(!active)return;
     try {
-        std::lock_guard<std::recursive_mutex> guard(mutex);PTTableMirror::Scope descriptorLock(true);
+        std::lock_guard<std::recursive_mutex> guard(mutex);
+        if(pendingMetrics.empty())return;
+        PTTableMirror::Scope descriptorLock(true);
         for(const auto& frame:pendingMetrics){
             if(!frame->deferred||!frame->producerSubmitted||!frame->assets)continue;
             const auto& a=frame->assets;const auto blocked=frame->wait;
@@ -471,7 +473,9 @@ static void Signalling(void*,ID3D12CommandQueue* queue,ID3D12Fence* fence,UINT64
 static void Selected(void*,ID3D12CommandQueue* queue,UINT count,ID3D12CommandList*const* lists,bool admitted) noexcept {
     if(!active)return;
     try {
-        std::lock_guard<std::recursive_mutex> guard(mutex);PTTableMirror::Scope descriptorLock(true);PTTableMirror::Mute privateWrites;
+        std::lock_guard<std::recursive_mutex> guard(mutex);
+        if(recordings.empty()&&environments.empty())return;
+        PTTableMirror::Scope descriptorLock(true);PTTableMirror::Mute privateWrites;
         if(!lists||count>256)return;const auto queueIdentity=Identity(queue);
         for(UINT n=0;n<count;++n){const auto key=Identity(lists[n]);
             for(auto& e:environments)if(e->list.Get()==key.Get()&&e->queue.Get()==queueIdentity.Get())e->submitted=true;
@@ -602,6 +606,6 @@ static bool Start(){
     if(FAILED(device->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&sceneUseFence))))return false;
     if(!PTSceneQueues::Start(&PTSceneLive::owner.Scenes())||!PTSceneQueues::Register(&PTSceneLive::owner.Scenes(),&queueConsumer)||
        !PTCommandBindings::Register(&commandConsumer)||!PTNativeJobRuntime::Register(&Job)||!PTSceneLive::owner.Start(step,true))return false;
-    active=true;Log("PT_PRIMARY_SESSION_READY build=M12R42 ready=1 hits=4 spp=1 roulette_start=3 material=opaque_general geometric_normals=1 native_fallback=1 primary_lighting=native diffuse_bounces=pt_indirect readiness=per_material graphics_tracking=0");return true;
+    active=true;Log("PT_PRIMARY_SESSION_READY build=M12R43 ready=1 hits=4 spp=1 roulette_start=3 material=opaque_general geometric_normals=1 native_fallback=1 primary_lighting=native diffuse_bounces=pt_indirect readiness=per_material graphics_tracking=0");return true;
 }
 }
