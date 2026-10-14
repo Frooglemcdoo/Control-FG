@@ -177,7 +177,7 @@ public:
         sourceTokens.clear();
         // Never admit an old table after an off/on cycle. Native writes must
         // repopulate every consumed slot; retained snapshots keep their storage.
-        for(auto& entry:heaps)std::fill(entry.second->seen.begin(),entry.second->seen.end(),0);
+        for(auto& entry:heaps)std::fill(entry.second->seen.begin(),entry.second->seen.end(),static_cast<unsigned char>(0));
     }
     void Invalidate(){std::lock_guard<DescriptorGate> lock(gate);sourceTokens.clear();uavFormats.clear();for(auto& entry:heaps)std::fill(entry.second->seen.begin(),entry.second->seen.end(),false);}
     struct Snapshot {
