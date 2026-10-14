@@ -61,3 +61,9 @@ material=next(c for c in active['constant_buffers'] if c['name']=='g_sbMaterialD
 fields=material['variables'][0]['type']['members']
 assert any(f['name']=='uScatterIndex_vTranslucencyDepthRange' and f['byte_offset']==4 for f in fields)
 print('PASS: material translucency range occupies the second material word; unsupported scattering retains native shading.')
+
+# Guard the production registration path, not only the profile lookup table.
+runtime = (root / 'src/pt_glass_runtime.h').read_text()
+registration = runtime.split('static void ObserveCompute(', 1)[1].split('primaryPipelines.Insert', 1)[0]
+assert re.search(r'const auto\* profile=PTPrimaryProfiles::Find\([^;]+;\s*if\(profile\)\s*\{\s*if\($', registration), 'Every exact reviewed profile must reach primary registration'
+print('PASS: production primary registration accepts both exact reviewed profiles without a variant-name exclusion.')

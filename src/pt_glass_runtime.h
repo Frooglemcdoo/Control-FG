@@ -161,11 +161,7 @@ static void STDMETHODCALLTYPE CopyHook(ID3D12Device* d,UINT count,D3D12_CPU_DESC
 }
 
 static void STDMETHODCALLTYPE CbvHook(ID3D12Device* d,const D3D12_CONSTANT_BUFFER_VIEW_DESC* cb,D3D12_CPU_DESCRIPTOR_HANDLE dst){
-    // Untracked CPU CBVs cannot invalidate any capture state. The next copy
-    // reads their current native descriptor. Previously these writes took the
-    // global exclusive gate and stalled unrelated parallel descriptor copies.
-    const bool track=PTSceneLive::owner.Active()&&PTDescriptorInterest::filter.NeedsOverwrite(dst.ptr);
-    PTTableMirror::Scope tableScope(track,true);
+    PTTableMirror::Scope tableScope(PTSceneLive::owner.Active(),true);
     {PTTableMirror::Mute forwarding;createCbv(d,cb,dst);}
     tableScope.Observing();
     if(PTTableMirror::privateWrites)return;
@@ -442,7 +438,7 @@ static void ObserveCompute(ID3D12Device* d,const D3D12_COMPUTE_PIPELINE_STATE_DE
         try {char primarySha[65]{};
             if(PTReflectionSha256(static_cast<const unsigned char*>(desc->CS.pShaderBytecode),desc->CS.BytecodeLength,primarySha)){
                 const auto* profile=PTPrimaryProfiles::Find(desc->CS.BytecodeLength,primarySha);
-                if(profile&&!std::strcmp(profile->name,"standard_output")){
+                if(profile){
                     if(primaryPipelines.Insert(static_cast<IUnknown*>(result),nativeRoots.Find(desc->pRootSignature)))
                         Log("PT_PRIMARY_PIPELINE_READY root_layout=verified constants=b2 native_returned=1 variant=%s sha256=%s",profile->name,primarySha);
                     else Log("PT_PRIMARY_PIPELINE_REJECT reason=root_or_identity variant=%s sha256=%s",profile->name,primarySha);
