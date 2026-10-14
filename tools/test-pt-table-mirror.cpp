@@ -78,6 +78,7 @@ int main(){
     // Ordinary fixed-table SRVs must take the parallel path, unlike R42's
     // ineffective untracked-only bypass. Adjacent slots used to share a bit
     // in vector<bool>; concurrent writes now have separate byte storage.
+    const auto beforeParallel=bank.Statistics();
     std::array<std::thread,8> writers;
     std::atomic<unsigned> forwarded{0};
     for(UINT n=0;n<writers.size();++n)writers[n]=std::thread([&,n]{
@@ -95,6 +96,24 @@ int main(){
     assert(bank.Read(native.Get(),prefix,0xffull<<5,parallelSnapshot));
     for(UINT n=5;n<13;++n)assert(parallelSnapshot.versions[n]);
     assert(bank.Unchanged(parallelSnapshot));
+    const auto afterParallel=bank.Statistics();
+    assert(afterParallel.single==beforeParallel.single+16000);
+    assert(afterParallel.descriptors==beforeParallel.descriptors+16000);
+    // Exclusive and parallel writes must advance the SAME slot generation.
+    bank.Copy(1,destination(prefix+5),source(0));
+    assert(!bank.Unchanged(parallelSnapshot));
+    PTTableMirror::Bank::Snapshot exclusiveSnapshot;
+    assert(bank.Read(native.Get(),prefix,0xffull<<5,exclusiveSnapshot));
+    assert(exclusiveSnapshot.versions[5]==parallelSnapshot.versions[5]+1);
+    assert(bank.TryParallelCopy(destination(prefix+5),source(0),[&]{
+        device->CopyDescriptorsSimple(1,destination(prefix+5),source(0),hd.Type);
+    }));
+    assert(!bank.Unchanged(exclusiveSnapshot));
+    PTTableMirror::Bank::Snapshot finalSnapshot;
+    assert(bank.Read(native.Get(),prefix,0xffull<<5,finalSnapshot));
+    assert(finalSnapshot.versions[5]==exclusiveSnapshot.versions[5]+1);
+    for(UINT n=6;n<13;++n)assert(finalSnapshot.versions[n]==parallelSnapshot.versions[n]);
+    puts("PASS: parallel counters exact; mixed exclusive/parallel writes invalidate only the changed slot generation");
     puts("PASS: 16000 parallel native/mirror copies to adjacent slots, reentrant hook exclusion and complete snapshot");
     D3D12_CONSTANT_BUFFER_VIEW_DESC cv{cb->GetGPUVirtualAddress(),256};device->CreateConstantBufferView(&cv,source(1));
     D3D12_UNORDERED_ACCESS_VIEW_DESC uav{};uav.ViewDimension=D3D12_UAV_DIMENSION_BUFFER;uav.Buffer.NumElements=2;uav.Buffer.StructureByteStride=4;

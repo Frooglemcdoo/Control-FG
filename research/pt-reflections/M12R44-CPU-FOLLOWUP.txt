@@ -1,0 +1,28 @@
+R44 CPU-only follow-up (no replacement DLL)
+
+The R44 bypass log confirms capture=0. The reported Quality improvement
+from 90-95 to about 140 FPS isolates overhead in the disabled PT infrastructure.
+It does not distinguish descriptor interception, scene/geometry capture,
+queue tracking, and the other experimental observers disabled together.
+
+1. Extract these two scripts beside the installed R44 dxgi.dll and Build.json.
+2. Fully close Control. Run PT-Capture-Restore.cmd from the R44 package.
+3. Start Control, set PT OFF, FG OFF, Quality, and keep RR as before.
+4. Load the same scene and allow it to settle.
+5. Right-click PT-CPU-Profile.cmd and Run as administrator.
+6. Press Enter when prompted; return to the game within 10 seconds.
+   Hold the camera still for the following 10 seconds, then return to the console.
+7. Send the new ZIP in Desktop/Control-PT-CPU-Profiles.
+
+The script validates the loaded R44 DLL against the package manifest and
+requires normal capture plus PT OFF. Quality is a user-selected setting;
+the log will be checked against it during analysis. Existing WPR recordings
+are refused and never cancelled. The script records CPU.verbose only,
+without GeneralProfile or GPU. This should reduce trace volume substantially,
+but file size and performance impact depend on the machine. No FPS comparison
+while recording is needed. Capture startup/stop may temporarily stutter.
+
+The Windows recorder cannot be executed in the Linux development environment.
+This script is adapted from the previously used R44 capture script; the
+recorder commands and cleanup were statically checked. CPU.verbose syntax:
+https://devblogs.microsoft.com/performance-diagnostics/wpr-start-and-stop-commands/

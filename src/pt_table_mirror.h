@@ -48,7 +48,19 @@ class Bank {
     ComPtr<ID3D12DescriptorHeap> defaults;
     std::map<SIZE_T,std::shared_ptr<Heap>> heaps;
     UINT slots=0,step=0;
-    std::atomic<std::uint64_t> version{1};
+    // Snapshot validity compares the same heap/slot, never stamps from different
+    // slots. Per-slot generations avoid a global atomic on every parallel copy.
+    struct alignas(64) CopyCounter {std::atomic<std::uint64_t> value{0};};
+    std::array<CopyCounter,128> parallelCopies{};
+    static unsigned CounterShard(){
+        static std::atomic<unsigned> next{0};
+        static thread_local const unsigned shard=next.fetch_add(1,std::memory_order_relaxed)%128;
+        return shard;
+    }
+    void Advance(Heap& h,UINT index){
+        if(h.versions[index]==UINT64_MAX){exhausted.store(true,std::memory_order_release);h.seen[index]=0;return;}
+        ++h.versions[index];h.sourceTokens[index]=0;h.seen[index]=1;
+    }
     std::atomic<bool> exhausted{false};
     std::atomic<std::uint64_t> singleCopies{0},batchCopies{0},mirroredDescriptors{0},redundantCopies{0};
     std::array<std::atomic<Heap*>,16> published{};
@@ -102,10 +114,8 @@ class Bank {
         device=d;defaults=std::move(empty);step=stride;return true;
     }
     void Mark(Heap& h,UINT first,UINT count){
-        if(exhausted||version==UINT64_MAX){exhausted=true;for(auto& entry:heaps)std::fill(entry.second->seen.begin(),entry.second->seen.end(),false);return;}
-        const auto stamp=version++;
         SourceWritten(At(h,first).ptr,count);
-        for(UINT n=0;n<count;++n){h.seen[first+n]=true;h.versions[first+n]=stamp;h.sourceTokens[first+n]=0;}
+        for(UINT n=0;n<count;++n)Advance(h,first+n);
     }
 public:
     Bank(){for(auto& heap:published)heap.store(nullptr,std::memory_order_relaxed);}
@@ -140,10 +150,10 @@ public:
         Mute privateCopy;forward();
         phase.Next(PTHotpathTiming::Kind::descriptor_parallel_mirror);
         device->CopyDescriptorsSimple(1,At(*target,index),source,D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-        ++singleCopies;++mirroredDescriptors;
-        const auto stamp=version.fetch_add(1,std::memory_order_relaxed);
-        if(stamp==UINT64_MAX)exhausted.store(true,std::memory_order_release);
-        target->versions[index]=stamp;target->sourceTokens[index]=0;target->seen[index]=1;
+        // Statistics use isolated per-thread shards; they are not correctness
+        // state. Threads sharing a shard still use atomic increments.
+        parallelCopies[CounterShard()].value.fetch_add(1,std::memory_order_relaxed);
+        Advance(*target,index);
         return true;
     }
     void Invalidate(){std::lock_guard<DescriptorGate> lock(gate);sourceTokens.clear();uavFormats.clear();for(auto& entry:heaps)std::fill(entry.second->seen.begin(),entry.second->seen.end(),false);}
@@ -203,7 +213,11 @@ public:
         }
     }
     struct CopyStats {std::uint64_t single,batch,descriptors,redundant;};
-    CopyStats Statistics(){std::lock_guard<DescriptorGate> lock(gate);return {singleCopies,batchCopies,mirroredDescriptors,redundantCopies};}
+    CopyStats Statistics(){
+        std::lock_guard<DescriptorGate> lock(gate);std::uint64_t parallel=0;
+        for(const auto& counter:parallelCopies)parallel+=counter.value.load(std::memory_order_relaxed);
+        return {singleCopies+parallel,batchCopies,mirroredDescriptors+parallel,redundantCopies};
+    }
     void Copy(const std::vector<Range>& destinations,const std::vector<Range>& sources){
         std::lock_guard<DescriptorGate> lock(gate);if(privateWrites||!device)return;
         std::uint64_t a=0,b=0;
