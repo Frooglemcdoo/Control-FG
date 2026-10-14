@@ -39,12 +39,20 @@ int main(){
     D3D12_UNORDERED_ACCESS_VIEW_DESC imageView{};imageView.Format=image.Format;imageView.ViewDimension=D3D12_UAV_DIMENSION_TEXTURE2D;
     device->CreateUnorderedAccessView(imageResource.Get(),nullptr,&imageView,source(3));
     bank.UnorderedAccess(imageResource.Get(),nullptr,&imageView,source(3));
+    bool rejectedForward=false;
+    assert(!bank.TryParallelCopy(destination(prefix+42),source(3),[&]{rejectedForward=true;}));
+    assert(!rejectedForward); // Current typed metadata must still use exclusive observation.
     assert(interest.Contains(source(3).ptr));
     // Typed metadata copied outside the mirrored suffix must propagate interest.
     bank.Copy(1,destination(7),source(3));assert(interest.Contains(destination(7).ptr));
     bank.Copy({{destination(8),1}},{{source(3),1}});assert(interest.Contains(destination(8).ptr));
     device->CopyDescriptorsSimple(1,destination(prefix+42),source(3),D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
     bank.Copy(1,destination(prefix+42),source(3));PTTableMirror::Bank::Snapshot typed;
+    assert(bank.Read(native.Get(),prefix,1ull<<42,typed)&&bank.TypedLoadSupported(typed,42));
+    assert(bank.TryParallelCopy(destination(prefix+42),source(3),[&]{
+        device->CopyDescriptorsSimple(1,destination(prefix+42),source(3),D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+    }));
+    assert(!bank.Unchanged(typed));
     assert(bank.Read(native.Get(),prefix,1ull<<42,typed)&&bank.TypedLoadSupported(typed,42));
     bank.Copy({{destination(prefix+43),1},{destination(prefix+44),1}},{{source(3),1},{source(3),1}});
     PTTableMirror::Bank::Snapshot bulkTyped;
@@ -63,6 +71,10 @@ int main(){
     auto readback=Buffer(device.Get(),8,D3D12_HEAP_TYPE_READBACK,D3D12_RESOURCE_STATE_COPY_DEST);
     D3D12_SHADER_RESOURCE_VIEW_DESC srv{};srv.ViewDimension=D3D12_SRV_DIMENSION_BUFFER;srv.Shader4ComponentMapping=D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;srv.Buffer.NumElements=1;srv.Buffer.StructureByteStride=4;
     device->CreateShaderResourceView(a.Get(),&srv,source(0));device->CreateShaderResourceView(a.Get(),&srv,source(2));
+    assert(PTDescriptorInterest::filter.Contains(destination(prefix+42).ptr));
+    assert(bank.TryParallelCopy(destination(prefix+42),source(0),[&]{
+        device->CopyDescriptorsSimple(1,destination(prefix+42),source(0),hd.Type);
+    })); // The earlier UAV was erased; its historical tag must not serialize this copy.
     // Ordinary fixed-table SRVs must take the parallel path, unlike R42's
     // ineffective untracked-only bypass. Adjacent slots used to share a bit
     // in vector<bool>; concurrent writes now have separate byte storage.
@@ -114,9 +126,12 @@ int main(){
     puts("PASS: 4145 fragmented sources clipped to 49 mirrored descriptors in one batch; typed-UAV metadata invalidation");
     const auto copyOne=[&]{device->CopyDescriptorsSimple(1,destination(prefix+5),source(0),hd.Type);bank.Copy(1,destination(prefix+5),source(0));};
     copyOne();PTTableMirror::Bank::Snapshot stable;assert(bank.Read(native.Get(),prefix,mask,stable));
-    bool wronglyForwarded=false;
-    assert(!bank.TryParallelCopy(destination(prefix+5),source(0),[&]{wronglyForwarded=true;}));
-    assert(!wronglyForwarded); // Known cached source takes the original transaction exactly once.
+    unsigned cachedForwarded=0;
+    assert(bank.TryParallelCopy(destination(prefix+6),source(0),[&]{
+        ++cachedForwarded;device->CopyDescriptorsSimple(1,destination(prefix+6),source(0),hd.Type);
+    }));
+    assert(cachedForwarded==1); // Reading a cached source does not invalidate its token.
+    puts("PASS: cached sources, erased UAV history and equal typed formats remain parallel; new typed metadata falls back without forwarding");
     assert(interest.Contains(source(0).ptr)); // Cached source-token invalidation must never be skipped.
     assert(interest.NeedsSimpleCopy(source(0).ptr,source(2).ptr));
     const auto beforeRepeat=bank.Statistics();
@@ -151,6 +166,8 @@ int main(){
         device->CopyDescriptorsSimple(1,destination(prefix+98+5),rewritten.At(5),hd.Type);
     }
     PTTableMirror::Bank::Snapshot excluded;assert(!bank.Read(native.Get(),prefix+49,mask,excluded));
+    PTDescriptorInterest::MarkAcceleration(source(2).ptr);bool asForwarded=false;
+    assert(!bank.TryParallelCopy(destination(prefix+6),source(2),[&]{asForwarded=true;}));assert(!asForwarded);
     bank.Invalidate();assert(!bank.Refresh(refreshed));assert(!bank.Unchanged(newSnapshot));assert(!bank.Read(native.Get(),prefix,mask,excluded));
     const char code[]="cbuffer C:register(b4){uint addend,index;};StructuredBuffer<uint> Input:register(t0);RWStructuredBuffer<uint> Output:register(u0);[numthreads(1,1,1)]void main(){Output[index]=Input[0]+addend;}";
     ComPtr<ID3DBlob> shader,error,signature;assert(SUCCEEDED(D3DCompile(code,sizeof(code)-1,nullptr,nullptr,nullptr,"main","cs_5_1",D3DCOMPILE_ENABLE_STRICTNESS,0,&shader,&error)));

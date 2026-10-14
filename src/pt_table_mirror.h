@@ -117,7 +117,7 @@ public:
     template<class Forward>
     bool TryParallelCopy(D3D12_CPU_DESCRIPTOR_HANDLE destination,D3D12_CPU_DESCRIPTOR_HANDLE source,Forward&& forward){
         if(privateWrites||!destination.ptr||!source.ptr||
-           PTDescriptorInterest::filter.Contains(destination.ptr)||PTDescriptorInterest::filter.Contains(source.ptr))return false;
+           PTDescriptorInterest::acceleration.Contains(destination.ptr)||PTDescriptorInterest::acceleration.Contains(source.ptr))return false;
         Heap* target=nullptr;UINT index=0;
         const auto count=publishedCount.load(std::memory_order_acquire);
         for(unsigned n=0;n<count;++n){auto* h=published[n].load(std::memory_order_relaxed);
@@ -126,9 +126,16 @@ public:
         if(!target)return false;
         PTHotpathTiming::Sample phase(PTHotpathTiming::Kind::descriptor_parallel_wait);
         std::shared_lock<DescriptorGate> transaction(gate);
-        // Recheck after acquisition: a metadata transaction may have completed
-        // between the initial rejection filter and acquiring shared ownership.
-        if(PTDescriptorInterest::filter.Contains(destination.ptr)||PTDescriptorInterest::filter.Contains(source.ptr))return false;
+        // Inspect CURRENT metadata under shared ownership. Historical UAV tags
+        // and a cached token for the SOURCE do not require any metadata write.
+        // A token at the DESTINATION must be revoked by the exclusive path.
+        if(PTDescriptorInterest::acceleration.Contains(destination.ptr)||PTDescriptorInterest::acceleration.Contains(source.ptr)||
+           sourceTokens.find(destination.ptr)!=sourceTokens.end())return false;
+        const auto destinationFormat=uavFormats.find(destination.ptr),sourceFormat=uavFormats.find(source.ptr);
+        const bool hasDestination=destinationFormat!=uavFormats.end(),hasSource=sourceFormat!=uavFormats.end();
+        if(hasDestination!=hasSource||(hasSource&&destinationFormat->second!=sourceFormat->second))return false;
+        // Equal typed formats also require no metadata mutation. The actual
+        // resource descriptor is still copied and receives a fresh version.
         phase.Next(PTHotpathTiming::Kind::descriptor_parallel_native);
         Mute privateCopy;forward();
         phase.Next(PTHotpathTiming::Kind::descriptor_parallel_mirror);

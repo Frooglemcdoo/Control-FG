@@ -41,4 +41,8 @@ public:
     }
 };
 inline Filter filter;
+// AS identities have an independent publication path through the live owner.
+// Keep their conservative rejection separate from historical UAV/source tags.
+inline Filter acceleration;
+inline void MarkAcceleration(U64 address) noexcept {acceleration.Mark(address);filter.Mark(address);}
 }

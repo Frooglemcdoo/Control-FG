@@ -44,7 +44,7 @@ public:
         if(!as.address||!as.token||!as.bytes)return true;
         if(entries.size()>=Maximum)return Fail("descriptor_write_capacity");
         ++asWrites;
-        PTDescriptorInterest::filter.Mark(handle);
+        PTDescriptorInterest::MarkAcceleration(handle);
         entries.emplace(handle,as);return true;
     }
     bool InvalidateAll(const char* reason){std::lock_guard<std::mutex> guard(mutex);return Fail(reason);}
@@ -62,7 +62,7 @@ public:
         ++copies;const auto found=entries.find(source);
         const auto value=found==entries.end()?Acceleration{}:found->second;
         entries.erase(destination);
-        if(value.token){if(entries.size()>=Maximum)return Fail("descriptor_copy_capacity");PTDescriptorInterest::filter.Mark(destination);entries.emplace(destination,value);}
+        if(value.token){if(entries.size()>=Maximum)return Fail("descriptor_copy_capacity");PTDescriptorInterest::MarkAcceleration(destination);entries.emplace(destination,value);}
         return true;
     }
     bool Copy(const std::vector<Range>& destinations,const std::vector<Range>& sources){
@@ -88,7 +88,7 @@ public:
         for(const auto& s:snapshot){
             while(s.first-offset>=destinations[range].count){offset+=destinations[range].count;++range;}
             const auto handle=destinations[range].start+(s.first-offset)*step;
-            PTDescriptorInterest::filter.Mark(handle);entries[handle]=s.second;
+            PTDescriptorInterest::MarkAcceleration(handle);entries[handle]=s.second;
             if(entries.size()>Maximum)return Fail("descriptor_copy_capacity");
         }
         return true;
