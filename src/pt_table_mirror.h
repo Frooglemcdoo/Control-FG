@@ -66,6 +66,8 @@ class Bank {
         ++h.versions[index];h.sourceTokens[index]=0;h.seen[index]=1;
     }
     std::atomic<bool> exhausted{false};
+    bool copying=true; // Accessed only while holding gate.
+    std::uint64_t epoch=1;
     std::atomic<std::uint64_t> singleCopies{0},batchCopies{0},mirroredDescriptors{0},redundantCopies{0};
     std::array<std::atomic<Heap*>,16> published{};
     std::atomic<unsigned> publishedCount{0};
@@ -140,6 +142,13 @@ public:
         if(!target)return false;
         PTHotpathTiming::Sample phase(PTHotpathTiming::Kind::descriptor_parallel_wait);
         std::shared_lock<DescriptorGate> transaction(gate);
+        // PT-off forwards native work but does not perform the private mirror
+        // copy. The shared gate serializes this decision with mode transitions.
+        // AS descriptor copies were excluded above and keep their owner path.
+        if(!copying){
+            if(PTDescriptorInterest::acceleration.Contains(destination.ptr)||PTDescriptorInterest::acceleration.Contains(source.ptr))return false;
+            Mute privateCopy;forward();return true;
+        }
         // Inspect CURRENT metadata under shared ownership. Historical UAV tags
         // and a cached token for the SOURCE do not require any metadata write.
         // A token at the DESTINATION must be revoked by the exclusive path.
@@ -160,11 +169,21 @@ public:
         Advance(*target,index);
         return true;
     }
+    void SetCopying(bool value){
+        std::lock_guard<DescriptorGate> lock(gate);
+        if(copying==value)return;
+        copying=value;
+        if(epoch==UINT64_MAX)exhausted.store(true,std::memory_order_release);else ++epoch;
+        sourceTokens.clear();
+        // Never admit an old table after an off/on cycle. Native writes must
+        // repopulate every consumed slot; retained snapshots keep their storage.
+        for(auto& entry:heaps)std::fill(entry.second->seen.begin(),entry.second->seen.end(),0);
+    }
     void Invalidate(){std::lock_guard<DescriptorGate> lock(gate);sourceTokens.clear();uavFormats.clear();for(auto& entry:heaps)std::fill(entry.second->seen.begin(),entry.second->seen.end(),false);}
     struct Snapshot {
         ComPtr<ID3D12DescriptorHeap> native,descriptors;
         UINT first=0,step=0;
-        std::uint64_t required=0;
+        std::uint64_t required=0,epoch=0;
         std::array<std::uint64_t,49> versions{};
         D3D12_CPU_DESCRIPTOR_HANDLE At(UINT slot)const {
             if(!descriptors||slot>=49)return {};auto at=descriptors->GetCPUDescriptorHandleForHeapStart();at.ptr+=SIZE_T(slot)*step;return at;
@@ -192,6 +211,7 @@ public:
     void Copy(UINT count,D3D12_CPU_DESCRIPTOR_HANDLE destination,D3D12_CPU_DESCRIPTOR_HANDLE source){
         std::lock_guard<DescriptorGate> lock(gate);if(privateWrites||!count||!device||!source.ptr)return;
         SourceWritten(destination.ptr,count);
+        if(!copying){CopyFormats(count,destination.ptr,source.ptr);return;}
         if(count==1){
             auto h=Find(destination.ptr);
             if(h){
@@ -254,6 +274,7 @@ public:
                 PTDescriptorInterest::filter.Mark(address);uavFormats[address]=f.second;
             }
         }
+        if(!copying)return;
         // Clip destination ranges BEFORE walking source fragments. Only the
         // fixed-table suffix is mirrored. One native batch per intersected
         // heap replaces potentially thousands of tiny native copy calls.
@@ -286,11 +307,11 @@ public:
         }
     }
     void Constant(const D3D12_CONSTANT_BUFFER_VIEW_DESC* desc,D3D12_CPU_DESCRIPTOR_HANDLE destination){
-        std::lock_guard<DescriptorGate> lock(gate);if(privateWrites)return;SourceWritten(destination.ptr,1);uavFormats.erase(destination.ptr);auto h=Find(destination.ptr);if(!h)return;
+        std::lock_guard<DescriptorGate> lock(gate);if(privateWrites)return;SourceWritten(destination.ptr,1);uavFormats.erase(destination.ptr);auto h=Find(destination.ptr);if(!h||!copying)return;
         const UINT index=static_cast<UINT>((destination.ptr-h->begin)/h->step);Mute mute;device->CreateConstantBufferView(desc,At(*h,index));Mark(*h,index,1);
     }
     void ShaderResource(ID3D12Resource* resource,const D3D12_SHADER_RESOURCE_VIEW_DESC* desc,D3D12_CPU_DESCRIPTOR_HANDLE destination){
-        std::lock_guard<DescriptorGate> lock(gate);if(privateWrites)return;SourceWritten(destination.ptr,1);uavFormats.erase(destination.ptr);auto h=Find(destination.ptr);if(!h)return;
+        std::lock_guard<DescriptorGate> lock(gate);if(privateWrites)return;SourceWritten(destination.ptr,1);uavFormats.erase(destination.ptr);auto h=Find(destination.ptr);if(!h||!copying)return;
         const UINT index=static_cast<UINT>((destination.ptr-h->begin)/h->step);Mute mute;device->CreateShaderResourceView(resource,desc,At(*h,index));Mark(*h,index,1);
     }
     void UnorderedAccess(ID3D12Resource* resource,ID3D12Resource* counter,const D3D12_UNORDERED_ACCESS_VIEW_DESC* desc,D3D12_CPU_DESCRIPTOR_HANDLE destination){
@@ -303,7 +324,7 @@ public:
                 PTDescriptorInterest::filter.Mark(destination.ptr);uavFormats[destination.ptr]=desc?desc->Format:rd.Format;
             }
         }
-        auto h=Find(destination.ptr);if(!h)return;
+        auto h=Find(destination.ptr);if(!h||!copying)return;
         const UINT index=static_cast<UINT>((destination.ptr-h->begin)/h->step);Mute mute;device->CreateUnorderedAccessView(resource,counter,desc,At(*h,index));Mark(*h,index,1);
     }
     bool TypedLoadSupported(const Snapshot& snapshot,UINT slot){
@@ -319,12 +340,12 @@ public:
     }
     bool Read(ID3D12DescriptorHeap* native,UINT first,std::uint64_t required,Snapshot& output){
         output={};std::lock_guard<DescriptorGate> lock(gate);
-        if(exhausted||!device||!native||first<Prefix||!required||(required>>49))return false;
+        if(!copying||exhausted||!device||!native||first<Prefix||!required||(required>>49))return false;
         auto h=Find(native->GetCPUDescriptorHandleForHeapStart().ptr+SIZE_T(first)*step);if(!h)return false;
         ComPtr<IUnknown> identity;if(FAILED(native->QueryInterface(IID_PPV_ARGS(&identity)))||identity.Get()!=h->identity.Get())return false;
         const UINT index=first-Prefix;if(index>h->count||49>h->count-index)return false;
         for(UINT n=0;n<49;++n)if((required&(1ull<<n))&&!h->seen[index+n])return false;
-        Snapshot result;result.native=native;result.first=first;result.step=step;result.required=required;
+        Snapshot result;result.native=native;result.first=first;result.step=step;result.required=required;result.epoch=epoch;
         D3D12_DESCRIPTOR_HEAP_DESC hd{};hd.Type=D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;hd.NumDescriptors=49;Mute mute;
         if(FAILED(device->CreateDescriptorHeap(&hd,IID_PPV_ARGS(&result.descriptors))))return false;
         SourceWritten(result.At(0).ptr,49);
@@ -340,7 +361,7 @@ public:
     // clearing PT alpha alone would leave its fallback using stale inputs.
     bool Refresh(Snapshot& snapshot){
         std::lock_guard<DescriptorGate> lock(gate);
-        if(exhausted||!device||!snapshot.native||!snapshot.descriptors||snapshot.first<Prefix||snapshot.step!=step)return false;
+        if(!copying||snapshot.epoch!=epoch||exhausted||!device||!snapshot.native||!snapshot.descriptors||snapshot.first<Prefix||snapshot.step!=step)return false;
         auto h=Find(snapshot.native->GetCPUDescriptorHandleForHeapStart().ptr+SIZE_T(snapshot.first)*step);if(!h)return false;
         ComPtr<IUnknown> identity;if(FAILED(snapshot.native.As(&identity))||identity.Get()!=h->identity.Get())return false;
         const UINT index=snapshot.first-Prefix;if(index>h->count||49>h->count-index)return false;
@@ -355,7 +376,7 @@ public:
         return true;
     }
     bool Unchanged(const Snapshot& snapshot){
-        std::lock_guard<DescriptorGate> lock(gate);if(exhausted||!snapshot.native||!snapshot.descriptors||snapshot.first<Prefix)return false;
+        std::lock_guard<DescriptorGate> lock(gate);if(!copying||snapshot.epoch!=epoch||exhausted||!snapshot.native||!snapshot.descriptors||snapshot.first<Prefix)return false;
         auto h=Find(snapshot.native->GetCPUDescriptorHandleForHeapStart().ptr+SIZE_T(snapshot.first)*step);if(!h)return false;
         const UINT index=snapshot.first-Prefix;if(index>h->count||49>h->count-index)return false;
         for(UINT n=0;n<49;++n)if(snapshot.required&(1ull<<n))if(!h->seen[index+n]||h->versions[index+n]!=snapshot.versions[n])return false;

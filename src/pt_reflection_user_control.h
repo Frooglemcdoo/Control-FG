@@ -9,11 +9,15 @@ static std::atomic<unsigned int> ptReflectionUserState{1u};
 // Start from the visually confirmed glossy path; opaque PT is independent.
 static std::atomic<unsigned int> ptGlassUserMode{1u};
 
+using PTReflectionModeObserver=void(*)(bool) noexcept;
+static std::atomic<PTReflectionModeObserver> ptReflectionModeObserver{nullptr};
+
 static bool PTReflectionUserRequested() noexcept {
     return (ptReflectionUserState.load(std::memory_order_acquire)&1u)!=0u;
 }
 static void PTReflectionUserRequest(bool enabled) noexcept {
     ptReflectionUserState.store(enabled?1u:0u,std::memory_order_release);
+    if(const auto observer=ptReflectionModeObserver.load(std::memory_order_acquire))observer(enabled);
 }
 static unsigned PTReflectionUserCycleDiagnostic() noexcept {
     unsigned state=ptReflectionUserState.load(std::memory_order_acquire);

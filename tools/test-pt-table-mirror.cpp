@@ -208,6 +208,34 @@ int main(){
     ComPtr<ID3D12Fence> fence;assert(SUCCEEDED(device->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&fence))));assert(SUCCEEDED(queue->Signal(fence.Get(),1)));
     HANDLE event=CreateEventW(nullptr,FALSE,FALSE,nullptr);assert(event);assert(SUCCEEDED(fence->SetEventOnCompletion(1,event)));assert(WaitForSingleObject(event,10000)==WAIT_OBJECT_0);CloseHandle(event);
     UINT* values=nullptr;const D3D12_RANGE read{0,8};assert(SUCCEEDED(readback->Map(0,&read,reinterpret_cast<void**>(&values))));assert(values[0]==53&&values[1]==111);const D3D12_RANGE empty{};readback->Unmap(0,&empty);
+    // Pausing private mirror work must not suppress native calls or release
+    // already-submitted snapshot storage. Re-enable requires freshly written slots.
+    bank.Copy(1,destination(prefix+5),source(0));
+    PTTableMirror::Bank::Snapshot beforePauseSnapshot;
+    assert(bank.Read(native.Get(),prefix,1ull<<5,beforePauseSnapshot)&&bank.Unchanged(beforePauseSnapshot));
+    const auto beforePause=bank.Statistics();
+    bank.SetCopying(false);
+    assert(!bank.Unchanged(beforePauseSnapshot)&&!bank.Refresh(beforePauseSnapshot));
+    PTTableMirror::Bank::Snapshot resumed;
+    assert(!bank.Read(native.Get(),prefix,mask,resumed));
+    unsigned nativeCalls=0;
+    for(unsigned n=0;n<1000;++n)assert(bank.TryParallelCopy(destination(prefix+5),source(0),[&]{
+        device->CopyDescriptorsSimple(1,destination(prefix+5),source(0),hd.Type);++nativeCalls;
+    }));
+    assert(nativeCalls==1000&&bank.Statistics().single==beforePause.single);
+    bank.Copy(1,destination(prefix+5),source(0));
+    bank.Constant(&cv,destination(prefix));
+    assert(bank.Statistics().single==beforePause.single);
+    bank.SetCopying(true);
+    assert(!bank.Unchanged(newSnapshot)&&!bank.Read(native.Get(),prefix,mask,resumed));
+    // Even identical descriptors acquire fresh validity in the new epoch.
+    device->CreateConstantBufferView(&cv,destination(prefix));bank.Constant(&cv,destination(prefix));
+    device->CopyDescriptorsSimple(1,destination(prefix+5),source(0),hd.Type);bank.Copy(1,destination(prefix+5),source(0));
+    assert(!bank.Read(native.Get(),prefix,mask,resumed));
+    device->CopyDescriptorsSimple(1,destination(prefix+41),source(2),hd.Type);bank.Copy(1,destination(prefix+41),source(2));
+    assert(bank.Read(native.Get(),prefix,mask,resumed)&&bank.Unchanged(resumed));
+    assert(!bank.Unchanged(beforePauseSnapshot));
+    puts("PASS: PT-off forwards 1000 native copies with zero mirror copies; old epochs rejected and complete fresh tables required");
     assert(SUCCEEDED(device->GetDeviceRemovedReason()));
     puts("PASS: CPU-source descriptor mirroring, clipped/multi-range copies, direct views, immutable snapshots, private exclusion and WARP readback");
 }

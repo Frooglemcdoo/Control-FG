@@ -596,6 +596,13 @@ static void PipelineBound(void*,ID3D12GraphicsCommandList*,ID3D12PipelineState* 
     catch(...){Log("PT_PRIMARY_PSO_PROBE_FAILED stage=binding");}
 }
 static const PTCommandBindings::Consumer commandConsumer{&handoff,&Dispatched,nullptr,nullptr,&PipelineBound,true};
+static void MirrorModeChanged(bool) noexcept {
+    try {PTTableMirror::Scope transition(true);
+        const bool requested=PTReflectionUserRequested();
+        PTTableMirror::bank.SetCopying(requested);
+        Log("PT_PRIMARY_MIRROR_MODE copying=%u fresh_tables_required=1 geometry_retained=1",unsigned(requested));
+    }catch(...){PTSceneLive::owner.Scenes().Invalidate();}
+}
 static bool Start(){
     if(active||!device||!enabled||!PTNativeJobRuntime::workerHooksReady||!PTNativeJobRuntime::dispatchHookReady)return false;
     if(!viewProviders.Initialize(verifiedRenderer,verifiedD3d)){Log("PT_PRIMARY_PROVIDER_INIT_FAILED");return false;}
@@ -607,6 +614,8 @@ static bool Start(){
     if(FAILED(device->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&sceneUseFence))))return false;
     if(!PTSceneQueues::Start(&PTSceneLive::owner.Scenes())||!PTSceneQueues::Register(&PTSceneLive::owner.Scenes(),&queueConsumer)||
        !PTCommandBindings::Register(&commandConsumer)||!PTNativeJobRuntime::Register(&Job)||!PTSceneLive::owner.Start(step,true))return false;
-    active=true;Log("PT_PRIMARY_SESSION_READY build=M12R50 ready=1 hits=4 spp=1 roulette_start=3 material=opaque_general geometric_normals=1 native_fallback=1 primary_lighting=native diffuse_bounces=pt_indirect readiness=per_material graphics_tracking=0");return true;
+    ptReflectionModeObserver.store(&MirrorModeChanged,std::memory_order_release);
+    MirrorModeChanged(PTReflectionUserRequested());
+    active=true;Log("PT_PRIMARY_SESSION_READY build=M12R51 ready=1 hits=4 spp=1 roulette_start=3 material=opaque_general geometric_normals=1 native_fallback=1 primary_lighting=native diffuse_bounces=pt_indirect readiness=per_material graphics_tracking=0");return true;
 }
 }
