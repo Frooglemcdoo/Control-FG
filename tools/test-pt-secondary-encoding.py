@@ -10,6 +10,15 @@ locked={
 }
 for name,expected in locked.items():
  source=(root/name).read_text()
+ if name=='src/fg_overlay.h':
+  assert source.count('const bool ptAvailable = PTStartupCaptureEnabled();\n    const bool ptEnabled = ptAvailable && PTReflectionUserRequested();')==1
+  source=source.replace('const bool ptAvailable = PTStartupCaptureEnabled();\n    const bool ptEnabled = ptAvailable && PTReflectionUserRequested();','const bool ptEnabled = PTReflectionUserRequested();')
+  assert source.count('PaintFGButton(dc, ptToggle, !ptAvailable ? L"RT ONLY (RESTART)" :\n        (ptEnabled ? L"PT REFLECTIONS ON" : L"PT REFLECTIONS OFF"), ptEnabled, ptAvailable);')==1
+  source=source.replace('PaintFGButton(dc, ptToggle, !ptAvailable ? L"RT ONLY (RESTART)" :\n        (ptEnabled ? L"PT REFLECTIONS ON" : L"PT REFLECTIONS OFF"), ptEnabled, ptAvailable);','PaintFGButton(dc, ptToggle, ptEnabled ? L"PT REFLECTIONS ON" : L"PT REFLECTIONS OFF", ptEnabled, true);')
+  assert source.count('if(PTStartupCaptureEnabled()&&PTReflectionUserRequested()){')==1
+  source=source.replace('if(PTStartupCaptureEnabled()&&PTReflectionUserRequested()){','if(PTReflectionUserRequested()){')
+  assert source.count('if(FGOverlayPTToggleFromPoint(x,y)){\n            if(!PTStartupCaptureEnabled())return 0;')==1
+  source=source.replace('if(FGOverlayPTToggleFromPoint(x,y)){\n            if(!PTStartupCaptureEnabled())return 0;','if(FGOverlayPTToggleFromPoint(x,y)){')
  # Glass capture adds observation only. Remove those explicit additions, then require
  # the entire remaining runtime to match the confirmed S1 source hashes.
  if name=='src/probe.cpp':
@@ -39,8 +48,8 @@ for name,expected in locked.items():
  # R37 adds a restart-only baseline gate. Verify its exact additions, then
  # retain the original S1 hashes for all enabled-mode runtime code.
  if name=='src/probe.cpp':
-  startup='// Read once before any PT installation, including early device creation.\n// This is a restart-only diagnostic; never tear down in-flight PT ownership.\nstatic bool PTStartupCaptureEnabled() {\n    static const bool enabled=[](){\n        const DWORD error=GetLastError();auto path=ModulePath(selfModule);\n        const auto slash=path.find_last_of(L"\\\\/");\n        if(slash==std::wstring::npos){SetLastError(error);return true;}\n        path.resize(slash+1);path+=L"ControlFG-PT-Capture-Off.txt";\n        const DWORD attributes=GetFileAttributesW(path.c_str());\n        const bool disabled=attributes!=INVALID_FILE_ATTRIBUTES&&!(attributes&FILE_ATTRIBUTE_DIRECTORY);\n        SetLastError(error);return !disabled;\n    }();\n    return enabled;\n}\n\n'
-  setup='        const bool ptCaptureEnabled=PTStartupCaptureEnabled();\n        Log("PT_PRIMARY_STARTUP build=M12R46 capture=%u restart_only=1 rr_fg_available=1",unsigned(ptCaptureEnabled));\n        const unsigned int rrObserverHooks = ptCaptureEnabled?InstallRRObservationHooks(renderer,d3d):0;'
+  startup='// Read once before any PT installation, including early device creation.\n// RT-only is the default. Mode changes require a process restart; ownership is\n// never torn down while recorded or submitted command lists can reference it.\nstatic bool PTStartupCaptureEnabled() {\n    static const bool enabled=[](){\n        const DWORD error=GetLastError();auto path=ModulePath(selfModule);\n        const auto slash=path.find_last_of(L"\\\\/");\n        if(slash==std::wstring::npos){SetLastError(error);return false;}\n        path.resize(slash+1);\n        const DWORD off=GetFileAttributesW((path+L"ControlFG-PT-Capture-Off.txt").c_str());\n        const DWORD on=GetFileAttributesW((path+L"ControlFG-PT-Enabled.txt").c_str());\n        const bool disabled=off!=INVALID_FILE_ATTRIBUTES&&!(off&FILE_ATTRIBUTE_DIRECTORY);\n        const bool optedIn=on!=INVALID_FILE_ATTRIBUTES&&!(on&FILE_ATTRIBUTE_DIRECTORY);\n        SetLastError(error);return optedIn&&!disabled;\n    }();\n    return enabled;\n}\n\n'
+  setup='        const bool ptCaptureEnabled=PTStartupCaptureEnabled();\n        Log("PT_PRIMARY_STARTUP build=M12R47 capture=%u restart_only=1 rr_fg_available=1",unsigned(ptCaptureEnabled));\n        const unsigned int rrObserverHooks = ptCaptureEnabled?InstallRRObservationHooks(renderer,d3d):0;'
   assert source.count(startup)==1 and source.count(setup)==1
   source=source.replace(startup,'').replace(setup,'        const unsigned int rrObserverHooks = InstallRRObservationHooks(renderer,d3d);')
  if name=='src/pt_reflection_loader.h':

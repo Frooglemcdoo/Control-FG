@@ -98,16 +98,19 @@ static std::wstring ModulePath(HMODULE module) {
 }
 
 // Read once before any PT installation, including early device creation.
-// This is a restart-only diagnostic; never tear down in-flight PT ownership.
+// RT-only is the default. Mode changes require a process restart; ownership is
+// never torn down while recorded or submitted command lists can reference it.
 static bool PTStartupCaptureEnabled() {
     static const bool enabled=[](){
         const DWORD error=GetLastError();auto path=ModulePath(selfModule);
         const auto slash=path.find_last_of(L"\\/");
-        if(slash==std::wstring::npos){SetLastError(error);return true;}
-        path.resize(slash+1);path+=L"ControlFG-PT-Capture-Off.txt";
-        const DWORD attributes=GetFileAttributesW(path.c_str());
-        const bool disabled=attributes!=INVALID_FILE_ATTRIBUTES&&!(attributes&FILE_ATTRIBUTE_DIRECTORY);
-        SetLastError(error);return !disabled;
+        if(slash==std::wstring::npos){SetLastError(error);return false;}
+        path.resize(slash+1);
+        const DWORD off=GetFileAttributesW((path+L"ControlFG-PT-Capture-Off.txt").c_str());
+        const DWORD on=GetFileAttributesW((path+L"ControlFG-PT-Enabled.txt").c_str());
+        const bool disabled=off!=INVALID_FILE_ATTRIBUTES&&!(off&FILE_ATTRIBUTE_DIRECTORY);
+        const bool optedIn=on!=INVALID_FILE_ATTRIBUTES&&!(on&FILE_ATTRIBUTE_DIRECTORY);
+        SetLastError(error);return optedIn&&!disabled;
     }();
     return enabled;
 }
@@ -1453,7 +1456,7 @@ static BOOL CALLBACK Configure(PINIT_ONCE, PVOID, PVOID*) noexcept {
         Log("HOOK_INSTALLED label=CONTROL_COMMAND_QUEUE_CTOR");
         const bool guideInputsReady = RRGuideInitializeInputs(d3d);
         const bool ptCaptureEnabled=PTStartupCaptureEnabled();
-        Log("PT_PRIMARY_STARTUP build=M12R46 capture=%u restart_only=1 rr_fg_available=1",unsigned(ptCaptureEnabled));
+        Log("PT_PRIMARY_STARTUP build=M12R47 capture=%u restart_only=1 rr_fg_available=1",unsigned(ptCaptureEnabled));
         const unsigned int rrObserverHooks = ptCaptureEnabled?InstallRRObservationHooks(renderer,d3d):0;
         Log("PT_REFLECTION_P0_OBSERVER ready=%u expected=5 scope=reflection_dispatch_identification gpu_work=unchanged allocations=0",rrObserverHooks);
         const bool ptReflectionLookupReady=PTReflectionInstallShaderLookupHooks(renderer,d3d);

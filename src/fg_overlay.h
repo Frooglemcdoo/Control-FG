@@ -865,10 +865,12 @@ static void PaintFGOverlay(HWND hwnd) noexcept {
     SelectObject(dc, sectionFont); SetTextColor(dc, RGB(210, 32, 32));
     RECT ptTitle{30, 752 + lowerSectionOffset, 710, 780 + lowerSectionOffset};
     DrawTextW(dc, L"PT REFLECTIONS", -1, &ptTitle, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
-    const bool ptEnabled = PTReflectionUserRequested();
+    const bool ptAvailable = PTStartupCaptureEnabled();
+    const bool ptEnabled = ptAvailable && PTReflectionUserRequested();
     const RECT ptToggle{30, 794 + lowerSectionOffset, 280, 846 + lowerSectionOffset};
     SelectObject(dc, ptEnabled ? buttonSelectedFont : buttonFont);
-    PaintFGButton(dc, ptToggle, ptEnabled ? L"PT REFLECTIONS ON" : L"PT REFLECTIONS OFF", ptEnabled, true);
+    PaintFGButton(dc, ptToggle, !ptAvailable ? L"RT ONLY (RESTART)" :
+        (ptEnabled ? L"PT REFLECTIONS ON" : L"PT REFLECTIONS OFF"), ptEnabled, ptAvailable);
     SelectObject(dc, smallFont); SetTextColor(dc, RGB(169, 169, 169));
     RECT ptDescription{304, 794 + lowerSectionOffset, 710, 846 + lowerSectionOffset};
     const unsigned glassMode=ptGlassUserMode.load(std::memory_order_acquire);
@@ -1050,7 +1052,7 @@ static LRESULT CALLBACK FGOverlayWndProc(HWND hwnd, UINT message, WPARAM wParam,
         }
         const int glassToggleY=794+FGOverlayLowerSectionOffset();
         if(x>=304&&x<710&&y>=glassToggleY&&y<glassToggleY+52){
-            if(PTReflectionUserRequested()){
+            if(PTStartupCaptureEnabled()&&PTReflectionUserRequested()){
                 const unsigned mode=(ptGlassUserMode.load(std::memory_order_acquire)+1u)%2u;
                 ptGlassUserMode.store(mode,std::memory_order_release);
                 Log("PT_GLASS_UI_MODE mode=%u label=%s opaque_pt_unchanged=1",mode,
@@ -1059,6 +1061,7 @@ static LRESULT CALLBACK FGOverlayWndProc(HWND hwnd, UINT message, WPARAM wParam,
             InvalidateRect(hwnd,nullptr,FALSE);return 0;
         }
         if(FGOverlayPTToggleFromPoint(x,y)){
+            if(!PTStartupCaptureEnabled())return 0;
             const bool previous=PTReflectionUserRequested();
             PTReflectionUserRequest(!previous);
             FGOverlayMarkSettingsDirty();
