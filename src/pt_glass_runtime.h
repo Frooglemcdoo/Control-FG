@@ -142,7 +142,15 @@ static PTGlass::LightingTableShadow* ActiveShadow() {
     return holder.get();
 }
 static void STDMETHODCALLTYPE CopyHook(ID3D12Device* d,UINT count,D3D12_CPU_DESCRIPTOR_HANDLE dst,D3D12_CPU_DESCRIPTOR_HANDLE src,D3D12_DESCRIPTOR_HEAP_TYPE type){
-    PTTableMirror::Scope tableScope(PTSceneLive::owner.Active()&&type==D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,true);
+    // Valid native descriptor copies already synchronize conflicting source/
+    // destination access. Before the native call, reject only pairs that have
+    // never held tracked metadata and cannot write a mirrored table. Relevant
+    // copies keep the original native+observer transaction and lock ordering.
+    const bool observe=PTSceneLive::owner.Active()&&!PTTableMirror::privateWrites&&type==D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+    const bool track=observe&&
+        (count!=1||PTDescriptorInterest::filter.NeedsSimpleCopy(dst.ptr,src.ptr));
+    PTHotpathTiming::Sample untracked(PTHotpathTiming::Kind::descriptor_untracked,observe&&!track);
+    PTTableMirror::Scope tableScope(track,true);
     {PTTableMirror::Mute forwarding;copySimple(d,count,dst,src,type);}
     tableScope.Observing();
     if(PTTableMirror::privateWrites)return;

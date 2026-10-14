@@ -9,12 +9,12 @@ namespace PTHotpathTiming {
 enum class Kind : unsigned {bindings,descriptors,descriptor_wait,descriptor_native,descriptor_observer,
     snapshot_wait,snapshot_work,build_wait,build_inputs,geometry_snapshot,build_record,
     reset_lookup,reset_wait,reset_native,reset_observer,primary_queue_wait,primary_guard_wait,
-    primary_setup,primary_lease,primary_sbt,primary_camera,primary_metrics,primary_record,glass_capture,count};
+    primary_setup,primary_lease,primary_sbt,primary_camera,primary_metrics,primary_record,glass_capture,descriptor_untracked,count};
 inline const char* Name(unsigned kind){
     static const char* names[]={"bindings","descriptors","descriptor_wait","descriptor_native","descriptor_observer",
         "snapshot_wait","snapshot_work","build_wait","build_inputs","geometry_snapshot","build_record",
         "reset_lookup","reset_wait","reset_native","reset_observer","primary_queue_wait","primary_guard_wait",
-        "primary_setup","primary_lease","primary_sbt","primary_camera","primary_metrics","primary_record","glass_capture"};
+        "primary_setup","primary_lease","primary_sbt","primary_camera","primary_metrics","primary_record","glass_capture","descriptor_untracked"};
     static_assert(sizeof(names)/sizeof(names[0])==static_cast<unsigned>(Kind::count),"timing names");
     return names[kind];
 }

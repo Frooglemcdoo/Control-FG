@@ -9,6 +9,7 @@
 #include <array>
 #include <algorithm>
 #include "pt_hotpath_timing.h"
+#include "pt_descriptor_interest.h"
 // Native descriptors cannot be copied out of a shader-visible heap. Mirror their
 // CPU-source writes as they happen; snapshots copy only from this CPU-only heap.
 // This preserves descriptor VALUES, not resource ownership or image contents.
@@ -60,7 +61,7 @@ class Bank {
         // fresh monotonically increasing tokens, never recycled generations.
         if(nextSourceToken==UINT64_MAX)return 0;
         if(sourceTokens.size()>=65536)sourceTokens.clear();
-        const auto token=nextSourceToken++;sourceTokens.emplace(address,token);return token;
+        const auto token=nextSourceToken++;PTDescriptorInterest::filter.Mark(address);sourceTokens.emplace(address,token);return token;
     }
     std::map<SIZE_T,DXGI_FORMAT> uavFormats;
     std::map<DXGI_FORMAT,bool> readableFormats;
@@ -71,7 +72,7 @@ class Bank {
             copied.emplace_back(destination+(it->first-source),it->second);
         auto first=uavFormats.lower_bound(destination),last=uavFormats.lower_bound(destination+bytes);uavFormats.erase(first,last);
         if(uavFormats.size()+copied.size()>65536){uavFormats.clear();return;}
-        for(const auto& entry:copied)uavFormats.insert(entry);
+        for(const auto& entry:copied){PTDescriptorInterest::filter.Mark(entry.first);uavFormats.insert(entry);}
     }
     std::shared_ptr<Heap> Find(SIZE_T address){
         auto it=heaps.upper_bound(address);if(it==heaps.begin())return {};--it;auto h=it->second;
@@ -123,7 +124,9 @@ public:
         if(FAILED(native->QueryInterface(IID_PPV_ARGS(&h->identity))))return false;
         D3D12_DESCRIPTOR_HEAP_DESC hd{};hd.Type=desc.Type;hd.NumDescriptors=h->count;Mute mute;
         if(FAILED(d->CreateDescriptorHeap(&hd,IID_PPV_ARGS(&h->shadow))))return false;
-        h->seen.resize(h->count,false);h->versions.resize(h->count,0);h->sourceTokens.resize(h->count,0);slots+=h->count;heaps.emplace(base,std::move(h));return true;
+        h->seen.resize(h->count,false);h->versions.resize(h->count,0);h->sourceTokens.resize(h->count,0);slots+=h->count;
+        PTDescriptorInterest::filter.IncludeMirror(base,base+SIZE_T(h->count)*step);
+        heaps.emplace(base,std::move(h));return true;
     }
     void Copy(UINT count,D3D12_CPU_DESCRIPTOR_HANDLE destination,D3D12_CPU_DESCRIPTOR_HANDLE source){
         std::lock_guard<std::recursive_mutex> lock(gate);if(privateWrites||!count||!device||!source.ptr)return;
@@ -183,7 +186,7 @@ public:
                 if(di==destinations.size()){uavFormats.clear();break;}
                 const auto address=destinations[di].first.ptr+SIZE_T(f.first-offset)*step;
                 if(uavFormats.size()>=65536&&!uavFormats.count(address)){uavFormats.clear();break;}
-                uavFormats[address]=f.second;
+                PTDescriptorInterest::filter.Mark(address);uavFormats[address]=f.second;
             }
         }
         // Clip destination ranges BEFORE walking source fragments. Only the
@@ -232,7 +235,7 @@ public:
             if(rd.Dimension==D3D12_RESOURCE_DIMENSION_TEXTURE2D&&rd.DepthOrArraySize==1&&
                (!desc||desc->ViewDimension==D3D12_UAV_DIMENSION_TEXTURE2D)){
                 if(uavFormats.size()>=65536)uavFormats.clear();
-                uavFormats[destination.ptr]=desc?desc->Format:rd.Format;
+                PTDescriptorInterest::filter.Mark(destination.ptr);uavFormats[destination.ptr]=desc?desc->Format:rd.Format;
             }
         }
         auto h=Find(destination.ptr);if(!h)return;

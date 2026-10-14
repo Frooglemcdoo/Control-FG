@@ -26,6 +26,9 @@ int main(){
     const auto destination=[&](UINT n){auto h=native->GetCPUDescriptorHandleForHeapStart();h.ptr+=SIZE_T(n)*step;return h;};
     const auto gpu=[&](UINT n){auto h=native->GetGPUDescriptorHandleForHeapStart();h.ptr+=UINT64(n)*step;return h;};
     PTTableMirror::Bank bank;assert(bank.HeapCreated(device.Get(),native.Get()));assert(!bank.HeapCreated(device.Get(),native.Get()));
+    auto& interest=PTDescriptorInterest::filter;
+    assert(interest.NeedsSimpleCopy(destination(prefix).ptr,source(0).ptr));
+    assert(interest.NeedsSimpleCopy(destination(prefix+146).ptr,source(0).ptr));
     PTTableMirror::Bank::Snapshot oldSnapshot,newSnapshot,refreshed;assert(!bank.Read(native.Get(),prefix,mask,oldSnapshot));
     // Track the exact typed UAV format through CPU-source and native copies.
     D3D12_RESOURCE_DESC image{};image.Dimension=D3D12_RESOURCE_DIMENSION_TEXTURE2D;image.Width=8;image.Height=1;
@@ -35,6 +38,10 @@ int main(){
     D3D12_UNORDERED_ACCESS_VIEW_DESC imageView{};imageView.Format=image.Format;imageView.ViewDimension=D3D12_UAV_DIMENSION_TEXTURE2D;
     device->CreateUnorderedAccessView(imageResource.Get(),nullptr,&imageView,source(3));
     bank.UnorderedAccess(imageResource.Get(),nullptr,&imageView,source(3));
+    assert(interest.Contains(source(3).ptr));
+    // Typed metadata copied outside the mirrored suffix must propagate interest.
+    bank.Copy(1,destination(7),source(3));assert(interest.Contains(destination(7).ptr));
+    bank.Copy({{destination(8),1}},{{source(3),1}});assert(interest.Contains(destination(8).ptr));
     device->CopyDescriptorsSimple(1,destination(prefix+42),source(3),D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
     bank.Copy(1,destination(prefix+42),source(3));PTTableMirror::Bank::Snapshot typed;
     assert(bank.Read(native.Get(),prefix,1ull<<42,typed)&&bank.TypedLoadSupported(typed,42));
@@ -85,6 +92,8 @@ int main(){
     puts("PASS: 4145 fragmented sources clipped to 49 mirrored descriptors in one batch; typed-UAV metadata invalidation");
     const auto copyOne=[&]{device->CopyDescriptorsSimple(1,destination(prefix+5),source(0),hd.Type);bank.Copy(1,destination(prefix+5),source(0));};
     copyOne();PTTableMirror::Bank::Snapshot stable;assert(bank.Read(native.Get(),prefix,mask,stable));
+    assert(interest.Contains(source(0).ptr)); // Cached source-token invalidation must never be skipped.
+    assert(interest.NeedsSimpleCopy(source(0).ptr,source(2).ptr));
     const auto beforeRepeat=bank.Statistics();
     for(UINT n=0;n<1024;++n)copyOne();
     const auto afterRepeat=bank.Statistics();
