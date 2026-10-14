@@ -439,7 +439,7 @@ static void TestRetirementTimelines(ID3D12Device* device){
     assert(SUCCEEDED(device->CreateCommandQueue(&desc,IID_PPV_ARGS(&a))));
     assert(SUCCEEDED(device->CreateCommandQueue(&desc,IID_PPV_ARGS(&b))));
     ComPtr<ID3D12Fence> ga,gb,da,db;
-    for(auto* f:{&ga,&gb,&da,&db})assert(SUCCEEDED(device->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(f->ReleaseAndGetAddressOf()))));
+    for(auto* f:{std::addressof(ga),std::addressof(gb),std::addressof(da),std::addressof(db)})assert(SUCCEEDED(device->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(f->ReleaseAndGetAddressOf()))));
     auto wait=[](ID3D12Fence* f,UINT64 value){
         HANDLE e=CreateEventW(nullptr,FALSE,FALSE,nullptr);assert(e);
         assert(SUCCEEDED(f->SetEventOnCompletion(value,e)));
