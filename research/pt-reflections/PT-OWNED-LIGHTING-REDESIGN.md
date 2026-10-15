@@ -1,11 +1,10 @@
 # PT-owned lighting redesign — implementation checkpoint
 
-Status: R69 recovery disables the R67/R68 surface replacement in the shipped
-host and restores the R66 native-light-buffer plus PT-indirect contract.
-The surface implementation remains development-only. All-material/all-light
-replacement, stable reconstruction, native-pass removal and the performance
-redesign remain incomplete. Historical R67/R68 details below describe those
-builds, not the active R69 route.
+Status: R70 replacement redesign in Windows validation. R69 remains the recovery
+option. R70 removes per-draw surface tables, adds explicit reconstruction, and
+separates primary ownership from secondary-path validity. Native-pass removal,
+all-material/all-light coverage and the CPU/queue performance redesign remain
+incomplete. The sections below preserve earlier evidence and decisions.
 
 ## Verified cause of the lighting limitation
 
@@ -165,3 +164,35 @@ Before surface replacement is packaged again:
   binding design that handles native heap rotation and recording concurrency.
 - Validate coverage/order across the full material set before native-pass
   suppression. Do not remove fallback producers while consumers still need them.
+
+## R70 implementation
+
+The graphics companion appends a raw root SRV (t0,space2) and two extent constants
+(b0,space2). Original native arguments are replayed after each root switch.
+Bytecode checks unsigned x/y bounds before reading 32-byte filtered pixels. No
+native surface descriptor allocation or per-draw copy remains. Each frame owns
+raw 16-byte samples and filtered 32-byte radiance/normal/material/depth/count.
+The output pool is keyed by queue, dimensions, representation and stride; both
+raw and filtered lifetimes are fenced. A 2 GiB resident cap remains explicit.
+
+The reconstruction shader reads the current authenticated GBuffer descriptors
+from a private three-entry heap. It spatially filters same-material, coplanar,
+normal-compatible neighbors, then reprojects using authenticated transforms and
+an explicit inverse of previous ClipToView. Depth/material/normal disagreement,
+resolution changes, nonconsecutive frames and large camera discontinuities
+reject history. It uses bounded history and local color-range clipping. Native
+object-motion vectors are not yet used; this is a material limitation for moving
+objects, especially smooth specular. Graphics AND compute arguments are restored
+because heap changes invalidate both pipelines' tables.
+
+Primary-valid is set before direct/continuation sampling. Valid primary pixels
+retain their accumulated finite estimate when unsupported secondary materials
+terminate a path. Those are absorbing boundaries, not correct special-BRDF
+transport; this can lose energy. Primary-unsupported pixels keep native fallback.
+No native producer was suppressed; no CPU performance claim follows from this.
+
+Validation includes compiler-generated DXBC patched through the same machinery,
+200 WARP draws, crop/bounds checks, native restoration, spatial checker-noise
+reduction, temporal accumulation, material/depth history rejection and admission
+0/2 handling. Existing output replay and late-admission tests remain. Windows
+validation cannot prove real-game hook coverage, appearance or GPU performance.

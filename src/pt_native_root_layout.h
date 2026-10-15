@@ -4,6 +4,7 @@
 #include <memory>
 #include <mutex>
 #include <map>
+#include <vector>
 // Exact layouts reconstructed from the reviewed native root signatures (PIX
 // objects 33 and 4877). A shader hash alone does not prove root parameter order.
 namespace PTNativeRoot {
@@ -57,7 +58,9 @@ class Layout {
     Microsoft::WRL::ComPtr<ID3D12RootSignature> root;
     Microsoft::WRL::ComPtr<IUnknown> identity;
     Kind kind=Kind::unknown;
+    std::vector<unsigned char> serialized;
 public:
+    const std::vector<unsigned char>& Serialized()const noexcept{return serialized;}
     Kind Type()const noexcept{return kind;}
     ID3D12RootSignature* Root()const noexcept{return root.Get();}
     bool Matches(ID3D12RootSignature* candidate)const {
@@ -80,6 +83,7 @@ public:
         if(!d||d->Version!=D3D_ROOT_SIGNATURE_VERSION_1_0)return false;
         const auto kind=Classify(d->Desc_1_0);if(kind==Kind::unknown)return false;
         auto layout=std::make_shared<Layout>();layout->kind=kind;
+        const auto* raw=static_cast<const unsigned char*>(blob);layout->serialized.assign(raw,raw+bytes);
         if(FAILED(created->QueryInterface(IID_PPV_ARGS(&layout->root)))||FAILED(created->QueryInterface(IID_PPV_ARGS(&layout->identity))))return false;
         std::lock_guard<std::mutex> guard(mutex);if(entries.size()>=64)return false;
         auto* key=layout->identity.Get();return entries.emplace(key,std::move(layout)).second;

@@ -140,9 +140,17 @@ void PTPrimaryPathRayGeneration(){
     // includes primary direct and both continuation lobes, and writes complete
     // material-weighted surface radiance. Primary emission stays in the native
     // material compositor in BOTH variants; secondary emission is integrated.
+#ifdef PT_PRIMARY_SURFACE_REPLACEMENT
+    // Primary ownership is decided before sampling continuations. An unsupported
+    // secondary BRDF terminates this estimate at its last finite contribution;
+    // it must not select a different primary lighting model on this frame.
+    if(result.primaryValid!=0&&all(isfinite(result.radiance))&&all(result.radiance>=0)){
+#else
     if(result.valid!=0&&all(isfinite(result.radiance))&&all(result.radiance>=0)){
+#endif
 #ifdef PT_PRIMARY_SURFACE_REPLACEMENT
         if(admission==2||PTCommitSurface(pixel,uint2(width,height),result.radiance,admission))PTMeasure(6,pixel);
+        if(result.valid==0&&((pixel.x|pixel.y)&63)==0){uint old;PTMetrics.InterlockedAdd(36+4*min(result.fault,15u),1,old);}
 #else
         if(admission==2||PTCommitIndirect(pixel,uint2(width,height),result.radiance,admission))PTMeasure(6,pixel);
 #endif

@@ -13,6 +13,7 @@
 #include "pt_scene_dispatch.h"
 #include "pt_surface_output.h"
 #include "pt_surface_table_budget.h"
+#include "pt_surface_reconstruction.h"
 #include "pt_native_view.h"
 #include <intrin.h>
 #include "pt_view_providers.h"

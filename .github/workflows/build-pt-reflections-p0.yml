@@ -127,6 +127,14 @@ jobs:
           if errorlevel 1 exit /b 1
           build\test-pt-primary-commit.exe surface
           if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-pt-surface-root-buffer.cpp /Febuild\test-pt-surface-root-buffer.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
+          if errorlevel 1 exit /b 1
+          build\test-pt-surface-root-buffer.exe
+          if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-pt-surface-reconstruction.cpp /Febuild\test-pt-surface-reconstruction.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
+          if errorlevel 1 exit /b 1
+          build\test-pt-surface-reconstruction.exe
+          if errorlevel 1 exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-pt-primary-lights.cpp /Febuild\test-pt-primary-lights.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
           if errorlevel 1 exit /b 1
           build\test-pt-primary-lights.exe
@@ -351,6 +359,8 @@ jobs:
           # Distinct filenames prevent loading a replacement shader with the legacy host contract.
           & $dxc -T lib_6_3 -HV 2021 -O3 -WX -I src/shaders -Fo build/pt_primary_surface.dxil src/shaders/pt_primary_surface.hlsl
           if($LASTEXITCODE -ne 0){throw "Surface replacement DXC compile failed: $LASTEXITCODE"}
+          & $dxc -T cs_6_0 -E main -HV 2021 -O3 -WX -I src/shaders -Fo build/pt_surface_reconstruct.dxil src/shaders/pt_surface_reconstruct.hlsl
+          if($LASTEXITCODE -ne 0){throw "Surface reconstruction DXC compile failed: $LASTEXITCODE"}
           & $dxc -T lib_6_3 -HV 2021 -O3 -I src/shaders -Fo build/pt_glass_raygen.dxil src/shaders/pt_glass_raygen.hlsl
           if($LASTEXITCODE -ne 0){throw "Glass DXC compile failed: $LASTEXITCODE"}
           & $dxc -T lib_6_3 -HV 2021 -O3 -I src/shaders -Fo build/pt_reflection_p2.dxil src/shaders/pt_reflection_p2.hlsl
@@ -431,32 +441,32 @@ jobs:
         shell: cmd
         run: |
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
-          rem Compile the surface development route, but ship the pre-R67 lighting contract.
-          cl /nologo /std:c++17 /EHsc /W4 /O2 /MT /c /DCONTROL_PT_SURFACE_REPLACEMENT /DUNICODE /D_UNICODE /I "third_party\streamline\include" src\probe.cpp /Fobuild\probe-surface-development.obj
+          rem Compile both host contracts; ship root-buffer PT plus reconstruction.
+          cl /nologo /std:c++17 /EHsc /W4 /O2 /MT /c /DCONTROL_PT_RECOVERY_BUILD /DUNICODE /D_UNICODE /I "third_party\streamline\include" src\probe.cpp /Fobuild\probe-legacy.obj
           if errorlevel 1 exit /b 1
-          cl /nologo /std:c++17 /EHsc /W4 /O2 /MT /LD /DCONTROL_PT_RECOVERY_BUILD /Zi /Fd"build\probe.pdb" /guard:cf /DUNICODE /D_UNICODE /I "third_party\streamline\include" src\probe.cpp build\control_fg_logo.res /Fobuild\probe.obj /Febuild\dxgi.dll /link /DEF:src\dxgi.def /INCREMENTAL:NO /DEBUG:FULL /OPT:REF /OPT:ICF /PDB:"build\dxgi.pdb" /DYNAMICBASE /NXCOMPAT /GUARD:CF bcrypt.lib wintrust.lib user32.lib gdi32.lib msimg32.lib d3d12.lib
+          cl /nologo /std:c++17 /EHsc /W4 /O2 /MT /LD /DCONTROL_PT_SURFACE_REPLACEMENT /Zi /Fd"build\probe.pdb" /guard:cf /DUNICODE /D_UNICODE /I "third_party\streamline\include" src\probe.cpp build\control_fg_logo.res /Fobuild\probe.obj /Febuild\dxgi.dll /link /DEF:src\dxgi.def /INCREMENTAL:NO /DEBUG:FULL /OPT:REF /OPT:ICF /PDB:"build\dxgi.pdb" /DYNAMICBASE /NXCOMPAT /GUARD:CF bcrypt.lib wintrust.lib user32.lib gdi32.lib msimg32.lib d3d12.lib
           if errorlevel 1 exit /b 1
           dumpbin /exports build\dxgi.dll > build\exports.txt
           dumpbin /imports build\dxgi.dll > build\imports.txt
 
-      - name: Package primary PT recovery M12R69
+      - name: Package reconstructed primary PT M12R70
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-PT-Primary-M12R69'
+          $out='Control-FG-PT-Primary-M12R70'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
           Copy-Item build/dxgi.pdb "$out/dxgi.pdb"
           Copy-Item tools/PT-Profile.cmd,tools/PT-Profile.ps1 $out
           Copy-Item tools/PT-Capture-Baseline.cmd,tools/PT-Capture-Restore.cmd,tools/PT-Enable.cmd,tools/PT-Enable.ps1,tools/RT-Only.cmd $out
-          $shaders=@('pt_primary_path.dxil','pt_reflection_p1.dxil','pt_reflection_p2.dxil',
+          $shaders=@('pt_surface_reconstruct.dxil','pt_primary_surface.dxil','pt_primary_path.dxil','pt_reflection_p1.dxil','pt_reflection_p2.dxil',
             'pt_reflection_p2_composite.dxbc','pt_reflection_p2_verify.dxbc',
             'pt_reflection_p2_local_light_probe.dxbc','pt_reflection_p2_diffuse_bridge.dxbc',
             'pt_glass_raygen.dxil','pt_glass_secondary.dxbc','pt_glass_composite.dxbc')
           foreach($shader in $shaders){Copy-Item "build/$shader" $out}
-          Copy-Item tools/Collect-PT-Primary-M12R69.cmd,tools/Collect-PT-Primary-M12R69.ps1 $out
-          Copy-Item research/pt-reflections/PT-Primary-M12R69-README.txt "$out/README.txt"
-          @{Build='M12R69';Commit=$env:GITHUB_SHA;Run=$env:GITHUB_RUN_ID;Lighting='Native direct and specular with PT diffuse indirect (recovery)';SurfaceReplacementEnabled=$false;RecoveryBaseline='M12R66';NativePassesRetained=$true;PerformanceRedesignComplete=$false;Validation='Windows build and WARP; in-game test pending'} |
+          Copy-Item tools/Collect-PT-Primary-M12R70.cmd,tools/Collect-PT-Primary-M12R70.ps1 $out
+          Copy-Item research/pt-reflections/PT-Primary-M12R70-README.txt "$out/README.txt"
+          @{Build='M12R70';Commit=$env:GITHUB_SHA;Run=$env:GITHUB_RUN_ID;Lighting='PT surface replacement with spatial-temporal reconstruction';SurfaceReplacementEnabled=$true;SurfaceBinding='root_buffer';Reconstruction='material_normal_depth_reprojection';NativePassesRetained=$true;PerformanceRedesignComplete=$false;Validation='Windows build and WARP; in-game test pending'} |
             ConvertTo-Json | Set-Content "$out/Build.json" -Encoding UTF8
           Get-ChildItem -LiteralPath $out -File | Sort-Object Name | ForEach-Object {
             '{0}  {1}' -f (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant(),$_.Name
@@ -467,10 +477,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-PT-Primary-M12R69
+          name: Control-FG-PT-Primary-M12R70
           path: |
-            Control-FG-PT-Primary-M12R69.zip
-            Control-FG-PT-Primary-M12R69.sha256
+            Control-FG-PT-Primary-M12R70.zip
+            Control-FG-PT-Primary-M12R70.sha256
             build/exports.txt
             build/imports.txt
             build/pt_reflection_p1.dxil

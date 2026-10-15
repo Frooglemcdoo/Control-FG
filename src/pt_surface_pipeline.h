@@ -14,7 +14,7 @@ using CreateGraphics=HRESULT(STDMETHODCALLTYPE*)(ID3D12Device*,const D3D12_GRAPH
 // only the reviewed pixel program and its stale cached-PSO blob differ.
 class Pipeline {
     Microsoft::WRL::ComPtr<ID3D12PipelineState> native,composed;
-    Microsoft::WRL::ComPtr<ID3D12RootSignature> root;
+    Microsoft::WRL::ComPtr<ID3D12RootSignature> root,composedRoot;
     std::shared_ptr<const PTNativeRoot::Layout> layout;
     std::uint64_t required=0;
 public:
@@ -34,7 +34,26 @@ public:
         Microsoft::WRL::ComPtr<IUnknown> expected,observed;
         if(FAILED(device->QueryInterface(IID_PPV_ARGS(&expected)))||FAILED(pending->native->GetDevice(IID_PPV_ARGS(&owner)))||
            FAILED(owner.As(&observed))||expected.Get()!=observed.Get())return E_INVALIDARG;
+        // Append a root SRV and width constant: no native descriptor allocation,
+        // heap switch, or per-draw table copying is necessary for PT radiance.
+        Microsoft::WRL::ComPtr<ID3D12VersionedRootSignatureDeserializer> decoder;
+        const auto& bytes=rootLayout->Serialized();
+        hr=D3D12CreateVersionedRootSignatureDeserializer(bytes.data(),bytes.size(),IID_PPV_ARGS(&decoder));if(FAILED(hr))return hr;
+        const auto* decoded=decoder->GetUnconvertedRootSignatureDesc();
+        if(!decoded||decoded->Version!=D3D_ROOT_SIGNATURE_VERSION_1_0||
+           PTNativeRoot::Classify(decoded->Desc_1_0)!=PTNativeRoot::Kind::graphics)return E_INVALIDARG;
+        auto desc=decoded->Desc_1_0;
+        std::vector<D3D12_ROOT_PARAMETER> parameters(desc.pParameters,desc.pParameters+desc.NumParameters);
+        D3D12_ROOT_PARAMETER radiance{};radiance.ParameterType=D3D12_ROOT_PARAMETER_TYPE_SRV;
+        radiance.ShaderVisibility=D3D12_SHADER_VISIBILITY_PIXEL;radiance.Descriptor={0,2};parameters.push_back(radiance);
+        D3D12_ROOT_PARAMETER extent{};extent.ParameterType=D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
+        extent.ShaderVisibility=D3D12_SHADER_VISIBILITY_PIXEL;extent.Constants={0,2,2};parameters.push_back(extent);
+        desc.NumParameters=static_cast<UINT>(parameters.size());desc.pParameters=parameters.data();
+        Microsoft::WRL::ComPtr<ID3DBlob> serialized,error;
+        hr=D3D12SerializeRootSignature(&desc,D3D_ROOT_SIGNATURE_VERSION_1_0,&serialized,&error);if(FAILED(hr))return hr;
+        hr=device->CreateRootSignature(0,serialized->GetBufferPointer(),serialized->GetBufferSize(),IID_PPV_ARGS(&pending->composedRoot));if(FAILED(hr))return hr;
         D3D12_GRAPHICS_PIPELINE_STATE_DESC adapted=*description;
+        adapted.pRootSignature=pending->composedRoot.Get();
         adapted.PS={program.data(),program.size()};adapted.CachedPSO={};
         hr=create(device,&adapted,IID_PPV_ARGS(&pending->composed));if(FAILED(hr))return hr;
         pending->root=description->pRootSignature;pending->layout=rootLayout;output=std::move(pending);return S_OK;
@@ -42,6 +61,7 @@ public:
     ID3D12PipelineState* Native()const noexcept{return native.Get();}
     ID3D12PipelineState* Composed()const noexcept{return composed.Get();}
     ID3D12RootSignature* Root()const noexcept{return root.Get();}
+    ID3D12RootSignature* ComposedRoot()const noexcept{return composedRoot.Get();}
     std::uint64_t Required()const noexcept{return required;}
 };
 

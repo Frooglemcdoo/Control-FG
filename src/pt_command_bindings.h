@@ -142,6 +142,15 @@ public:
         auto entry=FindEntry(list);if(!entry)return {};std::lock_guard<std::mutex> guard(entry->mutex);
         return entry->pipeline;
     }
+    // A private heap switch invalidates graphics tables even in a compute pass.
+    // Capture all known arguments for exact restoration, including unused ones.
+    bool GraphicsForRestore(ID3D12GraphicsCommandList* list,PTNativeRoot::Registry& roots,Snapshot& result){
+        result={};auto entry=FindEntry(list);if(!entry)return false;
+        std::lock_guard<std::mutex> guard(entry->mutex);const auto& e=*entry;
+        if(!e.graphics.root)return true;
+        auto layout=roots.Find(e.graphics.root.Get());if(!layout||layout->Type()!=PTNativeRoot::Kind::graphics)return false;
+        result.layout=std::move(layout);result.arguments=e.graphics.arguments;result.resources=e.resources;result.samplers=e.samplers;return true;
+    }
     bool Read(ID3D12GraphicsCommandList* list,PTNativeRoot::Registry& roots,bool graphics,UINT required,Snapshot& result){
         result={};if(!required||required>=(1u<<(graphics?18:8)))return false;
         auto entry=FindEntry(list);if(!entry)return false;std::lock_guard<std::mutex> guard(entry->mutex);

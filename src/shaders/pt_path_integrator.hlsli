@@ -23,7 +23,7 @@ uint PTPathRandomBits(inout uint state) {
     state ^= state << 13; state ^= state >> 17; state ^= state << 5; return state;
 }
 float PTPathRandom(inout uint state) { return (PTPathRandomBits(state)>>8)*(1.0/16777216.0); }
-struct PTPathResult { float3 radiance; uint hits; uint valid; uint fault; };
+struct PTPathResult { float3 radiance; uint hits; uint valid; uint fault; uint primaryValid; };
 PTPathResult PTIntegratePathFirst(RayDesc ray,uint maxHits,uint rouletteStart,uint seed,float originOffset,
                                   PTSceneHit first,uint useFirst,uint includePrimaryEmission) {
     PTTransportState path=PTBeginTransport();PTPathResult result=(PTPathResult)0;
@@ -52,6 +52,7 @@ PTPathResult PTIntegratePathFirst(RayDesc ray,uint maxHits,uint rouletteStart,ui
         float3 bitangent=cross(n,tangent);
         float3 wo=float3(dot(-ray.Direction,tangent),dot(-ray.Direction,bitangent),dot(-ray.Direction,n));
         if(wo.z<=0){path.valid=0;result.fault=5;break;}
+        if(depth==0)result.primaryValid=1;
         if(depth!=0||includePrimaryEmission!=0)path=PTAccumulate(path,surface.emission);
         PTDirectSample light;uint visibility;
         bool sampleDirect=true;
