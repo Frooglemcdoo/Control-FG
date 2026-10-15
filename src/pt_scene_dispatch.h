@@ -1,11 +1,13 @@
 #pragma once
 #include "pt_scene_pipeline.h"
 #include "pt_scene_leases.h"
+#include "pt_upload_pool.h"
 // A complete, immutable private SBT prepared on the CPU before recording rays.
 // Native asynchronous writer pointers are never referenced by this object.
 namespace PTScenePipeline {
 class Dispatch {
     std::shared_ptr<Pipeline> pipeline;
+    std::shared_ptr<PTUploadPool::Buffer> tableStorage;
     Microsoft::WRL::ComPtr<ID3D12Resource> table;
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> heap;
     D3D12_DISPATCH_RAYS_DESC rays{};
@@ -20,11 +22,9 @@ public:
         if(heapDesc.Type!=D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV||!(heapDesc.Flags&D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE))return E_INVALIDARG;
         auto pending=std::make_shared<Dispatch>();pending->pipeline=p;pending->heap=descriptors;pending->geometry=plan.keepAlive;
         const UINT64 hitBytes=UINT64(plan.records.size())*Pipeline::HitStride,totalBytes=128+hitBytes;
-        D3D12_RESOURCE_DESC desc{};desc.Dimension=D3D12_RESOURCE_DIMENSION_BUFFER;desc.Width=totalBytes;desc.Height=1;
-        desc.DepthOrArraySize=desc.MipLevels=1;desc.SampleDesc.Count=1;desc.Layout=D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-        D3D12_HEAP_PROPERTIES upload{};upload.Type=D3D12_HEAP_TYPE_UPLOAD;
-        HRESULT hr=device->CreateCommittedResource(&upload,D3D12_HEAP_FLAG_NONE,&desc,D3D12_RESOURCE_STATE_GENERIC_READ,nullptr,IID_PPV_ARGS(&pending->table));
+        HRESULT hr=PTUploadPool::Buffer::Acquire(device,totalBytes,pending->tableStorage);
         if(FAILED(hr))return hr;
+        pending->table=pending->tableStorage->Resource();
         void* mapped=nullptr;const D3D12_RANGE none{};hr=pending->table->Map(0,&none,&mapped);if(FAILED(hr))return hr;
         auto* data=static_cast<unsigned char*>(mapped);std::memset(data,0,128);
         std::memcpy(data,p->RayGeneration().data(),32);std::memcpy(data+64,p->SurfaceMiss().data(),32);std::memcpy(data+96,p->ShadowMiss().data(),32);

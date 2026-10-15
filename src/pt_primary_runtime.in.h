@@ -78,6 +78,7 @@ static std::vector<std::shared_ptr<Environment>> environments;
 struct Assets {
     PTPrimaryMetrics::Counters metrics;
     std::array<double,6> cpuCosts{}; // prepare, lease, SBT, camera, metrics, record
+    std::shared_ptr<PTUploadPool::Buffer> cameraStorage;
     ComPtr<ID3D12Resource> camera;View boundView;
     std::array<unsigned char,416> boundLights{},lightConstants{};
     Bindings bindings;Table primary;std::shared_ptr<Environment> environment;
@@ -133,6 +134,8 @@ static void PollMetrics(){
                     const double n=double(window.samples);const auto& c=window.cpu;
                     Log("PT_PRIMARY_SCALING dimensions=%ux%u samples=%u sequence=%llu gpu_avg_ms=%.6f prepare_avg_ms=%.6f lease_avg_ms=%.6f sbt_avg_ms=%.6f camera_avg_ms=%.6f metrics_avg_ms=%.6f record_avg_ms=%.6f setup_other_avg_ms=%.6f scope=completed_armed_pt_not_total_frame_time",
                         window.width,window.height,window.samples,static_cast<UINT64>(window.sequence),window.gpu/n,c[0]/n,c[1]/n,c[2]/n,c[3]/n,c[4]/n,c[5]/n,(c[0]-c[1]-c[2]-c[3]-c[4]-c[5])/n);
+                    const auto uploads=PTUploadPool::Buffer::Statistics();
+                    Log("PT_PRIMARY_UPLOAD_POOL created=%llu reused=%llu idle_bytes=%llu cumulative=1 retirement=recordings_and_gpu_fence",uploads.created,uploads.reused,uploads.idleBytes);
                     window.ClearSamples();
                 }
             }
@@ -306,10 +309,8 @@ static void Dispatched(void*,ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT 
         profile.Next(PTHotpathTiming::Kind::primary_sbt);QueryPerformanceCounter(&sbtStart);
         if(FAILED(PTScenePipeline::Dispatch::Create(device.Get(),pipeline,plan,view.width,view.height,bindings.resources.Get(),a->dispatch))){Reject("private_sbt");return;}
         profile.Next(PTHotpathTiming::Kind::primary_camera);QueryPerformanceCounter(&cameraStart);
-        D3D12_HEAP_PROPERTIES cameraHeap{};cameraHeap.Type=D3D12_HEAP_TYPE_UPLOAD;
-        D3D12_RESOURCE_DESC cameraDesc{};cameraDesc.Dimension=D3D12_RESOURCE_DIMENSION_BUFFER;cameraDesc.Width=1792;
-        cameraDesc.Height=1;cameraDesc.DepthOrArraySize=cameraDesc.MipLevels=1;cameraDesc.SampleDesc.Count=1;cameraDesc.Layout=D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-        if(FAILED(device->CreateCommittedResource(&cameraHeap,D3D12_HEAP_FLAG_NONE,&cameraDesc,D3D12_RESOURCE_STATE_GENERIC_READ,nullptr,IID_PPV_ARGS(&a->camera)))){Reject("camera_upload");return;}
+        if(FAILED(PTUploadPool::Buffer::Acquire(device.Get(),1792,a->cameraStorage))){Reject("camera_upload");return;}
+        a->camera=a->cameraStorage->Resource();
         void* cameraData=nullptr;const D3D12_RANGE noRead{};
         if(FAILED(a->camera->Map(0,&noRead,&cameraData))||!cameraData){Reject("camera_map");return;}
         std::memcpy(cameraData,view.bytes.data(),view.bytes.size());
@@ -633,6 +634,6 @@ static bool Start(){
        !PTCommandBindings::Register(&commandConsumer)||!PTNativeJobRuntime::Register(&Job)||!PTSceneLive::owner.Start(step,true))return false;
     ptReflectionModeObserver.store(&MirrorModeChanged,std::memory_order_release);
     MirrorModeChanged(PTReflectionUserRequested());
-    active=true;Log("PT_PRIMARY_SESSION_READY build=M12R54 ready=1 hits=4 spp=1 roulette_start=3 material=opaque_general geometric_normals=1 native_fallback=1 primary_lighting=native diffuse_bounces=pt_indirect readiness=per_material graphics_tracking=0");return true;
+    active=true;Log("PT_PRIMARY_SESSION_READY build=M12R55 ready=1 hits=4 spp=1 roulette_start=3 material=opaque_general geometric_normals=1 native_fallback=1 primary_lighting=native diffuse_bounces=pt_indirect readiness=per_material graphics_tracking=0");return true;
 }
 }
