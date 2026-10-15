@@ -19,5 +19,13 @@ int main(){
     index.Invalidate(0xb000,0x100);r=index.Check({instance},b,2);assert(r.missingBlas==1);
     instance.idMask=1;r=index.Check({instance},b,2);assert(r.masked==1&&!r.missingBlas);
     assert(!index.Compact(0xc000,0xdead));other.idMask=0xff000001;r=index.Check({other},b,2);assert(r.missingBlas==1);
+    Index shared;auto immutable=std::make_shared<const std::vector<Geometry>>(std::vector<Geometry>{g});
+    std::weak_ptr<const std::vector<Geometry>> weak=immutable;
+    assert(shared.BuildShared(0xa000,immutable));auto saved=shared;immutable.reset();
+    assert(shared.Same(saved)&&!weak.expired());
+    g.positions+=4;assert(shared.Build(0xa000,{g}));assert(!shared.Same(saved));
+    Index equal;assert(equal.Build(0xa000,{g}));assert(equal.Same(shared));
+    assert(!shared.BuildShared(0xa000,{}));assert(!shared.Same(equal));
+    saved.Clear();assert(weak.expired());
     std::puts("PASS topology: record contribution, compaction, index mismatch, conflicting geometry and allocation invalidation.");
 }

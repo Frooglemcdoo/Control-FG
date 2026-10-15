@@ -41,8 +41,8 @@ class Catalog {
     static bool Equal(Key a,Key b){return a.token==b.token&&a.address==b.address;}
     static bool Known(const Allocation& a){return a.key.token&&a.key.address&&a.bytes;}
     static std::size_t Rows(const Snapshot& s){return s.geometry.size()+s.instances.size()+s.bottom.size();}
-    Status Resolve(U64 cut,Key key,const Snapshot*& out,std::set<U64>& visiting,const char** pendingReason=nullptr,PTSceneOrder::Purpose purpose=PTSceneOrder::Purpose::submission,U64* selectedVersion=nullptr)const {
-        out=nullptr;PTSceneOrder::Selection selected;
+    Status Resolve(U64 cut,Key key,const Snapshot*& out,std::set<U64>& visiting,const char** pendingReason=nullptr,PTSceneOrder::Purpose purpose=PTSceneOrder::Purpose::submission,U64* selectedVersion=nullptr,std::shared_ptr<const Snapshot>* retained=nullptr)const {
+        out=nullptr;if(retained)retained->reset();PTSceneOrder::Selection selected;
         const auto status=graph.Select(cut,key,selected,pendingReason,purpose);if(status!=Status::ready)return status;
         if(selectedVersion)*selectedVersion=selected.version;
         const auto version=versions.find(selected.version);
@@ -50,10 +50,10 @@ class Catalog {
         const auto& v=version->second;const auto& s=*v.snapshot;
         if(!Equal(s.destination.key,key))return Status::invalid;
         if(s.kind==Snapshot::Kind::copy){
-            const auto result=Resolve(v.before,s.source.key,out,visiting,pendingReason,purpose);
+            const auto result=Resolve(v.before,s.source.key,out,visiting,pendingReason,purpose,nullptr,retained);
             visiting.erase(selected.version);return result;
         }
-        visiting.erase(selected.version);out=&s;return Status::ready;
+        visiting.erase(selected.version);out=&s;if(retained)*retained=v.snapshot;return Status::ready;
     }
 public:
     // A successful native Reset starts a new recording generation. First use of
@@ -214,13 +214,15 @@ public:
         scene.tlas={selected.key.token,selected.bytes};
         // Only instances intersecting the actual TraceRay inclusion mask can
         // reach this private SBT. Preserve original contributions/row numbers.
+        scene.instances.reserve(top->instances.size());
         for(const auto& instance:top->instances)if((instance.idMask>>24)&rayMask)scene.instances.push_back(instance);
         for(const auto& instance:scene.instances){
             if(!(instance.idMask>>24)||scene.blas.count(instance.blas))continue;
             const auto a=top->bottom.find(instance.blas);if(a==top->bottom.end())return Status::missing;
             if(!Known(a->second)){if(pendingReason)*pendingReason="scene_blas_owner_missing";return Status::missing;}
-            U64 bottomVersion=0;const Snapshot* bottom=nullptr;status=Resolve(c->second,a->second.key,bottom,visiting,pendingReason,purpose,&bottomVersion);if(status!=Status::ready){if(status==Status::missing&&pendingReason&&(!*pendingReason||std::strcmp(*pendingReason,"none")==0))*pendingReason="scene_blas_unavailable";return status;}
-            if(bottom->kind!=Snapshot::Kind::blas||!scene.topology.Build(instance.blas,bottom->geometry)){if(pendingReason)*pendingReason="scene_blas_invalid";return Status::missing;}
+            U64 bottomVersion=0;const Snapshot* bottom=nullptr;std::shared_ptr<const Snapshot> bottomOwner;
+            status=Resolve(c->second,a->second.key,bottom,visiting,pendingReason,purpose,&bottomVersion,&bottomOwner);if(status!=Status::ready){if(status==Status::missing&&pendingReason&&(!*pendingReason||std::strcmp(*pendingReason,"none")==0))*pendingReason="scene_blas_unavailable";return status;}
+            if(bottom->kind!=Snapshot::Kind::blas||!scene.topology.BuildShared(instance.blas,std::shared_ptr<const std::vector<PTSceneTopology::Geometry>>(bottomOwner,&bottom->geometry))){if(pendingReason)*pendingReason="scene_blas_invalid";return Status::missing;}
             scene.blas.emplace(instance.blas,PTSceneDispatch::Scene::Acceleration{a->second.key.token,a->second.bytes,bottomVersion});
         }
         output=std::move(scene);return Status::ready;

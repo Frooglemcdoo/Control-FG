@@ -199,5 +199,25 @@ int main(){
     deadBlas.geometry.clear();deadFrozen.reset();deadStorage.reset();std::set<U64> noLive;
     assert(deadHistory.RetireHistory({{1,0}},&noLive));assert(!deadWeak.expired());
     assert(deadHistory.RetireHistory({{1,deadHistory.TailStamp(1)}},&noLive));assert(deadWeak.expired());
+    // Exact compacted geometry survives catalog destruction; the last scene
+    // releases the frozen GPU owner. Replacement versions cannot mutate it.
+    PTSceneDispatch::Scene retained;std::weak_ptr<int> retainedOwner;
+    {
+        Catalog lifetime;auto storage=std::make_shared<int>(17);retainedOwner=storage;
+        auto frozen=std::make_shared<PTSceneTopology::FrozenGeometry>();frozen->owner=storage;
+        auto original=Blas(bottom,0x5100);original.geometry[0].frozen=frozen;
+        auto g=lifetime.Begin(1);assert(lifetime.Record(1,g,std::move(original)));
+        assert(lifetime.Record(1,g,copy));assert(lifetime.Record(1,g,Tlas(compact)));
+        assert(lifetime.Mark(1,g,901));assert(lifetime.Submit(1,{{1,g}}));
+        assert(lifetime.Scene(901,top,retained)==Status::ready);
+        g=lifetime.Begin(1);assert(lifetime.Record(1,g,Blas(compact,0x6100)));
+        assert(lifetime.Mark(1,g,902));assert(lifetime.Submit(1,{{1,g}}));
+        PTSceneDispatch::Scene replacement;assert(lifetime.Scene(902,top,replacement)==Status::ready);
+        assert(Position(retained)==0x5100&&Position(replacement)==0x6100);
+        assert(!PTSceneDispatch::SameScene(retained,replacement));
+    }
+    assert(!retainedOwner.expired()&&Position(retained)==0x5100);
+    auto retainedCopy=retained;assert(PTSceneDispatch::SameScene(retained,retainedCopy));
+    retained={};assert(!retainedOwner.expired());retainedCopy={};assert(retainedOwner.expired());
     std::puts("PASS scene catalog: submitted build/copy cuts, exact allocations, late signals, unknown writes, reset and replay rejection.");
 }
