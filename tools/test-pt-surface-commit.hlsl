@@ -1,5 +1,4 @@
 #include "../src/shaders/pt_surface_commit.hlsli"
-struct RayDesc {float3 Origin;float TMin;float3 Direction;float TMax;};
 struct PTSceneHit {uint status;float3 geometricNormal;};
 #define PT_PATH_PRIMARY_DECODE 1
 #include "../src/shaders/pt_path_integrator.hlsli"
@@ -28,8 +27,8 @@ void main(uint3 id:SV_DispatchThreadID){
     if(x==9){PTClearSurface(uint2(16,0),extent);PTCommitSurface(uint2(16,0),extent,c,1);}
     if(x>=10&&x<=12){
         testMode=x;
-        // Runtime input prevents FXC from evaluating unreachable 0/0 branches
-        // of the shared generic BRDF against this constant synthetic scene.
+        // Read a stable runtime input so the fixture exercises the shared
+        // transport rather than only compiler-folded constant arithmetic.
         testScale=asfloat(PTSurfaceRadiance.Load(13*16))*.5;
         RayDesc ray;ray.Origin=float3(0,0,testScale);ray.Direction=normalize(float3(testScale-1,0,-testScale));ray.TMin=testScale-1;ray.TMax=100*testScale;
         PTSceneHit first;first.status=1;first.geometricNormal=float3(0,0,1);
