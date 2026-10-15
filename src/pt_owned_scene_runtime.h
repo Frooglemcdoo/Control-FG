@@ -1,6 +1,7 @@
 #pragma once
 #include <set>
 #include "pt_owned_scene.h"
+#include "pt_preparation_metrics.h"
 #include "pt_scene_dispatch_plan.h"
 #include "pt_scene_leases.h"
 #include "pt_geometry_snapshot.h"
@@ -214,11 +215,14 @@ public:
     // occur between validating an allocation token and retaining its resource.
     bool PrepareLease(const PTSceneDispatch::Selection& selected,const PTSceneDispatch::Scene& scene,
                       const PTSceneDispatch::Table& table,const PTSceneDispatch::ExportSet& exports,
-                      PTSceneDispatch::Plan& plan,LeaseBatch& batch,PTSceneDispatch::Failure* failure=nullptr){
+                      PTSceneDispatch::Plan& plan,LeaseBatch& batch,PTSceneDispatch::Failure* failure=nullptr,PTPreparationMetrics::Costs* costs=nullptr){
+        using Clock=PTPreparationMetrics::Clock;const auto start=Clock::now();
         plan={};if(failure)*failure={PTSceneDispatch::Status::allocation,0};if(batch.Count()||!leaseBudget)return false;
-        std::lock_guard<std::mutex> guard(mutex);if(!active)return false;
+        std::lock_guard<std::mutex> guard(mutex);const auto locked=Clock::now();
+        if(costs)(*costs)[2]=PTPreparationMetrics::Milliseconds(start,locked);if(!active)return false;
         PTSceneDispatch::Plan candidate;
         const auto checked=PTSceneDispatch::Prepare(selected,scene,table,index,exports,candidate);
+        const auto validated=Clock::now();if(costs)(*costs)[3]=PTPreparationMetrics::Milliseconds(locked,validated);
         if(checked.status!=PTSceneDispatch::Status::prepared){if(failure)*failure=checked;return false;}
         auto payload=std::make_unique<LeaseBatch::Payload>();payload->budget=leaseBudget;
         U64 bytes=0;
@@ -230,7 +234,8 @@ public:
         }
         if(!leaseBudget->Acquire(bytes))return false;
         candidate.ownerRevision=index.Revision();
-        payload->bytes=bytes;payload->keepAlive=candidate.keepAlive;batch.payload=std::move(payload);plan=std::move(candidate);return true;
+        payload->bytes=bytes;payload->keepAlive=candidate.keepAlive;batch.payload=std::move(payload);plan=std::move(candidate);
+        if(costs)(*costs)[4]=PTPreparationMetrics::Milliseconds(validated,Clock::now());return true;
     }
     // Recheck under the allocation lock without acquiring a second GPU lease.
     // The caller must keep the original lease through this submission's fence.

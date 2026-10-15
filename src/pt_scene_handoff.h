@@ -150,9 +150,11 @@ public:
     }
     // Preview freezes a disarmed recording; only strict Revalidate may admit it.
     Status PrepareRecording(std::uint64_t serial,const PTSceneDispatch::ExportSet& exports,PTSceneDispatch::Plan& plan,PTOwnedScene::LeaseBatch& lease,
-                   std::shared_ptr<const Prepared>* proof=nullptr){
+                   std::shared_ptr<const Prepared>* proof=nullptr,PTPreparationMetrics::Costs* costs=nullptr){
+        using Clock=PTPreparationMetrics::Clock;const auto start=Clock::now();if(costs)*costs={};
         if(proof)proof->reset();
-        plan={};std::lock_guard<std::mutex> guard(mutex);const auto found=pending.find(serial);
+        plan={};std::lock_guard<std::mutex> guard(mutex);const auto locked=Clock::now();
+        if(costs)(*costs)[0]=PTPreparationMetrics::Milliseconds(start,locked);const auto found=pending.find(serial);
         if(found==pending.end())return Status::missing;
         auto& entry=found->second;if(!entry.written||!entry.submitted)return Status::pending;
         if(lease.Count())return Status::rejected;
@@ -162,12 +164,14 @@ public:
         }
         PTSceneDispatch::Scene scene;const char* pendingReason=nullptr;
         const auto selected=owner.Scenes().PreviewScene(serial,entry.acceleration,scene,&pendingReason,1);
+        if(costs)(*costs)[1]=PTPreparationMetrics::Milliseconds(locked,Clock::now());
         entry.scenePending=selected==PTSceneOrder::Status::pending?pendingReason:nullptr;
         if(entry.scenePending)return Status::pending;
         if(selected!=PTSceneOrder::Status::ready){Erase(found,selected==PTSceneOrder::Status::missing?(pendingReason?pendingReason:"scene_catalog_missing"):"scene_catalog_rejected");return Status::rejected;}
         const PTSceneDispatch::Selection selection{scene.address,scene.version,entry.table.address,entry.table.version,entry.table.pipeline};
         PTSceneDispatch::Failure failure;
-        const bool prepared=owner.Resources().PrepareLease(selection,scene,entry.table,exports,plan,lease,&failure);
+        const bool prepared=owner.Resources().PrepareLease(selection,scene,entry.table,exports,plan,lease,&failure,costs);
+        const auto retained=Clock::now();
         if(!prepared){const auto row=failure.record/entry.table.rays;
             const auto binding=row<entry.table.bindings.size()?entry.table.bindings[row]:PTNativeBinding::Binding{};
             Erase(found,PTSceneDispatch::FailureName(failure.status),row);failures.at(serial).binding=binding;return Status::rejected;
@@ -178,7 +182,8 @@ public:
             snapshot->nativePipeline=entry.pipeline;snapshot->table=std::move(entry.table);snapshot->exports=exports;snapshot->plan=plan;snapshot->scene=std::move(scene);
             *proof=std::move(snapshot);
         }
-        Erase(found);return prepared?Status::prepared:Status::rejected;
+        Erase(found);if(costs)(*costs)[5]=PTPreparationMetrics::Milliseconds(retained,Clock::now());
+        return prepared?Status::prepared:Status::rejected;
     }
     // The renderer marks a distinct ticket at the actual private DispatchRays
     // position and calls this AFTER catalog Submit, BEFORE native Execute.

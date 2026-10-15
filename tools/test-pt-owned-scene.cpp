@@ -48,5 +48,29 @@ int main(){
     ranges.Insert({9999,9999*4096,1024});assert(ranges.Find(9999*4096,4)==9999);
     ranges.Insert({10002,UINT64_MAX-3,4});assert(ranges.Find(UINT64_MAX,1)==10002);assert(ranges.Find(UINT64_MAX,2)==0);
     ranges.Clear();assert(ranges.Find(UINT64_MAX,1)==0);
+    // Compare cache hits, misses, collisions and generation invalidation against
+    // an uncached interval scan, including ambiguous ownership and reused tokens.
+    Index cachedIndex;std::map<U64,Allocation> oracle;
+    U64 randomState=0x123456789abcdef0ull;
+    auto random=[&](){randomState^=randomState<<13;randomState^=randomState>>7;randomState^=randomState<<17;return randomState;};
+    auto expectedToken=[&](U64 address,U64 bytes){
+        U64 found=0;for(const auto& item:oracle){const auto& a=item.second;
+            if(bytes&&address>=a.address&&address-a.address<=a.bytes&&bytes<=a.bytes-(address-a.address)){
+                if(found)return U64(0);found=a.token;
+            }
+        }return found;
+    };
+    for(unsigned round=0;round<80;++round){
+        const U64 token=random()%128+1;
+        if(round%4==0){cachedIndex.Remove(token);oracle.erase(token);}
+        else {Allocation a{token,random()%8192,random()%1024+1};cachedIndex.Insert(a);oracle[token]=a;}
+        for(unsigned query=0;query<2500;++query){
+            const U64 address=random()%10000,bytes=random()%200;
+            const U64 expectedValue=expectedToken(address,bytes);
+            assert(cachedIndex.Find(address,bytes)==expectedValue);
+            assert(cachedIndex.Find(address,bytes)==expectedValue);
+        }
+    }
+    cachedIndex.Clear();assert(cachedIndex.Find(128,1)==0);
     std::puts("PASS owned scene: candidate bounds, repeated updates, ambiguity, generation reuse, overlapping owners and R16 padding.");
 }

@@ -77,7 +77,7 @@ struct Environment {
 static std::vector<std::shared_ptr<Environment>> environments;
 struct Assets {
     PTPrimaryMetrics::Counters metrics;
-    std::array<double,6> cpuCosts{}; // prepare, lease, SBT, camera, metrics, record
+    std::array<double,12> cpuCosts{}; // prepare, lease, SBT, camera, metrics, record
     std::shared_ptr<PTUploadPool::Buffer> cameraStorage;
     ComPtr<ID3D12Resource> camera;View boundView;
     std::array<unsigned char,416> boundLights{},lightConstants{};
@@ -133,8 +133,8 @@ static void PollMetrics(){
                 static PTScalingMetrics::Window window;
                 if(window.Add(f.view.width,f.view.height,ms,f.assets->cpuCosts)){
                     const double n=double(window.samples);const auto& c=window.cpu;
-                    Log("PT_PRIMARY_SCALING dimensions=%ux%u samples=%u sequence=%llu gpu_avg_ms=%.6f prepare_avg_ms=%.6f lease_avg_ms=%.6f sbt_avg_ms=%.6f camera_avg_ms=%.6f metrics_avg_ms=%.6f record_avg_ms=%.6f setup_other_avg_ms=%.6f scope=completed_armed_pt_not_total_frame_time",
-                        window.width,window.height,window.samples,static_cast<UINT64>(window.sequence),window.gpu/n,c[0]/n,c[1]/n,c[2]/n,c[3]/n,c[4]/n,c[5]/n,(c[0]-c[1]-c[2]-c[3]-c[4]-c[5])/n);
+                    Log("PT_PRIMARY_SCALING dimensions=%ux%u samples=%u sequence=%llu gpu_avg_ms=%.6f prepare_avg_ms=%.6f lease_avg_ms=%.6f sbt_avg_ms=%.6f camera_avg_ms=%.6f metrics_avg_ms=%.6f record_avg_ms=%.6f setup_other_avg_ms=%.6f handoff_wait_avg_ms=%.6f scene_preview_avg_ms=%.6f owner_wait_avg_ms=%.6f plan_validate_avg_ms=%.6f resource_retain_avg_ms=%.6f proof_avg_ms=%.6f scope=completed_armed_pt_not_total_frame_time",
+                        window.width,window.height,window.samples,static_cast<UINT64>(window.sequence),window.gpu/n,c[0]/n,c[1]/n,c[2]/n,c[3]/n,c[4]/n,c[5]/n,(c[0]-c[1]-c[2]-c[3]-c[4]-c[5])/n,c[6]/n,c[7]/n,c[8]/n,c[9]/n,c[10]/n,c[11]/n);
                     const auto uploads=PTUploadPool::Buffer::Statistics();
                     Log("PT_PRIMARY_UPLOAD_POOL created=%llu reused=%llu idle_bytes=%llu cumulative=1 retirement=recordings_and_gpu_fence",uploads.created,uploads.reused,uploads.idleBytes);
                     const auto metrics=PTPrimaryMetrics::Counters::Statistics();
@@ -293,7 +293,8 @@ static void Dispatched(void*,ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT 
         PTNativeShaderTable::Identifiers identifiers;PTSceneDispatch::ExportSet exports;PTSceneDispatch::Plan plan;
         if(!handoff.ReadyIdentifiers(serial,identifiers)||!pipeline->Exports(candidate->ticket.pipeline,identifiers.hit,exports)){Reject("private_exports");return;}
         profile.Next(PTHotpathTiming::Kind::primary_lease);QueryPerformanceCounter(&leaseStart);
-        const auto status=handoff.PrepareRecording(serial,exports,plan,a->scene,&a->proof);
+        PTPreparationMetrics::Costs preparationCosts{};
+        const auto status=handoff.PrepareRecording(serial,exports,plan,a->scene,&a->proof,&preparationCosts);
         QueryPerformanceCounter(&leaseDone);profile.Next(PTHotpathTiming::Kind::primary_setup);
         if(status!=PTSceneHandoff::Status::pending)candidates.erase(serial);
         if(status!=PTSceneHandoff::Status::prepared){
@@ -338,6 +339,7 @@ static void Dispatched(void*,ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT 
         a->cpuCosts={CpuMilliseconds(prepareStart,recordDone),CpuMilliseconds(leaseStart,leaseDone),
             CpuMilliseconds(sbtStart,cameraStart),CpuMilliseconds(cameraStart,metricsStart),
             CpuMilliseconds(metricsStart,encodeStart),CpuMilliseconds(encodeStart,recordDone)};
+        std::copy(preparationCosts.begin(),preparationCosts.end(),a->cpuCosts.begin()+6);
         pendingMetrics.push_back(frame);
         static UINT64 cpuRecorded=0;if(++cpuRecorded<=8||cpuRecorded%240==0)
             Log("PT_PRIMARY_PREPARE_CPU frame=%u total_ms=%.6f find_ready_ms=%.6f lease_ms=%.6f",view.frame,CpuMilliseconds(prepareStart,recordDone),CpuMilliseconds(prepareStart,readyDone),CpuMilliseconds(leaseStart,leaseDone));
@@ -637,6 +639,6 @@ static bool Start(){
        !PTCommandBindings::Register(&commandConsumer)||!PTNativeJobRuntime::Register(&Job)||!PTSceneLive::owner.Start(step,true))return false;
     ptReflectionModeObserver.store(&MirrorModeChanged,std::memory_order_release);
     MirrorModeChanged(PTReflectionUserRequested());
-    active=true;Log("PT_PRIMARY_SESSION_READY build=M12R58 ready=1 hits=4 spp=1 roulette_start=3 material=opaque_general geometric_normals=1 native_fallback=1 primary_lighting=native diffuse_bounces=pt_indirect readiness=per_material graphics_tracking=0");return true;
+    active=true;Log("PT_PRIMARY_SESSION_READY build=M12R59 ready=1 hits=4 spp=1 roulette_start=3 material=opaque_general geometric_normals=1 native_fallback=1 primary_lighting=native diffuse_bounces=pt_indirect readiness=per_material graphics_tracking=0");return true;
 }
 }

@@ -17,7 +17,19 @@ class Index {
     std::size_t triangleCount=0;
     U64 revision=1;
     void Changed(){if(revision)revision=revision==UINT64_MAX?0:revision+1;}
-    mutable std::map<std::pair<U64,U64>,U64> lookup;
+    struct Lookup {U64 address=0,bytes=0,token=0,generation=0;};
+    static constexpr std::size_t LookupSlots=16384;
+    mutable std::vector<Lookup> lookup;
+    U64 lookupGeneration=1;
+    void InvalidateLookup(){
+        if(++lookupGeneration==0){lookup.clear();lookupGeneration=1;}
+    }
+    static std::size_t LookupSlot(U64 address,U64 bytes){
+        U64 hash=address^(bytes+0x9e3779b97f4a7c15ull+(address<<6)+(address>>2));
+        hash=(hash^(hash>>30))*0xbf58476d1ce4e5b9ull;
+        hash=(hash^(hash>>27))*0x94d049bb133111ebull;
+        return static_cast<std::size_t>(hash^(hash>>31))&(LookupSlots-1);
+    }
     mutable bool addressDirty=true;
     mutable std::vector<Allocation> byAddress;
     mutable std::vector<U64> prefixLast;
@@ -36,17 +48,20 @@ public:
     struct Resolved {PTSceneAdmission::Geometry geometry{};U64 tokens[3]{};};
     static constexpr std::size_t MaximumTriangles=65536;
     U64 Revision()const{return revision;} // Zero permanently disables reuse after overflow.
-    void Clear(){Changed();allocations.clear();triangles.clear();triangleCount=0;lookup.clear();byAddress.clear();prefixLast.clear();addressDirty=true;}
-    void Insert(Allocation a){Changed();lookup.clear();addressDirty=true;allocations[a.token]=a;}
-    void Remove(U64 token){Changed();lookup.clear();addressDirty=true;allocations.erase(token);}
+    void Clear(){Changed();allocations.clear();triangles.clear();triangleCount=0;InvalidateLookup();lookup.clear();byAddress.clear();prefixLast.clear();addressDirty=true;}
+    void Insert(Allocation a){Changed();InvalidateLookup();addressDirty=true;allocations[a.token]=a;}
+    void Remove(U64 token){Changed();InvalidateLookup();addressDirty=true;allocations.erase(token);}
     bool Contains(U64 token,U64 address,U64 bytes)const {
         auto it=allocations.find(token);if(it==allocations.end())return false;
         const auto& a=it->second;
         return bytes&&address>=a.address&&address-a.address<=a.bytes&&bytes<=a.bytes-(address-a.address);
     }
     U64 Find(U64 address,U64 bytes)const {
-        const auto key=std::make_pair(address,bytes);const auto cached=lookup.find(key);
-        if(cached!=lookup.end())return cached->second;
+        if(lookup.empty())lookup.resize(LookupSlots);
+        auto& cached=lookup[LookupSlot(address,bytes)];
+        // Collisions only evict a cache entry. Exact key and allocation generation
+        // must match, including cached missing/ambiguous results (token zero).
+        if(cached.generation==lookupGeneration&&cached.address==address&&cached.bytes==bytes)return cached.token;
         U64 found=0;AddressIndex();
         auto upper=std::upper_bound(byAddress.begin(),byAddress.end(),address,[](U64 value,const Allocation& a){return value<a.address;});
         std::size_t n=static_cast<std::size_t>(upper-byAddress.begin());
@@ -55,7 +70,7 @@ public:
             if(found){found=0;break;} // Preserve rejection of ALL overlapping owners.
             found=a.token;
         }
-        if(lookup.size()<65536)lookup.emplace(key,found);
+        cached={address,bytes,found,lookupGeneration};
         return found;
     }
     bool Observe(Triangle t){
