@@ -125,11 +125,11 @@ jobs:
           if not "%errorlevel%"=="0" exit /b 1
           build\test-pt-primary-commit.exe
           if not "%errorlevel%"=="0" exit /b 1
+          set PT_SURFACE_TEST_FAILED=0
           build\test-pt-primary-commit.exe surface
-          if not "%errorlevel%"=="0" exit /b 1
+          if not "%errorlevel%"=="0" set PT_SURFACE_TEST_FAILED=1
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-pt-surface-root-buffer.cpp /Febuild\test-pt-surface-root-buffer.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
           if not "%errorlevel%"=="0" exit /b 1
-          set PT_SURFACE_TEST_FAILED=0
           build\test-pt-surface-root-buffer.exe
           if not "%errorlevel%"=="0" set PT_SURFACE_TEST_FAILED=1
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-pt-surface-reconstruction.cpp /Febuild\test-pt-surface-reconstruction.exe /link d3d12.lib dxgi.lib d3dcompiler.lib

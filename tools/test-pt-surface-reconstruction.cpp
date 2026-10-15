@@ -20,7 +20,7 @@ int main(){
     ComPtr<IDXGIFactory4> factory;ComPtr<IDXGIAdapter> warp;ComPtr<ID3D12Device> device;
     assert(SUCCEEDED(CreateDXGIFactory1(IID_PPV_ARGS(&factory))));assert(SUCCEEDED(factory->EnumWarpAdapter(IID_PPV_ARGS(&warp))));assert(SUCCEEDED(D3D12CreateDevice(warp.Get(),D3D_FEATURE_LEVEL_12_0,IID_PPV_ARGS(&device))));
     PTTestShaderIncludes includes;
-    ComPtr<ID3DBlob> shader,error;HRESULT hr=D3DCompileFromFile(L"src/shaders/pt_surface_reconstruct.hlsl",nullptr,&includes,"main","cs_5_1",D3DCOMPILE_ENABLE_STRICTNESS|D3DCOMPILE_WARNINGS_ARE_ERRORS,0,&shader,&error);
+    ComPtr<ID3DBlob> shader,error;HRESULT hr=D3DCompileFromFile(L"src/shaders/pt_surface_reconstruct.hlsl",nullptr,&includes,"main","cs_5_1",D3DCOMPILE_ENABLE_STRICTNESS|D3DCOMPILE_IEEE_STRICTNESS|D3DCOMPILE_SKIP_OPTIMIZATION|D3DCOMPILE_WARNINGS_ARE_ERRORS,0,&shader,&error);
     if(FAILED(hr)&&error)puts(static_cast<const char*>(error->GetBufferPointer()));assert(SUCCEEDED(hr));
     auto pipeline=std::make_shared<PTSurfaceComposition::ReconstructionPipeline>();assert(SUCCEEDED(pipeline->Initialize(device.Get(),shader->GetBufferPointer(),shader->GetBufferSize())));
     ComPtr<ID3D12CommandQueue> queue;D3D12_COMMAND_QUEUE_DESC qd{};assert(SUCCEEDED(device->CreateCommandQueue(&qd,IID_PPV_ARGS(&queue))));
