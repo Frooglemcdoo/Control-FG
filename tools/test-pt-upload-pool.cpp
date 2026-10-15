@@ -15,6 +15,35 @@ struct UploadUse {
         list->CopyBufferRegion(self.readback.Get(),0,self.buffer->Resource(),0,4);return true;
     }
 };
+static void TestChangingSizes(ID3D12Device* device){
+    // Fill all idle slots with obsolete SBT capacities. Camera buffers must
+    // replace an old idle entry, rather than being discarded every frame.
+    std::array<std::shared_ptr<PTUploadPool::Buffer>,16> obsolete;
+    for(std::size_t i=0;i<obsolete.size();++i)
+        assert(SUCCEEDED(PTUploadPool::Buffer::Acquire(device,(i+3)*65536,obsolete[i])));
+    for(auto& item:obsolete)item.reset();
+    std::shared_ptr<PTUploadPool::Buffer> camera,table;
+    assert(SUCCEEDED(PTUploadPool::Buffer::Acquire(device,1792,camera)));
+    assert(SUCCEEDED(PTUploadPool::Buffer::Acquire(device,3*1024*1024,table)));
+    camera.reset();table.reset();const auto warm=PTUploadPool::Buffer::Statistics();
+    for(unsigned frame=0;frame<128;++frame){
+        assert(SUCCEEDED(PTUploadPool::Buffer::Acquire(device,1792,camera)));
+        assert(SUCCEEDED(PTUploadPool::Buffer::Acquire(device,3*1024*1024,table)));
+        camera.reset();table.reset();
+    }
+    auto after=PTUploadPool::Buffer::Statistics();
+    assert(after.created==warm.created&&after.reused==warm.reused+256&&after.idleBytes<=32ull*1024*1024);
+    // Exercise the byte ceiling as well as the slot ceiling.
+    std::shared_ptr<PTUploadPool::Buffer> largeA,largeB;
+    assert(SUCCEEDED(PTUploadPool::Buffer::Acquire(device,16*1024*1024,largeA)));
+    assert(SUCCEEDED(PTUploadPool::Buffer::Acquire(device,16*1024*1024,largeB)));
+    largeA.reset();largeB.reset();assert(PTUploadPool::Buffer::Statistics().idleBytes==32ull*1024*1024);
+    assert(SUCCEEDED(PTUploadPool::Buffer::Acquire(device,1792,camera)));camera.reset();
+    const auto full=PTUploadPool::Buffer::Statistics();
+    assert(SUCCEEDED(PTUploadPool::Buffer::Acquire(device,1792,camera)));camera.reset();
+    after=PTUploadPool::Buffer::Statistics();assert(after.created==full.created&&after.idleBytes<=32ull*1024*1024);
+    puts("PASS upload pool pressure: current camera/SBT sizes replace obsolete idle capacities; zero steady-state creates; 32 MiB limit retained.");
+}
 int main(){
     ComPtr<IDXGIFactory4> factory;ComPtr<IDXGIAdapter> adapter;ComPtr<ID3D12Device> device;
     assert(SUCCEEDED(CreateDXGIFactory1(IID_PPV_ARGS(&factory))));
@@ -71,6 +100,7 @@ int main(){
         assert(SUCCEEDED(PTUploadPool::Buffer::Acquire(device.Get(),bytes,recycled)));
         assert(recycled->Resource()->GetGPUVirtualAddress()==address);
     }
+    TestChangingSizes(device.Get());
     CloseHandle(event);const auto stats=PTUploadPool::Buffer::Statistics();assert(stats.reused>=2&&stats.idleBytes<=32ull*1024*1024);
     puts("PASS: pooled uploads retain GPU contents; recycling waits for recording release AND completed retirement fence.");
 }

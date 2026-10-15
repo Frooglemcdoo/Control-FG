@@ -18,6 +18,7 @@ class Buffer {
     struct Pool {
         std::mutex mutex;
         std::array<std::unique_ptr<Storage>,16> idle;
+        std::size_t count=0;
         UINT64 bytes=0,created=0,reused=0;
     };
     static Pool& State(){
@@ -41,8 +42,12 @@ public:
         auto& p=State();
         {
             std::lock_guard<std::mutex> lock(p.mutex);std::size_t best=p.idle.size();
-            for(std::size_t i=0;i<p.idle.size();++i)if(p.idle[i]&&p.idle[i]->device.Get()==identity.Get()&&p.idle[i]->bytes==capacity){best=i;break;}
-            if(best<p.idle.size()){result->storage=std::move(p.idle[best]);p.bytes-=capacity;++p.reused;}
+            for(std::size_t i=0;i<p.count;++i)if(p.idle[i]->device.Get()==identity.Get()&&p.idle[i]->bytes==capacity){best=i;break;}
+            if(best<p.count){
+                result->storage=std::move(p.idle[best]);p.bytes-=capacity;++p.reused;
+                for(std::size_t i=best+1;i<p.count;++i)p.idle[i-1]=std::move(p.idle[i]);
+                --p.count;
+            }
         }
         if(!result->storage){
             auto s=std::make_unique<Storage>();s->device=identity;s->bytes=capacity;
@@ -57,9 +62,17 @@ public:
     }
     ~Buffer(){
         if(!storage)return;
+        // Only idle resources are eviction candidates. Last-use ownership still
+        // waits for BOTH recorded references and GPU completion before arriving here.
+        // Destroy retired COM resources after dropping the pool mutex.
+        std::array<std::unique_ptr<Storage>,16> evicted;std::size_t retired=0;
         auto& p=State();std::lock_guard<std::mutex> lock(p.mutex);
-        if(storage->bytes>32ull*1024*1024-p.bytes)return;
-        for(auto& slot:p.idle)if(!slot){p.bytes+=storage->bytes;slot=std::move(storage);return;}
+        while(p.count&&(p.count==p.idle.size()||storage->bytes>32ull*1024*1024-p.bytes)){
+            p.bytes-=p.idle[0]->bytes;evicted[retired++]=std::move(p.idle[0]);
+            for(std::size_t i=1;i<p.count;++i)p.idle[i-1]=std::move(p.idle[i]);
+            --p.count;
+        }
+        p.bytes+=storage->bytes;p.idle[p.count++]=std::move(storage);
     }
 };
 }

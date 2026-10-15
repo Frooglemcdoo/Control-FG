@@ -16,6 +16,15 @@ AS selection uses bounded inline maximal-writer storage instead of allocating
 a temporary tree per lookup. FIFO permits at most one candidate per clock lane.
 All ordering/admission rules and GPU waits remain in place.
 
+The longer R62 Performance run also exposes upload-pool starvation: total
+created buffers rises from 30 to 806, about one create per frame, while camera
+upload CPU time rises toward 0.6 ms. Obsolete SBT capacities occupy all 16 idle
+slots, preventing newly returned camera buffers from being retained.
+R63 evicts the oldest IDLE entries to retain current sizes, within the same
+16-buffer/32-MiB limits. In-flight and recorded buffers are never candidates.
+Windows regression tests fill the pool with obsolete sizes, then require zero
+new creates across 128 camera/SBT cycles and exercise the byte limit.
+
 Local validation includes 199,816 differential selections against R62 with
 writes, waits, late signals, completion observations and cycles, plus scene
 catalog and sustained queue-ordering regression tests. Not an in-game FPS claim.
