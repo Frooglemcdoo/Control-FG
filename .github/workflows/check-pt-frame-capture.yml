@@ -1,0 +1,25 @@
+name: Check PT full-frame capture add-on
+on:
+  push:
+    branches: [experiment/pt-glass-integration]
+    paths:
+      - 'tools/PT-Frame-*'
+      - 'tools/PT-Capture-Parts.ps1'
+      - 'tools/test-pt-frame-profile.ps1'
+      - 'tools/test-pt-capture-parts.ps1'
+      - '.github/workflows/check-pt-frame-capture.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test bounded upload parts and exact reconstruction
+        shell: powershell
+        run: tools/test-pt-capture-parts.ps1
+      - name: Test PT-on capture flow and refusal paths
+        shell: powershell
+        run: tools/test-pt-frame-profile.ps1
