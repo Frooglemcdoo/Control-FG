@@ -167,6 +167,48 @@ int main(){
     UINT64 frequency=0;double elapsed=0;assert(SUCCEEDED(queue->GetTimestampFrequency(&frequency)));
     assert(probe->metrics.ReadMilliseconds(frequency,elapsed)&&elapsed>=0&&elapsed<10000);
     std::array<UINT,16> probeFaults{};assert(probe->metrics.ReadFaults(probeFaults));for(auto v:probeFaults)assert(v==0);
+    // Recycle the exact metrics backing through full -> disarmed -> probe.
+    // A completed fence alone cannot release an outstanding recording owner.
+    ComPtr<ID3D12Fence> poolDone,poolGate;
+    assert(SUCCEEDED(device->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&poolDone))));
+    assert(SUCCEEDED(device->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&poolGate))));
+    UINT64 pooledAddress=0;
+    for(unsigned cycle=0;cycle<3;++cycle){
+        auto sample=std::make_shared<GuardedWriter>();sample->device=device;sample->root=probe->root;sample->pipeline=probe->pipeline;
+        assert(sample->metrics.Initialize(device.Get()));
+        const auto address=sample->metrics.Buffer()->GetGPUVirtualAddress();
+        if(cycle)assert(address==pooledAddress);else pooledAddress=address;
+        assert(SUCCEEDED(device->CreateDescriptorHeap(&hd,IID_PPV_ARGS(&sample->heap))));
+        std::shared_ptr<PTSurfaceComposition::Output> sampleOutput;
+        assert(SUCCEEDED(PTSurfaceComposition::Output::Create(queue.Get(),4,3,sampleOutput)));
+        ComPtr<ID3D12CommandAllocator> sampleAllocator;ComPtr<ID3D12GraphicsCommandList> sampleList;
+        assert(SUCCEEDED(device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT,IID_PPV_ARGS(&sampleAllocator))));
+        assert(SUCCEEDED(device->CreateCommandList(0,D3D12_COMMAND_LIST_TYPE_DIRECT,sampleAllocator.Get(),nullptr,IID_PPV_ARGS(&sampleList))));
+        assert(sampleOutput->RecordInline(sampleList.Get(),sample.get(),&GuardedWriter::Encode,sample));
+        assert(SUCCEEDED(sampleList->Close()));
+        assert(SUCCEEDED(queue->Wait(poolGate.Get(),cycle+1)));
+        if(cycle!=1){assert(sampleOutput->AdmitInline());assert(sample->metrics.SetAdmission(queue.Get(),true,cycle==2));}
+        ID3D12CommandList* sampleLists[]={sampleList.Get()};queue->ExecuteCommandLists(1,sampleLists);
+        assert(sampleOutput->NativeSubmitted(queue.Get()));assert(SUCCEEDED(queue->Signal(poolDone.Get(),cycle+1)));
+        // Neither unfinished GPU work nor retained recording storage is reusable.
+        PTPrimaryMetrics::Counters unfinished;assert(unfinished.Initialize(device.Get()));
+        assert(unfinished.Buffer()->GetGPUVirtualAddress()!=address);
+        assert(SUCCEEDED(poolGate->Signal(cycle+1)));
+        HANDLE sampleEvent=CreateEventW(nullptr,FALSE,FALSE,nullptr);assert(sampleEvent);
+        assert(SUCCEEDED(poolDone->SetEventOnCompletion(cycle+1,sampleEvent)));
+        assert(WaitForSingleObject(sampleEvent,10000)==WAIT_OBJECT_0);CloseHandle(sampleEvent);
+        assert(sampleOutput->Completed());
+        std::array<UINT,8> values{};assert(sample->metrics.Read(values));
+        assert(values[0]==(cycle==0?12u:(cycle==1?0u:1u))&&values[1]==12);
+        assert(sample->metrics.CompletedForReuse());
+        std::array<UINT,16> faults{};assert(sample->metrics.ReadFaults(faults));for(auto value:faults)assert(value==0);
+        double duration=0;assert(sample->metrics.ReadMilliseconds(frequency,duration)&&duration>=0);
+        sample.reset();
+        PTPrimaryMetrics::Counters recorded;assert(recorded.Initialize(device.Get()));
+        assert(recorded.Buffer()->GetGPUVirtualAddress()!=address);
+        sampleList.Reset();sampleAllocator.Reset();sampleOutput.reset();
+    }
+    assert(PTPrimaryMetrics::Counters::Statistics().reused>=2);
     probeOutput.reset();probe.reset();
     original.reset();cancelled.reset();PTSurfaceComposition::Output::Poll();assert(inlineRetained.expired());assert(PTSurfaceComposition::Output::ResidentBytes()==0);assert(retained.expired());assert(SUCCEEDED(device->GetDeviceRemovedReason()));
     // Reuse is forbidden while the final queue fence is blocked, even when the

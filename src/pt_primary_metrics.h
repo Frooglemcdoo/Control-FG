@@ -3,11 +3,13 @@
 #include <wrl/client.h>
 #include <array>
 #include <cstring>
+#include <memory>
+#include <mutex>
 #include "pt_primary_readiness.h"
 // Sparse GPU coverage counters, sampled at one pixel per 64x64 block. Own these
 // through the producer's native fence; Read is valid ONLY after that fence.
 namespace PTPrimaryMetrics {
-class Counters {
+class Storage {
     Microsoft::WRL::ComPtr<ID3D12Resource> gpu,readback,upload;
     Microsoft::WRL::ComPtr<ID3D12QueryHeap> timing;
     struct Copy {Microsoft::WRL::ComPtr<ID3D12CommandAllocator> allocator;Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> list;};
@@ -72,7 +74,20 @@ public:
         D3D12_RESOURCE_BARRIER b{};b.Type=D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
         b.Transition={gpu.Get(),0,D3D12_RESOURCE_STATE_UNORDERED_ACCESS,D3D12_RESOURCE_STATE_COPY_SOURCE};list->ResourceBarrier(1,&b);
         list->CopyBufferRegion(readback.Get(),0,gpu.Get(),0,128);
+        // End each executed lifetime disarmed. Begin must preserve admission,
+        // so clearing here (after tracing) is required before any future reuse.
+        b.Transition.StateBefore=D3D12_RESOURCE_STATE_COPY_SOURCE;b.Transition.StateAfter=D3D12_RESOURCE_STATE_COPY_DEST;list->ResourceBarrier(1,&b);
+        list->CopyBufferRegion(gpu.Get(),32,upload.Get(),0,4);
+        b.Transition.StateBefore=D3D12_RESOURCE_STATE_COPY_DEST;b.Transition.StateAfter=D3D12_RESOURCE_STATE_COPY_SOURCE;list->ResourceBarrier(1,&b);
+        list->CopyBufferRegion(readback.Get(),32,gpu.Get(),32,4);
         b.Transition.StateBefore=D3D12_RESOURCE_STATE_COPY_SOURCE;b.Transition.StateAfter=D3D12_RESOURCE_STATE_COMMON;list->ResourceBarrier(1,&b);
+    }
+    void ResetCpuState(){enabled=false;cancelled=false;}
+    bool CleanAdmission(){
+        void* data=nullptr;const D3D12_RANGE read{32,36};
+        if(!readback||FAILED(readback->Map(0,&read,&data))||!data)return false;
+        UINT value=1;std::memcpy(&value,static_cast<unsigned char*>(data)+32,4);
+        const D3D12_RANGE noWrite{};readback->Unmap(0,&noWrite);return value==0;
     }
     bool ReadMilliseconds(UINT64 frequency,double& milliseconds){
         milliseconds=0;if(!frequency||!readback)return false;
@@ -92,6 +107,45 @@ public:
         values={};void* data=nullptr;const D3D12_RANGE read{0,32};
         if(!readback||FAILED(readback->Map(0,&read,&data))||!data)return false;
         std::memcpy(values.data(),data,32);const D3D12_RANGE noWrite{};readback->Unmap(0,&noWrite);return true;
+    }
+};
+// Reuse needs an explicit completed-consumer proof PLUS the last recording
+// reference releasing this wrapper. Output retirement continues to own Assets.
+class Counters {
+    struct Entry {Microsoft::WRL::ComPtr<IUnknown> device;Storage data;};
+    struct Pool {std::mutex mutex;std::array<std::unique_ptr<Entry>,16> idle;UINT64 created=0,reused=0;};
+    static Pool& State(){static Pool* pool=new Pool;return *pool;} // Bounded process lifetime, like upload pool.
+    std::unique_ptr<Entry> entry;
+    bool recyclable=false;
+public:
+    Counters()=default;Counters(const Counters&)=delete;Counters& operator=(const Counters&)=delete;
+    struct Stats {UINT64 created,reused,idle;};
+    static Stats Statistics(){auto& p=State();std::lock_guard<std::mutex> lock(p.mutex);UINT64 count=0;for(const auto& e:p.idle)if(e)++count;return {p.created,p.reused,count};}
+    bool Initialize(ID3D12Device* device){
+        if(!device||entry)return false;Microsoft::WRL::ComPtr<IUnknown> identity;
+        if(FAILED(device->QueryInterface(IID_PPV_ARGS(&identity))))return false;
+        auto& p=State();
+        {std::lock_guard<std::mutex> lock(p.mutex);for(auto& e:p.idle)if(e&&e->device.Get()==identity.Get()){
+            entry=std::move(e);entry->data.ResetCpuState();++p.reused;return true;
+        }}
+        auto fresh=std::make_unique<Entry>();fresh->device=identity;
+        if(!fresh->data.Initialize(device))return false;
+        entry=std::move(fresh);std::lock_guard<std::mutex> lock(p.mutex);++p.created;return true;
+    }
+    D3D12_CPU_DESCRIPTOR_HANDLE Uav()const{return entry?entry->data.Uav():D3D12_CPU_DESCRIPTOR_HANDLE{};}
+    ID3D12Resource* Buffer()const{return entry?entry->data.Buffer():nullptr;}
+    bool SetAdmission(ID3D12CommandQueue* queue,bool allow,bool probe=false){recyclable=false;return entry&&entry->data.SetAdmission(queue,allow,probe);}
+    void Begin(ID3D12GraphicsCommandList* list,D3D12_GPU_DESCRIPTOR_HANDLE handle){recyclable=false;entry->data.Begin(list,handle);}
+    void End(ID3D12GraphicsCommandList* list){entry->data.End(list);}
+    bool Read(std::array<UINT,8>& values){return entry&&entry->data.Read(values);}
+    bool ReadFaults(std::array<UINT,16>& values){return entry&&entry->data.ReadFaults(values);}
+    bool ReadMilliseconds(UINT64 frequency,double& ms){return entry&&entry->data.ReadMilliseconds(frequency,ms);}
+    // ONLY call after the consumer's Output fence completes, never at recording.
+    bool CompletedForReuse(){recyclable=entry&&entry->data.CleanAdmission();return recyclable;}
+    ~Counters(){
+        if(!entry||!recyclable)return;
+        auto& p=State();std::lock_guard<std::mutex> lock(p.mutex);
+        for(auto& e:p.idle)if(!e){e=std::move(entry);return;}
     }
 };
 }

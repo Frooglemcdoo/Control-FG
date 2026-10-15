@@ -114,6 +114,7 @@ static void PollMetrics(){
             f.deferred=false;f.cancelled=true;PTSceneLive::owner.Scenes().Forget(f.assets->ticket);
         }
         std::array<UINT,8> counts{};const bool good=f.assets&&f.assets->metrics.Read(counts);
+        if(f.assets)f.assets->metrics.CompletedForReuse();
         std::array<UINT,16> faults{};const bool faultRead=good&&(!counts[7]||f.assets->metrics.ReadFaults(faults));
         if(good&&f.armed&&counts[5]){
             const auto health=faultRead?PTPrimaryReadiness::Check(counts[5],counts[6],counts[7],faults[12]):PTPrimaryReadiness::Result::unhealthy;
@@ -136,6 +137,8 @@ static void PollMetrics(){
                         window.width,window.height,window.samples,static_cast<UINT64>(window.sequence),window.gpu/n,c[0]/n,c[1]/n,c[2]/n,c[3]/n,c[4]/n,c[5]/n,(c[0]-c[1]-c[2]-c[3]-c[4]-c[5])/n);
                     const auto uploads=PTUploadPool::Buffer::Statistics();
                     Log("PT_PRIMARY_UPLOAD_POOL created=%llu reused=%llu idle_bytes=%llu cumulative=1 retirement=recordings_and_gpu_fence",uploads.created,uploads.reused,uploads.idleBytes);
+                    const auto metrics=PTPrimaryMetrics::Counters::Statistics();
+                    Log("PT_PRIMARY_METRICS_POOL created=%llu reused=%llu idle=%llu cumulative=1 retirement=recordings_and_gpu_fence admission=cleared_after_trace",metrics.created,metrics.reused,metrics.idle);
                     window.ClearSamples();
                 }
             }
@@ -634,6 +637,6 @@ static bool Start(){
        !PTCommandBindings::Register(&commandConsumer)||!PTNativeJobRuntime::Register(&Job)||!PTSceneLive::owner.Start(step,true))return false;
     ptReflectionModeObserver.store(&MirrorModeChanged,std::memory_order_release);
     MirrorModeChanged(PTReflectionUserRequested());
-    active=true;Log("PT_PRIMARY_SESSION_READY build=M12R55 ready=1 hits=4 spp=1 roulette_start=3 material=opaque_general geometric_normals=1 native_fallback=1 primary_lighting=native diffuse_bounces=pt_indirect readiness=per_material graphics_tracking=0");return true;
+    active=true;Log("PT_PRIMARY_SESSION_READY build=M12R56 ready=1 hits=4 spp=1 roulette_start=3 material=opaque_general geometric_normals=1 native_fallback=1 primary_lighting=native diffuse_bounces=pt_indirect readiness=per_material graphics_tracking=0");return true;
 }
 }
