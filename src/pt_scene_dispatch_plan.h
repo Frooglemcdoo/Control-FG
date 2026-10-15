@@ -98,6 +98,8 @@ inline Failure Prepare(const Selection& selected,const Scene& scene,const Table&
     scene.topology.Check(scene.instances,table.bindings,table.rays,&mappings);
     if(mappings.size()!=table.bindings.size())return {Status::topology,0};
     Plan pending;
+    pending.allocationTokens.reserve(1+scene.blas.size()+table.bindings.size());
+    pending.keepAlive.reserve(table.bindings.size());
     const auto retainAS=[&](U64 address,const Scene::Acceleration& as){
         if(!as.token||!as.bytes||owners.Find(address,as.bytes)!=as.token)return false;
         pending.allocationTokens.push_back(as.token);return true;
@@ -105,9 +107,13 @@ inline Failure Prepare(const Selection& selected,const Scene& scene,const Table&
     if(!retainAS(scene.address,scene.tlas))return {Status::allocation,0};
     for(const auto& instance:scene.instances){
         if(!(instance.idMask>>24))continue;
+        // All instances at this address select the same immutable scene entry.
+        // Validate/retain that allocation once; topology still checks every instance.
+        const auto version=pending.bottomVersions.emplace(instance.blas,0);
+        if(!version.second)continue;
         const auto found=scene.blas.find(instance.blas);
         if(found==scene.blas.end()||!retainAS(instance.blas,found->second))return {Status::allocation,0};
-        pending.bottomVersions.emplace(instance.blas,found->second.version);
+        version.first->second=found->second.version;
     }
     pending.selection=selected;pending.privatePipeline=exports.privatePipeline;pending.records.resize(table.bindings.size()*table.rays);
     for(std::size_t i=0;i<table.bindings.size();++i){
@@ -169,8 +175,19 @@ inline Failure Prepare(const Selection& selected,const Scene& scene,const Table&
             // correlated to the selected BLAS, including unused native fields.
             if(std::memcmp(source+32,&binding.indices,8)||std::memcmp(source+40,&binding.attributes,8)||
                std::memcmp(source+48,binding.constants,40))return {Status::binding,record};
-            if(PTShaderTableAdapter::Convert(source,PTShaderTableAdapter::NativeStride,exports.rays[ray],&resolved.geometry,pending.records[record])!=PTShaderTableAdapter::Status::ready)
-                return {Status::conversion,record};
+            if(ray==0){
+                if(PTShaderTableAdapter::Convert(source,PTShaderTableAdapter::NativeStride,exports.rays[ray],&resolved.geometry,pending.records[record])!=PTShaderTableAdapter::Status::ready)
+                    return {Status::conversion,record};
+            }else{
+                // Both native local roots were compared against the SAME binding
+                // above. Geometry admission and its translated private root are
+                // therefore identical. Only the ray-specific identifier differs.
+                const PTShaderTableAdapter::Identifier* identifier=nullptr;
+                if(PTShaderTableAdapter::SelectIdentifier(source,PTShaderTableAdapter::NativeStride,exports.rays[ray],identifier)!=PTShaderTableAdapter::Status::ready)
+                    return {Status::conversion,record};
+                pending.records[record]=pending.records[i*table.rays];
+                std::memcpy(pending.records[record].data(),identifier->data(),32);
+            }
             if(g.frozen){
                 const auto& f=*g.frozen;
                 const U64 indices=f.indexCopyBase?f.privateIndex:f.privateIndex+(binding.indices-f.indexBase),positions=f.privatePosition+(g.positions-f.positionBase);

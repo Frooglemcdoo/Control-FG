@@ -48,6 +48,35 @@ int main(){
 #endif
     auto prepare=[&](){return Prepare(selected,scene,table,owners,exports,plan);};
     assert(prepare().status==Status::prepared&&plan.records.size()==2&&plan.allocationTokens.size()==5);
+    // Compare both ray records byte-for-byte with independent full conversion.
+    PTOwnedScene::Index::Resolved referenceGeometry;
+    const PTOwnedScene::Triangle referenceTriangle{0x1000,0x2000,12,1,2,2,3,3};
+    assert(owners.ResolveExact(b,referenceTriangle,scene.version,referenceGeometry)==PTOwnedScene::Status::candidate);
+    for(unsigned ray=0;ray<2;++ray){PTShaderTableAdapter::Bytes referenceRecord;
+        assert(PTShaderTableAdapter::Convert(table.bytes.data()+ray*96,96,exports.rays[ray],&referenceGeometry.geometry,referenceRecord)==PTShaderTableAdapter::Status::ready);
+        assert(plan.records[ray]==referenceRecord);
+    }
+    const auto originalTable=table;const auto originalExports=exports;
+    for(unsigned ray=0;ray<2;++ray)for(unsigned byte=32;byte<88;++byte){
+        table=originalTable;table.bytes[ray*96+byte]^=1;
+        const auto rejected=prepare();assert(rejected.status==Status::binding&&rejected.record==ray&&plan.records.empty());
+    }
+    table=originalTable;
+    for(unsigned ray=0;ray<2;++ray){
+        exports=originalExports;exports.rays[ray].privateAlpha={};
+        assert(prepare().status==Status::conversion&&plan.records.empty());
+        exports=originalExports;exports.rays[ray].nativeAlpha=exports.rays[ray].nativeOpaque;
+        assert(prepare().status==Status::conversion&&plan.records.empty());
+    }
+    exports=originalExports;
+    std::memcpy(table.bytes.data()+96,exports.rays[1].nativeAlpha.data(),32);
+    assert(prepare().status==Status::prepared&&plan.records[1][0]==7+1);
+    table=originalTable;assert(prepare().status==Status::prepared);
+    // Many instances of the same immutable BLAS retain one version/token.
+    const auto singleInstancePlan=plan;scene.instances.assign(64,instance);
+    assert(prepare().status==Status::prepared&&singleInstancePlan.records==plan.records&&
+        singleInstancePlan.allocationTokens==plan.allocationTokens&&singleInstancePlan.bottomVersions==plan.bottomVersions);
+    scene.instances={instance};
     // An unowned row is harmless only if the exact submitted TLAS cannot reach
     // it. A later registration must not repair the zero captured owner token.
     auto sparseLayout=layout;sparseLayout.bytes=512;sparseLayout.hitRecords=4;

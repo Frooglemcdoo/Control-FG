@@ -12,15 +12,22 @@ using Identifier=std::array<unsigned char,32>;
 using Bytes=std::array<unsigned char,PrivateStride>;
 struct Exports {Identifier nativeOpaque,nativeAlpha,privateOpaque,privateAlpha;};
 enum class Status {ready,record_size,unknown_export,unverified_mapping,native_mismatch,invalid_geometry,invalid_exports};
-inline Status Convert(const unsigned char* source,std::size_t bytes,const Exports& exports,
-                      const PTSceneAdmission::Geometry* mapping,Bytes& output){
-    output.fill(0);
+// Validate every ray's own identifiers even when its local root is shared.
+inline Status SelectIdentifier(const unsigned char* source,std::size_t bytes,const Exports& exports,
+                               const Identifier*& identifier){
+    identifier=nullptr;
     if(!source||bytes!=NativeStride)return Status::record_size;
     if(exports.nativeOpaque==Identifier{}||exports.nativeAlpha==Identifier{}||exports.privateOpaque==Identifier{}||exports.privateAlpha==Identifier{}||exports.nativeOpaque==exports.nativeAlpha)return Status::invalid_exports;
-    const Identifier* identifier=nullptr;
     if(!std::memcmp(source,exports.nativeOpaque.data(),32))identifier=&exports.privateOpaque;
     else if(!std::memcmp(source,exports.nativeAlpha.data(),32))identifier=&exports.privateAlpha;
     else return Status::unknown_export;
+    return Status::ready;
+}
+inline Status Convert(const unsigned char* source,std::size_t bytes,const Exports& exports,
+                      const PTSceneAdmission::Geometry* mapping,Bytes& output){
+    output.fill(0);const Identifier* identifier=nullptr;
+    const auto identified=SelectIdentifier(source,bytes,exports,identifier);
+    if(identified!=Status::ready)return identified;
     if(!mapping)return Status::unverified_mapping;
     std::uint64_t indexBase=0,attributeBase=0;std::uint32_t constants[10]{};
     std::memcpy(&indexBase,source+32,8);std::memcpy(&attributeBase,source+40,8);std::memcpy(constants,source+48,40);
