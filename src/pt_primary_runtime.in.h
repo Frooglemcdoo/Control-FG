@@ -125,7 +125,7 @@ static void PollMetrics(){
         if(good&&(n<=8||n%240==0)){UINT64 frequency=0;double ms=0;
             const bool timed=SUCCEEDED(f.queue->GetTimestampFrequency(&frequency))&&f.assets->metrics.ReadMilliseconds(frequency,ms);
             Log("PT_PRIMARY_TIMING frame=%u valid=%u dispatch_gpu_ms=%.6f probe=%u roulette_start=3 max_hits=4",f.view.frame,unsigned(timed),ms,unsigned(f.assets->probe));}
-        if(good&&f.armed&&!f.assets->probe){
+        if(good&&f.armed&&!f.cancelled&&!f.assets->probe){
             UINT64 frequency=0;double ms=0;
             if(SUCCEEDED(f.queue->GetTimestampFrequency(&frequency))&&f.assets->metrics.ReadMilliseconds(frequency,ms)){
                 static PTScalingMetrics::Window window;
