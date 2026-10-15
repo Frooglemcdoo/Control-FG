@@ -150,7 +150,7 @@ void PTPrimaryPathRayGeneration(){
 #endif
 #ifdef PT_PRIMARY_SURFACE_REPLACEMENT
         if(admission==2||PTCommitSurface(pixel,uint2(width,height),result.radiance,admission))PTMeasure(6,pixel);
-        if(result.valid==0&&((pixel.x|pixel.y)&63)==0){uint old;PTMetrics.InterlockedAdd(36+4*min(result.fault,15u),1,old);}
+        if(result.valid==0&&((pixel.x|pixel.y)&63)==0){uint old;PTMetrics.InterlockedAdd(36,1,old);}
 #else
         if(admission==2||PTCommitIndirect(pixel,uint2(width,height),result.radiance,admission))PTMeasure(6,pixel);
 #endif

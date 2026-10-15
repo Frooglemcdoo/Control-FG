@@ -93,6 +93,9 @@ public:
         }
         pending->storage=std::make_unique<Storage>();auto& s=*pending->storage;
         const std::uint64_t bytes=std::uint64_t(width)*height*stride;
+        // Retired storage may be evicted under pressure; never evict an output
+        // held by a recording/history owner or with an incomplete GPU fence.
+        if(residentBytes.load()>MaximumBytes-bytes){std::lock_guard<std::mutex> guard(retirementMutex);idle.clear();}
         auto used=residentBytes.load();
         do {if(used>MaximumBytes-bytes)return E_OUTOFMEMORY;}while(!residentBytes.compare_exchange_weak(used,used+bytes));
         s.budget=bytes;s.queue=queue;s.width=width;s.height=height;s.linear=linear;s.stride=stride;

@@ -132,7 +132,7 @@ static void PollMetrics(){
         }
         std::array<UINT,8> counts{};const bool good=f.assets&&f.assets->metrics.Read(counts);
         if(f.assets){f.assets->metrics.CompletedForReuse();f.assets->history.reset();}
-        std::array<UINT,16> faults{};const bool faultRead=good&&(!counts[7]||f.assets->metrics.ReadFaults(faults));
+        std::array<UINT,16> faults{};const bool faultRead=good&&((!surfaceReplacement&&!counts[7])||f.assets->metrics.ReadFaults(faults));
         if(good&&f.armed&&counts[5]){
             const auto health=faultRead?PTPrimaryReadiness::Check(counts[5],counts[6],counts[7],faults[12]):PTPrimaryReadiness::Result::unhealthy;
             if(health==PTPrimaryReadiness::Result::unhealthy){transportGoodFrames=0;transportValidated=false;}
@@ -160,6 +160,8 @@ static void PollMetrics(){
                 }
             }
         }
+        if(surfaceReplacement&&faultRead&&faults[0]&&(n<=8||n%240==0))
+            Log("PT_PRIMARY_SECONDARY_TERMINATION frame=%u sampled=%u retained_primary=1",f.view.frame,faults[0]);
         if(good&&counts[7]){
             if(faultRead&&(n<=8||n%240==0))
                 Log("PT_PRIMARY_FAULTS frame=%u probe=%u input=%u hit=%u material=%u normal=%u facing=%u light=%u direct=%u sample=%u spawn=%u radiance=%u material_bounds=%u brdf=%u material_values=%u native_light=%u",f.view.frame,unsigned(f.assets->probe),faults[1],faults[2],faults[3],faults[4],faults[5],faults[6],faults[7],faults[8],faults[9],faults[10],faults[11],faults[12],faults[13],faults[14]);

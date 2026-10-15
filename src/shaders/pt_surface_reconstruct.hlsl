@@ -33,7 +33,7 @@ void main(uint3 id:SV_DispatchThreadID){
     uint material=ControlDecodeMaterialID(gbuffer2.Load(int3(p,0)));
     float roughness=ControlDecodeMaterialRoughness(gbuffer1.Load(int3(p,0)));
     if(!all(isfinite(position))||!all(isfinite(normal)))return;
-    float3 sum=0,lo=center.rgb,hi=center.rgb;float total=0;
+    float3 sum=0;float total=0;
     // Same-material/normal/plane rejection protects object and shadow boundaries.
     // Smooth specular surfaces retain their local sample rather than spreading
     // reflection detail over a diffuse-sized kernel.
@@ -48,7 +48,7 @@ void main(uint3 id:SV_DispatchThreadID){
         float plane=abs(dot(v-position,ControlDecodeNormalView(gbuffer1.Load(int3(p,0)))));
         if(!all(isfinite(v))||alignment<.95||plane>max(.002,abs(position.z)*.001))continue;
         float weight=exp(-.35*(x*x+y*y))*pow(saturate(alignment),16);
-        sum+=value.rgb*weight;total+=weight;lo=min(lo,value.rgb);hi=max(hi,value.rgb);
+        sum+=value.rgb*weight;total+=weight;
     }
     float3 filtered=total>0?sum/total:center.rgb;float samples=1;
     if(useHistory!=0){
@@ -64,11 +64,13 @@ void main(uint3 id:SV_DispatchThreadID){
                dot(UnpackNormal(guide.x),normal)>.95&&isfinite(count)&&count>=1&&count<=maximumHistory&&
                isfinite(oldDepth)&&abs(oldDepth-previous.z)<=max(.003,abs(previous.z)*.002)){
                 samples=min(count+1,(float)maximumHistory);
-                // Local range clipping limits trails from moving material detail.
-                // Glossy pixels have no spatial range: retain a short history.
-                float3 previousColor=radius?clamp(old.rgb,lo,hi):old.rgb;
-                if(radius==0)samples=min(samples,8);
-                filtered=lerp(previousColor,filtered,1/samples);
+                // Do not clamp history to the extrema of sparse current samples:
+                // a valid all-zero neighborhood would repeatedly erase indirect
+                // energy and recreate temporal brightness flicker. Shorten history
+                // during screen motion and on sharp specular instead.
+                float motion=length(uv*float2(width,height)-(float2(p)+.5));
+                if(radius==0||motion>1)samples=min(samples,8);
+                filtered=lerp(old.rgb,filtered,1/samples);
             }
         }
     }

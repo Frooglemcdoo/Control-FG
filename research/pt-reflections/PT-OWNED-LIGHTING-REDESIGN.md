@@ -180,7 +180,8 @@ from a private three-entry heap. It spatially filters same-material, coplanar,
 normal-compatible neighbors, then reprojects using authenticated transforms and
 an explicit inverse of previous ClipToView. Depth/material/normal disagreement,
 resolution changes, nonconsecutive frames and large camera discontinuities
-reject history. It uses bounded history and local color-range clipping. Native
+reject history. It uses bounded history, shortened during screen motion. Sparse all-zero current
+neighborhoods do not clamp away valid accumulated energy. Native
 object-motion vectors are not yet used; this is a material limitation for moving
 objects, especially smooth specular. Graphics AND compute arguments are restored
 because heap changes invalidate both pipelines' tables.

@@ -36,7 +36,7 @@ int main(){
     changed=previousView;float distant=4;std::memcpy(changed.bytes.data()+144,&distant,4);assert(PTSurfaceComposition::ReconstructConstants(view,&changed,c)&&c.useHistory==0);
     changed=previousView;std::memset(changed.bytes.data()+224,0,64);assert(PTSurfaceComposition::ReconstructConstants(view,&changed,c)&&c.useHistory==0);
     std::shared_ptr<Output> previous;
-    for(UINT iteration=0;iteration<6;++iteration){
+    for(UINT iteration=0;iteration<9;++iteration){
         view.frame=iteration+1;view.engineFrame=iteration+1;
         std::shared_ptr<Output> raw,output;assert(SUCCEEDED(Output::Create(queue.Get(),8,8,raw,true,true)));assert(SUCCEEDED(Output::Create(queue.Get(),8,8,output,true,true,32)));assert(raw->Address()&&output->Address());
         std::array<ComPtr<ID3D12Resource>,3> guides;hp.Type=D3D12_HEAP_TYPE_DEFAULT;
@@ -49,7 +49,7 @@ int main(){
         void* mapped=nullptr;const D3D12_RANGE none{};assert(SUCCEEDED(upload->Map(0,&none,&mapped)));std::memset(mapped,0,8192);
         for(UINT y=0;y<8;++y)for(UINT x=0;x<8;++x){
             const float normal[]={.5f,.5f,.5f,0},material[]={0,0,0,iteration==2?1.0f:0.0f},depth[]={iteration==3?.7f:.5f,0,0,0};
-            const float radiance=iteration==0?1.0f:((x+y)%2?2.0f:0.0f);const float pixel[]={radiance,radiance,radiance,(x==0&&y==0)?0.0f:1.0f};
+            const float radiance=(iteration==0||iteration==6)?1.0f:(iteration>=7?0.0f:((x+y)%2?2.0f:0.0f));const float pixel[]={radiance,radiance,radiance,(x==0&&y==0)?0.0f:1.0f};
             auto* bytes=static_cast<unsigned char*>(mapped);std::memcpy(bytes+y*256+x*16,normal,16);std::memcpy(bytes+2048+y*256+x*16,material,16);std::memcpy(bytes+4096+y*256+x*16,depth,16);std::memcpy(bytes+6144+(y*8+x)*16,pixel,16);
         }upload->Unmap(0,nullptr);
         ComPtr<ID3D12CommandAllocator> allocator;ComPtr<ID3D12GraphicsCommandList> list;assert(SUCCEEDED(device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT,IID_PPV_ARGS(&allocator))));assert(SUCCEEDED(device->CreateCommandList(0,D3D12_COMMAND_LIST_TYPE_DIRECT,allocator.Get(),nullptr,IID_PPV_ARGS(&list))));
@@ -67,10 +67,12 @@ int main(){
         const D3D12_RANGE read{0,2048};assert(SUCCEEDED(readback->Map(0,&read,&mapped)));
         double errorSum=0;
         for(UINT i=0;i<64;++i){const auto* pixel=static_cast<const float*>(mapped)+i*8;
-            if(i==0||iteration>=4){for(UINT channel=0;channel<8;++channel)assert(pixel[channel]==0);continue;}
+            if(i==0||iteration==4||iteration==5){for(UINT channel=0;channel<8;++channel)assert(pixel[channel]==0);continue;}
             assert(pixel[3]==1&&std::isfinite(pixel[0])&&pixel[0]>=0&&pixel[0]<=2);
-            assert(std::abs(pixel[7]-(iteration==1?2.0f:1.0f))<1e-5f);
-            if(iteration==0)assert(std::abs(pixel[0]-1)<1e-5f);
+            assert(std::abs(pixel[7]-(iteration==1||iteration==7?2.0f:(iteration==8?3.0f:1.0f)))<1e-5f);
+            if(iteration==0||iteration==6)assert(std::abs(pixel[0]-1)<1e-5f);
+            if(iteration==7)assert(std::abs(pixel[0]-.5f)<1e-5f);
+            if(iteration==8)assert(std::abs(pixel[0]-1.0f/3.0f)<1e-5f);
             errorSum+=std::abs(pixel[0]-1);
         }
         if(iteration==1)assert(errorSum/63<.15); // Checker noise was +/-1 before reconstruction.
