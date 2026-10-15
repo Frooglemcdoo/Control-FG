@@ -5,6 +5,7 @@ function Export-PTCaptureParts {
         [ValidateRange(1,48)][int]$PartMiB=48
     )
     $ErrorActionPreference='Stop'
+    Add-Type -AssemblyName System.IO.Compression
     Add-Type -AssemblyName System.IO.Compression.FileSystem
     $file=Get-Item -LiteralPath $Source
     if($file.Length -eq 0){throw 'Cannot package an empty capture.'}
