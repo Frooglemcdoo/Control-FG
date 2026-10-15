@@ -229,7 +229,8 @@ static void Dispatched(void*,ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT 
         PTHotpathTiming::Sample profile(PTHotpathTiming::Kind::primary_queue_wait,!environmentPass);
         std::lock_guard<std::recursive_mutex> ordered(PTSceneQueues::queueMutex);PTSceneQueues::Scope privateQueues;
         profile.Next(PTHotpathTiming::Kind::primary_guard_wait);
-        std::lock_guard<std::recursive_mutex> guard(mutex);PTTableMirror::Scope descriptorLock(true);PTTableMirror::Mute privateWrites;
+        std::lock_guard<std::recursive_mutex> guard(mutex);std::optional<PTTableMirror::Scope> descriptorLock(std::in_place,true);
+        std::optional<PTTableMirror::Mute> privateWrites(std::in_place);
         profile.Next(PTHotpathTiming::Kind::primary_setup);
         Bindings bindings;if(!PTCommandBindings::tracker.Read(list,nativeRoots,false,0xd5,bindings)){Reject("lighting_bindings");return;}
         View view;Context context;
@@ -283,6 +284,11 @@ static void Dispatched(void*,ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT 
         if(!PTTableMirror::bank.Read(bindings.resources.Get(),context.table.first,required,a->primary)||
            !PTTableMirror::bank.Unchanged(environment->table)||!Fresh(context,&a->privateTable)||!Disjoint(a->privateTable,context.table.first)){Reject("primary_descriptor_allocation");return;}
         if(!PTTableMirror::bank.TypedLoadSupported(a->primary,42)){Reject("native_specular_typed_load_unproven");return;}
+        // CPU-owned descriptor values are immutable. Keep scene/recording ownership
+        // serialized, but allow native descriptor workers through during preparation.
+        descriptorLock.reset();
+        LARGE_INTEGER descriptorReleased{},descriptorReacquire{},descriptorAcquired{};
+        QueryPerformanceCounter(&descriptorReleased);
         auto& pipeline=privatePipelines[bindings.layout->Root()];
         if(!pipeline){
             if(privatePipelines.size()>8){Reject("pipeline_budget");return;}ComPtr<ID3D12Device5> rayDevice;
@@ -322,6 +328,14 @@ static void Dispatched(void*,ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT 
         std::memcpy(static_cast<unsigned char*>(cameraData)+1280,a->lightConstants.data(),a->lightConstants.size());a->camera->Unmap(0,nullptr);
         profile.Next(PTHotpathTiming::Kind::primary_metrics);QueryPerformanceCounter(&metricsStart);
         if(!a->metrics.Initialize(device.Get())){Reject("coverage_allocation");return;}
+        QueryPerformanceCounter(&descriptorReacquire);
+        // Mute suppresses nested hooks, including Scope acquisition. Restore it
+        // only AFTER reacquiring the gate, or revalidation would run unlocked.
+        privateWrites.reset();descriptorLock.emplace(true);privateWrites.emplace();
+        QueryPerformanceCounter(&descriptorAcquired);
+        if(!PTTableMirror::bank.Unchanged(a->primary)||!PTTableMirror::bank.Unchanged(environment->table)){
+            Reject("primary_descriptors_changed_during_prepare");return;
+        }
         profile.Next(PTHotpathTiming::Kind::primary_record);QueryPerformanceCounter(&encodeStart);
         device->CopyDescriptorsSimple(49,Cpu(a->privateTable),a->primary.At(0),D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
         device->CopyDescriptorsSimple(1,Cpu(a->privateTable,47),a->metrics.Uav(),D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
@@ -343,7 +357,7 @@ static void Dispatched(void*,ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT 
         std::copy(preparationCosts.begin(),preparationCosts.end(),a->cpuCosts.begin()+6);
         pendingMetrics.push_back(frame);
         static UINT64 cpuRecorded=0;if(++cpuRecorded<=8||cpuRecorded%240==0)
-            Log("PT_PRIMARY_PREPARE_CPU frame=%u total_ms=%.6f find_ready_ms=%.6f lease_ms=%.6f",view.frame,CpuMilliseconds(prepareStart,recordDone),CpuMilliseconds(prepareStart,readyDone),CpuMilliseconds(leaseStart,leaseDone));
+            Log("PT_PRIMARY_PREPARE_CPU frame=%u total_ms=%.6f find_ready_ms=%.6f lease_ms=%.6f descriptor_unlocked_ms=%.6f descriptor_relock_ms=%.6f",view.frame,CpuMilliseconds(prepareStart,recordDone),CpuMilliseconds(prepareStart,readyDone),CpuMilliseconds(leaseStart,leaseDone),CpuMilliseconds(descriptorReleased,descriptorReacquire),CpuMilliseconds(descriptorReacquire,descriptorAcquired));
         static UINT64 recorded=0;if(++recorded<=8||recorded%240==0)Log("PT_PRIMARY_RECORDED count=%llu frame=%u dimensions=%ux%u hits=4 spp=1 output=native_light_buffers",recorded,view.frame,view.width,view.height);
     }catch(...){Reject("dispatch_allocation");}
 }
@@ -640,6 +654,6 @@ static bool Start(){
        !PTCommandBindings::Register(&commandConsumer)||!PTNativeJobRuntime::Register(&Job)||!PTSceneLive::owner.Start(step,true))return false;
     ptReflectionModeObserver.store(&MirrorModeChanged,std::memory_order_release);
     MirrorModeChanged(PTReflectionUserRequested());
-    active=true;Log("PT_PRIMARY_SESSION_READY build=M12R63 ready=1 hits=4 spp=1 roulette_start=3 material=opaque_general geometric_normals=1 native_fallback=1 primary_lighting=native diffuse_bounces=pt_indirect readiness=per_material graphics_tracking=0");return true;
+    active=true;Log("PT_PRIMARY_SESSION_READY build=M12R64 ready=1 hits=4 spp=1 roulette_start=3 material=opaque_general geometric_normals=1 native_fallback=1 primary_lighting=native diffuse_bounces=pt_indirect readiness=per_material graphics_tracking=0");return true;
 }
 }

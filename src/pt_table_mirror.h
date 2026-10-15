@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <array>
 #include <algorithm>
+#include <optional>
 #include "pt_hotpath_timing.h"
 #include "pt_descriptor_interest.h"
 #include "pt_descriptor_gate.h"

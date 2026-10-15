@@ -115,6 +115,32 @@ int main(){
     for(UINT n=6;n<13;++n)assert(finalSnapshot.versions[n]==parallelSnapshot.versions[n]);
     puts("PASS: parallel counters exact; mixed exclusive/parallel writes invalidate only the changed slot generation");
     puts("PASS: 16000 parallel native/mirror copies to adjacent slots, reentrant hook exclusion and complete snapshot");
+    // Match the primary path's release/reacquire sequence, including TLS mute.
+    // A worker must finish BEFORE reacquisition; otherwise preparation still
+    // serializes descriptor copies. Required-slot mutations must fail closed.
+    for(UINT changedSlot : {20u,5u}){
+        std::optional<PTTableMirror::Scope> descriptorLock(std::in_place,true);
+        std::optional<PTTableMirror::Mute> privateWrites(std::in_place);
+        assert(descriptorLock->capture&&descriptorLock->lock.owns_lock());
+        PTTableMirror::Bank::Snapshot captured;
+        assert(bank.Read(native.Get(),prefix,0xffull<<5,captured));
+        descriptorLock.reset();
+        HANDLE complete=CreateEvent(nullptr,TRUE,FALSE,nullptr);assert(complete);
+        std::thread worker([&]{
+            assert(!PTTableMirror::privateWrites);
+            assert(bank.TryParallelCopy(destination(prefix+changedSlot),source(0),[&]{
+                device->CopyDescriptorsSimple(1,destination(prefix+changedSlot),source(0),hd.Type);
+            }));
+            SetEvent(complete);
+        });
+        assert(WaitForSingleObject(complete,10000)==WAIT_OBJECT_0);
+        worker.join();CloseHandle(complete);
+        privateWrites.reset();descriptorLock.emplace(true);privateWrites.emplace();
+        assert(descriptorLock->capture&&descriptorLock->lock.owns_lock());
+        assert(bank.Unchanged(captured)==(changedSlot==20));
+    }
+    assert(!PTTableMirror::privateWrites);
+    puts("PASS: preparation unlock permits worker copies; reacquisition owns gate and rejects required-slot mutation");
     D3D12_CONSTANT_BUFFER_VIEW_DESC cv{cb->GetGPUVirtualAddress(),256};device->CreateConstantBufferView(&cv,source(1));
     D3D12_UNORDERED_ACCESS_VIEW_DESC uav{};uav.ViewDimension=D3D12_UAV_DIMENSION_BUFFER;uav.Buffer.NumElements=2;uav.Buffer.StructureByteStride=4;
     device->CreateUnorderedAccessView(out.Get(),nullptr,&uav,source(3));
