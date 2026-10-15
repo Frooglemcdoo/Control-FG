@@ -41,19 +41,20 @@ class Catalog {
     static bool Equal(Key a,Key b){return a.token==b.token&&a.address==b.address;}
     static bool Known(const Allocation& a){return a.key.token&&a.key.address&&a.bytes;}
     static std::size_t Rows(const Snapshot& s){return s.geometry.size()+s.instances.size()+s.bottom.size();}
-    Status Resolve(U64 cut,Key key,const Snapshot*& out,std::set<U64>& visiting,const char** pendingReason=nullptr,PTSceneOrder::Purpose purpose=PTSceneOrder::Purpose::submission,U64* selectedVersion=nullptr,std::shared_ptr<const Snapshot>* retained=nullptr)const {
+    Status Resolve(U64 cut,Key key,const Snapshot*& out,std::vector<U64>& visiting,const char** pendingReason=nullptr,PTSceneOrder::Purpose purpose=PTSceneOrder::Purpose::submission,U64* selectedVersion=nullptr,std::shared_ptr<const Snapshot>* retained=nullptr)const {
         out=nullptr;if(retained)retained->reset();PTSceneOrder::Selection selected;
         const auto status=graph.Select(cut,key,selected,pendingReason,purpose);if(status!=Status::ready)return status;
         if(selectedVersion)*selectedVersion=selected.version;
         const auto version=versions.find(selected.version);
-        if(version==versions.end()||visiting.size()>=256||!visiting.insert(selected.version).second)return Status::invalid;
+        if(version==versions.end()||visiting.size()>=256||std::find(visiting.begin(),visiting.end(),selected.version)!=visiting.end())return Status::invalid;
+        visiting.push_back(selected.version);
         const auto& v=version->second;const auto& s=*v.snapshot;
         if(!Equal(s.destination.key,key))return Status::invalid;
         if(s.kind==Snapshot::Kind::copy){
             const auto result=Resolve(v.before,s.source.key,out,visiting,pendingReason,purpose,nullptr,retained);
-            visiting.erase(selected.version);return result;
+            visiting.pop_back();return result;
         }
-        visiting.erase(selected.version);out=&s;if(retained)*retained=v.snapshot;return Status::ready;
+        visiting.pop_back();out=&s;if(retained)*retained=v.snapshot;return Status::ready;
     }
 public:
     // A successful native Reset starts a new recording generation. First use of
@@ -153,7 +154,7 @@ public:
             if(!item.second.version){baseline.emplace(item.first,0);continue;}
             const auto current=versions.find(item.second.version);if(current==versions.end())return false;
             const Snapshot* resolved=current->second.snapshot.get();
-            if(resolved->kind==Snapshot::Kind::copy){std::set<U64> visiting;
+            if(resolved->kind==Snapshot::Kind::copy){std::vector<U64> visiting;
                 if(Resolve(current->second.before,resolved->source.key,resolved,visiting)!=Status::ready)return false;
             }
             auto materialized=current->second.snapshot;
@@ -176,7 +177,7 @@ public:
         // destination version remains unchanged, and shared geometry retains
         // its independent GPU storage owner.
         for(auto& v:versions)if(v.second.snapshot->kind==Snapshot::Kind::copy){
-            const Snapshot* source=nullptr;std::set<U64> visiting;
+            const Snapshot* source=nullptr;std::vector<U64> visiting;
             if(Resolve(v.second.before,v.second.snapshot->source.key,source,visiting)==Status::ready){
                 auto concrete=std::make_shared<Snapshot>(*source);concrete->destination=v.second.snapshot->destination;concrete->source={};
                 const auto previous=Rows(*v.second.snapshot),next=Rows(*concrete);
@@ -203,11 +204,43 @@ public:
         std::lock_guard<std::mutex> guard(mutex);const auto c=cuts.find(ticket);
         return c==cuts.end()||!c->second?PTSceneOrder::Graph::PendingFence{}:graph.PendingWait(c->second);
     }
+    // Re-select every dependency at the current strict submission cut, but do
+    // not rebuild the maps/vectors already retained by a private prepared scene.
+    // Geometry identity also checks recursively resolved compaction sources.
+    Status MatchScene(U64 ticket,Allocation selected,const PTSceneDispatch::Scene& expected,const char** pendingReason=nullptr,unsigned rayMask=0xff)const {
+        if(pendingReason)*pendingReason="submission_scene_changed";
+        std::lock_guard<std::mutex> guard(mutex);if(!valid)return Status::invalid;
+        const auto cut=cuts.find(ticket);if(cut==cuts.end())return Status::missing;if(!cut->second)return Status::pending;
+        if(!Known(selected)||!rayMask||rayMask>0xff||expected.address!=selected.key.address||
+           expected.tlas.token!=selected.key.token||expected.tlas.bytes!=selected.bytes||!expected.version)return Status::missing;
+        const Snapshot* top=nullptr;std::vector<U64> visiting;U64 version=0;
+        auto status=Resolve(cut->second,selected.key,top,visiting,pendingReason,PTSceneOrder::Purpose::submission,&version);
+        if(status!=Status::ready)return status;
+        if(top->kind!=Snapshot::Kind::tlas||version!=expected.version)return Status::missing;
+        std::size_t index=0;
+        for(const auto& instance:top->instances)if((instance.idMask>>24)&rayMask){
+            if(index>=expected.instances.size()||std::memcmp(&instance,&expected.instances[index],sizeof(instance))||
+               !expected.blas.count(instance.blas))return Status::missing;
+            ++index;
+        }
+        if(index!=expected.instances.size()||expected.topology.BottomCount()!=expected.blas.size())return Status::missing;
+        for(const auto& entry:expected.blas){
+            const auto allocation=top->bottom.find(entry.first);
+            if(allocation==top->bottom.end()||!Known(allocation->second)||
+               allocation->second.key.token!=entry.second.token||allocation->second.bytes!=entry.second.bytes)return Status::missing;
+            const Snapshot* bottom=nullptr;version=0;
+            status=Resolve(cut->second,allocation->second.key,bottom,visiting,pendingReason,PTSceneOrder::Purpose::submission,&version);
+            if(status!=Status::ready)return status;
+            if(bottom->kind!=Snapshot::Kind::blas||version!=entry.second.version||
+               !expected.topology.References(entry.first,&bottom->geometry))return Status::missing;
+        }
+        return Status::ready;
+    }
     Status Scene(U64 ticket,Allocation selected,PTSceneDispatch::Scene& output,const char** pendingReason=nullptr,PTSceneOrder::Purpose purpose=PTSceneOrder::Purpose::submission,unsigned rayMask=0xff)const {
         output={};if(pendingReason)*pendingReason="scene_submission_pending";std::lock_guard<std::mutex> guard(mutex);if(!valid)return Status::invalid;
         const auto c=cuts.find(ticket);if(c==cuts.end())return Status::missing;if(!c->second)return Status::pending;
         if(!Known(selected)||!rayMask||rayMask>0xff)return Status::missing;
-        const Snapshot* top=nullptr;std::set<U64> visiting;
+        const Snapshot* top=nullptr;std::vector<U64> visiting;
         U64 topVersion=0;auto status=Resolve(c->second,selected.key,top,visiting,pendingReason,purpose,&topVersion);if(status!=Status::ready){if(status==Status::missing&&pendingReason)*pendingReason="scene_tlas_unavailable";return status;}
         if(top->kind!=Snapshot::Kind::tlas){if(pendingReason)*pendingReason="scene_tlas_invalid";return Status::missing;}
         PTSceneDispatch::Scene scene;scene.address=selected.key.address;scene.version=topVersion;

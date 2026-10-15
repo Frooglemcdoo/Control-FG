@@ -23,6 +23,11 @@ struct Mapping {Geometry geometry{};bool referenced=false;};
 class Index {
     std::map<U64,std::shared_ptr<const std::vector<Geometry>>> blas;std::size_t rows=0;
 public:
+    bool References(U64 address,const std::vector<Geometry>* geometry)const {
+        const auto found=blas.find(address);
+        return found!=blas.end()&&found->second.get()==geometry;
+    }
+    std::size_t BottomCount()const{return blas.size();}
     bool Same(const Index& other)const {
         if(rows!=other.rows||blas.size()!=other.blas.size())return false;
         auto b=other.blas.begin();

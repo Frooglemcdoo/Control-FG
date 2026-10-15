@@ -38,6 +38,14 @@ int main(){
     assert(maskedScene.Scene(800,top,scene,&maskedReason)==Status::missing);
     assert(maskedScene.Scene(800,top,scene,&maskedReason,PTSceneOrder::Purpose::submission,1)==Status::ready);
     assert(scene.instances.size()==1&&scene.blas.size()==1&&Position(scene)==0x2000);
+    assert(maskedScene.MatchScene(800,top,scene,nullptr,1)==Status::ready);
+    assert(maskedScene.MatchScene(800,top,scene)==Status::missing);
+    auto damaged=scene;damaged.instances[0].transform[0]+=1;
+    assert(maskedScene.MatchScene(800,top,damaged,nullptr,1)==Status::missing);
+    damaged=scene;damaged.blas.begin()->second.token++;
+    assert(maskedScene.MatchScene(800,top,damaged,nullptr,1)==Status::missing);
+    damaged=scene;damaged.topology.Clear();
+    assert(maskedScene.MatchScene(800,top,damaged,nullptr,1)==Status::missing);
     assert(maskedScene.Scene(800,top,scene,&maskedReason,PTSceneOrder::Purpose::recordingPreview,1)==Status::ready);
     // Making the unavailable geometry reachable must block both stages.
     maskedGeneration=maskedScene.Begin(1);maskedTop.instances[1].idMask=0x03000002;
@@ -84,6 +92,8 @@ int main(){
     assert(preview.Scene(702,top,scene)==Status::pending);
     assert(preview.Scene(702,top,scene,nullptr,PTSceneOrder::Purpose::recordingPreview)==Status::ready);
     const auto previewBottom=scene.blas.at(bottom.key.address).version;
+    const auto previewProof=scene;
+    assert(preview.MatchScene(702,top,previewProof)==Status::pending);
     assert(Position(scene)==0x2000);
     assert(preview.Scene(702,top,scene)==Status::pending&&scene.instances.empty());
     // A producer that arrives later can change BLAS contents while keeping the
@@ -93,6 +103,8 @@ int main(){
     assert(preview.Submit(2,{{2,previewGeneration}}));assert(preview.Signal(2,302,1));
     assert(preview.Scene(702,top,scene)==Status::ready&&Position(scene)==0x3000);
     assert(scene.blas.at(bottom.key.address).version!=previewBottom);
+    assert(preview.MatchScene(702,top,previewProof)==Status::missing);
+    assert(preview.MatchScene(702,top,scene)==Status::ready);
     Catalog lateUnchanged;auto lg=lateUnchanged.Begin(1);
     assert(lateUnchanged.Record(1,lg,Blas(bottom,0x2000))&&lateUnchanged.Record(1,lg,Tlas(bottom)));
     assert(lateUnchanged.Submit(1,{{1,lg}}));assert(lateUnchanged.Signal(1,400,1));
@@ -100,10 +112,14 @@ int main(){
     lg=lateUnchanged.Begin(1);assert(lateUnchanged.Mark(1,lg,703)&&lateUnchanged.Submit(1,{{1,lg}}));
     assert(lateUnchanged.Scene(703,top,scene,nullptr,PTSceneOrder::Purpose::recordingPreview)==Status::ready);
     const auto unchangedVersion=scene.blas.at(bottom.key.address).version;
+    const auto unchangedProof=scene;
+    assert(lateUnchanged.MatchScene(703,top,unchangedProof)==Status::pending);
     assert(lateUnchanged.Scene(703,top,scene)==Status::pending);
     assert(lateUnchanged.Wait(2,400,1)&&lateUnchanged.Signal(2,401,1));
     assert(lateUnchanged.Scene(703,top,scene)==Status::pending);
+    assert(lateUnchanged.MatchScene(703,top,unchangedProof)==Status::pending);
     assert(lateUnchanged.Signal(2,401,2));
+    assert(lateUnchanged.MatchScene(703,top,unchangedProof)==Status::ready);
     assert(lateUnchanged.Scene(703,top,scene)==Status::ready&&scene.blas.at(bottom.key.address).version==unchangedVersion);
     auto producer=c.Begin(1);assert(producer);
     assert(c.Record(1,producer,Blas(bottom,0x2000)));
@@ -210,11 +226,14 @@ int main(){
         assert(lifetime.Record(1,g,copy));assert(lifetime.Record(1,g,Tlas(compact)));
         assert(lifetime.Mark(1,g,901));assert(lifetime.Submit(1,{{1,g}}));
         assert(lifetime.Scene(901,top,retained)==Status::ready);
+        assert(lifetime.MatchScene(901,top,retained)==Status::ready);
         g=lifetime.Begin(1);assert(lifetime.Record(1,g,Blas(compact,0x6100)));
         assert(lifetime.Mark(1,g,902));assert(lifetime.Submit(1,{{1,g}}));
         PTSceneDispatch::Scene replacement;assert(lifetime.Scene(902,top,replacement)==Status::ready);
         assert(Position(retained)==0x5100&&Position(replacement)==0x6100);
         assert(!PTSceneDispatch::SameScene(retained,replacement));
+        assert(lifetime.MatchScene(902,top,retained)!=Status::ready);
+        assert(lifetime.MatchScene(902,top,replacement)==Status::ready);
     }
     assert(!retainedOwner.expired()&&Position(retained)==0x5100);
     auto retainedCopy=retained;assert(PTSceneDispatch::SameScene(retained,retainedCopy));

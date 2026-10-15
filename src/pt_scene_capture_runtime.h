@@ -262,6 +262,10 @@ public:
         std::lock_guard<std::mutex> guard(mutex);RefreshWaitFences();
         return catalog.Scene(ticket,{{selected.token,selected.address},selected.bytes},scene,pendingReason,PTSceneOrder::Purpose::submission,rayMask);
     }
+    PTSceneOrder::Status MatchScene(U64 ticket,const PTSceneDescriptors::Acceleration& selected,const PTSceneDispatch::Scene& scene,const char** reason=nullptr,unsigned rayMask=0xff){
+        std::lock_guard<std::mutex> guard(mutex);RefreshWaitFences();
+        return catalog.MatchScene(ticket,{{selected.token,selected.address},selected.bytes},scene,reason,rayMask);
+    }
     // Recording only: the output remains disarmed until Scene succeeds at
     // actual queue submission and its exact versions match the prepared plan.
     PTSceneOrder::Status PreviewScene(U64 ticket,const PTSceneDescriptors::Acceleration& selected,PTSceneDispatch::Scene& scene,const char** pendingReason=nullptr,unsigned rayMask=0xff){

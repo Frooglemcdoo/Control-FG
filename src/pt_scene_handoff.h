@@ -193,11 +193,18 @@ public:
         if(reason)*reason="submission_proof_mismatch";
         if(!submissionTicket||!proof||proof->owner!=&owner||!owner.Active()||!engineFrame||proof->engineFrame!=engineFrame||
            proof->width!=width||proof->height!=height)return Status::rejected;
-        PTSceneDispatch::Scene scene;const auto selected=owner.Scenes().Scene(submissionTicket,proof->acceleration,scene,reason,1);
+        PTSceneDispatch::Scene rebuilt;
+        const PTSceneDispatch::Scene* scene=&proof->scene;
+        auto selected=owner.Scenes().MatchScene(submissionTicket,proof->acceleration,proof->scene,reason,1);
+        // History compaction may replace an equivalent immutable snapshot.
+        // Preserve the original full comparison as the conservative fallback.
+        if(selected!=PTSceneOrder::Status::ready&&selected!=PTSceneOrder::Status::pending){
+            selected=owner.Scenes().Scene(submissionTicket,proof->acceleration,rebuilt,reason,1);scene=&rebuilt;
+        }
         if(selected==PTSceneOrder::Status::pending)return Status::pending;
         if(selected!=PTSceneOrder::Status::ready){if(reason)*reason="submission_scene_rejected";return Status::rejected;}
         bool reused=false;
-        const bool same=owner.Resources().Revalidate(scene,proof->table,proof->exports,proof->plan,proof->scene,&reused);
+        const bool same=owner.Resources().Revalidate(*scene,proof->table,proof->exports,proof->plan,proof->scene,&reused);
         if(reason)*reason=same?(reused?"submission_preflight_reused":"submission_preflight_rebuilt"):"submission_scene_changed";
         return same?Status::prepared:Status::rejected;
     }
