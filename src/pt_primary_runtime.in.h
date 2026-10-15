@@ -1,11 +1,19 @@
 // Included inside PTGlassRuntime after the native context/allocator adapters.
 // One session owner. Every native call is still forwarded by its outer hook.
 namespace Primary {
+// Compile-time development route. No INI toggle or installation script enables
+// this incomplete material-coverage path, and release packaging omits its shader.
+#if defined(CONTROL_PT_SURFACE_DEVELOPMENT)
+static constexpr bool surfaceReplacement=true;
+#else
+static constexpr bool surfaceReplacement=false;
+#endif
 using View=PTNativeView::View;
 using Bindings=PTCommandBindings::Snapshot;
 using Table=PTTableMirror::Bank::Snapshot;
 using Output=PTSurfaceComposition::Output;
 static PTSceneHandoff::Runtime handoff{PTSceneLive::owner};
+static constexpr const char* outputName=surfaceReplacement?"private_surface":"native_light_buffers";
 static std::atomic<bool> active{false};
 static bool transportValidated=false;
 static unsigned transportGoodFrames=0;
@@ -123,7 +131,7 @@ static void PollMetrics(){
                 transportValidated=true;Log("PT_PRIMARY_TRANSPORT_READY frame=%u covered=%u stable_frames=%u",f.view.frame,counts[6],transportGoodFrames);}
         }
         static UINT64 samples=0;const auto n=++samples;
-        if(n<=8||n%240==0)Log("PT_PRIMARY_GPU frame=%u readback=%u armed=%u sampled=%u dimensions=%u primary_hit=%u material_match=%u depth_match=%u integrated=%u covered=%u fault=%u probe=%u sparse_step=64 output=native_light_buffers",f.view.frame,unsigned(good),unsigned(f.armed),counts[0],counts[1],counts[2],counts[3],counts[4],counts[5],counts[6],counts[7],unsigned(f.assets->probe));
+        if(n<=8||n%240==0)Log("PT_PRIMARY_GPU frame=%u readback=%u armed=%u sampled=%u dimensions=%u primary_hit=%u material_match=%u depth_match=%u integrated=%u covered=%u fault=%u probe=%u sparse_step=64 output=%s",f.view.frame,unsigned(good),unsigned(f.armed),counts[0],counts[1],counts[2],counts[3],counts[4],counts[5],counts[6],counts[7],unsigned(f.assets->probe),outputName);
         if(good&&(n<=8||n%240==0)){UINT64 frequency=0;double ms=0;
             const bool timed=SUCCEEDED(f.queue->GetTimestampFrequency(&frequency))&&f.assets->metrics.ReadMilliseconds(frequency,ms);
             Log("PT_PRIMARY_TIMING frame=%u valid=%u dispatch_gpu_ms=%.6f probe=%u roulette_start=3 max_hits=4",f.view.frame,unsigned(timed),ms,unsigned(f.assets->probe));}
@@ -161,7 +169,7 @@ static std::shared_ptr<Frame> FrameFor(const View& view,ID3D12CommandQueue* queu
     }
     if(frames.size()>=8)return {};
     auto f=std::make_shared<Frame>();f->view=view;f->queue=queue;
-    if(FAILED(Output::Create(queue,1,1,f->output,true)))return {};
+    if(FAILED(Output::Create(queue,surfaceReplacement?view.width:1,surfaceReplacement?view.height:1,f->output,true)))return {};
     frames.push_back(f);return f;
 }
 static D3D12_CPU_DESCRIPTOR_HANDLE Cpu(const PTGlass::DescriptorRange& range,UINT slot=0){
@@ -283,7 +291,7 @@ static void Dispatched(void*,ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT 
         constexpr UINT64 required=(1ull<<5)|(1ull<<6)|(1ull<<8)|(1ull<<12)|(1ull<<13)|(1ull<<15)|(1ull<<19)|(1ull<<20)|(1ull<<22)|(1ull<<23)|(1ull<<41)|(1ull<<42);
         if(!PTTableMirror::bank.Read(bindings.resources.Get(),context.table.first,required,a->primary)||
            !PTTableMirror::bank.Unchanged(environment->table)||!Fresh(context,&a->privateTable)||!Disjoint(a->privateTable,context.table.first)){Reject("primary_descriptor_allocation");return;}
-        if(!PTTableMirror::bank.TypedLoadSupported(a->primary,42)){Reject("native_specular_typed_load_unproven");return;}
+        if(!surfaceReplacement&&!PTTableMirror::bank.TypedLoadSupported(a->primary,42)){Reject("native_specular_typed_load_unproven");return;}
         // CPU-owned descriptor values are immutable. Keep scene/recording ownership
         // serialized, but allow native descriptor workers through during preparation.
         descriptorLock.reset();
@@ -336,6 +344,14 @@ static void Dispatched(void*,ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT 
         if(!PTTableMirror::bank.Unchanged(a->primary)||!PTTableMirror::bank.Unchanged(environment->table)){
             Reject("primary_descriptors_changed_during_prepare");return;
         }
+        if(surfaceReplacement){
+            if(!Fresh(context,&frame->surfaceTables,49*64)){Reject("surface_table_reservation");return;}
+            const auto& range=frame->surfaceTables;
+            const auto overlaps=[&](UINT first,UINT count){return range.first<UINT64(first)+count&&first<UINT64(range.first)+range.count;};
+            if(overlaps(context.table.first,49)||overlaps(a->privateTable.first,a->privateTable.count)){
+                Reject("surface_table_alias");return;
+            }
+        }
         profile.Next(PTHotpathTiming::Kind::primary_record);QueryPerformanceCounter(&encodeStart);
         device->CopyDescriptorsSimple(49,Cpu(a->privateTable),a->primary.At(0),D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
         device->CopyDescriptorsSimple(1,Cpu(a->privateTable,47),a->metrics.Uav(),D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
@@ -358,7 +374,7 @@ static void Dispatched(void*,ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT 
         pendingMetrics.push_back(frame);
         static UINT64 cpuRecorded=0;if(++cpuRecorded<=8||cpuRecorded%240==0)
             Log("PT_PRIMARY_PREPARE_CPU frame=%u total_ms=%.6f find_ready_ms=%.6f lease_ms=%.6f descriptor_unlocked_ms=%.6f descriptor_relock_ms=%.6f",view.frame,CpuMilliseconds(prepareStart,recordDone),CpuMilliseconds(prepareStart,readyDone),CpuMilliseconds(leaseStart,leaseDone),CpuMilliseconds(descriptorReleased,descriptorReacquire),CpuMilliseconds(descriptorReacquire,descriptorAcquired));
-        static UINT64 recorded=0;if(++recorded<=8||recorded%240==0)Log("PT_PRIMARY_RECORDED count=%llu frame=%u dimensions=%ux%u hits=4 spp=1 output=native_light_buffers",recorded,view.frame,view.width,view.height);
+        static UINT64 recorded=0;if(++recorded<=8||recorded%240==0)Log("PT_PRIMARY_RECORDED count=%llu frame=%u dimensions=%ux%u hits=4 spp=1 output=%s",recorded,view.frame,view.width,view.height,outputName);
     }catch(...){Reject("dispatch_allocation");}
 }
 struct Restore {ID3D12GraphicsCommandList* list=nullptr;ComPtr<ID3D12PipelineState> pipeline;D3D12_GPU_DESCRIPTOR_HANDLE table{};};
@@ -640,7 +656,8 @@ static void PipelineBound(void*,ID3D12GraphicsCommandList*,ID3D12PipelineState* 
     try{PTPrimaryPipelineProbe::Used(pipeline,0,0,0,false);}
     catch(...){Log("PT_PRIMARY_PSO_PROBE_FAILED stage=binding");}
 }
-static const PTCommandBindings::Consumer commandConsumer{&handoff,&Dispatched,nullptr,nullptr,&PipelineBound,true};
+static const PTCommandBindings::Consumer commandConsumer{&handoff,&Dispatched,
+    surfaceReplacement?&Drawing:nullptr,surfaceReplacement?&Drawn:nullptr,&PipelineBound,!surfaceReplacement};
 static void MirrorModeChanged(bool) noexcept {
     try {std::lock_guard<PTTableMirror::DescriptorGate> transition(PTTableMirror::gate);
         const bool requested=PTReflectionUserRequested();
@@ -652,7 +669,8 @@ static bool Start(){
     if(active||!device||!enabled||!PTNativeJobRuntime::workerHooksReady||!PTNativeJobRuntime::dispatchHookReady)return false;
     if(!viewProviders.Initialize(verifiedRenderer,verifiedD3d)){Log("PT_PRIMARY_PROVIDER_INIT_FAILED");return false;}
     char sha[65]{};bool loaded=false;
-    if(!PTReflectionLoadSidecar(L"pt_primary_path.dxil","PRIMARY_PATH",library,sha,loaded))return false;
+    if(!PTReflectionLoadSidecar(surfaceReplacement?L"pt_primary_surface.dxil":L"pt_primary_path.dxil","PRIMARY_PATH",library,sha,loaded))return false;
+    if(surfaceReplacement)Log("PT_PRIMARY_DEVELOPMENT surface_replacement=1 native_passes_retained=1 incomplete_material_coverage=1");
     pendingMetrics.reserve(8);
     PTCommandBindings::Mute privateRecording;PTTableMirror::Mute privateWrites;
     const auto step=device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
@@ -661,6 +679,6 @@ static bool Start(){
        !PTCommandBindings::Register(&commandConsumer)||!PTNativeJobRuntime::Register(&Job)||!PTSceneLive::owner.Start(step,true))return false;
     ptReflectionModeObserver.store(&MirrorModeChanged,std::memory_order_release);
     MirrorModeChanged(PTReflectionUserRequested());
-    active=true;Log("PT_PRIMARY_SESSION_READY build=M12R66 ready=1 hits=4 spp=1 roulette_start=3 material=opaque_general geometric_normals=1 native_fallback=1 primary_lighting=native diffuse_bounces=pt_indirect readiness=per_material graphics_tracking=0");return true;
+    active=true;Log("PT_PRIMARY_SESSION_READY build=M12R66 ready=1 hits=4 spp=1 roulette_start=3 material=opaque_general geometric_normals=1 native_fallback=1 primary_lighting=%s transport=%s readiness=per_material graphics_tracking=%u",surfaceReplacement?"pt":"native",surfaceReplacement?"full_surface":"diffuse_indirect",unsigned(surfaceReplacement));return true;
 }
 }

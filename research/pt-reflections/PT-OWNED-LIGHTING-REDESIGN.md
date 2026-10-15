@@ -29,14 +29,23 @@ Windows CI compiles both producers independently and runs the WARP commit test
 in both modes. The new shader is deliberately absent from release packaging.
 The existing executable must never load this shader under the legacy filename.
 
+## Development host route
+
+`CONTROL_PT_SURFACE_DEVELOPMENT` now selects the distinct shader filename,
+allocates at internal render extent, reserves 64 retained composition tables,
+checks allocator overlap, and registers graphics draw/restore callbacks. It
+removes the additive path's typed native-UAV-load requirement. CI compiles this
+host route separately; it is not linked into or packaged with the release DLL.
+This restores the previously disconnected composition path, but is not evidence
+of visual correctness, denoiser compatibility or complete material coverage.
+
 ## Host integration gaps found in the audit
 
-- `FrameFor` allocates 1x1. Replacement needs the view's internal render extent.
-- `surfaceTables` is read by Drawing but never allocated. Reserve its 64 tables
-  in the authenticated producer allocator context, with normal retained lifetime.
-- commandConsumer has null drawing/drawn callbacks and computeOnly=true.
-  Restoring composition requires graphics tracking, matching-frame admission,
-  descriptor validation, and post-draw state restoration as one change.
+- Release `FrameFor` allocates 1x1; the development route now uses render extent.
+- Release `surfaceTables` was never allocated. Development now reserves its 64
+  tables in the producer allocator context and retains them with the frame.
+- Release commandConsumer remains compute-only. Development reconnects graphics
+  tracking and the existing matching-frame admission/restore callbacks.
 - Nine reviewed general-surface profiles do not cover characters, scattering,
   decals, or transparency. Those need explicit ownership/fallback contracts.
 - Native u2 single-spot metadata and later diffuse/SSS consumers still exist.

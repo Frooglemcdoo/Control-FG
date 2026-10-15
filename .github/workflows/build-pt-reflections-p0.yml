@@ -427,6 +427,9 @@ jobs:
         shell: cmd
         run: |
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
+          rem Compile the development host route, but do not package or link it into the release DLL.
+          cl /nologo /std:c++17 /EHsc /W4 /O2 /MT /c /DCONTROL_PT_SURFACE_DEVELOPMENT /DUNICODE /D_UNICODE /I "third_party\streamline\include" src\probe.cpp /Fobuild\probe-surface-development.obj
+          if errorlevel 1 exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /O2 /MT /LD /Zi /Fd"build\probe.pdb" /guard:cf /DUNICODE /D_UNICODE /I "third_party\streamline\include" src\probe.cpp build\control_fg_logo.res /Fobuild\probe.obj /Febuild\dxgi.dll /link /DEF:src\dxgi.def /INCREMENTAL:NO /DEBUG:FULL /OPT:REF /OPT:ICF /PDB:"build\dxgi.pdb" /DYNAMICBASE /NXCOMPAT /GUARD:CF bcrypt.lib wintrust.lib user32.lib gdi32.lib msimg32.lib d3d12.lib
           if errorlevel 1 exit /b 1
           dumpbin /exports build\dxgi.dll > build\exports.txt
