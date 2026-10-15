@@ -41,6 +41,9 @@ class Graph {
     Status ClockAt(U64 at)const {
         if(!valid||!at||at>=nodes.size())return Status::invalid;
         if(clockDirty){clocks.assign(nodes.size(),{});clockState.assign(nodes.size(),0);clockDirty=false;clockCycle=false;fenceOrderKnown={};}
+        // Appending a write/mark/wait cannot alter an existing node's ancestry.
+        // Grow lazily; fence signals/completions and rebases still invalidate all.
+        if(clocks.size()<nodes.size()){clocks.resize(nodes.size());clockState.resize(nodes.size(),0);}
         if(clockCycle)return Status::invalid;
         if(clockState[at]>=2)return clockState[at]==2?Status::ready:Status::pending;
         std::vector<std::pair<U64,bool>> todo{{at,false}};
@@ -80,7 +83,8 @@ class Graph {
     U64 Append(U64 queue,Node node){
         if(!valid||!queue||nodes.size()>=MaximumNodes||(!queues.count(queue)&&queues.size()>=MaximumQueues)){valid=false;return 0;}
         if(!lanes.count(queue))lanes.emplace(queue,static_cast<unsigned>(lanes.size()+1));
-        node.lane=lanes.at(queue);node.stamp=++serial;node.base=observedComplete;clockDirty=true;
+        node.lane=lanes.at(queue);node.stamp=++serial;node.base=observedComplete;
+        if(clockCycle)clockDirty=true; // Retry independent cuts after a failed cyclic traversal.
         node.previous=queues.count(queue)?queues.at(queue):completedPrefix;nodes.push_back(node);queues[queue]=nodes.size()-1;
         if(node.target.token)targetWrites[node.target].push_back(nodes.size()-1);
         return nodes.size()-1;
@@ -119,7 +123,7 @@ public:
         if(!valid||!fence||!value||value==UINT64_MAX||(!fences.count(fence)&&fences.size()>=MaximumFences)){valid=false;return 0;}
         auto& f=fences[fence];if(value<=f.last){valid=false;return 0;}
         const auto node=Append(queue,{});if(!node)return 0;
-        f.last=value;f.signals.emplace(value,node);return node;
+        f.last=value;f.signals.emplace(value,node);clockDirty=true;return node;
     }
     U64 Wait(U64 queue,U64 fence,U64 value){
         if(!fence||value==UINT64_MAX){valid=false;return 0;}
@@ -307,20 +311,29 @@ public:
         fenceOrder[purposeIndex]=order;fenceOrderKnown[purposeIndex]=true;
         }
         if(fenceOrder[purposeIndex]!=Status::ready)return report(fenceOrder[purposeIndex],"scene_fence_order_pending");
-        std::set<U64> maximal;
+        // FIFO totally orders writes within one lane. An antichain therefore
+        // has at most one candidate per clock lane (including rebased lane 0).
+        // Keep it inline instead of allocating a tree node for every AS lookup.
+        std::array<U64,17> maximal{};std::size_t maximalCount=0;
         for(const U64 id:writes){
             if(!Before(id,dispatch))continue;
             const auto status=ClockAt(id);if(!usable(status))return status;
             bool dominated=false;
-            for(auto it=maximal.begin();it!=maximal.end();){
-                if(Before(id,*it)){dominated=true;break;}
-                if(Before(*it,id))it=maximal.erase(it);else ++it;
+            for(std::size_t n=0;n<maximalCount;){
+                if(Before(id,maximal[n])){dominated=true;break;}
+                if(Before(maximal[n],id)){
+                    for(std::size_t next=n+1;next<maximalCount;++next)maximal[next-1]=maximal[next];
+                    --maximalCount;
+                }else ++n;
             }
-            if(!dominated)maximal.insert(id);
+            if(!dominated){
+                if(maximalCount==maximal.size())return Status::invalid;
+                maximal[maximalCount++]=id;
+            }
         }
-        if(maximal.empty()){if(pendingReason)*pendingReason="scene_no_ordered_build";return Status::missing;}
-        if(maximal.size()!=1)return Status::unordered;
-        const U64 selected=*maximal.begin();
+        if(!maximalCount){if(pendingReason)*pendingReason="scene_no_ordered_build";return Status::missing;}
+        if(maximalCount!=1)return Status::unordered;
+        const U64 selected=maximal[0];
         if(!nodes[selected].version){if(pendingReason)*pendingReason=nodes[selected].unknownReason;return Status::missing;}
         result={nodes[selected].version,selected};return Status::ready;
     }
