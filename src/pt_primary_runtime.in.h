@@ -190,7 +190,7 @@ static bool Encode(void* context,ID3D12GraphicsCommandList* list,ID3D12Resource*
 static void Job(PTNativeJobRuntime::Phase phase,const PTNativeJobRoute::Ticket& ticket) noexcept {
     if(!active)return;
     try {
-        // WriterReady owns its input until this callback returns. It never waits
+        // Pre-schedule WriterReady owns its input until this callback returns. It never waits
         // for the native worker or acquires the queue submission lock.
         if(phase==PTNativeJobRuntime::Phase::writerReady){handoff.WriterReady(ticket);return;}
         std::lock_guard<std::recursive_mutex> ordered(PTSceneQueues::queueMutex);
@@ -637,6 +637,6 @@ static bool Start(){
        !PTCommandBindings::Register(&commandConsumer)||!PTNativeJobRuntime::Register(&Job)||!PTSceneLive::owner.Start(step,true))return false;
     ptReflectionModeObserver.store(&MirrorModeChanged,std::memory_order_release);
     MirrorModeChanged(PTReflectionUserRequested());
-    active=true;Log("PT_PRIMARY_SESSION_READY build=M12R56 ready=1 hits=4 spp=1 roulette_start=3 material=opaque_general geometric_normals=1 native_fallback=1 primary_lighting=native diffuse_bounces=pt_indirect readiness=per_material graphics_tracking=0");return true;
+    active=true;Log("PT_PRIMARY_SESSION_READY build=M12R57 ready=1 hits=4 spp=1 roulette_start=3 material=opaque_general geometric_normals=1 native_fallback=1 primary_lighting=native diffuse_bounces=pt_indirect readiness=per_material graphics_tracking=0");return true;
 }
 }

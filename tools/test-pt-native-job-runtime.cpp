@@ -37,17 +37,19 @@ int main(){
     auto first=received;auto* job=module.data()+0x136d30;
     Put(job+0x10,first.writer.buffer);Put(job+0x18,first.writer.state);Put(job+0x20,first.writer.bytes);
     Put(job+0x24,first.writer.rays);Put(job+0x28,first.writer.count);Put(job+0x30,first.writer.bindings);
-    Scheduling(job);assert(!pending.serial);
+    Scheduling(job);assert(!pending.serial&&ready==1&&received.serial==first.serial);
+    // Lighting may record before the worker even starts: inputs must already be ready.
     Put(module.data()+0x136c68,UINT64(92)); // Worker completion must retain the recording frame.
     auto wrong=first.writer;wrong.bindings++;assert(!Begin(0,wrong).serial);
     auto claimed=Begin(0,first.writer);assert(claimed.serial==first.serial&&claimed.engineFrame==91);Finish(0,claimed);assert(ready==1&&received.engineFrame==91);
     Finish(0,claimed);assert(ready==1&&GetLastError()==1234);
     Recorded(list,&desc,pipeline);auto second=received;assert(second.serial!=first.serial&&second.engineFrame==92);
-    Scheduling(job);claimed=Begin(0,second.writer);Finish(0,first);assert(ready==1);Finish(0,claimed);assert(ready==2);
-    Recorded(list,&desc,pipeline);Put(job+0x30,UINT64(0x4444));Scheduling(job);assert(cancelled==1&&!Begin(0,first.writer).serial);
+    Scheduling(job);assert(ready==2&&received.serial==second.serial);
+    claimed=Begin(0,second.writer);Finish(0,first);assert(ready==2);Finish(0,claimed);assert(ready==2);
+    Recorded(list,&desc,pipeline);Put(job+0x30,UINT64(0x4444));Scheduling(job);assert(cancelled==1&&ready==2&&!Begin(0,first.writer).serial);
     module[0x1371e0]=1;Recorded(list,&desc,pipeline);assert(!pending.serial);module[0x1371e0]=0;
     module[0xf6c30]=0;Recorded(list,&desc,pipeline);assert(!pending.serial);module[0xf6c30]=1;
     ++desc.HitGroupTable.StartAddress;Recorded(list,&desc,pipeline);assert(!pending.serial);--desc.HitGroupTable.StartAddress;
     Recorded(list,reinterpret_cast<D3D12_DISPATCH_RAYS_DESC*>(1),pipeline);assert(!pending.serial);
-    std::puts("PASS live job bridge: native dispatch layout, pre-schedule registration, worker publication, stale generations, mismatches and guarded reads.");
+    std::puts("PASS live job bridge: native dispatch layout, pre-schedule registration, publication before worker start, stale generations, mismatches and guarded reads.");
 }

@@ -23,7 +23,8 @@ template<class F> static void Diagnostics(F&& log){
 }
 // Consumer is a session-lifetime static callback. Register before the first
 // dispatch; do not replace it while jobs are pending. It must copy writer input
-// data / acquire ownership inside writerReady, before the native job returns.
+// data / acquire ownership inside writerReady, before runJob can start the worker.
+// Readiness means immutable CPU inputs were copied, not native GPU SBT completion.
 [[maybe_unused]] static bool Register(Consumer fn)noexcept {
     Consumer empty=nullptr;
     return workerHooksReady.load(std::memory_order_acquire)&&dispatchHookReady.load(std::memory_order_acquire)&&fn&&consumer.compare_exchange_strong(empty,fn);
@@ -97,7 +98,14 @@ static void Scheduling(void* handle)noexcept {
     const DWORD error=GetLastError();unsigned slot=0;Writer writer{};
     if(pending.serial){
         if(!ReadJob(handle,slot,writer)||!(writer==pending.writer)||!router.Schedule(slot,pending)){++scheduleRejected;callback(Phase::cancelled,pending);}
-        else ++scheduled;
+        else {
+            ++scheduled;
+            // The job arguments have been validated and the native scheduler
+            // still owns them. Snapshot before runJob can start/reclaim the job.
+            // PT reconstructs records from CPU inputs; it never reads the SBT
+            // written by nativeFill. Publishing at Finish races lighting recording.
+            callback(Phase::writerReady,pending);
+        }
     }
     pending={};SetLastError(error);
 }
@@ -108,12 +116,9 @@ static Ticket Begin(int mode,const Writer& writer)noexcept {
 static void Finish(int mode,const Ticket& ticket)noexcept {
     if(!ticket.serial)return;
     const DWORD error=GetLastError();
-    // Publish while the job is still running. The native waitJob cannot return
-    // and release its copy work until this callback and the native worker return.
-    if(router.Finish(static_cast<unsigned>(mode),ticket.serial)){
-        ++writerFinished;
-        if(const auto callback=consumer.load(std::memory_order_acquire))callback(Phase::writerReady,ticket);
-    }
+    // Retire the worker generation only. CPU inputs were already published
+    // before scheduling; completion must not publish or cancel them again.
+    if(router.Finish(static_cast<unsigned>(mode),ticket.serial))++writerFinished;
     SetLastError(error);
 }
 }

@@ -183,8 +183,8 @@ public:
         }
         return true;
     }
-    // Called inside the matching writerReady callback, before native waitJob
-    // can reclaim its CPU rows. Freeze identifiers, roots and allocation tokens
+    // Called inside the matching pre-schedule writerReady callback, before
+    // runJob can start the worker or reclaim CPU rows. Freeze identifiers, roots and allocation tokens
     // together; a later preparation cannot bind replacement allocations.
     bool SnapshotWriter(const PTNativeJobRoute::Ticket& ticket,PTNativeShaderTable::Identifiers& identifiers,PTSceneDispatch::Table& table,
                         const char** failure=nullptr,std::size_t* failedRow=nullptr){
