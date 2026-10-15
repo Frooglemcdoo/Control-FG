@@ -126,8 +126,6 @@ jobs:
           build\test-pt-primary-commit.exe
           if not "%errorlevel%"=="0" exit /b 1
           set PT_SURFACE_TEST_FAILED=0
-          build\test-pt-primary-commit.exe surface
-          if not "%errorlevel%"=="0" set PT_SURFACE_TEST_FAILED=1
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-pt-surface-root-buffer.cpp /Febuild\test-pt-surface-root-buffer.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
           if not "%errorlevel%"=="0" exit /b 1
           build\test-pt-surface-root-buffer.exe
@@ -356,6 +354,11 @@ jobs:
           }
           if(-not $dxc){throw 'dxc.exe was not found in the Windows SDK / Visual Studio installation.'}
           Write-Host "DXC: $dxc"
+          # Exercise the shared production transport with the production compiler.
+          & $dxc -T cs_6_0 -E main -HV 2021 -O3 -WX -I src/shaders -Fo build/test-pt-surface-commit.dxil tools/test-pt-surface-commit.hlsl
+          if($LASTEXITCODE -ne 0){throw "Surface transport fixture DXC failed: $LASTEXITCODE"}
+          & build/test-pt-primary-commit.exe surface
+          if($LASTEXITCODE -ne 0){throw "Surface transport GPU readback failed: $LASTEXITCODE"}
           & $dxc -T lib_6_3 -HV 2021 -O3 -WX -I src/shaders -Fo build/pt_primary_path.dxil src/shaders/pt_primary_path.hlsl
           if($LASTEXITCODE -ne 0){throw "Primary path DXC compile failed: $LASTEXITCODE"}
           # Distinct filenames prevent loading a replacement shader with the legacy host contract.
