@@ -113,6 +113,14 @@ int main(){
     alteredScene=scene;assert(alteredScene.topology.Build(0xb000,{{0x1000,0x2000,12,2,3,3,1,99}}));
     assert(!SameScene(scene,alteredScene));
     const auto preparedAtRayPass=plan;assert(SameDispatch(preparedAtRayPass,plan));
+    assert(SameDispatch(plan,plan));
+    // Identity may skip equality work, never the validity contract.
+    auto invalidIdentity=plan;invalidIdentity.bottomVersions.begin()->second=0;
+    assert(!SameDispatch(invalidIdentity,invalidIdentity));
+    invalidIdentity=plan;invalidIdentity.records.clear();assert(!SameDispatch(invalidIdentity,invalidIdentity));
+    invalidIdentity=plan;invalidIdentity.selection.tableVersion=0;assert(!SameDispatch(invalidIdentity,invalidIdentity));
+    auto invalidScene=scene;invalidScene.address=0;assert(!SameScene(invalidScene,invalidScene));
+    invalidScene=scene;invalidScene.version=0;assert(!SameScene(invalidScene,invalidScene));
     ++scene.blas[0xb000].version;assert(prepare().status==Status::prepared);
     assert(plan.records==preparedAtRayPass.records&&!SameDispatch(preparedAtRayPass,plan)); // In-place AS update, same SBT.
     --scene.blas[0xb000].version;assert(prepare().status==Status::prepared);

@@ -29,6 +29,8 @@ inline bool SameScene(const Scene& a,const Scene& b){
     };
     if(!a.address||!a.version||a.address!=b.address||a.version!=b.version||!sameAS(a.tlas,b.tlas)||
        a.instances.size()!=b.instances.size()||a.blas.size()!=b.blas.size())return false;
+    // The strict catalog path can return the exact retained immutable scene.
+    if(&a==&b)return true;
     if(!a.instances.empty()&&std::memcmp(a.instances.data(),b.instances.data(),a.instances.size()*sizeof(PTSceneTopology::Instance)))return false;
     auto next=b.blas.begin();for(const auto& item:a.blas){
         if(item.first!=next->first||!sameAS(item.second,next->second))return false;++next;
@@ -80,6 +82,9 @@ inline bool SameDispatch(const Plan& a,const Plan& b){
     const auto& x=a.selection;const auto& y=b.selection;
     if(!x.tlas||!x.sceneVersion||!x.hitTable||!x.tableVersion||!x.pipeline||!a.privatePipeline||a.records.empty()||a.bottomVersions.empty())return false;
     for(const auto& bottom:a.bottomVersions)if(!bottom.first||!bottom.second)return false;
+    // Preserve validity rejection above; identity proves equality without
+    // walking the SBT and dependency maps a second time.
+    if(&a==&b)return true;
     return x.tlas==y.tlas&&x.sceneVersion==y.sceneVersion&&x.hitTable==y.hitTable&&x.tableVersion==y.tableVersion&&
         x.pipeline==y.pipeline&&a.privatePipeline==b.privatePipeline&&a.records==b.records&&
         a.allocationTokens==b.allocationTokens&&a.bottomVersions==b.bottomVersions;
