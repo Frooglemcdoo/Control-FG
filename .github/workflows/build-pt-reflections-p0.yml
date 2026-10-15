@@ -51,32 +51,32 @@ jobs:
           call "%VSPATH%\VC\Auxiliary\Build\vcvars64.bat"
           if not exist build mkdir build
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-pt-startup-settings.cpp /Febuild\test-pt-startup-settings.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-pt-startup-settings.exe off
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-pt-startup-settings.exe on
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-pt-scaling-metrics.cpp /Febuild\test-pt-scaling-metrics.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-pt-scaling-metrics.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-pt-glass-vtable-call.cpp /Febuild\test-glass-call.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-glass-call.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-pt-reflection-energy.cpp /Febuild\test-reflection-energy.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-reflection-energy.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
       - name: Test native geometry observation M6
         shell: cmd
         run: |
           for /f "usebackq tokens=*" %%I in (`"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath`) do set "VSPATH=%%I"
           call "%VSPATH%\VC\Auxiliary\Build\vcvars64.bat"
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-pt-scene-observer.cpp /Febuild\test-pt-scene-observer.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-pt-scene-observer.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
 
       - name: Validate composition container checksum against Windows compiler
         shell: cmd
@@ -84,61 +84,63 @@ jobs:
           for /f "usebackq tokens=*" %%I in (`"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath`) do set "VSPATH=%%I"
           call "%VSPATH%\VC\Auxiliary\Build\vcvars64.bat"
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-pt-dxbc-checksum.cpp /Febuild\test-pt-dxbc-checksum.exe /link d3dcompiler.lib
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-pt-dxbc-checksum.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-pt-surface-composition.cpp /Febuild\test-pt-surface-composition.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-pt-surface-table-budget.cpp /Febuild\test-pt-surface-table-budget.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-pt-surface-table-budget.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-pt-primary-readiness.cpp /Febuild\test-pt-primary-readiness.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-pt-primary-readiness.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-pt-native-view.cpp /Febuild\test-pt-native-view.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-pt-native-view.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-pt-native-root-layout.cpp /Febuild\test-pt-native-root-layout.exe /link d3d12.lib dxgi.lib
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-pt-native-root-layout.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-pt-command-bindings.cpp /Febuild\test-pt-command-bindings.exe /link d3d12.lib dxgi.lib
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-pt-command-bindings.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-pt-table-mirror.cpp /Febuild\test-pt-table-mirror.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-pt-table-mirror.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-pt-surface-output.cpp /Febuild\test-pt-surface-output.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-pt-surface-output.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-pt-upload-pool.cpp /Febuild\test-pt-upload-pool.exe /link d3d12.lib dxgi.lib
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-pt-upload-pool.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-pt-primary-commit.cpp /Febuild\test-pt-primary-commit.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-pt-primary-commit.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-pt-primary-commit.exe surface
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-pt-surface-root-buffer.cpp /Febuild\test-pt-surface-root-buffer.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
+          set PT_SURFACE_TEST_FAILED=0
           build\test-pt-surface-root-buffer.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" set PT_SURFACE_TEST_FAILED=1
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-pt-surface-reconstruction.cpp /Febuild\test-pt-surface-reconstruction.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-pt-surface-reconstruction.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" set PT_SURFACE_TEST_FAILED=1
+          if not "%PT_SURFACE_TEST_FAILED%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-pt-primary-lights.cpp /Febuild\test-pt-primary-lights.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-pt-primary-lights.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
 
       - name: Test integrated primary results collector
         shell: powershell
@@ -154,33 +156,33 @@ jobs:
           for /f "usebackq tokens=*" %%I in (`"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath`) do set "VSPATH=%%I"
           call "%VSPATH%\VC\Auxiliary\Build\vcvars64.bat"
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-pt-native-binding.cpp /Febuild\test-pt-native-binding.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-pt-native-binding.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/test-pt-scene-binding-collector.ps1
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-pt-owned-scene.cpp /Febuild\test-pt-owned-scene.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-pt-owned-scene.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-pt-scene-topology.cpp /Febuild\test-pt-scene-topology.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-pt-scene-topology.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-pt-scene-dispatch-plan.cpp /Febuild\test-pt-scene-dispatch-plan.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-pt-scene-dispatch-plan.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-pt-native-job-route.cpp /Febuild\test-pt-native-job-route.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-pt-native-job-route.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-pt-native-job-runtime.cpp /Febuild\test-pt-native-job-runtime.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-pt-native-job-runtime.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           python tools/test-pt-scene-correlation.py
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
 
       - name: Verify glossy-only removal and native fallback
         run: python tools/test-pt-glass-glossy-only.py
@@ -200,46 +202,46 @@ jobs:
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
           if not exist build mkdir build
           powershell.exe -NoProfile -ExecutionPolicy Bypass -File Fetch-Streamline.ps1
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           powershell.exe -NoProfile -ExecutionPolicy Bypass -File Verify-Streamline.ps1
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           powershell.exe -NoProfile -ExecutionPolicy Bypass -File Verify-RRRuntime.ps1
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           powershell.exe -NoProfile -ExecutionPolicy Bypass -File Patch-OverlayStability.ps1
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /O2 /MT tools\compile-distance.cpp /Fobuild\compile-distance.obj /Febuild\compile-distance.exe /link d3dcompiler.lib
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\compile-distance.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /O2 /MT tools\compile-live.cpp /Fobuild\compile-live.obj /Febuild\compile-live.exe /link d3dcompiler.lib
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\compile-live.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /O2 /MT tools\compile-skin-mask.cpp /Fobuild\compile-skin-mask.obj /Febuild\compile-skin-mask.exe /link d3dcompiler.lib
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\compile-skin-mask.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /O2 /MT tools\compile-reflectance.cpp /Fobuild\compile-reflectance.obj /Febuild\compile-reflectance.exe /link d3dcompiler.lib
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\compile-reflectance.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /O2 /MT tools\compile-fg-ui-alpha.cpp /Fobuild\compile-fg-ui-alpha.obj /Febuild\compile-fg-ui-alpha.exe /link d3dcompiler.lib
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\compile-fg-ui-alpha.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /O2 /MT tools\compile-clamp-strength.cpp /Fobuild\compile-clamp-strength.obj /Febuild\compile-clamp-strength.exe /link d3dcompiler.lib
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           for /l %%S in (25,1,75) do build\compile-clamp-strength.exe %%S
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           copy /y src\rr_clamp_variants.in.h build\rr_clamp_variants.h >nul
           cl /nologo /std:c++17 /EHsc /W4 /O2 /MT tools\compile-pt-reflection-p2-composite.cpp /Fobuild\compile-pt-reflection-p2-composite.obj /Febuild\compile-pt-reflection-p2-composite.exe /link d3dcompiler.lib
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\compile-pt-reflection-p2-composite.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /O2 /MT tools\compile-pt-reflection-p2-diffuse-bridge.cpp /Fobuild\compile-pt-reflection-p2-diffuse-bridge.obj /Febuild\compile-pt-reflection-p2-diffuse-bridge.exe /link d3dcompiler.lib
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\compile-pt-reflection-p2-diffuse-bridge.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           pushd src
           rc /nologo /fo ..\build\control_fg_logo.res control_fg_logo.rc
           set "RC_RESULT=%ERRORLEVEL%"
@@ -251,44 +253,44 @@ jobs:
         run: |
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-pt-glass-capture.cpp /Febuild\test-pt-glass-capture.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-pt-glass-capture.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-pt-primary-pipeline-probe.cpp /Febuild\test-pt-primary-pipeline-probe.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-pt-primary-pipeline-probe.exe
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-pt-primary-profiles.cpp /Febuild\test-pt-primary-profiles.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-pt-primary-profiles.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           python tools/test-pt-primary-variants.py
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
 
       - name: Test scene version queue ordering
         shell: cmd
         run: |
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-pt-scene-order.cpp /Febuild\test-pt-scene-order.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-pt-scene-order.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-pt-scene-catalog.cpp /Febuild\test-pt-scene-catalog.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-pt-scene-catalog.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
 
       - name: Test exact AS descriptor copies
         shell: cmd
         run: |
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-pt-descriptor-interest.cpp /Febuild\test-pt-descriptor-interest.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-pt-descriptor-interest.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-pt-scene-descriptors.cpp /Febuild\test-pt-scene-descriptors.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-pt-scene-descriptors.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
 
       - name: Test exported descriptor submission order
         run: python -m unittest discover -s research/pt-reflections/tools -p test_replay_descriptor_events.py
@@ -298,20 +300,20 @@ jobs:
         run: |
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-pt-resource-lease.cpp /Febuild\test-pt-resource-lease.exe /link d3d12.lib dxgi.lib
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-pt-resource-lease.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
 
       - name: Check production compute capture path
         shell: cmd
         run: |
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-pt-glass-pipeline-capture.cpp /Febuild\test-pt-glass-pipeline-capture.exe /link bcrypt.lib
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-pt-glass-pipeline-capture.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-pt-glass-pipeline-capture.exe --enabled
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
 
       - name: Check glass collector retains middle records
         shell: powershell
@@ -424,18 +426,18 @@ jobs:
         run: |
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\compile-pt-glass-lighting.cpp /Febuild\compile-pt-glass-lighting.exe /link d3dcompiler.lib d3d12.lib dxgi.lib
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\compile-pt-glass-lighting.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
 
       - name: Validate profiling stages and capture script syntax
         shell: cmd
         run: |
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-pt-hotpath-timing.cpp /Febuild\test-pt-hotpath-timing.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-pt-hotpath-timing.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
 
       - name: Compile experimental proxy
         shell: cmd
@@ -443,9 +445,9 @@ jobs:
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
           rem Compile both host contracts; ship root-buffer PT plus reconstruction.
           cl /nologo /std:c++17 /EHsc /W4 /O2 /MT /c /DCONTROL_PT_RECOVERY_BUILD /DUNICODE /D_UNICODE /I "third_party\streamline\include" src\probe.cpp /Fobuild\probe-legacy.obj
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /O2 /MT /LD /DCONTROL_PT_SURFACE_REPLACEMENT /Zi /Fd"build\probe.pdb" /guard:cf /DUNICODE /D_UNICODE /I "third_party\streamline\include" src\probe.cpp build\control_fg_logo.res /Fobuild\probe.obj /Febuild\dxgi.dll /link /DEF:src\dxgi.def /INCREMENTAL:NO /DEBUG:FULL /OPT:REF /OPT:ICF /PDB:"build\dxgi.pdb" /DYNAMICBASE /NXCOMPAT /GUARD:CF bcrypt.lib wintrust.lib user32.lib gdi32.lib msimg32.lib d3d12.lib
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           dumpbin /exports build\dxgi.dll > build\exports.txt
           dumpbin /imports build\dxgi.dll > build\imports.txt
 
