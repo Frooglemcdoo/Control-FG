@@ -39,7 +39,8 @@ public static class ControlFGStartupIni {
 }
 $value=if($Mode -eq 'On'){'1'}else{'0'}
 if(-not [ControlFGStartupIni]::WritePrivateProfileString('PTReflections','Enabled',$value,$settings)){throw 'Could not save PT selection.'}
-if(-not [ControlFGStartupIni]::WritePrivateProfileString($null,$null,$null,$settings)){throw 'Could not flush PT selection.'}
+# Cache flush may return false on success; verify the stored value below.
+[void][ControlFGStartupIni]::WritePrivateProfileString($null,$null,$null,$settings)
 if([ControlFGStartupIni]::GetPrivateProfileInt('PTReflections','Enabled',2,$settings) -ne [uint32]$value){throw 'PT selection verification failed.'}
 foreach($entry in $manifest){$entry.AfterSHA256=(Get-FileHash -LiteralPath $entry.Path -Algorithm SHA256).Hash}
 ConvertTo-Json -InputObject @($manifest) -Depth 3 | Set-Content -LiteralPath (Join-Path $backup 'Settings-Hashes.json') -Encoding UTF8

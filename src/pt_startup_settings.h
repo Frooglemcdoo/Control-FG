@@ -33,10 +33,26 @@ static bool PTStartupCaptureEnabled() {
     static const bool enabled=PTStartupReadSelection();
     return enabled;
 }
-static bool PTStartupWriteSelection(bool enabled) {
+struct PTStartupSaveStatus {
+    const char* stage="path";
+    DWORD error=ERROR_SUCCESS;
+    UINT readback=2;
+};
+static bool PTStartupWriteSelection(bool enabled,PTStartupSaveStatus* status=nullptr) {
+    PTStartupSaveStatus result;
+    const auto finish=[&](bool saved){if(status)*status=result;return saved;};
     const auto path=PTStartupSettingsPath(true);
-    if(path.empty())return false;
-    if(!WritePrivateProfileStringW(L"PTReflections",L"Enabled",enabled?L"1":L"0",path.c_str()))return false;
-    if(!WritePrivateProfileStringW(nullptr,nullptr,nullptr,path.c_str()))return false;
-    return GetPrivateProfileIntW(L"PTReflections",L"Enabled",2,path.c_str())==(enabled?1u:0u);
+    if(path.empty()){result.error=GetLastError();return finish(false);}
+    result.stage="write";
+    if(!WritePrivateProfileStringW(L"PTReflections",L"Enabled",enabled?L"1":L"0",path.c_str())){
+        result.error=GetLastError();return finish(false);
+    }
+    // A cache flush can return zero even on success. Its BOOL is not a write
+    // result; verify the value after flushing instead (Win32 API contract).
+    WritePrivateProfileStringW(nullptr,nullptr,nullptr,path.c_str());
+    result.stage="verify";
+    result.readback=GetPrivateProfileIntW(L"PTReflections",L"Enabled",2,path.c_str());
+    if(result.readback!=(enabled?1u:0u)){result.error=ERROR_INVALID_DATA;return finish(false);}
+    result.stage="saved";
+    return finish(true);
 }

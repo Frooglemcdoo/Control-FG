@@ -1,6 +1,16 @@
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
+#include <windows.h>
+static bool forceZeroFlush=false;
+static unsigned forcedFlushes=0;
+static BOOL WINAPI TestWriteProfile(LPCWSTR section,LPCWSTR key,LPCWSTR value,LPCWSTR path) {
+    const BOOL result=WritePrivateProfileStringW(section,key,value,path);
+    if(forceZeroFlush&&!section&&!key&&!value){++forcedFlushes;return FALSE;}
+    return result;
+}
+#define WritePrivateProfileStringW TestWriteProfile
 #include "../src/pt_startup_settings.h"
+#undef WritePrivateProfileStringW
 #include <cassert>
 #include <cstdio>
 
@@ -28,11 +38,17 @@ int wmain(int argc,wchar_t** argv) {
     assert(GetPrivateProfileIntW(L"FrameGeneration",L"Mode",0,primary.c_str())==3);
     assert(GetPrivateProfileIntW(L"RayReconstruction",L"Enabled",0,primary.c_str())==1);
     assert(GetPrivateProfileIntW(L"PTReflections",L"Enabled",2,legacy.c_str())==(initial?1u:0u));
-    assert(PTStartupWriteSelection(initial));
+    // Reproduce the documented zero-on-flush behavior even on CI Windows
+    // versions which happen to return nonzero for this cache state.
+    forceZeroFlush=true;
+    PTStartupSaveStatus status;
+    assert(PTStartupWriteSelection(initial,&status));
+    assert(forcedFlushes==1&&status.error==ERROR_SUCCESS&&status.readback==(initial?1u:0u));
     assert(PTStartupReadSelection()==initial);
     assert(PTStartupCaptureEnabled()==initial);
     assert(SetFileAttributesW(primary.c_str(),FILE_ATTRIBUTE_READONLY));
-    assert(!PTStartupWriteSelection(!initial));
+    assert(!PTStartupWriteSelection(!initial,&status));
+    assert(status.error!=ERROR_SUCCESS);
     assert(PTStartupReadSelection()==initial);
     assert(SetFileAttributesW(primary.c_str(),FILE_ATTRIBUTE_NORMAL));
     assert(DeleteFileW(primary.c_str()));
@@ -44,5 +60,5 @@ int wmain(int argc,wchar_t** argv) {
     assert(!PTStartupReadSelection());
     assert(PTStartupCaptureEnabled()==initial);
     SetEnvironmentVariableW(L"LOCALAPPDATA",old[0]?old:nullptr);
-    puts("PASS: startup selection latched, opposite selection persists, unrelated preferences migrate, write failures rejected.");
+    puts("PASS: startup selection latched, opposite selection persists, unrelated preferences migrate, zero-return flush accepted, actual write failures rejected.");
 }

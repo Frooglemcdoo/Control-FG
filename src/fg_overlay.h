@@ -1067,10 +1067,12 @@ static LRESULT CALLBACK FGOverlayWndProc(HWND hwnd, UINT message, WPARAM wParam,
         }
         if(FGOverlayPTToggleFromPoint(x,y)){
             const bool previous=ptNextLaunchEnabled.load(std::memory_order_acquire);
-            const bool saved=PTStartupWriteSelection(!previous);
+            PTStartupSaveStatus saveStatus;
+            const bool saved=PTStartupWriteSelection(!previous,&saveStatus);
             if(saved)ptNextLaunchEnabled.store(!previous,std::memory_order_release);
             Log("PT_REFLECTION_UI_TOGGLE previous=%u requested=%u saved=%u session=%u apply=restart",
                 unsigned(previous),unsigned(!previous),unsigned(saved),unsigned(PTStartupCaptureEnabled()));
+            Log("PT_SELECTION_SAVE stage=%s error=%lu readback=%u",saveStatus.stage,saveStatus.error,saveStatus.readback);
             InvalidateRect(hwnd,nullptr,FALSE);return 0;
         }
         if(FGOverlayRRToggleFromPoint(x,y)){
