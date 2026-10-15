@@ -61,7 +61,7 @@ void main(uint3 id:SV_DispatchThreadID){
             float4 old=asfloat(history.Load4(offset));uint4 guide=history.Load4(offset+16);
             float oldDepth=asfloat(guide.z),count=asfloat(guide.w);
             if(old.w==1&&all(isfinite(old))&&all(old.rgb>=0)&&guide.y==material&&
-               dot(UnpackNormal(guide.x),normal)>.95&&isfinite(count)&&count>=1&&count<=maximumHistory&&
+               dot(UnpackNormal(guide.x),normal)>.95&&isfinite(count)&&count>=1&&count<=(float)maximumHistory&&
                isfinite(oldDepth)&&abs(oldDepth-previous.z)<=max(.003,abs(previous.z)*.002)){
                 samples=min(count+1,(float)maximumHistory);
                 // Do not clamp history to the extrema of sparse current samples:
