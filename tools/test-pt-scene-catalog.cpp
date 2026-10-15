@@ -203,9 +203,9 @@ int main(){
     // releases the frozen GPU owner. Replacement versions cannot mutate it.
     PTSceneDispatch::Scene retained;std::weak_ptr<int> retainedOwner;
     {
-        Catalog lifetime;auto storage=std::make_shared<int>(17);retainedOwner=storage;
-        auto frozen=std::make_shared<PTSceneTopology::FrozenGeometry>();frozen->owner=storage;
-        auto original=Blas(bottom,0x5100);original.geometry[0].frozen=frozen;
+        Catalog lifetime;auto retainedStorage=std::make_shared<int>(17);retainedOwner=retainedStorage;
+        auto retainedFrozen=std::make_shared<PTSceneTopology::FrozenGeometry>();retainedFrozen->owner=retainedStorage;
+        auto original=Blas(bottom,0x5100);original.geometry[0].frozen=retainedFrozen;
         auto g=lifetime.Begin(1);assert(lifetime.Record(1,g,std::move(original)));
         assert(lifetime.Record(1,g,copy));assert(lifetime.Record(1,g,Tlas(compact)));
         assert(lifetime.Mark(1,g,901));assert(lifetime.Submit(1,{{1,g}}));
