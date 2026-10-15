@@ -10,14 +10,16 @@
 #include <cstring>
 #include <algorithm>
 #include <cmath>
+#include "pt-test-shader-includes.h"
 using Microsoft::WRL::ComPtr;
 int main(int argc,char**){
     const bool surface=argc>1;
     ComPtr<IDXGIFactory4> factory;ComPtr<IDXGIAdapter> adapter;ComPtr<ID3D12Device> device;
     assert(SUCCEEDED(CreateDXGIFactory1(IID_PPV_ARGS(&factory))));assert(SUCCEEDED(factory->EnumWarpAdapter(IID_PPV_ARGS(&adapter))));
     assert(SUCCEEDED(D3D12CreateDevice(adapter.Get(),D3D_FEATURE_LEVEL_11_0,IID_PPV_ARGS(&device))));
+    PTTestShaderIncludes includes;
     ComPtr<ID3DBlob> shader,error,serialized;
-    HRESULT hr=D3DCompileFromFile(surface?L"tools/test-pt-surface-commit.hlsl":L"tools/test-pt-primary-commit.hlsl",nullptr,D3D_COMPILE_STANDARD_FILE_INCLUDE,"main","cs_5_1",D3DCOMPILE_ENABLE_STRICTNESS|D3DCOMPILE_WARNINGS_ARE_ERRORS,0,&shader,&error);
+    HRESULT hr=D3DCompileFromFile(surface?L"tools/test-pt-surface-commit.hlsl":L"tools/test-pt-primary-commit.hlsl",nullptr,&includes,"main","cs_5_1",D3DCOMPILE_ENABLE_STRICTNESS|D3DCOMPILE_WARNINGS_ARE_ERRORS,0,&shader,&error);
     if(FAILED(hr)&&error)std::fprintf(stderr,"%s",static_cast<const char*>(error->GetBufferPointer()));assert(SUCCEEDED(hr));
     D3D12_DESCRIPTOR_RANGE range{D3D12_DESCRIPTOR_RANGE_TYPE_UAV,2,surface?6u:0u,0,0};
     D3D12_ROOT_PARAMETER parameter{};parameter.ParameterType=D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;parameter.DescriptorTable={1,&range};

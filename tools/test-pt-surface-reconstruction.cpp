@@ -7,6 +7,7 @@
 #include "../src/pt_surface_output.h"
 #include "../src/pt_surface_reconstruction.h"
 #include "../src/pt_primary_metrics.h"
+#include "pt-test-shader-includes.h"
 using Microsoft::WRL::ComPtr;
 using PTSurfaceComposition::Output;
 static constexpr auto readState=static_cast<D3D12_RESOURCE_STATES>(D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE|D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
@@ -18,7 +19,8 @@ int main(){
     setvbuf(stdout,nullptr,_IONBF,0);
     ComPtr<IDXGIFactory4> factory;ComPtr<IDXGIAdapter> warp;ComPtr<ID3D12Device> device;
     assert(SUCCEEDED(CreateDXGIFactory1(IID_PPV_ARGS(&factory))));assert(SUCCEEDED(factory->EnumWarpAdapter(IID_PPV_ARGS(&warp))));assert(SUCCEEDED(D3D12CreateDevice(warp.Get(),D3D_FEATURE_LEVEL_12_0,IID_PPV_ARGS(&device))));
-    ComPtr<ID3DBlob> shader,error;HRESULT hr=D3DCompileFromFile(L"src/shaders/pt_surface_reconstruct.hlsl",nullptr,D3D_COMPILE_STANDARD_FILE_INCLUDE,"main","cs_5_1",D3DCOMPILE_ENABLE_STRICTNESS|D3DCOMPILE_WARNINGS_ARE_ERRORS,0,&shader,&error);
+    PTTestShaderIncludes includes;
+    ComPtr<ID3DBlob> shader,error;HRESULT hr=D3DCompileFromFile(L"src/shaders/pt_surface_reconstruct.hlsl",nullptr,&includes,"main","cs_5_1",D3DCOMPILE_ENABLE_STRICTNESS|D3DCOMPILE_WARNINGS_ARE_ERRORS,0,&shader,&error);
     if(FAILED(hr)&&error)puts(static_cast<const char*>(error->GetBufferPointer()));assert(SUCCEEDED(hr));
     auto pipeline=std::make_shared<PTSurfaceComposition::ReconstructionPipeline>();assert(SUCCEEDED(pipeline->Initialize(device.Get(),shader->GetBufferPointer(),shader->GetBufferSize())));
     ComPtr<ID3D12CommandQueue> queue;D3D12_COMMAND_QUEUE_DESC qd{};assert(SUCCEEDED(device->CreateCommandQueue(&qd,IID_PPV_ARGS(&queue))));

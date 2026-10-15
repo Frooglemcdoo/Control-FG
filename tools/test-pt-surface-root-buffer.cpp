@@ -13,25 +13,45 @@ int main(){
     ComPtr<IDXGIFactory4> factory;ComPtr<IDXGIAdapter> warp;ComPtr<ID3D12Device> device;
     assert(SUCCEEDED(CreateDXGIFactory1(IID_PPV_ARGS(&factory))));assert(SUCCEEDED(factory->EnumWarpAdapter(IID_PPV_ARGS(&warp))));
     assert(SUCCEEDED(D3D12CreateDevice(warp.Get(),D3D_FEATURE_LEVEL_12_0,IID_PPV_ARGS(&device))));
-    const char psSource[]="Texture2D<float4> diffuse:register(t0);Texture2D<float4> specular:register(t1);cbuffer C:register(b0){float4 color;};float4 main(float4 p:SV_Position):SV_Target{int3 q=int3(p.xy,0);float3 light=diffuse.Load(q).rgb*color.rgb+specular.Load(q).rgb;return float4(sqrt(max(light,0)),1);}";
+    const char psSource[]="Texture2D<float4> diffuse:register(t0);Texture2D<float4> specular:register(t1);Texture2D<float4> material:register(t2);cbuffer C:register(b0){float4 color;};float4 main(float4 p:SV_Position):SV_Target{int3 q=int3(p.xy,0);float3 light=diffuse.Load(q).rgb*(color.rgb*material.Load(q).rgb)+specular.Load(q).rgb;return float4(sqrt(max(light,0)),1);}";
     const char vsSource[]="float4 main(uint v:SV_VertexID):SV_Position{float2 p=float2((v<<1)&2,v&2);return float4(p*float2(2,-2)+float2(-1,1),0,1);}";
     ComPtr<ID3DBlob> ps,vs,error;
     assert(SUCCEEDED(D3DCompile(psSource,sizeof(psSource)-1,nullptr,nullptr,nullptr,"main","ps_5_1",D3DCOMPILE_OPTIMIZATION_LEVEL3,0,&ps,&error)));
     assert(SUCCEEDED(D3DCompile(vsSource,sizeof(vsSource)-1,nullptr,nullptr,nullptr,"main","vs_5_1",D3DCOMPILE_OPTIMIZATION_LEVEL3,0,&vs,&error)));
-    const auto* original=static_cast<const unsigned char*>(ps->GetBufferPointer());
-    PTSurfaceComposition::Profile profile{};profile.bytes=static_cast<UINT>(ps->GetBufferSize());std::memcpy(profile.checksum.data(),original+4,16);
+    // The fixture compiler may add redundant resource-type opcode extensions.
+    // Normalize those to the reviewed game's compact LD encoding before applying
+    // the production patch; declarations continue to define the resource type.
+    const auto* compiled=static_cast<const unsigned char*>(ps->GetBufferPointer());
+    const UINT chunkCount=PTDxbc::Word(compiled+28);std::vector<std::vector<unsigned char>> parts;
+    for(UINT n=0;n<chunkCount;++n){const UINT start=PTDxbc::Word(compiled+32+4*n),size=PTDxbc::Word(compiled+start+4);
+        std::vector<unsigned char> part(compiled+start,compiled+start+8+size);
+        if(PTDxbc::Word(part.data())==0x58454853u){std::vector<UINT> words(size/4);std::memcpy(words.data(),part.data()+8,size);std::vector<UINT> normalized{words[0],0};
+            for(UINT i=2;i<words.size();){const UINT length=(words[i]>>24)&127;assert(length);UINT skip=0;
+                if((words[i]&2047)==45){UINT extension=words[i]>>31;while(extension){++skip;extension=words[i+skip]>>31;}}
+                if(skip){normalized.push_back((words[i]&0x007fffffu)|((length-skip)<<24));normalized.insert(normalized.end(),words.begin()+i+1+skip,words.begin()+i+length);}
+                else normalized.insert(normalized.end(),words.begin()+i,words.begin()+i+length);i+=length;
+            }
+            normalized[1]=static_cast<UINT>(normalized.size());part.resize(8+normalized.size()*4);PTDxbc::Put(part.data()+4,static_cast<UINT>(normalized.size()*4));std::memcpy(part.data()+8,normalized.data(),normalized.size()*4);
+        }parts.push_back(std::move(part));
+    }
+    std::size_t total=32+chunkCount*4;for(const auto& part:parts)total+=part.size();std::vector<unsigned char> fixtureBytes(total);
+    std::memcpy(fixtureBytes.data(),compiled,32);PTDxbc::Put(fixtureBytes.data()+24,static_cast<UINT>(total));std::size_t cursor=32+chunkCount*4;
+    for(UINT i=0;i<chunkCount;++i){PTDxbc::Put(fixtureBytes.data()+32+i*4,static_cast<UINT>(cursor));std::memcpy(fixtureBytes.data()+cursor,parts[i].data(),parts[i].size());cursor+=parts[i].size();}
+    const auto sum=PTDxbc::Checksum(fixtureBytes.data()+20,static_cast<UINT>(total-20));std::memcpy(fixtureBytes.data()+4,sum.data(),16);
+    const auto* original=fixtureBytes.data();
+    PTSurfaceComposition::Profile profile{};profile.bytes=static_cast<UINT>(fixtureBytes.size());std::memcpy(profile.checksum.data(),original+4,16);
     const UINT chunks=PTDxbc::Word(original+28);const unsigned char* code=nullptr;UINT words=0;
     for(UINT i=0;i<chunks;++i){const UINT at=PTDxbc::Word(original+32+i*4);if(PTDxbc::Word(original+at)==0x58454853u){code=original+at+8;words=PTDxbc::Word(original+at+4)/4;}}
-    assert(code);profile.resource=2;
+    assert(code);profile.resource=3;
     for(UINT i=2;i<words;){const UINT op=PTDxbc::Word(code+i*4),length=(op>>24)&127;assert(length);
         if((op&2047)==104)profile.temps=i;
         if(op==0x0800002du&&PTDxbc::Word(code+(i+5)*4)>>12==0x207u&&PTDxbc::Word(code+(i+6)*4)==0&&PTDxbc::Word(code+(i+7)*4)==0)profile.load=i;
         if(op==0x09000032u&&PTDxbc::Word(code+(i+1)*4)==0x00100072u&&PTDxbc::Word(code+(i+2)*4)==0)profile.combine=i;
         i+=length;
     }
-    if(!profile.load||!profile.combine||!profile.temps){ComPtr<ID3DBlob> dis;D3DDisassemble(original,ps->GetBufferSize(),0,nullptr,&dis);if(dis)puts(static_cast<const char*>(dis->GetBufferPointer()));}
+    if(!profile.load||!profile.combine||!profile.temps){ComPtr<ID3DBlob> dis;D3DDisassemble(original,fixtureBytes.size(),0,nullptr,&dis);if(dis)puts(static_cast<const char*>(dis->GetBufferPointer()));}
     assert(profile.load&&profile.combine&&profile.temps);
-    std::vector<unsigned char> composed;assert(PTSurfaceComposition::PatchProfile(original,ps->GetBufferSize(),&profile,composed));
+    std::vector<unsigned char> composed;assert(PTSurfaceComposition::PatchProfile(original,fixtureBytes.size(),&profile,composed));
     PTNativeRootFixture fixture(true);ComPtr<ID3DBlob> blob;ComPtr<ID3D12RootSignature> nativeRoot,ptRoot;
     assert(SUCCEEDED(D3D12SerializeRootSignature(&fixture.desc,D3D_ROOT_SIGNATURE_VERSION_1,&blob,&error)));
     assert(SUCCEEDED(device->CreateRootSignature(0,blob->GetBufferPointer(),blob->GetBufferSize(),IID_PPV_ARGS(&nativeRoot))));
@@ -57,7 +77,7 @@ int main(){
     D3D12_SHADER_RESOURCE_VIEW_DESC srv{};srv.Format=DXGI_FORMAT_R32G32B32A32_FLOAT;srv.ViewDimension=D3D12_SRV_DIMENSION_TEXTURE2D;srv.Shader4ComponentMapping=D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;srv.Texture2D.MipLevels=1;
     // Null native SRVs return black. Covered PT pixels return their raw-buffer
     // values; uncovered pixels must stay native black, including row boundaries.
-    auto cpu=heap->GetCPUDescriptorHandleForHeapStart();cpu.ptr+=5ull*step;device->CreateShaderResourceView(nullptr,&srv,cpu);cpu.ptr+=step;device->CreateShaderResourceView(nullptr,&srv,cpu);
+    auto cpu=heap->GetCPUDescriptorHandleForHeapStart();cpu.ptr+=5ull*step;device->CreateShaderResourceView(nullptr,&srv,cpu);cpu.ptr+=step;device->CreateShaderResourceView(nullptr,&srv,cpu);cpu.ptr+=step;device->CreateShaderResourceView(nullptr,&srv,cpu);
     hp.Type=D3D12_HEAP_TYPE_DEFAULT;D3D12_RESOURCE_DESC td{};td.Dimension=D3D12_RESOURCE_DIMENSION_TEXTURE2D;td.Width=8;td.Height=8;td.DepthOrArraySize=td.MipLevels=1;td.SampleDesc.Count=1;td.Format=srv.Format;td.Flags=D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
     ComPtr<ID3D12Resource> target;assert(SUCCEEDED(device->CreateCommittedResource(&hp,D3D12_HEAP_FLAG_NONE,&td,D3D12_RESOURCE_STATE_RENDER_TARGET,nullptr,IID_PPV_ARGS(&target))));
     hd={};hd.Type=D3D12_DESCRIPTOR_HEAP_TYPE_RTV;hd.NumDescriptors=1;ComPtr<ID3D12DescriptorHeap> rtv;assert(SUCCEEDED(device->CreateDescriptorHeap(&hd,IID_PPV_ARGS(&rtv))));device->CreateRenderTargetView(target.Get(),nullptr,rtv->GetCPUDescriptorHandleForHeapStart());
