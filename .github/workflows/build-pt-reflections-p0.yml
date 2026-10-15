@@ -344,7 +344,7 @@ jobs:
           Write-Host "DXC: $dxc"
           & $dxc -T lib_6_3 -HV 2021 -O3 -WX -I src/shaders -Fo build/pt_primary_path.dxil src/shaders/pt_primary_path.hlsl
           if($LASTEXITCODE -ne 0){throw "Primary path DXC compile failed: $LASTEXITCODE"}
-          # Compile development replacement separately; never package it as the legacy producer.
+          # Distinct filenames prevent loading a replacement shader with the legacy host contract.
           & $dxc -T lib_6_3 -HV 2021 -O3 -WX -I src/shaders -Fo build/pt_primary_surface.dxil src/shaders/pt_primary_surface.hlsl
           if($LASTEXITCODE -ne 0){throw "Surface replacement DXC compile failed: $LASTEXITCODE"}
           & $dxc -T lib_6_3 -HV 2021 -O3 -I src/shaders -Fo build/pt_glass_raygen.dxil src/shaders/pt_glass_raygen.hlsl
@@ -427,32 +427,32 @@ jobs:
         shell: cmd
         run: |
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
-          rem Compile the development host route, but do not package or link it into the release DLL.
-          cl /nologo /std:c++17 /EHsc /W4 /O2 /MT /c /DCONTROL_PT_SURFACE_DEVELOPMENT /DUNICODE /D_UNICODE /I "third_party\streamline\include" src\probe.cpp /Fobuild\probe-surface-development.obj
+          rem Keep the legacy host compiling; package the surface integration route below.
+          cl /nologo /std:c++17 /EHsc /W4 /O2 /MT /c /DUNICODE /D_UNICODE /I "third_party\streamline\include" src\probe.cpp /Fobuild\probe-legacy.obj
           if errorlevel 1 exit /b 1
-          cl /nologo /std:c++17 /EHsc /W4 /O2 /MT /LD /Zi /Fd"build\probe.pdb" /guard:cf /DUNICODE /D_UNICODE /I "third_party\streamline\include" src\probe.cpp build\control_fg_logo.res /Fobuild\probe.obj /Febuild\dxgi.dll /link /DEF:src\dxgi.def /INCREMENTAL:NO /DEBUG:FULL /OPT:REF /OPT:ICF /PDB:"build\dxgi.pdb" /DYNAMICBASE /NXCOMPAT /GUARD:CF bcrypt.lib wintrust.lib user32.lib gdi32.lib msimg32.lib d3d12.lib
+          cl /nologo /std:c++17 /EHsc /W4 /O2 /MT /LD /DCONTROL_PT_SURFACE_REPLACEMENT /Zi /Fd"build\probe.pdb" /guard:cf /DUNICODE /D_UNICODE /I "third_party\streamline\include" src\probe.cpp build\control_fg_logo.res /Fobuild\probe.obj /Febuild\dxgi.dll /link /DEF:src\dxgi.def /INCREMENTAL:NO /DEBUG:FULL /OPT:REF /OPT:ICF /PDB:"build\dxgi.pdb" /DYNAMICBASE /NXCOMPAT /GUARD:CF bcrypt.lib wintrust.lib user32.lib gdi32.lib msimg32.lib d3d12.lib
           if errorlevel 1 exit /b 1
           dumpbin /exports build\dxgi.dll > build\exports.txt
           dumpbin /imports build\dxgi.dll > build\imports.txt
 
-      - name: Package integrated primary PT M12R66
+      - name: Package integrated primary PT M12R67
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-PT-Primary-M12R66'
+          $out='Control-FG-PT-Primary-M12R67'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
           Copy-Item build/dxgi.pdb "$out/dxgi.pdb"
           Copy-Item tools/PT-Profile.cmd,tools/PT-Profile.ps1 $out
           Copy-Item tools/PT-Capture-Baseline.cmd,tools/PT-Capture-Restore.cmd,tools/PT-Enable.cmd,tools/PT-Enable.ps1,tools/RT-Only.cmd $out
-          $shaders=@('pt_primary_path.dxil','pt_reflection_p1.dxil','pt_reflection_p2.dxil',
+          $shaders=@('pt_primary_surface.dxil','pt_primary_path.dxil','pt_reflection_p1.dxil','pt_reflection_p2.dxil',
             'pt_reflection_p2_composite.dxbc','pt_reflection_p2_verify.dxbc',
             'pt_reflection_p2_local_light_probe.dxbc','pt_reflection_p2_diffuse_bridge.dxbc',
             'pt_glass_raygen.dxil','pt_glass_secondary.dxbc','pt_glass_composite.dxbc')
           foreach($shader in $shaders){Copy-Item "build/$shader" $out}
-          Copy-Item tools/Collect-PT-Primary-M12R66.cmd,tools/Collect-PT-Primary-M12R66.ps1 $out
-          Copy-Item research/pt-reflections/PT-Primary-M12R66-README.txt "$out/README.txt"
-          @{Build='M12R66';Commit=$env:GITHUB_SHA;Run=$env:GITHUB_RUN_ID;Validation='Windows build and WARP; in-game test pending'} |
+          Copy-Item tools/Collect-PT-Primary-M12R67.cmd,tools/Collect-PT-Primary-M12R67.ps1 $out
+          Copy-Item research/pt-reflections/PT-Primary-M12R67-README.txt "$out/README.txt"
+          @{Build='M12R67';Commit=$env:GITHUB_SHA;Run=$env:GITHUB_RUN_ID;Lighting='PT surface replacement with native unsupported-material fallback';NativePassesRetained=$true;PerformanceRedesignComplete=$false;Validation='Windows build and WARP; in-game test pending'} |
             ConvertTo-Json | Set-Content "$out/Build.json" -Encoding UTF8
           Get-ChildItem -LiteralPath $out -File | Sort-Object Name | ForEach-Object {
             '{0}  {1}' -f (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant(),$_.Name
@@ -463,10 +463,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-PT-Primary-M12R66
+          name: Control-FG-PT-Primary-M12R67
           path: |
-            Control-FG-PT-Primary-M12R66.zip
-            Control-FG-PT-Primary-M12R66.sha256
+            Control-FG-PT-Primary-M12R67.zip
+            Control-FG-PT-Primary-M12R67.sha256
             build/exports.txt
             build/imports.txt
             build/pt_reflection_p1.dxil

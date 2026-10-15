@@ -1,9 +1,9 @@
 // Included inside PTGlassRuntime after the native context/allocator adapters.
 // One session owner. Every native call is still forwarded by its outer hook.
 namespace Primary {
-// Compile-time development route. No INI toggle or installation script enables
-// this incomplete material-coverage path, and release packaging omits its shader.
-#if defined(CONTROL_PT_SURFACE_DEVELOPMENT)
+// Compile-time surface integration route. The packaged host and distinct
+// shader sidecar must agree; unsupported materials retain native fallback.
+#if defined(CONTROL_PT_SURFACE_REPLACEMENT)
 static constexpr bool surfaceReplacement=true;
 #else
 static constexpr bool surfaceReplacement=false;
@@ -323,8 +323,8 @@ static void Dispatched(void*,ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT 
         const auto& plan=a->proof->DispatchPlan();
         auto frame=FrameFor(view,context.queue);
         if(!frame||frame->producerRecorded){Reject("frame_budget_or_duplicate");return;}
-        // Native light buffers carry the result; this owner only retains the
-        // private scene/dependencies and final submission fence.
+        // The output owner retains scene dependencies through producer and surface
+        // consumer completion; the surface variant also owns radiance storage.
         profile.Next(PTHotpathTiming::Kind::primary_sbt);QueryPerformanceCounter(&sbtStart);
         if(FAILED(PTScenePipeline::Dispatch::Create(device.Get(),pipeline,plan,view.width,view.height,bindings.resources.Get(),a->dispatch))){Reject("private_sbt");return;}
         profile.Next(PTHotpathTiming::Kind::primary_camera);QueryPerformanceCounter(&cameraStart);
@@ -380,9 +380,13 @@ static void Dispatched(void*,ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT 
 struct Restore {ID3D12GraphicsCommandList* list=nullptr;ComPtr<ID3D12PipelineState> pipeline;D3D12_GPU_DESCRIPTOR_HANDLE table{};};
 static thread_local Restore restore;
 static void Drawing(void*,ID3D12GraphicsCommandList* list) noexcept {
-    if(!active||ptReflectionUserState.load(std::memory_order_acquire)!=1||!PTSceneLive::owner.Scenes().Healthy())return;
+    if(!active||ptReflectionUserState.load(std::memory_order_acquire)!=1)return;
     try {
         if(restore.list)return;
+        // Filter non-surface PSOs before scene/frame locks on every native draw.
+        const auto pso=PTCommandBindings::tracker.PipelineFor(list);
+        auto pipeline=surfacePipelines.Find(pso.Get());if(!pipeline)return;
+        if(!PTSceneLive::owner.Scenes().Healthy())return;
         // No surface can consume PT before a producer exists. Avoid mapping
         // camera buffers and allocating descriptors for every native draw
         // when opaque/lighting admission has already failed this frame.
@@ -390,8 +394,6 @@ static void Drawing(void*,ID3D12GraphicsCommandList* list) noexcept {
             bool produced=false;for(const auto& weak:frames){const auto frame=weak.lock();if(frame&&frame->producerRecorded&&(!frame->producerSubmitted||frame->armed||frame->deferred)){produced=true;break;}}
             if(!produced)return;
         }
-        const auto pso=PTCommandBindings::tracker.PipelineFor(list);
-        auto pipeline=surfacePipelines.Find(pso.Get());if(!pipeline)return;
         std::lock_guard<std::recursive_mutex> ordered(PTSceneQueues::queueMutex);PTSceneQueues::Scope privateQueues;
         std::lock_guard<std::recursive_mutex> guard(mutex);
         Bindings bindings;
@@ -656,8 +658,9 @@ static void PipelineBound(void*,ID3D12GraphicsCommandList*,ID3D12PipelineState* 
     try{PTPrimaryPipelineProbe::Used(pipeline,0,0,0,false);}
     catch(...){Log("PT_PRIMARY_PSO_PROBE_FAILED stage=binding");}
 }
-static const PTCommandBindings::Consumer commandConsumer{&handoff,&Dispatched,
-    surfaceReplacement?&Drawing:nullptr,surfaceReplacement?&Drawn:nullptr,&PipelineBound,!surfaceReplacement};
+// Published once in Start, before native list hooks are installed. PT selection
+// is restart-only: an off session does not install graphics observation hooks.
+static PTCommandBindings::Consumer commandConsumer{};
 static void MirrorModeChanged(bool) noexcept {
     try {std::lock_guard<PTTableMirror::DescriptorGate> transition(PTTableMirror::gate);
         const bool requested=PTReflectionUserRequested();
@@ -670,7 +673,9 @@ static bool Start(){
     if(!viewProviders.Initialize(verifiedRenderer,verifiedD3d)){Log("PT_PRIMARY_PROVIDER_INIT_FAILED");return false;}
     char sha[65]{};bool loaded=false;
     if(!PTReflectionLoadSidecar(surfaceReplacement?L"pt_primary_surface.dxil":L"pt_primary_path.dxil","PRIMARY_PATH",library,sha,loaded))return false;
-    if(surfaceReplacement)Log("PT_PRIMARY_DEVELOPMENT surface_replacement=1 native_passes_retained=1 incomplete_material_coverage=1");
+    const bool compose=surfaceReplacement&&PTReflectionUserRequested();
+    commandConsumer={&handoff,&Dispatched,compose?&Drawing:nullptr,compose?&Drawn:nullptr,&PipelineBound,!compose};
+    if(surfaceReplacement)Log("PT_PRIMARY_SURFACE_MODE replacement=1 native_passes_retained=1 unsupported_materials=native graphics_tracking=%u",unsigned(compose));
     pendingMetrics.reserve(8);
     PTCommandBindings::Mute privateRecording;PTTableMirror::Mute privateWrites;
     const auto step=device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
@@ -679,6 +684,6 @@ static bool Start(){
        !PTCommandBindings::Register(&commandConsumer)||!PTNativeJobRuntime::Register(&Job)||!PTSceneLive::owner.Start(step,true))return false;
     ptReflectionModeObserver.store(&MirrorModeChanged,std::memory_order_release);
     MirrorModeChanged(PTReflectionUserRequested());
-    active=true;Log("PT_PRIMARY_SESSION_READY build=M12R66 ready=1 hits=4 spp=1 roulette_start=3 material=opaque_general geometric_normals=1 native_fallback=1 primary_lighting=%s transport=%s readiness=per_material graphics_tracking=%u",surfaceReplacement?"pt":"native",surfaceReplacement?"full_surface":"diffuse_indirect",unsigned(surfaceReplacement));return true;
+    active=true;Log("PT_PRIMARY_SESSION_READY build=M12R67 ready=1 hits=4 spp=1 roulette_start=3 material=opaque_general geometric_normals=1 native_fallback=1 primary_lighting=%s transport=%s readiness=per_material graphics_tracking=%u",surfaceReplacement?"pt":"native",surfaceReplacement?"full_surface":"diffuse_indirect",unsigned(compose));return true;
 }
 }

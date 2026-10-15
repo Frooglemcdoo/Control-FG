@@ -1,7 +1,9 @@
 # PT-owned lighting redesign — implementation checkpoint
 
-Status: development source only. R66 runtime and install bundle remain unchanged.
-No FPS improvement or complete RT replacement is claimed by this checkpoint.
+Status: R67 surface-integration build in validation. The complete performance
+and all-material/all-light redesign is NOT complete. No FPS gain is claimed.
+The R67 package selects the replacement host and includes its distinct sidecar;
+unsupported materials retain native lighting and native passes still execute.
 
 ## Verified cause of the lighting limitation
 
@@ -26,16 +28,16 @@ Sparse readiness probes do not publish surface pixels. Whole-output initializati
 and replay invalidation remain mandatory host responsibilities.
 
 Windows CI compiles both producers independently and runs the WARP commit test
-in both modes. The new shader is deliberately absent from release packaging.
-The existing executable must never load this shader under the legacy filename.
+in both modes. R67 packages the new shader under its distinct filename. The legacy executable
+must never load this shader under the legacy filename.
 
 ## Development host route
 
-`CONTROL_PT_SURFACE_DEVELOPMENT` now selects the distinct shader filename,
+`CONTROL_PT_SURFACE_REPLACEMENT` now selects the distinct shader filename,
 allocates at internal render extent, reserves 64 retained composition tables,
 checks allocator overlap, and registers graphics draw/restore callbacks. It
-removes the additive path's typed native-UAV-load requirement. CI compiles this
-host route separately; it is not linked into or packaged with the release DLL.
+removes the additive path's typed native-UAV-load requirement. R67 packages this host route and separately compiles the legacy host. Graphics
+tracking is configured at startup only when PT was selected for the session.
 This restores the previously disconnected composition path, but is not evidence
 of visual correctness, denoiser compatibility or complete material coverage.
 
@@ -85,5 +87,17 @@ Compile and WARP checks, then host/composition admission and replay tests; prove
 native outputs are not double-counted and unsupported consumers remain valid.
 Only suppress identified native passes after their replacements own all outputs.
 Use the existing captures for the CPU/queue redesign. No new user capture is
-required to establish these implementation gaps. Do not issue a gameplay test
-bundle for this source-only checkpoint.
+required to establish these implementation gaps. R67 is a visual integration build with those remaining limitations stated in
+its README and Build.json; it is not the completed redesign.
+
+
+## R67 validation scope
+
+Local adapter test rechecked all nine captured native shader binaries, including
+container checksums and corrupt/unknown shader rejection. Transport tests passed
+12 numerical integration cases in the preceding checkpoint. Windows CI runs the
+native forwarding/compute-only hook fixtures, output lifecycle/admission/replay,
+full-surface commit and legacy commit tests, DXIL compilation, and both host
+compilation routes. Final package verification must check commit identity,
+complete hashes, matching PDB, distinct surface shader and preserved settings
+scripts. These checks do not establish in-game lighting quality or FPS.
