@@ -10,6 +10,35 @@ locked={
 }
 for name,expected in locked.items():
  source=(root/name).read_text()
+ # R52 changes only persisted startup selection and its overlay controls.
+ if name=='src/fg_overlay.h':
+  addition='            const bool previous=ptNextLaunchEnabled.load(std::memory_order_acquire);\n            const bool saved=PTStartupWriteSelection(!previous);\n            if(saved)ptNextLaunchEnabled.store(!previous,std::memory_order_release);\n            Log("PT_REFLECTION_UI_TOGGLE previous=%u requested=%u saved=%u session=%u apply=restart",\n                unsigned(previous),unsigned(!previous),unsigned(saved),unsigned(PTStartupCaptureEnabled()));'
+  assert source.count(addition)==1,addition
+  source=source.replace(addition,'            if(!PTStartupCaptureEnabled())return 0;\n            const bool previous=PTReflectionUserRequested();\n            PTReflectionUserRequest(!previous);\n            FGOverlayMarkSettingsDirty();\n            Log("PT_REFLECTION_UI_TOGGLE previous=%u enabled=%u verify_mode=0 scope=added_second_bounce apply=next_reflection_composite persistence=dirty",\n                unsigned(previous),unsigned(!previous));')
+ if name=='src/fg_overlay.h':
+  addition='    const bool ptSelected=ptNextLaunchEnabled.load(std::memory_order_acquire);\n    const bool ptPending=ptSelected!=ptAvailable;\n    SelectObject(dc, ptSelected ? buttonSelectedFont : buttonFont);\n    PaintFGButton(dc, ptToggle, ptPending ?\n        (ptSelected ? L"PT ON (RESTART)" : L"PT OFF (RESTART)") :\n        (ptSelected ? L"PT REFLECTIONS ON" : L"PT REFLECTIONS OFF"), ptSelected, true);'
+  assert source.count(addition)==1,addition
+  source=source.replace(addition,'    SelectObject(dc, ptEnabled ? buttonSelectedFont : buttonFont);\n    PaintFGButton(dc, ptToggle, !ptAvailable ? L"RT ONLY (RESTART)" :\n        (ptEnabled ? L"PT REFLECTIONS ON" : L"PT REFLECTIONS OFF"), ptEnabled, ptAvailable);')
+ if name=='src/fg_overlay.h':
+  addition='swprintf_s(ptEnabledText, L"%u", ptNextLaunchEnabled.load(std::memory_order_acquire) ? 1u : 0u);'
+  assert source.count(addition)==1,addition
+  source=source.replace(addition,'swprintf_s(ptEnabledText, L"%u", PTReflectionUserRequested() ? 1u : 0u);')
+ if name=='src/fg_overlay.h':
+  addition='    Log("PT_REFLECTION_SETTINGS enabled=%u source=startup_latch default=off restart_required=1", unsigned(PTStartupCaptureEnabled()));'
+  assert source.count(addition)==1,addition
+  source=source.replace(addition,'    PTReflectionUserRequest(GetPrivateProfileIntW(L"PTReflections", L"Enabled", 1, fgOverlaySettingsPath.c_str()) != 0);\n    Log("PT_REFLECTION_SETTINGS enabled=%u source=settings default=on", unsigned(PTReflectionUserRequested()));')
+ if name=='src/fg_overlay.h':
+  addition='    if (!fgOverlaySettingsLoaded.compare_exchange_strong(expected, 1u)) return;\n    PTReflectionUserRequest(PTStartupCaptureEnabled());\n    ptNextLaunchEnabled.store(PTStartupCaptureEnabled(),std::memory_order_release);'
+  assert source.count(addition)==1,addition
+  source=source.replace(addition,'    if (!fgOverlaySettingsLoaded.compare_exchange_strong(expected, 1u)) return;')
+ if name=='src/fg_overlay.h':
+  addition='static std::wstring fgOverlaySettingsPath;\nstatic std::atomic<bool> ptNextLaunchEnabled{false};'
+  assert source.count(addition)==1,addition
+  source=source.replace(addition,'static std::wstring fgOverlaySettingsPath;')
+ if name=='src/probe.cpp':
+  addition='#include "pt_startup_settings.h"\n\n'
+  assert source.count(addition)==1,addition
+  source=source.replace(addition,'// Read once before any PT installation, including early device creation.\n// RT-only is the default. Mode changes require a process restart; ownership is\n// never torn down while recorded or submitted command lists can reference it.\nstatic bool PTStartupCaptureEnabled() {\n    static const bool enabled=[](){\n        const DWORD error=GetLastError();auto path=ModulePath(selfModule);\n        const auto slash=path.find_last_of(L"\\\\/");\n        if(slash==std::wstring::npos){SetLastError(error);return false;}\n        path.resize(slash+1);\n        const DWORD off=GetFileAttributesW((path+L"ControlFG-PT-Capture-Off.txt").c_str());\n        const DWORD on=GetFileAttributesW((path+L"ControlFG-PT-Enabled.txt").c_str());\n        const bool disabled=off!=INVALID_FILE_ATTRIBUTES&&!(off&FILE_ATTRIBUTE_DIRECTORY);\n        const bool optedIn=on!=INVALID_FILE_ATTRIBUTES&&!(on&FILE_ATTRIBUTE_DIRECTORY);\n        SetLastError(error);return optedIn&&!disabled;\n    }();\n    return enabled;\n}\n\n')
  if name=='src/fg_overlay.h':
   assert source.count('const bool ptAvailable = PTStartupCaptureEnabled();\n    const bool ptEnabled = ptAvailable && PTReflectionUserRequested();')==1
   source=source.replace('const bool ptAvailable = PTStartupCaptureEnabled();\n    const bool ptEnabled = ptAvailable && PTReflectionUserRequested();','const bool ptEnabled = PTReflectionUserRequested();')
@@ -57,7 +86,7 @@ for name,expected in locked.items():
  # retain the original S1 hashes for all enabled-mode runtime code.
  if name=='src/probe.cpp':
   startup='// Read once before any PT installation, including early device creation.\n// RT-only is the default. Mode changes require a process restart; ownership is\n// never torn down while recorded or submitted command lists can reference it.\nstatic bool PTStartupCaptureEnabled() {\n    static const bool enabled=[](){\n        const DWORD error=GetLastError();auto path=ModulePath(selfModule);\n        const auto slash=path.find_last_of(L"\\\\/");\n        if(slash==std::wstring::npos){SetLastError(error);return false;}\n        path.resize(slash+1);\n        const DWORD off=GetFileAttributesW((path+L"ControlFG-PT-Capture-Off.txt").c_str());\n        const DWORD on=GetFileAttributesW((path+L"ControlFG-PT-Enabled.txt").c_str());\n        const bool disabled=off!=INVALID_FILE_ATTRIBUTES&&!(off&FILE_ATTRIBUTE_DIRECTORY);\n        const bool optedIn=on!=INVALID_FILE_ATTRIBUTES&&!(on&FILE_ATTRIBUTE_DIRECTORY);\n        SetLastError(error);return optedIn&&!disabled;\n    }();\n    return enabled;\n}\n\n'
-  setup='        const bool ptCaptureEnabled=PTStartupCaptureEnabled();\n        Log("PT_PRIMARY_STARTUP build=M12R51 capture=%u restart_only=1 rr_fg_available=1",unsigned(ptCaptureEnabled));\n        const unsigned int rrObserverHooks = ptCaptureEnabled?InstallRRObservationHooks(renderer,d3d):0;'
+  setup='        const bool ptCaptureEnabled=PTStartupCaptureEnabled();\n        Log("PT_PRIMARY_STARTUP build=M12R52 capture=%u restart_only=1 rr_fg_available=1",unsigned(ptCaptureEnabled));\n        const unsigned int rrObserverHooks = ptCaptureEnabled?InstallRRObservationHooks(renderer,d3d):0;'
   assert source.count(startup)==1 and source.count(setup)==1
   source=source.replace(startup,'').replace(setup,'        const unsigned int rrObserverHooks = InstallRRObservationHooks(renderer,d3d);')
  if name=='src/pt_reflection_loader.h':

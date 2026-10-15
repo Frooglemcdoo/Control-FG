@@ -34,6 +34,7 @@ static bool fgOverlaySettingsDirty = false;
 static ULONGLONG fgOverlaySettingsDirtyMs = 0;
 static ULONGLONG fgOverlaySettingsSavedPulseUntilMs = 0;
 static std::wstring fgOverlaySettingsPath;
+static std::atomic<bool> ptNextLaunchEnabled{false};
 static std::atomic<unsigned int> fgOverlaySettingsLoaded{0};
 static bool fgOverlayOptionsPage = false;
 static bool fgOverlayRRSettingsPage = false;
@@ -180,6 +181,8 @@ static bool FGOverlayResolveSettingsPath() noexcept {
 static void FGOverlayLoadSettings() noexcept {
     unsigned int expected = 0;
     if (!fgOverlaySettingsLoaded.compare_exchange_strong(expected, 1u)) return;
+    PTReflectionUserRequest(PTStartupCaptureEnabled());
+    ptNextLaunchEnabled.store(PTStartupCaptureEnabled(),std::memory_order_release);
     if (!FGOverlayResolveSettingsPath()) {
         SetFGDynamicManualTargetFps(0);
         control_rr::RRUserSetSharpnessPercent(0);
@@ -220,8 +223,7 @@ static void FGOverlayLoadSettings() noexcept {
     control_rr::RRUserRequest(rrEnabled);
     SetFGTextureStreamingBudgetMs(textureStreamingMs);
     SetFGVramMonitorEnabled(vramMonitorEnabled);
-    PTReflectionUserRequest(GetPrivateProfileIntW(L"PTReflections", L"Enabled", 1, fgOverlaySettingsPath.c_str()) != 0);
-    Log("PT_REFLECTION_SETTINGS enabled=%u source=settings default=on", unsigned(PTReflectionUserRequested()));
+    Log("PT_REFLECTION_SETTINGS enabled=%u source=startup_latch default=off restart_required=1", unsigned(PTStartupCaptureEnabled()));
     Log("FG_SETTINGS_LOAD success=1 path=%ls selection=%s selected_code=%u target_policy=%s manual_target_fps=%u rr_enabled=%u rr_preset=%s rr_preset_value=%u texture_streaming_ms=%u vram_monitor=%u skin_mode=off schema=10 ui=fg_full_rr_toggle_model_E_F",
         fgOverlaySettingsPath.c_str(), GetFGSelectionName(selection), selection, manualTarget ? "manual" : "auto", manualTarget, unsigned(rrEnabled), control_rr::RRUserPresetLabel(), control_rr::RRUserPresetValue(), textureStreamingMs, unsigned(vramMonitorEnabled));
 }
@@ -246,7 +248,7 @@ static bool FGOverlaySaveSettingsNow() noexcept {
     wchar_t targetText[16]{};
     wchar_t rrEnabledText[8]{};
     wchar_t ptEnabledText[8]{};
-    swprintf_s(ptEnabledText, L"%u", PTReflectionUserRequested() ? 1u : 0u);
+    swprintf_s(ptEnabledText, L"%u", ptNextLaunchEnabled.load(std::memory_order_acquire) ? 1u : 0u);
     wchar_t rrPresetText[8]{};
     swprintf_s(modeText, L"%u", GetFGUserMultiplier());
     swprintf_s(targetText, L"%u", GetFGDynamicManualTargetFps());
@@ -868,9 +870,12 @@ static void PaintFGOverlay(HWND hwnd) noexcept {
     const bool ptAvailable = PTStartupCaptureEnabled();
     const bool ptEnabled = ptAvailable && PTReflectionUserRequested();
     const RECT ptToggle{30, 794 + lowerSectionOffset, 280, 846 + lowerSectionOffset};
-    SelectObject(dc, ptEnabled ? buttonSelectedFont : buttonFont);
-    PaintFGButton(dc, ptToggle, !ptAvailable ? L"RT ONLY (RESTART)" :
-        (ptEnabled ? L"PT REFLECTIONS ON" : L"PT REFLECTIONS OFF"), ptEnabled, ptAvailable);
+    const bool ptSelected=ptNextLaunchEnabled.load(std::memory_order_acquire);
+    const bool ptPending=ptSelected!=ptAvailable;
+    SelectObject(dc, ptSelected ? buttonSelectedFont : buttonFont);
+    PaintFGButton(dc, ptToggle, ptPending ?
+        (ptSelected ? L"PT ON (RESTART)" : L"PT OFF (RESTART)") :
+        (ptSelected ? L"PT REFLECTIONS ON" : L"PT REFLECTIONS OFF"), ptSelected, true);
     SelectObject(dc, smallFont); SetTextColor(dc, RGB(169, 169, 169));
     RECT ptDescription{304, 794 + lowerSectionOffset, 710, 846 + lowerSectionOffset};
     const unsigned glassMode=ptGlassUserMode.load(std::memory_order_acquire);
@@ -1061,12 +1066,11 @@ static LRESULT CALLBACK FGOverlayWndProc(HWND hwnd, UINT message, WPARAM wParam,
             InvalidateRect(hwnd,nullptr,FALSE);return 0;
         }
         if(FGOverlayPTToggleFromPoint(x,y)){
-            if(!PTStartupCaptureEnabled())return 0;
-            const bool previous=PTReflectionUserRequested();
-            PTReflectionUserRequest(!previous);
-            FGOverlayMarkSettingsDirty();
-            Log("PT_REFLECTION_UI_TOGGLE previous=%u enabled=%u verify_mode=0 scope=added_second_bounce apply=next_reflection_composite persistence=dirty",
-                unsigned(previous),unsigned(!previous));
+            const bool previous=ptNextLaunchEnabled.load(std::memory_order_acquire);
+            const bool saved=PTStartupWriteSelection(!previous);
+            if(saved)ptNextLaunchEnabled.store(!previous,std::memory_order_release);
+            Log("PT_REFLECTION_UI_TOGGLE previous=%u requested=%u saved=%u session=%u apply=restart",
+                unsigned(previous),unsigned(!previous),unsigned(saved),unsigned(PTStartupCaptureEnabled()));
             InvalidateRect(hwnd,nullptr,FALSE);return 0;
         }
         if(FGOverlayRRToggleFromPoint(x,y)){
