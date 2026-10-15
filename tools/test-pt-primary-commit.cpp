@@ -66,7 +66,7 @@ int main(int argc,char**){
                 // attempts an out-of-bounds clear/commit. Neither may corrupt it.
                 expected=(x==5||x>=9)?initial[c]:0;
                 if(committed)expected=c==3?1:pt[c];
-                if(x==6)expected=c==3?1:0; // black is covered, not fallback
+                if(x==6)expected=c==3?1.0f:0.0f; // black is covered, not fallback
             }
             assert(values[x*4+c]==expected);}}
 
