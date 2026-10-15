@@ -59,7 +59,7 @@ int main(){
     assert(SUCCEEDED(device->CreateCommittedResource(&hp,D3D12_HEAP_FLAG_NONE,&rd,D3D12_RESOURCE_STATE_COPY_DEST,nullptr,IID_PPV_ARGS(&readback))));
     std::array<ComPtr<ID3D12CommandAllocator>,6> allocators;
     std::array<ComPtr<ID3D12GraphicsCommandList>,6> lists;
-    const auto capture=[&](unsigned index){
+    const auto capture=[&](unsigned index,bool submit=true){
         assert(SUCCEEDED(device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT,IID_PPV_ARGS(&allocators[index]))));
         assert(SUCCEEDED(device->CreateCommandList(0,D3D12_COMMAND_LIST_TYPE_DIRECT,allocators[index].Get(),nullptr,IID_PPV_ARGS(&lists[index]))));
         auto* list=lists[index].Get();D3D12_RESOURCE_BARRIER barrier{};barrier.Type=D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
@@ -71,9 +71,12 @@ int main(){
         src.pResource=output->Texture();src.Type=D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
         list->CopyTextureRegion(&dst,0,0,0,&src,nullptr);
         std::swap(barrier.Transition.StateBefore,barrier.Transition.StateAfter);list->ResourceBarrier(1,&barrier);
-        assert(SUCCEEDED(list->Close()));ID3D12CommandList* submitted[]={list};queue->ExecuteCommandLists(1,submitted);
+        assert(SUCCEEDED(list->Close()));if(submit){ID3D12CommandList* submitted[]={list};queue->ExecuteCommandLists(1,submitted);}
     };
     capture(0);
+    // Record the consumer first, as native worker threads can do. Its GPU
+    // execution must still follow the producer, independent of CPU order.
+    capture(1,false);
     auto writer=std::make_shared<Writer>();writer->device=device;
     D3D12_DESCRIPTOR_HEAP_DESC hd{};hd.NumDescriptors=1;hd.Type=D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;hd.Flags=D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
     assert(SUCCEEDED(device->CreateDescriptorHeap(&hd,IID_PPV_ARGS(&writer->heap))));
@@ -81,7 +84,8 @@ int main(){
     assert(output->Record(writer.get(),&Writer::Encode,writer));
     assert(!output->Produce(wrongQueue.Get()));
     assert(output->Produce(queue.Get()));assert(!output->Produce(queue.Get()));
-    writer.reset();assert(!retained.expired());capture(1);
+    writer.reset();assert(!retained.expired());
+    ID3D12CommandList* earlyConsumer[]={lists[1].Get()};queue->ExecuteCommandLists(1,earlyConsumer);
     assert(!output->Invalidate(wrongQueue.Get()));
     assert(output->Invalidate(queue.Get()));assert(output->Invalidate(queue.Get()));
     assert(!output->Produce(queue.Get()));capture(2);
@@ -234,5 +238,5 @@ int main(){
     D3D12_RANGE noWrite{0,0};readback->Unmap(0,&noWrite);
     output.reset();PTSurfaceComposition::Output::Poll();PTSurfaceComposition::Output::TrimIdle();
     assert(PTSurfaceComposition::Output::ResidentBytes()==0);
-    puts("PASS: GPU-zero initialization, one-shot producer, queued replay clear, wrong-queue/late-producer rejection late COPY signal admission, rejected zero guard, replay cancellation, bounded deferred retirement and fence-owned dependencies");
+    puts("PASS: consumer-recorded-before-producer with ordered GPU output, GPU-zero initialization, one-shot producer, queued replay clear, wrong-queue/late-producer rejection late COPY signal admission, rejected zero guard, replay cancellation, bounded deferred retirement and fence-owned dependencies");
 }

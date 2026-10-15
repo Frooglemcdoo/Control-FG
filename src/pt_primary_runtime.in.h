@@ -15,6 +15,7 @@ using Output=PTSurfaceComposition::Output;
 static PTSceneHandoff::Runtime handoff{PTSceneLive::owner};
 static constexpr const char* outputName=surfaceReplacement?"private_surface":"native_light_buffers";
 static std::atomic<bool> active{false};
+static std::atomic<bool> surfaceRoutingHealthy{true};
 static bool transportValidated=false;
 static unsigned transportGoodFrames=0;
 static std::recursive_mutex mutex;
@@ -77,7 +78,8 @@ static bool ContextFor(ID3D12GraphicsCommandList* list,const Bindings& bindings,
     if(!PTSceneQueues::WatchQueue(context.queue)||!PTSceneQueues::WatchList(list))return false;
     if(!pinnedQueue)pinnedQueue=q;return true;
 }
-struct Candidate {PTNativeJobRoute::Ticket ticket;View view;};
+struct Frame;
+struct Candidate {PTNativeJobRoute::Ticket ticket;View view;std::shared_ptr<Frame> frame;};
 static std::map<UINT64,Candidate> candidates;
 struct Environment {
     View view;Table table;ComPtr<IUnknown> list,queue;bool submitted=false;
@@ -100,7 +102,7 @@ struct Frame {
     View view;std::shared_ptr<Output> output;ComPtr<ID3D12CommandQueue> queue;
     std::shared_ptr<Assets> assets;bool producerRecorded=false,producerSubmitted=false,armed=false,deferred=false,cancelled=false;
     PTSceneLive::Capture::PendingFence wait;UINT64 sceneUse=0;
-    PTGlass::DescriptorRange surfaceTables;UINT surfaceUsed=0;
+    PTGlass::DescriptorRange surfaceTables;PTSurfaceComposition::TableBudget surfaceBudget;
 };
 struct Draw {
     std::shared_ptr<Frame> frame;std::shared_ptr<PTSurfaceComposition::Pipeline> pipeline;
@@ -181,6 +183,25 @@ static D3D12_GPU_DESCRIPTOR_HANDLE Gpu(const PTGlass::DescriptorRange& range){
     handle.ptr+=UINT64(range.first)*device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);return handle;
 }
 static bool Disjoint(const PTGlass::DescriptorRange& a,UINT original){return a.first+49<=original||original+49<=a.first;}
+// Defined below with the other submission/admission helpers.
+static void CancelFrame(const std::shared_ptr<Frame>& frame,ID3D12CommandQueue* queue);
+static void StopSurfaceRouting(const char* reason,const std::shared_ptr<Frame>& failed){
+    surfaceRoutingHealthy.store(false,std::memory_order_release);
+    for(const auto& weak:frames)if(const auto frame=weak.lock())CancelFrame(frame,frame->queue.Get());
+    Log("PT_PRIMARY_SURFACE_ROUTING_STOP reason=%s frame=%u tables=%u capacity=%u session=native_until_restart",reason,
+        failed?failed->view.frame:0,failed?failed->surfaceBudget.Used():0,PTSurfaceComposition::TableBudget::Capacity);
+}
+static bool ReserveSurfaceTables(const std::shared_ptr<Frame>& frame,const Context& context){
+    if(!surfaceReplacement||frame->surfaceTables.count)return true;
+    if(!Fresh(context,&frame->surfaceTables,PTSurfaceComposition::TableBudget::Descriptors)){
+        StopSurfaceRouting("surface_table_reservation",frame);return false;
+    }
+    const auto& range=frame->surfaceTables;
+    if(range.first<UINT64(context.table.first)+49&&context.table.first<UINT64(range.first)+range.count){
+        StopSurfaceRouting("surface_table_alias",frame);return false;
+    }
+    return true;
+}
 static bool Encode(void* context,ID3D12GraphicsCommandList* list,ID3D12Resource*,D3D12_CPU_DESCRIPTOR_HANDLE){
     auto& a=*static_cast<Assets*>(context);ComPtr<ID3D12GraphicsCommandList4> rays;if(FAILED(list->QueryInterface(IID_PPV_ARGS(&rays))))return false;
     auto counter=Gpu(a.privateTable);counter.ptr+=47ull*device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
@@ -196,7 +217,7 @@ static bool Encode(void* context,ID3D12GraphicsCommandList* list,ID3D12Resource*
     a.metrics.End(list);return recorded;
 }
 static void Job(PTNativeJobRuntime::Phase phase,const PTNativeJobRoute::Ticket& ticket) noexcept {
-    if(!active)return;
+    if(!active||(surfaceReplacement&&!surfaceRoutingHealthy.load(std::memory_order_acquire)))return;
     try {
         // Pre-schedule WriterReady owns its input until this callback returns. It never waits
         // for the native worker or acquires the queue submission lock.
@@ -218,12 +239,23 @@ static void Job(PTNativeJobRuntime::Phase phase,const PTNativeJobRoute::Ticket& 
             if(it->second.ticket.engineFrame<ticket.engineFrame&&ticket.engineFrame-it->second.ticket.engineFrame>2){handoff.Cancelled(it->first);it=candidates.erase(it);}else ++it;
         }
         while(candidates.size()>=8){handoff.Cancelled(candidates.begin()->first);candidates.erase(candidates.begin());}
-        if(handoff.Recorded(ticket,bindings.resources.Get(),context.table.first,5))candidates.emplace(ticket.serial,Candidate{ticket,view});
-        else Reject("opaque_handoff");
+        if(handoff.Recorded(ticket,bindings.resources.Get(),context.table.first,5)){
+            // Reserve before native surface workers record their draws. CPU
+            // producer recording order is NOT the GPU execution dependency.
+            PTSceneQueues::Scope privateQueues;
+            PTTableMirror::Scope descriptorLock(true);PTTableMirror::Mute privateWrites;
+            auto frame=FrameFor(view,context.queue);
+            if(!frame||frame->cancelled||!ReserveSurfaceTables(frame,context)){
+                handoff.Cancelled(ticket.serial);Reject("surface_frame_reservation");return;
+            }
+            static UINT64 reserved=0;if(++reserved<=8||reserved%240==0)
+                Log("PT_PRIMARY_SURFACE_RESERVED frame=%u ticket=%llu capacity=%u stage=opaque_job",view.frame,ticket.serial,PTSurfaceComposition::TableBudget::Capacity);
+            candidates.emplace(ticket.serial,Candidate{ticket,view,std::move(frame)});
+        }else Reject("opaque_handoff");
     }catch(...){Reject("job_allocation");}
 }
 static void Dispatched(void*,ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT z) noexcept {
-    if(!active)return;++computeCallbacks;
+    if(!active||(surfaceReplacement&&!surfaceRoutingHealthy.load(std::memory_order_acquire)))return;++computeCallbacks;
     if(ptReflectionUserState.load(std::memory_order_acquire)!=1){++computeOff;return;}
     if(!PTSceneLive::owner.Scenes().Healthy())return;
     try {
@@ -322,7 +354,7 @@ static void Dispatched(void*,ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT 
         }
         const auto& plan=a->proof->DispatchPlan();
         auto frame=FrameFor(view,context.queue);
-        if(!frame||frame->producerRecorded){Reject("frame_budget_or_duplicate");return;}
+        if(!frame||frame->cancelled||frame->producerRecorded){Reject("frame_budget_or_duplicate");return;}
         // The output owner retains scene dependencies through producer and surface
         // consumer completion; the surface variant also owns radiance storage.
         profile.Next(PTHotpathTiming::Kind::primary_sbt);QueryPerformanceCounter(&sbtStart);
@@ -345,7 +377,7 @@ static void Dispatched(void*,ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT 
             Reject("primary_descriptors_changed_during_prepare");return;
         }
         if(surfaceReplacement){
-            if(!Fresh(context,&frame->surfaceTables,49*64)){Reject("surface_table_reservation");return;}
+            if(!ReserveSurfaceTables(frame,context))return;
             const auto& range=frame->surfaceTables;
             const auto overlaps=[&](UINT first,UINT count){return range.first<UINT64(first)+count&&first<UINT64(range.first)+range.count;};
             if(overlaps(context.table.first,49)||overlaps(a->privateTable.first,a->privateTable.count)){
@@ -380,20 +412,15 @@ static void Dispatched(void*,ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT 
 struct Restore {ID3D12GraphicsCommandList* list=nullptr;ComPtr<ID3D12PipelineState> pipeline;D3D12_GPU_DESCRIPTOR_HANDLE table{};};
 static thread_local Restore restore;
 static void Drawing(void*,ID3D12GraphicsCommandList* list) noexcept {
-    if(!active||ptReflectionUserState.load(std::memory_order_acquire)!=1)return;
+    if(!active||!surfaceRoutingHealthy.load(std::memory_order_acquire)||ptReflectionUserState.load(std::memory_order_acquire)!=1)return;
     try {
         if(restore.list)return;
         // Filter non-surface PSOs before scene/frame locks on every native draw.
         const auto pso=PTCommandBindings::tracker.PipelineFor(list);
         auto pipeline=surfacePipelines.Find(pso.Get());if(!pipeline)return;
         if(!PTSceneLive::owner.Scenes().Healthy())return;
-        // No surface can consume PT before a producer exists. Avoid mapping
-        // camera buffers and allocating descriptors for every native draw
-        // when opaque/lighting admission has already failed this frame.
-        {std::lock_guard<std::recursive_mutex> guard(mutex);
-            bool produced=false;for(const auto& weak:frames){const auto frame=weak.lock();if(frame&&frame->producerRecorded&&(!frame->producerSubmitted||frame->armed||frame->deferred)){produced=true;break;}}
-            if(!produced)return;
-        }
+        // A frame may be reserved before its producer is recorded. Its output
+        // starts at alpha zero; only ordered submission can authorize PT.
         std::lock_guard<std::recursive_mutex> ordered(PTSceneQueues::queueMutex);PTSceneQueues::Scope privateQueues;
         std::lock_guard<std::recursive_mutex> guard(mutex);
         Bindings bindings;
@@ -408,7 +435,7 @@ static void Drawing(void*,ID3D12GraphicsCommandList* list) noexcept {
             !PTSceneLive::owner.Resources().ReadUpload(bindings.arguments[12].value,raw.data(),raw.size())))return;
         std::shared_ptr<Frame> matched;
         for(const auto& weak:frames){const auto f=weak.lock();
-            if(!f||!f->producerRecorded||f->cancelled||f->view.engineFrame!=engineFrame||!f->view.MatchesSurface(raw))continue;
+            if(!f||f->cancelled||f->view.engineFrame!=engineFrame||!f->view.MatchesSurface(raw))continue;
             if(matched)return;matched=f;
         }
         if(!matched)return;
@@ -429,14 +456,21 @@ static void Drawing(void*,ID3D12GraphicsCommandList* list) noexcept {
         if(!draw){
             auto frame=matched;
             draw=std::make_shared<Draw>();draw->frame=frame;draw->pipeline=pipeline;draw->viewAddress=bindings.arguments[12].value;draw->boundView=view;
-            if(frame->surfaceUsed>=64)return;
-            draw->privateTable={frame->surfaceTables.heap,frame->surfaceTables.first+49*frame->surfaceUsed,49};
+            UINT offset=0;
+            if(!frame->surfaceBudget.Take(frame->surfaceTables.count,offset)){
+                // R67 silently selected native on draw 65+, so worker ordering
+                // changed which entire objects used PT each frame. Never admit
+                // that moving partial coverage. A real capacity failure latches
+                // the session to native, instead of retrying/flickering per frame.
+                StopSurfaceRouting("surface_table_capacity",frame);
+                return;
+            }
+            draw->privateTable={frame->surfaceTables.heap,frame->surfaceTables.first+offset,PTSurfaceComposition::TableBudget::Width};
             if(!Disjoint(draw->privateTable,first)||!PTTableMirror::bank.Read(bindings.resources.Get(),first,pipeline->Required(),draw->original)){Reject("surface_descriptor_allocation");return;}
-            ++frame->surfaceUsed;
             device->CopyDescriptorsSimple(49,Cpu(draw->privateTable),draw->original.At(0),D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
             device->CopyDescriptorsSimple(1,Cpu(draw->privateTable,40),frame->output->Srv(),D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
             recording->draws.push_back(draw);
-            static UINT64 composed=0;if(++composed<=8||composed%600==0)Log("PT_PRIMARY_SURFACE_RECORDED frame=%u count=%llu",frame->view.frame,composed);
+            static UINT64 composed=0;if(++composed<=8||composed%600==0)Log("PT_PRIMARY_SURFACE_RECORDED frame=%u count=%llu tables=%u capacity=%u",frame->view.frame,composed,frame->surfaceBudget.Used(),PTSurfaceComposition::TableBudget::Capacity);
         }
         restore={list,bindings.pipeline,{bindings.arguments[1].value}};
         list->SetPipelineState(pipeline->Composed());list->SetGraphicsRootDescriptorTable(1,Gpu(draw->privateTable));
@@ -570,7 +604,10 @@ static void Selected(void*,ID3D12CommandQueue* queue,UINT count,ID3D12CommandLis
                     device->CopyDescriptorsSimple(49,Cpu(draw->privateTable),draw->original.At(0),D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
                     device->CopyDescriptorsSimple(1,Cpu(draw->privateTable,40),draw->frame->output->Srv(),D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
                 }
-                if(recording.submitted||queueIdentity.Get()!=pinnedQueue.Get()||!SameView(draw->viewAddress,draw->boundView)||changed){
+                // CPU recording may precede the producer, GPU execution may not.
+                // Producer lists earlier in this batch have armed/deferred above.
+                const bool orderedProducer=draw->frame->producerRecorded&&(draw->frame->armed||draw->frame->deferred)&&!draw->frame->cancelled;
+                if(!orderedProducer||recording.submitted||queueIdentity.Get()!=pinnedQueue.Get()||!SameView(draw->viewAddress,draw->boundView)||changed){
                     CancelFrame(draw->frame,queue);Reject("surface_submission_changed");
                 }
             }
@@ -684,6 +721,6 @@ static bool Start(){
        !PTCommandBindings::Register(&commandConsumer)||!PTNativeJobRuntime::Register(&Job)||!PTSceneLive::owner.Start(step,true))return false;
     ptReflectionModeObserver.store(&MirrorModeChanged,std::memory_order_release);
     MirrorModeChanged(PTReflectionUserRequested());
-    active=true;Log("PT_PRIMARY_SESSION_READY build=M12R67 ready=1 hits=4 spp=1 roulette_start=3 material=opaque_general geometric_normals=1 native_fallback=1 primary_lighting=%s transport=%s readiness=per_material graphics_tracking=%u",surfaceReplacement?"pt":"native",surfaceReplacement?"full_surface":"diffuse_indirect",unsigned(compose));return true;
+    active=true;Log("PT_PRIMARY_SESSION_READY build=M12R68 ready=1 hits=4 spp=1 roulette_start=3 material=opaque_general geometric_normals=1 native_fallback=1 primary_lighting=%s transport=%s readiness=per_material graphics_tracking=%u",surfaceReplacement?"pt":"native",surfaceReplacement?"full_surface":"diffuse_indirect",unsigned(compose));return true;
 }
 }

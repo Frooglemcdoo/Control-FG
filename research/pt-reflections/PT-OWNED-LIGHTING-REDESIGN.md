@@ -101,3 +101,29 @@ full-surface commit and legacy commit tests, DXIL compilation, and both host
 compilation routes. Final package verification must check commit identity,
 complete hashes, matching PDB, distinct surface shader and preserved settings
 scripts. These checks do not establish in-game lighting quality or FPS.
+
+
+## R68: R67 flicker report and routing correction
+
+Evidence: PT-Primary-M12R67-Results-20261015-162656-315.zip and
+20261015-2124-42.9425473.mp4. Video frames show material-sized lighting changes.
+The log has one transport-ready transition and zero PT_PRIMARY_ADMISSION or
+PT_PRIMARY_LATE_REJECT records. Sampled producers stay armed and covered.
+It also has surface_bindings skips, primarily in bursts; these checks are not
+relaxed because the captured shaders actually consume the required roots.
+
+R67's silent 64-table ceiling and producerRecorded checks in Drawing create
+CPU-worker-order-dependent native/PT selection. Counts over 600-record windows
+are consistent with the 64-table ceiling in multiple intervals, but R67 did not
+log exhaustion directly; the video alone cannot attribute every fluctuation.
+
+R68 reserves a frame/output at the earlier opaque job and retains it in Candidate.
+Surface recording may precede producer recording; Selected still checks that an
+armed/deferred producer precedes consumers in GPU submission order. The 1024-table
+budget never wraps. Failed reservation/exhaustion cancels retained outputs and
+latches native routing until restart. New logs expose reservations, usage and
+routing stops. Randomized scheduling tests cover 200 draws across 40 frames;
+WARP verifies a consumer recorded before its producer reads the ordered result.
+No shader, RR, exposure, light sampling or scene-sync change is included.
+This fixes concrete routing defects; in-game flicker resolution remains to be
+verified with the same entrance view.
