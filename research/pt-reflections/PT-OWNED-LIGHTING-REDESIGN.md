@@ -1,9 +1,11 @@
 # PT-owned lighting redesign — implementation checkpoint
 
-Status: R67 surface-integration build in validation. The complete performance
-and all-material/all-light redesign is NOT complete. No FPS gain is claimed.
-The R67 package selects the replacement host and includes its distinct sidecar;
-unsupported materials retain native lighting and native passes still execute.
+Status: R69 recovery disables the R67/R68 surface replacement in the shipped
+host and restores the R66 native-light-buffer plus PT-indirect contract.
+The surface implementation remains development-only. All-material/all-light
+replacement, stable reconstruction, native-pass removal and the performance
+redesign remain incomplete. Historical R67/R68 details below describe those
+builds, not the active R69 route.
 
 ## Verified cause of the lighting limitation
 
@@ -127,3 +129,39 @@ WARP verifies a consumer recorded before its producer reads the ordered result.
 No shader, RR, exposure, light sampling or scene-sync change is included.
 This fixes concrete routing defects; in-game flicker resolution remains to be
 verified with the same entrance view.
+
+## R68 evidence and R69 recovery
+
+The supplied R68 log records `PT_PRIMARY_SURFACE_ROUTING_STOP` at frame 4028,
+QPC 2423678777983, reason `surface_table_reservation`, tables=0, capacity=1024.
+This positively identifies the shutdown path. `Fresh` rejects a missing,
+changed or out-of-bounds native heap provider; the log does not distinguish
+those cases. It is not evidence of VRAM exhaustion. The 49*1024 reservation
+was introduced by R68. Counts reach 169 tables in the late scene: the old 64
+limit was insufficient, but reserving 1024 every frame was not a sound fix.
+
+There is also no reconstruction between `PTCommitSurface` and the patched
+surface load/select. The random seed varies with frame; the direct estimator
+selects a single light. Unsupported secondary BRDF hits invalidate the entire
+path, clearing coverage and selecting native lighting for that camera pixel.
+At frame 3884, 1999 paths integrated, 1888 covered, 111 faulted (97 BRDF and
+14 normal). These mechanisms are present in source; their individual share
+of visible flicker is not established by the throttled log/video.
+
+R69 ships the legacy host contract, retains PT indirect, and restricts early
+Job frame/output reservation to the surface-development route. Recovery and
+surface macros together are a compile error. Build metadata and startup logs
+explicitly identify recovery; settings scripts remain unchanged. No claim
+that replacement flicker is solved or full PT lighting is delivered.
+
+Before surface replacement is packaged again:
+- Separate primary material ownership from stochastic secondary-path validity;
+  define supported secondary transport and failure handling without swapping
+  the entire primary lighting model based on the sampled bounce.
+- Implement and validate reconstruction with motion, depth/normal rejection,
+  disocclusion, camera cuts and render-resolution changes; verify the exact
+  relationship to native denoising and DLSS rather than assuming it filters PT.
+- Replace per-draw cloned native descriptor ranges with a lifetime-safe output
+  binding design that handles native heap rotation and recording concurrency.
+- Validate coverage/order across the full material set before native-pass
+  suppression. Do not remove fallback producers while consumers still need them.

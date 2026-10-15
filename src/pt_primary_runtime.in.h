@@ -1,6 +1,10 @@
 // Included inside PTGlassRuntime after the native context/allocator adapters.
 // One session owner. Every native call is still forwarded by its outer hook.
 namespace Primary {
+// Recovery packages must not accidentally enable the unfiltered replacement.
+#if defined(CONTROL_PT_RECOVERY_BUILD) && defined(CONTROL_PT_SURFACE_REPLACEMENT)
+#error Recovery builds must retain the native lighting reconstruction path
+#endif
 // Compile-time surface integration route. The packaged host and distinct
 // shader sidecar must agree; unsupported materials retain native fallback.
 #if defined(CONTROL_PT_SURFACE_REPLACEMENT)
@@ -242,14 +246,20 @@ static void Job(PTNativeJobRuntime::Phase phase,const PTNativeJobRoute::Ticket& 
         if(handoff.Recorded(ticket,bindings.resources.Get(),context.table.first,5)){
             // Reserve before native surface workers record their draws. CPU
             // producer recording order is NOT the GPU execution dependency.
-            PTSceneQueues::Scope privateQueues;
-            PTTableMirror::Scope descriptorLock(true);PTTableMirror::Mute privateWrites;
-            auto frame=FrameFor(view,context.queue);
-            if(!frame||frame->cancelled||!ReserveSurfaceTables(frame,context)){
-                handoff.Cancelled(ticket.serial);Reject("surface_frame_reservation");return;
+            std::shared_ptr<Frame> frame;
+            if constexpr(surfaceReplacement){
+                PTSceneQueues::Scope privateQueues;
+                PTTableMirror::Scope descriptorLock(true);PTTableMirror::Mute privateWrites;
+                frame=FrameFor(view,context.queue);
+                if(!frame||frame->cancelled||!ReserveSurfaceTables(frame,context)){
+                    handoff.Cancelled(ticket.serial);Reject("surface_frame_reservation");return;
+                }
+                static UINT64 reserved=0;if(++reserved<=8||reserved%240==0)
+                    Log("PT_PRIMARY_SURFACE_RESERVED frame=%u ticket=%llu capacity=%u stage=opaque_job",view.frame,ticket.serial,PTSurfaceComposition::TableBudget::Capacity);
             }
-            static UINT64 reserved=0;if(++reserved<=8||reserved%240==0)
-                Log("PT_PRIMARY_SURFACE_RESERVED frame=%u ticket=%llu capacity=%u stage=opaque_job",view.frame,ticket.serial,PTSurfaceComposition::TableBudget::Capacity);
+            // Legacy PT creates its placeholder at the lighting producer, as in
+            // R66. Do not acquire graphics descriptor locks or allocate early
+            // output resources for a route that has no surface consumers.
             candidates.emplace(ticket.serial,Candidate{ticket,view,std::move(frame)});
         }else Reject("opaque_handoff");
     }catch(...){Reject("job_allocation");}
@@ -713,6 +723,9 @@ static bool Start(){
     const bool compose=surfaceReplacement&&PTReflectionUserRequested();
     commandConsumer={&handoff,&Dispatched,compose?&Drawing:nullptr,compose?&Drawn:nullptr,&PipelineBound,!compose};
     if(surfaceReplacement)Log("PT_PRIMARY_SURFACE_MODE replacement=1 native_passes_retained=1 unsupported_materials=native graphics_tracking=%u",unsigned(compose));
+#if defined(CONTROL_PT_RECOVERY_BUILD)
+    Log("PT_PRIMARY_RECOVERY baseline=M12R66 surface_replacement=0 pt_indirect=1 graphics_tracking=0 reason=r67_r68_surface_regression");
+#endif
     pendingMetrics.reserve(8);
     PTCommandBindings::Mute privateRecording;PTTableMirror::Mute privateWrites;
     const auto step=device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
@@ -721,6 +734,6 @@ static bool Start(){
        !PTCommandBindings::Register(&commandConsumer)||!PTNativeJobRuntime::Register(&Job)||!PTSceneLive::owner.Start(step,true))return false;
     ptReflectionModeObserver.store(&MirrorModeChanged,std::memory_order_release);
     MirrorModeChanged(PTReflectionUserRequested());
-    active=true;Log("PT_PRIMARY_SESSION_READY build=M12R68 ready=1 hits=4 spp=1 roulette_start=3 material=opaque_general geometric_normals=1 native_fallback=1 primary_lighting=%s transport=%s readiness=per_material graphics_tracking=%u",surfaceReplacement?"pt":"native",surfaceReplacement?"full_surface":"diffuse_indirect",unsigned(compose));return true;
+    active=true;Log("PT_PRIMARY_SESSION_READY build=M12R69 ready=1 hits=4 spp=1 roulette_start=3 material=opaque_general geometric_normals=1 native_fallback=1 primary_lighting=%s transport=%s readiness=per_material graphics_tracking=%u",surfaceReplacement?"pt":"native",surfaceReplacement?"full_surface":"diffuse_indirect",unsigned(compose));return true;
 }
 }
