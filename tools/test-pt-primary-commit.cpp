@@ -8,14 +8,15 @@
 #include <cstdio>
 #include <array>
 using Microsoft::WRL::ComPtr;
-int main(){
+int main(int argc,char**){
+    const bool surface=argc>1;
     ComPtr<IDXGIFactory4> factory;ComPtr<IDXGIAdapter> adapter;ComPtr<ID3D12Device> device;
     assert(SUCCEEDED(CreateDXGIFactory1(IID_PPV_ARGS(&factory))));assert(SUCCEEDED(factory->EnumWarpAdapter(IID_PPV_ARGS(&adapter))));
     assert(SUCCEEDED(D3D12CreateDevice(adapter.Get(),D3D_FEATURE_LEVEL_11_0,IID_PPV_ARGS(&device))));
     ComPtr<ID3DBlob> shader,error,serialized;
-    HRESULT hr=D3DCompileFromFile(L"tools/test-pt-primary-commit.hlsl",nullptr,D3D_COMPILE_STANDARD_FILE_INCLUDE,"main","cs_5_1",D3DCOMPILE_ENABLE_STRICTNESS|D3DCOMPILE_WARNINGS_ARE_ERRORS,0,&shader,&error);
+    HRESULT hr=D3DCompileFromFile(surface?L"tools/test-pt-surface-commit.hlsl":L"tools/test-pt-primary-commit.hlsl",nullptr,D3D_COMPILE_STANDARD_FILE_INCLUDE,"main","cs_5_1",D3DCOMPILE_ENABLE_STRICTNESS|D3DCOMPILE_WARNINGS_ARE_ERRORS,0,&shader,&error);
     if(FAILED(hr)&&error)std::fprintf(stderr,"%s",static_cast<const char*>(error->GetBufferPointer()));assert(SUCCEEDED(hr));
-    D3D12_DESCRIPTOR_RANGE range{D3D12_DESCRIPTOR_RANGE_TYPE_UAV,2,0,0,0};
+    D3D12_DESCRIPTOR_RANGE range{D3D12_DESCRIPTOR_RANGE_TYPE_UAV,2,surface?6u:0u,0,0};
     D3D12_ROOT_PARAMETER parameter{};parameter.ParameterType=D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;parameter.DescriptorTable={1,&range};
     D3D12_ROOT_SIGNATURE_DESC rd{};rd.NumParameters=1;rd.pParameters=&parameter;
     assert(SUCCEEDED(D3D12SerializeRootSignature(&rd,D3D_ROOT_SIGNATURE_VERSION_1,&serialized,&error)));
@@ -58,8 +59,18 @@ int main(){
     void* data=nullptr;D3D12_RANGE read{0,1024};assert(SUCCEEDED(readback->Map(0,&read,&data)));
     for(UINT i=0;i<2;++i){const auto* values=reinterpret_cast<const float*>(static_cast<const unsigned char*>(data)+512*i);
         for(UINT x=0;x<16;++x)for(UINT c=0;c<4;++c){const float initial[]={2,3,4,2},pt[]={.25f,.5f,.75f,.25f};
-            const bool committed=x==3||x==7;const float expected=initial[c]+(committed&&i==1?pt[c]:0);assert(values[x*4+c]==expected);}}
+            const bool committed=x==3||x==7;
+            float expected=initial[c]+(committed&&i==1?pt[c]:0);
+            if(surface&&i==1){
+                // x>=9 never writes; x==5 tests mismatched dimensions and x==9
+                // attempts an out-of-bounds clear/commit. Neither may corrupt it.
+                expected=(x==5||x>=9)?initial[c]:0;
+                if(committed)expected=c==3?1:pt[c];
+                if(x==6)expected=c==3?1:0; // black is covered, not fallback
+            }
+            assert(values[x*4+c]==expected);}}
 
     const D3D12_RANGE noWrite{};readback->Unmap(0,&noWrite);assert(SUCCEEDED(device->GetDeviceRemovedReason()));
-    puts("PASS: indirect addition preserves native diffuse/direct/specular; invalid and zero samples leave native output intact");
+    if(surface)puts("PASS: full surface replacement, black coverage, invalid fallback, bounds, native output isolation");
+    else puts("PASS: indirect addition preserves native diffuse/direct/specular; invalid and zero samples leave native output intact");
 }

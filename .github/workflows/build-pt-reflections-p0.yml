@@ -121,6 +121,8 @@ jobs:
           if errorlevel 1 exit /b 1
           build\test-pt-primary-commit.exe
           if errorlevel 1 exit /b 1
+          build\test-pt-primary-commit.exe surface
+          if errorlevel 1 exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-pt-primary-lights.cpp /Febuild\test-pt-primary-lights.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
           if errorlevel 1 exit /b 1
           build\test-pt-primary-lights.exe
@@ -342,6 +344,9 @@ jobs:
           Write-Host "DXC: $dxc"
           & $dxc -T lib_6_3 -HV 2021 -O3 -WX -I src/shaders -Fo build/pt_primary_path.dxil src/shaders/pt_primary_path.hlsl
           if($LASTEXITCODE -ne 0){throw "Primary path DXC compile failed: $LASTEXITCODE"}
+          # Compile development replacement separately; never package it as the legacy producer.
+          & $dxc -T lib_6_3 -HV 2021 -O3 -WX -I src/shaders -Fo build/pt_primary_surface.dxil src/shaders/pt_primary_surface.hlsl
+          if($LASTEXITCODE -ne 0){throw "Surface replacement DXC compile failed: $LASTEXITCODE"}
           & $dxc -T lib_6_3 -HV 2021 -O3 -I src/shaders -Fo build/pt_glass_raygen.dxil src/shaders/pt_glass_raygen.hlsl
           if($LASTEXITCODE -ne 0){throw "Glass DXC compile failed: $LASTEXITCODE"}
           & $dxc -T lib_6_3 -HV 2021 -O3 -I src/shaders -Fo build/pt_reflection_p2.dxil src/shaders/pt_reflection_p2.hlsl

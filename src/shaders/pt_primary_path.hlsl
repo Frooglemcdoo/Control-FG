@@ -8,11 +8,17 @@
 #include "ControlPrimaryGuideDecode.hlsli"
 #include "pt_native_primary_lights.hlsli"
 #define PT_PATH_PRIMARY_DECODE 1
+#ifndef PT_PRIMARY_SURFACE_REPLACEMENT
 #define PT_PATH_PRIMARY_FILL 1
 #define PT_PATH_PRIMARY_INDIRECT 1
+#endif
 #define PT_PATH_PRIMARY_SHADING_NORMAL 1
 #include "pt_path_integrator.hlsli"
+#ifdef PT_PRIMARY_SURFACE_REPLACEMENT
+#include "pt_surface_commit.hlsli"
+#else
 #include "pt_primary_commit.hlsli"
+#endif
 cbuffer PTPrimarySystem : register(b0) { float4 PTSystem[71]; };
 Texture2D<float4> PTGBuffer1 : register(t0);
 Texture2D<float4> PTGBuffer2 : register(t1);
@@ -97,6 +103,12 @@ void PTPrimaryPathRayGeneration(){
     // Rejected/replayed lists must never traverse their old acceleration data.
     uint admission=PTMetrics.Load(32);
     [branch] if(admission==0||(admission==2&&((pixel.x|pixel.y)&15)!=0))return;
+#ifdef PT_PRIMARY_SURFACE_REPLACEMENT
+    // Clear coverage before any depth/material rejection. Admission 0 must not
+    // touch resources: replay may refer to an output whose scene was retired.
+    // Host initializes the whole output to zero before its first submission.
+    if(admission==1&&!PTClearSurface(pixel,DispatchRaysDimensions().xy))return;
+#endif
     PTMeasure(0,pixel);
     uint width,height,g2w,g2h,zw,zh;PTGBuffer1.GetDimensions(width,height);PTGBuffer2.GetDimensions(g2w,g2h);PTClipDepth.GetDimensions(zw,zh);
     if(any(uint2(width,height)!=DispatchRaysDimensions().xy)||width!=g2w||height!=g2h||width!=zw||height!=zh||
@@ -124,10 +136,16 @@ void PTPrimaryPathRayGeneration(){
     // Keep the first two continuations before roulette to reduce reflection variance.
     PTPathResult result=PTIntegratePathFirst(ray,4,3,seed,.001,first,1,0);
     PTMeasure(5,pixel);
-    // Native direct lighting and specular fill remain in their original buffers.
-    // The integrator excludes first-hit direct/emission and specular continuation.
+    // The legacy variant adds diffuse-first indirect. The replacement variant
+    // includes primary direct and both continuation lobes, and writes complete
+    // material-weighted surface radiance. Primary emission stays in the native
+    // material compositor in BOTH variants; secondary emission is integrated.
     if(result.valid!=0&&all(isfinite(result.radiance))&&all(result.radiance>=0)){
+#ifdef PT_PRIMARY_SURFACE_REPLACEMENT
+        if(admission==2||PTCommitSurface(pixel,uint2(width,height),result.radiance,admission))PTMeasure(6,pixel);
+#else
         if(admission==2||PTCommitIndirect(pixel,uint2(width,height),result.radiance,admission))PTMeasure(6,pixel);
+#endif
     }
     else {PTMeasure(7,pixel);if(((pixel.x|pixel.y)&63)==0){uint old;PTMetrics.InterlockedAdd(36+4*min(result.fault,15u),1,old);}}
 }
