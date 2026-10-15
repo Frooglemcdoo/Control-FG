@@ -94,8 +94,8 @@ inline Failure Prepare(const Selection& selected,const Scene& scene,const Table&
     if(!table.rays||table.rays>2||exports.rays.size()!=table.rays||table.bindings.empty()||table.bindings.size()>65536||
        table.allocationTokens.size()!=table.bindings.size()||table.bytes.size()!=table.bindings.size()*table.rays*PTShaderTableAdapter::NativeStride||
        scene.instances.empty()||scene.instances.size()>32768)return {Status::size,0};
-    std::vector<PTSceneTopology::Mapping> mappings;
-    scene.topology.Check(scene.instances,table.bindings,table.rays,&mappings);
+    std::vector<const PTSceneTopology::Geometry*> mappings;
+    scene.topology.CheckReferences(scene.instances,table.bindings,table.rays,&mappings);
     if(mappings.size()!=table.bindings.size())return {Status::topology,0};
     Plan pending;
     pending.allocationTokens.reserve(1+scene.blas.size()+table.bindings.size());
@@ -117,7 +117,7 @@ inline Failure Prepare(const Selection& selected,const Scene& scene,const Table&
     }
     pending.selection=selected;pending.privatePipeline=exports.privatePipeline;pending.records.resize(table.bindings.size()*table.rays);
     for(std::size_t i=0;i<table.bindings.size();++i){
-        if(!mappings[i].referenced){
+        if(!mappings[i]){
             // Check() proved every visible instance and geometry maps elsewhere.
             // Keep row numbers intact with valid private identifiers and zero
             // roots; these rows cannot execute for this immutable scene cut.
@@ -130,7 +130,7 @@ inline Failure Prepare(const Selection& selected,const Scene& scene,const Table&
         }
         if(!table.allocationTokens[i][0])return {Status::rowIndexOwner,i*table.rays};
         if(!table.allocationTokens[i][1])return {Status::rowAttributeOwner,i*table.rays};
-        const auto& g=mappings[i].geometry;const auto& binding=table.bindings[i];
+        const auto& g=*mappings[i];const auto& binding=table.bindings[i];
         PTOwnedScene::Index::Resolved resolved;
         const PTOwnedScene::Triangle triangle{g.indices,g.positions,g.stride,g.indexToken,g.positionToken,g.indexStride,g.indexCount,g.vertexCount};
         if(g.frozen){

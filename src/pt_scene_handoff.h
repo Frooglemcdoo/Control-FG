@@ -17,6 +17,8 @@ class Prepared {
     PTSceneDispatch::ExportSet exports;
     PTSceneDispatch::Plan plan;
     PTSceneDispatch::Scene scene;
+public:
+    const PTSceneDispatch::Plan& DispatchPlan()const{return plan;}
 };
 class Runtime {
     struct Entry {
@@ -149,11 +151,11 @@ public:
         }
     }
     // Preview freezes a disarmed recording; only strict Revalidate may admit it.
-    Status PrepareRecording(std::uint64_t serial,const PTSceneDispatch::ExportSet& exports,PTSceneDispatch::Plan& plan,PTOwnedScene::LeaseBatch& lease,
-                   std::shared_ptr<const Prepared>* proof=nullptr,PTPreparationMetrics::Costs* costs=nullptr){
+    Status PrepareRecording(std::uint64_t serial,const PTSceneDispatch::ExportSet& exports,PTOwnedScene::LeaseBatch& lease,
+                   std::shared_ptr<const Prepared>& proof,PTPreparationMetrics::Costs* costs=nullptr){
         using Clock=PTPreparationMetrics::Clock;const auto start=Clock::now();if(costs)*costs={};
-        if(proof)proof->reset();
-        plan={};std::lock_guard<std::mutex> guard(mutex);const auto locked=Clock::now();
+        proof.reset();
+        PTSceneDispatch::Plan plan;std::lock_guard<std::mutex> guard(mutex);const auto locked=Clock::now();
         if(costs)(*costs)[0]=PTPreparationMetrics::Milliseconds(start,locked);const auto found=pending.find(serial);
         if(found==pending.end())return Status::missing;
         auto& entry=found->second;if(!entry.written||!entry.submitted)return Status::pending;
@@ -176,11 +178,11 @@ public:
             const auto binding=row<entry.table.bindings.size()?entry.table.bindings[row]:PTNativeBinding::Binding{};
             Erase(found,PTSceneDispatch::FailureName(failure.status),row);failures.at(serial).binding=binding;return Status::rejected;
         }
-        if(prepared&&proof){
+        if(prepared){
             auto snapshot=std::make_shared<Prepared>();snapshot->owner=&owner;snapshot->acceleration=entry.acceleration;
             snapshot->engineFrame=entry.ticket.engineFrame;snapshot->width=entry.ticket.width;snapshot->height=entry.ticket.height;
-            snapshot->nativePipeline=entry.pipeline;snapshot->table=std::move(entry.table);snapshot->exports=exports;snapshot->plan=plan;snapshot->scene=std::move(scene);
-            *proof=std::move(snapshot);
+            snapshot->nativePipeline=entry.pipeline;snapshot->table=std::move(entry.table);snapshot->exports=exports;snapshot->plan=std::move(plan);snapshot->scene=std::move(scene);
+            proof=std::move(snapshot);
         }
         Erase(found);if(costs)(*costs)[5]=PTPreparationMetrics::Milliseconds(retained,Clock::now());
         return prepared?Status::prepared:Status::rejected;

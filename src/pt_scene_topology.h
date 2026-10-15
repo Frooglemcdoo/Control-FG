@@ -63,10 +63,12 @@ public:
         for(auto i=blas.lower_bound(address);i!=blas.end()&&i->first-address<bytes;){rows-=i->second->size();i=blas.erase(i);}
     }
     void Clear(){blas.clear();rows=0;}
-    Result Check(const std::vector<Instance>& instances,const std::vector<PTNativeBinding::Binding>& bindings,unsigned rays,
-                 std::vector<Mapping>* mapping=nullptr)const {
+    // Borrowed geometry remains valid while this immutable index is retained.
+    // Preparation consumes these pointers synchronously and never stores them.
+    Result CheckReferences(const std::vector<Instance>& instances,const std::vector<PTNativeBinding::Binding>& bindings,unsigned rays,
+                 std::vector<const Geometry*>* mapping=nullptr)const {
         if(mapping)mapping->clear();
-        Result out{};std::vector<Mapping> assigned(bindings.size());
+        Result out{};std::vector<const Geometry*> assigned(bindings.size(),nullptr);
         for(const auto& instance:instances){
             ++out.instances;if(!(instance.idMask>>24)){++out.masked;continue;}
             auto i=blas.find(instance.blas);if(i==blas.end()){++out.missingBlas;continue;}
@@ -79,14 +81,25 @@ public:
                 if(!PTNativeBinding::IndexAddress(b,address)||address!=geometry.indices||b.constants[1]!=geometry.indexStride||
                    b.constants[0]>=b.constants[8]||U64(geometry.indexCount)*geometry.indexStride>U64(b.constants[8])-b.constants[0]){++out.mismatch;continue;}
                 const auto& old=assigned[static_cast<std::size_t>(row)];
-                if(old.referenced&&(old.geometry.positions!=geometry.positions||old.geometry.stride!=geometry.stride||old.geometry.indexCount!=geometry.indexCount||old.geometry.vertexCount!=geometry.vertexCount||old.geometry.indexToken!=geometry.indexToken||old.geometry.positionToken!=geometry.positionToken||old.geometry.frozen!=geometry.frozen)){++out.conflict;continue;}
-                assigned[static_cast<std::size_t>(row)]={geometry,true};++out.matched;
+                if(old&&(old->positions!=geometry.positions||old->stride!=geometry.stride||old->indexCount!=geometry.indexCount||old->vertexCount!=geometry.vertexCount||old->indexToken!=geometry.indexToken||old->positionToken!=geometry.positionToken||old->frozen!=geometry.frozen)){++out.conflict;continue;}
+                assigned[static_cast<std::size_t>(row)]=&geometry;++out.matched;
             }
         }
         if(mapping&&out.matched&&!out.missingBlas&&!out.outOfRange&&!out.mismatch&&!out.conflict){
             *mapping=std::move(assigned);
         }
         return out;
+    }
+    Result Check(const std::vector<Instance>& instances,const std::vector<PTNativeBinding::Binding>& bindings,unsigned rays,
+                 std::vector<Mapping>* mapping=nullptr)const {
+        if(mapping)mapping->clear();
+        std::vector<const Geometry*> references;
+        const auto result=CheckReferences(instances,bindings,rays,mapping?&references:nullptr);
+        if(mapping&&!references.empty()){
+            mapping->resize(references.size());
+            for(std::size_t n=0;n<references.size();++n)if(references[n])(*mapping)[n]={*references[n],true};
+        }
+        return result;
     }
 };
 }

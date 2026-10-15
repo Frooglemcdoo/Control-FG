@@ -27,5 +27,28 @@ int main(){
     Index equal;assert(equal.Build(0xa000,{g}));assert(equal.Same(shared));
     assert(!shared.BuildShared(0xa000,{}));assert(!shared.Same(equal));
     saved.Clear();assert(weak.expired());
+    // Borrowed mappings retain no per-instance ownership copies. They select
+    // the same rows and reject the same conflicts as the owning API.
+    Index borrowed;auto frozen=std::make_shared<FrozenGeometry>();g.frozen=frozen;
+    assert(borrowed.Build(0xd000,{g}));
+    Instance visible{};visible.idMask=0xff000001;visible.blas=0xd000;visible.contributionFlags=2;
+    b[1].indices=g.indices;
+    const auto ownersBefore=frozen.use_count();
+    std::vector<const Geometry*> references;
+    r=borrowed.CheckReferences(std::vector<Instance>(256,visible),b,2,&references);
+    assert(r.matched==256&&references.size()==2&&!references[0]&&references[1]);
+    assert(references[1]->frozen==frozen&&frozen.use_count()==ownersBefore);
+    std::vector<Mapping> owning;
+    auto ownedResult=borrowed.Check({visible},b,2,&owning);
+    assert(ownedResult.matched==1&&owning.size()==2&&owning[1].geometry.positions==references[1]->positions);
+    assert(frozen.use_count()==ownersBefore+1);owning.clear();
+    auto conflicting=g;conflicting.positions+=12;assert(borrowed.Build(0xe000,{conflicting}));
+    auto second=visible;second.blas=0xe000;
+    r=borrowed.CheckReferences({visible,second},b,2,&references);
+    assert(r.conflict==1&&references.empty());
+    second.idMask=1;r=borrowed.CheckReferences({visible,second},b,2,&references);
+    assert(r.matched==1&&r.masked==1&&references.size()==2);
+    auto retained=borrowed;const auto* geometry=references[1];borrowed.Clear();
+    assert(retained.References(0xd000,nullptr)==false&&geometry->frozen==frozen);
     std::puts("PASS topology: record contribution, compaction, index mismatch, conflicting geometry and allocation invalidation.");
 }

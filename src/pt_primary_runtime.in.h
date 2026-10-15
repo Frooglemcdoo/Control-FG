@@ -290,11 +290,11 @@ static void Dispatched(void*,ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT 
             const HRESULT hr=p->Initialize(rayDevice.Get(),bindings.layout->Root(),library.data(),library.size(),L"PTPrimaryPathRayGeneration");
             if(FAILED(hr)){Log("PT_PRIMARY_PIPELINE_FAILED hr=0x%08lX",static_cast<unsigned long>(hr));return;}pipeline=std::move(p);
         }
-        PTNativeShaderTable::Identifiers identifiers;PTSceneDispatch::ExportSet exports;PTSceneDispatch::Plan plan;
+        PTNativeShaderTable::Identifiers identifiers;PTSceneDispatch::ExportSet exports;
         if(!handoff.ReadyIdentifiers(serial,identifiers)||!pipeline->Exports(candidate->ticket.pipeline,identifiers.hit,exports)){Reject("private_exports");return;}
         profile.Next(PTHotpathTiming::Kind::primary_lease);QueryPerformanceCounter(&leaseStart);
         PTPreparationMetrics::Costs preparationCosts{};
-        const auto status=handoff.PrepareRecording(serial,exports,plan,a->scene,&a->proof,&preparationCosts);
+        const auto status=handoff.PrepareRecording(serial,exports,a->scene,a->proof,&preparationCosts);
         QueryPerformanceCounter(&leaseDone);profile.Next(PTHotpathTiming::Kind::primary_setup);
         if(status!=PTSceneHandoff::Status::pending)candidates.erase(serial);
         if(status!=PTSceneHandoff::Status::prepared){
@@ -306,6 +306,7 @@ static void Dispatched(void*,ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT 
             }
             Reject(reason);return;
         }
+        const auto& plan=a->proof->DispatchPlan();
         auto frame=FrameFor(view,context.queue);
         if(!frame||frame->producerRecorded){Reject("frame_budget_or_duplicate");return;}
         // Native light buffers carry the result; this owner only retains the
@@ -639,6 +640,6 @@ static bool Start(){
        !PTCommandBindings::Register(&commandConsumer)||!PTNativeJobRuntime::Register(&Job)||!PTSceneLive::owner.Start(step,true))return false;
     ptReflectionModeObserver.store(&MirrorModeChanged,std::memory_order_release);
     MirrorModeChanged(PTReflectionUserRequested());
-    active=true;Log("PT_PRIMARY_SESSION_READY build=M12R61 ready=1 hits=4 spp=1 roulette_start=3 material=opaque_general geometric_normals=1 native_fallback=1 primary_lighting=native diffuse_bounces=pt_indirect readiness=per_material graphics_tracking=0");return true;
+    active=true;Log("PT_PRIMARY_SESSION_READY build=M12R62 ready=1 hits=4 spp=1 roulette_start=3 material=opaque_general geometric_normals=1 native_fallback=1 primary_lighting=native diffuse_bounces=pt_indirect readiness=per_material graphics_tracking=0");return true;
 }
 }
