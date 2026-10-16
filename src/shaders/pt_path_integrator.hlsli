@@ -23,7 +23,7 @@ uint PTPathRandomBits(inout uint state) {
     state ^= state << 13; state ^= state >> 17; state ^= state << 5; return state;
 }
 float PTPathRandom(inout uint state) { return (PTPathRandomBits(state)>>8)*(1.0/16777216.0); }
-struct PTPathResult { float3 radiance; uint hits; uint valid; uint fault; uint primaryValid; float3 diffuse,specular,kd,f0; float roughness,hitDistance,primaryViewCosine; };
+struct PTPathResult { float3 radiance; uint hits; uint valid; uint fault; uint primaryValid; uint terminalGIPositive; float3 diffuse,specular,kd,f0; float roughness,hitDistance,primaryViewCosine; };
 PTPathResult PTIntegratePathFirst(RayDesc ray,uint maxHits,uint rouletteStart,uint seed,float originOffset,
                                   PTSceneHit first,uint useFirst,uint includePrimaryEmission) {
     PTTransportState path=PTBeginTransport();PTPathResult result=(PTPathResult)0;
@@ -83,7 +83,17 @@ PTPathResult PTIntegratePathFirst(RayDesc ray,uint maxHits,uint rouletteStart,ui
         // A valid material alone is insufficient: failed primary lighting
         // must not publish covered black and suppress native illumination.
         if(depth==0&&path.valid!=0)result.primaryValid=1;
-        if(depth+1==maxHits) break;
+        if(depth+1==maxHits){
+#ifdef PT_PATH_TERMINAL_GI
+            // Replace the omitted indirect tail with the authored diffuse cache.
+            // Earlier vertices retain traced transport; never sum this at each
+            // bounce or add the native RT GI/reflection output a second time.
+            float3 tail=surface.material.kd*PTTerminalGI(surface.position,surface.normal);
+            result.terminalGIPositive=any(tail>0)?1u:0u;
+            path=PTAccumulate(path,tail);
+#endif
+            break;
+        }
         float choose=PTPathRandom(rng),u=PTPathRandom(rng),v=PTPathRandom(rng),rr=PTPathRandom(rng);
         PTSurfaceMaterial continuation=surface.material;
 #ifdef PT_PATH_PRIMARY_FILL
