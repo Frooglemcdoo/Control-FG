@@ -38,13 +38,44 @@ inline bool ReconstructConstants(const PTNativeView::View& view,const PTNativeVi
     }
     std::copy(old.begin()+8,old.begin()+24,c.previousWorldToView.begin());c.useHistory=1;return true;
 }
+// Released only with the enclosing reconstruction pass, whose owner is retained
+// by Output until its last GPU/recording use completes. Previous signals retain
+// this storage directly, never the preceding pass (no history ownership chain).
+struct SignalStorage {
+    Microsoft::WRL::ComPtr<ID3D12Resource> resource;
+    Microsoft::WRL::ComPtr<ID3D12Device> device;
+    UINT64 bytes=0;
+    inline static std::mutex mutex;
+    inline static std::vector<std::unique_ptr<SignalStorage>> idle;
+    inline static UINT64 resident=0;
+    static std::shared_ptr<SignalStorage> Acquire(ID3D12Device* device,UINT64 bytes){
+        std::lock_guard<std::mutex> guard(mutex);
+        std::unique_ptr<SignalStorage> value;
+        for(auto it=idle.begin();it!=idle.end();++it)if((*it)->device.Get()==device&&(*it)->bytes==bytes){value=std::move(*it);idle.erase(it);break;}
+        if(!value){
+            // Evict incompatible and excess idle storage before enforcing the cap.
+            for(auto& old:idle)resident-=old->bytes;idle.clear();
+            if(bytes>512ull*1024*1024||resident>2048ull*1024*1024-bytes)return {};
+            value=std::make_unique<SignalStorage>();value->device=device;value->bytes=bytes;
+            D3D12_RESOURCE_DESC rd{};rd.Dimension=D3D12_RESOURCE_DIMENSION_BUFFER;rd.Width=bytes;rd.Height=1;
+            rd.DepthOrArraySize=rd.MipLevels=1;rd.SampleDesc.Count=1;rd.Layout=D3D12_TEXTURE_LAYOUT_ROW_MAJOR;rd.Flags=D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+            D3D12_HEAP_PROPERTIES hp{};hp.Type=D3D12_HEAP_TYPE_DEFAULT;
+            if(FAILED(device->CreateCommittedResource(&hp,D3D12_HEAP_FLAG_NONE,&rd,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,nullptr,IID_PPV_ARGS(&value->resource))))return {};
+            resident+=bytes;
+        }
+        return std::shared_ptr<SignalStorage>(value.release(),[](SignalStorage* released){
+            std::lock_guard<std::mutex> lock(mutex);
+            if(idle.size()<4)idle.emplace_back(released);else{resident-=released->bytes;delete released;}
+        });
+    }
+};
 class ReconstructionPipeline {
     Microsoft::WRL::ComPtr<ID3D12RootSignature> root;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> pipeline;
 public:
     HRESULT Initialize(ID3D12Device* device,const void* bytes,SIZE_T size){
         if(!device||!bytes||!size)return E_INVALIDARG;
-        D3D12_ROOT_PARAMETER p[10]{};
+        D3D12_ROOT_PARAMETER p[13]{};
         p[0].ParameterType=D3D12_ROOT_PARAMETER_TYPE_CBV;p[0].Descriptor={0,0};
         p[1].ParameterType=p[2].ParameterType=D3D12_ROOT_PARAMETER_TYPE_SRV;p[1].Descriptor={0,0};p[2].Descriptor={1,0};
         p[3].ParameterType=p[5].ParameterType=D3D12_ROOT_PARAMETER_TYPE_UAV;p[3].Descriptor={0,0};p[5].Descriptor={1,0};
@@ -53,7 +84,9 @@ public:
         p[7].ParameterType=D3D12_ROOT_PARAMETER_TYPE_UAV;p[7].Descriptor={2,0};
         p[8].ParameterType=p[9].ParameterType=D3D12_ROOT_PARAMETER_TYPE_SRV;p[8].Descriptor={5,0};p[9].Descriptor={8,0};
         p[4].ParameterType=D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;p[4].DescriptorTable={2,range};
-        D3D12_ROOT_SIGNATURE_DESC desc{};desc.NumParameters=10;desc.pParameters=p;
+        p[10].ParameterType=D3D12_ROOT_PARAMETER_TYPE_SRV;p[10].Descriptor={9,0};
+        p[11].ParameterType=p[12].ParameterType=D3D12_ROOT_PARAMETER_TYPE_UAV;p[11].Descriptor={3,0};p[12].Descriptor={4,0};
+        D3D12_ROOT_SIGNATURE_DESC desc{};desc.NumParameters=13;desc.pParameters=p;
         Microsoft::WRL::ComPtr<ID3DBlob> blob,error;
         HRESULT hr=D3D12SerializeRootSignature(&desc,D3D_ROOT_SIGNATURE_VERSION_1,&blob,&error);if(FAILED(hr))return hr;
         hr=device->CreateRootSignature(0,blob->GetBufferPointer(),blob->GetBufferSize(),IID_PPV_ARGS(&root));if(FAILED(hr))return hr;
@@ -68,12 +101,18 @@ struct ReconstructionPass {
     std::shared_ptr<PTUploadPool::Buffer> constants,geometry;
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> guides;
     Microsoft::WRL::ComPtr<ID3D12Resource> raw,history,materials,previousMaterials;
+    std::shared_ptr<SignalStorage> signals,scratch,previousSignals;
     UINT width=0,height=0;bool historyEnabled=false;
     bool Initialize(ID3D12Device* device,const std::shared_ptr<ReconstructionPipeline>& p,const PTNativeView::View& view,
                     const PTNativeView::View* previous,ID3D12Resource* input,ID3D12Resource* old,
-                    const std::array<D3D12_CPU_DESCRIPTOR_HANDLE,5>& descriptors,const PTMaterialHistory::Keys& keys,ID3D12Resource* oldMaterials){
+                    const std::array<D3D12_CPU_DESCRIPTOR_HANDLE,5>& descriptors,const PTMaterialHistory::Keys& keys,ID3D12Resource* oldMaterials,const std::shared_ptr<SignalStorage>& oldSignals={}){
         if(!device||!p||!input)return false;
-        if(old&&!oldMaterials)return false;pipeline=p;raw=input;history=old?old:input;width=view.width;height=view.height;
+        if(old&&!oldMaterials)return false;
+        const bool split=input->GetDesc().Width==UINT64(view.width)*view.height*64;
+        if(split&&old&&!oldSignals)return false;
+        signals=SignalStorage::Acquire(device,UINT64(view.width)*view.height*32);
+        scratch=SignalStorage::Acquire(device,UINT64(view.width)*view.height*32);
+        if(!signals||!scratch)return false;previousSignals=oldSignals;pipeline=p;raw=input;history=old?old:input;width=view.width;height=view.height;
         ReconstructionConstants c;if(!ReconstructConstants(view,old?previous:nullptr,c))return false;historyEnabled=c.useHistory!=0;
         if(FAILED(PTUploadPool::Buffer::Acquire(device,512,constants)))return false;
         void* data=nullptr;const D3D12_RANGE noRead{};
@@ -104,12 +143,24 @@ struct ReconstructionPass {
         list->SetComputeRootUnorderedAccessView(7,materials->GetGPUVirtualAddress());
         list->SetComputeRootShaderResourceView(8,previousMaterials->GetGPUVirtualAddress());
         list->SetComputeRootShaderResourceView(9,geometry->Resource()->GetGPUVirtualAddress());
+        list->SetComputeRootShaderResourceView(10,previousSignals?previousSignals->resource->GetGPUVirtualAddress():raw->GetGPUVirtualAddress());
+        list->SetComputeRootUnorderedAccessView(11,signals->resource->GetGPUVirtualAddress());
+        list->SetComputeRootUnorderedAccessView(12,scratch->resource->GetGPUVirtualAddress());
         D3D12_RESOURCE_BARRIER b{};b.Type=D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-        b.Transition={materials.Get(),0,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,D3D12_RESOURCE_STATE_UNORDERED_ACCESS};list->ResourceBarrier(1,&b);
+        for(auto* resource:{materials.Get(),signals->resource.Get(),scratch->resource.Get()}){
+            b.Transition={resource,0,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,D3D12_RESOURCE_STATE_UNORDERED_ACCESS};list->ResourceBarrier(1,&b);
+        }
         list->SetComputeRoot32BitConstant(6,0,0);list->Dispatch((PTMaterialHistory::Count+63)/64,1,1);
         b.Type=D3D12_RESOURCE_BARRIER_TYPE_UAV;b.UAV.pResource=materials.Get();list->ResourceBarrier(1,&b);
         list->SetComputeRoot32BitConstant(6,1,0);list->Dispatch((width+7)/8,(height+7)/8,1);
-        b.Type=D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;b.Transition={materials.Get(),0,D3D12_RESOURCE_STATE_UNORDERED_ACCESS,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE};list->ResourceBarrier(1,&b);
+        for(UINT phase=2;phase<=3;++phase){
+            b.Type=D3D12_RESOURCE_BARRIER_TYPE_UAV;b.UAV.pResource=nullptr;list->ResourceBarrier(1,&b);
+            list->SetComputeRoot32BitConstant(6,phase,0);list->Dispatch((width+7)/8,(height+7)/8,1);
+        }
+        b.Type=D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+        for(auto* resource:{materials.Get(),signals->resource.Get(),scratch->resource.Get()}){
+            b.Transition={resource,0,D3D12_RESOURCE_STATE_UNORDERED_ACCESS,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE};list->ResourceBarrier(1,&b);
+        }
     }
 };
 }

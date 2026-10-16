@@ -1,11 +1,11 @@
 #include "../src/shaders/pt_surface_commit.hlsli"
 #include "../src/shaders/pt_light_reservoir.hlsli"
-struct PTSceneHit {uint status;float3 geometricNormal;};
+struct PTSceneHit {uint status;float3 geometricNormal;float distance;};
 #define PT_PATH_PRIMARY_DECODE 1
 #include "../src/shaders/pt_path_integrator.hlsli"
 static uint testMode;
 static float testScale;
-PTSceneHit PTPathTrace(RayDesc ray){PTSceneHit h;h.status=(uint)testScale;h.geometricNormal=-ray.Direction;return h;}
+PTSceneHit PTPathTrace(RayDesc ray){PTSceneHit h=(PTSceneHit)0;h.status=(uint)testScale;h.geometricNormal=-ray.Direction;return h;}
 PTPathSurface PTPathDecodePrimary(PTSceneHit hit,RayDesc ray){
     PTPathSurface s=(PTPathSurface)0;s.normal=normalize(float3(testScale-1,0,testScale));s.spawnOrigin=float3(0,0,.001*testScale);s.emission=testScale-1;
     s.material.kd=.5*testScale;s.material.f0=testScale-1;s.material.roughness=.5*testScale;s.material.lobes=testMode==10?0:1;s.decodeFault=12;return s;
@@ -32,9 +32,10 @@ void main(uint3 id:SV_DispatchThreadID){
         // transport rather than only compiler-folded constant arithmetic.
         testScale=asfloat(PTSurfaceRadiance.Load(15*16))*.5;
         RayDesc ray;ray.Origin=float3(0,0,testScale);ray.Direction=normalize(float3(testScale-1,0,-testScale));ray.TMin=testScale-1;ray.TMax=100*testScale;
-        PTSceneHit first;first.status=1;first.geometricNormal=float3(0,0,1);
+        PTSceneHit first=(PTSceneHit)0;first.status=1;first.geometricNormal=float3(0,0,1);
         PTPathResult estimate=PTIntegratePathFirst(ray,2,3,1234,.001*testScale,first,1,0);
         PTClearSurface(id.xy,extent);
+        if(any(abs(estimate.diffuse+estimate.specular-estimate.radiance)>1e-5))estimate.primaryValid=0;
         if(estimate.primaryValid!=0)PTCommitSurface(id.xy,extent,estimate.radiance,1);
         return;
     }

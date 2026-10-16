@@ -72,7 +72,7 @@ public:
         PTCommandBindings::Mute privateRecording;
         result.reset();Poll();
         if(!queue||queue->GetDesc().Type!=D3D12_COMMAND_LIST_TYPE_DIRECT||!width||!height||
-           width>16384||height>16384||(stride!=16&&stride!=32)||(!linear&&stride!=16)||std::uint64_t(width)*height*stride>512ull*1024*1024)return E_INVALIDARG;
+           width>16384||height>16384||(stride!=16&&stride!=32&&stride!=64)||(!linear&&stride!=16)||std::uint64_t(width)*height*stride>512ull*1024*1024)return E_INVALIDARG;
         auto pending=std::make_shared<Output>();
         if(reusable){
             Microsoft::WRL::ComPtr<IUnknown> identity;

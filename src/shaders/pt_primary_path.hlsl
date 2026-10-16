@@ -151,8 +151,13 @@ void PTPrimaryPathRayGeneration(){
     // material and a close depth before selecting any PT radiance for that pixel.
     uint material=ControlDecodeMaterialID(PTGBuffer2.Load(int3(pixel,0)));
     if(first.status!=1)return;PTMeasure(2,pixel);
-    if(first.material!=material)return;PTMeasure(3,pixel);
-    if(abs(first.distance-distance)>max(.002,distance*2e-4))return;PTMeasure(4,pixel);
+    bool sameMaterial=first.material==material;
+    bool sameDepth=abs(first.distance-distance)<=max(.002,distance*2e-4);
+    // Independent categories: distinguish wrong geometry from slot disagreement.
+    if(((pixel.x|pixel.y)&63)==0&&!sameMaterial){uint old;PTMetrics.InterlockedAdd(sameDepth?148:152,1,old);}
+    if(((pixel.x|pixel.y)&63)==0&&sameMaterial&&!sameDepth){uint old;PTMetrics.InterlockedAdd(156,1,old);}
+    if(!sameMaterial)return;PTMeasure(3,pixel);
+    if(!sameDepth)return;PTMeasure(4,pixel);
     uint seed=(pixel.x+pixel.y*width)*747796405u+asuint(PTSystem[69].z)*2891336453u+277803737u;
     seed=(seed^(seed>>16))*2246822519u;seed^=seed>>13;
     // Keep the first two continuations before roulette to reduce reflection variance.
@@ -171,7 +176,7 @@ void PTPrimaryPathRayGeneration(){
     if(result.valid!=0&&all(isfinite(result.radiance))&&all(result.radiance>=0)){
 #endif
 #ifdef PT_PRIMARY_SURFACE_REPLACEMENT
-        if(admission==2||PTCommitSurface(pixel,uint2(width,height),result.radiance,admission))PTMeasure(6,pixel);
+        if(admission==2||PTCommitSignals(pixel,uint2(width,height),result,admission))PTMeasure(6,pixel);
         if(result.valid==0&&((pixel.x|pixel.y)&63)==0){uint old;PTMetrics.InterlockedAdd(36,1,old);}
 #else
         if(admission==2||PTCommitIndirect(pixel,uint2(width,height),result.radiance,admission))PTMeasure(6,pixel);

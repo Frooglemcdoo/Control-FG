@@ -23,17 +23,18 @@ uint PTPathRandomBits(inout uint state) {
     state ^= state << 13; state ^= state >> 17; state ^= state << 5; return state;
 }
 float PTPathRandom(inout uint state) { return (PTPathRandomBits(state)>>8)*(1.0/16777216.0); }
-struct PTPathResult { float3 radiance; uint hits; uint valid; uint fault; uint primaryValid; };
+struct PTPathResult { float3 radiance; uint hits; uint valid; uint fault; uint primaryValid; float3 diffuse,specular,kd,f0; float roughness,hitDistance; };
 PTPathResult PTIntegratePathFirst(RayDesc ray,uint maxHits,uint rouletteStart,uint seed,float originOffset,
                                   PTSceneHit first,uint useFirst,uint includePrimaryEmission) {
     PTTransportState path=PTBeginTransport();PTPathResult result=(PTPathResult)0;
     if(maxHits==0||maxHits>32||!all(isfinite(ray.Origin))||!all(isfinite(ray.Direction))||
        abs(dot(ray.Direction,ray.Direction)-1)>1e-4||!isfinite(ray.TMin)||!isfinite(ray.TMax)||
        ray.TMin<0||ray.TMax<=ray.TMin||!isfinite(originOffset)||originOffset<=0){result.fault=1;return result;}
-    uint rng=seed==0?1:seed;
+    uint rng=seed==0?1:seed; float3 diffuseFraction=1; float3 primaryDirectDiffuse=0,primaryDirectSpecular=0;
     for(uint depth=0;depth<maxHits&&path.alive!=0;++depth) {
         PTSceneHit hit;
         if(depth==0&&useFirst!=0)hit=first;else hit=PTPathTrace(ray);
+        if(depth==1)result.hitDistance=hit.status==1?hit.distance:1e6;
         if(hit.status==2){path.valid=0;result.fault=2;break;}
         if(hit.status==0){path=PTAccumulate(path,PTPathEnvironment(ray.Direction));break;}
         PTPathSurface surface;
@@ -44,6 +45,7 @@ PTPathResult PTIntegratePathFirst(RayDesc ray,uint maxHits,uint rouletteStart,ui
 #endif
         result.hits++;
         PTSurfaceMaterial m=surface.material;
+        if(depth==0){result.kd=m.kd;result.f0=m.f0;result.roughness=m.roughness;}
         if(!PTValid(m.kd)||!PTValid(m.f0)||!PTFinite(m.roughness)||m.roughness<0||m.roughness>1||
            any(m.kd<0)||any(m.kd>1)||any(m.f0<0)||any(m.f0>1)||(m.lobes&~3u)!=0||m.lobes==0){path.valid=0;result.fault=surface.decodeFault!=0?surface.decodeFault:3;break;}
         float3 n=surface.normal;
@@ -64,6 +66,12 @@ PTPathResult PTIntegratePathFirst(RayDesc ray,uint maxHits,uint rouletteStart,ui
             PTDirectResult direct=PTEvaluateDirect(surface.material,wo,light,visibility);
             if(direct.valid==0){path.valid=0;result.fault=7;break;}
             path=PTAccumulate(path,direct.radiance);
+            if(depth==0){
+                PTSurfaceMaterial diffuseMaterial=surface.material;diffuseMaterial.lobes=surface.material.lobes&1u;
+                PTDirectResult diffuseDirect=PTEvaluateDirect(diffuseMaterial,wo,light,visibility);
+                primaryDirectDiffuse=diffuseDirect.radiance;
+                primaryDirectSpecular=max(direct.radiance-primaryDirectDiffuse,0);
+            }
         }
         // A valid material alone is insufficient: failed primary lighting
         // must not publish covered black and suppress native illumination.
@@ -75,6 +83,12 @@ PTPathResult PTIntegratePathFirst(RayDesc ray,uint maxHits,uint rouletteStart,ui
         if(depth==0&&useFirst!=0)continuation=PTPrimaryDiffuseContinuation(continuation);
 #endif
         PTSurfaceSample sample=PTSampleSurface(continuation,wo,choose,u,v);
+        if(depth==0&&sample.valid!=0){
+            PTSurfaceMaterial diffuseMaterial=continuation;diffuseMaterial.lobes=continuation.lobes&1u;
+            float3 df=PTEvaluateSurface(diffuseMaterial,wo,sample.wi).f;
+            float3 full=PTEvaluateSurface(continuation,wo,sample.wi).f;
+            diffuseFraction=float3(full.x>0?df.x/full.x:0,full.y>0?df.y/full.y:0,full.z>0?df.z/full.z:0);
+        }
         path=PTContinue(path,sample,rr,rouletteStart);
         if(path.alive==0){if(path.valid==0)result.fault=8;break;}
         ray.Origin=surface.spawnOrigin;
@@ -86,7 +100,11 @@ PTPathResult PTIntegratePathFirst(RayDesc ray,uint maxHits,uint rouletteStart,ui
         ray.TMin=0;
     }
     if(path.valid==0&&result.fault==0)result.fault=10;
-    result.radiance=path.radiance;result.valid=path.valid;return result;
+    result.radiance=path.radiance;result.valid=path.valid;
+    float3 indirect=max(path.radiance-primaryDirectDiffuse-primaryDirectSpecular,0);
+    result.diffuse=primaryDirectDiffuse+indirect*diffuseFraction;
+    result.specular=primaryDirectSpecular+indirect*(1-diffuseFraction);
+    return result;
 }
 PTPathResult PTIntegratePath(RayDesc ray,uint maxHits,uint rouletteStart,uint seed,float originOffset) {
     PTSceneHit unused=(PTSceneHit)0;

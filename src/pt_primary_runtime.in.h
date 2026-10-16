@@ -28,6 +28,7 @@ static std::shared_ptr<PTSurfaceComposition::ReconstructionPipeline> reconstruct
 static std::shared_ptr<Output> historyOutput;
 static View historyView;
 static ComPtr<ID3D12Resource> historyMaterials;
+static std::shared_ptr<PTSurfaceComposition::SignalStorage> historySignals;
 static PTNativeView::Providers viewProviders;
 static std::uint64_t nextTicket=1ull<<63;
 static std::atomic<unsigned> scheduleTrace{0};
@@ -164,6 +165,8 @@ static void PollMetrics(){
             }
         }
         if(surfaceReplacement&&good&&!f.assets->probe&&(n<=8||n%240==0)){
+            std::array<UINT,3> c{};if(f.assets->metrics.ReadCorrespondence(c))
+                Log("PT_PRIMARY_CORRESPONDENCE frame=%u different_material_same_depth=%u different_material_different_depth=%u same_material_different_depth=%u rejection_retained=1",f.view.frame,c[0],c[1],c[2]);
             std::array<UINT,12> h{};if(f.assets->metrics.ReadReconstruction(h))
                 Log("PT_PRIMARY_HISTORY_PIXELS frame=%u valid=%u available=%u projected=%u covered=%u compatible=%u accepted=%u sample_sum=%u material_match=%u normal_match=%u rescued=%u stable_material_match=%u reindexed_accepted=%u taps=4 candidates=4",f.view.frame,h[0],h[1],h[2],h[3],h[4],h[5],h[6],h[7],h[8],h[9],h[10],h[11]);
         }
@@ -188,7 +191,7 @@ static std::shared_ptr<Frame> FrameFor(const View& view,ID3D12CommandQueue* queu
     if(frames.size()>=8)return {};
     auto f=std::make_shared<Frame>();f->view=view;f->queue=queue;
     if(FAILED(Output::Create(queue,surfaceReplacement?view.width:1,surfaceReplacement?view.height:1,f->output,true,surfaceReplacement,surfaceReplacement?32:16)))return {};
-    if(surfaceReplacement&&FAILED(Output::Create(queue,view.width,view.height,f->raw,true,true)))return {};
+    if(surfaceReplacement&&FAILED(Output::Create(queue,view.width,view.height,f->raw,true,true,64)))return {};
     frames.push_back(f);return f;
 }
 static D3D12_CPU_DESCRIPTOR_HANDLE Cpu(const PTGlass::DescriptorRange& range,UINT slot=0){
@@ -428,7 +431,7 @@ static void Dispatched(void*,ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT 
             if(!PTCommandBindings::tracker.GraphicsForRestore(list,nativeRoots,a->graphicsRestore)){Reject("surface_graphics_restore");return;}
             a->history=historyOutput;a->reconstruction=std::make_shared<PTSurfaceComposition::ReconstructionPass>();
             if(!a->reconstruction->Initialize(device.Get(),reconstructionPipeline,view,a->history?&historyView:nullptr,
-                frame->raw->Texture(),a->history?a->history->Texture():nullptr,{a->primary.At(5),a->primary.At(6),a->primary.At(8),a->primary.At(12),a->primary.At(13)},*materialKeys,historyMaterials.Get())){
+                frame->raw->Texture(),a->history?a->history->Texture():nullptr,{a->primary.At(5),a->primary.At(6),a->primary.At(8),a->primary.At(12),a->primary.At(13)},*materialKeys,historyMaterials.Get(),historySignals)){
                 Reject("surface_reconstruction_setup");return;
             }
         }
@@ -574,7 +577,7 @@ static void CancelFrame(const std::shared_ptr<Frame>& frame,ID3D12CommandQueue* 
 static bool AdmitFrame(const std::shared_ptr<Frame>& frame,ID3D12CommandQueue* queue,bool late){
     if(!frame->output->AdmitInline()||!frame->assets->metrics.SetAdmission(queue,true,frame->assets->probe))return false;
     frame->armed=true;frame->deferred=false;
-    if(PTSurfaceHistory::Publish(frame,surfaceReplacement,historyOutput,historyView))historyMaterials=frame->assets->reconstruction->materials;
+    if(PTSurfaceHistory::Publish(frame,surfaceReplacement,historyOutput,historyView)){historyMaterials=frame->assets->reconstruction->materials;historySignals=frame->assets->reconstruction->signals;}
     if(late)sceneUseValue=(std::max)(sceneUseValue,frame->sceneUse);
     static UINT64 submitted=0;if(++submitted<=8||submitted%240==0)
         Log("PT_PRIMARY_SUBMITTED count=%llu frame=%u scene=exact admission_word=armed late_signal=%u",submitted,frame->view.frame,unsigned(late));
@@ -677,7 +680,7 @@ static void Submitted(void*,ID3D12CommandQueue* queue,UINT count,ID3D12CommandLi
                 signal(f->output);
                 if(f->raw)f->raw->NativeSubmitted(queue);
                 if(f->assets&&f->assets->history)f->assets->history->NativeSubmitted(queue);
-                if(PTSurfaceHistory::Publish(f,surfaceReplacement,historyOutput,historyView))historyMaterials=f->assets->reconstruction->materials;
+                if(PTSurfaceHistory::Publish(f,surfaceReplacement,historyOutput,historyView)){historyMaterials=f->assets->reconstruction->materials;historySignals=f->assets->reconstruction->signals;}
                 if(f->assets&&!f->deferred)PTSceneLive::owner.Scenes().Forget(f->assets->ticket);}
             for(const auto& d:r.draws)signal(d->frame->output);r.submitted=true;
         }
@@ -782,6 +785,6 @@ static bool Start(){
        !PTCommandBindings::Register(&commandConsumer)||!PTNativeJobRuntime::Register(&Job)||!PTSceneLive::owner.Start(step,true))return false;
     ptReflectionModeObserver.store(&MirrorModeChanged,std::memory_order_release);
     MirrorModeChanged(PTReflectionUserRequested());
-    active=true;Log("PT_PRIMARY_SESSION_READY build=M12R74 ready=1 hits=4 spp=1 roulette_start=3 material=opaque_general geometric_normals=1 native_fallback=1 primary_lighting=%s transport=%s readiness=per_material graphics_tracking=%u",surfaceReplacement?"pt":"native",surfaceReplacement?"full_surface":"diffuse_indirect",unsigned(compose));return true;
+    active=true;Log("PT_PRIMARY_SESSION_READY build=M12R75 ready=1 hits=4 spp=1 roulette_start=3 material=opaque_general geometric_normals=1 native_fallback=1 primary_lighting=%s transport=%s readiness=per_material graphics_tracking=%u",surfaceReplacement?"pt":"native",surfaceReplacement?"full_surface":"diffuse_indirect",unsigned(compose));return true;
 }
 }

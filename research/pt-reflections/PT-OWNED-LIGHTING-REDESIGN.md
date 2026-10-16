@@ -273,3 +273,27 @@ Texture descriptor/content changes and object motion are not fingerprinted.
 Simultaneously indistinguishable geometry groups reject rather than merge.
 See the R74 README for memory, lifecycle and validation details. No claim of
 restored missing light coverage or complete root-cause proof is made.
+
+
+## R75: reconstruction implementation and remaining evidence boundary
+
+R74 history acceptance improved, yet the user reports the same artifacts. Frame
+1907 rejects 719/2040 primary samples at material equality before testing depth.
+This does not prove material renumbering: those rays may hit different geometry.
+R75 retains strict admission and adds independent mismatch/depth categories.
+
+The replacement producer now splits mixture-BSDF transport by evaluated primary
+BSDF fractions, supplies material factors and continuation distance, and uses
+separate demodulated histories, second moments, and two edge-aware spatial scales.
+This implements a custom variance-guided reconstruction step, not the complete
+NRD/RR integration proposed in research. The decoded factors are reversibly
+floored at .02 solely for numerical conditioning; no lighting floor is added.
+
+Primary correspondence, object motion, zero environment, emissive sampling, and
+unsupported secondary materials remain unresolved. Do not describe R75 as a
+complete flicker/missing-light fix or an FPS improvement. Memory and bandwidth
+increase; signal storage is pooled, bounded and retained through GPU completion.
+
+References informing the signal contract:
+- https://github.com/NVIDIA-RTX/NRD/blob/master/README.md
+- https://research.nvidia.com/publication/2017-07_spatiotemporal-variance-guided-filtering-real-time-reconstruction-path-traced
