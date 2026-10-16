@@ -48,8 +48,11 @@ static std::map<ID3D12RootSignature*,std::shared_ptr<PTScenePipeline::Pipeline>>
 static std::atomic<UINT64> jobCallbacks{0},jobOff{0},jobUnknownPipeline{0},opaqueAccepted{0};
 static std::atomic<UINT64> computeCallbacks{0},computeOff{0},computeNoPipeline{0},computeOtherPipeline{0},primarySeen{0},environmentSeen{0};
 static void Reject(const char* reason){
-    static std::atomic<UINT64> count{0};const auto n=++count;
-    if(n<=32||n%600==0)Log("PT_PRIMARY_SKIP reason=%s count=%llu native_surface=retained",reason,n);
+    // Throttle independently: common surface-binding misses must not hide
+    // the first producer preparation/admission failure for hundreds of calls.
+    static std::mutex rejectMutex;static std::map<std::string,UINT64> counts;
+    std::lock_guard<std::mutex> lock(rejectMutex);const auto n=++counts[reason];
+    if(n<=8||n%600==0)Log("PT_PRIMARY_SKIP reason=%s reason_count=%llu native_surface=retained",reason,n);
 }
 static ComPtr<IUnknown> Identity(IUnknown* object){ComPtr<IUnknown> result;if(object)object->QueryInterface(IID_PPV_ARGS(&result));return result;}
 static bool ReadView(UINT64 address,View& view,PTNativeView::Pass pass=PTNativeView::Pass::opaque){
@@ -675,8 +678,11 @@ static void Selected(void*,ID3D12CommandQueue* queue,UINT count,ID3D12CommandLis
                     if(!draw->consumer->Invalidate(queue)){
                         CancelFrame(draw->frame,queue);PTSceneLive::owner.Scenes().Invalidate();Reject("surface_consumer_guard_failed");continue;
                     }
-                    static UINT64 rejected=0;if(++rejected<=16||rejected%240==0)
-                        Log("PT_PRIMARY_CONSUMER_REJECT frame=%u reasons=%u ordered=%u replay=%u queue=%u view=%u descriptors=%u scope=recording_group shared_output_preserved=1",draw->frame->view.frame,reason,unsigned((reason&1)==0),unsigned((reason&2)!=0),unsigned((reason&4)==0),unsigned((reason&8)==0),unsigned((reason&16)==0));
+                    static UINT64 rejected=0;static UINT lastRejectedFrame=0;
+                    const bool newRejectedFrame=lastRejectedFrame!=draw->frame->view.frame;
+                    if(newRejectedFrame){lastRejectedFrame=draw->frame->view.frame;++rejected;}
+                    if(newRejectedFrame&&(rejected<=32||rejected%60==0))
+                        Log("PT_PRIMARY_CONSUMER_REJECT frame=%u reasons=%u ordered=%u replay=%u queue=%u view=%u descriptors=%u producer_recorded=%u producer_submitted=%u armed=%u deferred=%u cancelled=%u batch_index=%u batch_lists=%u scope=recording_group shared_output_preserved=1",draw->frame->view.frame,reason,unsigned((reason&1)==0),unsigned((reason&2)!=0),unsigned((reason&4)==0),unsigned((reason&8)==0),unsigned((reason&16)==0),unsigned(draw->frame->producerRecorded),unsigned(draw->frame->producerSubmitted),unsigned(draw->frame->armed),unsigned(draw->frame->deferred),unsigned(draw->frame->cancelled),n,count);
                 }
             }
         }
@@ -802,6 +808,6 @@ static bool Start(){
        !PTCommandBindings::Register(&commandConsumer)||!PTNativeJobRuntime::Register(&Job)||!PTSceneLive::owner.Start(step,true))return false;
     ptReflectionModeObserver.store(&MirrorModeChanged,std::memory_order_release);
     MirrorModeChanged(PTReflectionUserRequested());
-    active=true;Log("PT_PRIMARY_SESSION_READY build=M12R76 ready=1 hits=4 spp=1 roulette_start=3 material=opaque_general geometric_normals=1 native_fallback=1 primary_lighting=%s transport=%s readiness=per_material graphics_tracking=%u",surfaceReplacement?"pt":"native",surfaceReplacement?"full_surface":"diffuse_indirect",unsigned(compose));return true;
+    active=true;Log("PT_PRIMARY_SESSION_READY build=M12R77 ready=1 hits=4 spp=1 roulette_start=3 material=opaque_general geometric_normals=1 native_fallback=1 primary_lighting=%s transport=%s readiness=per_material graphics_tracking=%u",surfaceReplacement?"pt":"native",surfaceReplacement?"full_surface":"diffuse_indirect",unsigned(compose));return true;
 }
 }

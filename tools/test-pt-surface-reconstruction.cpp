@@ -108,7 +108,7 @@ int main(int argc,char**){
             assert(pixel[3]==1&&std::isfinite(pixel[0])&&pixel[0]>=0&&pixel[0]<=2);
             if(iteration>=11){
                 assert(std::abs(pixel[7]-(iteration==12?2.0f:1.0f))<1e-5f);
-                assert(std::abs(pixel[0]-(iteration==11?2.0f:(iteration==12?1.0f:0.0f)))<1e-5f);continue;
+                assert(std::abs(pixel[0]-(iteration==11?2.0f:(iteration==12&&!split?1.0f:0.0f)))<1e-5f);continue;
             }
             if(iteration>=9){
                 const bool reused=iteration==10&&i%8!=7;
@@ -118,13 +118,13 @@ int main(int argc,char**){
             }
             assert(std::abs(pixel[7]-(iteration==1||iteration==7?2.0f:(iteration==8?3.0f:1.0f)))<1e-5f);
             if(iteration==0||iteration==6)assert(std::abs(pixel[0]-1)<1e-5f);
-            if(iteration==7)assert(std::abs(pixel[0]-.5f)<1e-5f);
-            if(iteration==8)assert(std::abs(pixel[0]-1.0f/3.0f)<1e-5f);
+            if(iteration==7)assert(std::abs(pixel[0]-(split?0.0f:.5f))<1e-5f);
+            if(iteration==8)assert(std::abs(pixel[0]-(split?0.0f:1.0f/3.0f))<1e-5f);
             errorSum+=std::abs(pixel[0]-1);
         }
         if(iteration==1)assert(errorSum/63<.15); // Checker noise was +/-1 before reconstruction.
         readback->Unmap(0,&none);assert(output->Completed());previous=output;previousView=view;previousMaterials=run->pass.materials;previousSignals=run->pass.signals;
     }
     previous.reset();previousSignals.reset();Output::TrimIdle();CloseHandle(event);assert(SUCCEEDED(device->GetDeviceRemovedReason()));
-    puts("PASS: raw-buffer initialization, spatial noise reduction, temporal accumulation, material/depth rejection, resolution/cut reset, zero coverage and rejected/probe admission, subpixel camera motion with incompatible nearest and valid neighboring history, renumbered material history retained, same-slot parameter/geometry/flag changes rejected");
+    puts("PASS: raw-buffer initialization, spatial noise reduction, temporal accumulation, material/depth rejection, resolution/cut reset, zero coverage and rejected/probe admission, subpixel camera motion with incompatible nearest and valid neighboring history, renumbered material history retained, same-slot parameter/geometry/flag changes rejected, split lighting-off history clipping");
 }
