@@ -29,6 +29,7 @@ try {
         StartupBuild=$startupBuild;SessionBuild=$sessionBuild;CollectionWarnings=$collectionWarnings
         TerminalGI=@($primary | Where-Object {$_ -match 'PT_PRIMARY_TERMINAL_GI(_GPU)? '})
         PipelineCreation=@($primary | Where-Object {$_ -match 'PT_PRIMARY_(PIPELINE_FAILED|PRIVATE_PIPELINE_READY|GI_COMPUTE) '})
+        SurfaceCameraResolutions=@($primary | Where-Object {$_ -match 'PT_PRIMARY_SURFACE_CAMERA_RESOLVED '})
         SurfaceCameraFailures=@($primary | Where-Object {$_ -match 'PT_PRIMARY_SURFACE_CAMERA_FAILURE '})
         EarlySurfaceReservations=@($primary | Where-Object {$_ -match 'PT_PRIMARY_SURFACE_EARLY_RESERVED '})
         SurfaceBindingFailures=@($primary | Where-Object {$_ -match 'PT_PRIMARY_SURFACE_BINDING_FAILURE '})
