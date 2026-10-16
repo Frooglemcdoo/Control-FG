@@ -1,5 +1,6 @@
 #pragma once
 #include <atomic>
+#include "rr_pt_input.h"
 #include <cstring>
 namespace control_rr {
 // r21y production: native Control energy clamp is fixed in the public runtime.

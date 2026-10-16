@@ -9,7 +9,7 @@ struct ReconstructionConstants {
     std::array<float,72> current{};
     std::array<float,16> previousWorldToView{},previousViewToClip{};
     UINT width=0,height=0,useHistory=0,maximumHistory=32;
-    UINT signalStride=16,reserved[3]{};
+    UINT signalStride=16,freshInput=0,reserved[2]{};
 };
 static_assert(sizeof(ReconstructionConstants)==448,"HLSL reconstruction layout");
 inline bool ReconstructConstants(const PTNativeView::View& view,const PTNativeView::View* previous,ReconstructionConstants& c){
@@ -46,6 +46,7 @@ struct SignalStorage {
     Microsoft::WRL::ComPtr<ID3D12Resource> resource;
     Microsoft::WRL::ComPtr<ID3D12Device> device;
     UINT64 bytes=0;
+    bool temporalCompatible=true;
     inline static std::mutex mutex;
     inline static std::vector<std::unique_ptr<SignalStorage>> idle;
     inline static UINT64 resident=0;
@@ -117,11 +118,11 @@ struct ReconstructionPass {
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> guides;
     Microsoft::WRL::ComPtr<ID3D12Resource> raw,history,materials,previousMaterials;
     std::shared_ptr<SignalStorage> signals,scratch,previousSignals;
-    UINT width=0,height=0;bool historyEnabled=false;
+    UINT width=0,height=0;bool historyEnabled=false,freshInput=false;
     const char* failure="none";HRESULT failureHr=S_OK;
     bool Initialize(ID3D12Device* device,const std::shared_ptr<ReconstructionPipeline>& p,const PTNativeView::View& view,
                     const PTNativeView::View* previous,ID3D12Resource* input,ID3D12Resource* old,
-                    const std::array<D3D12_CPU_DESCRIPTOR_HANDLE,5>& descriptors,const PTMaterialHistory::Keys& keys,ID3D12Resource* oldMaterials,const std::shared_ptr<SignalStorage>& oldSignals={}){
+                    const std::array<D3D12_CPU_DESCRIPTOR_HANDLE,5>& descriptors,const PTMaterialHistory::Keys& keys,ID3D12Resource* oldMaterials,const std::shared_ptr<SignalStorage>& oldSignals={},bool fresh=false){
         failure="inputs";failureHr=E_INVALIDARG;
         if(!device||!p||!input)return false;
         failure="history_materials";if(old&&!oldMaterials)return false;
@@ -131,7 +132,9 @@ struct ReconstructionPass {
         failure="signal_storage";signals=SignalStorage::Acquire(device,UINT64(view.width)*view.height*32,&failureHr);if(!signals)return false;
         failure="scratch_storage";scratch=SignalStorage::Acquire(device,UINT64(view.width)*view.height*32,&failureHr);if(!scratch)return false;
         previousSignals=oldSignals;pipeline=p;raw=input;history=old?old:input;width=view.width;height=view.height;
-        failure="view_constants";failureHr=E_INVALIDARG;ReconstructionConstants c;if(!ReconstructConstants(view,old?previous:nullptr,c))return false;historyEnabled=c.useHistory!=0;c.signalStride=split?64:16;
+        failure="view_constants";failureHr=E_INVALIDARG;ReconstructionConstants c;if(!ReconstructConstants(view,old?previous:nullptr,c))return false;freshInput=fresh;c.freshInput=fresh?1u:0u;
+        if(fresh||(oldSignals&&!oldSignals->temporalCompatible))c.useHistory=0;
+        signals->temporalCompatible=!fresh;historyEnabled=c.useHistory!=0;c.signalStride=split?64:16;
         failure="constant_upload";failureHr=PTUploadPool::Buffer::Acquire(device,512,constants);if(FAILED(failureHr))return false;
         void* data=nullptr;const D3D12_RANGE noRead{};
         failure="constant_map";failureHr=constants->Resource()->Map(0,&noRead,&data);if(FAILED(failureHr))return false;
@@ -171,7 +174,7 @@ struct ReconstructionPass {
         list->SetComputeRoot32BitConstant(6,0,0);list->Dispatch((PTMaterialHistory::Count+63)/64,1,1);
         b.Type=D3D12_RESOURCE_BARRIER_TYPE_UAV;b.UAV.pResource=materials.Get();list->ResourceBarrier(1,&b);
         list->SetComputeRoot32BitConstant(6,1,0);list->Dispatch((width+7)/8,(height+7)/8,1);
-        for(UINT phase=2;phase<=3;++phase){
+        for(UINT phase=2;!freshInput&&phase<=3;++phase){
             b.Type=D3D12_RESOURCE_BARRIER_TYPE_UAV;b.UAV.pResource=nullptr;list->ResourceBarrier(1,&b);
             list->SetComputeRoot32BitConstant(6,phase,0);list->Dispatch((width+7)/8,(height+7)/8,1);
         }

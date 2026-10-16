@@ -434,7 +434,7 @@ static void Dispatched(void*,ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT 
             if(!PTCommandBindings::tracker.GraphicsForRestore(list,nativeRoots,a->graphicsRestore)){Reject("surface_graphics_restore");return;}
             a->history=historyOutput;a->reconstruction=std::make_shared<PTSurfaceComposition::ReconstructionPass>();
             if(!a->reconstruction->Initialize(device.Get(),reconstructionPipeline,view,a->history?&historyView:nullptr,
-                frame->raw->Texture(),a->history?a->history->Texture():nullptr,{a->primary.At(5),a->primary.At(6),a->primary.At(8),a->primary.At(12),a->primary.At(13)},*materialKeys,historyMaterials.Get(),historySignals)){
+                frame->raw->Texture(),a->history?a->history->Texture():nullptr,{a->primary.At(5),a->primary.At(6),a->primary.At(8),a->primary.At(12),a->primary.At(13)},*materialKeys,historyMaterials.Get(),historySignals,control_rr::rrPTInputRoute.Fresh(view.engineFrame))){
                 const auto pool=PTSurfaceComposition::SignalStorage::Statistics();
                 static UINT64 failures=0;if(++failures<=16||failures%60==0)
                     Log("PT_PRIMARY_RECONSTRUCTION_FAILED frame=%u stage=%s hr=0x%08lX signal_resident_bytes=%llu signal_idle_bytes=%llu signal_budget_bytes=%llu budget_failures=%llu device_failures=%llu",view.frame,a->reconstruction->failure,static_cast<unsigned long>(a->reconstruction->failureHr),pool.residentBytes,pool.idleBytes,PTSurfaceComposition::SignalStorage::MaximumBytes,pool.budgetFailures,pool.deviceFailures);
@@ -451,7 +451,7 @@ static void Dispatched(void*,ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT 
             frame->output->RecordInline(list,a.get(),&Encode,a);
         if(!encoded){frame->output->Invalidate(context.queue);Reject("inline_record");return;}
         if(surfaceReplacement){static UINT64 reconstructed=0;if(++reconstructed<=8||reconstructed%240==0)
-            Log("PT_PRIMARY_RECONSTRUCTION frame=%u history=%u previous_frame=%u dimensions=%ux%u binding=root_buffer surface_descriptor_allocations=0",view.frame,unsigned(a->reconstruction->historyEnabled),a->history?historyView.frame:0,view.width,view.height);}
+            Log("PT_PRIMARY_RECONSTRUCTION frame=%u history=%u previous_frame=%u dimensions=%ux%u binding=root_buffer surface_descriptor_allocations=0 fresh_rr_input=%u engine_frame=%llu",view.frame,unsigned(a->reconstruction->historyEnabled),a->history?historyView.frame:0,view.width,view.height,unsigned(a->reconstruction->freshInput),view.engineFrame);}
         QueryPerformanceCounter(&recordDone);
         a->cpuCosts={CpuMilliseconds(prepareStart,recordDone),CpuMilliseconds(leaseStart,leaseDone),
             CpuMilliseconds(sbtStart,cameraStart),CpuMilliseconds(cameraStart,metricsStart),
@@ -811,6 +811,6 @@ static bool Start(){
        !PTCommandBindings::Register(&commandConsumer)||!PTNativeJobRuntime::Register(&Job)||!PTSceneLive::owner.Start(step,true))return false;
     ptReflectionModeObserver.store(&MirrorModeChanged,std::memory_order_release);
     MirrorModeChanged(PTReflectionUserRequested());
-    active=true;Log("PT_PRIMARY_SESSION_READY build=M12R78 ready=1 hits=4 spp=1 roulette_start=3 material=opaque_general geometric_normals=1 native_fallback=1 primary_lighting=%s transport=%s readiness=per_material graphics_tracking=%u",surfaceReplacement?"pt":"native",surfaceReplacement?"full_surface":"diffuse_indirect",unsigned(compose));return true;
+    active=true;Log("PT_PRIMARY_SESSION_READY build=M12R79 ready=1 hits=4 spp=1 roulette_start=3 material=opaque_general geometric_normals=1 native_fallback=1 primary_lighting=%s transport=%s readiness=per_material graphics_tracking=%u",surfaceReplacement?"pt":"native",surfaceReplacement?"full_surface":"diffuse_indirect",unsigned(compose));return true;
 }
 }

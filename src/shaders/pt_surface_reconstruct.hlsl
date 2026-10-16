@@ -4,7 +4,7 @@ cbuffer Reconstruction : register(b0) {
     float4 previousWorldToView[4];
     float4 previousViewToClip[4];
     uint width,height,useHistory,maximumHistory;
-    uint signalStride;uint3 reserved;
+    uint signalStride,freshInput;uint2 reserved;
 };
 ByteAddressBuffer rawRadiance : register(t0);
 ByteAddressBuffer history : register(t1);
@@ -134,7 +134,7 @@ void main(uint3 id:SV_DispatchThreadID,uint3 group:SV_GroupID,uint lane:SV_Group
     uint2 p=id.xy;if(p.x>=width||p.y>=height)return;
     // Replayed/rejected producers cannot read old guides or scene resources.
     if(admission.Load(32)!=1)return;
-    if(materialPhase>=2){if(SplitSignals())FilterSignals(p,materialPhase);return;}
+    if(materialPhase>=2){if(freshInput==0&&SplitSignals())FilterSignals(p,materialPhase);return;}
     uint at=Index(p)*32;float4 center=Raw(p);
     signals.Store4(at,0);signals.Store4(at+16,0);
     result.Store4(at,0);result.Store4(at+16,0);
@@ -145,6 +145,16 @@ void main(uint3 id:SV_DispatchThreadID,uint3 group:SV_GroupID,uint lane:SV_Group
     float roughness=ControlDecodeMaterialRoughness(gbuffer1.Load(int3(p,0)));
     if(!all(isfinite(position))||!all(isfinite(normal)))return;
     Measure(p,0,1);
+    // RR owns temporal reconstruction. Keep exactly this frame's radiance and
+    // coverage; do not pass our accumulated or spatially filtered color to RR.
+    if(freshInput!=0){
+        float3 noisy=center.rgb;
+        if(SplitSignals())noisy+=asfloat(rawRadiance.Load3(Index(p)*64+16));
+        if(!all(isfinite(noisy))||any(noisy<0))return;
+        result.Store4(at,asuint(float4(noisy,1)));
+        result.Store4(at+16,uint4(PackNormal(normal),material,asuint(position.z),asuint(1.0)));
+        return;
+    }
     float3 sum=0;float total=0;
     // Same-material/normal/plane rejection protects object and shadow boundaries.
     // Smooth specular surfaces retain their local sample rather than spreading

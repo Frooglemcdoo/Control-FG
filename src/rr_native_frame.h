@@ -338,6 +338,7 @@ static bool RRNativeReady(unsigned width,unsigned height) noexcept {
 }
 static bool RRNativeHookReset(unsigned outputWidth,unsigned outputHeight,unsigned width,unsigned height,
  bool flag0,bool flag1,bool nativeRequest,bool flag3,bool& reset) {
+ control_rr::rrPTInputRoute.Publish(0,false);
  if(!rrNativeFrameEnabled)return rrNativeResetOriginal(outputWidth,outputHeight,width,height,flag0,flag1,nativeRequest,flag3,reset);
  const DWORD saved=GetLastError();unsigned long long frame=0;DWORD fault=0;bool supported=false,active=false;
  const bool known=ReadEngineFrameSafe(&frame,&fault)&&RRNativeReadMode(&supported,&active);
@@ -402,6 +403,7 @@ static bool RRNativeHookReset(unsigned outputWidth,unsigned outputHeight,unsigne
  rrNativeFrame.FeatureResult(result&&observed,active);
  const bool mirrorRR=control_rr::NativeRenderOption(rrNativeFrameEnabled,rrNativeFrame.Selected()||partial,rrNativeFrame.Stopped());
  if(!rrNativeJitterOptionPatch.Set(mirrorRR)){rrNativeFrame.Fail("native_jitter_option_mirror");rrNativePartialFrame.store(false,std::memory_order_release);}
+ control_rr::rrPTInputRoute.Publish(frame,rrNativeFrame.Selected()&&!rrNativeFrame.Stopped()&&rrNativeFrame.Stage()==control_rr::RRFrameStage::Ready);
  RRPerfFrameMode(frame,outputWidth,outputHeight,width,height,requested,selected,ready,effects);
  control_rr::RRUserWaitingStatus(known&&supported,configuration,effects);
  control_rr::RRUserFrameStatus(requested,selected,rrNativeFrame.Stopped(),rrNativeFrame.Recovering(),rrNativeFrame.Resizing()||control_rr::RRUserRuntimePaused());

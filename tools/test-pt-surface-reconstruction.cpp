@@ -8,6 +8,7 @@
 #include "../src/pt_surface_reconstruction.h"
 #include "../src/pt_primary_metrics.h"
 #include "pt-test-shader-includes.h"
+#include "../src/rr_pt_input.h"
 using Microsoft::WRL::ComPtr;
 using PTSurfaceComposition::Output;
 static constexpr auto readState=static_cast<D3D12_RESOURCE_STATES>(D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE|D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
@@ -16,7 +17,11 @@ struct Run {
     static bool Encode(void* context,ID3D12GraphicsCommandList* list,ID3D12Resource* output,D3D12_CPU_DESCRIPTOR_HANDLE){auto& r=*static_cast<Run*>(context);r.metrics.Begin(list,{});r.pass.Record(list,output,r.metrics.Buffer());r.metrics.End(list);return true;}
 };
 int main(int argc,char**){
-    const bool split=argc>1;
+    const bool split=argc>1,freshTest=argc>2;
+    control_rr::RRPTInputRoute route;assert(!route.Fresh(0)&&!route.Fresh(10));
+    route.Publish(10,true);assert(route.Fresh(10)&&!route.Fresh(9)&&!route.Fresh(11));
+    route.Publish(11,false);assert(!route.Fresh(10)&&!route.Fresh(11));
+    route.Publish(12,true);route.Publish(0,false);assert(!route.Fresh(12));
     setvbuf(stdout,nullptr,_IONBF,0);
     ComPtr<IDXGIFactory4> factory;ComPtr<IDXGIAdapter> warp;ComPtr<ID3D12Device> device;
     assert(SUCCEEDED(CreateDXGIFactory1(IID_PPV_ARGS(&factory))));assert(SUCCEEDED(factory->EnumWarpAdapter(IID_PPV_ARGS(&warp))));assert(SUCCEEDED(D3D12CreateDevice(warp.Get(),D3D_FEATURE_LEVEL_12_0,IID_PPV_ARGS(&device))));
@@ -56,6 +61,7 @@ int main(int argc,char**){
     changed=previousView;std::memset(changed.bytes.data()+224,0,64);assert(PTSurfaceComposition::ReconstructConstants(view,&changed,c)&&c.useHistory==0);
     std::shared_ptr<Output> previous;ComPtr<ID3D12Resource> previousMaterials;std::shared_ptr<PTSurfaceComposition::SignalStorage> previousSignals;
     for(UINT iteration=0;iteration<16;++iteration){
+        const bool fresh=freshTest&&iteration!=0&&iteration!=8;
         if(iteration==9||iteration==11)previous.reset();
         if(iteration==10){camera[36]=.0625f;camera[20]=-.0625f;std::memcpy(view.bytes.data(),camera.data(),288);}
         view.frame=iteration+1;view.engineFrame=iteration+1;
@@ -98,7 +104,8 @@ int main(int argc,char**){
             D3D12_RESOURCE_BARRIER b{};b.Type=D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;b.Transition={guides[i].Get(),0,D3D12_RESOURCE_STATE_COPY_DEST,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE};list->ResourceBarrier(1,&b);}
         D3D12_RESOURCE_BARRIER b{};b.Type=D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;b.Transition={raw->Texture(),0,readState,D3D12_RESOURCE_STATE_COPY_DEST};list->ResourceBarrier(1,&b);list->CopyBufferRegion(raw->Texture(),0,upload.Get(),6144,split?4096:1024);std::swap(b.Transition.StateBefore,b.Transition.StateAfter);list->ResourceBarrier(1,&b);
         auto run=std::make_shared<Run>();assert(run->metrics.Initialize(device.Get()));
-        assert(run->pass.Initialize(device.Get(),pipeline,view,previous?&previousView:nullptr,raw->Texture(),previous?previous->Texture():nullptr,handles,keys,previous?previousMaterials.Get():nullptr,previous?previousSignals:nullptr));
+        assert(run->pass.Initialize(device.Get(),pipeline,view,previous?&previousView:nullptr,raw->Texture(),previous?previous->Texture():nullptr,handles,keys,previous?previousMaterials.Get():nullptr,previous?previousSignals:nullptr,fresh));
+        if(freshTest)assert(!run->pass.historyEnabled);
         // Zero admission is explicitly initialized through the cancellation copy.
         assert(run->metrics.SetAdmission(queue.Get(),true,iteration==5));if(iteration==4)assert(run->metrics.SetAdmission(queue.Get(),false));
         assert(output->RecordInline(list.Get(),run.get(),&Run::Encode,run));assert(output->AdmitInline());
@@ -107,13 +114,13 @@ int main(int argc,char**){
         assert(SUCCEEDED(queue->Signal(fence.Get(),iteration+1)));assert(SUCCEEDED(fence->SetEventOnCompletion(iteration+1,event)));assert(WaitForSingleObject(event,10000)==WAIT_OBJECT_0);
         std::array<UINT,12> historyCounters{};assert(run->metrics.ReadReconstruction(historyCounters));
         const bool active=iteration!=4&&iteration!=5;
-        const bool accepted=iteration==1||iteration==7||iteration==8||iteration==10||iteration==12;
+        const bool accepted=!freshTest&&(iteration==1||iteration==7||iteration==8||iteration==10||iteration==12);
         assert(historyCounters[0]==(active?1u:0u));
         assert(historyCounters[5]==(accepted?1u:0u));
         assert(historyCounters[6]==(accepted?(iteration==8?3u:2u):0u));
-        if(iteration==10)assert(historyCounters[9]==1); // Nearest normal fails; right tap is valid.
-        if(iteration==12){assert(historyCounters[7]==0&&historyCounters[10]==1&&historyCounters[11]==1);}
-        if(iteration>=13)assert(historyCounters[7]==1&&historyCounters[10]==0&&historyCounters[11]==0);
+        if(!freshTest&&iteration==10)assert(historyCounters[9]==1); // Nearest normal fails; right tap is valid.
+        if(!freshTest&&iteration==12){assert(historyCounters[7]==0&&historyCounters[10]==1&&historyCounters[11]==1);}
+        if(!freshTest&&iteration>=13)assert(historyCounters[7]==1&&historyCounters[10]==0&&historyCounters[11]==0);
         const D3D12_RANGE read{0,2048};assert(SUCCEEDED(readback->Map(0,&read,&mapped)));
         double errorSum=0;
         for(UINT i=0;i<64;++i){const auto* sourcePixel=static_cast<const float*>(mapped)+i*8;
@@ -121,6 +128,11 @@ int main(int argc,char**){
             if(split){const float factor=.75f*(i%2?.25f:1.0f)+.125f;for(UINT k=0;k<3;++k)pixel[k]/=factor;}
             if(i==0||iteration==4||iteration==5){for(UINT channel=0;channel<8;++channel)assert(pixel[channel]==0);continue;}
             assert(pixel[3]==1&&std::isfinite(pixel[0])&&pixel[0]>=0&&pixel[0]<=2);
+            if(freshTest){
+                const float expected=(iteration==9||iteration==11)?2.0f:(iteration==0||iteration==6)?1.0f:(iteration>=7?0.0f:(((i%8+i/8)%2)?2.0f:0.0f));
+                for(UINT k=0;k<3;++k)assert(std::abs(pixel[k]-expected)<1e-5f);
+                assert(pixel[7]==1.0f);continue;
+            }
             if(iteration>=11){
                 assert(std::abs(pixel[7]-(iteration==12?2.0f:1.0f))<1e-5f);
                 assert(std::abs(pixel[0]-(iteration==11?2.0f:(iteration==12&&!split?1.0f:0.0f)))<1e-5f);continue;
@@ -137,9 +149,10 @@ int main(int argc,char**){
             if(iteration==8)assert(std::abs(pixel[0]-(split?0.0f:1.0f/3.0f))<1e-5f);
             errorSum+=std::abs(pixel[0]-1);
         }
-        if(iteration==1)assert(errorSum/63<.15); // Checker noise was +/-1 before reconstruction.
+        if(!freshTest&&iteration==1)assert(errorSum/63<.15); // Checker noise was +/-1 before reconstruction.
         readback->Unmap(0,&none);assert(output->Completed());previous=output;previousView=view;previousMaterials=run->pass.materials;previousSignals=run->pass.signals;
     }
     previous.reset();previousSignals.reset();Output::TrimIdle();CloseHandle(event);assert(SUCCEEDED(device->GetDeviceRemovedReason()));
+    if(freshTest)puts("PASS: RR receives current diffuse plus specular exactly, checker samples unchanged, old light history ignored, RR-off transition discards incompatible history, coverage/admission retained");
     puts("PASS: raw-buffer initialization, spatial noise reduction, temporal accumulation, material/depth rejection, resolution/cut reset, zero coverage and rejected/probe admission, subpixel camera motion with incompatible nearest and valid neighboring history, renumbered material history retained, same-slot parameter/geometry/flag changes rejected, split lighting-off history clipping");
 }
