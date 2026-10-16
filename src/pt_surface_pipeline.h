@@ -18,11 +18,11 @@ class Pipeline {
     Microsoft::WRL::ComPtr<ID3D12RootSignature> root,composedRoot;
     std::shared_ptr<const PTNativeRoot::Layout> layout;
     std::uint64_t required=0;
-    UINT rootRequirements=0x31002;
+    UINT rootRequirements=0x31002;bool vertexCamera=false;
 public:
     static HRESULT Create(ID3D12Device* device,const D3D12_GRAPHICS_PIPELINE_STATE_DESC* description,
                           IUnknown* original,const char* verifiedSha,const std::shared_ptr<const PTNativeRoot::Layout>& rootLayout,
-                          CreateGraphics create,std::shared_ptr<Pipeline>& output){
+                          CreateGraphics create,std::shared_ptr<Pipeline>& output,const char* vertexSha=nullptr){
         output.reset();
         if(!device||!description||!original||!create||!description->pRootSignature)return E_INVALIDARG;
         if(description->SampleDesc.Count!=1)return S_FALSE;
@@ -31,6 +31,14 @@ public:
         if(!Patch(static_cast<const unsigned char*>(description->PS.pShaderBytecode),description->PS.BytecodeLength,verifiedSha,program))return S_FALSE;
         auto pending=std::make_shared<Pipeline>();
         pending->rootRequirements=SurfaceRootRequirements(*description);
+        // These two reviewed foliage PS variants do not read ViewToWorld.
+        // Their matching reviewed VS does, in vertex b0/root8. Never use
+        // unpopulated pixel CBV lanes as a camera identity.
+        if(!std::strcmp(verifiedSha,"3755ae5f574c639ee79de158a309414dec754dcc4964ccfa477322f7ef1f658a")||
+           !std::strcmp(verifiedSha,"68b095104f50891b21ebd4ff28c3ec038f1d6062c84f4f4568929a5037bc16a7")){
+            if(!vertexSha||std::strcmp(vertexSha,"a954d6e56122c5c0008775c37371d1bf240c6349c89c3397c455df655cdc1ea1"))return S_FALSE;
+            pending->vertexCamera=true;pending->rootRequirements|=1u<<8;
+        }
         for(const auto& profile:Profiles)if(!std::strcmp(profile.sha,verifiedSha))pending->required=profile.required;
         HRESULT hr=original->QueryInterface(IID_PPV_ARGS(&pending->native));if(FAILED(hr))return hr;
         Microsoft::WRL::ComPtr<ID3D12Device> owner;
@@ -68,6 +76,7 @@ public:
     ID3D12RootSignature* Root()const noexcept{return root.Get();}
     ID3D12RootSignature* ComposedRoot()const noexcept{return composedRoot.Get();}
     std::uint64_t Required()const noexcept{return required;}
+    bool VertexCamera()const noexcept{return vertexCamera;}
     UINT RootRequirements()const noexcept{return rootRequirements;}
 };
 

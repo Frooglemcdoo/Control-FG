@@ -54,7 +54,17 @@ PTPathResult PTIntegratePathFirst(RayDesc ray,uint maxHits,uint rouletteStart,ui
         PTSurfaceMaterial m=surface.material;
         if(depth==0){result.kd=m.kd;result.f0=m.f0;result.roughness=m.roughness;}
         if(!PTValid(m.kd)||!PTValid(m.f0)||!PTFinite(m.roughness)||m.roughness<0||m.roughness>1||
-           any(m.kd<0)||any(m.kd>1)||any(m.f0<0)||any(m.f0>1)||(m.lobes&~3u)!=0||m.lobes==0){path.valid=0;result.fault=surface.decodeFault!=0?surface.decodeFault:3;break;}
+           any(m.kd<0)||any(m.kd>1)||any(m.f0<0)||any(m.f0>1)||(m.lobes&~3u)!=0||m.lobes==0){
+#ifdef PT_PRIMARY_SURFACE_REPLACEMENT
+            // A secondary emitter does not need a supported scattering model.
+            // Preserve its verified front-face emission, then stop; never admit
+            // an unsupported primary or invent a diffuse/glossy continuation.
+            if(depth>0&&surface.decodeFault==12&&all(isfinite(surface.normal))&&
+               abs(dot(surface.normal,surface.normal)-1)<1e-4&&dot(surface.normal,-ray.Direction)>0&&
+               all(isfinite(surface.emission))&&all(surface.emission>=0))path=PTAccumulate(path,surface.emission);
+#endif
+            path.valid=0;result.fault=surface.decodeFault!=0?surface.decodeFault:3;break;
+        }
 #ifdef PT_PRIMARY_SURFACE_REPLACEMENT
         // Primary texture color is evaluated by the original raster material
         // shader at composition. Trace unit-color diffuse transport so black

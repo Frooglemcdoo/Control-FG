@@ -11,7 +11,7 @@ namespace PTNativeView {
 inline unsigned SurfaceAdmission(bool producer,bool replay,bool queue,bool camera,bool descriptors,bool batch){
     return (!producer?1u:0u)|(replay?2u:0u)|(!queue?4u:0u)|(!camera?8u:0u)|(!descriptors?16u:0u)|(!batch?32u:0u);
 }
-enum class Pass {opaque,primary,environment,surface};
+enum class Pass {opaque,primary,environment,surface,surfacePixel,surfaceVertex};
 struct View {
     std::array<unsigned char,1136> bytes{};
     std::array<unsigned char,1136> bound{};
@@ -71,13 +71,14 @@ struct View {
     unsigned Mismatch(const std::array<unsigned char,1136>& other)const {
         const auto same=[&](unsigned offset,unsigned count){return !std::memcmp(bound.data()+offset,other.data()+offset,count);};
         if(pass==Pass::environment){if(!same(0,8))return 0;}
-        else if(!same(8,8))return 8;
+        else if(pass!=Pass::surfaceVertex&&!same(8,8))return 8;
+        if(pass==Pass::surfacePixel)return UINT32_MAX;
         if(pass==Pass::primary&&!same(24,8))return 24; // Native specular-fill UV scale.
-        if(pass==Pass::surface||pass==Pass::opaque||pass==Pass::environment){
-            const unsigned first=pass==Pass::surface?96:32;
+        if(pass==Pass::surface||pass==Pass::surfaceVertex||pass==Pass::opaque||pass==Pass::environment){
+            const unsigned first=(pass==Pass::surface||pass==Pass::surfaceVertex)?96:32;
             for(unsigned offset=first;offset<160;offset+=16)if(!same(offset,12))return offset;
         }
-        if(pass!=Pass::surface&&!same(224,64))return 224;
+        if(pass!=Pass::surface&&pass!=Pass::surfaceVertex&&!same(224,64))return 224;
         if((pass==Pass::primary||pass==Pass::opaque)&&!same(1112,4))return 1112;
         return UINT32_MAX;
     }

@@ -125,7 +125,7 @@ struct Frame {
 };
 struct Draw {
     std::shared_ptr<Frame> frame;std::shared_ptr<PTSurfaceComposition::Pipeline> pipeline;
-    Table original;UINT64 viewAddress=0;View boundView;bool pendingCamera=false;std::shared_ptr<Output> consumer;
+    Table original;UINT64 viewAddress=0,vertexViewAddress=0;View boundView;bool pendingCamera=false;std::shared_ptr<Output> consumer;
 };
 struct Guide {std::shared_ptr<Frame> frame;std::shared_ptr<Output> guard;bool selected=false;};
 struct Recording {
@@ -571,6 +571,13 @@ static void Drawing(void*,ID3D12GraphicsCommandList* list) noexcept {
         if(!ReadEngineFrameSafe(&engineFrame,&fault)){Reject("surface_engine_frame");return;}
         if(!PTNativeView::uploads.Read(bindings.arguments[12].value,raw.data(),raw.size())&&
            !PTSceneLive::owner.Resources().ReadUpload(bindings.arguments[12].value,raw.data(),raw.size())){Reject("surface_view_upload");return;}
+        UINT64 vertexViewAddress=0;
+        if(pipeline->VertexCamera()){
+            vertexViewAddress=bindings.arguments[8].value;std::array<unsigned char,1136> vertex{};
+            if(!PTNativeView::uploads.Read(vertexViewAddress,vertex.data(),vertex.size())&&
+               !PTSceneLive::owner.Resources().ReadUpload(vertexViewAddress,vertex.data(),vertex.size())){Reject("surface_vertex_view_upload");return;}
+            std::memcpy(raw.data()+96,vertex.data()+96,64);
+        }
         std::shared_ptr<Frame> matched;bool pendingCamera=false;
         for(const auto& weak:frames){const auto f=weak.lock();
             if(!f||f->cancelled||f->view.engineFrame!=engineFrame||!f->view.MatchesSurface(raw))continue;
@@ -618,11 +625,11 @@ static void Drawing(void*,ID3D12GraphicsCommandList* list) noexcept {
         // View matching and upload reads do not touch descriptor values.
         PTTableMirror::Scope descriptorLock(true);
         std::shared_ptr<Draw> draw;
-        for(const auto& d:recording->draws)if(d->pipeline==pipeline&&d->viewAddress==bindings.arguments[12].value&&
+        for(const auto& d:recording->draws)if(d->pipeline==pipeline&&d->viewAddress==bindings.arguments[12].value&&d->vertexViewAddress==vertexViewAddress&&
             d->original.native.Get()==bindings.resources.Get()&&d->original.first==first&&d->frame->view.Same(view)){draw=d;break;}
         if(!draw){
             auto frame=matched;
-            draw=std::make_shared<Draw>();draw->frame=frame;draw->pipeline=pipeline;draw->viewAddress=bindings.arguments[12].value;draw->boundView=view;draw->pendingCamera=pendingCamera;
+            draw=std::make_shared<Draw>();draw->frame=frame;draw->pipeline=pipeline;draw->viewAddress=bindings.arguments[12].value;draw->boundView=view;draw->vertexViewAddress=vertexViewAddress;draw->pendingCamera=pendingCamera;
             if(!PTTableMirror::bank.Read(bindings.resources.Get(),first,pipeline->Required(),draw->original)){Reject("surface_descriptor_snapshot");return;}
             // Proven consumers may share their recording/frame guard. A pending
             // upload gets its own guard: a wrong candidate must not disable
@@ -796,8 +803,12 @@ static void Selected(void*,ID3D12CommandQueue* queue,UINT count,ID3D12CommandLis
                 // CPU recording may precede the producer, GPU execution may not.
                 // Producer lists earlier in this batch have armed/deferred above.
                 const bool orderedProducer=draw->frame->producerRecorded&&(draw->frame->armed||draw->frame->deferred)&&!draw->frame->cancelled;
+                auto pixelView=draw->boundView,vertexView=draw->boundView;
+                if(draw->vertexViewAddress){pixelView.pass=PTNativeView::Pass::surfacePixel;vertexView.pass=PTNativeView::Pass::surfaceVertex;}
+                const bool cameraMatches=SameView(draw->viewAddress,pixelView)&&
+                    (!draw->vertexViewAddress||SameView(draw->vertexViewAddress,vertexView));
                 const UINT reason=PTNativeView::SurfaceAdmission(orderedProducer,recording.submitted,
-                    queueIdentity.Get()==pinnedQueue.Get(),SameView(draw->viewAddress,draw->boundView),!changed,admitted);
+                    queueIdentity.Get()==pinnedQueue.Get(),cameraMatches,!changed,admitted);
                 if(draw->pendingCamera){
                     static UINT64 accepted=0,rejected=0;const auto checks=reason?++rejected:++accepted;
                     if(checks<=8||checks%600==0)Log("PT_PRIMARY_SURFACE_CAMERA_RESOLVED frame=%u accepted=%u reasons=%u count=%llu final_cbv_checked=1",draw->frame->view.frame,unsigned(reason==0),reason,checks);
@@ -941,6 +952,6 @@ static bool Start(){
        !PTCommandBindings::Register(&commandConsumer)||!PTNativeJobRuntime::Register(&Job)||!PTSceneLive::owner.Start(step,true))return false;
     ptReflectionModeObserver.store(&MirrorModeChanged,std::memory_order_release);
     MirrorModeChanged(PTReflectionUserRequested());
-    active=true;Log("PT_PRIMARY_SESSION_READY build=M12R91 ready=1 hits=4 spp=1 roulette_start=3 material=opaque_general geometric_normals=1 native_fallback=1 primary_lighting=%s transport=%s readiness=per_material graphics_tracking=%u",surfaceReplacement?"pt":"native",surfaceReplacement?"full_surface":"diffuse_indirect",unsigned(compose));return true;
+    active=true;Log("PT_PRIMARY_SESSION_READY build=M12R92 ready=1 hits=4 spp=1 roulette_start=3 material=opaque_general geometric_normals=1 native_fallback=1 primary_lighting=%s transport=%s readiness=per_material graphics_tracking=%u",surfaceReplacement?"pt":"native",surfaceReplacement?"full_surface":"diffuse_indirect",unsigned(compose));return true;
 }
 }

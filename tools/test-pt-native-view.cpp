@@ -39,6 +39,13 @@ int main(){
     Write(producer,224,2);assert(producer.Decode()&&!early.Same(producer));
     producer=early;Write(producer,8,1.f/1920);assert(producer.Decode()&&!early.Same(producer));
     producer=early;producer.engineFrame++;assert(!early.Same(producer));
+    auto pixelView=a,vertexView=a;pixelView.bound=a.bytes;vertexView.bound=a.bytes;
+    pixelView.pass=PTNativeView::Pass::surfacePixel;vertexView.pass=PTNativeView::Pass::surfaceVertex;
+    auto pixelBytes=a.bytes;pixelBytes[96]^=1;
+    auto vertexBytes=a.bytes;vertexBytes[8]^=1;
+    assert(pixelView.MatchesBound(pixelBytes)&&vertexView.MatchesBound(vertexBytes));
+    pixelBytes[8]^=1;assert(!pixelView.MatchesBound(pixelBytes));
+    vertexBytes[96]^=1;assert(!vertexView.MatchesBound(vertexBytes));
     for(unsigned bits=0;bits<64;++bits){
         const unsigned reasons=PTNativeView::SurfaceAdmission(!(bits&1),bool(bits&2),!(bits&4),!(bits&8),!(bits&16),!(bits&32));
         assert(reasons==bits); // Every independent gate fails closed, including batch rejection.

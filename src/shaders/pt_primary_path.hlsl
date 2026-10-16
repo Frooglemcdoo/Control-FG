@@ -47,8 +47,13 @@ PTPathSurface PTDecodeSurface(PTSceneHit hit,RayDesc ray,bool primary){
     uint count,stride;PTMaterialFlags.GetDimensions(count,stride);
     if(stride!=8||hit.material>=count){s.decodeFault=11;return s;} // lobes==0 rejects the whole path.
     uint2 flags=PTMaterialFlags[hit.material];uint packed=flags.x;
-    if((packed&255)!=0||(flags.y&65535u)!=0){s.decodeFault=12;return s;} // Special BRDFs and translucency/scattering stay native.
     PTNativeMaterial m=PTMaterials[hit.material];uint base=hit.material*35;
+    // Emission is independent of scattering. Native reflected-hit shading uses
+    // these common material fields even when our secondary BRDF is unsupported.
+    s.emission=asfloat(m.words[12])*asfloat(uint3(m.words[25],m.words[26],m.words[27]));
+    if(any(s.emission!=0))s.emission*=PTTextures[NonUniformResourceIndex(base+5)].SampleLevel(PTLinearWrap,hit.uv,0).rgb;
+    if(!all(isfinite(s.emission))||any(s.emission<0)){s.emission=0;s.decodeFault=13;return s;}
+    if((packed&255)!=0||(flags.y&65535u)!=0){s.decodeFault=12;return s;} // Unsupported scattering still terminates.
     float3 color=asfloat(uint3(m.words[13],m.words[14],m.words[15]))*
         PTTextures[NonUniformResourceIndex(base)].SampleLevel(PTLinearWrap,hit.uv,0).rgb;
     float specular=PTTextures[NonUniformResourceIndex(base+4)].SampleLevel(PTLinearWrap,hit.uv,0).x;
@@ -64,8 +69,6 @@ PTPathSurface PTDecodeSurface(PTSceneHit hit,RayDesc ray,bool primary){
         f0=ControlDecodeMaterialF0(packed,PTGBuffer2.Load(int3(pixel,0)).g);
         smoothness=1-ControlDecodeMaterialRoughness(PTGBuffer1.Load(int3(pixel,0)));
     }
-    s.emission=asfloat(m.words[12])*asfloat(uint3(m.words[25],m.words[26],m.words[27]))*
-        PTTextures[NonUniformResourceIndex(base+5)].SampleLevel(PTLinearWrap,hit.uv,0).rgb;
     // New transport material model, not a claim of native BRDF equivalence:
     // diffuse coefficient = texture color * (1-F0), GGX/VNDF specular.
     // Do not clamp invalid colors into an apparently valid path.
