@@ -43,7 +43,7 @@ uint PackNormal(float3 n){uint3 v=(uint3)round(saturate(n*.5+.5)*1023);return v.
 float3 UnpackNormal(uint n){return normalize(float3(n&1023,(n>>10)&1023,(n>>20)&1023)*(2.0/1023)-1);}
 // Clip each demodulated lobe independently against compatible CURRENT samples.
 // Geometry validation alone cannot detect lighting changes on a static surface.
-float3 ClipHistory(uint2 p,bool spec,float3 old,inout float second){
+float4 ClipHistory(uint2 p,bool spec,float3 old,float second){
     float3 mean=0,square=0,lo=1e30,hi=0;float count=0;
     uint material=ControlDecodeMaterialID(gbuffer2.Load(int3(p,0)));
     float3 position=Position(p),normal=Normal(p);
@@ -56,13 +56,13 @@ float3 ClipHistory(uint2 p,bool spec,float3 old,inout float second){
         float3 value=Noisy((uint2)q,spec);if(!all(isfinite(value))||any(value<0))continue;
         mean+=value;square+=value*value;lo=min(lo,value);hi=max(hi,value);count+=1;
     }
-    if(count<2)return old;
+    if(count<2)return float4(old,second);
     mean/=count;float3 sigma=sqrt(max(square/count-mean*mean,0));
     float3 clipped=clamp(old,max(lo,mean-3*sigma),min(hi,mean+3*sigma));
     // A changed mean must not retain the old light's second moment either.
     float before=Luma(old),after=Luma(clipped);
     second=before>1e-6?max(after*after,second*(after/before)*(after/before)):after*after;
-    return clipped;
+    return float4(clipped,second);
 }
 // Two edge-aware wavelet scales. Temporal channels remain untouched for next
 // frame; only the display result is filtered. Variance is propagated with w^2.
@@ -218,12 +218,12 @@ void main(uint3 id:SV_DispatchThreadID,uint3 group:SV_GroupID,uint lane:SV_Group
                 filtered=lerp(oldSum/oldWeight,filtered,1/samples);
                 if(split){
                     oldMoments/=oldWeight;
-                    float3 d=ClipHistory(p,false,oldDiffuse/oldWeight,oldMoments.x);
-                    float3 s=ClipHistory(p,true,oldSpecular/oldWeight,oldMoments.y);
+                    float4 d=ClipHistory(p,false,oldDiffuse/oldWeight,oldMoments.x);
+                    float4 s=ClipHistory(p,true,oldSpecular/oldWeight,oldMoments.y);
                     // Surface reprojection is not reflected-hit reprojection.
                     float specSamples=motion>.5?min(samples,lerp(2.0,8.0,roughness)):samples;
-                    diffuse=lerp(d,diffuse,1/samples);specular=lerp(s,specular,1/specSamples);
-                    moments=float2(lerp(oldMoments.x,moments.x,1/samples),lerp(oldMoments.y,moments.y,1/specSamples));
+                    diffuse=lerp(d.rgb,diffuse,1/samples);specular=lerp(s.rgb,specular,1/specSamples);
+                    moments=float2(lerp(d.w,moments.x,1/samples),lerp(s.w,moments.y,1/specSamples));
                 }
                 Measure(p,5,1);Measure(p,6,(uint)samples);
                 if(!nearestAccepted)Measure(p,9,1);
