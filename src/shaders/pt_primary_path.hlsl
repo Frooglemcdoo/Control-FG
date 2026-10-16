@@ -216,5 +216,17 @@ void PTPrimaryPathRayGeneration(){
         if(admission==2||PTCommitIndirect(pixel,uint2(width,height),result.radiance,admission))PTMeasure(6,pixel);
 #endif
     }
-    else {PTMeasure(7,pixel);if(((pixel.x|pixel.y)&63)==0){uint old;PTMetrics.InterlockedAdd(36+4*min(result.fault,15u),1,old);}}
+    else {PTMeasure(7,pixel);if(((pixel.x|pixel.y)&63)==0){
+        uint old;PTMetrics.InterlockedAdd(36+4*min(result.fault,15u),1,old);
+        // One representative rejection per screen tile; bounded sparse writes.
+        uint tile=min(pixel.x*8/width,7u)+8*min(pixel.y*4/height,3u),at=160+tile*32;
+        uint bytes;PTMetrics.GetDimensions(bytes);
+        if(bytes>=1184){
+            PTMetrics.InterlockedAdd(at,1,old);
+            if(old==0){uint count,stride;PTMaterialFlags.GetDimensions(count,stride);
+                uint2 flags=uint2(0xffffffffu,0xffffffffu);if(stride==8&&first.material<count)flags=PTMaterialFlags[first.material];
+                PTMetrics.Store4(at+4,uint4(pixel,first.material,flags.x));
+                PTMetrics.Store3(at+20,uint3(flags.y,result.fault,0));}
+        }
+    }}
 }

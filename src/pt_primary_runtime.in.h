@@ -183,6 +183,12 @@ static void PollMetrics(){
             Log("PT_PRIMARY_TERMINAL_GI_GPU frame=%u positive_samples=%u sampled_grid=64 terminal_vertex=4",f.view.frame,faults[15]);
         if(surfaceReplacement&&faultRead&&faults[0]&&(n<=8||n%240==0))
             Log("PT_PRIMARY_SECONDARY_TERMINATION frame=%u sampled=%u retained_primary=1",f.view.frame,faults[0]);
+        if(good&&counts[7]&&(n<=8||n%240==0)){
+            std::array<UINT,256> rejected{};
+            if(f.assets->metrics.ReadRejections(rejected))for(UINT tile=0;tile<32;++tile){const auto* r=rejected.data()+tile*8;
+                if(r[0])Log("PT_PRIMARY_REJECT_REGION frame=%u tile=%u sampled=%u x=%u y=%u material=%u flags_x=%08x flags_y=%08x fault=%u",f.view.frame,tile,r[0],r[1],r[2],r[3],r[4],r[5],r[6]);
+            }
+        }
         if(good&&counts[7]){
             if(faultRead&&(n<=8||n%240==0))
                 Log("PT_PRIMARY_FAULTS frame=%u probe=%u input=%u hit=%u material=%u normal=%u facing=%u light=%u direct=%u sample=%u spawn=%u radiance=%u material_bounds=%u brdf=%u material_values=%u native_light=%u stage=primary_rejection",f.view.frame,unsigned(f.assets->probe),faults[1],faults[2],faults[3],faults[4],faults[5],faults[6],faults[7],faults[8],faults[9],faults[10],faults[11],faults[12],faults[13],faults[14]);
@@ -560,7 +566,7 @@ static void Drawing(void*,ID3D12GraphicsCommandList* list) noexcept {
         if(!PTCommandBindings::tracker.Read(list,nativeRoots,true,pipeline->RootRequirements(),bindings,&bindingFailure)){
             static UINT64 failures[19]{};const UINT bucket=bindingFailure.parameter<18?bindingFailure.parameter:18;
             const auto count=++failures[bucket];
-            if(count<=8||count%600==0)Log("PT_PRIMARY_SURFACE_BINDING_FAILURE reason=%s parameter=%u address=%llx required_count=%u heap_count=%u count=%llu list=%p",bindingFailure.reason,bindingFailure.parameter,bindingFailure.address,bindingFailure.requiredCount,bindingFailure.heapCount,count,list);
+            if(count<=8||count%600==0)Log("PT_PRIMARY_SURFACE_BINDING_FAILURE reason=%s parameter=%u address=%llx required_count=%u heap_count=%u count=%llu list=%p argument_origin=%s previous_address=%llx shader=%s",bindingFailure.reason,bindingFailure.parameter,bindingFailure.address,bindingFailure.requiredCount,bindingFailure.heapCount,count,list,bindingFailure.argumentOrigin,bindingFailure.previousAddress,pipeline->ShaderIdentity());
             Reject("surface_bindings");return;
         }
         if(!bindings.layout->Matches(pipeline->Root())){Reject("surface_root_mismatch");return;}
@@ -952,6 +958,6 @@ static bool Start(){
        !PTCommandBindings::Register(&commandConsumer)||!PTNativeJobRuntime::Register(&Job)||!PTSceneLive::owner.Start(step,true))return false;
     ptReflectionModeObserver.store(&MirrorModeChanged,std::memory_order_release);
     MirrorModeChanged(PTReflectionUserRequested());
-    active=true;Log("PT_PRIMARY_SESSION_READY build=M12R93 ready=1 hits=4 spp=1 roulette_start=3 material=opaque_general geometric_normals=1 native_fallback=1 primary_lighting=%s transport=%s readiness=per_material graphics_tracking=%u",surfaceReplacement?"pt":"native",surfaceReplacement?"full_surface":"diffuse_indirect",unsigned(compose));return true;
+    active=true;Log("PT_PRIMARY_SESSION_READY build=M12R94 ready=1 hits=4 spp=1 roulette_start=3 material=opaque_general geometric_normals=1 native_fallback=1 primary_lighting=%s transport=%s readiness=per_material graphics_tracking=%u",surfaceReplacement?"pt":"native",surfaceReplacement?"full_surface":"diffuse_indirect",unsigned(compose));return true;
 }
 }

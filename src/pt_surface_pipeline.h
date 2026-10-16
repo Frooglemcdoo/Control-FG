@@ -18,7 +18,7 @@ class Pipeline {
     Microsoft::WRL::ComPtr<ID3D12RootSignature> root,composedRoot;
     std::shared_ptr<const PTNativeRoot::Layout> layout;
     std::uint64_t required=0;
-    UINT rootRequirements=0x31002;bool vertexCamera=false;
+    UINT rootRequirements=0x31002;bool vertexCamera=false;const char* shaderIdentity="unknown";
 public:
     static HRESULT Create(ID3D12Device* device,const D3D12_GRAPHICS_PIPELINE_STATE_DESC* description,
                           IUnknown* original,const char* verifiedSha,const std::shared_ptr<const PTNativeRoot::Layout>& rootLayout,
@@ -39,7 +39,7 @@ public:
             if(!vertexSha||std::strcmp(vertexSha,"a954d6e56122c5c0008775c37371d1bf240c6349c89c3397c455df655cdc1ea1"))return S_FALSE;
             pending->vertexCamera=true;pending->rootRequirements|=1u<<8;
         }
-        for(const auto& profile:Profiles)if(!std::strcmp(profile.sha,verifiedSha))pending->required=profile.required;
+        for(const auto& profile:Profiles)if(!std::strcmp(profile.sha,verifiedSha)){pending->required=profile.required;pending->shaderIdentity=profile.sha;}
         HRESULT hr=original->QueryInterface(IID_PPV_ARGS(&pending->native));if(FAILED(hr))return hr;
         Microsoft::WRL::ComPtr<ID3D12Device> owner;
         Microsoft::WRL::ComPtr<IUnknown> expected,observed;
@@ -78,6 +78,7 @@ public:
     std::uint64_t Required()const noexcept{return required;}
     bool VertexCamera()const noexcept{return vertexCamera;}
     UINT RootRequirements()const noexcept{return rootRequirements;}
+    const char* ShaderIdentity()const noexcept{return shaderIdentity;}
 };
 
 // Native pipeline identities remain owned, so a destroyed/reused raw address

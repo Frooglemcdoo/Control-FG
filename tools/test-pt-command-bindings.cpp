@@ -171,6 +171,7 @@ int main(){
     ID3D12DescriptorHeap* changed[]={replacement.Get(),samplers.Get()};list->SetDescriptorHeaps(2,changed);
     assert(!PTCommandBindings::tracker.Read(list.Get(),roots,false,allCompute,snapshot,&failure));
     assert(failure.parameter==0&&std::string(failure.reason)=="missing_argument");
+    assert(std::string(failure.argumentOrigin)=="heap_change"&&failure.previousAddress==nativeTable.ptr);
     assert(PTCommandBindings::tracker.Read(list.Get(),roots,false,1u<<2,snapshot)); // Root CBV survives heap change.
     list->SetDescriptorHeaps(2,heaps);bind();assert(PTCommandBindings::tracker.Read(list.Get(),roots,false,allCompute,snapshot));
     assert(SUCCEEDED(list->Close()));assert(SUCCEEDED(list->Reset(allocator.Get(),nullptr)));

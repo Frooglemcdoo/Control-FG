@@ -9,7 +9,7 @@
 namespace PTCommandBindings {
 using Microsoft::WRL::ComPtr;
 enum class ArgumentKind {none,table,constant};
-struct Argument {ArgumentKind kind=ArgumentKind::none;UINT64 value=0;};
+struct Argument {ArgumentKind kind=ArgumentKind::none;UINT64 value=0;const char* origin="never_set";UINT64 previous=0;};
 struct RootState {ComPtr<ID3D12RootSignature> root;std::array<Argument,18> arguments{};};
 struct Snapshot {
     std::shared_ptr<const PTNativeRoot::Layout> layout;
@@ -17,7 +17,7 @@ struct Snapshot {
     ComPtr<ID3D12DescriptorHeap> resources,samplers;
     std::array<Argument,18> arguments{};
 };
-struct ReadFailure {const char* reason="none";UINT parameter=~0u;UINT64 address=0;UINT requiredCount=0,heapCount=0;};
+struct ReadFailure {const char* reason="none";UINT parameter=~0u;UINT64 address=0;UINT requiredCount=0,heapCount=0;const char* argumentOrigin="unknown";UINT64 previousAddress=0;};
 class Tracker {
     struct Entry {
         std::mutex mutex; // Aliases share this recording state, independent lists do not.
@@ -56,7 +56,7 @@ class Tracker {
         auto entry=FindEntry(list);if(!entry)return;
         std::lock_guard<std::mutex> guard(entry->mutex);fn(*entry);
     }
-    static void Tables(RootState& state){for(auto& a:state.arguments)if(a.kind==ArgumentKind::table)a={};}
+    static void Tables(RootState& state){for(auto& a:state.arguments)if(a.kind==ArgumentKind::table)a={ArgumentKind::none,0,"heap_change",a.value};}
     static bool Inside(ID3D12DescriptorHeap* heap,UINT64 address,UINT count){
         if(!heap||!address||!count)return false;const auto d=heap->GetDesc();
         if(!(d.Flags&D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE)||count>d.NumDescriptors)return false;
@@ -121,11 +121,11 @@ public:
         Change(list,[&](Entry& e){auto& s=graphics?e.graphics:e.compute;
             // Same root pointer does not invalidate D3D12 arguments. A different
             // interface alias is conservatively treated as a change until rebound.
-            if(s.root.Get()!=value){s={};s.root=value;}});
+            if(s.root.Get()!=value){auto old=s.arguments;s={};s.root=value;for(UINT n=0;n<s.arguments.size();++n)s.arguments[n]={ArgumentKind::none,0,"root_change",old[n].value?old[n].value:old[n].previous};}});
     }
     void ArgumentValue(ID3D12GraphicsCommandList* list,UINT parameter,ArgumentKind kind,UINT64 value,bool graphics){
         Change(list,[&](Entry& e){auto& s=graphics?e.graphics:e.compute;
-            if(parameter>=s.arguments.size()){s={};return;}s.arguments[parameter]={kind,value};});
+            if(parameter>=s.arguments.size()){s={};return;}s.arguments[parameter]={kind,value,"explicit_set",value};});
     }
     void Heaps(ID3D12GraphicsCommandList* list,UINT count,ID3D12DescriptorHeap*const* values){
         Change(list,[&](Entry& e){ComPtr<ID3D12DescriptorHeap> resources,samplers;bool valid=count<=2&&(!count||values);
@@ -163,7 +163,9 @@ public:
         if(!layout||layout->Type()!=(graphics?PTNativeRoot::Kind::graphics:PTNativeRoot::Kind::compute))return fail("root_layout");
         for(UINT n=0;n<(graphics?18u:8u);++n)if(required&(1u<<n)){
             const bool constant=graphics?(n>=8&&n<16):(n>=2&&n<6);const auto& a=s.arguments[n];
-            if(a.kind!=(constant?ArgumentKind::constant:ArgumentKind::table)||!a.value)return fail("missing_argument",n,a.value);
+            if(a.kind!=(constant?ArgumentKind::constant:ArgumentKind::table)||!a.value){
+                if(failure){failure->argumentOrigin=a.origin;failure->previousAddress=a.previous;}
+                return fail("missing_argument",n,a.value);}
             if(constant){if(a.value%256)return fail("cbv_alignment",n,a.value);continue;}
             const bool sampler=graphics?((n>=4&&n<8)||n==16):(n==1||n==6);
             const UINT count=sampler?((graphics?n==16:n==6)?64:4):((graphics?n==17:n==7)?244000:49);

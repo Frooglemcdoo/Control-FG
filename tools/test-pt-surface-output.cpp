@@ -171,6 +171,7 @@ int main(){
     UINT64 frequency=0;double elapsed=0;assert(SUCCEEDED(queue->GetTimestampFrequency(&frequency)));
     assert(probe->metrics.ReadMilliseconds(frequency,elapsed)&&elapsed>=0&&elapsed<10000);
     std::array<UINT,16> probeFaults{};assert(probe->metrics.ReadFaults(probeFaults));for(auto v:probeFaults)assert(v==0);
+    std::array<UINT,256> rejected{};assert(probe->metrics.ReadRejections(rejected));for(auto v:rejected)assert(v==0);
     // Recycle the exact metrics backing through full -> disarmed -> probe.
     // A completed fence alone cannot release an outstanding recording owner.
     ComPtr<ID3D12Fence> poolDone,poolGate;

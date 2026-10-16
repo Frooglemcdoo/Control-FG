@@ -1448,7 +1448,7 @@ static BOOL CALLBACK Configure(PINIT_ONCE, PVOID, PVOID*) noexcept {
         Log("HOOK_INSTALLED label=CONTROL_COMMAND_QUEUE_CTOR");
         const bool guideInputsReady = RRGuideInitializeInputs(d3d);
         const bool ptCaptureEnabled=PTStartupCaptureEnabled();
-        Log("PT_PRIMARY_STARTUP build=M12R93 capture=%u restart_only=1 rr_fg_available=1",unsigned(ptCaptureEnabled));
+        Log("PT_PRIMARY_STARTUP build=M12R94 capture=%u restart_only=1 rr_fg_available=1",unsigned(ptCaptureEnabled));
         const unsigned int rrObserverHooks = ptCaptureEnabled?InstallRRObservationHooks(renderer,d3d):0;
         Log("PT_REFLECTION_P0_OBSERVER ready=%u expected=5 scope=reflection_dispatch_identification gpu_work=unchanged allocations=0",rrObserverHooks);
         const bool ptReflectionLookupReady=PTReflectionInstallShaderLookupHooks(renderer,d3d);
