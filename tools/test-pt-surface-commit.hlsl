@@ -8,7 +8,7 @@ static float testScale;
 PTSceneHit PTPathTrace(RayDesc ray){PTSceneHit h=(PTSceneHit)0;h.status=(uint)testScale;h.geometricNormal=-ray.Direction;return h;}
 PTPathSurface PTPathDecodePrimary(PTSceneHit hit,RayDesc ray){
     PTPathSurface s=(PTPathSurface)0;s.normal=normalize(float3(testScale-1,0,testScale));s.spawnOrigin=float3(0,0,.001*testScale);s.emission=testScale-1;
-    s.material.kd=.5*testScale;s.material.f0=testScale-1;s.material.roughness=.5*testScale;s.material.lobes=testMode==10?0:1;s.decodeFault=12;return s;
+    s.material.kd=.5*testScale;s.material.f0=testScale-1;s.material.roughness=.5*testScale;s.material.lobes=testMode==10?0:(testMode==12?3:1);if(testMode==12)s.material.f0=.04*testScale;s.decodeFault=12;return s;
 }
 PTPathSurface PTPathDecode(PTSceneHit hit,RayDesc ray){
     PTPathSurface s=(PTPathSurface)0;s.normal=hit.geometricNormal;s.material.roughness=.5*testScale;s.material.kd=testScale-1;s.material.f0=testScale-1;s.emission=testScale-1;

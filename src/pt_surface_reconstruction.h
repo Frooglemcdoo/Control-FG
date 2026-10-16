@@ -9,8 +9,9 @@ struct ReconstructionConstants {
     std::array<float,72> current{};
     std::array<float,16> previousWorldToView{},previousViewToClip{};
     UINT width=0,height=0,useHistory=0,maximumHistory=32;
+    UINT signalStride=16,reserved[3]{};
 };
-static_assert(sizeof(ReconstructionConstants)==432,"HLSL reconstruction layout");
+static_assert(sizeof(ReconstructionConstants)==448,"HLSL reconstruction layout");
 inline bool ReconstructConstants(const PTNativeView::View& view,const PTNativeView::View* previous,ReconstructionConstants& c){
     c={};c.width=view.width;c.height=view.height;c.maximumHistory=32;
     std::memcpy(c.current.data(),view.bytes.data(),288);
@@ -109,11 +110,12 @@ struct ReconstructionPass {
         if(!device||!p||!input)return false;
         if(old&&!oldMaterials)return false;
         const bool split=input->GetDesc().Width==UINT64(view.width)*view.height*64;
+        if(!split&&input->GetDesc().Width!=UINT64(view.width)*view.height*16)return false;
         if(split&&old&&!oldSignals)return false;
         signals=SignalStorage::Acquire(device,UINT64(view.width)*view.height*32);
         scratch=SignalStorage::Acquire(device,UINT64(view.width)*view.height*32);
         if(!signals||!scratch)return false;previousSignals=oldSignals;pipeline=p;raw=input;history=old?old:input;width=view.width;height=view.height;
-        ReconstructionConstants c;if(!ReconstructConstants(view,old?previous:nullptr,c))return false;historyEnabled=c.useHistory!=0;
+        ReconstructionConstants c;if(!ReconstructConstants(view,old?previous:nullptr,c))return false;historyEnabled=c.useHistory!=0;c.signalStride=split?64:16;
         if(FAILED(PTUploadPool::Buffer::Acquire(device,512,constants)))return false;
         void* data=nullptr;const D3D12_RANGE noRead{};
         if(FAILED(constants->Resource()->Map(0,&noRead,&data)))return false;

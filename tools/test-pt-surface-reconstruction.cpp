@@ -73,8 +73,8 @@ int main(int argc,char**){
             auto* bytes=static_cast<unsigned char*>(mapped);std::memcpy(bytes+y*256+x*16,normal,16);std::memcpy(bytes+2048+y*256+x*16,material,16);std::memcpy(bytes+4096+y*256+x*16,depth,16);if(split){
                 const float factor=x%2?.25f:1.0f;
                 const float channels[]={radiance*.75f*factor,radiance*.75f*factor,radiance*.75f*factor,pixel[3],
-                    radiance*.25f*factor,radiance*.25f*factor,radiance*.25f*factor,1,
-                    factor,factor,factor,.5f,factor,factor,factor,0};
+                    radiance*.125f,radiance*.125f,radiance*.125f,1,
+                    factor,factor,factor,.5f,.5f,.5f,.5f,0};
                 std::memcpy(bytes+6144+(y*8+x)*64,channels,64);
             }else std::memcpy(bytes+6144+(y*8+x)*16,pixel,16);
         }upload->Unmap(0,nullptr);
@@ -103,7 +103,7 @@ int main(int argc,char**){
         double errorSum=0;
         for(UINT i=0;i<64;++i){const auto* sourcePixel=static_cast<const float*>(mapped)+i*8;
             float pixel[8];std::memcpy(pixel,sourcePixel,sizeof(pixel));
-            if(split){const float factor=i%2?.25f:1.0f;for(UINT k=0;k<3;++k)pixel[k]/=factor;}
+            if(split){const float factor=.75f*(i%2?.25f:1.0f)+.125f;for(UINT k=0;k<3;++k)pixel[k]/=factor;}
             if(i==0||iteration==4||iteration==5){for(UINT channel=0;channel<8;++channel)assert(pixel[channel]==0);continue;}
             assert(pixel[3]==1&&std::isfinite(pixel[0])&&pixel[0]>=0&&pixel[0]<=2);
             if(iteration>=11){

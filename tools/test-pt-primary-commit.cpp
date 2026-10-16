@@ -85,7 +85,7 @@ int main(int argc,char**){
                 if(committed)expected=c==3?1:pt[c];
                 if(x==9)expected=c==3?1.0f:8.0f;
                 if(x==10||x==13)expected=0;
-                if(x==11||x==12||x==14)expected=c==3?1.0f:.5f/3.14159265358979323846f;
+                if(x==11||x==12||x==14)expected=c==3?1.0f:(x==12?.66f:.5f)/3.14159265358979323846f;
                 if(x==6)expected=c==3?1.0f:0.0f; // black is covered, not fallback
             }
             assert(std::abs(values[x*4+c]-expected)<1e-6f);}}

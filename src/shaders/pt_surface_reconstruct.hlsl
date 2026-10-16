@@ -4,6 +4,7 @@ cbuffer Reconstruction : register(b0) {
     float4 previousWorldToView[4];
     float4 previousViewToClip[4];
     uint width,height,useHistory,maximumHistory;
+    uint signalStride;uint3 reserved;
 };
 ByteAddressBuffer rawRadiance : register(t0);
 ByteAddressBuffer history : register(t1);
@@ -20,7 +21,7 @@ ByteAddressBuffer previousSignals : register(t9);
 RWByteAddressBuffer signals : register(u3);
 RWByteAddressBuffer scratch : register(u4);
 float Luma(float3 v){return dot(v,float3(.2126,.7152,.0722));}
-bool SplitSignals(){uint bytes;rawRadiance.GetDimensions(bytes);return bytes==width*height*64;}
+bool SplitSignals(){return signalStride==64;}
 float4 Raw(uint2 p){return asfloat(rawRadiance.Load4((p.y*width+p.x)*(SplitSignals()?64:16)));}
 float3 Factor(uint2 p,bool spec){return asfloat(rawRadiance.Load4((p.y*width+p.x)*64+(spec?48:32))).rgb;}
 float3 Noisy(uint2 p,bool spec){return asfloat(rawRadiance.Load4((p.y*width+p.x)*64+(spec?16:0))).rgb/Factor(p,spec);}
