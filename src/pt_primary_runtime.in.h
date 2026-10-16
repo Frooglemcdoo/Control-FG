@@ -125,7 +125,7 @@ struct Frame {
 };
 struct Draw {
     std::shared_ptr<Frame> frame;std::shared_ptr<PTSurfaceComposition::Pipeline> pipeline;
-    Table original;UINT64 viewAddress=0;View boundView;std::shared_ptr<Output> consumer;
+    Table original;UINT64 viewAddress=0;View boundView;bool pendingCamera=false;std::shared_ptr<Output> consumer;
 };
 struct Guide {std::shared_ptr<Frame> frame;std::shared_ptr<Output> guard;bool selected=false;};
 struct Recording {
@@ -571,28 +571,29 @@ static void Drawing(void*,ID3D12GraphicsCommandList* list) noexcept {
         if(!ReadEngineFrameSafe(&engineFrame,&fault)){Reject("surface_engine_frame");return;}
         if(!PTNativeView::uploads.Read(bindings.arguments[12].value,raw.data(),raw.size())&&
            !PTSceneLive::owner.Resources().ReadUpload(bindings.arguments[12].value,raw.data(),raw.size())){Reject("surface_view_upload");return;}
-        std::shared_ptr<Frame> matched;
+        std::shared_ptr<Frame> matched;bool pendingCamera=false;
         for(const auto& weak:frames){const auto f=weak.lock();
             if(!f||f->cancelled||f->view.engineFrame!=engineFrame||!f->view.MatchesSurface(raw))continue;
             if(matched){Reject("surface_ambiguous_frame");return;}matched=f;
         }
         if(!matched){
             // Native workers may record a surface before the opaque ray callback
-            // reserves its output. Authenticate this worker's complete camera;
-            // never borrow the most recent output or relax camera matching.
+            // reserves its output. Retain this worker's stable complete camera
+            // as a candidate until its actual CBV passes submission validation.
             View early;early.bytes=raw;
-            if(!pinnedQueue||!viewProviders.Read(early,PTNativeView::Pass::surface)||
-               early.engineFrame!=engineFrame||!early.MatchesSurface(raw)){
+            if(!pinnedQueue||!viewProviders.Read(early,PTNativeView::Pass::surface,true)||
+               early.engineFrame!=engineFrame){
                 static UINT64 failures=0;const auto count=++failures;
                 if(count<=8||count%600==0)Log("PT_PRIMARY_SURFACE_CAMERA_FAILURE reason=%s offset=%u engine_frame=%llu provider_engine_frame=%llu queue_ready=%u count=%llu",early.failure,early.failureOffset,engineFrame,early.engineFrame,unsigned(bool(pinnedQueue)),count);
                 Reject("surface_early_camera_unavailable");return;
             }
-            // Only reserve when this engine frame has no output yet. Another
-            // view is not evidence that its missing output should be allocated.
-            bool currentFrameExists=false;
+            pendingCamera=!early.MatchesSurface(raw);
+            // A stable TLS snapshot only selects a candidate. Reuse an exact
+            // same-frame reservation if present; a different view is rejected.
+            bool otherFrame=false;
             for(const auto& weak:frames){const auto f=weak.lock();
-                if(f&&f->view.engineFrame==engineFrame){currentFrameExists=true;break;}}
-            if(currentFrameExists){Reject("surface_other_view_or_cancelled_frame");return;}
+                if(f&&f->view.engineFrame==engineFrame&&!f->view.Same(early)){otherFrame=true;break;}}
+            if(otherFrame){Reject("surface_other_view_or_cancelled_frame");return;}
             ComPtr<ID3D12CommandQueue> queue;
             if(FAILED(pinnedQueue.As(&queue))){Reject("surface_early_queue_unavailable");return;}
             PTTableMirror::Scope descriptorLock(true);PTTableMirror::Mute privateWrites;
@@ -602,7 +603,10 @@ static void Drawing(void*,ID3D12GraphicsCommandList* list) noexcept {
             if(++earlyReservations<=8||earlyReservations%240==0)
                 Log("PT_PRIMARY_SURFACE_EARLY_RESERVED frame=%u engine_frame=%llu count=%llu producer_required=1",early.frame,early.engineFrame,earlyReservations);
         }
-        view=matched->view;view.pass=PTNativeView::Pass::surface;view.bound=raw;
+        view=matched->view;view.pass=PTNativeView::Pass::surface;
+        // Never bless the possibly stale recording-time bytes. The final CBV
+        // must match the producer camera at submission, including pending draws.
+        view.bound=view.bytes;
         const auto base=bindings.resources->GetGPUDescriptorHandleForHeapStart().ptr;
         const auto step=device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
         const auto address=bindings.arguments[1].value;
@@ -618,7 +622,7 @@ static void Drawing(void*,ID3D12GraphicsCommandList* list) noexcept {
             d->original.native.Get()==bindings.resources.Get()&&d->original.first==first&&d->frame->view.Same(view)){draw=d;break;}
         if(!draw){
             auto frame=matched;
-            draw=std::make_shared<Draw>();draw->frame=frame;draw->pipeline=pipeline;draw->viewAddress=bindings.arguments[12].value;draw->boundView=view;
+            draw=std::make_shared<Draw>();draw->frame=frame;draw->pipeline=pipeline;draw->viewAddress=bindings.arguments[12].value;draw->boundView=view;draw->pendingCamera=pendingCamera;
             if(!PTTableMirror::bank.Read(bindings.resources.Get(),first,pipeline->Required(),draw->original)){Reject("surface_descriptor_snapshot");return;}
             // One guard per recording/frame, shared only by this consumer group.
             // A rejected group must never clear another list's PT radiance/history.
@@ -790,8 +794,12 @@ static void Selected(void*,ID3D12CommandQueue* queue,UINT count,ID3D12CommandLis
                 // CPU recording may precede the producer, GPU execution may not.
                 // Producer lists earlier in this batch have armed/deferred above.
                 const bool orderedProducer=draw->frame->producerRecorded&&(draw->frame->armed||draw->frame->deferred)&&!draw->frame->cancelled;
-                const UINT reason=(!orderedProducer?1u:0u)|(recording.submitted?2u:0u)|
-                    (queueIdentity.Get()!=pinnedQueue.Get()?4u:0u)|(!SameView(draw->viewAddress,draw->boundView)?8u:0u)|(changed?16u:0u);
+                const UINT reason=PTNativeView::SurfaceAdmission(orderedProducer,recording.submitted,
+                    queueIdentity.Get()==pinnedQueue.Get(),SameView(draw->viewAddress,draw->boundView),!changed,admitted);
+                if(draw->pendingCamera){
+                    static UINT64 accepted=0,rejected=0;const auto checks=reason?++rejected:++accepted;
+                    if(checks<=8||checks%600==0)Log("PT_PRIMARY_SURFACE_CAMERA_RESOLVED frame=%u accepted=%u reasons=%u count=%llu final_cbv_checked=1",draw->frame->view.frame,unsigned(reason==0),reason,checks);
+                }
                 if(reason){
                     // Producer invalidation is handled above using scene/input proofs.
                     // Consumer-only failure selects native for this recording group;
@@ -931,6 +939,6 @@ static bool Start(){
        !PTCommandBindings::Register(&commandConsumer)||!PTNativeJobRuntime::Register(&Job)||!PTSceneLive::owner.Start(step,true))return false;
     ptReflectionModeObserver.store(&MirrorModeChanged,std::memory_order_release);
     MirrorModeChanged(PTReflectionUserRequested());
-    active=true;Log("PT_PRIMARY_SESSION_READY build=M12R90 ready=1 hits=4 spp=1 roulette_start=3 material=opaque_general geometric_normals=1 native_fallback=1 primary_lighting=%s transport=%s readiness=per_material graphics_tracking=%u",surfaceReplacement?"pt":"native",surfaceReplacement?"full_surface":"diffuse_indirect",unsigned(compose));return true;
+    active=true;Log("PT_PRIMARY_SESSION_READY build=M12R91 ready=1 hits=4 spp=1 roulette_start=3 material=opaque_general geometric_normals=1 native_fallback=1 primary_lighting=%s transport=%s readiness=per_material graphics_tracking=%u",surfaceReplacement?"pt":"native",surfaceReplacement?"full_surface":"diffuse_indirect",unsigned(compose));return true;
 }
 }

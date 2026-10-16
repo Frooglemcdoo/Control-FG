@@ -67,10 +67,10 @@ PT_INLINE float PTMasking(float nz,float alpha) {
     if (nz<=0.0f) return 0.0f;
     return 2.0f*nz/(nz+sqrt(alpha*alpha+(1.0f-alpha*alpha)*nz*nz));
 }
-PT_INLINE PTSurfaceEvaluation PTEvaluateSurface(PTSurfaceMaterial m,PTVec3 wo,PTVec3 wi) {
+PT_INLINE PTSurfaceEvaluation PTEvaluateSurfaceProposal(PTSurfaceMaterial m,PTVec3 wo,PTVec3 wi,float probability) {
     PTSurfaceEvaluation e; e.f=PTV(0,0,0);e.pdf=0;
     if(wo.z<=0||wi.z<=0||!PTValid(wo)||!PTValid(wi)||(m.lobes&3u)==0u) return e;
-    float p=PTSpecularProbability(m);
+    float p=probability;
     if((m.lobes&1u)!=0u) {e.f=PTScale(m.kd,1.0f/PTTransportPi);e.pdf=(1.0f-p)*wi.z/PTTransportPi;}
     if((m.lobes&2u)!=0u) {
         PTVec3 h=PTUnit(PTAdd(wo,wi));float vh=max(0.0f,PTDot(wo,h));
@@ -87,16 +87,22 @@ PT_INLINE PTSurfaceEvaluation PTEvaluateSurface(PTSurfaceMaterial m,PTVec3 wo,PT
     }
     return e;
 }
-PT_INLINE PTSurfaceSample PTSampleSurface(PTSurfaceMaterial m,PTVec3 wo,float choose,float u,float v) {
+PT_INLINE PTSurfaceEvaluation PTEvaluateSurface(PTSurfaceMaterial m,PTVec3 wo,PTVec3 wi) {
+    return PTEvaluateSurfaceProposal(m,wo,wi,PTSpecularProbability(m));
+}
+// The proposal may differ from the material's lobe energy. Its SAME mixture
+// probability must be used both to choose a lobe and to evaluate the PDF.
+PT_INLINE PTSurfaceSample PTSampleSurfaceProposal(PTSurfaceMaterial m,PTVec3 wo,float choose,float u,float v,float probability) {
     PTSurfaceSample s;s.wi=PTV(0,0,0);s.weight=PTV(0,0,0);s.pdf=0;s.valid=0;s.fault=0;
     if(!PTValid(wo)||!PTValid(m.kd)||!PTValid(m.f0)||!PTFinite(m.roughness)||
-       !PTFinite(choose)||!PTFinite(u)||!PTFinite(v)||choose<0||choose>=1||
+       !PTFinite(choose)||!PTFinite(u)||!PTFinite(v)||choose<0||choose>=1||!PTFinite(probability)||probability<0||probability>1||
+       ((m.lobes&1u)==0u&&probability!=1)||((m.lobes&2u)==0u&&probability!=0)||
        min(m.kd.x,min(m.kd.y,m.kd.z))<0||min(m.f0.x,min(m.f0.y,m.f0.z))<0||
        PTMax(m.kd)>1||PTMax(m.f0)>1) {s.fault=1;return s;}
     if(wo.z<=0||(m.lobes&3u)==0u) return s;
     u=min(0.99999994f,max(0.0f,u));v=min(0.99999994f,max(0.0f,v));
     float radius=sqrt(u),phi=2.0f*PTTransportPi*v;
-    if(choose<PTSpecularProbability(m)) {
+    if(choose<probability) {
         // GGX visible-normal disk warp (Heitz 2018). Below-surface reflections
         // terminate; do not resample them without correcting the conditional PDF.
         float a=PTAlpha(m);PTVec3 vh=PTUnit(PTV(a*wo.x,a*wo.y,wo.z));
@@ -109,13 +115,22 @@ PT_INLINE PTSurfaceSample PTSampleSurface(PTSurfaceMaterial m,PTVec3 wo,float ch
         PTVec3 h=PTUnit(PTV(a*nh.x,a*nh.y,max(0.0f,nh.z)));
         s.wi=PTAdd(PTScale(h,2.0f*PTDot(wo,h)),PTScale(wo,-1));
     } else s.wi=PTV(radius*cos(phi),radius*sin(phi),sqrt(1.0f-u));
-    PTSurfaceEvaluation e=PTEvaluateSurface(m,wo,s.wi);
+    PTSurfaceEvaluation e=PTEvaluateSurfaceProposal(m,wo,s.wi,probability);
     if(!PTFinite(e.pdf)||!PTValid(e.f)) {s.fault=1;return s;}
     if(e.pdf<=0) return s;
     s.weight=PTScale(e.f,s.wi.z/e.pdf);s.pdf=e.pdf;
     s.valid=PTValid(s.weight)&&min(s.weight.x,min(s.weight.y,s.weight.z))>=0?1u:0u;
     s.fault=s.valid==0u?1u:0u;
     return s;
+}
+
+PT_INLINE PTSurfaceSample PTSampleSurface(PTSurfaceMaterial m,PTVec3 wo,float choose,float u,float v) {
+    return PTSampleSurfaceProposal(m,wo,choose,u,v,PTSpecularProbability(m));
+}
+PT_INLINE PTSurfaceSample PTSamplePrimarySurface(PTSurfaceMaterial m,PTVec3 wo,float choose,float u,float v) {
+    // Unit-color primary diffuse is an output convention, not a reason to
+    // starve glossy transport. Balance both proposals without changing f.
+    return PTSampleSurfaceProposal(m,wo,choose,u,v,m.lobes==3u?.5f:PTSpecularProbability(m));
 }
 
 struct PTTransportState { PTVec3 throughput; PTVec3 radiance; uint depth; uint alive; uint valid; };

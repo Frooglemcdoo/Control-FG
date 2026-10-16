@@ -52,6 +52,17 @@ int main(){
         std::printf("lobes=%u rough=%.1f nz=%.1f estimate=%.6f integral=%.6f accepted=%.3f\n",lobes,rough,nz,estimate,reference,float(valid)/count);
         require(fabs(estimate-reference)<.004f+.025f*reference,"Sample estimate agrees with independent quadrature");
     }
+    // Independent quadrature catches a changed proposal with the OLD PDF:
+    // that error would brighten glossy energy instead of only reducing noise.
+    for(float rough: {.3f,.6f,.9f})for(float nz:{1.f,.2f}){
+        PTSurfaceMaterial m={PTV(.96f,.96f,.96f),PTV(.04f,.04f,.04f),rough,3u};
+        PTVec3 wo=PTV(sqrt(1-nz*nz),0,nz);double sum=0;
+        for(int i=0;i<350000;++i){auto sample=PTSamplePrimarySurface(m,wo,random01(),random01(),random01());
+            if(sample.valid)sum+=sample.weight.x;}
+        float reference=integrate(m,wo);
+        require(fabs(float(sum/350000)-reference)<.004f+.025f*reference,"Balanced primary proposal preserves quadrature energy");
+    }
+    require(PTSampleSurfaceProposal(diffuse,view,.5f,.5f,.5f,.5f).fault!=0,"Unsupported lobe proposals rejected");
     auto p=PTBeginTransport();p=PTAccumulate(p,PTV(2,3,4));
     auto s=PTSampleSurface(diffuse,PTV(0,0,1),.5f,.2f,.4f);
     p=PTContinue(p,s,.5f,99);p=PTAccumulate(p,PTV(1,1,1));

@@ -39,5 +39,16 @@ int main(){
     Write(producer,224,2);assert(producer.Decode()&&!early.Same(producer));
     producer=early;Write(producer,8,1.f/1920);assert(producer.Decode()&&!early.Same(producer));
     producer=early;producer.engineFrame++;assert(!early.Same(producer));
+    for(unsigned bits=0;bits<64;++bits){
+        const unsigned reasons=PTNativeView::SurfaceAdmission(!(bits&1),bool(bits&2),!(bits&4),!(bits&8),!(bits&16),!(bits&32));
+        assert(reasons==bits); // Every independent gate fails closed, including batch rejection.
+    }
+    // A recording-time candidate cannot authenticate its stale upload. Only
+    // the producer's complete snapshot is used as the final expected camera.
+    auto candidate=a;candidate.pass=PTNativeView::Pass::surface;candidate.bound=candidate.bytes;
+    auto stale=candidate.bytes;stale[96]^=1;
+    assert(!candidate.MatchesBound(stale));
+    assert(candidate.MatchesBound(a.bytes)); // Finalized matching upload.
+    stale=a.bytes;stale[144]^=1;assert(!candidate.MatchesBound(stale)); // Other view still rejects.
     puts("PASS: inverse render extents, unused fields ignored, frame/camera changes and missing transforms rejected");
 }

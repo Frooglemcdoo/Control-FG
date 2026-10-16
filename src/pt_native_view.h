@@ -6,6 +6,11 @@
 // sys_constants b0: reviewed native byte offsets. Compare camera contents, not
 // upload addresses: Control allocates distinct slices for each rendering pass.
 namespace PTNativeView {
+// Consumer admission is evaluated at submission, after uploads are finalized.
+// Pending recording-time camera candidates never bypass any execution proof.
+inline unsigned SurfaceAdmission(bool producer,bool replay,bool queue,bool camera,bool descriptors,bool batch){
+    return (!producer?1u:0u)|(replay?2u:0u)|(!queue?4u:0u)|(!camera?8u:0u)|(!descriptors?16u:0u)|(!batch?32u:0u);
+}
 enum class Pass {opaque,primary,environment,surface};
 struct View {
     std::array<unsigned char,1136> bytes{};

@@ -71,7 +71,7 @@ public:
             if(!Snapshot(n,check.data())||std::memcmp(check.data(),view.bytes.data()+offsets[n],sizes[n]))return false;}
         return ReadEngineFrameSafe(&after,&fault)&&before==after;
     }
-    bool Read(View& view,Pass pass){
+    bool Read(View& view,Pass pass,bool deferSurfaceBinding=false){
         // The caller has already read the real bound CBV. Authenticate fields
         // actually consumed by that native pass before using any provider-only
         // fields; never accept a globally most-recent camera from another view.
@@ -83,7 +83,10 @@ public:
             if(!Snapshot(n,view.bytes.data()+offsets[n]))return false;}
         view.failure="provider_binding_mismatch";
         view.failureOffset=view.Mismatch(view.bytes);
-        if(view.failureOffset!=UINT32_MAX)return false;
+        // A surface candidate can be retained before its upload is finalized.
+        // It is NOT authenticated for execution: submission must compare the
+        // real CBV with this complete snapshot. Other passes remain strict.
+        if(view.failureOffset!=UINT32_MAX&&!(deferSurfaceBinding&&pass==Pass::surface))return false;
         // Re-read each provider after the complete set, not just an individual
         // matrix. TLS/frame changes cannot silently mix separate cameras.
         for(unsigned n=1;n<count;++n){std::array<unsigned char,64> check{};

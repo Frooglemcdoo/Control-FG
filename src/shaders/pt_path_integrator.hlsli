@@ -105,7 +105,13 @@ PTPathResult PTIntegratePathFirst(RayDesc ray,uint maxHits,uint rouletteStart,ui
 #ifdef PT_PATH_PRIMARY_FILL
         if(depth==0&&useFirst!=0)continuation=PTPrimaryDiffuseContinuation(continuation);
 #endif
-        PTSurfaceSample sample=PTSampleSurface(continuation,wo,choose,u,v);
+        PTSurfaceSample sample;
+#ifdef PT_PRIMARY_SURFACE_REPLACEMENT
+        if(depth==0&&useFirst!=0)sample=PTSamplePrimarySurface(continuation,wo,choose,u,v);
+        else sample=PTSampleSurface(continuation,wo,choose,u,v);
+#else
+        sample=PTSampleSurface(continuation,wo,choose,u,v);
+#endif
         if(depth==0&&sample.valid!=0){
             PTSurfaceMaterial diffuseMaterial=continuation;diffuseMaterial.lobes=continuation.lobes&1u;
             float3 df=PTEvaluateSurface(diffuseMaterial,wo,sample.wi).f;
