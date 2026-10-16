@@ -10,13 +10,25 @@ try {
     Copy-Item -LiteralPath $record.FullName -Destination $copy
     $lines=@(Get-Content -LiteralPath $copy | ForEach-Object { [string]::Copy($_) })
     $primary=@($lines | Where-Object {$_ -match 'PT_PRIMARY_'})
-    $captureDisabled=@($primary | Where-Object {$_ -match 'PT_PRIMARY_STARTUP build=M12R71 capture=0'}).Count -gt 0
-    if (-not $captureDisabled -and @($primary | Where-Object {$_ -match 'PT_PRIMARY_SESSION_READY build=M12R71 ready=1'}).Count -eq 0) {throw 'The latest probe log has no M12R71 primary renderer records. Check that the M12R71 dxgi.dll and shader sidecars were installed together.'}
+    $startup=@($primary | Where-Object {$_ -match 'PT_PRIMARY_STARTUP '}) | Select-Object -Last 1
+    $session=@($primary | Where-Object {$_ -match 'PT_PRIMARY_SESSION_READY '}) | Select-Object -Last 1
+    $startupBuild=$null;$sessionBuild=$null
+    if($startup -match 'build=([^ ]+)'){$startupBuild=$Matches[1]}
+    if($session -match 'build=([^ ]+)'){$sessionBuild=$Matches[1]}
+    $captureDisabled=($startup -match 'capture=0\b')
+    $collectionWarnings=@()
+    if($startupBuild -and $startupBuild -ne 'M12R71'){$collectionWarnings+="Startup reports $startupBuild; expected M12R71. Evidence retained."}
+    if($sessionBuild -and $sessionBuild -ne 'M12R71'){$collectionWarnings+="Session marker reports $sessionBuild. R71 shipped with a stale R70 marker; evidence retained."}
+    if(-not $session -and -not $captureDisabled){$collectionWarnings+='No ready session marker. Startup/failure evidence retained.'}
+    if($primary.Count -eq 0){$collectionWarnings+='No primary records in latest log; raw log retained for diagnosis.'}
     $gpu=@($primary | Where-Object {$_ -match 'PT_PRIMARY_GPU '})
     $coverage=@($gpu | Where-Object {$_ -match 'covered=([1-9][0-9]*)\b' -and $_ -notmatch 'probe=1\b'})
     $skips=@($primary | Where-Object {$_ -match 'PT_PRIMARY_SKIP '})
     $summary=[ordered]@{
-        Build='M12R71';Log=$record.Name;StartupCaptureDisabled=$captureDisabled
+        Build='M12R71';Log=$record.Name;StartupCaptureDisabled=[bool]$captureDisabled
+        StartupBuild=$startupBuild;SessionBuild=$sessionBuild;CollectionWarnings=$collectionWarnings
+        Reconstruction=@($primary | Where-Object {$_ -match 'PT_PRIMARY_RECONSTRUCTION '})
+        SecondaryTerminations=@($primary | Where-Object {$_ -match 'PT_PRIMARY_SECONDARY_TERMINATION '})
         SessionReady=(@($primary | Where-Object {$_ -match 'PT_PRIMARY_SESSION_READY .*ready=1'}).Count -gt 0)
         SawSubmittedDispatch=(@($primary | Where-Object {$_ -match 'PT_PRIMARY_SUBMITTED '}).Count -gt 0)
         SawGPUCoveredSamples=($coverage.Count -gt 0)

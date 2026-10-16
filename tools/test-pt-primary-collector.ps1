@@ -43,5 +43,21 @@ try {
     & "$PSScriptRoot/Collect-PT-Primary-M12R71.ps1" -LogDirectory $logs -OutputDirectory $out
     $baseline=Summary
     if(-not $baseline.StartupCaptureDisabled -or $baseline.SessionReady -or $baseline.SawGPUCoveredSamples -or @($baseline.ReflexTimings).Count -ne 1){throw 'Capture-disabled baseline was not preserved honestly.'}
+    @('PT_PRIMARY_STARTUP build=M12R71 capture=1','PT_PRIMARY_SESSION_READY build=M12R70 ready=1',
+      'PT_PRIMARY_RECONSTRUCTION frame=40 history=1 previous_frame=39',
+      'PT_PRIMARY_SECONDARY_TERMINATION frame=40 sampled=8 retained_primary=1') | Set-Content -LiteralPath $log -Encoding UTF8
+    & "$PSScriptRoot/Collect-PT-Primary-M12R71.ps1" -LogDirectory $logs -OutputDirectory $out
+    $stale=Summary
+    if(-not $stale.SessionReady -or $stale.StartupBuild -ne 'M12R71' -or $stale.SessionBuild -ne 'M12R70' -or @($stale.CollectionWarnings).Count -eq 0){throw 'Shipped R71 stale session marker not preserved.'}
+    if(@($stale.Reconstruction).Count -ne 1 -or @($stale.SecondaryTerminations).Count -ne 1){throw 'Reconstruction evidence missing.'}
+    @('PT_PRIMARY_STARTUP build=M12R71 capture=1','PT_PRIMARY_SKIP reason=startup_fixture') | Set-Content -LiteralPath $log -Encoding UTF8
+    & "$PSScriptRoot/Collect-PT-Primary-M12R71.ps1" -LogDirectory $logs -OutputDirectory $out
+    $failed=Summary
+    if($failed.SessionReady -or @($failed.CollectionWarnings).Count -eq 0){throw 'Failed startup not captured honestly.'}
+    'Unrelated startup diagnostic' | Set-Content -LiteralPath $log -Encoding UTF8
+    & "$PSScriptRoot/Collect-PT-Primary-M12R71.ps1" -LogDirectory $logs -OutputDirectory $out
+    $missing=Summary
+    if($missing.SessionReady -or $missing.SawGPUCoveredSamples -or @($missing.CollectionWarnings).Count -eq 0){throw 'Missing primary records not captured honestly.'}
+    Write-Host 'PASS: stale R70 session marker in R71, failed startup, missing primary records, and reconstruction evidence retained.'
     Write-Host 'PASS: M12R71 collector distinguishes CPU submission, zero GPU coverage and covered GPU samples.'
 } finally {Remove-Item -LiteralPath $root -Recurse -Force}
