@@ -17,6 +17,7 @@ struct Snapshot {
     ComPtr<ID3D12DescriptorHeap> resources,samplers;
     std::array<Argument,18> arguments{};
 };
+struct ReadFailure {const char* reason="none";UINT parameter=~0u;UINT64 address=0;UINT requiredCount=0,heapCount=0;};
 class Tracker {
     struct Entry {
         std::mutex mutex; // Aliases share this recording state, independent lists do not.
@@ -151,18 +152,23 @@ public:
         auto layout=roots.Find(e.graphics.root.Get());if(!layout||layout->Type()!=PTNativeRoot::Kind::graphics)return false;
         result.layout=std::move(layout);result.arguments=e.graphics.arguments;result.resources=e.resources;result.samplers=e.samplers;return true;
     }
-    bool Read(ID3D12GraphicsCommandList* list,PTNativeRoot::Registry& roots,bool graphics,UINT required,Snapshot& result){
-        result={};if(!required||required>=(1u<<(graphics?18:8)))return false;
-        auto entry=FindEntry(list);if(!entry)return false;std::lock_guard<std::mutex> guard(entry->mutex);
+    bool Read(ID3D12GraphicsCommandList* list,PTNativeRoot::Registry& roots,bool graphics,UINT required,Snapshot& result,ReadFailure* failure=nullptr){
+        result={};if(failure)*failure={};
+        const auto fail=[&](const char* reason,UINT parameter=~0u,UINT64 address=0,UINT count=0,UINT heapCount=0){
+            if(failure)*failure={reason,parameter,address,count,heapCount};return false;
+        };
+        if(!required||required>=(1u<<(graphics?18:8)))return fail("invalid_required_mask");
+        auto entry=FindEntry(list);if(!entry)return fail("untracked_list");std::lock_guard<std::mutex> guard(entry->mutex);
         const auto& e=*entry;const auto& s=graphics?e.graphics:e.compute;auto layout=roots.Find(s.root.Get());
-        if(!layout||layout->Type()!=(graphics?PTNativeRoot::Kind::graphics:PTNativeRoot::Kind::compute))return false;
+        if(!layout||layout->Type()!=(graphics?PTNativeRoot::Kind::graphics:PTNativeRoot::Kind::compute))return fail("root_layout");
         for(UINT n=0;n<(graphics?18u:8u);++n)if(required&(1u<<n)){
             const bool constant=graphics?(n>=8&&n<16):(n>=2&&n<6);const auto& a=s.arguments[n];
-            if(a.kind!=(constant?ArgumentKind::constant:ArgumentKind::table)||!a.value)return false;
-            if(constant){if(a.value%256)return false;continue;}
+            if(a.kind!=(constant?ArgumentKind::constant:ArgumentKind::table)||!a.value)return fail("missing_argument",n,a.value);
+            if(constant){if(a.value%256)return fail("cbv_alignment",n,a.value);continue;}
             const bool sampler=graphics?((n>=4&&n<8)||n==16):(n==1||n==6);
             const UINT count=sampler?((graphics?n==16:n==6)?64:4):((graphics?n==17:n==7)?244000:49);
-            if(!Inside(sampler?e.samplers.Get():e.resources.Get(),a.value,count))return false;
+            auto* heap=sampler?e.samplers.Get():e.resources.Get();
+            if(!Inside(heap,a.value,count))return fail(heap?"table_bounds":"missing_heap",n,a.value,count,heap?heap->GetDesc().NumDescriptors:0);
         }
         result.layout=std::move(layout);result.pipeline=e.pipeline;result.resources=e.resources;result.samplers=e.samplers;result.arguments=s.arguments;return true;
     }

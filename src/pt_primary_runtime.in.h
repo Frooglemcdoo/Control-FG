@@ -489,30 +489,36 @@ static void Drawing(void*,ID3D12GraphicsCommandList* list) noexcept {
         std::lock_guard<std::recursive_mutex> ordered(PTSceneQueues::queueMutex);PTSceneQueues::Scope privateQueues;
         std::lock_guard<std::recursive_mutex> guard(mutex);
         Bindings bindings;
-        if(!PTCommandBindings::tracker.Read(list,nativeRoots,true,0x31002,bindings)){Reject("surface_bindings");return;}
-        if(!bindings.layout->Matches(pipeline->Root()))return;
+        PTCommandBindings::ReadFailure bindingFailure;
+        if(!PTCommandBindings::tracker.Read(list,nativeRoots,true,0x31002,bindings,&bindingFailure)){
+            static UINT64 failures[19]{};const UINT bucket=bindingFailure.parameter<18?bindingFailure.parameter:18;
+            const auto count=++failures[bucket];
+            if(count<=8||count%600==0)Log("PT_PRIMARY_SURFACE_BINDING_FAILURE reason=%s parameter=%u address=%llx required_count=%u heap_count=%u count=%llu list=%p",bindingFailure.reason,bindingFailure.parameter,bindingFailure.address,bindingFailure.requiredCount,bindingFailure.heapCount,count,list);
+            Reject("surface_bindings");return;
+        }
+        if(!bindings.layout->Matches(pipeline->Root())){Reject("surface_root_mismatch");return;}
         // Match the draw's actual CBV to a retained producer before consulting
         // allocator TLS or cloning descriptors. Worker TLS may already describe
         // another view; it is not the authority for this recorded surface.
         View view;std::array<unsigned char,1136> raw{};UINT64 engineFrame=0;DWORD fault=0;
-        if(!ReadEngineFrameSafe(&engineFrame,&fault)||
-           (!PTNativeView::uploads.Read(bindings.arguments[12].value,raw.data(),raw.size())&&
-            !PTSceneLive::owner.Resources().ReadUpload(bindings.arguments[12].value,raw.data(),raw.size())))return;
+        if(!ReadEngineFrameSafe(&engineFrame,&fault)){Reject("surface_engine_frame");return;}
+        if(!PTNativeView::uploads.Read(bindings.arguments[12].value,raw.data(),raw.size())&&
+           !PTSceneLive::owner.Resources().ReadUpload(bindings.arguments[12].value,raw.data(),raw.size())){Reject("surface_view_upload");return;}
         std::shared_ptr<Frame> matched;
         for(const auto& weak:frames){const auto f=weak.lock();
             if(!f||f->cancelled||f->view.engineFrame!=engineFrame||!f->view.MatchesSurface(raw))continue;
-            if(matched)return;matched=f;
+            if(matched){Reject("surface_ambiguous_frame");return;}matched=f;
         }
-        if(!matched)return;
+        if(!matched){Reject("surface_matching_frame_unavailable");return;}
         view=matched->view;view.pass=PTNativeView::Pass::surface;view.bound=raw;
         const auto base=bindings.resources->GetGPUDescriptorHandleForHeapStart().ptr;
         const auto step=device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
         const auto address=bindings.arguments[1].value;
         if(!step||address<base||(address-base)%step||
            (address-base)/step+49>bindings.resources->GetDesc().NumDescriptors||
-           !matched->output->Address()||!PTSceneQueues::WatchList(list))return;
+           !matched->output->Address()||!PTSceneQueues::WatchList(list)){Reject("surface_table_or_output");return;}
         const UINT first=static_cast<UINT>((address-base)/step);
-        auto* recording=RecordingFor(list);if(!recording||recording->submitted||recording->draws.size()>=4096)return;
+        auto* recording=RecordingFor(list);if(!recording||recording->submitted||recording->draws.size()>=4096){Reject("surface_recording_unavailable");return;}
         // View matching and upload reads do not touch descriptor values.
         PTTableMirror::Scope descriptorLock(true);
         std::shared_ptr<Draw> draw;
@@ -824,6 +830,6 @@ static bool Start(){
        !PTCommandBindings::Register(&commandConsumer)||!PTNativeJobRuntime::Register(&Job)||!PTSceneLive::owner.Start(step,true))return false;
     ptReflectionModeObserver.store(&MirrorModeChanged,std::memory_order_release);
     MirrorModeChanged(PTReflectionUserRequested());
-    active=true;Log("PT_PRIMARY_SESSION_READY build=M12R83 ready=1 hits=4 spp=1 roulette_start=3 material=opaque_general geometric_normals=1 native_fallback=1 primary_lighting=%s transport=%s readiness=per_material graphics_tracking=%u",surfaceReplacement?"pt":"native",surfaceReplacement?"full_surface":"diffuse_indirect",unsigned(compose));return true;
+    active=true;Log("PT_PRIMARY_SESSION_READY build=M12R84 ready=1 hits=4 spp=1 roulette_start=3 material=opaque_general geometric_normals=1 native_fallback=1 primary_lighting=%s transport=%s readiness=per_material graphics_tracking=%u",surfaceReplacement?"pt":"native",surfaceReplacement?"full_surface":"diffuse_indirect",unsigned(compose));return true;
 }
 }

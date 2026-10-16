@@ -2,6 +2,7 @@
 #include <windows.h>
 #include <dxgi1_6.h>
 #include <cassert>
+#include <string>
 #include <cstdio>
 #include <future>
 #include <thread>
@@ -158,13 +159,18 @@ int main(){
     {PTCommandBindings::Mute privateCommands;auto shifted=nativeTable;shifted.ptr+=device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
         list->SetComputeRootDescriptorTable(0,shifted);assert(PTCommandBindings::tracker.Read(list.Get(),roots,false,allCompute,snapshot));assert(snapshot.arguments[0].value==nativeTable.ptr);
         list->SetComputeRootDescriptorTable(0,nativeTable);}
+    PTCommandBindings::ReadFailure failure;
     // Inject invalid metadata, never invalid native GPU calls.
     PTCommandBindings::tracker.ArgumentValue(list.Get(),2,PTCommandBindings::ArgumentKind::constant,constants->GetGPUVirtualAddress()+4,false);
-    assert(!PTCommandBindings::tracker.Read(list.Get(),roots,false,allCompute,snapshot));bind();
+    assert(!PTCommandBindings::tracker.Read(list.Get(),roots,false,allCompute,snapshot,&failure));
+    assert(failure.parameter==2&&std::string(failure.reason)=="cbv_alignment");bind();
     PTCommandBindings::tracker.ArgumentValue(list.Get(),7,PTCommandBindings::ArgumentKind::table,materialTable.ptr+1000000,false);
-    assert(!PTCommandBindings::tracker.Read(list.Get(),roots,false,allCompute,snapshot));bind();
+    assert(!PTCommandBindings::tracker.Read(list.Get(),roots,false,allCompute,snapshot,&failure));
+    assert(failure.parameter==7&&std::string(failure.reason)=="table_bounds"&&failure.requiredCount==244000&&failure.heapCount==244100);bind();
+    assert(PTCommandBindings::tracker.Read(list.Get(),roots,false,allCompute,snapshot,&failure));assert(std::string(failure.reason)=="none");
     ID3D12DescriptorHeap* changed[]={replacement.Get(),samplers.Get()};list->SetDescriptorHeaps(2,changed);
-    assert(!PTCommandBindings::tracker.Read(list.Get(),roots,false,allCompute,snapshot));
+    assert(!PTCommandBindings::tracker.Read(list.Get(),roots,false,allCompute,snapshot,&failure));
+    assert(failure.parameter==0&&std::string(failure.reason)=="missing_argument");
     assert(PTCommandBindings::tracker.Read(list.Get(),roots,false,1u<<2,snapshot)); // Root CBV survives heap change.
     list->SetDescriptorHeaps(2,heaps);bind();assert(PTCommandBindings::tracker.Read(list.Get(),roots,false,allCompute,snapshot));
     assert(SUCCEEDED(list->Close()));assert(SUCCEEDED(list->Reset(allocator.Get(),nullptr)));
