@@ -24,6 +24,28 @@ jobs:
         run: python tools/test-pt-glass-glossy-only.py
       - name: Verify glass installation compatibility gate
         run: python tools/test-pt-glass-install.py
+      - name: Compile terminal GI dependency for native-root validation
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          New-Item -ItemType Directory -Force build | Out-Null
+          $pf86=[Environment]::GetFolderPath('ProgramFilesX86')
+          $pf=[Environment]::GetFolderPath('ProgramFiles')
+          $roots=@(
+            (Join-Path $pf86 'Windows Kits\10\bin'),
+            (Join-Path $pf 'Microsoft Visual Studio'),
+            (Join-Path $pf86 'Microsoft Visual Studio')
+          ) | Where-Object { $_ -and (Test-Path -LiteralPath $_) }
+          $dxc=$null
+          foreach($root in $roots){
+            $candidate=Get-ChildItem -LiteralPath $root -Filter dxc.exe -File -Recurse -ErrorAction SilentlyContinue |
+              Sort-Object FullName -Descending | Select-Object -First 1
+            if($candidate){$dxc=$candidate.FullName;break}
+          }
+          if(-not $dxc){throw 'dxc.exe was not found in the Windows SDK / Visual Studio installation.'}
+          Write-Host "DXC: $dxc"
+          & $dxc -T cs_6_0 -E main -HV 2021 -O3 -WX -I src/shaders -Fo build/pt_terminal_gi_compute.dxil src/shaders/pt_terminal_gi_compute.hlsl
+          if($LASTEXITCODE -ne 0){throw "Terminal GI compile failed: $LASTEXITCODE"}
       - name: Compile native and dedicated secondary lighting
         shell: cmd
         run: |
