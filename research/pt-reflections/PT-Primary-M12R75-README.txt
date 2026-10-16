@@ -21,8 +21,8 @@ This is a custom variance-guided filter, NOT an NRD integration.
 Raw output increases from 16 to 64 bytes/pixel. Two pooled 32-byte/pixel buffers
 hold channel history and filter scratch. Final native-consumer layout remains
 32 bytes/pixel. Resource reuse requires completed GPU work and released owners.
-The auxiliary pool is capped at 2 GiB, separately from the existing 2 GiB output
-pool. This increases memory/bandwidth; it is not an FPS optimization. All buffers
+The auxiliary pool is capped at 2 GiB, separately from the output pool, raised to 4 GiB so three
+4K split-signal frames can coexist without rejecting the producer. This increases memory/bandwidth; it is not an FPS optimization. All buffers
 use the admitted internal render dimensions, not the display resolution.
 
 Known unfinished work: primary surface correspondence, object-motion vectors,

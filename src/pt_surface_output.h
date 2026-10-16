@@ -14,7 +14,7 @@ namespace PTSurfaceComposition {
 class Output {
     using MicrosoftResource=Microsoft::WRL::ComPtr<ID3D12Resource>;
     inline static std::atomic<std::uint64_t> residentBytes{0};
-    static constexpr std::uint64_t MaximumBytes=2048ull*1024*1024;
+    static constexpr std::uint64_t MaximumBytes=4096ull*1024*1024;
     struct Storage {
         Microsoft::WRL::ComPtr<ID3D12Device> device;
         Microsoft::WRL::ComPtr<ID3D12CommandQueue> queue;

@@ -297,3 +297,7 @@ increase; signal storage is pooled, bounded and retained through GPU completion.
 References informing the signal contract:
 - https://github.com/NVIDIA-RTX/NRD/blob/master/README.md
 - https://research.nvidia.com/publication/2017-07_spatiotemporal-variance-guided-filtering-real-time-reconstruction-path-traced
+
+R75 raw+final outputs require about 759 MiB per 4K frame. The old 2 GiB
+output cap cannot admit three such frames; the cap is 4 GiB for this build,
+with the auxiliary pool separately capped at 2 GiB. Neither cap is a reservation.
