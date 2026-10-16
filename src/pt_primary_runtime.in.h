@@ -327,7 +327,6 @@ static void Dispatched(void*,ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT 
                     !PTSceneLive::owner.Resources().ReadUpload(e->scaleAddress,&e->scale,4))||
                    !std::isfinite(e->scale)||e->scale<0){Reject("environment_scale_snapshot");return;}
             }
-            if(!PTTableMirror::bank.Read(bindings.resources.Get(),context.table.first,1ull<<13,e->table)){Reject("environment_descriptor");return;}
             if(surfaceReplacement&&bindings.arguments[5].kind==PTCommandBindings::ArgumentKind::constant){
                 e->giAddress=bindings.arguments[5].value;e->giScaleAddress=bindings.arguments[3].value+252;
                 auto read=[](UINT64 address,void* data,std::size_t size){return PTNativeView::uploads.Read(address,data,size)||PTSceneLive::owner.Resources().ReadUpload(address,data,size);};
@@ -345,6 +344,7 @@ static void Dispatched(void*,ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT 
                 static UINT64 giSnapshots=0;if(++giSnapshots<=8||giSnapshots%240==0)
                     Log("PT_PRIMARY_TERMINAL_GI frame=%u admitted=%u volumes=%u scale=%.9g source=reflection_volume_inputs terminal_only=1",view.frame,unsigned(e->gi),volumes,scale);
             }
+            if(!e->gi&&!PTTableMirror::bank.Read(bindings.resources.Get(),context.table.first,1ull<<13,e->table)){Reject("environment_descriptor");return;}
             while(environments.size()>=16)environments.erase(environments.begin());environments.push_back(std::move(e));return;
         }
         if(z!=1||x!=(view.width+7)/8||y!=(view.height+7)/8||!primary->root->Matches(bindings.layout->Root())){Reject("primary_dispatch_shape_or_root");return;}
