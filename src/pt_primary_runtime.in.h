@@ -673,7 +673,7 @@ static void Selected(void*,ID3D12CommandQueue* queue,UINT count,ID3D12CommandLis
                     // Consumer-only failure selects native for this recording group;
                     // clearing shared output here used to invalidate ALL consumers.
                     if(!draw->consumer->Invalidate(queue)){
-                        CancelFrame(draw->frame,queue);PTSceneLive::owner.Scenes().Invalidate();Reject("surface_consumer_guard_failed");
+                        CancelFrame(draw->frame,queue);PTSceneLive::owner.Scenes().Invalidate();Reject("surface_consumer_guard_failed");continue;
                     }
                     static UINT64 rejected=0;if(++rejected<=16||rejected%240==0)
                         Log("PT_PRIMARY_CONSUMER_REJECT frame=%u reasons=%u ordered=%u replay=%u queue=%u view=%u descriptors=%u scope=recording_group shared_output_preserved=1",draw->frame->view.frame,reason,unsigned((reason&1)==0),unsigned((reason&2)!=0),unsigned((reason&4)==0),unsigned((reason&8)==0),unsigned((reason&16)==0));
