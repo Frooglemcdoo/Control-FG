@@ -2,6 +2,7 @@
 // guide architecture recovered from the supplied RenoDX RR addon.
 // One deterministic pass covers every material pixel; no material-family replay.
 #include "ControlPrimaryGuideDecode.hlsli"
+#include "rr_pt_diffuse.hlsli"
 
 Texture2D<float4> GBuffer1 : register(t0);
 Texture2D<float4> GBuffer2 : register(t1);
@@ -65,6 +66,12 @@ void GenerateLiveGuides(uint3 tid : SV_DispatchThreadID) {
         }
     }
 
+    // Only covered, same-material PT pixels use PT's actual diffuse coefficient.
+    // Preserve native guides for unsupported pixels and every PT-off frame.
+    if((GuideFlags&4u)!=0u){
+        uint materialID=ControlDecodeMaterialID(GBuffer2.Load(int3(tid.xy,0)));
+        materialGuide=PTDiffuseGuide(tid.y*Width+tid.x,materialID,materialGuide);
+    }
     // The supplied reference addon binds this stable per-material value as its
     // DLSS diffuse-albedo guide. It is intentionally not a replayed texture.
     DiffuseGuide[tid.xy] = float4(materialGuide, 1.0f);

@@ -23,7 +23,7 @@ RWByteAddressBuffer scratch : register(u4);
 float Luma(float3 v){return dot(v,float3(.2126,.7152,.0722));}
 bool SplitSignals(){return signalStride==64;}
 float4 Raw(uint2 p){return asfloat(rawRadiance.Load4((p.y*width+p.x)*(SplitSignals()?64:16)));}
-float3 Factor(uint2 p,bool spec){return asfloat(rawRadiance.Load4((p.y*width+p.x)*64+(spec?48:32))).rgb;}
+float3 Factor(uint2 p,bool spec){return max(asfloat(rawRadiance.Load4((p.y*width+p.x)*64+(spec?48:32))).rgb,.02);}
 float3 Noisy(uint2 p,bool spec){return asfloat(rawRadiance.Load4((p.y*width+p.x)*64+(spec?16:0))).rgb/Factor(p,spec);}
 
 cbuffer Phase : register(b1) { uint materialPhase; };

@@ -23,6 +23,8 @@ static bool RRLiveRecord(RRLiveOwner* c,RRLiveSlot* s,const RRGuideInputSnapshot
         ++*count;list->SetPipelineState(c->pipeline);
         ++*count;list->SetComputeRoot32BitConstants(0,4,constants,0);
         ++*count;list->SetComputeRootDescriptorTable(1,s->heap->GetGPUDescriptorHandleForHeapStart());
+        ++*count;list->SetComputeRootShaderResourceView(2,s->pt.raw);
+        ++*count;list->SetComputeRootShaderResourceView(3,s->pt.surface);
         ++*count;list->Dispatch((c->width+15)/16,(c->height+15)/16,1);
         for(auto& b:barriers){b.Transition.StateBefore=D3D12_RESOURCE_STATE_UNORDERED_ACCESS;b.Transition.StateAfter=D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;}
         ++*count;list->ResourceBarrier(3,barriers);

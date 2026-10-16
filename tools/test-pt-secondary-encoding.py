@@ -60,7 +60,7 @@ for name,expected in locked.items():
  # the entire remaining runtime to match the confirmed S1 source hashes.
  if name=='src/probe.cpp':
   # R51 adds read-only settings copies at explicit startup/present boundaries.
-  for addition in ['static std::wstring ptSettingsSnapshotBase;\n', '    ptSettingsSnapshotBase=dir+name;\n', '#include "pt_settings_snapshot.h"\n\n', '    if(count==1||count==240)PTSettingsSnapshot(count==1?L"first-present":L"present-240");\n', '        PTSettingsSnapshot(L"startup");\n']:
+  for addition in ['#include "rr_pt_guides_runtime.h"\n', 'static std::wstring ptSettingsSnapshotBase;\n', '    ptSettingsSnapshotBase=dir+name;\n', '#include "pt_settings_snapshot.h"\n\n', '    if(count==1||count==240)PTSettingsSnapshot(count==1?L"first-present":L"present-240");\n', '        PTSettingsSnapshot(L"startup");\n']:
    assert source.count(addition)==1,addition
    source=source.replace(addition,'')
   source=re.sub(r'static std::atomic<unsigned long long> ptGlass(?:Miss|HitGroup)BindCount\{0\};\n','',source)
@@ -94,7 +94,7 @@ for name,expected in locked.items():
  # retain the original S1 hashes for all enabled-mode runtime code.
  if name=='src/probe.cpp':
   startup='// Read once before any PT installation, including early device creation.\n// RT-only is the default. Mode changes require a process restart; ownership is\n// never torn down while recorded or submitted command lists can reference it.\nstatic bool PTStartupCaptureEnabled() {\n    static const bool enabled=[](){\n        const DWORD error=GetLastError();auto path=ModulePath(selfModule);\n        const auto slash=path.find_last_of(L"\\\\/");\n        if(slash==std::wstring::npos){SetLastError(error);return false;}\n        path.resize(slash+1);\n        const DWORD off=GetFileAttributesW((path+L"ControlFG-PT-Capture-Off.txt").c_str());\n        const DWORD on=GetFileAttributesW((path+L"ControlFG-PT-Enabled.txt").c_str());\n        const bool disabled=off!=INVALID_FILE_ATTRIBUTES&&!(off&FILE_ATTRIBUTE_DIRECTORY);\n        const bool optedIn=on!=INVALID_FILE_ATTRIBUTES&&!(on&FILE_ATTRIBUTE_DIRECTORY);\n        SetLastError(error);return optedIn&&!disabled;\n    }();\n    return enabled;\n}\n\n'
-  setup='        const bool ptCaptureEnabled=PTStartupCaptureEnabled();\n        Log("PT_PRIMARY_STARTUP build=M12R79 capture=%u restart_only=1 rr_fg_available=1",unsigned(ptCaptureEnabled));\n        const unsigned int rrObserverHooks = ptCaptureEnabled?InstallRRObservationHooks(renderer,d3d):0;'
+  setup='        const bool ptCaptureEnabled=PTStartupCaptureEnabled();\n        Log("PT_PRIMARY_STARTUP build=M12R80 capture=%u restart_only=1 rr_fg_available=1",unsigned(ptCaptureEnabled));\n        const unsigned int rrObserverHooks = ptCaptureEnabled?InstallRRObservationHooks(renderer,d3d):0;'
   assert source.count(startup)==1 and source.count(setup)==1
   source=source.replace(startup,'').replace(setup,'        const unsigned int rrObserverHooks = InstallRRObservationHooks(renderer,d3d);')
  if name=='src/pt_reflection_loader.h':
