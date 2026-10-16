@@ -163,8 +163,8 @@ static void PollMetrics(){
             }
         }
         if(surfaceReplacement&&good&&!f.assets->probe&&(n<=8||n%240==0)){
-            std::array<UINT,7> h{};if(f.assets->metrics.ReadReconstruction(h))
-                Log("PT_PRIMARY_HISTORY_PIXELS frame=%u valid=%u available=%u projected=%u covered=%u compatible=%u accepted=%u sample_sum=%u candidates=4",f.view.frame,h[0],h[1],h[2],h[3],h[4],h[5],h[6]);
+            std::array<UINT,10> h{};if(f.assets->metrics.ReadReconstruction(h))
+                Log("PT_PRIMARY_HISTORY_PIXELS frame=%u valid=%u available=%u projected=%u covered=%u compatible=%u accepted=%u sample_sum=%u material_match=%u normal_match=%u rescued=%u taps=4 candidates=4",f.view.frame,h[0],h[1],h[2],h[3],h[4],h[5],h[6],h[7],h[8],h[9]);
         }
         if(surfaceReplacement&&faultRead&&faults[0]&&(n<=8||n%240==0))
             Log("PT_PRIMARY_SECONDARY_TERMINATION frame=%u sampled=%u retained_primary=1",f.view.frame,faults[0]);
@@ -777,6 +777,6 @@ static bool Start(){
        !PTCommandBindings::Register(&commandConsumer)||!PTNativeJobRuntime::Register(&Job)||!PTSceneLive::owner.Start(step,true))return false;
     ptReflectionModeObserver.store(&MirrorModeChanged,std::memory_order_release);
     MirrorModeChanged(PTReflectionUserRequested());
-    active=true;Log("PT_PRIMARY_SESSION_READY build=M12R72 ready=1 hits=4 spp=1 roulette_start=3 material=opaque_general geometric_normals=1 native_fallback=1 primary_lighting=%s transport=%s readiness=per_material graphics_tracking=%u",surfaceReplacement?"pt":"native",surfaceReplacement?"full_surface":"diffuse_indirect",unsigned(compose));return true;
+    active=true;Log("PT_PRIMARY_SESSION_READY build=M12R73 ready=1 hits=4 spp=1 roulette_start=3 material=opaque_general geometric_normals=1 native_fallback=1 primary_lighting=%s transport=%s readiness=per_material graphics_tracking=%u",surfaceReplacement?"pt":"native",surfaceReplacement?"full_surface":"diffuse_indirect",unsigned(compose));return true;
 }
 }

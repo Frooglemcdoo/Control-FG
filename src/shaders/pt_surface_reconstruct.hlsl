@@ -63,23 +63,47 @@ void main(uint3 id:SV_DispatchThreadID){
         float2 uv=float2(clip.x,-clip.y)/clip.w*.5+.5;
         if(all(isfinite(uv))&&clip.w>0&&all(uv>=0)&&all(uv<1)){
             Measure(p,2,1);
-            uint2 q=(uint2)(uv*float2(width,height));uint offset=Index(q)*32;
-            float4 old=asfloat(history.Load4(offset));uint4 guide=history.Load4(offset+16);
-            float oldDepth=asfloat(guide.z),count=asfloat(guide.w);
-            if(old.w==1)Measure(p,3,1);
-            if(old.w==1&&guide.y==material&&dot(UnpackNormal(guide.x),normal)>.95)Measure(p,4,1);
-            if(old.w==1&&all(isfinite(old))&&all(old.rgb>=0)&&guide.y==material&&
-               dot(UnpackNormal(guide.x),normal)>.95&&isfinite(count)&&count>=1&&count<=(float)maximumHistory&&
-               isfinite(oldDepth)&&abs(oldDepth-previous.z)<=max(.003,abs(previous.z)*.002)){
-                samples=min(count+1,(float)maximumHistory);
-                // Do not clamp history to the extrema of sparse current samples:
-                // a valid all-zero neighborhood would repeatedly erase indirect
-                // energy and recreate temporal brightness flicker. Shorten history
-                // during screen motion and on sharp specular instead.
+            // Reprojection lands between texel centers. Validate each of the
+            // four bilinear taps independently, then renormalize only survivors.
+            // A rejected nearest tap must not discard another valid surface tap.
+            float2 texel=uv*float2(width,height)-.5;
+            int2 base=(int2)floor(texel);float2 fraction=frac(texel);
+            float3 oldSum=0;float oldWeight=0,oldCount=0;
+            bool covered=false,compatible=false,materialMatch=false,normalMatch=false;
+            bool nearestAccepted=false;
+            uint2 nearest=(uint2)(uv*float2(width,height));
+            [unroll] for(int y=0;y<2;++y)[unroll] for(int x=0;x<2;++x){
+                int2 q=base+int2(x,y);
+                float weight=(x?fraction.x:1-fraction.x)*(y?fraction.y:1-fraction.y);
+                if(weight<=0||any(q<0)||q.x>=(int)width||q.y>=(int)height)continue;
+                uint offset=Index((uint2)q)*32;
+                float4 old=asfloat(history.Load4(offset));uint4 guide=history.Load4(offset+16);
+                if(old.w!=1)continue;
+                covered=true;
+                bool sameMaterial=guide.y==material;
+                bool sameNormal=dot(UnpackNormal(guide.x),normal)>.95;
+                materialMatch=materialMatch||sameMaterial;normalMatch=normalMatch||sameNormal;
+                if(!sameMaterial||!sameNormal)continue;
+                compatible=true;
+                float oldDepth=asfloat(guide.z),count=asfloat(guide.w);
+                if(!all(isfinite(old))||any(old.rgb<0)||!isfinite(count)||count<1||count>(float)maximumHistory||
+                   !isfinite(oldDepth)||abs(oldDepth-previous.z)>max(.003,abs(previous.z)*.002))continue;
+                oldSum+=old.rgb*weight;oldCount+=count*weight;oldWeight+=weight;
+                if(all((uint2)q==nearest))nearestAccepted=true;
+            }
+            if(covered)Measure(p,3,1);
+            if(compatible)Measure(p,4,1);
+            if(materialMatch)Measure(p,7,1);
+            if(normalMatch)Measure(p,8,1);
+            // Ignore infinitesimal edge overlap rather than amplifying a tap
+            // whose bilinear weight is only floating-point projection noise.
+            if(oldWeight>=.01){
+                samples=min(oldCount/oldWeight+1,(float)maximumHistory);
                 float motion=length(uv*float2(width,height)-(float2(p)+.5));
                 if(radius==0||motion>1)samples=min(samples,8);
-                filtered=lerp(old.rgb,filtered,1/samples);
+                filtered=lerp(oldSum/oldWeight,filtered,1/samples);
                 Measure(p,5,1);Measure(p,6,(uint)samples);
+                if(!nearestAccepted)Measure(p,9,1);
             }
         }
     }

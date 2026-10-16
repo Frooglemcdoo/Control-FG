@@ -39,7 +39,9 @@ int main(){
     changed=previousView;float distant=4;std::memcpy(changed.bytes.data()+144,&distant,4);assert(PTSurfaceComposition::ReconstructConstants(view,&changed,c)&&c.useHistory==0);
     changed=previousView;std::memset(changed.bytes.data()+224,0,64);assert(PTSurfaceComposition::ReconstructConstants(view,&changed,c)&&c.useHistory==0);
     std::shared_ptr<Output> previous;
-    for(UINT iteration=0;iteration<9;++iteration){
+    for(UINT iteration=0;iteration<11;++iteration){
+        if(iteration==9)previous.reset();
+        if(iteration==10){camera[36]=.0625f;camera[20]=-.0625f;std::memcpy(view.bytes.data(),camera.data(),288);}
         view.frame=iteration+1;view.engineFrame=iteration+1;
         std::shared_ptr<Output> raw,output;assert(SUCCEEDED(Output::Create(queue.Get(),8,8,raw,true,true)));assert(SUCCEEDED(Output::Create(queue.Get(),8,8,output,true,true,32)));assert(raw->Address()&&output->Address());
         std::array<ComPtr<ID3D12Resource>,3> guides;hp.Type=D3D12_HEAP_TYPE_DEFAULT;
@@ -51,8 +53,8 @@ int main(){
             D3D12_SHADER_RESOURCE_VIEW_DESC srv{};srv.Format=td.Format;srv.ViewDimension=D3D12_SRV_DIMENSION_TEXTURE2D;srv.Shader4ComponentMapping=D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;srv.Texture2D.MipLevels=1;device->CreateShaderResourceView(guides[i].Get(),&srv,handles[i]);}
         void* mapped=nullptr;const D3D12_RANGE none{};assert(SUCCEEDED(upload->Map(0,&none,&mapped)));std::memset(mapped,0,8192);
         for(UINT y=0;y<8;++y)for(UINT x=0;x<8;++x){
-            const float normal[]={.5f,.5f,.5f,0},material[]={0,0,0,iteration==2?1.0f:0.0f},depth[]={iteration==3?.7f:.5f,0,0,0};
-            const float radiance=(iteration==0||iteration==6)?1.0f:(iteration>=7?0.0f:((x+y)%2?2.0f:0.0f));const float pixel[]={radiance,radiance,radiance,(x==0&&y==0)?0.0f:1.0f};
+            const float normal[]={(iteration==10||(iteration==9&&x%2==0))?.7f:.5f,.5f,.5f,0},material[]={0,0,0,iteration==2?1.0f:0.0f},depth[]={iteration==3?.7f:.5f,0,0,0};
+            const float radiance=iteration==9?2.0f:(iteration==0||iteration==6)?1.0f:(iteration>=7?0.0f:((x+y)%2?2.0f:0.0f));const float pixel[]={radiance,radiance,radiance,(x==0&&y==0)?0.0f:1.0f};
             auto* bytes=static_cast<unsigned char*>(mapped);std::memcpy(bytes+y*256+x*16,normal,16);std::memcpy(bytes+2048+y*256+x*16,material,16);std::memcpy(bytes+4096+y*256+x*16,depth,16);std::memcpy(bytes+6144+(y*8+x)*16,pixel,16);
         }upload->Unmap(0,nullptr);
         ComPtr<ID3D12CommandAllocator> allocator;ComPtr<ID3D12GraphicsCommandList> list;assert(SUCCEEDED(device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT,IID_PPV_ARGS(&allocator))));assert(SUCCEEDED(device->CreateCommandList(0,D3D12_COMMAND_LIST_TYPE_DIRECT,allocator.Get(),nullptr,IID_PPV_ARGS(&list))));
@@ -67,17 +69,24 @@ int main(){
         b.Transition={output->Texture(),0,readState,D3D12_RESOURCE_STATE_COPY_SOURCE};list->ResourceBarrier(1,&b);list->CopyBufferRegion(readback.Get(),0,output->Texture(),0,2048);std::swap(b.Transition.StateBefore,b.Transition.StateAfter);list->ResourceBarrier(1,&b);
         assert(SUCCEEDED(list->Close()));ID3D12CommandList* lists[]={list.Get()};queue->ExecuteCommandLists(1,lists);assert(output->NativeSubmitted(queue.Get()));assert(raw->NativeSubmitted(queue.Get()));if(previous)assert(previous->NativeSubmitted(queue.Get()));
         assert(SUCCEEDED(queue->Signal(fence.Get(),iteration+1)));assert(SUCCEEDED(fence->SetEventOnCompletion(iteration+1,event)));assert(WaitForSingleObject(event,10000)==WAIT_OBJECT_0);
-        std::array<UINT,7> historyCounters{};assert(run->metrics.ReadReconstruction(historyCounters));
+        std::array<UINT,10> historyCounters{};assert(run->metrics.ReadReconstruction(historyCounters));
         const bool active=iteration!=4&&iteration!=5;
-        const bool accepted=iteration==1||iteration==7||iteration==8;
+        const bool accepted=iteration==1||iteration==7||iteration==8||iteration==10;
         assert(historyCounters[0]==(active?1u:0u));
         assert(historyCounters[5]==(accepted?1u:0u));
         assert(historyCounters[6]==(accepted?(iteration==8?3u:2u):0u));
+        if(iteration==10)assert(historyCounters[9]==1); // Nearest normal fails; right tap is valid.
         const D3D12_RANGE read{0,2048};assert(SUCCEEDED(readback->Map(0,&read,&mapped)));
         double errorSum=0;
         for(UINT i=0;i<64;++i){const auto* pixel=static_cast<const float*>(mapped)+i*8;
             if(i==0||iteration==4||iteration==5){for(UINT channel=0;channel<8;++channel)assert(pixel[channel]==0);continue;}
             assert(pixel[3]==1&&std::isfinite(pixel[0])&&pixel[0]>=0&&pixel[0]<=2);
+            if(iteration>=9){
+                const bool reused=iteration==10&&i%8!=7;
+                assert(std::abs(pixel[7]-(reused?2.0f:1.0f))<1e-5f);
+                assert(std::abs(pixel[0]-(iteration==9?2.0f:(reused?1.0f:0.0f)))<1e-5f);
+                continue;
+            }
             assert(std::abs(pixel[7]-(iteration==1||iteration==7?2.0f:(iteration==8?3.0f:1.0f)))<1e-5f);
             if(iteration==0||iteration==6)assert(std::abs(pixel[0]-1)<1e-5f);
             if(iteration==7)assert(std::abs(pixel[0]-.5f)<1e-5f);
@@ -88,5 +97,5 @@ int main(){
         readback->Unmap(0,&none);assert(output->Completed());previous=output;previousView=view;
     }
     previous.reset();Output::TrimIdle();CloseHandle(event);assert(SUCCEEDED(device->GetDeviceRemovedReason()));
-    puts("PASS: raw-buffer initialization, spatial noise reduction, temporal accumulation, material/depth rejection, resolution/cut reset, zero coverage and rejected/probe admission");
+    puts("PASS: raw-buffer initialization, spatial noise reduction, temporal accumulation, material/depth rejection, resolution/cut reset, zero coverage and rejected/probe admission, subpixel camera motion with incompatible nearest and valid neighboring history");
 }

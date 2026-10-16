@@ -237,3 +237,21 @@ of the existing metrics buffer and sample one pixel per64x64 block.
 Reference: Bitterli et al., Spatiotemporal Reservoir Resampling (2020),
 https://research.nvidia.com/labs/rtr/publication/bitterli2020spatiotemporal/ .
 The local initial-resampling idea is used; cross-pixel/frame reservoirs are not.
+
+### M12R73: reconstruction evidence and bounded correction
+
+R72 result bundle `PT-Primary-M12R72-Results-20261016-062112-797.zip`
+reports history=1 with consecutive frames, yet frame 2519 loses 1899 of 1994
+covered samples at the combined material/normal gate. Frame 3280 loses 1855 of
+1913. This identifies where accumulation is lost, not which gate is responsible.
+Do not infer a CPU bottleneck, dynamic material renumbering, or missing emitters
+from these counters. The accompanying video shows substantial grain on walls.
+
+Nearest-only reprojection has a reproducible subpixel failure: the closest old
+normal can disagree while another bilinear tap agrees. M12R73 validates four
+taps independently and renormalizes survivors, preserving the existing rejection
+thresholds. A WARP fixture translates the camera by a quarter texel over alternating
+normals; it requires recovered history where the nearest sample fails and rejects
+the edge where no compatible tap exists. Split material/normal counters and a
+rescued-pixel count distinguish this correction's effect from remaining failures.
+No claim of in-game resolution or restored missing lighting is made.
