@@ -2,6 +2,7 @@
 #include "pt_scene_pipeline.h"
 #include "pt_scene_leases.h"
 #include "pt_upload_pool.h"
+#include "pt_callable_table.h"
 // A complete, immutable private SBT prepared on the CPU before recording rays.
 // Native asynchronous writer pointers are never referenced by this object.
 namespace PTScenePipeline {
@@ -21,7 +22,7 @@ public:
         const auto heapDesc=descriptors->GetDesc();
         if(heapDesc.Type!=D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV||!(heapDesc.Flags&D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE))return E_INVALIDARG;
         auto pending=std::make_shared<Dispatch>();pending->pipeline=p;pending->heap=descriptors;pending->geometry=plan.keepAlive;
-        const UINT64 hitBytes=UINT64(plan.records.size())*Pipeline::HitStride,totalBytes=128+hitBytes;
+        const UINT64 hitBytes=UINT64(plan.records.size())*Pipeline::HitStride,totalBytes=PTCallableTable::Bytes(plan.records.size(),p->HasCallable());
         HRESULT hr=PTUploadPool::Buffer::Acquire(device,totalBytes,pending->tableStorage);
         if(FAILED(hr))return hr;
         pending->table=pending->tableStorage->Resource();
@@ -30,10 +31,14 @@ public:
         std::memcpy(data,p->RayGeneration().data(),32);std::memcpy(data+64,p->SurfaceMiss().data(),32);std::memcpy(data+96,p->ShadowMiss().data(),32);
         static_assert(sizeof(PTShaderTableAdapter::Bytes)==Pipeline::HitStride,"private hit-table stride");
         std::memcpy(data+128,plan.records.data(),static_cast<std::size_t>(hitBytes));
+        if(p->HasCallable()){
+            std::memset(data+128+hitBytes,0,64);std::memcpy(data+128+hitBytes,p->Callable().data(),32);
+        }
         const D3D12_RANGE written{0,static_cast<SIZE_T>(totalBytes)};pending->table->Unmap(0,&written);
         const auto address=pending->table->GetGPUVirtualAddress();
         pending->rays.RayGenerationShaderRecord={address,32};pending->rays.MissShaderTable={address+64,64,32};
         pending->rays.HitGroupTable={address+128,hitBytes,Pipeline::HitStride};
+        if(p->HasCallable())pending->rays.CallableShaderTable={address+PTCallableTable::Offset(plan.records.size()),PTCallableTable::RecordBytes,PTCallableTable::RecordBytes};
         pending->rays.Width=width;pending->rays.Height=height;pending->rays.Depth=1;
         output=std::move(pending);return S_OK;
     }

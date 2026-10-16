@@ -1,7 +1,8 @@
 // Private full-surface path producer for the reviewed primary lighting pass.
 // Host supplies an immutable scene/SBT, cloned primary table, same-frame native
 // environment at t34 and TLAS at t35. Validated standard-output pixels add
-// diffuse-first indirect transport to the native specular buffer. Never bind to a native 4-byte payload state object.
+// separate diffuse/specular transport for reviewed raster composition (or the
+// legacy additive variant). Never bind to a native 4-byte payload state object.
 #define PT_GEOMETRY_SPAWN 1
 #define PT_SCENE_MATERIAL_REGISTER t8
 #include "pt_scene_hits.hlsl"
@@ -13,6 +14,10 @@
 #define PT_PATH_PRIMARY_INDIRECT 1
 #endif
 #define PT_PATH_PRIMARY_SHADING_NORMAL 1
+#ifdef PT_PRIMARY_SURFACE_REPLACEMENT
+#define PT_PATH_TERMINAL_GI 1
+#include "pt_terminal_gi_callable.hlsli"
+#endif
 #include "pt_path_integrator.hlsli"
 #include "pt_light_reservoir.hlsli"
 #ifdef PT_PRIMARY_SURFACE_REPLACEMENT
@@ -169,6 +174,7 @@ void PTPrimaryPathRayGeneration(){
     // Keep the first two continuations before roulette to reduce reflection variance.
     PTPathResult result=PTIntegratePathFirst(ray,4,3,seed,.001,first,1,0);
     PTMeasure(5,pixel);
+    if(result.terminalGIPositive!=0&&((pixel.x|pixel.y)&63)==0){uint old;PTMetrics.InterlockedAdd(96,1,old);}
     // The legacy variant adds diffuse-first indirect. The replacement variant
     // includes primary direct and both continuation lobes, and writes complete
     // material-weighted surface radiance. Primary emission stays in the native

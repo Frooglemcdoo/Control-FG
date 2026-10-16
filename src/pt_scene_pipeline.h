@@ -11,14 +11,19 @@ class Pipeline {
     ComPtr<ID3D12StateObject> state;
     ComPtr<ID3D12StateObjectProperties> properties;
     std::array<PTShaderTableAdapter::Identifier,4> hits{};
-    PTShaderTableAdapter::Identifier raygen{},surfaceMiss{},shadowMiss{};
+    PTShaderTableAdapter::Identifier raygen{},surfaceMiss{},shadowMiss{},callable{};
+    bool hasCallable=false;
     bool Identifier(const wchar_t* name,PTShaderTableAdapter::Identifier& result){
         const void* id=properties->GetShaderIdentifier(name);if(!id)return false;std::memcpy(result.data(),id,result.size());return true;
     }
 public:
     static constexpr UINT PayloadBytes=60,AttributeBytes=8,HitStride=128;
-    HRESULT Initialize(ID3D12Device5* device,ID3D12RootSignature* root,const void* bytes,std::size_t size,const wchar_t* rayGeneration){
+    const char* failureStage="not_started";HRESULT deviceBefore=S_OK,deviceAfter=S_OK;
+    HRESULT Initialize(ID3D12Device5* device,ID3D12RootSignature* root,const void* bytes,std::size_t size,const wchar_t* rayGeneration,const wchar_t* callableName=nullptr){
         if(state||!device||!root||!bytes||!size||!rayGeneration)return E_INVALIDARG;
+        failureStage="device_before_initialize";deviceBefore=device->GetDeviceRemovedReason();deviceAfter=deviceBefore;
+        if(FAILED(deviceBefore))return deviceBefore;
+        failureStage="serialize_local_root";
         D3D12_ROOT_PARAMETER params[4]{};
         for(UINT i=0;i<3;++i){params[i].ParameterType=D3D12_ROOT_PARAMETER_TYPE_SRV;params[i].Descriptor={i,3};}
         params[3].ParameterType=D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;params[3].Constants={0,3,12};
@@ -26,7 +31,8 @@ public:
         ComPtr<ID3DBlob> serialized,error;
         HRESULT hr=D3D12SerializeRootSignature(&desc,D3D_ROOT_SIGNATURE_VERSION_1,&serialized,&error);if(FAILED(hr))return hr;
         ComPtr<ID3D12RootSignature> createdLocal;
-        hr=device->CreateRootSignature(0,serialized->GetBufferPointer(),serialized->GetBufferSize(),IID_PPV_ARGS(&createdLocal));if(FAILED(hr))return hr;
+        failureStage="create_local_root";
+        hr=device->CreateRootSignature(0,serialized->GetBufferPointer(),serialized->GetBufferSize(),IID_PPV_ARGS(&createdLocal));if(FAILED(hr)){deviceAfter=device->GetDeviceRemovedReason();return hr;}
         const wchar_t* names[]={L"SurfaceOpaque",L"ShadowOpaque",L"SurfaceAlpha",L"ShadowAlpha"};
         D3D12_HIT_GROUP_DESC groups[4]{};
         for(UINT i=0;i<4;++i){groups[i].HitGroupExport=names[i];groups[i].Type=D3D12_HIT_GROUP_TYPE_TRIANGLES;
@@ -45,15 +51,25 @@ public:
         objects[8]={D3D12_STATE_SUBOBJECT_TYPE_SUBOBJECT_TO_EXPORTS_ASSOCIATION,&association};
         objects[9]={D3D12_STATE_SUBOBJECT_TYPE_RAYTRACING_PIPELINE_CONFIG,&pipeline};
         const D3D12_STATE_OBJECT_DESC stateDesc{D3D12_STATE_OBJECT_TYPE_RAYTRACING_PIPELINE,10,objects};
-        ComPtr<ID3D12StateObject> candidate;hr=device->CreateStateObject(&stateDesc,IID_PPV_ARGS(&candidate));if(FAILED(hr))return hr;
+        failureStage="device_before_state_object";deviceBefore=device->GetDeviceRemovedReason();deviceAfter=deviceBefore;
+        if(FAILED(deviceBefore))return deviceBefore;
+        failureStage="create_state_object";
+        ComPtr<ID3D12StateObject> candidate;hr=device->CreateStateObject(&stateDesc,IID_PPV_ARGS(&candidate));
+        deviceAfter=device->GetDeviceRemovedReason();if(FAILED(hr))return hr;
+        failureStage="state_object_properties";
         hr=candidate.As(&properties);if(FAILED(hr))return hr;
+        failureStage="shader_identifiers";
         bool valid=Identifier(rayGeneration,raygen)&&Identifier(L"PTSceneMiss",surfaceMiss)&&Identifier(L"PTVisibilityMiss",shadowMiss);
         for(UINT i=0;i<4;++i)valid=valid&&Identifier(names[i],hits[i]);
+        if(callableName)valid=valid&&Identifier(callableName,callable);
         if(!valid){properties.Reset();return E_FAIL;}
+        hasCallable=callableName!=nullptr;failureStage="ready";
         state=std::move(candidate);global=root;local=std::move(createdLocal);return S_OK;
     }
     ID3D12StateObject* State()const{return state.Get();}
     ID3D12RootSignature* Root()const{return global.Get();}
+    bool HasCallable()const{return hasCallable;}
+    const PTShaderTableAdapter::Identifier& Callable()const{return callable;}
     const PTShaderTableAdapter::Identifier& RayGeneration()const{return raygen;}
     const PTShaderTableAdapter::Identifier& SurfaceMiss()const{return surfaceMiss;}
     const PTShaderTableAdapter::Identifier& ShadowMiss()const{return shadowMiss;}

@@ -1,3 +1,10 @@
+# Abandoned recovery proposal — not delivered
+
+The user explicitly rejected a rollback before this package was delivered.
+This document records the abandoned recovery proposal only. The actual R88
+build retains GI and separates its lookup into a callable shader; see
+R88-CALLABLE-GI.md. Do not describe the actual R88 package as R86 recovery.
+
 # R87 device-removal report and recovery
 
 The supplied image image(20261016-183958).png shows:

@@ -1,17 +1,23 @@
-M12R88 - recovery build; R87 terminal GI withdrawn
+M12R88 - separate terminal GI callable shader
 
-Restores the R86 primary runtime, integrator and path shader. Removes R87's GI
-resource capture, descriptor remapping, constant uploads and terminal lookup
-from production. This is a rollback, not another lighting or performance fix.
-The previous missing-light, reflection and flicker limitations remain.
+GI remains enabled. Its volume lookup is now a separate DXR callable shader,
+invoked once after the tracing loop finishes, with the same terminal position,
+normal and throughput. This removes the GI tree walker from the ray-generation
+shader compiled around TraceRay. No new rays, full-screen passes or per-pixel
+buffers. The callable adds64 bytes to each shader table and incurs scheduling
+and stack overhead; performance is not yet measured.
 
-The reported R87 dialog says Device Removed, with CreateCommittedResource
-reporting an already-removed device. That message does not identify the first
-failing GPU operation or prove a VRAM shortage. The R87 log records device removal during private PT pipeline creation, before
-any PT dispatch was submitted. The first GPU fault is still undetermined. The isolated GI test did not validate the live game's resource
-states, lifetime or queue ownership; it was insufficient to ship R87 safely.
-The GI implementation remains isolated reference code and is not included by the
-production shader. It must not be re-enabled solely on the strength of WARP tests.
+The R87 capture shows device removal during PT pipeline initialization before
+any private PT dispatch was submitted. It cannot show a GI traversal GPU fault
+because that work did not run. This build targets the changed pipeline structure,
+but a driver/compiler cause is not proven. Each creation stage now reports the
+removed-device reason before/after failure, plus a successful private-pipeline
+marker, so another failure can be localized instead of collapsed into one HRESULT.
 
-Close Control, replace ALL package files, and preserve your settings.
+Validation: shader compilation and callable export/call inspection, callable-table
+alignment/bounds tests, GI arithmetic on WARP, and existing regression gates.
+The CI host cannot validate NVIDIA DXR pipeline creation or in-game appearance.
+Existing missing-light/reflection/flicker limitations remain under investigation.
+
+Close Control and replace ALL package files while preserving settings.
 Do not rerun PT-Enable. Use Collect-PT-Primary-M12R88.cmd after gameplay.
