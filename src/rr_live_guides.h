@@ -264,7 +264,9 @@ static void RRLiveBeforeImpl(ID3D12GraphicsCommandList* list,const control_rr::L
         if(!c->policy.CommandsStarted(lease)){c->policy.Abort(lease);RRLiveReleaseSources(s);__leave;}
         DWORD fault=0;const auto perf=RRPerfBegin(in,RRPerfStage::LiveGuides);
         if(!RRLiveRecord(c,&s,&in,&constants,&fault)){
-            c->policy.Abort(lease);RRLiveReleaseSources(s);c->stopped=true;
+            // A partial recording may already reference PT and native inputs.
+            // The stopped owner is retained; do not release those sources here.
+            c->policy.Abort(lease);c->stopped=true;
             Log("RR_G12_LIVE_STOP reason=recording_fault fault=0x%08lX resources_retained=1 stage=guide_generation architecture=renodx_descriptor_parity",fault);__leave;
         }
         // r21t retains the one-shot, stats-only readback of the exact owned guide textures
