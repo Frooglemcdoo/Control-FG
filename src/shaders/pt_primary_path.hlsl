@@ -16,6 +16,7 @@
 #define PT_PATH_PRIMARY_SHADING_NORMAL 1
 #ifdef PT_PRIMARY_SURFACE_REPLACEMENT
 #define PT_PATH_TERMINAL_GI 1
+#define PT_PATH_PRIMARY_LIGHT 1
 #include "pt_terminal_gi_request.hlsli"
 #endif
 #include "pt_path_integrator.hlsli"
@@ -83,7 +84,7 @@ float3 PTPathEnvironment(float3 direction){
     // inside path sampling. Native specular environment scale is b2 byte244.
     return PTEnvironment.SampleLevel(PTEnvironmentSampler,direction,0).rgb*PTPrimaryLightWords[15].y;
 }
-bool PTPathLight(PTPathSurface surface,float3 outgoingWorld,inout uint rng,out PTDirectSample light,out uint visibility){
+bool PTPathLightCandidates(PTPathSurface surface,float3 outgoingWorld,uint primary,inout uint rng,out PTDirectSample light,out uint visibility){
     light=(PTDirectSample)0;visibility=1;
     PTPrimaryLightSample native;
 #ifdef PT_PRIMARY_SURFACE_REPLACEMENT
@@ -94,8 +95,14 @@ bool PTPathLight(PTPathSurface surface,float3 outgoingWorld,inout uint rng,out P
     float3 tangent=normalize(cross(abs(n.z)<0.9?float3(0,0,1):float3(0,1,0),n));
     float3 bitangent=cross(n,tangent);
     float3 wo=float3(dot(outgoingWorld,tangent),dot(outgoingWorld,bitangent),dot(outgoingWorld,n));
-    [loop] for(uint candidateIndex=0;candidateIndex<4;++candidateIndex){
-        PTPrimaryLightSample candidate;PTSamplePrimaryLight(positionView,PTPathRandom(rng),candidate);
+    uint3 counts=asuint(PTPrimaryLightWords[16].xyz);
+    // Invalid counts still flow through the authenticated sampler's rejection.
+    uint total=counts.x<=65535&&counts.y<=65535&&counts.z<=1?counts.x+counts.y+counts.z:0;
+    uint candidates=PTLightCandidateCount(total,primary);
+    [loop] for(uint candidateIndex=0;candidateIndex<candidates;++candidateIndex){
+        float random=PTPathRandom(rng);
+        float choose=PTLightCandidateChoose(total,primary,candidateIndex,random);
+        PTPrimaryLightSample candidate;PTSamplePrimaryLight(positionView,choose,candidate);
         if(candidate.valid==0){native.valid=0;break;}
         // No lights is a valid zero estimator; do not pass a zero PDF to RIS.
         if(candidate.selectionPdf==0)break;
@@ -132,6 +139,14 @@ bool PTPathLight(PTPathSurface surface,float3 outgoingWorld,inout uint rng,out P
     TraceRay(PTScene,RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH,1,1,2,1,shadow,result);
     visibility=result.status;return true;
 }
+bool PTPathLight(PTPathSurface surface,float3 outgoingWorld,inout uint rng,out PTDirectSample light,out uint visibility){
+    return PTPathLightCandidates(surface,outgoingWorld,0,rng,light,visibility);
+}
+#ifdef PT_PATH_PRIMARY_LIGHT
+bool PTPathPrimaryLight(PTPathSurface surface,float3 outgoingWorld,inout uint rng,out PTDirectSample light,out uint visibility){
+    return PTPathLightCandidates(surface,outgoingWorld,1,rng,light,visibility);
+}
+#endif
 [shader("raygeneration")]
 void PTPrimaryPathRayGeneration(){
     uint2 pixel=DispatchRaysIndex().xy;

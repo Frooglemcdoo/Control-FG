@@ -19,6 +19,9 @@ PTPathSurface PTPathDecodePrimary(PTSceneHit hit,RayDesc ray);
 float3 PTPathEnvironment(float3 direction);
 bool PTPathLight(PTPathSurface surface, float3 outgoingWorld, inout uint rng, out PTDirectSample light, out uint visibility);
 
+#ifdef PT_PATH_PRIMARY_LIGHT
+bool PTPathPrimaryLight(PTPathSurface surface,float3 outgoingWorld,inout uint rng,out PTDirectSample light,out uint visibility);
+#endif
 uint PTPathRandomBits(inout uint state) {
     state ^= state << 13; state ^= state >> 17; state ^= state << 5; return state;
 }
@@ -84,7 +87,15 @@ PTPathResult PTIntegratePathFirst(RayDesc ray,uint maxHits,uint rouletteStart,ui
 #ifdef PT_PATH_PRIMARY_INDIRECT
         sampleDirect=depth!=0||useFirst==0;
 #endif
-        if(sampleDirect&&PTPathLight(surface,-ray.Direction,rng,light,visibility)) {
+        bool hasLight=false;
+        if(sampleDirect){
+#ifdef PT_PATH_PRIMARY_LIGHT
+            if(depth==0&&useFirst!=0)hasLight=PTPathPrimaryLight(surface,-ray.Direction,rng,light,visibility);
+            else
+#endif
+            hasLight=PTPathLight(surface,-ray.Direction,rng,light,visibility);
+        }
+        if(hasLight) {
             if(light.delta!=1||visibility>1){path.valid=0;result.fault=visibility==3?14:6;break;}
             light.wi=float3(dot(light.wi,tangent),dot(light.wi,bitangent),dot(light.wi,n));
             PTDirectResult direct=PTEvaluateDirect(surface.material,wo,light,visibility);

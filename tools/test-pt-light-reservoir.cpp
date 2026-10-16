@@ -33,6 +33,34 @@ int main(){
         visibleMean+=selected/PTLightDenominator(q);
     }
     visibleMean/=runs;assert(std::abs(visibleMean-6)<.04);
+    // Complete primary enumeration: a single contributing light must never
+    // disappear, regardless of its position in a sparse native light list.
+    for(uint total: {1u,2u,37u,64u})for(uint bright=0;bright<total;++bright){
+        for(uint trial=0;trial<20;++trial){auto q=empty;float chosen=0;
+            assert(PTLightCandidateCount(total,1)==total);
+            for(uint c=0;c<PTLightCandidateCount(total,1);++c){
+                uint selected=uint(PTLightCandidateChoose(total,1,c,Random())*total);
+                assert(selected==c);float target=selected==bright?10.f:0.f;
+                q=PTAddLightCandidate(q,target,1.f/float(total),Random(),c);
+                if(q.target>0&&q.selected==c)chosen=target;
+            }
+            assert(std::abs(chosen/PTLightDenominator(q)-10.f)<1e-4f);
+        }
+    }
+    assert(PTLightCandidateCount(0,1)==4&&PTLightCandidateCount(65,1)==4);
+    assert(PTLightCandidateCount(37,0)==4);
+    assert(PTLightCandidateChoose(65,1,2,.37f)==.37f);
+    // Enumeration preserves colored, shadowed energy. Bright occluded light
+    // remains eligible; never discard/reselect it after the shadow test.
+    double rgb[3]={};const float emission[4][3]={{9,1,2},{1,7,3},{0,0,0},{3,2,8}};
+    for(unsigned trial=0;trial<runs;++trial){auto q=empty;
+        for(uint c=0;c<4;++c){float target=emission[c][0]*.2126f+emission[c][1]*.7152f+emission[c][2]*.0722f;
+            q=PTAddLightCandidate(q,target,.25f,Random(),c);}
+        float denominator=PTLightDenominator(q);
+        if(q.selected!=0)for(uint c=0;c<3;++c)rgb[c]+=emission[q.selected][c]/denominator;
+    }
+    for(uint c=0;c<3;++c){rgb[c]/=runs;assert(std::abs(rgb[c]-(emission[1][c]+emission[3][c]))<.05);}
+    puts("PASS: primary enumeration has zero sparse-light dropouts for 1..64 lights, preserves colored/occluded energy, bounds fallback cost");
     // Equal-brightness lights, one aligned with a narrow specular lobe.
     // Old incident*cos weights ignore that lobe. Use identical proposals and
     // reservoir random numbers for both estimators; compare means to exact sum.
