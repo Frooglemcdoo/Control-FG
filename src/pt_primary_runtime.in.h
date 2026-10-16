@@ -24,7 +24,8 @@ static std::atomic<bool> active{false};
 static bool transportValidated=false;
 static unsigned transportGoodFrames=0;
 static std::recursive_mutex mutex;
-static std::vector<unsigned char> library;
+static std::vector<unsigned char> library,giComputeLibrary;
+static std::map<ID3D12RootSignature*,ComPtr<ID3D12PipelineState>> giPipelines;
 static std::shared_ptr<PTSurfaceComposition::ReconstructionPipeline> reconstructionPipeline;
 static std::shared_ptr<Output> historyOutput;
 static View historyView;
@@ -103,6 +104,7 @@ struct Environment {
 static std::vector<std::shared_ptr<Environment>> environments;
 struct Assets {
     PTPrimaryMetrics::Counters metrics;
+    ComPtr<ID3D12PipelineState> giPipeline;
     std::array<double,12> cpuCosts{}; // prepare, lease, SBT, camera, metrics, record
     std::shared_ptr<PTUploadPool::Buffer> cameraStorage;
     ComPtr<ID3D12Resource> camera;View boundView;
@@ -222,7 +224,22 @@ static bool Encode(void* context,ID3D12GraphicsCommandList* list,ID3D12Resource*
     a.metrics.Begin(list,counter);
     list->SetComputeRootConstantBufferView(2,a.camera->GetGPUVirtualAddress());
     list->SetComputeRootConstantBufferView(4,a.camera->GetGPUVirtualAddress()+1280);
+    D3D12_RESOURCE_BARRIER requestBarrier{};requestBarrier.Type=D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    if(surfaceReplacement)for(auto* resource:{a.reconstruction->signals->resource.Get(),a.reconstruction->scratch->resource.Get()}){
+        requestBarrier.Transition={resource,0,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,D3D12_RESOURCE_STATE_UNORDERED_ACCESS};list->ResourceBarrier(1,&requestBarrier);
+    }
     const bool recorded=a.dispatch->Record(rays.Get(),a.bindings.layout->Root(),a.bindings.pipeline.Get(),{a.bindings.arguments[0].value},Gpu(a.privateTable));
+    if(surfaceReplacement){
+        list->ResourceBarrier(1,&ordered); // Ray-written requests/raw signals before compute reads.
+        if(recorded){
+            list->SetPipelineState(a.giPipeline.Get());list->SetComputeRootDescriptorTable(0,Gpu(a.privateTable));
+            list->Dispatch((a.boundView.width+7)/8,(a.boundView.height+7)/8,1);
+            list->SetComputeRootDescriptorTable(0,{a.bindings.arguments[0].value});list->SetPipelineState(a.bindings.pipeline.Get());
+        }
+        for(auto* resource:{a.reconstruction->signals->resource.Get(),a.reconstruction->scratch->resource.Get()}){
+            requestBarrier.Transition={resource,0,D3D12_RESOURCE_STATE_UNORDERED_ACCESS,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE};list->ResourceBarrier(1,&requestBarrier);
+        }
+    }
     list->SetComputeRootConstantBufferView(2,a.bindings.arguments[2].value);
     list->SetComputeRootConstantBufferView(4,a.bindings.arguments[4].value);
     list->ResourceBarrier(1,&ordered); // Surface consumers observe both committed outputs.
@@ -394,12 +411,22 @@ static void Dispatched(void*,ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT 
         descriptorLock.reset();
         LARGE_INTEGER descriptorReleased{},descriptorReacquire{},descriptorAcquired{};
         QueryPerformanceCounter(&descriptorReleased);
+        if(surfaceReplacement){
+            auto& gi=giPipelines[bindings.layout->Root()];
+            if(!gi){
+                D3D12_COMPUTE_PIPELINE_STATE_DESC desc{};desc.pRootSignature=bindings.layout->Root();desc.CS={giComputeLibrary.data(),giComputeLibrary.size()};
+                const HRESULT hr=device->CreateComputePipelineState(&desc,IID_PPV_ARGS(&gi));
+                if(FAILED(hr)){Log("PT_PRIMARY_GI_COMPUTE_FAILED hr=0x%08lX device_reason=0x%08lX",static_cast<unsigned long>(hr),static_cast<unsigned long>(device->GetDeviceRemovedReason()));return;}
+                Log("PT_PRIMARY_GI_COMPUTE_READY scratch_reuse=1 extra_allocations=0");
+            }
+            a->giPipeline=gi;
+        }
         auto& pipeline=privatePipelines[bindings.layout->Root()];
         if(!pipeline){
             if(privatePipelines.size()>8){Reject("pipeline_budget");return;}ComPtr<ID3D12Device5> rayDevice;
             if(FAILED(device.As(&rayDevice)))return;auto p=std::make_shared<PTScenePipeline::Pipeline>();
-            const HRESULT hr=p->Initialize(rayDevice.Get(),bindings.layout->Root(),library.data(),library.size(),L"PTPrimaryPathRayGeneration",surfaceReplacement?L"PTTerminalGICallable":nullptr);
-            if(FAILED(hr)){Log("PT_PRIMARY_PIPELINE_FAILED hr=0x%08lX stage=%s device_before=0x%08lX device_after=0x%08lX terminal_gi_callable=%u",static_cast<unsigned long>(hr),p->failureStage,static_cast<unsigned long>(p->deviceBefore),static_cast<unsigned long>(p->deviceAfter),unsigned(surfaceReplacement));return;}
+            const HRESULT hr=p->Initialize(rayDevice.Get(),bindings.layout->Root(),library.data(),library.size(),L"PTPrimaryPathRayGeneration",nullptr);
+            if(FAILED(hr)){Log("PT_PRIMARY_PIPELINE_FAILED hr=0x%08lX stage=%s device_before=0x%08lX device_after=0x%08lX terminal_gi_callable=%u",static_cast<unsigned long>(hr),p->failureStage,static_cast<unsigned long>(p->deviceBefore),static_cast<unsigned long>(p->deviceAfter),0u);return;}
             Log("PT_PRIMARY_PRIVATE_PIPELINE_READY terminal_gi_callable=%u",unsigned(p->HasCallable()));pipeline=std::move(p);
         }
         PTNativeShaderTable::Identifiers identifiers;PTSceneDispatch::ExportSet exports;
@@ -436,7 +463,8 @@ static void Dispatched(void*,ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT 
         if(FAILED(a->camera->Map(0,&noRead,&cameraData))||!cameraData){Reject("camera_map");return;}
         std::memcpy(cameraData,view.bytes.data(),view.bytes.size());
         std::memcpy(static_cast<unsigned char*>(cameraData)+1280,a->lightConstants.data(),a->lightConstants.size());
-        std::memcpy(static_cast<unsigned char*>(cameraData)+1792,environment->giConstants.data(),64);a->camera->Unmap(0,nullptr);
+        std::memcpy(static_cast<unsigned char*>(cameraData)+1792,environment->giConstants.data(),64);
+        const UINT giExtent[]={view.width,view.height};std::memcpy(static_cast<unsigned char*>(cameraData)+1848,giExtent,8);a->camera->Unmap(0,nullptr);
         profile.Next(PTHotpathTiming::Kind::primary_metrics);QueryPerformanceCounter(&metricsStart);
         if(!a->metrics.Initialize(device.Get())){Reject("coverage_allocation");return;}
         QueryPerformanceCounter(&descriptorReacquire);
@@ -473,6 +501,14 @@ static void Dispatched(void*,ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT 
                     Log("PT_PRIMARY_RECONSTRUCTION_FAILED frame=%u stage=%s hr=0x%08lX signal_resident_bytes=%llu signal_idle_bytes=%llu signal_budget_bytes=%llu budget_failures=%llu device_failures=%llu",view.frame,a->reconstruction->failure,static_cast<unsigned long>(a->reconstruction->failureHr),pool.residentBytes,pool.idleBytes,PTSurfaceComposition::SignalStorage::MaximumBytes,pool.budgetFailures,pool.deviceFailures);
                 Reject("surface_reconstruction_setup");return;
             }
+        }
+        if(surfaceReplacement){
+            // Reuse reconstruction's two 32-byte/pixel buffers before filtering.
+            // They retain the same fence-owned lifetime; no new image allocation.
+            D3D12_UNORDERED_ACCESS_VIEW_DESC uav{};uav.Format=DXGI_FORMAT_R32_TYPELESS;uav.ViewDimension=D3D12_UAV_DIMENSION_BUFFER;
+            uav.Buffer.NumElements=view.width*view.height*8;uav.Buffer.Flags=D3D12_BUFFER_UAV_FLAG_RAW;
+            device->CreateUnorderedAccessView(a->reconstruction->signals->resource.Get(),nullptr,&uav,Cpu(a->privateTable,45)); // u4
+            device->CreateUnorderedAccessView(a->reconstruction->scratch->resource.Get(),nullptr,&uav,Cpu(a->privateTable,46)); // u5
         }
         if(nextTicket==UINT64_MAX){Reject("ticket_exhausted");return;}a->ticket=nextTicket++;
         if(!PTSceneLive::owner.Scenes().Mark(list,a->ticket)){Reject("private_scene_cut");return;}
@@ -875,6 +911,7 @@ static bool Start(){
     if(surfaceReplacement){
         std::vector<unsigned char> filter;char filterSha[65]{};bool found=false;
         if(!PTReflectionLoadSidecar(L"pt_surface_reconstruct.dxil","SURFACE_RECONSTRUCTION",filter,filterSha,found))return false;
+        if(!PTReflectionLoadSidecar(L"pt_terminal_gi_compute.dxil","TERMINAL_GI_COMPUTE",giComputeLibrary,filterSha,found))return false;
         reconstructionPipeline=std::make_shared<PTSurfaceComposition::ReconstructionPipeline>();
         if(FAILED(reconstructionPipeline->Initialize(device.Get(),filter.data(),filter.size())))return false;
     }
@@ -892,6 +929,6 @@ static bool Start(){
        !PTCommandBindings::Register(&commandConsumer)||!PTNativeJobRuntime::Register(&Job)||!PTSceneLive::owner.Start(step,true))return false;
     ptReflectionModeObserver.store(&MirrorModeChanged,std::memory_order_release);
     MirrorModeChanged(PTReflectionUserRequested());
-    active=true;Log("PT_PRIMARY_SESSION_READY build=M12R88 ready=1 hits=4 spp=1 roulette_start=3 material=opaque_general geometric_normals=1 native_fallback=1 primary_lighting=%s transport=%s readiness=per_material graphics_tracking=%u",surfaceReplacement?"pt":"native",surfaceReplacement?"full_surface":"diffuse_indirect",unsigned(compose));return true;
+    active=true;Log("PT_PRIMARY_SESSION_READY build=M12R89 ready=1 hits=4 spp=1 roulette_start=3 material=opaque_general geometric_normals=1 native_fallback=1 primary_lighting=%s transport=%s readiness=per_material graphics_tracking=%u",surfaceReplacement?"pt":"native",surfaceReplacement?"full_surface":"diffuse_indirect",unsigned(compose));return true;
 }
 }

@@ -16,7 +16,7 @@
 #define PT_PATH_PRIMARY_SHADING_NORMAL 1
 #ifdef PT_PRIMARY_SURFACE_REPLACEMENT
 #define PT_PATH_TERMINAL_GI 1
-#include "pt_terminal_gi_callable.hlsli"
+#include "pt_terminal_gi_request.hlsli"
 #endif
 #include "pt_path_integrator.hlsli"
 #include "pt_light_reservoir.hlsli"
@@ -140,7 +140,7 @@ void PTPrimaryPathRayGeneration(){
     // Clear coverage before any depth/material rejection. Admission 0 must not
     // touch resources: replay may refer to an output whose scene was retired.
     // Host initializes the whole output to zero before its first submission.
-    if(admission==1&&!PTClearSurface(pixel,DispatchRaysDimensions().xy))return;
+    if(admission==1&&(!PTClearSurface(pixel,DispatchRaysDimensions().xy)||!PTClearGIRequest(pixel,DispatchRaysDimensions().xy)))return;
 #endif
     PTMeasure(0,pixel);
     uint width,height,g2w,g2h,zw,zh;PTGBuffer1.GetDimensions(width,height);PTGBuffer2.GetDimensions(g2w,g2h);PTClipDepth.GetDimensions(zw,zh);
@@ -188,7 +188,11 @@ void PTPrimaryPathRayGeneration(){
     if(result.valid!=0&&all(isfinite(result.radiance))&&all(result.radiance>=0)){
 #endif
 #ifdef PT_PRIMARY_SURFACE_REPLACEMENT
-        if(admission==2||PTCommitSignals(pixel,uint2(width,height),result,admission))PTMeasure(6,pixel);
+        if(admission==2)PTMeasure(6,pixel);
+        else if(PTCommitSignals(pixel,uint2(width,height),result,admission)){
+            if(result.terminalPending!=0)PTWriteGIRequest(pixel,uint2(width,height),result.terminalPosition,result.terminalNormal,result.terminalWeight,result.terminalFraction);
+            PTMeasure(6,pixel);
+        }
         if(result.valid==0&&((pixel.x|pixel.y)&63)==0){uint old;PTMetrics.InterlockedAdd(36,1,old);}
 #else
         if(admission==2||PTCommitIndirect(pixel,uint2(width,height),result.radiance,admission))PTMeasure(6,pixel);

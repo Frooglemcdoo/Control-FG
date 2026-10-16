@@ -159,6 +159,10 @@ jobs:
           if not "%errorlevel%"=="0" exit /b 1
           build\test-pt-terminal-gi.exe
           if not "%errorlevel%"=="0" exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-pt-terminal-gi-compute.cpp /Febuild\test-pt-terminal-gi-compute.exe /link d3d11.lib d3dcompiler.lib
+          if not "%errorlevel%"=="0" exit /b 1
+          build\test-pt-terminal-gi-compute.exe
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-pt-callable-table.cpp /Febuild\test-pt-callable-table.exe
           if not "%errorlevel%"=="0" exit /b 1
           build\test-pt-callable-table.exe
@@ -395,9 +399,14 @@ jobs:
           & $dxc -dumpbin build/pt_primary_surface.dxil | Set-Content build/pt_primary_surface.dump.txt -Encoding UTF8
           if($LASTEXITCODE -ne 0){throw "Primary callable DXIL inspection failed: $LASTEXITCODE"}
           $surfaceDump=Get-Content build/pt_primary_surface.dump.txt -Raw
-          foreach($required in @('PTTerminalGICallable','dx.op.callShader','PTGIBricks','PTGITop')){
-            if(-not $surfaceDump.Contains($required)){throw "Primary callable contract missing: $required"}
+          foreach($forbidden in @('PTTerminalGICallable','dx.op.callShader','PTGIBricks','PTGITop')){
+            if($surfaceDump.Contains($forbidden)){throw "GI code leaked into DXR: $forbidden"}
           }
+          foreach($required in @('PTGIRequestGeometry','PTGIRequestWeight')){
+            if(-not $surfaceDump.Contains($required)){throw "GI request contract missing: $required"}
+          }
+          & $dxc -T cs_6_0 -E main -HV 2021 -O3 -WX -I src/shaders -Fo build/pt_terminal_gi_compute.dxil src/shaders/pt_terminal_gi_compute.hlsl
+          if($LASTEXITCODE -ne 0){throw "Terminal GI compute compile failed: $LASTEXITCODE"}
           & $dxc -T cs_6_0 -E main -HV 2021 -O3 -WX -I src/shaders -Fo build/pt_surface_reconstruct.dxil src/shaders/pt_surface_reconstruct.hlsl
           if($LASTEXITCODE -ne 0){throw "Surface reconstruction DXC compile failed: $LASTEXITCODE"}
           & $dxc -T lib_6_3 -HV 2021 -O3 -I src/shaders -Fo build/pt_glass_raygen.dxil src/shaders/pt_glass_raygen.hlsl
@@ -488,24 +497,24 @@ jobs:
           dumpbin /exports build\dxgi.dll > build\exports.txt
           dumpbin /imports build\dxgi.dll > build\imports.txt
 
-      - name: Package reconstructed primary PT M12R88
+      - name: Package reconstructed primary PT M12R89
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-PT-Primary-M12R88'
+          $out='Control-FG-PT-Primary-M12R89'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
           Copy-Item build/dxgi.pdb "$out/dxgi.pdb"
           Copy-Item tools/PT-Profile.cmd,tools/PT-Profile.ps1 $out
           Copy-Item tools/PT-Capture-Baseline.cmd,tools/PT-Capture-Restore.cmd,tools/PT-Enable.cmd,tools/PT-Enable.ps1,tools/RT-Only.cmd $out
-          $shaders=@('pt_surface_reconstruct.dxil','pt_primary_surface.dxil','pt_primary_path.dxil','pt_reflection_p1.dxil','pt_reflection_p2.dxil',
+          $shaders=@('pt_surface_reconstruct.dxil','pt_primary_surface.dxil','pt_terminal_gi_compute.dxil','pt_primary_path.dxil','pt_reflection_p1.dxil','pt_reflection_p2.dxil',
             'pt_reflection_p2_composite.dxbc','pt_reflection_p2_verify.dxbc',
             'pt_reflection_p2_local_light_probe.dxbc','pt_reflection_p2_diffuse_bridge.dxbc',
             'pt_glass_raygen.dxil','pt_glass_secondary.dxbc','pt_glass_composite.dxbc')
           foreach($shader in $shaders){Copy-Item "build/$shader" $out}
-          Copy-Item tools/Collect-PT-Primary-M12R88.cmd,tools/Collect-PT-Primary-M12R88.ps1 $out
-          Copy-Item research/pt-reflections/PT-Primary-M12R88-README.txt "$out/README.txt"
-          @{Build='M12R88';Commit=$env:GITHUB_SHA;Run=$env:GITHUB_RUN_ID;Lighting='PT surface replacement with spatial-temporal reconstruction';SurfaceReplacementEnabled=$true;SurfaceBinding='root_buffer';Reconstruction='fresh_current_frame_for_selected_rr_otherwise_split_temporal_spatial';PTDiffuseGuidesEnabled=$true;DirectLightTarget='material_brdf_radiance';PTSpecularGuideAngle='primary_n_dot_v';SurfaceFallbackDiagnostics=$true;EarlySurfaceReservation=$true;NativePrimaryMaterialColor=$true;TerminalDiffuseVolumeCache=$true;TerminalGIExecution='dxr_callable_after_trace_loop';PipelineCreationDiagnostics=$true;ConsumerIsolationEnabled=$true;ObjectMotionSupported=$false;PrimaryCorrespondenceFixed=$false;MissingLightingFixed=$false;NativePassesRetained=$true;PerformanceRedesignComplete=$false;Validation='Windows build and WARP; in-game test pending'} |
+          Copy-Item tools/Collect-PT-Primary-M12R89.cmd,tools/Collect-PT-Primary-M12R89.ps1 $out
+          Copy-Item research/pt-reflections/PT-Primary-M12R89-README.txt "$out/README.txt"
+          @{Build='M12R89';Commit=$env:GITHUB_SHA;Run=$env:GITHUB_RUN_ID;Lighting='PT surface replacement with spatial-temporal reconstruction';SurfaceReplacementEnabled=$true;SurfaceBinding='root_buffer';Reconstruction='fresh_current_frame_for_selected_rr_otherwise_split_temporal_spatial';PTDiffuseGuidesEnabled=$true;DirectLightTarget='material_brdf_radiance';PTSpecularGuideAngle='primary_n_dot_v';SurfaceFallbackDiagnostics=$true;EarlySurfaceReservation=$true;NativePrimaryMaterialColor=$true;TerminalDiffuseVolumeCache=$true;TerminalGIExecution='compute_after_trace_reusing_reconstruction_buffers';PipelineCreationDiagnostics=$true;ConsumerIsolationEnabled=$true;ObjectMotionSupported=$false;PrimaryCorrespondenceFixed=$false;MissingLightingFixed=$false;NativePassesRetained=$true;PerformanceRedesignComplete=$false;Validation='Windows build and WARP; in-game test pending'} |
             ConvertTo-Json | Set-Content "$out/Build.json" -Encoding UTF8
           Get-ChildItem -LiteralPath $out -File | Sort-Object Name | ForEach-Object {
             '{0}  {1}' -f (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant(),$_.Name
@@ -516,10 +525,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-PT-Primary-M12R88
+          name: Control-FG-PT-Primary-M12R89
           path: |
-            Control-FG-PT-Primary-M12R88.zip
-            Control-FG-PT-Primary-M12R88.sha256
+            Control-FG-PT-Primary-M12R89.zip
+            Control-FG-PT-Primary-M12R89.sha256
             build/exports.txt
             build/imports.txt
             build/pt_reflection_p1.dxil

@@ -23,7 +23,11 @@ uint PTPathRandomBits(inout uint state) {
     state ^= state << 13; state ^= state >> 17; state ^= state << 5; return state;
 }
 float PTPathRandom(inout uint state) { return (PTPathRandomBits(state)>>8)*(1.0/16777216.0); }
-struct PTPathResult { float3 radiance; uint hits; uint valid; uint fault; uint primaryValid; uint terminalGIPositive; float3 diffuse,specular,kd,f0; float roughness,hitDistance,primaryViewCosine; };
+struct PTPathResult { float3 radiance; uint hits; uint valid; uint fault; uint primaryValid; uint terminalGIPositive;
+#ifdef PT_PATH_TERMINAL_GI
+float3 terminalPosition,terminalNormal,terminalWeight,terminalFraction;uint terminalPending;
+#endif
+ float3 diffuse,specular,kd,f0; float roughness,hitDistance,primaryViewCosine; };
 PTPathResult PTIntegratePathFirst(RayDesc ray,uint maxHits,uint rouletteStart,uint seed,float originOffset,
                                   PTSceneHit first,uint useFirst,uint includePrimaryEmission) {
     PTTransportState path=PTBeginTransport();PTPathResult result=(PTPathResult)0;
@@ -119,14 +123,9 @@ PTPathResult PTIntegratePathFirst(RayDesc ray,uint maxHits,uint rouletteStart,ui
         ray.TMin=0;
     }
 #ifdef PT_PATH_TERMINAL_GI
-    // No GI tree state is carried around the path loop or across TraceRay.
-    // The callable is separately compiled and invoked once after tracing ends.
     if(terminalPending&&path.valid!=0){
-        float3 tail=terminalWeight*PTCallTerminalGI(terminalPosition,terminalNormal);
-        if(all(isfinite(tail))&&all(tail>=0)){
-            result.terminalGIPositive=any(tail>0)?1u:0u;path.radiance+=tail;
-            if(!all(isfinite(path.radiance))){path.alive=0;path.valid=0;}
-        }else{path.alive=0;path.valid=0;}
+        result.terminalPosition=terminalPosition;result.terminalNormal=terminalNormal;
+        result.terminalWeight=terminalWeight;result.terminalFraction=diffuseFraction;result.terminalPending=1;
     }
 #endif
     if(path.valid==0&&result.fault==0)result.fault=10;
