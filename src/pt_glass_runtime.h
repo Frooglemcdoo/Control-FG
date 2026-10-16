@@ -470,7 +470,7 @@ static HRESULT STDMETHODCALLTYPE GraphicsHook(ID3D12Device* d,const D3D12_GRAPHI
                 if(PTReflectionSha256(static_cast<const unsigned char*>(desc->PS.pShaderBytecode),desc->PS.BytecodeLength,sha)){
                     std::shared_ptr<PTSurfaceComposition::Pipeline> companion;
                     const HRESULT hr=PTSurfaceComposition::Pipeline::Create(d,desc,static_cast<IUnknown*>(*out),sha,nativeRoots.Find(desc->pRootSignature),createGraphics,companion);
-                    if(hr==S_OK&&surfacePipelines.Insert(companion))Log("PT_SURFACE_PSO_READY sha256=%s native_returned=1",sha);
+                    if(hr==S_OK&&surfacePipelines.Insert(companion))Log("PT_SURFACE_PSO_READY sha256=%s native_returned=1 root_requirements=0x%X",sha,companion->RootRequirements());
                     else if(FAILED(hr))Log("PT_SURFACE_PSO_REJECT sha256=%s hr=0x%08lX native_returned=1",sha,static_cast<unsigned long>(hr));
                 }
             }catch(...){Log("PT_SURFACE_PSO_REJECT reason=allocation native_returned=1");}

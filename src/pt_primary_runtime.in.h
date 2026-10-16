@@ -557,7 +557,7 @@ static void Drawing(void*,ID3D12GraphicsCommandList* list) noexcept {
         std::lock_guard<std::recursive_mutex> guard(mutex);
         Bindings bindings;
         PTCommandBindings::ReadFailure bindingFailure;
-        if(!PTCommandBindings::tracker.Read(list,nativeRoots,true,0x31002,bindings,&bindingFailure)){
+        if(!PTCommandBindings::tracker.Read(list,nativeRoots,true,pipeline->RootRequirements(),bindings,&bindingFailure)){
             static UINT64 failures[19]{};const UINT bucket=bindingFailure.parameter<18?bindingFailure.parameter:18;
             const auto count=++failures[bucket];
             if(count<=8||count%600==0)Log("PT_PRIMARY_SURFACE_BINDING_FAILURE reason=%s parameter=%u address=%llx required_count=%u heap_count=%u count=%llu list=%p",bindingFailure.reason,bindingFailure.parameter,bindingFailure.address,bindingFailure.requiredCount,bindingFailure.heapCount,count,list);
@@ -583,6 +583,8 @@ static void Drawing(void*,ID3D12GraphicsCommandList* list) noexcept {
             View early;early.bytes=raw;
             if(!pinnedQueue||!viewProviders.Read(early,PTNativeView::Pass::surface)||
                early.engineFrame!=engineFrame||!early.MatchesSurface(raw)){
+                static UINT64 failures=0;const auto count=++failures;
+                if(count<=8||count%600==0)Log("PT_PRIMARY_SURFACE_CAMERA_FAILURE reason=%s offset=%u engine_frame=%llu provider_engine_frame=%llu queue_ready=%u count=%llu",early.failure,early.failureOffset,engineFrame,early.engineFrame,unsigned(bool(pinnedQueue)),count);
                 Reject("surface_early_camera_unavailable");return;
             }
             // Only reserve when this engine frame has no output yet. Another
@@ -929,6 +931,6 @@ static bool Start(){
        !PTCommandBindings::Register(&commandConsumer)||!PTNativeJobRuntime::Register(&Job)||!PTSceneLive::owner.Start(step,true))return false;
     ptReflectionModeObserver.store(&MirrorModeChanged,std::memory_order_release);
     MirrorModeChanged(PTReflectionUserRequested());
-    active=true;Log("PT_PRIMARY_SESSION_READY build=M12R89 ready=1 hits=4 spp=1 roulette_start=3 material=opaque_general geometric_normals=1 native_fallback=1 primary_lighting=%s transport=%s readiness=per_material graphics_tracking=%u",surfaceReplacement?"pt":"native",surfaceReplacement?"full_surface":"diffuse_indirect",unsigned(compose));return true;
+    active=true;Log("PT_PRIMARY_SESSION_READY build=M12R90 ready=1 hits=4 spp=1 roulette_start=3 material=opaque_general geometric_normals=1 native_fallback=1 primary_lighting=%s transport=%s readiness=per_material graphics_tracking=%u",surfaceReplacement?"pt":"native",surfaceReplacement?"full_surface":"diffuse_indirect",unsigned(compose));return true;
 }
 }

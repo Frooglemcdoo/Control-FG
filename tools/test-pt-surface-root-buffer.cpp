@@ -19,6 +19,26 @@ int main(){
     ComPtr<ID3DBlob> ps,vs,error;
     assert(SUCCEEDED(D3DCompile(psSource,sizeof(psSource)-1,nullptr,nullptr,nullptr,"main","ps_5_1",D3DCOMPILE_OPTIMIZATION_LEVEL3,0,&ps,&error)));
     assert(SUCCEEDED(D3DCompile(vsSource,sizeof(vsSource)-1,nullptr,nullptr,nullptr,"main","vs_5_1",D3DCOMPILE_OPTIMIZATION_LEVEL3,0,&vs,&error)));
+    // A valid native draw can omit the global sampler table when its shaders
+    // use Load or ordinary space-zero samplers. Never omit a used/unknown table.
+    D3D12_GRAPHICS_PIPELINE_STATE_DESC requirements{};
+    requirements.VS={vs->GetBufferPointer(),vs->GetBufferSize()};
+    requirements.PS={ps->GetBufferPointer(),ps->GetBufferSize()};
+    assert(PTSurfaceComposition::SurfaceRootRequirements(requirements)==0x21002);
+    for(UINT space:{0u,1u}){
+        char source[512]{};
+        sprintf_s(source,"Texture2D<float4> t:register(t0);SamplerState s:register(s0,space%u);float4 main(float4 p:SV_Position):SV_Target{return t.SampleLevel(s,p.xy,0);}",space);
+        ComPtr<ID3DBlob> samplerShader;
+        assert(SUCCEEDED(D3DCompile(source,std::strlen(source),nullptr,nullptr,nullptr,"main","ps_5_1",D3DCOMPILE_OPTIMIZATION_LEVEL3,0,&samplerShader,&error)));
+        requirements.PS={samplerShader->GetBufferPointer(),samplerShader->GetBufferSize()};
+        assert(PTSurfaceComposition::SurfaceRootRequirements(requirements)==(space?0x31002u:0x21002u));
+        // Usage in another active stage must also retain the global table.
+        requirements.VS=requirements.PS;requirements.PS={ps->GetBufferPointer(),ps->GetBufferSize()};
+        assert(PTSurfaceComposition::SurfaceRootRequirements(requirements)==(space?0x31002u:0x21002u));
+        requirements.VS={vs->GetBufferPointer(),vs->GetBufferSize()};
+    }
+    requirements.PS={"bad",3};
+    assert(PTSurfaceComposition::SurfaceRootRequirements(requirements)==0x31002);
     // The fixture compiler may add redundant resource-type opcode extensions.
     // Normalize those to the reviewed game's compact LD encoding before applying
     // the production patch; declarations continue to define the resource type.
