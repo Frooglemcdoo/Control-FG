@@ -261,7 +261,7 @@ static void RRLiveBeforeImpl(ID3D12GraphicsCommandList* list,const control_rr::L
         // Valid bounded-size read resources even when the uniform PT flag is off.
         if(!s.pt.owner)s.pt.raw=s.pt.surface=s.pt.guard=material->GetGPUVirtualAddress();
         if(in.engineFrame%240==0||c->recorded<4)
-            Log("RR_PT_DIFFUSE_GUIDE frame=%llu bound=%u reason=%s width=%u height=%u semantic=pt_kd coverage=validated_surface",in.engineFrame,unsigned(bool(s.pt.owner)),s.pt.reason,width,height);
+            Log("RR_PT_DIFFUSE_GUIDE frame=%llu bound=%u reason=%s width=%u height=%u semantic=pt_kd coverage=validated_surface specular_angle=pt_primary_n_dot_v",in.engineFrame,unsigned(bool(s.pt.owner)),s.pt.reason,width,height);
         if(!c->policy.CommandsStarted(lease)){c->policy.Abort(lease);RRLiveReleaseSources(s);__leave;}
         DWORD fault=0;const auto perf=RRPerfBegin(in,RRPerfStage::LiveGuides);
         if(!RRLiveRecord(c,&s,&in,&constants,&fault)){

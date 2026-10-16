@@ -29,7 +29,7 @@ int main(){
     ComPtr<ID3D11ComputeShader> shader;assert(SUCCEEDED(device->CreateComputeShader(code->GetBufferPointer(),code->GetBufferSize(),nullptr,&shader)));
     std::array<ComPtr<ID3D11ShaderResourceView>,7> views;
     std::array<float,32> g1{},g2{},env{};
-    for(UINT i=0;i<8;++i){g1[i*4]=g1[i*4+1]=g1[i*4+2]=.5f;g2[i*4+1]=.04f;env[i*4]=.5f;env[i*4+1]=.125f;}
+    for(UINT i=0;i<8;++i){g1[i*4]=g1[i*4+1]=g1[i*4+2]=.5f;g2[i*4+1]=.04f;env[i*4]=float(i)/8;env[i*4+1]=.125f;}
     D3D11_TEXTURE2D_DESC td{};td.Width=8;td.Height=1;td.MipLevels=td.ArraySize=1;td.Format=DXGI_FORMAT_R32G32B32A32_FLOAT;td.SampleDesc.Count=1;td.Usage=D3D11_USAGE_DEFAULT;td.BindFlags=D3D11_BIND_SHADER_RESOURCE;
     for(UINT i=0;i<3;++i){
         D3D11_SUBRESOURCE_DATA data{};data.pSysMem=i==0?g1.data():(i==1?g2.data():env.data());data.SysMemPitch=128;
@@ -39,10 +39,10 @@ int main(){
     const UINT packed[2]={0x0a0a0a00,0};D3D11_BUFFER_DESC bd{};bd.ByteWidth=8;bd.Usage=D3D11_USAGE_DEFAULT;bd.BindFlags=D3D11_BIND_SHADER_RESOURCE;bd.MiscFlags=D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;bd.StructureByteStride=8;
     D3D11_SUBRESOURCE_DATA initial{};initial.pSysMem=packed;ComPtr<ID3D11Buffer> material;assert(SUCCEEDED(device->CreateBuffer(&bd,&initial,&material)));assert(SUCCEEDED(device->CreateShaderResourceView(material.Get(),nullptr,&views[2])));
     std::array<float,128> raw{};std::array<float,64> surface{};
-    for(UINT i=0;i<8;++i){raw[i*16+3]=surface[i*8+3]=1;raw[i*16+8]=.2f;raw[i*16+9]=.4f;raw[i*16+10]=.6f;}
+    for(UINT i=0;i<8;++i){raw[i*16+3]=surface[i*8+3]=1;raw[i*16+8]=.2f;raw[i*16+9]=.4f;raw[i*16+10]=.6f;raw[i*16+15]=i==0?.25f:(i==1?.75f:1.f);}
     raw[16+8]=raw[16+9]=raw[16+10]=0;surface[2*8+3]=0;raw[3*16+3]=0;
     const UINT wrong=1;std::memcpy(&surface[4*8+5],&wrong,4);
-    raw[5*16+8]=std::numeric_limits<float>::quiet_NaN();raw[6*16+8]=1.5f;raw[7*16+8]=raw[7*16+9]=raw[7*16+10]=1;
+    raw[5*16+8]=std::numeric_limits<float>::quiet_NaN();raw[6*16+15]=std::numeric_limits<float>::quiet_NaN();raw[7*16+8]=raw[7*16+9]=raw[7*16+10]=1;
     for(UINT i=0;i<2;++i){
         bd={};bd.ByteWidth=i?256:512;bd.Usage=D3D11_USAGE_DEFAULT;bd.BindFlags=D3D11_BIND_SHADER_RESOURCE;bd.MiscFlags=D3D11_RESOURCE_MISC_BUFFER_ALLOW_RAW_VIEWS;
         initial.pSysMem=i?surface.data():raw.data();ComPtr<ID3D11Buffer> buffer;assert(SUCCEEDED(device->CreateBuffer(&bd,&initial,&buffer)));
@@ -62,6 +62,7 @@ int main(){
     ID3D11ShaderResourceView* srvs[7];ID3D11UnorderedAccessView* targets[3];for(UINT i=0;i<7;++i)srvs[i]=views[i].Get();for(UINT i=0;i<3;++i)targets[i]=uavs[i].Get();
     context->CSSetShader(shader.Get(),nullptr,0);context->CSSetShaderResources(0,7,srvs);context->CSSetSamplers(0,1,state.GetAddressOf());context->CSSetConstantBuffers(0,1,constants.GetAddressOf());
     std::array<std::array<float,32>,3> baseline{};
+    // Oblique, grazing-relative and face-on PT angles with an angular LUT.
     // Off -> PT guides -> off: fallback pixels and normal/specular guides stay exact.
     for(UINT mode=0;mode<5;++mode){
         const UINT admission[4]={(mode==1||mode==3)?1u:0u,0,0,0};
@@ -76,10 +77,19 @@ int main(){
             for(UINT pixel=0;pixel<8;++pixel)for(UINT channel=0;channel<4;++channel){
                 float expected=baseline[output][pixel*4+channel];
                 if((mode==1||mode==3)&&output==1&&channel<3&&(pixel==0||pixel==1||pixel==7))expected=raw[pixel*16+8+channel];
+                if((mode==1||mode==3)&&output==2&&channel<3&&(pixel==0||pixel==1||pixel==7)){
+                    // Linear sampling: u*8-.5, clamped to the eight-texel LUT.
+                    // Native F0 is .04 times the packed-color tint correction.
+                    float packedColor=10.f/255.f;
+                    float f0=.04f*packedColor/(packedColor+1e-6f);
+                    float coordinate=pixel==0?1.5f:(pixel==1?5.5f:7.f);
+                    expected=f0*(coordinate/8.f)+.125f;
+                    if(pixel!=7)assert(std::abs(expected-baseline[output][pixel*4+channel])>1e-3f);
+                }
                 assert(std::isfinite(values[pixel*4+channel])&&std::abs(values[pixel*4+channel]-expected)<1e-6f);
             }
             context->Unmap(readback.Get(),0);
         }
     }
-    assert(SUCCEEDED(device->GetDeviceRemovedReason()));puts("PASS: submission-order policy and GPU admission rejection/re-enable; actual RR guide shader uses PT diffuse albedo including black; uncovered, mismatched, nonfinite and invalid pixels preserve native guides; normal/specular and PT-off unchanged");
+    assert(SUCCEEDED(device->GetDeviceRemovedReason()));puts("PASS: submission-order policy and GPU admission rejection/re-enable; actual RR guide shader uses PT diffuse albedo including black; uncovered, mismatched, nonfinite and invalid pixels preserve native guides; angular PT specular guide matches native F0 times LUT plus bias; normals and PT-off unchanged");
 }

@@ -35,6 +35,7 @@ void main(uint3 id:SV_DispatchThreadID){
         PTSceneHit first=(PTSceneHit)0;first.status=1;first.geometricNormal=float3(0,0,1);
         PTPathResult estimate=PTIntegratePathFirst(ray,2,3,1234,.001*testScale,first,1,0);
         PTClearSurface(id.xy,extent);
+        if(estimate.primaryValid!=0&&abs(estimate.primaryViewCosine-1)>1e-5)estimate.primaryValid=0;
         if(any(abs(estimate.diffuse+estimate.specular-estimate.radiance)>1e-5))estimate.primaryValid=0;
         if(estimate.primaryValid!=0)PTCommitSurface(id.xy,extent,estimate.radiance,1);
         return;

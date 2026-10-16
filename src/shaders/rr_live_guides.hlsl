@@ -55,23 +55,25 @@ void GenerateLiveGuides(uint3 tid : SV_DispatchThreadID) {
         uint brdfMode = 0u;
         materialGuide = DecodeMaterialValue(packed, g2.g, brdfMode);
 
+        // Keep the native F0 for the specular integral. PT changes diffuse
+        // reflectance and supplies the exact primary N.V from its shading frame.
+        float3 specularF0=materialGuide;
+        float viewCosine=min(abs(normalView.z),1.0f);
+        if((GuideFlags&4u)!=0u){
+            float4 pt=PTMaterialGuide(tid.y*Width+tid.x,materialID,materialGuide,viewCosine);
+            materialGuide=pt.rgb;viewCosine=pt.w;
+        }
         if ((GuideFlags & 2u) != 0u) {
-            // Exact coordinate convention recovered from the reference pass:
-            // abs(viewNormal.z), native Control smoothness (GBuffer1.B).
+            // Native fallback retains the reference pass convention. Covered
+            // PT uses its true per-pixel viewing angle and native smoothness.
             const float2 env = EnvBRDF.SampleLevel(
-                LinearClamp, float2(min(abs(normalView.z), 1.0f), g1.b), 0.0f).xy;
-            specularGuide = materialGuide * env.x + env.y;
+                LinearClamp, float2(viewCosine, g1.b), 0.0f).xy;
+            specularGuide = specularF0 * env.x + env.y;
             // Control BRDF mode 3 is excluded by the reference pass.
             if (brdfMode == 3u) specularGuide = 0.0f.xxx;
         }
     }
 
-    // Only covered, same-material PT pixels use PT's actual diffuse coefficient.
-    // Preserve native guides for unsupported pixels and every PT-off frame.
-    if((GuideFlags&4u)!=0u){
-        uint materialID=ControlDecodeMaterialID(GBuffer2.Load(int3(tid.xy,0)));
-        materialGuide=PTDiffuseGuide(tid.y*Width+tid.x,materialID,materialGuide);
-    }
     // The supplied reference addon binds this stable per-material value as its
     // DLSS diffuse-albedo guide. It is intentionally not a replayed texture.
     DiffuseGuide[tid.xy] = float4(materialGuide, 1.0f);

@@ -32,7 +32,7 @@ bool PTCommitSignals(uint2 pixel,uint2 extent,PTPathResult value,uint admission)
     PTSurfaceRadiance.Store4(at,asuint(float4(value.diffuse,1)));
     PTSurfaceRadiance.Store4(at+16,asuint(float4(value.specular,value.hitDistance)));
     PTSurfaceRadiance.Store4(at+32,asuint(float4(value.kd,value.roughness)));
-    PTSurfaceRadiance.Store4(at+48,asuint(float4(max(value.f0,.02),0)));
+    PTSurfaceRadiance.Store4(at+48,asuint(float4(max(value.f0,.02),value.primaryViewCosine)));
     return true;
 }
 #endif
