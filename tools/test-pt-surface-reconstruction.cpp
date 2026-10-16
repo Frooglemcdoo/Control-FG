@@ -20,6 +20,21 @@ int main(int argc,char**){
     setvbuf(stdout,nullptr,_IONBF,0);
     ComPtr<IDXGIFactory4> factory;ComPtr<IDXGIAdapter> warp;ComPtr<ID3D12Device> device;
     assert(SUCCEEDED(CreateDXGIFactory1(IID_PPV_ARGS(&factory))));assert(SUCCEEDED(factory->EnumWarpAdapter(IID_PPV_ARGS(&warp))));assert(SUCCEEDED(D3D12CreateDevice(warp.Get(),D3D_FEATURE_LEVEL_12_0,IID_PPV_ARGS(&device))));
+    // Reproduce the former 4K capacity mismatch without a multi-GiB CI allocation.
+    using Storage=PTSurfaceComposition::SignalStorage;
+    constexpr UINT64 one4K=3840ull*2160*32,oldBudget=2048ull*1024*1024;
+    static_assert(8*one4K<=oldBudget&&9*one4K>oldBudget,"old cap rejects ninth retained signal");
+    static_assert(Storage::Fits(8*one4K,one4K),"history plus four signal/scratch pairs must fit");
+    static_assert(Storage::Fits(10*one4K,one4K),"five retained frame pairs plus history must fit");
+    static_assert(!Storage::Fits(Storage::MaximumBytes,one4K),"cap remains bounded");
+    {
+        std::vector<std::shared_ptr<Storage>> live;
+        for(UINT i=0;i<11;++i){auto v=Storage::Acquire(device.Get(),2048);assert(v);
+            for(const auto& old:live)assert(old->resource.Get()!=v->resource.Get());live.push_back(v);}
+        auto retained=live.front();live.clear();auto another=Storage::Acquire(device.Get(),2048);
+        assert(another&&another->resource.Get()!=retained->resource.Get());
+    }
+    puts("PASS: signal capacity covers output retention plus history; retained signal storage never aliases a new acquisition");
     PTTestShaderIncludes includes;
     ComPtr<ID3DBlob> shader,error;HRESULT hr=D3DCompileFromFile(L"src/shaders/pt_surface_reconstruct.hlsl",nullptr,&includes,"main","cs_5_1",D3DCOMPILE_ENABLE_STRICTNESS|D3DCOMPILE_IEEE_STRICTNESS|D3DCOMPILE_SKIP_OPTIMIZATION|D3DCOMPILE_WARNINGS_ARE_ERRORS,0,&shader,&error);
     if(FAILED(hr)&&error)puts(static_cast<const char*>(error->GetBufferPointer()));assert(SUCCEEDED(hr));

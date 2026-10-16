@@ -435,6 +435,9 @@ static void Dispatched(void*,ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT 
             a->history=historyOutput;a->reconstruction=std::make_shared<PTSurfaceComposition::ReconstructionPass>();
             if(!a->reconstruction->Initialize(device.Get(),reconstructionPipeline,view,a->history?&historyView:nullptr,
                 frame->raw->Texture(),a->history?a->history->Texture():nullptr,{a->primary.At(5),a->primary.At(6),a->primary.At(8),a->primary.At(12),a->primary.At(13)},*materialKeys,historyMaterials.Get(),historySignals)){
+                const auto pool=PTSurfaceComposition::SignalStorage::Statistics();
+                static UINT64 failures=0;if(++failures<=16||failures%60==0)
+                    Log("PT_PRIMARY_RECONSTRUCTION_FAILED frame=%u stage=%s hr=0x%08lX signal_resident_bytes=%llu signal_idle_bytes=%llu signal_budget_bytes=%llu budget_failures=%llu device_failures=%llu",view.frame,a->reconstruction->failure,static_cast<unsigned long>(a->reconstruction->failureHr),pool.residentBytes,pool.idleBytes,PTSurfaceComposition::SignalStorage::MaximumBytes,pool.budgetFailures,pool.deviceFailures);
                 Reject("surface_reconstruction_setup");return;
             }
         }
@@ -808,6 +811,6 @@ static bool Start(){
        !PTCommandBindings::Register(&commandConsumer)||!PTNativeJobRuntime::Register(&Job)||!PTSceneLive::owner.Start(step,true))return false;
     ptReflectionModeObserver.store(&MirrorModeChanged,std::memory_order_release);
     MirrorModeChanged(PTReflectionUserRequested());
-    active=true;Log("PT_PRIMARY_SESSION_READY build=M12R77 ready=1 hits=4 spp=1 roulette_start=3 material=opaque_general geometric_normals=1 native_fallback=1 primary_lighting=%s transport=%s readiness=per_material graphics_tracking=%u",surfaceReplacement?"pt":"native",surfaceReplacement?"full_surface":"diffuse_indirect",unsigned(compose));return true;
+    active=true;Log("PT_PRIMARY_SESSION_READY build=M12R78 ready=1 hits=4 spp=1 roulette_start=3 material=opaque_general geometric_normals=1 native_fallback=1 primary_lighting=%s transport=%s readiness=per_material graphics_tracking=%u",surfaceReplacement?"pt":"native",surfaceReplacement?"full_surface":"diffuse_indirect",unsigned(compose));return true;
 }
 }

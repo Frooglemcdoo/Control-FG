@@ -49,19 +49,33 @@ struct SignalStorage {
     inline static std::mutex mutex;
     inline static std::vector<std::unique_ptr<SignalStorage>> idle;
     inline static UINT64 resident=0;
-    static std::shared_ptr<SignalStorage> Acquire(ID3D12Device* device,UINT64 bytes){
+    static constexpr UINT64 MaximumBytes=4096ull*1024*1024;
+    struct Stats { UINT64 residentBytes,idleBytes,budgetFailures,deviceFailures; };
+    inline static UINT64 budgetFailures=0,deviceFailures=0;
+    static constexpr bool Fits(UINT64 used,UINT64 requested){
+        return requested>0&&requested<=512ull*1024*1024&&used<=MaximumBytes-requested;
+    }
+    static Stats Statistics(){std::lock_guard<std::mutex> lock(mutex);UINT64 cached=0;
+        for(const auto& item:idle)cached+=item->bytes;return {resident,cached,budgetFailures,deviceFailures};}
+
+    static std::shared_ptr<SignalStorage> Acquire(ID3D12Device* device,UINT64 bytes,HRESULT* error=nullptr){
+        if(error)*error=S_OK;
         std::lock_guard<std::mutex> guard(mutex);
         std::unique_ptr<SignalStorage> value;
         for(auto it=idle.begin();it!=idle.end();++it)if((*it)->device.Get()==device&&(*it)->bytes==bytes){value=std::move(*it);idle.erase(it);break;}
         if(!value){
             // Evict incompatible and excess idle storage before enforcing the cap.
             for(auto& old:idle)resident-=old->bytes;idle.clear();
-            if(bytes>512ull*1024*1024||resident>2048ull*1024*1024-bytes)return {};
+            // Output retains up to 4 GiB of raw/final buffers. Its live frames,
+            // plus separately retained history signals, can exceed 2 GiB here.
+            // Keep recording/fence ownership intact; never recycle live storage.
+            if(!Fits(resident,bytes)){++budgetFailures;if(error)*error=E_OUTOFMEMORY;return {};}
             value=std::make_unique<SignalStorage>();value->device=device;value->bytes=bytes;
             D3D12_RESOURCE_DESC rd{};rd.Dimension=D3D12_RESOURCE_DIMENSION_BUFFER;rd.Width=bytes;rd.Height=1;
             rd.DepthOrArraySize=rd.MipLevels=1;rd.SampleDesc.Count=1;rd.Layout=D3D12_TEXTURE_LAYOUT_ROW_MAJOR;rd.Flags=D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
             D3D12_HEAP_PROPERTIES hp{};hp.Type=D3D12_HEAP_TYPE_DEFAULT;
-            if(FAILED(device->CreateCommittedResource(&hp,D3D12_HEAP_FLAG_NONE,&rd,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,nullptr,IID_PPV_ARGS(&value->resource))))return {};
+            const HRESULT hr=device->CreateCommittedResource(&hp,D3D12_HEAP_FLAG_NONE,&rd,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,nullptr,IID_PPV_ARGS(&value->resource));
+            if(FAILED(hr)){++deviceFailures;if(error)*error=hr;return {};}
             resident+=bytes;
         }
         return std::shared_ptr<SignalStorage>(value.release(),[](SignalStorage* released){
@@ -104,35 +118,37 @@ struct ReconstructionPass {
     Microsoft::WRL::ComPtr<ID3D12Resource> raw,history,materials,previousMaterials;
     std::shared_ptr<SignalStorage> signals,scratch,previousSignals;
     UINT width=0,height=0;bool historyEnabled=false;
+    const char* failure="none";HRESULT failureHr=S_OK;
     bool Initialize(ID3D12Device* device,const std::shared_ptr<ReconstructionPipeline>& p,const PTNativeView::View& view,
                     const PTNativeView::View* previous,ID3D12Resource* input,ID3D12Resource* old,
                     const std::array<D3D12_CPU_DESCRIPTOR_HANDLE,5>& descriptors,const PTMaterialHistory::Keys& keys,ID3D12Resource* oldMaterials,const std::shared_ptr<SignalStorage>& oldSignals={}){
+        failure="inputs";failureHr=E_INVALIDARG;
         if(!device||!p||!input)return false;
-        if(old&&!oldMaterials)return false;
+        failure="history_materials";if(old&&!oldMaterials)return false;
         const bool split=input->GetDesc().Width==UINT64(view.width)*view.height*64;
-        if(!split&&input->GetDesc().Width!=UINT64(view.width)*view.height*16)return false;
-        if(split&&old&&!oldSignals)return false;
-        signals=SignalStorage::Acquire(device,UINT64(view.width)*view.height*32);
-        scratch=SignalStorage::Acquire(device,UINT64(view.width)*view.height*32);
-        if(!signals||!scratch)return false;previousSignals=oldSignals;pipeline=p;raw=input;history=old?old:input;width=view.width;height=view.height;
-        ReconstructionConstants c;if(!ReconstructConstants(view,old?previous:nullptr,c))return false;historyEnabled=c.useHistory!=0;c.signalStride=split?64:16;
-        if(FAILED(PTUploadPool::Buffer::Acquire(device,512,constants)))return false;
+        failure="input_extent";if(!split&&input->GetDesc().Width!=UINT64(view.width)*view.height*16)return false;
+        failure="history_signals";if(split&&old&&!oldSignals)return false;
+        failure="signal_storage";signals=SignalStorage::Acquire(device,UINT64(view.width)*view.height*32,&failureHr);if(!signals)return false;
+        failure="scratch_storage";scratch=SignalStorage::Acquire(device,UINT64(view.width)*view.height*32,&failureHr);if(!scratch)return false;
+        previousSignals=oldSignals;pipeline=p;raw=input;history=old?old:input;width=view.width;height=view.height;
+        failure="view_constants";failureHr=E_INVALIDARG;ReconstructionConstants c;if(!ReconstructConstants(view,old?previous:nullptr,c))return false;historyEnabled=c.useHistory!=0;c.signalStride=split?64:16;
+        failure="constant_upload";failureHr=PTUploadPool::Buffer::Acquire(device,512,constants);if(FAILED(failureHr))return false;
         void* data=nullptr;const D3D12_RANGE noRead{};
-        if(FAILED(constants->Resource()->Map(0,&noRead,&data)))return false;
+        failure="constant_map";failureHr=constants->Resource()->Map(0,&noRead,&data);if(FAILED(failureHr))return false;
         std::memcpy(data,&c,sizeof(c));constants->Resource()->Unmap(0,nullptr);
-        if(FAILED(PTUploadPool::Buffer::Acquire(device,sizeof(keys),geometry)))return false;
-        if(FAILED(geometry->Resource()->Map(0,&noRead,&data)))return false;
+        failure="geometry_upload";failureHr=PTUploadPool::Buffer::Acquire(device,sizeof(keys),geometry);if(FAILED(failureHr))return false;
+        failure="geometry_map";failureHr=geometry->Resource()->Map(0,&noRead,&data);if(FAILED(failureHr))return false;
         std::memcpy(data,keys.data(),sizeof(keys));geometry->Resource()->Unmap(0,nullptr);
         D3D12_RESOURCE_DESC rd{};rd.Dimension=D3D12_RESOURCE_DIMENSION_BUFFER;rd.Width=PTMaterialHistory::Count*16ull;
         rd.Height=1;rd.DepthOrArraySize=rd.MipLevels=1;rd.SampleDesc.Count=1;rd.Layout=D3D12_TEXTURE_LAYOUT_ROW_MAJOR;rd.Flags=D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
         D3D12_HEAP_PROPERTIES hp{};hp.Type=D3D12_HEAP_TYPE_DEFAULT;
-        if(FAILED(device->CreateCommittedResource(&hp,D3D12_HEAP_FLAG_NONE,&rd,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,nullptr,IID_PPV_ARGS(&materials))))return false;
+        failure="material_storage";failureHr=device->CreateCommittedResource(&hp,D3D12_HEAP_FLAG_NONE,&rd,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,nullptr,IID_PPV_ARGS(&materials));if(FAILED(failureHr))return false;
         // Bind a valid read-state resource even on the no-history branch.
         previousMaterials=oldMaterials?oldMaterials:input;
         D3D12_DESCRIPTOR_HEAP_DESC hd{};hd.NumDescriptors=5;hd.Type=D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;hd.Flags=D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
-        if(FAILED(device->CreateDescriptorHeap(&hd,IID_PPV_ARGS(&guides))))return false;
+        failure="guide_descriptors";failureHr=device->CreateDescriptorHeap(&hd,IID_PPV_ARGS(&guides));if(FAILED(failureHr))return false;
         auto cpu=guides->GetCPUDescriptorHandleForHeapStart();const auto step=device->GetDescriptorHandleIncrementSize(hd.Type);
-        for(const auto d:descriptors){device->CopyDescriptorsSimple(1,cpu,d,hd.Type);cpu.ptr+=step;}return true;
+        for(const auto d:descriptors){device->CopyDescriptorsSimple(1,cpu,d,hd.Type);cpu.ptr+=step;}failure="none";return true;
     }
     void Record(ID3D12GraphicsCommandList* list,ID3D12Resource* output,ID3D12Resource* metrics){
         ID3D12DescriptorHeap* heaps[]={guides.Get()};list->SetDescriptorHeaps(1,heaps);
