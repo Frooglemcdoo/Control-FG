@@ -75,12 +75,17 @@ float3 PTPathEnvironment(float3 direction){
     // inside path sampling. Native specular environment scale is b2 byte244.
     return PTEnvironment.SampleLevel(PTEnvironmentSampler,direction,0).rgb*PTPrimaryLightWords[15].y;
 }
-bool PTPathLight(PTPathSurface surface,inout uint rng,out PTDirectSample light,out uint visibility){
+bool PTPathLight(PTPathSurface surface,float3 outgoingWorld,inout uint rng,out PTDirectSample light,out uint visibility){
     light=(PTDirectSample)0;visibility=1;
     PTPrimaryLightSample native;
 #ifdef PT_PRIMARY_SURFACE_REPLACEMENT
     PTLightReservoir reservoir=PTEmptyLightReservoir();native=(PTPrimaryLightSample)0;native.valid=1;
     float3 positionView=PTWorldToViewPoint(surface.position);
+    // Match the integrator's local shading frame for candidate and final BRDF.
+    float3 n=surface.normal;
+    float3 tangent=normalize(cross(abs(n.z)<0.9?float3(0,0,1):float3(0,1,0),n));
+    float3 bitangent=cross(n,tangent);
+    float3 wo=float3(dot(outgoingWorld,tangent),dot(outgoingWorld,bitangent),dot(outgoingWorld,n));
     [loop] for(uint candidateIndex=0;candidateIndex<4;++candidateIndex){
         PTPrimaryLightSample candidate;PTSamplePrimaryLight(positionView,PTPathRandom(rng),candidate);
         if(candidate.valid==0){native.valid=0;break;}
@@ -89,7 +94,8 @@ bool PTPathLight(PTPathSurface surface,inout uint rng,out PTDirectSample light,o
         float target=0;
         if(candidate.active!=0){
             float3 wi=normalize(PTViewToWorldVector(candidate.directionView));
-            target=dot(candidate.radiance,float3(.2126,.7152,.0722))*max(dot(surface.normal,wi),0);
+            float3 localWi=float3(dot(wi,tangent),dot(wi,bitangent),dot(wi,n));
+            target=PTLightTarget(surface.material,wo,localWi,candidate.radiance);
         }
         reservoir=PTAddLightCandidate(reservoir,target,candidate.selectionPdf,PTPathRandom(rng),candidateIndex);
         if(reservoir.valid==0){native.valid=0;break;}

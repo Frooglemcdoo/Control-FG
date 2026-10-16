@@ -15,7 +15,7 @@ PTPathSurface PTPathDecode(PTSceneHit hit,RayDesc ray){
     s.material.lobes=testMode==11?0:1;s.decodeFault=12;return s;
 }
 float3 PTPathEnvironment(float3 direction){return testScale-1;}
-bool PTPathLight(PTPathSurface surface,inout uint rng,out PTDirectSample light,out uint visibility){
+bool PTPathLight(PTPathSurface surface,float3 outgoingWorld,inout uint rng,out PTDirectSample light,out uint visibility){
     light=(PTDirectSample)0;light.wi=surface.normal;light.incidentRadiance=testScale;light.pdf=testScale;light.delta=(uint)testScale;visibility=(testMode==13||(testMode==14&&surface.material.kd.x==0))?3:(uint)testScale;return true;
 }
 [numthreads(16,1,1)]

@@ -33,5 +33,42 @@ int main(){
         visibleMean+=selected/PTLightDenominator(q);
     }
     visibleMean/=runs;assert(std::abs(visibleMean-6)<.04);
+    // Equal-brightness lights, one aligned with a narrow specular lobe.
+    // Old incident*cos weights ignore that lobe. Use identical proposals and
+    // reservoir random numbers for both estimators; compare means to exact sum.
+    PTSurfaceMaterial glossy;glossy.kd=PTV(.15f,.08f,.03f);glossy.f0=PTV(.8f,.5f,.2f);
+    glossy.roughness=.2f;glossy.lobes=3;
+    const PTVec3 wo=PTV(0,0,1),incident=PTV(1,1,1);
+    PTVec3 directions[16];float targets[16];double exact=0;
+    for(unsigned i=0;i<16;++i){
+        float x=i==0?0.f:.55f+.025f*float(i);
+        directions[i]=PTV(x,0,std::sqrt(1-x*x));
+        targets[i]=PTLightTarget(glossy,wo,directions[i],incident);exact+=targets[i];
+    }
+    assert(PTLightTarget(glossy,wo,PTV(0,0,-1),incident)==0);
+    assert(PTLightTarget(glossy,wo,wo,PTV(0,0,0))==0);
+    assert(PTLightTarget(glossy,wo,wo,PTV(-1,0,0))<0);
+    double sums[2]={},squares[2]={};
+    for(unsigned trial=0;trial<runs;++trial){
+        PTLightReservoir q[2]={empty,empty};float chosen[2]={};
+        for(uint c=0;c<4;++c){uint light=uint(Random()*16);float random=Random();
+            for(unsigned mode=0;mode<2;++mode){
+                float target=mode?targets[light]:directions[light].z;
+                q[mode]=PTAddLightCandidate(q[mode],target,1.f/16,random,c);
+                if(q[mode].target>0&&q[mode].selected==c)chosen[mode]=targets[light];
+            }
+        }
+        for(unsigned mode=0;mode<2;++mode){float denominator=PTLightDenominator(q[mode]);
+            double value=denominator>0?chosen[mode]/denominator:0;
+            sums[mode]+=value;squares[mode]+=value*value;
+        }
+    }
+    double variances[2];
+    for(unsigned mode=0;mode<2;++mode){sums[mode]/=runs;variances[mode]=squares[mode]/runs-sums[mode]*sums[mode];
+        assert(std::abs(sums[mode]-exact)<exact*.02);
+    }
+    assert(variances[1]<variances[0]*.4);
+    std::printf("PASS: material target exact=%.6f old_mean=%.6f new_mean=%.6f old_variance=%.6f new_variance=%.6f\n",
+                exact,sums[0],sums[1],variances[0],variances[1]);
     std::printf("PASS: shared RIS zero/invalid cases, sparse 38-light mean=%.6f variance=%.6f (uniform=3700), occluded mean=%.6f\n",mean,variance,visibleMean);
 }
