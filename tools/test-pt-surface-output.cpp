@@ -238,5 +238,25 @@ int main(){
     D3D12_RANGE noWrite{0,0};readback->Unmap(0,&noWrite);
     output.reset();PTSurfaceComposition::Output::Poll();PTSurfaceComposition::Output::TrimIdle();
     assert(PTSurfaceComposition::Output::ResidentBytes()==0);
+    {
+        std::shared_ptr<PTSurfaceComposition::Output> consumer;
+        assert(SUCCEEDED(PTSurfaceComposition::Output::Create(queue.Get(),1,1,consumer,true,true)));
+        assert(consumer->EnableConsumer(queue.Get()));
+        ComPtr<ID3D12Fence> hold,foreignDone;
+        assert(SUCCEEDED(device->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&hold))));
+        assert(SUCCEEDED(device->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&foreignDone))));
+        assert(SUCCEEDED(queue->Wait(hold.Get(),1)));
+        assert(consumer->InvalidateBefore(wrongQueue.Get()));
+        assert(SUCCEEDED(wrongQueue->Signal(foreignDone.Get(),1)));
+        assert(foreignDone->GetCompletedValue()==0); // Foreign work is blocked behind clear.
+        assert(SUCCEEDED(hold->Signal(1)));
+        HANDLE ready=CreateEventW(nullptr,FALSE,FALSE,nullptr);assert(ready);
+        assert(SUCCEEDED(foreignDone->SetEventOnCompletion(1,ready)));
+        assert(WaitForSingleObject(ready,10000)==WAIT_OBJECT_0);CloseHandle(ready);
+        assert(!consumer->EnableConsumer(queue.Get()));assert(consumer->Completed());
+    }
+    PTSurfaceComposition::Output::Poll();PTSurfaceComposition::Output::TrimIdle();
+    assert(PTSurfaceComposition::Output::ResidentBytes()==0);
+    puts("PASS: rejected foreign-queue guide replay waits for owning-queue clear");
     puts("PASS: consumer-recorded-before-producer with ordered GPU output, GPU-zero initialization, one-shot producer, queued replay clear, wrong-queue/late-producer rejection late COPY signal admission, rejected zero guard, replay cancellation, bounded deferred retirement and fence-owned dependencies");
 }

@@ -46,7 +46,7 @@ static bool RRLiveAllFree(RRLiveOwner* c) noexcept {
     for(const auto& s:c->policy.Inspect()) if(s.state!=control_rr::SlotState::Free) return false;
     return true;
 }
-static void RRLiveReleaseSources(RRLiveSlot& s) noexcept {for(auto*& p:s.sources) RRGuideRelease(p);s.pt.owner.reset();s.pt.raw=s.pt.surface=0;}
+static void RRLiveReleaseSources(RRLiveSlot& s) noexcept {for(auto*& p:s.sources) RRGuideRelease(p);s.pt.owner.reset();s.pt.raw=s.pt.surface=s.pt.guard=0;}
 static HRESULT RRLiveMakeTexture(RRLiveOwner* c,ID3D12Resource** out,bool=false,bool=false) noexcept {
     D3D12_HEAP_PROPERTIES hp{};hp.Type=D3D12_HEAP_TYPE_DEFAULT;hp.CreationNodeMask=hp.VisibleNodeMask=1;
     D3D12_RESOURCE_DESC d{};d.Dimension=D3D12_RESOURCE_DIMENSION_TEXTURE2D;d.Width=c->requestedWidth;d.Height=c->requestedHeight;
@@ -92,17 +92,18 @@ static DWORD WINAPI RRLivePrepare(void* context) noexcept {
         D3D12_DESCRIPTOR_RANGE ranges[2]{};
         ranges[0].RangeType=D3D12_DESCRIPTOR_RANGE_TYPE_SRV;ranges[0].NumDescriptors=4;ranges[0].BaseShaderRegister=0;ranges[0].OffsetInDescriptorsFromTableStart=0;
         ranges[1].RangeType=D3D12_DESCRIPTOR_RANGE_TYPE_UAV;ranges[1].NumDescriptors=3;ranges[1].BaseShaderRegister=0;ranges[1].OffsetInDescriptorsFromTableStart=4;
-        D3D12_ROOT_PARAMETER params[4]{};
+        D3D12_ROOT_PARAMETER params[5]{};
         params[0].ParameterType=D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;params[0].Constants.Num32BitValues=4;params[0].Constants.ShaderRegister=0;
         params[1].ParameterType=D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;params[1].DescriptorTable={2,ranges};
         params[2].ParameterType=params[3].ParameterType=D3D12_ROOT_PARAMETER_TYPE_SRV;
         params[2].Descriptor={4,0};params[3].Descriptor={5,0};
+        params[4].ParameterType=D3D12_ROOT_PARAMETER_TYPE_SRV;params[4].Descriptor={6,0};
         D3D12_STATIC_SAMPLER_DESC sampler{};sampler.Filter=D3D12_FILTER_MIN_MAG_MIP_LINEAR;
         sampler.AddressU=sampler.AddressV=sampler.AddressW=D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
         sampler.MipLODBias=0.0f;sampler.MaxAnisotropy=1;sampler.ComparisonFunc=D3D12_COMPARISON_FUNC_ALWAYS;
         sampler.BorderColor=D3D12_STATIC_BORDER_COLOR_TRANSPARENT_BLACK;sampler.MinLOD=0.0f;sampler.MaxLOD=D3D12_FLOAT32_MAX;
         sampler.ShaderRegister=0;sampler.RegisterSpace=0;sampler.ShaderVisibility=D3D12_SHADER_VISIBILITY_ALL;
-        D3D12_ROOT_SIGNATURE_DESC d{};d.NumParameters=4;d.pParameters=params;d.NumStaticSamplers=1;d.pStaticSamplers=&sampler;
+        D3D12_ROOT_SIGNATURE_DESC d{};d.NumParameters=5;d.pParameters=params;d.NumStaticSamplers=1;d.pStaticSamplers=&sampler;
         auto serialize=reinterpret_cast<D3D12SerializeRootSignatureDynamicFn>(GetProcAddress(GetModuleHandleW(L"d3d12.dll"),"D3D12SerializeRootSignature"));
         ID3DBlob* blob=nullptr;ID3DBlob* errors=nullptr;
         hr=serialize?serialize(&d,D3D_ROOT_SIGNATURE_VERSION_1,&blob,&errors):E_NOINTERFACE;
@@ -255,10 +256,10 @@ static void RRLiveBeforeImpl(ID3D12GraphicsCommandList* list,const control_rr::L
         c->device->CreateShaderResourceView(env.resource,&envSRV,handle);
 
         RRLiveConstants constants{};constants.invertSmoothness=1;constants.guideFlags=3;constants.width=width;constants.height=height;
-        RRPTAcquireGuides(in.engineFrame,width,height,in.queue,s.pt);
+        RRPTAcquireGuides(in.engineFrame,width,height,in.queue,list,s.pt);
         if(s.pt.owner)constants.guideFlags|=4;
         // Valid bounded-size read resources even when the uniform PT flag is off.
-        if(!s.pt.owner)s.pt.raw=s.pt.surface=material->GetGPUVirtualAddress();
+        if(!s.pt.owner)s.pt.raw=s.pt.surface=s.pt.guard=material->GetGPUVirtualAddress();
         if(in.engineFrame%240==0||c->recorded<4)
             Log("RR_PT_DIFFUSE_GUIDE frame=%llu bound=%u reason=%s width=%u height=%u semantic=pt_kd coverage=validated_surface",in.engineFrame,unsigned(bool(s.pt.owner)),s.pt.reason,width,height);
         if(!c->policy.CommandsStarted(lease)){c->policy.Abort(lease);RRLiveReleaseSources(s);__leave;}

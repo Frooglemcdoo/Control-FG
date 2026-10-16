@@ -246,6 +246,14 @@ public:
         if(storage->invalidated)return true;
         storage->invalidated=true;return Execute(storage->clearList.Get());
     }
+    // A rejected guide list must see zero even if replayed on another queue.
+    // Clear on the owning queue, then order that clear before the foreign read.
+    bool InvalidateBefore(ID3D12CommandQueue* consumerQueue){
+        std::lock_guard<std::mutex> guard(mutex);
+        if(!consumerQueue||!storage||storage->failed)return false;
+        if(!storage->invalidated){storage->invalidated=true;if(!Execute(storage->clearList.Get()))return false;}
+        return Queue(consumerQueue)||SUCCEEDED(consumerQueue->Wait(storage->fence.Get(),storage->lastFence));
+    }
     ~Output(){
         if(!storage)return;
         const auto completed=storage->fence?storage->fence->GetCompletedValue():0;

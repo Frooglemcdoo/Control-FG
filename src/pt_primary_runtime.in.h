@@ -1,4 +1,5 @@
 #include "pt_surface_history.h"
+#include "pt_guide_admission.h"
 // Included inside PTGlassRuntime after the native context/allocator adapters.
 // One session owner. Every native call is still forwarded by its outer hook.
 namespace Primary {
@@ -122,9 +123,10 @@ struct Draw {
     std::shared_ptr<Frame> frame;std::shared_ptr<PTSurfaceComposition::Pipeline> pipeline;
     Table original;UINT64 viewAddress=0;View boundView;std::shared_ptr<Output> consumer;
 };
+struct Guide {std::shared_ptr<Frame> frame;std::shared_ptr<Output> guard;bool selected=false;};
 struct Recording {
     ComPtr<IUnknown> identity;std::vector<std::shared_ptr<Draw>> draws;
-    std::vector<std::shared_ptr<Frame>> producers;bool submitted=false;
+    std::vector<std::shared_ptr<Frame>> producers;std::vector<std::shared_ptr<Guide>> guides;bool submitted=false;
 };
 static std::map<IUnknown*,Recording> recordings;
 static std::vector<std::weak_ptr<Frame>> frames;
@@ -642,7 +644,7 @@ static void Selected(void*,ID3D12CommandQueue* queue,UINT count,ID3D12CommandLis
         for(UINT n=0;n<count;++n){const auto key=Identity(lists[n]);
             for(auto& e:environments)if(e->list.Get()==key.Get()&&e->queue.Get()==queueIdentity.Get())e->submitted=true;
             auto found=recordings.find(key.Get());if(found==recordings.end())continue;auto& recording=found->second;
-            if(recording.producers.empty()&&recording.draws.empty())continue;
+            if(recording.producers.empty()&&recording.draws.empty()&&recording.guides.empty())continue;
             // Environment-only and unrelated lists require no descriptor access.
             // Hold the gate across all checks and admission for an actual consumer.
             PTTableMirror::Scope descriptorLock(true);PTTableMirror::Mute privateWrites;
@@ -666,6 +668,16 @@ static void Selected(void*,ID3D12CommandQueue* queue,UINT count,ID3D12CommandLis
                         Log("PT_PRIMARY_ADMISSION ticket=%llu reason=%s",a?a->ticket:0,admissionReason);
                     CancelFrame(frame,queue);Reject(admissionReason);
                 }
+            }
+            for(const auto& guide:recording.guides){
+                const auto& f=guide->frame;
+                const unsigned reason=PTGuideAdmission::Reject(f->producerRecorded,f->armed,f->deferred,f->cancelled,
+                    recording.submitted||guide->selected,queueIdentity.Get()==pinnedQueue.Get(),admitted);
+                guide->selected=true;
+                const bool okay=reason?guide->guard->InvalidateBefore(queue):guide->guard->EnableConsumer(queue);
+                if(!okay){PTSceneLive::owner.Scenes().Invalidate();Reject("rr_guide_guard_failed");}
+                static UINT64 checks=0;if(++checks<=8||checks%240==0||reason)
+                    Log("RR_PT_GUIDE_SUBMIT frame=%llu accepted=%u reasons=%u guard_ok=%u producer_submitted=%u deferred=%u batch_index=%u",f->view.engineFrame,unsigned(reason==0&&okay),reason,unsigned(okay),unsigned(f->producerSubmitted),unsigned(f->deferred),n);
             }
             for(const auto& draw:recording.draws){
                 const bool changed=!PTTableMirror::bank.Unchanged(draw->original);
@@ -708,7 +720,8 @@ static void Submitted(void*,ID3D12CommandQueue* queue,UINT count,ID3D12CommandLi
                 if(f->assets&&f->assets->history)f->assets->history->NativeSubmitted(queue);
                 if(PTSurfaceHistory::Publish(f,surfaceReplacement,historyOutput,historyView)){historyMaterials=f->assets->reconstruction->materials;historySignals=f->assets->reconstruction->signals;}
                 if(f->assets&&!f->deferred)PTSceneLive::owner.Scenes().Forget(f->assets->ticket);}
-            for(const auto& d:r.draws){signal(d->frame->output);signal(d->consumer);}r.submitted=true;
+            for(const auto& d:r.draws){signal(d->frame->output);signal(d->consumer);}
+            for(const auto& g:r.guides){signal(g->guard);signal(g->frame->output);signal(g->frame->raw);}r.submitted=true;
         }
         if(!uses.empty()){
             const auto value=sceneUseNext+1;
@@ -811,6 +824,6 @@ static bool Start(){
        !PTCommandBindings::Register(&commandConsumer)||!PTNativeJobRuntime::Register(&Job)||!PTSceneLive::owner.Start(step,true))return false;
     ptReflectionModeObserver.store(&MirrorModeChanged,std::memory_order_release);
     MirrorModeChanged(PTReflectionUserRequested());
-    active=true;Log("PT_PRIMARY_SESSION_READY build=M12R80 ready=1 hits=4 spp=1 roulette_start=3 material=opaque_general geometric_normals=1 native_fallback=1 primary_lighting=%s transport=%s readiness=per_material graphics_tracking=%u",surfaceReplacement?"pt":"native",surfaceReplacement?"full_surface":"diffuse_indirect",unsigned(compose));return true;
+    active=true;Log("PT_PRIMARY_SESSION_READY build=M12R81 ready=1 hits=4 spp=1 roulette_start=3 material=opaque_general geometric_normals=1 native_fallback=1 primary_lighting=%s transport=%s readiness=per_material graphics_tracking=%u",surfaceReplacement?"pt":"native",surfaceReplacement?"full_surface":"diffuse_indirect",unsigned(compose));return true;
 }
 }

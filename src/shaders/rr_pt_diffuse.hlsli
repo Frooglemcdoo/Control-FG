@@ -2,7 +2,9 @@
 // Never use radiance as albedo; black diffuse reflectance is a valid material.
 ByteAddressBuffer PTGuideRaw : register(t4);
 ByteAddressBuffer PTGuideSurface : register(t5);
+ByteAddressBuffer PTGuideAdmission : register(t6);
 float3 PTDiffuseGuide(uint index,uint material,float3 nativeGuide) {
+    [branch] if(PTGuideAdmission.Load(0)!=1)return nativeGuide;
     float4 covered=asfloat(PTGuideSurface.Load4(index*32));
     uint surfaceMaterial=PTGuideSurface.Load(index*32+20);
     float4 raw=asfloat(PTGuideRaw.Load4(index*64));

@@ -30,9 +30,9 @@ int main() {
         D3D11_SHADER_VARIABLE_DESC d{};
         contract=contract && cb && SUCCEEDED(cb->GetVariableByName(names[i])->GetDesc(&d)) && d.StartOffset==offsets[i] && d.Size==4;
     }
-    for(UINT i=0;i<2;++i){
+    for(UINT i=0;i<3;++i){
         D3D11_SHADER_INPUT_BIND_DESC d{};
-        contract=contract && SUCCEEDED(reflection->GetResourceBindingDescByName(i?"PTGuideSurface":"PTGuideRaw",&d)) && d.Type==D3D_SIT_BYTEADDRESS && d.BindPoint==4+i && d.BindCount==1;
+        contract=contract && SUCCEEDED(reflection->GetResourceBindingDescByName(i==2?"PTGuideAdmission":(i?"PTGuideSurface":"PTGuideRaw"),&d)) && d.Type==D3D_SIT_BYTEADDRESS && d.BindPoint==4+i && d.BindCount==1;
     }
     reflection->Release();
     if(!contract) {code->Release();std::fputs("FAIL: r21r retained GBuffer guide shader binding/constant ABI\n",stderr);return 5;}

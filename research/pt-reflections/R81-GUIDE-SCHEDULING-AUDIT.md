@@ -1,0 +1,11 @@
+# R81 guide scheduling audit
+
+R80 capture `probe-20261016-150150-907-3864.log` (collector PT-Primary-M12R80-Results-20261016-100551-320.zip): 19 sampled RR_PT_DIFFUSE_GUIDE records, all bound=0; initial records pt_off, later matching_submitted_producer_unavailable. Reconstruction setup failures: zero. Two missing-producer consumer rejections accompany primary_descriptor_allocation and lighting_bindings skips. Environment scale remains zero. Uploaded video hash equals the R79 video exactly; it is not new R80 visual evidence. User reports improvement and residual flicker/missing lights.
+
+The R80 acquisition check ran during RR command recording, before the producer submission and COPY-fence admission. Early records show reconstruction, guide binding failure, then PT_PRIMARY_SUBMITTED late_signal=1 for the matching view. Requiring submitted/armed at recording time prevented the intended guide correction. No claim can attribute reported improvement to that correction.
+
+R81 uses the existing queue-list ordering machinery: retain exact-frame resources during recording, initialize a separate 16-byte guard to zero, and authorize it only at Selected after earlier producer lists are armed/deferred. Deferred producer output stays zero unless its late admission succeeds. A producer later in the batch is not accepted. Replays, duplicate list entries, cancellation, wrong queues and scene rejection disable the consumer without clearing shared PT output. Wrong-queue replay explicitly waits for its guard clear. Recording and RR slot owners retain resources; submission extends output retirement fences.
+
+The shader reads the admission word before PT data. After admission, existing final coverage and material-ID checks select PT diffuse albedo per pixel. Off/unsupported paths retain native guides. Binding diagnostics distinguish recorded source from authorized GPU use.
+
+Tests cover the actual shader's zero/one/zero admission behavior, submission-policy cases including deferred COPY admission, and cross-queue invalidation ordering on D3D12 WARP. These are integration safeguards, not proof of in-game image correctness. The remaining lighting source coverage and reflection-motion work are unchanged.
