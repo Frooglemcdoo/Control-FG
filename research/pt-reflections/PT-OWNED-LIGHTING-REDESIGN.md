@@ -301,3 +301,23 @@ References informing the signal contract:
 R75 raw+final outputs require about 759 MiB per 4K frame. The old 2 GiB
 output cap cannot admit three such frames; the cap is 4 GiB for this build,
 with the auxiliary pool separately capped at 2 GiB. Neither cap is a reservation.
+
+
+## R76: consumer rejection must not clear shared radiance
+
+R75 reports repeated surface_submission_changed (throttled counter reaches 5400;
+this is not a unique-frame count). Most sampled completed frames pass primary
+material/depth correspondence on over 98% of sampled pixels. Completed frames
+are selection-biased evidence and do not describe cancelled frames.
+
+Code audit finds consumer rejection calling CancelFrame: it clears shared output
+and disarms producer admission. R76 adds a recording/frame consumer guard on a
+second raw root SRV. Consumer rejection clears this guard only; genuine producer
+invalidity retains whole-frame cancellation. This fixes rejection scope without
+weakening descriptor/view/queue/replay checks. Per-reason logs remain necessary
+to understand which consumer condition is failing in the actual game.
+
+Guards are GPU enabled/cleared on the pinned queue and retained through all native
+submissions. A rejected group cannot be re-enabled; replay stays native. Guard
+clearing failures retain global fail-closed behavior. WARP verification checks
+that rejection does not alter the radiance seen by a second valid consumer.

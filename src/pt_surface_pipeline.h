@@ -48,6 +48,8 @@ public:
         radiance.ShaderVisibility=D3D12_SHADER_VISIBILITY_PIXEL;radiance.Descriptor={0,2};parameters.push_back(radiance);
         D3D12_ROOT_PARAMETER extent{};extent.ParameterType=D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
         extent.ShaderVisibility=D3D12_SHADER_VISIBILITY_PIXEL;extent.Constants={0,2,2};parameters.push_back(extent);
+        D3D12_ROOT_PARAMETER consumer{};consumer.ParameterType=D3D12_ROOT_PARAMETER_TYPE_SRV;
+        consumer.ShaderVisibility=D3D12_SHADER_VISIBILITY_PIXEL;consumer.Descriptor={1,2};parameters.push_back(consumer);
         desc.NumParameters=static_cast<UINT>(parameters.size());desc.pParameters=parameters.data();
         Microsoft::WRL::ComPtr<ID3DBlob> serialized,error;
         hr=D3D12SerializeRootSignature(&desc,D3D_ROOT_SIGNATURE_VERSION_1_0,&serialized,&error);if(FAILED(hr))return hr;

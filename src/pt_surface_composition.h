@@ -45,6 +45,7 @@ inline bool PatchProfile(const unsigned char* input,std::size_t bytes,const Prof
             // Raw root SRV t0,space2. Width is b0,space2; the first native
             // lighting load already holds exact integer internal pixel coords.
             const U32 declaration[]={0x060000a1u,0x00307e46u,profile->resource,0,0,2,
+                0x060000a1u,0x00307e46u,profile->resource+1,1,1,2,
                 0x07000059u,0x00308e46u,cbId,0,0,1,2};
             const U32 coordinate=words[load+4];
             if(((words[load+3]>>12)&255)!=0||((words[load+3]>>20)&3)!=1||((words[load+3]>>4)&15)!=4)return false;
@@ -54,6 +55,9 @@ inline bool PatchProfile(const unsigned char* input,std::size_t bytes,const Prof
                 // out-of-extent native coordinates BEFORE issuing any raw load.
                 0x0900004fu,0x00100032u,scratch,0x00100046u,coordinate,0x00308046u,cbId,0,0,
                 0x07000001u,0x00100012u,scratch,0x0010000au,scratch,0x0010001au,scratch,
+                // Consumer-local guard. Reject before touching the shared PT buffer.
+                0x080000a5u,0x00100022u,scratch,0x00004001u,0,0x00207e46u,profile->resource+1,1,
+                0x07000001u,0x00100012u,scratch,0x0010000au,scratch,0x0010001au,scratch,
                 0x08000036u,0x001000f2u,temporary,0x00004002u,0,0,0,0,
                 0x0304001fu,0x0010000au,scratch,
                 0x0b000023u,0x00100012u,scratch,0x0010001au,coordinate,0x0030800au,cbId,0,0,0x0010000au,coordinate,
@@ -61,7 +65,7 @@ inline bool PatchProfile(const unsigned char* input,std::size_t bytes,const Prof
                 0x080000a5u,0x001000f2u,temporary,0x0010000au,scratch,0x00207e46u,profile->resource,0,
                 0x01000015u};
             const U32 select[]={0x09000037u,0x00100072u,0,0x00100ff6u,temporary,0x00100e46u,temporary,0x00100e46u,0};
-            constexpr U32 added=76;
+            constexpr U32 added=97;
             std::vector<U32> revised;revised.reserve(words.size()+added);revised.push_back(words[0]);revised.push_back(words[1]+added);
             bool sawLoad=false,sawCombine=false,sawTemps=false;
             for(std::size_t i=2;i<words.size();){

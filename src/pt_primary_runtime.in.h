@@ -117,7 +117,7 @@ struct Frame {
 };
 struct Draw {
     std::shared_ptr<Frame> frame;std::shared_ptr<PTSurfaceComposition::Pipeline> pipeline;
-    Table original;UINT64 viewAddress=0;View boundView;
+    Table original;UINT64 viewAddress=0;View boundView;std::shared_ptr<Output> consumer;
 };
 struct Recording {
     ComPtr<IUnknown> identity;std::vector<std::shared_ptr<Draw>> draws;
@@ -514,12 +514,20 @@ static void Drawing(void*,ID3D12GraphicsCommandList* list) noexcept {
             auto frame=matched;
             draw=std::make_shared<Draw>();draw->frame=frame;draw->pipeline=pipeline;draw->viewAddress=bindings.arguments[12].value;draw->boundView=view;
             if(!PTTableMirror::bank.Read(bindings.resources.Get(),first,pipeline->Required(),draw->original)){Reject("surface_descriptor_snapshot");return;}
+            // One guard per recording/frame, shared only by this consumer group.
+            // A rejected group must never clear another list's PT radiance/history.
+            for(const auto& d:recording->draws)if(d->frame==frame){draw->consumer=d->consumer;break;}
+            if(!draw->consumer){
+                if(FAILED(Output::Create(frame->queue.Get(),1,1,draw->consumer,true,true))||
+                   !draw->consumer->EnableConsumer(frame->queue.Get())){Reject("surface_consumer_guard");return;}
+            }
             recording->draws.push_back(draw);
             static UINT64 composed=0;if(++composed<=8||composed%600==0)Log("PT_PRIMARY_SURFACE_RECORDED frame=%u count=%llu binding=root_buffer descriptor_copies=0",frame->view.frame,composed);
         }
         restore={list,bindings};
         BindGraphics(list,pipeline->ComposedRoot(),bindings);
         list->SetGraphicsRootShaderResourceView(18,draw->frame->output->Address());
+        list->SetGraphicsRootShaderResourceView(20,draw->consumer->Address());
         const UINT extent[]={draw->frame->view.width,draw->frame->view.height};list->SetGraphicsRoot32BitConstants(19,2,extent,0);
         list->SetPipelineState(pipeline->Composed());
     }catch(...){Reject("surface_allocation");}
@@ -658,8 +666,17 @@ static void Selected(void*,ID3D12CommandQueue* queue,UINT count,ID3D12CommandLis
                 // CPU recording may precede the producer, GPU execution may not.
                 // Producer lists earlier in this batch have armed/deferred above.
                 const bool orderedProducer=draw->frame->producerRecorded&&(draw->frame->armed||draw->frame->deferred)&&!draw->frame->cancelled;
-                if(!orderedProducer||recording.submitted||queueIdentity.Get()!=pinnedQueue.Get()||!SameView(draw->viewAddress,draw->boundView)||changed){
-                    CancelFrame(draw->frame,queue);Reject("surface_submission_changed");
+                const UINT reason=(!orderedProducer?1u:0u)|(recording.submitted?2u:0u)|
+                    (queueIdentity.Get()!=pinnedQueue.Get()?4u:0u)|(!SameView(draw->viewAddress,draw->boundView)?8u:0u)|(changed?16u:0u);
+                if(reason){
+                    // Producer invalidation is handled above using scene/input proofs.
+                    // Consumer-only failure selects native for this recording group;
+                    // clearing shared output here used to invalidate ALL consumers.
+                    if(!draw->consumer->Invalidate(queue)){
+                        CancelFrame(draw->frame,queue);PTSceneLive::owner.Scenes().Invalidate();Reject("surface_consumer_guard_failed");
+                    }
+                    static UINT64 rejected=0;if(++rejected<=16||rejected%240==0)
+                        Log("PT_PRIMARY_CONSUMER_REJECT frame=%u reasons=%u ordered=%u replay=%u queue=%u view=%u descriptors=%u scope=recording_group shared_output_preserved=1",draw->frame->view.frame,reason,unsigned((reason&1)==0),unsigned((reason&2)!=0),unsigned((reason&4)==0),unsigned((reason&8)==0),unsigned((reason&16)==0));
                 }
             }
         }
@@ -669,10 +686,10 @@ static void Submitted(void*,ID3D12CommandQueue* queue,UINT count,ID3D12CommandLi
     if(!active)return;
     try {
         std::lock_guard<std::recursive_mutex> guard(mutex);if(!lists||count>256)return;
-        std::array<Output*,8> signalled{};UINT signals=0;bool traversed=false;std::vector<std::shared_ptr<Frame>> uses;
+        std::vector<Output*> signalled;bool traversed=false;std::vector<std::shared_ptr<Frame>> uses;
         const auto signal=[&](const std::shared_ptr<Output>& output){
-            for(UINT i=0;i<signals;++i)if(signalled[i]==output.get())return;
-            output->NativeSubmitted(queue);if(signals<signalled.size())signalled[signals++]=output.get();
+            if(std::find(signalled.begin(),signalled.end(),output.get())!=signalled.end())return;
+            output->NativeSubmitted(queue);signalled.push_back(output.get());
         };
         for(UINT n=0;n<count;++n){auto key=Identity(lists[n]);auto found=recordings.find(key.Get());if(found==recordings.end())continue;
             auto& r=found->second;for(const auto& f:r.producers){f->producerSubmitted=true;traversed=traversed||f->armed;
@@ -682,7 +699,7 @@ static void Submitted(void*,ID3D12CommandQueue* queue,UINT count,ID3D12CommandLi
                 if(f->assets&&f->assets->history)f->assets->history->NativeSubmitted(queue);
                 if(PTSurfaceHistory::Publish(f,surfaceReplacement,historyOutput,historyView)){historyMaterials=f->assets->reconstruction->materials;historySignals=f->assets->reconstruction->signals;}
                 if(f->assets&&!f->deferred)PTSceneLive::owner.Scenes().Forget(f->assets->ticket);}
-            for(const auto& d:r.draws)signal(d->frame->output);r.submitted=true;
+            for(const auto& d:r.draws){signal(d->frame->output);signal(d->consumer);}r.submitted=true;
         }
         if(!uses.empty()){
             const auto value=sceneUseNext+1;
@@ -785,6 +802,6 @@ static bool Start(){
        !PTCommandBindings::Register(&commandConsumer)||!PTNativeJobRuntime::Register(&Job)||!PTSceneLive::owner.Start(step,true))return false;
     ptReflectionModeObserver.store(&MirrorModeChanged,std::memory_order_release);
     MirrorModeChanged(PTReflectionUserRequested());
-    active=true;Log("PT_PRIMARY_SESSION_READY build=M12R75 ready=1 hits=4 spp=1 roulette_start=3 material=opaque_general geometric_normals=1 native_fallback=1 primary_lighting=%s transport=%s readiness=per_material graphics_tracking=%u",surfaceReplacement?"pt":"native",surfaceReplacement?"full_surface":"diffuse_indirect",unsigned(compose));return true;
+    active=true;Log("PT_PRIMARY_SESSION_READY build=M12R76 ready=1 hits=4 spp=1 roulette_start=3 material=opaque_general geometric_normals=1 native_fallback=1 primary_lighting=%s transport=%s readiness=per_material graphics_tracking=%u",surfaceReplacement?"pt":"native",surfaceReplacement?"full_surface":"diffuse_indirect",unsigned(compose));return true;
 }
 }

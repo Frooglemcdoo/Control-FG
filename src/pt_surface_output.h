@@ -40,7 +40,11 @@ class Output {
     // GPU fence has completed. Keep allocations, never old scene dependencies.
     static void Reclaim(Storage* s){
         s->dependencies.reset();s->producerList.Reset();s->producerAllocator.Reset();
-        if(s->reusable&&idle.size()<6){s->retiredNext=nullptr;idle.emplace_back(s);}
+        const bool guard=s->linear&&s->width==1&&s->height==1&&s->stride==16;
+        const auto count=std::count_if(idle.begin(),idle.end(),[&](const auto& item){
+            return (item->linear&&item->width==1&&item->height==1&&item->stride==16)==guard;
+        });
+        if(s->reusable&&count<(guard?64:6)){s->retiredNext=nullptr;idle.emplace_back(s);}
         else delete s;
     }
     std::unique_ptr<Storage> storage;
@@ -82,7 +86,8 @@ public:
                     pending->storage=std::move(*it);idle.erase(it);break;}
                 // A resolution/queue change must not strand the output budget.
                 if(!pending->storage)idle.erase(std::remove_if(idle.begin(),idle.end(),[&](const auto& candidate){
-                    return candidate->queueIdentity.Get()!=identity.Get()||candidate->width!=width||candidate->height!=height;
+                    return candidate->queueIdentity.Get()!=identity.Get()||
+                        (candidate->stride==stride&&(candidate->width!=width||candidate->height!=height));
                 }),idle.end());
             }
             if(pending->storage){auto& reused=*pending->storage;
@@ -138,7 +143,7 @@ public:
         s.armList->SetDescriptorHeaps(1,heaps);
         Transition(s.armList.Get(),s.texture.Get(),ReadState,D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
         const float armed[4]={0,0,0,1};
-        if(linear){const UINT empty[4]{};s.armList->ClearUnorderedAccessViewUint(s.gpu->GetGPUDescriptorHandleForHeapStart(),s.cpu->GetCPUDescriptorHandleForHeapStart(),s.texture.Get(),empty,0,nullptr);}
+        if(linear){const UINT empty[4]={1,1,1,1};s.armList->ClearUnorderedAccessViewUint(s.gpu->GetGPUDescriptorHandleForHeapStart(),s.cpu->GetCPUDescriptorHandleForHeapStart(),s.texture.Get(),empty,0,nullptr);}
         else s.armList->ClearUnorderedAccessViewFloat(s.gpu->GetGPUDescriptorHandleForHeapStart(),s.cpu->GetCPUDescriptorHandleForHeapStart(),s.texture.Get(),armed,0,nullptr);
         Transition(s.armList.Get(),s.texture.Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS,ReadState);
         hr=s.armList->Close();if(FAILED(hr))return hr;
@@ -184,6 +189,15 @@ public:
         const bool success=encode(context,list,s.texture.Get(),Uav());
         Transition(list,s.texture.Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS,ReadState);
         if(!success)s.invalidated=true;return success;
+    }
+    // Small, consumer-local GPU guard. No CPU-mapped flag races with queued draws.
+    // Clear/enable commands are ordered on the same queue and retirement includes
+    // every consumer submission, including replay. Never use this for PT output.
+    bool EnableConsumer(ID3D12CommandQueue* queue){
+        std::lock_guard<std::mutex> guard(mutex);
+        if(!Queue(queue)||!storage->linear||storage->width!=1||storage->height!=1||storage->stride!=16||
+           storage->failed||storage->invalidated||storage->recorded||storage->produced)return false;
+        storage->produced=true;return Execute(storage->armList.Get());
     }
     bool Arm(ID3D12CommandQueue* queue){
         std::lock_guard<std::mutex> guard(mutex);

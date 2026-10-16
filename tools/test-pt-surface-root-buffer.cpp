@@ -6,6 +6,7 @@
 #include <cstdio>
 #include <cmath>
 #include "../src/pt_surface_pipeline.h"
+#include "../src/pt_surface_output.h"
 #include "pt-native-root-fixture.h"
 using Microsoft::WRL::ComPtr;
 int main(){
@@ -55,10 +56,11 @@ int main(){
     PTNativeRootFixture fixture(true);ComPtr<ID3DBlob> blob;ComPtr<ID3D12RootSignature> nativeRoot,ptRoot;
     assert(SUCCEEDED(D3D12SerializeRootSignature(&fixture.desc,D3D_ROOT_SIGNATURE_VERSION_1,&blob,&error)));
     assert(SUCCEEDED(device->CreateRootSignature(0,blob->GetBufferPointer(),blob->GetBufferSize(),IID_PPV_ARGS(&nativeRoot))));
-    std::vector<D3D12_ROOT_PARAMETER> params(fixture.parameters,fixture.parameters+18);params.resize(20);
+    std::vector<D3D12_ROOT_PARAMETER> params(fixture.parameters,fixture.parameters+18);params.resize(21);
     params[18].ParameterType=D3D12_ROOT_PARAMETER_TYPE_SRV;params[18].Descriptor={0,2};params[18].ShaderVisibility=D3D12_SHADER_VISIBILITY_PIXEL;
     params[19].ParameterType=D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;params[19].Constants={0,2,2};params[19].ShaderVisibility=D3D12_SHADER_VISIBILITY_PIXEL;
-    auto desc=fixture.desc;desc.NumParameters=20;desc.pParameters=params.data();blob.Reset();
+    params[20].ParameterType=D3D12_ROOT_PARAMETER_TYPE_SRV;params[20].Descriptor={1,2};params[20].ShaderVisibility=D3D12_SHADER_VISIBILITY_PIXEL;
+    auto desc=fixture.desc;desc.NumParameters=21;desc.pParameters=params.data();blob.Reset();
     assert(SUCCEEDED(D3D12SerializeRootSignature(&desc,D3D_ROOT_SIGNATURE_VERSION_1,&blob,&error)));
     assert(SUCCEEDED(device->CreateRootSignature(0,blob->GetBufferPointer(),blob->GetBufferSize(),IID_PPV_ARGS(&ptRoot))));
     D3D12_GRAPHICS_PIPELINE_STATE_DESC pd{};pd.pRootSignature=nativeRoot.Get();pd.VS={vs->GetBufferPointer(),vs->GetBufferSize()};pd.PS={ps->GetBufferPointer(),ps->GetBufferSize()};
@@ -71,7 +73,7 @@ int main(){
     ComPtr<ID3D12Resource> data;assert(SUCCEEDED(device->CreateCommittedResource(&hp,D3D12_HEAP_FLAG_NONE,&bd,D3D12_RESOURCE_STATE_GENERIC_READ,nullptr,IID_PPV_ARGS(&data))));
     void* mapped=nullptr;const D3D12_RANGE none{};assert(SUCCEEDED(data->Map(0,&none,&mapped)));std::memset(mapped,0,4096);
     auto* values=static_cast<float*>(mapped);for(UINT y=0;y<8;++y)for(UINT x=0;x<8;++x){const UINT at=(y*8+x)*8;values[at]=.25f;values[at+1]=.5f;values[at+2]=.75f;values[at+3]=(x+y)%2?1.0f:0.0f;}
-    values[768]=values[769]=values[770]=2;data->Unmap(0,nullptr);
+    static_cast<UINT*>(mapped)[896]=1;values[768]=values[769]=values[770]=2;data->Unmap(0,nullptr);
     D3D12_DESCRIPTOR_HEAP_DESC hd{};hd.Type=D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;hd.NumDescriptors=49;hd.Flags=D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;ComPtr<ID3D12DescriptorHeap> heap;
     assert(SUCCEEDED(device->CreateDescriptorHeap(&hd,IID_PPV_ARGS(&heap))));const UINT step=device->GetDescriptorHandleIncrementSize(hd.Type);
     D3D12_SHADER_RESOURCE_VIEW_DESC srv{};srv.Format=DXGI_FORMAT_R32G32B32A32_FLOAT;srv.ViewDimension=D3D12_SRV_DIMENSION_TEXTURE2D;srv.Shader4ComponentMapping=D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;srv.Texture2D.MipLevels=1;
@@ -81,20 +83,32 @@ int main(){
     hp.Type=D3D12_HEAP_TYPE_DEFAULT;D3D12_RESOURCE_DESC td{};td.Dimension=D3D12_RESOURCE_DIMENSION_TEXTURE2D;td.Width=8;td.Height=8;td.DepthOrArraySize=td.MipLevels=1;td.SampleDesc.Count=1;td.Format=srv.Format;td.Flags=D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
     ComPtr<ID3D12Resource> target;assert(SUCCEEDED(device->CreateCommittedResource(&hp,D3D12_HEAP_FLAG_NONE,&td,D3D12_RESOURCE_STATE_RENDER_TARGET,nullptr,IID_PPV_ARGS(&target))));
     hd={};hd.Type=D3D12_DESCRIPTOR_HEAP_TYPE_RTV;hd.NumDescriptors=1;ComPtr<ID3D12DescriptorHeap> rtv;assert(SUCCEEDED(device->CreateDescriptorHeap(&hd,IID_PPV_ARGS(&rtv))));device->CreateRenderTargetView(target.Get(),nullptr,rtv->GetCPUDescriptorHandleForHeapStart());
-    hp.Type=D3D12_HEAP_TYPE_READBACK;bd.Width=8192;ComPtr<ID3D12Resource> readback;assert(SUCCEEDED(device->CreateCommittedResource(&hp,D3D12_HEAP_FLAG_NONE,&bd,D3D12_RESOURCE_STATE_COPY_DEST,nullptr,IID_PPV_ARGS(&readback))));
+    hp.Type=D3D12_HEAP_TYPE_READBACK;bd.Width=12288;ComPtr<ID3D12Resource> readback;assert(SUCCEEDED(device->CreateCommittedResource(&hp,D3D12_HEAP_FLAG_NONE,&bd,D3D12_RESOURCE_STATE_COPY_DEST,nullptr,IID_PPV_ARGS(&readback))));
     ComPtr<ID3D12CommandQueue> queue;D3D12_COMMAND_QUEUE_DESC qd{};assert(SUCCEEDED(device->CreateCommandQueue(&qd,IID_PPV_ARGS(&queue))));
+    std::shared_ptr<PTSurfaceComposition::Output> acceptedGuard,rejectedGuard;
+    assert(SUCCEEDED(PTSurfaceComposition::Output::Create(queue.Get(),1,1,acceptedGuard,true,true)));
+    assert(SUCCEEDED(PTSurfaceComposition::Output::Create(queue.Get(),1,1,rejectedGuard,true,true)));
+    assert(acceptedGuard->EnableConsumer(queue.Get())&&rejectedGuard->EnableConsumer(queue.Get()));
+    assert(rejectedGuard->Invalidate(queue.Get()));assert(!rejectedGuard->EnableConsumer(queue.Get()));
     ComPtr<ID3D12CommandAllocator> allocator;ComPtr<ID3D12GraphicsCommandList> list;assert(SUCCEEDED(device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT,IID_PPV_ARGS(&allocator))));assert(SUCCEEDED(device->CreateCommandList(0,D3D12_COMMAND_LIST_TYPE_DIRECT,allocator.Get(),nullptr,IID_PPV_ARGS(&list))));
     ID3D12DescriptorHeap* heaps[]={heap.Get()};list->SetDescriptorHeaps(1,heaps);auto handle=rtv->GetCPUDescriptorHandleForHeapStart();list->OMSetRenderTargets(1,&handle,FALSE,nullptr);
     D3D12_VIEWPORT viewport{0,0,8,8,0,1};D3D12_RECT rect{0,0,8,8};list->RSSetViewports(1,&viewport);list->RSSetScissorRects(1,&rect);list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-    for(UINT draw=0;draw<200;++draw){list->SetGraphicsRootSignature(ptRoot.Get());list->SetGraphicsRootDescriptorTable(1,heap->GetGPUDescriptorHandleForHeapStart());list->SetGraphicsRootConstantBufferView(12,data->GetGPUVirtualAddress()+3072);list->SetGraphicsRootShaderResourceView(18,data->GetGPUVirtualAddress());const UINT extent[]={8,8};list->SetGraphicsRoot32BitConstants(19,2,extent,0);list->SetPipelineState(ptPso.Get());list->DrawInstanced(3,1,0,0);}
+    for(UINT draw=0;draw<200;++draw){list->SetGraphicsRootSignature(ptRoot.Get());list->SetGraphicsRootDescriptorTable(1,heap->GetGPUDescriptorHandleForHeapStart());list->SetGraphicsRootConstantBufferView(12,data->GetGPUVirtualAddress()+3072);list->SetGraphicsRootShaderResourceView(18,data->GetGPUVirtualAddress());list->SetGraphicsRootShaderResourceView(20,acceptedGuard->Address());const UINT extent[]={8,8};list->SetGraphicsRoot32BitConstants(19,2,extent,0);list->SetPipelineState(ptPso.Get());list->DrawInstanced(3,1,0,0);}
     const auto capture=[&](UINT offset){D3D12_RESOURCE_BARRIER b{};b.Type=D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;b.Transition={target.Get(),0,D3D12_RESOURCE_STATE_RENDER_TARGET,D3D12_RESOURCE_STATE_COPY_SOURCE};list->ResourceBarrier(1,&b);
         D3D12_TEXTURE_COPY_LOCATION src{},dst{};src.pResource=target.Get();src.Type=D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;dst.pResource=readback.Get();dst.Type=D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;dst.PlacedFootprint.Offset=offset;dst.PlacedFootprint.Footprint={srv.Format,8,8,1,256};list->CopyTextureRegion(&dst,0,0,0,&src,nullptr);std::swap(b.Transition.StateBefore,b.Transition.StateAfter);list->ResourceBarrier(1,&b);};
     capture(0);
     list->SetGraphicsRootSignature(nativeRoot.Get());list->SetGraphicsRootDescriptorTable(1,heap->GetGPUDescriptorHandleForHeapStart());list->SetGraphicsRootConstantBufferView(12,data->GetGPUVirtualAddress()+3072);list->SetPipelineState(nativePso.Get());list->DrawInstanced(3,1,0,0);capture(2048);
-    list->SetGraphicsRootSignature(ptRoot.Get());list->SetGraphicsRootDescriptorTable(1,heap->GetGPUDescriptorHandleForHeapStart());list->SetGraphicsRootConstantBufferView(12,data->GetGPUVirtualAddress()+3072);list->SetGraphicsRootShaderResourceView(18,data->GetGPUVirtualAddress());const UINT cropped[]={8,4};list->SetGraphicsRoot32BitConstants(19,2,cropped,0);list->SetPipelineState(ptPso.Get());list->DrawInstanced(3,1,0,0);capture(4096);
-    assert(SUCCEEDED(list->Close()));ID3D12CommandList* lists[]={list.Get()};queue->ExecuteCommandLists(1,lists);
+    list->SetGraphicsRootSignature(ptRoot.Get());list->SetGraphicsRootDescriptorTable(1,heap->GetGPUDescriptorHandleForHeapStart());list->SetGraphicsRootConstantBufferView(12,data->GetGPUVirtualAddress()+3072);list->SetGraphicsRootShaderResourceView(18,data->GetGPUVirtualAddress());list->SetGraphicsRootShaderResourceView(20,acceptedGuard->Address());const UINT cropped[]={8,4};list->SetGraphicsRoot32BitConstants(19,2,cropped,0);list->SetPipelineState(ptPso.Get());list->DrawInstanced(3,1,0,0);capture(4096);
+    // A rejected consumer uses native black, then another consumer still reads
+    // the unchanged shared PT buffer. No global radiance clear is permitted.
+    const UINT full[]={8,8};list->SetGraphicsRoot32BitConstants(19,2,full,0);
+    list->SetGraphicsRootShaderResourceView(20,rejectedGuard->Address());
+    list->DrawInstanced(3,1,0,0);capture(6144);
+    list->SetGraphicsRootShaderResourceView(20,acceptedGuard->Address());
+    list->DrawInstanced(3,1,0,0);capture(8192);
+    assert(SUCCEEDED(list->Close()));ID3D12CommandList* lists[]={list.Get()};queue->ExecuteCommandLists(1,lists);assert(acceptedGuard->NativeSubmitted(queue.Get()));assert(rejectedGuard->NativeSubmitted(queue.Get()));
     ComPtr<ID3D12Fence> fence;assert(SUCCEEDED(device->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&fence))));assert(SUCCEEDED(queue->Signal(fence.Get(),1)));HANDLE event=CreateEventW(nullptr,FALSE,FALSE,nullptr);assert(SUCCEEDED(fence->SetEventOnCompletion(1,event)));assert(WaitForSingleObject(event,10000)==WAIT_OBJECT_0);CloseHandle(event);
-    const D3D12_RANGE read{0,6144};assert(SUCCEEDED(readback->Map(0,&read,&mapped)));
-    for(UINT frame=0;frame<3;++frame)for(UINT y=0;y<8;++y)for(UINT x=0;x<8;++x){const auto* pixel=reinterpret_cast<const float*>(static_cast<unsigned char*>(mapped)+frame*2048+y*256+x*16);for(UINT c=0;c<4;++c){const float pt[]={.25f,.5f,.75f};const float expected=c==3?1.0f:(((frame==0||(frame==2&&y<4))&&(x+y)%2)?std::sqrt(pt[c]):0.0f);assert(std::abs(pixel[c]-expected)<.0001f);}}
-    readback->Unmap(0,&none);assert(SUCCEEDED(device->GetDeviceRemovedReason()));puts("PASS: patched DXBC root-buffer GPU read, 200 draws, coverage selection, row pitch, and native-root restoration");
+    const D3D12_RANGE read{0,10240};assert(SUCCEEDED(readback->Map(0,&read,&mapped)));
+    for(UINT frame=0;frame<5;++frame)for(UINT y=0;y<8;++y)for(UINT x=0;x<8;++x){const auto* pixel=reinterpret_cast<const float*>(static_cast<unsigned char*>(mapped)+frame*2048+y*256+x*16);for(UINT c=0;c<4;++c){const float pt[]={.25f,.5f,.75f};const float expected=c==3?1.0f:(((frame==0||frame==4||(frame==2&&y<4))&&(x+y)%2)?std::sqrt(pt[c]):0.0f);assert(std::abs(pixel[c]-expected)<.0001f);}}
+    readback->Unmap(0,&none);assert(SUCCEEDED(device->GetDeviceRemovedReason()));puts("PASS: patched DXBC root-buffer GPU read, 200 draws, coverage selection, row pitch, native-root restoration, and rejected consumer isolation without clearing shared PT output");
 }
