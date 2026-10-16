@@ -97,8 +97,6 @@ static std::map<UINT64,Candidate> candidates;
 struct Environment {
     View view;Table table;ComPtr<IUnknown> list,queue;bool submitted=false;
     UINT64 scaleAddress=0;float scale=0;
-    UINT64 giAddress=0,giScaleAddress=0;bool gi=false;
-    std::array<unsigned char,64> giConstants{};
 };
 static std::vector<std::shared_ptr<Environment>> environments;
 struct Assets {
@@ -177,8 +175,6 @@ static void PollMetrics(){
             std::array<UINT,12> h{};if(f.assets->metrics.ReadReconstruction(h))
                 Log("PT_PRIMARY_HISTORY_PIXELS frame=%u valid=%u available=%u projected=%u covered=%u compatible=%u accepted=%u sample_sum=%u material_match=%u normal_match=%u rescued=%u stable_material_match=%u reindexed_accepted=%u taps=4 candidates=4",f.view.frame,h[0],h[1],h[2],h[3],h[4],h[5],h[6],h[7],h[8],h[9],h[10],h[11]);
         }
-        if(surfaceReplacement&&faultRead&&(n<=8||n%240==0))
-            Log("PT_PRIMARY_TERMINAL_GI_GPU frame=%u positive_samples=%u sampled_grid=64 terminal_vertex=4",f.view.frame,faults[15]);
         if(surfaceReplacement&&faultRead&&faults[0]&&(n<=8||n%240==0))
             Log("PT_PRIMARY_SECONDARY_TERMINATION frame=%u sampled=%u retained_primary=1",f.view.frame,faults[0]);
         if(good&&counts[7]){
@@ -327,24 +323,7 @@ static void Dispatched(void*,ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT 
                     !PTSceneLive::owner.Resources().ReadUpload(e->scaleAddress,&e->scale,4))||
                    !std::isfinite(e->scale)||e->scale<0){Reject("environment_scale_snapshot");return;}
             }
-            if(surfaceReplacement&&bindings.arguments[5].kind==PTCommandBindings::ArgumentKind::constant){
-                e->giAddress=bindings.arguments[5].value;e->giScaleAddress=bindings.arguments[3].value+252;
-                auto read=[](UINT64 address,void* data,std::size_t size){return PTNativeView::uploads.Read(address,data,size)||PTSceneLive::owner.Resources().ReadUpload(address,data,size);};
-                Table cache;float scale=0;UINT volumes=0;
-                constexpr UINT64 giMask=(1ull<<0)|(1ull<<13)|(0x1ffull<<21); // b4, cube, t16..24
-                if(read(e->giAddress,e->giConstants.data(),48)&&read(e->giScaleAddress,&scale,4)&&std::isfinite(scale)&&scale>=0&&
-                   PTTableMirror::bank.Read(bindings.resources.Get(),context.table.first,giMask,cache)){
-                    std::memcpy(&volumes,e->giConstants.data()+12,4);
-                    if(volumes<=384){
-                        e->gi=true;e->table=std::move(cache);const UINT enabled=1;
-                        std::memcpy(e->giConstants.data()+48,&scale,4);std::memcpy(e->giConstants.data()+52,&enabled,4);
-                    }
-                }
-                if(!e->gi)e->giConstants.fill(0);
-                static UINT64 giSnapshots=0;if(++giSnapshots<=8||giSnapshots%240==0)
-                    Log("PT_PRIMARY_TERMINAL_GI frame=%u admitted=%u volumes=%u scale=%.9g source=reflection_volume_inputs terminal_only=1",view.frame,unsigned(e->gi),volumes,scale);
-            }
-            if(!e->gi&&!PTTableMirror::bank.Read(bindings.resources.Get(),context.table.first,1ull<<13,e->table)){Reject("environment_descriptor");return;}
+            if(!PTTableMirror::bank.Read(bindings.resources.Get(),context.table.first,1ull<<13,e->table)){Reject("environment_descriptor");return;}
             while(environments.size()>=16)environments.erase(environments.begin());environments.push_back(std::move(e));return;
         }
         if(z!=1||x!=(view.width+7)/8||y!=(view.height+7)/8||!primary->root->Matches(bindings.layout->Root())){Reject("primary_dispatch_shape_or_root");return;}
@@ -429,13 +408,12 @@ static void Dispatched(void*,ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT 
         profile.Next(PTHotpathTiming::Kind::primary_sbt);QueryPerformanceCounter(&sbtStart);
         if(FAILED(PTScenePipeline::Dispatch::Create(device.Get(),pipeline,plan,view.width,view.height,bindings.resources.Get(),a->dispatch))){Reject("private_sbt");return;}
         profile.Next(PTHotpathTiming::Kind::primary_camera);QueryPerformanceCounter(&cameraStart);
-        if(FAILED(PTUploadPool::Buffer::Acquire(device.Get(),2048,a->cameraStorage))){Reject("camera_upload");return;}
+        if(FAILED(PTUploadPool::Buffer::Acquire(device.Get(),1792,a->cameraStorage))){Reject("camera_upload");return;}
         a->camera=a->cameraStorage->Resource();
         void* cameraData=nullptr;const D3D12_RANGE noRead{};
         if(FAILED(a->camera->Map(0,&noRead,&cameraData))||!cameraData){Reject("camera_map");return;}
         std::memcpy(cameraData,view.bytes.data(),view.bytes.size());
-        std::memcpy(static_cast<unsigned char*>(cameraData)+1280,a->lightConstants.data(),a->lightConstants.size());
-        std::memcpy(static_cast<unsigned char*>(cameraData)+1792,environment->giConstants.data(),64);a->camera->Unmap(0,nullptr);
+        std::memcpy(static_cast<unsigned char*>(cameraData)+1280,a->lightConstants.data(),a->lightConstants.size());a->camera->Unmap(0,nullptr);
         profile.Next(PTHotpathTiming::Kind::primary_metrics);QueryPerformanceCounter(&metricsStart);
         if(!a->metrics.Initialize(device.Get())){Reject("coverage_allocation");return;}
         QueryPerformanceCounter(&descriptorReacquire);
@@ -450,14 +428,6 @@ static void Dispatched(void*,ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT 
         device->CopyDescriptorsSimple(49,Cpu(a->privateTable),a->primary.At(0),D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
         device->CopyDescriptorsSimple(1,Cpu(a->privateTable,47),a->metrics.Uav(),D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
         device->CopyDescriptorsSimple(1,Cpu(a->privateTable,39),environment->table.At(13),D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-        if(surfaceReplacement){
-            D3D12_CONSTANT_BUFFER_VIEW_DESC giParameters{};giParameters.BufferLocation=a->camera->GetGPUVirtualAddress()+1792;giParameters.SizeInBytes=256;
-            device->CreateConstantBufferView(&giParameters,Cpu(a->privateTable,1)); // private b5
-            if(environment->gi){
-                device->CopyDescriptorsSimple(1,Cpu(a->privateTable,0),environment->table.At(0),D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV); // b4 volume transforms
-                device->CopyDescriptorsSimple(9,Cpu(a->privateTable,26),environment->table.At(21),D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV); // t21..29
-            }
-        }
         D3D12_SHADER_RESOURCE_VIEW_DESC as{};as.ViewDimension=D3D12_SRV_DIMENSION_RAYTRACING_ACCELERATION_STRUCTURE;
         as.Shader4ComponentMapping=D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;as.RaytracingAccelerationStructure.Location=plan.selection.tlas;
         device->CreateShaderResourceView(nullptr,&as,Cpu(a->privateTable,40));
@@ -633,14 +603,6 @@ static bool SameLights(const Assets& a){
 }
 static bool SameEnvironmentScale(const Environment& e){
     if(!surfaceReplacement)return true;float scale=0;
-    if(e.gi){
-        std::array<unsigned char,48> current{};float giScale=0;
-        if((!PTNativeView::uploads.Read(e.giAddress,current.data(),current.size())&&
-            !PTSceneLive::owner.Resources().ReadUpload(e.giAddress,current.data(),current.size()))||
-           (!PTNativeView::uploads.Read(e.giScaleAddress,&giScale,4)&&
-            !PTSceneLive::owner.Resources().ReadUpload(e.giScaleAddress,&giScale,4))||
-           std::memcmp(current.data(),e.giConstants.data(),48)||std::memcmp(&giScale,e.giConstants.data()+48,4))return false;
-    }
     return (PTNativeView::uploads.Read(e.scaleAddress,&scale,4)||
         PTSceneLive::owner.Resources().ReadUpload(e.scaleAddress,&scale,4))&&
         !std::memcmp(&scale,&e.scale,4);
@@ -891,6 +853,6 @@ static bool Start(){
        !PTCommandBindings::Register(&commandConsumer)||!PTNativeJobRuntime::Register(&Job)||!PTSceneLive::owner.Start(step,true))return false;
     ptReflectionModeObserver.store(&MirrorModeChanged,std::memory_order_release);
     MirrorModeChanged(PTReflectionUserRequested());
-    active=true;Log("PT_PRIMARY_SESSION_READY build=M12R87 ready=1 hits=4 spp=1 roulette_start=3 material=opaque_general geometric_normals=1 native_fallback=1 primary_lighting=%s transport=%s readiness=per_material graphics_tracking=%u",surfaceReplacement?"pt":"native",surfaceReplacement?"full_surface":"diffuse_indirect",unsigned(compose));return true;
+    active=true;Log("PT_PRIMARY_SESSION_READY build=M12R88 ready=1 hits=4 spp=1 roulette_start=3 material=opaque_general geometric_normals=1 native_fallback=1 primary_lighting=%s transport=%s readiness=per_material graphics_tracking=%u",surfaceReplacement?"pt":"native",surfaceReplacement?"full_surface":"diffuse_indirect",unsigned(compose));return true;
 }
 }
