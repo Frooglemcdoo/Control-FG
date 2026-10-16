@@ -509,7 +509,30 @@ static void Drawing(void*,ID3D12GraphicsCommandList* list) noexcept {
             if(!f||f->cancelled||f->view.engineFrame!=engineFrame||!f->view.MatchesSurface(raw))continue;
             if(matched){Reject("surface_ambiguous_frame");return;}matched=f;
         }
-        if(!matched){Reject("surface_matching_frame_unavailable");return;}
+        if(!matched){
+            // Native workers may record a surface before the opaque ray callback
+            // reserves its output. Authenticate this worker's complete camera;
+            // never borrow the most recent output or relax camera matching.
+            View early;early.bytes=raw;
+            if(!pinnedQueue||!viewProviders.Read(early,PTNativeView::Pass::surface)||
+               early.engineFrame!=engineFrame||!early.MatchesSurface(raw)){
+                Reject("surface_early_camera_unavailable");return;
+            }
+            // Only reserve when this engine frame has no output yet. Another
+            // view is not evidence that its missing output should be allocated.
+            bool currentFrameExists=false;
+            for(const auto& weak:frames){const auto f=weak.lock();
+                if(f&&f->view.engineFrame==engineFrame){currentFrameExists=true;break;}}
+            if(currentFrameExists){Reject("surface_other_view_or_cancelled_frame");return;}
+            ComPtr<ID3D12CommandQueue> queue;
+            if(FAILED(pinnedQueue.As(&queue))){Reject("surface_early_queue_unavailable");return;}
+            PTTableMirror::Scope descriptorLock(true);PTTableMirror::Mute privateWrites;
+            matched=FrameFor(early,queue.Get());
+            if(!matched||matched->cancelled){Reject("surface_early_reservation_failed");return;}
+            static UINT64 earlyReservations=0;
+            if(++earlyReservations<=8||earlyReservations%240==0)
+                Log("PT_PRIMARY_SURFACE_EARLY_RESERVED frame=%u engine_frame=%llu count=%llu producer_required=1",early.frame,early.engineFrame,earlyReservations);
+        }
         view=matched->view;view.pass=PTNativeView::Pass::surface;view.bound=raw;
         const auto base=bindings.resources->GetGPUDescriptorHandleForHeapStart().ptr;
         const auto step=device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
@@ -830,6 +853,6 @@ static bool Start(){
        !PTCommandBindings::Register(&commandConsumer)||!PTNativeJobRuntime::Register(&Job)||!PTSceneLive::owner.Start(step,true))return false;
     ptReflectionModeObserver.store(&MirrorModeChanged,std::memory_order_release);
     MirrorModeChanged(PTReflectionUserRequested());
-    active=true;Log("PT_PRIMARY_SESSION_READY build=M12R84 ready=1 hits=4 spp=1 roulette_start=3 material=opaque_general geometric_normals=1 native_fallback=1 primary_lighting=%s transport=%s readiness=per_material graphics_tracking=%u",surfaceReplacement?"pt":"native",surfaceReplacement?"full_surface":"diffuse_indirect",unsigned(compose));return true;
+    active=true;Log("PT_PRIMARY_SESSION_READY build=M12R85 ready=1 hits=4 spp=1 roulette_start=3 material=opaque_general geometric_normals=1 native_fallback=1 primary_lighting=%s transport=%s readiness=per_material graphics_tracking=%u",surfaceReplacement?"pt":"native",surfaceReplacement?"full_surface":"diffuse_indirect",unsigned(compose));return true;
 }
 }

@@ -30,5 +30,14 @@ int main(){
     raw=a.bytes;raw[1112]^=1;assert(!b.MatchesBound(raw));
     raw=a.bytes;raw[24]^=1;assert(b.Mismatch(raw)==24);
     b=a;b.engineFrame=123;assert(!a.Same(b));
+    // An authenticated surface reservation and its later opaque producer share
+    // identity, despite different pass-local bound fields. Full camera changes
+    // must not reuse that reservation.
+    auto early=a;early.engineFrame=123;early.pass=PTNativeView::Pass::surface;early.bound=raw;
+    auto producer=early;producer.pass=PTNativeView::Pass::primary;producer.bound=a.bytes;
+    assert(early.Same(producer)&&producer.Same(early));
+    Write(producer,224,2);assert(producer.Decode()&&!early.Same(producer));
+    producer=early;Write(producer,8,1.f/1920);assert(producer.Decode()&&!early.Same(producer));
+    producer=early;producer.engineFrame++;assert(!early.Same(producer));
     puts("PASS: inverse render extents, unused fields ignored, frame/camera changes and missing transforms rejected");
 }
