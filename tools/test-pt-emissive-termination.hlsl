@@ -1,5 +1,8 @@
 // Synthetic constant inputs legitimately make some finite checks redundant.
 #pragma warning(disable: 3577)
+// FXC flags aggregate returns on the deliberately non-finite test branch.
+// Every returned struct is initialized; GPU readback checks every result.
+#pragma warning(disable: 4000)
 // Execute the production integrator with deterministic synthetic hit adapters.
 struct RayDesc {float3 Origin;float TMin;float3 Direction;float TMax;};
 struct PTSceneHit {uint status;float distance;float3 geometricNormal;};
