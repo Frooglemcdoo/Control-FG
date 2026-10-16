@@ -52,7 +52,6 @@ PTPathResult PTIntegratePathFirst(RayDesc ray,uint maxHits,uint rouletteStart,ui
         float3 bitangent=cross(n,tangent);
         float3 wo=float3(dot(-ray.Direction,tangent),dot(-ray.Direction,bitangent),dot(-ray.Direction,n));
         if(wo.z<=0){path.valid=0;result.fault=5;break;}
-        if(depth==0)result.primaryValid=1;
         if(depth!=0||includePrimaryEmission!=0)path=PTAccumulate(path,surface.emission);
         PTDirectSample light;uint visibility;
         bool sampleDirect=true;
@@ -66,6 +65,9 @@ PTPathResult PTIntegratePathFirst(RayDesc ray,uint maxHits,uint rouletteStart,ui
             if(direct.valid==0){path.valid=0;result.fault=7;break;}
             path=PTAccumulate(path,direct.radiance);
         }
+        // A valid material alone is insufficient: failed primary lighting
+        // must not publish covered black and suppress native illumination.
+        if(depth==0&&path.valid!=0)result.primaryValid=1;
         if(depth+1==maxHits) break;
         float choose=PTPathRandom(rng),u=PTPathRandom(rng),v=PTPathRandom(rng),rr=PTPathRandom(rng);
         PTSurfaceMaterial continuation=surface.material;

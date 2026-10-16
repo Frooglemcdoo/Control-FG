@@ -197,3 +197,24 @@ Validation includes compiler-generated DXBC patched through the same machinery,
 reduction, temporal accumulation, material/depth history rejection and admission
 0/2 handling. Existing output replay and late-admission tests remain. Windows
 validation cannot prove real-game hook coverage, appearance or GPU performance.
+
+## R71 capture-driven corrections
+
+R70 user capture (2026-10-15 19:56 local) reports flicker/noise and missing lights.
+All 22 logged reconstruction records had history=0 and all sampled admissions
+used late_signal=1. Submitted ran before AdmitFrame, so its history publication
+condition could never pass in this route. Publish at both transitions, requiring
+submitted+armed, no cancellation/probe, and increasing engineFrame. A shared
+production helper has a regression test for both orders and retained lifetime.
+
+The environment intensity logged zero. R70 paired the reflection-composite cube
+with an opaque-pass provider value. The reviewed native secondary composite uses
+b1[15].y at native dword2962. R71 snapshots that bound lane with the cube and
+revalidates before admission. This fixes a source mismatch; actual brightness and
+remaining missing lights require in-game validation, not a fabricated floor.
+
+Primary validity is now established after primary direct-light validation.
+Unsupported/invalid secondary work preserves the known primary contribution,
+but an invalid primary light no longer suppresses native output with covered black.
+R70 component tests missed the actual late-admission history publication path.
+The Windows gate also now rejects negative assertion exit codes.

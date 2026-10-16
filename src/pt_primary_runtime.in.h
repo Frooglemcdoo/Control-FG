@@ -1,3 +1,4 @@
+#include "pt_surface_history.h"
 // Included inside PTGlassRuntime after the native context/allocator adapters.
 // One session owner. Every native call is still forwarded by its outer hook.
 namespace Primary {
@@ -89,6 +90,7 @@ struct Candidate {PTNativeJobRoute::Ticket ticket;View view;std::shared_ptr<Fram
 static std::map<UINT64,Candidate> candidates;
 struct Environment {
     View view;Table table;ComPtr<IUnknown> list,queue;bool submitted=false;
+    UINT64 scaleAddress=0;float scale=0;
 };
 static std::vector<std::shared_ptr<Environment>> environments;
 struct Assets {
@@ -291,7 +293,7 @@ static void Dispatched(void*,ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT 
         std::lock_guard<std::recursive_mutex> guard(mutex);std::optional<PTTableMirror::Scope> descriptorLock(std::in_place,true);
         std::optional<PTTableMirror::Mute> privateWrites(std::in_place);
         profile.Next(PTHotpathTiming::Kind::primary_setup);
-        Bindings bindings;if(!PTCommandBindings::tracker.Read(list,nativeRoots,false,0xd5,bindings)){Reject("lighting_bindings");return;}
+        Bindings bindings;if(!PTCommandBindings::tracker.Read(list,nativeRoots,false,(environmentPass&&surfaceReplacement)?0xdd:0xd5,bindings)){Reject("lighting_bindings");return;}
         View view;Context context;
         if(!ReadView(bindings.arguments[2].value,view,environmentPass?PTNativeView::Pass::environment:PTNativeView::Pass::primary)||!ContextFor(list,bindings,0,context)){Reject("lighting_view_or_context");return;}
         if(environmentPass){
@@ -299,6 +301,15 @@ static void Dispatched(void*,ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT 
             // table/view, not a guessed globally most recent environment.
             for(const auto& e:environments)if(e->view.Same(view)&&e->table.native.Get()==bindings.resources.Get()&&e->table.first==context.table.first)return;
             auto e=std::make_shared<Environment>();e->view=view;e->list=Identity(list);e->queue=Identity(context.queue);
+            if(surfaceReplacement){
+                // This exact cube is consumed with b1[15].y by the reviewed
+                // environment composite. The opaque-pass provider can be zero
+                // while ray-traced environment lighting remains enabled.
+                e->scaleAddress=bindings.arguments[3].value+244;
+                if((!PTNativeView::uploads.Read(e->scaleAddress,&e->scale,4)&&
+                    !PTSceneLive::owner.Resources().ReadUpload(e->scaleAddress,&e->scale,4))||
+                   !std::isfinite(e->scale)||e->scale<0){Reject("environment_scale_snapshot");return;}
+            }
             if(!PTTableMirror::bank.Read(bindings.resources.Get(),context.table.first,1ull<<13,e->table)){Reject("environment_descriptor");return;}
             while(environments.size()>=16)environments.erase(environments.begin());environments.push_back(std::move(e));return;
         }
@@ -335,9 +346,10 @@ static void Dispatched(void*,ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT 
         if((!PTNativeView::uploads.Read(bindings.arguments[4].value,a->boundLights.data(),a->boundLights.size())&&
             !PTSceneLive::owner.Resources().ReadUpload(bindings.arguments[4].value,a->boundLights.data(),a->boundLights.size()))||
             !viewProviders.ReadLights(view,a->boundLights,a->lightConstants)){Reject("light_provider_snapshot");return;}
+        if(surfaceReplacement)std::memcpy(a->lightConstants.data()+244,&environment->scale,4);
         static UINT64 lightSnapshots=0;if(++lightSnapshots<=8||lightSnapshots%240==0){UINT totals[3]{};float scale=0;
             std::memcpy(totals,a->lightConstants.data()+256,12);std::memcpy(&scale,a->lightConstants.data()+244,4);
-            Log("PT_PRIMARY_LIGHTS frame=%u points=%u spots=%u suns=%u environment=%.9g source=authenticated_provider",view.frame,totals[0],totals[1],totals[2],scale);}
+            Log("PT_PRIMARY_LIGHTS frame=%u points=%u spots=%u suns=%u environment=%.9g source=authenticated_provider environment_source=%s",view.frame,totals[0],totals[1],totals[2],scale,surfaceReplacement?"bound_reflection_composite":"opaque_provider");}
         // t0,t1,t3,t7,t8,t10,t14,t15,t17,t18 and native outputs.
         constexpr UINT64 required=(1ull<<5)|(1ull<<6)|(1ull<<8)|(1ull<<12)|(1ull<<13)|(1ull<<15)|(1ull<<19)|(1ull<<20)|(1ull<<22)|(1ull<<23)|(1ull<<41)|(1ull<<42);
         if(!PTTableMirror::bank.Read(bindings.resources.Get(),context.table.first,required,a->primary)||
@@ -421,7 +433,7 @@ static void Dispatched(void*,ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT 
             frame->output->RecordInline(list,a.get(),&Encode,a);
         if(!encoded){frame->output->Invalidate(context.queue);Reject("inline_record");return;}
         if(surfaceReplacement){static UINT64 reconstructed=0;if(++reconstructed<=8||reconstructed%240==0)
-            Log("PT_PRIMARY_RECONSTRUCTION frame=%u history=%u dimensions=%ux%u binding=root_buffer surface_descriptor_allocations=0",view.frame,unsigned(a->reconstruction->historyEnabled),view.width,view.height);}
+            Log("PT_PRIMARY_RECONSTRUCTION frame=%u history=%u previous_frame=%u dimensions=%ux%u binding=root_buffer surface_descriptor_allocations=0",view.frame,unsigned(a->reconstruction->historyEnabled),a->history?historyView.frame:0,view.width,view.height);}
         QueryPerformanceCounter(&recordDone);
         a->cpuCosts={CpuMilliseconds(prepareStart,recordDone),CpuMilliseconds(leaseStart,leaseDone),
             CpuMilliseconds(sbtStart,cameraStart),CpuMilliseconds(cameraStart,metricsStart),
@@ -532,10 +544,16 @@ static bool SameLights(const Assets& a){
         !std::memcmp(current.data()+216,a.boundLights.data()+216,16)&&
         !std::memcmp(current.data()+264,a.boundLights.data()+264,4);
 }
+static bool SameEnvironmentScale(const Environment& e){
+    if(!surfaceReplacement)return true;float scale=0;
+    return (PTNativeView::uploads.Read(e.scaleAddress,&scale,4)||
+        PTSceneLive::owner.Resources().ReadUpload(e.scaleAddress,&scale,4))&&
+        !std::memcmp(&scale,&e.scale,4);
+}
 static bool InputsUnchanged(const std::shared_ptr<Frame>& frame){
     const auto& a=frame->assets;
     return !frame->cancelled&&ptReflectionUserState.load()==1u&&a&&a->environment->submitted&&
-        SameView(a->bindings.arguments[2].value,a->boundView)&&SameLights(*a)&&PTTableMirror::bank.Unchanged(a->primary)&&
+        SameView(a->bindings.arguments[2].value,a->boundView)&&SameLights(*a)&&SameEnvironmentScale(*a->environment)&&PTTableMirror::bank.Unchanged(a->primary)&&
         PTTableMirror::bank.Unchanged(a->environment->table);
 }
 static void CancelFrame(const std::shared_ptr<Frame>& frame,ID3D12CommandQueue* queue){
@@ -547,6 +565,7 @@ static void CancelFrame(const std::shared_ptr<Frame>& frame,ID3D12CommandQueue* 
 static bool AdmitFrame(const std::shared_ptr<Frame>& frame,ID3D12CommandQueue* queue,bool late){
     if(!frame->output->AdmitInline()||!frame->assets->metrics.SetAdmission(queue,true,frame->assets->probe))return false;
     frame->armed=true;frame->deferred=false;
+    PTSurfaceHistory::Publish(frame,surfaceReplacement,historyOutput,historyView);
     if(late)sceneUseValue=(std::max)(sceneUseValue,frame->sceneUse);
     static UINT64 submitted=0;if(++submitted<=8||submitted%240==0)
         Log("PT_PRIMARY_SUBMITTED count=%llu frame=%u scene=exact admission_word=armed late_signal=%u",submitted,frame->view.frame,unsigned(late));
@@ -649,8 +668,7 @@ static void Submitted(void*,ID3D12CommandQueue* queue,UINT count,ID3D12CommandLi
                 signal(f->output);
                 if(f->raw)f->raw->NativeSubmitted(queue);
                 if(f->assets&&f->assets->history)f->assets->history->NativeSubmitted(queue);
-                if(surfaceReplacement&&f->armed&&!f->cancelled&&!f->assets->probe&&
-                   (!historyOutput||f->view.engineFrame>historyView.engineFrame)){historyOutput=f->output;historyView=f->view;}
+                PTSurfaceHistory::Publish(f,surfaceReplacement,historyOutput,historyView);
                 if(f->assets&&!f->deferred)PTSceneLive::owner.Scenes().Forget(f->assets->ticket);}
             for(const auto& d:r.draws)signal(d->frame->output);r.submitted=true;
         }

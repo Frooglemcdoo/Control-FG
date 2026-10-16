@@ -15,7 +15,7 @@ PTPathSurface PTPathDecode(PTSceneHit hit,RayDesc ray){
 }
 float3 PTPathEnvironment(float3 direction){return testScale-1;}
 bool PTPathLight(PTPathSurface surface,inout uint rng,out PTDirectSample light,out uint visibility){
-    light=(PTDirectSample)0;light.wi=surface.normal;light.incidentRadiance=testScale;light.pdf=testScale;light.delta=(uint)testScale;visibility=(uint)testScale;return true;
+    light=(PTDirectSample)0;light.wi=surface.normal;light.incidentRadiance=testScale;light.pdf=testScale;light.delta=(uint)testScale;visibility=(testMode==13||(testMode==14&&surface.material.kd.x==0))?3:(uint)testScale;return true;
 }
 [numthreads(16,1,1)]
 void main(uint3 id:SV_DispatchThreadID){
@@ -25,11 +25,11 @@ void main(uint3 id:SV_DispatchThreadID){
     if(x==5)extent.x=7;if(x==6)c=0;
     if(x==8)c.x=asfloat(0x7f800000);
     if(x==9){PTClearSurface(uint2(16,0),extent);PTCommitSurface(uint2(16,0),extent,c,1);}
-    if(x>=10&&x<=12){
+    if(x>=10&&x<=14){
         testMode=x;
         // Read a stable runtime input so the fixture exercises the shared
         // transport rather than only compiler-folded constant arithmetic.
-        testScale=asfloat(PTSurfaceRadiance.Load(13*16))*.5;
+        testScale=asfloat(PTSurfaceRadiance.Load(15*16))*.5;
         RayDesc ray;ray.Origin=float3(0,0,testScale);ray.Direction=normalize(float3(testScale-1,0,-testScale));ray.TMin=testScale-1;ray.TMax=100*testScale;
         PTSceneHit first;first.status=1;first.geometricNormal=float3(0,0,1);
         PTPathResult estimate=PTIntegratePathFirst(ray,2,3,1234,.001*testScale,first,1,0);
