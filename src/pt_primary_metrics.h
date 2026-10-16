@@ -98,10 +98,10 @@ public:
         if(stamps[1]<stamps[0])return false;
         milliseconds=double(stamps[1]-stamps[0])*1000.0/double(frequency);return true;
     }
-    bool ReadReconstruction(std::array<UINT,10>& values){
-        values={};void* data=nullptr;const D3D12_RANGE read{100,140};
+    bool ReadReconstruction(std::array<UINT,12>& values){
+        values={};void* data=nullptr;const D3D12_RANGE read{100,148};
         if(!readback||FAILED(readback->Map(0,&read,&data))||!data)return false;
-        std::memcpy(values.data(),static_cast<unsigned char*>(data)+100,40);const D3D12_RANGE noWrite{};readback->Unmap(0,&noWrite);return true;
+        std::memcpy(values.data(),static_cast<unsigned char*>(data)+100,48);const D3D12_RANGE noWrite{};readback->Unmap(0,&noWrite);return true;
     }
     bool ReadFaults(std::array<UINT,16>& values){
         values={};void* data=nullptr;const D3D12_RANGE read{36,100};
@@ -144,7 +144,7 @@ public:
     void End(ID3D12GraphicsCommandList* list){entry->data.End(list);}
     bool Read(std::array<UINT,8>& values){return entry&&entry->data.Read(values);}
     bool ReadFaults(std::array<UINT,16>& values){return entry&&entry->data.ReadFaults(values);}
-    bool ReadReconstruction(std::array<UINT,10>& values){return entry&&entry->data.ReadReconstruction(values);}
+    bool ReadReconstruction(std::array<UINT,12>& values){return entry&&entry->data.ReadReconstruction(values);}
     bool ReadMilliseconds(UINT64 frequency,double& ms){return entry&&entry->data.ReadMilliseconds(frequency,ms);}
     // ONLY call after the consumer's Output fence completes, never at recording.
     bool CompletedForReuse(){recyclable=entry&&entry->data.CleanAdmission();return recyclable;}

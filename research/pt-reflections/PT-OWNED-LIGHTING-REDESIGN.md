@@ -255,3 +255,21 @@ normals; it requires recovered history where the nearest sample fails and reject
 the edge where no compatible tap exists. Split material/normal counters and a
 rescued-pixel count distinguish this correction's effect from remaining failures.
 No claim of in-game resolution or restored missing lighting is made.
+
+### M12R74: material-slot equality is the observed rejection gate
+
+R73 bundle `PT-Primary-M12R73-Results-20261016-063735-856.zip` separates the
+previously combined tests. Frame 2413: covered 1917, normals 1911, raw material
+indices 300, accepted 300. Frame 2653: covered 1990, normals 1970, raw indices 418.
+Frame 2893: covered 1996, normals 1979, raw indices 449. Neighbor rescue is small
+(0, 4, 0 respectively). Do not present R73's nearest-tap fix as the main solution.
+
+M12R74 replaces temporal raw-index equality with geometry-set and full material
+parameter fingerprints, snapshotted on GPU before reconstruction. This removes a
+persistent-index assumption; the new reindexed_accepted counter must establish
+its actual in-game effect. Full parameter records can contain changing values,
+and geometry membership changes may remain a source of conservative rejection.
+Texture descriptor/content changes and object motion are not fingerprinted.
+Simultaneously indistinguishable geometry groups reject rather than merge.
+See the R74 README for memory, lifecycle and validation details. No claim of
+restored missing light coverage or complete root-cause proof is made.

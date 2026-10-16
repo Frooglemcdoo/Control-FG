@@ -1,6 +1,7 @@
 #pragma once
 #include "pt_native_view.h"
 #include "pt_upload_pool.h"
+#include "pt_material_history.h"
 #include <algorithm>
 #include <array>
 namespace PTSurfaceComposition {
@@ -43,13 +44,16 @@ class ReconstructionPipeline {
 public:
     HRESULT Initialize(ID3D12Device* device,const void* bytes,SIZE_T size){
         if(!device||!bytes||!size)return E_INVALIDARG;
-        D3D12_ROOT_PARAMETER p[6]{};
+        D3D12_ROOT_PARAMETER p[10]{};
         p[0].ParameterType=D3D12_ROOT_PARAMETER_TYPE_CBV;p[0].Descriptor={0,0};
         p[1].ParameterType=p[2].ParameterType=D3D12_ROOT_PARAMETER_TYPE_SRV;p[1].Descriptor={0,0};p[2].Descriptor={1,0};
         p[3].ParameterType=p[5].ParameterType=D3D12_ROOT_PARAMETER_TYPE_UAV;p[3].Descriptor={0,0};p[5].Descriptor={1,0};
-        D3D12_DESCRIPTOR_RANGE range{D3D12_DESCRIPTOR_RANGE_TYPE_SRV,3,2,0,0};
-        p[4].ParameterType=D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;p[4].DescriptorTable={1,&range};
-        D3D12_ROOT_SIGNATURE_DESC desc{};desc.NumParameters=6;desc.pParameters=p;
+        D3D12_DESCRIPTOR_RANGE range[2]={{D3D12_DESCRIPTOR_RANGE_TYPE_SRV,3,2,0,0},{D3D12_DESCRIPTOR_RANGE_TYPE_SRV,2,6,0,3}};
+        p[6].ParameterType=D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;p[6].Constants={1,0,1};
+        p[7].ParameterType=D3D12_ROOT_PARAMETER_TYPE_UAV;p[7].Descriptor={2,0};
+        p[8].ParameterType=p[9].ParameterType=D3D12_ROOT_PARAMETER_TYPE_SRV;p[8].Descriptor={5,0};p[9].Descriptor={8,0};
+        p[4].ParameterType=D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;p[4].DescriptorTable={2,range};
+        D3D12_ROOT_SIGNATURE_DESC desc{};desc.NumParameters=10;desc.pParameters=p;
         Microsoft::WRL::ComPtr<ID3DBlob> blob,error;
         HRESULT hr=D3D12SerializeRootSignature(&desc,D3D_ROOT_SIGNATURE_VERSION_1,&blob,&error);if(FAILED(hr))return hr;
         hr=device->CreateRootSignature(0,blob->GetBufferPointer(),blob->GetBufferSize(),IID_PPV_ARGS(&root));if(FAILED(hr))return hr;
@@ -61,20 +65,30 @@ public:
 };
 struct ReconstructionPass {
     std::shared_ptr<ReconstructionPipeline> pipeline;
-    std::shared_ptr<PTUploadPool::Buffer> constants;
+    std::shared_ptr<PTUploadPool::Buffer> constants,geometry;
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> guides;
-    Microsoft::WRL::ComPtr<ID3D12Resource> raw,history;
+    Microsoft::WRL::ComPtr<ID3D12Resource> raw,history,materials,previousMaterials;
     UINT width=0,height=0;bool historyEnabled=false;
     bool Initialize(ID3D12Device* device,const std::shared_ptr<ReconstructionPipeline>& p,const PTNativeView::View& view,
                     const PTNativeView::View* previous,ID3D12Resource* input,ID3D12Resource* old,
-                    const std::array<D3D12_CPU_DESCRIPTOR_HANDLE,3>& descriptors){
-        if(!device||!p||!input)return false;pipeline=p;raw=input;history=old?old:input;width=view.width;height=view.height;
+                    const std::array<D3D12_CPU_DESCRIPTOR_HANDLE,5>& descriptors,const PTMaterialHistory::Keys& keys,ID3D12Resource* oldMaterials){
+        if(!device||!p||!input)return false;
+        if(old&&!oldMaterials)return false;pipeline=p;raw=input;history=old?old:input;width=view.width;height=view.height;
         ReconstructionConstants c;if(!ReconstructConstants(view,old?previous:nullptr,c))return false;historyEnabled=c.useHistory!=0;
         if(FAILED(PTUploadPool::Buffer::Acquire(device,512,constants)))return false;
         void* data=nullptr;const D3D12_RANGE noRead{};
         if(FAILED(constants->Resource()->Map(0,&noRead,&data)))return false;
         std::memcpy(data,&c,sizeof(c));constants->Resource()->Unmap(0,nullptr);
-        D3D12_DESCRIPTOR_HEAP_DESC hd{};hd.NumDescriptors=3;hd.Type=D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;hd.Flags=D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+        if(FAILED(PTUploadPool::Buffer::Acquire(device,sizeof(keys),geometry)))return false;
+        if(FAILED(geometry->Resource()->Map(0,&noRead,&data)))return false;
+        std::memcpy(data,keys.data(),sizeof(keys));geometry->Resource()->Unmap(0,nullptr);
+        D3D12_RESOURCE_DESC rd{};rd.Dimension=D3D12_RESOURCE_DIMENSION_BUFFER;rd.Width=PTMaterialHistory::Count*16ull;
+        rd.Height=1;rd.DepthOrArraySize=rd.MipLevels=1;rd.SampleDesc.Count=1;rd.Layout=D3D12_TEXTURE_LAYOUT_ROW_MAJOR;rd.Flags=D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+        D3D12_HEAP_PROPERTIES hp{};hp.Type=D3D12_HEAP_TYPE_DEFAULT;
+        if(FAILED(device->CreateCommittedResource(&hp,D3D12_HEAP_FLAG_NONE,&rd,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,nullptr,IID_PPV_ARGS(&materials))))return false;
+        // Bind a valid read-state resource even on the no-history branch.
+        previousMaterials=oldMaterials?oldMaterials:input;
+        D3D12_DESCRIPTOR_HEAP_DESC hd{};hd.NumDescriptors=5;hd.Type=D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;hd.Flags=D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
         if(FAILED(device->CreateDescriptorHeap(&hd,IID_PPV_ARGS(&guides))))return false;
         auto cpu=guides->GetCPUDescriptorHandleForHeapStart();const auto step=device->GetDescriptorHandleIncrementSize(hd.Type);
         for(const auto d:descriptors){device->CopyDescriptorsSimple(1,cpu,d,hd.Type);cpu.ptr+=step;}return true;
@@ -86,7 +100,16 @@ struct ReconstructionPass {
         list->SetComputeRootShaderResourceView(1,raw->GetGPUVirtualAddress());list->SetComputeRootShaderResourceView(2,history->GetGPUVirtualAddress());
         list->SetComputeRootUnorderedAccessView(3,output->GetGPUVirtualAddress());
         list->SetComputeRootDescriptorTable(4,guides->GetGPUDescriptorHandleForHeapStart());
-        list->SetComputeRootUnorderedAccessView(5,metrics->GetGPUVirtualAddress());list->Dispatch((width+7)/8,(height+7)/8,1);
+        list->SetComputeRootUnorderedAccessView(5,metrics->GetGPUVirtualAddress());
+        list->SetComputeRootUnorderedAccessView(7,materials->GetGPUVirtualAddress());
+        list->SetComputeRootShaderResourceView(8,previousMaterials->GetGPUVirtualAddress());
+        list->SetComputeRootShaderResourceView(9,geometry->Resource()->GetGPUVirtualAddress());
+        D3D12_RESOURCE_BARRIER b{};b.Type=D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+        b.Transition={materials.Get(),0,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,D3D12_RESOURCE_STATE_UNORDERED_ACCESS};list->ResourceBarrier(1,&b);
+        list->SetComputeRoot32BitConstant(6,0,0);list->Dispatch((PTMaterialHistory::Count+63)/64,1,1);
+        b.Type=D3D12_RESOURCE_BARRIER_TYPE_UAV;b.UAV.pResource=materials.Get();list->ResourceBarrier(1,&b);
+        list->SetComputeRoot32BitConstant(6,1,0);list->Dispatch((width+7)/8,(height+7)/8,1);
+        b.Type=D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;b.Transition={materials.Get(),0,D3D12_RESOURCE_STATE_UNORDERED_ACCESS,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE};list->ResourceBarrier(1,&b);
     }
 };
 }

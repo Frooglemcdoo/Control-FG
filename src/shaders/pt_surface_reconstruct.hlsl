@@ -10,6 +10,13 @@ ByteAddressBuffer history : register(t1);
 Texture2D<float4> gbuffer1 : register(t2);
 Texture2D<float4> gbuffer2 : register(t3);
 Texture2D<float4> clipDepth : register(t4);
+ByteAddressBuffer previousMaterialKeys : register(t5);
+StructuredBuffer<uint2> materialFlags : register(t6);
+struct MaterialRecord { uint words[84]; };
+StructuredBuffer<MaterialRecord> materialRecords : register(t7);
+ByteAddressBuffer geometryKeys : register(t8);
+RWByteAddressBuffer materialKeys : register(u2);
+cbuffer Phase : register(b1) { uint materialPhase; };
 RWByteAddressBuffer result : register(u0);
 RWByteAddressBuffer admission : register(u1);
 void Measure(uint2 p,uint counter,uint amount){
@@ -25,7 +32,22 @@ float3 Normal(uint2 p){return ControlNormalViewToWorld(ControlDecodeNormalView(g
 uint PackNormal(float3 n){uint3 v=(uint3)round(saturate(n*.5+.5)*1023);return v.x|(v.y<<10)|(v.z<<20);}
 float3 UnpackNormal(uint n){return normalize(float3(n&1023,(n>>10)&1023,(n>>20)&1023)*(2.0/1023)-1);}
 [numthreads(8,8,1)]
-void main(uint3 id:SV_DispatchThreadID){
+void main(uint3 id:SV_DispatchThreadID,uint3 group:SV_GroupID,uint lane:SV_GroupIndex){
+    // The small first dispatch fingerprints each table record once, not per pixel.
+    if(materialPhase==0){
+        uint m=group.x*64+lane;if(m>=6971)return;
+        if(admission.Load(32)!=1)return;
+        uint at=m*16;materialKeys.Store4(at,0);
+        uint2 geometry=geometryKeys.Load2(m*8);if(all(geometry==0))return;
+        uint count,stride,flagsCount,flagsStride;
+        materialRecords.GetDimensions(count,stride);materialFlags.GetDimensions(flagsCount,flagsStride);
+        if(m>=count||m>=flagsCount||stride!=336||flagsStride!=8)return;
+        uint2 hash=uint2(2166136261u,2246822519u),flags=materialFlags[m];
+        hash=(hash^flags.x)*uint2(16777619u,3266489917u);
+        hash=(hash^flags.y)*uint2(16777619u,3266489917u);
+        [loop] for(uint n=0;n<84;++n)hash=(hash^materialRecords[m].words[n])*uint2(16777619u,3266489917u);
+        materialKeys.Store4(at,uint4(geometry,hash));return;
+    }
     uint2 p=id.xy;if(p.x>=width||p.y>=height)return;
     // Replayed/rejected producers cannot read old guides or scene resources.
     if(admission.Load(32)!=1)return;
@@ -34,6 +56,7 @@ void main(uint3 id:SV_DispatchThreadID){
     if(center.w!=1||!all(isfinite(center))||any(center.rgb<0))return;
     float3 position=Position(p),normal=Normal(p);
     uint material=ControlDecodeMaterialID(gbuffer2.Load(int3(p,0)));
+    uint4 materialKey=material<6971?materialKeys.Load4(material*16):uint4(0,0,0,0);
     float roughness=ControlDecodeMaterialRoughness(gbuffer1.Load(int3(p,0)));
     if(!all(isfinite(position))||!all(isfinite(normal)))return;
     Measure(p,0,1);
@@ -70,7 +93,7 @@ void main(uint3 id:SV_DispatchThreadID){
             int2 base=(int2)floor(texel);float2 fraction=frac(texel);
             float3 oldSum=0;float oldWeight=0,oldCount=0;
             bool covered=false,compatible=false,materialMatch=false,normalMatch=false;
-            bool nearestAccepted=false;
+            bool nearestAccepted=false,stableMatch=false,reindexedAccepted=false;
             uint2 nearest=(uint2)(uv*float2(width,height));
             [unroll] for(int y=0;y<2;++y)[unroll] for(int x=0;x<2;++x){
                 int2 q=base+int2(x,y);
@@ -80,14 +103,18 @@ void main(uint3 id:SV_DispatchThreadID){
                 float4 old=asfloat(history.Load4(offset));uint4 guide=history.Load4(offset+16);
                 if(old.w!=1)continue;
                 covered=true;
-                bool sameMaterial=guide.y==material;
+                bool sameIndex=guide.y==material;
+                uint4 oldKey=guide.y<6971?previousMaterialKeys.Load4(guide.y*16):uint4(0,0,0,0);
+                bool sameMaterial=any(materialKey.xy!=0)&&all(oldKey==materialKey);
+                stableMatch=stableMatch||sameMaterial;
                 bool sameNormal=dot(UnpackNormal(guide.x),normal)>.95;
-                materialMatch=materialMatch||sameMaterial;normalMatch=normalMatch||sameNormal;
+                materialMatch=materialMatch||sameIndex;normalMatch=normalMatch||sameNormal;
                 if(!sameMaterial||!sameNormal)continue;
                 compatible=true;
                 float oldDepth=asfloat(guide.z),count=asfloat(guide.w);
                 if(!all(isfinite(old))||any(old.rgb<0)||!isfinite(count)||count<1||count>(float)maximumHistory||
                    !isfinite(oldDepth)||abs(oldDepth-previous.z)>max(.003,abs(previous.z)*.002))continue;
+                if(!sameIndex)reindexedAccepted=true;
                 oldSum+=old.rgb*weight;oldCount+=count*weight;oldWeight+=weight;
                 if(all((uint2)q==nearest))nearestAccepted=true;
             }
@@ -95,6 +122,7 @@ void main(uint3 id:SV_DispatchThreadID){
             if(compatible)Measure(p,4,1);
             if(materialMatch)Measure(p,7,1);
             if(normalMatch)Measure(p,8,1);
+            if(stableMatch)Measure(p,10,1);
             // Ignore infinitesimal edge overlap rather than amplifying a tap
             // whose bilinear weight is only floating-point projection noise.
             if(oldWeight>=.01){
@@ -104,6 +132,7 @@ void main(uint3 id:SV_DispatchThreadID){
                 filtered=lerp(oldSum/oldWeight,filtered,1/samples);
                 Measure(p,5,1);Measure(p,6,(uint)samples);
                 if(!nearestAccepted)Measure(p,9,1);
+                if(reindexedAccepted)Measure(p,11,1);
             }
         }
     }
