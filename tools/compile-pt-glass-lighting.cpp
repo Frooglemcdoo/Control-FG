@@ -61,5 +61,13 @@ int main(){
        FAILED(factory->EnumWarpAdapter(IID_PPV_ARGS(&adapter)))||
        FAILED(D3D12CreateDevice(adapter.Get(),D3D_FEATURE_LEVEL_11_0,IID_PPV_ARGS(&device)))||
        FAILED(CreateGlassNativeRootFixture(device.Get(),&root)))return 7;
-    for(int mode=0;mode<3;++mode){int result=Compile(mode,device.Get(),root.Get());if(result)return result;}return 0;
+    for(int mode=0;mode<3;++mode){int result=Compile(mode,device.Get(),root.Get());if(result)return result;}
+    // Validate the actual packaged GI DXIL against the recovered root, including
+    // b4/b5, t21..29, sampler s6 space1 and the private u4..u7 bindings.
+    ComPtr<ID3DBlob> gi;ComPtr<ID3D12PipelineState> giPipeline;
+    if(FAILED(D3DReadFileToBlob(L"build/pt_terminal_gi_compute.dxil",&gi)))return 8;
+    D3D12_COMPUTE_PIPELINE_STATE_DESC desc{};desc.pRootSignature=root.Get();desc.CS={gi->GetBufferPointer(),gi->GetBufferSize()};
+    const HRESULT hr=device->CreateComputePipelineState(&desc,IID_PPV_ARGS(&giPipeline));
+    if(FAILED(hr)){printf("FAIL: terminal GI production native-root PSO 0x%08lX\n",static_cast<unsigned long>(hr));return 9;}
+    puts("PASS: production terminal GI DXIL creates WARP compute PSO with recovered native root");return 0;
 }
