@@ -624,9 +624,11 @@ static void Drawing(void*,ID3D12GraphicsCommandList* list) noexcept {
             auto frame=matched;
             draw=std::make_shared<Draw>();draw->frame=frame;draw->pipeline=pipeline;draw->viewAddress=bindings.arguments[12].value;draw->boundView=view;draw->pendingCamera=pendingCamera;
             if(!PTTableMirror::bank.Read(bindings.resources.Get(),first,pipeline->Required(),draw->original)){Reject("surface_descriptor_snapshot");return;}
-            // One guard per recording/frame, shared only by this consumer group.
-            // A rejected group must never clear another list's PT radiance/history.
-            for(const auto& d:recording->draws)if(d->frame==frame){draw->consumer=d->consumer;break;}
+            // Proven consumers may share their recording/frame guard. A pending
+            // upload gets its own guard: a wrong candidate must not disable
+            // already-matching draws in this same command list.
+            if(!pendingCamera)for(const auto& d:recording->draws)
+                if(d->frame==frame&&!d->pendingCamera){draw->consumer=d->consumer;break;}
             if(!draw->consumer){
                 if(FAILED(Output::Create(frame->queue.Get(),1,1,draw->consumer,true,true))||
                    !draw->consumer->EnableConsumer(frame->queue.Get())){Reject("surface_consumer_guard");return;}
