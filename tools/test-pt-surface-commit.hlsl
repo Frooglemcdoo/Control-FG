@@ -1,4 +1,5 @@
 #include "../src/shaders/pt_surface_commit.hlsli"
+#include "../src/shaders/pt_light_reservoir.hlsli"
 struct PTSceneHit {uint status;float3 geometricNormal;};
 #define PT_PATH_PRIMARY_DECODE 1
 #include "../src/shaders/pt_path_integrator.hlsli"
@@ -36,6 +37,12 @@ void main(uint3 id:SV_DispatchThreadID){
         PTClearSurface(id.xy,extent);
         if(estimate.primaryValid!=0)PTCommitSurface(id.xy,extent,estimate.radiance,1);
         return;
+    }
+    if(x==9){
+        PTLightReservoir q=PTEmptyLightReservoir();
+        q=PTAddLightCandidate(q,2,.25,0,0);q=PTAddLightCandidate(q,0,.25,0,1);
+        q=PTAddLightCandidate(q,6,.25,0,2);q=PTAddLightCandidate(q,0,.25,0,3);
+        PTClearSurface(id.xy,extent);PTCommitSurface(id.xy,extent,6/PTLightDenominator(q),1);return;
     }
     if(x>=9)return;
     PTClearSurface(id.xy,extent);

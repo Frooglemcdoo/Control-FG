@@ -14,6 +14,7 @@
 #endif
 #define PT_PATH_PRIMARY_SHADING_NORMAL 1
 #include "pt_path_integrator.hlsli"
+#include "pt_light_reservoir.hlsli"
 #ifdef PT_PRIMARY_SURFACE_REPLACEMENT
 #include "pt_surface_commit.hlsli"
 #else
@@ -76,7 +77,28 @@ float3 PTPathEnvironment(float3 direction){
 }
 bool PTPathLight(PTPathSurface surface,inout uint rng,out PTDirectSample light,out uint visibility){
     light=(PTDirectSample)0;visibility=1;
-    PTPrimaryLightSample native;PTSamplePrimaryLight(PTWorldToViewPoint(surface.position),PTPathRandom(rng),native);
+    PTPrimaryLightSample native;
+#ifdef PT_PRIMARY_SURFACE_REPLACEMENT
+    PTLightReservoir reservoir=PTEmptyLightReservoir();native=(PTPrimaryLightSample)0;native.valid=1;
+    float3 positionView=PTWorldToViewPoint(surface.position);
+    [loop] for(uint candidateIndex=0;candidateIndex<4;++candidateIndex){
+        PTPrimaryLightSample candidate;PTSamplePrimaryLight(positionView,PTPathRandom(rng),candidate);
+        if(candidate.valid==0){native.valid=0;break;}
+        // No lights is a valid zero estimator; do not pass a zero PDF to RIS.
+        if(candidate.selectionPdf==0)break;
+        float target=0;
+        if(candidate.active!=0){
+            float3 wi=normalize(PTViewToWorldVector(candidate.directionView));
+            target=dot(candidate.radiance,float3(.2126,.7152,.0722))*max(dot(surface.normal,wi),0);
+        }
+        reservoir=PTAddLightCandidate(reservoir,target,candidate.selectionPdf,PTPathRandom(rng),candidateIndex);
+        if(reservoir.valid==0){native.valid=0;break;}
+        if(reservoir.target>0&&reservoir.selected==candidateIndex)native=candidate;
+    }
+    if(native.valid!=0){native.selectionPdf=PTLightDenominator(reservoir);native.active=native.selectionPdf>0?1u:0u;}
+#else
+    PTSamplePrimaryLight(PTWorldToViewPoint(surface.position),PTPathRandom(rng),native);
+#endif
     // Invalid native data must invalidate the path, not become a dark sample.
     if(native.valid==0){light.pdf=1;light.delta=1;visibility=3;return true;}
     if(native.active==0)return false;

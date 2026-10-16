@@ -67,6 +67,12 @@ int main(){
         b.Transition={output->Texture(),0,readState,D3D12_RESOURCE_STATE_COPY_SOURCE};list->ResourceBarrier(1,&b);list->CopyBufferRegion(readback.Get(),0,output->Texture(),0,2048);std::swap(b.Transition.StateBefore,b.Transition.StateAfter);list->ResourceBarrier(1,&b);
         assert(SUCCEEDED(list->Close()));ID3D12CommandList* lists[]={list.Get()};queue->ExecuteCommandLists(1,lists);assert(output->NativeSubmitted(queue.Get()));assert(raw->NativeSubmitted(queue.Get()));if(previous)assert(previous->NativeSubmitted(queue.Get()));
         assert(SUCCEEDED(queue->Signal(fence.Get(),iteration+1)));assert(SUCCEEDED(fence->SetEventOnCompletion(iteration+1,event)));assert(WaitForSingleObject(event,10000)==WAIT_OBJECT_0);
+        std::array<UINT,7> historyCounters{};assert(run->metrics.ReadReconstruction(historyCounters));
+        const bool active=iteration!=4&&iteration!=5;
+        const bool accepted=iteration==1||iteration==7||iteration==8;
+        assert(historyCounters[0]==(active?1u:0u));
+        assert(historyCounters[5]==(accepted?1u:0u));
+        assert(historyCounters[6]==(accepted?(iteration==8?3u:2u):0u));
         const D3D12_RANGE read{0,2048};assert(SUCCEEDED(readback->Map(0,&read,&mapped)));
         double errorSum=0;
         for(UINT i=0;i<64;++i){const auto* pixel=static_cast<const float*>(mapped)+i*8;

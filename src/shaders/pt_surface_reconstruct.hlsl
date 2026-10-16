@@ -12,6 +12,9 @@ Texture2D<float4> gbuffer2 : register(t3);
 Texture2D<float4> clipDepth : register(t4);
 RWByteAddressBuffer result : register(u0);
 RWByteAddressBuffer admission : register(u1);
+void Measure(uint2 p,uint counter,uint amount){
+    if(((p.x-1)|(p.y-1))%64==0){uint old;admission.InterlockedAdd(100+counter*4,amount,old);}
+}
 uint Index(uint2 p){return p.y*width+p.x;}
 float3 Position(uint2 p){
     float2 uv=(float2(p)+.5)/float2(width,height);
@@ -33,6 +36,7 @@ void main(uint3 id:SV_DispatchThreadID){
     uint material=ControlDecodeMaterialID(gbuffer2.Load(int3(p,0)));
     float roughness=ControlDecodeMaterialRoughness(gbuffer1.Load(int3(p,0)));
     if(!all(isfinite(position))||!all(isfinite(normal)))return;
+    Measure(p,0,1);
     float3 sum=0;float total=0;
     // Same-material/normal/plane rejection protects object and shadow boundaries.
     // Smooth specular surfaces retain their local sample rather than spreading
@@ -52,14 +56,18 @@ void main(uint3 id:SV_DispatchThreadID){
     }
     float3 filtered=total>0?sum/total:center.rgb;float samples=1;
     if(useHistory!=0){
+        Measure(p,1,1);
         float3 world=position.x*current[6].xyz+position.y*current[7].xyz+position.z*current[8].xyz+current[9].xyz;
         float3 previous=world.x*previousWorldToView[0].xyz+world.y*previousWorldToView[1].xyz+world.z*previousWorldToView[2].xyz+previousWorldToView[3].xyz;
         float4 clip=previous.x*previousViewToClip[0]+previous.y*previousViewToClip[1]+previous.z*previousViewToClip[2]+previousViewToClip[3];
         float2 uv=float2(clip.x,-clip.y)/clip.w*.5+.5;
         if(all(isfinite(uv))&&clip.w>0&&all(uv>=0)&&all(uv<1)){
+            Measure(p,2,1);
             uint2 q=(uint2)(uv*float2(width,height));uint offset=Index(q)*32;
             float4 old=asfloat(history.Load4(offset));uint4 guide=history.Load4(offset+16);
             float oldDepth=asfloat(guide.z),count=asfloat(guide.w);
+            if(old.w==1)Measure(p,3,1);
+            if(old.w==1&&guide.y==material&&dot(UnpackNormal(guide.x),normal)>.95)Measure(p,4,1);
             if(old.w==1&&all(isfinite(old))&&all(old.rgb>=0)&&guide.y==material&&
                dot(UnpackNormal(guide.x),normal)>.95&&isfinite(count)&&count>=1&&count<=(float)maximumHistory&&
                isfinite(oldDepth)&&abs(oldDepth-previous.z)<=max(.003,abs(previous.z)*.002)){
@@ -71,6 +79,7 @@ void main(uint3 id:SV_DispatchThreadID){
                 float motion=length(uv*float2(width,height)-(float2(p)+.5));
                 if(radius==0||motion>1)samples=min(samples,8);
                 filtered=lerp(old.rgb,filtered,1/samples);
+                Measure(p,5,1);Measure(p,6,(uint)samples);
             }
         }
     }

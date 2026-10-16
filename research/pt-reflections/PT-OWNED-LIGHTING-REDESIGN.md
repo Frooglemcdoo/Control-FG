@@ -218,3 +218,22 @@ Unsupported/invalid secondary work preserves the known primary contribution,
 but an invalid primary light no longer suppresses native output with covered black.
 R70 component tests missed the actual late-admission history publication path.
 The Windows gate also now rejects negative assertion exit codes.
+
+## R72: R71 capture and remaining variance
+
+R71 2026-10-16 06:04 collector recovered the 02:39 UTC session. Consecutive
+history is now supplied (history=1, previous_frame=N-1), with no logged late
+admission rejection. Bound environment intensity remains zero. Do not describe
+R71 as restoring that lighting or treat history availability as GPU acceptance.
+
+R72 uses four independent light candidates with local RIS (target incident
+luminance times positive surface cosine), retaining one shadow ray. The estimator
+normalization is M*selected_target/sum(target/proposal_pdf); zero proposals count.
+This is not full ReSTIR. Shared-code tests check sparse 38-light energy/variance
+and occluded-light energy. The deterministic shader fixture verifies DXC/WARP
+execution. GPU reconstruction counters occupy previously unused bytes100..127
+of the existing metrics buffer and sample one pixel per64x64 block.
+
+Reference: Bitterli et al., Spatiotemporal Reservoir Resampling (2020),
+https://research.nvidia.com/labs/rtr/publication/bitterli2020spatiotemporal/ .
+The local initial-resampling idea is used; cross-pixel/frame reservoirs are not.
