@@ -1,3 +1,5 @@
+// Synthetic constant inputs legitimately make some finite checks redundant.
+#pragma warning(disable: 3577)
 // Execute the production integrator with deterministic synthetic hit adapters.
 struct RayDesc {float3 Origin;float TMin;float3 Direction;float TMax;};
 struct PTSceneHit {uint status;float distance;float3 geometricNormal;};
