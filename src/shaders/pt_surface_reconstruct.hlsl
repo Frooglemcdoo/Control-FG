@@ -56,13 +56,17 @@ float4 ClipHistory(uint2 p,bool spec,float3 old,float second){
         float3 value=Noisy((uint2)q,spec);if(!all(isfinite(value))||any(value<0))continue;
         mean+=value;square+=value*value;lo=min(lo,value);hi=max(hi,value);count+=1;
     }
-    if(count<2)return float4(old,second);
-    mean/=count;float3 sigma=sqrt(max(square/count-mean*mean,0));
-    float3 clipped=clamp(old,max(lo,mean-3*sigma),min(hi,mean+3*sigma));
-    // A changed mean must not retain the old light's second moment either.
-    float before=Luma(old),after=Luma(clipped);
-    second=before>1e-6?max(after*after,second*(after/before)*(after/before)):after*after;
-    return float4(clipped,second);
+    float4 clippedHistory=float4(old,second);
+    if(count>=2){
+        mean/=count;float3 sigma=sqrt(max(square/count-mean*mean,0));
+        float3 clipped=clamp(old,max(lo,mean-3*sigma),min(hi,mean+3*sigma));
+        // A changed mean must not retain the old light's second moment either.
+        float before=Luma(old),after=Luma(clipped);
+        float moment=after*after;
+        if(before>1e-6)moment=max(moment,second*(after/before)*(after/before));
+        clippedHistory=float4(clipped,moment);
+    }
+    return clippedHistory;
 }
 // Two edge-aware wavelet scales. Temporal channels remain untouched for next
 // frame; only the display result is filtered. Variance is propagated with w^2.
