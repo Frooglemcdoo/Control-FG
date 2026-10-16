@@ -65,7 +65,7 @@ int main(int argc,char**){
         if(iteration==9||iteration==11)previous.reset();
         if(iteration==10){camera[36]=.0625f;camera[20]=-.0625f;std::memcpy(view.bytes.data(),camera.data(),288);}
         view.frame=iteration+1;view.engineFrame=iteration+1;
-        std::shared_ptr<Output> raw,output;assert(SUCCEEDED(Output::Create(queue.Get(),8,8,raw,true,true,split?64:16)));assert(SUCCEEDED(Output::Create(queue.Get(),8,8,output,true,true,32)));assert(raw->Address()&&output->Address());
+        std::shared_ptr<Output> raw,output;assert(SUCCEEDED(Output::Create(queue.Get(),8,8,raw,true,true,split?64:16)));assert(SUCCEEDED(Output::Create(queue.Get(),8,8,output,true,true,64)));assert(raw->Address()&&output->Address());
         std::array<ComPtr<ID3D12Resource>,3> guides;hp.Type=D3D12_HEAP_TYPE_DEFAULT;
         D3D12_RESOURCE_DESC td{};td.Dimension=D3D12_RESOURCE_DIMENSION_TEXTURE2D;td.Width=td.Height=8;td.DepthOrArraySize=td.MipLevels=1;td.SampleDesc.Count=1;td.Format=DXGI_FORMAT_R32G32B32A32_FLOAT;
         D3D12_DESCRIPTOR_HEAP_DESC hd{};hd.Type=D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;hd.NumDescriptors=5;ComPtr<ID3D12DescriptorHeap> descriptors;assert(SUCCEEDED(device->CreateDescriptorHeap(&hd,IID_PPV_ARGS(&descriptors))));
@@ -109,7 +109,7 @@ int main(int argc,char**){
         // Zero admission is explicitly initialized through the cancellation copy.
         assert(run->metrics.SetAdmission(queue.Get(),true,iteration==5));if(iteration==4)assert(run->metrics.SetAdmission(queue.Get(),false));
         assert(output->RecordInline(list.Get(),run.get(),&Run::Encode,run));assert(output->AdmitInline());
-        b.Transition={output->Texture(),0,readState,D3D12_RESOURCE_STATE_COPY_SOURCE};list->ResourceBarrier(1,&b);list->CopyBufferRegion(readback.Get(),0,output->Texture(),0,2048);std::swap(b.Transition.StateBefore,b.Transition.StateAfter);list->ResourceBarrier(1,&b);
+        b.Transition={output->Texture(),0,readState,D3D12_RESOURCE_STATE_COPY_SOURCE};list->ResourceBarrier(1,&b);list->CopyBufferRegion(readback.Get(),0,output->Texture(),0,4096);std::swap(b.Transition.StateBefore,b.Transition.StateAfter);list->ResourceBarrier(1,&b);
         assert(SUCCEEDED(list->Close()));ID3D12CommandList* lists[]={list.Get()};queue->ExecuteCommandLists(1,lists);assert(output->NativeSubmitted(queue.Get()));assert(raw->NativeSubmitted(queue.Get()));if(previous)assert(previous->NativeSubmitted(queue.Get()));
         assert(SUCCEEDED(queue->Signal(fence.Get(),iteration+1)));assert(SUCCEEDED(fence->SetEventOnCompletion(iteration+1,event)));assert(WaitForSingleObject(event,10000)==WAIT_OBJECT_0);
         std::array<UINT,12> historyCounters{};assert(run->metrics.ReadReconstruction(historyCounters));
@@ -121,10 +121,11 @@ int main(int argc,char**){
         if(!freshTest&&iteration==10)assert(historyCounters[9]==1); // Nearest normal fails; right tap is valid.
         if(!freshTest&&iteration==12){assert(historyCounters[7]==0&&historyCounters[10]==1&&historyCounters[11]==1);}
         if(!freshTest&&iteration>=13)assert(historyCounters[7]==1&&historyCounters[10]==0&&historyCounters[11]==0);
-        const D3D12_RANGE read{0,2048};assert(SUCCEEDED(readback->Map(0,&read,&mapped)));
+        const D3D12_RANGE read{0,4096};assert(SUCCEEDED(readback->Map(0,&read,&mapped)));
         double errorSum=0;
-        for(UINT i=0;i<64;++i){const auto* sourcePixel=static_cast<const float*>(mapped)+i*8;
+        for(UINT i=0;i<64;++i){const auto* sourcePixel=static_cast<const float*>(mapped)+i*16;
             float pixel[8];std::memcpy(pixel,sourcePixel,sizeof(pixel));
+            for(UINT k=0;k<3;++k)assert(std::abs(sourcePixel[k]-sourcePixel[8+k]-sourcePixel[12+k])<1e-4f);
             if(split){const float factor=.75f*(i%2?.25f:1.0f)+.125f;for(UINT k=0;k<3;++k)pixel[k]/=factor;}
             if(i==0||iteration==4||iteration==5){for(UINT channel=0;channel<8;++channel)assert(pixel[channel]==0);continue;}
             assert(pixel[3]==1&&std::isfinite(pixel[0])&&pixel[0]>=0&&pixel[0]<=2);

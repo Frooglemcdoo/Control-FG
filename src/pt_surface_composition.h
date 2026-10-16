@@ -5,7 +5,8 @@
 // Bytecode-only adapter for the nine reviewed general-surface variants.
 // Host must SHA256-match the original shader to Profile::sha, preserve the native
 // graphics root and provide PT radiance through the appended raw root SRV t0,space2.
-// Alpha is a per-pixel 0/1 admission mask; RGB is reflected surface radiance.
+// 64-byte packet: summary+coverage, geometry metadata, unit-color diffuse, specular.
+// Native material color multiplies diffuse only; emission and fog remain native.
 // No original shader, heap, root, render target, or game file is modified here.
 namespace PTSurfaceComposition {
 using U32=std::uint32_t;
@@ -49,7 +50,7 @@ inline bool PatchProfile(const unsigned char* input,std::size_t bytes,const Prof
                 0x07000059u,0x00308e46u,cbId,0,0,1,2};
             const U32 coordinate=words[load+4];
             if(((words[load+3]>>12)&255)!=0||((words[load+3]>>20)&3)!=1||((words[load+3]>>4)&15)!=4)return false;
-            const U32 scratch=temporary+1;
+            const U32 scratch=temporary+1,diffuse=temporary+2,specular=temporary+3;
             const U32 fetch[]={
                 // Root descriptors have no bounds metadata. Reject negative or
                 // out-of-extent native coordinates BEFORE issuing any raw load.
@@ -61,11 +62,21 @@ inline bool PatchProfile(const unsigned char* input,std::size_t bytes,const Prof
                 0x08000036u,0x001000f2u,temporary,0x00004002u,0,0,0,0,
                 0x0304001fu,0x0010000au,scratch,
                 0x0b000023u,0x00100012u,scratch,0x0010001au,coordinate,0x0030800au,cbId,0,0,0x0010000au,coordinate,
-                0x07000029u,0x00100012u,scratch,0x0010000au,scratch,0x00004001u,5,
+                0x07000029u,0x00100012u,scratch,0x0010000au,scratch,0x00004001u,6,
                 0x080000a5u,0x001000f2u,temporary,0x0010000au,scratch,0x00207e46u,profile->resource,0,
+                // Keep each primary lobe separate through native material evaluation.
+                0x0700001eu,0x00100012u,scratch,0x0010000au,scratch,0x00004001u,32,
+                0x080000a5u,0x00100072u,diffuse,0x0010000au,scratch,0x00207e46u,profile->resource,0,
+                0x0700001eu,0x00100012u,scratch,0x0010000au,scratch,0x00004001u,16,
+                0x080000a5u,0x00100072u,specular,0x0010000au,scratch,0x00207e46u,profile->resource,0,
                 0x01000015u};
             const U32 select[]={0x09000037u,0x00100072u,0,0x00100ff6u,temporary,0x00100e46u,temporary,0x00100e46u,0};
-            constexpr U32 added=97;
+            const U32 materialize[]={
+                0x0304001fu,0x00100ff6u,temporary,
+                0x09000032u,0x00100072u,temporary,0x00100e46u,diffuse,
+                words[combine+5],words[combine+6],0x00100e46u,specular,
+                0x01000015u};
+            constexpr U32 added=140;
             std::vector<U32> revised;revised.reserve(words.size()+added);revised.push_back(words[0]);revised.push_back(words[1]+added);
             bool sawLoad=false,sawCombine=false,sawTemps=false;
             for(std::size_t i=2;i<words.size();){
@@ -74,8 +85,9 @@ inline bool PatchProfile(const unsigned char* input,std::size_t bytes,const Prof
                 if(!length||length>words.size()-i)return false;
                 if(i==temps){revised.insert(revised.end(),std::begin(declaration),std::end(declaration));sawTemps=true;}
                 if(i==load){revised.insert(revised.end(),std::begin(fetch),std::end(fetch));sawLoad=true;}
+                if(i==combine)revised.insert(revised.end(),std::begin(materialize),std::end(materialize));
                 const auto start=revised.size();revised.insert(revised.end(),words.begin()+i,words.begin()+i+length);
-                if(i==temps)revised[start+1]=temporary+2;
+                if(i==temps)revised[start+1]=temporary+4;
                 if(i==combine){revised.insert(revised.end(),std::begin(select),std::end(select));sawCombine=true;}
                 i+=length;
             }

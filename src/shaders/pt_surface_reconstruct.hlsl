@@ -71,7 +71,7 @@ float4 ClipHistory(uint2 p,bool spec,float3 old,float second){
 // Two edge-aware wavelet scales. Temporal channels remain untouched for next
 // frame; only the display result is filtered. Variance is propagated with w^2.
 void FilterSignals(uint2 p,uint phase){
-    uint at=Index(p)*32;if(asfloat(result.Load(at+12))!=1)return;
+    uint at=Index(p)*32;uint outAt=Index(p)*64;if(asfloat(result.Load(outAt+12))!=1)return;
     float3 position=Position(p),normal=Normal(p);
     uint material=ControlDecodeMaterialID(gbuffer2.Load(int3(p,0)));
     float roughness=ControlDecodeMaterialRoughness(gbuffer1.Load(int3(p,0)));
@@ -86,13 +86,13 @@ void FilterSignals(uint2 p,uint phase){
                 if(Raw((uint2)q).w!=1||ControlDecodeMaterialID(gbuffer2.Load(int3(q,0)))!=material)continue;
                 float value=Luma(Noisy((uint2)q,lobe!=0));mean+=value;second+=value*value;count+=1;
             }
-            if(count>0)variance=max(variance,max(second/count-(mean/count)*(mean/count),0)/max(asfloat(result.Load(at+28)),1));
+            if(count>0)variance=max(variance,max(second/count-(mean/count)*(mean/count),0)/max(asfloat(result.Load(outAt+28)),1));
         }
         float3 sum=0;float total=0,varSum=0;int step=phase==2?1:2;
         [unroll] for(int y=-1;y<=1;++y)[unroll] for(int x=-1;x<=1;++x){
             int2 q=int2(p)+int2(x,y)*step;if(any(q<0)||q.x>=(int)width||q.y>=(int)height)continue;
             uint address=Index((uint2)q)*32;
-            if(asfloat(result.Load(address+12))!=1||ControlDecodeMaterialID(gbuffer2.Load(int3(q,0)))!=material)continue;
+            if(asfloat(result.Load(Index((uint2)q)*64+12))!=1||ControlDecodeMaterialID(gbuffer2.Load(int3(q,0)))!=material)continue;
             float alignment=dot(Normal((uint2)q),normal);
             float plane=abs(dot(Position((uint2)q)-position,ControlDecodeNormalView(gbuffer1.Load(int3(p,0)))));
             if(alignment<.95||plane>max(.002,abs(position.z)*.001))continue;
@@ -110,9 +110,10 @@ void FilterSignals(uint2 p,uint phase){
         }
         float3 value=total>0?sum/total:center.rgb;
         if(phase==2)scratch.Store4(at+offset,asuint(float4(value,total>0?varSum/(total*total):variance)));
-        else combined+=value*Factor(p,lobe!=0);
+        else {float3 resolved=value*Factor(p,lobe!=0);combined+=resolved;
+            result.Store3(outAt+32+lobe*16,asuint(resolved));}
     }
-    if(phase==3&&all(isfinite(combined))&&all(combined>=0))result.Store3(at,asuint(combined));
+    if(phase==3&&all(isfinite(combined))&&all(combined>=0))result.Store3(outAt,asuint(combined));
 }
 [numthreads(8,8,1)]
 void main(uint3 id:SV_DispatchThreadID,uint3 group:SV_GroupID,uint lane:SV_GroupIndex){
@@ -135,9 +136,9 @@ void main(uint3 id:SV_DispatchThreadID,uint3 group:SV_GroupID,uint lane:SV_Group
     // Replayed/rejected producers cannot read old guides or scene resources.
     if(admission.Load(32)!=1)return;
     if(materialPhase>=2){if(freshInput==0&&SplitSignals())FilterSignals(p,materialPhase);return;}
-    uint at=Index(p)*32;float4 center=Raw(p);
+    uint at=Index(p)*32;uint outAt=Index(p)*64;float4 center=Raw(p);
     signals.Store4(at,0);signals.Store4(at+16,0);
-    result.Store4(at,0);result.Store4(at+16,0);
+    result.Store4(outAt,0);result.Store4(outAt+16,0);result.Store4(outAt+32,0);result.Store4(outAt+48,0);
     if(center.w!=1||!all(isfinite(center))||any(center.rgb<0))return;
     float3 position=Position(p),normal=Normal(p);
     uint material=ControlDecodeMaterialID(gbuffer2.Load(int3(p,0)));
@@ -151,8 +152,10 @@ void main(uint3 id:SV_DispatchThreadID,uint3 group:SV_GroupID,uint lane:SV_Group
         float3 noisy=center.rgb;
         if(SplitSignals())noisy+=asfloat(rawRadiance.Load3(Index(p)*64+16));
         if(!all(isfinite(noisy))||any(noisy<0))return;
-        result.Store4(at,asuint(float4(noisy,1)));
-        result.Store4(at+16,uint4(PackNormal(normal),material,asuint(position.z),asuint(1.0)));
+        result.Store3(outAt+32,asuint(center.rgb));
+        result.Store3(outAt+48,asuint(SplitSignals()?asfloat(rawRadiance.Load3(Index(p)*64+16)):float3(0,0,0)));
+        result.Store4(outAt,asuint(float4(noisy,1)));
+        result.Store4(outAt+16,uint4(PackNormal(normal),material,asuint(position.z),asuint(1.0)));
         return;
     }
     float3 sum=0;float total=0;
@@ -198,7 +201,7 @@ void main(uint3 id:SV_DispatchThreadID,uint3 group:SV_GroupID,uint lane:SV_Group
                 float weight=(x?fraction.x:1-fraction.x)*(y?fraction.y:1-fraction.y);
                 if(weight<=0||any(q<0)||q.x>=(int)width||q.y>=(int)height)continue;
                 uint offset=Index((uint2)q)*32;
-                float4 old=asfloat(history.Load4(offset));uint4 guide=history.Load4(offset+16);
+                float4 old=asfloat(history.Load4(Index((uint2)q)*64));uint4 guide=history.Load4(Index((uint2)q)*64+16);
                 if(old.w!=1)continue;
                 covered=true;
                 bool sameIndex=guide.y==material;
@@ -251,6 +254,8 @@ void main(uint3 id:SV_DispatchThreadID,uint3 group:SV_GroupID,uint lane:SV_Group
         signals.Store4(at,asuint(float4(diffuse,moments.x)));signals.Store4(at+16,asuint(float4(specular,moments.y)));
     }
     if(!all(isfinite(filtered))||any(filtered<0))return;
-    result.Store4(at,asuint(float4(filtered,1)));
-    result.Store4(at+16,uint4(PackNormal(normal),material,asuint(position.z),asuint(samples)));
+    result.Store3(outAt+32,asuint(split?diffuse*Factor(p,false):filtered));
+    result.Store3(outAt+48,asuint(split?specular*Factor(p,true):float3(0,0,0)));
+    result.Store4(outAt,asuint(float4(filtered,1)));
+    result.Store4(outAt+16,uint4(PackNormal(normal),material,asuint(position.z),asuint(samples)));
 }

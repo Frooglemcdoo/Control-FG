@@ -38,13 +38,13 @@ int main(){
     }
     const UINT packed[2]={0x0a0a0a00,0};D3D11_BUFFER_DESC bd{};bd.ByteWidth=8;bd.Usage=D3D11_USAGE_DEFAULT;bd.BindFlags=D3D11_BIND_SHADER_RESOURCE;bd.MiscFlags=D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;bd.StructureByteStride=8;
     D3D11_SUBRESOURCE_DATA initial{};initial.pSysMem=packed;ComPtr<ID3D11Buffer> material;assert(SUCCEEDED(device->CreateBuffer(&bd,&initial,&material)));assert(SUCCEEDED(device->CreateShaderResourceView(material.Get(),nullptr,&views[2])));
-    std::array<float,128> raw{};std::array<float,64> surface{};
-    for(UINT i=0;i<8;++i){raw[i*16+3]=surface[i*8+3]=1;raw[i*16+8]=.2f;raw[i*16+9]=.4f;raw[i*16+10]=.6f;raw[i*16+15]=i==0?.25f:(i==1?.75f:1.f);}
-    raw[16+8]=raw[16+9]=raw[16+10]=0;surface[2*8+3]=0;raw[3*16+3]=0;
-    const UINT wrong=1;std::memcpy(&surface[4*8+5],&wrong,4);
+    std::array<float,128> raw{};std::array<float,128> surface{};
+    for(UINT i=0;i<8;++i){raw[i*16+3]=surface[i*16+3]=1;raw[i*16+8]=.2f;raw[i*16+9]=.4f;raw[i*16+10]=.6f;raw[i*16+15]=i==0?.25f:(i==1?.75f:1.f);}
+    raw[16+8]=raw[16+9]=raw[16+10]=0;surface[2*16+3]=0;raw[3*16+3]=0;
+    const UINT wrong=1;std::memcpy(&surface[4*16+5],&wrong,4);
     raw[5*16+8]=std::numeric_limits<float>::quiet_NaN();raw[6*16+15]=std::numeric_limits<float>::quiet_NaN();raw[7*16+8]=raw[7*16+9]=raw[7*16+10]=1;
     for(UINT i=0;i<2;++i){
-        bd={};bd.ByteWidth=i?256:512;bd.Usage=D3D11_USAGE_DEFAULT;bd.BindFlags=D3D11_BIND_SHADER_RESOURCE;bd.MiscFlags=D3D11_RESOURCE_MISC_BUFFER_ALLOW_RAW_VIEWS;
+        bd={};bd.ByteWidth=512;bd.Usage=D3D11_USAGE_DEFAULT;bd.BindFlags=D3D11_BIND_SHADER_RESOURCE;bd.MiscFlags=D3D11_RESOURCE_MISC_BUFFER_ALLOW_RAW_VIEWS;
         initial.pSysMem=i?surface.data():raw.data();ComPtr<ID3D11Buffer> buffer;assert(SUCCEEDED(device->CreateBuffer(&bd,&initial,&buffer)));
         D3D11_SHADER_RESOURCE_VIEW_DESC sd{};sd.Format=DXGI_FORMAT_R32_TYPELESS;sd.ViewDimension=D3D11_SRV_DIMENSION_BUFFEREX;sd.BufferEx.NumElements=bd.ByteWidth/4;sd.BufferEx.Flags=D3D11_BUFFEREX_SRV_FLAG_RAW;
         assert(SUCCEEDED(device->CreateShaderResourceView(buffer.Get(),&sd,&views[4+i])));

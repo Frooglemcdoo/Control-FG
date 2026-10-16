@@ -195,7 +195,7 @@ static std::shared_ptr<Frame> FrameFor(const View& view,ID3D12CommandQueue* queu
     }
     if(frames.size()>=8)return {};
     auto f=std::make_shared<Frame>();f->view=view;f->queue=queue;
-    if(FAILED(Output::Create(queue,surfaceReplacement?view.width:1,surfaceReplacement?view.height:1,f->output,true,surfaceReplacement,surfaceReplacement?32:16)))return {};
+    if(FAILED(Output::Create(queue,surfaceReplacement?view.width:1,surfaceReplacement?view.height:1,f->output,true,surfaceReplacement,surfaceReplacement?64:16)))return {};
     if(surfaceReplacement&&FAILED(Output::Create(queue,view.width,view.height,f->raw,true,true,64)))return {};
     frames.push_back(f);return f;
 }
@@ -853,6 +853,6 @@ static bool Start(){
        !PTCommandBindings::Register(&commandConsumer)||!PTNativeJobRuntime::Register(&Job)||!PTSceneLive::owner.Start(step,true))return false;
     ptReflectionModeObserver.store(&MirrorModeChanged,std::memory_order_release);
     MirrorModeChanged(PTReflectionUserRequested());
-    active=true;Log("PT_PRIMARY_SESSION_READY build=M12R85 ready=1 hits=4 spp=1 roulette_start=3 material=opaque_general geometric_normals=1 native_fallback=1 primary_lighting=%s transport=%s readiness=per_material graphics_tracking=%u",surfaceReplacement?"pt":"native",surfaceReplacement?"full_surface":"diffuse_indirect",unsigned(compose));return true;
+    active=true;Log("PT_PRIMARY_SESSION_READY build=M12R86 ready=1 hits=4 spp=1 roulette_start=3 material=opaque_general geometric_normals=1 native_fallback=1 primary_lighting=%s transport=%s readiness=per_material graphics_tracking=%u",surfaceReplacement?"pt":"native",surfaceReplacement?"full_surface":"diffuse_indirect",unsigned(compose));return true;
 }
 }

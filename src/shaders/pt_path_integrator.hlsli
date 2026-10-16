@@ -48,6 +48,12 @@ PTPathResult PTIntegratePathFirst(RayDesc ray,uint maxHits,uint rouletteStart,ui
         if(depth==0){result.kd=m.kd;result.f0=m.f0;result.roughness=m.roughness;}
         if(!PTValid(m.kd)||!PTValid(m.f0)||!PTFinite(m.roughness)||m.roughness<0||m.roughness>1||
            any(m.kd<0)||any(m.kd>1)||any(m.f0<0)||any(m.f0>1)||(m.lobes&~3u)!=0||m.lobes==0){path.valid=0;result.fault=surface.decodeFault!=0?surface.decodeFault:3;break;}
+#ifdef PT_PRIMARY_SURFACE_REPLACEMENT
+        // Primary texture color is evaluated by the original raster material
+        // shader at composition. Trace unit-color diffuse transport so black
+        // channels and layered materials do not require albedo division.
+        if(depth==0){surface.material.kd=1-surface.material.f0;m=surface.material;}
+#endif
         float3 n=surface.normal;
         if(!all(isfinite(surface.position))||!all(isfinite(n))||abs(dot(n,n)-1)>1e-4){path.valid=0;result.fault=4;break;}
         float3 tangent=normalize(cross(abs(n.z)<0.9?float3(0,0,1):float3(0,1,0),n));

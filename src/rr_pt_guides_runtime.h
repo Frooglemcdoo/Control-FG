@@ -19,7 +19,7 @@ static void RRPTAcquireGuides(unsigned long long engineFrame,UINT width,UINT hei
            f->queue.Get()!=queue||!f->producerRecorded||f->cancelled||!f->raw||!f->assets||
            !f->assets->reconstruction||!f->assets->reconstruction->freshInput)continue;
         if(f->raw->Texture()->GetDesc().Width!=UINT64(width)*height*64||
-           f->output->Texture()->GetDesc().Width!=UINT64(width)*height*32)continue;
+           f->output->Texture()->GetDesc().Width!=UINT64(width)*height*64)continue;
         if(!PTSceneQueues::WatchList(list)){out.reason="guide_list_watch";return;}
         auto* recording=RecordingFor(list);
         if(!recording||recording->submitted||recording->guides.size()>=4){out.reason="guide_recording_unavailable";return;}
