@@ -389,6 +389,10 @@ static void Dispatched(void*,ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT 
             Reject(reason);return;
         }
         const auto& plan=a->proof->DispatchPlan();
+        // Canonicalization is CPU-only and uses immutable prepared records.
+        // Keep it in the unlocked preparation interval, not the descriptor gate.
+        std::optional<PTMaterialHistory::Keys> materialKeys;
+        if(surfaceReplacement)materialKeys=PTMaterialHistory::GeometryKeys(plan.records);
         auto frame=FrameFor(view,context.queue);
         if(!frame||frame->cancelled||frame->producerRecorded){Reject("frame_budget_or_duplicate");return;}
         // The output owner retains scene dependencies through producer and surface
@@ -424,7 +428,7 @@ static void Dispatched(void*,ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT 
             if(!PTCommandBindings::tracker.GraphicsForRestore(list,nativeRoots,a->graphicsRestore)){Reject("surface_graphics_restore");return;}
             a->history=historyOutput;a->reconstruction=std::make_shared<PTSurfaceComposition::ReconstructionPass>();
             if(!a->reconstruction->Initialize(device.Get(),reconstructionPipeline,view,a->history?&historyView:nullptr,
-                frame->raw->Texture(),a->history?a->history->Texture():nullptr,{a->primary.At(5),a->primary.At(6),a->primary.At(8),a->primary.At(12),a->primary.At(13)},PTMaterialHistory::GeometryKeys(plan.records),historyMaterials.Get())){
+                frame->raw->Texture(),a->history?a->history->Texture():nullptr,{a->primary.At(5),a->primary.At(6),a->primary.At(8),a->primary.At(12),a->primary.At(13)},*materialKeys,historyMaterials.Get())){
                 Reject("surface_reconstruction_setup");return;
             }
         }
