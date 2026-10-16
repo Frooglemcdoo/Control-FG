@@ -164,8 +164,9 @@ public:
         for(UINT n=0;n<(graphics?18u:8u);++n)if(required&(1u<<n)){
             const bool constant=graphics?(n>=8&&n<16):(n>=2&&n<6);const auto& a=s.arguments[n];
             if(a.kind!=(constant?ArgumentKind::constant:ArgumentKind::table)||!a.value){
+                fail("missing_argument",n,a.value);
                 if(failure){failure->argumentOrigin=a.origin;failure->previousAddress=a.previous;}
-                return fail("missing_argument",n,a.value);}
+                return false;}
             if(constant){if(a.value%256)return fail("cbv_alignment",n,a.value);continue;}
             const bool sampler=graphics?((n>=4&&n<8)||n==16):(n==1||n==6);
             const UINT count=sampler?((graphics?n==16:n==6)?64:4):((graphics?n==17:n==7)?244000:49);
