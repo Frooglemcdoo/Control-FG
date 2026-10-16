@@ -20,7 +20,7 @@ template<class Records> Keys GeometryKeys(const Records& records){
         unsigned material=0;std::memcpy(&material,record.data()+68,4);
         if(material>=Count)continue;
         Geometry g{};std::memcpy(g.data(),record.data()+32,g.size());
-        std::fill(g.begin()+36,g.begin()+40,0);groups[material].push_back(g);
+        std::fill(g.begin()+36,g.begin()+40,static_cast<unsigned char>(0));groups[material].push_back(g);
     }
     Keys keys{};
     for(auto& entry:groups){auto& group=entry.second;
