@@ -958,6 +958,6 @@ static bool Start(){
        !PTCommandBindings::Register(&commandConsumer)||!PTNativeJobRuntime::Register(&Job)||!PTSceneLive::owner.Start(step,true))return false;
     ptReflectionModeObserver.store(&MirrorModeChanged,std::memory_order_release);
     MirrorModeChanged(PTReflectionUserRequested());
-    active=true;Log("PT_PRIMARY_SESSION_READY build=M12R94 ready=1 hits=4 spp=1 roulette_start=3 material=opaque_general geometric_normals=1 native_fallback=1 primary_lighting=%s transport=%s readiness=per_material graphics_tracking=%u",surfaceReplacement?"pt":"native",surfaceReplacement?"full_surface":"diffuse_indirect",unsigned(compose));return true;
+    active=true;Log("PT_PRIMARY_SESSION_READY build=M12R95 ready=1 hits=4 spp=1 roulette_start=3 material=opaque_general geometric_normals=1 native_fallback=1 primary_lighting=%s transport=%s readiness=per_material graphics_tracking=%u",surfaceReplacement?"pt":"native",surfaceReplacement?"full_surface":"diffuse_indirect",unsigned(compose));return true;
 }
 }

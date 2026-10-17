@@ -23,7 +23,15 @@ RWByteAddressBuffer scratch : register(u4);
 float Luma(float3 v){return dot(v,float3(.2126,.7152,.0722));}
 bool SplitSignals(){return signalStride==64;}
 float4 Raw(uint2 p){return asfloat(rawRadiance.Load4((p.y*width+p.x)*(SplitSignals()?64:16)));}
-float3 Factor(uint2 p,bool spec){return max(asfloat(rawRadiance.Load4((p.y*width+p.x)*64+(spec?48:32))).rgb,.02);}
+float3 Factor(uint2 p,bool spec){
+    // The primary integrator traces UNIT-COLOR diffuse; the native raster
+    // material applies texture color only AFTER reconstruction. Dividing this
+    // signal by ray-hit kd introduces a texture that was never in the signal,
+    // and filtering prevents the later multiplication from cancelling it.
+    // Raw kd remains available to the separate RR-guide route.
+    if(!spec)return float3(1,1,1);
+    return max(asfloat(rawRadiance.Load3((p.y*width+p.x)*64+48)),.02);
+}
 float3 Noisy(uint2 p,bool spec){return asfloat(rawRadiance.Load4((p.y*width+p.x)*64+(spec?16:0))).rgb/Factor(p,spec);}
 
 cbuffer Phase : register(b1) { uint materialPhase; };

@@ -92,10 +92,13 @@ int main(int argc,char**){
             const float normal[]={(iteration==10||(iteration==9&&x%2==0))?.7f:.5f,.5f,.5f,0},material[]={0,0,0,iteration==2?1.0f:(iteration>=12?1.0f/255.0f:0.0f)},depth[]={iteration==3?.7f:.5f,0,0,0};
             const float radiance=(iteration==9||iteration==11)?2.0f:(iteration==0||iteration==6)?1.0f:(iteration>=7?0.0f:((x+y)%2?2.0f:0.0f));const float pixel[]={radiance,radiance,radiance,(x==0&&y==0)?0.0f:1.0f};
             auto* bytes=static_cast<unsigned char*>(mapped);std::memcpy(bytes+y*256+x*16,normal,16);std::memcpy(bytes+2048+y*256+x*16,material,16);std::memcpy(bytes+4096+y*256+x*16,depth,16);if(split){
-                const float factor=x%2?.25f:1.0f;
+                // Untextured primary lighting must not change when unused ray-hit
+                // albedo varies across pixels/frames, including black channels.
+                const float factor=1.0f;
+                const float texture=((x+iteration)%3)==0?0.0f:(((x+iteration)%3)==1?.25f:1.0f);
                 const float channels[]={radiance*.75f*factor,radiance*.75f*factor,radiance*.75f*factor,pixel[3],
                     radiance*.125f,radiance*.125f,radiance*.125f,1,
-                    factor,factor,factor,.5f,.5f,.5f,.5f,0};
+                    texture,1-texture,.1f+texture*.8f,.5f,.5f,.5f,.5f,0};
                 std::memcpy(bytes+6144+(y*8+x)*64,channels,64);
             }else std::memcpy(bytes+6144+(y*8+x)*16,pixel,16);
         }upload->Unmap(0,nullptr);
@@ -126,7 +129,7 @@ int main(int argc,char**){
         for(UINT i=0;i<64;++i){const auto* sourcePixel=static_cast<const float*>(mapped)+i*16;
             float pixel[8];std::memcpy(pixel,sourcePixel,sizeof(pixel));
             for(UINT k=0;k<3;++k)assert(std::abs(sourcePixel[k]-sourcePixel[8+k]-sourcePixel[12+k])<1e-4f);
-            if(split){const float factor=.75f*(i%2?.25f:1.0f)+.125f;for(UINT k=0;k<3;++k)pixel[k]/=factor;}
+            if(split){const float factor=.75f+.125f;for(UINT k=0;k<3;++k)pixel[k]/=factor;}
             if(i==0||iteration==4||iteration==5){for(UINT channel=0;channel<8;++channel)assert(pixel[channel]==0);continue;}
             assert(pixel[3]==1&&std::isfinite(pixel[0])&&pixel[0]>=0&&pixel[0]<=2);
             if(freshTest){
@@ -155,5 +158,5 @@ int main(int argc,char**){
     }
     previous.reset();previousSignals.reset();Output::TrimIdle();CloseHandle(event);assert(SUCCEEDED(device->GetDeviceRemovedReason()));
     if(freshTest)puts("PASS: RR receives current diffuse plus specular exactly, checker samples unchanged, old light history ignored, RR-off transition discards incompatible history, coverage/admission retained");
-    puts("PASS: raw-buffer initialization, spatial noise reduction, temporal accumulation, material/depth rejection, resolution/cut reset, zero coverage and rejected/probe admission, subpixel camera motion with incompatible nearest and valid neighboring history, renumbered material history retained, same-slot parameter/geometry/flag changes rejected, split lighting-off history clipping");
+    puts("PASS: raw-buffer initialization, spatial noise reduction, temporal accumulation, material/depth rejection, resolution/cut reset, zero coverage and rejected/probe admission, subpixel camera motion with incompatible nearest and valid neighboring history, renumbered material history retained, same-slot parameter/geometry/flag changes rejected, split lighting-off history clipping, unit-color diffuse invariant to colored/black/changing ray-hit albedo");
 }
