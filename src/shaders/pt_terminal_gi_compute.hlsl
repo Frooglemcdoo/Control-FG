@@ -11,12 +11,21 @@ void main(uint3 tid:SV_DispatchThreadID){
     if(PTGIParams[3].y!=1||!PTGIRequestExtent(pixel,extent))return;
     uint bytes;PTGIRadiance.GetDimensions(bytes);if(bytes!=extent.x*extent.y*64)return;
     uint index=pixel.y*extent.x+pixel.x,at=index*32,raw=index*64;
-    if(asfloat(PTGIRequestGeometry.Load(at+12))!=1||asfloat(PTGIRadiance.Load(raw+12))!=1)return;
+    float kind=asfloat(PTGIRequestGeometry.Load(at+12));
+    if((kind!=1&&kind!=2)||asfloat(PTGIRadiance.Load(raw+12))!=1)return;
     float3 position=asfloat(PTGIRequestGeometry.Load3(at)),normal=asfloat(PTGIRequestGeometry.Load3(at+16));
     float3 weight=asfloat(PTGIRequestWeight.Load3(at)),fraction=asfloat(PTGIRequestWeight.Load3(at+16));
     if(!all(isfinite(position))||!all(isfinite(normal))||!all(isfinite(weight))||any(weight<0)||
        !all(isfinite(fraction))||any(fraction<0)||any(fraction>1))return;
-    float3 tail=weight*PTTerminalGI(position,normal);
+    float3 cached;
+    bool available=PTLookupTerminalGI(position,normal,cached);
+    if(!available&&kind==2)cached=asfloat(uint3(PTGIRequestGeometry.Load(at+28),PTGIRequestWeight.Load(at+12),PTGIRequestWeight.Load(at+28)));
+    if(!all(isfinite(cached))||any(cached<0))return;
+    float3 tail=weight*cached;
+    if(kind==2&&available&&any(tail>0)&&((pixel.x|pixel.y)&63)==0){
+        uint metricBytes;PTGIMetrics.GetDimensions(metricBytes);
+        if(metricBytes>=1192){uint old;PTGIMetrics.InterlockedAdd(1188,1,old);}
+    }
     float3 diffuse=asfloat(PTGIRadiance.Load3(raw))+tail*fraction;
     float3 specular=asfloat(PTGIRadiance.Load3(raw+16))+tail*(1-fraction);
     if(!all(isfinite(tail))||any(tail<0)||!all(isfinite(diffuse))||!all(isfinite(specular)))return;

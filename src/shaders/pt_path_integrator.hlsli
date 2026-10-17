@@ -17,6 +17,9 @@ PTPathSurface PTPathDecode(PTSceneHit hit, RayDesc ray);
 PTPathSurface PTPathDecodePrimary(PTSceneHit hit,RayDesc ray);
 #endif
 float3 PTPathEnvironment(float3 direction);
+#ifdef PT_PATH_MISS_GI
+float PTPathContinuationLimit(float roughness,float noise);
+#endif
 bool PTPathLight(PTPathSurface surface, float3 outgoingWorld, inout uint rng, out PTDirectSample light, out uint visibility);
 
 #ifdef PT_PATH_PRIMARY_LIGHT
@@ -28,7 +31,7 @@ uint PTPathRandomBits(inout uint state) {
 float PTPathRandom(inout uint state) { return (PTPathRandomBits(state)>>8)*(1.0/16777216.0); }
 struct PTPathResult { float3 radiance; uint hits; uint valid; uint fault; uint primaryValid; uint terminalGIPositive;
 #ifdef PT_PATH_TERMINAL_GI
-float3 terminalPosition,terminalNormal,terminalWeight,terminalFraction;uint terminalPending;
+float3 terminalPosition,terminalNormal,terminalWeight,terminalFraction,terminalFallback;uint terminalPending;
 #endif
  float3 diffuse,specular,kd,f0; float roughness,hitDistance,primaryViewCosine; };
 PTPathResult PTIntegratePathFirst(RayDesc ray,uint maxHits,uint rouletteStart,uint seed,float originOffset,
@@ -39,14 +42,26 @@ PTPathResult PTIntegratePathFirst(RayDesc ray,uint maxHits,uint rouletteStart,ui
        ray.TMin<0||ray.TMax<=ray.TMin||!isfinite(originOffset)||originOffset<=0){result.fault=1;return result;}
     uint rng=seed==0?1:seed; float3 diffuseFraction=1; float3 primaryDirectDiffuse=0,primaryDirectSpecular=0;
 #ifdef PT_PATH_TERMINAL_GI
-    float3 terminalPosition=0,terminalNormal=0,terminalWeight=0;bool terminalPending=false;
+    float3 terminalPosition=0,terminalNormal=0,terminalWeight=0,terminalFallback=0;uint terminalPending=0;
 #endif
     for(uint depth=0;depth<maxHits&&path.alive!=0;++depth) {
         PTSceneHit hit;
         if(depth==0&&useFirst!=0)hit=first;else hit=PTPathTrace(ray);
         if(depth==1)result.hitDistance=hit.status==1?hit.distance:1e6;
         if(hit.status==2){path.valid=0;result.fault=2;break;}
-        if(hit.status==0){path=PTAccumulate(path,PTPathEnvironment(ray.Direction));break;}
+        if(hit.status==0){
+#ifdef PT_PATH_MISS_GI
+            // Only bounded secondary rays have a meaningful cache endpoint.
+            // The cache replaces this miss, not any already accumulated hit light.
+            if(depth>0&&ray.TMax<1e6){
+                terminalPosition=ray.Origin+ray.Direction*ray.TMax;
+                terminalNormal=ray.Direction;terminalWeight=path.throughput;
+                terminalFallback=PTPathEnvironment(ray.Direction);terminalPending=2;
+            }else
+#endif
+            path=PTAccumulate(path,PTPathEnvironment(ray.Direction));
+            break;
+        }
         PTPathSurface surface;
 #ifdef PT_PATH_PRIMARY_DECODE
         if(depth==0&&useFirst!=0)surface=PTPathDecodePrimary(hit,ray);else surface=PTPathDecode(hit,ray);
@@ -117,7 +132,7 @@ PTPathResult PTIntegratePathFirst(RayDesc ray,uint maxHits,uint rouletteStart,ui
             // Earlier vertices retain traced transport; never sum this at each
             // bounce or add the native RT GI/reflection output a second time.
             terminalPosition=surface.position;terminalNormal=surface.normal;
-            terminalWeight=path.throughput*surface.material.kd;terminalPending=true;
+            terminalWeight=path.throughput*surface.material.kd;terminalPending=1;
 #endif
             break;
         }
@@ -147,12 +162,17 @@ PTPathResult PTIntegratePathFirst(RayDesc ray,uint maxHits,uint rouletteStart,ui
 #ifdef PT_PATH_PRIMARY_SHADING_NORMAL
         if(depth==0&&useFirst!=0&&!PTPrimaryReflectionAboveGeometry(first.geometricNormal,ray.Direction))break;
 #endif
+#ifdef PT_PATH_MISS_GI
+        ray.TMax=PTPathContinuationLimit(surface.material.roughness,PTPathRandom(rng));
+        if(!isfinite(ray.TMax)||ray.TMax<=0){path.valid=0;result.fault=9;break;}
+#endif
         ray.TMin=0;
     }
 #ifdef PT_PATH_TERMINAL_GI
     if(terminalPending&&path.valid!=0){
         result.terminalPosition=terminalPosition;result.terminalNormal=terminalNormal;
-        result.terminalWeight=terminalWeight;result.terminalFraction=diffuseFraction;result.terminalPending=1;
+        result.terminalWeight=terminalWeight;result.terminalFraction=diffuseFraction;
+        result.terminalFallback=terminalFallback;result.terminalPending=terminalPending;
     }
 #endif
     if(path.valid==0&&result.fault==0)result.fault=10;

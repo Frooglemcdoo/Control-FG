@@ -17,6 +17,9 @@
 #define PT_PATH_PRIMARY_SHADING_NORMAL 1
 #ifdef PT_PRIMARY_SURFACE_REPLACEMENT
 #define PT_PATH_TERMINAL_GI 1
+#define PT_PATH_MISS_GI 1
+#include "pt_native_ray_extent.hlsli"
+cbuffer PTPathGIParameters : register(b5) { uint4 PTPathGIParams[4]; };
 #define PT_PATH_PRIMARY_LIGHT 1
 #include "pt_terminal_gi_request.hlsli"
 #endif
@@ -82,6 +85,11 @@ PTPathSurface PTDecodeSurface(PTSceneHit hit,RayDesc ray,bool primary){
 }
 PTPathSurface PTPathDecode(PTSceneHit hit,RayDesc ray){return PTDecodeSurface(hit,ray,false);}
 PTPathSurface PTPathDecodePrimary(PTSceneHit hit,RayDesc ray){return PTDecodeSurface(hit,ray,true);}
+#ifdef PT_PATH_MISS_GI
+float PTPathContinuationLimit(float roughness,float noise){
+    return PTPathGIParams[3].y==1?PTNativeRayExtent(roughness,noise):1e6;
+}
+#endif
 float3 PTPathEnvironment(float3 direction){
     // Physical miss uses the sharp cube; no roughness-dependent convolution
     // inside path sampling. Native specular environment scale is b2 byte244.
@@ -211,7 +219,8 @@ void PTPrimaryPathRayGeneration(){
 #ifdef PT_PRIMARY_SURFACE_REPLACEMENT
         if(admission==2)PTMeasure(6,pixel);
         else if(PTCommitSignals(pixel,uint2(width,height),result,admission)){
-            if(result.terminalPending!=0)PTWriteGIRequest(pixel,uint2(width,height),result.terminalPosition,result.terminalNormal,result.terminalWeight,result.terminalFraction);
+            if(result.terminalPending!=0)PTWriteGIRequest(pixel,uint2(width,height),result.terminalPosition,result.terminalNormal,result.terminalWeight,result.terminalFraction,result.terminalPending,result.terminalFallback);
+            if(result.terminalPending==2&&((pixel.x|pixel.y)&63)==0){uint old;PTMetrics.InterlockedAdd(1184,1,old);}
             PTMeasure(6,pixel);
         }
         if(result.valid==0&&((pixel.x|pixel.y)&63)==0){uint old;PTMetrics.InterlockedAdd(36,1,old);}

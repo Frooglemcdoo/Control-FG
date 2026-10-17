@@ -57,7 +57,7 @@ int main(){
     ComPtr<ID3D11SamplerState> sampler;assert(SUCCEEDED(d->CreateSamplerState(&sd,&sampler)));
     ID3D11ShaderResourceView* srvs[9];for(UINT i=0;i<9;++i)srvs[i]=views[i].Get();
     c->CSSetShader(shader.Get(),nullptr,0);c->CSSetShaderResources(21,9,srvs);c->CSSetSamplers(6,1,sampler.GetAddressOf());c->CSSetConstantBuffers(4,1,cb4.GetAddressOf());c->CSSetConstantBuffers(5,1,cb5.GetAddressOf());
-    for(UINT test=0;test<8;++test){
+    for(UINT test=0;test<13;++test){
         std::array<UINT,64> geometry{},weights{},metrics{};std::array<UINT,128> raw{};
         auto p=params;p[14]=8;p[15]=1;metrics[8]=1;
         if(test==1)metrics[8]=0;
@@ -78,6 +78,10 @@ int main(){
             if(pixel==6)g[4]=bits(-1); // Opposite directional brick.
             if(test==5)g[3]=0;
             if(test==6)w[0]=w[1]=w[2]=0;
+            if(test>=8){g[3]=bits(test==10?3.f:2.f);g[7]=bits(7);w[3]=bits(8);w[7]=bits(9);}
+            if(test==9)p[12]=0; // Valid black cache must not select environment.
+            if(test==11)g[7]=0x7fc00000u;
+            if(test==12)g[7]=bits(-1);
             if(test==7)w[4]=w[5]=w[6]=0; // All tail belongs to specular first lobe.
         }
         c->UpdateSubresource(cb4.Get(),0,nullptr,transforms.data(),0,0);c->UpdateSubresource(cb5.Get(),0,nullptr,p.data(),0,0);
@@ -90,11 +94,13 @@ int main(){
         const auto* got=static_cast<const float*>(mapped.pData);
         for(UINT pixel=0;pixel<8;++pixel)for(UINT word=0;word<16;++word){
             float expected;std::memcpy(&expected,&raw[pixel*16+word],4);
-            bool valid=(test==0||test==7)&&(pixel==0||pixel==6||pixel==7||(test==7&&pixel==5));
-            if(valid&&(word<3||(word>=4&&word<7))){
+            bool valid=(test==0||test==7||test==8||test==11||test==12)&&(pixel==0||pixel==6||pixel==7||(test==7&&pixel==5)||(test>=8&&pixel==1));
+            bool fallback=(test==8||test==9)&&pixel==3;
+            // Inside-volume cache is authoritative even if unused fallback is NaN.
+            if((valid||fallback)&&(word<3||(word>=4&&word<7))){
                 UINT channel=word%4;float weight[]={.5f,2,3},fraction[]={.25f,.5f,1};
                 float f=test==7?0:fraction[channel];if(word>=4)f=1-f;
-                expected+=float(channel+1)*(pixel==6?2.f:1.f)*weight[channel]*f;
+                expected+=(fallback?float(channel+7):float(channel+1)*(pixel==6?2.f:1.f))*weight[channel]*f;
             }
             if(!std::isfinite(got[pixel*16+word])||std::abs(got[pixel*16+word]-expected)>1e-4f){printf("FAIL compute test=%u pixel=%u word=%u got=%g expected=%g\n",test,pixel,word,got[pixel*16+word],expected);return 1;}
         }

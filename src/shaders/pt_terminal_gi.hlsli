@@ -1,7 +1,7 @@
 #ifndef CONTROL_PT_TERMINAL_GI
 #define CONTROL_PT_TERMINAL_GI
 // Diffuse GI-volume subset of native 4fc0a0e9... DWORD1377..2735.
-// Evaluated only at the terminal path vertex, never added at every bounce.
+// Evaluated once at a terminal hit or bounded miss, never at every bounce.
 // No native direct lights, shadow atlases, reflection targets or RT GI outputs.
 struct PTGIVolume { uint words[20]; };
 StructuredBuffer<PTGIVolume> PTGIVolumes : register(t21);
@@ -56,14 +56,15 @@ bool PTGIBrickPosition(PTGIVolume volume,uint3 cell,uint3 size,float3 fraction,o
     }
     return false; // Malformed/cyclic tree must not hang the GPU.
 }
-float3 PTTerminalGI(float3 positionWorld,float3 normalWorld){
-    if(PTGIParams[3].y!=1)return 0;
+bool PTLookupTerminalGI(float3 positionWorld,float3 normalWorld,out float3 radiance){
+    radiance=0;
+    if(PTGIParams[3].y!=1)return false;
     uint count,stride;PTGIVolumes.GetDimensions(count,stride);
     uint volumes=PTGIParams[0].w;
     float scale=asfloat(PTGIParams[3].x);
     float3 inverseSize=asfloat(PTGIParams[0].xyz),bias=asfloat(PTGIParams[1].xyz);
     if(stride!=80||volumes>384||volumes>count||!isfinite(scale)||scale<0||
-       !all(isfinite(inverseSize))||any(inverseSize<=0)||!all(isfinite(bias)))return 0;
+       !all(isfinite(inverseSize))||any(inverseSize<=0)||!all(isfinite(bias)))return false;
     float3 sum=0;float weightSum=0;
     [loop] for(uint i=0;i<volumes;++i){
         uint base=i*4;float4 world=float4(positionWorld,1);
@@ -99,8 +100,12 @@ float3 PTTerminalGI(float3 positionWorld,float3 normalWorld){
         if(!all(isfinite(irradiance))||any(irradiance<0))continue;
         sum+=irradiance*weight;weightSum+=weight;
     }
-    if(weightSum<=0)return 0; // No invented ambient light outside authored volumes.
-    float3 radiance=(sum/weightSum+bias)*(scale*0.3183098861837907);
-    return all(isfinite(radiance))?max(radiance,0):0;
+    if(weightSum<=0)return false; // No invented ambient light outside authored volumes.
+    radiance=(sum/weightSum+bias)*(scale*0.3183098861837907);
+    if(!all(isfinite(radiance)))return false;
+    radiance=max(radiance,0);return true;
+}
+float3 PTTerminalGI(float3 positionWorld,float3 normalWorld){
+    float3 radiance;return PTLookupTerminalGI(positionWorld,normalWorld,radiance)?radiance:0;
 }
 #endif
