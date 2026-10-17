@@ -24,7 +24,8 @@ static std::atomic<bool> active{false};
 static bool transportValidated=false;
 static unsigned transportGoodFrames=0;
 static std::recursive_mutex mutex;
-static std::vector<unsigned char> library;
+static std::vector<unsigned char> library,emitterLibrary;
+static std::map<ID3D12RootSignature*,std::shared_ptr<PTEmitters::Builder>> emitterBuilders;
 static std::shared_ptr<PTSurfaceComposition::ReconstructionPipeline> reconstructionPipeline;
 static std::shared_ptr<Output> historyOutput;
 static View historyView;
@@ -114,6 +115,9 @@ struct Assets {
     std::shared_ptr<const PTSceneHandoff::Prepared> proof;
     std::shared_ptr<PTScenePipeline::Dispatch> dispatch;
     PTGlass::DescriptorRange privateTable;
+    std::shared_ptr<PTEmitters::Storage> emitters;
+    std::shared_ptr<PTEmitters::Builder> emitterBuilder;
+    std::vector<PTEmitters::Geometry> emitterGeometry;
     UINT64 ticket=0,engineFrame=0;bool probe=true;
 };
 struct Frame {
@@ -232,6 +236,10 @@ static bool Encode(void* context,ID3D12GraphicsCommandList* list,ID3D12Resource*
     D3D12_RESOURCE_BARRIER ordered{};ordered.Type=D3D12_RESOURCE_BARRIER_TYPE_UAV;
     list->ResourceBarrier(1,&ordered); // Native u0/u1 writes precede the private overwrite.
     a.metrics.Begin(list,counter);
+    if(surfaceReplacement){
+        auto emitterUav=Gpu(a.privateTable);emitterUav.ptr+=45ull*device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+        if(!a.emitterBuilder->Record(list,a.bindings,Gpu(a.privateTable),emitterUav,a.emitters->Uav(),*a.emitters,a.emitterGeometry))return false;
+    }
     list->SetComputeRootConstantBufferView(2,a.camera->GetGPUVirtualAddress());
     list->SetComputeRootConstantBufferView(4,a.camera->GetGPUVirtualAddress()+1280);
     const bool recorded=a.dispatch->Record(rays.Get(),a.bindings.layout->Root(),a.bindings.pipeline.Get(),{a.bindings.arguments[0].value},Gpu(a.privateTable));
@@ -414,6 +422,16 @@ static void Dispatched(void*,ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT 
             Reject(reason);return;
         }
         const auto& plan=a->proof->DispatchPlan();
+        if(surfaceReplacement){
+            if(!PTEmitters::Plan(a->proof->SceneSnapshot(),plan,pipeline->SurfaceAlpha(),a->emitterGeometry)||
+               FAILED(PTEmitters::Storage::Acquire(device.Get(),a->emitters))){Reject("emitter_scene_plan");return;}
+            auto& builder=emitterBuilders[bindings.layout->Root()];
+            if(!builder){auto fresh=std::make_shared<PTEmitters::Builder>();
+                if(FAILED(fresh->Initialize(device.Get(),*bindings.layout,emitterLibrary.data(),emitterLibrary.size()))){Reject("emitter_pipeline");return;}
+                builder=std::move(fresh);
+            }
+            a->emitterBuilder=builder;
+        }
         // Canonicalization is CPU-only and uses immutable prepared records.
         // Keep it in the unlocked preparation interval, not the descriptor gate.
         std::optional<PTMaterialHistory::Keys> materialKeys;
@@ -446,7 +464,12 @@ static void Dispatched(void*,ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT 
         profile.Next(PTHotpathTiming::Kind::primary_record);QueryPerformanceCounter(&encodeStart);
         device->CopyDescriptorsSimple(49,Cpu(a->privateTable),a->primary.At(0),D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
         device->CopyDescriptorsSimple(1,Cpu(a->privateTable,47),a->metrics.Uav(),D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-        device->CopyDescriptorsSimple(1,Cpu(a->privateTable,39),environment->table.At(13),D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+        if(surfaceReplacement){
+            D3D12_SHADER_RESOURCE_VIEW_DESC srv{};srv.Format=DXGI_FORMAT_R32_TYPELESS;srv.ViewDimension=D3D12_SRV_DIMENSION_BUFFER;
+            srv.Shader4ComponentMapping=D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;srv.Buffer.NumElements=PTEmitters::Storage::Bytes/4;srv.Buffer.Flags=D3D12_BUFFER_SRV_FLAG_RAW;
+            device->CreateShaderResourceView(a->emitters->Resource(),&srv,Cpu(a->privateTable,39));
+            device->CopyDescriptorsSimple(1,Cpu(a->privateTable,45),a->emitters->Uav(),D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+        }
         if(surfaceReplacement){
             D3D12_CONSTANT_BUFFER_VIEW_DESC giParameters{};giParameters.BufferLocation=a->camera->GetGPUVirtualAddress()+1792;giParameters.SizeInBytes=256;
             device->CreateConstantBufferView(&giParameters,Cpu(a->privateTable,1)); // private b5
@@ -475,7 +498,6 @@ static void Dispatched(void*,ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT 
             // They retain the same fence-owned lifetime; no new image allocation.
             D3D12_UNORDERED_ACCESS_VIEW_DESC uav{};uav.Format=DXGI_FORMAT_R32_TYPELESS;uav.ViewDimension=D3D12_UAV_DIMENSION_BUFFER;
             uav.Buffer.NumElements=view.width*view.height*8;uav.Buffer.Flags=D3D12_BUFFER_UAV_FLAG_RAW;
-            device->CreateUnorderedAccessView(a->reconstruction->signals->resource.Get(),nullptr,&uav,Cpu(a->privateTable,45)); // u4
             device->CreateUnorderedAccessView(a->reconstruction->scratch->resource.Get(),nullptr,&uav,Cpu(a->privateTable,46)); // u5
         }
         if(nextTicket==UINT64_MAX){Reject("ticket_exhausted");return;}a->ticket=nextTicket++;
@@ -905,6 +927,7 @@ static bool Start(){
     if(!PTReflectionLoadSidecar(surfaceReplacement?L"pt_primary_surface.dxil":L"pt_primary_path.dxil","PRIMARY_PATH",library,sha,loaded))return false;
     if(surfaceReplacement){
         std::vector<unsigned char> filter;char filterSha[65]{};bool found=false;
+        if(!PTReflectionLoadSidecar(L"pt_emitter_build.dxil","EMITTER_BUILD",emitterLibrary,filterSha,found))return false;
         if(!PTReflectionLoadSidecar(L"pt_surface_reconstruct.dxil","SURFACE_RECONSTRUCTION",filter,filterSha,found))return false;
         reconstructionPipeline=std::make_shared<PTSurfaceComposition::ReconstructionPipeline>();
         if(FAILED(reconstructionPipeline->Initialize(device.Get(),filter.data(),filter.size())))return false;

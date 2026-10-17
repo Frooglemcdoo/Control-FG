@@ -11,7 +11,7 @@ struct Geometry {
 inline bool Plan(const PTSceneDispatch::Scene& scene,const PTSceneDispatch::Plan& dispatch,
                  const PTShaderTableAdapter::Identifier& alpha,std::vector<Geometry>& out){
     out.clear();if(!scene.version||scene.version!=dispatch.selection.sceneVersion||dispatch.records.empty()||dispatch.records.size()%2)return false;
-    std::vector<Geometry> pending;
+    std::vector<Geometry> pending;std::uint64_t totalTriangles=0;
     for(const auto& instance:scene.instances){
         if(((instance.idMask>>24)&1u)==0)continue;
         const auto* geometries=scene.topology.Geometries(instance.blas);if(!geometries)return false;
@@ -26,6 +26,8 @@ inline bool Plan(const PTSceneDispatch::Scene& scene,const PTSceneDispatch::Plan
             for(float v:instance.transform)if(!std::isfinite(v))return false;
             std::memcpy(g.constants.data()+12,instance.transform,48);
             g.constants[24]=source.indexCount/3;
+            totalTriangles+=g.constants[24];
+            if(g.constants[24]>65535u*64u||totalTriangles>UINT32_MAX)return false;
             const bool forceOpaque=(instance.contributionFlags&0x04000000u)!=0;
             const bool forceAlpha=(instance.contributionFlags&0x08000000u)!=0;
             if(forceOpaque&&forceAlpha)return false;

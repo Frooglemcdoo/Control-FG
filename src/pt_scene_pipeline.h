@@ -2,7 +2,7 @@
 #include <d3d12.h>
 #include "pt_scene_dispatch_plan.h"
 #include <wrl/client.h>
-// Private 60-byte payload pipeline. The global root is supplied by the admitted
+// Private 64-byte maximum payload pipeline. The global root is supplied by the admitted
 // native pass; local roots and hit identifiers never reuse the native payload ABI.
 namespace PTScenePipeline {
 using Microsoft::WRL::ComPtr;
@@ -17,7 +17,7 @@ class Pipeline {
         const void* id=properties->GetShaderIdentifier(name);if(!id)return false;std::memcpy(result.data(),id,result.size());return true;
     }
 public:
-    static constexpr UINT PayloadBytes=60,AttributeBytes=8,HitStride=128;
+    static constexpr UINT PayloadBytes=64,AttributeBytes=8,HitStride=128;
     const char* failureStage="not_started";HRESULT deviceBefore=S_OK,deviceAfter=S_OK;
     HRESULT Initialize(ID3D12Device5* device,ID3D12RootSignature* root,const void* bytes,std::size_t size,const wchar_t* rayGeneration,const wchar_t* callableName=nullptr){
         if(state||!device||!root||!bytes||!size||!rayGeneration)return E_INVALIDARG;

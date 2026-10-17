@@ -4,7 +4,11 @@
 #ifdef PT_GEOMETRY_SPAWN
 #include "vendor/SelfIntersectionAvoidance.hlsl"
 #endif
-struct PTSceneHit { float distance; float2 uv; float3 shadingNormal; uint material; uint status;
+struct PTSceneHit {
+#ifdef PT_SCENE_EMITTER_AREA
+    float emitterArea;
+#endif
+    float distance; float2 uv; float3 shadingNormal; uint material; uint status;
 #ifdef PT_GEOMETRY_SPAWN
     float3 worldPosition; float3 geometricNormal; float spawnOffset;
 #endif
@@ -96,6 +100,14 @@ void PTSceneClosestHit(inout PTSceneHit p,in BuiltInTriangleIntersectionAttribut
         vertices[i]=asfloat(PTPositions.Load3(a.address));
         if(!all(isfinite(vertices[i]))){p.status=2;return;}
     }
+#ifdef PT_SCENE_EMITTER_AREA
+    float3x4 objectToWorld=ObjectToWorld3x4();
+    float3 wa=mul(objectToWorld,float4(vertices[0],1));
+    float3 wb=mul(objectToWorld,float4(vertices[1],1));
+    float3 wc=mul(objectToWorld,float4(vertices[2],1));
+    p.emitterArea=.5*length(cross(wb-wa,wc-wa));
+    if(!isfinite(p.emitterArea)||p.emitterArea<=0){p.status=2;return;}
+#endif
     float3 geometric=cross(vertices[1]-vertices[0],vertices[2]-vertices[0]);
     if(!all(isfinite(geometric))||dot(geometric,geometric)<1e-20){p.status=2;return;}
     float3 objectPosition,objectNormal;

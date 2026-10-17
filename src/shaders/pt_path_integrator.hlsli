@@ -1,6 +1,9 @@
 #ifndef CONTROL_PT_PATH_INTEGRATOR
 #define CONTROL_PT_PATH_INTEGRATOR
 #include "pt_direct_light.hlsli"
+#ifdef PT_PATH_EMITTER_NEE
+#include "pt_emitter_sampling.hlsli"
+#endif
 // Camera radiance transport may use distinct shading/geometric frames. Adapters
 // enabling PT_PATH_SURFACE_GEOMETRY supply the oriented geometric normal for
 // direct and continuation hemisphere rejection. Transmission and importance-mode
@@ -21,6 +24,10 @@ PTPathSurface PTPathDecode(PTSceneHit hit, RayDesc ray);
 PTPathSurface PTPathDecodePrimary(PTSceneHit hit,RayDesc ray);
 #endif
 float3 PTPathEnvironment(float3 direction);
+#ifdef PT_PATH_EMITTER_NEE
+bool PTPathEmitterLight(PTPathSurface surface,inout uint rng,out PTDirectSample light,out uint visibility);
+float PTPathEmitterPdf(float3 previousPosition,PTSceneHit hit);
+#endif
 #ifdef PT_PATH_MISS_GI
 float PTPathContinuationLimit(float roughness,float noise);
 #endif
@@ -51,6 +58,9 @@ PTPathResult PTIntegratePathFirst(RayDesc ray,uint maxHits,uint rouletteStart,ui
 #ifdef PT_PATH_TERMINAL_GI
     float3 terminalPosition=0,terminalNormal=0,terminalWeight=0,terminalFallback=0;uint terminalPending=0;
 #endif
+#ifdef PT_PATH_EMITTER_NEE
+    float previousBsdfPdf=0;float3 previousPosition=ray.Origin;
+#endif
     for(uint depth=0;depth<maxHits&&path.alive!=0;++depth) {
         PTSceneHit hit;
         if(depth==0&&useFirst!=0)hit=first;else hit=PTPathTrace(ray);
@@ -74,6 +84,10 @@ PTPathResult PTIntegratePathFirst(RayDesc ray,uint maxHits,uint rouletteStart,ui
         if(depth==0&&useFirst!=0)surface=PTPathDecodePrimary(hit,ray);else surface=PTPathDecode(hit,ray);
 #else
         surface=PTPathDecode(hit,ray);
+#endif
+#ifdef PT_PATH_EMITTER_NEE
+        if(depth>0&&previousBsdfPdf>0)
+            surface.emission*=PTEmitterHitWeight(previousBsdfPdf,PTPathEmitterPdf(previousPosition,hit));
 #endif
         result.hits++;
         PTSurfaceMaterial m=surface.material;
@@ -133,6 +147,25 @@ PTPathResult PTIntegratePathFirst(RayDesc ray,uint maxHits,uint rouletteStart,ui
                 primaryDirectSpecular=max(direct.radiance-primaryDirectDiffuse,0);
             }
         }
+#ifdef PT_PATH_EMITTER_NEE
+        PTDirectSample emitter;uint emitterVisibility;
+        if(sampleDirect&&PTPathEmitterLight(surface,rng,emitter,emitterVisibility)){
+            if(emitter.delta!=0||emitterVisibility>1){path.valid=0;result.fault=6;break;}
+#ifdef PT_PATH_SURFACE_GEOMETRY
+            if(!PTPrimaryReflectionAboveGeometry(surface.geometricNormal,emitter.wi))emitterVisibility=0;
+#endif
+            float3 localWi=float3(dot(emitter.wi,tangent),dot(emitter.wi,bitangent),dot(emitter.wi,n));
+            float probability=PTSpecularProbability(surface.material);
+#ifdef PT_PRIMARY_SURFACE_REPLACEMENT
+            if(depth==0&&useFirst!=0&&surface.material.lobes==3u)probability=.5;
+#endif
+            PTEmitterDirectResult direct=PTEvaluateEmitterDirect(surface.material,wo,localWi,
+                emitter.incidentRadiance,emitter.pdf,probability,emitterVisibility,depth+1<maxHits?1u:0u);
+            if(direct.valid==0){path.valid=0;result.fault=7;break;}
+            path=PTAccumulate(path,direct.radiance);
+            if(depth==0){primaryDirectDiffuse+=direct.diffuse;primaryDirectSpecular+=max(direct.radiance-direct.diffuse,0);}
+        }
+#endif
         // A valid material alone is insufficient: failed primary lighting
         // must not publish covered black and suppress native illumination.
         if(depth==0&&path.valid!=0)result.primaryValid=1;
@@ -180,6 +213,9 @@ PTPathResult PTIntegratePathFirst(RayDesc ray,uint maxHits,uint rouletteStart,ui
             float3 full=PTEvaluateSurface(continuation,wo,sample.wi).f;
             diffuseFraction=float3(full.x>0?df.x/full.x:0,full.y>0?df.y/full.y:0,full.z>0?df.z/full.z:0);
         }
+#ifdef PT_PATH_EMITTER_NEE
+        previousBsdfPdf=sample.pdf;previousPosition=surface.position;
+#endif
         sample.weight/=continuationProbability;
         path=PTContinue(path,sample,rr,rouletteStart);
         if(path.alive==0){if(path.valid==0)result.fault=8;break;}

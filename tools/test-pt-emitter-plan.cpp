@@ -1,3 +1,6 @@
+#ifdef _WIN32
+#include <windows.h>
+#endif
 #include "../src/pt_emitter_plan.h"
 #include <cassert>
 #include <cstdio>

@@ -1,9 +1,13 @@
 // Private full-surface path producer for the reviewed primary lighting pass.
 // Host supplies an immutable scene/SBT, cloned primary table, same-frame native
-// environment at t34 and TLAS at t35. Validated standard-output pixels add
+// emitter registry at t34 and TLAS at t35. Validated standard-output pixels add
 // separate diffuse/specular transport for reviewed raster composition (or the
 // legacy additive variant). Never bind to a native 4-byte payload state object.
 #define PT_GEOMETRY_SPAWN 1
+#ifdef PT_PRIMARY_SURFACE_REPLACEMENT
+#define PT_SCENE_EMITTER_AREA 1
+#define PT_PATH_EMITTER_NEE 1
+#endif
 #define PT_SCENE_MATERIAL_REGISTER t8
 #include "pt_scene_hits.hlsl"
 #include "pt_material_admission.hlsli"
@@ -159,6 +163,9 @@ bool PTPathLight(PTPathSurface surface,float3 outgoingWorld,inout uint rng,out P
 bool PTPathPrimaryLight(PTPathSurface surface,float3 outgoingWorld,inout uint rng,out PTDirectSample light,out uint visibility){
     return PTPathLightCandidates(surface,outgoingWorld,1,rng,light,visibility);
 }
+#endif
+#ifdef PT_PATH_EMITTER_NEE
+#include "pt_emitter_scene.hlsli"
 #endif
 [shader("raygeneration")]
 void PTPrimaryPathRayGeneration(){

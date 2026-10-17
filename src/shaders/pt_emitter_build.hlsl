@@ -20,9 +20,15 @@ cbuffer GeometryConstants:PT_EMITTER_REGISTER(b0){
 // Header: attempted records, invalid geometry, overflow, reserved. Records are
 // 80 bytes: three world vertices, three UVs, material ID, alpha-test flag.
 RWByteAddressBuffer Emitters:register(u4);
+#ifndef PT_EMITTER_BUILD_TEST
+RWByteAddressBuffer PTMetrics:register(u6);
+#endif
 void InvalidEmitter(){uint old;Emitters.InterlockedOr(4,1,old);}
 [numthreads(64,1,1)]
 void main(uint3 id:SV_DispatchThreadID){
+#ifndef PT_EMITTER_BUILD_TEST
+    if(PTMetrics.Load(32)!=1)return; // Same submission admission as the DXR producer.
+#endif
     if(id.x>=triangleCount)return;
     uint bytes;Emitters.GetDimensions(bytes);if(bytes<16)return;
     uint count,stride;Materials.GetDimensions(count,stride);
