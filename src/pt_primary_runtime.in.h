@@ -180,8 +180,10 @@ static void PollMetrics(){
                 Log("PT_PRIMARY_HISTORY_PIXELS frame=%u valid=%u available=%u projected=%u covered=%u compatible=%u accepted=%u sample_sum=%u material_match=%u normal_match=%u rescued=%u stable_material_match=%u reindexed_accepted=%u taps=4 candidates=4",f.view.frame,h[0],h[1],h[2],h[3],h[4],h[5],h[6],h[7],h[8],h[9],h[10],h[11]);
         }
         if(surfaceReplacement&&faultRead&&(n<=8||n%240==0))
-            Log("PT_PRIMARY_TERMINAL_GI_GPU frame=%u positive_samples=%u sampled_grid=64 terminal_vertex=4_or_miss",f.view.frame,faults[15]);
+            Log("PT_PRIMARY_TERMINAL_GI_GPU frame=%u positive_samples=%u sampled_grid=64 terminal_vertex=diffuse_hit_or_limit_or_miss",f.view.frame,faults[15]);
         if(surfaceReplacement&&good&&!f.assets->probe&&(n<=8||n%240==0)){
+            std::array<UINT,3> hitGI{};if(f.assets->metrics.ReadHitGI(hitGI))
+                Log("PT_PRIMARY_HIT_GI_GPU frame=%u requests=%u cache_positive=%u cache_unavailable=%u sampled_grid=64 diffuse_tail_replaced=1",f.view.frame,hitGI[0],hitGI[1],hitGI[2]);
             std::array<UINT,2> miss{};if(f.assets->metrics.ReadMissGI(miss))
                 Log("PT_PRIMARY_MISS_GI_GPU frame=%u requests=%u cache_positive=%u sampled_grid=64 native_extent=1",f.view.frame,miss[0],miss[1]);
         }
@@ -966,6 +968,6 @@ static bool Start(){
        !PTCommandBindings::Register(&commandConsumer)||!PTNativeJobRuntime::Register(&Job)||!PTSceneLive::owner.Start(step,true))return false;
     ptReflectionModeObserver.store(&MirrorModeChanged,std::memory_order_release);
     MirrorModeChanged(PTReflectionUserRequested());
-    active=true;Log("PT_PRIMARY_SESSION_READY build=M12R99 ready=1 hits=4 spp=1 roulette_start=3 material=opaque_general secondary_mesh_normals=1 geometric_spawn_and_hemisphere=1 native_fallback=1 primary_lighting=%s transport=%s readiness=per_material graphics_tracking=%u",surfaceReplacement?"pt":"native",surfaceReplacement?"full_surface":"diffuse_indirect",unsigned(compose));return true;
+    active=true;Log("PT_PRIMARY_SESSION_READY build=M12R100 ready=1 hits=4 spp=1 roulette_start=3 material=opaque_general secondary_mesh_normals=1 geometric_spawn_and_hemisphere=1 native_fallback=1 primary_lighting=%s transport=%s readiness=per_material graphics_tracking=%u",surfaceReplacement?"pt":"native",surfaceReplacement?"full_surface":"diffuse_indirect",unsigned(compose));return true;
 }
 }

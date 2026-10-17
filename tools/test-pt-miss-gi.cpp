@@ -15,7 +15,7 @@ int main(){
     const auto hr=D3DCompileFromFile(L"../../tools/test-pt-miss-gi.hlsl",nullptr,D3D_COMPILE_STANDARD_FILE_INCLUDE,"main","cs_5_0",D3DCOMPILE_IEEE_STRICTNESS|D3DCOMPILE_ENABLE_STRICTNESS|D3DCOMPILE_SKIP_OPTIMIZATION|D3DCOMPILE_WARNINGS_ARE_ERRORS,0,&code,&error);
     if(FAILED(hr)){if(error)fprintf(stderr,"%s\n",static_cast<const char*>(error->GetBufferPointer()));return 1;}
     ComPtr<ID3D11ComputeShader> shader;assert(SUCCEEDED(device->CreateComputeShader(code->GetBufferPointer(),code->GetBufferSize(),nullptr,&shader)));
-    D3D11_BUFFER_DESC desc{};desc.ByteWidth=256;desc.BindFlags=D3D11_BIND_UNORDERED_ACCESS;desc.MiscFlags=D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;desc.StructureByteStride=16;
+    D3D11_BUFFER_DESC desc{};desc.ByteWidth=448;desc.BindFlags=D3D11_BIND_UNORDERED_ACCESS;desc.MiscFlags=D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;desc.StructureByteStride=16;
     ComPtr<ID3D11Buffer> output,readback;assert(SUCCEEDED(device->CreateBuffer(&desc,nullptr,&output)));
     ComPtr<ID3D11UnorderedAccessView> uav;assert(SUCCEEDED(device->CreateUnorderedAccessView(output.Get(),nullptr,&uav)));
     desc.BindFlags=0;desc.MiscFlags=0;desc.StructureByteStride=0;desc.Usage=D3D11_USAGE_STAGING;desc.CPUAccessFlags=D3D11_CPU_ACCESS_READ;
@@ -24,14 +24,21 @@ int main(){
     ID3D11UnorderedAccessView* none=nullptr;context->CSSetUnorderedAccessViews(0,1,&none,nullptr);context->CopyResource(readback.Get(),output.Get());
     D3D11_MAPPED_SUBRESOURCE mapped{};assert(SUCCEEDED(context->Map(readback.Get(),0,D3D11_MAP_READ,0,&mapped)));
     const auto* values=static_cast<const float*>(mapped.pData);
-    for(unsigned n=0;n<8;++n)for(unsigned c=0;c<8;++c){
+    for(unsigned n=0;n<14;++n)for(unsigned c=0;c<8;++c){
         float expected=0;
         if(c<3)expected=(n==0||n==4)?1.f:(n==2?.25f:0.f);
         if(c==3)expected=(n==0||n==2)?2.f:(n==4?1.f:0.f);
         if(c==6)expected=(n==1||n==5)?41.f:0.f;
         if(c==7)expected=n==5?0.f:1.f;
+        if(n>=8){
+            expected=0;
+            if(c<3)expected=(n==10||n==12)?1.f:(n==13?.5f:.25f);
+            if(c==3)expected=(n==9||n==12||n==13)?2.f:3.f;
+            if(c==6)expected=n==11?12.f:0.f;
+            if(c==7)expected=1.f;
+        }
         if(!std::isfinite(values[n*8+c])||std::abs(values[n*8+c]-expected)>1e-4f){printf("FAIL case=%u channel=%u actual=%g expected=%g\n",n,c,values[n*8+c],expected);return 1;}
     }
     context->Unmap(readback.Get(),0);assert(SUCCEEDED(device->GetDeviceRemovedReason()));
-    puts("PASS: production integrator GI miss endpoint/direction, throughput once, environment fallback payload, disabled cache, terminal hit, invalid hit/extent, absorption and primary miss");
+    puts("PASS: production integrator GI miss endpoint/direction, throughput once, environment fallback payload, disabled cache, terminal hit, invalid hit/extent, absorption and primary miss; secondary diffuse cache replaces traced tail, exact lobe probability, uncovered fallback, specular continuation, direct and emission once");
 }

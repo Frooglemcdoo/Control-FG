@@ -19,6 +19,8 @@
 #ifdef PT_PRIMARY_SURFACE_REPLACEMENT
 #define PT_PATH_TERMINAL_GI 1
 #define PT_PATH_MISS_GI 1
+#define PT_PATH_DIFFUSE_CACHE 1
+#include "pt_gi_volume_coverage.hlsli"
 #include "pt_native_ray_extent.hlsli"
 cbuffer PTPathGIParameters : register(b5) { uint4 PTPathGIParams[4]; };
 #define PT_PATH_PRIMARY_LIGHT 1
@@ -91,6 +93,15 @@ PTPathSurface PTPathDecodePrimary(PTSceneHit hit,RayDesc ray){return PTDecodeSur
 #ifdef PT_PATH_MISS_GI
 float PTPathContinuationLimit(float roughness,float noise){
     return PTPathGIParams[3].y==1?PTNativeRayExtent(roughness,noise):1e6;
+}
+#endif
+#ifdef PT_PATH_DIFFUSE_CACHE
+bool PTPathDiffuseCacheAvailable(float3 position){
+    if(PTPathGIParams[3].y!=1)return false;
+    float scale=asfloat(PTPathGIParams[3].x);
+    float3 inverseSize=asfloat(PTPathGIParams[0].xyz),bias=asfloat(PTPathGIParams[1].xyz);
+    if(!isfinite(scale)||scale<0||!all(isfinite(inverseSize))||any(inverseSize<=0)||!all(isfinite(bias)))return false;
+    return PTHasGIVolume(position,PTPathGIParams[0].w);
 }
 #endif
 float3 PTPathEnvironment(float3 direction){
@@ -224,6 +235,7 @@ void PTPrimaryPathRayGeneration(){
         if(admission==2)PTMeasure(6,pixel);
         else if(PTCommitSignals(pixel,uint2(width,height),result,admission)){
             if(result.terminalPending!=0)PTWriteGIRequest(pixel,uint2(width,height),result.terminalPosition,result.terminalNormal,result.terminalWeight,result.terminalFraction,result.terminalPending,result.terminalFallback);
+            if(result.terminalPending==3&&((pixel.x|pixel.y)&63)==0){uint old;PTMetrics.InterlockedAdd(1192,1,old);}
             if(result.terminalPending==2&&((pixel.x|pixel.y)&63)==0){uint old;PTMetrics.InterlockedAdd(1184,1,old);}
             PTMeasure(6,pixel);
         }

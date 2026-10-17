@@ -3,8 +3,7 @@
 // Diffuse GI-volume subset of native 4fc0a0e9... DWORD1377..2735.
 // Evaluated once at a terminal hit or bounded miss, never at every bounce.
 // No native direct lights, shadow atlases, reflection targets or RT GI outputs.
-struct PTGIVolume { uint words[20]; };
-StructuredBuffer<PTGIVolume> PTGIVolumes : register(t21);
+#include "pt_gi_volume_coverage.hlsli"
 StructuredBuffer<uint> PTGITopNodes : register(t22);
 StructuredBuffer<uint4> PTGIInternalNodes : register(t23);
 Texture3D<float4> PTGIBricks[6] : register(t24);
@@ -13,7 +12,6 @@ SamplerState PTGIClamp : register(s6);
 #else
 SamplerState PTGIClamp : register(s6,space1);
 #endif
-cbuffer PTGITopLevel : register(b4) { uint4 PTGITop[1536]; };
 // First 48 bytes: native illuminationvolume b3. Last16: scale, admission.
 cbuffer PTGIParameters : register(b5) { uint4 PTGIParams[4]; };
 bool PTGIBrickPosition(PTGIVolume volume,uint3 cell,uint3 size,float3 fraction,out float3 texel){
@@ -67,19 +65,10 @@ bool PTLookupTerminalGI(float3 positionWorld,float3 normalWorld,out float3 radia
        !all(isfinite(inverseSize))||any(inverseSize<=0)||!all(isfinite(bias)))return false;
     float3 sum=0;float weightSum=0;
     [loop] for(uint i=0;i<volumes;++i){
-        uint base=i*4;float4 world=float4(positionWorld,1);
-        float3 local=float3(dot(asfloat(PTGITop[base]),world),dot(asfloat(PTGITop[base+1]),world),dot(asfloat(PTGITop[base+2]),world));
-        uint3 size=PTGITop[base+3].xyz;
-        if(!all(isfinite(local))||any(local<0)||any(local>=float3(size)))continue;
+        float3 local;uint3 size;
+        float weight=PTGIVolumeWeight(positionWorld,i,local,size);
+        if(weight<=0)continue;
         PTGIVolume v=PTGIVolumes[i];
-        if(v.words[14]==0xffffffffu)continue; // Native diagnostic orange is not radiance.
-        float3 fadeScale=asfloat(uint3(v.words[9],v.words[10],v.words[11]));
-        float priority=asfloat(v.words[16]);
-        if(!all(isfinite(fadeScale))||any(fadeScale<0)||!isfinite(priority)||priority<0)continue;
-        float3 edge=saturate(local*fadeScale)*saturate((float3(size)-local)*fadeScale);
-        float fade=edge.x*edge.y*edge.z;
-        float weight=fade*(1+(priority-1)*fade*fade*(3-2*fade));
-        if(!isfinite(weight)||weight<=0)continue;
         float3 texel;
         if(!PTGIBrickPosition(v,(uint3)floor(local),size,frac(local),texel))continue;
         float3 uv=texel*inverseSize;

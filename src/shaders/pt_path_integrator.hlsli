@@ -24,6 +24,9 @@ float3 PTPathEnvironment(float3 direction);
 #ifdef PT_PATH_MISS_GI
 float PTPathContinuationLimit(float roughness,float noise);
 #endif
+#ifdef PT_PATH_DIFFUSE_CACHE
+bool PTPathDiffuseCacheAvailable(float3 position);
+#endif
 bool PTPathLight(PTPathSurface surface, float3 outgoingWorld, inout uint rng, out PTDirectSample light, out uint visibility);
 
 #ifdef PT_PATH_PRIMARY_LIGHT
@@ -145,6 +148,22 @@ PTPathResult PTIntegratePathFirst(RayDesc ray,uint maxHits,uint rouletteStart,ui
         }
         float choose=PTPathRandom(rng),u=PTPathRandom(rng),v=PTPathRandom(rng),rr=PTPathRandom(rng);
         PTSurfaceMaterial continuation=surface.material;
+        float continuationProbability=1;
+#ifdef PT_PATH_DIFFUSE_CACHE
+        // At secondary surfaces, replace the diffuse INDIRECT tail with authored
+        // irradiance, not another traced diffuse tail plus the same cache. Direct
+        // light/emission above remain once. Specular chains continue with their
+        // branch probability compensated exactly once.
+        if(depth>0&&(continuation.lobes&1u)!=0&&PTPathDiffuseCacheAvailable(surface.position)){
+            float p=PTSpecularProbability(continuation);
+            if(choose>=p){
+                terminalPosition=surface.position;terminalNormal=surface.normal;
+                terminalWeight=path.throughput*continuation.kd/(1-p);terminalPending=3;
+                break;
+            }
+            continuation.lobes=2;continuationProbability=p;
+        }
+#endif
 #ifdef PT_PATH_PRIMARY_FILL
         if(depth==0&&useFirst!=0)continuation=PTPrimaryDiffuseContinuation(continuation);
 #endif
@@ -161,6 +180,7 @@ PTPathResult PTIntegratePathFirst(RayDesc ray,uint maxHits,uint rouletteStart,ui
             float3 full=PTEvaluateSurface(continuation,wo,sample.wi).f;
             diffuseFraction=float3(full.x>0?df.x/full.x:0,full.y>0?df.y/full.y:0,full.z>0?df.z/full.z:0);
         }
+        sample.weight/=continuationProbability;
         path=PTContinue(path,sample,rr,rouletteStart);
         if(path.alive==0){if(path.valid==0)result.fault=8;break;}
         ray.Origin=surface.spawnOrigin;

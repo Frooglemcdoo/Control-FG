@@ -50,8 +50,8 @@ int main(){
     c->CSSetShader(shader.Get(),nullptr,0);c->CSSetShaderResources(21,9,srvs);c->CSSetSamplers(6,1,sampler.GetAddressOf());c->CSSetConstantBuffers(4,1,cb4.GetAddressOf());c->CSSetConstantBuffers(5,1,cb5.GetAddressOf());
     // Valid leaf, disabled, invalid count/tree/index/brick, overlapping volumes,
     // internal-child and parent-brick paths, rotated basis and scale/bias.
-    for(UINT test=0;test<11;++test){
-        auto p=params;auto v=volumes;auto t=top;auto n=node;
+    for(UINT test=0;test<14;++test){
+        auto p=params;auto v=volumes;auto t=top;auto n=node;auto tr=transforms;
         if(test==1)p[13]=0;
         if(test==2)p[3]=385;
         if(test==3)t[0]=100;
@@ -62,16 +62,20 @@ int main(){
         if(test==8)t[0]=0;
         if(test==9){v[0]=0;v[1]=bits(1);v[3]=bits(1);v[4]=0;}
         if(test==10){p[12]=bits(1.57079632679489661923f);p[4]=p[5]=p[6]=bits(2);}
-        c->UpdateSubresource(cb4.Get(),0,nullptr,transforms.data(),0,0);c->UpdateSubresource(cb5.Get(),0,nullptr,p.data(),0,0);
+        if(test==11)v[9]=v[10]=v[11]=0;
+        if(test==12)tr[0]=0x7fc00000u;
+        if(test==13)p[3]=0;
+        c->UpdateSubresource(cb4.Get(),0,nullptr,tr.data(),0,0);c->UpdateSubresource(cb5.Get(),0,nullptr,p.data(),0,0);
         c->UpdateSubresource(buffers[0].Get(),0,nullptr,v.data(),0,0);c->UpdateSubresource(buffers[1].Get(),0,nullptr,t.data(),0,0);c->UpdateSubresource(buffers[2].Get(),0,nullptr,n.data(),0,0);
         c->CSSetUnorderedAccessViews(0,1,uav.GetAddressOf(),nullptr);c->Dispatch(1,1,1);ID3D11UnorderedAccessView* nullView=nullptr;c->CSSetUnorderedAccessViews(0,1,&nullView,nullptr);
         c->CopyResource(readback.Get(),output.Get());D3D11_MAPPED_SUBRESOURCE mapped{};assert(SUCCEEDED(c->Map(readback.Get(),0,D3D11_MAP_READ,0,&mapped)));
         auto* values=static_cast<const float*>(mapped.pData);
-        for(UINT pixel=0;pixel<8;++pixel)for(UINT channel=0;channel<3;++channel){
+        for(UINT pixel=0;pixel<8;++pixel)for(UINT channel=0;channel<4;++channel){
             float expected=pixel<6?float(pixel+1):2.f;
             if(test==9&&pixel<4)expected=float((pixel^2u)+1);
             expected*=float(channel+1);if(test==10)expected=(expected+2)*.5f;
-            if(pixel==7||(test>=1&&test<=5))expected=0;
+            if(pixel==7||(test>=1&&test<=5)||test>=11)expected=0;
+            if(channel==3)expected=pixel==7||test==2||test==5||test>=11?0.f:1.f;
             if(!std::isfinite(values[pixel*4+channel])||std::abs(values[pixel*4+channel]-expected)>1e-4f){printf("FAIL test=%u pixel=%u channel=%u actual=%g expected=%g\n",test,pixel,channel,values[pixel*4+channel],expected);return 1;}
         }
         c->Unmap(readback.Get(),0);
