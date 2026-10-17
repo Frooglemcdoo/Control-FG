@@ -99,6 +99,7 @@ public:
         if(stamps[1]<stamps[0])return false;
         milliseconds=double(stamps[1]-stamps[0])*1000.0/double(frequency);return true;
     }
+    bool ReadEmitters(std::array<UINT,3>& values){return ReadHitGI(values);}
     bool ReadHitGI(std::array<UINT,3>& values){
         values={};void* data=nullptr;const D3D12_RANGE read{1192,1204};
         if(!readback||FAILED(readback->Map(0,&read,&data))||!data)return false;
@@ -168,6 +169,7 @@ public:
     bool Read(std::array<UINT,8>& values){return entry&&entry->data.Read(values);}
     bool ReadRejections(std::array<UINT,256>& values){return entry&&entry->data.ReadRejections(values);}
     bool ReadHitGI(std::array<UINT,3>& values){return entry&&entry->data.ReadHitGI(values);}
+    bool ReadEmitters(std::array<UINT,3>& values){return entry&&entry->data.ReadEmitters(values);}
     bool ReadMissGI(std::array<UINT,2>& values){return entry&&entry->data.ReadMissGI(values);}
     bool ReadFaults(std::array<UINT,16>& values){return entry&&entry->data.ReadFaults(values);}
     bool ReadCorrespondence(std::array<UINT,3>& values){return entry&&entry->data.ReadCorrespondence(values);}

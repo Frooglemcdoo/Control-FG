@@ -1,9 +1,11 @@
+#define NOMINMAX
 #include <windows.h>
 #include <d3dcompiler.h>
 #include <d3d12shader.h>
 #include <cstdio>
 #include <dxgi1_6.h>
 #include "pt-glass-native-root-fixture.h"
+#include "../src/pt_emitter_runtime.h"
 static bool Binding(ID3D12ShaderReflection* r,const char* name,D3D_SHADER_INPUT_TYPE type,UINT slot,D3D_SRV_DIMENSION dimension) {
     D3D12_SHADER_INPUT_BIND_DESC d{};
     return SUCCEEDED(r->GetResourceBindingDescByName(name,&d)) && d.Type==type &&
@@ -56,11 +58,24 @@ static int Compile(int mode,ID3D12Device* device,ID3D12RootSignature* root) {
 int main(){
     using Microsoft::WRL::ComPtr;
     ComPtr<IDXGIFactory4> factory;ComPtr<IDXGIAdapter> adapter;
+    ComPtr<ID3DBlob> serializedRoot;
     ComPtr<ID3D12Device> device;ComPtr<ID3D12RootSignature> root;
     if(FAILED(CreateDXGIFactory1(IID_PPV_ARGS(&factory)))||
        FAILED(factory->EnumWarpAdapter(IID_PPV_ARGS(&adapter)))||
        FAILED(D3D12CreateDevice(adapter.Get(),D3D_FEATURE_LEVEL_11_0,IID_PPV_ARGS(&device)))||
-       FAILED(CreateGlassNativeRootFixture(device.Get(),&root)))return 7;
+       FAILED(CreateGlassNativeRootFixture(device.Get(),&root,&serializedRoot)))return 7;
+    PTNativeRoot::Registry roots;
+    if(!roots.Observe(serializedRoot->GetBufferPointer(),serializedRoot->GetBufferSize(),root.Get(),&D3D12CreateVersionedRootSignatureDeserializer))return 10;
+    auto layout=roots.Find(root.Get());ComPtr<ID3DBlob> emitterCode;
+    if(!layout||FAILED(D3DReadFileToBlob(L"build/pt_emitter_build.dxil",&emitterCode)))return 11;
+    PTEmitters::Builder emitterBuilder;
+    const auto emitterHr=emitterBuilder.Initialize(device.Get(),*layout,emitterCode->GetBufferPointer(),emitterCode->GetBufferSize());
+    if(FAILED(emitterHr)){printf("FAIL: emitter builder production root/PSO 0x%08lX\n",static_cast<unsigned long>(emitterHr));return 12;}
+    std::shared_ptr<PTEmitters::Storage> storage;
+    if(FAILED(PTEmitters::Storage::Acquire(device.Get(),storage))||!storage->Resource()||!storage->Uav().ptr)return 13;
+    storage.reset();
+    if(FAILED(PTEmitters::Storage::Acquire(device.Get(),storage)))return 14;
+    puts("PASS: production emitter builder extended native root, DXIL PSO, clear descriptor and storage reuse on WARP");
     for(int mode=0;mode<3;++mode){int result=Compile(mode,device.Get(),root.Get());if(result)return result;}
     // Validate the actual packaged GI DXIL against the recovered root, including
     // b4/b5, t21..29, sampler s6 space1 and the private u4..u7 bindings.

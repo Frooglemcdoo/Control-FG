@@ -180,6 +180,9 @@ void PTPrimaryPathRayGeneration(){
     // Host initializes the whole output to zero before its first submission.
     if(admission==1&&!PTClearSurface(pixel,DispatchRaysDimensions().xy))return;
 #endif
+#ifdef PT_PATH_EMITTER_NEE
+    if(all(pixel==0)&&admission==1)PTMetrics.Store3(1192,PTEmitters.Load3(0));
+#endif
     PTMeasure(0,pixel);
     uint width,height,g2w,g2h,zw,zh;PTGBuffer1.GetDimensions(width,height);PTGBuffer2.GetDimensions(g2w,g2h);PTClipDepth.GetDimensions(zw,zh);
     if(any(uint2(width,height)!=DispatchRaysDimensions().xy)||width!=g2w||height!=g2h||width!=zw||height!=zh||

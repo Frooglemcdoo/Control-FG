@@ -30,7 +30,11 @@ bool PTPathEmitterLight(PTPathSurface surface,inout uint rng,out PTDirectSample 
     float root=sqrt(u);float3 bary=float3(1-root,root*(1-v),root*v);
     float2 uv=float2(dot(float3(a.w,b.w,c.w),bary),dot(asfloat(meta.xyz),bary));
     PTNativeMaterial m=PTMaterials[material];uint base=material*35;
-    if(alpha!=0&&PTTextures[NonUniformResourceIndex(base)].SampleLevel(PTLinearWrap,uv,0).a*asfloat(m.words[16])<.5)return false;
+    if(alpha!=0){
+        float opacity=PTTextures[NonUniformResourceIndex(base)].SampleLevel(PTLinearWrap,uv,0).a,scale=asfloat(m.words[16]);
+        if(!isfinite(opacity)||!isfinite(scale)){visibility=2;return true;}
+        if(opacity*scale<.5)return false;
+    }
     light.incidentRadiance=asfloat(m.words[12])*asfloat(uint3(m.words[25],m.words[26],m.words[27]))*
         PTTextures[NonUniformResourceIndex(base+5)].SampleLevel(PTLinearWrap,uv,0).rgb;
     light.delta=0;light.roughness=surface.material.roughness;

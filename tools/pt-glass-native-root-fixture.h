@@ -5,7 +5,7 @@
 // factory RVA 0x18c10, installed at renderer-device +0x70 by RVA 0x2b049.
 // The compiler's COMPUTE_ROOT_SIGNATURE string omits runtime root parameter 7.
 // Production integration must borrow the captured root, not instantiate this.
-inline HRESULT CreateGlassNativeRootFixture(ID3D12Device* device,ID3D12RootSignature** result){
+inline HRESULT CreateGlassNativeRootFixture(ID3D12Device* device,ID3D12RootSignature** result,ID3DBlob** serialized=nullptr){
     D3D12_DESCRIPTOR_RANGE ranges[6]{};
     ranges[0]={D3D12_DESCRIPTOR_RANGE_TYPE_CBV,5,4,0,D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND};
     ranges[1]={D3D12_DESCRIPTOR_RANGE_TYPE_SRV,36,0,0,D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND};
@@ -23,5 +23,6 @@ inline HRESULT CreateGlassNativeRootFixture(ID3D12Device* device,ID3D12RootSigna
     Microsoft::WRL::ComPtr<ID3DBlob> bytes,errors;
     HRESULT hr=D3D12SerializeRootSignature(&desc,D3D_ROOT_SIGNATURE_VERSION_1,&bytes,&errors);
     if(SUCCEEDED(hr))hr=device->CreateRootSignature(0,bytes->GetBufferPointer(),bytes->GetBufferSize(),IID_PPV_ARGS(result));
+    if(SUCCEEDED(hr)&&serialized)hr=bytes.CopyTo(serialized);
     return hr;
 }

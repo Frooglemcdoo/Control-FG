@@ -49,7 +49,7 @@ int main(){
         const UINT zero[4]={};c->ClearUnorderedAccessViewUint(uav.Get(),zero);c->UpdateSubresource(cb.Get(),0,nullptr,constants.data(),0,0);c->UpdateSubresource(materials.Get(),0,nullptr,material.data(),0,0);
         for(UINT i=0;i<dispatches;++i)c->Dispatch(1,1,1);
         c->CopyResource(readback.Get(),output.Get());D3D11_MAPPED_SUBRESOURCE mapped{};assert(SUCCEEDED(c->Map(readback.Get(),0,D3D11_MAP_READ,0,&mapped)));
-        std::array<UINT,bytes/4> r{};std::memcpy(r.data(),mapped.pData,bytes);c->Unmap(readback.Get(),0);return r;
+        std::array<UINT,24> r{};std::memcpy(r.data(),mapped.pData,bytes);c->Unmap(readback.Get(),0);return r;
     };
     auto r=run(1);assert(r[0]==1&&r[1]==0&&r[2]==0);
     assert(value(r[4])==5&&value(r[8])==7&&value(r[13])==2);assert(value(r[11])==1&&value(r[18])==1);assert(r[19]==0&&r[20]==1);
