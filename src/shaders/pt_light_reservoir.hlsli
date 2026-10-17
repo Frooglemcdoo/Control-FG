@@ -19,6 +19,9 @@ PT_RIS_INLINE float PTLightCandidateChoose(uint total,uint primary,uint index,fl
 // final direct shading. Visibility is deliberately excluded until selection.
 PT_RIS_INLINE float PTLightTarget(PTSurfaceMaterial material,PTVec3 wo,PTVec3 wi,PTVec3 incident){
     PTDirectSample light;light.wi=wi;light.incidentRadiance=incident;light.pdf=1;light.delta=1;
+#ifdef PT_DIRECT_LIGHT_ROUGHNESS
+    light.roughness=material.roughness;
+#endif
     PTDirectResult direct=PTEvaluateDirect(material,wo,light,1);
     return direct.valid!=0?PTDot(direct.radiance,PTV(.2126f,.7152f,.0722f)):-1.0f;
 }

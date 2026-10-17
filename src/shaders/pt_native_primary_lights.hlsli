@@ -21,6 +21,8 @@ struct PTPrimaryLightSample {
     uint valid;
     uint active;
     uint directional;
+    float radius;
+    float distance;
 };
 float PTPrimaryRangeFade(float range,float distance) {
     float t=saturate((range-distance)/(0.2*range));return t*t*(3-2*t);
@@ -31,7 +33,7 @@ float PTPrimaryRangeFade(float range,float distance) {
 // projection. The caller MUST TraceRay for visibility from its safe spawn point.
 void PTSamplePrimaryLight(float3 positionView,float choose,out PTPrimaryLightSample result) {
     result.directionView=0;result.radiance=0;result.targetView=0;result.selectionPdf=0;
-    result.valid=0;result.active=0;result.directional=0;
+    result.valid=0;result.active=0;result.directional=0;result.radius=0;result.distance=0;
     if(!all(isfinite(positionView))||!isfinite(choose)||choose<0||choose>=1)return;
     uint3 counts=asuint(PTPrimaryLightWords[16].xyz);
     uint pointCount,pointStride,spotCount,spotStride,sunCount,sunStride;
@@ -53,7 +55,7 @@ void PTSamplePrimaryLight(float3 positionView,float choose,out PTPrimaryLightSam
         float cutoff=asfloat(p.words[9]);
         if(!all(isfinite(target))||!isfinite(range)||range<=0||!isfinite(radius)||radius<0||!isfinite(cutoff)||!isfinite(d2))result.valid=0;
         if(result.valid==0||d2<=1e-12)return;
-        result.directionView=delta/distance;
+        result.directionView=delta/distance;result.radius=radius;result.distance=distance;
         attenuation=PTPrimaryRangeFade(range,distance)*max(1/(3.14159265359*max(radius*radius+d2,0.0001))-cutoff,0);
         if((p.words[39]&4u)!=0){
             float3 direction=asfloat(uint3(p.words[12],p.words[13],p.words[14]));
@@ -79,7 +81,7 @@ void PTSamplePrimaryLight(float3 positionView,float choose,out PTPrimaryLightSam
         if(!all(isfinite(wedge))||!isfinite(range)||range<=0||!isfinite(cutoff)||!isfinite(radius)||radius<0||
            !isfinite(sinSquared)||sinSquared<0||!isfinite(d2)){result.valid=0;return;}
         if(d2<=1e-12)return;
-        result.directionView=delta*rsqrt(d2);
+        result.directionView=delta*rsqrt(d2);result.radius=radius;result.distance=sqrt(d2);
         attenuation=PTPrimaryRangeFade(range,clip.z)*max(1/(3.14159265359*max(sinSquared*dot(wedge,wedge)+radius*radius,0.25))-cutoff,0);
         if((p.words[76]&1u)!=0){
             float2 uv=projected.xy;

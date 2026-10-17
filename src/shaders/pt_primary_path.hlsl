@@ -10,6 +10,8 @@
 #include "ControlPrimaryGuideDecode.hlsli"
 #include "pt_native_primary_lights.hlsli"
 #define PT_PATH_PRIMARY_DECODE 1
+#define PT_DIRECT_LIGHT_ROUGHNESS 1
+#include "pt_native_light_roughness.hlsli"
 #ifndef PT_PRIMARY_SURFACE_REPLACEMENT
 #define PT_PATH_PRIMARY_FILL 1
 #define PT_PATH_PRIMARY_INDIRECT 1
@@ -111,7 +113,7 @@ float3 PTPathEnvironment(float3 direction){
 }
 bool PTPathLightCandidates(PTPathSurface surface,float3 outgoingWorld,uint primary,inout uint rng,out PTDirectSample light,out uint visibility){
     light=(PTDirectSample)0;visibility=1;
-    PTPrimaryLightSample native;
+    PTPrimaryLightSample native;float selectedRoughness=surface.material.roughness;
 #ifdef PT_PRIMARY_SURFACE_REPLACEMENT
     PTLightReservoir reservoir=PTEmptyLightReservoir();native=(PTPrimaryLightSample)0;native.valid=1;
     float3 positionView=PTWorldToViewPoint(surface.position);
@@ -131,16 +133,19 @@ bool PTPathLightCandidates(PTPathSurface surface,float3 outgoingWorld,uint prima
         if(candidate.valid==0){native.valid=0;break;}
         // No lights is a valid zero estimator; do not pass a zero PDF to RIS.
         if(candidate.selectionPdf==0)break;
-        float target=0;
+        float target=0,candidateRoughness=surface.material.roughness;
         if(candidate.active!=0){
             float3 wi=normalize(PTViewToWorldVector(candidate.directionView));
             float3 localWi=float3(dot(wi,tangent),dot(wi,bitangent),dot(wi,n));
+            candidateRoughness=PTNativeLightRoughness(surface.material.roughness,candidate.radius,candidate.distance,localWi.z);
+            if(candidateRoughness<0){native.valid=0;break;}
+            PTSurfaceMaterial directMaterial=surface.material;directMaterial.roughness=candidateRoughness;
             if(PTPrimaryReflectionAboveGeometry(surface.geometricNormal,wi))
-                target=PTLightTarget(surface.material,wo,localWi,candidate.radiance);
+                target=PTLightTarget(directMaterial,wo,localWi,candidate.radiance);
         }
         reservoir=PTAddLightCandidate(reservoir,target,candidate.selectionPdf,PTPathRandom(rng),candidateIndex);
         if(reservoir.valid==0){native.valid=0;break;}
-        if(reservoir.target>0&&reservoir.selected==candidateIndex)native=candidate;
+        if(reservoir.target>0&&reservoir.selected==candidateIndex){native=candidate;selectedRoughness=candidateRoughness;}
     }
     if(native.valid!=0){native.selectionPdf=PTLightDenominator(reservoir);native.active=native.selectionPdf>0?1u:0u;}
 #else
@@ -151,6 +156,10 @@ bool PTPathLightCandidates(PTPathSurface surface,float3 outgoingWorld,uint prima
     if(native.active==0)return false;
     light.wi=normalize(PTViewToWorldVector(native.directionView));light.incidentRadiance=native.radiance;
     light.pdf=native.selectionPdf;light.delta=1;
+#ifndef PT_PRIMARY_SURFACE_REPLACEMENT
+    selectedRoughness=PTNativeLightRoughness(surface.material.roughness,native.radius,native.distance,dot(surface.normal,light.wi));
+#endif
+    light.roughness=selectedRoughness;
     if(dot(surface.normal,light.wi)<=0||!PTPrimaryReflectionAboveGeometry(surface.geometricNormal,light.wi)){visibility=0;return true;}
     RayDesc shadow;shadow.Origin=surface.spawnOrigin;shadow.Direction=light.wi;shadow.TMin=0;shadow.TMax=1e6;
     if(native.directional==0){

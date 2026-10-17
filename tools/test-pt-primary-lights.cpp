@@ -12,8 +12,8 @@
 #include <limits>
 using Microsoft::WRL::ComPtr;
 struct Input {float position[3],choose;};
-struct Result {float direction[3],radiance[3],target[3],pdf;UINT valid,active,directional;};
-static_assert(sizeof(Result)==52,"shader result stride");
+struct Result {float direction[3],radiance[3],target[3],pdf;UINT valid,active,directional;float radius,distance,effectiveRoughness,specular;};
+static_assert(sizeof(Result)==68,"shader result stride");
 static ComPtr<ID3D12Resource> Buffer(ID3D12Device* device,UINT64 bytes,D3D12_HEAP_TYPE type,D3D12_RESOURCE_STATES state,const void* data=nullptr,D3D12_RESOURCE_FLAGS flags=D3D12_RESOURCE_FLAG_NONE){
     D3D12_RESOURCE_DESC d{};d.Dimension=D3D12_RESOURCE_DIMENSION_BUFFER;d.Width=bytes;d.Height=1;d.DepthOrArraySize=d.MipLevels=1;d.SampleDesc.Count=1;d.Layout=D3D12_TEXTURE_LAYOUT_ROW_MAJOR;d.Flags=flags;
     D3D12_HEAP_PROPERTIES hp{};hp.Type=type;ComPtr<ID3D12Resource> result;
@@ -25,7 +25,8 @@ int main(){
     assert(SUCCEEDED(CreateDXGIFactory1(IID_PPV_ARGS(&factory))));assert(SUCCEEDED(factory->EnumWarpAdapter(IID_PPV_ARGS(&adapter))));
     assert(SUCCEEDED(D3D12CreateDevice(adapter.Get(),D3D_FEATURE_LEVEL_11_0,IID_PPV_ARGS(&device))));
     ComPtr<ID3DBlob> shader,error;
-    const HRESULT compiled=D3DCompileFromFile(L"tools/test-pt-primary-lights.hlsl",nullptr,D3D_COMPILE_STANDARD_FILE_INCLUDE,"main","cs_5_1",D3DCOMPILE_ENABLE_STRICTNESS|D3DCOMPILE_WARNINGS_ARE_ERRORS,0,&shader,&error);
+    assert(SetCurrentDirectoryW(L"src/shaders"));
+    const HRESULT compiled=D3DCompileFromFile(L"../../tools/test-pt-primary-lights.hlsl",nullptr,D3D_COMPILE_STANDARD_FILE_INCLUDE,"main","cs_5_1",D3DCOMPILE_ENABLE_STRICTNESS|D3DCOMPILE_WARNINGS_ARE_ERRORS,0,&shader,&error);
     if(FAILED(compiled)&&error)std::fprintf(stderr,"%s",static_cast<const char*>(error->GetBufferPointer()));assert(SUCCEEDED(compiled));
     D3D12_DESCRIPTOR_RANGE ranges[7]{};const UINT registers[]={10,15,18,14,17,0};
     for(UINT n=0;n<6;++n)ranges[n]={D3D12_DESCRIPTOR_RANGE_TYPE_SRV,1,registers[n],n==5?4u:0u,D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND};
@@ -100,8 +101,24 @@ int main(){
     for(UINT n=0;n<3;++n){assert(result[n].valid==1&&result[n].active==1);assert(std::abs(result[n].pdf-1.0f/3)<1e-6f);
         for(UINT c=0;c<3;++c){if(std::abs(result[n].radiance[c]-expected[n][c])>=1e-4f)std::fprintf(stderr,"light %u channel %u got %.9g expected %.9g\n",n,c,result[n].radiance[c],expected[n][c]);assert(std::abs(result[n].radiance[c]-expected[n][c])<1e-4f);}}
     assert(std::abs(result[0].direction[2]-1)<1e-5f&&std::abs(result[1].direction[2]-1)<1e-5f&&std::abs(result[2].direction[1]-1)<1e-5f&&result[2].directional==1);
+    // Independent double-precision GGX result at a known off-axis direction.
+    // Point distance=2, spot distance=1.5; both radius=1 and nDotL=1.
+    for(UINT n=0;n<3;++n){
+        const double distance=n==0?2.0:1.5,bArea=1/(1+3/(2*distance*distance));
+        const double rough=std::sqrt(.05*.05+(1-bArea*bArea)/(6*bArea-2*bArea*bArea*bArea));
+        double r=n<2?rough:.05,alpha=r*r,cosine=1/std::sqrt(1.16),halfCosine=std::sqrt((1+cosine)/2);
+        double den=1-halfCosine*halfCosine+alpha*alpha*halfCosine*halfCosine;
+        double D=alpha*alpha/(3.14159265358979323846*den*den);
+        double mask=2*cosine/(cosine+std::sqrt(alpha*alpha+(1-alpha*alpha)*cosine*cosine));
+        double F=.04+.96*std::pow(1-halfCosine,5),spec=D*mask*F/4;
+        assert(std::abs(result[n].effectiveRoughness-r)<1e-5);
+        assert(std::abs(result[n].specular-spec)<1e-5);
+    }
+    assert(result[0].radius==1&&std::abs(result[0].distance-2)<1e-6f);
+    assert(result[1].radius==1&&std::abs(result[1].distance-1.5f)<1e-6f);
+    assert(result[2].radius==0&&result[2].distance==0);
     assert(result[3].valid==1&&result[3].active==0);assert(result[4].valid==0);assert(result[5].valid==1&&result[5].active==0);assert(result[6].valid==0);
     for(UINT n=count;n<2*count;++n)assert(result[n].valid==0&&result[n].active==0);
     const D3D12_RANGE empty{};readback->Unmap(0,&empty);assert(SUCCEEDED(device->GetDeviceRemovedReason()));
-    puts("PASS: primary b2 counts, point/cone attenuation, spot projection/range, sun projection, uniform PDF and invalid-data rejection on WARP");
+    puts("PASS: primary b2 counts, point/cone attenuation, spot projection/range, sun projection, uniform PDF, radius/distance ABI, effective roughness, direct GGX highlight and invalid-data rejection on WARP");
 }

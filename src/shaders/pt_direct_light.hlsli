@@ -12,6 +12,9 @@ struct PTDirectSample {
     // Non-delta: complete solid-angle PDF INCLUDING light-selection probability.
     // Delta point/directional: discrete selection probability (no angular PDF).
     float pdf; uint delta;
+#ifdef PT_DIRECT_LIGHT_ROUGHNESS
+    float roughness; // per-light direct lobe; never written back to material
+#endif
 };
 struct PTDirectResult { PTVec3 radiance; uint valid; };
 PT_LIGHT_INLINE float PTPowerWeight(float a,float b) {
@@ -24,6 +27,10 @@ PT_LIGHT_INLINE PTDirectResult PTEvaluateDirect(PTSurfaceMaterial material,PTVec
     PTDirectResult r;r.radiance=PTV(0,0,0);r.valid=0;
     if(visibility>1u||!PTFinite(light.pdf)||light.pdf<=0||!PTValid(light.incidentRadiance)||
        !PTValid(light.wi)||min(light.incidentRadiance.x,min(light.incidentRadiance.y,light.incidentRadiance.z))<0) return r;
+#ifdef PT_DIRECT_LIGHT_ROUGHNESS
+    if(!PTFinite(light.roughness)||light.roughness<0||light.roughness>1)return r;
+    material.roughness=light.roughness;
+#endif
     r.valid=1;
     if(visibility==0u||light.wi.z<=0||wo.z<=0) return r;
     PTSurfaceEvaluation b=PTEvaluateSurface(material,wo,light.wi);
