@@ -6,6 +6,7 @@
 #define PT_GEOMETRY_SPAWN 1
 #define PT_SCENE_MATERIAL_REGISTER t8
 #include "pt_scene_hits.hlsl"
+#include "pt_material_admission.hlsli"
 #include "ControlPrimaryGuideDecode.hlsli"
 #include "pt_native_primary_lights.hlsli"
 #define PT_PATH_PRIMARY_DECODE 1
@@ -54,7 +55,9 @@ PTPathSurface PTDecodeSurface(PTSceneHit hit,RayDesc ray,bool primary){
     s.emission=asfloat(m.words[12])*asfloat(uint3(m.words[25],m.words[26],m.words[27]));
     if(any(s.emission!=0))s.emission*=PTTextures[NonUniformResourceIndex(base+5)].SampleLevel(PTLinearWrap,hit.uv,0).rgb;
     if(!all(isfinite(s.emission))||any(s.emission<0)){s.emission=0;s.decodeFault=13;return s;}
-    if((packed&255)!=0||(flags.y&65535u)!=0){s.decodeFault=12;return s;} // Unsupported scattering still terminates.
+    // Only primary surfaces require the specialized raster BRDF contract.
+    // Secondary hits use the reviewed common native material approximation.
+    if(!PTMaterialScatteringSupported(packed,flags.y,primary)){s.decodeFault=12;return s;}
     float3 color=asfloat(uint3(m.words[13],m.words[14],m.words[15]))*
         PTTextures[NonUniformResourceIndex(base)].SampleLevel(PTLinearWrap,hit.uv,0).rgb;
     float specular=PTTextures[NonUniformResourceIndex(base+4)].SampleLevel(PTLinearWrap,hit.uv,0).x;
