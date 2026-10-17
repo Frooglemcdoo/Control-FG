@@ -24,8 +24,7 @@ static std::atomic<bool> active{false};
 static bool transportValidated=false;
 static unsigned transportGoodFrames=0;
 static std::recursive_mutex mutex;
-static std::vector<unsigned char> library,giComputeLibrary;
-static std::map<ID3D12RootSignature*,ComPtr<ID3D12PipelineState>> giPipelines;
+static std::vector<unsigned char> library;
 static std::shared_ptr<PTSurfaceComposition::ReconstructionPipeline> reconstructionPipeline;
 static std::shared_ptr<Output> historyOutput;
 static View historyView;
@@ -104,7 +103,6 @@ struct Environment {
 static std::vector<std::shared_ptr<Environment>> environments;
 struct Assets {
     PTPrimaryMetrics::Counters metrics;
-    ComPtr<ID3D12PipelineState> giPipeline;
     std::array<double,12> cpuCosts{}; // prepare, lease, SBT, camera, metrics, record
     std::shared_ptr<PTUploadPool::Buffer> cameraStorage;
     ComPtr<ID3D12Resource> camera;View boundView;
@@ -236,22 +234,7 @@ static bool Encode(void* context,ID3D12GraphicsCommandList* list,ID3D12Resource*
     a.metrics.Begin(list,counter);
     list->SetComputeRootConstantBufferView(2,a.camera->GetGPUVirtualAddress());
     list->SetComputeRootConstantBufferView(4,a.camera->GetGPUVirtualAddress()+1280);
-    D3D12_RESOURCE_BARRIER requestBarrier{};requestBarrier.Type=D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-    if(surfaceReplacement)for(auto* resource:{a.reconstruction->signals->resource.Get(),a.reconstruction->scratch->resource.Get()}){
-        requestBarrier.Transition={resource,0,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,D3D12_RESOURCE_STATE_UNORDERED_ACCESS};list->ResourceBarrier(1,&requestBarrier);
-    }
     const bool recorded=a.dispatch->Record(rays.Get(),a.bindings.layout->Root(),a.bindings.pipeline.Get(),{a.bindings.arguments[0].value},Gpu(a.privateTable));
-    if(surfaceReplacement){
-        list->ResourceBarrier(1,&ordered); // Ray-written requests/raw signals before compute reads.
-        if(recorded){
-            list->SetPipelineState(a.giPipeline.Get());list->SetComputeRootDescriptorTable(0,Gpu(a.privateTable));
-            list->Dispatch((a.boundView.width+7)/8,(a.boundView.height+7)/8,1);
-            list->SetComputeRootDescriptorTable(0,{a.bindings.arguments[0].value});list->SetPipelineState(a.bindings.pipeline.Get());
-        }
-        for(auto* resource:{a.reconstruction->signals->resource.Get(),a.reconstruction->scratch->resource.Get()}){
-            requestBarrier.Transition={resource,0,D3D12_RESOURCE_STATE_UNORDERED_ACCESS,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE};list->ResourceBarrier(1,&requestBarrier);
-        }
-    }
     list->SetComputeRootConstantBufferView(2,a.bindings.arguments[2].value);
     list->SetComputeRootConstantBufferView(4,a.bindings.arguments[4].value);
     list->ResourceBarrier(1,&ordered); // Surface consumers observe both committed outputs.
@@ -356,23 +339,6 @@ static void Dispatched(void*,ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT 
                     !PTSceneLive::owner.Resources().ReadUpload(e->scaleAddress,&e->scale,4))||
                    !std::isfinite(e->scale)||e->scale<0){Reject("environment_scale_snapshot");return;}
             }
-            if(surfaceReplacement&&bindings.arguments[5].kind==PTCommandBindings::ArgumentKind::constant){
-                e->giAddress=bindings.arguments[5].value;e->giScaleAddress=bindings.arguments[3].value+252;
-                auto read=[](UINT64 address,void* data,std::size_t size){return PTNativeView::uploads.Read(address,data,size)||PTSceneLive::owner.Resources().ReadUpload(address,data,size);};
-                Table cache;float scale=0;UINT volumes=0;
-                constexpr UINT64 giMask=(1ull<<0)|(1ull<<13)|(0x1ffull<<21); // b4, cube, t16..24
-                if(read(e->giAddress,e->giConstants.data(),48)&&read(e->giScaleAddress,&scale,4)&&std::isfinite(scale)&&scale>=0&&
-                   PTTableMirror::bank.Read(bindings.resources.Get(),context.table.first,giMask,cache)){
-                    std::memcpy(&volumes,e->giConstants.data()+12,4);
-                    if(volumes<=384){
-                        e->gi=true;e->table=std::move(cache);const UINT enabled=1;
-                        std::memcpy(e->giConstants.data()+48,&scale,4);std::memcpy(e->giConstants.data()+52,&enabled,4);
-                    }
-                }
-                if(!e->gi)e->giConstants.fill(0);
-                static UINT64 giSnapshots=0;if(++giSnapshots<=8||giSnapshots%240==0)
-                    Log("PT_PRIMARY_TERMINAL_GI frame=%u admitted=%u volumes=%u scale=%.9g source=reflection_volume_inputs terminal_only=1",view.frame,unsigned(e->gi),volumes,scale);
-            }
             if(!e->gi&&!PTTableMirror::bank.Read(bindings.resources.Get(),context.table.first,1ull<<13,e->table)){Reject("environment_descriptor");return;}
             while(environments.size()>=16)environments.erase(environments.begin());environments.push_back(std::move(e));return;
         }
@@ -423,16 +389,6 @@ static void Dispatched(void*,ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT 
         descriptorLock.reset();
         LARGE_INTEGER descriptorReleased{},descriptorReacquire{},descriptorAcquired{};
         QueryPerformanceCounter(&descriptorReleased);
-        if(surfaceReplacement){
-            auto& gi=giPipelines[bindings.layout->Root()];
-            if(!gi){
-                D3D12_COMPUTE_PIPELINE_STATE_DESC desc{};desc.pRootSignature=bindings.layout->Root();desc.CS={giComputeLibrary.data(),giComputeLibrary.size()};
-                const HRESULT hr=device->CreateComputePipelineState(&desc,IID_PPV_ARGS(&gi));
-                if(FAILED(hr)){Log("PT_PRIMARY_GI_COMPUTE_FAILED hr=0x%08lX device_reason=0x%08lX",static_cast<unsigned long>(hr),static_cast<unsigned long>(device->GetDeviceRemovedReason()));return;}
-                Log("PT_PRIMARY_GI_COMPUTE_READY scratch_reuse=1 extra_allocations=0");
-            }
-            a->giPipeline=gi;
-        }
         auto& pipeline=privatePipelines[bindings.layout->Root()];
         if(!pipeline){
             if(privatePipelines.size()>8){Reject("pipeline_budget");return;}ComPtr<ID3D12Device5> rayDevice;
@@ -950,7 +906,6 @@ static bool Start(){
     if(surfaceReplacement){
         std::vector<unsigned char> filter;char filterSha[65]{};bool found=false;
         if(!PTReflectionLoadSidecar(L"pt_surface_reconstruct.dxil","SURFACE_RECONSTRUCTION",filter,filterSha,found))return false;
-        if(!PTReflectionLoadSidecar(L"pt_terminal_gi_compute.dxil","TERMINAL_GI_COMPUTE",giComputeLibrary,filterSha,found))return false;
         reconstructionPipeline=std::make_shared<PTSurfaceComposition::ReconstructionPipeline>();
         if(FAILED(reconstructionPipeline->Initialize(device.Get(),filter.data(),filter.size())))return false;
     }
@@ -968,6 +923,6 @@ static bool Start(){
        !PTCommandBindings::Register(&commandConsumer)||!PTNativeJobRuntime::Register(&Job)||!PTSceneLive::owner.Start(step,true))return false;
     ptReflectionModeObserver.store(&MirrorModeChanged,std::memory_order_release);
     MirrorModeChanged(PTReflectionUserRequested());
-    active=true;Log("PT_PRIMARY_SESSION_READY build=M12R102 ready=1 direct_lobe=native_radius_broadening shadow_policy=authored_flags hits=4 spp=1 roulette_start=3 material=opaque_general secondary_mesh_normals=1 geometric_spawn_and_hemisphere=1 native_fallback=1 primary_lighting=%s transport=%s readiness=per_material graphics_tracking=%u",surfaceReplacement?"pt":"native",surfaceReplacement?"full_surface":"diffuse_indirect",unsigned(compose));return true;
+    active=true;Log("PT_PRIMARY_SESSION_READY build=M12R103DEV ready=1 baked_gi=0 probe_lighting=0 direct_lobe=native_radius_broadening shadow_policy=all_traced hits=4 spp=1 roulette_start=3 material=opaque_general secondary_mesh_normals=1 geometric_spawn_and_hemisphere=1 native_fallback=1 primary_lighting=%s transport=%s readiness=per_material graphics_tracking=%u",surfaceReplacement?"pt":"native",surfaceReplacement?"full_surface":"diffuse_indirect",unsigned(compose));return true;
 }
 }

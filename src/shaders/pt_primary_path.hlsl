@@ -19,14 +19,8 @@
 #define PT_PATH_PRIMARY_SHADING_NORMAL 1
 #define PT_PATH_SURFACE_GEOMETRY 1
 #ifdef PT_PRIMARY_SURFACE_REPLACEMENT
-#define PT_PATH_TERMINAL_GI 1
-#define PT_PATH_MISS_GI 1
-#define PT_PATH_DIFFUSE_CACHE 1
-#include "pt_gi_volume_coverage.hlsli"
-#include "pt_native_ray_extent.hlsli"
-cbuffer PTPathGIParameters : register(b5) { uint4 PTPathGIParams[4]; };
+// Full transport: no authored diffuse-cache termination or bounded miss GI.
 #define PT_PATH_PRIMARY_LIGHT 1
-#include "pt_terminal_gi_request.hlsli"
 #endif
 #include "pt_path_integrator.hlsli"
 #include "pt_light_reservoir.hlsli"
@@ -40,8 +34,6 @@ Texture2D<float4> PTGBuffer1 : register(t0);
 Texture2D<float4> PTGBuffer2 : register(t1);
 Texture2D<float4> PTClipDepth : register(t3);
 StructuredBuffer<uint2> PTMaterialFlags : register(t7);
-TextureCube<float4> PTEnvironment : register(t34);
-SamplerState PTEnvironmentSampler : register(s10,space1);
 RaytracingAccelerationStructure PTScene : register(t35);
 RWByteAddressBuffer PTMetrics : register(u6);
 void PTMeasure(uint stage,uint2 pixel){if(((pixel.x|pixel.y)&63)==0){uint previous;PTMetrics.InterlockedAdd(stage*4,1,previous);}}
@@ -92,24 +84,10 @@ PTPathSurface PTDecodeSurface(PTSceneHit hit,RayDesc ray,bool primary){
 }
 PTPathSurface PTPathDecode(PTSceneHit hit,RayDesc ray){return PTDecodeSurface(hit,ray,false);}
 PTPathSurface PTPathDecodePrimary(PTSceneHit hit,RayDesc ray){return PTDecodeSurface(hit,ray,true);}
-#ifdef PT_PATH_MISS_GI
-float PTPathContinuationLimit(float roughness,float noise){
-    return PTPathGIParams[3].y==1?PTNativeRayExtent(roughness,noise):1e6;
-}
-#endif
-#ifdef PT_PATH_DIFFUSE_CACHE
-bool PTPathDiffuseCacheAvailable(float3 position){
-    if(PTPathGIParams[3].y!=1)return false;
-    float scale=asfloat(PTPathGIParams[3].x);
-    float3 inverseSize=asfloat(PTPathGIParams[0].xyz),bias=asfloat(PTPathGIParams[1].xyz);
-    if(!isfinite(scale)||scale<0||!all(isfinite(inverseSize))||any(inverseSize<=0)||!all(isfinite(bias)))return false;
-    return PTHasGIVolume(position,PTPathGIParams[0].w);
-}
-#endif
 float3 PTPathEnvironment(float3 direction){
-    // Physical miss uses the sharp cube; no roughness-dependent convolution
-    // inside path sampling. Native specular environment scale is b2 byte244.
-    return PTEnvironment.SampleLevel(PTEnvironmentSampler,direction,0).rgb*PTPrimaryLightWords[15].y;
+    // Reflection-probe cubemaps may contain baked scene lighting. Until a
+    // verified physical sky source is imported, a true scene miss is black.
+    return 0;
 }
 bool PTPathLightCandidates(PTPathSurface surface,float3 outgoingWorld,uint primary,inout uint rng,out PTDirectSample light,out uint visibility){
     light=(PTDirectSample)0;visibility=1;
@@ -161,9 +139,6 @@ bool PTPathLightCandidates(PTPathSurface surface,float3 outgoingWorld,uint prima
 #endif
     light.roughness=selectedRoughness;
     if(dot(surface.normal,light.wi)<=0||!PTPrimaryReflectionAboveGeometry(surface.geometricNormal,light.wi)){visibility=0;return true;}
-    // Match the native authored no-shadow policy after geometric rejection.
-    // Shadow-enabled lights retain the existing ray and occluder tests.
-    if(native.castsShadow==0)return true;
     RayDesc shadow;shadow.Origin=surface.spawnOrigin;shadow.Direction=light.wi;shadow.TMin=0;shadow.TMax=1e6;
     if(native.directional==0){
         float3 delta=PTViewToWorldPoint(native.targetView)-shadow.Origin;float distance=length(delta);
@@ -196,7 +171,7 @@ void PTPrimaryPathRayGeneration(){
     // Clear coverage before any depth/material rejection. Admission 0 must not
     // touch resources: replay may refer to an output whose scene was retired.
     // Host initializes the whole output to zero before its first submission.
-    if(admission==1&&(!PTClearSurface(pixel,DispatchRaysDimensions().xy)||!PTClearGIRequest(pixel,DispatchRaysDimensions().xy)))return;
+    if(admission==1&&!PTClearSurface(pixel,DispatchRaysDimensions().xy))return;
 #endif
     PTMeasure(0,pixel);
     uint width,height,g2w,g2h,zw,zh;PTGBuffer1.GetDimensions(width,height);PTGBuffer2.GetDimensions(g2w,g2h);PTClipDepth.GetDimensions(zw,zh);
@@ -246,9 +221,6 @@ void PTPrimaryPathRayGeneration(){
 #ifdef PT_PRIMARY_SURFACE_REPLACEMENT
         if(admission==2)PTMeasure(6,pixel);
         else if(PTCommitSignals(pixel,uint2(width,height),result,admission)){
-            if(result.terminalPending!=0)PTWriteGIRequest(pixel,uint2(width,height),result.terminalPosition,result.terminalNormal,result.terminalWeight,result.terminalFraction,result.terminalPending,result.terminalFallback);
-            if(result.terminalPending==3&&((pixel.x|pixel.y)&63)==0){uint old;PTMetrics.InterlockedAdd(1192,1,old);}
-            if(result.terminalPending==2&&((pixel.x|pixel.y)&63)==0){uint old;PTMetrics.InterlockedAdd(1184,1,old);}
             PTMeasure(6,pixel);
         }
         if(result.valid==0&&((pixel.x|pixel.y)&63)==0){uint old;PTMetrics.InterlockedAdd(36,1,old);}

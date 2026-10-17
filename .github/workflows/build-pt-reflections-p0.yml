@@ -423,13 +423,9 @@ jobs:
           & $dxc -dumpbin build/pt_primary_surface.dxil | Set-Content build/pt_primary_surface.dump.txt -Encoding UTF8
           if($LASTEXITCODE -ne 0){throw "Primary callable DXIL inspection failed: $LASTEXITCODE"}
           $surfaceDump=Get-Content build/pt_primary_surface.dump.txt -Raw
-          # Raygen may read volume transforms/weights for coverage only. Brick
-          # traversal, texture sampling and callable dispatch remain compute-only.
-          foreach($forbidden in @('PTTerminalGICallable','dx.op.callShader','PTGIBricks','PTGITopNodes','PTGIInternalNodes')){
-            if($surfaceDump.Contains($forbidden)){throw "GI code leaked into DXR: $forbidden"}
-          }
-          foreach($required in @('PTGIRequestGeometry','PTGIRequestWeight','PTGIVolumes','PTGITop')){
-            if(-not $surfaceDump.Contains($required)){throw "GI request contract missing: $required"}
+          # Production transport must not reference baked GI or reflection probes.
+          foreach($forbidden in @('PTTerminalGICallable','dx.op.callShader','PTGIBricks','PTGITopNodes','PTGIInternalNodes','PTGIRequestGeometry','PTGIRequestWeight','PTGIVolumes','PTGITop','PTEnvironment')){
+            if($surfaceDump.Contains($forbidden)){throw "Baked lighting dependency in PT: $forbidden"}
           }
           & $dxc -T cs_6_0 -E main -HV 2021 -O3 -WX -I src/shaders -Fo build/pt_terminal_gi_compute.dxil src/shaders/pt_terminal_gi_compute.hlsl
           if($LASTEXITCODE -ne 0){throw "Terminal GI compute compile failed: $LASTEXITCODE"}
@@ -524,6 +520,7 @@ jobs:
           dumpbin /imports build\dxgi.dll > build\imports.txt
 
       - name: Package reconstructed primary PT M12R102
+        if: ${{ false }} # Full PT conversion incomplete; do not ship a partial renderer.
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
@@ -551,10 +548,8 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-PT-Primary-M12R102
+          name: Control-FG-PT-M12R103DEV-validation-only
           path: |
-            Control-FG-PT-Primary-M12R102.zip
-            Control-FG-PT-Primary-M12R102.sha256
             build/exports.txt
             build/imports.txt
             build/pt_reflection_p1.dxil
