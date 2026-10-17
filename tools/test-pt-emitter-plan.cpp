@@ -1,4 +1,5 @@
 #ifdef _WIN32
+#define NOMINMAX
 #include <windows.h>
 #endif
 #include "../src/pt_emitter_plan.h"
