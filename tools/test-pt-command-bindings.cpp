@@ -173,9 +173,41 @@ int main(){
     assert(failure.parameter==0&&std::string(failure.reason)=="missing_argument");
     assert(std::string(failure.argumentOrigin)=="heap_change"&&failure.previousAddress==nativeTable.ptr);
     assert(PTCommandBindings::tracker.Read(list.Get(),roots,false,1u<<2,snapshot)); // Root CBV survives heap change.
+    // A resource-only switch may retain an explicit sampler replay candidate,
+    // but ordinary reads still see API-invalid state until a setter executes.
+    assert(!PTCommandBindings::tracker.Read(list.Get(),roots,true,1u<<16,snapshot,&failure));
+    assert(PTCommandBindings::tracker.Read(list.Get(),roots,true,1u<<16,snapshot,&failure,true));
+    assert(snapshot.requiresSamplerReplay&&snapshot.arguments[16].value==globalSamplers.ptr);
+    assert(!PTCommandBindings::tracker.Read(list.Get(),roots,false,1u<<6,snapshot,&failure,true));
+    assert(!PTCommandBindings::tracker.Read(list.Get(),roots,true,1u<<17,snapshot,&failure,true));
+    // Read planning must not mutate tracker/API validity.
+    assert(!PTCommandBindings::tracker.Read(list.Get(),roots,true,1u<<16,snapshot,&failure));
+    list->SetDescriptorHeaps(2,heaps); // Same sampler through a second resource switch.
+    assert(PTCommandBindings::tracker.Read(ray.Get(),roots,true,1u<<16,snapshot,&failure,true));
+    assert(snapshot.requiresSamplerReplay&&snapshot.arguments[16].value==globalSamplers.ptr);
+    list->SetGraphicsRootDescriptorTable(16,{snapshot.arguments[16].value}); // Actual replay.
+    assert(PTCommandBindings::tracker.Read(list.Get(),roots,true,1u<<16,snapshot));
+    assert(!snapshot.requiresSamplerReplay);
+    // A sampler unbind kills the candidate even if the old heap returns.
+    list->SetDescriptorHeaps(1,heaps);list->SetDescriptorHeaps(2,heaps);
+    assert(!PTCommandBindings::tracker.Read(list.Get(),roots,true,1u<<16,snapshot,&failure,true));
+    bind();ComPtr<ID3D12DescriptorHeap> otherSamplers;
+    assert(SUCCEEDED(device->CreateDescriptorHeap(&hd,IID_PPV_ARGS(&otherSamplers))));
+    ID3D12DescriptorHeap* otherHeaps[]={resources.Get(),otherSamplers.Get()};
+    list->SetDescriptorHeaps(2,otherHeaps);list->SetDescriptorHeaps(2,heaps);
+    assert(!PTCommandBindings::tracker.Read(list.Get(),roots,true,1u<<16,snapshot,&failure,true));
+    // Do not turn an invalid explicit sampler handle into a valid snapshot.
+    bind();PTCommandBindings::tracker.ArgumentValue(list.Get(),16,PTCommandBindings::ArgumentKind::table,globalSamplers.ptr+1000000,true);
+    list->SetDescriptorHeaps(2,changed);
+    assert(!PTCommandBindings::tracker.Read(list.Get(),roots,true,1u<<16,snapshot,&failure,true));
+    assert(std::string(failure.reason)=="table_bounds");
+    list->SetDescriptorHeaps(2,heaps);bind();list->SetDescriptorHeaps(2,changed);
+    list->SetGraphicsRootSignature(compute.Get());list->SetGraphicsRootSignature(graphics.Get());
+    assert(!PTCommandBindings::tracker.Read(list.Get(),roots,true,1u<<16,snapshot,&failure,true));
     list->SetDescriptorHeaps(2,heaps);bind();assert(PTCommandBindings::tracker.Read(list.Get(),roots,false,allCompute,snapshot));
     assert(SUCCEEDED(list->Close()));assert(SUCCEEDED(list->Reset(allocator.Get(),nullptr)));
+    assert(!PTCommandBindings::tracker.Read(list.Get(),roots,true,1u<<16,snapshot,&failure,true));
     assert(!PTCommandBindings::tracker.Read(list.Get(),roots,false,1u<<2,snapshot));assert(!PTCommandBindings::tracker.Read(list.Get(),roots,true,1u<<12,snapshot));
     PTSceneQueues::observer.store(nullptr);assert(SUCCEEDED(list->Close()));
-    puts("PASS: intercepted native compute/graphics bindings, alias identity, private-recording exclusion, bounds, heap changes and chained Reset");
+    puts("PASS: intercepted native compute/graphics bindings, alias identity, private-recording exclusion, bounds, guarded explicit sampler replay, heap/root changes and chained Reset");
 }

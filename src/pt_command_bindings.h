@@ -9,9 +9,10 @@
 namespace PTCommandBindings {
 using Microsoft::WRL::ComPtr;
 enum class ArgumentKind {none,table,constant};
-struct Argument {ArgumentKind kind=ArgumentKind::none;UINT64 value=0;const char* origin="never_set";UINT64 previous=0;};
+struct Argument {ArgumentKind kind=ArgumentKind::none;UINT64 value=0;const char* origin="never_set";UINT64 previous=0;UINT64 samplerReplay=0;};
 struct RootState {ComPtr<ID3D12RootSignature> root;std::array<Argument,18> arguments{};};
 struct Snapshot {
+    bool requiresSamplerReplay=false;
     std::shared_ptr<const PTNativeRoot::Layout> layout;
     ComPtr<ID3D12PipelineState> pipeline;
     ComPtr<ID3D12DescriptorHeap> resources,samplers;
@@ -56,7 +57,19 @@ class Tracker {
         auto entry=FindEntry(list);if(!entry)return;
         std::lock_guard<std::mutex> guard(entry->mutex);fn(*entry);
     }
-    static void Tables(RootState& state){for(auto& a:state.arguments)if(a.kind==ArgumentKind::table)a={ArgumentKind::none,0,"heap_change",a.value};}
+    static void Tables(RootState& state,bool graphics,bool sameSamplerHeap){
+        // API table validity is still discarded. Retain only an explicit global
+        // sampler address for a later *explicit* replay by a reviewed PT draw.
+        // A sampler unbind/change destroys this candidate, including A->B->A.
+        const auto& global=state.arguments[16];
+        const UINT64 replay=graphics&&sameSamplerHeap&&state.root?
+            (global.kind==ArgumentKind::table?global.value:global.samplerReplay):0;
+        for(auto& a:state.arguments){
+            a.samplerReplay=0;
+            if(a.kind==ArgumentKind::table)a={ArgumentKind::none,0,"heap_change",a.value};
+        }
+        state.arguments[16].samplerReplay=replay;
+    }
     static bool Inside(ID3D12DescriptorHeap* heap,UINT64 address,UINT count){
         if(!heap||!address||!count)return false;const auto d=heap->GetDesc();
         if(!(d.Flags&D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE)||count>d.NumDescriptors)return false;
@@ -135,7 +148,10 @@ public:
             if(!valid){resources.Reset();samplers.Reset();}
             // Clearing all tables when either heap changes is conservative;
             // existing root CBVs remain valid. A later setter must rebind tables.
-            if(resources.Get()!=e.resources.Get()||samplers.Get()!=e.samplers.Get()){Tables(e.compute);Tables(e.graphics);}
+            if(resources.Get()!=e.resources.Get()||samplers.Get()!=e.samplers.Get()){
+                const bool sameSampler=valid&&samplers&&samplers.Get()==e.samplers.Get();
+                Tables(e.compute,false,false);Tables(e.graphics,true,sameSampler);
+            }
             e.resources=std::move(resources);e.samplers=std::move(samplers);
         });
     }
@@ -152,7 +168,7 @@ public:
         auto layout=roots.Find(e.graphics.root.Get());if(!layout||layout->Type()!=PTNativeRoot::Kind::graphics)return false;
         result.layout=std::move(layout);result.arguments=e.graphics.arguments;result.resources=e.resources;result.samplers=e.samplers;return true;
     }
-    bool Read(ID3D12GraphicsCommandList* list,PTNativeRoot::Registry& roots,bool graphics,UINT required,Snapshot& result,ReadFailure* failure=nullptr){
+    bool Read(ID3D12GraphicsCommandList* list,PTNativeRoot::Registry& roots,bool graphics,UINT required,Snapshot& result,ReadFailure* failure=nullptr,bool allowSamplerReplay=false){
         result={};if(failure)*failure={};
         const auto fail=[&](const char* reason,UINT parameter=~0u,UINT64 address=0,UINT count=0,UINT heapCount=0){
             if(failure)*failure={reason,parameter,address,count,heapCount};return false;
@@ -161,8 +177,14 @@ public:
         auto entry=FindEntry(list);if(!entry)return fail("untracked_list");std::lock_guard<std::mutex> guard(entry->mutex);
         const auto& e=*entry;const auto& s=graphics?e.graphics:e.compute;auto layout=roots.Find(s.root.Get());
         if(!layout||layout->Type()!=(graphics?PTNativeRoot::Kind::graphics:PTNativeRoot::Kind::compute))return fail("root_layout");
+        auto arguments=s.arguments;bool replay=false;
+        if(allowSamplerReplay&&graphics&&(required&(1u<<16))&&
+           arguments[16].kind==ArgumentKind::none&&arguments[16].samplerReplay){
+            auto& a=arguments[16];a.kind=ArgumentKind::table;a.value=a.samplerReplay;
+            a.origin="same_sampler_heap_replay";replay=true;
+        }
         for(UINT n=0;n<(graphics?18u:8u);++n)if(required&(1u<<n)){
-            const bool constant=graphics?(n>=8&&n<16):(n>=2&&n<6);const auto& a=s.arguments[n];
+            const bool constant=graphics?(n>=8&&n<16):(n>=2&&n<6);const auto& a=arguments[n];
             if(a.kind!=(constant?ArgumentKind::constant:ArgumentKind::table)||!a.value){
                 fail("missing_argument",n,a.value);
                 if(failure){failure->argumentOrigin=a.origin;failure->previousAddress=a.previous;}
@@ -173,7 +195,7 @@ public:
             auto* heap=sampler?e.samplers.Get():e.resources.Get();
             if(!Inside(heap,a.value,count))return fail(heap?"table_bounds":"missing_heap",n,a.value,count,heap?heap->GetDesc().NumDescriptors:0);
         }
-        result.layout=std::move(layout);result.pipeline=e.pipeline;result.resources=e.resources;result.samplers=e.samplers;result.arguments=s.arguments;return true;
+        result.layout=std::move(layout);result.pipeline=e.pipeline;result.resources=e.resources;result.samplers=e.samplers;result.arguments=arguments;result.requiresSamplerReplay=replay;return true;
     }
 };
 inline Tracker tracker;

@@ -567,7 +567,7 @@ static void Drawing(void*,ID3D12GraphicsCommandList* list) noexcept {
         std::lock_guard<std::recursive_mutex> guard(mutex);
         Bindings bindings;
         PTCommandBindings::ReadFailure bindingFailure;
-        if(!PTCommandBindings::tracker.Read(list,nativeRoots,true,pipeline->RootRequirements(),bindings,&bindingFailure)){
+        if(!PTCommandBindings::tracker.Read(list,nativeRoots,true,pipeline->RootRequirements(),bindings,&bindingFailure,true)){
             static UINT64 failures[19]{};const UINT bucket=bindingFailure.parameter<18?bindingFailure.parameter:18;
             const auto count=++failures[bucket];
             if(count<=8||count%600==0)Log("PT_PRIMARY_SURFACE_BINDING_FAILURE reason=%s parameter=%u address=%llx required_count=%u heap_count=%u count=%llu list=%p argument_origin=%s previous_address=%llx shader=%s",bindingFailure.reason,bindingFailure.parameter,bindingFailure.address,bindingFailure.requiredCount,bindingFailure.heapCount,count,list,bindingFailure.argumentOrigin,bindingFailure.previousAddress,pipeline->ShaderIdentity());
@@ -655,6 +655,10 @@ static void Drawing(void*,ID3D12GraphicsCommandList* list) noexcept {
         }
         restore={list,bindings};
         BindGraphics(list,pipeline->ComposedRoot(),bindings);
+        if(bindings.requiresSamplerReplay){
+            static UINT64 replays=0;const auto count=++replays;
+            if(count<=8||count%600==0)Log("PT_PRIMARY_SURFACE_SAMPLER_REPLAY frame=%u parameter=16 address=%llx count=%llu list=%p shader=%s same_sampler_heap=1 explicit_rebind=1",draw->frame->view.frame,bindings.arguments[16].value,count,list,pipeline->ShaderIdentity());
+        }
         list->SetGraphicsRootShaderResourceView(18,draw->frame->output->Address());
         list->SetGraphicsRootShaderResourceView(20,draw->consumer->Address());
         const UINT extent[]={draw->frame->view.width,draw->frame->view.height};list->SetGraphicsRoot32BitConstants(19,2,extent,0);
@@ -962,6 +966,6 @@ static bool Start(){
        !PTCommandBindings::Register(&commandConsumer)||!PTNativeJobRuntime::Register(&Job)||!PTSceneLive::owner.Start(step,true))return false;
     ptReflectionModeObserver.store(&MirrorModeChanged,std::memory_order_release);
     MirrorModeChanged(PTReflectionUserRequested());
-    active=true;Log("PT_PRIMARY_SESSION_READY build=M12R97 ready=1 hits=4 spp=1 roulette_start=3 material=opaque_general geometric_normals=1 native_fallback=1 primary_lighting=%s transport=%s readiness=per_material graphics_tracking=%u",surfaceReplacement?"pt":"native",surfaceReplacement?"full_surface":"diffuse_indirect",unsigned(compose));return true;
+    active=true;Log("PT_PRIMARY_SESSION_READY build=M12R98 ready=1 hits=4 spp=1 roulette_start=3 material=opaque_general geometric_normals=1 native_fallback=1 primary_lighting=%s transport=%s readiness=per_material graphics_tracking=%u",surfaceReplacement?"pt":"native",surfaceReplacement?"full_surface":"diffuse_indirect",unsigned(compose));return true;
 }
 }

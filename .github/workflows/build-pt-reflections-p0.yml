@@ -505,11 +505,11 @@ jobs:
           dumpbin /exports build\dxgi.dll > build\exports.txt
           dumpbin /imports build\dxgi.dll > build\imports.txt
 
-      - name: Package reconstructed primary PT M12R97
+      - name: Package reconstructed primary PT M12R98
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-PT-Primary-M12R97'
+          $out='Control-FG-PT-Primary-M12R98'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
           Copy-Item build/dxgi.pdb "$out/dxgi.pdb"
@@ -520,9 +520,9 @@ jobs:
             'pt_reflection_p2_local_light_probe.dxbc','pt_reflection_p2_diffuse_bridge.dxbc',
             'pt_glass_raygen.dxil','pt_glass_secondary.dxbc','pt_glass_composite.dxbc')
           foreach($shader in $shaders){Copy-Item "build/$shader" $out}
-          Copy-Item tools/Collect-PT-Primary-M12R97.cmd,tools/Collect-PT-Primary-M12R97.ps1 $out
-          Copy-Item research/pt-reflections/PT-Primary-M12R97-README.txt "$out/README.txt"
-          @{Build='M12R97';Commit=$env:GITHUB_SHA;Run=$env:GITHUB_RUN_ID;Lighting='PT surface replacement with spatial-temporal reconstruction';SurfaceReplacementEnabled=$true;SurfaceBinding='root_buffer';Reconstruction='fresh_current_frame_for_selected_rr_otherwise_split_temporal_spatial';PTDiffuseGuidesEnabled=$true;DirectLightTarget='material_brdf_radiance';PrimaryLightCandidates='enumerate_up_to_64';FlickerResolved=$false;SecondaryMaterialAdmission='native_unified_flags_primary_gate_separate';MissGI='native_extent_endpoint_cache_with_environment_fallback';DiffuseReconstructionFactor='unit_color_matches_primary_transport';FallbackDiagnostics='binding_origin_shader_and_material_screen_regions';PTSpecularGuideAngle='primary_n_dot_v';SurfaceFallbackDiagnostics=$true;PendingSurfaceCamera=$true;FoliageVertexCamera=$true;SecondaryEmissionBeforeBRDFRejection=$true;PrimaryLobeProposal='balanced_energy_preserving';EarlySurfaceReservation=$true;NativePrimaryMaterialColor=$true;TerminalDiffuseVolumeCache=$true;TerminalGIExecution='compute_after_trace_reusing_reconstruction_buffers';PipelineCreationDiagnostics=$true;ConsumerIsolationEnabled=$true;ObjectMotionSupported=$false;PrimaryCorrespondenceFixed=$false;MissingLightingFixed=$false;NativePassesRetained=$true;PerformanceRedesignComplete=$false;Validation='Windows build and WARP; in-game test pending'} |
+          Copy-Item tools/Collect-PT-Primary-M12R98.cmd,tools/Collect-PT-Primary-M12R98.ps1 $out
+          Copy-Item research/pt-reflections/PT-Primary-M12R98-README.txt "$out/README.txt"
+          @{Build='M12R98';Commit=$env:GITHUB_SHA;Run=$env:GITHUB_RUN_ID;Lighting='PT surface replacement with spatial-temporal reconstruction';SurfaceReplacementEnabled=$true;SurfaceBinding='root_buffer';GlobalSamplerReplay='explicit_same_root_and_continuously_bound_sampler_heap';Reconstruction='fresh_current_frame_for_selected_rr_otherwise_split_temporal_spatial';PTDiffuseGuidesEnabled=$true;DirectLightTarget='material_brdf_radiance';PrimaryLightCandidates='enumerate_up_to_64';FlickerResolved=$false;SecondaryMaterialAdmission='native_unified_flags_primary_gate_separate';MissGI='native_extent_endpoint_cache_with_environment_fallback';DiffuseReconstructionFactor='unit_color_matches_primary_transport';FallbackDiagnostics='binding_origin_shader_and_material_screen_regions';PTSpecularGuideAngle='primary_n_dot_v';SurfaceFallbackDiagnostics=$true;PendingSurfaceCamera=$true;FoliageVertexCamera=$true;SecondaryEmissionBeforeBRDFRejection=$true;PrimaryLobeProposal='balanced_energy_preserving';EarlySurfaceReservation=$true;NativePrimaryMaterialColor=$true;TerminalDiffuseVolumeCache=$true;TerminalGIExecution='compute_after_trace_reusing_reconstruction_buffers';PipelineCreationDiagnostics=$true;ConsumerIsolationEnabled=$true;ObjectMotionSupported=$false;PrimaryCorrespondenceFixed=$false;MissingLightingFixed=$false;NativePassesRetained=$true;PerformanceRedesignComplete=$false;Validation='Windows build and WARP; in-game test pending'} |
             ConvertTo-Json | Set-Content "$out/Build.json" -Encoding UTF8
           Get-ChildItem -LiteralPath $out -File | Sort-Object Name | ForEach-Object {
             '{0}  {1}' -f (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant(),$_.Name
@@ -533,10 +533,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-PT-Primary-M12R97
+          name: Control-FG-PT-Primary-M12R98
           path: |
-            Control-FG-PT-Primary-M12R97.zip
-            Control-FG-PT-Primary-M12R97.sha256
+            Control-FG-PT-Primary-M12R98.zip
+            Control-FG-PT-Primary-M12R98.sha256
             build/exports.txt
             build/imports.txt
             build/pt_reflection_p1.dxil
