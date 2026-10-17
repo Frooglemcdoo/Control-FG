@@ -27,5 +27,12 @@ int main(){
     s.instances[0].contributionFlags=2;assert(!PTEmitters::Plan(s,p,alpha,out));
     s.instances[0].contributionFlags=0;s.version=5;assert(!PTEmitters::Plan(s,p,alpha,out));
     s.version=4;s.instances[0].blas=901;assert(!PTEmitters::Plan(s,p,alpha,out));
+    s.instances.resize(1);s.instances[0]=instance;s.instances[0].transform[0]=NAN;
+    assert(!PTEmitters::Plan(s,p,alpha,out));
+    s.instances[0]=instance;geometry.indexCount=65535u*64u*3u;
+    assert(s.topology.Build(900,{geometry}));assert(PTEmitters::Plan(s,p,alpha,out));
+    geometry.indexCount+=3;assert(s.topology.Build(900,{geometry}));assert(!PTEmitters::Plan(s,p,alpha,out));
+    geometry.indexCount-=3;assert(s.topology.Build(900,{geometry}));
+    s.instances.assign(1025,instance);assert(!PTEmitters::Plan(s,p,alpha,out)&&out.empty());
     puts("PASS: retained emitter geometry mapping, distinct instances, transforms, masks, alpha flags and stale/out-of-range rejection");
 }
