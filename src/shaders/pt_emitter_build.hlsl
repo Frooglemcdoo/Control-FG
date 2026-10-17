@@ -1,5 +1,6 @@
 // Compute-only scene emitter extraction: no native lighting or GI values.
 #include "pt_geometry_bounds.hlsli"
+#include "vendor/SelfIntersectionAvoidance.hlsl"
 struct PTEmitterMaterial {uint words[84];};
 StructuredBuffer<PTEmitterMaterial> Materials:register(t8);
 #ifdef PT_EMITTER_BUILD_TEST
@@ -16,6 +17,7 @@ cbuffer GeometryConstants:PT_EMITTER_REGISTER(b0){
     uint indexBytes,vertexBytes,positionStride,positionBytes;
     float4 transform0,transform1,transform2;
     uint triangleCount,alphaTest,pad0,pad1;
+    float4 inverse0,inverse1,inverse2;
 };
 // Header: attempted records, invalid geometry, overflow, reserved. Records are
 // 80 bytes: three world vertices, three UVs, material ID, alpha-test flag.
@@ -39,7 +41,7 @@ void main(uint3 id:SV_DispatchThreadID){
     if(!any(emission>0))return;
     PTByteAddress tri=PTCheckedTriangle(id.x,indexOffset,indexStride,indexBytes);
     if(tri.valid==0){InvalidEmitter();return;}
-    float3 p[3];float2 uv[3];
+    float3 p[3],objectVertices[3];float2 uv[3];
     [unroll]for(uint i=0;i<3;++i){
         uint a=tri.address+i*indexStride,word=a&~3u;
         if(!PTCanLoadWord(word,indexBytes)){InvalidEmitter();return;}
@@ -47,13 +49,24 @@ void main(uint3 id:SV_DispatchThreadID){
         PTByteAddress pos=PTCheckedField(index,positionStride,0,12,positionBytes);
         PTByteAddress tex=PTCheckedField(index,vertexStride,texcoordOffset,4,vertexBytes);
         if(pos.valid==0||tex.valid==0){InvalidEmitter();return;}
-        float4 v=float4(asfloat(Positions.Load3(pos.address)),1);
+        float4 v=float4(asfloat(Positions.Load3(pos.address)),1);objectVertices[i]=v.xyz;
         p[i]=float3(dot(transform0,v),dot(transform1,v),dot(transform2,v));
         uint t=Attributes.Load(tex.address);uv[i]=float2((int)(t<<16)>>16,(int)t>>16)/4095.0;
         if(!all(isfinite(p[i]))){InvalidEmitter();return;}
     }
     float area2=length(cross(p[1]-p[0],p[2]-p[0]));
     if(!isfinite(area2)){InvalidEmitter();return;}if(area2<=1e-10)return;
+    float targetOffset=0;
+    float3x4 o2w=float3x4(transform0,transform1,transform2),w2o=float3x4(inverse0,inverse1,inverse2);
+    // The bound is convex in position; max at vertices covers every sampled
+    // barycentric point without a scene-scale epsilon that skips thin blockers.
+    [unroll]for(uint corner=0;corner<3;++corner){
+        float3 op,wp,on,wn;float offset;
+        safeSpawnPoint(op,wp,on,wn,offset,objectVertices[0],objectVertices[1],objectVertices[2],
+            corner==0?float2(0,0):(corner==1?float2(1,0):float2(0,1)),o2w,w2o);
+        if(!isfinite(offset)||offset<=0){InvalidEmitter();return;}
+        targetOffset=max(targetOffset,offset);
+    }
     uint slot;Emitters.InterlockedAdd(0,1,slot);
     if(slot>=(bytes-16)/80){uint old;Emitters.InterlockedOr(8,1,old);return;}
     uint at=16+slot*80;
@@ -61,5 +74,5 @@ void main(uint3 id:SV_DispatchThreadID){
     Emitters.Store4(at+16,asuint(float4(p[1],uv[1].x)));
     Emitters.Store4(at+32,asuint(float4(p[2],uv[2].x)));
     Emitters.Store4(at+48,uint4(asuint(float3(uv[0].y,uv[1].y,uv[2].y)),material));
-    Emitters.Store4(at+64,uint4(alphaTest,0,0,0));
+    Emitters.Store4(at+64,uint4(alphaTest,asuint(targetOffset),0,0));
 }

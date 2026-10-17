@@ -29,6 +29,17 @@ int main(){
     s.version=4;s.instances[0].blas=901;assert(!PTEmitters::Plan(s,p,alpha,out));
     s.instances.resize(1);s.instances[0]=instance;s.instances[0].transform[0]=NAN;
     assert(!PTEmitters::Plan(s,p,alpha,out));
+    s.instances[0]=instance;
+    const float affine[]={2,.25f,0,7,0,3,.5f,-4,.125f,0,-2,8};
+    std::memcpy(s.instances[0].transform,affine,sizeof(affine));assert(PTEmitters::Plan(s,p,alpha,out));
+    float inverse[12];std::memcpy(inverse,out[0].constants.data()+28,sizeof(inverse));
+    for(unsigned row=0;row<3;++row)for(unsigned column=0;column<4;++column){
+        float product=column==3?affine[4*row+3]:0;
+        for(unsigned k=0;k<3;++k)product+=affine[4*row+k]*inverse[4*k+column];
+        assert(std::abs(product-(row==column?1.f:0.f))<1e-5f);
+    }
+    s.instances[0].transform[0]=s.instances[0].transform[1]=s.instances[0].transform[2]=0;
+    assert(!PTEmitters::Plan(s,p,alpha,out));
     s.instances[0]=instance;geometry.indexCount=65535u*64u*3u;
     assert(s.topology.Build(900,{geometry}));assert(PTEmitters::Plan(s,p,alpha,out));
     geometry.indexCount+=3;assert(s.topology.Build(900,{geometry}));assert(!PTEmitters::Plan(s,p,alpha,out));

@@ -55,7 +55,7 @@ public:
         const auto& original=converted->Desc_1_0;if(original.NumParameters!=8)return E_INVALIDARG;
         std::array<D3D12_ROOT_PARAMETER,12> params{};std::copy(original.pParameters,original.pParameters+8,params.begin());
         for(UINT i=0;i<3;++i){params[8+i].ParameterType=D3D12_ROOT_PARAMETER_TYPE_SRV;params[8+i].Descriptor={i,4};}
-        params[11].ParameterType=D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;params[11].Constants={0,4,28};
+        params[11].ParameterType=D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;params[11].Constants={0,4,40};
         D3D12_ROOT_SIGNATURE_DESC desc=original;desc.NumParameters=12;desc.pParameters=params.data();
         ComPtr<ID3DBlob> serialized,error;hr=D3D12SerializeRootSignature(&desc,D3D_ROOT_SIGNATURE_VERSION_1_0,&serialized,&error);if(FAILED(hr))return hr;
         hr=device->CreateRootSignature(0,serialized->GetBufferPointer(),serialized->GetBufferSize(),IID_PPV_ARGS(&root));if(FAILED(hr))return hr;
@@ -79,7 +79,7 @@ public:
         Bind(list,root.Get(),bindings);list->SetComputeRootDescriptorTable(0,table);list->SetPipelineState(pipeline.Get());
         for(const auto& g:geometries){
             list->SetComputeRootShaderResourceView(8,g.indices);list->SetComputeRootShaderResourceView(9,g.attributes);list->SetComputeRootShaderResourceView(10,g.positions);
-            list->SetComputeRoot32BitConstants(11,28,g.constants.data(),0);list->Dispatch((g.constants[24]+63)/64,1,1);
+            list->SetComputeRoot32BitConstants(11,40,g.constants.data(),0);list->Dispatch((g.constants[24]+63)/64,1,1);
         }
         barrier.Transition.StateBefore=D3D12_RESOURCE_STATE_UNORDERED_ACCESS;barrier.Transition.StateAfter=D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;list->ResourceBarrier(1,&barrier);
         Bind(list,bindings.layout->Root(),bindings);list->SetPipelineState(bindings.pipeline.Get());return true;

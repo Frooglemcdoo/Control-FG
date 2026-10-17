@@ -37,8 +37,9 @@ int main(){
         else{s.ViewDimension=D3D11_SRV_DIMENSION_BUFFER;s.Buffer.NumElements=1;}
         assert(SUCCEEDED(d->CreateShaderResourceView(resources[i],&s,&views[i])));auto* ptr=views[i].Get();c->CSSetShaderResources(i<3?i:8,1,&ptr);
     }
-    std::array<UINT,28> constants{};constants[1]=4;constants[2]=4;constants[8]=12;constants[9]=12;constants[10]=12;constants[11]=36;
+    std::array<UINT,40> constants{};constants[1]=4;constants[2]=4;constants[8]=12;constants[9]=12;constants[10]=12;constants[11]=36;
     constants[12]=constants[17]=constants[22]=bits(1);constants[15]=bits(5);constants[24]=1;constants[25]=1;
+    constants[28]=constants[33]=constants[38]=bits(1);constants[31]=bits(-5);
     auto cb=buffer(sizeof(constants),D3D11_BIND_CONSTANT_BUFFER,0,0,constants.data());auto* cbp=cb.Get();c->CSSetConstantBuffers(0,1,&cbp);
     constexpr UINT bytes=16+80;
     auto output=buffer(bytes,D3D11_BIND_UNORDERED_ACCESS,D3D11_RESOURCE_MISC_BUFFER_ALLOW_RAW_VIEWS,0,nullptr);
@@ -52,7 +53,7 @@ int main(){
         std::array<UINT,24> r{};std::memcpy(r.data(),mapped.pData,bytes);c->Unmap(readback.Get(),0);return r;
     };
     auto r=run(1);assert(r[0]==1&&r[1]==0&&r[2]==0);
-    assert(value(r[4])==5&&value(r[8])==7&&value(r[13])==2);assert(value(r[11])==1&&value(r[18])==1);assert(r[19]==0&&r[20]==1);
+    assert(value(r[4])==5&&value(r[8])==7&&value(r[13])==2);assert(value(r[11])==1&&value(r[18])==1);assert(r[19]==0&&r[20]==1);assert(std::isfinite(value(r[21]))&&value(r[21])>0);
     r=run(2);assert(r[0]==2&&r[2]==1); // Overflow invalidates the complete distribution.
     material[12]=0;r=run(1);assert(r[0]==0&&r[1]==0);
     material[12]=bits(2);constants[3]=1;r=run(1);assert(r[0]==0&&r[1]==1);

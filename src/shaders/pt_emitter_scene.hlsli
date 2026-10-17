@@ -43,7 +43,10 @@ bool PTPathEmitterLight(PTPathSurface surface,inout uint rng,out PTDirectSample 
         visibility=0;return true;
     }
     RayDesc shadow;shadow.Origin=surface.spawnOrigin;
-    delta=samplePoint.position-shadow.Origin;float distance=length(delta);
+    float targetOffset=asfloat(PTEmitters.Load(at+68));
+    float3 targetNormal=dot(samplePoint.normal,-light.wi)>=0?samplePoint.normal:-samplePoint.normal;
+    float3 target=safeSpawnPoint(samplePoint.position,targetNormal,targetOffset);
+    delta=target-shadow.Origin;float distance=length(delta);
     if(!isfinite(distance)||distance<=0){visibility=2;return true;}
     shadow.Direction=delta/distance;shadow.TMin=0;shadow.TMax=asfloat(asuint(distance)-1);
     PTVisibility result;result.status=0;
