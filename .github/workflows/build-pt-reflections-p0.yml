@@ -407,10 +407,12 @@ jobs:
           & $dxc -dumpbin build/pt_primary_surface.dxil | Set-Content build/pt_primary_surface.dump.txt -Encoding UTF8
           if($LASTEXITCODE -ne 0){throw "Primary callable DXIL inspection failed: $LASTEXITCODE"}
           $surfaceDump=Get-Content build/pt_primary_surface.dump.txt -Raw
-          foreach($forbidden in @('PTTerminalGICallable','dx.op.callShader','PTGIBricks','PTGITop')){
+          # Raygen may read volume transforms/weights for coverage only. Brick
+          # traversal, texture sampling and callable dispatch remain compute-only.
+          foreach($forbidden in @('PTTerminalGICallable','dx.op.callShader','PTGIBricks','PTGITopNodes','PTGIInternalNodes')){
             if($surfaceDump.Contains($forbidden)){throw "GI code leaked into DXR: $forbidden"}
           }
-          foreach($required in @('PTGIRequestGeometry','PTGIRequestWeight')){
+          foreach($required in @('PTGIRequestGeometry','PTGIRequestWeight','PTGIVolumes','PTGITop')){
             if(-not $surfaceDump.Contains($required)){throw "GI request contract missing: $required"}
           }
           & $dxc -T cs_6_0 -E main -HV 2021 -O3 -WX -I src/shaders -Fo build/pt_terminal_gi_compute.dxil src/shaders/pt_terminal_gi_compute.hlsl
