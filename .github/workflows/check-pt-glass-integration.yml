@@ -46,6 +46,8 @@ jobs:
           Write-Host "DXC: $dxc"
           & $dxc -T cs_6_0 -E main -HV 2021 -O3 -WX -I src/shaders -Fo build/pt_terminal_gi_compute.dxil src/shaders/pt_terminal_gi_compute.hlsl
           if($LASTEXITCODE -ne 0){throw "Terminal GI compile failed: $LASTEXITCODE"}
+          & $dxc -T cs_6_0 -E main -HV 2021 -O3 -WX -I src/shaders -Fo build/pt_emitter_build.dxil src/shaders/pt_emitter_build.hlsl
+          if($LASTEXITCODE -ne 0){throw "Emitter extraction compile failed: $LASTEXITCODE"}
       - name: Compile native and dedicated secondary lighting
         shell: cmd
         run: |
