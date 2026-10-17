@@ -14,7 +14,8 @@ int main(){
     ComPtr<ID3D11Device> d;ComPtr<ID3D11DeviceContext> c;D3D_FEATURE_LEVEL level;
     assert(SUCCEEDED(D3D11CreateDevice(nullptr,D3D_DRIVER_TYPE_WARP,nullptr,0,nullptr,0,D3D11_SDK_VERSION,&d,&level,&c)));
     ComPtr<ID3DBlob> code,error;
-    auto hr=D3DCompileFromFile(L"tools/test-pt-terminal-gi.hlsl",nullptr,D3D_COMPILE_STANDARD_FILE_INCLUDE,"main","cs_5_0",D3DCOMPILE_ENABLE_STRICTNESS|D3DCOMPILE_OPTIMIZATION_LEVEL3|D3DCOMPILE_WARNINGS_ARE_ERRORS,0,&code,&error);
+    assert(SetCurrentDirectoryW(L"src/shaders"));
+    auto hr=D3DCompileFromFile(L"../../tools/test-pt-terminal-gi.hlsl",nullptr,D3D_COMPILE_STANDARD_FILE_INCLUDE,"main","cs_5_0",D3DCOMPILE_ENABLE_STRICTNESS|D3DCOMPILE_OPTIMIZATION_LEVEL3|D3DCOMPILE_WARNINGS_ARE_ERRORS,0,&code,&error);
     if(FAILED(hr)){if(error)fprintf(stderr,"%s\n",static_cast<const char*>(error->GetBufferPointer()));else fprintf(stderr,"Shader compile HRESULT=%08lx\n",static_cast<unsigned long>(hr));return 1;}
     ComPtr<ID3D11ComputeShader> shader;assert(SUCCEEDED(d->CreateComputeShader(code->GetBufferPointer(),code->GetBufferSize(),nullptr,&shader)));
     std::array<ComPtr<ID3D11ShaderResourceView>,9> views;
