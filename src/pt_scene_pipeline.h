@@ -68,6 +68,7 @@ public:
     }
     ID3D12StateObject* State()const{return state.Get();}
     ID3D12RootSignature* Root()const{return global.Get();}
+    const PTShaderTableAdapter::Identifier& SurfaceAlpha()const{return hits[2];}
     bool HasCallable()const{return hasCallable;}
     const PTShaderTableAdapter::Identifier& Callable()const{return callable;}
     const PTShaderTableAdapter::Identifier& RayGeneration()const{return raygen;}

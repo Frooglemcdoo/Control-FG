@@ -19,6 +19,7 @@ class Prepared {
     PTSceneDispatch::Scene scene;
 public:
     const PTSceneDispatch::Plan& DispatchPlan()const{return plan;}
+    const PTSceneDispatch::Scene& SceneSnapshot()const{return scene;}
 };
 class Runtime {
     struct Entry {

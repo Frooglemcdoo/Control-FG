@@ -137,6 +137,18 @@ jobs:
           if not "%errorlevel%"=="0" exit /b 1
           build\test-pt-miss-gi.exe
           if not "%errorlevel%"=="0" exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-pt-emitter-plan.cpp /Febuild\test-pt-emitter-plan.exe
+          if not "%errorlevel%"=="0" exit /b 1
+          build\test-pt-emitter-plan.exe
+          if not "%errorlevel%"=="0" exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-pt-emitter-sampling.cpp /Febuild\test-pt-emitter-sampling.exe
+          if not "%errorlevel%"=="0" exit /b 1
+          build\test-pt-emitter-sampling.exe
+          if not "%errorlevel%"=="0" exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-pt-emitter-build.cpp /Febuild\test-pt-emitter-build.exe /link d3d11.lib d3dcompiler.lib
+          if not "%errorlevel%"=="0" exit /b 1
+          build\test-pt-emitter-build.exe
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-pt-native-light-roughness.cpp /Febuild\test-pt-native-light-roughness.exe
           if not "%errorlevel%"=="0" exit /b 1
           build\test-pt-native-light-roughness.exe
@@ -429,6 +441,8 @@ jobs:
           }
           & $dxc -T cs_6_0 -E main -HV 2021 -O3 -WX -I src/shaders -Fo build/pt_terminal_gi_compute.dxil src/shaders/pt_terminal_gi_compute.hlsl
           if($LASTEXITCODE -ne 0){throw "Terminal GI compute compile failed: $LASTEXITCODE"}
+          & $dxc -T cs_6_0 -E main -HV 2021 -O3 -WX -I src/shaders -Fo build/pt_emitter_build.dxil src/shaders/pt_emitter_build.hlsl
+          if($LASTEXITCODE -ne 0){throw "Emitter extraction DXC failed: $LASTEXITCODE"}
           & $dxc -T cs_6_0 -E main -HV 2021 -O3 -WX -I src/shaders -Fo build/pt_surface_reconstruct.dxil src/shaders/pt_surface_reconstruct.hlsl
           if($LASTEXITCODE -ne 0){throw "Surface reconstruction DXC compile failed: $LASTEXITCODE"}
           & $dxc -T lib_6_3 -HV 2021 -O3 -I src/shaders -Fo build/pt_glass_raygen.dxil src/shaders/pt_glass_raygen.hlsl

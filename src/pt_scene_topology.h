@@ -27,6 +27,9 @@ public:
         const auto found=blas.find(address);
         return found!=blas.end()&&found->second.get()==geometry;
     }
+    const std::vector<Geometry>* Geometries(U64 address)const {
+        const auto i=blas.find(address);return i==blas.end()?nullptr:i->second.get();
+    }
     std::size_t BottomCount()const{return blas.size();}
     bool Same(const Index& other)const {
         if(rows!=other.rows||blas.size()!=other.blas.size())return false;
