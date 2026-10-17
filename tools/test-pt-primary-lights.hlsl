@@ -1,5 +1,8 @@
 // Constant fixture inputs make a few finite checks redundant under FXC.
 #pragma warning(disable: 3577)
+// FXC reports aggregate finite-check branches for constant fixture inputs.
+// All fields are initialized; numerical results are checked by GPU readback.
+#pragma warning(disable: 4000)
 #define PT_DIRECT_LIGHT_ROUGHNESS 1
 #include "../src/shaders/pt_native_primary_lights.hlsli"
 #include "../src/shaders/pt_native_light_roughness.hlsli"
