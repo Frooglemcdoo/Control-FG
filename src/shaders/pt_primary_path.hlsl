@@ -161,6 +161,9 @@ bool PTPathLightCandidates(PTPathSurface surface,float3 outgoingWorld,uint prima
 #endif
     light.roughness=selectedRoughness;
     if(dot(surface.normal,light.wi)<=0||!PTPrimaryReflectionAboveGeometry(surface.geometricNormal,light.wi)){visibility=0;return true;}
+    // Match the native authored no-shadow policy after geometric rejection.
+    // Shadow-enabled lights retain the existing ray and occluder tests.
+    if(native.castsShadow==0)return true;
     RayDesc shadow;shadow.Origin=surface.spawnOrigin;shadow.Direction=light.wi;shadow.TMin=0;shadow.TMax=1e6;
     if(native.directional==0){
         float3 delta=PTViewToWorldPoint(native.targetView)-shadow.Origin;float distance=length(delta);

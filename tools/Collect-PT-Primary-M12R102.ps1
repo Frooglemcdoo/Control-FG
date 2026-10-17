@@ -1,0 +1,108 @@
+param([string]$LogDirectory=(Join-Path $env:LOCALAPPDATA 'ControlFGProbe'),[string]$OutputDirectory=$PSScriptRoot)
+$ErrorActionPreference='Stop'
+$dir=$LogDirectory
+$record=Get-ChildItem -LiteralPath $dir -Filter 'probe-*.log' -File | Sort-Object LastWriteTimeUtc -Descending | Select-Object -First 1
+if (-not $record) {throw 'No Control-FG probe log found. Run Control DX12 with M12R102 first.'}
+$stage=Join-Path $env:TEMP ('PT-Primary-M12R102-'+[guid]::NewGuid().ToString('N'))
+New-Item -ItemType Directory -Path $stage | Out-Null
+try {
+    $copy=Join-Path $stage $record.Name
+    Copy-Item -LiteralPath $record.FullName -Destination $copy
+    $lines=@(Get-Content -LiteralPath $copy | ForEach-Object { [string]::Copy($_) })
+    $primary=@($lines | Where-Object {$_ -match 'PT_PRIMARY_'})
+    $startup=@($primary | Where-Object {$_ -match 'PT_PRIMARY_STARTUP '}) | Select-Object -Last 1
+    $session=@($primary | Where-Object {$_ -match 'PT_PRIMARY_SESSION_READY '}) | Select-Object -Last 1
+    $startupBuild=$null;$sessionBuild=$null
+    if($startup -match 'build=([^ ]+)'){$startupBuild=$Matches[1]}
+    if($session -match 'build=([^ ]+)'){$sessionBuild=$Matches[1]}
+    $captureDisabled=($startup -match 'capture=0\b')
+    $collectionWarnings=@()
+    if($startupBuild -and $startupBuild -ne 'M12R102'){$collectionWarnings+="Startup reports $startupBuild; expected M12R102. Evidence retained."}
+    if($sessionBuild -and $sessionBuild -ne 'M12R102'){$collectionWarnings+="Session marker reports $sessionBuild. R71 shipped with a stale R70 marker; evidence retained."}
+    if(-not $session -and -not $captureDisabled){$collectionWarnings+='No ready session marker. Startup/failure evidence retained.'}
+    if($primary.Count -eq 0){$collectionWarnings+='No primary records in latest log; raw log retained for diagnosis.'}
+    $gpu=@($primary | Where-Object {$_ -match 'PT_PRIMARY_GPU '})
+    $coverage=@($gpu | Where-Object {$_ -match 'covered=([1-9][0-9]*)\b' -and $_ -notmatch 'probe=1\b'})
+    $skips=@($primary | Where-Object {$_ -match 'PT_PRIMARY_SKIP '})
+    $summary=[ordered]@{
+        Build='M12R102';Log=$record.Name;StartupCaptureDisabled=[bool]$captureDisabled
+        StartupBuild=$startupBuild;SessionBuild=$sessionBuild;CollectionWarnings=$collectionWarnings
+        HitGI=@($primary | Where-Object {$_ -match 'PT_PRIMARY_HIT_GI_GPU '})
+        MissGI=@($primary | Where-Object {$_ -match 'PT_PRIMARY_MISS_GI_GPU '})
+        TerminalGI=@($primary | Where-Object {$_ -match 'PT_PRIMARY_TERMINAL_GI(_GPU)? '})
+        PipelineCreation=@($primary | Where-Object {$_ -match 'PT_PRIMARY_(PIPELINE_FAILED|PRIVATE_PIPELINE_READY|GI_COMPUTE) '})
+        SurfaceCameraResolutions=@($primary | Where-Object {$_ -match 'PT_PRIMARY_SURFACE_CAMERA_RESOLVED '})
+        SurfaceCameraFailures=@($primary | Where-Object {$_ -match 'PT_PRIMARY_SURFACE_CAMERA_FAILURE '})
+        EarlySurfaceReservations=@($primary | Where-Object {$_ -match 'PT_PRIMARY_SURFACE_EARLY_RESERVED '})
+        SurfaceSamplerReplays=@($primary | Where-Object {$_ -match 'PT_PRIMARY_SURFACE_SAMPLER_REPLAY '})
+        SurfaceBindingFailures=@($primary | Where-Object {$_ -match 'PT_PRIMARY_SURFACE_BINDING_FAILURE '})
+        HistoryPixels=@($primary | Where-Object {$_ -match 'PT_PRIMARY_HISTORY_PIXELS '})
+        Reconstruction=@($primary | Where-Object {$_ -match 'PT_PRIMARY_RECONSTRUCTION '})
+        RejectedRegions=@($primary | Where-Object {$_ -match 'PT_PRIMARY_REJECT_REGION '})
+        SecondaryTerminations=@($primary | Where-Object {$_ -match 'PT_PRIMARY_SECONDARY_TERMINATION '})
+        SessionReady=(@($primary | Where-Object {$_ -match 'PT_PRIMARY_SESSION_READY .*ready=1'}).Count -gt 0)
+        SawSubmittedDispatch=(@($primary | Where-Object {$_ -match 'PT_PRIMARY_SUBMITTED '}).Count -gt 0)
+        SawGPUCoveredSamples=($coverage.Count -gt 0)
+        LastGPURecord=($gpu | Select-Object -Last 1)
+        LastSkipRecord=($skips | Select-Object -Last 1)
+        MetricsPool=@($primary | Where-Object {$_ -match 'PT_PRIMARY_METRICS_POOL '})
+        UploadPool=@($primary | Where-Object {$_ -match 'PT_PRIMARY_UPLOAD_POOL '})
+        ScalingWindows=@($primary | Where-Object {$_ -match 'PT_PRIMARY_SCALING '})
+        HandoffFailures=@($primary | Where-Object {$_ -match 'PT_PRIMARY_HANDOFF '})
+        AdmissionFailures=@($primary | Where-Object {$_ -match 'PT_PRIMARY_(ADMISSION|LATE_REJECT) '})
+        TransportReady=(@($primary | Where-Object {$_ -match 'PT_PRIMARY_TRANSPORT_READY '}).Count -gt 0)
+        LightSnapshots=@($primary | Where-Object {$_ -match 'PT_PRIMARY_LIGHTS '})
+        StartupMode=@($primary | Where-Object {$_ -match 'PT_PRIMARY_STARTUP '})
+        ReflexTimings=@($primary | Where-Object {$_ -match 'PT_PRIMARY_REFLEX_CPU '})
+        RetirementTimelines=@($primary | Where-Object {$_ -match 'PT_PRIMARY_RETIREMENT '})
+        MirrorCopies=@($primary | Where-Object {$_ -match 'PT_PRIMARY_MIRROR_COPY '})
+        HotPathTimings=@($primary | Where-Object {$_ -match 'PT_PRIMARY_HOT_CPU '})
+        QueueTimings=@($primary | Where-Object {$_ -match 'PT_PRIMARY_QUEUE_CPU '})
+        ProgressSamples=@($primary | Where-Object {$_ -match 'PT_PRIMARY_PROGRESS '})
+        PreparationTimings=@($primary | Where-Object {$_ -match 'PT_PRIMARY_(PREPARE|VALIDATE)_CPU '})
+        DispatchTimings=@($primary | Where-Object {$_ -match 'PT_PRIMARY_TIMING '})
+        FaultDetails=@($primary | Where-Object {$_ -match 'PT_PRIMARY_FAULTS '})
+        SurfaceReservations=@($primary | Where-Object {$_ -match 'PT_PRIMARY_SURFACE_RESERVED '})
+        SurfaceRoutingStops=@($primary | Where-Object {$_ -match 'PT_PRIMARY_SURFACE_ROUTING_STOP '})
+        SurfaceRecordings=@($primary | Where-Object {$_ -match 'PT_PRIMARY_SURFACE_RECORDED '})
+        LatePending=@($primary | Where-Object {$_ -match 'PT_PRIMARY_LATE_PENDING '})
+        LateExpired=@($primary | Where-Object {$_ -match 'PT_PRIMARY_LATE_EXPIRED '})
+        DeferredDispatches=@($primary | Where-Object {$_ -match 'PT_PRIMARY_DEFERRED '})
+        LateAdmissions=@($primary | Where-Object {$_ -match 'PT_PRIMARY_SUBMITTED .*late_signal=1'})
+        PreflightFailures=@($primary | Where-Object {$_ -match 'PT_PRIMARY_PREFLIGHT '})
+        LastDescriptorStats=($primary | Where-Object {$_ -match 'PT_PRIMARY_DESCRIPTOR_STATS '} | Select-Object -Last 1)
+        DescriptorFailures=@($primary | Where-Object {$_ -match 'PT_PRIMARY_DESCRIPTOR '})
+        LastOwnershipRecord=($primary | Where-Object {$_ -match 'PT_PRIMARY_OWNERS '} | Select-Object -Last 1)
+        LastCaptureRecord=($primary | Where-Object {$_ -match 'PT_PRIMARY_CAPTURE '} | Select-Object -Last 1)
+        LastRouteRecord=($primary | Where-Object {$_ -match 'PT_PRIMARY_ROUTE '} | Select-Object -Last 1)
+        LastNativeRouteRecord=($primary | Where-Object {$_ -match 'PT_PRIMARY_NATIVE_ROUTE '} | Select-Object -Last 1)
+        LastViewFailure=($primary | Where-Object {$_ -match 'PT_PRIMARY_VIEW_INVALID '} | Select-Object -Last 1)
+        MatchedLightingVariants=@($primary | Where-Object {$_ -match 'PT_PRIMARY_PIPELINE_READY '})
+        SkipReasons=@($skips | ForEach-Object {if($_ -match 'reason=([^ ]+)'){$Matches[1]}} | Sort-Object -Unique)
+        BoundLightingCandidates=@($primary | Where-Object {$_ -match 'PT_PRIMARY_PSO_BOUND .*candidate=1'})
+        ExecutedPipelineCount=(@($primary | Where-Object {$_ -match 'PT_PRIMARY_PSO_USED '}).Count)
+        ExecutedLightingCandidates=@($primary | Where-Object {$_ -match 'PT_PRIMARY_PSO_USED .*candidate=1'})
+        CapturedLightingShaders=(@($primary | Where-Object {$_ -match 'PT_PRIMARY_SHADER_END '}).Count)
+        UntrackedPipelines=@($primary | Where-Object {$_ -match 'PT_PRIMARY_PSO_UNTRACKED '})
+        Scope='Integrated rendering test; GPU coverage samples one pixel per 64x64 block. Logged samples are not a full-frame coverage count or a visual-quality verdict.'
+    }
+    $summary | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Join-Path $stage 'Primary-M12R102-Summary.json') -Encoding UTF8
+    # Only renderer/mod settings; never save-game data. Include snapshots tied
+    # to this exact log and the latest enable-command recovery copy.
+    Get-ChildItem -LiteralPath $dir -Filter ($record.Name+'-settings-*.ini') -File | ForEach-Object {Copy-Item -LiteralPath $_.FullName -Destination $stage}
+    $renderer=Join-Path $PSScriptRoot 'renderer.ini'
+    if(Test-Path -LiteralPath $renderer -PathType Leaf){Copy-Item -LiteralPath $renderer -Destination (Join-Path $stage 'renderer-current.ini')}
+    $backups=Join-Path $PSScriptRoot 'ControlFG-Settings-Backups'
+    if(Test-Path -LiteralPath $backups){
+        $latest=Get-ChildItem -LiteralPath $backups -Directory | Sort-Object LastWriteTimeUtc -Descending | Select-Object -First 1
+        if($latest){Copy-Item -LiteralPath $latest.FullName -Destination (Join-Path $stage 'Enable-Settings-Backup') -Recurse}
+    }
+    foreach($name in @('Build.json','SHA256SUMS.txt')) {
+        $path=Join-Path $PSScriptRoot $name
+        if(Test-Path -LiteralPath $path){Copy-Item -LiteralPath $path -Destination $stage}
+    }
+    $zip=Join-Path $OutputDirectory ('PT-Primary-M12R102-Results-'+(Get-Date -Format 'yyyyMMdd-HHmmss-fff')+'.zip')
+    Compress-Archive -Path (Join-Path $stage '*') -DestinationPath $zip
+    $summary | ConvertTo-Json -Depth 4 | Write-Host
+    Write-Host "Upload: $zip"
+} finally {Remove-Item -LiteralPath $stage -Recurse -Force}

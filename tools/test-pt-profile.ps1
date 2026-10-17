@@ -7,8 +7,8 @@ $pidExample=44300
 $logName='probe-20261013-232951-021-44300.log'
 if($logName -notlike ('probe-*-'+$pidExample+'.log')){throw 'PID log lookup mismatch'}
 foreach($capture in @(0,1)){
-    $startup="qpc=123 tid=45 PT_PRIMARY_STARTUP build=M12R101 capture=$capture restart_only=1 rr_fg_available=1"
-    if($startup -notmatch 'PT_PRIMARY_STARTUP build=M12R101 capture=[01]'){throw 'Startup version matcher failed'}
+    $startup="qpc=123 tid=45 PT_PRIMARY_STARTUP build=M12R102 capture=$capture restart_only=1 rr_fg_available=1"
+    if($startup -notmatch 'PT_PRIMARY_STARTUP build=M12R102 capture=[01]'){throw 'Startup version matcher failed'}
     if(($startup -match 'capture=0') -ne ($capture -eq 0)){throw 'Startup bypass matcher failed'}
 }
 Write-Host 'PASS: profiling script parses and matches runtime startup/PID evidence.'
@@ -39,13 +39,13 @@ New-Item -ItemType Directory -Path $root | Out-Null
 try {
     Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'PT-Profile.ps1') -Destination $root
     'dummy DLL for collector validation' | Set-Content (Join-Path $root 'dxgi.dll')
-    @{Build='M12R101';Commit='test'} | ConvertTo-Json | Set-Content (Join-Path $root 'Build.json')
+    @{Build='M12R102';Commit='test'} | ConvertTo-Json | Set-Content (Join-Path $root 'Build.json')
     $hash=(Get-FileHash (Join-Path $root 'dxgi.dll') -Algorithm SHA256).Hash.ToLowerInvariant()
     ($hash+'  dxgi.dll') | Set-Content (Join-Path $root 'SHA256SUMS.txt')
     $env:LOCALAPPDATA=$root
     $logs=Join-Path $root 'ControlFGProbe';New-Item -ItemType Directory -Path $logs | Out-Null
     $log=Join-Path $logs 'probe-20261013-232951-021-44300.log'
-    'PT_PRIMARY_STARTUP build=M12R101 capture=1 restart_only=1' | Set-Content $log
+    'PT_PRIMARY_STARTUP build=M12R102 capture=1 restart_only=1' | Set-Content $log
     $fakeGame=[pscustomobject]@{Id=44300;StartTime=(Get-Date);HasExited=$false;Modules=@([pscustomobject]@{ModuleName='dxgi.dll';FileName=(Join-Path $root 'dxgi.dll')})}
     $fakeGame | Add-Member -MemberType ScriptMethod -Name Refresh -Value {}
     $fakeWpr=Join-Path $root 'wpr-test.cmd'

@@ -23,6 +23,7 @@ struct PTPrimaryLightSample {
     uint directional;
     float radius;
     float distance;
+    uint castsShadow;
 };
 float PTPrimaryRangeFade(float range,float distance) {
     float t=saturate((range-distance)/(0.2*range));return t*t*(3-2*t);
@@ -30,10 +31,12 @@ float PTPrimaryRangeFade(float range,float distance) {
 // Uniform sampling includes out-of-range lights as zero-contribution samples.
 // Do not resample them without also changing the selection probability.
 // Point/spot/sun are treated as delta sources here, with native attenuation and
-// projection. The caller MUST TraceRay for visibility from its safe spawn point.
+// projection. Trace visibility only for authored shadow-casting sources.
+// Native fill lights intentionally bypass shadow maps; forcing a shadow ray
+// can extinguish lights authored inside fixtures. Directional lights still trace.
 void PTSamplePrimaryLight(float3 positionView,float choose,out PTPrimaryLightSample result) {
     result.directionView=0;result.radiance=0;result.targetView=0;result.selectionPdf=0;
-    result.valid=0;result.active=0;result.directional=0;result.radius=0;result.distance=0;
+    result.valid=0;result.active=0;result.directional=0;result.radius=0;result.distance=0;result.castsShadow=1;
     if(!all(isfinite(positionView))||!isfinite(choose)||choose<0||choose>=1)return;
     uint3 counts=asuint(PTPrimaryLightWords[16].xyz);
     uint pointCount,pointStride,spotCount,spotStride,sunCount,sunStride;
@@ -48,6 +51,7 @@ void PTSamplePrimaryLight(float3 positionView,float choose,out PTPrimaryLightSam
     float3 color=0,target=0;float attenuation=0;
     if(selected<counts.x){
         PTPrimaryPoint p=PTPrimaryPoints[selected];
+        result.castsShadow=(p.words[39]&2u)!=0?1u:0u;
         target=asfloat(uint3(p.words[0],p.words[1],p.words[2]));
         color=asfloat(uint3(p.words[4],p.words[5],p.words[6]));
         float range=asfloat(p.words[7]),radius=asfloat(p.words[36]);
@@ -65,6 +69,8 @@ void PTSamplePrimaryLight(float3 positionView,float choose,out PTPrimaryLightSam
         }
     }else if(selected<counts.x+counts.y){
         PTPrimarySpot p=PTPrimarySpots[selected-counts.x];
+        uint shadowMode=p.words[76]&0x300u;
+        result.castsShadow=((p.words[76]&2u)!=0||shadowMode==0x100u||shadowMode==0x200u)?1u:0u;
         target=asfloat(uint3(p.words[0],p.words[1],p.words[2]));
         color=asfloat(uint3(p.words[12],p.words[13],p.words[14]));
         float4 clip=positionView.x*asfloat(uint4(p.words[20],p.words[21],p.words[22],p.words[23]))+

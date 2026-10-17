@@ -1,3 +1,4 @@
+#include <cstdlib>
 #define NOMINMAX
 #include <windows.h>
 #include <d3d12.h>
@@ -12,15 +13,16 @@
 #include <limits>
 using Microsoft::WRL::ComPtr;
 struct Input {float position[3],choose;};
-struct Result {float direction[3],radiance[3],target[3],pdf;UINT valid,active,directional;float radius,distance,effectiveRoughness,specular;};
-static_assert(sizeof(Result)==68,"shader result stride");
+struct Result {float direction[3],radiance[3],target[3],pdf;UINT valid,active,directional;float radius,distance;UINT castsShadow;float effectiveRoughness,specular;};
+static_assert(sizeof(Result)==72,"shader result stride");
 static ComPtr<ID3D12Resource> Buffer(ID3D12Device* device,UINT64 bytes,D3D12_HEAP_TYPE type,D3D12_RESOURCE_STATES state,const void* data=nullptr,D3D12_RESOURCE_FLAGS flags=D3D12_RESOURCE_FLAG_NONE){
     D3D12_RESOURCE_DESC d{};d.Dimension=D3D12_RESOURCE_DIMENSION_BUFFER;d.Width=bytes;d.Height=1;d.DepthOrArraySize=d.MipLevels=1;d.SampleDesc.Count=1;d.Layout=D3D12_TEXTURE_LAYOUT_ROW_MAJOR;d.Flags=flags;
     D3D12_HEAP_PROPERTIES hp{};hp.Type=type;ComPtr<ID3D12Resource> result;
     assert(SUCCEEDED(device->CreateCommittedResource(&hp,D3D12_HEAP_FLAG_NONE,&d,state,nullptr,IID_PPV_ARGS(&result))));
     if(data){void* mapped=nullptr;D3D12_RANGE none{};assert(SUCCEEDED(result->Map(0,&none,&mapped)));std::memcpy(mapped,data,static_cast<size_t>(bytes));result->Unmap(0,nullptr);}return result;
 }
-int main(){
+int main(int argc,char** argv){
+    const unsigned shadowFlags=argc>1?static_cast<unsigned>(std::strtoul(argv[1],nullptr,0)):0;
     ComPtr<IDXGIFactory4> factory;ComPtr<IDXGIAdapter> adapter;ComPtr<ID3D12Device> device;
     assert(SUCCEEDED(CreateDXGIFactory1(IID_PPV_ARGS(&factory))));assert(SUCCEEDED(factory->EnumWarpAdapter(IID_PPV_ARGS(&adapter))));
     assert(SUCCEEDED(D3D12CreateDevice(adapter.Get(),D3D_FEATURE_LEVEL_11_0,IID_PPV_ARGS(&device))));
@@ -48,9 +50,9 @@ int main(){
     std::array<UINT,40> point{};std::array<UINT,80> spot{};std::array<UINT,144> sun{};
     const auto set=[](UINT& word,float value){std::memcpy(&word,&value,4);};
     set(point[2],2);set(point[4],5*pi);set(point[5],10*pi);set(point[6],15*pi);set(point[7],10);set(point[36],1);
-    point[39]=4;set(point[14],-1);set(point[10],.5);set(point[11],.25);
+    point[39]=4|(shadowFlags&2u);set(point[14],-1);set(point[10],.5);set(point[11],.25);
     set(spot[2],2);set(spot[12],1.0625f*pi);set(spot[13],2.125f*pi);set(spot[14],3.1875f*pi);set(spot[15],10);set(spot[18],1);set(spot[19],.25);
-    for(UINT n=0;n<4;++n)set(spot[20+n*5],1);spot[76]=1;set(spot[66],1);set(spot[67],1);
+    for(UINT n=0;n<4;++n)set(spot[20+n*5],1);spot[76]=1|shadowFlags;set(spot[66],1);set(spot[67],1);
     set(sun[1],1);set(sun[4],2);set(sun[5],4);set(sun[6],6);sun[26]=1;set(sun[24],.5);set(sun[20],.5);set(sun[21],.5);
     std::array<UINT,256> constants{};constants[64]=constants[65]=constants[66]=1;
     constants[128+64]=2;constants[128+65]=constants[128+66]=1; // Counts exceed the actual point buffer in dispatch two.
@@ -117,6 +119,10 @@ int main(){
     assert(result[0].radius==1&&std::abs(result[0].distance-2)<1e-6f);
     assert(result[1].radius==1&&std::abs(result[1].distance-1.5f)<1e-6f);
     assert(result[2].radius==0&&result[2].distance==0);
+    assert(result[0].castsShadow==((shadowFlags&2u)!=0?1u:0u));
+    const unsigned mode=shadowFlags&0x300u;
+    assert(result[1].castsShadow==((shadowFlags&2u)!=0||mode==0x100u||mode==0x200u?1u:0u));
+    assert(result[2].castsShadow==1);
     assert(result[3].valid==1&&result[3].active==0);assert(result[4].valid==0);assert(result[5].valid==1&&result[5].active==0);assert(result[6].valid==0);
     for(UINT n=count;n<2*count;++n)assert(result[n].valid==0&&result[n].active==0);
     const D3D12_RANGE empty{};readback->Unmap(0,&empty);assert(SUCCEEDED(device->GetDeviceRemovedReason()));
