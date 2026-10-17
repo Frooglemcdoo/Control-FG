@@ -41,6 +41,15 @@ PT_INLINE bool PTValidPrimaryShadingNormal(PTVec3 ns,PTVec3 ng,PTVec3 wo){
         PTDot(ns,ng)>0&&PTDot(ns,wo)>0&&PTDot(ng,wo)>0;
 }
 PT_INLINE bool PTPrimaryReflectionAboveGeometry(PTVec3 ng,PTVec3 wi){return PTValid(wi)&&PTDot(ng,wi)>0;}
+// Secondary mesh normals are already inverse-transpose transformed by the hit
+// shader. Orient them to the two-sided geometric frame. At silhouettes where
+// the interpolated frame excludes the viewer, retain geometric shading instead
+// of dropping the whole reflection path. Primary raster admission is unchanged.
+PT_INLINE PTVec3 PTSecondaryShadingNormal(PTVec3 ns,PTVec3 ng,PTVec3 wo){
+    if(!PTValid(ns)||PTDot(ns,ns)<1-1e-4f||PTDot(ns,ns)>1+1e-4f)return ng;
+    if(PTDot(ns,ng)<0)ns=PTScale(ns,-1);
+    return PTValidPrimaryShadingNormal(ns,ng,wo)?ns:ng;
+}
 static const float PTTransportPi=3.14159265358979323846f;
 
 // Directions are normalized, point away from the surface, and are in its local

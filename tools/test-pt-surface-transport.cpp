@@ -27,6 +27,17 @@ int main(){
     require(!PTPrimaryReflectionAboveGeometry(ng,leak),"Geometric back hemisphere clipped");
     require(PTPrimaryReflectionAboveGeometry(ng,view),"Front reflection retained");
 
+    const auto secondary=PTSecondaryShadingNormal(ns,ng,view);
+    require(fabs(secondary.x-.6f)<1e-6f&&fabs(secondary.z-.8f)<1e-6f,"Secondary interpolation retained");
+    const auto back=PTSecondaryShadingNormal(PTScale(ns,-1),ng,view);
+    require(fabs(back.x-.6f)<1e-6f&&fabs(back.z-.8f)<1e-6f,"Back-face mesh normal oriented to geometry");
+    for(auto bad: {PTV(0,0,0),PTV(0,0,2),PTV(NAN,0,1),PTV(INFINITY,0,1),PTV(1,0,0)}){
+        const auto n=PTSecondaryShadingNormal(bad,ng,view);
+        require(n.x==0&&n.z==1,"Invalid or tangent secondary frame uses geometry");
+    }
+    const auto grazing=PTSecondaryShadingNormal(ns,ng,PTUnit(PTV(-1,0,.1f)));
+    require(grazing.x==0&&grazing.z==1,"Viewer outside shading hemisphere retains geometric reflection");
+
     // Retaining native specular fill must remove that lobe only from the first
     // continuation, while preserving its diffuse throughput and direct BSDF.
     PTSurfaceMaterial original={PTV(.4f,.2f,.1f),PTV(.9f,.9f,.9f),.2f,3u};

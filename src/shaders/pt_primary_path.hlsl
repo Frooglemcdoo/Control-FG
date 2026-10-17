@@ -15,6 +15,7 @@
 #define PT_PATH_PRIMARY_INDIRECT 1
 #endif
 #define PT_PATH_PRIMARY_SHADING_NORMAL 1
+#define PT_PATH_SURFACE_GEOMETRY 1
 #ifdef PT_PRIMARY_SURFACE_REPLACEMENT
 #define PT_PATH_TERMINAL_GI 1
 #define PT_PATH_MISS_GI 1
@@ -48,7 +49,9 @@ PTSceneHit PTPathTrace(RayDesc ray){
 }
 PTPathSurface PTDecodeSurface(PTSceneHit hit,RayDesc ray,bool primary){
     PTPathSurface s=(PTPathSurface)0;s.position=hit.worldPosition;s.normal=hit.geometricNormal;
-    s.spawnOrigin=safeSpawnPoint(s.position,s.normal,hit.spawnOffset);
+    s.geometricNormal=hit.geometricNormal;
+    s.spawnOrigin=safeSpawnPoint(s.position,s.geometricNormal,hit.spawnOffset);
+    if(!primary)s.normal=PTSecondaryShadingNormal(hit.shadingNormal,s.geometricNormal,-ray.Direction);
     uint count,stride;PTMaterialFlags.GetDimensions(count,stride);
     if(stride!=8||hit.material>=count){s.decodeFault=11;return s;} // lobes==0 rejects the whole path.
     uint2 flags=PTMaterialFlags[hit.material];uint packed=flags.x;
@@ -121,7 +124,8 @@ bool PTPathLightCandidates(PTPathSurface surface,float3 outgoingWorld,uint prima
         if(candidate.active!=0){
             float3 wi=normalize(PTViewToWorldVector(candidate.directionView));
             float3 localWi=float3(dot(wi,tangent),dot(wi,bitangent),dot(wi,n));
-            target=PTLightTarget(surface.material,wo,localWi,candidate.radiance);
+            if(PTPrimaryReflectionAboveGeometry(surface.geometricNormal,wi))
+                target=PTLightTarget(surface.material,wo,localWi,candidate.radiance);
         }
         reservoir=PTAddLightCandidate(reservoir,target,candidate.selectionPdf,PTPathRandom(rng),candidateIndex);
         if(reservoir.valid==0){native.valid=0;break;}
@@ -136,7 +140,7 @@ bool PTPathLightCandidates(PTPathSurface surface,float3 outgoingWorld,uint prima
     if(native.active==0)return false;
     light.wi=normalize(PTViewToWorldVector(native.directionView));light.incidentRadiance=native.radiance;
     light.pdf=native.selectionPdf;light.delta=1;
-    if(dot(surface.normal,light.wi)<=0)return true;
+    if(dot(surface.normal,light.wi)<=0||!PTPrimaryReflectionAboveGeometry(surface.geometricNormal,light.wi)){visibility=0;return true;}
     RayDesc shadow;shadow.Origin=surface.spawnOrigin;shadow.Direction=light.wi;shadow.TMin=0;shadow.TMax=1e6;
     if(native.directional==0){
         float3 delta=PTViewToWorldPoint(native.targetView)-shadow.Origin;float distance=length(delta);

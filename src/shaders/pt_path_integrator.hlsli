@@ -1,12 +1,16 @@
 #ifndef CONTROL_PT_PATH_INTEGRATOR
 #define CONTROL_PT_PATH_INTEGRATOR
 #include "pt_direct_light.hlsli"
-// Secondary adapters use coincident geometric/shading normals. Primary camera
-// radiance transport may use the raster shading normal with geometric hemisphere
-// rejection below. Transmission and importance-mode correction are not admitted. Emitters/environment are BSDF-only; NEE accepts DELTA lights only,
+// Camera radiance transport may use distinct shading/geometric frames. Adapters
+// enabling PT_PATH_SURFACE_GEOMETRY supply the oriented geometric normal for
+// direct and continuation hemisphere rejection. Transmission and importance-mode
+// correction are not admitted. Emitters/environment are BSDF-only; NEE accepts DELTA lights only,
 // preventing duplicate non-delta light energy until emitter MIS is implemented.
 struct PTPathSurface {
     float3 position, normal, emission, spawnOrigin;
+#ifdef PT_PATH_SURFACE_GEOMETRY
+    float3 geometricNormal;
+#endif
     PTSurfaceMaterial material;
     uint decodeFault;
 };
@@ -112,6 +116,9 @@ PTPathResult PTIntegratePathFirst(RayDesc ray,uint maxHits,uint rouletteStart,ui
         }
         if(hasLight) {
             if(light.delta!=1||visibility>1){path.valid=0;result.fault=visibility==3?14:6;break;}
+#ifdef PT_PATH_SURFACE_GEOMETRY
+            if(!PTPrimaryReflectionAboveGeometry(surface.geometricNormal,light.wi))visibility=0;
+#endif
             light.wi=float3(dot(light.wi,tangent),dot(light.wi,bitangent),dot(light.wi,n));
             PTDirectResult direct=PTEvaluateDirect(surface.material,wo,light,visibility);
             if(direct.valid==0){path.valid=0;result.fault=7;break;}
@@ -159,7 +166,9 @@ PTPathResult PTIntegratePathFirst(RayDesc ray,uint maxHits,uint rouletteStart,ui
         ray.Origin=surface.spawnOrigin;
         if(!all(isfinite(ray.Origin))){path.valid=0;result.fault=9;break;}
         ray.Direction=normalize(tangent*sample.wi.x+bitangent*sample.wi.y+n*sample.wi.z);
-#ifdef PT_PATH_PRIMARY_SHADING_NORMAL
+#ifdef PT_PATH_SURFACE_GEOMETRY
+        if(!PTPrimaryReflectionAboveGeometry(surface.geometricNormal,ray.Direction))break;
+#elif defined(PT_PATH_PRIMARY_SHADING_NORMAL)
         if(depth==0&&useFirst!=0&&!PTPrimaryReflectionAboveGeometry(first.geometricNormal,ray.Direction))break;
 #endif
 #ifdef PT_PATH_MISS_GI
