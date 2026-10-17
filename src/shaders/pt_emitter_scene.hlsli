@@ -20,10 +20,10 @@ bool PTPathEmitterLight(PTPathSurface surface,inout uint rng,out PTDirectSample 
     float4 a=asfloat(PTEmitters.Load4(at)),b=asfloat(PTEmitters.Load4(at+16)),c=asfloat(PTEmitters.Load4(at+32));
     uint4 meta=PTEmitters.Load4(at+48);uint alpha=PTEmitters.Load(at+64);
     float u=PTPathRandom(rng),v=PTPathRandom(rng);
-    PTEmitterPoint point=PTSampleEmitterTriangle(a.xyz,b.xyz,c.xyz,count,u,v);
-    if(point.valid==0)return false;
-    float3 delta=point.position-surface.position;float d2=dot(delta,delta);if(!isfinite(d2)||d2<=0)return false;
-    light.wi=delta*rsqrt(d2);light.pdf=PTEmitterSolidAnglePdf(point.area,count,d2,saturate(abs(dot(point.normal,-light.wi))));
+    PTEmitterPoint samplePoint=PTSampleEmitterTriangle(a.xyz,b.xyz,c.xyz,count,u,v);
+    if(samplePoint.valid==0)return false;
+    float3 delta=samplePoint.position-surface.position;float d2=dot(delta,delta);if(!isfinite(d2)||d2<=0)return false;
+    light.wi=delta*rsqrt(d2);light.pdf=PTEmitterSolidAnglePdf(samplePoint.area,count,d2,saturate(abs(dot(samplePoint.normal,-light.wi))));
     if(light.pdf<=0)return false;
     uint material=meta.w,materials,stride;PTMaterials.GetDimensions(materials,stride);
     if(stride!=336||material>=materials||material>=244000/35){visibility=2;return true;}
@@ -43,7 +43,7 @@ bool PTPathEmitterLight(PTPathSurface surface,inout uint rng,out PTDirectSample 
         visibility=0;return true;
     }
     RayDesc shadow;shadow.Origin=surface.spawnOrigin;
-    delta=point.position-shadow.Origin;float distance=length(delta);
+    delta=samplePoint.position-shadow.Origin;float distance=length(delta);
     if(!isfinite(distance)||distance<=0){visibility=2;return true;}
     shadow.Direction=delta/distance;shadow.TMin=0;shadow.TMax=asfloat(asuint(distance)-1);
     PTVisibility result;result.status=0;

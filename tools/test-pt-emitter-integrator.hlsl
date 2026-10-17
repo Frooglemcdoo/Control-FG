@@ -1,6 +1,8 @@
 #pragma warning(disable: 3577)
 #pragma warning(disable: 4000)
+#ifndef __HLSL_VERSION
 struct RayDesc {float3 Origin;float TMin;float3 Direction;float TMax;};
+#endif
 struct PTSceneHit {uint status;float distance;};
 #define PT_PRIMARY_SURFACE_REPLACEMENT 1
 #define PT_PATH_PRIMARY_DECODE 1
