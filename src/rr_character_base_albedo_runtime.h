@@ -10,7 +10,7 @@ static unsigned rrCharacterBaseAlbedoRecordCount=0; // native primary preparatio
 static std::uintptr_t RRCharacterBaseAlbedoReplacement(std::uintptr_t original,std::uintptr_t selected,
  const RRAlbedoShader::CapturedPixelShader& albedo) noexcept {
  if(!rrCharacterBaseAlbedoStorageReady.load(std::memory_order_acquire)||!original||!selected||
-    albedo.bytes.size()!=3196||albedo.hashFNV1a!=UINT64_C(0x725bfe878e18cfac))return selected;
+    albedo.bytes.size()!=3196||albedo.hashFNV1a!=UINT64_C(0xac82dbf4f66ea1f2))return selected;
  for(unsigned i=0;i<rrCharacterBaseAlbedoRecordCount;++i){const auto* c=rrCharacterBaseAlbedoRecords[i];
   if(c->original==original&&c->selected==selected)return reinterpret_cast<std::uintptr_t>(c->record);}
  if(rrCharacterBaseAlbedoRecordCount>=32)return selected;
@@ -29,7 +29,7 @@ static std::uintptr_t RRCharacterBaseAlbedoReplacement(std::uintptr_t original,s
   if(!PTReflectionCloneShaderRecord(reinterpret_cast<void*>(selected),0x50,4,kRRCharacterBaseAlbedoStorageId,
        sizeof(kRRCharacterBaseAlbedoShader),c->record,c->descriptor)){delete c;return selected;}
   c->original=original;c->selected=selected;rrCharacterBaseAlbedoRecords[rrCharacterBaseAlbedoRecordCount++]=c;
-  Log("RR_CHARACTER_BASE_ALBEDO_R18 original=%p selected=%p replacement=%p native_hash_match=1 base_texture_slot=0 tint_offset=52 detail_multiplier_removed=1 replay_only=1",reinterpret_cast<void*>(original),reinterpret_cast<void*>(selected),c->record);
+  Log("RR_CHARACTER_BASE_ALBEDO_R19 original=%p selected=%p replacement=%p native_hash_match=1 base_texture_slot=0 tint_offset=52 detail_multiplier_removed=1 replay_only=1",reinterpret_cast<void*>(original),reinterpret_cast<void*>(selected),c->record);
   return reinterpret_cast<std::uintptr_t>(c->record);
  }catch(...){return selected;}
 }
