@@ -80,7 +80,7 @@ static unsigned int RREvaluationEntry(unsigned int branch, ID3D12GraphicsCommand
             SetLastError(incomingError);return 0xBAD00001u;
         }
         RRInputCaptureBeforeEvaluation(list,in.frame,activePreset,bindings.normal,bindings.specular,bindings.diffuse,
-            hitDistance,hitDistance?rrDistanceLastStatus:nullptr,bindings.viewToClip,bindings.projectionValid,bindings.rawAlbedo);
+            hitDistance,hitDistance?rrDistanceLastStatus:nullptr,bindings.viewToClip,bindings.projectionValid,bindings.rawAlbedo,in.color,in.depth,in.motion,parameters);
         rrAttempt=true;
         if(call<=4||(call%240)==0||distanceReset)
             Log("RR_F_DISTANCE_D1 frame=%llu preset=%u bound=%u resource=%p history_reset=%u projection_valid=%u",in.frame,activePreset,unsigned(hitDistance!=nullptr),hitDistance,unsigned(distanceReset),unsigned(bindings.projectionValid));

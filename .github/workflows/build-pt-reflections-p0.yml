@@ -62,6 +62,14 @@ jobs:
           if errorlevel 1 exit /b 1
           build\test-rr-character-albedo.exe
           if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX validation\rr-input-capture\record.cpp /Febuild\test-rr-input-record.exe
+          if errorlevel 1 exit /b 1
+          build\test-rr-input-record.exe
+          if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-rr-input-native.cpp /Febuild\test-rr-input-native.exe /link d3d12.lib dxgi.lib
+          if errorlevel 1 exit /b 1
+          build\test-rr-input-native.exe
+          if errorlevel 1 exit /b 1
       - name: Verify glossy-only removal and native fallback
         run: python tools/test-pt-glass-glossy-only.py
       - name: Verify glass installation compatibility gate
@@ -269,7 +277,7 @@ jobs:
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-RR-Hair-Coverage-R4'
+          $out='Control-FG-RR-Hair-Inputs-R5'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/pt_glass_raygen.dxil "$out/pt_glass_raygen.dxil"
           Copy-Item build/pt_glass_secondary.dxbc "$out/pt_glass_secondary.dxbc"
@@ -286,22 +294,20 @@ jobs:
           Copy-Item Collect-RR-Skin-Capture.ps1 "$out/Collect-RR-Skin-Capture.ps1"
           Copy-Item Collect-RR-Skin-Capture.cmd "$out/Collect-RR-Skin-Capture.cmd"
           @'
-          CONTROL-FG - RR HAIR COVERAGE R4 (TEST CANDIDATE)
+          CONTROL-FG - RR HAIR INPUTS R5 (DIAGNOSTIC)
           ========================================
-          Hair opacity now weights the diffuse guide for partial strands, using
-          slot 26 alpha times tint alpha. Fully transparent fragments are rejected.
-          Only the exact audited hair pair writes the private alpha coverage tag.
-          Character pixels keep the approved full-strength albedo assignment.
-          This tests opacity-weighted material fallback; it is not a reproduction
-          of native stochastic/MSAA coverage and needs in-game visual validation.
-          Reflection shaders and normal/specular guides are unchanged.
-          Compact logs now retain hair activation/capture records in glass/*.log.
+          Rendering is unchanged from R4; this is a diagnostic capture build.
+          F9 now captures native pre-RR color, depth and motion alongside the
+          four existing guide buffers. Source states are checked under native
+          locks and restored before RR. Unproven states skip capture.
+          Metadata includes native formats, motion scale and jitter.
+          This does not yet fix hair flicker. Skin and reflections are unchanged.
 
           Close Control. Install all binaries beside Control_DX12.exe.
-          Test the same loose hair/neck view with RR Model F.
-          Press F9 once; stay in gameplay for 15 seconds, then exit.
-          Send the hair capture ZIP, compact logs, and whether flicker improved.
-          Collect-RR-Skin-Capture.cmd retains four snapshots and shader evidence.
+          Use RR Model F and the same loose hair/neck view. Keep the camera still.
+          Press F9 once and wait 15 seconds in gameplay, then exit.
+          Run Collect-RR-Skin-Capture.cmd and Collect-ControlFG-Compact-Logs.cmd.
+          Send both ZIPs. Four snapshots include three new native input files.
           '@ | Set-Content "$out/README.txt" -Encoding ASCII
           Compress-Archive -Path "$out/*" -DestinationPath "$out.zip" -Force
           (Get-FileHash "$out.zip" -Algorithm SHA256).Hash | Set-Content "$out.sha256" -Encoding ASCII
@@ -309,10 +315,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-RR-Hair-Coverage-R4
+          name: Control-FG-RR-Hair-Inputs-R5
           path: |
-            Control-FG-RR-Hair-Coverage-R4.zip
-            Control-FG-RR-Hair-Coverage-R4.sha256
+            Control-FG-RR-Hair-Inputs-R5.zip
+            Control-FG-RR-Hair-Inputs-R5.sha256
             build/rr_hair_opacity.asm
             build/exports.txt
             build/imports.txt

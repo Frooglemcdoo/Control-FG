@@ -58,7 +58,7 @@ static ID3D12Resource* testDistance=nullptr;
 static ID3D12Resource* lastDistance=nullptr;
 static ID3D12Resource* RRDistanceBeforeEvaluation(ID3D12GraphicsCommandList*,ID3D12Resource*,unsigned long long,bool){++distanceCalls;return testDistance;}
 static ID3D12Resource* rrDistanceLastStatus=nullptr;
-static void RRInputCaptureBeforeEvaluation(ID3D12GraphicsCommandList*,unsigned long long,unsigned,ID3D12Resource*,ID3D12Resource*,ID3D12Resource*,ID3D12Resource*,ID3D12Resource*,const float*,bool,ID3D12Resource*){}
+static void RRInputCaptureBeforeEvaluation(ID3D12GraphicsCommandList*,unsigned long long,unsigned,ID3D12Resource*,ID3D12Resource*,ID3D12Resource*,ID3D12Resource*,ID3D12Resource*,const float*,bool,ID3D12Resource*,ID3D12Resource*,ID3D12Resource*,ID3D12Resource*,void*){}
 static bool RRNativePartialActive(){return false;}
 struct RRNativeGuideBindings {float viewToClip[16]{};bool projectionValid=false;ID3D12Resource*normal=nullptr;ID3D12Resource*diffuse=nullptr;ID3D12Resource*specular=nullptr;ID3D12Resource*responsivity=nullptr;ID3D12Resource*rawAlbedo=nullptr;};
 static bool RRNativeResolveEvaluationPreset(ID3D12GraphicsCommandList*,void* feature,void*,void** out,bool* reset,unsigned* active){

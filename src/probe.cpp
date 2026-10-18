@@ -540,7 +540,9 @@ static bool HookAA(void* t1, void* t2, void* t3, void* t4, void* t5, void* t6,
         Log("AA_SHARPNESS_OVERRIDE call=%llu present=%llu input=%.9g applied=%.9g scope=native_sr_dlaa rr_requested=0",
             call,currentPresent,double(f3),double(appliedF3));
     }
+    RRInputCaptureSetNativeTextures(textures,9,engineFrame);
     const bool result = argumentsReady&&originalAA(t1,t2,t3,t4,t5,t6,t7,t8,t9,flag,d1,d2,f1,f2,appliedF3);
+    RRInputCaptureSetNativeTextures(nullptr,0,0);
     MarkControlDLSSReady(call, result);
 
     // Reset is an NGX input populated inside the original DLSS wrapper, so read
