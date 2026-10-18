@@ -103,7 +103,18 @@ float3 HairNormalGuide(uint2 pixel, float3 center) {
             sum += n * weight;
         }
     }
-    return normalize(sum);
+    const float3 fallback = normalize(sum);
+    // R12_BEGIN: continuous fallback transition; R11's coherent branch above
+    // remains exact. Only supported but disagreeing hair patches reach here.
+    if (patchCount >= 3u && patchLength > 1.0e-5f && patchWeight > 0.0f) {
+        const float coherence = patchLength / patchWeight;
+        const float weight = smoothstep(0.05f, 0.5f, coherence);
+        const float3 blended = lerp(fallback, patchSum / patchLength, weight);
+        const float blendedLength = length(blended);
+        if (blendedLength > 1.0e-5f) return blended / blendedLength;
+    }
+    // R12_END
+    return fallback;
 }
 
 float3 DecodeMaterialValue(uint packed, float gbuffer2Green, out uint brdfMode) {

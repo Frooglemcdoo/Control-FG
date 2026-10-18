@@ -29,7 +29,7 @@ static std::uintptr_t RRHairOpacityReplacement(std::uintptr_t original,std::uint
   if(!PTReflectionCloneShaderRecord(reinterpret_cast<void*>(selected),0x50,4,kRRHairOpacityStorageId,
        sizeof(kRRHairOpacityShader),c->record,c->descriptor)){delete c;return selected;}
   c->original=original;c->selected=selected;rrHairOpacityRecords[rrHairOpacityRecordCount++]=c;
-  Log("RR_HAIR_OPACITY_READY original=%p selected=%p replacement=%p native_hash_match=1 opacity_texture_slot=26 channel=w reject=zero_only partial_opacity=weighted hair_alpha_tag=minus2_minus_opacity normal_guide=hair_only_opacity_weighted_coherent_patch_r11 skin_unchanged=1",reinterpret_cast<void*>(original),reinterpret_cast<void*>(selected),c->record);
+  Log("RR_HAIR_OPACITY_READY original=%p selected=%p replacement=%p native_hash_match=1 opacity_texture_slot=26 channel=w reject=zero_only partial_opacity=weighted hair_alpha_tag=minus2_minus_opacity normal_guide=hair_only_continuous_patch_fallback_r12 skin_unchanged=1",reinterpret_cast<void*>(original),reinterpret_cast<void*>(selected),c->record);
   return reinterpret_cast<std::uintptr_t>(c->record);
  }catch(...){return selected;}
 }

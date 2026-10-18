@@ -30,7 +30,11 @@ int main(){
   HRESULT result=D3DCompile(text.data(),text.size(),"src/shaders/rr_live_guides.hlsl",nullptr,D3D_COMPILE_STANDARD_FILE_INCLUDE,"GenerateLiveGuides","cs_5_0",D3DCOMPILE_OPTIMIZATION_LEVEL3|D3DCOMPILE_WARNINGS_ARE_ERRORS,0,&blob,&error);
   if(error)std::fwrite(error->GetBufferPointer(),1,error->GetBufferSize(),stderr);hr(result);
   ComPtr<ID3D11ComputeShader> shader;hr(device->CreateComputeShader(blob->GetBufferPointer(),blob->GetBufferSize(),nullptr,&shader));return shader;};
- auto original=compile(baseline),candidate=compile(source);
+ std::string previous=source;
+ const auto begin=previous.find("    // R12_BEGIN"),end=previous.find("    // R12_END");
+ check(begin!=std::string::npos&&end!=std::string::npos,"R12 transition markers");
+ previous.erase(begin,end-begin);
+ auto original=compile(baseline),candidate=compile(source),r11=compile(previous);
  std::array<ComPtr<ID3D11Texture2D>,5> inputs;
  std::array<ComPtr<ID3D11ShaderResourceView>,5> srvs;
  std::vector<Pixel> g1(N),g2(N),albedo(N),env(N);
@@ -55,6 +59,11 @@ int main(){
   g1[y*W+x]={{1.0f,1.0f,0.0f,1.0f}};
   albedo[y*W+x].v[3]=-2.01f;
  }
+ // Conflicting same-material normals exercise the low-coherence path.
+ for(UINT y=26;y<=30;++y)for(UINT x=26;x<=30;++x){
+  g1[y*W+x]={{x%2?1.0f:0.0f,0.5f,0.0f,0.0f}};
+  albedo[y*W+x]={{0.2f,0.1f,0.05f,-2.5f}};
+ }
  auto texture=[&](UINT slot,const std::vector<Pixel>& values){D3D11_TEXTURE2D_DESC d{};
   d.Width=W;d.Height=H;d.MipLevels=1;d.ArraySize=1;d.Format=DXGI_FORMAT_R32G32B32A32_FLOAT;d.SampleDesc.Count=1;d.Usage=D3D11_USAGE_IMMUTABLE;d.BindFlags=D3D11_BIND_SHADER_RESOURCE;
   D3D11_SUBRESOURCE_DATA init{values.data(),W*sizeof(Pixel),0};hr(device->CreateTexture2D(&d,&init,&inputs[slot]));hr(device->CreateShaderResourceView(inputs[slot].Get(),nullptr,&srvs[slot]));};
@@ -76,9 +85,12 @@ int main(){
     if(j<3)std::memcpy(result[j].data()+y*W,row,W*sizeof(Pixel));
     else for(UINT x=0;x<W;++x){std::uint16_t h=0;std::memcpy(&h,row+x*2,2);const int e=(h>>10)&31;const float m=float(h&1023);float v=e?std::ldexp(1.0f+m/1024.0f,e-15):std::ldexp(m,-24);result[j][y*W+x].v[0]=(h&32768)?-v:v;}
    }context->Unmap(staging[j].Get(),0);}return result;};
- UINT changed=0;
- for(UINT flags : {0u,1u,3u,4u,5u,7u}){auto before=run(original.Get(),flags),after=run(candidate.Get(),flags);
+ UINT changed=0,weakChanged=0;
+ for(UINT flags : {0u,1u,3u,4u,5u,7u}){auto before=run(original.Get(),flags),after=run(candidate.Get(),flags),prior=run(r11.Get(),flags);
   if((flags&5u)==5u){
+   check(!std::memcmp(&prior[0][28*W+22],&after[0][28*W+22],sizeof(Pixel)),"R11 coherent direction changed");
+   for(UINT y=27;y<=29;++y)for(UINT x=27;x<=29;++x)
+    if(std::memcmp(&prior[0][y*W+x],&after[0][y*W+x],12))++weakChanged;
    check(after[0][28*W+22].v[2]<-0.9f,"weak reversed card edge overrode coherent opaque patch");
    check(before[0][5*W+5].v[2]>0.5f,"outlier fixture not reversed");
    check(after[0][5*W+5].v[2]<-0.9f,"majority failed to recover isolated reversed hair normal");
@@ -93,5 +105,6 @@ int main(){
    if(hair){check(before[0][i].v[3]==after[0][i].v[3],"roughness changed");float len=0;for(UINT c=0;c<3;++c){float v=after[0][i].v[c];check(std::isfinite(v),"nonfinite normal");len+=v*v;}check(std::abs(len-1.0f)<0.0001f,"normal not unit length");if(std::memcmp(&before[0][i],&after[0][i],12))++changed;}
   }
  }
+ check(weakChanged>0,"low-coherence transition was not exercised");
  check(changed>0,"hair normals unchanged");std::printf("PASS: production WARP shader changes hair normals (%u samples); isolated outlier corrected, different material rejected; skin, fallback, diffuse and roughness preserved; R16F hair hint negative and skin zero across six guide modes\n",changed);
 }

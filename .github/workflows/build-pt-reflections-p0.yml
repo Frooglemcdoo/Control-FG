@@ -285,7 +285,7 @@ jobs:
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-RR-Hair-Coherent-Guides-R11'
+          $out='Control-FG-RR-Hair-Continuous-Guides-R12'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/pt_glass_raygen.dxil "$out/pt_glass_raygen.dxil"
           Copy-Item build/pt_glass_secondary.dxbc "$out/pt_glass_secondary.dxbc"
@@ -302,11 +302,12 @@ jobs:
           Copy-Item Collect-RR-Skin-Capture.ps1 "$out/Collect-RR-Skin-Capture.ps1"
           Copy-Item Collect-RR-Skin-Capture.cmd "$out/Collect-RR-Skin-Capture.cmd"
           @'
-          CONTROL-FG - HAIR COHERENT GUIDES R11 (TEST BUILD)
+          CONTROL-FG - HAIR CONTINUOUS GUIDES R12 (TEST BUILD)
           ==============================================
-          Hair normals use a coverage-weighted coherent 5x5 patch direction.
-          This avoids changing the entire neighborhood when the center flips.
-          Sparse/conflicting neighborhoods retain the previous fallback.
+          R11 coherent hair directions remain exact.
+          Conflicting hair patches now transition gradually into the fallback,
+          removing the abrupt coherence-threshold switch. Sparse patches retain
+          the previous fallback. No new history buffers or wider filter radius.
           Skin, hair color/opacity, roughness and glass shaders are unchanged.
           The paired capture remains available in the R10 diagnostic format.
           F9 now prepares two slots and captures successive RR evaluations.
@@ -330,10 +331,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-RR-Hair-Coherent-Guides-R11
+          name: Control-FG-RR-Hair-Continuous-Guides-R12
           path: |
-            Control-FG-RR-Hair-Coherent-Guides-R11.zip
-            Control-FG-RR-Hair-Coherent-Guides-R11.sha256
+            Control-FG-RR-Hair-Continuous-Guides-R12.zip
+            Control-FG-RR-Hair-Continuous-Guides-R12.sha256
             build/rr_hair_opacity.asm
             build/exports.txt
             build/imports.txt
