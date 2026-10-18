@@ -2,6 +2,7 @@
 #include "pt_glass_resources.h"
 #include "pt_glass_descriptors.h"
 #include "pt_glass_vtable_call.h"
+#include "pt_glass_hook_table.h"
 #include <intrin.h>
 #include <unordered_map>
 #include <memory>
@@ -25,7 +26,7 @@ static void NativeSetRayPso(ID3D12GraphicsCommandList4* list,ID3D12StateObject* 
 static void NativeDispatchRays(ID3D12GraphicsCommandList4* list,const D3D12_DISPATCH_RAYS_DESC* desc){
     reinterpret_cast<DispatchRays>((*reinterpret_cast<void***>(list))[76])(list,desc);
 }
-static auto setRayPso=&NativeSetRayPso;static auto dispatchRays=&NativeDispatchRays;static Execute execute=nullptr;static Reset reset=nullptr;
+static auto setRayPso=&NativeSetRayPso;static auto dispatchRays=&NativeDispatchRays;static PTGlass::HookTable executeHooks,resetHooks;
 static ComPtr<ID3D12Device> device;static ComPtr<ID3D12CommandQueue> queue;
 static ComPtr<ID3D12RootSignature> lightingRoot;static ComPtr<ID3D12PipelineState> nativeLighting,secondaryLighting,compositeLighting;
 static std::vector<unsigned char> rayBytes,secondaryBytes,compositeBytes;
@@ -93,6 +94,16 @@ static bool Patch(void* object,UINT index,void* hook,void** original) noexcept {
     *original=*slot;InterlockedExchangePointer(slot,hook);DWORD ignored=0;
     return VirtualProtect(slot,sizeof(void*),old,&ignored)!=FALSE;
 }
+static bool PatchPerTable(void* object,UINT index,void* hook,PTGlass::HookTable& registry) {
+    if(!object)return false;
+    return registry.Ensure(*reinterpret_cast<void***>(object),index,hook,[](void** slot,void* previous,void* replacement){
+        DWORD old=0;if(!VirtualProtect(slot,sizeof(void*),PAGE_EXECUTE_READWRITE,&old))return false;
+        const bool installed=InterlockedCompareExchangePointer(slot,replacement,previous)==previous;
+        DWORD ignored=0;const bool restored=VirtualProtect(slot,sizeof(void*),old,&ignored)!=FALSE;
+        if(!restored)Log("PT_GLASS_HOOK_PROTECTION_RESTORE_FAILED slot=%p installed=%u",slot,unsigned(installed));
+        return installed;
+    });
+}
 static PTGlass::LightingTableShadow* ActiveShadow() {
     if(!captureKind||mirrorGuard||!enabled)return nullptr;
     auto& holder=captureKind==1?pass.ray:pass.light;
@@ -152,6 +163,8 @@ static HRESULT STDMETHODCALLTYPE StateHook(ID3D12Device5* d,const D3D12_STATE_OB
     return hr;
 }
 static void STDMETHODCALLTYPE ExecuteHook(ID3D12CommandQueue* q,UINT count,ID3D12CommandList*const* lists){
+    const auto execute=reinterpret_cast<Execute>(executeHooks.Find(*reinterpret_cast<void***>(q)));
+    if(!execute){Skip("queue_original_missing");return;}
     execute(q,count,lists);std::lock_guard<std::mutex> guard(lock);
     if(q!=queue.Get())return;
     for(auto it=pending.begin();it!=pending.end();){bool submitted=false;for(UINT i=0;i<count;++i)submitted=submitted||lists[i]==it->list;
@@ -159,6 +172,8 @@ static void STDMETHODCALLTYPE ExecuteHook(ID3D12CommandQueue* q,UINT count,ID3D1
         if(it->hold.Ready()){if(FAILED(resources.Submitted(it->serial)))enabled=false;it=pending.erase(it);}else ++it;}
 }
 static HRESULT STDMETHODCALLTYPE ResetHook(ID3D12GraphicsCommandList* list,ID3D12CommandAllocator* allocator,ID3D12PipelineState* pso){
+    const auto reset=reinterpret_cast<Reset>(resetHooks.Find(*reinterpret_cast<void***>(list)));
+    if(!reset){Skip("reset_original_missing");return E_UNEXPECTED;}
     const HRESULT hr=reset(list,allocator,pso);if(SUCCEEDED(hr)){std::lock_guard<std::mutex> guard(lock);
         for(auto it=pending.begin();it!=pending.end();)if(it->list==list&&!it->hold.submitted){
             if(it->hold.anySubmitted){if(FAILED(resources.Submitted(it->serial)))enabled=false;}
@@ -175,7 +190,7 @@ static void STDMETHODCALLTYPE RaysHook(ID3D12GraphicsCommandList4* list,const D3
     if(!ReadContext(&context)||context.rays!=list||context.manager!=pass.rayContext.manager||context.gpu.ptr!=pass.rayContext.gpu.ptr){Skip("dispatch_context");dispatchRays(list,desc);return;}
     if(!queueReady){std::lock_guard<std::mutex> guard(lock);
         if(!queueReady){
-            if(!Patch(context.queue,10,reinterpret_cast<void*>(&ExecuteHook),reinterpret_cast<void**>(&execute))){Skip("queue_submit_hook");dispatchRays(list,desc);return;}
+            if(!PatchPerTable(context.queue,10,reinterpret_cast<void*>(&ExecuteHook),executeHooks)){Skip("queue_submit_hook");dispatchRays(list,desc);return;}
             // Control submits through the Streamline queue proxy, whose GetDevice
             // returns the proxy device. Resources belong to the native device.
             // Keep intercepting the actual submitted queue; fence its owned native
@@ -222,7 +237,7 @@ static void UseHook(void* table,void* state){
 static void RayHook(int a,int b){
     Context c{};bool ready=false;
     if(enabled&&ReadContext(&c)&&c.rays){
-        ready=Patch(c.list,10,reinterpret_cast<void*>(&ResetHook),reinterpret_cast<void**>(&reset));
+        ready=PatchPerTable(c.list,10,reinterpret_cast<void*>(&ResetHook),resetHooks);
         if(!ready)Skip("list_reset_hook");
     }else if(enabled)Skip("ray_context");
     rayScope=enabled&&ready;static std::atomic<UINT64> entries{0};const auto n=++entries;
@@ -277,7 +292,7 @@ static void LightHook(void* state,const void* dimensions){
         Skip("lighting_context",mismatch);return;
     }
     if(!ConsumerOrdered(pass.serial,context.list)){Skip("lighting_producer_not_submitted");return;}
-    if(!Patch(context.list,10,reinterpret_cast<void*>(&ResetHook),reinterpret_cast<void**>(&reset))){Skip("lighting_reset_hook");return;}
+    if(!PatchPerTable(context.list,10,reinterpret_cast<void*>(&ResetHook),resetHooks)){Skip("lighting_reset_hook");return;}
     const auto* dims=static_cast<const UINT*>(dimensions);if(!dims||dims[2]!=1){Skip("lighting_dimensions");return;}
     auto* slot=pass.slot;PTGlass::LightingTableShadow composite;
     mirrorGuard=true;

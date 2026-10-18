@@ -49,6 +49,10 @@ jobs:
           if errorlevel 1 exit /b 1
           build\test-glass-call.exe
           if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-pt-glass-hook-table.cpp /Febuild\test-glass-hooks.exe
+          if errorlevel 1 exit /b 1
+          build\test-glass-hooks.exe
+          if errorlevel 1 exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-pt-reflection-energy.cpp /Febuild\test-reflection-energy.exe
           if errorlevel 1 exit /b 1
           build\test-reflection-energy.exe
@@ -277,7 +281,7 @@ jobs:
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-RR-Hair-Inputs-R5'
+          $out='Control-FG-RR-Glass-Hook-R6'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/pt_glass_raygen.dxil "$out/pt_glass_raygen.dxil"
           Copy-Item build/pt_glass_secondary.dxbc "$out/pt_glass_secondary.dxbc"
@@ -294,20 +298,18 @@ jobs:
           Copy-Item Collect-RR-Skin-Capture.ps1 "$out/Collect-RR-Skin-Capture.ps1"
           Copy-Item Collect-RR-Skin-Capture.cmd "$out/Collect-RR-Skin-Capture.cmd"
           @'
-          CONTROL-FG - RR HAIR INPUTS R5 (DIAGNOSTIC)
+          CONTROL-FG - GLASS HOOK R6 (FIX CANDIDATE)
           ========================================
-          Rendering is unchanged from R4; this is a diagnostic capture build.
-          F9 now captures native pre-RR color, depth and motion alongside the
-          four existing guide buffers. Source states are checked under native
-          locks and restored before RR. Unproven states skip capture.
-          Metadata includes native formats, motion scale and jitter.
-          This does not yet fix hair flicker. Skin and reflections are unchanged.
+          Fixes glass hook registration rejecting a different command-list
+          implementation after glass initially worked. Reset and queue submission
+          hooks now retain the original callback separately for each vtable.
+          Glass shaders, skin and R5 hair diagnostics are unchanged.
 
           Close Control. Install all binaries beside Control_DX12.exe.
-          Use RR Model F and the same loose hair/neck view. Keep the camera still.
-          Press F9 once and wait 15 seconds in gameplay, then exit.
-          Run Collect-RR-Skin-Capture.cmd and Collect-ControlFG-Compact-Logs.cmd.
-          Send both ZIPs. Four snapshots include three new native input files.
+          Check glass reflections with the added reflection option enabled.
+          Test after changing RR/FG settings as well as immediately after loading.
+          Send compact logs and whether glass stays visible.
+          F9 hair capture and both collectors remain included.
           '@ | Set-Content "$out/README.txt" -Encoding ASCII
           Compress-Archive -Path "$out/*" -DestinationPath "$out.zip" -Force
           (Get-FileHash "$out.zip" -Algorithm SHA256).Hash | Set-Content "$out.sha256" -Encoding ASCII
@@ -315,10 +317,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-RR-Hair-Inputs-R5
+          name: Control-FG-RR-Glass-Hook-R6
           path: |
-            Control-FG-RR-Hair-Inputs-R5.zip
-            Control-FG-RR-Hair-Inputs-R5.sha256
+            Control-FG-RR-Glass-Hook-R6.zip
+            Control-FG-RR-Glass-Hook-R6.sha256
             build/rr_hair_opacity.asm
             build/exports.txt
             build/imports.txt
