@@ -26,7 +26,7 @@ int main(){
     const auto* values=static_cast<const float*>(mapped.pData);
     for(unsigned n=0;n<20;++n)for(unsigned c=0;c<4;++c){
         float expected=c==3?(n==5?0.f:1.f):((n==0||n==6||n==7)?float(c+2)*(n==7?.5f:1.f):0.f);
-        if(n>=8)expected=c==3?(n>=12?0.f:1.f):(n>=12?0.f:float(c+1));
+        if(n>=8)expected=c==3?(n==14?0.f:1.f):(n==14?0.f:float(c+1));
         if(n>=16)expected=c==3?1.f:(n==17?0.f:float(c+1)*(n>=18?.8f:1.f));
         if(!std::isfinite(values[n*4+c])||std::abs(values[n*4+c]-expected)>1e-4f){printf("FAIL case=%u channel=%u actual=%g expected=%g\n",n,c,values[n*4+c],expected);return 1;}
     }

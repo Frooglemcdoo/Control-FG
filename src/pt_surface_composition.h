@@ -2,7 +2,7 @@
 #include "pt_dxbc_checksum.h"
 #include <vector>
 #include <algorithm>
-// Bytecode-only adapter for the nine reviewed general-surface variants.
+// Bytecode-only adapter for the reviewed general-surface and character variants.
 // Host must SHA256-match the original shader to Profile::sha, preserve the native
 // graphics root and provide PT radiance through the appended raw root SRV t0,space2.
 // 64-byte packet: summary+coverage, geometry metadata, unit-color diffuse, specular.
@@ -10,7 +10,10 @@
 // No original shader, heap, root, render target, or game file is modified here.
 namespace PTSurfaceComposition {
 using U32=std::uint32_t;
-struct Profile {const char* sha;std::array<unsigned char,16> checksum;U32 bytes,load,combine,temps,resource;std::uint64_t required;};
+struct Profile {const char* sha;std::array<unsigned char,16> checksum;U32 bytes,load,combine,temps,resource;std::uint64_t required;
+    // Character programs add light-rig illumination after the material combine.
+    // Capture material color at combine, select PT only after that final add.
+    U32 loadBinding=0,combineRegister=0,finish=0,finishMask=7;};
 #include "pt_surface_profiles.in.h"
 inline bool PatchProfile(const unsigned char* input,std::size_t bytes,const Profile* profile,std::vector<unsigned char>& output){
     output.clear();if(!input||bytes<32||bytes>256*1024)return false;
@@ -31,8 +34,13 @@ inline bool PatchProfile(const unsigned char* input,std::size_t bytes,const Prof
             std::vector<U32> words(size/4);for(std::size_t i=0;i<words.size();++i)words[i]=PTDxbc::Word(chunk.data.data()+4*i);
             if(words[0]!=0x51||words[1]!=words.size()||profile->load+8>words.size()||profile->combine+9>words.size()||profile->temps+2>words.size())return false;
             const auto load=profile->load,combine=profile->combine,temps=profile->temps;
-            if(words[load]!=0x0800002du||words[load+5]>>12!=0x207u||words[load+6]||words[load+7]||
-               words[combine]!=0x09000032u||words[combine+1]!=0x00100072u||words[combine+2]||
+            const U32 finish=profile->finish?profile->finish:combine;
+            if(load>=combine||finish<combine||finish+7>words.size()||
+               (profile->finishMask!=7&&profile->finishMask!=11))return false;
+            if(profile->finish&&(words[finish]!=0x07000000u||
+               words[finish+1]!=(0x00100002u|(profile->finishMask<<4))||words[finish+2]))return false;
+            if(words[load]!=0x0800002du||words[load+5]>>12!=0x207u||words[load+6]!=profile->loadBinding||words[load+7]!=profile->loadBinding||
+               words[combine]!=0x09000032u||words[combine+1]!=0x00100072u||words[combine+2]!=profile->combineRegister||
                words[temps]!=0x02000068u||!words[temps+1]||words[temps+1]>=4096)return false;
             const U32 temporary=words[temps+1];
             U32 cbId=0;
@@ -70,7 +78,8 @@ inline bool PatchProfile(const unsigned char* input,std::size_t bytes,const Prof
                 0x0700001eu,0x00100012u,scratch,0x0010000au,scratch,0x00004001u,16,
                 0x080000a5u,0x00100072u,specular,0x0010000au,scratch,0x00207e46u,profile->resource,0,
                 0x01000015u};
-            const U32 select[]={0x09000037u,0x00100072u,0,0x00100ff6u,temporary,0x00100e46u,temporary,0x00100e46u,0};
+            const U32 select[]={0x09000037u,0x00100002u|(profile->finishMask<<4),0,0x00100ff6u,temporary,
+                profile->finishMask==11?0x00100846u:0x00100e46u,temporary,0x00100e46u,0};
             const U32 materialize[]={
                 0x0304001fu,0x00100ff6u,temporary,
                 0x09000032u,0x00100072u,temporary,0x00100e46u,diffuse,
@@ -88,7 +97,7 @@ inline bool PatchProfile(const unsigned char* input,std::size_t bytes,const Prof
                 if(i==combine)revised.insert(revised.end(),std::begin(materialize),std::end(materialize));
                 const auto start=revised.size();revised.insert(revised.end(),words.begin()+i,words.begin()+i+length);
                 if(i==temps)revised[start+1]=temporary+4;
-                if(i==combine){revised.insert(revised.end(),std::begin(select),std::end(select));sawCombine=true;}
+                if(i==finish){revised.insert(revised.end(),std::begin(select),std::end(select));sawCombine=true;}
                 i+=length;
             }
             if(!sawLoad||!sawCombine||!sawTemps||revised.size()!=words.size()+added)return false;

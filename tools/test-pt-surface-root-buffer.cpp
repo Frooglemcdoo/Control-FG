@@ -9,7 +9,7 @@
 #include "../src/pt_surface_output.h"
 #include "pt-native-root-fixture.h"
 using Microsoft::WRL::ComPtr;
-int main(){
+void RunComposition(UINT mode){
     setvbuf(stdout,nullptr,_IONBF,0);
     ComPtr<IDXGIFactory4> factory;ComPtr<IDXGIAdapter> warp;ComPtr<ID3D12Device> device;
     assert(SUCCEEDED(CreateDXGIFactory1(IID_PPV_ARGS(&factory))));assert(SUCCEEDED(factory->EnumWarpAdapter(IID_PPV_ARGS(&warp))));
@@ -52,6 +52,25 @@ int main(){
                 if(skip){normalized.push_back((words[i]&0x007fffffu)|((length-skip)<<24));normalized.insert(normalized.end(),words.begin()+i+1+skip,words.begin()+i+length);}
                 else normalized.insert(normalized.end(),words.begin()+i,words.begin()+i+length);i+=length;
             }
+            if(mode){
+                UINT temps=0,combine=0;
+                for(UINT i=2;i<normalized.size();){const UINT op=normalized[i],length=(op>>24)&127;assert(length);
+                    if((op&2047)==104)temps=i;
+                    if(op==0x09000032u&&normalized[i+1]==0x00100072u&&normalized[i+2]==0)combine=i;
+                    i+=length;
+                }
+                assert(temps&&combine);
+                const UINT rig=normalized[temps+1]++;
+                // Synthetic native light rig, deliberately bright and different
+                // in each channel. A selection at the early combine leaks it.
+                std::vector<UINT> late={0x08000036u,0x001000f2u,rig,0x00004002u,
+                    0x40400000u,0x40a00000u,mode==2?0u:0x40e00000u,mode==2?0x40e00000u:0u};
+                if(mode==2){const UINT pack[]={0x05000036u,0x001000b2u,0,0x00100846u,0};late.insert(late.end(),std::begin(pack),std::end(pack));}
+                const UINT add[]={0x07000000u,mode==2?0x001000b2u:0x00100072u,0,0x00100e46u,0,0x00100e46u,rig};
+                late.insert(late.end(),std::begin(add),std::end(add));
+                if(mode==2){const UINT unpack[]={0x05000036u,0x00100072u,0,0x00100346u,0};late.insert(late.end(),std::begin(unpack),std::end(unpack));}
+                normalized.insert(normalized.begin()+combine+9,late.begin(),late.end());
+            }
             normalized[1]=static_cast<UINT>(normalized.size());part.resize(8+normalized.size()*4);PTDxbc::Put(part.data()+4,static_cast<UINT>(normalized.size()*4));std::memcpy(part.data()+8,normalized.data(),normalized.size()*4);
         }parts.push_back(std::move(part));
     }
@@ -72,6 +91,7 @@ int main(){
     }
     if(!profile.load||!profile.combine||!profile.temps){ComPtr<ID3DBlob> dis;D3DDisassemble(original,fixtureBytes.size(),0,nullptr,&dis);if(dis)puts(static_cast<const char*>(dis->GetBufferPointer()));}
     assert(profile.load&&profile.combine&&profile.temps);
+    if(mode){profile.finish=profile.combine+9+8+(mode==2?5:0);profile.finishMask=mode==2?11:7;}
     std::vector<unsigned char> composed;assert(PTSurfaceComposition::PatchProfile(original,fixtureBytes.size(),&profile,composed));
     PTNativeRootFixture fixture(true);ComPtr<ID3DBlob> blob;ComPtr<ID3D12RootSignature> nativeRoot,ptRoot;
     assert(SUCCEEDED(D3D12SerializeRootSignature(&fixture.desc,D3D_ROOT_SIGNATURE_VERSION_1,&blob,&error)));
@@ -83,7 +103,7 @@ int main(){
     auto desc=fixture.desc;desc.NumParameters=21;desc.pParameters=params.data();blob.Reset();
     assert(SUCCEEDED(D3D12SerializeRootSignature(&desc,D3D_ROOT_SIGNATURE_VERSION_1,&blob,&error)));
     assert(SUCCEEDED(device->CreateRootSignature(0,blob->GetBufferPointer(),blob->GetBufferSize(),IID_PPV_ARGS(&ptRoot))));
-    D3D12_GRAPHICS_PIPELINE_STATE_DESC pd{};pd.pRootSignature=nativeRoot.Get();pd.VS={vs->GetBufferPointer(),vs->GetBufferSize()};pd.PS={ps->GetBufferPointer(),ps->GetBufferSize()};
+    D3D12_GRAPHICS_PIPELINE_STATE_DESC pd{};pd.pRootSignature=nativeRoot.Get();pd.VS={vs->GetBufferPointer(),vs->GetBufferSize()};pd.PS={original,fixtureBytes.size()};
     pd.BlendState.RenderTarget[0].RenderTargetWriteMask=15;pd.SampleMask=UINT_MAX;pd.RasterizerState.FillMode=D3D12_FILL_MODE_SOLID;pd.RasterizerState.CullMode=D3D12_CULL_MODE_NONE;
     pd.RasterizerState.DepthClipEnable=TRUE;pd.PrimitiveTopologyType=D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;pd.NumRenderTargets=1;pd.RTVFormats[0]=DXGI_FORMAT_R32G32B32A32_FLOAT;pd.SampleDesc.Count=1;
     ComPtr<ID3D12PipelineState> nativePso,ptPso;assert(SUCCEEDED(device->CreateGraphicsPipelineState(&pd,IID_PPV_ARGS(&nativePso))));
@@ -129,6 +149,8 @@ int main(){
     assert(SUCCEEDED(list->Close()));ID3D12CommandList* lists[]={list.Get()};queue->ExecuteCommandLists(1,lists);assert(acceptedGuard->NativeSubmitted(queue.Get()));assert(rejectedGuard->NativeSubmitted(queue.Get()));
     ComPtr<ID3D12Fence> fence;assert(SUCCEEDED(device->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&fence))));assert(SUCCEEDED(queue->Signal(fence.Get(),1)));HANDLE event=CreateEventW(nullptr,FALSE,FALSE,nullptr);assert(SUCCEEDED(fence->SetEventOnCompletion(1,event)));assert(WaitForSingleObject(event,10000)==WAIT_OBJECT_0);CloseHandle(event);
     const D3D12_RANGE read{0,10240};assert(SUCCEEDED(readback->Map(0,&read,&mapped)));
-    for(UINT frame=0;frame<5;++frame)for(UINT y=0;y<8;++y)for(UINT x=0;x<8;++x){const auto* pixel=reinterpret_cast<const float*>(static_cast<unsigned char*>(mapped)+frame*2048+y*256+x*16);for(UINT c=0;c<4;++c){const float pt[]={.125f,.25f,.5f};const float expected=c==3?1.0f:(((frame==0||frame==4||(frame==2&&y<4))&&(x+y)%2)?std::sqrt(pt[c]):0.0f);assert(std::abs(pixel[c]-expected)<.0001f);}}
+    for(UINT frame=0;frame<5;++frame)for(UINT y=0;y<8;++y)for(UINT x=0;x<8;++x){const auto* pixel=reinterpret_cast<const float*>(static_cast<unsigned char*>(mapped)+frame*2048+y*256+x*16);for(UINT c=0;c<4;++c){const float pt[]={.125f,.25f,.5f};const float expected=c==3?1.0f:(((frame==0||frame==4||(frame==2&&y<4))&&(x+y)%2)?std::sqrt(pt[c]):(mode?std::sqrt(float(3+2*c)):0.0f));assert(std::abs(pixel[c]-expected)<.0001f);}}
     readback->Unmap(0,&none);assert(SUCCEEDED(device->GetDeviceRemovedReason()));puts("PASS: patched DXBC root-buffer GPU read, 200 draws, coverage selection, row pitch, native-root restoration, and rejected consumer isolation without clearing shared PT output");
 }
+
+int main(){for(UINT mode=0;mode<3;++mode)RunComposition(mode);puts("PASS general and delayed character composition, including packed XYW and native light-rig exclusion");}

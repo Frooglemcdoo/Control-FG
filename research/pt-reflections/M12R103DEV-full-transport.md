@@ -57,3 +57,29 @@ readback (direct+hit MIS, shadows, missing registry, last bounce, unsupported
 secondary emission). Production DXIL and extended native compute root/PSO checks
 are required. These tests do not establish in-game image parity or all-material
 PT ownership. Packaging remains disabled; this is not an installable full-PT fix.
+
+## Opaque material composition conversion
+
+The six captured character pixel programs now have independent, hash-locked
+composition profiles. Material color is captured at the original diffuse/color
+combine, but PT is selected only after the final character light-rig addition.
+Selecting at the earlier combine would retain native character lights. One
+variant packs surface RGB in XYW; the adapter explicitly remaps that output.
+All original bytecode remains private. Only identities, offsets and binding
+requirements are retained. Existing nine general profiles are unchanged.
+
+Observed opaque modes 0, 1 and 3 now use the PT diffuse/GGX closure, including
+materials with native scattering-kernel indices. This deliberately converts
+those native models; it is not a recreation of native skin, cloth, or subsurface
+scattering. Mode 2 and unknown modes are still rejected. Primary normals, F0 and
+roughness come from the GBuffer, with original raster material color retained.
+No primary emission is added by these character adapters. Emission handling for
+existing general profiles remains after their lighting selection.
+
+GPU regression fixtures inject a distinct native light-rig contribution after
+the material combine. Covered pixels must exclude it, and uncovered/rejected
+consumers must preserve it, for both XYZ and XYW layouts. Local private capture
+checks cover all fifteen profiles, checksum rebuilding and rejection behavior.
+The production integrator fixture verifies converted modes and unknown-mode
+rejection separately. Native fog/media, glass, decal lighting, complete scene
+light import and runtime image validation remain outstanding.

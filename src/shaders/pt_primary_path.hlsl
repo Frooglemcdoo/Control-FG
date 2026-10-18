@@ -61,8 +61,8 @@ PTPathSurface PTDecodeSurface(PTSceneHit hit,RayDesc ray,bool primary){
     s.emission=asfloat(m.words[12])*asfloat(uint3(m.words[25],m.words[26],m.words[27]));
     if(any(s.emission!=0))s.emission*=PTTextures[NonUniformResourceIndex(base+5)].SampleLevel(PTLinearWrap,hit.uv,0).rgb;
     if(!all(isfinite(s.emission))||any(s.emission<0)){s.emission=0;s.decodeFault=13;return s;}
-    // Only primary surfaces require the specialized raster BRDF contract.
-    // Secondary hits use the reviewed common native material approximation.
+    // Full PT converts reviewed opaque primary encodings to its common closure;
+    // unknown encodings retain an explicit diagnostic rejection.
     if(!PTMaterialScatteringSupported(packed,flags.y,primary)){s.decodeFault=12;return s;}
     float3 color=asfloat(uint3(m.words[13],m.words[14],m.words[15]))*
         PTTextures[NonUniformResourceIndex(base)].SampleLevel(PTLinearWrap,hit.uv,0).rgb;
