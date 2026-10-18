@@ -62,7 +62,7 @@ static void RRDiffuseDrawFault(RRDiffuseReplay* c,const char* reason,int first,i
 }
 #include "rr_diffuse_resize.h"
 static void RRDiffusePrepare(void* callback,void* table) noexcept {
-    if(control_rr::RRGBufferGuideMode) return;
+    if(control_rr::RRGBufferGuideMode&&!control_rr::RRTexturedCharacterGuides) return;
     // No replay preparation, worker recording, target clears or material scans while FULL RR is off.
     if(!control_rr::RRUserRuntimeWorkRequested()) return;
     RRAlbedoLastError error;
@@ -121,9 +121,14 @@ static void RRDiffusePrepare(void* callback,void* table) noexcept {
         std::uintptr_t source=0;memcpy(&source,c->replay.manager.data()+0x30,sizeof(source));
         size_t kept=0;UINT targets=0;
         for(size_t i=0;i<c->replay.batches.size();++i) {
+            // Restrict this candidate to native Character/Hair techniques. Other
+            // materials keep the approved GBuffer guides.
+            if(control_rr::RRTexturedCharacterGuides &&
+               c->replay.familyKinds[i]!=2 && c->replay.familyKinds[i]!=5) continue;
             control_rr_albedo::OpaqueBatch original{};RRAlbedoShader::Result result{};
             if(!RRAlbedoRead(source+size_t(c->replay.sourceIndices[i])*sizeof(original),&original,sizeof(original)) ||
                !shaders.ValidatePair(original.shader,c->replay.batches[i].shader,result,&reason) ||
+               (control_rr::RRTexturedCharacterGuides && result.targetCount!=1) ||
                result.targetCount<1 || result.targetCount>2 || (targets && targets!=result.targetCount)) continue;
             targets=result.targetCount;c->replay.batches[kept]=c->replay.batches[i];
             c->replay.sourceIndices[kept]=c->replay.sourceIndices[i];c->replay.familyKinds[kept]=c->replay.familyKinds[i];++kept;
@@ -196,7 +201,7 @@ static void RRDiffusePrepare(void* callback,void* table) noexcept {
             if(!c->targets[i].nativeTexture && !RRAlbedoNativeCreate(&rrAlbedoAPI,c->width,c->height,&c->targets[i],&reason,&fault)) {RRDiffuseStop("target_creation_failed");return;}
             RRGuideInputSnapshot deviceCheck=context;deviceCheck.gbuffer1.resource=c->targets[i].resource;deviceCheck.gbuffer2.resource=c->targets[i].resource;
             if(!RRGuideResourcesShareDevice(&deviceCheck,nullptr,nullptr)) {RRDiffuseStop("target_device_mismatch");return;}
-            if(!RRAlbedoNativePrepareClear(&rrAlbedoAPI,&c->targets[i],&fault)) {RRDiffuseStop("target_clear_failed");return;}
+            if(!RRAlbedoNativePrepareClear(&rrAlbedoAPI,&c->targets[i],&fault,control_rr::RRTexturedCharacterGuides)) {RRDiffuseStop("target_clear_failed");return;}
         }
         if(characterBatches && control_rr::RRUserSkinResponsivity()){
             if(!c->characterTarget.nativeTexture && !RRAlbedoNativeCreate(&rrAlbedoAPI,c->width,c->height,&c->characterTarget,&reason,&fault)){

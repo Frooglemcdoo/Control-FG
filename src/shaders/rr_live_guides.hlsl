@@ -1,12 +1,14 @@
 // r21p: full-frame Control GBuffer -> RR guide conversion, matching the
 // guide architecture recovered from the supplied RenoDX RR addon.
-// One deterministic pass covers every material pixel; no material-family replay.
+// Character/hair can override diffuse with the current native albedo replay.
 #include "ControlPrimaryGuideDecode.hlsli"
+#include "rr_character_albedo.hlsli"
 
 Texture2D<float4> GBuffer1 : register(t0);
 Texture2D<float4> GBuffer2 : register(t1);
 StructuredBuffer<uint2> MaterialDataPart1 : register(t2);
 Texture2D<float4> EnvBRDF : register(t3);
+Texture2D<float4> TexturedCharacterAlbedo : register(t4);
 SamplerState LinearClamp : register(s0);
 
 RWTexture2D<float4> NormalRoughness : register(u0);
@@ -15,7 +17,7 @@ RWTexture2D<float4> SpecularGuide : register(u2);
 
 cbuffer GuideConstants : register(b0) {
     uint InvertSmoothness; // Control: 1 => roughness = 1 - GBuffer1.B
-    uint GuideFlags;       // bit0 material table/GBuffer2, bit1 EnvBRDF
+    uint GuideFlags;       // bit0 material table/GBuffer2, bit1 EnvBRDF, bit2 current albedo replay
     uint Width;
     uint Height;
 };
@@ -65,8 +67,16 @@ void GenerateLiveGuides(uint3 tid : SV_DispatchThreadID) {
         }
     }
 
-    // The supplied reference addon binds this stable per-material value as its
-    // DLSS diffuse-albedo guide. It is intentionally not a replayed texture.
-    DiffuseGuide[tid.xy] = float4(materialGuide, 1.0f);
+    // The packed material value is F0, not textured diffuse reflectance.
+    // Use the selected native albedo technique only where it wrote valid RGB.
+    // The replay clears RGB to -1, preserving valid black and avoiding any
+    // assumption that the native shader's alpha channel is a coverage mask.
+    float3 diffuseGuide = materialGuide;
+    if ((GuideFlags & 4u) != 0u) {
+        const float3 albedo = TexturedCharacterAlbedo.Load(int3(tid.xy, 0)).rgb;
+        if (ControlCharacterAlbedoValid(albedo.r, albedo.g, albedo.b))
+            diffuseGuide = albedo;
+    }
+    DiffuseGuide[tid.xy] = float4(diffuseGuide, 1.0f);
     SpecularGuide[tid.xy] = float4(specularGuide, 1.0f);
 }

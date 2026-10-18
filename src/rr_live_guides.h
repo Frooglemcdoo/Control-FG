@@ -6,10 +6,12 @@
 // Owned per-frame candidate textures. No readback/upload loop, no RR tagging.
 // Included after rr_albedo_capture.h so exact native Part1 readers are available.
 #include "rr_live_capture.h"
+#include "rr_diffuse_copy.h"
 struct RRLiveSlot {
     ID3D12DescriptorHeap* heap=nullptr;
     ID3D12Resource* normal=nullptr;ID3D12Resource* specular=nullptr;
     ID3D12Resource* diffuse=nullptr;
+    ID3D12Resource* texturedAlbedo=nullptr;
     bool diffuseValid=false;
     CameraSnapshot camera{};
     ID3D12Resource* sources[4]{};
@@ -84,12 +86,12 @@ static DWORD WINAPI RRLivePrepare(void* context) noexcept {
     if(SUCCEEDED(hr)&&!(floatSupport.Support2&D3D12_FORMAT_SUPPORT2_UAV_TYPED_STORE))hr=E_NOTIMPL;
     if(SUCCEEDED(hr)&&!c->root){
         // r21t: match the supplied RenoDX RRG root contract exactly:
-        // [0] = four b0 constants, [1] = one descriptor table {t0..t3,u0..u2}.
+        // [0] = four b0 constants, [1] = one descriptor table {t0..t4,u0..u2}.
         // In particular, MaterialDataPart1 is a bounded StructuredBuffer SRV at t2
         // instead of an unbounded root GPU VA.
         D3D12_DESCRIPTOR_RANGE ranges[2]{};
-        ranges[0].RangeType=D3D12_DESCRIPTOR_RANGE_TYPE_SRV;ranges[0].NumDescriptors=4;ranges[0].BaseShaderRegister=0;ranges[0].OffsetInDescriptorsFromTableStart=0;
-        ranges[1].RangeType=D3D12_DESCRIPTOR_RANGE_TYPE_UAV;ranges[1].NumDescriptors=3;ranges[1].BaseShaderRegister=0;ranges[1].OffsetInDescriptorsFromTableStart=4;
+        ranges[0].RangeType=D3D12_DESCRIPTOR_RANGE_TYPE_SRV;ranges[0].NumDescriptors=5;ranges[0].BaseShaderRegister=0;ranges[0].OffsetInDescriptorsFromTableStart=0;
+        ranges[1].RangeType=D3D12_DESCRIPTOR_RANGE_TYPE_UAV;ranges[1].NumDescriptors=3;ranges[1].BaseShaderRegister=0;ranges[1].OffsetInDescriptorsFromTableStart=5;
         D3D12_ROOT_PARAMETER params[2]{};
         params[0].ParameterType=D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;params[0].Constants.Num32BitValues=4;params[0].Constants.ShaderRegister=0;
         params[1].ParameterType=D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;params[1].DescriptorTable={2,ranges};
@@ -112,11 +114,12 @@ static DWORD WINAPI RRLivePrepare(void* context) noexcept {
     }
     if(SUCCEEDED(hr)&&RRLiveAllFree(c)){
         for(auto& s:c->slots){
-            RRLiveReleaseSources(s);RRGuideRelease(s.normal);RRGuideRelease(s.specular);RRGuideRelease(s.diffuse);RRGuideRelease(s.heap);
+            RRLiveReleaseSources(s);RRGuideRelease(s.normal);RRGuideRelease(s.specular);RRGuideRelease(s.diffuse);RRGuideRelease(s.texturedAlbedo);RRGuideRelease(s.heap);
             hr=RRLiveMakeTexture(c,&s.normal);if(SUCCEEDED(hr))hr=RRLiveMakeTexture(c,&s.diffuse);if(SUCCEEDED(hr))hr=RRLiveMakeTexture(c,&s.specular);
-            D3D12_DESCRIPTOR_HEAP_DESC hd{};hd.Type=D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;hd.NumDescriptors=7;hd.Flags=D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+            if(SUCCEEDED(hr))hr=RRLiveMakeTexture(c,&s.texturedAlbedo);
+            D3D12_DESCRIPTOR_HEAP_DESC hd{};hd.Type=D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;hd.NumDescriptors=8;hd.Flags=D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
             if(SUCCEEDED(hr))hr=c->device->CreateDescriptorHeap(&hd,IID_PPV_ARGS(&s.heap));if(FAILED(hr))break;
-            auto handle=s.heap->GetCPUDescriptorHandleForHeapStart();handle.ptr+=SIZE_T(c->increment)*4;
+            auto handle=s.heap->GetCPUDescriptorHandleForHeapStart();handle.ptr+=SIZE_T(c->increment)*5;
             D3D12_UNORDERED_ACCESS_VIEW_DESC ud{};ud.Format=DXGI_FORMAT_R16G16B16A16_FLOAT;ud.ViewDimension=D3D12_UAV_DIMENSION_TEXTURE2D;
             c->device->CreateUnorderedAccessView(s.normal,nullptr,&ud,handle);handle.ptr+=c->increment;
             c->device->CreateUnorderedAccessView(s.diffuse,nullptr,&ud,handle);handle.ptr+=c->increment;
@@ -248,11 +251,26 @@ static void RRLiveBeforeImpl(ID3D12GraphicsCommandList* list,const control_rr::L
         D3D12_SHADER_RESOURCE_VIEW_DESC envSRV{};envSRV.Format=RRGuideEnvViewFormat(env.desc.Format);
         envSRV.ViewDimension=D3D12_SRV_DIMENSION_TEXTURE2D;envSRV.Shader4ComponentMapping=D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
         envSRV.Texture2D.MostDetailedMip=0;envSRV.Texture2D.MipLevels=env.desc.MipLevels;envSRV.Texture2D.ResourceMinLODClamp=0.0f;
-        c->device->CreateShaderResourceView(env.resource,&envSRV,handle);
+        c->device->CreateShaderResourceView(env.resource,&envSRV,handle);handle.ptr+=c->increment;
+        D3D12_SHADER_RESOURCE_VIEW_DESC albedoSRV=gbufferSRV;
+        albedoSRV.Format=DXGI_FORMAT_R16G16B16A16_FLOAT;
+        c->device->CreateShaderResourceView(s.texturedAlbedo,&albedoSRV,handle);
 
         RRLiveConstants constants{};constants.invertSmoothness=1;constants.guideFlags=3;constants.width=width;constants.height=height;
         if(!c->policy.CommandsStarted(lease)){c->policy.Abort(lease);RRLiveReleaseSources(s);__leave;}
         DWORD fault=0;const auto perf=RRPerfBegin(in,RRPerfStage::LiveGuides);
+        auto* textured=control_rr::RRTexturedCharacterGuides?RRDiffuseCurrent(&in):nullptr;
+        if(textured){
+            // Copy into this fence-protected slot; restore native RT state before
+            // compute reads the owned copy. Never sample a previous-frame replay.
+            if(!RRDiffuseCopy(&in,textured,s.texturedAlbedo,&fault)){
+                c->policy.Abort(lease);c->stopped=true;RRPerfEnd(perf);
+                Log("RR_CHARACTER_GUIDE_STOP frame=%llu reason=copy_fault fault=0x%08lX",in.engineFrame,fault);__leave;
+            }
+            constants.guideFlags|=4u;
+        }
+        if(c->recorded<4 || in.engineFrame%240ull==0)
+            Log("RR_CHARACTER_GUIDE frame=%llu replay_bound=%u source=native_character_hair_albedo fallback=material_value",in.engineFrame,unsigned(textured!=nullptr));
         if(!RRLiveRecord(c,&s,&in,&constants,&fault)){
             c->policy.Abort(lease);RRLiveReleaseSources(s);c->stopped=true;
             Log("RR_G12_LIVE_STOP reason=recording_fault fault=0x%08lX resources_retained=1 stage=guide_generation architecture=renodx_descriptor_parity",fault);__leave;
@@ -277,7 +295,7 @@ static void RRLiveBeforeImpl(ID3D12GraphicsCommandList* list,const control_rr::L
         s.diffuseValid=true;++c->guideFrames;RRPerfEnd(perf);
         c->policy.GuidesReady(lease);const auto n=++c->recorded;
         if(n<=4||(n&(n-1))==0)
-            Log("RR_G12_LIVE_DISPATCH count=%llu frame=%llu slot=%u epoch=%llu width=%u height=%u source=gbuffer1_gbuffer2_part1_envbrdf guide_arch=renodx_descriptor_parity material_binding=bounded_descriptor normal_space=view diffuse_semantic=material_value specular_semantic=native_envbrdf guide_frames=%llu reset=%d stage=guide_generation",
+            Log("RR_G12_LIVE_DISPATCH count=%llu frame=%llu slot=%u epoch=%llu width=%u height=%u source=gbuffer1_gbuffer2_part1_envbrdf guide_arch=renodx_descriptor_parity material_binding=bounded_descriptor normal_space=view diffuse_semantic=character_hair_native_albedo_with_material_fallback specular_semantic=native_envbrdf guide_frames=%llu reset=%d stage=guide_generation",
                 n,in.engineFrame,unsigned(lease.index),c->epoch,width,height,c->guideFrames,s.frameInput.reset);
     } __finally {
         if(recordingHeld)RRGuideReleaseNativeLock(before.recordingLock);

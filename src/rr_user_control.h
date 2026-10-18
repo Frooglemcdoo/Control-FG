@@ -5,8 +5,9 @@ namespace control_rr {
 // r21y production: native Control energy clamp is fixed in the public runtime.
 // The r21w ReShade reference enum/helper remains only for archived source comparison; the
 // public overlay does not expose it and the production temporal hooks do not request it.
-// RAW remains an emergency fail-closed fallback. Historical material replay stays source-only.
+// RAW remains an emergency fail-closed fallback. Character/hair diffuse replay is a scoped candidate correction.
 inline constexpr bool RRGBufferGuideMode = true;
+inline constexpr bool RRTexturedCharacterGuides = true;
 enum class RRUserStatus {Off,Waiting,Active,Stopped,Recovering,Resizing};
 enum class RRUserMode : unsigned int { Off=0, Partial=1, Full=2 };
 inline std::atomic<unsigned int> rrUserMode{static_cast<unsigned int>(RRUserMode::Off)};
