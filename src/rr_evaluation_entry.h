@@ -48,7 +48,8 @@ static unsigned int RREvaluationEntry(unsigned int branch, ID3D12GraphicsCommand
     const bool partial=rrNativeFrameEnabled&&RRNativePartialActive();
     // Compile-time retained references keep the old skin experiment available for source comparison,
     // but r20t never executes it.
-    if(false&&rrNativeFrameEnabled)RRNativeObserveSkinInputs(parameters,in.frame,"r20t_disabled",in.width,in.height);
+    if(fullWork&&branch==1&&(in.frame%240ull)==0)
+        RRNativeObserveSkinInputs(parameters,in.frame,"skin_guide_audit",in.width,in.height);
     // D1: optional, owned, same-frame distance; never reuses a prior frame.
     RRNativeGuideBindings bindings{};bool rrAttempt=false;
     ID3D12Resource* hitDistance=nullptr;bool distanceReset=false;bool clampReset=false;

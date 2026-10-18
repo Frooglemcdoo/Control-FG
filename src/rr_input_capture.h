@@ -69,8 +69,8 @@ static void RRInputCaptureBeforeEvaluation(ID3D12GraphicsCommandList* list,unsig
  __try {
   auto* c=&rrInputCapture;using Policy=control_rr::InputCapturePolicy;
   if(c->policy.phase!=Policy::Requested&&c->policy.phase!=Policy::Ready)__leave;
-  // For F, wait for the real bound distance rather than capturing fallback data.
-  if(preset==control_rr::RRPresetF&&(!distance||!status))__leave;
+  // Capture the guides actually bound to RR. Hit distance is optional for F
+  // too; waiting for it prevents capture in the production no-distance path.
   ID3D12Resource* resources[]{normal,specular,diffuse,distance,status};const unsigned count=distance&&status?5u:3u;
   RRGuideInputSnapshot native{};const char* reason=nullptr;
   if(!RRGuideReadRendererContext(&native,&reason)||native.commandList!=list||native.engineFrame!=frame)__leave;

@@ -255,7 +255,7 @@ jobs:
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-Material-Reflections-R1'
+          $out='Control-FG-RR-Skin-Guide-Diagnostic-R1'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/pt_glass_raygen.dxil "$out/pt_glass_raygen.dxil"
           Copy-Item build/pt_glass_secondary.dxbc "$out/pt_glass_secondary.dxbc"
@@ -269,29 +269,29 @@ jobs:
           Copy-Item build/pt_reflection_p2_diffuse_bridge.dxbc "$out/pt_reflection_p2_diffuse_bridge.dxbc"
           Copy-Item Collect-ControlFG-Compact-Logs.ps1 "$out/Collect-ControlFG-Compact-Logs.ps1"
           Copy-Item Collect-ControlFG-Compact-Logs.cmd "$out/Collect-ControlFG-Compact-Logs.cmd"
+          Copy-Item Collect-RR-Skin-Capture.ps1 "$out/Collect-RR-Skin-Capture.ps1"
+          Copy-Item Collect-RR-Skin-Capture.cmd "$out/Collect-RR-Skin-Capture.cmd"
           @'
-          CONTROL-FG - MATERIAL REFLECTION COVERAGE R1 (EXPERIMENTAL)
-          ==========================================================
-          Historical baseline: 3cb3d93 (G3 glossy glass + Opaque R1/R2).
-          This predates the full-scene path tracing work.
-          Close Control and back up dxgi.dll and all PT shader sidecars.
-          Copy ALL binaries beside Control_DX12.exe, replacing matching files.
-          Requires the existing Control FG installation and verified Steam DLLs.
+          CONTROL-FG - RR SKIN GUIDE DIAGNOSTIC R1
+          =======================================
+          Based on approved Material Reflections R1 (64786c5).
+          Rendering and reflection shaders are unchanged. This is an input capture
+          build, not a claimed noise fix or a new diffuse-albedo implementation.
+          Fixes F9 capture waiting forever when Model F has no optional hit distance.
+          Adds throttled read-only logging of available skin/SSS NGX resources.
+          The old skin responsiveness-mask experiment remains disabled.
 
-          Removes the opaque primary roughness cutoff of 0.92. The full decoded
-          range now reaches reflection tracing. Material roughness and reflectance
-          still control shading; matte materials should not become mirrors.
-          Preserves glossy glass, native primary sampling, retained-light clamp
-          correction, native-lighting fallback, and existing transparency handling.
-          Glass continuation still retains its existing smoothness restriction.
-          This is an opaque material coverage test, not a full PT lighting build.
-
-          F10: PT REFLECTIONS toggles added secondary lighting. Primary coverage
-          changes also apply with that toggle off; compare with the prior build
-          from a fixed camera for the coverage change. F11 diagnostics remain.
-          Check glass, metal, polished floors, rough concrete and Jesse's hair.
-          Jesse transparency noise is not claimed fixed in this build.
-          In-game appearance, performance and later native filtering need testing.
+          Close Control. Back up dxgi.dll and all PT shader sidecars, then copy
+          all included binaries beside Control_DX12.exe.
+          Enable RR Model F, frame Jesse's neck and loose hair closely, and press
+          F9 once. Remain in gameplay for several seconds to complete the export.
+          Capture the same view as a screenshot. Do not switch resolution or RR
+          while capture is pending. Up to four captures are allowed per launch.
+          Exit the game, then run Collect-RR-Skin-Capture.cmd.
+          Send the resulting ZIP, screenshot and the usual compact logs.
+          The ZIP contains only the latest completed RR guide capture.
+          Capture data is written beneath LOCALAPPDATA/ControlFGProbe/rr-input-c1-*
+          No new capture folder means export did not complete; send compact logs.
           '@ | Set-Content "$out/README.txt" -Encoding ASCII
           Compress-Archive -Path "$out/*" -DestinationPath "$out.zip" -Force
           (Get-FileHash "$out.zip" -Algorithm SHA256).Hash | Set-Content "$out.sha256" -Encoding ASCII
@@ -299,10 +299,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-Material-Reflections-R1
+          name: Control-FG-RR-Skin-Guide-Diagnostic-R1
           path: |
-            Control-FG-Material-Reflections-R1.zip
-            Control-FG-Material-Reflections-R1.sha256
+            Control-FG-RR-Skin-Guide-Diagnostic-R1.zip
+            Control-FG-RR-Skin-Guide-Diagnostic-R1.sha256
             build/exports.txt
             build/imports.txt
             build/pt_reflection_p1.dxil
