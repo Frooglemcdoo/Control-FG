@@ -40,12 +40,12 @@ int main(){
   ctx->CSSetShader(shader.Get(),nullptr,0);ctx->CSSetShaderResources(0,5,views);ctx->CSSetConstantBuffers(0,2,buffers);ctx->CSSetSamplers(6,1,&samp);ctx->CSSetSamplers(11,1,&samp);ctx->CSSetUnorderedAccessViews(0,1,&target,nullptr);ctx->Dispatch(4,4,1);
   ID3D11UnorderedAccessView* nullUav=nullptr;ctx->CSSetUnorderedAccessViews(0,1,&nullUav,nullptr);ctx->CopyResource(read.Get(),output.Get());D3D11_MAPPED_SUBRESOURCE map{};hr(ctx->Map(read.Get(),0,D3D11_MAP_READ,0,&map));Pixel p{};std::memcpy(&p,static_cast<const char*>(map.pData)+16*map.RowPitch+16*sizeof(Pixel),sizeof(p));ctx->Unmap(read.Get(),0);return p.x;
  };
- auto near=[](float a,float b){return std::isfinite(a)&&std::abs(a-b)<0.0001f;};
- check(near(run(1.04f,0,10,0,false),1.014f),"static 35 percent blend");
- check(near(run(1.04f,0,10,1,false),1.0f),"camera cut rejects history");
- check(near(run(1.04f,0.25f,10,0,false),1.0f),"eight-pixel motion rejects history");
- check(near(run(1.04f,0,20,0,false),1.0f),"depth mismatch rejects history");
- check(near(run(100,0,10,0,false),1.0175f),"stale bright history bounded");
- check(near(run(1,0,10,0,true),0.87f),"stationary stochastic error reduced");
+ auto closeEnough=[](float a,float b){return std::isfinite(a)&&std::abs(a-b)<0.0001f;};
+ check(closeEnough(run(1.04f,0,10,0,false),1.014f),"static 35 percent blend");
+ check(closeEnough(run(1.04f,0,10,1,false),1.0f),"camera cut rejects history");
+ check(closeEnough(run(1.04f,0.25f,10,0,false),1.0f),"eight-pixel motion rejects history");
+ check(closeEnough(run(1.04f,0,20,0,false),1.0f),"depth mismatch rejects history");
+ check(closeEnough(run(100,0,10,0,false),1.0175f),"stale bright history bounded");
+ check(closeEnough(run(1,0,10,0,true),0.87f),"stationary stochastic error reduced");
  std::puts("PASS R16 production GPU: static stabilization, camera cuts, motion/depth rejection, stale-light clamp");
 }
