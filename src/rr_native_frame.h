@@ -43,7 +43,7 @@ using RRNativeGIReleaseFn=void (*)(void*);
 static RRNativeOptionFn rrNativeOptionOriginal=nullptr;
 static RRNativeGIReleaseFn rrNativeGIReleaseOriginal=nullptr;
 static RRAlbedoCallPatch rrNativeReflectionOptionPatch{},rrNativeGIRadiusOptionPatch{},rrNativeGIBypassOptionPatch{};
-static RRAlbedoCallPatch rrNativeGIReleasePatch{};
+static RRAlbedoCallPatch rrNativeGIReleasePatch{},rrNativeGIFilterPatch{};
 static RRAlbedoCallPatch rrNativeContactShadowFilterPatch{};
 static RRAlbedoCallPatch rrNativeBroadDiffuseFilterPatchA{},rrNativeBroadDiffuseFilterPatchB{};
 static RRNativeJitterOptionPatch rrNativeJitterOptionPatch{};
@@ -563,6 +563,35 @@ static void RRNativeHookDispatch(void* state,const void* groups) {
    static_cast<unsigned long long>(scope->frame.frame));
  SetLastError(saved);
 }
+// R15: suppress BOTH diffuse history blends only inside the main GI filter.
+// Preserve native current-frame firefly clamping, spatial passes and ownership.
+// The TLS provider lease restores the exact prior value even on native unwind.
+static void RRNativeHookGIFilter(void* color,void* history,unsigned passes) {
+ const bool full=rrNativeFrameEnabled&&rrNativeFrame.Selected()&&!rrNativeFrame.Stopped()&&!RRNativePartialActive();
+ if(!full){rrNativeDiffuseFilterOriginal(color,history,passes);return;}
+ const DWORD saved=GetLastError();
+ const bool correct=reinterpret_cast<std::uintptr_t>(history)==reinterpret_cast<std::uintptr_t>(verifiedRenderer)+0x90eac8;
+ control_rr_native_clamp::Lease lease{};
+ const bool armed=correct&&(rrNativeRTFrame.effects&control_rr::RTDiffuseGI)&&rrNativeClampApi.Arm(lease);
+ if(!armed){
+  rrNativeFrame.Fail("gi_current_frame_scope_rejected");
+  Log("RR_GI_CURRENT_FRAME_R15 success=0 reason=scope_rejected native_fallback=1");
+  SetLastError(saved);rrNativeDiffuseFilterOriginal(color,history,passes);return;
+ }
+ bool restored=false;
+ SetLastError(saved);
+ __try {
+  rrNativeDiffuseFilterOriginal(color,history,passes);
+ } __finally {
+  const DWORD nativeError=GetLastError();
+  restored=rrNativeClampApi.Restore(lease);
+  if(!restored)rrNativeFrame.Fail("gi_camera_cut_restore");
+  if(!restored||rrNativeFrame.Reset()||rrNativeRTFrame.frame%240==0)
+   Log("RR_GI_CURRENT_FRAME_R15 frame=%llu success=%u native_spatial_passes=%u camera_cut_original=%u camera_cut_forced=1 restore=%u",
+    static_cast<unsigned long long>(rrNativeRTFrame.frame),unsigned(restored),passes,lease.original,unsigned(restored));
+  SetLastError(nativeError);
+ }
+}
 static void RRNativeHookContactShadowFilter(void* color,void* history,void* auxiliary,
  bool temporal,int spatialSize,int spatialStep) {
  if(!rrNativeFrameEnabled||!rrNativeContactShadowFilterOriginal){
@@ -691,6 +720,7 @@ static bool RRNativeInstallFrame(HMODULE renderer,HMODULE d3d) noexcept {
   !RRAlbedoPrepareCallPatch(base+0x12cd45,reinterpret_cast<void*>(rrNativeOptionOriginal),reinterpret_cast<void*>(&RRNativeGIBypassOption),&rrNativeGIBypassOptionPatch)||
   !RRAlbedoPrepareCallPatch(base+0x12b8d7,reinterpret_cast<void*>(rrNativeFilterOriginal),reinterpret_cast<void*>(&RRNativeHookFilter),&rrNativeFilterPatch)||
   !RRAlbedoPrepareCallPatch(base+0x12cd55,reinterpret_cast<void*>(rrNativeGIReleaseOriginal),reinterpret_cast<void*>(&RRNativeHookGIRelease),&rrNativeGIReleasePatch)||
+  !RRAlbedoPrepareCallPatch(base+0x12cd96,reinterpret_cast<void*>(rrNativeDiffuseFilterOriginal),reinterpret_cast<void*>(&RRNativeHookGIFilter),&rrNativeGIFilterPatch)||
   !RRAlbedoPrepareCallPatch(base+0x23fb55,reinterpret_cast<void*>(rrNativeContactShadowFilterOriginal),reinterpret_cast<void*>(&RRNativeHookContactShadowFilter),&rrNativeContactShadowFilterPatch)||
   !RRAlbedoPrepareCallPatch(base+0x2489a4,reinterpret_cast<void*>(rrNativeDiffuseFilterOriginal),reinterpret_cast<void*>(&RRNativeHookBroadDiffuseA),&rrNativeBroadDiffuseFilterPatchA)||
   !RRAlbedoPrepareCallPatch(base+0x24a3f2,reinterpret_cast<void*>(rrNativeDiffuseFilterOriginal),reinterpret_cast<void*>(&RRNativeHookBroadDiffuseB),&rrNativeBroadDiffuseFilterPatchB)||
@@ -700,7 +730,7 @@ static bool RRNativeInstallFrame(HMODULE renderer,HMODULE d3d) noexcept {
  // this point forward the registered option is never written TRUE by the mod.
  if(!RRNativeKeepRegisteredOptionOff()||!rrNativeJitterOptionPatch.Set(false))return false;
 
- bool temporalBind=false,reflectionOption=false,giRadiusOption=false,giBypassOption=false,filter=false,gi=false,contactShadow=false,broadA=false,broadB=false,jitter=false;
+ bool temporalBind=false,reflectionOption=false,giRadiusOption=false,giBypassOption=false,filter=false,gi=false,giFilter=false,contactShadow=false,broadA=false,broadB=false,jitter=false;
  if(rrNativeDispatchPatch.Exchange(true)&&rrNativeDispatchPatch.healthy){
   temporalBind=RRAlbedoExchangeCall(&rrNativeTemporalBindPatch,true);
   if(temporalBind&&rrNativeTemporalBindPatch.writeHealthy){
@@ -713,7 +743,8 @@ static bool RRNativeInstallFrame(HMODULE renderer,HMODULE d3d) noexcept {
      filter=RRAlbedoExchangeCall(&rrNativeFilterPatch,true);
      if(filter&&rrNativeFilterPatch.writeHealthy){
       gi=RRAlbedoExchangeCall(&rrNativeGIReleasePatch,true);
-      if(gi&&rrNativeGIReleasePatch.writeHealthy){
+      if(gi&&rrNativeGIReleasePatch.writeHealthy&&
+         (giFilter=RRAlbedoExchangeCall(&rrNativeGIFilterPatch,true))&&rrNativeGIFilterPatch.writeHealthy){
        contactShadow=RRAlbedoExchangeCall(&rrNativeContactShadowFilterPatch,true);
        if(contactShadow&&rrNativeContactShadowFilterPatch.writeHealthy){
         broadA=RRAlbedoExchangeCall(&rrNativeBroadDiffuseFilterPatchA,true);
@@ -725,7 +756,7 @@ static bool RRNativeInstallFrame(HMODULE renderer,HMODULE d3d) noexcept {
          rrNativeFrameEnabled=true;
          Log("RR_NATIVE_OPTION_ISOLATION ready=1 registered_option=forced_off_never_true reflection=mod_state gi_radius=mod_state gi_bypass=partial_only_r14 jitter=private_mirror partial_mode=mod_owned_option_reads_no_feature13");
          Log("RR_NATIVE_SPECULAR_CLAMP_READY ready=1 target_shader_crc=0x600347E7 camera_cut_provider=name_resolved_per_filter bind_site=0x16744 dispatch_site=0x16786 temporal_history=forced_zero current_frame_energy_clamp=CS3_default_60 restore=verified_each_dispatch reshade_required=0");
-         Log("RR_FRAME_HOOKS_READY native_feature=13 early_mode=1 temporal_signal=CS3_integrated_adjustable raw_copy=off_or_fallback public_reference_ui=0 reflection_geometry_capture=D1_F_only hit_distance_runtime=D1_optional specular_mvec_runtime=0 guide_stats_readback=0 zero_spatial=1 preserve_brdf=1 native_gi_filter=preserved_r14 contact_shadow_denoiser=temporal_off_spatial_zero broad_diffuse_denoiser=temporal_and_spatial_bypassed full_rt_settings=1 option_isolation=1");
+         Log("RR_FRAME_HOOKS_READY native_feature=13 early_mode=1 temporal_signal=CS3_integrated_adjustable raw_copy=off_or_fallback public_reference_ui=0 reflection_geometry_capture=D1_F_only hit_distance_runtime=D1_optional specular_mvec_runtime=0 guide_stats_readback=0 zero_spatial=1 preserve_brdf=1 native_gi_filter=current_frame_spatial_r15 contact_shadow_denoiser=temporal_off_spatial_zero broad_diffuse_denoiser=temporal_and_spatial_bypassed full_rt_settings=1 option_isolation=1");
          return true;
         }
        }
@@ -744,6 +775,7 @@ static bool RRNativeInstallFrame(HMODULE renderer,HMODULE d3d) noexcept {
  if(broadB)RRAlbedoExchangeCall(&rrNativeBroadDiffuseFilterPatchB,false);
  if(broadA)RRAlbedoExchangeCall(&rrNativeBroadDiffuseFilterPatchA,false);
  if(contactShadow)RRAlbedoExchangeCall(&rrNativeContactShadowFilterPatch,false);
+ if(giFilter)RRAlbedoExchangeCall(&rrNativeGIFilterPatch,false);
  if(gi)RRAlbedoExchangeCall(&rrNativeGIReleasePatch,false);
  if(filter)RRAlbedoExchangeCall(&rrNativeFilterPatch,false);
  if(temporalBind)RRAlbedoExchangeCall(&rrNativeTemporalBindPatch,false);
