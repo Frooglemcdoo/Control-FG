@@ -95,7 +95,9 @@ static void RRInputCaptureOneBeforeEvaluation(RRInputCaptureJob* c,ID3D12Graphic
   RRGuideInputSnapshot native{};const char* reason=nullptr;
   if(!RRGuideReadRendererContext(&native,&reason)||native.commandList!=list||native.engineFrame!=frame)__leave;
   RRGuideInputSnapshot gb{};
-  if(!RRGuideReadInputs(&gb,&reason)||gb.engineFrame!=frame||gb.commandList!=list)__leave;
+  if(!RRGuideReadInputs(&gb,&reason)||gb.engineFrame!=frame||gb.commandList!=list){
+   static unsigned rejects=0;if(++rejects<=4||(rejects%240)==0)Log("RR_INPUT_CAPTURE_C1_REJECT reason=gbuffer_snapshot detail=%s frame=%llu",reason?reason:"context_mismatch",frame);__leave;
+  }
   resources[nativeIndex+3]=gb.gbuffer1.resource;resources[nativeIndex+4]=gb.gbuffer2.resource;
   nativeInputs[3]=gb.gbuffer1;nativeInputs[4]=gb.gbuffer2;
   if(responsivity)resources[maskIndex]=responsivity;
@@ -158,7 +160,9 @@ static void RRInputCaptureOneBeforeEvaluation(RRInputCaptureJob* c,ID3D12Graphic
   c->count=allocatedCount;
   if(!recorded){
    if(commandsStarted){c->policy.phase=Policy::Failed;Log("RR_INPUT_CAPTURE_C1_FAILED reason=record fault=0x%08lX resources_retained=1",fault);}
-   else {for(unsigned i=0;i<count;++i)RRGuideRelease(c->sources[i]);}
+   else {for(unsigned i=0;i<count;++i)RRGuideRelease(c->sources[i]);
+    static unsigned rejects=0;if(++rejects<=4||(rejects%240)==0)Log("RR_INPUT_CAPTURE_C1_REJECT reason=guard_revalidation_or_lock frame=%llu fault=0x%08lX",frame,fault);
+   }
    __leave;
   }
   c->policy.Record(native.presentToken);rrInputCaptureRecording=c->pairIndex;

@@ -35,6 +35,8 @@ int main(){
  *reinterpret_cast<unsigned*>(wrappers[0]+0x60)=0xc0;wrappers[0][0x68]=1;assert(!RRInputCaptureFindNative(42,resources,inputs));wrappers[0][0x68]=0;
  assert(RRInputCaptureFindNative(42,resources,inputs));auto stale=current;stale.engineFrame=41;
  assert(!RRInputCaptureRecordGuarded(&job,&stale,inputs,&fault,&started));assert(!started&&records==1&&acquired==released);
+ *reinterpret_cast<unsigned*>(wrappers[1]+0x60)=D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+ assert(RRInputCaptureFindNative(42,resources,inputs));
  RRGuideInputTexture five[]{inputs[0],inputs[1],inputs[2],inputs[1],inputs[2]};
  started=false;assert(RRInputCaptureRecordGuarded(&job,&current,five,&fault,&started,5));assert(started&&acquired==released);
  started=false;busy=inputs[2].stateTracker;assert(!RRInputCaptureRecordGuarded(&job,&current,five,&fault,&started,5));assert(!started&&acquired==released);busy=nullptr;

@@ -17,7 +17,7 @@ static bool RRInputCaptureReadNative(void* texture,ID3D12Resource* expected,RRGu
   out->stateTracker=*reinterpret_cast<void**>(p+0x50);if(!out->stateTracker)out->stateTracker=p+0x40;
   out->trackedState=*reinterpret_cast<unsigned*>(static_cast<unsigned char*>(out->stateTracker)+0x20);
   // Only established read states. No split, writable, copy or guessed states.
-  if(outputUav ? out->trackedState!=0x8u : (!(out->trackedState&0x40u)||(out->trackedState&~0xe0u)))return false;
+  if(outputUav ? out->trackedState!=0x8u : (!(out->trackedState&0xc0u)||(out->trackedState&~0xe0u)))return false;
   out->desc=expected->GetDesc();
   return !(out->desc.Flags&D3D12_RESOURCE_FLAG_ALLOW_SIMULTANEOUS_ACCESS);
  } __except(EXCEPTION_EXECUTE_HANDLER){return false;}
