@@ -105,7 +105,7 @@ try {
     $zip=Join-Path $OutputDirectory ('Control-FG-Compact-Logs-'+(Get-Date -Format 'yyyyMMdd-HHmmss')+'-'+$suffix+'.zip')
     try {
         [void][IO.Directory]::CreateDirectory($script:stage)
-        # Preserve glass records before compacting startup/middle log sections.
+        # Preserve glass and hair activation/capture records before trimming log middles.
         foreach ($file in $logs) {
             $capture=Join-Path ([IO.Path]::GetTempPath()) ('ControlFG-Glass-'+$suffix+'-'+$file.BaseName+'.log')
             $reader=$null; $writer=$null
@@ -114,7 +114,7 @@ try {
                 $writer=New-Object IO.StreamWriter($capture,$false,[Text.Encoding]::UTF8)
                 [long]$captureChars=0
                 while ($null -ne ($line=$reader.ReadLine())) {
-                    if ($line.Contains('PT_GLASS_')) {
+                    if (($line.Contains('PT_GLASS_') -or $line.Contains('RR_HAIR_') -or $line.Contains('RR_INPUT_CAPTURE_C1_'))) {
                         $captureChars += $line.Length+2
                         if ($captureChars -gt 10MB) { throw 'Glass capture exceeds diagnostic budget.' }
                         $writer.WriteLine($line)

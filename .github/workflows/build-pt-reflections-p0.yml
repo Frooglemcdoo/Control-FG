@@ -269,7 +269,7 @@ jobs:
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-RR-Hair-Opacity-R3'
+          $out='Control-FG-RR-Hair-Coverage-R4'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/pt_glass_raygen.dxil "$out/pt_glass_raygen.dxil"
           Copy-Item build/pt_glass_secondary.dxbc "$out/pt_glass_secondary.dxbc"
@@ -286,15 +286,16 @@ jobs:
           Copy-Item Collect-RR-Skin-Capture.ps1 "$out/Collect-RR-Skin-Capture.ps1"
           Copy-Item Collect-RR-Skin-Capture.cmd "$out/Collect-RR-Skin-Capture.cmd"
           @'
-          CONTROL-FG - RR HAIR OPACITY R3 (TEST FIX)
+          CONTROL-FG - RR HAIR COVERAGE R4 (TEST CANDIDATE)
           ========================================
-          Skin replay and RR guide shader are unchanged from Character Albedo R1.
-          Hair replay reads the captured native hair opacity source: texture slot
-          26 alpha times material tint alpha. Fully transparent fragments no longer
-          overwrite the RR albedo replay. Nonzero-opacity strands retain the prior
-          albedo result; this does not reproduce the full native coverage algorithm.
-          Only the exact captured hair shader pair is replaced. Others fall back.
-          Reflections, skin, normal/specular guides and RR settings are unchanged.
+          Hair opacity now weights the diffuse guide for partial strands, using
+          slot 26 alpha times tint alpha. Fully transparent fragments are rejected.
+          Only the exact audited hair pair writes the private alpha coverage tag.
+          Character pixels keep the approved full-strength albedo assignment.
+          This tests opacity-weighted material fallback; it is not a reproduction
+          of native stochastic/MSAA coverage and needs in-game visual validation.
+          Reflection shaders and normal/specular guides are unchanged.
+          Compact logs now retain hair activation/capture records in glass/*.log.
 
           Close Control. Install all binaries beside Control_DX12.exe.
           Test the same loose hair/neck view with RR Model F.
@@ -308,10 +309,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-RR-Hair-Opacity-R3
+          name: Control-FG-RR-Hair-Coverage-R4
           path: |
-            Control-FG-RR-Hair-Opacity-R3.zip
-            Control-FG-RR-Hair-Opacity-R3.sha256
+            Control-FG-RR-Hair-Coverage-R4.zip
+            Control-FG-RR-Hair-Coverage-R4.sha256
             build/rr_hair_opacity.asm
             build/exports.txt
             build/imports.txt

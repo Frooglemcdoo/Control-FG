@@ -73,9 +73,15 @@ void GenerateLiveGuides(uint3 tid : SV_DispatchThreadID) {
     // assumption that the native shader's alpha channel is a coverage mask.
     float3 diffuseGuide = materialGuide;
     if ((GuideFlags & 4u) != 0u) {
-        const float3 albedo = TexturedCharacterAlbedo.Load(int3(tid.xy, 0)).rgb;
+        const float4 replay = TexturedCharacterAlbedo.Load(int3(tid.xy, 0));
+        const float3 albedo = replay.rgb;
         if (ControlCharacterAlbedoValid(albedo.r, albedo.g, albedo.b))
-            diffuseGuide = albedo;
+        {
+            // Preserve the exact character assignment. Only tagged replacement
+            // hair blends with the existing material guide at partial opacity.
+            const float hairWeight = ControlHairGuideWeight(replay.a);
+            diffuseGuide = hairWeight == 1.0f ? albedo : lerp(materialGuide, albedo, hairWeight);
+        }
     }
     DiffuseGuide[tid.xy] = float4(diffuseGuide, 1.0f);
     SpecularGuide[tid.xy] = float4(specularGuide, 1.0f);

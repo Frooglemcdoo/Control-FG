@@ -18,5 +18,8 @@ float4 HairAlbedo(Input input):SV_Target0 {
  const float opacity=g_sMaterialTextureArray[baseIndex+26u].Sample(g_sMaterialArrayGlobal,input.uv).w*tint.w;
  // Only true holes are rejected. No cutoff is introduced for visible strands.
  if (!(opacity>0.0f)) discard;
- return g_sMaterialTextureArray[baseIndex].Sample(g_sMaterialArrayGlobal,input.uv)*tint;
+ // Private replay metadata: only the exact audited hair replacement writes
+ // alpha in [-3,-2]. Native character alpha is not interpreted as coverage.
+ const float3 color=g_sMaterialTextureArray[baseIndex].Sample(g_sMaterialArrayGlobal,input.uv).rgb*tint.rgb;
+ return float4(color,-2.0f-saturate(opacity));
 }
