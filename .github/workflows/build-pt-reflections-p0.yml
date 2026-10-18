@@ -23,6 +23,7 @@ on:
       - experiment/pt-sharper-materials
       - experiment/pt-glass-capture
       - experiment/pt-glass-integration
+      - experiment/material-reflections-restored
   workflow_dispatch:
   pull_request:
     branches:
@@ -254,7 +255,7 @@ jobs:
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-PT-Opaque-R2'
+          $out='Control-FG-Material-Reflections-R1'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/pt_glass_raygen.dxil "$out/pt_glass_raygen.dxil"
           Copy-Item build/pt_glass_secondary.dxbc "$out/pt_glass_secondary.dxbc"
@@ -269,32 +270,28 @@ jobs:
           Copy-Item Collect-ControlFG-Compact-Logs.ps1 "$out/Collect-ControlFG-Compact-Logs.ps1"
           Copy-Item Collect-ControlFG-Compact-Logs.cmd "$out/Collect-ControlFG-Compact-Logs.cmd"
           @'
-          CONTROL-FG - OPAQUE REFLECTION LIGHTING R2 (EXPERIMENTAL)
-          =======================================================
-          Close Control. Back up your current dxgi.dll and PT shader sidecars.
-          Extract every file here beside Control_DX12.exe, replacing matching files.
-          Requires the existing Control FG installation and verified Steam game DLLs.
-          F10 opens the overlay. PT REFLECTIONS toggles the added lighting pass.
+          CONTROL-FG - MATERIAL REFLECTION COVERAGE R1 (EXPERIMENTAL)
+          ==========================================================
+          Historical baseline: 3cb3d93 (G3 glossy glass + Opaque R1/R2).
+          This predates the full-scene path tracing work.
+          Close Control and back up dxgi.dll and all PT shader sidecars.
+          Copy ALL binaries beside Control_DX12.exe, replacing matching files.
+          Requires the existing Control FG installation and verified Steam DLLs.
 
-          Fixes a clamp bug in the opaque PT replacement pass: bright secondary
-          specular samples previously rescaled the entire reflected RGB value,
-          dimming native diffuse, direct light and emission. R2 retains their
-          original native clamp scale and limits the new specular to the remaining
-          intensity budget. Equal specular reproduces native; black specular does
-          not amplify or dim the retained native terms.
+          Removes the opaque primary roughness cutoff of 0.92. The full decoded
+          range now reaches reflection tracing. Material roughness and reflectance
+          still control shading; matte materials should not become mirrors.
+          Preserves glossy glass, native primary sampling, retained-light clamp
+          correction, native-lighting fallback, and existing transparency handling.
+          Glass continuation still retains its existing smoothness restriction.
+          This is an opaque material coverage test, not a full PT lighting build.
 
-          G3 glossy glass remains unchanged. Added glass diffuse remains removed.
-          Primary ray sampling and the one-path storage layout are unchanged from
-          R1. The current PT toggle keeps those same rays in both views, so lost
-          primary sample count cannot explain the supplied ON/OFF difference.
-
-          Validation: 300 cases executing the shader clamp functions, including
-          a bright colored bounce that reproduced the old retained-color loss;
-          existing encoding, origin and energy checks; production Windows build.
-          The fix addresses a confirmed mathematical defect. The supplied scene
-          still needs PT OFF/ON visual verification; it is not claimed resolved.
-          Keep the camera, exposure, RR and FG settings the same when comparing.
-          Restore your backed-up binaries to roll back.
+          F10: PT REFLECTIONS toggles added secondary lighting. Primary coverage
+          changes also apply with that toggle off; compare with the prior build
+          from a fixed camera for the coverage change. F11 diagnostics remain.
+          Check glass, metal, polished floors, rough concrete and Jesse's hair.
+          Jesse transparency noise is not claimed fixed in this build.
+          In-game appearance, performance and later native filtering need testing.
           '@ | Set-Content "$out/README.txt" -Encoding ASCII
           Compress-Archive -Path "$out/*" -DestinationPath "$out.zip" -Force
           (Get-FileHash "$out.zip" -Algorithm SHA256).Hash | Set-Content "$out.sha256" -Encoding ASCII
@@ -302,10 +299,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-PT-Opaque-R2
+          name: Control-FG-Material-Reflections-R1
           path: |
-            Control-FG-PT-Opaque-R2.zip
-            Control-FG-PT-Opaque-R2.sha256
+            Control-FG-Material-Reflections-R1.zip
+            Control-FG-Material-Reflections-R1.sha256
             build/exports.txt
             build/imports.txt
             build/pt_reflection_p1.dxil

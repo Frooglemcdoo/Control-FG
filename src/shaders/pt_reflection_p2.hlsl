@@ -272,11 +272,10 @@ void reflectionRayGeneration()
     float3 primaryView,primaryWorld,normalWorld;
     float roughness;
     if(!PTPrimary(pixel,primaryView,primaryWorld,normalWorld,roughness)) return;
-    // Native Control rejects very rough primary surfaces early. P2 intentionally
-    // extends the glossy lobe so concrete/plaster can still carry a broad,
-    // low-frequency reflection/bounce signal into RR instead of disappearing.
-    const float p2MaxPrimaryRoughness=max(g_fRTMaxRayRoughness,0.92f);
-    if(roughness>p2MaxPrimaryRoughness) return;
+    // Admit the full decoded material roughness range, including matte surfaces.
+    // Roughness still controls the native primary lobe and secondary GGX lobe;
+    // it must not be used as a binary material-coverage cutoff here.
+    if(!isfinite(roughness)) return;
 
     float3 cameraWorld=PTCameraWorld();
     float3 viewToCamera=normalize(cameraWorld-primaryWorld);
