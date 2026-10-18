@@ -285,7 +285,7 @@ jobs:
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-RR-Hair-Paired-Capture-R10'
+          $out='Control-FG-RR-Hair-Coherent-Guides-R11'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/pt_glass_raygen.dxil "$out/pt_glass_raygen.dxil"
           Copy-Item build/pt_glass_secondary.dxbc "$out/pt_glass_secondary.dxbc"
@@ -302,9 +302,13 @@ jobs:
           Copy-Item Collect-RR-Skin-Capture.ps1 "$out/Collect-RR-Skin-Capture.ps1"
           Copy-Item Collect-RR-Skin-Capture.cmd "$out/Collect-RR-Skin-Capture.cmd"
           @'
-          CONTROL-FG - HAIR PAIRED CAPTURE R10 (DIAGNOSTIC)
+          CONTROL-FG - HAIR COHERENT GUIDES R11 (TEST BUILD)
           ==============================================
-          Rendering shaders are identical to R9. Skin and glass are unchanged.
+          Hair normals use a coverage-weighted coherent 5x5 patch direction.
+          This avoids changing the entire neighborhood when the center flips.
+          Sparse/conflicting neighborhoods retain the previous fallback.
+          Skin, hair color/opacity, roughness and glass shaders are unchanged.
+          The paired capture remains available in the R10 diagnostic format.
           F9 now prepares two slots and captures successive RR evaluations.
           Captures input color/depth/motion, raw GBuffer1/2, replay albedo,
           RR guides, hair responsivity and post-RR output when its state is proven.
@@ -326,10 +330,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-RR-Hair-Paired-Capture-R10
+          name: Control-FG-RR-Hair-Coherent-Guides-R11
           path: |
-            Control-FG-RR-Hair-Paired-Capture-R10.zip
-            Control-FG-RR-Hair-Paired-Capture-R10.sha256
+            Control-FG-RR-Hair-Coherent-Guides-R11.zip
+            Control-FG-RR-Hair-Coherent-Guides-R11.sha256
             build/rr_hair_opacity.asm
             build/exports.txt
             build/imports.txt

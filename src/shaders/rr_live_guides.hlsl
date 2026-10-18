@@ -28,6 +28,34 @@ cbuffer GuideConstants : register(b0) {
 // radius, matching material and hemisphere gate keep silhouettes and folds.
 float3 HairNormalGuide(uint2 pixel, float3 center) {
     const uint material = ControlDecodeMaterialID(GBuffer2.Load(int3(pixel, 0)));
+    // R11: choose a shared patch direction before any center-hemisphere gate.
+    // Otherwise a stochastic center flip changes the entire accepted neighborhood.
+    // Opacity weighting suppresses weak card-edge samples; matching material and
+    // the private replay tag keep skin/background out of the estimate.
+    float3 patchSum = 0.0f.xxx;
+    float patchWeight = 0.0f;
+    uint patchCount = 0u;
+    [unroll] for (int py = -2; py <= 2; ++py) {
+        [unroll] for (int px = -2; px <= 2; ++px) {
+            const int2 q = int2(pixel) + int2(px, py);
+            if (any(q < 0) || q.x >= (int)Width || q.y >= (int)Height) continue;
+            const float4 replay = TexturedCharacterAlbedo.Load(int3(q, 0));
+            if (!ControlHairGuideTagged(replay.a) ||
+                !ControlCharacterAlbedoValid(replay.r, replay.g, replay.b)) continue;
+            if (ControlDecodeMaterialID(GBuffer2.Load(int3(q, 0))) != material) continue;
+            const float opacity = ControlHairGuideWeight(replay.a);
+            if (opacity <= 0.0f) continue;
+            const float weight = (3 - abs(px)) * (3 - abs(py)) * opacity;
+            patchSum += ControlDecodeNormalView(GBuffer1.Load(int3(q, 0))) * weight;
+            patchWeight += weight;
+            ++patchCount;
+        }
+    }
+    const float patchLength = length(patchSum);
+    // Reject unsupported or cancelling folds. Preserve R8's established fallback.
+    if (patchCount >= 3u && patchLength > 1.0e-5f &&
+        patchLength >= 0.5f * patchWeight)
+        return patchSum / patchLength;
     // R8: a center-gated bilateral filter preserves isolated flipped normals.
     // Select a local direction only when >= 2/3 of valid 3x3 hair samples
     // agree. Ties, thin unsupported pixels and real folds retain the center.

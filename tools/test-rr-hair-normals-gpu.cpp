@@ -45,6 +45,16 @@ int main(){
  g1[5*W+5]={{1.0f,1.0f,0.0f,1.0f}};
  // An identical normal from a different material must retain its direction.
  g1[5*W+10]={{1.0f,1.0f,0.0f,1.0f}};g2[5*W+10].v[3]=1.0f/255.0f;
+ // A thin patch whose 3x3 center majority is the weak, reversed card edge.
+ // Stronger 5x5 neighbors must anchor the guide without touching adjacent skin.
+ for(UINT y=26;y<=30;++y)for(UINT x=20;x<=24;++x){
+  g1[y*W+x]={{0.5f,0.5f,0.0f,0.0f}};
+  albedo[y*W+x]={{0.2f,0.1f,0.05f,-2.5f}};
+ }
+ for(UINT y=27;y<=29;++y)for(UINT x=21;x<=23;++x){
+  g1[y*W+x]={{1.0f,1.0f,0.0f,1.0f}};
+  albedo[y*W+x].v[3]=-2.01f;
+ }
  auto texture=[&](UINT slot,const std::vector<Pixel>& values){D3D11_TEXTURE2D_DESC d{};
   d.Width=W;d.Height=H;d.MipLevels=1;d.ArraySize=1;d.Format=DXGI_FORMAT_R32G32B32A32_FLOAT;d.SampleDesc.Count=1;d.Usage=D3D11_USAGE_IMMUTABLE;d.BindFlags=D3D11_BIND_SHADER_RESOURCE;
   D3D11_SUBRESOURCE_DATA init{values.data(),W*sizeof(Pixel),0};hr(device->CreateTexture2D(&d,&init,&inputs[slot]));hr(device->CreateShaderResourceView(inputs[slot].Get(),nullptr,&srvs[slot]));};
@@ -69,13 +79,14 @@ int main(){
  UINT changed=0;
  for(UINT flags : {0u,1u,3u,4u,5u,7u}){auto before=run(original.Get(),flags),after=run(candidate.Get(),flags);
   if((flags&5u)==5u){
+   check(after[0][28*W+22].v[2]<-0.9f,"weak reversed card edge overrode coherent opaque patch");
    check(before[0][5*W+5].v[2]>0.5f,"outlier fixture not reversed");
    check(after[0][5*W+5].v[2]<-0.9f,"majority failed to recover isolated reversed hair normal");
    for(UINT c=0;c<3;++c)check(std::abs(before[0][5*W+10].v[c]-after[0][5*W+10].v[c])<0.00001f,"different-material singleton changed");
   }
-  for(UINT i=0;i<N;++i){const bool hair=albedo[i].v[3]==-2.5f&&(flags&5u)==5u;
+  for(UINT i=0;i<N;++i){const bool hair=(albedo[i].v[3]>=-3.0f&&albedo[i].v[3]<=-2.0f)&&(flags&5u)==5u;
    for(UINT j=0;j<3;++j){if(!hair||j==1)check(!std::memcmp(&before[j][i],&after[j][i],sizeof(Pixel)),"untagged skin/fallback/diffuse changed");}
-   const bool tagged=albedo[i].v[3]==-2.5f&&(flags&4u)!=0u;
+   const bool tagged=(albedo[i].v[3]>=-3.0f&&albedo[i].v[3]<=-2.0f)&&(flags&4u)!=0u;
    const float hint=after[3][i].v[0];
    check(std::isfinite(hint)&&hint>=-0.75f&&hint<=0.0f,"mask range");
    check(tagged?hint<0.0f:hint==0.0f,"hair mask leaked into skin or missing guide");
