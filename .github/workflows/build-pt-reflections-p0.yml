@@ -62,6 +62,10 @@ jobs:
         run: |
           for /f "usebackq tokens=*" %%I in (`"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath`) do set "VSPATH=%%I"
           call "%VSPATH%\VC\Auxiliary\Build\vcvars64.bat"
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-rr-contact-shadow.cpp /Febuild\test-rr-contact-shadow.exe
+          if errorlevel 1 exit /b 1
+          build\test-rr-contact-shadow.exe
+          if errorlevel 1 exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-rr-character-albedo.cpp /Febuild\test-rr-character-albedo.exe
           if errorlevel 1 exit /b 1
           build\test-rr-character-albedo.exe
@@ -285,7 +289,7 @@ jobs:
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-RR-Hair-Continuous-Guides-R12'
+          $out='Control-FG-RR-Neck-Shadow-Filter-R13'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/pt_glass_raygen.dxil "$out/pt_glass_raygen.dxil"
           Copy-Item build/pt_glass_secondary.dxbc "$out/pt_glass_secondary.dxbc"
@@ -302,20 +306,18 @@ jobs:
           Copy-Item Collect-RR-Skin-Capture.ps1 "$out/Collect-RR-Skin-Capture.ps1"
           Copy-Item Collect-RR-Skin-Capture.cmd "$out/Collect-RR-Skin-Capture.cmd"
           @'
-          CONTROL-FG - HAIR CONTINUOUS GUIDES R12 (TEST BUILD)
-          ==============================================
-          R11 coherent hair directions remain exact.
-          Conflicting hair patches now transition gradually into the fallback,
-          removing the abrupt coherence-threshold switch. Sparse patches retain
-          the previous fallback. No new history buffers or wider filter radius.
-          Skin, hair color/opacity, roughness and glass shaders are unchanged.
-          The paired capture remains available in the R10 diagnostic format.
-          F9 now prepares two slots and captures successive RR evaluations.
-          Captures input color/depth/motion, raw GBuffer1/2, replay albedo,
-          RR guides, hair responsivity and post-RR output when its state is proven.
-          Metadata reports actual frame gaps, output status, jitter, motion scale,
-          reset, formats, dimensions and exact resource states.
+          CONTROL-FG - NECK CONTACT SHADOW FILTER R13 (TEST BUILD)
+          ======================================================
+          Restores native contact-shadow temporal/spatial filtering under RR.
+          Previously RR forced temporal off, spatial size zero, and step one.
+          Uses Control's configured native arguments without overriding quality.
+          Confirmed R12 hair shaders, skin materials and glass are unchanged.
+          GI/AO/sun-shadow and reflection filtering policies are unchanged.
+          Test with the corrected RT High settings and RR Model F.
+          Compare neck noise while rotating the camera and after stopping.
+          No F9 capture is needed for the initial visual comparison.
 
+          Optional paired capture (retains the R10 diagnostic format):
           Close Control. Install all binaries beside Control_DX12.exe.
           Use RR Model F and the same scene with the troublesome loose strands.
           Keep the camera still, allow Jesse's idle animation, press F9 once.
@@ -331,10 +333,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-RR-Hair-Continuous-Guides-R12
+          name: Control-FG-RR-Neck-Shadow-Filter-R13
           path: |
-            Control-FG-RR-Hair-Continuous-Guides-R12.zip
-            Control-FG-RR-Hair-Continuous-Guides-R12.sha256
+            Control-FG-RR-Neck-Shadow-Filter-R13.zip
+            Control-FG-RR-Neck-Shadow-Filter-R13.sha256
             build/rr_hair_opacity.asm
             build/exports.txt
             build/imports.txt
