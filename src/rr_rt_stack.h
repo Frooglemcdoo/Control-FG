@@ -11,14 +11,18 @@ inline bool RRSupportsRTSettings(unsigned effects) noexcept {
  // Reflection capture remains the source of specular hit distance.
  return (effects&RTReflection)!=0&&(effects&~RTKnownEffects)==0;
 }
-// Evidence for the native GI bypass is scoped to one selected frame. The exact
-// call being observed releases GI history AFTER the raw GI producer and skips
-// filterDiffuseNoise. Other RT paths continue through their native shaders.
+// GI evidence is scoped to one selected frame. Legacy bypass observes history
+// release; R14 observes the verified post-producer branch selecting native GI
+// filtering/history. Neither observation alone claims GPU completion.
 struct RRRTFrame {
  std::uint64_t frame=0;unsigned effects=0;bool selected=false,giObserved=false;
  void Begin(std::uint64_t f,unsigned e,bool rr) noexcept {frame=f;effects=e;selected=rr;giObserved=false;}
  bool ObserveGI(std::uint64_t f,bool lightingStarted,bool correctHistory,bool emptyHistory) noexcept {
   if(!selected||!(effects&RTDiffuseGI)||f!=frame||!lightingStarted||!correctHistory||!emptyHistory||giObserved)return false;
+  giObserved=true;return true;
+ }
+ bool ObserveGINativeRoute(std::uint64_t f,bool lightingStarted,bool correctOption) noexcept {
+  if(!selected||!(effects&RTDiffuseGI)||f!=frame||!lightingStarted||!correctOption||giObserved)return false;
   giObserved=true;return true;
  }
  bool Complete(std::uint64_t f,unsigned currentEffects,bool reflectionComplete) const noexcept {

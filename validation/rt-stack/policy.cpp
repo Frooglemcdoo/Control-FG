@@ -17,6 +17,14 @@ int main(){
    assert(!f.ObserveGI(8,true,true,true)&&f.Complete(8,effects,true));
   }else assert(!f.ObserveGI(8,true,true,true));
   f.Begin(9,effects,true);assert(!f.giObserved);
+  assert(!f.ObserveGINativeRoute(8,true,true));
+  assert(!f.ObserveGINativeRoute(9,false,true));
+  assert(!f.ObserveGINativeRoute(9,true,false));
+  assert(!f.giObserved);
+  assert(f.ObserveGINativeRoute(9,true,true)==bool(effects&RTDiffuseGI));
+  assert(!f.ObserveGINativeRoute(9,true,true));
+  assert(f.Complete(9,effects,true));
+  f.Begin(10,effects,false);assert(!f.ObserveGINativeRoute(10,true,true));
   f.Begin(9,effects,false);assert(!f.ObserveGI(9,true,true,true)&&!f.Complete(9,effects,true));
  }
  RRFrameCoordinator c;

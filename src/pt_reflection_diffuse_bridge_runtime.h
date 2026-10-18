@@ -1,7 +1,7 @@
 #pragma once
 
 // Routes P2 radiance for rough primary surfaces into Control's raw diffuse-GI
-// color target. Called at the reviewed DGI boundary (renderer+0x12CD55), after
+// color target. Called at the reviewed DGI boundary (R14: renderer+0x12CD45; legacy bypass: +0x12CD55), after
 // the native DGI producer and before the later filter/history branch.
 
 struct PTDiffuseGIBridgeOwner {

@@ -7,8 +7,8 @@ int main(){
  for(bool temporal:{false,true})for(int size:{-1,0,1,3,5,9,11})
  for(int step:{0,1,2,4,8}){
   const auto p=control_rr::ContactShadowFilterPolicy(full,enabled,temporal,size,step);
-  assert(!p.neutralized);
-  assert(p.temporal==temporal&&p.spatialSize==size&&p.spatialStep==step);
+  if(full&&enabled){assert(p.neutralized&&!p.temporal&&p.spatialSize==0&&p.spatialStep==1);}
+  else {assert(!p.neutralized&&p.temporal==temporal&&p.spatialSize==size&&p.spatialStep==step);}
  }
- puts("PASS R13 contact shadow filter preserves every native argument in RR/off/fallback modes");
+ puts("PASS R14 restores R12 contact-shadow policy; off/fallback preserve native arguments");
 }

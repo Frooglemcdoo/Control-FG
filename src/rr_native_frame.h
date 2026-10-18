@@ -48,7 +48,7 @@ static RRAlbedoCallPatch rrNativeContactShadowFilterPatch{};
 static RRAlbedoCallPatch rrNativeBroadDiffuseFilterPatchA{},rrNativeBroadDiffuseFilterPatchB{};
 static RRNativeJitterOptionPatch rrNativeJitterOptionPatch{};
 static std::atomic<unsigned long long> rrNativeRegisteredOptionRepairs{0};
-static std::atomic<unsigned long long> rrNativeContactShadowNativeCalls{0};
+static std::atomic<unsigned long long> rrNativeContactShadowBypasses{0};
 static std::atomic<unsigned long long> rrNativeBroadDiffuseBypassesA{0},rrNativeBroadDiffuseBypassesB{0};
 static std::atomic<unsigned long long> rrNativeClampDispatches{0},rrNativeClampFallbacks{0},rrNativeClampRestoreFailures{0};
 // r20w: a resolution change is a hard RR epoch boundary.  Do not allocate or
@@ -313,6 +313,24 @@ static void RRNativeHookGIRelease(void* history) {
  }
  SetLastError(saved);
 }
+// R14: this getter runs after the GI producer, before either native branch.
+// Return false for FULL RR so Control owns its configured GI filter/history
+// (including its zero-pass history-copy branch). Keep radius selection unchanged.
+static bool RRNativeGIBypassOption(void* option) noexcept {
+ const bool full=rrNativeFrameEnabled&&rrNativeFrame.Selected()&&!rrNativeFrame.Stopped()&&!RRNativePartialActive();
+ if(!full)return RRNativeSelectedOption(option);
+ const DWORD saved=GetLastError();
+ unsigned long long frame=0;DWORD fault=0;
+ const bool correct=reinterpret_cast<std::uintptr_t>(option)==reinterpret_cast<std::uintptr_t>(verifiedRenderer)+0x914570;
+ const bool okay=ReadEngineFrameSafe(&frame,&fault)&&rrNativeRTFrame.ObserveGINativeRoute(
+  frame,rrNativeFrame.Stage()==control_rr::RRFrameStage::Lighting,correct);
+ if(okay)PTReflectionBridgeDiffuseGI();
+ else rrNativeFrame.Fail("diffuse_gi_native_route_contract");
+ if(!okay||rrNativeFrame.Reset()||frame%240==0)
+  Log("RR_NATIVE_GI_ROUTE_R14 frame=%llu success=%u native_filter_branch=1 history_release_bypassed=1 rt_effects=0x%X",frame,unsigned(okay),rrNativeRTFrame.effects);
+ SetLastError(saved);
+ return false;
+}
 static bool RRNativeLightingReady(unsigned long long frame) noexcept {
  unsigned effects=0;
  const bool readable=RRNativeReadRTSettings(&effects);
@@ -554,18 +572,18 @@ static void RRNativeHookContactShadowFilter(void* color,void* history,void* auxi
  const bool full=rrNativeFrame.Selected()&&!rrNativeFrame.Stopped();
  const bool contact=(rrNativeRTFrame.effects&control_rr::RTContactShadow)!=0;
  const auto policy=control_rr::ContactShadowFilterPolicy(full,contact,temporal,spatialSize,spatialStep);
+ if(!policy.neutralized){
+  rrNativeContactShadowFilterOriginal(color,history,auxiliary,temporal,spatialSize,spatialStep);return;
+ }
  const DWORD saved=GetLastError();
  SetLastError(saved);
  rrNativeContactShadowFilterOriginal(color,history,auxiliary,policy.temporal,policy.spatialSize,policy.spatialStep);
  const DWORD nativeError=GetLastError();
- if(full&&contact){
-  const auto count=rrNativeContactShadowNativeCalls.fetch_add(1,std::memory_order_relaxed)+1;
-  const auto frame=rrNativeFrame.Key().frame;
-  if(count<=2||(frame&&frame%600==0))
-   Log("RR_NATIVE_CONTACT_SHADOW_R13 frame=%llu count=%llu temporal=%u spatial_size=%d spatial_step=%d native_call_preserved=1 native_filter_preserved=1 feature_rr=1",
-    static_cast<unsigned long long>(frame),count,unsigned(policy.temporal),policy.spatialSize,policy.spatialStep);
- }
-
+ const auto count=rrNativeContactShadowBypasses.fetch_add(1,std::memory_order_relaxed)+1;
+ const auto frame=rrNativeFrame.Key().frame;
+ if(count<=2||(frame&&frame%600==0))
+  Log("RR_NOISY_CONTACT_SHADOW frame=%llu count=%llu temporal_in=%u temporal_out=0 spatial_size_in=%d spatial_size_out=0 spatial_step_in=%d spatial_step_out=1 native_call_preserved=1 feature_rr=1",
+   static_cast<unsigned long long>(frame),count,unsigned(temporal),spatialSize,spatialStep);
  SetLastError(nativeError);
 }
 static void RRNativeHookBroadDiffuseCommon(unsigned site, void* color, void* history, unsigned passes) {
@@ -662,15 +680,15 @@ static bool RRNativeInstallFrame(HMODULE renderer,HMODULE d3d) noexcept {
   reinterpret_cast<void*>(rrNativeCopy.copy)!=native+0x3d190)return false;
 
  // The three option getter sites are the only reviewed render decisions which
- // need the native RR semantic: reflection spatial-pass selection, diffuse-GI
- // radius selection and diffuse-GI filter bypass. They now consult the current
+ // control reflection spatial-pass selection, diffuse-GI radius selection
+ // and GI filter routing (R14 preserves native filtering in FULL RR). They now consult the current
  // mod-owned frame selection instead of Control's registered option object.
  if(!rrNativeResetPatch.Prepare(base+0x11b697,reinterpret_cast<void**>(base+0x5df758),reinterpret_cast<void*>(rrNativeResetOriginal),reinterpret_cast<void*>(&RRNativeHookReset))||
   !rrNativeDispatchPatch.Prepare(base+0x16786,reinterpret_cast<void**>(base+0x5dfcc0),reinterpret_cast<void*>(rrNativeDispatchOriginal),reinterpret_cast<void*>(&RRNativeHookDispatch))||
   !RRAlbedoPrepareCallPatch(base+0x16744,reinterpret_cast<void*>(rrNativeTemporalBindOriginal),reinterpret_cast<void*>(&RRNativeHookTemporalBind),&rrNativeTemporalBindPatch)||
   !RRAlbedoPrepareCallPatch(base+0x12b8ad,reinterpret_cast<void*>(rrNativeOptionOriginal),reinterpret_cast<void*>(&RRNativeSelectedOption),&rrNativeReflectionOptionPatch)||
   !RRAlbedoPrepareCallPatch(base+0x12bda4,reinterpret_cast<void*>(rrNativeOptionOriginal),reinterpret_cast<void*>(&RRNativeSelectedOption),&rrNativeGIRadiusOptionPatch)||
-  !RRAlbedoPrepareCallPatch(base+0x12cd45,reinterpret_cast<void*>(rrNativeOptionOriginal),reinterpret_cast<void*>(&RRNativeSelectedOption),&rrNativeGIBypassOptionPatch)||
+  !RRAlbedoPrepareCallPatch(base+0x12cd45,reinterpret_cast<void*>(rrNativeOptionOriginal),reinterpret_cast<void*>(&RRNativeGIBypassOption),&rrNativeGIBypassOptionPatch)||
   !RRAlbedoPrepareCallPatch(base+0x12b8d7,reinterpret_cast<void*>(rrNativeFilterOriginal),reinterpret_cast<void*>(&RRNativeHookFilter),&rrNativeFilterPatch)||
   !RRAlbedoPrepareCallPatch(base+0x12cd55,reinterpret_cast<void*>(rrNativeGIReleaseOriginal),reinterpret_cast<void*>(&RRNativeHookGIRelease),&rrNativeGIReleasePatch)||
   !RRAlbedoPrepareCallPatch(base+0x23fb55,reinterpret_cast<void*>(rrNativeContactShadowFilterOriginal),reinterpret_cast<void*>(&RRNativeHookContactShadowFilter),&rrNativeContactShadowFilterPatch)||
@@ -705,9 +723,9 @@ static bool RRNativeInstallFrame(HMODULE renderer,HMODULE d3d) noexcept {
           jitter=rrNativeJitterOptionPatch.Exchange(true);
         if(jitter&&rrNativeJitterOptionPatch.healthy&&rrNativeResetPatch.Exchange(true)&&rrNativeResetPatch.healthy){
          rrNativeFrameEnabled=true;
-         Log("RR_NATIVE_OPTION_ISOLATION ready=1 registered_option=forced_off_never_true reflection=mod_state gi_radius=mod_state gi_bypass=mod_state jitter=private_mirror partial_mode=mod_owned_option_reads_no_feature13");
+         Log("RR_NATIVE_OPTION_ISOLATION ready=1 registered_option=forced_off_never_true reflection=mod_state gi_radius=mod_state gi_bypass=partial_only_r14 jitter=private_mirror partial_mode=mod_owned_option_reads_no_feature13");
          Log("RR_NATIVE_SPECULAR_CLAMP_READY ready=1 target_shader_crc=0x600347E7 camera_cut_provider=name_resolved_per_filter bind_site=0x16744 dispatch_site=0x16786 temporal_history=forced_zero current_frame_energy_clamp=CS3_default_60 restore=verified_each_dispatch reshade_required=0");
-         Log("RR_FRAME_HOOKS_READY native_feature=13 early_mode=1 temporal_signal=CS3_integrated_adjustable raw_copy=off_or_fallback public_reference_ui=0 reflection_geometry_capture=D1_F_only hit_distance_runtime=D1_optional specular_mvec_runtime=0 guide_stats_readback=0 zero_spatial=1 preserve_brdf=1 native_gi_bypass=1 contact_shadow_denoiser=native_preserved_r13 broad_diffuse_denoiser=temporal_and_spatial_bypassed full_rt_settings=1 option_isolation=1");
+         Log("RR_FRAME_HOOKS_READY native_feature=13 early_mode=1 temporal_signal=CS3_integrated_adjustable raw_copy=off_or_fallback public_reference_ui=0 reflection_geometry_capture=D1_F_only hit_distance_runtime=D1_optional specular_mvec_runtime=0 guide_stats_readback=0 zero_spatial=1 preserve_brdf=1 native_gi_filter=preserved_r14 contact_shadow_denoiser=temporal_off_spatial_zero broad_diffuse_denoiser=temporal_and_spatial_bypassed full_rt_settings=1 option_isolation=1");
          return true;
         }
        }
