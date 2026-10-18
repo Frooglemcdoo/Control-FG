@@ -38,6 +38,9 @@ inline std::uint32_t CRC(const void* data,std::size_t size) noexcept {
  for(std::size_t i=0;i<size;++i){crc^=p[i];for(unsigned j=0;j<8;++j)crc=(crc>>1)^(0xedb88320u&(0u-(crc&1u)));}
  return crc^0xffffffffu;
 }
+inline void STDMETHODCALLTYPE Set(ID3D12GraphicsCommandList*,ID3D12PipelineState*);
+inline void STDMETHODCALLTYPE Dispatch(ID3D12GraphicsCommandList*,UINT,UINT,UINT);
+#include "rr_gi_history.h"
 inline bool Target(const D3D12_COMPUTE_PIPELINE_STATE_DESC* desc) noexcept {
  __try {return desc&&desc->pRootSignature&&desc->CS.pShaderBytecode&&desc->CS.BytecodeLength==kRRClampNativeSize&&CRC(desc->CS.pShaderBytecode,desc->CS.BytecodeLength)==0x600347e7u;}
  __except(EXCEPTION_EXECUTE_HANDLER){return false;}
@@ -60,7 +63,7 @@ inline void Capture(ID3D12Device* device,const D3D12_COMPUTE_PIPELINE_STATE_DESC
 }
 inline HRESULT STDMETHODCALLTYPE Create(ID3D12Device* device,const D3D12_COMPUTE_PIPELINE_STATE_DESC* desc,REFIID iid,void** result) {
  const HRESULT hr=createOriginal(device,desc,iid,result);const DWORD error=GetLastError();
- if(SUCCEEDED(hr)&&result&&*result)Capture(device,desc,*result);
+ if(SUCCEEDED(hr)&&result&&*result){Capture(device,desc,*result);GICapture(device,desc,*result);}
  SetLastError(error);return hr;
 }
 inline bool InstallDevice(IUnknown* unknown) noexcept {
@@ -79,9 +82,10 @@ inline Bundle* Find(ID3D12PipelineState* native) noexcept {
  if(!native)return nullptr;for(auto& slot:bundles){auto* b=slot.load(std::memory_order_acquire);if(b&&b->native==native)return b;}return nullptr;
 }
 inline void STDMETHODCALLTYPE Set(ID3D12GraphicsCommandList* list,ID3D12PipelineState* pipeline) {
- setOriginal(list,pipeline);if(active&&active->list==list)active->observed=pipeline;
+ setOriginal(list,pipeline);GIObserveSet(list,pipeline);if(active&&active->list==list)active->observed=pipeline;
 }
 inline void STDMETHODCALLTYPE Dispatch(ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT z) {
+ if(GIDispatch(list,x,y,z))return;
  auto* request=active;
  if(!request||request->list!=list){dispatchOriginal(list,x,y,z);return;}
  ++request->count;auto* b=Find(request->observed);const int variant=Variant(request->strength);

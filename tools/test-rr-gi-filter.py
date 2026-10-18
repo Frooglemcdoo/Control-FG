@@ -18,12 +18,15 @@ unsigned provider=0,seen=99,calls=0,restores=0;
 void* verifiedRenderer=reinterpret_cast<void*>(0x10000000);
 void* seenColor=nullptr;void* seenHistory=nullptr;unsigned seenPasses=0;
 bool RRNativePartialActive(){return partial;}
-namespace control_rr_native_clamp {struct Lease {unsigned original=0;};}
-struct Api {
- bool Arm(control_rr_native_clamp::Lease& l){l.original=provider;if(!armOkay)return false;provider=1;SetLastError(900);return true;}
- bool Restore(control_rr_native_clamp::Lease& l){++restores;provider=l.original;SetLastError(901);return restoreOkay;}
-} rrNativeClampApi;
-void native(void* c,void* h,unsigned p){++calls;seen=provider;seenColor=c;seenHistory=h;seenPasses=p;
+namespace control_rr_clamp {
+struct GIScope {unsigned temporal=0,spatial=0,missed=0;};
+GIScope* giActive=nullptr;
+bool GIReady(){return armOkay;}
+}
+void release(void*){++restores;SetLastError(222);}
+auto rrNativeGIReleaseOriginal=&release;
+void native(void* c,void* h,unsigned p){++calls;seenColor=c;seenHistory=h;seenPasses=p;
+ if(control_rr_clamp::giActive){++control_rr_clamp::giActive->temporal;control_rr_clamp::giActive->spatial=p;if(!restoreOkay)control_rr_clamp::giActive->missed=1;}
  SetLastError(321);if(raiseNative)RaiseException(0xe0123456,0,0,nullptr);}
 auto rrNativeDiffuseFilterOriginal=&native;
 template<class... T> void Log(const char*,T...){SetLastError(902);}
@@ -32,24 +35,20 @@ void reset(){rrNativeFrame={};rrNativeRTFrame.Begin(240,3,true);rrNativeFrameEna
  partial=false;armOkay=restoreOkay=true;raiseNative=false;provider=0;seen=99;calls=restores=0;SetLastError(123);}
 int main(){
  void* c=reinterpret_cast<void*>(0x12340000);void* h=reinterpret_cast<void*>(0x1090eac8);
- for(unsigned original=0;original<2;++original){reset();provider=original;
-  RRNativeHookGIFilter(c,h,6);assert(calls==1&&seen==1&&provider==original&&restores==1);
-  assert(seenColor==c&&seenHistory==h&&seenPasses==6&&GetLastError()==321&&!rrNativeFrame.failed);
- }
+ reset();RRNativeHookGIFilter(c,h,6);assert(calls==1&&seenColor==c&&seenHistory==h&&seenPasses==6&&GetLastError()==321&&!rrNativeFrame.failed&&!control_rr_clamp::giActive);
  for(int mode=0;mode<4;++mode){reset();
   if(mode==0)rrNativeFrameEnabled=false;if(mode==1)rrNativeFrame.selected=false;
   if(mode==2)rrNativeFrame.stopped=true;if(mode==3)partial=true;
-  RRNativeHookGIFilter(c,h,4);assert(calls==1&&seen==0&&restores==0&&!rrNativeFrame.failed);
+  RRNativeHookGIFilter(c,h,4);assert(calls==1&&restores==0&&!rrNativeFrame.failed&&!control_rr_clamp::giActive);
  }
- for(int mode=0;mode<3;++mode){reset();void* arg=h;
-  if(mode==0)armOkay=false;if(mode==1)arg=nullptr;if(mode==2)rrNativeRTFrame.effects=1;
-  RRNativeHookGIFilter(c,arg,4);assert(calls==1&&seen==0&&restores==0&&rrNativeFrame.failed);
- }
- reset();restoreOkay=false;RRNativeHookGIFilter(c,h,6);assert(rrNativeFrame.failed&&restores==1);
+ reset();armOkay=false;RRNativeHookGIFilter(c,h,6);assert(calls==0&&restores==1&&!rrNativeFrame.failed&&GetLastError()==222);
+ reset();RRNativeHookGIFilter(c,nullptr,6);assert(calls==1&&rrNativeFrame.failed);
+ reset();restoreOkay=false;RRNativeHookGIFilter(c,h,6);assert(rrNativeFrame.failed&&!control_rr_clamp::giActive);
  reset();raiseNative=true;bool caught=false;
  __try {RRNativeHookGIFilter(c,h,6);}
  __except(GetExceptionCode()==0xe0123456?EXCEPTION_EXECUTE_HANDLER:EXCEPTION_CONTINUE_SEARCH){caught=true;}
- assert(caught&&calls==1&&seen==1&&provider==0&&restores==1);
+ assert(caught&&calls==1&&!control_rr_clamp::giActive);
+
 }
 '''.replace('HOOK',hook)
 with tempfile.TemporaryDirectory() as td:

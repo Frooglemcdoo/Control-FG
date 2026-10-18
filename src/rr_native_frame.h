@@ -563,32 +563,37 @@ static void RRNativeHookDispatch(void* state,const void* groups) {
    static_cast<unsigned long long>(scope->frame.frame));
  SetLastError(saved);
 }
-// R15: suppress BOTH diffuse history blends only inside the main GI filter.
-// Preserve native current-frame firefly clamping, spatial passes and ownership.
-// The TLS provider lease restores the exact prior value even on native unwind.
+// R16: one bounded temporal GI blend, then spatial-only passes. Shader
+// clones retain the native root/resources. Every dispatch restores its PSO.
 static void RRNativeHookGIFilter(void* color,void* history,unsigned passes) {
  const bool full=rrNativeFrameEnabled&&rrNativeFrame.Selected()&&!rrNativeFrame.Stopped()&&!RRNativePartialActive();
  if(!full){rrNativeDiffuseFilterOriginal(color,history,passes);return;}
  const DWORD saved=GetLastError();
  const bool correct=reinterpret_cast<std::uintptr_t>(history)==reinterpret_cast<std::uintptr_t>(verifiedRenderer)+0x90eac8;
- control_rr_native_clamp::Lease lease{};
- const bool armed=correct&&(rrNativeRTFrame.effects&control_rr::RTDiffuseGI)&&rrNativeClampApi.Arm(lease);
- if(!armed){
-  rrNativeFrame.Fail("gi_current_frame_scope_rejected");
-  Log("RR_GI_CURRENT_FRAME_R15 success=0 reason=scope_rejected native_fallback=1");
-  SetLastError(saved);rrNativeDiffuseFilterOriginal(color,history,passes);return;
+ if(!correct){rrNativeFrame.Fail("gi_history_identity");SetLastError(saved);rrNativeDiffuseFilterOriginal(color,history,passes);return;}
+ if(!control_rr_clamp::GIReady()){
+  // No partial substitution: retain R12's raw GI path when the complete
+  // clone set or command-list interception is unavailable.
+  rrNativeGIReleaseOriginal(history);
+  const DWORD error=GetLastError();
+  if(rrNativeFrame.Reset()||rrNativeRTFrame.frame%240==0)
+   Log("RR_GI_SHORT_HISTORY_R16 frame=%llu applied=0 fallback=raw_gi",static_cast<unsigned long long>(rrNativeRTFrame.frame));
+  SetLastError(error);return;
  }
- bool restored=false;
+ control_rr_clamp::GIScope scope{};
+ auto* previous=control_rr_clamp::giActive;
  SetLastError(saved);
  __try {
+  control_rr_clamp::giActive=&scope;
   rrNativeDiffuseFilterOriginal(color,history,passes);
  } __finally {
   const DWORD nativeError=GetLastError();
-  restored=rrNativeClampApi.Restore(lease);
-  if(!restored)rrNativeFrame.Fail("gi_camera_cut_restore");
-  if(!restored||rrNativeFrame.Reset()||rrNativeRTFrame.frame%240==0)
-   Log("RR_GI_CURRENT_FRAME_R15 frame=%llu success=%u native_spatial_passes=%u camera_cut_original=%u camera_cut_forced=1 restore=%u",
-    static_cast<unsigned long long>(rrNativeRTFrame.frame),unsigned(restored),passes,lease.original,unsigned(restored));
+  control_rr_clamp::giActive=previous;
+  const bool okay=scope.temporal==1&&scope.spatial==passes&&!scope.missed;
+  if(!okay)rrNativeFrame.Fail("gi_shader_dispatch_contract");
+  if(!okay||rrNativeFrame.Reset()||rrNativeRTFrame.frame%240==0)
+   Log("RR_GI_SHORT_HISTORY_R16 frame=%llu applied=%u temporal_dispatches=%u spatial_dispatches=%u expected_spatial=%u missed=%u max_history=0.35 motion_rejection_pixels=8 pso_restored=1",
+    static_cast<unsigned long long>(rrNativeRTFrame.frame),unsigned(okay),scope.temporal,scope.spatial,passes,scope.missed);
   SetLastError(nativeError);
  }
 }
@@ -756,7 +761,7 @@ static bool RRNativeInstallFrame(HMODULE renderer,HMODULE d3d) noexcept {
          rrNativeFrameEnabled=true;
          Log("RR_NATIVE_OPTION_ISOLATION ready=1 registered_option=forced_off_never_true reflection=mod_state gi_radius=mod_state gi_bypass=partial_only_r14 jitter=private_mirror partial_mode=mod_owned_option_reads_no_feature13");
          Log("RR_NATIVE_SPECULAR_CLAMP_READY ready=1 target_shader_crc=0x600347E7 camera_cut_provider=name_resolved_per_filter bind_site=0x16744 dispatch_site=0x16786 temporal_history=forced_zero current_frame_energy_clamp=CS3_default_60 restore=verified_each_dispatch reshade_required=0");
-         Log("RR_FRAME_HOOKS_READY native_feature=13 early_mode=1 temporal_signal=CS3_integrated_adjustable raw_copy=off_or_fallback public_reference_ui=0 reflection_geometry_capture=D1_F_only hit_distance_runtime=D1_optional specular_mvec_runtime=0 guide_stats_readback=0 zero_spatial=1 preserve_brdf=1 native_gi_filter=current_frame_spatial_r15 contact_shadow_denoiser=temporal_off_spatial_zero broad_diffuse_denoiser=temporal_and_spatial_bypassed full_rt_settings=1 option_isolation=1");
+         Log("RR_FRAME_HOOKS_READY native_feature=13 early_mode=1 temporal_signal=CS3_integrated_adjustable raw_copy=off_or_fallback public_reference_ui=0 reflection_geometry_capture=D1_F_only hit_distance_runtime=D1_optional specular_mvec_runtime=0 guide_stats_readback=0 zero_spatial=1 preserve_brdf=1 native_gi_filter=short_history_r16 contact_shadow_denoiser=temporal_off_spatial_zero broad_diffuse_denoiser=temporal_and_spatial_bypassed full_rt_settings=1 option_isolation=1");
          return true;
         }
        }
