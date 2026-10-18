@@ -13,8 +13,9 @@ Completed in this checkpoint:
 Not complete and not advertised as full PT:
 - Emissive extraction and area-light MIS are integrated, but runtime scene
   coverage and performance have not yet been verified in Control.
-- Unsupported primary materials and correspondence failures retain native
-  composition; transparent/specialized material models are not replaced.
+- Unknown primary modes and correspondence failures retain native composition;
+  transparent/decal lighting and native volumetrics are not replaced. Reviewed
+  opaque modes use the PT closure, rather than native specialized models.
 - Scene completeness still depends on the captured native TLAS and light lists.
 - The four-hit limit remains. There is no physical sky-source import.
 
@@ -83,3 +84,20 @@ checks cover all fifteen profiles, checksum rebuilding and rejection behavior.
 The production integrator fixture verifies converted modes and unknown-mode
 rejection separately. Native fog/media, glass, decal lighting, complete scene
 light import and runtime image validation remain outstanding.
+
+## Primary shading-horizon continuity
+
+Full-surface PT now regularizes valid primary raster normals toward the geometric
+normal when their shading hemisphere excludes the camera. The blend enforces a
+small positive geometric/view margin and varies continuously through grazing
+angles; ordinary normals are unchanged. All scattering evaluation and sampling
+uses this same frame. Geometric visibility and robust spawn offsets are retained.
+Non-finite/non-unit inputs and geometrically back-facing views still reject.
+This addresses an actual rejection category in R101 logs without accepting bad
+resource correspondence or switching to native light at the shading horizon.
+
+The shared CPU/HLSL tests sweep 1,000 grazing directions and verify continuity,
+valid ownership, unchanged ordinary normals, and invalid-input rejection.
+Background on shading/geometric hemisphere mismatch:
+https://pbr-book.org/3ed-2018/Materials/BSDFs . The bounded normal blend is our
+chosen approximation, not an implementation of that book's BSDF formulation.

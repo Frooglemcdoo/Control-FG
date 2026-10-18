@@ -40,6 +40,23 @@ PT_INLINE bool PTValidPrimaryShadingNormal(PTVec3 ns,PTVec3 ng,PTVec3 wo){
     return PTValid(ns)&&PTValid(ng)&&PTValid(wo)&&PTDot(ns,ns)>1-1e-4f&&PTDot(ns,ns)<1+1e-4f&&
         PTDot(ns,ng)>0&&PTDot(ns,wo)>0&&PTDot(ng,wo)>0;
 }
+// A finite raster normal can put a geometrically visible primary point behind
+// its shading hemisphere. Keep PT ownership and smoothly reduce that normal-map
+// tilt instead of swapping the pixel back to native lighting. The same corrected
+// frame is used by BRDF evaluation, sampling, PDFs and direct-light selection.
+// Invalid inputs still reject; geometry continues to control visibility/spawn.
+PT_INLINE PTVec3 PTPrimaryShadingNormal(PTVec3 ns,PTVec3 ng,PTVec3 wo){
+    if(!PTValid(ns)||!PTValid(ng)||!PTValid(wo)||
+       PTDot(ns,ns)<1-1e-4f||PTDot(ns,ns)>1+1e-4f||
+       PTDot(ng,ng)<1-1e-4f||PTDot(ng,ng)>1+1e-4f||PTDot(wo,wo)<1-1e-4f||PTDot(wo,wo)>1+1e-4f)
+        return PTV(0,0,0);
+    float gv=PTDot(ng,wo),sv=PTDot(ns,wo),sg=PTDot(ns,ng);
+    if(gv<=0)return PTV(0,0,0);
+    float blend=0,target=0.1f*gv;
+    if(sv<target)blend=(target-sv)/(gv-sv);
+    if(sg<0.1f)blend=max(blend,(0.1f-sg)/(1-sg));
+    return PTUnit(PTAdd(PTScale(ns,1-blend),PTScale(ng,blend)));
+}
 PT_INLINE bool PTPrimaryReflectionAboveGeometry(PTVec3 ng,PTVec3 wi){return PTValid(wi)&&PTDot(ng,wi)>0;}
 // Secondary mesh normals are already inverse-transpose transformed by the hit
 // shader. Orient them to the two-sided geometric frame. At silhouettes where

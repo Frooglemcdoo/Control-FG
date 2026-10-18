@@ -27,6 +27,20 @@ int main(){
     require(!PTPrimaryReflectionAboveGeometry(ng,leak),"Geometric back hemisphere clipped");
     require(PTPrimaryReflectionAboveGeometry(ng,view),"Front reflection retained");
 
+    const auto primary=PTPrimaryShadingNormal(ns,ng,view);
+    require(PTDot(primary,ns)>.99999f,"Primary detail preserved away from shading horizon");
+    const auto grazingView=PTUnit(PTV(-1,0,.1f));
+    const auto corrected=PTPrimaryShadingNormal(ns,ng,grazingView);
+    require(PTValidPrimaryShadingNormal(corrected,ng,grazingView),"Grazing raster normal keeps valid PT frame");
+    require(PTDot(PTPrimaryShadingNormal(PTV(0,0,2),ng,view),ng)==0,"Malformed primary normal still rejects");
+    require(PTDot(PTPrimaryShadingNormal(ns,ng,PTV(0,0,-1)),ng)==0,"Geometric back side still rejects");
+    auto previous=PTPrimaryShadingNormal(PTUnit(PTV(.1f,0,1)),ng,grazingView);
+    for(int i=1;i<=1000;++i){
+        const auto candidate=PTPrimaryShadingNormal(PTUnit(PTV(.1f+i*.001f,0,1)),ng,grazingView);
+        require(PTValidPrimaryShadingNormal(candidate,ng,grazingView),"Continuous grazing sweep remains owned by PT");
+        require(PTDot(previous,candidate)>.99999f,"No hard geometric-normal switch at shading horizon");
+        previous=candidate;
+    }
     const auto secondary=PTSecondaryShadingNormal(ns,ng,view);
     require(fabs(secondary.x-.6f)<1e-6f&&fabs(secondary.z-.8f)<1e-6f,"Secondary interpolation retained");
     const auto back=PTSecondaryShadingNormal(PTScale(ns,-1),ng,view);

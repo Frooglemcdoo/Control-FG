@@ -74,6 +74,9 @@ PTPathSurface PTDecodeSurface(PTSceneHit hit,RayDesc ray,bool primary){
         uint2 pixel=DispatchRaysIndex().xy;
         float3 shading=ControlNormalViewToWorld(ControlDecodeNormalView(PTGBuffer1.Load(int3(pixel,0))),
             PTSystem[6].xyz,PTSystem[7].xyz,PTSystem[8].xyz);
+#ifdef PT_PRIMARY_SURFACE_REPLACEMENT
+        shading=PTPrimaryShadingNormal(shading,hit.geometricNormal,-ray.Direction);
+#endif
         if(!PTValidPrimaryShadingNormal(shading,hit.geometricNormal,-ray.Direction)){s.decodeFault=4;return s;}
         s.normal=shading; // Spawn offset above deliberately keeps the geometric normal.
         f0=ControlDecodeMaterialF0(packed,PTGBuffer2.Load(int3(pixel,0)).g);

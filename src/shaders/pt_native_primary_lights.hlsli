@@ -31,9 +31,8 @@ float PTPrimaryRangeFade(float range,float distance) {
 // Uniform sampling includes out-of-range lights as zero-contribution samples.
 // Do not resample them without also changing the selection probability.
 // Point/spot/sun are treated as delta sources here, with native attenuation and
-// projection. Trace visibility only for authored shadow-casting sources.
-// Native fill lights intentionally bypass shadow maps; forcing a shadow ray
-// can extinguish lights authored inside fixtures. Directional lights still trace.
+// projection. castsShadow retains the authored flag as metadata; the full PT
+// adapter traces visibility for every sampled source, including native fill.
 void PTSamplePrimaryLight(float3 positionView,float choose,out PTPrimaryLightSample result) {
     result.directionView=0;result.radiance=0;result.targetView=0;result.selectionPdf=0;
     result.valid=0;result.active=0;result.directional=0;result.radius=0;result.distance=0;result.castsShadow=1;

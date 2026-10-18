@@ -7,8 +7,8 @@
 // Camera radiance transport may use distinct shading/geometric frames. Adapters
 // enabling PT_PATH_SURFACE_GEOMETRY supply the oriented geometric normal for
 // direct and continuation hemisphere rejection. Transmission and importance-mode
-// correction are not admitted. Emitters/environment are BSDF-only; NEE accepts DELTA lights only,
-// preventing duplicate non-delta light energy until emitter MIS is implemented.
+// correction are not admitted. Analytic NEE accepts delta sources. When enabled,
+// emissive-triangle NEE has separate BSDF-hit MIS; environment is BSDF-only.
 struct PTPathSurface {
     float3 position, normal, emission, spawnOrigin;
 #ifdef PT_PATH_SURFACE_GEOMETRY
