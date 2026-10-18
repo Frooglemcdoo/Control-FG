@@ -4,6 +4,7 @@
 struct RRNativeGuideBindings {
  ID3D12Resource* normal=nullptr;ID3D12Resource* diffuse=nullptr;ID3D12Resource* specular=nullptr;
  ID3D12Resource* responsivity=nullptr;
+ ID3D12Resource* rawAlbedo=nullptr; // diagnostic only, never tagged to NGX
  bool projectionValid=false;
  float worldToView[16]{},viewToClip[16]{};
 };
@@ -34,6 +35,7 @@ static bool RRNativeTakeGuides(const RREvaluationInputs& in,RRNativeGuideBinding
    }
    if(!owner->policy.TakeEvaluation({i,state.serial},state.key))__leave;
    bindings.normal=slot.normal;bindings.specular=slot.specular;bindings.diffuse=slot.diffuse;
+   bindings.rawAlbedo=slot.texturedAlbedoValid?slot.texturedAlbedo:nullptr;
    good=bindings.normal&&bindings.specular&&bindings.diffuse;break;
   }
  } __except(EXCEPTION_EXECUTE_HANDLER){good=false;}

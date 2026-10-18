@@ -24,6 +24,7 @@ on:
       - experiment/pt-glass-capture
       - experiment/pt-glass-integration
       - experiment/material-reflections-restored
+      - experiment/rr-hair-guide-audit
   workflow_dispatch:
   pull_request:
     branches:
@@ -264,7 +265,7 @@ jobs:
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-RR-Character-Albedo-R1'
+          $out='Control-FG-RR-Hair-Audit-R2'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/pt_glass_raygen.dxil "$out/pt_glass_raygen.dxil"
           Copy-Item build/pt_glass_secondary.dxbc "$out/pt_glass_secondary.dxbc"
@@ -281,29 +282,21 @@ jobs:
           Copy-Item Collect-RR-Skin-Capture.ps1 "$out/Collect-RR-Skin-Capture.ps1"
           Copy-Item Collect-RR-Skin-Capture.cmd "$out/Collect-RR-Skin-Capture.cmd"
           @'
-          CONTROL-FG - RR CHARACTER ALBEDO R1 (TEST FIX)
-          ============================================
-          Based on the approved Material Reflections R1.
-          Replaces the packed-material diffuse guide on supported character/hair
-          pixels with the native selected albedo technique's output. Single-target,
-          matching-vertex shader contracts only; current-frame joined replay only.
-          Invalid/uncovered pixels and unavailable replay retain the existing guide.
-          RGB=-1 marks uncovered pixels; alpha is not assumed to mean coverage.
-          Native texture state is restored after a copy into fence-protected slots.
-          Specular, normal, roughness and reflection shaders are unchanged.
-          Skin responsivity remains disabled. This is a candidate noise correction:
-          game-side color semantics and visual benefit still require this test.
-          Extra albedo images use approximately 253 MiB at 4K, plus replay work.
+          CONTROL-FG - RR HAIR AUDIT R2 (DIAGNOSTIC)
+          =========================================
+          Rendering is unchanged from Character Albedo R1. This is not a noise fix.
+          Adds raw RGBA albedo replay to each F9 guide capture and exports selected
+          native albedo/original shader pairs to diagnose black skin and hair edges.
+          One F9 press starts four serial snapshots, at least 30 presents apart.
+          These are timed snapshots, not consecutive frames; capture may hitch.
+          Only owned guide/replay copies are read back; native resources unchanged.
 
-          Close Control. Back up dxgi.dll and the PT shader sidecars, then copy all
-          included binaries beside Control_DX12.exe. Keep the same RR Model F and
-          clamp setting used for the diagnostic build. Revisit the loose hair over
-          Jesse's neck and check stationary and moving views.
-          Press F9 once in the affected view and remain in gameplay a few seconds.
-          Exit, run Collect-RR-Skin-Capture.cmd and the compact log collector, and
-          send both ZIPs with a short clip. The logs identify whether replay was
-          actually bound; the capture contains the resulting diffuse guide.
-          Up to four captures per launch; avoid resolution/RR changes during export.
+          Close Control and install all binaries beside Control_DX12.exe.
+          Enable RR Model F. Frame the flickering hair against Jesse's neck.
+          Press F9 ONCE; hold the view for 15 seconds without changing settings.
+          Exit and run Collect-RR-Skin-Capture.cmd. Send its ZIP and compact logs.
+          The collector includes all completed snapshots from the latest process
+          and its shader evidence. Up to four snapshots per game launch.
           '@ | Set-Content "$out/README.txt" -Encoding ASCII
           Compress-Archive -Path "$out/*" -DestinationPath "$out.zip" -Force
           (Get-FileHash "$out.zip" -Algorithm SHA256).Hash | Set-Content "$out.sha256" -Encoding ASCII
@@ -311,10 +304,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-RR-Character-Albedo-R1
+          name: Control-FG-RR-Hair-Audit-R2
           path: |
-            Control-FG-RR-Character-Albedo-R1.zip
-            Control-FG-RR-Character-Albedo-R1.sha256
+            Control-FG-RR-Hair-Audit-R2.zip
+            Control-FG-RR-Hair-Audit-R2.sha256
             build/exports.txt
             build/imports.txt
             build/pt_reflection_p1.dxil

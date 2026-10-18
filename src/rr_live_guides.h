@@ -13,6 +13,7 @@ struct RRLiveSlot {
     ID3D12Resource* diffuse=nullptr;
     ID3D12Resource* texturedAlbedo=nullptr;
     bool diffuseValid=false;
+    bool texturedAlbedoValid=false;
     CameraSnapshot camera{};
     ID3D12Resource* sources[4]{};
     unsigned long long present=0;
@@ -230,7 +231,7 @@ static void RRLiveBeforeImpl(ID3D12GraphicsCommandList* list,const control_rr::L
         control_rr::Lease lease{};
         if(!c->policy.Begin({in.engineFrame,c->epoch,width,height},lease)){RRLiveSkip(c,"slots_busy_or_duplicate_frame");__leave;}
         auto& s=c->slots[lease.index];RRLiveReleaseSources(s);
-        s.present=in.presentToken;s.frameInput=frameInput;s.diffuseValid=false;s.camera=in.camera;
+        s.present=in.presentToken;s.frameInput=frameInput;s.diffuseValid=false;s.texturedAlbedoValid=false;s.camera=in.camera;
         ID3D12Resource* inputs[4]{in.gbuffer1.resource,in.gbuffer2.resource,material,env.resource};
         for(UINT i=0;i<4;++i){inputs[i]->AddRef();s.sources[i]=inputs[i];}
 
@@ -268,6 +269,7 @@ static void RRLiveBeforeImpl(ID3D12GraphicsCommandList* list,const control_rr::L
                 Log("RR_CHARACTER_GUIDE_STOP frame=%llu reason=copy_fault fault=0x%08lX",in.engineFrame,fault);__leave;
             }
             constants.guideFlags|=4u;
+            s.texturedAlbedoValid=true;
         }
         if(c->recorded<4 || in.engineFrame%240ull==0)
             Log("RR_CHARACTER_GUIDE frame=%llu replay_bound=%u source=native_character_hair_albedo fallback=material_value",in.engineFrame,unsigned(textured!=nullptr));
