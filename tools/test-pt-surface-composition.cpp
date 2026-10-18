@@ -18,5 +18,5 @@ int main(int argc,char** argv){
         auto corrupt=original;corrupt.back()^=1;assert(!PTSurfaceComposition::Patch(corrupt.data(),corrupt.size(),profile.sha,patched)&&patched.empty());
         assert(!PTSurfaceComposition::Patch(original.data(),original.size(),"unreviewed",patched)&&patched.empty());
     }
-    std::puts("PASS all reviewed general and character surface variants: complete patch, container checksum, corruption/unknown rejection.");
+    std::puts("PASS all reviewed general, character and decal surface variants: complete patch, container checksum, corruption/unknown rejection.");
 }

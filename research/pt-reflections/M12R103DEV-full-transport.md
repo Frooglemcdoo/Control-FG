@@ -109,3 +109,18 @@ only for validated PT pixels. The RR guide no longer zeros mode-3 specular for
 PT-owned pixels now using GGX. Native fallback still follows its original rule.
 The WARP guide test covers corrected normals, converted mode-3 specular, black
 albedo, material mismatch, invalid data and PT on/off/admission transitions.
+
+## Projected decals
+
+Two further captured lighting programs now compose the PT lobes with their
+original projected decal color, opacity, clipping and emission. Their lighting
+combine packs RGB in YZW; the adapter rebases the source color and result mask
+explicitly. There are now seventeen reviewed composition profiles. The original
+emissive decal add remains after lighting selection. This does not import decals
+as independent emissive geometry or recover decal layers at secondary ray hits.
+
+Shader reflection now requires the global pixel material-texture table only
+when actually used. Decals use ordinary space-zero texture slots and global
+samplers, so an absent unused material array must not prevent their PT draw.
+Unknown or stripped reflection remains conservative. A fourth GPU fixture tests
+the YZW layout, along with explicit table-usage reflection tests.

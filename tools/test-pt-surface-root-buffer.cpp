@@ -24,19 +24,24 @@ void RunComposition(UINT mode){
     D3D12_GRAPHICS_PIPELINE_STATE_DESC requirements{};
     requirements.VS={vs->GetBufferPointer(),vs->GetBufferSize()};
     requirements.PS={ps->GetBufferPointer(),ps->GetBufferSize()};
-    assert(PTSurfaceComposition::SurfaceRootRequirements(requirements)==0x21002);
+    assert(PTSurfaceComposition::SurfaceRootRequirements(requirements)==0x1002);
     for(UINT space:{0u,1u}){
         char source[512]{};
         sprintf_s(source,"Texture2D<float4> t:register(t0);SamplerState s:register(s0,space%u);float4 main(float4 p:SV_Position):SV_Target{return t.SampleLevel(s,p.xy,0);}",space);
         ComPtr<ID3DBlob> samplerShader;
         assert(SUCCEEDED(D3DCompile(source,std::strlen(source),nullptr,nullptr,nullptr,"main","ps_5_1",D3DCOMPILE_OPTIMIZATION_LEVEL3,0,&samplerShader,&error)));
         requirements.PS={samplerShader->GetBufferPointer(),samplerShader->GetBufferSize()};
-        assert(PTSurfaceComposition::SurfaceRootRequirements(requirements)==(space?0x31002u:0x21002u));
+        assert(PTSurfaceComposition::SurfaceRootRequirements(requirements)==(space?0x11002u:0x1002u));
         // Usage in another active stage must also retain the global table.
         requirements.VS=requirements.PS;requirements.PS={ps->GetBufferPointer(),ps->GetBufferSize()};
-        assert(PTSurfaceComposition::SurfaceRootRequirements(requirements)==(space?0x31002u:0x21002u));
+        assert(PTSurfaceComposition::SurfaceRootRequirements(requirements)==(space?0x11002u:0x1002u));
         requirements.VS={vs->GetBufferPointer(),vs->GetBufferSize()};
     }
+    const char arraySource[]="Texture2D<float4> t:register(t0,space1);float4 main(float4 p:SV_Position):SV_Target{return t.Load(int3(p.xy,0));}";
+    ComPtr<ID3DBlob> arrayShader;
+    assert(SUCCEEDED(D3DCompile(arraySource,sizeof(arraySource)-1,nullptr,nullptr,nullptr,"main","ps_5_1",D3DCOMPILE_OPTIMIZATION_LEVEL3,0,&arrayShader,&error)));
+    requirements.PS={arrayShader->GetBufferPointer(),arrayShader->GetBufferSize()};
+    assert(PTSurfaceComposition::SurfaceRootRequirements(requirements)==0x21002);
     requirements.PS={"bad",3};
     assert(PTSurfaceComposition::SurfaceRootRequirements(requirements)==0x31002);
     // The fixture compiler may add redundant resource-type opcode extensions.
@@ -61,14 +66,21 @@ void RunComposition(UINT mode){
                 }
                 assert(temps&&combine);
                 const UINT rig=normalized[temps+1]++;
+                if(mode==3){
+                    normalized[combine+1]=0x001000e2u;
+                    for(UINT operand:{3u,5u,7u}){
+                        const UINT token=normalized[combine+operand];
+                        normalized[combine+operand]=(token&~0xff0u)|(((token>>4)&63u)<<6);
+                    }
+                }
                 // Synthetic native light rig, deliberately bright and different
                 // in each channel. A selection at the early combine leaks it.
                 std::vector<UINT> late={0x08000036u,0x001000f2u,rig,0x00004002u,
-                    0x40400000u,0x40a00000u,mode==2?0u:0x40e00000u,mode==2?0x40e00000u:0u};
+                    mode==3?0u:0x40400000u,mode==3?0x40400000u:0x40a00000u,mode==3?0x40a00000u:(mode==2?0u:0x40e00000u),mode>=2?0x40e00000u:0u};
                 if(mode==2){const UINT pack[]={0x05000036u,0x001000b2u,0,0x00100846u,0};late.insert(late.end(),std::begin(pack),std::end(pack));}
-                const UINT add[]={0x07000000u,mode==2?0x001000b2u:0x00100072u,0,0x00100e46u,0,0x00100e46u,rig};
+                const UINT add[]={0x07000000u,mode==3?0x001000e2u:(mode==2?0x001000b2u:0x00100072u),0,0x00100e46u,0,0x00100e46u,rig};
                 late.insert(late.end(),std::begin(add),std::end(add));
-                if(mode==2){const UINT unpack[]={0x05000036u,0x00100072u,0,0x00100346u,0};late.insert(late.end(),std::begin(unpack),std::end(unpack));}
+                if(mode>=2){const UINT unpack[]={0x05000036u,0x00100072u,0,mode==3?0x00100796u:0x00100346u,0};late.insert(late.end(),std::begin(unpack),std::end(unpack));}
                 normalized.insert(normalized.begin()+combine+9,late.begin(),late.end());
             }
             normalized[1]=static_cast<UINT>(normalized.size());part.resize(8+normalized.size()*4);PTDxbc::Put(part.data()+4,static_cast<UINT>(normalized.size()*4));std::memcpy(part.data()+8,normalized.data(),normalized.size()*4);
@@ -86,12 +98,12 @@ void RunComposition(UINT mode){
     for(UINT i=2;i<words;){const UINT op=PTDxbc::Word(code+i*4),length=(op>>24)&127;assert(length);
         if((op&2047)==104)profile.temps=i;
         if(op==0x0800002du&&PTDxbc::Word(code+(i+5)*4)>>12==0x207u&&PTDxbc::Word(code+(i+6)*4)==0&&PTDxbc::Word(code+(i+7)*4)==0)profile.load=i;
-        if(op==0x09000032u&&PTDxbc::Word(code+(i+1)*4)==0x00100072u&&PTDxbc::Word(code+(i+2)*4)==0)profile.combine=i;
+        if(op==0x09000032u&&PTDxbc::Word(code+(i+1)*4)==(mode==3?0x001000e2u:0x00100072u)&&PTDxbc::Word(code+(i+2)*4)==0)profile.combine=i;
         i+=length;
     }
     if(!profile.load||!profile.combine||!profile.temps){ComPtr<ID3DBlob> dis;D3DDisassemble(original,fixtureBytes.size(),0,nullptr,&dis);if(dis)puts(static_cast<const char*>(dis->GetBufferPointer()));}
     assert(profile.load&&profile.combine&&profile.temps);
-    if(mode){profile.finish=profile.combine+9+8+(mode==2?5:0);profile.finishMask=mode==2?11:7;}
+    if(mode){profile.finish=profile.combine+9+8+(mode==2?5:0);profile.finishMask=mode==3?14:(mode==2?11:7);profile.combineMask=mode==3?14:7;}
     std::vector<unsigned char> composed;assert(PTSurfaceComposition::PatchProfile(original,fixtureBytes.size(),&profile,composed));
     PTNativeRootFixture fixture(true);ComPtr<ID3DBlob> blob;ComPtr<ID3D12RootSignature> nativeRoot,ptRoot;
     assert(SUCCEEDED(D3D12SerializeRootSignature(&fixture.desc,D3D_ROOT_SIGNATURE_VERSION_1,&blob,&error)));
@@ -153,4 +165,4 @@ void RunComposition(UINT mode){
     readback->Unmap(0,&none);assert(SUCCEEDED(device->GetDeviceRemovedReason()));puts("PASS: patched DXBC root-buffer GPU read, 200 draws, coverage selection, row pitch, native-root restoration, and rejected consumer isolation without clearing shared PT output");
 }
 
-int main(){for(UINT mode=0;mode<3;++mode)RunComposition(mode);puts("PASS general and delayed character composition, including packed XYW and native light-rig exclusion");}
+int main(){for(UINT mode=0;mode<4;++mode)RunComposition(mode);puts("PASS general and delayed character composition, including packed XYW/YZW and native light-rig exclusion");}

@@ -13,7 +13,7 @@ using U32=std::uint32_t;
 struct Profile {const char* sha;std::array<unsigned char,16> checksum;U32 bytes,load,combine,temps,resource;std::uint64_t required;
     // Character programs add light-rig illumination after the material combine.
     // Capture material color at combine, select PT only after that final add.
-    U32 loadBinding=0,combineRegister=0,finish=0,finishMask=7;};
+    U32 loadBinding=0,combineRegister=0,finish=0,finishMask=7,combineMask=7;};
 #include "pt_surface_profiles.in.h"
 inline bool PatchProfile(const unsigned char* input,std::size_t bytes,const Profile* profile,std::vector<unsigned char>& output){
     output.clear();if(!input||bytes<32||bytes>256*1024)return false;
@@ -36,11 +36,12 @@ inline bool PatchProfile(const unsigned char* input,std::size_t bytes,const Prof
             const auto load=profile->load,combine=profile->combine,temps=profile->temps;
             const U32 finish=profile->finish?profile->finish:combine;
             if(load>=combine||finish<combine||finish+7>words.size()||
-               (profile->finishMask!=7&&profile->finishMask!=11))return false;
+               (profile->finishMask!=7&&profile->finishMask!=11&&profile->finishMask!=14)||
+               (profile->combineMask!=7&&profile->combineMask!=14))return false;
             if(profile->finish&&(words[finish]!=0x07000000u||
                words[finish+1]!=(0x00100002u|(profile->finishMask<<4))||words[finish+2]))return false;
             if(words[load]!=0x0800002du||words[load+5]>>12!=0x207u||words[load+6]!=profile->loadBinding||words[load+7]!=profile->loadBinding||
-               words[combine]!=0x09000032u||words[combine+1]!=0x00100072u||words[combine+2]!=profile->combineRegister||
+               words[combine]!=0x09000032u||words[combine+1]!=(0x00100002u|(profile->combineMask<<4))||words[combine+2]!=profile->combineRegister||
                words[temps]!=0x02000068u||!words[temps+1]||words[temps+1]>=4096)return false;
             const U32 temporary=words[temps+1];
             U32 cbId=0;
@@ -79,11 +80,15 @@ inline bool PatchProfile(const unsigned char* input,std::size_t bytes,const Prof
                 0x080000a5u,0x00100072u,specular,0x0010000au,scratch,0x00207e46u,profile->resource,0,
                 0x01000015u};
             const U32 select[]={0x09000037u,0x00100002u|(profile->finishMask<<4),0,0x00100ff6u,temporary,
-                profile->finishMask==11?0x00100846u:0x00100e46u,temporary,0x00100e46u,0};
+                profile->finishMask==14?0x00100906u:(profile->finishMask==11?0x00100846u:0x00100e46u),temporary,0x00100e46u,0};
+            // Decals pack RGB into YZW. Rebase their color operand to XYZ
+            // before multiplying the independent PT diffuse/specular signals.
+            const U32 color=profile->combineMask==14?
+                ((words[combine+5]&~0xff0u)|(((words[combine+5]>>6)&63u)<<4)):words[combine+5];
             const U32 materialize[]={
                 0x0304001fu,0x00100ff6u,temporary,
                 0x09000032u,0x00100072u,temporary,0x00100e46u,diffuse,
-                words[combine+5],words[combine+6],0x00100e46u,specular,
+                color,words[combine+6],0x00100e46u,specular,
                 0x01000015u};
             constexpr U32 added=140;
             std::vector<U32> revised;revised.reserve(words.size()+added);revised.push_back(words[0]);revised.push_back(words[1]+added);

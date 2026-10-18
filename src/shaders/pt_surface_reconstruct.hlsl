@@ -48,11 +48,12 @@ float3 Position(uint2 p){
     return v.xyz/v.w;
 }
 float3 NormalView(uint2 p){
+    float3 value=ControlDecodeNormalView(gbuffer1.Load(int3(p,0)));
     if(SplitSignals()&&Raw(p).w==1){
         uint packed=rawRadiance.Load(Index(p)*64+44);
-        if((packed&0x80000000u)!=0)return PTUnpackGuideNormal(packed);
+        if((packed&0x80000000u)!=0)value=PTUnpackGuideNormal(packed);
     }
-    return ControlDecodeNormalView(gbuffer1.Load(int3(p,0)));
+    return value;
 }
 float3 Normal(uint2 p){return ControlNormalViewToWorld(NormalView(p),current[6].xyz,current[7].xyz,current[8].xyz);}
 uint PackNormal(float3 n){uint3 v=(uint3)round(saturate(n*.5+.5)*1023);return v.x|(v.y<<10)|(v.z<<20);}
