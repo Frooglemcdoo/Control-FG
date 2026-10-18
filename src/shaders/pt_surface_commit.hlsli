@@ -1,5 +1,6 @@
 #ifndef CONTROL_PT_SURFACE_COMMIT
 #define CONTROL_PT_SURFACE_COMMIT
+#include "pt_guide_normal.hlsli"
 // Material-weighted radiance belongs AFTER diffuse*albedo+specular, BEFORE
 // primary emission/fog/media. Alpha is coverage, never opacity or luminance.
 // u7 is the existing private descriptor slot 48; never alias native u0/u1/u2.
@@ -31,7 +32,7 @@ bool PTCommitSignals(uint2 pixel,uint2 extent,PTPathResult value,uint admission)
     uint at=(pixel.y*extent.x+pixel.x)*64;
     PTSurfaceRadiance.Store4(at,asuint(float4(value.diffuse,1)));
     PTSurfaceRadiance.Store4(at+16,asuint(float4(value.specular,value.hitDistance)));
-    PTSurfaceRadiance.Store4(at+32,asuint(float4(value.kd,value.roughness)));
+    PTSurfaceRadiance.Store4(at+32,uint4(asuint(value.kd),PTPackGuideNormal(value.primaryNormal)));
     PTSurfaceRadiance.Store4(at+48,asuint(float4(max(value.f0,.02),value.primaryViewCosine)));
     return true;
 }

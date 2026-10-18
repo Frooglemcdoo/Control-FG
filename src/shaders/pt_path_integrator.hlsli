@@ -47,7 +47,7 @@ struct PTPathResult { float3 radiance; uint hits; uint valid; uint fault; uint p
 #ifdef PT_PATH_TERMINAL_GI
 float3 terminalPosition,terminalNormal,terminalWeight,terminalFraction,terminalFallback;uint terminalPending;
 #endif
- float3 diffuse,specular,kd,f0; float roughness,hitDistance,primaryViewCosine; };
+ float3 diffuse,specular,kd,f0,primaryNormal; float roughness,hitDistance,primaryViewCosine; };
 PTPathResult PTIntegratePathFirst(RayDesc ray,uint maxHits,uint rouletteStart,uint seed,float originOffset,
                                   PTSceneHit first,uint useFirst,uint includePrimaryEmission) {
     PTTransportState path=PTBeginTransport();PTPathResult result=(PTPathResult)0;
@@ -115,7 +115,7 @@ PTPathResult PTIntegratePathFirst(RayDesc ray,uint maxHits,uint rouletteStart,ui
         float3 tangent=normalize(cross(abs(n.z)<0.9?float3(0,0,1):float3(0,1,0),n));
         float3 bitangent=cross(n,tangent);
         float3 wo=float3(dot(-ray.Direction,tangent),dot(-ray.Direction,bitangent),dot(-ray.Direction,n));
-        if(depth==0)result.primaryViewCosine=saturate(wo.z);
+        if(depth==0){result.primaryViewCosine=saturate(wo.z);result.primaryNormal=n;}
         if(wo.z<=0){path.valid=0;result.fault=5;break;}
         if(depth!=0||includePrimaryEmission!=0)path=PTAccumulate(path,surface.emission);
         PTDirectSample light;uint visibility;

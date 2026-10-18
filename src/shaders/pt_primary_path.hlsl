@@ -217,6 +217,7 @@ void PTPrimaryPathRayGeneration(){
     seed=(seed^(seed>>16))*2246822519u;seed^=seed>>13;
     // Keep the first two continuations before roulette to reduce reflection variance.
     PTPathResult result=PTIntegratePathFirst(ray,4,3,seed,.001,first,1,0);
+    result.primaryNormal=result.primaryNormal.x*PTSystem[2].xyz+result.primaryNormal.y*PTSystem[3].xyz+result.primaryNormal.z*PTSystem[4].xyz;
     PTMeasure(5,pixel);
     if(result.terminalGIPositive!=0&&((pixel.x|pixel.y)&63)==0){uint old;PTMetrics.InterlockedAdd(96,1,old);}
     // The legacy variant adds diffuse-first indirect. The replacement variant

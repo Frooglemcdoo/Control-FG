@@ -101,3 +101,11 @@ valid ownership, unchanged ordinary normals, and invalid-input rejection.
 Background on shading/geometric hemisphere mismatch:
 https://pbr-book.org/3ed-2018/Materials/BSDFs . The bounded normal blend is our
 chosen approximation, not an implementation of that book's BSDF formulation.
+
+The corrected primary view normal is packed into the previously unused raw
+roughness DWORD (+44), with a validity bit; packet size and bindings stay fixed.
+Reconstruction history rejection and RR normal guides consume that same normal
+only for validated PT pixels. The RR guide no longer zeros mode-3 specular for
+PT-owned pixels now using GGX. Native fallback still follows its original rule.
+The WARP guide test covers corrected normals, converted mode-3 specular, black
+albedo, material mismatch, invalid data and PT on/off/admission transitions.

@@ -1,4 +1,5 @@
 #include "ControlPrimaryGuideDecode.hlsli"
+#include "pt_guide_normal.hlsli"
 cbuffer Reconstruction : register(b0) {
     float4 current[18];
     float4 previousWorldToView[4];
@@ -46,7 +47,14 @@ float3 Position(uint2 p){
     float4 v=(uv.x*2-1)*current[14]+(1-uv.y*2)*current[15]+clipDepth.Load(int3(p,0)).x*current[16]+current[17];
     return v.xyz/v.w;
 }
-float3 Normal(uint2 p){return ControlNormalViewToWorld(ControlDecodeNormalView(gbuffer1.Load(int3(p,0))),current[6].xyz,current[7].xyz,current[8].xyz);}
+float3 NormalView(uint2 p){
+    if(SplitSignals()&&Raw(p).w==1){
+        uint packed=rawRadiance.Load(Index(p)*64+44);
+        if((packed&0x80000000u)!=0)return PTUnpackGuideNormal(packed);
+    }
+    return ControlDecodeNormalView(gbuffer1.Load(int3(p,0)));
+}
+float3 Normal(uint2 p){return ControlNormalViewToWorld(NormalView(p),current[6].xyz,current[7].xyz,current[8].xyz);}
 uint PackNormal(float3 n){uint3 v=(uint3)round(saturate(n*.5+.5)*1023);return v.x|(v.y<<10)|(v.z<<20);}
 float3 UnpackNormal(uint n){return normalize(float3(n&1023,(n>>10)&1023,(n>>20)&1023)*(2.0/1023)-1);}
 // Clip each demodulated lobe independently against compatible CURRENT samples.

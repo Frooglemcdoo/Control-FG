@@ -38,11 +38,11 @@ void GenerateLiveGuides(uint3 tid : SV_DispatchThreadID) {
     if (tid.x >= Width || tid.y >= Height) return;
 
     const float4 g1 = GBuffer1.Load(int3(tid.xy, 0));
-    const float3 normalView = ControlDecodeNormalView(g1);
+    float3 normalView = ControlDecodeNormalView(g1);
     const float roughness = InvertSmoothness != 0u ? 1.0f - g1.b : g1.b;
 
     // RenoDX's recovered guide shader writes view-space normals directly.
-    NormalRoughness[tid.xy] = float4(normalView, roughness);
+
 
     float3 materialGuide = 0.0f.xxx;
     float3 specularGuide = 0.0f.xxx;
@@ -59,8 +59,9 @@ void GenerateLiveGuides(uint3 tid : SV_DispatchThreadID) {
         // reflectance and supplies the exact primary N.V from its shading frame.
         float3 specularF0=materialGuide;
         float viewCosine=min(abs(normalView.z),1.0f);
+        bool ptOwned=false;
         if((GuideFlags&4u)!=0u){
-            float4 pt=PTMaterialGuide(tid.y*Width+tid.x,materialID,materialGuide,viewCosine);
+            float4 pt=PTMaterialGuide(tid.y*Width+tid.x,materialID,materialGuide,viewCosine,normalView,ptOwned);
             materialGuide=pt.rgb;viewCosine=pt.w;
         }
         if ((GuideFlags & 2u) != 0u) {
@@ -69,13 +70,14 @@ void GenerateLiveGuides(uint3 tid : SV_DispatchThreadID) {
             const float2 env = EnvBRDF.SampleLevel(
                 LinearClamp, float2(viewCosine, g1.b), 0.0f).xy;
             specularGuide = specularF0 * env.x + env.y;
-            // Control BRDF mode 3 is excluded by the reference pass.
-            if (brdfMode == 3u) specularGuide = 0.0f.xxx;
+            // Native mode 3 excludes specular; its PT conversion has a GGX lobe.
+            if (brdfMode == 3u&&!ptOwned) specularGuide = 0.0f.xxx;
         }
     }
 
     // The supplied reference addon binds this stable per-material value as its
     // DLSS diffuse-albedo guide. It is intentionally not a replayed texture.
+    NormalRoughness[tid.xy] = float4(normalView, roughness);
     DiffuseGuide[tid.xy] = float4(materialGuide, 1.0f);
     SpecularGuide[tid.xy] = float4(specularGuide, 1.0f);
 }
