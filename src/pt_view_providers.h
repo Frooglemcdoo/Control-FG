@@ -7,9 +7,9 @@
 namespace PTNativeView {
 class Providers {
     unsigned char* d3d=nullptr;
-    std::array<int,10> ids{{-1,-1,-1,-1,-1,-1,-1,-1,-1,-1}};
+    std::array<int,9> ids{{-1,-1,-1,-1,-1,-1,-1,-1,-1}};
     inline static constexpr unsigned offsets[6]={8,32,96,224,1112,0};
-    inline static constexpr unsigned sizes[10]={8,64,64,64,4,8,4,4,4,4};
+    inline static constexpr unsigned sizes[9]={8,64,64,64,4,8,4,4,4};
     static bool Entry(void* context,std::int32_t id,control_rr_provider::Entry& out) noexcept {
         auto& self=*static_cast<Providers*>(context);
         __try {if(!self.d3d||id<0||id>=4096)return false;
@@ -46,25 +46,26 @@ public:
             std::int32_t rel=0;std::memcpy(&rel,r+0x17e2e9+1,4);
             if(r[0x17e2e9]!=0xe8||r+0x17e2e9+5+rel!=r+0x210270)return false;
             using Resolve=void(*)(void*,const char*);
-            const char* names[10]={"g_vInvScreenRes","g_mWorldToView","g_mViewToWorld","g_mClipToView","g_uCurrentFrame","g_vScreenRes",
-                "g_uPointLightTotalCount","g_uSpotLightTotalCount","g_uSunLightTotalCount","g_fAmbientEnvSpecularIntensityOnOpaque"};
-            for(unsigned n=0;n<10;++n){struct Slot {int id,tag;} slot{-1,0};
+            const char* names[9]={"g_vInvScreenRes","g_mWorldToView","g_mViewToWorld","g_mClipToView","g_uCurrentFrame","g_vScreenRes",
+                "g_uPointLightTotalCount","g_uSpotLightTotalCount","g_uSunLightTotalCount"};
+            for(unsigned n=0;n<9;++n){struct Slot {int id,tag;} slot{-1,0};
                 reinterpret_cast<Resolve>(r+0x210270)(&slot,names[n]);
                 if(slot.id<0||slot.id>=4096)return false;ids[n]=slot.id;
             }
             return true;
         }__except(EXCEPTION_EXECUTE_HANDLER){return false;}
     }
-    // Primary DXBC only requests the sun total; point/spot totals and ambient
-    // scale are optimized out. Never interpret their untouched CBV lanes.
+    // Primary DXBC only requests the sun total; obtain point/spot counts
+    // from authenticated providers. PT imports no native ambient intensity.
     bool ReadLights(const View& view,const std::array<unsigned char,416>& bound,std::array<unsigned char,416>& complete){
         DWORD fault=0;unsigned long long before=0,after=0;
         if(!ReadEngineFrameSafe(&before,&fault)||before!=view.engineFrame)return false;
-        complete=bound;constexpr unsigned lightOffsets[4]={256,260,264,244};
-        for(unsigned n=0;n<4;++n)if(!Snapshot(n+6,complete.data()+lightOffsets[n]))return false;
+        complete=bound;std::memset(complete.data()+244,0,4);
+        constexpr unsigned lightOffsets[3]={256,260,264};
+        for(unsigned n=0;n<3;++n)if(!Snapshot(n+6,complete.data()+lightOffsets[n]))return false;
         // This field IS consumed by both authenticated primary variants.
         if(std::memcmp(bound.data()+264,complete.data()+264,4))return false;
-        for(unsigned n=0;n<4;++n){std::array<unsigned char,4> check{};
+        for(unsigned n=0;n<3;++n){std::array<unsigned char,4> check{};
             if(!Snapshot(n+6,check.data())||std::memcmp(check.data(),complete.data()+lightOffsets[n],4))return false;}
         // Tie view-space lights to the camera authenticated in this callback.
         for(unsigned n=1;n<5;++n){std::array<unsigned char,64> check{};

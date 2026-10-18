@@ -124,3 +124,20 @@ when actually used. Decals use ordinary space-zero texture slots and global
 samplers, so an absent unused material array must not prevent their PT draw.
 Unknown or stripped reflection remains conservative. A fourth GPU fixture tests
 the YZW layout, along with explicit table-usage reflection tests.
+
+## Remove obsolete native environment admission
+
+The host no longer waits for an environment-composite dispatch or snapshots its
+probe descriptor, ambient intensity, GI constants or submission state. Both
+private primary variants return zero for environment misses and never consume
+those inputs. Previously, absent or changed native environment data could cancel
+an otherwise valid PT producer and restore native composition. The provider
+adapter now authenticates only the three actual light counts and camera, and
+zeros the unused ambient lane. Removed the unused GI CBV and scratch UAV setup.
+
+Full-surface PT also no longer requires or revalidates native output UAVs that
+it does not read. The legacy additive variant retains those requirements. Actual
+PT input descriptors, bound camera/light snapshots, scene proofs, queue identity,
+submission ordering and fence lifetime checks remain required. This is a host
+admission fix, not a claim that missing glass or scene lights are implemented;
+in-game visual validation is still required.

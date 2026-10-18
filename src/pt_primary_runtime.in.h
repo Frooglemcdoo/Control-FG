@@ -95,13 +95,6 @@ static bool ContextFor(ID3D12GraphicsCommandList* list,const Bindings& bindings,
 struct Frame;
 struct Candidate {PTNativeJobRoute::Ticket ticket;View view;std::shared_ptr<Frame> frame;};
 static std::map<UINT64,Candidate> candidates;
-struct Environment {
-    View view;Table table;ComPtr<IUnknown> list,queue;bool submitted=false;
-    UINT64 scaleAddress=0;float scale=0;
-    UINT64 giAddress=0,giScaleAddress=0;bool gi=false;
-    std::array<unsigned char,64> giConstants{};
-};
-static std::vector<std::shared_ptr<Environment>> environments;
 struct Assets {
     PTPrimaryMetrics::Counters metrics;
     std::array<double,12> cpuCosts{}; // prepare, lease, SBT, camera, metrics, record
@@ -110,7 +103,7 @@ struct Assets {
     std::array<unsigned char,416> boundLights{},lightConstants{};
     std::shared_ptr<PTSurfaceComposition::ReconstructionPass> reconstruction;
     std::shared_ptr<Output> history;
-    Bindings bindings,graphicsRestore;Table primary;std::shared_ptr<Environment> environment;
+    Bindings bindings,graphicsRestore;Table primary;
     PTOwnedScene::LeaseBatch scene;
     std::shared_ptr<const PTSceneHandoff::Prepared> proof;
     std::shared_ptr<PTScenePipeline::Dispatch> dispatch;
@@ -318,34 +311,20 @@ static void Dispatched(void*,ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT 
         const bool environmentPass=pso.Get()==ptReflectionNativeCompositePso||pso.Get()==ptReflectionP2CompositePso;
         const auto primary=primaryPipelines.Find(pso.Get());
         if(!pso){++computeNoPipeline;return;}
-        if(!environmentPass&&!primary){++computeOtherPipeline;return;}
-        if(environmentPass)++environmentSeen;else ++primarySeen;
-        PTHotpathTiming::Sample profile(PTHotpathTiming::Kind::primary_queue_wait,!environmentPass);
+        // PT consumes no native environment/probe data. Its dispatch order and
+        // descriptors must not gate the independent path-traced producer.
+        if(environmentPass){++environmentSeen;return;}
+        if(!primary){++computeOtherPipeline;return;}
+        ++primarySeen;
+        PTHotpathTiming::Sample profile(PTHotpathTiming::Kind::primary_queue_wait);
         std::lock_guard<std::recursive_mutex> ordered(PTSceneQueues::queueMutex);PTSceneQueues::Scope privateQueues;
         profile.Next(PTHotpathTiming::Kind::primary_guard_wait);
         std::lock_guard<std::recursive_mutex> guard(mutex);std::optional<PTTableMirror::Scope> descriptorLock(std::in_place,true);
         std::optional<PTTableMirror::Mute> privateWrites(std::in_place);
         profile.Next(PTHotpathTiming::Kind::primary_setup);
-        Bindings bindings;if(!PTCommandBindings::tracker.Read(list,nativeRoots,false,(environmentPass&&surfaceReplacement)?0xdd:0xd5,bindings)){Reject("lighting_bindings");return;}
+        Bindings bindings;if(!PTCommandBindings::tracker.Read(list,nativeRoots,false,0xd5,bindings)){Reject("lighting_bindings");return;}
         View view;Context context;
-        if(!ReadView(bindings.arguments[2].value,view,environmentPass?PTNativeView::Pass::environment:PTNativeView::Pass::primary)||!ContextFor(list,bindings,0,context)){Reject("lighting_view_or_context");return;}
-        if(environmentPass){
-            // Prefer the first observed native/P2 dispatch for this immutable
-            // table/view, not a guessed globally most recent environment.
-            for(const auto& e:environments)if(e->view.Same(view)&&e->table.native.Get()==bindings.resources.Get()&&e->table.first==context.table.first)return;
-            auto e=std::make_shared<Environment>();e->view=view;e->list=Identity(list);e->queue=Identity(context.queue);
-            if(surfaceReplacement){
-                // This exact cube is consumed with b1[15].y by the reviewed
-                // environment composite. The opaque-pass provider can be zero
-                // while ray-traced environment lighting remains enabled.
-                e->scaleAddress=bindings.arguments[3].value+244;
-                if((!PTNativeView::uploads.Read(e->scaleAddress,&e->scale,4)&&
-                    !PTSceneLive::owner.Resources().ReadUpload(e->scaleAddress,&e->scale,4))||
-                   !std::isfinite(e->scale)||e->scale<0){Reject("environment_scale_snapshot");return;}
-            }
-            if(!e->gi&&!PTTableMirror::bank.Read(bindings.resources.Get(),context.table.first,1ull<<13,e->table)){Reject("environment_descriptor");return;}
-            while(environments.size()>=16)environments.erase(environments.begin());environments.push_back(std::move(e));return;
-        }
+        if(!ReadView(bindings.arguments[2].value,view,PTNativeView::Pass::primary)||!ContextFor(list,bindings,0,context)){Reject("lighting_view_or_context");return;}
         if(z!=1||x!=(view.width+7)/8||y!=(view.height+7)/8||!primary->root->Matches(bindings.layout->Root())){Reject("primary_dispatch_shape_or_root");return;}
         struct RetireAttempt {
             const View& view;
@@ -355,11 +334,7 @@ static void Dispatched(void*,ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT 
         } retire{view};
         Candidate* candidate=nullptr;
         for(auto& c:candidates)if(c.second.view.Same(view)){if(candidate){Reject("ambiguous_scene_view");return;}candidate=&c.second;}
-        std::shared_ptr<Environment> environment;
-        for(const auto& e:environments)if(e->view.Same(view)&&e->queue.Get()==pinnedQueue.Get()){
-            if(environment){Reject("ambiguous_environment_view");return;}environment=e;
-        }
-        if(!candidate||!environment){Reject("scene_or_environment_not_ready");return;}
+        if(!candidate){Reject("scene_not_ready");return;}
         LARGE_INTEGER prepareStart{},readyDone{},leaseStart{},leaseDone{},recordDone{},sbtStart{},cameraStart{},metricsStart{},encodeStart{};QueryPerformanceCounter(&prepareStart);
         UINT64 serial=0;
         if(!handoff.FindReady(candidate->ticket.engineFrame,view.width,view.height,candidate->ticket.pipeline,serial)){
@@ -375,18 +350,17 @@ static void Dispatched(void*,ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT 
         QueryPerformanceCounter(&readyDone);
         auto* recording=RecordingFor(list);
         if(!recording||recording->submitted){Reject("frame_budget_or_duplicate");return;}
-        auto a=std::make_shared<Assets>();a->bindings=bindings;a->boundView=view;a->environment=environment;a->engineFrame=candidate->ticket.engineFrame;a->probe=!transportValidated;
+        auto a=std::make_shared<Assets>();a->bindings=bindings;a->boundView=view;a->engineFrame=candidate->ticket.engineFrame;a->probe=!transportValidated;
         if((!PTNativeView::uploads.Read(bindings.arguments[4].value,a->boundLights.data(),a->boundLights.size())&&
             !PTSceneLive::owner.Resources().ReadUpload(bindings.arguments[4].value,a->boundLights.data(),a->boundLights.size()))||
             !viewProviders.ReadLights(view,a->boundLights,a->lightConstants)){Reject("light_provider_snapshot");return;}
-        if(surfaceReplacement)std::memcpy(a->lightConstants.data()+244,&environment->scale,4);
-        static UINT64 lightSnapshots=0;if(++lightSnapshots<=8||lightSnapshots%240==0){UINT totals[3]{};float scale=0;
-            std::memcpy(totals,a->lightConstants.data()+256,12);std::memcpy(&scale,a->lightConstants.data()+244,4);
-            Log("PT_PRIMARY_LIGHTS frame=%u points=%u spots=%u suns=%u environment=%.9g source=authenticated_provider environment_source=%s primary_candidates=%s",view.frame,totals[0],totals[1],totals[2],scale,surfaceReplacement?"bound_reflection_composite":"opaque_provider",surfaceReplacement?"enumerate_up_to_64":"uniform");}
-        // t0,t1,t3,t7,t8,t10,t14,t15,t17,t18 and native outputs.
-        constexpr UINT64 required=(1ull<<5)|(1ull<<6)|(1ull<<8)|(1ull<<12)|(1ull<<13)|(1ull<<15)|(1ull<<19)|(1ull<<20)|(1ull<<22)|(1ull<<23)|(1ull<<41)|(1ull<<42);
+        static UINT64 lightSnapshots=0;if(++lightSnapshots<=8||lightSnapshots%240==0){UINT totals[3]{};
+            std::memcpy(totals,a->lightConstants.data()+256,12);
+            Log("PT_PRIMARY_LIGHTS frame=%u points=%u spots=%u suns=%u environment=0 source=authenticated_provider environment_source=disabled primary_candidates=%s",view.frame,totals[0],totals[1],totals[2],surfaceReplacement?"enumerate_up_to_64":"uniform");}
+        // PT inputs only; the legacy additive variant also reads native outputs.
+        constexpr UINT64 required=(1ull<<5)|(1ull<<6)|(1ull<<8)|(1ull<<12)|(1ull<<13)|(1ull<<15)|(1ull<<19)|(1ull<<20)|(1ull<<22)|(1ull<<23)|(surfaceReplacement?0ull:((1ull<<41)|(1ull<<42)));
         if(!PTTableMirror::bank.Read(bindings.resources.Get(),context.table.first,required,a->primary)||
-           !PTTableMirror::bank.Unchanged(environment->table)||!Fresh(context,&a->privateTable)||!Disjoint(a->privateTable,context.table.first)){Reject("primary_descriptor_allocation");return;}
+           !Fresh(context,&a->privateTable)||!Disjoint(a->privateTable,context.table.first)){Reject("primary_descriptor_allocation");return;}
         if(!surfaceReplacement&&!PTTableMirror::bank.TypedLoadSupported(a->primary,42)){Reject("native_specular_typed_load_unproven");return;}
         // CPU-owned descriptor values are immutable. Keep scene/recording ownership
         // serialized, but allow native descriptor workers through during preparation.
@@ -443,10 +417,10 @@ static void Dispatched(void*,ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT 
         a->camera=a->cameraStorage->Resource();
         void* cameraData=nullptr;const D3D12_RANGE noRead{};
         if(FAILED(a->camera->Map(0,&noRead,&cameraData))||!cameraData){Reject("camera_map");return;}
+        std::memset(cameraData,0,2048);
         std::memcpy(cameraData,view.bytes.data(),view.bytes.size());
         std::memcpy(static_cast<unsigned char*>(cameraData)+1280,a->lightConstants.data(),a->lightConstants.size());
-        std::memcpy(static_cast<unsigned char*>(cameraData)+1792,environment->giConstants.data(),64);
-        const UINT giExtent[]={view.width,view.height};std::memcpy(static_cast<unsigned char*>(cameraData)+1848,giExtent,8);a->camera->Unmap(0,nullptr);
+        a->camera->Unmap(0,nullptr);
         profile.Next(PTHotpathTiming::Kind::primary_metrics);QueryPerformanceCounter(&metricsStart);
         if(!a->metrics.Initialize(device.Get())){Reject("coverage_allocation");return;}
         QueryPerformanceCounter(&descriptorReacquire);
@@ -454,7 +428,7 @@ static void Dispatched(void*,ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT 
         // only AFTER reacquiring the gate, or revalidation would run unlocked.
         privateWrites.reset();descriptorLock.emplace(true);privateWrites.emplace();
         QueryPerformanceCounter(&descriptorAcquired);
-        if(!PTTableMirror::bank.Unchanged(a->primary)||!PTTableMirror::bank.Unchanged(environment->table)){
+        if(!PTTableMirror::bank.Unchanged(a->primary)){
             Reject("primary_descriptors_changed_during_prepare");return;
         }
         profile.Next(PTHotpathTiming::Kind::primary_record);QueryPerformanceCounter(&encodeStart);
@@ -465,14 +439,6 @@ static void Dispatched(void*,ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT 
             srv.Shader4ComponentMapping=D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;srv.Buffer.NumElements=PTEmitters::Storage::Bytes/4;srv.Buffer.Flags=D3D12_BUFFER_SRV_FLAG_RAW;
             device->CreateShaderResourceView(a->emitters->Resource(),&srv,Cpu(a->privateTable,39));
             device->CopyDescriptorsSimple(1,Cpu(a->privateTable,45),a->emitters->Uav(),D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-        }
-        if(surfaceReplacement){
-            D3D12_CONSTANT_BUFFER_VIEW_DESC giParameters{};giParameters.BufferLocation=a->camera->GetGPUVirtualAddress()+1792;giParameters.SizeInBytes=256;
-            device->CreateConstantBufferView(&giParameters,Cpu(a->privateTable,1)); // private b5
-            if(environment->gi){
-                device->CopyDescriptorsSimple(1,Cpu(a->privateTable,0),environment->table.At(0),D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV); // b4 volume transforms
-                device->CopyDescriptorsSimple(9,Cpu(a->privateTable,26),environment->table.At(21),D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV); // t21..29
-            }
         }
         D3D12_SHADER_RESOURCE_VIEW_DESC as{};as.ViewDimension=D3D12_SRV_DIMENSION_RAYTRACING_ACCELERATION_STRUCTURE;
         as.Shader4ComponentMapping=D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;as.RaytracingAccelerationStructure.Location=plan.selection.tlas;
@@ -488,13 +454,6 @@ static void Dispatched(void*,ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT 
                     Log("PT_PRIMARY_RECONSTRUCTION_FAILED frame=%u stage=%s hr=0x%08lX signal_resident_bytes=%llu signal_idle_bytes=%llu signal_budget_bytes=%llu budget_failures=%llu device_failures=%llu",view.frame,a->reconstruction->failure,static_cast<unsigned long>(a->reconstruction->failureHr),pool.residentBytes,pool.idleBytes,PTSurfaceComposition::SignalStorage::MaximumBytes,pool.budgetFailures,pool.deviceFailures);
                 Reject("surface_reconstruction_setup");return;
             }
-        }
-        if(surfaceReplacement){
-            // Reuse reconstruction's two 32-byte/pixel buffers before filtering.
-            // They retain the same fence-owned lifetime; no new image allocation.
-            D3D12_UNORDERED_ACCESS_VIEW_DESC uav{};uav.Format=DXGI_FORMAT_R32_TYPELESS;uav.ViewDimension=D3D12_UAV_DIMENSION_BUFFER;
-            uav.Buffer.NumElements=view.width*view.height*8;uav.Buffer.Flags=D3D12_BUFFER_UAV_FLAG_RAW;
-            device->CreateUnorderedAccessView(a->reconstruction->scratch->resource.Get(),nullptr,&uav,Cpu(a->privateTable,46)); // u5
         }
         if(nextTicket==UINT64_MAX){Reject("ticket_exhausted");return;}a->ticket=nextTicket++;
         if(!PTSceneLive::owner.Scenes().Mark(list,a->ticket)){Reject("private_scene_cut");return;}
@@ -673,25 +632,10 @@ static bool SameLights(const Assets& a){
         !std::memcmp(current.data()+216,a.boundLights.data()+216,16)&&
         !std::memcmp(current.data()+264,a.boundLights.data()+264,4);
 }
-static bool SameEnvironmentScale(const Environment& e){
-    if(!surfaceReplacement)return true;float scale=0;
-    if(e.gi){
-        std::array<unsigned char,48> current{};float giScale=0;
-        if((!PTNativeView::uploads.Read(e.giAddress,current.data(),current.size())&&
-            !PTSceneLive::owner.Resources().ReadUpload(e.giAddress,current.data(),current.size()))||
-           (!PTNativeView::uploads.Read(e.giScaleAddress,&giScale,4)&&
-            !PTSceneLive::owner.Resources().ReadUpload(e.giScaleAddress,&giScale,4))||
-           std::memcmp(current.data(),e.giConstants.data(),48)||std::memcmp(&giScale,e.giConstants.data()+48,4))return false;
-    }
-    return (PTNativeView::uploads.Read(e.scaleAddress,&scale,4)||
-        PTSceneLive::owner.Resources().ReadUpload(e.scaleAddress,&scale,4))&&
-        !std::memcmp(&scale,&e.scale,4);
-}
 static bool InputsUnchanged(const std::shared_ptr<Frame>& frame){
     const auto& a=frame->assets;
-    return !frame->cancelled&&ptReflectionUserState.load()==1u&&a&&a->environment->submitted&&
-        SameView(a->bindings.arguments[2].value,a->boundView)&&SameLights(*a)&&SameEnvironmentScale(*a->environment)&&PTTableMirror::bank.Unchanged(a->primary)&&
-        PTTableMirror::bank.Unchanged(a->environment->table);
+    return !frame->cancelled&&ptReflectionUserState.load()==1u&&a&&
+        SameView(a->bindings.arguments[2].value,a->boundView)&&SameLights(*a)&&PTTableMirror::bank.Unchanged(a->primary);
 }
 static void CancelFrame(const std::shared_ptr<Frame>& frame,ID3D12CommandQueue* queue){
     frame->cancelled=true;frame->deferred=false;
@@ -748,13 +692,12 @@ static void Selected(void*,ID3D12CommandQueue* queue,UINT count,ID3D12CommandLis
     if(!active)return;
     try {
         std::lock_guard<std::recursive_mutex> guard(mutex);
-        if(recordings.empty()&&environments.empty())return;
+        if(recordings.empty())return;
         if(!lists||count>256)return;const auto queueIdentity=Identity(queue);
         for(UINT n=0;n<count;++n){const auto key=Identity(lists[n]);
-            for(auto& e:environments)if(e->list.Get()==key.Get()&&e->queue.Get()==queueIdentity.Get())e->submitted=true;
             auto found=recordings.find(key.Get());if(found==recordings.end())continue;auto& recording=found->second;
             if(recording.producers.empty()&&recording.draws.empty()&&recording.guides.empty())continue;
-            // Environment-only and unrelated lists require no descriptor access.
+            // Unrelated lists require no descriptor access.
             // Hold the gate across all checks and admission for an actual consumer.
             PTTableMirror::Scope descriptorLock(true);PTTableMirror::Mute privateWrites;
             for(const auto& frame:recording.producers){const auto& a=frame->assets;
