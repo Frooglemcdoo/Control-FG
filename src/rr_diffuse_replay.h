@@ -1,6 +1,7 @@
 #pragma once
 #include "rr_hair_shader_audit.h"
 #include "rr_hair_opacity.h"
+#include "rr_character_base_albedo.h"
 // Recurring native albedo replay. CPU draw data lives only through its join.
 // Targets resize only after native CPU join and post-Present GPU retirement.
 enum class RRDiffuseStage {Idle,Recording,Joined,Stopped};
@@ -136,6 +137,8 @@ static void RRDiffusePrepare(void* callback,void* table) noexcept {
             if(auditShaders&&auditPairs++<32)RRHairExportShaderPair(frame,c->replay.familyKinds[i],c->replay.sourceIndices[i],original.shader,c->replay.batches[i].shader,shaders.PixelShaders()[result.selectedIndex]);
             if(c->replay.familyKinds[i]==5)
                 c->replay.batches[i].shader=RRHairOpacityReplacement(original.shader,c->replay.batches[i].shader,shaders.PixelShaders()[result.selectedIndex]);
+            if(c->replay.familyKinds[i]==2)
+                c->replay.batches[i].shader=RRCharacterBaseAlbedoReplacement(original.shader,c->replay.batches[i].shader,shaders.PixelShaders()[result.selectedIndex]);
             targets=result.targetCount;c->replay.batches[kept]=c->replay.batches[i];
             c->replay.sourceIndices[kept]=c->replay.sourceIndices[i];c->replay.familyKinds[kept]=c->replay.familyKinds[i];++kept;
         }

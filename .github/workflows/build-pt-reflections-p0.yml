@@ -129,6 +129,10 @@ jobs:
           if errorlevel 1 exit /b 1
           build\compile-rr-hair-opacity.exe
           if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /O2 /MT tools\compile-rr-character-base-albedo.cpp /Fobuild\compile-rr-character-base-albedo.obj /Febuild\compile-rr-character-base-albedo.exe /link d3dcompiler.lib
+          if errorlevel 1 exit /b 1
+          build\compile-rr-character-base-albedo.exe
+          if errorlevel 1 exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /O2 /MT tools\compile-skin-mask.cpp /Fobuild\compile-skin-mask.obj /Febuild\compile-skin-mask.exe /link d3dcompiler.lib
           if errorlevel 1 exit /b 1
           build\compile-skin-mask.exe
@@ -307,7 +311,7 @@ jobs:
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-RR-GI-Dispatch-Fix-R17'
+          $out='Control-FG-RR-Character-Guide-R18'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/pt_glass_raygen.dxil "$out/pt_glass_raygen.dxil"
           Copy-Item build/pt_glass_secondary.dxbc "$out/pt_glass_secondary.dxbc"
@@ -325,22 +329,18 @@ jobs:
           Copy-Item Collect-RR-Skin-Capture.ps1 "$out/Collect-RR-Skin-Capture.ps1"
           Copy-Item Collect-RR-Skin-Capture.cmd "$out/Collect-RR-Skin-Capture.cmd"
           @'
-          CONTROL-FG - GI DISPATCH FIX R17 (TEST BUILD)
-          ============================================
-          Fixes R16 rejecting auxiliary compute work and stopping RR.
-          Requires one temporal and all configured spatial GI replacements,
-          while letting unrelated native compute dispatches pass through.
-          GI history is capped at 35%, rejected with motion/depth changes, and
-          constrained to the current lighting neighborhood. Spatial passes do
-          not blend history a second time. Native camera-cut flags are respected.
-          Exact original PSOs are restored after each replacement dispatch.
-          Keeps the existing GI ray radius and rough-surface energy bridge.
-          Retains the R12 contact-shadow policy and R14 native GI filter routing.
-          Confirmed R12 hair shaders, skin materials and glass are unchanged.
-          Test with all RT options enabled, RT High, and RR Model F.
-          Compare neck noise while rotating the camera and after stopping.
-          This is an in-game validation build; visual improvement is unconfirmed.
-          No F9 capture is needed for the initial visual comparison.
+          CONTROL-FG - CHARACTER DIFFUSE GUIDE R18 (TEST BUILD)
+          ==================================================
+          Corrects the RR-only character albedo replay for the exact captured
+          native character shader pair. Uses the same base texture and tint
+          as the native lighting draw, omitting the albedo variant's unused
+          detail multiplier which can produce a zero skin diffuse guide.
+          Native skin lighting, materials, and texture bindings are untouched.
+          R12 hair and glass shaders are unchanged. GI filtering remains R17
+          so this test isolates the guide correction.
+          Test the same scene with RR Model F, all RT enabled and RT High.
+          Check neck noise and motion smearing, and skin appearance overall.
+          Visual improvement is not confirmed until tested in game.
 
           Optional paired capture (retains the R10 diagnostic format):
           Close Control. Install all binaries beside Control_DX12.exe.
@@ -358,11 +358,12 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-RR-GI-Dispatch-Fix-R17
+          name: Control-FG-RR-Character-Guide-R18
           path: |
-            Control-FG-RR-GI-Dispatch-Fix-R17.zip
-            Control-FG-RR-GI-Dispatch-Fix-R17.sha256
+            Control-FG-RR-Character-Guide-R18.zip
+            Control-FG-RR-Character-Guide-R18.sha256
             build/rr_hair_opacity.asm
+            build/rr_character_base_albedo.asm
             build/exports.txt
             build/imports.txt
             build/pt_reflection_p1.dxil

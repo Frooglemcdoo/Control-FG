@@ -478,6 +478,8 @@ static void* PTReflectionHookTechniqueLookup(void* rfx,const char* technique) {
 #include "pt_glass_runtime.h"
 
 static const char* PTReflectionHookShaderStorageGet(int id) {
+    if(id==kRRCharacterBaseAlbedoStorageId&&rrCharacterBaseAlbedoStorageReady.load(std::memory_order_acquire))
+        return reinterpret_cast<const char*>(kRRCharacterBaseAlbedoShader);
     if(id==kRRHairOpacityStorageId&&rrHairOpacityStorageReady.load(std::memory_order_acquire))
         return reinterpret_cast<const char*>(kRRHairOpacityShader);
     if(id==kPTReflectionP2RaySyntheticStorageId&&ptReflectionP2InjectionEnabled&&
@@ -2019,6 +2021,7 @@ static bool PTReflectionInstallShaderLookupHooks(HMODULE renderer,HMODULE d3d) n
     ptReflectionP2InjectionEnabled=false;
     const bool storageGetHooksReady=PTReflectionInstallStorageGetHooks(d3d);
     rrHairOpacityStorageReady.store(storageGetHooksReady,std::memory_order_release);
+    rrCharacterBaseAlbedoStorageReady.store(storageGetHooksReady,std::memory_order_release);
     wchar_t p1EnableValue[8]{};
     const DWORD p1EnableLength=GetEnvironmentVariableW(
         L"CONTROLFG_PT_REFLECTION_P1",p1EnableValue,_countof(p1EnableValue));

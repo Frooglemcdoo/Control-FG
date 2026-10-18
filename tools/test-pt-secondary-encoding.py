@@ -12,10 +12,13 @@ for name,expected in locked.items():
  source=(root/name).read_text()
  # Hair replay has a separate shader path; preserve the original PT hashes.
  hair_additions={
-  'src/probe.cpp':['#include "rr_hair_opacity_runtime.h"\n',
+  'src/probe.cpp':['#include "rr_character_base_albedo_runtime.h"\n',
+   '#include "rr_hair_opacity_runtime.h"\n',
    '    RRInputCaptureSetNativeTextures(textures,9,engineFrame);\n',
    '    RRInputCaptureSetNativeTextures(nullptr,0,0);\n'],
   'src/pt_reflection_loader.h':[
+   '    if(id==kRRCharacterBaseAlbedoStorageId&&rrCharacterBaseAlbedoStorageReady.load(std::memory_order_acquire))\n        return reinterpret_cast<const char*>(kRRCharacterBaseAlbedoShader);\n',
+   '    rrCharacterBaseAlbedoStorageReady.store(storageGetHooksReady,std::memory_order_release);\n',
    '    if(id==kRRHairOpacityStorageId&&rrHairOpacityStorageReady.load(std::memory_order_acquire))\n        return reinterpret_cast<const char*>(kRRHairOpacityShader);\n',
    '    rrHairOpacityStorageReady.store(storageGetHooksReady,std::memory_order_release);\n'],
  }
