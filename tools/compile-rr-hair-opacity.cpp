@@ -6,7 +6,7 @@
 int main(){
  ID3DBlob* code=nullptr;ID3DBlob* errors=nullptr;
  HRESULT hr=D3DCompileFromFile(L"src/shaders/rr_hair_opacity.hlsl",nullptr,D3D_COMPILE_STANDARD_FILE_INCLUDE,
-  "HairAlbedo","ps_5_1",D3DCOMPILE_OPTIMIZATION_LEVEL3|D3DCOMPILE_WARNINGS_ARE_ERRORS,0,&code,&errors);
+  "HairAlbedo","ps_5_1",D3DCOMPILE_OPTIMIZATION_LEVEL3|D3DCOMPILE_WARNINGS_ARE_ERRORS|D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES,0,&code,&errors);
  if(errors){fwrite(errors->GetBufferPointer(),1,errors->GetBufferSize(),stderr);errors->Release();}
  if(FAILED(hr)||!code)return 1;
  ID3D12ShaderReflection* reflection=nullptr;
