@@ -307,7 +307,7 @@ jobs:
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-RR-GI-Short-History-R16'
+          $out='Control-FG-RR-GI-Dispatch-Fix-R17'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/pt_glass_raygen.dxil "$out/pt_glass_raygen.dxil"
           Copy-Item build/pt_glass_secondary.dxbc "$out/pt_glass_secondary.dxbc"
@@ -325,8 +325,11 @@ jobs:
           Copy-Item Collect-RR-Skin-Capture.ps1 "$out/Collect-RR-Skin-Capture.ps1"
           Copy-Item Collect-RR-Skin-Capture.cmd "$out/Collect-RR-Skin-Capture.cmd"
           @'
-          CONTROL-FG - SHORT-HISTORY GI R16 (TEST BUILD)
+          CONTROL-FG - GI DISPATCH FIX R17 (TEST BUILD)
           ============================================
+          Fixes R16 rejecting auxiliary compute work and stopping RR.
+          Requires one temporal and all configured spatial GI replacements,
+          while letting unrelated native compute dispatches pass through.
           GI history is capped at 35%, rejected with motion/depth changes, and
           constrained to the current lighting neighborhood. Spatial passes do
           not blend history a second time. Native camera-cut flags are respected.
@@ -355,10 +358,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-RR-GI-Short-History-R16
+          name: Control-FG-RR-GI-Dispatch-Fix-R17
           path: |
-            Control-FG-RR-GI-Short-History-R16.zip
-            Control-FG-RR-GI-Short-History-R16.sha256
+            Control-FG-RR-GI-Dispatch-Fix-R17.zip
+            Control-FG-RR-GI-Dispatch-Fix-R17.sha256
             build/rr_hair_opacity.asm
             build/exports.txt
             build/imports.txt

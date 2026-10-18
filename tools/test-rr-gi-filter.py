@@ -19,14 +19,14 @@ void* verifiedRenderer=reinterpret_cast<void*>(0x10000000);
 void* seenColor=nullptr;void* seenHistory=nullptr;unsigned seenPasses=0;
 bool RRNativePartialActive(){return partial;}
 namespace control_rr_clamp {
-struct GIScope {unsigned temporal=0,spatial=0,missed=0;};
+struct GIScope {unsigned temporal=0,spatial=0,missed=0,passthrough=0;};
 GIScope* giActive=nullptr;
 bool GIReady(){return armOkay;}
 }
 void release(void*){++restores;SetLastError(222);}
 auto rrNativeGIReleaseOriginal=&release;
 void native(void* c,void* h,unsigned p){++calls;seenColor=c;seenHistory=h;seenPasses=p;
- if(control_rr_clamp::giActive){++control_rr_clamp::giActive->temporal;control_rr_clamp::giActive->spatial=p;if(!restoreOkay)control_rr_clamp::giActive->missed=1;}
+ if(control_rr_clamp::giActive){++control_rr_clamp::giActive->temporal;control_rr_clamp::giActive->spatial=p;control_rr_clamp::giActive->passthrough=4;if(!restoreOkay)control_rr_clamp::giActive->missed=1;}
  SetLastError(321);if(raiseNative)RaiseException(0xe0123456,0,0,nullptr);}
 auto rrNativeDiffuseFilterOriginal=&native;
 template<class... T> void Log(const char*,T...){SetLastError(902);}

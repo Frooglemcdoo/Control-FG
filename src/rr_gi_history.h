@@ -4,7 +4,7 @@
 struct GIBundle {ID3D12PipelineState* native=nullptr;ID3D12PipelineState* replacement=nullptr;unsigned kind=0;};
 inline std::atomic<GIBundle*> giBundles[24]{};
 inline std::atomic<unsigned> giBundleCount{0};
-struct GIScope {ID3D12GraphicsCommandList* list=nullptr;ID3D12PipelineState* observed=nullptr;unsigned temporal=0,spatial=0,missed=0;};
+struct GIScope {ID3D12GraphicsCommandList* list=nullptr;ID3D12GraphicsCommandList* observedList=nullptr;ID3D12PipelineState* observed=nullptr;unsigned temporal=0,spatial=0,missed=0,passthrough=0;};
 inline thread_local GIScope* giActive=nullptr;
 inline int GITarget(const D3D12_COMPUTE_PIPELINE_STATE_DESC* desc) noexcept {
  __try {
@@ -28,14 +28,19 @@ inline bool GIReady() noexcept {
  return mask==7&&listTable&&listTable[14]==reinterpret_cast<void*>(&Dispatch)&&listTable[25]==reinterpret_cast<void*>(&Set);
 }
 inline void GIObserveSet(ID3D12GraphicsCommandList* list,ID3D12PipelineState* pso) noexcept {
- if(!giActive)return;if(!giActive->list)giActive->list=list;
- if(giActive->list==list)giActive->observed=pso;else ++giActive->missed;
+ if(!giActive)return;
+ giActive->observedList=list;giActive->observed=pso;
 }
 inline bool GIDispatch(ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT z) {
  auto* scope=giActive;if(!scope)return false;
+ if(scope->observedList!=list){++scope->missed;return false;}
  GIBundle* found=nullptr;
  for(auto& slot:giBundles){auto* b=slot.load(std::memory_order_acquire);if(b&&b->native==scope->observed){found=b;break;}}
- if(scope->list!=list||!found||!found->replacement){++scope->missed;return false;}
+ // The native filter also records auxiliary compute work. Only known GI
+ // PSOs count toward the replacement contract; unrelated work stays native.
+ if(!found){++scope->passthrough;return false;}
+ if((scope->list&&scope->list!=list)||!found->replacement){++scope->missed;return false;}
+ if(!scope->list)scope->list=list;
  __try {setOriginal(list,found->replacement);dispatchOriginal(list,x,y,z);
   if(found->kind==0)++scope->temporal;else ++scope->spatial;
  } __finally {setOriginal(list,scope->observed);}

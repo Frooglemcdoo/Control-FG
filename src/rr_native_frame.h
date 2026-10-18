@@ -577,7 +577,7 @@ static void RRNativeHookGIFilter(void* color,void* history,unsigned passes) {
   rrNativeGIReleaseOriginal(history);
   const DWORD error=GetLastError();
   if(rrNativeFrame.Reset()||rrNativeRTFrame.frame%240==0)
-   Log("RR_GI_SHORT_HISTORY_R16 frame=%llu applied=0 fallback=raw_gi",static_cast<unsigned long long>(rrNativeRTFrame.frame));
+   Log("RR_GI_SHORT_HISTORY_R17 frame=%llu applied=0 fallback=raw_gi",static_cast<unsigned long long>(rrNativeRTFrame.frame));
   SetLastError(error);return;
  }
  control_rr_clamp::GIScope scope{};
@@ -592,8 +592,8 @@ static void RRNativeHookGIFilter(void* color,void* history,unsigned passes) {
   const bool okay=scope.temporal==1&&scope.spatial==passes&&!scope.missed;
   if(!okay)rrNativeFrame.Fail("gi_shader_dispatch_contract");
   if(!okay||rrNativeFrame.Reset()||rrNativeRTFrame.frame%240==0)
-   Log("RR_GI_SHORT_HISTORY_R16 frame=%llu applied=%u temporal_dispatches=%u spatial_dispatches=%u expected_spatial=%u missed=%u max_history=0.35 motion_rejection_pixels=8 pso_restored=1",
-    static_cast<unsigned long long>(rrNativeRTFrame.frame),unsigned(okay),scope.temporal,scope.spatial,passes,scope.missed);
+   Log("RR_GI_SHORT_HISTORY_R17 frame=%llu applied=%u temporal_dispatches=%u spatial_dispatches=%u expected_spatial=%u missed=%u auxiliary_native=%u max_history=0.35 motion_rejection_pixels=8 pso_restored=1",
+    static_cast<unsigned long long>(rrNativeRTFrame.frame),unsigned(okay),scope.temporal,scope.spatial,passes,scope.missed,scope.passthrough);
   SetLastError(nativeError);
  }
 }
