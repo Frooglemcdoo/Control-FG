@@ -1,4 +1,4 @@
-# Full PT conversion — development checkpoint, not a user build
+# Full PT conversion — experimental in-game test build
 
 User requirement: all lights evaluated through PT, no baked or native lighting.
 R102 was visually worse and its authored no-shadow policy is rejected.
@@ -19,8 +19,9 @@ Not complete and not advertised as full PT:
 - Scene completeness still depends on the captured native TLAS and light lists.
 - The four-hit limit remains. There is no physical sky-source import.
 
-Shipping package is deliberately disabled while these gaps remain. This avoids
-asking the user to judge a darker intermediate state as a purported lighting fix.
+A clearly labelled M12R103DEV test update is packaged for in-game validation.
+It is not a completed full-PT release; the gaps above remain explicit in its
+README and Build.json. No claim of visual parity follows from the CI results.
 
 Next implementation: replace specialized primary/fallback shading with PT material handling and
 verify that production composition cannot source native illumination when PT owns
@@ -57,7 +58,7 @@ extraction (filtering, bounds, transforms, overflow) and production integrator
 readback (direct+hit MIS, shadows, missing registry, last bounce, unsupported
 secondary emission). Production DXIL and extended native compute root/PSO checks
 are required. These tests do not establish in-game image parity or all-material
-PT ownership. Packaging remains disabled; this is not an installable full-PT fix.
+PT ownership. The test package includes the emitter builder. It is not a completed full-PT fix.
 
 ## Opaque material composition conversion
 

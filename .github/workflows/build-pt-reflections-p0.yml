@@ -537,31 +537,18 @@ jobs:
           dumpbin /exports build\dxgi.dll > build\exports.txt
           dumpbin /imports build\dxgi.dll > build\imports.txt
 
-      - name: Package reconstructed primary PT M12R102
-        if: ${{ false }} # Full PT conversion incomplete; do not ship a partial renderer.
+      - name: Package M12R103DEV in-game test update
         shell: powershell
-        run: |
-          $ErrorActionPreference='Stop'
-          $out='Control-FG-PT-Primary-M12R102'
-          New-Item -ItemType Directory -Force -Path $out | Out-Null
-          Copy-Item build/dxgi.dll "$out/dxgi.dll"
-          Copy-Item build/dxgi.pdb "$out/dxgi.pdb"
-          Copy-Item tools/PT-Profile.cmd,tools/PT-Profile.ps1 $out
-          Copy-Item tools/PT-Capture-Baseline.cmd,tools/PT-Capture-Restore.cmd,tools/PT-Enable.cmd,tools/PT-Enable.ps1,tools/RT-Only.cmd $out
-          $shaders=@('pt_surface_reconstruct.dxil','pt_primary_surface.dxil','pt_terminal_gi_compute.dxil','pt_primary_path.dxil','pt_reflection_p1.dxil','pt_reflection_p2.dxil',
-            'pt_reflection_p2_composite.dxbc','pt_reflection_p2_verify.dxbc',
-            'pt_reflection_p2_local_light_probe.dxbc','pt_reflection_p2_diffuse_bridge.dxbc',
-            'pt_glass_raygen.dxil','pt_glass_secondary.dxbc','pt_glass_composite.dxbc')
-          foreach($shader in $shaders){Copy-Item "build/$shader" $out}
-          Copy-Item tools/Collect-PT-Primary-M12R102.cmd,tools/Collect-PT-Primary-M12R102.ps1 $out
-          Copy-Item research/pt-reflections/PT-Primary-M12R102-README.txt "$out/README.txt"
-          @{Build='M12R102';Commit=$env:GITHUB_SHA;Run=$env:GITHUB_RUN_ID;Lighting='PT surface replacement with spatial-temporal reconstruction';SurfaceReplacementEnabled=$true;SurfaceBinding='root_buffer';GlobalSamplerReplay='explicit_same_root_and_continuously_bound_sampler_heap';SecondaryShadingNormal='oriented_interpolated_mesh_with_geometric_fallback';ReflectionHemisphere='geometric_direct_and_continuation';Reconstruction='fresh_current_frame_for_selected_rr_otherwise_split_temporal_spatial';PTDiffuseGuidesEnabled=$true;DirectLightTarget='material_brdf_radiance';DirectLightLobe='native_radius_broadening';LightVisibility='authored_shadow_flags_with_traced_casters';PrimaryLightCandidates='enumerate_up_to_64';FlickerResolved=$false;SecondaryMaterialAdmission='native_unified_flags_primary_gate_separate';MissGI='native_extent_endpoint_cache_with_environment_fallback';SecondaryDiffuseTail='authored_cache_at_covered_hit_with_probability_compensated_specular_continuation';DiffuseReconstructionFactor='unit_color_matches_primary_transport';FallbackDiagnostics='binding_origin_shader_and_material_screen_regions';PTSpecularGuideAngle='primary_n_dot_v';SurfaceFallbackDiagnostics=$true;PendingSurfaceCamera=$true;FoliageVertexCamera=$true;SecondaryEmissionBeforeBRDFRejection=$true;PrimaryLobeProposal='balanced_energy_preserving';EarlySurfaceReservation=$true;NativePrimaryMaterialColor=$true;TerminalDiffuseVolumeCache=$true;TerminalGIExecution='compute_after_trace_reusing_reconstruction_buffers';PipelineCreationDiagnostics=$true;ConsumerIsolationEnabled=$true;ObjectMotionSupported=$false;PrimaryCorrespondenceFixed=$false;MissingLightingFixed=$false;NativePassesRetained=$true;PerformanceRedesignComplete=$false;Validation='Windows build and WARP; in-game test pending'} |
-            ConvertTo-Json | Set-Content "$out/Build.json" -Encoding UTF8
-          Get-ChildItem -LiteralPath $out -File | Sort-Object Name | ForEach-Object {
-            '{0}  {1}' -f (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant(),$_.Name
-          } | Set-Content "$out/SHA256SUMS.txt" -Encoding ASCII
-          Compress-Archive -Path "$out/*" -DestinationPath "$out.zip" -Force
-          (Get-FileHash "$out.zip" -Algorithm SHA256).Hash | Set-Content "$out.sha256" -Encoding ASCII
+        run: tools/package-pt-primary.ps1
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Control-FG-PT-Primary-M12R103DEV-Test
+          path: |
+            Control-FG-PT-Primary-M12R103DEV-Test.zip
+            Control-FG-PT-Primary-M12R103DEV-Test.sha256
+          if-no-files-found: error
+          retention-days: 14
 
       - uses: actions/upload-artifact@v4
         if: always()
