@@ -285,7 +285,7 @@ jobs:
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-RR-Hair-Temporal-R9'
+          $out='Control-FG-RR-Hair-Paired-Capture-R10'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/pt_glass_raygen.dxil "$out/pt_glass_raygen.dxil"
           Copy-Item build/pt_glass_secondary.dxbc "$out/pt_glass_secondary.dxbc"
@@ -302,17 +302,23 @@ jobs:
           Copy-Item Collect-RR-Skin-Capture.ps1 "$out/Collect-RR-Skin-Capture.ps1"
           Copy-Item Collect-RR-Skin-Capture.cmd "$out/Collect-RR-Skin-Capture.cmd"
           @'
-          CONTROL-FG - HAIR TEMPORAL GUIDE R9 (FIX CANDIDATE)
-          ===============================================
-          Adds Model F's negative responsivity hint only on partial hair coverage
-          and hair edges. Untagged skin and background receive exactly zero.
-          Retains the R7/R8 hair guides and R6 glass hook fix.
-          Other RR presets do not receive this optional mask.
+          CONTROL-FG - HAIR PAIRED CAPTURE R10 (DIAGNOSTIC)
+          ==============================================
+          Rendering shaders are identical to R9. Skin and glass are unchanged.
+          F9 now prepares two slots and captures successive RR evaluations.
+          Captures input color/depth/motion, raw GBuffer1/2, replay albedo,
+          RR guides, hair responsivity and post-RR output when its state is proven.
+          Metadata reports actual frame gaps, output status, jitter, motion scale,
+          reset, formats, dimensions and exact resource states.
 
           Close Control. Install all binaries beside Control_DX12.exe.
-          Use RR Model F. Compare the same loose strands stationary and moving.
-          Check for reduced flicker and any new trailing during movement.
-          F9 captures and both log collectors remain included.
+          Use RR Model F and the same scene with the troublesome loose strands.
+          Keep the camera still, allow Jesse's idle animation, press F9 once.
+          Wait 20 seconds. Run Collect-RR-Skin-Capture.cmd.
+          Send the single Control-RR-Hair-Audit-R10 ZIP from your Desktop.
+          The collector includes the pair report and matching available probe logs.
+          A capture may briefly hitch. Do not change RR/FG/resolution during it.
+          Legacy pixel capture has moved to Ctrl+F9 to avoid overlapping captures.
           '@ | Set-Content "$out/README.txt" -Encoding ASCII
           Compress-Archive -Path "$out/*" -DestinationPath "$out.zip" -Force
           (Get-FileHash "$out.zip" -Algorithm SHA256).Hash | Set-Content "$out.sha256" -Encoding ASCII
@@ -320,10 +326,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-RR-Hair-Temporal-R9
+          name: Control-FG-RR-Hair-Paired-Capture-R10
           path: |
-            Control-FG-RR-Hair-Temporal-R9.zip
-            Control-FG-RR-Hair-Temporal-R9.sha256
+            Control-FG-RR-Hair-Paired-Capture-R10.zip
+            Control-FG-RR-Hair-Paired-Capture-R10.sha256
             build/rr_hair_opacity.asm
             build/exports.txt
             build/imports.txt

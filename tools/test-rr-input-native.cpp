@@ -12,7 +12,7 @@ static RRGuideInputSnapshot current{};static unsigned acquired=0,released=0,reco
 static bool RRGuideReadRendererContext(RRGuideInputSnapshot* out,const char**){*out=current;return true;}
 static bool RRGuideTryAcquireNativeLock(void* p){if(p==busy)return false;++acquired;return true;}
 static void RRGuideReleaseNativeLock(void*){++released;}
-static bool RRInputCaptureRecord(RRInputCaptureJob*,const RRGuideInputSnapshot*,DWORD*,bool* started) {assert(acquired-released==4);++records;*started=true;return true;}
+static bool RRInputCaptureRecord(RRInputCaptureJob*,const RRGuideInputSnapshot*,DWORD*,bool* started) {assert(acquired-released>=2&&acquired-released<=6);++records;*started=true;return true;}
 #include "../src/rr_input_capture_guard.h"
 int main(){
  IDXGIFactory4* factory=nullptr;IDXGIAdapter* adapter=nullptr;ID3D12Device* device=nullptr;
@@ -35,6 +35,17 @@ int main(){
  *reinterpret_cast<unsigned*>(wrappers[0]+0x60)=0xc0;wrappers[0][0x68]=1;assert(!RRInputCaptureFindNative(42,resources,inputs));wrappers[0][0x68]=0;
  assert(RRInputCaptureFindNative(42,resources,inputs));auto stale=current;stale.engineFrame=41;
  assert(!RRInputCaptureRecordGuarded(&job,&stale,inputs,&fault,&started));assert(!started&&records==1&&acquired==released);
+ RRGuideInputTexture five[]{inputs[0],inputs[1],inputs[2],inputs[1],inputs[2]};
+ started=false;assert(RRInputCaptureRecordGuarded(&job,&current,five,&fault,&started,5));assert(started&&acquired==released);
+ started=false;busy=inputs[2].stateTracker;assert(!RRInputCaptureRecordGuarded(&job,&current,five,&fault,&started,5));assert(!started&&acquired==released);busy=nullptr;
+ // Output copies accept only explicitly tracked UAV, never read-only or RT.
+ RRGuideInputTexture output{};
+ assert(!RRInputCaptureFindOutput(42,resources[0],&output));
+ *reinterpret_cast<unsigned*>(wrappers[0]+0x60)=D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+ assert(RRInputCaptureFindOutput(42,resources[0],&output));
+ assert(!RRInputCaptureReadNative(wrappers[0],resources[0],&output));
+ assert(RRInputCaptureFindOutput(42,resources[0],&output));
+ started=false;assert(RRInputCaptureRecordGuarded(&job,&current,&output,&fault,&started,1,true));assert(started&&acquired==released);
  RRInputCaptureSetNativeTextures(nullptr,0,0);assert(!RRInputCaptureFindNative(42,resources,inputs));
  for(auto* r:resources)r->Release();device->Release();adapter->Release();factory->Release();
  puts("PASS: real WARP resource formats; wrapper scope/frame matching; native state rejection, lock release and pre-record revalidation");

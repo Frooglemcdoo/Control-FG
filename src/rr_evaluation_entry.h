@@ -83,7 +83,7 @@ static unsigned int RREvaluationEntry(unsigned int branch, ID3D12GraphicsCommand
             SetLastError(incomingError);return 0xBAD00001u;
         }
         RRInputCaptureBeforeEvaluation(list,in.frame,activePreset,bindings.normal,bindings.specular,bindings.diffuse,
-            hitDistance,hitDistance?rrDistanceLastStatus:nullptr,bindings.viewToClip,bindings.projectionValid,bindings.rawAlbedo,in.color,in.depth,in.motion,parameters);
+            hitDistance,hitDistance?rrDistanceLastStatus:nullptr,bindings.viewToClip,bindings.projectionValid,bindings.rawAlbedo,in.color,in.depth,in.motion,in.output,bindings.responsivity,parameters);
         rrAttempt=true;
         if(call<=4||(call%240)==0||distanceReset)
             Log("RR_F_DISTANCE_D1 frame=%llu preset=%u bound=%u resource=%p history_reset=%u projection_valid=%u",in.frame,activePreset,unsigned(hitDistance!=nullptr),hitDistance,unsigned(distanceReset),unsigned(bindings.projectionValid));
@@ -103,6 +103,7 @@ static unsigned int RREvaluationEntry(unsigned int branch, ID3D12GraphicsCommand
     SetLastError(incomingError);
     const unsigned int result=rrEvaluationOriginal(list,evaluationFeature,parameters,callback);
     const DWORD nativeError=GetLastError();
+    if(rrAttempt)RRInputCaptureAfterEvaluation(list,in.frame,in.output,result);
     const double perfNativeCpu=RRPerfElapsed(perfNativeStart);
     RRPerfEnd(perf);
     RRPerfEvaluation(in.frame,rrAttempt,(result&0xFFF00000u)!=0xBAD00000u,

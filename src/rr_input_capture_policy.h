@@ -13,4 +13,14 @@ struct InputCapturePolicy {
  bool Retire(std::uint64_t completed){if(phase!=Submitted)return false;if(completed==UINT64_MAX){phase=Failed;return false;}if(completed<1)return false;phase=Exporting;return true;}
  void Exported(){if(phase==Exporting)phase=Idle;}
 };
+// Returns 2 while waiting. Both readback slots must be ready before any copy.
+inline unsigned SelectInputCapturePair(InputCapturePolicy::Phase first,InputCapturePolicy::Phase second,
+ std::uint64_t firstFrame,std::uint64_t frame){
+ using P=InputCapturePolicy;
+ if(first==P::Requested)return 0;
+ if(second==P::Requested)return 1;
+ if(first==P::Ready&&second==P::Ready)return 0;
+ if(second==P::Ready&&(first==P::Recorded||first==P::Submitted||first==P::Exporting||first==P::Idle)&&firstFrame&&frame>firstFrame)return 1;
+ return 2;
+}
 }

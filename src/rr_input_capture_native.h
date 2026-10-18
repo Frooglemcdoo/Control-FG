@@ -6,7 +6,7 @@ static void RRInputCaptureSetNativeTextures(void* const* textures,unsigned count
  for(unsigned i=0;i<9;++i)rrInputCaptureNativeTextures[i]=textures&&i<count?textures[i]:nullptr;
  rrInputCaptureNativeFrame=frame;
 }
-static bool RRInputCaptureReadNative(void* texture,ID3D12Resource* expected,RRGuideInputTexture* out) noexcept {
+static bool RRInputCaptureReadNative(void* texture,ID3D12Resource* expected,RRGuideInputTexture* out,bool outputUav=false) noexcept {
  __try {
   if(!texture||!expected)return false;
   auto* p=static_cast<unsigned char*>(texture);*out={};out->nativeTexture=texture;
@@ -17,7 +17,7 @@ static bool RRInputCaptureReadNative(void* texture,ID3D12Resource* expected,RRGu
   out->stateTracker=*reinterpret_cast<void**>(p+0x50);if(!out->stateTracker)out->stateTracker=p+0x40;
   out->trackedState=*reinterpret_cast<unsigned*>(static_cast<unsigned char*>(out->stateTracker)+0x20);
   // Only established read states. No split, writable, copy or guessed states.
-  if(!(out->trackedState&0x40u)||(out->trackedState&~0xe0u))return false;
+  if(outputUav ? out->trackedState!=0x8u : (!(out->trackedState&0x40u)||(out->trackedState&~0xe0u)))return false;
   out->desc=expected->GetDesc();
   return !(out->desc.Flags&D3D12_RESOURCE_FLAG_ALLOW_SIMULTANEOUS_ACCESS);
  } __except(EXCEPTION_EXECUTE_HANDLER){return false;}
@@ -29,4 +29,11 @@ static bool RRInputCaptureFindNative(unsigned long long frame,ID3D12Resource* co
   if(!found)return false;
  }
  return true;
+}
+
+static bool RRInputCaptureFindOutput(unsigned long long frame,ID3D12Resource* resource,RRGuideInputTexture* out) noexcept {
+ if(frame!=rrInputCaptureNativeFrame)return false;
+ for(void* texture:rrInputCaptureNativeTextures)
+  if(RRInputCaptureReadNative(texture,resource,out,true))return true;
+ return false;
 }

@@ -115,7 +115,7 @@ static void FGPixelBridge(ID3D12GraphicsCommandList* list,ID3D12Resource* source
     ReleaseSRWLockExclusive(&fgPixelLock);
 }
 static void FGPixelPoll() noexcept {
-    static bool held=false;const bool down=(GetAsyncKeyState(VK_F9)&0x8000)!=0;
+    static bool held=false;const bool down=(GetAsyncKeyState(VK_F9)&0x8000)!=0&&(GetAsyncKeyState(VK_CONTROL)&0x8000)!=0;
     AcquireSRWLockExclusive(&fgPixelLock);
     if(down&&!held){
         if(fgPixelRemaining||fgPixelBurst>=4)Log("PIXEL_REQUEST_REJECT reason=busy_or_four_burst_limit");
