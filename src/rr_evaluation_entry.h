@@ -67,6 +67,9 @@ static unsigned int RREvaluationEntry(unsigned int branch, ID3D12GraphicsCommand
             ID3D12Resource* character=RRDiffuseCharacterCurrent(in.frame,in.width,in.height);
             if(character)bindings.responsivity=RRSkinMaskBeforeEvaluation(list,character,in.width,in.height,in.frame);
         }
+        // Responsivity is supported only by F. Always clear it on other presets.
+        if(activePreset!=control_rr::RRPresetF)bindings.responsivity=nullptr;
+        if(guides&&(call<=4||(call%240)==0))Log("RR_HAIR_RESPONSIVITY frame=%llu mask=%p preset=%u source=same_frame_slot range=minus075_to_zero skin_mask=zero",in.frame,bindings.responsivity,activePreset);
         const bool lighting=RRNativeLightingReady(in.frame);
         const bool beginEvaluation=rrNativeFrame.BeginEvaluation(in.frame,guides,lighting);
         if(control_rr::DistanceEligible(beginEvaluation,bindings.projectionValid,activePreset,control_rr::RRPresetF))

@@ -36,6 +36,7 @@ static bool RRNativeTakeGuides(const RREvaluationInputs& in,RRNativeGuideBinding
    if(!owner->policy.TakeEvaluation({i,state.serial},state.key))__leave;
    bindings.normal=slot.normal;bindings.specular=slot.specular;bindings.diffuse=slot.diffuse;
    bindings.rawAlbedo=slot.texturedAlbedoValid?slot.texturedAlbedo:nullptr;
+   bindings.responsivity=slot.texturedAlbedoValid?slot.hairResponsivity:nullptr;
    good=bindings.normal&&bindings.specular&&bindings.diffuse;break;
   }
  } __except(EXCEPTION_EXECUTE_HANDLER){good=false;}

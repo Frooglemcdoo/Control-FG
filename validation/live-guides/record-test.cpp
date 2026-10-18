@@ -12,10 +12,10 @@ struct D3D12_RESOURCE_BARRIER {UINT Type=0;struct {ID3D12Resource* pResource=nul
 static unsigned seen=0,failAt=0;static unsigned long long* commandCount=nullptr;
 static DWORD GetExceptionCode(){return 123;}
 struct Heap {std::uint64_t GetGPUDescriptorHandleForHeapStart(){return 77;}};
-static ID3D12Resource normal,specular,diffuse;static Heap heap;
+static ID3D12Resource normal,specular,diffuse,hair;static Heap heap;
 static void step(){++seen;assert(*commandCount==seen);if(seen==failAt)throw std::runtime_error("simulated command fault");}
 struct List {
- void ResourceBarrier(UINT n,D3D12_RESOURCE_BARRIER* b){step();assert(n==3);assert(b[0].Transition.pResource==&normal&&b[1].Transition.pResource==&diffuse&&b[2].Transition.pResource==&specular);for(UINT i=0;i<3;++i){assert(b[i].Transition.Subresource==~0u);assert(b[i].Transition.StateBefore==(seen==1?64u:8u));assert(b[i].Transition.StateAfter==(seen==1?8u:64u));}}
+ void ResourceBarrier(UINT n,D3D12_RESOURCE_BARRIER* b){step();assert(n==4);assert(b[0].Transition.pResource==&normal&&b[1].Transition.pResource==&diffuse&&b[2].Transition.pResource==&specular&&b[3].Transition.pResource==&hair);for(UINT i=0;i<4;++i){assert(b[i].Transition.Subresource==~0u);assert(b[i].Transition.StateBefore==(seen==1?64u:8u));assert(b[i].Transition.StateAfter==(seen==1?8u:64u));}}
  void SetDescriptorHeaps(UINT n,Heap** h){step();assert(n==1&&*h==&heap);}
  void SetComputeRootSignature(void* p){step();assert(p==reinterpret_cast<void*>(1));}
  void SetPipelineState(void* p){step();assert(p==reinterpret_cast<void*>(2));}
@@ -24,11 +24,11 @@ struct List {
  void Dispatch(UINT x,UINT y,UINT z){step();assert(x==161&&y==91&&z==1);}
 };
 struct RRLiveOwner{UINT width=2561,height=1441;void* root=reinterpret_cast<void*>(1);void* pipeline=reinterpret_cast<void*>(2);};
-struct RRLiveSlot{ID3D12Resource* normal;ID3D12Resource* specular;ID3D12Resource* diffuse;Heap* heap;};
+struct RRLiveSlot{ID3D12Resource* normal;ID3D12Resource* specular;ID3D12Resource* diffuse;ID3D12Resource* hairResponsivity;Heap* heap;};
 struct RRGuideInputSnapshot {List* commandList;void* commandContext;};
 #include "../../src/rr_live_record.h"
 int main(){
- RRLiveOwner c;RRLiveSlot s{&normal,&specular,&diffuse,&heap};List list;
+ RRLiveOwner c;RRLiveSlot s{&normal,&specular,&diffuse,&hair,&heap};List list;
  struct Context{unsigned long long reserved,count;} context{};
  RRGuideInputSnapshot input{&list,&context};RRLiveConstants constants{1,3,2561,1441};
  for(unsigned fail=0;fail<=8u;++fail){seen=0;failAt=fail;context.count=0;DWORD fault=0;commandCount=&context.count;

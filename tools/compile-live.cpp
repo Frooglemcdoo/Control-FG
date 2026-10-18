@@ -16,10 +16,10 @@ int main() {
     if(FAILED(hr) || !reflection) {code->Release();return 4;}
     UINT x=0,y=0,z=0;reflection->GetThreadGroupSize(&x,&y,&z);
     bool contract=x==16 && y==16 && z==1;
-    const char* resources[]={"GBuffer1","GBuffer2","MaterialDataPart1","EnvBRDF","LinearClamp","NormalRoughness","DiffuseGuide","SpecularGuide","GuideConstants","TexturedCharacterAlbedo"};
-    const D3D_SHADER_INPUT_TYPE types[]={D3D_SIT_TEXTURE,D3D_SIT_TEXTURE,D3D_SIT_STRUCTURED,D3D_SIT_TEXTURE,D3D_SIT_SAMPLER,D3D_SIT_UAV_RWTYPED,D3D_SIT_UAV_RWTYPED,D3D_SIT_UAV_RWTYPED,D3D_SIT_CBUFFER,D3D_SIT_TEXTURE};
-    const UINT slots[]={0,1,2,3,0,0,1,2,0,4};
-    for(UINT i=0;i<10;++i) {
+    const char* resources[]={"GBuffer1","GBuffer2","MaterialDataPart1","EnvBRDF","LinearClamp","NormalRoughness","DiffuseGuide","SpecularGuide","GuideConstants","TexturedCharacterAlbedo","HairResponsivity"};
+    const D3D_SHADER_INPUT_TYPE types[]={D3D_SIT_TEXTURE,D3D_SIT_TEXTURE,D3D_SIT_STRUCTURED,D3D_SIT_TEXTURE,D3D_SIT_SAMPLER,D3D_SIT_UAV_RWTYPED,D3D_SIT_UAV_RWTYPED,D3D_SIT_UAV_RWTYPED,D3D_SIT_CBUFFER,D3D_SIT_TEXTURE,D3D_SIT_UAV_RWTYPED};
+    const UINT slots[]={0,1,2,3,0,0,1,2,0,4,3};
+    for(UINT i=0;i<11;++i) {
         D3D11_SHADER_INPUT_BIND_DESC d{};
         contract=contract && SUCCEEDED(reflection->GetResourceBindingDescByName(resources[i],&d)) && d.Type==types[i] && d.BindPoint==slots[i] && d.BindCount==1;
     }

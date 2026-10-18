@@ -12,6 +12,7 @@ struct RRLiveSlot {
     ID3D12Resource* normal=nullptr;ID3D12Resource* specular=nullptr;
     ID3D12Resource* diffuse=nullptr;
     ID3D12Resource* texturedAlbedo=nullptr;
+    ID3D12Resource* hairResponsivity=nullptr;
     bool diffuseValid=false;
     bool texturedAlbedoValid=false;
     CameraSnapshot camera{};
@@ -48,10 +49,10 @@ static bool RRLiveAllFree(RRLiveOwner* c) noexcept {
     return true;
 }
 static void RRLiveReleaseSources(RRLiveSlot& s) noexcept {for(auto*& p:s.sources) RRGuideRelease(p);}
-static HRESULT RRLiveMakeTexture(RRLiveOwner* c,ID3D12Resource** out,bool=false,bool=false) noexcept {
+static HRESULT RRLiveMakeTexture(RRLiveOwner* c,ID3D12Resource** out,DXGI_FORMAT format=DXGI_FORMAT_R16G16B16A16_FLOAT) noexcept {
     D3D12_HEAP_PROPERTIES hp{};hp.Type=D3D12_HEAP_TYPE_DEFAULT;hp.CreationNodeMask=hp.VisibleNodeMask=1;
     D3D12_RESOURCE_DESC d{};d.Dimension=D3D12_RESOURCE_DIMENSION_TEXTURE2D;d.Width=c->requestedWidth;d.Height=c->requestedHeight;
-    d.DepthOrArraySize=d.MipLevels=1;d.Format=DXGI_FORMAT_R16G16B16A16_FLOAT;d.SampleDesc.Count=1;
+    d.DepthOrArraySize=d.MipLevels=1;d.Format=format;d.SampleDesc.Count=1;
     d.Flags=D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
     return c->device->CreateCommittedResource(&hp,D3D12_HEAP_FLAG_NONE,&d,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,nullptr,IID_PPV_ARGS(out));
 }
@@ -85,14 +86,19 @@ static DWORD WINAPI RRLivePrepare(void* context) noexcept {
     D3D12_FEATURE_DATA_FORMAT_SUPPORT floatSupport{};floatSupport.Format=DXGI_FORMAT_R16G16B16A16_FLOAT;
     HRESULT hr=c->device->CheckFeatureSupport(D3D12_FEATURE_FORMAT_SUPPORT,&floatSupport,sizeof(floatSupport));
     if(SUCCEEDED(hr)&&!(floatSupport.Support2&D3D12_FORMAT_SUPPORT2_UAV_TYPED_STORE))hr=E_NOTIMPL;
+    if(SUCCEEDED(hr)) {
+        floatSupport={};floatSupport.Format=DXGI_FORMAT_R16_FLOAT;
+        hr=c->device->CheckFeatureSupport(D3D12_FEATURE_FORMAT_SUPPORT,&floatSupport,sizeof(floatSupport));
+        if(SUCCEEDED(hr)&&!(floatSupport.Support2&D3D12_FORMAT_SUPPORT2_UAV_TYPED_STORE))hr=E_NOTIMPL;
+    }
     if(SUCCEEDED(hr)&&!c->root){
         // r21t: match the supplied RenoDX RRG root contract exactly:
-        // [0] = four b0 constants, [1] = one descriptor table {t0..t4,u0..u2}.
+        // [0] = four b0 constants, [1] = one descriptor table {t0..t4,u0..u3}.
         // In particular, MaterialDataPart1 is a bounded StructuredBuffer SRV at t2
         // instead of an unbounded root GPU VA.
         D3D12_DESCRIPTOR_RANGE ranges[2]{};
         ranges[0].RangeType=D3D12_DESCRIPTOR_RANGE_TYPE_SRV;ranges[0].NumDescriptors=5;ranges[0].BaseShaderRegister=0;ranges[0].OffsetInDescriptorsFromTableStart=0;
-        ranges[1].RangeType=D3D12_DESCRIPTOR_RANGE_TYPE_UAV;ranges[1].NumDescriptors=3;ranges[1].BaseShaderRegister=0;ranges[1].OffsetInDescriptorsFromTableStart=5;
+        ranges[1].RangeType=D3D12_DESCRIPTOR_RANGE_TYPE_UAV;ranges[1].NumDescriptors=4;ranges[1].BaseShaderRegister=0;ranges[1].OffsetInDescriptorsFromTableStart=5;
         D3D12_ROOT_PARAMETER params[2]{};
         params[0].ParameterType=D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;params[0].Constants.Num32BitValues=4;params[0].Constants.ShaderRegister=0;
         params[1].ParameterType=D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;params[1].DescriptorTable={2,ranges};
@@ -115,16 +121,19 @@ static DWORD WINAPI RRLivePrepare(void* context) noexcept {
     }
     if(SUCCEEDED(hr)&&RRLiveAllFree(c)){
         for(auto& s:c->slots){
-            RRLiveReleaseSources(s);RRGuideRelease(s.normal);RRGuideRelease(s.specular);RRGuideRelease(s.diffuse);RRGuideRelease(s.texturedAlbedo);RRGuideRelease(s.heap);
+            RRLiveReleaseSources(s);RRGuideRelease(s.normal);RRGuideRelease(s.specular);RRGuideRelease(s.diffuse);RRGuideRelease(s.texturedAlbedo);RRGuideRelease(s.hairResponsivity);RRGuideRelease(s.heap);
             hr=RRLiveMakeTexture(c,&s.normal);if(SUCCEEDED(hr))hr=RRLiveMakeTexture(c,&s.diffuse);if(SUCCEEDED(hr))hr=RRLiveMakeTexture(c,&s.specular);
             if(SUCCEEDED(hr))hr=RRLiveMakeTexture(c,&s.texturedAlbedo);
-            D3D12_DESCRIPTOR_HEAP_DESC hd{};hd.Type=D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;hd.NumDescriptors=8;hd.Flags=D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+            if(SUCCEEDED(hr))hr=RRLiveMakeTexture(c,&s.hairResponsivity,DXGI_FORMAT_R16_FLOAT);
+            D3D12_DESCRIPTOR_HEAP_DESC hd{};hd.Type=D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;hd.NumDescriptors=9;hd.Flags=D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
             if(SUCCEEDED(hr))hr=c->device->CreateDescriptorHeap(&hd,IID_PPV_ARGS(&s.heap));if(FAILED(hr))break;
             auto handle=s.heap->GetCPUDescriptorHandleForHeapStart();handle.ptr+=SIZE_T(c->increment)*5;
             D3D12_UNORDERED_ACCESS_VIEW_DESC ud{};ud.Format=DXGI_FORMAT_R16G16B16A16_FLOAT;ud.ViewDimension=D3D12_UAV_DIMENSION_TEXTURE2D;
             c->device->CreateUnorderedAccessView(s.normal,nullptr,&ud,handle);handle.ptr+=c->increment;
             c->device->CreateUnorderedAccessView(s.diffuse,nullptr,&ud,handle);handle.ptr+=c->increment;
-            c->device->CreateUnorderedAccessView(s.specular,nullptr,&ud,handle);
+            c->device->CreateUnorderedAccessView(s.specular,nullptr,&ud,handle);handle.ptr+=c->increment;
+            ud.Format=DXGI_FORMAT_R16_FLOAT;
+            c->device->CreateUnorderedAccessView(s.hairResponsivity,nullptr,&ud,handle);
         }
         if(SUCCEEDED(hr)&&rrLiveGuideStatsEnabled)RRLiveCapturePrepare(c);
     }else if(SUCCEEDED(hr))hr=E_UNEXPECTED;

@@ -14,6 +14,7 @@ SamplerState LinearClamp : register(s0);
 RWTexture2D<float4> NormalRoughness : register(u0);
 RWTexture2D<float4> DiffuseGuide : register(u1);
 RWTexture2D<float4> SpecularGuide : register(u2);
+RWTexture2D<float> HairResponsivity : register(u3);
 
 cbuffer GuideConstants : register(b0) {
     uint InvertSmoothness; // Control: 1 => roughness = 1 - GBuffer1.B
@@ -133,6 +134,7 @@ void GenerateLiveGuides(uint3 tid : SV_DispatchThreadID) {
     // The replay clears RGB to -1, preserving valid black and avoiding any
     // assumption that the native shader's alpha channel is a coverage mask.
     float3 diffuseGuide = materialGuide;
+    float hairResponsivity = 0.0f;
     if ((GuideFlags & 4u) != 0u) {
         const float4 replay = TexturedCharacterAlbedo.Load(int3(tid.xy, 0));
         const float3 albedo = replay.rgb;
@@ -141,9 +143,26 @@ void GenerateLiveGuides(uint3 tid : SV_DispatchThreadID) {
             // Preserve the exact character assignment. Only tagged replacement
             // hair blends with the existing material guide at partial opacity.
             const float hairWeight = ControlHairGuideWeight(replay.a);
+            if (ControlHairGuideTagged(replay.a)) {
+                // Model F: negative hints reduce flicker. Apply only to exact
+                // hair coverage, never dilate onto skin or background pixels.
+                uint neighbors = 0u;
+                [unroll] for (int y = -1; y <= 1; ++y) {
+                    [unroll] for (int x = -1; x <= 1; ++x) {
+                        const int2 q = int2(tid.xy) + int2(x,y);
+                        if (any(q < 0) || q.x >= (int)Width || q.y >= (int)Height) continue;
+                        const float4 a = TexturedCharacterAlbedo.Load(int3(q,0));
+                        if (ControlHairGuideTagged(a.a) &&
+                            ControlCharacterAlbedoValid(a.r,a.g,a.b)) ++neighbors;
+                    }
+                }
+                const float edge = 1.0f - float(neighbors) / 9.0f;
+                hairResponsivity = -0.75f * max(1.0f-hairWeight, edge);
+            }
             diffuseGuide = hairWeight == 1.0f ? albedo : lerp(materialGuide, albedo, hairWeight);
         }
     }
+    HairResponsivity[tid.xy] = hairResponsivity;
     DiffuseGuide[tid.xy] = float4(diffuseGuide, 1.0f);
     SpecularGuide[tid.xy] = float4(specularGuide, 1.0f);
 }

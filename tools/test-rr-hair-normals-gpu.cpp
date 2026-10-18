@@ -12,6 +12,7 @@
 #include <cstdlib>
 #include <cmath>
 #include <cstring>
+#include <cstdint>
 using Microsoft::WRL::ComPtr;
 static void check(bool ok,const char* what){if(!ok){std::fprintf(stderr,"FAIL: %s\n",what);std::exit(1);}}
 static void hr(HRESULT value){check(SUCCEEDED(value),"D3D call");}
@@ -50,18 +51,21 @@ int main(){
  texture(0,g1);texture(1,g2);texture(3,env);texture(4,albedo);
  const UINT material[4]={0x20202001u,0,0x20202001u,0};D3D11_BUFFER_DESC bd{};bd.ByteWidth=sizeof(material);bd.Usage=D3D11_USAGE_IMMUTABLE;bd.BindFlags=D3D11_BIND_SHADER_RESOURCE;bd.MiscFlags=D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;bd.StructureByteStride=8;
  D3D11_SUBRESOURCE_DATA init{material,0,0};ComPtr<ID3D11Buffer> table;hr(device->CreateBuffer(&bd,&init,&table));hr(device->CreateShaderResourceView(table.Get(),nullptr,&srvs[2]));
- std::array<ComPtr<ID3D11Texture2D>,3> outputs,staging;
- std::array<ComPtr<ID3D11UnorderedAccessView>,3> uavs;
- for(UINT j=0;j<3;++j){D3D11_TEXTURE2D_DESC d{};d.Width=W;d.Height=H;d.MipLevels=1;d.ArraySize=1;d.Format=DXGI_FORMAT_R32G32B32A32_FLOAT;d.SampleDesc.Count=1;d.BindFlags=D3D11_BIND_UNORDERED_ACCESS;
+ std::array<ComPtr<ID3D11Texture2D>,4> outputs,staging;
+ std::array<ComPtr<ID3D11UnorderedAccessView>,4> uavs;
+ for(UINT j=0;j<4;++j){D3D11_TEXTURE2D_DESC d{};d.Width=W;d.Height=H;d.MipLevels=1;d.ArraySize=1;d.Format=j==3?DXGI_FORMAT_R16_FLOAT:DXGI_FORMAT_R32G32B32A32_FLOAT;d.SampleDesc.Count=1;d.BindFlags=D3D11_BIND_UNORDERED_ACCESS;
   hr(device->CreateTexture2D(&d,nullptr,&outputs[j]));hr(device->CreateUnorderedAccessView(outputs[j].Get(),nullptr,&uavs[j]));d.BindFlags=0;d.Usage=D3D11_USAGE_STAGING;d.CPUAccessFlags=D3D11_CPU_ACCESS_READ;hr(device->CreateTexture2D(&d,nullptr,&staging[j]));}
  D3D11_SAMPLER_DESC sd{};sd.Filter=D3D11_FILTER_MIN_MAG_MIP_LINEAR;sd.AddressU=sd.AddressV=sd.AddressW=D3D11_TEXTURE_ADDRESS_CLAMP;sd.MaxLOD=D3D11_FLOAT32_MAX;ComPtr<ID3D11SamplerState> sampler;hr(device->CreateSamplerState(&sd,&sampler));
  auto run=[&](ID3D11ComputeShader* shader,UINT flags){UINT constants[4]={1,flags,W,H};D3D11_BUFFER_DESC d{};d.ByteWidth=16;d.Usage=D3D11_USAGE_IMMUTABLE;d.BindFlags=D3D11_BIND_CONSTANT_BUFFER;D3D11_SUBRESOURCE_DATA data{constants,0,0};ComPtr<ID3D11Buffer> cb;hr(device->CreateBuffer(&d,&data,&cb));
-  ID3D11ShaderResourceView* views[5];for(UINT j=0;j<5;++j)views[j]=srvs[j].Get();ID3D11UnorderedAccessView* targets[3];for(UINT j=0;j<3;++j)targets[j]=uavs[j].Get();
-  context->CSSetShader(shader,nullptr,0);context->CSSetShaderResources(0,5,views);context->CSSetUnorderedAccessViews(0,3,targets,nullptr);auto* c=cb.Get();context->CSSetConstantBuffers(0,1,&c);auto* s=sampler.Get();context->CSSetSamplers(0,1,&s);context->Dispatch(2,2,1);
-  ID3D11UnorderedAccessView* nulls[3]={};context->CSSetUnorderedAccessViews(0,3,nulls,nullptr);
-  std::array<std::vector<Pixel>,3> result;
-  for(UINT j=0;j<3;++j){context->CopyResource(staging[j].Get(),outputs[j].Get());D3D11_MAPPED_SUBRESOURCE mapped{};hr(context->Map(staging[j].Get(),0,D3D11_MAP_READ,0,&mapped));result[j].resize(N);
-   for(UINT y=0;y<H;++y)std::memcpy(result[j].data()+y*W,static_cast<const char*>(mapped.pData)+y*mapped.RowPitch,W*sizeof(Pixel));context->Unmap(staging[j].Get(),0);}return result;};
+  ID3D11ShaderResourceView* views[5];for(UINT j=0;j<5;++j)views[j]=srvs[j].Get();ID3D11UnorderedAccessView* targets[4];for(UINT j=0;j<4;++j)targets[j]=uavs[j].Get();
+  context->CSSetShader(shader,nullptr,0);context->CSSetShaderResources(0,5,views);context->CSSetUnorderedAccessViews(0,4,targets,nullptr);auto* c=cb.Get();context->CSSetConstantBuffers(0,1,&c);auto* s=sampler.Get();context->CSSetSamplers(0,1,&s);context->Dispatch(2,2,1);
+  ID3D11UnorderedAccessView* nulls[4]={};context->CSSetUnorderedAccessViews(0,4,nulls,nullptr);
+  std::array<std::vector<Pixel>,4> result;
+  for(UINT j=0;j<4;++j){context->CopyResource(staging[j].Get(),outputs[j].Get());D3D11_MAPPED_SUBRESOURCE mapped{};hr(context->Map(staging[j].Get(),0,D3D11_MAP_READ,0,&mapped));result[j].resize(N);
+   for(UINT y=0;y<H;++y){const auto* row=static_cast<const char*>(mapped.pData)+y*mapped.RowPitch;
+    if(j<3)std::memcpy(result[j].data()+y*W,row,W*sizeof(Pixel));
+    else for(UINT x=0;x<W;++x){std::uint16_t h=0;std::memcpy(&h,row+x*2,2);const int e=(h>>10)&31;const float m=float(h&1023);float v=e?std::ldexp(1.0f+m/1024.0f,e-15):std::ldexp(m,-24);result[j][y*W+x].v[0]=(h&32768)?-v:v;}
+   }context->Unmap(staging[j].Get(),0);}return result;};
  UINT changed=0;
  for(UINT flags : {0u,1u,3u,4u,5u,7u}){auto before=run(original.Get(),flags),after=run(candidate.Get(),flags);
   if((flags&5u)==5u){
@@ -71,8 +75,12 @@ int main(){
   }
   for(UINT i=0;i<N;++i){const bool hair=albedo[i].v[3]==-2.5f&&(flags&5u)==5u;
    for(UINT j=0;j<3;++j){if(!hair||j==1)check(!std::memcmp(&before[j][i],&after[j][i],sizeof(Pixel)),"untagged skin/fallback/diffuse changed");}
+   const bool tagged=albedo[i].v[3]==-2.5f&&(flags&4u)!=0u;
+   const float hint=after[3][i].v[0];
+   check(std::isfinite(hint)&&hint>=-0.75f&&hint<=0.0f,"mask range");
+   check(tagged?hint<0.0f:hint==0.0f,"hair mask leaked into skin or missing guide");
    if(hair){check(before[0][i].v[3]==after[0][i].v[3],"roughness changed");float len=0;for(UINT c=0;c<3;++c){float v=after[0][i].v[c];check(std::isfinite(v),"nonfinite normal");len+=v*v;}check(std::abs(len-1.0f)<0.0001f,"normal not unit length");if(std::memcmp(&before[0][i],&after[0][i],12))++changed;}
   }
  }
- check(changed>0,"hair normals unchanged");std::printf("PASS: production WARP shader changes hair normals (%u samples); isolated outlier corrected, different material rejected; skin, fallback, diffuse and roughness preserved across six guide modes\n",changed);
+ check(changed>0,"hair normals unchanged");std::printf("PASS: production WARP shader changes hair normals (%u samples); isolated outlier corrected, different material rejected; skin, fallback, diffuse and roughness preserved; R16F hair hint negative and skin zero across six guide modes\n",changed);
 }

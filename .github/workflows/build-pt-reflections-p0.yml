@@ -285,7 +285,7 @@ jobs:
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-RR-Hair-Strands-R8'
+          $out='Control-FG-RR-Hair-Temporal-R9'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/pt_glass_raygen.dxil "$out/pt_glass_raygen.dxil"
           Copy-Item build/pt_glass_secondary.dxbc "$out/pt_glass_secondary.dxbc"
@@ -302,18 +302,17 @@ jobs:
           Copy-Item Collect-RR-Skin-Capture.ps1 "$out/Collect-RR-Skin-Capture.ps1"
           Copy-Item Collect-RR-Skin-Capture.cmd "$out/Collect-RR-Skin-Capture.cmd"
           @'
-          CONTROL-FG - HAIR STRAND GUIDE R8 (FIX CANDIDATE)
+          CONTROL-FG - HAIR TEMPORAL GUIDE R9 (FIX CANDIDATE)
           ===============================================
-          Retains R7 hair normal smoothing and rejects isolated normal outliers
-          only with a two-thirds majority of nearby matching hair material.
-          Native hair lighting, opacity, skin and reflection shaders are unchanged.
-          Includes the R6 glass hook fix.
+          Adds Model F's negative responsivity hint only on partial hair coverage
+          and hair edges. Untagged skin and background receive exactly zero.
+          Retains the R7/R8 hair guides and R6 glass hook fix.
+          Other RR presets do not receive this optional mask.
 
           Close Control. Install all binaries beside Control_DX12.exe.
-          Compare the neck hair with RR on in the same scene and camera position.
-          Check movement as well as a stationary camera.
-          F9 captures the updated guides for verification if needed.
-          Both log collectors remain included.
+          Use RR Model F. Compare the same loose strands stationary and moving.
+          Check for reduced flicker and any new trailing during movement.
+          F9 captures and both log collectors remain included.
           '@ | Set-Content "$out/README.txt" -Encoding ASCII
           Compress-Archive -Path "$out/*" -DestinationPath "$out.zip" -Force
           (Get-FileHash "$out.zip" -Algorithm SHA256).Hash | Set-Content "$out.sha256" -Encoding ASCII
@@ -321,10 +320,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-RR-Hair-Strands-R8
+          name: Control-FG-RR-Hair-Temporal-R9
           path: |
-            Control-FG-RR-Hair-Strands-R8.zip
-            Control-FG-RR-Hair-Strands-R8.sha256
+            Control-FG-RR-Hair-Temporal-R9.zip
+            Control-FG-RR-Hair-Temporal-R9.sha256
             build/rr_hair_opacity.asm
             build/exports.txt
             build/imports.txt
