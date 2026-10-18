@@ -44,7 +44,7 @@ if($game.Count -ne 1){throw 'Run one instance of Control_DX12.exe and load the t
 $game=$game[0]
 $buildPath=Join-Path $PSScriptRoot 'Build.json'
 $build=Get-Content -LiteralPath $buildPath -Raw | ConvertFrom-Json
-if($build.Build -ne 'M12R102'){throw 'This capture script requires the M12R102 profiling package.'}
+if($build.Build -ne 'M12R103DEV'){throw 'This capture script requires the M12R103DEV profiling package.'}
 $manifest=Get-Content -LiteralPath (Join-Path $PSScriptRoot 'SHA256SUMS.txt')
 $expected=@($manifest | Where-Object {$_ -match '^[0-9a-fA-F]{64}\s+dxgi\.dll$'})
 if($expected.Count -ne 1){throw 'Package must contain exactly one dxgi.dll hash.'}
@@ -54,18 +54,18 @@ $hash=($expected[0] -split '\s+')[0].ToLowerInvariant()
 $loaded=@($game.Modules | Where-Object {$_.ModuleName -ieq 'dxgi.dll'} | Where-Object {
     (Get-FileHash -LiteralPath $_.FileName -Algorithm SHA256).Hash.ToLowerInvariant() -eq $hash
 })
-if($loaded.Count -ne 1){throw 'The running game has no unique dxgi.dll matching this R41 package. Install together and restart Control.'}
+if($loaded.Count -ne 1){throw 'The running game has no unique dxgi.dll matching this M12R103DEV package. Install together and restart Control.'}
 $logDir=Join-Path $env:LOCALAPPDATA 'ControlFGProbe'
 $record=Get-ChildItem -LiteralPath $logDir -Filter ('probe-*-'+$game.Id+'.log') -File | Sort-Object LastWriteTimeUtc -Descending | Select-Object -First 1
-if(-not $record){throw 'Cannot find a probe log for this game process. Restart Control after installing R41.'}
-$startup=@(Get-Content -LiteralPath $record.FullName | Where-Object {$_ -match 'PT_PRIMARY_STARTUP build=M12R102 capture=[01]'})
-if($startup.Count -ne 1){throw 'Loaded game does not have one R41 startup record. Restart after installation.'}
+if(-not $record){throw 'Cannot find a probe log for this game process. Restart Control after installing M12R103DEV.'}
+$startup=@(Get-Content -LiteralPath $record.FullName | Where-Object {$_ -match 'PT_PRIMARY_STARTUP build=M12R103DEV capture=[01]'})
+if($startup.Count -ne 1){throw 'Loaded game does not have one M12R103DEV startup record. Restart after installation.'}
 $actualBypass=$startup[0] -match 'capture=0'
 if(($Mode -eq 'Bypass') -ne $actualBypass){throw 'Selected mode disagrees with the RUNNING game. Use the baseline/restore script and restart Control.'}
 $dir=Join-Path $OutputDirectory ($Mode+'-'+$Resolution+'-'+(Get-Date -Format 'yyyyMMdd-HHmmss-fff'))
 New-Item -ItemType Directory -Path $dir -Force | Out-Null
 $profiles | Set-Content -LiteralPath (Join-Path $dir 'WPR-profiles.txt')
-$meta=[ordered]@{Build='M12R102';Commit=$build.Commit;DllSHA256=$hash;LoadedDll=$loaded[0].FileName;ProcessId=$game.Id;ProcessStartUtc=$game.StartTime.ToUniversalTime().ToString('o');RequestedMode=$Mode;RequestedResolution=$Resolution;StartupCaptureDisabled=$actualBypass;Seconds=$Seconds;Profile='GeneralProfile+GPU';SettingsAreUserLabels=$true;StartupRecord=$startup[0]}
+$meta=[ordered]@{Build='M12R103DEV';Commit=$build.Commit;DllSHA256=$hash;LoadedDll=$loaded[0].FileName;ProcessId=$game.Id;ProcessStartUtc=$game.StartTime.ToUniversalTime().ToString('o');RequestedMode=$Mode;RequestedResolution=$Resolution;StartupCaptureDisabled=$actualBypass;Seconds=$Seconds;Profile='GeneralProfile+GPU';SettingsAreUserLabels=$true;StartupRecord=$startup[0]}
 Write-Host 'Keep the same scene and camera, FG OFF, VSync/frame cap OFF, RR unchanged.'
 Write-Host 'Set the selected PT/DLSS state and wait for it to settle before continuing.'
 Read-Host 'Press Enter when ready. You then have 10 seconds to return to the game' | Out-Null
