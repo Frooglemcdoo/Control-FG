@@ -1032,6 +1032,7 @@ static bool Exchange(Patch& p, bool install) {
 
 #include "rr_albedo_hooks.h"
 #include "pt_reflection_loader.h"
+#include "rr_hair_opacity_runtime.h"
 static bool PTReflectionBridgeDiffuseGI() noexcept;
 #define CONTROL_FG_RR_VRAM_RESIZE_R2 1
 static bool RRNativeVramReleaseCachedRRFeaturesForResize(unsigned long long frame,

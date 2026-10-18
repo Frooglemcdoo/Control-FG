@@ -95,6 +95,10 @@ jobs:
           if errorlevel 1 exit /b 1
           build\compile-live.exe
           if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /O2 /MT tools\compile-rr-hair-opacity.cpp /Fobuild\compile-rr-hair-opacity.obj /Febuild\compile-rr-hair-opacity.exe /link d3dcompiler.lib
+          if errorlevel 1 exit /b 1
+          build\compile-rr-hair-opacity.exe
+          if errorlevel 1 exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /O2 /MT tools\compile-skin-mask.cpp /Fobuild\compile-skin-mask.obj /Febuild\compile-skin-mask.exe /link d3dcompiler.lib
           if errorlevel 1 exit /b 1
           build\compile-skin-mask.exe
@@ -265,7 +269,7 @@ jobs:
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-RR-Hair-Audit-R2'
+          $out='Control-FG-RR-Hair-Opacity-R3'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/pt_glass_raygen.dxil "$out/pt_glass_raygen.dxil"
           Copy-Item build/pt_glass_secondary.dxbc "$out/pt_glass_secondary.dxbc"
@@ -282,21 +286,21 @@ jobs:
           Copy-Item Collect-RR-Skin-Capture.ps1 "$out/Collect-RR-Skin-Capture.ps1"
           Copy-Item Collect-RR-Skin-Capture.cmd "$out/Collect-RR-Skin-Capture.cmd"
           @'
-          CONTROL-FG - RR HAIR AUDIT R2 (DIAGNOSTIC)
-          =========================================
-          Rendering is unchanged from Character Albedo R1. This is not a noise fix.
-          Adds raw RGBA albedo replay to each F9 guide capture and exports selected
-          native albedo/original shader pairs to diagnose black skin and hair edges.
-          One F9 press starts four serial snapshots, at least 30 presents apart.
-          These are timed snapshots, not consecutive frames; capture may hitch.
-          Only owned guide/replay copies are read back; native resources unchanged.
+          CONTROL-FG - RR HAIR OPACITY R3 (TEST FIX)
+          ========================================
+          Skin replay and RR guide shader are unchanged from Character Albedo R1.
+          Hair replay reads the captured native hair opacity source: texture slot
+          26 alpha times material tint alpha. Fully transparent fragments no longer
+          overwrite the RR albedo replay. Nonzero-opacity strands retain the prior
+          albedo result; this does not reproduce the full native coverage algorithm.
+          Only the exact captured hair shader pair is replaced. Others fall back.
+          Reflections, skin, normal/specular guides and RR settings are unchanged.
 
-          Close Control and install all binaries beside Control_DX12.exe.
-          Enable RR Model F. Frame the flickering hair against Jesse's neck.
-          Press F9 ONCE; hold the view for 15 seconds without changing settings.
-          Exit and run Collect-RR-Skin-Capture.cmd. Send its ZIP and compact logs.
-          The collector includes all completed snapshots from the latest process
-          and its shader evidence. Up to four snapshots per game launch.
+          Close Control. Install all binaries beside Control_DX12.exe.
+          Test the same loose hair/neck view with RR Model F.
+          Press F9 once; stay in gameplay for 15 seconds, then exit.
+          Send the hair capture ZIP, compact logs, and whether flicker improved.
+          Collect-RR-Skin-Capture.cmd retains four snapshots and shader evidence.
           '@ | Set-Content "$out/README.txt" -Encoding ASCII
           Compress-Archive -Path "$out/*" -DestinationPath "$out.zip" -Force
           (Get-FileHash "$out.zip" -Algorithm SHA256).Hash | Set-Content "$out.sha256" -Encoding ASCII
@@ -304,10 +308,11 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-RR-Hair-Audit-R2
+          name: Control-FG-RR-Hair-Opacity-R3
           path: |
-            Control-FG-RR-Hair-Audit-R2.zip
-            Control-FG-RR-Hair-Audit-R2.sha256
+            Control-FG-RR-Hair-Opacity-R3.zip
+            Control-FG-RR-Hair-Opacity-R3.sha256
+            build/rr_hair_opacity.asm
             build/exports.txt
             build/imports.txt
             build/pt_reflection_p1.dxil
