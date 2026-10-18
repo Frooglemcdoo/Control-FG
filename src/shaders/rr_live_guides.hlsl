@@ -27,6 +27,36 @@ cbuffer GuideConstants : register(b0) {
 // radius, matching material and hemisphere gate keep silhouettes and folds.
 float3 HairNormalGuide(uint2 pixel, float3 center) {
     const uint material = ControlDecodeMaterialID(GBuffer2.Load(int3(pixel, 0)));
+    // R8: a center-gated bilateral filter preserves isolated flipped normals.
+    // Select a local direction only when >= 2/3 of valid 3x3 hair samples
+    // agree. Ties, thin unsupported pixels and real folds retain the center.
+    float3 directions[9];
+    uint count = 0u;
+    [unroll] for (int dy = -1; dy <= 1; ++dy) {
+        [unroll] for (int dx = -1; dx <= 1; ++dx) {
+            const int2 q = int2(pixel) + int2(dx, dy);
+            if (any(q < 0) || q.x >= (int)Width || q.y >= (int)Height) continue;
+            const float4 replay = TexturedCharacterAlbedo.Load(int3(q, 0));
+            if (!ControlHairGuideTagged(replay.a) ||
+                !ControlCharacterAlbedoValid(replay.r, replay.g, replay.b)) continue;
+            if (ControlDecodeMaterialID(GBuffer2.Load(int3(q, 0))) != material) continue;
+            directions[count++] = ControlDecodeNormalView(GBuffer1.Load(int3(q, 0)));
+        }
+    }
+    uint bestSupport = 0u;
+    float3 bestDirection = center;
+    [loop] for (uint i = 0u; i < count; ++i) {
+        uint support = 0u;
+        [loop] for (uint j = 0u; j < count; ++j)
+            if (dot(directions[i], directions[j]) >= 0.5f) ++support;
+        if (support > bestSupport) {
+            bestSupport = support;
+            bestDirection = directions[i];
+        }
+    }
+    if (bestSupport >= 3u && bestSupport * 3u >= count * 2u &&
+        dot(center, bestDirection) < 0.5f)
+        center = bestDirection;
     float3 sum = center * 9.0f;
     [unroll] for (int y = -2; y <= 2; ++y) {
         [unroll] for (int x = -2; x <= 2; ++x) {

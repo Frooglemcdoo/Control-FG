@@ -285,7 +285,7 @@ jobs:
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-RR-Hair-Normals-R7'
+          $out='Control-FG-RR-Hair-Strands-R8'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/pt_glass_raygen.dxil "$out/pt_glass_raygen.dxil"
           Copy-Item build/pt_glass_secondary.dxbc "$out/pt_glass_secondary.dxbc"
@@ -302,10 +302,10 @@ jobs:
           Copy-Item Collect-RR-Skin-Capture.ps1 "$out/Collect-RR-Skin-Capture.ps1"
           Copy-Item Collect-RR-Skin-Capture.cmd "$out/Collect-RR-Skin-Capture.cmd"
           @'
-          CONTROL-FG - HAIR NORMAL GUIDE R7 (FIX CANDIDATE)
+          CONTROL-FG - HAIR STRAND GUIDE R8 (FIX CANDIDATE)
           ===============================================
-          Smooths strand-scale RR guide normals on the exact audited hair only.
-          Uses a 5x5 neighborhood with matching hair material and normal direction.
+          Retains R7 hair normal smoothing and rejects isolated normal outliers
+          only with a two-thirds majority of nearby matching hair material.
           Native hair lighting, opacity, skin and reflection shaders are unchanged.
           Includes the R6 glass hook fix.
 
@@ -321,10 +321,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-RR-Hair-Normals-R7
+          name: Control-FG-RR-Hair-Strands-R8
           path: |
-            Control-FG-RR-Hair-Normals-R7.zip
-            Control-FG-RR-Hair-Normals-R7.sha256
+            Control-FG-RR-Hair-Strands-R8.zip
+            Control-FG-RR-Hair-Strands-R8.sha256
             build/rr_hair_opacity.asm
             build/exports.txt
             build/imports.txt

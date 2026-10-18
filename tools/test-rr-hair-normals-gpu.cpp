@@ -39,11 +39,16 @@ int main(){
   // Tagged hair touches top/left texture bounds; untagged skin includes black.
   albedo[i]={{x%3?0.2f:0.0f,0.1f,0.05f,(x<16&&y<24)?-2.5f:0.0f}};
  }
+ // A lone reversed hair normal within a coherent patch must be corrected.
+ for(UINT y=2;y<=8;++y)for(UINT x=2;x<=8;++x)g1[y*W+x]={{0.5f,0.5f,0.0f,0.0f}};
+ g1[5*W+5]={{1.0f,1.0f,0.0f,1.0f}};
+ // An identical normal from a different material must retain its direction.
+ g1[5*W+10]={{1.0f,1.0f,0.0f,1.0f}};g2[5*W+10].v[3]=1.0f/255.0f;
  auto texture=[&](UINT slot,const std::vector<Pixel>& values){D3D11_TEXTURE2D_DESC d{};
   d.Width=W;d.Height=H;d.MipLevels=1;d.ArraySize=1;d.Format=DXGI_FORMAT_R32G32B32A32_FLOAT;d.SampleDesc.Count=1;d.Usage=D3D11_USAGE_IMMUTABLE;d.BindFlags=D3D11_BIND_SHADER_RESOURCE;
   D3D11_SUBRESOURCE_DATA init{values.data(),W*sizeof(Pixel),0};hr(device->CreateTexture2D(&d,&init,&inputs[slot]));hr(device->CreateShaderResourceView(inputs[slot].Get(),nullptr,&srvs[slot]));};
  texture(0,g1);texture(1,g2);texture(3,env);texture(4,albedo);
- const UINT material[2]={0x20202001u,0};D3D11_BUFFER_DESC bd{};bd.ByteWidth=sizeof(material);bd.Usage=D3D11_USAGE_IMMUTABLE;bd.BindFlags=D3D11_BIND_SHADER_RESOURCE;bd.MiscFlags=D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;bd.StructureByteStride=8;
+ const UINT material[4]={0x20202001u,0,0x20202001u,0};D3D11_BUFFER_DESC bd{};bd.ByteWidth=sizeof(material);bd.Usage=D3D11_USAGE_IMMUTABLE;bd.BindFlags=D3D11_BIND_SHADER_RESOURCE;bd.MiscFlags=D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;bd.StructureByteStride=8;
  D3D11_SUBRESOURCE_DATA init{material,0,0};ComPtr<ID3D11Buffer> table;hr(device->CreateBuffer(&bd,&init,&table));hr(device->CreateShaderResourceView(table.Get(),nullptr,&srvs[2]));
  std::array<ComPtr<ID3D11Texture2D>,3> outputs,staging;
  std::array<ComPtr<ID3D11UnorderedAccessView>,3> uavs;
@@ -59,10 +64,15 @@ int main(){
    for(UINT y=0;y<H;++y)std::memcpy(result[j].data()+y*W,static_cast<const char*>(mapped.pData)+y*mapped.RowPitch,W*sizeof(Pixel));context->Unmap(staging[j].Get(),0);}return result;};
  UINT changed=0;
  for(UINT flags : {0u,1u,3u,4u,5u,7u}){auto before=run(original.Get(),flags),after=run(candidate.Get(),flags);
+  if((flags&5u)==5u){
+   check(before[0][5*W+5].v[2]>0.5f,"outlier fixture not reversed");
+   check(after[0][5*W+5].v[2]<-0.9f,"majority failed to recover isolated reversed hair normal");
+   for(UINT c=0;c<3;++c)check(std::abs(before[0][5*W+10].v[c]-after[0][5*W+10].v[c])<0.00001f,"different-material singleton changed");
+  }
   for(UINT i=0;i<N;++i){const bool hair=albedo[i].v[3]==-2.5f&&(flags&5u)==5u;
    for(UINT j=0;j<3;++j){if(!hair||j==1)check(!std::memcmp(&before[j][i],&after[j][i],sizeof(Pixel)),"untagged skin/fallback/diffuse changed");}
    if(hair){check(before[0][i].v[3]==after[0][i].v[3],"roughness changed");float len=0;for(UINT c=0;c<3;++c){float v=after[0][i].v[c];check(std::isfinite(v),"nonfinite normal");len+=v*v;}check(std::abs(len-1.0f)<0.0001f,"normal not unit length");if(std::memcmp(&before[0][i],&after[0][i],12))++changed;}
   }
  }
- check(changed>0,"hair normals unchanged");std::printf("PASS: production WARP shader changes hair normals (%u samples); skin, fallback, diffuse and roughness preserved across six guide modes\n",changed);
+ check(changed>0,"hair normals unchanged");std::printf("PASS: production WARP shader changes hair normals (%u samples); isolated outlier corrected, different material rejected; skin, fallback, diffuse and roughness preserved across six guide modes\n",changed);
 }
