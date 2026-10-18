@@ -18,12 +18,15 @@ int main() {
     }
     // Partial hair is continuous; native skin (including zero-alpha black)
     // keeps its exact full-strength branch. NaN is never treated as a hair tag.
+    assert(ControlHairGuideTagged(-2.0f));
+    assert(ControlHairGuideTagged(-2.5f));
+    assert(ControlHairGuideTagged(-3.0f));
     assert(ControlHairGuideWeight(-2.0f)==0.0f);
     assert(ControlHairGuideWeight(-2.25f)==0.25f);
     assert(ControlHairGuideWeight(-2.5f)==0.5f);
     assert(ControlHairGuideWeight(-3.0f)==1.0f);
     for(float a : {0.0f,1.0f,-1.0f,-3.1f,-1.9f,
         std::numeric_limits<float>::quiet_NaN(),std::numeric_limits<float>::infinity()})
-        assert(ControlHairGuideWeight(a)==1.0f);
+        { assert(!ControlHairGuideTagged(a)); assert(ControlHairGuideWeight(a)==1.0f); }
     puts("PASS: shared albedo coverage rule retains black/white and rejects sentinel, invalid range, NaN and infinity in every channel");
 }

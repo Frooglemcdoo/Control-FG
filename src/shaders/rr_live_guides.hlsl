@@ -22,6 +22,31 @@ cbuffer GuideConstants : register(b0) {
     uint Height;
 };
 
+// R7: reduce strand-scale normal variation only inside the audited hair replay.
+// Read immutable GBuffer inputs, never neighboring output UAVs. A two-pixel
+// radius, matching material and hemisphere gate keep silhouettes and folds.
+float3 HairNormalGuide(uint2 pixel, float3 center) {
+    const uint material = ControlDecodeMaterialID(GBuffer2.Load(int3(pixel, 0)));
+    float3 sum = center * 9.0f;
+    [unroll] for (int y = -2; y <= 2; ++y) {
+        [unroll] for (int x = -2; x <= 2; ++x) {
+            if (x == 0 && y == 0) continue;
+            const int2 q = int2(pixel) + int2(x, y);
+            if (any(q < 0) || q.x >= (int)Width || q.y >= (int)Height) continue;
+            const float4 replay = TexturedCharacterAlbedo.Load(int3(q, 0));
+            if (!ControlHairGuideTagged(replay.a) ||
+                !ControlCharacterAlbedoValid(replay.r, replay.g, replay.b)) continue;
+            if (ControlDecodeMaterialID(GBuffer2.Load(int3(q, 0))) != material) continue;
+            const float3 n = ControlDecodeNormalView(GBuffer1.Load(int3(q, 0)));
+            // Do not average across opposed cards or a sharp surface fold.
+            if (dot(center, n) < 0.5f) continue;
+            const float weight = (3 - abs(x)) * (3 - abs(y));
+            sum += n * weight;
+        }
+    }
+    return normalize(sum);
+}
+
 float3 DecodeMaterialValue(uint packed, float gbuffer2Green, out uint brdfMode) {
     float3 packedColor = float3((packed >> 24u) & 255u,
                                 (packed >> 16u) & 255u,
@@ -39,7 +64,13 @@ void GenerateLiveGuides(uint3 tid : SV_DispatchThreadID) {
     if (tid.x >= Width || tid.y >= Height) return;
 
     const float4 g1 = GBuffer1.Load(int3(tid.xy, 0));
-    const float3 normalView = ControlDecodeNormalView(g1);
+    float3 normalView = ControlDecodeNormalView(g1);
+    if ((GuideFlags & 5u) == 5u) {
+        const float4 hair = TexturedCharacterAlbedo.Load(int3(tid.xy, 0));
+        if (ControlHairGuideTagged(hair.a) &&
+            ControlCharacterAlbedoValid(hair.r, hair.g, hair.b))
+            normalView = HairNormalGuide(tid.xy, normalView);
+    }
     const float roughness = InvertSmoothness != 0u ? 1.0f - g1.b : g1.b;
 
     // RenoDX's recovered guide shader writes view-space normals directly.

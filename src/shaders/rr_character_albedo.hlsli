@@ -9,7 +9,10 @@ bool ControlCharacterAlbedoValid(float r, float g, float b) {
 }
 // R4 private hair tag. Invalid tags and every native character alpha retain
 // the original full-strength override. The RGB sentinel is checked separately.
+bool ControlHairGuideTagged(float alpha) {
+    return alpha >= -3.0f && alpha <= -2.0f;
+}
 float ControlHairGuideWeight(float alpha) {
-    return alpha >= -3.0f && alpha <= -2.0f ? -alpha-2.0f : 1.0f;
+    return ControlHairGuideTagged(alpha) ? -alpha-2.0f : 1.0f;
 }
 #endif

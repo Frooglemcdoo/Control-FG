@@ -66,6 +66,10 @@ jobs:
           if errorlevel 1 exit /b 1
           build\test-rr-character-albedo.exe
           if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-rr-hair-normals-gpu.cpp /Febuild\test-rr-hair-normals-gpu.exe /link d3d11.lib d3dcompiler.lib
+          if errorlevel 1 exit /b 1
+          build\test-rr-hair-normals-gpu.exe
+          if errorlevel 1 exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /WX validation\rr-input-capture\record.cpp /Febuild\test-rr-input-record.exe
           if errorlevel 1 exit /b 1
           build\test-rr-input-record.exe
@@ -281,7 +285,7 @@ jobs:
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-RR-Glass-Hook-R6'
+          $out='Control-FG-RR-Hair-Normals-R7'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/pt_glass_raygen.dxil "$out/pt_glass_raygen.dxil"
           Copy-Item build/pt_glass_secondary.dxbc "$out/pt_glass_secondary.dxbc"
@@ -298,18 +302,18 @@ jobs:
           Copy-Item Collect-RR-Skin-Capture.ps1 "$out/Collect-RR-Skin-Capture.ps1"
           Copy-Item Collect-RR-Skin-Capture.cmd "$out/Collect-RR-Skin-Capture.cmd"
           @'
-          CONTROL-FG - GLASS HOOK R6 (FIX CANDIDATE)
-          ========================================
-          Fixes glass hook registration rejecting a different command-list
-          implementation after glass initially worked. Reset and queue submission
-          hooks now retain the original callback separately for each vtable.
-          Glass shaders, skin and R5 hair diagnostics are unchanged.
+          CONTROL-FG - HAIR NORMAL GUIDE R7 (FIX CANDIDATE)
+          ===============================================
+          Smooths strand-scale RR guide normals on the exact audited hair only.
+          Uses a 5x5 neighborhood with matching hair material and normal direction.
+          Native hair lighting, opacity, skin and reflection shaders are unchanged.
+          Includes the R6 glass hook fix.
 
           Close Control. Install all binaries beside Control_DX12.exe.
-          Check glass reflections with the added reflection option enabled.
-          Test after changing RR/FG settings as well as immediately after loading.
-          Send compact logs and whether glass stays visible.
-          F9 hair capture and both collectors remain included.
+          Compare the neck hair with RR on in the same scene and camera position.
+          Check movement as well as a stationary camera.
+          F9 captures the updated guides for verification if needed.
+          Both log collectors remain included.
           '@ | Set-Content "$out/README.txt" -Encoding ASCII
           Compress-Archive -Path "$out/*" -DestinationPath "$out.zip" -Force
           (Get-FileHash "$out.zip" -Algorithm SHA256).Hash | Set-Content "$out.sha256" -Encoding ASCII
@@ -317,10 +321,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-RR-Glass-Hook-R6
+          name: Control-FG-RR-Hair-Normals-R7
           path: |
-            Control-FG-RR-Glass-Hook-R6.zip
-            Control-FG-RR-Glass-Hook-R6.sha256
+            Control-FG-RR-Hair-Normals-R7.zip
+            Control-FG-RR-Hair-Normals-R7.sha256
             build/rr_hair_opacity.asm
             build/exports.txt
             build/imports.txt
