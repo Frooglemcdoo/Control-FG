@@ -474,6 +474,8 @@ static void* PTReflectionHookTechniqueLookup(void* rfx,const char* technique) {
     return result;
 }
 
+#include "pt_glass_runtime.h"
+
 static const char* PTReflectionHookShaderStorageGet(int id) {
     if(id==kRRCharacterBaseAlbedoStorageId&&rrCharacterBaseAlbedoStorageReady.load(std::memory_order_acquire))
         return reinterpret_cast<const char*>(kRRCharacterBaseAlbedoShader);
@@ -790,7 +792,7 @@ static HRESULT STDMETHODCALLTYPE PTReflectionHookCreateComputePipelineState(
 
     char sha[65]{};
     bool target=false;
-    if(desc&&desc->CS.pShaderBytecode&&desc->CS.BytecodeLength==42408u){
+    if(ptReflectionP2InjectionEnabled&&desc&&desc->CS.pShaderBytecode&&desc->CS.BytecodeLength==42408u){
         target=PTReflectionSha256(
             static_cast<const unsigned char*>(desc->CS.pShaderBytecode),
             desc->CS.BytecodeLength,sha)&&
@@ -798,6 +800,7 @@ static HRESULT STDMETHODCALLTYPE PTReflectionHookCreateComputePipelineState(
     }
 
     const HRESULT nativeHr=ptReflectionOriginalCreateComputePipelineState(device,desc,riid,out);
+    if(SUCCEEDED(nativeHr)&&out&&*out)PTGlassRuntime::ObserveCompute(device,desc,*out);
     if(!target||FAILED(nativeHr)||!out||!*out||!desc)return nativeHr;
 
     AcquireSRWLockExclusive(&ptReflectionCompositePsoLock);
@@ -873,6 +876,7 @@ static bool PTReflectionInstallComputePsoHookOnDevice(ID3D12Device* device) noex
     }
 
     ptReflectionOriginalCreateComputePipelineState=original;
+    PTGlassRuntime::InstallDevice(device);
     ptReflectionCreateComputePipelineStateSlot=slot;
     Log("PT_REFLECTION_P2_PSO_HOOK ready=1 source=device_create device=%p vtable=%p slot_index=%llu slot=%p original=%p hook=%p exchange_error=%lu",
         device,vtable,static_cast<unsigned long long>(slotIndex),slot,
@@ -1948,160 +1952,17 @@ static void PTReflectionProbeCachedTechniqueOnce(HMODULE renderer,HMODULE d3d) n
 
 static bool PTReflectionInstallShaderLookupHooks(HMODULE renderer,HMODULE d3d) noexcept {
     if(!renderer||renderer!=verifiedRenderer||!d3d||d3d!=verifiedD3d)return false;
-    PTReflectionLogShaderCodeStorageExports(d3d);
-    PTReflectionLogShaderCodeStorageGetterBytes(d3d);
-    PTReflectionLogShaderCodeStorageGetterCallsites(d3d);
-    ptReflectionStoragePersist=reinterpret_cast<PTShaderCodeStoragePersistFn>(
-        GetProcAddress(d3d,"?persist@ShaderCodeStorage@d3d@@YAHPEBD_KW4ShaderType@2@@Z"));
-    ptReflectionStorageIsPersisted=reinterpret_cast<PTShaderCodeStorageIsPersistedFn>(
-        GetProcAddress(d3d,"?isPersisted@ShaderCodeStorage@d3d@@YA_NPEBD@Z"));
-    ptReflectionStorageRoundtripPersistResult=-0x7fffffff;
-    ptReflectionStorageRoundtripNativeId=-1;
-    ptReflectionStorageRoundtripStage=0;
-    ptReflectionStorageRoundtripVariant=0xffffffffu;
-    ptReflectionStorageRoundtripBefore=false;
-    ptReflectionStorageRoundtripSame=false;
-    ptReflectionStorageRoundtripValid=false;
-    ptReflectionStorageRoundtripTechnique=nullptr;
-    ptReflectionStorageRoundtripShader=nullptr;
-    ptReflectionStorageRoundtripDone.store(0u,std::memory_order_release);
-    Log("PT_REFLECTION_P1_STORAGE_API persist=%p is_persisted=%p ready=%u usage=disabled_visual_build reason=private_packed_representation",
-        reinterpret_cast<void*>(ptReflectionStoragePersist),reinterpret_cast<void*>(ptReflectionStorageIsPersisted),
-        unsigned(ptReflectionStoragePersist&&ptReflectionStorageIsPersisted));
-    PTReflectionLoadP1Sidecar();
-    PTReflectionLoadP2Sidecar();
-    PTReflectionLoadP2VerifySidecar();
-    PTReflectionLoadP2LocalLightProbeSidecar();
-    PTReflectionLoadP2CompositeSidecar();
-    PTReflectionLoadP2DiffuseBridgeSidecar();
-    ptReflectionCompositePsoCaptured.store(0u,std::memory_order_release);
-    ptReflectionNativeCompositePso=nullptr;
-    ptReflectionP2CompositePso=nullptr;
-    ptReflectionP2VerifyPso=nullptr;
-    ptReflectionP2LocalLightProbePso=nullptr;
-    ptReflectionTwoLayerContract.store(0u,std::memory_order_release);
-    ptReflectionTwoLayerAttempts.store(0u,std::memory_order_release);
-    ptReflectionUserState.fetch_and(1u,std::memory_order_acq_rel);
-    ptReflectionVerifyKeyDown.store(0u,std::memory_order_release);
-    Log("PT_REFLECTION_BOUNCE_ENERGY rgb_bsdf_over_pdf=1 native_indirect_replaced=1 direct_emission_preserved=1 second_direction_lobe_mixture=1");
-    Log("PT_REFLECTION_NATIVE_SECONDARY_SHADING enabled=1 material_brdf=1 light_cells=1 point_shadow_atlas=1 spot_shadow_atlases=1 gi_volumes=1 native_shader_sha=4fc0a0e9cd3706bcb86e29444d86fa32616138e1712c53b1b5103b30d7a1ecc9");
-    Log("PT_REFLECTION_MATERIAL_BOUNDS source=bound_t4_GetDimensions native_b6_count_ignored=1 expected_stride=336");
-    Log("PT_REFLECTION_REJECTION_DIAGNOSTIC enabled=1 F11_mode=1 red=first_hit magenta=second_hit yellow=normal cyan=segment white=material_range green=accepted");
-    Log("PT_REFLECTION_HIT_UAV_COHERENCE enabled=1 globallycoherent_uavs=3 raygen_publish=1 closesthit_publish=1 miss_publish=1");
-    Log("PT_REFLECTION_SECONDARY_MATERIAL_FILTER enabled=1 uv_steps=31 footprint_mip=1 emission_texture_slot=5 primary_ray_change=0");
-    Log("PT_REFLECTION_SECONDARY_ORIGIN_PRECISION enabled=1 source=ray_origin_direction_payload distance_quantum_m=0.0001 fp16_position_reuse=0 native_samples=1");
-    Log("PT_REFLECTION_TWO_LAYER_PROOF_CONFIG ray_paths=1 first_layer=0 second_layer=1 native_material_sentinel=65534 secondary_id_storage=numeric_half secondary_uv_storage=numeric_5bit_each native_first_sample_tradeoff=1 experimental=1");
-    Log("PT_REFLECTION_VERIFY_INIT mode=0 hotkey=F11 cycle=normal,composite_quadrants,diffuse_gi_native_copy_proof,native_point_light_probe verify_sidecar=%u local_probe_sidecar=%u",
-        unsigned(ptReflectionP2VerifyLoaded),unsigned(ptReflectionP2LocalLightProbeLoaded));
-    ptReflectionCompositeRoot=nullptr;
-    ptReflectionP1ShaderRecordReady=false;
-    ptReflectionP2RayShaderRecordReady=false;
-    ptReflectionP2CompositeShaderRecordReady=false;
-    ptReflectionNativeDeferredShaderRecord=nullptr;
-    ptReflectionRecordMapLogged.store(0,std::memory_order_release);
-    ptReflectionDeferredRecordMapLogged.store(0,std::memory_order_release);
-    ptReflectionDeferredDxbcDumped.store(0,std::memory_order_release);
-    ptReflectionP1GetIntercepts.store(0,std::memory_order_release);
-    ptReflectionP2RayGetIntercepts.store(0,std::memory_order_release);
-    ptReflectionP2CompositeGetIntercepts.store(0,std::memory_order_release);
-    ptReflectionP2PostDispatches.store(0,std::memory_order_release);
-    memset(ptReflectionNativeCompositeCacheTail,0,sizeof(ptReflectionNativeCompositeCacheTail));
-    memset(ptReflectionP2CompositeCacheTail,0,sizeof(ptReflectionP2CompositeCacheTail));
-    ptReflectionNativeCompositeCacheTailReady=false;
-    ptReflectionP2CompositeCacheTailReady=false;
+    // R34: keep the shared shader transport used by the character/hair fixes.
+    // Do not load opaque PT sidecars or install any opaque ray/composite hooks.
+    ptReflectionP1InjectionEnabled=false;
     ptReflectionP2InjectionEnabled=false;
-    const bool storageGetHooksReady=PTReflectionInstallStorageGetHooks(d3d);
-    rrHairOpacityStorageReady.store(storageGetHooksReady,std::memory_order_release);
-    rrCharacterBaseAlbedoStorageReady.store(storageGetHooksReady,std::memory_order_release);
-    wchar_t p1EnableValue[8]{};
-    const DWORD p1EnableLength=GetEnvironmentVariableW(
-        L"CONTROLFG_PT_REFLECTION_P1",p1EnableValue,_countof(p1EnableValue));
-    const bool explicitDisable=p1EnableLength>0&&p1EnableLength<_countof(p1EnableValue)&&p1EnableValue[0]==L'0';
-    ptReflectionP1InjectionEnabled=ptReflectionP1Loaded&&storageGetHooksReady&&!explicitDisable;
-    Log("PT_REFLECTION_P1_INJECTION_CONFIG enabled=%u sidecar=%u get_hooks=%u variant_gate=000 exact_native_sha=1 env=CONTROLFG_PT_REFLECTION_P1 default=enabled disable_with_0 fail_closed=1",
-        unsigned(ptReflectionP1InjectionEnabled),unsigned(ptReflectionP1Loaded),unsigned(storageGetHooksReady));
-    ptReflectionP1StorageId=-1;
-    ptReflectionP1StorageVerified=false;
-    ptReflectionP1StorageAttempted=false;
-    ptReflectionForcedNativeVariant=PTReflectionReadForcedNativeVariant();
-    ptReflectionSwapTechnique=nullptr;
-    ptReflectionSwapShader=nullptr;
-    ptReflectionSwapVariant=-1;
-    Log("PT_REFLECTION_P1_NATIVE_SWAP_CONFIG forced_variant=%d env=CONTROLFG_PT_REFLECTION_NATIVE_VARIANT default=disabled",
-        ptReflectionForcedNativeVariant);
-    if(!RRAlbedoShader::Initialize(d3d)){
-        Log("PT_REFLECTION_P1_LOOKUP_HOOKS ready=0 reason=resident_shader_getter");
-        return false;
-    }
-    auto* base=reinterpret_cast<unsigned char*>(renderer);
-    ptReflectionOriginalRfxLookup=reinterpret_cast<PTReflectionRfxLookupFn>(base+0x1D9960);
-    ptReflectionOriginalTechniqueLookup=reinterpret_cast<PTReflectionTechniqueLookupFn>(base+0x1D2CE0);
-    ptReflectionOriginalVariantLookup=reinterpret_cast<PTReflectionVariantLookupFn>(base+0x1DD450);
-    ptReflectionBindCompute=reinterpret_cast<PTReflectionBindComputeFn>(base+0x1DB750);
-    ptReflectionOriginalDispatch=reinterpret_cast<PTReflectionDispatchFn>(
-        GetProcAddress(d3d,"?dispatch@DeviceUtil@d3d@@SAXAEAVDeviceState@2@V?$Vector3Template@H@m@@@Z"));
-
-    bool p2DispatchHookReady=false;
-    auto** dispatchSlot=reinterpret_cast<void**>(base+0x5DFCC0);
-    if(ptReflectionOriginalDispatch&&dispatchSlot&&
-       ptReflectionDeferredDispatchPatch.Prepare(base+0x129714,dispatchSlot,
-            reinterpret_cast<void*>(ptReflectionOriginalDispatch),
-            reinterpret_cast<void*>(&PTReflectionHookDeferredDispatch))&&
-       ptReflectionDeferredDispatchPatch.Exchange(true)&&
-       ptReflectionDeferredDispatchPatch.healthy){
-        p2DispatchHookReady=true;
-    }
-    wchar_t p2EnableValue[8]{};
-    const DWORD p2EnableLength=GetEnvironmentVariableW(
-        L"CONTROLFG_PT_REFLECTION_P2",p2EnableValue,_countof(p2EnableValue));
-    const bool p2ExplicitDisable=p2EnableLength>0&&p2EnableLength<_countof(p2EnableValue)&&p2EnableValue[0]==L'0';
-    ptReflectionP2InjectionEnabled=ptReflectionP2Loaded&&ptReflectionP2CompositeLoaded&&
-        ptReflectionP2DiffuseBridgeLoaded&&storageGetHooksReady&&p2DispatchHookReady&&!p2ExplicitDisable;
-    Log("PT_REFLECTION_P2_INJECTION_CONFIG enabled=%u ray_sidecar=%u composite_sidecar=%u diffuse_bridge_sidecar=%u get_hooks=%u dispatch_hook=%u rough_route=diffuse_gi variant_gate=000 native_composite_sha=4fc0a0e9cd3706bcb86e29444d86fa32616138e1712c53b1b5103b30d7a1ecc9 env=CONTROLFG_PT_REFLECTION_P2 default=enabled disable_with_0 fail_closed=1",
-        unsigned(ptReflectionP2InjectionEnabled),unsigned(ptReflectionP2Loaded),
-        unsigned(ptReflectionP2CompositeLoaded),unsigned(ptReflectionP2DiffuseBridgeLoaded),
-        unsigned(storageGetHooksReady),unsigned(p2DispatchHookReady));
-
-    if(!RRAlbedoPrepareCallPatch(base+0x12953C,
-        reinterpret_cast<void*>(ptReflectionOriginalRfxLookup),
-        reinterpret_cast<void*>(&PTReflectionHookRfxLookup),
-        &ptReflectionLookupPatches[0]))return false;
-    if(!RRAlbedoPrepareCallPatch(base+0x12954B,
-        reinterpret_cast<void*>(ptReflectionOriginalTechniqueLookup),
-        reinterpret_cast<void*>(&PTReflectionHookTechniqueLookup),
-        &ptReflectionLookupPatches[1]))return false;
-    if(!RRAlbedoPrepareCallPatch(base+0x12956C,
-        reinterpret_cast<void*>(ptReflectionOriginalVariantLookup),
-        reinterpret_cast<void*>(&PTReflectionHookVariantLookup),
-        &ptReflectionLookupPatches[2]))return false;
-    if(!RRAlbedoPrepareCallPatch(base+0x1296B8,
-        reinterpret_cast<void*>(ptReflectionOriginalRfxLookup),
-        reinterpret_cast<void*>(&PTReflectionHookRfxLookup),
-        &ptReflectionLookupPatches[3]))return false;
-    if(!RRAlbedoPrepareCallPatch(base+0x1296C7,
-        reinterpret_cast<void*>(ptReflectionOriginalTechniqueLookup),
-        reinterpret_cast<void*>(&PTReflectionHookTechniqueLookup),
-        &ptReflectionLookupPatches[4]))return false;
-    if(!RRAlbedoPrepareCallPatch(base+0x1296E8,
-        reinterpret_cast<void*>(ptReflectionOriginalVariantLookup),
-        reinterpret_cast<void*>(&PTReflectionHookVariantLookup),
-        &ptReflectionLookupPatches[5]))return false;
-
-    unsigned applied=0;
-    for(;applied<6;++applied){
-        if(!RRAlbedoExchangeCall(&ptReflectionLookupPatches[applied],true))break;
-        if(!ptReflectionLookupPatches[applied].writeHealthy){++applied;break;}
-    }
-    if(applied!=6){
-        while(applied){
-            --applied;
-            if(!RRAlbedoExchangeCall(&ptReflectionLookupPatches[applied],false))
-                Log("PT_REFLECTION_P1_HOOK_ROLLBACK_FAILED index=%u",applied);
-        }
-        return false;
-    }
-    Log("PT_REFLECTION_P1_LOOKUP_HOOKS ready=1 ray_calls=12953C,12954B,12956C deferred_calls=1296B8,1296C7,1296E8 rfx_helper=0x1D9960 technique_helper=0x1D2CE0 variant_helper=0x1DD450 native_hashes=32 native_swap_probe=%s forced_variant=%d gpu_work=%s",
-        ptReflectionForcedNativeVariant>=0?"enabled":"disabled",ptReflectionForcedNativeVariant,
-        ptReflectionForcedNativeVariant>=0?"native_reflection_permutation_may_change":"unchanged");
-    return true;
+    ptReflectionForcedNativeVariant=-1;
+    const bool storageReady=PTReflectionInstallStorageGetHooks(d3d);
+    rrHairOpacityStorageReady.store(storageReady,std::memory_order_release);
+    rrCharacterBaseAlbedoStorageReady.store(storageReady,std::memory_order_release);
+    if(!storageReady||!RRAlbedoShader::Initialize(d3d))return false;
+    const bool glassReady=PTGlassRuntime::Install(renderer,d3d);
+    Log("GLASS_ONLY_R34 glass_ready=%u opaque_pt=disabled character_shader_transport=%u",unsigned(glassReady),unsigned(storageReady));
+    // Glass has its own failure reporting; a glass fallback must not disable RR.
+    return storageReady;
 }

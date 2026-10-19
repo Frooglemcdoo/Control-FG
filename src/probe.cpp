@@ -1434,7 +1434,7 @@ static BOOL CALLBACK Configure(PINIT_ONCE, PVOID, PVOID*) noexcept {
         const unsigned int rrObserverHooks = InstallRRObservationHooks(renderer,d3d);
         Log("PT_REFLECTION_P0_OBSERVER ready=%u expected=5 scope=reflection_dispatch_identification gpu_work=unchanged allocations=0",rrObserverHooks);
         const bool ptReflectionLookupReady=PTReflectionInstallShaderLookupHooks(renderer,d3d);
-        Log("PT_REFLECTION_P1_LOOKUP_INSTALL ready=%u replacement=disabled fail_closed=1",unsigned(ptReflectionLookupReady));
+        Log("GLASS_RR_TRANSPORT_INSTALL ready=%u opaque_pt=disabled",unsigned(ptReflectionLookupReady));
         const bool albedoHooksReady = guideInputsReady && RRAlbedoInstallHooks(renderer, d3d);
         if(albedoHooksReady) rrAlbedoStage.store(RRAlbedoStage::Disabled,std::memory_order_release);
         Log("RR_GUIDE_G3_NATIVE_PATH ready=%u diagnostic_capture=0 recurring_replay=on_demand_full_rr_only rr_eval=warmup_then_native", unsigned(albedoHooksReady));

@@ -3,7 +3,8 @@
 
 // One atomic snapshot couples the A/B switch and diagnostic mode. A UI toggle
 // always returns to normal shading, even if F11 is pressed concurrently.
-// Bit 0 = added PT reflection lighting enabled; bits 1..2 = F11 mode.
+// R34: bit 0 controls only the restored glass enhancement. Opaque PT is retired.
+// Legacy diagnostic helpers remain unused; no F11 diagnostic hook is installed.
 static std::atomic<unsigned int> ptReflectionUserState{1u};
 
 static bool PTReflectionUserRequested() noexcept {

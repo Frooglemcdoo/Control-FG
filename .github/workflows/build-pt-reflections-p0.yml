@@ -1,4 +1,4 @@
-name: Build PT reflections P0
+name: Build glass reflections and RR
 
 on:
   push:
@@ -26,6 +26,7 @@ on:
       - experiment/rr-gi-live-samples-r31
       - experiment/rr-dlaa-profile-r32
       - experiment/rr-gi-selection-fix-r33
+      - experiment/glass-only-restore-r34
   workflow_dispatch:
   pull_request:
     branches:
@@ -136,62 +137,32 @@ jobs:
           }
           if(-not $dxc){throw 'dxc.exe was not found in the Windows SDK / Visual Studio installation.'}
           Write-Host "DXC: $dxc"
-          & $dxc -T lib_6_3 -HV 2021 -O3 -I src/shaders -Fo build/pt_reflection_p2.dxil src/shaders/pt_reflection_p2.hlsl
-          if($LASTEXITCODE -ne 0){throw "DXC compile failed: $LASTEXITCODE"}
-          & $dxc -dumpbin build/pt_reflection_p2.dxil | Set-Content -LiteralPath build/pt_reflection_p2.dump.txt -Encoding UTF8
-          if($LASTEXITCODE -ne 0){throw "DXC dump failed: $LASTEXITCODE"}
-          $dump=Get-Content -LiteralPath build/pt_reflection_p2.dump.txt -Raw
-          if(([regex]::Matches($dump,'call void @dx.op.barrier\(i32 80, i32 2\)')).Count -lt 3){
-            throw 'P2 DXIL is missing device-wide UAV memory barriers.'
-          }
+          & $dxc -T lib_6_3 -HV 2021 -O3 -I src/shaders -Fo build/pt_glass_raygen.dxil src/shaders/pt_glass_raygen.hlsl
+          if($LASTEXITCODE -ne 0){throw "Glass DXC compile failed: $LASTEXITCODE"}
 
-          foreach($name in @(
-            'reflectionRayGeneration',
-            'reflectionClosestHit',
-            'reflectionAlphaTestAnyHit',
-            'reflectionMiss',
-            'shadowClosestHit',
-            'shadowAlphaTestAnyHit',
-            'shadowMiss'
-          )){
-            if(-not $dump.Contains($name)){throw "Missing DXR export: $name"}
-          }
-          $source=Get-Content -LiteralPath src/shaders/pt_reflection_p2.hlsl -Raw
-          foreach($contract in @(
-            'g_rwtShadow : register(u3)',
-            'g_rwtShadow[uint3(pixel,layer)]=0u',
-            'g_rwtShadow[uint3(pixel,layer)]=1u'
-          )){
-            if(-not $source.Contains($contract)){throw "Missing native shadow contract: $contract"}
-          }
-          if(-not $source.Contains('#define PT_REFLECTION_P2_POST_COMPOSITE_READY 1')){
-            throw 'P2 paired-layer post-composite marker missing.'
-          }
-          (Get-FileHash -LiteralPath build/pt_reflection_p2.dxil -Algorithm SHA256).Hash.ToLowerInvariant() |
-            Set-Content -LiteralPath build/pt_reflection_p2.sha256 -Encoding ASCII
+      - name: Validate glass lighting, descriptors and resource retirement on WARP
+        shell: cmd
+        run: |
+          call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
+          python tools/test-pt-glass-glossy-only.py
+          if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\compile-pt-glass-lighting.cpp /Febuild\compile-glass.exe /link d3dcompiler.lib d3d12.lib dxgi.lib
+          if errorlevel 1 exit /b 1
+          build\compile-glass.exe
+          if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-pt-glass-resources.cpp /Febuild\test-glass-resources.exe /link d3d12.lib dxgi.lib
+          if errorlevel 1 exit /b 1
+          build\test-glass-resources.exe
+          if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-pt-glass-descriptors.cpp /Febuild\test-glass-descriptors.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
+          if errorlevel 1 exit /b 1
+          build\test-glass-descriptors.exe
+          if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-pt-glass-vtable-call.cpp /Febuild\test-glass-call.exe
+          if errorlevel 1 exit /b 1
+          build\test-glass-call.exe
+          if errorlevel 1 exit /b 1
 
-          & $dxc -T lib_6_3 -HV 2021 -O3 -I src/shaders -Fo build/pt_reflection_p1.dxil src/shaders/pt_reflection_p1.hlsl
-          if($LASTEXITCODE -ne 0){throw "P1 DXC compile failed: $LASTEXITCODE"}
-          & $dxc -dumpbin build/pt_reflection_p1.dxil | Set-Content -LiteralPath build/pt_reflection_p1.dump.txt -Encoding UTF8
-          if($LASTEXITCODE -ne 0){throw "P1 DXC dump failed: $LASTEXITCODE"}
-          $p1dump=Get-Content -LiteralPath build/pt_reflection_p1.dump.txt -Raw
-          foreach($name in @(
-            'reflectionRayGeneration',
-            'reflectionClosestHit',
-            'reflectionAlphaTestAnyHit',
-            'reflectionMiss',
-            'shadowClosestHit',
-            'shadowAlphaTestAnyHit',
-            'shadowMiss'
-          )){
-            if(-not $p1dump.Contains($name)){throw "P1 missing DXR export: $name"}
-          }
-          $p1source=Get-Content -LiteralPath src/shaders/pt_reflection_p1.hlsl -Raw
-          if(-not $p1source.Contains('#define PT_REFLECTION_P1_STOCK_COMPOSITE_COMPATIBLE 1')){
-            throw 'P1 stock-composite compatibility marker missing.'
-          }
-          (Get-FileHash -LiteralPath build/pt_reflection_p1.dxil -Algorithm SHA256).Hash.ToLowerInvariant() |
-            Set-Content -LiteralPath build/pt_reflection_p1.sha256 -Encoding ASCII
       - name: Verify clean baseline and character guide scope
         shell: cmd
         run: |
@@ -230,19 +201,16 @@ jobs:
           dumpbin /exports build\dxgi.dll > build\exports.txt
           dumpbin /imports build\dxgi.dll > build\imports.txt
 
-      - name: Package P0
+      - name: Package glass restoration R34
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-GI-Selection-Fix-R33'
+          $out='Control-FG-Glass-Restore-R34'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
-          Copy-Item build/pt_reflection_p1.dxil "$out/pt_reflection_p1.dxil"
-          Copy-Item build/pt_reflection_p2.dxil "$out/pt_reflection_p2.dxil"
-          Copy-Item build/pt_reflection_p2_composite.dxbc "$out/pt_reflection_p2_composite.dxbc"
-          Copy-Item build/pt_reflection_p2_verify.dxbc "$out/pt_reflection_p2_verify.dxbc"
-          Copy-Item build/pt_reflection_p2_local_light_probe.dxbc "$out/pt_reflection_p2_local_light_probe.dxbc"
-          Copy-Item build/pt_reflection_p2_diffuse_bridge.dxbc "$out/pt_reflection_p2_diffuse_bridge.dxbc"
+          Copy-Item build/pt_glass_raygen.dxil "$out/pt_glass_raygen.dxil"
+          Copy-Item build/pt_glass_secondary.dxbc "$out/pt_glass_secondary.dxbc"
+          Copy-Item build/pt_glass_composite.dxbc "$out/pt_glass_composite.dxbc"
           Copy-Item Collect-RR-Skin-Capture.cmd "$out/Collect-RR-Skin-Capture.cmd"
           Copy-Item Collect-RR-Skin-Capture.ps1 "$out/Collect-RR-Skin-Capture.ps1"
           Copy-Item Collect-RR-Blinds-Capture.cmd "$out/Collect-RR-Blinds-Capture.cmd"
@@ -250,24 +218,28 @@ jobs:
           Copy-Item Collect-ControlFG-Compact-Logs.cmd "$out/Collect-ControlFG-Compact-Logs.cmd"
           Copy-Item Collect-ControlFG-Compact-Logs.ps1 "$out/Collect-ControlFG-Compact-Logs.ps1"
           @'
-          CONTROL-FG GI SELECTION FIX R33
-          Branch: experiment/rr-gi-selection-fix-r33
+          CONTROL-FG GLASS RESTORE R34
+          Branch: experiment/glass-only-restore-r34
 
-          Fixes live GI buttons not applying when Control's native count is two.
-          The submitted log showed requested=4/6/8 but effective=2. The previous
-          policy only overrode native=1. Explicit selections now apply to valid
-          native counts 1..16. Native still preserves the game's sample count.
+          Restores the glossy-only G3 glass continuation omitted from the clean
+          R21 baseline. Opaque experimental PT reflections are disabled: no P1/P2
+          sidecars are loaded and no opaque ray/composite hooks are installed.
+          Old pt_reflection_* files are ignored and may be removed.
 
-          Close Control and install all included binaries. No INI required.
-          F10 -> cog beside Ray Reconstruction -> Native / 2 / 4 / 6 / 8.
-          Click to apply live. Existing saved selection is preserved.
-          Keep RR and RT Indirect Diffuse Lighting ON.
-          Four remains the default for a new setting; higher counts cost more
-          GPU time and VRAM. Frame-boundary application and one-shot history
-          reset remain unchanged. Shader bytes are unchanged from R21.
-          RR_GI_SAMPLES_R33 now reports the actual requested/effective change.
-          R32 performance diagnostics and the compact log collector are included.
-          Verify the sample buttons first before resuming the FPS comparison.
+          Close Control. Copy dxgi.dll and all three pt_glass_* files beside
+          Control_DX12.exe, replacing the installed DLL. No separate INI needed.
+          Keep the game's Ray Traced Transparent Reflections enabled.
+          F10 -> GLASS REFLECTIONS -> GLASS ON / GLASS OFF for live comparison.
+          The glass preference is saved separately from the retired PT toggle.
+
+          Retains R33 live GI samples, R32 performance logging and R21 character
+          and hair shaders. No added diffuse glass lighting or whole-scene PT.
+          Glass hooks retain the original verified Steam module compatibility
+          gate. Other renderer versions fall back to native transparent reflections.
+
+          Glass shader/root ABI and WARP descriptor/resource tests are automated;
+          actual in-game appearance still needs confirmation on your GPU.
+          Use the included compact log collector if the enhancement does not show.
           '@ | Set-Content "$out/README.txt" -Encoding ASCII
           Compress-Archive -Path "$out/*" -DestinationPath "$out.zip" -Force
           (Get-FileHash "$out.zip" -Algorithm SHA256).Hash | Set-Content "$out.sha256" -Encoding ASCII
@@ -275,23 +247,14 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-GI-Selection-Fix-R33
+          name: Control-FG-Glass-Restore-R34
           path: |
-            Control-FG-GI-Selection-Fix-R33.zip
-            Control-FG-GI-Selection-Fix-R33.sha256
+            Control-FG-Glass-Restore-R34.zip
+            Control-FG-Glass-Restore-R34.sha256
             build/exports.txt
             build/imports.txt
-            build/pt_reflection_p1.dxil
-            build/pt_reflection_p1.sha256
-            build/pt_reflection_p1.dump.txt
-            build/pt_reflection_p2.dxil
-            build/pt_reflection_p2.sha256
-            build/pt_reflection_p2_composite.dxbc
-            build/pt_reflection_p2_verify.dxbc
-            build/pt_reflection_p2_local_light_probe.dxbc
-            build/pt_reflection_p2_diffuse_bridge.dxbc
-            build/pt_reflection_p2.dump.txt
-            build/pt-reflection-native-audit.json
-            build/pt-reflection-native-audit-failure.txt
+            build/pt_glass_raygen.dxil
+            build/pt_glass_secondary.dxbc
+            build/pt_glass_composite.dxbc
           if-no-files-found: warn
           retention-days: 7

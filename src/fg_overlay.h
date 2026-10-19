@@ -222,8 +222,8 @@ static void FGOverlayLoadSettings() noexcept {
     control_rr::RRUserRequest(rrEnabled);
     SetFGTextureStreamingBudgetMs(textureStreamingMs);
     SetFGVramMonitorEnabled(vramMonitorEnabled);
-    PTReflectionUserRequest(GetPrivateProfileIntW(L"PTReflections", L"Enabled", 1, fgOverlaySettingsPath.c_str()) != 0);
-    Log("PT_REFLECTION_SETTINGS enabled=%u source=settings default=on", unsigned(PTReflectionUserRequested()));
+    PTReflectionUserRequest(GetPrivateProfileIntW(L"GlassReflections", L"Enabled", 1, fgOverlaySettingsPath.c_str()) != 0);
+    Log("GLASS_REFLECTION_SETTINGS enabled=%u source=settings default=on", unsigned(PTReflectionUserRequested()));
     Log("FG_SETTINGS_LOAD success=1 path=%ls selection=%s selected_code=%u target_policy=%s manual_target_fps=%u rr_enabled=%u rr_preset=%s rr_preset_value=%u texture_streaming_ms=%u vram_monitor=%u skin_mode=off schema=10 ui=fg_full_rr_toggle_model_E_F",
         fgOverlaySettingsPath.c_str(), GetFGSelectionName(selection), selection, manualTarget ? "manual" : "auto", manualTarget, unsigned(rrEnabled), control_rr::RRUserPresetLabel(), control_rr::RRUserPresetValue(), textureStreamingMs, unsigned(vramMonitorEnabled));
 }
@@ -268,7 +268,7 @@ static bool FGOverlaySaveSettingsNow() noexcept {
     ok = (WritePrivateProfileStringW(L"Overlay", L"VramMonitorEnabled", vramMonitorText, fgOverlaySettingsPath.c_str()) != FALSE) && ok;
     ok = (WritePrivateProfileStringW(L"Experimental", L"RTX40MultiFG", experimentalText, fgOverlaySettingsPath.c_str()) != FALSE) && ok;
     ok = (WritePrivateProfileStringW(L"Experimental", L"TextureStreamingBudgetMs", textureStreamingText, fgOverlaySettingsPath.c_str()) != FALSE) && ok;
-    ok = (WritePrivateProfileStringW(L"PTReflections", L"Enabled", ptEnabledText, fgOverlaySettingsPath.c_str()) != FALSE) && ok;
+    ok = (WritePrivateProfileStringW(L"GlassReflections", L"Enabled", ptEnabledText, fgOverlaySettingsPath.c_str()) != FALSE) && ok;
     // Old experimental RR/AA settings are intentionally removed; FG settings remain intact.
     WritePrivateProfileStringW(L"AntiAliasing", nullptr, nullptr, fgOverlaySettingsPath.c_str());
     WritePrivateProfileStringW(L"RayReconstruction", L"SkinResponsivity", nullptr, fgOverlaySettingsPath.c_str());
@@ -883,14 +883,14 @@ static void PaintFGOverlay(HWND hwnd) noexcept {
     PaintFGDivider(dc, left, 734 + lowerSectionOffset, right);
     SelectObject(dc, sectionFont); SetTextColor(dc, RGB(210, 32, 32));
     RECT ptTitle{30, 752 + lowerSectionOffset, 710, 780 + lowerSectionOffset};
-    DrawTextW(dc, L"PT REFLECTIONS", -1, &ptTitle, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+    DrawTextW(dc, L"GLASS REFLECTIONS", -1, &ptTitle, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
     const bool ptEnabled = PTReflectionUserRequested();
     const RECT ptToggle{30, 794 + lowerSectionOffset, 280, 846 + lowerSectionOffset};
     SelectObject(dc, ptEnabled ? buttonSelectedFont : buttonFont);
-    PaintFGButton(dc, ptToggle, ptEnabled ? L"PT REFLECTIONS ON" : L"PT REFLECTIONS OFF", ptEnabled, true);
+    PaintFGButton(dc, ptToggle, ptEnabled ? L"GLASS ON" : L"GLASS OFF", ptEnabled, true);
     SelectObject(dc, smallFont); SetTextColor(dc, RGB(169, 169, 169));
     RECT ptDescription{304, 794 + lowerSectionOffset, 710, 846 + lowerSectionOffset};
-    DrawTextW(dc, L"Compare traced second-bounce lighting.\nNative reflections stay visible.", -1, &ptDescription,
+    DrawTextW(dc, L"Enhanced glossy reflections on glass.\nToggle to compare with native glass.", -1, &ptDescription,
         DT_LEFT | DT_WORDBREAK);
 
 
@@ -1079,7 +1079,7 @@ static LRESULT CALLBACK FGOverlayWndProc(HWND hwnd, UINT message, WPARAM wParam,
             const bool previous=PTReflectionUserRequested();
             PTReflectionUserRequest(!previous);
             FGOverlayMarkSettingsDirty();
-            Log("PT_REFLECTION_UI_TOGGLE previous=%u enabled=%u verify_mode=0 scope=added_second_bounce apply=next_reflection_composite persistence=dirty",
+            Log("GLASS_REFLECTION_UI_TOGGLE previous=%u enabled=%u scope=glass_only apply=next_glass_dispatch persistence=dirty",
                 unsigned(previous),unsigned(!previous));
             InvalidateRect(hwnd,nullptr,FALSE);return 0;
         }
