@@ -110,7 +110,7 @@ static void RRPerfAfterPresent(unsigned long long returned) noexcept {
             const auto s=p->pool.slots[i];double ms=0;
             if(s.resolved&&control_rr_perf::Milliseconds(p->mapped[i*2],p->mapped[i*2+1],p->frequency,ms)){
                 const auto& k=p->keys[i];
-                Log("RR_PERF_GPU frame=%llu stage=%s planned=%s width=%u height=%u ms=%.6f completed=1",s.frame,RRPerfName(p->stages[i]),k.rr?"RR":"SR",k.width,k.height,ms);
+                Log("RR_PERF_GPU frame=%llu stage=%s planned=%s width=%u height=%u ms=%.6f gi_request=%u completed=1",s.frame,RRPerfName(p->stages[i]),k.rr?"RR":"SR",k.width,k.height,ms,k.giRequest);
             }else if(s.resolved)Log("RR_PERF_GPU_INVALID frame=%llu stage=%s",s.frame,RRPerfName(p->stages[i]));
             p->pool.Retire(i,completed);
         }
@@ -132,9 +132,9 @@ static void RRPerfAfterPresent(unsigned long long returned) noexcept {
     SetLastError(saved);
 }
 static void RRPerfFrameMode(unsigned long long frame,unsigned ow,unsigned oh,unsigned width,unsigned height,
-    bool requested,bool selected,bool ready,unsigned effects) noexcept {
+    bool requested,bool selected,bool ready,unsigned effects,unsigned giRequest=0) noexcept {
     rrPerfFrame=frame;rrPerfFrameThread=GetCurrentThreadId();
-    rrPerfKey={width,height,ow,oh,0,0,effects,selected,requested,ready};
+    rrPerfKey={width,height,ow,oh,0,0,effects,selected,requested,ready,selected?giRequest:0u};
     rrPerfReplayPrepareMs=0;rrPerfReplayWorkersMs=0;rrPerfFilterMs=0;rrPerfReplayBatches=0;
 }
 static void RRPerfReplayPrepared(unsigned long long frame,double ms) noexcept {
@@ -154,9 +154,9 @@ static void RRPerfEvaluation(unsigned long long frame,bool rr,bool success,bool 
     const bool eligible=rrPerfStability.Observe(key,frame,static_cast<unsigned long long>(entryTicks),
         static_cast<unsigned long long>(frequency.QuadPart),reset,success,cadence);
     if(frame%240==0||reset||!success)
-        Log("RR_PERF_FRAME frame=%llu segment=%llu mode=%s requested=%u ready=%u eligible=%u width=%u height=%u output_width=%u output_height=%u fg=%u hdr=%u rt_effects=%u reset=%u cadence_ms=%.6f guides_cpu_ms=%.6f eval_cpu_ms=%.6f replay_prepare_cpu_ms=%.6f replay_workers_cpu_ms=%.6f replay_batches=%u filter_cpu_ms=%.6f gpu_skipped=%llu",
+        Log("RR_PERF_FRAME frame=%llu segment=%llu mode=%s requested=%u ready=%u eligible=%u width=%u height=%u output_width=%u output_height=%u fg=%u hdr=%u rt_effects=%u reset=%u cadence_ms=%.6f guides_cpu_ms=%.6f eval_cpu_ms=%.6f replay_prepare_cpu_ms=%.6f replay_workers_cpu_ms=%.6f replay_batches=%u filter_cpu_ms=%.6f gpu_skipped=%llu gi_request=%u",
             frame,rrPerfStability.segment,success?(rr?"RR":"SR"):"FAILED",unsigned(key.requested),unsigned(key.ready),unsigned(eligible),
             key.width,key.height,key.outputWidth,key.outputHeight,fg,hdr,key.effects,unsigned(reset),cadence,guidesCpuMs,evaluationCpuMs,
-            rrPerfReplayPrepareMs,rrPerfReplayWorkersMs,rrPerfReplayBatches,rrPerfFilterMs,rrPerfSkipped);
+            rrPerfReplayPrepareMs,rrPerfReplayWorkersMs,rrPerfReplayBatches,rrPerfFilterMs,rrPerfSkipped,key.giRequest);
     SetLastError(saved);
 }

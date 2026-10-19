@@ -402,7 +402,7 @@ static bool RRNativeHookReset(unsigned outputWidth,unsigned outputHeight,unsigne
   const bool srResult=rrNativeResetOriginal(outputWidth,outputHeight,width,height,flag0,flag1,false,flag3,reset);
   const DWORD srError=GetLastError();
   bool srSupport=false,srActive=false;RRNativeReadMode(&srSupport,&srActive);
-  RRPerfFrameMode(frame,outputWidth,outputHeight,width,height,requested,false,ready,effects);
+  RRPerfFrameMode(frame,outputWidth,outputHeight,width,height,requested,false,ready,effects,rrNativeGISampleSelection.requested);
   control_rr::RRUserWaitingStatus(known&&srSupport,configuration,effects);
   control_rr::RRUserFrameStatus(requested,false,true,false,rrNativeFrame.Resizing()||control_rr::RRUserRuntimePaused());
   Log("RR_NATIVE_OPTION_GUARD_FAILED frame=%llu sr_reset_success=%u sr_active=%u rr_stopped=1 registered_option_true_never_written=1",frame,unsigned(srResult),unsigned(srActive));
@@ -427,7 +427,7 @@ static bool RRNativeHookReset(unsigned outputWidth,unsigned outputHeight,unsigne
  rrNativeFrame.FeatureResult(result&&observed,active);
  const bool mirrorRR=control_rr::NativeRenderOption(rrNativeFrameEnabled,rrNativeFrame.Selected()||partial,rrNativeFrame.Stopped());
  if(!rrNativeJitterOptionPatch.Set(mirrorRR)){rrNativeFrame.Fail("native_jitter_option_mirror");rrNativePartialFrame.store(false,std::memory_order_release);}
- RRPerfFrameMode(frame,outputWidth,outputHeight,width,height,requested,selected,ready,effects);
+ RRPerfFrameMode(frame,outputWidth,outputHeight,width,height,requested,selected,ready,effects,rrNativeGISampleSelection.requested);
  control_rr::RRUserWaitingStatus(known&&supported,configuration,effects);
  control_rr::RRUserFrameStatus(requested,selected,rrNativeFrame.Stopped(),rrNativeFrame.Recovering(),rrNativeFrame.Resizing()||control_rr::RRUserRuntimePaused());
  const auto count=++rrNativeResetCalls;

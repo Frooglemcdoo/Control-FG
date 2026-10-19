@@ -186,6 +186,22 @@ static bool RRNativeResolveEvaluationPreset(void* list,void* controlFeature,void
  return true;
 }
 
+// R32 read-only creation audit: never infer or change flags from performance alone.
+static void RRNativeLogCreateParameters(void* parameters) noexcept {
+ const DWORD saved=GetLastError();
+ __try {
+  const char* keys[]{"Width","Height","OutWidth","OutHeight","PerfQualityValue",
+   "DLSS.Feature.Create.Flags","CreationNodeMask","VisibilityNodeMask",
+   "DLSS.Denoise.Mode","DLSS.Roughness.Mode","DLSS.Use.HW.Depth",
+   "RayReconstruction.Hint.Render.Preset.DLAA"};
+  for(const auto* key:keys){
+   unsigned value=0;unsigned status=ngxGetUInt?ngxGetUInt(parameters,key,&value):0;
+   if(status!=1&&ngxGetInt){int signedValue=0;status=ngxGetInt(parameters,key,&signedValue);value=static_cast<unsigned>(signedValue);}
+   Log("RR_CREATE_AUDIT_R32 key=%s status=0x%08X value=%u hex=0x%08X read_only=1",key,status,value,value);
+  }
+ } __except(EXCEPTION_EXECUTE_HANDLER){Log("RR_CREATE_AUDIT_R32 failed=1 read_only=1");}
+ SetLastError(saved);
+}
 static unsigned RRNativeCreateWithPreset(void* list,unsigned feature,void* parameters,void** output) {
  const DWORD saved=GetLastError();
  if(feature!=13||!RRNativeApplyPreset(parameters)){
@@ -193,6 +209,7 @@ static unsigned RRNativeCreateWithPreset(void* list,unsigned feature,void* param
   Log("RR_PRESET_CREATE_REJECT feature=%u requested_preset=%s requested_value=%u native_create_called=0",feature,control_rr::RRUserPresetLabel(),control_rr::RRUserPresetValue());
   SetLastError(saved);return 0xBAD00001u;
  }
+ RRNativeLogCreateParameters(parameters);
  const unsigned requested=control_rr::RRUserPresetValue();
  Log("RR_PRESET_REQUEST feature=13 preset=%s preset_value=%u quality_modes=6 readback=verified",control_rr::RRUserPresetLabel(),requested);
  SetLastError(saved);const unsigned result=rrNativeCreateOriginal(list,feature,parameters,output);const DWORD error=GetLastError();

@@ -24,6 +24,7 @@ on:
       - experiment/rr-gi-samples-r29
       - experiment/rr-gi-samples-r30
       - experiment/rr-gi-live-samples-r31
+      - experiment/rr-dlaa-profile-r32
   workflow_dispatch:
   pull_request:
     branches:
@@ -198,6 +199,10 @@ jobs:
           if errorlevel 1 exit /b 1
           build\test-gi-samples.exe
           if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-rr-perf-r32.cpp /Febuild\test-perf-r32.exe
+          if errorlevel 1 exit /b 1
+          build\test-perf-r32.exe
+          if errorlevel 1 exit /b 1
           python tools/test-clean-baseline.py
           if errorlevel 1 exit /b 1
           python tools/test-rr-character-shader-match.py
@@ -228,7 +233,7 @@ jobs:
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-GI-Live-Samples-R31'
+          $out='Control-FG-RR-DLAA-Profile-R32'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
           Copy-Item build/pt_reflection_p1.dxil "$out/pt_reflection_p1.dxil"
@@ -241,30 +246,30 @@ jobs:
           Copy-Item Collect-RR-Skin-Capture.ps1 "$out/Collect-RR-Skin-Capture.ps1"
           Copy-Item Collect-RR-Blinds-Capture.cmd "$out/Collect-RR-Blinds-Capture.cmd"
           Copy-Item Collect-RR-Blinds-Capture.ps1 "$out/Collect-RR-Blinds-Capture.ps1"
+          Copy-Item Collect-ControlFG-Compact-Logs.cmd "$out/Collect-ControlFG-Compact-Logs.cmd"
+          Copy-Item Collect-ControlFG-Compact-Logs.ps1 "$out/Collect-ControlFG-Compact-Logs.ps1"
           @'
-          CONTROL-FG LIVE GI SAMPLES R31
-          Branch: experiment/rr-gi-live-samples-r31
+          CONTROL-FG RR DLAA PROFILE R32
+          Branch: experiment/rr-dlaa-profile-r32
 
-          R30 four samples removed almost all blinds/Jesse noise in user testing.
-          Adds live Native / 2 / 4 / 6 / 8 buttons in F10 overlay:
-          open the settings cog beside Ray Reconstruction.
-          Four samples is the default. Six/eight are new comparison options.
-          Keep RR and RT Indirect Diffuse Lighting ON.
-          Click a sample count to apply on the next selected RR frame.
-          The selected button is highlighted. Saves automatically in the normal
-          overlay settings. No game restart is needed to change sample count.
-          A change resets RR history once; a brief settling period is expected.
-          Higher samples increase GPU work and hit-buffer VRAM use.
+          Diagnostic update to R31; no visual/performance fix claimed.
+          Live Native/2/4/6/8 GI buttons and existing settings are retained.
+          Fixes steady-state RR-OFF timing eligibility, labels timings with the
+          frame-latched GI selection, and logs native RR creation parameters.
+          Parameters are read only. Shaders and rendering choices are unchanged.
 
-          Close Control once to install all included binaries.
-          No comparison INI is required. Old GI Samples Test INI is ignored.
-          Existing settings are preserved; GISamples is a new RayReconstruction key.
-          Native preserves Control's count; custom native counts other than one
-          are preserved for all selections. RR OFF/partial use native sampling.
-          UI selection is snapshotted on the render thread before allocation;
-          the same native local drives hit-array size and shader sample count.
-          R21 guide shaders, GI radius, glass code and PT bridge are unchanged.
-          F9 diagnostic capture remains optional; no logs required for first test.
+          Close Control to install all included binaries. No INI needed.
+          At 4K DLAA, FG OFF, hold the same scene/camera and RT settings:
+          1. RR OFF for 30 seconds.
+          2. RR ON, Native GI samples for 30 seconds.
+          3. RR ON, 4 GI samples for 30 seconds.
+          Then run Collect-ControlFG-Compact-Logs.cmd and send the resulting ZIP.
+          No F9 capture is needed. Discard transitions when comparing FPS.
+          GPU timing samples remain every 240 frames, without GPU waits.
+          gi_request=0 means native selection; it is not an actual ray count.
+          Actual native/effective count remains in RR_GI_SAMPLES_R31 log entries.
+          This is a targeted configuration/timing audit, not a full GPU profiler;
+          character replay GPU cost and other engine stages remain unmeasured.
           '@ | Set-Content "$out/README.txt" -Encoding ASCII
           Compress-Archive -Path "$out/*" -DestinationPath "$out.zip" -Force
           (Get-FileHash "$out.zip" -Algorithm SHA256).Hash | Set-Content "$out.sha256" -Encoding ASCII
@@ -272,10 +277,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-GI-Live-Samples-R31
+          name: Control-FG-RR-DLAA-Profile-R32
           path: |
-            Control-FG-GI-Live-Samples-R31.zip
-            Control-FG-GI-Live-Samples-R31.sha256
+            Control-FG-RR-DLAA-Profile-R32.zip
+            Control-FG-RR-DLAA-Profile-R32.sha256
             build/exports.txt
             build/imports.txt
             build/pt_reflection_p1.dxil

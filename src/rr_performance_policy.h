@@ -44,9 +44,10 @@ inline bool Milliseconds(std::uint64_t begin,std::uint64_t end,std::uint64_t tim
 struct Key {
     unsigned width=0,height=0,outputWidth=0,outputHeight=0,fg=0,hdr=0,effects=0;
     bool rr=false,requested=false,ready=false;
+    unsigned giRequest=0;
     bool operator==(const Key& b) const noexcept {
         return width==b.width&&height==b.height&&outputWidth==b.outputWidth&&outputHeight==b.outputHeight&&
-            fg==b.fg&&hdr==b.hdr&&effects==b.effects&&rr==b.rr&&requested==b.requested&&ready==b.ready;
+            fg==b.fg&&hdr==b.hdr&&effects==b.effects&&rr==b.rr&&requested==b.requested&&ready==b.ready&&giRequest==b.giRequest;
     }
 };
 struct Stability {
@@ -59,7 +60,7 @@ struct Stability {
         const bool transition=!consecutive||reset||!success||cadence>250.0;
         if(transition){stableSince=ticks;++segment;}
         key=next;lastFrame=frame;lastTicks=ticks;have=true;
-        return !transition&&success&&next.ready&&timestampFrequency&&ticks>=stableSince&&
+        return !transition&&success&&(!next.requested||next.ready)&&timestampFrequency&&ticks>=stableSince&&
             static_cast<double>(ticks-stableSince)/static_cast<double>(timestampFrequency)>=3.0;
     }
 };
