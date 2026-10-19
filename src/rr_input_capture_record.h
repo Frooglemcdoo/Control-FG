@@ -1,10 +1,10 @@
 #pragma once
 static bool RRInputCaptureRecord(RRInputCaptureJob* c,const RRGuideInputSnapshot* native,DWORD* fault,bool* started) noexcept {
  bool initialDone=false,restoreAttempted=false,okay=false;
- D3D12_RESOURCE_BARRIER barriers[13]{},restore[13]{};
+ D3D12_RESOURCE_BARRIER barriers[14]{},restore[14]{};
  auto* list=native->commandList;auto* commands=reinterpret_cast<unsigned long long*>(static_cast<unsigned char*>(native->commandContext)+8);
  RR_SEH_TRY {
-  for(unsigned i=0;i<c->count;++i){auto& b=barriers[i];b.Type=D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;b.Transition.pResource=c->sources[i];b.Transition.Subresource=D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;b.Transition.StateBefore=c->states[i];b.Transition.StateAfter=D3D12_RESOURCE_STATE_COPY_SOURCE;
+  for(unsigned i=0;i<c->count;++i){auto& b=barriers[i];b.Type=D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;b.Transition.pResource=c->sources[i];b.Transition.Subresource=0;b.Transition.StateBefore=c->states[i];b.Transition.StateAfter=D3D12_RESOURCE_STATE_COPY_SOURCE;
    restore[i]=b;restore[i].Transition.StateBefore=D3D12_RESOURCE_STATE_COPY_SOURCE;restore[i].Transition.StateAfter=c->states[i];}
   *started=true;++*commands;list->ResourceBarrier(c->count,barriers);initialDone=true;
   for(unsigned i=0;i<c->count;++i){D3D12_TEXTURE_COPY_LOCATION from{},to{};from.pResource=c->sources[i];from.Type=D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;

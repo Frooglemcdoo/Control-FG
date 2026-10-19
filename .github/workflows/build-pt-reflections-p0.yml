@@ -20,6 +20,7 @@ on:
       - experiment/pt-native-secondary-shading
       - experiment/pt-bounce-energy
       - experiment/rr-clean-baseline-r21
+      - experiment/rr-gi-capture-r28
   workflow_dispatch:
   pull_request:
     branches:
@@ -202,6 +203,10 @@ jobs:
           if errorlevel 1 exit /b 1
           build\test-hair.exe
           if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-rr-input-native.cpp /Febuild\test-input-native.exe /link d3d12.lib dxgi.lib
+          if errorlevel 1 exit /b 1
+          build\test-input-native.exe
+          if errorlevel 1 exit /b 1
 
       - name: Compile experimental proxy
         shell: cmd
@@ -216,7 +221,7 @@ jobs:
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-Clean-Baseline-Guides-R21'
+          $out='Control-FG-GI-Capture-R28'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
           Copy-Item build/pt_reflection_p1.dxil "$out/pt_reflection_p1.dxil"
@@ -227,23 +232,28 @@ jobs:
           Copy-Item build/pt_reflection_p2_diffuse_bridge.dxbc "$out/pt_reflection_p2_diffuse_bridge.dxbc"
           Copy-Item Collect-RR-Skin-Capture.cmd "$out/Collect-RR-Skin-Capture.cmd"
           Copy-Item Collect-RR-Skin-Capture.ps1 "$out/Collect-RR-Skin-Capture.ps1"
+          Copy-Item Collect-RR-Blinds-Capture.cmd "$out/Collect-RR-Blinds-Capture.cmd"
+          Copy-Item Collect-RR-Blinds-Capture.ps1 "$out/Collect-RR-Blinds-Capture.ps1"
           @'
-          CONTROL-FG CLEAN BASELINE + CHARACTER/HAIR GUIDES R21
-          Source baseline: fa2f6c5363fc3ca43d13542152fe80b0b79b3479
-          Branch: experiment/rr-clean-baseline-r21
+          CONTROL-FG GI CAPTURE R28
+          Branch: experiment/rr-gi-capture-r28
 
-          Restores the PT Bounce Energy Correction clean baseline world renderer.
-          Carries over R12 hair guides and R19 character base-albedo guides.
-          Native skin lighting is unchanged. PT shaders, diffuse bridge, reflection
-          clamp and GI/contact/AO filtering policies match the clean baseline.
-          Later experimental glass integration and R14-R20 GI filtering are absent.
-          Control-RR-GI-Test.ini has no effect in this build.
+          Diagnostic build from confirmed R21. No R23-R27 rendering experiments.
+          This is not a visual fix. Adds raw diffuse GI mip 0 to the existing
+          synchronized pre-RR inputs and post-RR output capture.
+          All shaders, hair/skin guides and normal rendering behavior are R21.
+          Captures use verified native read states, mip-0-only copy barriers,
+          native locks, same-frame validation and GPU-fence-retired readbacks.
+          No capture allocation or GI copy is performed until F9 is pressed.
+          No INI is needed; all previous comparison INIs are ignored.
 
-          Close Control and copy every binary beside Control_DX12.exe, replacing
-          the existing files. Keep the same settings for comparison (RR Model F,
-          RT High). Compare world surfaces in motion first, then hair and neck.
-          This is a regression-isolation build; visual quality needs confirmation.
-          Optional: press F9 once, wait 20 seconds, run Collect-RR-Skin-Capture.cmd.
+          Close Control and replace all included binaries.
+          Keep RR and RT Indirect Diffuse Lighting ON. Return to the blinds.
+          Press F9 once and gently move the camera as the fault appears.
+          Wait 20 seconds, then run Collect-RR-Blinds-Capture.cmd and send its ZIP.
+          The raw-gi.rgba16f file should accompany both RR capture frames.
+          Capture is limited to 4096x2160 and adds two GI readbacks (~127 MiB
+          combined at 4K). Brief capture overhead is expected.
           '@ | Set-Content "$out/README.txt" -Encoding ASCII
           Compress-Archive -Path "$out/*" -DestinationPath "$out.zip" -Force
           (Get-FileHash "$out.zip" -Algorithm SHA256).Hash | Set-Content "$out.sha256" -Encoding ASCII
@@ -251,10 +261,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-Clean-Baseline-Guides-R21
+          name: Control-FG-GI-Capture-R28
           path: |
-            Control-FG-Clean-Baseline-Guides-R21.zip
-            Control-FG-Clean-Baseline-Guides-R21.sha256
+            Control-FG-GI-Capture-R28.zip
+            Control-FG-GI-Capture-R28.sha256
             build/exports.txt
             build/imports.txt
             build/pt_reflection_p1.dxil

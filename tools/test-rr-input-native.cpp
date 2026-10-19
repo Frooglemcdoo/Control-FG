@@ -40,6 +40,13 @@ int main(){
  RRGuideInputTexture five[]{inputs[0],inputs[1],inputs[2],inputs[1],inputs[2]};
  started=false;assert(RRInputCaptureRecordGuarded(&job,&current,five,&fault,&started,5));assert(started&&acquired==released);
  started=false;busy=inputs[2].stateTracker;assert(!RRInputCaptureRecordGuarded(&job,&current,five,&fault,&started,5));assert(!started&&acquired==released);busy=nullptr;
+ // R28 supports six native inputs, deduplicates shared trackers, and checks mip shape.
+ RRGuideInputTexture six[]{inputs[0],inputs[1],inputs[2],inputs[1],inputs[2],inputs[0]};
+ started=false;assert(RRInputCaptureRecordGuarded(&job,&current,six,&fault,&started,6));assert(started&&acquired==released);
+ started=false;busy=inputs[0].stateTracker;assert(!RRInputCaptureRecordGuarded(&job,&current,six,&fault,&started,6));assert(!started&&acquired==released);busy=nullptr;
+ six[5].desc.MipLevels+=1;
+ started=false;assert(!RRInputCaptureRecordGuarded(&job,&current,six,&fault,&started,6));assert(!started&&acquired==released);
+ assert(!RRInputCaptureRecordGuarded(&job,&current,six,&fault,&started,7));
  // Output copies accept only explicitly tracked UAV, never read-only or RT.
  RRGuideInputTexture output{};
  assert(!RRInputCaptureFindOutput(42,resources[0],&output));
