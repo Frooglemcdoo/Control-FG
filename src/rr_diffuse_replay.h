@@ -1,6 +1,7 @@
 #pragma once
 #include "rr_hair_shader_audit.h"
 #include "rr_world_shader_audit.h"
+#include "rr_world_albedo.h"
 #include "rr_hair_opacity.h"
 #include "rr_character_base_albedo.h"
 // Recurring native albedo replay. CPU draw data lives only through its join.
@@ -121,22 +122,30 @@ static void RRDiffusePrepare(void* callback,void* table) noexcept {
         c->frameSkips=0;c->rangeSkips=0;c->viewSkips=0;c->drawCalls=0;
         const bool auditShaders=rrHairShaderAuditRequested.exchange(false,std::memory_order_acq_rel);
         RRAlbedoShader::Session shaders; // fresh native shader validation each frame
+        RRAlbedoShader::Session worldShaders; // separate budget preserves character/hair admission
+        RRWorldAlbedoAdmission worldAdmission;
+        unsigned worldAccepted=0;
         const control_rr_albedo::Access access{&RRAlbedoRead,&RRAlbedoGetShader,nullptr,&shaders,&RRAlbedoValidateEyeCandidate};
         if(!control_rr_albedo::prepare(access,c->manager,c->replay,true)) {rrDiffuseStage.store(RRDiffuseStage::Idle);return;}
         if(auditShaders)RRWorldExportShaderAudit(frame,c->replay);
         std::uintptr_t source=0;memcpy(&source,c->replay.manager.data()+0x30,sizeof(source));
         size_t kept=0;UINT targets=0;unsigned auditPairs=0;
         for(size_t i=0;i<c->replay.batches.size();++i) {
-            // Restrict this candidate to native Character/Hair techniques. Other
-            // materials keep the approved GBuffer guides.
+            // Character/hair retain R21 behavior. Standard materials additionally
+            // require the exact audited R23 pair below; all others keep fallback.
             if(control_rr::RRTexturedCharacterGuides &&
-               c->replay.familyKinds[i]!=2 && c->replay.familyKinds[i]!=5) continue;
+               c->replay.familyKinds[i]!=1 && c->replay.familyKinds[i]!=2 && c->replay.familyKinds[i]!=5) continue;
+            auto& selectedShaders=c->replay.familyKinds[i]==1?worldShaders:shaders;
             control_rr_albedo::OpaqueBatch original{};RRAlbedoShader::Result result{};
             if(!RRAlbedoRead(source+size_t(c->replay.sourceIndices[i])*sizeof(original),&original,sizeof(original)) ||
-               !shaders.ValidatePair(original.shader,c->replay.batches[i].shader,result,&reason) ||
+               !selectedShaders.ValidatePair(original.shader,c->replay.batches[i].shader,result,&reason) ||
                (control_rr::RRTexturedCharacterGuides && result.targetCount!=1) ||
                result.targetCount<1 || result.targetCount>2 || (targets && targets!=result.targetCount)) continue;
-            if(auditShaders&&auditPairs++<32)RRHairExportShaderPair(frame,c->replay.familyKinds[i],c->replay.sourceIndices[i],original.shader,c->replay.batches[i].shader,shaders.PixelShaders()[result.selectedIndex]);
+            if(c->replay.familyKinds[i]==1){
+                if(!worldAdmission.Allow(original.shader,c->replay.batches[i].shader,selectedShaders.PixelShaders()[result.selectedIndex]))continue;
+                ++worldAccepted;
+            }
+            if(auditShaders&&auditPairs++<32)RRHairExportShaderPair(frame,c->replay.familyKinds[i],c->replay.sourceIndices[i],original.shader,c->replay.batches[i].shader,selectedShaders.PixelShaders()[result.selectedIndex]);
             if(c->replay.familyKinds[i]==5)
                 c->replay.batches[i].shader=RRHairOpacityReplacement(original.shader,c->replay.batches[i].shader,shaders.PixelShaders()[result.selectedIndex]);
             if(c->replay.familyKinds[i]==2)
@@ -145,6 +154,7 @@ static void RRDiffusePrepare(void* callback,void* table) noexcept {
             c->replay.sourceIndices[kept]=c->replay.sourceIndices[i];c->replay.familyKinds[kept]=c->replay.familyKinds[i];++kept;
         }
         c->replay.batches.resize(kept);c->replay.sourceIndices.resize(kept);c->replay.familyKinds.resize(kept);
+        if(frame%240==0||auditShaders)Log("RR_WORLD_ALBEDO_R23 frame=%llu accepted_batches=%u exact_pair_only=1 native_albedo=1 skin_hair_budget_separate=1",frame,worldAccepted);
         c->accepted=static_cast<UINT>(kept);c->rejected=c->replay.coverage.sourceBatches-c->accepted;
         c->replay.coverage.replayBatches=c->accepted;c->replay.coverage.rejectedBatches=c->rejected;c->replay.coverage.complete=c->rejected==0;
         UINT familyCounts[7]{};
