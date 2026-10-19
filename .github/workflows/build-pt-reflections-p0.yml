@@ -31,6 +31,7 @@ on:
       - experiment/glass-lighting-direction-r36
       - experiment/glass-native-light-preserve-r37
       - experiment/glass-shadow-filter-r38
+      - experiment/reflected-character-material-audit-r39
   workflow_dispatch:
   pull_request:
     branches:
@@ -219,6 +220,15 @@ jobs:
           build\test-input-native.exe
           if errorlevel 1 exit /b 1
 
+      - name: Check character capture bounds
+        shell: cmd
+        run: |
+          call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-character-capture-bounds.cpp /Febuild\test-character-capture-bounds.exe
+          if errorlevel 1 exit /b 1
+          build\test-character-capture-bounds.exe
+          if errorlevel 1 exit /b 1
+
       - name: Compile experimental proxy
         shell: cmd
         run: |
@@ -228,11 +238,11 @@ jobs:
           dumpbin /exports build\dxgi.dll > build\exports.txt
           dumpbin /imports build\dxgi.dll > build\imports.txt
 
-      - name: Package stable glass shadow filter R38
+      - name: Package reflected character capture R39
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-Glass-Shadow-Filter-R38'
+          $out='Control-FG-Character-Lighting-Capture-R39'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
           Copy-Item build/opaque_reflection_raygen.dxil "$out/opaque_reflection_raygen.dxil"
@@ -240,6 +250,8 @@ jobs:
           Copy-Item build/pt_glass_raygen.dxil "$out/pt_glass_raygen.dxil"
           Copy-Item build/pt_glass_secondary.dxbc "$out/pt_glass_secondary.dxbc"
           Copy-Item build/pt_glass_composite.dxbc "$out/pt_glass_composite.dxbc"
+          Copy-Item Collect-Character-R39.cmd "$out/Collect-Character-R39.cmd"
+          Copy-Item Collect-Character-R39.ps1 "$out/Collect-Character-R39.ps1"
           Copy-Item Collect-RR-Skin-Capture.cmd "$out/Collect-RR-Skin-Capture.cmd"
           Copy-Item Collect-RR-Skin-Capture.ps1 "$out/Collect-RR-Skin-Capture.ps1"
           Copy-Item Collect-RR-Blinds-Capture.cmd "$out/Collect-RR-Blinds-Capture.cmd"
@@ -247,48 +259,37 @@ jobs:
           Copy-Item Collect-ControlFG-Compact-Logs.cmd "$out/Collect-ControlFG-Compact-Logs.cmd"
           Copy-Item Collect-ControlFG-Compact-Logs.ps1 "$out/Collect-ControlFG-Compact-Logs.ps1"
           @'
-          CONTROL-FG GLASS SHADOW FILTER R38
-          Branch: experiment/glass-shadow-filter-r38
+          CONTROL-FG CHARACTER LIGHTING CAPTURE R39
+          Branch: experiment/reflected-character-material-audit-r39
 
-          R38 replaces the added glass bounce's eight randomized spotlight PCF
-          taps with sixteen fixed disk taps and bilinear comparison filtering.
-          Every depth fetch stays inside the light's atlas tile. Native radius,
-          receiver depth, first-hit shadows, VSM and R37 color merge are retained.
-          No history accumulation, extra reflection rays or world GI changes.
-          The added shadow filtering costs GPU time; measure in game.
+          DIAGNOSTIC BUILD: the R38 image is intentionally unchanged.
+          Records the native character light rigs, instance object data,
+          transforms and DXR instance descriptors for the same engine frame.
+          No new lighting, shadow changes, GPU readback or GPU commands.
+          The capture copies CPU upload data before the game unlocks it.
 
-          Preserves native glass first-hit direct lighting and indirect RGB light.
-          A darker continuation no longer replaces brighter native lighting.
-          Brighter continuation detail is merged per channel without summing the
-          two complete solutions. R36 viewing-direction correction remains only
-          on added continuation hits. No exposure multiplier or added rays.
-          This conservative hybrid preserves native probe light/leakage too; it
-          does not claim complete reconstruction of baked or occluded lighting.
+          Close Control. Replace dxgi.dll beside Control_DX12.exe.
+          If already on R38, keep the five existing shader sidecars.
+          The included shader files are unchanged from R38.
 
-          Includes R35 glass-style continuation for native opaque RT reflections.
-          Preserves native primary roughness, ray samples, direct/diffuse/emission,
-          sample averaging and miss fallback. The reflected hit must be glossy
-          (smoothness >= 0.8), matching the glass enhancement. Additional hits use
-          private storage; original hit textures are restored after each ray.
-          The retired P1/P2 experiment remains disabled; old pt_reflection_* files
-          are ignored. Native first-hit glass lighting is retained in this build.
+          Enable native RT reflections and transparent reflections.
+          Load the glass location where Jesse's reflection looks flat.
+          Keep GLASS enhancement on. RR and FG may stay at your usual settings.
+          Press Ctrl+Shift+F7 once and wait 10 seconds in-game.
+          Run Collect-Character-R39.cmd and send the desktop ZIP.
+          Up to two captures per game launch; a second camera angle is optional.
+          Do not use F9 for this capture.
 
-          Close Control. Copy dxgi.dll and all five shader files beside
-          Control_DX12.exe. No separate INI needed. Keep the game's Ray Traced
-          Reflections and Ray Traced Transparent Reflections enabled.
-          F10 -> REFLECTION ENHANCEMENTS: GLASS and OPAQUE switch independently
-          in real time. Preferences are saved automatically.
+          Capture files are saved in LOCALAPPDATA/ControlFGProbe/character-r39-*.
+          Missing stages are recorded; send the ZIP even if it is incomplete.
+          The diagnostic is limited to 4 MiB per record, 32 MiB per request,
+          four records per stage and two requests per game launch.
+          Capturing may briefly hitch while copying CPU data.
 
-          Retains R33 diffuse GI sample buttons, R32 performance logging and R21
-          character/hair shaders. Additional rays/lighting cost GPU time and VRAM;
-          opaque hit storage uses 32 bytes per reflection pixel per native layer,
-          per in-flight slot (up to three). Unsupported shapes/allocation failures
-          fall back to native reflections. Steam renderer hash gate retained.
-
-          Automated compilation, recovered native-root PSO, descriptor/resource
-          retirement and baseline checks do not replace in-game visual validation.
-          Use OPAQUE OFF to compare with the previous native opaque reflections.
-          Use the compact log collector if the enhancement does not show.
+          Preserves R37 glass light/color merging and R38 stable shadow filtering,
+          R35 opaque reflection continuation, GI sample buttons and RR guides.
+          No separate INI. Existing preferences are retained.
+          Steam renderer hash gate retained. In-game capture validation required.
           '@ | Set-Content "$out/README.txt" -Encoding ASCII
           Compress-Archive -Path "$out/*" -DestinationPath "$out.zip" -Force
           (Get-FileHash "$out.zip" -Algorithm SHA256).Hash | Set-Content "$out.sha256" -Encoding ASCII
@@ -296,10 +297,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-Glass-Shadow-Filter-R38
+          name: Control-FG-Character-Lighting-Capture-R39
           path: |
-            Control-FG-Glass-Shadow-Filter-R38.zip
-            Control-FG-Glass-Shadow-Filter-R38.sha256
+            Control-FG-Character-Lighting-Capture-R39.zip
+            Control-FG-Character-Lighting-Capture-R39.sha256
             build/exports.txt
             build/imports.txt
             build/opaque_reflection_raygen.dxil

@@ -5,6 +5,7 @@
 #include <intrin.h>
 #include <unordered_map>
 #include <memory>
+#include "pt_character_capture.h"
 // G1: Steam hash-locked glass continuation. Original exports and native passes
 // remain present; only a fully prepared dispatch selects the additional raygen.
 static bool (*opaqueDispatchObserver)(ID3D12GraphicsCommandList4*,const D3D12_DISPATCH_RAYS_DESC*)=nullptr;
@@ -220,6 +221,7 @@ using UseFn=void(*)(void*,void*);using RayFn=void(*)(int,int);using BindFn=void(
 static UseFn useNative=nullptr;static RayFn rayNative=nullptr;static BindFn bindNative=nullptr;static LightFn lightNative=nullptr;
 static RRIndirectCallPatch usePatch,rayPatch,lightPatch;static RRAlbedoCallPatch bindPatch{};
 static void UseHook(void* table,void* state){
+    PTCharacterCapture::Poll();
     pass=Pass{};pass.serial=sequence.fetch_add(1);pass.mode=1u;captureKind=enabled?1u:0u;
     useNative(table,state);captureKind=0;
     if(enabled&&!pass.ray)Skip("native_constant_use");
@@ -344,6 +346,7 @@ static bool Install(HMODULE renderer,HMODULE d3d){
     if(!HashMatches(renderer,kRendererHash)||!HashMatches(d3d,kD3dHash)){
         Log("PT_GLASS_INSTALL ready=0 build=G3 reason=unsupported_module_hash");return false;
     }
+    PTCharacterCapture::Install(renderer,d3d);
     char sha[65]{};bool loaded=false;
     if(!PTReflectionLoadSidecar(L"pt_glass_raygen.dxil","GLASS_RAY",rayBytes,sha,loaded)||
        !PTReflectionLoadSidecar(L"pt_glass_secondary.dxbc","GLASS_LIGHT",secondaryBytes,sha,loaded)||
