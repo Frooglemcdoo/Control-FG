@@ -20,6 +20,7 @@ on:
       - experiment/pt-native-secondary-shading
       - experiment/pt-bounce-energy
       - experiment/rr-clean-baseline-r21
+      - experiment/rr-gi-energy-r26
   workflow_dispatch:
   pull_request:
     branches:
@@ -216,7 +217,7 @@ jobs:
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-Clean-Baseline-Guides-R21'
+          $out='Control-FG-GI-Energy-Comparison-R26'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
           Copy-Item build/pt_reflection_p1.dxil "$out/pt_reflection_p1.dxil"
@@ -227,34 +228,42 @@ jobs:
           Copy-Item build/pt_reflection_p2_diffuse_bridge.dxbc "$out/pt_reflection_p2_diffuse_bridge.dxbc"
           Copy-Item Collect-RR-Skin-Capture.cmd "$out/Collect-RR-Skin-Capture.cmd"
           Copy-Item Collect-RR-Skin-Capture.ps1 "$out/Collect-RR-Skin-Capture.ps1"
+          Copy-Item Collect-RR-Blinds-Capture.cmd "$out/Collect-RR-Blinds-Capture.cmd"
+          Copy-Item Collect-RR-Blinds-Capture.ps1 "$out/Collect-RR-Blinds-Capture.ps1"
           @'
-          CONTROL-FG CLEAN BASELINE + CHARACTER/HAIR GUIDES R21
-          Source baseline: fa2f6c5363fc3ca43d13542152fe80b0b79b3479
-          Branch: experiment/rr-clean-baseline-r21
+          CONTROL-FG GI ENERGY COMPARISON R26
+          Branch: experiment/rr-gi-energy-r26
 
-          Restores the PT Bounce Energy Correction clean baseline world renderer.
-          Carries over R12 hair guides and R19 character base-albedo guides.
-          Native skin lighting is unchanged. PT shaders, diffuse bridge, reflection
-          clamp and GI/contact/AO filtering policies match the clean baseline.
-          Later experimental glass integration and R14-R20 GI filtering are absent.
-          Control-RR-GI-Test.ini has no effect in this build.
+          Built from confirmed R21. R23/R24/R25 experiments are absent.
+          Restores the native diffuse GI current-frame energy clamp, with
+          g_uCameraCut forced and verified at the temporal dispatch. Zero spatial
+          passes; native history released afterward. No cross-frame accumulation.
+          This is a candidate, not a confirmed visual fix. The clamp can change
+          GI brightness throughout the scene and adds native filtering work.
+          Character/hair guides, PT shaders and reflection filtering are R21.
 
-          Close Control and copy every binary beside Control_DX12.exe, replacing
-          the existing files. Keep the same settings for comparison (RR Model F,
-          RT High). Compare world surfaces in motion first, then hair and neck.
-          This is a regression-isolation build; visual quality needs confirmation.
-          Optional: press F9 once, wait 20 seconds, run Collect-RR-Skin-Capture.cmd.
+          Close Control and install all binaries AND the included INI beside dxgi.dll.
+          Keep RT Indirect Diffuse Lighting ON. Test the blinds moving, then check
+          nearby world noise, brightness, Jesse and performance.
+          Control-RR-GI-Energy-Test.ini: CurrentFrameClamp=1 enables this test.
+          Set CurrentFrameClamp=0 and restart for the R21 raw GI path.
+          Missing/invalid INI uses R21 behavior. R24/R25 settings are ignored.
+          If needed press F9, continue movement for 20 seconds, and run the collector.
           '@ | Set-Content "$out/README.txt" -Encoding ASCII
+          @'
+          [GIEnergyTest]
+          CurrentFrameClamp=1
+          '@ | Set-Content "$out/Control-RR-GI-Energy-Test.ini" -Encoding ASCII
           Compress-Archive -Path "$out/*" -DestinationPath "$out.zip" -Force
           (Get-FileHash "$out.zip" -Algorithm SHA256).Hash | Set-Content "$out.sha256" -Encoding ASCII
 
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-Clean-Baseline-Guides-R21
+          name: Control-FG-GI-Energy-Comparison-R26
           path: |
-            Control-FG-Clean-Baseline-Guides-R21.zip
-            Control-FG-Clean-Baseline-Guides-R21.sha256
+            Control-FG-GI-Energy-Comparison-R26.zip
+            Control-FG-GI-Energy-Comparison-R26.sha256
             build/exports.txt
             build/imports.txt
             build/pt_reflection_p1.dxil

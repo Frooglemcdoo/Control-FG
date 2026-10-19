@@ -1,0 +1,22 @@
+[
+  [
+    "",
+    "#include \"rr_gi_energy.h\"\n"
+  ],
+  [
+    "",
+    " RRGIEnergyBeforeRelease(history);\n"
+  ],
+  [
+    " if(!rrNativeResetPatch.Prepare(base+0x11b697,reinterpret_cast<void**>(base+0x5df758),reinterpret_cast<void*>(rrNativeResetOriginal),reinterpret_cast<void*>(&RRNativeHookReset))||\n",
+    " if(!rrGIEnergyDispatchPatch.Prepare(base+0x156d3,reinterpret_cast<void**>(base+0x5dfcc0),reinterpret_cast<void*>(rrNativeDispatchOriginal),reinterpret_cast<void*>(&RRGIEnergyDispatch))||\n  !rrNativeResetPatch.Prepare(base+0x11b697,reinterpret_cast<void**>(base+0x5df758),reinterpret_cast<void*>(rrNativeResetOriginal),reinterpret_cast<void*>(&RRNativeHookReset))||\n"
+  ],
+  [
+    "        if(jitter&&rrNativeJitterOptionPatch.healthy&&rrNativeResetPatch.Exchange(true)&&rrNativeResetPatch.healthy){\n",
+    "        if(jitter&&rrNativeJitterOptionPatch.healthy&&rrGIEnergyDispatchPatch.Exchange(true)&&rrGIEnergyDispatchPatch.healthy&&rrNativeResetPatch.Exchange(true)&&rrNativeResetPatch.healthy){\n"
+  ],
+  [
+    "",
+    " if(rrGIEnergyDispatchPatch.changed)rrGIEnergyDispatchPatch.Exchange(false);\n"
+  ]
+]

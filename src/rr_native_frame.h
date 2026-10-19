@@ -281,6 +281,7 @@ static bool RRNativeReadRTSettings(unsigned* enabledBits) noexcept {
   return true;
  } __except(EXCEPTION_EXECUTE_HANDLER){return false;}
 }
+#include "rr_gi_energy.h"
 static void RRNativeHookGIRelease(void* history) {
  // P2 rough-surface energy belongs in diffuse GI, not the specular reflection
  // target. This reviewed callsite is after the native DGI producer and before
@@ -291,6 +292,7 @@ static void RRNativeHookGIRelease(void* history) {
   PTReflectionBridgeDiffuseGI();
  SetLastError(bridgeSaved);
 
+ RRGIEnergyBeforeRelease(history);
  // Preserve the native ownership operation exactly once, including exceptions.
  rrNativeGIReleaseOriginal(history);
  const DWORD saved=GetLastError();
@@ -665,7 +667,8 @@ static bool RRNativeInstallFrame(HMODULE renderer,HMODULE d3d) noexcept {
  // need the native RR semantic: reflection spatial-pass selection, diffuse-GI
  // radius selection and diffuse-GI filter bypass. They now consult the current
  // mod-owned frame selection instead of Control's registered option object.
- if(!rrNativeResetPatch.Prepare(base+0x11b697,reinterpret_cast<void**>(base+0x5df758),reinterpret_cast<void*>(rrNativeResetOriginal),reinterpret_cast<void*>(&RRNativeHookReset))||
+ if(!rrGIEnergyDispatchPatch.Prepare(base+0x156d3,reinterpret_cast<void**>(base+0x5dfcc0),reinterpret_cast<void*>(rrNativeDispatchOriginal),reinterpret_cast<void*>(&RRGIEnergyDispatch))||
+  !rrNativeResetPatch.Prepare(base+0x11b697,reinterpret_cast<void**>(base+0x5df758),reinterpret_cast<void*>(rrNativeResetOriginal),reinterpret_cast<void*>(&RRNativeHookReset))||
   !rrNativeDispatchPatch.Prepare(base+0x16786,reinterpret_cast<void**>(base+0x5dfcc0),reinterpret_cast<void*>(rrNativeDispatchOriginal),reinterpret_cast<void*>(&RRNativeHookDispatch))||
   !RRAlbedoPrepareCallPatch(base+0x16744,reinterpret_cast<void*>(rrNativeTemporalBindOriginal),reinterpret_cast<void*>(&RRNativeHookTemporalBind),&rrNativeTemporalBindPatch)||
   !RRAlbedoPrepareCallPatch(base+0x12b8ad,reinterpret_cast<void*>(rrNativeOptionOriginal),reinterpret_cast<void*>(&RRNativeSelectedOption),&rrNativeReflectionOptionPatch)||
@@ -703,7 +706,7 @@ static bool RRNativeInstallFrame(HMODULE renderer,HMODULE d3d) noexcept {
          broadB=RRAlbedoExchangeCall(&rrNativeBroadDiffuseFilterPatchB,true);
          if(broadB&&rrNativeBroadDiffuseFilterPatchB.writeHealthy){
           jitter=rrNativeJitterOptionPatch.Exchange(true);
-        if(jitter&&rrNativeJitterOptionPatch.healthy&&rrNativeResetPatch.Exchange(true)&&rrNativeResetPatch.healthy){
+        if(jitter&&rrNativeJitterOptionPatch.healthy&&rrGIEnergyDispatchPatch.Exchange(true)&&rrGIEnergyDispatchPatch.healthy&&rrNativeResetPatch.Exchange(true)&&rrNativeResetPatch.healthy){
          rrNativeFrameEnabled=true;
          Log("RR_NATIVE_OPTION_ISOLATION ready=1 registered_option=forced_off_never_true reflection=mod_state gi_radius=mod_state gi_bypass=mod_state jitter=private_mirror partial_mode=mod_owned_option_reads_no_feature13");
          Log("RR_NATIVE_SPECULAR_CLAMP_READY ready=1 target_shader_crc=0x600347E7 camera_cut_provider=name_resolved_per_filter bind_site=0x16744 dispatch_site=0x16786 temporal_history=forced_zero current_frame_energy_clamp=CS3_default_60 restore=verified_each_dispatch reshade_required=0");
@@ -722,6 +725,7 @@ static bool RRNativeInstallFrame(HMODULE renderer,HMODULE d3d) noexcept {
 }
  rrNativeFrameEnabled=false;rrNativePartialFrame.store(false,std::memory_order_release);rrNativeJitterOptionPatch.Set(false);RRNativeKeepRegisteredOptionOff();
  if(rrNativeResetPatch.changed)rrNativeResetPatch.Exchange(false);
+ if(rrGIEnergyDispatchPatch.changed)rrGIEnergyDispatchPatch.Exchange(false);
  if(jitter)rrNativeJitterOptionPatch.Exchange(false);
  if(broadB)RRAlbedoExchangeCall(&rrNativeBroadDiffuseFilterPatchB,false);
  if(broadA)RRAlbedoExchangeCall(&rrNativeBroadDiffuseFilterPatchA,false);
