@@ -30,6 +30,7 @@ on:
       - experiment/native-reflection-continuation-r35
       - experiment/glass-lighting-direction-r36
       - experiment/glass-native-light-preserve-r37
+      - experiment/glass-shadow-filter-r38
   workflow_dispatch:
   pull_request:
     branches:
@@ -153,6 +154,10 @@ jobs:
           if errorlevel 1 exit /b 1
           build\test-glass-direction.exe
           if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-glass-shadow-filter.cpp /Febuild\test-glass-shadow.exe /link d3d11.lib d3dcompiler.lib
+          if errorlevel 1 exit /b 1
+          build\test-glass-shadow.exe
+          if errorlevel 1 exit /b 1
           python tools/test-pt-glass-glossy-only.py
           if errorlevel 1 exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\compile-pt-glass-lighting.cpp /Febuild\compile-glass.exe /link d3dcompiler.lib d3d12.lib dxgi.lib
@@ -223,11 +228,11 @@ jobs:
           dumpbin /exports build\dxgi.dll > build\exports.txt
           dumpbin /imports build\dxgi.dll > build\imports.txt
 
-      - name: Package native glass light preservation R37
+      - name: Package stable glass shadow filter R38
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-Glass-Light-Preserve-R37'
+          $out='Control-FG-Glass-Shadow-Filter-R38'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
           Copy-Item build/opaque_reflection_raygen.dxil "$out/opaque_reflection_raygen.dxil"
@@ -242,8 +247,15 @@ jobs:
           Copy-Item Collect-ControlFG-Compact-Logs.cmd "$out/Collect-ControlFG-Compact-Logs.cmd"
           Copy-Item Collect-ControlFG-Compact-Logs.ps1 "$out/Collect-ControlFG-Compact-Logs.ps1"
           @'
-          CONTROL-FG GLASS LIGHT PRESERVATION R37
-          Branch: experiment/glass-native-light-preserve-r37
+          CONTROL-FG GLASS SHADOW FILTER R38
+          Branch: experiment/glass-shadow-filter-r38
+
+          R38 replaces the added glass bounce's eight randomized spotlight PCF
+          taps with sixteen fixed disk taps and bilinear comparison filtering.
+          Every depth fetch stays inside the light's atlas tile. Native radius,
+          receiver depth, first-hit shadows, VSM and R37 color merge are retained.
+          No history accumulation, extra reflection rays or world GI changes.
+          The added shadow filtering costs GPU time; measure in game.
 
           Preserves native glass first-hit direct lighting and indirect RGB light.
           A darker continuation no longer replaces brighter native lighting.
@@ -284,10 +296,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-Glass-Light-Preserve-R37
+          name: Control-FG-Glass-Shadow-Filter-R38
           path: |
-            Control-FG-Glass-Light-Preserve-R37.zip
-            Control-FG-Glass-Light-Preserve-R37.sha256
+            Control-FG-Glass-Shadow-Filter-R38.zip
+            Control-FG-Glass-Shadow-Filter-R38.sha256
             build/exports.txt
             build/imports.txt
             build/opaque_reflection_raygen.dxil

@@ -52,6 +52,9 @@ cbuffer distancefield_CS : register(b5) { uint4 ptCB5[2]; };
 #ifndef PT_GLASS_COMPOSITE
 #define PT_GLASS_COMPOSITE 0
 #endif
+#if PT_GLASS_SECONDARY_EVALUATION
+#include "pt_glass_shadow_filter.hlsli"
+#endif
 #if PT_GLASS_SECONDARY_EVALUATION || PT_GLASS_COMPOSITE
 #include "pt_glass_secondary_layout.hlsli"
 StructuredBuffer<PTGlassSecondaryHit> ptGlassSecondaryHits : register(t28, space0);
@@ -772,6 +775,12 @@ void main(uint3 groupId : SV_GroupID, uint3 groupThreadId : SV_GroupThreadID) {
     } // native dword 5037
     r25.xy=((uint4(r24.yyyy==uint4(0x100u,0x200u,0x0u,0x0u))*0xffffffffu)).xy; // native dword 5038
     if((r25.xxxx).x != 0u) { // native dword 5048
+#if PT_GLASS_SECONDARY_EVALUATION
+    // R38: stable comparison-filtered shadows on the continuation only.
+    r16.w=asuint(PTGlassStableShadow(g_tSpotLightPCFShadowAtlas,
+        asfloat(r22.zw)*asfloat(r23.zw)+asfloat(r23.xy),
+        asfloat(r20.z),asfloat(r22.x),asfloat(r23)));
+#else
     r25.xz=(asuint(mad(asfloat(r22.zzwz),asfloat(r23.zzwz),asfloat(r23.xxyx)))).xz; // native dword 5051
     r26.xyzw=(asuint((asfloat(r4.xyzw)*asfloat(r23.zwzw)))).xyzw; // native dword 5060
     r26.xyzw=(asuint((asfloat(r22.xxxx)*asfloat(r26.xyzw)))).xyzw; // native dword 5067
@@ -823,6 +832,7 @@ void main(uint3 groupId : SV_GroupID, uint3 groupThreadId : SV_GroupThreadID) {
     r17.y=((r17.yyyy&uint4(0x3f800000u,0x3f800000u,0x3f800000u,0x3f800000u))).y; // native dword 5517
     r16.w=(asuint((asfloat(r16.wwww)+asfloat(r17.yyyy)))).w; // native dword 5524
     r16.w=(asuint((asfloat(r16.wwww)*asfloat(uint4(0x3e000000u,0x3e000000u,0x3e000000u,0x3e000000u))))).w; // native dword 5531
+#endif
     } else { // native dword 5538
     r17.y=((uint4(r24.yyyy==uint4(0x200u,0x200u,0x200u,0x200u))*0xffffffffu)).y; // native dword 5539
     if((r17.yyyy).x != 0u) { // native dword 5546
