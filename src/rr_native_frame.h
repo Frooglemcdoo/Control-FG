@@ -12,7 +12,7 @@
 #include "rr_rt_stack.h"
 #include "rr_contact_shadow_policy.h"
 #include "rr_broad_diffuse_policy.h"
-#include "rr_gi_sample_policy.h"
+#include "rr_gi_sample_control.h"
 static control_rr::RRFrameCoordinator rrNativeFrame;
 static control_rr::RRRTFrame rrNativeRTFrame;
 static control_rr_specular::NativeCopyApi rrNativeCopy;
@@ -48,7 +48,7 @@ static RRAlbedoCallPatch rrNativeGIReleasePatch{};
 using RRNativeGISampleFn=unsigned (*)(void*);
 static RRNativeGISampleFn rrNativeGISampleOriginal=nullptr;
 static RRAlbedoCallPatch rrNativeGISamplePatch{};
-static unsigned rrNativeGISampleRequest=0;
+static control_rr::GISampleFrameSelection rrNativeGISampleSelection{};
 static RRAlbedoCallPatch rrNativeContactShadowFilterPatch{};
 static RRAlbedoCallPatch rrNativeBroadDiffuseFilterPatchA{},rrNativeBroadDiffuseFilterPatchB{};
 static RRNativeJitterOptionPatch rrNativeJitterOptionPatch{};
@@ -264,22 +264,14 @@ static unsigned RRNativeGISampleCount(void* option) {
  const unsigned nativeCount=rrNativeGISampleOriginal(option);
  const DWORD saved=GetLastError();
  const bool full=rrNativeFrameEnabled&&rrNativeFrame.Selected()&&!rrNativeFrame.Stopped()&&!RRNativePartialActive();
- const unsigned effective=control_rr::GISampleComparison(nativeCount,rrNativeGISampleRequest,full);
+ const unsigned effective=control_rr::GISampleComparison(nativeCount,rrNativeGISampleSelection.requested,full);
  static thread_local unsigned lastNative=~0u,lastEffective=~0u;
  if(nativeCount!=lastNative||effective!=lastEffective||rrNativeFrame.Key().frame%240==0){
-  Log("RR_GI_SAMPLES_R30 frame=%llu native=%u effective=%u requested=%u full_rr=%u allocation_and_shader=shared_native_local temporal_changes=0",
-   static_cast<unsigned long long>(rrNativeFrame.Key().frame),nativeCount,effective,rrNativeGISampleRequest,unsigned(full));
+  Log("RR_GI_SAMPLES_R31 frame=%llu native=%u effective=%u requested=%u full_rr=%u allocation_and_shader=shared_native_local temporal_changes=0",
+   static_cast<unsigned long long>(rrNativeFrame.Key().frame),nativeCount,effective,rrNativeGISampleSelection.requested,unsigned(full));
   lastNative=nativeCount;lastEffective=effective;
  }
  SetLastError(saved);return effective;
-}
-static void RRNativeLoadGISampleComparison(HMODULE renderer) {
- auto path=ModulePath(renderer);const auto slash=path.find_last_of(L"\\/");
- if(slash==std::wstring::npos)return;
- path.resize(slash+1);path+=L"Control-RR-GI-Samples-Test.ini";
- const unsigned requested=GetPrivateProfileIntW(L"GISamplesTest",L"Samples",0,path.c_str());
- rrNativeGISampleRequest=control_rr::NormalizeGISampleRequest(requested);
- Log("RR_GI_SAMPLES_CONFIG requested=%u accepted=%u missing_or_invalid=baseline restart_required=1",requested,rrNativeGISampleRequest);
 }
 static bool RRNativePrepareAA(void* color,void*& normal,void*& diffuse,void*& specular) noexcept {
  if(!rrNativeFrameEnabled)return true;
@@ -381,6 +373,11 @@ static bool RRNativeHookReset(unsigned outputWidth,unsigned outputHeight,unsigne
  const auto previousKey=rrNativeFrame.Key();const auto previousStage=rrNativeFrame.Stage();
  const bool wasRecovering=rrNativeFrame.Recovering(),wasStopped=rrNativeFrame.Stopped();
  const bool selected=rrNativeFrame.Begin({frame,outputWidth,outputHeight,width,height,effects},runtimeRequested,ready);
+ // Snapshot UI selection once, before the GI producer allocates any hit arrays.
+ if(rrNativeGISampleSelection.Latch(control_rr::GISampleRequested(),selected)){
+  rrNativeFrame.ResetForSignalChange();
+  Log("RR_GI_SAMPLES_LIVE frame=%llu requested=%u rr_history_reset=1 apply=before_native_gi_allocation",frame,rrNativeGISampleSelection.requested);
+ }
  const bool partial=partialRequested&&known&&supported&&configuration&&!rrNativeFrame.Stopped()&&!selected;
  rrNativePartialFrame.store(partial,std::memory_order_release);
  rrNativeRTFrame.Begin(frame,effects,selected);
@@ -687,7 +684,6 @@ static bool RRNativeInstallFrame(HMODULE renderer,HMODULE d3d) noexcept {
  rrNativeOptionOriginal=reinterpret_cast<RRNativeOptionFn>(base+0x13d20);
  rrNativeGIReleaseOriginal=reinterpret_cast<RRNativeGIReleaseFn>(base+0x13df0);
  rrNativeGISampleOriginal=reinterpret_cast<RRNativeGISampleFn>(base+0x2dac0);
- RRNativeLoadGISampleComparison(renderer);
  if(reinterpret_cast<void*>(GetProcAddress(d3d,"?dispatch@DeviceUtil@d3d@@SAXAEAVDeviceState@2@V?$Vector3Template@H@m@@@Z"))!=reinterpret_cast<void*>(rrNativeDispatchOriginal)||
   reinterpret_cast<void*>(rrNativeCopy.copy)!=native+0x3d190)return false;
 

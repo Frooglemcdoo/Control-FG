@@ -4,6 +4,7 @@
 #include "settings_cog_image.h"
 #include "rr_user_control.h"
 #include "pt_reflection_user_control.h"
+#include "rr_gi_sample_control.h"
 
 // Process-local Control FG overlay for v2.1.2.
 // The v0.8.26 generation path is intentionally untouched. This layer owns only
@@ -202,6 +203,7 @@ static void FGOverlayLoadSettings() noexcept {
     const unsigned int rawTarget = GetPrivateProfileIntW(L"FrameGeneration", L"DynamicTargetFPS", 0, fgOverlaySettingsPath.c_str());
     const unsigned int manualTarget = ClampFGDynamicManualTargetFps(rawTarget);
     control_rr_clamp::Select(control_rr_clamp::Normalize(GetPrivateProfileIntW(L"RayReconstruction", L"ReflectionClamp", 60, fgOverlaySettingsPath.c_str())));
+    control_rr::GISampleSelect(GetPrivateProfileIntW(L"RayReconstruction", L"GISamples", 4, fgOverlaySettingsPath.c_str()));
     const bool rrEnabled = GetPrivateProfileIntW(L"RayReconstruction", L"Enabled", 0, fgOverlaySettingsPath.c_str()) != 0;
     const unsigned int rawRrPreset = GetPrivateProfileIntW(L"RayReconstruction", L"Preset", control_rr::RRPresetF, fgOverlaySettingsPath.c_str());
     const unsigned int rrPreset = rawRrPreset == control_rr::RRPresetE ? control_rr::RRPresetE : control_rr::RRPresetF;
@@ -247,6 +249,8 @@ static bool FGOverlaySaveSettingsNow() noexcept {
     wchar_t rrEnabledText[8]{};
     wchar_t ptEnabledText[8]{};
     swprintf_s(ptEnabledText, L"%u", PTReflectionUserRequested() ? 1u : 0u);
+    wchar_t giSamplesText[8]{};
+    swprintf_s(giSamplesText,L"%u",control_rr::GISampleRequested());
     wchar_t rrPresetText[8]{};
     swprintf_s(modeText, L"%u", GetFGUserMultiplier());
     swprintf_s(targetText, L"%u", GetFGDynamicManualTargetFps());
@@ -259,6 +263,7 @@ static bool FGOverlaySaveSettingsNow() noexcept {
     ok = (WritePrivateProfileStringW(L"RayReconstruction", L"Enabled", rrEnabledText, fgOverlaySettingsPath.c_str()) != FALSE) && ok;
     ok = (WritePrivateProfileStringW(L"RayReconstruction", L"Preset", rrPresetText, fgOverlaySettingsPath.c_str()) != FALSE) && ok;
     ok = (WritePrivateProfileStringW(L"RayReconstruction", L"ReflectionClamp", clampText, fgOverlaySettingsPath.c_str()) != FALSE) && ok;
+    ok = (WritePrivateProfileStringW(L"RayReconstruction", L"GISamples", giSamplesText, fgOverlaySettingsPath.c_str()) != FALSE) && ok;
     ok = (WritePrivateProfileStringW(L"Overlay", L"ToggleKey", bindingText, fgOverlaySettingsPath.c_str()) != FALSE) && ok;
     ok = (WritePrivateProfileStringW(L"Overlay", L"VramMonitorEnabled", vramMonitorText, fgOverlaySettingsPath.c_str()) != FALSE) && ok;
     ok = (WritePrivateProfileStringW(L"Experimental", L"RTX40MultiFG", experimentalText, fgOverlaySettingsPath.c_str()) != FALSE) && ok;
@@ -716,7 +721,21 @@ static void PaintFGOverlay(HWND hwnd) noexcept {
         swprintf_s(status,L"Last RR: %u%%%s. Release to apply. Saves automatically.",control_rr_clamp::effective.load(),control_rr_clamp::applied.load()?L"":L" (native fallback)");
         RECT help{30,330,710,375}; DrawTextW(dc,status,-1,&help,DT_LEFT|DT_WORDBREAK);
         SelectObject(dc,buttonFont);
-        PaintFGButton(dc,RECT{550,410,710,460},L"Back",false);
+        SelectObject(dc,bodyFont);
+        RECT giTitle{30,390,710,423};
+        DrawTextW(dc,L"Indirect diffuse samples",-1,&giTitle,DT_LEFT|DT_SINGLELINE);
+        const unsigned giValues[5]{0,2,4,6,8};
+        const wchar_t* giLabels[5]{L"Native",L"2",L"4",L"6",L"8"};
+        SelectObject(dc,buttonFont);
+        for(unsigned i=0;i<5;++i){
+            const int left=30+static_cast<int>(i)*136;
+            PaintFGButton(dc,RECT{left,432,left+124,482},giLabels[i],control_rr::GISampleRequested()==giValues[i]);
+        }
+        SelectObject(dc,smallFont);
+        RECT giHelp{30,500,710,548};
+        DrawTextW(dc,L"Applies live with RR and RT indirect diffuse lighting on. Saves automatically. Higher samples use more GPU time and VRAM.",-1,&giHelp,DT_LEFT|DT_WORDBREAK);
+        SelectObject(dc,buttonFont);
+        PaintFGButton(dc,RECT{550,570,710,620},L"Back",false);
     } else {
     const unsigned int selected = GetFGUserMultiplier();
     const unsigned int maxSupported = GetFGMaxSupportedMultiplier();
@@ -909,7 +928,7 @@ static bool FGOverlaySliderFromPoint(int x, int y) noexcept {
     return IsFGDynamicSelection(GetFGUserMultiplier()) && y >= 443 && y < 512 && x >= 30 && x < 710;
 }
 static int FGOverlayLowerSectionOffset() noexcept { return IsFGDynamicSelection(GetFGUserMultiplier()) ? 0 : -kFGOverlayDynamicSectionHeight; }
-static int FGOverlayDesiredHeight() noexcept { if (fgOverlayOptionsPage) return 812; if (fgOverlayRRSettingsPage) return 490; return IsFGDynamicSelection(GetFGUserMultiplier()) ? kFGOverlayHeight : kFGOverlayCompactHeight; }
+static int FGOverlayDesiredHeight() noexcept { if (fgOverlayOptionsPage) return 812; if (fgOverlayRRSettingsPage) return 650; return IsFGDynamicSelection(GetFGUserMultiplier()) ? kFGOverlayHeight : kFGOverlayCompactHeight; }
 static void FGOverlayResizeWindowForCurrentSelection(HWND hwnd) noexcept {
     if (!hwnd) return;
     SetWindowPos(hwnd, nullptr, 0, 0, kFGOverlayWidth, FGOverlayDesiredHeight(),
@@ -1031,7 +1050,16 @@ static LRESULT CALLBACK FGOverlayWndProc(HWND hwnd, UINT message, WPARAM wParam,
                 FGOverlayMarkSettingsDirty();
                 FGOverlayFlushSettingsIfDue(true);
                 Log("RR_CLAMP_RESET_CS4 selected=60");
-            } else if (x >= 550 && x < 710 && y >= 410 && y < 460) {
+            } else if (y >= 432 && y < 482 && x >= 30 && x < 698) {
+                const unsigned index=static_cast<unsigned>((x-30)/136);
+                if(index<5&&(x-30)%136<124){
+                    const unsigned values[5]{0,2,4,6,8};
+                    control_rr::GISampleSelect(values[index]);
+                    FGOverlayMarkSettingsDirty();
+                    FGOverlayFlushSettingsIfDue(true);
+                    Log("RR_GI_SAMPLES_UI requested=%u apply=next_frame",values[index]);
+                }
+            } else if (x >= 550 && x < 710 && y >= 570 && y < 620) {
                 fgOverlayRRSettingsPage=false;
                 FGOverlayResizeWindowForCurrentSelection(hwnd);
             }

@@ -23,6 +23,7 @@ on:
       - experiment/rr-gi-capture-r28
       - experiment/rr-gi-samples-r29
       - experiment/rr-gi-samples-r30
+      - experiment/rr-gi-live-samples-r31
   workflow_dispatch:
   pull_request:
     branches:
@@ -227,7 +228,7 @@ jobs:
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-GI-Samples-R30'
+          $out='Control-FG-GI-Live-Samples-R31'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
           Copy-Item build/pt_reflection_p1.dxil "$out/pt_reflection_p1.dxil"
@@ -240,34 +241,30 @@ jobs:
           Copy-Item Collect-RR-Skin-Capture.ps1 "$out/Collect-RR-Skin-Capture.ps1"
           Copy-Item Collect-RR-Blinds-Capture.cmd "$out/Collect-RR-Blinds-Capture.cmd"
           Copy-Item Collect-RR-Blinds-Capture.ps1 "$out/Collect-RR-Blinds-Capture.ps1"
-          Copy-Item Control-RR-GI-Samples-Test.ini "$out/Control-RR-GI-Samples-Test.ini"
           @'
-          CONTROL-FG GI SAMPLE COMPARISON R30
-          Branch: experiment/rr-gi-samples-r30
+          CONTROL-FG LIVE GI SAMPLES R31
+          Branch: experiment/rr-gi-live-samples-r31
 
-          Experimental comparison, not a confirmed visual fix.
-          R28 capture shows the blinds streak pattern already in native raw GI.
-          R29 was confirmed active and improved the issue but did not fix it.
-          R30 compares four native diffuse GI samples in FULL RR.
-          The producer-local count drives BOTH native hit-buffer allocation and
-          shader input. Native counts other than one are preserved.
-          R21 hair/skin guide shaders, GI radius, temporal behavior and glass
-          reflection code are unchanged. No R23-R27 experiments are included.
-          Four samples increase GI GPU work and hit-buffer memory versus two.
-          This is a quality/performance comparison, not a confirmed fix.
-          Overall FPS and VRAM cost must be measured in game.
+          R30 four samples removed almost all blinds/Jesse noise in user testing.
+          Adds live Native / 2 / 4 / 6 / 8 buttons in F10 overlay:
+          open the settings cog beside Ray Reconstruction.
+          Four samples is the default. Six/eight are new comparison options.
+          Keep RR and RT Indirect Diffuse Lighting ON.
+          Click a sample count to apply on the next selected RR frame.
+          The selected button is highlighted. Saves automatically in the normal
+          overlay settings. No game restart is needed to change sample count.
+          A change resets RR history once; a brief settling period is expected.
+          Higher samples increase GPU work and hit-buffer VRAM use.
 
-          Close Control and replace all included binaries AND the INI.
-          Keep RR and RT Indirect Diffuse Lighting ON. Compare the blinds in motion.
-          Control-RR-GI-Samples-Test.ini: [GISamplesTest]
-          Samples=4: four-sample comparison (packaged default).
-          Samples=2: reproduce the R29 two-sample behavior.
-          Set Samples=0 and restart for unchanged native sampling.
-          Missing INI or any other value also uses unchanged native sampling.
-          RR OFF and partial RR use unchanged native sampling.
-          Startup/frame logs identify native and effective counts.
-          Existing F9 raw-GI capture remains available, but no new capture is
-          required for the initial visual/performance comparison.
+          Close Control once to install all included binaries.
+          No comparison INI is required. Old GI Samples Test INI is ignored.
+          Existing settings are preserved; GISamples is a new RayReconstruction key.
+          Native preserves Control's count; custom native counts other than one
+          are preserved for all selections. RR OFF/partial use native sampling.
+          UI selection is snapshotted on the render thread before allocation;
+          the same native local drives hit-array size and shader sample count.
+          R21 guide shaders, GI radius, glass code and PT bridge are unchanged.
+          F9 diagnostic capture remains optional; no logs required for first test.
           '@ | Set-Content "$out/README.txt" -Encoding ASCII
           Compress-Archive -Path "$out/*" -DestinationPath "$out.zip" -Force
           (Get-FileHash "$out.zip" -Algorithm SHA256).Hash | Set-Content "$out.sha256" -Encoding ASCII
@@ -275,10 +272,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-GI-Samples-R30
+          name: Control-FG-GI-Live-Samples-R31
           path: |
-            Control-FG-GI-Samples-R30.zip
-            Control-FG-GI-Samples-R30.sha256
+            Control-FG-GI-Live-Samples-R31.zip
+            Control-FG-GI-Live-Samples-R31.sha256
             build/exports.txt
             build/imports.txt
             build/pt_reflection_p1.dxil

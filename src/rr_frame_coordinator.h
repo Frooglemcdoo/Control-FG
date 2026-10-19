@@ -51,6 +51,11 @@ public:
   if(selected_){if(!fixed_.frame||!SameExtent(key_,fixed_))reset_=true;fixed_=key_;resizing_=false;}
   return true;
  }
+ // Signal settings are latched immediately after Begin, before feature/lighting.
+ bool ResetForSignalChange() noexcept {
+  if(!selected_||stopped_||stage_!=RRFrameStage::Selected)return false;
+  reset_=true;return true;
+ }
  bool NeedsHistoryReset() const noexcept {return historyDirty_&&!selected_;}
  bool HistoryResetResult(bool success) noexcept {
   if(stage_!=RRFrameStage::Ready||!NeedsHistoryReset()||!success)return Fail();
