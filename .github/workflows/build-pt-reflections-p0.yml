@@ -22,6 +22,7 @@ on:
       - experiment/rr-clean-baseline-r21
       - experiment/rr-blinds-audit-r22
       - experiment/rr-world-albedo-r23
+      - experiment/rr-world-view-angle-r25
   workflow_dispatch:
   pull_request:
     branches:
@@ -72,6 +73,10 @@ jobs:
           cl /nologo /std:c++17 /EHsc /W4 /O2 /MT tools\compile-rr-character-base-albedo.cpp /Fobuild\compile-rr-character-base-albedo.obj /Febuild\compile-rr-character-base-albedo.exe /link d3dcompiler.lib
           if errorlevel 1 exit /b 1
           build\compile-rr-character-base-albedo.exe
+          if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /O2 /MT tools\compile-rr-world-albedo.cpp /Fobuild\compile-rr-world-albedo.obj /Febuild\compile-rr-world-albedo.exe /link d3dcompiler.lib
+          if errorlevel 1 exit /b 1
+          build\compile-rr-world-albedo.exe
           if errorlevel 1 exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /O2 /MT tools\compile-skin-mask.cpp /Fobuild\compile-skin-mask.obj /Febuild\compile-skin-mask.exe /link d3dcompiler.lib
           if errorlevel 1 exit /b 1
@@ -194,6 +199,10 @@ jobs:
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
           python tools/test-rr-world-albedo.py
           if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc validation\live-guides\record-test.cpp /Febuild\test-live-record.exe
+          if errorlevel 1 exit /b 1
+          build\test-live-record.exe
+          if errorlevel 1 exit /b 1
           python tools/test-clean-baseline.py
           if errorlevel 1 exit /b 1
           python tools/test-rr-character-shader-match.py
@@ -220,7 +229,7 @@ jobs:
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-World-Albedo-Comparison-R23'
+          $out='Control-FG-World-View-Angle-R25'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
           Copy-Item build/pt_reflection_p1.dxil "$out/pt_reflection_p1.dxil"
@@ -234,26 +243,26 @@ jobs:
           Copy-Item Collect-RR-Skin-Capture.cmd "$out/Collect-RR-Skin-Capture.cmd"
           Copy-Item Collect-RR-Skin-Capture.ps1 "$out/Collect-RR-Skin-Capture.ps1"
           @'
-          CONTROL-FG WORLD ALBEDO COMPARISON R23
-          Branch: experiment/rr-world-albedo-r23
+          CONTROL-FG WORLD VIEW ANGLE R25
+          Branch: experiment/rr-world-view-angle-r25
 
-          Controlled guide test based on confirmed R21/R22 rendering.
-          Uses native textured diffuse albedo for the exact standard-material
-          pixel shader pair verified from the R22 capture. Other materials keep
-          the R21 fallback. The correction applies to matching world surfaces,
-          not only the blinds. Character/hair fixes and their validation budget
-          are preserved. No PT, GI, clamp, normal or roughness shader changes.
+          Corrects the specular-albedo view angle for the exact audited standard
+          world-material shader pair: abs(dot(normal, per-pixel view ray)) replaces
+          abs(normal.z). The original EnvBRDF LUT and smoothness coordinate remain.
+          A private alpha=-4 replay tag limits the correction to those world draws.
+          Character/hair guides keep their existing calculations. Original world
+          material RGB is preserved; native game materials are not modified.
+
+          Based on R23; R24 extra reflection filtering is removed. PT/GI/contact
+          shadow policies and native temporal bypass match the confirmed baseline.
+          This corrects a guide approximation; the blinds result needs in-game QA.
+          Other world surfaces using the exact same shader pair are affected too.
 
           Close Control and replace all included binaries beside Control_DX12.exe.
-          Keep the same settings. Compare the blinds while moving sideways, then
-          inspect nearby world surfaces for noise. This is a test, not a confirmed
-          visual fix. Replaying additional world draws may cost performance.
-          To restore R21 guides, reinstall your confirmed R21 package.
-          No INI changes are needed.
-
-          If the result needs investigation: face the blinds, press F9 once,
-          continue moving with them visible for 20 seconds, then run
-          Collect-RR-Blinds-Capture.cmd. Send its ZIP and the visual result.
+          No INI needed. Control-RR-Reflection-Test.ini from R24 is ignored.
+          Keep game settings unchanged. Check blinds while moving, nearby world
+          noise, reflection detail and Jesse. If needed, press F9, keep moving for
+          20 seconds, and run Collect-RR-Blinds-Capture.cmd.
           '@ | Set-Content "$out/README.txt" -Encoding ASCII
           Compress-Archive -Path "$out/*" -DestinationPath "$out.zip" -Force
           (Get-FileHash "$out.zip" -Algorithm SHA256).Hash | Set-Content "$out.sha256" -Encoding ASCII
@@ -261,10 +270,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-World-Albedo-Comparison-R23
+          name: Control-FG-World-View-Angle-R25
           path: |
-            Control-FG-World-Albedo-Comparison-R23.zip
-            Control-FG-World-Albedo-Comparison-R23.sha256
+            Control-FG-World-View-Angle-R25.zip
+            Control-FG-World-View-Angle-R25.sha256
             build/exports.txt
             build/imports.txt
             build/pt_reflection_p1.dxil

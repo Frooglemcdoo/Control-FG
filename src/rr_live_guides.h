@@ -93,14 +93,14 @@ static DWORD WINAPI RRLivePrepare(void* context) noexcept {
     }
     if(SUCCEEDED(hr)&&!c->root){
         // r21t: match the supplied RenoDX RRG root contract exactly:
-        // [0] = four b0 constants, [1] = one descriptor table {t0..t4,u0..u3}.
+        // [0] = six b0 constants, [1] = one descriptor table {t0..t4,u0..u3}.
         // In particular, MaterialDataPart1 is a bounded StructuredBuffer SRV at t2
         // instead of an unbounded root GPU VA.
         D3D12_DESCRIPTOR_RANGE ranges[2]{};
         ranges[0].RangeType=D3D12_DESCRIPTOR_RANGE_TYPE_SRV;ranges[0].NumDescriptors=5;ranges[0].BaseShaderRegister=0;ranges[0].OffsetInDescriptorsFromTableStart=0;
         ranges[1].RangeType=D3D12_DESCRIPTOR_RANGE_TYPE_UAV;ranges[1].NumDescriptors=4;ranges[1].BaseShaderRegister=0;ranges[1].OffsetInDescriptorsFromTableStart=5;
         D3D12_ROOT_PARAMETER params[2]{};
-        params[0].ParameterType=D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;params[0].Constants.Num32BitValues=4;params[0].Constants.ShaderRegister=0;
+        params[0].ParameterType=D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;params[0].Constants.Num32BitValues=6;params[0].Constants.ShaderRegister=0;
         params[1].ParameterType=D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;params[1].DescriptorTable={2,ranges};
         D3D12_STATIC_SAMPLER_DESC sampler{};sampler.Filter=D3D12_FILTER_MIN_MAG_MIP_LINEAR;
         sampler.AddressU=sampler.AddressV=sampler.AddressW=D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
@@ -267,6 +267,11 @@ static void RRLiveBeforeImpl(ID3D12GraphicsCommandList* list,const control_rr::L
         c->device->CreateShaderResourceView(s.texturedAlbedo,&albedoSRV,handle);
 
         RRLiveConstants constants{};constants.invertSmoothness=1;constants.guideFlags=3;constants.width=width;constants.height=height;
+        // Fail closed to the previous guide for unsupported camera projections.
+        if(control_rr_reflectance::SupportedProjection(in.camera.viewToClip,&constants.projectionX,&constants.projectionY))
+            constants.guideFlags|=8u;
+        if(c->recorded<4 || in.engineFrame%240ull==0)
+            Log("RR_WORLD_VIEW_R25 frame=%llu projection_valid=%u sx=%.6g sy=%.6g tagged_world_only=1",in.engineFrame,unsigned((constants.guideFlags&8u)!=0),double(constants.projectionX),double(constants.projectionY));
         if(!c->policy.CommandsStarted(lease)){c->policy.Abort(lease);RRLiveReleaseSources(s);__leave;}
         DWORD fault=0;const auto perf=RRPerfBegin(in,RRPerfStage::LiveGuides);
         auto* textured=control_rr::RRTexturedCharacterGuides?RRDiffuseCurrent(&in):nullptr;

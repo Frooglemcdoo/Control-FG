@@ -13,3 +13,8 @@ struct RRWorldAlbedoAdmission {
   entries[count++]={original,selected,accepted};return accepted;
  }
 };
+
+#include "../build/rr_world_albedo_compiled.h"
+static constexpr int kRRWorldAlbedoStorageId=0x6F475036;
+static std::atomic<bool> rrWorldAlbedoStorageReady{false};
+static std::uintptr_t RRWorldAlbedoReplacement(std::uintptr_t original,std::uintptr_t selected);

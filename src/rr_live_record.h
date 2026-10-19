@@ -5,8 +5,8 @@
 #ifndef RR_SEH_EXCEPT
 #define RR_SEH_EXCEPT(filter) __except(filter)
 #endif
-struct RRLiveConstants {UINT invertSmoothness,guideFlags,width,height;};
-static_assert(sizeof(RRLiveConstants)==16,"RenoDX-style live guide constant ABI");
+struct RRLiveConstants {UINT invertSmoothness,guideFlags,width,height;float projectionX,projectionY;};
+static_assert(sizeof(RRLiveConstants)==24,"RenoDX-style live guide constant ABI");
 // POD-only recording leaf. All inputs are already compute-readable. The guide
 // pass owns only its three RGBA16F guides and one R16F hair mask and restores them to SRV state
 // before native NGX evaluation consumes them.
@@ -21,7 +21,7 @@ static bool RRLiveRecord(RRLiveOwner* c,RRLiveSlot* s,const RRGuideInputSnapshot
         ++*count;list->SetDescriptorHeaps(1,&s->heap);
         ++*count;list->SetComputeRootSignature(c->root);
         ++*count;list->SetPipelineState(c->pipeline);
-        ++*count;list->SetComputeRoot32BitConstants(0,4,constants,0);
+        ++*count;list->SetComputeRoot32BitConstants(0,6,constants,0);
         ++*count;list->SetComputeRootDescriptorTable(1,s->heap->GetGPUDescriptorHandleForHeapStart());
         ++*count;list->Dispatch((c->width+15)/16,(c->height+15)/16,1);
         for(auto& b:barriers){b.Transition.StateBefore=D3D12_RESOURCE_STATE_UNORDERED_ACCESS;b.Transition.StateAfter=D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;}

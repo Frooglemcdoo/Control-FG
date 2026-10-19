@@ -146,6 +146,8 @@ static void RRDiffusePrepare(void* callback,void* table) noexcept {
                 ++worldAccepted;
             }
             if(auditShaders&&auditPairs++<32)RRHairExportShaderPair(frame,c->replay.familyKinds[i],c->replay.sourceIndices[i],original.shader,c->replay.batches[i].shader,selectedShaders.PixelShaders()[result.selectedIndex]);
+            if(c->replay.familyKinds[i]==1)
+                c->replay.batches[i].shader=RRWorldAlbedoReplacement(original.shader,c->replay.batches[i].shader);
             if(c->replay.familyKinds[i]==5)
                 c->replay.batches[i].shader=RRHairOpacityReplacement(original.shader,c->replay.batches[i].shader,shaders.PixelShaders()[result.selectedIndex]);
             if(c->replay.familyKinds[i]==2)

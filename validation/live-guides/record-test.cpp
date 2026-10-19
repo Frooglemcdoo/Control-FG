@@ -19,7 +19,7 @@ struct List {
  void SetDescriptorHeaps(UINT n,Heap** h){step();assert(n==1&&*h==&heap);}
  void SetComputeRootSignature(void* p){step();assert(p==reinterpret_cast<void*>(1));}
  void SetPipelineState(void* p){step();assert(p==reinterpret_cast<void*>(2));}
- void SetComputeRoot32BitConstants(UINT n,UINT count,const void* p,UINT offset){step();assert(n==0&&count==4&&offset==0);const auto* x=static_cast<const UINT*>(p);assert(x[0]==1&&x[1]==3&&x[2]==2561&&x[3]==1441);}
+ void SetComputeRoot32BitConstants(UINT n,UINT count,const void* p,UINT offset){step();assert(n==0&&count==6&&offset==0);const auto* x=static_cast<const UINT*>(p);assert(x[0]==1&&x[1]==3&&x[2]==2561&&x[3]==1441);const auto* f=static_cast<const float*>(p);assert(f[4]==1.5f&&f[5]==2.5f);}
  void SetComputeRootDescriptorTable(UINT n,std::uint64_t h){step();assert(n==1&&h==77);}
  void Dispatch(UINT x,UINT y,UINT z){step();assert(x==161&&y==91&&z==1);}
 };
@@ -30,7 +30,7 @@ struct RRGuideInputSnapshot {List* commandList;void* commandContext;};
 int main(){
  RRLiveOwner c;RRLiveSlot s{&normal,&specular,&diffuse,&hair,&heap};List list;
  struct Context{unsigned long long reserved,count;} context{};
- RRGuideInputSnapshot input{&list,&context};RRLiveConstants constants{1,3,2561,1441};
+ RRGuideInputSnapshot input{&list,&context};RRLiveConstants constants{1,3,2561,1441,1.5f,2.5f};
  for(unsigned fail=0;fail<=8u;++fail){seen=0;failAt=fail;context.count=0;DWORD fault=0;commandCount=&context.count;
   const bool result=RRLiveRecord(&c,&s,&input,&constants,&fault);
   assert(result==(fail==0));assert(seen==(fail?fail:8u));assert(context.count==seen);assert(fault==(fail?123u:0u));

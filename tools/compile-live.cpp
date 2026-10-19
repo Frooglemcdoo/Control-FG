@@ -24,9 +24,9 @@ int main() {
         contract=contract && SUCCEEDED(reflection->GetResourceBindingDescByName(resources[i],&d)) && d.Type==types[i] && d.BindPoint==slots[i] && d.BindCount==1;
     }
     auto* cb=reflection->GetConstantBufferByName("GuideConstants");
-    const char* names[]={"InvertSmoothness","GuideFlags","Width","Height"};
-    const UINT offsets[]={0,4,8,12};
-    for(UINT i=0;i<4;++i) {
+    const char* names[]={"InvertSmoothness","GuideFlags","Width","Height","ProjectionX","ProjectionY"};
+    const UINT offsets[]={0,4,8,12,16,20};
+    for(UINT i=0;i<6;++i) {
         D3D11_SHADER_VARIABLE_DESC d{};
         contract=contract && cb && SUCCEEDED(cb->GetVariableByName(names[i])->GetDesc(&d)) && d.StartOffset==offsets[i] && d.Size==4;
     }

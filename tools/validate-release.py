@@ -202,7 +202,7 @@ live_record = (root/'src/rr_live_record.h').read_text(encoding='utf-8-sig')
 ck('gbuffer-guide-mode', 'RRGBufferGuideMode = true' in user_control and 'architecture=renodx_descriptor_parity' in live_guides)
 ck('guide-shader-contract', all(x in (root/'src/shaders/rr_live_guides.hlsl').read_text() for x in ['MaterialDataPart1','EnvBRDF','[numthreads(16,16,1)]','NormalRoughness','DiffuseGuide','SpecularGuide']))
 ck('bounded-material-srv', all(x in live_guides for x in ['NumDescriptors=4','hd.NumDescriptors=7','materialSRV.Buffer.NumElements=static_cast<UINT>(sample.metadata.bytes/8)','materialSRV.Buffer.StructureByteStride=8','CreateShaderResourceView(material,&materialSRV,handle)']) and 'SetComputeRootShaderResourceView' not in live_record)
-ck('renodx-root-order', 'SetComputeRoot32BitConstants(0,4,constants,0)' in live_record and 'SetComputeRootDescriptorTable(1,s->heap->GetGPUDescriptorHandleForHeapStart())' in live_record)
+ck('renodx-root-order', 'SetComputeRoot32BitConstants(0,6,constants,0)' in live_record and 'SetComputeRootDescriptorTable(1,s->heap->GetGPUDescriptorHandleForHeapStart())' in live_record)
 
 # Native clamp is the signed-off signal path.
 native_clamp = (root/'src/rr_specular_native_clamp.h').read_text(encoding='utf-8-sig')
