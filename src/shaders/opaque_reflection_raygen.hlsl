@@ -37,14 +37,14 @@ void opaqueContinuationRayGeneration(){
         if(!all(isfinite(n))||!all(isfinite(p))||dot(n.xyz,n.xyz)<0.5f)continue;
         float smooth=saturate(lerp(materials[first].d[17],materials[first].d[18],materialTextures[NonUniformResourceIndex(first*35u+2u)].SampleLevel(linearWrap,float2(n.w,p.w),0).x));
         if(smooth<0.8f)continue; // Same glossy continuation as glass; no diffuse ray.
-        float3 point=World(p.xyz),delta=point-primaryWorld;
+        float3 hitWorld=World(p.xyz),delta=hitWorld-primaryWorld;
         if(dot(delta,delta)<1.e-6f)continue;
         float3 incoming=normalize(delta),normal=normalize(n.xyz);
         if(dot(incoming,normal)>0)normal=-normal;
         float3 direction=normalize(reflect(incoming,normal));
         // Native positions are FP16. Bias scales with their quantization.
         float bias=max(0.01f,max(abs(p.x),max(abs(p.y),abs(p.z)))*0.001f);
-        RayDesc ray;ray.Origin=point+normal*bias;ray.Direction=direction;ray.TMin=bias;ray.TMax=60;
+        RayDesc ray;ray.Origin=hitWorld+normal*bias;ray.Direction=direction;ray.TMin=bias;ray.TMax=60;
         Payload payload;payload.value=layer;DeviceMemoryBarrier();
         TraceRay(scene,RAY_FLAG_NONE,1,0,2,0,ray,payload);DeviceMemoryBarrier();
         uint second=nativeMaterial[at];float4 sn=nativeNormal[at],sp=nativePosition[at];
