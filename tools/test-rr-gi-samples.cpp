@@ -10,7 +10,7 @@ int main(){
   assert(NormalizeGISampleRequest(requested)==(accepted?requested:0u));
   for(unsigned n: {0u,1u,2u,4u,16u,0xffffffffu}){
    assert(GISampleComparison(n,requested,false)==n);
-   assert(GISampleComparison(n,requested,true)==(accepted&&n==1?requested:n));
+   assert(GISampleComparison(n,requested,true)==(accepted&&n>=1&&n<=16?requested:n));
   }
  }
  GISampleFrameSelection latch;
@@ -38,5 +38,5 @@ int main(){
  assert(!off.Begin({1,3840,2160,3840,2160,0},false,false));
  assert(!off.ResetForSignalChange());
  assert(!off.Reset());
- puts("PASS: GI 2/4/6/8; invalid/native/off preservation; frame snapshot; one history reset per change; late reset rejected");
+ puts("PASS: GI 2/4/6/8; native=2 regression; invalid/native/off preservation; frame snapshot; one history reset per change; late reset rejected");
 }

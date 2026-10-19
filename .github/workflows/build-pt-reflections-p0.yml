@@ -25,6 +25,7 @@ on:
       - experiment/rr-gi-samples-r30
       - experiment/rr-gi-live-samples-r31
       - experiment/rr-dlaa-profile-r32
+      - experiment/rr-gi-selection-fix-r33
   workflow_dispatch:
   pull_request:
     branches:
@@ -233,7 +234,7 @@ jobs:
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-RR-DLAA-Profile-R32'
+          $out='Control-FG-GI-Selection-Fix-R33'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
           Copy-Item build/pt_reflection_p1.dxil "$out/pt_reflection_p1.dxil"
@@ -249,27 +250,24 @@ jobs:
           Copy-Item Collect-ControlFG-Compact-Logs.cmd "$out/Collect-ControlFG-Compact-Logs.cmd"
           Copy-Item Collect-ControlFG-Compact-Logs.ps1 "$out/Collect-ControlFG-Compact-Logs.ps1"
           @'
-          CONTROL-FG RR DLAA PROFILE R32
-          Branch: experiment/rr-dlaa-profile-r32
+          CONTROL-FG GI SELECTION FIX R33
+          Branch: experiment/rr-gi-selection-fix-r33
 
-          Diagnostic update to R31; no visual/performance fix claimed.
-          Live Native/2/4/6/8 GI buttons and existing settings are retained.
-          Fixes steady-state RR-OFF timing eligibility, labels timings with the
-          frame-latched GI selection, and logs native RR creation parameters.
-          Parameters are read only. Shaders and rendering choices are unchanged.
+          Fixes live GI buttons not applying when Control's native count is two.
+          The submitted log showed requested=4/6/8 but effective=2. The previous
+          policy only overrode native=1. Explicit selections now apply to valid
+          native counts 1..16. Native still preserves the game's sample count.
 
-          Close Control to install all included binaries. No INI needed.
-          At 4K DLAA, FG OFF, hold the same scene/camera and RT settings:
-          1. RR OFF for 30 seconds.
-          2. RR ON, Native GI samples for 30 seconds.
-          3. RR ON, 4 GI samples for 30 seconds.
-          Then run Collect-ControlFG-Compact-Logs.cmd and send the resulting ZIP.
-          No F9 capture is needed. Discard transitions when comparing FPS.
-          GPU timing samples remain every 240 frames, without GPU waits.
-          gi_request=0 means native selection; it is not an actual ray count.
-          Actual native/effective count remains in RR_GI_SAMPLES_R31 log entries.
-          This is a targeted configuration/timing audit, not a full GPU profiler;
-          character replay GPU cost and other engine stages remain unmeasured.
+          Close Control and install all included binaries. No INI required.
+          F10 -> cog beside Ray Reconstruction -> Native / 2 / 4 / 6 / 8.
+          Click to apply live. Existing saved selection is preserved.
+          Keep RR and RT Indirect Diffuse Lighting ON.
+          Four remains the default for a new setting; higher counts cost more
+          GPU time and VRAM. Frame-boundary application and one-shot history
+          reset remain unchanged. Shader bytes are unchanged from R21.
+          RR_GI_SAMPLES_R33 now reports the actual requested/effective change.
+          R32 performance diagnostics and the compact log collector are included.
+          Verify the sample buttons first before resuming the FPS comparison.
           '@ | Set-Content "$out/README.txt" -Encoding ASCII
           Compress-Archive -Path "$out/*" -DestinationPath "$out.zip" -Force
           (Get-FileHash "$out.zip" -Algorithm SHA256).Hash | Set-Content "$out.sha256" -Encoding ASCII
@@ -277,10 +275,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-RR-DLAA-Profile-R32
+          name: Control-FG-GI-Selection-Fix-R33
           path: |
-            Control-FG-RR-DLAA-Profile-R32.zip
-            Control-FG-RR-DLAA-Profile-R32.sha256
+            Control-FG-GI-Selection-Fix-R33.zip
+            Control-FG-GI-Selection-Fix-R33.sha256
             build/exports.txt
             build/imports.txt
             build/pt_reflection_p1.dxil
