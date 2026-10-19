@@ -253,6 +253,7 @@ static bool RRNativeSelectedOption(void*) noexcept {
  const bool active=rrNativeFrame.Selected()||RRNativePartialActive();
  return control_rr::NativeRenderOption(rrNativeFrameEnabled,active,rrNativeFrame.Stopped());
 }
+#include "rr_gi_radius.h"
 static bool RRNativePrepareAA(void* color,void*& normal,void*& diffuse,void*& specular) noexcept {
  if(!rrNativeFrameEnabled)return true;
  bool support=false,active=false;
@@ -307,8 +308,10 @@ static void RRNativeHookGIRelease(void* history) {
    const bool okay=ReadEngineFrameSafe(&frame,&fault)&&rrNativeRTFrame.ObserveGI(frame,
     rrNativeFrame.Selected()&&rrNativeFrame.Stage()==control_rr::RRFrameStage::Lighting,correct,empty);
    if(!okay)rrNativeFrame.Fail("diffuse_gi_bypass_contract");
-   if(!okay||rrNativeFrame.Reset()||frame%240==0)
+   if(!okay||rrNativeFrame.Reset()||frame%240==0){
     Log("RR_NOISY_GI frame=%llu success=%u history_empty=%u native_filter_skipped=1 rt_effects=0x%X",frame,unsigned(okay),unsigned(empty),rrNativeRTFrame.effects);
+    RRGIRadiusReport(frame);
+   }
   }
  }
  SetLastError(saved);
@@ -669,7 +672,7 @@ static bool RRNativeInstallFrame(HMODULE renderer,HMODULE d3d) noexcept {
   !rrNativeDispatchPatch.Prepare(base+0x16786,reinterpret_cast<void**>(base+0x5dfcc0),reinterpret_cast<void*>(rrNativeDispatchOriginal),reinterpret_cast<void*>(&RRNativeHookDispatch))||
   !RRAlbedoPrepareCallPatch(base+0x16744,reinterpret_cast<void*>(rrNativeTemporalBindOriginal),reinterpret_cast<void*>(&RRNativeHookTemporalBind),&rrNativeTemporalBindPatch)||
   !RRAlbedoPrepareCallPatch(base+0x12b8ad,reinterpret_cast<void*>(rrNativeOptionOriginal),reinterpret_cast<void*>(&RRNativeSelectedOption),&rrNativeReflectionOptionPatch)||
-  !RRAlbedoPrepareCallPatch(base+0x12bda4,reinterpret_cast<void*>(rrNativeOptionOriginal),reinterpret_cast<void*>(&RRNativeSelectedOption),&rrNativeGIRadiusOptionPatch)||
+  !RRAlbedoPrepareCallPatch(base+0x12bda4,reinterpret_cast<void*>(rrNativeOptionOriginal),reinterpret_cast<void*>(&RRGIRadiusOption),&rrNativeGIRadiusOptionPatch)||
   !RRAlbedoPrepareCallPatch(base+0x12cd45,reinterpret_cast<void*>(rrNativeOptionOriginal),reinterpret_cast<void*>(&RRNativeSelectedOption),&rrNativeGIBypassOptionPatch)||
   !RRAlbedoPrepareCallPatch(base+0x12b8d7,reinterpret_cast<void*>(rrNativeFilterOriginal),reinterpret_cast<void*>(&RRNativeHookFilter),&rrNativeFilterPatch)||
   !RRAlbedoPrepareCallPatch(base+0x12cd55,reinterpret_cast<void*>(rrNativeGIReleaseOriginal),reinterpret_cast<void*>(&RRNativeHookGIRelease),&rrNativeGIReleasePatch)||

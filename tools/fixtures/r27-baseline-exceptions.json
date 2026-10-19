@@ -1,0 +1,18 @@
+[
+  [
+    "",
+    "#include \"rr_gi_radius.h\"\n"
+  ],
+  [
+    "   if(!okay||rrNativeFrame.Reset()||frame%240==0)\n",
+    "   if(!okay||rrNativeFrame.Reset()||frame%240==0){\n"
+  ],
+  [
+    "",
+    "    RRGIRadiusReport(frame);\n   }\n"
+  ],
+  [
+    "  !RRAlbedoPrepareCallPatch(base+0x12bda4,reinterpret_cast<void*>(rrNativeOptionOriginal),reinterpret_cast<void*>(&RRNativeSelectedOption),&rrNativeGIRadiusOptionPatch)||\n",
+    "  !RRAlbedoPrepareCallPatch(base+0x12bda4,reinterpret_cast<void*>(rrNativeOptionOriginal),reinterpret_cast<void*>(&RRGIRadiusOption),&rrNativeGIRadiusOptionPatch)||\n"
+  ]
+]

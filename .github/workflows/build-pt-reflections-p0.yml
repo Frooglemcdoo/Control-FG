@@ -20,6 +20,7 @@ on:
       - experiment/pt-native-secondary-shading
       - experiment/pt-bounce-energy
       - experiment/rr-clean-baseline-r21
+      - experiment/rr-gi-radius-r27
   workflow_dispatch:
   pull_request:
     branches:
@@ -216,7 +217,7 @@ jobs:
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-Clean-Baseline-Guides-R21'
+          $out='Control-FG-GI-Radius-Comparison-R27'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
           Copy-Item build/pt_reflection_p1.dxil "$out/pt_reflection_p1.dxil"
@@ -227,34 +228,42 @@ jobs:
           Copy-Item build/pt_reflection_p2_diffuse_bridge.dxbc "$out/pt_reflection_p2_diffuse_bridge.dxbc"
           Copy-Item Collect-RR-Skin-Capture.cmd "$out/Collect-RR-Skin-Capture.cmd"
           Copy-Item Collect-RR-Skin-Capture.ps1 "$out/Collect-RR-Skin-Capture.ps1"
+          Copy-Item Collect-RR-Blinds-Capture.cmd "$out/Collect-RR-Blinds-Capture.cmd"
+          Copy-Item Collect-RR-Blinds-Capture.ps1 "$out/Collect-RR-Blinds-Capture.ps1"
           @'
-          CONTROL-FG CLEAN BASELINE + CHARACTER/HAIR GUIDES R21
-          Source baseline: fa2f6c5363fc3ca43d13542152fe80b0b79b3479
-          Branch: experiment/rr-clean-baseline-r21
+          CONTROL-FG GI RADIUS COMPARISON R27
+          Branch: experiment/rr-gi-radius-r27
 
-          Restores the PT Bounce Energy Correction clean baseline world renderer.
-          Carries over R12 hair guides and R19 character base-albedo guides.
-          Native skin lighting is unchanged. PT shaders, diffuse bridge, reflection
-          clamp and GI/contact/AO filtering policies match the clean baseline.
-          Later experimental glass integration and R14-R20 GI filtering are absent.
-          Control-RR-GI-Test.ini has no effect in this build.
+          Based on confirmed R21; R23 through R26 changes are absent.
+          Tests the game's stock diffuse GI ray radius with RR enabled.
+          Only the GI producer radius option read is changed. Native GI filtering
+          stays bypassed, as in R21. No extra clamp or temporal accumulation.
+          Hair/skin guides, reflection filtering and all shaders are R21.
+          This is an isolated comparison, not a confirmed fix. Changing GI reach
+          may affect lighting throughout the scene; compare brightness and noise.
 
-          Close Control and copy every binary beside Control_DX12.exe, replacing
-          the existing files. Keep the same settings for comparison (RR Model F,
-          RT High). Compare world surfaces in motion first, then hair and neck.
-          This is a regression-isolation build; visual quality needs confirmation.
-          Optional: press F9 once, wait 20 seconds, run Collect-RR-Skin-Capture.cmd.
+          Close Control. Install ALL binaries and the included INI beside dxgi.dll.
+          Keep RR and RT Indirect Diffuse Lighting ON.
+          Control-RR-GI-Radius-Test.ini: UseStockRadius=1 enables the comparison.
+          UseStockRadius=0 restores R21's RR radius. Restart after each change.
+          Missing/invalid INI defaults to 0. R26's clamp INI is ignored.
+          Compare blinds in motion, nearby world noise, Jesse and performance.
+          Logs report the actual radius and both native multipliers.
           '@ | Set-Content "$out/README.txt" -Encoding ASCII
+          @'
+          [GIRadiusTest]
+          UseStockRadius=1
+          '@ | Set-Content "$out/Control-RR-GI-Radius-Test.ini" -Encoding ASCII
           Compress-Archive -Path "$out/*" -DestinationPath "$out.zip" -Force
           (Get-FileHash "$out.zip" -Algorithm SHA256).Hash | Set-Content "$out.sha256" -Encoding ASCII
 
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-Clean-Baseline-Guides-R21
+          name: Control-FG-GI-Radius-Comparison-R27
           path: |
-            Control-FG-Clean-Baseline-Guides-R21.zip
-            Control-FG-Clean-Baseline-Guides-R21.sha256
+            Control-FG-GI-Radius-Comparison-R27.zip
+            Control-FG-GI-Radius-Comparison-R27.sha256
             build/exports.txt
             build/imports.txt
             build/pt_reflection_p1.dxil
