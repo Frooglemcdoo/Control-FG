@@ -21,6 +21,7 @@ on:
       - experiment/pt-bounce-energy
       - experiment/rr-clean-baseline-r21
       - experiment/rr-gi-capture-r28
+      - experiment/rr-gi-samples-r29
   workflow_dispatch:
   pull_request:
     branches:
@@ -191,6 +192,10 @@ jobs:
         shell: cmd
         run: |
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-rr-gi-samples.cpp /Febuild\test-gi-samples.exe
+          if errorlevel 1 exit /b 1
+          build\test-gi-samples.exe
+          if errorlevel 1 exit /b 1
           python tools/test-clean-baseline.py
           if errorlevel 1 exit /b 1
           python tools/test-rr-character-shader-match.py
@@ -221,7 +226,7 @@ jobs:
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-GI-Capture-R28'
+          $out='Control-FG-GI-Samples-R29'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
           Copy-Item build/pt_reflection_p1.dxil "$out/pt_reflection_p1.dxil"
@@ -234,26 +239,30 @@ jobs:
           Copy-Item Collect-RR-Skin-Capture.ps1 "$out/Collect-RR-Skin-Capture.ps1"
           Copy-Item Collect-RR-Blinds-Capture.cmd "$out/Collect-RR-Blinds-Capture.cmd"
           Copy-Item Collect-RR-Blinds-Capture.ps1 "$out/Collect-RR-Blinds-Capture.ps1"
+          Copy-Item Control-RR-GI-Samples-Test.ini "$out/Control-RR-GI-Samples-Test.ini"
           @'
-          CONTROL-FG GI CAPTURE R28
-          Branch: experiment/rr-gi-capture-r28
+          CONTROL-FG GI SAMPLE COMPARISON R29
+          Branch: experiment/rr-gi-samples-r29
 
-          Diagnostic build from confirmed R21. No R23-R27 rendering experiments.
-          This is not a visual fix. Adds raw diffuse GI mip 0 to the existing
-          synchronized pre-RR inputs and post-RR output capture.
-          All shaders, hair/skin guides and normal rendering behavior are R21.
-          Captures use verified native read states, mip-0-only copy barriers,
-          native locks, same-frame validation and GPU-fence-retired readbacks.
-          No capture allocation or GI copy is performed until F9 is pressed.
-          No INI is needed; all previous comparison INIs are ignored.
+          Experimental comparison, not a confirmed visual fix.
+          R28 capture shows the blinds streak pattern already in native raw GI.
+          This build raises native diffuse GI from one sample to two in FULL RR.
+          The producer-local count drives BOTH native hit-buffer allocation and
+          shader input. Native counts other than one are preserved.
+          R21 hair/skin guide shaders, GI radius, temporal behavior and glass
+          reflection code are unchanged. No R23-R27 experiments are included.
+          This increases GI GPU work and intermediate texture memory at 4K.
+          Overall FPS and VRAM cost must be measured in game.
 
-          Close Control and replace all included binaries.
-          Keep RR and RT Indirect Diffuse Lighting ON. Return to the blinds.
-          Press F9 once and gently move the camera as the fault appears.
-          Wait 20 seconds, then run Collect-RR-Blinds-Capture.cmd and send its ZIP.
-          The raw-gi.rgba16f file should accompany both RR capture frames.
-          Capture is limited to 4096x2160 and adds two GI readbacks (~127 MiB
-          combined at 4K). Brief capture overhead is expected.
+          Close Control and replace all included binaries AND the INI.
+          Keep RR and RT Indirect Diffuse Lighting ON. Compare the blinds in motion.
+          Control-RR-GI-Samples-Test.ini: [GISamplesTest] Samples=2 enables test.
+          Set Samples=0 and restart for unchanged native sampling.
+          Missing INI or any other value also uses unchanged native sampling.
+          RR OFF and partial RR use unchanged native sampling.
+          Startup/frame logs identify native and effective counts.
+          Existing F9 raw-GI capture remains available, but no new capture is
+          required for the initial visual/performance comparison.
           '@ | Set-Content "$out/README.txt" -Encoding ASCII
           Compress-Archive -Path "$out/*" -DestinationPath "$out.zip" -Force
           (Get-FileHash "$out.zip" -Algorithm SHA256).Hash | Set-Content "$out.sha256" -Encoding ASCII
@@ -261,10 +270,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-GI-Capture-R28
+          name: Control-FG-GI-Samples-R29
           path: |
-            Control-FG-GI-Capture-R28.zip
-            Control-FG-GI-Capture-R28.sha256
+            Control-FG-GI-Samples-R29.zip
+            Control-FG-GI-Samples-R29.sha256
             build/exports.txt
             build/imports.txt
             build/pt_reflection_p1.dxil

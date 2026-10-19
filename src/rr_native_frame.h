@@ -12,6 +12,7 @@
 #include "rr_rt_stack.h"
 #include "rr_contact_shadow_policy.h"
 #include "rr_broad_diffuse_policy.h"
+#include "rr_gi_sample_policy.h"
 static control_rr::RRFrameCoordinator rrNativeFrame;
 static control_rr::RRRTFrame rrNativeRTFrame;
 static control_rr_specular::NativeCopyApi rrNativeCopy;
@@ -44,6 +45,10 @@ static RRNativeOptionFn rrNativeOptionOriginal=nullptr;
 static RRNativeGIReleaseFn rrNativeGIReleaseOriginal=nullptr;
 static RRAlbedoCallPatch rrNativeReflectionOptionPatch{},rrNativeGIRadiusOptionPatch{},rrNativeGIBypassOptionPatch{};
 static RRAlbedoCallPatch rrNativeGIReleasePatch{};
+using RRNativeGISampleFn=unsigned (*)(void*);
+static RRNativeGISampleFn rrNativeGISampleOriginal=nullptr;
+static RRAlbedoCallPatch rrNativeGISamplePatch{};
+static unsigned rrNativeGISampleRequest=0;
 static RRAlbedoCallPatch rrNativeContactShadowFilterPatch{};
 static RRAlbedoCallPatch rrNativeBroadDiffuseFilterPatchA{},rrNativeBroadDiffuseFilterPatchB{};
 static RRNativeJitterOptionPatch rrNativeJitterOptionPatch{};
@@ -252,6 +257,29 @@ static bool RRNativeKeepRegisteredOptionOff() noexcept {
 static bool RRNativeSelectedOption(void*) noexcept {
  const bool active=rrNativeFrame.Selected()||RRNativePartialActive();
  return control_rr::NativeRenderOption(rrNativeFrameEnabled,active,rrNativeFrame.Stopped());
+}
+// Override the sole producer-local getter, before allocation and provider binding.
+// Never mutate the registered option or the shader constant independently.
+static unsigned RRNativeGISampleCount(void* option) {
+ const unsigned nativeCount=rrNativeGISampleOriginal(option);
+ const DWORD saved=GetLastError();
+ const bool full=rrNativeFrameEnabled&&rrNativeFrame.Selected()&&!rrNativeFrame.Stopped()&&!RRNativePartialActive();
+ const unsigned effective=control_rr::GISampleComparison(nativeCount,rrNativeGISampleRequest,full);
+ static thread_local unsigned lastNative=~0u,lastEffective=~0u;
+ if(nativeCount!=lastNative||effective!=lastEffective||rrNativeFrame.Key().frame%240==0){
+  Log("RR_GI_SAMPLES_R29 frame=%llu native=%u effective=%u requested=%u full_rr=%u allocation_and_shader=shared_native_local temporal_changes=0",
+   static_cast<unsigned long long>(rrNativeFrame.Key().frame),nativeCount,effective,rrNativeGISampleRequest,unsigned(full));
+  lastNative=nativeCount;lastEffective=effective;
+ }
+ SetLastError(saved);return effective;
+}
+static void RRNativeLoadGISampleComparison(HMODULE renderer) {
+ auto path=ModulePath(renderer);const auto slash=path.find_last_of(L"\\/");
+ if(slash==std::wstring::npos)return;
+ path.resize(slash+1);path+=L"Control-RR-GI-Samples-Test.ini";
+ const unsigned requested=GetPrivateProfileIntW(L"GISamplesTest",L"Samples",0,path.c_str());
+ rrNativeGISampleRequest=requested==2?2u:0u;
+ Log("RR_GI_SAMPLES_CONFIG requested=%u accepted=%u missing_or_invalid=baseline restart_required=1",requested,rrNativeGISampleRequest);
 }
 static bool RRNativePrepareAA(void* color,void*& normal,void*& diffuse,void*& specular) noexcept {
  if(!rrNativeFrameEnabled)return true;
@@ -658,6 +686,8 @@ static bool RRNativeInstallFrame(HMODULE renderer,HMODULE d3d) noexcept {
  rrNativeDiffuseFilterOriginal=reinterpret_cast<RRNativeDiffuseFilterFn>(base+0x14c90);
  rrNativeOptionOriginal=reinterpret_cast<RRNativeOptionFn>(base+0x13d20);
  rrNativeGIReleaseOriginal=reinterpret_cast<RRNativeGIReleaseFn>(base+0x13df0);
+ rrNativeGISampleOriginal=reinterpret_cast<RRNativeGISampleFn>(base+0x2dac0);
+ RRNativeLoadGISampleComparison(renderer);
  if(reinterpret_cast<void*>(GetProcAddress(d3d,"?dispatch@DeviceUtil@d3d@@SAXAEAVDeviceState@2@V?$Vector3Template@H@m@@@Z"))!=reinterpret_cast<void*>(rrNativeDispatchOriginal)||
   reinterpret_cast<void*>(rrNativeCopy.copy)!=native+0x3d190)return false;
 
@@ -665,7 +695,8 @@ static bool RRNativeInstallFrame(HMODULE renderer,HMODULE d3d) noexcept {
  // need the native RR semantic: reflection spatial-pass selection, diffuse-GI
  // radius selection and diffuse-GI filter bypass. They now consult the current
  // mod-owned frame selection instead of Control's registered option object.
- if(!rrNativeResetPatch.Prepare(base+0x11b697,reinterpret_cast<void**>(base+0x5df758),reinterpret_cast<void*>(rrNativeResetOriginal),reinterpret_cast<void*>(&RRNativeHookReset))||
+ if(!RRAlbedoPrepareCallPatch(base+0x12ba17,reinterpret_cast<void*>(rrNativeGISampleOriginal),reinterpret_cast<void*>(&RRNativeGISampleCount),&rrNativeGISamplePatch)||
+  !rrNativeResetPatch.Prepare(base+0x11b697,reinterpret_cast<void**>(base+0x5df758),reinterpret_cast<void*>(rrNativeResetOriginal),reinterpret_cast<void*>(&RRNativeHookReset))||
   !rrNativeDispatchPatch.Prepare(base+0x16786,reinterpret_cast<void**>(base+0x5dfcc0),reinterpret_cast<void*>(rrNativeDispatchOriginal),reinterpret_cast<void*>(&RRNativeHookDispatch))||
   !RRAlbedoPrepareCallPatch(base+0x16744,reinterpret_cast<void*>(rrNativeTemporalBindOriginal),reinterpret_cast<void*>(&RRNativeHookTemporalBind),&rrNativeTemporalBindPatch)||
   !RRAlbedoPrepareCallPatch(base+0x12b8ad,reinterpret_cast<void*>(rrNativeOptionOriginal),reinterpret_cast<void*>(&RRNativeSelectedOption),&rrNativeReflectionOptionPatch)||
@@ -682,7 +713,7 @@ static bool RRNativeInstallFrame(HMODULE renderer,HMODULE d3d) noexcept {
  // this point forward the registered option is never written TRUE by the mod.
  if(!RRNativeKeepRegisteredOptionOff()||!rrNativeJitterOptionPatch.Set(false))return false;
 
- bool temporalBind=false,reflectionOption=false,giRadiusOption=false,giBypassOption=false,filter=false,gi=false,contactShadow=false,broadA=false,broadB=false,jitter=false;
+ bool temporalBind=false,reflectionOption=false,giRadiusOption=false,giBypassOption=false,filter=false,gi=false,contactShadow=false,broadA=false,broadB=false,jitter=false,giSamples=false;
  if(rrNativeDispatchPatch.Exchange(true)&&rrNativeDispatchPatch.healthy){
   temporalBind=RRAlbedoExchangeCall(&rrNativeTemporalBindPatch,true);
   if(temporalBind&&rrNativeTemporalBindPatch.writeHealthy){
@@ -703,7 +734,7 @@ static bool RRNativeInstallFrame(HMODULE renderer,HMODULE d3d) noexcept {
          broadB=RRAlbedoExchangeCall(&rrNativeBroadDiffuseFilterPatchB,true);
          if(broadB&&rrNativeBroadDiffuseFilterPatchB.writeHealthy){
           jitter=rrNativeJitterOptionPatch.Exchange(true);
-        if(jitter&&rrNativeJitterOptionPatch.healthy&&rrNativeResetPatch.Exchange(true)&&rrNativeResetPatch.healthy){
+        if(jitter&&rrNativeJitterOptionPatch.healthy&&(giSamples=RRAlbedoExchangeCall(&rrNativeGISamplePatch,true))&&rrNativeGISamplePatch.writeHealthy&&rrNativeResetPatch.Exchange(true)&&rrNativeResetPatch.healthy){
          rrNativeFrameEnabled=true;
          Log("RR_NATIVE_OPTION_ISOLATION ready=1 registered_option=forced_off_never_true reflection=mod_state gi_radius=mod_state gi_bypass=mod_state jitter=private_mirror partial_mode=mod_owned_option_reads_no_feature13");
          Log("RR_NATIVE_SPECULAR_CLAMP_READY ready=1 target_shader_crc=0x600347E7 camera_cut_provider=name_resolved_per_filter bind_site=0x16744 dispatch_site=0x16786 temporal_history=forced_zero current_frame_energy_clamp=CS3_default_60 restore=verified_each_dispatch reshade_required=0");
@@ -722,6 +753,7 @@ static bool RRNativeInstallFrame(HMODULE renderer,HMODULE d3d) noexcept {
 }
  rrNativeFrameEnabled=false;rrNativePartialFrame.store(false,std::memory_order_release);rrNativeJitterOptionPatch.Set(false);RRNativeKeepRegisteredOptionOff();
  if(rrNativeResetPatch.changed)rrNativeResetPatch.Exchange(false);
+ if(giSamples)RRAlbedoExchangeCall(&rrNativeGISamplePatch,false);
  if(jitter)rrNativeJitterOptionPatch.Exchange(false);
  if(broadB)RRAlbedoExchangeCall(&rrNativeBroadDiffuseFilterPatchB,false);
  if(broadA)RRAlbedoExchangeCall(&rrNativeBroadDiffuseFilterPatchA,false);
