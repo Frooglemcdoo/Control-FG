@@ -29,6 +29,7 @@ on:
       - experiment/glass-only-restore-r34
       - experiment/native-reflection-continuation-r35
       - experiment/glass-lighting-direction-r36
+      - experiment/glass-native-light-preserve-r37
   workflow_dispatch:
   pull_request:
     branches:
@@ -222,11 +223,11 @@ jobs:
           dumpbin /exports build\dxgi.dll > build\exports.txt
           dumpbin /imports build\dxgi.dll > build\imports.txt
 
-      - name: Package glass lighting correction R36
+      - name: Package native glass light preservation R37
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-Glass-Lighting-R36'
+          $out='Control-FG-Glass-Light-Preserve-R37'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
           Copy-Item build/opaque_reflection_raygen.dxil "$out/opaque_reflection_raygen.dxil"
@@ -241,13 +242,16 @@ jobs:
           Copy-Item Collect-ControlFG-Compact-Logs.cmd "$out/Collect-ControlFG-Compact-Logs.cmd"
           Copy-Item Collect-ControlFG-Compact-Logs.ps1 "$out/Collect-ControlFG-Compact-Logs.ps1"
           @'
-          CONTROL-FG GLASS LIGHTING R36
-          Branch: experiment/glass-lighting-direction-r36
+          CONTROL-FG GLASS LIGHT PRESERVATION R37
+          Branch: experiment/glass-native-light-preserve-r37
 
-          Corrects point/spot-light BRDF viewing direction at reflected glass hits
-          and their continuation hits. Uses the previous path segment instead of
-          the real camera direction. Hit positions, light attenuation and shadow
-          coordinates retain native values. No exposure or brightness multiplier.
+          Preserves native glass first-hit direct lighting and indirect RGB light.
+          A darker continuation no longer replaces brighter native lighting.
+          Brighter continuation detail is merged per channel without summing the
+          two complete solutions. R36 viewing-direction correction remains only
+          on added continuation hits. No exposure multiplier or added rays.
+          This conservative hybrid preserves native probe light/leakage too; it
+          does not claim complete reconstruction of baked or occluded lighting.
 
           Includes R35 glass-style continuation for native opaque RT reflections.
           Preserves native primary roughness, ray samples, direct/diffuse/emission,
@@ -255,7 +259,7 @@ jobs:
           (smoothness >= 0.8), matching the glass enhancement. Additional hits use
           private storage; original hit textures are restored after each ray.
           The retired P1/P2 experiment remains disabled; old pt_reflection_* files
-          are ignored. Glass direct-light viewing direction is corrected in this build.
+          are ignored. Native first-hit glass lighting is retained in this build.
 
           Close Control. Copy dxgi.dll and all five shader files beside
           Control_DX12.exe. No separate INI needed. Keep the game's Ray Traced
@@ -280,10 +284,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-Glass-Lighting-R36
+          name: Control-FG-Glass-Light-Preserve-R37
           path: |
-            Control-FG-Glass-Lighting-R36.zip
-            Control-FG-Glass-Lighting-R36.sha256
+            Control-FG-Glass-Light-Preserve-R37.zip
+            Control-FG-Glass-Light-Preserve-R37.sha256
             build/exports.txt
             build/imports.txt
             build/opaque_reflection_raygen.dxil

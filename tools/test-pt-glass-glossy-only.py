@@ -24,3 +24,7 @@ assert 'float3 ptGlassLightView=PTGlassLightView(asfloat(r0.xyz)' in lighting
 assert lighting.index('r6.xzw=asuint(ptGlassLightView)') < lighting.index('// native dword 2959')
 assert 'native dword 2772' in lighting and 'native dword 2917' in lighting
 print('PASS: reflected direct-light viewing direction applied before NdotV; native hit positions and shadow origins retained.')
+
+assert 'r11.xyz=asuint(PTGlassMergeRadiance(asfloat(r11.xyz),traced.xyz))' in lighting
+assert '#if PT_GLASS_SECONDARY_EVALUATION\n    // Override only V,' in lighting
+print('PASS: native first-hit direct lighting retained; continuation uses conservative native-color merge.')
