@@ -313,11 +313,12 @@ jobs:
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-RR-Character-Guide-R19'
+          $out='Control-FG-RR-GI-Input-Comparison-R20'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/pt_glass_raygen.dxil "$out/pt_glass_raygen.dxil"
           Copy-Item build/pt_glass_secondary.dxbc "$out/pt_glass_secondary.dxbc"
           Copy-Item build/pt_glass_composite.dxbc "$out/pt_glass_composite.dxbc"
+          "[GI]`r`nRawInput=1" | Set-Content "$out/Control-RR-GI-Test.ini" -Encoding ASCII
           Copy-Item legal/RENODX-LICENSE.txt "$out/RENODX-LICENSE.txt"
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
           Copy-Item build/pt_reflection_p1.dxil "$out/pt_reflection_p1.dxil"
@@ -331,19 +332,24 @@ jobs:
           Copy-Item Collect-RR-Skin-Capture.ps1 "$out/Collect-RR-Skin-Capture.ps1"
           Copy-Item Collect-RR-Skin-Capture.cmd "$out/Collect-RR-Skin-Capture.cmd"
           @'
-          CONTROL-FG - CHARACTER DIFFUSE GUIDE R19 (TEST BUILD)
-          ==================================================
-          Fixes the R18 shader hash guard that prevented activation.
-          Corrects the RR-only character albedo replay for the exact captured
-          native character shader pair. Uses the same base texture and tint
-          as the native lighting draw, omitting the albedo variant's unused
-          detail multiplier which can produce a zero skin diffuse guide.
-          Native skin lighting, materials, and texture bindings are untouched.
-          R12 hair and glass shaders are unchanged. GI filtering remains R17
-          so this test isolates the guide correction.
-          Test the same scene with RR Model F, all RT enabled and RT High.
-          Check neck noise and motion smearing, and skin appearance overall.
-          Visual improvement is not confirmed until tested in game.
+          CONTROL-FG - GI INPUT COMPARISON R20 (TEST BUILD)
+          ===============================================
+          Preserves the confirmed R19 character guide and R12 hair fix.
+          Tests whether GI filtering before RR contributes to neck mottling.
+          Default INI RawInput=1 sends GI directly to RR using the existing
+          native bypass/history-release branch. No GI temporal or spatial
+          filter runs in this mode. The GI ray radius and bridge are unchanged.
+          Native skin shading, specular filtering, contact policy and glass
+          remain unchanged. This is a controlled test, not a confirmed fix.
+
+          Install all files beside Control_DX12.exe with Control closed.
+          Test the same scene with your existing RR Model F / RT High settings.
+          For the R19 filtering baseline, close Control, edit
+          Control-RR-GI-Test.ini to RawInput=0, then restart Control.
+          Set RawInput=1 and restart to return to the R20 comparison.
+          Compare neck mottling, fine noise and motion smearing in both modes.
+          Send the compact logs and which mode looks better. If neither does,
+          keep RawInput=0. This setting is read once per game process.
 
           Optional paired capture (retains the R10 diagnostic format):
           Close Control. Install all binaries beside Control_DX12.exe.
@@ -361,10 +367,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-RR-Character-Guide-R19
+          name: Control-FG-RR-GI-Input-Comparison-R20
           path: |
-            Control-FG-RR-Character-Guide-R19.zip
-            Control-FG-RR-Character-Guide-R19.sha256
+            Control-FG-RR-GI-Input-Comparison-R20.zip
+            Control-FG-RR-GI-Input-Comparison-R20.sha256
             build/rr_hair_opacity.asm
             build/rr_character_base_albedo.asm
             build/exports.txt

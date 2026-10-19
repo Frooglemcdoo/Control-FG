@@ -12,6 +12,7 @@
 #include "rr_rt_stack.h"
 #include "rr_contact_shadow_policy.h"
 #include "rr_broad_diffuse_policy.h"
+#include "rr_gi_input_test.h"
 static control_rr::RRFrameCoordinator rrNativeFrame;
 static control_rr::RRRTFrame rrNativeRTFrame;
 static control_rr_specular::NativeCopyApi rrNativeCopy;
@@ -319,6 +320,9 @@ static void RRNativeHookGIRelease(void* history) {
 static bool RRNativeGIBypassOption(void* option) noexcept {
  const bool full=rrNativeFrameEnabled&&rrNativeFrame.Selected()&&!rrNativeFrame.Stopped()&&!RRNativePartialActive();
  if(!full)return RRNativeSelectedOption(option);
+ // R20 diagnostic: the existing release branch owns the bridge and GI observation.
+ // Do not also mark the native-filter route or inject the bridge here.
+ if(RRNativeGIRawInputRequested())return true;
  const DWORD saved=GetLastError();
  unsigned long long frame=0;DWORD fault=0;
  const bool correct=reinterpret_cast<std::uintptr_t>(option)==reinterpret_cast<std::uintptr_t>(verifiedRenderer)+0x914570;

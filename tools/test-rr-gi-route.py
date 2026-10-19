@@ -3,10 +3,11 @@ from pathlib import Path
 import os, subprocess, tempfile
 root=Path(__file__).resolve().parents[1]
 s=(root/'src/rr_native_frame.h').read_text()
-hook=s[s.index('static bool RRNativeGIBypassOption('):s.index('static bool RRNativeLightingReady(')]
+hook=s[s.index('static void RRNativeHookGIRelease('):s.index('static bool RRNativeLightingReady(')]
 fixture=r'''
 #include <cassert>
 #include <cstdint>
+#include <cstddef>
 #include "rr_rt_stack.h"
 using DWORD=unsigned long;
 namespace control_rr {enum class RRFrameStage {Lighting,Other};}
@@ -18,7 +19,14 @@ struct Frame {
  void Fail(const char*){failed=true;}
 } rrNativeFrame;
 control_rr::RRRTFrame rrNativeRTFrame;
-bool rrNativeFrameEnabled=true,partial=false,readable=true;
+bool rrNativeFrameEnabled=true,partial=false,readable=true,rawInput=false;
+bool RRNativeGIRawInputRequested(){return rawInput;}
+unsigned releaseCalls=0;
+void release(void*){++releaseCalls;}
+auto rrNativeGIReleaseOriginal=&release;
+namespace control_rr_reflection {struct WindowsAccess {
+ static bool Read(void*,std::uintptr_t,void* out,size_t){*static_cast<std::uintptr_t*>(out)=0;return true;}
+};}
 unsigned bridgeCalls=0,fallbackCalls=0;DWORD error=123;
 void* verifiedRenderer=reinterpret_cast<void*>(0x10000000);
 bool RRNativePartialActive(){return partial;}
@@ -29,9 +37,13 @@ void PTReflectionBridgeDiffuseGI(){++bridgeCalls;error=99;}
 template<class... T> void Log(const char*,T...){error=65;}
 HOOK
 void reset(){rrNativeFrame={};rrNativeFrameEnabled=true;partial=false;readable=true;
- bridgeCalls=fallbackCalls=0;error=123;rrNativeRTFrame.Begin(8,3,true);}
+ bridgeCalls=fallbackCalls=releaseCalls=0;rawInput=false;error=123;rrNativeRTFrame.Begin(8,3,true);}
 int main(){
  void* option=reinterpret_cast<void*>(0x10914570);
+ reset();rawInput=true;assert(RRNativeGIBypassOption(option));
+ assert(bridgeCalls==0&&fallbackCalls==0&&!rrNativeRTFrame.giObserved);
+ RRNativeHookGIRelease(reinterpret_cast<void*>(0x1090eac8));
+ assert(bridgeCalls==1&&releaseCalls==1&&rrNativeRTFrame.Complete(8,3,true)&&!rrNativeFrame.failed);
  reset();assert(!RRNativeGIBypassOption(option));
  assert(bridgeCalls==1&&fallbackCalls==0&&error==123&&!rrNativeFrame.failed);
  assert(rrNativeRTFrame.Complete(8,3,true));
