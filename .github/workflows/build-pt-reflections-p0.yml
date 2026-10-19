@@ -22,6 +22,7 @@ on:
       - experiment/rr-clean-baseline-r21
       - experiment/rr-gi-capture-r28
       - experiment/rr-gi-samples-r29
+      - experiment/rr-gi-samples-r30
   workflow_dispatch:
   pull_request:
     branches:
@@ -226,7 +227,7 @@ jobs:
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-GI-Samples-R29'
+          $out='Control-FG-GI-Samples-R30'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
           Copy-Item build/pt_reflection_p1.dxil "$out/pt_reflection_p1.dxil"
@@ -241,22 +242,26 @@ jobs:
           Copy-Item Collect-RR-Blinds-Capture.ps1 "$out/Collect-RR-Blinds-Capture.ps1"
           Copy-Item Control-RR-GI-Samples-Test.ini "$out/Control-RR-GI-Samples-Test.ini"
           @'
-          CONTROL-FG GI SAMPLE COMPARISON R29
-          Branch: experiment/rr-gi-samples-r29
+          CONTROL-FG GI SAMPLE COMPARISON R30
+          Branch: experiment/rr-gi-samples-r30
 
           Experimental comparison, not a confirmed visual fix.
           R28 capture shows the blinds streak pattern already in native raw GI.
-          This build raises native diffuse GI from one sample to two in FULL RR.
+          R29 was confirmed active and improved the issue but did not fix it.
+          R30 compares four native diffuse GI samples in FULL RR.
           The producer-local count drives BOTH native hit-buffer allocation and
           shader input. Native counts other than one are preserved.
           R21 hair/skin guide shaders, GI radius, temporal behavior and glass
           reflection code are unchanged. No R23-R27 experiments are included.
-          This increases GI GPU work and intermediate texture memory at 4K.
+          Four samples increase GI GPU work and hit-buffer memory versus two.
+          This is a quality/performance comparison, not a confirmed fix.
           Overall FPS and VRAM cost must be measured in game.
 
           Close Control and replace all included binaries AND the INI.
           Keep RR and RT Indirect Diffuse Lighting ON. Compare the blinds in motion.
-          Control-RR-GI-Samples-Test.ini: [GISamplesTest] Samples=2 enables test.
+          Control-RR-GI-Samples-Test.ini: [GISamplesTest]
+          Samples=4: four-sample comparison (packaged default).
+          Samples=2: reproduce the R29 two-sample behavior.
           Set Samples=0 and restart for unchanged native sampling.
           Missing INI or any other value also uses unchanged native sampling.
           RR OFF and partial RR use unchanged native sampling.
@@ -270,10 +275,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-GI-Samples-R29
+          name: Control-FG-GI-Samples-R30
           path: |
-            Control-FG-GI-Samples-R29.zip
-            Control-FG-GI-Samples-R29.sha256
+            Control-FG-GI-Samples-R30.zip
+            Control-FG-GI-Samples-R30.sha256
             build/exports.txt
             build/imports.txt
             build/pt_reflection_p1.dxil

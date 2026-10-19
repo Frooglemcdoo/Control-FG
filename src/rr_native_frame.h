@@ -267,7 +267,7 @@ static unsigned RRNativeGISampleCount(void* option) {
  const unsigned effective=control_rr::GISampleComparison(nativeCount,rrNativeGISampleRequest,full);
  static thread_local unsigned lastNative=~0u,lastEffective=~0u;
  if(nativeCount!=lastNative||effective!=lastEffective||rrNativeFrame.Key().frame%240==0){
-  Log("RR_GI_SAMPLES_R29 frame=%llu native=%u effective=%u requested=%u full_rr=%u allocation_and_shader=shared_native_local temporal_changes=0",
+  Log("RR_GI_SAMPLES_R30 frame=%llu native=%u effective=%u requested=%u full_rr=%u allocation_and_shader=shared_native_local temporal_changes=0",
    static_cast<unsigned long long>(rrNativeFrame.Key().frame),nativeCount,effective,rrNativeGISampleRequest,unsigned(full));
   lastNative=nativeCount;lastEffective=effective;
  }
@@ -278,7 +278,7 @@ static void RRNativeLoadGISampleComparison(HMODULE renderer) {
  if(slash==std::wstring::npos)return;
  path.resize(slash+1);path+=L"Control-RR-GI-Samples-Test.ini";
  const unsigned requested=GetPrivateProfileIntW(L"GISamplesTest",L"Samples",0,path.c_str());
- rrNativeGISampleRequest=requested==2?2u:0u;
+ rrNativeGISampleRequest=control_rr::NormalizeGISampleRequest(requested);
  Log("RR_GI_SAMPLES_CONFIG requested=%u accepted=%u missing_or_invalid=baseline restart_required=1",requested,rrNativeGISampleRequest);
 }
 static bool RRNativePrepareAA(void* color,void*& normal,void*& diffuse,void*& specular) noexcept {
