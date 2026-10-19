@@ -1,0 +1,41 @@
+{
+  "capture": "Control-RR-Hair-Audit-R10-20261018-164315.zip",
+  "roi_xyxy": [
+    1530,
+    1720,
+    1680,
+    1850
+  ],
+  "frames": {
+    "rr-input-c1-57700-5769": {
+      "raw-albedo.rgba16f": {
+        "pixels": 19500,
+        "zero_rgb_pixels": 19500,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "diffuse.rgba16f": {
+        "pixels": 19500,
+        "zero_rgb_pixels": 19500,
+        "min": 0.0,
+        "max": 0.0
+      }
+    },
+    "rr-input-c1-57700-5770": {
+      "raw-albedo.rgba16f": {
+        "pixels": 19500,
+        "zero_rgb_pixels": 19500,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "diffuse.rgba16f": {
+        "pixels": 19500,
+        "zero_rgb_pixels": 19500,
+        "min": 0.0,
+        "max": 0.0
+      }
+    }
+  },
+  "original_shader_sha256": "0cd8a4b8144f1add1eac28edb815477ad7e3b42291735aa361e2f8e77b20bb96",
+  "albedo_shader_sha256": "dc9fe7a05347aa5b570595e75e4b19b787ecb9c4ee5bd6dfcc80b1f9ed776c24"
+}

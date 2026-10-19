@@ -1,0 +1,13 @@
+# R18 character diffuse guide correction
+
+The paired capture contains frames 5769/5770, 3840x2160, preset F, no RR reset, both evaluations successful. The neck ROI in capture-findings.json contains 19,500 pixels; raw replay and RR diffuse guide RGB are exactly zero in both frames. Specular guides remain nonzero. Input color already contains neck mottling; RR smooths fine grain and retains larger patches. This does not establish that the missing diffuse guide is the sole source of the visual artifact.
+
+All nine captured character shader pairs are identical. Decoding the native lighting shader shows the diffuse-light multiplication at DWORD 552 uses the base texture at materialIndex*35, multiplied by MaterialDataPart3 bytes 52..67. The selected albedo variant additionally reads Part3 byte 156, samples detail texture materialIndex*35+7 at scaled UVs, doubles its green channel and multiplies the base reflectance by it. The captured native lighting shader has no such detail sample. The all-zero output does not identify which bound value is zero, but the variant's reflectance calculation demonstrably differs from the native draw.
+
+R18 provides a hash-gated replacement only for this RR replay pair, using the native draw's base-texture/tint expression. It preserves the selected record's binding metadata, vertex shader and input layout; TEXCOORD1 remains v4.xy. It adds no native skin material/lighting patch. Unknown shader pairs retain the existing behavior. Hair replacements, GI filters, specular guides, normal guides, glass and opaque PT are unchanged.
+
+Compilation checks the exact resource slots/spaces and UV/output signature, plus one texture sample. The existing PT runtime integrity test permits only the new explicit replay storage entry points, retaining its original PT baseline hashes. Visual validation remains necessary: this guide correction can alter RR's reconstruction of skin, even though native skin rendering is unchanged.
+
+## R19 activation correction
+
+R18 used an FNV hash calculated with the wrong offset basis and therefore rejected the exact captured shader before reaching its SHA256 check. The new capture (PID 14680, frames 3055/3056) still shows a black neck guide and no replacement activation marker. Its shader pair has the same SHA256 values as the original capture. Runtime logs report FNV 0xAC82DBF4F66EA1F2; R19 uses that value. The new regression compiles the actual production HashFNV1a function against the captured shader fixture and checks both acceptance and rejection after a byte mutation. Shader code and GI filter settings are unchanged from R18. The reported visual improvement cannot be attributed to the inactive R18 correction.

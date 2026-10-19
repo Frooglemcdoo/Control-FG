@@ -183,12 +183,13 @@ static bool RRAlbedoNativeCreate(const RRAlbedoNativeAPI* api, unsigned int widt
     }
 }
 static bool RRAlbedoNativePrepareClear(const RRAlbedoNativeAPI* api,
-    RRAlbedoNativeTarget* target, DWORD* fault) noexcept {
+    RRAlbedoNativeTarget* target, DWORD* fault, bool uncoveredSentinel=false) noexcept {
     if (!api || !target || !target->nativeTexture || !fault) return false;
     *fault = 0;
     void* tls = nullptr; void* context = nullptr; void* state = nullptr; bool worker = false;
     RRGuideInputSnapshot primary{}; const char* reason = nullptr;
-    RRAlbedoNativeFloat4 zero{};
+    // Negative RGB distinguishes untouched pixels from valid black albedo.
+    RRAlbedoNativeFloat4 zero=uncoveredSentinel?RRAlbedoNativeFloat4{-1,-1,-1,0}:RRAlbedoNativeFloat4{};
     __try {
         if (!RRGuideReadRendererContext(&primary, &reason) ||
             !RRAlbedoNativeContext(api, &tls, &context, &state, &worker) || worker) return false;

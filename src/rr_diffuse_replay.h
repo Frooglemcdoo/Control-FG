@@ -1,4 +1,7 @@
 #pragma once
+#include "rr_hair_shader_audit.h"
+#include "rr_hair_opacity.h"
+#include "rr_character_base_albedo.h"
 // Recurring native albedo replay. CPU draw data lives only through its join.
 // Targets resize only after native CPU join and post-Present GPU retirement.
 enum class RRDiffuseStage {Idle,Recording,Joined,Stopped};
@@ -62,7 +65,7 @@ static void RRDiffuseDrawFault(RRDiffuseReplay* c,const char* reason,int first,i
 }
 #include "rr_diffuse_resize.h"
 static void RRDiffusePrepare(void* callback,void* table) noexcept {
-    if(control_rr::RRGBufferGuideMode) return;
+    if(control_rr::RRGBufferGuideMode&&!control_rr::RRTexturedCharacterGuides) return;
     // No replay preparation, worker recording, target clears or material scans while FULL RR is off.
     if(!control_rr::RRUserRuntimeWorkRequested()) return;
     RRAlbedoLastError error;
@@ -115,16 +118,27 @@ static void RRDiffusePrepare(void* callback,void* table) noexcept {
         c->characterInstances.store(0,std::memory_order_relaxed);
         c->characterFingerprint.store(0,std::memory_order_relaxed);
         c->frameSkips=0;c->rangeSkips=0;c->viewSkips=0;c->drawCalls=0;
+        const bool auditShaders=rrHairShaderAuditRequested.exchange(false,std::memory_order_acq_rel);
         RRAlbedoShader::Session shaders; // fresh native shader validation each frame
         const control_rr_albedo::Access access{&RRAlbedoRead,&RRAlbedoGetShader,nullptr,&shaders,&RRAlbedoValidateEyeCandidate};
         if(!control_rr_albedo::prepare(access,c->manager,c->replay,true)) {rrDiffuseStage.store(RRDiffuseStage::Idle);return;}
         std::uintptr_t source=0;memcpy(&source,c->replay.manager.data()+0x30,sizeof(source));
-        size_t kept=0;UINT targets=0;
+        size_t kept=0;UINT targets=0;unsigned auditPairs=0;
         for(size_t i=0;i<c->replay.batches.size();++i) {
+            // Restrict this candidate to native Character/Hair techniques. Other
+            // materials keep the approved GBuffer guides.
+            if(control_rr::RRTexturedCharacterGuides &&
+               c->replay.familyKinds[i]!=2 && c->replay.familyKinds[i]!=5) continue;
             control_rr_albedo::OpaqueBatch original{};RRAlbedoShader::Result result{};
             if(!RRAlbedoRead(source+size_t(c->replay.sourceIndices[i])*sizeof(original),&original,sizeof(original)) ||
                !shaders.ValidatePair(original.shader,c->replay.batches[i].shader,result,&reason) ||
+               (control_rr::RRTexturedCharacterGuides && result.targetCount!=1) ||
                result.targetCount<1 || result.targetCount>2 || (targets && targets!=result.targetCount)) continue;
+            if(auditShaders&&auditPairs++<32)RRHairExportShaderPair(frame,c->replay.familyKinds[i],c->replay.sourceIndices[i],original.shader,c->replay.batches[i].shader,shaders.PixelShaders()[result.selectedIndex]);
+            if(c->replay.familyKinds[i]==5)
+                c->replay.batches[i].shader=RRHairOpacityReplacement(original.shader,c->replay.batches[i].shader,shaders.PixelShaders()[result.selectedIndex]);
+            if(c->replay.familyKinds[i]==2)
+                c->replay.batches[i].shader=RRCharacterBaseAlbedoReplacement(original.shader,c->replay.batches[i].shader,shaders.PixelShaders()[result.selectedIndex]);
             targets=result.targetCount;c->replay.batches[kept]=c->replay.batches[i];
             c->replay.sourceIndices[kept]=c->replay.sourceIndices[i];c->replay.familyKinds[kept]=c->replay.familyKinds[i];++kept;
         }
@@ -196,7 +210,7 @@ static void RRDiffusePrepare(void* callback,void* table) noexcept {
             if(!c->targets[i].nativeTexture && !RRAlbedoNativeCreate(&rrAlbedoAPI,c->width,c->height,&c->targets[i],&reason,&fault)) {RRDiffuseStop("target_creation_failed");return;}
             RRGuideInputSnapshot deviceCheck=context;deviceCheck.gbuffer1.resource=c->targets[i].resource;deviceCheck.gbuffer2.resource=c->targets[i].resource;
             if(!RRGuideResourcesShareDevice(&deviceCheck,nullptr,nullptr)) {RRDiffuseStop("target_device_mismatch");return;}
-            if(!RRAlbedoNativePrepareClear(&rrAlbedoAPI,&c->targets[i],&fault)) {RRDiffuseStop("target_clear_failed");return;}
+            if(!RRAlbedoNativePrepareClear(&rrAlbedoAPI,&c->targets[i],&fault,control_rr::RRTexturedCharacterGuides)) {RRDiffuseStop("target_clear_failed");return;}
         }
         if(characterBatches && control_rr::RRUserSkinResponsivity()){
             if(!c->characterTarget.nativeTexture && !RRAlbedoNativeCreate(&rrAlbedoAPI,c->width,c->height,&c->characterTarget,&reason,&fault)){

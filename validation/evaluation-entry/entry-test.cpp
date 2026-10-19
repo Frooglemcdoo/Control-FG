@@ -58,22 +58,23 @@ static ID3D12Resource* testDistance=nullptr;
 static ID3D12Resource* lastDistance=nullptr;
 static ID3D12Resource* RRDistanceBeforeEvaluation(ID3D12GraphicsCommandList*,ID3D12Resource*,unsigned long long,bool){++distanceCalls;return testDistance;}
 static ID3D12Resource* rrDistanceLastStatus=nullptr;
-static void RRInputCaptureBeforeEvaluation(ID3D12GraphicsCommandList*,unsigned long long,unsigned,ID3D12Resource*,ID3D12Resource*,ID3D12Resource*,ID3D12Resource*,ID3D12Resource*,const float*,bool){}
+static void RRInputCaptureBeforeEvaluation(ID3D12GraphicsCommandList*,unsigned long long,unsigned,ID3D12Resource*,ID3D12Resource*,ID3D12Resource*,ID3D12Resource*,ID3D12Resource*,const float*,bool,ID3D12Resource*,ID3D12Resource*,ID3D12Resource*,ID3D12Resource*,ID3D12Resource*,ID3D12Resource*,void*){}
+static void RRInputCaptureAfterEvaluation(ID3D12GraphicsCommandList*,unsigned long long,ID3D12Resource*,unsigned){}
 static bool RRNativePartialActive(){return false;}
-struct RRNativeGuideBindings {float viewToClip[16]{};bool projectionValid=false;ID3D12Resource*normal=nullptr;ID3D12Resource*diffuse=nullptr;ID3D12Resource*specular=nullptr;ID3D12Resource*responsivity=nullptr;};
+struct RRNativeGuideBindings {float viewToClip[16]{};bool projectionValid=false;ID3D12Resource*normal=nullptr;ID3D12Resource*diffuse=nullptr;ID3D12Resource*specular=nullptr;ID3D12Resource*responsivity=nullptr;ID3D12Resource*rawAlbedo=nullptr;};
 static bool RRNativeResolveEvaluationPreset(ID3D12GraphicsCommandList*,void* feature,void*,void** out,bool* reset,unsigned* active){
  *out=feature;*reset=false;*active=testPreset;return true;
 }
 static ID3D12Resource* RRDiffuseCharacterCurrent(unsigned long long,UINT,UINT){return nullptr;}
 static ID3D12Resource* RRSkinMaskBeforeEvaluation(ID3D12GraphicsCommandList*,ID3D12Resource*,UINT,UINT,unsigned long long){return nullptr;}
-static bool RRNativeTakeGuides(const RREvaluationInputs&,RRNativeGuideBindings& b){b.projectionValid=testProjection;return !missingGuides;}
+static bool RRNativeTakeGuides(const RREvaluationInputs&,RRNativeGuideBindings& b){b.projectionValid=testProjection;b.responsivity=reinterpret_cast<ID3D12Resource*>(0x4321);return !missingGuides;}
 #include "../../src/rr_rt_stack.h"
 static control_rr::RRRTFrame rrNativeRTFrame;
 static bool checkRTStack=false;
 static unsigned currentEffects=1;
 static bool RRNativeLightingReady(unsigned long long frame){return checkRTStack?rrNativeRTFrame.Complete(frame,currentEffects,rrNativeLightingComplete):rrNativeLightingComplete;}
 static bool lastRRReset=false;
-static bool RRNativeSetGuides(void*,const RRNativeGuideBindings*,ID3D12Resource* distance,bool reset){lastDistance=distance;lastRRReset=reset;return !setFailure;}
+static bool RRNativeSetGuides(void*,const RRNativeGuideBindings* b,ID3D12Resource* distance,bool reset){assert(b->responsivity==(testPreset==6?reinterpret_cast<ID3D12Resource*>(0x4321):nullptr));lastDistance=distance;lastRRReset=reset;return !setFailure;}
 static UINT RRDiffuseFamilyCount(unsigned long long,UINT){return 0;}
 struct RRDiffuseCharacterSummary {UINT batches=0;unsigned long long instances=0,fingerprint=0;};
 static RRDiffuseCharacterSummary RRDiffuseCharacterInfo(unsigned long long){return {};}

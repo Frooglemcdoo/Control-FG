@@ -9,18 +9,32 @@ constexpr UINT D3D12_RESOURCE_BARRIER_TYPE_TRANSITION=0,D3D12_RESOURCE_BARRIER_A
 struct ID3D12Resource{};struct Footprint{unsigned marker;};
 struct D3D12_TEXTURE_COPY_LOCATION{ID3D12Resource* pResource;UINT Type;Footprint PlacedFootprint;};
 struct D3D12_RESOURCE_BARRIER{UINT Type;struct{ID3D12Resource*pResource;UINT Subresource,StateBefore,StateAfter;}Transition;};
-static ID3D12Resource sources[5],outputs[5];static unsigned seen=0,failAt=0,total=0;
+static ID3D12Resource sources[13],outputs[13];static unsigned seen=0,failAt=0,total=0;
 static unsigned long long* counter=nullptr;
+static unsigned states[13]{};
 static DWORD GetExceptionCode(){return 123;}
 static void Step(){++seen;assert(*counter==seen);if(failAt==seen)throw std::runtime_error("command fault");}
 struct List{
- void ResourceBarrier(UINT n,D3D12_RESOURCE_BARRIER*b){Step();assert(n==total);for(UINT i=0;i<n;++i){assert(b[i].Transition.pResource==&sources[i]);assert(b[i].Transition.Subresource==~0u);assert(b[i].Transition.StateBefore==(seen==1?64u:2048u));assert(b[i].Transition.StateAfter==(seen==1?2048u:64u));}}
+ void ResourceBarrier(UINT n,D3D12_RESOURCE_BARRIER*b){Step();assert(n==total);for(UINT i=0;i<n;++i){assert(b[i].Transition.pResource==&sources[i]);assert(b[i].Transition.Subresource==~0u);assert(b[i].Transition.StateBefore==(seen==1?states[i]:2048u));assert(b[i].Transition.StateAfter==(seen==1?2048u:states[i]));}}
  void CopyTextureRegion(D3D12_TEXTURE_COPY_LOCATION*d,UINT x,UINT y,UINT z,D3D12_TEXTURE_COPY_LOCATION*s,void*box){Step();assert(!x&&!y&&!z&&!box);assert(s->Type==0&&d->Type==1);assert(s->pResource==&sources[seen-2]);assert(d->pResource==&outputs[seen-2]);assert(d->PlacedFootprint.marker==seen-2);}
 };
-struct RRInputCaptureJob{unsigned count=0;ID3D12Resource*sources[5]{},*readback[5]{};Footprint footprint[5]{};};
+struct RRInputCaptureJob{unsigned count=0;ID3D12Resource*sources[13]{},*readback[13]{};Footprint footprint[13]{};unsigned states[13]{};};
 struct RRGuideInputSnapshot{List*commandList;void*commandContext;};
 #include "../../src/rr_input_capture_record.h"
-int main(){List list;RRInputCaptureJob job;struct{unsigned long long unused,count;}context{};RRGuideInputSnapshot native{&list,&context};counter=&context.count;
- for(unsigned n:{3u,5u}){total=job.count=n;for(unsigned i=0;i<n;++i){job.sources[i]=&sources[i];job.readback[i]=&outputs[i];job.footprint[i].marker=i;}
- for(unsigned fault=0;fault<=n+2;++fault){seen=0;failAt=fault;context.count=0;DWORD code=0;const bool okay=RRInputCaptureRecord(&job,&native,&code);assert(okay==(fault==0));assert(seen==(fault?fault:n+2));assert(code==(fault?DWORD{123}:DWORD{0}));}}
+#include "../../src/rr_input_capture_policy.h"
+int main(){
+ using P=control_rr::InputCapturePolicy;using control_rr::SelectInputCapturePair;
+ assert(SelectInputCapturePair(P::Requested,P::Requested,0,100)==0);
+ assert(SelectInputCapturePair(P::Preparing,P::Requested,0,100)==1);
+ assert(SelectInputCapturePair(P::Ready,P::Preparing,0,100)==2);
+ assert(SelectInputCapturePair(P::Ready,P::Ready,0,100)==0);
+ assert(SelectInputCapturePair(P::Recorded,P::Ready,100,100)==2);
+ assert(SelectInputCapturePair(P::Recorded,P::Ready,100,101)==1);
+ assert(SelectInputCapturePair(P::Submitted,P::Ready,100,104)==1);
+ assert(SelectInputCapturePair(P::Failed,P::Ready,100,101)==2);
+ assert(SelectInputCapturePair(P::Preparing,P::Ready,100,101)==2);
+ assert(SelectInputCapturePair(P::Idle,P::Ready,100,101)==1);
+ List list;RRInputCaptureJob job;struct{unsigned long long unused,count;}context{};RRGuideInputSnapshot native{&list,&context};counter=&context.count;
+ for(unsigned n:{1u,10u,12u,13u}){total=job.count=n;for(unsigned i=0;i<n;++i){job.sources[i]=&sources[i];job.readback[i]=&outputs[i];job.footprint[i].marker=i;job.states[i]=states[i]=n==1?8u:i<4?64u:i%2?192u:224u;}
+ for(unsigned fault=0;fault<=n+2;++fault){seen=0;failAt=fault;context.count=0;DWORD code=0;bool started=false;const bool okay=RRInputCaptureRecord(&job,&native,&code,&started);assert(started);assert(okay==(fault==0));assert(seen==(fault?(fault>1&&fault<n+2?fault+1:fault):n+2));assert(code==(fault?DWORD{123}:DWORD{0}));}}
  puts("PASS actual C1 recorder: E/F buffer copies, state restoration, native command count, every recording fault");}

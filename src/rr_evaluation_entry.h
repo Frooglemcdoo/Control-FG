@@ -48,7 +48,8 @@ static unsigned int RREvaluationEntry(unsigned int branch, ID3D12GraphicsCommand
     const bool partial=rrNativeFrameEnabled&&RRNativePartialActive();
     // Compile-time retained references keep the old skin experiment available for source comparison,
     // but r20t never executes it.
-    if(false&&rrNativeFrameEnabled)RRNativeObserveSkinInputs(parameters,in.frame,"r20t_disabled",in.width,in.height);
+    if(fullWork&&branch==1&&(in.frame%240ull)==0)
+        RRNativeObserveSkinInputs(parameters,in.frame,"skin_guide_audit",in.width,in.height);
     // D1: optional, owned, same-frame distance; never reuses a prior frame.
     RRNativeGuideBindings bindings{};bool rrAttempt=false;
     ID3D12Resource* hitDistance=nullptr;bool distanceReset=false;bool clampReset=false;
@@ -66,6 +67,9 @@ static unsigned int RREvaluationEntry(unsigned int branch, ID3D12GraphicsCommand
             ID3D12Resource* character=RRDiffuseCharacterCurrent(in.frame,in.width,in.height);
             if(character)bindings.responsivity=RRSkinMaskBeforeEvaluation(list,character,in.width,in.height,in.frame);
         }
+        // Responsivity is supported only by F. Always clear it on other presets.
+        if(activePreset!=control_rr::RRPresetF)bindings.responsivity=nullptr;
+        if(guides&&(call<=4||(call%240)==0))Log("RR_HAIR_RESPONSIVITY frame=%llu mask=%p preset=%u source=same_frame_slot range=minus075_to_zero skin_mask=zero",in.frame,bindings.responsivity,activePreset);
         const bool lighting=RRNativeLightingReady(in.frame);
         const bool beginEvaluation=rrNativeFrame.BeginEvaluation(in.frame,guides,lighting);
         if(control_rr::DistanceEligible(beginEvaluation,bindings.projectionValid,activePreset,control_rr::RRPresetF))
@@ -79,7 +83,7 @@ static unsigned int RREvaluationEntry(unsigned int branch, ID3D12GraphicsCommand
             SetLastError(incomingError);return 0xBAD00001u;
         }
         RRInputCaptureBeforeEvaluation(list,in.frame,activePreset,bindings.normal,bindings.specular,bindings.diffuse,
-            hitDistance,hitDistance?rrDistanceLastStatus:nullptr,bindings.viewToClip,bindings.projectionValid);
+            hitDistance,hitDistance?rrDistanceLastStatus:nullptr,bindings.viewToClip,bindings.projectionValid,bindings.rawAlbedo,in.color,in.depth,in.motion,in.output,bindings.responsivity,parameters);
         rrAttempt=true;
         if(call<=4||(call%240)==0||distanceReset)
             Log("RR_F_DISTANCE_D1 frame=%llu preset=%u bound=%u resource=%p history_reset=%u projection_valid=%u",in.frame,activePreset,unsigned(hitDistance!=nullptr),hitDistance,unsigned(distanceReset),unsigned(bindings.projectionValid));
@@ -99,6 +103,7 @@ static unsigned int RREvaluationEntry(unsigned int branch, ID3D12GraphicsCommand
     SetLastError(incomingError);
     const unsigned int result=rrEvaluationOriginal(list,evaluationFeature,parameters,callback);
     const DWORD nativeError=GetLastError();
+    if(rrAttempt)RRInputCaptureAfterEvaluation(list,in.frame,in.output,result);
     const double perfNativeCpu=RRPerfElapsed(perfNativeStart);
     RRPerfEnd(perf);
     RRPerfEvaluation(in.frame,rrAttempt,(result&0xFFF00000u)!=0xBAD00000u,

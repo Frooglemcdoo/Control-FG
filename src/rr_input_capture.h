@@ -1,19 +1,27 @@
 #pragma once
 #include "rr_input_capture_policy.h"
-// C1 diagnostics: one outstanding job; only owned RR resources; no native input transitions.
+#include "rr_input_capture_native.h"
+// R10 diagnostics: two prepared slots capture successive evaluated frames.
+// Inputs and post-RR output are copied on the original list, with exact restoration.
 struct RRInputCaptureJob {
  control_rr::InputCapturePolicy policy{};
  ID3D12Device* device=nullptr;ID3D12CommandQueue* queue=nullptr;ID3D12Fence* fence=nullptr;
- ID3D12Resource* sources[5]{},*readback[5]{};
- D3D12_RESOURCE_DESC descriptions[5]{};
- D3D12_PLACED_SUBRESOURCE_FOOTPRINT footprint[5]{};UINT64 bytes[5]{};
- unsigned count=0,preset=0;UINT width=0,height=0;unsigned long long frame=0;
+ ID3D12Resource* sources[13]{},*readback[13]{};
+ D3D12_RESOURCE_DESC descriptions[13]{};
+ D3D12_PLACED_SUBRESOURCE_FOOTPRINT footprint[13]{};UINT64 bytes[13]{};
+ unsigned count=0,preset=0;bool distanceBound=false;unsigned rawIndex=13;
+ unsigned nativeIndex=13;D3D12_RESOURCE_STATES states[13]{};
+ unsigned pixelBytes[13]{};const wchar_t* names[13]{};
+ float jitterX=0,jitterY=0,mvScaleX=0,mvScaleY=0;bool motionScaleValid=false;
+ unsigned pairIndex=0,outputIndex=13;bool outputCaptured=false;unsigned long long previousFrame=0;
+ int reset=0;unsigned evaluationResult=0;UINT width=0,height=0;unsigned long long frame=0;
  float projection[16]{};bool projectionValid=false;
 };
 static SRWLOCK rrInputCaptureLock=SRWLOCK_INIT;
-static RRInputCaptureJob rrInputCapture;
+static RRInputCaptureJob rrInputCaptures[2];
+static unsigned rrInputCaptureRecording=2;
 static void RRInputCaptureRelease(RRInputCaptureJob* c) noexcept {
- for(unsigned i=0;i<5;++i){RRGuideRelease(c->sources[i]);RRGuideRelease(c->readback[i]);}
+ for(unsigned i=0;i<13;++i){RRGuideRelease(c->sources[i]);RRGuideRelease(c->readback[i]);}
  RRGuideRelease(c->fence);RRGuideRelease(c->queue);RRGuideRelease(c->device);
 }
 static DWORD WINAPI RRInputCapturePrepare(void* context) noexcept {
@@ -35,23 +43,26 @@ static DWORD WINAPI RRInputCapturePrepare(void* context) noexcept {
 static DWORD WINAPI RRInputCaptureExport(void* context) noexcept {
  auto* c=static_cast<RRInputCaptureJob*>(context);
  AcquireSRWLockExclusive(&rrInputCaptureLock);
- bool okay=true;void* mapped[5]{};
+ bool okay=true;void* mapped[13]{};
  try {
   wchar_t env[32768]{};const DWORD length=GetEnvironmentVariableW(L"LOCALAPPDATA",env,32768);
   if(!length||length>=32768)okay=false;
   std::wstring directory;
   if(okay){directory=std::wstring(env,length)+L"\\ControlFGProbe\\rr-input-c1-"+std::to_wstring(GetCurrentProcessId())+L"-"+std::to_wstring(c->frame);
    okay=CreateDirectoryW(directory.c_str(),nullptr)!=FALSE;}
-  const wchar_t* names[]{L"normal-roughness.rgba16f",L"specular.rgba16f",L"diffuse.rgba16f",L"distance.r32f",L"distance-status.r32u"};
   for(unsigned i=0;i<c->count&&okay;++i){
+   if(i==c->outputIndex&&!c->outputCaptured)continue;
    D3D12_RANGE range{0,static_cast<SIZE_T>(c->bytes[i])};
    okay=SUCCEEDED(c->readback[i]->Map(0,&range,&mapped[i]))&&mapped[i];
-   if(okay)okay=RRGuideExportDetail::WriteRaw(directory+L"\\"+names[i],static_cast<unsigned char*>(mapped[i])+c->footprint[i].Offset,c->footprint[i].Footprint.RowPitch,size_t(c->width)*(i<3?8:4),c->height);
+   if(okay)okay=RRGuideExportDetail::WriteRaw(directory+L"\\"+c->names[i],static_cast<unsigned char*>(mapped[i])+c->footprint[i].Offset,c->footprint[i].Footprint.RowPitch,size_t(c->descriptions[i].Width)*c->pixelBytes[i],c->descriptions[i].Height);
   }
   if(okay){
    std::ostringstream out;out.imbue(std::locale::classic());out<<std::setprecision(9);
-   out<<"{\"schema\":\"control-rr-input-c1\",\"pid\":"<<GetCurrentProcessId()<<",\"frame\":"<<c->frame<<",\"present\":"<<c->policy.present<<",\"preset\":"<<c->preset<<",\"width\":"<<c->width<<",\"height\":"<<c->height<<",\"buffers\":"<<c->count<<",\"hit_distance_bound\":"<<(c->count==5?"true":"false")<<",\"projection_valid\":"<<(c->projectionValid?"true":"false")<<",\"row_padding_removed\":true,\"little_endian\":true,\"view_to_clip\":[";
-   for(unsigned i=0;i<16;++i){if(i)out<<',';out<<c->projection[i];}out<<"]}\n";
+   out<<"{\"schema\":\"control-rr-hair-r10\",\"pid\":"<<GetCurrentProcessId()<<",\"frame\":"<<c->frame<<",\"present\":"<<c->policy.present<<",\"preset\":"<<c->preset<<",\"width\":"<<c->width<<",\"height\":"<<c->height<<",\"buffers\":"<<c->count<<",\"hit_distance_bound\":"<<(c->distanceBound?"true":"false")<<",\"raw_albedo_bound\":"<<(c->rawIndex<c->count?"true":"false")<<",\"capture_ordinal\":"<<c->policy.requests<<",\"projection_valid\":"<<(c->projectionValid?"true":"false")<<",\"row_padding_removed\":true,\"little_endian\":true,\"view_to_clip\":[";
+   for(unsigned i=0;i<16;++i){if(i)out<<',';out<<c->projection[i];}out<<"],\"jitter\":["<<c->jitterX<<','<<c->jitterY<<"],\"motion_scale\":["<<c->mvScaleX<<','<<c->mvScaleY<<"],\"motion_scale_valid\":"<<(c->motionScaleValid?"true":"false")<<",\"native_inputs_bound\":true,\"resources\":[";
+   for(unsigned i=0;i<c->count;++i){if(i)out<<',';std::string name;for(const wchar_t* p=c->names[i];*p;++p)name+=static_cast<char>(*p);
+    out<<"{\"file\":\""<<name<<"\",\"dxgi_format\":"<<unsigned(c->descriptions[i].Format)<<",\"pixel_bytes\":"<<c->pixelBytes[i]<<",\"state_before_and_after\":"<<unsigned(c->states[i])<<",\"width\":"<<c->descriptions[i].Width<<",\"height\":"<<c->descriptions[i].Height<<",\"copied\":"<<((i!=c->outputIndex||c->outputCaptured)?"true":"false")<<'}';}
+   out<<"],\"pair_index\":"<<c->pairIndex<<",\"previous_frame\":"<<c->previousFrame<<",\"consecutive\":"<<((c->pairIndex==1&&c->frame==c->previousFrame+1)?"true":"false")<<",\"reset\":"<<c->reset<<",\"rr_result\":"<<c->evaluationResult<<",\"output_captured\":"<<(c->outputCaptured?"true":"false")<<"}\n";
    const auto bytes=out.str();RRGuideExportDetail::File file(directory+L"\\metadata.pending");
    okay=file.Write(bytes.data(),bytes.size())&&file.Finish();
    if(okay)okay=MoveFileExW((directory+L"\\metadata.pending").c_str(),(directory+L"\\metadata.json").c_str(),MOVEFILE_WRITE_THROUGH)!=FALSE;
@@ -60,59 +71,155 @@ static DWORD WINAPI RRInputCaptureExport(void* context) noexcept {
  for(unsigned i=0;i<c->count;++i)if(mapped[i]){D3D12_RANGE written{0,0};c->readback[i]->Unmap(0,&written);}
  Log("RR_INPUT_CAPTURE_C1_EXPORTED success=%u frame=%llu preset=%u buffers=%u",unsigned(okay),c->frame,c->preset,c->count);
  RRInputCaptureRelease(c);c->policy.Exported();
+
  ReleaseSRWLockExclusive(&rrInputCaptureLock);return 0;
 }
 #include "rr_input_capture_record.h"
-static void RRInputCaptureBeforeEvaluation(ID3D12GraphicsCommandList* list,unsigned long long frame,unsigned preset,
- ID3D12Resource* normal,ID3D12Resource* specular,ID3D12Resource* diffuse,ID3D12Resource* distance,ID3D12Resource* status,const float* projection,bool projectionValid) noexcept {
+#include "rr_input_capture_guard.h"
+static void RRInputCaptureOneBeforeEvaluation(RRInputCaptureJob* c,ID3D12GraphicsCommandList* list,unsigned long long frame,unsigned preset,
+ ID3D12Resource* normal,ID3D12Resource* specular,ID3D12Resource* diffuse,ID3D12Resource* distance,ID3D12Resource* status,const float* projection,bool projectionValid,ID3D12Resource* rawAlbedo,ID3D12Resource* color,ID3D12Resource* depth,ID3D12Resource* motion,ID3D12Resource* output,ID3D12Resource* responsivity,void* parameters) noexcept {
  if(!TryAcquireSRWLockExclusive(&rrInputCaptureLock))return;
  __try {
-  auto* c=&rrInputCapture;using Policy=control_rr::InputCapturePolicy;
+  using Policy=control_rr::InputCapturePolicy;
   if(c->policy.phase!=Policy::Requested&&c->policy.phase!=Policy::Ready)__leave;
-  // For F, wait for the real bound distance rather than capturing fallback data.
-  if(preset==control_rr::RRPresetF&&(!distance||!status))__leave;
-  ID3D12Resource* resources[]{normal,specular,diffuse,distance,status};const unsigned count=distance&&status?5u:3u;
+  // Capture the guides actually bound to RR. Hit distance is optional for F
+  // too; waiting for it prevents capture in the production no-distance path.
+  ID3D12Resource* resources[13]{normal,specular,diffuse,distance,status,nullptr};const bool distanceBound=distance&&status;const unsigned baseCount=distanceBound?5u:3u;
+  const unsigned rawIndex=rawAlbedo?baseCount:13u;const unsigned nativeIndex=baseCount+(rawAlbedo?1u:0u);const unsigned maskIndex=nativeIndex+5u;const unsigned outputIndex=maskIndex+(responsivity?1u:0u);const unsigned count=outputIndex+1u;
+  if(rawAlbedo)resources[rawIndex]=rawAlbedo;
+  resources[nativeIndex]=color;resources[nativeIndex+1]=depth;resources[nativeIndex+2]=motion;
+  RRGuideInputTexture nativeInputs[5]{};
+  if(!RRInputCaptureFindNative(frame,resources+nativeIndex,nativeInputs)){
+   static unsigned rejects=0;if(++rejects<=4||(rejects%240)==0)Log("RR_INPUT_CAPTURE_C1_REJECT reason=native_input_state_unproven frame=%llu",frame);__leave;
+  }
   RRGuideInputSnapshot native{};const char* reason=nullptr;
   if(!RRGuideReadRendererContext(&native,&reason)||native.commandList!=list||native.engineFrame!=frame)__leave;
-  D3D12_RESOURCE_DESC descriptions[5]{};
+  RRGuideInputSnapshot gb{};
+  if(!RRGuideReadInputs(&gb,&reason)||gb.engineFrame!=frame||gb.commandList!=list){
+   static unsigned rejects=0;if(++rejects<=4||(rejects%240)==0)Log("RR_INPUT_CAPTURE_C1_REJECT reason=gbuffer_snapshot detail=%s frame=%llu",reason?reason:"context_mismatch",frame);__leave;
+  }
+  resources[nativeIndex+3]=gb.gbuffer1.resource;resources[nativeIndex+4]=gb.gbuffer2.resource;
+  nativeInputs[3]=gb.gbuffer1;nativeInputs[4]=gb.gbuffer2;
+  if(responsivity)resources[maskIndex]=responsivity;
+  resources[outputIndex]=output;
+  D3D12_RESOURCE_DESC descriptions[13]{};
   for(unsigned i=0;i<count;++i){if(!resources[i])__leave;descriptions[i]=resources[i]->GetDesc();}
   if(!resources[0]||!resources[1]||!resources[2])__leave;
   const auto width=descriptions[0].Width;const auto height=descriptions[0].Height;
   if(!width||!height||width>4096||height>2160){Log("RR_INPUT_CAPTURE_C1_REJECT reason=extent_limit");c->policy.phase=Policy::Failed;__leave;}
   bool valid=true;
-  for(unsigned i=0;i<count;++i){const auto& d=descriptions[i];valid=valid&&d.Dimension==D3D12_RESOURCE_DIMENSION_TEXTURE2D&&d.Width==width&&d.Height==height&&d.DepthOrArraySize==1&&d.MipLevels==1&&d.SampleDesc.Count==1&&d.Format==(i<3?DXGI_FORMAT_R16G16B16A16_FLOAT:i==3?DXGI_FORMAT_R32_FLOAT:DXGI_FORMAT_R32_UINT);}
-  if(!valid)__leave;
+  for(unsigned i=0;i<nativeIndex;++i){const auto& d=descriptions[i];valid=valid&&d.Dimension==D3D12_RESOURCE_DIMENSION_TEXTURE2D&&d.Width==width&&d.Height==height&&d.DepthOrArraySize==1&&d.MipLevels==1&&d.SampleDesc.Count==1&&d.Format==((i<3||i==rawIndex)?DXGI_FORMAT_R16G16B16A16_FLOAT:i==3?DXGI_FORMAT_R32_FLOAT:DXGI_FORMAT_R32_UINT);}
+  for(unsigned i=nativeIndex;i<nativeIndex+3;++i){const auto& d=descriptions[i];valid=valid&&d.Dimension==D3D12_RESOURCE_DIMENSION_TEXTURE2D&&d.Width==width&&d.Height==height&&d.DepthOrArraySize==1&&d.MipLevels==1&&d.SampleDesc.Count==1&&d.SampleDesc.Quality==0;
+   const auto f=d.Format;valid=valid&&(i==nativeIndex?(f==DXGI_FORMAT_R11G11B10_FLOAT||f==DXGI_FORMAT_R16G16B16A16_FLOAT):i==nativeIndex+1?(f==DXGI_FORMAT_R32_TYPELESS||f==DXGI_FORMAT_R32_FLOAT):(f==DXGI_FORMAT_R16G16_FLOAT||f==DXGI_FORMAT_R32G32_FLOAT));
+  }
+  for(unsigned i=nativeIndex+3;i<outputIndex;++i){const auto& d=descriptions[i];
+   valid=valid&&d.Dimension==D3D12_RESOURCE_DIMENSION_TEXTURE2D&&d.Width==width&&d.Height==height&&d.DepthOrArraySize==1&&d.MipLevels==1&&d.SampleDesc.Count==1&&d.Format==(i<maskIndex?DXGI_FORMAT_R8G8B8A8_UNORM:DXGI_FORMAT_R16_FLOAT);
+  }
+  const auto& od=descriptions[outputIndex];
+  valid=valid&&od.Dimension==D3D12_RESOURCE_DIMENSION_TEXTURE2D&&od.Width>0&&od.Width<=4096&&od.Height>0&&od.Height<=2160&&od.DepthOrArraySize==1&&od.MipLevels==1&&od.SampleDesc.Count==1&&(od.Format==DXGI_FORMAT_R11G11B10_FLOAT||od.Format==DXGI_FORMAT_R16G16B16A16_FLOAT);
+  for(unsigned i=0;i<count;++i)for(unsigned j=0;j<i;++j)if(resources[i]==resources[j])valid=false;
+  if(!valid){Log("RR_INPUT_CAPTURE_C1_REJECT reason=native_input_format_or_extent frame=%llu",frame);c->policy.phase=Policy::Failed;__leave;}
   if(c->policy.phase==Policy::Requested){
    if(FAILED(list->GetDevice(IID_PPV_ARGS(&c->device)))||!c->device){c->policy.phase=Policy::Failed;__leave;}
-   c->queue=native.queue;c->queue->AddRef();c->count=count;c->width=static_cast<UINT>(width);c->height=height;c->preset=preset;
-   for(unsigned i=0;i<count;++i)c->descriptions[i]=descriptions[i];
+   c->queue=native.queue;c->queue->AddRef();c->count=count;c->distanceBound=distanceBound;c->rawIndex=rawIndex;c->nativeIndex=nativeIndex;c->outputIndex=outputIndex;c->width=static_cast<UINT>(width);c->height=height;c->preset=preset;
+   const wchar_t* guideNames[]{L"normal-roughness.rgba16f",L"specular.rgba16f",L"diffuse.rgba16f",L"distance.r32f",L"distance-status.r32u"};
+   for(unsigned i=0;i<count;++i){c->descriptions[i]=descriptions[i];c->pixelBytes[i]=(i<3||i==rawIndex)?8u:4u;
+    c->names[i]=i==rawIndex?L"raw-albedo.rgba16f":i<nativeIndex?guideNames[i]:L"";
+   }
+   c->names[nativeIndex]=descriptions[nativeIndex].Format==DXGI_FORMAT_R11G11B10_FLOAT?L"input-color.r11g11b10f":L"input-color.rgba16f";
+   c->pixelBytes[nativeIndex]=descriptions[nativeIndex].Format==DXGI_FORMAT_R11G11B10_FLOAT?4u:8u;
+   c->names[nativeIndex+1]=L"input-depth.r32f";
+   c->names[nativeIndex+2]=descriptions[nativeIndex+2].Format==DXGI_FORMAT_R16G16_FLOAT?L"input-motion.rg16f":L"input-motion.rg32f";
+   c->pixelBytes[nativeIndex+2]=descriptions[nativeIndex+2].Format==DXGI_FORMAT_R16G16_FLOAT?4u:8u;
+   c->names[nativeIndex+3]=L"native-gbuffer1.rgba8";c->names[nativeIndex+4]=L"native-gbuffer2.rgba8";
+   if(responsivity){c->names[maskIndex]=L"hair-responsivity.r16f";c->pixelBytes[maskIndex]=2;}
+   c->names[outputIndex]=od.Format==DXGI_FORMAT_R11G11B10_FLOAT?L"rr-output.r11g11b10f":L"rr-output.rgba16f";
+   c->pixelBytes[outputIndex]=od.Format==DXGI_FORMAT_R11G11B10_FLOAT?4u:8u;
    c->policy.BeginPrepare();
    if(!QueueUserWorkItem(&RRInputCapturePrepare,c,WT_EXECUTEDEFAULT)){RRInputCaptureRelease(c);c->policy.phase=Policy::Failed;}
    __leave;
   }
-  if(c->queue!=native.queue||c->count!=count||c->width!=width||c->height!=height||c->preset!=preset){
+  if(c->queue!=native.queue||c->count!=count||c->rawIndex!=rawIndex||c->distanceBound!=distanceBound||c->width!=width||c->height!=height||c->preset!=preset){
    RRInputCaptureRelease(c);c->policy.phase=Policy::Requested;__leave; // No commands yet; reprepare safely.
   }
-  for(unsigned i=0;i<count;++i){c->sources[i]=resources[i];resources[i]->AddRef();}
+  bool formatsMatch=true;
+  for(unsigned i=0;i<count;++i)if(c->descriptions[i].Format!=descriptions[i].Format||c->descriptions[i].Width!=descriptions[i].Width||c->descriptions[i].Height!=descriptions[i].Height)formatsMatch=false;
+  if(!formatsMatch){RRInputCaptureRelease(c);c->policy.phase=Policy::Requested;__leave;}
+  for(unsigned i=0;i<count;++i){ID3D12Device* device=nullptr;const HRESULT hr=resources[i]->GetDevice(IID_PPV_ARGS(&device));const bool same=SUCCEEDED(hr)&&device==c->device;if(device)device->Release();if(!same)__leave;}
+  for(unsigned i=0;i<count;++i){c->sources[i]=resources[i];resources[i]->AddRef();c->states[i]=i>=nativeIndex&&i<nativeIndex+5?static_cast<D3D12_RESOURCE_STATES>(nativeInputs[i-nativeIndex].trackedState):i==outputIndex?D3D12_RESOURCE_STATE_UNORDERED_ACCESS:D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;}
+  c->jitterX=c->jitterY=c->mvScaleX=c->mvScaleY=0;
+  if(ngxGetFloat){ngxGetFloat(parameters,"Jitter.Offset.X",&c->jitterX);ngxGetFloat(parameters,"Jitter.Offset.Y",&c->jitterY);}
+  c->motionScaleValid=ngxGetFloat&&ngxGetFloat(parameters,"MV.Scale.X",&c->mvScaleX)==1&&ngxGetFloat(parameters,"MV.Scale.Y",&c->mvScaleY)==1;
   c->frame=frame;c->projectionValid=projectionValid;memcpy(c->projection,projection,sizeof(c->projection));
-  c->policy.Record(native.presentToken);DWORD fault=0;
-  if(!RRInputCaptureRecord(c,&native,&fault)){c->policy.phase=Policy::Failed;Log("RR_INPUT_CAPTURE_C1_FAILED reason=record fault=0x%08lX resources_retained=1",fault);__leave;}
+  c->outputCaptured=false;c->evaluationResult=0;c->reset=0;
+  if(ngxGetInt)ngxGetInt(parameters,"Reset",&c->reset);
+  c->previousFrame=c->pairIndex?rrInputCaptures[0].frame:0;
+  DWORD fault=0;bool commandsStarted=false;
+  const unsigned allocatedCount=c->count;c->count=outputIndex;
+  const bool recorded=RRInputCaptureRecordGuarded(c,&native,nativeInputs,&fault,&commandsStarted,5);
+  c->count=allocatedCount;
+  if(!recorded){
+   if(commandsStarted){c->policy.phase=Policy::Failed;Log("RR_INPUT_CAPTURE_C1_FAILED reason=record fault=0x%08lX resources_retained=1",fault);}
+   else {for(unsigned i=0;i<count;++i)RRGuideRelease(c->sources[i]);
+    static unsigned rejects=0;if(++rejects<=4||(rejects%240)==0)Log("RR_INPUT_CAPTURE_C1_REJECT reason=guard_revalidation_or_lock frame=%llu fault=0x%08lX",frame,fault);
+   }
+   __leave;
+  }
+  c->policy.Record(native.presentToken);rrInputCaptureRecording=c->pairIndex;
   Log("RR_INPUT_CAPTURE_C1_RECORDED frame=%llu preset=%u buffers=%u",frame,preset,count);
- } __except(EXCEPTION_EXECUTE_HANDLER){rrInputCapture.policy.phase=control_rr::InputCapturePolicy::Failed;Log("RR_INPUT_CAPTURE_C1_FAILED reason=exception resources_retained=1");}
+ } __except(EXCEPTION_EXECUTE_HANDLER){c->policy.phase=control_rr::InputCapturePolicy::Failed;Log("RR_INPUT_CAPTURE_C1_FAILED reason=exception resources_retained=1");}
+ ReleaseSRWLockExclusive(&rrInputCaptureLock);
+}
+
+static void RRInputCaptureBeforeEvaluation(ID3D12GraphicsCommandList* list,unsigned long long frame,unsigned preset,
+ ID3D12Resource* normal,ID3D12Resource* specular,ID3D12Resource* diffuse,ID3D12Resource* distance,ID3D12Resource* status,const float* projection,bool projectionValid,ID3D12Resource* rawAlbedo,ID3D12Resource* color,ID3D12Resource* depth,ID3D12Resource* motion,ID3D12Resource* output,ID3D12Resource* responsivity,void* parameters) noexcept {
+ // Worker publication is read under the same lock. Prepare both before the first copy.
+ if(!TryAcquireSRWLockExclusive(&rrInputCaptureLock))return;
+ const unsigned select=control_rr::SelectInputCapturePair(rrInputCaptures[0].policy.phase,
+  rrInputCaptures[1].policy.phase,rrInputCaptures[0].frame,frame);
+ ReleaseSRWLockExclusive(&rrInputCaptureLock);
+ if(select<2)RRInputCaptureOneBeforeEvaluation(&rrInputCaptures[select],list,frame,preset,normal,specular,diffuse,distance,status,projection,projectionValid,rawAlbedo,color,depth,motion,output,responsivity,parameters);
+}
+static void RRInputCaptureAfterEvaluation(ID3D12GraphicsCommandList* list,unsigned long long frame,ID3D12Resource* output,unsigned result) noexcept {
+ if(!TryAcquireSRWLockExclusive(&rrInputCaptureLock))return;
+ RRInputCaptureJob* active=nullptr;
+ __try {
+  if(rrInputCaptureRecording>=2)__leave;
+  auto* c=&rrInputCaptures[rrInputCaptureRecording];active=c;rrInputCaptureRecording=2;
+  if(c->frame!=frame||c->sources[c->outputIndex]!=output)__leave;
+  c->evaluationResult=result;
+  RRGuideInputTexture input{};RRGuideInputSnapshot native{};const char* reason=nullptr;
+  if((result&0xFFF00000u)==0xBAD00000u||!RRInputCaptureFindOutput(frame,output,&input)||
+     !RRGuideReadRendererContext(&native,&reason)||native.engineFrame!=frame||native.commandList!=list){
+   Log("RR_INPUT_CAPTURE_C1_OUTPUT_SKIPPED frame=%llu reason=unproven_output_uav_or_failed_evaluation result=0x%08X",frame,result);__leave;
+  }
+  RRInputCaptureJob copy{};copy.count=1;copy.sources[0]=output;copy.readback[0]=c->readback[c->outputIndex];copy.footprint[0]=c->footprint[c->outputIndex];copy.states[0]=D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+  DWORD fault=0;bool started=false;
+  c->outputCaptured=RRInputCaptureRecordGuarded(&copy,&native,&input,&fault,&started,1,true);
+  if(!c->outputCaptured&&started)c->policy.phase=control_rr::InputCapturePolicy::Failed;
+  Log("RR_INPUT_CAPTURE_C1_OUTPUT frame=%llu captured=%u pair_index=%u previous_frame=%llu consecutive=%u fault=0x%08lX",frame,unsigned(c->outputCaptured),c->pairIndex,c->previousFrame,unsigned(c->pairIndex==1&&frame==c->previousFrame+1),fault);
+ } __except(EXCEPTION_EXECUTE_HANDLER){if(active)active->policy.phase=control_rr::InputCapturePolicy::Failed;}
  ReleaseSRWLockExclusive(&rrInputCaptureLock);
 }
 static void RRInputCaptureAfterPresent(unsigned long long present) noexcept {
  static bool held=false;const bool down=(GetAsyncKeyState(VK_F9)&0x8000)!=0;const bool pressed=down&&!held;held=down;
  if(!TryAcquireSRWLockExclusive(&rrInputCaptureLock))return;
  __try {
-  auto* c=&rrInputCapture;
+  using P=control_rr::InputCapturePolicy;
   if(pressed){DWORD foregroundPid=0;GetWindowThreadProcessId(GetForegroundWindow(),&foregroundPid);
-   if(foregroundPid==GetCurrentProcessId()){const bool accepted=c->policy.Request();Log("RR_INPUT_CAPTURE_C1_REQUEST accepted=%u ordinal=%u",unsigned(accepted),c->policy.requests);}}
-  if(c->policy.Retire(c->fence?c->fence->GetCompletedValue():0)){
-   if(!QueueUserWorkItem(&RRInputCaptureExport,c,WT_EXECUTEDEFAULT))c->policy.phase=control_rr::InputCapturePolicy::Failed;
+   if(foregroundPid==GetCurrentProcessId()){
+    bool accepted=rrInputCaptures[0].policy.phase==P::Idle&&rrInputCaptures[1].policy.phase==P::Idle&&rrInputCaptures[0].policy.requests<2;
+    if(accepted){for(unsigned i=0;i<2;++i){rrInputCaptures[i].pairIndex=i;rrInputCaptures[i].frame=0;rrInputCaptures[i].policy.Request();}rrHairShaderAuditRequested.store(true,std::memory_order_release);}
+    Log("RR_INPUT_CAPTURE_C1_REQUEST accepted=%u mode=r10_pair slots=2 maximum_pairs=2",unsigned(accepted));
+   }
   }
-  if(c->policy.CanSubmit(present)){const HRESULT hr=c->queue->Signal(c->fence,1);c->policy.Submit(SUCCEEDED(hr));
-   if(FAILED(hr))Log("RR_INPUT_CAPTURE_C1_FAILED reason=signal resources_retained=1");}
- } __except(EXCEPTION_EXECUTE_HANDLER){rrInputCapture.policy.phase=control_rr::InputCapturePolicy::Failed;}
+  for(auto& job:rrInputCaptures){auto* c=&job;
+   if(c->policy.Retire(c->fence?c->fence->GetCompletedValue():0)){
+    if(!QueueUserWorkItem(&RRInputCaptureExport,c,WT_EXECUTEDEFAULT))c->policy.phase=P::Failed;
+   }
+   if(c->policy.CanSubmit(present)){const HRESULT hr=c->queue->Signal(c->fence,1);c->policy.Submit(SUCCEEDED(hr));
+    if(FAILED(hr))Log("RR_INPUT_CAPTURE_C1_FAILED reason=signal resources_retained=1");}
+  }
+ } __except(EXCEPTION_EXECUTE_HANDLER){for(auto& c:rrInputCaptures)c.policy.phase=control_rr::InputCapturePolicy::Failed;}
  ReleaseSRWLockExclusive(&rrInputCaptureLock);
 }

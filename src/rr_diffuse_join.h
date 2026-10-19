@@ -26,6 +26,8 @@ static ID3D12Resource* RRDiffuseCurrent(const RRGuideInputSnapshot* in) noexcept
     auto* c=rrDiffuse;
     if(!c || c->frame!=in->engineFrame || c->queue!=in->queue || c->renderer!=reinterpret_cast<std::uintptr_t>(in->camera.renderer) ||
        c->width!=in->gbuffer1.desc.Width || c->height!=in->gbuffer1.desc.Height) return nullptr;
+    if(!c->accepted || c->fault.load() || c->batches.load()!=c->accepted ||
+       !RRAlbedoNativeTextureState(c->targets[0].nativeTexture,D3D12_RESOURCE_STATE_RENDER_TARGET)) return nullptr;
     return c->targets[0].resource;
 }
 

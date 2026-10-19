@@ -48,6 +48,8 @@ static bool RRLiveReleaseForRROff(unsigned long long present) noexcept {
             RRGuideRelease(s.normal);
             RRGuideRelease(s.specular);
             RRGuideRelease(s.diffuse);
+            RRGuideRelease(s.texturedAlbedo);
+            RRGuideRelease(s.hairResponsivity);
             RRGuideRelease(s.heap);
         }
         RRGuideRelease(c->pipeline);

@@ -73,7 +73,7 @@ static bool RRNativeEpochOldWorkRetired() noexcept {
   __except(EXCEPTION_EXECUTE_HANDLER){liveIdle=false;}
   ReleaseSRWLockExclusive(&rrLiveLock);
  } else liveIdle=false;
- diffuseIdle=control_rr::RRGBufferGuideMode || rrDiffuseStage.load(std::memory_order_acquire)!=RRDiffuseStage::Recording;
+ diffuseIdle=(control_rr::RRGBufferGuideMode&&!control_rr::RRTexturedCharacterGuides) || rrDiffuseStage.load(std::memory_order_acquire)!=RRDiffuseStage::Recording;
  return liveIdle&&diffuseIdle;
 }
 // r20x: live E<->F changes are also hard RR epochs. The overlay arms the
@@ -346,7 +346,7 @@ static bool RRNativeHookReset(unsigned outputWidth,unsigned outputHeight,unsigne
  const bool resizeGate=known?RRNativeResizeGate(requested,frame,outputWidth,outputHeight,width,height):!control_rr::RRUserRuntimePaused();
  const bool presetGate=known?RRNativePresetGate(requested,frame):!control_rr::RRUserRuntimePaused();
  const bool runtimeRequested=requested&&resizeGate&&presetGate&&!control_rr::RRUserRuntimePaused();
- if(known&&runtimeRequested&&!control_rr::RRGBufferGuideMode)RRDiffuseRequestExtent(frame,width,height);
+ if(known&&runtimeRequested&&(!control_rr::RRGBufferGuideMode||control_rr::RRTexturedCharacterGuides))RRDiffuseRequestExtent(frame,width,height);
  unsigned effects=0;const bool configuration=RRNativeReadRTSettings(&effects)&&control_rr::RRSupportsRTSettings(effects);
  // r20t: avoid guide-owner locks and warmup readiness checks while FULL RR is off.
  const bool ready=runtimeRequested&&known&&supported&&configuration&&RRNativeReady(width,height);

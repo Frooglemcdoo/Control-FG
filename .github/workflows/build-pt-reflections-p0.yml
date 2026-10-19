@@ -19,6 +19,7 @@ on:
       - experiment/pt-overlay-toggle
       - experiment/pt-native-secondary-shading
       - experiment/pt-bounce-energy
+      - experiment/rr-clean-baseline-r21
   workflow_dispatch:
   pull_request:
     branches:
@@ -61,6 +62,14 @@ jobs:
           cl /nologo /std:c++17 /EHsc /W4 /O2 /MT tools\compile-live.cpp /Fobuild\compile-live.obj /Febuild\compile-live.exe /link d3dcompiler.lib
           if errorlevel 1 exit /b 1
           build\compile-live.exe
+          if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /O2 /MT tools\compile-rr-hair-opacity.cpp /Fobuild\compile-rr-hair-opacity.obj /Febuild\compile-rr-hair-opacity.exe /link d3dcompiler.lib
+          if errorlevel 1 exit /b 1
+          build\compile-rr-hair-opacity.exe
+          if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /O2 /MT tools\compile-rr-character-base-albedo.cpp /Fobuild\compile-rr-character-base-albedo.obj /Febuild\compile-rr-character-base-albedo.exe /link d3dcompiler.lib
+          if errorlevel 1 exit /b 1
+          build\compile-rr-character-base-albedo.exe
           if errorlevel 1 exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /O2 /MT tools\compile-skin-mask.cpp /Fobuild\compile-skin-mask.obj /Febuild\compile-skin-mask.exe /link d3dcompiler.lib
           if errorlevel 1 exit /b 1
@@ -177,6 +186,23 @@ jobs:
           }
           (Get-FileHash -LiteralPath build/pt_reflection_p1.dxil -Algorithm SHA256).Hash.ToLowerInvariant() |
             Set-Content -LiteralPath build/pt_reflection_p1.sha256 -Encoding ASCII
+      - name: Verify clean baseline and character guide scope
+        shell: cmd
+        run: |
+          call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
+          python tools/test-clean-baseline.py
+          if errorlevel 1 exit /b 1
+          python tools/test-rr-character-shader-match.py
+          if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-rr-character-albedo.cpp /Febuild\test-character.exe
+          if errorlevel 1 exit /b 1
+          build\test-character.exe
+          if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-rr-hair-normals-gpu.cpp /Febuild\test-hair.exe /link d3d11.lib d3dcompiler.lib
+          if errorlevel 1 exit /b 1
+          build\test-hair.exe
+          if errorlevel 1 exit /b 1
+
       - name: Compile experimental proxy
         shell: cmd
         run: |
@@ -190,7 +216,7 @@ jobs:
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-PT-Reflections-P0'
+          $out='Control-FG-Clean-Baseline-Guides-R21'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
           Copy-Item build/pt_reflection_p1.dxil "$out/pt_reflection_p1.dxil"
@@ -199,76 +225,25 @@ jobs:
           Copy-Item build/pt_reflection_p2_verify.dxbc "$out/pt_reflection_p2_verify.dxbc"
           Copy-Item build/pt_reflection_p2_local_light_probe.dxbc "$out/pt_reflection_p2_local_light_probe.dxbc"
           Copy-Item build/pt_reflection_p2_diffuse_bridge.dxbc "$out/pt_reflection_p2_diffuse_bridge.dxbc"
+          Copy-Item Collect-RR-Skin-Capture.cmd "$out/Collect-RR-Skin-Capture.cmd"
+          Copy-Item Collect-RR-Skin-Capture.ps1 "$out/Collect-RR-Skin-Capture.ps1"
           @'
-          CONTROL-FG - PT BOUNCE ENERGY CORRECTION
-          ================================================
-          EXPERIMENTAL STEAM DX12 TEST.
-          Branch: experiment/pt-bounce-energy
-          Corrects two composition errors left in the prior native-shading test:
-          1. RGB first-hit BSDF*cos/PDF replaces colorless arbitrary weight.
-          2. Explicit bounce replaces first-hit probe indirect lighting; it is
-             no longer added on top of the same native indirect contribution.
-          Native first-hit direct lights and emission are retained once.
-          Ray sampling chooses a cosine/GGX lobe with a matching mixture PDF.
-          First-hit texture smoothness is used by both raygen and the evaluator.
-          Missing/unsupported second hits retain the native reflection fallback.
-          No private UAVs or hit-layout changes; coherency/bounds fixes retained.
-          Copy ALL SEVEN binaries beside Control_DX12.exe with Control closed.
-          F10 -> PT REFLECTIONS compares traced bounce ON vs native indirect OFF.
-          Test normal mode, same camera, RR allowed time to settle.
-          Native shadow-map coverage and quantized secondary UV limits remain.
-          This is an integration test; final visual correctness needs game QA.
+          CONTROL-FG CLEAN BASELINE + CHARACTER/HAIR GUIDES R21
+          Source baseline: fa2f6c5363fc3ca43d13542152fe80b0b79b3479
+          Branch: experiment/rr-clean-baseline-r21
 
-          ROOT CAUSE:
-          Control's native material/position/normal hit texture arrays have
-          TWO layers, not four. Previous P2 tried to store two independent
-          secondary hits in OUT-OF-BOUNDS array layers 2 and 3. The output
-          normals/materials could not survive into the P2 compute shader.
-          Previous material ID and UV encoding also used raw asfloat(bitcast)
-          which cannot round-trip through RGBA16_FLOAT hit textures.
+          Restores the PT Bounce Energy Correction clean baseline world renderer.
+          Carries over R12 hair guides and R19 character base-albedo guides.
+          Native skin lighting is unchanged. PT shaders, diffuse bridge, reflection
+          clamp and GI/contact/AO filtering policies match the clean baseline.
+          Later experimental glass integration and R14-R20 GI filtering are absent.
+          Control-RR-GI-Test.ini has no effect in this build.
 
-          THIS PROOF FITS IN THE ACTUAL TWO NATIVE ARRAY SLICES:
-          Layer 0: ONE native first-bounce reflection hit.
-          Layer 1: ONE real secondary hit, materialId native sentinel 65534.
-          P2 compute reads position/normal from layer 1 and adds bounce.
-          Secondary material ID uses exact numeric FP16 integer 0..2047,
-          with -1 for miss/unsupported; 2D UV uses 5+5 bits exactly
-          representable in half float. This is a temporary tradeoff:
-          ONE first-bounce sample, not the earlier TWO. A dedicated
-          private P2 UAV path is still needed for the final 2-path version.
-
-          SAFETY:
-          Read-only runtime audit confirms native material/normal/position
-          resources are TWO-layer arrays, width/height and expected formats
-          (R16_UINT, RGBA16_FLOAT, RGBA16_FLOAT). Mismatch fails closed.
-          No native GI custom compute/root/heap mutation. The stable
-          GI checker COPY diagnostic is preserved in F11 mode 2.
-          Normal P2 now uses actual second-hit position/material/normal,
-          but fully shadowed native LOCAL lighting is not yet integrated.
-
-          F11 cycle:
-          0 = one-path two-bounce reflections (normal experimental mode)
-          1 = four quadrant ray validity/second-bounce radiance/16x proof
-          2 = known visible 512x512 GI copy checker proof
-          3 = V7 native-light + stored-normal diagnostic on corrected layer 1
-          next F11 returns to 0.
-
-          TEST:
-          Start in normal mode, stand in a concrete/bright lighting scene,
-          confirm it renders for 20 seconds. Press F11 ONCE to mode 1;
-          screenshot all four quadrants and look for green valid second hits
-          and non-blue bounce heat. Press F11 twice more to mode 3 if desired,
-          screenshot second-hit normal validation. Collect compact logs.
-          Exit diagnostic mode before extended play.
-
-          Log evidence:
-            PT_REFLECTION_TWO_LAYER_PROOF_CONFIG
-            PT_REFLECTION_P2_TWO_LAYER_CONTRACT ready=1 ...
-              material_layers=2 normal_layers=2 position_layers=2
-            PT_REFLECTION_P2_POST_DISPATCH ... dispatched=1
-          If contract logs incompatible or device hangs, revert binaries
-          and send compact logs. Do not treat successful dispatch alone as
-          proof of visible correct PT/GI. This build is a geometry/data proof.
+          Close Control and copy every binary beside Control_DX12.exe, replacing
+          the existing files. Keep the same settings for comparison (RR Model F,
+          RT High). Compare world surfaces in motion first, then hair and neck.
+          This is a regression-isolation build; visual quality needs confirmation.
+          Optional: press F9 once, wait 20 seconds, run Collect-RR-Skin-Capture.cmd.
           '@ | Set-Content "$out/README.txt" -Encoding ASCII
           Compress-Archive -Path "$out/*" -DestinationPath "$out.zip" -Force
           (Get-FileHash "$out.zip" -Algorithm SHA256).Hash | Set-Content "$out.sha256" -Encoding ASCII
@@ -276,10 +251,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-PT-Reflections-P0
+          name: Control-FG-Clean-Baseline-Guides-R21
           path: |
-            Control-FG-PT-Reflections-P0.zip
-            Control-FG-PT-Reflections-P0.sha256
+            Control-FG-Clean-Baseline-Guides-R21.zip
+            Control-FG-Clean-Baseline-Guides-R21.sha256
             build/exports.txt
             build/imports.txt
             build/pt_reflection_p1.dxil
