@@ -1,5 +1,6 @@
 // GENERATED from captured native glass lighting SHA256 b19de5e0b8a216076b6800790b100b91caa83814abdad3ad276736ba72b5e762
-// Offline integration component. Runtime activation requires dedicated secondary storage.
+#include "pt_glass_lighting_direction.hlsli"
+// R36: direct-light BRDFs use the path viewing direction at reflected hits.
 SamplerState g_sLinearWrap : register(s5, space1);
 SamplerState g_sLinearClamp : register(s6, space1);
 SamplerState g_sLinearMipLinearWrap : register(s10, space1);
@@ -175,6 +176,9 @@ void main(uint3 groupId : SV_GroupID, uint3 groupThreadId : SV_GroupThreadID) {
     r1.z=(asuint(dot(asfloat(r0.xyzx).xyz,asfloat(r0.xyzx).xyz).xxxx)).z; // native dword 661
     r1.w=(asuint(rsqrt(asfloat(r1.zzzz)))).w; // native dword 668
     r0.xyz=(asuint((asfloat(r0.xyzx)*asfloat(r1.wwww)))).xyz; // native dword 673
+#endif
+#if PT_GLASS_SECONDARY_EVALUATION || PT_GLASS_COMPOSITE
+    float3 ptGlassLightView=PTGlassLightView(asfloat(r0.xyz),asfloat(ptCB0[2]).xyz,asfloat(ptCB0[3]).xyz,asfloat(ptCB0[4]).xyz);
 #endif
     r5.xyzw=uint4(g_sbMaterialDataPart3[(r0.wwww).x].d[(uint4(0x30u,0x30u,0x30u,0x30u)).x/4u+0u],g_sbMaterialDataPart3[(r0.wwww).x].d[(uint4(0x30u,0x30u,0x30u,0x30u)).x/4u+1u],g_sbMaterialDataPart3[(r0.wwww).x].d[(uint4(0x30u,0x30u,0x30u,0x30u)).x/4u+2u],g_sbMaterialDataPart3[(r0.wwww).x].d[(uint4(0x30u,0x30u,0x30u,0x30u)).x/4u+3u]); // native dword 680
     r6.xy=uint2(g_sbMaterialDataPart3[(r0.wwww).x].d[(uint4(0x44u,0x44u,0x44u,0x44u)).x/4u+0u],g_sbMaterialDataPart3[(r0.wwww).x].d[(uint4(0x44u,0x44u,0x44u,0x44u)).x/4u+1u]); // native dword 690
@@ -477,6 +481,10 @@ void main(uint3 groupId : SV_GroupID, uint3 groupThreadId : SV_GroupThreadID) {
     r2.z=(asuint(dot(asfloat(asuint(-asfloat(r0.xyzx))).xyz,asfloat(asuint(-asfloat(r0.xyzx))).xyz).xxxx)).z; // native dword 2937
     r2.z=(asuint(rsqrt(asfloat(r2.zzzz)))).z; // native dword 2946
     r6.xzw=(asuint((asfloat(asuint(-asfloat(r0.xxyz)))*asfloat(r2.zzzz)))).xzw; // native dword 2951
+#if PT_GLASS_SECONDARY_EVALUATION || PT_GLASS_COMPOSITE
+    // Override only V, after native position/attenuation/shadow setup.
+    if(all(isfinite(ptGlassLightView)))r6.xzw=asuint(ptGlassLightView);
+#endif
     r2.z=(asuint(saturate(dot(asfloat(r3.xyzx).xyz,asfloat(r6.xzwx).xyz).xxxx))).z; // native dword 2959
     r2.w=(asuint((asfloat(asuint(-asfloat(r1.zzzz)))+asfloat(uint4(0x3f800000u,0x3f800000u,0x3f800000u,0x3f800000u))))).w; // native dword 2966
     r14.w=(uint4(0x3f800000u,0x3f800000u,0x3f800000u,0x3f800000u)).w; // native dword 2974

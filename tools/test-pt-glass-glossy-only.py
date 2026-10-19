@@ -19,3 +19,8 @@ assert 'float4(max(asfloat(r0.xyz),0.0f),1.0f)' in lighting
 assert 'traced.w>0.5f && all(isfinite(traced.xyz))' in lighting
 assert 'native dword 6728' in lighting
 print('PASS: one glossy continuation; no added diffuse/history/diagnostic work; two-state UI; invalid secondary lighting retains native specular.')
+
+assert 'float3 ptGlassLightView=PTGlassLightView(asfloat(r0.xyz)' in lighting
+assert lighting.index('r6.xzw=asuint(ptGlassLightView)') < lighting.index('// native dword 2959')
+assert 'native dword 2772' in lighting and 'native dword 2917' in lighting
+print('PASS: reflected direct-light viewing direction applied before NdotV; native hit positions and shadow origins retained.')
