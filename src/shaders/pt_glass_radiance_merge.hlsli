@@ -5,7 +5,6 @@
 // Per-channel coverage retains colored native light. This intentionally cannot
 // darken native probe leakage; it is a conservative hybrid, not a full estimator.
 float3 PTGlassMergeRadiance(float3 nativeRadiance,float3 continuation) {
-    if(!all(isfinite(continuation)))return nativeRadiance;
-    return max(nativeRadiance,max(continuation,0.0f));
+    return all(isfinite(continuation)) ? max(nativeRadiance,max(continuation,0.0f)) : nativeRadiance;
 }
 #endif
