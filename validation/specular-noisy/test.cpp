@@ -24,13 +24,17 @@ struct Fake {
  bool RunRef(Scope& s){return ValidateReferenceDispatch(s,Accessors(),*this,0x1000,TemporalDispatchRva,300);}
 };
 int main(){
+ {Fake f;auto s=f.Frame();s.spatialPasses=1;assert(f.RunRef(s)&&f.copyCalls==0);}
+ {Fake f;auto s=f.Frame();s.spatialPasses=1;assert(f.Run(s)&&s.recorded&&f.copyCalls==1);}
+ for(unsigned n:{2u,UINT32_MAX}){Fake f;auto s=f.Frame();s.spatialPasses=n;assert(!f.RunRef(s)&&f.copyCalls==0);}
+
  {Fake f;auto s=f.Frame();assert(f.RunRef(s)&&!s.recorded&&!s.attempted&&!s.failed&&f.copyCalls==0&&std::strcmp(s.reason,"reference_dispatch_admitted")==0);}
  {Fake f;auto s=f.Frame();f.changeList=true;assert(!f.RunRef(s)&&!s.attempted&&!s.failed&&f.copyCalls==0&&std::strcmp(s.reason,"reference_context_changed_before_dispatch")==0);}
  {Fake f;auto s=f.Frame();f.changeTargetMips=true;assert(!f.RunRef(s)&&!s.attempted&&!s.failed&&f.copyCalls==0&&std::strcmp(s.reason,"reference_pair_changed_before_dispatch")==0);}
  {Fake f;auto s=f.Frame();assert(!ValidateReferenceDispatch(s,f.Accessors(),f,0x1000,0x16ee2,300)&&f.copyCalls==0);}
  {Fake f;auto s=f.Frame();assert(f.Run(s)&&s.recorded&&s.attempted&&!s.failed&&f.copyCalls==1);assert(!f.Run(s)&&f.copyCalls==1);}
  for(int which=0;which<13;++which){Fake f;auto s=f.Frame();switch(which){
- case 0:s.rrCommitted=false;break;case 1:s.spatialPasses=1;break;case 2:s.sourceNative=1;break;
+ case 0:s.rrCommitted=false;break;case 1:s.spatialPasses=2;break;case 2:s.sourceNative=1;break;
  case 3:f.failRead=true;break;case 4:f.changeFrame=true;break;case 5:f.badDevice=true;break;
  case 6:f.targetShape.width++;break;case 7:f.targetShape.format=28;break;case 8:f.targetShape.samples=2;break;
  case 9:f.source[0x68]=1;break;case 10:f.target[0x38]=0x10;break;case 11:f.wrongState=true;break;

@@ -15,6 +15,8 @@ struct Scope {
  Context frame{},dispatch{};
  Address sourceNative=0;
  bool rrCommitted=false;
+ // Native spatial loop follows TemporalDispatchRva (0x16786); loop dispatch
+ // is 0x16b3c and native ping-pong/copy-back owns its output. R24 admits 0/1.
  unsigned spatialPasses=0;
  bool attempted=false,recorded=false,referenceDispatched=false,nativeClampPrepared=false,nativeClampDispatched=false,nativeClampRestoreFailed=false,knownReplacementContamination=false,failed=false;
  const char* reason="not_attempted";
@@ -57,7 +59,7 @@ inline bool SameFrameOwner(const Context& a,const Context& b) {
 template<class Api> bool ValidateReferenceDispatch(Scope& scope,const Access& a,Api& api,
  Address renderer,Address site,Address deviceState) {
  scope.reason="reference_scope_not_eligible";
- if(!scope.rrCommitted||scope.spatialPasses||scope.attempted||scope.failed||site!=TemporalDispatchRva)return false;
+ if(!scope.rrCommitted||scope.spatialPasses>1||scope.attempted||scope.failed||site!=TemporalDispatchRva)return false;
  scope.reason="reference_frame_missing";
  if(!a.currentContext||!scope.frame.frame||!scope.frame.device||!scope.frame.queue||!scope.frame.list||!scope.frame.view)return false;
  scope.reason="reference_native_device_state";if(!api.StateMatches(deviceState))return false;
@@ -84,7 +86,7 @@ template<class Api> bool ValidateReferenceDispatch(Scope& scope,const Access& a,
 template<class Api> bool Substitute(Scope& scope,const Access& a,Api& api,
  Address renderer,Address site,Address deviceState) {
  scope.reason="scope_not_eligible";
- if(!scope.rrCommitted||scope.spatialPasses||scope.attempted||scope.failed||site!=TemporalDispatchRva)return false;
+ if(!scope.rrCommitted||scope.spatialPasses>1||scope.attempted||scope.failed||site!=TemporalDispatchRva)return false;
  // Mark rejection before borrowed reads; clear it only after a complete copy.
  scope.failed=true;
  scope.reason="scope_frame_missing";

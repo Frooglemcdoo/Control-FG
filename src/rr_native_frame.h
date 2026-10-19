@@ -1,4 +1,5 @@
 #pragma once
+#include "rr_reflection_spatial_test.h"
 #include "rr_frame_coordinator.h"
 #include "rr_native_preset.h"
 #include "rr_user_control.h"
@@ -621,11 +622,11 @@ static void RRNativeHookFilter(void* color,void* history,unsigned passes,bool ev
  if(!ready||!rrNativeFrame.BeginLighting(scope.frame.frame)){
   rrNativeFrame.Fail();Log("RR_FRAME_STOP reason=filter_frame_context");SetLastError(saved);rrNativeFilterOriginal(color,history,passes,evaluateColor);return;
  }
- scope.rrCommitted=true;scope.spatialPasses=0;rrNativeClampLease={};rrNativeSpecularScope=&scope;
+ scope.rrCommitted=true;scope.spatialPasses=RRReflectionSpatialTestPasses();rrNativeClampLease={};rrNativeSpecularScope=&scope;
  SetLastError(saved);
  // Let native exceptions propagate. The finally block is also the last-resort
  // provider restoration boundary if the bind or dispatch unwinds unexpectedly.
- __try {rrNativeFilterOriginal(color,history,0,evaluateColor);}
+ __try {rrNativeFilterOriginal(color,history,scope.spatialPasses,evaluateColor);}
  __finally {
   if(rrNativeClampLease.armed){
    const bool restored=rrNativeClampApi.Restore(rrNativeClampLease);
@@ -640,10 +641,10 @@ static void RRNativeHookFilter(void* color,void* history,unsigned passes,bool ev
  RRPerfFilter(scope.frame.frame,RRPerfElapsed(perfStart));
  if(!rrNativeLightingComplete)rrNativeFrame.Fail();
  if(!rrNativeLightingComplete||rrNativeFrame.Reset()||scope.frame.frame%240==0)
-  Log("RR_NOISY_REFLECTION frame=%llu produced=%u native_clamp=%u raw_copy_fallback=%u reference_dispatch=%u restore_failed=%u failed=%u spatial_passes=0 brdf=%u signal=%s",
+  Log("RR_NOISY_REFLECTION frame=%llu produced=%u native_clamp=%u raw_copy_fallback=%u reference_dispatch=%u restore_failed=%u failed=%u spatial_passes=%u brdf=%u signal=%s",
    static_cast<unsigned long long>(scope.frame.frame),unsigned(scope.recorded),unsigned(scope.nativeClampDispatched),
    unsigned(scope.recorded&&!scope.nativeClampDispatched&&!scope.referenceDispatched),unsigned(scope.referenceDispatched),
-   unsigned(scope.nativeClampRestoreFailed),unsigned(scope.failed),unsigned(evaluateColor),
+   unsigned(scope.nativeClampRestoreFailed),unsigned(scope.failed),scope.spatialPasses,unsigned(evaluateColor),
    scope.referenceDispatched?"renodx_reference":(scope.nativeClampDispatched?"native_control_clamp":"raw_copy_fallback"));
  SetLastError(nativeError);
 }
@@ -707,7 +708,7 @@ static bool RRNativeInstallFrame(HMODULE renderer,HMODULE d3d) noexcept {
          rrNativeFrameEnabled=true;
          Log("RR_NATIVE_OPTION_ISOLATION ready=1 registered_option=forced_off_never_true reflection=mod_state gi_radius=mod_state gi_bypass=mod_state jitter=private_mirror partial_mode=mod_owned_option_reads_no_feature13");
          Log("RR_NATIVE_SPECULAR_CLAMP_READY ready=1 target_shader_crc=0x600347E7 camera_cut_provider=name_resolved_per_filter bind_site=0x16744 dispatch_site=0x16786 temporal_history=forced_zero current_frame_energy_clamp=CS3_default_60 restore=verified_each_dispatch reshade_required=0");
-         Log("RR_FRAME_HOOKS_READY native_feature=13 early_mode=1 temporal_signal=CS3_integrated_adjustable raw_copy=off_or_fallback public_reference_ui=0 reflection_geometry_capture=D1_F_only hit_distance_runtime=D1_optional specular_mvec_runtime=0 guide_stats_readback=0 zero_spatial=1 preserve_brdf=1 native_gi_bypass=1 contact_shadow_denoiser=temporal_off_spatial_zero broad_diffuse_denoiser=temporal_and_spatial_bypassed full_rt_settings=1 option_isolation=1");
+         Log("RR_FRAME_HOOKS_READY native_feature=13 early_mode=1 temporal_signal=CS3_integrated_adjustable raw_copy=off_or_fallback public_reference_ui=0 reflection_geometry_capture=D1_F_only hit_distance_runtime=D1_optional specular_mvec_runtime=0 guide_stats_readback=0 spatial_policy=r24_ini_0_or_1 preserve_brdf=1 native_gi_bypass=1 contact_shadow_denoiser=temporal_off_spatial_zero broad_diffuse_denoiser=temporal_and_spatial_bypassed full_rt_settings=1 option_isolation=1");
          return true;
         }
        }

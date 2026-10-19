@@ -1,0 +1,42 @@
+{
+  "src/rr_native_frame.h": [
+    [
+      "",
+      "#include \"rr_reflection_spatial_test.h\"\n"
+    ],
+    [
+      " scope.rrCommitted=true;scope.spatialPasses=0;rrNativeClampLease={};rrNativeSpecularScope=&scope;\n",
+      " scope.rrCommitted=true;scope.spatialPasses=RRReflectionSpatialTestPasses();rrNativeClampLease={};rrNativeSpecularScope=&scope;\n"
+    ],
+    [
+      " __try {rrNativeFilterOriginal(color,history,0,evaluateColor);}\n",
+      " __try {rrNativeFilterOriginal(color,history,scope.spatialPasses,evaluateColor);}\n"
+    ],
+    [
+      "  Log(\"RR_NOISY_REFLECTION frame=%llu produced=%u native_clamp=%u raw_copy_fallback=%u reference_dispatch=%u restore_failed=%u failed=%u spatial_passes=0 brdf=%u signal=%s\",\n",
+      "  Log(\"RR_NOISY_REFLECTION frame=%llu produced=%u native_clamp=%u raw_copy_fallback=%u reference_dispatch=%u restore_failed=%u failed=%u spatial_passes=%u brdf=%u signal=%s\",\n"
+    ],
+    [
+      "   unsigned(scope.nativeClampRestoreFailed),unsigned(scope.failed),unsigned(evaluateColor),\n",
+      "   unsigned(scope.nativeClampRestoreFailed),unsigned(scope.failed),scope.spatialPasses,unsigned(evaluateColor),\n"
+    ],
+    [
+      "         Log(\"RR_FRAME_HOOKS_READY native_feature=13 early_mode=1 temporal_signal=CS3_integrated_adjustable raw_copy=off_or_fallback public_reference_ui=0 reflection_geometry_capture=D1_F_only hit_distance_runtime=D1_optional specular_mvec_runtime=0 guide_stats_readback=0 zero_spatial=1 preserve_brdf=1 native_gi_bypass=1 contact_shadow_denoiser=temporal_off_spatial_zero broad_diffuse_denoiser=temporal_and_spatial_bypassed full_rt_settings=1 option_isolation=1\");\n",
+      "         Log(\"RR_FRAME_HOOKS_READY native_feature=13 early_mode=1 temporal_signal=CS3_integrated_adjustable raw_copy=off_or_fallback public_reference_ui=0 reflection_geometry_capture=D1_F_only hit_distance_runtime=D1_optional specular_mvec_runtime=0 guide_stats_readback=0 spatial_policy=r24_ini_0_or_1 preserve_brdf=1 native_gi_bypass=1 contact_shadow_denoiser=temporal_off_spatial_zero broad_diffuse_denoiser=temporal_and_spatial_bypassed full_rt_settings=1 option_isolation=1\");\n"
+    ]
+  ],
+  "src/rr_specular_noisy.h": [
+    [
+      "",
+      " // Native spatial loop follows TemporalDispatchRva (0x16786); loop dispatch\n // is 0x16b3c and native ping-pong/copy-back owns its output. R24 admits 0/1.\n"
+    ],
+    [
+      " if(!scope.rrCommitted||scope.spatialPasses||scope.attempted||scope.failed||site!=TemporalDispatchRva)return false;\n",
+      " if(!scope.rrCommitted||scope.spatialPasses>1||scope.attempted||scope.failed||site!=TemporalDispatchRva)return false;\n"
+    ],
+    [
+      " if(!scope.rrCommitted||scope.spatialPasses||scope.attempted||scope.failed||site!=TemporalDispatchRva)return false;\n",
+      " if(!scope.rrCommitted||scope.spatialPasses>1||scope.attempted||scope.failed||site!=TemporalDispatchRva)return false;\n"
+    ]
+  ]
+}
