@@ -1,5 +1,6 @@
 #pragma once
 #include "rr_hair_shader_audit.h"
+#include "rr_world_shader_audit.h"
 #include "rr_hair_opacity.h"
 #include "rr_character_base_albedo.h"
 // Recurring native albedo replay. CPU draw data lives only through its join.
@@ -122,6 +123,7 @@ static void RRDiffusePrepare(void* callback,void* table) noexcept {
         RRAlbedoShader::Session shaders; // fresh native shader validation each frame
         const control_rr_albedo::Access access{&RRAlbedoRead,&RRAlbedoGetShader,nullptr,&shaders,&RRAlbedoValidateEyeCandidate};
         if(!control_rr_albedo::prepare(access,c->manager,c->replay,true)) {rrDiffuseStage.store(RRDiffuseStage::Idle);return;}
+        if(auditShaders)RRWorldExportShaderAudit(frame,c->replay);
         std::uintptr_t source=0;memcpy(&source,c->replay.manager.data()+0x30,sizeof(source));
         size_t kept=0;UINT targets=0;unsigned auditPairs=0;
         for(size_t i=0;i<c->replay.batches.size();++i) {

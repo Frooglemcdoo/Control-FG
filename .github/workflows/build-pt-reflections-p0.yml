@@ -20,6 +20,7 @@ on:
       - experiment/pt-native-secondary-shading
       - experiment/pt-bounce-energy
       - experiment/rr-clean-baseline-r21
+      - experiment/rr-blinds-audit-r22
   workflow_dispatch:
   pull_request:
     branches:
@@ -216,7 +217,7 @@ jobs:
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-Clean-Baseline-Guides-R21'
+          $out='Control-FG-Blinds-Shader-Audit-R22'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
           Copy-Item build/pt_reflection_p1.dxil "$out/pt_reflection_p1.dxil"
@@ -225,25 +226,26 @@ jobs:
           Copy-Item build/pt_reflection_p2_verify.dxbc "$out/pt_reflection_p2_verify.dxbc"
           Copy-Item build/pt_reflection_p2_local_light_probe.dxbc "$out/pt_reflection_p2_local_light_probe.dxbc"
           Copy-Item build/pt_reflection_p2_diffuse_bridge.dxbc "$out/pt_reflection_p2_diffuse_bridge.dxbc"
+          Copy-Item Collect-RR-Blinds-Capture.cmd "$out/Collect-RR-Blinds-Capture.cmd"
+          Copy-Item Collect-RR-Blinds-Capture.ps1 "$out/Collect-RR-Blinds-Capture.ps1"
           Copy-Item Collect-RR-Skin-Capture.cmd "$out/Collect-RR-Skin-Capture.cmd"
           Copy-Item Collect-RR-Skin-Capture.ps1 "$out/Collect-RR-Skin-Capture.ps1"
           @'
-          CONTROL-FG CLEAN BASELINE + CHARACTER/HAIR GUIDES R21
-          Source baseline: fa2f6c5363fc3ca43d13542152fe80b0b79b3479
-          Branch: experiment/rr-clean-baseline-r21
+          CONTROL-FG BLINDS SHADER AUDIT R22
+          Branch: experiment/rr-blinds-audit-r22
+          Rendering baseline: confirmed R21. No shader or filter changes.
 
-          Restores the PT Bounce Energy Correction clean baseline world renderer.
-          Carries over R12 hair guides and R19 character base-albedo guides.
-          Native skin lighting is unchanged. PT shaders, diffuse bridge, reflection
-          clamp and GI/contact/AO filtering policies match the clean baseline.
-          Later experimental glass integration and R14-R20 GI filtering are absent.
-          Control-RR-GI-Test.ini has no effect in this build.
+          This is an evidence build, not a visual fix. F9 additionally exports
+          the current opaque draw shader inventory, including world materials
+          excluded from the character/hair replay. It records native and
+          selected albedo pixel shaders without enabling world-material replay.
 
-          Close Control and copy every binary beside Control_DX12.exe, replacing
-          the existing files. Keep the same settings for comparison (RR Model F,
-          RT High). Compare world surfaces in motion first, then hair and neck.
-          This is a regression-isolation build; visual quality needs confirmation.
-          Optional: press F9 once, wait 20 seconds, run Collect-RR-Skin-Capture.cmd.
+          Close Control and replace all included binaries beside Control_DX12.exe.
+          Keep your settings. Face the same blinds with RR on and press F9 once.
+          Keep the blinds in view for 20 seconds, then run
+          Collect-RR-Blinds-Capture.cmd and send its ZIP.
+          One brief capture hitch is possible. No INI changes are needed.
+          The report explicitly records incomplete/capped shader exports.
           '@ | Set-Content "$out/README.txt" -Encoding ASCII
           Compress-Archive -Path "$out/*" -DestinationPath "$out.zip" -Force
           (Get-FileHash "$out.zip" -Algorithm SHA256).Hash | Set-Content "$out.sha256" -Encoding ASCII
@@ -251,10 +253,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-Clean-Baseline-Guides-R21
+          name: Control-FG-Blinds-Shader-Audit-R22
           path: |
-            Control-FG-Clean-Baseline-Guides-R21.zip
-            Control-FG-Clean-Baseline-Guides-R21.sha256
+            Control-FG-Blinds-Shader-Audit-R22.zip
+            Control-FG-Blinds-Shader-Audit-R22.sha256
             build/exports.txt
             build/imports.txt
             build/pt_reflection_p1.dxil
