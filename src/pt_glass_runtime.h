@@ -7,6 +7,9 @@
 #include <memory>
 // G1: Steam hash-locked glass continuation. Original exports and native passes
 // remain present; only a fully prepared dispatch selects the additional raygen.
+static bool (*opaqueDispatchObserver)(ID3D12GraphicsCommandList4*,const D3D12_DISPATCH_RAYS_DESC*)=nullptr;
+static void (*opaqueSetObserver)(ID3D12GraphicsCommandList4*,ID3D12StateObject*)=nullptr;
+static void (*opaqueResetObserver)(ID3D12GraphicsCommandList*)=nullptr;
 namespace PTGlassRuntime {
 using Microsoft::WRL::ComPtr;
 using CreateState=HRESULT(STDMETHODCALLTYPE*)(ID3D12Device5*,const D3D12_STATE_OBJECT_DESC*,REFIID,void**);
@@ -164,10 +167,12 @@ static HRESULT STDMETHODCALLTYPE ResetHook(ID3D12GraphicsCommandList* list,ID3D1
             if(it->hold.anySubmitted){if(FAILED(resources.Submitted(it->serial)))enabled=false;}
             else resources.Discarded(it->serial);it=pending.erase(it);
         }else ++it;}
+    if(SUCCEEDED(hr)&&opaqueResetObserver)opaqueResetObserver(list);
     return hr;
 }
-static void STDMETHODCALLTYPE SetRayPsoHook(ID3D12GraphicsCommandList4* list,ID3D12StateObject* pso){currentRayPso=pso;setRayPso(list,pso);}
+static void STDMETHODCALLTYPE SetRayPsoHook(ID3D12GraphicsCommandList4* list,ID3D12StateObject* pso){currentRayPso=pso;if(opaqueSetObserver)opaqueSetObserver(list,pso);setRayPso(list,pso);}
 static void STDMETHODCALLTYPE RaysHook(ID3D12GraphicsCommandList4* list,const D3D12_DISPATCH_RAYS_DESC* desc){
+    if(opaqueDispatchObserver&&opaqueDispatchObserver(list,desc))return;
     if(!enabled||!rayScope||!desc||desc->Depth!=1||pass.mode==0||(ptReflectionUserState.load()&1u)==0){if(enabled&&rayScope)Skip("dispatch_disabled_or_shape");dispatchRays(list,desc);return;}
     if(!pass.ray){Skip("ray_descriptor_snapshot");dispatchRays(list,desc);return;}
     Context context{};unsigned char identifier[32]{};

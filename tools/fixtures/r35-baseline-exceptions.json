@@ -1,0 +1,76 @@
+{
+  "src/fg_overlay.h": [
+    [
+      "#include \"pt_reflection_user_control.h\"",
+      "#include \"pt_reflection_user_control.h\"\n#include \"opaque_reflection_control.h\""
+    ],
+    [
+      "    PTReflectionUserRequest(GetPrivateProfileIntW(L\"GlassReflections\", L\"Enabled\", 1, fgOverlaySettingsPath.c_str()) != 0);",
+      "    PTReflectionUserRequest(GetPrivateProfileIntW(L\"GlassReflections\", L\"Enabled\", 1, fgOverlaySettingsPath.c_str()) != 0);\n    opaqueReflectionEnabled.store(GetPrivateProfileIntW(L\"OpaqueReflections\", L\"Enabled\", 1, fgOverlaySettingsPath.c_str()) != 0);"
+    ],
+    [
+      "    wchar_t ptEnabledText[8]{};",
+      "    wchar_t opaqueEnabledText[8]{};\n    swprintf_s(opaqueEnabledText, L\"%u\", opaqueReflectionEnabled.load() ? 1u : 0u);\n    wchar_t ptEnabledText[8]{};"
+    ],
+    [
+      "    ok = (WritePrivateProfileStringW(L\"GlassReflections\", L\"Enabled\", ptEnabledText, fgOverlaySettingsPath.c_str()) != FALSE) && ok;",
+      "    ok = (WritePrivateProfileStringW(L\"GlassReflections\", L\"Enabled\", ptEnabledText, fgOverlaySettingsPath.c_str()) != FALSE) && ok;\n    ok = (WritePrivateProfileStringW(L\"OpaqueReflections\", L\"Enabled\", opaqueEnabledText, fgOverlaySettingsPath.c_str()) != FALSE) && ok;"
+    ],
+    [
+      "L\"GLASS REFLECTIONS\"",
+      "L\"REFLECTION ENHANCEMENTS\""
+    ],
+    [
+      "    SelectObject(dc, smallFont); SetTextColor(dc, RGB(169, 169, 169));\n    RECT ptDescription{304, 794 + lowerSectionOffset, 710, 846 + lowerSectionOffset};\n    DrawTextW(dc, L\"Enhanced glossy reflections on glass.\\nToggle to compare with native glass.\", -1, &ptDescription,\n        DT_LEFT | DT_WORDBREAK);",
+      "    const bool opaqueEnabled=opaqueReflectionEnabled.load();\n    const RECT opaqueToggle{304, 794 + lowerSectionOffset, 554, 846 + lowerSectionOffset};\n    SelectObject(dc, opaqueEnabled ? buttonSelectedFont : buttonFont);\n    PaintFGButton(dc, opaqueToggle, opaqueEnabled ? L\"OPAQUE ON\" : L\"OPAQUE OFF\", opaqueEnabled, true);"
+    ],
+    [
+      "static bool FGOverlayPTToggleFromPoint(int x,int y) noexcept { const int y0=794+FGOverlayLowerSectionOffset(); return y>=y0&&y<y0+52&&x>=30&&x<280; }",
+      "static bool FGOverlayPTToggleFromPoint(int x,int y) noexcept { const int y0=794+FGOverlayLowerSectionOffset(); return y>=y0&&y<y0+52&&x>=30&&x<280; }\nstatic bool FGOverlayOpaqueToggleFromPoint(int x,int y) noexcept { const int y0=794+FGOverlayLowerSectionOffset(); return y>=y0&&y<y0+52&&x>=304&&x<554; }"
+    ],
+    [
+      "        if(FGOverlayPTToggleFromPoint(x,y)){",
+      "        if(FGOverlayOpaqueToggleFromPoint(x,y)){\n            const bool previous=opaqueReflectionEnabled.load();\n            opaqueReflectionEnabled.store(!previous);\n            FGOverlayMarkSettingsDirty();\n            Log(\"OPAQUE_REFLECTION_UI_TOGGLE previous=%u enabled=%u apply=next_dispatch\",unsigned(previous),unsigned(!previous));\n            InvalidateRect(hwnd,nullptr,FALSE);return 0;\n        }\n        if(FGOverlayPTToggleFromPoint(x,y)){"
+    ]
+  ],
+  "src/pt_reflection_loader.h": [
+    [
+      "#include \"pt_glass_runtime.h\"",
+      "#include \"pt_glass_runtime.h\"\n#include \"opaque_reflection_runtime.h\""
+    ],
+    [
+      "    if(SUCCEEDED(nativeHr)&&out&&*out)PTGlassRuntime::ObserveCompute(device,desc,*out);",
+      "    if(SUCCEEDED(nativeHr)&&out&&*out){PTGlassRuntime::ObserveCompute(device,desc,*out);OpaqueReflectionRuntime::ObserveCompute(device,desc,*out);}"
+    ],
+    [
+      "    PTGlassRuntime::InstallDevice(device);",
+      "    PTGlassRuntime::InstallDevice(device);\n    OpaqueReflectionRuntime::InstallDevice(device);"
+    ],
+    [
+      "    // R34: keep the shared shader transport used by the character/hair fixes.\n    // Do not load opaque PT sidecars or install any opaque ray/composite hooks.",
+      "    // R35: preserve character/hair transport. Retired P1/P2 stays disabled;\n    // native opaque continuation uses its own storage and independent hooks."
+    ],
+    [
+      "    Log(\"GLASS_ONLY_R34 glass_ready=%u opaque_pt=disabled character_shader_transport=%u\",unsigned(glassReady),unsigned(storageReady));",
+      "    const bool opaqueReady=OpaqueReflectionRuntime::Install(renderer,d3d);\n    Log(\"REFLECTIONS_R35 glass_ready=%u opaque_ready=%u retired_pt=disabled character_shader_transport=%u\",unsigned(glassReady),unsigned(opaqueReady),unsigned(storageReady));"
+    ]
+  ],
+  "src/pt_glass_runtime.h": [
+    [
+      "namespace PTGlassRuntime {",
+      "static bool (*opaqueDispatchObserver)(ID3D12GraphicsCommandList4*,const D3D12_DISPATCH_RAYS_DESC*)=nullptr;\nstatic void (*opaqueSetObserver)(ID3D12GraphicsCommandList4*,ID3D12StateObject*)=nullptr;\nstatic void (*opaqueResetObserver)(ID3D12GraphicsCommandList*)=nullptr;\nnamespace PTGlassRuntime {"
+    ],
+    [
+      "    return hr;\n}\nstatic void STDMETHODCALLTYPE SetRayPsoHook",
+      "    if(SUCCEEDED(hr)&&opaqueResetObserver)opaqueResetObserver(list);\n    return hr;\n}\nstatic void STDMETHODCALLTYPE SetRayPsoHook"
+    ],
+    [
+      "{currentRayPso=pso;setRayPso(list,pso);}",
+      "{currentRayPso=pso;if(opaqueSetObserver)opaqueSetObserver(list,pso);setRayPso(list,pso);}"
+    ],
+    [
+      "static void STDMETHODCALLTYPE RaysHook(ID3D12GraphicsCommandList4* list,const D3D12_DISPATCH_RAYS_DESC* desc){",
+      "static void STDMETHODCALLTYPE RaysHook(ID3D12GraphicsCommandList4* list,const D3D12_DISPATCH_RAYS_DESC* desc){\n    if(opaqueDispatchObserver&&opaqueDispatchObserver(list,desc))return;"
+    ]
+  ]
+}

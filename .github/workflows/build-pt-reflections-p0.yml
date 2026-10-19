@@ -1,4 +1,4 @@
-name: Build glass reflections and RR
+name: Build native reflection enhancements and RR
 
 on:
   push:
@@ -27,6 +27,7 @@ on:
       - experiment/rr-dlaa-profile-r32
       - experiment/rr-gi-selection-fix-r33
       - experiment/glass-only-restore-r34
+      - experiment/native-reflection-continuation-r35
   workflow_dispatch:
   pull_request:
     branches:
@@ -139,6 +140,8 @@ jobs:
           Write-Host "DXC: $dxc"
           & $dxc -T lib_6_3 -HV 2021 -O3 -I src/shaders -Fo build/pt_glass_raygen.dxil src/shaders/pt_glass_raygen.hlsl
           if($LASTEXITCODE -ne 0){throw "Glass DXC compile failed: $LASTEXITCODE"}
+          & $dxc -T lib_6_3 -HV 2021 -O3 -I src/shaders -Fo build/opaque_reflection_raygen.dxil src/shaders/opaque_reflection_raygen.hlsl
+          if($LASTEXITCODE -ne 0){throw "Opaque DXC compile failed: $LASTEXITCODE"}
 
       - name: Validate glass lighting, descriptors and resource retirement on WARP
         shell: cmd
@@ -161,6 +164,19 @@ jobs:
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-pt-glass-vtable-call.cpp /Febuild\test-glass-call.exe
           if errorlevel 1 exit /b 1
           build\test-glass-call.exe
+          if errorlevel 1 exit /b 1
+
+      - name: Validate opaque continuation resources and native composite on WARP
+        shell: cmd
+        run: |
+          call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\compile-opaque-reflection.cpp /Febuild\compile-opaque.exe /link d3dcompiler.lib d3d12.lib dxgi.lib
+          if errorlevel 1 exit /b 1
+          build\compile-opaque.exe
+          if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-opaque-resources.cpp /Febuild\test-opaque-resources.exe /link d3d12.lib dxgi.lib
+          if errorlevel 1 exit /b 1
+          build\test-opaque-resources.exe
           if errorlevel 1 exit /b 1
 
       - name: Verify clean baseline and character guide scope
@@ -201,13 +217,15 @@ jobs:
           dumpbin /exports build\dxgi.dll > build\exports.txt
           dumpbin /imports build\dxgi.dll > build\imports.txt
 
-      - name: Package glass restoration R34
+      - name: Package native reflection enhancements R35
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-Glass-Restore-R34'
+          $out='Control-FG-Reflection-Enhancements-R35'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
+          Copy-Item build/opaque_reflection_raygen.dxil "$out/opaque_reflection_raygen.dxil"
+          Copy-Item build/opaque_reflection_composite.dxbc "$out/opaque_reflection_composite.dxbc"
           Copy-Item build/pt_glass_raygen.dxil "$out/pt_glass_raygen.dxil"
           Copy-Item build/pt_glass_secondary.dxbc "$out/pt_glass_secondary.dxbc"
           Copy-Item build/pt_glass_composite.dxbc "$out/pt_glass_composite.dxbc"
@@ -218,28 +236,33 @@ jobs:
           Copy-Item Collect-ControlFG-Compact-Logs.cmd "$out/Collect-ControlFG-Compact-Logs.cmd"
           Copy-Item Collect-ControlFG-Compact-Logs.ps1 "$out/Collect-ControlFG-Compact-Logs.ps1"
           @'
-          CONTROL-FG GLASS RESTORE R34
-          Branch: experiment/glass-only-restore-r34
+          CONTROL-FG REFLECTION ENHANCEMENTS R35
+          Branch: experiment/native-reflection-continuation-r35
 
-          Restores the glossy-only G3 glass continuation omitted from the clean
-          R21 baseline. Opaque experimental PT reflections are disabled: no P1/P2
-          sidecars are loaded and no opaque ray/composite hooks are installed.
-          Old pt_reflection_* files are ignored and may be removed.
+          Adds the glass-style glossy continuation to native opaque RT reflections.
+          Preserves native primary roughness, ray samples, direct/diffuse/emission,
+          sample averaging and miss fallback. The reflected hit must be glossy
+          (smoothness >= 0.8), matching the glass enhancement. Additional hits use
+          private storage; original hit textures are restored after each ray.
+          The retired P1/P2 experiment remains disabled; old pt_reflection_* files
+          are ignored. Glass sidecars and glass shading are unchanged from R34.
 
-          Close Control. Copy dxgi.dll and all three pt_glass_* files beside
-          Control_DX12.exe, replacing the installed DLL. No separate INI needed.
-          Keep the game's Ray Traced Transparent Reflections enabled.
-          F10 -> GLASS REFLECTIONS -> GLASS ON / GLASS OFF for live comparison.
-          The glass preference is saved separately from the retired PT toggle.
+          Close Control. Copy dxgi.dll and all five shader files beside
+          Control_DX12.exe. No separate INI needed. Keep the game's Ray Traced
+          Reflections and Ray Traced Transparent Reflections enabled.
+          F10 -> REFLECTION ENHANCEMENTS: GLASS and OPAQUE switch independently
+          in real time. Preferences are saved automatically.
 
-          Retains R33 live GI samples, R32 performance logging and R21 character
-          and hair shaders. No added diffuse glass lighting or whole-scene PT.
-          Glass hooks retain the original verified Steam module compatibility
-          gate. Other renderer versions fall back to native transparent reflections.
+          Retains R33 diffuse GI sample buttons, R32 performance logging and R21
+          character/hair shaders. Additional rays/lighting cost GPU time and VRAM;
+          opaque hit storage uses 32 bytes per reflection pixel per native layer,
+          per in-flight slot (up to three). Unsupported shapes/allocation failures
+          fall back to native reflections. Steam renderer hash gate retained.
 
-          Glass shader/root ABI and WARP descriptor/resource tests are automated;
-          actual in-game appearance still needs confirmation on your GPU.
-          Use the included compact log collector if the enhancement does not show.
+          Automated compilation, recovered native-root PSO, descriptor/resource
+          retirement and baseline checks do not replace in-game visual validation.
+          Use OPAQUE OFF to compare with the previous native opaque reflections.
+          Use the compact log collector if the enhancement does not show.
           '@ | Set-Content "$out/README.txt" -Encoding ASCII
           Compress-Archive -Path "$out/*" -DestinationPath "$out.zip" -Force
           (Get-FileHash "$out.zip" -Algorithm SHA256).Hash | Set-Content "$out.sha256" -Encoding ASCII
@@ -247,12 +270,14 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-Glass-Restore-R34
+          name: Control-FG-Reflection-Enhancements-R35
           path: |
-            Control-FG-Glass-Restore-R34.zip
-            Control-FG-Glass-Restore-R34.sha256
+            Control-FG-Reflection-Enhancements-R35.zip
+            Control-FG-Reflection-Enhancements-R35.sha256
             build/exports.txt
             build/imports.txt
+            build/opaque_reflection_raygen.dxil
+            build/opaque_reflection_composite.dxbc
             build/pt_glass_raygen.dxil
             build/pt_glass_secondary.dxbc
             build/pt_glass_composite.dxbc
