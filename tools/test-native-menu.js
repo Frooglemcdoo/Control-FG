@@ -40,14 +40,18 @@ function exercise(rtx40) {
     const maps={default:{},NO_WARNING_WHEN_DISABLED:{}};
     const requireModule=name=>name.includes('mobx/lib')?{observable:{array:x=>x},runInAction:f=>f()}:
         name.includes('OptionToDescriptionModeMap')?maps:engine;
-    const menu=context.window.__controlFG, rows=menu.rows(requireModule);
+    const nativeModel={m_vecBoolProperties:[
+        {m_strNameLocID:'MENU_OPTIONS_RT_INDIRECT_DIFFUSE_QUALITY',m_value:true},
+        {m_strNameLocID:'MENU_OPTIONS_RT_SPOT_CONTACT_SHADOW_QUALITY',m_value:false}
+    ]};
+    const menu=context.window.__controlFG, rows=menu.rows(requireModule,nativeModel);
     assert.equal(rows.length,rtx40?11:10);
     assert.equal(rows[0].m_vecPossibleValues.length,rtx40?2:7);
     assert.equal(rows[0].m_value,liveValues[0]); // Live FG survives view recreation.
     assert.equal(rows[0].cfgHeader,'CFG_FG_HEADER');
     assert.equal(menu.translate('CFG_GLASS'),'Enhanced Glass Reflections');
     assert(!rows.some(r=>r.m_strNameLocID.includes('OPAQUE')));
-    assert.equal(menu.rows(requireModule),rows);
+    assert.equal(menu.rows(requireModule,nativeModel),rows);
     assert.equal(events.length,1); // One handshake, no duplicate event wrapping.
     rows.forEach(r=>{
         assert(menu.translate(r.m_strNameLocID));
@@ -62,9 +66,23 @@ function exercise(rtx40) {
     engine.trigger('OnIntGraphicsPropertySet',10005,75);
     assert.equal(rows[5].m_value,75);
     engine.reject=true;
-    engine.trigger('OnEnumGraphicsPropertySet',10008,6);
+    engine.trigger('OnIntGraphicsPropertySet',10008,2);
+    assert.deepEqual(events.at(-1),['OnIntGraphicsPropertySet',10008,6]);
     assert.equal(rows[8].m_value,0); // Rejected native writes roll back the displayed value.
     engine.reject=false;
+    assert.equal(rows[6].m_bIsDisabled,false); // Contact Shadows off does not disable GI.
+    engine.trigger('OnIntGraphicsPropertySet',10006,3);
+    assert.equal(rows[6].m_value,6);
+    assert.equal(menu.slider(rows[6]).m_value,3);
+    assert.deepEqual(Array.from(menu.sliderLabels(rows[6])),['Native','2','4','6','8']);
+    nativeModel.m_vecBoolProperties[0].m_value=false;
+    menu.rows(requireModule,nativeModel);
+    assert.equal(rows[6].m_bIsDisabled,true);
+    assert.equal(menu.slider(rows[6]).m_value,0);
+    assert.equal(rows[6].m_value,6); // Keep the requested count while inactive.
+    nativeModel.m_vecBoolProperties[0].m_value=true;
+    menu.rows(requireModule,nativeModel);
+    assert.equal(menu.slider(rows[6]).m_value,3);
     engine.trigger('OnIntGraphicsPropertySet',10005,76);
     assert.equal(rows[5].m_value,75);
     if(!rtx40){
@@ -110,6 +128,11 @@ if(process.argv[2] && process.argv[2] !== '--config') {
     const rendered=graphics.renderOptions();
     assert.equal(rendered[0].children[0].children[0].props.className,'options-tab__group-header');
     assert.equal(rendered[0].children[1].props.label,'CFG_FG');
+    assert.equal(rendered[0].children[1].props.valueDataType,3);
+    assert.equal(rendered[6].props.valueDataType,1);
+    assert.equal(rendered[6].props.max,4);
+    assert.equal(rendered[8].children[1].props.max,3);
+    assert.deepEqual(Array.from(rendered[8].children[1].props.strValues),['Native','4 ms','6 ms','8 ms']);
     assert.equal(rendered[0].children[0].props.style.position,'relative');
     assert.equal(rendered[0].children[0].props.style.zIndex,0); // Contain native header text's z-index:999 below dropdowns.
 }

@@ -27,6 +27,10 @@ def generate(schema=None):
         assert type(option_id) is int and key.isascii()
         assert option['localizationKey'] not in localization_keys
         localization_keys.add(option['localizationKey'])
+        assert option.get('presentation') in (None, 'slider')
+        if option.get('presentation') == 'slider':
+            assert option['type'] == 'choice'
+        assert all(isinstance(name, str) and name.startswith('MENU_OPTIONS_') for name in option.get('nativeRequires', []))
         assert option.get('visibility') in (None, 'rtx40')
         assert option.get('capability') in (None, 'frameGeneration')
         assert option.get('defaultPolicy') in (None, 'supportedMultiplier')

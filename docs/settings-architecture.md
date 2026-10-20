@@ -96,3 +96,18 @@ only. Real controller navigation, overlay coexistence, GPU capability transition
 and disk-write failures still require Windows/in-game validation. Startup renderer
 application is deliberately explicit; a new persistent setting still needs its
 startup adapter. This review does not certify the older rendering subsystem.
+
+## Choice sliders (R45)
+
+Set `presentation: "slider"` on a choice option to reuse the game's native integer
+slider. Positions are indices into its choices, with explicit labels; UI events
+map the index back to the real stored value before entering the native bridge.
+This avoids invalid intermediate budgets/counts. FG retains the native dropdown.
+
+`nativeRequires` lists native option localization IDs. The menu observes the
+Graphics model and disables a row when its native prerequisite is off or missing.
+GI samples require RR plus `MENU_OPTIONS_RT_INDIRECT_DIFFUSE_QUALITY`. The audited
+producer uses `rt:Sample Count Diffuse` and `g_uRTDiffuseRayCount`; Contact Shadows
+is a separate pass. While inactive the slider displays Native without overwriting
+the saved requested sample count. Actual override remains gated by full RR and
+execution of the native diffuse producer.

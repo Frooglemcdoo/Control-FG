@@ -38,7 +38,7 @@ inline const Option kOptions[] = {
     {Key::RayReconstruction, 10003, 0, 0, 0, 1, {0, 1}, L"RayReconstruction", L"Enabled", {}},
     {Key::RayReconstructionModel, 10004, 6, 0, 0, 1, {5, 6}, L"RayReconstruction", L"Preset", {}},
     {Key::ReflectionDetail, 10005, 60, 25, 75, 1, {}, L"RayReconstruction", L"ReflectionClamp", {{Key::RayReconstruction, 1}, {Key::RayReconstructionModel, 6}}},
-    {Key::GlobalIlluminationSamples, 10006, 4, 0, 0, 1, {0, 2, 4, 6, 8}, L"RayReconstruction", L"GISamples", {}},
+    {Key::GlobalIlluminationSamples, 10006, 4, 0, 0, 1, {0, 2, 4, 6, 8}, L"RayReconstruction", L"GISamples", {{Key::RayReconstruction, 1}}},
     {Key::GlassReflections, 10007, 1, 0, 0, 1, {0, 1}, L"GlassReflections", L"Enabled", {}},
     {Key::TextureStreamingBudget, 10008, 0, 0, 0, 1, {0, 4, 6, 8}, L"Experimental", L"TextureStreamingBudgetMs", {}},
     {Key::VideoMemoryMonitor, 10009, 1, 0, 0, 1, {0, 1}, L"Overlay", L"VramMonitorEnabled", {}},

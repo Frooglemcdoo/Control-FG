@@ -184,7 +184,7 @@
       "id": 10006,
       "localizationKey": "GI",
       "label": "Global Illumination Samples",
-      "description": "Choose the sample count for ray-traced indirect lighting. More samples can reduce sampling noise but cost GPU time and lower frame rate. Native leaves the game's sample count unchanged. Requires Ray Traced Indirect Diffuse Lighting to affect the image; this does not control Frame Generation or reflection bounces.",
+      "description": "Choose the sample count for ray-traced indirect lighting. More samples can reduce noise but cost GPU time. Native keeps the game sample count. Active only with Ray Reconstruction and Ray Traced Indirect Diffuse Lighting enabled; Contact Shadows does not control this setting. When inactive, the slider shows Native and your saved choice is retained.",
       "type": "choice",
       "default": 4,
       "choices": [
@@ -212,7 +212,17 @@
       "storage": {
         "section": "RayReconstruction",
         "key": "GISamples"
-      }
+      },
+      "presentation": "slider",
+      "requires": [
+        {
+          "key": "RayReconstruction",
+          "value": 1
+        }
+      ],
+      "nativeRequires": [
+        "MENU_OPTIONS_RT_INDIRECT_DIFFUSE_QUALITY"
+      ]
     },
     {
       "key": "GlassReflections",
@@ -268,7 +278,8 @@
       "storage": {
         "section": "Experimental",
         "key": "TextureStreamingBudgetMs"
-      }
+      },
+      "presentation": "slider"
     },
     {
       "key": "VideoMemoryMonitor",

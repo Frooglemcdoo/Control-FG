@@ -10,6 +10,7 @@
     }
     var schema = window.__controlFGSchema;
     var definitions = schema.options, protocol = schema.protocol;
+    var nativeModel = null;
     var rowsByKey = Object.create(null), rowsById = Object.create(null);
     function makeRows() {
         return definitions.map(function (definition, slot) {
@@ -38,17 +39,27 @@
             return row;
         }).filter(function (row) { return row.cfgDefinition.visibility !== "rtx40" || cfg.rtx40; });
     }
+    function nativeOptionEnabled(name) {
+        if (!nativeModel) return false;
+        var groups = ["m_vecBoolProperties", "m_vecEnumProperties", "m_vecIntProperties"];
+        return groups.some(function (group) {
+            return Array.from(nativeModel[group] || []).some(function (property) {
+                return property.m_strNameLocID === name && Number(property.m_value) > 0;
+            });
+        });
+    }
     function refresh() {
         rows.forEach(function (row) {
             row.m_bIsDisabled = (row.cfgDefinition.requires || []).some(function (dependency) {
                 var source = rowsByKey[dependency.key];
                 return !source || source.m_value !== dependency.value;
-            });
+            }) || (row.cfgDefinition.nativeRequires || []).some(function (name) { return !nativeOptionEnabled(name); });
         });
     }
     window.__controlFG = {
-        rows: function (require) {
-            if (rows) return rows;
+        rows: function (require, model) {
+            nativeModel = model || null;
+            if (rows) { mobx.runInAction(refresh); return rows; }
             mobx = require("./node_modules/mobx/lib/mobx.module.js");
             rows = mobx.observable.array(makeRows());
             rows.forEach(function (row) {
@@ -138,6 +149,11 @@
                 if ((event === "OnEnumGraphicsPropertySet" || event === "OnIntGraphicsPropertySet") && id >= protocol.firstId && id < protocol.endId) {
                     var row = rowsById[id];
                     if (!row || row.m_bIsDisabled || !Number.isInteger(value)) return;
+                    if (row.cfgDefinition.presentation === "slider") {
+                        var selected = row.cfgDefinition.choices[value];
+                        if (!selected) return;
+                        value = selected.value;
+                    }
                     if (row.m_eDataType === 3 ? !row.m_vecPossibleValues.some(function (v) { return v.m_value === value; }) : value < row.m_minValue || value > row.m_maxValue || (value - row.m_minValue) % row.m_valueStep !== 0) return;
                     pending[id].push(value);
                     mobx.runInAction(function () { row.m_value = value; refresh(); });
@@ -150,11 +166,23 @@
                         refresh();
                     });
                 }
+                if (rowsById[id] && (event === "OnEnumGraphicsPropertySet" || event === "OnIntGraphicsPropertySet"))
+                    return original.call(engine, event, id, value);
                 return original.apply(engine, arguments);
             };
             mobx.runInAction(refresh);
             original.call(engine, "OnEnumGraphicsPropertySet", protocol.handshakeId, protocol.version);
             return rows;
+        },
+        slider: function (row) {
+            var values = row.cfgDefinition.choices;
+            var index = values.findIndex(function (item) { return item.value === row.m_value; });
+            return Object.assign({}, row, {m_eDataType: 1, m_value: row.m_bIsDisabled ? 0 : Math.max(0, index),
+                m_minValue: 0, m_maxValue: values.length - 1, m_valueStep: 1});
+        },
+        sliderLabels: function (row) {
+            return row.cfgDefinition && row.cfgDefinition.presentation === "slider" ?
+                row.cfgDefinition.choices.map(function (item) { return item.label; }) : [];
         },
         suffix: function (key) {
             var definition = definitions.find(function (option) { return "CFG_" + option.localizationKey === key; });
