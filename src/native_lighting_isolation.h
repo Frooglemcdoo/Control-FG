@@ -82,6 +82,29 @@ inline constexpr ShaderPatch kPatternOff = {
     kPatternOffEdits, 2
 };
 
+// Individual shadow paths reuse the validated all-shadow instruction edits.
+inline constexpr InstructionEdit kScreenShadowsEdits[] = {{13992, kShadowBypass710Expected, kShadowBypass710Replacement, 8}, {28868, kShadowBypass4429Expected, kShadowBypass4429Replacement, 8}};
+inline constexpr unsigned char kScreenShadowsChecksum[] = {55,29,56,184,20,157,103,56,138,55,67,224,232,188,94,255};
+inline constexpr ShaderPatch kScreenShadows = {
+    "ScreenShadows", kDirect.size, kDirect.nativeSha, "d98cafbd21bb31173fca18fbdb5c285ea67ea660a42e92caa20afa438b2f58fe",
+    kDirect.instructionOffset, kDirectInstruction, 15, nullptr, 0, kScreenShadowsChecksum,
+    kScreenShadowsEdits, 2
+};
+inline constexpr InstructionEdit kSpotShadowsEdits[] = {{40224, kShadowBypass7268Expected, kShadowBypass7268Replacement, 9}};
+inline constexpr unsigned char kSpotShadowsChecksum[] = {234,118,87,245,127,212,205,255,76,56,47,209,20,202,182,180};
+inline constexpr ShaderPatch kSpotShadows = {
+    "SpotShadows", kDirect.size, kDirect.nativeSha, "6cdd55f4b98012cd7bfd1418e2e48339e092e11e2b465493bb4103fd0ade4b9d",
+    kDirect.instructionOffset, kDirectInstruction, 15, nullptr, 0, kSpotShadowsChecksum,
+    kSpotShadowsEdits, 1
+};
+inline constexpr InstructionEdit kPointShadowsEdits[] = {{58576, kShadowBypass11856Expected, kShadowBypass11856Replacement, 9}};
+inline constexpr unsigned char kPointShadowsChecksum[] = {144,148,106,187,41,30,131,229,235,44,43,92,143,83,132,26};
+inline constexpr ShaderPatch kPointShadows = {
+    "PointShadows", kDirect.size, kDirect.nativeSha, "ecb18587d898d3150dd9709b5f3716fa177a645e65b89a579d30e62e95000020",
+    kDirect.instructionOffset, kDirectInstruction, 15, nullptr, 0, kPointShadowsChecksum,
+    kPointShadowsEdits, 1
+};
+
 inline bool MakeDisabledContribution(const ShaderPatch& patch, const void* bytes,
                                      size_t size, const char* sha,
                                      std::vector<unsigned char>& result) {

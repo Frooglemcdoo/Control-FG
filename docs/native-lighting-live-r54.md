@@ -1,3 +1,13 @@
+# R58: isolate the shadow source
+
+R57 recorded speckles gone with all shadow visibility bypassed, and speckles remaining with projected light patterns disabled. This narrows the next test to shadow inputs; it does not yet identify a faulty sampling operation.
+
+The panel now shows Native, All Shadows, Screen Shadows, Spot Shadows, and Point Shadows. Shadow buttons **bypass** the named input. Compare each separately from the same stationary view, let history/exposure settle, and record Speckles Remain/Gone after bindings are recorded. F10 returns focus to the game; no restarts between modes. Ctrl+Shift+1 through 5 follow button order. Save Log gives the exact R58 log path.
+
+Screen Shadows replaces the two g_tShadowBuffer reads. Spot Shadows replaces final spotlight visibility. Point Shadows replaces final point-light visibility. Each reuses the exact instruction edits from R57, independently checksummed and SHA-verified. They affect shared direct diffuse/specular factors, preserve baked GI, and are diagnostic bypasses rather than a production fix. Older component modes remain covered by routing tests but are hidden to keep the comparison focused.
+
+Mode state now reserves four bits, with named masks/shifts for observation and selection sequence; stale worker recordings remain rejected. Windows WARP tests exercise each new route via SetPipelineState and Reset; captured-bytecode checks verify only declared edits and checksum bytes change. In-game visual confirmation is still required.
+
 # R57 direct-light input diagnostic
 
 R56's successful non-RT run marked diffuse_off speckles_gone and specular_off

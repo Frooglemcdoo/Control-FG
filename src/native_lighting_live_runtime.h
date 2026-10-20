@@ -15,11 +15,17 @@ inline const GUID kVariantGuid = {0x822329d7,0x3614,0x4f73,{0xa6,0x14,0xd0,0x8c,
 inline const GUID kDiffuseVariantGuid = {0x822329d7,0x3614,0x4f73,{0xa6,0x14,0xd0,0x8c,0x94,0xf2,0x56,0x01}};
 inline const GUID kSpecularVariantGuid = {0x822329d7,0x3614,0x4f73,{0xa6,0x14,0xd0,0x8c,0x94,0xf2,0x56,0x02}};
 inline const GUID kShadowVariantGuid = {0x822329d7,0x3614,0x4f73,{0xa6,0x14,0xd0,0x8c,0x94,0xf2,0x57,0x01}};
+inline const GUID kScreenVariantGuid = {0x822329d7,0x3614,0x4f73,{0xa6,0x14,0xd0,0x8c,0x94,0xf2,0x58,0x01}};
+inline const GUID kSpotVariantGuid = {0x822329d7,0x3614,0x4f73,{0xa6,0x14,0xd0,0x8c,0x94,0xf2,0x58,0x02}};
+inline const GUID kPointVariantGuid = {0x822329d7,0x3614,0x4f73,{0xa6,0x14,0xd0,0x8c,0x94,0xf2,0x58,0x03}};
 inline const GUID kPatternVariantGuid = {0x822329d7,0x3614,0x4f73,{0xa6,0x14,0xd0,0x8c,0x94,0xf2,0x57,0x02}};
 inline const GUID& VariantGuid(Mode mode) noexcept {
     if (mode == Mode::DisableDirectDiffuse) return kDiffuseVariantGuid;
     if (mode == Mode::DisableDirectSpecular) return kSpecularVariantGuid;
     if (mode == Mode::BypassShadows) return kShadowVariantGuid;
+    if (mode == Mode::BypassScreenShadows) return kScreenVariantGuid;
+    if (mode == Mode::BypassSpotShadows) return kSpotVariantGuid;
+    if (mode == Mode::BypassPointShadows) return kPointVariantGuid;
     if (mode == Mode::DisableLightPattern) return kPatternVariantGuid;
     return kVariantGuid;
 }
@@ -132,6 +138,9 @@ inline void ObserveCompute(ID3D12Device* device, const D3D12_COMPUTE_PIPELINE_ST
         {&kDirectDiffuse, &kDiffuseVariantGuid, kDiffuseReadyBit},
         {&kDirectSpecular, &kSpecularVariantGuid, kSpecularReadyBit},
         {&kShadowBypass, &kShadowVariantGuid, kShadowReadyBit},
+        {&kScreenShadows, &kScreenVariantGuid, kScreenReadyBit},
+        {&kSpotShadows, &kSpotVariantGuid, kSpotReadyBit},
+        {&kPointShadows, &kPointVariantGuid, kPointReadyBit},
         {&kPatternOff, &kPatternVariantGuid, kPatternReadyBit}
     };
     for (const auto& spec : variants) {

@@ -150,7 +150,7 @@ inline DWORD WINAPI ThreadProc(LPVOID) noexcept {
     if(!timer){Trace("overlay_failed reason=timer");return 0;}
     HWND panel=nullptr,owner=nullptr;bool held[kModeCount+1]{};
     ULONGLONG nextRefresh=0;
-    Trace("session_start build=R57-light-inputs pid=%lu default=native log=user-diagnostics-folder",GetCurrentProcessId());
+    Trace("session_start build=R58-shadow-paths pid=%lu default=native log=user-diagnostics-folder",GetCurrentProcessId());
     MSG msg{};
     while(GetMessageW(&msg,nullptr,0,0)>0){
         if (!panel || !IsDialogMessageW(panel, &msg)) {
@@ -164,8 +164,8 @@ inline DWORD WINAPI ThreadProc(LPVOID) noexcept {
         if(!panel)continue;
         const bool foreground=GetForegroundWindow()==game || PanelHasForeground(panel);
         const bool modifier=(GetAsyncKeyState(VK_CONTROL)&0x8000)&&(GetAsyncKeyState(VK_SHIFT)&0x8000);
-        const int keys[kModeCount+1]={VK_F10,'1','2','3','4','5','6','7'};
-        for(int i=0;i<int(kModeCount+1);++i){const bool down=(GetAsyncKeyState(keys[i])&0x8000)!=0;
+        static_assert(kModeCount <= 9, "Numeric shortcuts support nine choices");
+        for(int i=0;i<int(kModeCount+1);++i){const bool down=(GetAsyncKeyState(i == 0 ? VK_F10 : '0' + i)&0x8000)!=0;
             if(foreground&&down&&!held[i]&&(i==0||modifier)){
                 if(i==0){if(panelOpen)ClosePanel(panel);else OpenPanel(panel);}else {selectionRejected=!SelectMode(kModeChoices[i-1].mode);savedNotice=0;}
             }held[i]=down;

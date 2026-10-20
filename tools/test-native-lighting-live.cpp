@@ -18,7 +18,7 @@ int main(){
     assert(!Disables(LiveSelection::GetMode(native),kGiBit));
     assert(!Disables(LiveSelection::GetMode(native),kDirectBit));
     assert(LiveSelection::Observed(live.Read())==0);
-    for (auto mode : {Mode::DisableDirectDiffuse, Mode::DisableDirectSpecular, Mode::BypassShadows, Mode::DisableLightPattern}) {
+    for (auto mode : {Mode::DisableDirectDiffuse, Mode::DisableDirectSpecular, Mode::BypassShadows, Mode::DisableLightPattern, Mode::BypassScreenShadows, Mode::BypassSpotShadows, Mode::BypassPointShadows}) {
         const auto old = live.Read(); const auto next = live.Select(mode);
         assert(LiveSelection::GetMode(next) == mode);
         assert(Disables(mode, kDirectBit) && !Disables(mode, kGiBit));

@@ -10,7 +10,7 @@ int main(int argc, char** argv) try {
     std::ifstream file(argv[1], std::ios::binary);
     std::vector<unsigned char> source((std::istreambuf_iterator<char>(file)), {}), output;
     Require(source.size() == kDirect.size);
-    for (const auto* patch : {&kDirectDiffuse, &kDirectSpecular, &kShadowBypass, &kPatternOff}) {
+    for (const auto* patch : {&kDirectDiffuse, &kDirectSpecular, &kShadowBypass, &kPatternOff, &kScreenShadows, &kSpotShadows, &kPointShadows}) {
         Require(MakeDisabledContribution(*patch,source.data(),source.size(),patch->nativeSha,output));
         Require(output.size()==source.size());
         for(size_t i=0;i<source.size();++i) {
