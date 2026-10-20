@@ -12,7 +12,7 @@ glass_exceptions = json.loads((root/'tools/fixtures/r34-baseline-exceptions.json
 menu_exceptions = json.loads((root/'tools/fixtures/r41-baseline-exceptions.json').read_text())
 fixed_exceptions = json.loads((root/'tools/fixtures/r46-baseline-exceptions.json').read_text())
 provider_exceptions = json.loads((root/'tools/fixtures/r49-baseline-exceptions.json').read_text())
-isolation_exceptions = json.loads((root/'tools/fixtures/r53-baseline-exceptions.json').read_text())
+isolation_exceptions = json.loads((root/'tools/fixtures/r54-baseline-exceptions.json').read_text())
 for name, expected in manifest['files'].items():
     if name == 'src/fg_overlay.h':
         assert not (root / name).exists(), 'Legacy settings popup must remain removed'
@@ -21,7 +21,7 @@ for name, expected in manifest['files'].items():
     if name in isolation_exceptions:
         text=data.decode()
         for before,after in reversed(isolation_exceptions[name]):
-            assert text.count(after)==1, (name, 'R53 isolation changed or duplicated')
+            assert text.count(after)==1, (name, 'R54 live isolation changed or duplicated')
             text=text.replace(after,before,1)
         data=text.encode()
     if name in provider_exceptions:

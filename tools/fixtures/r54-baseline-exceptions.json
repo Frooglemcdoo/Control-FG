@@ -1,0 +1,16 @@
+{
+  "src/pt_reflection_loader.h": [
+    [
+      "static HRESULT STDMETHODCALLTYPE PTReflectionHookCreateComputePipelineState(",
+      "#include \"native_lighting_live_runtime.h\"\n\nstatic HRESULT STDMETHODCALLTYPE PTReflectionHookCreateComputePipelineState("
+    ],
+    [
+      "    const HRESULT nativeHr=ptReflectionOriginalCreateComputePipelineState(device,desc,riid,out);",
+      "    const HRESULT nativeHr=ptReflectionOriginalCreateComputePipelineState(device,desc,riid,out);\n    if(SUCCEEDED(nativeHr)&&out&&*out&&desc)\n        native_lighting::ObserveCompute(device,desc,reinterpret_cast<IUnknown*>(*out),ptReflectionOriginalCreateComputePipelineState);"
+    ],
+    [
+      "static bool PTReflectionInstallComputePsoHookOnDevice(ID3D12Device* device) noexcept {\n    if(!device)return false;",
+      "static bool PTReflectionInstallComputePsoHookOnDevice(ID3D12Device* device) noexcept {\n    if(!device)return false;\n    native_lighting::InstallLiveDiagnostic(device);"
+    ]
+  ]
+}

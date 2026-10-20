@@ -1,5 +1,7 @@
 # R53 native lighting isolation
 
+Historical: superseded by [R54 live controls](native-lighting-live-r54.md).
+
 Diagnostic based directly on R49, not a quality fix. R50/R51/R52 renderer
 experiments are excluded. Existing skin, glass and native-menu behavior is
 preserved. HBAO+ remains a separate roadmap item.
