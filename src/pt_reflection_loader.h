@@ -784,6 +784,28 @@ static bool PTReflectionEnsureCapturedCompositePso() noexcept {
     return ready;
 }
 
+#include "native_shadow_pattern.h"
+
+static bool NativeShadowPatternTestEnabled() noexcept {
+    static const bool enabled=[]() noexcept {
+        wchar_t path[MAX_PATH]{};
+        const DWORD length=GetModuleFileNameW(nullptr,path,MAX_PATH);
+        if(!length||length>=MAX_PATH)return false;
+        wchar_t* slash=wcsrchr(path,L'\\');
+        if(!slash)return false;
+        constexpr wchar_t marker[]=L"ControlFG-Fixed-Shadow-Pattern.txt";
+        const size_t prefix=static_cast<size_t>(slash-path)+1u;
+        if(prefix+_countof(marker)>MAX_PATH)return false;
+        memcpy(path+prefix,marker,sizeof(marker));
+        const DWORD attributes=GetFileAttributesW(path);
+        const bool present=attributes!=INVALID_FILE_ATTRIBUTES&&
+            !(attributes&FILE_ATTRIBUTE_DIRECTORY);
+        Log("NATIVE_SHADOW_PATTERN_R52 enabled=%u scope=exact_non_rt_shader restart_required=1",unsigned(present));
+        return present;
+    }();
+    return enabled;
+}
+
 static HRESULT STDMETHODCALLTYPE PTReflectionHookCreateComputePipelineState(
     ID3D12Device* device,const D3D12_COMPUTE_PIPELINE_STATE_DESC* desc,
     REFIID riid,void** out) {
@@ -799,6 +821,38 @@ static HRESULT STDMETHODCALLTYPE PTReflectionHookCreateComputePipelineState(
             strcmp(sha,"4fc0a0e9cd3706bcb86e29444d86fa32616138e1712c53b1b5103b30d7a1ecc9")==0;
     }
 
+    // Diagnostic is independent of RR/PT toggles; unsupported shader variants
+    // pass through. Never mutate the game's bytecode or cached pipeline blob.
+    if(NativeShadowPatternTestEnabled()&&desc&&out&&desc->CS.pShaderBytecode&&
+       desc->CS.BytecodeLength==control_lighting::kDeferredShaderBytes){
+        char nativeSha[65]{};
+        if(PTReflectionSha256(static_cast<const unsigned char*>(desc->CS.pShaderBytecode),
+                             desc->CS.BytecodeLength,nativeSha)&&
+           strcmp(nativeSha,control_lighting::kDeferredShaderSha256)==0){
+            try {
+                std::vector<unsigned char> patched;
+                char patchedSha[65]{};
+                if(control_lighting::MakeFixedPatternShader(desc->CS.pShaderBytecode,
+                    desc->CS.BytecodeLength,nativeSha,patched)&&
+                   PTReflectionSha256(patched.data(),patched.size(),patchedSha)&&
+                   strcmp(patchedSha,control_lighting::kFixedPatternSha256)==0){
+                    auto replacement=*desc;
+                    replacement.CS={patched.data(),patched.size()};
+                    replacement.CachedPSO={nullptr,0};
+                    const HRESULT patchedHr=ptReflectionOriginalCreateComputePipelineState(
+                        device,&replacement,riid,out);
+                    Log("NATIVE_SHADOW_PATTERN_R52 matched=1 applied=%u hr=0x%08lX native_sha=%s patched_sha=%s",
+                        unsigned(SUCCEEDED(patchedHr)&&*out),static_cast<unsigned long>(patchedHr),nativeSha,patchedSha);
+                    if(SUCCEEDED(patchedHr)&&*out)return patchedHr;
+                }else{
+                    Log("NATIVE_SHADOW_PATTERN_R52 matched=1 applied=0 reason=patch_identity_check");
+                }
+            }catch(...){
+                Log("NATIVE_SHADOW_PATTERN_R52 matched=1 applied=0 reason=allocation_or_patch_exception");
+            }
+            // Driver rejection or preparation failure retains native behavior.
+        }
+    }
     const HRESULT nativeHr=ptReflectionOriginalCreateComputePipelineState(device,desc,riid,out);
     if(SUCCEEDED(nativeHr)&&out&&*out)PTGlassRuntime::ObserveCompute(device,desc,*out);
     if(!target||FAILED(nativeHr)||!out||!*out||!desc)return nativeHr;
