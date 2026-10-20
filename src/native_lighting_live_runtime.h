@@ -31,6 +31,41 @@ inline void Trace(const char* format, ...) noexcept {
     Log("NATIVE_LIGHTING_R54 %s", detail);
 }
 
+inline const GUID kIdentityGuid = {0x822329d7,0x3614,0x4f73,{0xa6,0x14,0xd0,0x8c,0x94,0xf2,0x54,0x03}};
+struct PipelineIdentity { unsigned stage = 0; unsigned logged = 0; unsigned long long bytes = 0; char sha[65]{}; };
+inline SRWLOCK identityLock = SRWLOCK_INIT;
+inline std::atomic<unsigned> identityReports{0};
+inline void IdentifyPipeline(IUnknown* object, const D3D12_SHADER_BYTECODE& shader, unsigned stage) noexcept {
+    if (!object || !shader.pShaderBytecode || !shader.BytecodeLength) return;
+    ID3D12PipelineState* pso = nullptr;
+    if (FAILED(object->QueryInterface(IID_PPV_ARGS(&pso)))) return;
+    PipelineIdentity identity{}; UINT size = sizeof(identity);
+    // Library loads can return an already-observed object. Keep its report flag.
+    if (FAILED(pso->GetPrivateData(kIdentityGuid, &size, &identity)) || !identity.stage) {
+        identity = {}; identity.stage = stage; identity.bytes = shader.BytecodeLength;
+        if (PTReflectionSha256(static_cast<const unsigned char*>(shader.pShaderBytecode), shader.BytecodeLength, identity.sha))
+            pso->SetPrivateData(kIdentityGuid, sizeof(identity), &identity);
+    }
+    pso->Release();
+}
+inline void ReportBoundIdentity(ID3D12PipelineState* pso) noexcept {
+    if (!pso) return;
+    PipelineIdentity identity{}; UINT size = sizeof(identity);
+    const HRESULT read = pso->GetPrivateData(kIdentityGuid, &size, &identity);
+    if (SUCCEEDED(read) && identity.logged) return;
+    AcquireSRWLockExclusive(&identityLock);
+    size = sizeof(identity);
+    pso->GetPrivateData(kIdentityGuid, &size, &identity);
+    if (!identity.logged) {
+        identity.logged = 1;
+        pso->SetPrivateData(kIdentityGuid, sizeof(identity), &identity);
+        if (identityReports.fetch_add(1) < 512)
+            Trace("bound_pipeline pso=%p stage=%s bytes=%llu sha=%s", pso,
+                identity.stage == 1 ? "PS" : identity.stage == 2 ? "CS" : "unobserved_creation",
+                identity.bytes, identity.sha);
+    }
+    ReleaseSRWLockExclusive(&identityLock);
+}
 inline bool SelectMode(Mode mode) noexcept {
     const unsigned required = mode == Mode::DisableBakedGi ? kGiBit : mode == Mode::DisableDirect ? kDirectBit : 0;
     if (required && !(readyMask.load() & required)) { Trace("selection_rejected mode=%s reason=variant_not_ready", ModeName(mode)); return false; }
@@ -79,6 +114,7 @@ inline void AttachVariant(IUnknown* native, ID3D12PipelineState* variant, unsign
 using CreateCompute = HRESULT (STDMETHODCALLTYPE*)(ID3D12Device*, const D3D12_COMPUTE_PIPELINE_STATE_DESC*, REFIID, void**);
 inline void ObserveCompute(ID3D12Device* device, const D3D12_COMPUTE_PIPELINE_STATE_DESC* desc, IUnknown* native, CreateCompute original) noexcept {
     computeSeen.fetch_add(1);
+    IdentifyPipeline(native, desc->CS, 2);
     std::vector<unsigned char> bytes;
     if (!Prepare(kDirect, desc->CS, bytes)) return;
     auto replacement = *desc; replacement.CS = {bytes.data(), bytes.size()}; replacement.CachedPSO = {nullptr, 0};
@@ -94,6 +130,7 @@ struct Binding {
     unsigned kind = 0;
     explicit Binding(ID3D12PipelineState* native) noexcept : selected(native) {
         bindingsSeen.fetch_add(1);
+        ReportBoundIdentity(native);
         UINT size = sizeof(kind);
         if (!native || FAILED(native->GetPrivateData(kKindGuid, &size, &kind)) || size != sizeof(kind) || (kind != kGiBit && kind != kDirectBit)) { kind = 0; return; }
         if (Disables(LiveSelection::GetMode(state), kind)) {
@@ -164,18 +201,21 @@ using CreateGraphics = HRESULT (STDMETHODCALLTYPE*)(ID3D12Device*, const D3D12_G
 using CreateList = HRESULT (STDMETHODCALLTYPE*)(ID3D12Device*, UINT, D3D12_COMMAND_LIST_TYPE, ID3D12CommandAllocator*, ID3D12PipelineState*, REFIID, void**);
 inline CreateGraphics originalGraphics = nullptr;
 inline CreateList originalCreateList = nullptr;
-inline HRESULT STDMETHODCALLTYPE GraphicsHook(ID3D12Device* device, const D3D12_GRAPHICS_PIPELINE_STATE_DESC* desc, REFIID iid, void** out) {
-    if (!originalGraphics) return E_UNEXPECTED;
-    const HRESULT hr = originalGraphics(device, desc, iid, out);
-    if (FAILED(hr) || !out || !*out || !desc) return hr;
+inline void ObserveGraphics(ID3D12Device* device, const D3D12_GRAPHICS_PIPELINE_STATE_DESC* desc, IUnknown* native) noexcept {
     graphicsSeen.fetch_add(1);
+    IdentifyPipeline(native, desc->PS, 1);
     std::vector<unsigned char> bytes;
     if (Prepare(kBakedGi, desc->PS, bytes)) {
         auto replacement = *desc; replacement.PS = {bytes.data(), bytes.size()}; replacement.CachedPSO = {nullptr, 0};
         ID3D12PipelineState* variant = nullptr;
         const HRESULT variantHr = originalGraphics(device, &replacement, IID_PPV_ARGS(&variant));
-        AttachVariant(reinterpret_cast<IUnknown*>(*out), variant, kGiBit, variantHr);
+        AttachVariant(native, variant, kGiBit, variantHr);
     }
+}
+inline HRESULT STDMETHODCALLTYPE GraphicsHook(ID3D12Device* device, const D3D12_GRAPHICS_PIPELINE_STATE_DESC* desc, REFIID iid, void** out) {
+    if (!originalGraphics) return E_UNEXPECTED;
+    const HRESULT hr = originalGraphics(device, desc, iid, out);
+    if (SUCCEEDED(hr) && out && *out && desc) ObserveGraphics(device, desc, reinterpret_cast<IUnknown*>(*out));
     return hr; // The game always receives its original native PSO.
 }
 inline HRESULT STDMETHODCALLTYPE CreateListHook(ID3D12Device* device, UINT node, D3D12_COMMAND_LIST_TYPE type,
@@ -190,6 +230,7 @@ inline HRESULT STDMETHODCALLTYPE CreateListHook(ID3D12Device* device, UINT node,
     }
     return hr;
 }
+#include "native_lighting_pipeline_library.h"
 inline void StartOverlay() noexcept;
 inline void InstallLiveDiagnostic(ID3D12Device* device) noexcept {
     if (!device) return;
@@ -205,6 +246,7 @@ inline void InstallLiveDiagnostic(ID3D12Device* device) noexcept {
     }
     ReleaseSRWLockExclusive(&hookLock);
     Trace("device_hooks graphics=%u create_list=%u", unsigned(originalGraphics != nullptr), unsigned(originalCreateList != nullptr));
+    InstallPipelineLibraries(device);
     StartOverlay();
 }
 } // namespace native_lighting

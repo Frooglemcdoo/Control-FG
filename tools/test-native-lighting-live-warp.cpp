@@ -32,9 +32,11 @@ int main() try {
     D3D12_ROOT_SIGNATURE_DESC rootDesc{};rootDesc.NumParameters=1;rootDesc.pParameters=&parameter;
     ComPtr<ID3DBlob> serialized,errors;Check(D3D12SerializeRootSignature(&rootDesc,D3D_ROOT_SIGNATURE_VERSION_1,&serialized,&errors));
     ComPtr<ID3D12RootSignature> root;Check(device->CreateRootSignature(0,serialized->GetBufferPointer(),serialized->GetBufferSize(),IID_PPV_ARGS(&root)));
+    std::vector<unsigned char> lastShader;
     auto makePso=[&](unsigned value){
         const std::string code="RWStructuredBuffer<uint> output : register(u0); [numthreads(1,1,1)] void main(){output[0]="+std::to_string(value)+";}";
         ComPtr<ID3DBlob> shader;Check(D3DCompile(code.data(),code.size(),nullptr,nullptr,nullptr,"main","cs_5_0",0,0,&shader,&errors));
+        lastShader.assign(static_cast<const unsigned char*>(shader->GetBufferPointer()), static_cast<const unsigned char*>(shader->GetBufferPointer()) + shader->GetBufferSize());
         D3D12_COMPUTE_PIPELINE_STATE_DESC desc{};desc.pRootSignature=root.Get();desc.CS={shader->GetBufferPointer(),shader->GetBufferSize()};
         ID3D12PipelineState* pso=nullptr;Check(device->CreateComputePipelineState(&desc,IID_PPV_ARGS(&pso)));return pso;
     };
@@ -68,5 +70,29 @@ int main() try {
         SelectMode(Mode::DisableDirect);render(direct.Get(),0,reset);render(gi.Get(),22,reset);
         SelectMode(Mode::Native);render(direct.Get(),11,reset);render(gi.Get(),22,reset);
     }
+    // Reload a serialized native PSO. Its public creation hook need not run;
+    // the library load observer must still run, then live routing must work.
+    ComPtr<ID3D12Device1> device1; Check(device.As(&device1));
+    ComPtr<ID3D12PipelineLibrary> library;
+    Check(device1->CreatePipelineLibrary(nullptr, 0, IID_PPV_ARGS(&library)));
+    ComPtr<ID3D12PipelineState> cachedSource; cachedSource.Attach(makePso(33));
+    const auto cachedShader = lastShader;
+    Check(library->StorePipeline(L"cached-direct", cachedSource.Get()));
+    std::vector<unsigned char> cache(library->GetSerializedSize());
+    Check(library->Serialize(cache.data(), cache.size()));
+    cachedSource.Reset(); library.Reset();
+    Check(device1->CreatePipelineLibrary(cache.data(), cache.size(), IID_PPV_ARGS(&library)));
+    D3D12_COMPUTE_PIPELINE_STATE_DESC cachedDesc{}; cachedDesc.pRootSignature=root.Get();
+    cachedDesc.CS={cachedShader.data(),cachedShader.size()};
+    ComPtr<ID3D12PipelineState> cached;
+    const auto priorLoads=libraryComputeSeen.load(), priorObservations=computeSeen.load();
+    Check(library->LoadComputePipeline(L"cached-direct", &cachedDesc, IID_PPV_ARGS(&cached)));
+    if(libraryComputeSeen.load()!=priorLoads+1 || computeSeen.load()<=priorObservations)
+        throw std::runtime_error("cached load bypassed diagnostic observer");
+    AttachVariant(cached.Get(),makePso(0),kDirectBit,S_OK);
+    SelectMode(Mode::Native);render(cached.Get(),33,false);
+    SelectMode(Mode::DisableDirect);render(cached.Get(),0,false);
+    SelectMode(Mode::Native);render(cached.Get(),33,true);
+    std::cout<<"PASS: serialized pipeline-library load observed and live native/off/native GPU output verified\n";
     CloseHandle(event);std::cout<<"PASS: WARP live native/GI/direct switching through SetPipelineState and Reset; native restored without restart\n";return 0;
 } catch(const std::exception& error){std::cerr<<error.what()<<'\n';return 1;}

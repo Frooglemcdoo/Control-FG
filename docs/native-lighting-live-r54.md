@@ -81,3 +81,23 @@ integration. Existing glass, menu and provider checks remain enabled.
 
 R54b adds Windows file tests for an unwritable primary destination, fallback,
 readable flushed contents, append preservation, unique sessions and total failure.
+
+## R55: cached pipeline coverage
+
+The supplied R54b log recorded 1,824,226 pipeline bindings but zero tagged lighting
+bindings. Direct was prepared but never bound; GI was never prepared. It does not
+establish that disabling either contribution leaves the image unchanged.
+
+R55 observes LoadGraphicsPipeline and LoadComputePipeline on D3D12 pipeline
+libraries, including shared runtime vtables bootstrapped before first use. These
+paths reuse the ordinary shader identification and alternate-PSO builders. Shader
+hash guards remain exact; no broader shader suppression is enabled. Cache use is
+a hypothesis until the new library counters and shader identities confirm it.
+
+The report includes the first binding of up to 512 PSOs with shader hashes/sizes,
+or an explicit unobserved-creation marker. This distinguishes unsupported shader
+variants from missed creation paths. Pipeline-state-stream creation/LoadPipeline
+is not yet covered. Logs now have the Lighting-R55 prefix in the same user folder.
+The WARP gate reloads a serialized compute pipeline library, checks the observer
+ran and verifies native/off/native GPU outputs for that cached PSO. It uses
+synthetic shaders, not Control's actual captured graphics shader.

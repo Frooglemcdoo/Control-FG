@@ -68,6 +68,7 @@ inline void SaveReport(HWND window) noexcept {
     Trace("save_log seq=%llu mode=%s recorded_mask=%u", LiveSelection::Sequence(state),
         ModeName(LiveSelection::GetMode(state)), LiveSelection::Observed(state));
     Trace("coverage graphics_pso=%llu compute_pso=%llu bindings=%llu same_size_mismatches=%u ready_mask=%u", graphicsSeen.load(), computeSeen.load(), bindingsSeen.load(), candidateMismatches.load(), readyMask.load());
+    Trace("library_coverage graphics_loads=%llu compute_loads=%llu identities=%u", libraryGraphicsSeen.load(), libraryComputeSeen.load(), identityReports.load());
     wchar_t message[1024]{};
     AcquireSRWLockShared(&reportLock);
     const bool saved = reportHealthy.load();
@@ -139,7 +140,7 @@ inline DWORD WINAPI ThreadProc(LPVOID) noexcept {
     if(!timer){Trace("overlay_failed reason=timer");return 0;}
     HWND panel=nullptr,owner=nullptr;bool held[4]{};
     ULONGLONG nextRefresh=0;
-    Trace("session_start build=R54b-report-fix pid=%lu default=native log=user-diagnostics-folder",GetCurrentProcessId());
+    Trace("session_start build=R55-cached-pipelines pid=%lu default=native log=user-diagnostics-folder",GetCurrentProcessId());
     MSG msg{};
     while(GetMessageW(&msg,nullptr,0,0)>0){
         if (!panel || !IsDialogMessageW(panel, &msg)) {

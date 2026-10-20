@@ -276,11 +276,11 @@ jobs:
           node tools/test-native-menu.js --config build/native-menu-config.json
           if errorlevel 1 exit /b 1
 
-      - name: Package live lighting diagnostic R54b
+      - name: Package live lighting diagnostic R55
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-Native-Lighting-Live-R54b'
+          $out='Control-FG-Native-Lighting-Live-R55'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
           New-Item -ItemType Directory -Force -Path "$out/ControlFGStreamline" | Out-Null
@@ -298,7 +298,7 @@ jobs:
           Copy-Item Collect-ControlFG-Compact-Logs.ps1 "$out/Collect-ControlFG-Compact-Logs.ps1"
           Copy-Item docs/native-lighting-live-r54.md "$out/DIAGNOSTIC-NOTES.md"
           @'
-          CONTROL-FG LIVE LIGHTING DIAGNOSTIC R54b - report saving and application status
+          CONTROL-FG LIVE LIGHTING DIAGNOSTIC R55 - cached pipeline observation
           Close Control to install this DLL, then launch once. No restarts between modes.
           Copy package contents beside Control_DX12.exe, preserving ControlFGStreamline.
           Keep existing NVIDIA runtimes. Old R51/R52/R53 marker files are ignored.
@@ -327,10 +327,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-Native-Lighting-Live-R54b
+          name: Control-FG-Native-Lighting-Live-R55
           path: |
-            Control-FG-Native-Lighting-Live-R54b.zip
-            Control-FG-Native-Lighting-Live-R54b.sha256
+            Control-FG-Native-Lighting-Live-R55.zip
+            Control-FG-Native-Lighting-Live-R55.sha256
             build/exports.txt
             build/imports.txt
             build/pt_glass_raygen.dxil
