@@ -29,7 +29,7 @@ inline constexpr RECT kLabelBounds{14, 8, 82, 30};
 inline constexpr RECT kValueBounds{82, 5, 376, 38};
 inline constexpr RECT kDetailBounds{14, 48, 376, 72};
 }
-inline HFONT CreateFont(const FontStyle& style) noexcept {
+inline HFONT CreateFontForStyle(const FontStyle& style) noexcept {
     return CreateFontW(-style.height, 0, 0, 0, style.weight, FALSE, FALSE, FALSE, DEFAULT_CHARSET,
         OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, style.family);
 }

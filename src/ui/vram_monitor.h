@@ -23,9 +23,9 @@ static void PaintFGVramProbe(HWND window) noexcept {
     DeleteObject(border);
     SetBkMode(dc, TRANSPARENT);
 
-    HFONT headingFont = theme::CreateFont(theme::kHeadingFont);
-    HFONT valueFont = theme::CreateFont(theme::kValueFont);
-    HFONT detailFont = theme::CreateFont(theme::kDetailFont);
+    HFONT headingFont = theme::CreateFontForStyle(theme::kHeadingFont);
+    HFONT valueFont = theme::CreateFontForStyle(theme::kValueFont);
+    HFONT detailFont = theme::CreateFontForStyle(theme::kDetailFont);
     HGDIOBJ previousFont = SelectObject(dc, headingFont);
     SetTextColor(dc, theme::kAccent);
     RECT headingBounds = theme::vram::kLabelBounds;
