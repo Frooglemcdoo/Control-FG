@@ -28,7 +28,7 @@ inline void Paint(HWND window) noexcept {
         observed == kAllBits ? L"bindings confirmed" : L"waiting for bindings");
     DrawLabel(dc, detailFont, status, {14,82,kWidth-12,108}, theme::kMutedText);
     DrawLabel(dc, detailFont, L"F10: panel    Ctrl+Shift+1 / 2 / 3: live mode", {14,155,kWidth-12,179}, theme::kMutedText);
-    DrawLabel(dc, detailFont, savedNotice.load() ? L"Saved: ControlFG-Lighting-R54.log" : L"Choose a mode, let it settle, then record what you see.", {14,181,kWidth-12,208}, theme::kText);
+    DrawLabel(dc, detailFont, savedNotice.load() == 2 ? L"Log write failed: check game-folder write access." : savedNotice.load() == 1 ? L"Saved: ControlFG-Lighting-R54.log" : L"Choose a mode, let it settle, then record what you see.", {14,181,kWidth-12,208}, theme::kText);
     EndPaint(window, &ps);
 }
 inline LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPARAM lParam) noexcept {
@@ -62,7 +62,7 @@ inline LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPA
             const unsigned index=LOWORD(wParam)-kButtonFirst;
             if(index<3){SelectMode(static_cast<Mode>(index));savedNotice=0;}
             else if(index==3||index==4)ReportVisual(index==3);
-            else if(index==5){const auto state=selection.Read();Trace("save_log seq=%llu mode=%s recorded_mask=%u",LiveSelection::Sequence(state),ModeName(LiveSelection::GetMode(state)),LiveSelection::Observed(state));savedNotice=1;}
+            else if(index==5){const auto state=selection.Read();Trace("save_log seq=%llu mode=%s recorded_mask=%u",LiveSelection::Sequence(state),ModeName(LiveSelection::GetMode(state)),LiveSelection::Observed(state));savedNotice=reportHealthy.load()?1u:2u;}
             RedrawWindow(window,nullptr,nullptr,RDW_INVALIDATE|RDW_ALLCHILDREN);
             return 0;
         }

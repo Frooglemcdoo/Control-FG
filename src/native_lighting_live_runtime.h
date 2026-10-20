@@ -7,6 +7,7 @@ inline LiveSelection selection;
 inline std::atomic<unsigned> readyMask{0};
 inline SRWLOCK reportLock = SRWLOCK_INIT;
 inline HANDLE reportFile = INVALID_HANDLE_VALUE;
+inline std::atomic<bool> reportHealthy{false};
 inline const GUID kVariantGuid = {0x822329d7,0x3614,0x4f73,{0xa6,0x14,0xd0,0x8c,0x94,0xf2,0x54,0x01}};
 inline const GUID kKindGuid = {0x822329d7,0x3614,0x4f73,{0xa6,0x14,0xd0,0x8c,0x94,0xf2,0x54,0x02}};
 
@@ -29,8 +30,9 @@ inline void Trace(const char* format, ...) noexcept {
     }
     if (reportFile != INVALID_HANDLE_VALUE && length > 0) {
         DWORD written = 0;
-        WriteFile(reportFile, line, DWORD(length < int(sizeof(line)) ? length : sizeof(line)-1), &written, nullptr);
-        FlushFileBuffers(reportFile);
+        const DWORD expected = DWORD(length < int(sizeof(line)) ? length : sizeof(line)-1);
+        const bool writtenOk = WriteFile(reportFile, line, expected, &written, nullptr) && written == expected;
+        reportHealthy.store(writtenOk && FlushFileBuffers(reportFile));
     }
     ReleaseSRWLockExclusive(&reportLock);
     Log("NATIVE_LIGHTING_R54 %s", detail);
