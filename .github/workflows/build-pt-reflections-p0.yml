@@ -213,6 +213,7 @@ jobs:
       - name: Validate live lighting switching on WARP
         shell: cmd
         run: |
+          call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
           cl /nologo /std:c++17 /EHsc /W4 /O2 tools\test-native-lighting-live.cpp /Febuild\test-native-lighting-live.exe
           if errorlevel 1 exit /b 1
           build\test-native-lighting-live.exe
