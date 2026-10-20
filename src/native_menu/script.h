@@ -82,6 +82,40 @@ static constexpr char kNativeMenuScript[] = R"CFGJS(window.__controlFGSchema={"p
             });
             // The persistent resource contains a startup snapshot. A fresh view
             // must read live native settings before treating that snapshot as current.
+            var incomingChoices = null, incomingDefaults = null;
+            engine.on("CFG_CHOICES_BEGIN", function () { incomingChoices = []; });
+            var fgRow = rowsByKey.FrameGeneration;
+            fgRow.cfgDefinition.choices.forEach(function (item) {
+                engine.on("CFG_CHOICE_FG_" + item.value, function () {
+                    if (incomingChoices) incomingChoices.push(item.value);
+                });
+            });
+            engine.on("CFG_CHOICES_END", function () {
+                if (!incomingChoices) return;
+                cfg.fgChoices = incomingChoices;
+                mobx.runInAction(function () {
+                    fgRow.m_vecPossibleValues = fgRow.cfgDefinition.choices.filter(function (item) {
+                        return incomingChoices.indexOf(item.value) !== -1;
+                    }).map(function (item) { return choice(fgRow.m_strNameLocID, item.value, item.label); });
+                });
+                incomingChoices = null;
+            });
+            engine.on("CFG_DEFAULT_BEGIN", function () { incomingDefaults = definitions.map(function () { return 0; }); });
+            definitions.forEach(function (_, slot) {
+                for (var bit = 0; bit < protocol.stateBits; ++bit) (function (b) {
+                    engine.on("CFG_DEFAULT_" + slot + "_" + b, function () {
+                        if (incomingDefaults) incomingDefaults[slot] |= (1 << b);
+                    });
+                }(bit));
+            });
+            engine.on("CFG_DEFAULT_END", function () {
+                if (!incomingDefaults) return;
+                cfg.defaults = incomingDefaults;
+                mobx.runInAction(function () {
+                    rows.forEach(function (row) { row.m_defaultValue = cfg.defaults[row.cfgSlot]; });
+                });
+                incomingDefaults = null;
+            });
             var incoming = null;
             engine.on("CFG_STATE_BEGIN", function () { incoming = definitions.map(function () { return 0; }); });
             definitions.forEach(function (_, index) {
@@ -107,7 +141,7 @@ static constexpr char kNativeMenuScript[] = R"CFGJS(window.__controlFGSchema={"p
                 if ((event === "OnEnumGraphicsPropertySet" || event === "OnIntGraphicsPropertySet") && id >= protocol.firstId && id < protocol.endId) {
                     var row = rowsById[id];
                     if (!row || row.m_bIsDisabled || !Number.isInteger(value)) return;
-                    if (row.m_eDataType === 3 ? !row.m_vecPossibleValues.some(function (v) { return v.m_value === value; }) : value < row.m_minValue || value > row.m_maxValue) return;
+                    if (row.m_eDataType === 3 ? !row.m_vecPossibleValues.some(function (v) { return v.m_value === value; }) : value < row.m_minValue || value > row.m_maxValue || (value - row.m_minValue) % row.m_valueStep !== 0) return;
                     pending[id].push(value);
                     mobx.runInAction(function () { row.m_value = value; refresh(); });
                 } else if (event === "OnGraphicsReset") {

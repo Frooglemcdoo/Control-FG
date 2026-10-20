@@ -222,6 +222,8 @@ jobs:
         shell: cmd
         run: |
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
+          python tools/test-settings-schema.py
+          if errorlevel 1 exit /b 1
           python tools/generate-settings-schema.py --check
           if errorlevel 1 exit /b 1
           python tools/embed-native-menu.py
@@ -242,11 +244,11 @@ jobs:
           node tools/test-native-menu.js --config build/native-menu-config.json
           if errorlevel 1 exit /b 1
 
-      - name: Package native graphics menu R43
+      - name: Package native graphics menu R44
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-Native-Menu-R43'
+          $out='Control-FG-Native-Menu-R44'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
           Copy-Item build/pt_glass_raygen.dxil "$out/pt_glass_raygen.dxil"
@@ -261,7 +263,7 @@ jobs:
           Copy-Item Collect-ControlFG-Compact-Logs.cmd "$out/Collect-ControlFG-Compact-Logs.cmd"
           Copy-Item Collect-ControlFG-Compact-Logs.ps1 "$out/Collect-ControlFG-Compact-Logs.ps1"
           @'
-          CONTROL-FG NATIVE GRAPHICS MENU R43
+          CONTROL-FG NATIVE GRAPHICS MENU R44
           Branch: experiment/native-graphics-menu-r41
 
           Removes the OPAQUE button, setting and runtime enhancement hooks.
@@ -279,7 +281,9 @@ jobs:
           Native menu only: the F10 popup and its input handling are removed.
           Unsupported game/UI builds keep saved settings and log the mismatch.
           Dropdown headers no longer draw over open lists. Descriptions expanded.
-          R43 centralizes settings metadata, validation, snapshots and saving.
+          R44 preserves saved FG Off on RTX 40 and validates dependencies natively.
+          FG choices and reset defaults refresh with live readback.
+          Catalog validation rejects invalid dependencies, slider steps and duplicate keys.
           Shared theme tokens define the optional monitor fonts, colors and layout.
           The optional VRAM monitor no longer uses global topmost placement.
           This test build targets the supplied March 2025 game DLLs/UI bundle.
@@ -297,10 +301,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-Native-Menu-R43
+          name: Control-FG-Native-Menu-R44
           path: |
-            Control-FG-Native-Menu-R43.zip
-            Control-FG-Native-Menu-R43.sha256
+            Control-FG-Native-Menu-R44.zip
+            Control-FG-Native-Menu-R44.sha256
             build/exports.txt
             build/imports.txt
             build/pt_glass_raygen.dxil

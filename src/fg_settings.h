@@ -134,7 +134,7 @@ static void FGSettingsLoadSettings() noexcept {
     }
 
     const unsigned int rawSelection = FGSettingsReadStored(control_settings::Key::FrameGeneration);
-    const unsigned int selection = IsFGRtx40Series() ? 2u : NormalizeFGMultiplier(rawSelection);
+    const unsigned int selection = control_settings::RestoreFG(rawSelection);
     const unsigned int rawTarget = FGSettingsReadStored(control_settings::Key::DynamicTargetFps);
     const unsigned int manualTarget = ClampFGDynamicManualTargetFps(rawTarget);
     control_rr_clamp::Select(control_rr_clamp::Normalize(FGSettingsReadStored(control_settings::Key::ReflectionDetail)));
@@ -184,7 +184,7 @@ static bool FGSettingsSaveSettingsNow() noexcept {
     WritePrivateProfileStringW(L"AntiAliasing", nullptr, nullptr, fgSettingsPath.c_str());
     WritePrivateProfileStringW(L"RayReconstruction", L"SkinResponsivity", nullptr, fgSettingsPath.c_str());
     WritePrivateProfileStringW(L"RayReconstruction", L"SkinPreserveNative", nullptr, fgSettingsPath.c_str());
-    if (ok) WritePrivateProfileStringW(nullptr, nullptr, nullptr, fgSettingsPath.c_str());
+    if (ok) ok = WritePrivateProfileStringW(nullptr, nullptr, nullptr, fgSettingsPath.c_str()) != FALSE;
 
     Log("FG_SETTINGS_SAVE success=%u path=%ls selection=%s selected_code=%u target_policy=%s manual_target_fps=%u rr_enabled=%u rr_preset=%s rr_preset_value=%u texture_streaming_ms=%u vram_monitor=%u schema=10 ui=fg_full_rr_toggle_model_E_F",
         unsigned(ok), fgSettingsPath.c_str(), GetFGSelectionName(GetFGUserMultiplier()), GetFGUserMultiplier(),
@@ -299,7 +299,8 @@ static DWORD WINAPI FGSettingsThreadProc(LPVOID) noexcept {
         HWND game = FindFGGameWindowCached();
         if (game) FGSettingsRefreshDisplayTarget(game);
         if (IsFGRtx40Series() && !IsFGSelectionAllowedByGpuPolicy(GetFGUserMultiplier())) {
-            SetFGUserMultiplier(2u);
+            std::lock_guard<std::recursive_mutex> lock(fgSettingsMutex);
+            SetFGUserMultiplier(control_settings::RestoreFG(GetFGUserMultiplier()));
             FGSettingsMarkSettingsDirty();
         }
         const bool visible = game && FGSettingsGameIsForeground(game) && IsFGVramMonitorEnabled();

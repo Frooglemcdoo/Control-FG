@@ -13,6 +13,7 @@ function exercise(rtx40) {
         fgChoices:rtx40?[0,2]:[0,1,2,3,4,5,6]};
     if(rtx40) config.values[0]=config.defaults[0]=2;
     const liveValues=config.values.slice();
+    config.fgChoices=[0]; // Startup resource can predate GPU capability discovery.
     config.values[0]=0; // Reopened view still receives the cached startup snapshot.
     const context={window:{__controlFGConfig:config,__controlFGSchema:schema},Number};
     vm.createContext(context);vm.runInContext(script,context);
@@ -20,6 +21,12 @@ function exercise(rtx40) {
     const engine={on(name,fn){handlers[name]=fn;},trigger(...args){
         events.push(args);
         if(args[1]===10999) {
+            handlers.CFG_CHOICES_BEGIN();
+            (rtx40?[0,2]:[0,1,2,3,4,5,6]).forEach(v=>handlers['CFG_CHOICE_FG_'+v]());
+            handlers.CFG_CHOICES_END();
+            handlers.CFG_DEFAULT_BEGIN();
+            config.defaults.forEach((v,i)=>{for(let b=0;b<10;++b)if(v&(1<<b))handlers['CFG_DEFAULT_'+i+'_'+b]();});
+            handlers.CFG_DEFAULT_END();
             handlers.CFG_STATE_BEGIN();
             liveValues.forEach((v,i)=>{for(let b=0;b<10;++b)if(v&(1<<b))handlers['CFG_STATE_'+i+'_'+b]();});
             handlers.CFG_STATE_END();
@@ -35,6 +42,7 @@ function exercise(rtx40) {
         name.includes('OptionToDescriptionModeMap')?maps:engine;
     const menu=context.window.__controlFG, rows=menu.rows(requireModule);
     assert.equal(rows.length,rtx40?11:10);
+    assert.equal(rows[0].m_vecPossibleValues.length,rtx40?2:7);
     assert.equal(rows[0].m_value,liveValues[0]); // Live FG survives view recreation.
     assert.equal(rows[0].cfgHeader,'CFG_FG_HEADER');
     assert.equal(menu.translate('CFG_GLASS'),'Enhanced Glass Reflections');

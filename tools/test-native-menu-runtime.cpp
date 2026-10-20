@@ -26,7 +26,8 @@ static std::atomic<unsigned> slRtx40MfgRequested{0};
 static unsigned mode=4,target=0,texture=0,saveCount=0,dirtyCount=0,nativeCalls=0;
 static bool vram=true,glass=true,rtx40=false,textureApply=true;
 static void Log(const char*,...){}
-static unsigned GetFGMaxSupportedMultiplier(){return 6;}
+static unsigned maxMultiplier=6;
+static unsigned GetFGMaxSupportedMultiplier(){return maxMultiplier;}
 static bool IsFGSelectionAllowedByGpuPolicy(unsigned v){return !rtx40||v==0||v==2;}
 static bool IsFGDynamicCapabilityKnown(){return true;}
 static bool IsFGDynamicMFGSupported(){return !rtx40;}
@@ -90,7 +91,7 @@ int main(int argc,char** argv){
     memcpy(model+0xd0,&viewPointer,sizeof(viewPointer));
     mode=6;target=1000;
     EnumHook(model,10999,41);
-    assert(emitted.front()=="CFG_STATE_BEGIN"&&emitted.back()=="CFG_STATE_END");
+    assert(emitted.front()=="CFG_CHOICES_BEGIN"&&emitted.back()=="CFG_STATE_END");
     unsigned decoded[11]{};
     for(const auto& event:emitted){unsigned i,b;if(std::sscanf(event.c_str(),"CFG_STATE_%u_%u",&i,&b)==2){assert(i<11&&b<10);decoded[i]|=1u<<b;}}
     assert(decoded[0]==6&&decoded[1]==1&&decoded[2]==1000);
@@ -102,13 +103,20 @@ int main(int argc,char** argv){
     IntHook(nullptr,10005,76);assert(control_rr_clamp::value==75);
     EnumHook(nullptr,10998,1);assert(nativeCalls==0);
     EnumHook(nullptr,14,3);assert(nativeCalls==1);
+    EnumHook(nullptr,10001,1);assert(target==0); // Disabled dependent setting is rejected natively.
+    EnumHook(nullptr,10000,1);
     EnumHook(nullptr,10001,1);assert(target==144);
     IntHook(nullptr,10002,240);assert(target==240);
     EnumHook(nullptr,10001,0);assert(target==0);
     EnumHook(nullptr,10001,1);assert(target==240);
     textureApply=false;EnumHook(nullptr,10008,6);assert(texture==0);
     textureApply=true;EnumHook(nullptr,10008,6);assert(texture==6);
-    rtx40=true;EnumHook(nullptr,10000,6);assert(mode==4);
+    rtx40=true;EnumHook(nullptr,10000,6);assert(mode==1);
+    assert(control_settings::RestoreFG(0)==0);
+    assert(control_settings::RestoreFG(6)==2);
+    maxMultiplier=1;
+    assert(control_settings::Default(control_settings::Key::FrameGeneration)==0);
+    maxMultiplier=6;
     ResetHook(nullptr);assert(mode==2&&target==0&&glass&&texture==0&&!control_rr::rr);
     assert(control_rr::gi==4&&control_rr_clamp::value==60&&saveCount==1&&nativeCalls==2);
     SaveHook(nullptr);assert(saveCount==2&&nativeCalls==3);

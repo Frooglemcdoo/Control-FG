@@ -60,6 +60,26 @@ static void Notify(void* model,int id,bool success) {
 // every menu value (including the 1000 FPS limit) without payload ABI guesses.
 static void Sync(void* model) {
     std::lock_guard<std::recursive_mutex> lock(fgSettingsMutex);
+    // Capabilities/defaults can change after the resource's startup snapshot.
+    Emit(model, "CFG_CHOICES_BEGIN");
+    for (unsigned choice : control_settings::Definition(control_settings::Key::FrameGeneration).choices) {
+        if (!control_settings::AllowedFG(choice)) continue;
+        char event[48]{};
+        std::snprintf(event, sizeof(event), "CFG_CHOICE_FG_%u", choice);
+        Emit(model, event);
+    }
+    Emit(model, "CFG_CHOICES_END");
+    const auto defaults = control_settings::Snapshot(true);
+    Emit(model, "CFG_DEFAULT_BEGIN");
+    for (unsigned i = 0; i < defaults.size(); ++i) {
+        for (unsigned bit = 0; bit < control_settings::kStateBits; ++bit) {
+            if (!(defaults[i] & (1u << bit))) continue;
+            char event[48]{};
+            std::snprintf(event, sizeof(event), "CFG_DEFAULT_%u_%u", i, bit);
+            Emit(model, event);
+        }
+    }
+    Emit(model, "CFG_DEFAULT_END");
     const auto values = control_settings::Snapshot();
     Emit(model,"CFG_STATE_BEGIN");
     for(unsigned i=0;i<values.size();++i)for(unsigned bit=0;bit<control_settings::kStateBits;++bit)if(values[i]&(1u<<bit)) {
@@ -70,12 +90,15 @@ static void Sync(void* model) {
     Emit(model,"CFG_STATE_END");
 }
 static void Dispatch(void* model, int id, int value, PropertyFn original) {
-    if(id==control_settings::kHandshakeId) { Log("NATIVE_MENU_HANDSHAKE version=%d",value); Sync(model); return; }
+    if(id==control_settings::kHandshakeId) { Log("NATIVE_MENU_HANDSHAKE version=%d",value);
+        if (value == control_settings::kVersion && fgNativeMenuReady.load()) Sync(model);
+        return; }
     if(id>=control_settings::kFirstId&&id<control_settings::kEndId) {
         std::lock_guard<std::recursive_mutex> lock(fgSettingsMutex);
         const bool ok = fgNativeMenuReady.load() && Apply(id,value);
         Log("NATIVE_MENU_SETTING id=%d value=%d applied=%u",id,value,unsigned(ok));
         Notify(model,id,ok);
+        if (ok && id == control_settings::Definition(control_settings::Key::ExperimentalMultiFrameGeneration).id) Sync(model);
         return; // Reserved IDs must never reach native renderer settings.
     }
     original(model,id,value);
@@ -95,6 +118,7 @@ static void ResetHook(void* model) {
         FGSettingsFlushSettingsIfDue(true);
     }
     originalReset(model);
+    if (fgNativeMenuReady.load()) Sync(model); // Show actual defaults/rejected resets, not an old UI guess.
 }
 static void SaveHook(void* model) { originalSave(model); FGSettingsFlushSettingsIfDue(true); }
 

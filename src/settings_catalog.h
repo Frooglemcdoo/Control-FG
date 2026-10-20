@@ -27,7 +27,8 @@ inline bool Visible(const Option& option) {
     return option.key != Key::ExperimentalMultiFrameGeneration || IsFGRtx40Series();
 }
 inline unsigned Default(const Option& option) {
-    if (option.key == Key::FrameGeneration && !AllowedFG(option.defaultValue)) return 2;
+    if (option.key == Key::FrameGeneration && !AllowedFG(option.defaultValue))
+        return AllowedFG(2) ? 2 : 0;
     return option.defaultValue;
 }
 inline unsigned Default(Key key) { return Default(Definition(key)); }
@@ -75,8 +76,19 @@ inline std::array<unsigned, kOptionCount> Snapshot(bool defaults = false) {
         values[i] = defaults ? Default(kOptions[i]) : Read(kOptions[i].key);
     return values;
 }
+inline bool Enabled(const Option& option) {
+    if (!Visible(option)) return false;
+    for (const auto& dependency : option.dependencies)
+        if (Read(dependency.key) != dependency.value) return false;
+    return true;
+}
+inline unsigned RestoreFG(unsigned stored) {
+    // Preserve Off and supported saved selections; only coerce unsupported modes.
+    return AllowedFG(stored) ? stored : Default(Key::FrameGeneration);
+}
 inline bool Write(const Option& option, int value, WriteReason reason = WriteReason::UserChange) {
     if (!Valid(option, value)) return false;
+    if (reason == WriteReason::UserChange && !Enabled(option)) return false;
     const unsigned requested = static_cast<unsigned>(value);
     switch (option.key) {
     case Key::FrameGeneration: SetFGUserMultiplier(requested); break;

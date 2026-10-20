@@ -16,6 +16,7 @@ enum class Key {
     VideoMemoryMonitor,
     ExperimentalMultiFrameGeneration,
 };
+struct Dependency { Key key; unsigned value; };
 struct Option {
     Key key;
     int id;
@@ -23,6 +24,7 @@ struct Option {
     std::initializer_list<unsigned> choices;
     const wchar_t* section;
     const wchar_t* storageKey;
+    std::initializer_list<Dependency> dependencies;
 };
 inline constexpr int kVersion = 41;
 inline constexpr int kFirstId = 10000;
@@ -30,17 +32,17 @@ inline constexpr int kEndId = 11000;
 inline constexpr int kHandshakeId = 10999;
 inline constexpr int kStateBits = 10;
 inline const Option kOptions[] = {
-    {Key::FrameGeneration, 10000, 4, 0, 0, 1, {0, 1, 2, 3, 4, 5, 6}, L"FrameGeneration", L"Mode"},
-    {Key::DynamicTargetMode, 10001, 0, 0, 0, 1, {0, 1}, nullptr, nullptr},
-    {Key::DynamicTargetFps, 10002, 144, 30, 1000, 1, {}, L"FrameGeneration", L"DynamicTargetFPS"},
-    {Key::RayReconstruction, 10003, 0, 0, 0, 1, {0, 1}, L"RayReconstruction", L"Enabled"},
-    {Key::RayReconstructionModel, 10004, 6, 0, 0, 1, {5, 6}, L"RayReconstruction", L"Preset"},
-    {Key::ReflectionDetail, 10005, 60, 25, 75, 1, {}, L"RayReconstruction", L"ReflectionClamp"},
-    {Key::GlobalIlluminationSamples, 10006, 4, 0, 0, 1, {0, 2, 4, 6, 8}, L"RayReconstruction", L"GISamples"},
-    {Key::GlassReflections, 10007, 1, 0, 0, 1, {0, 1}, L"GlassReflections", L"Enabled"},
-    {Key::TextureStreamingBudget, 10008, 0, 0, 0, 1, {0, 4, 6, 8}, L"Experimental", L"TextureStreamingBudgetMs"},
-    {Key::VideoMemoryMonitor, 10009, 1, 0, 0, 1, {0, 1}, L"Overlay", L"VramMonitorEnabled"},
-    {Key::ExperimentalMultiFrameGeneration, 10010, 0, 0, 0, 1, {0, 1}, L"Experimental", L"RTX40MultiFG"},
+    {Key::FrameGeneration, 10000, 4, 0, 0, 1, {0, 1, 2, 3, 4, 5, 6}, L"FrameGeneration", L"Mode", {}},
+    {Key::DynamicTargetMode, 10001, 0, 0, 0, 1, {0, 1}, nullptr, nullptr, {{Key::FrameGeneration, 1}}},
+    {Key::DynamicTargetFps, 10002, 144, 30, 1000, 1, {}, L"FrameGeneration", L"DynamicTargetFPS", {{Key::FrameGeneration, 1}, {Key::DynamicTargetMode, 1}}},
+    {Key::RayReconstruction, 10003, 0, 0, 0, 1, {0, 1}, L"RayReconstruction", L"Enabled", {}},
+    {Key::RayReconstructionModel, 10004, 6, 0, 0, 1, {5, 6}, L"RayReconstruction", L"Preset", {}},
+    {Key::ReflectionDetail, 10005, 60, 25, 75, 1, {}, L"RayReconstruction", L"ReflectionClamp", {{Key::RayReconstruction, 1}, {Key::RayReconstructionModel, 6}}},
+    {Key::GlobalIlluminationSamples, 10006, 4, 0, 0, 1, {0, 2, 4, 6, 8}, L"RayReconstruction", L"GISamples", {}},
+    {Key::GlassReflections, 10007, 1, 0, 0, 1, {0, 1}, L"GlassReflections", L"Enabled", {}},
+    {Key::TextureStreamingBudget, 10008, 0, 0, 0, 1, {0, 4, 6, 8}, L"Experimental", L"TextureStreamingBudgetMs", {}},
+    {Key::VideoMemoryMonitor, 10009, 1, 0, 0, 1, {0, 1}, L"Overlay", L"VramMonitorEnabled", {}},
+    {Key::ExperimentalMultiFrameGeneration, 10010, 0, 0, 0, 1, {0, 1}, L"Experimental", L"RTX40MultiFG", {}},
 };
 inline constexpr std::size_t kOptionCount = sizeof(kOptions) / sizeof(kOptions[0]);
 }

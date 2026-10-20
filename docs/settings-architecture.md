@@ -75,3 +75,24 @@ Automatic/Manual target semantics, live readback and native event forwarding.
 A cross-language test compares emitted C++ defaults/choices with the JSON schema.
 The exact supplied game bundle is tested locally without committing game assets.
 Windows CI compiles the DLL and runs the existing renderer/guide/glass gates.
+
+## R44 review corrections and remaining boundaries
+
+Review found and corrected saved FG Off being forced to 2x on RTX 40; an
+unsupported 2x reset fallback; UI-only dependency enforcement; stale capability
+choices/reset defaults after resource load; missing slider-step validation; and
+a final INI flush failure being reported as successful. Dependency requirements
+now generate into C++ and are enforced for user writes. Reset intentionally
+bypasses dependency enablement while retaining range and GPU-policy validation.
+Live readback refreshes FG choices and all reset defaults before sending values.
+
+Catalog validation now rejects dependency cycles, nonexistent dependency values,
+invalid step alignment, duplicate localization keys, case-insensitive duplicate
+INI ownership, unknown policies and unsupported bit widths. CI exercises rejected
+catalog edits as well as native callback and UI behavior.
+
+Remaining boundaries: this integration supports the verified game DLL/UI build
+only. Real controller navigation, overlay coexistence, GPU capability transitions
+and disk-write failures still require Windows/in-game validation. Startup renderer
+application is deliberately explicit; a new persistent setting still needs its
+startup adapter. This review does not certify the older rendering subsystem.
