@@ -8,8 +8,8 @@ if (process.argv[2] === '--config') {
     assert.deepEqual(native.fgChoices, schema.options.find(option => option.key === 'FrameGeneration').choices.map(choice => choice.value));
 }
 function exercise(rtx40) {
-    const config = {presetE:5,presetF:6,rtx40,
-        values:[4,0,144,0,6,60,4,1,0,1,0],defaults:[4,0,144,0,6,60,4,1,0,1,0],
+    const config = {rtx40,
+        values:schema.options.map(o=>o.default),defaults:schema.options.map(o=>o.default),
         fgChoices:rtx40?[0,2]:[0,1,2,3,4,5,6]};
     if(rtx40) config.values[0]=config.defaults[0]=2;
     const liveValues=config.values.slice();
@@ -45,10 +45,12 @@ function exercise(rtx40) {
         {m_strNameLocID:'MENU_OPTIONS_RT_SPOT_CONTACT_SHADOW_QUALITY',m_value:false}
     ]};
     const menu=context.window.__controlFG, rows=menu.rows(requireModule,nativeModel);
-    assert.equal(rows.length,rtx40?11:10);
-    assert.equal(rows[0].m_vecPossibleValues.length,rtx40?2:7);
-    assert.equal(rows[0].m_value,liveValues[0]); // Live FG survives view recreation.
-    assert.equal(rows[0].cfgHeader,'CFG_FG_HEADER');
+    const byId=Object.fromEntries(rows.map(row=>[row.m_iPropertyID,row]));
+    assert.equal(rows.length,rtx40?9:8);
+    assert(!byId[10004] && !byId[10005]);
+    assert.equal(byId[10000].m_vecPossibleValues.length,rtx40?2:7);
+    assert.equal(byId[10000].m_value,liveValues[0]); // Live FG survives view recreation.
+    assert.equal(byId[10000].cfgHeader,'');
     assert.equal(menu.translate('CFG_GLASS'),'Enhanced Glass Reflections');
     assert(!rows.some(r=>r.m_strNameLocID.includes('OPAQUE')));
     assert.equal(menu.rows(requireModule,nativeModel),rows);
@@ -61,45 +63,59 @@ function exercise(rtx40) {
     });
     engine.trigger('OnEnumGraphicsPropertySet',10000,99);
     assert.equal(events.length,1);
-    engine.trigger('OnEnumGraphicsPropertySet',10003,1);
-    assert.equal(rows[3].m_value,1);assert.equal(rows[5].m_bIsDisabled,false);
+    engine.trigger('OnBoolGraphicsPropertySet',10003,true);
+    assert.deepEqual(events.at(-1),['OnEnumGraphicsPropertySet',10003,1]);
+    assert.equal(byId[10003].m_eDataType,0);
+    assert.equal(byId[10003].m_value,1);
     engine.trigger('OnIntGraphicsPropertySet',10005,75);
-    assert.equal(rows[5].m_value,75);
+    assert(!byId[10005]);
     engine.reject=true;
     engine.trigger('OnIntGraphicsPropertySet',10008,2);
     assert.deepEqual(events.at(-1),['OnIntGraphicsPropertySet',10008,6]);
-    assert.equal(rows[8].m_value,0); // Rejected native writes roll back the displayed value.
+    assert.equal(byId[10008].m_value,0); // Rejected native writes roll back the displayed value.
     engine.reject=false;
-    assert.equal(rows[6].m_bIsDisabled,false); // Contact Shadows off does not disable GI.
+    assert.equal(byId[10006].m_bIsDisabled,false); // Contact Shadows off does not disable GI.
     engine.trigger('OnIntGraphicsPropertySet',10006,3);
-    assert.equal(rows[6].m_value,6);
-    assert.equal(menu.slider(rows[6]).m_value,3);
-    assert.deepEqual(Array.from(menu.sliderLabels(rows[6])),['Native','2','4','6','8']);
+    assert.equal(byId[10006].m_value,6);
+    assert.equal(menu.slider(byId[10006]).m_value,3);
+    assert.deepEqual(Array.from(menu.sliderLabels(byId[10006])),['Native','2','4','6','8']);
     nativeModel.m_vecBoolProperties[0].m_bIsDisabled=true;
     menu.rows(requireModule,nativeModel);
-    assert.equal(rows[6].m_bIsDisabled,true); // Global RT capability/settings can disable the native control.
+    assert.equal(byId[10006].m_bIsDisabled,true); // Global RT capability/settings can disable the native control.
     nativeModel.m_vecBoolProperties[0].m_bIsDisabled=false;
     nativeModel.m_vecBoolProperties[0].m_value=false;
     menu.rows(requireModule,nativeModel);
-    assert.equal(rows[6].m_bIsDisabled,true);
-    assert.equal(menu.slider(rows[6]).m_value,0);
-    assert.equal(rows[6].m_value,6); // Keep the requested count while inactive.
+    assert.equal(byId[10006].m_bIsDisabled,true);
+    assert.equal(menu.slider(byId[10006]).m_value,0);
+    assert.equal(byId[10006].m_value,6); // Keep the requested count while inactive.
     nativeModel.m_vecBoolProperties[0].m_value=true;
     menu.rows(requireModule,nativeModel);
-    assert.equal(menu.slider(rows[6]).m_value,3);
+    assert.equal(menu.slider(byId[10006]).m_value,3);
     engine.trigger('OnIntGraphicsPropertySet',10005,76);
-    assert.equal(rows[5].m_value,75);
+    assert(!byId[10005]);
     if(!rtx40){
         engine.trigger('OnEnumGraphicsPropertySet',10000,1);
         engine.trigger('OnEnumGraphicsPropertySet',10001,1);
         engine.trigger('OnIntGraphicsPropertySet',10002,240);
-        assert.equal(rows[2].m_value,240);
+        assert.equal(byId[10002].m_value,240);
     }
     engine.trigger('OnGraphicsReset');
-    assert.equal(rows[3].m_value,0);assert.equal(rows[5].m_value,60);
-    assert.equal(rows[7].m_value,1);assert.equal(rows[1].m_value,0);
+    assert.equal(byId[10003].m_value,0);
+    assert.equal(byId[10007].m_value,1);assert.equal(byId[10001].m_value,0);
     engine.trigger('OnEnumGraphicsPropertySet',14,3);
     assert.deepEqual(events.at(-1),['OnEnumGraphicsPropertySet',14,3]);
+    engine.trigger('OnBoolGraphicsPropertySet',14,true);
+    assert.deepEqual(events.at(-1),['OnBoolGraphicsPropertySet',14,true]); // Native checkboxes pass through unchanged.
+    const names=['MENU_OPTIONS_WINDOW_MODE','VSYNC','MENU_OPTIONS_HDR','MENU_OPTIONS_FILM_GRAIN',
+        'MENU_OPTIONS_QUALITY_PRESET','QUALITY_LAST','MENU_OPTIONS_RT_QUALITY_PRESET','RT_LAST'];
+    const native=names.map((name,i)=>({m_iPropertyID:i,m_strNameLocID:name}));
+    const ordered=menu.order(native.concat(rows));
+    const position=name=>ordered.findIndex(row=>row.m_strNameLocID===name);
+    assert(position('CFG_FG')>position('VSYNC') && position('CFG_FG')<position('MENU_OPTIONS_HDR'));
+    assert(position('CFG_TEXTURE')>position('QUALITY_LAST') && position('CFG_TEXTURE')<position('MENU_OPTIONS_RT_QUALITY_PRESET'));
+    ['CFG_RR','CFG_GI','CFG_GLASS'].forEach(name=>assert(position(name)>position('RT_LAST')));
+    assert.equal(new Set(ordered).size,ordered.length);
+    assert.deepEqual(ordered.filter(row=>!row.cfgDefinition),native);
     engine.trigger('OnSaveOptions');assert.equal(events.at(-1)[0],'OnSaveOptions');
     return {context, requireModule, rows};
 }
@@ -111,7 +127,7 @@ if(process.argv[2] && process.argv[2] !== '--config') {
     const modules=context.window.webpackJsonp[0][1];
     class Component {constructor(props){this.props=props;}}
     const react={Component,Fragment:'Fragment',createElement:(type,props,...children)=>({type,props,children})};
-    const types={DataType:{BOOLEAN:0,INTEGER:1,FLOAT:2,ENUM:3,STRING:4,DISPLAY_MODE:5,KEY_BIND:6},OptionsEventType:{Enum:'Enum',Int:'Int',Float:'Float',DisplayMode:'DisplayMode'}};
+    const types={DataType:{BOOLEAN:0,INTEGER:1,FLOAT:2,ENUM:3,STRING:4,DISPLAY_MODE:5,KEY_BIND:6},OptionsEventType:{Bool:'Bool',Enum:'Enum',Int:'Int',Float:'Float',DisplayMode:'DisplayMode'}};
     const exports={};
     function req(name) {
         if(name.includes('react/index.js'))return react;
@@ -126,18 +142,17 @@ if(process.argv[2] && process.argv[2] !== '--config') {
     modules['./northlight/LinkComponents/OptionsTab/OptionsTab.tsx']({},exports,req);
     const model={};['Bool','DisplayMode','Enum','Float','Int','Str','KeyBind'].forEach(t=>model['m_vec'+t+'Properties']=[]);
     const graphics=new exports.default({sectionType:'Graphics',modelProperties:model});
-    assert.equal(graphics.renderOptions().length,10);
+    assert.equal(graphics.renderOptions().length,8);
     const audio=new exports.default({sectionType:'Audio',modelProperties:model});
     assert.equal(audio.renderOptions().length,0);
     const rendered=graphics.renderOptions();
-    assert.equal(rendered[0].children[0].children[0].props.className,'options-tab__group-header');
-    assert.equal(rendered[0].children[1].props.label,'CFG_FG');
-    assert.equal(rendered[0].children[1].props.valueDataType,3);
-    assert.equal(rendered[6].props.valueDataType,1);
-    assert.equal(rendered[6].props.max,4);
-    assert.equal(rendered[8].children[1].props.max,3);
-    assert.deepEqual(Array.from(rendered[8].children[1].props.strValues),['Native','4 ms','6 ms','8 ms']);
-    assert.equal(rendered[0].children[0].props.style.position,'relative');
-    assert.equal(rendered[0].children[0].props.style.zIndex,0); // Contain native header text's z-index:999 below dropdowns.
+    assert.equal(rendered[0].props.label,'CFG_FG');
+    assert.equal(rendered[0].props.valueDataType,3);
+    const toggle=rendered.find(element=>element.props.eventType==='Bool');
+    assert.equal(toggle.props.property.m_strNameLocID,'CFG_RR');
+    assert.equal(rendered[4].props.max,4); // GI choice slider.
+    assert.equal(rendered[6].props.max,3); // Texture budget slider.
+    assert.deepEqual(Array.from(rendered[6].props.strValues),['Native','4 ms','6 ms','8 ms']);
+
 }
 console.log('PASS native menu labels, choices, events, reset, capability filtering and native component rendering');

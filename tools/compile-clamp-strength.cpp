@@ -34,12 +34,8 @@ static bool BasicContract(ID3D12ShaderReflection* r,bool replacement) {
     ok=ok&&var&&SUCCEEDED(var->GetDesc(&vd))&&vd.StartOffset==8&&vd.Size==8;
     return ok;
 }
-int main(int argc,char** argv) {
-    if(argc!=2)return 8;
-    if(std::strlen(argv[1])!=2||argv[1][0]<'0'||argv[1][0]>'9'||argv[1][1]<'0'||argv[1][1]>'9')return 8;
-    const unsigned strength=unsigned(argv[1][0]-'0')*10u+unsigned(argv[1][1]-'0');
-    if(strength<25||strength>75)return 8;
-    char exponent[16]{};sprintf_s(exponent,"0.%02u",strength);
+int main() {
+    const char* exponent="0.60";
     const D3D_SHADER_MACRO macros[]={{"FIREFLY_CLAMP",exponent},{"TEMPORAL_WEIGHT","0.0"},{nullptr,nullptr}};
 
     std::ifstream in("research/native-integration-audit/shaders/deferredlight_filtering_specular-000.dxbc",std::ios::binary);
@@ -65,15 +61,15 @@ int main(int argc,char** argv) {
       FAILED(rr->GetResourceBindingDescByName("velocity_tex",&dead))&&FAILED(rr->GetResourceBindingDescByName("linear_clamp",&dead));
     rr->Release();
     if(!temporalRemoved){code->Release();std::fputs("FAIL: temporal-history dependencies survived replacement optimization\n",stderr);return 5;}
-    char output[128]{};sprintf_s(output,"build/rr_clamp_%s.h",argv[1]);
+    char output[128]{};sprintf_s(output,"build/rr_clamp_60.h");
     FILE* file=nullptr;
     if(fopen_s(&file,output,"wb")||!file){code->Release();return 6;}
-    std::fprintf(file,"#pragma once\nstatic const unsigned char kRRClampShader%s[]={\n",argv[1]);
+    std::fprintf(file,"#pragma once\nstatic const unsigned char kRRClampShader%s[]={\n","60");
     const auto* bytes=static_cast<const unsigned char*>(code->GetBufferPointer());
     for(size_t i=0;i<code->GetBufferSize();++i)std::fprintf(file,"0x%02x,%s",bytes[i],i%16==15?"\n":"");
-    std::fprintf(file,"\n};\nstatic constexpr unsigned int kRRClampCRC%s=0x%08Xu;\n",argv[1],CRC32(bytes,code->GetBufferSize()));
+    std::fprintf(file,"\n};\nstatic constexpr unsigned int kRRClampCRC%s=0x%08Xu;\n","60",CRC32(bytes,code->GetBufferSize()));
     const bool good=!std::ferror(file)&&std::fclose(file)==0;code->Release();
     if(!good)return 7;
-    std::puts("PASS: Control 0x600347E7 ABI verified; CS3 adjustable current-frame clamp compiled cs_5_1; t3/s11(space1)/u0/b0 and 8x8x1 verified; temporal history compiled out");
+    std::puts("PASS: Control 0x600347E7 ABI verified; CS3 fixed 60% current-frame clamp compiled cs_5_1; t3/s11(space1)/u0/b0 and 8x8x1 verified; temporal history compiled out");
     return 0;
 }

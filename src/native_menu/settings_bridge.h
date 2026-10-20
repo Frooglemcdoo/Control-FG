@@ -13,8 +13,7 @@ static ResetFn originalReset = nullptr, originalSave = nullptr;
 static std::string Configuration() {
     std::lock_guard<std::recursive_mutex> lock(fgSettingsMutex);
     std::ostringstream output;
-    output << "{\"presetE\":" << control_rr::RRPresetE << ",\"presetF\":" << control_rr::RRPresetF
-           << ",\"rtx40\":" << (IsFGRtx40Series() ? "true" : "false");
+    output << "{\"rtx40\":" << (IsFGRtx40Series() ? "true" : "false");
     auto appendValues = [&](const char* name, bool defaults) {
         output << ",\"" << name << "\":[";
         const auto values = control_settings::Snapshot(defaults);

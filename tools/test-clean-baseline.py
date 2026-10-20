@@ -10,11 +10,18 @@ live_exceptions = json.loads((root/'tools/fixtures/r31-baseline-exceptions.json'
 exceptions = json.loads((root/'tools/fixtures/r28-baseline-exceptions.json').read_text())
 glass_exceptions = json.loads((root/'tools/fixtures/r34-baseline-exceptions.json').read_text())
 menu_exceptions = json.loads((root/'tools/fixtures/r41-baseline-exceptions.json').read_text())
+fixed_exceptions = json.loads((root/'tools/fixtures/r46-baseline-exceptions.json').read_text())
 for name, expected in manifest['files'].items():
     if name == 'src/fg_overlay.h':
         assert not (root / name).exists(), 'Legacy settings popup must remain removed'
         continue # R42 replaces UI-only code with fg_settings.h; renderer hashes remain enforced.
     data = (root / name).read_bytes().replace(b'\r\n', b'\n')
+    if name in fixed_exceptions:
+        text=data.decode()
+        for before,after in reversed(fixed_exceptions[name]):
+            assert text.count(after)==1, (name, 'R46 fixed RR policy changed or duplicated')
+            text=text.replace(after,before,1)
+        data=text.encode()
     if name in menu_exceptions:
         text=data.decode()
         for before,after in reversed(menu_exceptions[name]):

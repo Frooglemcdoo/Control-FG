@@ -122,7 +122,6 @@ static void FGSettingsLoadSettings() noexcept {
         SetFGDynamicManualTargetFps(0);
         control_rr::RRUserSetSharpnessPercent(0);
         control_rr::RRUserSetSharpnessOverrideEnabled(false);
-        control_rr::RRUserSetPresetValue(control_rr::RRPresetF);
         control_rr::RRUserSetSkinMode(control_rr::RRSkinMode::Off);
         control_rr::RRUserMarkPresetRestartRequired(false);
         control_rr::RRUserSetSpecularSignalMode(control_rr::RRSpecularSignalMode::NativeClamp);
@@ -137,11 +136,8 @@ static void FGSettingsLoadSettings() noexcept {
     const unsigned int selection = control_settings::RestoreFG(rawSelection);
     const unsigned int rawTarget = FGSettingsReadStored(control_settings::Key::DynamicTargetFps);
     const unsigned int manualTarget = ClampFGDynamicManualTargetFps(rawTarget);
-    control_rr_clamp::Select(control_rr_clamp::Normalize(FGSettingsReadStored(control_settings::Key::ReflectionDetail)));
     control_rr::GISampleSelect(FGSettingsReadStored(control_settings::Key::GlobalIlluminationSamples));
     const bool rrEnabled = FGSettingsReadStored(control_settings::Key::RayReconstruction) != 0;
-    const unsigned int rawRrPreset = FGSettingsReadStored(control_settings::Key::RayReconstructionModel);
-    const unsigned int rrPreset = rawRrPreset == control_rr::RRPresetE ? control_rr::RRPresetE : control_rr::RRPresetF;
     const unsigned int rawTextureStreamingMs = FGSettingsReadStored(control_settings::Key::TextureStreamingBudget);
     const unsigned int textureStreamingMs = NormalizeFGTextureStreamingBudgetMs(rawTextureStreamingMs);
     const bool vramMonitorEnabled = FGSettingsReadStored(control_settings::Key::VideoMemoryMonitor) != 0;
@@ -150,7 +146,6 @@ static void FGSettingsLoadSettings() noexcept {
     slFgDynamicManualTargetFps.store(manualTarget, std::memory_order_release);
     control_rr::RRUserSetSharpnessPercent(0);
     control_rr::RRUserSetSharpnessOverrideEnabled(false);
-    control_rr::RRUserSetPresetValue(rrPreset);
     control_rr::RRUserSetSkinMode(control_rr::RRSkinMode::Off);
     control_rr::RRUserMarkPresetRestartRequired(false);
     control_rr::RRUserSetSpecularSignalMode(control_rr::RRSpecularSignalMode::NativeClamp);

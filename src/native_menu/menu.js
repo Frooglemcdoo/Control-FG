@@ -19,7 +19,7 @@
             label(key + "_INFO", definition.description);
             var row = {
                 m_iPropertyID: definition.id,
-                m_eDataType: definition.type === "choice" ? 3 : 1,
+                m_eDataType: definition.presentation === "checkbox" ? 0 : definition.type === "choice" ? 3 : 1,
                 m_strNameLocID: key,
                 m_value: cfg.values[slot],
                 m_defaultValue: cfg.defaults[slot],
@@ -37,7 +37,7 @@
                 return definition.capability !== "frameGeneration" || cfg.fgChoices.indexOf(item.value) !== -1;
             }).map(function (item) { return choice(key, item.value, item.label); });
             return row;
-        }).filter(function (row) { return row.cfgDefinition.visibility !== "rtx40" || cfg.rtx40; });
+        }).filter(function (row) { return (row.cfgDefinition.visibility !== "rtx40" || cfg.rtx40); });
     }
     function nativeOptionEnabled(name) {
         if (!nativeModel) return false;
@@ -146,15 +146,16 @@
                 incoming = null;
             });
             engine.trigger = function (event, id, value) {
-                if ((event === "OnEnumGraphicsPropertySet" || event === "OnIntGraphicsPropertySet") && id >= protocol.firstId && id < protocol.endId) {
+                if ((event === "OnEnumGraphicsPropertySet" || event === "OnIntGraphicsPropertySet" || event === "OnBoolGraphicsPropertySet") && id >= protocol.firstId && id < protocol.endId) {
                     var row = rowsById[id];
+                    if (row && row.cfgDefinition.presentation === "checkbox" && typeof value === "boolean") value = Number(value);
                     if (!row || row.m_bIsDisabled || !Number.isInteger(value)) return;
                     if (row.cfgDefinition.presentation === "slider") {
                         var selected = row.cfgDefinition.choices[value];
                         if (!selected) return;
                         value = selected.value;
                     }
-                    if (row.m_eDataType === 3 ? !row.m_vecPossibleValues.some(function (v) { return v.m_value === value; }) : value < row.m_minValue || value > row.m_maxValue || (value - row.m_minValue) % row.m_valueStep !== 0) return;
+                    if (row.cfgDefinition.type === "choice" ? !row.m_vecPossibleValues.some(function (v) { return v.m_value === value; }) : value < row.m_minValue || value > row.m_maxValue || (value - row.m_minValue) % row.m_valueStep !== 0) return;
                     pending[id].push(value);
                     mobx.runInAction(function () { row.m_value = value; refresh(); });
                 } else if (event === "OnGraphicsReset") {
@@ -166,13 +167,35 @@
                         refresh();
                     });
                 }
-                if (rowsById[id] && (event === "OnEnumGraphicsPropertySet" || event === "OnIntGraphicsPropertySet"))
-                    return original.call(engine, event, id, value);
+                if (rowsById[id] && (event === "OnEnumGraphicsPropertySet" || event === "OnIntGraphicsPropertySet" || event === "OnBoolGraphicsPropertySet"))
+                    return original.call(engine, event === "OnBoolGraphicsPropertySet" ? "OnEnumGraphicsPropertySet" : event, id, value);
                 return original.apply(engine, arguments);
             };
             mobx.runInAction(refresh);
             original.call(engine, "OnEnumGraphicsPropertySet", protocol.handshakeId, protocol.version);
             return rows;
+        },
+        order: function (allRows) {
+            var nativeRows = allRows.filter(function (row) { return !row.cfgDefinition; });
+            var customRows = allRows.filter(function (row) { return !!row.cfgDefinition; });
+            var result = [], inserted = Object.create(null);
+            nativeRows.forEach(function (row, index) {
+                result.push(row);
+                Object.keys(schema.layout.groups).forEach(function (group) {
+                    var anchor = nativeRows.findIndex(function (item) {
+                        return item.m_strNameLocID === schema.layout.groups[group];
+                    });
+                    var next = nativeRows[index + 1];
+                    var boundary = !next || schema.layout.boundaries.indexOf(next.m_strNameLocID) !== -1;
+                    if (anchor >= 0 && index >= anchor && boundary && !inserted[group]) {
+                        customRows.forEach(function (custom) { if (custom.cfgDefinition.group === group) result.push(custom); });
+                        inserted[group] = true;
+                    }
+                });
+            });
+            // Keep controls usable if a native group is absent; never discard rows.
+            customRows.forEach(function (row) { if (!inserted[row.cfgDefinition.group]) result.push(row); });
+            return result;
         },
         slider: function (row) {
             var values = row.cfgDefinition.choices;

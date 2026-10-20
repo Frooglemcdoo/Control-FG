@@ -26,13 +26,7 @@ inline constexpr unsigned int RRRuntimePauseResize = 1u << 0;
 inline constexpr unsigned int RRRuntimePausePreset = 1u << 1;
 inline std::atomic<unsigned int> rrUserRuntimePauseReasons{0};
 inline std::atomic<bool> rrUserPresetOptionsWindow{false};
-inline constexpr unsigned int RRPresetE = 5;
 inline constexpr unsigned int RRPresetF = 6;
-inline constexpr unsigned int RRPresetK = 11;
-inline constexpr unsigned int RRPresetL = 12;
-inline constexpr unsigned int RRPresetM = 13;
-inline std::atomic<unsigned int> rrUserPreset{RRPresetF};
-inline std::atomic<unsigned long long> rrUserPresetSelectionGeneration{1};
 inline std::atomic<bool> rrUserPresetRestartRequired{false};
 inline std::atomic<unsigned int> rrUserPresetCreateConfirmed{0};
 inline std::atomic<unsigned long long> rrUserPresetCreateGeneration{0};
@@ -99,17 +93,13 @@ inline unsigned int RRUserSharpnessPercent() noexcept {return rrUserSharpnessPer
 inline float RRUserSharpnessValue() noexcept {return static_cast<float>(RRUserSharpnessPercent())/100.0f;}
 inline void RRUserSetSharpnessPercent(unsigned int value) noexcept {if(value>100)value=100; rrUserSharpnessPercent.store(value,std::memory_order_release);}
 inline bool RRUserPresetSupported(unsigned int value) noexcept {
- return value==RRPresetE||value==RRPresetF||value==RRPresetK||value==RRPresetL||value==RRPresetM;
+ return value==RRPresetF;
 }
-inline unsigned int RRUserPresetValue() noexcept {return rrUserPreset.load(std::memory_order_acquire);}
-inline bool RRUserPresetLiveSwitchable(unsigned int value) noexcept {return value==RRPresetE||value==RRPresetF;}
+inline unsigned int RRUserPresetValue() noexcept {return RRPresetF;}
+inline bool RRUserPresetLiveSwitchable(unsigned int value) noexcept {return value==RRPresetF;}
 inline bool RRUserPresetLiveSwitchable(unsigned int from,unsigned int to) noexcept {return RRUserPresetLiveSwitchable(from)&&RRUserPresetLiveSwitchable(to);}
-inline void RRUserSetPresetValue(unsigned int value) noexcept {
- if(!RRUserPresetSupported(value))return;
- const auto previous=rrUserPreset.exchange(value,std::memory_order_acq_rel);
- if(previous!=value)rrUserPresetSelectionGeneration.fetch_add(1,std::memory_order_acq_rel);
-}
-inline unsigned long long RRUserPresetSelectionGeneration() noexcept {return rrUserPresetSelectionGeneration.load(std::memory_order_acquire);}
+
+inline unsigned long long RRUserPresetSelectionGeneration() noexcept {return 1;}
 inline bool RRUserPresetNeedsRestart() noexcept {return rrUserPresetRestartRequired.load(std::memory_order_acquire);}
 inline void RRUserMarkPresetRestartRequired(bool required=true) noexcept {rrUserPresetRestartRequired.store(required,std::memory_order_release);if(required)rrUserPresetCreateConfirmed.store(0,std::memory_order_release);}
 inline void RRUserConfirmPresetCreate(unsigned int value) noexcept {
@@ -117,16 +107,8 @@ inline void RRUserConfirmPresetCreate(unsigned int value) noexcept {
 }
 inline unsigned int RRUserConfirmedPresetValue() noexcept {return rrUserPresetCreateConfirmed.load(std::memory_order_acquire);}
 inline unsigned long long RRUserPresetCreateGeneration() noexcept {return rrUserPresetCreateGeneration.load(std::memory_order_acquire);}
-inline const wchar_t* RRUserPresetLabelW() noexcept {
- switch(RRUserPresetValue()){
- case RRPresetE:return L"E"; case RRPresetK:return L"K"; case RRPresetL:return L"L"; case RRPresetM:return L"M"; default:return L"F";
- }
-}
-inline const char* RRUserPresetLabel() noexcept {
- switch(RRUserPresetValue()){
- case RRPresetE:return "E"; case RRPresetK:return "K"; case RRPresetL:return "L"; case RRPresetM:return "M"; default:return "F";
- }
-}
+inline const wchar_t* RRUserPresetLabelW() noexcept {return L"F";}
+inline const char* RRUserPresetLabel() noexcept {return "F";}
 inline RRSkinMode RRUserSkinModeValue() noexcept {return static_cast<RRSkinMode>(rrUserSkinMode.load(std::memory_order_acquire));}
 inline bool RRUserSkinResponsivity() noexcept {return RRUserSkinModeValue()==RRSkinMode::Responsivity;}
 inline void RRUserSetSkinMode(RRSkinMode mode) noexcept {rrUserSkinMode.store(static_cast<unsigned int>(mode),std::memory_order_release);}
@@ -147,15 +129,7 @@ inline const wchar_t* RRUserLabel() noexcept {
    return L"Resolution changed - rebuilding RR guides";
  }
  if(status==RRUserStatus::Recovering)return L"Paused - resumes when gameplay returns";
- if(status==RRUserStatus::Active){
-  switch(RRUserPresetValue()){
-  case RRPresetE:return L"Active - RR Preset E";
-  case RRPresetK:return L"Active - RR Preset K";
-  case RRPresetL:return L"Active - RR Preset L";
-  case RRPresetM:return L"Active - RR Preset M";
-  default:return L"Active - RR Preset F";
-  }
- }
+ if(status==RRUserStatus::Active)return L"Active - RR Preset F";
  switch(rrUserWaitReason.load(std::memory_order_acquire)){
  case RRWaitReason::Unsupported:return L"RR unavailable on this device/runtime";
  case RRWaitReason::EnableReflections:return L"Enable Ray Traced Reflections in Graphics";

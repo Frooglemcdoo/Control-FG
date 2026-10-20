@@ -17,17 +17,21 @@ def generate(schema=None):
     options, protocol = schema['options'], schema['protocol']
     assert 1 <= protocol['stateBits'] <= 30
     assert protocol['firstId'] <= protocol['handshakeId'] < protocol['endId']
+    assert all(anchor in schema['layout']['boundaries'] for anchor in schema['layout']['groups'].values())
     keys, ids, localization_keys = set(), set(), set()
     storage = set()
     for option in options:
         key, option_id = option['key'], option['id']
+        assert option['group'] in schema['layout']['groups']
         assert key.isidentifier() and key not in keys, f'Duplicate/invalid key: {key}'
         assert protocol['firstId'] <= option_id < protocol['endId'] and option_id != protocol['handshakeId']
         assert option_id not in ids, f'Duplicate ID: {option_id}'
         assert type(option_id) is int and key.isascii()
         assert option['localizationKey'] not in localization_keys
         localization_keys.add(option['localizationKey'])
-        assert option.get('presentation') in (None, 'slider')
+        assert option.get('presentation') in (None, 'slider', 'checkbox')
+        if option.get('presentation') == 'checkbox':
+            assert option['type'] == 'choice' and [c['value'] for c in option['choices']] == [0, 1]
         if option.get('presentation') == 'slider':
             assert option['type'] == 'choice'
         assert all(isinstance(name, str) and name.startswith('MENU_OPTIONS_') for name in option.get('nativeRequires', []))

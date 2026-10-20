@@ -111,3 +111,18 @@ producer uses `rt:Sample Count Diffuse` and `g_uRTDiffuseRayCount`; Contact Shad
 is a separate pass. While inactive the slider displays Native without overwriting
 the saved requested sample count. Actual override remains gated by full RR and
 execution of the native diffuse producer.
+
+## Native group placement and fixed RR policy (R46)
+
+The schema's `layout` names native group anchors and header boundaries. Each
+option declares its group; the generic ordering pass appends it within that
+group while preserving native row order and stable IDs. Monitor holds FG controls,
+Quality holds Texture Streaming, and Ray Tracing holds RR, GI and glass.
+
+`presentation: "checkbox"` uses the native Toggle component. Custom boolean
+events are normalized to 0/1 and sent through the existing verified enum bridge;
+original game boolean events pass through untouched. No additional ABI hook is
+needed. The model and reflection-detail settings are removed from the catalog,
+INI reads/writes and dispatch. Model F and 60% are renderer constants; there is
+no setter or selectable Model E. Only the 60% clamp shader is compiled/cached.
+The retired numeric IDs are unassigned and rejected by dispatch.

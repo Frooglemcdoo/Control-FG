@@ -235,5 +235,5 @@ static bool RRNativeInstallPreset(HMODULE d3d) noexcept {
  rrNativeReleaseFeature=reinterpret_cast<RRNativeReleaseFeatureFn>(GetProcAddress(d3d,"NVSDK_NGX_D3D12_ReleaseFeature"));
  if(!RRAlbedoExchangeCall(&p,true))return false;
  if(!p.writeHealthy){RRAlbedoExchangeCall(&p,false);return false;}
- Log("RR_PRESET_HOOK_READY site=0x1D457 target=0x528D0 default_preset=F selectable=E,F,K,L,M live_switch=E<->F restart_only=K,L,M create_confirmation=1 alternate_features=release_after_retired_switch_or_rr_off release_api=%u",unsigned(rrNativeReleaseFeature!=nullptr));return true;
+ Log("RR_PRESET_HOOK_READY site=0x1D457 target=0x528D0 preset=fixed_F create_confirmation=1 alternate_features=release_after_retired_switch_or_rr_off release_api=%u",unsigned(rrNativeReleaseFeature!=nullptr));return true;
 }

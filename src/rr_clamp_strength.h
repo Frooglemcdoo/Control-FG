@@ -11,7 +11,6 @@
 // heaps, roots and resources stay native. Restore the exact observed native PSO.
 namespace control_rr_clamp {
 static_assert(sizeof(kRRClampShaders)/sizeof(kRRClampShaders[0])==VariantCount,"shader table count");
-inline void Select(unsigned v) noexcept {if(Valid(v))requested.store(v,std::memory_order_release);}
 using CreateFn=HRESULT (STDMETHODCALLTYPE*)(ID3D12Device*,const D3D12_COMPUTE_PIPELINE_STATE_DESC*,REFIID,void**);
 using SetFn=void (STDMETHODCALLTYPE*)(ID3D12GraphicsCommandList*,ID3D12PipelineState*);
 using DispatchFn=void (STDMETHODCALLTYPE*)(ID3D12GraphicsCommandList*,UINT,UINT,UINT);

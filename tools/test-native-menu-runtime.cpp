@@ -47,7 +47,7 @@ static void SetFGVramMonitorEnabled(bool v){vram=v;}
 static void FGSettingsMarkSettingsDirty(){++dirtyCount;}
 static void FGSettingsFlushSettingsIfDue(bool){++saveCount;}
 namespace control_rr {
-constexpr unsigned RRPresetE=5,RRPresetF=6;
+constexpr unsigned RRPresetF=6;
 static bool rr=false;static unsigned preset=6,gi=4;
 static bool RRUserRequested(){return rr;}
 static unsigned RRUserPresetValue(){return preset;}
@@ -83,6 +83,7 @@ int main(int argc,char** argv){
     assert(control_settings::Snapshot().size() == control_settings::kOptionCount);
     assert(control_settings::ReadStored(control_settings::Definition(control_settings::Key::DynamicTargetFps)) == 0);
     assert(control_settings::Read(control_settings::Key::DynamicTargetFps) == 144);
+    assert(!Apply(10004,5) && !Apply(10004,6) && !Apply(10005,75));
     void* viewTable[0x220/8]{};
     viewTable[0x218/8]=reinterpret_cast<void*>(&Capture);
     void** view=viewTable;
@@ -92,15 +93,15 @@ int main(int argc,char** argv){
     mode=6;target=1000;
     EnumHook(model,10999,41);
     assert(emitted.front()=="CFG_CHOICES_BEGIN"&&emitted.back()=="CFG_STATE_END");
-    unsigned decoded[11]{};
-    for(const auto& event:emitted){unsigned i,b;if(std::sscanf(event.c_str(),"CFG_STATE_%u_%u",&i,&b)==2){assert(i<11&&b<10);decoded[i]|=1u<<b;}}
+    unsigned decoded[control_settings::kOptionCount]{};
+    for(const auto& event:emitted){unsigned i,b;if(std::sscanf(event.c_str(),"CFG_STATE_%u_%u",&i,&b)==2){assert(i<control_settings::kOptionCount&&b<10);decoded[i]|=1u<<b;}}
     assert(decoded[0]==6&&decoded[1]==1&&decoded[2]==1000);
     assert(mode==6&&target==1000&&dirtyCount==0); // Readback never writes settings.
     mode=4;target=0;control_settings::manualTarget=144;
     originalEnum=originalInt=Native;originalReset=originalSave=NativeReset;
     EnumHook(nullptr,10003,1);assert(control_rr::rr && nativeCalls==0);
-    IntHook(nullptr,10005,75);assert(control_rr_clamp::value==75);
-    IntHook(nullptr,10005,76);assert(control_rr_clamp::value==75);
+    IntHook(nullptr,10005,75);assert(control_rr_clamp::value==60);
+    IntHook(nullptr,10005,76);assert(control_rr_clamp::value==60);
     EnumHook(nullptr,10998,1);assert(nativeCalls==0);
     EnumHook(nullptr,14,3);assert(nativeCalls==1);
     EnumHook(nullptr,10001,1);assert(target==0); // Disabled dependent setting is rejected natively.

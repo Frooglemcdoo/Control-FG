@@ -29,6 +29,8 @@ inline bool PatchCommons(const std::string& input, const std::string& config, st
         "t.default=function(e,t={}){if(!e)return e;if(e.indexOf(\"CFG_\")===0)return window.__controlFG.translate(e);let n=\"\";")) return false;
     if (!ReplaceOnce(s, "let o=_.default[e.m_strNameLocID]||void 0,r=[],s=\"\";return",
         "let o=_.default[e.m_strNameLocID]||void 0,r=window.__controlFG.sliderLabels(e),s=window.__controlFG.suffix(e.m_strNameLocID);return")) return false;
+    if (!ReplaceOnce(s, "e.sort((e,t)=>e.m_iPropertyID-t.m_iPropertyID),e.map(this.renderProperty)",
+        "e.sort((e,t)=>e.m_iPropertyID-t.m_iPropertyID),window.__controlFG.order(e).map(this.renderProperty)")) return false;
     output = "window.__controlFGConfig=" + config + ";\n" + kNativeMenuScript + "\n" + s;
     return true;
 }

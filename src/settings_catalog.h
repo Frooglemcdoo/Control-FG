@@ -24,7 +24,7 @@ inline const Option& Definition(Key key) {
     std::abort();
 }
 inline bool Visible(const Option& option) {
-    return option.key != Key::ExperimentalMultiFrameGeneration || IsFGRtx40Series();
+    return (option.key != Key::ExperimentalMultiFrameGeneration || IsFGRtx40Series());
 }
 inline unsigned Default(const Option& option) {
     if (option.key == Key::FrameGeneration && !AllowedFG(option.defaultValue))
@@ -54,8 +54,6 @@ inline unsigned Read(Key key) {
         return manualTarget;
     }
     case Key::RayReconstruction: return unsigned(control_rr::RRUserRequested());
-    case Key::RayReconstructionModel: return control_rr::RRUserPresetValue();
-    case Key::ReflectionDetail: return control_rr_clamp::Requested();
     case Key::GlobalIlluminationSamples: return control_rr::GISampleRequested();
     case Key::GlassReflections: return unsigned(PTReflectionUserRequested());
     case Key::TextureStreamingBudget: return GetFGTextureStreamingBudgetMs();
@@ -86,6 +84,7 @@ inline unsigned RestoreFG(unsigned stored) {
     // Preserve Off and supported saved selections; only coerce unsupported modes.
     return AllowedFG(stored) ? stored : Default(Key::FrameGeneration);
 }
+
 inline bool Write(const Option& option, int value, WriteReason reason = WriteReason::UserChange) {
     if (!Valid(option, value)) return false;
     if (reason == WriteReason::UserChange && !Enabled(option)) return false;
@@ -101,11 +100,6 @@ inline bool Write(const Option& option, int value, WriteReason reason = WriteRea
         control_rr::RRUserMarkPresetRestartRequired(false);
         control_rr::RRUserRequest(requested != 0);
         break;
-    case Key::RayReconstructionModel:
-        control_rr::RRUserSetPresetValue(requested);
-        control_rr::RRUserMarkPresetRestartRequired(false);
-        break;
-    case Key::ReflectionDetail: control_rr_clamp::Select(requested); break;
     case Key::GlobalIlluminationSamples: control_rr::GISampleSelect(requested); break;
     case Key::GlassReflections: PTReflectionUserRequest(requested != 0); break;
     case Key::TextureStreamingBudget:
