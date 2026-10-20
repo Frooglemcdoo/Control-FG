@@ -244,11 +244,11 @@ jobs:
           node tools/test-native-menu.js --config build/native-menu-config.json
           if errorlevel 1 exit /b 1
 
-      - name: Package native graphics menu R47
+      - name: Package native graphics menu R48
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-Native-Menu-R47'
+          $out='Control-FG-Native-Menu-R48'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
           Copy-Item build/pt_glass_raygen.dxil "$out/pt_glass_raygen.dxil"
@@ -263,7 +263,7 @@ jobs:
           Copy-Item Collect-ControlFG-Compact-Logs.cmd "$out/Collect-ControlFG-Compact-Logs.cmd"
           Copy-Item Collect-ControlFG-Compact-Logs.ps1 "$out/Collect-ControlFG-Compact-Logs.ps1"
           @'
-          CONTROL-FG NATIVE GRAPHICS MENU R47
+          CONTROL-FG NATIVE GRAPHICS MENU R48
           Branch: experiment/native-graphics-menu-r41
 
           Removes the OPAQUE button, setting and runtime enhancement hooks.
@@ -281,7 +281,7 @@ jobs:
           Native menu only: the F10 popup and its input handling are removed.
           Unsupported game/UI builds keep saved settings and log the mismatch.
           Dropdown headers no longer draw over open lists. Descriptions expanded.
-          R47 integrates controls into Monitor, Quality and Ray Tracing.
+          R48 integrates controls into Monitor, Quality and Ray Tracing.
           RR is a checkbox. Model F and reflection detail 60% are fixed.
           Model E and the reflection-detail control are removed.
           GI samples and texture streaming use stepped sliders.
@@ -306,10 +306,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-Native-Menu-R47
+          name: Control-FG-Native-Menu-R48
           path: |
-            Control-FG-Native-Menu-R47.zip
-            Control-FG-Native-Menu-R47.sha256
+            Control-FG-Native-Menu-R48.zip
+            Control-FG-Native-Menu-R48.sha256
             build/exports.txt
             build/imports.txt
             build/pt_glass_raygen.dxil
