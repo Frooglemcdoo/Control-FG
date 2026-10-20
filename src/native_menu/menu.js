@@ -4,6 +4,8 @@
     "use strict";
     var cfg = window.__controlFGConfig;
     var labels = Object.create(null), rows = null, mobx = null;
+    // Native slider labels need explicit vertical alignment; retain native typography.
+    var sliderValueStyle = {display: "flex", alignItems: "center", justifyContent: "center", padding: 0};
     function label(key, text) { labels[key] = text; return key; }
     function choice(key, value, text) {
         return {m_value: value, m_strLabelLocID: label(key + "_V" + value, text)};
@@ -202,6 +204,9 @@
             var index = values.findIndex(function (item) { return item.value === row.m_value; });
             return Object.assign({}, row, {m_eDataType: 1, m_value: row.m_bIsDisabled ? 0 : Math.max(0, index),
                 m_minValue: 0, m_maxValue: values.length - 1, m_valueStep: 1});
+        },
+        sliderValueStyle: function (row) {
+            return row && row.cfgDefinition ? sliderValueStyle : undefined;
         },
         sliderLabels: function (row) {
             return row.cfgDefinition && row.cfgDefinition.presentation === "slider" ?

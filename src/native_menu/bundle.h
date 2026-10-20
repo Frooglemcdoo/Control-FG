@@ -31,6 +31,8 @@ inline bool PatchCommons(const std::string& input, const std::string& config, st
         "let o=_.default[e.m_strNameLocID]||void 0,r=window.__controlFG.sliderLabels(e),s=window.__controlFG.suffix(e.m_strNameLocID);return")) return false;
     if (!ReplaceOnce(s, "e.sort((e,t)=>e.m_iPropertyID-t.m_iPropertyID),e.map(this.renderProperty)",
         "e.sort((e,t)=>e.m_iPropertyID-t.m_iPropertyID),window.__controlFG.order(e).map(this.renderProperty)")) return false;
+    if (!ReplaceOnce(s, "i.createElement(\"label\",{className:\"slider__value\"},r)",
+        "i.createElement(\"label\",{className:\"slider__value\",style:window.__controlFG.sliderValueStyle(e)},r)")) return false;
     output = "window.__controlFGConfig=" + config + ";\n" + kNativeMenuScript + "\n" + s;
     return true;
 }

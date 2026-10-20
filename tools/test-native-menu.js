@@ -48,6 +48,20 @@ function exercise(rtx40) {
     const byId=Object.fromEntries(rows.map(row=>[row.m_iPropertyID,row]));
     assert.equal(rows.length,rtx40?9:8);
     assert(!byId[10004] && !byId[10005]);
+    [10003,10007,10009].concat(rtx40?[10010]:[]).forEach(id=>{
+        assert.equal(byId[id].m_eDataType,0);
+        const next=!byId[id].m_value;
+        engine.trigger('OnBoolGraphicsPropertySet',id,next);
+        assert.equal(byId[id].m_value,Number(next));
+        assert.deepEqual(events.at(-1),['OnEnumGraphicsPropertySet',id,Number(next)]);
+        engine.trigger('OnBoolGraphicsPropertySet',id,!next);
+    });
+    const style=menu.sliderValueStyle(byId[10006]);
+    assert.equal(style.alignItems,'center');assert.equal(style.justifyContent,'center');
+    assert.strictEqual(style,menu.sliderValueStyle(byId[10002]));
+    assert.strictEqual(style,menu.sliderValueStyle(byId[10008]));
+    assert.equal(menu.sliderValueStyle({}),undefined);
+    events.splice(1); // Discard checkbox round-trip events; retain the initial handshake.
     assert.equal(byId[10000].m_vecPossibleValues.length,rtx40?2:7);
     assert.equal(byId[10000].m_value,liveValues[0]); // Live FG survives view recreation.
     assert.equal(byId[10000].cfgHeader,'');
