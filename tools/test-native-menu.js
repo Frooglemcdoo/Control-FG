@@ -93,7 +93,9 @@ if(process.argv[2]) {
     const audio=new exports.default({sectionType:'Audio',modelProperties:model});
     assert.equal(audio.renderOptions().length,0);
     const rendered=graphics.renderOptions();
-    assert.equal(rendered[0].children[0].props.className,'options-tab__group-header');
+    assert.equal(rendered[0].children[0].children[0].props.className,'options-tab__group-header');
     assert.equal(rendered[0].children[1].props.label,'CFG_FG');
+    assert.equal(rendered[0].children[0].props.style.position,'relative');
+    assert.equal(rendered[0].children[0].props.style.zIndex,0); // Contain native header text's z-index:999 below dropdowns.
 }
 console.log('PASS native menu labels, choices, events, reset, capability filtering and native component rendering');

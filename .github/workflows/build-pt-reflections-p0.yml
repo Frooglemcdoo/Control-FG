@@ -110,11 +110,6 @@ jobs:
           if errorlevel 1 exit /b 1
           build\compile-pt-reflection-p2-diffuse-bridge.exe
           if errorlevel 1 exit /b 1
-          pushd src
-          rc /nologo /fo ..\build\control_fg_logo.res control_fg_logo.rc
-          set "RC_RESULT=%ERRORLEVEL%"
-          popd
-          if not "%RC_RESULT%"=="0" exit /b %RC_RESULT%
 
       - name: Check secondary ray origin precision
         run: python tools/test-pt-secondary-origin.py
@@ -220,7 +215,7 @@ jobs:
         shell: cmd
         run: |
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
-          cl /nologo /std:c++17 /EHsc /W4 /O2 /MT /LD /guard:cf /DUNICODE /D_UNICODE /I "third_party\streamline\include" src\probe.cpp build\control_fg_logo.res /Fobuild\probe.obj /Febuild\dxgi.dll /link /DEF:src\dxgi.def /INCREMENTAL:NO /DYNAMICBASE /NXCOMPAT /GUARD:CF bcrypt.lib wintrust.lib user32.lib gdi32.lib msimg32.lib
+          cl /nologo /std:c++17 /EHsc /W4 /O2 /MT /LD /guard:cf /DUNICODE /D_UNICODE /I "third_party\streamline\include" src\probe.cpp /Fobuild\probe.obj /Febuild\dxgi.dll /link /DEF:src\dxgi.def /INCREMENTAL:NO /DYNAMICBASE /NXCOMPAT /GUARD:CF bcrypt.lib wintrust.lib user32.lib gdi32.lib
           if errorlevel 1 exit /b 1
           dumpbin /exports build\dxgi.dll > build\exports.txt
           dumpbin /imports build\dxgi.dll > build\imports.txt
@@ -243,11 +238,11 @@ jobs:
           build\test-native-menu-runtime.exe
           if errorlevel 1 exit /b 1
 
-      - name: Package native graphics menu R41
+      - name: Package native graphics menu R42
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-Native-Menu-R41'
+          $out='Control-FG-Native-Menu-R42'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
           Copy-Item build/pt_glass_raygen.dxil "$out/pt_glass_raygen.dxil"
@@ -262,7 +257,7 @@ jobs:
           Copy-Item Collect-ControlFG-Compact-Logs.cmd "$out/Collect-ControlFG-Compact-Logs.cmd"
           Copy-Item Collect-ControlFG-Compact-Logs.ps1 "$out/Collect-ControlFG-Compact-Logs.ps1"
           @'
-          CONTROL-FG NATIVE GRAPHICS MENU R41
+          CONTROL-FG NATIVE GRAPHICS MENU R42
           Branch: experiment/native-graphics-menu-r41
 
           Removes the OPAQUE button, setting and runtime enhancement hooks.
@@ -277,9 +272,11 @@ jobs:
           Glass is under Reflection Enhancements. Opaque reflections are not added.
           Settings save automatically and when leaving Options. Graphics Reset also
           restores the mod defaults. Existing saved settings are retained.
-          F10 popup is disabled after native menu injection succeeds. Unsupported
-          game/UI builds retain the popup and log why injection was skipped.
-          This first test build targets the supplied March 2025 game DLLs/UI bundle.
+          Native menu only: the F10 popup and its input handling are removed.
+          Unsupported game/UI builds keep saved settings and log the mismatch.
+          Dropdown headers no longer draw over open lists. Descriptions expanded.
+          The optional VRAM monitor no longer uses global topmost placement.
+          This test build targets the supplied March 2025 game DLLs/UI bundle.
           Check main menu and pause menu, mouse/controller navigation, changes,
           leaving/reopening Graphics, restart persistence and Reset.
           If rows are missing, use Collect-ControlFG-Compact-Logs.cmd and send its ZIP.
@@ -294,10 +291,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-Native-Menu-R41
+          name: Control-FG-Native-Menu-R42
           path: |
-            Control-FG-Native-Menu-R41.zip
-            Control-FG-Native-Menu-R41.sha256
+            Control-FG-Native-Menu-R42.zip
+            Control-FG-Native-Menu-R42.sha256
             build/exports.txt
             build/imports.txt
             build/pt_glass_raygen.dxil

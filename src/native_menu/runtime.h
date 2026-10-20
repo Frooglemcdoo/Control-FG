@@ -58,7 +58,7 @@ static bool Apply(int id, int value) {
     case 10010: if(v>1||!IsFGRtx40Series())return false; slRtx40MfgRequested.store(v); break;
     default: return false;
     }
-    FGOverlayMarkSettingsDirty();
+    FGSettingsMarkSettingsDirty();
     return true;
 }
 static void Emit(void* model,const char* event) {
@@ -115,11 +115,11 @@ static void ResetHook(void* model) {
             const bool ok=i==2||Apply(10000+i,defaults[i]);
             Notify(model,10000+i,ok);
         }
-        FGOverlayFlushSettingsIfDue(true);
+        FGSettingsFlushSettingsIfDue(true);
     }
     originalReset(model);
 }
-static void SaveHook(void* model) { originalSave(model); FGOverlayFlushSettingsIfDue(true); }
+static void SaveHook(void* model) { originalSave(model); FGSettingsFlushSettingsIfDue(true); }
 
 struct Bytes { char* data; unsigned size, flags; };
 using ReserveFn=void(*)(Bytes*,size_t);
@@ -165,8 +165,7 @@ static void PatchResource(void* object) {
     for(unsigned i=0;i<files->size;++i)if(&entries[i]!=target && entries[i].size && entries[i].offset>=oldEnd)entries[i].offset+=growth;
     target->size=result.size();
     fgNativeMenuReady.store(true);
-    fgOverlayVisible.store(0);
-    Log("NATIVE_MENU_RESOURCE ready=1 controls=native_options_tab bytes=%u popup=disabled",bytes->size);
+    Log("NATIVE_MENU_RESOURCE ready=1 controls=native_options_tab bytes=%u popup=removed",bytes->size);
 }
 static void ReadHook(void* object,void* stream,bool flag) {
     originalRead(object,stream,flag);
@@ -184,7 +183,7 @@ static bool Install() {
     HMODULE ui=GetModuleHandleW(L"ui_rmdwin10_f.dll"), core=GetModuleHandleW(L"coregame_rmdwin10_f.dll");
     if(!MatchModule(ui,0x67e06a9f,0x158000)||!MatchModule(core,0x67e06af5,0x928000)||
        !MatchModule(GetModuleHandleW(L"CoherentUIGT.dll"),0x5e8f6e9a,0x329000)) {
-        Log("NATIVE_MENU_INSTALL ready=0 reason=unsupported_modules fallback=popup"); return false;
+        Log("NATIVE_MENU_INSTALL ready=0 reason=unsupported_modules fallback=settings_file"); return false;
     }
     uiBase=reinterpret_cast<unsigned char*>(ui);
     reserveBytes=reinterpret_cast<ReserveFn>(uiBase+0x28f70);

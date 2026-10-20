@@ -80,7 +80,8 @@ failed writes. A recursive mutex serializes settings writes across UI threads.
 
 The DLL and UI implementation are version gated. The exact commons bundle hash
 and unique replacement anchors must match before mutation. Unsupported builds
-retain the existing popup. Successful injection disables its F10 activation.
+keep saved settings without a popup fallback. R42 removes the old settings
+window and its keyboard polling, mouse capture and unused HDR replay hooks.
 Glass remains available; opaque reflections and all opaque runtime hooks remain
 absent. The shaders and RR skin/hair guide code are unchanged.
 
@@ -91,3 +92,23 @@ Windows DLL and runs portable bridge tests without redistributing game assets.
 
 Still requires Control: visual/navigation verification in main and pause menus,
 actual Coherent callback delivery, and persistence after closing/restarting.
+
+## R42 menu-only cleanup
+
+`fg_settings.h` retains persistence, GPU policy enforcement, display-refresh
+discovery and the optional read-only VRAM monitor. The 1,589-line popup module
+is removed. The current CI build no longer embeds its logo resource or links
+its bitmap compositing library. Historical build fixtures remain provenance.
+
+The VRAM monitor is an owned, non-topmost, nonactivating, transparent window;
+position updates occur only when placement changes and preserve z-order. This
+removes repeated global topmost promotion, a possible overlay interference
+source. NVIDIA overlay operation still requires in-game verification. No input
+hooks or shortcut registration are installed by the settings service.
+
+Each custom InventoryHeader is enclosed in a stacking context at z-index 0.
+Its native text z-index of 999 can no longer escape over dropdowns (z-index 5)
+or the native dimming layer. Fonts, spacing and dropdown controls remain native.
+
+Descriptions now explain effect, dependencies and performance/memory tradeoffs.
+Live settings readback on view creation remains in place from the R41 fix.

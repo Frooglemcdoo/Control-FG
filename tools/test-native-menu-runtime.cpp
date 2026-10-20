@@ -22,7 +22,7 @@ static void* InterlockedExchangePointer(void** p,void* v){auto old=*p;*p=v;retur
 #endif
 static std::recursive_mutex fgSettingsMutex;
 static std::atomic<bool> fgNativeMenuReady{true};
-static std::atomic<unsigned> fgOverlayVisible{0},slRtx40MfgRequested{0};
+static std::atomic<unsigned> slRtx40MfgRequested{0};
 static unsigned mode=4,target=0,texture=0,saveCount=0,dirtyCount=0,nativeCalls=0;
 static bool vram=true,glass=true,rtx40=false,textureApply=true;
 static void Log(const char*,...){}
@@ -43,8 +43,8 @@ static void PTReflectionUserRequest(bool v){glass=v;}
 static bool ApplyTextureStreamingExperimental(unsigned){return textureApply;}
 static void SetFGTextureStreamingBudgetMs(unsigned v){texture=v;}
 static void SetFGVramMonitorEnabled(bool v){vram=v;}
-static void FGOverlayMarkSettingsDirty(){++dirtyCount;}
-static void FGOverlayFlushSettingsIfDue(bool){++saveCount;}
+static void FGSettingsMarkSettingsDirty(){++dirtyCount;}
+static void FGSettingsFlushSettingsIfDue(bool){++saveCount;}
 namespace control_rr {
 constexpr unsigned RRPresetE=5,RRPresetF=6;
 static bool rr=false;static unsigned preset=6,gi=4;

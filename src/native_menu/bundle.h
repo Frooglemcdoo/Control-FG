@@ -24,7 +24,7 @@ inline bool PatchCommons(const std::string& input, const std::string& config, st
         "renderOptions(){const e=[...(this.props.sectionType===\"Graphics\"?window.__controlFG.rows(n):[]),")) return false;
     if (!ReplaceOnce(s,
         "n=C(e,l.OptionsEventType.Enum,!0,this.props.sectionType,this.props.isPauseMenu),\"MENU_OPTIONS_ASSIST_MODE\"",
-        "n=C(e,l.OptionsEventType.Enum,!0,this.props.sectionType,this.props.isPauseMenu),e.cfgHeader?i.createElement(i.Fragment,{key:this.props.sectionType+e.m_iPropertyID},i.createElement(f.default,{className:\"options-tab__group-header\",locId:e.cfgHeader}),n):\"MENU_OPTIONS_ASSIST_MODE\"")) return false;
+        "n=C(e,l.OptionsEventType.Enum,!0,this.props.sectionType,this.props.isPauseMenu),e.cfgHeader?i.createElement(i.Fragment,{key:this.props.sectionType+e.m_iPropertyID},i.createElement(\"div\",{style:{position:\"relative\",zIndex:0}},i.createElement(f.default,{className:\"options-tab__group-header\",locId:e.cfgHeader})),n):\"MENU_OPTIONS_ASSIST_MODE\"")) return false;
     if (!ReplaceOnce(s, "t.default=function(e,t={}){if(!e)return e;let n=\"\";",
         "t.default=function(e,t={}){if(!e)return e;if(e.indexOf(\"CFG_\")===0)return window.__controlFG.translate(e);let n=\"\";")) return false;
     if (!ReplaceOnce(s, "let o=_.default[e.m_strNameLocID]||void 0,r=[],s=\"\";return",

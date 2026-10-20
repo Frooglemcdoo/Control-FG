@@ -11,6 +11,9 @@ exceptions = json.loads((root/'tools/fixtures/r28-baseline-exceptions.json').rea
 glass_exceptions = json.loads((root/'tools/fixtures/r34-baseline-exceptions.json').read_text())
 menu_exceptions = json.loads((root/'tools/fixtures/r41-baseline-exceptions.json').read_text())
 for name, expected in manifest['files'].items():
+    if name == 'src/fg_overlay.h':
+        assert not (root / name).exists(), 'Legacy settings popup must remain removed'
+        continue # R42 replaces UI-only code with fg_settings.h; renderer hashes remain enforced.
     data = (root / name).read_bytes().replace(b'\r\n', b'\n')
     if name in menu_exceptions:
         text=data.decode()
