@@ -68,6 +68,20 @@ static std::vector<std::string> emitted;
 static void Capture(void*,const char* event){emitted.emplace_back(event);}
 int main(int argc,char** argv){
     using namespace control_native_menu;
+    if (argc == 3 && std::string(argv[1]) == "--config") {
+        std::ofstream(argv[2]) << Configuration();
+        return 0;
+    }
+    for (const auto& option : control_settings::kOptions) {
+        assert(control_settings::Find(option.id) == &option);
+        assert(!control_settings::Valid(option, -1));
+        if (control_settings::Visible(option))
+            assert(control_settings::Valid(option, control_settings::Default(option)));
+    }
+    assert(control_settings::Find(10998) == nullptr);
+    assert(control_settings::Snapshot().size() == control_settings::kOptionCount);
+    assert(control_settings::ReadStored(control_settings::Definition(control_settings::Key::DynamicTargetFps)) == 0);
+    assert(control_settings::Read(control_settings::Key::DynamicTargetFps) == 144);
     void* viewTable[0x220/8]{};
     viewTable[0x218/8]=reinterpret_cast<void*>(&Capture);
     void** view=viewTable;
@@ -81,7 +95,7 @@ int main(int argc,char** argv){
     for(const auto& event:emitted){unsigned i,b;if(std::sscanf(event.c_str(),"CFG_STATE_%u_%u",&i,&b)==2){assert(i<11&&b<10);decoded[i]|=1u<<b;}}
     assert(decoded[0]==6&&decoded[1]==1&&decoded[2]==1000);
     assert(mode==6&&target==1000&&dirtyCount==0); // Readback never writes settings.
-    mode=4;target=0;manualTarget=144;
+    mode=4;target=0;control_settings::manualTarget=144;
     originalEnum=originalInt=Native;originalReset=originalSave=NativeReset;
     EnumHook(nullptr,10003,1);assert(control_rr::rr && nativeCalls==0);
     IntHook(nullptr,10005,75);assert(control_rr_clamp::value==75);
@@ -122,5 +136,12 @@ int main(int argc,char** argv){
         PatchResource(resource);assert(buffer->size==patchedSize); // Never patch twice.
         free(buffer->data);
     }
+    rtx40 = true;
+    for (const auto& option : control_settings::kOptions) {
+        const unsigned expected = control_settings::Default(option);
+        assert(control_settings::Write(option, expected, control_settings::WriteReason::Reset));
+        assert(control_settings::Read(option.key) == expected);
+    }
+    assert(target == 0); // Resetting the slider never changes Automatic to Manual.
     std::cout<<"PASS native callback routing, validation, reset, save and resource relocation\n";
 }

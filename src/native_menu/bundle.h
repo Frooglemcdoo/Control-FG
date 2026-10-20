@@ -28,7 +28,7 @@ inline bool PatchCommons(const std::string& input, const std::string& config, st
     if (!ReplaceOnce(s, "t.default=function(e,t={}){if(!e)return e;let n=\"\";",
         "t.default=function(e,t={}){if(!e)return e;if(e.indexOf(\"CFG_\")===0)return window.__controlFG.translate(e);let n=\"\";")) return false;
     if (!ReplaceOnce(s, "let o=_.default[e.m_strNameLocID]||void 0,r=[],s=\"\";return",
-        "let o=_.default[e.m_strNameLocID]||void 0,r=[],s=e.m_strNameLocID===\"CFG_CLAMP\"?\"%\":e.m_strNameLocID===\"CFG_TARGET\"?\" FPS\":\"\";return")) return false;
+        "let o=_.default[e.m_strNameLocID]||void 0,r=[],s=window.__controlFG.suffix(e.m_strNameLocID);return")) return false;
     output = "window.__controlFGConfig=" + config + ";\n" + kNativeMenuScript + "\n" + s;
     return true;
 }

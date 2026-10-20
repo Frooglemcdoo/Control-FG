@@ -8,42 +8,42 @@
     function choice(key, value, text) {
         return {m_value: value, m_strLabelLocID: label(key + "_V" + value, text)};
     }
-    var definitions = [
-        ["FG", "Frame Generation", "Insert generated frames between rendered frames for smoother motion. 2x adds one frame per rendered frame; higher multipliers add more. Dynamic adjusts generation toward a target frame rate. This improves displayed smoothness, not the underlying game simulation or input response. Requires supported NVIDIA hardware.", 3, 4,
-            [[0,"Off"],[1,"Dynamic"],[2,"2x"],[3,"3x"],[4,"4x"],[5,"5x"],[6,"6x"]], "FRAME GENERATION"],
-        ["TARGET_MODE", "Dynamic Frame Rate", "Choose how Dynamic Frame Generation selects its target. Automatic follows the refresh rate of the display running Control. Manual uses Target Frame Rate below. Available only when Frame Generation is set to Dynamic.", 3, 0, [[0,"Automatic"],[1,"Manual"]]],
-        ["TARGET", "Target Frame Rate", "Set the desired displayed frame rate for Dynamic Frame Generation, from 30 to 1000 FPS. This includes generated frames and is a target, not a guarantee. Choose a value appropriate for your display. Available only with Dynamic Frame Generation and Manual targeting.", 1, 144, [30,1000,1]],
-        ["RR", "Ray Reconstruction", "Use NVIDIA DLSS Ray Reconstruction to reconstruct ray-traced lighting and reflections from noisy samples. Native ray tracing must be enabled. It can improve detail and stability, but may change fine textures and hair and increase GPU memory use. Enabling it during play may use more memory than starting the game with it enabled.", 3, 0, [[0,"Off"],[1,"On"]], "RAY RECONSTRUCTION"],
-        ["PRESET", "Ray Reconstruction Model", "Choose the DLSS Ray Reconstruction model. Model F is the default; Model E offers an alternative reconstruction appearance. Compare fine detail, motion and reflection stability in your scene. Switching models during play may increase video memory use; restart with your preferred model selected if that occurs.", 3, cfg.presetF, [[cfg.presetE,"Model E"],[cfg.presetF,"Model F"]]],
-        ["CLAMP", "Reflection Detail", "Adjust the reflection signal used by Ray Reconstruction Model F. Lower values smooth reflections more and can lose surface detail. Higher values retain more detail but can expose noise and shimmer. 60% is the recommended balance. Available only when Ray Reconstruction is On and Model F is selected.", 1, 60, [25,75,1]],
-        ["GI", "Global Illumination Samples", "Choose the sample count for ray-traced indirect lighting. More samples can reduce sampling noise but cost GPU time and lower frame rate. Native leaves the game's sample count unchanged. Requires Ray Traced Indirect Diffuse Lighting to affect the image; this does not control Frame Generation or reflection bounces.", 3, 4, [[0,"Native"],[2,"2"],[4,"4"],[6,"6"],[8,"8"]]],
-        ["GLASS", "Enhanced Glass Reflections", "Add a glossy reflected-light continuation on glass surfaces to improve reflected lighting. Requires Ray Traced Transparent Reflections in the game settings. This affects glass, not opaque surfaces, and can reduce performance. Off restores the native glass reflection path.", 3, 1, [[0,"Off"],[1,"On"]], "REFLECTION ENHANCEMENTS"],
-        ["TEXTURE", "Texture Streaming Budget", "Set the time budget for texture streaming work. Native leaves the game budget unchanged. 4, 6 or 8 ms can help textures reach full detail sooner, but higher budgets may cause frame-time spikes and traversal stutter. Try 4 ms first, and increase only if texture pop-in improves enough to justify the cost.", 3, 0, [[0,"Native"],[4,"4 ms"],[6,"6 ms"],[8,"8 ms"]], "ADVANCED"],
-        ["VRAM", "Video Memory Monitor", "Show current local video memory usage, the Windows memory budget and peak usage while Control is in the foreground. The budget can be lower than the GPU's physical capacity. This is a read-only monitor; turning it off hides the display without changing rendering quality.", 3, 1, [[0,"Off"],[1,"On"]]],
-        ["MFG40", "Experimental Multi Frame Generation", "Allow experimental Frame Generation multipliers above 2x on RTX 40-series GPUs. Compatibility and stability depend on the GPU driver and runtime. Restart Control after changing this option. Off keeps the standard RTX 40-series selection policy.", 3, 0, [[0,"Off"],[1,"On"]]]
-    ];
+    var schema = window.__controlFGSchema;
+    var definitions = schema.options, protocol = schema.protocol;
+    var rowsByKey = Object.create(null), rowsById = Object.create(null);
     function makeRows() {
-        return definitions.map(function (d, index) {
-            var key = "CFG_" + d[0];
-            label(key, d[1]); label(key + "_INFO", d[2]);
-            var row = {m_iPropertyID: 10000 + index, m_eDataType: d[3],
-                m_strNameLocID: key, m_value: cfg.values[index], m_defaultValue: d[4],
-                m_bIsDisabled: false, m_vecPossibleValues: [], m_minValue: 0,
-                m_maxValue: 0, m_valueStep: 1, cfgHeader: ""};
-            if (d[6]) row.cfgHeader = label(key + "_HEADER", d[6]);
-            if (d[3] === 3) row.m_vecPossibleValues = d[5].filter(function (v) {
-                return index !== 0 || cfg.fgChoices.indexOf(v[0]) !== -1;
-            }).map(function (v) { return choice(key, v[0], v[1]); });
-            else { row.m_minValue = d[5][0]; row.m_maxValue = d[5][1]; row.m_valueStep = d[5][2]; }
+        return definitions.map(function (definition, slot) {
+            var key = "CFG_" + definition.localizationKey;
+            label(key, definition.label);
+            label(key + "_INFO", definition.description);
+            var row = {
+                m_iPropertyID: definition.id,
+                m_eDataType: definition.type === "choice" ? 3 : 1,
+                m_strNameLocID: key,
+                m_value: cfg.values[slot],
+                m_defaultValue: cfg.defaults[slot],
+                m_bIsDisabled: false,
+                m_vecPossibleValues: [],
+                m_minValue: definition.min || 0,
+                m_maxValue: definition.max || 0,
+                m_valueStep: definition.step || 1,
+                cfgHeader: "",
+                cfgDefinition: definition,
+                cfgSlot: slot
+            };
+            if (definition.header) row.cfgHeader = label(key + "_HEADER", definition.header);
+            row.m_vecPossibleValues = (definition.choices || []).filter(function (item) {
+                return definition.capability !== "frameGeneration" || cfg.fgChoices.indexOf(item.value) !== -1;
+            }).map(function (item) { return choice(key, item.value, item.label); });
             return row;
-        }).filter(function (r) { return r.m_iPropertyID !== 10010 || cfg.rtx40; });
+        }).filter(function (row) { return row.cfgDefinition.visibility !== "rtx40" || cfg.rtx40; });
     }
     function refresh() {
-        rows.forEach(function (r) {
-            var id = r.m_iPropertyID;
-            r.m_bIsDisabled = (id === 10001 && rows[0].m_value !== 1) ||
-                (id === 10002 && (rows[0].m_value !== 1 || rows[1].m_value !== 1)) ||
-                (id === 10005 && (rows[3].m_value !== 1 || rows[4].m_value !== cfg.presetF));
+        rows.forEach(function (row) {
+            row.m_bIsDisabled = (row.cfgDefinition.requires || []).some(function (dependency) {
+                var source = rowsByKey[dependency.key];
+                return !source || source.m_value !== dependency.value;
+            });
         });
     }
     window.__controlFG = {
@@ -51,6 +51,10 @@
             if (rows) return rows;
             mobx = require("./node_modules/mobx/lib/mobx.module.js");
             rows = mobx.observable.array(makeRows());
+            rows.forEach(function (row) {
+                rowsByKey[row.cfgDefinition.key] = row;
+                rowsById[row.m_iPropertyID] = row;
+            });
             var map = require("./northlight/LinkComponents/OptionsTab/OptionToDescriptionModeMap.ts");
             rows.forEach(function (r) {
                 map.default[r.m_strNameLocID] = 2; // Native text-only description panel.
@@ -78,7 +82,7 @@
             var incoming = null;
             engine.on("CFG_STATE_BEGIN", function () { incoming = definitions.map(function () { return 0; }); });
             definitions.forEach(function (_, index) {
-                for (var bit = 0; bit < 10; ++bit) (function (b) {
+                for (var bit = 0; bit < protocol.stateBits; ++bit) (function (b) {
                     engine.on("CFG_STATE_" + index + "_" + b, function () {
                         if (incoming) incoming[index] |= (1 << b);
                     });
@@ -89,7 +93,7 @@
                 mobx.runInAction(function () {
                     rows.forEach(function (r) {
                         var id = r.m_iPropertyID;
-                        confirmed[id] = incoming[id - 10000];
+                        confirmed[id] = incoming[r.cfgSlot];
                         if (!pending[id].length) r.m_value = confirmed[id];
                     });
                     refresh();
@@ -97,8 +101,8 @@
                 incoming = null;
             });
             engine.trigger = function (event, id, value) {
-                if ((event === "OnEnumGraphicsPropertySet" || event === "OnIntGraphicsPropertySet") && id >= 10000 && id <= 10010) {
-                    var row = rows.find(function (r) { return r.m_iPropertyID === id; });
+                if ((event === "OnEnumGraphicsPropertySet" || event === "OnIntGraphicsPropertySet") && id >= protocol.firstId && id < protocol.endId) {
+                    var row = rowsById[id];
                     if (!row || row.m_bIsDisabled || !Number.isInteger(value)) return;
                     if (row.m_eDataType === 3 ? !row.m_vecPossibleValues.some(function (v) { return v.m_value === value; }) : value < row.m_minValue || value > row.m_maxValue) return;
                     pending[id].push(value);
@@ -106,7 +110,7 @@
                 } else if (event === "OnGraphicsReset") {
                     mobx.runInAction(function () {
                         rows.forEach(function (r) {
-                            r.m_value = cfg.defaults[r.m_iPropertyID - 10000];
+                            r.m_value = cfg.defaults[r.cfgSlot];
                             pending[r.m_iPropertyID].push(r.m_value);
                         });
                         refresh();
@@ -115,8 +119,12 @@
                 return original.apply(engine, arguments);
             };
             mobx.runInAction(refresh);
-            original.call(engine, "OnEnumGraphicsPropertySet", 10999, 41);
+            original.call(engine, "OnEnumGraphicsPropertySet", protocol.handshakeId, protocol.version);
             return rows;
+        },
+        suffix: function (key) {
+            var definition = definitions.find(function (option) { return "CFG_" + option.localizationKey === key; });
+            return definition && definition.suffix || "";
         },
         translate: function (key) {
             // Unknown CFG descriptions are intentionally blank, never hotpink.

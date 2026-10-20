@@ -7,7 +7,6 @@
 // Native-menu settings persistence, display refresh discovery and optional
 // read-only VRAM monitor. No settings window, shortcut polling or input hooks.
 static constexpr wchar_t kFGVramProbeClassName[] = L"ControlFGVramLifecycle_R1";
-static constexpr int kFGVramProbeWidth = 390, kFGVramProbeHeight = 86;
 static constexpr ULONGLONG kFGSettingsDebounceMs = 350;
 static std::recursive_mutex fgSettingsMutex;
 static std::atomic<bool> fgNativeMenuReady{false};
@@ -41,6 +40,9 @@ static unsigned int GetFGTextureStreamingBudgetMs() noexcept {
 static void SetFGTextureStreamingBudgetMs(unsigned int value) noexcept {
     fgTextureStreamingBudgetMs.store(NormalizeFGTextureStreamingBudgetMs(value),std::memory_order_release);
 }
+
+#include "settings_catalog.h"
+#include "ui/theme.h"
 
 struct FGWindowSearch {
     DWORD pid;
@@ -106,6 +108,13 @@ static bool FGSettingsResolveSettingsPath() noexcept {
     return true;
 }
 
+static unsigned FGSettingsReadStored(control_settings::Key key) noexcept {
+    const auto& option = control_settings::Definition(key);
+    const unsigned fallback = key == control_settings::Key::DynamicTargetFps ? 0 :
+        control_settings::Default(option);
+    return GetPrivateProfileIntW(option.section, option.storageKey, fallback, fgSettingsPath.c_str());
+}
+
 static void FGSettingsLoadSettings() noexcept {
     unsigned int expected = 0;
     if (!fgSettingsLoaded.compare_exchange_strong(expected, 1u)) return;
@@ -124,18 +133,18 @@ static void FGSettingsLoadSettings() noexcept {
         return;
     }
 
-    const unsigned int rawSelection = GetPrivateProfileIntW(L"FrameGeneration", L"Mode", kSLDefaultMultiplier, fgSettingsPath.c_str());
+    const unsigned int rawSelection = FGSettingsReadStored(control_settings::Key::FrameGeneration);
     const unsigned int selection = IsFGRtx40Series() ? 2u : NormalizeFGMultiplier(rawSelection);
-    const unsigned int rawTarget = GetPrivateProfileIntW(L"FrameGeneration", L"DynamicTargetFPS", 0, fgSettingsPath.c_str());
+    const unsigned int rawTarget = FGSettingsReadStored(control_settings::Key::DynamicTargetFps);
     const unsigned int manualTarget = ClampFGDynamicManualTargetFps(rawTarget);
-    control_rr_clamp::Select(control_rr_clamp::Normalize(GetPrivateProfileIntW(L"RayReconstruction", L"ReflectionClamp", 60, fgSettingsPath.c_str())));
-    control_rr::GISampleSelect(GetPrivateProfileIntW(L"RayReconstruction", L"GISamples", 4, fgSettingsPath.c_str()));
-    const bool rrEnabled = GetPrivateProfileIntW(L"RayReconstruction", L"Enabled", 0, fgSettingsPath.c_str()) != 0;
-    const unsigned int rawRrPreset = GetPrivateProfileIntW(L"RayReconstruction", L"Preset", control_rr::RRPresetF, fgSettingsPath.c_str());
+    control_rr_clamp::Select(control_rr_clamp::Normalize(FGSettingsReadStored(control_settings::Key::ReflectionDetail)));
+    control_rr::GISampleSelect(FGSettingsReadStored(control_settings::Key::GlobalIlluminationSamples));
+    const bool rrEnabled = FGSettingsReadStored(control_settings::Key::RayReconstruction) != 0;
+    const unsigned int rawRrPreset = FGSettingsReadStored(control_settings::Key::RayReconstructionModel);
     const unsigned int rrPreset = rawRrPreset == control_rr::RRPresetE ? control_rr::RRPresetE : control_rr::RRPresetF;
-    const unsigned int rawTextureStreamingMs = GetPrivateProfileIntW(L"Experimental", L"TextureStreamingBudgetMs", 0, fgSettingsPath.c_str());
+    const unsigned int rawTextureStreamingMs = FGSettingsReadStored(control_settings::Key::TextureStreamingBudget);
     const unsigned int textureStreamingMs = NormalizeFGTextureStreamingBudgetMs(rawTextureStreamingMs);
-    const bool vramMonitorEnabled = GetPrivateProfileIntW(L"Overlay", L"VramMonitorEnabled", 1, fgSettingsPath.c_str()) != 0;
+    const bool vramMonitorEnabled = FGSettingsReadStored(control_settings::Key::VideoMemoryMonitor) != 0;
 
     slFgUserMultiplier.store(selection, std::memory_order_release);
     slFgDynamicManualTargetFps.store(manualTarget, std::memory_order_release);
@@ -148,7 +157,7 @@ static void FGSettingsLoadSettings() noexcept {
     control_rr::RRUserRequest(rrEnabled);
     SetFGTextureStreamingBudgetMs(textureStreamingMs);
     SetFGVramMonitorEnabled(vramMonitorEnabled);
-    PTReflectionUserRequest(GetPrivateProfileIntW(L"GlassReflections", L"Enabled", 1, fgSettingsPath.c_str()) != 0);
+    PTReflectionUserRequest(FGSettingsReadStored(control_settings::Key::GlassReflections) != 0);
     Log("GLASS_REFLECTION_SETTINGS enabled=%u source=settings default=on", unsigned(PTReflectionUserRequested()));
     Log("FG_SETTINGS_LOAD success=1 path=%ls selection=%s selected_code=%u target_policy=%s manual_target_fps=%u rr_enabled=%u rr_preset=%s rr_preset_value=%u texture_streaming_ms=%u vram_monitor=%u skin_mode=off schema=10 ui=fg_full_rr_toggle_model_E_F",
         fgSettingsPath.c_str(), GetFGSelectionName(selection), selection, manualTarget ? "manual" : "auto", manualTarget, unsigned(rrEnabled), control_rr::RRUserPresetLabel(), control_rr::RRUserPresetValue(), textureStreamingMs, unsigned(vramMonitorEnabled));
@@ -161,39 +170,16 @@ static bool FGSettingsSaveSettingsNow() noexcept {
         return false;
     }
 
-    wchar_t clampText[8]{};
-    swprintf_s(clampText,L"%u",control_rr_clamp::Requested());
-    wchar_t experimentalText[8]{};
-    swprintf_s(experimentalText, L"%u", IsRTX40MFGRequested() ? 1u : 0u);
-    wchar_t textureStreamingText[8]{};
-    swprintf_s(textureStreamingText,L"%u",GetFGTextureStreamingBudgetMs());
-    wchar_t vramMonitorText[8]{};
-    swprintf_s(vramMonitorText,L"%u",IsFGVramMonitorEnabled()?1u:0u);
-    wchar_t modeText[16]{};
-    wchar_t targetText[16]{};
-    wchar_t rrEnabledText[8]{};
-    wchar_t ptEnabledText[8]{};
-    swprintf_s(ptEnabledText, L"%u", PTReflectionUserRequested() ? 1u : 0u);
-    wchar_t giSamplesText[8]{};
-    swprintf_s(giSamplesText,L"%u",control_rr::GISampleRequested());
-    wchar_t rrPresetText[8]{};
-    swprintf_s(modeText, L"%u", GetFGUserMultiplier());
-    swprintf_s(targetText, L"%u", GetFGDynamicManualTargetFps());
-    swprintf_s(rrEnabledText, L"%u", control_rr::RRUserRequested() ? 1u : 0u);
-    swprintf_s(rrPresetText, L"%u", control_rr::RRUserPresetValue());
-
     bool ok = WritePrivateProfileStringW(L"ControlFG", L"Schema", L"10", fgSettingsPath.c_str()) != FALSE;
-    ok = (WritePrivateProfileStringW(L"FrameGeneration", L"Mode", modeText, fgSettingsPath.c_str()) != FALSE) && ok;
-    ok = (WritePrivateProfileStringW(L"FrameGeneration", L"DynamicTargetFPS", targetText, fgSettingsPath.c_str()) != FALSE) && ok;
-    ok = (WritePrivateProfileStringW(L"RayReconstruction", L"Enabled", rrEnabledText, fgSettingsPath.c_str()) != FALSE) && ok;
-    ok = (WritePrivateProfileStringW(L"RayReconstruction", L"Preset", rrPresetText, fgSettingsPath.c_str()) != FALSE) && ok;
-    ok = (WritePrivateProfileStringW(L"RayReconstruction", L"ReflectionClamp", clampText, fgSettingsPath.c_str()) != FALSE) && ok;
-    ok = (WritePrivateProfileStringW(L"RayReconstruction", L"GISamples", giSamplesText, fgSettingsPath.c_str()) != FALSE) && ok;
+    for (const auto& option : control_settings::kOptions) {
+        if (!option.section) continue; // Derived controls do not own an INI key.
+        wchar_t text[16]{};
+        swprintf_s(text, L"%u", control_settings::ReadStored(option));
+        const bool saved = WritePrivateProfileStringW(option.section, option.storageKey,
+            text, fgSettingsPath.c_str()) != FALSE;
+        ok = saved && ok;
+    }
     WritePrivateProfileStringW(L"Overlay", L"ToggleKey", nullptr, fgSettingsPath.c_str());
-    ok = (WritePrivateProfileStringW(L"Overlay", L"VramMonitorEnabled", vramMonitorText, fgSettingsPath.c_str()) != FALSE) && ok;
-    ok = (WritePrivateProfileStringW(L"Experimental", L"RTX40MultiFG", experimentalText, fgSettingsPath.c_str()) != FALSE) && ok;
-    ok = (WritePrivateProfileStringW(L"Experimental", L"TextureStreamingBudgetMs", textureStreamingText, fgSettingsPath.c_str()) != FALSE) && ok;
-    ok = (WritePrivateProfileStringW(L"GlassReflections", L"Enabled", ptEnabledText, fgSettingsPath.c_str()) != FALSE) && ok;
     // Old experimental RR/AA settings are intentionally removed; FG settings remain intact.
     WritePrivateProfileStringW(L"AntiAliasing", nullptr, nullptr, fgSettingsPath.c_str());
     WritePrivateProfileStringW(L"RayReconstruction", L"SkinResponsivity", nullptr, fgSettingsPath.c_str());
@@ -282,107 +268,84 @@ static void FGSettingsRefreshDisplayTarget(HWND game, bool force = false) noexce
     else if (gameChanged) SetFGDynamicDetectedRefreshMilliHz(0, "unresolved_new_window");
 }
 
-static HFONT CreateFGControlFont(int height, int weight, const wchar_t* face) noexcept {
-    return CreateFontW(-height, 0, 0, 0, weight, FALSE, FALSE, FALSE, DEFAULT_CHARSET,
-        OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, face);
-}
+#include "ui/vram_monitor.h"
 
-static void PaintFGVramProbe(HWND hwnd) noexcept {
-    PAINTSTRUCT ps{};HDC dc=BeginPaint(hwnd,&ps);if(!dc)return;
-    RECT client{};GetClientRect(hwnd,&client);
-    HBRUSH bg=CreateSolidBrush(RGB(0,0,0));FillRect(dc,&client,bg);DeleteObject(bg);
-    HPEN border=CreatePen(PS_SOLID,1,RGB(92,92,92));HGDIOBJ oldPen=SelectObject(dc,border);
-    HGDIOBJ oldBrush=SelectObject(dc,GetStockObject(HOLLOW_BRUSH));Rectangle(dc,0,0,client.right-1,client.bottom-1);
-    SelectObject(dc,oldBrush);SelectObject(dc,oldPen);DeleteObject(border);SetBkMode(dc,TRANSPARENT);
-
-    HFONT label=CreateFGControlFont(16,FW_BOLD,L"Bahnschrift Condensed");
-    HFONT value=CreateFGControlFont(22,FW_SEMIBOLD,L"Bahnschrift SemiCondensed");
-    HFONT smallFont=CreateFGControlFont(13,FW_NORMAL,L"Bahnschrift SemiCondensed");
-    HGDIOBJ oldFont=SelectObject(dc,label);SetTextColor(dc,RGB(255,32,32));
-    RECT labelRc{14,8,82,30};DrawTextW(dc,L"VRAM",-1,&labelRc,DT_LEFT|DT_VCENTER|DT_SINGLELINE);
-
-    wchar_t mainText[160]{},detail[192]{};
-    if(vramProbeSampleValid.load(std::memory_order_acquire)){
-        constexpr double GiB=1024.0*1024.0*1024.0;
-        const auto usage=vramProbeLocalUsageBytes.load(std::memory_order_acquire);
-        const auto budget=vramProbeLocalBudgetBytes.load(std::memory_order_acquire);
-        const auto peak=vramProbePeakLocalUsageBytes.load(std::memory_order_acquire);
-        const auto physical=vramProbeDedicatedVideoBytes.load(std::memory_order_acquire);
-        const unsigned pct=budget?static_cast<unsigned>((usage*100ull+budget/2ull)/budget):0u;
-        swprintf_s(mainText,L"%.2f / %.2f GB  (%u%%)",double(usage)/GiB,double(budget)/GiB,pct);
-        const bool hdrKnown=vramProbeHdrKnown.load(std::memory_order_acquire)!=0;
-        const bool hdr=vramProbeHdrEnabled.load(std::memory_order_acquire)!=0;
-        swprintf_s(detail,L"Peak %.2f GB   Physical %.2f GB   HDR %s",double(peak)/GiB,double(physical)/GiB,
-            hdrKnown?(hdr?L"ON":L"OFF"):L"?");
-    }else{
-        wcscpy_s(mainText,L"Waiting for GPU sample...");
-        wcscpy_s(detail,L"Updates while Control is rendering.");
-    }
-    SelectObject(dc,value);SetTextColor(dc,RGB(246,246,246));
-    RECT valueRc{82,5,376,38};DrawTextW(dc,mainText,-1,&valueRc,DT_RIGHT|DT_VCENTER|DT_SINGLELINE);
-    SelectObject(dc,smallFont);SetTextColor(dc,RGB(185,185,185));
-    RECT detailRc{14,48,376,72};DrawTextW(dc,detail,-1,&detailRc,DT_LEFT|DT_VCENTER|DT_SINGLELINE);
-    SelectObject(dc,oldFont);DeleteObject(label);DeleteObject(value);DeleteObject(smallFont);EndPaint(hwnd,&ps);
-}
-static LRESULT CALLBACK FGVramProbeWndProc(HWND hwnd,UINT message,WPARAM wParam,LPARAM lParam) noexcept {
-    switch(message){
-    case WM_ERASEBKGND:return 1;
-    case WM_PAINT:PaintFGVramProbe(hwnd);return 0;
-    case WM_NCHITTEST:return HTTRANSPARENT;
-    }
-    return DefWindowProcW(hwnd,message,wParam,lParam);
-}
 // An owned, non-topmost monitor stays with the game without competing with
 // NVIDIA/Steam overlays. It never takes focus, captures input or polls shortcuts.
 static DWORD WINAPI FGSettingsThreadProc(LPVOID) noexcept {
-    WNDCLASSEXW wc{};
-    wc.cbSize=sizeof(wc); wc.lpfnWndProc=FGVramProbeWndProc;
-    wc.hInstance=selfModule; wc.lpszClassName=kFGVramProbeClassName;
-    RegisterClassExW(&wc);
-    const UINT_PTR timer=SetTimer(nullptr,0,250,nullptr);
-    if(!timer){Log("FG_SETTINGS_TIMER_FAILED error=%lu",GetLastError());return 0;}
-    HWND monitor=nullptr, owner=nullptr;
-    bool shown=false; RECT last{};
-    MSG msg{};
-    while(GetMessageW(&msg,nullptr,0,0)>0){
-        TranslateMessage(&msg);DispatchMessageW(&msg);
-        if(msg.message!=WM_TIMER||msg.wParam!=timer)continue;
+    namespace layout = control_ui::theme::vram;
+    WNDCLASSEXW windowClass{};
+    windowClass.cbSize = sizeof(windowClass);
+    windowClass.lpfnWndProc = FGVramProbeWndProc;
+    windowClass.hInstance = selfModule;
+    windowClass.lpszClassName = kFGVramProbeClassName;
+    RegisterClassExW(&windowClass);
+
+    const UINT_PTR timer = SetTimer(nullptr, 0, 250, nullptr);
+    if (!timer) {
+        Log("FG_SETTINGS_TIMER_FAILED error=%lu", GetLastError());
+        return 0;
+    }
+    HWND monitor = nullptr, owner = nullptr;
+    bool shown = false;
+    RECT lastPlacement{};
+    MSG message{};
+    while (GetMessageW(&message, nullptr, 0, 0) > 0) {
+        TranslateMessage(&message);
+        DispatchMessageW(&message);
+        if (message.message != WM_TIMER || message.wParam != timer) continue;
+
         FGSettingsFlushSettingsIfDue();
-        HWND game=FindFGGameWindowCached();
-        if(game)FGSettingsRefreshDisplayTarget(game);
-        if(IsFGRtx40Series()&&!IsFGSelectionAllowedByGpuPolicy(GetFGUserMultiplier())){
-            SetFGUserMultiplier(2u);FGSettingsMarkSettingsDirty();
+        HWND game = FindFGGameWindowCached();
+        if (game) FGSettingsRefreshDisplayTarget(game);
+        if (IsFGRtx40Series() && !IsFGSelectionAllowedByGpuPolicy(GetFGUserMultiplier())) {
+            SetFGUserMultiplier(2u);
+            FGSettingsMarkSettingsDirty();
         }
-        const bool visible=game&&FGSettingsGameIsForeground(game)&&IsFGVramMonitorEnabled();
-        if(monitor&&owner!=game){DestroyWindow(monitor);monitor=nullptr;shown=false;}
-        if(visible&&!monitor){
-            monitor=CreateWindowExW(WS_EX_TOOLWINDOW|WS_EX_LAYERED|WS_EX_NOACTIVATE|WS_EX_TRANSPARENT,
-                kFGVramProbeClassName,L"Control FG VRAM",WS_POPUP,0,0,kFGVramProbeWidth,kFGVramProbeHeight,
-                game,nullptr,selfModule,nullptr);
-            owner=game;last={};
-            if(monitor)SetLayeredWindowAttributes(monitor,0,238,LWA_ALPHA);
+        const bool visible = game && FGSettingsGameIsForeground(game) && IsFGVramMonitorEnabled();
+        if (monitor && owner != game) {
+            DestroyWindow(monitor);
+            monitor = nullptr;
+            shown = false;
         }
-        if(!monitor)continue;
-        if(visible){
-            POINT origin{18,18};
-            if(ClientToScreen(game,&origin)){
-                RECT next{origin.x,origin.y,origin.x+kFGVramProbeWidth,origin.y+kFGVramProbeHeight};
-                if(!EqualRect(&last,&next)){
-                    SetWindowPos(monitor,nullptr,next.left,next.top,kFGVramProbeWidth,kFGVramProbeHeight,
-                        SWP_NOACTIVATE|SWP_NOZORDER);last=next;
+        if (visible && !monitor) {
+            monitor = CreateWindowExW(WS_EX_TOOLWINDOW | WS_EX_LAYERED | WS_EX_NOACTIVATE | WS_EX_TRANSPARENT,
+                kFGVramProbeClassName, L"Control FG VRAM", WS_POPUP, 0, 0, layout::kWidth, layout::kHeight,
+                game, nullptr, selfModule, nullptr);
+            owner = game;
+            lastPlacement = {};
+            if (monitor) SetLayeredWindowAttributes(monitor, 0, layout::kOpacity, LWA_ALPHA);
+        }
+        if (!monitor) continue;
+        if (visible) {
+            POINT origin{layout::kMargin, layout::kMargin};
+            if (ClientToScreen(game, &origin)) {
+                RECT placement{origin.x, origin.y, origin.x + layout::kWidth, origin.y + layout::kHeight};
+                if (!EqualRect(&lastPlacement, &placement)) {
+                    SetWindowPos(monitor, nullptr, placement.left, placement.top, layout::kWidth, layout::kHeight,
+                        SWP_NOACTIVATE | SWP_NOZORDER);
+                    lastPlacement = placement;
                 }
             }
-            if(!shown){ShowWindow(monitor,SW_SHOWNOACTIVATE);shown=true;}
-            InvalidateRect(monitor,nullptr,FALSE);
-        }else if(shown){ShowWindow(monitor,SW_HIDE);shown=false;}
+            if (!shown) {
+                ShowWindow(monitor, SW_SHOWNOACTIVATE);
+                shown = true;
+            }
+            InvalidateRect(monitor, nullptr, FALSE);
+        } else if (shown) {
+            ShowWindow(monitor, SW_HIDE);
+            shown = false;
+        }
     }
-    KillTimer(nullptr,timer);FGSettingsFlushSettingsIfDue(true);
-    if(monitor)DestroyWindow(monitor);
+    KillTimer(nullptr, timer);
+    FGSettingsFlushSettingsIfDue(true);
+    if (monitor) DestroyWindow(monitor);
     return 0;
 }
+
 static void StartFGSettingsService() noexcept {
-    if(fgSettingsThreadHandle)return;
+    if (fgSettingsThreadHandle) return;
     FGSettingsLoadSettings();
-    fgSettingsThreadHandle=CreateThread(nullptr,0,FGSettingsThreadProc,nullptr,0,nullptr);
-    Log("FG_SETTINGS_SERVICE started=%u ui=native_menu_only input_hooks=none",unsigned(fgSettingsThreadHandle!=nullptr));
+    fgSettingsThreadHandle = CreateThread(nullptr, 0, FGSettingsThreadProc, nullptr, 0, nullptr);
+    Log("FG_SETTINGS_SERVICE started=%u ui=native_menu_only input_hooks=none", unsigned(fgSettingsThreadHandle != nullptr));
 }

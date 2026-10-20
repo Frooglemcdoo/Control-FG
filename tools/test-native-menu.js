@@ -1,5 +1,12 @@
 const fs = require('fs'), vm = require('vm'), assert = require('assert');
+const schema = JSON.parse(fs.readFileSync('src/settings_schema.json', 'utf8'));
 const script = fs.readFileSync('src/native_menu/menu.js', 'utf8');
+if (process.argv[2] === '--config') {
+    const native = JSON.parse(fs.readFileSync(process.argv[3], 'utf8'));
+    assert.equal(native.values.length, schema.options.length);
+    assert.deepEqual(native.defaults, schema.options.map(option => option.default));
+    assert.deepEqual(native.fgChoices, schema.options.find(option => option.key === 'FrameGeneration').choices.map(choice => choice.value));
+}
 function exercise(rtx40) {
     const config = {presetE:5,presetF:6,rtx40,
         values:[4,0,144,0,6,60,4,1,0,1,0],defaults:[4,0,144,0,6,60,4,1,0,1,0],
@@ -7,7 +14,7 @@ function exercise(rtx40) {
     if(rtx40) config.values[0]=config.defaults[0]=2;
     const liveValues=config.values.slice();
     config.values[0]=0; // Reopened view still receives the cached startup snapshot.
-    const context={window:{__controlFGConfig:config},Number};
+    const context={window:{__controlFGConfig:config,__controlFGSchema:schema},Number};
     vm.createContext(context);vm.runInContext(script,context);
     const events=[], handlers={};
     const engine={on(name,fn){handlers[name]=fn;},trigger(...args){
@@ -68,7 +75,7 @@ function exercise(rtx40) {
 }
 exercise(false);exercise(true);
 // Optional local check against user-supplied assets; proprietary fixtures are not shipped.
-if(process.argv[2]) {
+if(process.argv[2] && process.argv[2] !== '--config') {
     const {context,requireModule,rows}=exercise(false);
     vm.runInContext(fs.readFileSync(process.argv[2],'utf8'),context);
     const modules=context.window.webpackJsonp[0][1];
