@@ -3,12 +3,13 @@
 #include <cstdint>
 
 namespace native_lighting {
-enum class Mode : unsigned { Native, DisableBakedGi, DisableDirect, DisableDirectDiffuse, DisableDirectSpecular };
+enum class Mode : unsigned { Native, DisableBakedGi, DisableDirect, DisableDirectDiffuse, DisableDirectSpecular, BypassShadows, DisableLightPattern };
 inline constexpr unsigned kGiBit = 1, kDirectBit = 2, kAllBits = 3;
-inline constexpr unsigned kDiffuseReadyBit = 4, kSpecularReadyBit = 8;
+inline constexpr unsigned kDiffuseReadyBit = 4, kSpecularReadyBit = 8, kShadowReadyBit = 16, kPatternReadyBit = 32;
 struct ModeChoice { Mode mode; const wchar_t* label; };
 inline constexpr ModeChoice kModeChoices[] = {
-    {Mode::Native, L"NATIVE"}, {Mode::DisableDirectDiffuse, L"DIFFUSE OFF"},
+    {Mode::Native, L"NATIVE"}, {Mode::BypassShadows, L"SHADOWS BYPASS"},
+    {Mode::DisableLightPattern, L"PATTERN OFF"}, {Mode::DisableDirectDiffuse, L"DIFFUSE OFF"},
     {Mode::DisableDirectSpecular, L"SPECULAR OFF"}, {Mode::DisableBakedGi, L"GI OFF"},
     {Mode::DisableDirect, L"DIRECT OFF"}
 };
@@ -19,6 +20,8 @@ inline unsigned RequiredVariant(Mode mode) noexcept {
     case Mode::DisableDirect: return kDirectBit;
     case Mode::DisableDirectDiffuse: return kDiffuseReadyBit;
     case Mode::DisableDirectSpecular: return kSpecularReadyBit;
+    case Mode::BypassShadows: return kShadowReadyBit;
+    case Mode::DisableLightPattern: return kPatternReadyBit;
     default: return 0;
     }
 }
@@ -31,12 +34,14 @@ inline const char* ModeName(Mode mode) noexcept {
     case Mode::DisableDirect: return "direct_off";
     case Mode::DisableDirectDiffuse: return "diffuse_off";
     case Mode::DisableDirectSpecular: return "specular_off";
+    case Mode::BypassShadows: return "shadows_bypass";
+    case Mode::DisableLightPattern: return "pattern_off";
     default: return "native";
     }
 }
 inline bool Disables(Mode mode, unsigned kind) noexcept {
     return (mode == Mode::DisableBakedGi && kind == kGiBit) ||
-           ((mode == Mode::DisableDirect || mode == Mode::DisableDirectDiffuse || mode == Mode::DisableDirectSpecular) && kind == kDirectBit);
+           ((mode == Mode::DisableDirect || mode == Mode::DisableDirectDiffuse || mode == Mode::DisableDirectSpecular || mode == Mode::BypassShadows || mode == Mode::DisableLightPattern) && kind == kDirectBit);
 }
 
 // A selection and its observation masks share one atomic word. Late worker

@@ -3,7 +3,12 @@
 
 namespace native_lighting::ui {
 inline constexpr wchar_t kClass[] = L"ControlFGLightingDiagnosticR54";
-inline constexpr int kWidth = 490, kHeight = 294, kButtonFirst = 5400;
+inline constexpr int kWidth = 490, kButtonFirst = 5400;
+inline constexpr int kModeRows = (kModeCount + 2) / 3;
+inline constexpr int kStatusY = 40 + kModeRows * 46 - 2;
+inline constexpr int kActionsY = kStatusY + 28;
+inline constexpr int kFooterY = kActionsY + 52;
+inline constexpr int kHeight = kFooterY + 72;
 inline constexpr unsigned kButtonCount = kModeCount + 3;
 inline const wchar_t* ButtonLabel(unsigned index) noexcept {
     if (index < kModeCount) return kModeChoices[index].label;
@@ -61,11 +66,11 @@ inline void Paint(HWND window) noexcept {
     const auto mode = LiveSelection::GetMode(state);
     const unsigned required = RequiredBinding(mode);
     wchar_t status[160]{};
-    swprintf_s(status, L"Diffuse: %s   Specular: %s   %s", ready & kDiffuseReadyBit ? L"ready" : L"waiting", ready & kSpecularReadyBit ? L"ready" : L"waiting",
+    swprintf_s(status, L"Selected mode: %s   %s", (ready & RequiredVariant(mode)) == RequiredVariant(mode) ? L"ready" : L"waiting",
         (observed & required) == required ? L"bindings recorded" : L"NOT APPLIED: awaiting bind");
-    DrawLabel(dc, detailFont, status, {14,130,kWidth-12,154}, theme::kMutedText);
-    DrawLabel(dc, detailFont, L"F10: return to game    Ctrl+Shift+1..5: live mode", {14,225,kWidth-12,249}, theme::kMutedText);
-    DrawLabel(dc, detailFont, selectionRejected ? L"Mode unavailable: matching shader is not ready. Save Log." : savedNotice.load() == 2 ? L"Log write failed. Save Log shows the Windows error." : savedNotice.load() == 1 ? L"Log saved. See the folder shown in the confirmation." : L"Choose a mode, let it settle, then record what you see.", {14,251,kWidth-12,280}, theme::kText);
+    DrawLabel(dc, detailFont, status, {14,kStatusY,kWidth-12,kStatusY+24}, theme::kMutedText);
+    DrawLabel(dc, detailFont, L"F10: return to game    Ctrl+Shift+1..7: live mode", {14,kFooterY,kWidth-12,kFooterY+24}, theme::kMutedText);
+    DrawLabel(dc, detailFont, selectionRejected ? L"Mode unavailable: matching shader is not ready. Save Log." : savedNotice.load() == 2 ? L"Log write failed. Save Log shows the Windows error." : savedNotice.load() == 1 ? L"Log saved. See the folder shown in the confirmation." : L"Choose a mode, let it settle, then record what you see.", {14,kFooterY+26,kWidth-12,kFooterY+56}, theme::kText);
     EndPaint(window, &ps);
 }
 inline void SaveReport(HWND window) noexcept {
@@ -103,9 +108,9 @@ inline LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPA
     case WM_PAINT: Paint(window); return 0;
     case WM_CREATE:
         for (unsigned i=0;i<kButtonCount;++i) {
-            const int row=i<kModeCount ? i/3 : 2, col=i<kModeCount ? i%3 : i-kModeCount;
+            const int row=i<kModeCount ? i/3 : kModeRows, col=i<kModeCount ? i%3 : i-kModeCount;
             HWND button=CreateWindowExW(0,L"BUTTON",ButtonLabel(i),WS_CHILD|WS_VISIBLE|WS_TABSTOP|BS_OWNERDRAW,
-                14+col*156,40+row*46+(row==2?26:0),148,36,window,reinterpret_cast<HMENU>(INT_PTR(kButtonFirst+i)),selfModule,nullptr);
+                14+col*156,i<kModeCount ? 40+row*46 : kActionsY,148,36,window,reinterpret_cast<HMENU>(INT_PTR(kButtonFirst+i)),selfModule,nullptr);
             SendMessageW(button,WM_SETFONT,reinterpret_cast<WPARAM>(bodyFont),TRUE);
         }
         return 0;
@@ -143,9 +148,9 @@ inline DWORD WINAPI ThreadProc(LPVOID) noexcept {
     if(!RegisterClassExW(&wc)&&GetLastError()!=ERROR_CLASS_ALREADY_EXISTS){Trace("overlay_failed reason=class");return 0;}
     UINT_PTR timer=SetTimer(nullptr,0,50,nullptr);
     if(!timer){Trace("overlay_failed reason=timer");return 0;}
-    HWND panel=nullptr,owner=nullptr;bool held[6]{};
+    HWND panel=nullptr,owner=nullptr;bool held[kModeCount+1]{};
     ULONGLONG nextRefresh=0;
-    Trace("session_start build=R56-direct-components pid=%lu default=native log=user-diagnostics-folder",GetCurrentProcessId());
+    Trace("session_start build=R57-light-inputs pid=%lu default=native log=user-diagnostics-folder",GetCurrentProcessId());
     MSG msg{};
     while(GetMessageW(&msg,nullptr,0,0)>0){
         if (!panel || !IsDialogMessageW(panel, &msg)) {
@@ -159,8 +164,8 @@ inline DWORD WINAPI ThreadProc(LPVOID) noexcept {
         if(!panel)continue;
         const bool foreground=GetForegroundWindow()==game || PanelHasForeground(panel);
         const bool modifier=(GetAsyncKeyState(VK_CONTROL)&0x8000)&&(GetAsyncKeyState(VK_SHIFT)&0x8000);
-        const int keys[6]={VK_F10,'1','2','3','4','5'};
-        for(int i=0;i<6;++i){const bool down=(GetAsyncKeyState(keys[i])&0x8000)!=0;
+        const int keys[kModeCount+1]={VK_F10,'1','2','3','4','5','6','7'};
+        for(int i=0;i<int(kModeCount+1);++i){const bool down=(GetAsyncKeyState(keys[i])&0x8000)!=0;
             if(foreground&&down&&!held[i]&&(i==0||modifier)){
                 if(i==0){if(panelOpen)ClosePanel(panel);else OpenPanel(panel);}else {selectionRejected=!SelectMode(kModeChoices[i-1].mode);savedNotice=0;}
             }held[i]=down;

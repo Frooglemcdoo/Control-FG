@@ -14,9 +14,13 @@ inline std::atomic<bool> reportHealthy{false};
 inline const GUID kVariantGuid = {0x822329d7,0x3614,0x4f73,{0xa6,0x14,0xd0,0x8c,0x94,0xf2,0x54,0x01}};
 inline const GUID kDiffuseVariantGuid = {0x822329d7,0x3614,0x4f73,{0xa6,0x14,0xd0,0x8c,0x94,0xf2,0x56,0x01}};
 inline const GUID kSpecularVariantGuid = {0x822329d7,0x3614,0x4f73,{0xa6,0x14,0xd0,0x8c,0x94,0xf2,0x56,0x02}};
+inline const GUID kShadowVariantGuid = {0x822329d7,0x3614,0x4f73,{0xa6,0x14,0xd0,0x8c,0x94,0xf2,0x57,0x01}};
+inline const GUID kPatternVariantGuid = {0x822329d7,0x3614,0x4f73,{0xa6,0x14,0xd0,0x8c,0x94,0xf2,0x57,0x02}};
 inline const GUID& VariantGuid(Mode mode) noexcept {
     if (mode == Mode::DisableDirectDiffuse) return kDiffuseVariantGuid;
     if (mode == Mode::DisableDirectSpecular) return kSpecularVariantGuid;
+    if (mode == Mode::BypassShadows) return kShadowVariantGuid;
+    if (mode == Mode::DisableLightPattern) return kPatternVariantGuid;
     return kVariantGuid;
 }
 inline const GUID kKindGuid = {0x822329d7,0x3614,0x4f73,{0xa6,0x14,0xd0,0x8c,0x94,0xf2,0x54,0x02}};
@@ -126,7 +130,9 @@ inline void ObserveCompute(ID3D12Device* device, const D3D12_COMPUTE_PIPELINE_ST
     const VariantSpec variants[] = {
         {&kDirect, &kVariantGuid, kDirectBit},
         {&kDirectDiffuse, &kDiffuseVariantGuid, kDiffuseReadyBit},
-        {&kDirectSpecular, &kSpecularVariantGuid, kSpecularReadyBit}
+        {&kDirectSpecular, &kSpecularVariantGuid, kSpecularReadyBit},
+        {&kShadowBypass, &kShadowVariantGuid, kShadowReadyBit},
+        {&kPatternOff, &kPatternVariantGuid, kPatternReadyBit}
     };
     for (const auto& spec : variants) {
         std::vector<unsigned char> bytes;

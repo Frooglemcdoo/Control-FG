@@ -276,11 +276,11 @@ jobs:
           node tools/test-native-menu.js --config build/native-menu-config.json
           if errorlevel 1 exit /b 1
 
-      - name: Package live lighting diagnostic R56
+      - name: Package live lighting diagnostic R57
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-Native-Lighting-Live-R56'
+          $out='Control-FG-Native-Lighting-Live-R57'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
           New-Item -ItemType Directory -Force -Path "$out/ControlFGStreamline" | Out-Null
@@ -298,17 +298,19 @@ jobs:
           Copy-Item Collect-ControlFG-Compact-Logs.ps1 "$out/Collect-ControlFG-Compact-Logs.ps1"
           Copy-Item docs/native-lighting-live-r54.md "$out/DIAGNOSTIC-NOTES.md"
           @'
-          CONTROL-FG LIVE LIGHTING DIAGNOSTIC R56 - direct diffuse/specular isolation
+          CONTROL-FG LIVE LIGHTING DIAGNOSTIC R57 - shadow and projected light input isolation
           Close Control to install this DLL, then launch once. No restarts between modes.
           Copy package contents beside Control_DX12.exe, preserving ControlFGStreamline.
           Keep existing NVIDIA runtimes. Old R51/R52/R53 marker files are ignored.
 
           Use Borderless display mode for the floating diagnostic panel.
-          F10 opens it with mouse focus; F10 again returns to the game. Buttons: NATIVE / DIFFUSE OFF / SPECULAR OFF / GI OFF / DIRECT OFF.
-          Optional live keys: Ctrl+Shift+1 / 2 / 3 / 4 / 5 (same order).
+          F10 opens it with mouse focus; F10 again returns to the game. Buttons: NATIVE / SHADOWS BYPASS / PATTERN OFF, plus earlier tests.
+          Optional live keys: Ctrl+Shift+1 / 2 / 3 (Native / Shadows Bypass / Pattern Off).
           Start with RT/DLSS/RR/FG/glass OFF and compare the same stationary view.
-          Test Native, Diffuse Off and Specular Off; record speckles for each.
-          Diffuse Off removes direct diffuse only; Specular Off removes direct specular only.
+          Test Native, Shadows Bypass and Pattern Off; record speckles for each.
+          These tests keep direct light visible. Shadows Bypass can brighten shadowed areas.
+          Pattern Off removes projected light textures; material normals remain unchanged.
+          Both tests affect the shared direct diffuse/specular light inputs.
           Wait for bindings recorded and allow exposure/history to settle.
           NOT APPLIED means the selected shader has not been seen binding yet.
           For each mode, click SPECKLES REMAIN or SPECKLES GONE.
@@ -329,10 +331,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-Native-Lighting-Live-R56
+          name: Control-FG-Native-Lighting-Live-R57
           path: |
-            Control-FG-Native-Lighting-Live-R56.zip
-            Control-FG-Native-Lighting-Live-R56.sha256
+            Control-FG-Native-Lighting-Live-R57.zip
+            Control-FG-Native-Lighting-Live-R57.sha256
             build/exports.txt
             build/imports.txt
             build/pt_glass_raygen.dxil

@@ -10,7 +10,7 @@ int main(int argc, char** argv) try {
     std::ifstream file(argv[1], std::ios::binary);
     std::vector<unsigned char> source((std::istreambuf_iterator<char>(file)), {}), output;
     Require(source.size() == kDirect.size);
-    for (const auto* patch : {&kDirectDiffuse, &kDirectSpecular}) {
+    for (const auto* patch : {&kDirectDiffuse, &kDirectSpecular, &kShadowBypass, &kPatternOff}) {
         Require(MakeDisabledContribution(*patch,source.data(),source.size(),patch->nativeSha,output));
         Require(output.size()==source.size());
         for(size_t i=0;i<source.size();++i) {
@@ -20,12 +20,22 @@ int main(int argc, char** argv) try {
                 const size_t offset=patch->instructionOffset+patch->zeroWords[w]*4;
                 zero |= i>=offset && i<offset+4;
             }
-            Require(output[i] == (zero ? 0 : source[i]));
+            unsigned char expected = zero ? 0 : source[i];
+            for (size_t e=0;e<patch->editCount;++e) {
+                const auto& edit=patch->edits[e];
+                if(i>=edit.offset && i<edit.offset+edit.words*4)
+                    expected=reinterpret_cast<const unsigned char*>(edit.replacement)[i-edit.offset];
+            }
+            Require(output[i] == expected);
+        }
+        if (patch->editCount) {
+            auto wrong=source; wrong[patch->edits[0].offset]^=1;
+            Require(!MakeDisabledContribution(*patch,wrong.data(),wrong.size(),patch->nativeSha,output));
         }
         Require(!MakeDisabledContribution(*patch,source.data(),source.size(),"unsupported",output));
         auto altered=source; altered[patch->instructionOffset]^=1;
         Require(!MakeDisabledContribution(*patch,altered.data(),altered.size(),patch->nativeSha,output));
     }
-    std::cout<<"PASS: component patches change only their two output multiplier words and checksum; invalid identities/instructions rejected\n";
+    std::cout<<"PASS: exact output/input patches change only their declared edits and checksum; invalid identities/instructions rejected\n";
     return 0;
 } catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}

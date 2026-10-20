@@ -1,3 +1,50 @@
+# R57 direct-light input diagnostic
+
+R56's successful non-RT run marked diffuse_off speckles_gone and specular_off
+speckles_remain, with both variant bindings confirmed and baked GI unchanged.
+R57 keeps diffuse illumination and isolates two upstream light inputs before
+changing normals or material response:
+
+- SHADOWS BYPASS sets the direct shader's screen shadow-buffer reads, final
+  spotlight visibility and final point-light visibility to 1. Shadowed surfaces
+  can become brighter; this is a diagnostic, not a quality improvement.
+- PATTERN OFF substitutes 1 for the sun and spotlight projection-texture samples.
+  Light positions, attenuation, material inputs and shadows remain native.
+
+These are mutually exclusive modes. Both change shared inputs to direct diffuse
+AND specular calculations, not diffuse alone. Baked GI and other passes remain
+native; neither mode claims to remove every shadow/pattern elsewhere in the game.
+A change can implicate the input or its interaction with material response, not
+necessarily the input texture alone. The earlier diffuse/specular/GI/full-direct
+suppression controls remain available as cross-checks.
+
+Use the same view with RT/DLSS/RR/FG/glass OFF. Compare Native, Shadows Bypass,
+Pattern Off, allowing bindings and exposure/history to settle. Mark Speckles
+Remain/Gone for each and send the single Lighting-R57 session log. F10 opens or
+closes the panel; Ctrl+Shift+1/2/3 chooses these three modes. No restart between
+modes. Save Log confirms the path under the user diagnostics folder.
+
+## Exact shader edits and verification
+
+All patches require the original complete SHA256 and each expected instruction.
+In the 69,704-byte native direct CS, SHEX dwords 710 and 4429 read g_tShadowBuffer;
+7268 is the final spotlight visibility selection before its nonzero branch;
+11856 is the final point visibility before attenuation multiplication. Each is
+replaced by a same-destination MOV 1 and one-word NOP padding, retaining byte
+length and surrounding control flow. Sun and spot projection samples are SHEX
+653 (t17) and 7525 (t14), replaced the same way only for PATTERN OFF.
+
+ShadowBypass SHA256: c6661e9f3b9fe0bb297eb55d2a069df029b09bd93a2faa67a4b09ed3c986133a
+PatternOff SHA256: 07a28cb8848d31c54cb08d73c333ec517a89117dd923e8c14ff546597b9bd2c7
+
+Local checks cover every changed byte, expected-instruction rejection, unchanged
+shader size/bindings, DXBC checksum and complete instruction decoding. The Windows
+WARP test adds distinct shadow/pattern alternate PSOs and checks switching and
+native restoration via SetPipelineState and Reset, with GI unchanged. This GPU
+routing test uses synthetic shaders, not an in-game NVIDIA visual validation.
+
+---
+
 # R56 direct diffuse/specular diagnostic
 
 R55 successfully isolated the visible speckles to the direct-lighting contribution:

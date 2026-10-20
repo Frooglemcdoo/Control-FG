@@ -7,6 +7,7 @@
 // Exact captured native shaders only. Diagnostics remove one contribution;
 // they do not change sampling quality or ship as a visual improvement.
 namespace native_lighting {
+struct InstructionEdit { size_t offset; const uint32_t* expected; const uint32_t* replacement; size_t words; };
 struct ShaderPatch {
     const char* name;
     size_t size;
@@ -18,6 +19,8 @@ struct ShaderPatch {
     const size_t* zeroWords;
     size_t zeroCount;
     const unsigned char* checksum;
+    const InstructionEdit* edits = nullptr;
+    size_t editCount = 0;
 };
 inline constexpr uint32_t kDirectInstruction[] = {0xf000032u,0x100032u,0x0u,0x100006u,0x0u,0x4002u,0x3ca3d70au,0x3dcccccdu,0x0u,0x0u,0x4002u,0x3f800000u,0x3f800000u,0x0u,0x0u};
 inline constexpr size_t kDirectZeroWords[] = {6,7,11,12};
@@ -52,6 +55,33 @@ inline constexpr ShaderPatch kBakedGi = {
     16416, kBakedGiInstruction, 7, kBakedGiZeroWords, 1, kBakedGiChecksum
 };
 
+inline constexpr uint32_t kShadowBypass710Expected[] = {0x800002du,0x100082u,0x3u,0x100e46u,0x9u,0x207396u,0x2u,0x2u};
+inline constexpr uint32_t kShadowBypass710Replacement[] = {0x5000036u,0x100082u,0x3u,0x4001u,0x3f800000u,0x100003au,0x100003au,0x100003au};
+inline constexpr uint32_t kShadowBypass4429Expected[] = {0x800002du,0x100032u,0x9u,0x100e46u,0x9u,0x2078d6u,0x2u,0x2u};
+inline constexpr uint32_t kShadowBypass4429Replacement[] = {0x5000036u,0x100032u,0x9u,0x4001u,0x3f800000u,0x100003au,0x100003au,0x100003au};
+inline constexpr uint32_t kShadowBypass7268Expected[] = {0x9000037u,0x100082u,0x1cu,0x10003au,0x1eu,0x10003au,0x1fu,0x10003au,0x1cu};
+inline constexpr uint32_t kShadowBypass7268Replacement[] = {0x5000036u,0x100082u,0x1cu,0x4001u,0x3f800000u,0x100003au,0x100003au,0x100003au,0x100003au};
+inline constexpr uint32_t kShadowBypass11856Expected[] = {0x9000037u,0x100082u,0x11u,0x10003au,0x13u,0x4001u,0x3f800000u,0x10003au,0x11u};
+inline constexpr uint32_t kShadowBypass11856Replacement[] = {0x5000036u,0x100082u,0x11u,0x4001u,0x3f800000u,0x100003au,0x100003au,0x100003au,0x100003au};
+inline constexpr InstructionEdit kShadowBypassEdits[] = {{13992, kShadowBypass710Expected, kShadowBypass710Replacement, 8},{28868, kShadowBypass4429Expected, kShadowBypass4429Replacement, 8},{40224, kShadowBypass7268Expected, kShadowBypass7268Replacement, 9},{58576, kShadowBypass11856Expected, kShadowBypass11856Replacement, 9}};
+inline constexpr unsigned char kShadowBypassChecksum[] = {6,209,151,206,182,92,103,174,25,129,232,225,40,64,162,220};
+inline constexpr ShaderPatch kShadowBypass = {
+    "ShadowBypass", kDirect.size, kDirect.nativeSha, "c6661e9f3b9fe0bb297eb55d2a069df029b09bd93a2faa67a4b09ed3c986133a",
+    kDirect.instructionOffset, kDirectInstruction, 15, nullptr, 0, kShadowBypassChecksum,
+    kShadowBypassEdits, 4
+};
+inline constexpr uint32_t kPatternOff653Expected[] = {0xd000048u,0x100082u,0x3u,0x100046u,0xcu,0x207396u,0x11u,0x11u,0x206000u,0x2u,0x8u,0x4001u,0x0u};
+inline constexpr uint32_t kPatternOff653Replacement[] = {0x5000036u,0x100082u,0x3u,0x4001u,0x3f800000u,0x100003au,0x100003au,0x100003au,0x100003au,0x100003au,0x100003au,0x100003au,0x100003au};
+inline constexpr uint32_t kPatternOff7525Expected[] = {0xd000048u,0x100072u,0x20u,0x100086u,0x1fu,0x207e46u,0xeu,0xeu,0x206000u,0x3u,0xbu,0x4001u,0x0u};
+inline constexpr uint32_t kPatternOff7525Replacement[] = {0x5000036u,0x100072u,0x20u,0x4001u,0x3f800000u,0x100003au,0x100003au,0x100003au,0x100003au,0x100003au,0x100003au,0x100003au,0x100003au};
+inline constexpr InstructionEdit kPatternOffEdits[] = {{13764, kPatternOff653Expected, kPatternOff653Replacement, 13},{41252, kPatternOff7525Expected, kPatternOff7525Replacement, 13}};
+inline constexpr unsigned char kPatternOffChecksum[] = {100,186,153,71,113,24,220,164,106,117,234,102,55,175,186,254};
+inline constexpr ShaderPatch kPatternOff = {
+    "PatternOff", kDirect.size, kDirect.nativeSha, "07a28cb8848d31c54cb08d73c333ec517a89117dd923e8c14ff546597b9bd2c7",
+    kDirect.instructionOffset, kDirectInstruction, 15, nullptr, 0, kPatternOffChecksum,
+    kPatternOffEdits, 2
+};
+
 inline bool MakeDisabledContribution(const ShaderPatch& patch, const void* bytes,
                                      size_t size, const char* sha,
                                      std::vector<unsigned char>& result) {
@@ -62,7 +92,16 @@ inline bool MakeDisabledContribution(const ShaderPatch& patch, const void* bytes
     if (std::memcmp(source + patch.instructionOffset, patch.instruction, patch.instructionWords * 4)) return false;
     for (size_t i = 0; i < patch.zeroCount; ++i)
         if (patch.zeroWords[i] >= patch.instructionWords) return false;
+    for (size_t i = 0; i < patch.editCount; ++i) {
+        const auto& edit = patch.edits[i];
+        if (edit.offset > size || edit.words > (size - edit.offset) / 4 ||
+            std::memcmp(source + edit.offset, edit.expected, edit.words * 4)) return false;
+    }
     result.assign(source, source + size);
+    for (size_t i = 0; i < patch.editCount; ++i) {
+        const auto& edit = patch.edits[i];
+        std::memcpy(result.data() + edit.offset, edit.replacement, edit.words * 4);
+    }
     const uint32_t zero = 0;
     for (size_t i = 0; i < patch.zeroCount; ++i)
         std::memcpy(result.data() + patch.instructionOffset + patch.zeroWords[i] * 4, &zero, 4);
