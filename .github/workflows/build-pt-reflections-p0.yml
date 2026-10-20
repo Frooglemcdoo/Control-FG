@@ -218,6 +218,15 @@ jobs:
           dumpbin /exports build\dxgi.dll > build\exports.txt
           dumpbin /imports build\dxgi.dll > build\imports.txt
 
+      - name: Build RTX 40-series provider fix
+        shell: cmd
+        run: |
+          call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
+          python validation/mfg-test/contracts.py
+          if errorlevel 1 exit /b 1
+          cl /nologo /std:c++20 /EHsc /W4 /O2 /MT /LD /DNOMINMAX /DUNICODE /D_UNICODE src\rtx40_mfg\control_bridge.cpp src\rtx40_mfg\ada_patch.cpp src\rtx40_mfg\provider_policy.cpp src\rtx40_mfg\gates.cpp src\rtx40_mfg\patches.cpp src\rtx40_mfg\log.cpp /Fobuild\ /Febuild\ControlFG.RTX40MFG.dll /link /INCREMENTAL:NO /DYNAMICBASE /NXCOMPAT bcrypt.lib version.lib
+          if errorlevel 1 exit /b 1
+
       - name: Test native graphics menu
         shell: cmd
         run: |
@@ -244,13 +253,15 @@ jobs:
           node tools/test-native-menu.js --config build/native-menu-config.json
           if errorlevel 1 exit /b 1
 
-      - name: Package native graphics menu R48
+      - name: Package native graphics menu R49
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-Native-Menu-R48'
+          $out='Control-FG-Native-Menu-R49'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
+          New-Item -ItemType Directory -Force -Path "$out/ControlFGStreamline" | Out-Null
+          Copy-Item build/ControlFG.RTX40MFG.dll "$out/ControlFGStreamline/ControlFG.RTX40MFG.dll"
           Copy-Item build/pt_glass_raygen.dxil "$out/pt_glass_raygen.dxil"
           Copy-Item build/pt_glass_secondary.dxbc "$out/pt_glass_secondary.dxbc"
           Copy-Item build/pt_glass_composite.dxbc "$out/pt_glass_composite.dxbc"
@@ -263,7 +274,7 @@ jobs:
           Copy-Item Collect-ControlFG-Compact-Logs.cmd "$out/Collect-ControlFG-Compact-Logs.cmd"
           Copy-Item Collect-ControlFG-Compact-Logs.ps1 "$out/Collect-ControlFG-Compact-Logs.ps1"
           @'
-          CONTROL-FG NATIVE GRAPHICS MENU R48
+          CONTROL-FG NATIVE GRAPHICS MENU R49
           Branch: experiment/native-graphics-menu-r41
 
           Removes the OPAQUE button, setting and runtime enhancement hooks.
@@ -271,6 +282,9 @@ jobs:
           Preserves R37 glass lighting, R38 shadow filtering, RR guides and GI controls.
           No RR sharpening changes in this build.
 
+          R49 fixes RTX 40 Multi-FG patching the bundled DLL while NGX uses its cache.
+          Also replace ControlFGStreamline/ControlFG.RTX40MFG.dll with the included file.
+          RTX 40 hardware validation is required; incompatible providers fail closed.
           Close Control. Replace dxgi.dll and all three pt_glass shader files
           beside Control_DX12.exe. Keep native transparent reflections enabled.
           Open Options -> Graphics and scroll below the original settings.
@@ -281,7 +295,7 @@ jobs:
           Native menu only: the F10 popup and its input handling are removed.
           Unsupported game/UI builds keep saved settings and log the mismatch.
           Dropdown headers no longer draw over open lists. Descriptions expanded.
-          R48 integrates controls into Monitor, Quality and Ray Tracing.
+          R49 integrates controls into Monitor, Quality and Ray Tracing.
           RR is a checkbox. Model F and reflection detail 60% are fixed.
           Model E and the reflection-detail control are removed.
           GI samples and texture streaming use stepped sliders.
@@ -306,10 +320,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-Native-Menu-R48
+          name: Control-FG-Native-Menu-R49
           path: |
-            Control-FG-Native-Menu-R48.zip
-            Control-FG-Native-Menu-R48.sha256
+            Control-FG-Native-Menu-R49.zip
+            Control-FG-Native-Menu-R49.sha256
             build/exports.txt
             build/imports.txt
             build/pt_glass_raygen.dxil
