@@ -34,6 +34,7 @@ on:
       - experiment/reflected-character-material-audit-r39
       - fix/glass-only-remove-opaque-r40
       - experiment/native-graphics-menu-r41
+      - experiment/rr-speckle-lighting-r50
   workflow_dispatch:
   pull_request:
     branches:
@@ -183,6 +184,10 @@ jobs:
           if errorlevel 1 exit /b 1
           build\test-perf-r32.exe
           if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-rr-contact-shadow.cpp /Febuild\test-lighting-filters.exe
+          if errorlevel 1 exit /b 1
+          build\test-lighting-filters.exe
+          if errorlevel 1 exit /b 1
           python tools/test-clean-baseline.py
           if errorlevel 1 exit /b 1
           python tools/test-rr-character-shader-match.py
@@ -253,11 +258,11 @@ jobs:
           node tools/test-native-menu.js --config build/native-menu-config.json
           if errorlevel 1 exit /b 1
 
-      - name: Package native graphics menu R49
+      - name: Package RR lighting filter test R50
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-Native-Menu-R49'
+          $out='Control-FG-RR-Lighting-R50'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
           New-Item -ItemType Directory -Force -Path "$out/ControlFGStreamline" | Out-Null
@@ -274,45 +279,28 @@ jobs:
           Copy-Item Collect-ControlFG-Compact-Logs.cmd "$out/Collect-ControlFG-Compact-Logs.cmd"
           Copy-Item Collect-ControlFG-Compact-Logs.ps1 "$out/Collect-ControlFG-Compact-Logs.ps1"
           @'
-          CONTROL-FG NATIVE GRAPHICS MENU R49
-          Branch: experiment/native-graphics-menu-r41
+          CONTROL-FG RR LIGHTING FILTER TEST R50
+          Branch: experiment/rr-speckle-lighting-r50
+          Baseline: R49, including the RTX 40 provider fix and native menu.
 
-          Removes the OPAQUE button, setting and runtime enhancement hooks.
-          Opaque surfaces use the game's native reflections.
-          Preserves R37 glass lighting, R38 shadow filtering, RR guides and GI controls.
-          No RR sharpening changes in this build.
+          TEST CHANGE: preserve native contact-shadow filtering and the two broad
+          diffuse-filter calls previously bypassed for sun-shadow/AO configurations.
+          This tests a possible source of RR-amplified stationary lighting speckles.
+          Visual improvement has NOT been verified in game.
+          RR reflection/GI filtering, Model F, fixed 60% reflection detail,
+          character guides, skin and glass shaders remain as in R49.
 
-          R49 fixes RTX 40 Multi-FG patching the bundled DLL while NGX uses its cache.
-          Also replace ControlFGStreamline/ControlFG.RTX40MFG.dll with the included file.
-          RTX 40 hardware validation is required; incompatible providers fail closed.
-          Close Control. Replace dxgi.dll and all three pt_glass shader files
-          beside Control_DX12.exe. Keep native transparent reflections enabled.
-          Open Options -> Graphics and scroll below the original settings.
-          New sections use the game's own controls, text, highlights and descriptions.
-          Glass is under Reflection Enhancements. Opaque reflections are not added.
-          Settings save automatically and when leaving Options. Graphics Reset also
-          restores the mod defaults. Existing saved settings are retained.
-          Native menu only: the F10 popup and its input handling are removed.
-          Unsupported game/UI builds keep saved settings and log the mismatch.
-          Dropdown headers no longer draw over open lists. Descriptions expanded.
-          R49 integrates controls into Monitor, Quality and Ray Tracing.
-          RR is a checkbox. Model F and reflection detail 60% are fixed.
-          Model E and the reflection-detail control are removed.
-          GI samples and texture streaming use stepped sliders.
-          FG remains a dropdown. GI is inactive without RR or native indirect diffuse lighting.
-          Saved sample preferences are retained while inactive.
-          FG choices and reset defaults refresh with live readback.
-          Catalog validation rejects invalid dependencies, slider steps and duplicate keys.
-          Shared theme tokens define the optional monitor fonts, colors and layout.
-          The optional VRAM monitor no longer uses global topmost placement.
-          This test build targets the supplied March 2025 game DLLs/UI bundle.
-          Check main menu and pause menu, mouse/controller navigation, changes,
-          leaving/reopening Graphics, restart persistence and Reset.
-          If rows are missing, use Collect-ControlFG-Compact-Logs.cmd and send its ZIP.
-          Old opaque_reflection_raygen.dxil and opaque_reflection_composite.dxbc
-          are no longer loaded and may be deleted. Old opaque settings are ignored.
-          Character capture remains available but is not needed for this test.
-          No separate INI required.
+          Close Control. Install dxgi.dll and the three pt_glass shader files next
+          to Control_DX12.exe. Replace ControlFGStreamline/ControlFG.RTX40MFG.dll
+          with the included file. Keep the existing Streamline/runtime files.
+          No new setting or INI entry is required.
+
+          Compare R49 RR ON against R50 RR ON at the same pose and settings.
+          Let each view settle for 10 seconds. Inspect the stair-wall light edge,
+          cabinet and papers. Then pan slowly and check for trails or smearing.
+          Also compare RR OFF. Record FPS; native filtering adds work.
+          Use Collect-ControlFG-Compact-Logs.cmd if the result is unchanged or worse.
+          Restore the R49 package to revert. No saved settings format is changed.
           '@ | Set-Content "$out/README.txt" -Encoding ASCII
           Compress-Archive -Path "$out/*" -DestinationPath "$out.zip" -Force
           (Get-FileHash "$out.zip" -Algorithm SHA256).Hash | Set-Content "$out.sha256" -Encoding ASCII
@@ -320,10 +308,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-Native-Menu-R49
+          name: Control-FG-RR-Lighting-R50
           path: |
-            Control-FG-Native-Menu-R49.zip
-            Control-FG-Native-Menu-R49.sha256
+            Control-FG-RR-Lighting-R50.zip
+            Control-FG-RR-Lighting-R50.sha256
             build/exports.txt
             build/imports.txt
             build/pt_glass_raygen.dxil
