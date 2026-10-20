@@ -7,6 +7,7 @@
 #include <iterator>
 #include <cassert>
 #include <iostream>
+#include <vector>
 #ifdef _WIN32
 #include <windows.h>
 #else
@@ -63,8 +64,24 @@ static void Select(unsigned v){value=v;}
 #include "../src/native_menu/runtime.h"
 static void Native(void*,int,int){++nativeCalls;}
 static void NativeReset(void*){++nativeCalls;}
+static std::vector<std::string> emitted;
+static void Capture(void*,const char* event){emitted.emplace_back(event);}
 int main(int argc,char** argv){
     using namespace control_native_menu;
+    void* viewTable[0x220/8]{};
+    viewTable[0x218/8]=reinterpret_cast<void*>(&Capture);
+    void** view=viewTable;
+    alignas(8) unsigned char model[0xd8]{};
+    void* viewPointer=&view;
+    memcpy(model+0xd0,&viewPointer,sizeof(viewPointer));
+    mode=6;target=1000;
+    EnumHook(model,10999,41);
+    assert(emitted.front()=="CFG_STATE_BEGIN"&&emitted.back()=="CFG_STATE_END");
+    unsigned decoded[11]{};
+    for(const auto& event:emitted){unsigned i,b;if(std::sscanf(event.c_str(),"CFG_STATE_%u_%u",&i,&b)==2){assert(i<11&&b<10);decoded[i]|=1u<<b;}}
+    assert(decoded[0]==6&&decoded[1]==1&&decoded[2]==1000);
+    assert(mode==6&&target==1000&&dirtyCount==0); // Readback never writes settings.
+    mode=4;target=0;manualTarget=144;
     originalEnum=originalInt=Native;originalReset=originalSave=NativeReset;
     EnumHook(nullptr,10003,1);assert(control_rr::rr && nativeCalls==0);
     IntHook(nullptr,10005,75);assert(control_rr_clamp::value==75);

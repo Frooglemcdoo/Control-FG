@@ -73,6 +73,29 @@
                     });
                 });
             });
+            // The persistent resource contains a startup snapshot. A fresh view
+            // must read live native settings before treating that snapshot as current.
+            var incoming = null;
+            engine.on("CFG_STATE_BEGIN", function () { incoming = definitions.map(function () { return 0; }); });
+            definitions.forEach(function (_, index) {
+                for (var bit = 0; bit < 10; ++bit) (function (b) {
+                    engine.on("CFG_STATE_" + index + "_" + b, function () {
+                        if (incoming) incoming[index] |= (1 << b);
+                    });
+                }(bit));
+            });
+            engine.on("CFG_STATE_END", function () {
+                if (!incoming) return;
+                mobx.runInAction(function () {
+                    rows.forEach(function (r) {
+                        var id = r.m_iPropertyID;
+                        confirmed[id] = incoming[id - 10000];
+                        if (!pending[id].length) r.m_value = confirmed[id];
+                    });
+                    refresh();
+                });
+                incoming = null;
+            });
             engine.trigger = function (event, id, value) {
                 if ((event === "OnEnumGraphicsPropertySet" || event === "OnIntGraphicsPropertySet") && id >= 10000 && id <= 10010) {
                     var row = rows.find(function (r) { return r.m_iPropertyID === id; });

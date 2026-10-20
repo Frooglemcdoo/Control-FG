@@ -61,18 +61,40 @@ static bool Apply(int id, int value) {
     FGOverlayMarkSettingsDirty();
     return true;
 }
-static void Notify(void* model,int id,bool success) {
+static void Emit(void* model,const char* event) {
     if(!model)return;
     void* view=*reinterpret_cast<void**>(static_cast<unsigned char*>(model)+0xd0);
     if(!view)return;
     // Exact no-argument event path used by ui::Page::triggerEvent (ui RVA 0x29d0).
     auto** table=*reinterpret_cast<void***>(view);
-    char event[48]{};
-    std::snprintf(event,sizeof(event),"CFG_%s_%d",success?"OK":"FAIL",id);
     reinterpret_cast<void(*)(void*,const char*)>(table[0x218/8])(view,event);
 }
+static void Notify(void* model,int id,bool success) {
+    char event[48]{};
+    std::snprintf(event,sizeof(event),"CFG_%s_%d",success?"OK":"FAIL",id);
+    Emit(model,event);
+}
+// Use the verified no-argument event ABI for live readback. Ten bits cover
+// every menu value (including the 1000 FPS limit) without payload ABI guesses.
+static void Sync(void* model) {
+    std::lock_guard<std::recursive_mutex> lock(fgSettingsMutex);
+    const auto target=GetFGDynamicManualTargetFps();
+    if(target)manualTarget=target;
+    const unsigned values[]{GetFGUserMultiplier(),target?1u:0u,manualTarget,
+        unsigned(control_rr::RRUserRequested()),control_rr::RRUserPresetValue(),
+        control_rr_clamp::Requested(),control_rr::GISampleRequested(),
+        unsigned(PTReflectionUserRequested()),GetFGTextureStreamingBudgetMs(),
+        unsigned(IsFGVramMonitorEnabled()),unsigned(IsRTX40MFGRequested())};
+    Emit(model,"CFG_STATE_BEGIN");
+    for(unsigned i=0;i<11;++i)for(unsigned bit=0;bit<10;++bit)if(values[i]&(1u<<bit)) {
+        char event[48]{};
+        std::snprintf(event,sizeof(event),"CFG_STATE_%u_%u",i,bit);
+        Emit(model,event);
+    }
+    Emit(model,"CFG_STATE_END");
+}
 static void Dispatch(void* model, int id, int value, PropertyFn original) {
-    if(id==10999) { Log("NATIVE_MENU_HANDSHAKE version=%d",value); return; }
+    if(id==10999) { Log("NATIVE_MENU_HANDSHAKE version=%d",value); Sync(model); return; }
     if(id>=10000&&id<11000) {
         std::lock_guard<std::recursive_mutex> lock(fgSettingsMutex);
         const bool ok = fgNativeMenuReady.load() && Apply(id,value);

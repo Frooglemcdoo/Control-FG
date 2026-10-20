@@ -5,12 +5,19 @@ function exercise(rtx40) {
         values:[4,0,144,0,6,60,4,1,0,1,0],defaults:[4,0,144,0,6,60,4,1,0,1,0],
         fgChoices:rtx40?[0,2]:[0,1,2,3,4,5,6]};
     if(rtx40) config.values[0]=config.defaults[0]=2;
+    const liveValues=config.values.slice();
+    config.values[0]=0; // Reopened view still receives the cached startup snapshot.
     const context={window:{__controlFGConfig:config},Number};
     vm.createContext(context);vm.runInContext(script,context);
     const events=[], handlers={};
     const engine={on(name,fn){handlers[name]=fn;},trigger(...args){
         events.push(args);
-        if(args[0]==='OnGraphicsReset')Object.keys(handlers).filter(k=>k.startsWith('CFG_OK_')).forEach(k=>handlers[k]());
+        if(args[1]===10999) {
+            handlers.CFG_STATE_BEGIN();
+            liveValues.forEach((v,i)=>{for(let b=0;b<10;++b)if(v&(1<<b))handlers['CFG_STATE_'+i+'_'+b]();});
+            handlers.CFG_STATE_END();
+        }
+        else if(args[0]==='OnGraphicsReset')Object.keys(handlers).filter(k=>k.startsWith('CFG_OK_')).forEach(k=>handlers[k]());
         else if(args[1]>=10000&&args[1]<=10010) {
             const key=(engine.reject?'CFG_FAIL_':'CFG_OK_')+args[1];
             if(handlers[key])handlers[key]();
@@ -21,6 +28,7 @@ function exercise(rtx40) {
         name.includes('OptionToDescriptionModeMap')?maps:engine;
     const menu=context.window.__controlFG, rows=menu.rows(requireModule);
     assert.equal(rows.length,rtx40?11:10);
+    assert.equal(rows[0].m_value,liveValues[0]); // Live FG survives view recreation.
     assert.equal(rows[0].cfgHeader,'CFG_FG_HEADER');
     assert.equal(menu.translate('CFG_GLASS'),'Enhanced Glass Reflections');
     assert(!rows.some(r=>r.m_strNameLocID.includes('OPAQUE')));
