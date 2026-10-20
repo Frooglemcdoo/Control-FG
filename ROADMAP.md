@@ -79,6 +79,21 @@ Planned research includes:
 - a clean Control-styled UI integrated alongside FG and RR controls;
 - compatibility checks and safe fallback behavior.
 
+## Planned: HBAO+ ambient occlusion
+
+Add HBAO+ as an alternative to Control's native SSAO, integrated into the DX12 lighting pipeline. Status: planned; no release version assigned.
+
+- Use the game's depth buffer and camera projection, with correctly decoded normals where appropriate.
+- Replace the native ambient-occlusion contribution before lighting composition, avoiding double application of AO.
+- Preserve the shared native pass's other outputs, including bent normals and reflections.
+- Keep the implementation modular, with shared settings handling and controls styled to match the native graphics menu.
+- Validate image quality, temporal stability and GPU cost against native SSAO, including RT/RR on and off, resolution changes, HDR and Frame Generation.
+- Retain a native SSAO fallback if initialization or required resource validation fails.
+
+Lighting-noise investigation update (2026-10-20): the user reports that no exposed graphics setting corrects the speckles, following the requested SSAO-off comparison. The capture shows speckles in the early lighting buffer, but does not isolate which lighting input produces them. HBAO+ remains planned as an AO quality improvement, not a confirmed fix for those speckles; its implementation is not a prerequisite for continuing the noise investigation.
+
+Implementation reference: [NVIDIA HBAO+ source and DX12 samples](https://github.com/NVIDIAGameWorks/HBAOPlus).
+
 ## Longer-term direction
 
 The project is being developed as a set of game-aware rendering modules rather than a single isolated Frame Generation patch. The longer-term goal is to preserve Control-specific renderer knowledge — including HUD-less scene capture, motion vectors, depth, camera state, HDR handling and presentation timing — while adding additional DLSS/FG capabilities where they can be integrated cleanly and validated in runtime testing.

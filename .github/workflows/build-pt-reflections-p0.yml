@@ -34,6 +34,7 @@ on:
       - experiment/reflected-character-material-audit-r39
       - fix/glass-only-remove-opaque-r40
       - experiment/native-graphics-menu-r41
+      - experiment/native-gi-isolation-r53
   workflow_dispatch:
   pull_request:
     branches:
@@ -253,11 +254,11 @@ jobs:
           node tools/test-native-menu.js --config build/native-menu-config.json
           if errorlevel 1 exit /b 1
 
-      - name: Package native graphics menu R49
+      - name: Package native lighting isolation R53
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-Native-Menu-R49'
+          $out='Control-FG-Native-Lighting-Isolation-R53'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
           New-Item -ItemType Directory -Force -Path "$out/ControlFGStreamline" | Out-Null
@@ -273,46 +274,27 @@ jobs:
           Copy-Item Collect-RR-Blinds-Capture.ps1 "$out/Collect-RR-Blinds-Capture.ps1"
           Copy-Item Collect-ControlFG-Compact-Logs.cmd "$out/Collect-ControlFG-Compact-Logs.cmd"
           Copy-Item Collect-ControlFG-Compact-Logs.ps1 "$out/Collect-ControlFG-Compact-Logs.ps1"
+          Copy-Item tools/Select-Lighting-Test-R53.cmd "$out/Select-Lighting-Test-R53.cmd"
+          Copy-Item tools/select-lighting-test-r53.ps1 "$out/select-lighting-test-r53.ps1"
+          Copy-Item docs/native-lighting-isolation-r53.md "$out/DIAGNOSTIC-NOTES.md"
+          Set-Content "$out/ControlFG-Disable-BakedGI-R53.txt" 'R53 default: baked GI contribution disabled' -Encoding ASCII
           @'
-          CONTROL-FG NATIVE GRAPHICS MENU R49
-          Branch: experiment/native-graphics-menu-r41
+          CONTROL-FG NATIVE LIGHTING ISOLATION R53 - DIAGNOSTIC, NOT A FIX
+          Close Control. Copy package contents beside Control_DX12.exe,
+          preserving ControlFGStreamline. Keep existing NVIDIA runtimes.
+          R49 baseline; failed R51/R52 experiments are not included.
 
-          Removes the OPAQUE button, setting and runtime enhancement hooks.
-          Opaque surfaces use the game's native reflections.
-          Preserves R37 glass lighting, R38 shadow filtering, RR guides and GI controls.
-          No RR sharpening changes in this build.
+          Run Select-Lighting-Test-R53.cmd with Control closed:
+          0 = native comparison; 1 = baked GI disabled; 2 = direct lighting disabled.
+          Restart after every selection. Default mode is 1.
+          Compare the same stationary stair wall/carton with RT/DLSS/RR/FG/glass OFF.
+          These modes remove only the two exact captured lighting contributions.
+          Other passes remain, and exposure may change. They are not pure lighting views.
 
-          R49 fixes RTX 40 Multi-FG patching the bundled DLL while NGX uses its cache.
-          Also replace ControlFGStreamline/ControlFG.RTX40MFG.dll with the included file.
-          RTX 40 hardware validation is required; incompatible providers fail closed.
-          Close Control. Replace dxgi.dll and all three pt_glass shader files
-          beside Control_DX12.exe. Keep native transparent reflections enabled.
-          Open Options -> Graphics and scroll below the original settings.
-          New sections use the game's own controls, text, highlights and descriptions.
-          Glass is under Reflection Enhancements. Opaque reflections are not added.
-          Settings save automatically and when leaving Options. Graphics Reset also
-          restores the mod defaults. Existing saved settings are retained.
-          Native menu only: the F10 popup and its input handling are removed.
-          Unsupported game/UI builds keep saved settings and log the mismatch.
-          Dropdown headers no longer draw over open lists. Descriptions expanded.
-          R49 integrates controls into Monitor, Quality and Ray Tracing.
-          RR is a checkbox. Model F and reflection detail 60% are fixed.
-          Model E and the reflection-detail control are removed.
-          GI samples and texture streaming use stepped sliders.
-          FG remains a dropdown. GI is inactive without RR or native indirect diffuse lighting.
-          Saved sample preferences are retained while inactive.
-          FG choices and reset defaults refresh with live readback.
-          Catalog validation rejects invalid dependencies, slider steps and duplicate keys.
-          Shared theme tokens define the optional monitor fonts, colors and layout.
-          The optional VRAM monitor no longer uses global topmost placement.
-          This test build targets the supplied March 2025 game DLLs/UI bundle.
-          Check main menu and pause menu, mouse/controller navigation, changes,
-          leaving/reopening Graphics, restart persistence and Reset.
-          If rows are missing, use Collect-ControlFG-Compact-Logs.cmd and send its ZIP.
-          Old opaque_reflection_raygen.dxil and opaque_reflection_composite.dxbc
-          are no longer loaded and may be deleted. Old opaque settings are ignored.
-          Character capture remains available but is not needed for this test.
-          No separate INI required.
+          Send three labeled screenshots and compact logs. No new capture needed.
+          Logs must show NATIVE_LIGHTING_R53 contribution=BakedGi or Direct,
+          matched=1 applied=1. If absent, report that; the test was not established.
+          Use mode 0 to restore native lighting. Old R51/R52 markers are ignored.
           '@ | Set-Content "$out/README.txt" -Encoding ASCII
           Compress-Archive -Path "$out/*" -DestinationPath "$out.zip" -Force
           (Get-FileHash "$out.zip" -Algorithm SHA256).Hash | Set-Content "$out.sha256" -Encoding ASCII
@@ -320,10 +302,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-Native-Menu-R49
+          name: Control-FG-Native-Lighting-Isolation-R53
           path: |
-            Control-FG-Native-Menu-R49.zip
-            Control-FG-Native-Menu-R49.sha256
+            Control-FG-Native-Lighting-Isolation-R53.zip
+            Control-FG-Native-Lighting-Isolation-R53.sha256
             build/exports.txt
             build/imports.txt
             build/pt_glass_raygen.dxil

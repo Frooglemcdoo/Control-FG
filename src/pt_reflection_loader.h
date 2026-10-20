@@ -784,6 +784,8 @@ static bool PTReflectionEnsureCapturedCompositePso() noexcept {
     return ready;
 }
 
+#include "native_lighting_isolation_runtime.h"
+
 static HRESULT STDMETHODCALLTYPE PTReflectionHookCreateComputePipelineState(
     ID3D12Device* device,const D3D12_COMPUTE_PIPELINE_STATE_DESC* desc,
     REFIID riid,void** out) {
@@ -799,6 +801,19 @@ static HRESULT STDMETHODCALLTYPE PTReflectionHookCreateComputePipelineState(
             strcmp(sha,"4fc0a0e9cd3706bcb86e29444d86fa32616138e1712c53b1b5103b30d7a1ecc9")==0;
     }
 
+    std::vector<unsigned char> diagnosticBytes;
+    if(native_lighting::ActiveMode()==native_lighting::Mode::DisableDirect && desc && out &&
+       native_lighting::Prepare(native_lighting::kDirect,desc->CS,diagnosticBytes)) {
+        auto replacement=*desc;
+        replacement.CS={diagnosticBytes.data(),diagnosticBytes.size()};
+        replacement.CachedPSO={nullptr,0};
+        void* candidate=nullptr;
+        const HRESULT hr=ptReflectionOriginalCreateComputePipelineState(device,&replacement,riid,&candidate);
+        Log("NATIVE_LIGHTING_R53 contribution=Direct matched=1 applied=%u hr=0x%08lX patched_sha=%s",
+            unsigned(SUCCEEDED(hr)&&candidate),static_cast<unsigned long>(hr),native_lighting::kDirect.patchedSha);
+        if(SUCCEEDED(hr)&&candidate){*out=candidate;return hr;}
+        if(candidate)reinterpret_cast<IUnknown*>(candidate)->Release();
+    }
     const HRESULT nativeHr=ptReflectionOriginalCreateComputePipelineState(device,desc,riid,out);
     if(SUCCEEDED(nativeHr)&&out&&*out)PTGlassRuntime::ObserveCompute(device,desc,*out);
     if(!target||FAILED(nativeHr)||!out||!*out||!desc)return nativeHr;
@@ -835,6 +850,7 @@ static HRESULT STDMETHODCALLTYPE PTReflectionHookCreateComputePipelineState(
 
 static bool PTReflectionInstallComputePsoHookOnDevice(ID3D12Device* device) noexcept {
     if(!device)return false;
+    native_lighting::InstallGraphicsHook(device);
 
     void** vtable=nullptr;
     __try {vtable=*reinterpret_cast<void***>(device);}
