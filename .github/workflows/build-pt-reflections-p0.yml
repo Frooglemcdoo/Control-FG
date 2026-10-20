@@ -34,6 +34,7 @@ on:
       - experiment/reflected-character-material-audit-r39
       - fix/glass-only-remove-opaque-r40
       - experiment/native-graphics-menu-r41
+      - experiment/native-light-dither-r51
   workflow_dispatch:
   pull_request:
     branches:
@@ -253,11 +254,11 @@ jobs:
           node tools/test-native-menu.js --config build/native-menu-config.json
           if errorlevel 1 exit /b 1
 
-      - name: Package native graphics menu R49
+      - name: Package native lighting dither test R51
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-Native-Menu-R49'
+          $out='Control-FG-Native-Light-Dither-R51'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
           New-Item -ItemType Directory -Force -Path "$out/ControlFGStreamline" | Out-Null
@@ -273,46 +274,28 @@ jobs:
           Copy-Item Collect-RR-Blinds-Capture.ps1 "$out/Collect-RR-Blinds-Capture.ps1"
           Copy-Item Collect-ControlFG-Compact-Logs.cmd "$out/Collect-ControlFG-Compact-Logs.cmd"
           Copy-Item Collect-ControlFG-Compact-Logs.ps1 "$out/Collect-ControlFG-Compact-Logs.ps1"
+          Set-Content "$out/ControlFG-Native-Dither-Off.txt" 'R51 diagnostic enabled. Rename this file and restart Control for native output dither.' -Encoding ASCII
           @'
-          CONTROL-FG NATIVE GRAPHICS MENU R49
-          Branch: experiment/native-graphics-menu-r41
+          CONTROL-FG NATIVE LIGHTING DITHER TEST R51
+          Branch: experiment/native-light-dither-r51
+          Based on R49. The R50 filtering experiment is not included.
 
-          Removes the OPAQUE button, setting and runtime enhancement hooks.
-          Opaque surfaces use the game's native reflections.
-          Preserves R37 glass lighting, R38 shadow filtering, RR guides and GI controls.
-          No RR sharpening changes in this build.
+          Close Control. Install the included files beside Control_DX12.exe,
+          including the ControlFGStreamline subfolder. Keep existing runtimes.
+          The included ControlFG-Native-Dither-Off.txt enables the test.
+          Rename that marker to .disabled and restart for the native comparison.
 
-          R49 fixes RTX 40 Multi-FG patching the bundled DLL while NGX uses its cache.
-          Also replace ControlFGStreamline/ControlFG.RTX40MFG.dll with the included file.
-          RTX 40 hardware validation is required; incompatible providers fail closed.
-          Close Control. Replace dxgi.dll and all three pt_glass shader files
-          beside Control_DX12.exe. Keep native transparent reflections enabled.
-          Open Options -> Graphics and scroll below the original settings.
-          New sections use the game's own controls, text, highlights and descriptions.
-          Glass is under Reflection Enhancements. Opaque reflections are not added.
-          Settings save automatically and when leaving Options. Graphics Reset also
-          restores the mod defaults. Existing saved settings are retained.
-          Native menu only: the F10 popup and its input handling are removed.
-          Unsupported game/UI builds keep saved settings and log the mismatch.
-          Dropdown headers no longer draw over open lists. Descriptions expanded.
-          R49 integrates controls into Monitor, Quality and Ray Tracing.
-          RR is a checkbox. Model F and reflection detail 60% are fixed.
-          Model E and the reflection-detail control are removed.
-          GI samples and texture streaming use stepped sliders.
-          FG remains a dropdown. GI is inactive without RR or native indirect diffuse lighting.
-          Saved sample preferences are retained while inactive.
-          FG choices and reset defaults refresh with live readback.
-          Catalog validation rejects invalid dependencies, slider steps and duplicate keys.
-          Shared theme tokens define the optional monitor fonts, colors and layout.
-          The optional VRAM monitor no longer uses global topmost placement.
-          This test build targets the supplied March 2025 game DLLs/UI bundle.
-          Check main menu and pause menu, mouse/controller navigation, changes,
-          leaving/reopening Graphics, restart persistence and Reset.
-          If rows are missing, use Collect-ControlFG-Compact-Logs.cmd and send its ZIP.
-          Old opaque_reflection_raygen.dxil and opaque_reflection_composite.dxbc
-          are no longer loaded and may be deleted. Old opaque settings are ignored.
-          Character capture remains available but is not needed for this test.
-          No separate INI required.
+          Start with RT, DLSS, RR, FG and glass OFF, matching capture 01.
+          Compare the same stationary stair-wall/cabinet view after settling.
+          Only the captured deferred shader's final blue-noise amplitudes are
+          zeroed (diffuse +/-1%, specular +/-5%). No extra blur or samples.
+          Shadow sampling jitter and film grain are separate and stay native.
+          Check gradients for banding as well as speckles. Compare FPS.
+
+          This is a diagnostic, not a confirmed fix. RT variants are not patched.
+          Logs must show NATIVE_LIGHT_DITHER_R51 matched=1 applied=1.
+          If unchanged/worse, send compact logs and comparison screenshots.
+          Remove the marker and restart to disable. No saved settings changed.
           '@ | Set-Content "$out/README.txt" -Encoding ASCII
           Compress-Archive -Path "$out/*" -DestinationPath "$out.zip" -Force
           (Get-FileHash "$out.zip" -Algorithm SHA256).Hash | Set-Content "$out.sha256" -Encoding ASCII
@@ -320,10 +303,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-Native-Menu-R49
+          name: Control-FG-Native-Light-Dither-R51
           path: |
-            Control-FG-Native-Menu-R49.zip
-            Control-FG-Native-Menu-R49.sha256
+            Control-FG-Native-Light-Dither-R51.zip
+            Control-FG-Native-Light-Dither-R51.sha256
             build/exports.txt
             build/imports.txt
             build/pt_glass_raygen.dxil
