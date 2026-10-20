@@ -3,8 +3,13 @@
 
 namespace native_lighting::ui {
 inline constexpr wchar_t kClass[] = L"ControlFGLightingDiagnosticR54";
-inline constexpr int kWidth = 490, kHeight = 222, kButtonFirst = 5400;
-inline constexpr const wchar_t* kButtons[] = {L"NATIVE", L"GI OFF", L"DIRECT OFF", L"SPECKLES REMAIN", L"SPECKLES GONE", L"SAVE LOG"};
+inline constexpr int kWidth = 490, kHeight = 294, kButtonFirst = 5400;
+inline constexpr unsigned kButtonCount = kModeCount + 3;
+inline const wchar_t* ButtonLabel(unsigned index) noexcept {
+    if (index < kModeCount) return kModeChoices[index].label;
+    constexpr const wchar_t* actions[] = {L"SPECKLES REMAIN", L"SPECKLES GONE", L"SAVE LOG"};
+    return actions[index - kModeCount];
+}
 inline HFONT headingFont = nullptr, bodyFont = nullptr, detailFont = nullptr;
 inline std::atomic<bool> started{false};
 inline std::atomic<unsigned> savedNotice{0};
@@ -54,13 +59,13 @@ inline void Paint(HWND window) noexcept {
     const auto state = selection.Read();
     const unsigned ready = readyMask.load(), observed = LiveSelection::Observed(state);
     const auto mode = LiveSelection::GetMode(state);
-    const unsigned required = mode == Mode::DisableBakedGi ? kGiBit : mode == Mode::DisableDirect ? kDirectBit : kAllBits;
+    const unsigned required = RequiredBinding(mode);
     wchar_t status[160]{};
-    swprintf_s(status, L"GI: %s   Direct: %s   %s", ready & kGiBit ? L"ready" : L"waiting", ready & kDirectBit ? L"ready" : L"waiting",
+    swprintf_s(status, L"Diffuse: %s   Specular: %s   %s", ready & kDiffuseReadyBit ? L"ready" : L"waiting", ready & kSpecularReadyBit ? L"ready" : L"waiting",
         (observed & required) == required ? L"bindings recorded" : L"NOT APPLIED: awaiting bind");
-    DrawLabel(dc, detailFont, status, {14,82,kWidth-12,108}, theme::kMutedText);
-    DrawLabel(dc, detailFont, L"F10: return to game    Ctrl+Shift+1 / 2 / 3: mode", {14,155,kWidth-12,179}, theme::kMutedText);
-    DrawLabel(dc, detailFont, selectionRejected ? L"Mode unavailable: matching shader is not ready. Save Log." : savedNotice.load() == 2 ? L"Log write failed. Save Log shows the Windows error." : savedNotice.load() == 1 ? L"Log saved. See the folder shown in the confirmation." : L"Choose a mode, let it settle, then record what you see.", {14,181,kWidth-12,208}, theme::kText);
+    DrawLabel(dc, detailFont, status, {14,130,kWidth-12,154}, theme::kMutedText);
+    DrawLabel(dc, detailFont, L"F10: return to game    Ctrl+Shift+1..5: live mode", {14,225,kWidth-12,249}, theme::kMutedText);
+    DrawLabel(dc, detailFont, selectionRejected ? L"Mode unavailable: matching shader is not ready. Save Log." : savedNotice.load() == 2 ? L"Log write failed. Save Log shows the Windows error." : savedNotice.load() == 1 ? L"Log saved. See the folder shown in the confirmation." : L"Choose a mode, let it settle, then record what you see.", {14,251,kWidth-12,280}, theme::kText);
     EndPaint(window, &ps);
 }
 inline void SaveReport(HWND window) noexcept {
@@ -97,30 +102,30 @@ inline LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPA
     case WM_SETCURSOR: SetCursor(LoadCursorW(nullptr, IDC_ARROW)); return TRUE;
     case WM_PAINT: Paint(window); return 0;
     case WM_CREATE:
-        for (int i=0;i<6;++i) {
-            const int row=i/3, col=i%3;
-            HWND button=CreateWindowExW(0,L"BUTTON",kButtons[i],WS_CHILD|WS_VISIBLE|WS_TABSTOP|BS_OWNERDRAW,
-                14+col*156,40+row*72,148,36,window,reinterpret_cast<HMENU>(INT_PTR(kButtonFirst+i)),selfModule,nullptr);
+        for (unsigned i=0;i<kButtonCount;++i) {
+            const int row=i<kModeCount ? i/3 : 2, col=i<kModeCount ? i%3 : i-kModeCount;
+            HWND button=CreateWindowExW(0,L"BUTTON",ButtonLabel(i),WS_CHILD|WS_VISIBLE|WS_TABSTOP|BS_OWNERDRAW,
+                14+col*156,40+row*46+(row==2?26:0),148,36,window,reinterpret_cast<HMENU>(INT_PTR(kButtonFirst+i)),selfModule,nullptr);
             SendMessageW(button,WM_SETFONT,reinterpret_cast<WPARAM>(bodyFont),TRUE);
         }
         return 0;
     case WM_DRAWITEM: {
         const auto* item=reinterpret_cast<const DRAWITEMSTRUCT*>(lParam);
         const unsigned index=item->CtlID-kButtonFirst;
-        if(index>=6)return FALSE;
-        const bool active=index<3 && unsigned(LiveSelection::GetMode(selection.Read()))==index;
+        if(index>=kButtonCount)return FALSE;
+        const bool active=index<kModeCount && LiveSelection::GetMode(selection.Read())==kModeChoices[index].mode;
         HBRUSH brush=CreateSolidBrush(active?theme::kAccent:RGB(35,35,35)); FillRect(item->hDC,&item->rcItem,brush); DeleteObject(brush);
         HBRUSH border=CreateSolidBrush(theme::kBorder); FrameRect(item->hDC,&item->rcItem,border); DeleteObject(border);
         const auto previous=SelectObject(item->hDC,bodyFont); SetBkMode(item->hDC,TRANSPARENT); SetTextColor(item->hDC,theme::kText);
-        RECT rect=item->rcItem; DrawTextW(item->hDC,kButtons[index],-1,&rect,DT_CENTER|DT_VCENTER|DT_SINGLELINE); SelectObject(item->hDC,previous);
+        RECT rect=item->rcItem; DrawTextW(item->hDC,ButtonLabel(index),-1,&rect,DT_CENTER|DT_VCENTER|DT_SINGLELINE); SelectObject(item->hDC,previous);
         return TRUE;
     }
     case WM_COMMAND:
         if(HIWORD(wParam)==BN_CLICKED) {
             const unsigned index=LOWORD(wParam)-kButtonFirst;
-            if(index<3){selectionRejected=!SelectMode(static_cast<Mode>(index));savedNotice=0;}
-            else if(index==3||index==4)ReportVisual(index==3);
-            else if(index==5) SaveReport(window);
+            if(index<kModeCount){selectionRejected=!SelectMode(kModeChoices[index].mode);savedNotice=0;}
+            else if(index==kModeCount||index==kModeCount+1)ReportVisual(index==kModeCount);
+            else if(index==kModeCount+2) SaveReport(window);
             RedrawWindow(window,nullptr,nullptr,RDW_INVALIDATE|RDW_ALLCHILDREN);
             return 0;
         }
@@ -138,9 +143,9 @@ inline DWORD WINAPI ThreadProc(LPVOID) noexcept {
     if(!RegisterClassExW(&wc)&&GetLastError()!=ERROR_CLASS_ALREADY_EXISTS){Trace("overlay_failed reason=class");return 0;}
     UINT_PTR timer=SetTimer(nullptr,0,50,nullptr);
     if(!timer){Trace("overlay_failed reason=timer");return 0;}
-    HWND panel=nullptr,owner=nullptr;bool held[4]{};
+    HWND panel=nullptr,owner=nullptr;bool held[6]{};
     ULONGLONG nextRefresh=0;
-    Trace("session_start build=R55-cached-pipelines pid=%lu default=native log=user-diagnostics-folder",GetCurrentProcessId());
+    Trace("session_start build=R56-direct-components pid=%lu default=native log=user-diagnostics-folder",GetCurrentProcessId());
     MSG msg{};
     while(GetMessageW(&msg,nullptr,0,0)>0){
         if (!panel || !IsDialogMessageW(panel, &msg)) {
@@ -154,10 +159,10 @@ inline DWORD WINAPI ThreadProc(LPVOID) noexcept {
         if(!panel)continue;
         const bool foreground=GetForegroundWindow()==game || PanelHasForeground(panel);
         const bool modifier=(GetAsyncKeyState(VK_CONTROL)&0x8000)&&(GetAsyncKeyState(VK_SHIFT)&0x8000);
-        const int keys[4]={VK_F10,'1','2','3'};
-        for(int i=0;i<4;++i){const bool down=(GetAsyncKeyState(keys[i])&0x8000)!=0;
+        const int keys[6]={VK_F10,'1','2','3','4','5'};
+        for(int i=0;i<6;++i){const bool down=(GetAsyncKeyState(keys[i])&0x8000)!=0;
             if(foreground&&down&&!held[i]&&(i==0||modifier)){
-                if(i==0){if(panelOpen)ClosePanel(panel);else OpenPanel(panel);}else {selectionRejected=!SelectMode(static_cast<Mode>(i-1));savedNotice=0;}
+                if(i==0){if(panelOpen)ClosePanel(panel);else OpenPanel(panel);}else {selectionRejected=!SelectMode(kModeChoices[i-1].mode);savedNotice=0;}
             }held[i]=down;
         }
         if(foreground&&panelOpen){

@@ -18,5 +18,14 @@ int main(){
     assert(!Disables(LiveSelection::GetMode(native),kGiBit));
     assert(!Disables(LiveSelection::GetMode(native),kDirectBit));
     assert(LiveSelection::Observed(live.Read())==0);
+    for (auto mode : {Mode::DisableDirectDiffuse, Mode::DisableDirectSpecular}) {
+        const auto old = live.Read(); const auto next = live.Select(mode);
+        assert(LiveSelection::GetMode(next) == mode);
+        assert(Disables(mode, kDirectBit) && !Disables(mode, kGiBit));
+        assert(!live.Observe(old, kDirectBit));
+        assert(live.Observe(next, kDirectBit));
+        assert(LiveSelection::Observed(live.Read()) == kDirectBit);
+        assert(RequiredVariant(mode) != kDirectBit);
+    }
     std::cout<<"PASS: live modes, return to native, stale-recording rejection\n";
 }

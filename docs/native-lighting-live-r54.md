@@ -1,3 +1,39 @@
+# R56 direct diffuse/specular diagnostic
+
+R55 successfully isolated the visible speckles to the direct-lighting contribution:
+the user's 16:17 session recorded direct_off variant=1 with speckles_gone, then
+gi_off variant=1 with speckles_remain. Both contributions had matching bindings.
+This narrows the investigation; removing illumination can also hide noise arising
+from material response, so it does not prove the lights themselves are defective.
+
+R56 adds DIFFUSE OFF and SPECULAR OFF. They change only the selected direct-light
+output multiplier in the exact captured non-RT shader; the other output and baked
+GI remain intact. Native, GI Off and full Direct Off remain available.
+
+Use RT/DLSS/RR/FG/glass OFF, the same stationary view, and F10 for the panel.
+Compare Native, Diffuse Off and Specular Off. Let each settle and mark Speckles
+Remain/Gone. Ctrl+Shift+1..5 selects Native, Diffuse Off, Specular Off, GI Off,
+Direct Off respectively. There are no restarts between modes. Save Log shows the
+exact filename; the current prefix is Lighting-R56 in the user diagnostics folder.
+
+The captured shader declares UAV0 as g_rwtLightBufferDiffuse and UAV1 as
+ g_rwtLightBufferSpecular. At byte 69372, its MAD builds separate x/y multipliers.
+Diffuse Off zeros words 6 and 11 (x); Specular Off zeros words 7 and 12 (y).
+The original output stores, bindings, sizes and all other instructions are intact.
+Checksums and patched hashes are fixed and validated. The mode state reserves
+three bits for the five modes and keeps stale-binding rejection. Each alternate
+PSO is owned by the native PSO under a separate private-data GUID.
+
+Validation: portable component test verifies the two selected words are the only
+payload changes, rejects unsupported identities/instructions, and leaves the
+other component's multiplier untouched. Local DXBC checksum/hash checks use the
+captured native shader. Windows WARP tests verify selection of distinct native,
+full-off, diffuse-off and specular-off PSOs through SetPipelineState and Reset,
+with GI unchanged and native restoration. Synthetic WARP outputs validate routing;
+the actual in-game visual result remains for this test.
+
+---
+
 # R54 live lighting diagnostic
 
 Supersedes R53's startup markers and restart-based selector. Install with the

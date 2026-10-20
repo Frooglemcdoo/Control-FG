@@ -12,6 +12,13 @@ inline SRWLOCK reportLock = SRWLOCK_INIT;
 inline SessionReport report;
 inline std::atomic<bool> reportHealthy{false};
 inline const GUID kVariantGuid = {0x822329d7,0x3614,0x4f73,{0xa6,0x14,0xd0,0x8c,0x94,0xf2,0x54,0x01}};
+inline const GUID kDiffuseVariantGuid = {0x822329d7,0x3614,0x4f73,{0xa6,0x14,0xd0,0x8c,0x94,0xf2,0x56,0x01}};
+inline const GUID kSpecularVariantGuid = {0x822329d7,0x3614,0x4f73,{0xa6,0x14,0xd0,0x8c,0x94,0xf2,0x56,0x02}};
+inline const GUID& VariantGuid(Mode mode) noexcept {
+    if (mode == Mode::DisableDirectDiffuse) return kDiffuseVariantGuid;
+    if (mode == Mode::DisableDirectSpecular) return kSpecularVariantGuid;
+    return kVariantGuid;
+}
 inline const GUID kKindGuid = {0x822329d7,0x3614,0x4f73,{0xa6,0x14,0xd0,0x8c,0x94,0xf2,0x54,0x02}};
 
 inline void Trace(const char* format, ...) noexcept {
@@ -67,7 +74,7 @@ inline void ReportBoundIdentity(ID3D12PipelineState* pso) noexcept {
     ReleaseSRWLockExclusive(&identityLock);
 }
 inline bool SelectMode(Mode mode) noexcept {
-    const unsigned required = mode == Mode::DisableBakedGi ? kGiBit : mode == Mode::DisableDirect ? kDirectBit : 0;
+    const unsigned required = RequiredVariant(mode);
     if (required && !(readyMask.load() & required)) { Trace("selection_rejected mode=%s reason=variant_not_ready", ModeName(mode)); return false; }
     const auto state = selection.Select(mode);
     Trace("selection seq=%llu mode=%s ready_mask=%u", LiveSelection::Sequence(state), ModeName(mode), readyMask.load());
@@ -98,29 +105,37 @@ inline bool Prepare(const ShaderPatch& patch, const D3D12_SHADER_BYTECODE& shade
     Trace("variant_failed contribution=%s reason=identity_or_allocation", patch.name);
     return false;
 }
-inline void AttachVariant(IUnknown* native, ID3D12PipelineState* variant, unsigned kind, HRESULT createHr) noexcept {
+inline void AttachVariant(IUnknown* native, ID3D12PipelineState* variant, unsigned kind, HRESULT createHr, const GUID& variantGuid = kVariantGuid, unsigned readyBit = 0) noexcept {
     HRESULT hr = createHr;
     ID3D12PipelineState* owner = nullptr;
     if (SUCCEEDED(hr) && variant && native && SUCCEEDED(native->QueryInterface(IID_PPV_ARGS(&owner)))) {
-        hr = owner->SetPrivateDataInterface(kVariantGuid, variant);
+        hr = owner->SetPrivateDataInterface(variantGuid, variant);
         if (SUCCEEDED(hr)) hr = owner->SetPrivateData(kKindGuid, sizeof(kind), &kind);
-        if (SUCCEEDED(hr)) readyMask.fetch_or(kind);
-        else owner->SetPrivateDataInterface(kVariantGuid, nullptr);
+        if (SUCCEEDED(hr)) readyMask.fetch_or(readyBit ? readyBit : kind);
+        else owner->SetPrivateDataInterface(variantGuid, nullptr);
     } else if (SUCCEEDED(hr)) hr = E_NOINTERFACE;
     if (owner) owner->Release();
     if (variant) variant->Release(); // Native PSO owns its alternate; no global PSO/device retention.
-    Trace("variant contribution=%s ready=%u hr=0x%08lX", kind == kGiBit ? "BakedGi" : "Direct", unsigned(SUCCEEDED(hr)), static_cast<unsigned long>(hr));
+    Trace("variant contribution=%s ready=%u hr=0x%08lX ready_bit=%u", kind == kGiBit ? "BakedGi" : "Direct", unsigned(SUCCEEDED(hr)), static_cast<unsigned long>(hr), readyBit ? readyBit : kind);
 }
 using CreateCompute = HRESULT (STDMETHODCALLTYPE*)(ID3D12Device*, const D3D12_COMPUTE_PIPELINE_STATE_DESC*, REFIID, void**);
 inline void ObserveCompute(ID3D12Device* device, const D3D12_COMPUTE_PIPELINE_STATE_DESC* desc, IUnknown* native, CreateCompute original) noexcept {
     computeSeen.fetch_add(1);
     IdentifyPipeline(native, desc->CS, 2);
-    std::vector<unsigned char> bytes;
-    if (!Prepare(kDirect, desc->CS, bytes)) return;
-    auto replacement = *desc; replacement.CS = {bytes.data(), bytes.size()}; replacement.CachedPSO = {nullptr, 0};
-    ID3D12PipelineState* variant = nullptr;
-    const HRESULT hr = original(device, &replacement, IID_PPV_ARGS(&variant));
-    AttachVariant(native, variant, kDirectBit, hr);
+    struct VariantSpec { const ShaderPatch* patch; const GUID* guid; unsigned ready; };
+    const VariantSpec variants[] = {
+        {&kDirect, &kVariantGuid, kDirectBit},
+        {&kDirectDiffuse, &kDiffuseVariantGuid, kDiffuseReadyBit},
+        {&kDirectSpecular, &kSpecularVariantGuid, kSpecularReadyBit}
+    };
+    for (const auto& spec : variants) {
+        std::vector<unsigned char> bytes;
+        if (!Prepare(*spec.patch, desc->CS, bytes)) continue;
+        auto replacement = *desc; replacement.CS = {bytes.data(), bytes.size()}; replacement.CachedPSO = {nullptr, 0};
+        ID3D12PipelineState* variant = nullptr;
+        const HRESULT hr = original(device, &replacement, IID_PPV_ARGS(&variant));
+        AttachVariant(native, variant, kDirectBit, hr, *spec.guid, spec.ready);
+    }
 }
 
 struct Binding {
@@ -135,7 +150,7 @@ struct Binding {
         if (!native || FAILED(native->GetPrivateData(kKindGuid, &size, &kind)) || size != sizeof(kind) || (kind != kGiBit && kind != kDirectBit)) { kind = 0; return; }
         if (Disables(LiveSelection::GetMode(state), kind)) {
             size = sizeof(alternate);
-            if (SUCCEEDED(native->GetPrivateData(kVariantGuid, &size, &alternate)) && alternate) selected = alternate;
+            if (SUCCEEDED(native->GetPrivateData(VariantGuid(LiveSelection::GetMode(state)), &size, &alternate)) && alternate) selected = alternate;
             else { kind = 0; Trace("bind_fallback reason=variant_missing"); }
         }
     }

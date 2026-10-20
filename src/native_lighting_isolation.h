@@ -28,6 +28,20 @@ inline constexpr ShaderPatch kDirect = {
     "46fd09e5d4e1612e601086874af30513b8e0f9641a6ba95a9791706406c58f16",
     69372, kDirectInstruction, 15, kDirectZeroWords, 4, kDirectChecksum
 };
+inline constexpr size_t kDirectDiffuseZeroWords[] = {6,11};
+inline constexpr unsigned char kDirectDiffuseChecksum[] = {226,114,59,194,212,169,172,229,77,100,1,223,241,21,244,3};
+inline constexpr ShaderPatch kDirectDiffuse = {
+    "DirectDiffuse", kDirect.size, kDirect.nativeSha,
+    "20c171cfec68f40055e07771082822ee6885fe4fdb13bbd622c9008647bb17c0",
+    kDirect.instructionOffset, kDirectInstruction, 15, kDirectDiffuseZeroWords, 2, kDirectDiffuseChecksum
+};
+inline constexpr size_t kDirectSpecularZeroWords[] = {7,12};
+inline constexpr unsigned char kDirectSpecularChecksum[] = {189,233,26,206,10,30,148,198,130,87,242,157,1,178,180,73};
+inline constexpr ShaderPatch kDirectSpecular = {
+    "DirectSpecular", kDirect.size, kDirect.nativeSha,
+    "230f46a74e01806049f36fb8ebe7135b82c508668aa8af4b0759167a39de39cc",
+    kDirect.instructionOffset, kDirectInstruction, 15, kDirectSpecularZeroWords, 2, kDirectSpecularChecksum
+};
 inline constexpr uint32_t kBakedGiInstruction[] = {0x7000038u,0x100082u,0x0u,0x10003au,0x0u,0x4001u,0x3ea2f983u};
 inline constexpr size_t kBakedGiZeroWords[] = {6};
 inline constexpr unsigned char kBakedGiChecksum[] = {43,215,128,24,199,53,17,76,124,7,139,176,78,58,12,230};
