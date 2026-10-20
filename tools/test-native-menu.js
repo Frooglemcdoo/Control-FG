@@ -75,6 +75,10 @@ function exercise(rtx40) {
     assert.equal(rows[6].m_value,6);
     assert.equal(menu.slider(rows[6]).m_value,3);
     assert.deepEqual(Array.from(menu.sliderLabels(rows[6])),['Native','2','4','6','8']);
+    nativeModel.m_vecBoolProperties[0].m_bIsDisabled=true;
+    menu.rows(requireModule,nativeModel);
+    assert.equal(rows[6].m_bIsDisabled,true); // Global RT capability/settings can disable the native control.
+    nativeModel.m_vecBoolProperties[0].m_bIsDisabled=false;
     nativeModel.m_vecBoolProperties[0].m_value=false;
     menu.rows(requireModule,nativeModel);
     assert.equal(rows[6].m_bIsDisabled,true);

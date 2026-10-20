@@ -44,7 +44,7 @@
         var groups = ["m_vecBoolProperties", "m_vecEnumProperties", "m_vecIntProperties"];
         return groups.some(function (group) {
             return Array.from(nativeModel[group] || []).some(function (property) {
-                return property.m_strNameLocID === name && Number(property.m_value) > 0;
+                return property.m_strNameLocID === name && !property.m_bIsDisabled && Number(property.m_value) > 0;
             });
         });
     }
