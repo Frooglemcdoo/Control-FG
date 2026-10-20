@@ -4,7 +4,6 @@
 #include "settings_cog_image.h"
 #include "rr_user_control.h"
 #include "pt_reflection_user_control.h"
-#include "opaque_reflection_control.h"
 #include "rr_gi_sample_control.h"
 
 // Process-local Control FG overlay for v2.1.2.
@@ -224,7 +223,6 @@ static void FGOverlayLoadSettings() noexcept {
     SetFGTextureStreamingBudgetMs(textureStreamingMs);
     SetFGVramMonitorEnabled(vramMonitorEnabled);
     PTReflectionUserRequest(GetPrivateProfileIntW(L"GlassReflections", L"Enabled", 1, fgOverlaySettingsPath.c_str()) != 0);
-    opaqueReflectionEnabled.store(GetPrivateProfileIntW(L"OpaqueReflections", L"Enabled", 1, fgOverlaySettingsPath.c_str()) != 0);
     Log("GLASS_REFLECTION_SETTINGS enabled=%u source=settings default=on", unsigned(PTReflectionUserRequested()));
     Log("FG_SETTINGS_LOAD success=1 path=%ls selection=%s selected_code=%u target_policy=%s manual_target_fps=%u rr_enabled=%u rr_preset=%s rr_preset_value=%u texture_streaming_ms=%u vram_monitor=%u skin_mode=off schema=10 ui=fg_full_rr_toggle_model_E_F",
         fgOverlaySettingsPath.c_str(), GetFGSelectionName(selection), selection, manualTarget ? "manual" : "auto", manualTarget, unsigned(rrEnabled), control_rr::RRUserPresetLabel(), control_rr::RRUserPresetValue(), textureStreamingMs, unsigned(vramMonitorEnabled));
@@ -249,8 +247,6 @@ static bool FGOverlaySaveSettingsNow() noexcept {
     wchar_t modeText[16]{};
     wchar_t targetText[16]{};
     wchar_t rrEnabledText[8]{};
-    wchar_t opaqueEnabledText[8]{};
-    swprintf_s(opaqueEnabledText, L"%u", opaqueReflectionEnabled.load() ? 1u : 0u);
     wchar_t ptEnabledText[8]{};
     swprintf_s(ptEnabledText, L"%u", PTReflectionUserRequested() ? 1u : 0u);
     wchar_t giSamplesText[8]{};
@@ -273,7 +269,6 @@ static bool FGOverlaySaveSettingsNow() noexcept {
     ok = (WritePrivateProfileStringW(L"Experimental", L"RTX40MultiFG", experimentalText, fgOverlaySettingsPath.c_str()) != FALSE) && ok;
     ok = (WritePrivateProfileStringW(L"Experimental", L"TextureStreamingBudgetMs", textureStreamingText, fgOverlaySettingsPath.c_str()) != FALSE) && ok;
     ok = (WritePrivateProfileStringW(L"GlassReflections", L"Enabled", ptEnabledText, fgOverlaySettingsPath.c_str()) != FALSE) && ok;
-    ok = (WritePrivateProfileStringW(L"OpaqueReflections", L"Enabled", opaqueEnabledText, fgOverlaySettingsPath.c_str()) != FALSE) && ok;
     // Old experimental RR/AA settings are intentionally removed; FG settings remain intact.
     WritePrivateProfileStringW(L"AntiAliasing", nullptr, nullptr, fgOverlaySettingsPath.c_str());
     WritePrivateProfileStringW(L"RayReconstruction", L"SkinResponsivity", nullptr, fgOverlaySettingsPath.c_str());
@@ -888,15 +883,15 @@ static void PaintFGOverlay(HWND hwnd) noexcept {
     PaintFGDivider(dc, left, 734 + lowerSectionOffset, right);
     SelectObject(dc, sectionFont); SetTextColor(dc, RGB(210, 32, 32));
     RECT ptTitle{30, 752 + lowerSectionOffset, 710, 780 + lowerSectionOffset};
-    DrawTextW(dc, L"REFLECTION ENHANCEMENTS", -1, &ptTitle, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+    DrawTextW(dc, L"GLASS REFLECTIONS", -1, &ptTitle, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
     const bool ptEnabled = PTReflectionUserRequested();
     const RECT ptToggle{30, 794 + lowerSectionOffset, 280, 846 + lowerSectionOffset};
     SelectObject(dc, ptEnabled ? buttonSelectedFont : buttonFont);
     PaintFGButton(dc, ptToggle, ptEnabled ? L"GLASS ON" : L"GLASS OFF", ptEnabled, true);
-    const bool opaqueEnabled=opaqueReflectionEnabled.load();
-    const RECT opaqueToggle{304, 794 + lowerSectionOffset, 554, 846 + lowerSectionOffset};
-    SelectObject(dc, opaqueEnabled ? buttonSelectedFont : buttonFont);
-    PaintFGButton(dc, opaqueToggle, opaqueEnabled ? L"OPAQUE ON" : L"OPAQUE OFF", opaqueEnabled, true);
+    SelectObject(dc, smallFont); SetTextColor(dc, RGB(169, 169, 169));
+    RECT ptDescription{304, 794 + lowerSectionOffset, 710, 846 + lowerSectionOffset};
+    DrawTextW(dc, L"Enhanced glossy reflections on glass.\nToggle to compare with native glass.", -1, &ptDescription,
+        DT_LEFT | DT_WORDBREAK);
 
 
 
@@ -941,7 +936,6 @@ static void FGOverlayResizeWindowForCurrentSelection(HWND hwnd) noexcept {
     fgOverlayLastPlacementValid = false;
 }
 static bool FGOverlayPTToggleFromPoint(int x,int y) noexcept { const int y0=794+FGOverlayLowerSectionOffset(); return y>=y0&&y<y0+52&&x>=30&&x<280; }
-static bool FGOverlayOpaqueToggleFromPoint(int x,int y) noexcept { const int y0=794+FGOverlayLowerSectionOffset(); return y>=y0&&y<y0+52&&x>=304&&x<554; }
 static bool FGOverlayRRToggleFromPoint(int x,int y) noexcept { const int y0=656+FGOverlayLowerSectionOffset(); return y>=y0&&y<y0+52&&x>=30&&x<280; }
 static unsigned int FGOverlayRRPresetFromPoint(int x,int y) noexcept {
     const int y0=656+FGOverlayLowerSectionOffset();
@@ -1080,13 +1074,6 @@ static LRESULT CALLBACK FGOverlayWndProc(HWND hwnd, UINT message, WPARAM wParam,
             FGOverlayResizeWindowForCurrentSelection(hwnd);
             InvalidateRect(hwnd,nullptr,FALSE);
             return 0;
-        }
-        if(FGOverlayOpaqueToggleFromPoint(x,y)){
-            const bool previous=opaqueReflectionEnabled.load();
-            opaqueReflectionEnabled.store(!previous);
-            FGOverlayMarkSettingsDirty();
-            Log("OPAQUE_REFLECTION_UI_TOGGLE previous=%u enabled=%u apply=next_dispatch",unsigned(previous),unsigned(!previous));
-            InvalidateRect(hwnd,nullptr,FALSE);return 0;
         }
         if(FGOverlayPTToggleFromPoint(x,y)){
             const bool previous=PTReflectionUserRequested();

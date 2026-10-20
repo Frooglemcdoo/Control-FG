@@ -32,6 +32,7 @@ on:
       - experiment/glass-native-light-preserve-r37
       - experiment/glass-shadow-filter-r38
       - experiment/reflected-character-material-audit-r39
+      - fix/glass-only-remove-opaque-r40
   workflow_dispatch:
   pull_request:
     branches:
@@ -144,8 +145,6 @@ jobs:
           Write-Host "DXC: $dxc"
           & $dxc -T lib_6_3 -HV 2021 -O3 -I src/shaders -Fo build/pt_glass_raygen.dxil src/shaders/pt_glass_raygen.hlsl
           if($LASTEXITCODE -ne 0){throw "Glass DXC compile failed: $LASTEXITCODE"}
-          & $dxc -T lib_6_3 -HV 2021 -O3 -I src/shaders -Fo build/opaque_reflection_raygen.dxil src/shaders/opaque_reflection_raygen.hlsl
-          if($LASTEXITCODE -ne 0){throw "Opaque DXC compile failed: $LASTEXITCODE"}
 
       - name: Validate glass lighting, descriptors and resource retirement on WARP
         shell: cmd
@@ -176,19 +175,6 @@ jobs:
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-pt-glass-vtable-call.cpp /Febuild\test-glass-call.exe
           if errorlevel 1 exit /b 1
           build\test-glass-call.exe
-          if errorlevel 1 exit /b 1
-
-      - name: Validate opaque continuation resources and native composite on WARP
-        shell: cmd
-        run: |
-          call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
-          cl /nologo /std:c++17 /EHsc /W4 /WX tools\compile-opaque-reflection.cpp /Febuild\compile-opaque.exe /link d3dcompiler.lib d3d12.lib dxgi.lib
-          if errorlevel 1 exit /b 1
-          build\compile-opaque.exe
-          if errorlevel 1 exit /b 1
-          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-opaque-resources.cpp /Febuild\test-opaque-resources.exe /link d3d12.lib dxgi.lib
-          if errorlevel 1 exit /b 1
-          build\test-opaque-resources.exe
           if errorlevel 1 exit /b 1
 
       - name: Verify clean baseline and character guide scope
@@ -238,15 +224,13 @@ jobs:
           dumpbin /exports build\dxgi.dll > build\exports.txt
           dumpbin /imports build\dxgi.dll > build\imports.txt
 
-      - name: Package reflected character capture R39
+      - name: Package glass-only R40
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-Character-Lighting-Capture-R39'
+          $out='Control-FG-Glass-Only-R40'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
-          Copy-Item build/opaque_reflection_raygen.dxil "$out/opaque_reflection_raygen.dxil"
-          Copy-Item build/opaque_reflection_composite.dxbc "$out/opaque_reflection_composite.dxbc"
           Copy-Item build/pt_glass_raygen.dxil "$out/pt_glass_raygen.dxil"
           Copy-Item build/pt_glass_secondary.dxbc "$out/pt_glass_secondary.dxbc"
           Copy-Item build/pt_glass_composite.dxbc "$out/pt_glass_composite.dxbc"
@@ -259,37 +243,21 @@ jobs:
           Copy-Item Collect-ControlFG-Compact-Logs.cmd "$out/Collect-ControlFG-Compact-Logs.cmd"
           Copy-Item Collect-ControlFG-Compact-Logs.ps1 "$out/Collect-ControlFG-Compact-Logs.ps1"
           @'
-          CONTROL-FG CHARACTER LIGHTING CAPTURE R39
-          Branch: experiment/reflected-character-material-audit-r39
+          CONTROL-FG GLASS ONLY R40
+          Branch: fix/glass-only-remove-opaque-r40
 
-          DIAGNOSTIC BUILD: the R38 image is intentionally unchanged.
-          Records the native character light rigs, instance object data,
-          transforms and DXR instance descriptors for the same engine frame.
-          No new lighting, shadow changes, GPU readback or GPU commands.
-          The capture copies CPU upload data before the game unlocks it.
+          Removes the OPAQUE button, setting and runtime enhancement hooks.
+          Opaque surfaces use the game's native reflections.
+          Preserves R37 glass lighting, R38 shadow filtering, RR guides and GI controls.
+          No RR sharpening changes in this build.
 
-          Close Control. Replace dxgi.dll beside Control_DX12.exe.
-          If already on R38, keep the five existing shader sidecars.
-          The included shader files are unchanged from R38.
-
-          Enable native RT reflections and transparent reflections.
-          Load the glass location where Jesse's reflection looks flat.
-          Keep GLASS enhancement on. RR and FG may stay at your usual settings.
-          Press Ctrl+Shift+F7 once and wait 10 seconds in-game.
-          Run Collect-Character-R39.cmd and send the desktop ZIP.
-          Up to two captures per game launch; a second camera angle is optional.
-          Do not use F9 for this capture.
-
-          Capture files are saved in LOCALAPPDATA/ControlFGProbe/character-r39-*.
-          Missing stages are recorded; send the ZIP even if it is incomplete.
-          The diagnostic is limited to 4 MiB per record, 32 MiB per request,
-          four records per stage and two requests per game launch.
-          Capturing may briefly hitch while copying CPU data.
-
-          Preserves R37 glass light/color merging and R38 stable shadow filtering,
-          R35 opaque reflection continuation, GI sample buttons and RR guides.
-          No separate INI. Existing preferences are retained.
-          Steam renderer hash gate retained. In-game capture validation required.
+          Close Control. Replace dxgi.dll and all three pt_glass shader files
+          beside Control_DX12.exe. Keep native transparent reflections enabled.
+          Use F10 -> GLASS ON/OFF to compare.
+          Old opaque_reflection_raygen.dxil and opaque_reflection_composite.dxbc
+          are no longer loaded and may be deleted. Old opaque settings are ignored.
+          Character capture remains available but is not needed for this test.
+          No separate INI required.
           '@ | Set-Content "$out/README.txt" -Encoding ASCII
           Compress-Archive -Path "$out/*" -DestinationPath "$out.zip" -Force
           (Get-FileHash "$out.zip" -Algorithm SHA256).Hash | Set-Content "$out.sha256" -Encoding ASCII
@@ -297,14 +265,12 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-Character-Lighting-Capture-R39
+          name: Control-FG-Glass-Only-R40
           path: |
-            Control-FG-Character-Lighting-Capture-R39.zip
-            Control-FG-Character-Lighting-Capture-R39.sha256
+            Control-FG-Glass-Only-R40.zip
+            Control-FG-Glass-Only-R40.sha256
             build/exports.txt
             build/imports.txt
-            build/opaque_reflection_raygen.dxil
-            build/opaque_reflection_composite.dxbc
             build/pt_glass_raygen.dxil
             build/pt_glass_secondary.dxbc
             build/pt_glass_composite.dxbc

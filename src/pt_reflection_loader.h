@@ -475,7 +475,6 @@ static void* PTReflectionHookTechniqueLookup(void* rfx,const char* technique) {
 }
 
 #include "pt_glass_runtime.h"
-#include "opaque_reflection_runtime.h"
 
 static const char* PTReflectionHookShaderStorageGet(int id) {
     if(id==kRRCharacterBaseAlbedoStorageId&&rrCharacterBaseAlbedoStorageReady.load(std::memory_order_acquire))
@@ -801,7 +800,7 @@ static HRESULT STDMETHODCALLTYPE PTReflectionHookCreateComputePipelineState(
     }
 
     const HRESULT nativeHr=ptReflectionOriginalCreateComputePipelineState(device,desc,riid,out);
-    if(SUCCEEDED(nativeHr)&&out&&*out){PTGlassRuntime::ObserveCompute(device,desc,*out);OpaqueReflectionRuntime::ObserveCompute(device,desc,*out);}
+    if(SUCCEEDED(nativeHr)&&out&&*out)PTGlassRuntime::ObserveCompute(device,desc,*out);
     if(!target||FAILED(nativeHr)||!out||!*out||!desc)return nativeHr;
 
     AcquireSRWLockExclusive(&ptReflectionCompositePsoLock);
@@ -878,7 +877,6 @@ static bool PTReflectionInstallComputePsoHookOnDevice(ID3D12Device* device) noex
 
     ptReflectionOriginalCreateComputePipelineState=original;
     PTGlassRuntime::InstallDevice(device);
-    OpaqueReflectionRuntime::InstallDevice(device);
     ptReflectionCreateComputePipelineStateSlot=slot;
     Log("PT_REFLECTION_P2_PSO_HOOK ready=1 source=device_create device=%p vtable=%p slot_index=%llu slot=%p original=%p hook=%p exchange_error=%lu",
         device,vtable,static_cast<unsigned long long>(slotIndex),slot,
@@ -1954,8 +1952,8 @@ static void PTReflectionProbeCachedTechniqueOnce(HMODULE renderer,HMODULE d3d) n
 
 static bool PTReflectionInstallShaderLookupHooks(HMODULE renderer,HMODULE d3d) noexcept {
     if(!renderer||renderer!=verifiedRenderer||!d3d||d3d!=verifiedD3d)return false;
-    // R35: preserve character/hair transport. Retired P1/P2 stays disabled;
-    // native opaque continuation uses its own storage and independent hooks.
+    // R34: keep the shared shader transport used by the character/hair fixes.
+    // Do not load opaque PT sidecars or install any opaque ray/composite hooks.
     ptReflectionP1InjectionEnabled=false;
     ptReflectionP2InjectionEnabled=false;
     ptReflectionForcedNativeVariant=-1;
@@ -1964,8 +1962,7 @@ static bool PTReflectionInstallShaderLookupHooks(HMODULE renderer,HMODULE d3d) n
     rrCharacterBaseAlbedoStorageReady.store(storageReady,std::memory_order_release);
     if(!storageReady||!RRAlbedoShader::Initialize(d3d))return false;
     const bool glassReady=PTGlassRuntime::Install(renderer,d3d);
-    const bool opaqueReady=OpaqueReflectionRuntime::Install(renderer,d3d);
-    Log("REFLECTIONS_R35 glass_ready=%u opaque_ready=%u retired_pt=disabled character_shader_transport=%u",unsigned(glassReady),unsigned(opaqueReady),unsigned(storageReady));
+    Log("GLASS_ONLY_R34 glass_ready=%u opaque_pt=disabled character_shader_transport=%u",unsigned(glassReady),unsigned(storageReady));
     // Glass has its own failure reporting; a glass fallback must not disable RR.
     return storageReady;
 }
