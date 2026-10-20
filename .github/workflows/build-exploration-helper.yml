@@ -1,0 +1,28 @@
+name: Build Control exploration helper
+on:
+  push:
+    branches: [experiment/rr-exploration-no-spawns]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile and test
+        shell: cmd
+        run: |
+          for /f "usebackq tokens=*" %%I in (`"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath`) do set "VSROOT=%%I"
+          call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
+          mkdir exploration-package
+          cl /nologo /std:c++17 /EHsc /W4 /O2 /MT tools\exploration\no-spawns.cpp /Feexploration-package\Control-No-Encounter-Starts.exe /Foexploration-package\no-spawns.obj /link bcrypt.lib
+          if errorlevel 1 exit /b 1
+          exploration-package\Control-No-Encounter-Starts.exe --self-test
+          if errorlevel 1 exit /b 1
+          del exploration-package\no-spawns.obj
+          copy tools\exploration\README.md exploration-package\README.md
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Control-No-Encounter-Starts-Test1
+          path: exploration-package/
