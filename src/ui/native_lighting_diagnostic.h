@@ -8,6 +8,7 @@ inline constexpr const wchar_t* kButtons[] = {L"NATIVE", L"GI OFF", L"DIRECT OFF
 inline HFONT headingFont = nullptr, bodyFont = nullptr, detailFont = nullptr;
 inline std::atomic<bool> started{false};
 inline std::atomic<unsigned> savedNotice{0};
+inline bool selectionRejected = false;
 inline bool panelOpen = false; // Owned exclusively by the diagnostic UI thread.
 inline int cursorVisibilityIncrements = 0;
 
@@ -52,13 +53,29 @@ inline void Paint(HWND window) noexcept {
     DrawLabel(dc, headingFont, L"LIGHTING DIAGNOSTIC", {14,8,kWidth-12,34}, theme::kAccent);
     const auto state = selection.Read();
     const unsigned ready = readyMask.load(), observed = LiveSelection::Observed(state);
+    const auto mode = LiveSelection::GetMode(state);
+    const unsigned required = mode == Mode::DisableBakedGi ? kGiBit : mode == Mode::DisableDirect ? kDirectBit : kAllBits;
     wchar_t status[160]{};
     swprintf_s(status, L"GI: %s   Direct: %s   %s", ready & kGiBit ? L"ready" : L"waiting", ready & kDirectBit ? L"ready" : L"waiting",
-        observed == kAllBits ? L"bindings confirmed" : L"waiting for bindings");
+        (observed & required) == required ? L"bindings recorded" : L"NOT APPLIED: awaiting bind");
     DrawLabel(dc, detailFont, status, {14,82,kWidth-12,108}, theme::kMutedText);
     DrawLabel(dc, detailFont, L"F10: return to game    Ctrl+Shift+1 / 2 / 3: mode", {14,155,kWidth-12,179}, theme::kMutedText);
-    DrawLabel(dc, detailFont, savedNotice.load() == 2 ? L"Log write failed: check game-folder write access." : savedNotice.load() == 1 ? L"Saved: ControlFG-Lighting-R54.log" : L"Choose a mode, let it settle, then record what you see.", {14,181,kWidth-12,208}, theme::kText);
+    DrawLabel(dc, detailFont, selectionRejected ? L"Mode unavailable: matching shader is not ready. Save Log." : savedNotice.load() == 2 ? L"Log write failed. Save Log shows the Windows error." : savedNotice.load() == 1 ? L"Log saved. See the folder shown in the confirmation." : L"Choose a mode, let it settle, then record what you see.", {14,181,kWidth-12,208}, theme::kText);
     EndPaint(window, &ps);
+}
+inline void SaveReport(HWND window) noexcept {
+    const auto state = selection.Read();
+    Trace("save_log seq=%llu mode=%s recorded_mask=%u", LiveSelection::Sequence(state),
+        ModeName(LiveSelection::GetMode(state)), LiveSelection::Observed(state));
+    Trace("coverage graphics_pso=%llu compute_pso=%llu bindings=%llu same_size_mismatches=%u ready_mask=%u", graphicsSeen.load(), computeSeen.load(), bindingsSeen.load(), candidateMismatches.load(), readyMask.load());
+    wchar_t message[1024]{};
+    AcquireSRWLockShared(&reportLock);
+    const bool saved = reportHealthy.load();
+    if (saved) swprintf_s(message, L"Log saved and flushed to disk:\n\n%s\n\nSend this file. Earlier session logs are kept.", report.Path());
+    else swprintf_s(message, L"The log could not be saved. Windows error: %lu\n\nAttempted path: %s\n\nPlease send a screenshot of this message.", report.Error(), *report.Path() ? report.Path() : L"LocalAppData and temporary diagnostics folders");
+    ReleaseSRWLockShared(&reportLock);
+    savedNotice = saved ? 1u : 2u;
+    MessageBoxW(window, message, saved ? L"Lighting log saved" : L"Lighting log failed", MB_OK | (saved ? MB_ICONINFORMATION : MB_ICONERROR));
 }
 inline LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPARAM lParam) noexcept {
     namespace theme = control_ui::theme;
@@ -100,9 +117,9 @@ inline LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPA
     case WM_COMMAND:
         if(HIWORD(wParam)==BN_CLICKED) {
             const unsigned index=LOWORD(wParam)-kButtonFirst;
-            if(index<3){SelectMode(static_cast<Mode>(index));savedNotice=0;}
+            if(index<3){selectionRejected=!SelectMode(static_cast<Mode>(index));savedNotice=0;}
             else if(index==3||index==4)ReportVisual(index==3);
-            else if(index==5){const auto state=selection.Read();Trace("save_log seq=%llu mode=%s recorded_mask=%u",LiveSelection::Sequence(state),ModeName(LiveSelection::GetMode(state)),LiveSelection::Observed(state));savedNotice=reportHealthy.load()?1u:2u;}
+            else if(index==5) SaveReport(window);
             RedrawWindow(window,nullptr,nullptr,RDW_INVALIDATE|RDW_ALLCHILDREN);
             return 0;
         }
@@ -122,7 +139,7 @@ inline DWORD WINAPI ThreadProc(LPVOID) noexcept {
     if(!timer){Trace("overlay_failed reason=timer");return 0;}
     HWND panel=nullptr,owner=nullptr;bool held[4]{};
     ULONGLONG nextRefresh=0;
-    Trace("session_start build=R54a-input-fix pid=%lu default=native log=ControlFG-Lighting-R54.log",GetCurrentProcessId());
+    Trace("session_start build=R54b-report-fix pid=%lu default=native log=user-diagnostics-folder",GetCurrentProcessId());
     MSG msg{};
     while(GetMessageW(&msg,nullptr,0,0)>0){
         if (!panel || !IsDialogMessageW(panel, &msg)) {
@@ -139,7 +156,7 @@ inline DWORD WINAPI ThreadProc(LPVOID) noexcept {
         const int keys[4]={VK_F10,'1','2','3'};
         for(int i=0;i<4;++i){const bool down=(GetAsyncKeyState(keys[i])&0x8000)!=0;
             if(foreground&&down&&!held[i]&&(i==0||modifier)){
-                if(i==0){if(panelOpen)ClosePanel(panel);else OpenPanel(panel);}else {SelectMode(static_cast<Mode>(i-1));savedNotice=0;}
+                if(i==0){if(panelOpen)ClosePanel(panel);else OpenPanel(panel);}else {selectionRejected=!SelectMode(static_cast<Mode>(i-1));savedNotice=0;}
             }held[i]=down;
         }
         if(foreground&&panelOpen){

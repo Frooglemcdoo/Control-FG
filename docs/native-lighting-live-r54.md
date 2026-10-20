@@ -21,11 +21,21 @@ rendering while its window lacks focus, close the panel with F10 to let the new
 mode render, then reopen it to record the result. No game restart is needed.
 
 Use the same stationary stair-wall view with RT/DLSS/RR/FG/glass OFF. Wait for
-bindings confirmed and allow exposure/history to settle, then use Speckles
+bindings recorded and allow exposure/history to settle, then use Speckles
 Remain or Speckles Gone to record your visual observation. Repeat for each mode
-and press Save Log. Send only `ControlFG-Lighting-R54.log` beside Control_DX12.exe.
-It is flushed as events occur and recreated on each launch, so send/copy it
-before launching again. The ordinary mod log receives the same diagnostic events.
+and press Save Log. R54b confirms the exact saved path in a dialog, or shows the
+Windows error if writing fails. Reports go to `%LOCALAPPDATA%\Control-FG\Diagnostics`,
+falling back to `%TEMP%\Control-FG\Diagnostics` if needed. Each launch creates one
+unique `Lighting-R54b-<date>-<time>-<pid>-<serial>.log`; previous sessions are kept.
+The ordinary mod log receives the same diagnostic events.
+
+Rejected mode clicks now explain that the matching shader is not ready. A selected
+mode shows NOT APPLIED until its tagged pipeline has been recorded. This is not
+GPU-completion proof or proof that all lighting in the scene uses this pipeline.
+Save Log includes graphics/compute PSO and binding counts, same-size shader hash
+mismatches, variant creation results and hook status to diagnose missing coverage.
+The unchanged-image report from R54a does not establish that direct lighting is
+unrelated to the speckles: successful application has not yet been verified.
 
 The dedicated log contains shader-variant readiness/failures, mode sequence,
 recorded native/alternate bindings, present counter/time, user observations and
@@ -68,3 +78,6 @@ using synthetic shaders, not the visual effect of the game shaders on NVIDIA.
 The exact game shader patches were separately checked byte-for-byte in R53.
 The 132-file clean-baseline audit permits only the documented diagnostic hook
 integration. Existing glass, menu and provider checks remain enabled.
+
+R54b adds Windows file tests for an unwritable primary destination, fallback,
+readable flushed contents, append preservation, unique sessions and total failure.

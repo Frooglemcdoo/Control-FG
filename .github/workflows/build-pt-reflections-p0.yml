@@ -223,6 +223,15 @@ jobs:
           build\test-native-lighting-live-warp.exe
           if errorlevel 1 exit /b 1
 
+      - name: Validate diagnostic report saving
+        shell: cmd
+        run: |
+          call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
+          cl /nologo /std:c++17 /EHsc /W4 tools\test-native-lighting-report.cpp /Febuild\test-native-lighting-report.exe
+          if errorlevel 1 exit /b 1
+          build\test-native-lighting-report.exe
+          if errorlevel 1 exit /b 1
+
       - name: Compile experimental proxy
         shell: cmd
         run: |
@@ -267,11 +276,11 @@ jobs:
           node tools/test-native-menu.js --config build/native-menu-config.json
           if errorlevel 1 exit /b 1
 
-      - name: Package live lighting diagnostic R54a
+      - name: Package live lighting diagnostic R54b
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-Native-Lighting-Live-R54a'
+          $out='Control-FG-Native-Lighting-Live-R54b'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
           New-Item -ItemType Directory -Force -Path "$out/ControlFGStreamline" | Out-Null
@@ -289,7 +298,7 @@ jobs:
           Copy-Item Collect-ControlFG-Compact-Logs.ps1 "$out/Collect-ControlFG-Compact-Logs.ps1"
           Copy-Item docs/native-lighting-live-r54.md "$out/DIAGNOSTIC-NOTES.md"
           @'
-          CONTROL-FG LIVE LIGHTING DIAGNOSTIC R54a - mouse input fix
+          CONTROL-FG LIVE LIGHTING DIAGNOSTIC R54b - report saving and application status
           Close Control to install this DLL, then launch once. No restarts between modes.
           Copy package contents beside Control_DX12.exe, preserving ControlFGStreamline.
           Keep existing NVIDIA runtimes. Old R51/R52/R53 marker files are ignored.
@@ -298,11 +307,14 @@ jobs:
           F10 opens it with mouse focus; F10 again returns to the game. Buttons: NATIVE / GI OFF / DIRECT OFF.
           Optional live keys: Ctrl+Shift+1 / 2 / 3 (same order).
           Start with RT/DLSS/RR/FG/glass OFF and compare the same stationary view.
-          Wait for bindings confirmed and allow exposure/history to settle.
+          Wait for bindings recorded and allow exposure/history to settle.
+          NOT APPLIED means the selected shader has not been seen binding yet.
           For each mode, click SPECKLES REMAIN or SPECKLES GONE.
-          Click SAVE LOG, then send ControlFG-Lighting-R54.log beside the game EXE.
+          Click SAVE LOG. The confirmation shows the exact file to send.
+          Default folder: %LOCALAPPDATA%\Control-FG\Diagnostics
+          Fallback folder: %TEMP%\Control-FG\Diagnostics
           That one file records variant readiness, selections, bindings and your results.
-          Copy/send it before another launch, which starts a fresh log.
+          Each launch creates a dated log; earlier sessions are kept.
 
           This is diagnostic. Other lighting passes remain; neither mode is a pure
           direct-only/GI-only view. No pause commands or global input hooks are used.
@@ -315,10 +327,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-Native-Lighting-Live-R54a
+          name: Control-FG-Native-Lighting-Live-R54b
           path: |
-            Control-FG-Native-Lighting-Live-R54a.zip
-            Control-FG-Native-Lighting-Live-R54a.sha256
+            Control-FG-Native-Lighting-Live-R54b.zip
+            Control-FG-Native-Lighting-Live-R54b.sha256
             build/exports.txt
             build/imports.txt
             build/pt_glass_raygen.dxil
