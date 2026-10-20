@@ -8,6 +8,35 @@ inline constexpr const wchar_t* kButtons[] = {L"NATIVE", L"GI OFF", L"DIRECT OFF
 inline HFONT headingFont = nullptr, bodyFont = nullptr, detailFont = nullptr;
 inline std::atomic<bool> started{false};
 inline std::atomic<unsigned> savedNotice{0};
+inline bool panelOpen = false; // Owned exclusively by the diagnostic UI thread.
+inline int cursorVisibilityIncrements = 0;
+
+inline bool PanelHasForeground(HWND panel) noexcept {
+    const HWND foreground = GetForegroundWindow();
+    return foreground == panel || IsChild(panel, foreground);
+}
+inline void RestoreCursorVisibility() noexcept {
+    while (cursorVisibilityIncrements > 0) {
+        ShowCursor(FALSE);
+        --cursorVisibilityIncrements;
+    }
+}
+inline void ClosePanel(HWND panel) noexcept {
+    const bool returnToGame = PanelHasForeground(panel);
+    panelOpen = false;
+    RestoreCursorVisibility();
+    ShowWindow(panel, SW_HIDE);
+    if (returnToGame) SetForegroundWindow(GetWindow(panel, GW_OWNER));
+    Trace("overlay_closed return_to_game=%u", returnToGame ? 1u : 0u);
+}
+inline void OpenPanel(HWND panel) noexcept {
+    panelOpen = true;
+    ShowWindow(panel, SW_SHOWNOACTIVATE);
+    // Only called for an explicit F10 press while the game has foreground.
+    const BOOL activated = SetForegroundWindow(panel);
+    if (activated) SetFocus(GetDlgItem(panel, kButtonFirst));
+    Trace("overlay_open activation=%u", activated ? 1u : 0u);
+}
 
 inline void DrawLabel(HDC dc, HFONT font, const wchar_t* text, RECT bounds, COLORREF color) noexcept {
     const auto previous = SelectObject(dc, font);
@@ -27,21 +56,32 @@ inline void Paint(HWND window) noexcept {
     swprintf_s(status, L"GI: %s   Direct: %s   %s", ready & kGiBit ? L"ready" : L"waiting", ready & kDirectBit ? L"ready" : L"waiting",
         observed == kAllBits ? L"bindings confirmed" : L"waiting for bindings");
     DrawLabel(dc, detailFont, status, {14,82,kWidth-12,108}, theme::kMutedText);
-    DrawLabel(dc, detailFont, L"F10: panel    Ctrl+Shift+1 / 2 / 3: live mode", {14,155,kWidth-12,179}, theme::kMutedText);
+    DrawLabel(dc, detailFont, L"F10: return to game    Ctrl+Shift+1 / 2 / 3: mode", {14,155,kWidth-12,179}, theme::kMutedText);
     DrawLabel(dc, detailFont, savedNotice.load() == 2 ? L"Log write failed: check game-folder write access." : savedNotice.load() == 1 ? L"Saved: ControlFG-Lighting-R54.log" : L"Choose a mode, let it settle, then record what you see.", {14,181,kWidth-12,208}, theme::kText);
     EndPaint(window, &ps);
 }
 inline LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPARAM lParam) noexcept {
     namespace theme = control_ui::theme;
     switch (message) {
-    case WM_MOUSEACTIVATE: return MA_NOACTIVATE;
+    case WM_MOUSEACTIVATE: return MA_ACTIVATE;
+    case WM_ACTIVATE:
+        if (LOWORD(wParam) == WA_INACTIVE) RestoreCursorVisibility();
+        else {
+            ClipCursor(nullptr);
+            // Balance every ShowCursor call when focus leaves this panel.
+            if (!cursorVisibilityIncrements) {
+                int count;
+                do { count = ShowCursor(TRUE); ++cursorVisibilityIncrements; } while (count < 0);
+            }
+        }
+        break;
     case WM_ERASEBKGND: return 1;
     case WM_SETCURSOR: SetCursor(LoadCursorW(nullptr, IDC_ARROW)); return TRUE;
     case WM_PAINT: Paint(window); return 0;
     case WM_CREATE:
         for (int i=0;i<6;++i) {
             const int row=i/3, col=i%3;
-            HWND button=CreateWindowExW(WS_EX_NOACTIVATE,L"BUTTON",kButtons[i],WS_CHILD|WS_VISIBLE|BS_OWNERDRAW,
+            HWND button=CreateWindowExW(0,L"BUTTON",kButtons[i],WS_CHILD|WS_VISIBLE|WS_TABSTOP|BS_OWNERDRAW,
                 14+col*156,40+row*72,148,36,window,reinterpret_cast<HMENU>(INT_PTR(kButtonFirst+i)),selfModule,nullptr);
             SendMessageW(button,WM_SETFONT,reinterpret_cast<WPARAM>(bodyFont),TRUE);
         }
@@ -67,7 +107,7 @@ inline LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPA
             return 0;
         }
         break;
-    case WM_CLOSE: ShowWindow(window,SW_HIDE); return 0;
+    case WM_CLOSE: ClosePanel(window); return 0;
     }
     return DefWindowProcW(window,message,wParam,lParam);
 }
@@ -80,34 +120,37 @@ inline DWORD WINAPI ThreadProc(LPVOID) noexcept {
     if(!RegisterClassExW(&wc)&&GetLastError()!=ERROR_CLASS_ALREADY_EXISTS){Trace("overlay_failed reason=class");return 0;}
     UINT_PTR timer=SetTimer(nullptr,0,50,nullptr);
     if(!timer){Trace("overlay_failed reason=timer");return 0;}
-    HWND panel=nullptr,owner=nullptr;bool open=true,held[4]{};
+    HWND panel=nullptr,owner=nullptr;bool held[4]{};
     ULONGLONG nextRefresh=0;
-    Trace("session_start build=R54 pid=%lu default=native log=ControlFG-Lighting-R54.log",GetCurrentProcessId());
+    Trace("session_start build=R54a-input-fix pid=%lu default=native log=ControlFG-Lighting-R54.log",GetCurrentProcessId());
     MSG msg{};
     while(GetMessageW(&msg,nullptr,0,0)>0){
-        TranslateMessage(&msg);DispatchMessageW(&msg);
+        if (!panel || !IsDialogMessageW(panel, &msg)) {
+            TranslateMessage(&msg); DispatchMessageW(&msg);
+        }
         if(msg.message!=WM_TIMER||msg.wParam!=timer)continue;
         HWND game=FindFGGameWindow();
-        if(panel&&owner!=game){DestroyWindow(panel);panel=nullptr;}
-        if(game&&!panel){panel=CreateWindowExW(WS_EX_TOOLWINDOW|WS_EX_NOACTIVATE,kClass,L"Control lighting diagnostic",WS_POPUP,
+        if(panel&&owner!=game){ClosePanel(panel);DestroyWindow(panel);panel=nullptr;}
+        if(game&&!panel){panel=CreateWindowExW(WS_EX_TOOLWINDOW,kClass,L"Control lighting diagnostic",WS_POPUP,
             0,0,kWidth,kHeight,game,nullptr,selfModule,nullptr);owner=game;}
         if(!panel)continue;
-        const bool foreground=GetForegroundWindow()==game;
+        const bool foreground=GetForegroundWindow()==game || PanelHasForeground(panel);
         const bool modifier=(GetAsyncKeyState(VK_CONTROL)&0x8000)&&(GetAsyncKeyState(VK_SHIFT)&0x8000);
         const int keys[4]={VK_F10,'1','2','3'};
         for(int i=0;i<4;++i){const bool down=(GetAsyncKeyState(keys[i])&0x8000)!=0;
             if(foreground&&down&&!held[i]&&(i==0||modifier)){
-                if(i==0)open=!open;else {SelectMode(static_cast<Mode>(i-1));savedNotice=0;}
+                if(i==0){if(panelOpen)ClosePanel(panel);else OpenPanel(panel);}else {SelectMode(static_cast<Mode>(i-1));savedNotice=0;}
             }held[i]=down;
         }
-        if(foreground&&open){
+        if(foreground&&panelOpen){
             RECT client{};GetClientRect(game,&client);POINT origin{client.right-kWidth-18,18};if(origin.x<0)origin.x=0;
             ClientToScreen(game,&origin);SetWindowPos(panel,HWND_TOP,origin.x,origin.y,kWidth,kHeight,SWP_NOACTIVATE|SWP_SHOWWINDOW);
-            // No focus switch, game window subclass, global input hook or topmost window.
+            // Release confinement only while this panel owns input, never over other apps.
+            if (PanelHasForeground(panel)) ClipCursor(nullptr);
             if(GetTickCount64()>=nextRefresh){RedrawWindow(panel,nullptr,nullptr,RDW_INVALIDATE|RDW_ALLCHILDREN);nextRefresh=GetTickCount64()+250;}
-        }else ShowWindow(panel,SW_HIDE);
+        }else {RestoreCursorVisibility();ShowWindow(panel,SW_HIDE);if(!foreground)panelOpen=false;}
     }
-    KillTimer(nullptr,timer);if(panel)DestroyWindow(panel);
+    KillTimer(nullptr,timer);RestoreCursorVisibility();if(panel)DestroyWindow(panel);
     DeleteObject(headingFont);DeleteObject(bodyFont);DeleteObject(detailFont);return 0;
 }
 } // namespace native_lighting::ui

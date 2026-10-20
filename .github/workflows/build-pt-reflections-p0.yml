@@ -267,11 +267,11 @@ jobs:
           node tools/test-native-menu.js --config build/native-menu-config.json
           if errorlevel 1 exit /b 1
 
-      - name: Package live lighting diagnostic R54
+      - name: Package live lighting diagnostic R54a
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-Native-Lighting-Live-R54'
+          $out='Control-FG-Native-Lighting-Live-R54a'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
           New-Item -ItemType Directory -Force -Path "$out/ControlFGStreamline" | Out-Null
@@ -289,13 +289,13 @@ jobs:
           Copy-Item Collect-ControlFG-Compact-Logs.ps1 "$out/Collect-ControlFG-Compact-Logs.ps1"
           Copy-Item docs/native-lighting-live-r54.md "$out/DIAGNOSTIC-NOTES.md"
           @'
-          CONTROL-FG LIVE LIGHTING DIAGNOSTIC R54
+          CONTROL-FG LIVE LIGHTING DIAGNOSTIC R54a - mouse input fix
           Close Control to install this DLL, then launch once. No restarts between modes.
           Copy package contents beside Control_DX12.exe, preserving ControlFGStreamline.
           Keep existing NVIDIA runtimes. Old R51/R52/R53 marker files are ignored.
 
           Use Borderless display mode for the floating diagnostic panel.
-          F10 shows/hides it. Buttons: NATIVE / GI OFF / DIRECT OFF.
+          F10 opens it with mouse focus; F10 again returns to the game. Buttons: NATIVE / GI OFF / DIRECT OFF.
           Optional live keys: Ctrl+Shift+1 / 2 / 3 (same order).
           Start with RT/DLSS/RR/FG/glass OFF and compare the same stationary view.
           Wait for bindings confirmed and allow exposure/history to settle.
@@ -305,7 +305,8 @@ jobs:
           Copy/send it before another launch, which starts a fresh log.
 
           This is diagnostic. Other lighting passes remain; neither mode is a pure
-          direct-only/GI-only view. It does not pause the game or use global input hooks.
+          direct-only/GI-only view. No pause commands or global input hooks are used.
+          If rendering stops while the panel owns focus, F10 returns to the game.
           NATIVE restores both contributions immediately as new commands are recorded.
           '@ | Set-Content "$out/README.txt" -Encoding ASCII
           Compress-Archive -Path "$out/*" -DestinationPath "$out.zip" -Force
@@ -314,10 +315,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-Native-Lighting-Live-R54
+          name: Control-FG-Native-Lighting-Live-R54a
           path: |
-            Control-FG-Native-Lighting-Live-R54.zip
-            Control-FG-Native-Lighting-Live-R54.sha256
+            Control-FG-Native-Lighting-Live-R54a.zip
+            Control-FG-Native-Lighting-Live-R54a.sha256
             build/exports.txt
             build/imports.txt
             build/pt_glass_raygen.dxil

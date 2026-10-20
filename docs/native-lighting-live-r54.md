@@ -6,13 +6,19 @@ Old R51/R52/R53 marker files are ignored.
 
 ## Controls and one-file report
 
-Run Control in Borderless mode. The owned, nonactivating diagnostic panel uses
-the shared UI theme/fonts and shows three mode buttons: Native, GI Off and
-Direct Off. F10 shows/hides this diagnostic panel. Ctrl+Shift+1/2/3 offers the
-same live selection when the game owns the mouse. The panel has no global
-input hook, game-window subclass, forced foreground activation or permanent
-topmost status. It hides when Control loses foreground. Exclusive-fullscreen
-visibility is not supported by this Win32 panel.
+Run Control in Borderless mode. R54a fixes the original panel's mouse ownership:
+the panel starts hidden; press F10 to open it and give its buttons keyboard/mouse
+focus. Press F10 again to hide it and return focus to Control. Tab/Space also
+operate the buttons. The panel releases cursor confinement while it owns focus
+and balances its cursor-visibility changes when focus leaves. It does not steal
+focus back from another app. Alt-Tab hides it; F10 reopens it from the game.
+
+The shared UI theme/fonts and three mode buttons (Native, GI Off, Direct Off)
+remain. Ctrl+Shift+1/2/3 also changes modes with the game or panel foreground.
+There is no global input hook, game-window subclass or permanent topmost window.
+Exclusive fullscreen is unsupported. No pause command is sent; if Control stops
+rendering while its window lacks focus, close the panel with F10 to let the new
+mode render, then reopen it to record the result. No game restart is needed.
 
 Use the same stationary stair-wall view with RT/DLSS/RR/FG/glass OFF. Wait for
 bindings confirmed and allow exposure/history to settle, then use Speckles
