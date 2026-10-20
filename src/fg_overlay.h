@@ -1,3 +1,4 @@
+#include <mutex>
 #pragma once
 
 #include "control_fg_logo_resource.h"
@@ -31,9 +32,11 @@ static HWND fgOverlayLastRefreshGame = nullptr;
 static bool fgOverlaySliderDragging = false;
 static bool fgOverlayClampDragging = false;
 static unsigned fgOverlayClampPreview = 60;
-static bool fgOverlaySettingsDirty = false;
-static ULONGLONG fgOverlaySettingsDirtyMs = 0;
-static ULONGLONG fgOverlaySettingsSavedPulseUntilMs = 0;
+static std::atomic<bool> fgOverlaySettingsDirty{false};
+static std::recursive_mutex fgSettingsMutex;
+static std::atomic<bool> fgNativeMenuReady{false};
+static std::atomic<ULONGLONG> fgOverlaySettingsDirtyMs{0};
+static std::atomic<ULONGLONG> fgOverlaySettingsSavedPulseUntilMs{0};
 static std::wstring fgOverlaySettingsPath;
 static std::atomic<unsigned int> fgOverlaySettingsLoaded{0};
 static bool fgOverlayOptionsPage = false;
@@ -229,6 +232,7 @@ static void FGOverlayLoadSettings() noexcept {
 }
 
 static bool FGOverlaySaveSettingsNow() noexcept {
+    std::lock_guard<std::recursive_mutex> lock(fgSettingsMutex);
     if (!FGOverlayResolveSettingsPath()) {
         Log("FG_SETTINGS_SAVE success=0 reason=path_unavailable ui=fg_full_rr_toggle_only");
         return false;
@@ -283,11 +287,13 @@ static bool FGOverlaySaveSettingsNow() noexcept {
 }
 
 static void FGOverlayMarkSettingsDirty() noexcept {
+    std::lock_guard<std::recursive_mutex> lock(fgSettingsMutex);
     fgOverlaySettingsDirty = true;
     fgOverlaySettingsDirtyMs = GetTickCount64();
 }
 
 static void FGOverlayFlushSettingsIfDue(bool force = false) noexcept {
+    std::lock_guard<std::recursive_mutex> lock(fgSettingsMutex);
     if (!fgOverlaySettingsDirty) return;
     const ULONGLONG now = GetTickCount64();
     if (!force && now - fgOverlaySettingsDirtyMs < kFGSettingsDebounceMs) return;
@@ -1541,13 +1547,13 @@ static DWORD WINAPI FGOverlayThreadProc(LPVOID) noexcept {
                 if (!fgOverlayBindingCapture) InvalidateRect(overlay, nullptr, FALSE);
             }
             const bool toggleDown = (GetAsyncKeyState(static_cast<int>(fgOverlayToggleKey)) & 0x8000) != 0;
-            if (!capturingBinding && gameForeground && toggleDown && !fgOverlayToggleWasDown) {
+            if (!fgNativeMenuReady.load() && !capturingBinding && gameForeground && toggleDown && !fgOverlayToggleWasDown) {
                 const unsigned int next = fgOverlayVisible.load(std::memory_order_acquire) ? 0u : 1u;
                 fgOverlayVisible.store(next, std::memory_order_release);
                 Log("FG_OVERLAY_TOGGLE visible=%u key=%u input=nonexclusive", next, fgOverlayToggleKey);
             }
             fgOverlayToggleWasDown = toggleDown;
-            const bool show = gameForeground && fgOverlayVisible.load(std::memory_order_acquire);
+            const bool show = !fgNativeMenuReady.load() && gameForeground && fgOverlayVisible.load(std::memory_order_acquire);
             FGOverlaySetShown(overlay, game, show);
             if (show) {
                 if (now - fgOverlayLastPlacementPollMs >= kFGOverlayPlacementPollIntervalMs) {

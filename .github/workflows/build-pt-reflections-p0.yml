@@ -33,6 +33,7 @@ on:
       - experiment/glass-shadow-filter-r38
       - experiment/reflected-character-material-audit-r39
       - fix/glass-only-remove-opaque-r40
+      - experiment/native-graphics-menu-r41
   workflow_dispatch:
   pull_request:
     branches:
@@ -224,11 +225,28 @@ jobs:
           dumpbin /exports build\dxgi.dll > build\exports.txt
           dumpbin /imports build\dxgi.dll > build\imports.txt
 
-      - name: Package glass-only R40
+      - name: Test native graphics menu
+        shell: cmd
+        run: |
+          python tools/embed-native-menu.py
+          git diff --exit-code -- src/native_menu/script.h
+          if errorlevel 1 exit /b 1
+          node tools/test-native-menu.js
+          if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /O2 /MT tools\test-native-menu-bundle.cpp /Fobuild\test-native-menu-bundle.obj /Febuild\test-native-menu-bundle.exe
+          if errorlevel 1 exit /b 1
+          build\test-native-menu-bundle.exe
+          if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /O2 /MT tools\test-native-menu-runtime.cpp /Fobuild\test-native-menu-runtime.obj /Febuild\test-native-menu-runtime.exe
+          if errorlevel 1 exit /b 1
+          build\test-native-menu-runtime.exe
+          if errorlevel 1 exit /b 1
+
+      - name: Package native graphics menu R41
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-Glass-Only-R40'
+          $out='Control-FG-Native-Menu-R41'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
           Copy-Item build/pt_glass_raygen.dxil "$out/pt_glass_raygen.dxil"
@@ -243,8 +261,8 @@ jobs:
           Copy-Item Collect-ControlFG-Compact-Logs.cmd "$out/Collect-ControlFG-Compact-Logs.cmd"
           Copy-Item Collect-ControlFG-Compact-Logs.ps1 "$out/Collect-ControlFG-Compact-Logs.ps1"
           @'
-          CONTROL-FG GLASS ONLY R40
-          Branch: fix/glass-only-remove-opaque-r40
+          CONTROL-FG NATIVE GRAPHICS MENU R41
+          Branch: experiment/native-graphics-menu-r41
 
           Removes the OPAQUE button, setting and runtime enhancement hooks.
           Opaque surfaces use the game's native reflections.
@@ -253,7 +271,17 @@ jobs:
 
           Close Control. Replace dxgi.dll and all three pt_glass shader files
           beside Control_DX12.exe. Keep native transparent reflections enabled.
-          Use F10 -> GLASS ON/OFF to compare.
+          Open Options -> Graphics and scroll below the original settings.
+          New sections use the game's own controls, text, highlights and descriptions.
+          Glass is under Reflection Enhancements. Opaque reflections are not added.
+          Settings save automatically and when leaving Options. Graphics Reset also
+          restores the mod defaults. Existing saved settings are retained.
+          F10 popup is disabled after native menu injection succeeds. Unsupported
+          game/UI builds retain the popup and log why injection was skipped.
+          This first test build targets the supplied March 2025 game DLLs/UI bundle.
+          Check main menu and pause menu, mouse/controller navigation, changes,
+          leaving/reopening Graphics, restart persistence and Reset.
+          If rows are missing, use Collect-ControlFG-Compact-Logs.cmd and send its ZIP.
           Old opaque_reflection_raygen.dxil and opaque_reflection_composite.dxbc
           are no longer loaded and may be deleted. Old opaque settings are ignored.
           Character capture remains available but is not needed for this test.
@@ -265,10 +293,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-Glass-Only-R40
+          name: Control-FG-Native-Menu-R41
           path: |
-            Control-FG-Glass-Only-R40.zip
-            Control-FG-Glass-Only-R40.sha256
+            Control-FG-Native-Menu-R41.zip
+            Control-FG-Native-Menu-R41.sha256
             build/exports.txt
             build/imports.txt
             build/pt_glass_raygen.dxil

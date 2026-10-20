@@ -9,8 +9,15 @@ perf_exceptions = json.loads((root/'tools/fixtures/r32-baseline-exceptions.json'
 live_exceptions = json.loads((root/'tools/fixtures/r31-baseline-exceptions.json').read_text())
 exceptions = json.loads((root/'tools/fixtures/r28-baseline-exceptions.json').read_text())
 glass_exceptions = json.loads((root/'tools/fixtures/r34-baseline-exceptions.json').read_text())
+menu_exceptions = json.loads((root/'tools/fixtures/r41-baseline-exceptions.json').read_text())
 for name, expected in manifest['files'].items():
     data = (root / name).read_bytes().replace(b'\r\n', b'\n')
+    if name in menu_exceptions:
+        text=data.decode()
+        for before,after in reversed(menu_exceptions[name]):
+            assert text.count(after)==1, (name, 'R41 menu integration changed or duplicated')
+            text=text.replace(after,before,1)
+        data=text.encode()
     if name in glass_exceptions:
         text=data.decode()
         for before,after in reversed(glass_exceptions[name]):
