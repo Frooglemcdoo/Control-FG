@@ -69,8 +69,10 @@ inline void Paint(HWND window) noexcept {
     swprintf_s(status, L"Selected mode: %s   %s", (ready & RequiredVariant(mode)) == RequiredVariant(mode) ? L"ready" : L"waiting",
         (observed & required) == required ? L"bindings recorded" : L"NOT APPLIED: awaiting bind");
     DrawLabel(dc, detailFont, status, {14,kStatusY,kWidth-12,kStatusY+24}, theme::kMutedText);
-    DrawLabel(dc, detailFont, L"F10: return to game    Ctrl+Shift+1..7: live mode", {14,kFooterY,kWidth-12,kFooterY+24}, theme::kMutedText);
-    DrawLabel(dc, detailFont, selectionRejected ? L"Mode unavailable: matching shader is not ready. Save Log." : savedNotice.load() == 2 ? L"Log write failed. Save Log shows the Windows error." : savedNotice.load() == 1 ? L"Log saved. See the folder shown in the confirmation." : L"Choose a mode, let it settle, then record what you see.", {14,kFooterY+26,kWidth-12,kFooterY+56}, theme::kText);
+    wchar_t shortcuts[128]{};
+    swprintf_s(shortcuts, L"F10: return to game    Ctrl+Shift+1..%u: bypass mode", kModeCount);
+    DrawLabel(dc, detailFont, shortcuts, {14,kFooterY,kWidth-12,kFooterY+24}, theme::kMutedText);
+    DrawLabel(dc, detailFont, selectionRejected ? L"Mode unavailable: matching shader is not ready. Save Log." : savedNotice.load() == 2 ? L"Log write failed. Save Log shows the Windows error." : savedNotice.load() == 1 ? L"Log saved. See the folder shown in the confirmation." : L"Shadow buttons bypass that input. Let the image settle.", {14,kFooterY+26,kWidth-12,kFooterY+56}, theme::kText);
     EndPaint(window, &ps);
 }
 inline void SaveReport(HWND window) noexcept {
