@@ -48,6 +48,10 @@ int main() try {
     AttachVariant(direct.Get(),makePso(16),kDirectBit,S_OK,kScreenVariantGuid,kScreenReadyBit);
     AttachVariant(direct.Get(),makePso(17),kDirectBit,S_OK,kSpotVariantGuid,kSpotReadyBit);
     AttachVariant(direct.Get(),makePso(18),kDirectBit,S_OK,kPointVariantGuid,kPointReadyBit);
+    AttachVariant(direct.Get(),makePso(19),kDirectBit,S_OK,kSpotVarianceLowVariantGuid,kSpotVarianceLowReadyBit);
+    AttachVariant(direct.Get(),makePso(20),kDirectBit,S_OK,kSpotVarianceHighVariantGuid,kSpotVarianceHighReadyBit);
+    AttachVariant(direct.Get(),makePso(21),kDirectBit,S_OK,kSpotPcfCenterVariantGuid,kSpotPcfCenterReadyBit);
+    AttachVariant(direct.Get(),makePso(23),kDirectBit,S_OK,kSpotPcf32VariantGuid,kSpotPcf32ReadyBit);
     AttachVariant(direct.Get(),makePso(15),kDirectBit,S_OK,kPatternVariantGuid,kPatternReadyBit);
     D3D12_COMMAND_QUEUE_DESC queueDesc{};ComPtr<ID3D12CommandQueue> queue;Check(device->CreateCommandQueue(&queueDesc,IID_PPV_ARGS(&queue)));
     ComPtr<ID3D12CommandAllocator> allocator;Check(device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT,IID_PPV_ARGS(&allocator)));
@@ -81,6 +85,10 @@ int main() try {
         SelectMode(Mode::BypassScreenShadows);render(direct.Get(),16,reset);render(gi.Get(),22,reset);
         SelectMode(Mode::BypassSpotShadows);render(direct.Get(),17,reset);render(gi.Get(),22,reset);
         SelectMode(Mode::BypassPointShadows);render(direct.Get(),18,reset);render(gi.Get(),22,reset);
+        SelectMode(Mode::SpotVarianceLow);render(direct.Get(),19,reset);render(gi.Get(),22,reset);
+        SelectMode(Mode::SpotVarianceHigh);render(direct.Get(),20,reset);render(gi.Get(),22,reset);
+        SelectMode(Mode::SpotPcfCenter);render(direct.Get(),21,reset);render(gi.Get(),22,reset);
+        SelectMode(Mode::SpotPcf32);render(direct.Get(),23,reset);render(gi.Get(),22,reset);
         SelectMode(Mode::DisableLightPattern);render(direct.Get(),15,reset);render(gi.Get(),22,reset);
         SelectMode(Mode::Native);render(direct.Get(),11,reset);render(gi.Get(),22,reset);
     }

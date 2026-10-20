@@ -6,13 +6,25 @@
 static void Require(bool value) { if (!value) throw std::runtime_error("component patch validation failed"); }
 int main(int argc, char** argv) try {
     using namespace native_lighting;
-    if (argc != 2) throw std::runtime_error("provide captured native direct-light DXBC");
+    if (argc < 2 || argc > 3) throw std::runtime_error("provide captured native direct-light DXBC");
     std::ifstream file(argv[1], std::ios::binary);
     std::vector<unsigned char> source((std::istreambuf_iterator<char>(file)), {}), output;
     Require(source.size() == kDirect.size);
-    for (const auto* patch : {&kDirectDiffuse, &kDirectSpecular, &kShadowBypass, &kPatternOff, &kScreenShadows, &kSpotShadows, &kPointShadows}) {
+    for (const auto* patch : {&kDirectDiffuse, &kDirectSpecular, &kShadowBypass, &kPatternOff, &kScreenShadows, &kSpotShadows, &kPointShadows, &kSpotVarianceLow, &kSpotVarianceHigh, &kSpotPcfCenter, &kSpotPcf32}) {
         Require(MakeDisabledContribution(*patch,source.data(),source.size(),patch->nativeSha,output));
-        Require(output.size()==source.size());
+        const size_t insertedBytes = patch->insertedWordCount * 4;
+        Require(output.size()==source.size()+insertedBytes);
+        if (insertedBytes) {
+            Require(std::memcmp(output.data()+patch->insertionOffset, patch->insertedWords, insertedBytes)==0);
+            auto invalid=*patch; invalid.insertionOffset=source.size()+4;
+            std::vector<unsigned char> rejected;
+            Require(!MakeDisabledContribution(invalid,source.data(),source.size(),patch->nativeSha,rejected));
+            if (argc == 3) {
+                std::ofstream exported(argv[2],std::ios::binary);
+                exported.write(reinterpret_cast<const char*>(output.data()), output.size());
+                Require(bool(exported));
+            }
+        }
         for(size_t i=0;i<source.size();++i) {
             if(i>=4 && i<20) continue; // Separately validated container checksum.
             bool zero=false;
@@ -26,7 +38,7 @@ int main(int argc, char** argv) try {
                 if(i>=edit.offset && i<edit.offset+edit.words*4)
                     expected=reinterpret_cast<const unsigned char*>(edit.replacement)[i-edit.offset];
             }
-            Require(output[i] == expected);
+            Require(output[i + (insertedBytes && i >= patch->insertionOffset ? insertedBytes : 0)] == expected);
         }
         if (patch->editCount) {
             auto wrong=source; wrong[patch->edits[0].offset]^=1;

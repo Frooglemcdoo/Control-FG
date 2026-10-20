@@ -70,9 +70,9 @@ inline void Paint(HWND window) noexcept {
         (observed & required) == required ? L"bindings recorded" : L"NOT APPLIED: awaiting bind");
     DrawLabel(dc, detailFont, status, {14,kStatusY,kWidth-12,kStatusY+24}, theme::kMutedText);
     wchar_t shortcuts[128]{};
-    swprintf_s(shortcuts, L"F10: return to game    Ctrl+Shift+1..%u: bypass mode", kModeCount);
+    swprintf_s(shortcuts, L"F10: return to game    Ctrl+Shift+1..%u: live mode", kModeCount);
     DrawLabel(dc, detailFont, shortcuts, {14,kFooterY,kWidth-12,kFooterY+24}, theme::kMutedText);
-    DrawLabel(dc, detailFont, selectionRejected ? L"Mode unavailable: matching shader is not ready. Save Log." : savedNotice.load() == 2 ? L"Log write failed. Save Log shows the Windows error." : savedNotice.load() == 1 ? L"Log saved. See the folder shown in the confirmation." : L"Shadow buttons bypass that input. Let the image settle.", {14,kFooterY+26,kWidth-12,kFooterY+56}, theme::kText);
+    DrawLabel(dc, detailFont, selectionRejected ? L"Mode unavailable: matching shader is not ready. Save Log." : savedNotice.load() == 2 ? L"Log write failed. Save Log shows the Windows error." : savedNotice.load() == 1 ? L"Log saved. See the folder shown in the confirmation." : L"Shadow tuning: check noise AND retained shadow detail.", {14,kFooterY+26,kWidth-12,kFooterY+56}, theme::kText);
     EndPaint(window, &ps);
 }
 inline void SaveReport(HWND window) noexcept {
@@ -152,7 +152,7 @@ inline DWORD WINAPI ThreadProc(LPVOID) noexcept {
     if(!timer){Trace("overlay_failed reason=timer");return 0;}
     HWND panel=nullptr,owner=nullptr;bool held[kModeCount+1]{};
     ULONGLONG nextRefresh=0;
-    Trace("session_start build=R58-shadow-paths pid=%lu default=native log=user-diagnostics-folder",GetCurrentProcessId());
+    Trace("session_start build=R59-spot-shadow-tuning pid=%lu default=native log=user-diagnostics-folder",GetCurrentProcessId());
     MSG msg{};
     while(GetMessageW(&msg,nullptr,0,0)>0){
         if (!panel || !IsDialogMessageW(panel, &msg)) {

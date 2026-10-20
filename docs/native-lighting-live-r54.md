@@ -1,3 +1,19 @@
+# R59: spotlight shadow tuning with visibility retained
+
+R58: screen and point bypasses recorded speckles remaining; spotlight bypass recorded speckles gone. Removing spotlight visibility is diagnostic, not a fix.
+
+Compare Native (16), PCF 32 Samples, Variance Low, Variance High, and PCF Center in the same stationary view, with RT/DLSS/RR/FG/glass off. Allow history/exposure to settle and wait for bindings recorded. Record Speckles Remain/Gone and separately report whether shadow detail stays intact. F10 returns focus to the game. Ctrl+Shift+1 through 5 follow button order. Save Log identifies one R59 session file; no restart between modes.
+
+PCF 32 Samples adds 16 distinct taps using a 90-degree rotation of the native pattern and normalizes all 32 comparisons by 1/32. Native depth, footprint scale, stochastic rotation, and shadow blending stay intact. It doubles fetches only inside the active spotlight PCF branch; it does not alter VSM, shadow-map resolution, or depth precision. Compare FPS and shadow quality. Container/chunk lengths and offsets are updated for the added bytecode.
+
+Variance Low raises both spotlight VSM minimum variance constants from 1e-5 to 1e-4; High uses 1e-3. Only SHEX instructions 6042 and 7149 change. This tests numerical/self-shadow sensitivity and can introduce excessive softness or light bleeding. PCF Center replaces the radius operand at instruction 6134 with zero: the 16 existing depth tests use the same center coordinate, with original receiver depth and averaging. It preserves occlusion but sacrifices soft edges; no extra texture samples or memory allocation. This differs from the unsuccessful R52 fixed rotation experiment: R52 kept a spread kernel.
+
+Each mode starts independently from native bytecode. No visibility result is forced to one, and no branches are disabled. Screen/point shadows, baked GI, light attenuation, material inputs, and final spotlight blending remain unchanged. This is a candidate correction comparison, not a verified production fix. A mode may have no effect if that spotlight uses the other shadow method.
+
+Reference: NVIDIA GPU Gems 3, Chapter 8, Summed-Area Variance Shadow Maps (minimum variance, surface acne, and light bleeding): https://developer.nvidia.com/gpugems/gpugems3/part-ii-light-and-shadows/chapter-8-summed-area-variance-shadow-maps
+
+Validation: exact shader SHA and instruction checks, declared-edit comparison, full bytecode decoding, portable mode/stale-recording tests, and Windows synthetic WARP routing and log persistence tests. In-game quality remains to be verified.
+
 # R58: isolate the shadow source
 
 R57 recorded speckles gone with all shadow visibility bypassed, and speckles remaining with projected light patterns disabled. This narrows the next test to shadow inputs; it does not yet identify a faulty sampling operation.

@@ -18,6 +18,10 @@ inline const GUID kShadowVariantGuid = {0x822329d7,0x3614,0x4f73,{0xa6,0x14,0xd0
 inline const GUID kScreenVariantGuid = {0x822329d7,0x3614,0x4f73,{0xa6,0x14,0xd0,0x8c,0x94,0xf2,0x58,0x01}};
 inline const GUID kSpotVariantGuid = {0x822329d7,0x3614,0x4f73,{0xa6,0x14,0xd0,0x8c,0x94,0xf2,0x58,0x02}};
 inline const GUID kPointVariantGuid = {0x822329d7,0x3614,0x4f73,{0xa6,0x14,0xd0,0x8c,0x94,0xf2,0x58,0x03}};
+inline const GUID kSpotVarianceLowVariantGuid = {0x822329d7,0x3614,0x4f73,{0xa6,0x14,0xd0,0x8c,0x94,0xf2,0x59,0x01}};
+inline const GUID kSpotVarianceHighVariantGuid = {0x822329d7,0x3614,0x4f73,{0xa6,0x14,0xd0,0x8c,0x94,0xf2,0x59,0x02}};
+inline const GUID kSpotPcfCenterVariantGuid = {0x822329d7,0x3614,0x4f73,{0xa6,0x14,0xd0,0x8c,0x94,0xf2,0x59,0x03}};
+inline const GUID kSpotPcf32VariantGuid = {0x822329d7,0x3614,0x4f73,{0xa6,0x14,0xd0,0x8c,0x94,0xf2,0x59,0x04}};
 inline const GUID kPatternVariantGuid = {0x822329d7,0x3614,0x4f73,{0xa6,0x14,0xd0,0x8c,0x94,0xf2,0x57,0x02}};
 inline const GUID& VariantGuid(Mode mode) noexcept {
     if (mode == Mode::DisableDirectDiffuse) return kDiffuseVariantGuid;
@@ -26,6 +30,10 @@ inline const GUID& VariantGuid(Mode mode) noexcept {
     if (mode == Mode::BypassScreenShadows) return kScreenVariantGuid;
     if (mode == Mode::BypassSpotShadows) return kSpotVariantGuid;
     if (mode == Mode::BypassPointShadows) return kPointVariantGuid;
+    if (mode == Mode::SpotVarianceLow) return kSpotVarianceLowVariantGuid;
+    if (mode == Mode::SpotVarianceHigh) return kSpotVarianceHighVariantGuid;
+    if (mode == Mode::SpotPcfCenter) return kSpotPcfCenterVariantGuid;
+    if (mode == Mode::SpotPcf32) return kSpotPcf32VariantGuid;
     if (mode == Mode::DisableLightPattern) return kPatternVariantGuid;
     return kVariantGuid;
 }
@@ -141,6 +149,10 @@ inline void ObserveCompute(ID3D12Device* device, const D3D12_COMPUTE_PIPELINE_ST
         {&kScreenShadows, &kScreenVariantGuid, kScreenReadyBit},
         {&kSpotShadows, &kSpotVariantGuid, kSpotReadyBit},
         {&kPointShadows, &kPointVariantGuid, kPointReadyBit},
+        {&kSpotVarianceLow, &kSpotVarianceLowVariantGuid, kSpotVarianceLowReadyBit},
+        {&kSpotVarianceHigh, &kSpotVarianceHighVariantGuid, kSpotVarianceHighReadyBit},
+        {&kSpotPcfCenter, &kSpotPcfCenterVariantGuid, kSpotPcfCenterReadyBit},
+        {&kSpotPcf32, &kSpotPcf32VariantGuid, kSpotPcf32ReadyBit},
         {&kPatternOff, &kPatternVariantGuid, kPatternReadyBit}
     };
     for (const auto& spec : variants) {
