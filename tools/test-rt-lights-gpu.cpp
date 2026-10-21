@@ -11,6 +11,7 @@
 #include <fstream>
 #include <iostream>
 #include <stdexcept>
+#include <string>
 #include <vector>
 #include "../src/rt_lights/layout.h"
 using Microsoft::WRL::ComPtr;
@@ -37,7 +38,9 @@ struct Device {
         ComPtr<IDXGIFactory6> factory; Check(CreateDXGIFactory1(IID_PPV_ARGS(&factory)));
         for(UINT i=0;;++i) {
             ComPtr<IDXGIAdapter1> adapter;
-            if(factory->EnumAdapterByGpuPreference(i,DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE,IID_PPV_ARGS(&adapter))==DXGI_ERROR_NOT_FOUND) break;
+            const HRESULT found=factory->EnumAdapterByGpuPreference(i,DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE,IID_PPV_ARGS(&adapter));
+            if(found==DXGI_ERROR_NOT_FOUND) break;
+            Check(found);
             DXGI_ADAPTER_DESC1 desc{}; Check(adapter->GetDesc1(&desc));
             if(desc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE) continue;
             ComPtr<ID3D12Device5> candidate;
