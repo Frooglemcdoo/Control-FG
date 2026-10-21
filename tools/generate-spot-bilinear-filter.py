@@ -145,13 +145,25 @@ def main():
     # same texture range identifier, and an output UAV so the work remains live.
     get=lambda dw,n:list(struct.unpack_from('<'+'I'*n,source,11152+dw*4))
     declarations=get(139,7)+get(202,7)+[0x2000068,40,0x400009b,1,1,1]
+    declarations[2]=0 # Standalone shader has one SRV range; keep binding register t12.
     initial=[]
     for n,mask,value in [(35,'x',.25),(35,'y',.25),(35,'z',.5),(35,'w',.5),(37,'x',.5),(37,'z',.5),(32,'z',.5)]:
         initial+=encode([('mov',dest(n,mask),(imm(value),))])
     store=[0xb0000a4,0x21e0f2,0,0,0x4002,0,0,0,0,0x100ff6,29]
-    shex=[0x50051,0]+declarations+initial+encode(p)+store+[0x100003e]
+    block=encode(p)
+    position=0
+    while position<len(block):
+        length=block[position]>>24&127
+        if block[position]&2047 in (opnames.index('resinfo'),opnames.index('ld')):
+            block[position+length-2]=0 # Remap range ID only; same register and operations.
+        position+=length
+    shex=[0x50051,0]+declarations+initial+block+store+[0x100003e]
     shex[1]=len(shex);payload=struct.pack('<'+'I'*len(shex),*shex)
-    container=bytearray(b'DXBC'+bytes(16)+struct.pack('<4I',1,44+len(payload),1,36)+b'SHEX'+struct.pack('<I',len(payload))+payload)
+    chunks=[(b'ISGN',struct.pack('<2I',0,8)),(b'OSGN',struct.pack('<2I',0,8)),(b'SHEX',payload)]
+    offset=32+4*len(chunks);offsets=[];body=bytearray()
+    for tag,data in chunks:
+        offsets.append(offset);body+=tag+struct.pack('<I',len(data))+data;offset+=8+len(data)
+    container=bytearray(b'DXBC'+bytes(16)+struct.pack('<3I',1,offset,len(chunks))+struct.pack('<3I',*offsets)+body)
     container[4:20]=checksum(container)
     header='// Generated standalone shader containing the exact R61 PCF block.\ninline constexpr unsigned char kSpotBilinearValidationShader[] = {\n'
     for i in range(0,len(container),24):header+='    '+','.join(str(v) for v in container[i:i+24])+',\n'
