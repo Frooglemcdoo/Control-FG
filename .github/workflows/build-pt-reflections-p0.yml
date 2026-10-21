@@ -294,11 +294,11 @@ jobs:
           node tools/test-native-menu.js --config build/native-menu-config.json
           if errorlevel 1 exit /b 1
 
-      - name: Package live lighting diagnostic R62
+      - name: Package live lighting diagnostic R63
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-Native-Lighting-Live-R62'
+          $out='Control-FG-Native-Lighting-Live-R63'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
           New-Item -ItemType Directory -Force -Path "$out/ControlFGStreamline" | Out-Null
@@ -314,9 +314,9 @@ jobs:
           Copy-Item Collect-RR-Blinds-Capture.ps1 "$out/Collect-RR-Blinds-Capture.ps1"
           Copy-Item Collect-ControlFG-Compact-Logs.cmd "$out/Collect-ControlFG-Compact-Logs.cmd"
           Copy-Item Collect-ControlFG-Compact-Logs.ps1 "$out/Collect-ControlFG-Compact-Logs.ps1"
-          Copy-Item docs/native-shadow-resolution-r62.md "$out/DIAGNOSTIC-NOTES.md"
+          Copy-Item docs/native-shadow-audit-r63.md "$out/DIAGNOSTIC-NOTES.md"
           @'
-          CONTROL-FG LIVE LIGHTING DIAGNOSTIC R62 - native spotlight resolution
+          CONTROL-FG LIVE LIGHTING DIAGNOSTIC R63 - packed shadow audit
           Close Control to install this DLL, then launch once. No restarts between modes.
           Copy package contents beside Control_DX12.exe, preserving ControlFGStreamline.
           Keep existing NVIDIA runtimes. Old R51/R52/R53 marker files are ignored.
@@ -331,7 +331,10 @@ jobs:
           Baked shadow textures, point-light and sun tile requests are unchanged.
           This does not improve resolution in precomputed static shadow textures.
           After choosing a mode, F10 back to the game and allow history to settle.
-          Reopen the panel; requests/bindings recorded is CPU evidence, not GPU validation.
+          Reopen the panel; packed tiles/bindings recorded verifies final CPU packing, not GPU execution.
+          This build logs final tile sizes and static/dynamic spotlight request paths.
+          It gathers evidence; it adds no new image-quality fix.
+          If the status never confirms, save the log anyway.
           For each mode click SPECKLES REMAIN or SPECKLES GONE, then SAVE LOG.
           Send that log and comparison images, including retained shadow softness.
           Log: %LOCALAPPDATA%\Control-FG\Diagnostics (fallback: %TEMP%).
@@ -345,10 +348,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-Native-Lighting-Live-R62
+          name: Control-FG-Native-Lighting-Live-R63
           path: |
-            Control-FG-Native-Lighting-Live-R62.zip
-            Control-FG-Native-Lighting-Live-R62.sha256
+            Control-FG-Native-Lighting-Live-R63.zip
+            Control-FG-Native-Lighting-Live-R63.sha256
             build/exports.txt
             build/imports.txt
             build/pt_glass_raygen.dxil

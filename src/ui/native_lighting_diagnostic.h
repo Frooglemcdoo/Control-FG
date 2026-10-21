@@ -67,7 +67,7 @@ inline void Paint(HWND window) noexcept {
     const unsigned required = RequiredBinding(mode);
     wchar_t status[160]{};
     swprintf_s(status, L"Selected mode: %s   %s", (ready & RequiredVariant(mode)) == RequiredVariant(mode) ? L"ready" : L"waiting",
-        (observed & required) == required && (mode != Mode::SpotResolution2x || spot_resolution_runtime::Observed(state)) ? L"requests/bindings recorded" : L"Waiting: return to game");
+        (observed & required) == required && (mode != Mode::SpotResolution2x || spot_resolution_runtime::Observed(state)) ? L"packed tiles/bindings recorded" : L"Waiting: return to game");
     DrawLabel(dc, detailFont, status, {14,kStatusY,kWidth-12,kStatusY+24}, theme::kMutedText);
     wchar_t shortcuts[128]{};
     swprintf_s(shortcuts, L"F10: return to game    Ctrl+Shift+1..%u: live mode", kModeCount);
@@ -155,7 +155,7 @@ inline DWORD WINAPI ThreadProc(LPVOID) noexcept {
     if(!timer){Trace("overlay_failed reason=timer");return 0;}
     HWND panel=nullptr,owner=nullptr;bool held[kModeCount+1]{};
     ULONGLONG nextRefresh=0;
-    Trace("session_start build=R62-native-shadow-resolution pid=%lu default=native log=user-diagnostics-folder",GetCurrentProcessId());
+    Trace("session_start build=R63-packed-shadow-audit pid=%lu default=native log=user-diagnostics-folder",GetCurrentProcessId());
     MSG msg{};
     while(GetMessageW(&msg,nullptr,0,0)>0){
         if (!panel || !IsDialogMessageW(panel, &msg)) {

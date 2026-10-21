@@ -25,7 +25,7 @@ static void Check(HRESULT hr) { if(FAILED(hr)) throw std::runtime_error("D3D fai
 static native_lighting::spot_resolution::Extent seenExtent{};
 static unsigned seenDynamic=0, seenId=0;
 static float seenDistance=0;
-static int fakePool=0, fakeRecord=0;
+alignas(void*) static unsigned char fakePool[0x80]{}, fakeRecord[0x48]{};
 static void FakeResize(void* pool, const native_lighting::spot_resolution::Extent* size) {
     if(pool!=&fakePool) throw std::runtime_error("resize owner changed");
     seenExtent=*size;
@@ -45,8 +45,23 @@ static void TestAllocatorForwarding() {
     SelectMode(Mode::SpotResolution2x);
     auto result=sr::RequestAt(&fakePool,1024,1024,1,12.5f,77,fakeModule+0x18acba);
     if(result!=&fakeRecord || seenExtent.width!=2048 || seenExtent.height!=2048 ||
-       seenDynamic!=1 || seenDistance!=12.5f || seenId!=77 || !sr::Observed(selection.Read()))
+       seenDynamic!=1 || seenDistance!=12.5f || seenId!=77 || sr::Observed(selection.Read()))
         throw std::runtime_error("native request ABI forwarding failed");
+    void* recordPointer=&fakeRecord;
+    void** records=&recordPointer;
+    std::memcpy(fakePool+0x18,&records,sizeof(records));
+    int count=1, width=16384, height=8192, tile=2048;
+    std::memcpy(fakePool+0x5c,&count,4);
+    std::memcpy(fakePool+0x64,&width,4);std::memcpy(fakePool+0x60,&height,4);
+    std::memcpy(fakeRecord+8,&recordPointer,sizeof(recordPointer));
+    std::memcpy(fakeRecord+0x3c,&tile,4);std::memcpy(fakeRecord+0x40,&tile,4);
+    spot_shadow_audit::Packed(&fakePool);
+    if(!sr::Observed(selection.Read())) throw std::runtime_error("final packed size not confirmed");
+    SelectMode(Mode::SpotResolution2x);
+    sr::RequestAt(&fakePool,1024,1024,1,12.5f,77,fakeModule+0x18acba);
+    tile=1024;std::memcpy(fakeRecord+0x3c,&tile,4);std::memcpy(fakeRecord+0x40,&tile,4);
+    spot_shadow_audit::Packed(&fakePool);
+    if(sr::Observed(selection.Read())) throw std::runtime_error("downsized tile incorrectly confirmed");
     SelectMode(Mode::Native);
     if(sr::Observed(selection.Read())) throw std::runtime_error("stale request observation");
     sr::RequestAt(&fakePool,1024,1024,1,12.5f,77,fakeModule+0x18acba);
@@ -56,6 +71,11 @@ static void TestAllocatorForwarding() {
     if(seenExtent.width!=1024) throw std::runtime_error("sun request modified");
     sr::ResizeAt(&fakePool,&native,fakeModule+1);
     if(seenExtent.height!=2048) throw std::runtime_error("unrelated resize modified");
+    sr::originalVsmRequest=&FakeRequest;
+    result=sr::VsmRequestHook(&fakePool,512,256,0,4.25f,88);
+    if(result!=&fakeRecord || seenExtent.width!=512 || seenExtent.height!=256 || seenDynamic!=0 || seenDistance!=4.25f || seenId!=88)
+        throw std::runtime_error("VSM observer changed native arguments");
+    sr::originalVsmRequest=nullptr;
     sr::originalResize=nullptr;sr::originalRequest=nullptr;sr::rendererBase=nullptr;
     sr::expandedPool=nullptr;SelectMode(Mode::Native);
 }
