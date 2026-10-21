@@ -54,6 +54,7 @@ int main() try {
     AttachVariant(direct.Get(),makePso(23),kDirectBit,S_OK,kSpotPcf32VariantGuid,kSpotPcf32ReadyBit);
     AttachVariant(direct.Get(),makePso(24),kDirectBit,S_OK,kSpotStableSoftVariantGuid,kSpotStableSoftReadyBit);
     AttachVariant(direct.Get(),makePso(25),kDirectBit,S_OK,kSpotStableTightVariantGuid,kSpotStableTightReadyBit);
+    AttachVariant(direct.Get(),makePso(26),kDirectBit,S_OK,kSpotBilinearVariantGuid,kSpotBilinearReadyBit);
     AttachVariant(direct.Get(),makePso(15),kDirectBit,S_OK,kPatternVariantGuid,kPatternReadyBit);
     D3D12_COMMAND_QUEUE_DESC queueDesc{};ComPtr<ID3D12CommandQueue> queue;Check(device->CreateCommandQueue(&queueDesc,IID_PPV_ARGS(&queue)));
     ComPtr<ID3D12CommandAllocator> allocator;Check(device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT,IID_PPV_ARGS(&allocator)));
@@ -93,6 +94,7 @@ int main() try {
         SelectMode(Mode::SpotPcf32);render(direct.Get(),23,reset);render(gi.Get(),22,reset);
         SelectMode(Mode::SpotStableSoft);render(direct.Get(),24,reset);render(gi.Get(),22,reset);
         SelectMode(Mode::SpotStableTight);render(direct.Get(),25,reset);render(gi.Get(),22,reset);
+        SelectMode(Mode::SpotBilinear);render(direct.Get(),26,reset);render(gi.Get(),22,reset);
         SelectMode(Mode::DisableLightPattern);render(direct.Get(),15,reset);render(gi.Get(),22,reset);
         SelectMode(Mode::Native);render(direct.Get(),11,reset);render(gi.Get(),22,reset);
     }

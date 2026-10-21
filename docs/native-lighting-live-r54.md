@@ -1,3 +1,15 @@
+# R61: compact bilinear spotlight PCF
+
+R60 Soft/Tight produced patterned, blurred shadows; Center produced hard stair steps. All modes bound correctly. Those filters are rejected and no longer created as runtime alternatives.
+
+Filtered PCF uses integer loads of the four adjacent t12 shadow-depth texels. Each depth is compared against the unchanged receiver depth; visibility is bilinearly interpolated using the fractional texel position. Resource dimensions come from resinfo. Coordinates are clamped to the inclusive spotlight tile bounds derived from the existing atlas scale/offset. This replaces the wide random footprint, not the shadow map or its resolution, and may produce firmer shadows than native. No changes to VSM, other light types, GI, RR guides, depth bias, or material lighting. It does not recreate lost map detail.
+
+Compare Native and Filtered PCF at the same stationary view, then move the camera. Check speckles, railing/cart edges, and FPS. F10 returns game focus; Ctrl+Shift+1/2 selects the mode. Wait for bindings recorded before marking Speckles Remain/Gone. Save one R61 log and screenshots. No restart between modes.
+
+The generator owns a readable instruction program and validates 1000 random fractional visibility and tile-boundary cases against an independent bilinear calculation. It checks a half-visible depth edge and preserved live registers. The exact emitted block is also compiled as a standalone SM5.1 test shader on Windows WARP; the separate live-routing test checks GPU route selection. These tests do not establish in-game visual quality.
+
+Reference: NVIDIA GPU Gems, Shadow Map Antialiasing, https://developer.nvidia.com/gpugems/gpugems/part-ii-lighting-and-shadows/chapter-11-shadow-map-antialiasing
+
 # R60: stable spotlight filtering
 
 R59 PCF Center removes the sample footprint and exposes jagged shadow edges. Its last speckles-gone report was recorded before that selection bound; earlier and later center bindings exist. R60 refuses visual results until the selected contribution has bound and explains how to return focus to let the game render.

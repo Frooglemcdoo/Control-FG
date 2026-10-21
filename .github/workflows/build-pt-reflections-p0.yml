@@ -223,6 +223,14 @@ jobs:
           build\test-native-lighting-live-warp.exe
           if errorlevel 1 exit /b 1
 
+      - name: Validate emitted spotlight PCF instructions on WARP
+        shell: pwsh
+        run: |
+          cl /nologo /EHsc /std:c++17 tools/test-spot-bilinear-validation.cpp /Fe:spot-bilinear-test.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          ./spot-bilinear-test.exe
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
       - name: Validate diagnostic report saving
         shell: cmd
         run: |
@@ -276,11 +284,11 @@ jobs:
           node tools/test-native-menu.js --config build/native-menu-config.json
           if errorlevel 1 exit /b 1
 
-      - name: Package live lighting diagnostic R60
+      - name: Package live lighting diagnostic R61
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-Native-Lighting-Live-R60'
+          $out='Control-FG-Native-Lighting-Live-R61'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
           New-Item -ItemType Directory -Force -Path "$out/ControlFGStreamline" | Out-Null
@@ -298,19 +306,19 @@ jobs:
           Copy-Item Collect-ControlFG-Compact-Logs.ps1 "$out/Collect-ControlFG-Compact-Logs.ps1"
           Copy-Item docs/native-lighting-live-r54.md "$out/DIAGNOSTIC-NOTES.md"
           @'
-          CONTROL-FG LIVE LIGHTING DIAGNOSTIC R60 - stable spotlight shadow filtering
+          CONTROL-FG LIVE LIGHTING DIAGNOSTIC R61 - bilinear spotlight shadow filtering
           Close Control to install this DLL, then launch once. No restarts between modes.
           Copy package contents beside Control_DX12.exe, preserving ControlFGStreamline.
           Keep existing NVIDIA runtimes. Old R51/R52/R53 marker files are ignored.
 
           Use Borderless display mode for the floating diagnostic panel.
-          F10 opens it with mouse focus; F10 again returns to the game. Buttons: NATIVE / STABLE SOFT / STABLE TIGHT / PCF CENTER.
-          Optional live keys: Ctrl+Shift+1 through 4, in button order.
+          F10 opens it with mouse focus; F10 again returns to the game. Buttons: NATIVE / FILTERED PCF.
+          Optional live keys: Ctrl+Shift+1 through 2, in button order.
           Start with RT/DLSS/RR/FG/glass OFF and compare the same stationary view.
-          Stable Soft/Tight use fixed 32-tap disk filters; compare noise, shadow edges and FPS.
+          Filtered PCF compares four adjacent depth texels, then blends shadow visibility.
           Test each mode separately; record speckles and note whether shadows retain detail.
-          Soft retains the native radius; Tight uses half the radius. Both retain occlusion.
-          PCF Center removes the stochastic footprint but retains center depth comparisons.
+          The compact footprint is clamped to the spotlight atlas tile. Check shadow edges.
+          This replaces the wide random footprint; it may produce firmer shadows than native.
           These tests retain shadows and affect the shared direct diffuse/specular light inputs.
           Wait for bindings recorded and allow exposure/history to settle.
           NOT APPLIED means the selected shader has not been seen binding yet.
@@ -332,10 +340,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-Native-Lighting-Live-R60
+          name: Control-FG-Native-Lighting-Live-R61
           path: |
-            Control-FG-Native-Lighting-Live-R60.zip
-            Control-FG-Native-Lighting-Live-R60.sha256
+            Control-FG-Native-Lighting-Live-R61.zip
+            Control-FG-Native-Lighting-Live-R61.sha256
             build/exports.txt
             build/imports.txt
             build/pt_glass_raygen.dxil

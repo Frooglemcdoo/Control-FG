@@ -24,6 +24,7 @@ inline const GUID kSpotPcfCenterVariantGuid = {0x822329d7,0x3614,0x4f73,{0xa6,0x
 inline const GUID kSpotPcf32VariantGuid = {0x822329d7,0x3614,0x4f73,{0xa6,0x14,0xd0,0x8c,0x94,0xf2,0x59,0x04}};
 inline const GUID kSpotStableSoftVariantGuid = {0x822329d7,0x3614,0x4f73,{0xa6,0x14,0xd0,0x8c,0x94,0xf2,0x60,0x01}};
 inline const GUID kSpotStableTightVariantGuid = {0x822329d7,0x3614,0x4f73,{0xa6,0x14,0xd0,0x8c,0x94,0xf2,0x60,0x02}};
+inline const GUID kSpotBilinearVariantGuid = {0x822329d7,0x3614,0x4f73,{0xa6,0x14,0xd0,0x8c,0x94,0xf2,0x61,0x01}};
 inline const GUID kPatternVariantGuid = {0x822329d7,0x3614,0x4f73,{0xa6,0x14,0xd0,0x8c,0x94,0xf2,0x57,0x02}};
 inline const GUID& VariantGuid(Mode mode) noexcept {
     if (mode == Mode::DisableDirectDiffuse) return kDiffuseVariantGuid;
@@ -38,6 +39,7 @@ inline const GUID& VariantGuid(Mode mode) noexcept {
     if (mode == Mode::SpotPcf32) return kSpotPcf32VariantGuid;
     if (mode == Mode::SpotStableSoft) return kSpotStableSoftVariantGuid;
     if (mode == Mode::SpotStableTight) return kSpotStableTightVariantGuid;
+    if (mode == Mode::SpotBilinear) return kSpotBilinearVariantGuid;
     if (mode == Mode::DisableLightPattern) return kPatternVariantGuid;
     return kVariantGuid;
 }
@@ -150,21 +152,9 @@ inline void ObserveCompute(ID3D12Device* device, const D3D12_COMPUTE_PIPELINE_ST
     computeSeen.fetch_add(1);
     IdentifyPipeline(native, desc->CS, 2);
     struct VariantSpec { const ShaderPatch* patch; const GUID* guid; unsigned ready; };
+    // Failed exploratory filters remain test fixtures, not runtime alternatives.
     const VariantSpec variants[] = {
-        {&kDirect, &kVariantGuid, kDirectBit},
-        {&kDirectDiffuse, &kDiffuseVariantGuid, kDiffuseReadyBit},
-        {&kDirectSpecular, &kSpecularVariantGuid, kSpecularReadyBit},
-        {&kShadowBypass, &kShadowVariantGuid, kShadowReadyBit},
-        {&kScreenShadows, &kScreenVariantGuid, kScreenReadyBit},
-        {&kSpotShadows, &kSpotVariantGuid, kSpotReadyBit},
-        {&kPointShadows, &kPointVariantGuid, kPointReadyBit},
-        {&kSpotVarianceLow, &kSpotVarianceLowVariantGuid, kSpotVarianceLowReadyBit},
-        {&kSpotVarianceHigh, &kSpotVarianceHighVariantGuid, kSpotVarianceHighReadyBit},
-        {&kSpotPcfCenter, &kSpotPcfCenterVariantGuid, kSpotPcfCenterReadyBit},
-        {&kSpotPcf32, &kSpotPcf32VariantGuid, kSpotPcf32ReadyBit},
-        {&kSpotStableSoft, &kSpotStableSoftVariantGuid, kSpotStableSoftReadyBit},
-        {&kSpotStableTight, &kSpotStableTightVariantGuid, kSpotStableTightReadyBit},
-        {&kPatternOff, &kPatternVariantGuid, kPatternReadyBit}
+        {&kSpotBilinear, &kSpotBilinearVariantGuid, kSpotBilinearReadyBit}
     };
     for (const auto& spec : variants) {
         std::vector<unsigned char> bytes;

@@ -155,7 +155,7 @@ inline DWORD WINAPI ThreadProc(LPVOID) noexcept {
     if(!timer){Trace("overlay_failed reason=timer");return 0;}
     HWND panel=nullptr,owner=nullptr;bool held[kModeCount+1]{};
     ULONGLONG nextRefresh=0;
-    Trace("session_start build=R60-stable-shadow-filter pid=%lu default=native log=user-diagnostics-folder",GetCurrentProcessId());
+    Trace("session_start build=R61-bilinear-shadow-filter pid=%lu default=native log=user-diagnostics-folder",GetCurrentProcessId());
     MSG msg{};
     while(GetMessageW(&msg,nullptr,0,0)>0){
         if (!panel || !IsDialogMessageW(panel, &msg)) {
