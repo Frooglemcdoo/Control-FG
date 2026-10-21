@@ -6,6 +6,7 @@
 #include <d3dcompiler.h>
 #include <wrl/client.h>
 #include <stdexcept>
+#include <string>
 #include <iostream>
 #include "fixtures/spot-bilinear-validation.h"
 using Microsoft::WRL::ComPtr;
@@ -13,6 +14,7 @@ static void Check(HRESULT hr) { if(FAILED(hr)) throw std::runtime_error("Shader 
 int main() try {
     ComPtr<ID3DBlob> disassembly;
     Check(D3DDisassemble(kSpotBilinearValidationShader,sizeof(kSpotBilinearValidationShader),0,nullptr,&disassembly));
+    std::cout<<"PASS: emitted instructions disassemble\n";
     ComPtr<IDXGIFactory4> factory;Check(CreateDXGIFactory1(IID_PPV_ARGS(&factory)));
     ComPtr<IDXGIAdapter> adapter;Check(factory->EnumWarpAdapter(IID_PPV_ARGS(&adapter)));
     ComPtr<ID3D12Device> device;Check(D3D12CreateDevice(adapter.Get(),D3D_FEATURE_LEVEL_11_0,IID_PPV_ARGS(&device)));

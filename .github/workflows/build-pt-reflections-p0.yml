@@ -57,6 +57,15 @@ jobs:
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
           echo VSROOT=%VSROOT%>>%GITHUB_ENV%
 
+      - name: Validate emitted spotlight PCF instructions on WARP
+        shell: cmd
+        run: |
+          call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
+          cl /nologo /EHsc /std:c++17 tools/test-spot-bilinear-validation.cpp /Fe:spot-bilinear-test.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
+          if errorlevel 1 exit /b 1
+          spot-bilinear-test.exe
+          if errorlevel 1 exit /b 1
+
       - name: Prepare Streamline and generated shaders
         shell: cmd
         run: |
@@ -221,15 +230,6 @@ jobs:
           cl /nologo /std:c++17 /EHsc /W4 /O2 tools\test-native-lighting-live-warp.cpp /Febuild\test-native-lighting-live-warp.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
           if errorlevel 1 exit /b 1
           build\test-native-lighting-live-warp.exe
-          if errorlevel 1 exit /b 1
-
-      - name: Validate emitted spotlight PCF instructions on WARP
-        shell: cmd
-        run: |
-          call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
-          cl /nologo /EHsc /std:c++17 tools/test-spot-bilinear-validation.cpp /Fe:spot-bilinear-test.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
-          if errorlevel 1 exit /b 1
-          spot-bilinear-test.exe
           if errorlevel 1 exit /b 1
 
       - name: Validate diagnostic report saving
