@@ -53,12 +53,12 @@ inline void ReportShadowFiltering(bool fullRR, bool contact, bool temporal, int 
         last.temporal != temporal || last.size != size || last.step != step) {
         Trace("rt_spot_filter full_rr=%u contact=%u native_preserved=1 temporal=%u spatial_size=%d spatial_step=%d",
             unsigned(fullRR),unsigned(contact),unsigned(temporal),size,step);
-        Trace("rt_spot_history filter_policy=mode_specific point_history=native spotlight_only=1 transition_reset=1 spot_samples=variant closest_blocker=1 fixed_emitter_radius=1 bounded_penumbra=1 per_sample_endpoint=1 near_distance_cutoff=0");
+        Trace("rt_spot_history filter_policy=mode_specific point_history=native spotlight_only=1 transition_reset=1 spot_samples=4 sample_pattern=r71_symmetric closest_blocker=1 fixed_emitter_radius=1 bounded_penumbra=1 per_sample_endpoint=0 near_distance_cutoff=1 baseline=R71");
         last = {true, fullRR, contact, temporal, size, step};
     }
 }
 inline void RefreshReady() noexcept {
-    if (scopeReady && spot_culling_runtime::ready.load() && components.load() == kRequiredComponents && !disabled.load()) readyMask.fetch_or(kRtSpotReadyBit);
+    if (scopeReady && components.load() == kRequiredComponents && !disabled.load()) readyMask.fetch_or(kRtSpotReadyBit);
 }
 inline bool Matches(const D3D12_SHADER_BYTECODE& shader, const char* expected) noexcept {
     if (!shader.pShaderBytecode || !shader.BytecodeLength) return false;
@@ -70,7 +70,7 @@ inline void HookPass(void* a, void* b, void* c, void* d) {
     Pass* previous = active;
     pass.selectionState = selection.Read();
     pass.mode = LiveSelection::GetMode(pass.selectionState);
-    pass.requested = !previous && spot_culling_runtime::ready.load() && !disabled.load() && components.load() == kRequiredComponents &&
+    pass.requested = !previous && !disabled.load() && components.load() == kRequiredComponents &&
         IsRtSpotMode(pass.mode);
     active = &pass;
     __try { originalPass(a,b,c,d); }
@@ -108,9 +108,9 @@ inline void Install() noexcept {
             PTReflectionLoadSidecar(L"rt_spot_raw_spatial1.dxbc","RT_SPOT_RAW",rawSpatialBytes[1],sha,loaded) &&
             !strcmp(sha,"f84b55c052931f960ef28c78b270faa69884c69626a30f6b8666728c64511628") &&
             PTReflectionLoadSidecar(L"rt_spot_full.dxil","RT_SPOT_RAY",rayBytes,sha,loaded) &&
-            !strcmp(sha,"b07be6430ca5b2630457716be48bdd02554b8f7a4c1358022651ffdbf1b5a996") &&
+            !strcmp(sha,"f0127f6267359eccf61fda126ecc9ff733d0b9090f6e9d16a88f65840e7d3ab8") &&
             PTReflectionLoadSidecar(L"rt_spot_multi.dxil","RT_SPOT_MULTI",multiRayBytes,sha,loaded) &&
-            !strcmp(sha,"38a6e8690b115446df8f03f0f82a8241cd032a027117299444ef36e8464067ec") &&
+            !strcmp(sha,"7f454565838e18d05911bc9b64b5a81622c917d9d67e3fe92ab92d33b5b32ec7") &&
             PTReflectionLoadSidecar(L"rt_spot_light.dxbc","RT_SPOT_LIGHT",lightBytes,sha,loaded) &&
             !strcmp(sha,"a844888cdd5478605574157b323cb3376369ae9517c4954bf38bee21b664ecd7") &&
             PTReflectionLoadSidecar(L"rt_spot_reset.dxbc","RT_SPOT_RESET",resetBytes,sha,loaded) &&
@@ -122,7 +122,7 @@ inline void Install() noexcept {
             PTReflectionLoadSidecar(L"rt_spot_spatial1.dxbc","RT_SPOT_SPATIAL1",spatialBytes[1],sha,loaded) &&
             !strcmp(sha,"ef654dc4b4cd49f2811c9002f894a7cb240a348cbde2fa625fabfaebcafd7b7c");
     }
-    if (filesReady && !scopeReady && verifiedRenderer && spot_culling_runtime::Install(verifiedRenderer)) {
+    if (filesReady && !scopeReady && verifiedRenderer) {
         auto* base = reinterpret_cast<unsigned char*>(verifiedRenderer);
         originalPass = reinterpret_cast<PassFn>(base + 0x23ed10);
         scopeReady = RRAlbedoPrepareCallPatch(base+0x12daf7, reinterpret_cast<void*>(originalPass),

@@ -9,7 +9,9 @@ inline bool IsRtSpotMode(Mode mode) noexcept {
         mode == Mode::RtSpotMapGuard || mode == Mode::RtSpotNativeCull;
 }
 inline bool ExpandsSpotCasters(Mode mode) noexcept {
-    return IsRtSpotMode(mode) && mode != Mode::RtSpotNativeCull;
+    // R78 uses R71 native caster coverage; expansion hooks are not installed.
+    (void)mode;
+    return false;
 }
 inline constexpr unsigned kGiBit = 1, kDirectBit = 2, kAllBits = 3;
 inline constexpr unsigned kDiffuseReadyBit = 4, kSpecularReadyBit = 8, kShadowReadyBit = 16, kPatternReadyBit = 32;
@@ -26,10 +28,7 @@ inline constexpr unsigned kRtSpotReadyBit = 1u << 17;
 struct ModeChoice { Mode mode; const wchar_t* label; };
 inline constexpr ModeChoice kModeChoices[] = {
     {Mode::Native, L"NATIVE SHADOWS"},
-    {Mode::RtSpot, L"RT FILTERED"},
-    {Mode::RtSpotRaw, L"RT RAW"},
-    {Mode::RtSpotMapGuard, L"RT + MAPS"},
-    {Mode::RtSpotNativeCull, L"NATIVE COVERAGE"}
+    {Mode::RtSpot, L"RT SPOTLIGHT"}
 };
 inline constexpr unsigned kModeCount = sizeof(kModeChoices) / sizeof(kModeChoices[0]);
 inline unsigned RequiredVariant(Mode mode) noexcept {

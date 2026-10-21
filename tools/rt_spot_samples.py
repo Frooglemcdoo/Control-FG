@@ -1,20 +1,62 @@
-"""Four symmetric, bounded spotlight segments for the hash-locked R65 shader.
+"""Four symmetric disk samples for the hash-locked R65 spotlight path.
 
-The light disk, native alpha handlers, inclusion mask and point branch are
-retained. Each ray measures its own segment from the native biased origin to
-its sampled emitter position; the contact path's fNearDistance is not a limit.
+Preserve the disk distribution, alpha handlers, masks and point
+branch. Reflect the native uniform disk sample across both axes; each marginal
+remains uniform, while a pixel covers all four quadrants in the same frame.
 """
-# Exactly representable float32: leave one part in 2**20 before the emitter.
-# This keeps geometry behind the sample out without a scene-scale near cutoff.
-ENDPOINT_FRACTION = 1.0 - 2.0**-20
-ENDPOINT_FRACTION_IR = '0x3FEFFFFE00000000'
-# Axis, world-space emitter center, native disk basis offsets, biased ray origin.
-AXES = (
-    ('x', '%192', '%.i0278', '%.i0284', '%.i0275'),
-    ('y', '%194', '%.i1279', '%.i1285', '%.i1276'),
-    ('z', '%196', '%.i2280', '%.i2286', '%.i2277'),
-)
-SAMPLE_SIGNS = ((1,1), (-1,1), (1,-1), (-1,-1))
+def _four_spot_samples(source):
+    # Full-distance shadows need a closest blocker, not traversal-order first hit.
+    # The native disk has radius 0.5; use diameter 2*emitterRadius to match the
+    # spatial filter, instead of the randomized short-contact radius multiplier.
+    radius = '  %215 = fmul fast float %214, %174'
+    assert source.count(radius) == 1
+    source = source.replace(radius, '  %215 = fmul fast float 2.000000e+00, %174')
+    first_ray = 'i32 157, %dx.types.Handle %250, i32 4, i32 1'
+    assert source.count(first_ray) == 1
+    source = source.replace(first_ray, 'i32 157, %dx.types.Handle %250, i32 0, i32 1')
+    anchor='  %251 = load float, float* %249, align 8\n'
+    assert source.count(anchor)==1
+    lines=[]
+    hits=['%251']
+    axes=[('x','%.i0234','%.i0278','%.i0284','%.i0275'),
+          ('y','%.i1235','%.i1279','%.i1285','%.i1276'),
+          ('z','%.i2236','%.i2280','%.i2286','%.i2277')]
+    for index,(sx,sy) in enumerate([(-1,1),(1,-1),(-1,-1)],1):
+        prefix=f'SpotSample{index}'
+        for axis,center,dx,dy,_ in axes:
+            lines.append(f'  %{prefix}{axis}A = {"fadd" if sx>0 else "fsub"} fast float {center}, {dx}')
+            lines.append(f'  %{prefix}{axis} = {"fadd" if sy>0 else "fsub"} fast float %{prefix}{axis}A, {dy}')
+            lines.append(f'  %{prefix}{axis}Squared = fmul fast float %{prefix}{axis}, %{prefix}{axis}')
+        lines.extend([
+            f'  %{prefix}XY = fadd fast float %{prefix}xSquared, %{prefix}ySquared',
+            f'  %{prefix}XYZ = fadd fast float %{prefix}XY, %{prefix}zSquared',
+            f'  %{prefix}Length = call float @dx.op.unary.f32(i32 24, float %{prefix}XYZ)'])
+        for axis,*_ in axes:
+            lines.append(f'  %{prefix}{axis}Direction = fdiv fast float %{prefix}{axis}, %{prefix}Length')
+        lines.extend([
+            '  store float %SpotFullDistance, float* %249, align 8',
+            f'  call void @dx.op.traceRay.struct.ShadowHitData(i32 157, %dx.types.Handle %250, i32 0, i32 1, i32 0, i32 2, i32 0, float %.i0275, float %.i1276, float %.i2277, float 0.000000e+00, float %{prefix}xDirection, float %{prefix}yDirection, float %{prefix}zDirection, float %SpotFullDistance, %struct.ShadowHitData* nonnull %11)',
+            f'  %{prefix}Hit = load float, float* %249, align 8'])
+        hits.append(f'%{prefix}Hit')
+    for index,hit in enumerate(hits):
+        lines.extend([f'  %SpotOccluded{index} = fcmp fast olt float {hit}, %SpotFullDistance',
+                      f'  %SpotVisible{index} = select i1 %SpotOccluded{index}, float 0.000000e+00, float 1.000000e+00'])
+    lines.extend([
+        '  %SpotVisibleA = fadd fast float %SpotVisible0, %SpotVisible1',
+        '  %SpotVisibleB = fadd fast float %SpotVisible2, %SpotVisible3',
+        '  %SpotVisibleSum = fadd fast float %SpotVisibleA, %SpotVisibleB',
+        '  %SpotNearestA = call float @dx.op.binary.f32(i32 36, float %251, float %SpotSample1Hit)',
+        '  %SpotNearestB = call float @dx.op.binary.f32(i32 36, float %SpotSample2Hit, float %SpotSample3Hit)',
+        '  %SpotNearest = call float @dx.op.binary.f32(i32 36, float %SpotNearestA, float %SpotNearestB)'])
+    source=source.replace(anchor,anchor+'\n'.join(lines)+'\n')
+    for before,after in [
+        ('%252 = fcmp fast olt float %251, %SpotFullDistance','%252 = fcmp fast olt float %SpotNearest, %SpotFullDistance'),
+        ('%253 = select i1 %252, float 0.000000e+00, float 1.000000e+00','%253 = fmul fast float %SpotVisibleSum, 2.500000e-01'),
+        ('%254 = fcmp fast olt float %251, 5.000000e+04','%254 = fcmp fast olt float %SpotNearest, 5.000000e+04'),
+        ('select i1 %255, float %251, float 5.000000e+04','select i1 %255, float %SpotNearest, float 5.000000e+04')]:
+        assert source.count(before)==1,before
+        source=source.replace(before,after)
+    return source
 
 
 def replace_once(source, before, after):
@@ -23,100 +65,69 @@ def replace_once(source, before, after):
     return source.replace(before, after)
 
 
-def segment_instructions(index, sx, sy, axes=AXES):
-    """Emit a sampled emitter-minus-origin vector, safe direction and TMax."""
-    prefix = f'SpotSample{index}'
-    lines = []
-    for axis, emitter, dx, dy, origin in axes:
-        # Subtract before adding disk offsets to avoid rounding a small disk
-        # offset away when the world-space emitter position is large.
-        lines.extend([
-            f'  %{prefix}{axis}Center = fsub fast float {emitter}, {origin}',
-            f'  %{prefix}{axis}A = {"fadd" if sx>0 else "fsub"} fast float %{prefix}{axis}Center, {dx}',
-            f'  %{prefix}{axis} = {"fadd" if sy>0 else "fsub"} fast float %{prefix}{axis}A, {dy}',
-            f'  %{prefix}{axis}Squared = fmul fast float %{prefix}{axis}, %{prefix}{axis}'])
-    lines.extend([
-        f'  %{prefix}XY = fadd fast float %{prefix}xSquared, %{prefix}ySquared',
-        f'  %{prefix}XYZ = fadd fast float %{prefix}XY, %{prefix}zSquared',
-        f'  %{prefix}Length = call float @dx.op.unary.f32(i32 24, float %{prefix}XYZ)',
-        f'  %{prefix}Nonzero = fcmp fast ogt float %{prefix}Length, 0.000000e+00',
-        f'  %{prefix}Divisor = select i1 %{prefix}Nonzero, float %{prefix}Length, float 1.000000e+00',
-        f'  %{prefix}Max = fmul fast float %{prefix}Length, {ENDPOINT_FRACTION_IR}'])
-    for axis, *_ in axes:
-        lines.append(f'  %{prefix}{axis}Direction = fdiv fast float %{prefix}{axis}, %{prefix}Divisor')
-    return lines
-
-
-def visibility_instructions(hits):
-    lines = []
-    for index, hit in enumerate(hits):
-        lines.extend([
-            f'  %SpotOccluded{index} = fcmp fast olt float {hit}, %SpotSample{index}Max',
-            f'  %SpotVisible{index} = select i1 %SpotOccluded{index}, float 0.000000e+00, float 1.000000e+00',
-            # Miss lengths vary by sample. Exclude them from nearest-hit reduction.
-            f'  %SpotBlocker{index} = select i1 %SpotOccluded{index}, float {hit}, float 5.000000e+04'])
-    lines.extend([
-        '  %SpotVisibleA = fadd fast float %SpotVisible0, %SpotVisible1',
-        '  %SpotVisibleB = fadd fast float %SpotVisible2, %SpotVisible3',
-        '  %SpotVisibleSum = fadd fast float %SpotVisibleA, %SpotVisibleB',
-        '  %SpotOccludedA = or i1 %SpotOccluded0, %SpotOccluded1',
-        '  %SpotOccludedB = or i1 %SpotOccluded2, %SpotOccluded3',
-        '  %SpotNearestA = call float @dx.op.binary.f32(i32 36, float %SpotBlocker0, float %SpotBlocker1)',
-        '  %SpotNearestB = call float @dx.op.binary.f32(i32 36, float %SpotBlocker2, float %SpotBlocker3)',
-        '  %SpotNearest = call float @dx.op.binary.f32(i32 36, float %SpotNearestA, float %SpotNearestB)'])
-    return lines
-
-
-def four_spot_samples(source):
-    source = replace_once(source, '  %215 = fmul fast float %214, %174',
-        '  %215 = fmul fast float 2.000000e+00, %174')
-    first_store = '  store float %FMin, float* %249, align 8'
-    source = replace_once(source, first_store, '\n'.join(segment_instructions(0,1,1)) +
-        '\n  store float %SpotSample0Max, float* %249, align 8')
-    # Keep the original handle and payload; use closest-hit traversal as in R71.
-    source = replace_once(source, 'i32 157, %dx.types.Handle %250, i32 4, i32 1',
-        'i32 157, %dx.types.Handle %250, i32 0, i32 1')
-    source = replace_once(source,
-        'float %.i0293, float %.i1294, float %.i2295, float %FMin, %struct.ShadowHitData* nonnull %11)',
-        'float %SpotSample0xDirection, float %SpotSample0yDirection, float %SpotSample0zDirection, float %SpotSample0Max, %struct.ShadowHitData* nonnull %11)')
-    lines = []
-    hits = ['%251']
-    for index, (sx,sy) in enumerate(SAMPLE_SIGNS[1:],1):
-        prefix = f'SpotSample{index}'
-        lines.extend(segment_instructions(index,sx,sy))
-        lines.extend([
-            f'  store float %{prefix}Max, float* %249, align 8',
-            f'  call void @dx.op.traceRay.struct.ShadowHitData(i32 157, %dx.types.Handle %250, i32 0, i32 1, i32 0, i32 2, i32 0, float %.i0275, float %.i1276, float %.i2277, float 0.000000e+00, float %{prefix}xDirection, float %{prefix}yDirection, float %{prefix}zDirection, float %{prefix}Max, %struct.ShadowHitData* nonnull %11)',
-            f'  %{prefix}Hit = load float, float* %249, align 8'])
-        hits.append(f'%{prefix}Hit')
-    lines.extend(visibility_instructions(hits))
-    anchor = '  %251 = load float, float* %249, align 8\n'
-    source = replace_once(source, anchor, anchor+'\n'.join(lines)+'\n')
+def full_distance_limit(source, single):
+    """R71 light range contract: retain the light's near-plane exclusion."""
+    distance, radius_step, pointer, payload, hit, test = (
+        (207, 212, 249, 11, 251, 252) if single else (210, 233, 213, 12, 257, 258))
+    anchor = f'  %{radius_step} = fadd fast float %FMin, -5.000000e-01'
+    source = replace_once(source, anchor,
+        f'  %SpotFullDistance = call float @dx.op.binary.f32(i32 35, float %{distance}, float 0.000000e+00)\n' + anchor)
     for before, after in (
-        ('%252 = fcmp fast olt float %251, %FMin', '%252 = or i1 %SpotOccludedA, %SpotOccludedB'),
-        ('%253 = select i1 %252, float 0.000000e+00, float 1.000000e+00', '%253 = fmul fast float %SpotVisibleSum, 2.500000e-01'),
-        ('%254 = fcmp fast olt float %251, 5.000000e+04', '%254 = fcmp fast olt float %SpotNearest, 5.000000e+04'),
-        ('select i1 %255, float %251, float 5.000000e+04', 'select i1 %255, float %SpotNearest, float 5.000000e+04')):
+        (f'store float %FMin, float* %{pointer}', f'store float %SpotFullDistance, float* %{pointer}'),
+        (f'float %FMin, %struct.ShadowHitData* nonnull %{payload})',
+         f'float %SpotFullDistance, %struct.ShadowHitData* nonnull %{payload})'),
+        (f'%{test} = fcmp fast olt float %{hit}, %FMin',
+         f'%{test} = fcmp fast olt float %{hit}, %SpotFullDistance')):
         source = replace_once(source, before, after)
     return source
 
 
+def four_spot_samples(source):
+    return _four_spot_samples(full_distance_limit(source, True))
+
+
 def multi_spot_samples(source):
-    """Retain native configurable sample loop and point rays for the R64 variant."""
-    axes = (
-        ('x', '%195', '%.i0282', '%.i0288', '%.i0279'),
-        ('y', '%197', '%.i1283', '%.i1289', '%.i1280'),
-        ('z', '%199', '%.i2284', '%.i2290', '%.i2281'),
+    """Use R71's four symmetric samples in the alternate native ray library.
+
+    Only the spotlight loop changes. Point-light sample count, normalization,
+    seed, hit handlers and resource bindings keep their native behavior.
+    The spotlight seed is the frame index, matching the single-ray library;
+    each iteration reflects that same disk sample across a different axis.
+    """
+    source = full_distance_limit(source, False)
+    changes = (
+        ('%236 = fmul fast float %235, %177', '%236 = fmul fast float 2.000000e+00, %177'),
+        ('i32 157, %dx.types.Handle %256, i32 4, i32 1', 'i32 157, %dx.types.Handle %256, i32 0, i32 1'),
+        ('%231 = uitofp i32 %230 to float', '%231 = uitofp i32 %228 to float'),
+        ('%211 = icmp sgt i32 %165, 0', '%211 = icmp sgt i32 4, 0'),
+        ('%exitcond446 = icmp eq i32 %263, %165', '%exitcond446 = icmp eq i32 %263, 4'),
+        ('%.i0368 = fmul fast float %352, %vShadowResult.1.i0',
+         '%.i0368 = fmul fast float 2.500000e-01, %vShadowResult.1.i0'),
     )
-    source = replace_once(source, '%236 = fmul fast float %235, %177',
-        '%236 = fmul fast float 2.000000e+00, %177')
-    source = replace_once(source, '  store float %FMin, float* %213, align 8',
-        '\n'.join(segment_instructions(0,1,1,axes)) +
-        '\n  store float %SpotSample0Max, float* %213, align 8')
-    source = replace_once(source, 'i32 157, %dx.types.Handle %256, i32 4, i32 1',
-        'i32 157, %dx.types.Handle %256, i32 0, i32 1')
-    source = replace_once(source,
-        'float %.i0297, float %.i1298, float %.i2299, float %FMin, %struct.ShadowHitData* nonnull %12)',
-        'float %SpotSample0xDirection, float %SpotSample0yDirection, float %SpotSample0zDirection, float %SpotSample0Max, %struct.ShadowHitData* nonnull %12)')
-    return replace_once(source, '%258 = fcmp fast olt float %257, %FMin',
-        '%258 = fcmp fast olt float %257, %SpotSample0Max')
+    for before, after in changes:
+        source = replace_once(source, before, after)
+    # Bit 0 reflects disk X; bit 1 reflects disk Y: ++, -+, +-, --.
+    anchor = '  %.i0282 = fmul fast float %.0.i0, %.i0262'
+    signs = [
+        '  %SpotXBit = and i32 %iRay.039, 1',
+        '  %SpotYBit = and i32 %iRay.039, 2',
+        '  %SpotFlipX = icmp ne i32 %SpotXBit, 0',
+        '  %SpotFlipY = icmp ne i32 %SpotYBit, 0',
+        '  %SpotSignX = select i1 %SpotFlipX, float -1.000000e+00, float 1.000000e+00',
+        '  %SpotSignY = select i1 %SpotFlipY, float -1.000000e+00, float 1.000000e+00',
+        '  %SpotDiskX = fmul fast float %.i0262, %SpotSignX',
+        '  %SpotDiskY = fmul fast float %.i1263, %SpotSignY',
+    ]
+    source = replace_once(source, anchor, '\n'.join(signs) + '\n' + anchor)
+    for target, basis, disk in (
+        ('%.i0282', '%.0.i0', '%.i0262'),
+        ('%.i1283', '%.027.i0', '%.i0262'),
+        ('%.i2284', '%.0.i2', '%.i0262'),
+        ('%.i0288', '%.027.i0', '%.i1263'),
+        ('%.i1289', '%.027.i1', '%.i1263'),
+        ('%.i2290', '%.027.i2', '%.i1263'),
+    ):
+        signed = '%SpotDiskX' if disk == '%.i0262' else '%SpotDiskY'
+        source = replace_once(source, f'{target} = fmul fast float {basis}, {disk}',
+            f'{target} = fmul fast float {basis}, {signed}')
+    return source

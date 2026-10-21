@@ -111,8 +111,9 @@ static void TestSpotCulling() {
     sc::ready.store(true);
     readyMask.fetch_or(kRtSpotReadyBit);
     SelectMode(Mode::RtSpot);
-    cullingExpected=150;
+    cullingExpected=60;
     sc::SceneHook(&cullingArguments[0]);
+    cullingExpected=1;
     sc::ObjectsHook(&cullingArguments[0],&cullingArguments[1],&cullingArguments[2]);
     if (cullingCalls!=2 || cullingFar!=150) throw std::runtime_error("Culling forwarding/far plane changed");
     // No render-thread wait if another collection is updating the two options.
@@ -134,7 +135,7 @@ static void TestSpotCulling() {
     sc::slots[0]={}; sc::slots[1]={};
     sc::originalScene=nullptr; sc::originalObjects=nullptr;
     readyMask.fetch_and(~kRtSpotReadyBit);
-    std::cout<<"PASS culling hooks: arguments, pre-collection expansion, exact restore, external values, no lock wait\n";
+    std::cout<<"PASS native caster coverage: arguments, unchanged expansion, external values, no lock wait\n";
 }
 static bool passForwarded = false;
 static int passArguments[4]{};
@@ -159,7 +160,7 @@ static void FakeIncompleteSpotPass(void*, void*, void*, void*) {
 }
 static void TestSpotPassSelection() {
     using namespace native_lighting;
-    spot_culling_runtime::ready.store(true);
+    spot_culling_runtime::ready.store(false); // R78 does not require expansion hooks.
     // A partial R71 install must retain native rendering, even if UI requested RT.
     readyMask.fetch_or(kRtSpotReadyBit);
     SelectMode(Mode::RtSpot);

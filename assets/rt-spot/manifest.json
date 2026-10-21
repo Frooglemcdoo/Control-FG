@@ -4,8 +4,8 @@
   "native_temporal": "feb37637481fed22a3cd4d256da613d1f61aec70fc11ff5e42aa2a585101fedb",
   "outputs": {
     "rt_spot_full.dxil": {
-      "bytes": 50936,
-      "sha256": "b07be6430ca5b2630457716be48bdd02554b8f7a4c1358022651ffdbf1b5a996"
+      "bytes": 50072,
+      "sha256": "f0127f6267359eccf61fda126ecc9ff733d0b9090f6e9d16a88f65840e7d3ab8"
     },
     "rt_spot_light.dxbc": {
       "bytes": 50752,
@@ -28,8 +28,8 @@
       "sha256": "ef654dc4b4cd49f2811c9002f894a7cb240a348cbde2fa625fabfaebcafd7b7c"
     },
     "rt_spot_multi.dxil": {
-      "bytes": 49916,
-      "sha256": "38a6e8690b115446df8f03f0f82a8241cd032a027117299444ef36e8464067ec"
+      "bytes": 49656,
+      "sha256": "7f454565838e18d05911bc9b64b5a81622c917d9d67e3fe92ab92d33b5b32ec7"
     },
     "rt_spot_raw_history.dxbc": {
       "bytes": 4888,

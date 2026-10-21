@@ -31,9 +31,8 @@ if len(sys.argv)>1:
     assert result.split(raygen)[0] == source.split(raygen)[0]
     point='; <label>:257 '
     assert result.split(point,1)[1]==source.split(point,1)[1], 'Point branch or handlers changed'
-    for i in range(4):
-        assert f'float %SpotSample{i}Max, %struct.ShadowHitData* nonnull %11)' in result
-    assert '%SpotFullDistance' not in result
+    assert result.count('float %SpotFullDistance, %struct.ShadowHitData* nonnull %11)') == 4
+    assert '%SpotSample0Max' not in result
     for i in range(1,4):assert f'%SpotSample{i}Hit' in result
     assert '%253 = fmul fast float %SpotVisibleSum, 2.500000e-01' in result
     assert 'select i1 %255, float %SpotNearest, float 5.000000e+04' in result
