@@ -1,0 +1,49 @@
+name: Build per-light RT shadow backend test
+on:
+  push:
+    branches: [experiment/native-lighting-live-r54]
+    paths:
+      - src/rt_lights/**
+      - src/shaders/rt_lights_*.hlsl
+      - tools/test-rt-lights-gpu.cpp
+      - tools/rt-lights-test/**
+      - .github/workflows/rt-lights-backend.yml
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $vswhere="${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $vs=& $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          $dxc=Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Filter dxc.exe -Recurse | Where-Object {$_.FullName -match '\\x64\\'} | Sort-Object FullName -Descending | Select-Object -First 1
+          if(-not $dxc){throw 'DXC unavailable'}
+          New-Item -ItemType Directory -Path package | Out-Null
+          & $dxc.FullName -T lib_6_3 -HV 2021 -Fo package/rt_lights_production.dxil src/shaders/rt_lights_visibility.hlsl
+          if($LASTEXITCODE -ne 0){throw 'Production shader compilation failed'}
+          & $dxc.FullName -T lib_6_3 -HV 2021 -D RT_LIGHTS_FIXTURE=1 -Fo package/rt_lights_visibility.dxil src/shaders/rt_lights_visibility.hlsl
+          if($LASTEXITCODE -ne 0){throw 'Fixture shader compilation failed'}
+          & $dxc.FullName -T cs_6_0 -E main -HV 2021 -Fo package/rt_lights_compose.dxil src/shaders/rt_lights_compose.hlsl
+          if($LASTEXITCODE -ne 0){throw 'Composition shader compilation failed'}
+          $bat="call `"$vs\VC\Auxiliary\Build\vcvars64.bat`"`r`ncl /nologo /std:c++17 /EHsc /W4 /WX /O2 /MT tools\test-rt-lights-gpu.cpp /Fepackage\Per-Light-DXR-Test.exe /link d3d12.lib dxgi.lib d3dcompiler.lib`r`nexit /b %errorlevel%"
+          [IO.File]::WriteAllText("$pwd/compile-test.cmd",$bat)
+          cmd /c compile-test.cmd
+          if($LASTEXITCODE -ne 0){throw 'GPU test compilation failed'}
+      - name: Package
+        shell: powershell
+        run: |
+          Copy-Item tools/rt-lights-test/* package
+          Remove-Item package/rt_lights_production.dxil
+          Compress-Archive -Path package/* -DestinationPath Control-Per-Light-DXR-Test-1.zip
+          (Get-FileHash Control-Per-Light-DXR-Test-1.zip -Algorithm SHA256).Hash | Set-Content Control-Per-Light-DXR-Test-1.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Control-Per-Light-DXR-Test-1
+          path: |
+            Control-Per-Light-DXR-Test-1.zip
+            Control-Per-Light-DXR-Test-1.sha256
