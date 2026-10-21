@@ -101,9 +101,22 @@ static void FakeSpotPass(void* a, void* b, void* c, void* d) {
     if (!rt_spot_runtime::NeedsNativeShadowFiltering()) throw std::runtime_error("Full-distance shadows lost native filtering");
     passForwarded = true;
 }
+static void FakeIncompleteSpotPass(void*, void*, void*, void*) {
+    const auto* scope = native_lighting::rt_spot_runtime::active;
+    if (!scope || scope->requested)
+        throw std::runtime_error("Incomplete spatial shaders enabled RT replacement");
+}
 static void TestSpotPassSelection() {
     using namespace native_lighting;
-    rt_spot_runtime::components.store(7);
+    // A partial R71 install must retain native rendering, even if UI requested RT.
+    readyMask.fetch_or(kRtSpotReadyBit);
+    SelectMode(Mode::RtSpot);
+    rt_spot_runtime::originalPass = &FakeIncompleteSpotPass;
+    for (unsigned missing : rt_spot_runtime::kSpatialComponents) {
+        rt_spot_runtime::components.store(rt_spot_runtime::kRequiredComponents & ~missing);
+        rt_spot_runtime::HookPass(nullptr,nullptr,nullptr,nullptr);
+    }
+    rt_spot_runtime::components.store(rt_spot_runtime::kRequiredComponents);
     readyMask.fetch_or(kRtSpotReadyBit);
     SelectMode(Mode::RtSpot);
     rt_spot_runtime::originalPass = &FakeSpotPass;
