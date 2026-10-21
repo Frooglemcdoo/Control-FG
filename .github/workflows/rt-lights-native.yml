@@ -9,10 +9,13 @@ on:
       - src/shaders/rt_lights_visibility.hlsl
       - src/rt_lights/**
       - tools/rt_lights_native_extract.py
+      - tools/rt_lights_native_base.py
       - tools/test-rt-lights-native.cpp
       - tools/gpu_test_device.h
       - tools/gpu_test_textures.h
       - tools/test-rt-lights-batch.cpp
+      - tools/test-rt-lights-arguments.cpp
+      - tools/test-rt-lights-commit.cpp
       - .github/workflows/rt-lights-native.yml
 permissions:
   contents: read
@@ -32,6 +35,12 @@ jobs:
           $root=[Convert]::FromBase64String((Get-Content assets/rt-lights/native_global.rootsig.b64 -Raw))
           [IO.File]::WriteAllBytes("$pwd/native_global.rootsig",$root)
           if((Get-FileHash native_global.rootsig -Algorithm SHA256).Hash.ToLower() -ne $manifest.native_global_root_sha256){throw 'Native root hash mismatch'}
+          $baseManifest=Get-Content assets/rt-lights/base-manifest.json | ConvertFrom-Json
+          foreach($entry in $baseManifest.outputs.PSObject.Properties){
+            $bytes=[Convert]::FromBase64String((Get-Content "assets/rt-lights/$($entry.Name).b64" -Raw))
+            [IO.File]::WriteAllBytes("$pwd/$($entry.Name)",$bytes)
+            if((Get-FileHash $entry.Name -Algorithm SHA256).Hash.ToLower() -ne $entry.Value.sha256){throw 'Replay shader hash mismatch'}
+          }
       - name: Compile and execute WARP fixture
         shell: powershell
         run: |
@@ -48,6 +57,8 @@ jobs:
           if($LASTEXITCODE -ne 0){throw 'Compact batch shader compilation failed'}
           & $dxc.FullName -T cs_6_0 -E main -HV 2021 -Fo rt_lights_native_arguments.dxil src/shaders/rt_lights_native_arguments.hlsl
           if($LASTEXITCODE -ne 0){throw 'Indirect argument shader compilation failed'}
+          & $dxc.FullName -T cs_6_0 -E main -HV 2021 -Fo rt_lights_native_commit.dxil src/shaders/rt_lights_native_commit.hlsl
+          if($LASTEXITCODE -ne 0){throw 'Native lighting commit shader compilation failed'}
           & $dxc.FullName -T cs_6_0 -E batchMain -HV 2021 -Fo rt_lights_batch_compose.dxil src/shaders/rt_lights_compose.hlsl
           if($LASTEXITCODE -ne 0){throw 'Batch composition shader compilation failed'}
           & $dxc.FullName -T lib_6_3 -HV 2021 -D RT_LIGHTS_NATIVE_BINDINGS=1 -Fo rt_lights_native_visibility.dxil src/shaders/rt_lights_visibility.hlsl
@@ -60,6 +71,18 @@ jobs:
           [IO.File]::WriteAllText("$pwd/compile-batch.cmd",$batchCompile)
           cmd /c compile-batch.cmd
           if($LASTEXITCODE -ne 0){throw 'Native batch fixture compilation failed'}
+          $argumentsCompile="call `"$vs\VC\Auxiliary\Build\vcvars64.bat`"`r`ncl /nologo /std:c++17 /EHsc /W4 /WX /O2 /MT tools\test-rt-lights-arguments.cpp /FeNative-Arguments-Test.exe /link d3d12.lib dxgi.lib d3dcompiler.lib`r`nexit /b %errorlevel%"
+          [IO.File]::WriteAllText("$pwd/compile-arguments.cmd",$argumentsCompile)
+          cmd /c compile-arguments.cmd
+          if($LASTEXITCODE -ne 0){throw 'Indirect arguments fixture compilation failed'}
+          ./Native-Arguments-Test.exe
+          if($LASTEXITCODE -ne 0){throw "Indirect arguments GPU validation failed: exit $LASTEXITCODE"}
+          $commitCompile="call `"$vs\VC\Auxiliary\Build\vcvars64.bat`"`r`ncl /nologo /std:c++17 /EHsc /W4 /WX /O2 /MT tools\test-rt-lights-commit.cpp /FeNative-Commit-Test.exe /link d3d12.lib dxgi.lib d3dcompiler.lib`r`nexit /b %errorlevel%"
+          [IO.File]::WriteAllText("$pwd/compile-commit.cmd",$commitCompile)
+          cmd /c compile-commit.cmd
+          if($LASTEXITCODE -ne 0){throw 'Lighting commit fixture compilation failed'}
+          ./Native-Commit-Test.exe
+          if($LASTEXITCODE -ne 0){throw "Lighting commit GPU validation failed: exit $LASTEXITCODE"}
           ./Native-Batch-Test.exe
           if($LASTEXITCODE -ne 0){throw "Native batch GPU validation failed: exit $LASTEXITCODE"}
           ./Native-Light-Test.exe

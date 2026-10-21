@@ -1,0 +1,15 @@
+{
+  "purpose": "private non-spotlight base replay; never replace native outputs",
+  "native_producer_sha256": "a9e5b544d5ec48e9b439b36aafc5346645f0261d3b1df65dc09e6cce290c164f",
+  "native_selected_sha256": "6af3f7403a4e33ef1c478c386de8d0f6534ba9b852a75a9302c9b760c926b621",
+  "outputs": {
+    "rt_lights_native_base.dxbc": {
+      "bytes": 71148,
+      "sha256": "86daf66335204ebbac1d99de7c7d18d705177c0c623e5c923d27cafc16e1bfa9"
+    },
+    "rt_lights_native_point.dxbc": {
+      "bytes": 50772,
+      "sha256": "cc6a9b8e45b0199ea645c9fcae9ae64ea1b6db5aefffd657e232f2c24a2177ac"
+    }
+  }
+}

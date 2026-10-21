@@ -35,6 +35,12 @@ int main() try {
     auto nativePipelineDesc=ps;nativePipelineDesc.pRootSignature=nativeRoot.Get();
     ComPtr<ID3D12PipelineState> nativePipeline;Check(gpu.device->CreateComputePipelineState(&nativePipelineDesc,IID_PPV_ARGS(&nativePipeline)));
     std::cout<<"PASS: captured native global root and extraction pipeline compatibility\n";
+    for(const char* file:{"rt_lights_native_base.dxbc","rt_lights_native_point.dxbc"}) {
+        auto replay=Read(file);auto replayDesc=nativePipelineDesc;replayDesc.CS={replay.data(),replay.size()};
+        ComPtr<ID3D12PipelineState> replayPso;Check(gpu.device->CreateComputePipelineState(&replayDesc,IID_PPV_ARGS(&replayPso)));
+        std::cout<<"PASS: private native replay pipeline "<<file<<'\n';
+    }
+
     std::vector<float> constants(320,0);constants[0]=constants[1]=2;constants[2]=constants[3]=0.5f;
     for(UINT i=0;i<4;++i)constants[56+i*5]=1; // Native clip-to-view matrix at byte 224.
     auto cb=gpu.Upload(constants);auto cb1=gpu.Upload(std::vector<float>(64,0));
