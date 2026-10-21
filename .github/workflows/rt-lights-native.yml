@@ -44,6 +44,10 @@ jobs:
           if($LASTEXITCODE -ne 0){throw 'Native packing shader compilation failed'}
           & $dxc.FullName -T cs_6_0 -E main -HV 2021 -Fo rt_lights_native_batch.dxil src/shaders/rt_lights_native_batch.hlsl
           if($LASTEXITCODE -ne 0){throw 'Native batch shader compilation failed'}
+          & $dxc.FullName -T cs_6_0 -E main -HV 2021 -D RT_LIGHTS_COMPACT=1 -Fo rt_lights_native_compact.dxil src/shaders/rt_lights_native_batch.hlsl
+          if($LASTEXITCODE -ne 0){throw 'Compact batch shader compilation failed'}
+          & $dxc.FullName -T cs_6_0 -E main -HV 2021 -Fo rt_lights_native_arguments.dxil src/shaders/rt_lights_native_arguments.hlsl
+          if($LASTEXITCODE -ne 0){throw 'Indirect argument shader compilation failed'}
           & $dxc.FullName -T cs_6_0 -E batchMain -HV 2021 -Fo rt_lights_batch_compose.dxil src/shaders/rt_lights_compose.hlsl
           if($LASTEXITCODE -ne 0){throw 'Batch composition shader compilation failed'}
           & $dxc.FullName -T lib_6_3 -HV 2021 -D RT_LIGHTS_NATIVE_BINDINGS=1 -Fo rt_lights_native_visibility.dxil src/shaders/rt_lights_visibility.hlsl

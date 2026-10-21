@@ -7,6 +7,24 @@ StructuredBuffer<NativeSpotLight> spotLights : register(t3);
 RWTexture2D<uint4> work : register(u0);
 RWStructuredBuffer<ShadowTask> tasks : register(u1);
 RWStructuredBuffer<ReceiverRange> ranges : register(u2);
+#ifdef RT_LIGHTS_COMPACT
+// Reset this one-word counter on the GPU before each batch. A bounded CAS
+// reservation never wraps or publishes a partial receiver when capacity runs out.
+RWStructuredBuffer<uint> allocation : register(u3);
+bool Reserve(uint count, uint capacity, out uint first) {
+    first=0;
+    uint size,stride;allocation.GetDimensions(size,stride);
+    if(size!=1 || stride!=4) return false;
+    uint expected;InterlockedAdd(allocation[0],0,expected);
+    for(;;) {
+        if(expected>capacity || count>capacity-expected) return false;
+        uint observed;
+        InterlockedCompareExchange(allocation[0],expected,expected+count,observed);
+        if(observed==expected) { first=expected;return true; }
+        expected=observed;
+    }
+}
+#endif
 cbuffer NativeDeferred : register(b1) { uint4 deferredWords[26]; }
 cbuffer Batch : register(b2) {
     uint firstReceiver; uint receiverCount; uint slotsPerReceiver; uint frameTag;
@@ -30,7 +48,11 @@ void main(uint3 dispatch : SV_DispatchThreadID) {
     if(slotsPerReceiver==0 || slotsPerReceiver>1024 || taskStride!=96 ||
        workWidth==0 || workHeight==0 || workWidth!=atlasWidth || workHeight!=atlasHeight ||
        workHeight>Invalid/workWidth || local>Invalid/slotsPerReceiver) return;
-    uint first=local*slotsPerReceiver, atlasCount=workWidth*workHeight;
+    uint atlasCount=workWidth*workHeight;
+#ifdef RT_LIGHTS_COMPACT
+    uint first=0;
+#else
+    uint first=local*slotsPerReceiver;
     if(first>taskCount || slotsPerReceiver>taskCount-first ||
        first>atlasCount || slotsPerReceiver>atlasCount-first) return;
     for(uint slot=0;slot<slotsPerReceiver;++slot) {
@@ -38,6 +60,7 @@ void main(uint3 dispatch : SV_DispatchThreadID) {
         work[uint2(index%workWidth,index/workWidth)]=0;
         tasks[index]=(ShadowTask)0;
     }
+    #endif
     uint width,height,depthWidth,depthHeight,lightCount,lightStride,cellWidth,cellHeight;
     gbuffer.GetDimensions(width,height);clipDepth.GetDimensions(depthWidth,depthHeight);
     spotLights.GetDimensions(lightCount,lightStride);spotCells.GetDimensions(cellWidth,cellHeight);
@@ -90,6 +113,16 @@ void main(uint3 dispatch : SV_DispatchThreadID) {
         if(light>=nativeTotal) return;
     }
     if(count==nativeCapacity) return;
+#ifdef RT_LIGHTS_COMPACT
+    if(!Reserve(count,min(taskCount,atlasCount),first)) return;
+    // A later geometry rejection must not send stale tasks from a previous batch
+    // through DXR. Only clear the reserved entries, never padded capacity.
+    for(uint reservedSlot=0;reservedSlot<count;++reservedSlot) {
+        uint index=first+reservedSlot;
+        tasks[index]=(ShadowTask)0;
+        work[uint2(index%workWidth,index/workWidth)]=0;
+    }
+#endif
     for(uint candidate=0;candidate<count;++candidate) {
         uint light=spotCells.Load(int3(cellX+candidate,cellY,0)).x;
         NativeSpotLight source=spotLights[light];
