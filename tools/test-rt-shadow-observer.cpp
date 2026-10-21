@@ -12,7 +12,7 @@
 #include "../src/native_lighting_report.h"
 static bool PTReflectionSha256(const unsigned char* data,size_t size,char* out) {
     unsigned char digest[32]{};
-    if(size>MAXULONG || BCryptHash(BCRYPT_SHA256_ALG_HANDLE,nullptr,0,const_cast<PUCHAR>(data),static_cast<ULONG>(size),digest,32)<0) return false;
+    if(size>MAXDWORD || BCryptHash(BCRYPT_SHA256_ALG_HANDLE,nullptr,0,const_cast<PUCHAR>(data),static_cast<ULONG>(size),digest,32)<0) return false;
     for(unsigned i=0;i<32;++i) sprintf_s(out+i*2,3,"%02x",digest[i]);
     return true;
 }
