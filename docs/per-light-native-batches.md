@@ -59,11 +59,22 @@ incorrect screen inverse resolution do not become partial replacement lighting.
 If a later geometry check fails after some writes, the range remains invalid;
 those tasks may execute but their partial lighting must never be committed.
 
-This fixed-slot version is not a full-frame allocation strategy. At high
-resolutions its padded work and clearing bandwidth would be excessive. Production
-integration needs compact work/indirect dispatch or another measured bounded
-strategy before enabling full-screen replacement. Do not dispatch padded full-frame
-work and call it the production all-light path.
+The fixed-slot entry remains a reference fixture. The `RT_LIGHTS_COMPACT=1`
+entry reserves only the complete receiver's actual candidate count through a
+bounded compare/exchange counter at u3. Reset that counter on the GPU before each
+batch. Overflow leaves the receiver invalid; reservations cannot wrap, overlap,
+or exceed either the task buffer or work atlas. Reserved tasks are initialized so
+a later geometry rejection cannot trace stale work. No CPU count readback is used.
+
+`rt_lights_native_arguments.hlsl` consumes that counter after a UAV barrier. It
+preserves the first 88 bytes of a submission-owned native ray-table template,
+writes ray dimensions at byte 88, native 8x8 extraction dispatch arguments at
+112, and packing arguments at 124. The buffer is 136 bytes. Transition it to
+INDIRECT_ARGUMENT before ExecuteIndirect. The extraction atlas dimensions must
+be multiples of eight; the shader disables only the final partial group rows.
+A zero count or invalid capacity produces zero work. These argument bytes and
+padding are executed/checked on WARP, including poisoned prior atlas contents.
+Actual native ExecuteIndirect ray dispatch remains runtime integration work.
 
 `rt_lights_compose.hlsl` now has `batchMain` alongside the original test entry.
 Its b0 is firstReceiver, receiverCount, frameTag, reserved. It checks global
@@ -102,8 +113,45 @@ incorrect inverse resolution and stale composition. It checks translated/rotated
 world positions, the physical emitter field, packed normals, orthogonal emitter
 axes, sample/mask/bias policy and complete batch composition.
 
-Remaining: compact production scheduling, live descriptor/CBV forwarding and
-queue-fenced resources, native DXR hit-table/geometry verification, independent
-per-light filtering and atomic replacement of native spotlight contributions.
+Remaining: live descriptor/CBV forwarding and queue-fenced resources, connecting
+compact scheduling and native DXR dispatch, native hit-table/geometry verification,
+independent per-light filtering, and wiring the private lighting replay/commit.
+The shaders described here are not yet invoked by the game runtime.
 Native light indices are frame identities only until cross-frame stability is
 proven. Do not use them alone as temporal history keys.
+
+## Private base replay and paired lighting commit
+
+`tools/rt_lights_native_base.py` creates two hash-locked replay shaders. The
+producer variant inserts an unconditional break at the start of the spotlight
+loop (SHEX 5685), after its accumulators have been initialized. The selected-light
+variant clears only the spotlight guard r5.z after SHEX 362, preserving the point
+guard and original point identity. Both pipelines successfully compile against
+the captured global root on WARP. Their non-spotlight output equivalence still
+needs a native-input execution check; pipeline creation alone does not prove it.
+
+The live adapter must replay these into PRIVATE diffuse/specular outputs. The
+producer's selection UAV must also be private, while the selected-point replay
+must READ the ORIGINAL native selection texture. Neither replay shader is a
+drop-in replacement for the original game pass. Original dispatches run normally
+and leave a complete fallback image.
+
+`rt_lights_native_commit.hlsl` writes private base + independent RT spotlight
+lighting only for complete valid receivers. It validates diffuse and specular
+together before either store, preserves base alpha, rejects nonfinite values and
+half-float overflow, and leaves both original outputs unchanged on rejection.
+WARP tests cover nonzero batch origins, out-of-batch pixels, invalid visibility
+composition, NaN/infinity, overflow, and avoiding double-addition of native light.
+
+Renderer disassembly confirms producer and selected-light work are within the
+existing 0x23ed10 pass scope: producer shader selection occurs at 0x23f757 and the
+native ray setup follows at 0x23f8cc. This supplies a candidate recording scope;
+it does not establish live descriptor snapshot completeness or queue lifetime.
+
+Executed Windows validation for compact batches, argument generation, native
+replay PSO compatibility, extraction, and paired commit:
+https://github.com/Frooglemcdoo/Control-FG/actions/runs/39695423333
+
+No new installable shadow-replacement build is produced by this validation run.
+The main proxy workflow still contains the old runtime until live integration is
+implemented. Do not present its artifact as the all-spotlight replacement.
