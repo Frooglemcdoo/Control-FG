@@ -14,6 +14,7 @@ import subprocess
 import tempfile
 from dxbc_checksum import checksum
 from rt_spot_history import bounded_history
+from rt_spot_samples import four_spot_samples
 
 MULTI_RAY_SHA = 'd5efe2c2219257e2a7b51bbd65a7fa3b80cdb56fb7e6444223f8b4d7ee45a1a9'
 SINGLE_RAY_SHA = '3c6bee7eea5b5758dcaf96b400bb7589b4af2031c17bf6ba5ce2343623ddb618'
@@ -44,7 +45,7 @@ def full_distance(source, single_ray=False):
         (f'%{test} = fcmp fast olt float %{returned}, %FMin',
          f'%{test} = fcmp fast olt float %{returned}, %SpotFullDistance')):
         source = replace_once(source, before, after)
-    return source
+    return four_spot_samples(source) if single_ray else source
 
 def patch_instruction(data, dword, expected_opcode, words):
     data = bytearray(data)

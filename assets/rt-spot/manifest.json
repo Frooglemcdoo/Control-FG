@@ -4,8 +4,8 @@
   "native_temporal": "feb37637481fed22a3cd4d256da613d1f61aec70fc11ff5e42aa2a585101fedb",
   "outputs": {
     "rt_spot_full.dxil": {
-      "bytes": 48752,
-      "sha256": "1fc49d54946bf53e7abe5a23cf1e28c229ebba843e517c68f6b2ce2ab9762e40"
+      "bytes": 50072,
+      "sha256": "bb54d79a9b92626f8fa3f8eb7abc7506e1a0772c188d02a5f9436ab5a0e07520"
     },
     "rt_spot_light.dxbc": {
       "bytes": 50752,

@@ -42,7 +42,7 @@ inline void ReportShadowFiltering(bool fullRR, bool contact, bool temporal, int 
         last.temporal != temporal || last.size != size || last.step != step) {
         Trace("rt_spot_filter full_rr=%u contact=%u native_preserved=1 temporal=%u spatial_size=%d spatial_step=%d",
             unsigned(fullRR),unsigned(contact),unsigned(temporal),size,step);
-        Trace("rt_spot_history neighborhood_clip=1 spotlight_only=1 transition_reset=1");
+        Trace("rt_spot_history neighborhood_clip=1 spotlight_only=1 transition_reset=1 spot_samples=4");
         last = {true, fullRR, contact, temporal, size, step};
     }
 }
@@ -83,7 +83,7 @@ inline void Install() noexcept {
         filesAttempted = true;
         char sha[65]{}; bool loaded = false;
         filesReady = PTReflectionLoadSidecar(L"rt_spot_full.dxil","RT_SPOT_RAY",rayBytes,sha,loaded) &&
-            !strcmp(sha,"1fc49d54946bf53e7abe5a23cf1e28c229ebba843e517c68f6b2ce2ab9762e40") &&
+            !strcmp(sha,"bb54d79a9b92626f8fa3f8eb7abc7506e1a0772c188d02a5f9436ab5a0e07520") &&
             PTReflectionLoadSidecar(L"rt_spot_light.dxbc","RT_SPOT_LIGHT",lightBytes,sha,loaded) &&
             !strcmp(sha,"a844888cdd5478605574157b323cb3376369ae9517c4954bf38bee21b664ecd7") &&
             PTReflectionLoadSidecar(L"rt_spot_reset.dxbc","RT_SPOT_RESET",resetBytes,sha,loaded) &&
