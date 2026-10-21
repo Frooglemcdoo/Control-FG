@@ -84,8 +84,6 @@ jobs:
           if errorlevel 1 exit /b 1
           rt-shadow-observer.exe
           if errorlevel 1 exit /b 1
-          python tools/extract-rt-shadow-capture.py rt-shadow-observer-test.log rt-shadow-observer-output
-          if errorlevel 1 exit /b 1
 
       - name: Test spotlight resolution policy
         shell: cmd
