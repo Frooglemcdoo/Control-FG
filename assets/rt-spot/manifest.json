@@ -5,7 +5,7 @@
   "outputs": {
     "rt_spot_full.dxil": {
       "bytes": 50072,
-      "sha256": "bb54d79a9b92626f8fa3f8eb7abc7506e1a0772c188d02a5f9436ab5a0e07520"
+      "sha256": "f0127f6267359eccf61fda126ecc9ff733d0b9090f6e9d16a88f65840e7d3ab8"
     },
     "rt_spot_light.dxbc": {
       "bytes": 50752,
@@ -18,6 +18,14 @@
     "rt_spot_history.dxbc": {
       "bytes": 6996,
       "sha256": "0c30a3cb345a5ccb7f5a10d639b611118f683d007ec4c4944453187c62928e91"
+    },
+    "rt_spot_spatial0.dxbc": {
+      "bytes": 12388,
+      "sha256": "fc1dc49d260b40bdbc11a0a0e843ad34b9cb164afad946b3808fa20fd988c69d"
+    },
+    "rt_spot_spatial1.dxbc": {
+      "bytes": 12388,
+      "sha256": "ef654dc4b4cd49f2811c9002f894a7cb240a348cbde2fa625fabfaebcafd7b7c"
     }
   }
 }

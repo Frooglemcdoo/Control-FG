@@ -4,8 +4,7 @@ The captured shader has no previous-light ID input. This is neighborhood clippin
 not an ID validity test: mixed neighborhoods may still retain stale history.
 Only use with the hash-verified R65 temporal shader and a full-distance pass.
 """
-import struct
-from dxbc_checksum import checksum
+from dxbc_transform import transform_shex
 
 OP = {'mov':54, 'ftoi':27, 'iadd':30, 'imax':36, 'imin':37,
       'ld':45, 'min':51, 'max':52}
@@ -49,22 +48,9 @@ def history_instructions():
     return words
 
 def bounded_history(data):
-    count = struct.unpack_from('<I',data,28)[0]
-    chunks=[]
-    for offset in struct.unpack_from('<'+'I'*count,data,32):
-        tag=data[offset:offset+4];size=struct.unpack_from('<I',data,offset+4)[0]
-        body=data[offset+8:offset+8+size]
-        if tag==b'SHEX':
-            w=list(struct.unpack('<'+'I'*(len(body)//4),body))
-            assert w[69]&2047==104 and w[70]==4, 'Native temp declaration changed'
-            assert w[316]&2047==0 and w[324]&2047==50, 'Native history blend changed'
-            w[70]=6
-            w[316:316]=history_instructions()
-            w[1]=len(w)
-            body=struct.pack('<'+'I'*len(w),*w)
-        chunks.append(tag+struct.pack('<I',len(body))+body)
-    offset=32+4*count; offsets=[]
-    for chunk in chunks: offsets.append(offset);offset+=len(chunk)
-    out=bytearray(data[:28]+struct.pack('<I',count)+struct.pack('<'+'I'*count,*offsets)+b''.join(chunks))
-    struct.pack_into('<I',out,24,len(out));out[4:20]=checksum(bytes(out))
-    return bytes(out)
+    def transform(w):
+        assert w[69]&2047==104 and w[70]==4, 'Native temp declaration changed'
+        assert w[316]&2047==0 and w[324]&2047==50, 'Native history blend changed'
+        w[70]=6
+        w[316:316]=history_instructions()
+    return transform_shex(data, transform)

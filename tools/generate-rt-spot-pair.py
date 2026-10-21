@@ -1,7 +1,7 @@
 """Build the hash-locked spotlight ray and composition pair from captured shaders.
 
 Requires DXC, the small assemble-dxil helper, and DXV. Does not modify the game.
-The native radius calculation, point branch, alpha handlers and resource layout
+The point branch, alpha handlers and resource layout
 remain intact. The selected-light compute variant removes map visibility only;
 it must never be selected without a matching full-distance spotlight dispatch.
 """
@@ -15,6 +15,7 @@ import tempfile
 from dxbc_checksum import checksum
 from rt_spot_history import bounded_history
 from rt_spot_samples import four_spot_samples
+from rt_spot_filter import SPATIAL_SHAS, bounded_penumbra
 
 MULTI_RAY_SHA = 'd5efe2c2219257e2a7b51bbd65a7fa3b80cdb56fb7e6444223f8b4d7ee45a1a9'
 SINGLE_RAY_SHA = '3c6bee7eea5b5758dcaf96b400bb7589b4af2031c17bf6ba5ce2343623ddb618'
@@ -91,6 +92,9 @@ def main():
     temporal = patch_instruction(temporal, 324, 50, [0x05000036, 0x001000f2, 1, 0x00100ae6, 1])
     args.output.mkdir(parents=True, exist_ok=True)
     outputs = {'rt_spot_full.dxil': full, 'rt_spot_light.dxbc': light, 'rt_spot_reset.dxbc': temporal, 'rt_spot_history.dxbc': history}
+    for index, sha in enumerate(SPATIAL_SHAS):
+        native = checked(args.capture / f'compute_cs-{sha}.dxbc', sha)
+        outputs[f'rt_spot_spatial{index}.dxbc'] = bounded_penumbra(native)
     manifest = {'native_ray': ray_sha, 'native_light': LIGHT_SHA, 'native_temporal': TEMPORAL_SHA, 'outputs': {}}
     for name, data in outputs.items():
         (args.output / name).write_bytes(data)

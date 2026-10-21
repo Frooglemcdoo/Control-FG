@@ -7,12 +7,17 @@ using PassFn = void (*)(void*, void*, void*, void*);
 inline constexpr char kRaySha[] = "3c6bee7eea5b5758dcaf96b400bb7589b4af2031c17bf6ba5ce2343623ddb618";
 inline constexpr char kLightSha[] = "6af3f7403a4e33ef1c478c386de8d0f6534ba9b852a75a9302c9b760c926b621";
 inline constexpr char kTemporalSha[] = "feb37637481fed22a3cd4d256da613d1f61aec70fc11ff5e42aa2a585101fedb";
+inline constexpr const char* kSpatialSha[] = {
+    "584d4085443970868fe903d10bcdacb18c4c82490d08b742b5219648da437ab3",
+    "e1a78e01b31559354cd8d474c22d117c444dd008a0067881d44836a23b0a459b"
+};
 inline const GUID kVariant = {0xe631a601,0x6651,0x4911,{0x80,0x90,0x11,0x71,0x14,0x28,0x30,0x01}};
 inline const GUID kKind = {0xe631a601,0x6651,0x4911,{0x80,0x90,0x11,0x71,0x14,0x28,0x30,0x02}};
 inline const GUID kRecord = {0xe631a601,0x6651,0x4911,{0x80,0x90,0x11,0x71,0x14,0x28,0x30,0x03}};
 inline const GUID kState = {0xe631a601,0x6651,0x4911,{0x80,0x90,0x11,0x71,0x14,0x28,0x30,0x04}};
 inline const GUID kHistoryVariant = {0xe631a601,0x6651,0x4911,{0x80,0x90,0x11,0x71,0x14,0x28,0x30,0x05}};
 inline std::vector<unsigned char> rayBytes, lightBytes, resetBytes, historyBytes;
+inline std::vector<unsigned char> spatialBytes[2];
 inline SRWLOCK installLock = SRWLOCK_INIT;
 inline std::atomic<unsigned> components{0}, reports{0};
 inline std::atomic<bool> disabled{false};
@@ -21,6 +26,8 @@ inline PassFn originalPass = nullptr;
 inline bool filesAttempted = false;
 inline std::atomic<bool> filesReady{false}, scopeReady{false};
 inline constexpr unsigned kRayComponent = 1, kLightComponent = 2, kResetComponent = 4;
+inline constexpr unsigned kSpatialComponents[] = {8,16};
+inline constexpr unsigned kRequiredComponents = 1|2|4|8|16;
 struct Pass {
     uint64_t selectionState = 0;
     bool requested = false, raySeen = false, fullRay = false, reset = false, composed = false;
@@ -42,12 +49,12 @@ inline void ReportShadowFiltering(bool fullRR, bool contact, bool temporal, int 
         last.temporal != temporal || last.size != size || last.step != step) {
         Trace("rt_spot_filter full_rr=%u contact=%u native_preserved=1 temporal=%u spatial_size=%d spatial_step=%d",
             unsigned(fullRR),unsigned(contact),unsigned(temporal),size,step);
-        Trace("rt_spot_history neighborhood_clip=1 spotlight_only=1 transition_reset=1 spot_samples=4");
+        Trace("rt_spot_history neighborhood_clip=1 spotlight_only=1 transition_reset=1 spot_samples=4 closest_blocker=1 fixed_emitter_radius=1 bounded_penumbra=1");
         last = {true, fullRR, contact, temporal, size, step};
     }
 }
 inline void RefreshReady() noexcept {
-    if (scopeReady && components.load() == 7 && !disabled.load()) readyMask.fetch_or(kRtSpotReadyBit);
+    if (scopeReady && components.load() == kRequiredComponents && !disabled.load()) readyMask.fetch_or(kRtSpotReadyBit);
 }
 inline bool Matches(const D3D12_SHADER_BYTECODE& shader, const char* expected) noexcept {
     if (!shader.pShaderBytecode || !shader.BytecodeLength) return false;
@@ -58,7 +65,7 @@ inline void HookPass(void* a, void* b, void* c, void* d) {
     Pass pass;
     Pass* previous = active;
     pass.selectionState = selection.Read();
-    pass.requested = !previous && !disabled.load() && components.load() == 7 &&
+    pass.requested = !previous && !disabled.load() && components.load() == kRequiredComponents &&
         LiveSelection::GetMode(pass.selectionState) == Mode::RtSpot;
     active = &pass;
     __try { originalPass(a,b,c,d); }
@@ -83,13 +90,17 @@ inline void Install() noexcept {
         filesAttempted = true;
         char sha[65]{}; bool loaded = false;
         filesReady = PTReflectionLoadSidecar(L"rt_spot_full.dxil","RT_SPOT_RAY",rayBytes,sha,loaded) &&
-            !strcmp(sha,"bb54d79a9b92626f8fa3f8eb7abc7506e1a0772c188d02a5f9436ab5a0e07520") &&
+            !strcmp(sha,"f0127f6267359eccf61fda126ecc9ff733d0b9090f6e9d16a88f65840e7d3ab8") &&
             PTReflectionLoadSidecar(L"rt_spot_light.dxbc","RT_SPOT_LIGHT",lightBytes,sha,loaded) &&
             !strcmp(sha,"a844888cdd5478605574157b323cb3376369ae9517c4954bf38bee21b664ecd7") &&
             PTReflectionLoadSidecar(L"rt_spot_reset.dxbc","RT_SPOT_RESET",resetBytes,sha,loaded) &&
             !strcmp(sha,"3081daebf178680b5f7e117a836e4494520c0e760de2fc1ee49d3cfb3a8d089f") &&
             PTReflectionLoadSidecar(L"rt_spot_history.dxbc","RT_SPOT_HISTORY",historyBytes,sha,loaded) &&
-            !strcmp(sha,"0c30a3cb345a5ccb7f5a10d639b611118f683d007ec4c4944453187c62928e91");
+            !strcmp(sha,"0c30a3cb345a5ccb7f5a10d639b611118f683d007ec4c4944453187c62928e91") &&
+            PTReflectionLoadSidecar(L"rt_spot_spatial0.dxbc","RT_SPOT_SPATIAL0",spatialBytes[0],sha,loaded) &&
+            !strcmp(sha,"fc1dc49d260b40bdbc11a0a0e843ad34b9cb164afad946b3808fa20fd988c69d") &&
+            PTReflectionLoadSidecar(L"rt_spot_spatial1.dxbc","RT_SPOT_SPATIAL1",spatialBytes[1],sha,loaded) &&
+            !strcmp(sha,"ef654dc4b4cd49f2811c9002f894a7cb240a348cbde2fa625fabfaebcafd7b7c");
     }
     if (filesReady && !scopeReady && verifiedRenderer) {
         auto* base = reinterpret_cast<unsigned char*>(verifiedRenderer);
@@ -103,13 +114,17 @@ inline void Install() noexcept {
 }
 inline void ObserveCompute(ID3D12Device* device, const D3D12_COMPUTE_PIPELINE_STATE_DESC* desc,
     IUnknown* native, CreateComputeFn create) noexcept {
-    if (!desc || !native || (desc->CS.BytecodeLength != 50752 && desc->CS.BytecodeLength != 4868)) return;
-    const unsigned kind = Matches(desc->CS,kLightSha) ? kLightComponent : Matches(desc->CS,kTemporalSha) ? kResetComponent : 0;
+    if (!desc || !native || (desc->CS.BytecodeLength != 50752 && desc->CS.BytecodeLength != 4868 && desc->CS.BytecodeLength != 12360)) return;
+    unsigned kind = Matches(desc->CS,kLightSha) ? kLightComponent : Matches(desc->CS,kTemporalSha) ? kResetComponent : 0;
+    int spatialIndex = -1;
+    for (int i=0;i<2;++i) if (Matches(desc->CS,kSpatialSha[i])) {
+        kind = kSpatialComponents[i]; spatialIndex = i; break;
+    }
     if (!kind) return;
     Install();
     if (!filesReady) return;
     auto custom = *desc;
-    const auto& bytes = kind == kLightComponent ? lightBytes : resetBytes;
+    const auto& bytes = spatialIndex >= 0 ? spatialBytes[spatialIndex] : kind == kLightComponent ? lightBytes : resetBytes;
     custom.CS = {bytes.data(),bytes.size()}; custom.CachedPSO = {};
     ID3D12PipelineState* variant = nullptr;
     HRESULT hr = create(device,&custom,IID_PPV_ARGS(&variant));
@@ -137,7 +152,8 @@ inline ID3D12PipelineState* SelectCompute(ID3D12PipelineState* native) noexcept 
     if (!active || !native) return nullptr;
     unsigned kind = 0; UINT size = sizeof(kind);
     if (FAILED(native->GetPrivateData(kKind,&size,&kind))) return nullptr;
-    const bool replace = kind == kLightComponent ? active->fullRay : kind == kResetComponent && active->raySeen && (active->reset || active->fullRay);
+    const bool spatial = kind == kSpatialComponents[0] || kind == kSpatialComponents[1];
+    const bool replace = (kind == kLightComponent || spatial) ? active->fullRay : kind == kResetComponent && active->raySeen && (active->reset || active->fullRay);
     if (!replace) return nullptr;
     ID3D12PipelineState* alternate = nullptr; size = sizeof(alternate);
     const GUID& variant = kind == kResetComponent && !active->reset ? kHistoryVariant : kVariant;

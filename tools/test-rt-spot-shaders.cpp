@@ -33,7 +33,7 @@ int main() try {
     D3D12_ROOT_SIGNATURE_DESC desc{1,&parameter,16,samplers,D3D12_ROOT_SIGNATURE_FLAG_NONE};
     ComPtr<ID3DBlob> blob,error;Check(D3D12SerializeRootSignature(&desc,D3D_ROOT_SIGNATURE_VERSION_1,&blob,&error));
     ComPtr<ID3D12RootSignature> root;Check(device->CreateRootSignature(0,blob->GetBufferPointer(),blob->GetBufferSize(),IID_PPV_ARGS(&root)));
-    for(const auto* name:{"build/rt_spot_light.dxbc","build/rt_spot_reset.dxbc","build/rt_spot_history.dxbc"}) {
+    for(const auto* name:{"build/rt_spot_light.dxbc","build/rt_spot_reset.dxbc","build/rt_spot_history.dxbc","build/rt_spot_spatial0.dxbc","build/rt_spot_spatial1.dxbc"}) {
         std::ifstream file(name,std::ios::binary);if(!file)throw std::runtime_error(name);
         std::vector<char> bytes((std::istreambuf_iterator<char>(file)),{});
         ComPtr<ID3DBlob> assembly;Check(D3DDisassemble(bytes.data(),bytes.size(),0,nullptr,&assembly));

@@ -1,10 +1,19 @@
 """Four symmetric disk samples for the hash-locked R65 spotlight path.
 
-Preserve the native disk radius distribution, alpha handlers, masks and point
+Preserve the disk distribution, alpha handlers, masks and point
 branch. Reflect the native uniform disk sample across both axes; each marginal
 remains uniform, while a pixel covers all four quadrants in the same frame.
 """
 def four_spot_samples(source):
+    # Full-distance shadows need a closest blocker, not traversal-order first hit.
+    # The native disk has radius 0.5; use diameter 2*emitterRadius to match the
+    # spatial filter, instead of the randomized short-contact radius multiplier.
+    radius = '  %215 = fmul fast float %214, %174'
+    assert source.count(radius) == 1
+    source = source.replace(radius, '  %215 = fmul fast float 2.000000e+00, %174')
+    first_ray = 'i32 157, %dx.types.Handle %250, i32 4, i32 1'
+    assert source.count(first_ray) == 1
+    source = source.replace(first_ray, 'i32 157, %dx.types.Handle %250, i32 0, i32 1')
     anchor='  %251 = load float, float* %249, align 8\n'
     assert source.count(anchor)==1
     lines=[]
@@ -26,7 +35,7 @@ def four_spot_samples(source):
             lines.append(f'  %{prefix}{axis}Direction = fdiv fast float %{prefix}{axis}, %{prefix}Length')
         lines.extend([
             '  store float %SpotFullDistance, float* %249, align 8',
-            f'  call void @dx.op.traceRay.struct.ShadowHitData(i32 157, %dx.types.Handle %250, i32 4, i32 1, i32 0, i32 2, i32 0, float %.i0275, float %.i1276, float %.i2277, float 0.000000e+00, float %{prefix}xDirection, float %{prefix}yDirection, float %{prefix}zDirection, float %SpotFullDistance, %struct.ShadowHitData* nonnull %11)',
+            f'  call void @dx.op.traceRay.struct.ShadowHitData(i32 157, %dx.types.Handle %250, i32 0, i32 1, i32 0, i32 2, i32 0, float %.i0275, float %.i1276, float %.i2277, float 0.000000e+00, float %{prefix}xDirection, float %{prefix}yDirection, float %{prefix}zDirection, float %SpotFullDistance, %struct.ShadowHitData* nonnull %11)',
             f'  %{prefix}Hit = load float, float* %249, align 8'])
         hits.append(f'%{prefix}Hit')
     for index,hit in enumerate(hits):

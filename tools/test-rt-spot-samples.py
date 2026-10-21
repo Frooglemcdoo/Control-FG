@@ -24,6 +24,11 @@ if len(sys.argv)>1:
     source=Path(sys.argv[1]).read_text();result=generator.full_distance(source,True)
     call='call void @dx.op.traceRay.struct.ShadowHitData('
     assert result.count(call)==source.count(call)+3
+    assert result.count('i32 157, %dx.types.Handle %250, i32 0, i32 1') == 4
+    assert '%215 = fmul fast float 2.000000e+00, %174' in result
+    # Shared native alpha/closest-hit/miss handlers remain byte-identical.
+    raygen = '; Function Attrs: nounwind\ndefine void @"\\01?spotRayGeneration'
+    assert result.split(raygen)[0] == source.split(raygen)[0]
     point='; <label>:257 '
     assert result.split(point,1)[1]==source.split(point,1)[1], 'Point branch or handlers changed'
     for i in range(1,4):assert f'%SpotSample{i}Hit' in result
