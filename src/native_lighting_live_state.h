@@ -3,7 +3,7 @@
 #include <cstdint>
 
 namespace native_lighting {
-enum class Mode : unsigned { Native, DisableBakedGi, DisableDirect, DisableDirectDiffuse, DisableDirectSpecular, BypassShadows, DisableLightPattern, BypassScreenShadows, BypassSpotShadows, BypassPointShadows, SpotVarianceLow, SpotVarianceHigh, SpotPcfCenter, SpotPcf32, SpotStableSoft, SpotStableTight, SpotBilinear, SpotResolution2x };
+enum class Mode : unsigned { Native, DisableBakedGi, DisableDirect, DisableDirectDiffuse, DisableDirectSpecular, BypassShadows, DisableLightPattern, BypassScreenShadows, BypassSpotShadows, BypassPointShadows, SpotVarianceLow, SpotVarianceHigh, SpotPcfCenter, SpotPcf32, SpotStableSoft, SpotStableTight, SpotBilinear, SpotResolution2x, RtSpot };
 inline constexpr unsigned kGiBit = 1, kDirectBit = 2, kAllBits = 3;
 inline constexpr unsigned kDiffuseReadyBit = 4, kSpecularReadyBit = 8, kShadowReadyBit = 16, kPatternReadyBit = 32;
 inline constexpr unsigned kScreenReadyBit = 64, kSpotReadyBit = 128, kPointReadyBit = 256;
@@ -15,13 +15,16 @@ inline constexpr unsigned kSpotStableSoftReadyBit = 1u << 13;
 inline constexpr unsigned kSpotStableTightReadyBit = 1u << 14;
 inline constexpr unsigned kSpotBilinearReadyBit = 1u << 15;
 inline constexpr unsigned kSpotResolutionReadyBit = 1u << 16;
+inline constexpr unsigned kRtSpotReadyBit = 1u << 17;
 struct ModeChoice { Mode mode; const wchar_t* label; };
 inline constexpr ModeChoice kModeChoices[] = {
-    {Mode::Native, L"NATIVE / CAPTURE"}
+    {Mode::Native, L"NATIVE SHADOWS"},
+    {Mode::RtSpot, L"RT SPOTLIGHTS"}
 };
 inline constexpr unsigned kModeCount = sizeof(kModeChoices) / sizeof(kModeChoices[0]);
 inline unsigned RequiredVariant(Mode mode) noexcept {
     switch (mode) {
+    case Mode::RtSpot: return kRtSpotReadyBit;
     case Mode::DisableBakedGi: return kGiBit;
     case Mode::DisableDirect: return kDirectBit;
     case Mode::DisableDirectDiffuse: return kDiffuseReadyBit;
@@ -47,6 +50,7 @@ inline unsigned RequiredBinding(Mode mode) noexcept {
 }
 inline const char* ModeName(Mode mode) noexcept {
     switch (mode) {
+    case Mode::RtSpot: return "rt_spot_replacement";
     case Mode::DisableBakedGi: return "gi_off";
     case Mode::DisableDirect: return "direct_off";
     case Mode::DisableDirectDiffuse: return "diffuse_off";
@@ -72,7 +76,7 @@ inline bool CanReportVisual(Mode mode, unsigned observed) noexcept {
     return (observed & required) == required;
 }
 inline bool Disables(Mode mode, unsigned kind) noexcept {
-    if (mode == Mode::Native || mode == Mode::SpotResolution2x) return false;
+    if (mode == Mode::Native || mode == Mode::SpotResolution2x || mode == Mode::RtSpot) return false;
     return kind == RequiredBinding(mode);
 }
 

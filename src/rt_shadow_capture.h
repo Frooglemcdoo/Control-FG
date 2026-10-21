@@ -7,6 +7,11 @@ using CreateState = HRESULT (STDMETHODCALLTYPE*)(ID3D12Device5*, const D3D12_STA
 using CreateSrv = void (STDMETHODCALLTYPE*)(ID3D12Device*, ID3D12Resource*, const D3D12_SHADER_RESOURCE_VIEW_DESC*, D3D12_CPU_DESCRIPTOR_HANDLE);
 inline CreateRoot originalRoot = nullptr;
 inline CreateState originalState = nullptr;
+inline std::atomic<CreateState> replacementState{nullptr};
+using StateObserver = void (*)(ID3D12GraphicsCommandList4*, ID3D12StateObject*);
+inline std::atomic<StateObserver> onState{nullptr};
+using DispatchReplacement = bool (*)(ID3D12GraphicsCommandList4*, const D3D12_DISPATCH_RAYS_DESC*);
+inline std::atomic<DispatchReplacement> replacementDispatch{nullptr};
 inline CreateSrv originalSrv = nullptr;
 inline SRWLOCK installLock = SRWLOCK_INIT, captureLock = SRWLOCK_INIT;
 inline char captured[128][65]{};
@@ -102,7 +107,8 @@ inline void STDMETHODCALLTYPE SrvHook(ID3D12Device* device,ID3D12Resource* resou
         Trace("rt_scene_srv cpu=%llu gpu_va=%llu sample_only=1",static_cast<unsigned long long>(destination.ptr),desc->RaytracingAccelerationStructure.Location);
 }
 inline HRESULT STDMETHODCALLTYPE StateHook(ID3D12Device5* device,const D3D12_STATE_OBJECT_DESC* desc,REFIID iid,void** out) {
-    const HRESULT hr=originalState(device,desc,iid,out);
+    const auto replacement = replacementState.load();
+    const HRESULT hr=(replacement ? replacement : originalState)(device,desc,iid,out);
     if(!desc || FAILED(hr) || !out || !*out || stateReports.fetch_add(1)>=128) return hr;
     Trace("rt_state object=%p type=%u subobjects=%u",*out,unsigned(desc->Type),desc->NumSubobjects);
     for(UINT i=0;i<desc->NumSubobjects;++i) {
@@ -155,11 +161,13 @@ inline ListHooks Lookup(ID3D12GraphicsCommandList4* list) noexcept {
 inline void STDMETHODCALLTYPE SetStateHook(ID3D12GraphicsCommandList4* list,ID3D12StateObject* state) {
     const auto hooks=Lookup(list);
     hooks.set(list,state);
+    if (const auto observer = onState.load()) observer(list,state);
     if(stateBindings.fetch_add(1)<128) Trace("rt_state_bound list=%p state=%p",list,state);
 }
 inline void STDMETHODCALLTYPE DispatchHook(ID3D12GraphicsCommandList4* list,const D3D12_DISPATCH_RAYS_DESC* desc) {
     const auto hooks=Lookup(list);
-    hooks.dispatch(list,desc);
+    const auto replacement = replacementDispatch.load();
+    if (!replacement || !replacement(list,desc)) hooks.dispatch(list,desc);
     if(desc && rayReports.fetch_add(1)<128)
         Trace("rt_dispatch list=%p extent=%ux%ux%u raygen=%llu hit_start=%llu hit_bytes=%llu hit_stride=%llu miss_start=%llu miss_bytes=%llu miss_stride=%llu gpu_confirmed=0",
             list,desc->Width,desc->Height,desc->Depth,desc->RayGenerationShaderRecord.StartAddress,
@@ -211,18 +219,18 @@ inline void Install(ID3D12Device* device) noexcept {
     D3D12_FEATURE_DATA_D3D12_OPTIONS5 options{};
     const HRESULT feature=device->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS5,&options,sizeof(options));
     ReleaseSRWLockExclusive(&installLock);
-    Trace("rt_capture_hooks root=%u srv=%u state=%u feature_hr=0x%08lX dxr_tier=%u replacement_active=0",
+    Trace("rt_capture_hooks root=%u srv=%u state=%u feature_hr=0x%08lX dxr_tier=%u observer_only=1",
         unsigned(originalRoot!=nullptr),unsigned(originalSrv!=nullptr),unsigned(originalState!=nullptr),static_cast<unsigned long>(feature),unsigned(options.RaytracingTier));
 }
 inline void Summary() noexcept {
-    Trace("rt_compute_summary expected_mask=%u created_mask=%u saved_mask=%u bound_mask=%u missing_saved_mask=%u replacement_active=0",
+    Trace("rt_compute_summary expected_mask=%u created_mask=%u saved_mask=%u bound_mask=%u missing_saved_mask=%u observer_only=1",
         kExpectedComputeMask, computeCreatedMask.load(), computeSavedMask.load(), computeBoundMask.load(),
         kExpectedComputeMask & ~computeSavedMask.load());
     AcquireSRWLockShared(&captureLock);
     const unsigned count=capturedCount;
     const size_t bytes=capturedBytes;
     ReleaseSRWLockShared(&captureLock);
-    Trace("rt_capture_summary blobs=%u raw_bytes=%llu roots_seen=%u states_seen=%u scene_srvs_seen=%u state_bindings_seen=%u ray_dispatches_seen=%u limit_reached=%u replacement_active=0",
+    Trace("rt_capture_summary blobs=%u raw_bytes=%llu roots_seen=%u states_seen=%u scene_srvs_seen=%u state_bindings_seen=%u ray_dispatches_seen=%u limit_reached=%u observer_only=1",
         count,static_cast<unsigned long long>(bytes),rootReports.load(),stateReports.load(),sceneReports.load(),stateBindings.load(),rayReports.load(),unsigned(limitReported.load()));
 }
 } // namespace rt_shadow_capture

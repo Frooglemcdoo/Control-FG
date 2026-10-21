@@ -18,6 +18,12 @@
 static std::atomic<unsigned long long> presentCount{0};
 static void Log(const char*, ...) {}
 static bool PTReflectionSha256(const unsigned char*, size_t, char*) { return false; }
+// Renderer and sidecar operations are unavailable in the standalone WARP test.
+static HMODULE verifiedRenderer = nullptr;
+struct RRAlbedoCallPatch {};
+static bool RRAlbedoPrepareCallPatch(void*, void*, void*, RRAlbedoCallPatch*) { return false; }
+static bool RRAlbedoExchangeCall(RRAlbedoCallPatch*, bool) { return false; }
+static bool PTReflectionLoadSidecar(const wchar_t*, const char*, std::vector<unsigned char>&, char*, bool&) { return false; }
 #define CONTROL_LIGHTING_NO_OVERLAY
 #include "../src/native_lighting_live_runtime.h"
 using Microsoft::WRL::ComPtr;
@@ -79,7 +85,35 @@ static void TestAllocatorForwarding() {
     sr::originalResize=nullptr;sr::originalRequest=nullptr;sr::rendererBase=nullptr;
     sr::expandedPool=nullptr;SelectMode(Mode::Native);
 }
+static bool passForwarded = false;
+static int passArguments[4]{};
+static void FakeSpotPass(void* a, void* b, void* c, void* d) {
+    using namespace native_lighting;
+    auto* scope = rt_spot_runtime::active;
+    if (!scope || !scope->requested || a != &passArguments[0] || b != &passArguments[1] ||
+        c != &passArguments[2] || d != &passArguments[3]) throw std::runtime_error("RT pass arguments or selection changed");
+    SelectMode(Mode::Native); // UI changes cannot split the in-progress pair.
+    if (!scope->requested) throw std::runtime_error("RT selection was not held for the pass");
+    scope->raySeen = scope->fullRay = scope->composed = true;
+    passForwarded = true;
+}
+static void TestSpotPassSelection() {
+    using namespace native_lighting;
+    rt_spot_runtime::components.store(7);
+    readyMask.fetch_or(kRtSpotReadyBit);
+    SelectMode(Mode::RtSpot);
+    rt_spot_runtime::originalPass = &FakeSpotPass;
+    rt_spot_runtime::HookPass(&passArguments[0], &passArguments[1], &passArguments[2], &passArguments[3]);
+    if (!passForwarded || rt_spot_runtime::active ||
+        LiveSelection::GetMode(selection.Read()) != Mode::Native || LiveSelection::Observed(selection.Read()) != 0)
+        throw std::runtime_error("RT pass restored incorrectly or marked a newer selection");
+    rt_spot_runtime::components.store(0);
+    rt_spot_runtime::previousFull = false;
+    readyMask.fetch_and(~kRtSpotReadyBit);
+    std::cout << "PASS: RT pass forwards arguments, holds selection and rejects stale observation\n";
+}
 int main() try {
+    TestSpotPassSelection();
     using namespace native_lighting;
     TestAllocatorForwarding();
     ComPtr<IDXGIFactory4> factory; Check(CreateDXGIFactory1(IID_PPV_ARGS(&factory)));

@@ -156,6 +156,10 @@ inline void AttachVariant(IUnknown* native, ID3D12PipelineState* variant, unsign
     Trace("variant contribution=%s ready=%u hr=0x%08lX ready_bit=%u", kind == kGiBit ? "BakedGi" : "Direct", unsigned(SUCCEEDED(hr)), static_cast<unsigned long>(hr), readyBit ? readyBit : kind);
 }
 using CreateCompute = HRESULT (STDMETHODCALLTYPE*)(ID3D12Device*, const D3D12_COMPUTE_PIPELINE_STATE_DESC*, REFIID, void**);
+namespace rt_spot_runtime {
+inline void ObserveCompute(ID3D12Device*, const D3D12_COMPUTE_PIPELINE_STATE_DESC*, IUnknown*, CreateCompute) noexcept;
+inline ID3D12PipelineState* SelectCompute(ID3D12PipelineState*) noexcept;
+}
 namespace rt_shadow_capture {
 inline void RecordDirect(const D3D12_COMPUTE_PIPELINE_STATE_DESC*) noexcept;
 inline void RecordCompute(const D3D12_COMPUTE_PIPELINE_STATE_DESC*) noexcept;
@@ -164,6 +168,7 @@ inline void ObserveCompute(ID3D12Device* device, const D3D12_COMPUTE_PIPELINE_ST
     computeSeen.fetch_add(1);
     IdentifyPipeline(native, desc->CS, 2);
     rt_shadow_capture::RecordCompute(desc);
+    rt_spot_runtime::ObserveCompute(device,desc,native,original);
     // Native shaders remain intact. Tag the captured direct-light shader solely
     // for the diagnostic's binding observation.
     if (desc->CS.BytecodeLength == kDirect.size && desc->CS.pShaderBytecode) {
@@ -199,7 +204,7 @@ struct Binding {
         }
     }
     void Recorded() const noexcept {
-        if (kind && selection.Observe(state, kind))
+        if (kind && LiveSelection::GetMode(state) != Mode::RtSpot && selection.Observe(state, kind))
             Trace("binding_recorded seq=%llu mode=%s contribution=%s variant=%u", LiveSelection::Sequence(state),
                 ModeName(LiveSelection::GetMode(state)), kind == kGiBit ? "BakedGi" : "Direct", unsigned(alternate != nullptr));
     }
@@ -223,7 +228,11 @@ inline ListHooks Lookup(ID3D12GraphicsCommandList* list) noexcept {
 inline void STDMETHODCALLTYPE SetHook(ID3D12GraphicsCommandList* list, ID3D12PipelineState* pso) {
     const auto original = Lookup(list).set;
     if (!original) return;
-    Binding binding(pso); original(list, binding.selected); binding.Recorded();
+    Binding binding(pso);
+    auto* alternate = rt_spot_runtime::SelectCompute(binding.selected);
+    original(list, alternate ? alternate : binding.selected);
+    if (alternate) alternate->Release();
+    binding.Recorded();
 }
 inline HRESULT STDMETHODCALLTYPE ResetHook(ID3D12GraphicsCommandList* list, ID3D12CommandAllocator* allocator, ID3D12PipelineState* pso) {
     const auto original = Lookup(list).reset;
@@ -242,6 +251,7 @@ inline bool PatchSlot(void** slot, void* expected, void* hook) noexcept {
 }
 #include "spot_shadow_resolution_runtime.h"
 #include "rt_shadow_capture.h"
+#include "rt_spot_runtime.h"
 inline void InstallList(ID3D12GraphicsCommandList* list) noexcept {
     rt_shadow_capture::InstallList(list);
     void** table = *reinterpret_cast<void***>(list);
@@ -296,6 +306,10 @@ inline HRESULT STDMETHODCALLTYPE CreateListHook(ID3D12Device* device, UINT node,
 inline void StartOverlay() noexcept;
 inline void InstallLiveDiagnostic(ID3D12Device* device) noexcept {
     if (!device) return;
+    rt_spot_runtime::Install();
+    rt_shadow_capture::replacementState = &rt_spot_runtime::CreateAugmented;
+    rt_shadow_capture::onState = &rt_spot_runtime::OnState;
+    rt_shadow_capture::replacementDispatch = &rt_spot_runtime::Dispatch;
     rt_shadow_capture::Install(device);
     void** table = *reinterpret_cast<void***>(device);
     AcquireSRWLockExclusive(&hookLock);

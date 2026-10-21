@@ -149,6 +149,27 @@ jobs:
           build\compile-pt-reflection-p2-diffuse-bridge.exe
           if errorlevel 1 exit /b 1
 
+      - name: Prepare validated RT spotlight shader pair
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $manifest=Get-Content assets/rt-spot/manifest.json -Raw | ConvertFrom-Json
+          foreach ($entry in $manifest.outputs.PSObject.Properties) {
+            $name=$entry.Name
+            $bytes=[Convert]::FromBase64String((Get-Content "assets/rt-spot/$name.b64" -Raw))
+            [IO.File]::WriteAllBytes("$pwd/build/$name",$bytes)
+            if ((Get-FileHash "build/$name" -Algorithm SHA256).Hash.ToLower() -ne $entry.Value.sha256) { throw "Shader hash mismatch: $name" }
+          }
+
+      - name: Validate RT spotlight composition and history shaders on WARP
+        shell: cmd
+        run: |
+          call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
+          cl /nologo /EHsc /std:c++17 /W4 /WX tools/test-rt-spot-shaders.cpp /Fe:rt-spot-shaders.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
+          if errorlevel 1 exit /b 1
+          rt-spot-shaders.exe
+          if errorlevel 1 exit /b 1
+
       - name: Check secondary ray origin precision
         run: python tools/test-pt-secondary-origin.py
 
@@ -317,13 +338,14 @@ jobs:
           node tools/test-native-menu.js --config build/native-menu-config.json
           if errorlevel 1 exit /b 1
 
-      - name: Package live lighting diagnostic R65
+      - name: Package live lighting diagnostic R66
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-Native-Lighting-Live-R65'
+          $out='Control-FG-Native-Lighting-Live-R66'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
+          Copy-Item build/rt_spot_full.dxil,build/rt_spot_light.dxbc,build/rt_spot_reset.dxbc $out
           New-Item -ItemType Directory -Force -Path "$out/ControlFGStreamline" | Out-Null
           Copy-Item build/ControlFG.RTX40MFG.dll "$out/ControlFGStreamline/ControlFG.RTX40MFG.dll"
           Copy-Item build/pt_glass_raygen.dxil "$out/pt_glass_raygen.dxil"
@@ -337,22 +359,19 @@ jobs:
           Copy-Item Collect-RR-Blinds-Capture.ps1 "$out/Collect-RR-Blinds-Capture.ps1"
           Copy-Item Collect-ControlFG-Compact-Logs.cmd "$out/Collect-ControlFG-Compact-Logs.cmd"
           Copy-Item Collect-ControlFG-Compact-Logs.ps1 "$out/Collect-ControlFG-Compact-Logs.ps1"
-          Copy-Item docs/rt-shadow-integration-r65.md "$out/DIAGNOSTIC-NOTES.md"
+          Copy-Item docs/rt-spot-replacement-r66.md "$out/DIAGNOSTIC-NOTES.md"
           @'
-          CONTROL-FG R65 - RT spotlight integration capture
-          This does NOT enable replacement shadows. Native rendering stays active.
-          Close Control to install, then launch once. Copy contents beside Control_DX12.exe.
-          Keep existing NVIDIA runtimes and preserve the ControlFGStreamline folder.
+          CONTROL-FG R66 - experimental selected-spotlight RT replacement
+          Close Control to install. Copy contents beside Control_DX12.exe.
+          Preserve existing NVIDIA runtimes and the ControlFGStreamline folder.
           Use Borderless. Load the affected room with FG, RR and glass enhancements OFF.
-          Start with RT OFF, return to gameplay, then enable native RT Contact Shadows
-          and RT Reflections. Return to gameplay for 10 seconds and move briefly.
-          Toggle RT OFF and ON once more, returning to gameplay after each change.
-          Press F10, then SAVE LOG. Send the single Lighting-R65 log shown in the dialog.
-          No PIX capture is required. There is no replacement-shadow A/B test yet.
-          No restart between settings if the game applies them live.
-          The log includes bounded shader/root bytes and RT integration metadata.
-          The old expanded shadow atlas is no longer enabled in this build.
-          See DIAGNOSTIC-NOTES.md for scope, remaining implementation and validation.
+          Enable native RT Contact Shadows. Keep the same camera position for comparison.
+          F10: switch NATIVE SHADOWS / RT SPOTLIGHT REPLACEMENT, then return to gameplay.
+          No restart between modes. SAVE LOG writes one Lighting-R66 session log.
+          This replaces one selected spotlight per pixel, not every shadow in the scene.
+          An unavailable button means the required native shader pair was not prepared.
+          This is the first visual test; softness, coverage and GPU cost need verification.
+          See DIAGNOSTIC-NOTES.md for scope and limitations.
           '@ | Set-Content "$out/README.txt" -Encoding ASCII
           Compress-Archive -Path "$out/*" -DestinationPath "$out.zip" -Force
           (Get-FileHash "$out.zip" -Algorithm SHA256).Hash | Set-Content "$out.sha256" -Encoding ASCII
@@ -360,10 +379,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-Native-Lighting-Live-R65
+          name: Control-FG-Native-Lighting-Live-R66
           path: |
-            Control-FG-Native-Lighting-Live-R65.zip
-            Control-FG-Native-Lighting-Live-R65.sha256
+            Control-FG-Native-Lighting-Live-R66.zip
+            Control-FG-Native-Lighting-Live-R66.sha256
             build/rt_spot_shadow_prototype.dxil
             build/exports.txt
             build/imports.txt

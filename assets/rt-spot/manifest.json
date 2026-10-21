@@ -1,0 +1,19 @@
+{
+  "native_ray": "3c6bee7eea5b5758dcaf96b400bb7589b4af2031c17bf6ba5ce2343623ddb618",
+  "native_light": "6af3f7403a4e33ef1c478c386de8d0f6534ba9b852a75a9302c9b760c926b621",
+  "native_temporal": "feb37637481fed22a3cd4d256da613d1f61aec70fc11ff5e42aa2a585101fedb",
+  "outputs": {
+    "rt_spot_full.dxil": {
+      "bytes": 48752,
+      "sha256": "1fc49d54946bf53e7abe5a23cf1e28c229ebba843e517c68f6b2ce2ab9762e40"
+    },
+    "rt_spot_light.dxbc": {
+      "bytes": 50752,
+      "sha256": "a844888cdd5478605574157b323cb3376369ae9517c4954bf38bee21b664ecd7"
+    },
+    "rt_spot_reset.dxbc": {
+      "bytes": 4868,
+      "sha256": "3081daebf178680b5f7e117a836e4494520c0e760de2fc1ee49d3cfb3a8d089f"
+    }
+  }
+}
