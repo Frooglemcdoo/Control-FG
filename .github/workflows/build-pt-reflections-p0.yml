@@ -70,6 +70,10 @@ jobs:
         shell: cmd
         run: |
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
+          cl /nologo /EHsc /std:c++17 /W4 /WX tools/test-rt-shadow-candidates.cpp /Fe:rt-shadow-candidates.exe
+          if errorlevel 1 exit /b 1
+          rt-shadow-candidates.exe
+          if errorlevel 1 exit /b 1
           python tools/test-rt-shadow-capture.py
           if errorlevel 1 exit /b 1
           cl /nologo /EHsc /std:c++17 /W4 /WX tools/test-rt-spot-shadow-contract.cpp /Fe:rt-spot-contract.exe
@@ -313,11 +317,11 @@ jobs:
           node tools/test-native-menu.js --config build/native-menu-config.json
           if errorlevel 1 exit /b 1
 
-      - name: Package live lighting diagnostic R64
+      - name: Package live lighting diagnostic R65
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-Native-Lighting-Live-R64'
+          $out='Control-FG-Native-Lighting-Live-R65'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
           New-Item -ItemType Directory -Force -Path "$out/ControlFGStreamline" | Out-Null
@@ -333,16 +337,17 @@ jobs:
           Copy-Item Collect-RR-Blinds-Capture.ps1 "$out/Collect-RR-Blinds-Capture.ps1"
           Copy-Item Collect-ControlFG-Compact-Logs.cmd "$out/Collect-ControlFG-Compact-Logs.cmd"
           Copy-Item Collect-ControlFG-Compact-Logs.ps1 "$out/Collect-ControlFG-Compact-Logs.ps1"
-          Copy-Item docs/rt-spot-shadow-prototype-r64.md "$out/DIAGNOSTIC-NOTES.md"
+          Copy-Item docs/rt-shadow-integration-r65.md "$out/DIAGNOSTIC-NOTES.md"
           @'
-          CONTROL-FG R64 - RT spotlight integration capture
+          CONTROL-FG R65 - RT spotlight integration capture
           This does NOT enable replacement shadows. Native rendering stays active.
           Close Control to install, then launch once. Copy contents beside Control_DX12.exe.
           Keep existing NVIDIA runtimes and preserve the ControlFGStreamline folder.
           Use Borderless. Load the affected room with FG, RR and glass enhancements OFF.
           Start with RT OFF, return to gameplay, then enable native RT Contact Shadows
           and RT Reflections. Return to gameplay for 10 seconds and move briefly.
-          Press F10, then SAVE LOG. Send the single Lighting-R64 log shown in the dialog.
+          Toggle RT OFF and ON once more, returning to gameplay after each change.
+          Press F10, then SAVE LOG. Send the single Lighting-R65 log shown in the dialog.
           No PIX capture is required. There is no replacement-shadow A/B test yet.
           No restart between settings if the game applies them live.
           The log includes bounded shader/root bytes and RT integration metadata.
@@ -355,10 +360,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-Native-Lighting-Live-R64
+          name: Control-FG-Native-Lighting-Live-R65
           path: |
-            Control-FG-Native-Lighting-Live-R64.zip
-            Control-FG-Native-Lighting-Live-R64.sha256
+            Control-FG-Native-Lighting-Live-R65.zip
+            Control-FG-Native-Lighting-Live-R65.sha256
             build/rt_spot_shadow_prototype.dxil
             build/exports.txt
             build/imports.txt

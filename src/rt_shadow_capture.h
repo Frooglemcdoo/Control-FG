@@ -18,23 +18,23 @@ inline constexpr size_t kBlobLimit = 2 * 1024 * 1024, kSessionLimit = 8 * 1024 *
 
 // Store exact shader/root bytes inside the single session log. One write/flush
 // per unique blob, at creation time; no per-frame readback or disk capture.
-inline void Blob(const char* kind, const void* data, size_t size) noexcept {
+inline bool Blob(const char* kind, const void* data, size_t size) noexcept {
     if (!data || !size || size > kBlobLimit) {
         Trace("rt_blob_rejected kind=%s bytes=%llu", kind, static_cast<unsigned long long>(size));
-        return;
+        return false;
     }
     char sha[65]{};
     if (!PTReflectionSha256(static_cast<const unsigned char*>(data), size, sha)) {
-        Trace("rt_blob_rejected kind=%s reason=hash_failed", kind); return;
+        Trace("rt_blob_rejected kind=%s reason=hash_failed", kind); return false;
     }
     AcquireSRWLockExclusive(&captureLock);
     for (unsigned i=0; i<capturedCount; ++i) if (!strcmp(captured[i],sha)) {
-        ReleaseSRWLockExclusive(&captureLock); return;
+        ReleaseSRWLockExclusive(&captureLock); return true;
     }
     if (capturedCount == 128 || size > kSessionLimit-capturedBytes) {
         ReleaseSRWLockExclusive(&captureLock);
         if (!limitReported.exchange(true)) Trace("rt_capture_limit_reached max_raw_bytes=%llu", static_cast<unsigned long long>(kSessionLimit));
-        return;
+        return false;
     }
     bool saved = false;
     try {
@@ -60,6 +60,26 @@ inline void Blob(const char* kind, const void* data, size_t size) noexcept {
     if(saved) { strcpy_s(captured[capturedCount++],sha);capturedBytes+=size; }
     ReleaseSRWLockExclusive(&captureLock);
     Trace("rt_blob_saved kind=%s sha=%s bytes=%llu saved=%u",kind,sha,static_cast<unsigned long long>(size),unsigned(saved));
+    return saved;
+}
+
+inline std::atomic<unsigned> computeCreatedMask{0}, computeSavedMask{0}, computeBoundMask{0};
+inline void RecordCompute(const D3D12_COMPUTE_PIPELINE_STATE_DESC* desc) noexcept {
+    if (!desc || !desc->CS.pShaderBytecode || !IsCandidateSize(desc->CS.BytecodeLength)) return;
+    char sha[65]{};
+    if (!PTReflectionSha256(static_cast<const unsigned char*>(desc->CS.pShaderBytecode), desc->CS.BytecodeLength, sha)) return;
+    const unsigned bit = ComputeCandidateBit(desc->CS.BytecodeLength, sha);
+    if (!bit) return;
+    const bool first = !(computeCreatedMask.fetch_or(bit) & bit);
+    if (Blob("compute_cs", desc->CS.pShaderBytecode, desc->CS.BytecodeLength))
+        computeSavedMask.fetch_or(bit);
+    if (first) Trace("rt_compute_created bit=%u sha=%s bytes=%llu root=%p role=unverified", bit, sha,
+        static_cast<unsigned long long>(desc->CS.BytecodeLength), desc->pRootSignature);
+}
+inline void RecordComputeBinding(size_t bytes, const char* sha) noexcept {
+    const unsigned bit = ComputeCandidateBit(bytes, sha);
+    if (bit && !(computeBoundMask.fetch_or(bit) & bit))
+        Trace("rt_compute_bound bit=%u sha=%s gpu_confirmed=0", bit, sha);
 }
 
 inline void RecordDirect(const D3D12_COMPUTE_PIPELINE_STATE_DESC* desc) noexcept {
@@ -195,6 +215,9 @@ inline void Install(ID3D12Device* device) noexcept {
         unsigned(originalRoot!=nullptr),unsigned(originalSrv!=nullptr),unsigned(originalState!=nullptr),static_cast<unsigned long>(feature),unsigned(options.RaytracingTier));
 }
 inline void Summary() noexcept {
+    Trace("rt_compute_summary expected_mask=%u created_mask=%u saved_mask=%u bound_mask=%u missing_saved_mask=%u replacement_active=0",
+        kExpectedComputeMask, computeCreatedMask.load(), computeSavedMask.load(), computeBoundMask.load(),
+        kExpectedComputeMask & ~computeSavedMask.load());
     AcquireSRWLockShared(&captureLock);
     const unsigned count=capturedCount;
     const size_t bytes=capturedBytes;

@@ -9,6 +9,7 @@ rows=''.join(f'rt_blob_data sha={sha} offset={offset} hex={data[offset:offset+12
 end=f'rt_blob_end sha={sha}\n'
 text=begin+rows+end
 assert capture.extract('ms=0 unrelated log line\n'+text)[sha]==('direct_cs',data)
+assert capture.extract(text.replace('kind=direct_cs', 'kind=compute_cs'))[sha] == ('compute_cs', data)
 bad=[begin+rows,text.replace('offset=128','offset=127'),text.replace('hex=0001','hex=ff01'),
      text.replace('bytes=256','bytes=257'),text.replace('kind=direct_cs','kind=../../escape'),
      text.replace('hex=0001','hex=0g01'),text+text,rows+end]

@@ -1,4 +1,4 @@
-"""Recover hash-verified shader/root blobs from one R64 session log.
+"""Recover hash-verified shader/root blobs from one RT integration session log.
 
 Reject partial captures, mismatched lengths, gaps, corrupt hex and hash failures.
 Names are derived only from an allow-listed kind and a verified SHA256.
@@ -8,7 +8,7 @@ import argparse
 import hashlib
 import re
 
-BEGIN = re.compile(r'^rt_blob_begin kind=(direct_cs|dxil_library|root_signature) sha=([0-9a-f]{64}) bytes=(\d+)$')
+BEGIN = re.compile(r'^rt_blob_begin kind=(direct_cs|compute_cs|dxil_library|root_signature) sha=([0-9a-f]{64}) bytes=(\d+)$')
 DATA = re.compile(r'^rt_blob_data sha=([0-9a-f]{64}) offset=(\d+) hex=([0-9a-f]+)$')
 END = re.compile(r'^rt_blob_end sha=([0-9a-f]{64})$')
 MAX_BLOB = 2 * 1024 * 1024

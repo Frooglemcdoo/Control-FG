@@ -2,6 +2,7 @@
 #include "native_lighting_isolation.h"
 #include "native_lighting_live_state.h"
 #include "native_lighting_report.h"
+#include "rt_shadow_capture_candidates.h"
 #include "spot_shadow_resolution_policy.h"
 #include <intrin.h>
 #include <string>
@@ -82,6 +83,7 @@ inline void IdentifyPipeline(IUnknown* object, const D3D12_SHADER_BYTECODE& shad
     }
     pso->Release();
 }
+namespace rt_shadow_capture { inline void RecordComputeBinding(size_t, const char*) noexcept; }
 inline void ReportBoundIdentity(ID3D12PipelineState* pso) noexcept {
     if (!pso) return;
     PipelineIdentity identity{}; UINT size = sizeof(identity);
@@ -92,6 +94,7 @@ inline void ReportBoundIdentity(ID3D12PipelineState* pso) noexcept {
     pso->GetPrivateData(kIdentityGuid, &size, &identity);
     if (!identity.logged) {
         identity.logged = 1;
+        if (identity.stage == 2) rt_shadow_capture::RecordComputeBinding(static_cast<size_t>(identity.bytes), identity.sha);
         pso->SetPrivateData(kIdentityGuid, sizeof(identity), &identity);
         if (identityReports.fetch_add(1) < 512)
             Trace("bound_pipeline pso=%p stage=%s bytes=%llu sha=%s", pso,
@@ -153,10 +156,14 @@ inline void AttachVariant(IUnknown* native, ID3D12PipelineState* variant, unsign
     Trace("variant contribution=%s ready=%u hr=0x%08lX ready_bit=%u", kind == kGiBit ? "BakedGi" : "Direct", unsigned(SUCCEEDED(hr)), static_cast<unsigned long>(hr), readyBit ? readyBit : kind);
 }
 using CreateCompute = HRESULT (STDMETHODCALLTYPE*)(ID3D12Device*, const D3D12_COMPUTE_PIPELINE_STATE_DESC*, REFIID, void**);
-namespace rt_shadow_capture { inline void RecordDirect(const D3D12_COMPUTE_PIPELINE_STATE_DESC*) noexcept; }
+namespace rt_shadow_capture {
+inline void RecordDirect(const D3D12_COMPUTE_PIPELINE_STATE_DESC*) noexcept;
+inline void RecordCompute(const D3D12_COMPUTE_PIPELINE_STATE_DESC*) noexcept;
+}
 inline void ObserveCompute(ID3D12Device* device, const D3D12_COMPUTE_PIPELINE_STATE_DESC* desc, IUnknown* native, CreateCompute original) noexcept {
     computeSeen.fetch_add(1);
     IdentifyPipeline(native, desc->CS, 2);
+    rt_shadow_capture::RecordCompute(desc);
     // Native shaders remain intact. Tag the captured direct-light shader solely
     // for the diagnostic's binding observation.
     if (desc->CS.BytecodeLength == kDirect.size && desc->CS.pShaderBytecode) {

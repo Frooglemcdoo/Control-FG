@@ -10,6 +10,7 @@
 #include <cassert>
 #include <vector>
 #include "../src/native_lighting_report.h"
+#include "../src/rt_shadow_capture_candidates.h"
 static bool PTReflectionSha256(const unsigned char* data,size_t size,char* out) {
     unsigned char digest[32]{};
     if(size>MAXDWORD || BCryptHash(BCRYPT_SHA256_ALG_HANDLE,nullptr,0,const_cast<PUCHAR>(data),static_cast<ULONG>(size),digest,32)<0) return false;
@@ -52,7 +53,18 @@ int main() {
     capture::SrvHook(nullptr,nullptr,&srv,{1234});
     assert(roots==1 && states==1 && srvs==1);
     assert(capture::capturedCount==1 && capture::capturedBytes==256 && reportHealthy);
-    capture::Blob("direct_cs",data,capture::kBlobLimit+1); // Rejected before reading.
+    assert(!capture::Blob("direct_cs",data,capture::kBlobLimit+1)); // Rejected before reading.
+    assert(capture::Blob("direct_cs",data,sizeof(data))); // Already persisted.
+    capture::RecordCompute(nullptr);
+    const auto& candidate = capture::kComputeCandidates[0];
+    std::vector<unsigned char> unrelated(candidate.bytes, 0);
+    D3D12_COMPUTE_PIPELINE_STATE_DESC compute{};
+    compute.CS = {unrelated.data(), unrelated.size()};
+    capture::RecordCompute(&compute); // Correct length, wrong shader: never saved.
+    assert(capture::computeCreatedMask == 0 && capture::computeSavedMask == 0);
+    capture::RecordComputeBinding(candidate.bytes, candidate.sha);
+    capture::RecordComputeBinding(candidate.bytes, candidate.sha);
+    assert(capture::computeBoundMask == 1 && capture::computeSavedMask == 0);
     assert(capture::capturedCount==1);
     HANDLE file=CreateFileW(report.Path(),GENERIC_READ,FILE_SHARE_READ|FILE_SHARE_WRITE,nullptr,OPEN_EXISTING,0,nullptr);
     assert(file!=INVALID_HANDLE_VALUE);
