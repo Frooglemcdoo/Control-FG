@@ -29,7 +29,11 @@ Hardware Test 1 passed on the user's RTX 5090. Native spotlight BRDF extraction
 and frame-keyed contribution packing now pass an executing Windows WARP fixture.
 See [per-light-native-extraction.md](per-light-native-extraction.md) for the atlas
 contract, preserved native calculations, validation and integration requirements.
-Neither component is wired into the live game renderer yet.
+Native cell enumeration, world-space shadow tasks, and batch composition also
+pass executing WARP fixtures. See [per-light-native-batches.md](per-light-native-batches.md).
+The native-binding ray library compiles and the captured root accepts the extraction
+compute pipeline. Native DXR linking/dispatch is not yet verified. These components
+are not wired into the live game renderer yet.
 
 ## Native adapter still required
 

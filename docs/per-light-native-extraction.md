@@ -69,9 +69,12 @@ remapping and blocked map/contact inputs. The initial generated shader had inval
 UAV destination selectors; Windows validation caught this before game integration.
 The generator now emits UAV write masks and scalar branch operands correctly.
 
-Still required before an in-game test: complete native spotlight enumeration and
-culling, native receiver/emitter ShadowTask production, verified native TLAS and
-alpha SBT bindings, fence-retired frame resources, per-light filtering, and atomic
-replacement of the corresponding native contributions. The old selected-light
+Native tile/depth enumeration, receiver/emitter task production and bounded-batch
+composition are now implemented and pass WARP fixtures. See
+[per-light-native-batches.md](per-light-native-batches.md) for the contracts and
+captured native ray bindings. These stages are not yet connected to live rendering.
+Still required before an in-game test: compact production scheduling, live native
+input forwarding, verified native TLAS and alpha SBT bindings, fence-retired frame
+resources, per-light filtering, and atomic replacement of native contributions. The old selected-light
 filter/history cannot serve as the new all-light filter. No new installation or
 manual fixture run is requested until these pieces support a useful game test.
