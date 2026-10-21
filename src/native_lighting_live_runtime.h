@@ -4,6 +4,7 @@
 #include "native_lighting_report.h"
 #include "spot_shadow_resolution_policy.h"
 #include <intrin.h>
+#include <string>
 
 namespace native_lighting {
 inline LiveSelection selection;
@@ -152,6 +153,7 @@ inline void AttachVariant(IUnknown* native, ID3D12PipelineState* variant, unsign
     Trace("variant contribution=%s ready=%u hr=0x%08lX ready_bit=%u", kind == kGiBit ? "BakedGi" : "Direct", unsigned(SUCCEEDED(hr)), static_cast<unsigned long>(hr), readyBit ? readyBit : kind);
 }
 using CreateCompute = HRESULT (STDMETHODCALLTYPE*)(ID3D12Device*, const D3D12_COMPUTE_PIPELINE_STATE_DESC*, REFIID, void**);
+namespace rt_shadow_capture { inline void RecordDirect(const D3D12_COMPUTE_PIPELINE_STATE_DESC*) noexcept; }
 inline void ObserveCompute(ID3D12Device* device, const D3D12_COMPUTE_PIPELINE_STATE_DESC* desc, IUnknown* native, CreateCompute original) noexcept {
     computeSeen.fetch_add(1);
     IdentifyPipeline(native, desc->CS, 2);
@@ -161,6 +163,7 @@ inline void ObserveCompute(ID3D12Device* device, const D3D12_COMPUTE_PIPELINE_ST
         char sha[65]{};
         if (PTReflectionSha256(static_cast<const unsigned char*>(desc->CS.pShaderBytecode), desc->CS.BytecodeLength, sha) &&
             !std::strcmp(sha, kDirect.nativeSha)) {
+            rt_shadow_capture::RecordDirect(desc);
             ID3D12PipelineState* pso = nullptr;
             if (SUCCEEDED(native->QueryInterface(IID_PPV_ARGS(&pso)))) {
                 const unsigned kind = kDirectBit;
@@ -231,7 +234,9 @@ inline bool PatchSlot(void** slot, void* expected, void* hook) noexcept {
     return installed;
 }
 #include "spot_shadow_resolution_runtime.h"
+#include "rt_shadow_capture.h"
 inline void InstallList(ID3D12GraphicsCommandList* list) noexcept {
+    rt_shadow_capture::InstallList(list);
     void** table = *reinterpret_cast<void***>(list);
     AcquireSRWLockExclusive(&hookLock);
     ListHooks* available = nullptr;
@@ -284,7 +289,7 @@ inline HRESULT STDMETHODCALLTYPE CreateListHook(ID3D12Device* device, UINT node,
 inline void StartOverlay() noexcept;
 inline void InstallLiveDiagnostic(ID3D12Device* device) noexcept {
     if (!device) return;
-    spot_resolution_runtime::Install(GetModuleHandleW(L"renderer_rmdwin10_f.dll"));
+    rt_shadow_capture::Install(device);
     void** table = *reinterpret_cast<void***>(device);
     AcquireSRWLockExclusive(&hookLock);
     if (!originalGraphics) {

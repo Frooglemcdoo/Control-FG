@@ -17,7 +17,7 @@ inline constexpr unsigned kSpotBilinearReadyBit = 1u << 15;
 inline constexpr unsigned kSpotResolutionReadyBit = 1u << 16;
 struct ModeChoice { Mode mode; const wchar_t* label; };
 inline constexpr ModeChoice kModeChoices[] = {
-    {Mode::Native, L"NATIVE"}, {Mode::SpotResolution2x, L"SHADOW RES 2X"}
+    {Mode::Native, L"NATIVE / CAPTURE"}
 };
 inline constexpr unsigned kModeCount = sizeof(kModeChoices) / sizeof(kModeChoices[0]);
 inline unsigned RequiredVariant(Mode mode) noexcept {
