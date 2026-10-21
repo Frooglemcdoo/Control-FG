@@ -1,5 +1,6 @@
 #include "gpu_test_device.h"
 #include <array>
+#include "../src/rt_lights/layout.h"
 using Pixel=std::array<float,4>;
 using Job=std::array<UINT,4>;
 static ComPtr<ID3D12Resource> Texture(Device& gpu,UINT width,UINT height,DXGI_FORMAT format,const void* data,bool output=false) {
@@ -45,6 +46,7 @@ static Readback CopyOutput(Device& gpu,ID3D12Resource* texture) {
     gpu.list->CopyTextureRegion(&to,0,0,0,&from,nullptr);return {buffer,fp.Footprint.RowPitch};
 }
 int main() try {
+    std::cout<<std::unitbuf<<"Creating WARP device\n";
     Device gpu(false);
     D3D12_DESCRIPTOR_RANGE ranges[]={{D3D12_DESCRIPTOR_RANGE_TYPE_SRV,17,0,0,0},{D3D12_DESCRIPTOR_RANGE_TYPE_UAV,2,0,0,17}};
     D3D12_ROOT_PARAMETER params[3]{};params[0].ParameterType=D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;params[0].DescriptorTable={2,ranges};
@@ -54,9 +56,12 @@ int main() try {
     D3D12_ROOT_SIGNATURE_DESC desc{3,params,3,samplers,D3D12_ROOT_SIGNATURE_FLAG_NONE};
     ComPtr<ID3DBlob> bytes,error;Check(D3D12SerializeRootSignature(&desc,D3D_ROOT_SIGNATURE_VERSION_1,&bytes,&error));
     ComPtr<ID3D12RootSignature> root;Check(gpu.device->CreateRootSignature(0,bytes->GetBufferPointer(),bytes->GetBufferSize(),IID_PPV_ARGS(&root)));
+    std::cout<<"Root signature created; disassembling native shader\n";
     auto shader=Read("rt_lights_native_spot.dxbc");ComPtr<ID3DBlob> assembly;Check(D3DDisassemble(shader.data(),shader.size(),0,nullptr,&assembly));
+    std::cout<<"Native shader disassembled; creating pipeline\n";
     D3D12_COMPUTE_PIPELINE_STATE_DESC ps{};ps.pRootSignature=root.Get();ps.CS={shader.data(),shader.size()};
     ComPtr<ID3D12PipelineState> pipeline;Check(gpu.device->CreateComputePipelineState(&ps,IID_PPV_ARGS(&pipeline)));
+    std::cout<<"Native pipeline created; creating fixture resources\n";
     std::vector<float> constants(320,0);constants[0]=constants[1]=2;constants[2]=constants[3]=0.5f;
     for(UINT i=0;i<4;++i)constants[56+i*5]=1; // Native clip-to-view matrix at byte 224.
     auto cb=gpu.Upload(constants);auto cb1=gpu.Upload(std::vector<float>(64,0));
@@ -77,10 +82,44 @@ int main() try {
     auto jobTexture=Texture(gpu,8,8,DXGI_FORMAT_R32G32B32A32_UINT,jobs.data());TextureView(gpu,jobTexture.Get(),14);
     auto diffuse=Texture(gpu,8,8,DXGI_FORMAT_R32G32B32A32_FLOAT,nullptr,true);TextureView(gpu,diffuse.Get(),17,true);
     auto specular=Texture(gpu,8,8,DXGI_FORMAT_R32G32B32A32_FLOAT,nullptr,true);TextureView(gpu,specular.Get(),18,true);
+    std::cout<<"Fixture resources created; recording native dispatch\n";
     gpu.list->SetComputeRootSignature(root.Get());gpu.list->SetPipelineState(pipeline.Get());
     gpu.list->SetComputeRootDescriptorTable(0,gpu.views->GetGPUDescriptorHandleForHeapStart());
     gpu.list->SetComputeRootConstantBufferView(1,cb->GetGPUVirtualAddress());gpu.list->SetComputeRootConstantBufferView(2,cb1->GetGPUVirtualAddress());gpu.list->Dispatch(1,1,1);
-    auto d=CopyOutput(gpu,diffuse.Get());auto s=CopyOutput(gpu,specular.Get());gpu.Submit();
+    auto d=CopyOutput(gpu,diffuse.Get());auto s=CopyOutput(gpu,specular.Get());
+    gpu.Transition(diffuse.Get(),D3D12_RESOURCE_STATE_COPY_SOURCE,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+    gpu.Transition(specular.Get(),D3D12_RESOURCE_STATE_COPY_SOURCE,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+    std::vector<rt_lights::ShadowTask> tasks(64);
+    for(UINT i=0;i<64;++i){tasks[i].lightId=jobs[i][0];tasks[i].receiverId=jobs[i][2]*2+jobs[i][1];tasks[i].frameTag=19;}
+    // A second valid extraction with a stale task must not reach composition.
+    tasks[2].frameTag=18;
+    auto taskBuffer=gpu.Upload(tasks);
+    auto contributionBuffer=gpu.Buffer(64*sizeof(rt_lights::Contribution),D3D12_HEAP_TYPE_DEFAULT,D3D12_RESOURCE_STATE_UNORDERED_ACCESS,true);
+    TextureView(gpu,jobTexture.Get(),19);TextureView(gpu,diffuse.Get(),20);TextureView(gpu,specular.Get(),21);
+    gpu.View(taskBuffer.Get(),22,sizeof(rt_lights::ShadowTask),64,false);
+    gpu.View(contributionBuffer.Get(),23,sizeof(rt_lights::Contribution),64,true);
+    D3D12_DESCRIPTOR_RANGE packRanges[]={{D3D12_DESCRIPTOR_RANGE_TYPE_SRV,4,0,0,0},{D3D12_DESCRIPTOR_RANGE_TYPE_UAV,1,0,0,4}};
+    D3D12_ROOT_PARAMETER packParams[2]{};
+    packParams[0].ParameterType=D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;packParams[0].DescriptorTable={2,packRanges};
+    packParams[1].ParameterType=D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;packParams[1].Constants={0,0,4};
+    D3D12_ROOT_SIGNATURE_DESC packDesc{2,packParams,0,nullptr,D3D12_ROOT_SIGNATURE_FLAG_NONE};
+    Check(D3D12SerializeRootSignature(&packDesc,D3D_ROOT_SIGNATURE_VERSION_1,&bytes,&error));
+    ComPtr<ID3D12RootSignature> packRoot;Check(gpu.device->CreateRootSignature(0,bytes->GetBufferPointer(),bytes->GetBufferSize(),IID_PPV_ARGS(&packRoot)));
+    auto packShader=Read("rt_lights_native_pack.dxil");ps.pRootSignature=packRoot.Get();ps.CS={packShader.data(),packShader.size()};
+    ComPtr<ID3D12PipelineState> packPipeline;Check(gpu.device->CreateComputePipelineState(&ps,IID_PPV_ARGS(&packPipeline)));
+    gpu.list->SetComputeRootSignature(packRoot.Get());gpu.list->SetPipelineState(packPipeline.Get());
+    auto packTable=gpu.views->GetGPUDescriptorHandleForHeapStart();packTable.ptr+=19ULL*gpu.descriptorSize;
+    gpu.list->SetComputeRootDescriptorTable(0,packTable);const UINT batch[]={2,2,19,64};gpu.list->SetComputeRoot32BitConstants(1,4,batch,0);gpu.list->Dispatch(1,1,1);
+    gpu.Transition(contributionBuffer.Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS,D3D12_RESOURCE_STATE_COPY_SOURCE);
+    auto packedReadback=gpu.Buffer(64*sizeof(rt_lights::Contribution),D3D12_HEAP_TYPE_READBACK,D3D12_RESOURCE_STATE_COPY_DEST);
+    gpu.list->CopyResource(packedReadback.Get(),contributionBuffer.Get());std::cout<<"Submitting GPU work\n";gpu.Submit();std::cout<<"GPU work completed\n";
+    void* packedData=nullptr;Check(packedReadback->Map(0,nullptr,&packedData));auto* packed=static_cast<rt_lights::Contribution*>(packedData);
+    for(UINT i=0;i<64;++i) {
+        if(i<2){Require(packed[i].visibilityIndex==i && packed[i].receiverId==0 && packed[i].lightId==i && packed[i].frameTag==19,"Packed identity mismatch");}
+        else Require(packed[i].visibilityIndex==0xffffffff,"Invalid or stale extraction reached composition");
+    }
+    Require(packed[0].diffuse.x>0 && packed[1].diffuse.z>0,"Packed native energy missing");
+    packedReadback->Unmap(0,nullptr);
     for(auto* result:{&d,&s}) {
         void* mapped=nullptr;Check(result->buffer->Map(0,nullptr,&mapped));auto* pixels=static_cast<Pixel*>(mapped);
         for(UINT i=0;i<8;++i){auto p=pixels[i];std::cout<<(result==&d?"diffuse":"specular")<<" task="<<i<<" rgb="<<p[0]<<','<<p[1]<<','<<p[2]<<" valid="<<p[3]<<'\n';for(float x:p)Require(std::isfinite(x),"Nonfinite native contribution");Require(p[3]==(i<3?1.0f:0.0f),"Wrong extraction validity");}
@@ -90,5 +129,5 @@ int main() try {
         for(UINT i=3;i<8;++i)Require(pixels[i]==Pixel{},"Invalid work retained output");
         result->buffer->Unmap(0,nullptr);
     }
-    std::cout<<"PASS: native spotlight extraction on WARP; separate colors, receiver mapping and invalid work rejection\n";return 0;
+    std::cout<<"PASS: native spotlight extraction on WARP; separate colors, receiver mapping, invalid work rejection and frame-keyed contribution packing\n";return 0;
 } catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}

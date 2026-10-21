@@ -4,6 +4,8 @@ on:
     branches: [experiment/native-lighting-live-r54]
     paths:
       - assets/rt-lights/**
+      - src/shaders/rt_lights_native_pack.hlsl
+      - src/rt_lights/**
       - tools/rt_lights_native_extract.py
       - tools/test-rt-lights-native.cpp
       - tools/gpu_test_device.h
@@ -29,9 +31,13 @@ jobs:
           $ErrorActionPreference='Stop'
           $vswhere="${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
           $vs=& $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          $dxc=Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Filter dxc.exe -Recurse | Where-Object {$_.FullName -match '\\x64\\'} | Sort-Object FullName -Descending | Select-Object -First 1
+          if(-not $dxc){throw 'DXC unavailable'}
+          & $dxc.FullName -T cs_6_0 -E main -HV 2021 -Fo rt_lights_native_pack.dxil src/shaders/rt_lights_native_pack.hlsl
+          if($LASTEXITCODE -ne 0){throw 'Native packing shader compilation failed'}
           $bat="call `"$vs\VC\Auxiliary\Build\vcvars64.bat`"`r`ncl /nologo /std:c++17 /EHsc /W4 /WX /O2 /MT tools\test-rt-lights-native.cpp /FeNative-Light-Test.exe /link d3d12.lib dxgi.lib d3dcompiler.lib`r`nexit /b %errorlevel%"
           [IO.File]::WriteAllText("$pwd/compile-native.cmd",$bat)
           cmd /c compile-native.cmd
           if($LASTEXITCODE -ne 0){throw 'Native fixture compilation failed'}
           ./Native-Light-Test.exe
-          if($LASTEXITCODE -ne 0){throw 'Native extraction GPU validation failed'}
+          if($LASTEXITCODE -ne 0){throw "Native extraction GPU validation failed: exit $LASTEXITCODE"}
