@@ -26,6 +26,11 @@
     "rt_spot_spatial1.dxbc": {
       "bytes": 12388,
       "sha256": "ef654dc4b4cd49f2811c9002f894a7cb240a348cbde2fa625fabfaebcafd7b7c"
+    },
+    "rt_spot_multi.dxil": {
+      "bytes": 49916,
+      "sha256": "38a6e8690b115446df8f03f0f82a8241cd032a027117299444ef36e8464067ec"
     }
-  }
+  },
+  "native_multi_ray": "d5efe2c2219257e2a7b51bbd65a7fa3b80cdb56fb7e6444223f8b4d7ee45a1a9"
 }

@@ -23,11 +23,11 @@ def replace_once(source, before, after):
     return source.replace(before, after)
 
 
-def segment_instructions(index, sx, sy):
+def segment_instructions(index, sx, sy, axes=AXES):
     """Emit a sampled emitter-minus-origin vector, safe direction and TMax."""
     prefix = f'SpotSample{index}'
     lines = []
-    for axis, emitter, dx, dy, origin in AXES:
+    for axis, emitter, dx, dy, origin in axes:
         # Subtract before adding disk offsets to avoid rounding a small disk
         # offset away when the world-space emitter position is large.
         lines.extend([
@@ -42,7 +42,7 @@ def segment_instructions(index, sx, sy):
         f'  %{prefix}Nonzero = fcmp fast ogt float %{prefix}Length, 0.000000e+00',
         f'  %{prefix}Divisor = select i1 %{prefix}Nonzero, float %{prefix}Length, float 1.000000e+00',
         f'  %{prefix}Max = fmul fast float %{prefix}Length, {ENDPOINT_FRACTION_IR}'])
-    for axis, *_ in AXES:
+    for axis, *_ in axes:
         lines.append(f'  %{prefix}{axis}Direction = fdiv fast float %{prefix}{axis}, %{prefix}Divisor')
     return lines
 
@@ -99,3 +99,24 @@ def four_spot_samples(source):
         ('select i1 %255, float %251, float 5.000000e+04', 'select i1 %255, float %SpotNearest, float 5.000000e+04')):
         source = replace_once(source, before, after)
     return source
+
+
+def multi_spot_samples(source):
+    """Retain native configurable sample loop and point rays for the R64 variant."""
+    axes = (
+        ('x', '%195', '%.i0282', '%.i0288', '%.i0279'),
+        ('y', '%197', '%.i1283', '%.i1289', '%.i1280'),
+        ('z', '%199', '%.i2284', '%.i2290', '%.i2281'),
+    )
+    source = replace_once(source, '%236 = fmul fast float %235, %177',
+        '%236 = fmul fast float 2.000000e+00, %177')
+    source = replace_once(source, '  store float %FMin, float* %213, align 8',
+        '\n'.join(segment_instructions(0,1,1,axes)) +
+        '\n  store float %SpotSample0Max, float* %213, align 8')
+    source = replace_once(source, 'i32 157, %dx.types.Handle %256, i32 4, i32 1',
+        'i32 157, %dx.types.Handle %256, i32 0, i32 1')
+    source = replace_once(source,
+        'float %.i0297, float %.i1298, float %.i2299, float %FMin, %struct.ShadowHitData* nonnull %12)',
+        'float %SpotSample0xDirection, float %SpotSample0yDirection, float %SpotSample0zDirection, float %SpotSample0Max, %struct.ShadowHitData* nonnull %12)')
+    return replace_once(source, '%258 = fcmp fast olt float %257, %FMin',
+        '%258 = fcmp fast olt float %257, %SpotSample0Max')

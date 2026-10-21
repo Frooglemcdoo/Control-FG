@@ -14,7 +14,7 @@ import subprocess
 import tempfile
 from dxbc_checksum import checksum
 from rt_spot_history import current_spotlight_history
-from rt_spot_samples import four_spot_samples
+from rt_spot_samples import four_spot_samples, multi_spot_samples
 from rt_spot_filter import SPATIAL_SHAS, bounded_penumbra
 
 MULTI_RAY_SHA = 'd5efe2c2219257e2a7b51bbd65a7fa3b80cdb56fb7e6444223f8b4d7ee45a1a9'
@@ -36,19 +36,7 @@ def replace_once(source, before, after):
 def full_distance(source, single_ray=False):
     if single_ray:
         return four_spot_samples(source)
-    # Legacy multi-light capture path is not installed by the current runtime.
-    distance, radius_step, payload_pointer, payload, returned, test = (210, 233, 213, 12, 257, 258)
-    radius = f'  %{radius_step} = fadd fast float %FMin, -5.000000e-01'
-    source = replace_once(source, radius,
-        f'  %SpotFullDistance = call float @dx.op.binary.f32(i32 35, float %{distance}, float 0.000000e+00)\n' + radius)
-    for before, after in (
-        (f'store float %FMin, float* %{payload_pointer}', f'store float %SpotFullDistance, float* %{payload_pointer}'),
-        (f'float %FMin, %struct.ShadowHitData* nonnull %{payload})',
-         f'float %SpotFullDistance, %struct.ShadowHitData* nonnull %{payload})'),
-        (f'%{test} = fcmp fast olt float %{returned}, %FMin',
-         f'%{test} = fcmp fast olt float %{returned}, %SpotFullDistance')):
-        source = replace_once(source, before, after)
-    return source
+    return multi_spot_samples(source)
 
 def patch_instruction(data, dword, expected_opcode, words):
     data = bytearray(data)
@@ -70,10 +58,11 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument('capture', type=Path)
     ap.add_argument('output', type=Path)
+    ap.add_argument('--multi-ray-capture', type=Path, help='Use the configurable-loop native ray capture')
     for name in ('dxc', 'assembler', 'dxv'): ap.add_argument('--' + name, required=True)
     args = ap.parse_args()
-    ray_sha = SINGLE_RAY_SHA if (args.capture / f'dxil_library-{SINGLE_RAY_SHA}.dxbc').exists() else MULTI_RAY_SHA
-    ray = args.capture / f'dxil_library-{ray_sha}.dxbc'
+    ray_sha = MULTI_RAY_SHA if args.multi_ray_capture else SINGLE_RAY_SHA
+    ray = (args.multi_ray_capture or args.capture) / f'dxil_library-{ray_sha}.dxbc'
     checked(ray, ray_sha)
     light = checked(args.capture / f'compute_cs-{LIGHT_SHA}.dxbc', LIGHT_SHA)
     temporal = checked(args.capture / f'compute_cs-{TEMPORAL_SHA}.dxbc', TEMPORAL_SHA)
@@ -93,7 +82,8 @@ def main():
     # mov r1.xyzw, r1.zwzz; current visibility only, for history reset on transition.
     temporal = patch_instruction(temporal, 324, 50, [0x05000036, 0x001000f2, 1, 0x00100ae6, 1])
     args.output.mkdir(parents=True, exist_ok=True)
-    outputs = {'rt_spot_full.dxil': full, 'rt_spot_light.dxbc': light, 'rt_spot_reset.dxbc': temporal, 'rt_spot_history.dxbc': history}
+    ray_name = 'rt_spot_multi.dxil' if args.multi_ray_capture else 'rt_spot_full.dxil'
+    outputs = {ray_name: full, 'rt_spot_light.dxbc': light, 'rt_spot_reset.dxbc': temporal, 'rt_spot_history.dxbc': history}
     for index, sha in enumerate(SPATIAL_SHAS):
         native = checked(args.capture / f'compute_cs-{sha}.dxbc', sha)
         outputs[f'rt_spot_spatial{index}.dxbc'] = bounded_penumbra(native)

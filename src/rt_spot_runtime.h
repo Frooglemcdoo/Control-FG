@@ -5,6 +5,7 @@ namespace rt_spot_runtime {
 using CreateComputeFn = HRESULT (STDMETHODCALLTYPE*)(ID3D12Device*, const D3D12_COMPUTE_PIPELINE_STATE_DESC*, REFIID, void**);
 using PassFn = void (*)(void*, void*, void*, void*);
 inline constexpr char kRaySha[] = "3c6bee7eea5b5758dcaf96b400bb7589b4af2031c17bf6ba5ce2343623ddb618";
+inline constexpr char kMultiRaySha[] = "d5efe2c2219257e2a7b51bbd65a7fa3b80cdb56fb7e6444223f8b4d7ee45a1a9";
 inline constexpr char kLightSha[] = "6af3f7403a4e33ef1c478c386de8d0f6534ba9b852a75a9302c9b760c926b621";
 inline constexpr char kTemporalSha[] = "feb37637481fed22a3cd4d256da613d1f61aec70fc11ff5e42aa2a585101fedb";
 inline constexpr const char* kSpatialSha[] = {
@@ -16,7 +17,7 @@ inline const GUID kKind = {0xe631a601,0x6651,0x4911,{0x80,0x90,0x11,0x71,0x14,0x
 inline const GUID kRecord = {0xe631a601,0x6651,0x4911,{0x80,0x90,0x11,0x71,0x14,0x28,0x30,0x03}};
 inline const GUID kState = {0xe631a601,0x6651,0x4911,{0x80,0x90,0x11,0x71,0x14,0x28,0x30,0x04}};
 inline const GUID kHistoryVariant = {0xe631a601,0x6651,0x4911,{0x80,0x90,0x11,0x71,0x14,0x28,0x30,0x05}};
-inline std::vector<unsigned char> rayBytes, lightBytes, resetBytes, historyBytes;
+inline std::vector<unsigned char> rayBytes, multiRayBytes, lightBytes, resetBytes, historyBytes;
 inline std::vector<unsigned char> spatialBytes[2];
 inline SRWLOCK installLock = SRWLOCK_INIT;
 inline std::atomic<unsigned> components{0}, reports{0};
@@ -49,7 +50,7 @@ inline void ReportShadowFiltering(bool fullRR, bool contact, bool temporal, int 
         last.temporal != temporal || last.size != size || last.step != step) {
         Trace("rt_spot_filter full_rr=%u contact=%u native_preserved=1 temporal=%u spatial_size=%d spatial_step=%d",
             unsigned(fullRR),unsigned(contact),unsigned(temporal),size,step);
-        Trace("rt_spot_history neighborhood_clip=0 spotlight_history=0 point_history=native spotlight_only=1 transition_reset=1 spot_samples=4 closest_blocker=1 fixed_emitter_radius=1 bounded_penumbra=1 per_sample_endpoint=1 near_distance_cutoff=0");
+        Trace("rt_spot_history neighborhood_clip=0 spotlight_history=0 point_history=native spotlight_only=1 transition_reset=1 spot_samples=variant closest_blocker=1 fixed_emitter_radius=1 bounded_penumbra=1 per_sample_endpoint=1 near_distance_cutoff=0");
         last = {true, fullRR, contact, temporal, size, step};
     }
 }
@@ -91,6 +92,8 @@ inline void Install() noexcept {
         char sha[65]{}; bool loaded = false;
         filesReady = PTReflectionLoadSidecar(L"rt_spot_full.dxil","RT_SPOT_RAY",rayBytes,sha,loaded) &&
             !strcmp(sha,"b07be6430ca5b2630457716be48bdd02554b8f7a4c1358022651ffdbf1b5a996") &&
+            PTReflectionLoadSidecar(L"rt_spot_multi.dxil","RT_SPOT_MULTI",multiRayBytes,sha,loaded) &&
+            !strcmp(sha,"38a6e8690b115446df8f03f0f82a8241cd032a027117299444ef36e8464067ec") &&
             PTReflectionLoadSidecar(L"rt_spot_light.dxbc","RT_SPOT_LIGHT",lightBytes,sha,loaded) &&
             !strcmp(sha,"a844888cdd5478605574157b323cb3376369ae9517c4954bf38bee21b664ecd7") &&
             PTReflectionLoadSidecar(L"rt_spot_reset.dxbc","RT_SPOT_RESET",resetBytes,sha,loaded) &&
@@ -166,11 +169,16 @@ inline HRESULT CreateAugmented(ID3D12Device5* device, const D3D12_STATE_OBJECT_D
     auto original = rt_shadow_capture::originalState;
     if (!desc || desc->Type != D3D12_STATE_OBJECT_TYPE_RAYTRACING_PIPELINE || !filesReady)
         return original(device,desc,iid,out);
-    bool target = false;
-    for (UINT i=0;i<desc->NumSubobjects;++i)
-        if (desc->pSubobjects[i].Type == D3D12_STATE_SUBOBJECT_TYPE_DXIL_LIBRARY && desc->pSubobjects[i].pDesc)
-            target |= Matches(static_cast<const D3D12_DXIL_LIBRARY_DESC*>(desc->pSubobjects[i].pDesc)->DXILLibrary,kRaySha);
-    if (!target) return original(device,desc,iid,out);
+    const std::vector<unsigned char>* replacementBytes = nullptr;
+    const char* variantName = nullptr;
+    for (UINT i=0;i<desc->NumSubobjects;++i) {
+        const auto& object = desc->pSubobjects[i];
+        if (object.Type != D3D12_STATE_SUBOBJECT_TYPE_DXIL_LIBRARY || !object.pDesc) continue;
+        const auto& shader = static_cast<const D3D12_DXIL_LIBRARY_DESC*>(object.pDesc)->DXILLibrary;
+        if (Matches(shader,kRaySha)) { replacementBytes=&rayBytes; variantName="single"; }
+        else if (Matches(shader,kMultiRaySha)) { replacementBytes=&multiRayBytes; variantName="configurable"; }
+    }
+    if (!replacementBytes) return original(device,desc,iid,out);
     try {
         std::vector<D3D12_STATE_SUBOBJECT> objects(desc->pSubobjects,desc->pSubobjects+desc->NumSubobjects);
         objects.reserve(desc->NumSubobjects+1);
@@ -194,7 +202,7 @@ inline HRESULT CreateAugmented(ID3D12Device5* device, const D3D12_STATE_OBJECT_D
             associations[i].pSubobjectToAssociate=&objects[targetIndex]; objects[i].pDesc=&associations[i];
         }
         D3D12_EXPORT_DESC exportDesc{L"controlFullSpotRayGeneration",L"spotRayGeneration",D3D12_EXPORT_FLAG_NONE};
-        D3D12_DXIL_LIBRARY_DESC extra{{rayBytes.data(),rayBytes.size()},1,&exportDesc};
+        D3D12_DXIL_LIBRARY_DESC extra{{replacementBytes->data(),replacementBytes->size()},1,&exportDesc};
         objects.push_back({D3D12_STATE_SUBOBJECT_TYPE_DXIL_LIBRARY,&extra});
         auto custom = *desc; custom.NumSubobjects=static_cast<UINT>(objects.size()); custom.pSubobjects=objects.data();
         HRESULT hr=original(device,&custom,iid,out);
@@ -215,7 +223,7 @@ inline HRESULT CreateAugmented(ID3D12Device5* device, const D3D12_STATE_OBJECT_D
             prepared=state->SetPrivateDataInterface(kRecord,record.Get());
         }
         if (SUCCEEDED(prepared)) components.fetch_or(kRayComponent);
-        RefreshReady();Trace("rt_spot_state ready=%u native_exports_retained=1",unsigned(SUCCEEDED(prepared)));
+        RefreshReady();Trace("rt_spot_state ready=%u native_exports_retained=1 variant=%s",unsigned(SUCCEEDED(prepared)),variantName);
         return hr;
     } catch (...) { return original(device,desc,iid,out); }
 }
