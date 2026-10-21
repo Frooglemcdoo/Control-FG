@@ -54,3 +54,17 @@ def bounded_history(data):
         w[70]=6
         w[316:316]=history_instructions()
     return transform_shex(data, transform)
+
+
+def current_spotlight_history(data):
+    """Diagnostic: remove spotlight history, preserving native point blending.
+
+    Before the native history-minus-current operation, replace spotlight history
+    with current spotlight visibility. x/z/w are spotlight copies; y is point.
+    Spatial filtering still follows. No extra resource or render-thread work.
+    """
+    def transform(words):
+        assert words[316:324] == [0x08000000, 0x001000f2, 2,
+            0x80100ae6, 0x41, 1, 0x00100e46, 2], 'Native history delta changed'
+        words[316:316] = instruction('mov', dest(2,13), source(1,'zzzz'))
+    return transform_shex(data, transform)

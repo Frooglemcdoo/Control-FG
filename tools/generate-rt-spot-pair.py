@@ -13,7 +13,7 @@ import struct
 import subprocess
 import tempfile
 from dxbc_checksum import checksum
-from rt_spot_history import bounded_history
+from rt_spot_history import current_spotlight_history
 from rt_spot_samples import four_spot_samples
 from rt_spot_filter import SPATIAL_SHAS, bounded_penumbra
 
@@ -89,7 +89,7 @@ def main():
         full = signed.read_bytes()
     # mov r0.x, 1; replaces final static/dynamic map visibility before its zero gate.
     light = patch_instruction(light, 1707, 55, [0x05000036, 0x00100012, 0, 0x00004001, 0x3f800000])
-    history = bounded_history(temporal)
+    history = current_spotlight_history(temporal)
     # mov r1.xyzw, r1.zwzz; current visibility only, for history reset on transition.
     temporal = patch_instruction(temporal, 324, 50, [0x05000036, 0x001000f2, 1, 0x00100ae6, 1])
     args.output.mkdir(parents=True, exist_ok=True)
