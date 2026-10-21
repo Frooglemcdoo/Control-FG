@@ -45,6 +45,10 @@ def emit(name, *operands, flags=0):
     return [((len(words) + 1) << 24) | opnames.index(name) | flags, *words]
 
 
+def scalar(index, component='x'):
+    return [0x10000a | ('xyzw'.index(component) << 4), index]
+
+
 def thread(swizzle='xyzw'):
     return [(src(0, swizzle)[0] & ~0x300000) | (32 << 12)]
 
@@ -54,22 +58,22 @@ def preamble():
     code = emit('mov', dst(24, 'xy'), thread('xyxx'))
     code += emit('mov', dst(24, 'zw'), literal(0))
     for slot in (0, 1):
-        code += emit('store_uav_typed', resource(slot, kind=30), thread('xyyy'), literal(0))
+        code += emit('store_uav_typed', [0x21e0f2, slot, slot], thread('xyyy'), [0x4002, 0, 0, 0, 0])
     code += emit('ld', dst(23), src(24, 'xyww'), resource(14))
     code += emit('ine', dst(25, 'x'), src(23, 'w'), literal(1))
-    code += emit('if', src(25, 'x'), flags=1 << 18)
+    code += emit('if', scalar(25), flags=1 << 18)
     code += emit('ret') + emit('endif')
     code += emit('bufinfo', dst(25, 'x'), resource(13))
     code += emit('uge', dst(25, 'x'), src(23, 'x'), src(25, 'x'))
     code += emit('ieq', dst(25, 'y'), src(23, 'x'), literal(65535))
     code += emit('or', dst(25, 'x'), src(25, 'x'), src(25, 'y'))
-    code += emit('if', src(25, 'x'), flags=1 << 18)
+    code += emit('if', scalar(25), flags=1 << 18)
     code += emit('ret') + emit('endif')
     # Use actual GBuffer dimensions, not padded atlas or output resolution.
     code += emit('resinfo', dst(25, 'xy'), literal(0), resource(0), flags=2 << 11)
     code += emit('uge', dst(25, 'xy'), src(23, 'yzyy'), src(25, 'xyxx'))
     code += emit('or', dst(25, 'x'), src(25, 'x'), src(25, 'y'))
-    code += emit('if', src(25, 'x'), flags=1 << 18)
+    code += emit('if', scalar(25), flags=1 << 18)
     code += emit('ret') + emit('endif')
     code += emit('mov', dst(22, 'xy'), src(23, 'yzyy'))
     return code

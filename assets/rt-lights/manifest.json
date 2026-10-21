@@ -3,8 +3,8 @@
   "input_t14": "uint4(lightIndex, receiverX, receiverY, enabled=1)",
   "outputs": {
     "rt_lights_native_spot.dxbc": {
-      "bytes": 31624,
-      "sha256": "174e5bc8c1b05a214a60982ea79858628729c1e9d9f21fe6e7d26d889a35e00a"
+      "bytes": 31648,
+      "sha256": "0e07a19de2529b518f4da8b116c2f29c11782763bc8b704682f4ace331071273"
     }
   },
   "output_u0_u1": "float4(diffuse/specular RGB, validity)",
