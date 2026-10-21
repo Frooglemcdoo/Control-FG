@@ -15,7 +15,7 @@ import tempfile
 from dxbc_checksum import checksum
 from rt_spot_history import bounded_history
 from rt_spot_diagnostics import raw_history, raw_spatial
-from rt_spot_samples import four_spot_samples, multi_spot_samples
+from rt_spot_samples import four_spot_samples
 from rt_spot_filter import SPATIAL_SHAS, bounded_penumbra
 
 MULTI_RAY_SHA = 'd5efe2c2219257e2a7b51bbd65a7fa3b80cdb56fb7e6444223f8b4d7ee45a1a9'
@@ -34,10 +34,10 @@ def replace_once(source, before, after):
         raise ValueError('Native DXIL instruction anchor changed')
     return source.replace(before, after)
 
-def full_distance(source, single_ray=False):
-    if single_ray:
-        return four_spot_samples(source)
-    return multi_spot_samples(source)
+def full_distance(source, single_ray=True):
+    if not single_ray:
+        raise ValueError('Only the canonical R71 replacement is generated')
+    return four_spot_samples(source)
 
 def patch_instruction(data, dword, expected_opcode, words):
     data = bytearray(data)
@@ -59,11 +59,10 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument('capture', type=Path)
     ap.add_argument('output', type=Path)
-    ap.add_argument('--multi-ray-capture', type=Path, help='Use the configurable-loop native ray capture')
     for name in ('dxc', 'assembler', 'dxv'): ap.add_argument('--' + name, required=True)
     args = ap.parse_args()
-    ray_sha = MULTI_RAY_SHA if args.multi_ray_capture else SINGLE_RAY_SHA
-    ray = (args.multi_ray_capture or args.capture) / f'dxil_library-{ray_sha}.dxbc'
+    ray_sha = SINGLE_RAY_SHA
+    ray = args.capture / f'dxil_library-{ray_sha}.dxbc'
     checked(ray, ray_sha)
     light = checked(args.capture / f'compute_cs-{LIGHT_SHA}.dxbc', LIGHT_SHA)
     temporal = checked(args.capture / f'compute_cs-{TEMPORAL_SHA}.dxbc', TEMPORAL_SHA)
@@ -84,7 +83,7 @@ def main():
     # mov r1.xyzw, r1.zwzz; current visibility only, for history reset on transition.
     temporal = patch_instruction(temporal, 324, 50, [0x05000036, 0x001000f2, 1, 0x00100ae6, 1])
     args.output.mkdir(parents=True, exist_ok=True)
-    ray_name = 'rt_spot_multi.dxil' if args.multi_ray_capture else 'rt_spot_full.dxil'
+    ray_name = 'rt_spot_full.dxil'
     outputs = {'rt_spot_raw_history.dxbc': raw_temporal, ray_name: full, 'rt_spot_light.dxbc': light, 'rt_spot_reset.dxbc': temporal, 'rt_spot_history.dxbc': history}
     for index, sha in enumerate(SPATIAL_SHAS):
         native = checked(args.capture / f'compute_cs-{sha}.dxbc', sha)

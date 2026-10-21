@@ -18,7 +18,7 @@ inline const GUID kRecord = {0xe631a601,0x6651,0x4911,{0x80,0x90,0x11,0x71,0x14,
 inline const GUID kState = {0xe631a601,0x6651,0x4911,{0x80,0x90,0x11,0x71,0x14,0x28,0x30,0x04}};
 inline const GUID kRawVariant = {0xe631a601,0x6651,0x4911,{0x80,0x90,0x11,0x71,0x14,0x28,0x30,0x06}};
 inline const GUID kHistoryVariant = {0xe631a601,0x6651,0x4911,{0x80,0x90,0x11,0x71,0x14,0x28,0x30,0x05}};
-inline std::vector<unsigned char> rayBytes, multiRayBytes, lightBytes, resetBytes, historyBytes;
+inline std::vector<unsigned char> rayBytes, lightBytes, resetBytes, historyBytes;
 inline std::vector<unsigned char> spatialBytes[2], rawSpatialBytes[2], rawHistoryBytes;
 inline SRWLOCK installLock = SRWLOCK_INIT;
 inline std::atomic<unsigned> components{0}, reports{0};
@@ -53,7 +53,7 @@ inline void ReportShadowFiltering(bool fullRR, bool contact, bool temporal, int 
         last.temporal != temporal || last.size != size || last.step != step) {
         Trace("rt_spot_filter full_rr=%u contact=%u native_preserved=1 temporal=%u spatial_size=%d spatial_step=%d",
             unsigned(fullRR),unsigned(contact),unsigned(temporal),size,step);
-        Trace("rt_spot_history filter_policy=mode_specific point_history=native spotlight_only=1 transition_reset=1 spot_samples=4 sample_pattern=r71_symmetric closest_blocker=1 fixed_emitter_radius=1 bounded_penumbra=1 per_sample_endpoint=0 near_distance_cutoff=1 baseline=R71");
+        Trace("rt_spot_history filter_policy=mode_specific point_history=native spotlight_only=1 transition_reset=1 spot_samples=4 sample_pattern=r71_symmetric closest_blocker=1 fixed_emitter_radius=1 bounded_penumbra=1 per_sample_endpoint=0 near_distance_cutoff=1 baseline=R71_exact point_samples=1");
         last = {true, fullRR, contact, temporal, size, step};
     }
 }
@@ -84,6 +84,12 @@ inline void HookPass(void* a, void* b, void* c, void* d) {
             if (pass.reset || reports.fetch_add(1) < 8)
                 Trace("rt_spot_pass requested=%u rays=%u full=%u composed=%u reset=%u gpu_confirmed=0",
                     unsigned(pass.requested),unsigned(pass.raySeen),unsigned(pass.fullRay),unsigned(pass.composed),unsigned(pass.reset));
+            if (pass.reset && pass.fullRay && verifiedRenderer) {
+                const auto* base = reinterpret_cast<const unsigned char*>(verifiedRenderer);
+                int nativeSamples = 0;
+                memcpy(&nativeSamples,base+0x913c90,sizeof(nativeSamples));
+                Trace("rt_spot_sample_policy native_shadow_samples=%d replacement=R71_exact spot_samples=4 point_samples=1 engine_option_unchanged=1",nativeSamples);
+            }
             if (pass.reset && pass.fullRay)
                 Trace("rt_spot_test seq=%llu mode=%s raw=%u maps=%u expanded_casters=%u",
                     LiveSelection::Sequence(pass.selectionState),ModeName(pass.mode),
@@ -109,8 +115,6 @@ inline void Install() noexcept {
             !strcmp(sha,"f84b55c052931f960ef28c78b270faa69884c69626a30f6b8666728c64511628") &&
             PTReflectionLoadSidecar(L"rt_spot_full.dxil","RT_SPOT_RAY",rayBytes,sha,loaded) &&
             !strcmp(sha,"f0127f6267359eccf61fda126ecc9ff733d0b9090f6e9d16a88f65840e7d3ab8") &&
-            PTReflectionLoadSidecar(L"rt_spot_multi.dxil","RT_SPOT_MULTI",multiRayBytes,sha,loaded) &&
-            !strcmp(sha,"7f454565838e18d05911bc9b64b5a81622c917d9d67e3fe92ab92d33b5b32ec7") &&
             PTReflectionLoadSidecar(L"rt_spot_light.dxbc","RT_SPOT_LIGHT",lightBytes,sha,loaded) &&
             !strcmp(sha,"a844888cdd5478605574157b323cb3376369ae9517c4954bf38bee21b664ecd7") &&
             PTReflectionLoadSidecar(L"rt_spot_reset.dxbc","RT_SPOT_RESET",resetBytes,sha,loaded) &&
@@ -208,7 +212,10 @@ inline HRESULT CreateAugmented(ID3D12Device5* device, const D3D12_STATE_OBJECT_D
         if (object.Type != D3D12_STATE_SUBOBJECT_TYPE_DXIL_LIBRARY || !object.pDesc) continue;
         const auto& shader = static_cast<const D3D12_DXIL_LIBRARY_DESC*>(object.pDesc)->DXILLibrary;
         if (Matches(shader,kRaySha)) { replacementBytes=&rayBytes; variantName="single"; }
-        else if (Matches(shader,kMultiRaySha)) { replacementBytes=&multiRayBytes; variantName="configurable"; }
+        // The single-library raygen uses a subset of the configurable library's
+        // bindings. Both native variants therefore run the identical R71 binary.
+        // Keep the native hit/miss tables and use their original handlers.
+        else if (Matches(shader,kMultiRaySha)) { replacementBytes=&rayBytes; variantName="configurable"; }
     }
     if (!replacementBytes) return original(device,desc,iid,out);
     try {
@@ -255,7 +262,7 @@ inline HRESULT CreateAugmented(ID3D12Device5* device, const D3D12_STATE_OBJECT_D
             prepared=state->SetPrivateDataInterface(kRecord,record.Get());
         }
         if (SUCCEEDED(prepared)) components.fetch_or(kRayComponent);
-        RefreshReady();Trace("rt_spot_state ready=%u native_exports_retained=1 variant=%s",unsigned(SUCCEEDED(prepared)),variantName);
+        RefreshReady();Trace("rt_spot_state ready=%u native_exports_retained=1 variant=%s replacement=R71_exact spot_samples=4 point_samples=1",unsigned(SUCCEEDED(prepared)),variantName);
         return hr;
     } catch (...) { return original(device,desc,iid,out); }
 }
