@@ -54,7 +54,7 @@ inline void ReportShadowFiltering(bool fullRR, bool contact, bool temporal, int 
     }
 }
 inline void RefreshReady() noexcept {
-    if (scopeReady && components.load() == kRequiredComponents && !disabled.load()) readyMask.fetch_or(kRtSpotReadyBit);
+    if (scopeReady && spot_culling_runtime::ready.load() && components.load() == kRequiredComponents && !disabled.load()) readyMask.fetch_or(kRtSpotReadyBit);
 }
 inline bool Matches(const D3D12_SHADER_BYTECODE& shader, const char* expected) noexcept {
     if (!shader.pShaderBytecode || !shader.BytecodeLength) return false;
@@ -65,7 +65,7 @@ inline void HookPass(void* a, void* b, void* c, void* d) {
     Pass pass;
     Pass* previous = active;
     pass.selectionState = selection.Read();
-    pass.requested = !previous && !disabled.load() && components.load() == kRequiredComponents &&
+    pass.requested = !previous && spot_culling_runtime::ready.load() && !disabled.load() && components.load() == kRequiredComponents &&
         LiveSelection::GetMode(pass.selectionState) == Mode::RtSpot;
     active = &pass;
     __try { originalPass(a,b,c,d); }
@@ -102,7 +102,7 @@ inline void Install() noexcept {
             PTReflectionLoadSidecar(L"rt_spot_spatial1.dxbc","RT_SPOT_SPATIAL1",spatialBytes[1],sha,loaded) &&
             !strcmp(sha,"ef654dc4b4cd49f2811c9002f894a7cb240a348cbde2fa625fabfaebcafd7b7c");
     }
-    if (filesReady && !scopeReady && verifiedRenderer) {
+    if (filesReady && !scopeReady && verifiedRenderer && spot_culling_runtime::Install(verifiedRenderer)) {
         auto* base = reinterpret_cast<unsigned char*>(verifiedRenderer);
         originalPass = reinterpret_cast<PassFn>(base + 0x23ed10);
         scopeReady = RRAlbedoPrepareCallPatch(base+0x12daf7, reinterpret_cast<void*>(originalPass),

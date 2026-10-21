@@ -85,6 +85,57 @@ static void TestAllocatorForwarding() {
     sr::originalResize=nullptr;sr::originalRequest=nullptr;sr::rendererBase=nullptr;
     sr::expandedPool=nullptr;SelectMode(Mode::Native);
 }
+static int cullingArguments[3]{};
+static unsigned cullingCalls = 0;
+static float cullingExpected = 0;
+static float cullingExpansion = 60, cullingWithoutReflections = 1, cullingFar = 150;
+static void FakeSceneCollection(void* scene) {
+    if (scene != &cullingArguments[0] || cullingExpansion != cullingExpected)
+        throw std::runtime_error("Scene culling arguments or expansion changed");
+    ++cullingCalls;
+}
+static void FakeObjectCollection(void* objects, void* view, void* output) {
+    if (objects != &cullingArguments[0] || view != &cullingArguments[1] ||
+        output != &cullingArguments[2] || cullingWithoutReflections != cullingExpected)
+        throw std::runtime_error("Object culling arguments or expansion changed");
+    ++cullingCalls;
+}
+static void TestSpotCulling() {
+    using namespace native_lighting;
+    namespace sc = spot_culling_runtime;
+    sc::slots[0] = {&cullingExpansion};
+    sc::slots[1] = {&cullingWithoutReflections};
+    sc::farDistance = &cullingFar;
+    sc::originalScene = &FakeSceneCollection;
+    sc::originalObjects = &FakeObjectCollection;
+    sc::ready.store(true);
+    readyMask.fetch_or(kRtSpotReadyBit);
+    SelectMode(Mode::RtSpot);
+    cullingExpected=150;
+    sc::SceneHook(&cullingArguments[0]);
+    sc::ObjectsHook(&cullingArguments[0],&cullingArguments[1],&cullingArguments[2]);
+    if (cullingCalls!=2 || cullingFar!=150) throw std::runtime_error("Culling forwarding/far plane changed");
+    // No render-thread wait if another collection is updating the two options.
+    AcquireSRWLockExclusive(&sc::updateLock);
+    sc::Update();
+    ReleaseSRWLockExclusive(&sc::updateLock);
+    SelectMode(Mode::Native);
+    sc::Update();
+    if(cullingExpansion!=60 || cullingWithoutReflections!=1)
+        throw std::runtime_error("Native culling settings not restored");
+    SelectMode(Mode::RtSpot);
+    sc::Update();
+    cullingExpansion=180; // Later engine/debug changes must survive native restore.
+    SelectMode(Mode::Native);
+    sc::Update();
+    if(cullingExpansion!=180 || cullingWithoutReflections!=1)
+        throw std::runtime_error("External culling setting was overwritten");
+    sc::ready.store(false); sc::farDistance=nullptr;
+    sc::slots[0]={}; sc::slots[1]={};
+    sc::originalScene=nullptr; sc::originalObjects=nullptr;
+    readyMask.fetch_and(~kRtSpotReadyBit);
+    std::cout<<"PASS culling hooks: arguments, pre-collection expansion, exact restore, external values, no lock wait\n";
+}
 static bool passForwarded = false;
 static int passArguments[4]{};
 static void FakeSpotPass(void* a, void* b, void* c, void* d) {
@@ -108,6 +159,7 @@ static void FakeIncompleteSpotPass(void*, void*, void*, void*) {
 }
 static void TestSpotPassSelection() {
     using namespace native_lighting;
+    spot_culling_runtime::ready.store(true);
     // A partial R71 install must retain native rendering, even if UI requested RT.
     readyMask.fetch_or(kRtSpotReadyBit);
     SelectMode(Mode::RtSpot);
@@ -125,11 +177,13 @@ static void TestSpotPassSelection() {
         LiveSelection::GetMode(selection.Read()) != Mode::Native || LiveSelection::Observed(selection.Read()) != 0)
         throw std::runtime_error("RT pass restored incorrectly or marked a newer selection");
     rt_spot_runtime::components.store(0);
+    spot_culling_runtime::ready.store(false);
     rt_spot_runtime::previousFull = false;
     readyMask.fetch_and(~kRtSpotReadyBit);
     std::cout << "PASS: RT pass forwards arguments, holds selection and rejects stale observation\n";
 }
 int main() try {
+    TestSpotCulling();
     TestSpotPassSelection();
     using namespace native_lighting;
     TestAllocatorForwarding();

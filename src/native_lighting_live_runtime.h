@@ -5,6 +5,7 @@
 #include "native_lighting_log_queue.h"
 #include "rt_shadow_capture_candidates.h"
 #include "spot_shadow_resolution_policy.h"
+#include "rt_spot_culling_policy.h"
 #include <intrin.h>
 #include <string>
 
@@ -264,6 +265,7 @@ inline bool PatchSlot(void** slot, void* expected, void* hook) noexcept {
 }
 #include "spot_shadow_resolution_runtime.h"
 #include "rt_shadow_capture.h"
+#include "rt_spot_culling_runtime.h"
 #include "rt_spot_runtime.h"
 inline void InstallList(ID3D12GraphicsCommandList* list) noexcept {
     rt_shadow_capture::InstallList(list);
