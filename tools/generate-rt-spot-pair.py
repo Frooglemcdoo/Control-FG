@@ -34,8 +34,10 @@ def replace_once(source, before, after):
     return source.replace(before, after)
 
 def full_distance(source, single_ray=False):
-    distance, radius_step, payload_pointer, payload, returned, test = (
-        (207, 212, 249, 11, 251, 252) if single_ray else (210, 233, 213, 12, 257, 258))
+    if single_ray:
+        return four_spot_samples(source)
+    # Legacy multi-light capture path is not installed by the current runtime.
+    distance, radius_step, payload_pointer, payload, returned, test = (210, 233, 213, 12, 257, 258)
     radius = f'  %{radius_step} = fadd fast float %FMin, -5.000000e-01'
     source = replace_once(source, radius,
         f'  %SpotFullDistance = call float @dx.op.binary.f32(i32 35, float %{distance}, float 0.000000e+00)\n' + radius)
@@ -46,7 +48,7 @@ def full_distance(source, single_ray=False):
         (f'%{test} = fcmp fast olt float %{returned}, %FMin',
          f'%{test} = fcmp fast olt float %{returned}, %SpotFullDistance')):
         source = replace_once(source, before, after)
-    return four_spot_samples(source) if single_ray else source
+    return source
 
 def patch_instruction(data, dword, expected_opcode, words):
     data = bytearray(data)

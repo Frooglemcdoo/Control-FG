@@ -171,6 +171,8 @@ jobs:
           if errorlevel 1 exit /b 1
           rt-spot-shaders.exe
           if errorlevel 1 exit /b 1
+          python tools/test-rt-spot-segments.py
+          if errorlevel 1 exit /b 1
           python tools/test-rt-spot-samples.py
           if errorlevel 1 exit /b 1
           python tools/test-rt-spot-filter.py
@@ -350,11 +352,11 @@ jobs:
           node tools/test-native-menu.js --config build/native-menu-config.json
           if errorlevel 1 exit /b 1
 
-      - name: Package live lighting diagnostic R72
+      - name: Package live lighting diagnostic R73
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-Native-Lighting-Live-R72'
+          $out='Control-FG-Native-Lighting-Live-R73'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
           Copy-Item build/rt_spot_full.dxil,build/rt_spot_light.dxbc,build/rt_spot_reset.dxbc,build/rt_spot_history.dxbc,build/rt_spot_spatial0.dxbc,build/rt_spot_spatial1.dxbc $out
@@ -371,18 +373,18 @@ jobs:
           Copy-Item Collect-RR-Blinds-Capture.ps1 "$out/Collect-RR-Blinds-Capture.ps1"
           Copy-Item Collect-ControlFG-Compact-Logs.cmd "$out/Collect-ControlFG-Compact-Logs.cmd"
           Copy-Item Collect-ControlFG-Compact-Logs.ps1 "$out/Collect-ControlFG-Compact-Logs.ps1"
-          Copy-Item docs/spot-caster-coverage-r72.md "$out/DIAGNOSTIC-NOTES.md"
+          Copy-Item docs/spot-near-light-segments-r73.md "$out/DIAGNOSTIC-NOTES.md"
           @'
-          CONTROL-FG R72 - experimental selected-spotlight RT replacement
+          CONTROL-FG R73 - experimental selected-spotlight RT replacement
           Close Control to install. Copy contents beside Control_DX12.exe.
           Preserve existing NVIDIA runtimes and the ControlFGStreamline folder.
           Use Borderless. Load the affected room with FG and glass enhancements OFF. Compare RR OFF and ON.
           Enable native RT Contact Shadows. Keep the same camera position for comparison.
           F10: switch NATIVE SHADOWS / RT SPOTLIGHT REPLACEMENT, then return to gameplay.
-          No restart between modes. SAVE LOG writes one Lighting-R72 session log.
+          No restart between modes. SAVE LOG writes one Lighting-R73 session log.
           This replaces one selected spotlight per pixel, not every shadow in the scene.
           An unavailable button means the required native shader pair was not prepared.
-          R72 expands off-screen caster coverage while preserving the R71 shadow shaders. R69 nonblocking diagnostic logging is retained.
+          R73 corrects per-sample ray endpoints near lights; R71 filtering and R72 caster coverage remain. R69 nonblocking diagnostic logging is retained.
           See DIAGNOSTIC-NOTES.md for scope and limitations.
           '@ | Set-Content "$out/README.txt" -Encoding ASCII
           Compress-Archive -Path "$out/*" -DestinationPath "$out.zip" -Force
@@ -391,10 +393,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-Native-Lighting-Live-R72
+          name: Control-FG-Native-Lighting-Live-R73
           path: |
-            Control-FG-Native-Lighting-Live-R72.zip
-            Control-FG-Native-Lighting-Live-R72.sha256
+            Control-FG-Native-Lighting-Live-R73.zip
+            Control-FG-Native-Lighting-Live-R73.sha256
             build/rt_spot_shadow_prototype.dxil
             build/exports.txt
             build/imports.txt
