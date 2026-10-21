@@ -10,7 +10,7 @@ int main(int argc, char** argv) try {
     std::ifstream file(argv[1], std::ios::binary);
     std::vector<unsigned char> source((std::istreambuf_iterator<char>(file)), {}), output;
     Require(source.size() == kDirect.size);
-    for (const auto* patch : {&kDirectDiffuse, &kDirectSpecular, &kShadowBypass, &kPatternOff, &kScreenShadows, &kSpotShadows, &kPointShadows, &kSpotVarianceLow, &kSpotVarianceHigh, &kSpotPcfCenter, &kSpotPcf32}) {
+    for (const auto* patch : {&kDirectDiffuse, &kDirectSpecular, &kShadowBypass, &kPatternOff, &kScreenShadows, &kSpotShadows, &kPointShadows, &kSpotVarianceLow, &kSpotVarianceHigh, &kSpotPcfCenter, &kSpotPcf32, &kSpotStableSoft, &kSpotStableTight}) {
         Require(MakeDisabledContribution(*patch,source.data(),source.size(),patch->nativeSha,output));
         const size_t insertedBytes = patch->insertedWordCount * 4;
         Require(output.size()==source.size()+insertedBytes);

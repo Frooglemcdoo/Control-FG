@@ -276,11 +276,11 @@ jobs:
           node tools/test-native-menu.js --config build/native-menu-config.json
           if errorlevel 1 exit /b 1
 
-      - name: Package live lighting diagnostic R59
+      - name: Package live lighting diagnostic R60
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-Native-Lighting-Live-R59'
+          $out='Control-FG-Native-Lighting-Live-R60'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
           New-Item -ItemType Directory -Force -Path "$out/ControlFGStreamline" | Out-Null
@@ -298,18 +298,18 @@ jobs:
           Copy-Item Collect-ControlFG-Compact-Logs.ps1 "$out/Collect-ControlFG-Compact-Logs.ps1"
           Copy-Item docs/native-lighting-live-r54.md "$out/DIAGNOSTIC-NOTES.md"
           @'
-          CONTROL-FG LIVE LIGHTING DIAGNOSTIC R59 - spotlight shadow tuning
+          CONTROL-FG LIVE LIGHTING DIAGNOSTIC R60 - stable spotlight shadow filtering
           Close Control to install this DLL, then launch once. No restarts between modes.
           Copy package contents beside Control_DX12.exe, preserving ControlFGStreamline.
           Keep existing NVIDIA runtimes. Old R51/R52/R53 marker files are ignored.
 
           Use Borderless display mode for the floating diagnostic panel.
-          F10 opens it with mouse focus; F10 again returns to the game. Buttons: NATIVE (16) / PCF 32 SAMPLES / VARIANCE LOW / VARIANCE HIGH / PCF CENTER.
-          Optional live keys: Ctrl+Shift+1 through 5, in button order.
+          F10 opens it with mouse focus; F10 again returns to the game. Buttons: NATIVE / STABLE SOFT / STABLE TIGHT / PCF CENTER.
+          Optional live keys: Ctrl+Shift+1 through 4, in button order.
           Start with RT/DLSS/RR/FG/glass OFF and compare the same stationary view.
-          PCF 32 doubles spotlight depth samples and retains shadowing; compare FPS too.
+          Stable Soft/Tight use fixed 32-tap disk filters; compare noise, shadow edges and FPS.
           Test each mode separately; record speckles and note whether shadows retain detail.
-          Variance Low/High raise the minimum spotlight variance; may soften/lighten shadows.
+          Soft retains the native radius; Tight uses half the radius. Both retain occlusion.
           PCF Center removes the stochastic footprint but retains center depth comparisons.
           These tests retain shadows and affect the shared direct diffuse/specular light inputs.
           Wait for bindings recorded and allow exposure/history to settle.
@@ -332,10 +332,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-Native-Lighting-Live-R59
+          name: Control-FG-Native-Lighting-Live-R60
           path: |
-            Control-FG-Native-Lighting-Live-R59.zip
-            Control-FG-Native-Lighting-Live-R59.sha256
+            Control-FG-Native-Lighting-Live-R60.zip
+            Control-FG-Native-Lighting-Live-R60.sha256
             build/exports.txt
             build/imports.txt
             build/pt_glass_raygen.dxil

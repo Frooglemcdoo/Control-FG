@@ -131,7 +131,10 @@ inline LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPA
         if(HIWORD(wParam)==BN_CLICKED) {
             const unsigned index=LOWORD(wParam)-kButtonFirst;
             if(index<kModeCount){selectionRejected=!SelectMode(kModeChoices[index].mode);savedNotice=0;}
-            else if(index==kModeCount||index==kModeCount+1)ReportVisual(index==kModeCount);
+            else if(index==kModeCount||index==kModeCount+1) {
+                if (!ReportVisual(index==kModeCount))
+                    MessageBoxW(window, L"This mode has not applied yet. Press F10 to return to the game, wait for the image to settle, then reopen the panel and record your result.", L"Wait for mode to apply", MB_OK);
+            }
             else if(index==kModeCount+2) SaveReport(window);
             RedrawWindow(window,nullptr,nullptr,RDW_INVALIDATE|RDW_ALLCHILDREN);
             return 0;
@@ -152,7 +155,7 @@ inline DWORD WINAPI ThreadProc(LPVOID) noexcept {
     if(!timer){Trace("overlay_failed reason=timer");return 0;}
     HWND panel=nullptr,owner=nullptr;bool held[kModeCount+1]{};
     ULONGLONG nextRefresh=0;
-    Trace("session_start build=R59-spot-shadow-tuning pid=%lu default=native log=user-diagnostics-folder",GetCurrentProcessId());
+    Trace("session_start build=R60-stable-shadow-filter pid=%lu default=native log=user-diagnostics-folder",GetCurrentProcessId());
     MSG msg{};
     while(GetMessageW(&msg,nullptr,0,0)>0){
         if (!panel || !IsDialogMessageW(panel, &msg)) {

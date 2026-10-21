@@ -22,6 +22,8 @@ inline const GUID kSpotVarianceLowVariantGuid = {0x822329d7,0x3614,0x4f73,{0xa6,
 inline const GUID kSpotVarianceHighVariantGuid = {0x822329d7,0x3614,0x4f73,{0xa6,0x14,0xd0,0x8c,0x94,0xf2,0x59,0x02}};
 inline const GUID kSpotPcfCenterVariantGuid = {0x822329d7,0x3614,0x4f73,{0xa6,0x14,0xd0,0x8c,0x94,0xf2,0x59,0x03}};
 inline const GUID kSpotPcf32VariantGuid = {0x822329d7,0x3614,0x4f73,{0xa6,0x14,0xd0,0x8c,0x94,0xf2,0x59,0x04}};
+inline const GUID kSpotStableSoftVariantGuid = {0x822329d7,0x3614,0x4f73,{0xa6,0x14,0xd0,0x8c,0x94,0xf2,0x60,0x01}};
+inline const GUID kSpotStableTightVariantGuid = {0x822329d7,0x3614,0x4f73,{0xa6,0x14,0xd0,0x8c,0x94,0xf2,0x60,0x02}};
 inline const GUID kPatternVariantGuid = {0x822329d7,0x3614,0x4f73,{0xa6,0x14,0xd0,0x8c,0x94,0xf2,0x57,0x02}};
 inline const GUID& VariantGuid(Mode mode) noexcept {
     if (mode == Mode::DisableDirectDiffuse) return kDiffuseVariantGuid;
@@ -34,6 +36,8 @@ inline const GUID& VariantGuid(Mode mode) noexcept {
     if (mode == Mode::SpotVarianceHigh) return kSpotVarianceHighVariantGuid;
     if (mode == Mode::SpotPcfCenter) return kSpotPcfCenterVariantGuid;
     if (mode == Mode::SpotPcf32) return kSpotPcf32VariantGuid;
+    if (mode == Mode::SpotStableSoft) return kSpotStableSoftVariantGuid;
+    if (mode == Mode::SpotStableTight) return kSpotStableTightVariantGuid;
     if (mode == Mode::DisableLightPattern) return kPatternVariantGuid;
     return kVariantGuid;
 }
@@ -98,11 +102,16 @@ inline bool SelectMode(Mode mode) noexcept {
     Trace("selection seq=%llu mode=%s ready_mask=%u", LiveSelection::Sequence(state), ModeName(mode), readyMask.load());
     return true;
 }
-inline void ReportVisual(bool specklesRemain) noexcept {
+inline bool ReportVisual(bool specklesRemain) noexcept {
     const auto state = selection.Read();
+    if (!CanReportVisual(LiveSelection::GetMode(state), LiveSelection::Observed(state))) {
+        Trace("visual_result_rejected seq=%llu reason=awaiting_bind", LiveSelection::Sequence(state));
+        return false;
+    }
     Trace("visual_result seq=%llu mode=%s result=%s recorded_mask=%u ready_mask=%u",
         LiveSelection::Sequence(state), ModeName(LiveSelection::GetMode(state)),
         specklesRemain ? "speckles_remain" : "speckles_gone", LiveSelection::Observed(state), readyMask.load());
+    return true;
 }
 inline bool Prepare(const ShaderPatch& patch, const D3D12_SHADER_BYTECODE& shader, std::vector<unsigned char>& bytes) noexcept {
     if (!shader.pShaderBytecode || shader.BytecodeLength != patch.size) return false;
@@ -153,6 +162,8 @@ inline void ObserveCompute(ID3D12Device* device, const D3D12_COMPUTE_PIPELINE_ST
         {&kSpotVarianceHigh, &kSpotVarianceHighVariantGuid, kSpotVarianceHighReadyBit},
         {&kSpotPcfCenter, &kSpotPcfCenterVariantGuid, kSpotPcfCenterReadyBit},
         {&kSpotPcf32, &kSpotPcf32VariantGuid, kSpotPcf32ReadyBit},
+        {&kSpotStableSoft, &kSpotStableSoftVariantGuid, kSpotStableSoftReadyBit},
+        {&kSpotStableTight, &kSpotStableTightVariantGuid, kSpotStableTightReadyBit},
         {&kPatternOff, &kPatternVariantGuid, kPatternReadyBit}
     };
     for (const auto& spec : variants) {

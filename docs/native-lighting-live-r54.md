@@ -1,3 +1,13 @@
+# R60: stable spotlight filtering
+
+R59 PCF Center removes the sample footprint and exposes jagged shadow edges. Its last speckles-gone report was recorded before that selection bound; earlier and later center bindings exist. R60 refuses visual results until the selected contribution has bound and explains how to return focus to let the game render.
+
+Compare Native, Stable Soft, Stable Tight, and PCF Center from the same view. Soft and Tight use 32 equally weighted samples in two symmetric rings (8 inner, 24 outer), with an atlas-aligned basis independent of the per-pixel random rotation texture. Soft retains native radius; Tight halves it. Center is a diagnostic reference only. Neither stable mode disables shadows or changes depth bias, VSM, screen/point shadows, GI, materials, or RR guides. The previous fixed-rotation test did not fix noise: this comparison also changes the distribution and tests a narrower footprint, so improvement is not presumed.
+
+Check speckles, railing/cart shadow edges, moving-camera stability, and FPS. F10 toggles focus; Ctrl+Shift+1 through 4 select modes. Save Log supplies one R60 file. No game restart between modes. Recorded bindings are not GPU completion or a guarantee of settled history.
+
+Validation covers exact bytecode edits/checksums, instruction decoding, sample counts and symmetric kernel geometry, unchanged resources, stale-selection rejection, synthetic Windows WARP routing, and log persistence. Visual quality remains an in-game test.
+
 # R59: spotlight shadow tuning with visibility retained
 
 R58: screen and point bypasses recorded speckles remaining; spotlight bypass recorded speckles gone. Removing spotlight visibility is diagnostic, not a fix.
