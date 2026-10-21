@@ -9,6 +9,8 @@
 #include <iostream>
 #include <vector>
 #include <stdexcept>
+#include <string>
+#include <iterator>
 using Microsoft::WRL::ComPtr;
 static void Check(HRESULT hr) { if(FAILED(hr)) throw std::runtime_error("Validation HRESULT " + std::to_string(static_cast<unsigned long>(hr))); }
 int main() try {
