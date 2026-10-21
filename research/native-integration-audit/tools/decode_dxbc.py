@@ -41,7 +41,10 @@ def decode(p):
  r=chunks['RDEF'];U=lambda off:struct.unpack_from('<I',r,off)[0];S=lambda off:r[off:r.index(b'\0',off)].decode()
  bindings=[]
  for i in range(U(8)):
-  off=U(12)+40*i;x=struct.unpack_from('<10I',r,off)
+  # SM5.1 adds register-space and identifier fields to each binding.
+  stride=40 if (U(16)&65535)>=0x501 else 32
+  off=U(12)+stride*i;x=struct.unpack_from('<10I' if stride==40 else '<8I',r,off)
+  if stride==32:x=(*x,0,i)
   bindings.append(dict(name=S(x[0]),kind=x[1],return_type=x[2],dimension=x[3],samples=x[4],slot=x[5],count=x[6],flags=x[7],space=x[8],identifier=x[9]))
  def typ(off):
   cls,base,rows,cols,arr,members=struct.unpack_from('<6H',r,off);moff=U(off+12);ret=dict(type_offset=off,cls=cls,base=base,rows=rows,cols=cols,array=arr,members=[])
@@ -56,7 +59,15 @@ def decode(p):
   cbs.append(cb)
  w=list(struct.unpack('<'+'I'*(len(chunks['SHEX'])//4),chunks['SHEX']));ins=[];pos=2
  while pos<len(w):
-  start=pos;t=w[pos];op=t&2047;ln=(t>>24)&127;name=opnames[op];end=pos+ln;pos+=1
+  start=pos;t=w[pos];op=t&2047;ln=(t>>24)&127;name=opnames[op]
+  # Custom-data length is a separate DWORD; the opcode length is zero.
+  if name=='customdata':
+   ln=w[pos+1]
+   if ln<2 or pos+ln>len(w):raise ValueError('Invalid custom data length')
+   ins.append(dict(dword=start,name=name,operands=['raw:'+','.join(hex(x) for x in w[pos+2:pos+ln])]))
+   pos+=ln;continue
+  if ln<1 or pos+ln>len(w):raise ValueError('Invalid instruction length')
+  end=pos+ln;pos+=1
   ex=t>>31
   while ex:ex=w[pos]>>31;pos+=1
   vals=[]
