@@ -5,6 +5,7 @@ on:
     paths:
       - src/rt_lights/**
       - src/shaders/rt_lights_*.hlsl
+      - tools/gpu_test_device.h
       - tools/test-rt-lights-gpu.cpp
       - tools/rt-lights-test/**
       - .github/workflows/rt-lights-backend.yml

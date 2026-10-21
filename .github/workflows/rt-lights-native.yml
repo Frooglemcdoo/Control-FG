@@ -1,0 +1,37 @@
+name: Validate native per-light extraction
+on:
+  push:
+    branches: [experiment/native-lighting-live-r54]
+    paths:
+      - assets/rt-lights/**
+      - tools/rt_lights_native_extract.py
+      - tools/test-rt-lights-native.cpp
+      - tools/gpu_test_device.h
+      - .github/workflows/rt-lights-native.yml
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Decode and verify shader
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $manifest=Get-Content assets/rt-lights/manifest.json | ConvertFrom-Json
+          $bytes=[Convert]::FromBase64String((Get-Content assets/rt-lights/rt_lights_native_spot.dxbc.b64 -Raw))
+          [IO.File]::WriteAllBytes("$pwd/rt_lights_native_spot.dxbc",$bytes)
+          if((Get-FileHash rt_lights_native_spot.dxbc -Algorithm SHA256).Hash.ToLower() -ne $manifest.outputs.'rt_lights_native_spot.dxbc'.sha256){throw 'Shader hash mismatch'}
+      - name: Compile and execute WARP fixture
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $vswhere="${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $vs=& $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          $bat="call `"$vs\VC\Auxiliary\Build\vcvars64.bat`"`r`ncl /nologo /std:c++17 /EHsc /W4 /WX /O2 /MT tools\test-rt-lights-native.cpp /FeNative-Light-Test.exe /link d3d12.lib dxgi.lib d3dcompiler.lib`r`nexit /b %errorlevel%"
+          [IO.File]::WriteAllText("$pwd/compile-native.cmd",$bat)
+          cmd /c compile-native.cmd
+          if($LASTEXITCODE -ne 0){throw 'Native fixture compilation failed'}
+          ./Native-Light-Test.exe
+          if($LASTEXITCODE -ne 0){throw 'Native extraction GPU validation failed'}
