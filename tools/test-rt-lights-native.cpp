@@ -69,7 +69,11 @@ int main() try {
     auto whiteTexture=Texture(gpu,2,2,DXGI_FORMAT_R32G32B32A32_FLOAT,white.data());
     for(UINT i=0;i<17;++i)TextureView(gpu,whiteTexture.Get(),i);
     auto setTexture=[&](UINT slot,Pixel pixel){std::array<Pixel,4> values;values.fill(pixel);auto t=Texture(gpu,2,2,DXGI_FORMAT_R32G32B32A32_FLOAT,values.data());TextureView(gpu,t.Get(),slot);};
-    setTexture(0,{0.5f,0.5f,0.5f,0});setTexture(1,{0.5f,0.5f,0,0});setTexture(3,{0.5f,0,0,0});setTexture(16,{0.5f,0.5f,0,0});
+    setTexture(0,{0.5f,0.5f,0.5f,0});setTexture(1,{0.5f,0.5f,0,0});
+    const std::array<Pixel,4> depth={Pixel{0.5f,0,0,0},Pixel{0.5f,0,0,0},Pixel{0.5f,0,0,0},Pixel{2,0,0,0}};
+    auto depthTexture=Texture(gpu,2,2,DXGI_FORMAT_R32G32B32A32_FLOAT,depth.data());TextureView(gpu,depthTexture.Get(),3);
+    // Blocked map/contact inputs must not erase the unshadowed extraction.
+    setTexture(10,{0,0,0,0});setTexture(11,{0,0,0,0});setTexture(15,{0,0,0,0});setTexture(16,{0.5f,0.5f,0,0});
     auto material=gpu.Upload(std::vector<UINT>{0x80808000,0x000080ff});gpu.View(material.Get(),6,8,1,false);
     auto material3=gpu.Upload(std::vector<float>(84,0));gpu.View(material3.Get(),7,336,1,false);
     auto point=gpu.Upload(std::vector<float>(40,0));gpu.View(point.Get(),9,160,1,false);
@@ -126,6 +130,7 @@ int main() try {
         Require(pixels[0][0]>0 && pixels[1][2]>0,"Native lit fixture produced no energy");
         Require(pixels[0][1]==0 && pixels[0][2]==0 && pixels[1][0]==0 && pixels[1][1]==0,"Light contributions mixed");
         Require(std::abs(pixels[0][0]-pixels[1][2])<1e-5f,"Identical lights disagree after color swap");
+        Require(pixels[2]==Pixel{0,0,0,1},"Atlas slot did not use its assigned receiver pixel");
         for(UINT i=3;i<8;++i)Require(pixels[i]==Pixel{},"Invalid work retained output");
         result->buffer->Unmap(0,nullptr);
     }

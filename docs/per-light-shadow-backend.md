@@ -23,6 +23,14 @@ The fixture's alpha handler is deliberately synthetic and excluded from the
 production compile. Control's alpha material handling remains an adapter task.
 This checkpoint is not hooked into the game and is not a visual fix release.
 
+## Native adapter progress
+
+Hardware Test 1 passed on the user's RTX 5090. Native spotlight BRDF extraction
+and frame-keyed contribution packing now pass an executing Windows WARP fixture.
+See [per-light-native-extraction.md](per-light-native-extraction.md) for the atlas
+contract, preserved native calculations, validation and integration requirements.
+Neither component is wired into the live game renderer yet.
+
 ## Native adapter still required
 
 The captured a9e5b544... producer enumerates lighting before the existing selected
