@@ -82,6 +82,7 @@ inline void SaveReport(HWND window) noexcept {
         ModeName(LiveSelection::GetMode(state)), LiveSelection::Observed(state));
     Trace("coverage graphics_pso=%llu compute_pso=%llu bindings=%llu same_size_mismatches=%u ready_mask=%u", graphicsSeen.load(), computeSeen.load(), bindingsSeen.load(), candidateMismatches.load(), readyMask.load());
     Trace("library_coverage graphics_loads=%llu compute_loads=%llu identities=%u", libraryGraphicsSeen.load(), libraryComputeSeen.load(), identityReports.load());
+    DrainDiagnosticLog(true);
     wchar_t message[1024]{};
     AcquireSRWLockShared(&reportLock);
     const bool saved = reportHealthy.load();
@@ -155,15 +156,21 @@ inline DWORD WINAPI ThreadProc(LPVOID) noexcept {
     UINT_PTR timer=SetTimer(nullptr,0,50,nullptr);
     if(!timer){Trace("overlay_failed reason=timer");return 0;}
     HWND panel=nullptr,owner=nullptr;bool held[kModeCount+1]{};
-    ULONGLONG nextRefresh=0;
-    Trace("session_start build=R68-rt-spot-replacement pid=%lu default=native log=user-diagnostics-folder",GetCurrentProcessId());
+    ULONGLONG nextRefresh=0, nextWindowSearch=0, nextLogDrain=0;
+    HWND cachedGame=nullptr;
+    POINT lastOrigin{-1,-1};
+    Trace("session_start build=R69-rt-spot-replacement pid=%lu default=native log=user-diagnostics-folder",GetCurrentProcessId());
     MSG msg{};
     while(GetMessageW(&msg,nullptr,0,0)>0){
         if (!panel || !IsDialogMessageW(panel, &msg)) {
             TranslateMessage(&msg); DispatchMessageW(&msg);
         }
         if(msg.message!=WM_TIMER||msg.wParam!=timer)continue;
-        HWND game=FindFGGameWindow();
+        const ULONGLONG now=GetTickCount64();
+        if(now>=nextLogDrain){DrainDiagnosticLog();nextLogDrain=now+500;}
+        if(cachedGame&&!IsWindow(cachedGame))cachedGame=nullptr;
+        if(!cachedGame&&now>=nextWindowSearch){cachedGame=FindFGGameWindow();nextWindowSearch=now+1000;}
+        HWND game=cachedGame;
         if(panel&&owner!=game){ClosePanel(panel);DestroyWindow(panel);panel=nullptr;}
         if(game&&!panel){panel=CreateWindowExW(WS_EX_TOOLWINDOW,kClass,L"Control lighting diagnostic",WS_POPUP,
             0,0,kWidth,kHeight,game,nullptr,selfModule,nullptr);owner=game;}
@@ -178,12 +185,17 @@ inline DWORD WINAPI ThreadProc(LPVOID) noexcept {
         }
         if(foreground&&panelOpen){
             RECT client{};GetClientRect(game,&client);POINT origin{client.right-kWidth-18,18};if(origin.x<0)origin.x=0;
-            ClientToScreen(game,&origin);SetWindowPos(panel,HWND_TOP,origin.x,origin.y,kWidth,kHeight,SWP_NOACTIVATE|SWP_SHOWWINDOW);
+            ClientToScreen(game,&origin);
+            if(!IsWindowVisible(panel)||origin.x!=lastOrigin.x||origin.y!=lastOrigin.y){
+                SetWindowPos(panel,HWND_TOP,origin.x,origin.y,kWidth,kHeight,SWP_NOACTIVATE|SWP_SHOWWINDOW);
+                lastOrigin=origin;
+            }
             // Release confinement only while this panel owns input, never over other apps.
             if (PanelHasForeground(panel)) ClipCursor(nullptr);
             if(GetTickCount64()>=nextRefresh){RedrawWindow(panel,nullptr,nullptr,RDW_INVALIDATE|RDW_ALLCHILDREN);nextRefresh=GetTickCount64()+250;}
-        }else {RestoreCursorVisibility();ShowWindow(panel,SW_HIDE);if(!foreground)panelOpen=false;}
+        }else {RestoreCursorVisibility();if(IsWindowVisible(panel))ShowWindow(panel,SW_HIDE);if(!foreground)panelOpen=false;}
     }
+    DrainDiagnosticLog(true);
     KillTimer(nullptr,timer);RestoreCursorVisibility();if(panel)DestroyWindow(panel);
     DeleteObject(headingFont);DeleteObject(bodyFont);DeleteObject(detailFont);return 0;
 }

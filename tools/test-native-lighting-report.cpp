@@ -29,6 +29,7 @@ int main() try {
         Require(first.Write("selection\n", 10), "first write failed");
         Require(first.Open(blocked, root), "reopen failed");
         Require(first.Write("result\n", 7), "second write failed");
+        Require(first.Flush(), "explicit flush failed");
         Require(Read(first.Path()) == "selection\nresult\n", "earlier events lost or not flushed");
         native_lighting::SessionReport second;
         Require(second.Open(root, root), "second session failed");

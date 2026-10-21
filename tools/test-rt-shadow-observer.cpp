@@ -52,9 +52,9 @@ int main() {
     D3D12_SHADER_RESOURCE_VIEW_DESC srv{};srv.ViewDimension=D3D12_SRV_DIMENSION_RAYTRACING_ACCELERATION_STRUCTURE;srv.RaytracingAccelerationStructure.Location=4096;
     capture::SrvHook(nullptr,nullptr,&srv,{1234});
     assert(roots==1 && states==1 && srvs==1);
-    assert(capture::capturedCount==1 && capture::capturedBytes==256 && reportHealthy);
+    assert(capture::capturedCount==0 && capture::capturedBytes==0 && !reportHealthy);
     assert(!capture::Blob("direct_cs",data,capture::kBlobLimit+1)); // Rejected before reading.
-    assert(capture::Blob("direct_cs",data,sizeof(data))); // Already persisted.
+    assert(!capture::Blob("direct_cs",data,sizeof(data))); // Capture remains disabled.
     capture::RecordCompute(nullptr);
     const auto& candidate = capture::kComputeCandidates[0];
     std::vector<unsigned char> unrelated(candidate.bytes, 0);
@@ -65,11 +65,11 @@ int main() {
     capture::RecordComputeBinding(candidate.bytes, candidate.sha);
     capture::RecordComputeBinding(candidate.bytes, candidate.sha);
     assert(capture::computeBoundMask == 1 && capture::computeSavedMask == 0);
-    assert(capture::capturedCount==1);
+    assert(capture::capturedCount==0);
     HANDLE file=CreateFileW(report.Path(),GENERIC_READ,FILE_SHARE_READ|FILE_SHARE_WRITE,nullptr,OPEN_EXISTING,0,nullptr);
     assert(file!=INVALID_HANDLE_VALUE);
     char bytes[4096]{};DWORD read=0;assert(ReadFile(file,bytes,sizeof(bytes)-1,&read,nullptr));CloseHandle(file);
-    assert(strstr(bytes,"rt_blob_end sha=") && strstr(bytes,"offset=128 hex=80818283"));
+    assert(read==0); // D3D hooks must not write to the session file.
     assert(CopyFileW(report.Path(),L"rt-shadow-observer-test.log",FALSE));
-    puts("PASS: unchanged root/state/SRV arguments and return values; bounded deduplicated capture persisted");
+    puts("PASS: unchanged root/state/SRV arguments and return values; completed capture disabled; no D3D callback file writes");
 }

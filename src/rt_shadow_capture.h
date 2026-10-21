@@ -21,52 +21,9 @@ inline std::atomic<unsigned> stateReports{0}, rootReports{0}, sceneReports{0};
 inline std::atomic<bool> limitReported{false};
 inline constexpr size_t kBlobLimit = 2 * 1024 * 1024, kSessionLimit = 8 * 1024 * 1024;
 
-// Store exact shader/root bytes inside the single session log. One write/flush
-// per unique blob, at creation time; no per-frame readback or disk capture.
-inline bool Blob(const char* kind, const void* data, size_t size) noexcept {
-    if (!data || !size || size > kBlobLimit) {
-        Trace("rt_blob_rejected kind=%s bytes=%llu", kind, static_cast<unsigned long long>(size));
-        return false;
-    }
-    char sha[65]{};
-    if (!PTReflectionSha256(static_cast<const unsigned char*>(data), size, sha)) {
-        Trace("rt_blob_rejected kind=%s reason=hash_failed", kind); return false;
-    }
-    AcquireSRWLockExclusive(&captureLock);
-    for (unsigned i=0; i<capturedCount; ++i) if (!strcmp(captured[i],sha)) {
-        ReleaseSRWLockExclusive(&captureLock); return true;
-    }
-    if (capturedCount == 128 || size > kSessionLimit-capturedBytes) {
-        ReleaseSRWLockExclusive(&captureLock);
-        if (!limitReported.exchange(true)) Trace("rt_capture_limit_reached max_raw_bytes=%llu", static_cast<unsigned long long>(kSessionLimit));
-        return false;
-    }
-    bool saved = false;
-    try {
-        constexpr char digits[]="0123456789abcdef";
-        char heading[192]{};
-        snprintf(heading,sizeof(heading),"rt_blob_begin kind=%s sha=%s bytes=%llu\r\n",kind,sha,static_cast<unsigned long long>(size));
-        std::string block(heading);
-        block.reserve(size*3+4096);
-        const auto* bytes=static_cast<const unsigned char*>(data);
-        for (size_t offset=0; offset<size; offset+=128) {
-            snprintf(heading,sizeof(heading),"rt_blob_data sha=%s offset=%llu hex=",sha,static_cast<unsigned long long>(offset));
-            block+=heading;
-            const size_t end=(offset+128<size)?offset+128:size;
-            for(size_t i=offset;i<end;++i) { block+=digits[bytes[i]>>4]; block+=digits[bytes[i]&15]; }
-            block+="\r\n";
-        }
-        block+="rt_blob_end sha=";block+=sha;block+="\r\n";
-        AcquireSRWLockExclusive(&reportLock);
-        saved=report.OpenDefault() && report.Write(block.data(),static_cast<DWORD>(block.size()));
-        reportHealthy.store(saved);
-        ReleaseSRWLockExclusive(&reportLock);
-    } catch (...) { saved=false; }
-    if(saved) { strcpy_s(captured[capturedCount++],sha);capturedBytes+=size; }
-    ReleaseSRWLockExclusive(&captureLock);
-    Trace("rt_blob_saved kind=%s sha=%s bytes=%llu saved=%u",kind,sha,static_cast<unsigned long long>(size),unsigned(saved));
-    return saved;
-}
+// R69: shader capture is complete. Runtime experiments must not serialize or
+// flush shader blobs from D3D creation callbacks.
+inline bool Blob(const char*, const void*, size_t) noexcept { return false; }
 
 inline std::atomic<unsigned> computeCreatedMask{0}, computeSavedMask{0}, computeBoundMask{0};
 inline void RecordCompute(const D3D12_COMPUTE_PIPELINE_STATE_DESC* desc) noexcept {
@@ -223,6 +180,7 @@ inline void Install(ID3D12Device* device) noexcept {
         unsigned(originalRoot!=nullptr),unsigned(originalSrv!=nullptr),unsigned(originalState!=nullptr),static_cast<unsigned long>(feature),unsigned(options.RaytracingTier));
 }
 inline void Summary() noexcept {
+    Trace("shader_blob_capture enabled=0 reason=capture_complete");
     Trace("rt_compute_summary expected_mask=%u created_mask=%u saved_mask=%u bound_mask=%u missing_saved_mask=%u observer_only=1",
         kExpectedComputeMask, computeCreatedMask.load(), computeSavedMask.load(), computeBoundMask.load(),
         kExpectedComputeMask & ~computeSavedMask.load());

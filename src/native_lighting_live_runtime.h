@@ -2,6 +2,7 @@
 #include "native_lighting_isolation.h"
 #include "native_lighting_live_state.h"
 #include "native_lighting_report.h"
+#include "native_lighting_log_queue.h"
 #include "rt_shadow_capture_candidates.h"
 #include "spot_shadow_resolution_policy.h"
 #include <intrin.h>
@@ -14,6 +15,7 @@ inline std::atomic<unsigned long long> graphicsSeen{0}, computeSeen{0}, bindings
 inline std::atomic<unsigned> candidateMismatches{0};
 inline SRWLOCK reportLock = SRWLOCK_INIT;
 inline SessionReport report;
+inline DiagnosticLogQueue diagnosticLog;
 inline std::atomic<bool> reportHealthy{false};
 inline const GUID kVariantGuid = {0x822329d7,0x3614,0x4f73,{0xa6,0x14,0xd0,0x8c,0x94,0xf2,0x54,0x01}};
 inline const GUID kDiffuseVariantGuid = {0x822329d7,0x3614,0x4f73,{0xa6,0x14,0xd0,0x8c,0x94,0xf2,0x56,0x01}};
@@ -55,15 +57,26 @@ inline void Trace(const char* format, ...) noexcept {
     char line[960]{};
     const int length = snprintf(line, sizeof(line), "ms=%llu present=%llu %s\r\n",
         GetTickCount64(), presentCount.load(), detail);
+    if (length > 0) diagnosticLog.Push(line, size_t(length < int(sizeof(line)) ? length : sizeof(line)-1));
+}
+// The diagnostic UI thread owns all report I/O; no disk lock is shared with
+// render-side producers. Routine drains use buffered writes; SAVE LOG flushes.
+inline bool DrainDiagnosticLog(bool flush = false) noexcept {
+    static char batch[DiagnosticLogQueue::Capacity()];
     AcquireSRWLockExclusive(&reportLock);
+    const size_t length = diagnosticLog.Drain(batch,sizeof(batch));
+    const auto dropped = diagnosticLog.TakeDropped();
     bool ok = report.OpenDefault();
-    if (ok && length > 0) {
-        const DWORD expected = DWORD(length < int(sizeof(line)) ? length : sizeof(line)-1);
-        ok = report.Write(line, expected);
+    if (ok && length) ok = report.Write(batch,static_cast<DWORD>(length));
+    if (ok && dropped) {
+        char loss[128]{};
+        const int size = snprintf(loss,sizeof(loss),"diagnostic_lines_dropped=%llu reason=queue_contention_or_capacity\r\n",dropped);
+        ok = report.Write(loss,static_cast<DWORD>(size));
     }
+    if (ok && flush) ok = report.Flush();
     reportHealthy.store(ok);
     ReleaseSRWLockExclusive(&reportLock);
-    Log("NATIVE_LIGHTING_R54 %s", detail);
+    return ok;
 }
 
 inline const GUID kIdentityGuid = {0x822329d7,0x3614,0x4f73,{0xa6,0x14,0xd0,0x8c,0x94,0xf2,0x54,0x03}};
