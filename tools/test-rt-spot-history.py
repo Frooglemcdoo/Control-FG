@@ -57,6 +57,16 @@ for current in [0.0,1.0]:
 # Validate the checked-in container, including bounds and instruction parsing.
 data=base64.b64decode((root/'assets/rt-spot/rt_spot_history.dxbc.b64').read_text())
 assert data[4:20]==checksum(data)
+count=struct.unpack_from('<I',data,28)[0]
+offsets=struct.unpack_from('<'+'I'*count,data,32)
+offset=next(x for x in offsets if data[x:x+4]==b'SHEX')
+size=struct.unpack_from('<I',data,offset+4)[0]
+words=struct.unpack_from('<'+'I'*(size//4),data,offset+8)
+clamp=history_instructions()
+assert list(words[316:316+len(clamp)])==clamp, 'Packaged shader must contain tested history clamp'
+assert words[316+len(clamp)]&2047==0
+assert words[324+len(clamp)]&2047==50, 'Native temporal blend must remain'
+
 import tempfile
 with tempfile.TemporaryDirectory() as folder:
     path=Path(folder)/'history.dxbc';path.write_bytes(data)

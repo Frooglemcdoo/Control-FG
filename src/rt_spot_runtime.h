@@ -50,7 +50,7 @@ inline void ReportShadowFiltering(bool fullRR, bool contact, bool temporal, int 
         last.temporal != temporal || last.size != size || last.step != step) {
         Trace("rt_spot_filter full_rr=%u contact=%u native_preserved=1 temporal=%u spatial_size=%d spatial_step=%d",
             unsigned(fullRR),unsigned(contact),unsigned(temporal),size,step);
-        Trace("rt_spot_history neighborhood_clip=0 spotlight_history=0 point_history=native spotlight_only=1 transition_reset=1 spot_samples=variant closest_blocker=1 fixed_emitter_radius=1 bounded_penumbra=1 per_sample_endpoint=1 near_distance_cutoff=0");
+        Trace("rt_spot_history neighborhood_clip=1 spotlight_history=1 point_history=native spotlight_only=1 transition_reset=1 spot_samples=variant closest_blocker=1 fixed_emitter_radius=1 bounded_penumbra=1 per_sample_endpoint=1 near_distance_cutoff=0");
         last = {true, fullRR, contact, temporal, size, step};
     }
 }
@@ -99,7 +99,7 @@ inline void Install() noexcept {
             PTReflectionLoadSidecar(L"rt_spot_reset.dxbc","RT_SPOT_RESET",resetBytes,sha,loaded) &&
             !strcmp(sha,"3081daebf178680b5f7e117a836e4494520c0e760de2fc1ee49d3cfb3a8d089f") &&
             PTReflectionLoadSidecar(L"rt_spot_history.dxbc","RT_SPOT_HISTORY",historyBytes,sha,loaded) &&
-            !strcmp(sha,"e5075b9dbbaacbb814b292d7bef94d477d1102a85c195c9515f76ca1af3651d0") &&
+            !strcmp(sha,"0c30a3cb345a5ccb7f5a10d639b611118f683d007ec4c4944453187c62928e91") &&
             PTReflectionLoadSidecar(L"rt_spot_spatial0.dxbc","RT_SPOT_SPATIAL0",spatialBytes[0],sha,loaded) &&
             !strcmp(sha,"fc1dc49d260b40bdbc11a0a0e843ad34b9cb164afad946b3808fa20fd988c69d") &&
             PTReflectionLoadSidecar(L"rt_spot_spatial1.dxbc","RT_SPOT_SPATIAL1",spatialBytes[1],sha,loaded) &&
