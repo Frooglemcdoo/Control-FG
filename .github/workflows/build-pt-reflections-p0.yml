@@ -224,12 +224,13 @@ jobs:
           if errorlevel 1 exit /b 1
 
       - name: Validate emitted spotlight PCF instructions on WARP
-        shell: pwsh
+        shell: cmd
         run: |
+          call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
           cl /nologo /EHsc /std:c++17 tools/test-spot-bilinear-validation.cpp /Fe:spot-bilinear-test.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          ./spot-bilinear-test.exe
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if errorlevel 1 exit /b 1
+          spot-bilinear-test.exe
+          if errorlevel 1 exit /b 1
 
       - name: Validate diagnostic report saving
         shell: cmd

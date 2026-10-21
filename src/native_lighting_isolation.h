@@ -769,8 +769,8 @@ inline bool MakeDisabledContribution(const ShaderPatch& patch, const void* bytes
     for (size_t i = 0; i < patch.zeroCount; ++i)
         std::memcpy(result.data() + patch.instructionOffset + patch.zeroWords[i] * 4, &zero, 4);
     if (patch.insertedWordCount) {
-        const auto* bytes = reinterpret_cast<const unsigned char*>(patch.insertedWords);
-        result.insert(result.begin() + patch.insertionOffset, bytes, bytes + patch.insertedWordCount * 4);
+        const auto* insertionBytes = reinterpret_cast<const unsigned char*>(patch.insertedWords);
+        result.insert(result.begin() + patch.insertionOffset, insertionBytes, insertionBytes + patch.insertedWordCount * 4);
     }
     std::memcpy(result.data() + 4, patch.checksum, 16);
     return true;
