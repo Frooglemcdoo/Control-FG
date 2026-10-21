@@ -218,7 +218,7 @@ struct Binding {
         }
     }
     void Recorded() const noexcept {
-        if (kind && LiveSelection::GetMode(state) != Mode::RtSpot && selection.Observe(state, kind))
+        if (kind && !IsRtSpotMode(LiveSelection::GetMode(state)) && selection.Observe(state, kind))
             Trace("binding_recorded seq=%llu mode=%s contribution=%s variant=%u", LiveSelection::Sequence(state),
                 ModeName(LiveSelection::GetMode(state)), kind == kGiBit ? "BakedGi" : "Direct", unsigned(alternate != nullptr));
     }

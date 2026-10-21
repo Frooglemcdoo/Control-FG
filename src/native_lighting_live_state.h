@@ -3,7 +3,14 @@
 #include <cstdint>
 
 namespace native_lighting {
-enum class Mode : unsigned { Native, DisableBakedGi, DisableDirect, DisableDirectDiffuse, DisableDirectSpecular, BypassShadows, DisableLightPattern, BypassScreenShadows, BypassSpotShadows, BypassPointShadows, SpotVarianceLow, SpotVarianceHigh, SpotPcfCenter, SpotPcf32, SpotStableSoft, SpotStableTight, SpotBilinear, SpotResolution2x, RtSpot };
+enum class Mode : unsigned { Native, DisableBakedGi, DisableDirect, DisableDirectDiffuse, DisableDirectSpecular, BypassShadows, DisableLightPattern, BypassScreenShadows, BypassSpotShadows, BypassPointShadows, SpotVarianceLow, SpotVarianceHigh, SpotPcfCenter, SpotPcf32, SpotStableSoft, SpotStableTight, SpotBilinear, SpotResolution2x, RtSpot, RtSpotRaw, RtSpotMapGuard, RtSpotNativeCull };
+inline bool IsRtSpotMode(Mode mode) noexcept {
+    return mode == Mode::RtSpot || mode == Mode::RtSpotRaw ||
+        mode == Mode::RtSpotMapGuard || mode == Mode::RtSpotNativeCull;
+}
+inline bool ExpandsSpotCasters(Mode mode) noexcept {
+    return IsRtSpotMode(mode) && mode != Mode::RtSpotNativeCull;
+}
 inline constexpr unsigned kGiBit = 1, kDirectBit = 2, kAllBits = 3;
 inline constexpr unsigned kDiffuseReadyBit = 4, kSpecularReadyBit = 8, kShadowReadyBit = 16, kPatternReadyBit = 32;
 inline constexpr unsigned kScreenReadyBit = 64, kSpotReadyBit = 128, kPointReadyBit = 256;
@@ -19,12 +26,15 @@ inline constexpr unsigned kRtSpotReadyBit = 1u << 17;
 struct ModeChoice { Mode mode; const wchar_t* label; };
 inline constexpr ModeChoice kModeChoices[] = {
     {Mode::Native, L"NATIVE SHADOWS"},
-    {Mode::RtSpot, L"RT SPOTLIGHTS"}
+    {Mode::RtSpot, L"RT FILTERED"},
+    {Mode::RtSpotRaw, L"RT RAW"},
+    {Mode::RtSpotMapGuard, L"RT + MAPS"},
+    {Mode::RtSpotNativeCull, L"NATIVE COVERAGE"}
 };
 inline constexpr unsigned kModeCount = sizeof(kModeChoices) / sizeof(kModeChoices[0]);
 inline unsigned RequiredVariant(Mode mode) noexcept {
     switch (mode) {
-    case Mode::RtSpot: return kRtSpotReadyBit;
+    case Mode::RtSpot: case Mode::RtSpotRaw: case Mode::RtSpotMapGuard: case Mode::RtSpotNativeCull: return kRtSpotReadyBit;
     case Mode::DisableBakedGi: return kGiBit;
     case Mode::DisableDirect: return kDirectBit;
     case Mode::DisableDirectDiffuse: return kDiffuseReadyBit;
@@ -51,6 +61,9 @@ inline unsigned RequiredBinding(Mode mode) noexcept {
 inline const char* ModeName(Mode mode) noexcept {
     switch (mode) {
     case Mode::RtSpot: return "rt_spot_replacement";
+    case Mode::RtSpotRaw: return "rt_spot_raw";
+    case Mode::RtSpotMapGuard: return "rt_spot_map_guard";
+    case Mode::RtSpotNativeCull: return "rt_spot_native_coverage";
     case Mode::DisableBakedGi: return "gi_off";
     case Mode::DisableDirect: return "direct_off";
     case Mode::DisableDirectDiffuse: return "diffuse_off";
@@ -76,7 +89,7 @@ inline bool CanReportVisual(Mode mode, unsigned observed) noexcept {
     return (observed & required) == required;
 }
 inline bool Disables(Mode mode, unsigned kind) noexcept {
-    if (mode == Mode::Native || mode == Mode::SpotResolution2x || mode == Mode::RtSpot) return false;
+    if (mode == Mode::Native || mode == Mode::SpotResolution2x || IsRtSpotMode(mode)) return false;
     return kind == RequiredBinding(mode);
 }
 
@@ -87,7 +100,7 @@ class LiveSelection {
     static constexpr unsigned kSequenceShift = kModeBits + 2;
     static constexpr uint64_t kModeMask = (uint64_t(1) << kModeBits) - 1;
     static constexpr uint64_t kObservedMask = uint64_t(kAllBits) << kObservedShift;
-    static_assert(static_cast<unsigned>(Mode::SpotResolution2x) <= kModeMask, "Mode storage exhausted");
+    static_assert(static_cast<unsigned>(Mode::RtSpotNativeCull) <= kModeMask, "Mode storage exhausted");
     std::atomic<uint64_t> state_{0};
 public:
     uint64_t Read() const noexcept { return state_.load(std::memory_order_acquire); }

@@ -41,7 +41,7 @@ inline void UpdateSlot(ExpansionSlot& slot, bool enabled, float distance) noexce
 inline void Update() noexcept {
     if (!ready.load() || !farDistance || !TryAcquireSRWLockExclusive(&updateLock)) return;
     const auto state = selection.Read();
-    const bool enabled = LiveSelection::GetMode(state) == Mode::RtSpot &&
+    const bool enabled = ExpandsSpotCasters(LiveSelection::GetMode(state)) &&
         (readyMask.load() & kRtSpotReadyBit) != 0;
     const float distance = Read(farDistance);
     const float before0 = Read(slots[0].value), before1 = Read(slots[1].value);

@@ -12,7 +12,7 @@ inline constexpr int kHeight = kFooterY + 72;
 inline constexpr unsigned kButtonCount = kModeCount + 3;
 inline const wchar_t* ButtonLabel(unsigned index) noexcept {
     if (index < kModeCount) return kModeChoices[index].label;
-    constexpr const wchar_t* actions[] = {L"SPECKLES REMAIN", L"SPECKLES GONE", L"SAVE LOG"};
+    constexpr const wchar_t* actions[] = {L"ISSUE REMAINS", L"ISSUE GONE", L"SAVE LOG"};
     return actions[index - kModeCount];
 }
 inline HFONT headingFont = nullptr, bodyFont = nullptr, detailFont = nullptr;
@@ -67,7 +67,7 @@ inline void Paint(HWND window) noexcept {
     const unsigned required = RequiredBinding(mode);
     wchar_t status[160]{};
     swprintf_s(status, L"Selected mode: %s   %s", (ready & RequiredVariant(mode)) == RequiredVariant(mode) ? L"ready" : L"waiting",
-        (observed & required) == required && (mode != Mode::SpotResolution2x || spot_resolution_runtime::Observed(state)) ? (mode == Mode::RtSpot ? L"RT pair recorded" : L"native bindings recorded") : L"Waiting: return to game");
+        (observed & required) == required && (mode != Mode::SpotResolution2x || spot_resolution_runtime::Observed(state)) ? (IsRtSpotMode(mode) ? L"RT pair recorded" : L"native bindings recorded") : L"Waiting: return to game");
     DrawLabel(dc, detailFont, status, {14,kStatusY,kWidth-12,kStatusY+24}, theme::kMutedText);
     wchar_t shortcuts[128]{};
     swprintf_s(shortcuts, L"F10: return to game    Ctrl+Shift+1..%u: live mode", kModeCount);
@@ -159,7 +159,7 @@ inline DWORD WINAPI ThreadProc(LPVOID) noexcept {
     ULONGLONG nextRefresh=0, nextWindowSearch=0, nextLogDrain=0;
     HWND cachedGame=nullptr;
     POINT lastOrigin{-1,-1};
-    Trace("session_start build=R76-rt-spot-replacement pid=%lu default=native log=user-diagnostics-folder",GetCurrentProcessId());
+    Trace("session_start build=R77-rt-spot-replacement pid=%lu default=native log=user-diagnostics-folder",GetCurrentProcessId());
     MSG msg{};
     while(GetMessageW(&msg,nullptr,0,0)>0){
         if (!panel || !IsDialogMessageW(panel, &msg)) {

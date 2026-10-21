@@ -119,7 +119,7 @@ static void TestSpotCulling() {
     AcquireSRWLockExclusive(&sc::updateLock);
     sc::Update();
     ReleaseSRWLockExclusive(&sc::updateLock);
-    SelectMode(Mode::Native);
+    SelectMode(Mode::RtSpotNativeCull);
     sc::Update();
     if(cullingExpansion!=60 || cullingWithoutReflections!=1)
         throw std::runtime_error("Native culling settings not restored");
@@ -203,6 +203,34 @@ int main() try {
         D3D12_COMPUTE_PIPELINE_STATE_DESC desc{};desc.pRootSignature=root.Get();desc.CS={shader->GetBufferPointer(),shader->GetBufferSize()};
         ID3D12PipelineState* pso=nullptr;Check(device->CreateComputePipelineState(&desc,IID_PPV_ARGS(&pso)));return pso;
     };
+    {
+        namespace rt = rt_spot_runtime;
+        ComPtr<ID3D12PipelineState> owner, filtered, raw, reset;
+        owner.Attach(makePso(101)); filtered.Attach(makePso(102));
+        raw.Attach(makePso(103)); reset.Attach(makePso(104));
+        Check(owner->SetPrivateDataInterface(rt::kVariant,reset.Get()));
+        Check(owner->SetPrivateDataInterface(rt::kHistoryVariant,filtered.Get()));
+        Check(owner->SetPrivateDataInterface(rt::kRawVariant,raw.Get()));
+        rt::Pass pass; pass.raySeen=pass.fullRay=true; rt::active=&pass;
+        for (auto mode : {Mode::RtSpot,Mode::RtSpotRaw,Mode::RtSpotMapGuard,Mode::RtSpotNativeCull}) {
+            if (!IsRtSpotMode(mode) || Disables(mode,kDirectBit) || RequiredVariant(mode)!=kRtSpotReadyBit)
+                throw std::runtime_error("Diagnostic mode policy mismatch");
+            pass.mode=mode;
+            for (unsigned kind : {rt::kResetComponent,rt::kSpatialComponents[0],rt::kLightComponent}) {
+                Check(owner->SetPrivateData(rt::kKind,sizeof(kind),&kind));
+                auto* expected=kind==rt::kResetComponent ? filtered.Get() : reset.Get();
+                if (mode==Mode::RtSpotRaw && kind!=rt::kLightComponent) expected=raw.Get();
+                if (mode==Mode::RtSpotMapGuard && kind==rt::kLightComponent) expected=owner.Get();
+                auto* actual=rt::SelectCompute(owner.Get());
+                if(actual!=expected) throw std::runtime_error("Diagnostic pipeline route mismatch");
+                actual->Release();
+            }
+        }
+        pass.fullRay=false;pass.reset=false;
+        if(rt::SelectCompute(owner.Get())) throw std::runtime_error("Diagnostic leaked outside full ray pass");
+        rt::active=nullptr;
+        std::cout << "PASS diagnostic PSO routes, point-independent mode policy and fallback scope\n";
+    }
     ComPtr<ID3D12PipelineState> direct,gi;direct.Attach(makePso(11));gi.Attach(makePso(22));
     AttachVariant(direct.Get(),makePso(0),kDirectBit,S_OK);AttachVariant(gi.Get(),makePso(0),kGiBit,S_OK);
     AttachVariant(direct.Get(),makePso(12),kDirectBit,S_OK,kDiffuseVariantGuid,kDiffuseReadyBit);

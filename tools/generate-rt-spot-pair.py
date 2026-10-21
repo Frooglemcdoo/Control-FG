@@ -14,6 +14,7 @@ import subprocess
 import tempfile
 from dxbc_checksum import checksum
 from rt_spot_history import bounded_history
+from rt_spot_diagnostics import raw_history, raw_spatial
 from rt_spot_samples import four_spot_samples, multi_spot_samples
 from rt_spot_filter import SPATIAL_SHAS, bounded_penumbra
 
@@ -78,15 +79,17 @@ def main():
         full = signed.read_bytes()
     # mov r0.x, 1; replaces final static/dynamic map visibility before its zero gate.
     light = patch_instruction(light, 1707, 55, [0x05000036, 0x00100012, 0, 0x00004001, 0x3f800000])
+    raw_temporal = raw_history(temporal)
     history = bounded_history(temporal)
     # mov r1.xyzw, r1.zwzz; current visibility only, for history reset on transition.
     temporal = patch_instruction(temporal, 324, 50, [0x05000036, 0x001000f2, 1, 0x00100ae6, 1])
     args.output.mkdir(parents=True, exist_ok=True)
     ray_name = 'rt_spot_multi.dxil' if args.multi_ray_capture else 'rt_spot_full.dxil'
-    outputs = {ray_name: full, 'rt_spot_light.dxbc': light, 'rt_spot_reset.dxbc': temporal, 'rt_spot_history.dxbc': history}
+    outputs = {'rt_spot_raw_history.dxbc': raw_temporal, ray_name: full, 'rt_spot_light.dxbc': light, 'rt_spot_reset.dxbc': temporal, 'rt_spot_history.dxbc': history}
     for index, sha in enumerate(SPATIAL_SHAS):
         native = checked(args.capture / f'compute_cs-{sha}.dxbc', sha)
         outputs[f'rt_spot_spatial{index}.dxbc'] = bounded_penumbra(native)
+        outputs[f'rt_spot_raw_spatial{index}.dxbc'] = raw_spatial(native)
     manifest = {'native_ray': ray_sha, 'native_light': LIGHT_SHA, 'native_temporal': TEMPORAL_SHA, 'outputs': {}}
     for name, data in outputs.items():
         (args.output / name).write_bytes(data)

@@ -30,6 +30,18 @@
     "rt_spot_multi.dxil": {
       "bytes": 49916,
       "sha256": "38a6e8690b115446df8f03f0f82a8241cd032a027117299444ef36e8464067ec"
+    },
+    "rt_spot_raw_history.dxbc": {
+      "bytes": 4888,
+      "sha256": "e5075b9dbbaacbb814b292d7bef94d477d1102a85c195c9515f76ca1af3651d0"
+    },
+    "rt_spot_raw_spatial0.dxbc": {
+      "bytes": 12380,
+      "sha256": "42418aedec88af1380d6e57b0152e5186a8ac93ca8efc1d5a3837892fa8c5008"
+    },
+    "rt_spot_raw_spatial1.dxbc": {
+      "bytes": 12380,
+      "sha256": "f84b55c052931f960ef28c78b270faa69884c69626a30f6b8666728c64511628"
     }
   },
   "native_multi_ray": "d5efe2c2219257e2a7b51bbd65a7fa3b80cdb56fb7e6444223f8b4d7ee45a1a9"
