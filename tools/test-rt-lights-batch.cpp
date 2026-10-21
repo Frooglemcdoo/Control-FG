@@ -10,7 +10,7 @@ static ComPtr<ID3D12Resource> CopyBuffer(Device& gpu,ID3D12Resource* source) {
     gpu.Transition(source,D3D12_RESOURCE_STATE_UNORDERED_ACCESS,D3D12_RESOURCE_STATE_COPY_SOURCE);
     gpu.list->CopyResource(copy.Get(),source);return copy;
 }
-enum class Case { Normal, Capacity, Unterminated, InvalidLight, InvalidInverseSize };
+enum class Case { Normal, Capacity, Unterminated, InvalidLight, InvalidInverseSize, StaleComposition };
 static void Run(Case test) {
     Device gpu(false);
     D3D12_DESCRIPTOR_RANGE bindings[]={{D3D12_DESCRIPTOR_RANGE_TYPE_SRV,4,0,0,0},{D3D12_DESCRIPTOR_RANGE_TYPE_UAV,3,0,0,4}};
@@ -59,7 +59,34 @@ static void Run(Case test) {
     gpu.list->SetComputeRootDescriptorTable(0,gpu.views->GetGPUDescriptorHandleForHeapStart());
     gpu.list->SetComputeRootConstantBufferView(1,sys->GetGPUVirtualAddress());gpu.list->SetComputeRootConstantBufferView(2,def->GetGPUVirtualAddress());
     gpu.list->SetComputeRoot32BitConstants(3,12,batch,0);gpu.list->Dispatch(1,1,1);
-    auto taskCopy=CopyBuffer(gpu,tasks.Get());auto rangeCopy=CopyBuffer(gpu,ranges.Get());auto workCopy=CopyOutput(gpu,jobs.Get());gpu.Submit();
+    auto taskCopy=CopyBuffer(gpu,tasks.Get());auto rangeCopy=CopyBuffer(gpu,ranges.Get());auto workCopy=CopyOutput(gpu,jobs.Get());
+    gpu.Transition(ranges.Get(),D3D12_RESOURCE_STATE_COPY_SOURCE,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+    std::vector<Contribution> contributions(16);std::vector<Visibility> visibility(16);
+    for(UINT local=0;local<receiverCount;++local)for(UINT slot=0;slot<slots;++slot) {
+        const UINT index=local*slots+slot,receiver=firstReceiver+local,light=receiver<64?slot:1;
+        auto& c=contributions[index];c.visibilityIndex=index;c.receiverId=receiver;c.lightId=light;c.frameTag=19;c.diffuse={1,2,3};c.specular={2,4,6};
+        auto& v=visibility[index];v.value=.5f;v.valid=1;v.receiverId=receiver;v.lightId=light;v.frameTag=19;
+    }
+    auto contributionBuffer=gpu.Upload(contributions);auto visibilityBuffer=gpu.Upload(visibility);
+    auto lighting=gpu.Buffer(receiverCount*sizeof(Lighting),D3D12_HEAP_TYPE_DEFAULT,D3D12_RESOURCE_STATE_UNORDERED_ACCESS,true);
+    gpu.View(visibilityBuffer.Get(),7,sizeof(Visibility),16,false);gpu.View(contributionBuffer.Get(),8,sizeof(Contribution),16,false);
+    gpu.View(ranges.Get(),9,sizeof(ReceiverRange),receiverCount,false);gpu.View(lighting.Get(),10,sizeof(Lighting),receiverCount,true);
+    D3D12_DESCRIPTOR_RANGE composeBindings[]={{D3D12_DESCRIPTOR_RANGE_TYPE_SRV,3,0,0,0},{D3D12_DESCRIPTOR_RANGE_TYPE_UAV,1,0,0,3}};
+    D3D12_ROOT_PARAMETER composeParameters[2]{};
+    composeParameters[0].ParameterType=D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;composeParameters[0].DescriptorTable={2,composeBindings};
+    composeParameters[1].ParameterType=D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;composeParameters[1].Constants={0,0,4};
+    D3D12_ROOT_SIGNATURE_DESC composeDesc{2,composeParameters,0,nullptr,D3D12_ROOT_SIGNATURE_FLAG_NONE};
+    Check(D3D12SerializeRootSignature(&composeDesc,D3D_ROOT_SIGNATURE_VERSION_1,&bytes,&error));
+    ComPtr<ID3D12RootSignature> composeRoot;Check(gpu.device->CreateRootSignature(0,bytes->GetBufferPointer(),bytes->GetBufferSize(),IID_PPV_ARGS(&composeRoot)));
+    auto composeShader=Read("rt_lights_batch_compose.dxil");pipelineDesc.pRootSignature=composeRoot.Get();pipelineDesc.CS={composeShader.data(),composeShader.size()};
+    ComPtr<ID3D12PipelineState> composePipeline;Check(gpu.device->CreateComputePipelineState(&pipelineDesc,IID_PPV_ARGS(&composePipeline)));
+    gpu.list->SetComputeRootSignature(composeRoot.Get());gpu.list->SetPipelineState(composePipeline.Get());
+    auto composeTable=gpu.views->GetGPUDescriptorHandleForHeapStart();composeTable.ptr+=7ULL*gpu.descriptorSize;
+    gpu.list->SetComputeRootDescriptorTable(0,composeTable);
+    const UINT composeBatch[]={firstReceiver,receiverCount,test==Case::StaleComposition?20u:19u,0};
+    gpu.list->SetComputeRoot32BitConstants(1,4,composeBatch,0);gpu.list->Dispatch(1,1,1);
+    auto lightingCopy=CopyBuffer(gpu,lighting.Get());gpu.Submit();
+    void* mappedLighting=nullptr;Check(lightingCopy->Map(0,nullptr,&mappedLighting));auto* actualLighting=static_cast<Lighting*>(mappedLighting);
     void* mappedTasks=nullptr;void* mappedRanges=nullptr;void* mappedWork=nullptr;
     Check(taskCopy->Map(0,nullptr,&mappedTasks));Check(rangeCopy->Map(0,nullptr,&mappedRanges));Check(workCopy.buffer->Map(0,nullptr,&mappedWork));
     auto* actualTasks=static_cast<ShadowTask*>(mappedTasks);auto* actualRanges=static_cast<ReceiverRange*>(mappedRanges);
@@ -72,6 +99,10 @@ static void Run(Case test) {
         Require(range.frameTag==19,"Range frame mismatch");
         if(invalid)Require(range.first==0xffffffff && range.count==1,"Incomplete native list was accepted");
         else Require(range.first==local*slots && range.count==expectedCount,"Wrong tile/depth list");
+        const bool composeInvalid=invalid || test==Case::StaleComposition;
+        const auto& result=actualLighting[local];
+        Require(result.valid==(composeInvalid?0u:1u),"Invalid or stale receiver was composed");
+        if(!composeInvalid)Require(result.lightCount==expectedCount && Near(result.diffuse.x,.5f*expectedCount) && Near(result.specular.z,3.0f*expectedCount),"Global receiver batch composition failed");
         for(UINT slot=0;slot<slots;++slot) {
             const UINT index=local*slots+slot;
             auto* row=reinterpret_cast<Job*>(static_cast<unsigned char*>(mappedWork)+(index/atlasWidth)*workCopy.rowPitch);
@@ -89,11 +120,11 @@ static void Run(Case test) {
             Require(Near(task.originBias,0.001f) && Near(task.endpointBias,0.002f),"Ray bias changed");
         }
     }
-    taskCopy->Unmap(0,nullptr);rangeCopy->Unmap(0,nullptr);workCopy.buffer->Unmap(0,nullptr);
+    lightingCopy->Unmap(0,nullptr);taskCopy->Unmap(0,nullptr);rangeCopy->Unmap(0,nullptr);workCopy.buffer->Unmap(0,nullptr);
     std::cout<<"PASS: native batch case="<<int(test)<<'\n';
 }
 int main() try {
     std::cout<<std::unitbuf;
-    for(Case test:{Case::Normal,Case::Capacity,Case::Unterminated,Case::InvalidLight,Case::InvalidInverseSize})Run(test);
+    for(Case test:{Case::Normal,Case::Capacity,Case::Unterminated,Case::InvalidLight,Case::InvalidInverseSize,Case::StaleComposition})Run(test);
     std::cout<<"PASS: native tile/depth enumeration, complete-list rejection, receiver/emitter transforms and deterministic task generation\n";return 0;
 } catch(const std::exception& error){std::cerr<<error.what()<<'\n';return 1;}
