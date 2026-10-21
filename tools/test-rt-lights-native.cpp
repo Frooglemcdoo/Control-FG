@@ -17,6 +17,24 @@ int main() try {
     D3D12_COMPUTE_PIPELINE_STATE_DESC ps{};ps.pRootSignature=root.Get();ps.CS={shader.data(),shader.size()};
     ComPtr<ID3D12PipelineState> pipeline;Check(gpu.device->CreateComputePipelineState(&ps,IID_PPV_ARGS(&pipeline)));
     std::cout<<"Native pipeline created; creating fixture resources\n";
+    // Validate extraction against the captured native global root as well as
+    // the smaller fixture root. Dispatch below still uses the fixture bindings.
+    auto nativeRootBytes=Read("native_global.rootsig");
+    ComPtr<ID3D12RootSignatureDeserializer> deserializer;
+    Check(D3D12CreateRootSignatureDeserializer(nativeRootBytes.data(),nativeRootBytes.size(),IID_PPV_ARGS(&deserializer)));
+    const auto* nativeDesc=deserializer->GetRootSignatureDesc();
+    Require(nativeDesc && nativeDesc->NumParameters==8,"Native root layout changed");
+    const auto& table=nativeDesc->pParameters[0];
+    Require(table.ParameterType==D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE && table.DescriptorTable.NumDescriptorRanges==3,"Native global table changed");
+    const auto* nativeRanges=table.DescriptorTable.pDescriptorRanges;
+    Require(nativeRanges[0].RangeType==D3D12_DESCRIPTOR_RANGE_TYPE_CBV && nativeRanges[0].BaseShaderRegister==4 && nativeRanges[0].NumDescriptors==5 && nativeRanges[0].RegisterSpace==0,"Native b4 slot absent");
+    Require(nativeRanges[1].RangeType==D3D12_DESCRIPTOR_RANGE_TYPE_SRV && nativeRanges[1].BaseShaderRegister==0 && nativeRanges[1].NumDescriptors==36 && nativeRanges[1].RegisterSpace==0,"Native t6/t8 slots absent");
+    Require(nativeRanges[2].RangeType==D3D12_DESCRIPTOR_RANGE_TYPE_UAV && nativeRanges[2].BaseShaderRegister==0 && nativeRanges[2].NumDescriptors==8 && nativeRanges[2].RegisterSpace==0,"Native u2 slot absent");
+    ComPtr<ID3D12RootSignature> nativeRoot;
+    Check(gpu.device->CreateRootSignature(0,nativeRootBytes.data(),nativeRootBytes.size(),IID_PPV_ARGS(&nativeRoot)));
+    auto nativePipelineDesc=ps;nativePipelineDesc.pRootSignature=nativeRoot.Get();
+    ComPtr<ID3D12PipelineState> nativePipeline;Check(gpu.device->CreateComputePipelineState(&nativePipelineDesc,IID_PPV_ARGS(&nativePipeline)));
+    std::cout<<"PASS: captured native global root and extraction pipeline compatibility\n";
     std::vector<float> constants(320,0);constants[0]=constants[1]=2;constants[2]=constants[3]=0.5f;
     for(UINT i=0;i<4;++i)constants[56+i*5]=1; // Native clip-to-view matrix at byte 224.
     auto cb=gpu.Upload(constants);auto cb1=gpu.Upload(std::vector<float>(64,0));

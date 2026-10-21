@@ -8,5 +8,6 @@
     }
   },
   "output_u0_u1": "float4(diffuse/specular RGB, validity)",
-  "game_integration": false
+  "game_integration": false,
+  "native_global_root_sha256": "451162124dcb4e610eb1ee4939b9f0d7963ec3be5d475ed8986799846a22bee3"
 }

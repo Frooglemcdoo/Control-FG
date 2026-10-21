@@ -132,6 +132,7 @@ def main():
     name = 'rt_lights_native_spot.dxbc'
     (args.output / (name + '.b64')).write_text(base64.b64encode(data).decode() + '\n')
     manifest = {'native_sha256': NATIVE_SHA,
+        'native_global_root_sha256': '451162124dcb4e610eb1ee4939b9f0d7963ec3be5d475ed8986799846a22bee3',
         'input_t14': 'uint4(lightIndex, receiverX, receiverY, enabled=1)',
         'outputs': {name: {'bytes': len(data), 'sha256': hashlib.sha256(data).hexdigest()}},
         'output_u0_u1': 'float4(diffuse/specular RGB, validity)',

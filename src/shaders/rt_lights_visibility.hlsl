@@ -1,10 +1,21 @@
 #include "../rt_lights/layout.h"
+#ifdef RT_LIGHTS_NATIVE_BINDINGS
+// Captured 45116212... global root already covers these registers. Native hit
+// handlers and their space-1 material / space-3 local bindings stay intact.
+RaytracingAccelerationStructure scene : register(t6);
+StructuredBuffer<ShadowTask> tasks : register(t8);
+RWStructuredBuffer<Visibility> visibility : register(u2);
+cbuffer ShaderTableLayout : register(b4) {
+    uint hitOffset; uint geometryStride; uint missIndex; uint unused;
+}
+#else
 RaytracingAccelerationStructure scene : register(t0,space7);
 StructuredBuffer<ShadowTask> tasks : register(t1,space7);
 RWStructuredBuffer<Visibility> visibility : register(u0,space7);
 cbuffer ShaderTableLayout : register(b0,space7) {
     uint hitOffset; uint geometryStride; uint missIndex; uint unused;
 }
+#endif
 // Same float-distance payload layout as Control's captured contact-shadow library.
 struct ShadowHit { float distance; };
 [shader("closesthit")]

@@ -6,6 +6,7 @@ on:
       - assets/rt-lights/**
       - src/shaders/rt_lights_native*
       - src/shaders/rt_lights_compose.hlsl
+      - src/shaders/rt_lights_visibility.hlsl
       - src/rt_lights/**
       - tools/rt_lights_native_extract.py
       - tools/test-rt-lights-native.cpp
@@ -28,6 +29,9 @@ jobs:
           $bytes=[Convert]::FromBase64String((Get-Content assets/rt-lights/rt_lights_native_spot.dxbc.b64 -Raw))
           [IO.File]::WriteAllBytes("$pwd/rt_lights_native_spot.dxbc",$bytes)
           if((Get-FileHash rt_lights_native_spot.dxbc -Algorithm SHA256).Hash.ToLower() -ne $manifest.outputs.'rt_lights_native_spot.dxbc'.sha256){throw 'Shader hash mismatch'}
+          $root=[Convert]::FromBase64String((Get-Content assets/rt-lights/native_global.rootsig.b64 -Raw))
+          [IO.File]::WriteAllBytes("$pwd/native_global.rootsig",$root)
+          if((Get-FileHash native_global.rootsig -Algorithm SHA256).Hash.ToLower() -ne $manifest.native_global_root_sha256){throw 'Native root hash mismatch'}
       - name: Compile and execute WARP fixture
         shell: powershell
         run: |
@@ -42,6 +46,8 @@ jobs:
           if($LASTEXITCODE -ne 0){throw 'Native batch shader compilation failed'}
           & $dxc.FullName -T cs_6_0 -E batchMain -HV 2021 -Fo rt_lights_batch_compose.dxil src/shaders/rt_lights_compose.hlsl
           if($LASTEXITCODE -ne 0){throw 'Batch composition shader compilation failed'}
+          & $dxc.FullName -T lib_6_3 -HV 2021 -D RT_LIGHTS_NATIVE_BINDINGS=1 -Fo rt_lights_native_visibility.dxil src/shaders/rt_lights_visibility.hlsl
+          if($LASTEXITCODE -ne 0){throw 'Native visibility library compilation failed'}
           $bat="call `"$vs\VC\Auxiliary\Build\vcvars64.bat`"`r`ncl /nologo /std:c++17 /EHsc /W4 /WX /O2 /MT tools\test-rt-lights-native.cpp /FeNative-Light-Test.exe /link d3d12.lib dxgi.lib d3dcompiler.lib`r`nexit /b %errorlevel%"
           [IO.File]::WriteAllText("$pwd/compile-native.cmd",$bat)
           cmd /c compile-native.cmd
