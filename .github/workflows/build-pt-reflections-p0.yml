@@ -338,11 +338,11 @@ jobs:
           node tools/test-native-menu.js --config build/native-menu-config.json
           if errorlevel 1 exit /b 1
 
-      - name: Package live lighting diagnostic R66
+      - name: Package live lighting diagnostic R67
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-Native-Lighting-Live-R66'
+          $out='Control-FG-Native-Lighting-Live-R67'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
           Copy-Item build/rt_spot_full.dxil,build/rt_spot_light.dxbc,build/rt_spot_reset.dxbc $out
@@ -359,18 +359,18 @@ jobs:
           Copy-Item Collect-RR-Blinds-Capture.ps1 "$out/Collect-RR-Blinds-Capture.ps1"
           Copy-Item Collect-ControlFG-Compact-Logs.cmd "$out/Collect-ControlFG-Compact-Logs.cmd"
           Copy-Item Collect-ControlFG-Compact-Logs.ps1 "$out/Collect-ControlFG-Compact-Logs.ps1"
-          Copy-Item docs/rt-spot-replacement-r66.md "$out/DIAGNOSTIC-NOTES.md"
+          Copy-Item docs/rt-spot-rr-filter-r67.md "$out/DIAGNOSTIC-NOTES.md"
           @'
-          CONTROL-FG R66 - experimental selected-spotlight RT replacement
+          CONTROL-FG R67 - experimental selected-spotlight RT replacement
           Close Control to install. Copy contents beside Control_DX12.exe.
           Preserve existing NVIDIA runtimes and the ControlFGStreamline folder.
-          Use Borderless. Load the affected room with FG, RR and glass enhancements OFF.
+          Use Borderless. Load the affected room with FG and glass enhancements OFF. Compare RR OFF and ON.
           Enable native RT Contact Shadows. Keep the same camera position for comparison.
           F10: switch NATIVE SHADOWS / RT SPOTLIGHT REPLACEMENT, then return to gameplay.
-          No restart between modes. SAVE LOG writes one Lighting-R66 session log.
+          No restart between modes. SAVE LOG writes one Lighting-R67 session log.
           This replaces one selected spotlight per pixel, not every shadow in the scene.
           An unavailable button means the required native shader pair was not prepared.
-          This is the first visual test; softness, coverage and GPU cost need verification.
+          R67 preserves native filtering for full-distance RT shadows with RR. Compare moving and stationary.
           See DIAGNOSTIC-NOTES.md for scope and limitations.
           '@ | Set-Content "$out/README.txt" -Encoding ASCII
           Compress-Archive -Path "$out/*" -DestinationPath "$out.zip" -Force
@@ -379,10 +379,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-Native-Lighting-Live-R66
+          name: Control-FG-Native-Lighting-Live-R67
           path: |
-            Control-FG-Native-Lighting-Live-R66.zip
-            Control-FG-Native-Lighting-Live-R66.sha256
+            Control-FG-Native-Lighting-Live-R67.zip
+            Control-FG-Native-Lighting-Live-R67.sha256
             build/rt_spot_shadow_prototype.dxil
             build/exports.txt
             build/imports.txt

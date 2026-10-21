@@ -578,7 +578,11 @@ static void RRNativeHookContactShadowFilter(void* color,void* history,void* auxi
  }
  const bool full=rrNativeFrame.Selected()&&!rrNativeFrame.Stopped();
  const bool contact=(rrNativeRTFrame.effects&control_rr::RTContactShadow)!=0;
- const auto policy=control_rr::ContactShadowFilterPolicy(full,contact,temporal,spatialSize,spatialStep);
+ const bool fullSpot=native_lighting::rt_spot_runtime::NeedsNativeShadowFiltering();
+ const DWORD filterError=GetLastError();
+ native_lighting::rt_spot_runtime::ReportShadowFiltering(full,contact,temporal,spatialSize,spatialStep);
+ SetLastError(filterError);
+ const auto policy=control_rr::ContactShadowFilterPolicy(full,contact,temporal,spatialSize,spatialStep,fullSpot);
  if(!policy.neutralized){
   rrNativeContactShadowFilterOriginal(color,history,auxiliary,temporal,spatialSize,spatialStep);return;
  }

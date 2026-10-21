@@ -26,6 +26,24 @@ struct Pass {
 };
 inline thread_local Pass* active = nullptr;
 inline thread_local bool previousFull = false;
+// Requested mode alone is insufficient: fallback passes must retain RR's policy.
+inline bool NeedsNativeShadowFiltering() noexcept {
+    return active && active->fullRay;
+}
+inline void ReportShadowFiltering(bool fullRR, bool contact, bool temporal, int size, int step) {
+    if (!NeedsNativeShadowFiltering()) return;
+    struct FilterState {
+        bool valid = false, fullRR = false, contact = false, temporal = false;
+        int size = 0, step = 0;
+    };
+    static thread_local FilterState last;
+    if (!last.valid || active->reset || last.fullRR != fullRR || last.contact != contact ||
+        last.temporal != temporal || last.size != size || last.step != step) {
+        Trace("rt_spot_filter full_rr=%u contact=%u native_preserved=1 temporal=%u spatial_size=%d spatial_step=%d",
+            unsigned(fullRR),unsigned(contact),unsigned(temporal),size,step);
+        last = {true, fullRR, contact, temporal, size, step};
+    }
+}
 inline void RefreshReady() noexcept {
     if (scopeReady && components.load() == 7 && !disabled.load()) readyMask.fetch_or(kRtSpotReadyBit);
 }

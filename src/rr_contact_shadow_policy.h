@@ -14,9 +14,12 @@ struct RRContactShadowFilterPolicy {
 };
 
 inline RRContactShadowFilterPolicy ContactShadowFilterPolicy(
-    bool fullRR, bool contactShadowEnabled, bool temporal, int spatialSize, int spatialStep) noexcept {
+    bool fullRR, bool contactShadowEnabled, bool temporal, int spatialSize, int spatialStep,
+    bool fullDistanceSpotShadow = false) noexcept {
     RRContactShadowFilterPolicy out{temporal, spatialSize, spatialStep, false};
-    if (fullRR && contactShadowEnabled) {
+    // Full-distance single-ray visibility needs native filtering before light composition.
+    // Only the original short contact-shadow signal is handed to RR unfiltered.
+    if (fullRR && contactShadowEnabled && !fullDistanceSpotShadow) {
         out.temporal = false;
         out.spatialSize = 0;
         // Keep a non-zero step.  The native shader still runs as an identity-style

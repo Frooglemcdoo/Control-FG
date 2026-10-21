@@ -94,7 +94,11 @@ static void FakeSpotPass(void* a, void* b, void* c, void* d) {
         c != &passArguments[2] || d != &passArguments[3]) throw std::runtime_error("RT pass arguments or selection changed");
     SelectMode(Mode::Native); // UI changes cannot split the in-progress pair.
     if (!scope->requested) throw std::runtime_error("RT selection was not held for the pass");
-    scope->raySeen = scope->fullRay = scope->composed = true;
+    if (rt_spot_runtime::NeedsNativeShadowFiltering()) throw std::runtime_error("Requested but untraced pass changed filtering");
+    scope->raySeen = true;
+    if (rt_spot_runtime::NeedsNativeShadowFiltering()) throw std::runtime_error("Native ray fallback changed filtering");
+    scope->fullRay = scope->composed = true;
+    if (!rt_spot_runtime::NeedsNativeShadowFiltering()) throw std::runtime_error("Full-distance shadows lost native filtering");
     passForwarded = true;
 }
 static void TestSpotPassSelection() {
@@ -104,7 +108,7 @@ static void TestSpotPassSelection() {
     SelectMode(Mode::RtSpot);
     rt_spot_runtime::originalPass = &FakeSpotPass;
     rt_spot_runtime::HookPass(&passArguments[0], &passArguments[1], &passArguments[2], &passArguments[3]);
-    if (!passForwarded || rt_spot_runtime::active ||
+    if (!passForwarded || rt_spot_runtime::active || rt_spot_runtime::NeedsNativeShadowFiltering() ||
         LiveSelection::GetMode(selection.Read()) != Mode::Native || LiveSelection::Observed(selection.Read()) != 0)
         throw std::runtime_error("RT pass restored incorrectly or marked a newer selection");
     rt_spot_runtime::components.store(0);
