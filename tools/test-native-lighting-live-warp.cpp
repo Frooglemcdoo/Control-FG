@@ -22,8 +22,46 @@ static bool PTReflectionSha256(const unsigned char*, size_t, char*) { return fal
 #include "../src/native_lighting_live_runtime.h"
 using Microsoft::WRL::ComPtr;
 static void Check(HRESULT hr) { if(FAILED(hr)) throw std::runtime_error("D3D failure " + std::to_string(static_cast<unsigned long>(hr))); }
+static native_lighting::spot_resolution::Extent seenExtent{};
+static unsigned seenDynamic=0, seenId=0;
+static float seenDistance=0;
+static int fakePool=0, fakeRecord=0;
+static void FakeResize(void* pool, const native_lighting::spot_resolution::Extent* size) {
+    if(pool!=&fakePool) throw std::runtime_error("resize owner changed");
+    seenExtent=*size;
+}
+static void* FakeRequest(void* pool,int w,int h,unsigned dynamic,float distance,unsigned id) {
+    if(pool!=&fakePool) throw std::runtime_error("request owner changed");
+    seenExtent={w,h};seenDynamic=dynamic;seenDistance=distance;seenId=id;return &fakeRecord;
+}
+static void TestAllocatorForwarding() {
+    using namespace native_lighting;
+    namespace sr=spot_resolution_runtime;
+    static unsigned char fakeModule[0x1400000]{};
+    sr::rendererBase=fakeModule;sr::originalResize=&FakeResize;sr::originalRequest=&FakeRequest;
+    spot_resolution::Extent native{16384,2048};
+    sr::ResizeAt(&fakePool,&native,fakeModule+0x1376c8);
+    if(seenExtent.height!=8192 || native.height!=2048) throw std::runtime_error("atlas expansion failed");
+    SelectMode(Mode::SpotResolution2x);
+    auto result=sr::RequestAt(&fakePool,1024,1024,1,12.5f,77,fakeModule+0x18acba);
+    if(result!=&fakeRecord || seenExtent.width!=2048 || seenExtent.height!=2048 ||
+       seenDynamic!=1 || seenDistance!=12.5f || seenId!=77 || !sr::Observed(selection.Read()))
+        throw std::runtime_error("native request ABI forwarding failed");
+    SelectMode(Mode::Native);
+    if(sr::Observed(selection.Read())) throw std::runtime_error("stale request observation");
+    sr::RequestAt(&fakePool,1024,1024,1,12.5f,77,fakeModule+0x18acba);
+    if(seenExtent.width!=1024) throw std::runtime_error("native restoration failed");
+    SelectMode(Mode::SpotResolution2x);
+    sr::RequestAt(&fakePool,1024,1024,0,12.5f,77,fakeModule+0x18e4db);
+    if(seenExtent.width!=1024) throw std::runtime_error("sun request modified");
+    sr::ResizeAt(&fakePool,&native,fakeModule+1);
+    if(seenExtent.height!=2048) throw std::runtime_error("unrelated resize modified");
+    sr::originalResize=nullptr;sr::originalRequest=nullptr;sr::rendererBase=nullptr;
+    sr::expandedPool=nullptr;SelectMode(Mode::Native);
+}
 int main() try {
     using namespace native_lighting;
+    TestAllocatorForwarding();
     ComPtr<IDXGIFactory4> factory; Check(CreateDXGIFactory1(IID_PPV_ARGS(&factory)));
     ComPtr<IDXGIAdapter> adapter; Check(factory->EnumWarpAdapter(IID_PPV_ARGS(&adapter)));
     ComPtr<ID3D12Device> device; Check(D3D12CreateDevice(adapter.Get(),D3D_FEATURE_LEVEL_11_0,IID_PPV_ARGS(&device)));
@@ -95,6 +133,7 @@ int main() try {
         SelectMode(Mode::SpotStableSoft);render(direct.Get(),24,reset);render(gi.Get(),22,reset);
         SelectMode(Mode::SpotStableTight);render(direct.Get(),25,reset);render(gi.Get(),22,reset);
         SelectMode(Mode::SpotBilinear);render(direct.Get(),26,reset);render(gi.Get(),22,reset);
+        SelectMode(Mode::SpotResolution2x);render(direct.Get(),11,reset);render(gi.Get(),22,reset);
         SelectMode(Mode::DisableLightPattern);render(direct.Get(),15,reset);render(gi.Get(),22,reset);
         SelectMode(Mode::Native);render(direct.Get(),11,reset);render(gi.Get(),22,reset);
     }

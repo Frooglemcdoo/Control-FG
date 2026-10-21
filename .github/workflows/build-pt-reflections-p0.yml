@@ -66,6 +66,15 @@ jobs:
           spot-bilinear-test.exe
           if errorlevel 1 exit /b 1
 
+      - name: Test spotlight resolution policy
+        shell: cmd
+        run: |
+          call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
+          cl /nologo /EHsc /std:c++17 tools/test-spot-shadow-resolution.cpp /Fe:spot-resolution-test.exe
+          if errorlevel 1 exit /b 1
+          spot-resolution-test.exe
+          if errorlevel 1 exit /b 1
+
       - name: Prepare Streamline and generated shaders
         shell: cmd
         run: |
@@ -285,11 +294,11 @@ jobs:
           node tools/test-native-menu.js --config build/native-menu-config.json
           if errorlevel 1 exit /b 1
 
-      - name: Package live lighting diagnostic R61
+      - name: Package live lighting diagnostic R62
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-Native-Lighting-Live-R61'
+          $out='Control-FG-Native-Lighting-Live-R62'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
           New-Item -ItemType Directory -Force -Path "$out/ControlFGStreamline" | Out-Null
@@ -305,35 +314,30 @@ jobs:
           Copy-Item Collect-RR-Blinds-Capture.ps1 "$out/Collect-RR-Blinds-Capture.ps1"
           Copy-Item Collect-ControlFG-Compact-Logs.cmd "$out/Collect-ControlFG-Compact-Logs.cmd"
           Copy-Item Collect-ControlFG-Compact-Logs.ps1 "$out/Collect-ControlFG-Compact-Logs.ps1"
-          Copy-Item docs/native-lighting-live-r54.md "$out/DIAGNOSTIC-NOTES.md"
+          Copy-Item docs/native-shadow-resolution-r62.md "$out/DIAGNOSTIC-NOTES.md"
           @'
-          CONTROL-FG LIVE LIGHTING DIAGNOSTIC R61 - bilinear spotlight shadow filtering
+          CONTROL-FG LIVE LIGHTING DIAGNOSTIC R62 - native spotlight resolution
           Close Control to install this DLL, then launch once. No restarts between modes.
           Copy package contents beside Control_DX12.exe, preserving ControlFGStreamline.
           Keep existing NVIDIA runtimes. Old R51/R52/R53 marker files are ignored.
 
-          Use Borderless display mode for the floating diagnostic panel.
-          F10 opens it with mouse focus; F10 again returns to the game. Buttons: NATIVE / FILTERED PCF.
-          Optional live keys: Ctrl+Shift+1 through 2, in button order.
+          Use Borderless. F10 opens the panel; F10 returns focus to the game.
+          Buttons: NATIVE / SHADOW RES 2X. Live keys: Ctrl+Shift+1 / Ctrl+Shift+2.
           Start with RT/DLSS/RR/FG/glass OFF and compare the same stationary view.
-          Filtered PCF compares four adjacent depth texels, then blends shadow visibility.
-          Test each mode separately; record speckles and note whether shadows retain detail.
-          The compact footprint is clamped to the spotlight atlas tile. Check shadow edges.
-          This replaces the wide random footprint; it may produce firmer shadows than native.
-          These tests retain shadows and affect the shared direct diffuse/specular light inputs.
-          Wait for bindings recorded and allow exposure/history to settle.
-          NOT APPLIED means the selected shader has not been seen binding yet.
-          For each mode, click SPECKLES REMAIN or SPECKLES GONE.
-          Click SAVE LOG. The confirmation shows the exact file to send.
-          Default folder: %LOCALAPPDATA%\Control-FG\Diagnostics
-          Fallback folder: %TEMP%\Control-FG\Diagnostics
-          That one file records variant readiness, selections, bindings and your results.
-          Each launch creates a dated log; earlier sessions are kept.
-
-          This is diagnostic. Other lighting passes remain; neither mode is a pure
-          direct-only/GI-only view. No pause commands or global input hooks are used.
-          If rendering stops while the panel owns focus, F10 returns to the game.
-          NATIVE restores both contributions immediately as new commands are recorded.
+          SHADOW RES 2X requests twice the width and height for dynamic PCF spotlight tiles.
+          Native PCF samples, jitter and filter radius remain unchanged.
+          The shared PCF atlas reserves four times its original area in BOTH modes.
+          At the captured High setting this adds approximately 384 MiB of depth storage.
+          Baked shadow textures, point-light and sun tile requests are unchanged.
+          This does not improve resolution in precomputed static shadow textures.
+          After choosing a mode, F10 back to the game and allow history to settle.
+          Reopen the panel; requests/bindings recorded is CPU evidence, not GPU validation.
+          For each mode click SPECKLES REMAIN or SPECKLES GONE, then SAVE LOG.
+          Send that log and comparison images, including retained shadow softness.
+          Log: %LOCALAPPDATA%\Control-FG\Diagnostics (fallback: %TEMP%).
+          The test is unavailable on an unrecognized renderer or before atlas resize.
+          NATIVE restores original tile requests; larger atlas capacity stays reserved.
+          If the image does not improve, this remains a failed resolution experiment.
           '@ | Set-Content "$out/README.txt" -Encoding ASCII
           Compress-Archive -Path "$out/*" -DestinationPath "$out.zip" -Force
           (Get-FileHash "$out.zip" -Algorithm SHA256).Hash | Set-Content "$out.sha256" -Encoding ASCII
@@ -341,10 +345,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-Native-Lighting-Live-R61
+          name: Control-FG-Native-Lighting-Live-R62
           path: |
-            Control-FG-Native-Lighting-Live-R61.zip
-            Control-FG-Native-Lighting-Live-R61.sha256
+            Control-FG-Native-Lighting-Live-R62.zip
+            Control-FG-Native-Lighting-Live-R62.sha256
             build/exports.txt
             build/imports.txt
             build/pt_glass_raygen.dxil

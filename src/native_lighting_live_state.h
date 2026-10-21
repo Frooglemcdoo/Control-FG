@@ -3,7 +3,7 @@
 #include <cstdint>
 
 namespace native_lighting {
-enum class Mode : unsigned { Native, DisableBakedGi, DisableDirect, DisableDirectDiffuse, DisableDirectSpecular, BypassShadows, DisableLightPattern, BypassScreenShadows, BypassSpotShadows, BypassPointShadows, SpotVarianceLow, SpotVarianceHigh, SpotPcfCenter, SpotPcf32, SpotStableSoft, SpotStableTight, SpotBilinear };
+enum class Mode : unsigned { Native, DisableBakedGi, DisableDirect, DisableDirectDiffuse, DisableDirectSpecular, BypassShadows, DisableLightPattern, BypassScreenShadows, BypassSpotShadows, BypassPointShadows, SpotVarianceLow, SpotVarianceHigh, SpotPcfCenter, SpotPcf32, SpotStableSoft, SpotStableTight, SpotBilinear, SpotResolution2x };
 inline constexpr unsigned kGiBit = 1, kDirectBit = 2, kAllBits = 3;
 inline constexpr unsigned kDiffuseReadyBit = 4, kSpecularReadyBit = 8, kShadowReadyBit = 16, kPatternReadyBit = 32;
 inline constexpr unsigned kScreenReadyBit = 64, kSpotReadyBit = 128, kPointReadyBit = 256;
@@ -14,9 +14,10 @@ inline constexpr unsigned kSpotPcf32ReadyBit = 1u << 12;
 inline constexpr unsigned kSpotStableSoftReadyBit = 1u << 13;
 inline constexpr unsigned kSpotStableTightReadyBit = 1u << 14;
 inline constexpr unsigned kSpotBilinearReadyBit = 1u << 15;
+inline constexpr unsigned kSpotResolutionReadyBit = 1u << 16;
 struct ModeChoice { Mode mode; const wchar_t* label; };
 inline constexpr ModeChoice kModeChoices[] = {
-    {Mode::Native, L"NATIVE"}, {Mode::SpotBilinear, L"FILTERED PCF"}
+    {Mode::Native, L"NATIVE"}, {Mode::SpotResolution2x, L"SHADOW RES 2X"}
 };
 inline constexpr unsigned kModeCount = sizeof(kModeChoices) / sizeof(kModeChoices[0]);
 inline unsigned RequiredVariant(Mode mode) noexcept {
@@ -37,6 +38,7 @@ inline unsigned RequiredVariant(Mode mode) noexcept {
     case Mode::SpotStableSoft: return kSpotStableSoftReadyBit;
     case Mode::SpotStableTight: return kSpotStableTightReadyBit;
     case Mode::SpotBilinear: return kSpotBilinearReadyBit;
+    case Mode::SpotResolution2x: return kSpotResolutionReadyBit;
     default: return 0;
     }
 }
@@ -61,6 +63,7 @@ inline const char* ModeName(Mode mode) noexcept {
     case Mode::SpotStableSoft: return "SpotStableSoft";
     case Mode::SpotStableTight: return "SpotStableTight";
     case Mode::SpotBilinear: return "spot_bilinear";
+    case Mode::SpotResolution2x: return "spot_resolution_2x";
     default: return "native";
     }
 }
@@ -69,7 +72,7 @@ inline bool CanReportVisual(Mode mode, unsigned observed) noexcept {
     return (observed & required) == required;
 }
 inline bool Disables(Mode mode, unsigned kind) noexcept {
-    if (mode == Mode::Native) return false;
+    if (mode == Mode::Native || mode == Mode::SpotResolution2x) return false;
     return kind == RequiredBinding(mode);
 }
 
@@ -80,7 +83,7 @@ class LiveSelection {
     static constexpr unsigned kSequenceShift = kModeBits + 2;
     static constexpr uint64_t kModeMask = (uint64_t(1) << kModeBits) - 1;
     static constexpr uint64_t kObservedMask = uint64_t(kAllBits) << kObservedShift;
-    static_assert(static_cast<unsigned>(Mode::SpotBilinear) <= kModeMask, "Mode storage exhausted");
+    static_assert(static_cast<unsigned>(Mode::SpotResolution2x) <= kModeMask, "Mode storage exhausted");
     std::atomic<uint64_t> state_{0};
 public:
     uint64_t Read() const noexcept { return state_.load(std::memory_order_acquire); }

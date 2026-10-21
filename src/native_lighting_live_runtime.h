@@ -2,6 +2,8 @@
 #include "native_lighting_isolation.h"
 #include "native_lighting_live_state.h"
 #include "native_lighting_report.h"
+#include "spot_shadow_resolution_policy.h"
+#include <intrin.h>
 
 namespace native_lighting {
 inline LiveSelection selection;
@@ -104,9 +106,11 @@ inline bool SelectMode(Mode mode) noexcept {
     Trace("selection seq=%llu mode=%s ready_mask=%u", LiveSelection::Sequence(state), ModeName(mode), readyMask.load());
     return true;
 }
+namespace spot_resolution_runtime { inline bool Observed(uint64_t state) noexcept; }
 inline bool ReportVisual(bool specklesRemain) noexcept {
     const auto state = selection.Read();
-    if (!CanReportVisual(LiveSelection::GetMode(state), LiveSelection::Observed(state))) {
+    if (!CanReportVisual(LiveSelection::GetMode(state), LiveSelection::Observed(state)) ||
+        (LiveSelection::GetMode(state) == Mode::SpotResolution2x && !spot_resolution_runtime::Observed(state))) {
         Trace("visual_result_rejected seq=%llu reason=awaiting_bind", LiveSelection::Sequence(state));
         return false;
     }
@@ -151,19 +155,21 @@ using CreateCompute = HRESULT (STDMETHODCALLTYPE*)(ID3D12Device*, const D3D12_CO
 inline void ObserveCompute(ID3D12Device* device, const D3D12_COMPUTE_PIPELINE_STATE_DESC* desc, IUnknown* native, CreateCompute original) noexcept {
     computeSeen.fetch_add(1);
     IdentifyPipeline(native, desc->CS, 2);
-    struct VariantSpec { const ShaderPatch* patch; const GUID* guid; unsigned ready; };
-    // Failed exploratory filters remain test fixtures, not runtime alternatives.
-    const VariantSpec variants[] = {
-        {&kSpotBilinear, &kSpotBilinearVariantGuid, kSpotBilinearReadyBit}
-    };
-    for (const auto& spec : variants) {
-        std::vector<unsigned char> bytes;
-        if (!Prepare(*spec.patch, desc->CS, bytes)) continue;
-        auto replacement = *desc; replacement.CS = {bytes.data(), bytes.size()}; replacement.CachedPSO = {nullptr, 0};
-        ID3D12PipelineState* variant = nullptr;
-        const HRESULT hr = original(device, &replacement, IID_PPV_ARGS(&variant));
-        AttachVariant(native, variant, kDirectBit, hr, *spec.guid, spec.ready);
+    // Native shaders remain intact. Tag the captured direct-light shader solely
+    // for the diagnostic's binding observation.
+    if (desc->CS.BytecodeLength == kDirect.size && desc->CS.pShaderBytecode) {
+        char sha[65]{};
+        if (PTReflectionSha256(static_cast<const unsigned char*>(desc->CS.pShaderBytecode), desc->CS.BytecodeLength, sha) &&
+            !std::strcmp(sha, kDirect.nativeSha)) {
+            ID3D12PipelineState* pso = nullptr;
+            if (SUCCEEDED(native->QueryInterface(IID_PPV_ARGS(&pso)))) {
+                const unsigned kind = kDirectBit;
+                pso->SetPrivateData(kKindGuid, sizeof(kind), &kind);
+                pso->Release();
+            }
+        }
     }
+    (void)device; (void)original;
 }
 
 struct Binding {
@@ -224,6 +230,7 @@ inline bool PatchSlot(void** slot, void* expected, void* hook) noexcept {
     if (!VirtualProtect(slot, sizeof(void*), old, &ignored)) Trace("hook_protection_restore_failed");
     return installed;
 }
+#include "spot_shadow_resolution_runtime.h"
 inline void InstallList(ID3D12GraphicsCommandList* list) noexcept {
     void** table = *reinterpret_cast<void***>(list);
     AcquireSRWLockExclusive(&hookLock);
@@ -277,6 +284,7 @@ inline HRESULT STDMETHODCALLTYPE CreateListHook(ID3D12Device* device, UINT node,
 inline void StartOverlay() noexcept;
 inline void InstallLiveDiagnostic(ID3D12Device* device) noexcept {
     if (!device) return;
+    spot_resolution_runtime::Install(GetModuleHandleW(L"renderer_rmdwin10_f.dll"));
     void** table = *reinterpret_cast<void***>(device);
     AcquireSRWLockExclusive(&hookLock);
     if (!originalGraphics) {
