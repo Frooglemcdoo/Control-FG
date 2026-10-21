@@ -14,6 +14,10 @@
     "rt_spot_reset.dxbc": {
       "bytes": 4868,
       "sha256": "3081daebf178680b5f7e117a836e4494520c0e760de2fc1ee49d3cfb3a8d089f"
+    },
+    "rt_spot_history.dxbc": {
+      "bytes": 6996,
+      "sha256": "0c30a3cb345a5ccb7f5a10d639b611118f683d007ec4c4944453187c62928e91"
     }
   }
 }

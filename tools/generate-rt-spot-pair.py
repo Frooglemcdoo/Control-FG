@@ -13,6 +13,7 @@ import struct
 import subprocess
 import tempfile
 from dxbc_checksum import checksum
+from rt_spot_history import bounded_history
 
 MULTI_RAY_SHA = 'd5efe2c2219257e2a7b51bbd65a7fa3b80cdb56fb7e6444223f8b4d7ee45a1a9'
 SINGLE_RAY_SHA = '3c6bee7eea5b5758dcaf96b400bb7589b4af2031c17bf6ba5ce2343623ddb618'
@@ -84,10 +85,11 @@ def main():
         full = signed.read_bytes()
     # mov r0.x, 1; replaces final static/dynamic map visibility before its zero gate.
     light = patch_instruction(light, 1707, 55, [0x05000036, 0x00100012, 0, 0x00004001, 0x3f800000])
+    history = bounded_history(temporal)
     # mov r1.xyzw, r1.zwzz; current visibility only, for history reset on transition.
     temporal = patch_instruction(temporal, 324, 50, [0x05000036, 0x001000f2, 1, 0x00100ae6, 1])
     args.output.mkdir(parents=True, exist_ok=True)
-    outputs = {'rt_spot_full.dxil': full, 'rt_spot_light.dxbc': light, 'rt_spot_reset.dxbc': temporal}
+    outputs = {'rt_spot_full.dxil': full, 'rt_spot_light.dxbc': light, 'rt_spot_reset.dxbc': temporal, 'rt_spot_history.dxbc': history}
     manifest = {'native_ray': ray_sha, 'native_light': LIGHT_SHA, 'native_temporal': TEMPORAL_SHA, 'outputs': {}}
     for name, data in outputs.items():
         (args.output / name).write_bytes(data)

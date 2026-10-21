@@ -11,7 +11,8 @@ inline const GUID kVariant = {0xe631a601,0x6651,0x4911,{0x80,0x90,0x11,0x71,0x14
 inline const GUID kKind = {0xe631a601,0x6651,0x4911,{0x80,0x90,0x11,0x71,0x14,0x28,0x30,0x02}};
 inline const GUID kRecord = {0xe631a601,0x6651,0x4911,{0x80,0x90,0x11,0x71,0x14,0x28,0x30,0x03}};
 inline const GUID kState = {0xe631a601,0x6651,0x4911,{0x80,0x90,0x11,0x71,0x14,0x28,0x30,0x04}};
-inline std::vector<unsigned char> rayBytes, lightBytes, resetBytes;
+inline const GUID kHistoryVariant = {0xe631a601,0x6651,0x4911,{0x80,0x90,0x11,0x71,0x14,0x28,0x30,0x05}};
+inline std::vector<unsigned char> rayBytes, lightBytes, resetBytes, historyBytes;
 inline SRWLOCK installLock = SRWLOCK_INIT;
 inline std::atomic<unsigned> components{0}, reports{0};
 inline std::atomic<bool> disabled{false};
@@ -41,6 +42,7 @@ inline void ReportShadowFiltering(bool fullRR, bool contact, bool temporal, int 
         last.temporal != temporal || last.size != size || last.step != step) {
         Trace("rt_spot_filter full_rr=%u contact=%u native_preserved=1 temporal=%u spatial_size=%d spatial_step=%d",
             unsigned(fullRR),unsigned(contact),unsigned(temporal),size,step);
+        Trace("rt_spot_history neighborhood_clip=1 spotlight_only=1 transition_reset=1");
         last = {true, fullRR, contact, temporal, size, step};
     }
 }
@@ -85,7 +87,9 @@ inline void Install() noexcept {
             PTReflectionLoadSidecar(L"rt_spot_light.dxbc","RT_SPOT_LIGHT",lightBytes,sha,loaded) &&
             !strcmp(sha,"a844888cdd5478605574157b323cb3376369ae9517c4954bf38bee21b664ecd7") &&
             PTReflectionLoadSidecar(L"rt_spot_reset.dxbc","RT_SPOT_RESET",resetBytes,sha,loaded) &&
-            !strcmp(sha,"3081daebf178680b5f7e117a836e4494520c0e760de2fc1ee49d3cfb3a8d089f");
+            !strcmp(sha,"3081daebf178680b5f7e117a836e4494520c0e760de2fc1ee49d3cfb3a8d089f") &&
+            PTReflectionLoadSidecar(L"rt_spot_history.dxbc","RT_SPOT_HISTORY",historyBytes,sha,loaded) &&
+            !strcmp(sha,"0c30a3cb345a5ccb7f5a10d639b611118f683d007ec4c4944453187c62928e91");
     }
     if (filesReady && !scopeReady && verifiedRenderer) {
         auto* base = reinterpret_cast<unsigned char*>(verifiedRenderer);
@@ -113,6 +117,14 @@ inline void ObserveCompute(ID3D12Device* device, const D3D12_COMPUTE_PIPELINE_ST
     if (SUCCEEDED(hr)) hr = native->QueryInterface(IID_PPV_ARGS(&owner));
     if (SUCCEEDED(hr)) hr = owner->SetPrivateDataInterface(kVariant,variant);
     if (SUCCEEDED(hr)) hr = owner->SetPrivateData(kKind,sizeof(kind),&kind);
+    if (SUCCEEDED(hr) && kind == kResetComponent) {
+        // Both variants must exist before advertising this component as ready.
+        custom.CS = {historyBytes.data(),historyBytes.size()};
+        ID3D12PipelineState* history = nullptr;
+        hr = create(device,&custom,IID_PPV_ARGS(&history));
+        if (SUCCEEDED(hr)) hr = owner->SetPrivateDataInterface(kHistoryVariant,history);
+        if (history) history->Release();
+    }
     if (owner) owner->Release();
     if (variant) variant->Release();
     if (SUCCEEDED(hr)) components.fetch_or(kind);
@@ -125,10 +137,11 @@ inline ID3D12PipelineState* SelectCompute(ID3D12PipelineState* native) noexcept 
     if (!active || !native) return nullptr;
     unsigned kind = 0; UINT size = sizeof(kind);
     if (FAILED(native->GetPrivateData(kKind,&size,&kind))) return nullptr;
-    const bool replace = kind == kLightComponent ? active->fullRay : kind == kResetComponent && active->raySeen && active->reset;
+    const bool replace = kind == kLightComponent ? active->fullRay : kind == kResetComponent && active->raySeen && (active->reset || active->fullRay);
     if (!replace) return nullptr;
     ID3D12PipelineState* alternate = nullptr; size = sizeof(alternate);
-    if (FAILED(native->GetPrivateData(kVariant,&size,&alternate)) || !alternate) return nullptr;
+    const GUID& variant = kind == kResetComponent && !active->reset ? kHistoryVariant : kVariant;
+    if (FAILED(native->GetPrivateData(variant,&size,&alternate)) || !alternate) return nullptr;
     if (kind == kLightComponent) active->composed = true;
     return alternate;
 }

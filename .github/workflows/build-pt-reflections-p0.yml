@@ -169,6 +169,8 @@ jobs:
           if errorlevel 1 exit /b 1
           rt-spot-shaders.exe
           if errorlevel 1 exit /b 1
+          python tools/test-rt-spot-history.py
+          if errorlevel 1 exit /b 1
 
       - name: Check secondary ray origin precision
         run: python tools/test-pt-secondary-origin.py
@@ -338,14 +340,14 @@ jobs:
           node tools/test-native-menu.js --config build/native-menu-config.json
           if errorlevel 1 exit /b 1
 
-      - name: Package live lighting diagnostic R67
+      - name: Package live lighting diagnostic R68
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-Native-Lighting-Live-R67'
+          $out='Control-FG-Native-Lighting-Live-R68'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
-          Copy-Item build/rt_spot_full.dxil,build/rt_spot_light.dxbc,build/rt_spot_reset.dxbc $out
+          Copy-Item build/rt_spot_full.dxil,build/rt_spot_light.dxbc,build/rt_spot_reset.dxbc,build/rt_spot_history.dxbc $out
           New-Item -ItemType Directory -Force -Path "$out/ControlFGStreamline" | Out-Null
           Copy-Item build/ControlFG.RTX40MFG.dll "$out/ControlFGStreamline/ControlFG.RTX40MFG.dll"
           Copy-Item build/pt_glass_raygen.dxil "$out/pt_glass_raygen.dxil"
@@ -359,18 +361,18 @@ jobs:
           Copy-Item Collect-RR-Blinds-Capture.ps1 "$out/Collect-RR-Blinds-Capture.ps1"
           Copy-Item Collect-ControlFG-Compact-Logs.cmd "$out/Collect-ControlFG-Compact-Logs.cmd"
           Copy-Item Collect-ControlFG-Compact-Logs.ps1 "$out/Collect-ControlFG-Compact-Logs.ps1"
-          Copy-Item docs/rt-spot-rr-filter-r67.md "$out/DIAGNOSTIC-NOTES.md"
+          Copy-Item docs/rt-spot-history-r68.md "$out/DIAGNOSTIC-NOTES.md"
           @'
-          CONTROL-FG R67 - experimental selected-spotlight RT replacement
+          CONTROL-FG R68 - experimental selected-spotlight RT replacement
           Close Control to install. Copy contents beside Control_DX12.exe.
           Preserve existing NVIDIA runtimes and the ControlFGStreamline folder.
           Use Borderless. Load the affected room with FG and glass enhancements OFF. Compare RR OFF and ON.
           Enable native RT Contact Shadows. Keep the same camera position for comparison.
           F10: switch NATIVE SHADOWS / RT SPOTLIGHT REPLACEMENT, then return to gameplay.
-          No restart between modes. SAVE LOG writes one Lighting-R67 session log.
+          No restart between modes. SAVE LOG writes one Lighting-R68 session log.
           This replaces one selected spotlight per pixel, not every shadow in the scene.
           An unavailable button means the required native shader pair was not prepared.
-          R67 preserves native filtering for full-distance RT shadows with RR. Compare moving and stationary.
+          R68 bounds spotlight history to current local visibility while preserving R67 filtering.
           See DIAGNOSTIC-NOTES.md for scope and limitations.
           '@ | Set-Content "$out/README.txt" -Encoding ASCII
           Compress-Archive -Path "$out/*" -DestinationPath "$out.zip" -Force
@@ -379,10 +381,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-Native-Lighting-Live-R67
+          name: Control-FG-Native-Lighting-Live-R68
           path: |
-            Control-FG-Native-Lighting-Live-R67.zip
-            Control-FG-Native-Lighting-Live-R67.sha256
+            Control-FG-Native-Lighting-Live-R68.zip
+            Control-FG-Native-Lighting-Live-R68.sha256
             build/rt_spot_shadow_prototype.dxil
             build/exports.txt
             build/imports.txt
