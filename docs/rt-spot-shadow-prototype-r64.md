@@ -52,8 +52,9 @@ lights and is not an acceptable integration.
 
 The sampler supports 1–64 rays; one ray targets the center, more rays sample a
 fixed equal-area disk. Rays end before the sampled emitter. Alpha testing is
-not disabled. The shader expects a dedicated SBT with geometry stride one and
-the custom miss at slot zero; it must not use the native reflection SBT as-is.
+not disabled. The adapter supplies verified SBT hit offset, geometry stride and
+miss index. Its dedicated SBT must preserve the scene's existing per-instance
+contribution indices; it must not use the native reflection SBT as-is.
 Invalid tasks/results retain native visibility in the CPU composition policy.
 
 Remaining before an in-game RT replacement: verified native geometry/material

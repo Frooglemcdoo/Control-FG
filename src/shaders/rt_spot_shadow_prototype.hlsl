@@ -13,6 +13,12 @@ struct HitData { uint visibility; };
 RaytracingAccelerationStructure shadowScene : register(t0, space7);
 StructuredBuffer<Task> shadowTasks : register(t1, space7);
 RWStructuredBuffer<Result> shadowResults : register(u0, space7);
+cbuffer ShadowShaderTable : register(b0, space7) {
+    uint hitRecordOffset;
+    uint geometryRecordStride;
+    uint missRecordIndex;
+    uint reserved;
+}
 
 bool ValidTask(Task task) {
     float normalLength = dot(task.normal, task.normal);
@@ -35,6 +41,7 @@ void rtSpotVisible(inout HitData payload) { payload.visibility = 1; }
 
 [shader("raygeneration")]
 void rtSpotVisibility() {
+    if (any(DispatchRaysIndex().yz != 0)) return;
     uint index = DispatchRaysIndex().x;
     uint count, stride, outputCount, outputStride;
     shadowTasks.GetDimensions(count, stride);
@@ -42,7 +49,9 @@ void rtSpotVisibility() {
     if (index >= outputCount) return;
     Result result; result.visibility = 0; result.valid = 0;
     shadowResults[index] = result;
-    if (index >= count || stride != 80 || outputStride != 8) return;
+    if (index >= count || stride != 80 || outputStride != 8 ||
+        hitRecordOffset > 15 || geometryRecordStride == 0 || geometryRecordStride > 15 ||
+        missRecordIndex > 65535) return;
     Task task = shadowTasks[index];
     if (!ValidTask(task)) return;
     float3 normal = normalize(task.normal);
@@ -63,10 +72,10 @@ void rtSpotVisibility() {
         ray.Origin = origin; ray.Direction = delta/distance;
         ray.TMin = 0; ray.TMax = distance-task.endpointBias;
         HitData payload; payload.visibility = 0;
-        // The future adapter must build an SBT with one hit record per geometry
-        // and the custom miss at slot zero. Alpha tests stay enabled.
+        // The adapter must preserve the TLAS instance contribution indices and
+        // provide a matching dedicated SBT. Alpha tests stay enabled.
         TraceRay(shadowScene, RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH,
-                 task.instanceMask, 0, 1, 0, ray, payload);
+                 task.instanceMask, hitRecordOffset, geometryRecordStride, missRecordIndex, ray, payload);
         visible += float(payload.visibility == 1);
     }
     result.visibility = visible / float(task.sampleCount);
