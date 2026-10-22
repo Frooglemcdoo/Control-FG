@@ -92,6 +92,22 @@ int main() try {
     frame.Transition(gpu.list.Get(), Surface::Counter, D3D12_RESOURCE_STATE_COPY_SOURCE);
     auto copied = gpu.Buffer(4, D3D12_HEAP_TYPE_READBACK, D3D12_RESOURCE_STATE_COPY_DEST);
     gpu.list->CopyBufferRegion(copied.Get(), 0, frame.Get(Surface::Counter), 0, 4);
+    const ReceiverRange range{0,1,84,0};
+    const Lighting light{{1,2,3},1,{4,5,6},1};
+    const Visibility visibility{1,0,1,0,0,84,0,0};
+    const Contribution contribution{0,0,0,84,{1,2,3},0,{4,5,6},0};
+    const auto uploadEvidence = [&](Surface surface, const void* value, UINT bytes) {
+        const auto address = frame.StoreConstants(value,bytes);
+        Require(address != 0,"Evidence fixture constants exhausted");
+        frame.CopyStored(gpu.list.Get(),surface,address,bytes);
+    };
+    uploadEvidence(Surface::Ranges,&range,sizeof(range));
+    uploadEvidence(Surface::Lighting,&light,sizeof(light));
+    uploadEvidence(Surface::Visibility,&visibility,sizeof(visibility));
+    uploadEvidence(Surface::Contributions,&contribution,sizeof(contribution));
+    frame.CaptureEvidence(gpu.list.Get(),0,1,84);
+    FrameResources::EvidenceSummary early;
+    Require(frame.EvidencePending() && !frame.ReadEvidence(early),"Unretired GPU evidence was readable");
     pool.ReleaseRecording(slot);
     gpu.Submit(); // Fixture-only blocking wait; production pool has none.
     ID3D12CommandList* submitted[] = {gpu.list.Get()};
@@ -113,9 +129,18 @@ int main() try {
     Check(gpu.fence->SetEventOnCompletion(2, event));
     const DWORD waited = WaitForSingleObject(event, 15000); CloseHandle(event);
     Require(waited == WAIT_OBJECT_0, "Fixture fence timed out");
-    // Acquisition must reclaim completed work without a worker timer tick.
+    // Completed evidence must not hold the render slot hostage to the worker timer.
+    auto* reused = pool.Acquire(gpu.list.Get(),32,16);
+    Require(reused == slot,"GPU evidence blocked scratch reuse");
+    static bool reported = false;
+    pool.Poll(false, [](const FrameResources::EvidenceSummary& evidence) {
+        Require(evidence.tasks==1 && evidence.validRanges==1 && evidence.litRanges==1 &&
+            evidence.validLighting==1 && evidence.validVisibility==1 && evidence.validContributions==1,
+            "Completed GPU evidence did not match recorded data");
+        reported = true;
+    });
+    Require(reported,"Worker did not report completed GPU evidence");
     Check(gpu.allocator->Reset()); Check(gpu.list->Reset(gpu.allocator.Get(), nullptr));
-    auto* reused = pool.Acquire(gpu.list.Get(), 32, 16);
     Require(reused == slot, "Completed recording was not reusable without worker polling");
     // Discard an unsubmitted recording with a recorded state change. Subsequent
     // recording must start from the actual last submitted COPY_SOURCE state.

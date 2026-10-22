@@ -43,6 +43,7 @@ private:
             if (slot.consumer) slot.consumerLifetime.Retire(completed);
             if (!submitted && !consumerSubmitted) slot.resources->DiscardRecording();
             else if (slot.consumer && !consumerSubmitted) slot.resources->DiscardConsumer();
+            else slot.resources->EvidenceRetired();
             slot.list.Reset(); slot.consumer.Reset();
             slot.rayOwner.Reset();
         }
@@ -179,14 +180,25 @@ public:
     }
     // Worker only. trim is useful while the feature is disabled; in-flight
     // recordings remain owned until reset/discard and actual fence completion.
-    void Poll(bool trim = false) noexcept {
-        std::array<std::unique_ptr<FrameResources>, SlotCount> retired;
+    void Poll(bool trim = false, void (*report)(const FrameResources::EvidenceSummary&) = nullptr) noexcept {
+        // Resource creation/destruction is worker-owned. Render callbacks may
+        // reuse scratch buffers while this independent completed copy is read.
+        std::array<FrameResources*, SlotCount> evidence{};
         {
             std::lock_guard<std::mutex> lock(mutex);
             for (unsigned i = 0; i < SlotCount; ++i) {
-                auto& slot = *slots[i]; RetireLocked(slot);
-                if (trim && !slot.preparing && slot.lifetime.Available()) retired[i] = std::move(slot.resources);
+                RetireLocked(*slots[i]); evidence[i] = slots[i]->resources.get();
             }
+        }
+        for (auto* resource : evidence) if (resource) {
+            FrameResources::EvidenceSummary result;
+            if (resource->ReadEvidence(result) && report) report(result);
+        }
+        std::array<std::unique_ptr<FrameResources>, SlotCount> retired;
+        if (trim) {
+            std::lock_guard<std::mutex> lock(mutex);
+            for (unsigned i = 0; i < SlotCount; ++i)
+                if (!slots[i]->preparing && slots[i]->lifetime.Available()) retired[i] = std::move(slots[i]->resources);
         }
     }
 };

@@ -4,6 +4,7 @@
 #include <d3d12.h>
 #include <wrl/client.h>
 #include <array>
+#include <atomic>
 #include <cstdint>
 #include <cstring>
 
@@ -40,6 +41,19 @@ class FrameResources {
     UINT descriptorStep = 0, uploadCursor = 0, uploadBytes = 0;
     UINT width = 0, height = 0;
     UINT64 residentBytes = 0;
+    // Sparse GPU evidence: one middle-screen batch per 120 slot recordings.
+    // Readback is allocated at startup and mapped only by the worker after retirement.
+    ComPtr<ID3D12Resource> evidence;
+    UINT recordings = 0, evidenceFirst = 0, evidenceCount = 0, evidenceTag = 0;
+    enum class EvidenceState { Empty, Recorded, Ready };
+    std::atomic<EvidenceState> evidenceState{EvidenceState::Empty};
+    bool recordedEvidence = false;
+    static constexpr UINT EvidenceTasks = 4096;
+    static constexpr UINT RangeOffset = 16;
+    static constexpr UINT LightingOffset = RangeOffset + BatchCapacity::Receivers * sizeof(ReceiverRange);
+    static constexpr UINT VisibilityOffset = LightingOffset + BatchCapacity::Receivers * sizeof(Lighting);
+    static constexpr UINT ContributionOffset = VisibilityOffset + EvidenceTasks * sizeof(Visibility);
+    static constexpr UINT EvidenceBytes = ContributionOffset + EvidenceTasks * sizeof(Contribution);
 
     static D3D12_RESOURCE_DESC Buffer(UINT64 bytes) noexcept {
         D3D12_RESOURCE_DESC desc{};
@@ -165,7 +179,14 @@ public:
                 cpu.ptr += descriptorStep;
             }
         }
-        width = w; height = h; residentBytes = total;
+        auto evidenceDesc = Buffer(EvidenceBytes); evidenceDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
+        const auto evidenceAllocation = device->GetResourceAllocationInfo(0, 1, &evidenceDesc);
+        if (evidenceAllocation.SizeInBytes > budget || total > budget - evidenceAllocation.SizeInBytes) return E_OUTOFMEMORY;
+        heap.Type = D3D12_HEAP_TYPE_READBACK;
+        hr = device->CreateCommittedResource(&heap, D3D12_HEAP_FLAG_NONE, &evidenceDesc,
+            D3D12_RESOURCE_STATE_COPY_DEST, nullptr, IID_PPV_ARGS(&evidence));
+        if (FAILED(hr)) return hr;
+        width = w; height = h; residentBytes = total + evidenceAllocation.SizeInBytes;
         return S_OK;
     }
     UINT Width() const noexcept { return width; }
@@ -197,18 +218,78 @@ public:
     // Call only after the recording has retired. Upload addresses referenced by
     // earlier dispatches are immutable, including between batches of one frame.
     void BeginRecording() noexcept {
-        uploadCursor = 0;
+        uploadCursor = 0; ++recordings; recordedEvidence = false;
         for (UINT i = 0; i < SurfaceCount; ++i) initialStates[i] = allocations[i].state;
     }
     void CheckpointHandoff() noexcept {
         for (UINT i = 0; i < SurfaceCount; ++i) handoffStates[i] = allocations[i].state;
     }
     void DiscardConsumer() noexcept {
+        if (recordedEvidence) evidenceState.store(EvidenceState::Empty);
+        recordedEvidence = false;
         for (UINT i = 0; i < SurfaceCount; ++i) allocations[i].state = handoffStates[i];
     }
     void DiscardRecording() noexcept {
+        if (recordedEvidence) evidenceState.store(EvidenceState::Empty);
+        recordedEvidence = false;
         for (UINT i = 0; i < SurfaceCount; ++i) allocations[i].state = initialStates[i];
         uploadCursor = 0;
+    }
+    bool EvidencePending() const noexcept { return evidenceState.load() != EvidenceState::Empty; }
+    void EvidenceRetired() noexcept {
+        if (recordedEvidence) evidenceState.store(EvidenceState::Ready);
+        recordedEvidence = false;
+    }
+    void CaptureEvidence(ID3D12GraphicsCommandList* list, UINT first, UINT count, UINT tag) noexcept {
+        if (EvidencePending() || recordings % 120 != 1) return;
+        const UINT middle = (width * height / 2 / BatchCapacity::Receivers) * BatchCapacity::Receivers;
+        if (first != middle) return;
+        evidenceFirst = first; evidenceCount = count; evidenceTag = tag;
+        const auto copy = [&](Surface surface, UINT offset, UINT bytes) {
+            const auto before = allocations[static_cast<UINT>(surface)].state;
+            Transition(list, surface, D3D12_RESOURCE_STATE_COPY_SOURCE);
+            list->CopyBufferRegion(evidence.Get(), offset, Get(surface), 0, bytes);
+            Transition(list, surface, before);
+        };
+        copy(Surface::Counter, 0, 4);
+        copy(Surface::Ranges, RangeOffset, count * sizeof(ReceiverRange));
+        copy(Surface::Lighting, LightingOffset, count * sizeof(Lighting));
+        copy(Surface::Visibility, VisibilityOffset, EvidenceTasks * sizeof(Visibility));
+        copy(Surface::Contributions, ContributionOffset, EvidenceTasks * sizeof(Contribution));
+        recordedEvidence = true; evidenceState.store(EvidenceState::Recorded);
+    }
+    struct EvidenceSummary {
+        UINT first = 0, receivers = 0, tasks = 0, validRanges = 0, litRanges = 0;
+        UINT validLighting = 0, sampledTasks = 0, validVisibility = 0, validContributions = 0;
+        UINT rejected[10]{};
+    };
+    // Worker only, after both command-list fences have completed. Never waits.
+    bool ReadEvidence(EvidenceSummary& result) noexcept {
+        if (evidenceState.load() != EvidenceState::Ready) return false;
+        void* mappedEvidence = nullptr; D3D12_RANGE read{0, EvidenceBytes};
+        if (FAILED(evidence->Map(0, &read, &mappedEvidence))) return false;
+        const auto* bytes = static_cast<const unsigned char*>(mappedEvidence);
+        result = {}; result.first = evidenceFirst; result.receivers = evidenceCount;
+        std::memcpy(&result.tasks, bytes, 4);
+        const auto* ranges = reinterpret_cast<const ReceiverRange*>(bytes + RangeOffset);
+        const auto* lighting = reinterpret_cast<const Lighting*>(bytes + LightingOffset);
+        for (UINT i = 0; i < evidenceCount; ++i) {
+            const auto& range = ranges[i];
+            if (range.first != UINT32_MAX && range.frameTag == evidenceTag) {
+                ++result.validRanges; result.litRanges += range.count != 0;
+            } else if (range.reserved < 10) ++result.rejected[range.reserved];
+            result.validLighting += lighting[i].valid == 1;
+        }
+        result.sampledTasks = result.tasks < EvidenceTasks ? result.tasks : EvidenceTasks;
+        const auto* visibility = reinterpret_cast<const Visibility*>(bytes + VisibilityOffset);
+        const auto* contributions = reinterpret_cast<const Contribution*>(bytes + ContributionOffset);
+        for (UINT i = 0; i < result.sampledTasks; ++i) {
+            result.validVisibility += visibility[i].valid == 1 && visibility[i].frameTag == evidenceTag;
+            result.validContributions += contributions[i].visibilityIndex == i && contributions[i].frameTag == evidenceTag;
+        }
+        D3D12_RANGE noWrites{0, 0}; evidence->Unmap(0, &noWrites);
+        evidenceState.store(EvidenceState::Empty);
+        return true;
     }
     D3D12_GPU_VIRTUAL_ADDRESS StoreConstants(const void* data, UINT bytes) noexcept {
         if (!mapped || !data || !bytes || bytes > 256 || uploadCursor > uploadBytes - 256) return 0;

@@ -141,7 +141,11 @@ inline HRESULT CreateAugmented(ID3D12Device5* owner, const D3D12_STATE_OBJECT_DE
 inline void WorkerTick() noexcept {
     if (!pipelinesReady.load() || runtimeFailed.load()) return;
     const bool enabled = LiveSelection::GetMode(selection.Read()) == Mode::RtAllSpot;
-    pool.Poll(!enabled);
+    pool.Poll(!enabled, [](const rt_lights::FrameResources::EvidenceSummary& e) {
+        Trace("rt_all_gpu first=%u receivers=%u tasks=%u ranges=%u lit_ranges=%u lighting=%u sampled=%u visibility=%u contributions=%u rejected=%u,%u,%u,%u,%u,%u,%u,%u,%u,%u",
+            e.first,e.receivers,e.tasks,e.validRanges,e.litRanges,e.validLighting,e.sampledTasks,e.validVisibility,e.validContributions,
+            e.rejected[0],e.rejected[1],e.rejected[2],e.rejected[3],e.rejected[4],e.rejected[5],e.rejected[6],e.rejected[7],e.rejected[8],e.rejected[9]);
+    });
     const UINT64 extent = requestedExtent.load();
     if (!enabled || !extent) return;
     try {

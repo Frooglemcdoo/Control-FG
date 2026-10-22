@@ -10,7 +10,7 @@ static ComPtr<ID3D12Resource> CopyBuffer(Device& gpu,ID3D12Resource* source) {
     gpu.Transition(source,D3D12_RESOURCE_STATE_UNORDERED_ACCESS,D3D12_RESOURCE_STATE_COPY_SOURCE);
     gpu.list->CopyResource(copy.Get(),source);return copy;
 }
-enum class Case { Normal, Capacity, Unterminated, InvalidLight, InvalidInverseSize, StaleComposition, Overflow };
+enum class Case { Normal, Capacity, FullTile, InvalidLight, InvalidInverseSize, StaleComposition, Overflow };
 static void Run(Case test,bool compact=false) {
     Device gpu(false);
     D3D12_DESCRIPTOR_RANGE bindings[]={{D3D12_DESCRIPTOR_RANGE_TYPE_SRV,4,0,0,0},{D3D12_DESCRIPTOR_RANGE_TYPE_UAV,3,0,0,4},{D3D12_DESCRIPTOR_RANGE_TYPE_UAV,1,3,0,11}};
@@ -46,7 +46,7 @@ static void Run(Case test,bool compact=false) {
     auto depthTexture=Texture(gpu,width,height,DXGI_FORMAT_R32G32B32A32_FLOAT,depths.data());TextureView(gpu,depthTexture.Get(),1);
     // Tile 0 has both lights. Tile 1 near has only light 1; its far slice is empty.
     std::array<Job,12> cells;cells.fill(Job{65535,0,0,0});cells[0][0]=0;cells[1][0]=1;cells[3][0]=1;
-    if(test==Case::Unterminated)cells[2][0]=0;
+    if(test==Case::FullTile)cells[2][0]=0;
     if(test==Case::InvalidLight)cells[1][0]=2;
     auto cellTexture=Texture(gpu,6,2,DXGI_FORMAT_R32G32B32A32_UINT,cells.data());TextureView(gpu,cellTexture.Get(),2);
     std::vector<float> lights(160,0);
@@ -73,7 +73,7 @@ static void Run(Case test,bool compact=false) {
     gpu.Transition(ranges.Get(),D3D12_RESOURCE_STATE_COPY_SOURCE,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
     std::vector<Contribution> contributions(16);std::vector<Visibility> visibility(16);
     for(UINT local=0;local<receiverCount;++local)for(UINT slot=0;slot<slots;++slot) {
-        const UINT index=local*slots+slot,receiver=firstReceiver+local,light=receiver<64?slot:1;
+        const UINT index=local*slots+slot,receiver=firstReceiver+local,light=receiver<64?(slot%2):1;
         auto& c=contributions[index];c.visibilityIndex=index;c.receiverId=receiver;c.lightId=light;c.frameTag=19;c.diffuse={1,2,3};c.specular={2,4,6};
         auto& v=visibility[index];v.value=.5f;v.valid=1;v.receiverId=receiver;v.lightId=light;v.frameTag=19;
     }
@@ -106,8 +106,8 @@ static void Run(Case test,bool compact=false) {
     for(UINT local=0;local<receiverCount;++local) {
         const UINT receiver=firstReceiver+local;
         const bool invalid=(test==Case::Overflow && actualRanges[local].first==0xffffffff) || test==Case::Capacity || test==Case::InvalidInverseSize ||
-            ((test==Case::Unterminated || test==Case::InvalidLight) && receiver<64);
-        const UINT expectedCount=receiver<64?2:receiver==65?0:1;
+            (test==Case::InvalidLight && receiver<64);
+        const UINT expectedCount=receiver<64?(test==Case::FullTile?3:2):receiver==65?0:1;
         const auto& range=actualRanges[local];
         Require(range.frameTag==19,"Range frame mismatch");
         if(invalid)Require(range.first==0xffffffff && range.count==1,"Incomplete native list was accepted");
@@ -126,7 +126,7 @@ static void Run(Case test,bool compact=false) {
             auto* row=reinterpret_cast<Job*>(static_cast<unsigned char*>(mappedWork)+(index/atlasWidth)*workCopy.rowPitch);
             const auto& job=row[index%atlasWidth];const auto& task=actualTasks[index];
             if(invalid || slot>=expectedCount){Require(job==Job{} && task.sampleCount==0,"Unused/invalid slot retained work");continue;}
-            const UINT light=receiver<64?slot:1;
+            const UINT light=receiver<64?(slot%2):1;
             Require(job==Job{light,receiver,0,1},"Wrong work identity");
             Require(task.lightId==light && task.receiverId==receiver && task.frameTag==19 && task.sampleCount==32 && task.instanceMask==1,"Wrong task identity/policy");
             const float viewX=(float(receiver)+0.5f)*2.0f/width-1;
@@ -144,7 +144,7 @@ static void Run(Case test,bool compact=false) {
 }
 int main() try {
     std::cout<<std::unitbuf;
-    for(Case test:{Case::Normal,Case::Capacity,Case::Unterminated,Case::InvalidLight,Case::InvalidInverseSize,Case::StaleComposition})Run(test);
-    for(Case test:{Case::Normal,Case::Capacity,Case::Unterminated,Case::InvalidLight,Case::InvalidInverseSize,Case::Overflow})Run(test,true);
-    std::cout<<"PASS: native tile/depth enumeration, complete-list rejection, receiver/emitter transforms and deterministic task generation\n";return 0;
+    for(Case test:{Case::Normal,Case::Capacity,Case::FullTile,Case::InvalidLight,Case::InvalidInverseSize,Case::StaleComposition})Run(test);
+    for(Case test:{Case::Normal,Case::Capacity,Case::FullTile,Case::InvalidLight,Case::InvalidInverseSize,Case::Overflow})Run(test,true);
+    std::cout<<"PASS: native tile/depth enumeration, full-capacity lists and invalid-list rejection, receiver/emitter transforms and deterministic task generation\n";return 0;
 } catch(const std::exception& error){std::cerr<<error.what()<<'\n';return 1;}

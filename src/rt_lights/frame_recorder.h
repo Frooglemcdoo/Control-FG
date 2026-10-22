@@ -227,6 +227,7 @@ public:
             frame.Transition(list, Surface::Lighting, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
             selected.Apply(list, t.commit.gpu); Compute(list, pipelines.commit, commitAddress);
             list->Dispatch((count + 63) / 64, 1, 1); FrameResources::UavBarrier(list);
+            frame.CaptureEvidence(list, first, count, frameTag);
         }
         selected.Restore(list);
         if (reason) *reason = "recorded";
