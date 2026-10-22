@@ -101,6 +101,9 @@ inline bool PrepareQueue(ID3D12CommandQueue* queue) noexcept {
     AcquireSRWLockExclusive(&queueLock);
     if (!submittedQueue) {
         if (resolveQueue) resolveQueue(queue,nativeQueue.GetAddressOf());
+        ComPtr<ID3D12Device> queueDevice;
+        if (nativeQueue && (FAILED(nativeQueue->GetDevice(IID_PPV_ARGS(&queueDevice))) || queueDevice.Get() != device.Get()))
+            nativeQueue.Reset();
         if (nativeQueue) {
             auto** table = *reinterpret_cast<void***>(queue);
             originalExecute = reinterpret_cast<Execute>(table[10]);
@@ -135,7 +138,7 @@ inline void ObservePso(ID3D12GraphicsCommandList* list, ID3D12PipelineState* pip
 }
 inline void ResetSucceeded(ID3D12GraphicsCommandList* list) noexcept {
     pool.ResetSucceeded(list);
-    if (auto* state = State(list)) state->bindings = {};
+    for (auto& state : rootStates) if (state.list == list) { state = {}; break; }
 }
 inline bool Snapshot(const Context& context, UINT index, rt_lights::NativeBindings& out) noexcept {
     auto* state = State(context.list);

@@ -86,7 +86,7 @@ public:
         auto fresh = std::make_unique<FrameResources>();
         const HRESULT hr = fresh->Initialize(device.Get(), width, height, totalBudget / SlotCount);
         std::vector<BatchTables> tables;
-        if (SUCCEEDED(hr)) tables.resize((UINT64(width) * height + BatchCapacity::Receivers - 1) / BatchCapacity::Receivers);
+        if (SUCCEEDED(hr)) tables.resize(1);
         {
             std::lock_guard<std::mutex> lock(mutex);
             if (SUCCEEDED(hr) && !failed) {

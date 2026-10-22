@@ -152,6 +152,6 @@ Executed Windows validation for compact batches, argument generation, native
 replay PSO compatibility, extraction, and paired commit:
 https://github.com/Frooglemcdoo/Control-FG/actions/runs/39695423333
 
-No new installable shadow-replacement build is produced by this validation run.
-The main proxy workflow still contains the old runtime until live integration is
-implemented. Do not present its artifact as the all-spotlight replacement.
+R80 now connects this backend to the live native pass, descriptor snapshots and
+queue-fenced resource pool. The main workflow packages the integrated runtime.
+See `all-spotlight-r80.md` for installation, coverage and in-game validation limits.

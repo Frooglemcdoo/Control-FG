@@ -42,7 +42,7 @@ inline void LoadAssets() noexcept {
 }
 inline void ObserveCompute(ID3D12Device* owner, const D3D12_COMPUTE_PIPELINE_STATE_DESC* desc,
                            IUnknown* native, CreateCompute original) noexcept {
-    if (!desc || !native || (desc->CS.BytecodeLength != 71144 && desc->CS.BytecodeLength != 50752)) return;
+    if (runtimeFailed.load() || !desc || !native || (desc->CS.BytecodeLength != 71144 && desc->CS.BytecodeLength != 50752)) return;
     unsigned stage = rt_spot_runtime::Matches(desc->CS,kProducerSha) ? 1u : rt_spot_runtime::Matches(desc->CS,rt_spot_runtime::kLightSha) ? 2u : 0u;
     if (!stage) return;
     LoadAssets();

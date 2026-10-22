@@ -131,7 +131,7 @@ public:
         constexpr UINT64 producerRequired = (1ull << Srv) | (1ull << (Srv + 3)) | (3ull << (Srv + 15));
         const UINT receivers = frame.Width() * frame.Height();
         const UINT batches = (receivers + BatchCapacity::Receivers - 1) / BatchCapacity::Receivers;
-        if (!list || !pipelines.Ready() || !rayState || !rayRecord || !tables || tableCapacity < batches ||
+        if (!list || !pipelines.Ready() || !rayState || !rayRecord || !tables || tableCapacity < 1 ||
             !producer.Has(producerRequired) || !producer.constants[2] || !ray.Has(1ull << (Srv + 6)) ||
             !ray.table[7].ptr || !selected.Has(selectedRequired) || !selected.constants[1] ||
             producer.heap != selected.heap || ray.heap != selected.heap || nativeRays.Depth != 1 ||
@@ -150,8 +150,10 @@ public:
         DescriptorTable pointTable;
         const DescriptorEdit pointEdits[] = {Write(frame, 0, Surface::BaseDiffuse), Write(frame, 1, Surface::BaseSpecular)};
         if (!allocator.Publish(selected, pointEdits, 2, pointTable)) return false;
-        for (UINT batch = 0; batch < batches; ++batch) {
-            auto& t = tables[batch];
+        // Descriptors reference the same scratch resources for every batch.
+        // Only root CBV addresses change, so publish one immutable set per pass.
+        {
+            auto& t = tables[0];
             auto source = [&](UINT index) { auto h = producer.snapshot; h.ptr += SIZE_T(Srv + index) * allocator.step; return h; };
             const DescriptorEdit generate[] = {{Srv, source(0)}, {Srv + 1, source(3)}, {Srv + 2, source(16)}, {Srv + 3, source(15)},
                 Write(frame, 0, Surface::Work), Write(frame, 1, Surface::Tasks), Write(frame, 2, Surface::Ranges), Write(frame, 3, Surface::Counter)};
@@ -187,7 +189,7 @@ public:
             const auto composeAddress = frame.StoreConstants(compose, sizeof(compose));
             const auto commitAddress = frame.StoreConstants(commit, sizeof(commit));
             if (!generateAddress || !packAddress || !composeAddress || !commitAddress) { selected.Restore(list); return false; }
-            const auto& t = tables[batch];
+            const auto& t = tables[0];
             frame.CopyStored(list, Surface::Counter, zeroAddress, 4);
             frame.CopyStored(list, Surface::Arguments, templateAddress, IndirectLayout::Bytes);
             for (Surface surface : {Surface::Counter, Surface::Arguments, Surface::Work, Surface::Tasks, Surface::Ranges})
