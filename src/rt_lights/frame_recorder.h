@@ -15,13 +15,13 @@ struct NativeBindings {
     D3D12_CPU_DESCRIPTOR_HANDLE snapshot{};
     UINT64 observed = 0;
     bool Has(UINT64 required) const noexcept {
-        return root && heap && snapshot.ptr && table[0].ptr && table[1].ptr && table[6].ptr && table[7].ptr &&
-            constants[0] && constants[1] && constants[2] && constants[3] && (observed & required) == required;
+        return root && heap && snapshot.ptr && table[0].ptr && table[6].ptr &&
+            constants[0] && (observed & required) == required;
     }
     void Apply(ID3D12GraphicsCommandList* list, D3D12_GPU_DESCRIPTOR_HANDLE custom) const noexcept {
         list->SetComputeRootSignature(root);
-        for (UINT index : {1u, 6u, 7u}) list->SetComputeRootDescriptorTable(index, table[index]);
-        for (UINT index = 0; index < 4; ++index) list->SetComputeRootConstantBufferView(index + 2, constants[index]);
+        for (UINT index : {1u, 6u, 7u}) if (table[index].ptr) list->SetComputeRootDescriptorTable(index, table[index]);
+        for (UINT index = 0; index < 4; ++index) if (constants[index]) list->SetComputeRootConstantBufferView(index + 2, constants[index]);
         list->SetComputeRootDescriptorTable(0, custom);
     }
     void Restore(ID3D12GraphicsCommandList* list) const noexcept {
@@ -104,7 +104,7 @@ public:
                            const NativeBindings& native, const Pipelines& pipelines,
                            const TableAllocator& allocator, UINT x, UINT y, UINT z) noexcept {
         constexpr UINT64 required = (((1ull << 21) - 1) << Srv) | (7ull << Uav);
-        if (!pipelines.Ready() || !native.Has(required) || z != 1 ||
+        if (!pipelines.Ready() || !native.Has(required) || !native.constants[1] || !native.constants[2] || !native.constants[3] || z != 1 ||
             x != (frame.Width() + 7) / 8 || y != (frame.Height() + 7) / 8) return false;
         const DescriptorEdit edits[] = {Write(frame, 0, Surface::BaseDiffuse), Write(frame, 1, Surface::BaseSpecular), Write(frame, 2, Surface::BaseSelection)};
         DescriptorTable table;
@@ -132,7 +132,8 @@ public:
         const UINT receivers = frame.Width() * frame.Height();
         const UINT batches = (receivers + BatchCapacity::Receivers - 1) / BatchCapacity::Receivers;
         if (!list || !pipelines.Ready() || !rayState || !rayRecord || !tables || tableCapacity < batches ||
-            !producer.Has(producerRequired) || !ray.Has(1ull << (Srv + 6)) || !selected.Has(selectedRequired) ||
+            !producer.Has(producerRequired) || !producer.constants[2] || !ray.Has(1ull << (Srv + 6)) ||
+            !ray.table[7].ptr || !selected.Has(selectedRequired) || !selected.constants[1] ||
             producer.heap != selected.heap || ray.heap != selected.heap || nativeRays.Depth != 1 ||
             nativeRays.Width != frame.Width() || nativeRays.Height != frame.Height()) return false;
 

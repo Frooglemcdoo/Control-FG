@@ -30,6 +30,7 @@ int main() try {
     frame.Transition(gpu.list.Get(), Surface::Counter, D3D12_RESOURCE_STATE_COPY_SOURCE);
     auto copied = gpu.Buffer(4, D3D12_HEAP_TYPE_READBACK, D3D12_RESOURCE_STATE_COPY_DEST);
     gpu.list->CopyBufferRegion(copied.Get(), 0, frame.Get(Surface::Counter), 0, 4);
+    pool.ReleaseRecording(slot);
     gpu.Submit(); // Fixture-only blocking wait; production pool has none.
     ID3D12CommandList* submitted[] = {gpu.list.Get()};
     Require(pool.Submitted(gpu.queue.Get(), 1, submitted), "Actual submission was rejected");
@@ -57,7 +58,7 @@ int main() try {
     // recording must start from the actual last submitted COPY_SOURCE state.
     frame.Transition(gpu.list.Get(), Surface::Counter, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
     Check(gpu.list->Close()); Check(gpu.list->Reset(gpu.allocator.Get(), nullptr));
-    pool.ResetSucceeded(gpu.list.Get()); pool.Poll();
+    pool.ResetSucceeded(gpu.list.Get()); pool.ReleaseRecording(reused); pool.Poll();
     pool.Poll(true);
     Require(!pool.Acquire(gpu.list.Get(), 32, 16), "Disabled feature retained an idle allocation");
     std::cout << "PASS: recording retirement, resubmission ownership, immutable upload slices, extent gating and worker cleanup\n";

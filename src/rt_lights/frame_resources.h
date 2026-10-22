@@ -143,17 +143,40 @@ public:
         if (FAILED(hr)) return hr;
         mapped = static_cast<unsigned char*>(data); uploadBytes = static_cast<UINT>(constants);
         D3D12_DESCRIPTOR_HEAP_DESC hd{};
-        hd.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV; hd.NumDescriptors = SurfaceCount * 2;
+        hd.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV; hd.NumDescriptors = SurfaceCount * 2 + 4 * 49;
         hr = device->CreateDescriptorHeap(&hd, IID_PPV_ARGS(&descriptors));
         if (FAILED(hr)) return hr;
         descriptorStep = device->GetDescriptorHandleIncrementSize(hd.Type);
         for (UINT i = 0; i < SurfaceCount; ++i) CreateViews(device, i);
+        for (UINT snapshot = 0; snapshot < 4; ++snapshot) {
+            auto cpu = Snapshot(snapshot);
+            for (UINT index = 0; index < 49; ++index) {
+                if (index < 5) device->CreateConstantBufferView(nullptr, cpu);
+                else if (index < 41) {
+                    D3D12_SHADER_RESOURCE_VIEW_DESC srv{}; srv.Format = DXGI_FORMAT_R32_FLOAT;
+                    srv.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D; srv.Texture2D.MipLevels = 1;
+                    srv.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+                    device->CreateShaderResourceView(nullptr, &srv, cpu);
+                } else {
+                    D3D12_UNORDERED_ACCESS_VIEW_DESC uav{}; uav.Format = DXGI_FORMAT_R32_FLOAT;
+                    uav.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
+                    device->CreateUnorderedAccessView(nullptr, nullptr, &uav, cpu);
+                }
+                cpu.ptr += descriptorStep;
+            }
+        }
         width = w; height = h; residentBytes = total;
         return S_OK;
     }
     UINT Width() const noexcept { return width; }
     UINT Height() const noexcept { return height; }
     UINT64 ResidentBytes() const noexcept { return residentBytes; }
+    D3D12_CPU_DESCRIPTOR_HANDLE Snapshot(UINT index) const noexcept {
+        if (index >= 4) return {};
+        auto cpu = descriptors->GetCPUDescriptorHandleForHeapStart();
+        cpu.ptr += SIZE_T(SurfaceCount * 2 + index * 49) * descriptorStep;
+        return cpu;
+    }
     ID3D12Resource* Get(Surface surface) const noexcept { return allocations[static_cast<UINT>(surface)].resource.Get(); }
     D3D12_CPU_DESCRIPTOR_HANDLE View(Surface surface, bool write) const noexcept {
         auto handle = descriptors->GetCPUDescriptorHandleForHeapStart();

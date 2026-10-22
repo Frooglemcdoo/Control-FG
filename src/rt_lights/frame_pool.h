@@ -1,8 +1,10 @@
 #pragma once
 #include "frame_resources.h"
 #include "recording_lifetime.h"
+#include "frame_recorder.h"
 #include <memory>
 #include <mutex>
+#include <vector>
 
 namespace rt_lights {
 class FramePool {
@@ -10,12 +12,14 @@ public:
     static constexpr unsigned SlotCount = 3;
     struct Slot {
         std::unique_ptr<FrameResources> resources;
+        std::vector<BatchTables> tables;
         ComPtr<ID3D12Fence> fence;
         ComPtr<ID3D12CommandQueue> queue;
         ComPtr<ID3D12CommandList> list;
+        ComPtr<ID3D12StateObject> rayOwner;
         RecordingLifetime lifetime;
         UINT64 nextFence = 1;
-        bool preparing = false;
+        bool preparing = false, ownerActive = false;
     };
 private:
     std::mutex mutex;
@@ -25,7 +29,7 @@ private:
     bool failed = false;
 
     void RetireLocked(Slot& slot) noexcept {
-        if (!slot.fence || slot.lifetime.Available()) return;
+        if (!slot.fence || slot.lifetime.Available() || slot.ownerActive) return;
         const UINT64 completed = slot.fence->GetCompletedValue();
         if (completed == UINT64_MAX) {
             slot.lifetime.Quarantine(); failed = true;
@@ -35,6 +39,7 @@ private:
         if (slot.lifetime.Retire(completed)) {
             if (!submitted && slot.resources) slot.resources->DiscardRecording();
             slot.list.Reset();
+            slot.rayOwner.Reset();
         }
     }
 public:
@@ -80,9 +85,14 @@ public:
         old.reset();
         auto fresh = std::make_unique<FrameResources>();
         const HRESULT hr = fresh->Initialize(device.Get(), width, height, totalBudget / SlotCount);
+        std::vector<BatchTables> tables;
+        if (SUCCEEDED(hr)) tables.resize((UINT64(width) * height + BatchCapacity::Receivers - 1) / BatchCapacity::Receivers);
         {
             std::lock_guard<std::mutex> lock(mutex);
-            if (SUCCEEDED(hr) && !failed) target->resources = std::move(fresh);
+            if (SUCCEEDED(hr) && !failed) {
+                target->resources = std::move(fresh);
+                target->tables = std::move(tables);
+            }
             target->preparing = false;
         }
         return hr;
@@ -96,10 +106,15 @@ public:
                 slot->resources->Width() != width || slot->resources->Height() != height) continue;
             if (!slot->lifetime.Begin(++generation)) return nullptr;
             slot->list = list;
+            slot->ownerActive = true;
             slot->resources->BeginRecording();
             return slot.get();
         }
         return nullptr; // Native fallback; never wait for a busy slot.
+    }
+    void ReleaseRecording(Slot* slot) noexcept {
+        std::lock_guard<std::mutex> lock(mutex);
+        for (auto& owned : slots) if (owned.get() == slot) owned->ownerActive = false;
     }
     // The adapter passes the ACTUAL native queue after its ExecuteCommandLists
     // call returns, plus the exact observed recording-list identities. Do not

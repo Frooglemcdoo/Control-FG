@@ -8,6 +8,9 @@
 #include "rt_spot_culling_policy.h"
 #include <intrin.h>
 #include <string>
+#include "rt_lights/frame_pool.h"
+#include "rt_lights/frame_recorder.h"
+#include "rt_lights/runtime_assets.h"
 
 namespace native_lighting {
 inline LiveSelection selection;
@@ -170,6 +173,13 @@ inline void AttachVariant(IUnknown* native, ID3D12PipelineState* variant, unsign
     Trace("variant contribution=%s ready=%u hr=0x%08lX ready_bit=%u", kind == kGiBit ? "BakedGi" : "Direct", unsigned(SUCCEEDED(hr)), static_cast<unsigned long>(hr), readyBit ? readyBit : kind);
 }
 using CreateCompute = HRESULT (STDMETHODCALLTYPE*)(ID3D12Device*, const D3D12_COMPUTE_PIPELINE_STATE_DESC*, REFIID, void**);
+namespace rt_lights_runtime {
+inline void BeginPass() noexcept;
+inline void EndPass() noexcept;
+inline void ObservePso(ID3D12GraphicsCommandList*, ID3D12PipelineState*) noexcept;
+inline void ResetSucceeded(ID3D12GraphicsCommandList*) noexcept;
+inline void ObserveCompute(ID3D12Device*, const D3D12_COMPUTE_PIPELINE_STATE_DESC*, IUnknown*, CreateCompute) noexcept;
+}
 namespace rt_spot_runtime {
 inline void ObserveCompute(ID3D12Device*, const D3D12_COMPUTE_PIPELINE_STATE_DESC*, IUnknown*, CreateCompute) noexcept;
 inline ID3D12PipelineState* SelectCompute(ID3D12PipelineState*) noexcept;
@@ -183,6 +193,7 @@ inline void ObserveCompute(ID3D12Device* device, const D3D12_COMPUTE_PIPELINE_ST
     IdentifyPipeline(native, desc->CS, 2);
     rt_shadow_capture::RecordCompute(desc);
     rt_spot_runtime::ObserveCompute(device,desc,native,original);
+    rt_lights_runtime::ObserveCompute(device,desc,native,original);
     // Native shaders remain intact. Tag the captured direct-light shader solely
     // for the diagnostic's binding observation.
     if (desc->CS.BytecodeLength == kDirect.size && desc->CS.pShaderBytecode) {
@@ -218,7 +229,7 @@ struct Binding {
         }
     }
     void Recorded() const noexcept {
-        if (kind && !IsRtSpotMode(LiveSelection::GetMode(state)) && selection.Observe(state, kind))
+        if (kind && LiveSelection::GetMode(state) != Mode::RtAllSpot && !IsRtSpotMode(LiveSelection::GetMode(state)) && selection.Observe(state, kind))
             Trace("binding_recorded seq=%llu mode=%s contribution=%s variant=%u", LiveSelection::Sequence(state),
                 ModeName(LiveSelection::GetMode(state)), kind == kGiBit ? "BakedGi" : "Direct", unsigned(alternate != nullptr));
     }
@@ -245,6 +256,7 @@ inline void STDMETHODCALLTYPE SetHook(ID3D12GraphicsCommandList* list, ID3D12Pip
     Binding binding(pso);
     auto* alternate = rt_spot_runtime::SelectCompute(binding.selected);
     original(list, alternate ? alternate : binding.selected);
+    rt_lights_runtime::ObservePso(list,alternate ? alternate : binding.selected);
     if (alternate) alternate->Release();
     binding.Recorded();
 }
@@ -252,7 +264,7 @@ inline HRESULT STDMETHODCALLTYPE ResetHook(ID3D12GraphicsCommandList* list, ID3D
     const auto original = Lookup(list).reset;
     if (!original) return E_UNEXPECTED;
     Binding binding(pso); const HRESULT hr = original(list, allocator, binding.selected);
-    if (SUCCEEDED(hr)) binding.Recorded();
+    if (SUCCEEDED(hr)) { rt_lights_runtime::ResetSucceeded(list); binding.Recorded(); }
     return hr;
 }
 inline bool PatchSlot(void** slot, void* expected, void* hook) noexcept {
@@ -267,8 +279,11 @@ inline bool PatchSlot(void** slot, void* expected, void* hook) noexcept {
 #include "rt_shadow_capture.h"
 #include "rt_spot_culling_runtime.h"
 #include "rt_spot_runtime.h"
+#include "rt_lights_pipeline_runtime.h"
+#include "rt_lights_live_runtime.h"
 inline void InstallList(ID3D12GraphicsCommandList* list) noexcept {
     rt_shadow_capture::InstallList(list);
+    rt_lights_runtime::InstallList(list);
     void** table = *reinterpret_cast<void***>(list);
     AcquireSRWLockExclusive(&hookLock);
     ListHooks* available = nullptr;
@@ -322,10 +337,11 @@ inline void StartOverlay() noexcept;
 inline void InstallLiveDiagnostic(ID3D12Device* device) noexcept {
     if (!device) return;
     rt_spot_runtime::Install();
-    rt_shadow_capture::replacementState = &rt_spot_runtime::CreateAugmented;
-    rt_shadow_capture::onState = &rt_spot_runtime::OnState;
-    rt_shadow_capture::replacementDispatch = &rt_spot_runtime::Dispatch;
+    rt_shadow_capture::replacementState = &rt_lights_runtime::CreateAugmented;
+    rt_shadow_capture::onState = &rt_lights_runtime::OnState;
+    rt_shadow_capture::replacementDispatch = &rt_lights_runtime::OnRays;
     rt_shadow_capture::Install(device);
+    rt_lights_runtime::InstallDevice(device);
     void** table = *reinterpret_cast<void***>(device);
     AcquireSRWLockExclusive(&hookLock);
     if (!originalGraphics) {

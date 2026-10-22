@@ -73,8 +73,10 @@ inline void HookPass(void* a, void* b, void* c, void* d) {
     pass.requested = !previous && !disabled.load() && components.load() == kRequiredComponents &&
         IsRtSpotMode(pass.mode);
     active = &pass;
+    rt_lights_runtime::BeginPass();
     __try { originalPass(a,b,c,d); }
     __finally {
+        rt_lights_runtime::EndPass();
         active = previous;
         if (!previous) {
             if (pass.fullRay && !pass.composed) {

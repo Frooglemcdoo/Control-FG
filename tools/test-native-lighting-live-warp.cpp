@@ -20,6 +20,7 @@ static void Log(const char*, ...) {}
 static bool PTReflectionSha256(const unsigned char*, size_t, char*) { return false; }
 // Renderer and sidecar operations are unavailable in the standalone WARP test.
 static HMODULE verifiedRenderer = nullptr;
+static HMODULE verifiedD3d = nullptr;
 struct RRAlbedoCallPatch {};
 static bool RRAlbedoPrepareCallPatch(void*, void*, void*, RRAlbedoCallPatch*) { return false; }
 static bool RRAlbedoExchangeCall(RRAlbedoCallPatch*, bool) { return false; }
