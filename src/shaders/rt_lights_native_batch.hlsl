@@ -11,7 +11,7 @@ RWStructuredBuffer<ReceiverRange> ranges : register(u2);
 // Reset this one-word counter on the GPU before each batch. A bounded CAS
 // reservation never wraps or publishes a partial receiver when capacity runs out.
 RWStructuredBuffer<uint> allocation : register(u3);
-bool Reserve(uint count, uint capacity, out uint first) {
+bool ReserveScalar(uint count, uint capacity, out uint first) {
     first=0;
     uint size,stride;allocation.GetDimensions(size,stride);
     if(size!=1 || stride!=4) return false;
@@ -23,6 +23,21 @@ bool Reserve(uint count, uint capacity, out uint first) {
         if(observed==expected) { first=expected;return true; }
         expected=observed;
     }
+}
+bool Reserve(uint count, uint capacity, out uint first) {
+    first=0;
+    if(count==0) return true;
+    // One bounded reservation per active wave instead of a contended CAS loop
+    // for every receiver. Prefixes preserve disjoint complete receiver lists.
+    uint waveCount=WaveActiveSum(count), prefix=WavePrefixSum(count);
+    uint base=0; bool reservedWave=false;
+    if(WaveIsFirstLane()) reservedWave=ReserveScalar(waveCount,capacity,base);
+    reservedWave=WaveReadLaneFirst(reservedWave);
+    base=WaveReadLaneFirst(base);
+    if(reservedWave) { first=base+prefix; return true; }
+    // Near exhaustion retain the previous per-receiver admission policy;
+    // a large wave must not reject a smaller list that still fits.
+    return ReserveScalar(count,capacity,first);
 }
 #endif
 cbuffer NativeDeferred : register(b1) { uint4 deferredWords[26]; }

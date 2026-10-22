@@ -7,6 +7,10 @@ about 3.6 million rays. Frames were approximately 7.5 seconds apart.
 
 R86 changes:
 
+- Reserve compact work once per active GPU wave using prefix sums, instead of
+  every receiver spinning on the same atomic counter. Capacity remains bounded;
+  near exhaustion the original individual reservation policy is retained.
+
 - Extract and validate native per-light diffuse/specular energy before DXR.
   Exact-zero pairs are valid zero contributions and skip tracing entirely.
   Nonzero energy is never threshold-culled; invalid extraction still retains native lighting.
