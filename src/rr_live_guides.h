@@ -277,6 +277,8 @@ static void RRLiveBeforeImpl(ID3D12GraphicsCommandList* list,const control_rr::L
                 c->policy.Abort(lease);c->stopped=true;RRPerfEnd(perf);
                 Log("RR_CHARACTER_GUIDE_STOP frame=%llu reason=copy_fault fault=0x%08lX",in.engineFrame,fault);__leave;
             }
+            if(rrDiffuse->worldAlbedo && rrDiffuse->worldBatches)
+                control_rr_diagnostic::Record(control_rr_diagnostic::Event::WorldAlbedoBound);
             constants.guideFlags|=4u;
             s.texturedAlbedoValid=true;
         }

@@ -477,6 +477,9 @@ static void* PTReflectionHookTechniqueLookup(void* rfx,const char* technique) {
 #include "pt_glass_runtime.h"
 
 static const char* PTReflectionHookShaderStorageGet(int id) {
+    if(id>=kRRWorldAlbedoStorageBase && id<kRRWorldAlbedoStorageBase+4 &&
+       rrWorldAlbedoStorageReady.load(std::memory_order_acquire))
+        return reinterpret_cast<const char*>(kRRWorldVariants[id-kRRWorldAlbedoStorageBase].replay);
     if(id==kRRCharacterBaseAlbedoStorageId&&rrCharacterBaseAlbedoStorageReady.load(std::memory_order_acquire))
         return reinterpret_cast<const char*>(kRRCharacterBaseAlbedoShader);
     if(id==kRRHairOpacityStorageId&&rrHairOpacityStorageReady.load(std::memory_order_acquire))
@@ -1965,6 +1968,7 @@ static bool PTReflectionInstallShaderLookupHooks(HMODULE renderer,HMODULE d3d) n
     const bool storageReady=PTReflectionInstallStorageGetHooks(d3d);
     rrHairOpacityStorageReady.store(storageReady,std::memory_order_release);
     rrCharacterBaseAlbedoStorageReady.store(storageReady,std::memory_order_release);
+    rrWorldAlbedoStorageReady.store(storageReady,std::memory_order_release);
     if(!storageReady||!RRAlbedoShader::Initialize(d3d))return false;
     const bool glassReady=PTGlassRuntime::Install(renderer,d3d);
     Log("GLASS_ONLY_R34 glass_ready=%u opaque_pt=disabled character_shader_transport=%u",unsigned(glassReady),unsigned(storageReady));

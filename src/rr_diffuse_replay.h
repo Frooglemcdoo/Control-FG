@@ -1,5 +1,7 @@
 #pragma once
 #include "rr_hair_shader_audit.h"
+#include "rr_world_albedo.h"
+#include "rr_lighting_diagnostic.h"
 #include "rr_hair_opacity.h"
 #include "rr_character_base_albedo.h"
 // Recurring native albedo replay. CPU draw data lives only through its join.
@@ -19,6 +21,8 @@ struct RRDiffuseReplay {
     bool resizePending=false;
     unsigned long long frame=0,prepared=0,joined=0;
     UINT width=0,height=0,targetCount=0,accepted=0,rejected=0;
+    bool worldAlbedo=false;
+    UINT worldBatches=0;
     std::atomic<long long> drawTicks{0};
     std::atomic<long long> characterDrawTicks{0};
     std::atomic<UINT> frameSkips{0},rangeSkips{0},viewSkips{0},drawCalls{0};
@@ -118,15 +122,17 @@ static void RRDiffusePrepare(void* callback,void* table) noexcept {
         c->characterInstances.store(0,std::memory_order_relaxed);
         c->characterFingerprint.store(0,std::memory_order_relaxed);
         c->frameSkips=0;c->rangeSkips=0;c->viewSkips=0;c->drawCalls=0;
+        c->worldAlbedo=RRWorldAlbedoRequested();c->worldBatches=0;
         RRMaterialAudit::BeginFrame(frame);
-        RRAlbedoShader::Session shaders; // fresh native shader validation each frame
+        RRAlbedoShader::Session shaders; // Preserve the character/hair validation budget.
+        RRAlbedoShader::Session worldShaders; // Independent bounded world validation.
         const control_rr_albedo::Access access{&RRAlbedoRead,&RRAlbedoGetShader,nullptr,&shaders,&RRAlbedoValidateEyeCandidate};
         if(!control_rr_albedo::prepare(access,c->manager,c->replay,true)) {rrDiffuseStage.store(RRDiffuseStage::Idle);return;}
         std::uintptr_t source=0;memcpy(&source,c->replay.manager.data()+0x30,sizeof(source));
         size_t kept=0;UINT targets=0;
         for(size_t i=0;i<c->replay.batches.size();++i) {
             const auto family=c->replay.familyKinds[i];
-            if(control_rr::RRTexturedCharacterGuides && family!=2 && family!=5 &&
+            if(control_rr::RRTexturedCharacterGuides && family!=2 && family!=5 && !(c->worldAlbedo && family==1) &&
                !RRMaterialAudit::Wants(family)) continue;
             control_rr_albedo::OpaqueBatch original{};RRAlbedoShader::Result result{};
             if(!RRAlbedoRead(source+size_t(c->replay.sourceIndices[i])*sizeof(original),&original,sizeof(original))) continue;
@@ -134,12 +140,19 @@ static void RRDiffusePrepare(void* callback,void* table) noexcept {
             // shader contract does not prove that its RGB is diffuse albedo.
             RRMaterialAudit::Capture(frame,c->replay.familyKinds[i],c->replay.sourceIndices[i],
                 original.shader,c->replay.batches[i].shader);
-            // Keep the audited Character/Hair rendering scope unchanged.
+            // Admit only exact audited Standard variants in the world test mode.
             if(control_rr::RRTexturedCharacterGuides &&
-               c->replay.familyKinds[i]!=2 && c->replay.familyKinds[i]!=5) continue;
-            if(!shaders.ValidatePair(original.shader,c->replay.batches[i].shader,result,&reason) ||
+               family!=2 && family!=5 && !(c->worldAlbedo && family==1)) continue;
+            auto& batchShaders=family==1?worldShaders:shaders;
+            if(!batchShaders.ValidatePair(original.shader,c->replay.batches[i].shader,result,&reason) ||
                (control_rr::RRTexturedCharacterGuides && result.targetCount!=1) ||
                result.targetCount<1 || result.targetCount>2 || (targets && targets!=result.targetCount)) continue;
+            if(family==1) {
+                const int variant=RRWorldAlbedoVariant(batchShaders.PixelShaders()[result.selectedIndex]);
+                const auto replacement=RRWorldAlbedoReplacement(c->replay.batches[i].shader,variant);
+                if(!replacement) {control_rr_diagnostic::Record(control_rr_diagnostic::Event::WorldAlbedoRejected);continue;}
+                c->replay.batches[i].shader=replacement;++c->worldBatches;
+            }
             if(c->replay.familyKinds[i]==5)
                 c->replay.batches[i].shader=RRHairOpacityReplacement(original.shader,c->replay.batches[i].shader,shaders.PixelShaders()[result.selectedIndex]);
             if(c->replay.familyKinds[i]==2)

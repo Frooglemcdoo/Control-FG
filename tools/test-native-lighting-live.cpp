@@ -55,6 +55,12 @@ int main(){
     assert(IsRtSpotMode(Mode::RtSpotGiFiltered) && UsesUnshadowedSpotSelection(Mode::RtSpotGiFiltered));
     assert(!UsesRawSpotVisibility(Mode::RtSpotGiFiltered) && !Disables(Mode::RtSpotGiFiltered,kGiBit));
     assert(RequiredVariant(Mode::RtSpotGiFiltered)==kRtSpotReadyBit);
+    const auto world=Mode::RtSpotWorldAlbedo;
+    assert(UsesWorldAlbedo(world) && !UsesWorldAlbedo(Mode::RtSpotGiFiltered));
+    assert(PreservesGiFiltering(world) && IsRtSpotMode(world));
+    assert(!UsesRawSpotVisibility(world) && !PreservesBroadDiffuseFiltering(world));
+    assert(RequiredVariant(world)==kRtSpotReadyBit && !Disables(world,kGiBit));
+    assert(LiveSelection::GetMode(live.Select(world))==world);
     // UI snapshots must not reset or lose concurrent render-side observations.
     control_rr_diagnostic::Counters counters;
     using Event=control_rr_diagnostic::Event;

@@ -98,6 +98,10 @@ jobs:
           spot-resolution-test.exe
           if errorlevel 1 exit /b 1
 
+      - name: Prepare audited world albedo shaders
+        shell: cmd
+        run: python tools/generate-rr-world-albedo.py
+
       - name: Prepare Streamline and generated shaders
         shell: cmd
         run: |
@@ -264,6 +268,8 @@ jobs:
           if errorlevel 1 exit /b 1
           build\test-perf-r32.exe
           if errorlevel 1 exit /b 1
+          python tools/test-rr-world-albedo.py
+          if errorlevel 1 exit /b 1
           python tools/test-rr-material-audit.py
           if errorlevel 1 exit /b 1
           python tools/test-rr-gi-filter.py
@@ -364,11 +370,11 @@ jobs:
           node tools/test-native-menu.js --config build/native-menu-config.json
           if errorlevel 1 exit /b 1
 
-      - name: Package live lighting diagnostic R101
+      - name: Package live lighting diagnostic R102
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-Native-Lighting-Live-R101'
+          $out='Control-FG-Native-Lighting-Live-R102'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
           Copy-Item build/rt_spot_selected_off.dxbc,build/rt_spot_selection.dxbc,build/rt_spot_visibility.dxbc,build/rt_spot_light_ids.dxbc,build/rt_spot_raw_history.dxbc,build/rt_spot_raw_spatial0.dxbc,build/rt_spot_raw_spatial1.dxbc,build/rt_spot_full.dxil,build/rt_spot_r94.dxil,build/rt_spot_light.dxbc,build/rt_spot_reset.dxbc,build/rt_spot_history.dxbc,build/rt_spot_spatial0.dxbc,build/rt_spot_spatial1.dxbc $out
@@ -386,20 +392,21 @@ jobs:
           Copy-Item Collect-RR-Blinds-Capture.ps1 "$out/Collect-RR-Blinds-Capture.ps1"
           Copy-Item Collect-ControlFG-Compact-Logs.cmd "$out/Collect-ControlFG-Compact-Logs.cmd"
           Copy-Item Collect-ControlFG-Compact-Logs.ps1 "$out/Collect-ControlFG-Compact-Logs.ps1"
-          Copy-Item docs/rr-material-audit-r101.md "$out/DIAGNOSTIC-NOTES.md"
+          Copy-Item docs/rr-world-albedo-r102.md "$out/DIAGNOSTIC-NOTES.md"
           @'
-          CONTROL-FG R101 - experimental selected-spotlight RT replacement
+          CONTROL-FG R102 - experimental selected-spotlight RT replacement
           Close Control to install. Copy contents beside Control_DX12.exe.
           Preserve existing NVIDIA runtimes and the ControlFGStreamline folder.
           Use Borderless. Load the affected wall or painting with RR ON, FG and glass enhancements OFF.
           Enable native RT Contact Shadows. Keep the same camera position for comparison.
-          F10: select GI FILTER, then close the panel. Face an affected wall or painting.
-          With RR ON, stop moving for 10 seconds. Press F9 once, then wait 20 seconds.
-          SAVE LOG, close the game, and run Collect-RR-Material-Capture.cmd. Send its ZIP.
-          No restart between modes. SAVE LOG writes one Lighting-R101 session log.
+          F10: compare GI FILTER with WORLD ALBEDO. Keep RR ON.
+          Face an affected wall or painting and stand still for 10 seconds in each mode.
+          SAVE LOG once after comparing. Send the Lighting-R102 log and screenshots.
+          No restart between modes. SAVE LOG writes one Lighting-R102 session log.
           This replaces one selected spotlight per pixel, not every shadow in the scene.
           An unavailable button means the required native shader pair was not prepared.
-          R101 captures material shader evidence; it does not yet change world albedo or fix oversharpening.
+          WORLD ALBEDO supplies audited textured diffuse guides for Standard materials.
+          Both comparison modes retain GI filtering; unknown shaders keep the previous fallback.
           GI filtering and centered shadows remain as in R100. All 14 shadow assets remain exact R97.
           See DIAGNOSTIC-NOTES.md for scope and limitations.
           '@ | Set-Content "$out/README.txt" -Encoding ASCII
@@ -409,10 +416,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-Native-Lighting-Live-R101
+          name: Control-FG-Native-Lighting-Live-R102
           path: |
-            Control-FG-Native-Lighting-Live-R101.zip
-            Control-FG-Native-Lighting-Live-R101.sha256
+            Control-FG-Native-Lighting-Live-R102.zip
+            Control-FG-Native-Lighting-Live-R102.sha256
             build/rt_spot_shadow_prototype.dxil
             build/exports.txt
             build/imports.txt

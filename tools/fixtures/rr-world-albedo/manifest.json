@@ -1,0 +1,22 @@
+[
+  {
+    "variant": 0,
+    "sha256": "27713d41a80358660ae326a31132bc6d82fec98147b31497a13d0fac9cce5db2",
+    "bytes": 3220
+  },
+  {
+    "variant": 1,
+    "sha256": "6e8fdc47e77f203157c23e9f77e19b1a66f874a66e3955e29aff3181309536dd",
+    "bytes": 2908
+  },
+  {
+    "variant": 2,
+    "sha256": "b2b8ab2bf331f79837bd09ef24b669cbbfbc506b4a369edabbdead78f92a7411",
+    "bytes": 3580
+  },
+  {
+    "variant": 3,
+    "sha256": "b9478f82cb3da6907f56fc7648c22ce994a873a794a6f32b3924f85853de121d",
+    "bytes": 3824
+  }
+]
