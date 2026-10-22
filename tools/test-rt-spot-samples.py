@@ -5,10 +5,12 @@ for hits in itertools.product([0.1,1.0,10.0],repeat=4):
     maximum=10.0
     visible=sum(h>=maximum for h in hits)/4
     nearest=min(hits)
-    output=nearest if nearest<maximum else 50000.0
+    blockers=[h for h in hits if h<maximum]
+    output=sum(blockers)/len(blockers) if blockers else 50000.0
     assert 0<=visible<=1
     assert (output==50000.0)==(visible==1)
-    if visible==0:assert output==min(hits)
+    if blockers: assert min(blockers)-1e-12<=output<=max(blockers)+1e-12
+    if len(set(blockers))==1: assert math.isclose(output,blockers[0],rel_tol=1e-12)
 random.seed(70)
 for _ in range(1000):
     radius=math.sqrt(random.random());angle=random.random()*math.tau
@@ -35,5 +37,5 @@ if len(sys.argv)>1:
     assert '%SpotSample0Max' not in result
     for i in range(1,4):assert f'%SpotSample{i}Hit' in result
     assert '%253 = fmul fast float %SpotVisibleSum, 2.500000e-01' in result
-    assert 'select i1 %255, float %SpotNearest, float 5.000000e+04' in result
+    assert 'select i1 %255, float %SpotMeanBlocker, float 5.000000e+04' in result
 print('PASS symmetric disk coverage, same-frame visibility/blocker aggregation, captured IR when provided')

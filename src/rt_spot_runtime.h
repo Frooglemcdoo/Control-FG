@@ -53,7 +53,7 @@ inline void ReportShadowFiltering(bool fullRR, bool contact, bool temporal, int 
         last.temporal != temporal || last.size != size || last.step != step) {
         Trace("rt_spot_filter full_rr=%u contact=%u native_preserved=1 temporal=%u spatial_size=%d spatial_step=%d",
             unsigned(fullRR),unsigned(contact),unsigned(temporal),size,step);
-        Trace("rt_spot_history filter_policy=mode_specific point_history=native spotlight_only=1 transition_reset=1 spot_samples=4 sample_pattern=r71_symmetric closest_blocker=1 fixed_emitter_radius=1 bounded_penumbra=1 per_sample_endpoint=0 near_distance_cutoff=1 baseline=R71_exact point_samples=1");
+        Trace("rt_spot_history filter_policy=mode_specific point_history=native spotlight_only=1 transition_reset=1 spot_samples=4 sample_pattern=r71_symmetric closest_hit_per_ray=1 mean_blocker=1 fixed_emitter_radius=1 bounded_penumbra=1 per_sample_endpoint=0 near_distance_cutoff=1 baseline=R89_mean_blocker point_samples=1");
         last = {true, fullRR, contact, temporal, size, step};
     }
 }
@@ -88,7 +88,7 @@ inline void HookPass(void* a, void* b, void* c, void* d) {
                 const auto* base = reinterpret_cast<const unsigned char*>(verifiedRenderer);
                 int nativeSamples = 0;
                 memcpy(&nativeSamples,base+0x913c90,sizeof(nativeSamples));
-                Trace("rt_spot_sample_policy native_shadow_samples=%d replacement=R71_exact spot_samples=4 point_samples=1 engine_option_unchanged=1",nativeSamples);
+                Trace("rt_spot_sample_policy native_shadow_samples=%d replacement=R89_mean_blocker spot_samples=4 point_samples=1 engine_option_unchanged=1",nativeSamples);
             }
             if (pass.reset && pass.fullRay)
                 Trace("rt_spot_test seq=%llu mode=%s raw=%u maps=%u expanded_casters=%u",
@@ -114,7 +114,7 @@ inline void Install() noexcept {
             PTReflectionLoadSidecar(L"rt_spot_raw_spatial1.dxbc","RT_SPOT_RAW",rawSpatialBytes[1],sha,loaded) &&
             !strcmp(sha,"f84b55c052931f960ef28c78b270faa69884c69626a30f6b8666728c64511628") &&
             PTReflectionLoadSidecar(L"rt_spot_full.dxil","RT_SPOT_RAY",rayBytes,sha,loaded) &&
-            !strcmp(sha,"f0127f6267359eccf61fda126ecc9ff733d0b9090f6e9d16a88f65840e7d3ab8") &&
+            !strcmp(sha,"39f75f7b953389d233ea6115bc2fb374fcf897dab023079aa9a3383d1807d98d") &&
             PTReflectionLoadSidecar(L"rt_spot_light.dxbc","RT_SPOT_LIGHT",lightBytes,sha,loaded) &&
             !strcmp(sha,"a844888cdd5478605574157b323cb3376369ae9517c4954bf38bee21b664ecd7") &&
             PTReflectionLoadSidecar(L"rt_spot_reset.dxbc","RT_SPOT_RESET",resetBytes,sha,loaded) &&
@@ -262,7 +262,7 @@ inline HRESULT CreateAugmented(ID3D12Device5* device, const D3D12_STATE_OBJECT_D
             prepared=state->SetPrivateDataInterface(kRecord,record.Get());
         }
         if (SUCCEEDED(prepared)) components.fetch_or(kRayComponent);
-        RefreshReady();Trace("rt_spot_state ready=%u native_exports_retained=1 variant=%s replacement=R71_exact spot_samples=4 point_samples=1",unsigned(SUCCEEDED(prepared)),variantName);
+        RefreshReady();Trace("rt_spot_state ready=%u native_exports_retained=1 variant=%s replacement=R89_mean_blocker spot_samples=4 point_samples=1",unsigned(SUCCEEDED(prepared)),variantName);
         return hr;
     } catch (...) { return original(device,desc,iid,out); }
 }

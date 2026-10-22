@@ -1,4 +1,4 @@
-"""Verify the shipped R71 binary and optional captured-library binding compatibility."""
+"""Verify the shipped canonical binary and optional captured-library binding compatibility."""
 import base64
 import hashlib
 import json
@@ -14,7 +14,7 @@ for name, expected in manifest['outputs'].items():
     assert len(data) == expected['bytes']
     assert hashlib.sha256(data).hexdigest() == expected['sha256']
     assert expected['sha256'] in runtime, f'Runtime rejects packaged {name}'
-assert manifest['outputs']['rt_spot_full.dxil']['sha256'] == 'f0127f6267359eccf61fda126ecc9ff733d0b9090f6e9d16a88f65840e7d3ab8'
+assert manifest['outputs']['rt_spot_full.dxil']['sha256'] == '39f75f7b953389d233ea6115bc2fb374fcf897dab023079aa9a3383d1807d98d'
 assert 'rt_spot_multi.dxil' not in manifest['outputs']
 assert 'multiRayBytes' not in runtime
 assert 'Matches(shader,kRaySha)) { replacementBytes=&rayBytes;' in runtime
@@ -40,4 +40,4 @@ if len(sys.argv) == 3:
         pattern = rf'^%struct\.{type_name} = type .*'
         assert re.search(pattern,single,re.M)[0] == re.search(pattern,multi,re.M)[0]
     print('PASS captured native bindings: canonical library is a subset; payload and light/hit layouts match')
-print('PASS packaged R71 shader hash and shared replacement selection for both native variants')
+print('PASS packaged canonical shader hash and shared replacement selection for both native variants')

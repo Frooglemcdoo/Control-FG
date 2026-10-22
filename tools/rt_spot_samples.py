@@ -48,12 +48,26 @@ def _four_spot_samples(source):
         '  %SpotNearestA = call float @dx.op.binary.f32(i32 36, float %251, float %SpotSample1Hit)',
         '  %SpotNearestB = call float @dx.op.binary.f32(i32 36, float %SpotSample2Hit, float %SpotSample3Hit)',
         '  %SpotNearest = call float @dx.op.binary.f32(i32 36, float %SpotNearestA, float %SpotNearestB)'])
+    # Estimate softness from actual blockers only. A single near hit must not
+    # collapse the entire penumbra; misses never enter the distance average.
+    for index, hit in enumerate(hits):
+        lines.extend([
+            f'  %SpotBlockerDistance{index} = select i1 %SpotOccluded{index}, float {hit}, float 0.000000e+00',
+            f'  %SpotBlockerCount{index} = select i1 %SpotOccluded{index}, float 1.000000e+00, float 0.000000e+00'])
+    for label in ('Distance', 'Count'):
+        lines.extend([
+            f'  %SpotBlocker{label}A = fadd fast float %SpotBlocker{label}0, %SpotBlocker{label}1',
+            f'  %SpotBlocker{label}B = fadd fast float %SpotBlocker{label}2, %SpotBlocker{label}3',
+            f'  %SpotBlocker{label}Sum = fadd fast float %SpotBlocker{label}A, %SpotBlocker{label}B'])
+    lines.extend([
+        '  %SpotSafeBlockerCount = call float @dx.op.binary.f32(i32 35, float %SpotBlockerCountSum, float 1.000000e+00)',
+        '  %SpotMeanBlocker = fdiv fast float %SpotBlockerDistanceSum, %SpotSafeBlockerCount'])
     source=source.replace(anchor,anchor+'\n'.join(lines)+'\n')
     for before,after in [
         ('%252 = fcmp fast olt float %251, %SpotFullDistance','%252 = fcmp fast olt float %SpotNearest, %SpotFullDistance'),
         ('%253 = select i1 %252, float 0.000000e+00, float 1.000000e+00','%253 = fmul fast float %SpotVisibleSum, 2.500000e-01'),
         ('%254 = fcmp fast olt float %251, 5.000000e+04','%254 = fcmp fast olt float %SpotNearest, 5.000000e+04'),
-        ('select i1 %255, float %251, float 5.000000e+04','select i1 %255, float %SpotNearest, float 5.000000e+04')]:
+        ('select i1 %255, float %251, float 5.000000e+04','select i1 %255, float %SpotMeanBlocker, float 5.000000e+04')]:
         assert source.count(before)==1,before
         source=source.replace(before,after)
     return source
