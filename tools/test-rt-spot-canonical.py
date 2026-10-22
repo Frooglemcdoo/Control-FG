@@ -14,7 +14,7 @@ for name, expected in manifest['outputs'].items():
     assert len(data) == expected['bytes']
     assert hashlib.sha256(data).hexdigest() == expected['sha256']
     assert expected['sha256'] in runtime, f'Runtime rejects packaged {name}'
-assert manifest['outputs']['rt_spot_full.dxil']['sha256'] == 'c1f3f1b7b8845dd85224c6c41e7c8d10c6cd0fc793328e7168766563352707a5'
+assert manifest['outputs']['rt_spot_full.dxil']['sha256'] == '811f21d83796e3b8932b47e52cfbe3f9a1f94f40cd61968be3e65fe1524c2b3a'
 assert 'rt_spot_multi.dxil' not in manifest['outputs']
 assert 'multiRayBytes' not in runtime
 assert 'Matches(shader,kRaySha)) { replacementBytes=&rayBytes;' in runtime

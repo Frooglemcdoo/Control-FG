@@ -1,3 +1,6 @@
+> Superseded by the user clarification that R94 fixes earlier artifacts. R96
+> builds forward from R94; this rollback is not the development baseline.
+
 # R95: withdraw the R94 selection experiment
 
 R94 was reported to remove shadows, over-soften others, and green-screen the

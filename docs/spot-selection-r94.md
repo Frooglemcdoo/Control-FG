@@ -1,5 +1,5 @@
-> WITHDRAWN after reported missing/over-soft shadows and a system green screen.
-> R95 removes this experiment. The crash cause is not established.
+> Latest test: user reports earlier artifacts resolved, close shadows still
+> disappear. R96 preserves this selection. Earlier green screen remains unresolved.
 
 # R94: separate RT light selection from map visibility
 

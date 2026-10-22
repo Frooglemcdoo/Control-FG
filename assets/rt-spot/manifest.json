@@ -1,11 +1,32 @@
 {
+  "native_multi_ray": "d5efe2c2219257e2a7b51bbd65a7fa3b80cdb56fb7e6444223f8b4d7ee45a1a9",
   "native_ray": "3c6bee7eea5b5758dcaf96b400bb7589b4af2031c17bf6ba5ce2343623ddb618",
   "native_light": "6af3f7403a4e33ef1c478c386de8d0f6534ba9b852a75a9302c9b760c926b621",
   "native_temporal": "feb37637481fed22a3cd4d256da613d1f61aec70fc11ff5e42aa2a585101fedb",
   "outputs": {
-    "rt_spot_full.dxil": {
+    "rt_spot_r94.dxil": {
       "bytes": 51800,
       "sha256": "c1f3f1b7b8845dd85224c6c41e7c8d10c6cd0fc793328e7168766563352707a5"
+    },
+    "rt_spot_selection.dxbc": {
+      "bytes": 71244,
+      "sha256": "4319b0bd2d0ad74b670c084d92b84bd7ceda2be433ccd3e60588d49bb66ddb9c"
+    },
+    "rt_spot_visibility.dxbc": {
+      "bytes": 8240,
+      "sha256": "d12f7d085b26b0a23a1271c8eb83f412540f5370c15704f9b596e1194998de6c"
+    },
+    "rt_spot_light_ids.dxbc": {
+      "bytes": 8300,
+      "sha256": "8c813b5bd51894f9d429439a49cc1715524103de499d306609e4a7c9475771f2"
+    },
+    "rt_spot_raw_history.dxbc": {
+      "bytes": 4888,
+      "sha256": "e5075b9dbbaacbb814b292d7bef94d477d1102a85c195c9515f76ca1af3651d0"
+    },
+    "rt_spot_full.dxil": {
+      "bytes": 54408,
+      "sha256": "811f21d83796e3b8932b47e52cfbe3f9a1f94f40cd61968be3e65fe1524c2b3a"
     },
     "rt_spot_light.dxbc": {
       "bytes": 50752,
@@ -23,30 +44,17 @@
       "bytes": 12388,
       "sha256": "fc1dc49d260b40bdbc11a0a0e843ad34b9cb164afad946b3808fa20fd988c69d"
     },
-    "rt_spot_spatial1.dxbc": {
-      "bytes": 12388,
-      "sha256": "ef654dc4b4cd49f2811c9002f894a7cb240a348cbde2fa625fabfaebcafd7b7c"
-    },
-    "rt_spot_raw_history.dxbc": {
-      "bytes": 4888,
-      "sha256": "e5075b9dbbaacbb814b292d7bef94d477d1102a85c195c9515f76ca1af3651d0"
-    },
     "rt_spot_raw_spatial0.dxbc": {
       "bytes": 12380,
       "sha256": "42418aedec88af1380d6e57b0152e5186a8ac93ca8efc1d5a3837892fa8c5008"
     },
+    "rt_spot_spatial1.dxbc": {
+      "bytes": 12388,
+      "sha256": "ef654dc4b4cd49f2811c9002f894a7cb240a348cbde2fa625fabfaebcafd7b7c"
+    },
     "rt_spot_raw_spatial1.dxbc": {
       "bytes": 12380,
       "sha256": "f84b55c052931f960ef28c78b270faa69884c69626a30f6b8666728c64511628"
-    },
-    "rt_spot_visibility.dxbc": {
-      "bytes": 8240,
-      "sha256": "d12f7d085b26b0a23a1271c8eb83f412540f5370c15704f9b596e1194998de6c"
-    },
-    "rt_spot_light_ids.dxbc": {
-      "bytes": 8300,
-      "sha256": "8c813b5bd51894f9d429439a49cc1715524103de499d306609e4a7c9475771f2"
     }
-  },
-  "native_multi_ray": "d5efe2c2219257e2a7b51bbd65a7fa3b80cdb56fb7e6444223f8b4d7ee45a1a9"
+  }
 }

@@ -14,9 +14,11 @@ import subprocess
 import tempfile
 from dxbc_checksum import checksum
 from rt_spot_history import bounded_history
+from rt_spot_selection import unshadowed_selection, NATIVE_SHA as SELECTOR_SHA
 from rt_spot_debug_views import debug_view
 from rt_spot_diagnostics import raw_history, raw_spatial
 from rt_spot_samples import four_spot_samples
+from rt_spot_segments import emitter_bounded_segments
 from rt_spot_filter import SPATIAL_SHAS, bounded_penumbra
 
 MULTI_RAY_SHA = 'd5efe2c2219257e2a7b51bbd65a7fa3b80cdb56fb7e6444223f8b4d7ee45a1a9'
@@ -38,7 +40,7 @@ def replace_once(source, before, after):
 def full_distance(source, single_ray=True):
     if not single_ray:
         raise ValueError('Only the canonical R71 replacement is generated')
-    return four_spot_samples(source)
+    return emitter_bounded_segments(four_spot_samples(source))
 
 def patch_instruction(data, dword, expected_opcode, words):
     data = bytearray(data)
@@ -70,13 +72,20 @@ def main():
     with tempfile.TemporaryDirectory() as directory:
         directory = Path(directory)
         source = subprocess.check_output([args.dxc, '-dumpbin', str(ray)], text=True)
-        ll = directory / 'full-distance.ll'
-        ll.write_text(full_distance(source, ray_sha == SINGLE_RAY_SHA))
-        unsigned = directory / 'unsigned.dxil'
-        signed = directory / 'signed.dxil'
-        subprocess.run([args.assembler, str(ll), str(unsigned)], check=True)
-        subprocess.run([args.dxv, str(unsigned), '-o=' + str(signed)], check=True)
-        full = signed.read_bytes()
+        binaries = {}
+        for name, transformed in (
+            ('rt_spot_full.dxil', full_distance(source)),
+            ('rt_spot_r94.dxil', four_spot_samples(source)),
+        ):
+            ll = directory / (name + '.ll')
+            ll.write_text(transformed)
+            unsigned = directory / ('unsigned-' + name)
+            signed = directory / name
+            subprocess.run([args.assembler, str(ll), str(unsigned)], check=True)
+            subprocess.run([args.dxv, str(unsigned), '-o=' + str(signed)], check=True)
+            binaries[name] = signed.read_bytes()
+        full = binaries['rt_spot_full.dxil']
+    selector = unshadowed_selection(checked(args.capture / f'compute_cs-{SELECTOR_SHA}.dxbc', SELECTOR_SHA))
     visibility = debug_view(light)
     light_ids = debug_view(light, light_ids=True)
     # mov r0.x, 1; replaces final static/dynamic map visibility before its zero gate.
@@ -87,7 +96,7 @@ def main():
     temporal = patch_instruction(temporal, 324, 50, [0x05000036, 0x001000f2, 1, 0x00100ae6, 1])
     args.output.mkdir(parents=True, exist_ok=True)
     ray_name = 'rt_spot_full.dxil'
-    outputs = {'rt_spot_visibility.dxbc': visibility, 'rt_spot_light_ids.dxbc': light_ids, 'rt_spot_raw_history.dxbc': raw_temporal, ray_name: full, 'rt_spot_light.dxbc': light, 'rt_spot_reset.dxbc': temporal, 'rt_spot_history.dxbc': history}
+    outputs = {'rt_spot_r94.dxil': binaries['rt_spot_r94.dxil'], 'rt_spot_selection.dxbc': selector, 'rt_spot_visibility.dxbc': visibility, 'rt_spot_light_ids.dxbc': light_ids, 'rt_spot_raw_history.dxbc': raw_temporal, ray_name: full, 'rt_spot_light.dxbc': light, 'rt_spot_reset.dxbc': temporal, 'rt_spot_history.dxbc': history}
     for index, sha in enumerate(SPATIAL_SHAS):
         native = checked(args.capture / f'compute_cs-{sha}.dxbc', sha)
         outputs[f'rt_spot_spatial{index}.dxbc'] = bounded_penumbra(native)
