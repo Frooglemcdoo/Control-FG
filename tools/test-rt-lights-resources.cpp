@@ -14,7 +14,61 @@ static void Lifetime() {
     life.Quarantine();
     Require(!life.Reset(3) && !life.Retire(100) && !life.Available(), "Quarantined work was reused");
 }
+static void Handoff() {
+    Device gpu(false);
+    FramePool pool; Check(pool.Initialize(gpu.device.Get()));
+    Check(pool.Prepare(32,16,768ull*1024*1024));
+    ComPtr<ID3D12CommandAllocator> consumerAllocator;
+    ComPtr<ID3D12GraphicsCommandList> consumer;
+    Check(gpu.device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT,IID_PPV_ARGS(&consumerAllocator)));
+    Check(gpu.device->CreateCommandList(0,D3D12_COMMAND_LIST_TYPE_DIRECT,consumerAllocator.Get(),nullptr,IID_PPV_ARGS(&consumer)));
+    auto* slot = pool.Acquire(gpu.list.Get(),32,16);
+    Require(slot != nullptr,"Missing handoff lease");
+    const UINT value = 83;
+    const auto address = slot->resources->StoreConstants(&value,sizeof(value));
+    slot->resources->CopyStored(gpu.list.Get(),Surface::Counter,address,4);
+    Check(gpu.list->Close());
+    Require(pool.AttachConsumer(slot,consumer.Get()),"Second native list could not join lease");
+    slot->resources->Transition(consumer.Get(),Surface::Counter,D3D12_RESOURCE_STATE_COPY_SOURCE);
+    auto readback = gpu.Buffer(4,D3D12_HEAP_TYPE_READBACK,D3D12_RESOURCE_STATE_COPY_DEST);
+    consumer->CopyBufferRegion(readback.Get(),0,slot->resources->Get(Surface::Counter),0,4);
+    Check(consumer->Close()); pool.ReleaseRecording(slot);
+    ID3D12CommandList* pair[] = {gpu.list.Get(),consumer.Get()};
+    gpu.queue->ExecuteCommandLists(2,pair);
+    Require(pool.Submitted(gpu.queue.Get(),2,pair),"Paired submission was rejected");
+    auto wait = [&](UINT64 serial) {
+        Check(gpu.queue->Signal(gpu.fence.Get(),serial));
+        HANDLE event = CreateEventW(nullptr,FALSE,FALSE,nullptr);
+        Require(event != nullptr,"Handoff fixture event failed");
+        Check(gpu.fence->SetEventOnCompletion(serial,event));
+        DWORD result = WaitForSingleObject(event,15000); CloseHandle(event);
+        Require(result == WAIT_OBJECT_0,"Handoff fixture fence timed out");
+    };
+    wait(1);
+    void* mapped = nullptr; Check(readback->Map(0,nullptr,&mapped));
+    Require(*static_cast<UINT*>(mapped) == value,"Cross-list producer data was not preserved");
+    readback->Unmap(0,nullptr);
+    Check(gpu.list->Reset(gpu.allocator.Get(),nullptr)); pool.ResetSucceeded(gpu.list.Get());
+    Require(!pool.Acquire(gpu.list.Get(),32,16),"Producer reset released a resubmittable consumer");
+    gpu.queue->ExecuteCommandLists(1,pair+1);
+    Require(pool.Submitted(gpu.queue.Get(),1,pair+1),"Consumer resubmission lost its resource lease");
+    wait(2);
+    Check(consumer->Reset(consumerAllocator.Get(),nullptr)); pool.ResetSucceeded(consumer.Get());
+    auto* reused = pool.Acquire(gpu.list.Get(),32,16);
+    Require(reused == slot,"Completed reset pair did not retire");
+    Require(pool.AttachConsumer(reused,consumer.Get()),"Discard pair attach failed");
+    Check(gpu.list->Close()); Check(consumer->Close());
+    Check(gpu.list->Reset(gpu.allocator.Get(),nullptr)); pool.ResetSucceeded(gpu.list.Get());
+    pool.ReleaseRecording(reused);
+    Require(!pool.Acquire(gpu.list.Get(),32,16),"Partial discard released an attached consumer");
+    Check(consumer->Reset(consumerAllocator.Get(),nullptr)); pool.ResetSucceeded(consumer.Get());
+    pool.Poll(true);
+    Require(!pool.Acquire(gpu.list.Get(),32,16),"Discarded pair was not trimmed");
+    std::cout << "PASS: two-list GPU handoff, consumer resubmission, paired retirement and discard\n";
+}
+
 int main() try {
+    Handoff();
     Lifetime();
     constexpr auto prefix = DescriptorOverlap(1024,49,992,3,32);
     static_assert(prefix.tableIndex == 0 && prefix.sourceSkip == 1 && prefix.count == 2);

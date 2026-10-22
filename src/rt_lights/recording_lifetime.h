@@ -26,9 +26,12 @@ public:
         detached = true;
         return true;
     }
+    bool CanRetire(std::uint64_t completed) const noexcept {
+        return !quarantined && generation && detached && completed != UINT64_MAX &&
+            (!submitted || completed >= lastFence);
+    }
     bool Retire(std::uint64_t completed) noexcept {
-        if (quarantined || !generation || !detached || completed == UINT64_MAX ||
-            (submitted && completed < lastFence)) return false;
+        if (!CanRetire(completed)) return false;
         generation = lastFence = 0;
         submitted = false;
         return true;

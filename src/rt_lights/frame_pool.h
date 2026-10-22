@@ -15,9 +15,9 @@ public:
         std::vector<BatchTables> tables;
         ComPtr<ID3D12Fence> fence;
         ComPtr<ID3D12CommandQueue> queue;
-        ComPtr<ID3D12CommandList> list;
+        ComPtr<ID3D12CommandList> list, consumer;
         ComPtr<ID3D12StateObject> rayOwner;
-        RecordingLifetime lifetime;
+        RecordingLifetime lifetime, consumerLifetime;
         UINT64 nextFence = 1;
         bool preparing = false, ownerActive = false;
     };
@@ -35,10 +35,15 @@ private:
             slot.lifetime.Quarantine(); failed = true;
             return;
         }
+        if (!slot.lifetime.CanRetire(completed) ||
+            (slot.consumer && !slot.consumerLifetime.CanRetire(completed))) return;
         const bool submitted = slot.lifetime.Submitted();
+        const bool consumerSubmitted = slot.consumerLifetime.Submitted();
         if (slot.lifetime.Retire(completed)) {
-            if (!submitted && slot.resources) slot.resources->DiscardRecording();
-            slot.list.Reset();
+            if (slot.consumer) slot.consumerLifetime.Retire(completed);
+            if (!submitted && !consumerSubmitted) slot.resources->DiscardRecording();
+            else if (slot.consumer && !consumerSubmitted) slot.resources->DiscardConsumer();
+            slot.list.Reset(); slot.consumer.Reset();
             slot.rayOwner.Reset();
         }
     }
@@ -116,6 +121,20 @@ public:
         }
         return nullptr; // Native fallback; never wait for a busy slot.
     }
+    // Join a second native recording to this resource lease before emitting
+    // custom commands on it. Both lists execute on the verified native queue.
+    bool AttachConsumer(Slot* slot, ID3D12CommandList* list) noexcept {
+        if (!slot || !list) return false;
+        std::lock_guard<std::mutex> lock(mutex);
+        if (failed || !slot->ownerActive || slot->lifetime.Available()) return false;
+        if (slot->list.Get() == list && !slot->lifetime.Detached()) return true;
+        if (slot->consumer) return slot->consumer.Get() == list && !slot->consumerLifetime.Detached();
+        if (slot->lifetime.Detached() && !slot->lifetime.Submitted()) return false;
+        if (!slot->consumerLifetime.Begin(slot->lifetime.Generation())) return false;
+        slot->resources->CheckpointHandoff();
+        slot->consumer = list;
+        return true;
+    }
     void ReleaseRecording(Slot* slot) noexcept {
         std::lock_guard<std::mutex> lock(mutex);
         for (auto& owned : slots) if (owned.get() == slot) owned->ownerActive = false;
@@ -128,20 +147,23 @@ public:
         std::lock_guard<std::mutex> lock(mutex);
         if (failed) return false;
         for (auto& slot : slots) {
-            // A reset list pointer now names a different recording. Its submission
-            // must not be charged to the old generation still retiring on GPU.
-            if (slot->lifetime.Available() || slot->lifetime.Detached() || !slot->list) continue;
-            bool found = false;
-            for (UINT i = 0; i < count; ++i) found |= lists[i] == slot->list.Get();
-            if (!found) continue;
-            if ((slot->queue && slot->queue.Get() != queue) || slot->nextFence == UINT64_MAX) {
+            if (slot->lifetime.Available()) continue;
+            bool primaryFound = false, consumerFound = false;
+            for (UINT i = 0; i < count; ++i) {
+                primaryFound |= !slot->lifetime.Detached() && lists[i] == slot->list.Get();
+                consumerFound |= slot->consumer && !slot->consumerLifetime.Detached() && lists[i] == slot->consumer.Get();
+            }
+            if (!primaryFound && !consumerFound) continue;
+            if ((slot->queue && slot->queue.Get() != queue) || slot->nextFence == UINT64_MAX ||
+                (consumerFound && !primaryFound && !slot->lifetime.Submitted())) {
                 slot->lifetime.Quarantine(); failed = true;
                 return false;
             }
             slot->queue = queue;
             const UINT64 value = slot->nextFence++;
             if (FAILED(queue->Signal(slot->fence.Get(), value)) ||
-                !slot->lifetime.Submit(slot->lifetime.Generation(), value)) {
+                (primaryFound && !slot->lifetime.Submit(slot->lifetime.Generation(), value)) ||
+                (consumerFound && !slot->consumerLifetime.Submit(slot->consumerLifetime.Generation(), value))) {
                 slot->lifetime.Quarantine(); failed = true;
                 return false;
             }
@@ -150,8 +172,10 @@ public:
     }
     void ResetSucceeded(ID3D12CommandList* list) noexcept {
         std::lock_guard<std::mutex> lock(mutex);
-        for (auto& slot : slots) if (slot->list.Get() == list)
-            slot->lifetime.Reset(slot->lifetime.Generation());
+        for (auto& slot : slots) {
+            if (slot->list.Get() == list) slot->lifetime.Reset(slot->lifetime.Generation());
+            if (slot->consumer.Get() == list) slot->consumerLifetime.Reset(slot->consumerLifetime.Generation());
+        }
     }
     // Worker only. trim is useful while the feature is disabled; in-flight
     // recordings remain owned until reset/discard and actual fence completion.

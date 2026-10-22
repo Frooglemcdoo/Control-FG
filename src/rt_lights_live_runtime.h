@@ -66,6 +66,8 @@ struct Pass {
     UINT64 selection = 0, descriptorEpoch = 0, observed = 0;
     bool requested = false, base = false, rays = false, committed = false;
     Context context;
+    ID3D12GraphicsCommandList* mirrorList = nullptr;
+    bool handoff = false;
     rt_lights::FramePool::Slot* slot = nullptr;
     rt_lights::NativeBindings producer, ray, selected;
     const char* reason = "awaiting_producer";
@@ -125,9 +127,9 @@ inline void EndPass() noexcept {
         Trace("rt_all_pass slot=%u base=%u rays=%u committed=%u descriptor_mask=%llx gpu_confirmed=0",
             unsigned(pass.slot != nullptr),unsigned(pass.base),unsigned(pass.rays),unsigned(pass.committed),pass.observed);
     if (pass.requested && (passReports.load() <= 12 || (!pass.committed && passReports.load() % 300 == 0)))
-        Trace("rt_all_result reason=%s producer_dispatches=%u selected_dispatches=%u producer_mask=%llx ray_mask=%llx selected_mask=%llx ray_materials=%u selected_cb1=%u selected_outside_pass=%u selected_other_list=%u",
+        Trace("rt_all_result reason=%s producer_dispatches=%u selected_dispatches=%u producer_mask=%llx ray_mask=%llx selected_mask=%llx ray_materials=%u selected_cb1=%u selected_outside_pass=%u selected_other_list=%u handoff=%u",
             pass.reason,pass.producerDispatches,pass.selectedDispatches,pass.producer.observed,pass.ray.observed,pass.selected.observed,
-            unsigned(pass.ray.table[7].ptr != 0),unsigned(pass.selected.constants[1] != 0),selectedOutsidePass.load(),selectedOtherList.load());
+            unsigned(pass.ray.table[7].ptr != 0),unsigned(pass.selected.constants[1] != 0),selectedOutsidePass.load(),selectedOtherList.load(),unsigned(pass.handoff));
     pass = Pass{};
 }
 inline void ObservePso(ID3D12GraphicsCommandList* list, ID3D12PipelineState* pipeline) noexcept {
@@ -136,11 +138,14 @@ inline void ObservePso(ID3D12GraphicsCommandList* list, ID3D12PipelineState* pip
 }
 inline void ResetSucceeded(ID3D12GraphicsCommandList* list) noexcept {
     pool.ResetSucceeded(list);
+    if (passDepth && pass.mirrorList == list) { pass.mirrorList = nullptr; pass.descriptorEpoch = pass.observed = 0; }
     if (auto* state = State(list)) state->bindings = {};
 }
 inline bool Snapshot(const Context& context, UINT index, rt_lights::NativeBindings& out) noexcept {
     auto* state = State(context.list);
-    if (!pass.slot || !state || context.list != pass.context.list || context.heap != pass.context.heap ||
+    if (!pass.slot || !state || context.queue != pass.context.queue || context.heap != pass.context.heap ||
+        (context.list != pass.context.list && !(index == 3 && pass.base && pass.rays)) ||
+        pass.mirrorList != context.list ||
         state->bindings.table[0].ptr != context.gpu.ptr || pass.descriptorEpoch != context.gpu.ptr) return false;
     out = state->bindings; out.heap = context.heap; out.observed = pass.observed;
     out.snapshot = pass.slot->resources->Snapshot(index);
@@ -150,12 +155,15 @@ inline bool Snapshot(const Context& context, UINT index, rt_lights::NativeBindin
 inline bool MirrorDestination(D3D12_CPU_DESCRIPTOR_HANDLE destination, UINT count, UINT& index, UINT& skip, UINT& copied) noexcept {
     if (customRecording || !passDepth || !pass.slot || !count) return false;
     Context context;
-    if (!ReadContext(context) || context.list != pass.context.list || context.heap != pass.context.heap) return false;
+    if (!ReadContext(context) || context.queue != pass.context.queue || context.heap != pass.context.heap ||
+        (context.list != pass.context.list && !(pass.base && pass.rays))) return false;
     const UINT step = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
     const auto overlap = rt_lights::DescriptorOverlap(context.cpu.ptr,49,destination.ptr,count,step);
     if (!overlap.count) return false;
     index = overlap.tableIndex; skip = overlap.sourceSkip; copied = overlap.count;
-    if (pass.descriptorEpoch != context.gpu.ptr) { pass.descriptorEpoch = context.gpu.ptr; pass.observed = 0; }
+    if (pass.mirrorList != context.list || pass.descriptorEpoch != context.gpu.ptr) {
+        pass.mirrorList = context.list; pass.descriptorEpoch = context.gpu.ptr; pass.observed = 0;
+    }
     return true;
 }
 using CopySimple = void (STDMETHODCALLTYPE*)(ID3D12Device*,UINT,D3D12_CPU_DESCRIPTOR_HANDLE,D3D12_CPU_DESCRIPTOR_HANDLE,D3D12_DESCRIPTOR_HEAP_TYPE);
@@ -266,12 +274,11 @@ inline void STDMETHODCALLTYPE DispatchHook(ID3D12GraphicsCommandList* list, UINT
     if (FAILED(tracked->bindings.pipeline->GetPrivateData(kStage,&size,&stage))) return;
     if (!passDepth) { if (stage == 2) selectedOutsidePass.fetch_add(1); return; }
     if (!pass.slot) return;
-    if (list != pass.context.list) {
-        if (stage == 2) { selectedOtherList.fetch_add(1); pass.reason = "selected_other_list"; }
-        return;
-    }
+    if (list != pass.context.list && stage != 2) return;
+    if (list != pass.context.list) selectedOtherList.fetch_add(1);
     Context context;
-    if (!ReadContext(context) || context.list != list) return;
+    if (!ReadContext(context) || context.list != list) { pass.reason = "dispatch_context"; return; }
+    if (context.queue != pass.context.queue) { pass.reason = "handoff_queue_changed"; return; }
     customRecording = true;
     const rt_lights::TableAllocator allocator{&context,&AllocateTable,device.Get(),device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV)};
     if (stage == 1) {
@@ -284,6 +291,8 @@ inline void STDMETHODCALLTYPE DispatchHook(ID3D12GraphicsCommandList* list, UINT
         pass.reason = !pass.base ? "missing_base" : !pass.rays ? "missing_rays" : z != 1 ? "selected_depth" : "selected_snapshot";
         auto& selected = pass.selected;
         if (pass.base && pass.rays && z == 1 && Snapshot(context,3,selected)) {
+            if (!pool.AttachConsumer(pass.slot,list)) { pass.reason = "handoff_lease"; customRecording = false; return; }
+            pass.handoff = pass.slot->consumer != nullptr;
             pass.committed = rt_lights::FrameRecorder::Replace(context.rays,*pass.slot->resources,pass.producer,pass.ray,selected,Pipelines(),allocator,
                 pass.state.Get(),pass.dispatch,pass.record->GetGPUVirtualAddress(),static_cast<UINT>(pass.slot->lifetime.Generation()),
                 pass.slot->tables.data(),static_cast<UINT>(pass.slot->tables.size()),&pass.reason);

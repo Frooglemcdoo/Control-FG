@@ -33,7 +33,7 @@ class FrameResources {
     };
     static constexpr UINT SurfaceCount = static_cast<UINT>(Surface::Count);
     std::array<Allocation, SurfaceCount> allocations;
-    std::array<D3D12_RESOURCE_STATES, SurfaceCount> initialStates{};
+    std::array<D3D12_RESOURCE_STATES, SurfaceCount> initialStates{}, handoffStates{};
     ComPtr<ID3D12DescriptorHeap> descriptors;
     ComPtr<ID3D12Resource> upload;
     unsigned char* mapped = nullptr;
@@ -199,6 +199,12 @@ public:
     void BeginRecording() noexcept {
         uploadCursor = 0;
         for (UINT i = 0; i < SurfaceCount; ++i) initialStates[i] = allocations[i].state;
+    }
+    void CheckpointHandoff() noexcept {
+        for (UINT i = 0; i < SurfaceCount; ++i) handoffStates[i] = allocations[i].state;
+    }
+    void DiscardConsumer() noexcept {
+        for (UINT i = 0; i < SurfaceCount; ++i) allocations[i].state = handoffStates[i];
     }
     void DiscardRecording() noexcept {
         for (UINT i = 0; i < SurfaceCount; ++i) allocations[i].state = initialStates[i];
