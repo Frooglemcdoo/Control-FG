@@ -5,7 +5,7 @@ $items = @($all | ForEach-Object { $m=Get-Content -Raw -LiteralPath (Join-Path $
 if (-not $items.Count) { throw 'No completed R10 capture found. Keep RR on, press F9 once and wait 20 seconds.' }
 $latest=$items[0].Metadata
 $pair=@($items | Where-Object {$_.Metadata.pid -eq $latest.pid -and $_.Metadata.capture_ordinal -eq $latest.capture_ordinal} | Sort-Object {$_.Metadata.pair_index})
-$shaders=@(Get-ChildItem -LiteralPath $root -Directory -Filter "rr-hair-shaders-$($latest.pid)-*")
+$shaders=@(Get-ChildItem -LiteralPath $root -Directory | Where-Object { $_.Name -like "rr-hair-shaders-$($latest.pid)-*" -or $_.Name -like "rr-material-shaders-$($latest.pid)-*" })
 $logs=@(Get-ChildItem -LiteralPath $root -Recurse -File -Filter "probe-*-$($latest.pid).log" -ErrorAction SilentlyContinue)
 $report=[ordered]@{schema='control-rr-hair-r10-report';pid=$latest.pid;pair=$latest.capture_ordinal;frame_count=$pair.Count;consecutive=($pair.Count -eq 2 -and $pair[1].Metadata.consecutive);output_complete=($pair.Count -eq 2 -and @($pair | Where-Object {-not $_.Metadata.output_captured}).Count -eq 0);frames=@($pair | ForEach-Object {$_.Metadata})}
 $reportPath=Join-Path $root "rr-hair-r10-report-$($latest.pid)-$($latest.capture_ordinal).json"

@@ -118,23 +118,28 @@ static void RRDiffusePrepare(void* callback,void* table) noexcept {
         c->characterInstances.store(0,std::memory_order_relaxed);
         c->characterFingerprint.store(0,std::memory_order_relaxed);
         c->frameSkips=0;c->rangeSkips=0;c->viewSkips=0;c->drawCalls=0;
-        const bool auditShaders=rrHairShaderAuditRequested.exchange(false,std::memory_order_acq_rel);
+        RRMaterialAudit::BeginFrame(frame);
         RRAlbedoShader::Session shaders; // fresh native shader validation each frame
         const control_rr_albedo::Access access{&RRAlbedoRead,&RRAlbedoGetShader,nullptr,&shaders,&RRAlbedoValidateEyeCandidate};
         if(!control_rr_albedo::prepare(access,c->manager,c->replay,true)) {rrDiffuseStage.store(RRDiffuseStage::Idle);return;}
         std::uintptr_t source=0;memcpy(&source,c->replay.manager.data()+0x30,sizeof(source));
-        size_t kept=0;UINT targets=0;unsigned auditPairs=0;
+        size_t kept=0;UINT targets=0;
         for(size_t i=0;i<c->replay.batches.size();++i) {
-            // Restrict this candidate to native Character/Hair techniques. Other
-            // materials keep the approved GBuffer guides.
+            const auto family=c->replay.familyKinds[i];
+            if(control_rr::RRTexturedCharacterGuides && family!=2 && family!=5 &&
+               !RRMaterialAudit::Wants(family)) continue;
+            control_rr_albedo::OpaqueBatch original{};RRAlbedoShader::Result result{};
+            if(!RRAlbedoRead(source+size_t(c->replay.sourceIndices[i])*sizeof(original),&original,sizeof(original))) continue;
+            // Capture world candidates BEFORE replay admission. A structural
+            // shader contract does not prove that its RGB is diffuse albedo.
+            RRMaterialAudit::Capture(frame,c->replay.familyKinds[i],c->replay.sourceIndices[i],
+                original.shader,c->replay.batches[i].shader);
+            // Keep the audited Character/Hair rendering scope unchanged.
             if(control_rr::RRTexturedCharacterGuides &&
                c->replay.familyKinds[i]!=2 && c->replay.familyKinds[i]!=5) continue;
-            control_rr_albedo::OpaqueBatch original{};RRAlbedoShader::Result result{};
-            if(!RRAlbedoRead(source+size_t(c->replay.sourceIndices[i])*sizeof(original),&original,sizeof(original)) ||
-               !shaders.ValidatePair(original.shader,c->replay.batches[i].shader,result,&reason) ||
+            if(!shaders.ValidatePair(original.shader,c->replay.batches[i].shader,result,&reason) ||
                (control_rr::RRTexturedCharacterGuides && result.targetCount!=1) ||
                result.targetCount<1 || result.targetCount>2 || (targets && targets!=result.targetCount)) continue;
-            if(auditShaders&&auditPairs++<32)RRHairExportShaderPair(frame,c->replay.familyKinds[i],c->replay.sourceIndices[i],original.shader,c->replay.batches[i].shader,shaders.PixelShaders()[result.selectedIndex]);
             if(c->replay.familyKinds[i]==5)
                 c->replay.batches[i].shader=RRHairOpacityReplacement(original.shader,c->replay.batches[i].shader,shaders.PixelShaders()[result.selectedIndex]);
             if(c->replay.familyKinds[i]==2)
