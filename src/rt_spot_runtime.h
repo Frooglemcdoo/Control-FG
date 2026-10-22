@@ -21,7 +21,8 @@ inline const GUID kRawVariant = {0xe631a601,0x6651,0x4911,{0x80,0x90,0x11,0x71,0
 inline const GUID kHistoryVariant = {0xe631a601,0x6651,0x4911,{0x80,0x90,0x11,0x71,0x14,0x28,0x30,0x05}};
 inline const GUID kVisibilityVariant = {0xe631a601,0x6651,0x4911,{0x80,0x90,0x11,0x71,0x14,0x28,0x30,0x07}};
 inline const GUID kLightIdsVariant = {0xe631a601,0x6651,0x4911,{0x80,0x90,0x11,0x71,0x14,0x28,0x30,0x08}};
-inline std::vector<unsigned char> visibilityBytes, lightIdsBytes, selectionBytes;
+inline const GUID kSelectedOffVariant = {0xe631a601,0x6651,0x4911,{0x80,0x90,0x11,0x71,0x14,0x28,0x30,0x09}};
+inline std::vector<unsigned char> visibilityBytes, lightIdsBytes, selectedOffBytes, selectionBytes;
 inline std::vector<unsigned char> rayBytes, baselineRayBytes, lightBytes, resetBytes, historyBytes;
 inline std::vector<unsigned char> spatialBytes[2], rawSpatialBytes[2], rawHistoryBytes;
 inline SRWLOCK installLock = SRWLOCK_INIT;
@@ -43,7 +44,7 @@ struct Pass {
 inline constexpr UINT kRayRecordStride = D3D12_RAYTRACING_SHADER_TABLE_BYTE_ALIGNMENT;
 inline constexpr UINT kRayRecordBufferSize = 2 * kRayRecordStride;
 inline constexpr UINT RayRecordOffset(Mode mode) noexcept {
-    return mode == Mode::RtSpotBaseline ? kRayRecordStride : 0;
+    return mode == Mode::RtSpotBaseline || mode == Mode::RtSpotMapGuard ? kRayRecordStride : 0;
 }
 inline thread_local Pass* active = nullptr;
 inline thread_local bool previousFull = false;
@@ -63,8 +64,8 @@ inline void ReportShadowFiltering(bool fullRR, bool contact, bool temporal, int 
         last.temporal != temporal || last.size != size || last.step != step) {
         Trace("rt_spot_filter full_rr=%u contact=%u native_preserved=1 temporal=%u spatial_size=%d spatial_step=%d",
             unsigned(fullRR),unsigned(contact),unsigned(temporal),size,step);
-        Trace("rt_spot_history filter_policy=mode_specific point_history=native spotlight_only=1 transition_reset=1 spot_samples=4 sample_pattern=r92_radial_strata closest_hit_per_ray=1 mean_blocker=1 fixed_emitter_radius=1 bounded_penumbra=1 per_sample_endpoint=%u near_distance_cutoff=%u point_samples=1",
-            unsigned(active->mode != Mode::RtSpotBaseline), unsigned(active->mode == Mode::RtSpotBaseline));
+        Trace("rt_spot_history filter_policy=mode_specific point_history=native spotlight_only=1 transition_reset=1 spot_samples=4 sample_pattern=r92_radial_strata closest_hit_per_ray=1 mean_blocker=1 center_probe=%u bounded_penumbra=1 per_sample_endpoint=%u near_distance_cutoff=%u point_samples=1",
+            unsigned(RayRecordOffset(active->mode)==0), unsigned(RayRecordOffset(active->mode)==0), unsigned(RayRecordOffset(active->mode)!=0));
         last = {true, fullRR, contact, temporal, size, step};
     }
 }
@@ -99,10 +100,10 @@ inline void HookPass(void* a, void* b, void* c, void* d) {
                 const auto* base = reinterpret_cast<const unsigned char*>(verifiedRenderer);
                 int nativeSamples = 0;
                 memcpy(&nativeSamples,base+0x913c90,sizeof(nativeSamples));
-                Trace("rt_spot_sample_policy native_shadow_samples=%d replacement=R96_emitter_segments_with_R94_baseline spot_samples=4 point_samples=1 engine_option_unchanged=1",nativeSamples);
+                Trace("rt_spot_sample_policy native_shadow_samples=%d replacement=R97_center_probe_with_R94_baseline spot_samples=4 point_samples=1 engine_option_unchanged=1",nativeSamples);
             }
             if (pass.reset && pass.fullRay)
-                Trace("rt_spot_test seq=%llu mode=%s raw=%u maps=%u expanded_casters=%u",
+                Trace("rt_spot_test seq=%llu mode=%s raw=%u selected_off=%u expanded_casters=%u",
                     LiveSelection::Sequence(pass.selectionState),ModeName(pass.mode),
                     unsigned(UsesRawSpotVisibility(pass.mode)),unsigned(pass.mode==Mode::RtSpotMapGuard),
                     unsigned(ExpandsSpotCasters(pass.mode)));
@@ -120,6 +121,8 @@ inline void Install() noexcept {
         filesAttempted = true;
         char sha[65]{}; bool loaded = false;
         filesReady =
+            PTReflectionLoadSidecar(L"rt_spot_selected_off.dxbc","RT_SPOT_SELECTED_OFF",selectedOffBytes,sha,loaded) &&
+            !strcmp(sha,"b5a2edadb8a7d7f5def335c3e8037f7f21df2cefa650eda0ec3622bd590ee819") &&
             PTReflectionLoadSidecar(L"rt_spot_selection.dxbc","RT_SPOT_SELECTION",selectionBytes,sha,loaded) &&
             !strcmp(sha,"4319b0bd2d0ad74b670c084d92b84bd7ceda2be433ccd3e60588d49bb66ddb9c") &&
             PTReflectionLoadSidecar(L"rt_spot_raw_history.dxbc","RT_SPOT_RAW",rawHistoryBytes,sha,loaded) &&
@@ -135,7 +138,7 @@ inline void Install() noexcept {
             PTReflectionLoadSidecar(L"rt_spot_r94.dxil","RT_SPOT_BASELINE",baselineRayBytes,sha,loaded) &&
             !strcmp(sha,"c1f3f1b7b8845dd85224c6c41e7c8d10c6cd0fc793328e7168766563352707a5") &&
             PTReflectionLoadSidecar(L"rt_spot_full.dxil","RT_SPOT_RAY",rayBytes,sha,loaded) &&
-            !strcmp(sha,"811f21d83796e3b8932b47e52cfbe3f9a1f94f40cd61968be3e65fe1524c2b3a") &&
+            !strcmp(sha,"26688736d38b5ea056ae6bb37dc1a738334d94c784003a67957f3677f789a246") &&
             PTReflectionLoadSidecar(L"rt_spot_light.dxbc","RT_SPOT_LIGHT",lightBytes,sha,loaded) &&
             !strcmp(sha,"a844888cdd5478605574157b323cb3376369ae9517c4954bf38bee21b664ecd7") &&
             PTReflectionLoadSidecar(L"rt_spot_reset.dxbc","RT_SPOT_RESET",resetBytes,sha,loaded) &&
@@ -194,9 +197,9 @@ inline void ObserveCompute(ID3D12Device* device, const D3D12_COMPUTE_PIPELINE_ST
         if (variantRaw) variantRaw->Release();
     }
     if (SUCCEEDED(hr) && kind == kLightComponent) {
-        const std::vector<unsigned char>* debugBytes[] = {&visibilityBytes, &lightIdsBytes};
-        const GUID* debugKeys[] = {&kVisibilityVariant, &kLightIdsVariant};
-        for (unsigned i=0; i<2 && SUCCEEDED(hr); ++i) {
+        const std::vector<unsigned char>* debugBytes[] = {&visibilityBytes, &lightIdsBytes, &selectedOffBytes};
+        const GUID* debugKeys[] = {&kVisibilityVariant, &kLightIdsVariant, &kSelectedOffVariant};
+        for (unsigned i=0; i<3 && SUCCEEDED(hr); ++i) {
             custom.CS = {debugBytes[i]->data(),debugBytes[i]->size()};
             ID3D12PipelineState* debug = nullptr;
             hr = create(device,&custom,IID_PPV_ARGS(&debug));
@@ -239,14 +242,10 @@ inline ID3D12PipelineState* SelectCompute(ID3D12PipelineState* native) noexcept 
     const bool replace = (kind == kLightComponent || spatial) ? active->fullRay : kind == kResetComponent && active->raySeen && (active->reset || active->fullRay);
     if (!replace) return nullptr;
     ID3D12PipelineState* alternate = nullptr; size = sizeof(alternate);
-    if (kind == kLightComponent && active->mode == Mode::RtSpotMapGuard) {
-        active->composed = true;
-        native->AddRef();
-        return native;
-    }
     const bool raw = active->fullRay && UsesRawSpotVisibility(active->mode) &&
         (spatial || kind == kResetComponent);
-    const GUID& variant = kind == kLightComponent && ShowsSpotVisibility(active->mode) ? kVisibilityVariant :
+    const GUID& variant = kind == kLightComponent && active->mode == Mode::RtSpotMapGuard ? kSelectedOffVariant :
+        kind == kLightComponent && ShowsSpotVisibility(active->mode) ? kVisibilityVariant :
         kind == kLightComponent && active->mode == Mode::RtSpotLightIds ? kLightIdsVariant : raw ? kRawVariant : kind == kResetComponent && !active->reset ? kHistoryVariant : kVariant;
     if (FAILED(native->GetPrivateData(variant,&size,&alternate)) || !alternate) return nullptr;
     if (kind == kLightComponent) active->composed = true;
@@ -322,7 +321,7 @@ inline HRESULT CreateAugmented(ID3D12Device5* device, const D3D12_STATE_OBJECT_D
             prepared=state->SetPrivateDataInterface(kRecord,record.Get());
         }
         if (SUCCEEDED(prepared)) components.fetch_or(kRayComponent);
-        RefreshReady();Trace("rt_spot_state ready=%u native_exports_retained=1 variant=%s replacement=R96_emitter_segments_with_R94_baseline spot_samples=4 point_samples=1",unsigned(SUCCEEDED(prepared)),variantName);
+        RefreshReady();Trace("rt_spot_state ready=%u native_exports_retained=1 variant=%s replacement=R97_center_probe_with_R94_baseline spot_samples=4 point_samples=1",unsigned(SUCCEEDED(prepared)),variantName);
         return hr;
     } catch (...) { return original(device,desc,iid,out); }
 }

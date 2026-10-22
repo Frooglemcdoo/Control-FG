@@ -42,7 +42,8 @@ if len(sys.argv)>1:
     call='call void @dx.op.traceRay.struct.ShadowHitData('
     assert result.count(call)==source.count(call)+3
     assert result.count('i32 157, %dx.types.Handle %250, i32 0, i32 1') == 4
-    assert '%SpotDisk0ScaledRadius = fmul fast float %SpotDisk0Radius, %174' in result
+    for i in range(4):
+        assert f'%SpotDisk{i}ScaledRadius = fmul fast float %SpotDisk{i}Radius, 0.000000e+00' in result
     for i in range(4):
         assert f'%SpotDisk{i}Area = call float @dx.op.unary.f32(i32 22,' in result
     # Shared native alpha/closest-hit/miss handlers remain byte-identical.

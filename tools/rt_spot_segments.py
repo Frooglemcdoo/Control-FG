@@ -65,3 +65,12 @@ def emitter_bounded_segments(source):
     return replace_once(source,
         '%254 = fcmp fast olt float %SpotNearest, 5.000000e+04',
         '%254 = fcmp fast olt float %SpotMeanBlocker, 5.000000e+04')
+
+
+def center_sample_probe(source):
+    """Diagnostic only: collapse the R94 disk to its center, retain ray segments."""
+    for index in range(4):
+        source = replace_once(source,
+            f'%SpotDisk{index}ScaledRadius = fmul fast float %SpotDisk{index}Radius, %174',
+            f'%SpotDisk{index}ScaledRadius = fmul fast float %SpotDisk{index}Radius, 0.000000e+00')
+    return source

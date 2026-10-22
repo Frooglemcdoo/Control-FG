@@ -38,9 +38,9 @@ inline constexpr unsigned kRtSpotReadyBit = 1u << 17;
 struct ModeChoice { Mode mode; const wchar_t* label; };
 inline constexpr ModeChoice kModeChoices[] = {
     {Mode::Native, L"NATIVE SHADOWS"},
-    {Mode::RtSpot, L"RT CLOSE COVERAGE"},
-    {Mode::RtSpotRaw, L"RT RAW"},
-    {Mode::RtSpotVisibilityRaw, L"RAW VISIBILITY"},
+    {Mode::RtSpot, L"CENTER FILTERED"},
+    {Mode::RtSpotRaw, L"CENTER RAW"},
+    {Mode::RtSpotMapGuard, L"SELECTED LIGHT OFF"},
     {Mode::RtSpotVisibilityFiltered, L"FILTERED VISIBILITY"},
     {Mode::RtSpotLightIds, L"LIGHT ID COLORS"},
     {Mode::RtSpotBaseline, L"RT R94 BASELINE"}
@@ -81,7 +81,7 @@ inline const char* ModeName(Mode mode) noexcept {
     case Mode::RtSpotLightIds: return "rt_spot_light_ids";
     case Mode::RtSpot: return "rt_spot_replacement";
     case Mode::RtSpotRaw: return "rt_spot_raw";
-    case Mode::RtSpotMapGuard: return "rt_spot_map_guard";
+    case Mode::RtSpotMapGuard: return "rt_spot_selected_light_off";
     case Mode::RtSpotNativeCull: return "rt_spot_native_coverage";
     case Mode::DisableBakedGi: return "gi_off";
     case Mode::DisableDirect: return "direct_off";
