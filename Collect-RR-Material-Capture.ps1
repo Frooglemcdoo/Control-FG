@@ -11,7 +11,7 @@ $paths += @(Get-ChildItem -LiteralPath $root -Recurse -File -Filter "probe-*-$ca
 foreach ($base in @($env:LOCALAPPDATA, [IO.Path]::GetTempPath())) {
     $diagnostics = Join-Path $base 'Control-FG\Diagnostics'
     if (Test-Path -LiteralPath $diagnostics) {
-        $paths += @(Get-ChildItem -LiteralPath $diagnostics -File -Filter "Lighting-R10[12]-*-$capturePid-*.log" | ForEach-Object { $_.FullName })
+        $paths += @(Get-ChildItem -LiteralPath $diagnostics -File -Filter "Lighting-R10*-*-$capturePid-*.log" | ForEach-Object { $_.FullName })
     }
 }
 $paths = @($paths | Select-Object -Unique)
