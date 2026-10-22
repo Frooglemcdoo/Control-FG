@@ -3,14 +3,18 @@
 // Offsets verified against R65 native RDEF and contact-shadow DXIL.
 struct NativeSpotLight { float4 words[20]; };
 cbuffer NativeSystem : register(b0) { float4 systemWords[71]; }
+// The producer does not use ViewToWorld (RDEF flags=0), so its upload is not
+// a source for this matrix. The native contact-ray shader reads rows 6..9.
+// Keep the two pass-specific constant buffers separate, even at the same frame.
+cbuffer NativeRaySystem : register(b3) { float4 raySystemWords[71]; }
 float4 NativeClipToView(float4 clip) {
     return clip.x*systemWords[14]+clip.y*systemWords[15]+clip.z*systemWords[16]+systemWords[17];
 }
 float3 NativeViewDirectionToWorld(float3 value) {
-    return value.x*systemWords[6].xyz+value.y*systemWords[7].xyz+value.z*systemWords[8].xyz;
+    return value.x*raySystemWords[6].xyz+value.y*raySystemWords[7].xyz+value.z*raySystemWords[8].xyz;
 }
 float3 NativeViewPositionToWorld(float3 value) {
-    return NativeViewDirectionToWorld(value)+systemWords[9].xyz;
+    return NativeViewDirectionToWorld(value)+raySystemWords[9].xyz;
 }
 float3 NativeViewNormal(float4 gbuffer) {
     uint3 bytes=uint3(floor(gbuffer.xy*255+0.5), uint(gbuffer.w*255+0.5)&254);

@@ -64,11 +64,13 @@ void main(uint3 dispatch : SV_DispatchThreadID) {
     uint width,height,depthWidth,depthHeight,lightCount,lightStride,cellWidth,cellHeight;
     gbuffer.GetDimensions(width,height);clipDepth.GetDimensions(depthWidth,depthHeight);
     spotLights.GetDimensions(lightCount,lightStride);spotCells.GetDimensions(cellWidth,cellHeight);
-    uint nativeTotal=deferredWords[16].y, nativeCapacity=deferredWords[14].y;
+    // g_uSpotLightTotalCount is unused by the native producer (RDEF flags=0).
+    // The tile list determines membership; the bound SRV supplies its safe limit.
+    uint nativeCapacity=deferredWords[14].y;
     uint depthCount=deferredWords[10].z, depthLimit=deferredWords[12].z;
     if(width==0 || height==0 || width!=depthWidth || height!=depthHeight || height>Invalid/width ||
        firstReceiver>Invalid-local || firstReceiver+local>=width*height || lightStride!=320 ||
-       nativeTotal>lightCount || nativeTotal>=NoLight || nativeCapacity==0 || nativeCapacity>slotsPerReceiver ||
+       nativeCapacity==0 || nativeCapacity>slotsPerReceiver ||
        depthCount==0 || depthLimit==0 || depthLimit>depthCount || depthCount>cellHeight ||
        sampleCount==0 || sampleCount>64 || instanceMask==0 || instanceMask>255 ||
        !isfinite(originBias) || originBias<0 || !isfinite(endpointBias) || endpointBias<0 ||
@@ -110,7 +112,7 @@ void main(uint3 dispatch : SV_DispatchThreadID) {
     for(;count<nativeCapacity;++count) {
         uint light=spotCells.Load(int3(cellX+count,cellY,0)).x;
         if(light==NoLight) break;
-        if(light>=nativeTotal) { ranges[local].reserved=7; return; }
+        if(light>=lightCount) { ranges[local].reserved=7; return; }
     }
 #ifdef RT_LIGHTS_COMPACT
     if(!Reserve(count,min(taskCount,atlasCount),first)) { ranges[local].reserved=8; return; }

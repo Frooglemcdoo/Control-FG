@@ -1,4 +1,5 @@
 #include "gpu_test_textures.h"
+#include <limits>
 #include "../src/rt_lights/layout.h"
 using namespace rt_lights;
 static UINT Bits(float value) { UINT bits=0;std::memcpy(&bits,&value,4);return bits; }
@@ -10,15 +11,16 @@ static ComPtr<ID3D12Resource> CopyBuffer(Device& gpu,ID3D12Resource* source) {
     gpu.Transition(source,D3D12_RESOURCE_STATE_UNORDERED_ACCESS,D3D12_RESOURCE_STATE_COPY_SOURCE);
     gpu.list->CopyResource(copy.Get(),source);return copy;
 }
-enum class Case { Normal, Capacity, FullTile, InvalidLight, InvalidInverseSize, StaleComposition, Overflow };
+enum class Case { Normal, Capacity, FullTile, InvalidLight, InvalidInverseSize, StaleComposition, Overflow, UnusedProducerFields };
 static void Run(Case test,bool compact=false) {
     Device gpu(false);
     D3D12_DESCRIPTOR_RANGE bindings[]={{D3D12_DESCRIPTOR_RANGE_TYPE_SRV,4,0,0,0},{D3D12_DESCRIPTOR_RANGE_TYPE_UAV,3,0,0,4},{D3D12_DESCRIPTOR_RANGE_TYPE_UAV,1,3,0,11}};
-    D3D12_ROOT_PARAMETER parameters[4]{};
+    D3D12_ROOT_PARAMETER parameters[5]{};
     parameters[0].ParameterType=D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;parameters[0].DescriptorTable={compact?3u:2u,bindings};
     for(UINT i=1;i<3;++i){parameters[i].ParameterType=D3D12_ROOT_PARAMETER_TYPE_CBV;parameters[i].Descriptor={i-1,0};}
     parameters[3].ParameterType=D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;parameters[3].Constants={2,0,12};
-    D3D12_ROOT_SIGNATURE_DESC desc{4,parameters,0,nullptr,D3D12_ROOT_SIGNATURE_FLAG_NONE};
+    parameters[4].ParameterType=D3D12_ROOT_PARAMETER_TYPE_CBV;parameters[4].Descriptor={3,0};
+    D3D12_ROOT_SIGNATURE_DESC desc{5,parameters,0,nullptr,D3D12_ROOT_SIGNATURE_FLAG_NONE};
     ComPtr<ID3DBlob> bytes,error;Check(D3D12SerializeRootSignature(&desc,D3D_ROOT_SIGNATURE_VERSION_1,&bytes,&error));
     ComPtr<ID3D12RootSignature> root;Check(gpu.device->CreateRootSignature(0,bytes->GetBufferPointer(),bytes->GetBufferSize(),IID_PPV_ARGS(&root)));
     auto shader=Read(compact?"rt_lights_native_compact.dxil":"rt_lights_native_batch.dxil");
@@ -35,10 +37,15 @@ static void Run(Case test,bool compact=false) {
     for(UINT i=0;i<4;++i)system[56+i*5]=1;
     // Rotation around Z followed by translation; native columns at byte 96.
     system[25]=1;system[28]=-1;system[34]=1;system[36]=10;system[37]=20;system[38]=30;system[39]=1;
+    auto raySys=gpu.Upload(system);
+    // Poison the producer's unused matrix in EVERY case. A zero/identity
+    // fixture hid the live integration error by supplying data the pass did not use.
+    for(UINT i=24;i<40;++i)system[i]=std::numeric_limits<float>::quiet_NaN();
     auto sys=gpu.Upload(system);
     std::vector<UINT> deferred(128,0);
     deferred[40]=Bits(1);deferred[41]=Bits(0);deferred[42]=2;deferred[50]=2;deferred[54]=Bits(0.5f);
-    deferred[57]=3;deferred[65]=2;
+    deferred[57]=3;
+    deferred[65]=test==Case::UnusedProducerFields?0xffffffff:0; // unused native total is not a contract
     auto def=gpu.Upload(deferred);
     std::vector<Pixel> normals(width,Pixel{0.5f,0.5f,0.5f,0});
     std::vector<Pixel> depths(width,Pixel{0.25f,0,0,0});depths[65][0]=0.75f;
@@ -66,6 +73,7 @@ static void Run(Case test,bool compact=false) {
     gpu.list->SetComputeRootSignature(root.Get());gpu.list->SetPipelineState(pipeline.Get());
     gpu.list->SetComputeRootDescriptorTable(0,gpu.views->GetGPUDescriptorHandleForHeapStart());
     gpu.list->SetComputeRootConstantBufferView(1,sys->GetGPUVirtualAddress());gpu.list->SetComputeRootConstantBufferView(2,def->GetGPUVirtualAddress());
+    gpu.list->SetComputeRootConstantBufferView(4,raySys->GetGPUVirtualAddress());
     gpu.list->SetComputeRoot32BitConstants(3,12,batch,0);gpu.list->Dispatch(1,1,1);
     ComPtr<ID3D12Resource> counterCopy;
     if(compact)counterCopy=CopyBuffer(gpu,counter.Get());
@@ -144,7 +152,7 @@ static void Run(Case test,bool compact=false) {
 }
 int main() try {
     std::cout<<std::unitbuf;
-    for(Case test:{Case::Normal,Case::Capacity,Case::FullTile,Case::InvalidLight,Case::InvalidInverseSize,Case::StaleComposition})Run(test);
-    for(Case test:{Case::Normal,Case::Capacity,Case::FullTile,Case::InvalidLight,Case::InvalidInverseSize,Case::Overflow})Run(test,true);
+    for(Case test:{Case::Normal,Case::Capacity,Case::FullTile,Case::InvalidLight,Case::InvalidInverseSize,Case::StaleComposition,Case::UnusedProducerFields})Run(test);
+    for(Case test:{Case::Normal,Case::Capacity,Case::FullTile,Case::InvalidLight,Case::InvalidInverseSize,Case::Overflow,Case::UnusedProducerFields})Run(test,true);
     std::cout<<"PASS: native tile/depth enumeration, full-capacity lists and invalid-list rejection, receiver/emitter transforms and deterministic task generation\n";return 0;
 } catch(const std::exception& error){std::cerr<<error.what()<<'\n';return 1;}

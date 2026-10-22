@@ -201,6 +201,7 @@ public:
             producer.Apply(list, t.generate.gpu); list->SetPipelineState(pipelines.batch);
             list->SetComputeRootConstantBufferView(3, producer.constants[2]); // native deferred b2 -> batch b1
             list->SetComputeRootConstantBufferView(4, generateAddress);
+            list->SetComputeRootConstantBufferView(5, ray.constants[0]); // native RT sys b0 -> batch b3
             list->Dispatch((count + 63) / 64, 1, 1); FrameResources::UavBarrier(list);
             frame.Transition(list, Surface::Counter, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
             producer.Apply(list, t.arguments.gpu); Compute(list, pipelines.arguments, argumentControls);

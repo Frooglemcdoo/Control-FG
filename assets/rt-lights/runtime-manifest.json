@@ -2,8 +2,8 @@
   "assets": [
     {
       "file": "rt_lights_native_compact.dxil",
-      "sha256": "75ae8ed060c5ccbd864435edec93d725e3c75accf08fd8bfd846711b6001a256",
-      "bytes": 12328
+      "sha256": "38816504bf35cfa21682376b6724e7211f9f7996445ab90d419e0ef440429e0e",
+      "bytes": 12456
     },
     {
       "file": "rt_lights_native_arguments.dxil",

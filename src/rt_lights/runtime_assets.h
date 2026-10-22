@@ -3,7 +3,7 @@
 namespace rt_lights {
 struct RuntimeAsset { const wchar_t* file; const char* sha; };
 inline constexpr RuntimeAsset RuntimeAssets[] = {
-    {L"rt_lights_native_compact.dxil", "75ae8ed060c5ccbd864435edec93d725e3c75accf08fd8bfd846711b6001a256"},
+    {L"rt_lights_native_compact.dxil", "38816504bf35cfa21682376b6724e7211f9f7996445ab90d419e0ef440429e0e"},
     {L"rt_lights_native_arguments.dxil", "e9c10aa85e9863d371215c3af79b4fb486d97354c28d5e8edde0c24aeb180fb8"},
     {L"rt_lights_native_pack.dxil", "f6e0362da39ccd728ea39603d543ebb5f6669c14bcc52a4eaf28001a28e99630"},
     {L"rt_lights_batch_compose.dxil", "503492306581d50099fd8c61f9bfc442bca97510094bcd291e15adf346424d55"},
