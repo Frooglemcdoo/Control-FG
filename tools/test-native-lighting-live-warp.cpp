@@ -15,6 +15,7 @@
 #include <string>
 #include <utility>
 #include <iostream>
+#include <thread>
 static std::atomic<unsigned long long> presentCount{0};
 static void Log(const char*, ...) {}
 static bool PTReflectionSha256(const unsigned char*, size_t, char*) { return false; }
@@ -234,6 +235,37 @@ int main() try {
         std::cout << "PASS diagnostic PSO routes, point-independent mode policy and fallback scope\n";
     }
     ComPtr<ID3D12PipelineState> direct,gi;direct.Attach(makePso(11));gi.Attach(makePso(22));
+    {
+        // More than the former 32-thread-local entries, with an initial PSO
+        // and no SetPipelineState call. Metadata must follow the list.
+        ComPtr<ID3D12CommandAllocator> owner;
+        Check(device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT,IID_PPV_ARGS(&owner)));
+        std::vector<ComPtr<ID3D12GraphicsCommandList>> created(48);
+        for (auto& command : created) {
+            Check(device->CreateCommandList(0,D3D12_COMMAND_LIST_TYPE_DIRECT,owner.Get(),direct.Get(),IID_PPV_ARGS(&command)));
+            auto* state = rt_lights_runtime::State(command.Get());
+            if (!state || state->bindings.pipeline != direct.Get()) throw std::runtime_error("Initial creation PSO was not tracked");
+            Check(command->Close());
+        }
+        bool migrated = false;
+        std::thread worker([&] {
+            auto* command = created.front().Get();
+            auto* state = rt_lights_runtime::State(command);
+            if (!state || state->bindings.pipeline != direct.Get()) return;
+            if (FAILED(command->Reset(owner.Get(),gi.Get()))) return;
+            state = rt_lights_runtime::State(command);
+            migrated = state && state->bindings.pipeline == gi.Get() && !state->bindings.root;
+            if (FAILED(command->Close())) migrated = false;
+        });
+        worker.join();
+        if (!migrated || rt_lights_runtime::State(created.front().Get())->bindings.pipeline != gi.Get())
+            throw std::runtime_error("Reset PSO did not follow command list across threads");
+        Check(created.front()->Reset(owner.Get(),nullptr));
+        if (rt_lights_runtime::State(created.front().Get())->bindings.pipeline)
+            throw std::runtime_error("Null reset retained a stale PSO");
+        Check(created.front()->Close());
+        std::cout << "PASS: initial creation/reset PSOs, 48 live lists and recording thread handoff\n";
+    }
     AttachVariant(direct.Get(),makePso(0),kDirectBit,S_OK);AttachVariant(gi.Get(),makePso(0),kGiBit,S_OK);
     AttachVariant(direct.Get(),makePso(12),kDirectBit,S_OK,kDiffuseVariantGuid,kDiffuseReadyBit);
     AttachVariant(direct.Get(),makePso(13),kDirectBit,S_OK,kSpecularVariantGuid,kSpecularReadyBit);
@@ -262,6 +294,10 @@ int main() try {
     auto render=[&](ID3D12PipelineState* native,unsigned expected,bool useReset){
         Check(allocator->Reset());Check(list->Reset(allocator.Get(),useReset?native:nullptr));
         if(!useReset)list->SetPipelineState(native);
+        Binding expectedBinding(native);
+        auto* tracked = rt_lights_runtime::State(list.Get());
+        if (!tracked || tracked->bindings.pipeline != expectedBinding.selected)
+            throw std::runtime_error("Tracked pipeline does not match the actual GPU selection");
         list->SetComputeRootSignature(root.Get());list->SetComputeRootUnorderedAccessView(0,gpu->GetGPUVirtualAddress());list->Dispatch(1,1,1);
         D3D12_RESOURCE_BARRIER barrier{};barrier.Type=D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;barrier.Transition={gpu.Get(),D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,D3D12_RESOURCE_STATE_UNORDERED_ACCESS,D3D12_RESOURCE_STATE_COPY_SOURCE};list->ResourceBarrier(1,&barrier);
         list->CopyBufferRegion(readback.Get(),0,gpu.Get(),0,4);

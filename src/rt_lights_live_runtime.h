@@ -59,16 +59,8 @@ inline bool AllocateTable(void* pointer, ID3D12DescriptorHeap* expected, rt_ligh
         return index >= 0x3b920 && index <= desc.NumDescriptors && 49 <= desc.NumDescriptors - index;
     } __except (EXCEPTION_EXECUTE_HANDLER) { return false; }
 }
-struct RootState { ID3D12GraphicsCommandList* list = nullptr; rt_lights::NativeBindings bindings; };
-inline thread_local RootState rootStates[32];
-inline RootState* State(ID3D12GraphicsCommandList* list) noexcept {
-    RootState* empty = nullptr;
-    for (auto& state : rootStates) {
-        if (state.list == list) return &state;
-        if (!state.list && !empty) empty = &state;
-    }
-    if (empty) empty->list = list;
-    return empty;
+inline rt_lights::CommandBindings* State(ID3D12GraphicsCommandList* list) noexcept {
+    return rt_lights::CommandBindings::Get(list);
 }
 struct Pass {
     UINT64 selection = 0, descriptorEpoch = 0, observed = 0;
@@ -85,7 +77,7 @@ struct Pass {
 inline thread_local Pass pass;
 inline thread_local unsigned passDepth = 0;
 inline thread_local bool customRecording = false;
-inline std::atomic<UINT> passReports{0};
+inline std::atomic<UINT> passReports{0}, selectedOutsidePass{0}, selectedOtherList{0};
 using Execute = void (STDMETHODCALLTYPE*)(ID3D12CommandQueue*,UINT,ID3D12CommandList*const*);
 inline Execute originalExecute = nullptr;
 inline ComPtr<ID3D12CommandQueue> submittedQueue, nativeQueue;
@@ -133,9 +125,9 @@ inline void EndPass() noexcept {
         Trace("rt_all_pass slot=%u base=%u rays=%u committed=%u descriptor_mask=%llx gpu_confirmed=0",
             unsigned(pass.slot != nullptr),unsigned(pass.base),unsigned(pass.rays),unsigned(pass.committed),pass.observed);
     if (pass.requested && (passReports.load() <= 12 || (!pass.committed && passReports.load() % 300 == 0)))
-        Trace("rt_all_result reason=%s producer_dispatches=%u selected_dispatches=%u producer_mask=%llx ray_mask=%llx selected_mask=%llx ray_materials=%u selected_cb1=%u",
+        Trace("rt_all_result reason=%s producer_dispatches=%u selected_dispatches=%u producer_mask=%llx ray_mask=%llx selected_mask=%llx ray_materials=%u selected_cb1=%u selected_outside_pass=%u selected_other_list=%u",
             pass.reason,pass.producerDispatches,pass.selectedDispatches,pass.producer.observed,pass.ray.observed,pass.selected.observed,
-            unsigned(pass.ray.table[7].ptr != 0),unsigned(pass.selected.constants[1] != 0));
+            unsigned(pass.ray.table[7].ptr != 0),unsigned(pass.selected.constants[1] != 0),selectedOutsidePass.load(),selectedOtherList.load());
     pass = Pass{};
 }
 inline void ObservePso(ID3D12GraphicsCommandList* list, ID3D12PipelineState* pipeline) noexcept {
@@ -144,7 +136,7 @@ inline void ObservePso(ID3D12GraphicsCommandList* list, ID3D12PipelineState* pip
 }
 inline void ResetSucceeded(ID3D12GraphicsCommandList* list) noexcept {
     pool.ResetSucceeded(list);
-    for (auto& state : rootStates) if (state.list == list) { state = {}; break; }
+    if (auto* state = State(list)) state->bindings = {};
 }
 inline bool Snapshot(const Context& context, UINT index, rt_lights::NativeBindings& out) noexcept {
     auto* state = State(context.list);
@@ -268,10 +260,16 @@ inline void STDMETHODCALLTYPE CbvBindingHook(ID3D12GraphicsCommandList* list, UI
 inline void STDMETHODCALLTYPE DispatchHook(ID3D12GraphicsCommandList* list, UINT x, UINT y, UINT z) {
     const auto original = Lookup(list).dispatch;
     original(list,x,y,z);
-    if (customRecording || !passDepth || !pass.slot || list != pass.context.list) return;
+    if (customRecording) return;
     auto* tracked = State(list); if (!tracked || !tracked->bindings.pipeline) return;
     UINT stage = 0, size = sizeof(stage);
     if (FAILED(tracked->bindings.pipeline->GetPrivateData(kStage,&size,&stage))) return;
+    if (!passDepth) { if (stage == 2) selectedOutsidePass.fetch_add(1); return; }
+    if (!pass.slot) return;
+    if (list != pass.context.list) {
+        if (stage == 2) { selectedOtherList.fetch_add(1); pass.reason = "selected_other_list"; }
+        return;
+    }
     Context context;
     if (!ReadContext(context) || context.list != list) return;
     customRecording = true;
@@ -311,6 +309,9 @@ inline bool OnRays(ID3D12GraphicsCommandList4* list, const D3D12_DISPATCH_RAYS_D
     return false; // Always run the untouched native rays for complete fallback.
 }
 inline void InstallList(ID3D12GraphicsCommandList* list) noexcept {
+    if (!rt_lights::CommandBindings::Attach(list)) {
+        runtimeFailed.store(true); readyMask.fetch_and(~kRtAllSpotReadyBit); return;
+    }
     auto** table = *reinterpret_cast<void***>(list);
     AcquireSRWLockExclusive(&listLock);
     Hooks* slot = nullptr;

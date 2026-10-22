@@ -10,6 +10,7 @@
 #include <string>
 #include "rt_lights/frame_pool.h"
 #include "rt_lights/frame_recorder.h"
+#include "rt_lights/command_bindings.h"
 #include "rt_lights/runtime_assets.h"
 
 namespace native_lighting {
@@ -264,7 +265,7 @@ inline HRESULT STDMETHODCALLTYPE ResetHook(ID3D12GraphicsCommandList* list, ID3D
     const auto original = Lookup(list).reset;
     if (!original) return E_UNEXPECTED;
     Binding binding(pso); const HRESULT hr = original(list, allocator, binding.selected);
-    if (SUCCEEDED(hr)) { rt_lights_runtime::ResetSucceeded(list); binding.Recorded(); }
+    if (SUCCEEDED(hr)) { rt_lights_runtime::ResetSucceeded(list); rt_lights_runtime::ObservePso(list,binding.selected); binding.Recorded(); }
     return hr;
 }
 inline bool PatchSlot(void** slot, void* expected, void* hook) noexcept {
@@ -327,7 +328,7 @@ inline HRESULT STDMETHODCALLTYPE CreateListHook(ID3D12Device* device, UINT node,
     const HRESULT hr = originalCreateList(device, node, type, allocator, binding.selected, iid, out);
     if (SUCCEEDED(hr) && out && *out) {
         ID3D12GraphicsCommandList* list = nullptr;
-        if (SUCCEEDED(reinterpret_cast<IUnknown*>(*out)->QueryInterface(IID_PPV_ARGS(&list)))) { InstallList(list); list->Release(); }
+        if (SUCCEEDED(reinterpret_cast<IUnknown*>(*out)->QueryInterface(IID_PPV_ARGS(&list)))) { InstallList(list); rt_lights_runtime::ObservePso(list,binding.selected); list->Release(); }
         binding.Recorded();
     }
     return hr;
