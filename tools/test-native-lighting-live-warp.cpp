@@ -216,7 +216,7 @@ int main() try {
         Check(owner->SetPrivateDataInterface(rt::kLightIdsVariant,raw.Get()));
         Check(owner->SetPrivateDataInterface(rt::kSelectedOffVariant,filtered.Get()));
         rt::Pass pass; pass.raySeen=pass.fullRay=true; rt::active=&pass;
-        for (auto mode : {Mode::RtSpot,Mode::RtSpotRaw,Mode::RtSpotMapGuard,Mode::RtSpotNativeCull,Mode::RtSpotVisibilityRaw,Mode::RtSpotVisibilityFiltered,Mode::RtSpotLightIds,Mode::RtSpotBaseline,Mode::RtSpotDiffuseFiltered}) {
+        for (auto mode : {Mode::RtSpot,Mode::RtSpotRaw,Mode::RtSpotMapGuard,Mode::RtSpotNativeCull,Mode::RtSpotVisibilityRaw,Mode::RtSpotVisibilityFiltered,Mode::RtSpotLightIds,Mode::RtSpotBaseline,Mode::RtSpotDiffuseFiltered,Mode::RtSpotGiFiltered}) {
             if (!IsRtSpotMode(mode) || Disables(mode,kDirectBit) || RequiredVariant(mode)!=kRtSpotReadyBit)
                 throw std::runtime_error("Diagnostic mode policy mismatch");
             pass.mode=mode;
@@ -238,12 +238,12 @@ int main() try {
         if (!UsesUnshadowedSpotSelection(Mode::RtSpotBaseline) || !UsesUnshadowedSpotSelection(Mode::RtSpot))
             throw std::runtime_error("R94 comparison must preserve the same selector");
         if (rt::RayRecordOffset(Mode::RtSpotBaseline) != 64 || rt::RayRecordOffset(Mode::RtSpot) != 0 ||
-            rt::RayRecordOffset(Mode::RtSpotDiffuseFiltered) != 0 || rt::RayRecordOffset(Mode::RtSpotRaw) != 0 || rt::kRayRecordBufferSize != 128)
+            rt::RayRecordOffset(Mode::RtSpotGiFiltered) != 0 || rt::RayRecordOffset(Mode::RtSpotDiffuseFiltered) != 0 || rt::RayRecordOffset(Mode::RtSpotRaw) != 0 || rt::kRayRecordBufferSize != 128)
             throw std::runtime_error("Live ray record selection or alignment mismatch");
         const unsigned producer=rt::kSelectorComponent;
         Check(owner->SetPrivateData(rt::kKind,sizeof(producer),&producer));
         rt::scopeReady=true;rt::components.store(rt::kRequiredComponents);rt::disabled.store(false);
-        for (auto mode : {Mode::Native,Mode::RtSpotBaseline,Mode::RtSpot,Mode::RtSpotVisibilityRaw,Mode::RtSpotLightIds,Mode::RtSpotDiffuseFiltered}) {
+        for (auto mode : {Mode::Native,Mode::RtSpotBaseline,Mode::RtSpot,Mode::RtSpotVisibilityRaw,Mode::RtSpotLightIds,Mode::RtSpotDiffuseFiltered,Mode::RtSpotGiFiltered}) {
             selection.Select(mode);
             auto* actual=rt::SelectCompute(owner.Get());
             auto* expected=UsesUnshadowedSpotSelection(mode)?reset.Get():nullptr;

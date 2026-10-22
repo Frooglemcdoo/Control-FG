@@ -11,14 +11,18 @@ inline bool RRSupportsRTSettings(unsigned effects) noexcept {
  // Reflection capture remains the source of specular hit distance.
  return (effects&RTReflection)!=0&&(effects&~RTKnownEffects)==0;
 }
-// Evidence for the native GI bypass is scoped to one selected frame. The exact
-// call being observed releases GI history AFTER the raw GI producer and skips
-// filterDiffuseNoise. Other RT paths continue through their native shaders.
+// GI evidence is scoped to one selected frame. Bypassed frames require the
+// history release after the producer; filtered frames require native filtering
+// to return with retained history. Neither path can satisfy the other.
 struct RRRTFrame {
- std::uint64_t frame=0;unsigned effects=0;bool selected=false,giObserved=false;
- void Begin(std::uint64_t f,unsigned e,bool rr) noexcept {frame=f;effects=e;selected=rr;giObserved=false;}
+ std::uint64_t frame=0;unsigned effects=0;bool selected=false,giObserved=false,giFiltered=false;
+ void Begin(std::uint64_t f,unsigned e,bool rr,bool filtered=false) noexcept {frame=f;effects=e;selected=rr;giObserved=false;giFiltered=filtered;}
  bool ObserveGI(std::uint64_t f,bool lightingStarted,bool correctHistory,bool emptyHistory) noexcept {
-  if(!selected||!(effects&RTDiffuseGI)||f!=frame||!lightingStarted||!correctHistory||!emptyHistory||giObserved)return false;
+  if(giFiltered||!selected||!(effects&RTDiffuseGI)||f!=frame||!lightingStarted||!correctHistory||!emptyHistory||giObserved)return false;
+  giObserved=true;return true;
+ }
+ bool ObserveFilteredGI(std::uint64_t f,bool lightingStarted,bool correctHistory,bool retainedHistory,unsigned passes) noexcept {
+  if(!giFiltered||!selected||!(effects&RTDiffuseGI)||f!=frame||!lightingStarted||!correctHistory||!retainedHistory||!passes||giObserved)return false;
   giObserved=true;return true;
  }
  bool Complete(std::uint64_t f,unsigned currentEffects,bool reflectionComplete) const noexcept {

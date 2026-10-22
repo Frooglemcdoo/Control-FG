@@ -49,6 +49,12 @@ int main(){
     assert(!Disables(filtered,kGiBit) && !Disables(filtered,kDirectBit));
     assert(RequiredVariant(filtered)==kRtSpotReadyBit);
     assert(LiveSelection::GetMode(live.Select(filtered))==filtered);
+    assert(PreservesGiFiltering(Mode::RtSpotGiFiltered));
+    assert(!PreservesBroadDiffuseFiltering(Mode::RtSpotGiFiltered));
+    assert(!PreservesGiFiltering(Mode::RtSpot));
+    assert(IsRtSpotMode(Mode::RtSpotGiFiltered) && UsesUnshadowedSpotSelection(Mode::RtSpotGiFiltered));
+    assert(!UsesRawSpotVisibility(Mode::RtSpotGiFiltered) && !Disables(Mode::RtSpotGiFiltered,kGiBit));
+    assert(RequiredVariant(Mode::RtSpotGiFiltered)==kRtSpotReadyBit);
     // UI snapshots must not reset or lose concurrent render-side observations.
     control_rr_diagnostic::Counters counters;
     using Event=control_rr_diagnostic::Event;
