@@ -15,6 +15,7 @@ struct Scope {
  Context frame{},dispatch{};
  Address sourceNative=0;
  bool rrCommitted=false;
+ bool preserveNativeFiltering=false,nativeFilterBound=false;
  unsigned spatialPasses=0;
  bool attempted=false,recorded=false,referenceDispatched=false,nativeClampPrepared=false,nativeClampDispatched=false,nativeClampRestoreFailed=false,knownReplacementContamination=false,failed=false;
  const char* reason="not_attempted";
@@ -55,9 +56,9 @@ inline bool SameFrameOwner(const Context& a,const Context& b) {
 // source/target pair. This performs no GPU work, so a rejected reference arm can safely
 // fall back to the proven raw-copy substitution.
 template<class Api> bool ValidateReferenceDispatch(Scope& scope,const Access& a,Api& api,
- Address renderer,Address site,Address deviceState) {
+ Address renderer,Address site,Address deviceState,bool allowSpatial=false) {
  scope.reason="reference_scope_not_eligible";
- if(!scope.rrCommitted||scope.spatialPasses||scope.attempted||scope.failed||site!=TemporalDispatchRva)return false;
+ if(!scope.rrCommitted||(scope.spatialPasses&&!allowSpatial)||scope.attempted||scope.failed||site!=TemporalDispatchRva)return false;
  scope.reason="reference_frame_missing";
  if(!a.currentContext||!scope.frame.frame||!scope.frame.device||!scope.frame.queue||!scope.frame.list||!scope.frame.view)return false;
  scope.reason="reference_native_device_state";if(!api.StateMatches(deviceState))return false;
@@ -79,12 +80,24 @@ template<class Api> bool ValidateReferenceDispatch(Scope& scope,const Access& a,
  return true;
 }
 
+// The filtered experiment observes the untouched native temporal dispatch. It
+// never copies/clamps resources or marks readiness before that call returns.
+// Rejections still forward native work once, but cannot authorize RR evaluation.
+template<class Api,class Dispatch> void ObserveFilteredDispatch(Scope& scope,const Access& a,Api& api,
+ Address renderer,Address site,Address deviceState,Dispatch dispatch) {
+ const bool admitted=scope.preserveNativeFiltering&&scope.nativeFilterBound&&
+  ValidateReferenceDispatch(scope,a,api,renderer,site,deviceState,true);
+ scope.attempted=true;scope.failed=true;
+ dispatch();
+ if(admitted){scope.recorded=true;scope.failed=false;scope.reason="native_specular_filter_recorded";}
+}
+
 // Call only at the exact temporal-dispatch site inside a committed native filter.
 // Native copyRegion records transitions/counter updates and restores states.
 template<class Api> bool Substitute(Scope& scope,const Access& a,Api& api,
  Address renderer,Address site,Address deviceState) {
  scope.reason="scope_not_eligible";
- if(!scope.rrCommitted||scope.spatialPasses||scope.attempted||scope.failed||site!=TemporalDispatchRva)return false;
+ if(!scope.rrCommitted||scope.preserveNativeFiltering||scope.spatialPasses||scope.attempted||scope.failed||site!=TemporalDispatchRva)return false;
  // Mark rejection before borrowed reads; clear it only after a complete copy.
  scope.failed=true;
  scope.reason="scope_frame_missing";

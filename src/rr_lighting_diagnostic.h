@@ -11,13 +11,13 @@ enum class Event : std::size_t {
     HooksInstalled, BroadA, BroadB, BroadNative, BroadBypass,
     ReflectionEntry, ReflectionNative, ReflectionClamp, ReflectionRaw,
     GIOption, GIBypassSelected, GIRelease, GIValidated,
-    EvaluationEntry, RRAttempt, RRSuccess, RRFailure, SRReturn, EvaluationRejected, GIFilterEntry, GIFilterValidated, GIFilterUnavailable, WorldAlbedoBound, WorldAlbedoRejected, Count
+    EvaluationEntry, RRAttempt, RRSuccess, RRFailure, SRReturn, EvaluationRejected, GIFilterEntry, GIFilterValidated, GIFilterUnavailable, WorldAlbedoBound, WorldAlbedoRejected, SpecularFilterValidated, SpecularFilterRejected, Count
 };
 inline constexpr const char* kEventNames[] = {
     "hooks_installed", "broad_a", "broad_b", "broad_native", "broad_bypass",
     "reflection_entry", "reflection_native", "reflection_clamp", "reflection_raw",
     "gi_option", "gi_bypass_selected", "gi_release", "gi_validated",
-    "evaluation_entry", "rr_attempt", "rr_success", "rr_failure", "sr_return", "evaluation_rejected", "gi_filter_entry", "gi_filter_validated", "gi_filter_unavailable", "world_albedo_bound", "world_albedo_rejected"
+    "evaluation_entry", "rr_attempt", "rr_success", "rr_failure", "sr_return", "evaluation_rejected", "gi_filter_entry", "gi_filter_validated", "gi_filter_unavailable", "world_albedo_bound", "world_albedo_rejected", "specular_filter_validated", "specular_filter_rejected"
 };
 inline constexpr auto kCount = static_cast<std::size_t>(Event::Count);
 static_assert(sizeof(kEventNames)/sizeof(kEventNames[0]) == kCount);

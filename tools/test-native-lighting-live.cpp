@@ -61,6 +61,13 @@ int main(){
     assert(!UsesRawSpotVisibility(world) && !PreservesBroadDiffuseFiltering(world));
     assert(RequiredVariant(world)==kRtSpotReadyBit && !Disables(world,kGiBit));
     assert(LiveSelection::GetMode(live.Select(world))==world);
+    const auto specular=Mode::RtSpotSpecularFiltered;
+    assert(PreservesSpecularFiltering(specular) && !PreservesSpecularFiltering(world));
+    assert(UsesWorldAlbedo(specular) && PreservesGiFiltering(specular));
+    assert(IsRtSpotMode(specular) && RequiredVariant(specular)==kRtSpotReadyBit);
+    assert(!UsesRawSpotVisibility(specular) && !PreservesBroadDiffuseFiltering(specular));
+    assert(!Disables(specular,kDirectBit) && !Disables(specular,kGiBit));
+    assert(LiveSelection::GetMode(live.Select(specular))==specular);
     // UI snapshots must not reset or lose concurrent render-side observations.
     control_rr_diagnostic::Counters counters;
     using Event=control_rr_diagnostic::Event;

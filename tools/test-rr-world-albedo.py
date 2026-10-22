@@ -65,6 +65,7 @@ int main(){
  assert(rrWorldAlbedoRecordCount==64&&!RRWorldAlbedoReplacement(1000,0));
  assert(RRWorldAlbedoReplacement(100,0)==first); // Existing records remain usable at capacity.
  native_lighting::selection.Select(native_lighting::Mode::RtSpotWorldAlbedo);assert(RRWorldAlbedoRequested());
+ native_lighting::selection.Select(native_lighting::Mode::RtSpotSpecularFiltered);assert(RRWorldAlbedoRequested());
  native_lighting::selection.Select(native_lighting::Mode::RtSpotGiFiltered);assert(!RRWorldAlbedoRequested());
 }
 '''
