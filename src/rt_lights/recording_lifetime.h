@@ -34,6 +34,7 @@ public:
         return true;
     }
     void Quarantine() noexcept { quarantined = true; }
+    bool Detached() const noexcept { return detached; }
     bool Submitted() const noexcept { return submitted; }
     bool Available() const noexcept { return !generation && !quarantined; }
     std::uint64_t Generation() const noexcept { return generation; }

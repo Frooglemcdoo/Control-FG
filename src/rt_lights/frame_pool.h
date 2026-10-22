@@ -128,7 +128,9 @@ public:
         std::lock_guard<std::mutex> lock(mutex);
         if (failed) return false;
         for (auto& slot : slots) {
-            if (slot->lifetime.Available() || !slot->list) continue;
+            // A reset list pointer now names a different recording. Its submission
+            // must not be charged to the old generation still retiring on GPU.
+            if (slot->lifetime.Available() || slot->lifetime.Detached() || !slot->list) continue;
             bool found = false;
             for (UINT i = 0; i < count; ++i) found |= lists[i] == slot->list.Get();
             if (!found) continue;

@@ -44,6 +44,7 @@ int main() try {
     // Submit the new empty recording so the fixture's completion fence also
     // orders the pool's earlier signal. Only the fixture waits on this fence.
     Check(gpu.list->Close()); gpu.queue->ExecuteCommandLists(1, submitted);
+    Require(pool.Submitted(gpu.queue.Get(), 1, submitted), "Reset list submission was charged to its old recording");
     Check(gpu.queue->Signal(gpu.fence.Get(), 2));
     HANDLE event = CreateEventW(nullptr, FALSE, FALSE, nullptr);
     Require(event != nullptr, "Fixture event creation failed");
