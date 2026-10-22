@@ -7,6 +7,24 @@ observations, not GPU readback proof. The screenshot shows RT CLOSE COVERAGE
 selected and weak close shadows. Further cutoff tuning is not justified by this
 result; preserve R94 selection and isolate the next cause.
 
+## Confirmed visual baseline — 2026-10-22
+
+User reports CENTER FILTERED fixes every reported visual issue and looks great.
+The attached image(20261022-200122).png shows CENTER FILTERED selected, Jesse's
+floor shadow restored, and visible soft rail shadows. The session log
+Lighting-R97-20261022-145537-49136-0.log records filtered mode at final sequence 5:
+center_probe=1, raw=0, selected_off=0, per_sample_endpoint=1,
+near_distance_cutoff=0, with R94 unshadowed-contribution selection.
+
+Preserve this exact CENTER FILTERED path as the next development baseline.
+The evidence implicates the previous emitter-disk sampling in the close-shadow
+loss; it does not establish which radius/basis/placement assumption was wrong.
+The successful combination is R94 selection, centered emitter rays with R96
+segments, and existing spotlight filtering. Do not reintroduce the disk spread
+or change the filtering while promoting this baseline. Four coincident rays
+remain in R97; reducing redundant traces is a separate change requiring visual
+comparison. The earlier green-screen report has not been diagnosed by this test.
+
 ## Controls and purpose
 
 Install all package files while Control is closed. Enable native RT Contact

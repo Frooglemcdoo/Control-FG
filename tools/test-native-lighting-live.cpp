@@ -1,4 +1,5 @@
 #include "../src/native_lighting_live_state.h"
+#include "../src/rr_broad_diffuse_policy.h"
 #include <cassert>
 #include <iostream>
 int main(){
@@ -30,5 +31,21 @@ int main(){
     assert(!CanReportVisual(Mode::SpotStableSoft, 0));
     assert(!CanReportVisual(Mode::SpotStableSoft, kGiBit));
     assert(CanReportVisual(Mode::SpotStableSoft, kDirectBit));
+    // Exercise both the unmodified policy and the diagnostic across every effect mask.
+    for (unsigned effects=0; effects<64; ++effects) {
+        for (bool full : {false,true}) for (bool partial : {false,true}) {
+            const bool expected=full && !partial && (effects & (4u|16u));
+            assert(control_rr::BroadDiffusePolicy(full,partial,effects).bypass==expected);
+            assert(!control_rr::BroadDiffusePolicy(full,partial,effects,true).bypass);
+        }
+    }
+    const auto filtered=Mode::RtSpotDiffuseFiltered;
+    assert(PreservesBroadDiffuseFiltering(filtered));
+    assert(!PreservesBroadDiffuseFiltering(Mode::RtSpot));
+    assert(IsRtSpotMode(filtered) && UsesUnshadowedSpotSelection(filtered));
+    assert(!UsesRawSpotVisibility(filtered) && !ShowsSpotVisibility(filtered));
+    assert(!Disables(filtered,kGiBit) && !Disables(filtered,kDirectBit));
+    assert(RequiredVariant(filtered)==kRtSpotReadyBit);
+    assert(LiveSelection::GetMode(live.Select(filtered))==filtered);
     std::cout<<"PASS: live modes, return to native, stale-recording rejection\n";
 }

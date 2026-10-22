@@ -599,13 +599,37 @@ static void RRNativeHookContactShadowFilter(void* color,void* history,void* auxi
 }
 static void RRNativeHookBroadDiffuseCommon(unsigned site, void* color, void* history, unsigned passes) {
  if(!rrNativeDiffuseFilterOriginal)return;
- // r20v: the two remaining direct DLF calls live inside renderer+0x248940.
- // filterDiffuseNoise always executes its temporal_feedback technique even when
- // passCount is zero, so FULL RR must bypass the function boundary completely;
- // merely forcing passes=0 would still pre-denoise RR's input.
+ // These two DLF calls include temporal feedback even with zero spatial passes.
+ // R98 can preserve the complete native call without changing RR inputs or shadow shaders.
+ const DWORD entryError=GetLastError();
+ const auto selected=native_lighting::selection.Read();
+ const auto mode=native_lighting::LiveSelection::GetMode(selected);
  const bool full=rrNativeFrameEnabled&&rrNativeFrame.Selected()&&!rrNativeFrame.Stopped();
- const auto policy=control_rr::BroadDiffusePolicy(full,RRNativePartialActive(),rrNativeRTFrame.effects);
- if(!policy.bypass){rrNativeDiffuseFilterOriginal(color,history,passes);return;}
+ const bool partial=RRNativePartialActive();
+ const bool preserve=native_lighting::PreservesBroadDiffuseFiltering(mode);
+ const auto policy=control_rr::BroadDiffusePolicy(full,partial,rrNativeRTFrame.effects,preserve);
+ SetLastError(entryError);
+ if(!policy.bypass)rrNativeDiffuseFilterOriginal(color,history,passes);
+ const DWORD resultError=GetLastError();
+ // One bounded queue entry per site/policy transition. The UI thread writes the log.
+ // RR selection is CPU state, not a claim that GPU reconstruction completed.
+ struct Observation {
+  bool valid=false, full=false, partial=false, bypass=false;
+  uint64_t sequence=0;
+  unsigned effects=0, passes=0;
+ };
+ static thread_local Observation observations[2];
+ auto& last=observations[site];
+ const auto sequence=native_lighting::LiveSelection::Sequence(selected);
+ if(!last.valid||last.sequence!=sequence||last.full!=full||last.partial!=partial||
+    last.bypass!=policy.bypass||last.effects!=rrNativeRTFrame.effects||last.passes!=passes){
+  native_lighting::Trace("rr_broad_diffuse seq=%llu site=%u mode=%s rr_selected=%u partial=%u rt_effects=0x%X passes=%u preserve_requested=%u native_call_completed=%u bypass=%u gpu_confirmed=0",
+   sequence,site,native_lighting::ModeName(mode),unsigned(full),unsigned(partial),rrNativeRTFrame.effects,passes,
+   unsigned(preserve),unsigned(!policy.bypass),unsigned(policy.bypass));
+  last={true,full,partial,policy.bypass,sequence,rrNativeRTFrame.effects,passes};
+ }
+ SetLastError(resultError);
+ if(!policy.bypass)return;
  const DWORD saved=GetLastError();
  auto& counter=(site==0)?rrNativeBroadDiffuseBypassesA:rrNativeBroadDiffuseBypassesB;
  const auto count=counter.fetch_add(1,std::memory_order_relaxed)+1;
