@@ -41,6 +41,9 @@ static bool PTReflectionCloneShaderRecord(void*,size_t slot,unsigned stage,int i
 }
 #include "rr_world_albedo_runtime.h"
 int main(){
+ RRWorldAlbedoHistory history;
+ assert(!history.Update(false));assert(history.Update(true));assert(!history.Update(true));
+ assert(history.Update(false));assert(!history.Update(false));
  for(unsigned i=0;i<4;++i){
   const auto& v=kRRWorldVariants[i];RRAlbedoShader::Contract c{};const char* why=nullptr;
   assert(RRAlbedoShader::ParsePixelContract(v.native,v.nativeSize,c,&why)&&c.targetCount==1);

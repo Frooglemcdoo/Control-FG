@@ -277,8 +277,6 @@ static void RRLiveBeforeImpl(ID3D12GraphicsCommandList* list,const control_rr::L
                 c->policy.Abort(lease);c->stopped=true;RRPerfEnd(perf);
                 Log("RR_CHARACTER_GUIDE_STOP frame=%llu reason=copy_fault fault=0x%08lX",in.engineFrame,fault);__leave;
             }
-            if(rrDiffuse->worldAlbedo && rrDiffuse->worldBatches)
-                control_rr_diagnostic::Record(control_rr_diagnostic::Event::WorldAlbedoBound);
             constants.guideFlags|=4u;
             s.texturedAlbedoValid=true;
         }
@@ -287,6 +285,10 @@ static void RRLiveBeforeImpl(ID3D12GraphicsCommandList* list,const control_rr::L
         if(!RRLiveRecord(c,&s,&in,&constants,&fault)){
             c->policy.Abort(lease);RRLiveReleaseSources(s);c->stopped=true;
             Log("RR_G12_LIVE_STOP reason=recording_fault fault=0x%08lX resources_retained=1 stage=guide_generation architecture=renodx_descriptor_parity",fault);__leave;
+        }
+        if(textured && rrDiffuse->worldAlbedo && rrDiffuse->worldBatches) {
+            rrWorldAlbedoGuideFrame.store(in.engineFrame,std::memory_order_release);
+            control_rr_diagnostic::Record(control_rr_diagnostic::Event::WorldAlbedoBound);
         }
         // r21t retains the one-shot, stats-only readback of the exact owned guide textures
         // consumed by RR. It records after guide generation and restores the

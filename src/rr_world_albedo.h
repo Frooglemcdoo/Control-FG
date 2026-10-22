@@ -14,3 +14,10 @@ static constexpr int kRRWorldAlbedoStorageBase=0x6F475040;
 static std::atomic<bool> rrWorldAlbedoStorageReady{false};
 static bool RRWorldAlbedoRequested() noexcept;
 static std::uintptr_t RRWorldAlbedoReplacement(std::uintptr_t selected,int variant) noexcept;
+
+// Published only after successful current-frame guide command recording.
+static std::atomic<unsigned long long> rrWorldAlbedoGuideFrame{0};
+struct RRWorldAlbedoHistory {
+    bool previous=false;
+    bool Update(bool current) noexcept {const bool changed=current!=previous;previous=current;return changed;}
+};
