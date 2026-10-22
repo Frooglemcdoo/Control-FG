@@ -4,6 +4,8 @@
 // handlers and their space-1 material / space-3 local bindings stay intact.
 RaytracingAccelerationStructure scene : register(t6);
 StructuredBuffer<ShadowTask> tasks : register(t8);
+// Native contact hit shaders use t0..t7; t9 is private to this raygen.
+StructuredBuffer<Contribution> contributions : register(t9);
 RWStructuredBuffer<Visibility> visibility : register(u2);
 cbuffer ShaderTableLayout : register(b4) {
     uint hitOffset; uint geometryStride; uint missIndex; uint unused;
@@ -49,6 +51,20 @@ void perLightVisibility() {
     result.lightId=task.lightId; result.receiverId=task.receiverId; result.frameTag=task.frameTag;
     visibility[index]=result;
     if(!Valid(task)) return;
+#ifdef RT_LIGHTS_NATIVE_BINDINGS
+    uint contributionCount, contributionStride;
+    contributions.GetDimensions(contributionCount, contributionStride);
+    if(index>=contributionCount || contributionStride!=48) return;
+    Contribution contribution=contributions[index];
+    if(contribution.visibilityIndex!=index || contribution.receiverId!=task.receiverId ||
+       contribution.lightId!=task.lightId || contribution.frameTag!=task.frameTag ||
+       !all(isfinite(contribution.diffuse)) || !all(isfinite(contribution.specular))) return;
+    // Exact zero only: never cull faint lights or change BRDF/cone membership.
+    if(all(contribution.diffuse==0) && all(contribution.specular==0)) {
+        result.value=1;result.valid=1;result.nearestBlocker=3.402823466e+38;
+        result.reserved1=1;visibility[index]=result;return;
+    }
+#endif
     float3 normal=normalize(task.normal);
     if(dot(normal,task.lightCenter-task.receiver)<0) normal=-normal;
     float3 origin=task.receiver+normal*task.originBias;
@@ -64,11 +80,14 @@ void perLightVisibility() {
         ray.Origin=origin; ray.Direction=delta/lengthToLight;
         ray.TMin=0; ray.TMax=lengthToLight-task.endpointBias;
         ShadowHit hit; hit.distance=ray.TMax;
-        TraceRay(scene,RAY_FLAG_NONE,task.instanceMask,hitOffset,geometryStride,missIndex,ray,hit);
+        // Only binary visibility is consumed. Native alpha testing still runs;
+        // terminate after the first ACCEPTED hit, not the first cutout candidate.
+        TraceRay(scene,RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH,task.instanceMask,hitOffset,geometryStride,missIndex,ray,hit);
         bool occluded=hit.distance<ray.TMax;
         sum+=occluded ? 0 : 1;
         if(occluded) nearest=min(nearest,hit.distance);
     }
+    result.reserved0=task.sampleCount; // actual rays, for sparse GPU evidence
     result.value=sum/task.sampleCount; result.nearestBlocker=nearest; result.valid=1;
     visibility[index]=result;
 }

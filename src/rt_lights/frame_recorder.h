@@ -163,13 +163,13 @@ public:
                 Write(frame, 0, Surface::Work), Write(frame, 1, Surface::Tasks), Write(frame, 2, Surface::Ranges), Write(frame, 3, Surface::Counter)};
             const DescriptorEdit arguments[] = {Read(frame, 0, Surface::Counter), Write(frame, 0, Surface::Work), Write(frame, 1, Surface::Arguments)};
             const DescriptorEdit extract[] = {Read(frame, 14, Surface::Work), Write(frame, 0, Surface::DiffuseAtlas), Write(frame, 1, Surface::SpecularAtlas)};
-            const DescriptorEdit rays[] = {Read(frame, 8, Surface::Tasks), Write(frame, 2, Surface::Visibility)};
+            const DescriptorEdit rays[] = {Read(frame, 8, Surface::Tasks), Read(frame, 9, Surface::Contributions), Write(frame, 2, Surface::Visibility)};
             const DescriptorEdit pack[] = {Read(frame, 0, Surface::Work), Read(frame, 1, Surface::DiffuseAtlas), Read(frame, 2, Surface::SpecularAtlas),
                 Read(frame, 3, Surface::Tasks), Write(frame, 0, Surface::Contributions)};
             const DescriptorEdit compose[] = {Read(frame, 0, Surface::Visibility), Read(frame, 1, Surface::Contributions), Read(frame, 2, Surface::Ranges), Write(frame, 0, Surface::Lighting)};
             const DescriptorEdit commit[] = {Read(frame, 0, Surface::Lighting), Read(frame, 1, Surface::BaseDiffuse), Read(frame, 2, Surface::BaseSpecular)};
             if (!allocator.Publish(producer, generate, 8, t.generate) || !allocator.Publish(producer, arguments, 3, t.arguments) ||
-                !allocator.Publish(selected, extract, 3, t.extract) || !allocator.Publish(ray, rays, 2, t.rays, rayControls) ||
+                !allocator.Publish(selected, extract, 3, t.extract) || !allocator.Publish(ray, rays, 3, t.rays, rayControls) ||
                 !allocator.Publish(selected, pack, 5, t.pack) || !allocator.Publish(selected, compose, 4, t.compose) ||
                 !allocator.Publish(selected, commit, 3, t.commit)) return fail("batch_descriptor_allocation");
         }
@@ -183,7 +183,7 @@ public:
         for (UINT batch = 0; batch < batches; ++batch) {
             const UINT first = batch * BatchCapacity::Receivers;
             const UINT count = (std::min)(BatchCapacity::Receivers, receivers - first);
-            const UINT generate[] = {first, count, 1024, frameTag, 32, 1, Bits(0.001f), Bits(0.002f),
+            const UINT generate[] = {first, count, 1024, frameTag, BatchCapacity::ShadowSamples, 1, Bits(0.001f), Bits(0.002f),
                 BatchCapacity::AtlasWidth, BatchCapacity::AtlasHeight, Bits(1.0f), 0};
             const UINT pack[] = {frame.Width(), frame.Height(), frameTag, BatchCapacity::Tasks};
             const UINT compose[] = {first, count, frameTag, 0};
@@ -215,14 +215,16 @@ public:
             selected.Apply(list, t.extract.gpu); list->SetPipelineState(pipelines.extract);
             list->ExecuteIndirect(pipelines.indirectCompute, 1, frame.Get(Surface::Arguments), IndirectLayout::Extract, nullptr, 0);
             FrameResources::UavBarrier(list);
-            ray.Apply(list, t.rays.gpu); list->SetPipelineState1(rayState);
-            list->ExecuteIndirect(pipelines.indirectRays, 1, frame.Get(Surface::Arguments), IndirectLayout::Rays, nullptr, 0);
-            FrameResources::UavBarrier(list);
-            for (Surface surface : {Surface::DiffuseAtlas, Surface::SpecularAtlas, Surface::Visibility})
+            // Extract and validate energy before tracing. Zero-energy lights
+            // need no visibility query, but remain valid contributions.
+            for (Surface surface : {Surface::DiffuseAtlas, Surface::SpecularAtlas})
                 frame.Transition(list, surface, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
             selected.Apply(list, t.pack.gpu); Compute(list, pipelines.pack, packAddress);
             list->ExecuteIndirect(pipelines.indirectCompute, 1, frame.Get(Surface::Arguments), IndirectLayout::Pack, nullptr, 0);
             frame.Transition(list, Surface::Contributions, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+            ray.Apply(list, t.rays.gpu); list->SetPipelineState1(rayState);
+            list->ExecuteIndirect(pipelines.indirectRays, 1, frame.Get(Surface::Arguments), IndirectLayout::Rays, nullptr, 0);
+            frame.Transition(list, Surface::Visibility, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
             selected.Apply(list, t.compose.gpu); Compute(list, pipelines.compose, composeAddress);
             list->Dispatch((count + 63) / 64, 1, 1);
             frame.Transition(list, Surface::Lighting, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);

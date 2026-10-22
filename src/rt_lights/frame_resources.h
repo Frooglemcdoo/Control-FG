@@ -19,6 +19,8 @@ enum class Surface : unsigned {
 };
 
 struct BatchCapacity {
+    // Live area-light budget. The backend still supports up to 64 for fixtures.
+    static constexpr UINT ShadowSamples = 4;
     static constexpr UINT Receivers = 32768;
     static constexpr UINT AtlasWidth = 512, AtlasHeight = 512;
     static constexpr UINT Tasks = AtlasWidth * AtlasHeight;
@@ -261,6 +263,7 @@ public:
     struct EvidenceSummary {
         UINT first = 0, receivers = 0, tasks = 0, validRanges = 0, litRanges = 0;
         UINT validLighting = 0, sampledTasks = 0, validVisibility = 0, validContributions = 0;
+        UINT tracedRays = 0, zeroContributions = 0;
         UINT rejected[10]{};
     };
     // Worker only, after both command-list fences have completed. Never waits.
@@ -285,6 +288,10 @@ public:
         const auto* contributions = reinterpret_cast<const Contribution*>(bytes + ContributionOffset);
         for (UINT i = 0; i < result.sampledTasks; ++i) {
             result.validVisibility += visibility[i].valid == 1 && visibility[i].frameTag == evidenceTag;
+            if (visibility[i].valid == 1 && visibility[i].frameTag == evidenceTag) {
+                result.tracedRays += visibility[i].reserved0;
+                result.zeroContributions += visibility[i].reserved1 == 1;
+            }
             result.validContributions += contributions[i].visibilityIndex == i && contributions[i].frameTag == evidenceTag;
         }
         D3D12_RANGE noWrites{0, 0}; evidence->Unmap(0, &noWrites);

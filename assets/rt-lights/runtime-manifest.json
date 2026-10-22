@@ -27,8 +27,8 @@
     },
     {
       "file": "rt_lights_native_visibility.dxil",
-      "sha256": "1efa2f9bee343fc14a3db20bda3c57dd651edb22f4e4d1bc7189ed8e0a415786",
-      "bytes": 9732
+      "sha256": "9ad55d00d21f7a20cfe7b7b6b86b3a59388f44ca7c5c2be8b65bb8727d212ed4",
+      "bytes": 11040
     },
     {
       "file": "rt_lights_native_base.dxbc",
