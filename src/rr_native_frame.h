@@ -1,5 +1,6 @@
 #pragma once
 #include "rr_frame_coordinator.h"
+#include "rr_lighting_diagnostic.h"
 #include "rr_native_preset.h"
 #include "rr_user_control.h"
 #include "rr_guide_parameters.h"
@@ -258,6 +259,13 @@ static bool RRNativeSelectedOption(void*) noexcept {
  const bool active=rrNativeFrame.Selected()||RRNativePartialActive();
  return control_rr::NativeRenderOption(rrNativeFrameEnabled,active,rrNativeFrame.Stopped());
 }
+// Observe the GI branch independently; preserve the existing option result exactly.
+static bool RRNativeGIBypassOption(void* option) noexcept {
+ control_rr_diagnostic::Record(control_rr_diagnostic::Event::GIOption);
+ const bool bypass=RRNativeSelectedOption(option);
+ if(bypass)control_rr_diagnostic::Record(control_rr_diagnostic::Event::GIBypassSelected);
+ return bypass;
+}
 // Override the sole producer-local getter, before allocation and provider binding.
 // Never mutate the registered option or the shader constant independently.
 static unsigned RRNativeGISampleCount(void* option) {
@@ -302,6 +310,7 @@ static bool RRNativeReadRTSettings(unsigned* enabledBits) noexcept {
  } __except(EXCEPTION_EXECUTE_HANDLER){return false;}
 }
 static void RRNativeHookGIRelease(void* history) {
+ control_rr_diagnostic::Record(control_rr_diagnostic::Event::GIRelease);
  // P2 rough-surface energy belongs in diffuse GI, not the specular reflection
  // target. This reviewed callsite is after the native DGI producer and before
  // the later filter/history branch, so inject before the ownership release.
@@ -326,6 +335,7 @@ static void RRNativeHookGIRelease(void* history) {
   } else {
    const bool okay=ReadEngineFrameSafe(&frame,&fault)&&rrNativeRTFrame.ObserveGI(frame,
     rrNativeFrame.Selected()&&rrNativeFrame.Stage()==control_rr::RRFrameStage::Lighting,correct,empty);
+   if(okay)control_rr_diagnostic::Record(control_rr_diagnostic::Event::GIValidated);
    if(!okay)rrNativeFrame.Fail("diffuse_gi_bypass_contract");
    if(!okay||rrNativeFrame.Reset()||frame%240==0)
     Log("RR_NOISY_GI frame=%llu success=%u history_empty=%u native_filter_skipped=1 rt_effects=0x%X",frame,unsigned(okay),unsigned(empty),rrNativeRTFrame.effects);
@@ -381,6 +391,8 @@ static bool RRNativeHookReset(unsigned outputWidth,unsigned outputHeight,unsigne
  const bool partial=partialRequested&&known&&supported&&configuration&&!rrNativeFrame.Stopped()&&!selected;
  rrNativePartialFrame.store(partial,std::memory_order_release);
  rrNativeRTFrame.Begin(frame,effects,selected);
+ control_rr_diagnostic::lastEffects.store(effects,std::memory_order_relaxed);
+ control_rr_diagnostic::lastSelected.store(selected,std::memory_order_relaxed);
  if(previousKey.frame&&previousKey.rtEffects!=effects)
   Log("RR_RT_SETTINGS frame=%llu old_effects=0x%X new_effects=0x%X rr_selected=%u reset=%u",frame,previousKey.rtEffects,effects,unsigned(selected),unsigned(rrNativeFrame.Reset()));
  if(previousKey.frame&&!control_rr::SameExtent(previousKey,rrNativeFrame.Key()))
@@ -517,6 +529,7 @@ static void RRNativeHookDispatch(void* state,const void* groups) {
     }
    }
    if(nativeReturned){
+    control_rr_diagnostic::Record(control_rr_diagnostic::Event::ReflectionClamp);
     scope->recorded=true;scope->nativeClampDispatched=true;scope->failed=!restored;
     scope->reason=restored?"native_control_energy_clamp":"native_control_energy_clamp_restore_failed";
     const auto count=rrNativeClampDispatches.fetch_add(1,std::memory_order_relaxed)+1;
@@ -560,6 +573,7 @@ static void RRNativeHookDispatch(void* state,const void* groups) {
   if(!scope->attempted){SetLastError(saved);rrNativeDispatchOriginal(state,groups);return;}
   RaiseException(0xE0425252u,EXCEPTION_NONCONTINUABLE,0,nullptr);
  }
+ control_rr_diagnostic::Record(control_rr_diagnostic::Event::ReflectionRaw);
  control_rr_clamp::effective.store(0,std::memory_order_release);
  control_rr_clamp::applied.store(rrClampFrameStrength==0,std::memory_order_release);
  const auto count=scope->frame.frame;
@@ -598,6 +612,7 @@ static void RRNativeHookContactShadowFilter(void* color,void* history,void* auxi
  SetLastError(nativeError);
 }
 static void RRNativeHookBroadDiffuseCommon(unsigned site, void* color, void* history, unsigned passes) {
+ control_rr_diagnostic::Record(site==0?control_rr_diagnostic::Event::BroadA:control_rr_diagnostic::Event::BroadB);
  if(!rrNativeDiffuseFilterOriginal)return;
  // These two DLF calls include temporal feedback even with zero spatial passes.
  // R98 can preserve the complete native call without changing RR inputs or shadow shaders.
@@ -609,7 +624,10 @@ static void RRNativeHookBroadDiffuseCommon(unsigned site, void* color, void* his
  const bool preserve=native_lighting::PreservesBroadDiffuseFiltering(mode);
  const auto policy=control_rr::BroadDiffusePolicy(full,partial,rrNativeRTFrame.effects,preserve);
  SetLastError(entryError);
- if(!policy.bypass)rrNativeDiffuseFilterOriginal(color,history,passes);
+ if(!policy.bypass){
+  rrNativeDiffuseFilterOriginal(color,history,passes);
+  control_rr_diagnostic::Record(control_rr_diagnostic::Event::BroadNative);
+ }else control_rr_diagnostic::Record(control_rr_diagnostic::Event::BroadBypass);
  const DWORD resultError=GetLastError();
  // One bounded queue entry per site/policy transition. The UI thread writes the log.
  // RR selection is CPU state, not a claim that GPU reconstruction completed.
@@ -645,7 +663,11 @@ static void RRNativeHookBroadDiffuseCommon(unsigned site, void* color, void* his
 static void RRNativeHookBroadDiffuseA(void* color,void* history,unsigned passes) {RRNativeHookBroadDiffuseCommon(0,color,history,passes);}
 static void RRNativeHookBroadDiffuseB(void* color,void* history,unsigned passes) {RRNativeHookBroadDiffuseCommon(1,color,history,passes);}
 static void RRNativeHookFilter(void* color,void* history,unsigned passes,bool evaluateColor) {
- if(!rrNativeFrameEnabled){rrNativeFilterOriginal(color,history,passes,evaluateColor);return;}
+ control_rr_diagnostic::Record(control_rr_diagnostic::Event::ReflectionEntry);
+ if(!rrNativeFrameEnabled){
+  rrNativeFilterOriginal(color,history,passes,evaluateColor);
+  control_rr_diagnostic::Record(control_rr_diagnostic::Event::ReflectionNative);return;
+ }
  const DWORD saved=GetLastError();
  const auto perfStart=RRPerfClock();
  if(RRNativePartialActive()){
@@ -654,6 +676,7 @@ static void RRNativeHookFilter(void* color,void* history,unsigned passes,bool ev
    Log("RR_NATIVE_HISTORY_RESET success=%u reason=enter_partial",unsigned(historyReset));
   }
   SetLastError(saved);rrNativeFilterOriginal(color,history,passes,evaluateColor);
+  control_rr_diagnostic::Record(control_rr_diagnostic::Event::ReflectionNative);
   const DWORD nativeError=GetLastError();RRPerfFilter(rrNativeFrame.Key().frame,RRPerfElapsed(perfStart));
   if(rrNativeFrame.Key().frame%240==0)
    Log("RR_PARTIAL_FILTER frame=%llu spatial_passes=%u brdf=%u feature_rr=0 temporal_substitution=0 partial=1",static_cast<unsigned long long>(rrNativeFrame.Key().frame),passes,unsigned(evaluateColor));
@@ -665,6 +688,7 @@ static void RRNativeHookFilter(void* color,void* history,unsigned passes,bool ev
    Log("RR_NATIVE_HISTORY_RESET success=%u",unsigned(reset));
   }
   SetLastError(saved);rrNativeFilterOriginal(color,history,passes,evaluateColor);
+  control_rr_diagnostic::Record(control_rr_diagnostic::Event::ReflectionNative);
   const DWORD nativeError=GetLastError();RRPerfFilter(rrNativeFrame.Key().frame,RRPerfElapsed(perfStart));SetLastError(nativeError);return;
  }
  control_rr_specular::Scope scope{};
@@ -672,7 +696,8 @@ static void RRNativeHookFilter(void* color,void* history,unsigned passes,bool ev
  bool ready=RRReflectionCurrent(nullptr,scope.frame)&&scope.frame.frame==rrNativeFrame.Key().frame&&!rrNativeSpecularScope;
  if(ready){scope.sourceNative=access.Callbacks().containerNative(&access,reinterpret_cast<std::uintptr_t>(color));ready=scope.sourceNative!=0;}
  if(!ready||!rrNativeFrame.BeginLighting(scope.frame.frame)){
-  rrNativeFrame.Fail();Log("RR_FRAME_STOP reason=filter_frame_context");SetLastError(saved);rrNativeFilterOriginal(color,history,passes,evaluateColor);return;
+  rrNativeFrame.Fail();Log("RR_FRAME_STOP reason=filter_frame_context");SetLastError(saved);rrNativeFilterOriginal(color,history,passes,evaluateColor);
+  control_rr_diagnostic::Record(control_rr_diagnostic::Event::ReflectionNative);return;
  }
  scope.rrCommitted=true;scope.spatialPasses=0;rrNativeClampLease={};rrNativeSpecularScope=&scope;
  SetLastError(saved);
@@ -725,7 +750,7 @@ static bool RRNativeInstallFrame(HMODULE renderer,HMODULE d3d) noexcept {
   !RRAlbedoPrepareCallPatch(base+0x16744,reinterpret_cast<void*>(rrNativeTemporalBindOriginal),reinterpret_cast<void*>(&RRNativeHookTemporalBind),&rrNativeTemporalBindPatch)||
   !RRAlbedoPrepareCallPatch(base+0x12b8ad,reinterpret_cast<void*>(rrNativeOptionOriginal),reinterpret_cast<void*>(&RRNativeSelectedOption),&rrNativeReflectionOptionPatch)||
   !RRAlbedoPrepareCallPatch(base+0x12bda4,reinterpret_cast<void*>(rrNativeOptionOriginal),reinterpret_cast<void*>(&RRNativeSelectedOption),&rrNativeGIRadiusOptionPatch)||
-  !RRAlbedoPrepareCallPatch(base+0x12cd45,reinterpret_cast<void*>(rrNativeOptionOriginal),reinterpret_cast<void*>(&RRNativeSelectedOption),&rrNativeGIBypassOptionPatch)||
+  !RRAlbedoPrepareCallPatch(base+0x12cd45,reinterpret_cast<void*>(rrNativeOptionOriginal),reinterpret_cast<void*>(&RRNativeGIBypassOption),&rrNativeGIBypassOptionPatch)||
   !RRAlbedoPrepareCallPatch(base+0x12b8d7,reinterpret_cast<void*>(rrNativeFilterOriginal),reinterpret_cast<void*>(&RRNativeHookFilter),&rrNativeFilterPatch)||
   !RRAlbedoPrepareCallPatch(base+0x12cd55,reinterpret_cast<void*>(rrNativeGIReleaseOriginal),reinterpret_cast<void*>(&RRNativeHookGIRelease),&rrNativeGIReleasePatch)||
   !RRAlbedoPrepareCallPatch(base+0x23fb55,reinterpret_cast<void*>(rrNativeContactShadowFilterOriginal),reinterpret_cast<void*>(&RRNativeHookContactShadowFilter),&rrNativeContactShadowFilterPatch)||
@@ -760,6 +785,7 @@ static bool RRNativeInstallFrame(HMODULE renderer,HMODULE d3d) noexcept {
           jitter=rrNativeJitterOptionPatch.Exchange(true);
         if(jitter&&rrNativeJitterOptionPatch.healthy&&(giSamples=RRAlbedoExchangeCall(&rrNativeGISamplePatch,true))&&rrNativeGISamplePatch.writeHealthy&&rrNativeResetPatch.Exchange(true)&&rrNativeResetPatch.healthy){
          rrNativeFrameEnabled=true;
+         control_rr_diagnostic::Record(control_rr_diagnostic::Event::HooksInstalled);
          Log("RR_NATIVE_OPTION_ISOLATION ready=1 registered_option=forced_off_never_true reflection=mod_state gi_radius=mod_state gi_bypass=mod_state jitter=private_mirror partial_mode=mod_owned_option_reads_no_feature13");
          Log("RR_NATIVE_SPECULAR_CLAMP_READY ready=1 target_shader_crc=0x600347E7 camera_cut_provider=name_resolved_per_filter bind_site=0x16744 dispatch_site=0x16786 temporal_history=forced_zero current_frame_energy_clamp=CS3_default_60 restore=verified_each_dispatch reshade_required=0");
          Log("RR_FRAME_HOOKS_READY native_feature=13 early_mode=1 temporal_signal=CS3_integrated_adjustable raw_copy=off_or_fallback public_reference_ui=0 reflection_geometry_capture=D1_F_only hit_distance_runtime=D1_optional specular_mvec_runtime=0 guide_stats_readback=0 zero_spatial=1 preserve_brdf=1 native_gi_bypass=1 contact_shadow_denoiser=temporal_off_spatial_zero broad_diffuse_denoiser=temporal_and_spatial_bypassed full_rt_settings=1 option_isolation=1");

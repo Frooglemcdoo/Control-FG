@@ -1,6 +1,7 @@
 #pragma once
 #include "native_lighting_isolation.h"
 #include "native_lighting_live_state.h"
+#include "rr_lighting_diagnostic.h"
 #include "native_lighting_report.h"
 #include "native_lighting_log_queue.h"
 #include "rt_shadow_capture_candidates.h"
@@ -59,6 +60,17 @@ inline void Trace(const char* format, ...) noexcept {
     const int length = snprintf(line, sizeof(line), "ms=%llu present=%llu %s\r\n",
         GetTickCount64(), presentCount.load(), detail);
     if (length > 0) diagnosticLog.Push(line, size_t(length < int(sizeof(line)) ? length : sizeof(line)-1));
+}
+// UI-thread snapshots: totals are independent atomic observations, not one GPU frame.
+inline void ReportRRPaths(const char* reason) noexcept {
+    namespace diagnostic = control_rr_diagnostic;
+    const auto state=selection.Read();
+    const auto counts=diagnostic::counters.Snapshot();
+    Trace("rr_path_snapshot reason=%s seq=%llu mode=%s rt_effects=0x%X rr_selected=%u last_result=0x%08X cpu_observations=1 gpu_completion_confirmed=0",
+        reason,LiveSelection::Sequence(state),ModeName(LiveSelection::GetMode(state)),
+        diagnostic::lastEffects.load(),unsigned(diagnostic::lastSelected.load()),diagnostic::lastEvaluationResult.load());
+    for(std::size_t i=0; i<diagnostic::kCount; ++i)
+        Trace("rr_path_count seq=%llu event=%s total=%llu",LiveSelection::Sequence(state),diagnostic::kEventNames[i],counts[i]);
 }
 // The diagnostic UI thread owns all report I/O; no disk lock is shared with
 // render-side producers. Routine drains use buffered writes; SAVE LOG flushes.
@@ -120,6 +132,7 @@ inline void ReportBoundIdentity(ID3D12PipelineState* pso) noexcept {
 inline bool SelectMode(Mode mode) noexcept {
     const unsigned required = RequiredVariant(mode);
     if (required && !(readyMask.load() & required)) { Trace("selection_rejected mode=%s reason=variant_not_ready", ModeName(mode)); return false; }
+    ReportRRPaths("before_selection");
     const auto state = selection.Select(mode);
     Trace("selection seq=%llu mode=%s ready_mask=%u", LiveSelection::Sequence(state), ModeName(mode), readyMask.load());
     return true;

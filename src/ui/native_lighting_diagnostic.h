@@ -72,10 +72,11 @@ inline void Paint(HWND window) noexcept {
     wchar_t shortcuts[128]{};
     swprintf_s(shortcuts, L"F10: return to game    Ctrl+Shift+1..%u: live mode", kModeCount);
     DrawLabel(dc, detailFont, shortcuts, {14,kFooterY,kWidth-12,kFooterY+24}, theme::kMutedText);
-    DrawLabel(dc, detailFont, selectionRejected ? L"Mode unavailable: required shaders are not ready. Save Log." : savedNotice.load() == 2 ? L"Log write failed. Save Log shows the Windows error." : savedNotice.load() == 1 ? L"Log saved. See the folder shown in the confirmation." : L"RR ON: compare CENTER FILTERED / DIFFUSE FILTER.", {14,kFooterY+26,kWidth-12,kFooterY+56}, theme::kText);
+    DrawLabel(dc, detailFont, selectionRejected ? L"Mode unavailable: required shaders are not ready. Save Log." : savedNotice.load() == 2 ? L"Log write failed. Save Log shows the Windows error." : savedNotice.load() == 1 ? L"Log saved. See the folder shown in the confirmation." : L"R99 trace: CENTER FILTERED, RR ON then OFF.", {14,kFooterY+26,kWidth-12,kFooterY+56}, theme::kText);
     EndPaint(window, &ps);
 }
 inline void SaveReport(HWND window) noexcept {
+    ReportRRPaths("save_log");
     rt_shadow_capture::Summary();
     const auto state = selection.Read();
     Trace("save_log seq=%llu mode=%s recorded_mask=%u", LiveSelection::Sequence(state),
@@ -156,10 +157,10 @@ inline DWORD WINAPI ThreadProc(LPVOID) noexcept {
     UINT_PTR timer=SetTimer(nullptr,0,50,nullptr);
     if(!timer){Trace("overlay_failed reason=timer");return 0;}
     HWND panel=nullptr,owner=nullptr;bool held[kModeCount+1]{};
-    ULONGLONG nextRefresh=0, nextWindowSearch=0, nextLogDrain=0;
+    ULONGLONG nextRefresh=0, nextWindowSearch=0, nextLogDrain=0, nextRRReport=0;
     HWND cachedGame=nullptr;
     POINT lastOrigin{-1,-1};
-    Trace("session_start build=R98-rr-diffuse-isolation pid=%lu default=native log=user-diagnostics-folder",GetCurrentProcessId());
+    Trace("session_start build=R99-rr-path-trace pid=%lu default=native log=user-diagnostics-folder",GetCurrentProcessId());
     MSG msg{};
     while(GetMessageW(&msg,nullptr,0,0)>0){
         if (!panel || !IsDialogMessageW(panel, &msg)) {
@@ -167,6 +168,7 @@ inline DWORD WINAPI ThreadProc(LPVOID) noexcept {
         }
         if(msg.message!=WM_TIMER||msg.wParam!=timer)continue;
         const ULONGLONG now=GetTickCount64();
+        if(now>=nextRRReport){ReportRRPaths("heartbeat");nextRRReport=now+5000;}
         if(now>=nextLogDrain){DrainDiagnosticLog();nextLogDrain=now+500;}
         if(cachedGame&&!IsWindow(cachedGame))cachedGame=nullptr;
         if(!cachedGame&&now>=nextWindowSearch){cachedGame=FindFGGameWindow();nextWindowSearch=now+1000;}

@@ -37,6 +37,7 @@ static RREvaluationInputs RRReadEvaluationInputs(void* parameters) noexcept {
 static unsigned int RREvaluationEntry(unsigned int branch, ID3D12GraphicsCommandList* list,
     void* feature, void* parameters, void* callback) {
     const DWORD incomingError=GetLastError();
+    control_rr_diagnostic::Record(control_rr_diagnostic::Event::EvaluationEntry);
     const auto perfEntry=RRPerfClock();
     const auto call=rrEvaluationCalls[branch].fetch_add(1,std::memory_order_relaxed)+1;
     const auto in=RRReadEvaluationInputs(parameters);
@@ -60,6 +61,7 @@ static unsigned int RREvaluationEntry(unsigned int branch, ID3D12GraphicsCommand
         if(!RRNativeResolveEvaluationPreset(list,feature,parameters,&evaluationFeature,&presetReset,&activePreset)){
             rrNativeFrame.Fail();control_rr::RRUserPublish(control_rr::RRUserStatus::Stopped);
             Log("RR_FRAME_STOP frame=%llu reason=preset_feature_resolution requested=%s requested_value=%u control_feature=%p native_evaluation_called=0",in.frame,control_rr::RRUserPresetLabel(),control_rr::RRUserPresetValue(),feature);
+            control_rr_diagnostic::Record(control_rr_diagnostic::Event::EvaluationRejected);
             SetLastError(incomingError);return 0xBAD00001u;
         }
         const bool guides=in.valid==127&&!in.fault&&RRNativeTakeGuides(in,bindings);
@@ -80,6 +82,7 @@ static unsigned int RREvaluationEntry(unsigned int branch, ID3D12GraphicsCommand
         if(!beginEvaluation||!RRNativeSetGuides(parameters,&bindings,hitDistance,rrNativeFrame.Reset()||presetReset||distanceReset||clampReset)){
             rrNativeFrame.Fail();control_rr::RRUserPublish(control_rr::RRUserStatus::Stopped);
             Log("RR_FRAME_STOP frame=%llu reason=pre_evaluation_contract hit_distance_required=0 guides=%u lighting=%u native_evaluation_called=0",in.frame,unsigned(guides),unsigned(lighting));
+            control_rr_diagnostic::Record(control_rr_diagnostic::Event::EvaluationRejected);
             SetLastError(incomingError);return 0xBAD00001u;
         }
         RRInputCaptureBeforeEvaluation(list,in.frame,activePreset,bindings.normal,bindings.specular,bindings.diffuse,
@@ -90,6 +93,7 @@ static unsigned int RREvaluationEntry(unsigned int branch, ID3D12GraphicsCommand
     }
     if(rrNativeFrameEnabled&&branch==0&&rrNativeFrame.Selected()){
         rrNativeFrame.Fail();Log("RR_FRAME_STOP frame=%llu reason=unexpected_sr_branch native_evaluation_called=0",in.frame);
+        control_rr_diagnostic::Record(control_rr_diagnostic::Event::EvaluationRejected);
         SetLastError(incomingError);return 0xBAD00001u;
     }
     if(partial&&branch==1){
@@ -101,8 +105,13 @@ static unsigned int RREvaluationEntry(unsigned int branch, ID3D12GraphicsCommand
         perf=RRPerfBegin(perfContext,RRPerfStage::NativeEvaluation);
     const auto perfNativeStart=RRPerfClock();
     SetLastError(incomingError);
+    if(rrAttempt)control_rr_diagnostic::Record(control_rr_diagnostic::Event::RRAttempt);
     const unsigned int result=rrEvaluationOriginal(list,evaluationFeature,parameters,callback);
     const DWORD nativeError=GetLastError();
+    control_rr_diagnostic::lastEvaluationResult.store(result,std::memory_order_relaxed);
+    if(rrAttempt)control_rr_diagnostic::Record((result&0xFFF00000u)!=0xBAD00000u
+        ?control_rr_diagnostic::Event::RRSuccess:control_rr_diagnostic::Event::RRFailure);
+    else if(branch==0)control_rr_diagnostic::Record(control_rr_diagnostic::Event::SRReturn);
     if(rrAttempt)RRInputCaptureAfterEvaluation(list,in.frame,in.output,result);
     const double perfNativeCpu=RRPerfElapsed(perfNativeStart);
     RRPerfEnd(perf);

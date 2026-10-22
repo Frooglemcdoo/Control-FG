@@ -1,5 +1,7 @@
 #include "../src/native_lighting_live_state.h"
 #include "../src/rr_broad_diffuse_policy.h"
+#include "../src/rr_lighting_diagnostic.h"
+#include <thread>
 #include <cassert>
 #include <iostream>
 int main(){
@@ -47,5 +49,21 @@ int main(){
     assert(!Disables(filtered,kGiBit) && !Disables(filtered,kDirectBit));
     assert(RequiredVariant(filtered)==kRtSpotReadyBit);
     assert(LiveSelection::GetMode(live.Select(filtered))==filtered);
+    // UI snapshots must not reset or lose concurrent render-side observations.
+    control_rr_diagnostic::Counters counters;
+    using Event=control_rr_diagnostic::Event;
+    std::thread worker([&]{for(unsigned i=0;i<10000;++i)counters.Record(Event::RRSuccess);});
+    std::uint64_t previous=0;
+    for(unsigned i=0;i<10000;++i){
+        counters.Record(Event::BroadA);
+        const auto snapshot=counters.Snapshot();
+        const auto current=snapshot[static_cast<std::size_t>(Event::RRSuccess)];
+        assert(current>=previous);previous=current;
+    }
+    worker.join();
+    const auto totals=counters.Snapshot();
+    assert(totals[static_cast<std::size_t>(Event::RRSuccess)]==10000);
+    assert(totals[static_cast<std::size_t>(Event::BroadA)]==10000);
+    assert(totals[static_cast<std::size_t>(Event::BroadB)]==0);
     std::cout<<"PASS: live modes, return to native, stale-recording rejection\n";
 }

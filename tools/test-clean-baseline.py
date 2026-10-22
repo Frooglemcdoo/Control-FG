@@ -15,11 +15,18 @@ provider_exceptions = json.loads((root/'tools/fixtures/r49-baseline-exceptions.j
 isolation_exceptions = json.loads((root/'tools/fixtures/r54-baseline-exceptions.json').read_text())
 shadow_exceptions = json.loads((root/'tools/fixtures/r67-baseline-exceptions.json').read_text())
 rr_filter_exceptions = json.loads((root/'tools/fixtures/r98-baseline-exceptions.json').read_text())
+rr_path_exceptions = json.loads((root/'tools/fixtures/r99-baseline-exceptions.json').read_text())
 for name, expected in manifest['files'].items():
     if name == 'src/fg_overlay.h':
         assert not (root / name).exists(), 'Legacy settings popup must remain removed'
         continue # R42 replaces UI-only code with fg_settings.h; renderer hashes remain enforced.
     data = (root / name).read_bytes().replace(b'\r\n', b'\n')
+    if name in rr_path_exceptions:
+        text=data.decode()
+        for before,after in reversed(rr_path_exceptions[name]):
+            assert text.count(after)==1, (name, 'R99 path instrumentation changed or duplicated')
+            text=text.replace(after,before,1)
+        data=text.encode()
     if name in rr_filter_exceptions:
         text=data.decode()
         for before,after in reversed(rr_filter_exceptions[name]):

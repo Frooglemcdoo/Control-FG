@@ -360,11 +360,11 @@ jobs:
           node tools/test-native-menu.js --config build/native-menu-config.json
           if errorlevel 1 exit /b 1
 
-      - name: Package live lighting diagnostic R98
+      - name: Package live lighting diagnostic R99
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-Native-Lighting-Live-R98'
+          $out='Control-FG-Native-Lighting-Live-R99'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
           Copy-Item build/rt_spot_selected_off.dxbc,build/rt_spot_selection.dxbc,build/rt_spot_visibility.dxbc,build/rt_spot_light_ids.dxbc,build/rt_spot_raw_history.dxbc,build/rt_spot_raw_spatial0.dxbc,build/rt_spot_raw_spatial1.dxbc,build/rt_spot_full.dxil,build/rt_spot_r94.dxil,build/rt_spot_light.dxbc,build/rt_spot_reset.dxbc,build/rt_spot_history.dxbc,build/rt_spot_spatial0.dxbc,build/rt_spot_spatial1.dxbc $out
@@ -381,18 +381,18 @@ jobs:
           Copy-Item Collect-RR-Blinds-Capture.ps1 "$out/Collect-RR-Blinds-Capture.ps1"
           Copy-Item Collect-ControlFG-Compact-Logs.cmd "$out/Collect-ControlFG-Compact-Logs.cmd"
           Copy-Item Collect-ControlFG-Compact-Logs.ps1 "$out/Collect-ControlFG-Compact-Logs.ps1"
-          Copy-Item docs/rr-diffuse-isolation-r98.md "$out/DIAGNOSTIC-NOTES.md"
+          Copy-Item docs/rr-path-trace-r99.md "$out/DIAGNOSTIC-NOTES.md"
           @'
-          CONTROL-FG R98 - experimental selected-spotlight RT replacement
+          CONTROL-FG R99 - experimental selected-spotlight RT replacement
           Close Control to install. Copy contents beside Control_DX12.exe.
           Preserve existing NVIDIA runtimes and the ControlFGStreamline folder.
           Use Borderless. Load the noisy projector room with RR ON, FG and glass enhancements OFF.
           Enable native RT Contact Shadows. Keep the same camera position for comparison.
-          F10: compare CENTER FILTERED and DIFFUSE FILTER at the same camera. Keep RR ON.
-          No restart between modes. SAVE LOG writes one Lighting-R98 session log.
+          F10: select CENTER FILTERED. Observe RR ON for 15 seconds, then RR OFF for 15 seconds, then RR ON again.
+          No restart between modes. SAVE LOG writes one Lighting-R99 session log.
           This replaces one selected spotlight per pixel, not every shadow in the scene.
           An unavailable button means the required native shader pair was not prepared.
-          DIFFUSE FILTER preserves both native broad diffuse filter calls. CENTER FILTERED restores the R97 policy. Wait 5-10 seconds per mode. Shadow shader assets are unchanged from R97.
+          R99 adds CPU path counters only. No visual improvement is expected yet. SAVE LOG once after the comparison; all path evidence is included. Shadow shader assets are unchanged from R97.
           See DIAGNOSTIC-NOTES.md for scope and limitations.
           '@ | Set-Content "$out/README.txt" -Encoding ASCII
           Compress-Archive -Path "$out/*" -DestinationPath "$out.zip" -Force
@@ -401,10 +401,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-Native-Lighting-Live-R98
+          name: Control-FG-Native-Lighting-Live-R99
           path: |
-            Control-FG-Native-Lighting-Live-R98.zip
-            Control-FG-Native-Lighting-Live-R98.sha256
+            Control-FG-Native-Lighting-Live-R99.zip
+            Control-FG-Native-Lighting-Live-R99.sha256
             build/rt_spot_shadow_prototype.dxil
             build/exports.txt
             build/imports.txt
