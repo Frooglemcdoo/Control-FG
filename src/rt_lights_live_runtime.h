@@ -291,9 +291,15 @@ inline void STDMETHODCALLTYPE DispatchHook(ID3D12GraphicsCommandList* list, UINT
         pass.reason = !pass.base ? "missing_base" : !pass.rays ? "missing_rays" : z != 1 ? "selected_depth" : "selected_snapshot";
         auto& selected = pass.selected;
         if (pass.base && pass.rays && z == 1 && Snapshot(context,3,selected)) {
+            // The engine's cached ray interface can still point at the producer.
+            // Query the actual composition list before recording replacement DXR.
+            ComPtr<ID3D12GraphicsCommandList4> composition;
+            if (FAILED(list->QueryInterface(IID_PPV_ARGS(&composition)))) {
+                pass.reason = "composition_dxr_interface"; customRecording = false; return;
+            }
             if (!pool.AttachConsumer(pass.slot,list)) { pass.reason = "handoff_lease"; customRecording = false; return; }
             pass.handoff = pass.slot->consumer != nullptr;
-            pass.committed = rt_lights::FrameRecorder::Replace(context.rays,*pass.slot->resources,pass.producer,pass.ray,selected,Pipelines(),allocator,
+            pass.committed = rt_lights::FrameRecorder::Replace(composition.Get(),*pass.slot->resources,pass.producer,pass.ray,selected,Pipelines(),allocator,
                 pass.state.Get(),pass.dispatch,pass.record->GetGPUVirtualAddress(),static_cast<UINT>(pass.slot->lifetime.Generation()),
                 pass.slot->tables.data(),static_cast<UINT>(pass.slot->tables.size()),&pass.reason);
         }
