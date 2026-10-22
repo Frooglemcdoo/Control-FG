@@ -46,12 +46,7 @@
     "rt_spot_light_ids.dxbc": {
       "bytes": 8300,
       "sha256": "8c813b5bd51894f9d429439a49cc1715524103de499d306609e4a7c9475771f2"
-    },
-    "rt_spot_selection.dxbc": {
-      "bytes": 71244,
-      "sha256": "4319b0bd2d0ad74b670c084d92b84bd7ceda2be433ccd3e60588d49bb66ddb9c"
     }
   },
-  "native_multi_ray": "d5efe2c2219257e2a7b51bbd65a7fa3b80cdb56fb7e6444223f8b4d7ee45a1a9",
-  "native_selector": "a9e5b544d5ec48e9b439b36aafc5346645f0261d3b1df65dc09e6cce290c164f"
+  "native_multi_ray": "d5efe2c2219257e2a7b51bbd65a7fa3b80cdb56fb7e6444223f8b4d7ee45a1a9"
 }

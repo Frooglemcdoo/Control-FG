@@ -1,3 +1,6 @@
+> WITHDRAWN after reported missing/over-soft shadows and a system green screen.
+> R95 removes this experiment. The crash cause is not established.
+
 # R94: separate RT light selection from map visibility
 
 R93 screenshots showed blob/staircase shapes corresponding closely to colors in

@@ -4,7 +4,6 @@
 namespace rt_spot_runtime {
 using CreateComputeFn = HRESULT (STDMETHODCALLTYPE*)(ID3D12Device*, const D3D12_COMPUTE_PIPELINE_STATE_DESC*, REFIID, void**);
 using PassFn = void (*)(void*, void*, void*, void*);
-inline constexpr char kSelectorSha[] = "a9e5b544d5ec48e9b439b36aafc5346645f0261d3b1df65dc09e6cce290c164f";
 inline constexpr char kRaySha[] = "3c6bee7eea5b5758dcaf96b400bb7589b4af2031c17bf6ba5ce2343623ddb618";
 inline constexpr char kMultiRaySha[] = "d5efe2c2219257e2a7b51bbd65a7fa3b80cdb56fb7e6444223f8b4d7ee45a1a9";
 inline constexpr char kLightSha[] = "6af3f7403a4e33ef1c478c386de8d0f6534ba9b852a75a9302c9b760c926b621";
@@ -21,7 +20,7 @@ inline const GUID kRawVariant = {0xe631a601,0x6651,0x4911,{0x80,0x90,0x11,0x71,0
 inline const GUID kHistoryVariant = {0xe631a601,0x6651,0x4911,{0x80,0x90,0x11,0x71,0x14,0x28,0x30,0x05}};
 inline const GUID kVisibilityVariant = {0xe631a601,0x6651,0x4911,{0x80,0x90,0x11,0x71,0x14,0x28,0x30,0x07}};
 inline const GUID kLightIdsVariant = {0xe631a601,0x6651,0x4911,{0x80,0x90,0x11,0x71,0x14,0x28,0x30,0x08}};
-inline std::vector<unsigned char> visibilityBytes, lightIdsBytes, selectionBytes;
+inline std::vector<unsigned char> visibilityBytes, lightIdsBytes;
 inline std::vector<unsigned char> rayBytes, lightBytes, resetBytes, historyBytes;
 inline std::vector<unsigned char> spatialBytes[2], rawSpatialBytes[2], rawHistoryBytes;
 inline SRWLOCK installLock = SRWLOCK_INIT;
@@ -33,8 +32,7 @@ inline bool filesAttempted = false;
 inline std::atomic<bool> filesReady{false}, scopeReady{false};
 inline constexpr unsigned kRayComponent = 1, kLightComponent = 2, kResetComponent = 4;
 inline constexpr unsigned kSpatialComponents[] = {8,16};
-inline constexpr unsigned kSelectorComponent = 32;
-inline constexpr unsigned kRequiredComponents = 1|2|4|8|16|32;
+inline constexpr unsigned kRequiredComponents = 1|2|4|8|16;
 struct Pass {
     uint64_t selectionState = 0;
     Mode mode = Mode::Native;
@@ -114,8 +112,6 @@ inline void Install() noexcept {
         filesAttempted = true;
         char sha[65]{}; bool loaded = false;
         filesReady =
-            PTReflectionLoadSidecar(L"rt_spot_selection.dxbc","RT_SPOT_SELECTION",selectionBytes,sha,loaded) &&
-            !strcmp(sha,"4319b0bd2d0ad74b670c084d92b84bd7ceda2be433ccd3e60588d49bb66ddb9c") &&
             PTReflectionLoadSidecar(L"rt_spot_raw_history.dxbc","RT_SPOT_RAW",rawHistoryBytes,sha,loaded) &&
             !strcmp(sha,"e5075b9dbbaacbb814b292d7bef94d477d1102a85c195c9515f76ca1af3651d0") &&
             PTReflectionLoadSidecar(L"rt_spot_raw_spatial0.dxbc","RT_SPOT_RAW",rawSpatialBytes[0],sha,loaded) &&
@@ -151,8 +147,8 @@ inline void Install() noexcept {
 }
 inline void ObserveCompute(ID3D12Device* device, const D3D12_COMPUTE_PIPELINE_STATE_DESC* desc,
     IUnknown* native, CreateComputeFn create) noexcept {
-    if (!desc || !native || (desc->CS.BytecodeLength != 71144 && desc->CS.BytecodeLength != 50752 && desc->CS.BytecodeLength != 4868 && desc->CS.BytecodeLength != 12360)) return;
-    unsigned kind = Matches(desc->CS,kSelectorSha) ? kSelectorComponent : Matches(desc->CS,kLightSha) ? kLightComponent : Matches(desc->CS,kTemporalSha) ? kResetComponent : 0;
+    if (!desc || !native || (desc->CS.BytecodeLength != 50752 && desc->CS.BytecodeLength != 4868 && desc->CS.BytecodeLength != 12360)) return;
+    unsigned kind = Matches(desc->CS,kLightSha) ? kLightComponent : Matches(desc->CS,kTemporalSha) ? kResetComponent : 0;
     int spatialIndex = -1;
     for (int i=0;i<2;++i) if (Matches(desc->CS,kSpatialSha[i])) {
         kind = kSpatialComponents[i]; spatialIndex = i; break;
@@ -161,7 +157,7 @@ inline void ObserveCompute(ID3D12Device* device, const D3D12_COMPUTE_PIPELINE_ST
     Install();
     if (!filesReady) return;
     auto custom = *desc;
-    const auto& bytes = kind == kSelectorComponent ? selectionBytes : spatialIndex >= 0 ? spatialBytes[spatialIndex] : kind == kLightComponent ? lightBytes : resetBytes;
+    const auto& bytes = spatialIndex >= 0 ? spatialBytes[spatialIndex] : kind == kLightComponent ? lightBytes : resetBytes;
     custom.CS = {bytes.data(),bytes.size()}; custom.CachedPSO = {};
     ID3D12PipelineState* variant = nullptr;
     HRESULT hr = create(device,&custom,IID_PPV_ARGS(&variant));
@@ -205,28 +201,9 @@ inline void ObserveCompute(ID3D12Device* device, const D3D12_COMPUTE_PIPELINE_ST
 }
 // Returns an AddRef'd alternate only within the verified renderer pass.
 inline ID3D12PipelineState* SelectCompute(ID3D12PipelineState* native) noexcept {
-    if (!native) return nullptr;
+    if (!active || !native) return nullptr;
     unsigned kind = 0; UINT size = sizeof(kind);
     if (FAILED(native->GetPrivateData(kKind,&size,&kind))) return nullptr;
-    // The producer runs before the scoped ray/filter/composition pass. Its
-    // selected-ID exclusion and mapped accumulation remain self-consistent
-    // even if a UI transition occurs before the later pass uses those IDs.
-    if (kind == kSelectorComponent) {
-        const auto state = selection.Read();
-        const bool use = scopeReady && !disabled.load() && components.load()==kRequiredComponents &&
-            UsesUnshadowedSpotSelection(LiveSelection::GetMode(state));
-        static thread_local uint64_t lastSequence = ~uint64_t(0);
-        if (lastSequence != LiveSelection::Sequence(state)) {
-            Trace("rt_spot_selection seq=%llu policy=%s cpu_binding_only=1",LiveSelection::Sequence(state),
-                use ? "unshadowed_contribution" : "native_r93");
-            lastSequence = LiveSelection::Sequence(state);
-        }
-        if (!use) return nullptr;
-        ID3D12PipelineState* alternate = nullptr;size=sizeof(alternate);
-        if (FAILED(native->GetPrivateData(kVariant,&size,&alternate))) return nullptr;
-        return alternate;
-    }
-    if (!active) return nullptr;
     const bool spatial = kind == kSpatialComponents[0] || kind == kSpatialComponents[1];
     const bool replace = (kind == kLightComponent || spatial) ? active->fullRay : kind == kResetComponent && active->raySeen && (active->reset || active->fullRay);
     if (!replace) return nullptr;

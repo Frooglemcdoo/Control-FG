@@ -251,10 +251,7 @@ inline void STDMETHODCALLTYPE SetHook(ID3D12GraphicsCommandList* list, ID3D12Pip
 inline HRESULT STDMETHODCALLTYPE ResetHook(ID3D12GraphicsCommandList* list, ID3D12CommandAllocator* allocator, ID3D12PipelineState* pso) {
     const auto original = Lookup(list).reset;
     if (!original) return E_UNEXPECTED;
-    Binding binding(pso);
-    auto* alternate = rt_spot_runtime::SelectCompute(binding.selected);
-    const HRESULT hr = original(list, allocator, alternate ? alternate : binding.selected);
-    if (alternate) alternate->Release();
+    Binding binding(pso); const HRESULT hr = original(list, allocator, binding.selected);
     if (SUCCEEDED(hr)) binding.Recorded();
     return hr;
 }
