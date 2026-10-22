@@ -50,10 +50,10 @@ int main() try {
     Check(gpu.fence->SetEventOnCompletion(2, event));
     const DWORD waited = WaitForSingleObject(event, 15000); CloseHandle(event);
     Require(waited == WAIT_OBJECT_0, "Fixture fence timed out");
-    pool.Poll();
+    // Acquisition must reclaim completed work without a worker timer tick.
     Check(gpu.allocator->Reset()); Check(gpu.list->Reset(gpu.allocator.Get(), nullptr));
     auto* reused = pool.Acquire(gpu.list.Get(), 32, 16);
-    Require(reused == slot, "Retired recording was not reusable");
+    Require(reused == slot, "Completed recording was not reusable without worker polling");
     // Discard an unsubmitted recording with a recorded state change. Subsequent
     // recording must start from the actual last submitted COPY_SOURCE state.
     frame.Transition(gpu.list.Get(), Surface::Counter, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);

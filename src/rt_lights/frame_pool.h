@@ -102,6 +102,10 @@ public:
         std::lock_guard<std::mutex> lock(mutex);
         if (failed || generation == UINT64_MAX) return nullptr;
         for (auto& slot : slots) {
+            // Poll completed fences without waiting; the worker timer must not
+            // limit reuse to three frames per half-second. Resources stay allocated.
+            RetireLocked(*slot);
+            if (failed) return nullptr;
             if (slot->preparing || !slot->lifetime.Available() || !slot->resources ||
                 slot->resources->Width() != width || slot->resources->Height() != height) continue;
             if (!slot->lifetime.Begin(++generation)) return nullptr;
