@@ -6,6 +6,9 @@ RaytracingAccelerationStructure scene : register(t6);
 StructuredBuffer<ShadowTask> tasks : register(t8);
 // Native contact hit shaders use t0..t7; t9 is private to this raygen.
 StructuredBuffer<Contribution> contributions : register(t9);
+StructuredBuffer<ReceiverRange> receivers : register(t10);
+#include "rt_lights_reconstruction.hlsli"
+cbuffer ReconstructionTile : register(b3) { ShadowTile tile; }
 RWStructuredBuffer<Visibility> visibility : register(u2);
 cbuffer ShaderTableLayout : register(b4) {
     uint hitOffset; uint geometryStride; uint missIndex; uint unused;
@@ -56,13 +59,24 @@ void perLightVisibility() {
     contributions.GetDimensions(contributionCount, contributionStride);
     if(index>=contributionCount || contributionStride!=48) return;
     Contribution contribution=contributions[index];
-    if(contribution.visibilityIndex!=index || contribution.receiverId!=task.receiverId ||
-       contribution.lightId!=task.lightId || contribution.frameTag!=task.frameTag ||
-       !all(isfinite(contribution.diffuse)) || !all(isfinite(contribution.specular))) return;
+    if(!ValidShadowContribution(contribution,task,index)) return;
     // Exact zero only: never cull faint lights or change BRDF/cone membership.
-    if(all(contribution.diffuse==0) && all(contribution.specular==0)) {
+    if(ZeroShadowContribution(contribution)) {
         result.value=1;result.valid=1;result.nearestBlocker=3.402823466e+38;
         result.reserved1=1;visibility[index]=result;return;
+    }
+    if(tile.frameWidth==0 || tile.frameTag!=task.frameTag) return;
+    uint2 pixel=uint2(task.receiverId%tile.frameWidth,task.receiverId/tile.frameWidth);
+    uint2 anchor=pixel&~1u;
+    if(any(pixel!=anchor)) {
+        uint other;
+        if(FindShadowTask(tile,anchor,task.lightId,other) && other<contributionCount) {
+            ShadowTask neighbour=tasks[other];Contribution energy=contributions[other];
+            if(Valid(neighbour) && SameShadowSurface(task,neighbour) && ValidShadowContribution(energy,neighbour,other) && !ZeroShadowContribution(energy)) {
+                result.valid=2;visibility[index]=result;return; // reconstructed, never interpreted as a traced ray
+            }
+        }
+        result.reserved1=2;task.sampleCount=4; // extra direct samples at geometry/light-list boundaries
     }
 #endif
     float3 normal=normalize(task.normal);
@@ -72,6 +86,15 @@ void perLightVisibility() {
     for(uint sample=0;sample<task.sampleCount;++sample) {
         float radius=task.sampleCount==1 ? 0 : sqrt((sample+0.5)/task.sampleCount);
         float angle=sample*2.399963229728653;
+#ifdef RT_LIGHTS_NATIVE_BINDINGS
+        // A stable spatial pattern samples the emitter across neighbouring quads.
+        // No frame seed: stationary shadows do not sparkle or rely on RR history.
+        uint seed=(pixel.x>>1)*1973u+(pixel.y>>1)*9277u+task.lightId*26699u;
+        seed^=seed>>16;seed*=0x7feb352du;seed^=seed>>15;
+        uint stratum=(seed+sample*17u)&63u;
+        radius=sqrt((float(stratum)+0.5)/64.0);
+        angle=float(stratum)*2.399963229728653;
+#endif
         float3 target=task.lightCenter+radius*(cos(angle)*task.emitterAxisU+sin(angle)*task.emitterAxisV);
         float3 delta=target-origin;
         float lengthToLight=length(delta);

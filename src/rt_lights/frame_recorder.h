@@ -131,8 +131,8 @@ public:
         auto fail = [&](const char* value) { if (reason) *reason = value; return false; };
         constexpr UINT64 selectedRequired = (((1ull << 17) - 1) << Srv) | (3ull << Uav);
         constexpr UINT64 producerRequired = (1ull << Srv) | (1ull << (Srv + 3)) | (3ull << (Srv + 15));
-        const UINT receivers = frame.Width() * frame.Height();
-        const UINT batches = (receivers + BatchCapacity::Receivers - 1) / BatchCapacity::Receivers;
+        const UINT batches = TileLayout::Count(frame.Width(),frame.Height());
+        static_assert((TileLayout::Core+2*TileLayout::Border)*(TileLayout::Core+2*TileLayout::Border)<=BatchCapacity::Receivers);
         if (!list || !pipelines.Ready() || !rayState || !rayRecord || !tables || tableCapacity < 1) return fail("recorder_not_ready");
         if (!producer.Has(producerRequired) || !producer.constants[2]) return fail("producer_bindings");
         if (!ray.Has(1ull << (Srv + 6))) return fail("ray_bindings");
@@ -163,14 +163,14 @@ public:
                 Write(frame, 0, Surface::Work), Write(frame, 1, Surface::Tasks), Write(frame, 2, Surface::Ranges), Write(frame, 3, Surface::Counter)};
             const DescriptorEdit arguments[] = {Read(frame, 0, Surface::Counter), Write(frame, 0, Surface::Work), Write(frame, 1, Surface::Arguments)};
             const DescriptorEdit extract[] = {Read(frame, 14, Surface::Work), Write(frame, 0, Surface::DiffuseAtlas), Write(frame, 1, Surface::SpecularAtlas)};
-            const DescriptorEdit rays[] = {Read(frame, 8, Surface::Tasks), Read(frame, 9, Surface::Contributions), Write(frame, 2, Surface::Visibility)};
+            const DescriptorEdit rays[] = {Read(frame, 8, Surface::Tasks), Read(frame, 9, Surface::Contributions), Read(frame, 10, Surface::Ranges), Write(frame, 2, Surface::Visibility)};
             const DescriptorEdit pack[] = {Read(frame, 0, Surface::Work), Read(frame, 1, Surface::DiffuseAtlas), Read(frame, 2, Surface::SpecularAtlas),
                 Read(frame, 3, Surface::Tasks), Write(frame, 0, Surface::Contributions)};
-            const DescriptorEdit compose[] = {Read(frame, 0, Surface::Visibility), Read(frame, 1, Surface::Contributions), Read(frame, 2, Surface::Ranges), Write(frame, 0, Surface::Lighting)};
+            const DescriptorEdit compose[] = {Read(frame, 0, Surface::Visibility), Read(frame, 1, Surface::Contributions), Read(frame, 2, Surface::Ranges), Read(frame, 3, Surface::Tasks), Write(frame, 0, Surface::Lighting)};
             const DescriptorEdit commit[] = {Read(frame, 0, Surface::Lighting), Read(frame, 1, Surface::BaseDiffuse), Read(frame, 2, Surface::BaseSpecular)};
             if (!allocator.Publish(producer, generate, 8, t.generate) || !allocator.Publish(producer, arguments, 3, t.arguments) ||
-                !allocator.Publish(selected, extract, 3, t.extract) || !allocator.Publish(ray, rays, 3, t.rays, rayControls) ||
-                !allocator.Publish(selected, pack, 5, t.pack) || !allocator.Publish(selected, compose, 4, t.compose) ||
+                !allocator.Publish(selected, extract, 3, t.extract) || !allocator.Publish(ray, rays, 4, t.rays, rayControls) ||
+                !allocator.Publish(selected, pack, 5, t.pack) || !allocator.Publish(selected, compose, 5, t.compose) ||
                 !allocator.Publish(selected, commit, 3, t.commit)) return fail("batch_descriptor_allocation");
         }
         FrameResources::UavBarrier(list);
@@ -181,17 +181,15 @@ public:
             frame.Transition(list, surface, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 
         for (UINT batch = 0; batch < batches; ++batch) {
-            const UINT first = batch * BatchCapacity::Receivers;
-            const UINT count = (std::min)(BatchCapacity::Receivers, receivers - first);
+            const auto tile=TileLayout::At(batch,frame.Width(),frame.Height(),frameTag);
+            const UINT first=tile.firstReceiver,count=tile.receiverCount;
             const UINT generate[] = {first, count, 1024, frameTag, BatchCapacity::ShadowSamples, 1, Bits(0.001f), Bits(0.002f),
-                BatchCapacity::AtlasWidth, BatchCapacity::AtlasHeight, Bits(1.0f), 0};
+                BatchCapacity::AtlasWidth, BatchCapacity::AtlasHeight, Bits(1.0f), 0, tile.originX,tile.originY,tile.width,tile.height};
             const UINT pack[] = {frame.Width(), frame.Height(), frameTag, BatchCapacity::Tasks};
-            const UINT compose[] = {first, count, frameTag, 0};
-            const UINT commit[] = {first, count, frame.Width(), frame.Height()};
             const auto generateAddress = frame.StoreConstants(generate, sizeof(generate));
             const auto packAddress = frame.StoreConstants(pack, sizeof(pack));
-            const auto composeAddress = frame.StoreConstants(compose, sizeof(compose));
-            const auto commitAddress = frame.StoreConstants(commit, sizeof(commit));
+            const auto composeAddress = frame.StoreConstants(&tile, sizeof(tile));
+            const auto commitAddress = frame.StoreConstants(&tile, sizeof(tile));
             if (!generateAddress || !packAddress || !composeAddress || !commitAddress) { selected.Restore(list); return fail("batch_constants"); }
             const auto& t = tables[0];
             frame.CopyStored(list, Surface::Counter, zeroAddress, 4);
@@ -222,7 +220,7 @@ public:
             selected.Apply(list, t.pack.gpu); Compute(list, pipelines.pack, packAddress);
             list->ExecuteIndirect(pipelines.indirectCompute, 1, frame.Get(Surface::Arguments), IndirectLayout::Pack, nullptr, 0);
             frame.Transition(list, Surface::Contributions, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-            ray.Apply(list, t.rays.gpu); list->SetPipelineState1(rayState);
+            ray.Apply(list, t.rays.gpu); list->SetComputeRootConstantBufferView(5,composeAddress); list->SetPipelineState1(rayState);
             list->ExecuteIndirect(pipelines.indirectRays, 1, frame.Get(Surface::Arguments), IndirectLayout::Rays, nullptr, 0);
             frame.Transition(list, Surface::Visibility, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
             selected.Apply(list, t.compose.gpu); Compute(list, pipelines.compose, composeAddress);
@@ -230,7 +228,9 @@ public:
             frame.Transition(list, Surface::Lighting, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
             selected.Apply(list, t.commit.gpu); Compute(list, pipelines.commit, commitAddress);
             list->Dispatch((count + 63) / 64, 1, 1); FrameResources::UavBarrier(list);
-            frame.CaptureEvidence(list, first, count, frameTag);
+            const bool centerTile=tile.coreX<=frame.Width()/2 && tile.coreX+tile.coreWidth>frame.Width()/2 &&
+                tile.coreY<=frame.Height()/2 && tile.coreY+tile.coreHeight>frame.Height()/2;
+            if(centerTile) frame.CaptureEvidence(list, first, count, frameTag,true);
         }
         selected.Restore(list);
         if (reason) *reason = "recorded";

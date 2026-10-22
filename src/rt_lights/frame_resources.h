@@ -1,5 +1,6 @@
 #pragma once
 #include "layout.h"
+#include "tile_layout.h"
 #include "indirect_layout.h"
 #include <d3d12.h>
 #include <wrl/client.h>
@@ -20,7 +21,7 @@ enum class Surface : unsigned {
 
 struct BatchCapacity {
     // Live area-light budget. The backend still supports up to 64 for fixtures.
-    static constexpr UINT ShadowSamples = 4;
+    static constexpr UINT ShadowSamples = 1;
     static constexpr UINT Receivers = 32768;
     static constexpr UINT AtlasWidth = 512, AtlasHeight = 512;
     static constexpr UINT Tasks = AtlasWidth * AtlasHeight;
@@ -110,8 +111,7 @@ public:
     // Worker/startup thread only. Never allocate or map in the recording hook.
     HRESULT Initialize(ID3D12Device* device, UINT w, UINT h, UINT64 budget) noexcept {
         if (!device || width || !w || !h || w > 16384 || h > 16384) return E_INVALIDARG;
-        const UINT64 receivers = UINT64(w) * h;
-        const UINT64 batches = (receivers + BatchCapacity::Receivers - 1) / BatchCapacity::Receivers;
+        const UINT64 batches = TileLayout::Count(w,h);
         const UINT64 constants = (batches * BatchCapacity::ConstantsPerBatch + BatchCapacity::GlobalConstants) * BatchCapacity::ConstantAlignment;
         if (constants > UINT32_MAX) return E_INVALIDARG;
         std::array<D3D12_RESOURCE_DESC, SurfaceCount + 1> descs;
@@ -242,10 +242,10 @@ public:
         if (recordedEvidence) evidenceState.store(EvidenceState::Ready);
         recordedEvidence = false;
     }
-    void CaptureEvidence(ID3D12GraphicsCommandList* list, UINT first, UINT count, UINT tag) noexcept {
+    void CaptureEvidence(ID3D12GraphicsCommandList* list, UINT first, UINT count, UINT tag, bool selectedTile = false) noexcept {
         if (EvidencePending() || recordings % 120 != 1) return;
         const UINT middle = (width * height / 2 / BatchCapacity::Receivers) * BatchCapacity::Receivers;
-        if (first != middle) return;
+        if (!selectedTile && first != middle) return;
         evidenceFirst = first; evidenceCount = count; evidenceTag = tag;
         const auto copy = [&](Surface surface, UINT offset, UINT bytes) {
             const auto before = allocations[static_cast<UINT>(surface)].state;
@@ -263,7 +263,7 @@ public:
     struct EvidenceSummary {
         UINT first = 0, receivers = 0, tasks = 0, validRanges = 0, litRanges = 0;
         UINT validLighting = 0, sampledTasks = 0, validVisibility = 0, validContributions = 0;
-        UINT tracedRays = 0, zeroContributions = 0;
+        UINT tracedRays = 0, zeroContributions = 0, reconstructed = 0;
         UINT rejected[10]{};
     };
     // Worker only, after both command-list fences have completed. Never waits.
@@ -287,6 +287,7 @@ public:
         const auto* visibility = reinterpret_cast<const Visibility*>(bytes + VisibilityOffset);
         const auto* contributions = reinterpret_cast<const Contribution*>(bytes + ContributionOffset);
         for (UINT i = 0; i < result.sampledTasks; ++i) {
+            result.reconstructed += visibility[i].valid == 2 && visibility[i].frameTag == evidenceTag;
             result.validVisibility += visibility[i].valid == 1 && visibility[i].frameTag == evidenceTag;
             if (visibility[i].valid == 1 && visibility[i].frameTag == evidenceTag) {
                 result.tracedRays += visibility[i].reserved0;

@@ -2,8 +2,8 @@
   "assets": [
     {
       "file": "rt_lights_native_compact.dxil",
-      "sha256": "ce81d0046944614e1708bf451c654edca4395725a5d04fc8f3382ea5ce5a3680",
-      "bytes": 13144
+      "sha256": "3190550dfe49703ddc92992686ecaed32fdbead9bf056ce06066021c8528ffc3",
+      "bytes": 13376
     },
     {
       "file": "rt_lights_native_arguments.dxil",
@@ -17,18 +17,18 @@
     },
     {
       "file": "rt_lights_batch_compose.dxil",
-      "sha256": "503492306581d50099fd8c61f9bfc442bca97510094bcd291e15adf346424d55",
-      "bytes": 6432
+      "sha256": "c3966fe084c8c621fc8d938efcdc2748946699ff0e5b357eda2428048f6bf20a",
+      "bytes": 10020
     },
     {
       "file": "rt_lights_native_commit.dxil",
-      "sha256": "75cd9ac61d48d6d11ab8bb129eedc53f101bae75829d2c0d4d1613489492edb7",
-      "bytes": 5708
+      "sha256": "8126e586f93cf38fb0d4ab69e3a1254b2e41a0886628562b829c89428addc3f0",
+      "bytes": 6156
     },
     {
       "file": "rt_lights_native_visibility.dxil",
-      "sha256": "9ad55d00d21f7a20cfe7b7b6b86b3a59388f44ca7c5c2be8b65bb8727d212ed4",
-      "bytes": 11040
+      "sha256": "11cfcde2158c4fcbd2a675117cc4a37665eb5704d193de2b928bf38e8da581e1",
+      "bytes": 14896
     },
     {
       "file": "rt_lights_native_base.dxbc",

@@ -45,6 +45,9 @@ cbuffer Batch : register(b2) {
     uint firstReceiver; uint receiverCount; uint slotsPerReceiver; uint frameTag;
     uint sampleCount; uint instanceMask; float originBias; float endpointBias;
     uint workWidth; uint workHeight; float emitterScale; uint reserved;
+#ifdef RT_LIGHTS_RECONSTRUCT
+    uint originX; uint originY; uint tileWidth; uint tileHeight;
+#endif
 }
 static const uint Invalid=0xffffffff;
 static const uint NoLight=65535;
@@ -82,16 +85,23 @@ void main(uint3 dispatch : SV_DispatchThreadID) {
     // g_uSpotLightTotalCount is unused by the native producer (RDEF flags=0).
     // The tile list determines membership; the bound SRV supplies its safe limit.
     uint nativeCapacity=deferredWords[14].y;
+#ifdef RT_LIGHTS_RECONSTRUCT
+    if(tileWidth==0 || tileHeight==0 || local>=tileWidth*tileHeight) { ranges[local].reserved=2; return; }
+    uint2 pixel=uint2(originX,originY)+uint2(local%tileWidth,local/tileWidth);
+    if(pixel.x>=width || pixel.y>=height) { ranges[local].reserved=2; return; }
+    uint receiver=pixel.y*width+pixel.x;
+#else
+    uint receiver=firstReceiver+local;
+    uint2 pixel=uint2(receiver%max(width,1),receiver/max(width,1));
+#endif
     uint depthCount=deferredWords[10].z, depthLimit=deferredWords[12].z;
     if(width==0 || height==0 || width!=depthWidth || height!=depthHeight || height>Invalid/width ||
-       firstReceiver>Invalid-local || firstReceiver+local>=width*height || lightStride!=320 ||
+       receiver>=width*height || lightStride!=320 ||
        nativeCapacity==0 || nativeCapacity>slotsPerReceiver ||
        depthCount==0 || depthLimit==0 || depthLimit>depthCount || depthCount>cellHeight ||
        sampleCount==0 || sampleCount>64 || instanceMask==0 || instanceMask>255 ||
        !isfinite(originBias) || originBias<0 || !isfinite(endpointBias) || endpointBias<0 ||
        !isfinite(emitterScale) || emitterScale<0) { ranges[local].reserved=2; return; }
-    uint receiver=firstReceiver+local;
-    uint2 pixel=uint2(receiver%width,receiver/width);
     float4 packedNormal=gbuffer.Load(int3(pixel,0));float depth=clipDepth.Load(int3(pixel,0)).x;
     float2 inverseSize=systemWords[0].zw;
     if(!all(isfinite(packedNormal)) || any(packedNormal<0) || any(packedNormal>1) ||

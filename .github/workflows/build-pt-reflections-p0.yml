@@ -366,11 +366,11 @@ jobs:
             if($bytes.Length -ne $asset.bytes -or (Get-FileHash $path -Algorithm SHA256).Hash.ToLower() -ne $asset.sha256){throw "Runtime shader verification failed: $path"}
           }
 
-      - name: Package all-spotlight RT test R86
+      - name: Package all-spotlight RT test R87
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-All-Spotlight-RT-R86'
+          $out='Control-FG-All-Spotlight-RT-R87'
           $manifest=Get-Content assets/rt-lights/runtime-manifest.json | ConvertFrom-Json
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
@@ -390,16 +390,16 @@ jobs:
           Copy-Item Collect-RR-Blinds-Capture.ps1 "$out/Collect-RR-Blinds-Capture.ps1"
           Copy-Item Collect-ControlFG-Compact-Logs.cmd "$out/Collect-ControlFG-Compact-Logs.cmd"
           Copy-Item Collect-ControlFG-Compact-Logs.ps1 "$out/Collect-ControlFG-Compact-Logs.ps1"
-          Copy-Item docs/all-spotlight-r86.md "$out/DIAGNOSTIC-NOTES.md"
+          Copy-Item docs/all-spotlight-r87.md "$out/DIAGNOSTIC-NOTES.md"
           @'
-          CONTROL-FG R86 - experimental all-spotlight RT shadows
+          CONTROL-FG R87 - experimental all-spotlight RT shadows
           Close Control to install. Copy contents beside Control_DX12.exe.
           Preserve existing NVIDIA runtimes and the ControlFGStreamline folder.
           Use Borderless. Load the affected room with FG and glass enhancements OFF. Compare RR OFF and ON.
           Enable native RT Contact Shadows. Keep the same camera position for comparison.
           F10: compare NATIVE SHADOWS and ALL RT SPOTLIGHTS.
           No restart between modes. Allow a few seconds for first-use resource preparation.
-          SAVE LOG writes one Lighting-R86 session log.
+          SAVE LOG writes one Lighting-R87 session log.
           This targets every spotlight in the native per-pixel list; point/sun shadows remain native.
           Unsupported or incomplete recordings keep native lighting. A recorded dispatch is not proof of a visual fix.
           This is the first in-game integration test. Native TLAS coverage, image quality and performance require validation.
@@ -411,10 +411,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-All-Spotlight-RT-R86
+          name: Control-FG-All-Spotlight-RT-R87
           path: |
-            Control-FG-All-Spotlight-RT-R86.zip
-            Control-FG-All-Spotlight-RT-R86.sha256
+            Control-FG-All-Spotlight-RT-R87.zip
+            Control-FG-All-Spotlight-RT-R87.sha256
             build/rt_spot_shadow_prototype.dxil
             build/exports.txt
             build/imports.txt

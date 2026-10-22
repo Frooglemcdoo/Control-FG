@@ -5,6 +5,8 @@ on:
     paths:
       - assets/rt-lights/**
       - src/shaders/rt_lights_native*
+      - src/shaders/rt_lights_reconstruct*
+      - tools/test-rt-lights-reconstruct.cpp
       - src/shaders/rt_lights_compose.hlsl
       - src/shaders/rt_lights_visibility.hlsl
       - src/rt_lights/**
@@ -82,6 +84,14 @@ jobs:
           [IO.File]::WriteAllText("$pwd/compile-commit.cmd",$commitCompile)
           cmd /c compile-commit.cmd
           if($LASTEXITCODE -ne 0){throw 'Lighting commit fixture compilation failed'}
+          & $dxc.FullName -T cs_6_0 -E main -HV 2021 -Fo rt_lights_reconstruct.dxil src/shaders/rt_lights_reconstruct.hlsl
+          if($LASTEXITCODE -ne 0){throw 'Reconstruction compilation failed'}
+          $reconstructCompile="call `"$vs\VC\Auxiliary\Build\vcvars64.bat`"`r`ncl /nologo /std:c++17 /EHsc /W4 /WX /O2 /MT tools\test-rt-lights-reconstruct.cpp /FeReconstruct-Test.exe /link d3d12.lib dxgi.lib d3dcompiler.lib`r`nexit /b %errorlevel%"
+          [IO.File]::WriteAllText("$pwd/compile-reconstruct.cmd",$reconstructCompile)
+          cmd /c compile-reconstruct.cmd
+          if($LASTEXITCODE -ne 0){throw 'Reconstruction fixture compilation failed'}
+          ./Reconstruct-Test.exe
+          if($LASTEXITCODE -ne 0){throw 'Reconstruction fixture failed'}
           ./Native-Commit-Test.exe
           if($LASTEXITCODE -ne 0){throw "Lighting commit GPU validation failed: exit $LASTEXITCODE"}
           $resourcesCompile="call `"$vs\VC\Auxiliary\Build\vcvars64.bat`"`r`ncl /nologo /std:c++17 /EHsc /W4 /WX /O2 /MT tools\test-rt-lights-resources.cpp /FeNative-Resources-Test.exe /link d3d12.lib dxgi.lib d3dcompiler.lib`r`nexit /b %errorlevel%"
