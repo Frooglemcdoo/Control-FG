@@ -3,7 +3,7 @@
 #include <cstdint>
 
 namespace native_lighting {
-enum class Mode : unsigned { Native, DisableBakedGi, DisableDirect, DisableDirectDiffuse, DisableDirectSpecular, BypassShadows, DisableLightPattern, BypassScreenShadows, BypassSpotShadows, BypassPointShadows, SpotVarianceLow, SpotVarianceHigh, SpotPcfCenter, SpotPcf32, SpotStableSoft, SpotStableTight, SpotBilinear, SpotResolution2x, RtSpot, RtSpotRaw, RtSpotMapGuard, RtSpotNativeCull, RtAllSpot };
+enum class Mode : unsigned { Native, DisableBakedGi, DisableDirect, DisableDirectDiffuse, DisableDirectSpecular, BypassShadows, DisableLightPattern, BypassScreenShadows, BypassSpotShadows, BypassPointShadows, SpotVarianceLow, SpotVarianceHigh, SpotPcfCenter, SpotPcf32, SpotStableSoft, SpotStableTight, SpotBilinear, SpotResolution2x, RtSpot, RtSpotRaw, RtSpotMapGuard, RtSpotNativeCull };
 inline bool IsRtSpotMode(Mode mode) noexcept {
     return mode == Mode::RtSpot || mode == Mode::RtSpotRaw ||
         mode == Mode::RtSpotMapGuard || mode == Mode::RtSpotNativeCull;
@@ -25,16 +25,14 @@ inline constexpr unsigned kSpotStableTightReadyBit = 1u << 14;
 inline constexpr unsigned kSpotBilinearReadyBit = 1u << 15;
 inline constexpr unsigned kSpotResolutionReadyBit = 1u << 16;
 inline constexpr unsigned kRtSpotReadyBit = 1u << 17;
-inline constexpr unsigned kRtAllSpotReadyBit = 1u << 18;
 struct ModeChoice { Mode mode; const wchar_t* label; };
 inline constexpr ModeChoice kModeChoices[] = {
     {Mode::Native, L"NATIVE SHADOWS"},
-    {Mode::RtAllSpot, L"ALL RT SPOTLIGHTS"}
+    {Mode::RtSpot, L"RT SPOTLIGHT"}
 };
 inline constexpr unsigned kModeCount = sizeof(kModeChoices) / sizeof(kModeChoices[0]);
 inline unsigned RequiredVariant(Mode mode) noexcept {
     switch (mode) {
-    case Mode::RtAllSpot: return kRtAllSpotReadyBit;
     case Mode::RtSpot: case Mode::RtSpotRaw: case Mode::RtSpotMapGuard: case Mode::RtSpotNativeCull: return kRtSpotReadyBit;
     case Mode::DisableBakedGi: return kGiBit;
     case Mode::DisableDirect: return kDirectBit;
@@ -61,7 +59,6 @@ inline unsigned RequiredBinding(Mode mode) noexcept {
 }
 inline const char* ModeName(Mode mode) noexcept {
     switch (mode) {
-    case Mode::RtAllSpot: return "rt_all_spotlights";
     case Mode::RtSpot: return "rt_spot_replacement";
     case Mode::RtSpotRaw: return "rt_spot_raw";
     case Mode::RtSpotMapGuard: return "rt_spot_map_guard";
@@ -91,7 +88,7 @@ inline bool CanReportVisual(Mode mode, unsigned observed) noexcept {
     return (observed & required) == required;
 }
 inline bool Disables(Mode mode, unsigned kind) noexcept {
-    if (mode == Mode::Native || mode == Mode::SpotResolution2x || mode == Mode::RtAllSpot || IsRtSpotMode(mode)) return false;
+    if (mode == Mode::Native || mode == Mode::SpotResolution2x || IsRtSpotMode(mode)) return false;
     return kind == RequiredBinding(mode);
 }
 
@@ -102,7 +99,7 @@ class LiveSelection {
     static constexpr unsigned kSequenceShift = kModeBits + 2;
     static constexpr uint64_t kModeMask = (uint64_t(1) << kModeBits) - 1;
     static constexpr uint64_t kObservedMask = uint64_t(kAllBits) << kObservedShift;
-    static_assert(static_cast<unsigned>(Mode::RtAllSpot) <= kModeMask, "Mode storage exhausted");
+    static_assert(static_cast<unsigned>(Mode::RtSpotNativeCull) <= kModeMask, "Mode storage exhausted");
     std::atomic<uint64_t> state_{0};
 public:
     uint64_t Read() const noexcept { return state_.load(std::memory_order_acquire); }

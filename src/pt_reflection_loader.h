@@ -839,13 +839,6 @@ static HRESULT STDMETHODCALLTYPE PTReflectionHookCreateComputePipelineState(
 
 static bool PTReflectionInstallComputePsoHookOnDevice(ID3D12Device* device) noexcept {
     if(!device)return false;
-    native_lighting::rt_lights_runtime::resolveQueue = [](ID3D12CommandQueue* queue, ID3D12CommandQueue** out) noexcept -> HRESULT {
-        *out = nullptr; void* raw = nullptr;
-        if (!slGetNativeInterfaceApi || slGetNativeInterfaceApi(queue,&raw) != sl::Result::eOk || !raw) return E_NOINTERFACE;
-        const HRESULT hr = static_cast<IUnknown*>(raw)->QueryInterface(IID_PPV_ARGS(out));
-        static_cast<IUnknown*>(raw)->Release();
-        return hr;
-    };
     native_lighting::InstallLiveDiagnostic(device);
 
     void** vtable=nullptr;

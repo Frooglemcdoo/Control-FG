@@ -354,28 +354,13 @@ jobs:
           node tools/test-native-menu.js --config build/native-menu-config.json
           if errorlevel 1 exit /b 1
 
-      - name: Decode validated all-spotlight runtime shaders
+      - name: Package live lighting diagnostic R88
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $manifest=Get-Content assets/rt-lights/runtime-manifest.json | ConvertFrom-Json
-          foreach($asset in $manifest.assets){
-            $bytes=[Convert]::FromBase64String((Get-Content "assets/rt-lights/$($asset.file).b64" -Raw))
-            $path="build/$($asset.file)"
-            [IO.File]::WriteAllBytes("$pwd/$path",$bytes)
-            if($bytes.Length -ne $asset.bytes -or (Get-FileHash $path -Algorithm SHA256).Hash.ToLower() -ne $asset.sha256){throw "Runtime shader verification failed: $path"}
-          }
-
-      - name: Package all-spotlight RT test R87
-        shell: powershell
-        run: |
-          $ErrorActionPreference='Stop'
-          $out='Control-FG-All-Spotlight-RT-R87'
-          $manifest=Get-Content assets/rt-lights/runtime-manifest.json | ConvertFrom-Json
+          $out='Control-FG-Native-Lighting-Live-R88'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
-          foreach($asset in $manifest.assets){Copy-Item "build/$($asset.file)" $out}
-          Copy-Item assets/rt-lights/runtime-manifest.json "$out/runtime-manifest.json"
           Copy-Item build/rt_spot_raw_history.dxbc,build/rt_spot_raw_spatial0.dxbc,build/rt_spot_raw_spatial1.dxbc,build/rt_spot_full.dxil,build/rt_spot_light.dxbc,build/rt_spot_reset.dxbc,build/rt_spot_history.dxbc,build/rt_spot_spatial0.dxbc,build/rt_spot_spatial1.dxbc $out
           New-Item -ItemType Directory -Force -Path "$out/ControlFGStreamline" | Out-Null
           Copy-Item build/ControlFG.RTX40MFG.dll "$out/ControlFGStreamline/ControlFG.RTX40MFG.dll"
@@ -390,19 +375,18 @@ jobs:
           Copy-Item Collect-RR-Blinds-Capture.ps1 "$out/Collect-RR-Blinds-Capture.ps1"
           Copy-Item Collect-ControlFG-Compact-Logs.cmd "$out/Collect-ControlFG-Compact-Logs.cmd"
           Copy-Item Collect-ControlFG-Compact-Logs.ps1 "$out/Collect-ControlFG-Compact-Logs.ps1"
-          Copy-Item docs/all-spotlight-r87.md "$out/DIAGNOSTIC-NOTES.md"
+          Copy-Item docs/spot-baseline-r88.md "$out/DIAGNOSTIC-NOTES.md"
           @'
-          CONTROL-FG R87 - experimental all-spotlight RT shadows
+          CONTROL-FG R88 - experimental selected-spotlight RT replacement
           Close Control to install. Copy contents beside Control_DX12.exe.
           Preserve existing NVIDIA runtimes and the ControlFGStreamline folder.
           Use Borderless. Load the affected room with FG and glass enhancements OFF. Compare RR OFF and ON.
           Enable native RT Contact Shadows. Keep the same camera position for comparison.
-          F10: compare NATIVE SHADOWS and ALL RT SPOTLIGHTS.
-          No restart between modes. Allow a few seconds for first-use resource preparation.
-          SAVE LOG writes one Lighting-R87 session log.
-          This targets every spotlight in the native per-pixel list; point/sun shadows remain native.
-          Unsupported or incomplete recordings keep native lighting. A recorded dispatch is not proof of a visual fix.
-          This is the first in-game integration test. Native TLAS coverage, image quality and performance require validation.
+          F10: compare NATIVE SHADOWS and RT SPOTLIGHT.
+          No restart between modes. SAVE LOG writes one Lighting-R88 session log.
+          This replaces one selected spotlight per pixel, not every shadow in the scene.
+          An unavailable button means the required native shader pair was not prepared.
+          R88 restores the R71-based selected-spotlight renderer with both native shader variants supported. The R80-R87 all-spotlight runtime is not loaded. Old rt_lights_* files are ignored.
           See DIAGNOSTIC-NOTES.md for scope and limitations.
           '@ | Set-Content "$out/README.txt" -Encoding ASCII
           Compress-Archive -Path "$out/*" -DestinationPath "$out.zip" -Force
@@ -411,10 +395,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-All-Spotlight-RT-R87
+          name: Control-FG-Native-Lighting-Live-R88
           path: |
-            Control-FG-All-Spotlight-RT-R87.zip
-            Control-FG-All-Spotlight-RT-R87.sha256
+            Control-FG-Native-Lighting-Live-R88.zip
+            Control-FG-Native-Lighting-Live-R88.sha256
             build/rt_spot_shadow_prototype.dxil
             build/exports.txt
             build/imports.txt

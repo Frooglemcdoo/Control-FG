@@ -67,12 +67,12 @@ inline void Paint(HWND window) noexcept {
     const unsigned required = RequiredBinding(mode);
     wchar_t status[160]{};
     swprintf_s(status, L"Selected mode: %s   %s", (ready & RequiredVariant(mode)) == RequiredVariant(mode) ? L"ready" : L"waiting",
-        (observed & required) == required && (mode != Mode::SpotResolution2x || spot_resolution_runtime::Observed(state)) ? (mode == Mode::RtAllSpot ? L"RT replacement recorded" : IsRtSpotMode(mode) ? L"RT pair recorded" : L"native bindings recorded") : L"Waiting: return to game");
+        (observed & required) == required && (mode != Mode::SpotResolution2x || spot_resolution_runtime::Observed(state)) ? (IsRtSpotMode(mode) ? L"RT pair recorded" : L"native bindings recorded") : L"Waiting: return to game");
     DrawLabel(dc, detailFont, status, {14,kStatusY,kWidth-12,kStatusY+24}, theme::kMutedText);
     wchar_t shortcuts[128]{};
     swprintf_s(shortcuts, L"F10: return to game    Ctrl+Shift+1..%u: live mode", kModeCount);
     DrawLabel(dc, detailFont, shortcuts, {14,kFooterY,kWidth-12,kFooterY+24}, theme::kMutedText);
-    DrawLabel(dc, detailFont, selectionRejected ? L"Mode unavailable: required shaders are not ready. Save Log." : savedNotice.load() == 2 ? L"Log write failed. Save Log shows the Windows error." : savedNotice.load() == 1 ? L"Log saved. See the folder shown in the confirmation." : L"All-spotlight RT test. Keep native RT Contact Shadows on.", {14,kFooterY+26,kWidth-12,kFooterY+56}, theme::kText);
+    DrawLabel(dc, detailFont, selectionRejected ? L"Mode unavailable: required shaders are not ready. Save Log." : savedNotice.load() == 2 ? L"Log write failed. Save Log shows the Windows error." : savedNotice.load() == 1 ? L"Log saved. See the folder shown in the confirmation." : L"RT test: selected spotlights only. Keep native RT shadows on.", {14,kFooterY+26,kWidth-12,kFooterY+56}, theme::kText);
     EndPaint(window, &ps);
 }
 inline void SaveReport(HWND window) noexcept {
@@ -159,7 +159,7 @@ inline DWORD WINAPI ThreadProc(LPVOID) noexcept {
     ULONGLONG nextRefresh=0, nextWindowSearch=0, nextLogDrain=0;
     HWND cachedGame=nullptr;
     POINT lastOrigin{-1,-1};
-    Trace("session_start build=R87-all-spotlight-runtime pid=%lu default=native log=user-diagnostics-folder",GetCurrentProcessId());
+    Trace("session_start build=R88-rt-spot-replacement pid=%lu default=native log=user-diagnostics-folder",GetCurrentProcessId());
     MSG msg{};
     while(GetMessageW(&msg,nullptr,0,0)>0){
         if (!panel || !IsDialogMessageW(panel, &msg)) {
@@ -167,7 +167,7 @@ inline DWORD WINAPI ThreadProc(LPVOID) noexcept {
         }
         if(msg.message!=WM_TIMER||msg.wParam!=timer)continue;
         const ULONGLONG now=GetTickCount64();
-        if(now>=nextLogDrain){rt_lights_runtime::WorkerTick();DrainDiagnosticLog();nextLogDrain=now+500;}
+        if(now>=nextLogDrain){DrainDiagnosticLog();nextLogDrain=now+500;}
         if(cachedGame&&!IsWindow(cachedGame))cachedGame=nullptr;
         if(!cachedGame&&now>=nextWindowSearch){cachedGame=FindFGGameWindow();nextWindowSearch=now+1000;}
         HWND game=cachedGame;
