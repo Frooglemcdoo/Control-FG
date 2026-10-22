@@ -418,9 +418,10 @@ static bool RRNativeHookReset(unsigned outputWidth,unsigned outputHeight,unsigne
  }
  const bool partial=partialRequested&&known&&supported&&configuration&&!rrNativeFrame.Stopped()&&!selected;
  rrNativePartialFrame.store(partial,std::memory_order_release);
- // Latch before lighting begins so a live UI change cannot split one GI frame.
+ // Snapshot one selection for both filter policies before lighting begins.
+ const auto lightingMode=native_lighting::LiveSelection::GetMode(native_lighting::selection.Read());
  const bool giRequested=selected&&(effects&control_rr::RTDiffuseGI)&&
-  native_lighting::PreservesGiFiltering(native_lighting::LiveSelection::GetMode(native_lighting::selection.Read()));
+  native_lighting::PreservesGiFiltering(lightingMode);
  bool giFiltered=false;
  if(giRequested){
   const int passes=static_cast<int>(rrNativeGISampleOriginal(reinterpret_cast<unsigned char*>(verifiedRenderer)+0x913400));
@@ -429,8 +430,7 @@ static bool RRNativeHookReset(unsigned outputWidth,unsigned outputHeight,unsigne
  }
  if(rrNativeGIKeepThisFrame!=giFiltered)rrNativeFrame.ResetForSignalChange();
  rrNativeGIKeepThisFrame=giFiltered;
- const bool specularFiltered=selected&&native_lighting::PreservesSpecularFiltering(
-  native_lighting::LiveSelection::GetMode(native_lighting::selection.Read()));
+ const bool specularFiltered=selected&&native_lighting::PreservesSpecularFiltering(lightingMode);
  if(rrNativeSpecularKeepThisFrame!=specularFiltered){
   rrNativeFrame.ResetForSignalChange();
   if(specularFiltered)rrNativeSpecularHistoryPending=true;
