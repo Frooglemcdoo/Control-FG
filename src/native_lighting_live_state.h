@@ -3,10 +3,17 @@
 #include <cstdint>
 
 namespace native_lighting {
-enum class Mode : unsigned { Native, DisableBakedGi, DisableDirect, DisableDirectDiffuse, DisableDirectSpecular, BypassShadows, DisableLightPattern, BypassScreenShadows, BypassSpotShadows, BypassPointShadows, SpotVarianceLow, SpotVarianceHigh, SpotPcfCenter, SpotPcf32, SpotStableSoft, SpotStableTight, SpotBilinear, SpotResolution2x, RtSpot, RtSpotRaw, RtSpotMapGuard, RtSpotNativeCull };
+enum class Mode : unsigned { Native, DisableBakedGi, DisableDirect, DisableDirectDiffuse, DisableDirectSpecular, BypassShadows, DisableLightPattern, BypassScreenShadows, BypassSpotShadows, BypassPointShadows, SpotVarianceLow, SpotVarianceHigh, SpotPcfCenter, SpotPcf32, SpotStableSoft, SpotStableTight, SpotBilinear, SpotResolution2x, RtSpot, RtSpotRaw, RtSpotMapGuard, RtSpotNativeCull, RtSpotVisibilityRaw, RtSpotVisibilityFiltered, RtSpotLightIds };
 inline bool IsRtSpotMode(Mode mode) noexcept {
     return mode == Mode::RtSpot || mode == Mode::RtSpotRaw ||
-        mode == Mode::RtSpotMapGuard || mode == Mode::RtSpotNativeCull;
+        mode == Mode::RtSpotMapGuard || mode == Mode::RtSpotNativeCull ||
+        mode == Mode::RtSpotVisibilityRaw || mode == Mode::RtSpotVisibilityFiltered || mode == Mode::RtSpotLightIds;
+}
+inline bool UsesRawSpotVisibility(Mode mode) noexcept {
+    return mode == Mode::RtSpotRaw || mode == Mode::RtSpotVisibilityRaw;
+}
+inline bool ShowsSpotVisibility(Mode mode) noexcept {
+    return mode == Mode::RtSpotVisibilityRaw || mode == Mode::RtSpotVisibilityFiltered;
 }
 inline bool ExpandsSpotCasters(Mode mode) noexcept {
     // R78 uses R71 native caster coverage; expansion hooks are not installed.
@@ -29,12 +36,16 @@ struct ModeChoice { Mode mode; const wchar_t* label; };
 inline constexpr ModeChoice kModeChoices[] = {
     {Mode::Native, L"NATIVE SHADOWS"},
     {Mode::RtSpot, L"RT FILTERED"},
-    {Mode::RtSpotRaw, L"RT RAW"}
+    {Mode::RtSpotRaw, L"RT RAW"},
+    {Mode::RtSpotVisibilityRaw, L"RAW VISIBILITY"},
+    {Mode::RtSpotVisibilityFiltered, L"FILTERED VISIBILITY"},
+    {Mode::RtSpotLightIds, L"LIGHT ID COLORS"}
 };
 inline constexpr unsigned kModeCount = sizeof(kModeChoices) / sizeof(kModeChoices[0]);
 inline unsigned RequiredVariant(Mode mode) noexcept {
     switch (mode) {
-    case Mode::RtSpot: case Mode::RtSpotRaw: case Mode::RtSpotMapGuard: case Mode::RtSpotNativeCull: return kRtSpotReadyBit;
+    case Mode::RtSpot: case Mode::RtSpotRaw: case Mode::RtSpotMapGuard: case Mode::RtSpotNativeCull:
+    case Mode::RtSpotVisibilityRaw: case Mode::RtSpotVisibilityFiltered: case Mode::RtSpotLightIds: return kRtSpotReadyBit;
     case Mode::DisableBakedGi: return kGiBit;
     case Mode::DisableDirect: return kDirectBit;
     case Mode::DisableDirectDiffuse: return kDiffuseReadyBit;
@@ -60,6 +71,9 @@ inline unsigned RequiredBinding(Mode mode) noexcept {
 }
 inline const char* ModeName(Mode mode) noexcept {
     switch (mode) {
+    case Mode::RtSpotVisibilityRaw: return "rt_spot_visibility_raw";
+    case Mode::RtSpotVisibilityFiltered: return "rt_spot_visibility_filtered";
+    case Mode::RtSpotLightIds: return "rt_spot_light_ids";
     case Mode::RtSpot: return "rt_spot_replacement";
     case Mode::RtSpotRaw: return "rt_spot_raw";
     case Mode::RtSpotMapGuard: return "rt_spot_map_guard";
@@ -100,7 +114,7 @@ class LiveSelection {
     static constexpr unsigned kSequenceShift = kModeBits + 2;
     static constexpr uint64_t kModeMask = (uint64_t(1) << kModeBits) - 1;
     static constexpr uint64_t kObservedMask = uint64_t(kAllBits) << kObservedShift;
-    static_assert(static_cast<unsigned>(Mode::RtSpotNativeCull) <= kModeMask, "Mode storage exhausted");
+    static_assert(static_cast<unsigned>(Mode::RtSpotLightIds) <= kModeMask, "Mode storage exhausted");
     std::atomic<uint64_t> state_{0};
 public:
     uint64_t Read() const noexcept { return state_.load(std::memory_order_acquire); }

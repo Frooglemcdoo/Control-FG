@@ -212,16 +212,20 @@ int main() try {
         Check(owner->SetPrivateDataInterface(rt::kVariant,reset.Get()));
         Check(owner->SetPrivateDataInterface(rt::kHistoryVariant,filtered.Get()));
         Check(owner->SetPrivateDataInterface(rt::kRawVariant,raw.Get()));
+        Check(owner->SetPrivateDataInterface(rt::kVisibilityVariant,filtered.Get()));
+        Check(owner->SetPrivateDataInterface(rt::kLightIdsVariant,raw.Get()));
         rt::Pass pass; pass.raySeen=pass.fullRay=true; rt::active=&pass;
-        for (auto mode : {Mode::RtSpot,Mode::RtSpotRaw,Mode::RtSpotMapGuard,Mode::RtSpotNativeCull}) {
+        for (auto mode : {Mode::RtSpot,Mode::RtSpotRaw,Mode::RtSpotMapGuard,Mode::RtSpotNativeCull,Mode::RtSpotVisibilityRaw,Mode::RtSpotVisibilityFiltered,Mode::RtSpotLightIds}) {
             if (!IsRtSpotMode(mode) || Disables(mode,kDirectBit) || RequiredVariant(mode)!=kRtSpotReadyBit)
                 throw std::runtime_error("Diagnostic mode policy mismatch");
             pass.mode=mode;
             for (unsigned kind : {rt::kResetComponent,rt::kSpatialComponents[0],rt::kLightComponent}) {
                 Check(owner->SetPrivateData(rt::kKind,sizeof(kind),&kind));
                 auto* expected=kind==rt::kResetComponent ? filtered.Get() : reset.Get();
-                if (mode==Mode::RtSpotRaw && kind!=rt::kLightComponent) expected=raw.Get();
+                if (UsesRawSpotVisibility(mode) && kind!=rt::kLightComponent) expected=raw.Get();
                 if (mode==Mode::RtSpotMapGuard && kind==rt::kLightComponent) expected=owner.Get();
+                if (kind==rt::kLightComponent && ShowsSpotVisibility(mode)) expected=filtered.Get();
+                if (kind==rt::kLightComponent && mode==Mode::RtSpotLightIds) expected=raw.Get();
                 auto* actual=rt::SelectCompute(owner.Get());
                 if(actual!=expected) throw std::runtime_error("Diagnostic pipeline route mismatch");
                 actual->Release();

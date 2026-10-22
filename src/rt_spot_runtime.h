@@ -18,6 +18,9 @@ inline const GUID kRecord = {0xe631a601,0x6651,0x4911,{0x80,0x90,0x11,0x71,0x14,
 inline const GUID kState = {0xe631a601,0x6651,0x4911,{0x80,0x90,0x11,0x71,0x14,0x28,0x30,0x04}};
 inline const GUID kRawVariant = {0xe631a601,0x6651,0x4911,{0x80,0x90,0x11,0x71,0x14,0x28,0x30,0x06}};
 inline const GUID kHistoryVariant = {0xe631a601,0x6651,0x4911,{0x80,0x90,0x11,0x71,0x14,0x28,0x30,0x05}};
+inline const GUID kVisibilityVariant = {0xe631a601,0x6651,0x4911,{0x80,0x90,0x11,0x71,0x14,0x28,0x30,0x07}};
+inline const GUID kLightIdsVariant = {0xe631a601,0x6651,0x4911,{0x80,0x90,0x11,0x71,0x14,0x28,0x30,0x08}};
+inline std::vector<unsigned char> visibilityBytes, lightIdsBytes;
 inline std::vector<unsigned char> rayBytes, lightBytes, resetBytes, historyBytes;
 inline std::vector<unsigned char> spatialBytes[2], rawSpatialBytes[2], rawHistoryBytes;
 inline SRWLOCK installLock = SRWLOCK_INIT;
@@ -93,8 +96,10 @@ inline void HookPass(void* a, void* b, void* c, void* d) {
             if (pass.reset && pass.fullRay)
                 Trace("rt_spot_test seq=%llu mode=%s raw=%u maps=%u expanded_casters=%u",
                     LiveSelection::Sequence(pass.selectionState),ModeName(pass.mode),
-                    unsigned(pass.mode==Mode::RtSpotRaw),unsigned(pass.mode==Mode::RtSpotMapGuard),
+                    unsigned(UsesRawSpotVisibility(pass.mode)),unsigned(pass.mode==Mode::RtSpotMapGuard),
                     unsigned(ExpandsSpotCasters(pass.mode)));
+            if (pass.reset && pass.fullRay && (ShowsSpotVisibility(pass.mode) || pass.mode==Mode::RtSpotLightIds))
+                Trace("rt_spot_debug mode=%s composition=signal_only invalid_light=magenta downstream_postprocessing=1",ModeName(pass.mode));
             if (pass.fullRay && pass.composed) selection.Observe(pass.selectionState,kDirectBit);
             previousFull = pass.fullRay;
             previousMode = pass.mode;
@@ -113,6 +118,10 @@ inline void Install() noexcept {
             !strcmp(sha,"42418aedec88af1380d6e57b0152e5186a8ac93ca8efc1d5a3837892fa8c5008") &&
             PTReflectionLoadSidecar(L"rt_spot_raw_spatial1.dxbc","RT_SPOT_RAW",rawSpatialBytes[1],sha,loaded) &&
             !strcmp(sha,"f84b55c052931f960ef28c78b270faa69884c69626a30f6b8666728c64511628") &&
+            PTReflectionLoadSidecar(L"rt_spot_visibility.dxbc","RT_SPOT_VISIBILITY",visibilityBytes,sha,loaded) &&
+            !strcmp(sha,"d12f7d085b26b0a23a1271c8eb83f412540f5370c15704f9b596e1194998de6c") &&
+            PTReflectionLoadSidecar(L"rt_spot_light_ids.dxbc","RT_SPOT_LIGHT_IDS",lightIdsBytes,sha,loaded) &&
+            !strcmp(sha,"8c813b5bd51894f9d429439a49cc1715524103de499d306609e4a7c9475771f2") &&
             PTReflectionLoadSidecar(L"rt_spot_full.dxil","RT_SPOT_RAY",rayBytes,sha,loaded) &&
             !strcmp(sha,"c1f3f1b7b8845dd85224c6c41e7c8d10c6cd0fc793328e7168766563352707a5") &&
             PTReflectionLoadSidecar(L"rt_spot_light.dxbc","RT_SPOT_LIGHT",lightBytes,sha,loaded) &&
@@ -172,6 +181,17 @@ inline void ObserveCompute(ID3D12Device* device, const D3D12_COMPUTE_PIPELINE_ST
         if (SUCCEEDED(hr)) hr = owner->SetPrivateDataInterface(kRawVariant,variantRaw);
         if (variantRaw) variantRaw->Release();
     }
+    if (SUCCEEDED(hr) && kind == kLightComponent) {
+        const std::vector<unsigned char>* debugBytes[] = {&visibilityBytes, &lightIdsBytes};
+        const GUID* debugKeys[] = {&kVisibilityVariant, &kLightIdsVariant};
+        for (unsigned i=0; i<2 && SUCCEEDED(hr); ++i) {
+            custom.CS = {debugBytes[i]->data(),debugBytes[i]->size()};
+            ID3D12PipelineState* debug = nullptr;
+            hr = create(device,&custom,IID_PPV_ARGS(&debug));
+            if (SUCCEEDED(hr)) hr = owner->SetPrivateDataInterface(*debugKeys[i],debug);
+            if (debug) debug->Release();
+        }
+    }
     if (owner) owner->Release();
     if (variant) variant->Release();
     if (SUCCEEDED(hr)) components.fetch_or(kind);
@@ -193,9 +213,10 @@ inline ID3D12PipelineState* SelectCompute(ID3D12PipelineState* native) noexcept 
         native->AddRef();
         return native;
     }
-    const bool raw = active->fullRay && active->mode == Mode::RtSpotRaw &&
+    const bool raw = active->fullRay && UsesRawSpotVisibility(active->mode) &&
         (spatial || kind == kResetComponent);
-    const GUID& variant = raw ? kRawVariant : kind == kResetComponent && !active->reset ? kHistoryVariant : kVariant;
+    const GUID& variant = kind == kLightComponent && ShowsSpotVisibility(active->mode) ? kVisibilityVariant :
+        kind == kLightComponent && active->mode == Mode::RtSpotLightIds ? kLightIdsVariant : raw ? kRawVariant : kind == kResetComponent && !active->reset ? kHistoryVariant : kVariant;
     if (FAILED(native->GetPrivateData(variant,&size,&alternate)) || !alternate) return nullptr;
     if (kind == kLightComponent) active->composed = true;
     return alternate;

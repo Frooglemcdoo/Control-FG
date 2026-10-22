@@ -38,6 +38,14 @@
     "rt_spot_raw_spatial1.dxbc": {
       "bytes": 12380,
       "sha256": "f84b55c052931f960ef28c78b270faa69884c69626a30f6b8666728c64511628"
+    },
+    "rt_spot_visibility.dxbc": {
+      "bytes": 8240,
+      "sha256": "d12f7d085b26b0a23a1271c8eb83f412540f5370c15704f9b596e1194998de6c"
+    },
+    "rt_spot_light_ids.dxbc": {
+      "bytes": 8300,
+      "sha256": "8c813b5bd51894f9d429439a49cc1715524103de499d306609e4a7c9475771f2"
     }
   },
   "native_multi_ray": "d5efe2c2219257e2a7b51bbd65a7fa3b80cdb56fb7e6444223f8b4d7ee45a1a9"

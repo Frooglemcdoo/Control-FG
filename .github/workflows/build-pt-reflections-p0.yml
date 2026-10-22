@@ -354,14 +354,14 @@ jobs:
           node tools/test-native-menu.js --config build/native-menu-config.json
           if errorlevel 1 exit /b 1
 
-      - name: Package live lighting diagnostic R92
+      - name: Package live lighting diagnostic R93
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-Native-Lighting-Live-R92'
+          $out='Control-FG-Native-Lighting-Live-R93'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
-          Copy-Item build/rt_spot_raw_history.dxbc,build/rt_spot_raw_spatial0.dxbc,build/rt_spot_raw_spatial1.dxbc,build/rt_spot_full.dxil,build/rt_spot_light.dxbc,build/rt_spot_reset.dxbc,build/rt_spot_history.dxbc,build/rt_spot_spatial0.dxbc,build/rt_spot_spatial1.dxbc $out
+          Copy-Item build/rt_spot_visibility.dxbc,build/rt_spot_light_ids.dxbc,build/rt_spot_raw_history.dxbc,build/rt_spot_raw_spatial0.dxbc,build/rt_spot_raw_spatial1.dxbc,build/rt_spot_full.dxil,build/rt_spot_light.dxbc,build/rt_spot_reset.dxbc,build/rt_spot_history.dxbc,build/rt_spot_spatial0.dxbc,build/rt_spot_spatial1.dxbc $out
           New-Item -ItemType Directory -Force -Path "$out/ControlFGStreamline" | Out-Null
           Copy-Item build/ControlFG.RTX40MFG.dll "$out/ControlFGStreamline/ControlFG.RTX40MFG.dll"
           Copy-Item build/pt_glass_raygen.dxil "$out/pt_glass_raygen.dxil"
@@ -375,18 +375,18 @@ jobs:
           Copy-Item Collect-RR-Blinds-Capture.ps1 "$out/Collect-RR-Blinds-Capture.ps1"
           Copy-Item Collect-ControlFG-Compact-Logs.cmd "$out/Collect-ControlFG-Compact-Logs.cmd"
           Copy-Item Collect-ControlFG-Compact-Logs.ps1 "$out/Collect-ControlFG-Compact-Logs.ps1"
-          Copy-Item docs/spot-sampling-r92.md "$out/DIAGNOSTIC-NOTES.md"
+          Copy-Item docs/spot-signal-views-r93.md "$out/DIAGNOSTIC-NOTES.md"
           @'
-          CONTROL-FG R92 - experimental selected-spotlight RT replacement
+          CONTROL-FG R93 - experimental selected-spotlight RT replacement
           Close Control to install. Copy contents beside Control_DX12.exe.
           Preserve existing NVIDIA runtimes and the ControlFGStreamline folder.
           Use Borderless. Load the affected room with FG and glass enhancements OFF. Compare RR OFF and ON.
           Enable native RT Contact Shadows. Keep the same camera position for comparison.
           F10: compare NATIVE SHADOWS, RT FILTERED and RT RAW.
-          No restart between modes. SAVE LOG writes one Lighting-R92 session log.
+          No restart between modes. SAVE LOG writes one Lighting-R93 session log.
           This replaces one selected spotlight per pixel, not every shadow in the scene.
           An unavailable button means the required native shader pair was not prepared.
-          R92 spreads four spotlight rays across equal-area radial strata. R89 softness and pure RT composition remain. Start with RR OFF; RAW is intentionally noisy.
+          R93 adds RAW VISIBILITY, FILTERED VISIBILITY and LIGHT ID COLORS. RR and FG must be OFF. Magenta means no selected spotlight. Normal RT rendering remains R92.
           See DIAGNOSTIC-NOTES.md for scope and limitations.
           '@ | Set-Content "$out/README.txt" -Encoding ASCII
           Compress-Archive -Path "$out/*" -DestinationPath "$out.zip" -Force
@@ -395,10 +395,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-Native-Lighting-Live-R92
+          name: Control-FG-Native-Lighting-Live-R93
           path: |
-            Control-FG-Native-Lighting-Live-R92.zip
-            Control-FG-Native-Lighting-Live-R92.sha256
+            Control-FG-Native-Lighting-Live-R93.zip
+            Control-FG-Native-Lighting-Live-R93.sha256
             build/rt_spot_shadow_prototype.dxil
             build/exports.txt
             build/imports.txt
