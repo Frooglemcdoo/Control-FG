@@ -14,6 +14,7 @@ import subprocess
 import tempfile
 from dxbc_checksum import checksum
 from rt_spot_history import bounded_history
+from rt_spot_selection import unshadowed_selection, NATIVE_SHA as SELECTOR_SHA
 from rt_spot_debug_views import debug_view
 from rt_spot_diagnostics import raw_history, raw_spatial
 from rt_spot_samples import four_spot_samples
@@ -77,6 +78,7 @@ def main():
         subprocess.run([args.assembler, str(ll), str(unsigned)], check=True)
         subprocess.run([args.dxv, str(unsigned), '-o=' + str(signed)], check=True)
         full = signed.read_bytes()
+    selector = unshadowed_selection(checked(args.capture / f'compute_cs-{SELECTOR_SHA}.dxbc', SELECTOR_SHA))
     visibility = debug_view(light)
     light_ids = debug_view(light, light_ids=True)
     # mov r0.x, 1; replaces final static/dynamic map visibility before its zero gate.
@@ -87,7 +89,7 @@ def main():
     temporal = patch_instruction(temporal, 324, 50, [0x05000036, 0x001000f2, 1, 0x00100ae6, 1])
     args.output.mkdir(parents=True, exist_ok=True)
     ray_name = 'rt_spot_full.dxil'
-    outputs = {'rt_spot_visibility.dxbc': visibility, 'rt_spot_light_ids.dxbc': light_ids, 'rt_spot_raw_history.dxbc': raw_temporal, ray_name: full, 'rt_spot_light.dxbc': light, 'rt_spot_reset.dxbc': temporal, 'rt_spot_history.dxbc': history}
+    outputs = {'rt_spot_selection.dxbc': selector, 'rt_spot_visibility.dxbc': visibility, 'rt_spot_light_ids.dxbc': light_ids, 'rt_spot_raw_history.dxbc': raw_temporal, ray_name: full, 'rt_spot_light.dxbc': light, 'rt_spot_reset.dxbc': temporal, 'rt_spot_history.dxbc': history}
     for index, sha in enumerate(SPATIAL_SHAS):
         native = checked(args.capture / f'compute_cs-{sha}.dxbc', sha)
         outputs[f'rt_spot_spatial{index}.dxbc'] = bounded_penumbra(native)
