@@ -53,7 +53,7 @@ inline void ReportShadowFiltering(bool fullRR, bool contact, bool temporal, int 
         last.temporal != temporal || last.size != size || last.step != step) {
         Trace("rt_spot_filter full_rr=%u contact=%u native_preserved=1 temporal=%u spatial_size=%d spatial_step=%d",
             unsigned(fullRR),unsigned(contact),unsigned(temporal),size,step);
-        Trace("rt_spot_history filter_policy=mode_specific point_history=native spotlight_only=1 transition_reset=1 spot_samples=4 sample_pattern=r71_symmetric closest_hit_per_ray=1 mean_blocker=1 map_coverage=min_once fixed_emitter_radius=1 bounded_penumbra=1 per_sample_endpoint=0 near_distance_cutoff=1 baseline=R89_mean_blocker point_samples=1");
+        Trace("rt_spot_history filter_policy=mode_specific point_history=native spotlight_only=1 transition_reset=1 spot_samples=4 sample_pattern=r71_symmetric closest_hit_per_ray=1 mean_blocker=1 fixed_emitter_radius=1 bounded_penumbra=1 per_sample_endpoint=0 near_distance_cutoff=1 baseline=R89_mean_blocker point_samples=1");
         last = {true, fullRR, contact, temporal, size, step};
     }
 }
@@ -116,7 +116,7 @@ inline void Install() noexcept {
             PTReflectionLoadSidecar(L"rt_spot_full.dxil","RT_SPOT_RAY",rayBytes,sha,loaded) &&
             !strcmp(sha,"39f75f7b953389d233ea6115bc2fb374fcf897dab023079aa9a3383d1807d98d") &&
             PTReflectionLoadSidecar(L"rt_spot_light.dxbc","RT_SPOT_LIGHT",lightBytes,sha,loaded) &&
-            !strcmp(sha,"65d6c4d3a1afd5912adecdc462a2d76d3a40331ef934bbe69cb0c1ac00937bdd") &&
+            !strcmp(sha,"a844888cdd5478605574157b323cb3376369ae9517c4954bf38bee21b664ecd7") &&
             PTReflectionLoadSidecar(L"rt_spot_reset.dxbc","RT_SPOT_RESET",resetBytes,sha,loaded) &&
             !strcmp(sha,"3081daebf178680b5f7e117a836e4494520c0e760de2fc1ee49d3cfb3a8d089f") &&
             PTReflectionLoadSidecar(L"rt_spot_history.dxbc","RT_SPOT_HISTORY",historyBytes,sha,loaded) &&

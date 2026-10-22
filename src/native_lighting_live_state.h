@@ -28,7 +28,8 @@ inline constexpr unsigned kRtSpotReadyBit = 1u << 17;
 struct ModeChoice { Mode mode; const wchar_t* label; };
 inline constexpr ModeChoice kModeChoices[] = {
     {Mode::Native, L"NATIVE SHADOWS"},
-    {Mode::RtSpot, L"RT SPOTLIGHT"}
+    {Mode::RtSpot, L"RT FILTERED"},
+    {Mode::RtSpotRaw, L"RT RAW"}
 };
 inline constexpr unsigned kModeCount = sizeof(kModeChoices) / sizeof(kModeChoices[0]);
 inline unsigned RequiredVariant(Mode mode) noexcept {

@@ -2,7 +2,7 @@
 
 Requires DXC, the small assemble-dxil helper, and DXV. Does not modify the game.
 The point branch, alpha handlers and resource layout
-remain intact. The selected-light compute variant preserves map coverage without double shadowing;
+remain intact. The selected-light compute variant removes map visibility only;
 it must never be selected without a matching full-distance spotlight dispatch.
 """
 import argparse
@@ -16,7 +16,6 @@ from dxbc_checksum import checksum
 from rt_spot_history import bounded_history
 from rt_spot_diagnostics import raw_history, raw_spatial
 from rt_spot_samples import four_spot_samples
-from rt_spot_coverage import preserve_coverage
 from rt_spot_filter import SPATIAL_SHAS, bounded_penumbra
 
 MULTI_RAY_SHA = 'd5efe2c2219257e2a7b51bbd65a7fa3b80cdb56fb7e6444223f8b4d7ee45a1a9'
@@ -77,7 +76,8 @@ def main():
         subprocess.run([args.assembler, str(ll), str(unsigned)], check=True)
         subprocess.run([args.dxv, str(unsigned), '-o=' + str(signed)], check=True)
         full = signed.read_bytes()
-    light = preserve_coverage(light)
+    # mov r0.x, 1; replaces final static/dynamic map visibility before its zero gate.
+    light = patch_instruction(light, 1707, 55, [0x05000036, 0x00100012, 0, 0x00004001, 0x3f800000])
     raw_temporal = raw_history(temporal)
     history = bounded_history(temporal)
     # mov r1.xyzw, r1.zwzz; current visibility only, for history reset on transition.
