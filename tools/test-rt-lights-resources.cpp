@@ -16,6 +16,14 @@ static void Lifetime() {
 }
 int main() try {
     Lifetime();
+    constexpr auto prefix = DescriptorOverlap(1024,49,992,3,32);
+    static_assert(prefix.tableIndex == 0 && prefix.sourceSkip == 1 && prefix.count == 2);
+    constexpr auto suffix = DescriptorOverlap(1024,49,2560,8,32);
+    static_assert(suffix.tableIndex == 48 && suffix.count == 1);
+    constexpr auto covering = DescriptorOverlap(1024,49,0,128,32);
+    static_assert(covering.sourceSkip == 32 && covering.count == 49);
+    static_assert(DescriptorOverlap(1024,49,1025,8,32).count == 0);
+    static_assert(DescriptorOverlap(1024,49,2592,1,32).count == 0);
     Device gpu(false);
     FramePool pool; Check(pool.Initialize(gpu.device.Get()));
     constexpr UINT64 budget = 768ull * 1024 * 1024;

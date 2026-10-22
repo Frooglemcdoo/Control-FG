@@ -75,7 +75,9 @@ struct Pass {
     bool requested = false, base = false, rays = false, committed = false;
     Context context;
     rt_lights::FramePool::Slot* slot = nullptr;
-    rt_lights::NativeBindings producer, ray;
+    rt_lights::NativeBindings producer, ray, selected;
+    const char* reason = "awaiting_producer";
+    UINT producerDispatches = 0, selectedDispatches = 0;
     ComPtr<ID3D12StateObject> currentState, state;
     ComPtr<ID3D12Resource> record;
     D3D12_DISPATCH_RAYS_DESC dispatch{};
@@ -130,6 +132,10 @@ inline void EndPass() noexcept {
     if (pass.requested && (passReports.fetch_add(1) < 12 || !pass.committed && passReports.load() % 300 == 0))
         Trace("rt_all_pass slot=%u base=%u rays=%u committed=%u descriptor_mask=%llx gpu_confirmed=0",
             unsigned(pass.slot != nullptr),unsigned(pass.base),unsigned(pass.rays),unsigned(pass.committed),pass.observed);
+    if (pass.requested && (passReports.load() <= 12 || (!pass.committed && passReports.load() % 300 == 0)))
+        Trace("rt_all_result reason=%s producer_dispatches=%u selected_dispatches=%u producer_mask=%llx ray_mask=%llx selected_mask=%llx ray_materials=%u selected_cb1=%u",
+            pass.reason,pass.producerDispatches,pass.selectedDispatches,pass.producer.observed,pass.ray.observed,pass.selected.observed,
+            unsigned(pass.ray.table[7].ptr != 0),unsigned(pass.selected.constants[1] != 0));
     pass = Pass{};
 }
 inline void ObservePso(ID3D12GraphicsCommandList* list, ID3D12PipelineState* pipeline) noexcept {
@@ -149,16 +155,15 @@ inline bool Snapshot(const Context& context, UINT index, rt_lights::NativeBindin
     device->CopyDescriptorsSimple(49,out.snapshot,pass.slot->resources->Snapshot(0),D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
     return true;
 }
-inline bool MirrorDestination(D3D12_CPU_DESCRIPTOR_HANDLE destination, UINT count, UINT& index) noexcept {
+inline bool MirrorDestination(D3D12_CPU_DESCRIPTOR_HANDLE destination, UINT count, UINT& index, UINT& skip, UINT& copied) noexcept {
     if (customRecording || !passDepth || !pass.slot || !count) return false;
     Context context;
     if (!ReadContext(context) || context.list != pass.context.list || context.heap != pass.context.heap) return false;
     const UINT step = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-    if (destination.ptr < context.cpu.ptr || (destination.ptr - context.cpu.ptr) % step) return false;
-    const SIZE_T offset = (destination.ptr - context.cpu.ptr) / step;
-    if (offset >= 49 || count > 49 - offset) return false;
+    const auto overlap = rt_lights::DescriptorOverlap(context.cpu.ptr,49,destination.ptr,count,step);
+    if (!overlap.count) return false;
+    index = overlap.tableIndex; skip = overlap.sourceSkip; copied = overlap.count;
     if (pass.descriptorEpoch != context.gpu.ptr) { pass.descriptorEpoch = context.gpu.ptr; pass.observed = 0; }
-    index = static_cast<UINT>(offset);
     return true;
 }
 using CopySimple = void (STDMETHODCALLTYPE*)(ID3D12Device*,UINT,D3D12_CPU_DESCRIPTOR_HANDLE,D3D12_CPU_DESCRIPTOR_HANDLE,D3D12_DESCRIPTOR_HEAP_TYPE);
@@ -167,21 +172,66 @@ inline CopySimple originalCopy = nullptr;
 inline CreateCbv originalCbv = nullptr;
 inline void STDMETHODCALLTYPE CopyHook(ID3D12Device* owner, UINT count, D3D12_CPU_DESCRIPTOR_HANDLE to, D3D12_CPU_DESCRIPTOR_HANDLE from, D3D12_DESCRIPTOR_HEAP_TYPE type) {
     originalCopy(owner,count,to,from,type);
-    UINT index = 0;
-    if (type != D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV || !MirrorDestination(to,count,index)) return;
+    UINT index = 0, skip = 0, copied = 0;
+    if (type != D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV || !MirrorDestination(to,count,index,skip,copied)) return;
+    const UINT step = owner->GetDescriptorHandleIncrementSize(type);
     auto destination = pass.slot->resources->Snapshot(0);
-    destination.ptr += SIZE_T(index) * owner->GetDescriptorHandleIncrementSize(type);
-    originalCopy(owner,count,destination,from,type);
-    pass.observed |= ((1ull << count) - 1) << index;
+    destination.ptr += SIZE_T(index) * step; from.ptr += SIZE_T(skip) * step;
+    originalCopy(owner,copied,destination,from,type);
+    pass.observed |= ((1ull << copied) - 1) << index;
+}
+using CopyRanges = void (STDMETHODCALLTYPE*)(ID3D12Device*,UINT,const D3D12_CPU_DESCRIPTOR_HANDLE*,const UINT*,UINT,const D3D12_CPU_DESCRIPTOR_HANDLE*,const UINT*,D3D12_DESCRIPTOR_HEAP_TYPE);
+using CreateSrv = void (STDMETHODCALLTYPE*)(ID3D12Device*,ID3D12Resource*,const D3D12_SHADER_RESOURCE_VIEW_DESC*,D3D12_CPU_DESCRIPTOR_HANDLE);
+using CreateUav = void (STDMETHODCALLTYPE*)(ID3D12Device*,ID3D12Resource*,ID3D12Resource*,const D3D12_UNORDERED_ACCESS_VIEW_DESC*,D3D12_CPU_DESCRIPTOR_HANDLE);
+inline CopyRanges originalRanges = nullptr;
+inline CreateSrv originalSrv = nullptr;
+inline CreateUav originalUav = nullptr;
+inline void STDMETHODCALLTYPE RangesHook(ID3D12Device* owner,UINT nd,const D3D12_CPU_DESCRIPTOR_HANDLE* dst,const UINT* dc,
+    UINT ns,const D3D12_CPU_DESCRIPTOR_HANDLE* src,const UINT* sc,D3D12_DESCRIPTOR_HEAP_TYPE type) {
+    originalRanges(owner,nd,dst,dc,ns,src,sc,type);
+    if (customRecording || !passDepth || !pass.slot || type != D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV) return;
+    const UINT step = owner->GetDescriptorHandleIncrementSize(type);
+    UINT si = 0, so = 0;
+    for (UINT di = 0; di < nd; ++di) {
+        UINT offset = 0, remaining = dc ? dc[di] : 1;
+        while (remaining && si < ns) {
+            const UINT sourceCount = sc ? sc[si] : 1;
+            if (so == sourceCount) { ++si; so = 0; continue; }
+            const UINT chunk = (std::min)(remaining,sourceCount-so);
+            auto to = dst[di]; to.ptr += SIZE_T(offset)*step;
+            auto from = src[si]; from.ptr += SIZE_T(so)*step;
+            UINT index = 0, skip = 0, copied = 0;
+            if (MirrorDestination(to,chunk,index,skip,copied)) {
+                auto shadow = pass.slot->resources->Snapshot(0); shadow.ptr += SIZE_T(index)*step;
+                from.ptr += SIZE_T(skip)*step;
+                originalCopy(owner,copied,shadow,from,type);
+                pass.observed |= ((1ull << copied)-1) << index;
+            }
+            offset += chunk; remaining -= chunk; so += chunk;
+        }
+    }
+}
+inline bool ShadowView(ID3D12Device* owner,D3D12_CPU_DESCRIPTOR_HANDLE& to,UINT& index) noexcept {
+    UINT skip = 0, copied = 0;
+    if (!MirrorDestination(to,1,index,skip,copied)) return false;
+    to = pass.slot->resources->Snapshot(0);
+    to.ptr += SIZE_T(index)*owner->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+    return true;
+}
+inline void STDMETHODCALLTYPE SrvHook(ID3D12Device* owner,ID3D12Resource* resource,const D3D12_SHADER_RESOURCE_VIEW_DESC* desc,D3D12_CPU_DESCRIPTOR_HANDLE to) {
+    originalSrv(owner,resource,desc,to);
+    UINT index = 0;
+    if (ShadowView(owner,to,index)) { originalSrv(owner,resource,desc,to); pass.observed |= 1ull << index; }
+}
+inline void STDMETHODCALLTYPE UavHook(ID3D12Device* owner,ID3D12Resource* resource,ID3D12Resource* counter,const D3D12_UNORDERED_ACCESS_VIEW_DESC* desc,D3D12_CPU_DESCRIPTOR_HANDLE to) {
+    originalUav(owner,resource,counter,desc,to);
+    UINT index = 0;
+    if (ShadowView(owner,to,index)) { originalUav(owner,resource,counter,desc,to); pass.observed |= 1ull << index; }
 }
 inline void STDMETHODCALLTYPE CbvHook(ID3D12Device* owner, const D3D12_CONSTANT_BUFFER_VIEW_DESC* cb, D3D12_CPU_DESCRIPTOR_HANDLE to) {
     originalCbv(owner,cb,to);
     UINT index = 0;
-    if (!cb || !MirrorDestination(to,1,index)) return;
-    auto destination = pass.slot->resources->Snapshot(0);
-    destination.ptr += SIZE_T(index) * owner->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-    originalCbv(owner,cb,destination);
-    pass.observed |= 1ull << index;
+    if (cb && ShadowView(owner,to,index)) { originalCbv(owner,cb,to); pass.observed |= 1ull << index; }
 }
 using DispatchCompute = void (STDMETHODCALLTYPE*)(ID3D12GraphicsCommandList*,UINT,UINT,UINT);
 using SetRoot = void (STDMETHODCALLTYPE*)(ID3D12GraphicsCommandList*,ID3D12RootSignature*);
@@ -226,14 +276,19 @@ inline void STDMETHODCALLTYPE DispatchHook(ID3D12GraphicsCommandList* list, UINT
     if (!ReadContext(context) || context.list != list) return;
     customRecording = true;
     const rt_lights::TableAllocator allocator{&context,&AllocateTable,device.Get(),device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV)};
-    if (stage == 1 && Snapshot(context,1,pass.producer)) {
+    if (stage == 1) {
+        ++pass.producerDispatches; pass.reason = "producer_snapshot";
+        if (!Snapshot(context,1,pass.producer)) { customRecording = false; return; }
         pass.base = rt_lights::FrameRecorder::ReplayBase(list,*pass.slot->resources,pass.producer,Pipelines(),allocator,x,y,z);
-    } else if (stage == 2 && pass.base && pass.rays && !pass.committed && z == 1) {
-        rt_lights::NativeBindings selected;
-        if (Snapshot(context,3,selected)) {
+        pass.reason = pass.base ? "awaiting_rays" : "producer_bindings_or_extent";
+    } else if (stage == 2 && !pass.committed) {
+        ++pass.selectedDispatches;
+        pass.reason = !pass.base ? "missing_base" : !pass.rays ? "missing_rays" : z != 1 ? "selected_depth" : "selected_snapshot";
+        auto& selected = pass.selected;
+        if (pass.base && pass.rays && z == 1 && Snapshot(context,3,selected)) {
             pass.committed = rt_lights::FrameRecorder::Replace(context.rays,*pass.slot->resources,pass.producer,pass.ray,selected,Pipelines(),allocator,
                 pass.state.Get(),pass.dispatch,pass.record->GetGPUVirtualAddress(),static_cast<UINT>(pass.slot->lifetime.Generation()),
-                pass.slot->tables.data(),static_cast<UINT>(pass.slot->tables.size()));
+                pass.slot->tables.data(),static_cast<UINT>(pass.slot->tables.size()),&pass.reason);
         }
     }
     customRecording = false;
@@ -251,7 +306,7 @@ inline bool OnRays(ID3D12GraphicsCommandList4* list, const D3D12_DISPATCH_RAYS_D
     if (!ReadContext(context) || context.rays != list || context.list != pass.context.list) return false;
     customRecording = true;
     pass.rays = Snapshot(context,2,pass.ray);
-    if (pass.rays) { pass.dispatch = *desc; pass.record = record; pass.state = pass.currentState; pass.slot->rayOwner = pass.state; }
+    if (pass.rays) { pass.reason = "awaiting_selected"; pass.dispatch = *desc; pass.record = record; pass.state = pass.currentState; pass.slot->rayOwner = pass.state; }
     customRecording = false;
     return false; // Always run the untouched native rays for complete fallback.
 }
@@ -278,8 +333,13 @@ inline void InstallDevice(ID3D12Device* owner) noexcept {
     AcquireSRWLockExclusive(&deviceLock);
     if (!originalCopy) {
         auto** table = *reinterpret_cast<void***>(owner);
+        originalRanges = reinterpret_cast<CopyRanges>(table[23]);
+        originalSrv = reinterpret_cast<CreateSrv>(table[18]); originalUav = reinterpret_cast<CreateUav>(table[19]);
         originalCopy = reinterpret_cast<CopySimple>(table[24]); originalCbv = reinterpret_cast<CreateCbv>(table[17]);
-        const bool good = PatchSlot(&table[24],reinterpret_cast<void*>(originalCopy),reinterpret_cast<void*>(&CopyHook)) &&
+        const bool good = PatchSlot(&table[23],reinterpret_cast<void*>(originalRanges),reinterpret_cast<void*>(&RangesHook)) &&
+            PatchSlot(&table[18],reinterpret_cast<void*>(originalSrv),reinterpret_cast<void*>(&SrvHook)) &&
+            PatchSlot(&table[19],reinterpret_cast<void*>(originalUav),reinterpret_cast<void*>(&UavHook)) &&
+            PatchSlot(&table[24],reinterpret_cast<void*>(originalCopy),reinterpret_cast<void*>(&CopyHook)) &&
             PatchSlot(&table[17],reinterpret_cast<void*>(originalCbv),reinterpret_cast<void*>(&CbvHook));
         if (!good) runtimeFailed.store(true);
     }

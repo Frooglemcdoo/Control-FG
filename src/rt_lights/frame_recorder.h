@@ -1,5 +1,6 @@
 #pragma once
 #include "frame_resources.h"
+#include "descriptor_overlap.h"
 #include <algorithm>
 
 namespace rt_lights {
@@ -126,16 +127,19 @@ public:
                         const TableAllocator& allocator, ID3D12StateObject* rayState,
                         const D3D12_DISPATCH_RAYS_DESC& nativeRays,
                         D3D12_GPU_VIRTUAL_ADDRESS rayRecord, UINT frameTag,
-                        BatchTables* tables, UINT tableCapacity) noexcept {
+                        BatchTables* tables, UINT tableCapacity, const char** reason = nullptr) noexcept {
+        auto fail = [&](const char* value) { if (reason) *reason = value; return false; };
         constexpr UINT64 selectedRequired = (((1ull << 17) - 1) << Srv) | (3ull << Uav);
         constexpr UINT64 producerRequired = (1ull << Srv) | (1ull << (Srv + 3)) | (3ull << (Srv + 15));
         const UINT receivers = frame.Width() * frame.Height();
         const UINT batches = (receivers + BatchCapacity::Receivers - 1) / BatchCapacity::Receivers;
-        if (!list || !pipelines.Ready() || !rayState || !rayRecord || !tables || tableCapacity < 1 ||
-            !producer.Has(producerRequired) || !producer.constants[2] || !ray.Has(1ull << (Srv + 6)) ||
-            !ray.table[7].ptr || !selected.Has(selectedRequired) || !selected.constants[1] ||
-            producer.heap != selected.heap || ray.heap != selected.heap || nativeRays.Depth != 1 ||
-            nativeRays.Width != frame.Width() || nativeRays.Height != frame.Height()) return false;
+        if (!list || !pipelines.Ready() || !rayState || !rayRecord || !tables || tableCapacity < 1) return fail("recorder_not_ready");
+        if (!producer.Has(producerRequired) || !producer.constants[2]) return fail("producer_bindings");
+        if (!ray.Has(1ull << (Srv + 6))) return fail("ray_bindings");
+        if (!ray.table[7].ptr) return fail("ray_material_table");
+        if (!selected.Has(selectedRequired) || !selected.constants[1]) return fail("selected_bindings");
+        if (producer.heap != selected.heap || ray.heap != selected.heap) return fail("heap_changed");
+        if (nativeRays.Depth != 1 || nativeRays.Width != frame.Width() || nativeRays.Height != frame.Height()) return fail("ray_extent");
 
         // All four are immutable upload slices owned by this recording.
         const UINT zero = 0, rayLayout[] = {0, 2, 0, 0};
@@ -145,11 +149,11 @@ public:
         const auto templateAddress = frame.StoreConstants(&rayArguments, sizeof(rayArguments));
         const auto rayControls = frame.StoreConstants(rayLayout, sizeof(rayLayout));
         const auto argumentControls = frame.StoreConstants(limits, sizeof(limits));
-        if (!zeroAddress || !templateAddress || !rayControls || !argumentControls) return false;
+        if (!zeroAddress || !templateAddress || !rayControls || !argumentControls) return fail("global_constants");
 
         DescriptorTable pointTable;
         const DescriptorEdit pointEdits[] = {Write(frame, 0, Surface::BaseDiffuse), Write(frame, 1, Surface::BaseSpecular)};
-        if (!allocator.Publish(selected, pointEdits, 2, pointTable)) return false;
+        if (!allocator.Publish(selected, pointEdits, 2, pointTable)) return fail("point_descriptor_allocation");
         // Descriptors reference the same scratch resources for every batch.
         // Only root CBV addresses change, so publish one immutable set per pass.
         {
@@ -167,7 +171,7 @@ public:
             if (!allocator.Publish(producer, generate, 8, t.generate) || !allocator.Publish(producer, arguments, 3, t.arguments) ||
                 !allocator.Publish(selected, extract, 3, t.extract) || !allocator.Publish(ray, rays, 2, t.rays, rayControls) ||
                 !allocator.Publish(selected, pack, 5, t.pack) || !allocator.Publish(selected, compose, 4, t.compose) ||
-                !allocator.Publish(selected, commit, 3, t.commit)) return false;
+                !allocator.Publish(selected, commit, 3, t.commit)) return fail("batch_descriptor_allocation");
         }
         FrameResources::UavBarrier(list);
         selected.Apply(list, pointTable.gpu); list->SetPipelineState(pipelines.point);
@@ -188,7 +192,7 @@ public:
             const auto packAddress = frame.StoreConstants(pack, sizeof(pack));
             const auto composeAddress = frame.StoreConstants(compose, sizeof(compose));
             const auto commitAddress = frame.StoreConstants(commit, sizeof(commit));
-            if (!generateAddress || !packAddress || !composeAddress || !commitAddress) { selected.Restore(list); return false; }
+            if (!generateAddress || !packAddress || !composeAddress || !commitAddress) { selected.Restore(list); return fail("batch_constants"); }
             const auto& t = tables[0];
             frame.CopyStored(list, Surface::Counter, zeroAddress, 4);
             frame.CopyStored(list, Surface::Arguments, templateAddress, IndirectLayout::Bytes);
@@ -225,6 +229,7 @@ public:
             list->Dispatch((count + 63) / 64, 1, 1); FrameResources::UavBarrier(list);
         }
         selected.Restore(list);
+        if (reason) *reason = "recorded";
         return true;
     }
 };
