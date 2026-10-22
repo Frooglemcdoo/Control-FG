@@ -1,13 +1,38 @@
-"""Four symmetric disk samples for the hash-locked R65 spotlight path.
+"""Four equal-area radial strata for the hash-locked spotlight path.
 
-Preserve the disk distribution, alpha handlers, masks and point
-branch. Reflect the native uniform disk sample across both axes; each marginal
-remains uniform, while a pixel covers all four quadrants in the same frame.
+Each ray is uniform over the disk across frames. Within a frame the four rays
+cover separate equal-area annuli and angular quadrants. Native frame/pixel
+random values drive both dimensions; ray count and filter contract stay fixed.
 """
+
+def stratified_disk_samples(source):
+    lines = []
+    for index in range(4):
+        prefix = f'SpotDisk{index}'
+        offset = f'{index / 4:.6e}'
+        lines.extend([
+            f'  %{prefix}RadialShift = fadd fast float %Frc, {offset}',
+            f'  %{prefix}Area = call float @dx.op.unary.f32(i32 22, float %{prefix}RadialShift)',
+            f'  %{prefix}Radius = call float @dx.op.unary.f32(i32 24, float %{prefix}Area)',
+            f'  %{prefix}AngularShift = fadd fast float %Frc48, {offset}',
+            f'  %{prefix}Turn = call float @dx.op.unary.f32(i32 22, float %{prefix}AngularShift)',
+            f'  %{prefix}Angle = fmul fast float %{prefix}Turn, 0x401921FB60000000',
+            f'  %{prefix}Cos = call float @dx.op.unary.f32(i32 12, float %{prefix}Angle)',
+            f'  %{prefix}Sin = call float @dx.op.unary.f32(i32 13, float %{prefix}Angle)',
+            f'  %{prefix}ScaledRadius = fmul fast float %{prefix}Radius, %174',
+            f'  %{prefix}X = fmul fast float %{prefix}ScaledRadius, %{prefix}Cos',
+            f'  %{prefix}Y = fmul fast float %{prefix}ScaledRadius, %{prefix}Sin'])
+    anchor = '  %.i0258 = fmul fast float %.030.i0, %215'
+    source = replace_once(source, anchor, '\n'.join(lines) + '\n' +
+                          '  %.i0258 = fmul fast float %SpotDisk0X, 1.000000e+00')
+    return replace_once(source, '  %.i1259 = fmul fast float %.030.i1, %215',
+                        '  %.i1259 = fmul fast float %SpotDisk0Y, 1.000000e+00')
+
+
 def _four_spot_samples(source):
     # Full-distance shadows need a closest blocker, not traversal-order first hit.
-    # The native disk has radius 0.5; use diameter 2*emitterRadius to match the
-    # spatial filter, instead of the randomized short-contact radius multiplier.
+    # Retain the R89 native IR anchor; stratified_disk_samples replaces its
+    # consumers with unit-disk samples scaled directly by emitterRadius.
     radius = '  %215 = fmul fast float %214, %174'
     assert source.count(radius) == 1
     source = source.replace(radius, '  %215 = fmul fast float 2.000000e+00, %174')
@@ -16,16 +41,19 @@ def _four_spot_samples(source):
     source = source.replace(first_ray, 'i32 157, %dx.types.Handle %250, i32 0, i32 1')
     anchor='  %251 = load float, float* %249, align 8\n'
     assert source.count(anchor)==1
+    source = stratified_disk_samples(source)
     lines=[]
     hits=['%251']
-    axes=[('x','%.i0234','%.i0278','%.i0284','%.i0275'),
-          ('y','%.i1235','%.i1279','%.i1285','%.i1276'),
-          ('z','%.i2236','%.i2280','%.i2286','%.i2277')]
-    for index,(sx,sy) in enumerate([(-1,1),(1,-1),(-1,-1)],1):
+    axes=[('x','%.i0234','%.0.i0','%.027.i0'),
+          ('y','%.i1235','%.027.i0','%.027.i1'),
+          ('z','%.i2236','%.0.i2','%.027.i2')]
+    for index in range(1, 4):
         prefix=f'SpotSample{index}'
-        for axis,center,dx,dy,_ in axes:
-            lines.append(f'  %{prefix}{axis}A = {"fadd" if sx>0 else "fsub"} fast float {center}, {dx}')
-            lines.append(f'  %{prefix}{axis} = {"fadd" if sy>0 else "fsub"} fast float %{prefix}{axis}A, {dy}')
+        for axis,center,basis_x,basis_y in axes:
+            lines.append(f'  %{prefix}{axis}OffsetX = fmul fast float {basis_x}, %SpotDisk{index}X')
+            lines.append(f'  %{prefix}{axis}OffsetY = fmul fast float {basis_y}, %SpotDisk{index}Y')
+            lines.append(f'  %{prefix}{axis}A = fadd fast float {center}, %{prefix}{axis}OffsetX')
+            lines.append(f'  %{prefix}{axis} = fadd fast float %{prefix}{axis}A, %{prefix}{axis}OffsetY')
             lines.append(f'  %{prefix}{axis}Squared = fmul fast float %{prefix}{axis}, %{prefix}{axis}')
         lines.extend([
             f'  %{prefix}XY = fadd fast float %{prefix}xSquared, %{prefix}ySquared',

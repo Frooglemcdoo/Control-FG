@@ -354,11 +354,11 @@ jobs:
           node tools/test-native-menu.js --config build/native-menu-config.json
           if errorlevel 1 exit /b 1
 
-      - name: Package live lighting diagnostic R91
+      - name: Package live lighting diagnostic R92
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-Native-Lighting-Live-R91'
+          $out='Control-FG-Native-Lighting-Live-R92'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
           Copy-Item build/rt_spot_raw_history.dxbc,build/rt_spot_raw_spatial0.dxbc,build/rt_spot_raw_spatial1.dxbc,build/rt_spot_full.dxil,build/rt_spot_light.dxbc,build/rt_spot_reset.dxbc,build/rt_spot_history.dxbc,build/rt_spot_spatial0.dxbc,build/rt_spot_spatial1.dxbc $out
@@ -375,18 +375,18 @@ jobs:
           Copy-Item Collect-RR-Blinds-Capture.ps1 "$out/Collect-RR-Blinds-Capture.ps1"
           Copy-Item Collect-ControlFG-Compact-Logs.cmd "$out/Collect-ControlFG-Compact-Logs.cmd"
           Copy-Item Collect-ControlFG-Compact-Logs.ps1 "$out/Collect-ControlFG-Compact-Logs.ps1"
-          Copy-Item docs/spot-coverage-isolation-r91.md "$out/DIAGNOSTIC-NOTES.md"
+          Copy-Item docs/spot-sampling-r92.md "$out/DIAGNOSTIC-NOTES.md"
           @'
-          CONTROL-FG R91 - experimental selected-spotlight RT replacement
+          CONTROL-FG R92 - experimental selected-spotlight RT replacement
           Close Control to install. Copy contents beside Control_DX12.exe.
           Preserve existing NVIDIA runtimes and the ControlFGStreamline folder.
           Use Borderless. Load the affected room with FG and glass enhancements OFF. Compare RR OFF and ON.
           Enable native RT Contact Shadows. Keep the same camera position for comparison.
           F10: compare NATIVE SHADOWS, RT FILTERED and RT RAW.
-          No restart between modes. SAVE LOG writes one Lighting-R91 session log.
+          No restart between modes. SAVE LOG writes one Lighting-R92 session log.
           This replaces one selected spotlight per pixel, not every shadow in the scene.
           An unavailable button means the required native shader pair was not prepared.
-          R91 restores R89 pure RT composition and adds a live raw spotlight view to isolate missing coverage. RR must be OFF for this comparison. RAW is intentionally noisy.
+          R92 spreads four spotlight rays across equal-area radial strata. R89 softness and pure RT composition remain. Start with RR OFF; RAW is intentionally noisy.
           See DIAGNOSTIC-NOTES.md for scope and limitations.
           '@ | Set-Content "$out/README.txt" -Encoding ASCII
           Compress-Archive -Path "$out/*" -DestinationPath "$out.zip" -Force
@@ -395,10 +395,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-Native-Lighting-Live-R91
+          name: Control-FG-Native-Lighting-Live-R92
           path: |
-            Control-FG-Native-Lighting-Live-R91.zip
-            Control-FG-Native-Lighting-Live-R91.sha256
+            Control-FG-Native-Lighting-Live-R92.zip
+            Control-FG-Native-Lighting-Live-R92.sha256
             build/rt_spot_shadow_prototype.dxil
             build/exports.txt
             build/imports.txt

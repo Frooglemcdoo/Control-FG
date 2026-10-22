@@ -11,14 +11,29 @@ for hits in itertools.product([0.1,1.0,10.0],repeat=4):
     assert (output==50000.0)==(visible==1)
     if blockers: assert min(blockers)-1e-12<=output<=max(blockers)+1e-12
     if len(set(blockers))==1: assert math.isclose(output,blockers[0],rel_tol=1e-12)
-random.seed(70)
-for _ in range(1000):
-    radius=math.sqrt(random.random());angle=random.random()*math.tau
-    x,y=radius*math.cos(angle),radius*math.sin(angle)
-    samples=[(x,y),(-x,y),(x,-y),(-x,-y)]
-    assert abs(sum(p[0] for p in samples))<1e-12
-    assert abs(sum(p[1] for p in samples))<1e-12
-    assert all(abs(a*a+b*b-radius*radius)<1e-12 for a,b in samples)
+# Equal-area annuli avoid the old four-rays-at-one-radius failure: an
+# annular blocker covering 25% of the emitter gets one hit, not 0 or 4 hits.
+random.seed(92)
+radial_sum = [0.0]*4
+angular_x = angular_y = 0.0
+count = 20000
+for _ in range(count):
+    area, turn = random.random(), random.random()
+    samples=[]
+    strata=[]
+    for i in range(4):
+        q=(area+i/4)%1
+        angle=math.tau*((turn+i/4)%1)
+        x,y=math.sqrt(q)*math.cos(angle),math.sqrt(q)*math.sin(angle)
+        samples.append((x,y))
+        strata.append(int(q*4))
+        radial_sum[i]+=q
+        angular_x+=x; angular_y+=y
+        assert math.isfinite(x+y) and x*x+y*y<=1+1e-12
+    assert sorted(strata)==[0,1,2,3]
+    assert sum(x*x+y*y<0.25 for x,y in samples)==1
+assert all(abs(total/count-0.5)<0.01 for total in radial_sum)
+assert abs(angular_x/(count*4))<0.01 and abs(angular_y/(count*4))<0.01
 if len(sys.argv)>1:
     import importlib.util
     spec=importlib.util.spec_from_file_location('generator',Path(__file__).with_name('generate-rt-spot-pair.py'))
@@ -27,7 +42,9 @@ if len(sys.argv)>1:
     call='call void @dx.op.traceRay.struct.ShadowHitData('
     assert result.count(call)==source.count(call)+3
     assert result.count('i32 157, %dx.types.Handle %250, i32 0, i32 1') == 4
-    assert '%215 = fmul fast float 2.000000e+00, %174' in result
+    assert '%SpotDisk0ScaledRadius = fmul fast float %SpotDisk0Radius, %174' in result
+    for i in range(4):
+        assert f'%SpotDisk{i}Area = call float @dx.op.unary.f32(i32 22,' in result
     # Shared native alpha/closest-hit/miss handlers remain byte-identical.
     raygen = '; Function Attrs: nounwind\ndefine void @"\\01?spotRayGeneration'
     assert result.split(raygen)[0] == source.split(raygen)[0]
@@ -38,4 +55,4 @@ if len(sys.argv)>1:
     for i in range(1,4):assert f'%SpotSample{i}Hit' in result
     assert '%253 = fmul fast float %SpotVisibleSum, 2.500000e-01' in result
     assert 'select i1 %255, float %SpotMeanBlocker, float 5.000000e+04' in result
-print('PASS symmetric disk coverage, same-frame visibility/blocker aggregation, captured IR when provided')
+print('PASS stratified equal-area disk coverage, same-frame visibility/blocker aggregation, captured IR when provided')

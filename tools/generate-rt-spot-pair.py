@@ -89,7 +89,7 @@ def main():
         native = checked(args.capture / f'compute_cs-{sha}.dxbc', sha)
         outputs[f'rt_spot_spatial{index}.dxbc'] = bounded_penumbra(native)
         outputs[f'rt_spot_raw_spatial{index}.dxbc'] = raw_spatial(native)
-    manifest = {'native_ray': ray_sha, 'native_light': LIGHT_SHA, 'native_temporal': TEMPORAL_SHA, 'outputs': {}}
+    manifest = {'native_multi_ray': MULTI_RAY_SHA, 'native_ray': ray_sha, 'native_light': LIGHT_SHA, 'native_temporal': TEMPORAL_SHA, 'outputs': {}}
     for name, data in outputs.items():
         (args.output / name).write_bytes(data)
         manifest['outputs'][name] = {'bytes': len(data), 'sha256': hashlib.sha256(data).hexdigest()}
