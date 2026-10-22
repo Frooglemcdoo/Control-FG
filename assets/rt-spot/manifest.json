@@ -8,8 +8,8 @@
       "sha256": "39f75f7b953389d233ea6115bc2fb374fcf897dab023079aa9a3383d1807d98d"
     },
     "rt_spot_light.dxbc": {
-      "bytes": 50752,
-      "sha256": "a844888cdd5478605574157b323cb3376369ae9517c4954bf38bee21b664ecd7"
+      "bytes": 50800,
+      "sha256": "65d6c4d3a1afd5912adecdc462a2d76d3a40331ef934bbe69cb0c1ac00937bdd"
     },
     "rt_spot_reset.dxbc": {
       "bytes": 4868,
