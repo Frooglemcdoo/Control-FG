@@ -43,26 +43,24 @@ void main(uint3 dispatch : SV_DispatchThreadID) {
     if(local>=rangeCount || rangeStride!=16) return;
     ReceiverRange range;range.first=Invalid;range.count=1;range.frameTag=frameTag;range.reserved=0;
     ranges[local]=range; // Invalid until all candidates and tasks are complete.
-    ranges[local].reserved=1; // GPU diagnostic validation stage
     uint taskCount,taskStride,atlasWidth,atlasHeight;
     tasks.GetDimensions(taskCount,taskStride);work.GetDimensions(atlasWidth,atlasHeight);
     if(slotsPerReceiver==0 || slotsPerReceiver>1024 || taskStride!=96 ||
        workWidth==0 || workHeight==0 || workWidth!=atlasWidth || workHeight!=atlasHeight ||
-       workHeight>Invalid/workWidth || local>Invalid/slotsPerReceiver) return;
+       workHeight>Invalid/workWidth || local>Invalid/slotsPerReceiver) { ranges[local].reserved=1; return; }
     uint atlasCount=workWidth*workHeight;
 #ifdef RT_LIGHTS_COMPACT
     uint first=0;
 #else
     uint first=local*slotsPerReceiver;
     if(first>taskCount || slotsPerReceiver>taskCount-first ||
-       first>atlasCount || slotsPerReceiver>atlasCount-first) return;
+       first>atlasCount || slotsPerReceiver>atlasCount-first) { ranges[local].reserved=1; return; }
     for(uint slot=0;slot<slotsPerReceiver;++slot) {
         uint index=first+slot;
         work[uint2(index%workWidth,index/workWidth)]=0;
         tasks[index]=(ShadowTask)0;
     }
     #endif
-    ranges[local].reserved=2; // GPU diagnostic validation stage
     uint width,height,depthWidth,depthHeight,lightCount,lightStride,cellWidth,cellHeight;
     gbuffer.GetDimensions(width,height);clipDepth.GetDimensions(depthWidth,depthHeight);
     spotLights.GetDimensions(lightCount,lightStride);spotCells.GetDimensions(cellWidth,cellHeight);
@@ -74,54 +72,48 @@ void main(uint3 dispatch : SV_DispatchThreadID) {
        depthCount==0 || depthLimit==0 || depthLimit>depthCount || depthCount>cellHeight ||
        sampleCount==0 || sampleCount>64 || instanceMask==0 || instanceMask>255 ||
        !isfinite(originBias) || originBias<0 || !isfinite(endpointBias) || endpointBias<0 ||
-       !isfinite(emitterScale) || emitterScale<0) return;
-    ranges[local].reserved=3; // GPU diagnostic validation stage
+       !isfinite(emitterScale) || emitterScale<0) { ranges[local].reserved=2; return; }
     uint receiver=firstReceiver+local;
     uint2 pixel=uint2(receiver%width,receiver/width);
     float4 packedNormal=gbuffer.Load(int3(pixel,0));float depth=clipDepth.Load(int3(pixel,0)).x;
     float2 inverseSize=systemWords[0].zw;
     if(!all(isfinite(packedNormal)) || any(packedNormal<0) || any(packedNormal>1) ||
        !isfinite(depth) || depth<0 || depth>1 || !all(isfinite(inverseSize)) ||
-       any(abs(inverseSize*float2(width,height)-1)>0.00001)) return;
-    ranges[local].reserved=4; // GPU diagnostic validation stage
+       any(abs(inverseSize*float2(width,height)-1)>0.00001)) { ranges[local].reserved=3; return; }
     float2 clip=(float2(pixel)+0.5)*inverseSize*float2(2,-2)+float2(-1,1);
     float4 viewHomogeneous=NativeClipToView(float4(clip,depth,1));
-    if(!all(isfinite(viewHomogeneous)) || abs(viewHomogeneous.w)<1e-20) return;
+    if(!all(isfinite(viewHomogeneous)) || abs(viewHomogeneous.w)<1e-20) { ranges[local].reserved=4; return; }
     float3 view=viewHomogeneous.xyz/viewHomogeneous.w;
     float3 world=NativeViewPositionToWorld(view);
     float3 normal=NativeViewDirectionToWorld(NativeViewNormal(packedNormal));
     float normalSquare=dot(normal,normal);
-    if(!all(isfinite(world)) || !isfinite(normalSquare) || normalSquare<0.5 || normalSquare>1.5) return;
+    if(!all(isfinite(world)) || !isfinite(normalSquare) || normalSquare<0.5 || normalSquare>1.5) { ranges[local].reserved=4; return; }
     normal=normalize(normal);
-    ranges[local].reserved=5; // GPU diagnostic validation stage
     float nearDepth=asfloat(deferredWords[13].z);
     float2 depthResolve=asfloat(deferredWords[10].xy);
-    if(!isfinite(nearDepth) || !all(isfinite(depthResolve))) return;
+    if(!isfinite(nearDepth) || !all(isfinite(depthResolve))) { ranges[local].reserved=5; return; }
     uint slice=0;
     if(view.z>nearDepth) {
-        if(view.z<=0) return;
+        if(view.z<=0) { ranges[local].reserved=5; return; }
         // Native SHEX: ceil((resolve.y - ln(view.z))*resolve.x), capped at Z-1.
         float resolved=min(ceil((depthResolve.y-log(view.z))*depthResolve.x),float(depthLimit-1));
-        if(!isfinite(resolved) || resolved<0) return;
+        if(!isfinite(resolved) || resolved<0) { ranges[local].reserved=5; return; }
         slice=uint(resolved);
     }
-    ranges[local].reserved=6; // GPU diagnostic validation stage
     uint2 tile=pixel>>6;
-    if(tile.x>Invalid/nativeCapacity || tile.y>(Invalid-slice)/depthCount) return;
+    if(tile.x>Invalid/nativeCapacity || tile.y>(Invalid-slice)/depthCount) { ranges[local].reserved=6; return; }
     uint cellX=tile.x*nativeCapacity, cellY=tile.y*depthCount+slice;
-    if(cellX>cellWidth || nativeCapacity>cellWidth-cellX || cellY>=cellHeight) return;
+    if(cellX>cellWidth || nativeCapacity>cellWidth-cellX || cellY>=cellHeight) { ranges[local].reserved=6; return; }
     // Match the native loop: either the sentinel OR the configured capacity
     // ends the list. A full tile is valid and must still receive RT shadows.
-    ranges[local].reserved=7; // GPU diagnostic validation stage
     uint count=0;
     for(;count<nativeCapacity;++count) {
         uint light=spotCells.Load(int3(cellX+count,cellY,0)).x;
         if(light==NoLight) break;
-        if(light>=nativeTotal) return;
+        if(light>=nativeTotal) { ranges[local].reserved=7; return; }
     }
-    ranges[local].reserved=8; // GPU diagnostic validation stage
 #ifdef RT_LIGHTS_COMPACT
-    if(!Reserve(count,min(taskCount,atlasCount),first)) return;
+    if(!Reserve(count,min(taskCount,atlasCount),first)) { ranges[local].reserved=8; return; }
     // A later geometry rejection must not send stale tasks from a previous batch
     // through DXR. Only clear the reserved entries, never padded capacity.
     for(uint reservedSlot=0;reservedSlot<count;++reservedSlot) {
@@ -130,7 +122,6 @@ void main(uint3 dispatch : SV_DispatchThreadID) {
         work[uint2(index%workWidth,index/workWidth)]=0;
     }
 #endif
-    ranges[local].reserved=9; // GPU diagnostic validation stage
     for(uint candidate=0;candidate<count;++candidate) {
         uint light=spotCells.Load(int3(cellX+candidate,cellY,0)).x;
         NativeSpotLight source=spotLights[light];
@@ -140,7 +131,7 @@ void main(uint3 dispatch : SV_DispatchThreadID) {
         float radius=source.words[4].z*emitterScale;
         float3 delta=center-world;float distanceSquare=dot(delta,delta);
         if(!all(isfinite(center)) || !isfinite(radius) || radius<0 ||
-           !isfinite(distanceSquare) || distanceSquare<=endpointBias*endpointBias) return;
+           !isfinite(distanceSquare) || distanceSquare<=endpointBias*endpointBias) { ranges[local].reserved=9; return; }
         ShadowTask task=(ShadowTask)0;
         task.receiver=world;task.normal=normal;task.originBias=originBias;task.endpointBias=endpointBias;
         task.lightCenter=center;task.lightId=light;task.receiverId=receiver;task.frameTag=frameTag;
