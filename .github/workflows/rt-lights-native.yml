@@ -16,6 +16,7 @@ on:
       - tools/test-rt-lights-batch.cpp
       - tools/test-rt-lights-arguments.cpp
       - tools/test-rt-lights-commit.cpp
+      - tools/test-rt-lights-resources.cpp
       - .github/workflows/rt-lights-native.yml
 permissions:
   contents: read
@@ -83,6 +84,12 @@ jobs:
           if($LASTEXITCODE -ne 0){throw 'Lighting commit fixture compilation failed'}
           ./Native-Commit-Test.exe
           if($LASTEXITCODE -ne 0){throw "Lighting commit GPU validation failed: exit $LASTEXITCODE"}
+          $resourcesCompile="call `"$vs\VC\Auxiliary\Build\vcvars64.bat`"`r`ncl /nologo /std:c++17 /EHsc /W4 /WX /O2 /MT tools\test-rt-lights-resources.cpp /FeNative-Resources-Test.exe /link d3d12.lib dxgi.lib d3dcompiler.lib`r`nexit /b %errorlevel%"
+          [IO.File]::WriteAllText("$pwd/compile-resources.cmd",$resourcesCompile)
+          cmd /c compile-resources.cmd
+          if($LASTEXITCODE -ne 0){throw 'Native resource fixture compilation failed'}
+          ./Native-Resources-Test.exe
+          if($LASTEXITCODE -ne 0){throw "Native resources GPU validation failed: exit $LASTEXITCODE"}
           ./Native-Batch-Test.exe
           if($LASTEXITCODE -ne 0){throw "Native batch GPU validation failed: exit $LASTEXITCODE"}
           ./Native-Light-Test.exe
