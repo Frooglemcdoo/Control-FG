@@ -491,6 +491,56 @@ static void TestCopyAudit(ID3D12Device* device) {
         if(fenceLog.find(marker)==std::string::npos)throw std::runtime_error("fence diagnostic detail missing");
     std::cout<<"PASS scoped fence capture: repeated values do not import later work, unrelated ambiguity survives, transitive proofs revoked, independent recovery, native CPU signal forwarding, exact diagnostic values\n";
     std::cout<<"PASS cross-queue capture: native future Signal/Wait forwarding, deferred unordered dispatch, exact and greater values, transitive dependencies, concurrent queues, failed signals and scoped fence isolation\n";
+    // Reproduce R125's 6641/6644 cycle with actual native queues. Three
+    // producer signals are queued before arming, but held behind a test gate.
+    // Their CompletedValue is therefore still 6640 when the observer starts.
+    mirror::done.store(true);
+    ComPtr<ID3D12Fence> boundaryA,boundaryB,boundaryGate,boundaryComplete;
+    Check(device->CreateFence(6640,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&boundaryA)));
+    Check(device->CreateFence(6640,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&boundaryB)));
+    Check(device->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&boundaryGate)));
+    Check(device->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&boundaryComplete)));
+    Check(queue->Wait(boundaryGate.Get(),1));
+    Check(queue->Signal(boundaryA.Get(),6641));
+    Check(queue->Signal(boundaryA.Get(),6642));
+    Check(queue->Signal(boundaryA.Get(),6643));
+    mirror::Request();mirror::BeginIfRequested();
+    mirror::Observe(list.Get(),destination.Get(),0,source.Get(),0,512);
+    mirror::RecordDispatch(dispatchList.Get(),audit::targetAddress,384,ids);
+    Check(queue->Wait(boundaryB.Get(),6644));
+    queue->ExecuteCommandLists(1,consumer);
+    Check(queue->Signal(boundaryA.Get(),6644));
+    Check(otherQueue->Signal(boundaryB.Get(),6641));
+    Check(otherQueue->Signal(boundaryB.Get(),6642));
+    Check(otherQueue->Wait(boundaryA.Get(),6641));
+    otherQueue->ExecuteCommandLists(1,producer);
+    Check(otherQueue->Signal(boundaryB.Get(),6643));
+    Check(otherQueue->Signal(boundaryB.Get(),6644));
+    const bool prematureBoundary=mirror::done.load() || mirror::coverage.count;
+    // Always release the test gate before reporting a failure. This is a test
+    // fixture only; the diagnostic never creates or waits on a GPU fence.
+    Check(boundaryGate->Signal(1));
+    Check(queue->Signal(boundaryComplete.Get(),1));
+    HANDLE boundaryEvent=CreateEventW(nullptr,FALSE,FALSE,nullptr);
+    if(!boundaryEvent)throw std::runtime_error("boundary test event failed");
+    Check(boundaryComplete->SetEventOnCompletion(1,boundaryEvent));
+    const auto boundaryWait=WaitForSingleObject(boundaryEvent,30000);CloseHandle(boundaryEvent);
+    if(boundaryWait!=WAIT_OBJECT_0)throw std::runtime_error("native boundary cycle did not progress");
+    if(prematureBoundary)throw std::runtime_error("boundary wait was released before native completion");
+    for(unsigned retry=0;retry<50 && !mirror::done.load();++retry) {
+        Sleep(2); // Test-only: exercise the nonblocking 2 ms polling throttle.
+        mirror::CaptureLease lease;if(!lease)break;
+        AcquireSRWLockExclusive(&mirror::submissionLock);mirror::DrainQueueOrder();ReleaseSRWLockExclusive(&mirror::submissionLock);
+    }
+    if(!mirror::validated.load() || !mirror::coverage.Covers(128,384))throw std::runtime_error("R125 initial signal gap still trapped replay");
+    Check(readback->Map(0,&read,&data));
+    const bool boundaryBytes=std::memcmp(data,expected.data(),expected.size())==0;readback->Unmap(0,&empty);
+    if(!boundaryBytes)throw std::runtime_error("boundary capture changed native GPU copy results");
+    const auto boundaryLogLength=native_lighting::diagnosticLog.Drain(log.data(),log.size());
+    const std::string boundaryLog(log.data(),boundaryLogLength);
+    if(boundaryLog.find("rt_hit_table_start_boundary ")==std::string::npos || boundaryLog.find("wait=6641")==std::string::npos || boundaryLog.find("first_signal=6644")==std::string::npos || boundaryLog.find("imported_dependency=0 coverage_discarded=1")==std::string::npos)
+        throw std::runtime_error("boundary cut evidence missing");
+    std::cout<<"PASS capture start boundary: real pre-arm queued signals, 6641/6644 cycle, no early release, no invented dependency, fresh complete table and unchanged GPU bytes\n";
     mirror::Request();mirror::BeginIfRequested();mirror::copiedBytes=mirror::kCopyBudget;
     mirror::Observe(list.Get(),destination.Get(),0,source.Get(),0,192);
     if(!mirror::done.load())throw std::runtime_error("copy budget not enforced");

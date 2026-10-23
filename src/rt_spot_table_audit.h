@@ -223,6 +223,8 @@ struct QueueState {
 struct FenceState {
     UINT64 identity=0,baseline=0,lastValue=0;unsigned producer=kNoNode;
     bool unsupported=false;
+    UINT64 firstSignalValue=0,lastBoundaryPoll=0;
+    Microsoft::WRL::ComPtr<ID3D12Fence> source;
 };
 struct QueueNode {
     QueueOperation operation=QueueOperation::Execute;
@@ -260,7 +262,7 @@ inline unsigned FindFence(ID3D12Fence* fence) noexcept {
     if(fenceCount==kMaximumFences){Stop("fence_budget");return kNoNode;}
     const auto baseline=fence->GetCompletedValue();
     if(baseline==~UINT64(0)){Stop("device_removed");return kNoNode;}
-    const auto index=fenceCount++;fences[index]={identity,baseline,baseline,kNoNode};return index;
+    const auto index=fenceCount++;fences[index]={identity,baseline,baseline,kNoNode};fences[index].source=fence;return index;
 }
 // Unsupported fence behavior removes only proofs that used that fence. Native
 // calls still run. Same-queue order and independent fence proofs remain usable.
@@ -290,6 +292,26 @@ inline unsigned AppendNode(unsigned queue,QueueOperation operation,UINT64 token=
     auto& q=queues[queue];if(q.tail!=kNoNode)queueNodes[q.tail].next=index;else q.head=index;
     q.tail=index;return index;
 }
+// Arming can miss earlier queued signals that have not yet completed. Never
+// bind an initial wait to a later signal behind that wait (a false model cycle).
+// CompletedValue permits dropping this missing edge, not importing any clock.
+inline bool ReleaseInitialWait(QueueNode& node) noexcept {
+    auto& fence=fences[node.fence];
+    const bool initialGap=fence.producer==kNoNode || node.value<fence.firstSignalValue;
+    if(!initialGap || !fence.source)return false;
+    const auto now=GetTickCount64();
+    if(fence.lastBoundaryPoll && now-fence.lastBoundaryPoll<2)return false;
+    fence.lastBoundaryPoll=now;
+    const auto completed=fence.source->GetCompletedValue();
+    if(completed==~UINT64(0)){Stop("device_removed");return false;}
+    if(completed<node.value)return false;
+    // Drop all partial bytes at the cut. Fresh observed copies must provide
+    // complete coverage before any later dispatch can validate.
+    coverage.Clear();lastWriteClock={};
+    Trace("rt_hit_table_start_boundary queue=%llu fence=%llu wait=%llu completed=%llu baseline=%llu first_signal=%llu imported_dependency=0 coverage_discarded=1",
+        queues[node.queue].identity,fence.identity,node.value,completed,fence.baseline,fence.firstSignalValue);
+    return true;
+}
 inline void DrainQueueOrder() noexcept {
     bool progress=true;
     while(progress && !done.load()) {
@@ -311,10 +333,12 @@ inline void DrainQueueOrder() noexcept {
                     }
                     if(!signal || !signal->processed) {
                         if(!node.pendingReported && waitReports++<32)Trace("rt_hit_table_fence_pending queue=%llu fence=%llu value=%llu baseline=%llu matching_signal=%u signal_processed=%u",q.identity,fence.identity,node.value,fence.baseline,unsigned(signal!=nullptr),unsigned(signal && signal->processed));
-                        node.pendingReported=true;continue;
+                        node.pendingReported=true;
+                        if(!ReleaseInitialWait(node))continue;
+                    } else {
+                        q.clock.Merge(signal->signalClock);q.clock.AddFence(node.fence);
+                        if(waitReports++<16)Trace("rt_hit_table_fence_wait queue=%llu fence=%llu value=%llu signal=%llu dependency_resolved=1",q.identity,fence.identity,node.value,signal->value);
                     }
-                    q.clock.Merge(signal->signalClock);q.clock.AddFence(node.fence);
-                    if(waitReports++<16)Trace("rt_hit_table_fence_wait queue=%llu fence=%llu value=%llu signal=%llu dependency_resolved=1",q.identity,fence.identity,node.value,signal->value);
                 }
             }
             ++q.clock.value[qIndex];
@@ -358,7 +382,10 @@ inline QueueCall BeginQueueCall(ID3D12CommandQueue* queue,QueueOperation operati
                         // Equal values are legal: a wait must use the earliest
                         // sufficient signal, never gain the later signal's work.
                         if(signalReports++<32)Trace("rt_hit_table_fence_signal queue=%llu fence=%llu value=%llu previous_value=%llu baseline=%llu repeated=%u isolated=%u",q.identity,state.identity,value,state.lastValue,state.baseline,unsigned(value==state.lastValue),unsigned(state.unsupported));
-                        if(!state.unsupported){state.producer=index;state.lastValue=value;}
+                        if(!state.unsupported){
+                            if(state.producer==kNoNode)state.firstSignalValue=value;
+                            state.producer=index;state.lastValue=value;
+                        }
                     }
                     if(!done.load())AppendNode(index,operation,0,f,value);
                 }
