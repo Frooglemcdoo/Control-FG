@@ -380,6 +380,9 @@ jobs:
           Copy-Item build/Capture-Preflight.exe "$out/Capture-Preflight.exe"
           Copy-Item tools/Run-Capture-Preflight.cmd "$out/Run-Capture-Preflight.cmd"
           Copy-Item docs/capture-preflight-r130.md "$out/README.md"
+          New-Item -ItemType Directory -Force -Path build/preflight-logs | Out-Null
+          Copy-Item "$env:LOCALAPPDATA/Control-FG/Diagnostics/Capture-R130-*.log" build/preflight-logs
+          Get-Content build/preflight-logs/*.log
           Compress-Archive -Path $out -DestinationPath "$out.zip" -Force
           (Get-FileHash "$out.zip" -Algorithm SHA256).Hash | Set-Content "$out.sha256" -Encoding ASCII
 
@@ -390,7 +393,7 @@ jobs:
           path: |
             Control-FG-Capture-Preflight-R130.zip
             Control-FG-Capture-Preflight-R130.sha256
-            ~/AppData/Local/Control-FG/Diagnostics/Capture-R130-*.log
+            build/preflight-logs/*.log
           retention-days: 7
 
       - name: Validate diagnostic report saving

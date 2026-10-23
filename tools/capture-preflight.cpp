@@ -176,7 +176,7 @@ static int RunParent(bool warp) {
             STARTUPINFOW startup{};startup.cb=sizeof(startup);startup.dwFlags=STARTF_USESTDHANDLES;
             startup.hStdOutput=startup.hStdError=file;startup.hStdInput=GetStdHandle(STD_INPUT_HANDLE);
             PROCESS_INFORMATION process{};
-            std::string label(stage,stage+wcslen(stage));WriteLog(file,"\r\nSTAGE "+label+"\r\n");
+            std::string label;for(const wchar_t* c=stage;*c;++c)label.push_back(static_cast<char>(*c));WriteLog(file,"\r\nSTAGE "+label+"\r\n");
             if(!CreateProcessW(exe,command.data(),nullptr,nullptr,TRUE,CREATE_NO_WINDOW,nullptr,nullptr,&startup,&process))throw std::runtime_error("Cannot launch stage process");
             CloseHandle(process.hThread);
             const auto wait=WaitForSingleObject(process.hProcess,45000);DWORD code=1;
