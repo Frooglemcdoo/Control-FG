@@ -19,11 +19,18 @@ rr_path_exceptions = json.loads((root/'tools/fixtures/r99-baseline-exceptions.js
 gi_filter_exceptions = json.loads((root/'tools/fixtures/r100-baseline-exceptions.json').read_text())
 world_albedo_exceptions = json.loads((root/'tools/fixtures/r102-baseline-exceptions.json').read_text())
 specular_filter_exceptions = json.loads((root/'tools/fixtures/r103-baseline-exceptions.json').read_text())
+clamp_90_exceptions = json.loads((root/'tools/fixtures/r104-baseline-exceptions.json').read_text())
 for name, expected in manifest['files'].items():
     if name == 'src/fg_overlay.h':
         assert not (root / name).exists(), 'Legacy settings popup must remain removed'
         continue # R42 replaces UI-only code with fg_settings.h; renderer hashes remain enforced.
     data = (root / name).read_bytes().replace(b'\r\n', b'\n')
+    if name in clamp_90_exceptions:
+        text=data.decode()
+        for before,after in reversed(clamp_90_exceptions[name]):
+            assert text.count(after)==1, (name, 'R104 clamp strength changed or duplicated')
+            text=text.replace(after,before,1)
+        data=text.encode()
     if name in specular_filter_exceptions:
         text=data.decode()
         for before,after in reversed(specular_filter_exceptions[name]):

@@ -2,7 +2,7 @@
 #include <cstdint>
 #include <atomic>
 namespace control_rr_clamp {
-inline constexpr unsigned kReflectionDetailPercent = 60;
+inline constexpr unsigned kReflectionDetailPercent = 90;
 inline std::atomic<unsigned> effective{100};
 inline std::atomic<bool> applied{true};
 inline constexpr unsigned Requested() noexcept {return kReflectionDetailPercent;}

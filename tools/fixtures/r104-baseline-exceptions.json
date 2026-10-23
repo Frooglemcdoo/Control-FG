@@ -1,0 +1,14 @@
+{
+  "src/rr_clamp_strength_policy.h": [
+    [
+      "#include <cstdint>\n#include <atomic>\nnamespace control_rr_clamp {\ninline constexpr unsigned kReflectionDetailPercent = 60;\ninline std::atomic<unsigned> effective{100};\ninline std::atomic<bool> applied{true};\ninline constexpr unsigned Requested() noexcept {return kReflectionDetailPercent;}\n",
+      "#include <cstdint>\n#include <atomic>\nnamespace control_rr_clamp {\ninline constexpr unsigned kReflectionDetailPercent = 90;\ninline std::atomic<unsigned> effective{100};\ninline std::atomic<bool> applied{true};\ninline constexpr unsigned Requested() noexcept {return kReflectionDetailPercent;}\n"
+    ]
+  ],
+  "src/rr_clamp_variants.in.h": [
+    [
+      "#pragma once\n#include <cstddef>\n#include \"rr_clamp_60.h\"\ninline constexpr std::size_t kRRClampNativeSize=6160;\nstruct RRClampShaderBytes {const void* data;std::size_t size;};\ninline const RRClampShaderBytes kRRClampShaders[]={\n{kRRClampShader60,sizeof(kRRClampShader60)},\n};\n",
+      "#pragma once\n#include <cstddef>\n#include \"rr_clamp_fixed.h\"\n#include \"../src/rr_clamp_strength_policy.h\"\nstatic_assert(kRRClampCompiledPercent==control_rr_clamp::Requested(),\"Compiled clamp does not match runtime policy\");\ninline constexpr std::size_t kRRClampNativeSize=6160;\nstruct RRClampShaderBytes {const void* data;std::size_t size;};\ninline const RRClampShaderBytes kRRClampShaders[]={\n{kRRClampShaderFixed,sizeof(kRRClampShaderFixed)},\n};\n"
+    ]
+  ]
+}

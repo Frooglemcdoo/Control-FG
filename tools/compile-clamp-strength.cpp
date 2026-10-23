@@ -7,6 +7,7 @@
 #include <iterator>
 #include <cstdint>
 #include <cstring>
+#include "../src/rr_clamp_strength_policy.h"
 
 static uint32_t CRC32(const void* data, size_t size) {
     uint32_t crc=0xFFFFFFFFu;
@@ -35,7 +36,10 @@ static bool BasicContract(ID3D12ShaderReflection* r,bool replacement) {
     return ok;
 }
 int main() {
-    const char* exponent="0.60";
+    // Compile the same value the runtime requests; one source of truth.
+    constexpr auto percent=control_rr_clamp::Requested();
+    static_assert(percent>0&&percent<=100,"Clamp percentage outside supported range");
+    char exponent[16]{};sprintf_s(exponent,"%u.%02u",percent/100,percent%100);
     const D3D_SHADER_MACRO macros[]={{"FIREFLY_CLAMP",exponent},{"TEMPORAL_WEIGHT","0.0"},{nullptr,nullptr}};
 
     std::ifstream in("research/native-integration-audit/shaders/deferredlight_filtering_specular-000.dxbc",std::ios::binary);
@@ -61,15 +65,15 @@ int main() {
       FAILED(rr->GetResourceBindingDescByName("velocity_tex",&dead))&&FAILED(rr->GetResourceBindingDescByName("linear_clamp",&dead));
     rr->Release();
     if(!temporalRemoved){code->Release();std::fputs("FAIL: temporal-history dependencies survived replacement optimization\n",stderr);return 5;}
-    char output[128]{};sprintf_s(output,"build/rr_clamp_60.h");
+    char output[128]{};sprintf_s(output,"build/rr_clamp_fixed.h");
     FILE* file=nullptr;
     if(fopen_s(&file,output,"wb")||!file){code->Release();return 6;}
-    std::fprintf(file,"#pragma once\nstatic const unsigned char kRRClampShader%s[]={\n","60");
+    std::fprintf(file,"#pragma once\nstatic constexpr unsigned kRRClampCompiledPercent=%u;\nstatic const unsigned char kRRClampShaderFixed[]={\n",percent);
     const auto* bytes=static_cast<const unsigned char*>(code->GetBufferPointer());
     for(size_t i=0;i<code->GetBufferSize();++i)std::fprintf(file,"0x%02x,%s",bytes[i],i%16==15?"\n":"");
-    std::fprintf(file,"\n};\nstatic constexpr unsigned int kRRClampCRC%s=0x%08Xu;\n","60",CRC32(bytes,code->GetBufferSize()));
+    std::fprintf(file,"\n};\nstatic constexpr unsigned int kRRClampCRCFixed=0x%08Xu;\n",CRC32(bytes,code->GetBufferSize()));
     const bool good=!std::ferror(file)&&std::fclose(file)==0;code->Release();
     if(!good)return 7;
-    std::puts("PASS: Control 0x600347E7 ABI verified; CS3 fixed 60% current-frame clamp compiled cs_5_1; t3/s11(space1)/u0/b0 and 8x8x1 verified; temporal history compiled out");
+    std::printf("PASS: Control 0x600347E7 ABI verified; CS3 fixed %u%% current-frame clamp compiled cs_5_1; t3/s11(space1)/u0/b0 and 8x8x1 verified; temporal history compiled out\n",percent);
     return 0;
 }
