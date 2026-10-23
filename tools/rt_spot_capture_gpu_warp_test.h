@@ -119,3 +119,27 @@ static void TestHitCaptureExportRetry() {
     drain();queue.TakeDropped();capture::exportCursor=capture::exportStage=0;capture::phase.store(capture::Phase::Idle);
     std::cout<<"PASS capture log retry: full queue preserves header, record cursor and final completion marker without render-thread waits\n";
 }
+
+// Exercise the real release entry points, including repeated installation and a
+// forged ready flag. Neither loading nor BOTH may arm the quarantined capture.
+static void TestDisabledGpuCapture(ID3D12Device* device) {
+    namespace capture=native_lighting::rt_spot_capture_runtime;
+    static_assert(!rt_spot_capture::GpuCaptureEnabled);
+    auto** table=*reinterpret_cast<void***>(device);
+    constexpr UINT slots[]={17,18,19,23,24};
+    void* before[5]{};for(UINT i=0;i<5;++i)before[i]=table[slots[i]];
+    capture::Install(device);capture::Install(device);
+    if(capture::ready.load() || capture::resources.device || capture::resources.inputs ||
+       capture::resources.staging || capture::resources.fence || capture::originalCopy ||
+       capture::originalRanges || capture::originalCbv || capture::originalSrv || capture::originalUav)
+        throw std::runtime_error("disabled capture initialized GPU resources or hooks");
+    for(UINT i=0;i<5;++i)if(before[i]!=table[slots[i]])throw std::runtime_error("disabled capture patched descriptor vtable");
+    capture::ready.store(true);capture::Request();capture::BeginScope();
+    if(capture::phase.load()!=capture::Phase::Idle || capture::inScope)
+        throw std::runtime_error("BOTH armed disabled capture");
+    capture::ready.store(false);
+    if(native_lighting::rt_spot_capture_gpu::PreparePipeline(nullptr,nullptr,nullptr)!=E_NOTIMPL)
+        throw std::runtime_error("disabled capture attempted pipeline preparation");
+    capture::Record(nullptr,nullptr,nullptr);
+    std::cout<<"PASS R129 capture isolation: no GPU allocations, descriptor mutations, startup compilation or BOTH capture activation\n";
+}

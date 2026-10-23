@@ -9,6 +9,7 @@
 #include "rt_spot_table_coverage.h"
 #include "rt_spot_capture_table.h"
 #include "rt_spot_capture_layout.h"
+#include "rt_spot_capture_policy.h"
 #include "rt_lights/descriptor_overlap.h"
 #include <algorithm>
 #include "spot_shadow_resolution_policy.h"

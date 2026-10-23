@@ -660,7 +660,9 @@ int main() try {
     TestHitCaptureExportRetry();
     TestHitSetupAudit(device.Get());
     TestCopyAudit(device.Get());
+    TestDisabledGpuCapture(device.Get());
     InstallLiveDiagnostic(device.Get());
+    TestDisabledGpuCapture(device.Get());
     D3D12_ROOT_PARAMETER parameter{}; parameter.ParameterType=D3D12_ROOT_PARAMETER_TYPE_UAV; parameter.ShaderVisibility=D3D12_SHADER_VISIBILITY_ALL;
     D3D12_ROOT_SIGNATURE_DESC rootDesc{};rootDesc.NumParameters=1;rootDesc.pParameters=&parameter;
     ComPtr<ID3DBlob> serialized,errors;Check(D3D12SerializeRootSignature(&rootDesc,D3D_ROOT_SIGNATURE_VERSION_1,&serialized,&errors));

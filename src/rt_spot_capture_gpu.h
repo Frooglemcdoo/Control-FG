@@ -65,6 +65,7 @@ inline void UavBarrier(ID3D12GraphicsCommandList* list) noexcept {
     D3D12_RESOURCE_BARRIER barrier{};barrier.Type=D3D12_RESOURCE_BARRIER_TYPE_UAV;list->ResourceBarrier(1,&barrier);
 }
 inline HRESULT PreparePipeline(ID3D12Device5* device,ID3D12StateObject* owner,ID3D12RootSignature* root) noexcept {
+    if constexpr (!rt_spot_capture::GpuCaptureEnabled) return E_NOTIMPL;
     D3D12_EXPORT_DESC entry{L"captureNativeInputs",nullptr,D3D12_EXPORT_FLAG_NONE};
     D3D12_DXIL_LIBRARY_DESC library{{kSpotCaptureInputsShader,sizeof(kSpotCaptureInputsShader)},1,&entry};
     D3D12_GLOBAL_ROOT_SIGNATURE global{root};

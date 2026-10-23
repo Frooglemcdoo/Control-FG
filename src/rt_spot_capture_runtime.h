@@ -86,10 +86,15 @@ inline void Fail(const char* reason) noexcept {
     Trace("rt_hit_gpu_failed reason=%s resources_retained=1",reason);
 }
 inline void Request() noexcept {
+    if constexpr (!rt_spot_capture::GpuCaptureEnabled) {
+        Trace("rt_hit_gpu_disabled reason=R128_load_crash gameplay_modes_available=1");
+        return;
+    }
     Phase expected=Phase::Idle;
     if(ready.load() && phase.compare_exchange_strong(expected,Phase::Armed))Trace("rt_hit_gpu_requested grid=64 one_capture_per_session=1");
 }
 inline void BeginScope() noexcept {
+    if constexpr (!rt_spot_capture::GpuCaptureEnabled) return;
     if(inScope || !ready.load())return;
     Phase expected=Phase::Armed;if(!phase.compare_exchange_strong(expected,Phase::Recording))return;
     inScope=true;mirrored={};observed=0;
@@ -167,6 +172,7 @@ template<class T> inline bool Attached(ID3D12Object* owner,REFGUID key,ComPtr<T>
     UINT size=sizeof(T*);return SUCCEEDED(owner->GetPrivateData(key,&size,object.ReleaseAndGetAddressOf())) && object;
 }
 inline void Record(ID3D12GraphicsCommandList4* list,ID3D12StateObject* owner,const D3D12_DISPATCH_RAYS_DESC* desc) noexcept {
+    if constexpr (!rt_spot_capture::GpuCaptureEnabled) return;
     if(!inScope || phase.load()!=Phase::Recording || !desc)return;
     if(desc->Depth!=1 || !desc->Width || desc->Width>16384 || !desc->Height || desc->Height>16384 ||
         !rt_spot_capture::NativeHitTableLayout(desc->HitGroupTable.StartAddress,desc->HitGroupTable.SizeInBytes,desc->HitGroupTable.StrideInBytes))return;
@@ -342,6 +348,12 @@ inline void Poll() noexcept {
     if(exportCursor==gpu::kRayCount && Trace("rt_hit_gpu_export_complete records_examined=4096 format=CaptureResult80 frame_tag=%u",frameTag))exportStage=3;
 }
 inline void Install(ID3D12Device* device) noexcept {
+    if constexpr (!rt_spot_capture::GpuCaptureEnabled) {
+        static std::atomic<bool> reported{false};
+        if (!reported.exchange(true))
+            Trace("rt_hit_gpu_setup ready=0 disabled=R128_load_crash descriptor_hooks=0 gpu_allocations=0");
+        return;
+    }
     static bool attempted=false;if(attempted)return;attempted=true;
     const HRESULT hr=resources.Initialize(device);
     if(FAILED(hr)){Trace("rt_hit_gpu_setup ready=0 hr=0x%08lX",static_cast<unsigned long>(hr));return;}
