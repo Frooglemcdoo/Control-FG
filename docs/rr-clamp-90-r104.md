@@ -10,4 +10,4 @@ Close the game to install this ZIP beside Control_DX12.exe, retaining existing N
 
 The main game log reports requested=90 and effective=90 when the replacement shader is applied. An effective value of 100 means native fallback, not successful application of the requested 90% variant. The generated header is retained in the build artifact for verification that its shader bytes are present in the delivered DLL.
 
-All fourteen spotlight shader assets and the glass shader assets remain unchanged. Visual improvement is unconfirmed until tested in game.
+All fourteen spotlight shader assets and the glass shader assets remain unchanged. Packaging restores the verified R97 glass raygen bytes from a hash-checked fixture so runner DXC updates cannot introduce an unrelated glass change. Visual improvement is unconfirmed until tested in game.

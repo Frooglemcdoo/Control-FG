@@ -374,6 +374,9 @@ jobs:
           node tools/test-native-menu.js --config build/native-menu-config.json
           if errorlevel 1 exit /b 1
 
+      - name: Preserve verified glass raygen across DXC updates
+        run: python tools/prepare-canonical-glass.py
+
       - name: Package live lighting diagnostic R104
         shell: powershell
         run: |
