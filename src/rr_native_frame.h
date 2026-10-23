@@ -54,6 +54,7 @@ static RRAlbedoCallPatch rrNativeGISamplePatch{};
 static control_rr::GISampleFrameSelection rrNativeGISampleSelection{};
 static RRSpecularSamplePatch rrNativeSpecularSamplePatch{};
 static unsigned rrNativeSpecularSampleRequest=0;
+static bool rrNativeSpecularSamplesAvailable=false;
 static RRAlbedoCallPatch rrNativeContactShadowFilterPatch{};
 static RRAlbedoCallPatch rrNativeBroadDiffuseFilterPatchA{},rrNativeBroadDiffuseFilterPatchB{};
 static RRAlbedoCallPatch rrNativeGIFilterPatch{};
@@ -420,7 +421,7 @@ static bool RRNativeHookReset(unsigned outputWidth,unsigned outputHeight,unsigne
  const bool selected=rrNativeFrame.Begin({frame,outputWidth,outputHeight,width,height,effects},runtimeRequested,ready);
  // Snapshot diagnostic selection before either producer allocates hit arrays.
  const auto lightingMode=native_lighting::LiveSelection::GetMode(native_lighting::selection.Read());
- const unsigned specularRequest=selected?native_lighting::SpecularSampleRequest(lightingMode):0;
+ const unsigned specularRequest=selected&&rrNativeSpecularSamplesAvailable?native_lighting::SpecularSampleRequest(lightingMode):0;
  if(specularRequest!=rrNativeSpecularSampleRequest){
   rrNativeSpecularSampleRequest=specularRequest;
   rrNativeFrame.ResetForSignalChange();
@@ -845,8 +846,11 @@ static bool RRNativeInstallFrame(HMODULE renderer,HMODULE d3d) noexcept {
  // need the native RR semantic: reflection spatial-pass selection, diffuse-GI
  // radius selection and diffuse-GI filter bypass. They now consult the current
  // mod-owned frame selection instead of Control's registered option object.
- if(!rrNativeSpecularSamplePatch.Prepare(base+0x128ff4,base+0x9137e0)||
-  !RRAlbedoPrepareCallPatch(base+0x12ba17,reinterpret_cast<void*>(rrNativeGISampleOriginal),reinterpret_cast<void*>(&RRNativeGISampleCount),&rrNativeGISamplePatch)||
+ // Optional diagnostic: preparation failure must never disable baseline RR.
+ const bool specularPrepared=rrNativeSpecularSamplePatch.Prepare(base+0x128ff4,base+0x9137e0);
+ native_lighting::Trace("specular_sample_hook stage=prepare ready=%u reason=%s baseline_rr_independent=1",
+  unsigned(specularPrepared),rrNativeSpecularSamplePatch.failure);
+ if(!RRAlbedoPrepareCallPatch(base+0x12ba17,reinterpret_cast<void*>(rrNativeGISampleOriginal),reinterpret_cast<void*>(&RRNativeGISampleCount),&rrNativeGISamplePatch)||
   !rrNativeResetPatch.Prepare(base+0x11b697,reinterpret_cast<void**>(base+0x5df758),reinterpret_cast<void*>(rrNativeResetOriginal),reinterpret_cast<void*>(&RRNativeHookReset))||
   !rrNativeDispatchPatch.Prepare(base+0x16786,reinterpret_cast<void**>(base+0x5dfcc0),reinterpret_cast<void*>(rrNativeDispatchOriginal),reinterpret_cast<void*>(&RRNativeHookDispatch))||
   !RRAlbedoPrepareCallPatch(base+0x16744,reinterpret_cast<void*>(rrNativeTemporalBindOriginal),reinterpret_cast<void*>(&RRNativeHookTemporalBind),&rrNativeTemporalBindPatch)||
@@ -887,7 +891,15 @@ static bool RRNativeInstallFrame(HMODULE renderer,HMODULE d3d) noexcept {
          broadB=RRAlbedoExchangeCall(&rrNativeBroadDiffuseFilterPatchB,true);
          if(broadB&&rrNativeBroadDiffuseFilterPatchB.writeHealthy){
           jitter=rrNativeJitterOptionPatch.Exchange(true);
-        if(jitter&&rrNativeJitterOptionPatch.healthy&&(giSamples=RRAlbedoExchangeCall(&rrNativeGISamplePatch,true))&&rrNativeGISamplePatch.writeHealthy&&rrNativeSpecularSamplePatch.Exchange(true)&&rrNativeSpecularSamplePatch.healthy&&rrNativeResetPatch.Exchange(true)&&rrNativeResetPatch.healthy){
+        if(jitter&&rrNativeJitterOptionPatch.healthy&&(giSamples=RRAlbedoExchangeCall(&rrNativeGISamplePatch,true))&&rrNativeGISamplePatch.writeHealthy&&rrNativeResetPatch.Exchange(true)&&rrNativeResetPatch.healthy){
+         if(specularPrepared){
+          const bool installed=rrNativeSpecularSamplePatch.Exchange(true);
+          rrNativeSpecularSamplesAvailable=installed&&rrNativeSpecularSamplePatch.healthy;
+          if(!rrNativeSpecularSamplesAvailable&&rrNativeSpecularSamplePatch.changed)
+           rrNativeSpecularSamplePatch.Exchange(false);
+         }
+         native_lighting::specularSamplesReady.store(rrNativeSpecularSamplesAvailable,std::memory_order_release);
+         native_lighting::Trace("specular_sample_hook stage=install ready=%u baseline_rr_independent=1",unsigned(rrNativeSpecularSamplesAvailable));
          rrNativeFrameEnabled=true;
          control_rr_diagnostic::Record(control_rr_diagnostic::Event::HooksInstalled);
          Log("RR_NATIVE_OPTION_ISOLATION ready=1 registered_option=forced_off_never_true reflection=mod_state gi_radius=mod_state gi_bypass=mod_state jitter=private_mirror partial_mode=mod_owned_option_reads_no_feature13");
@@ -906,6 +918,7 @@ static bool RRNativeInstallFrame(HMODULE renderer,HMODULE d3d) noexcept {
 }
 }
  rrNativeFrameEnabled=false;rrNativePartialFrame.store(false,std::memory_order_release);rrNativeJitterOptionPatch.Set(false);RRNativeKeepRegisteredOptionOff();
+ rrNativeSpecularSamplesAvailable=false;native_lighting::specularSamplesReady.store(false,std::memory_order_release);
  rrNativeSpecularSamplePatch.BeginFrame(0);
  if(rrNativeSpecularSamplePatch.changed)rrNativeSpecularSamplePatch.Exchange(false);
  if(rrNativeResetPatch.changed)rrNativeResetPatch.Exchange(false);

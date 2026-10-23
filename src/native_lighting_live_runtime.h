@@ -130,8 +130,7 @@ inline void ReportBoundIdentity(ID3D12PipelineState* pso) noexcept {
     ReleaseSRWLockExclusive(&identityLock);
 }
 inline bool SelectMode(Mode mode) noexcept {
-    const unsigned required = RequiredVariant(mode);
-    if (required && !(readyMask.load() & required)) { Trace("selection_rejected mode=%s reason=variant_not_ready", ModeName(mode)); return false; }
+    if (!ModeAvailable(mode,readyMask.load())) { Trace("selection_rejected mode=%s reason=shader_or_sample_hook_not_ready", ModeName(mode)); return false; }
     ReportRRPaths("before_selection");
     const auto state = selection.Select(mode);
     Trace("selection seq=%llu mode=%s ready_mask=%u", LiveSelection::Sequence(state), ModeName(mode), readyMask.load());

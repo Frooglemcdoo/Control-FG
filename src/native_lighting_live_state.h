@@ -21,6 +21,7 @@ inline unsigned SpecularSampleRequest(Mode mode) noexcept {
     default:return 0;
     }
 }
+inline std::atomic<bool> specularSamplesReady{false};
 inline bool IsSpecularSampleMode(Mode mode) noexcept { return SpecularSampleRequest(mode)!=0; }
 // A per-frame diagnostic override; never writes the user's saved GI setting.
 inline unsigned GiSampleRequest(Mode mode,unsigned saved) noexcept {
@@ -113,6 +114,11 @@ inline unsigned RequiredVariant(Mode mode) noexcept {
 }
 inline unsigned RequiredBinding(Mode mode) noexcept {
     return mode == Mode::Native ? kAllBits : mode == Mode::DisableBakedGi ? kGiBit : kDirectBit;
+}
+inline bool ModeAvailable(Mode mode,unsigned ready) noexcept {
+    const unsigned required=RequiredVariant(mode);
+    return (ready&required)==required &&
+        (!IsSpecularSampleMode(mode)||specularSamplesReady.load(std::memory_order_acquire));
 }
 inline const char* ModeName(Mode mode) noexcept {
     switch (mode) {

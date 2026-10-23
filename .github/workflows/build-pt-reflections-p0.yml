@@ -381,11 +381,11 @@ jobs:
       - name: Preserve verified glass raygen across DXC updates
         run: python tools/prepare-canonical-glass.py
 
-      - name: Package live lighting diagnostic R109
+      - name: Package live lighting diagnostic R110
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-Native-Lighting-Live-R109'
+          $out='Control-FG-Native-Lighting-Live-R110'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
           Copy-Item build/rt_spot_selected_off.dxbc,build/rt_spot_selection.dxbc,build/rt_spot_visibility.dxbc,build/rt_spot_light_ids.dxbc,build/rt_spot_raw_history.dxbc,build/rt_spot_raw_spatial0.dxbc,build/rt_spot_raw_spatial1.dxbc,build/rt_spot_full.dxil,build/rt_spot_r94.dxil,build/rt_spot_light.dxbc,build/rt_spot_reset.dxbc,build/rt_spot_history.dxbc,build/rt_spot_spatial0.dxbc,build/rt_spot_spatial1.dxbc $out
@@ -403,17 +403,17 @@ jobs:
           Copy-Item Collect-RR-Blinds-Capture.ps1 "$out/Collect-RR-Blinds-Capture.ps1"
           Copy-Item Collect-ControlFG-Compact-Logs.cmd "$out/Collect-ControlFG-Compact-Logs.cmd"
           Copy-Item Collect-ControlFG-Compact-Logs.ps1 "$out/Collect-ControlFG-Compact-Logs.ps1"
-          Copy-Item docs/rr-specular-samples-r109.md "$out/DIAGNOSTIC-NOTES.md"
+          Copy-Item docs/rr-specular-startup-r110.md "$out/DIAGNOSTIC-NOTES.md"
           @'
-          CONTROL-FG R109 - Isolated specular sampling tests
+          CONTROL-FG R110 - Isolated specular sampling tests
           Close Control to install. Copy contents beside Control_DX12.exe.
           Preserve existing NVIDIA runtimes and the ControlFGStreamline folder.
           Use Borderless. Load the affected wall or painting with RR ON, FG and glass enhancements OFF.
           Enable native RT Contact Shadows. Keep the same camera position for comparison.
           F10: compare SPEC 1, SPEC 2, SPEC 4, SPEC 8, SPEC 12 and SPEC 16 with RR ON.
           Set game Ray Tracing Samples Count to 1. Keep the saved GI setting fixed. Let each settle 10 seconds.
-          SAVE LOG once after testing. Send the Lighting-R109 log and screenshots.
-          No restart between modes. SAVE LOG writes one Lighting-R109 session log.
+          SAVE LOG once after testing. Send the Lighting-R110 log and screenshots.
+          No restart between modes. SAVE LOG writes one Lighting-R110 session log.
           This replaces one selected spotlight per pixel, not every shadow in the scene.
           An unavailable button means the required native shader pair was not prepared.
           BASELINE removes the specular override. SPEC buttons leave the saved GI count unchanged.
@@ -427,10 +427,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-Native-Lighting-Live-R109
+          name: Control-FG-Native-Lighting-Live-R110
           path: |
-            Control-FG-Native-Lighting-Live-R109.zip
-            Control-FG-Native-Lighting-Live-R109.sha256
+            Control-FG-Native-Lighting-Live-R110.zip
+            Control-FG-Native-Lighting-Live-R110.sha256
             build/rt_spot_shadow_prototype.dxil
             build/rr_clamp_fixed.h
             build/exports.txt

@@ -9,20 +9,23 @@ struct RRSpecularSamplePatch {
     control_rr::SpecularSampleObservation* observation=nullptr;
     void* relay=nullptr;
     bool changed=false,healthy=false;
+    const char* failure="not_prepared";
     bool Prepare(unsigned char* address,unsigned char* nativeOption) {
-        if(!address||!nativeOption)return false;
+        failure="invalid_address";if(!address||!nativeOption)return false;
         site=address;std::memcpy(original.data(),site,original.size());
         relay=AllocateExecutableRelayNear(site);
         observation=static_cast<control_rr::SpecularSampleObservation*>(AllocateExecutableRelayNear(site));
-        if(!relay||!observation)return false;
+        failure="allocation";if(!relay||!observation)return false;
         *observation={};control_rr::SpecularSampleCode code;
+        failure="instruction_or_jump_range";
         if(!control_rr::BuildSpecularSampleCode(original.data(),reinterpret_cast<std::uintptr_t>(site),
             reinterpret_cast<std::uintptr_t>(nativeOption),reinterpret_cast<std::uintptr_t>(relay),
             reinterpret_cast<std::uintptr_t>(observation),code))return false;
         replacement=code.replacement;std::memcpy(relay,code.relay.data(),code.relay.size());
         DWORD previous=0;
-        return VirtualProtect(relay,4096,PAGE_EXECUTE_READ,&previous)&&
-            FlushInstructionCache(GetCurrentProcess(),relay,code.relay.size());
+        if(!VirtualProtect(relay,4096,PAGE_EXECUTE_READ,&previous)){failure="relay_protection";return false;}
+        if(!FlushInstructionCache(GetCurrentProcess(),relay,code.relay.size())){failure="relay_flush";return false;}
+        failure="none";return true;
     }
     void BeginFrame(unsigned request) noexcept {
         if(!observation)return;
