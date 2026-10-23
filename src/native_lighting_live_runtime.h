@@ -287,10 +287,10 @@ inline bool PatchSlot(void** slot, void* expected, void* hook) noexcept {
 }
 #include "spot_shadow_resolution_runtime.h"
 #include "rt_spot_capture_audit.h"
+#include "rt_shadow_capture.h"
 #include "rt_spot_hit_pipeline.h"
 #include "rt_spot_table_audit.h"
 #include "rt_spot_copy_audit.h"
-#include "rt_shadow_capture.h"
 #include "rt_spot_culling_runtime.h"
 #include "rt_spot_runtime.h"
 inline void InstallList(ID3D12GraphicsCommandList* list) noexcept {
