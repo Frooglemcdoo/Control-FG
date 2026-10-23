@@ -283,11 +283,13 @@ inline bool PatchSlot(void** slot, void* expected, void* hook) noexcept {
 }
 #include "spot_shadow_resolution_runtime.h"
 #include "rt_spot_capture_audit.h"
+#include "rt_spot_copy_audit.h"
 #include "rt_shadow_capture.h"
 #include "rt_spot_culling_runtime.h"
 #include "rt_spot_runtime.h"
 inline void InstallList(ID3D12GraphicsCommandList* list) noexcept {
     rt_shadow_capture::InstallList(list);
+    rt_spot_copy_audit::InstallList(list);
     void** table = *reinterpret_cast<void***>(list);
     AcquireSRWLockExclusive(&hookLock);
     ListHooks* available = nullptr;

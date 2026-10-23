@@ -21,7 +21,7 @@ inline UINT64 targetAddress = 0, targetBytes = 0;
 inline std::atomic<bool> targetActive{false};
 inline std::atomic<ULONGLONG> nextAttemptMs{0};
 inline std::atomic<unsigned> capacityRejects{0}, budgetRejects{0}, contentionRejects{0};
-inline std::atomic<unsigned> addressQueries{0}, targetedMatches{0};
+inline std::atomic<unsigned> addressQueries{0}, targetedMatches{0}, heapReports{0}, allocations{0};
 using GetAddress = D3D12_GPU_VIRTUAL_ADDRESS (STDMETHODCALLTYPE*)(ID3D12Resource*);
 inline GetAddress originalGetAddress = nullptr;
 inline SRWLOCK addressInstallLock = SRWLOCK_INIT;
@@ -39,15 +39,16 @@ inline CreateCommitted originalCommitted = nullptr;
 inline CreatePlaced originalPlaced = nullptr;
 
 inline void ObserveOwner(IUnknown* object, D3D12_RESOURCE_STATES initialState) noexcept {
-    if (!object || captured.load(std::memory_order_relaxed) || attempts.load(std::memory_order_relaxed) >= kMaximumAttempts || initialState != D3D12_RESOURCE_STATE_GENERIC_READ) return;
+    if (!object || captured.load(std::memory_order_relaxed) || attempts.load(std::memory_order_relaxed) >= kMaximumAttempts) return;
     ComPtr<ID3D12Resource> resource;
     if (FAILED(object->QueryInterface(IID_PPV_ARGS(&resource)))) return;
     const auto desc = resource->GetDesc();
     if (desc.Dimension != D3D12_RESOURCE_DIMENSION_BUFFER || desc.Width < 65536 || desc.Width > kRetainedUploadBudget) return;
-    D3D12_HEAP_PROPERTIES heap{}; D3D12_HEAP_FLAGS flags{};
-    if (FAILED(resource->GetHeapProperties(&heap,&flags)) || heap.Type != D3D12_HEAP_TYPE_UPLOAD) return;
+    ++allocations;
     InstallAddressObserver(resource.Get());
     const auto address = resource->GetGPUVirtualAddress();
+    D3D12_HEAP_PROPERTIES heap{}; D3D12_HEAP_FLAGS flags{};
+    if (FAILED(resource->GetHeapProperties(&heap,&flags)) || heap.Type != D3D12_HEAP_TYPE_UPLOAD || initialState != D3D12_RESOURCE_STATE_GENERIC_READ) return;
     if (!rt_spot_capture::ContainsGpuRange(address,desc.Width,address,desc.Width)) return;
     if (!TryAcquireSRWLockExclusive(&ownerLock)) { ++rejectedOwners; ++contentionRejects; return; }
     if (captured.load(std::memory_order_relaxed) || attempts.load(std::memory_order_relaxed) >= kMaximumAttempts) { ReleaseSRWLockExclusive(&ownerLock); return; }
@@ -81,7 +82,10 @@ inline void ObserveAddress(ID3D12Resource* resource, UINT64 address) noexcept {
     if (desc.Dimension != D3D12_RESOURCE_DIMENSION_BUFFER || desc.Width > kRetainedUploadBudget ||
         !rt_spot_capture::ContainsGpuRange(address,desc.Width,wantedAddress,wantedBytes)) return;
     D3D12_HEAP_PROPERTIES heap{}; D3D12_HEAP_FLAGS flags{};
-    if (FAILED(resource->GetHeapProperties(&heap,&flags)) || heap.Type != D3D12_HEAP_TYPE_UPLOAD) return;
+    const HRESULT heapHr = resource->GetHeapProperties(&heap,&flags);
+    if (heapReports.fetch_add(1) < 4)
+        Trace("rt_hit_setup_address_owner base=%llu bytes=%llu heap=%u heap_hr=0x%08lX target=%llu table_bytes=%llu",address,desc.Width,unsigned(heap.Type),static_cast<unsigned long>(heapHr),wantedAddress,wantedBytes);
+    if (FAILED(heapHr) || heap.Type != D3D12_HEAP_TYPE_UPLOAD) return;
     if (!TryAcquireSRWLockExclusive(&ownerLock)) { ++contentionRejects; return; }
     if (!targetedOwner.resource && !captured.load(std::memory_order_relaxed) &&
         attempts.load(std::memory_order_relaxed) < kMaximumAttempts &&

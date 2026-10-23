@@ -259,6 +259,55 @@ static void TestHitSetupAudit(ID3D12Device* device) {
     for(const auto& owner:audit::owners)if(owner.resource)throw std::runtime_error("upload owner retained after completion");
     std::cout<<"PASS setup audit: saturated-cache address recovery, retry throttling, bounded upload sample, unchanged records, no GPU dispatch, owner release\n";
 }
+static void TestCopyAudit(ID3D12Device* device) {
+    namespace audit=native_lighting::rt_spot_capture_audit;
+    namespace copies=native_lighting::rt_spot_copy_audit;
+    audit::captured.store(false);audit::attempts.store(0);audit::nextAttemptMs.store(0);
+    D3D12_RESOURCE_DESC desc{};desc.Dimension=D3D12_RESOURCE_DIMENSION_BUFFER;
+    desc.Width=65536;desc.Height=desc.DepthOrArraySize=desc.MipLevels=1;
+    desc.SampleDesc.Count=1;desc.Layout=D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+    ComPtr<ID3D12Resource> source,destination,readback;
+    D3D12_HEAP_PROPERTIES heap{};heap.Type=D3D12_HEAP_TYPE_UPLOAD;
+    Check(device->CreateCommittedResource(&heap,D3D12_HEAP_FLAG_NONE,&desc,D3D12_RESOURCE_STATE_GENERIC_READ,nullptr,IID_PPV_ARGS(&source)));
+    heap.Type=D3D12_HEAP_TYPE_DEFAULT;
+    Check(device->CreateCommittedResource(&heap,D3D12_HEAP_FLAG_NONE,&desc,D3D12_RESOURCE_STATE_COPY_DEST,nullptr,IID_PPV_ARGS(&destination)));
+    heap.Type=D3D12_HEAP_TYPE_READBACK;
+    Check(device->CreateCommittedResource(&heap,D3D12_HEAP_FLAG_NONE,&desc,D3D12_RESOURCE_STATE_COPY_DEST,nullptr,IID_PPV_ARGS(&readback)));
+    std::vector<unsigned char> expected(65536);for(size_t i=0;i<expected.size();++i)expected[i]=static_cast<unsigned char>(i*13);
+    D3D12_RANGE empty{0,0};void* data=nullptr;Check(source->Map(0,&empty,&data));
+    std::memcpy(data,expected.data(),expected.size());D3D12_RANGE written{0,65536};source->Unmap(0,&written);
+    audit::targetAddress=destination->GetGPUVirtualAddress()+128;audit::targetBytes=384;audit::targetActive.store(true);
+    copies::Observe(destination.Get(),~UINT64(0),source.Get(),0,384);
+    if(copies::matches.load())throw std::runtime_error("overflowing copy was sampled");
+    copies::Observe(destination.Get(),64,source.Get(),32,192);
+    if(copies::samples.load()!=1)throw std::runtime_error("partial copy evidence missing");
+    ComPtr<ID3D12CommandAllocator> allocator;Check(device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT,IID_PPV_ARGS(&allocator)));
+    ComPtr<ID3D12GraphicsCommandList> list;Check(device->CreateCommandList(0,D3D12_COMMAND_LIST_TYPE_DIRECT,allocator.Get(),nullptr,IID_PPV_ARGS(&list)));
+    copies::InstallList(list.Get());
+    list->CopyBufferRegion(destination.Get(),64,source.Get(),32,512);
+    list->CopyResource(destination.Get(),source.Get());
+    if(copies::samples.load()!=3)throw std::runtime_error("copy hooks did not sample both native copy forms");
+    D3D12_RESOURCE_BARRIER barrier{};barrier.Type=D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    barrier.Transition={destination.Get(),D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,D3D12_RESOURCE_STATE_COPY_DEST,D3D12_RESOURCE_STATE_COPY_SOURCE};
+    list->ResourceBarrier(1,&barrier);list->CopyResource(readback.Get(),destination.Get());Check(list->Close());
+    D3D12_COMMAND_QUEUE_DESC queueDesc{};ComPtr<ID3D12CommandQueue> queue;Check(device->CreateCommandQueue(&queueDesc,IID_PPV_ARGS(&queue)));
+    ComPtr<ID3D12Fence> fence;Check(device->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&fence)));
+    HANDLE event=CreateEventW(nullptr,FALSE,FALSE,nullptr);if(!event)throw std::runtime_error("copy test event creation failed");
+    ID3D12CommandList* lists[]={list.Get()};queue->ExecuteCommandLists(1,lists);Check(queue->Signal(fence.Get(),1));Check(fence->SetEventOnCompletion(1,event));
+    const auto wait=WaitForSingleObject(event,30000);CloseHandle(event);if(wait!=WAIT_OBJECT_0)throw std::runtime_error("copy test GPU timeout");
+    D3D12_RANGE read{0,65536};Check(readback->Map(0,&read,&data));
+    const bool unchanged=std::memcmp(data,expected.data(),expected.size())==0;readback->Unmap(0,&empty);
+    if(!unchanged)throw std::runtime_error("copy observer changed GPU destination bytes");
+    Check(source->Map(0,&read,&data));const bool sourceUnchanged=std::memcmp(data,expected.data(),expected.size())==0;source->Unmap(0,&empty);
+    if(!sourceUnchanged)throw std::runtime_error("copy observer changed upload bytes");
+    std::vector<char> log(native_lighting::DiagnosticLogQueue::Capacity());const auto length=native_lighting::diagnosticLog.Drain(log.data(),log.size());
+    const std::string output(log.data(),length);
+    if(output.find("destination_heap=1")==std::string::npos || output.find("full_previous_table=0")==std::string::npos || output.find("dispatch_snapshot=0")==std::string::npos)
+        throw std::runtime_error("copy audit omitted heap/partial/snapshot limits");
+    audit::captured.store(true);audit::ReleaseFinishedOwners();
+    std::cout<<"PASS copy audit: default-heap destination, partial coverage, overflow rejection, native buffer/resource forwarding and unchanged GPU/upload bytes\n";
+}
+
 int main() try {
     TestSpotCulling();
     TestSpotPassSelection();
@@ -268,6 +317,7 @@ int main() try {
     ComPtr<IDXGIAdapter> adapter; Check(factory->EnumWarpAdapter(IID_PPV_ARGS(&adapter)));
     ComPtr<ID3D12Device> device; Check(D3D12CreateDevice(adapter.Get(),D3D_FEATURE_LEVEL_11_0,IID_PPV_ARGS(&device)));
     TestHitSetupAudit(device.Get());
+    TestCopyAudit(device.Get());
     InstallLiveDiagnostic(device.Get());
     D3D12_ROOT_PARAMETER parameter{}; parameter.ParameterType=D3D12_ROOT_PARAMETER_TYPE_UAV; parameter.ShaderVisibility=D3D12_SHADER_VISIBILITY_ALL;
     D3D12_ROOT_SIGNATURE_DESC rootDesc{};rootDesc.NumParameters=1;rootDesc.pParameters=&parameter;
