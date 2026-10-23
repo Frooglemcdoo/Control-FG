@@ -346,6 +346,7 @@ inline HRESULT STDMETHODCALLTYPE CreateListHook(ID3D12Device* device, UINT node,
 inline void StartOverlay() noexcept;
 inline void InstallLiveDiagnostic(ID3D12Device* device) noexcept {
     if (!device) return;
+    rt_spot_capture_audit::retentionEnabled.store(false);
     rt_spot_capture_audit::captured.store(true); // Retire speculative upload retention; R122 uses copy journals.
     rt_spot_table_audit::InstallQueues(device);
     rt_spot_runtime::Install();

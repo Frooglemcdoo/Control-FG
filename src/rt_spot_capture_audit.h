@@ -29,7 +29,7 @@ inline void InstallAddressObserver(ID3D12Resource* resource) noexcept;
 inline SRWLOCK ownerLock = SRWLOCK_INIT, installLock = SRWLOCK_INIT;
 inline UINT64 retainedBytes = 0;
 inline std::atomic<unsigned> rejectedOwners{0}, attempts{0};
-inline std::atomic<bool> captured{false};
+inline std::atomic<bool> captured{false}, retentionEnabled{true};
 using CreateCommitted = HRESULT (STDMETHODCALLTYPE*)(ID3D12Device*, const D3D12_HEAP_PROPERTIES*,
     D3D12_HEAP_FLAGS, const D3D12_RESOURCE_DESC*, D3D12_RESOURCE_STATES,
     const D3D12_CLEAR_VALUE*, REFIID, void**);
@@ -233,6 +233,7 @@ inline void InspectTable(ID3D12StateObject* state, const D3D12_DISPATCH_RAYS_DES
 // Called only by the existing diagnostic UI worker. Releasing unrelated upload
 // buffers here avoids render-thread destruction and ends temporary retention.
 inline void ReleaseFinishedOwners() noexcept {
+    if(!retentionEnabled.load(std::memory_order_relaxed))return;
     const bool finished = captured.load(std::memory_order_acquire) || attempts.load(std::memory_order_relaxed) >= kMaximumAttempts;
     if (!TryAcquireSRWLockExclusive(&ownerLock)) return;
     if (!finished) {

@@ -290,6 +290,10 @@ static void TestCopyAudit(ID3D12Device* device) {
     mirror::armed.store(false);
     mirror::Observe(list.Get(),destination.Get(),0,source.Get(),0,512);
     if(mirror::eventCount || mirror::copiedBytes)throw std::runtime_error("capture ran before user request");
+    // Retired upload-cache cleanup must not clear the journal's target.
+    audit::retentionEnabled.store(false);audit::captured.store(true);audit::ReleaseFinishedOwners();
+    if(!audit::targetActive.load() || !audit::targetAddress)throw std::runtime_error("retired cache erased submission target");
+    audit::retentionEnabled.store(true);audit::captured.store(false);
     mirror::Request();mirror::BeginIfRequested();
     ComPtr<ID3D12CommandAllocator> dispatchAllocator;Check(device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT,IID_PPV_ARGS(&dispatchAllocator)));
     ComPtr<ID3D12GraphicsCommandList> dispatchList;Check(device->CreateCommandList(0,D3D12_COMMAND_LIST_TYPE_DIRECT,dispatchAllocator.Get(),nullptr,IID_PPV_ARGS(&dispatchList)));
