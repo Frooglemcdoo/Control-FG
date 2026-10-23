@@ -131,6 +131,12 @@ int main(){
     assert(!ModeAvailable(Mode::RoomBlocker,kRtSpotReadyBit));
     spotBandColorsReady.store(true);
     assert(ModeAvailable(Mode::RoomBlocker,kRtSpotReadyBit));
+    for(auto mode:{Mode::RoomHitX,Mode::RoomHitY,Mode::RoomHitZ}){
+        assert(IsSignalDiagnostic(mode)&&UsesRawSpotVisibility(mode)&&ShowsSpotVisibility(mode));
+        assert(IsRtSpotMode(mode)&&SpecularSampleRequest(mode)==4);
+        spotHitPositionReady.store(false);assert(!ModeAvailable(mode,kRtSpotReadyBit));
+        spotHitPositionReady.store(true);assert(ModeAvailable(mode,kRtSpotReadyBit));
+    }
     // UI snapshots must not reset or lose concurrent render-side observations.
     control_rr_diagnostic::Counters counters;
     using Event=control_rr_diagnostic::Event;
