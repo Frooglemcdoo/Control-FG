@@ -348,7 +348,94 @@ static void TestCopyAudit(ID3D12Device* device) {
     ID3D12CommandList* producer[]={list.Get()};mirror::Submitted(queue.Get(),1,producer);
     ComPtr<ID3D12CommandQueue> otherQueue;Check(device->CreateCommandQueue(&queueDesc,IID_PPV_ARGS(&otherQueue)));
     mirror::Submitted(otherQueue.Get(),1,consumer);
-    if(!mirror::done.load())throw std::runtime_error("unverified cross-queue dependency was accepted");
+    if(mirror::done.load())throw std::runtime_error("unverified cross-queue dispatch was validated or aborted instead of deferred");
+    // A later correctly fenced dispatch can validate without restarting capture.
+    ComPtr<ID3D12Fence> orderingFence;Check(device->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&orderingFence)));
+    const auto fenceOperation=[&](ID3D12CommandQueue* q,mirror::QueueOperation op,ID3D12Fence* f,UINT64 value,HRESULT result=S_OK) {
+        mirror::CaptureLease lease;if(!lease)throw std::runtime_error("fence test lease unavailable");
+        mirror::EndQueueCall(mirror::BeginQueueCall(q,op,0,nullptr,f,value),result);
+    };
+    fenceOperation(queue.Get(),mirror::QueueOperation::Signal,orderingFence.Get(),1);
+    fenceOperation(otherQueue.Get(),mirror::QueueOperation::Wait,orderingFence.Get(),1);
+    mirror::Token(dispatchList.Get(),true);mirror::RecordDispatch(dispatchList.Get(),audit::targetAddress,384,ids);
+    mirror::Submitted(otherQueue.Get(),1,consumer);
+    if(!mirror::validated.load())throw std::runtime_error("fenced cross-queue table failed validation");
+    // Real native queue hooks: wait and consumer arrive before producer/signal.
+    // The queue wait is GPU-side; this CPU thread must continue to the producer.
+    mirror::Request();mirror::BeginIfRequested();
+    Check(allocator->Reset());Check(list->Reset(allocator.Get(),nullptr));
+    barrier.Transition.StateBefore=D3D12_RESOURCE_STATE_COPY_SOURCE;barrier.Transition.StateAfter=D3D12_RESOURCE_STATE_COPY_DEST;
+    list->ResourceBarrier(1,&barrier);list->CopyResource(destination.Get(),source.Get());
+    barrier.Transition.StateBefore=D3D12_RESOURCE_STATE_COPY_DEST;barrier.Transition.StateAfter=D3D12_RESOURCE_STATE_COPY_SOURCE;
+    list->ResourceBarrier(1,&barrier);list->CopyResource(readback.Get(),destination.Get());Check(list->Close());
+    mirror::RecordDispatch(dispatchList.Get(),audit::targetAddress,384,ids);
+    mirror::InstallQueue(otherQueue.Get());
+    Check(otherQueue->Wait(orderingFence.Get(),2));
+    otherQueue->ExecuteCommandLists(1,consumer);
+    if(mirror::done.load() || mirror::coverage.count)throw std::runtime_error("future wait consumed unsubmitted data");
+    queue->ExecuteCommandLists(1,producer);Check(queue->Signal(orderingFence.Get(),2));
+    if(!mirror::validated.load())throw std::runtime_error("future signal did not release deferred consumer");
+    ComPtr<ID3D12Fence> completion;Check(device->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&completion)));
+    Check(otherQueue->Signal(completion.Get(),1));
+    HANDLE completed=CreateEventW(nullptr,FALSE,FALSE,nullptr);if(!completed)throw std::runtime_error("queue completion event failed");
+    Check(completion->SetEventOnCompletion(1,completed));const auto completedWait=WaitForSingleObject(completed,30000);CloseHandle(completed);
+    if(completedWait!=WAIT_OBJECT_0)throw std::runtime_error("native queue Signal/Wait forwarding stalled");
+    Check(readback->Map(0,&read,&data));
+    const bool crossQueueUnchanged=std::memcmp(data,expected.data(),expected.size())==0;readback->Unmap(0,&empty);
+    if(!crossQueueUnchanged)throw std::runtime_error("cross-queue observer changed GPU bytes");
+    // A wait for the wrong value cannot import an earlier producer clock.
+    mirror::Request();mirror::BeginIfRequested();
+    mirror::Observe(list.Get(),destination.Get(),0,source.Get(),0,512);
+    mirror::RecordDispatch(dispatchList.Get(),audit::targetAddress,384,ids);
+    mirror::Submitted(queue.Get(),1,producer);
+    fenceOperation(queue.Get(),mirror::QueueOperation::Signal,orderingFence.Get(),3);
+    fenceOperation(otherQueue.Get(),mirror::QueueOperation::Wait,orderingFence.Get(),4);
+    mirror::Submitted(otherQueue.Get(),1,consumer);
+    if(mirror::done.load())throw std::runtime_error("insufficient fence value released consumer");
+    fenceOperation(queue.Get(),mirror::QueueOperation::Signal,orderingFence.Get(),5);
+    if(!mirror::validated.load())throw std::runtime_error("greater fence value failed to release consumer");
+    // Three queues must preserve transitive signal/wait dependencies.
+    ComPtr<ID3D12CommandQueue> thirdQueue;Check(device->CreateCommandQueue(&queueDesc,IID_PPV_ARGS(&thirdQueue)));
+    ComPtr<ID3D12Fence> relayFence;Check(device->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&relayFence)));
+    mirror::Request();mirror::BeginIfRequested();
+    mirror::Observe(list.Get(),destination.Get(),0,source.Get(),0,512);
+    mirror::RecordDispatch(dispatchList.Get(),audit::targetAddress,384,ids);
+    mirror::Submitted(queue.Get(),1,producer);
+    fenceOperation(queue.Get(),mirror::QueueOperation::Signal,orderingFence.Get(),6);
+    fenceOperation(otherQueue.Get(),mirror::QueueOperation::Wait,orderingFence.Get(),6);
+    fenceOperation(otherQueue.Get(),mirror::QueueOperation::Signal,relayFence.Get(),1);
+    fenceOperation(thirdQueue.Get(),mirror::QueueOperation::Wait,relayFence.Get(),1);
+    mirror::Submitted(thirdQueue.Get(),1,consumer);
+    if(!mirror::validated.load())throw std::runtime_error("transitive queue dependency was lost");
+    // Failed calls and ambiguous fence reuse must never become valid edges.
+    mirror::Request();mirror::BeginIfRequested();
+    fenceOperation(queue.Get(),mirror::QueueOperation::Signal,orderingFence.Get(),7,E_FAIL);
+    if(!mirror::done.load() || mirror::validated.load())throw std::runtime_error("failed signal accepted");
+    mirror::Request();mirror::BeginIfRequested();
+    fenceOperation(queue.Get(),mirror::QueueOperation::Signal,orderingFence.Get(),7);
+    fenceOperation(otherQueue.Get(),mirror::QueueOperation::Signal,orderingFence.Get(),8);
+    if(!mirror::done.load() || mirror::validated.load())throw std::runtime_error("multiple fence producers accepted");
+    mirror::Request();mirror::BeginIfRequested();
+    fenceOperation(queue.Get(),mirror::QueueOperation::Signal,orderingFence.Get(),7);
+    fenceOperation(queue.Get(),mirror::QueueOperation::Signal,orderingFence.Get(),6);
+    if(!mirror::done.load() || mirror::validated.load())throw std::runtime_error("fence rewind accepted");
+    // Metadata calls on different queues may overlap. Publish the wait before
+    // the in-flight signal completes, then verify deferred progress.
+    mirror::Request();mirror::BeginIfRequested();
+    mirror::Observe(list.Get(),destination.Get(),0,source.Get(),0,512);
+    mirror::RecordDispatch(dispatchList.Get(),audit::targetAddress,384,ids);
+    mirror::Submitted(queue.Get(),1,producer);
+    const auto pendingSignal=mirror::BeginQueueCall(queue.Get(),mirror::QueueOperation::Signal,0,nullptr,orderingFence.Get(),9);
+    fenceOperation(otherQueue.Get(),mirror::QueueOperation::Wait,orderingFence.Get(),9);
+    mirror::Submitted(otherQueue.Get(),1,consumer);
+    if(mirror::done.load())throw std::runtime_error("unfinished native signal published early");
+    mirror::EndQueueCall(pendingSignal);
+    if(!mirror::validated.load())throw std::runtime_error("overlapping different queues did not resolve");
+    mirror::Request();mirror::BeginIfRequested();
+    mirror::InstallFence(orderingFence.Get());Check(orderingFence->Signal(10));
+    if(!mirror::done.load() || mirror::validated.load() || orderingFence->GetCompletedValue()!=10)
+        throw std::runtime_error("CPU fence signal was not forwarded and rejected as GPU evidence");
+    std::cout<<"PASS cross-queue capture: native future Signal/Wait forwarding, deferred unordered dispatch, exact and greater values, transitive dependencies, concurrent queues, failed signals and ambiguous fence rejection\n";
     mirror::Request();mirror::BeginIfRequested();mirror::copiedBytes=mirror::kCopyBudget;
     mirror::Observe(list.Get(),destination.Get(),0,source.Get(),0,192);
     if(!mirror::done.load())throw std::runtime_error("copy budget not enforced");
@@ -405,7 +492,7 @@ static void TestCopyAudit(ID3D12Device* device) {
     }
     mirror::done.store(true);
     std::cout<<"PASS concurrent capture: producer paused before publication, independent recording/submission progress, complete published replay, eight writers without overlapping storage\n";
-    std::cout<<"PASS submission capture: idle before request, separate lists in GPU submission order, rearm, reversed order, replay, reset and cross-queue rejection\n";
+    std::cout<<"PASS submission capture: idle before request, separate lists in GPU submission order, rearm, reversed order, replay, reset and cross-queue dependencies\n";
     audit::captured.store(true);audit::ReleaseFinishedOwners();
     std::cout<<"PASS copy audit: default-heap destination, partial coverage, overflow rejection, native buffer/resource forwarding and unchanged GPU/upload bytes\n";
 }

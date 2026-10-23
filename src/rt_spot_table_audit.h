@@ -9,8 +9,7 @@ inline const GUID kGeneration={0xf27cd9f1,0xf963,0x467a,{0x91,0x40,0x21,0x00,0x0
 inline const GUID kQueueIdentity={0xf27cd9f1,0xf963,0x467a,{0x91,0x40,0x22,0x00,0x00,0x00,0x00,0x01}};
 inline const GUID kResourceIdentity={0xf27cd9f1,0xf963,0x467a,{0x91,0x40,0x23,0x00,0x00,0x00,0x00,0x01}};
 inline std::atomic<UINT64> nextIdentity{1},request{0};
-inline std::atomic<bool> armed{false},done{false},resetTracking{true},overlapReported{false};
-inline std::atomic<unsigned> inFlightSubmissions{0};
+inline std::atomic<bool> armed{false},done{false},validated{false},resetTracking{true};
 // Readers share the lifetime lock; only rearming takes it exclusively.
 // Recording never owns the replay lock, including while copying upload bytes.
 inline SRWLOCK lifetimeLock=SRWLOCK_INIT,submissionLock=SRWLOCK_INIT,identityLock=SRWLOCK_INIT;
@@ -18,6 +17,19 @@ inline std::atomic<UINT64> activeRequest{0},copiedBytes{0};
 inline std::atomic<unsigned> eventCount{0};
 inline UINT64 deadline=0,queueIdentity=0,base=0,resourceIdentity=0,extent=0;
 inline unsigned dispatchReports=0;
+inline constexpr unsigned kMaximumQueues=32;
+struct QueueClock {
+    UINT64 value[kMaximumQueues]{};
+    bool Includes(const QueueClock& other)const noexcept {
+        for(unsigned i=0;i<kMaximumQueues;++i)if(value[i]<other.value[i])return false;
+        return true;
+    }
+    void Merge(const QueueClock& other) noexcept {
+        for(unsigned i=0;i<kMaximumQueues;++i)if(value[i]<other.value[i])value[i]=other.value[i];
+    }
+};
+inline QueueClock replayClock,lastWriteClock;
+inline void ResetQueueOrder() noexcept;
 inline unsigned char archive[kCopyBudget],mirror[kCapacity];
 inline rt_spot_capture::TableCoverage coverage;
 enum class Kind { Copy,Dispatch };
@@ -53,13 +65,13 @@ inline bool Enabled() noexcept {
 // it retries from a later dispatch if the old request still has active callbacks.
 inline void BeginIfRequested() noexcept {
     const auto wanted=request.load(std::memory_order_acquire);
-    if(!wanted || activeRequest.load()==wanted || inFlightSubmissions.load()!=0)return;
+    if(!wanted || activeRequest.load()==wanted)return;
     if(!TryAcquireSRWLockExclusive(&lifetimeLock))return;
     if(activeRequest.load()!=wanted) {
         armed.store(false);activeRequest.store(wanted);eventCount.store(0);dispatchReports=0;copiedBytes.store(0);
         for(auto& ready:published)ready.store(false,std::memory_order_relaxed);
-        queueIdentity=base=resourceIdentity=extent=0;coverage.Clear();
-        deadline=GetTickCount64()+60000;done.store(false);overlapReported.store(false);
+        queueIdentity=base=resourceIdentity=extent=0;coverage.Clear();ResetQueueOrder();
+        deadline=GetTickCount64()+60000;done.store(false);validated.store(false);
         if(!resetTracking.load()){Stop("reset_hook_unavailable");ReleaseSRWLockExclusive(&lifetimeLock);return;}
         armed.store(true,std::memory_order_release);
         Trace("rt_hit_table_armed request=%llu trigger=both copy_budget=%llu",wanted,kCopyBudget);
@@ -163,6 +175,8 @@ inline void Replay(UINT64 token) noexcept {
         auto& e=events[i];if(e.generation!=token)continue;
         if(e.submitted){Stop("command_list_replay");return;}e.submitted=true;
         if(e.kind==Kind::Copy) {
+            if(coverage.count && !replayClock.Includes(lastWriteClock)){Stop("unordered_target_writes");return;}
+            lastWriteClock=replayClock;
             if(resourceIdentity!=e.resource || base!=e.base || extent!=e.extent || e.offset==0)coverage.Clear();
             resourceIdentity=e.resource;base=e.base;extent=e.extent;
             std::memcpy(mirror+e.offset,archive+e.archiveOffset,static_cast<size_t>(e.size));
@@ -170,7 +184,8 @@ inline void Replay(UINT64 token) noexcept {
         } else {
             const bool range=rt_spot_capture::ContainsGpuRange(base,extent,e.base,e.size);
             const UINT64 offset=range?e.base-base:0;
-            const bool complete=range && coverage.Covers(offset,e.size);
+            const bool ordered=replayClock.Includes(lastWriteClock);
+            const bool complete=ordered && range && coverage.Covers(offset,e.size);
             rt_spot_capture::TableIdentifiers counts;
             if(complete)counts=rt_spot_capture::CountTableIdentifiers(mirror+offset,e.size,e.identifiers[0],e.identifiers[1]);
             const bool valid=complete && !counts.unknown && (counts.group0+counts.group1)>0;
@@ -179,7 +194,7 @@ inline void Replay(UINT64 token) noexcept {
                 for(unsigned n=0;n<2;++n){char hex[65]{};audit::Hex(e.identifiers[n],32,hex);Trace("rt_hit_table_identifier group=%u bytes=%s",n,hex);}
                 const UINT64 records=e.size/96,indices[]={0ull,records>1?1ull:0ull,records/2,records-1};
                 for(unsigned n=0;n<4;++n){char hex[193]{};audit::Hex(mirror+offset+indices[n]*96,96,hex);Trace("rt_hit_table_record generation=%llu index=%llu bytes=%s",token,indices[n],hex);}
-                done.store(true);
+                validated.store(true);done.store(true);
             }
         }
     }
@@ -190,57 +205,221 @@ inline bool HasGeneration(UINT64 token) noexcept {
         if(published[i].load(std::memory_order_acquire) && events[i].generation==token)return true;
     return false;
 }
-inline bool Relevant(UINT count,ID3D12CommandList*const* lists,bool allowCompleted=false) noexcept {
-    if(!lists || count>1024)return false;
-    CaptureLease lease(allowCompleted);if(!lease)return false;
-    for(UINT n=0;n<count;++n) {
-        UINT64 token=0;UINT size=sizeof(token);
-        if(lists[n] && SUCCEEDED(lists[n]->GetPrivateData(kGeneration,&size,&token)) && HasGeneration(token))return true;
-    }
-    return false;
+// Bounded per-queue timelines. A wait may be recorded before its signal. Such
+// a queue stays pending in the CPU model; native GPU calls are always forwarded.
+inline constexpr unsigned kMaximumQueueNodes=4096,kMaximumFences=128,kNoNode=~0u;
+enum class QueueOperation { Execute,Signal,Wait };
+struct QueueState {
+    UINT64 identity=0;unsigned head=kNoNode,tail=kNoNode;bool busy=false;
+    QueueClock clock;
+};
+struct FenceState { UINT64 identity=0,baseline=0,lastValue=0;unsigned producer=kNoNode; };
+struct QueueNode {
+    QueueOperation operation=QueueOperation::Execute;
+    unsigned queue=0,fence=kNoNode,next=kNoNode;
+    UINT64 value=0,token=0;bool ready=false,processed=false;
+    QueueClock signalClock;
+};
+inline QueueState queues[kMaximumQueues];
+inline FenceState fences[kMaximumFences];
+inline QueueNode queueNodes[kMaximumQueueNodes];
+inline unsigned queueCount=0,fenceCount=0,queueNodeCount=0;
+inline unsigned waitReports=0;
+inline const GUID kFenceIdentity={0xf27cd9f1,0xf963,0x467a,{0x91,0x40,0x24,0x00,0x00,0x00,0x00,0x01}};
+inline void ResetQueueOrder() noexcept {
+    for(auto& q:queues)q={};
+    for(auto& f:fences)f={};
+    queueCount=fenceCount=queueNodeCount=waitReports=0;
+    replayClock={};lastWriteClock={};
 }
-inline void Submitted(ID3D12CommandQueue* queue,UINT count,ID3D12CommandList*const* lists) noexcept {
-    if(!queue || !lists || !Enabled())return;
-    if(count>1024){Stop("submission_count");return;}
-    CaptureLease lease;if(!lease)return;
-    // Replay state is separate from producers' append-only storage.
-    if(!TryAcquireSRWLockExclusive(&submissionLock)){Stop("concurrent_relevant_submissions");return;}
-    for(UINT n=0;n<count && !done.load();++n) {
-        UINT64 token=0;UINT size=sizeof(token);
-        if(!lists[n] || FAILED(lists[n]->GetPrivateData(kGeneration,&size,&token)) || !HasGeneration(token))continue;
-        const auto identity=Identity(queue,kQueueIdentity);
-        if(!identity || (queueIdentity && queueIdentity!=identity)){Stop("cross_queue_order_unverified");break;}
-        queueIdentity=identity;Replay(token);
+inline unsigned FindQueue(ID3D12CommandQueue* queue) noexcept {
+    const auto identity=Identity(queue,kQueueIdentity);
+    if(!identity){Stop("queue_identity");return kNoNode;}
+    for(unsigned i=0;i<queueCount;++i)if(queues[i].identity==identity)return i;
+    if(queueCount==kMaximumQueues){Stop("queue_budget");return kNoNode;}
+    const auto index=queueCount++;queues[index].identity=identity;return index;
+}
+inline void InstallFence(ID3D12Fence* fence) noexcept;
+inline unsigned FindFence(ID3D12Fence* fence) noexcept {
+    if(!fence){Stop("null_fence");return kNoNode;}
+    InstallFence(fence);
+    if(!resetTracking.load()){Stop("fence_hook_unavailable");return kNoNode;}
+    const auto identity=Identity(fence,kFenceIdentity);
+    if(!identity){Stop("fence_identity");return kNoNode;}
+    for(unsigned i=0;i<fenceCount;++i)if(fences[i].identity==identity)return i;
+    if(fenceCount==kMaximumFences){Stop("fence_budget");return kNoNode;}
+    const auto baseline=fence->GetCompletedValue();
+    if(baseline==~UINT64(0)){Stop("device_removed");return kNoNode;}
+    const auto index=fenceCount++;fences[index]={identity,baseline,baseline,kNoNode};return index;
+}
+inline unsigned AppendNode(unsigned queue,QueueOperation operation,UINT64 token=0,unsigned fence=kNoNode,UINT64 value=0) noexcept {
+    if(queueNodeCount==kMaximumQueueNodes){Stop("queue_event_budget");return kNoNode;}
+    const auto index=queueNodeCount++;auto& node=queueNodes[index];node={};
+    node.queue=queue;node.operation=operation;node.token=token;node.fence=fence;node.value=value;
+    auto& q=queues[queue];if(q.tail!=kNoNode)queueNodes[q.tail].next=index;else q.head=index;
+    q.tail=index;return index;
+}
+inline void DrainQueueOrder() noexcept {
+    bool progress=true;
+    while(progress && !done.load()) {
+        progress=false;
+        for(unsigned qIndex=0;qIndex<queueCount && !done.load();++qIndex) {
+            auto& q=queues[qIndex];if(q.head==kNoNode)continue;
+            auto& node=queueNodes[q.head];if(!node.ready)continue;
+            if(node.operation==QueueOperation::Wait) {
+                const auto& fence=fences[node.fence];
+                if(node.value>fence.baseline) {
+                    const QueueNode* signal=nullptr;
+                    for(unsigned i=0;i<queueNodeCount;++i) {
+                        const auto& candidate=queueNodes[i];
+                        if(candidate.operation==QueueOperation::Signal && candidate.fence==node.fence && candidate.value>=node.value) {
+                            signal=&candidate;break;
+                        }
+                    }
+                    if(!signal || !signal->processed)continue;
+                    q.clock.Merge(signal->signalClock);
+                    if(waitReports++<16)Trace("rt_hit_table_fence_wait queue=%llu fence=%llu value=%llu signal=%llu dependency_resolved=1",q.identity,fence.identity,node.value,signal->value);
+                }
+            }
+            ++q.clock.value[qIndex];
+            if(node.operation==QueueOperation::Signal)node.signalClock=q.clock;
+            if(node.operation==QueueOperation::Execute) {
+                replayClock=q.clock;queueIdentity=q.identity;Replay(node.token);
+            }
+            node.processed=true;q.head=node.next;if(q.head==kNoNode)q.tail=kNoNode;progress=true;
+        }
     }
+}
+struct QueueCall {unsigned queue=kNoNode,first=0,last=0;};
+// Caller holds a lifetime lease through the native call. The short metadata
+// lock is never held across a native queue call or upload-byte publication.
+inline QueueCall BeginQueueCall(ID3D12CommandQueue* queue,QueueOperation operation,UINT count=0,
+    ID3D12CommandList*const* lists=nullptr,ID3D12Fence* fence=nullptr,UINT64 value=0) noexcept {
+    QueueCall call;if(!queue || !Enabled())return call;
+    AcquireSRWLockExclusive(&submissionLock);
+    const auto index=FindQueue(queue);
+    if(index!=kNoNode && !done.load()) {
+        auto& q=queues[index];
+        if(q.busy)Stop("overlapping_same_queue_calls");
+        else {
+            q.busy=true;call.queue=index;call.first=queueNodeCount;
+            if(operation==QueueOperation::Execute) {
+                if(count>1024 || (count && !lists))Stop("submission_count");
+                else for(UINT n=0;n<count && !done.load();++n) {
+                    UINT64 token=0;UINT size=sizeof(token);
+                    if(lists[n] && SUCCEEDED(lists[n]->GetPrivateData(kGeneration,&size,&token)) && HasGeneration(token))
+                        AppendNode(index,operation,token);
+                }
+            } else {
+                const auto f=FindFence(fence);
+                if(f!=kNoNode && !done.load()) {
+                    auto& state=fences[f];
+                    if(operation==QueueOperation::Signal) {
+                        if((state.producer!=kNoNode && state.producer!=index) || value<=state.lastValue)
+                            Stop("ambiguous_fence_timeline");
+                        else {state.producer=index;state.lastValue=value;}
+                    }
+                    if(!done.load())AppendNode(index,operation,0,f,value);
+                }
+            }
+            call.last=queueNodeCount;
+        }
+    }
+    ReleaseSRWLockExclusive(&submissionLock);return call;
+}
+inline void EndQueueCall(const QueueCall& call,HRESULT result=S_OK) noexcept {
+    if(call.queue==kNoNode)return;
+    AcquireSRWLockExclusive(&submissionLock);
+    if(FAILED(result))Stop("native_queue_call_failed");
+    for(unsigned i=call.first;i<call.last;++i)queueNodes[i].ready=true;
+    queues[call.queue].busy=false;
+    if(!done.load())DrainQueueOrder();
     ReleaseSRWLockExclusive(&submissionLock);
 }
-
+inline void Submitted(ID3D12CommandQueue* queue,UINT count,ID3D12CommandList*const* lists) noexcept {
+    CaptureLease lease;if(!lease)return;
+    EndQueueCall(BeginQueueCall(queue,QueueOperation::Execute,count,lists));
+}
 using Execute=void (STDMETHODCALLTYPE*)(ID3D12CommandQueue*,UINT,ID3D12CommandList*const*);
-struct QueueHook{void** table=nullptr;Execute execute=nullptr;};
+using FenceCall=HRESULT (STDMETHODCALLTYPE*)(ID3D12CommandQueue*,ID3D12Fence*,UINT64);
+using CpuSignal=HRESULT (STDMETHODCALLTYPE*)(ID3D12Fence*,UINT64);
+struct QueueHook{void** table=nullptr;Execute execute=nullptr;FenceCall signal=nullptr,wait=nullptr;};
 inline QueueHook queueHooks[16];inline SRWLOCK queueHookLock=SRWLOCK_INIT;
+struct FenceHook {void** table=nullptr;CpuSignal signal=nullptr;};
+inline FenceHook fenceHooks[16];
 inline thread_local unsigned submitDepth=0;
+inline QueueHook LookupQueue(ID3D12CommandQueue* queue) noexcept {
+    QueueHook result;auto** table=*reinterpret_cast<void***>(queue);
+    AcquireSRWLockShared(&queueHookLock);
+    for(const auto& entry:queueHooks)if(entry.table==table){result=entry;break;}
+    ReleaseSRWLockShared(&queueHookLock);return result;
+}
 inline void STDMETHODCALLTYPE ExecuteHook(ID3D12CommandQueue* queue,UINT count,ID3D12CommandList*const* lists) {
-    Execute original=nullptr;auto** table=*reinterpret_cast<void***>(queue);
-    AcquireSRWLockShared(&queueHookLock);for(const auto& entry:queueHooks)if(entry.table==table){original=entry.execute;break;}ReleaseSRWLockShared(&queueHookLock);
-    const bool outer=submitDepth++==0;
-    const bool track=outer && Relevant(count,lists,inFlightSubmissions.load()!=0);
-    if(track && inFlightSubmissions.fetch_add(1)!=0) {
-        done.store(true);
-        if(!overlapReported.exchange(true))Trace("rt_hit_table_invalidate reason=overlapping_submissions prior_evidence_unusable=1");
-    }
-    if(track)Submitted(queue,count,lists);
+    const auto original=LookupQueue(queue).execute;
+    if(submitDepth){original(queue,count,lists);return;}
+    ++submitDepth;CaptureLease lease;QueueCall call;
+    if(lease)call=BeginQueueCall(queue,QueueOperation::Execute,count,lists);
     original(queue,count,lists);
-    if(track)--inFlightSubmissions;
+    if(lease)EndQueueCall(call);
     --submitDepth;
+}
+inline HRESULT ForwardFenceCall(ID3D12CommandQueue* queue,ID3D12Fence* fence,UINT64 value,QueueOperation operation) {
+    const auto hook=LookupQueue(queue);const auto original=operation==QueueOperation::Signal?hook.signal:hook.wait;
+    if(submitDepth)return original(queue,fence,value);
+    ++submitDepth;CaptureLease lease;QueueCall call;
+    if(lease)call=BeginQueueCall(queue,operation,0,nullptr,fence,value);
+    const auto result=original(queue,fence,value);
+    if(lease)EndQueueCall(call,result);
+    --submitDepth;return result;
+}
+inline HRESULT STDMETHODCALLTYPE SignalHook(ID3D12CommandQueue* queue,ID3D12Fence* fence,UINT64 value) {
+    return ForwardFenceCall(queue,fence,value,QueueOperation::Signal);
+}
+inline HRESULT STDMETHODCALLTYPE WaitHook(ID3D12CommandQueue* queue,ID3D12Fence* fence,UINT64 value) {
+    return ForwardFenceCall(queue,fence,value,QueueOperation::Wait);
+}
+inline HRESULT STDMETHODCALLTYPE CpuSignalHook(ID3D12Fence* fence,UINT64 value) {
+    // CPU signals do not carry a GPU queue dependency. Never let one silently
+    // satisfy a recorded GPU producer/consumer edge.
+    CaptureLease lease;if(lease)Stop("cpu_fence_signal_unverified");
+    CpuSignal original=nullptr;auto** table=*reinterpret_cast<void***>(fence);
+    AcquireSRWLockShared(&queueHookLock);
+    for(const auto& entry:fenceHooks)if(entry.table==table){original=entry.signal;break;}
+    ReleaseSRWLockShared(&queueHookLock);
+    return original(fence,value);
+}
+inline void InstallFence(ID3D12Fence* fence) noexcept {
+    auto** table=*reinterpret_cast<void***>(fence);AcquireSRWLockExclusive(&queueHookLock);
+    FenceHook* slot=nullptr;
+    for(auto& entry:fenceHooks) {
+        if(entry.table==table){ReleaseSRWLockExclusive(&queueHookLock);return;}
+        if(!entry.table && !slot)slot=&entry;
+    }
+    if(slot) {
+        *slot={table,reinterpret_cast<CpuSignal>(table[10])};
+        if(!PatchSlot(&table[10],reinterpret_cast<void*>(slot->signal),reinterpret_cast<void*>(&CpuSignalHook)))resetTracking.store(false);
+    } else resetTracking.store(false);
+    ReleaseSRWLockExclusive(&queueHookLock);
 }
 inline void InstallQueue(ID3D12CommandQueue* queue) noexcept {
     auto** table=*reinterpret_cast<void***>(queue);AcquireSRWLockExclusive(&queueHookLock);
     QueueHook* slot=nullptr;
     for(auto& e:queueHooks){if(e.table==table){ReleaseSRWLockExclusive(&queueHookLock);return;}if(!e.table&&!slot)slot=&e;}
-    if(slot){*slot={table,reinterpret_cast<Execute>(table[10])};const bool ready=PatchSlot(&table[10],reinterpret_cast<void*>(slot->execute),reinterpret_cast<void*>(&ExecuteHook));if(!ready)*slot={};Trace("rt_hit_table_queue_hook ready=%u type=%u",unsigned(ready),unsigned(queue->GetDesc().Type));}
+    if(slot) {
+        *slot={table,reinterpret_cast<Execute>(table[10]),reinterpret_cast<FenceCall>(table[14]),reinterpret_cast<FenceCall>(table[15])};
+        const bool execute=PatchSlot(&table[10],reinterpret_cast<void*>(slot->execute),reinterpret_cast<void*>(&ExecuteHook));
+        const bool signal=PatchSlot(&table[14],reinterpret_cast<void*>(slot->signal),reinterpret_cast<void*>(&SignalHook));
+        const bool wait=PatchSlot(&table[15],reinterpret_cast<void*>(slot->wait),reinterpret_cast<void*>(&WaitHook));
+        if(!execute || !signal || !wait)resetTracking.store(false);
+        Trace("rt_hit_table_queue_hook ready=%u type=%u signal=%u wait=%u",unsigned(execute&&signal&&wait),unsigned(queue->GetDesc().Type),unsigned(signal),unsigned(wait));
+    } else resetTracking.store(false);
     ReleaseSRWLockExclusive(&queueHookLock);
 }
 inline void InstallQueues(ID3D12Device* device) noexcept {
+    Microsoft::WRL::ComPtr<ID3D12Fence> fence;
+    if(SUCCEEDED(device->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&fence)))) {
+        InstallFence(fence.Get());
+    } else resetTracking.store(false);
     for(auto type:{D3D12_COMMAND_LIST_TYPE_DIRECT,D3D12_COMMAND_LIST_TYPE_COMPUTE,D3D12_COMMAND_LIST_TYPE_COPY}) {
         D3D12_COMMAND_QUEUE_DESC desc{};desc.Type=type;Microsoft::WRL::ComPtr<ID3D12CommandQueue> queue;
         if(SUCCEEDED(device->CreateCommandQueue(&desc,IID_PPV_ARGS(&queue))))InstallQueue(queue.Get());
