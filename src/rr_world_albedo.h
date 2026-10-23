@@ -13,6 +13,7 @@ inline int RRWorldAlbedoVariant(const RRAlbedoShader::CapturedPixelShader& shade
 static constexpr int kRRWorldAlbedoStorageBase=0x6F475040;
 static std::atomic<bool> rrWorldAlbedoStorageReady{false};
 static bool RRWorldAlbedoRequested() noexcept;
+static bool RRWorldPerspectiveGuideRequested() noexcept;
 static std::uintptr_t RRWorldAlbedoReplacement(std::uintptr_t selected,int variant) noexcept;
 
 // Published only after successful current-frame guide command recording.

@@ -286,8 +286,7 @@ static void RRLiveBeforeImpl(ID3D12GraphicsCommandList* list,const control_rr::L
         // Restrict this comparison to a same-frame, audited world replay and
         // the captured symmetric perspective shape. Unsupported cameras retain
         // the baseline guide. No guessed matrix layout or jitter sign is used.
-        const bool viewAngleRequested=native_lighting::UsesPerspectiveGuide(
-            native_lighting::LiveSelection::GetMode(native_lighting::selection.Read()));
+        const bool viewAngleRequested=RRWorldPerspectiveGuideRequested();
         float validatedProjection[16]{};
         if(viewAngleRequested && textured && rrDiffuse->worldAlbedo && rrDiffuse->worldBatches &&
            in.camera.engineFrame==in.engineFrame &&

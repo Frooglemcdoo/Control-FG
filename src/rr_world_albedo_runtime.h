@@ -27,3 +27,8 @@ static std::uintptr_t RRWorldAlbedoReplacement(std::uintptr_t selected,int varia
     record.selected=selected;record.variant=variant;++rrWorldAlbedoRecordCount;
     return reinterpret_cast<std::uintptr_t>(record.record);
 }
+
+static bool RRWorldPerspectiveGuideRequested() noexcept {
+    return native_lighting::UsesPerspectiveGuide(
+        native_lighting::LiveSelection::GetMode(native_lighting::selection.Read()));
+}

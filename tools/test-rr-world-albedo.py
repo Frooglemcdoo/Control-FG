@@ -64,9 +64,9 @@ int main(){
  for(unsigned i=1;i<64;++i)assert(RRWorldAlbedoReplacement(100+i,int(i%4)));
  assert(rrWorldAlbedoRecordCount==64&&!RRWorldAlbedoReplacement(1000,0));
  assert(RRWorldAlbedoReplacement(100,0)==first); // Existing records remain usable at capacity.
- native_lighting::selection.Select(native_lighting::Mode::RtSpotWorldAlbedo);assert(RRWorldAlbedoRequested());
+ native_lighting::selection.Select(native_lighting::Mode::RtSpotWorldAlbedo);assert(RRWorldAlbedoRequested()&&!RRWorldPerspectiveGuideRequested());
  native_lighting::selection.Select(native_lighting::Mode::RtSpotSpecularFiltered);assert(RRWorldAlbedoRequested());
- native_lighting::selection.Select(native_lighting::Mode::RtSpotViewAngle);assert(RRWorldAlbedoRequested());
+ native_lighting::selection.Select(native_lighting::Mode::RtSpotViewAngle);assert(RRWorldAlbedoRequested()&&RRWorldPerspectiveGuideRequested());
  native_lighting::selection.Select(native_lighting::Mode::RtSpotGiFiltered);assert(!RRWorldAlbedoRequested());
 }
 '''
