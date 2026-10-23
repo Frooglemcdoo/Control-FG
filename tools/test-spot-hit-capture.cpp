@@ -1,6 +1,7 @@
 #include "../src/rt_spot_capture_layout.h"
 #include "../src/rt_spot_capture_table.h"
 #include "../src/rt_spot_capture_bounds.h"
+#include "../src/rt_spot_table_coverage.h"
 #include <cassert>
 #include <iostream>
 
@@ -16,6 +17,19 @@ int main() {
     assert(!NativeHitTableLayout(4097, 192, 96));
     assert(!NativeHitTableLayout(4096, 193, 96));
     assert(!NativeHitTableLayout(4096, 192, 64));
+    TableCoverage coverage;
+    assert(coverage.Add(0,128,512));assert(coverage.Add(256,256,512));
+    assert(!coverage.Covers(0,512));assert(coverage.Add(128,128,512));assert(coverage.Covers(0,512));
+    assert(!coverage.Add(UINT64_MAX-1,4,512));assert(!coverage.Covers(UINT64_MAX-1,4));
+    coverage.Clear();assert(!coverage.Covers(0,512));
+    assert(coverage.Add(256,256,512));assert(!coverage.Covers(0,512));
+    for(unsigned i=0;i<128;++i)coverage.ranges[i]={i*2,i*2+1};
+    coverage.count=128;
+    assert(!coverage.Add(300,1,512));assert(!coverage.count);
+    unsigned char ids[2][32]{};ids[0][0]=1;ids[1][0]=2;
+    unsigned char table[96*4]{};std::memcpy(table,ids[0],32);std::memcpy(table+96,ids[1],32);table[96*3]=3;
+    const auto classified=CountTableIdentifiers(table,sizeof(table),ids[0],ids[1]);
+    assert(classified.group0==1 && classified.group1==1 && classified.empty==1 && classified.unknown==1);
     static_assert(offsetof(CaptureResult, origin) == 32);
     static_assert(offsetof(CaptureResult, direction) == 48);
     static_assert(offsetof(CaptureResult, pixelX) == 64);

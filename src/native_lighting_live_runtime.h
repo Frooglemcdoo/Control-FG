@@ -6,6 +6,7 @@
 #include "native_lighting_log_queue.h"
 #include "rt_shadow_capture_candidates.h"
 #include "rt_spot_capture_bounds.h"
+#include "rt_spot_table_coverage.h"
 #include "spot_shadow_resolution_policy.h"
 #include "rt_spot_culling_policy.h"
 #include <intrin.h>
@@ -283,6 +284,7 @@ inline bool PatchSlot(void** slot, void* expected, void* hook) noexcept {
 }
 #include "spot_shadow_resolution_runtime.h"
 #include "rt_spot_capture_audit.h"
+#include "rt_spot_table_audit.h"
 #include "rt_spot_copy_audit.h"
 #include "rt_shadow_capture.h"
 #include "rt_spot_culling_runtime.h"

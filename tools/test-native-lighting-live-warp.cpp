@@ -304,6 +304,23 @@ static void TestCopyAudit(ID3D12Device* device) {
     const std::string output(log.data(),length);
     if(output.find("destination_heap=1")==std::string::npos || output.find("full_previous_table=0")==std::string::npos || output.find("dispatch_snapshot=0")==std::string::npos)
         throw std::runtime_error("copy audit omitted heap/partial/snapshot limits");
+    namespace mirror=native_lighting::rt_spot_table_audit;
+    const auto oldToken=mirror::Token(list.Get());
+    if(!mirror::Matches(oldToken,audit::targetAddress,384))throw std::runtime_error("full copied table not correlated to list");
+    Check(allocator->Reset());Check(list->Reset(allocator.Get(),nullptr));
+    const auto newToken=mirror::Token(list.Get());
+    if(oldToken==newToken || mirror::Matches(newToken,audit::targetAddress,384))throw std::runtime_error("reset reused stale copy coverage");
+    mirror::Observe(list.Get(),destination.Get(),0,source.Get(),0,192);
+    if(mirror::Matches(newToken,audit::targetAddress,384))throw std::runtime_error("new prefix inherited an old tail");
+    mirror::Observe(list.Get(),destination.Get(),192,source.Get(),192,320);
+    if(!mirror::Matches(newToken,audit::targetAddress,384))throw std::runtime_error("split upload coverage not joined");
+    ++mirror::lossEpoch;
+    if(mirror::Matches(newToken,audit::targetAddress,384))throw std::runtime_error("lost copy event left valid evidence");
+    mirror::copiedBytes.store(mirror::kCopyBudget);
+    mirror::Observe(list.Get(),destination.Get(),0,source.Get(),0,192);
+    if(!mirror::done.load())throw std::runtime_error("mirror copy budget not enforced");
+    Check(list->Close());
+    std::cout<<"PASS table correlation: split coverage, reset generations, stale-tail rejection, lost-copy rejection and bounded CPU work\n";
     audit::captured.store(true);audit::ReleaseFinishedOwners();
     std::cout<<"PASS copy audit: default-heap destination, partial coverage, overflow rejection, native buffer/resource forwarding and unchanged GPU/upload bytes\n";
 }

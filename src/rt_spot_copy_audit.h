@@ -6,7 +6,8 @@ namespace rt_spot_copy_audit {
 namespace audit = rt_spot_capture_audit;
 using CopyBuffer = void (STDMETHODCALLTYPE*)(ID3D12GraphicsCommandList*,ID3D12Resource*,UINT64,ID3D12Resource*,UINT64,UINT64);
 using CopyResource = void (STDMETHODCALLTYPE*)(ID3D12GraphicsCommandList*,ID3D12Resource*,ID3D12Resource*);
-struct Hooks { void** table = nullptr; CopyBuffer buffer = nullptr; CopyResource resource = nullptr; };
+using Reset = HRESULT (STDMETHODCALLTYPE*)(ID3D12GraphicsCommandList*,ID3D12CommandAllocator*,ID3D12PipelineState*);
+struct Hooks { void** table = nullptr; CopyBuffer buffer = nullptr; CopyResource resource = nullptr; Reset reset = nullptr; };
 inline Hooks hooks[16]{};
 inline SRWLOCK hookLock = SRWLOCK_INIT;
 inline std::atomic<unsigned> calls{0}, matches{0}, samples{0};
@@ -72,16 +73,24 @@ inline void Observe(ID3D12Resource* destination, UINT64 destinationOffset,
 }
 inline void STDMETHODCALLTYPE BufferHook(ID3D12GraphicsCommandList* list,ID3D12Resource* destination,UINT64 destinationOffset,ID3D12Resource* source,UINT64 sourceOffset,UINT64 bytes) {
     const auto original = Lookup(list).buffer;
+    rt_spot_table_audit::Observe(list,destination,destinationOffset,source,sourceOffset,bytes);
     Observe(destination,destinationOffset,source,sourceOffset,bytes);
     original(list,destination,destinationOffset,source,sourceOffset,bytes);
 }
 inline void STDMETHODCALLTYPE ResourceHook(ID3D12GraphicsCommandList* list,ID3D12Resource* destination,ID3D12Resource* source) {
     const auto original = Lookup(list).resource;
+    if (destination && source && rt_spot_table_audit::Enabled())
+        rt_spot_table_audit::Observe(list,destination,0,source,0,destination->GetDesc().Width);
     // CopyResource permits textures; buffer inspection rejects them before use.
     if (destination && source && audit::targetActive.load(std::memory_order_acquire) &&
         matches.load(std::memory_order_relaxed) < kMaximumReports)
         Observe(destination,0,source,0,destination->GetDesc().Width);
     original(list,destination,source);
+}
+inline HRESULT STDMETHODCALLTYPE ResetHook(ID3D12GraphicsCommandList* list,ID3D12CommandAllocator* allocator,ID3D12PipelineState* pipeline) {
+    const auto hr=Lookup(list).reset(list,allocator,pipeline);
+    if(SUCCEEDED(hr))rt_spot_table_audit::Token(list,true);
+    return hr;
 }
 inline void InstallList(ID3D12GraphicsCommandList* list) noexcept {
     if (!list) return;
@@ -93,11 +102,13 @@ inline void InstallList(ID3D12GraphicsCommandList* list) noexcept {
         if (!entry.table && !slot) slot = &entry;
     }
     if (slot) {
-        *slot = {table,reinterpret_cast<CopyBuffer>(table[15]),reinterpret_cast<CopyResource>(table[17])};
+        *slot = {table,reinterpret_cast<CopyBuffer>(table[15]),reinterpret_cast<CopyResource>(table[17]),reinterpret_cast<Reset>(table[10])};
         const bool buffer = PatchSlot(&table[15],reinterpret_cast<void*>(slot->buffer),reinterpret_cast<void*>(&BufferHook));
         const bool resource = PatchSlot(&table[17],reinterpret_cast<void*>(slot->resource),reinterpret_cast<void*>(&ResourceHook));
-        Trace("rt_hit_copy_hooks buffer=%u resource=%u",unsigned(buffer),unsigned(resource));
-        if (!buffer && !resource) *slot = {};
+        const bool reset = PatchSlot(&table[10],reinterpret_cast<void*>(slot->reset),reinterpret_cast<void*>(&ResetHook));
+        Trace("rt_hit_copy_hooks buffer=%u resource=%u reset=%u",unsigned(buffer),unsigned(resource),unsigned(reset));
+        if (!reset) rt_spot_table_audit::done.store(true); // No reuse tracking means no safe correlation.
+        if (!buffer && !resource && !reset) *slot = {};
     } else Trace("rt_hit_copy_hooks capacity_exhausted=1");
     ReleaseSRWLockExclusive(&hookLock);
 }
