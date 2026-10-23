@@ -3,17 +3,31 @@
 #include <cstdint>
 
 namespace native_lighting {
-enum class Mode : unsigned { Native, DisableBakedGi, DisableDirect, DisableDirectDiffuse, DisableDirectSpecular, BypassShadows, DisableLightPattern, BypassScreenShadows, BypassSpotShadows, BypassPointShadows, SpotVarianceLow, SpotVarianceHigh, SpotPcfCenter, SpotPcf32, SpotStableSoft, SpotStableTight, SpotBilinear, SpotResolution2x, RtSpot, RtSpotRaw, RtSpotMapGuard, RtSpotNativeCull, RtSpotVisibilityRaw, RtSpotVisibilityFiltered, RtSpotLightIds, RtSpotBaseline, RtSpotDiffuseFiltered, RtSpotGiFiltered, RtSpotWorldAlbedo, RtSpotSpecularFiltered, RtSpotViewAngle };
+enum class Mode : unsigned { Native, DisableBakedGi, DisableDirect, DisableDirectDiffuse, DisableDirectSpecular, BypassShadows, DisableLightPattern, BypassScreenShadows, BypassSpotShadows, BypassPointShadows, SpotVarianceLow, SpotVarianceHigh, SpotPcfCenter, SpotPcf32, SpotStableSoft, SpotStableTight, SpotBilinear, SpotResolution2x, RtSpot, RtSpotRaw, RtSpotMapGuard, RtSpotNativeCull, RtSpotVisibilityRaw, RtSpotVisibilityFiltered, RtSpotLightIds, RtSpotBaseline, RtSpotDiffuseFiltered, RtSpotGiFiltered, RtSpotWorldAlbedo, RtSpotSpecularFiltered, RtSpotViewAngle, RtSpotGi2, RtSpotGi4, RtSpotGi8, RtSpotGiMenu };
+inline bool IsGiSampleMode(Mode mode) noexcept {
+    return mode==Mode::RtSpotGi2 || mode==Mode::RtSpotGi4 ||
+           mode==Mode::RtSpotGi8 || mode==Mode::RtSpotGiMenu;
+}
+// A per-frame diagnostic override; never writes the user's saved GI setting.
+inline unsigned GiSampleRequest(Mode mode,unsigned saved) noexcept {
+    switch(mode){
+    case Mode::RtSpotGi2:return 2;
+    case Mode::RtSpotGi4:return 4;
+    case Mode::RtSpotGi8:return 8;
+    case Mode::RtSpotGiMenu:return 0;
+    default:return saved;
+    }
+}
 inline bool IsRtSpotMode(Mode mode) noexcept {
-    return mode == Mode::RtSpot || mode == Mode::RtSpotRaw ||
+    return IsGiSampleMode(mode) || mode == Mode::RtSpot || mode == Mode::RtSpotRaw ||
         mode == Mode::RtSpotMapGuard || mode == Mode::RtSpotNativeCull ||
         mode == Mode::RtSpotVisibilityRaw || mode == Mode::RtSpotVisibilityFiltered || mode == Mode::RtSpotLightIds || mode == Mode::RtSpotBaseline || mode == Mode::RtSpotDiffuseFiltered || mode == Mode::RtSpotGiFiltered || mode == Mode::RtSpotWorldAlbedo || mode == Mode::RtSpotSpecularFiltered || mode == Mode::RtSpotViewAngle;
 }
-inline bool UsesWorldAlbedo(Mode mode) noexcept { return mode == Mode::RtSpotWorldAlbedo || mode == Mode::RtSpotSpecularFiltered || mode == Mode::RtSpotViewAngle; }
+inline bool UsesWorldAlbedo(Mode mode) noexcept { return IsGiSampleMode(mode) || mode == Mode::RtSpotWorldAlbedo || mode == Mode::RtSpotSpecularFiltered || mode == Mode::RtSpotViewAngle; }
 inline bool UsesPerspectiveGuide(Mode mode) noexcept { return mode == Mode::RtSpotViewAngle; }
 inline bool PreservesSpecularFiltering(Mode mode) noexcept { return mode == Mode::RtSpotSpecularFiltered; }
 // These denoising diagnostics retain the centered, filtered shadow routes.
-inline bool PreservesGiFiltering(Mode mode) noexcept { return mode == Mode::RtSpotGiFiltered || mode == Mode::RtSpotWorldAlbedo || mode == Mode::RtSpotSpecularFiltered || mode == Mode::RtSpotViewAngle; }
+inline bool PreservesGiFiltering(Mode mode) noexcept { return IsGiSampleMode(mode) || mode == Mode::RtSpotGiFiltered || mode == Mode::RtSpotWorldAlbedo || mode == Mode::RtSpotSpecularFiltered || mode == Mode::RtSpotViewAngle; }
 inline bool PreservesBroadDiffuseFiltering(Mode mode) noexcept {
     return mode == Mode::RtSpotDiffuseFiltered;
 }
@@ -45,18 +59,19 @@ inline constexpr unsigned kSpotResolutionReadyBit = 1u << 16;
 inline constexpr unsigned kRtSpotReadyBit = 1u << 17;
 struct ModeChoice { Mode mode; const wchar_t* label; };
 inline constexpr ModeChoice kModeChoices[] = {
-    {Mode::Native, L"NATIVE SHADOWS"},
+    {Mode::RtSpotWorldAlbedo, L"BASELINE"},
+    {Mode::RtSpotGi2, L"GI 2"},
+    {Mode::RtSpotGi4, L"GI 4"},
+    {Mode::RtSpotGi8, L"GI 8"},
+    {Mode::RtSpotGiMenu, L"GI FOLLOW MENU"},
+    {Mode::RtSpotGiFiltered, L"GI FILTER"},
     {Mode::RtSpot, L"CENTER FILTERED"},
-    {Mode::RtSpotRaw, L"CENTER RAW"},
-    {Mode::RtSpotMapGuard, L"SELECTED LIGHT OFF"},
-    {Mode::RtSpotVisibilityFiltered, L"FILTERED VISIBILITY"},
-    {Mode::RtSpotLightIds, L"LIGHT ID COLORS"},
     {Mode::RtSpotViewAngle, L"VIEW ANGLE"},
-    {Mode::RtSpotWorldAlbedo, L"WORLD ALBEDO"},
-    {Mode::RtSpotGiFiltered, L"GI FILTER"}
+    {Mode::Native, L"NATIVE SHADOWS"}
 };
 inline constexpr unsigned kModeCount = sizeof(kModeChoices) / sizeof(kModeChoices[0]);
 inline unsigned RequiredVariant(Mode mode) noexcept {
+    if(IsGiSampleMode(mode))return kRtSpotReadyBit;
     switch (mode) {
     case Mode::RtSpot: case Mode::RtSpotRaw: case Mode::RtSpotMapGuard: case Mode::RtSpotNativeCull:
     case Mode::RtSpotVisibilityRaw: case Mode::RtSpotVisibilityFiltered: case Mode::RtSpotLightIds: case Mode::RtSpotBaseline: case Mode::RtSpotDiffuseFiltered: case Mode::RtSpotGiFiltered: case Mode::RtSpotWorldAlbedo: case Mode::RtSpotSpecularFiltered: case Mode::RtSpotViewAngle: return kRtSpotReadyBit;
@@ -85,6 +100,10 @@ inline unsigned RequiredBinding(Mode mode) noexcept {
 }
 inline const char* ModeName(Mode mode) noexcept {
     switch (mode) {
+    case Mode::RtSpotGi2:return "rt_spot_gi_2";
+    case Mode::RtSpotGi4:return "rt_spot_gi_4";
+    case Mode::RtSpotGi8:return "rt_spot_gi_8";
+    case Mode::RtSpotGiMenu:return "rt_spot_gi_menu";
     case Mode::RtSpotViewAngle: return "rt_spot_view_angle";
     case Mode::RtSpotSpecularFiltered: return "rt_spot_specular_filtered";
     case Mode::RtSpotGiFiltered: return "rt_spot_gi_filtered";
@@ -130,11 +149,11 @@ inline bool Disables(Mode mode, unsigned kind) noexcept {
 // A selection and its observation masks share one atomic word. Late worker
 // recordings cannot mark a newer selection as confirmed.
 class LiveSelection {
-    static constexpr unsigned kModeBits = 5, kObservedShift = kModeBits;
+    static constexpr unsigned kModeBits = 6, kObservedShift = kModeBits;
     static constexpr unsigned kSequenceShift = kModeBits + 2;
     static constexpr uint64_t kModeMask = (uint64_t(1) << kModeBits) - 1;
     static constexpr uint64_t kObservedMask = uint64_t(kAllBits) << kObservedShift;
-    static_assert(static_cast<unsigned>(Mode::RtSpotViewAngle) <= kModeMask, "Mode storage exhausted");
+    static_assert(static_cast<unsigned>(Mode::RtSpotGiMenu) <= kModeMask, "Mode storage exhausted");
     std::atomic<uint64_t> state_{0};
 public:
     uint64_t Read() const noexcept { return state_.load(std::memory_order_acquire); }

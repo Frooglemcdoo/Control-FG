@@ -1,0 +1,12 @@
+{
+  "renderer_sha256": "ebfb5b47cebc2d4482e912b8090bd343f717bab8a178b5a6385dec9105e7c433",
+  "checks": [
+    "specular_registration",
+    "menu_sample_routing",
+    "filter_high_count_value",
+    "specular_allocation",
+    "gi_allocation",
+    "specular_filter_option"
+  ],
+  "scope": "Static routing only; option snapshots and GI producer logs are runtime evidence."
+}

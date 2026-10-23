@@ -14,6 +14,7 @@
 #include "rr_contact_shadow_policy.h"
 #include "rr_broad_diffuse_policy.h"
 #include "rr_gi_sample_control.h"
+#include "rr_sample_diagnostic.h"
 static control_rr::RRFrameCoordinator rrNativeFrame;
 static control_rr::RRRTFrame rrNativeRTFrame;
 static control_rr_specular::NativeCopyApi rrNativeCopy;
@@ -285,6 +286,8 @@ static unsigned RRNativeGISampleCount(void* option) {
  if(nativeCount!=lastNative||effective!=lastEffective||rrNativeFrame.Key().frame%240==0){
   Log("RR_GI_SAMPLES_R33 frame=%llu native=%u effective=%u requested=%u full_rr=%u allocation_and_shader=shared_native_local temporal_changes=0",
    static_cast<unsigned long long>(rrNativeFrame.Key().frame),nativeCount,effective,rrNativeGISampleSelection.requested,unsigned(full));
+  native_lighting::Trace("gi_sample_producer frame=%llu native=%u effective=%u requested=%u full_rr=%u allocation_and_shader=shared_local",
+   static_cast<unsigned long long>(rrNativeFrame.Key().frame),nativeCount,effective,rrNativeGISampleSelection.requested,unsigned(full));
   lastNative=nativeCount;lastEffective=effective;
  }
  SetLastError(saved);return effective;
@@ -411,15 +414,17 @@ static bool RRNativeHookReset(unsigned outputWidth,unsigned outputHeight,unsigne
  const auto previousKey=rrNativeFrame.Key();const auto previousStage=rrNativeFrame.Stage();
  const bool wasRecovering=rrNativeFrame.Recovering(),wasStopped=rrNativeFrame.Stopped();
  const bool selected=rrNativeFrame.Begin({frame,outputWidth,outputHeight,width,height,effects},runtimeRequested,ready);
- // Snapshot UI selection once, before the GI producer allocates any hit arrays.
- if(rrNativeGISampleSelection.Latch(control_rr::GISampleRequested(),selected)){
+ // Snapshot diagnostic selection before the GI producer allocates hit arrays.
+ const auto lightingMode=native_lighting::LiveSelection::GetMode(native_lighting::selection.Read());
+ const unsigned giRequest=native_lighting::GiSampleRequest(lightingMode,control_rr::GISampleRequested());
+ if(rrNativeGISampleSelection.Latch(giRequest,selected)){
   rrNativeFrame.ResetForSignalChange();
   Log("RR_GI_SAMPLES_LIVE frame=%llu requested=%u rr_history_reset=1 apply=before_native_gi_allocation",frame,rrNativeGISampleSelection.requested);
  }
  const bool partial=partialRequested&&known&&supported&&configuration&&!rrNativeFrame.Stopped()&&!selected;
  rrNativePartialFrame.store(partial,std::memory_order_release);
- // Snapshot one selection for both filter policies before lighting begins.
- const auto lightingMode=native_lighting::LiveSelection::GetMode(native_lighting::selection.Read());
+ // Both filter policies use the same selection as the sample-count latch.
+ if(known&&configuration)RRReportSampleOptions(verifiedRenderer,frame,selected,rrNativeGISampleSelection.requested);
  const bool giRequested=selected&&(effects&control_rr::RTDiffuseGI)&&
   native_lighting::PreservesGiFiltering(lightingMode);
  bool giFiltered=false;

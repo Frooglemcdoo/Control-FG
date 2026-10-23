@@ -2,6 +2,7 @@
 #include "../src/rr_gi_sample_control.h"
 #include "../src/rr_frame_coordinator.h"
 #include <cassert>
+#include "../src/native_lighting_live_state.h"
 #include <cstdio>
 int main(){
  using namespace control_rr;
@@ -31,6 +32,14 @@ int main(){
   assert(frame.BeginLighting(f));
   assert(frame.BeginEvaluation(f,true,true));
   assert(frame.EvaluationResult(true));
+ }
+ GISampleSelect(6);
+ using native_lighting::Mode;
+ for(auto mode:{Mode::RtSpotGi2,Mode::RtSpotGi8,Mode::RtSpotGiMenu,Mode::RtSpotWorldAlbedo}){
+  const auto request=native_lighting::GiSampleRequest(mode,GISampleRequested());
+  assert(latch.Latch(request,true));assert(!latch.Latch(request,true));
+  assert(GISampleRequested()==6); // Diagnostics never persist their override.
+  assert(GISampleComparison(8,latch.requested,true)==(request?request:8));
  }
  const unsigned before=latch.requested;
  assert(!latch.Latch(6,false)&&latch.requested==before);
