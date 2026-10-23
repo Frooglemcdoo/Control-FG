@@ -401,7 +401,7 @@ jobs:
           Copy-Item Collect-ControlFG-Compact-Logs.ps1 "$out/Collect-ControlFG-Compact-Logs.ps1"
           Copy-Item docs/rr-view-angle-r106.md "$out/DIAGNOSTIC-NOTES.md"
           @'
-          CONTROL-FG R106 - experimental selected-spotlight RT replacement
+          CONTROL-FG R106 - world specular-guide viewing-angle comparison
           Close Control to install. Copy contents beside Control_DX12.exe.
           Preserve existing NVIDIA runtimes and the ControlFGStreamline folder.
           Use Borderless. Load the affected wall or painting with RR ON, FG and glass enhancements OFF.

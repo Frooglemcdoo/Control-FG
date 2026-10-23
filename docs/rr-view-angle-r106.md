@@ -20,4 +20,4 @@ CPU counters distinguish view_angle_recorded, view_angle_fallback, view_angle_co
 
 All fourteen spotlight assets and three glass assets must remain byte-identical to R97; the compiled clamp remains 60%. In-game image quality and hardware stability still require the user's comparison.
 
-Research background: [R105 investigation](rr-material-sharpening-r105.md). NVIDIA reference: https://github.com/NVIDIA-RTX/Streamline/blob/main/docs/ProgrammingGuideDLSS_RR.md . No SDK upgrade is part of this test.
+Research background: [R105 investigation](https://github.com/Frooglemcdoo/Control-FG/blob/b27080e50a83f42a7122955c1eeb0c87d708c99a/docs/rr-material-sharpening-r105.md). NVIDIA reference: https://github.com/NVIDIA-RTX/Streamline/blob/main/docs/ProgrammingGuideDLSS_RR.md . No SDK upgrade is part of this test.

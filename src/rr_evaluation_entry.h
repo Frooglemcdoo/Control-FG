@@ -80,8 +80,6 @@ static unsigned int RREvaluationEntry(unsigned int branch, ID3D12GraphicsCommand
         if(beginEvaluation)worldReset=worldHistory.Update(in.frame!=0 &&
             rrWorldAlbedoGuideFrame.load(std::memory_order_acquire)==in.frame);
         if(beginEvaluation)viewAngleReset=viewAngleHistory.Update(bindings.viewAngleApplied);
-        if(beginEvaluation)control_rr_diagnostic::Record(bindings.viewAngleApplied ?
-            control_rr_diagnostic::Event::ViewAngleConsumed : control_rr_diagnostic::Event::ViewAngleBaseline);
         distanceReset=distanceHistory.Update(hitDistance!=nullptr);
         clampReset=clampHistory.Update(control_rr_clamp::effective.load(std::memory_order_acquire));
         if(clampReset)Log("RR_CLAMP_CS3_HISTORY_RESET frame=%llu effective=%u",in.frame,control_rr_clamp::effective.load());
@@ -132,6 +130,8 @@ static unsigned int RREvaluationEntry(unsigned int branch, ID3D12GraphicsCommand
     if(rrAttempt){
         const bool success=(result&0xFFF00000u)!=0xBAD00000u;
         rrNativeFrame.EvaluationResult(success);
+        if(success)control_rr_diagnostic::Record(bindings.viewAngleApplied ?
+            control_rr_diagnostic::Event::ViewAngleConsumed : control_rr_diagnostic::Event::ViewAngleBaseline);
         control_rr::RRUserPublish(success?control_rr::RRUserStatus::Active:control_rr::RRUserStatus::Stopped);
         if(call<=4||(call%240)==0||!success||rrNativeFrame.Reset()||presetReset||distanceReset||clampReset||worldReset||viewAngleReset)Log("RR_NATIVE_EVALUATED frame=%llu result=0x%08X success=%u diffuse=%p specular=%p normal=%p hit_distance=D1_optional specular_mvec=cleared reflection_mvec=cleared matrix_mode=preset_dependent_projection_p1 responsivity=%p replaces_sr=1 reset=%u preset_reset=%u preset_requested=%s preset_value=%u active_preset=%u control_feature=%p evaluation_feature=%p native_create_confirmed=%u native_create_generation=%llu",in.frame,result,unsigned(success),bindings.diffuse,bindings.specular,bindings.normal,bindings.responsivity,unsigned(rrNativeFrame.Reset()||presetReset||distanceReset||clampReset||worldReset||viewAngleReset),unsigned(presetReset),control_rr::RRUserPresetLabel(),control_rr::RRUserPresetValue(),activePreset,feature,evaluationFeature,control_rr::RRUserConfirmedPresetValue(),control_rr::RRUserPresetCreateGeneration());
     } else if(rrNativeFrameEnabled&&branch==0){
