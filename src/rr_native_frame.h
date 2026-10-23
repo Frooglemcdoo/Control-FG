@@ -60,6 +60,7 @@ static RRAlbedoCallPatch rrNativeBroadDiffuseFilterPatchA{},rrNativeBroadDiffuse
 static RRAlbedoCallPatch rrNativeGIFilterPatch{};
 static bool rrNativeGIKeepThisFrame=false;
 static bool rrNativeSpecularKeepThisFrame=false,rrNativeSpecularHistoryPending=false;
+static bool rrNativeSpecularTemporalThisFrame=false;
 static RRNativeJitterOptionPatch rrNativeJitterOptionPatch{};
 static std::atomic<unsigned long long> rrNativeRegisteredOptionRepairs{0};
 static std::atomic<unsigned long long> rrNativeContactShadowBypasses{0};
@@ -424,6 +425,7 @@ static bool RRNativeHookReset(unsigned outputWidth,unsigned outputHeight,unsigne
  const unsigned specularRequest=selected&&rrNativeSpecularSamplesAvailable?native_lighting::SpecularSampleRequest(lightingMode):0;
  if(specularRequest!=rrNativeSpecularSampleRequest){
   rrNativeSpecularSampleRequest=specularRequest;
+  rrNativeSpecularHistoryPending=true;
   rrNativeFrame.ResetForSignalChange();
  }
  const unsigned giRequest=native_lighting::GiSampleRequest(lightingMode,control_rr::GISampleRequested());
@@ -445,12 +447,19 @@ static bool RRNativeHookReset(unsigned outputWidth,unsigned outputHeight,unsigne
  }
  if(rrNativeGIKeepThisFrame!=giFiltered)rrNativeFrame.ResetForSignalChange();
  rrNativeGIKeepThisFrame=giFiltered;
- const bool specularFiltered=selected&&native_lighting::PreservesSpecularFiltering(lightingMode);
- if(rrNativeSpecularKeepThisFrame!=specularFiltered){
+ const bool temporalOnly=selected&&native_lighting::UsesSpecularTemporalOnly(lightingMode)&&control_rr_temporal::ready.load(std::memory_order_acquire);
+ const bool specularFiltered=selected&&(native_lighting::PreservesSpecularFiltering(lightingMode)||temporalOnly);
+ if(rrNativeSpecularKeepThisFrame!=specularFiltered||rrNativeSpecularTemporalThisFrame!=temporalOnly){
   rrNativeFrame.ResetForSignalChange();
   if(specularFiltered)rrNativeSpecularHistoryPending=true;
  }
- rrNativeSpecularKeepThisFrame=specularFiltered;
+ rrNativeSpecularKeepThisFrame=specularFiltered;rrNativeSpecularTemporalThisFrame=temporalOnly;
+ static unsigned lastPolicy=~0u;
+ const unsigned policy=unsigned(native_lighting::IsRtSpotMode(lightingMode))|(unsigned(giFiltered)<<1)|(unsigned(temporalOnly)<<2);
+ if(policy!=lastPolicy||frame%240==0){
+  native_lighting::Trace("lighting_policy frame=%llu spot_replacement=%u gi_filter=%u specular_temporal=%u specular_request=%u gi_request=%u rr_selected=%u",
+   frame,unsigned(native_lighting::IsRtSpotMode(lightingMode)),unsigned(giFiltered),unsigned(temporalOnly),specularRequest,giRequest,unsigned(selected));lastPolicy=policy;
+ }
  rrNativeRTFrame.Begin(frame,effects,selected,giFiltered);
  control_rr_diagnostic::lastEffects.store(effects,std::memory_order_relaxed);
  control_rr_diagnostic::lastSelected.store(selected,std::memory_order_relaxed);
@@ -516,6 +525,7 @@ static void RRNativeHookTemporalBind(void* technique) {
  if(scope->preserveNativeFiltering){
   rrNativeTemporalBindOriginal(technique);
   scope->nativeFilterBound=true;
+  rrClampFrameStrength=control_rr_clamp::Requested();
   return;
  }
  const DWORD saved=GetLastError();
@@ -560,10 +570,22 @@ static void RRNativeHookDispatch(void* state,const void* groups) {
  const DWORD saved=GetLastError();
  auto access=rrReflectionAccess;access.current=&RRReflectionCurrent;access.user=nullptr;
  if(scope->preserveNativeFiltering){
+  bool variantUsed=!scope->temporalOnly;
   control_rr_specular::ObserveFilteredDispatch(*scope,access.Callbacks(),rrNativeCopy,
    reinterpret_cast<std::uintptr_t>(verifiedRenderer),control_rr_specular::TemporalDispatchRva,
-   reinterpret_cast<std::uintptr_t>(state),[&]{SetLastError(saved);rrNativeDispatchOriginal(state,groups);});
-  return;
+   reinterpret_cast<std::uintptr_t>(state),[&]{
+    SetLastError(saved);
+    if(scope->temporalOnly && scope->nativeFilterValidated) {
+     (void)control_rr_clamp::Invoke(rrNativeDispatchOriginal,state,groups,
+      reinterpret_cast<ID3D12GraphicsCommandList*>(scope->dispatch.list),rrClampFrameStrength,true,&variantUsed);
+    }else rrNativeDispatchOriginal(state,groups);
+   });
+  const DWORD temporalError=GetLastError();
+  if(scope->temporalOnly&&!variantUsed){scope->failed=true;scope->recorded=false;scope->reason="temporal_variant_unavailable";}
+  if(scope->temporalOnly&&(rrNativeFrame.Reset()||scope->frame.frame%240==0||scope->failed))
+   native_lighting::Trace("specular_temporal frame=%llu recorded=%u spatial_passes=%u history_percent=60 clamp_percent=60 variant_used=%u reason=%s",
+    static_cast<unsigned long long>(scope->frame.frame),unsigned(scope->recorded&&!scope->failed),scope->spatialPasses,unsigned(variantUsed),scope->reason);
+  SetLastError(temporalError);return;
  }
  const auto signalPath=control_rr::UseNativeSignalClamp(scope->knownReplacementContamination,scope->nativeClampPrepared,rrClampFrameStrength)
   ?control_rr_specular_policy::Path::NativeClamp
@@ -786,6 +808,7 @@ static void RRNativeHookFilter(void* color,void* history,unsigned passes,bool ev
   control_rr_diagnostic::Record(control_rr_diagnostic::Event::ReflectionNative);return;
  }
  scope.preserveNativeFiltering=rrNativeSpecularKeepThisFrame;
+ scope.temporalOnly=rrNativeSpecularTemporalThisFrame;
  if(scope.preserveNativeFiltering){
   // Reset once at the pre-filter boundary on entry, not once per frame. Native
   // setup owns missing-history allocation and the ordinary camera-cut provider.
@@ -798,7 +821,7 @@ static void RRNativeHookFilter(void* color,void* history,unsigned passes,bool ev
   }
   rrNativeSpecularHistoryPending=false;
  }
- scope.rrCommitted=true;scope.spatialPasses=scope.preserveNativeFiltering?passes:0;
+ scope.rrCommitted=true;scope.spatialPasses=scope.preserveNativeFiltering&&!scope.temporalOnly?passes:0;
  rrNativeClampLease={};rrNativeSpecularScope=&scope;
  SetLastError(saved);
  // Let native exceptions propagate. The finally block is also the last-resort

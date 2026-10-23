@@ -5,6 +5,8 @@
 #include <cstdint>
 #include <new>
 #include "rr_clamp_strength_policy.h"
+#include "rr_specular_temporal_policy.h"
+#include "../build/rr_clamp_temporal.h"
 #include "../build/rr_clamp_variants.h"
 // Diagnostic CS3: immutable PSO clones; original creation result is never replaced.
 // Only the validated RR temporal-dispatch scope may select a clone. Descriptor
@@ -20,10 +22,10 @@ inline DispatchFn dispatchOriginal=nullptr;
 inline void** deviceTable=nullptr;inline void** listTable=nullptr;
 inline SRWLOCK installLock=SRWLOCK_INIT;
 inline ID3D12Device* hostDevice=nullptr; // held for the bounded process-lifetime cache
-struct Bundle {ID3D12PipelineState* native=nullptr;ID3D12PipelineState* variants[VariantCount]{};};
+struct Bundle {ID3D12PipelineState* native=nullptr;ID3D12PipelineState* variants[VariantCount]{};ID3D12PipelineState* temporal=nullptr;};
 inline std::atomic<Bundle*> bundles[8]{};
 inline std::atomic<unsigned> bundleCount{0};
-struct Request {ID3D12GraphicsCommandList* list=nullptr;ID3D12PipelineState* observed=nullptr;unsigned strength=100,count=0;bool used=false;};
+struct Request {ID3D12GraphicsCommandList* list=nullptr;ID3D12PipelineState* observed=nullptr;unsigned strength=100,count=0;bool used=false,temporal=false;};
 inline thread_local Request* active=nullptr;
 inline bool Exchange(void** slot,void* expected,void* replacement) noexcept {
  DWORD protection=0;if(!VirtualProtect(slot,sizeof(void*),PAGE_READWRITE,&protection))return false;
@@ -53,6 +55,11 @@ inline void Capture(ID3D12Device* device,const D3D12_COMPUTE_PIPELINE_STATE_DESC
   const HRESULT hr=createOriginal(device,&copy,IID_PPV_ARGS(&b->variants[i]));
   if(FAILED(hr))Log("RR_CLAMP_CS3_VARIANT_FAILED index=%u hr=0x%08lX",i,static_cast<unsigned long>(hr));
  }
+ auto temporalDesc=*desc;temporalDesc.CachedPSO={};
+ temporalDesc.CS={kRRClampShaderTemporal,sizeof(kRRClampShaderTemporal)};
+ const HRESULT temporalResult=createOriginal(device,&temporalDesc,IID_PPV_ARGS(&b->temporal));
+ if(FAILED(temporalResult))Log("RR_TEMPORAL_CLAMP_PSO_FAILED hr=0x%08lX",static_cast<unsigned long>(temporalResult));
+ if(b->temporal)control_rr_temporal::ready.store(true,std::memory_order_release);
  bundles[index].store(b,std::memory_order_release);
  unsigned ready=0;for(auto* pipeline:b->variants)if(pipeline)++ready;
  Log("RR_CLAMP_CS3_CAPTURE native=%p variants_ready=%u total=%u root_preserved=1 cached_blob_cleared=1",b->native,ready,VariantCount);
@@ -84,7 +91,7 @@ inline void STDMETHODCALLTYPE Dispatch(ID3D12GraphicsCommandList* list,UINT x,UI
  auto* request=active;
  if(!request||request->list!=list){dispatchOriginal(list,x,y,z);return;}
  ++request->count;auto* b=Find(request->observed);const int variant=Variant(request->strength);
- auto* replacement=(b&&variant>=0)?b->variants[variant]:nullptr;
+ auto* replacement=request->temporal?(b?b->temporal:nullptr):((b&&variant>=0)?b->variants[variant]:nullptr);
  if(!Admit(true,true,b!=nullptr,replacement!=nullptr,request->count)){dispatchOriginal(list,x,y,z);return;}
  // This runs after the native DeviceUtil has committed its root/descriptors/PSO.
  // Never swap before DeviceUtil, which could overwrite the chosen PSO.
@@ -107,13 +114,14 @@ inline bool InstallList(ID3D12GraphicsCommandList* list) noexcept {
 // Internal fallback=100 and RR OFF never substitute shaders. A missed creation path or
 // unobserved native PSO gives an explicit native fallback, not a guessed binding.
 using NativeDispatchFn=void (*)(void*,const void*);
-inline bool Invoke(NativeDispatchFn fn,void* state,const void* groups,ID3D12GraphicsCommandList* list,unsigned strength) {
- Request request{};request.list=list;request.strength=strength;auto* previous=active;
+inline bool Invoke(NativeDispatchFn fn,void* state,const void* groups,ID3D12GraphicsCommandList* list,unsigned strength,bool temporal=false,bool* used=nullptr) {
+ Request request{};request.temporal=temporal;request.list=list;request.strength=strength;auto* previous=active;
  const DWORD incoming=GetLastError();DWORD nativeError=incoming;
  const bool armed=Variant(strength)>=0&&InstallList(list);
  __try {if(armed)active=&request;SetLastError(incoming);fn(state,groups);nativeError=GetLastError();}
  __finally {active=previous;}
  const bool changed=armed&&request.used&&request.count==1;
+ if(used)*used=changed;
  effective.store(changed?strength:100,std::memory_order_release);applied.store(strength==100||changed,std::memory_order_release);
  SetLastError(nativeError);return !armed||request.count<=1;
 }

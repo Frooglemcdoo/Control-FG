@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <cstring>
 #include "../src/rr_clamp_strength_policy.h"
+#include "../src/rr_specular_temporal_policy.h"
 
 static uint32_t CRC32(const void* data, size_t size) {
     uint32_t crc=0xFFFFFFFFu;
@@ -35,12 +36,23 @@ static bool BasicContract(ID3D12ShaderReflection* r,bool replacement) {
     ok=ok&&var&&SUCCEEDED(var->GetDesc(&vd))&&vd.StartOffset==8&&vd.Size==8;
     return ok;
 }
-int main() {
+static bool TemporalOffsets(ID3D12ShaderReflection* r,bool replacement) {
+    struct Field {const char* buffer;const char* name;UINT offset,size;};
+    for(const auto& field:{Field{"sys_constants",replacement?"g_vPrevViewToViewCol3":"g_mPreviousViewToView",replacement?592u:544u,replacement?16u:64u},Field{"deferredlight_filtering","g_uCameraCut",32,4}}){
+        D3D12_SHADER_VARIABLE_DESC desc{};
+        auto* variable=r->GetConstantBufferByName(field.buffer)->GetVariableByName(field.name);
+        if(!variable||FAILED(variable->GetDesc(&desc))||desc.StartOffset!=field.offset||desc.Size!=field.size)return false;
+    }
+    return true;
+}
+int main(int argc,char** argv) {
+    const bool temporal=argc==2&&std::strcmp(argv[1],"--temporal")==0;
     // Compile the same value the runtime requests; one source of truth.
     constexpr auto percent=control_rr_clamp::Requested();
     static_assert(percent>0&&percent<=100,"Clamp percentage outside supported range");
     char exponent[16]{};sprintf_s(exponent,"%u.%02u",percent/100,percent%100);
-    const D3D_SHADER_MACRO macros[]={{"FIREFLY_CLAMP",exponent},{"TEMPORAL_WEIGHT","0.0"},{nullptr,nullptr}};
+    char weight[16]{};sprintf_s(weight,"%u.%02u",control_rr_temporal::kHistoryPercent/100,control_rr_temporal::kHistoryPercent%100);
+    const D3D_SHADER_MACRO macros[]={{"FIREFLY_CLAMP",exponent},{"TEMPORAL_WEIGHT",temporal?weight:"0.0"},{nullptr,nullptr}};
 
     std::ifstream in("research/native-integration-audit/shaders/deferredlight_filtering_specular-000.dxbc",std::ios::binary);
     std::vector<unsigned char> native((std::istreambuf_iterator<char>(in)),{});
@@ -49,9 +61,10 @@ int main() {
     if(FAILED(D3DReflect(native.data(),native.size(),__uuidof(ID3D12ShaderReflection),reinterpret_cast<void**>(&nr)))||!nr||!BasicContract(nr,false)){
         if(nr)nr->Release();std::fputs("FAIL: native Control temporal shader ABI mismatch\n",stderr);return 2;
     }
+    if(temporal&&!TemporalOffsets(nr,false)){nr->Release();return 8;}
     nr->Release();
     ID3DBlob* code=nullptr;ID3DBlob* errors=nullptr;
-    HRESULT hr=D3DCompileFromFile(L"src/shaders/rr_clamp_strength.hlsl",macros,D3D_COMPILE_STANDARD_FILE_INCLUDE,"main","cs_5_1",
+    HRESULT hr=D3DCompileFromFile(temporal?L"src/shaders/rr_specular_temporal.hlsl":L"src/shaders/rr_clamp_strength.hlsl",macros,D3D_COMPILE_STANDARD_FILE_INCLUDE,"main","cs_5_1",
         D3DCOMPILE_OPTIMIZATION_LEVEL3|D3DCOMPILE_WARNINGS_ARE_ERRORS,0,&code,&errors);
     if(errors){std::fwrite(errors->GetBufferPointer(),1,errors->GetBufferSize(),stderr);errors->Release();}
     if(FAILED(hr)||!code){if(code)code->Release();return 3;}
@@ -63,17 +76,22 @@ int main() {
     const bool temporalRemoved=FAILED(rr->GetResourceBindingDescByName("history_tex",&dead))&&
       FAILED(rr->GetResourceBindingDescByName("linear_depth",&dead))&&FAILED(rr->GetResourceBindingDescByName("prev_linear_depth",&dead))&&
       FAILED(rr->GetResourceBindingDescByName("velocity_tex",&dead))&&FAILED(rr->GetResourceBindingDescByName("linear_clamp",&dead));
+    const bool temporalPresent=TemporalOffsets(rr,true)&&Binding(rr,"history_tex",D3D_SIT_TEXTURE,4,0)&&
+      Binding(rr,"linear_depth",D3D_SIT_TEXTURE,0,0)&&Binding(rr,"prev_linear_depth",D3D_SIT_TEXTURE,1,0)&&
+      Binding(rr,"velocity_tex",D3D_SIT_TEXTURE,2,0)&&Binding(rr,"linear_clamp",D3D_SIT_SAMPLER,6,1)&&
+      Binding(rr,"deferredlight_filtering",D3D_SIT_CBUFFER,1,0);
     rr->Release();
-    if(!temporalRemoved){code->Release();std::fputs("FAIL: temporal-history dependencies survived replacement optimization\n",stderr);return 5;}
-    char output[128]{};sprintf_s(output,"build/rr_clamp_fixed.h");
+    if(temporal?!temporalPresent:!temporalRemoved){code->Release();std::fputs("FAIL: temporal-history dependencies survived replacement optimization\n",stderr);return 5;}
+    char output[128]{};sprintf_s(output,"build/%s",temporal?"rr_clamp_temporal.h":"rr_clamp_fixed.h");
     FILE* file=nullptr;
     if(fopen_s(&file,output,"wb")||!file){code->Release();return 6;}
-    std::fprintf(file,"#pragma once\nstatic constexpr unsigned kRRClampCompiledPercent=%u;\nstatic const unsigned char kRRClampShaderFixed[]={\n",percent);
+    std::fprintf(file,"#pragma once\nstatic constexpr unsigned kRRClamp%sPercent=%u;\nstatic const unsigned char kRRClampShader%s[]={\n",temporal?"Temporal":"Compiled",percent,temporal?"Temporal":"Fixed");
     const auto* bytes=static_cast<const unsigned char*>(code->GetBufferPointer());
     for(size_t i=0;i<code->GetBufferSize();++i)std::fprintf(file,"0x%02x,%s",bytes[i],i%16==15?"\n":"");
-    std::fprintf(file,"\n};\nstatic constexpr unsigned int kRRClampCRCFixed=0x%08Xu;\n",CRC32(bytes,code->GetBufferSize()));
+    std::fprintf(file,"\n};\nstatic constexpr unsigned int kRRClampCRC%s=0x%08Xu;\n",temporal?"Temporal":"Fixed",CRC32(bytes,code->GetBufferSize()));
     const bool good=!std::ferror(file)&&std::fclose(file)==0;code->Release();
     if(!good)return 7;
-    std::printf("PASS: Control 0x600347E7 ABI verified; CS3 fixed %u%% current-frame clamp compiled cs_5_1; t3/s11(space1)/u0/b0 and 8x8x1 verified; temporal history compiled out\n",percent);
+    if(!temporal)std::printf("PASS: Control 0x600347E7 ABI verified; CS3 fixed %u%% current-frame clamp compiled cs_5_1; t3/s11(space1)/u0/b0 and 8x8x1 verified; temporal history compiled out\n",percent);
+    if(temporal)std::puts("PASS: optional temporal shader retains history/depth/motion/camera-cut bindings, 60 percent clamp, zero spatial passes");
     return 0;
 }

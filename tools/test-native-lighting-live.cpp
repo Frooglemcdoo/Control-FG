@@ -89,6 +89,21 @@ int main(){
     assert(GiSampleRequest(Mode::RtSpotGi8,2)==8&&GiSampleRequest(Mode::RtSpotGiMenu,8)==0);
     assert(GiSampleRequest(Mode::RtSpotWorldAlbedo,6)==6);
     assert(GiSampleRequest(Mode::RtSpotGi12,4)==12&&GiSampleRequest(Mode::RtSpotGi16,4)==16);
+    for(auto mode:{Mode::RoomNative,Mode::RoomGi,Mode::RoomSpot,Mode::RoomBoth}){
+        assert(SpecularSampleRequest(mode)==4&&GiSampleRequest(mode,6)==6&&UsesWorldAlbedo(mode));
+        assert(!Disables(mode,kGiBit)&&!Disables(mode,kDirectBit));
+        assert(IsRtSpotMode(mode)==(mode==Mode::RoomSpot||mode==Mode::RoomBoth));
+        assert(PreservesGiFiltering(mode)==(mode==Mode::RoomGi||mode==Mode::RoomBoth));
+        assert(!UsesSpecularTemporalOnly(mode));
+        assert(LiveSelection::GetMode(live.Select(mode))==mode);
+    }
+    specularSamplesReady.store(true);
+    for(auto mode:{Mode::RtSpotTemporal2,Mode::RtSpotTemporal4}){
+        control_rr_temporal::ready.store(false);assert(!ModeAvailable(mode,kRtSpotReadyBit));
+        control_rr_temporal::ready.store(true);assert(ModeAvailable(mode,kRtSpotReadyBit));
+        assert(UsesSpecularTemporalOnly(mode)&&!PreservesSpecularFiltering(mode)&&PreservesGiFiltering(mode));
+        assert(UsesWorldAlbedo(mode)&&IsRtSpotMode(mode));
+    }
     // UI snapshots must not reset or lose concurrent render-side observations.
     control_rr_diagnostic::Counters counters;
     using Event=control_rr_diagnostic::Event;

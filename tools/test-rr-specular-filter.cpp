@@ -40,6 +40,7 @@ int main(){
   if(fault==11)s.preserveNativeFiltering=false;
   ObserveFilteredDispatch(s,f.Callbacks(),f,1,site,123,[&]{++f.calls;assert(!s.recorded&&s.failed);});
   assert(f.calls==1&&f.copies==0);
+  assert(s.nativeFilterValidated==(fault==0));
   assert(s.recorded==(fault==0)&&s.failed==(fault!=0));
  }
  Fixture f;auto s=f.NewScope();

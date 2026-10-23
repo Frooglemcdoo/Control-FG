@@ -15,7 +15,7 @@ struct Scope {
  Context frame{},dispatch{};
  Address sourceNative=0;
  bool rrCommitted=false;
- bool preserveNativeFiltering=false,nativeFilterBound=false;
+ bool preserveNativeFiltering=false,nativeFilterBound=false,nativeFilterValidated=false,temporalOnly=false;
  unsigned spatialPasses=0;
  bool attempted=false,recorded=false,referenceDispatched=false,nativeClampPrepared=false,nativeClampDispatched=false,nativeClampRestoreFailed=false,knownReplacementContamination=false,failed=false;
  const char* reason="not_attempted";
@@ -87,6 +87,7 @@ template<class Api,class Dispatch> void ObserveFilteredDispatch(Scope& scope,con
  Address renderer,Address site,Address deviceState,Dispatch dispatch) {
  const bool admitted=scope.preserveNativeFiltering&&scope.nativeFilterBound&&
   ValidateReferenceDispatch(scope,a,api,renderer,site,deviceState,true);
+ scope.nativeFilterValidated=admitted;
  scope.attempted=true;scope.failed=true;
  dispatch();
  if(admitted){scope.recorded=true;scope.failed=false;scope.reason="native_specular_filter_recorded";}

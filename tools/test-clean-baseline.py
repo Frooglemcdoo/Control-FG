@@ -21,11 +21,18 @@ world_albedo_exceptions = json.loads((root/'tools/fixtures/r102-baseline-excepti
 specular_filter_exceptions = json.loads((root/'tools/fixtures/r103-baseline-exceptions.json').read_text())
 clamp_90_exceptions = json.loads((root/'tools/fixtures/r104-baseline-exceptions.json').read_text())
 restore_60_exceptions = json.loads((root/'tools/fixtures/r105-baseline-exceptions.json').read_text())
+temporal_exceptions = json.loads((root/'tools/fixtures/r111-baseline-exceptions.json').read_text())
 for name, expected in manifest['files'].items():
     if name == 'src/fg_overlay.h':
         assert not (root / name).exists(), 'Legacy settings popup must remain removed'
         continue # R42 replaces UI-only code with fg_settings.h; renderer hashes remain enforced.
     data = (root / name).read_bytes().replace(b'\r\n', b'\n')
+    if name in temporal_exceptions:
+        text=data.decode()
+        for before,after in reversed(temporal_exceptions[name]):
+            assert text.count(after)==1, (name, 'R111 scoped temporal diagnostic changed or duplicated')
+            text=text.replace(after,before,1)
+        data=text.encode()
     if name in restore_60_exceptions:
         text=data.decode()
         for before,after in reversed(restore_60_exceptions[name]):
