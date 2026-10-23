@@ -5,7 +5,7 @@ namespace rt_spot_hit_pipeline {
 #include "../build/rt_spot_hit_capture.h"
 inline const GUID kPipeline={0x964c9021,0x414a,0x43d4,{0xa1,0x11,0x70,0x00,0x00,0x00,0x00,0x01}};
 inline const GUID kIdentifiers={0x964c9021,0x414a,0x43d4,{0xa1,0x11,0x70,0x00,0x00,0x00,0x00,0x02}};
-inline HRESULT Prepare(ID3D12Device5* device,const D3D12_STATE_OBJECT_DESC* native,ID3D12StateObject* owner) noexcept {
+inline HRESULT Prepare(ID3D12Device5* device,const D3D12_STATE_OBJECT_DESC* native,ID3D12Object* owner) noexcept {
     const D3D12_DXIL_LIBRARY_DESC* library=nullptr;
     const D3D12_GLOBAL_ROOT_SIGNATURE* global=nullptr;
     const D3D12_LOCAL_ROOT_SIGNATURE* local=nullptr;

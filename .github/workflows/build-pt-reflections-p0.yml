@@ -360,6 +360,39 @@ jobs:
           build\test-native-lighting-live-warp.exe
           if errorlevel 1 exit /b 1
 
+      - name: Build and validate standalone capture preflight R130
+        shell: cmd
+        run: |
+          call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
+          python tools/embed-capture-preflight.py
+          if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /O2 /MT tools\capture-preflight.cpp /Febuild\Capture-Preflight.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
+          if errorlevel 1 exit /b 1
+          build\Capture-Preflight.exe --warp
+          if errorlevel 1 exit /b 1
+
+      - name: Package standalone capture preflight R130
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $out='Control-FG-Capture-Preflight-R130'
+          New-Item -ItemType Directory -Force -Path $out | Out-Null
+          Copy-Item build/Capture-Preflight.exe "$out/Capture-Preflight.exe"
+          Copy-Item tools/Run-Capture-Preflight.cmd "$out/Run-Capture-Preflight.cmd"
+          Copy-Item docs/capture-preflight-r130.md "$out/README.md"
+          Compress-Archive -Path $out -DestinationPath "$out.zip" -Force
+          (Get-FileHash "$out.zip" -Algorithm SHA256).Hash | Set-Content "$out.sha256" -Encoding ASCII
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Control-FG-Capture-Preflight-R130
+          path: |
+            Control-FG-Capture-Preflight-R130.zip
+            Control-FG-Capture-Preflight-R130.sha256
+            ~/AppData/Local/Control-FG/Diagnostics/Capture-R130-*.log
+          retention-days: 7
+
       - name: Validate diagnostic report saving
         shell: cmd
         run: |

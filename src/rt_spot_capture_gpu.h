@@ -64,7 +64,7 @@ inline void Transition(ID3D12GraphicsCommandList* list,ID3D12Resource* resource,
 inline void UavBarrier(ID3D12GraphicsCommandList* list) noexcept {
     D3D12_RESOURCE_BARRIER barrier{};barrier.Type=D3D12_RESOURCE_BARRIER_TYPE_UAV;list->ResourceBarrier(1,&barrier);
 }
-inline HRESULT PreparePipeline(ID3D12Device5* device,ID3D12StateObject* owner,ID3D12RootSignature* root) noexcept {
+inline HRESULT PrepareInputPipeline(ID3D12Device5* device,ID3D12Object* owner,ID3D12RootSignature* root) noexcept {
     if constexpr (!rt_spot_capture::GpuCaptureEnabled) return E_NOTIMPL;
     D3D12_EXPORT_DESC entry{L"captureNativeInputs",nullptr,D3D12_EXPORT_FLAG_NONE};
     D3D12_DXIL_LIBRARY_DESC library{{kSpotCaptureInputsShader,sizeof(kSpotCaptureInputsShader)},1,&entry};
@@ -82,6 +82,11 @@ inline HRESULT PreparePipeline(ID3D12Device5* device,ID3D12StateObject* owner,ID
     if(SUCCEEDED(hr) && !identifier)hr=E_FAIL;
     if(SUCCEEDED(hr))hr=owner->SetPrivateData(kInputIdentifier,32,identifier);
     if(SUCCEEDED(hr))hr=owner->SetPrivateDataInterface(kInputState,input.Get());
+    return hr;
+}
+inline HRESULT PrepareTablePipelines(ID3D12Device* device,ID3D12Object* owner,ID3D12RootSignature* root) noexcept {
+    if constexpr (!rt_spot_capture::GpuCaptureEnabled) return E_NOTIMPL;
+    HRESULT hr=S_OK;
     D3D12_COMPUTE_PIPELINE_STATE_DESC compute{};compute.pRootSignature=root;
     ComPtr<ID3D12PipelineState> translate,clear;
     compute.CS={kSpotCaptureTranslateShader,sizeof(kSpotCaptureTranslateShader)};
@@ -90,6 +95,12 @@ inline HRESULT PreparePipeline(ID3D12Device5* device,ID3D12StateObject* owner,ID
     if(SUCCEEDED(hr))hr=device->CreateComputePipelineState(&compute,IID_PPV_ARGS(&clear));
     if(SUCCEEDED(hr))hr=owner->SetPrivateDataInterface(kTranslate,translate.Get());
     if(SUCCEEDED(hr))hr=owner->SetPrivateDataInterface(kClear,clear.Get());
+    return hr;
+}
+inline HRESULT PreparePipeline(ID3D12Device5* device,ID3D12StateObject* owner,ID3D12RootSignature* root) noexcept {
+    if constexpr (!rt_spot_capture::GpuCaptureEnabled) return E_NOTIMPL;
+    HRESULT hr=PrepareInputPipeline(device,owner,root);
+    if(SUCCEEDED(hr))hr=PrepareTablePipelines(device,owner,root);
     Trace("rt_hit_gpu_pipelines ready=%u hr=0x%08lX exact_native_inputs=1 grid=64",unsigned(SUCCEEDED(hr)),static_cast<unsigned long>(hr));
     return hr;
 }
