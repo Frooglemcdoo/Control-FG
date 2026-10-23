@@ -20,11 +20,18 @@ inline unsigned dispatchReports=0;
 inline constexpr unsigned kMaximumQueues=32;
 struct QueueClock {
     UINT64 value[kMaximumQueues]{};
+    UINT64 dependencies[2]{}; // Provenance for the bounded 128-fence registry.
+    bool UsesFence(unsigned fence)const noexcept {return (dependencies[fence/64] & (UINT64(1)<<(fence%64)))!=0;}
+    void AddFence(unsigned fence) noexcept {dependencies[fence/64]|=UINT64(1)<<(fence%64);}
+    void KeepLocal(unsigned queue) noexcept {
+        const auto local=value[queue];*this={};value[queue]=local;
+    }
     bool Includes(const QueueClock& other)const noexcept {
         for(unsigned i=0;i<kMaximumQueues;++i)if(value[i]<other.value[i])return false;
         return true;
     }
     void Merge(const QueueClock& other) noexcept {
+        for(unsigned i=0;i<2;++i)dependencies[i]|=other.dependencies[i];
         for(unsigned i=0;i<kMaximumQueues;++i)if(value[i]<other.value[i])value[i]=other.value[i];
     }
 };
@@ -189,7 +196,7 @@ inline void Replay(UINT64 token) noexcept {
             rt_spot_capture::TableIdentifiers counts;
             if(complete)counts=rt_spot_capture::CountTableIdentifiers(mirror+offset,e.size,e.identifiers[0],e.identifiers[1]);
             const bool valid=complete && !counts.unknown && (counts.group0+counts.group1)>0;
-            if(dispatchReports++<8 || valid)Trace("rt_hit_table_submission request=%llu queue=%llu generation=%llu coverage_complete=%u records=%llu group0=%u group1=%u empty=%u unknown=%u identifiers_validated=%u copy_bytes=%llu gpu_completion_confirmed=0 gpu_hit_capture=0",activeRequest.load(),queueIdentity,token,unsigned(complete),e.size/96,counts.group0,counts.group1,counts.empty,counts.unknown,unsigned(valid),copiedBytes.load());
+            if(dispatchReports++<8 || valid)Trace("rt_hit_table_submission request=%llu queue=%llu generation=%llu coverage_complete=%u records=%llu group0=%u group1=%u empty=%u unknown=%u identifiers_validated=%u copy_bytes=%llu dependency_ordered=%u gpu_completion_confirmed=0 gpu_hit_capture=0",activeRequest.load(),queueIdentity,token,unsigned(complete),e.size/96,counts.group0,counts.group1,counts.empty,counts.unknown,unsigned(valid),copiedBytes.load(),unsigned(ordered));
             if(valid) {
                 for(unsigned n=0;n<2;++n){char hex[65]{};audit::Hex(e.identifiers[n],32,hex);Trace("rt_hit_table_identifier group=%u bytes=%s",n,hex);}
                 const UINT64 records=e.size/96,indices[]={0ull,records>1?1ull:0ull,records/2,records-1};
@@ -213,23 +220,26 @@ struct QueueState {
     UINT64 identity=0;unsigned head=kNoNode,tail=kNoNode;bool busy=false;
     QueueClock clock;
 };
-struct FenceState { UINT64 identity=0,baseline=0,lastValue=0;unsigned producer=kNoNode; };
+struct FenceState {
+    UINT64 identity=0,baseline=0,lastValue=0;unsigned producer=kNoNode;
+    bool unsupported=false;
+};
 struct QueueNode {
     QueueOperation operation=QueueOperation::Execute;
     unsigned queue=0,fence=kNoNode,next=kNoNode;
-    UINT64 value=0,token=0;bool ready=false,processed=false;
+    UINT64 value=0,token=0;bool ready=false,processed=false,pendingReported=false;
     QueueClock signalClock;
 };
 inline QueueState queues[kMaximumQueues];
 inline FenceState fences[kMaximumFences];
 inline QueueNode queueNodes[kMaximumQueueNodes];
 inline unsigned queueCount=0,fenceCount=0,queueNodeCount=0;
-inline unsigned waitReports=0;
+inline unsigned waitReports=0,signalReports=0;
 inline const GUID kFenceIdentity={0xf27cd9f1,0xf963,0x467a,{0x91,0x40,0x24,0x00,0x00,0x00,0x00,0x01}};
 inline void ResetQueueOrder() noexcept {
     for(auto& q:queues)q={};
     for(auto& f:fences)f={};
-    queueCount=fenceCount=queueNodeCount=waitReports=0;
+    queueCount=fenceCount=queueNodeCount=waitReports=signalReports=0;
     replayClock={};lastWriteClock={};
 }
 inline unsigned FindQueue(ID3D12CommandQueue* queue) noexcept {
@@ -252,6 +262,27 @@ inline unsigned FindFence(ID3D12Fence* fence) noexcept {
     if(baseline==~UINT64(0)){Stop("device_removed");return kNoNode;}
     const auto index=fenceCount++;fences[index]={identity,baseline,baseline,kNoNode};return index;
 }
+// Unsupported fence behavior removes only proofs that used that fence. Native
+// calls still run. Same-queue order and independent fence proofs remain usable.
+inline void IsolateFence(unsigned index,const char* reason,UINT64 queue,UINT64 value) noexcept {
+    auto& fence=fences[index];if(fence.unsupported)return;
+    fence.unsupported=true;
+    const UINT64 previousQueue=fence.producer==kNoNode?0:queues[fence.producer].identity;
+    unsigned affectedQueues=0,affectedSignals=0;
+    for(unsigned i=0;i<queueCount;++i)if(queues[i].clock.UsesFence(index)) {
+        queues[i].clock.KeepLocal(i);++affectedQueues;
+    }
+    for(unsigned i=0;i<queueNodeCount;++i) {
+        auto& node=queueNodes[i];
+        if(node.operation==QueueOperation::Signal && node.signalClock.UsesFence(index)) {
+            node.signalClock.KeepLocal(node.queue);++affectedSignals;
+        }
+    }
+    const bool discard=lastWriteClock.UsesFence(index);
+    if(discard){coverage.Clear();lastWriteClock={};}
+    Trace("rt_hit_table_fence_isolated reason=%s fence=%llu queue=%llu previous_queue=%llu value=%llu previous_value=%llu baseline=%llu affected_queues=%u affected_signals=%u coverage_discarded=%u capture_continues=1",
+        reason,fence.identity,queue,previousQueue,value,fence.lastValue,fence.baseline,affectedQueues,affectedSignals,unsigned(discard));
+}
 inline unsigned AppendNode(unsigned queue,QueueOperation operation,UINT64 token=0,unsigned fence=kNoNode,UINT64 value=0) noexcept {
     if(queueNodeCount==kMaximumQueueNodes){Stop("queue_event_budget");return kNoNode;}
     const auto index=queueNodeCount++;auto& node=queueNodes[index];node={};
@@ -268,7 +299,9 @@ inline void DrainQueueOrder() noexcept {
             auto& node=queueNodes[q.head];if(!node.ready)continue;
             if(node.operation==QueueOperation::Wait) {
                 const auto& fence=fences[node.fence];
-                if(node.value>fence.baseline) {
+                if(fence.unsupported) {
+                    if(waitReports++<32)Trace("rt_hit_table_fence_wait queue=%llu fence=%llu value=%llu dependency_resolved=0 reason=isolated_fence capture_continues=1",q.identity,fence.identity,node.value);
+                } else if(node.value>fence.baseline) {
                     const QueueNode* signal=nullptr;
                     for(unsigned i=0;i<queueNodeCount;++i) {
                         const auto& candidate=queueNodes[i];
@@ -276,8 +309,11 @@ inline void DrainQueueOrder() noexcept {
                             signal=&candidate;break;
                         }
                     }
-                    if(!signal || !signal->processed)continue;
-                    q.clock.Merge(signal->signalClock);
+                    if(!signal || !signal->processed) {
+                        if(!node.pendingReported && waitReports++<32)Trace("rt_hit_table_fence_pending queue=%llu fence=%llu value=%llu baseline=%llu matching_signal=%u signal_processed=%u",q.identity,fence.identity,node.value,fence.baseline,unsigned(signal!=nullptr),unsigned(signal && signal->processed));
+                        node.pendingReported=true;continue;
+                    }
+                    q.clock.Merge(signal->signalClock);q.clock.AddFence(node.fence);
                     if(waitReports++<16)Trace("rt_hit_table_fence_wait queue=%llu fence=%llu value=%llu signal=%llu dependency_resolved=1",q.identity,fence.identity,node.value,signal->value);
                 }
             }
@@ -315,9 +351,14 @@ inline QueueCall BeginQueueCall(ID3D12CommandQueue* queue,QueueOperation operati
                 if(f!=kNoNode && !done.load()) {
                     auto& state=fences[f];
                     if(operation==QueueOperation::Signal) {
-                        if((state.producer!=kNoNode && state.producer!=index) || value<=state.lastValue)
-                            Stop("ambiguous_fence_timeline");
-                        else {state.producer=index;state.lastValue=value;}
+                        if(state.producer!=kNoNode && state.producer!=index)
+                            IsolateFence(f,"multiple_queue_producers",q.identity,value);
+                        else if(value<state.lastValue)
+                            IsolateFence(f,"decreasing_value",q.identity,value);
+                        // Equal values are legal: a wait must use the earliest
+                        // sufficient signal, never gain the later signal's work.
+                        if(signalReports++<32)Trace("rt_hit_table_fence_signal queue=%llu fence=%llu value=%llu previous_value=%llu baseline=%llu repeated=%u isolated=%u",q.identity,state.identity,value,state.lastValue,state.baseline,unsigned(value==state.lastValue),unsigned(state.unsupported));
+                        if(!state.unsupported){state.producer=index;state.lastValue=value;}
                     }
                     if(!done.load())AppendNode(index,operation,0,f,value);
                 }
@@ -381,7 +422,14 @@ inline HRESULT STDMETHODCALLTYPE WaitHook(ID3D12CommandQueue* queue,ID3D12Fence*
 inline HRESULT STDMETHODCALLTYPE CpuSignalHook(ID3D12Fence* fence,UINT64 value) {
     // CPU signals do not carry a GPU queue dependency. Never let one silently
     // satisfy a recorded GPU producer/consumer edge.
-    CaptureLease lease;if(lease)Stop("cpu_fence_signal_unverified");
+    CaptureLease lease;
+    if(lease) {
+        AcquireSRWLockExclusive(&submissionLock);
+        const auto index=FindFence(fence);
+        if(index!=kNoNode)IsolateFence(index,"cpu_signal",0,value);
+        if(!done.load())DrainQueueOrder();
+        ReleaseSRWLockExclusive(&submissionLock);
+    }
     CpuSignal original=nullptr;auto** table=*reinterpret_cast<void***>(fence);
     AcquireSRWLockShared(&queueHookLock);
     for(const auto& entry:fenceHooks)if(entry.table==table){original=entry.signal;break;}

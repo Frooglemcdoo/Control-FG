@@ -406,11 +406,11 @@ jobs:
       - name: Preserve verified glass raygen across DXC updates
         run: python tools/prepare-canonical-glass.py
 
-      - name: Package live lighting diagnostic R124
+      - name: Package live lighting diagnostic R125
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-Native-Lighting-Live-R124'
+          $out='Control-FG-Native-Lighting-Live-R125'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
           Copy-Item build/rt_spot_selected_off.dxbc,build/rt_spot_selection.dxbc,build/rt_spot_visibility.dxbc,build/rt_spot_light_ids.dxbc,build/rt_spot_raw_history.dxbc,build/rt_spot_raw_spatial0.dxbc,build/rt_spot_raw_spatial1.dxbc,build/rt_spot_full.dxil,build/rt_spot_r94.dxil,build/rt_spot_light.dxbc,build/rt_spot_reset.dxbc,build/rt_spot_history.dxbc,build/rt_spot_spatial0.dxbc,build/rt_spot_spatial1.dxbc $out
@@ -428,17 +428,17 @@ jobs:
           Copy-Item Collect-RR-Blinds-Capture.ps1 "$out/Collect-RR-Blinds-Capture.ps1"
           Copy-Item Collect-ControlFG-Compact-Logs.cmd "$out/Collect-ControlFG-Compact-Logs.cmd"
           Copy-Item Collect-ControlFG-Compact-Logs.ps1 "$out/Collect-ControlFG-Compact-Logs.ps1"
-          Copy-Item docs/spot-capture-r124.md "$out/DIAGNOSTIC-NOTES.md"
+          Copy-Item docs/spot-capture-r125.md "$out/DIAGNOSTIC-NOTES.md"
           @'
-          CONTROL-FG R124 - Read-only native hit-capture setup audit
+          CONTROL-FG R125 - Read-only native hit-capture setup audit
           Close Control to install. Copy contents beside Control_DX12.exe.
           Preserve existing NVIDIA runtimes and the ControlFGStreamline folder.
           Use Borderless. Load the affected cafeteria room with FG and glass enhancements OFF. RR bypass is automatic in signal views.
           Enable native RT Contact Shadows. Keep the same camera position for comparison.
           F10: select BOTH and let gameplay run for 70 seconds, then SAVE LOG.
           Set game Ray Tracing Samples Count to 1. Keep the saved GI setting fixed. Let each settle 10 seconds.
-          Send the Lighting-R124 log. No new screenshots are needed for this setup audit.
-          No restart between modes. SAVE LOG writes one Lighting-R124 session log.
+          Send the Lighting-R125 log. No new screenshots are needed for this setup audit.
+          No restart between modes. SAVE LOG writes one Lighting-R125 session log.
           This replaces one selected spotlight per pixel, not every shadow in the scene.
           An unavailable button means the required native shader pair was not prepared.
           HIT BANDS is a diagnostic image, not a lighting fix. RR is automatically bypassed in signal views.
@@ -457,10 +457,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-Native-Lighting-Live-R124
+          name: Control-FG-Native-Lighting-Live-R125
           path: |
-            Control-FG-Native-Lighting-Live-R124.zip
-            Control-FG-Native-Lighting-Live-R124.sha256
+            Control-FG-Native-Lighting-Live-R125.zip
+            Control-FG-Native-Lighting-Live-R125.sha256
             build/rt_spot_shadow_prototype.dxil
             build/rr_clamp_fixed.h
             build/rt_spot_blocker.dxil

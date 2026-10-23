@@ -414,11 +414,11 @@ static void TestCopyAudit(ID3D12Device* device) {
     mirror::Request();mirror::BeginIfRequested();
     fenceOperation(queue.Get(),mirror::QueueOperation::Signal,orderingFence.Get(),7);
     fenceOperation(otherQueue.Get(),mirror::QueueOperation::Signal,orderingFence.Get(),8);
-    if(!mirror::done.load() || mirror::validated.load())throw std::runtime_error("multiple fence producers accepted");
+    if(mirror::done.load() || mirror::validated.load() || !mirror::fences[mirror::FindFence(orderingFence.Get())].unsupported)throw std::runtime_error("multiple fence producers were not isolated");
     mirror::Request();mirror::BeginIfRequested();
     fenceOperation(queue.Get(),mirror::QueueOperation::Signal,orderingFence.Get(),7);
     fenceOperation(queue.Get(),mirror::QueueOperation::Signal,orderingFence.Get(),6);
-    if(!mirror::done.load() || mirror::validated.load())throw std::runtime_error("fence rewind accepted");
+    if(mirror::done.load() || mirror::validated.load() || !mirror::fences[mirror::FindFence(orderingFence.Get())].unsupported)throw std::runtime_error("fence rewind was not isolated");
     // Metadata calls on different queues may overlap. Publish the wait before
     // the in-flight signal completes, then verify deferred progress.
     mirror::Request();mirror::BeginIfRequested();
@@ -433,9 +433,64 @@ static void TestCopyAudit(ID3D12Device* device) {
     if(!mirror::validated.load())throw std::runtime_error("overlapping different queues did not resolve");
     mirror::Request();mirror::BeginIfRequested();
     mirror::InstallFence(orderingFence.Get());Check(orderingFence->Signal(10));
-    if(!mirror::done.load() || mirror::validated.load() || orderingFence->GetCompletedValue()!=10)
+    if(mirror::done.load() || mirror::validated.load() || orderingFence->GetCompletedValue()!=10 || !mirror::fences[mirror::FindFence(orderingFence.Get())].unsupported)
         throw std::runtime_error("CPU fence signal was not forwarded and rejected as GPU evidence");
-    std::cout<<"PASS cross-queue capture: native future Signal/Wait forwarding, deferred unordered dispatch, exact and greater values, transitive dependencies, concurrent queues, failed signals and ambiguous fence rejection\n";
+    // Repeated values cannot prove work added after the first sufficient signal.
+    mirror::Request();mirror::BeginIfRequested();
+    fenceOperation(queue.Get(),mirror::QueueOperation::Signal,relayFence.Get(),1);
+    mirror::Observe(list.Get(),destination.Get(),0,source.Get(),0,512);
+    mirror::Submitted(queue.Get(),1,producer);
+    fenceOperation(queue.Get(),mirror::QueueOperation::Signal,relayFence.Get(),1);
+    fenceOperation(otherQueue.Get(),mirror::QueueOperation::Wait,relayFence.Get(),1);
+    mirror::RecordDispatch(dispatchList.Get(),audit::targetAddress,384,ids);
+    mirror::Submitted(otherQueue.Get(),1,consumer);
+    if(mirror::done.load())throw std::runtime_error("repeated signal either aborted or imported later work");
+    fenceOperation(queue.Get(),mirror::QueueOperation::Signal,relayFence.Get(),2);
+    fenceOperation(otherQueue.Get(),mirror::QueueOperation::Wait,relayFence.Get(),2);
+    mirror::Token(dispatchList.Get(),true);mirror::RecordDispatch(dispatchList.Get(),audit::targetAddress,384,ids);
+    mirror::Submitted(otherQueue.Get(),1,consumer);
+    if(!mirror::validated.load())throw std::runtime_error("new sufficient signal failed after repeated value");
+    // An unrelated ambiguous fence must not destroy independent capture work.
+    mirror::Request();mirror::BeginIfRequested();
+    mirror::Observe(list.Get(),destination.Get(),0,source.Get(),0,512);mirror::Submitted(queue.Get(),1,producer);
+    fenceOperation(queue.Get(),mirror::QueueOperation::Signal,orderingFence.Get(),11);
+    fenceOperation(otherQueue.Get(),mirror::QueueOperation::Signal,orderingFence.Get(),12);
+    fenceOperation(otherQueue.Get(),mirror::QueueOperation::Wait,orderingFence.Get(),12);
+    mirror::RecordDispatch(dispatchList.Get(),audit::targetAddress,384,ids);mirror::Submitted(otherQueue.Get(),1,consumer);
+    if(mirror::done.load() || !mirror::coverage.Covers(128,384))throw std::runtime_error("isolated fence imported work or destroyed unrelated coverage");
+    fenceOperation(queue.Get(),mirror::QueueOperation::Signal,relayFence.Get(),1);
+    fenceOperation(otherQueue.Get(),mirror::QueueOperation::Wait,relayFence.Get(),1);
+    mirror::Token(dispatchList.Get(),true);mirror::RecordDispatch(dispatchList.Get(),audit::targetAddress,384,ids);
+    mirror::Submitted(otherQueue.Get(),1,consumer);
+    if(!mirror::validated.load())throw std::runtime_error("independent dependency failed after fence isolation");
+    // Invalidate an already imported edge, including its transitive relay.
+    mirror::Request();mirror::BeginIfRequested();
+    mirror::Observe(list.Get(),destination.Get(),0,source.Get(),0,512);mirror::Submitted(queue.Get(),1,producer);
+    fenceOperation(queue.Get(),mirror::QueueOperation::Signal,orderingFence.Get(),13);
+    fenceOperation(otherQueue.Get(),mirror::QueueOperation::Wait,orderingFence.Get(),13);
+    fenceOperation(otherQueue.Get(),mirror::QueueOperation::Signal,relayFence.Get(),1);
+    fenceOperation(thirdQueue.Get(),mirror::QueueOperation::Wait,relayFence.Get(),1);
+    fenceOperation(otherQueue.Get(),mirror::QueueOperation::Signal,orderingFence.Get(),14);
+    mirror::RecordDispatch(dispatchList.Get(),audit::targetAddress,384,ids);mirror::Submitted(thirdQueue.Get(),1,consumer);
+    if(mirror::done.load())throw std::runtime_error("revoked transitive dependency still validated or aborted capture");
+    ComPtr<ID3D12Fence> independentFence;Check(device->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&independentFence)));
+    fenceOperation(queue.Get(),mirror::QueueOperation::Signal,independentFence.Get(),1);
+    fenceOperation(thirdQueue.Get(),mirror::QueueOperation::Wait,independentFence.Get(),1);
+    mirror::Token(dispatchList.Get(),true);mirror::RecordDispatch(dispatchList.Get(),audit::targetAddress,384,ids);
+    mirror::Submitted(thirdQueue.Get(),1,consumer);
+    if(!mirror::validated.load())throw std::runtime_error("capture did not recover after dependency revocation");
+    // CPU signaling is forwarded and isolated, while unrelated same-queue data survives.
+    mirror::Request();mirror::BeginIfRequested();
+    mirror::Observe(list.Get(),destination.Get(),0,source.Get(),0,512);mirror::Submitted(queue.Get(),1,producer);
+    Check(orderingFence->Signal(20));
+    mirror::RecordDispatch(dispatchList.Get(),audit::targetAddress,384,ids);mirror::Submitted(queue.Get(),1,consumer);
+    if(!mirror::validated.load() || orderingFence->GetCompletedValue()!=20)throw std::runtime_error("unrelated CPU signal stopped capture or was not forwarded");
+    const auto fenceLogLength=native_lighting::diagnosticLog.Drain(log.data(),log.size());
+    const std::string fenceLog(log.data(),fenceLogLength);
+    for(const char* marker:{"reason=multiple_queue_producers","reason=decreasing_value","reason=cpu_signal","previous_queue=","previous_value=","baseline=","capture_continues=1","repeated=1"})
+        if(fenceLog.find(marker)==std::string::npos)throw std::runtime_error("fence diagnostic detail missing");
+    std::cout<<"PASS scoped fence capture: repeated values do not import later work, unrelated ambiguity survives, transitive proofs revoked, independent recovery, native CPU signal forwarding, exact diagnostic values\n";
+    std::cout<<"PASS cross-queue capture: native future Signal/Wait forwarding, deferred unordered dispatch, exact and greater values, transitive dependencies, concurrent queues, failed signals and scoped fence isolation\n";
     mirror::Request();mirror::BeginIfRequested();mirror::copiedBytes=mirror::kCopyBudget;
     mirror::Observe(list.Get(),destination.Get(),0,source.Get(),0,192);
     if(!mirror::done.load())throw std::runtime_error("copy budget not enforced");
