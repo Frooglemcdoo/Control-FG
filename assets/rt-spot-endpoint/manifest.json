@@ -1,8 +1,8 @@
 {
   "baseline_sha256": "26688736d38b5ea056ae6bb37dc1a738334d94c784003a67957f3677f789a246",
-  "sha256": "cc16c3602b6735a6ddb3592466ef954de028db13fb9a990051914fad25821131",
-  "bytes": 55048,
-  "radius_scale": 1,
-  "maximum_segment_fraction": 0.1,
+  "sha256": "5583c1de1ed094bcf11f70bc731bf9eaf757b47918b10ea7d8e6869bcb0b9708",
+  "bytes": 55152,
+  "radius_scale": 0.1,
+  "maximum_segment_fraction": 0.01,
   "changed": "Four spotlight TMax equations only; existing payload initialization and hit comparison share the new endpoint."
 }

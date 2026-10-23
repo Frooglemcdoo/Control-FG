@@ -362,7 +362,7 @@ inline HRESULT CreateAugmentedInternal(ID3D12Device5* device, const D3D12_STATE_
             prepared=state->SetPrivateDataInterface(kRecord,record.Get());
         }
         spotEndpointReady.store(SUCCEEDED(prepared)&&endpointAvailable,std::memory_order_release);
-        Trace("rt_spot_endpoint ready=%u radius_scale=1 max_segment_fraction=0.1",unsigned(SUCCEEDED(prepared)&&endpointAvailable));
+        Trace("rt_spot_endpoint ready=%u radius_scale=%.3f max_segment_fraction=%.3f",unsigned(SUCCEEDED(prepared)&&endpointAvailable),double(kSpotEndpointRadiusScale),double(kSpotEndpointCapFraction));
         if (SUCCEEDED(prepared)) components.fetch_or(kRayComponent);
         RefreshReady();Trace("rt_spot_state ready=%u native_exports_retained=1 variant=%s replacement=R97_center_probe_with_R94_baseline spot_samples=4 point_samples=1",unsigned(SUCCEEDED(prepared)),variantName);
         return hr;

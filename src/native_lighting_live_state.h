@@ -96,7 +96,7 @@ inline constexpr ModeChoice kModeChoices[] = {
     {Mode::RoomBoth, L"BOTH"},
     {Mode::RtSpotSpec16, L"SPEC 16"},
     {Mode::RoomRaw, L"RAW"},
-    {Mode::RoomEndpoint, L"END GUARD"},
+    {Mode::RoomEndpoint, L"TIGHT END"},
     {Mode::RoomOpen, L"LIGHT OPEN"},
     {Mode::RoomNativeSelection, L"NATIVE PICK"},
     {Mode::RoomSelectedOff, L"LIGHT OFF"},

@@ -3,11 +3,17 @@
 Only four segment endpoints change. The receiver origin, direction, hit handlers,
 closest-hit search, point branch and filter inputs remain unchanged.
 """
-import argparse, base64, hashlib, json, subprocess, tempfile
+import argparse, base64, hashlib, json, subprocess, tempfile, struct
 from pathlib import Path
 
 BASE_SHA='26688736d38b5ea056ae6bb37dc1a738334d94c784003a67957f3677f789a246'
-CAP_FRACTION=0.1
+CAP_FRACTION=0.01
+RADIUS_SCALE=0.1
+
+def llvm_float(value):
+    """LLVM spells an f32 constant as the hex bits of its exact f64 promotion."""
+    rounded=struct.unpack("f",struct.pack("f",value))[0]
+    return "0x"+struct.pack(">d",rounded).hex().upper()
 
 def endpoint_guard(source):
     replacements=[]
@@ -19,8 +25,9 @@ def endpoint_guard(source):
             f'  %{p}RadiusValid = fcmp ord float %174, %174',
             f'  %{p}Radius = select i1 %{p}RadiusValid, float %174, float 0.000000e+00',
             f'  %{p}PositiveRadius = call float @dx.op.binary.f32(i32 35, float %{p}Radius, float 0.000000e+00)',
-            f'  %{p}Cap = fmul fast float %{p}Length, 0x3FB99999A0000000',
-            f'  %{p}Guard = call float @dx.op.binary.f32(i32 36, float %{p}PositiveRadius, float %{p}Cap)',
+            f'  %{p}ScaledRadius = fmul fast float %{p}PositiveRadius, {llvm_float(RADIUS_SCALE)}',
+            f'  %{p}Cap = fmul fast float %{p}Length, {llvm_float(CAP_FRACTION)}',
+            f'  %{p}Guard = call float @dx.op.binary.f32(i32 36, float %{p}ScaledRadius, float %{p}Cap)',
             f'  %{p}Max = fsub fast float %{p}OriginalMax, %{p}Guard'])
         if source.count(before)!=1:raise ValueError('Centered endpoint anchor changed')
         source=source.replace(before,after);replacements.append((before,after))
@@ -33,7 +40,7 @@ def prepare(root):
     assert hashlib.sha256(data).hexdigest()==manifest['sha256']
     out=root/'build';out.mkdir(exist_ok=True)
     (out/'rt_spot_endpoint.dxil').write_bytes(data)
-    (out/'rt_spot_endpoint.h').write_text('#pragma once\nstatic const unsigned char kSpotEndpointShader[]={\n'+','.join(f'0x{x:02x}' for x in data)+'\n};\n')
+    (out/'rt_spot_endpoint.h').write_text('#pragma once\nstatic const unsigned char kSpotEndpointShader[]={\n'+','.join(f'0x{x:02x}' for x in data)+'\n};\n'+f'static constexpr float kSpotEndpointRadiusScale={manifest["radius_scale"]}f;\nstatic constexpr float kSpotEndpointCapFraction={manifest["maximum_segment_fraction"]}f;\n')
     print('PASS endpoint shader hash and embedded header: '+manifest['sha256'])
 
 def generate(root,dxc,assembler,dxv):
@@ -54,7 +61,7 @@ def generate(root,dxc,assembler,dxv):
         result=signed.read_bytes()
     folder=root/'assets/rt-spot-endpoint';folder.mkdir(exist_ok=True)
     (folder/'rt_spot_endpoint.dxil.b64').write_text(base64.b64encode(result).decode()+'\n')
-    (folder/'manifest.json').write_text(json.dumps({'baseline_sha256':BASE_SHA,'sha256':hashlib.sha256(result).hexdigest(),'bytes':len(result),'radius_scale':1,'maximum_segment_fraction':CAP_FRACTION,'changed':'Four spotlight TMax equations only; existing payload initialization and hit comparison share the new endpoint.'},indent=2)+'\n')
+    (folder/'manifest.json').write_text(json.dumps({'baseline_sha256':BASE_SHA,'sha256':hashlib.sha256(result).hexdigest(),'bytes':len(result),'radius_scale':RADIUS_SCALE,'maximum_segment_fraction':CAP_FRACTION,'changed':'Four spotlight TMax equations only; existing payload initialization and hit comparison share the new endpoint.'},indent=2)+'\n')
 
 if __name__=='__main__':
     parser=argparse.ArgumentParser(description=__doc__)
