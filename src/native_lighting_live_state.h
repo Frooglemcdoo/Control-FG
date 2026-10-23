@@ -3,10 +3,11 @@
 #include <cstdint>
 
 namespace native_lighting {
-enum class Mode : unsigned { Native, DisableBakedGi, DisableDirect, DisableDirectDiffuse, DisableDirectSpecular, BypassShadows, DisableLightPattern, BypassScreenShadows, BypassSpotShadows, BypassPointShadows, SpotVarianceLow, SpotVarianceHigh, SpotPcfCenter, SpotPcf32, SpotStableSoft, SpotStableTight, SpotBilinear, SpotResolution2x, RtSpot, RtSpotRaw, RtSpotMapGuard, RtSpotNativeCull, RtSpotVisibilityRaw, RtSpotVisibilityFiltered, RtSpotLightIds, RtSpotBaseline, RtSpotDiffuseFiltered, RtSpotGiFiltered, RtSpotWorldAlbedo, RtSpotSpecularFiltered, RtSpotViewAngle, RtSpotGi2, RtSpotGi4, RtSpotGi8, RtSpotGiMenu };
+enum class Mode : unsigned { Native, DisableBakedGi, DisableDirect, DisableDirectDiffuse, DisableDirectSpecular, BypassShadows, DisableLightPattern, BypassScreenShadows, BypassSpotShadows, BypassPointShadows, SpotVarianceLow, SpotVarianceHigh, SpotPcfCenter, SpotPcf32, SpotStableSoft, SpotStableTight, SpotBilinear, SpotResolution2x, RtSpot, RtSpotRaw, RtSpotMapGuard, RtSpotNativeCull, RtSpotVisibilityRaw, RtSpotVisibilityFiltered, RtSpotLightIds, RtSpotBaseline, RtSpotDiffuseFiltered, RtSpotGiFiltered, RtSpotWorldAlbedo, RtSpotSpecularFiltered, RtSpotViewAngle, RtSpotGi2, RtSpotGi4, RtSpotGi8, RtSpotGiMenu, RtSpotGi12, RtSpotGi16 };
 inline bool IsGiSampleMode(Mode mode) noexcept {
     return mode==Mode::RtSpotGi2 || mode==Mode::RtSpotGi4 ||
-           mode==Mode::RtSpotGi8 || mode==Mode::RtSpotGiMenu;
+           mode==Mode::RtSpotGi8 || mode==Mode::RtSpotGiMenu ||
+           mode==Mode::RtSpotGi12 || mode==Mode::RtSpotGi16;
 }
 // A per-frame diagnostic override; never writes the user's saved GI setting.
 inline unsigned GiSampleRequest(Mode mode,unsigned saved) noexcept {
@@ -14,6 +15,8 @@ inline unsigned GiSampleRequest(Mode mode,unsigned saved) noexcept {
     case Mode::RtSpotGi2:return 2;
     case Mode::RtSpotGi4:return 4;
     case Mode::RtSpotGi8:return 8;
+    case Mode::RtSpotGi12:return 12;
+    case Mode::RtSpotGi16:return 16;
     case Mode::RtSpotGiMenu:return 0;
     default:return saved;
     }
@@ -65,8 +68,8 @@ inline constexpr ModeChoice kModeChoices[] = {
     {Mode::RtSpotGi8, L"GI 8"},
     {Mode::RtSpotGiMenu, L"GI FOLLOW MENU"},
     {Mode::RtSpotGiFiltered, L"GI FILTER"},
-    {Mode::RtSpot, L"CENTER FILTERED"},
-    {Mode::RtSpotViewAngle, L"VIEW ANGLE"},
+    {Mode::RtSpotGi12, L"GI 12"},
+    {Mode::RtSpotGi16, L"GI 16"},
     {Mode::Native, L"NATIVE SHADOWS"}
 };
 inline constexpr unsigned kModeCount = sizeof(kModeChoices) / sizeof(kModeChoices[0]);
@@ -103,6 +106,8 @@ inline const char* ModeName(Mode mode) noexcept {
     case Mode::RtSpotGi2:return "rt_spot_gi_2";
     case Mode::RtSpotGi4:return "rt_spot_gi_4";
     case Mode::RtSpotGi8:return "rt_spot_gi_8";
+    case Mode::RtSpotGi12:return "rt_spot_gi_12";
+    case Mode::RtSpotGi16:return "rt_spot_gi_16";
     case Mode::RtSpotGiMenu:return "rt_spot_gi_menu";
     case Mode::RtSpotViewAngle: return "rt_spot_view_angle";
     case Mode::RtSpotSpecularFiltered: return "rt_spot_specular_filtered";
@@ -153,7 +158,7 @@ class LiveSelection {
     static constexpr unsigned kSequenceShift = kModeBits + 2;
     static constexpr uint64_t kModeMask = (uint64_t(1) << kModeBits) - 1;
     static constexpr uint64_t kObservedMask = uint64_t(kAllBits) << kObservedShift;
-    static_assert(static_cast<unsigned>(Mode::RtSpotGiMenu) <= kModeMask, "Mode storage exhausted");
+    static_assert(static_cast<unsigned>(Mode::RtSpotGi16) <= kModeMask, "Mode storage exhausted");
     std::atomic<uint64_t> state_{0};
 public:
     uint64_t Read() const noexcept { return state_.load(std::memory_order_acquire); }

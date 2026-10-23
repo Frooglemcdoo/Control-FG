@@ -92,7 +92,12 @@ function exercise(rtx40) {
     engine.trigger('OnIntGraphicsPropertySet',10006,3);
     assert.equal(byId[10006].m_value,6);
     assert.equal(menu.slider(byId[10006]).m_value,3);
-    assert.deepEqual(Array.from(menu.sliderLabels(byId[10006])),['Native','2','4','6','8']);
+    assert.deepEqual(Array.from(menu.sliderLabels(byId[10006])),['Native','2','4','6','8','12','16']);
+    engine.trigger('OnIntGraphicsPropertySet',10006,6);
+    assert.deepEqual(events.at(-1),['OnIntGraphicsPropertySet',10006,16]);
+    assert.equal(byId[10006].m_value,16);
+    assert.equal(menu.slider(byId[10006]).m_value,6);
+    engine.trigger('OnIntGraphicsPropertySet',10006,3);
     nativeModel.m_vecBoolProperties[0].m_bIsDisabled=true;
     menu.rows(requireModule,nativeModel);
     assert.equal(byId[10006].m_bIsDisabled,true); // Global RT capability/settings can disable the native control.

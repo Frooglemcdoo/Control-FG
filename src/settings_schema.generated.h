@@ -34,7 +34,7 @@ inline const Option kOptions[] = {
     {Key::DynamicTargetMode, 10001, 0, 0, 0, 1, {0, 1}, nullptr, nullptr, {{Key::FrameGeneration, 1}}},
     {Key::DynamicTargetFps, 10002, 144, 30, 1000, 1, {}, L"FrameGeneration", L"DynamicTargetFPS", {{Key::FrameGeneration, 1}, {Key::DynamicTargetMode, 1}}},
     {Key::RayReconstruction, 10003, 0, 0, 0, 1, {0, 1}, L"RayReconstruction", L"Enabled", {}},
-    {Key::GlobalIlluminationSamples, 10006, 4, 0, 0, 1, {0, 2, 4, 6, 8}, L"RayReconstruction", L"GISamples", {{Key::RayReconstruction, 1}}},
+    {Key::GlobalIlluminationSamples, 10006, 4, 0, 0, 1, {0, 2, 4, 6, 8, 12, 16}, L"RayReconstruction", L"GISamples", {{Key::RayReconstruction, 1}}},
     {Key::GlassReflections, 10007, 1, 0, 0, 1, {0, 1}, L"GlassReflections", L"Enabled", {}},
     {Key::TextureStreamingBudget, 10008, 0, 0, 0, 1, {0, 4, 6, 8}, L"Experimental", L"TextureStreamingBudgetMs", {}},
     {Key::VideoMemoryMonitor, 10009, 1, 0, 0, 1, {0, 1}, L"Overlay", L"VramMonitorEnabled", {}},

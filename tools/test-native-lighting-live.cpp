@@ -76,7 +76,7 @@ int main(){
     assert(RequiredVariant(angle)==kRtSpotReadyBit && !Disables(angle,kGiBit));
     assert(LiveSelection::GetMode(live.Select(angle))==angle);
     assert(kModeCount==9);
-    for(auto mode:{Mode::RtSpotGi2,Mode::RtSpotGi4,Mode::RtSpotGi8,Mode::RtSpotGiMenu}){
+    for(auto mode:{Mode::RtSpotGi2,Mode::RtSpotGi4,Mode::RtSpotGi8,Mode::RtSpotGiMenu,Mode::RtSpotGi12,Mode::RtSpotGi16}){
         const auto old=live.Read();const auto next=live.Select(mode);
         assert(LiveSelection::GetMode(next)==mode);
         assert(!live.Observe(old,kDirectBit));assert(live.Observe(next,kDirectBit));
@@ -88,6 +88,7 @@ int main(){
     assert(GiSampleRequest(Mode::RtSpotGi2,8)==2&&GiSampleRequest(Mode::RtSpotGi4,8)==4);
     assert(GiSampleRequest(Mode::RtSpotGi8,2)==8&&GiSampleRequest(Mode::RtSpotGiMenu,8)==0);
     assert(GiSampleRequest(Mode::RtSpotWorldAlbedo,6)==6);
+    assert(GiSampleRequest(Mode::RtSpotGi12,4)==12&&GiSampleRequest(Mode::RtSpotGi16,4)==16);
     // UI snapshots must not reset or lose concurrent render-side observations.
     control_rr_diagnostic::Counters counters;
     using Event=control_rr_diagnostic::Event;

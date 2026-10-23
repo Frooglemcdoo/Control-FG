@@ -6,8 +6,8 @@
 #include <cstdio>
 int main(){
  using namespace control_rr;
- for(unsigned requested: {0u,1u,2u,3u,4u,6u,8u,16u,0xffffffffu}){
-  const bool accepted=requested==2||requested==4||requested==6||requested==8;
+ for(unsigned requested: {0u,1u,2u,3u,4u,6u,8u,10u,12u,14u,16u,17u,32u,0xffffffffu}){
+  const bool accepted=requested==2||requested==4||requested==6||requested==8||requested==12||requested==16;
   assert(NormalizeGISampleRequest(requested)==(accepted?requested:0u));
   for(unsigned n: {0u,1u,2u,4u,16u,0xffffffffu}){
    assert(GISampleComparison(n,requested,false)==n);
@@ -35,7 +35,7 @@ int main(){
  }
  GISampleSelect(6);
  using native_lighting::Mode;
- for(auto mode:{Mode::RtSpotGi2,Mode::RtSpotGi8,Mode::RtSpotGiMenu,Mode::RtSpotWorldAlbedo}){
+ for(auto mode:{Mode::RtSpotGi2,Mode::RtSpotGi8,Mode::RtSpotGi12,Mode::RtSpotGi16,Mode::RtSpotGiMenu,Mode::RtSpotWorldAlbedo}){
   const auto request=native_lighting::GiSampleRequest(mode,GISampleRequested());
   assert(latch.Latch(request,true));assert(!latch.Latch(request,true));
   assert(GISampleRequested()==6); // Diagnostics never persist their override.
@@ -47,5 +47,5 @@ int main(){
  assert(!off.Begin({1,3840,2160,3840,2160,0},false,false));
  assert(!off.ResetForSignalChange());
  assert(!off.Reset());
- puts("PASS: GI 2/4/6/8; native=2 regression; invalid/native/off preservation; frame snapshot; one history reset per change; late reset rejected");
+ puts("PASS: GI 2/4/6/8/12/16; native=2 regression; invalid/native/off preservation; frame snapshot; one history reset per change; late reset rejected");
 }

@@ -216,7 +216,7 @@ int main() try {
         Check(owner->SetPrivateDataInterface(rt::kLightIdsVariant,raw.Get()));
         Check(owner->SetPrivateDataInterface(rt::kSelectedOffVariant,filtered.Get()));
         rt::Pass pass; pass.raySeen=pass.fullRay=true; rt::active=&pass;
-        for (auto mode : {Mode::RtSpot,Mode::RtSpotRaw,Mode::RtSpotMapGuard,Mode::RtSpotNativeCull,Mode::RtSpotVisibilityRaw,Mode::RtSpotVisibilityFiltered,Mode::RtSpotLightIds,Mode::RtSpotBaseline,Mode::RtSpotDiffuseFiltered,Mode::RtSpotGiFiltered,Mode::RtSpotWorldAlbedo,Mode::RtSpotSpecularFiltered,Mode::RtSpotViewAngle,Mode::RtSpotGi2,Mode::RtSpotGi4,Mode::RtSpotGi8,Mode::RtSpotGiMenu}) {
+        for (auto mode : {Mode::RtSpot,Mode::RtSpotRaw,Mode::RtSpotMapGuard,Mode::RtSpotNativeCull,Mode::RtSpotVisibilityRaw,Mode::RtSpotVisibilityFiltered,Mode::RtSpotLightIds,Mode::RtSpotBaseline,Mode::RtSpotDiffuseFiltered,Mode::RtSpotGiFiltered,Mode::RtSpotWorldAlbedo,Mode::RtSpotSpecularFiltered,Mode::RtSpotViewAngle,Mode::RtSpotGi2,Mode::RtSpotGi4,Mode::RtSpotGi8,Mode::RtSpotGiMenu,Mode::RtSpotGi12,Mode::RtSpotGi16}) {
             if (!IsRtSpotMode(mode) || Disables(mode,kDirectBit) || RequiredVariant(mode)!=kRtSpotReadyBit)
                 throw std::runtime_error("Diagnostic mode policy mismatch");
             pass.mode=mode;
@@ -243,7 +243,7 @@ int main() try {
         const unsigned producer=rt::kSelectorComponent;
         Check(owner->SetPrivateData(rt::kKind,sizeof(producer),&producer));
         rt::scopeReady=true;rt::components.store(rt::kRequiredComponents);rt::disabled.store(false);
-        for (auto mode : {Mode::Native,Mode::RtSpotBaseline,Mode::RtSpot,Mode::RtSpotVisibilityRaw,Mode::RtSpotLightIds,Mode::RtSpotDiffuseFiltered,Mode::RtSpotGiFiltered,Mode::RtSpotWorldAlbedo,Mode::RtSpotSpecularFiltered,Mode::RtSpotViewAngle,Mode::RtSpotGi2,Mode::RtSpotGi4,Mode::RtSpotGi8,Mode::RtSpotGiMenu}) {
+        for (auto mode : {Mode::Native,Mode::RtSpotBaseline,Mode::RtSpot,Mode::RtSpotVisibilityRaw,Mode::RtSpotLightIds,Mode::RtSpotDiffuseFiltered,Mode::RtSpotGiFiltered,Mode::RtSpotWorldAlbedo,Mode::RtSpotSpecularFiltered,Mode::RtSpotViewAngle,Mode::RtSpotGi2,Mode::RtSpotGi4,Mode::RtSpotGi8,Mode::RtSpotGiMenu,Mode::RtSpotGi12,Mode::RtSpotGi16}) {
             selection.Select(mode);
             auto* actual=rt::SelectCompute(owner.Get());
             auto* expected=UsesUnshadowedSpotSelection(mode)?reset.Get():nullptr;
