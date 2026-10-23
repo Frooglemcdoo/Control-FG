@@ -53,8 +53,8 @@ static unsigned int RREvaluationEntry(unsigned int branch, ID3D12GraphicsCommand
         RRNativeObserveSkinInputs(parameters,in.frame,"skin_guide_audit",in.width,in.height);
     // D1: optional, owned, same-frame distance; never reuses a prior frame.
     RRNativeGuideBindings bindings{};bool rrAttempt=false;
-    ID3D12Resource* hitDistance=nullptr;bool distanceReset=false;bool clampReset=false;bool worldReset=false;
-    static RRWorldAlbedoHistory worldHistory;
+    ID3D12Resource* hitDistance=nullptr;bool distanceReset=false;bool clampReset=false;bool worldReset=false;bool viewAngleReset=false;
+    static RRWorldAlbedoHistory worldHistory,viewAngleHistory;
     static control_rr_clamp::History clampHistory;
     static control_rr::DistanceBindingHistory distanceHistory;
     void* evaluationFeature=feature;bool presetReset=false;unsigned activePreset=0;
@@ -79,10 +79,13 @@ static unsigned int RREvaluationEntry(unsigned int branch, ID3D12GraphicsCommand
             hitDistance=RRDistanceBeforeEvaluation(list,in.depth,in.frame,lighting);
         if(beginEvaluation)worldReset=worldHistory.Update(in.frame!=0 &&
             rrWorldAlbedoGuideFrame.load(std::memory_order_acquire)==in.frame);
+        if(beginEvaluation)viewAngleReset=viewAngleHistory.Update(bindings.viewAngleApplied);
+        if(beginEvaluation)control_rr_diagnostic::Record(bindings.viewAngleApplied ?
+            control_rr_diagnostic::Event::ViewAngleConsumed : control_rr_diagnostic::Event::ViewAngleBaseline);
         distanceReset=distanceHistory.Update(hitDistance!=nullptr);
         clampReset=clampHistory.Update(control_rr_clamp::effective.load(std::memory_order_acquire));
         if(clampReset)Log("RR_CLAMP_CS3_HISTORY_RESET frame=%llu effective=%u",in.frame,control_rr_clamp::effective.load());
-        if(!beginEvaluation||!RRNativeSetGuides(parameters,&bindings,hitDistance,rrNativeFrame.Reset()||presetReset||distanceReset||clampReset||worldReset)){
+        if(!beginEvaluation||!RRNativeSetGuides(parameters,&bindings,hitDistance,rrNativeFrame.Reset()||presetReset||distanceReset||clampReset||worldReset||viewAngleReset)){
             rrNativeFrame.Fail();control_rr::RRUserPublish(control_rr::RRUserStatus::Stopped);
             Log("RR_FRAME_STOP frame=%llu reason=pre_evaluation_contract hit_distance_required=0 guides=%u lighting=%u native_evaluation_called=0",in.frame,unsigned(guides),unsigned(lighting));
             control_rr_diagnostic::Record(control_rr_diagnostic::Event::EvaluationRejected);
@@ -119,7 +122,7 @@ static unsigned int RREvaluationEntry(unsigned int branch, ID3D12GraphicsCommand
     const double perfNativeCpu=RRPerfElapsed(perfNativeStart);
     RRPerfEnd(perf);
     RRPerfEvaluation(in.frame,rrAttempt,(result&0xFFF00000u)!=0xBAD00000u,
-        in.reset!=0||(rrAttempt&&(rrNativeFrame.Reset()||presetReset||distanceReset||clampReset||worldReset)),perfEntry,perfGuidesCpu,perfNativeCpu,
+        in.reset!=0||(rrAttempt&&(rrNativeFrame.Reset()||presetReset||distanceReset||clampReset||worldReset||viewAngleReset)),perfEntry,perfGuidesCpu,perfNativeCpu,
         GetFGUserMultiplier(),IsHdr10BridgeActive()?1u:0u);
     if(partial&&branch==1){
         const bool success=(result&0xFFF00000u)!=0xBAD00000u;
@@ -130,7 +133,7 @@ static unsigned int RREvaluationEntry(unsigned int branch, ID3D12GraphicsCommand
         const bool success=(result&0xFFF00000u)!=0xBAD00000u;
         rrNativeFrame.EvaluationResult(success);
         control_rr::RRUserPublish(success?control_rr::RRUserStatus::Active:control_rr::RRUserStatus::Stopped);
-        if(call<=4||(call%240)==0||!success||rrNativeFrame.Reset()||presetReset||distanceReset||clampReset||worldReset)Log("RR_NATIVE_EVALUATED frame=%llu result=0x%08X success=%u diffuse=%p specular=%p normal=%p hit_distance=D1_optional specular_mvec=cleared reflection_mvec=cleared matrix_mode=preset_dependent_projection_p1 responsivity=%p replaces_sr=1 reset=%u preset_reset=%u preset_requested=%s preset_value=%u active_preset=%u control_feature=%p evaluation_feature=%p native_create_confirmed=%u native_create_generation=%llu",in.frame,result,unsigned(success),bindings.diffuse,bindings.specular,bindings.normal,bindings.responsivity,unsigned(rrNativeFrame.Reset()||presetReset||distanceReset||clampReset||worldReset),unsigned(presetReset),control_rr::RRUserPresetLabel(),control_rr::RRUserPresetValue(),activePreset,feature,evaluationFeature,control_rr::RRUserConfirmedPresetValue(),control_rr::RRUserPresetCreateGeneration());
+        if(call<=4||(call%240)==0||!success||rrNativeFrame.Reset()||presetReset||distanceReset||clampReset||worldReset||viewAngleReset)Log("RR_NATIVE_EVALUATED frame=%llu result=0x%08X success=%u diffuse=%p specular=%p normal=%p hit_distance=D1_optional specular_mvec=cleared reflection_mvec=cleared matrix_mode=preset_dependent_projection_p1 responsivity=%p replaces_sr=1 reset=%u preset_reset=%u preset_requested=%s preset_value=%u active_preset=%u control_feature=%p evaluation_feature=%p native_create_confirmed=%u native_create_generation=%llu",in.frame,result,unsigned(success),bindings.diffuse,bindings.specular,bindings.normal,bindings.responsivity,unsigned(rrNativeFrame.Reset()||presetReset||distanceReset||clampReset||worldReset||viewAngleReset),unsigned(presetReset),control_rr::RRUserPresetLabel(),control_rr::RRUserPresetValue(),activePreset,feature,evaluationFeature,control_rr::RRUserConfirmedPresetValue(),control_rr::RRUserPresetCreateGeneration());
     } else if(rrNativeFrameEnabled&&branch==0){
         if(rrNativeFrame.Selected()){rrNativeFrame.Fail();Log("RR_FRAME_STOP frame=%llu reason=unexpected_sr_branch",in.frame);}
         else {

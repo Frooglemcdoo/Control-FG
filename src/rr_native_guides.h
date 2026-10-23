@@ -6,6 +6,7 @@ struct RRNativeGuideBindings {
  ID3D12Resource* responsivity=nullptr;
  ID3D12Resource* rawAlbedo=nullptr; // diagnostic only, never tagged to NGX
  bool projectionValid=false;
+ bool viewAngleApplied=false;
  float worldToView[16]{},viewToClip[16]{};
 };
 static bool RRNativeTakeGuides(const RREvaluationInputs& in,RRNativeGuideBindings& bindings) noexcept {
@@ -34,6 +35,7 @@ static bool RRNativeTakeGuides(const RREvaluationInputs& in,RRNativeGuideBinding
      Log("RR_F_PROJECTION_P1 frame=%llu valid=%u mode=%s hit_distance=D1_gated",in.frame,unsigned(validProjection),validProjection?"native_projection_view_normals":"identity_fallback");
    }
    if(!owner->policy.TakeEvaluation({i,state.serial},state.key))__leave;
+   bindings.viewAngleApplied=slot.viewAngleApplied;
    bindings.normal=slot.normal;bindings.specular=slot.specular;bindings.diffuse=slot.diffuse;
    bindings.rawAlbedo=slot.texturedAlbedoValid?slot.texturedAlbedo:nullptr;
    bindings.responsivity=slot.texturedAlbedoValid?slot.hairResponsivity:nullptr;

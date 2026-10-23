@@ -24,12 +24,14 @@ int main() {
         contract=contract && SUCCEEDED(reflection->GetResourceBindingDescByName(resources[i],&d)) && d.Type==types[i] && d.BindPoint==slots[i] && d.BindCount==1;
     }
     auto* cb=reflection->GetConstantBufferByName("GuideConstants");
-    const char* names[]={"InvertSmoothness","GuideFlags","Width","Height"};
-    const UINT offsets[]={0,4,8,12};
-    for(UINT i=0;i<4;++i) {
+    const char* names[]={"InvertSmoothness","GuideFlags","Width","Height","ProjectionX","ProjectionY","ReservedX","ReservedY"};
+    const UINT offsets[]={0,4,8,12,16,20,24,28};
+    for(UINT i=0;i<8;++i) {
         D3D11_SHADER_VARIABLE_DESC d{};
         contract=contract && cb && SUCCEEDED(cb->GetVariableByName(names[i])->GetDesc(&d)) && d.StartOffset==offsets[i] && d.Size==4;
     }
+    D3D11_SHADER_BUFFER_DESC cbDesc{};
+    contract=contract && SUCCEEDED(cb->GetDesc(&cbDesc)) && cbDesc.Size==32;
     reflection->Release();
     if(!contract) {code->Release();std::fputs("FAIL: r21r retained GBuffer guide shader binding/constant ABI\n",stderr);return 5;}
     FILE* file=nullptr;

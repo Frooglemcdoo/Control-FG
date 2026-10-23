@@ -68,6 +68,14 @@ int main(){
     assert(!UsesRawSpotVisibility(specular) && !PreservesBroadDiffuseFiltering(specular));
     assert(!Disables(specular,kDirectBit) && !Disables(specular,kGiBit));
     assert(LiveSelection::GetMode(live.Select(specular))==specular);
+    const auto angle=Mode::RtSpotViewAngle;
+    assert(UsesPerspectiveGuide(angle) && !UsesPerspectiveGuide(world));
+    assert(UsesWorldAlbedo(angle) && PreservesGiFiltering(angle));
+    assert(!PreservesSpecularFiltering(angle) && !PreservesBroadDiffuseFiltering(angle));
+    assert(IsRtSpotMode(angle) && !UsesRawSpotVisibility(angle));
+    assert(RequiredVariant(angle)==kRtSpotReadyBit && !Disables(angle,kGiBit));
+    assert(LiveSelection::GetMode(live.Select(angle))==angle);
+    assert(kModeCount==9);
     // UI snapshots must not reset or lose concurrent render-side observations.
     control_rr_diagnostic::Counters counters;
     using Event=control_rr_diagnostic::Event;

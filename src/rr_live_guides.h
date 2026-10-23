@@ -2,6 +2,8 @@
 #include "rr_frame_slots.h"
 #include "rr_live_frame_input.h"
 #include "rr_reflectance_projection.h"
+#include "rr_projection_validation.h"
+#include "rr_live_constants.h"
 #include "../build/rr_live_compiled.h"
 // Owned per-frame candidate textures. No readback/upload loop, no RR tagging.
 // Included after rr_albedo_capture.h so exact native Part1 readers are available.
@@ -15,6 +17,7 @@ struct RRLiveSlot {
     ID3D12Resource* hairResponsivity=nullptr;
     bool diffuseValid=false;
     bool texturedAlbedoValid=false;
+    bool viewAngleApplied=false;
     CameraSnapshot camera{};
     ID3D12Resource* sources[4]{};
     unsigned long long present=0;
@@ -92,15 +95,15 @@ static DWORD WINAPI RRLivePrepare(void* context) noexcept {
         if(SUCCEEDED(hr)&&!(floatSupport.Support2&D3D12_FORMAT_SUPPORT2_UAV_TYPED_STORE))hr=E_NOTIMPL;
     }
     if(SUCCEEDED(hr)&&!c->root){
-        // r21t: match the supplied RenoDX RRG root contract exactly:
-        // [0] = four b0 constants, [1] = one descriptor table {t0..t4,u0..u3}.
+        // Owned guide contract: eight b0 constants (including camera scales),
+        // [0] = b0 constants, [1] = one descriptor table {t0..t4,u0..u3}.
         // In particular, MaterialDataPart1 is a bounded StructuredBuffer SRV at t2
         // instead of an unbounded root GPU VA.
         D3D12_DESCRIPTOR_RANGE ranges[2]{};
         ranges[0].RangeType=D3D12_DESCRIPTOR_RANGE_TYPE_SRV;ranges[0].NumDescriptors=5;ranges[0].BaseShaderRegister=0;ranges[0].OffsetInDescriptorsFromTableStart=0;
         ranges[1].RangeType=D3D12_DESCRIPTOR_RANGE_TYPE_UAV;ranges[1].NumDescriptors=4;ranges[1].BaseShaderRegister=0;ranges[1].OffsetInDescriptorsFromTableStart=5;
         D3D12_ROOT_PARAMETER params[2]{};
-        params[0].ParameterType=D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;params[0].Constants.Num32BitValues=4;params[0].Constants.ShaderRegister=0;
+        params[0].ParameterType=D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;params[0].Constants.Num32BitValues=kRRLiveConstantCount;params[0].Constants.ShaderRegister=0;
         params[1].ParameterType=D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;params[1].DescriptorTable={2,ranges};
         D3D12_STATIC_SAMPLER_DESC sampler{};sampler.Filter=D3D12_FILTER_MIN_MAG_MIP_LINEAR;
         sampler.AddressU=sampler.AddressV=sampler.AddressW=D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
@@ -240,7 +243,7 @@ static void RRLiveBeforeImpl(ID3D12GraphicsCommandList* list,const control_rr::L
         control_rr::Lease lease{};
         if(!c->policy.Begin({in.engineFrame,c->epoch,width,height},lease)){RRLiveSkip(c,"slots_busy_or_duplicate_frame");__leave;}
         auto& s=c->slots[lease.index];RRLiveReleaseSources(s);
-        s.present=in.presentToken;s.frameInput=frameInput;s.diffuseValid=false;s.texturedAlbedoValid=false;s.camera=in.camera;
+        s.present=in.presentToken;s.frameInput=frameInput;s.diffuseValid=false;s.texturedAlbedoValid=false;s.viewAngleApplied=false;s.camera=in.camera;
         ID3D12Resource* inputs[4]{in.gbuffer1.resource,in.gbuffer2.resource,material,env.resource};
         for(UINT i=0;i<4;++i){inputs[i]->AddRef();s.sources[i]=inputs[i];}
 
@@ -280,6 +283,19 @@ static void RRLiveBeforeImpl(ID3D12GraphicsCommandList* list,const control_rr::L
             constants.guideFlags|=4u;
             s.texturedAlbedoValid=true;
         }
+        // Restrict this comparison to a same-frame, audited world replay and
+        // the captured symmetric perspective shape. Unsupported cameras retain
+        // the baseline guide. No guessed matrix layout or jitter sign is used.
+        const bool viewAngleRequested=native_lighting::UsesPerspectiveGuide(
+            native_lighting::LiveSelection::GetMode(native_lighting::selection.Read()));
+        float validatedProjection[16]{};
+        if(viewAngleRequested && textured && rrDiffuse->worldAlbedo && rrDiffuse->worldBatches &&
+           in.camera.engineFrame==in.engineFrame &&
+           control_rr::CopyValidatedProjection(in.camera.viewToClip,in.camera.clipToView,validatedProjection) &&
+           control_rr_reflectance::SupportedProjection(in.camera.viewToClip,&constants.projectionX,&constants.projectionY)) {
+            constants.guideFlags|=8u;
+            s.viewAngleApplied=true;
+        }
         if(c->recorded<4 || in.engineFrame%240ull==0)
             Log("RR_CHARACTER_GUIDE frame=%llu replay_bound=%u source=native_character_hair_albedo fallback=material_value",in.engineFrame,unsigned(textured!=nullptr));
         if(!RRLiveRecord(c,&s,&in,&constants,&fault)){
@@ -290,6 +306,8 @@ static void RRLiveBeforeImpl(ID3D12GraphicsCommandList* list,const control_rr::L
             rrWorldAlbedoGuideFrame.store(in.engineFrame,std::memory_order_release);
             control_rr_diagnostic::Record(control_rr_diagnostic::Event::WorldAlbedoBound);
         }
+        if(viewAngleRequested)control_rr_diagnostic::Record(s.viewAngleApplied ?
+            control_rr_diagnostic::Event::ViewAngleRecorded : control_rr_diagnostic::Event::ViewAngleFallback);
         // r21t retains the one-shot, stats-only readback of the exact owned guide textures
         // consumed by RR. It records after guide generation and restores the
         // outputs to NPS-SRV before native evaluation. No borrowed game resource

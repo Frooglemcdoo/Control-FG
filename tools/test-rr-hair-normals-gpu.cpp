@@ -13,6 +13,7 @@
 #include <cmath>
 #include <cstring>
 #include <cstdint>
+#include "../src/rr_live_constants.h"
 using Microsoft::WRL::ComPtr;
 static void check(bool ok,const char* what){if(!ok){std::fprintf(stderr,"FAIL: %s\n",what);std::exit(1);}}
 static void hr(HRESULT value){check(SUCCEEDED(value),"D3D call");}
@@ -40,10 +41,11 @@ int main(){
  std::vector<Pixel> g1(N),g2(N),albedo(N),env(N);
  for(UINT i=0;i<N;++i){UINT x=i%W,y=i/W;
   g1[i]={{(x%2?150.0f:110.0f)/255.0f,130.0f/255.0f,0.0f,0.0f}};
-  g2[i]={{0.0f,0.1f,0.0f,0.0f}}; env[i]={{0.5f,0.1f,0.0f,0.0f}};
+  g2[i]={{0.0f,0.1f,0.0f,0.0f}}; env[i]={{0.0f,(float(x)+0.5f)/W,0.0f,0.0f}};
   // Tagged hair touches top/left texture bounds; untagged skin includes black.
-  albedo[i]={{x%3?0.2f:0.0f,0.1f,0.05f,(x<16&&y<24)?-2.5f:0.0f}};
+  albedo[i]={{x%3?0.2f:0.0f,0.1f,0.05f,(x<16&&y<24)?-2.5f:(y<24?-4.0f:0.0f)}};
  }
+ albedo[20]={{-1.0f,-1.0f,-1.0f,-4.0f}}; // Tagged but uncovered must retain the baseline.
  // A lone reversed hair normal within a coherent patch must be corrected.
  for(UINT y=2;y<=8;++y)for(UINT x=2;x<=8;++x)g1[y*W+x]={{0.5f,0.5f,0.0f,0.0f}};
  g1[5*W+5]={{1.0f,1.0f,0.0f,1.0f}};
@@ -75,7 +77,7 @@ int main(){
  for(UINT j=0;j<4;++j){D3D11_TEXTURE2D_DESC d{};d.Width=W;d.Height=H;d.MipLevels=1;d.ArraySize=1;d.Format=j==3?DXGI_FORMAT_R16_FLOAT:DXGI_FORMAT_R32G32B32A32_FLOAT;d.SampleDesc.Count=1;d.BindFlags=D3D11_BIND_UNORDERED_ACCESS;
   hr(device->CreateTexture2D(&d,nullptr,&outputs[j]));hr(device->CreateUnorderedAccessView(outputs[j].Get(),nullptr,&uavs[j]));d.BindFlags=0;d.Usage=D3D11_USAGE_STAGING;d.CPUAccessFlags=D3D11_CPU_ACCESS_READ;hr(device->CreateTexture2D(&d,nullptr,&staging[j]));}
  D3D11_SAMPLER_DESC sd{};sd.Filter=D3D11_FILTER_MIN_MAG_MIP_LINEAR;sd.AddressU=sd.AddressV=sd.AddressW=D3D11_TEXTURE_ADDRESS_CLAMP;sd.MaxLOD=D3D11_FLOAT32_MAX;ComPtr<ID3D11SamplerState> sampler;hr(device->CreateSamplerState(&sd,&sampler));
- auto run=[&](ID3D11ComputeShader* shader,UINT flags){UINT constants[4]={1,flags,W,H};D3D11_BUFFER_DESC d{};d.ByteWidth=16;d.Usage=D3D11_USAGE_IMMUTABLE;d.BindFlags=D3D11_BIND_CONSTANT_BUFFER;D3D11_SUBRESOURCE_DATA data{constants,0,0};ComPtr<ID3D11Buffer> cb;hr(device->CreateBuffer(&d,&data,&cb));
+ auto run=[&](ID3D11ComputeShader* shader,UINT flags){RRLiveConstants constants{1,flags,W,H,1.42814803f,2.5389297f,0,0};D3D11_BUFFER_DESC d{};d.ByteWidth=sizeof(constants);d.Usage=D3D11_USAGE_IMMUTABLE;d.BindFlags=D3D11_BIND_CONSTANT_BUFFER;D3D11_SUBRESOURCE_DATA data{&constants,0,0};ComPtr<ID3D11Buffer> cb;hr(device->CreateBuffer(&d,&data,&cb));
   ID3D11ShaderResourceView* views[5];for(UINT j=0;j<5;++j)views[j]=srvs[j].Get();ID3D11UnorderedAccessView* targets[4];for(UINT j=0;j<4;++j)targets[j]=uavs[j].Get();
   context->CSSetShader(shader,nullptr,0);context->CSSetShaderResources(0,5,views);context->CSSetUnorderedAccessViews(0,4,targets,nullptr);auto* c=cb.Get();context->CSSetConstantBuffers(0,1,&c);auto* s=sampler.Get();context->CSSetSamplers(0,1,&s);context->Dispatch(2,2,1);
   ID3D11UnorderedAccessView* nulls[4]={};context->CSSetUnorderedAccessViews(0,4,nulls,nullptr);
@@ -85,6 +87,27 @@ int main(){
     if(j<3)std::memcpy(result[j].data()+y*W,row,W*sizeof(Pixel));
     else for(UINT x=0;x<W;++x){std::uint16_t h=0;std::memcpy(&h,row+x*2,2);const int e=(h>>10)&31;const float m=float(h&1023);float v=e?std::ldexp(1.0f+m/1024.0f,e-15):std::ldexp(m,-24);result[j][y*W+x].v[0]=(h&32768)?-v:v;}
    }context->Unmap(staging[j].Get(),0);}return result;};
+ // Actual production shader: only audited world specular pixels may change.
+ auto baselineAngle=run(candidate.Get(),7u), perspectiveAngle=run(candidate.Get(),15u);
+ unsigned angleChanges=0;
+ for(UINT i=0;i<N;++i){
+  const bool world=albedo[i].v[3]==-4.0f && albedo[i].v[0]>=0;
+  for(UINT j=0;j<4;++j)if(j!=2||!world)
+   check(!std::memcmp(&baselineAngle[j][i],&perspectiveAngle[j][i],sizeof(Pixel)),"view angle changed skin/hair/diffuse/normal/mask");
+  if(!world)continue;
+  const float vx=(2.0f*(float(i%W)+0.5f)/W-1.0f)/1.42814803f;
+  const float vy=(1.0f-2.0f*(float(i/W)+0.5f)/H)/2.5389297f;
+  const auto& n=perspectiveAngle[0][i].v;
+  const float cosine=std::abs(n[0]*vx+n[1]*vy+n[2])/std::sqrt(vx*vx+vy*vy+1);
+  // Fixture LUT x=0, y=U yields specular=U; clamp-to-edge is half a texel.
+  const float expected=std::fmax(0.5f/W,std::fmin(1.0f-0.5f/W,cosine));
+  check(std::abs(perspectiveAngle[2][i].v[0]-expected)<0.002f,"perspective guide disagrees with independent CPU ray");
+  if(std::abs(baselineAngle[2][i].v[0]-perspectiveAngle[2][i].v[0])>0.001f)++angleChanges;
+ }
+ check(angleChanges>100,"view-angle test did not alter off-axis world specular");
+ auto absentReplay=run(candidate.Get(),3u), gatedReplay=run(candidate.Get(),11u);
+ for(UINT j=0;j<4;++j)check(!std::memcmp(absentReplay[j].data(),gatedReplay[j].data(),N*sizeof(Pixel)),"view angle read absent replay");
+ std::printf("PASS: perspective specular guide (%u changed world pixels); independent ray/LUT expectation, character isolation and missing/invalid replay fallback\n",angleChanges);
  UINT changed=0,weakChanged=0;
  for(UINT flags : {0u,1u,3u,4u,5u,7u}){auto before=run(original.Get(),flags),after=run(candidate.Get(),flags),prior=run(r11.Get(),flags);
   if((flags&5u)==5u){

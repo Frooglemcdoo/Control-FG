@@ -12,7 +12,7 @@ subprocess.run([sys.executable,str(root/'tools/generate-rr-world-albedo.py')],ch
 # except for a new alpha-only mov immediately before the final ret.
 for entry in json.loads((root/'tools/fixtures/rr-world-albedo/manifest.json').read_text()):
     data=bytes.fromhex((root/f"tools/fixtures/rr-world-albedo/variant-{entry['variant']}.hex").read_text())
-    def patch(w):w[-1:-1]=[0x05000036,0x00102082,0,0x00004001,0x3f800000]
+    def patch(w):w[-1:-1]=[0x05000036,0x00102082,0,0x00004001,0xc0800000]
     modified=transform_shex(data,patch)
     assert modified[4:20]==checksum(modified)
     with tempfile.TemporaryDirectory() as d:
@@ -21,7 +21,7 @@ for entry in json.loads((root/'tools/fixtures/rr-world-albedo/manifest.json').re
     assert old['bindings']==new['bindings'] and old['constant_buffers']==new['constant_buffers']
     assert old['instructions'][:-1]==new['instructions'][:-2]
     mov=new['instructions'][-2]
-    assert mov['name']=='mov' and mov['operands']==['o[0].w','l(1)']
+    assert mov['name']=='mov' and mov['operands']==['o[0].w','l(-4)']
     assert new['instructions'][-1]['name']=='ret'
 source=r'''
 #include <atomic>
@@ -66,6 +66,7 @@ int main(){
  assert(RRWorldAlbedoReplacement(100,0)==first); // Existing records remain usable at capacity.
  native_lighting::selection.Select(native_lighting::Mode::RtSpotWorldAlbedo);assert(RRWorldAlbedoRequested());
  native_lighting::selection.Select(native_lighting::Mode::RtSpotSpecularFiltered);assert(RRWorldAlbedoRequested());
+ native_lighting::selection.Select(native_lighting::Mode::RtSpotViewAngle);assert(RRWorldAlbedoRequested());
  native_lighting::selection.Select(native_lighting::Mode::RtSpotGiFiltered);assert(!RRWorldAlbedoRequested());
 }
 '''

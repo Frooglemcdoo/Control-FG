@@ -18,9 +18,13 @@ RWTexture2D<float> HairResponsivity : register(u3);
 
 cbuffer GuideConstants : register(b0) {
     uint InvertSmoothness; // Control: 1 => roughness = 1 - GBuffer1.B
-    uint GuideFlags;       // bit0 material table/GBuffer2, bit1 EnvBRDF, bit2 current albedo replay
+    uint GuideFlags;       // bit0 material table/GBuffer2, bit1 EnvBRDF, bit2 replay, bit3 world view angle
     uint Width;
     uint Height;
+    float ProjectionX;
+    float ProjectionY;
+    float ReservedX;
+    float ReservedY;
 };
 
 // R7: reduce strand-scale normal variation only inside the audited hair replay.
@@ -160,8 +164,20 @@ void GenerateLiveGuides(uint3 tid : SV_DispatchThreadID) {
         if ((GuideFlags & 2u) != 0u) {
             // Exact coordinate convention recovered from the reference pass:
             // abs(viewNormal.z), native Control smoothness (GBuffer1.B).
+            float viewCosine = min(abs(normalView.z), 1.0f);
+            if ((GuideFlags & 12u) == 12u) {
+                const float4 replay = TexturedCharacterAlbedo.Load(int3(tid.xy, 0));
+                // -4 is exclusive to the four audited Standard world replays.
+                // RGB validity remains coverage; native character alpha is not a mask.
+                if (replay.a == -4.0f && ControlCharacterAlbedoValid(replay.r,replay.g,replay.b)) {
+                    const float2 uv = (float2(tid.xy) + 0.5f) / float2(Width,Height);
+                    const float3 ray = normalize(float3((2.0f*uv.x-1.0f)/ProjectionX,
+                                                       (1.0f-2.0f*uv.y)/ProjectionY,1.0f));
+                    viewCosine = saturate(abs(dot(normalView,ray)));
+                }
+            }
             const float2 env = EnvBRDF.SampleLevel(
-                LinearClamp, float2(min(abs(normalView.z), 1.0f), g1.b), 0.0f).xy;
+                LinearClamp, float2(viewCosine, g1.b), 0.0f).xy;
             specularGuide = materialGuide * env.x + env.y;
             // Control BRDF mode 3 is excluded by the reference pass.
             if (brdfMode == 3u) specularGuide = 0.0f.xxx;

@@ -377,11 +377,11 @@ jobs:
       - name: Preserve verified glass raygen across DXC updates
         run: python tools/prepare-canonical-glass.py
 
-      - name: Package live lighting diagnostic R105
+      - name: Package live lighting diagnostic R106
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-Native-Lighting-Live-R105'
+          $out='Control-FG-Native-Lighting-Live-R106'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
           Copy-Item build/rt_spot_selected_off.dxbc,build/rt_spot_selection.dxbc,build/rt_spot_visibility.dxbc,build/rt_spot_light_ids.dxbc,build/rt_spot_raw_history.dxbc,build/rt_spot_raw_spatial0.dxbc,build/rt_spot_raw_spatial1.dxbc,build/rt_spot_full.dxil,build/rt_spot_r94.dxil,build/rt_spot_light.dxbc,build/rt_spot_reset.dxbc,build/rt_spot_history.dxbc,build/rt_spot_spatial0.dxbc,build/rt_spot_spatial1.dxbc $out
@@ -399,20 +399,20 @@ jobs:
           Copy-Item Collect-RR-Blinds-Capture.ps1 "$out/Collect-RR-Blinds-Capture.ps1"
           Copy-Item Collect-ControlFG-Compact-Logs.cmd "$out/Collect-ControlFG-Compact-Logs.cmd"
           Copy-Item Collect-ControlFG-Compact-Logs.ps1 "$out/Collect-ControlFG-Compact-Logs.ps1"
-          Copy-Item docs/rr-material-sharpening-r105.md "$out/DIAGNOSTIC-NOTES.md"
+          Copy-Item docs/rr-view-angle-r106.md "$out/DIAGNOSTIC-NOTES.md"
           @'
-          CONTROL-FG R105 - experimental selected-spotlight RT replacement
+          CONTROL-FG R106 - experimental selected-spotlight RT replacement
           Close Control to install. Copy contents beside Control_DX12.exe.
           Preserve existing NVIDIA runtimes and the ControlFGStreamline folder.
           Use Borderless. Load the affected wall or painting with RR ON, FG and glass enhancements OFF.
           Enable native RT Contact Shadows. Keep the same camera position for comparison.
-          F10: select WORLD ALBEDO. Keep RR ON. This build uses the requested 60% clamp.
+          F10: compare WORLD ALBEDO against VIEW ANGLE with RR ON. Both use 60% clamp.
           Face the affected wall or painting and stand still for 10 seconds, then move.
-          SAVE LOG once after testing. Send the Lighting-R105 log and screenshots.
-          No restart between modes. SAVE LOG writes one Lighting-R105 session log.
+          SAVE LOG once after testing. Send the Lighting-R106 log and screenshots.
+          No restart between modes. SAVE LOG writes one Lighting-R106 session log.
           This replaces one selected spotlight per pixel, not every shadow in the scene.
           An unavailable button means the required native shader pair was not prepared.
-          Do not use SPEC FILTER for this test: it bypasses the clamp.
+          VIEW ANGLE replaces the rejected SPEC FILTER button. No restart between comparisons.
           WORLD ALBEDO retains GI filtering and textured world albedo.
           GI filtering and centered shadows remain as in R100. All 14 shadow assets remain exact R97.
           See DIAGNOSTIC-NOTES.md for scope and limitations.
@@ -423,10 +423,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-Native-Lighting-Live-R105
+          name: Control-FG-Native-Lighting-Live-R106
           path: |
-            Control-FG-Native-Lighting-Live-R105.zip
-            Control-FG-Native-Lighting-Live-R105.sha256
+            Control-FG-Native-Lighting-Live-R106.zip
+            Control-FG-Native-Lighting-Live-R106.sha256
             build/rt_spot_shadow_prototype.dxil
             build/rr_clamp_fixed.h
             build/exports.txt

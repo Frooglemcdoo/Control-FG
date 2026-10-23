@@ -1,4 +1,4 @@
-"""Exact captured world RGB, with private replay alpha forced to one."""
+"""Exact captured world RGB, with private replay alpha tagged as -4."""
 from pathlib import Path
 import struct, json, hashlib
 from dxbc_transform import transform_shex
@@ -6,9 +6,9 @@ root=Path(__file__).resolve().parents[1]
 fixtures=root/'tools/fixtures/rr-world-albedo'
 def patch(words):
     # All four audited shaders have one unconditional final ret. Preserve every
-    # original instruction and append mov o0.w, l(1.0) immediately before it.
+    # original instruction and append mov o0.w, l(-4.0) immediately before it.
     assert words[-1]==0x0100003e
-    words[-1:-1]=[0x05000036,0x00102082,0,0x00004001,0x3f800000]
+    words[-1:-1]=[0x05000036,0x00102082,0,0x00004001,0xc0800000]
 lines=['#pragma once','// Generated from audited R101 Standard material bytecode.']
 for entry in json.loads((fixtures/'manifest.json').read_text()):
     i=entry['variant']; native=bytes.fromhex((fixtures/f'variant-{i}.hex').read_text())
@@ -23,4 +23,4 @@ for entry in json.loads((fixtures/'manifest.json').read_text()):
 lines.append('};')
 (root/'build').mkdir(exist_ok=True)
 (root/'build/rr_world_albedo_compiled.h').write_text('\n'.join(lines)+'\n')
-print('Generated four exact-match world albedo variants; RGB untouched, alpha=1')
+print('Generated four exact-match world albedo variants; RGB untouched, alpha=-4')
