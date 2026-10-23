@@ -59,8 +59,8 @@ inline void Capture(ID3D12Device* device,const D3D12_COMPUTE_PIPELINE_STATE_DESC
  temporalDesc.CS={kRRClampShaderTemporal,sizeof(kRRClampShaderTemporal)};
  const HRESULT temporalResult=createOriginal(device,&temporalDesc,IID_PPV_ARGS(&b->temporal));
  if(FAILED(temporalResult))Log("RR_TEMPORAL_CLAMP_PSO_FAILED hr=0x%08lX",static_cast<unsigned long>(temporalResult));
- if(b->temporal)control_rr_temporal::ready.store(true,std::memory_order_release);
  bundles[index].store(b,std::memory_order_release);
+ if(b->temporal)control_rr_temporal::ready.store(true,std::memory_order_release);
  unsigned ready=0;for(auto* pipeline:b->variants)if(pipeline)++ready;
  Log("RR_CLAMP_CS3_CAPTURE native=%p variants_ready=%u total=%u root_preserved=1 cached_blob_cleared=1",b->native,ready,VariantCount);
 }

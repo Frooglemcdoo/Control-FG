@@ -25,7 +25,7 @@ int main(){
  std::size_t at=0;while((at=source.find(", space1"))!=std::string::npos)source.erase(at,8);
  auto compile=[&](const char* weight){
   const D3D_SHADER_MACRO macros[]={{"FIREFLY_CLAMP","0.60"},{"TEMPORAL_WEIGHT",weight},{nullptr,nullptr}};
-  ComPtr<ID3DBlob> code,error;auto result=D3DCompile(source.data(),source.size(),nullptr,macros,nullptr,"main","cs_5_0",D3DCOMPILE_OPTIMIZATION_LEVEL3|D3DCOMPILE_WARNINGS_ARE_ERRORS,0,&code,&error);
+  ComPtr<ID3DBlob> code,error;auto result=D3DCompile(source.data(),source.size(),nullptr,macros,nullptr,"main","cs_5_0",D3DCOMPILE_OPTIMIZATION_LEVEL3|D3DCOMPILE_WARNINGS_ARE_ERRORS|D3DCOMPILE_IEEE_STRICTNESS,0,&code,&error);
   if(error)std::fwrite(error->GetBufferPointer(),1,error->GetBufferSize(),stderr);hr(result);
   ComPtr<ID3D11ComputeShader> shader;hr(device->CreateComputeShader(code->GetBufferPointer(),code->GetBufferSize(),nullptr,&shader));return shader;
  };

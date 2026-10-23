@@ -65,7 +65,7 @@ int main(int argc,char** argv) {
     nr->Release();
     ID3DBlob* code=nullptr;ID3DBlob* errors=nullptr;
     HRESULT hr=D3DCompileFromFile(temporal?L"src/shaders/rr_specular_temporal.hlsl":L"src/shaders/rr_clamp_strength.hlsl",macros,D3D_COMPILE_STANDARD_FILE_INCLUDE,"main","cs_5_1",
-        D3DCOMPILE_OPTIMIZATION_LEVEL3|D3DCOMPILE_WARNINGS_ARE_ERRORS,0,&code,&errors);
+        D3DCOMPILE_OPTIMIZATION_LEVEL3|D3DCOMPILE_WARNINGS_ARE_ERRORS|(temporal?D3DCOMPILE_IEEE_STRICTNESS:0),0,&code,&errors);
     if(errors){std::fwrite(errors->GetBufferPointer(),1,errors->GetBufferSize(),stderr);errors->Release();}
     if(FAILED(hr)||!code){if(code)code->Release();return 3;}
     ID3D12ShaderReflection* rr=nullptr;
