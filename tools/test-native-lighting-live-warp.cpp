@@ -215,8 +215,9 @@ int main() try {
         Check(owner->SetPrivateDataInterface(rt::kVisibilityVariant,filtered.Get()));
         Check(owner->SetPrivateDataInterface(rt::kLightIdsVariant,raw.Get()));
         Check(owner->SetPrivateDataInterface(rt::kSelectedOffVariant,filtered.Get()));
+        Check(owner->SetPrivateDataInterface(rt::kOpenVariant,raw.Get()));
         rt::Pass pass; pass.raySeen=pass.fullRay=true; rt::active=&pass;
-        for (auto mode : {Mode::RtSpot,Mode::RtSpotRaw,Mode::RtSpotMapGuard,Mode::RtSpotNativeCull,Mode::RtSpotVisibilityRaw,Mode::RtSpotVisibilityFiltered,Mode::RtSpotLightIds,Mode::RtSpotBaseline,Mode::RtSpotDiffuseFiltered,Mode::RtSpotGiFiltered,Mode::RtSpotWorldAlbedo,Mode::RtSpotSpecularFiltered,Mode::RtSpotViewAngle,Mode::RtSpotGi2,Mode::RtSpotGi4,Mode::RtSpotGi8,Mode::RtSpotGiMenu,Mode::RtSpotGi12,Mode::RtSpotGi16,Mode::RtSpotSpec1,Mode::RtSpotSpec2,Mode::RtSpotSpec4,Mode::RtSpotSpec8,Mode::RtSpotSpec12,Mode::RtSpotSpec16,Mode::RtSpotTemporal2,Mode::RtSpotTemporal4,Mode::RoomSpot,Mode::RoomBoth}) {
+        for (auto mode : {Mode::RtSpot,Mode::RtSpotRaw,Mode::RtSpotMapGuard,Mode::RtSpotNativeCull,Mode::RtSpotVisibilityRaw,Mode::RtSpotVisibilityFiltered,Mode::RtSpotLightIds,Mode::RtSpotBaseline,Mode::RtSpotDiffuseFiltered,Mode::RtSpotGiFiltered,Mode::RtSpotWorldAlbedo,Mode::RtSpotSpecularFiltered,Mode::RtSpotViewAngle,Mode::RtSpotGi2,Mode::RtSpotGi4,Mode::RtSpotGi8,Mode::RtSpotGiMenu,Mode::RtSpotGi12,Mode::RtSpotGi16,Mode::RtSpotSpec1,Mode::RtSpotSpec2,Mode::RtSpotSpec4,Mode::RtSpotSpec8,Mode::RtSpotSpec12,Mode::RtSpotSpec16,Mode::RtSpotTemporal2,Mode::RtSpotTemporal4,Mode::RoomSpot,Mode::RoomBoth,Mode::RoomNativeSelection,Mode::RoomOpen,Mode::RoomSelectedOff}) {
             if (!IsRtSpotMode(mode) || Disables(mode,kDirectBit) || RequiredVariant(mode)!=kRtSpotReadyBit)
                 throw std::runtime_error("Diagnostic mode policy mismatch");
             pass.mode=mode;
@@ -224,9 +225,10 @@ int main() try {
                 Check(owner->SetPrivateData(rt::kKind,sizeof(kind),&kind));
                 auto* expected=kind==rt::kResetComponent ? filtered.Get() : reset.Get();
                 if (UsesRawSpotVisibility(mode) && kind!=rt::kLightComponent) expected=raw.Get();
-                if (mode==Mode::RtSpotMapGuard && kind==rt::kLightComponent) expected=filtered.Get();
+                if ((mode==Mode::RtSpotMapGuard || mode==Mode::RoomSelectedOff) && kind==rt::kLightComponent) expected=filtered.Get();
                 if (kind==rt::kLightComponent && ShowsSpotVisibility(mode)) expected=filtered.Get();
                 if (kind==rt::kLightComponent && mode==Mode::RtSpotLightIds) expected=raw.Get();
+                if (mode==Mode::RoomOpen && kind==rt::kLightComponent) expected=raw.Get();
                 auto* actual=rt::SelectCompute(owner.Get());
                 if(actual!=expected) throw std::runtime_error("Diagnostic pipeline route mismatch");
                 actual->Release();
@@ -243,7 +245,7 @@ int main() try {
         const unsigned producer=rt::kSelectorComponent;
         Check(owner->SetPrivateData(rt::kKind,sizeof(producer),&producer));
         rt::scopeReady=true;rt::components.store(rt::kRequiredComponents);rt::disabled.store(false);
-        for (auto mode : {Mode::Native,Mode::RtSpotBaseline,Mode::RtSpot,Mode::RtSpotVisibilityRaw,Mode::RtSpotLightIds,Mode::RtSpotDiffuseFiltered,Mode::RtSpotGiFiltered,Mode::RtSpotWorldAlbedo,Mode::RtSpotSpecularFiltered,Mode::RtSpotViewAngle,Mode::RtSpotGi2,Mode::RtSpotGi4,Mode::RtSpotGi8,Mode::RtSpotGiMenu,Mode::RtSpotGi12,Mode::RtSpotGi16,Mode::RtSpotSpec1,Mode::RtSpotSpec2,Mode::RtSpotSpec4,Mode::RtSpotSpec8,Mode::RtSpotSpec12,Mode::RtSpotSpec16,Mode::RtSpotTemporal2,Mode::RtSpotTemporal4,Mode::RoomSpot,Mode::RoomBoth}) {
+        for (auto mode : {Mode::Native,Mode::RtSpotBaseline,Mode::RtSpot,Mode::RtSpotVisibilityRaw,Mode::RtSpotLightIds,Mode::RtSpotDiffuseFiltered,Mode::RtSpotGiFiltered,Mode::RtSpotWorldAlbedo,Mode::RtSpotSpecularFiltered,Mode::RtSpotViewAngle,Mode::RtSpotGi2,Mode::RtSpotGi4,Mode::RtSpotGi8,Mode::RtSpotGiMenu,Mode::RtSpotGi12,Mode::RtSpotGi16,Mode::RtSpotSpec1,Mode::RtSpotSpec2,Mode::RtSpotSpec4,Mode::RtSpotSpec8,Mode::RtSpotSpec12,Mode::RtSpotSpec16,Mode::RtSpotTemporal2,Mode::RtSpotTemporal4,Mode::RoomSpot,Mode::RoomBoth,Mode::RoomNativeSelection,Mode::RoomOpen,Mode::RoomSelectedOff}) {
             selection.Select(mode);
             auto* actual=rt::SelectCompute(owner.Get());
             auto* expected=UsesUnshadowedSpotSelection(mode)?reset.Get():nullptr;

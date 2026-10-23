@@ -2,6 +2,7 @@
 // Included inside native_lighting, after the capture hooks. The renderer scope
 // holds one selection across ray production, history filtering and composition.
 namespace rt_spot_runtime {
+#include "../build/rt_spot_open.h"
 using CreateComputeFn = HRESULT (STDMETHODCALLTYPE*)(ID3D12Device*, const D3D12_COMPUTE_PIPELINE_STATE_DESC*, REFIID, void**);
 using PassFn = void (*)(void*, void*, void*, void*);
 inline constexpr char kSelectorSha[] = "a9e5b544d5ec48e9b439b36aafc5346645f0261d3b1df65dc09e6cce290c164f";
@@ -21,6 +22,7 @@ inline const GUID kRawVariant = {0xe631a601,0x6651,0x4911,{0x80,0x90,0x11,0x71,0
 inline const GUID kHistoryVariant = {0xe631a601,0x6651,0x4911,{0x80,0x90,0x11,0x71,0x14,0x28,0x30,0x05}};
 inline const GUID kVisibilityVariant = {0xe631a601,0x6651,0x4911,{0x80,0x90,0x11,0x71,0x14,0x28,0x30,0x07}};
 inline const GUID kLightIdsVariant = {0xe631a601,0x6651,0x4911,{0x80,0x90,0x11,0x71,0x14,0x28,0x30,0x08}};
+inline const GUID kOpenVariant = {0xe631a601,0x6651,0x4911,{0x80,0x90,0x11,0x71,0x14,0x28,0x30,0x0a}};
 inline const GUID kSelectedOffVariant = {0xe631a601,0x6651,0x4911,{0x80,0x90,0x11,0x71,0x14,0x28,0x30,0x09}};
 inline std::vector<unsigned char> visibilityBytes, lightIdsBytes, selectedOffBytes, selectionBytes;
 inline std::vector<unsigned char> rayBytes, baselineRayBytes, lightBytes, resetBytes, historyBytes;
@@ -207,6 +209,16 @@ inline void ObserveCompute(ID3D12Device* device, const D3D12_COMPUTE_PIPELINE_ST
             if (debug) debug->Release();
         }
     }
+    // Optional diagnostic failure must not disable the working spotlight path.
+    if (SUCCEEDED(hr) && kind == kLightComponent) {
+        custom.CS = {kSpotOpenShader,sizeof(kSpotOpenShader)};
+        ID3D12PipelineState* open = nullptr;
+        HRESULT openResult = create(device,&custom,IID_PPV_ARGS(&open));
+        if (SUCCEEDED(openResult)) openResult = owner->SetPrivateDataInterface(kOpenVariant,open);
+        if (open) open->Release();
+        spotOpenReady.store(SUCCEEDED(openResult),std::memory_order_release);
+        Trace("rt_spot_open ready=%u hr=0x%08lX",unsigned(SUCCEEDED(openResult)),static_cast<unsigned long>(openResult));
+    }
     if (owner) owner->Release();
     if (variant) variant->Release();
     if (SUCCEEDED(hr)) components.fetch_or(kind);
@@ -244,11 +256,23 @@ inline ID3D12PipelineState* SelectCompute(ID3D12PipelineState* native) noexcept 
     ID3D12PipelineState* alternate = nullptr; size = sizeof(alternate);
     const bool raw = active->fullRay && UsesRawSpotVisibility(active->mode) &&
         (spatial || kind == kResetComponent);
-    const GUID& variant = kind == kLightComponent && active->mode == Mode::RtSpotMapGuard ? kSelectedOffVariant :
+    const GUID& variant = kind == kLightComponent && active->mode == Mode::RoomOpen ? kOpenVariant :
+        kind == kLightComponent && (active->mode == Mode::RtSpotMapGuard || active->mode == Mode::RoomSelectedOff) ? kSelectedOffVariant :
         kind == kLightComponent && ShowsSpotVisibility(active->mode) ? kVisibilityVariant :
         kind == kLightComponent && active->mode == Mode::RtSpotLightIds ? kLightIdsVariant : raw ? kRawVariant : kind == kResetComponent && !active->reset ? kHistoryVariant : kVariant;
     if (FAILED(native->GetPrivateData(variant,&size,&alternate)) || !alternate) return nullptr;
-    if (kind == kLightComponent) active->composed = true;
+    if (kind == kLightComponent) {
+        active->composed = true;
+        static thread_local uint64_t reported = ~uint64_t(0);
+        const auto sequence = LiveSelection::Sequence(active->selectionState);
+        if (reported != sequence) {
+            Trace("spot_light_isolation seq=%llu mode=%s selector=%s composition=%s gpu_confirmed=0",
+                sequence,ModeName(active->mode),UsesUnshadowedSpotSelection(active->mode)?"unshadowed":"native",
+                active->mode==Mode::RoomOpen?"selected_visibility_one":
+                active->mode==Mode::RoomSelectedOff?"selected_omitted":"filtered_rt");
+            reported = sequence;
+        }
+    }
     return alternate;
 }
 inline HRESULT CreateAugmented(ID3D12Device5* device, const D3D12_STATE_OBJECT_DESC* desc, REFIID iid, void** out) {

@@ -169,6 +169,9 @@ jobs:
             if ((Get-FileHash "build/$name" -Algorithm SHA256).Hash.ToLower() -ne $entry.Value.sha256) { throw "Shader hash mismatch: $name" }
           }
 
+      - name: Generate isolated spotlight visibility diagnostic
+        run: python tools/generate-spot-open.py
+
       - name: Validate RT spotlight composition and history shaders on WARP
         shell: cmd
         run: |
@@ -387,11 +390,11 @@ jobs:
       - name: Preserve verified glass raygen across DXC updates
         run: python tools/prepare-canonical-glass.py
 
-      - name: Package live lighting diagnostic R111
+      - name: Package live lighting diagnostic R112
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-Native-Lighting-Live-R111'
+          $out='Control-FG-Native-Lighting-Live-R112'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
           Copy-Item build/rt_spot_selected_off.dxbc,build/rt_spot_selection.dxbc,build/rt_spot_visibility.dxbc,build/rt_spot_light_ids.dxbc,build/rt_spot_raw_history.dxbc,build/rt_spot_raw_spatial0.dxbc,build/rt_spot_raw_spatial1.dxbc,build/rt_spot_full.dxil,build/rt_spot_r94.dxil,build/rt_spot_light.dxbc,build/rt_spot_reset.dxbc,build/rt_spot_history.dxbc,build/rt_spot_spatial0.dxbc,build/rt_spot_spatial1.dxbc $out
@@ -409,22 +412,24 @@ jobs:
           Copy-Item Collect-RR-Blinds-Capture.ps1 "$out/Collect-RR-Blinds-Capture.ps1"
           Copy-Item Collect-ControlFG-Compact-Logs.cmd "$out/Collect-ControlFG-Compact-Logs.cmd"
           Copy-Item Collect-ControlFG-Compact-Logs.ps1 "$out/Collect-ControlFG-Compact-Logs.ps1"
-          Copy-Item docs/rr-temporal-room-r111.md "$out/DIAGNOSTIC-NOTES.md"
+          Copy-Item docs/spot-light-isolation-r112.md "$out/DIAGNOSTIC-NOTES.md"
           @'
-          CONTROL-FG R111 - Temporal specular and room-light isolation
+          CONTROL-FG R112 - Selected spotlight light-loss isolation
           Close Control to install. Copy contents beside Control_DX12.exe.
           Preserve existing NVIDIA runtimes and the ControlFGStreamline folder.
-          Use Borderless. Load the affected wall or painting with RR ON, FG and glass enhancements OFF.
+          Use Borderless. Load the affected cafeteria room with RR ON, FG and glass enhancements OFF.
           Enable native RT Contact Shadows. Keep the same camera position for comparison.
-          F10: compare SPEC 2/TEMP 2, SPEC 4/TEMP 4, then SPEC 16 with RR ON.
+          F10: compare GI ONLY, BOTH, NATIVE PICK, LIGHT OPEN, LIGHT OFF.
           Set game Ray Tracing Samples Count to 1. Keep the saved GI setting fixed. Let each settle 10 seconds.
-          SAVE LOG once after testing. Send the Lighting-R111 log and screenshots.
-          No restart between modes. SAVE LOG writes one Lighting-R111 session log.
+          SAVE LOG once after testing. Send the Lighting-R112 log and screenshots.
+          No restart between modes. SAVE LOG writes one Lighting-R112 session log.
           This replaces one selected spotlight per pixel, not every shadow in the scene.
           An unavailable button means the required native shader pair was not prepared.
           Room: compare ROOM NONE / GI ONLY / SPOT ONLY / BOTH, all at SPEC 4.
-          TEMP uses history with zero spatial passes and the same 60% clamp. GI samples stay saved.
-          GI filtering and centered shadows remain as in R100. All 14 shadow assets remain exact R97.
+          NATIVE PICK changes only ranking. LIGHT OPEN bypasses only selected RT visibility.
+          LIGHT OFF omits only selected light additions. These are diagnostics, not fixes.
+          SPEC 8 / SPEC 16 remain quality references. No TEMP buttons in this build.
+          All 14 existing shadow assets remain exact R97. New diagnostic shader is embedded in dxgi.dll.
           See DIAGNOSTIC-NOTES.md for scope and limitations.
           '@ | Set-Content "$out/README.txt" -Encoding ASCII
           Compress-Archive -Path "$out/*" -DestinationPath "$out.zip" -Force
@@ -433,12 +438,13 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-Native-Lighting-Live-R111
+          name: Control-FG-Native-Lighting-Live-R112
           path: |
-            Control-FG-Native-Lighting-Live-R111.zip
-            Control-FG-Native-Lighting-Live-R111.sha256
+            Control-FG-Native-Lighting-Live-R112.zip
+            Control-FG-Native-Lighting-Live-R112.sha256
             build/rt_spot_shadow_prototype.dxil
             build/rr_clamp_fixed.h
+            build/rt_spot_open.dxbc
             build/rr_clamp_temporal.h
             build/exports.txt
             build/imports.txt
