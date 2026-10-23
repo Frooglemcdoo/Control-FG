@@ -15,6 +15,9 @@
 #include <string>
 #include <utility>
 #include <iostream>
+#include <thread>
+#include <future>
+#include <chrono>
 static std::atomic<unsigned long long> presentCount{0};
 static void Log(const char*, ...) {}
 static bool PTReflectionSha256(const unsigned char*, size_t, char*) { return false; }
@@ -349,6 +352,59 @@ static void TestCopyAudit(ID3D12Device* device) {
     mirror::Request();mirror::BeginIfRequested();mirror::copiedBytes=mirror::kCopyBudget;
     mirror::Observe(list.Get(),destination.Get(),0,source.Get(),0,192);
     if(!mirror::done.load())throw std::runtime_error("copy budget not enforced");
+    // Hold one producer mid-publication while another recording callback and
+    // submission run. R122 used an exclusive journal lock across this window.
+    mirror::Request();mirror::BeginIfRequested();
+    std::promise<void> producerEntered,resumeProducer;
+    auto entered=producerEntered.get_future();auto resume=resumeProducer.get_future();
+    std::exception_ptr producerError;
+    std::thread producerThread([&] {
+        try {
+            mirror::CaptureLease lease;
+            if(!lease)throw std::runtime_error("producer lease unavailable");
+            unsigned index=0;UINT64 offset=0;
+            if(!mirror::ReserveEvent(index) || !mirror::ReserveBytes(512,offset))throw std::runtime_error("producer reservation failed");
+            auto& e=mirror::events[index];e={};e.kind=mirror::Kind::Copy;e.generation=mirror::Token(list.Get());
+            e.resource=mirror::Identity(destination.Get(),mirror::kResourceIdentity);e.base=destination->GetGPUVirtualAddress();e.extent=65536;e.size=512;e.archiveOffset=offset;
+            std::memcpy(mirror::archive+offset,expected.data(),512);
+            producerEntered.set_value();resume.wait();
+            mirror::published[index].store(true,std::memory_order_release);
+        } catch(...) {producerError=std::current_exception();try{producerEntered.set_value();}catch(...){} }
+    });
+    entered.wait();
+    auto concurrent=std::async(std::launch::async,[&] {
+        mirror::RecordDispatch(dispatchList.Get(),audit::targetAddress,384,ids);
+        mirror::Submitted(queue.Get(),1,consumer);
+    });
+    const bool progressed=concurrent.wait_for(std::chrono::seconds(2))==std::future_status::ready;
+    resumeProducer.set_value();producerThread.join();concurrent.get();
+    if(producerError)std::rethrow_exception(producerError);
+    if(!progressed || mirror::done.load() || mirror::coverage.count)
+        throw std::runtime_error("recording/submission blocked, aborted, or read an unpublished copy");
+    mirror::Submitted(queue.Get(),1,producer);
+    mirror::Token(dispatchList.Get(),true); // New recording generation for the consumer.
+    mirror::RecordDispatch(dispatchList.Get(),audit::targetAddress,384,ids);
+    mirror::Submitted(queue.Get(),1,consumer);
+    if(!mirror::done.load() || !mirror::coverage.Covers(128,384))throw std::runtime_error("published concurrent copy did not validate");
+    mirror::Request();mirror::BeginIfRequested();
+    unsigned reservedIndices[512]{};UINT64 reservedOffsets[512]{};
+    std::future<void> writers[8];
+    for(unsigned t=0;t<8;++t)writers[t]=std::async(std::launch::async,[&,t] {
+        mirror::CaptureLease lease;if(!lease)throw std::runtime_error("writer lease unavailable");
+        for(unsigned i=0;i<64;++i) {
+            const unsigned result=t*64+i;
+            if(!mirror::ReserveEvent(reservedIndices[result]) || !mirror::ReserveBytes(32,reservedOffsets[result]))throw std::runtime_error("parallel reservation failed");
+        }
+    });
+    for(auto& writer:writers)writer.get();
+    bool usedIndices[512]{},usedOffsets[512]{};
+    for(unsigned i=0;i<512;++i) {
+        if(reservedIndices[i]>=512 || reservedOffsets[i]%32 || reservedOffsets[i]/32>=512 || usedIndices[reservedIndices[i]] || usedOffsets[reservedOffsets[i]/32])
+            throw std::runtime_error("parallel writers overlap journal storage");
+        usedIndices[reservedIndices[i]]=true;usedOffsets[reservedOffsets[i]/32]=true;
+    }
+    mirror::done.store(true);
+    std::cout<<"PASS concurrent capture: producer paused before publication, independent recording/submission progress, complete published replay, eight writers without overlapping storage\n";
     std::cout<<"PASS submission capture: idle before request, separate lists in GPU submission order, rearm, reversed order, replay, reset and cross-queue rejection\n";
     audit::captured.store(true);audit::ReleaseFinishedOwners();
     std::cout<<"PASS copy audit: default-heap destination, partial coverage, overflow rejection, native buffer/resource forwarding and unchanged GPU/upload bytes\n";
