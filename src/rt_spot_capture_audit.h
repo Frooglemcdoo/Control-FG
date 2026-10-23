@@ -71,7 +71,12 @@ inline void DescribeRoot(ID3D12RootSignature* root, bool local) noexcept {
         Trace("rt_hit_setup_root local=%u captured=0",unsigned(local)); return;
     }
     ComPtr<ID3D12VersionedRootSignatureDeserializer> decoder;
-    if (FAILED(D3D12CreateVersionedRootSignatureDeserializer(bytes,size,IID_PPV_ARGS(&decoder)))) return;
+    using Deserialize = HRESULT (WINAPI*)(LPCVOID,SIZE_T,REFIID,void**);
+    const HMODULE module = GetModuleHandleW(L"d3d12.dll");
+    const auto deserialize = module ? reinterpret_cast<Deserialize>(GetProcAddress(module,"D3D12CreateVersionedRootSignatureDeserializer")) : nullptr;
+    if (!deserialize || FAILED(deserialize(bytes,size,IID_PPV_ARGS(&decoder)))) {
+        Trace("rt_hit_setup_root local=%u decode_failed=1",unsigned(local)); return;
+    }
     const D3D12_VERSIONED_ROOT_SIGNATURE_DESC* desc = nullptr;
     if (FAILED(decoder->GetRootSignatureDescAtVersion(D3D_ROOT_SIGNATURE_VERSION_1_0,&desc)) || !desc) return;
     Trace("rt_hit_setup_root local=%u parameters=%u samplers=%u flags=%u",unsigned(local),desc->Desc_1_0.NumParameters,desc->Desc_1_0.NumStaticSamplers,unsigned(desc->Desc_1_0.Flags));
@@ -134,7 +139,7 @@ inline void InspectTable(ID3D12StateObject* state, const D3D12_DISPATCH_RAYS_DES
     const HRESULT hr = found.resource->Map(0,&range,&mapped);
     if (FAILED(hr) || !mapped) { Trace("rt_hit_setup_map failed=1 hr=0x%08lX",static_cast<unsigned long>(hr)); return; }
     const UINT64 count = table.SizeInBytes / 96;
-    const UINT64 indices[] = {0, count > 1 ? 1 : 0, count / 2, count - 1};
+    const UINT64 indices[] = {0ull, count > 1 ? 1ull : 0ull, count / 2, count - 1};
     unsigned char first[4][96]{}, second[4][96]{};
     const auto* source = static_cast<const unsigned char*>(mapped) + offset;
     for (UINT i = 0; i < 4; ++i) std::memcpy(first[i],source + indices[i]*96,96);

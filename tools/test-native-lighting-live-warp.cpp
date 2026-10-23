@@ -199,6 +199,19 @@ public:
 };
 static void TestHitSetupAudit(ID3D12Device* device) {
     namespace audit=native_lighting::rt_spot_capture_audit;
+    D3D12_ROOT_PARAMETER parameter{};parameter.ParameterType=D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
+    parameter.Constants={0,3,10};
+    D3D12_ROOT_SIGNATURE_DESC rootDesc{1,&parameter,0,nullptr,D3D12_ROOT_SIGNATURE_FLAG_NONE};
+    ComPtr<ID3DBlob> serialized,error;
+    Check(D3D12SerializeRootSignature(&rootDesc,D3D_ROOT_SIGNATURE_VERSION_1,&serialized,&error));
+    ComPtr<ID3D12RootSignature> root;
+    Check(device->CreateRootSignature(0,serialized->GetBufferPointer(),serialized->GetBufferSize(),IID_PPV_ARGS(&root)));
+    audit::RememberRoot(root.Get(),serialized->GetBufferPointer(),serialized->GetBufferSize());
+    audit::DescribeRoot(root.Get(),false);
+    std::vector<char> log(native_lighting::DiagnosticLogQueue::Capacity());
+    const auto length=native_lighting::diagnosticLog.Drain(log.data(),log.size());
+    if(std::string(log.data(),length).find("rt_hit_setup_constants local=0 parameter=0 count=10 reg=0 space=3")==std::string::npos)
+        throw std::runtime_error("dynamic root decoder did not report native constants");
     D3D12_HEAP_PROPERTIES heap{};heap.Type=D3D12_HEAP_TYPE_UPLOAD;
     D3D12_RESOURCE_DESC desc{};desc.Dimension=D3D12_RESOURCE_DIMENSION_BUFFER;
     desc.Width=65536;desc.Height=desc.DepthOrArraySize=desc.MipLevels=1;
