@@ -14,6 +14,7 @@
 
 namespace native_lighting {
 namespace rt_spot_capture_audit { inline void ReleaseFinishedOwners() noexcept; }
+namespace rt_spot_table_audit { inline void Request() noexcept; }
 inline LiveSelection selection;
 inline std::atomic<unsigned> readyMask{0};
 inline std::atomic<unsigned long long> graphicsSeen{0}, computeSeen{0}, bindingsSeen{0};
@@ -137,6 +138,7 @@ inline bool SelectMode(Mode mode) noexcept {
     if (!ModeAvailable(mode,readyMask.load())) { Trace("selection_rejected mode=%s reason=shader_or_sample_hook_not_ready", ModeName(mode)); return false; }
     ReportRRPaths("before_selection");
     const auto state = selection.Select(mode);
+    if(mode==Mode::RoomBoth)rt_spot_table_audit::Request();
     Trace("selection seq=%llu mode=%s ready_mask=%u", LiveSelection::Sequence(state), ModeName(mode), readyMask.load());
     return true;
 }
@@ -344,7 +346,8 @@ inline HRESULT STDMETHODCALLTYPE CreateListHook(ID3D12Device* device, UINT node,
 inline void StartOverlay() noexcept;
 inline void InstallLiveDiagnostic(ID3D12Device* device) noexcept {
     if (!device) return;
-    rt_spot_capture_audit::Install(device);
+    rt_spot_capture_audit::captured.store(true); // Retire speculative upload retention; R122 uses copy journals.
+    rt_spot_table_audit::InstallQueues(device);
     rt_spot_runtime::Install();
     rt_shadow_capture::onRoot = &rt_spot_capture_audit::RememberRoot;
     rt_shadow_capture::replacementState = &rt_spot_runtime::CreateAugmented;

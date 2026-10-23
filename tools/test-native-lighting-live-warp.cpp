@@ -262,6 +262,7 @@ static void TestHitSetupAudit(ID3D12Device* device) {
 static void TestCopyAudit(ID3D12Device* device) {
     namespace audit=native_lighting::rt_spot_capture_audit;
     namespace copies=native_lighting::rt_spot_copy_audit;
+    namespace mirror=native_lighting::rt_spot_table_audit;
     audit::captured.store(false);audit::attempts.store(0);audit::nextAttemptMs.store(0);
     D3D12_RESOURCE_DESC desc{};desc.Dimension=D3D12_RESOURCE_DIMENSION_BUFFER;
     desc.Width=65536;desc.Height=desc.DepthOrArraySize=desc.MipLevels=1;
@@ -274,6 +275,8 @@ static void TestCopyAudit(ID3D12Device* device) {
     heap.Type=D3D12_HEAP_TYPE_READBACK;
     Check(device->CreateCommittedResource(&heap,D3D12_HEAP_FLAG_NONE,&desc,D3D12_RESOURCE_STATE_COPY_DEST,nullptr,IID_PPV_ARGS(&readback)));
     std::vector<unsigned char> expected(65536);for(size_t i=0;i<expected.size();++i)expected[i]=static_cast<unsigned char>(i*13);
+    unsigned char ids[2][32]{};ids[0][0]=1;ids[1][0]=2;
+    for(unsigned i=0;i<4;++i)std::memcpy(expected.data()+128+i*96,ids[i%2],32);
     D3D12_RANGE empty{0,0};void* data=nullptr;Check(source->Map(0,&empty,&data));
     std::memcpy(data,expected.data(),expected.size());D3D12_RANGE written{0,65536};source->Unmap(0,&written);
     audit::targetAddress=destination->GetGPUVirtualAddress()+128;audit::targetBytes=384;audit::targetActive.store(true);
@@ -284,6 +287,14 @@ static void TestCopyAudit(ID3D12Device* device) {
     ComPtr<ID3D12CommandAllocator> allocator;Check(device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT,IID_PPV_ARGS(&allocator)));
     ComPtr<ID3D12GraphicsCommandList> list;Check(device->CreateCommandList(0,D3D12_COMMAND_LIST_TYPE_DIRECT,allocator.Get(),nullptr,IID_PPV_ARGS(&list)));
     copies::InstallList(list.Get());
+    mirror::armed.store(false);
+    mirror::Observe(list.Get(),destination.Get(),0,source.Get(),0,512);
+    if(mirror::eventCount || mirror::copiedBytes)throw std::runtime_error("capture ran before user request");
+    mirror::Request();mirror::BeginIfRequested();
+    ComPtr<ID3D12CommandAllocator> dispatchAllocator;Check(device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT,IID_PPV_ARGS(&dispatchAllocator)));
+    ComPtr<ID3D12GraphicsCommandList> dispatchList;Check(device->CreateCommandList(0,D3D12_COMMAND_LIST_TYPE_DIRECT,dispatchAllocator.Get(),nullptr,IID_PPV_ARGS(&dispatchList)));
+    // Record the consumer first: CPU recording order differs from submission.
+    mirror::RecordDispatch(dispatchList.Get(),audit::targetAddress,384,ids);Check(dispatchList->Close());
     list->CopyBufferRegion(destination.Get(),64,source.Get(),32,512);
     list->CopyResource(destination.Get(),source.Get());
     if(copies::samples.load()!=3)throw std::runtime_error("copy hooks did not sample both native copy forms");
@@ -293,7 +304,8 @@ static void TestCopyAudit(ID3D12Device* device) {
     D3D12_COMMAND_QUEUE_DESC queueDesc{};ComPtr<ID3D12CommandQueue> queue;Check(device->CreateCommandQueue(&queueDesc,IID_PPV_ARGS(&queue)));
     ComPtr<ID3D12Fence> fence;Check(device->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&fence)));
     HANDLE event=CreateEventW(nullptr,FALSE,FALSE,nullptr);if(!event)throw std::runtime_error("copy test event creation failed");
-    ID3D12CommandList* lists[]={list.Get()};queue->ExecuteCommandLists(1,lists);Check(queue->Signal(fence.Get(),1));Check(fence->SetEventOnCompletion(1,event));
+    mirror::InstallQueue(queue.Get());
+    ID3D12CommandList* lists[]={list.Get(),dispatchList.Get()};queue->ExecuteCommandLists(2,lists);Check(queue->Signal(fence.Get(),1));Check(fence->SetEventOnCompletion(1,event));
     const auto wait=WaitForSingleObject(event,30000);CloseHandle(event);if(wait!=WAIT_OBJECT_0)throw std::runtime_error("copy test GPU timeout");
     D3D12_RANGE read{0,65536};Check(readback->Map(0,&read,&data));
     const bool unchanged=std::memcmp(data,expected.data(),expected.size())==0;readback->Unmap(0,&empty);
@@ -304,23 +316,36 @@ static void TestCopyAudit(ID3D12Device* device) {
     const std::string output(log.data(),length);
     if(output.find("destination_heap=1")==std::string::npos || output.find("full_previous_table=0")==std::string::npos || output.find("dispatch_snapshot=0")==std::string::npos)
         throw std::runtime_error("copy audit omitted heap/partial/snapshot limits");
-    namespace mirror=native_lighting::rt_spot_table_audit;
-    const auto oldToken=mirror::Token(list.Get());
-    if(!mirror::Matches(oldToken,audit::targetAddress,384))throw std::runtime_error("full copied table not correlated to list");
-    Check(allocator->Reset());Check(list->Reset(allocator.Get(),nullptr));
-    const auto newToken=mirror::Token(list.Get());
-    if(oldToken==newToken || mirror::Matches(newToken,audit::targetAddress,384))throw std::runtime_error("reset reused stale copy coverage");
-    mirror::Observe(list.Get(),destination.Get(),0,source.Get(),0,192);
-    if(mirror::Matches(newToken,audit::targetAddress,384))throw std::runtime_error("new prefix inherited an old tail");
-    mirror::Observe(list.Get(),destination.Get(),192,source.Get(),192,320);
-    if(!mirror::Matches(newToken,audit::targetAddress,384))throw std::runtime_error("split upload coverage not joined");
-    ++mirror::lossEpoch;
-    if(mirror::Matches(newToken,audit::targetAddress,384))throw std::runtime_error("lost copy event left valid evidence");
-    mirror::copiedBytes.store(mirror::kCopyBudget);
-    mirror::Observe(list.Get(),destination.Get(),0,source.Get(),0,192);
-    if(!mirror::done.load())throw std::runtime_error("mirror copy budget not enforced");
+    if(!mirror::done.load() || output.find("identifiers_validated=1")==std::string::npos)
+        throw std::runtime_error("submission order did not join separate producer and consumer lists");
+    // A fresh request must not inherit the previous table or spent budget.
+    mirror::Request();mirror::BeginIfRequested();
+    if(mirror::copiedBytes || mirror::coverage.count)throw std::runtime_error("rearm inherited old capture data");
+    mirror::RecordDispatch(dispatchList.Get(),audit::targetAddress,384,ids);
+    mirror::Observe(list.Get(),destination.Get(),0,source.Get(),0,512);
+    ID3D12CommandList* reversed[]={dispatchList.Get(),list.Get()};mirror::Submitted(queue.Get(),2,reversed);
+    if(mirror::done.load())throw std::runtime_error("consumer-before-producer was falsely validated");
+    ID3D12CommandList* consumer[]={dispatchList.Get()};mirror::Submitted(queue.Get(),1,consumer);
+    if(!mirror::done.load())throw std::runtime_error("command-list replay was accepted");
+    mirror::Request();mirror::BeginIfRequested();
+    mirror::Observe(list.Get(),destination.Get(),0,source.Get(),0,512);
+    const auto oldToken=mirror::Token(list.Get());Check(allocator->Reset());Check(list->Reset(allocator.Get(),nullptr));
+    if(mirror::Token(list.Get())==oldToken)throw std::runtime_error("reset retained generation");
+    mirror::RecordDispatch(dispatchList.Get(),audit::targetAddress,384,ids);
+    mirror::Submitted(queue.Get(),2,lists);
+    if(mirror::done.load() || mirror::coverage.count)throw std::runtime_error("unsubmitted pre-reset copies were reused");
     Check(list->Close());
-    std::cout<<"PASS table correlation: split coverage, reset generations, stale-tail rejection, lost-copy rejection and bounded CPU work\n";
+    mirror::Request();mirror::BeginIfRequested();
+    mirror::Observe(list.Get(),destination.Get(),0,source.Get(),0,512);
+    mirror::RecordDispatch(dispatchList.Get(),audit::targetAddress,384,ids);
+    ID3D12CommandList* producer[]={list.Get()};mirror::Submitted(queue.Get(),1,producer);
+    ComPtr<ID3D12CommandQueue> otherQueue;Check(device->CreateCommandQueue(&queueDesc,IID_PPV_ARGS(&otherQueue)));
+    mirror::Submitted(otherQueue.Get(),1,consumer);
+    if(!mirror::done.load())throw std::runtime_error("unverified cross-queue dependency was accepted");
+    mirror::Request();mirror::BeginIfRequested();mirror::copiedBytes=mirror::kCopyBudget;
+    mirror::Observe(list.Get(),destination.Get(),0,source.Get(),0,192);
+    if(!mirror::done.load())throw std::runtime_error("copy budget not enforced");
+    std::cout<<"PASS submission capture: idle before request, separate lists in GPU submission order, rearm, reversed order, replay, reset and cross-queue rejection\n";
     audit::captured.store(true);audit::ReleaseFinishedOwners();
     std::cout<<"PASS copy audit: default-heap destination, partial coverage, overflow rejection, native buffer/resource forwarding and unchanged GPU/upload bytes\n";
 }

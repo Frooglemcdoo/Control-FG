@@ -107,7 +107,7 @@ inline void InstallList(ID3D12GraphicsCommandList* list) noexcept {
         const bool resource = PatchSlot(&table[17],reinterpret_cast<void*>(slot->resource),reinterpret_cast<void*>(&ResourceHook));
         const bool reset = PatchSlot(&table[10],reinterpret_cast<void*>(slot->reset),reinterpret_cast<void*>(&ResetHook));
         Trace("rt_hit_copy_hooks buffer=%u resource=%u reset=%u",unsigned(buffer),unsigned(resource),unsigned(reset));
-        if (!reset) rt_spot_table_audit::done.store(true); // No reuse tracking means no safe correlation.
+        if (!reset) rt_spot_table_audit::resetTracking.store(false); // No reuse tracking means no safe correlation.
         if (!buffer && !resource && !reset) *slot = {};
     } else Trace("rt_hit_copy_hooks capacity_exhausted=1");
     ReleaseSRWLockExclusive(&hookLock);
