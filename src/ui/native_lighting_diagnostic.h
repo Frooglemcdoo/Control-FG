@@ -72,7 +72,7 @@ inline void Paint(HWND window) noexcept {
     wchar_t shortcuts[128]{};
     swprintf_s(shortcuts, L"F10: return to game    Ctrl+Shift+1..%u: live mode", kModeCount);
     DrawLabel(dc, detailFont, shortcuts, {14,kFooterY,kWidth-12,kFooterY+24}, theme::kMutedText);
-    DrawLabel(dc, detailFont, selectionRejected ? L"Mode unavailable: required shaders are not ready. Save Log." : savedNotice.load() == 2 ? L"Log write failed. Save Log shows the Windows error." : savedNotice.load() == 1 ? L"Log saved. See the folder shown in the confirmation." : L"GI 2/4/8/12/16: live GI samples. Game RT count is separate.", {14,kFooterY+26,kWidth-12,kFooterY+56}, theme::kText);
+    DrawLabel(dc, detailFont, selectionRejected ? L"Mode unavailable: required shaders are not ready. Save Log." : savedNotice.load() == 2 ? L"Log write failed. Save Log shows the Windows error." : savedNotice.load() == 1 ? L"Log saved. See the folder shown in the confirmation." : L"SPEC 1/2/4/8/12/16: specular samples only. Keep game RT count at 1.", {14,kFooterY+26,kWidth-12,kFooterY+56}, theme::kText);
     EndPaint(window, &ps);
 }
 inline void SaveReport(HWND window) noexcept {
@@ -160,7 +160,7 @@ inline DWORD WINAPI ThreadProc(LPVOID) noexcept {
     ULONGLONG nextRefresh=0, nextWindowSearch=0, nextLogDrain=0, nextRRReport=0;
     HWND cachedGame=nullptr;
     POINT lastOrigin{-1,-1};
-    Trace("session_start build=R108-samples-16 pid=%lu default=native log=user-diagnostics-folder",GetCurrentProcessId());
+    Trace("session_start build=R109-specular-samples pid=%lu default=native log=user-diagnostics-folder",GetCurrentProcessId());
     MSG msg{};
     while(GetMessageW(&msg,nullptr,0,0)>0){
         if (!panel || !IsDialogMessageW(panel, &msg)) {

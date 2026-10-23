@@ -5,6 +5,7 @@
     "menu_sample_routing",
     "filter_high_count_value",
     "specular_allocation",
+    "specular_provider",
     "gi_allocation",
     "specular_filter_option"
   ],

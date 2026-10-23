@@ -3,12 +3,25 @@
 #include <cstdint>
 
 namespace native_lighting {
-enum class Mode : unsigned { Native, DisableBakedGi, DisableDirect, DisableDirectDiffuse, DisableDirectSpecular, BypassShadows, DisableLightPattern, BypassScreenShadows, BypassSpotShadows, BypassPointShadows, SpotVarianceLow, SpotVarianceHigh, SpotPcfCenter, SpotPcf32, SpotStableSoft, SpotStableTight, SpotBilinear, SpotResolution2x, RtSpot, RtSpotRaw, RtSpotMapGuard, RtSpotNativeCull, RtSpotVisibilityRaw, RtSpotVisibilityFiltered, RtSpotLightIds, RtSpotBaseline, RtSpotDiffuseFiltered, RtSpotGiFiltered, RtSpotWorldAlbedo, RtSpotSpecularFiltered, RtSpotViewAngle, RtSpotGi2, RtSpotGi4, RtSpotGi8, RtSpotGiMenu, RtSpotGi12, RtSpotGi16 };
+enum class Mode : unsigned { Native, DisableBakedGi, DisableDirect, DisableDirectDiffuse, DisableDirectSpecular, BypassShadows, DisableLightPattern, BypassScreenShadows, BypassSpotShadows, BypassPointShadows, SpotVarianceLow, SpotVarianceHigh, SpotPcfCenter, SpotPcf32, SpotStableSoft, SpotStableTight, SpotBilinear, SpotResolution2x, RtSpot, RtSpotRaw, RtSpotMapGuard, RtSpotNativeCull, RtSpotVisibilityRaw, RtSpotVisibilityFiltered, RtSpotLightIds, RtSpotBaseline, RtSpotDiffuseFiltered, RtSpotGiFiltered, RtSpotWorldAlbedo, RtSpotSpecularFiltered, RtSpotViewAngle, RtSpotGi2, RtSpotGi4, RtSpotGi8, RtSpotGiMenu, RtSpotGi12, RtSpotGi16, RtSpotSpec1, RtSpotSpec2, RtSpotSpec4, RtSpotSpec8, RtSpotSpec12, RtSpotSpec16 };
 inline bool IsGiSampleMode(Mode mode) noexcept {
     return mode==Mode::RtSpotGi2 || mode==Mode::RtSpotGi4 ||
            mode==Mode::RtSpotGi8 || mode==Mode::RtSpotGiMenu ||
            mode==Mode::RtSpotGi12 || mode==Mode::RtSpotGi16;
 }
+// Specular tests leave GI at its saved value and retain the working light policies.
+inline unsigned SpecularSampleRequest(Mode mode) noexcept {
+    switch(mode){
+    case Mode::RtSpotSpec1:return 1;
+    case Mode::RtSpotSpec2:return 2;
+    case Mode::RtSpotSpec4:return 4;
+    case Mode::RtSpotSpec8:return 8;
+    case Mode::RtSpotSpec12:return 12;
+    case Mode::RtSpotSpec16:return 16;
+    default:return 0;
+    }
+}
+inline bool IsSpecularSampleMode(Mode mode) noexcept { return SpecularSampleRequest(mode)!=0; }
 // A per-frame diagnostic override; never writes the user's saved GI setting.
 inline unsigned GiSampleRequest(Mode mode,unsigned saved) noexcept {
     switch(mode){
@@ -22,15 +35,15 @@ inline unsigned GiSampleRequest(Mode mode,unsigned saved) noexcept {
     }
 }
 inline bool IsRtSpotMode(Mode mode) noexcept {
-    return IsGiSampleMode(mode) || mode == Mode::RtSpot || mode == Mode::RtSpotRaw ||
+    return IsSpecularSampleMode(mode) || IsGiSampleMode(mode) || mode == Mode::RtSpot || mode == Mode::RtSpotRaw ||
         mode == Mode::RtSpotMapGuard || mode == Mode::RtSpotNativeCull ||
         mode == Mode::RtSpotVisibilityRaw || mode == Mode::RtSpotVisibilityFiltered || mode == Mode::RtSpotLightIds || mode == Mode::RtSpotBaseline || mode == Mode::RtSpotDiffuseFiltered || mode == Mode::RtSpotGiFiltered || mode == Mode::RtSpotWorldAlbedo || mode == Mode::RtSpotSpecularFiltered || mode == Mode::RtSpotViewAngle;
 }
-inline bool UsesWorldAlbedo(Mode mode) noexcept { return IsGiSampleMode(mode) || mode == Mode::RtSpotWorldAlbedo || mode == Mode::RtSpotSpecularFiltered || mode == Mode::RtSpotViewAngle; }
+inline bool UsesWorldAlbedo(Mode mode) noexcept { return IsSpecularSampleMode(mode) || IsGiSampleMode(mode) || mode == Mode::RtSpotWorldAlbedo || mode == Mode::RtSpotSpecularFiltered || mode == Mode::RtSpotViewAngle; }
 inline bool UsesPerspectiveGuide(Mode mode) noexcept { return mode == Mode::RtSpotViewAngle; }
 inline bool PreservesSpecularFiltering(Mode mode) noexcept { return mode == Mode::RtSpotSpecularFiltered; }
 // These denoising diagnostics retain the centered, filtered shadow routes.
-inline bool PreservesGiFiltering(Mode mode) noexcept { return IsGiSampleMode(mode) || mode == Mode::RtSpotGiFiltered || mode == Mode::RtSpotWorldAlbedo || mode == Mode::RtSpotSpecularFiltered || mode == Mode::RtSpotViewAngle; }
+inline bool PreservesGiFiltering(Mode mode) noexcept { return IsSpecularSampleMode(mode) || IsGiSampleMode(mode) || mode == Mode::RtSpotGiFiltered || mode == Mode::RtSpotWorldAlbedo || mode == Mode::RtSpotSpecularFiltered || mode == Mode::RtSpotViewAngle; }
 inline bool PreservesBroadDiffuseFiltering(Mode mode) noexcept {
     return mode == Mode::RtSpotDiffuseFiltered;
 }
@@ -63,18 +76,18 @@ inline constexpr unsigned kRtSpotReadyBit = 1u << 17;
 struct ModeChoice { Mode mode; const wchar_t* label; };
 inline constexpr ModeChoice kModeChoices[] = {
     {Mode::RtSpotWorldAlbedo, L"BASELINE"},
-    {Mode::RtSpotGi2, L"GI 2"},
-    {Mode::RtSpotGi4, L"GI 4"},
-    {Mode::RtSpotGi8, L"GI 8"},
-    {Mode::RtSpotGiMenu, L"GI FOLLOW MENU"},
+    {Mode::RtSpotSpec1, L"SPEC 1"},
+    {Mode::RtSpotSpec2, L"SPEC 2"},
+    {Mode::RtSpotSpec4, L"SPEC 4"},
+    {Mode::RtSpotSpec8, L"SPEC 8"},
+    {Mode::RtSpotSpec12, L"SPEC 12"},
+    {Mode::RtSpotSpec16, L"SPEC 16"},
     {Mode::RtSpotGiFiltered, L"GI FILTER"},
-    {Mode::RtSpotGi12, L"GI 12"},
-    {Mode::RtSpotGi16, L"GI 16"},
     {Mode::Native, L"NATIVE SHADOWS"}
 };
 inline constexpr unsigned kModeCount = sizeof(kModeChoices) / sizeof(kModeChoices[0]);
 inline unsigned RequiredVariant(Mode mode) noexcept {
-    if(IsGiSampleMode(mode))return kRtSpotReadyBit;
+    if(IsSpecularSampleMode(mode)||IsGiSampleMode(mode))return kRtSpotReadyBit;
     switch (mode) {
     case Mode::RtSpot: case Mode::RtSpotRaw: case Mode::RtSpotMapGuard: case Mode::RtSpotNativeCull:
     case Mode::RtSpotVisibilityRaw: case Mode::RtSpotVisibilityFiltered: case Mode::RtSpotLightIds: case Mode::RtSpotBaseline: case Mode::RtSpotDiffuseFiltered: case Mode::RtSpotGiFiltered: case Mode::RtSpotWorldAlbedo: case Mode::RtSpotSpecularFiltered: case Mode::RtSpotViewAngle: return kRtSpotReadyBit;
@@ -103,6 +116,12 @@ inline unsigned RequiredBinding(Mode mode) noexcept {
 }
 inline const char* ModeName(Mode mode) noexcept {
     switch (mode) {
+    case Mode::RtSpotSpec1:return "rt_spot_spec_1";
+    case Mode::RtSpotSpec2:return "rt_spot_spec_2";
+    case Mode::RtSpotSpec4:return "rt_spot_spec_4";
+    case Mode::RtSpotSpec8:return "rt_spot_spec_8";
+    case Mode::RtSpotSpec12:return "rt_spot_spec_12";
+    case Mode::RtSpotSpec16:return "rt_spot_spec_16";
     case Mode::RtSpotGi2:return "rt_spot_gi_2";
     case Mode::RtSpotGi4:return "rt_spot_gi_4";
     case Mode::RtSpotGi8:return "rt_spot_gi_8";
@@ -158,7 +177,7 @@ class LiveSelection {
     static constexpr unsigned kSequenceShift = kModeBits + 2;
     static constexpr uint64_t kModeMask = (uint64_t(1) << kModeBits) - 1;
     static constexpr uint64_t kObservedMask = uint64_t(kAllBits) << kObservedShift;
-    static_assert(static_cast<unsigned>(Mode::RtSpotGi16) <= kModeMask, "Mode storage exhausted");
+    static_assert(static_cast<unsigned>(Mode::RtSpotSpec16) <= kModeMask, "Mode storage exhausted");
     std::atomic<uint64_t> state_{0};
 public:
     uint64_t Read() const noexcept { return state_.load(std::memory_order_acquire); }
