@@ -116,6 +116,18 @@ int main(){
     assert(ModeAvailable(Mode::RoomBoth,kRtSpotReadyBit));
     spotOpenReady.store(true);
     assert(ModeAvailable(Mode::RoomOpen,kRtSpotReadyBit));
+    for(auto mode:{Mode::RoomRaw,Mode::RoomEndpoint}){
+        assert(IsRoomMode(mode)&&SpecularSampleRequest(mode)==4&&GiSampleRequest(mode,6)==6);
+        assert(IsRtSpotMode(mode)&&PreservesGiFiltering(mode)&&UsesWorldAlbedo(mode));
+        assert(UsesRawSpotVisibility(mode)==(mode==Mode::RoomRaw));
+        assert(!UsesSpecularTemporalOnly(mode)&&!Disables(mode,kDirectBit));
+        assert(LiveSelection::GetMode(live.Select(mode))==mode);
+    }
+    spotEndpointReady.store(false);
+    assert(!ModeAvailable(Mode::RoomEndpoint,kRtSpotReadyBit));
+    assert(ModeAvailable(Mode::RoomBoth,kRtSpotReadyBit));
+    spotEndpointReady.store(true);
+    assert(ModeAvailable(Mode::RoomEndpoint,kRtSpotReadyBit));
     // UI snapshots must not reset or lose concurrent render-side observations.
     control_rr_diagnostic::Counters counters;
     using Event=control_rr_diagnostic::Event;

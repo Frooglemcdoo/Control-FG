@@ -3,6 +3,7 @@
 // holds one selection across ray production, history filtering and composition.
 namespace rt_spot_runtime {
 #include "../build/rt_spot_open.h"
+#include "../build/rt_spot_endpoint.h"
 using CreateComputeFn = HRESULT (STDMETHODCALLTYPE*)(ID3D12Device*, const D3D12_COMPUTE_PIPELINE_STATE_DESC*, REFIID, void**);
 using PassFn = void (*)(void*, void*, void*, void*);
 inline constexpr char kSelectorSha[] = "a9e5b544d5ec48e9b439b36aafc5346645f0261d3b1df65dc09e6cce290c164f";
@@ -44,9 +45,13 @@ struct Pass {
     bool requested = false, raySeen = false, fullRay = false, reset = false, composed = false;
 };
 inline constexpr UINT kRayRecordStride = D3D12_RAYTRACING_SHADER_TABLE_BYTE_ALIGNMENT;
-inline constexpr UINT kRayRecordBufferSize = 2 * kRayRecordStride;
+inline constexpr UINT kRayRecordBufferSize = 3 * kRayRecordStride;
 inline constexpr UINT RayRecordOffset(Mode mode) noexcept {
+    if (mode == Mode::RoomEndpoint) return 2 * kRayRecordStride;
     return mode == Mode::RtSpotBaseline || mode == Mode::RtSpotMapGuard ? kRayRecordStride : 0;
+}
+inline constexpr bool RayRecordFits(Mode mode, UINT64 bytes) noexcept {
+    return RayRecordOffset(mode)+D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES<=bytes;
 }
 inline thread_local Pass* active = nullptr;
 inline thread_local bool previousFull = false;
@@ -67,7 +72,7 @@ inline void ReportShadowFiltering(bool fullRR, bool contact, bool temporal, int 
         Trace("rt_spot_filter full_rr=%u contact=%u native_preserved=1 temporal=%u spatial_size=%d spatial_step=%d",
             unsigned(fullRR),unsigned(contact),unsigned(temporal),size,step);
         Trace("rt_spot_history filter_policy=mode_specific point_history=native spotlight_only=1 transition_reset=1 spot_samples=4 sample_pattern=r92_radial_strata closest_hit_per_ray=1 mean_blocker=1 center_probe=%u bounded_penumbra=1 per_sample_endpoint=%u near_distance_cutoff=%u point_samples=1",
-            unsigned(RayRecordOffset(active->mode)==0), unsigned(RayRecordOffset(active->mode)==0), unsigned(RayRecordOffset(active->mode)!=0));
+            unsigned(RayRecordOffset(active->mode)!=kRayRecordStride), unsigned(RayRecordOffset(active->mode)!=kRayRecordStride), unsigned(RayRecordOffset(active->mode)==kRayRecordStride));
         last = {true, fullRR, contact, temporal, size, step};
     }
 }
@@ -275,7 +280,7 @@ inline ID3D12PipelineState* SelectCompute(ID3D12PipelineState* native) noexcept 
     }
     return alternate;
 }
-inline HRESULT CreateAugmented(ID3D12Device5* device, const D3D12_STATE_OBJECT_DESC* desc, REFIID iid, void** out) {
+inline HRESULT CreateAugmentedInternal(ID3D12Device5* device, const D3D12_STATE_OBJECT_DESC* desc, REFIID iid, void** out, bool endpoint) {
     using Microsoft::WRL::ComPtr;
     auto original = rt_shadow_capture::originalState;
     if (!desc || desc->Type != D3D12_STATE_OBJECT_TYPE_RAYTRACING_PIPELINE || !filesReady)
@@ -295,7 +300,7 @@ inline HRESULT CreateAugmented(ID3D12Device5* device, const D3D12_STATE_OBJECT_D
     if (!replacementBytes) return original(device,desc,iid,out);
     try {
         std::vector<D3D12_STATE_SUBOBJECT> objects(desc->pSubobjects,desc->pSubobjects+desc->NumSubobjects);
-        objects.reserve(desc->NumSubobjects+2);
+        objects.reserve(desc->NumSubobjects+3);
         std::vector<D3D12_SUBOBJECT_TO_EXPORTS_ASSOCIATION> associations(desc->NumSubobjects);
         std::vector<std::vector<LPCWSTR>> names(desc->NumSubobjects);
         for (UINT i=0;i<desc->NumSubobjects;++i) if (objects[i].Type == D3D12_STATE_SUBOBJECT_TYPE_SUBOBJECT_TO_EXPORTS_ASSOCIATION) {
@@ -312,6 +317,7 @@ inline HRESULT CreateAugmented(ID3D12Device5* device, const D3D12_STATE_OBJECT_D
                 names[i].assign(associations[i].pExports,associations[i].pExports+associations[i].NumExports);
                 names[i].push_back(L"controlFullSpotRayGeneration");
                 names[i].push_back(L"controlR94SpotRayGeneration");
+                if (endpoint) names[i].push_back(L"controlEndpointSpotRayGeneration");
                 associations[i].NumExports=static_cast<UINT>(names[i].size()); associations[i].pExports=names[i].data();
             }
             associations[i].pSubobjectToAssociate=&objects[targetIndex]; objects[i].pDesc=&associations[i];
@@ -322,32 +328,54 @@ inline HRESULT CreateAugmented(ID3D12Device5* device, const D3D12_STATE_OBJECT_D
         D3D12_EXPORT_DESC baselineExport{L"controlR94SpotRayGeneration",L"spotRayGeneration",D3D12_EXPORT_FLAG_NONE};
         D3D12_DXIL_LIBRARY_DESC baselineLibrary{{baselineRayBytes.data(),baselineRayBytes.size()},1,&baselineExport};
         objects.push_back({D3D12_STATE_SUBOBJECT_TYPE_DXIL_LIBRARY,&baselineLibrary});
+        D3D12_EXPORT_DESC endpointExport{L"controlEndpointSpotRayGeneration",L"spotRayGeneration",D3D12_EXPORT_FLAG_NONE};
+        D3D12_DXIL_LIBRARY_DESC endpointLibrary{{kSpotEndpointShader,sizeof(kSpotEndpointShader)},1,&endpointExport};
+        if (endpoint) objects.push_back({D3D12_STATE_SUBOBJECT_TYPE_DXIL_LIBRARY,&endpointLibrary});
         auto custom = *desc; custom.NumSubobjects=static_cast<UINT>(objects.size()); custom.pSubobjects=objects.data();
         HRESULT hr=original(device,&custom,iid,out);
+        if (FAILED(hr) && endpoint) {
+            spotEndpointReady.store(false,std::memory_order_release);
+            Trace("rt_spot_endpoint unavailable=1 hr=0x%08lX baseline_retry=1",static_cast<unsigned long>(hr));
+            return CreateAugmentedInternal(device,desc,iid,out,false);
+        }
         if (FAILED(hr)) { Trace("rt_spot_state_fallback hr=0x%08lX",static_cast<unsigned long>(hr)); return original(device,desc,iid,out); }
         ComPtr<ID3D12StateObject> state; ComPtr<ID3D12StateObjectProperties> properties;
         if (!out || !*out || FAILED(static_cast<IUnknown*>(*out)->QueryInterface(IID_PPV_ARGS(&state))) || FAILED(state.As(&properties))) return hr;
         const void* identifier=properties->GetShaderIdentifier(L"controlFullSpotRayGeneration");
         const void* baselineIdentifier=properties->GetShaderIdentifier(L"controlR94SpotRayGeneration");
+        const void* endpointIdentifier=endpoint?properties->GetShaderIdentifier(L"controlEndpointSpotRayGeneration"):nullptr;
         if (!identifier || !baselineIdentifier) return hr;
+        const bool endpointAvailable=endpointIdentifier!=nullptr;
         D3D12_HEAP_PROPERTIES heap{};heap.Type=D3D12_HEAP_TYPE_UPLOAD;heap.CreationNodeMask=heap.VisibleNodeMask=1;
-        D3D12_RESOURCE_DESC buffer{};buffer.Dimension=D3D12_RESOURCE_DIMENSION_BUFFER;buffer.Width=kRayRecordBufferSize;buffer.Height=1;
+        D3D12_RESOURCE_DESC buffer{};buffer.Dimension=D3D12_RESOURCE_DIMENSION_BUFFER;buffer.Width=endpointAvailable?kRayRecordBufferSize:2*kRayRecordStride;buffer.Height=1;
         buffer.DepthOrArraySize=1;buffer.MipLevels=1;buffer.SampleDesc.Count=1;buffer.Layout=D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
         ComPtr<ID3D12Resource> record;
         HRESULT prepared=device->CreateCommittedResource(&heap,D3D12_HEAP_FLAG_NONE,&buffer,D3D12_RESOURCE_STATE_GENERIC_READ,nullptr,IID_PPV_ARGS(&record));
         void* mapped=nullptr;D3D12_RANGE empty{0,0};
         if (SUCCEEDED(prepared)) prepared=record->Map(0,&empty,&mapped);
         if (SUCCEEDED(prepared)) {
-            memset(mapped,0,kRayRecordBufferSize);
+            memset(mapped,0,static_cast<size_t>(buffer.Width));
             memcpy(mapped,identifier,D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES);
             memcpy(static_cast<unsigned char*>(mapped)+kRayRecordStride,baselineIdentifier,D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES);
+            if (endpointAvailable) memcpy(static_cast<unsigned char*>(mapped)+2*kRayRecordStride,endpointIdentifier,D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES);
             record->Unmap(0,nullptr);
             prepared=state->SetPrivateDataInterface(kRecord,record.Get());
         }
+        spotEndpointReady.store(SUCCEEDED(prepared)&&endpointAvailable,std::memory_order_release);
+        Trace("rt_spot_endpoint ready=%u radius_scale=1 max_segment_fraction=0.1",unsigned(SUCCEEDED(prepared)&&endpointAvailable));
         if (SUCCEEDED(prepared)) components.fetch_or(kRayComponent);
         RefreshReady();Trace("rt_spot_state ready=%u native_exports_retained=1 variant=%s replacement=R97_center_probe_with_R94_baseline spot_samples=4 point_samples=1",unsigned(SUCCEEDED(prepared)),variantName);
         return hr;
-    } catch (...) { return original(device,desc,iid,out); }
+    } catch (...) {
+        if (endpoint) {
+            spotEndpointReady.store(false,std::memory_order_release);
+            return CreateAugmentedInternal(device,desc,iid,out,false);
+        }
+        return original(device,desc,iid,out);
+    }
+}
+inline HRESULT CreateAugmented(ID3D12Device5* device, const D3D12_STATE_OBJECT_DESC* desc, REFIID iid, void** out) {
+    return CreateAugmentedInternal(device,desc,iid,out,true);
 }
 inline void OnState(ID3D12GraphicsCommandList4* list,ID3D12StateObject* state) noexcept {
     if (active) list->SetPrivateDataInterface(kState,state);
@@ -360,9 +388,11 @@ inline bool Dispatch(ID3D12GraphicsCommandList4* list,const D3D12_DISPATCH_RAYS_
     const HRESULT found=state->GetPrivateData(kRecord,&size,&record);state->Release();
     if (FAILED(found) || !record) return false;
     active->raySeen=true;
-    active->fullRay=active->requested && desc->Depth==1 && desc->RayGenerationShaderRecord.SizeInBytes==32;
+    active->fullRay=active->requested && desc->Depth==1 && desc->RayGenerationShaderRecord.SizeInBytes==32 &&
+        RayRecordFits(active->mode,record->GetDesc().Width);
     active->reset=previousFull!=active->fullRay || previousMode!=active->mode;
     if (active->fullRay) {
+        if (active->reset) Trace("rt_spot_ray_route mode=%s record_offset=%u endpoint_guard=%u raw=%u gpu_confirmed=0",ModeName(active->mode),RayRecordOffset(active->mode),unsigned(active->mode==Mode::RoomEndpoint),unsigned(UsesRawSpotVisibility(active->mode)));
         auto custom=*desc;custom.RayGenerationShaderRecord={record->GetGPUVirtualAddress() + RayRecordOffset(active->mode),32};
         rt_shadow_capture::Lookup(list).dispatch(list,&custom);
     }
