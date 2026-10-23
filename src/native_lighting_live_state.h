@@ -13,6 +13,11 @@ inline bool IsGiSampleMode(Mode mode) noexcept {
 inline bool IsSpotIsolationMode(Mode mode) noexcept {
     return mode==Mode::RoomRaw||mode==Mode::RoomBlocker||mode==Mode::RoomNativeSelection||mode==Mode::RoomOpen||mode==Mode::RoomSelectedOff;
 }
+inline bool IsSignalDiagnostic(Mode mode) noexcept {
+    return mode==Mode::RoomBlocker || mode==Mode::RtSpotVisibilityRaw ||
+        mode==Mode::RtSpotVisibilityFiltered || mode==Mode::RtSpotLightIds;
+}
+inline std::atomic<bool> spotBandColorsReady{false};
 inline std::atomic<bool> spotOpenReady{false}, spotBlockerReady{false};
 inline bool IsRoomMode(Mode mode) noexcept {
     return IsSpotIsolationMode(mode)||mode==Mode::RoomNative||mode==Mode::RoomGi||mode==Mode::RoomSpot||mode==Mode::RoomBoth;
@@ -133,7 +138,7 @@ inline unsigned RequiredBinding(Mode mode) noexcept {
     return mode == Mode::Native ? kAllBits : mode == Mode::DisableBakedGi ? kGiBit : kDirectBit;
 }
 inline bool ModeAvailable(Mode mode,unsigned ready) noexcept {
-    if(mode==Mode::RoomBlocker&&!spotBlockerReady.load(std::memory_order_acquire))return false;
+    if(mode==Mode::RoomBlocker&&(!spotBlockerReady.load(std::memory_order_acquire)||!spotBandColorsReady.load(std::memory_order_acquire)))return false;
     if(mode==Mode::RoomOpen&&!spotOpenReady.load(std::memory_order_acquire))return false;
     const unsigned required=RequiredVariant(mode);
     return (ready&required)==required &&

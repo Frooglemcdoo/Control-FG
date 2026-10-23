@@ -6,7 +6,7 @@
 // Execute the shipped diagnostics on synthetic light IDs and visibility values.
 // GPU waits/readback exist only in this standalone validation executable.
 static void TestSpotDebugView(ID3D12Device* device, ID3D12RootSignature* root,
-    ID3D12PipelineState* pipeline, bool ids) {
+    ID3D12PipelineState* pipeline, bool ids, bool bands=false) {
     constexpr UINT extent=8;
     D3D12_HEAP_PROPERTIES gpu{};gpu.Type=D3D12_HEAP_TYPE_DEFAULT;
     D3D12_HEAP_PROPERTIES uploadHeap{};uploadHeap.Type=D3D12_HEAP_TYPE_UPLOAD;
@@ -82,6 +82,11 @@ static void TestSpotDebugView(ID3D12Device* device, ID3D12RootSignature* root,
         float actual[4],spec[4];memcpy(actual,mapped+y*256+x*16,sizeof(actual));memcpy(spec,mapped+2048+y*256+x*16,sizeof(spec));
         for(UINT c=0;c<4;++c){
             float expected=c==3?1.0f:float((x+y)%5)/4;
+            if(c<3 && bands){
+                const float v=float((x+y)%5)/4;
+                const float color[4][3]={{0,0,1},{1,.25f,0},{1,0,0},{0,1,0}};
+                expected=color[v>=.875f?3:v>=.625f?2:v>=.25f?1:0][c];
+            }
             if(c<3 && ids){const float value=float(y*extent+x)*factors[c];expected=value-std::floor(value);}
             if(c<3 && x==7)expected=c==1?0.0f:1.0f;
             if(!std::isfinite(actual[c]) || std::abs(actual[c]-expected)>0.0001f || spec[c]!=0)

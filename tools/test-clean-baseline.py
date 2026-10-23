@@ -22,11 +22,18 @@ specular_filter_exceptions = json.loads((root/'tools/fixtures/r103-baseline-exce
 clamp_90_exceptions = json.loads((root/'tools/fixtures/r104-baseline-exceptions.json').read_text())
 restore_60_exceptions = json.loads((root/'tools/fixtures/r105-baseline-exceptions.json').read_text())
 temporal_exceptions = json.loads((root/'tools/fixtures/r111-baseline-exceptions.json').read_text())
+diagnostic_exceptions = json.loads((root/'tools/fixtures/r116-baseline-exceptions.json').read_text())
 for name, expected in manifest['files'].items():
     if name == 'src/fg_overlay.h':
         assert not (root / name).exists(), 'Legacy settings popup must remain removed'
         continue # R42 replaces UI-only code with fg_settings.h; renderer hashes remain enforced.
-    data = (root / name).read_bytes().replace(b'\r\n', b'\n')
+    data = (root / name).read_bytes()
+    if name in diagnostic_exceptions:
+        text=data.decode()
+        for before,after in reversed(diagnostic_exceptions[name]):
+            assert text.count(after)==1, (name, 'R116 diagnostic bypass changed or duplicated')
+            text=text.replace(after,before,1)
+        data=text.encode().replace(b'\r\n', b'\n')
     if name in temporal_exceptions:
         text=data.decode()
         for before,after in reversed(temporal_exceptions[name]):

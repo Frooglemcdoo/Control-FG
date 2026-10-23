@@ -128,6 +128,8 @@ int main(){
     assert(!ModeAvailable(Mode::RoomBlocker,kRtSpotReadyBit));
     assert(ModeAvailable(Mode::RoomBoth,kRtSpotReadyBit));
     spotBlockerReady.store(true);
+    assert(!ModeAvailable(Mode::RoomBlocker,kRtSpotReadyBit));
+    spotBandColorsReady.store(true);
     assert(ModeAvailable(Mode::RoomBlocker,kRtSpotReadyBit));
     // UI snapshots must not reset or lose concurrent render-side observations.
     control_rr_diagnostic::Counters counters;

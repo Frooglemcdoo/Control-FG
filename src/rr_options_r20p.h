@@ -116,7 +116,7 @@ static void ConfigureRR20POptionsForAA(unsigned long long call,unsigned long lon
     const bool presetOptionsWindow=control_rr::RRUserPresetOptionsWindow();
     const bool presetOnlyPause=runtimePaused&&(pauseReasons&~control_rr::RRRuntimePausePreset)==0;
     const bool allowPresetRebuild=presetOnlyPause&&presetOptionsWindow;
-    if(!control_rr::RRUserRequested()||(runtimePaused&&!allowPresetRebuild)){
+    if(!control_rr::RRUserRequested()||control_rr::RRDiagnosticBypassed()||(runtimePaused&&!allowPresetRebuild)){
         // Streamline RR must be explicitly disabled while OFF and while a
         // renderer-state epoch is quiescing. A preset-only transition gets one
         // controlled rebuild window after old GPU work has retired. Teardown deliberately does

@@ -172,6 +172,7 @@ jobs:
       - name: Generate isolated spotlight visibility diagnostic
         run: |
           python tools/generate-spot-open.py
+          python tools/generate-spot-band-colors.py
           python tools/rt_spot_blocker.py
           python tools/test-rt-spot-blocker.py
 
@@ -328,6 +329,10 @@ jobs:
           if errorlevel 1 exit /b 1
           build\test-native-lighting-live.exe
           if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /O2 tools\test-rr-diagnostic-bypass.cpp /Febuild\test-rr-diagnostic-bypass.exe
+          if errorlevel 1 exit /b 1
+          build\test-rr-diagnostic-bypass.exe
+          if errorlevel 1 exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /O2 tools\test-native-lighting-live-warp.cpp /Febuild\test-native-lighting-live-warp.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
           if errorlevel 1 exit /b 1
           build\test-native-lighting-live-warp.exe
@@ -393,11 +398,11 @@ jobs:
       - name: Preserve verified glass raygen across DXC updates
         run: python tools/prepare-canonical-glass.py
 
-      - name: Package live lighting diagnostic R115
+      - name: Package live lighting diagnostic R116
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-Native-Lighting-Live-R115'
+          $out='Control-FG-Native-Lighting-Live-R116'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
           Copy-Item build/rt_spot_selected_off.dxbc,build/rt_spot_selection.dxbc,build/rt_spot_visibility.dxbc,build/rt_spot_light_ids.dxbc,build/rt_spot_raw_history.dxbc,build/rt_spot_raw_spatial0.dxbc,build/rt_spot_raw_spatial1.dxbc,build/rt_spot_full.dxil,build/rt_spot_r94.dxil,build/rt_spot_light.dxbc,build/rt_spot_reset.dxbc,build/rt_spot_history.dxbc,build/rt_spot_spatial0.dxbc,build/rt_spot_spatial1.dxbc $out
@@ -415,22 +420,22 @@ jobs:
           Copy-Item Collect-RR-Blinds-Capture.ps1 "$out/Collect-RR-Blinds-Capture.ps1"
           Copy-Item Collect-ControlFG-Compact-Logs.cmd "$out/Collect-ControlFG-Compact-Logs.cmd"
           Copy-Item Collect-ControlFG-Compact-Logs.ps1 "$out/Collect-ControlFG-Compact-Logs.ps1"
-          Copy-Item docs/spot-blocker-r115.md "$out/DIAGNOSTIC-NOTES.md"
+          Copy-Item docs/spot-blocker-r116.md "$out/DIAGNOSTIC-NOTES.md"
           @'
-          CONTROL-FG R115 - Full-length spotlight blocker diagnostic
+          CONTROL-FG R116 - Colored spotlight blocker diagnostic
           Close Control to install. Copy contents beside Control_DX12.exe.
           Preserve existing NVIDIA runtimes and the ControlFGStreamline folder.
-          Use Borderless. Load the affected cafeteria room with RR OFF, FG and glass enhancements OFF.
+          Use Borderless. Load the affected cafeteria room with FG and glass enhancements OFF. RR bypass is automatic in signal views.
           Enable native RT Contact Shadows. Keep the same camera position for comparison.
           F10: capture BOTH, HIT BANDS, VISIBILITY, LIGHT IDS at the same viewpoint.
           Set game Ray Tracing Samples Count to 1. Keep the saved GI setting fixed. Let each settle 10 seconds.
-          SAVE LOG once after testing. Send the Lighting-R115 log and screenshots.
-          No restart between modes. SAVE LOG writes one Lighting-R115 session log.
+          SAVE LOG once after testing. Send the Lighting-R116 log and screenshots.
+          No restart between modes. SAVE LOG writes one Lighting-R116 session log.
           This replaces one selected spotlight per pixel, not every shadow in the scene.
           An unavailable button means the required native shader pair was not prepared.
-          HIT BANDS is a diagnostic image, not a lighting fix. Keep RR OFF for these images.
+          HIT BANDS is a diagnostic image, not a lighting fix. RR is automatically bypassed in signal views.
           HIT BANDS uses full-length centered rays and bypasses spotlight filtering.
-          Bands: black=earlier blocker, gray=R113-only gap, pale=R114 gap, white=no hit.
+          Bands: blue=earlier blocker, orange=R113-only gap, red=R114 gap, green=no hit.
           NATIVE PICK and LIGHT OPEN remain diagnostic references.
           Magenta means no selected spotlight. LIGHT IDS shows selected-light boundaries.
           SPEC 8 / SPEC 16 remain quality references. No TEMP buttons in this build.
@@ -443,13 +448,14 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-Native-Lighting-Live-R115
+          name: Control-FG-Native-Lighting-Live-R116
           path: |
-            Control-FG-Native-Lighting-Live-R115.zip
-            Control-FG-Native-Lighting-Live-R115.sha256
+            Control-FG-Native-Lighting-Live-R116.zip
+            Control-FG-Native-Lighting-Live-R116.sha256
             build/rt_spot_shadow_prototype.dxil
             build/rr_clamp_fixed.h
             build/rt_spot_blocker.dxil
+            build/rt_spot_band_colors.dxbc
             build/rt_spot_open.dxbc
             build/rr_clamp_temporal.h
             build/exports.txt

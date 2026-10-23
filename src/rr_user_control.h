@@ -79,7 +79,10 @@ inline void RRUserSetRuntimePaused(bool paused) noexcept {RRUserSetRuntimePauseR
 inline void RRUserSetPresetTransitionPaused(bool paused) noexcept {RRUserSetRuntimePauseReason(RRRuntimePausePreset,paused);}
 inline bool RRUserPresetOptionsWindow() noexcept {return rrUserPresetOptionsWindow.load(std::memory_order_acquire);}
 inline void RRUserSetPresetOptionsWindow(bool enabled) noexcept {rrUserPresetOptionsWindow.store(enabled,std::memory_order_release);}
-inline bool RRUserRuntimeWorkRequested() noexcept {return RRUserModeValue()==RRUserMode::Full&&!RRUserRuntimePaused();}
+inline std::atomic<bool> rrDiagnosticBypass{false};
+inline bool RRDiagnosticBypassed() noexcept { return rrDiagnosticBypass.load(std::memory_order_acquire); }
+inline void RRSetDiagnosticBypass(bool bypass) noexcept { rrDiagnosticBypass.store(bypass,std::memory_order_release); }
+inline bool RRUserRuntimeWorkRequested() noexcept {return RRUserModeValue()==RRUserMode::Full&&!RRUserRuntimePaused()&&!RRDiagnosticBypassed();}
 inline void RRUserSetMode(RRUserMode mode) noexcept {rrUserMode.store(static_cast<unsigned int>(mode),std::memory_order_release);}
 inline void RRUserRequest(bool enabled) noexcept {RRUserSetMode(enabled?RRUserMode::Full:RRUserMode::Off);}
 inline RRSpecularSignalMode RRUserSpecularSignalModeValue() noexcept {return static_cast<RRSpecularSignalMode>(rrUserSpecularSignalMode.load(std::memory_order_acquire));}

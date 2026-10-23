@@ -4,6 +4,7 @@
 namespace rt_spot_runtime {
 #include "../build/rt_spot_open.h"
 #include "../build/rt_spot_blocker.h"
+#include "../build/rt_spot_band_colors.h"
 using CreateComputeFn = HRESULT (STDMETHODCALLTYPE*)(ID3D12Device*, const D3D12_COMPUTE_PIPELINE_STATE_DESC*, REFIID, void**);
 using PassFn = void (*)(void*, void*, void*, void*);
 inline constexpr char kSelectorSha[] = "a9e5b544d5ec48e9b439b36aafc5346645f0261d3b1df65dc09e6cce290c164f";
@@ -23,6 +24,7 @@ inline const GUID kRawVariant = {0xe631a601,0x6651,0x4911,{0x80,0x90,0x11,0x71,0
 inline const GUID kHistoryVariant = {0xe631a601,0x6651,0x4911,{0x80,0x90,0x11,0x71,0x14,0x28,0x30,0x05}};
 inline const GUID kVisibilityVariant = {0xe631a601,0x6651,0x4911,{0x80,0x90,0x11,0x71,0x14,0x28,0x30,0x07}};
 inline const GUID kLightIdsVariant = {0xe631a601,0x6651,0x4911,{0x80,0x90,0x11,0x71,0x14,0x28,0x30,0x08}};
+inline const GUID kBandColorsVariant = {0xe631a601,0x6651,0x4911,{0x80,0x90,0x11,0x71,0x14,0x28,0x30,0x0b}};
 inline const GUID kOpenVariant = {0xe631a601,0x6651,0x4911,{0x80,0x90,0x11,0x71,0x14,0x28,0x30,0x0a}};
 inline const GUID kSelectedOffVariant = {0xe631a601,0x6651,0x4911,{0x80,0x90,0x11,0x71,0x14,0x28,0x30,0x09}};
 inline std::vector<unsigned char> visibilityBytes, lightIdsBytes, selectedOffBytes, selectionBytes;
@@ -214,6 +216,15 @@ inline void ObserveCompute(ID3D12Device* device, const D3D12_COMPUTE_PIPELINE_ST
             if (debug) debug->Release();
         }
     }
+    if (SUCCEEDED(hr) && kind == kLightComponent) {
+        custom.CS = {kSpotBandColorsShader,sizeof(kSpotBandColorsShader)};
+        ID3D12PipelineState* bands = nullptr;
+        HRESULT bandResult = create(device,&custom,IID_PPV_ARGS(&bands));
+        if (SUCCEEDED(bandResult)) bandResult = owner->SetPrivateDataInterface(kBandColorsVariant,bands);
+        if (bands) bands->Release();
+        spotBandColorsReady.store(SUCCEEDED(bandResult),std::memory_order_release);
+        Trace("rt_spot_band_colors ready=%u hr=0x%08lX",unsigned(SUCCEEDED(bandResult)),static_cast<unsigned long>(bandResult));
+    }
     // Optional diagnostic failure must not disable the working spotlight path.
     if (SUCCEEDED(hr) && kind == kLightComponent) {
         custom.CS = {kSpotOpenShader,sizeof(kSpotOpenShader)};
@@ -261,7 +272,8 @@ inline ID3D12PipelineState* SelectCompute(ID3D12PipelineState* native) noexcept 
     ID3D12PipelineState* alternate = nullptr; size = sizeof(alternate);
     const bool raw = active->fullRay && UsesRawSpotVisibility(active->mode) &&
         (spatial || kind == kResetComponent);
-    const GUID& variant = kind == kLightComponent && active->mode == Mode::RoomOpen ? kOpenVariant :
+    const GUID& variant = kind == kLightComponent && active->mode == Mode::RoomBlocker ? kBandColorsVariant :
+        kind == kLightComponent && active->mode == Mode::RoomOpen ? kOpenVariant :
         kind == kLightComponent && (active->mode == Mode::RtSpotMapGuard || active->mode == Mode::RoomSelectedOff) ? kSelectedOffVariant :
         kind == kLightComponent && ShowsSpotVisibility(active->mode) ? kVisibilityVariant :
         kind == kLightComponent && active->mode == Mode::RtSpotLightIds ? kLightIdsVariant : raw ? kRawVariant : kind == kResetComponent && !active->reset ? kHistoryVariant : kVariant;

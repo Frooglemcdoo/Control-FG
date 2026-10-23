@@ -408,8 +408,16 @@ static bool RRNativeHookReset(unsigned outputWidth,unsigned outputHeight,unsigne
  if(!rrNativeFrameEnabled)return rrNativeResetOriginal(outputWidth,outputHeight,width,height,flag0,flag1,nativeRequest,flag3,reset);
  const DWORD saved=GetLastError();unsigned long long frame=0;DWORD fault=0;bool supported=false,active=false;
  const bool known=ReadEngineFrameSafe(&frame,&fault)&&RRNativeReadMode(&supported,&active);
- const bool requested=control_rr::RRUserRequested();
- const bool partialRequested=control_rr::RRUserPartialRequested();
+ const auto diagnosticMode=native_lighting::LiveSelection::GetMode(native_lighting::selection.Read());
+ const bool diagnosticBypass=native_lighting::IsSignalDiagnostic(diagnosticMode);
+ control_rr::RRSetDiagnosticBypass(diagnosticBypass);
+ static bool previousDiagnosticBypass=false;
+ if(previousDiagnosticBypass!=diagnosticBypass){
+  native_lighting::Trace("rr_diagnostic_bypass active=%u mode=%s saved_request=%u",unsigned(diagnosticBypass),native_lighting::ModeName(diagnosticMode),unsigned(control_rr::RRUserRequested()));
+  previousDiagnosticBypass=diagnosticBypass;
+ }
+ const bool requested=control_rr::RRUserRequested()&&!diagnosticBypass;
+ const bool partialRequested=control_rr::RRUserPartialRequested()&&!diagnosticBypass;
  const bool resizeGate=known?RRNativeResizeGate(requested,frame,outputWidth,outputHeight,width,height):!control_rr::RRUserRuntimePaused();
  const bool presetGate=known?RRNativePresetGate(requested,frame):!control_rr::RRUserRuntimePaused();
  const bool runtimeRequested=requested&&resizeGate&&presetGate&&!control_rr::RRUserRuntimePaused();

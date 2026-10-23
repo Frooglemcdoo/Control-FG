@@ -216,6 +216,7 @@ int main() try {
         Check(owner->SetPrivateDataInterface(rt::kLightIdsVariant,raw.Get()));
         Check(owner->SetPrivateDataInterface(rt::kSelectedOffVariant,filtered.Get()));
         Check(owner->SetPrivateDataInterface(rt::kOpenVariant,raw.Get()));
+        Check(owner->SetPrivateDataInterface(rt::kBandColorsVariant,filtered.Get()));
         rt::Pass pass; pass.raySeen=pass.fullRay=true; rt::active=&pass;
         for (auto mode : {Mode::RtSpot,Mode::RtSpotRaw,Mode::RtSpotMapGuard,Mode::RtSpotNativeCull,Mode::RtSpotVisibilityRaw,Mode::RtSpotVisibilityFiltered,Mode::RtSpotLightIds,Mode::RtSpotBaseline,Mode::RtSpotDiffuseFiltered,Mode::RtSpotGiFiltered,Mode::RtSpotWorldAlbedo,Mode::RtSpotSpecularFiltered,Mode::RtSpotViewAngle,Mode::RtSpotGi2,Mode::RtSpotGi4,Mode::RtSpotGi8,Mode::RtSpotGiMenu,Mode::RtSpotGi12,Mode::RtSpotGi16,Mode::RtSpotSpec1,Mode::RtSpotSpec2,Mode::RtSpotSpec4,Mode::RtSpotSpec8,Mode::RtSpotSpec12,Mode::RtSpotSpec16,Mode::RtSpotTemporal2,Mode::RtSpotTemporal4,Mode::RoomSpot,Mode::RoomBoth,Mode::RoomNativeSelection,Mode::RoomOpen,Mode::RoomSelectedOff,Mode::RoomRaw,Mode::RoomBlocker}) {
             if (!IsRtSpotMode(mode) || Disables(mode,kDirectBit) || RequiredVariant(mode)!=kRtSpotReadyBit)

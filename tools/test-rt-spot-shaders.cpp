@@ -34,14 +34,14 @@ int main() try {
     D3D12_ROOT_SIGNATURE_DESC desc{1,&parameter,16,samplers,D3D12_ROOT_SIGNATURE_FLAG_NONE};
     ComPtr<ID3DBlob> blob,error;Check(D3D12SerializeRootSignature(&desc,D3D_ROOT_SIGNATURE_VERSION_1,&blob,&error));
     ComPtr<ID3D12RootSignature> root;Check(device->CreateRootSignature(0,blob->GetBufferPointer(),blob->GetBufferSize(),IID_PPV_ARGS(&root)));
-    for(const auto* name:{"build/rt_spot_open.dxbc","build/rt_spot_selected_off.dxbc","build/rt_spot_selection.dxbc","build/rt_spot_visibility.dxbc","build/rt_spot_light_ids.dxbc","build/rt_spot_raw_history.dxbc","build/rt_spot_raw_spatial0.dxbc","build/rt_spot_raw_spatial1.dxbc","build/rt_spot_light.dxbc","build/rt_spot_reset.dxbc","build/rt_spot_history.dxbc","build/rt_spot_spatial0.dxbc","build/rt_spot_spatial1.dxbc"}) {
+    for(const auto* name:{"build/rt_spot_band_colors.dxbc","build/rt_spot_open.dxbc","build/rt_spot_selected_off.dxbc","build/rt_spot_selection.dxbc","build/rt_spot_visibility.dxbc","build/rt_spot_light_ids.dxbc","build/rt_spot_raw_history.dxbc","build/rt_spot_raw_spatial0.dxbc","build/rt_spot_raw_spatial1.dxbc","build/rt_spot_light.dxbc","build/rt_spot_reset.dxbc","build/rt_spot_history.dxbc","build/rt_spot_spatial0.dxbc","build/rt_spot_spatial1.dxbc"}) {
         std::ifstream file(name,std::ios::binary);if(!file)throw std::runtime_error(name);
         std::vector<char> bytes((std::istreambuf_iterator<char>(file)),{});
         ComPtr<ID3DBlob> assembly;Check(D3DDisassemble(bytes.data(),bytes.size(),0,nullptr,&assembly));
         D3D12_COMPUTE_PIPELINE_STATE_DESC pipeline{};pipeline.pRootSignature=root.Get();pipeline.CS={bytes.data(),bytes.size()};
         ComPtr<ID3D12PipelineState> pso;Check(device->CreateComputePipelineState(&pipeline,IID_PPV_ARGS(&pso)));
-        if (std::string(name)=="build/rt_spot_visibility.dxbc" || std::string(name)=="build/rt_spot_light_ids.dxbc")
-            TestSpotDebugView(device.Get(),root.Get(),pso.Get(),std::string(name)=="build/rt_spot_light_ids.dxbc");
+        if (std::string(name)=="build/rt_spot_band_colors.dxbc" || std::string(name)=="build/rt_spot_visibility.dxbc" || std::string(name)=="build/rt_spot_light_ids.dxbc")
+            TestSpotDebugView(device.Get(),root.Get(),pso.Get(),std::string(name)=="build/rt_spot_light_ids.dxbc",std::string(name)=="build/rt_spot_band_colors.dxbc");
         std::cout<<"PASS: disassembly and WARP pipeline validation: "<<name<<'\n';
     }
     return 0;
