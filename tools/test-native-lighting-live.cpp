@@ -116,18 +116,19 @@ int main(){
     assert(ModeAvailable(Mode::RoomBoth,kRtSpotReadyBit));
     spotOpenReady.store(true);
     assert(ModeAvailable(Mode::RoomOpen,kRtSpotReadyBit));
-    for(auto mode:{Mode::RoomRaw,Mode::RoomEndpoint}){
+    for(auto mode:{Mode::RoomRaw,Mode::RoomBlocker}){
         assert(IsRoomMode(mode)&&SpecularSampleRequest(mode)==4&&GiSampleRequest(mode,6)==6);
         assert(IsRtSpotMode(mode)&&PreservesGiFiltering(mode)&&UsesWorldAlbedo(mode));
-        assert(UsesRawSpotVisibility(mode)==(mode==Mode::RoomRaw));
+        assert(UsesRawSpotVisibility(mode));
+        assert(ShowsSpotVisibility(mode)==(mode==Mode::RoomBlocker));
         assert(!UsesSpecularTemporalOnly(mode)&&!Disables(mode,kDirectBit));
         assert(LiveSelection::GetMode(live.Select(mode))==mode);
     }
-    spotEndpointReady.store(false);
-    assert(!ModeAvailable(Mode::RoomEndpoint,kRtSpotReadyBit));
+    spotBlockerReady.store(false);
+    assert(!ModeAvailable(Mode::RoomBlocker,kRtSpotReadyBit));
     assert(ModeAvailable(Mode::RoomBoth,kRtSpotReadyBit));
-    spotEndpointReady.store(true);
-    assert(ModeAvailable(Mode::RoomEndpoint,kRtSpotReadyBit));
+    spotBlockerReady.store(true);
+    assert(ModeAvailable(Mode::RoomBlocker,kRtSpotReadyBit));
     // UI snapshots must not reset or lose concurrent render-side observations.
     control_rr_diagnostic::Counters counters;
     using Event=control_rr_diagnostic::Event;

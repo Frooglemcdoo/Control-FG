@@ -172,8 +172,8 @@ jobs:
       - name: Generate isolated spotlight visibility diagnostic
         run: |
           python tools/generate-spot-open.py
-          python tools/rt_spot_endpoint.py
-          python tools/test-rt-spot-endpoint.py
+          python tools/rt_spot_blocker.py
+          python tools/test-rt-spot-blocker.py
 
       - name: Validate RT spotlight composition and history shaders on WARP
         shell: cmd
@@ -393,11 +393,11 @@ jobs:
       - name: Preserve verified glass raygen across DXC updates
         run: python tools/prepare-canonical-glass.py
 
-      - name: Package live lighting diagnostic R114
+      - name: Package live lighting diagnostic R115
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-Native-Lighting-Live-R114'
+          $out='Control-FG-Native-Lighting-Live-R115'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
           Copy-Item build/rt_spot_selected_off.dxbc,build/rt_spot_selection.dxbc,build/rt_spot_visibility.dxbc,build/rt_spot_light_ids.dxbc,build/rt_spot_raw_history.dxbc,build/rt_spot_raw_spatial0.dxbc,build/rt_spot_raw_spatial1.dxbc,build/rt_spot_full.dxil,build/rt_spot_r94.dxil,build/rt_spot_light.dxbc,build/rt_spot_reset.dxbc,build/rt_spot_history.dxbc,build/rt_spot_spatial0.dxbc,build/rt_spot_spatial1.dxbc $out
@@ -415,24 +415,24 @@ jobs:
           Copy-Item Collect-RR-Blinds-Capture.ps1 "$out/Collect-RR-Blinds-Capture.ps1"
           Copy-Item Collect-ControlFG-Compact-Logs.cmd "$out/Collect-ControlFG-Compact-Logs.cmd"
           Copy-Item Collect-ControlFG-Compact-Logs.ps1 "$out/Collect-ControlFG-Compact-Logs.ps1"
-          Copy-Item docs/spot-endpoint-r114.md "$out/DIAGNOSTIC-NOTES.md"
+          Copy-Item docs/spot-blocker-r115.md "$out/DIAGNOSTIC-NOTES.md"
           @'
-          CONTROL-FG R114 - Tighter spotlight endpoint test
+          CONTROL-FG R115 - Full-length spotlight blocker diagnostic
           Close Control to install. Copy contents beside Control_DX12.exe.
           Preserve existing NVIDIA runtimes and the ControlFGStreamline folder.
-          Use Borderless. Load the affected cafeteria room with RR ON, FG and glass enhancements OFF.
+          Use Borderless. Load the affected cafeteria room with RR OFF, FG and glass enhancements OFF.
           Enable native RT Contact Shadows. Keep the same camera position for comparison.
-          F10: compare GI ONLY, BOTH, RAW, TIGHT END, LIGHT OPEN.
+          F10: capture BOTH, HIT BANDS, VISIBILITY, LIGHT IDS at the same viewpoint.
           Set game Ray Tracing Samples Count to 1. Keep the saved GI setting fixed. Let each settle 10 seconds.
-          SAVE LOG once after testing. Send the Lighting-R114 log and screenshots.
-          No restart between modes. SAVE LOG writes one Lighting-R114 session log.
+          SAVE LOG once after testing. Send the Lighting-R115 log and screenshots.
+          No restart between modes. SAVE LOG writes one Lighting-R115 session log.
           This replaces one selected spotlight per pixel, not every shadow in the scene.
           An unavailable button means the required native shader pair was not prepared.
-          Room tests keep SPEC 4, saved GI samples and GI filtering fixed.
-          RAW bypasses spotlight filters. TIGHT END shortens only the final light-end segment.
-          TIGHT END is capped at one tenth of the emitter radius and 1 percent of ray length.
+          HIT BANDS is a diagnostic image, not a lighting fix. Keep RR OFF for these images.
+          HIT BANDS uses full-length centered rays and bypasses spotlight filtering.
+          Bands: black=earlier blocker, gray=R113-only gap, pale=R114 gap, white=no hit.
           NATIVE PICK and LIGHT OPEN remain diagnostic references.
-          LIGHT OFF omits only selected light additions. These are diagnostics, not fixes.
+          Magenta means no selected spotlight. LIGHT IDS shows selected-light boundaries.
           SPEC 8 / SPEC 16 remain quality references. No TEMP buttons in this build.
           All 14 existing shadow assets remain exact R97. New diagnostic shader is embedded in dxgi.dll.
           See DIAGNOSTIC-NOTES.md for scope and limitations.
@@ -443,13 +443,13 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-Native-Lighting-Live-R114
+          name: Control-FG-Native-Lighting-Live-R115
           path: |
-            Control-FG-Native-Lighting-Live-R114.zip
-            Control-FG-Native-Lighting-Live-R114.sha256
+            Control-FG-Native-Lighting-Live-R115.zip
+            Control-FG-Native-Lighting-Live-R115.sha256
             build/rt_spot_shadow_prototype.dxil
             build/rr_clamp_fixed.h
-            build/rt_spot_endpoint.dxil
+            build/rt_spot_blocker.dxil
             build/rt_spot_open.dxbc
             build/rr_clamp_temporal.h
             build/exports.txt

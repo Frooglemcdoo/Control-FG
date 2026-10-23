@@ -3,7 +3,7 @@
 // holds one selection across ray production, history filtering and composition.
 namespace rt_spot_runtime {
 #include "../build/rt_spot_open.h"
-#include "../build/rt_spot_endpoint.h"
+#include "../build/rt_spot_blocker.h"
 using CreateComputeFn = HRESULT (STDMETHODCALLTYPE*)(ID3D12Device*, const D3D12_COMPUTE_PIPELINE_STATE_DESC*, REFIID, void**);
 using PassFn = void (*)(void*, void*, void*, void*);
 inline constexpr char kSelectorSha[] = "a9e5b544d5ec48e9b439b36aafc5346645f0261d3b1df65dc09e6cce290c164f";
@@ -47,7 +47,7 @@ struct Pass {
 inline constexpr UINT kRayRecordStride = D3D12_RAYTRACING_SHADER_TABLE_BYTE_ALIGNMENT;
 inline constexpr UINT kRayRecordBufferSize = 3 * kRayRecordStride;
 inline constexpr UINT RayRecordOffset(Mode mode) noexcept {
-    if (mode == Mode::RoomEndpoint) return 2 * kRayRecordStride;
+    if (mode == Mode::RoomBlocker) return 2 * kRayRecordStride;
     return mode == Mode::RtSpotBaseline || mode == Mode::RtSpotMapGuard ? kRayRecordStride : 0;
 }
 inline constexpr bool RayRecordFits(Mode mode, UINT64 bytes) noexcept {
@@ -274,13 +274,17 @@ inline ID3D12PipelineState* SelectCompute(ID3D12PipelineState* native) noexcept 
             Trace("spot_light_isolation seq=%llu mode=%s selector=%s composition=%s gpu_confirmed=0",
                 sequence,ModeName(active->mode),UsesUnshadowedSpotSelection(active->mode)?"unshadowed":"native",
                 active->mode==Mode::RoomOpen?"selected_visibility_one":
-                active->mode==Mode::RoomSelectedOff?"selected_omitted":"filtered_rt");
+                active->mode==Mode::RoomSelectedOff?"selected_omitted":
+                active->mode==Mode::RoomBlocker?"blocker_bands":
+                ShowsSpotVisibility(active->mode)?"visibility_signal":
+                active->mode==Mode::RtSpotLightIds?"light_ids":
+                UsesRawSpotVisibility(active->mode)?"raw_rt":"filtered_rt");
             reported = sequence;
         }
     }
     return alternate;
 }
-inline HRESULT CreateAugmentedInternal(ID3D12Device5* device, const D3D12_STATE_OBJECT_DESC* desc, REFIID iid, void** out, bool endpoint) {
+inline HRESULT CreateAugmentedInternal(ID3D12Device5* device, const D3D12_STATE_OBJECT_DESC* desc, REFIID iid, void** out, bool blocker) {
     using Microsoft::WRL::ComPtr;
     auto original = rt_shadow_capture::originalState;
     if (!desc || desc->Type != D3D12_STATE_OBJECT_TYPE_RAYTRACING_PIPELINE || !filesReady)
@@ -317,7 +321,7 @@ inline HRESULT CreateAugmentedInternal(ID3D12Device5* device, const D3D12_STATE_
                 names[i].assign(associations[i].pExports,associations[i].pExports+associations[i].NumExports);
                 names[i].push_back(L"controlFullSpotRayGeneration");
                 names[i].push_back(L"controlR94SpotRayGeneration");
-                if (endpoint) names[i].push_back(L"controlEndpointSpotRayGeneration");
+                if (blocker) names[i].push_back(L"controlBlockerSpotRayGeneration");
                 associations[i].NumExports=static_cast<UINT>(names[i].size()); associations[i].pExports=names[i].data();
             }
             associations[i].pSubobjectToAssociate=&objects[targetIndex]; objects[i].pDesc=&associations[i];
@@ -328,14 +332,14 @@ inline HRESULT CreateAugmentedInternal(ID3D12Device5* device, const D3D12_STATE_
         D3D12_EXPORT_DESC baselineExport{L"controlR94SpotRayGeneration",L"spotRayGeneration",D3D12_EXPORT_FLAG_NONE};
         D3D12_DXIL_LIBRARY_DESC baselineLibrary{{baselineRayBytes.data(),baselineRayBytes.size()},1,&baselineExport};
         objects.push_back({D3D12_STATE_SUBOBJECT_TYPE_DXIL_LIBRARY,&baselineLibrary});
-        D3D12_EXPORT_DESC endpointExport{L"controlEndpointSpotRayGeneration",L"spotRayGeneration",D3D12_EXPORT_FLAG_NONE};
-        D3D12_DXIL_LIBRARY_DESC endpointLibrary{{kSpotEndpointShader,sizeof(kSpotEndpointShader)},1,&endpointExport};
-        if (endpoint) objects.push_back({D3D12_STATE_SUBOBJECT_TYPE_DXIL_LIBRARY,&endpointLibrary});
+        D3D12_EXPORT_DESC blockerExport{L"controlBlockerSpotRayGeneration",L"spotRayGeneration",D3D12_EXPORT_FLAG_NONE};
+        D3D12_DXIL_LIBRARY_DESC blockerLibrary{{kSpotBlockerShader,sizeof(kSpotBlockerShader)},1,&blockerExport};
+        if (blocker) objects.push_back({D3D12_STATE_SUBOBJECT_TYPE_DXIL_LIBRARY,&blockerLibrary});
         auto custom = *desc; custom.NumSubobjects=static_cast<UINT>(objects.size()); custom.pSubobjects=objects.data();
         HRESULT hr=original(device,&custom,iid,out);
-        if (FAILED(hr) && endpoint) {
-            spotEndpointReady.store(false,std::memory_order_release);
-            Trace("rt_spot_endpoint unavailable=1 hr=0x%08lX baseline_retry=1",static_cast<unsigned long>(hr));
+        if (FAILED(hr) && blocker) {
+            spotBlockerReady.store(false,std::memory_order_release);
+            Trace("rt_spot_blocker unavailable=1 hr=0x%08lX baseline_retry=1",static_cast<unsigned long>(hr));
             return CreateAugmentedInternal(device,desc,iid,out,false);
         }
         if (FAILED(hr)) { Trace("rt_spot_state_fallback hr=0x%08lX",static_cast<unsigned long>(hr)); return original(device,desc,iid,out); }
@@ -343,11 +347,11 @@ inline HRESULT CreateAugmentedInternal(ID3D12Device5* device, const D3D12_STATE_
         if (!out || !*out || FAILED(static_cast<IUnknown*>(*out)->QueryInterface(IID_PPV_ARGS(&state))) || FAILED(state.As(&properties))) return hr;
         const void* identifier=properties->GetShaderIdentifier(L"controlFullSpotRayGeneration");
         const void* baselineIdentifier=properties->GetShaderIdentifier(L"controlR94SpotRayGeneration");
-        const void* endpointIdentifier=endpoint?properties->GetShaderIdentifier(L"controlEndpointSpotRayGeneration"):nullptr;
+        const void* blockerIdentifier=blocker?properties->GetShaderIdentifier(L"controlBlockerSpotRayGeneration"):nullptr;
         if (!identifier || !baselineIdentifier) return hr;
-        const bool endpointAvailable=endpointIdentifier!=nullptr;
+        const bool blockerAvailable=blockerIdentifier!=nullptr;
         D3D12_HEAP_PROPERTIES heap{};heap.Type=D3D12_HEAP_TYPE_UPLOAD;heap.CreationNodeMask=heap.VisibleNodeMask=1;
-        D3D12_RESOURCE_DESC buffer{};buffer.Dimension=D3D12_RESOURCE_DIMENSION_BUFFER;buffer.Width=endpointAvailable?kRayRecordBufferSize:2*kRayRecordStride;buffer.Height=1;
+        D3D12_RESOURCE_DESC buffer{};buffer.Dimension=D3D12_RESOURCE_DIMENSION_BUFFER;buffer.Width=blockerAvailable?kRayRecordBufferSize:2*kRayRecordStride;buffer.Height=1;
         buffer.DepthOrArraySize=1;buffer.MipLevels=1;buffer.SampleDesc.Count=1;buffer.Layout=D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
         ComPtr<ID3D12Resource> record;
         HRESULT prepared=device->CreateCommittedResource(&heap,D3D12_HEAP_FLAG_NONE,&buffer,D3D12_RESOURCE_STATE_GENERIC_READ,nullptr,IID_PPV_ARGS(&record));
@@ -357,18 +361,18 @@ inline HRESULT CreateAugmentedInternal(ID3D12Device5* device, const D3D12_STATE_
             memset(mapped,0,static_cast<size_t>(buffer.Width));
             memcpy(mapped,identifier,D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES);
             memcpy(static_cast<unsigned char*>(mapped)+kRayRecordStride,baselineIdentifier,D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES);
-            if (endpointAvailable) memcpy(static_cast<unsigned char*>(mapped)+2*kRayRecordStride,endpointIdentifier,D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES);
+            if (blockerAvailable) memcpy(static_cast<unsigned char*>(mapped)+2*kRayRecordStride,blockerIdentifier,D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES);
             record->Unmap(0,nullptr);
             prepared=state->SetPrivateDataInterface(kRecord,record.Get());
         }
-        spotEndpointReady.store(SUCCEEDED(prepared)&&endpointAvailable,std::memory_order_release);
-        Trace("rt_spot_endpoint ready=%u radius_scale=%.3f max_segment_fraction=%.3f",unsigned(SUCCEEDED(prepared)&&endpointAvailable),double(kSpotEndpointRadiusScale),double(kSpotEndpointCapFraction));
+        spotBlockerReady.store(SUCCEEDED(prepared)&&blockerAvailable,std::memory_order_release);
+        Trace("rt_spot_blocker ready=%u full_length=1 bands=clear_1_tight_.75_wide_.5_earlier_0",unsigned(SUCCEEDED(prepared)&&blockerAvailable));
         if (SUCCEEDED(prepared)) components.fetch_or(kRayComponent);
         RefreshReady();Trace("rt_spot_state ready=%u native_exports_retained=1 variant=%s replacement=R97_center_probe_with_R94_baseline spot_samples=4 point_samples=1",unsigned(SUCCEEDED(prepared)),variantName);
         return hr;
     } catch (...) {
-        if (endpoint) {
-            spotEndpointReady.store(false,std::memory_order_release);
+        if (blocker) {
+            spotBlockerReady.store(false,std::memory_order_release);
             return CreateAugmentedInternal(device,desc,iid,out,false);
         }
         return original(device,desc,iid,out);
@@ -392,7 +396,7 @@ inline bool Dispatch(ID3D12GraphicsCommandList4* list,const D3D12_DISPATCH_RAYS_
         RayRecordFits(active->mode,record->GetDesc().Width);
     active->reset=previousFull!=active->fullRay || previousMode!=active->mode;
     if (active->fullRay) {
-        if (active->reset) Trace("rt_spot_ray_route mode=%s record_offset=%u endpoint_guard=%u raw=%u gpu_confirmed=0",ModeName(active->mode),RayRecordOffset(active->mode),unsigned(active->mode==Mode::RoomEndpoint),unsigned(UsesRawSpotVisibility(active->mode)));
+        if (active->reset) Trace("rt_spot_ray_route mode=%s record_offset=%u blocker_bands=%u raw=%u gpu_confirmed=0",ModeName(active->mode),RayRecordOffset(active->mode),unsigned(active->mode==Mode::RoomBlocker),unsigned(UsesRawSpotVisibility(active->mode)));
         auto custom=*desc;custom.RayGenerationShaderRecord={record->GetGPUVirtualAddress() + RayRecordOffset(active->mode),32};
         rt_shadow_capture::Lookup(list).dispatch(list,&custom);
     }
