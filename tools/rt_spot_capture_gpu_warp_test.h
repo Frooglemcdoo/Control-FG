@@ -71,3 +71,26 @@ static void TestGpuHitTableTranslation(ID3D12Device* device) {
     controls.version=1;memcpy(controls.nativeIds[1],controls.nativeIds[0],32);run(0,1);
     std::cout<<"PASS GPU capture table: 65 records, partial final group, CPU-reference parity, nonzero null-record arguments, late unknown, bad layout, duplicate identifiers and untouched guard bytes\n";
 }
+
+static void TestHitCaptureSubmissionPolicy(ID3D12Device* device) {
+    namespace capture=native_lighting::rt_spot_capture_runtime;
+    namespace journal=native_lighting::rt_spot_table_audit;
+    ComPtr<ID3D12CommandAllocator> allocator;Check(device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT,IID_PPV_ARGS(&allocator)));
+    ComPtr<ID3D12GraphicsCommandList4> list;Check(device->CreateCommandList(0,D3D12_COMMAND_LIST_TYPE_DIRECT,allocator.Get(),nullptr,IID_PPV_ARGS(&list)));Check(list->Close());
+    D3D12_COMMAND_QUEUE_DESC desc{};ComPtr<ID3D12CommandQueue> queue;Check(device->CreateCommandQueue(&desc,IID_PPV_ARGS(&queue)));
+    capture::recordedList=list;capture::recordedGeneration=journal::Token(list.Get());capture::readbackCopied=false;
+    ID3D12CommandList* lists[]={list.Get()};
+    capture::phase.store(capture::Phase::Recorded);
+    // A reused command-list object is insufficient: its generation must match.
+    journal::Token(list.Get(),true);capture::BeforeExecute(queue.Get(),1,lists);
+    if(capture::phase.load()!=capture::Phase::Recorded)throw std::runtime_error("stale generation submitted capture");
+    capture::recordedGeneration=journal::Token(list.Get());capture::BeforeExecute(queue.Get(),1,lists);
+    if(capture::phase.load()!=capture::Phase::Submitting || capture::submittedQueue.Get()!=queue.Get())throw std::runtime_error("capture submission identity");
+    capture::BeforeExecute(queue.Get(),1,lists);
+    if(capture::phase.load()!=capture::Phase::Failed)throw std::runtime_error("capture replay not rejected");
+    capture::phase.store(capture::Phase::Recorded);capture::ResetObserved(list.Get());
+    if(capture::phase.load()!=capture::Phase::Failed)throw std::runtime_error("discarded capture not rejected");
+    if(capture::recordedList.Get()!=list.Get())throw std::runtime_error("uncertain capture reference released");
+    capture::recordedList.Reset();capture::submittedQueue.Reset();capture::recordedGeneration=0;capture::phase.store(capture::Phase::Idle);
+    std::cout<<"PASS capture submission policy: exact generation, actual queue, replay rejection, reset-before-submit rejection and retained uncertain references\n";
+}

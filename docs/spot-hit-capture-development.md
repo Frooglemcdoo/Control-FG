@@ -1,11 +1,13 @@
-# Native hit capture: checkpoint after R127 preparation
+# Native hit capture: R128 implementation checkpoint
 
-R126 live evidence validated native table coverage and submission ordering.
-R127 prepares an independent native-alpha-compatible capture pipeline and translates
-known identifiers while preserving null records. See spot-capture-r127.md for the
-current limits. Actual ray input capture, diagnostic dispatch, GPU readback and
-resource lifetime integration remain outstanding. The following notes retain the
-original ABI design and its constraints.
+R127 live evidence confirmed driver pipeline linking and CPU table translation.
+R128 adds exact native input extraction, GPU table translation, bounded hit tracing,
+private descriptor tables, exact-queue fence readback and batched log export.
+See spot-capture-r128.md for the live test and implementation limits. Live GPU
+traversal has not yet been confirmed on the user's card.
+
+The original design below is retained as a review checklist. Its required steps
+are implemented in R128; their live behavior still needs the R128 log.
 
 ## Evidence and limitation
 

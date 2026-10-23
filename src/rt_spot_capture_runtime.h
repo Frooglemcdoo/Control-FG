@@ -18,7 +18,7 @@ inline ComPtr<ID3D12GraphicsCommandList4> recordedList;
 inline ComPtr<ID3D12StateObject> recordedState,captureState;
 inline ComPtr<ID3D12CommandQueue> submittedQueue;
 inline unsigned attempts=0,exportCursor=0;
-inline UINT frameTag=0,capturedWidth=0,capturedHeight=0;
+inline UINT frameTag=0,capturedWidth=0,capturedHeight=0,capturedTableRecords=0;
 inline bool readbackCopied=false;
 inline unsigned char completedBytes[gpu::kReadbackBytes]{};
 inline thread_local bool inScope=false,internal=false;
@@ -196,6 +196,7 @@ inline void Record(ID3D12GraphicsCommandList4* list,ID3D12StateObject* owner,con
         if(!id)return;memcpy(tableControls.nativeIds[i],id,32);memcpy(tableControls.captureIds[i],ids[i],32);
     }
     frameTag=static_cast<UINT>(rt_spot_table_audit::Token(list));if(!frameTag){Fail("frame_tag");return;}
+    capturedTableRecords=tableControls.count;
     const UINT inputControls[]={desc->Width,desc->Height,frameTag,64};
     const UINT captureControls[]={gpu::kRayCount,frameTag,0,2,0,1,0,0};
     void* mapped=nullptr;D3D12_RANGE empty{0,0};
@@ -300,8 +301,18 @@ inline void Poll() noexcept {
                 memcpy(completedBytes,mapped,sizeof(completedBytes));D3D12_RANGE written{0,0};resources.readback->Unmap(0,&written);
                 readbackCopied=true;phase.store(Phase::Complete);
                 UINT status[4]{};memcpy(status,completedBytes+gpu::kResultBytes,16);
-                Trace("rt_hit_gpu_complete generation=%llu frame_tag=%u unknown=%u translated=%u null=%u invalid_layout=%u gpu_completion_confirmed=1",recordedGeneration,frameTag,status[0],status[1],status[2],status[3]);
-                if(status[0] || status[3])Fail("gpu_table_validation");
+                const bool tableValid=!status[0] && !status[3] && status[1]+status[2]==capturedTableRecords;
+                UINT validRays=0,hits=0,invalidRecords=0;
+                for(UINT i=0;i<gpu::kRayCount;++i) {
+                    rt_spot_capture::CaptureResult result{};memcpy(&result,completedBytes+i*sizeof(result),sizeof(result));
+                    if(!result.valid)continue;
+                    if(result.valid!=1 || result.frameTag!=frameTag || result.pixelX>=capturedWidth || result.pixelY>=capturedHeight ||
+                        (result.hit.hitKind!=0 && result.hit.hitKind!=254 && result.hit.hitKind!=255)){++invalidRecords;continue;}
+                    ++validRays;if(result.hit.hitKind)++hits;
+                }
+                Trace("rt_hit_gpu_complete generation=%llu frame_tag=%u unknown=%u translated=%u null=%u invalid_layout=%u valid_rays=%u hits=%u misses=%u invalid_records=%u gpu_completion_confirmed=1 gpu_hit_capture=%u",recordedGeneration,frameTag,status[0],status[1],status[2],status[3],validRays,hits,validRays-hits,invalidRecords,unsigned(tableValid && !invalidRecords));
+                if(!tableValid)Fail("gpu_table_validation");
+                else if(invalidRecords)Fail("readback_provenance");
             }
         }
         ReleaseSRWLockExclusive(&stateLock);

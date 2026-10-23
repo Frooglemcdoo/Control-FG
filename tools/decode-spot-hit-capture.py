@@ -2,6 +2,7 @@
 import argparse
 import json
 import math
+import re
 import struct
 from pathlib import Path
 
@@ -50,13 +51,67 @@ def decode(data, frame_tag):
     return results
 
 
+def decode_log(text):
+    """Accept only a complete, fenced R128 capture with every valid record present."""
+    def fields(line):
+        return {key: int(value) for key, value in re.findall(r'(\w+)=(\d+)(?:\s|$)', line)}
+    recorded = [line for line in text.splitlines() if ' rt_hit_gpu_recorded ' in line]
+    completed = [line for line in text.splitlines() if ' rt_hit_gpu_complete ' in line]
+    exported = [line for line in text.splitlines() if ' rt_hit_gpu_export_complete ' in line]
+    if len(recorded) != 1 or len(completed) != 1 or len(exported) != 1 or ' rt_hit_gpu_failed ' in text:
+        raise ValueError('Capture did not complete exactly once')
+    begin, finish, end = fields(recorded[0]), fields(completed[0]), fields(exported[0])
+    if not (text.index(recorded[0]) < text.index(completed[0]) < text.index(exported[0])):
+        raise ValueError('Capture markers are out of order')
+    if (finish.get('gpu_completion_confirmed') != 1 or finish.get('gpu_hit_capture') != 1 or
+        finish.get('unknown') != 0 or finish.get('invalid_layout') != 0 or finish.get('invalid_records') != 0 or
+        finish.get('generation') != begin.get('generation') or
+        not begin.get('frame_tag') or finish.get('frame_tag') != begin['frame_tag'] or end.get('frame_tag') != begin['frame_tag'] or
+        end.get('records_examined') != MAX_RECORDS or
+        finish.get('translated', -1) + finish.get('null', -1) != begin.get('table_records')):
+        raise ValueError('Capture GPU validation or provenance failed')
+    extent = re.search(r'extent=(\d+)x(\d+)', recorded[0])
+    if not extent: raise ValueError('Missing native image extent')
+    width, height = map(int, extent.groups())
+    if not 0 < width <= 16384 or not 0 < height <= 16384: raise ValueError('Invalid native image extent')
+    data = bytearray(MAX_RECORDS * RECORD.size)
+    seen = set()
+    for line in text.splitlines():
+        if ' rt_hit_gpu_record ' not in line: continue
+        if not text.index(completed[0]) < text.index(line) < text.index(exported[0]):
+            raise ValueError('Record is outside the completed export')
+        match = re.search(r'index=(\d+) bytes=([0-9a-fA-F]{160})$', line)
+        if not match: raise ValueError('Malformed capture record')
+        index = int(match[1])
+        if index >= MAX_RECORDS or index in seen: raise ValueError('Duplicate or out-of-range record')
+        seen.add(index); data[index*RECORD.size:(index+1)*RECORD.size] = bytes.fromhex(match[2])
+    results = decode(data, begin['frame_tag'])
+    valid = [record for record in results if record['valid']]
+    hits = sum(record['hit'] for record in valid)
+    if len(seen) != len(valid) or len(valid) != finish.get('valid_rays') or hits != finish.get('hits') or len(valid)-hits != finish.get('misses'):
+        raise ValueError('Missing records or inconsistent capture totals')
+    for record in valid:
+        index = record['ordinal']
+        if record['pixel'] != [(2*(index%64)+1)*width//128, (2*(index//64)+1)*height//128]:
+            raise ValueError('Record does not match its native sample pixel')
+    return {'schema': 'control-spot-hit-capture-v1',
+            'capture_id': f"generation-{begin['generation']}-frame-{begin['frame_tag']}",
+            'extent': [width, height], 'records': results}
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('readback', type=Path)
-    parser.add_argument('--frame-tag', required=True, type=int)
-    parser.add_argument('--capture-id', required=True,
+    parser.add_argument('--log', action='store_true', help='Decode a completed Lighting-R128 session log')
+    parser.add_argument('--frame-tag', type=int)
+    parser.add_argument('--capture-id',
                         help='Capture/TLAS-generation provenance; IDs are not persistent asset names')
     args = parser.parse_args()
+    if args.log:
+        print(json.dumps(decode_log(args.readback.read_text(encoding='utf-8-sig')), indent=2))
+        return
+    if args.frame_tag is None or not args.capture_id:
+        parser.error('Binary input requires --frame-tag and --capture-id')
     print(json.dumps({'schema': 'control-spot-hit-capture-v1', 'capture_id': args.capture_id,
                       'records': decode(args.readback.read_bytes(), args.frame_tag)}, indent=2))
 

@@ -656,6 +656,7 @@ int main() try {
     ComPtr<IDXGIAdapter> adapter; Check(factory->EnumWarpAdapter(IID_PPV_ARGS(&adapter)));
     ComPtr<ID3D12Device> device; Check(D3D12CreateDevice(adapter.Get(),D3D_FEATURE_LEVEL_11_0,IID_PPV_ARGS(&device)));
     TestGpuHitTableTranslation(device.Get());
+    TestHitCaptureSubmissionPolicy(device.Get());
     TestHitSetupAudit(device.Get());
     TestCopyAudit(device.Get());
     InstallLiveDiagnostic(device.Get());

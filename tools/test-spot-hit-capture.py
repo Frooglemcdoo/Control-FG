@@ -41,3 +41,19 @@ for data, frame in [(b'',19), (packed()[:-1],19), (packed()*4097,19), (packed(),
     else:
         raise AssertionError('Invalid capture accepted')
 print('PASS capture ABI, exact integer identity, world hit position, misses, bounds and frame validation')
+
+log = ('ms=1 rt_hit_gpu_recorded generation=7 frame_tag=19 extent=128x128 table_records=2\n'
+       'ms=2 rt_hit_gpu_complete generation=7 frame_tag=19 unknown=0 translated=1 null=1 invalid_layout=0 valid_rays=1 hits=1 misses=0 invalid_records=0 gpu_completion_confirmed=1 gpu_hit_capture=1\n'
+       'ms=3 rt_hit_gpu_record index=0 bytes='+packed(x=1,y=1).hex()+'\n'
+       'ms=4 rt_hit_gpu_export_complete records_examined=4096 frame_tag=19\n')
+assert decoder.decode_log(log)['records'][0]['primitive_index']==0xfedcba98
+for bad in [log.replace('gpu_completion_confirmed=1','gpu_completion_confirmed=0'),
+            log.replace('unknown=0','unknown=1'),log.replace('valid_rays=1','valid_rays=2'),
+            log.replace('index=0','index=1'),log.replace('frame_tag=19','frame_tag=20'),
+            log.replace('ms=4 rt_hit_gpu_export_complete','ms=4 interrupted'),
+            log+'ms=5 rt_hit_gpu_record index=0 bytes='+packed(x=1,y=1).hex()+'\n',
+            log+'ms=5 rt_hit_gpu_failed reason=test\n']:
+    try:decoder.decode_log(bad)
+    except ValueError:pass
+    else:raise AssertionError('Invalid capture log accepted')
+print('PASS complete-log decoding: fenced provenance, record counts, exact grid pixels, partial/duplicate/replayed exports rejected')
