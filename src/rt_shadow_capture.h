@@ -5,6 +5,8 @@ namespace rt_shadow_capture {
 using CreateRoot = HRESULT (STDMETHODCALLTYPE*)(ID3D12Device*, UINT, const void*, SIZE_T, REFIID, void**);
 using CreateState = HRESULT (STDMETHODCALLTYPE*)(ID3D12Device5*, const D3D12_STATE_OBJECT_DESC*, REFIID, void**);
 using CreateSrv = void (STDMETHODCALLTYPE*)(ID3D12Device*, ID3D12Resource*, const D3D12_SHADER_RESOURCE_VIEW_DESC*, D3D12_CPU_DESCRIPTOR_HANDLE);
+using RootObserver = void (*)(IUnknown*, const void*, SIZE_T) noexcept;
+inline std::atomic<RootObserver> onRoot{nullptr};
 inline CreateRoot originalRoot = nullptr;
 inline CreateState originalState = nullptr;
 inline std::atomic<CreateState> replacementState{nullptr};
@@ -51,7 +53,7 @@ inline void RecordDirect(const D3D12_COMPUTE_PIPELINE_STATE_DESC* desc) noexcept
 }
 inline HRESULT STDMETHODCALLTYPE RootHook(ID3D12Device* device,UINT node,const void* bytes,SIZE_T size,REFIID iid,void** out) {
     const HRESULT hr=originalRoot(device,node,bytes,size,iid,out);
-    if(SUCCEEDED(hr) && out && *out) rt_spot_capture_audit::RememberRoot(static_cast<IUnknown*>(*out),bytes,size);
+    if(SUCCEEDED(hr) && out && *out) if (const auto observer = onRoot.load()) observer(static_cast<IUnknown*>(*out),bytes,size);
     if(SUCCEEDED(hr) && out && *out && rootReports.fetch_add(1)<256) {
         char sha[65]{};PTReflectionSha256(static_cast<const unsigned char*>(bytes),size,sha);
         Trace("rt_root object=%p sha=%s bytes=%llu",*out,sha,static_cast<unsigned long long>(size));

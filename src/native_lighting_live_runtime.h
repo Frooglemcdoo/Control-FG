@@ -342,6 +342,7 @@ inline void InstallLiveDiagnostic(ID3D12Device* device) noexcept {
     if (!device) return;
     rt_spot_capture_audit::Install(device);
     rt_spot_runtime::Install();
+    rt_shadow_capture::onRoot = &rt_spot_capture_audit::RememberRoot;
     rt_shadow_capture::replacementState = &rt_spot_runtime::CreateAugmented;
     rt_shadow_capture::onState = &rt_spot_runtime::OnState;
     rt_shadow_capture::replacementDispatch = &rt_spot_runtime::Dispatch;
