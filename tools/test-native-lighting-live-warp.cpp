@@ -183,6 +183,50 @@ static void TestSpotPassSelection() {
     readyMask.fetch_and(~kRtSpotReadyBit);
     std::cout << "PASS: RT pass forwards arguments, holds selection and rejects stale observation\n";
 }
+
+// The audit uses only QueryInterface on the state; absence of properties must
+// not prevent bounded upload sampling or accidentally dispatch any GPU work.
+class AuditState final : public ID3D12StateObject {
+public:
+    HRESULT STDMETHODCALLTYPE QueryInterface(REFIID,void** out) override { if(!out)return E_POINTER;*out=nullptr;return E_NOINTERFACE; }
+    ULONG STDMETHODCALLTYPE AddRef() override { return 1; }
+    ULONG STDMETHODCALLTYPE Release() override { return 1; }
+    HRESULT STDMETHODCALLTYPE GetPrivateData(REFGUID,UINT*,void*) override { return E_NOTIMPL; }
+    HRESULT STDMETHODCALLTYPE SetPrivateData(REFGUID,UINT,const void*) override { return E_NOTIMPL; }
+    HRESULT STDMETHODCALLTYPE SetPrivateDataInterface(REFGUID,const IUnknown*) override { return E_NOTIMPL; }
+    HRESULT STDMETHODCALLTYPE SetName(LPCWSTR) override { return S_OK; }
+    HRESULT STDMETHODCALLTYPE GetDevice(REFIID,void**) override { return E_NOTIMPL; }
+};
+static void TestHitSetupAudit(ID3D12Device* device) {
+    namespace audit=native_lighting::rt_spot_capture_audit;
+    D3D12_HEAP_PROPERTIES heap{};heap.Type=D3D12_HEAP_TYPE_UPLOAD;
+    D3D12_RESOURCE_DESC desc{};desc.Dimension=D3D12_RESOURCE_DIMENSION_BUFFER;
+    desc.Width=65536;desc.Height=desc.DepthOrArraySize=desc.MipLevels=1;
+    desc.SampleDesc.Count=1;desc.Layout=D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+    ComPtr<ID3D12Resource> resource;
+    Check(device->CreateCommittedResource(&heap,D3D12_HEAP_FLAG_NONE,&desc,D3D12_RESOURCE_STATE_GENERIC_READ,nullptr,IID_PPV_ARGS(&resource)));
+    void* mapped=nullptr;D3D12_RANGE empty{0,0};Check(resource->Map(0,&empty,&mapped));
+    unsigned char bytes[384];for(unsigned i=0;i<sizeof(bytes);++i)bytes[i]=static_cast<unsigned char>(i*17);
+    std::memcpy(static_cast<unsigned char*>(mapped)+128,bytes,sizeof(bytes));
+    D3D12_RANGE written{128,128+sizeof(bytes)};resource->Unmap(0,&written);
+    audit::ObserveOwner(resource.Get(),D3D12_RESOURCE_STATE_COMMON);
+    if(audit::retainedBytes)throw std::runtime_error("non-generic-read owner was retained");
+    audit::ObserveOwner(resource.Get(),D3D12_RESOURCE_STATE_GENERIC_READ);
+    audit::ObserveOwner(resource.Get(),D3D12_RESOURCE_STATE_GENERIC_READ);
+    if(audit::retainedBytes!=65536)throw std::runtime_error("upload owner missing or duplicated");
+    D3D12_DISPATCH_RAYS_DESC rays{};
+    rays.HitGroupTable={resource->GetGPUVirtualAddress()+128,sizeof(bytes),96};
+    AuditState state;audit::InspectTable(&state,&rays);
+    if(!audit::captured.load())throw std::runtime_error("bounded upload audit did not complete");
+    D3D12_RANGE read{128,128+sizeof(bytes)};Check(resource->Map(0,&read,&mapped));
+    const bool unchanged=std::memcmp(static_cast<unsigned char*>(mapped)+128,bytes,sizeof(bytes))==0;
+    resource->Unmap(0,&empty);
+    if(!unchanged)throw std::runtime_error("setup audit changed native shader-table bytes");
+    audit::ReleaseFinishedOwners();
+    if(audit::retainedBytes)throw std::runtime_error("temporary upload owners not released");
+    for(const auto& owner:audit::owners)if(owner.resource)throw std::runtime_error("upload owner retained after completion");
+    std::cout<<"PASS setup audit: bounded upload sample, unchanged records, no GPU dispatch, owner release\n";
+}
 int main() try {
     TestSpotCulling();
     TestSpotPassSelection();
@@ -191,6 +235,7 @@ int main() try {
     ComPtr<IDXGIFactory4> factory; Check(CreateDXGIFactory1(IID_PPV_ARGS(&factory)));
     ComPtr<IDXGIAdapter> adapter; Check(factory->EnumWarpAdapter(IID_PPV_ARGS(&adapter)));
     ComPtr<ID3D12Device> device; Check(D3D12CreateDevice(adapter.Get(),D3D_FEATURE_LEVEL_11_0,IID_PPV_ARGS(&device)));
+    TestHitSetupAudit(device.Get());
     InstallLiveDiagnostic(device.Get());
     D3D12_ROOT_PARAMETER parameter{}; parameter.ParameterType=D3D12_ROOT_PARAMETER_TYPE_UAV; parameter.ShaderVisibility=D3D12_SHADER_VISIBILITY_ALL;
     D3D12_ROOT_SIGNATURE_DESC rootDesc{};rootDesc.NumParameters=1;rootDesc.pParameters=&parameter;

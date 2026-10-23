@@ -1,10 +1,21 @@
 #include "../src/rt_spot_capture_layout.h"
 #include "../src/rt_spot_capture_table.h"
+#include "../src/rt_spot_capture_bounds.h"
 #include <cassert>
 #include <iostream>
 
 int main() {
     using namespace rt_spot_capture;
+    assert(ContainsGpuRange(4096, 512, 4096, 512));
+    assert(ContainsGpuRange(4096, 512, 4160, 96));
+    assert(!ContainsGpuRange(4096, 512, 4095, 1));
+    assert(!ContainsGpuRange(4096, 512, 4608, 1));
+    assert(!ContainsGpuRange(UINT64_MAX - 31, 64, UINT64_MAX - 31, 1));
+    assert(!ContainsGpuRange(4096, 512, 4096, 0));
+    assert(NativeHitTableLayout(4096, 192, 96));
+    assert(!NativeHitTableLayout(4097, 192, 96));
+    assert(!NativeHitTableLayout(4096, 193, 96));
+    assert(!NativeHitTableLayout(4096, 192, 64));
     static_assert(offsetof(CaptureResult, origin) == 32);
     static_assert(offsetof(CaptureResult, direction) == 48);
     static_assert(offsetof(CaptureResult, pixelX) == 64);

@@ -5,12 +5,14 @@
 #include "native_lighting_report.h"
 #include "native_lighting_log_queue.h"
 #include "rt_shadow_capture_candidates.h"
+#include "rt_spot_capture_bounds.h"
 #include "spot_shadow_resolution_policy.h"
 #include "rt_spot_culling_policy.h"
 #include <intrin.h>
 #include <string>
 
 namespace native_lighting {
+namespace rt_spot_capture_audit { inline void ReleaseFinishedOwners() noexcept; }
 inline LiveSelection selection;
 inline std::atomic<unsigned> readyMask{0};
 inline std::atomic<unsigned long long> graphicsSeen{0}, computeSeen{0}, bindingsSeen{0};
@@ -75,6 +77,7 @@ inline void ReportRRPaths(const char* reason) noexcept {
 // The diagnostic UI thread owns all report I/O; no disk lock is shared with
 // render-side producers. Routine drains use buffered writes; SAVE LOG flushes.
 inline bool DrainDiagnosticLog(bool flush = false) noexcept {
+    rt_spot_capture_audit::ReleaseFinishedOwners();
     static char batch[DiagnosticLogQueue::Capacity()];
     AcquireSRWLockExclusive(&reportLock);
     const size_t length = diagnosticLog.Drain(batch,sizeof(batch));
@@ -279,6 +282,7 @@ inline bool PatchSlot(void** slot, void* expected, void* hook) noexcept {
     return installed;
 }
 #include "spot_shadow_resolution_runtime.h"
+#include "rt_spot_capture_audit.h"
 #include "rt_shadow_capture.h"
 #include "rt_spot_culling_runtime.h"
 #include "rt_spot_runtime.h"
@@ -336,6 +340,7 @@ inline HRESULT STDMETHODCALLTYPE CreateListHook(ID3D12Device* device, UINT node,
 inline void StartOverlay() noexcept;
 inline void InstallLiveDiagnostic(ID3D12Device* device) noexcept {
     if (!device) return;
+    rt_spot_capture_audit::Install(device);
     rt_spot_runtime::Install();
     rt_shadow_capture::replacementState = &rt_spot_runtime::CreateAugmented;
     rt_shadow_capture::onState = &rt_spot_runtime::OnState;

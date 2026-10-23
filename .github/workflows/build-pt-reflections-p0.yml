@@ -3,6 +3,7 @@ name: Build native reflection enhancements and RR
 on:
   push:
     branches:
+      - experiment/native-hit-capture-r118
       - experiment/pt-reflections-p0
       - experiment/pt-verify-stages-20261010
       - experiment/pt-local-light-probe-p1
@@ -175,6 +176,7 @@ jobs:
           python tools/generate-spot-band-colors.py
           python tools/rt_spot_hit_position.py
           python tools/test-rt-spot-hit-position.py
+          python tools/test-spot-hit-capture.py
           python tools/rt_spot_blocker.py
           python tools/test-rt-spot-blocker.py
 
@@ -335,6 +337,10 @@ jobs:
           if errorlevel 1 exit /b 1
           build\test-rr-diagnostic-bypass.exe
           if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /O2 tools\test-spot-hit-capture.cpp /Febuild\test-spot-hit-capture.exe
+          if errorlevel 1 exit /b 1
+          build\test-spot-hit-capture.exe
+          if errorlevel 1 exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /O2 tools\test-native-lighting-live-warp.cpp /Febuild\test-native-lighting-live-warp.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
           if errorlevel 1 exit /b 1
           build\test-native-lighting-live-warp.exe
@@ -400,11 +406,11 @@ jobs:
       - name: Preserve verified glass raygen across DXC updates
         run: python tools/prepare-canonical-glass.py
 
-      - name: Package live lighting diagnostic R117
+      - name: Package live lighting diagnostic R118
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-Native-Lighting-Live-R117'
+          $out='Control-FG-Native-Lighting-Live-R118'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
           Copy-Item build/rt_spot_selected_off.dxbc,build/rt_spot_selection.dxbc,build/rt_spot_visibility.dxbc,build/rt_spot_light_ids.dxbc,build/rt_spot_raw_history.dxbc,build/rt_spot_raw_spatial0.dxbc,build/rt_spot_raw_spatial1.dxbc,build/rt_spot_full.dxil,build/rt_spot_r94.dxil,build/rt_spot_light.dxbc,build/rt_spot_reset.dxbc,build/rt_spot_history.dxbc,build/rt_spot_spatial0.dxbc,build/rt_spot_spatial1.dxbc $out
@@ -422,17 +428,17 @@ jobs:
           Copy-Item Collect-RR-Blinds-Capture.ps1 "$out/Collect-RR-Blinds-Capture.ps1"
           Copy-Item Collect-ControlFG-Compact-Logs.cmd "$out/Collect-ControlFG-Compact-Logs.cmd"
           Copy-Item Collect-ControlFG-Compact-Logs.ps1 "$out/Collect-ControlFG-Compact-Logs.ps1"
-          Copy-Item docs/spot-blocker-r117.md "$out/DIAGNOSTIC-NOTES.md"
+          Copy-Item docs/spot-capture-r118.md "$out/DIAGNOSTIC-NOTES.md"
           @'
-          CONTROL-FG R117 - Native hit-position diagnostic
+          CONTROL-FG R118 - Read-only native hit-capture setup audit
           Close Control to install. Copy contents beside Control_DX12.exe.
           Preserve existing NVIDIA runtimes and the ControlFGStreamline folder.
           Use Borderless. Load the affected cafeteria room with FG and glass enhancements OFF. RR bypass is automatic in signal views.
           Enable native RT Contact Shadows. Keep the same camera position for comparison.
-          F10: capture HIT BANDS, HIT X, HIT Y, HIT Z at the same viewpoint, then BOTH.
+          F10: select BOTH and let gameplay run for 15 seconds, then SAVE LOG.
           Set game Ray Tracing Samples Count to 1. Keep the saved GI setting fixed. Let each settle 10 seconds.
-          SAVE LOG once after testing. Send the Lighting-R117 log and screenshots.
-          No restart between modes. SAVE LOG writes one Lighting-R117 session log.
+          Send the Lighting-R118 log. No new screenshots are needed for this setup audit.
+          No restart between modes. SAVE LOG writes one Lighting-R118 session log.
           This replaces one selected spotlight per pixel, not every shadow in the scene.
           An unavailable button means the required native shader pair was not prepared.
           HIT BANDS is a diagnostic image, not a lighting fix. RR is automatically bypassed in signal views.
@@ -441,7 +447,8 @@ jobs:
           HIT BANDS retains its prior distance legend. See DIAGNOSTIC-NOTES.md.
           Magenta means no selected spotlight. LIGHT IDS shows selected-light boundaries.
           Coordinate views are coarse position bands, not mesh IDs.
-          All 14 existing shadow assets remain exact R97. New diagnostic shader is embedded in dxgi.dll.
+          All 14 existing shadow assets remain exact R97. The audit adds no GPU dispatches.
+          This records root layout and four upload-backed shader-table records, not actual ray hits.
           See DIAGNOSTIC-NOTES.md for scope and limitations.
           '@ | Set-Content "$out/README.txt" -Encoding ASCII
           Compress-Archive -Path "$out/*" -DestinationPath "$out.zip" -Force
@@ -450,10 +457,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-Native-Lighting-Live-R117
+          name: Control-FG-Native-Lighting-Live-R118
           path: |
-            Control-FG-Native-Lighting-Live-R117.zip
-            Control-FG-Native-Lighting-Live-R117.sha256
+            Control-FG-Native-Lighting-Live-R118.zip
+            Control-FG-Native-Lighting-Live-R118.sha256
             build/rt_spot_shadow_prototype.dxil
             build/rr_clamp_fixed.h
             build/rt_spot_blocker.dxil

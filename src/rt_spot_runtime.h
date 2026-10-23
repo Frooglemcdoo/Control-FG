@@ -317,6 +317,7 @@ inline HRESULT CreateAugmentedInternal(ID3D12Device5* device, const D3D12_STATE_
         else if (Matches(shader,kMultiRaySha)) { replacementBytes=&rayBytes; variantName="configurable"; }
     }
     if (!replacementBytes) return original(device,desc,iid,out);
+    rt_spot_capture_audit::DescribeState(desc);
     try {
         std::vector<D3D12_STATE_SUBOBJECT> objects(desc->pSubobjects,desc->pSubobjects+desc->NumSubobjects);
         objects.reserve(desc->NumSubobjects+6);
@@ -426,7 +427,9 @@ inline bool Dispatch(ID3D12GraphicsCommandList4* list,const D3D12_DISPATCH_RAYS_
     ID3D12StateObject* state=nullptr;UINT size=sizeof(state);
     if (FAILED(list->GetPrivateData(kState,&size,&state)) || !state) return false;
     ID3D12Resource* record=nullptr;size=sizeof(record);
-    const HRESULT found=state->GetPrivateData(kRecord,&size,&record);state->Release();
+    const HRESULT found=state->GetPrivateData(kRecord,&size,&record);
+    if (SUCCEEDED(found) && record) rt_spot_capture_audit::InspectTable(state,desc);
+    state->Release();
     if (FAILED(found) || !record) return false;
     active->raySeen=true;
     active->fullRay=active->requested && desc->Depth==1 && desc->RayGenerationShaderRecord.SizeInBytes==32 &&
