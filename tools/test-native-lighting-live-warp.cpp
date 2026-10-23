@@ -262,6 +262,41 @@ static void TestHitSetupAudit(ID3D12Device* device) {
     for(const auto& owner:audit::owners)if(owner.resource)throw std::runtime_error("upload owner retained after completion");
     std::cout<<"PASS setup audit: saturated-cache address recovery, retry throttling, bounded upload sample, unchanged records, no GPU dispatch, owner release\n";
 }
+static bool captureDescriptionVerified=false;
+static HRESULT STDMETHODCALLTYPE InspectCapturePipeline(ID3D12Device5*,const D3D12_STATE_OBJECT_DESC* desc,REFIID,void**) {
+    if(desc->NumSubobjects!=9)return E_INVALIDARG;
+    const auto& native=*static_cast<const D3D12_DXIL_LIBRARY_DESC*>(desc->pSubobjects[0].pDesc);
+    const auto& config=*static_cast<const D3D12_RAYTRACING_SHADER_CONFIG*>(desc->pSubobjects[4].pDesc);
+    const auto& alpha=*static_cast<const D3D12_HIT_GROUP_DESC*>(desc->pSubobjects[3].pDesc);
+    const auto& association=*static_cast<const D3D12_SUBOBJECT_TO_EXPORTS_ASSOCIATION*>(desc->pSubobjects[8].pDesc);
+    captureDescriptionVerified=native.NumExports==1 && !wcscmp(native.pExports[0].Name,L"shadowAlphaTestAnyHit") &&
+        config.MaxPayloadSizeInBytes==32 && config.MaxAttributeSizeInBytes==8 &&
+        !wcscmp(alpha.ClosestHitShaderImport,L"captureClosestHit") && !wcscmp(alpha.AnyHitShaderImport,L"shadowAlphaTestAnyHit") &&
+        association.pSubobjectToAssociate==&desc->pSubobjects[6] && association.NumExports==2;
+    return E_NOTIMPL; // Exercise driver rejection without requiring DXR on WARP.
+}
+static void TestCapturePipelineDescription() {
+    D3D12_DXIL_LIBRARY_DESC library{};D3D12_GLOBAL_ROOT_SIGNATURE global{};D3D12_LOCAL_ROOT_SIGNATURE local{};
+    D3D12_HIT_GROUP_DESC opaque{},alpha{};
+    opaque.HitGroupExport=L"HitGroup_0_0";opaque.ClosestHitShaderImport=L"shadowClosestHit";
+    alpha=opaque;alpha.HitGroupExport=L"HitGroup_1_0";alpha.AnyHitShaderImport=L"shadowAlphaTestAnyHit";
+    D3D12_STATE_SUBOBJECT objects[]={
+        {D3D12_STATE_SUBOBJECT_TYPE_DXIL_LIBRARY,&library},
+        {D3D12_STATE_SUBOBJECT_TYPE_GLOBAL_ROOT_SIGNATURE,&global},
+        {D3D12_STATE_SUBOBJECT_TYPE_LOCAL_ROOT_SIGNATURE,&local},
+        {D3D12_STATE_SUBOBJECT_TYPE_HIT_GROUP,&opaque},
+        {D3D12_STATE_SUBOBJECT_TYPE_HIT_GROUP,&alpha}
+    };
+    D3D12_STATE_OBJECT_DESC desc{D3D12_STATE_OBJECT_TYPE_RAYTRACING_PIPELINE,5,objects};
+    const auto saved=native_lighting::rt_shadow_capture::originalState;
+    native_lighting::rt_shadow_capture::originalState=&InspectCapturePipeline;
+    const auto result=native_lighting::rt_spot_hit_pipeline::Prepare(nullptr,&desc,nullptr);
+    native_lighting::rt_shadow_capture::originalState=saved;
+    if(result!=E_NOTIMPL || !captureDescriptionVerified || wcscmp(opaque.ClosestHitShaderImport,L"shadowClosestHit"))
+        throw std::runtime_error("isolated capture description or failure handling incorrect");
+    std::cout<<"PASS capture pipeline description: native alpha export, independent 32-byte payload, original local root, untouched native descriptor, driver failure returned\n";
+}
+
 static void TestCopyAudit(ID3D12Device* device) {
     namespace audit=native_lighting::rt_spot_capture_audit;
     namespace copies=native_lighting::rt_spot_copy_audit;
@@ -301,7 +336,8 @@ static void TestCopyAudit(ID3D12Device* device) {
     ComPtr<ID3D12CommandAllocator> dispatchAllocator;Check(device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT,IID_PPV_ARGS(&dispatchAllocator)));
     ComPtr<ID3D12GraphicsCommandList> dispatchList;Check(device->CreateCommandList(0,D3D12_COMMAND_LIST_TYPE_DIRECT,dispatchAllocator.Get(),nullptr,IID_PPV_ARGS(&dispatchList)));
     // Record the consumer first: CPU recording order differs from submission.
-    mirror::RecordDispatch(dispatchList.Get(),audit::targetAddress,384,ids);Check(dispatchList->Close());
+    unsigned char captureIds[2][32]{};captureIds[0][0]=31;captureIds[1][0]=32;
+    mirror::RecordDispatch(dispatchList.Get(),audit::targetAddress,384,ids,captureIds);Check(dispatchList->Close());
     list->CopyBufferRegion(destination.Get(),64,source.Get(),32,512);
     list->CopyResource(destination.Get(),source.Get());
     if(copies::samples.load()!=3)throw std::runtime_error("copy hooks did not sample both native copy forms");
@@ -325,6 +361,11 @@ static void TestCopyAudit(ID3D12Device* device) {
         throw std::runtime_error("copy audit omitted heap/partial/snapshot limits");
     if(!mirror::done.load() || output.find("identifiers_validated=1")==std::string::npos)
         throw std::runtime_error("submission order did not join separate producer and consumer lists");
+    if(output.find("rt_hit_table_translation ready=1")==std::string::npos)throw std::runtime_error("live table was not translated for its capture pipeline");
+    for(unsigned i=0;i<4;++i) {
+        if(std::memcmp(mirror::translatedTable+i*96,captureIds[i%2],32) || std::memcmp(mirror::translatedTable+i*96+32,expected.data()+128+i*96+32,64))
+            throw std::runtime_error("live translation changed a local argument or used the wrong state identifier");
+    }
     // A fresh request must not inherit the previous table or spent budget.
     mirror::Request();mirror::BeginIfRequested();
     if(mirror::copiedBytes || mirror::coverage.count)throw std::runtime_error("rearm inherited old capture data");
@@ -603,6 +644,7 @@ static void TestCopyAudit(ID3D12Device* device) {
 }
 
 int main() try {
+    TestCapturePipelineDescription();
     TestSpotCulling();
     TestSpotPassSelection();
     using namespace native_lighting;

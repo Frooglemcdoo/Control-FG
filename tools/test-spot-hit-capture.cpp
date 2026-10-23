@@ -50,6 +50,21 @@ int main() {
         assert(!std::memcmp(destination.data() + i * 96, replacements[i % 2].capture.data(), 32));
         assert(!std::memcmp(destination.data() + i * 96 + 32, source.data() + i * 96 + 32, 64));
     }
+    // R126 has null identifiers with nonzero trailing bytes. Preserve the
+    // entire slots and their indices, not merely the identifier prefix.
+    auto withNull=source;std::memset(withNull.data()+96,0,32);
+    const auto beforeNull=withNull;
+    assert(TranslateHitTable(withNull,replacements,destination));
+    assert(withNull==beforeNull && destination.size()==withNull.size());
+    assert(!std::memcmp(destination.data()+96,withNull.data()+96,96));
+    std::vector<unsigned char> sentinel(source.size(),0x5a);
+    auto bad=withNull;bad[96*3]=99;
+    const auto unchanged=sentinel;
+    assert(!TranslateHitTableBytes(bad.data(),bad.size(),replacements.data(),2,sentinel.data(),sentinel.size()));
+    assert(sentinel==unchanged);
+    assert(!TranslateHitTableBytes(source.data(),source.size(),replacements.data(),2,sentinel.data(),sentinel.size()-1));
+    assert(sentinel==unchanged);
+    assert(TranslateHitTable(source,replacements,destination));
     const auto accepted = destination;
     source[96 * 3] = 99;
     assert(!TranslateHitTable(source, replacements, destination));

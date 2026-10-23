@@ -1,8 +1,11 @@
-# Native hit capture: implementation checkpoint after R117
+# Native hit capture: checkpoint after R127 preparation
 
-Status: shader and offline record/table validation implemented. **Not integrated
-into the game, not an R118 release, and not a lighting fix.** R117 remains the
-last installable test. No runtime hooks or packaged assets change in this commit.
+R126 live evidence validated native table coverage and submission ordering.
+R127 prepares an independent native-alpha-compatible capture pipeline and translates
+known identifiers while preserving null records. See spot-capture-r127.md for the
+current limits. Actual ray input capture, diagnostic dispatch, GPU readback and
+resource lifetime integration remain outstanding. The following notes retain the
+original ABI design and its constraints.
 
 ## Evidence and limitation
 

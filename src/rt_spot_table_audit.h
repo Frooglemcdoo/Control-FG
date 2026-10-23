@@ -37,12 +37,12 @@ struct QueueClock {
 };
 inline QueueClock replayClock,lastWriteClock;
 inline void ResetQueueOrder() noexcept;
-inline unsigned char archive[kCopyBudget],mirror[kCapacity];
+inline unsigned char archive[kCopyBudget],mirror[kCapacity],translatedTable[kCapacity];
 inline rt_spot_capture::TableCoverage coverage;
 enum class Kind { Copy,Dispatch };
 struct Event {
     Kind kind=Kind::Copy;UINT64 generation=0,resource=0,base=0,extent=0,offset=0,size=0,archiveOffset=0;
-    unsigned char identifiers[2][32]{};bool submitted=false;
+    unsigned char identifiers[2][32]{},captureIdentifiers[2][32]{};bool submitted=false,captureReady=false;
 };
 inline Event events[kMaximumEvents];
 inline std::atomic<bool> published[kMaximumEvents];
@@ -150,12 +150,13 @@ inline void Observe(ID3D12GraphicsCommandList* list,ID3D12Resource* destination,
     }
     source->Unmap(0,&written);
 }
-inline void RecordDispatch(ID3D12GraphicsCommandList* list,UINT64 address,UINT64 size,const unsigned char identifiers[2][32]) noexcept {
+inline void RecordDispatch(ID3D12GraphicsCommandList* list,UINT64 address,UINT64 size,const unsigned char identifiers[2][32],const unsigned char (*captureIdentifiers)[32]=nullptr) noexcept {
     CaptureLease lease;if(!lease)return;
     const auto token=Token(list);if(!token){Stop("dispatch_identity");return;}
     unsigned index=0;if(!ReserveEvent(index))return;
     auto& e=events[index];e={};e.kind=Kind::Dispatch;e.generation=token;e.base=address;e.size=size;
     std::memcpy(e.identifiers,identifiers,sizeof(e.identifiers));
+    if(captureIdentifiers){std::memcpy(e.captureIdentifiers,captureIdentifiers,sizeof(e.captureIdentifiers));e.captureReady=true;}
     published[index].store(true,std::memory_order_release);
 }
 
@@ -171,7 +172,9 @@ inline void Inspect(ID3D12GraphicsCommandList4* list,ID3D12StateObject* state,co
     if(FAILED(state->QueryInterface(IID_PPV_ARGS(&properties)))){Stop("state_properties");return;}
     unsigned char identifiers[2][32]{};const wchar_t* names[]={L"HitGroup_0_0",L"HitGroup_1_0"};
     for(unsigned i=0;i<2;++i){const auto* id=properties->GetShaderIdentifier(names[i]);if(!id){Stop("missing_identifier");return;}std::memcpy(identifiers[i],id,32);}
-    RecordDispatch(list,table.StartAddress,table.SizeInBytes,identifiers);
+    unsigned char captureIdentifiers[4][32]{};UINT identifierBytes=sizeof(captureIdentifiers);
+    const bool captureReady=SUCCEEDED(state->GetPrivateData(rt_spot_hit_pipeline::kIdentifiers,&identifierBytes,captureIdentifiers)) && identifierBytes==sizeof(captureIdentifiers);
+    RecordDispatch(list,table.StartAddress,table.SizeInBytes,identifiers,captureReady?captureIdentifiers:nullptr);
 }
 // Replay one recorded generation. Caller holds a lifetime lease and replay lock. Never use CPU recording
 // timestamps as execution order; only the actual ExecuteCommandLists array.
@@ -198,6 +201,10 @@ inline void Replay(UINT64 token) noexcept {
             const bool valid=complete && !counts.unknown && (counts.group0+counts.group1)>0;
             if(dispatchReports++<8 || valid)Trace("rt_hit_table_submission request=%llu queue=%llu generation=%llu coverage_complete=%u records=%llu group0=%u group1=%u empty=%u unknown=%u identifiers_validated=%u copy_bytes=%llu dependency_ordered=%u gpu_completion_confirmed=0 gpu_hit_capture=0",activeRequest.load(),queueIdentity,token,unsigned(complete),e.size/96,counts.group0,counts.group1,counts.empty,counts.unknown,unsigned(valid),copiedBytes.load(),unsigned(ordered));
             if(valid) {
+                rt_spot_capture::IdentifierReplacement replacements[2]{};
+                for(unsigned n=0;n<2;++n){std::memcpy(replacements[n].native.data(),e.identifiers[n],32);std::memcpy(replacements[n].capture.data(),e.captureIdentifiers[n],32);}
+                const bool translated=e.captureReady && rt_spot_capture::TranslateHitTableBytes(mirror+offset,static_cast<size_t>(e.size),replacements,2,translatedTable,sizeof(translatedTable));
+                Trace("rt_hit_table_translation ready=%u pipeline_ready=%u records=%llu null_records=%u local_arguments_preserved=1 gpu_upload=0 gpu_hit_capture=0",unsigned(translated),unsigned(e.captureReady),e.size/96,counts.empty);
                 for(unsigned n=0;n<2;++n){char hex[65]{};audit::Hex(e.identifiers[n],32,hex);Trace("rt_hit_table_identifier group=%u bytes=%s",n,hex);}
                 const UINT64 records=e.size/96,indices[]={0ull,records>1?1ull:0ull,records/2,records-1};
                 for(unsigned n=0;n<4;++n){char hex[193]{};audit::Hex(mirror+offset+indices[n]*96,96,hex);Trace("rt_hit_table_record generation=%llu index=%llu bytes=%s",token,indices[n],hex);}

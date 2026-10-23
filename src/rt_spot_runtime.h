@@ -376,6 +376,8 @@ inline HRESULT CreateAugmentedInternal(ID3D12Device5* device, const D3D12_STATE_
         if (FAILED(hr)) { Trace("rt_spot_state_fallback hr=0x%08lX",static_cast<unsigned long>(hr)); return original(device,desc,iid,out); }
         ComPtr<ID3D12StateObject> state; ComPtr<ID3D12StateObjectProperties> properties;
         if (!out || !*out || FAILED(static_cast<IUnknown*>(*out)->QueryInterface(IID_PPV_ARGS(&state))) || FAILED(state.As(&properties))) return hr;
+        const auto captureResult=rt_spot_hit_pipeline::Prepare(device,desc,state.Get());
+        if(FAILED(captureResult))Trace("rt_hit_pipeline_unavailable hr=0x%08lX gameplay_preserved=1",static_cast<unsigned long>(captureResult));
         const void* identifier=properties->GetShaderIdentifier(L"controlFullSpotRayGeneration");
         const void* baselineIdentifier=properties->GetShaderIdentifier(L"controlR94SpotRayGeneration");
         const void* blockerIdentifier=blocker?properties->GetShaderIdentifier(L"controlBlockerSpotRayGeneration"):nullptr;
