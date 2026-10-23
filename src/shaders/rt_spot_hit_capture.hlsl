@@ -4,6 +4,7 @@
 // capture table must bind private buffers; NEVER bind the gameplay UAV here.
 RaytracingAccelerationStructure captureScene : register(t6);
 StructuredBuffer<CaptureRay> captureRays : register(t8);
+ByteAddressBuffer captureStatus : register(t9);
 RWStructuredBuffer<CaptureResult> captureResults : register(u2);
 cbuffer CaptureLayout : register(b4) {
     uint captureCount;
@@ -45,6 +46,8 @@ void captureRayGeneration() {
     if (outputStride != CaptureResultBytes || index >= outputCount || index >= CaptureMaxRecords) return;
     CaptureResult result = (CaptureResult)0;
     captureResults[index] = result;
+    uint statusBytes; captureStatus.GetDimensions(statusBytes);
+    if (statusBytes < 16 || captureStatus.Load(0) != 0 || captureStatus.Load(12) != 0) return;
     // One bounded batch; invalid input yields an explicit invalid record.
     if (captureCount > CaptureMaxRecords || index >= captureCount || index >= inputCount ||
         inputStride != CaptureRayBytes || captureLayoutVersion != CaptureLayoutVersion || expectedFrameTag == 0 ||

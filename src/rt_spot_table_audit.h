@@ -434,7 +434,9 @@ inline void STDMETHODCALLTYPE ExecuteHook(ID3D12CommandQueue* queue,UINT count,I
     if(submitDepth){original(queue,count,lists);return;}
     ++submitDepth;CaptureLease lease;QueueCall call;
     if(lease)call=BeginQueueCall(queue,QueueOperation::Execute,count,lists);
+    rt_spot_capture_runtime::BeforeExecute(queue,count,lists);
     original(queue,count,lists);
+    rt_spot_capture_runtime::AfterExecute(queue,count,lists);
     if(lease)EndQueueCall(call);
     --submitDepth;
 }

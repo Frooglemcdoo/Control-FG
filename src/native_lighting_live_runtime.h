@@ -8,6 +8,9 @@
 #include "rt_spot_capture_bounds.h"
 #include "rt_spot_table_coverage.h"
 #include "rt_spot_capture_table.h"
+#include "rt_spot_capture_layout.h"
+#include "rt_lights/descriptor_overlap.h"
+#include <algorithm>
 #include "spot_shadow_resolution_policy.h"
 #include "rt_spot_culling_policy.h"
 #include <intrin.h>
@@ -16,6 +19,14 @@
 namespace native_lighting {
 namespace rt_spot_capture_audit { inline void ReleaseFinishedOwners() noexcept; }
 namespace rt_spot_table_audit { inline void Request() noexcept; }
+namespace rt_spot_capture_runtime {
+inline void Request() noexcept;
+inline void Poll() noexcept;
+inline void BeforeExecute(ID3D12CommandQueue*,UINT,ID3D12CommandList*const*) noexcept;
+inline void AfterExecute(ID3D12CommandQueue*,UINT,ID3D12CommandList*const*) noexcept;
+inline void ObserveTableOwner(ID3D12Resource*) noexcept;
+inline void ResetObserved(ID3D12GraphicsCommandList*) noexcept;
+}
 inline LiveSelection selection;
 inline std::atomic<unsigned> readyMask{0};
 inline std::atomic<unsigned long long> graphicsSeen{0}, computeSeen{0}, bindingsSeen{0};
@@ -80,6 +91,7 @@ inline void ReportRRPaths(const char* reason) noexcept {
 // The diagnostic UI thread owns all report I/O; no disk lock is shared with
 // render-side producers. Routine drains use buffered writes; SAVE LOG flushes.
 inline bool DrainDiagnosticLog(bool flush = false) noexcept {
+    rt_spot_capture_runtime::Poll();
     rt_spot_capture_audit::ReleaseFinishedOwners();
     static char batch[DiagnosticLogQueue::Capacity()];
     AcquireSRWLockExclusive(&reportLock);
@@ -139,7 +151,7 @@ inline bool SelectMode(Mode mode) noexcept {
     if (!ModeAvailable(mode,readyMask.load())) { Trace("selection_rejected mode=%s reason=shader_or_sample_hook_not_ready", ModeName(mode)); return false; }
     ReportRRPaths("before_selection");
     const auto state = selection.Select(mode);
-    if(mode==Mode::RoomBoth)rt_spot_table_audit::Request();
+    if(mode==Mode::RoomBoth){rt_spot_table_audit::Request();rt_spot_capture_runtime::Request();}
     Trace("selection seq=%llu mode=%s ready_mask=%u", LiveSelection::Sequence(state), ModeName(mode), readyMask.load());
     return true;
 }
@@ -289,8 +301,10 @@ inline bool PatchSlot(void** slot, void* expected, void* hook) noexcept {
 #include "rt_spot_capture_audit.h"
 #include "rt_shadow_capture.h"
 #include "rt_spot_hit_pipeline.h"
+#include "rt_spot_capture_gpu.h"
 #include "rt_spot_table_audit.h"
 #include "rt_spot_copy_audit.h"
+#include "rt_spot_capture_runtime.h"
 #include "rt_spot_culling_runtime.h"
 #include "rt_spot_runtime.h"
 inline void InstallList(ID3D12GraphicsCommandList* list) noexcept {
@@ -357,6 +371,7 @@ inline void InstallLiveDiagnostic(ID3D12Device* device) noexcept {
     rt_shadow_capture::onState = &rt_spot_runtime::OnState;
     rt_shadow_capture::replacementDispatch = &rt_spot_runtime::Dispatch;
     rt_shadow_capture::Install(device);
+    rt_spot_capture_runtime::Install(device);
     void** table = *reinterpret_cast<void***>(device);
     AcquireSRWLockExclusive(&hookLock);
     if (!originalGraphics) {

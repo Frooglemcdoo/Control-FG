@@ -73,12 +73,14 @@ inline void Observe(ID3D12Resource* destination, UINT64 destinationOffset,
 }
 inline void STDMETHODCALLTYPE BufferHook(ID3D12GraphicsCommandList* list,ID3D12Resource* destination,UINT64 destinationOffset,ID3D12Resource* source,UINT64 sourceOffset,UINT64 bytes) {
     const auto original = Lookup(list).buffer;
+    rt_spot_capture_runtime::ObserveTableOwner(destination);
     rt_spot_table_audit::Observe(list,destination,destinationOffset,source,sourceOffset,bytes);
     Observe(destination,destinationOffset,source,sourceOffset,bytes);
     original(list,destination,destinationOffset,source,sourceOffset,bytes);
 }
 inline void STDMETHODCALLTYPE ResourceHook(ID3D12GraphicsCommandList* list,ID3D12Resource* destination,ID3D12Resource* source) {
     const auto original = Lookup(list).resource;
+    rt_spot_capture_runtime::ObserveTableOwner(destination);
     if (destination && source && rt_spot_table_audit::Enabled())
         rt_spot_table_audit::Observe(list,destination,0,source,0,destination->GetDesc().Width);
     // CopyResource permits textures; buffer inspection rejects them before use.
@@ -89,7 +91,7 @@ inline void STDMETHODCALLTYPE ResourceHook(ID3D12GraphicsCommandList* list,ID3D1
 }
 inline HRESULT STDMETHODCALLTYPE ResetHook(ID3D12GraphicsCommandList* list,ID3D12CommandAllocator* allocator,ID3D12PipelineState* pipeline) {
     const auto hr=Lookup(list).reset(list,allocator,pipeline);
-    if(SUCCEEDED(hr))rt_spot_table_audit::Token(list,true);
+    if(SUCCEEDED(hr)){rt_spot_capture_runtime::ResetObserved(list);rt_spot_table_audit::Token(list,true);}
     return hr;
 }
 inline void InstallList(ID3D12GraphicsCommandList* list) noexcept {

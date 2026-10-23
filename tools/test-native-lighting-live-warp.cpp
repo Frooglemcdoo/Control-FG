@@ -23,6 +23,7 @@ static void Log(const char*, ...) {}
 static bool PTReflectionSha256(const unsigned char*, size_t, char*) { return false; }
 // Renderer and sidecar operations are unavailable in the standalone WARP test.
 static HMODULE verifiedRenderer = nullptr;
+static HMODULE verifiedD3d = nullptr;
 struct RRAlbedoCallPatch {};
 static bool RRAlbedoPrepareCallPatch(void*, void*, void*, RRAlbedoCallPatch*) { return false; }
 static bool RRAlbedoExchangeCall(RRAlbedoCallPatch*, bool) { return false; }
@@ -643,6 +644,8 @@ static void TestCopyAudit(ID3D12Device* device) {
     std::cout<<"PASS copy audit: default-heap destination, partial coverage, overflow rejection, native buffer/resource forwarding and unchanged GPU/upload bytes\n";
 }
 
+#include "rt_spot_capture_gpu_warp_test.h"
+
 int main() try {
     TestCapturePipelineDescription();
     TestSpotCulling();
@@ -652,6 +655,7 @@ int main() try {
     ComPtr<IDXGIFactory4> factory; Check(CreateDXGIFactory1(IID_PPV_ARGS(&factory)));
     ComPtr<IDXGIAdapter> adapter; Check(factory->EnumWarpAdapter(IID_PPV_ARGS(&adapter)));
     ComPtr<ID3D12Device> device; Check(D3D12CreateDevice(adapter.Get(),D3D_FEATURE_LEVEL_11_0,IID_PPV_ARGS(&device)));
+    TestGpuHitTableTranslation(device.Get());
     TestHitSetupAudit(device.Get());
     TestCopyAudit(device.Get());
     InstallLiveDiagnostic(device.Get());

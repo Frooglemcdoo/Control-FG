@@ -96,8 +96,10 @@ inline void HookPass(void* a, void* b, void* c, void* d) {
     pass.requested = !previous && !disabled.load() && components.load() == kRequiredComponents &&
         IsRtSpotMode(pass.mode);
     active = &pass;
+    if(!previous)rt_spot_capture_runtime::BeginScope();
     __try { originalPass(a,b,c,d); }
     __finally {
+        if(!previous)rt_spot_capture_runtime::EndScope();
         active = previous;
         if (!previous) {
             if (pass.fullRay && !pass.composed) {
@@ -378,6 +380,9 @@ inline HRESULT CreateAugmentedInternal(ID3D12Device5* device, const D3D12_STATE_
         if (!out || !*out || FAILED(static_cast<IUnknown*>(*out)->QueryInterface(IID_PPV_ARGS(&state))) || FAILED(state.As(&properties))) return hr;
         const auto captureResult=rt_spot_hit_pipeline::Prepare(device,desc,state.Get());
         if(FAILED(captureResult))Trace("rt_hit_pipeline_unavailable hr=0x%08lX gameplay_preserved=1",static_cast<unsigned long>(captureResult));
+        if(SUCCEEDED(captureResult))for(UINT i=0;i<desc->NumSubobjects;++i)
+            if(desc->pSubobjects[i].Type==D3D12_STATE_SUBOBJECT_TYPE_GLOBAL_ROOT_SIGNATURE)
+                rt_spot_capture_gpu::PreparePipeline(device,state.Get(),static_cast<const D3D12_GLOBAL_ROOT_SIGNATURE*>(desc->pSubobjects[i].pDesc)->pGlobalRootSignature);
         const void* identifier=properties->GetShaderIdentifier(L"controlFullSpotRayGeneration");
         const void* baselineIdentifier=properties->GetShaderIdentifier(L"controlR94SpotRayGeneration");
         const void* blockerIdentifier=blocker?properties->GetShaderIdentifier(L"controlBlockerSpotRayGeneration"):nullptr;
@@ -433,8 +438,7 @@ inline bool Dispatch(ID3D12GraphicsCommandList4* list,const D3D12_DISPATCH_RAYS_
     if (SUCCEEDED(found) && record) {
         rt_spot_table_audit::Inspect(list,state,desc);
     }
-    state->Release();
-    if (FAILED(found) || !record) return false;
+    if (FAILED(found) || !record) {state->Release();return false;}
     active->raySeen=true;
     active->fullRay=active->requested && desc->Depth==1 && desc->RayGenerationShaderRecord.SizeInBytes==32 &&
         RayRecordFits(active->mode,record->GetDesc().Width);
@@ -443,7 +447,8 @@ inline bool Dispatch(ID3D12GraphicsCommandList4* list,const D3D12_DISPATCH_RAYS_
         if (active->reset) Trace("rt_spot_ray_route mode=%s record_offset=%u blocker_bands=%u raw=%u gpu_confirmed=0",ModeName(active->mode),RayRecordOffset(active->mode),unsigned(active->mode==Mode::RoomBlocker),unsigned(UsesRawSpotVisibility(active->mode)));
         auto custom=*desc;custom.RayGenerationShaderRecord={record->GetGPUVirtualAddress() + RayRecordOffset(active->mode),32};
         rt_shadow_capture::Lookup(list).dispatch(list,&custom);
+        if(active->mode==Mode::RoomBoth)rt_spot_capture_runtime::Record(list,state,desc);
     }
-    record->Release();return active->fullRay;
+    state->Release();record->Release();return active->fullRay;
 }
 } // namespace rt_spot_runtime
