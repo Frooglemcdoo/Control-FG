@@ -224,21 +224,40 @@ static void TestHitSetupAudit(ID3D12Device* device) {
     D3D12_RANGE written{128,128+sizeof(bytes)};resource->Unmap(0,&written);
     audit::ObserveOwner(resource.Get(),D3D12_RESOURCE_STATE_COMMON);
     if(audit::retainedBytes)throw std::runtime_error("non-generic-read owner was retained");
+    // Reproduce R118: unrelated uploads fill every speculative slot before the
+    // shader-table allocation appears. Exact address tracking must still find it.
+    ComPtr<ID3D12Resource> unrelated[audit::kMaximumOwners];
+    for (auto& other : unrelated) {
+        Check(device->CreateCommittedResource(&heap,D3D12_HEAP_FLAG_NONE,&desc,D3D12_RESOURCE_STATE_GENERIC_READ,nullptr,IID_PPV_ARGS(&other)));
+        audit::ObserveOwner(other.Get(),D3D12_RESOURCE_STATE_GENERIC_READ);
+    }
+    const auto retained = audit::retainedBytes;
+    audit::ObserveOwner(unrelated[0].Get(),D3D12_RESOURCE_STATE_GENERIC_READ);
+    if(audit::retainedBytes!=retained)throw std::runtime_error("duplicate upload owner retained");
     audit::ObserveOwner(resource.Get(),D3D12_RESOURCE_STATE_GENERIC_READ);
-    audit::ObserveOwner(resource.Get(),D3D12_RESOURCE_STATE_GENERIC_READ);
-    if(audit::retainedBytes!=65536)throw std::runtime_error("upload owner missing or duplicated");
+    if(audit::capacityRejects.load()!=1)throw std::runtime_error("saturated cache did not report capacity rejection");
     D3D12_DISPATCH_RAYS_DESC rays{};
-    rays.HitGroupTable={resource->GetGPUVirtualAddress()+128,sizeof(bytes),96};
+    const auto address=resource->GetGPUVirtualAddress();
+    rays.HitGroupTable={address+128,sizeof(bytes),96};
     AuditState state;audit::InspectTable(&state,&rays);
+    if(audit::captured.load())throw std::runtime_error("unobserved owner unexpectedly captured");
+    unrelated[0]->GetGPUVirtualAddress();
+    if(audit::targetedOwner.resource)throw std::runtime_error("unrelated address claimed target");
+    if(resource->GetGPUVirtualAddress()!=address)throw std::runtime_error("address hook changed native return value");
+    if(audit::targetedOwner.resource.Get()!=resource.Get())throw std::runtime_error("targeted address observer missed saturated-cache owner");
+    audit::InspectTable(&state,&rays);
+    if(audit::attempts.load()!=1)throw std::runtime_error("retry interval was not enforced");
+    audit::nextAttemptMs.store(0);
+    audit::InspectTable(&state,&rays);
     if(!audit::captured.load())throw std::runtime_error("bounded upload audit did not complete");
     D3D12_RANGE read{128,128+sizeof(bytes)};Check(resource->Map(0,&read,&mapped));
     const bool unchanged=std::memcmp(static_cast<unsigned char*>(mapped)+128,bytes,sizeof(bytes))==0;
     resource->Unmap(0,&empty);
     if(!unchanged)throw std::runtime_error("setup audit changed native shader-table bytes");
     audit::ReleaseFinishedOwners();
-    if(audit::retainedBytes)throw std::runtime_error("temporary upload owners not released");
+    if(audit::retainedBytes || audit::targetedOwner.resource)throw std::runtime_error("temporary upload owners not released");
     for(const auto& owner:audit::owners)if(owner.resource)throw std::runtime_error("upload owner retained after completion");
-    std::cout<<"PASS setup audit: bounded upload sample, unchanged records, no GPU dispatch, owner release\n";
+    std::cout<<"PASS setup audit: saturated-cache address recovery, retry throttling, bounded upload sample, unchanged records, no GPU dispatch, owner release\n";
 }
 int main() try {
     TestSpotCulling();

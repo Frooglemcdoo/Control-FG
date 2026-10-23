@@ -4,6 +4,8 @@
 namespace rt_spot_capture_audit {
 using Microsoft::WRL::ComPtr;
 inline constexpr UINT kMaximumOwners = 32;
+inline constexpr unsigned kMaximumAttempts = 240;
+inline constexpr ULONGLONG kAttemptIntervalMs = 250;
 inline constexpr UINT64 kRetainedUploadBudget = 512ull * 1024 * 1024;
 inline const GUID kRootBytes = {0xd8139341,0x0c53,0x46b7,{0xb1,0x29,0x48,0x22,0x18,0x00,0x00,0x01}};
 struct Owner {
@@ -11,6 +13,19 @@ struct Owner {
     UINT64 address = 0, bytes = 0;
 };
 inline Owner owners[kMaximumOwners];
+// A reserved slot is independent of the speculative cache. Once DispatchRays
+// supplies the exact table range, subsequent address queries can retain its owner
+// even when unrelated level-loading uploads have filled the cache.
+inline Owner targetedOwner;
+inline UINT64 targetAddress = 0, targetBytes = 0;
+inline std::atomic<bool> targetActive{false};
+inline std::atomic<ULONGLONG> nextAttemptMs{0};
+inline std::atomic<unsigned> capacityRejects{0}, budgetRejects{0}, contentionRejects{0};
+inline std::atomic<unsigned> addressQueries{0}, targetedMatches{0};
+using GetAddress = D3D12_GPU_VIRTUAL_ADDRESS (STDMETHODCALLTYPE*)(ID3D12Resource*);
+inline GetAddress originalGetAddress = nullptr;
+inline SRWLOCK addressInstallLock = SRWLOCK_INIT;
+inline void InstallAddressObserver(ID3D12Resource* resource) noexcept;
 inline SRWLOCK ownerLock = SRWLOCK_INIT, installLock = SRWLOCK_INIT;
 inline UINT64 retainedBytes = 0;
 inline std::atomic<unsigned> rejectedOwners{0}, attempts{0};
@@ -24,17 +39,18 @@ inline CreateCommitted originalCommitted = nullptr;
 inline CreatePlaced originalPlaced = nullptr;
 
 inline void ObserveOwner(IUnknown* object, D3D12_RESOURCE_STATES initialState) noexcept {
-    if (!object || captured.load(std::memory_order_relaxed) || attempts.load(std::memory_order_relaxed) >= 64 || initialState != D3D12_RESOURCE_STATE_GENERIC_READ) return;
+    if (!object || captured.load(std::memory_order_relaxed) || attempts.load(std::memory_order_relaxed) >= kMaximumAttempts || initialState != D3D12_RESOURCE_STATE_GENERIC_READ) return;
     ComPtr<ID3D12Resource> resource;
     if (FAILED(object->QueryInterface(IID_PPV_ARGS(&resource)))) return;
     const auto desc = resource->GetDesc();
     if (desc.Dimension != D3D12_RESOURCE_DIMENSION_BUFFER || desc.Width < 65536 || desc.Width > kRetainedUploadBudget) return;
     D3D12_HEAP_PROPERTIES heap{}; D3D12_HEAP_FLAGS flags{};
     if (FAILED(resource->GetHeapProperties(&heap,&flags)) || heap.Type != D3D12_HEAP_TYPE_UPLOAD) return;
+    InstallAddressObserver(resource.Get());
     const auto address = resource->GetGPUVirtualAddress();
     if (!rt_spot_capture::ContainsGpuRange(address,desc.Width,address,desc.Width)) return;
-    if (!TryAcquireSRWLockExclusive(&ownerLock)) { ++rejectedOwners; return; }
-    if (captured.load(std::memory_order_relaxed) || attempts.load(std::memory_order_relaxed) >= 64) { ReleaseSRWLockExclusive(&ownerLock); return; }
+    if (!TryAcquireSRWLockExclusive(&ownerLock)) { ++rejectedOwners; ++contentionRejects; return; }
+    if (captured.load(std::memory_order_relaxed) || attempts.load(std::memory_order_relaxed) >= kMaximumAttempts) { ReleaseSRWLockExclusive(&ownerLock); return; }
     bool stored = false;
     for (auto& owner : owners) if (owner.resource.Get() == resource.Get()) { stored = true; break; }
     if (!stored && desc.Width <= kRetainedUploadBudget - retainedBytes) {
@@ -43,8 +59,53 @@ inline void ObserveOwner(IUnknown* object, D3D12_RESOURCE_STATES initialState) n
             retainedBytes += desc.Width; stored = true; break;
         }
     }
-    if (!stored) ++rejectedOwners;
+    if (!stored) {
+        ++rejectedOwners;
+        if (desc.Width > kRetainedUploadBudget - retainedBytes) ++budgetRejects;
+        else ++capacityRejects;
+    }
     ReleaseSRWLockExclusive(&ownerLock);
+}
+// Observe address use, not just allocation order. The resource is alive for this
+// method call; retain it before returning. Never dereference a stale raw registry
+// pointer, copy GPU memory, or replace an already retained target on this thread.
+inline void ObserveAddress(ID3D12Resource* resource, UINT64 address) noexcept {
+    if (!resource || !targetActive.load(std::memory_order_acquire) || captured.load(std::memory_order_relaxed) || attempts.load(std::memory_order_relaxed) >= kMaximumAttempts) return;
+    ++addressQueries;
+    UINT64 wantedAddress = 0, wantedBytes = 0;
+    if (!TryAcquireSRWLockShared(&ownerLock)) { ++contentionRejects; return; }
+    if (!targetedOwner.resource) { wantedAddress = targetAddress; wantedBytes = targetBytes; }
+    ReleaseSRWLockShared(&ownerLock);
+    if (!wantedAddress || address > wantedAddress) return;
+    const auto desc = resource->GetDesc();
+    if (desc.Dimension != D3D12_RESOURCE_DIMENSION_BUFFER || desc.Width > kRetainedUploadBudget ||
+        !rt_spot_capture::ContainsGpuRange(address,desc.Width,wantedAddress,wantedBytes)) return;
+    D3D12_HEAP_PROPERTIES heap{}; D3D12_HEAP_FLAGS flags{};
+    if (FAILED(resource->GetHeapProperties(&heap,&flags)) || heap.Type != D3D12_HEAP_TYPE_UPLOAD) return;
+    if (!TryAcquireSRWLockExclusive(&ownerLock)) { ++contentionRejects; return; }
+    if (!targetedOwner.resource && !captured.load(std::memory_order_relaxed) &&
+        attempts.load(std::memory_order_relaxed) < kMaximumAttempts &&
+        rt_spot_capture::ContainsGpuRange(address,desc.Width,targetAddress,targetBytes)) {
+        targetedOwner.resource = resource;
+        targetedOwner.address = address; targetedOwner.bytes = desc.Width;
+        ++targetedMatches;
+    }
+    ReleaseSRWLockExclusive(&ownerLock);
+}
+inline D3D12_GPU_VIRTUAL_ADDRESS STDMETHODCALLTYPE AddressHook(ID3D12Resource* resource) {
+    const auto address = originalGetAddress(resource);
+    ObserveAddress(resource,address);
+    return address;
+}
+inline void InstallAddressObserver(ID3D12Resource* resource) noexcept {
+    AcquireSRWLockExclusive(&addressInstallLock);
+    auto** table = *reinterpret_cast<void***>(resource);
+    if (!originalGetAddress) {
+        originalGetAddress = reinterpret_cast<GetAddress>(table[11]);
+        if (!PatchSlot(&table[11],reinterpret_cast<void*>(originalGetAddress),reinterpret_cast<void*>(&AddressHook))) originalGetAddress = nullptr;
+        Trace("rt_hit_setup_address_hook ready=%u",unsigned(originalGetAddress != nullptr));
+    }
+    ReleaseSRWLockExclusive(&addressInstallLock);
 }
 inline HRESULT STDMETHODCALLTYPE CommittedHook(ID3D12Device* device, const D3D12_HEAP_PROPERTIES* heap,
     D3D12_HEAP_FLAGS flags, const D3D12_RESOURCE_DESC* desc, D3D12_RESOURCE_STATES state,
@@ -116,21 +177,28 @@ inline void Hex(const unsigned char* bytes, UINT count, char* out) noexcept {
 }
 inline void InspectTable(ID3D12StateObject* state, const D3D12_DISPATCH_RAYS_DESC* desc) noexcept {
     if (!state || !desc || captured.load(std::memory_order_acquire)) return;
-    if (attempts.load(std::memory_order_relaxed) >= 64) return;
+    if (attempts.load(std::memory_order_relaxed) >= kMaximumAttempts) return;
+    const auto now = GetTickCount64();
+    auto next = nextAttemptMs.load(std::memory_order_relaxed);
+    if (now < next || !nextAttemptMs.compare_exchange_strong(next,now + kAttemptIntervalMs)) return;
     const unsigned attempt = attempts.fetch_add(1);
-    if (attempt >= 64) return;
+    if (attempt >= kMaximumAttempts) return;
     const auto& table = desc->HitGroupTable;
     if (!rt_spot_capture::NativeHitTableLayout(table.StartAddress,table.SizeInBytes,table.StrideInBytes)) {
         if (!attempt) Trace("rt_hit_setup_table unsupported_layout=1 bytes=%llu stride=%llu",table.SizeInBytes,table.StrideInBytes);
         return;
     }
     Owner found;
-    if (!TryAcquireSRWLockShared(&ownerLock)) return;
-    for (const auto& owner : owners) if (owner.resource && rt_spot_capture::ContainsGpuRange(owner.address,owner.bytes,table.StartAddress,table.SizeInBytes)) { found = owner; break; }
+    if (!TryAcquireSRWLockExclusive(&ownerLock)) { ++contentionRejects; return; }
+    targetAddress = table.StartAddress; targetBytes = table.SizeInBytes;
+    targetActive.store(true,std::memory_order_release);
+    if (targetedOwner.resource && rt_spot_capture::ContainsGpuRange(targetedOwner.address,targetedOwner.bytes,targetAddress,targetBytes)) found = targetedOwner;
+    for (const auto& owner : owners) if (!found.resource && owner.resource && rt_spot_capture::ContainsGpuRange(owner.address,owner.bytes,table.StartAddress,table.SizeInBytes)) { found = owner; break; }
     const auto retained = retainedBytes;
-    ReleaseSRWLockShared(&ownerLock);
+    ReleaseSRWLockExclusive(&ownerLock);
     if (!found.resource) {
-        if (!attempt || attempt == 63) Trace("rt_hit_setup_table upload_owner=0 attempt=%u retained_upload_bytes=%llu rejected_owners=%u",attempt,retained,rejectedOwners.load());
+        if (!attempt || attempt % 40 == 0 || attempt + 1 == kMaximumAttempts)
+            Trace("rt_hit_setup_table upload_owner=0 attempt=%u retained_upload_bytes=%llu rejected_owners=%u capacity_rejects=%u budget_rejects=%u contention_rejects=%u address_queries=%u target_matches=%u table_address=%llu table_bytes=%llu",attempt,retained,rejectedOwners.load(),capacityRejects.load(),budgetRejects.load(),contentionRejects.load(),addressQueries.load(),targetedMatches.load(),table.StartAddress,table.SizeInBytes);
         return;
     }
     const UINT64 offset = table.StartAddress - found.address;
@@ -148,7 +216,7 @@ inline void InspectTable(ID3D12StateObject* state, const D3D12_DISPATCH_RAYS_DES
     D3D12_RANGE written{0,0}; found.resource->Unmap(0,&written);
     if (std::memcmp(first,second,sizeof(first))) { Trace("rt_hit_setup_table unstable_sample=1 retry=1"); return; }
     if (captured.exchange(true,std::memory_order_acq_rel)) return;
-    Trace("rt_hit_setup_table upload_owner=1 owner_bytes=%llu table_offset=%llu table_bytes=%llu records=%llu sample_stable=1 gpu_hit_capture=0 retained_upload_bytes=%llu",found.bytes,offset,table.SizeInBytes,count,retained);
+    Trace("rt_hit_setup_table upload_owner=1 owner_bytes=%llu table_offset=%llu table_bytes=%llu records=%llu sample_stable=1 gpu_hit_capture=0 retained_upload_bytes=%llu target_matches=%u",found.bytes,offset,table.SizeInBytes,count,retained,targetedMatches.load());
     ComPtr<ID3D12StateObjectProperties> properties;
     if (SUCCEEDED(state->QueryInterface(IID_PPV_ARGS(&properties)))) {
         for (const auto* name : {L"HitGroup_0_0",L"HitGroup_1_0"}) {
@@ -161,10 +229,19 @@ inline void InspectTable(ID3D12StateObject* state, const D3D12_DISPATCH_RAYS_DES
 // Called only by the existing diagnostic UI worker. Releasing unrelated upload
 // buffers here avoids render-thread destruction and ends temporary retention.
 inline void ReleaseFinishedOwners() noexcept {
-    if (!captured.load(std::memory_order_acquire) && attempts.load(std::memory_order_relaxed) < 64) return;
+    const bool finished = captured.load(std::memory_order_acquire) || attempts.load(std::memory_order_relaxed) >= kMaximumAttempts;
     if (!TryAcquireSRWLockExclusive(&ownerLock)) return;
+    if (!finished) {
+        // A rebuilt table may move. Drop only obsolete targets on the worker,
+        // allowing the next address query to claim the new allocation.
+        if (targetedOwner.resource && !rt_spot_capture::ContainsGpuRange(targetedOwner.address,targetedOwner.bytes,targetAddress,targetBytes)) targetedOwner = {};
+        ReleaseSRWLockExclusive(&ownerLock);
+        return;
+    }
+    targetActive.store(false,std::memory_order_release);
     for (auto& owner : owners) owner = {};
     retainedBytes = 0;
+    targetedOwner = {}; targetAddress = targetBytes = 0;
     ReleaseSRWLockExclusive(&ownerLock);
 }
 inline void Install(ID3D12Device* device) noexcept {
