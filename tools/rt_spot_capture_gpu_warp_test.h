@@ -94,3 +94,28 @@ static void TestHitCaptureSubmissionPolicy(ID3D12Device* device) {
     capture::recordedList.Reset();capture::submittedQueue.Reset();capture::recordedGeneration=0;capture::phase.store(capture::Phase::Idle);
     std::cout<<"PASS capture submission policy: exact generation, actual queue, replay rejection, reset-before-submit rejection and retained uncertain references\n";
 }
+
+static void TestHitCaptureExportRetry() {
+    namespace capture=native_lighting::rt_spot_capture_runtime;
+    auto& queue=native_lighting::diagnosticLog;
+    std::vector<char> bytes(native_lighting::DiagnosticLogQueue::Capacity(),'x');
+    auto drain=[&](){return queue.Drain(bytes.data(),bytes.size());};
+    auto fill=[&](){drain();if(!queue.Push(bytes.data(),bytes.size()))throw std::runtime_error("capture log fill");};
+    memset(capture::completedBytes,0,sizeof(capture::completedBytes));
+    const UINT valid=1;memcpy(capture::completedBytes+76,&valid,4);
+    capture::phase.store(capture::Phase::Complete);capture::exportStage=0;capture::exportCursor=0;
+    fill();capture::Poll();
+    if(capture::exportStage!=0 || capture::exportCursor!=0)throw std::runtime_error("busy log discarded capture header");
+    drain();capture::Poll();
+    if(capture::exportStage!=2 || capture::exportCursor!=64)throw std::runtime_error("capture header retry did not resume");
+    auto length=drain();std::string text(bytes.data(),length);
+    if(text.find("rt_hit_gpu_recorded ")==std::string::npos || text.find("rt_hit_gpu_complete ")==std::string::npos || text.find("rt_hit_gpu_record index=0 ")==std::string::npos)throw std::runtime_error("capture headers missing after retry");
+    capture::exportCursor=0;fill();capture::Poll();
+    if(capture::exportCursor!=0)throw std::runtime_error("busy log discarded capture record");
+    drain();capture::Poll();if(capture::exportCursor!=64)throw std::runtime_error("capture record retry failed");
+    capture::exportCursor=4096;fill();capture::Poll();
+    if(capture::exportStage!=2)throw std::runtime_error("busy log discarded completion marker");
+    drain();capture::Poll();if(capture::exportStage!=3)throw std::runtime_error("capture completion retry failed");
+    drain();queue.TakeDropped();capture::exportCursor=capture::exportStage=0;capture::phase.store(capture::Phase::Idle);
+    std::cout<<"PASS capture log retry: full queue preserves header, record cursor and final completion marker without render-thread waits\n";
+}

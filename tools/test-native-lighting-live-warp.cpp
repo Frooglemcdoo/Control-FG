@@ -657,6 +657,7 @@ int main() try {
     ComPtr<ID3D12Device> device; Check(D3D12CreateDevice(adapter.Get(),D3D_FEATURE_LEVEL_11_0,IID_PPV_ARGS(&device)));
     TestGpuHitTableTranslation(device.Get());
     TestHitCaptureSubmissionPolicy(device.Get());
+    TestHitCaptureExportRetry();
     TestHitSetupAudit(device.Get());
     TestCopyAudit(device.Get());
     InstallLiveDiagnostic(device.Get());

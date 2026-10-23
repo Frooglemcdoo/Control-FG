@@ -96,7 +96,7 @@ inline void HookPass(void* a, void* b, void* c, void* d) {
     pass.requested = !previous && !disabled.load() && components.load() == kRequiredComponents &&
         IsRtSpotMode(pass.mode);
     active = &pass;
-    if(!previous)rt_spot_capture_runtime::BeginScope();
+    if(!previous && pass.mode==Mode::RoomBoth)rt_spot_capture_runtime::BeginScope();
     __try { originalPass(a,b,c,d); }
     __finally {
         if(!previous)rt_spot_capture_runtime::EndScope();

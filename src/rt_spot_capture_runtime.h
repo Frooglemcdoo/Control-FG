@@ -17,7 +17,8 @@ inline UINT64 recordedGeneration=0,recordedPresent=0;
 inline ComPtr<ID3D12GraphicsCommandList4> recordedList;
 inline ComPtr<ID3D12StateObject> recordedState,captureState;
 inline ComPtr<ID3D12CommandQueue> submittedQueue;
-inline unsigned attempts=0,exportCursor=0;
+inline unsigned attempts=0,exportCursor=0,exportStage=0;
+inline UINT completionStatus[4]{},completionRays=0,completionHits=0;
 inline UINT frameTag=0,capturedWidth=0,capturedHeight=0,capturedTableRecords=0;
 inline bool readbackCopied=false;
 inline unsigned char completedBytes[gpu::kReadbackBytes]{};
@@ -255,11 +256,11 @@ inline void Record(ID3D12GraphicsCommandList4* list,ID3D12StateObject* owner,con
     gpu::Transition(list,resources.table.Get(),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
     list->SetComputeRootDescriptorTable(0,current.gpu);hooks.set(list,owner);
     phase.store(Phase::Recorded,std::memory_order_release);
-    Trace("rt_hit_gpu_recorded generation=%llu frame_tag=%u extent=%ux%u rays=4096 table_records=%u native_outputs_untouched=1 bindings_restored=1",recordedGeneration,frameTag,capturedWidth,capturedHeight,tableControls.count);
+    Trace("rt_hit_gpu_recording generation=%llu frame_tag=%u extent=%ux%u rays=4096 table_records=%u native_outputs_untouched=1 bindings_restored=1",recordedGeneration,frameTag,capturedWidth,capturedHeight,tableControls.count);
 }
 inline void BeforeExecute(ID3D12CommandQueue* queue,UINT count,ID3D12CommandList*const* lists) noexcept {
     const auto current=phase.load(std::memory_order_acquire);
-    if(current<Phase::Recorded || current==Phase::Failed)return;
+    if(current<Phase::Recorded || current==Phase::Complete || current==Phase::Failed)return;
     for(UINT i=0;i<count;++i) {
         if(!lists[i])continue;
         UINT64 generation=0;UINT size=sizeof(generation);
@@ -310,21 +311,35 @@ inline void Poll() noexcept {
                         (result.hit.hitKind!=0 && result.hit.hitKind!=254 && result.hit.hitKind!=255)){++invalidRecords;continue;}
                     ++validRays;if(result.hit.hitKind)++hits;
                 }
-                Trace("rt_hit_gpu_complete generation=%llu frame_tag=%u unknown=%u translated=%u null=%u invalid_layout=%u valid_rays=%u hits=%u misses=%u invalid_records=%u gpu_completion_confirmed=1 gpu_hit_capture=%u",recordedGeneration,frameTag,status[0],status[1],status[2],status[3],validRays,hits,validRays-hits,invalidRecords,unsigned(tableValid && !invalidRecords));
+                Trace("rt_hit_gpu_readback generation=%llu frame_tag=%u unknown=%u translated=%u null=%u invalid_layout=%u valid_rays=%u hits=%u misses=%u invalid_records=%u gpu_completion_confirmed=1 gpu_hit_capture=%u",recordedGeneration,frameTag,status[0],status[1],status[2],status[3],validRays,hits,validRays-hits,invalidRecords,unsigned(tableValid && !invalidRecords));
+                memcpy(completionStatus,status,sizeof(status));completionRays=validRays;completionHits=hits;
                 if(!tableValid)Fail("gpu_table_validation");
                 else if(invalidRecords)Fail("readback_provenance");
             }
         }
         ReleaseSRWLockExclusive(&stateLock);
     }
-    if(phase.load()!=Phase::Complete || exportCursor>=gpu::kRayCount)return;
+    if(phase.load()!=Phase::Complete || exportStage==3)return;
+    // Retry canonical headers and records if the nonblocking log queue is busy.
+    // Cursor advancement means successful enqueue, never merely an attempted write.
+    if(exportStage==0) {
+        if(!Trace("rt_hit_gpu_recorded generation=%llu frame_tag=%u extent=%ux%u table_records=%u captured_present=%llu",recordedGeneration,frameTag,capturedWidth,capturedHeight,capturedTableRecords,recordedPresent))return;
+        exportStage=1;
+    }
+    if(exportStage==1) {
+        if(!Trace("rt_hit_gpu_complete generation=%llu frame_tag=%u unknown=%u translated=%u null=%u invalid_layout=%u valid_rays=%u hits=%u misses=%u invalid_records=0 gpu_completion_confirmed=1 gpu_hit_capture=1",recordedGeneration,frameTag,completionStatus[0],completionStatus[1],completionStatus[2],completionStatus[3],completionRays,completionHits,completionRays-completionHits))return;
+        exportStage=2;
+    }
     // Bounded batches share the existing asynchronous log worker, never the render thread.
     const unsigned end=(std::min)(exportCursor+64,gpu::kRayCount);
     for(;exportCursor<end;++exportCursor) {
         const auto* record=completedBytes+exportCursor*80;UINT valid=0;memcpy(&valid,record+76,4);
-        if(valid){char hex[161]{};rt_spot_capture_audit::Hex(record,80,hex);Trace("rt_hit_gpu_record index=%u bytes=%s",exportCursor,hex);}
+        if(valid) {
+            char hex[161]{};rt_spot_capture_audit::Hex(record,80,hex);
+            if(!Trace("rt_hit_gpu_record index=%u bytes=%s",exportCursor,hex))return;
+        }
     }
-    if(exportCursor==gpu::kRayCount)Trace("rt_hit_gpu_export_complete records_examined=4096 format=CaptureResult80 frame_tag=%u",frameTag);
+    if(exportCursor==gpu::kRayCount && Trace("rt_hit_gpu_export_complete records_examined=4096 format=CaptureResult80 frame_tag=%u",frameTag))exportStage=3;
 }
 inline void Install(ID3D12Device* device) noexcept {
     static bool attempted=false;if(attempted)return;attempted=true;

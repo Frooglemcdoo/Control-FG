@@ -69,13 +69,13 @@ inline const GUID& VariantGuid(Mode mode) noexcept {
 }
 inline const GUID kKindGuid = {0x822329d7,0x3614,0x4f73,{0xa6,0x14,0xd0,0x8c,0x94,0xf2,0x54,0x02}};
 
-inline void Trace(const char* format, ...) noexcept {
+inline bool Trace(const char* format, ...) noexcept {
     char detail[768]{};
     va_list args; va_start(args, format); vsnprintf_s(detail, sizeof(detail), _TRUNCATE, format, args); va_end(args);
     char line[960]{};
     const int length = snprintf(line, sizeof(line), "ms=%llu present=%llu %s\r\n",
         GetTickCount64(), presentCount.load(), detail);
-    if (length > 0) diagnosticLog.Push(line, size_t(length < int(sizeof(line)) ? length : sizeof(line)-1));
+    return length > 0 && diagnosticLog.Push(line, size_t(length < int(sizeof(line)) ? length : sizeof(line)-1));
 }
 // UI-thread snapshots: totals are independent atomic observations, not one GPU frame.
 inline void ReportRRPaths(const char* reason) noexcept {
