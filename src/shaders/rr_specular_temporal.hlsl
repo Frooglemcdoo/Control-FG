@@ -69,6 +69,8 @@ void main(uint3 id: SV_DispatchThreadID) {
     if(all(isfinite(hist))&&all(isfinite(hist_clamped))) result = lerp(c_clamped, hist_clamped, conf);
     }
   }
-  if (any(isnan(result))) result = 0.0;
+  // Inspect IEEE bits: FXC can optimize arithmetic isnan checks away.
+  uint3 resultBits = asuint(result) & 0x7fffffffu;
+  if (any(resultBits > 0x7f800000u)) result = 0.0;
   target[p] = result;
 }
