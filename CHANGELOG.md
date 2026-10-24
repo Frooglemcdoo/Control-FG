@@ -8,7 +8,10 @@
   false shadow removed with no observed regression.
 - R140: added live motion comparisons that retain both confirmed corrections.
   No History appears to resolve the reported railing flicker.
-- R141: candidate history-agreement rejection, still awaiting in-game validation.
+- R141: history agreement helped but did not fully remove flicker in user testing.
+- R142: promote the tested No History spotlight path to Default (Fixed); the user
+  reports the flicker resolved without a visible smoothness/noise penalty. Spatial
+  softness, point history, authored clipping and normal correction remain active.
 - Added a [release evidence ledger](docs/LIGHTING_RELEASE_LEDGER.md). These entries
   are experimental progress, not changes already shipped in the public release.
 

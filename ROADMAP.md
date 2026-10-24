@@ -3,9 +3,10 @@
 ## Current experimental priority — lighting stability
 
 Preserve the user-confirmed R134 authored-light fix and R139 direct-light normal
-correction. Next, resolve motion-only spotlight flicker: R140 No History improves
-the reported railing case; R141 tests history agreement without disabling all
-accumulation. Specular-sampling cost and release integration remain open.
+correction. R142 promotes No History for spotlight shadows after the user reported
+the railing flicker fixed with no visible smoothness/noise penalty. R141 History
+Guard only partially helped. Broader room/transition checks, specular-sampling
+cost and release integration remain open.
 See [the lighting release ledger](docs/LIGHTING_RELEASE_LEDGER.md) and
 [issue #14](https://github.com/Frooglemcdoo/Control-FG/issues/14).
 

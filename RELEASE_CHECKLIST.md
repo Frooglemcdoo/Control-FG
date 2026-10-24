@@ -3,8 +3,8 @@
 ## Experimental lighting release preparation
 
 Use [the lighting release gate](docs/LIGHTING_RELEASE_LEDGER.md#public-release-gate)
-for the current branch. R141 is a test candidate; do not publish it as a confirmed
-motion-flicker fix. The v2.1.2 checklist below is historical and does not authorize
+for the current branch. R142 promotes the user-accepted current-frame spotlight
+policy; validate the final package across rooms and transitions before release. The v2.1.2 checklist below is historical and does not authorize
 publishing the experimental branch under that version.
 
 

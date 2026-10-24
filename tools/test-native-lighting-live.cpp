@@ -18,7 +18,10 @@ int main(){
     assert(kModeChoices[2].mode==kDefaultMode);
     assert(kModeChoices[8].mode==Mode::RoomCorrectedNoAO);
     assert(kModeChoices[3].mode==Mode::RoomCorrectedGuarded);
-    assert(kModeChoices[4].mode==Mode::RoomCorrectedNoHistory);
+    assert(kModeChoices[4].mode==Mode::RoomBentNormalOff);
+    assert(kDefaultMode==Mode::RoomCorrectedNoHistory);
+    assert(BypassesSpotHistory(kDefaultMode)&&!UsesRawSpotVisibility(kDefaultMode));
+    assert(!BypassesSpotHistory(Mode::RoomBentNormalOff));
     assert(kModeChoices[5].mode==Mode::RoomCorrectedNoRR);
     assert(UsesDirectSurfaceNormals(kDefaultMode)&&UsesAuthoredClip(kDefaultMode));
     LiveSelection live;

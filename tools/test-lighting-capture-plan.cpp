@@ -38,6 +38,10 @@ int main(){
  assert(Applied(Mode::RoomScreenOcclusionOff,kAllBits,true));
  assert(modes.count(Mode::RoomCorrectedNoRR));
  assert(UsesDirectSurfaceNormals(kDefaultMode)&&UsesDirectSurfaceNormals(Mode::RoomCorrectedNoRR));
+ assert(BypassesSpotHistory(kDefaultMode)&&BypassesSpotHistory(Mode::RoomCorrectedNoRR));
+ assert(!UsesRawSpotVisibility(kDefaultMode)&&!UsesRawSpotVisibility(Mode::RoomCorrectedNoRR));
+ assert(UsesDirectSurfaceNormals(Mode::RoomBentNormalOff)&&!BypassesSpotHistory(Mode::RoomBentNormalOff));
+ std::set<Mode> buttons;for(auto choice:kModeChoices)assert(buttons.insert(choice.mode).second);
  assert(!UsesDirectSurfaceNormals(Mode::RoomAuthoredClip));
  assert(UsesAuthoredClip(Mode::RoomCorrectedNoRR)&&PreservesGiFiltering(Mode::RoomCorrectedNoRR));
  assert(BypassesRR(Mode::RoomCorrectedNoRR)&&!IsSignalDiagnostic(Mode::RoomCorrectedNoRR));
@@ -57,7 +61,7 @@ int main(){
   assert(modes.count(m)&&UsesDirectSurfaceNormals(m)&&UsesAuthoredClip(m));
   assert(PreservesGiFiltering(m)&&IsRtSpotMode(m)&&NeedsIsolationProducer(m));
   assert(!BypassesRR(m)&&!IsSignalDiagnostic(m));
-  assert(BypassesSpotHistory(m)==(m!=Mode::RoomCorrectedNoAO));
+  assert(BypassesSpotHistory(m));
   assert(UsesRawSpotVisibility(m)==(m==Mode::RoomCorrectedRaw));
   assert(!Applied(m,kDirectBit,true)&&!Applied(m,kGiBit,true)&&Applied(m,kAllBits,true));
  }

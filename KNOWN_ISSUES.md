@@ -2,9 +2,9 @@
 
 ## Experimental lighting branch — current status
 
-Motion-only spotlight shadow flicker remains open. R140 No History appears to
-resolve the stair/railing case, but disabling accumulation may increase noise.
-R141 History Guard is a candidate, not yet a confirmed fix. R134's authored-light
+The user reports No History fixes the stair/railing flicker with no visible
+smoothness/noise penalty; R142 makes that spotlight policy the default. R141
+History Guard only partially helped. Broader release validation is still pending. R134's authored-light
 correction and R139's broad false-shadow correction have user confirmation.
 See [the release ledger](docs/LIGHTING_RELEASE_LEDGER.md) for evidence and limits.
 The v2.1.2 notes below describe the older release and are retained as history.

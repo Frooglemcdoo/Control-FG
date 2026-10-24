@@ -727,7 +727,7 @@ int main() try {
         if(missingGuard){missingGuard->Release();throw std::runtime_error("Missing guard silently fell back");}
         pass.mode=kDefaultMode;
         auto* baselineHistory=rt::SelectCompute(owner.Get());
-        if(baselineHistory!=filtered.Get())throw std::runtime_error("Optional guard failure broke baseline");
+        if(baselineHistory!=raw.Get())throw std::runtime_error("Optional guard failure broke current-frame baseline");
         baselineHistory->Release();
         pass.fullRay=false;pass.reset=false;
         if(rt::SelectCompute(owner.Get())) throw std::runtime_error("Diagnostic leaked outside full ray pass");

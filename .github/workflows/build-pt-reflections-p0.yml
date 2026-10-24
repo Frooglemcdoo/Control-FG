@@ -479,11 +479,11 @@ jobs:
           build\test-lighting-capture-plan.exe
           if errorlevel 1 exit /b 1
 
-      - name: Package live lighting diagnostic R141
+      - name: Package live lighting diagnostic R142
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-Native-Lighting-Live-R141'
+          $out='Control-FG-Native-Lighting-Live-R142'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
           Copy-Item build/rt_spot_selected_off.dxbc,build/rt_spot_selection.dxbc,build/rt_spot_visibility.dxbc,build/rt_spot_light_ids.dxbc,build/rt_spot_raw_history.dxbc,build/rt_spot_raw_spatial0.dxbc,build/rt_spot_raw_spatial1.dxbc,build/rt_spot_full.dxil,build/rt_spot_r94.dxil,build/rt_spot_light.dxbc,build/rt_spot_reset.dxbc,build/rt_spot_history.dxbc,build/rt_spot_spatial0.dxbc,build/rt_spot_spatial1.dxbc $out
@@ -501,14 +501,15 @@ jobs:
           Copy-Item Collect-RR-Blinds-Capture.ps1 "$out/Collect-RR-Blinds-Capture.ps1"
           Copy-Item Collect-ControlFG-Compact-Logs.cmd "$out/Collect-ControlFG-Compact-Logs.cmd"
           Copy-Item Collect-ControlFG-Compact-Logs.ps1 "$out/Collect-ControlFG-Compact-Logs.ps1"
-          Copy-Item docs/spot-history-agreement-r141.md "$out/DIAGNOSTIC-NOTES.md"
+          Copy-Item docs/current-frame-spot-default-r142.md "$out/DIAGNOSTIC-NOTES.md"
           @'
-          CONTROL-FG R141 - Spotlight history agreement (experimental)
+          CONTROL-FG R142 - Current-frame spotlight default
           Close Control to install. Copy contents beside Control_DX12.exe.
           Preserve existing NVIDIA runtimes and the ControlFGStreamline folder.
           Keep RT Contact Shadows on, samples 1, FG/glass enhancements off.
-          F10: NATIVE / BOTH / DEFAULT (FIXED). Default includes authored clip and the normal correction.
-          Walk the same railing path in DEFAULT, HISTORY GUARD and NO HISTORY.
+          F10: NATIVE / BOTH / DEFAULT (FIXED). Default includes authored clip, normal correction and current-frame spotlight shadows.
+          DEFAULT (FIXED) now uses the accepted NO HISTORY behavior automatically.
+          HISTORY ON restores the R139 temporal comparison; HISTORY GUARD is the partial fix.
           These comparisons all retain the working surface-normal correction.
           RAW SHADOWS additionally bypasses spotlight spatial filtering; it may be noisy.
           Close the panel before moving. Mark ISSUE REMAINS/GONE and SAVE LOG.
@@ -516,7 +517,7 @@ jobs:
           Leave RR enabled in the game settings; the tests bypass it temporarily.
           F9: 25 comparisons, up to 75 PNGs and GPU hit/light-context capture.
           Keep camera still during the suite. F9 again cancels. Your mode is restored.
-          Send the Shadow-R141 folder shown in the completion dialog (zip it first).
+          Send the Shadow-R142 folder shown in the completion dialog (zip it first).
           The manifest lists unavailable modes, timeouts and capture errors.
           PNGs are display-referred, not raw HDR. See DIAGNOSTIC-NOTES.md.
           '@ | Set-Content "$out/README.txt" -Encoding ASCII
@@ -526,10 +527,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-Native-Lighting-Live-R141
+          name: Control-FG-Native-Lighting-Live-R142
           path: |
-            Control-FG-Native-Lighting-Live-R141.zip
-            Control-FG-Native-Lighting-Live-R141.sha256
+            Control-FG-Native-Lighting-Live-R142.zip
+            Control-FG-Native-Lighting-Live-R142.sha256
             build/rt_spot_shadow_prototype.dxil
             build/rr_clamp_fixed.h
             build/rt_spot_blocker.dxil

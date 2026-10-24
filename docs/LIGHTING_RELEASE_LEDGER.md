@@ -18,9 +18,14 @@ real-hardware compatibility coverage.
 
 ## Active issues and acceptance criteria
 
+R142 decision: the user reports **No History fixes the flicker**, with no visible
+noise or smoothness penalty. History Guard only partially helps. Promote the exact
+current-frame spotlight path, retaining spatial softness and point history.
+The symptom is reported resolved; broader release validation remains open.
+
 | Issue | Current evidence | Next work / closure criterion |
 | --- | --- | --- |
-| Motion-only shadow flicker at stairs/railings | User reports R140 No History appears to fix it. Old temporal shader uses a 3x3 visibility clamp and has no previous-light identity input. | [#14](https://github.com/Frooglemcdoo/Control-FG/issues/14): R141 History Guard rejects substantial current/history disagreement. Candidate only. Require repeatable motion improvement, preserved softness, acceptable stationary noise, other-room/transition tests and frame-time comparison. |
+| Motion-only shadow flicker at stairs/railings | User reports No History fixes it with no visible smoothness/noise penalty; R141 Guard only partially helps. | [#14](https://github.com/Frooglemcdoo/Control-FG/issues/14): R142 promotes the tested current-frame spotlight path. Other-room/transition tests and frame-time comparisons remain release checks. |
 | Expensive specular sampling needed for some RR materials | User reported SPEC 16 clears the tested artifacts; 8 is the minimum useful level but still expensive. Prior temporal substitutes did not match 16. | Optimize without restoring noise/boiling. Keep specular filter and 90% clamp experiments classified as rejected; 60% clamp remains the intended baseline. No universal low-cost fix is claimed. |
 | Release integration and compatibility | Current F10/F9 panel is a diagnostic build; public settings use the game's menu architecture. | Choose validated defaults, integrate necessary controls using shared settings/font methods, remove unneeded diagnostic code from public packaging, and recheck overlay coexistence. |
 | Cross-hardware/storefront validation | Current lighting evidence is principally RTX 5090. Existing storefront support and older FG fixes are separate milestones. | Test the final release package on supported storefronts, FG modes, HDR/SDR and DLSS resolutions. [#9](https://github.com/Frooglemcdoo/Control-FG/issues/9) RTX 4080 MFG remains separately tracked; do not close it based on 5090 lighting results. |
@@ -44,7 +49,8 @@ represent the shipping UI. Preserve the accepted skin guide and glass fixes.
 | R138 | `ac56317532c55cdd63a7aac9792e3cb317176e9d` | [40104648742](https://github.com/Frooglemcdoo/Control-FG/actions/runs/40104648742) passed | `Shadow-R138-20261024-101346-49136-0.zip` isolated direct bent normals. |
 | R139 | `83a126403066cb26d4e5509400298e672d2dadec` | [40106649871](https://github.com/Frooglemcdoo/Control-FG/actions/runs/40106649871) passed | Broad false shadow fixed; user observed no regressions. |
 | R140 | `daa61d649409ba74bbde387a0ab2b31a43bd3ee0` | [40108087558](https://github.com/Frooglemcdoo/Control-FG/actions/runs/40108087558) passed | No History appears to resolve motion flicker; permanent correction remains open. |
-| R141 | Use the commit containing `spot-history-agreement-r141.md` and its associated CI run | Candidate implementation; consult commit checks | Awaiting target-machine results. |
+| R141 | `8431746fee70b0ab0b8a0f990f0f8fc29ccaa7cd` | [40113754267](https://github.com/Frooglemcdoo/Control-FG/actions/runs/40113754267) passed | Guard partially helps; No History reported fully effective without visible noise/softness cost. |
+| R142 | Use the commit containing `current-frame-spot-default-r142.md` and its associated CI run | Default-policy promotion; consult commit checks | Reuses the accepted No History shader path unchanged. Broad release validation pending. |
 
 Evidence filenames: `20261024-1532-26.4811424.mp4` (original railing flicker),
 `20261024-1645-24.5201649.mp4` (user's No History test). Videos are private test

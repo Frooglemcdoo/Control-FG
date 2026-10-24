@@ -5,11 +5,11 @@
 
 namespace native_lighting {
 enum class Mode : unsigned { Native, DisableBakedGi, DisableDirect, DisableDirectDiffuse, DisableDirectSpecular, BypassShadows, DisableLightPattern, BypassScreenShadows, BypassSpotShadows, BypassPointShadows, SpotVarianceLow, SpotVarianceHigh, SpotPcfCenter, SpotPcf32, SpotStableSoft, SpotStableTight, SpotBilinear, SpotResolution2x, RtSpot, RtSpotRaw, RtSpotMapGuard, RtSpotNativeCull, RtSpotVisibilityRaw, RtSpotVisibilityFiltered, RtSpotLightIds, RtSpotBaseline, RtSpotDiffuseFiltered, RtSpotGiFiltered, RtSpotWorldAlbedo, RtSpotSpecularFiltered, RtSpotViewAngle, RtSpotGi2, RtSpotGi4, RtSpotGi8, RtSpotGiMenu, RtSpotGi12, RtSpotGi16, RtSpotSpec1, RtSpotSpec2, RtSpotSpec4, RtSpotSpec8, RtSpotSpec12, RtSpotSpec16, RtSpotTemporal2, RtSpotTemporal4, RoomNative, RoomGi, RoomSpot, RoomBoth, RoomNativeSelection, RoomOpen, RoomSelectedOff, RoomRaw, RoomBlocker, RoomHitX, RoomHitY, RoomHitZ, RoomAuthoredClip, RoomAuthoredSpatial, RoomAuthoredRaw, RoomNativeNoRR, RoomClipNoRR, RoomContactOff, RoomScreenOcclusionOff, RoomBentNormalOff, RoomLocalMapsOff, RoomCorrectedNoRR, RoomCorrectedNoHistory, RoomCorrectedNoAO, RoomCorrectedRaw, RoomCorrectedGuarded };
-// R138 captures isolate the broad false shadow to direct-light bent normals.
-// Reuse the tested surface-normal variants; retain the old clip mode for A/B.
-inline constexpr Mode kDefaultMode = Mode::RoomBentNormalOff;
+// User-confirmed motion fix: current-frame spotlight visibility with spatial softness.
+// Keep the R139 normal correction and authored clipping; point history stays native.
+inline constexpr Mode kDefaultMode = Mode::RoomCorrectedNoHistory;
 inline constexpr bool UsesDirectSurfaceNormals(Mode mode) noexcept {
-    return mode==kDefaultMode || mode==Mode::RoomCorrectedNoRR ||
+    return mode==Mode::RoomBentNormalOff || mode==Mode::RoomCorrectedNoRR ||
         mode==Mode::RoomCorrectedNoHistory || mode==Mode::RoomCorrectedNoAO || mode==Mode::RoomCorrectedRaw || mode==Mode::RoomCorrectedGuarded;
 }
 inline bool IsGiSampleMode(Mode mode) noexcept {
@@ -25,7 +25,8 @@ inline constexpr bool UsesAuthoredClip(Mode mode) noexcept {
 }
 inline bool BypassesSpotHistory(Mode mode) noexcept {
     return mode==Mode::RoomAuthoredSpatial || mode==Mode::RoomAuthoredRaw ||
-        mode==Mode::RoomCorrectedNoHistory || mode==Mode::RoomCorrectedRaw;
+        mode==Mode::RoomCorrectedNoHistory || mode==Mode::RoomCorrectedRaw ||
+        mode==Mode::RoomCorrectedNoRR || mode==Mode::RoomCorrectedNoAO;
 }
 inline bool IsSpotIsolationMode(Mode mode) noexcept {
     return UsesAuthoredClip(mode)||IsHitPositionMode(mode)||mode==Mode::RoomRaw||mode==Mode::RoomBlocker||mode==Mode::RoomNativeSelection||mode==Mode::RoomOpen||mode==Mode::RoomSelectedOff;
@@ -129,7 +130,7 @@ inline constexpr unsigned kRtSpotReadyBit = 1u << 17;
 struct ModeChoice { Mode mode; const wchar_t* label; };
 inline constexpr ModeChoice kModeChoices[] = {
     {Mode::Native, L"NATIVE"}, {Mode::RoomBoth, L"BOTH"}, {kDefaultMode, L"DEFAULT (FIXED)"},
-    {Mode::RoomCorrectedGuarded, L"HISTORY GUARD"}, {Mode::RoomCorrectedNoHistory, L"NO HISTORY"}, {Mode::RoomCorrectedNoRR, L"RR OFF"},
+    {Mode::RoomCorrectedGuarded, L"HISTORY GUARD"}, {Mode::RoomBentNormalOff, L"HISTORY ON"}, {Mode::RoomCorrectedNoRR, L"RR OFF"},
     {Mode::RoomCorrectedRaw, L"RAW SHADOWS"}, {Mode::RtSpotLightIds, L"LIGHT IDS"}, {Mode::RoomCorrectedNoAO, L"SCREEN AO OFF"}
 };
 inline constexpr unsigned kModeCount = sizeof(kModeChoices) / sizeof(kModeChoices[0]);
@@ -194,12 +195,12 @@ inline const char* ModeName(Mode mode) noexcept {
     case Mode::RoomAuthoredSpatial:return "room_authored_spatial";
     case Mode::RoomAuthoredRaw:return "room_authored_raw";
     case Mode::RoomNativeNoRR:return "native_rr_off";
-    case Mode::RoomBentNormalOff:return "default_surface_normals";
+    case Mode::RoomBentNormalOff:return "surface_normals_history_on";
     case Mode::RoomCorrectedGuarded:return "default_guarded_history";
     case Mode::RoomCorrectedNoHistory:return "default_no_spot_history";
-    case Mode::RoomCorrectedNoAO:return "default_screen_ao_off";
+    case Mode::RoomCorrectedNoAO:return "default_no_history_screen_ao_off";
     case Mode::RoomCorrectedRaw:return "default_raw_spot_visibility";
-    case Mode::RoomCorrectedNoRR:return "default_surface_normals_rr_off";
+    case Mode::RoomCorrectedNoRR:return "default_no_history_rr_off";
     case Mode::RoomLocalMapsOff:return "clip_local_maps_off";
     case Mode::RoomContactOff:return "clip_contact_off";
     case Mode::RoomScreenOcclusionOff:return "clip_screen_occlusion_off";

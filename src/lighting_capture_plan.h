@@ -10,7 +10,7 @@ inline constexpr Step steps[]={
     {Mode::RoomCorrectedNoRR,L"default-fixed-rr-off",false},
     {Mode::RoomCorrectedGuarded,L"default-history-guard",false},
     {Mode::RoomCorrectedNoAO,L"default-screen-ao-off",false},
-    {Mode::RoomCorrectedNoHistory,L"default-no-history",false},
+    {Mode::RoomBentNormalOff,L"previous-history-on",false},
     {Mode::RoomCorrectedRaw,L"default-raw-shadows",false},
     {Mode::RoomAuthoredClip,L"previous-clip-user-rr",false},
     {Mode::RoomClipNoRR,L"previous-clip-rr-off",false},
