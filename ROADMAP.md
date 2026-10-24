@@ -1,5 +1,15 @@
 # Control FG roadmap
 
+## Current experimental priority — lighting stability
+
+Preserve the user-confirmed R134 authored-light fix and R139 direct-light normal
+correction. Next, resolve motion-only spotlight flicker: R140 No History improves
+the reported railing case; R141 tests history agreement without disabling all
+accumulation. Specular-sampling cost and release integration remain open.
+See [the lighting release ledger](docs/LIGHTING_RELEASE_LEDGER.md) and
+[issue #14](https://github.com/Frooglemcdoo/Control-FG/issues/14).
+
+
 ## v1.0.0 — Frame Generation
 
 The original public release established the Control-specific DLSS Frame Generation path:

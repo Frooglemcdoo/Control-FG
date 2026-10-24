@@ -8,6 +8,7 @@ inline constexpr Step steps[]={
     {Mode::RoomBoth,L"both",true},
     {kDefaultMode,L"default-fixed-user-rr",false},
     {Mode::RoomCorrectedNoRR,L"default-fixed-rr-off",false},
+    {Mode::RoomCorrectedGuarded,L"default-history-guard",false},
     {Mode::RoomCorrectedNoAO,L"default-screen-ao-off",false},
     {Mode::RoomCorrectedNoHistory,L"default-no-history",false},
     {Mode::RoomCorrectedRaw,L"default-raw-shadows",false},

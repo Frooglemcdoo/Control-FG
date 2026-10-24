@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased — experimental lighting branch
+
+- R134: corrected authored spotlight ray clipping; tester confirmed missing
+  lighting restored across affected rooms.
+- R139: corrected direct-light bent-normal shading; tester confirmed the broad
+  false shadow removed with no observed regression.
+- R140: added live motion comparisons that retain both confirmed corrections.
+  No History appears to resolve the reported railing flicker.
+- R141: candidate history-agreement rejection, still awaiting in-game validation.
+- Added a [release evidence ledger](docs/LIGHTING_RELEASE_LEDGER.md). These entries
+  are experimental progress, not changes already shipped in the public release.
+
+
 ## v2.1.2 — RR VRAM, texture streaming, and RTX 40-series compatibility
 
 - Fixed RR VRAM retention across live enable/disable, Model F ↔ E changes, and resolution/DLSS-mode changes by retiring stale native RR feature epochs.

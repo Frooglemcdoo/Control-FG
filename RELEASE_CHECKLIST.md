@@ -1,5 +1,13 @@
 # Release checklist — Control FG v2.1.2
 
+## Experimental lighting release preparation
+
+Use [the lighting release gate](docs/LIGHTING_RELEASE_LEDGER.md#public-release-gate)
+for the current branch. R141 is a test candidate; do not publish it as a confirmed
+motion-flicker fix. The v2.1.2 checklist below is historical and does not authorize
+publishing the experimental branch under that version.
+
+
 - Build the exact release commit using `Build.cmd` on Windows; source verification, C++ checks, ABI/exports, proxy smoke test and package verification must pass.
 - Confirm the source ZIP and deployment ZIP come from that same commit; retain SHA256SUMS.txt and build-validation.json.
 - Confirm README, installation instructions and release notes identify Steam, Epic and GOG support and the Galaxy overlay workaround.

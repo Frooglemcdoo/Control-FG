@@ -682,6 +682,7 @@ int main() try {
         raw.Attach(makePso(103)); reset.Attach(makePso(104));
         Check(owner->SetPrivateDataInterface(rt::kVariant,reset.Get()));
         Check(owner->SetPrivateDataInterface(rt::kHistoryVariant,filtered.Get()));
+        Check(owner->SetPrivateDataInterface(rt::kGuardedHistoryVariant,raw.Get()));
         Check(owner->SetPrivateDataInterface(rt::kRawVariant,raw.Get()));
         Check(owner->SetPrivateDataInterface(rt::kVisibilityVariant,filtered.Get()));
         Check(owner->SetPrivateDataInterface(rt::kLightIdsVariant,raw.Get()));
@@ -694,7 +695,7 @@ int main() try {
         Check(owner->SetPrivateDataInterface(rt::kScreenOcclusionVariant,filtered.Get()));
         Check(owner->SetPrivateDataInterface(rt::kBandColorsVariant,filtered.Get()));
         rt::Pass pass; pass.raySeen=pass.fullRay=true; rt::active=&pass;
-        for (auto mode : {Mode::RtSpot,Mode::RtSpotRaw,Mode::RtSpotMapGuard,Mode::RtSpotNativeCull,Mode::RtSpotVisibilityRaw,Mode::RtSpotVisibilityFiltered,Mode::RtSpotLightIds,Mode::RtSpotBaseline,Mode::RtSpotDiffuseFiltered,Mode::RtSpotGiFiltered,Mode::RtSpotWorldAlbedo,Mode::RtSpotSpecularFiltered,Mode::RtSpotViewAngle,Mode::RtSpotGi2,Mode::RtSpotGi4,Mode::RtSpotGi8,Mode::RtSpotGiMenu,Mode::RtSpotGi12,Mode::RtSpotGi16,Mode::RtSpotSpec1,Mode::RtSpotSpec2,Mode::RtSpotSpec4,Mode::RtSpotSpec8,Mode::RtSpotSpec12,Mode::RtSpotSpec16,Mode::RtSpotTemporal2,Mode::RtSpotTemporal4,Mode::RoomSpot,Mode::RoomBoth,Mode::RoomCorrectedNoAO,Mode::RoomCorrectedNoHistory,Mode::RoomCorrectedRaw,Mode::RoomCorrectedNoRR,Mode::RoomBentNormalOff,Mode::RoomLocalMapsOff,Mode::RoomContactOff,Mode::RoomScreenOcclusionOff,Mode::RoomClipNoRR,Mode::RoomAuthoredClip,Mode::RoomAuthoredSpatial,Mode::RoomAuthoredRaw,Mode::RoomNativeSelection,Mode::RoomOpen,Mode::RoomSelectedOff,Mode::RoomRaw,Mode::RoomBlocker,Mode::RoomHitX,Mode::RoomHitY,Mode::RoomHitZ}) {
+        for (auto mode : {Mode::RtSpot,Mode::RtSpotRaw,Mode::RtSpotMapGuard,Mode::RtSpotNativeCull,Mode::RtSpotVisibilityRaw,Mode::RtSpotVisibilityFiltered,Mode::RtSpotLightIds,Mode::RtSpotBaseline,Mode::RtSpotDiffuseFiltered,Mode::RtSpotGiFiltered,Mode::RtSpotWorldAlbedo,Mode::RtSpotSpecularFiltered,Mode::RtSpotViewAngle,Mode::RtSpotGi2,Mode::RtSpotGi4,Mode::RtSpotGi8,Mode::RtSpotGiMenu,Mode::RtSpotGi12,Mode::RtSpotGi16,Mode::RtSpotSpec1,Mode::RtSpotSpec2,Mode::RtSpotSpec4,Mode::RtSpotSpec8,Mode::RtSpotSpec12,Mode::RtSpotSpec16,Mode::RtSpotTemporal2,Mode::RtSpotTemporal4,Mode::RoomSpot,Mode::RoomBoth,Mode::RoomCorrectedGuarded,Mode::RoomCorrectedNoAO,Mode::RoomCorrectedNoHistory,Mode::RoomCorrectedRaw,Mode::RoomCorrectedNoRR,Mode::RoomBentNormalOff,Mode::RoomLocalMapsOff,Mode::RoomContactOff,Mode::RoomScreenOcclusionOff,Mode::RoomClipNoRR,Mode::RoomAuthoredClip,Mode::RoomAuthoredSpatial,Mode::RoomAuthoredRaw,Mode::RoomNativeSelection,Mode::RoomOpen,Mode::RoomSelectedOff,Mode::RoomRaw,Mode::RoomBlocker,Mode::RoomHitX,Mode::RoomHitY,Mode::RoomHitZ}) {
             if (!IsRtSpotMode(mode) || Disables(mode,kDirectBit) || RequiredVariant(mode)!=kRtSpotReadyBit)
                 throw std::runtime_error("Diagnostic mode policy mismatch");
             pass.mode=mode;
@@ -703,6 +704,7 @@ int main() try {
                 auto* expected=kind==rt::kResetComponent ? filtered.Get() : reset.Get();
                 if (UsesRawSpotVisibility(mode) && kind!=rt::kLightComponent) expected=raw.Get();
                 if (BypassesSpotHistory(mode) && kind==rt::kResetComponent) expected=raw.Get();
+                if (UsesGuardedSpotHistory(mode) && kind==rt::kResetComponent) expected=raw.Get();
                 if ((mode==Mode::RtSpotMapGuard || mode==Mode::RoomSelectedOff) && kind==rt::kLightComponent) expected=filtered.Get();
                 if (kind==rt::kLightComponent && ShowsSpotVisibility(mode)) expected=filtered.Get();
                 if (kind==rt::kLightComponent && mode==Mode::RtSpotLightIds) expected=raw.Get();
@@ -713,6 +715,20 @@ int main() try {
                 actual->Release();
             }
         }
+        // Guard must not leak into the transition reset or silently route to old history.
+        pass.mode=Mode::RoomCorrectedGuarded;pass.reset=true;
+        const unsigned temporalKind=rt::kResetComponent;
+        Check(owner->SetPrivateData(rt::kKind,sizeof(temporalKind),&temporalKind));
+        auto* transition=rt::SelectCompute(owner.Get());
+        if(transition!=reset.Get())throw std::runtime_error("Guard bypassed transition reset");
+        transition->Release();pass.reset=false;
+        Check(owner->SetPrivateDataInterface(rt::kGuardedHistoryVariant,nullptr));
+        auto* missingGuard=rt::SelectCompute(owner.Get());
+        if(missingGuard){missingGuard->Release();throw std::runtime_error("Missing guard silently fell back");}
+        pass.mode=kDefaultMode;
+        auto* baselineHistory=rt::SelectCompute(owner.Get());
+        if(baselineHistory!=filtered.Get())throw std::runtime_error("Optional guard failure broke baseline");
+        baselineHistory->Release();
         pass.fullRay=false;pass.reset=false;
         if(rt::SelectCompute(owner.Get())) throw std::runtime_error("Diagnostic leaked outside full ray pass");
         rt::active=nullptr;
@@ -728,7 +744,7 @@ int main() try {
         const unsigned producer=rt::kSelectorComponent;
         Check(owner->SetPrivateData(rt::kKind,sizeof(producer),&producer));
         rt::scopeReady=true;rt::components.store(rt::kRequiredComponents);rt::disabled.store(false);
-        for (auto mode : {Mode::Native,Mode::RtSpotBaseline,Mode::RtSpot,Mode::RtSpotVisibilityRaw,Mode::RtSpotLightIds,Mode::RtSpotDiffuseFiltered,Mode::RtSpotGiFiltered,Mode::RtSpotWorldAlbedo,Mode::RtSpotSpecularFiltered,Mode::RtSpotViewAngle,Mode::RtSpotGi2,Mode::RtSpotGi4,Mode::RtSpotGi8,Mode::RtSpotGiMenu,Mode::RtSpotGi12,Mode::RtSpotGi16,Mode::RtSpotSpec1,Mode::RtSpotSpec2,Mode::RtSpotSpec4,Mode::RtSpotSpec8,Mode::RtSpotSpec12,Mode::RtSpotSpec16,Mode::RtSpotTemporal2,Mode::RtSpotTemporal4,Mode::RoomSpot,Mode::RoomBoth,Mode::RoomCorrectedNoAO,Mode::RoomCorrectedNoHistory,Mode::RoomCorrectedRaw,Mode::RoomCorrectedNoRR,Mode::RoomBentNormalOff,Mode::RoomLocalMapsOff,Mode::RoomContactOff,Mode::RoomScreenOcclusionOff,Mode::RoomClipNoRR,Mode::RoomAuthoredClip,Mode::RoomAuthoredSpatial,Mode::RoomAuthoredRaw,Mode::RoomNativeSelection,Mode::RoomOpen,Mode::RoomSelectedOff,Mode::RoomRaw,Mode::RoomBlocker,Mode::RoomHitX,Mode::RoomHitY,Mode::RoomHitZ}) {
+        for (auto mode : {Mode::Native,Mode::RtSpotBaseline,Mode::RtSpot,Mode::RtSpotVisibilityRaw,Mode::RtSpotLightIds,Mode::RtSpotDiffuseFiltered,Mode::RtSpotGiFiltered,Mode::RtSpotWorldAlbedo,Mode::RtSpotSpecularFiltered,Mode::RtSpotViewAngle,Mode::RtSpotGi2,Mode::RtSpotGi4,Mode::RtSpotGi8,Mode::RtSpotGiMenu,Mode::RtSpotGi12,Mode::RtSpotGi16,Mode::RtSpotSpec1,Mode::RtSpotSpec2,Mode::RtSpotSpec4,Mode::RtSpotSpec8,Mode::RtSpotSpec12,Mode::RtSpotSpec16,Mode::RtSpotTemporal2,Mode::RtSpotTemporal4,Mode::RoomSpot,Mode::RoomBoth,Mode::RoomCorrectedGuarded,Mode::RoomCorrectedNoAO,Mode::RoomCorrectedNoHistory,Mode::RoomCorrectedRaw,Mode::RoomCorrectedNoRR,Mode::RoomBentNormalOff,Mode::RoomLocalMapsOff,Mode::RoomContactOff,Mode::RoomScreenOcclusionOff,Mode::RoomClipNoRR,Mode::RoomAuthoredClip,Mode::RoomAuthoredSpatial,Mode::RoomAuthoredRaw,Mode::RoomNativeSelection,Mode::RoomOpen,Mode::RoomSelectedOff,Mode::RoomRaw,Mode::RoomBlocker,Mode::RoomHitX,Mode::RoomHitY,Mode::RoomHitZ}) {
             selection.Select(mode);
             auto* actual=rt::SelectCompute(owner.Get());
             auto* expected=NeedsIsolationProducer(mode)?filtered.Get():UsesUnshadowedSpotSelection(mode)?reset.Get():nullptr;

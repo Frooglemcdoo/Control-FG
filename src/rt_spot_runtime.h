@@ -3,6 +3,7 @@
 // holds one selection across ray production, history filtering and composition.
 namespace rt_spot_runtime {
 #include "../build/rt_spot_open.h"
+#include "../build/rt_spot_history_guard.h"
 #include "../build/rt_spot_shadow_isolation.h"
 #include "../build/rt_spot_authored_clip.h"
 #include "../build/rt_spot_blocker.h"
@@ -35,6 +36,7 @@ inline const GUID kScreenOcclusionVariant = {0xe631a601,0x6651,0x4911,{0x80,0x90
 inline const GUID kBentNormalVariant = {0xe631a601,0x6651,0x4911,{0x80,0x90,0x11,0x71,0x14,0x28,0x30,0x0e}};
 inline const GUID kLocalMapsVariant = {0xe631a601,0x6651,0x4911,{0x80,0x90,0x11,0x71,0x14,0x28,0x30,0x0f}};
 inline const GUID kCorrectedNoAOVariant = {0xe631a601,0x6651,0x4911,{0x80,0x90,0x11,0x71,0x14,0x28,0x30,0x10}};
+inline const GUID kGuardedHistoryVariant = {0xe631a601,0x6651,0x4911,{0x80,0x90,0x11,0x71,0x14,0x28,0x30,0x11}};
 inline const GUID& IsolationVariant(Mode mode) noexcept {
     if(mode==Mode::RoomCorrectedNoAO)return kCorrectedNoAOVariant;
     if(UsesDirectSurfaceNormals(mode))return kBentNormalVariant;
@@ -232,6 +234,9 @@ inline void ObserveCompute(ID3D12Device* device, const D3D12_COMPUTE_PIPELINE_ST
         if (SUCCEEDED(hr)) hr = owner->SetPrivateDataInterface(kHistoryVariant,history);
         if (history) history->Release();
     }
+    if(SUCCEEDED(hr) && kind==kResetComponent) {
+        PrepareIsolation(device,*desc,owner,create,kGuardedHistoryShader,sizeof(kGuardedHistoryShader),kGuardedHistoryVariant,guardedHistoryReady,"guarded_spot_history");
+    }
     if (SUCCEEDED(hr) && (kind == kResetComponent || spatialIndex >= 0)) {
         const auto& raw = spatialIndex >= 0 ? rawSpatialBytes[spatialIndex] : rawHistoryBytes;
         custom.CS = {raw.data(),raw.size()};
@@ -337,8 +342,17 @@ inline ID3D12PipelineState* SelectCompute(ID3D12PipelineState* native) noexcept 
         kind == kLightComponent && active->mode == Mode::RoomOpen ? kOpenVariant :
         kind == kLightComponent && (active->mode == Mode::RtSpotMapGuard || active->mode == Mode::RoomSelectedOff) ? kSelectedOffVariant :
         kind == kLightComponent && ShowsSpotVisibility(active->mode) ? kVisibilityVariant :
-        kind == kLightComponent && active->mode == Mode::RtSpotLightIds ? kLightIdsVariant : raw ? kRawVariant : kind == kResetComponent && !active->reset ? kHistoryVariant : kVariant;
+        kind == kLightComponent && active->mode == Mode::RtSpotLightIds ? kLightIdsVariant : raw ? kRawVariant : kind == kResetComponent && !active->reset ? (UsesGuardedSpotHistory(active->mode)?kGuardedHistoryVariant:kHistoryVariant) : kVariant;
     if (FAILED(native->GetPrivateData(variant,&size,&alternate)) || !alternate) return nullptr;
+    if(kind==kResetComponent) {
+        static thread_local uint64_t reported=~uint64_t(0);
+        const auto sequence=LiveSelection::Sequence(active->selectionState);
+        if(reported!=sequence && !active->reset) {
+            Trace("spot_history_applied seq=%llu mode=%s policy=%s cpu_binding_only=1",sequence,ModeName(active->mode),
+                raw?"current_frame":UsesGuardedSpotHistory(active->mode)?"current_pixel_agreement_0.125":"neighborhood_clamp");
+            reported=sequence;
+        }
+    }
     if (kind == kLightComponent) {
         active->composed = true;
         static thread_local uint64_t reported = ~uint64_t(0);
