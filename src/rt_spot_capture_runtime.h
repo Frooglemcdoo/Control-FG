@@ -112,7 +112,7 @@ inline void CancelPending() noexcept {
     Phase expected=Phase::Armed;
     if(phase.compare_exchange_strong(expected,Phase::Idle))Trace("rt_hit_gpu_cancelled reason=suite_ended_before_recording");
 }
-inline bool Exported() noexcept {return phase.load()==Phase::Complete && exportStage==3;}
+inline bool Exported() noexcept {return phase.load()==Phase::Complete && exportStage==3 && completionRays>0;}
 inline void BeginScope() noexcept {
     if constexpr (!rt_spot_capture::GpuCaptureEnabled) return;
     if(inScope || !ready.load())return;

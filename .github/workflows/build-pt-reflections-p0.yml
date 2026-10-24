@@ -465,6 +465,7 @@ jobs:
       - name: Validate capture sequencing
         shell: cmd
         run: |
+          call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
           cl /nologo /std:c++17 /EHsc /W4 /O2 tools\test-lighting-capture-plan.cpp /Febuild\test-lighting-capture-plan.exe
           if errorlevel 1 exit /b 1
           build\test-lighting-capture-plan.exe
