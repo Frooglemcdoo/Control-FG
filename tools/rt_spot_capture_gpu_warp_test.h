@@ -54,7 +54,7 @@ static void TestGpuCapturePolicy(ID3D12Device* device) {
 #ifdef CONTROL_CAPTURE_DIAGNOSTIC
     namespace capture=native_lighting::rt_spot_capture_runtime;
     static_assert(rt_spot_capture::GpuCaptureEnabled);
-    const bool wasReady=capture::ready.exchange(false);capture::Request();
+    const bool wasReady=capture::ready.exchange(false);capture::RequestFresh();
     if(capture::phase.load()!=capture::Phase::Idle)throw std::runtime_error("capture armed before installation");
     capture::ready.store(wasReady);capture::Install(device);
     auto* inputs=capture::resources.inputs.Get();
@@ -64,18 +64,18 @@ static void TestGpuCapturePolicy(ID3D12Device* device) {
        !capture::originalCopy || !capture::originalRanges || !capture::originalCbv || !capture::originalSrv || !capture::originalUav)
         throw std::runtime_error("capture installation missing or repeated allocations");
     // The second invocation follows InstallLiveDiagnostic; Install is idempotent.
-    capture::ready.store(true);capture::Request();capture::Request();
+    capture::ready.store(true);capture::RequestFresh();capture::RequestFresh();
     if(capture::phase.load()!=capture::Phase::Armed)throw std::runtime_error("capture did not arm");
     capture::BeginScope();capture::BeginScope();
     if(!capture::inScope || capture::phase.load()!=capture::Phase::Recording)throw std::runtime_error("capture scope entry");
     capture::EndScope();
     if(capture::inScope || capture::phase.load()!=capture::Phase::Armed)throw std::runtime_error("unrecorded capture retry");
     for(auto phase:{capture::Phase::Recorded,capture::Phase::Submitted,capture::Phase::Complete,capture::Phase::Failed}) {
-        capture::phase.store(phase);capture::Request();capture::BeginScope();
+        capture::phase.store(phase);capture::RequestFresh();capture::BeginScope();
         if(capture::phase.load()!=phase || capture::inScope)throw std::runtime_error("capture rearmed after recording");
     }
     capture::phase.store(capture::Phase::Idle);capture::attempts=0;
-    std::cout<<"PASS R132 capture policy: installation idempotent, explicit request, scope retry and one capture per session\n";
+    std::cout<<"PASS R132 capture policy: installation idempotent, explicit request, scope retry and incomplete capture rearm rejection\n";
 #else
     namespace capture=native_lighting::rt_spot_capture_runtime;
     static_assert(!rt_spot_capture::GpuCaptureEnabled);
@@ -88,7 +88,7 @@ static void TestGpuCapturePolicy(ID3D12Device* device) {
        capture::originalRanges || capture::originalCbv || capture::originalSrv || capture::originalUav)
         throw std::runtime_error("disabled capture initialized GPU resources or hooks");
     for(UINT i=0;i<5;++i)if(before[i]!=table[slots[i]])throw std::runtime_error("disabled capture patched descriptor vtable");
-    capture::ready.store(true);capture::Request();capture::BeginScope();
+    capture::ready.store(true);capture::RequestFresh();capture::BeginScope();
     if(capture::phase.load()!=capture::Phase::Idle || capture::inScope)
         throw std::runtime_error("BOTH armed disabled capture");
     capture::ready.store(false);
