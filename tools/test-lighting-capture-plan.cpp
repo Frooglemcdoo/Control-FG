@@ -17,6 +17,18 @@ int main(){
  assert(!Disables(Mode::RoomNativeNoRR,kGiBit));
  assert(!IsSignalDiagnostic(Mode::RoomNativeNoRR)&&!IsSignalDiagnostic(Mode::RoomClipNoRR));
  assert(UsesAuthoredClip(Mode::RoomClipNoRR)&&UsesAuthoredClip(Mode::RoomSelectedOff));
+ for(auto m:{Mode::RoomContactOff,Mode::RoomScreenOcclusionOff}) {
+  assert(modes.count(m)&&UsesAuthoredClip(m)&&PreservesGiFiltering(m)&&IsRtSpotMode(m));
+  assert(!Disables(m,kDirectBit)&&!BypassesRR(m)&&!IsSignalDiagnostic(m));
+  assert(!ModeAvailable(m,kRtSpotReadyBit));
+  LiveSelection selection;const auto selected=selection.Select(m);
+  assert(LiveSelection::GetMode(selected)==m);
+  assert(selection.Observe(selected,kDirectBit));
+  assert(LiveSelection::GetMode(selection.Read())==m);
+ }
+ assert(!Applied(Mode::RoomScreenOcclusionOff,kDirectBit,true));
+ assert(!Applied(Mode::RoomScreenOcclusionOff,kGiBit,true));
+ assert(Applied(Mode::RoomScreenOcclusionOff,kAllBits,true));
  assert(gpu==1);assert(modes.count(Mode::Native)&&modes.count(Mode::RoomAuthoredClip));
  assert(modes.count(Mode::RoomAuthoredSpatial)&&modes.count(Mode::RoomAuthoredRaw));
  assert(!Settled(2499,100,true));assert(!Settled(4000,89,true));assert(!Settled(4000,100,false));assert(Settled(2500,90,true));

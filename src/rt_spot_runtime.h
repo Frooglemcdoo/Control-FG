@@ -3,6 +3,7 @@
 // holds one selection across ray production, history filtering and composition.
 namespace rt_spot_runtime {
 #include "../build/rt_spot_open.h"
+#include "../build/rt_spot_shadow_isolation.h"
 #include "../build/rt_spot_authored_clip.h"
 #include "../build/rt_spot_blocker.h"
 #include "../build/rt_spot_hit_position.h"
@@ -29,6 +30,20 @@ inline const GUID kLightIdsVariant = {0xe631a601,0x6651,0x4911,{0x80,0x90,0x11,0
 inline const GUID kBandColorsVariant = {0xe631a601,0x6651,0x4911,{0x80,0x90,0x11,0x71,0x14,0x28,0x30,0x0b}};
 inline const GUID kOpenVariant = {0xe631a601,0x6651,0x4911,{0x80,0x90,0x11,0x71,0x14,0x28,0x30,0x0a}};
 inline const GUID kSelectedOffVariant = {0xe631a601,0x6651,0x4911,{0x80,0x90,0x11,0x71,0x14,0x28,0x30,0x09}};
+inline const GUID kContactOffVariant = {0xe631a601,0x6651,0x4911,{0x80,0x90,0x11,0x71,0x14,0x28,0x30,0x0c}};
+inline const GUID kScreenOcclusionVariant = {0xe631a601,0x6651,0x4911,{0x80,0x90,0x11,0x71,0x14,0x28,0x30,0x0d}};
+// Optional diagnostics share ownership with the native PSO and never disable Default.
+inline void PrepareIsolation(ID3D12Device* device, D3D12_COMPUTE_PIPELINE_STATE_DESC desc,
+    ID3D12PipelineState* owner, CreateComputeFn create, const unsigned char* bytes, size_t length,
+    const GUID& key, std::atomic<bool>& ready, const char* label) noexcept {
+    desc.CS={bytes,length}; desc.CachedPSO={};
+    ID3D12PipelineState* alternate=nullptr;
+    HRESULT result=create(device,&desc,IID_PPV_ARGS(&alternate));
+    if(SUCCEEDED(result))result=owner->SetPrivateDataInterface(key,alternate);
+    if(alternate)alternate->Release();
+    ready.store(SUCCEEDED(result),std::memory_order_release);
+    Trace("shadow_isolation_prepare input=%s ready=%u hr=0x%08lX",label,unsigned(SUCCEEDED(result)),static_cast<unsigned long>(result));
+}
 inline std::vector<unsigned char> visibilityBytes, lightIdsBytes, selectedOffBytes, selectionBytes;
 inline std::vector<unsigned char> rayBytes, baselineRayBytes, lightBytes, resetBytes, historyBytes;
 inline std::vector<unsigned char> spatialBytes[2], rawSpatialBytes[2], rawHistoryBytes;
@@ -242,6 +257,12 @@ inline void ObserveCompute(ID3D12Device* device, const D3D12_COMPUTE_PIPELINE_ST
         spotOpenReady.store(SUCCEEDED(openResult),std::memory_order_release);
         Trace("rt_spot_open ready=%u hr=0x%08lX",unsigned(SUCCEEDED(openResult)),static_cast<unsigned long>(openResult));
     }
+    if(SUCCEEDED(hr) && kind==kLightComponent) {
+        PrepareIsolation(device,*desc,owner,create,kContactOffShader,sizeof(kContactOffShader),kContactOffVariant,contactOffReady,"contact_visibility");
+        PrepareIsolation(device,*desc,owner,create,kScreenOcclusionOffShader,sizeof(kScreenOcclusionOffShader),kScreenOcclusionVariant,screenOcclusionLightReady,"screen_occlusion_composition");
+    }
+    if(SUCCEEDED(hr) && kind==kSelectorComponent)
+        PrepareIsolation(device,*desc,owner,create,kSelectorOcclusionOffShader,sizeof(kSelectorOcclusionOffShader),kScreenOcclusionVariant,screenOcclusionSelectorReady,"screen_occlusion_producer");
     if (owner) owner->Release();
     if (variant) variant->Release();
     if (SUCCEEDED(hr)) components.fetch_or(kind);
@@ -269,7 +290,17 @@ inline ID3D12PipelineState* SelectCompute(ID3D12PipelineState* native) noexcept 
         }
         if (!use) return nullptr;
         ID3D12PipelineState* alternate = nullptr;size=sizeof(alternate);
-        if (FAILED(native->GetPrivateData(kVariant,&size,&alternate))) return nullptr;
+        const bool screenOff=LiveSelection::GetMode(state)==Mode::RoomScreenOcclusionOff;
+        const GUID& key=screenOff?kScreenOcclusionVariant:kVariant;
+        if (FAILED(native->GetPrivateData(key,&size,&alternate)) || !alternate) return nullptr;
+        if(screenOff) {
+            selection.Observe(state,kGiBit); // producer evidence; composition supplies kDirectBit
+            static thread_local uint64_t observed=~uint64_t(0);
+            if(observed!=LiveSelection::Sequence(state)) {
+                Trace("shadow_isolation_applied seq=%llu input=screen_occlusion_producer channels=yw neutral=1 cpu_binding_only=1",LiveSelection::Sequence(state));
+                observed=LiveSelection::Sequence(state);
+            }
+        }
         return alternate;
     }
     if (!active) return nullptr;
@@ -280,7 +311,9 @@ inline ID3D12PipelineState* SelectCompute(ID3D12PipelineState* native) noexcept 
     const bool raw = active->fullRay &&
         ((UsesRawSpotVisibility(active->mode) && (spatial || kind == kResetComponent)) ||
          (BypassesSpotHistory(active->mode) && kind == kResetComponent));
-    const GUID& variant = kind == kLightComponent && (active->mode == Mode::RoomBlocker || IsHitPositionMode(active->mode)) ? kBandColorsVariant :
+    const GUID& variant = kind == kLightComponent && active->mode==Mode::RoomContactOff ? kContactOffVariant :
+        kind == kLightComponent && active->mode==Mode::RoomScreenOcclusionOff ? kScreenOcclusionVariant :
+        kind == kLightComponent && (active->mode == Mode::RoomBlocker || IsHitPositionMode(active->mode)) ? kBandColorsVariant :
         kind == kLightComponent && active->mode == Mode::RoomOpen ? kOpenVariant :
         kind == kLightComponent && (active->mode == Mode::RtSpotMapGuard || active->mode == Mode::RoomSelectedOff) ? kSelectedOffVariant :
         kind == kLightComponent && ShowsSpotVisibility(active->mode) ? kVisibilityVariant :
@@ -293,6 +326,8 @@ inline ID3D12PipelineState* SelectCompute(ID3D12PipelineState* native) noexcept 
         if (reported != sequence) {
             Trace("spot_light_isolation seq=%llu mode=%s selector=%s composition=%s gpu_confirmed=0",
                 sequence,ModeName(active->mode),UsesUnshadowedSpotSelection(active->mode)?"unshadowed":"native",
+                active->mode==Mode::RoomContactOff?"spot_point_contact_visibility_one":
+                active->mode==Mode::RoomScreenOcclusionOff?"screen_occlusion_yw_one":
                 active->mode==Mode::RoomOpen?"selected_visibility_one":
                 active->mode==Mode::RoomSelectedOff?"selected_omitted":
                 IsHitPositionMode(active->mode)?"hit_position_bands":
