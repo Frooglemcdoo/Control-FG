@@ -17,7 +17,7 @@ int main(){
  assert(!Disables(Mode::RoomNativeNoRR,kGiBit));
  assert(!IsSignalDiagnostic(Mode::RoomNativeNoRR)&&!IsSignalDiagnostic(Mode::RoomClipNoRR));
  assert(UsesAuthoredClip(Mode::RoomClipNoRR)&&UsesAuthoredClip(Mode::RoomSelectedOff));
- for(auto m:{Mode::RoomContactOff,Mode::RoomScreenOcclusionOff}) {
+ for(auto m:{Mode::RoomBentNormalOff,Mode::RoomLocalMapsOff,Mode::RoomContactOff,Mode::RoomScreenOcclusionOff}) {
   assert(modes.count(m)&&UsesAuthoredClip(m)&&PreservesGiFiltering(m)&&IsRtSpotMode(m));
   assert(!Disables(m,kDirectBit)&&!BypassesRR(m)&&!IsSignalDiagnostic(m));
   assert(!ModeAvailable(m,kRtSpotReadyBit));
@@ -25,6 +25,13 @@ int main(){
   assert(LiveSelection::GetMode(selected)==m);
   assert(selection.Observe(selected,kDirectBit));
   assert(LiveSelection::GetMode(selection.Read())==m);
+ }
+ for(auto m:{Mode::RoomBentNormalOff,Mode::RoomLocalMapsOff}) {
+  assert(!Applied(m,kDirectBit,true)&&!Applied(m,kGiBit,true)&&Applied(m,kAllBits,true));
+  LiveSelection selection;
+  const auto old=selection.Select(m);const auto next=selection.Select(Mode::Native);
+  assert(!selection.Observe(old,kAllBits));assert(LiveSelection::Observed(selection.Read())==0);
+  assert(LiveSelection::Sequence(next)==LiveSelection::Sequence(old)+1);
  }
  assert(!Applied(Mode::RoomScreenOcclusionOff,kDirectBit,true));
  assert(!Applied(Mode::RoomScreenOcclusionOff,kGiBit,true));

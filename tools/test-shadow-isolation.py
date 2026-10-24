@@ -29,3 +29,17 @@ try:
 except ValueError: pass
 else: raise AssertionError('Modified input accepted')
 print('PASS: unsupported shader rejected')
+
+# R138 independently decode all changed operands and ensure the neighboring
+# normal blend / light-color multiplication still consumes the neutral value.
+for name,edits,neighbors in [
+ ('bent_normal_off',[(2551,16,'xyz',0),(5116,17,'xyz',0),(7602,12,'xyz',0),(10023,6,'xyz',0)],[(2559,'mad'),(5124,'mad'),(7610,'mad'),(10031,'mad')]),
+ ('selector_bent_normal_off',[(4745,10,'xyz',0)],[(8076,'mad'),(9765,'mad'),(12485,'mad'),(14030,'mad')]),
+ ('local_maps_off',[(6987,4,'w',1)],[(6996,'mul'),(346,'ld')]),
+ ('selector_local_maps_off',[(7321,43,'x',1),(12098,18,'w',1)],[(10464,'mul'),(10471,'mul'),(12107,'mul'),(717,'ld')])]:
+ d=decode(root/'build'/f'rt_spot_{name}.dxbc');instructions={i['dword']:i for i in d['instructions']}
+ for offset,register,mask,value in edits:
+  assert instructions[offset]['name']=='mov'
+  assert instructions[offset]['operands']==[f'r[{register}].{mask}',f'l({value})']
+ for offset,opcode in neighbors: assert instructions[offset]['name']==opcode
+print('PASS: bent-normal blend and local-map consumption boundaries remain intact')

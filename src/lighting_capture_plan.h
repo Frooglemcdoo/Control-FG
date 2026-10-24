@@ -8,6 +8,8 @@ inline constexpr Step steps[]={
     {Mode::RoomBoth,L"both",true},
     {Mode::RoomAuthoredClip,L"default-clip-user-rr",false},
     {Mode::RoomClipNoRR,L"default-clip-rr-off",false},
+    {Mode::RoomLocalMapsOff,L"clip-local-maps-off",false},
+    {Mode::RoomBentNormalOff,L"clip-bent-normal-off",false},
     {Mode::RoomContactOff,L"clip-contact-off",false},
     {Mode::RoomScreenOcclusionOff,L"clip-screen-ao-off",false},
     {Mode::RoomSelectedOff,L"selected-light-off",false},

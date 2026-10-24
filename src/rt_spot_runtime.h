@@ -32,6 +32,17 @@ inline const GUID kOpenVariant = {0xe631a601,0x6651,0x4911,{0x80,0x90,0x11,0x71,
 inline const GUID kSelectedOffVariant = {0xe631a601,0x6651,0x4911,{0x80,0x90,0x11,0x71,0x14,0x28,0x30,0x09}};
 inline const GUID kContactOffVariant = {0xe631a601,0x6651,0x4911,{0x80,0x90,0x11,0x71,0x14,0x28,0x30,0x0c}};
 inline const GUID kScreenOcclusionVariant = {0xe631a601,0x6651,0x4911,{0x80,0x90,0x11,0x71,0x14,0x28,0x30,0x0d}};
+inline const GUID kBentNormalVariant = {0xe631a601,0x6651,0x4911,{0x80,0x90,0x11,0x71,0x14,0x28,0x30,0x0e}};
+inline const GUID kLocalMapsVariant = {0xe631a601,0x6651,0x4911,{0x80,0x90,0x11,0x71,0x14,0x28,0x30,0x0f}};
+inline const GUID& IsolationVariant(Mode mode) noexcept {
+    switch(mode) {
+    case Mode::RoomContactOff:return kContactOffVariant;
+    case Mode::RoomScreenOcclusionOff:return kScreenOcclusionVariant;
+    case Mode::RoomBentNormalOff:return kBentNormalVariant;
+    case Mode::RoomLocalMapsOff:return kLocalMapsVariant;
+    default:return kVariant;
+    }
+}
 // Optional diagnostics share ownership with the native PSO and never disable Default.
 inline void PrepareIsolation(ID3D12Device* device, D3D12_COMPUTE_PIPELINE_STATE_DESC desc,
     ID3D12PipelineState* owner, CreateComputeFn create, const unsigned char* bytes, size_t length,
@@ -258,11 +269,16 @@ inline void ObserveCompute(ID3D12Device* device, const D3D12_COMPUTE_PIPELINE_ST
         Trace("rt_spot_open ready=%u hr=0x%08lX",unsigned(SUCCEEDED(openResult)),static_cast<unsigned long>(openResult));
     }
     if(SUCCEEDED(hr) && kind==kLightComponent) {
+        PrepareIsolation(device,*desc,owner,create,kBentNormalOffShader,sizeof(kBentNormalOffShader),kBentNormalVariant,bentNormalLightReady,"bent_normal_composition");
+        PrepareIsolation(device,*desc,owner,create,kLocalMapsOffShader,sizeof(kLocalMapsOffShader),kLocalMapsVariant,localMapsLightReady,"local_maps_composition");
         PrepareIsolation(device,*desc,owner,create,kContactOffShader,sizeof(kContactOffShader),kContactOffVariant,contactOffReady,"contact_visibility");
         PrepareIsolation(device,*desc,owner,create,kScreenOcclusionOffShader,sizeof(kScreenOcclusionOffShader),kScreenOcclusionVariant,screenOcclusionLightReady,"screen_occlusion_composition");
     }
-    if(SUCCEEDED(hr) && kind==kSelectorComponent)
+    if(SUCCEEDED(hr) && kind==kSelectorComponent) {
+        PrepareIsolation(device,*desc,owner,create,kSelectorBentNormalOffShader,sizeof(kSelectorBentNormalOffShader),kBentNormalVariant,bentNormalSelectorReady,"bent_normal_producer");
+        PrepareIsolation(device,*desc,owner,create,kSelectorLocalMapsOffShader,sizeof(kSelectorLocalMapsOffShader),kLocalMapsVariant,localMapsSelectorReady,"local_maps_producer");
         PrepareIsolation(device,*desc,owner,create,kSelectorOcclusionOffShader,sizeof(kSelectorOcclusionOffShader),kScreenOcclusionVariant,screenOcclusionSelectorReady,"screen_occlusion_producer");
+    }
     if (owner) owner->Release();
     if (variant) variant->Release();
     if (SUCCEEDED(hr)) components.fetch_or(kind);
@@ -290,14 +306,15 @@ inline ID3D12PipelineState* SelectCompute(ID3D12PipelineState* native) noexcept 
         }
         if (!use) return nullptr;
         ID3D12PipelineState* alternate = nullptr;size=sizeof(alternate);
-        const bool screenOff=LiveSelection::GetMode(state)==Mode::RoomScreenOcclusionOff;
-        const GUID& key=screenOff?kScreenOcclusionVariant:kVariant;
+        const auto mode=LiveSelection::GetMode(state);
+        const bool isolated=NeedsIsolationProducer(mode);
+        const GUID& key=isolated?IsolationVariant(mode):kVariant;
         if (FAILED(native->GetPrivateData(key,&size,&alternate)) || !alternate) return nullptr;
-        if(screenOff) {
+        if(isolated) {
             selection.Observe(state,kGiBit); // producer evidence; composition supplies kDirectBit
             static thread_local uint64_t observed=~uint64_t(0);
             if(observed!=LiveSelection::Sequence(state)) {
-                Trace("shadow_isolation_applied seq=%llu input=screen_occlusion_producer channels=yw neutral=1 cpu_binding_only=1",LiveSelection::Sequence(state));
+                Trace("shadow_isolation_applied seq=%llu mode=%s producer=1 cpu_binding_only=1",LiveSelection::Sequence(state),ModeName(mode));
                 observed=LiveSelection::Sequence(state);
             }
         }
@@ -311,8 +328,7 @@ inline ID3D12PipelineState* SelectCompute(ID3D12PipelineState* native) noexcept 
     const bool raw = active->fullRay &&
         ((UsesRawSpotVisibility(active->mode) && (spatial || kind == kResetComponent)) ||
          (BypassesSpotHistory(active->mode) && kind == kResetComponent));
-    const GUID& variant = kind == kLightComponent && active->mode==Mode::RoomContactOff ? kContactOffVariant :
-        kind == kLightComponent && active->mode==Mode::RoomScreenOcclusionOff ? kScreenOcclusionVariant :
+    const GUID& variant = kind == kLightComponent && (NeedsIsolationProducer(active->mode)||active->mode==Mode::RoomContactOff) ? IsolationVariant(active->mode) :
         kind == kLightComponent && (active->mode == Mode::RoomBlocker || IsHitPositionMode(active->mode)) ? kBandColorsVariant :
         kind == kLightComponent && active->mode == Mode::RoomOpen ? kOpenVariant :
         kind == kLightComponent && (active->mode == Mode::RtSpotMapGuard || active->mode == Mode::RoomSelectedOff) ? kSelectedOffVariant :
@@ -326,6 +342,8 @@ inline ID3D12PipelineState* SelectCompute(ID3D12PipelineState* native) noexcept 
         if (reported != sequence) {
             Trace("spot_light_isolation seq=%llu mode=%s selector=%s composition=%s gpu_confirmed=0",
                 sequence,ModeName(active->mode),UsesUnshadowedSpotSelection(active->mode)?"unshadowed":"native",
+                active->mode==Mode::RoomBentNormalOff?"geometric_normals":
+                active->mode==Mode::RoomLocalMapsOff?"local_map_visibility_one":
                 active->mode==Mode::RoomContactOff?"spot_point_contact_visibility_one":
                 active->mode==Mode::RoomScreenOcclusionOff?"screen_occlusion_yw_one":
                 active->mode==Mode::RoomOpen?"selected_visibility_one":

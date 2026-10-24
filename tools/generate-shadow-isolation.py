@@ -1,7 +1,7 @@
-"""R137: isolate RT contact visibility from direct-light screen occlusion.
+"""R138: isolate contact visibility, screen occlusion, bent normals and local maps.
 
 Hash-locked operand edits only. Keep authored rays, map visibility, material
-response, bent normals, resources and accumulated lighting unchanged.
+response, resources and accumulation; only the named diagnostic input changes.
 """
 import base64
 import hashlib
@@ -15,17 +15,53 @@ LIGHT_SHA = 'a844888cdd5478605574157b323cb3376369ae9517c4954bf38bee21b664ecd7'
 SELECTOR_SHA = '4319b0bd2d0ad74b670c084d92b84bd7ceda2be433ccd3e60588d49bb66ddb9c'
 
 
-def neutralize_load(data, expected_sha, offset, register, mask, address, resource):
+def fixed_edits(data, expected_sha, edits):
+    """Apply hash/word-locked edits without shifting any instruction or resource."""
     if hashlib.sha256(data).hexdigest() != expected_sha:
         raise ValueError('Unsupported shadow isolation input')
-    expected = [0x0800002d, *dest(register, mask), *source(*address), *resource]
-    replacement = [0x05000036, *dest(register, mask), 0x00004001, 0x3f800000,
-                   0x0100003a, 0x0100003a, 0x0100003a]
     def patch(words):
-        if words[offset:offset+8] != expected:
-            raise ValueError('Shadow input instruction changed')
-        words[offset:offset+8] = replacement
-    return transform_shex(data, patch)
+        for offset, expected, replacement in edits:
+            if words[offset:offset+len(expected)] != expected or len(replacement)>len(expected):
+                raise ValueError('Shadow input instruction changed')
+            words[offset:offset+len(expected)] = replacement + [0x0100003a]*(len(expected)-len(replacement))
+    result=transform_shex(data,patch)
+    shex=next(o+8 for o in struct.unpack_from('<'+'I'*struct.unpack_from('<I',data,28)[0],data,32) if data[o:o+4]==b'SHEX')
+    allowed=set(range(4,20))
+    for offset,expected,_ in edits: allowed.update(range(shex+offset*4,shex+(offset+len(expected))*4))
+    assert len(data)==len(result) and all(a==b for i,(a,b) in enumerate(zip(data,result)) if i not in allowed)
+    return result
+
+
+def constant_move(register,mask,value):
+    return [0x05000036,*dest(register,mask),0x00004001,value]
+
+
+def neutralize_load(data, expected_sha, offset, register, mask, address, resource):
+    expected=[0x0800002d,*dest(register,mask),*source(*address),*resource]
+    return fixed_edits(data,expected_sha,[(offset,expected,constant_move(register,mask,0x3f800000))])
+
+
+def remaining_isolation(light,selector):
+    # Zero only bent-normal minus geometric-normal deltas. The existing blend
+    # then uses the decoded geometric normal for every material case, rather
+    # than substituting an arbitrary world axis or changing normal decoding.
+    bent_light=[]
+    for offset,register in [(2551,16),(5116,17)]:
+        bent_light.append((offset,[0x08000000,*dest(register,7),0x100246,6,0x80100246,0x41,13],constant_move(register,7,0)))
+    for offset,register in [(7602,12),(10023,6)]:
+        bent_light.append((offset,[0x08000000,*dest(register,7),0x80100346,0x41,2,0x100246,6],constant_move(register,7,0)))
+    bent_selector=[(4745,[0x08000000,*dest(10,7),0x80100346,0x41,5,0x100246,10],constant_move(10,7,0))]
+    # Default already bypasses the selected spotlight map. Remaining local-map
+    # paths are the producer's nonselected spots/points and selected point map.
+    maps_light=[(6987,[0x09000037,*dest(4,8),0x10001a,5,0x4001,0x3f800000,0x10003a,4],constant_move(4,8,0x3f800000))]
+    maps_selector=[
+        (7321,[0x05000036,*dest(43,1),0x100ff6,28],constant_move(43,1,0x3f800000)),
+        (12098,[0x09000037,*dest(18,8),0x10002a,21,0x4001,0x3f800000,0x10003a,18],constant_move(18,8,0x3f800000))]
+    return [
+        ('bent_normal_off','kBentNormalOffShader',fixed_edits(light,LIGHT_SHA,bent_light)),
+        ('selector_bent_normal_off','kSelectorBentNormalOffShader',fixed_edits(selector,SELECTOR_SHA,bent_selector)),
+        ('local_maps_off','kLocalMapsOffShader',fixed_edits(light,LIGHT_SHA,maps_light)),
+        ('selector_local_maps_off','kSelectorLocalMapsOffShader',fixed_edits(selector,SELECTOR_SHA,maps_selector))]
 
 
 def generate():
@@ -42,13 +78,13 @@ def generate():
     headers = ['#pragma once']
     for name, symbol, data, sha, offset, register, mask, address, resource in variants:
         result = neutralize_load(data,sha,offset,register,mask,address,resource)
-        # Container checksum plus exactly one eight-DWORD instruction may differ.
-        shex = next(o+8 for o in struct.unpack_from('<'+'I'*struct.unpack_from('<I',data,28)[0],data,32) if data[o:o+4]==b'SHEX')
-        allowed = set(range(4,20)) | set(range(shex+offset*4,shex+(offset+8)*4))
-        assert len(data)==len(result) and all(a==b for i,(a,b) in enumerate(zip(data,result)) if i not in allowed)
         (out/f'rt_spot_{name}.dxbc').write_bytes(result)
         headers.append(f'static const unsigned char {symbol}[]={{\n'+','.join(f'0x{x:02x}' for x in result)+'\n};')
         print(f'PASS: {name}, one neutralized load, sha256={hashlib.sha256(result).hexdigest()}')
+    for name,symbol,result in remaining_isolation(light,selector):
+        (out/f'rt_spot_{name}.dxbc').write_bytes(result)
+        headers.append(f'static const unsigned char {symbol}[]={{\n'+','.join(f'0x{x:02x}' for x in result)+'\n};')
+        print(f'PASS: {name}, fixed instruction edits, sha256={hashlib.sha256(result).hexdigest()}')
     (out/'rt_spot_shadow_isolation.h').write_text('\n'.join(headers)+'\n')
 
 if __name__ == '__main__': generate()
