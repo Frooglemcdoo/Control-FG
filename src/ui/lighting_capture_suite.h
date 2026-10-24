@@ -43,6 +43,12 @@ inline void Finish(HWND game,const char* reason) noexcept {
 }
 inline bool Start() noexcept {
     if(active)return false;
+    using CapturePhase=rt_spot_capture_runtime::Phase;
+    const auto capturePhase=rt_spot_capture_runtime::phase.load();
+    if(capturePhase!=CapturePhase::Idle && capturePhase!=CapturePhase::Failed &&
+       !(capturePhase==CapturePhase::Complete && rt_spot_capture_runtime::exportStage==3)) {
+        Trace("capture_suite_start_rejected reason=previous_gpu_capture_pending");return false;
+    }
     if(!DrainDiagnosticLog(true))return false;
     wchar_t root[MAX_PATH]{};wcscpy_s(root,report.Path());auto* slash=wcsrchr(root,L'\\');if(!slash)return false;*slash=0;
     SYSTEMTIME time{};GetLocalTime(&time);static unsigned serial=0;
@@ -69,17 +75,17 @@ inline void Tick(HWND game,uint64_t now) noexcept {
     if(!entered){
         if(!SelectMode(current.mode)){Note("step=%u mode=%s skipped=unavailable",step,ModeName(current.mode));++failures;++step;return;}
         selectedState=selection.Read();began=now;firstPresent=presentCount.load();imageIndex=0;nextImage=0;entered=true;gpuAccepted=false;
-        if(current.gpu)gpuAccepted=rt_spot_capture_runtime::RequestFresh();
         Note("step=%u mode=%s start_ms=%llu present=%llu gpu_requested=%u",step,ModeName(current.mode),now,firstPresent,unsigned(gpuAccepted));
         Trace("capture_suite_step index=%u mode=%s",step,ModeName(current.mode));return;
     }
     if(LiveSelection::Sequence(selection.Read())!=LiveSelection::Sequence(selectedState)){Finish(game,"selection_changed");return;}
     const auto elapsed=now-began;
-    if(current.gpu && !gpuAccepted)gpuAccepted=rt_spot_capture_runtime::RequestFresh();
     const auto observed=LiveSelection::Observed(selection.Read());
     // Native has no replacement hook; count presents instead of claiming a GPU binding.
     const bool bound=current.mode==Mode::Native || (observed&kDirectBit)!=0;
-    if(capture_plan::Settled(elapsed,presentCount.load()-firstPresent,bound) && now>=nextImage && imageIndex<capture_plan::imagesPerStep){
+    const bool settled=capture_plan::Settled(elapsed,presentCount.load()-firstPresent,bound);
+    if(current.gpu && settled && !gpuAccepted)gpuAccepted=rt_spot_capture_runtime::RequestFresh();
+    if(settled && now>=nextImage && imageIndex<capture_plan::imagesPerStep){
         wchar_t path[MAX_PATH]{};swprintf_s(path,L"%s\\%02u-%s-%u.png",folder,step,current.name,imageIndex);
         const HRESULT hr=screenshots::Save(game,path);
         Note("image step=%u sample=%u ms=%llu present=%llu hr=0x%08lX rr=%u effects=0x%X",step,imageIndex,now,presentCount.load(),static_cast<unsigned long>(hr),unsigned(control_rr_diagnostic::lastSelected.load()),control_rr_diagnostic::lastEffects.load());

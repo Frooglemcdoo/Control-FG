@@ -187,7 +187,7 @@ inline DWORD WINAPI ThreadProc(LPVOID) noexcept {
         if(capturePress && (GetForegroundWindow()==game || PanelHasForeground(panel))) {
             if(capture_suite::active)capture_suite::Finish(game,"cancelled");
             else {if(panelOpen)ClosePanel(panel);
-                if(!capture_suite::Start())MessageBoxW(game,L"Could not start the capture. Use Save Log for details.",L"F9 capture",MB_OK|MB_ICONERROR);}
+                if(!capture_suite::Start())MessageBoxW(game,L"Could not start the capture. If a previous capture was cancelled, let its GPU export finish and try F9 again. Use Save Log for details.",L"F9 capture",MB_OK|MB_ICONERROR);}
         }
         capture_suite::Tick(game,now);
         const bool foreground=GetForegroundWindow()==game || PanelHasForeground(panel);
