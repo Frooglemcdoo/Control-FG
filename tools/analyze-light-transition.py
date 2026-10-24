@@ -67,10 +67,24 @@ def summarize(capture, tolerance):
         group=groups[light]
         if not compatible(geometry,group['geometry'],tolerance):
             raise ValueError('One frame/index refers to inconsistent light geometry')
+        if 'composition' in record:
+            signal = record['composition']
+            values = [signal['visibility'][0], *signal['diffuse'][:3], *signal['specular'][:3]]
+            stats = group.setdefault('composition', dict(count=0, sums=[0.0]*7, minimum=list(values), maximum=list(values)))
+            stats['count'] += 1
+            stats['sums'] = [x+y for x,y in zip(stats['sums'],values)]
+            stats['minimum'] = [min(x,y) for x,y in zip(stats['minimum'],values)]
+            stats['maximum'] = [max(x,y) for x,y in zip(stats['maximum'],values)]
         group['selected_samples']+=1
         group['receiver_min']=[min(x,y) for x,y in zip(group['receiver_min'],record['origin'])]
         group['receiver_max']=[max(x,y) for x,y in zip(group['receiver_max'],record['origin'])]
     if not groups: raise ValueError('No valid sampled lights')
+    for group in groups.values():
+        if 'composition' in group:
+            stats = group['composition']
+            stats['channels'] = ['spot_visibility','diffuse_r','diffuse_g','diffuse_b','specular_r','specular_g','specular_b']
+            stats['mean'] = [x/stats['count'] for x in stats.pop('sums')]
+
     return dict(capture_id=capture['capture_id'],extent=capture['extent'],lights=list(groups.values()))
 
 

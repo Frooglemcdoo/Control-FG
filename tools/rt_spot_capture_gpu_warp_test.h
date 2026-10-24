@@ -13,7 +13,10 @@ static void TestHitCaptureSubmissionPolicy(ID3D12Device* device) {
     // A reused command-list object is insufficient: its generation must match.
     journal::Token(list.Get(),true);capture::BeforeExecute(queue.Get(),1,lists);
     if(capture::phase.load()!=capture::Phase::Recorded)throw std::runtime_error("stale generation submitted capture");
-    capture::recordedGeneration=journal::Token(list.Get());capture::BeforeExecute(queue.Get(),1,lists);
+    capture::recordedGeneration=journal::Token(list.Get());capture::signalRecorded=false;
+    capture::BeforeExecute(queue.Get(),1,lists);
+    if(capture::phase.load()!=capture::Phase::Failed)throw std::runtime_error("missing composition accepted");
+    capture::signalRecorded=true;capture::phase.store(capture::Phase::Recorded);capture::BeforeExecute(queue.Get(),1,lists);
     if(capture::phase.load()!=capture::Phase::Submitting || capture::submittedQueue.Get()!=queue.Get())throw std::runtime_error("capture submission identity");
     capture::BeforeExecute(queue.Get(),1,lists);
     if(capture::phase.load()!=capture::Phase::Failed)throw std::runtime_error("capture replay not rejected");
@@ -64,7 +67,7 @@ static void TestGpuCapturePolicy(ID3D12Device* device) {
        !capture::originalCopy || !capture::originalRanges || !capture::originalCbv || !capture::originalSrv || !capture::originalUav)
         throw std::runtime_error("capture installation missing or repeated allocations");
     // The second invocation follows InstallLiveDiagnostic; Install is idempotent.
-    capture::ready.store(true);capture::RequestFresh();capture::RequestFresh();
+    capture::ready.store(true);capture::signalReady.store(true);capture::RequestFresh();capture::RequestFresh();
     if(capture::phase.load()!=capture::Phase::Armed)throw std::runtime_error("capture did not arm");
     capture::BeginScope();capture::BeginScope();
     if(!capture::inScope || capture::phase.load()!=capture::Phase::Recording)throw std::runtime_error("capture scope entry");

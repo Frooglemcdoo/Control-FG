@@ -38,13 +38,13 @@ inline void Finish(HWND game,const char* reason) noexcept {
     Note("end=%s failures=%u restored=%s",reason,failures,ModeName(restore));
     if(manifest!=INVALID_HANDLE_VALUE){FlushFileBuffers(manifest);CloseHandle(manifest);manifest=INVALID_HANDLE_VALUE;}
     active=false;
-    wchar_t message[768]{};swprintf_s(message,L"Lighting capture %s. %u skipped/failed steps or files.\n\n%s\n\nYour previous mode has been restored. Zip and send this folder.\nStationary suites include PNGs. Motion traces store light records in lighting.log.",
+    wchar_t message[768]{};swprintf_s(message,L"Lighting capture %s. %u skipped/failed steps or files.\n\n%s\n\nYour previous mode has been restored. Use Package-Lighting-Capture.cmd to split this folder into ZIPs below 200 MB.\nStationary suites include PNGs. Motion traces store light records in lighting.log.",
         strcmp(reason,"complete")==0?L"finished":L"stopped",failures,folder);
     MessageBoxW(game,message,L"Control-FG F9 capture",MB_OK);
 }
 inline bool Start(bool traceMotion=false) noexcept {
     if(active)return false;
-    if(traceMotion && (!rt_spot_capture_runtime::ready.load() ||
+    if(traceMotion && (!rt_spot_capture_runtime::ready.load() || !rt_spot_capture_runtime::signalReady.load() ||
        !ModeAvailable(kDefaultMode,readyMask.load()))) {
         Trace("transition_start_rejected reason=default_or_capture_unavailable");return false;
     }
@@ -57,7 +57,7 @@ inline bool Start(bool traceMotion=false) noexcept {
     if(!DrainDiagnosticLog(true))return false;
     wchar_t root[MAX_PATH]{};wcscpy_s(root,report.Path());auto* slash=wcsrchr(root,L'\\');if(!slash)return false;*slash=0;
     SYSTEMTIME time{};GetLocalTime(&time);static unsigned serial=0;
-    if(swprintf_s(folder,L"%s\\Shadow-R144-%04u%02u%02u-%02u%02u%02u-%lu-%u",root,time.wYear,time.wMonth,time.wDay,time.wHour,time.wMinute,time.wSecond,GetCurrentProcessId(),serial++)<0)return false;
+    if(swprintf_s(folder,L"%s\\Shadow-R145-%04u%02u%02u-%02u%02u%02u-%lu-%u",root,time.wYear,time.wMonth,time.wDay,time.wHour,time.wMinute,time.wSecond,GetCurrentProcessId(),serial++)<0)return false;
     if(!CreateDirectoryW(folder,nullptr))return false;
     wchar_t path[MAX_PATH]{};swprintf_s(path,L"%s\\manifest.txt",folder);
     manifest=CreateFileW(path,GENERIC_WRITE,FILE_SHARE_READ,nullptr,CREATE_NEW,0,nullptr);
@@ -68,8 +68,8 @@ inline bool Start(bool traceMotion=false) noexcept {
     CloseHandle(log);
     motion=traceMotion;traceStarted=0;lastRequest=0;
     restore=LiveSelection::GetMode(selection.Read());active=true;entered=false;step=imageIndex=failures=0;
-    Note("build=R144 restore=%s steps=%u PNG=display_referred_not_raw_HDR\nFor stationary suites keep camera still; motion traces require walking. F9 cancels. Focus loss cancels. No GPU waits.\nUnavailable shader variants are explicitly skipped. Hit coordinates and legacy unclipped visibility use reference rays. Default spot signal/IDs retain authored clipping and corrected selection.\nStationary GPU capture uses BOTH; motion capture uses DEFAULT. Context records identify the sampled light geometry, not a persistent engine object.",ModeName(restore),motion?capture_plan::transitionSamples:capture_plan::count);
-    Trace("capture_suite_start build=R144 restore=%s steps=%u",ModeName(restore),motion?capture_plan::transitionSamples:capture_plan::count);
+    Note("build=R145 restore=%s steps=%u PNG=display_referred_not_raw_HDR\nFor stationary suites keep camera still; motion traces require walking. F9 cancels. Focus loss cancels. No GPU waits.\nUnavailable shader variants are explicitly skipped. Hit coordinates and legacy unclipped visibility use reference rays. Default spot signal/IDs retain authored clipping and corrected selection.\nStationary GPU capture uses BOTH; motion capture uses DEFAULT. Context records identify sampled light geometry, not a persistent engine object. Composition records contain filtered spot visibility and native diffuse/specular output before tone mapping.",ModeName(restore),motion?capture_plan::transitionSamples:capture_plan::count);
+    Trace("capture_suite_start build=R145 restore=%s steps=%u",ModeName(restore),motion?capture_plan::transitionSamples:capture_plan::count);
     Note("capture_kind=%s requested_samples=%u",motion?"motion_light_context":"stationary_suite",
         motion?capture_plan::transitionSamples:capture_plan::count);
     if(motion)Trace("transition_trace_start samples=%u mode=%s",capture_plan::transitionSamples,ModeName(kDefaultMode));

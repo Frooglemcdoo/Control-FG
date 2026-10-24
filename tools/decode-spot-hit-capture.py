@@ -77,17 +77,22 @@ def decode_log(text):
     data = bytearray(MAX_RECORDS * RECORD.size)
     seen = set()
     contexts = {}
+    signals = {}
+    signal_bytes = begin.get("signal_bytes", 0)
+    if signal_bytes not in (0, 64): raise ValueError("Unsupported composition signal ABI")
     context_bytes = begin.get("light_context_bytes", 0)
     if context_bytes not in (0, 128): raise ValueError("Unsupported light context ABI")
     for line in text.splitlines():
         if ' rt_hit_gpu_record ' not in line: continue
         if not text.index(completed[0]) < text.index(line) < text.index(exported[0]):
             raise ValueError('Record is outside the completed export')
-        match = re.search(r'index=(\d+) bytes=([0-9a-fA-F]{160})(?: light_context=([0-9a-fA-F]{256}))?$', line)
+        match = re.search(r'index=(\d+) bytes=([0-9a-fA-F]{160})(?: light_context=([0-9a-fA-F]{256}))?(?: signal=([0-9a-fA-F]{128}))?$', line)
         if not match: raise ValueError('Malformed capture record')
         index = int(match[1])
         if index >= MAX_RECORDS or index in seen: raise ValueError('Duplicate or out-of-range record')
         if bool(match[3]) != bool(context_bytes): raise ValueError('Missing or unexpected light context')
+        if bool(match[4]) != bool(signal_bytes): raise ValueError('Missing or unexpected composition signal')
+        if match[4]: signals[index] = struct.unpack('<4I12f', bytes.fromhex(match[4]))
         if match[3]: contexts[index] = struct.unpack('<32f', bytes.fromhex(match[3]))
         seen.add(index); data[index*RECORD.size:(index+1)*RECORD.size] = bytes.fromhex(match[2])
     results = decode(data, begin['frame_tag'])
@@ -105,6 +110,14 @@ def decode_log(text):
                 emitter_view=list(values[4:7]), far_distance=values[7], direction_view=list(values[8:11]),
                 far_width=values[11], falloff=list(values[12:14]), radius=values[14], sin_half_cone_squared=values[15],
                 view_to_world=[list(values[16+i*4:20+i*4]) for i in range(4)])
+        if signal_bytes:
+            signal = signals[index]
+            if list(signal[:2]) != record['pixel'] or signal[2] != record['light_id']:
+                raise ValueError('Composition pixel/light differs from captured ray')
+            if not all(math.isfinite(x) for x in signal[4:]) or not -.001 <= signal[4] <= 1.001:
+                raise ValueError('Invalid composition signal')
+            record['composition'] = dict(point_light_id=signal[3], visibility=list(signal[4:8]),
+                                         diffuse=list(signal[8:12]), specular=list(signal[12:16]))
         if record['pixel'] != [(2*(index%64)+1)*width//128, (2*(index//64)+1)*height//128]:
             raise ValueError('Record does not match its native sample pixel')
     return {'schema': 'control-spot-hit-capture-v1',

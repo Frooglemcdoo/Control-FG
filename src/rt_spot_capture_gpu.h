@@ -10,7 +10,10 @@ inline constexpr UINT kInputBytes=kRayCount*rt_spot_capture::CaptureRayBytes, kR
 inline constexpr UINT kLightContextStride=128, kLightContextBytes=kRayCount*kLightContextStride;
 inline constexpr UINT kInputAllocationBytes=kInputBytes+kLightContextBytes;
 inline constexpr UINT kLightContextReadbackOffset=kResultBytes+16;
-inline constexpr UINT kTableBytes=8*1024*1024, kReadbackBytes=kLightContextReadbackOffset+kLightContextBytes;
+inline constexpr UINT kSignalStride=64, kSignalBytes=kRayCount*kSignalStride;
+inline constexpr UINT kSignalReadbackOffset=kLightContextReadbackOffset+kLightContextBytes;
+inline constexpr UINT kTableBytes=8*1024*1024, kReadbackBytes=kSignalReadbackOffset+kSignalBytes;
+inline const GUID kSignalPipeline={0x964c9021,0x414a,0x43d4,{0xa1,0x11,0x70,0,0,0,0,7}};
 inline const GUID kInputState={0x964c9021,0x414a,0x43d4,{0xa1,0x11,0x70,0,0,0,0,3}};
 inline const GUID kTranslate={0x964c9021,0x414a,0x43d4,{0xa1,0x11,0x70,0,0,0,0,4}};
 inline const GUID kClear={0x964c9021,0x414a,0x43d4,{0xa1,0x11,0x70,0,0,0,0,5}};
@@ -19,7 +22,7 @@ struct TableControls {UINT count=0,bytes=0,version=1,reserved=0;unsigned char na
 static_assert(sizeof(TableControls)==144);
 struct Resources {
     ComPtr<ID3D12Device> device;
-    ComPtr<ID3D12Resource> inputs,results,table,status,upload,readback;
+    ComPtr<ID3D12Resource> inputs,results,table,status,upload,readback,signal;
     ComPtr<ID3D12DescriptorHeap> staging;
     ComPtr<ID3D12Fence> fence;
     UINT step=0;
@@ -33,13 +36,14 @@ struct Resources {
     HRESULT Initialize(ID3D12Device* owner) noexcept {
         if(device)return E_UNEXPECTED;
         device=owner;
-        HRESULT hr=Buffer(kInputAllocationBytes,D3D12_HEAP_TYPE_DEFAULT,D3D12_RESOURCE_STATE_UNORDERED_ACCESS,&inputs);
+        HRESULT hr=Buffer(kSignalBytes,D3D12_HEAP_TYPE_DEFAULT,D3D12_RESOURCE_STATE_UNORDERED_ACCESS,&signal);
+        if(SUCCEEDED(hr))hr=Buffer(kInputAllocationBytes,D3D12_HEAP_TYPE_DEFAULT,D3D12_RESOURCE_STATE_UNORDERED_ACCESS,&inputs);
         if(SUCCEEDED(hr))hr=Buffer(kResultBytes,D3D12_HEAP_TYPE_DEFAULT,D3D12_RESOURCE_STATE_UNORDERED_ACCESS,&results);
         if(SUCCEEDED(hr))hr=Buffer(kTableBytes,D3D12_HEAP_TYPE_DEFAULT,D3D12_RESOURCE_STATE_UNORDERED_ACCESS,&table);
         if(SUCCEEDED(hr))hr=Buffer(16,D3D12_HEAP_TYPE_DEFAULT,D3D12_RESOURCE_STATE_UNORDERED_ACCESS,&status);
         if(SUCCEEDED(hr))hr=Buffer(1024,D3D12_HEAP_TYPE_UPLOAD,D3D12_RESOURCE_STATE_GENERIC_READ,&upload);
         if(SUCCEEDED(hr))hr=Buffer(kReadbackBytes,D3D12_HEAP_TYPE_READBACK,D3D12_RESOURCE_STATE_COPY_DEST,&readback);
-        D3D12_DESCRIPTOR_HEAP_DESC desc{};desc.Type=D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;desc.NumDescriptors=49*4;
+        D3D12_DESCRIPTOR_HEAP_DESC desc{};desc.Type=D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;desc.NumDescriptors=49*5;
         if(SUCCEEDED(hr))hr=owner->CreateDescriptorHeap(&desc,IID_PPV_ARGS(&staging));
         if(SUCCEEDED(hr))hr=owner->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&fence));
         if(SUCCEEDED(hr))step=owner->GetDescriptorHandleIncrementSize(desc.Type);

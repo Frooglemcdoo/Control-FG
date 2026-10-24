@@ -278,6 +278,17 @@ inline void ObserveCompute(ID3D12Device* device, const D3D12_COMPUTE_PIPELINE_ST
         spotBandColorsReady.store(SUCCEEDED(bandResult),std::memory_order_release);
         Trace("rt_spot_band_colors ready=%u hr=0x%08lX",unsigned(SUCCEEDED(bandResult)),static_cast<unsigned long>(bandResult));
     }
+    if constexpr (rt_spot_capture::GpuCaptureEnabled) {
+        if(SUCCEEDED(hr) && kind==kLightComponent) {
+            custom.CS={rt_spot_capture_gpu::kSpotCaptureSignalShader,sizeof(rt_spot_capture_gpu::kSpotCaptureSignalShader)};
+            ID3D12PipelineState* signal=nullptr;
+            HRESULT signalHr=create(device,&custom,IID_PPV_ARGS(&signal));
+            if(SUCCEEDED(signalHr))signalHr=owner->SetPrivateDataInterface(rt_spot_capture_gpu::kSignalPipeline,signal);
+            if(signal)signal->Release();
+            rt_spot_capture_runtime::signalReady.store(SUCCEEDED(signalHr));
+            Trace("composition_capture_pipeline ready=%u hr=0x%08lX",unsigned(SUCCEEDED(signalHr)),static_cast<unsigned long>(signalHr));
+        }
+    }
     // Optional diagnostic failure must not disable the working spotlight path.
     if (SUCCEEDED(hr) && kind == kLightComponent) {
         custom.CS = {kSpotOpenShader,sizeof(kSpotOpenShader)};

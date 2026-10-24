@@ -22,6 +22,8 @@ namespace rt_spot_capture_audit { inline void ReleaseFinishedOwners() noexcept; 
 namespace rt_spot_table_audit { inline void Request() noexcept; }
 namespace rt_spot_capture_runtime {
 inline void Poll() noexcept;
+inline void BindCompute(ID3D12GraphicsCommandList*,ID3D12PipelineState*,ID3D12PipelineState*) noexcept;
+inline void AfterCompute(ID3D12GraphicsCommandList*,UINT,UINT,UINT) noexcept;
 inline void BeforeExecute(ID3D12CommandQueue*,UINT,ID3D12CommandList*const*) noexcept;
 inline void AfterExecute(ID3D12CommandQueue*,UINT,ID3D12CommandList*const*) noexcept;
 inline void ObserveTableOwner(ID3D12Resource*) noexcept;
@@ -258,7 +260,8 @@ struct Binding {
 };
 using SetPso = void (STDMETHODCALLTYPE*)(ID3D12GraphicsCommandList*, ID3D12PipelineState*);
 using ResetList = HRESULT (STDMETHODCALLTYPE*)(ID3D12GraphicsCommandList*, ID3D12CommandAllocator*, ID3D12PipelineState*);
-struct ListHooks { void** table = nullptr; SetPso set = nullptr; ResetList reset = nullptr; };
+using ComputeDispatch = void (STDMETHODCALLTYPE*)(ID3D12GraphicsCommandList*,UINT,UINT,UINT);
+struct ListHooks { void** table = nullptr; SetPso set = nullptr; ResetList reset = nullptr; ComputeDispatch dispatch = nullptr; };
 inline ListHooks listHooks[8]{};
 inline SRWLOCK hookLock = SRWLOCK_INIT;
 inline ListHooks Lookup(ID3D12GraphicsCommandList* list) noexcept {
@@ -275,8 +278,14 @@ inline void STDMETHODCALLTYPE SetHook(ID3D12GraphicsCommandList* list, ID3D12Pip
     Binding binding(pso);
     auto* alternate = rt_spot_runtime::SelectCompute(binding.selected);
     original(list, alternate ? alternate : binding.selected);
+    rt_spot_capture_runtime::BindCompute(list,pso,alternate ? alternate : binding.selected);
     if (alternate) alternate->Release();
     binding.Recorded();
+}
+inline void STDMETHODCALLTYPE ComputeDispatchHook(ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT z) {
+    const auto original=Lookup(list).dispatch;if(!original)return;
+    original(list,x,y,z);
+    rt_spot_capture_runtime::AfterCompute(list,x,y,z);
 }
 inline HRESULT STDMETHODCALLTYPE ResetHook(ID3D12GraphicsCommandList* list, ID3D12CommandAllocator* allocator, ID3D12PipelineState* pso) {
     const auto original = Lookup(list).reset;
@@ -317,9 +326,11 @@ inline void InstallList(ID3D12GraphicsCommandList* list) noexcept {
         if (!entry.table && !available) available = &entry;
     }
     if (available) {
-        *available = {table, reinterpret_cast<SetPso>(table[25]), reinterpret_cast<ResetList>(table[10])};
+        *available = {table, reinterpret_cast<SetPso>(table[25]), reinterpret_cast<ResetList>(table[10]),reinterpret_cast<ComputeDispatch>(table[14])};
         const bool set = PatchSlot(&table[25], reinterpret_cast<void*>(available->set), reinterpret_cast<void*>(&SetHook));
         const bool reset = PatchSlot(&table[10], reinterpret_cast<void*>(available->reset), reinterpret_cast<void*>(&ResetHook));
+        if constexpr (rt_spot_capture::GpuCaptureEnabled)
+            PatchSlot(&table[14],reinterpret_cast<void*>(available->dispatch),reinterpret_cast<void*>(&ComputeDispatchHook));
         Trace("command_list_hooks set=%u reset=%u", unsigned(set), unsigned(reset));
     } else Trace("command_list_hooks failed=capacity");
     ReleaseSRWLockExclusive(&hookLock);

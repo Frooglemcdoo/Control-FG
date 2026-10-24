@@ -645,6 +645,7 @@ static void TestCopyAudit(ID3D12Device* device) {
 }
 
 #include "rt_spot_capture_gpu_warp_test.h"
+#include "rt_spot_capture_signal_test.h"
 
 int main() try {
     TestCapturePipelineDescription();
@@ -656,6 +657,7 @@ int main() try {
     ComPtr<IDXGIAdapter> adapter; Check(factory->EnumWarpAdapter(IID_PPV_ARGS(&adapter)));
     ComPtr<ID3D12Device> device; Check(D3D12CreateDevice(adapter.Get(),D3D_FEATURE_LEVEL_11_0,IID_PPV_ARGS(&device)));
     TestGpuHitTableTranslation(device.Get());
+    TestCompositionSignal(device.Get());
     TestHitCaptureSubmissionPolicy(device.Get());
     TestHitCaptureExportRetry();
     TestHitSetupAudit(device.Get());
@@ -847,6 +849,7 @@ int main() try {
         namespace capture=rt_spot_capture_runtime;
         if constexpr(rt_spot_capture::GpuCaptureEnabled) {
             capture::ready=true;capture::phase=capture::Phase::Idle;
+            capture::signalReady=true;
             if(!capture::RequestFresh() || capture::RequestFresh())throw std::runtime_error("Capture arm must be exclusive");
             capture::CancelPending();
             for(auto phase:{capture::Phase::Recorded,capture::Phase::Submitted,capture::Phase::Failed}){

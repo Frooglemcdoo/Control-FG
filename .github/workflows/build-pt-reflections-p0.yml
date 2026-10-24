@@ -256,6 +256,8 @@ jobs:
           if($LASTEXITCODE -ne 0){throw 'GPU table translation compile failed'}
           & $dxc -T cs_6_0 -E clearStatus -O3 -WX -Fo build/rt_spot_capture_clear.dxil src/shaders/rt_spot_capture_table.hlsl
           if($LASTEXITCODE -ne 0){throw 'GPU table status compile failed'}
+          & $dxc -T cs_6_0 -E captureComposition -O3 -WX -Fo build/rt_spot_capture_signal.dxil src/shaders/rt_spot_capture_signal.hlsl
+          if($LASTEXITCODE -ne 0){throw 'Composition signal capture compile failed'}
           python tools/embed-spot-capture-table.py
           if($LASTEXITCODE -ne 0){throw 'GPU table embedding failed'}
           python tools/rt_spot_capture_inputs.py
@@ -482,11 +484,11 @@ jobs:
           build\test-lighting-capture-plan.exe
           if errorlevel 1 exit /b 1
 
-      - name: Package live lighting diagnostic R144
+      - name: Package live lighting diagnostic R145
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-Native-Lighting-Live-R144'
+          $out='Control-FG-Native-Lighting-Live-R145'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
           Copy-Item build/rt_spot_selected_off.dxbc,build/rt_spot_selection.dxbc,build/rt_spot_visibility.dxbc,build/rt_spot_light_ids.dxbc,build/rt_spot_raw_history.dxbc,build/rt_spot_raw_spatial0.dxbc,build/rt_spot_raw_spatial1.dxbc,build/rt_spot_full.dxil,build/rt_spot_r94.dxil,build/rt_spot_light.dxbc,build/rt_spot_reset.dxbc,build/rt_spot_history.dxbc,build/rt_spot_spatial0.dxbc,build/rt_spot_spatial1.dxbc $out
@@ -505,9 +507,9 @@ jobs:
           Copy-Item Collect-ControlFG-Compact-Logs.cmd "$out/Collect-ControlFG-Compact-Logs.cmd"
           Copy-Item Collect-ControlFG-Compact-Logs.ps1 "$out/Collect-ControlFG-Compact-Logs.ps1"
           Copy-Item Package-Lighting-Capture.cmd,tools/package-lighting-capture.py $out
-          Copy-Item docs/motion-light-context-r144.md "$out/DIAGNOSTIC-NOTES.md"
+          Copy-Item docs/motion-light-context-r145.md "$out/DIAGNOSTIC-NOTES.md"
           @'
-          CONTROL-FG R144 - Motion light-context capture
+          CONTROL-FG R145 - Motion light-context capture
           Close Control to install. Copy contents beside Control_DX12.exe.
           Preserve existing NVIDIA runtimes and the ControlFGStreamline folder.
           Keep RT Contact Shadows on, samples 1, FG/glass enhancements off.
@@ -516,13 +518,14 @@ jobs:
           Shift+F9: start a six-sample motion capture. Walk through the affected room and back.
           Keep moving until the completion dialog appears, usually 25-40 seconds.
           No mode cycling or screenshots. Default stays selected throughout the trace.
-          Drag the completed Shadow-R144 folder onto Package-Lighting-Capture.cmd.
+          Drag the completed Shadow-R145 folder onto Package-Lighting-Capture.cmd.
           Send ALL ZIPs from the new SEND folder (each below 200 MB), plus your video.
           The packager uses installed Python 3.8+ without extra packages.
           The folder contains one lighting.log and manifest.txt. No Python setup required.
           F9 or Shift+F9 cancels; losing focus also cancels. Prior mode is restored.
           Plain F9 still runs 28 stationary comparisons / up to 84 PNGs; keep still for that suite.
-          The trace captures selected-light geometry, not exposure or final shadow visibility.
+          The trace captures light geometry, filtered shadow visibility and native lighting output.
+          Values are captured before tone mapping; exposure itself is not captured.
           Diagnostic hit rays remain unclipped references. See DIAGNOSTIC-NOTES.md.
           '@ | Set-Content "$out/README.txt" -Encoding ASCII
           Compress-Archive -Path "$out/*" -DestinationPath "$out.zip" -Force
@@ -531,10 +534,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-Native-Lighting-Live-R144
+          name: Control-FG-Native-Lighting-Live-R145
           path: |
-            Control-FG-Native-Lighting-Live-R144.zip
-            Control-FG-Native-Lighting-Live-R144.sha256
+            Control-FG-Native-Lighting-Live-R145.zip
+            Control-FG-Native-Lighting-Live-R145.sha256
             build/rt_spot_shadow_prototype.dxil
             build/rr_clamp_fixed.h
             build/rt_spot_blocker.dxil

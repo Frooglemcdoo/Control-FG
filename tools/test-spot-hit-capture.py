@@ -78,3 +78,17 @@ for bad in [context_log.replace(' light_context='+context,''),
     except ValueError:pass
     else:raise AssertionError('Missing, undeclared or truncated light context accepted')
 print('PASS R133 light context field offsets, versioning, completeness and R132 compatibility')
+
+signal = struct.pack('<4I12f', 1, 1, 7, 65535, .25, .75, 0, 0, 8, 4, 2, 1, 16, 8, 4, 1).hex()
+# The fixture's actual selected light ID is authoritative.
+light = decoder.decode_log(context_log)['records'][0]['light_id']
+signal = struct.pack('<4I12f', 1, 1, light, 65535, .25, .75, 0, 0, 8, 4, 2, 1, 16, 8, 4, 1).hex()
+signal_log = context_log.replace('light_context_bytes=128', 'light_context_bytes=128 signal_bytes=64').replace(' light_context='+context, ' light_context='+context+' signal='+signal)
+result = decoder.decode_log(signal_log)['records'][0]['composition']
+assert result['visibility'][0] == .25 and result['diffuse'][0] == 8 and result['specular'][0] == 16
+for bad in [signal_log.replace(' signal='+signal, ''), signal_log.replace('signal_bytes=64','signal_bytes=32'),
+            signal_log.replace(signal, '00000000'+signal[8:]), signal_log.replace(signal, signal[:32]+'0000807f'+signal[40:])]:
+    try: decoder.decode_log(bad)
+    except ValueError: pass
+    else: raise AssertionError('Invalid composition capture accepted')
+print('PASS R145 signal decoding: HDR preserved, pixel provenance, finite visibility, complete ABI')

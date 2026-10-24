@@ -21,7 +21,10 @@ inline unsigned attempts=0,exportCursor=0,exportStage=0;
 inline UINT64 fenceValue=1;
 inline UINT completionStatus[4]{},completionRays=0,completionHits=0;
 inline UINT frameTag=0,capturedWidth=0,capturedHeight=0,capturedTableRecords=0;
-inline bool readbackCopied=false;
+inline bool readbackCopied=false,signalRecorded=false;
+inline std::atomic<bool> signalReady{false};
+inline thread_local ID3D12GraphicsCommandList* signalList=nullptr;
+inline thread_local ComPtr<ID3D12PipelineState> signalOwner,signalRendered;
 inline unsigned char completedBytes[gpu::kReadbackBytes]{};
 inline thread_local bool inScope=false,internal=false;
 struct Context {
@@ -89,7 +92,7 @@ inline void Fail(const char* reason) noexcept {
 // UI thread only. A failed or still-owned recording is never recycled.
 inline bool RequestFresh() noexcept {
     if constexpr (!rt_spot_capture::GpuCaptureEnabled) return false;
-    if(!ready.load())return false;
+    if(!ready.load() || !signalReady.load())return false;
     AcquireSRWLockExclusive(&stateLock);
     bool accepted=false;
     if(phase.load()==Phase::Idle)accepted=true;
@@ -103,7 +106,7 @@ inline bool RequestFresh() noexcept {
             accepted=true;
         }
     }
-    if(accepted){attempts=0;phase.store(Phase::Armed,std::memory_order_release);}
+    if(accepted){attempts=0;signalRecorded=false;phase.store(Phase::Armed,std::memory_order_release);}
     ReleaseSRWLockExclusive(&stateLock);
     if(accepted){rt_spot_table_audit::Request();Trace("rt_hit_gpu_requested grid=64 repeatable=1 fence=%llu",fenceValue);}
     return accepted;
@@ -121,12 +124,15 @@ inline void BeginScope() noexcept {
 }
 inline void EndScope() noexcept {
     if(!inScope)return;
-    inScope=false;
+    inScope=false;signalList=nullptr;signalOwner.Reset();signalRendered.Reset();
+    if(phase.load()==Phase::Recorded && !signalRecorded){Fail("composition_signal_not_recorded");return;}
     Phase expected=Phase::Recording;
     if(phase.compare_exchange_strong(expected,Phase::Armed) && ++attempts>=240)Fail("binding_attempt_budget");
 }
 inline bool Mirror(D3D12_CPU_DESCRIPTOR_HANDLE to,UINT count,UINT& index,UINT& skip,UINT& copied) noexcept {
-    if(!inScope || internal || phase.load()!=Phase::Recording)return false;
+    if(!inScope || internal)return false;
+    const auto phaseNow=phase.load();
+    if(phaseNow!=Phase::Recording && !(phaseNow==Phase::Recorded && !signalRecorded))return false;
     Context current;if(!ReadContext(current))return false;
     if(current.list!=mirrored.list || current.heap!=mirrored.heap || current.gpu.ptr!=mirrored.gpu.ptr) {
         mirrored=current;observed=0;internal=true;
@@ -190,6 +196,44 @@ inline void ObserveTableOwner(ID3D12Resource* resource) noexcept {
 }
 template<class T> inline bool Attached(ID3D12Object* owner,REFGUID key,ComPtr<T>& object) noexcept {
     UINT size=sizeof(T*);return SUCCEEDED(owner->GetPrivateData(key,&size,object.ReleaseAndGetAddressOf())) && object;
+}
+// Bound PSOs are retained only for the current verified native spotlight pass.
+inline void BindCompute(ID3D12GraphicsCommandList* list,ID3D12PipelineState* owner,ID3D12PipelineState* rendered) noexcept {
+    if(!inScope || internal)return;
+    signalList=list;signalOwner=owner;signalRendered=rendered;
+}
+inline void AfterCompute(ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT z) noexcept {
+    if(!inScope || internal || phase.load()!=Phase::Recorded || signalRecorded || list!=signalList)return;
+    ComPtr<ID3D12PipelineState> pipeline;
+    if(!signalOwner || !Attached(signalOwner.Get(),gpu::kSignalPipeline,pipeline))return;
+    constexpr UINT64 required=(1ull<<19)|(1ull<<20)|(1ull<<41)|(1ull<<42);
+    Context current;
+    if(list!=recordedList.Get() || x!=(capturedWidth+7)/8 || y!=(capturedHeight+7)/8 || z!=1 ||
+       !ReadContext(current) || current.list!=list || current.list!=mirrored.list ||
+       current.heap!=mirrored.heap || current.gpu.ptr!=mirrored.gpu.ptr || (observed&required)!=required) {
+        Fail("composition_signal_bindings");return;
+    }
+    D3D12_GPU_DESCRIPTOR_HANDLE table{};D3D12_CPU_DESCRIPTOR_HANDLE destination{};
+    if(!Fresh(current,table,destination)){Fail("composition_signal_table");return;}
+    const auto original=Lookup(list).set;
+    if(!original || !signalRendered){Fail("composition_signal_restore");return;}
+    internal=true;
+    constexpr UINT base=49*4;
+    originalCopy(resources.device.Get(),49,resources.At(base),resources.At(0),D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+    D3D12_CONSTANT_BUFFER_VIEW_DESC cb{resources.upload->GetGPUVirtualAddress(),256};
+    originalCbv(resources.device.Get(),&cb,resources.At(base));
+    resources.RawUav(resources.signal.Get(),gpu::kSignalBytes,base+43);
+    originalCopy(resources.device.Get(),49,destination,resources.At(base),D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+    // Order the native UAV writes before diagnostic reads. Native resources stay
+    // in their existing states; only our private buffer transitions for copying.
+    gpu::UavBarrier(list);
+    list->SetComputeRootDescriptorTable(0,table);original(list,pipeline.Get());
+    list->Dispatch(8,8,1);
+    gpu::Transition(list,resources.signal.Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS,D3D12_RESOURCE_STATE_COPY_SOURCE);
+    list->CopyBufferRegion(resources.readback.Get(),gpu::kSignalReadbackOffset,resources.signal.Get(),0,gpu::kSignalBytes);
+    gpu::Transition(list,resources.signal.Get(),D3D12_RESOURCE_STATE_COPY_SOURCE,D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+    list->SetComputeRootDescriptorTable(0,current.gpu);original(list,signalRendered.Get());
+    internal=false;signalRecorded=true;
 }
 inline void Record(ID3D12GraphicsCommandList4* list,ID3D12StateObject* owner,const D3D12_DISPATCH_RAYS_DESC* desc) noexcept {
     if constexpr (!rt_spot_capture::GpuCaptureEnabled) return;
@@ -283,6 +327,7 @@ inline void Record(ID3D12GraphicsCommandList4* list,ID3D12StateObject* owner,con
     gpu::Transition(list,resources.inputs.Get(),D3D12_RESOURCE_STATE_COPY_SOURCE,D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
     gpu::Transition(list,resources.table.Get(),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
     list->SetComputeRootDescriptorTable(0,current.gpu);hooks.set(list,owner);
+    mirrored={};observed=0;
     phase.store(Phase::Recorded,std::memory_order_release);
     Trace("rt_hit_gpu_recording generation=%llu frame_tag=%u extent=%ux%u rays=4096 table_records=%u native_outputs_untouched=1 bindings_restored=1",recordedGeneration,frameTag,capturedWidth,capturedHeight,tableControls.count);
 }
@@ -294,7 +339,10 @@ inline void BeforeExecute(ID3D12CommandQueue* queue,UINT count,ID3D12CommandList
         UINT64 generation=0;UINT size=sizeof(generation);
         if(FAILED(lists[i]->GetPrivateData(rt_spot_table_audit::kGeneration,&size,&generation)) || generation!=recordedGeneration)continue;
         AcquireSRWLockExclusive(&stateLock);
-        if(phase.load()==Phase::Recorded){submittedQueue=queue;phase.store(Phase::Submitting);}
+        if(phase.load()==Phase::Recorded){
+            if(!signalRecorded){Fail("submission_before_composition_signal");}
+            else {submittedQueue=queue;phase.store(Phase::Submitting);}
+        }
         else if(!readbackCopied)Fail("recording_replayed_before_readback");
         ReleaseSRWLockExclusive(&stateLock);
     }
@@ -351,7 +399,7 @@ inline void Poll() noexcept {
     // Retry canonical headers and records if the nonblocking log queue is busy.
     // Cursor advancement means successful enqueue, never merely an attempted write.
     if(exportStage==0) {
-        if(!Trace("rt_hit_gpu_recorded generation=%llu frame_tag=%u extent=%ux%u table_records=%u captured_present=%llu light_context_bytes=128",recordedGeneration,frameTag,capturedWidth,capturedHeight,capturedTableRecords,recordedPresent))return;
+        if(!Trace("rt_hit_gpu_recorded generation=%llu frame_tag=%u extent=%ux%u table_records=%u captured_present=%llu light_context_bytes=128 signal_bytes=64",recordedGeneration,frameTag,capturedWidth,capturedHeight,capturedTableRecords,recordedPresent))return;
         exportStage=1;
     }
     if(exportStage==1) {
@@ -366,7 +414,9 @@ inline void Poll() noexcept {
             char hex[161]{};rt_spot_capture_audit::Hex(record,80,hex);
             char contextHex[gpu::kLightContextStride*2+1]{};
             rt_spot_capture_audit::Hex(completedBytes+gpu::kLightContextReadbackOffset+exportCursor*gpu::kLightContextStride,gpu::kLightContextStride,contextHex);
-            if(!Trace("rt_hit_gpu_record index=%u bytes=%s light_context=%s",exportCursor,hex,contextHex))return;
+            char signalHex[gpu::kSignalStride*2+1]{};
+            rt_spot_capture_audit::Hex(completedBytes+gpu::kSignalReadbackOffset+exportCursor*gpu::kSignalStride,gpu::kSignalStride,signalHex);
+            if(!Trace("rt_hit_gpu_record index=%u bytes=%s light_context=%s signal=%s",exportCursor,hex,contextHex,signalHex))return;
         }
     }
     if(exportCursor==gpu::kRayCount && Trace("rt_hit_gpu_export_complete records_examined=4096 format=CaptureResult80 frame_tag=%u",frameTag))exportStage=3;
