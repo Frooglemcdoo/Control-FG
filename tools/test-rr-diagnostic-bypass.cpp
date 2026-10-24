@@ -8,7 +8,7 @@ int main() {
     using namespace native_lighting;
     for (bool requested : {false,true}) {
         RRUserRequest(requested);
-        for (Mode mode : {Mode::RoomBoth,Mode::RoomBlocker,Mode::RoomHitX,Mode::RoomHitY,Mode::RoomHitZ,Mode::RtSpotVisibilityRaw,Mode::RtSpotLightIds,Mode::RoomBoth}) {
+        for (Mode mode : {Mode::RoomBoth,Mode::RoomAuthoredClip,Mode::RoomBlocker,Mode::RoomHitX,Mode::RoomHitY,Mode::RoomHitZ,Mode::RtSpotVisibilityRaw,Mode::RtSpotLightIds,Mode::RoomBoth}) {
             RRSetDiagnosticBypass(IsSignalDiagnostic(mode));
             assert(RRUserRequested()==requested);
             assert(RRUserRuntimeWorkRequested()==(requested&&!IsSignalDiagnostic(mode)));

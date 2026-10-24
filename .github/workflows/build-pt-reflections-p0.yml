@@ -177,6 +177,8 @@ jobs:
           python tools/rt_spot_hit_position.py
           python tools/test-rt-spot-hit-position.py
           python tools/test-spot-hit-capture.py
+          python tools/rt_spot_authored_clip.py
+          python tools/test-rt-spot-authored-clip.py
           python tools/rt_spot_blocker.py
           python tools/test-rt-spot-blocker.py
 
@@ -364,7 +366,7 @@ jobs:
           build\test-native-lighting-capture-warp.exe
           if errorlevel 1 exit /b 1
 
-      - name: Build and validate standalone capture preflight R133
+      - name: Build and validate standalone capture preflight R134
         shell: cmd
         run: |
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
@@ -375,17 +377,17 @@ jobs:
           build\Capture-Preflight.exe --warp
           if errorlevel 1 exit /b 1
 
-      - name: Package standalone capture preflight R133
+      - name: Package standalone capture preflight R134
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-Capture-Preflight-R133'
+          $out='Control-FG-Capture-Preflight-R134'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/Capture-Preflight.exe "$out/Capture-Preflight.exe"
           Copy-Item tools/Run-Capture-Preflight.cmd "$out/Run-Capture-Preflight.cmd"
-          Copy-Item docs/capture-preflight-r133.md "$out/README.md"
+          Copy-Item docs/capture-preflight-r134.md "$out/README.md"
           New-Item -ItemType Directory -Force -Path build/preflight-logs | Out-Null
-          Copy-Item "$env:LOCALAPPDATA/Control-FG/Diagnostics/Capture-R133-*.log" build/preflight-logs
+          Copy-Item "$env:LOCALAPPDATA/Control-FG/Diagnostics/Capture-R134-*.log" build/preflight-logs
           Get-Content build/preflight-logs/*.log
           Compress-Archive -Path $out -DestinationPath "$out.zip" -Force
           (Get-FileHash "$out.zip" -Algorithm SHA256).Hash | Set-Content "$out.sha256" -Encoding ASCII
@@ -393,10 +395,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-Capture-Preflight-R133
+          name: Control-FG-Capture-Preflight-R134
           path: |
-            Control-FG-Capture-Preflight-R133.zip
-            Control-FG-Capture-Preflight-R133.sha256
+            Control-FG-Capture-Preflight-R134.zip
+            Control-FG-Capture-Preflight-R134.sha256
             build/preflight-logs/*.log
           retention-days: 7
 
@@ -460,11 +462,11 @@ jobs:
       - name: Preserve verified glass raygen across DXC updates
         run: python tools/prepare-canonical-glass.py
 
-      - name: Package live lighting diagnostic R133
+      - name: Package live lighting diagnostic R134
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-Native-Lighting-Live-R133'
+          $out='Control-FG-Native-Lighting-Live-R134'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
           Copy-Item build/rt_spot_selected_off.dxbc,build/rt_spot_selection.dxbc,build/rt_spot_visibility.dxbc,build/rt_spot_light_ids.dxbc,build/rt_spot_raw_history.dxbc,build/rt_spot_raw_spatial0.dxbc,build/rt_spot_raw_spatial1.dxbc,build/rt_spot_full.dxil,build/rt_spot_r94.dxil,build/rt_spot_light.dxbc,build/rt_spot_reset.dxbc,build/rt_spot_history.dxbc,build/rt_spot_spatial0.dxbc,build/rt_spot_spatial1.dxbc $out
@@ -482,21 +484,19 @@ jobs:
           Copy-Item Collect-RR-Blinds-Capture.ps1 "$out/Collect-RR-Blinds-Capture.ps1"
           Copy-Item Collect-ControlFG-Compact-Logs.cmd "$out/Collect-ControlFG-Compact-Logs.cmd"
           Copy-Item Collect-ControlFG-Compact-Logs.ps1 "$out/Collect-ControlFG-Compact-Logs.ps1"
-          Copy-Item docs/spot-capture-r133.md "$out/DIAGNOSTIC-NOTES.md"
+          Copy-Item docs/spot-authored-clip-r134.md "$out/DIAGNOSTIC-NOTES.md"
           @'
-          CONTROL-FG R133 - Authored spotlight context capture
+          CONTROL-FG R134 - Authored spotlight boundary comparison
           Close Control to install. Copy contents beside Control_DX12.exe.
           Preserve existing NVIDIA runtimes and the ControlFGStreamline folder.
-          Load the affected room with RT Contact Shadows on, samples 1,
-          and FG and glass enhancements off. Face the affected light/table/floor.
-          Open F10, select BOTH once, then close the overlay.
-          Hold the view for a few seconds and let the game run for 70 seconds.
-          Send the Lighting-R133 log from %LOCALAPPDATA%/Control-FG/Diagnostics.
-          Logs save automatically; SAVE LOG is optional.
-          One bounded GPU capture is allowed per game session.
-          Adds each selected light's native cone, near distance, radius and transform.
-          This tests in-game capture; it is not a new lighting correction.
-          Existing centered shadows, GI filtering, guides, glass and clamp remain.
+          Keep RT Contact Shadows on, samples 1, FG/glass enhancements off.
+          In F10 compare BOTH (unchanged R134 shadows) and AUTHORED CLIP.
+          Allow the shadow history to settle after each change.
+          Check affected lighting, close Jesse/object shadows and several rooms.
+          No restart is needed between modes. RR and GI filtering stay enabled.
+          Send comparisons and Lighting-R134 from %LOCALAPPDATA%/Control-FG/Diagnostics.
+          This is a general per-light rule under test, not yet a confirmed universal fix.
+          No mesh IDs, room coordinates, global distance cutoff or extra rays.
           See DIAGNOSTIC-NOTES.md for scope and limitations.
           '@ | Set-Content "$out/README.txt" -Encoding ASCII
           Compress-Archive -Path "$out/*" -DestinationPath "$out.zip" -Force
@@ -505,10 +505,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-Native-Lighting-Live-R133
+          name: Control-FG-Native-Lighting-Live-R134
           path: |
-            Control-FG-Native-Lighting-Live-R133.zip
-            Control-FG-Native-Lighting-Live-R133.sha256
+            Control-FG-Native-Lighting-Live-R134.zip
+            Control-FG-Native-Lighting-Live-R134.sha256
             build/rt_spot_shadow_prototype.dxil
             build/rr_clamp_fixed.h
             build/rt_spot_blocker.dxil

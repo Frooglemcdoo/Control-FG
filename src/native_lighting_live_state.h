@@ -4,7 +4,7 @@
 #include "rr_specular_temporal_policy.h"
 
 namespace native_lighting {
-enum class Mode : unsigned { Native, DisableBakedGi, DisableDirect, DisableDirectDiffuse, DisableDirectSpecular, BypassShadows, DisableLightPattern, BypassScreenShadows, BypassSpotShadows, BypassPointShadows, SpotVarianceLow, SpotVarianceHigh, SpotPcfCenter, SpotPcf32, SpotStableSoft, SpotStableTight, SpotBilinear, SpotResolution2x, RtSpot, RtSpotRaw, RtSpotMapGuard, RtSpotNativeCull, RtSpotVisibilityRaw, RtSpotVisibilityFiltered, RtSpotLightIds, RtSpotBaseline, RtSpotDiffuseFiltered, RtSpotGiFiltered, RtSpotWorldAlbedo, RtSpotSpecularFiltered, RtSpotViewAngle, RtSpotGi2, RtSpotGi4, RtSpotGi8, RtSpotGiMenu, RtSpotGi12, RtSpotGi16, RtSpotSpec1, RtSpotSpec2, RtSpotSpec4, RtSpotSpec8, RtSpotSpec12, RtSpotSpec16, RtSpotTemporal2, RtSpotTemporal4, RoomNative, RoomGi, RoomSpot, RoomBoth, RoomNativeSelection, RoomOpen, RoomSelectedOff, RoomRaw, RoomBlocker, RoomHitX, RoomHitY, RoomHitZ };
+enum class Mode : unsigned { Native, DisableBakedGi, DisableDirect, DisableDirectDiffuse, DisableDirectSpecular, BypassShadows, DisableLightPattern, BypassScreenShadows, BypassSpotShadows, BypassPointShadows, SpotVarianceLow, SpotVarianceHigh, SpotPcfCenter, SpotPcf32, SpotStableSoft, SpotStableTight, SpotBilinear, SpotResolution2x, RtSpot, RtSpotRaw, RtSpotMapGuard, RtSpotNativeCull, RtSpotVisibilityRaw, RtSpotVisibilityFiltered, RtSpotLightIds, RtSpotBaseline, RtSpotDiffuseFiltered, RtSpotGiFiltered, RtSpotWorldAlbedo, RtSpotSpecularFiltered, RtSpotViewAngle, RtSpotGi2, RtSpotGi4, RtSpotGi8, RtSpotGiMenu, RtSpotGi12, RtSpotGi16, RtSpotSpec1, RtSpotSpec2, RtSpotSpec4, RtSpotSpec8, RtSpotSpec12, RtSpotSpec16, RtSpotTemporal2, RtSpotTemporal4, RoomNative, RoomGi, RoomSpot, RoomBoth, RoomNativeSelection, RoomOpen, RoomSelectedOff, RoomRaw, RoomBlocker, RoomHitX, RoomHitY, RoomHitZ, RoomAuthoredClip };
 inline bool IsGiSampleMode(Mode mode) noexcept {
     return mode==Mode::RtSpotGi2 || mode==Mode::RtSpotGi4 ||
            mode==Mode::RtSpotGi8 || mode==Mode::RtSpotGiMenu ||
@@ -14,13 +14,13 @@ inline constexpr bool IsHitPositionMode(Mode mode) noexcept {
     return mode==Mode::RoomHitX || mode==Mode::RoomHitY || mode==Mode::RoomHitZ;
 }
 inline bool IsSpotIsolationMode(Mode mode) noexcept {
-    return IsHitPositionMode(mode)||mode==Mode::RoomRaw||mode==Mode::RoomBlocker||mode==Mode::RoomNativeSelection||mode==Mode::RoomOpen||mode==Mode::RoomSelectedOff;
+    return mode==Mode::RoomAuthoredClip||IsHitPositionMode(mode)||mode==Mode::RoomRaw||mode==Mode::RoomBlocker||mode==Mode::RoomNativeSelection||mode==Mode::RoomOpen||mode==Mode::RoomSelectedOff;
 }
 inline bool IsSignalDiagnostic(Mode mode) noexcept {
     return IsHitPositionMode(mode) || mode==Mode::RoomBlocker || mode==Mode::RtSpotVisibilityRaw ||
         mode==Mode::RtSpotVisibilityFiltered || mode==Mode::RtSpotLightIds;
 }
-inline std::atomic<bool> spotBandColorsReady{false}, spotHitPositionReady{false};
+inline std::atomic<bool> spotBandColorsReady{false}, spotHitPositionReady{false}, spotAuthoredClipReady{false};
 inline std::atomic<bool> spotOpenReady{false}, spotBlockerReady{false};
 inline bool IsRoomMode(Mode mode) noexcept {
     return IsSpotIsolationMode(mode)||mode==Mode::RoomNative||mode==Mode::RoomGi||mode==Mode::RoomSpot||mode==Mode::RoomBoth;
@@ -100,7 +100,7 @@ inline constexpr unsigned kSpotResolutionReadyBit = 1u << 16;
 inline constexpr unsigned kRtSpotReadyBit = 1u << 17;
 struct ModeChoice { Mode mode; const wchar_t* label; };
 inline constexpr ModeChoice kModeChoices[] = {
-    {Mode::RoomGi, L"GI ONLY"}, {Mode::RoomBoth, L"BOTH"}, {Mode::RoomBlocker, L"HIT BANDS"},
+    {Mode::RoomGi, L"GI ONLY"}, {Mode::RoomBoth, L"BOTH"}, {Mode::RoomAuthoredClip, L"AUTHORED CLIP"},
     {Mode::RoomHitX, L"HIT X"}, {Mode::RoomHitY, L"HIT Y"}, {Mode::RoomHitZ, L"HIT Z"},
     {Mode::RtSpotVisibilityRaw, L"VISIBILITY"}, {Mode::RtSpotLightIds, L"LIGHT IDS"}, {Mode::RoomOpen, L"LIGHT OPEN"}
 };
@@ -135,6 +135,7 @@ inline unsigned RequiredBinding(Mode mode) noexcept {
     return mode == Mode::Native ? kAllBits : mode == Mode::DisableBakedGi ? kGiBit : kDirectBit;
 }
 inline bool ModeAvailable(Mode mode,unsigned ready) noexcept {
+    if(mode==Mode::RoomAuthoredClip&&!spotAuthoredClipReady.load(std::memory_order_acquire))return false;
     if(IsHitPositionMode(mode)&&(!spotHitPositionReady.load(std::memory_order_acquire)||!spotBandColorsReady.load(std::memory_order_acquire)))return false;
     if(mode==Mode::RoomBlocker&&(!spotBlockerReady.load(std::memory_order_acquire)||!spotBandColorsReady.load(std::memory_order_acquire)))return false;
     if(mode==Mode::RoomOpen&&!spotOpenReady.load(std::memory_order_acquire))return false;
@@ -156,6 +157,7 @@ inline const char* ModeName(Mode mode) noexcept {
     case Mode::RoomHitX:return "room_hit_x";
     case Mode::RoomHitY:return "room_hit_y";
     case Mode::RoomHitZ:return "room_hit_z";
+    case Mode::RoomAuthoredClip:return "room_authored_clip";
     case Mode::RoomNativeSelection:return "room_native_selection";
     case Mode::RoomOpen:return "room_open";
     case Mode::RoomSelectedOff:return "room_selected_off";
@@ -220,7 +222,7 @@ class LiveSelection {
     static constexpr unsigned kSequenceShift = kModeBits + 2;
     static constexpr uint64_t kModeMask = (uint64_t(1) << kModeBits) - 1;
     static constexpr uint64_t kObservedMask = uint64_t(kAllBits) << kObservedShift;
-    static_assert(static_cast<unsigned>(Mode::RoomHitZ) <= kModeMask, "Mode storage exhausted");
+    static_assert(static_cast<unsigned>(Mode::RoomAuthoredClip) <= kModeMask, "Mode storage exhausted");
     std::atomic<uint64_t> state_{0};
 public:
     uint64_t Read() const noexcept { return state_.load(std::memory_order_acquire); }

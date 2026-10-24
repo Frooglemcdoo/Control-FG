@@ -139,9 +139,15 @@ static int RunStage(const std::wstring& stage,bool warp) {
         if(needsDxr&&(FAILED(feature)||options.RaytracingTier==D3D12_RAYTRACING_TIER_NOT_SUPPORTED)){puts("SKIP DXR unavailable; this is not a pass");return 77;}
         Roots roots;roots.Create(device.Get());ComPtr<ID3D12Fence> owner;Check(device->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&owner)));
         native_lighting::rt_shadow_capture::originalState=&CreateStateLogged;
-        if(stage==L"native") {NativeState state(roots);ComPtr<ID3D12StateObject> result;Mark("R97_reference_pipeline");Check(CreateStateLogged(device.Get(),&state.desc,IID_PPV_ARGS(&result)));}
+        if(stage==L"native") {
+            NativeState state(roots);ComPtr<ID3D12StateObject> result;
+            Mark("R97_reference_pipeline");Check(CreateStateLogged(device.Get(),&state.desc,IID_PPV_ARGS(&result)));
+            result.Reset();
+            state.library.DXILLibrary={native_lighting::rt_spot_runtime::kSpotAuthoredClipShader,sizeof(native_lighting::rt_spot_runtime::kSpotAuthoredClipShader)};
+            Mark("R134_authored_plane_pipeline");Check(CreateStateLogged(device.Get(),&state.desc,IID_PPV_ARGS(&result)));
+        }
         else if(stage==L"hit") {NativeState state(roots);Mark("shared_native_alpha_capture_pipeline");Check(native_lighting::rt_spot_hit_pipeline::Prepare(device.Get(),&state.desc,owner.Get()));}
-        else if(stage==L"input") {Mark("shared_R133_payload_free_input_pipeline");Check(native_lighting::rt_spot_capture_gpu::PrepareInputPipeline(device.Get(),owner.Get(),roots.global.Get()));}
+        else if(stage==L"input") {Mark("shared_R134_payload_free_input_pipeline");Check(native_lighting::rt_spot_capture_gpu::PrepareInputPipeline(device.Get(),owner.Get(),roots.global.Get()));}
         else if(stage==L"tables") {Mark("shared_translation_pipelines_native_root");Check(native_lighting::rt_spot_capture_gpu::PrepareTablePipelines(device.Get(),owner.Get(),roots.global.Get()));Mark("GPU_translation_readback");TestGpuHitTableTranslation(device.Get());}
         else if(stage==L"hooks") TestDescriptorForwarding(device.Get());
         else throw std::runtime_error("Unknown stage");
@@ -162,14 +168,14 @@ static int RunParent(bool warp) {
     std::wstring directory=std::wstring(folder)+L"\\Control-FG";CreateDirectoryW(directory.c_str(),nullptr);
     directory+=L"\\Diagnostics";CreateDirectoryW(directory.c_str(),nullptr);
     SYSTEMTIME time{};GetLocalTime(&time);
-    swprintf_s(path,L"%s\\Capture-R133-%04u%02u%02u-%02u%02u%02u-%lu.log",directory.c_str(),time.wYear,time.wMonth,time.wDay,time.wHour,time.wMinute,time.wSecond,GetCurrentProcessId());
+    swprintf_s(path,L"%s\\Capture-R134-%04u%02u%02u-%02u%02u%02u-%lu.log",directory.c_str(),time.wYear,time.wMonth,time.wDay,time.wHour,time.wMinute,time.wSecond,GetCurrentProcessId());
     SECURITY_ATTRIBUTES security{sizeof(security),nullptr,TRUE};
     HANDLE file=CreateFileW(path,GENERIC_WRITE,FILE_SHARE_READ|FILE_SHARE_WRITE,&security,CREATE_NEW,FILE_ATTRIBUTE_NORMAL,nullptr);
     if(file==INVALID_HANDLE_VALUE){printf("Cannot create log. Windows error %lu\n",GetLastError());return 1;}
-    printf("Capture preflight R133. Keep Control closed.\nLog: %ls\n",path);
+    printf("Capture preflight R134. Keep Control closed.\nLog: %ls\n",path);
     int result=0;
     try {
-        WriteLog(file,"Control-FG capture preflight R133\r\nStandalone; no game process, mod injection, native scene or ray dispatch.\r\n");
+        WriteLog(file,"Control-FG capture preflight R134\r\nStandalone; no game process, mod injection, native scene or ray dispatch.\r\n");
         for(const wchar_t* stage:{L"native",L"hit",L"input",L"tables",L"hooks"}) {
             printf("Checking %ls...\n",stage);
             std::wstring command=L"\""+std::wstring(exe)+L"\" --stage "+stage+(warp?L" --warp":L"");

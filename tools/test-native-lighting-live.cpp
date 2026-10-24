@@ -124,6 +124,13 @@ int main(){
         assert(!UsesSpecularTemporalOnly(mode)&&!Disables(mode,kDirectBit));
         assert(LiveSelection::GetMode(live.Select(mode))==mode);
     }
+    assert(IsRtSpotMode(Mode::RoomAuthoredClip)&&PreservesGiFiltering(Mode::RoomAuthoredClip));
+    assert(!UsesRawSpotVisibility(Mode::RoomAuthoredClip)&&!ShowsSpotVisibility(Mode::RoomAuthoredClip)&&!IsSignalDiagnostic(Mode::RoomAuthoredClip));
+    assert(SpecularSampleRequest(Mode::RoomAuthoredClip)==SpecularSampleRequest(Mode::RoomBoth));
+    assert(!ModeAvailable(Mode::RoomAuthoredClip,kRtSpotReadyBit));
+    spotAuthoredClipReady.store(true);
+    assert(ModeAvailable(Mode::RoomAuthoredClip,kRtSpotReadyBit));
+    assert(LiveSelection::GetMode(live.Select(Mode::RoomAuthoredClip))==Mode::RoomAuthoredClip);
     spotBlockerReady.store(false);
     assert(!ModeAvailable(Mode::RoomBlocker,kRtSpotReadyBit));
     assert(ModeAvailable(Mode::RoomBoth,kRtSpotReadyBit));
