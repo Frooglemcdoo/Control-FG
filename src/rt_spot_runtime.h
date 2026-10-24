@@ -52,7 +52,7 @@ inline constexpr UINT kRayRecordStride = D3D12_RAYTRACING_SHADER_TABLE_BYTE_ALIG
 inline constexpr unsigned kOptionalRayCount = 4; // X, Y, Z diagnostics and authored clip.
 inline constexpr UINT kRayRecordBufferSize = (3 + kOptionalRayCount) * kRayRecordStride;
 inline constexpr UINT RayRecordOffset(Mode mode) noexcept {
-    if (mode == Mode::RoomAuthoredClip) return 6 * kRayRecordStride;
+    if (UsesAuthoredClip(mode)) return 6 * kRayRecordStride;
     if (mode == Mode::RoomBlocker) return 2 * kRayRecordStride;
     if (IsHitPositionMode(mode)) return (3 + static_cast<UINT>(mode)-static_cast<UINT>(Mode::RoomHitX))*kRayRecordStride;
     return mode == Mode::RtSpotBaseline || mode == Mode::RtSpotMapGuard ? kRayRecordStride : 0;
@@ -277,8 +277,9 @@ inline ID3D12PipelineState* SelectCompute(ID3D12PipelineState* native) noexcept 
     const bool replace = (kind == kLightComponent || spatial) ? active->fullRay : kind == kResetComponent && active->raySeen && (active->reset || active->fullRay);
     if (!replace) return nullptr;
     ID3D12PipelineState* alternate = nullptr; size = sizeof(alternate);
-    const bool raw = active->fullRay && UsesRawSpotVisibility(active->mode) &&
-        (spatial || kind == kResetComponent);
+    const bool raw = active->fullRay &&
+        ((UsesRawSpotVisibility(active->mode) && (spatial || kind == kResetComponent)) ||
+         (BypassesSpotHistory(active->mode) && kind == kResetComponent));
     const GUID& variant = kind == kLightComponent && (active->mode == Mode::RoomBlocker || IsHitPositionMode(active->mode)) ? kBandColorsVariant :
         kind == kLightComponent && active->mode == Mode::RoomOpen ? kOpenVariant :
         kind == kLightComponent && (active->mode == Mode::RtSpotMapGuard || active->mode == Mode::RoomSelectedOff) ? kSelectedOffVariant :

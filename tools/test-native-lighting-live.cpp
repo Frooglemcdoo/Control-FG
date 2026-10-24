@@ -6,6 +6,16 @@
 #include <iostream>
 int main(){
     using namespace native_lighting;
+    for(auto mode:{Mode::RoomAuthoredSpatial,Mode::RoomAuthoredRaw}) {
+        assert(UsesAuthoredClip(mode) && BypassesSpotHistory(mode));
+        assert(IsRtSpotMode(mode) && PreservesGiFiltering(mode));
+        assert(!IsSignalDiagnostic(mode) && !ShowsSpotVisibility(mode));
+        assert(UsesRawSpotVisibility(mode)==(mode==Mode::RoomAuthoredRaw));
+    }
+    assert(!BypassesSpotHistory(Mode::RoomAuthoredClip));
+    assert(kModeChoices[0].mode==Mode::Native);
+    assert(kModeChoices[1].mode==Mode::RoomBoth);
+    assert(kModeChoices[2].mode==Mode::RoomAuthoredClip);
     LiveSelection live;
     assert(LiveSelection::GetMode(live.Read())==Mode::Native);
     const auto first=live.Select(Mode::DisableBakedGi);

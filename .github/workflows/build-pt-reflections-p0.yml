@@ -462,11 +462,19 @@ jobs:
       - name: Preserve verified glass raygen across DXC updates
         run: python tools/prepare-canonical-glass.py
 
-      - name: Package live lighting diagnostic R134
+      - name: Validate capture sequencing
+        shell: cmd
+        run: |
+          cl /nologo /std:c++17 /EHsc /W4 /O2 tools\test-lighting-capture-plan.cpp /Febuild\test-lighting-capture-plan.exe
+          if errorlevel 1 exit /b 1
+          build\test-lighting-capture-plan.exe
+          if errorlevel 1 exit /b 1
+
+      - name: Package live lighting diagnostic R135
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-Native-Lighting-Live-R134'
+          $out='Control-FG-Native-Lighting-Live-R135'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
           Copy-Item build/rt_spot_selected_off.dxbc,build/rt_spot_selection.dxbc,build/rt_spot_visibility.dxbc,build/rt_spot_light_ids.dxbc,build/rt_spot_raw_history.dxbc,build/rt_spot_raw_spatial0.dxbc,build/rt_spot_raw_spatial1.dxbc,build/rt_spot_full.dxil,build/rt_spot_r94.dxil,build/rt_spot_light.dxbc,build/rt_spot_reset.dxbc,build/rt_spot_history.dxbc,build/rt_spot_spatial0.dxbc,build/rt_spot_spatial1.dxbc $out
@@ -484,20 +492,20 @@ jobs:
           Copy-Item Collect-RR-Blinds-Capture.ps1 "$out/Collect-RR-Blinds-Capture.ps1"
           Copy-Item Collect-ControlFG-Compact-Logs.cmd "$out/Collect-ControlFG-Compact-Logs.cmd"
           Copy-Item Collect-ControlFG-Compact-Logs.ps1 "$out/Collect-ControlFG-Compact-Logs.ps1"
-          Copy-Item docs/spot-authored-clip-r134.md "$out/DIAGNOSTIC-NOTES.md"
+          Copy-Item docs/spot-shadow-suite-r135.md "$out/DIAGNOSTIC-NOTES.md"
           @'
-          CONTROL-FG R134 - Authored spotlight boundary comparison
+          CONTROL-FG R135 - Shadow comparisons and F9 capture suite
           Close Control to install. Copy contents beside Control_DX12.exe.
           Preserve existing NVIDIA runtimes and the ControlFGStreamline folder.
           Keep RT Contact Shadows on, samples 1, FG/glass enhancements off.
-          In F10 compare BOTH (unchanged R134 shadows) and AUTHORED CLIP.
-          Allow the shadow history to settle after each change.
-          Check affected lighting, close Jesse/object shadows and several rooms.
-          No restart is needed between modes. RR and GI filtering stay enabled.
-          Send comparisons and Lighting-R134 from %LOCALAPPDATA%/Control-FG/Diagnostics.
-          This is a general per-light rule under test, not yet a confirmed universal fix.
-          No mesh IDs, room coordinates, global distance cutoff or extra rays.
-          See DIAGNOSTIC-NOTES.md for scope and limitations.
+          F10: NATIVE / BOTH / DEFAULT (CLIP). Default retains the working R134 fix.
+          Compare DEFAULT against NO HISTORY while moving Jesse near the light.
+          NO HISTORY tests motion trails while retaining spatial shadow softness.
+          F9: automatic comparison PNGs and GPU-hit/light-context capture.
+          Keep camera still during the suite. F9 again cancels. Your mode is restored.
+          Send the Shadow-R135 folder shown in the completion dialog (zip it first).
+          The manifest lists unavailable modes, timeouts and capture errors.
+          PNGs are display-referred, not raw HDR. See DIAGNOSTIC-NOTES.md.
           '@ | Set-Content "$out/README.txt" -Encoding ASCII
           Compress-Archive -Path "$out/*" -DestinationPath "$out.zip" -Force
           (Get-FileHash "$out.zip" -Algorithm SHA256).Hash | Set-Content "$out.sha256" -Encoding ASCII
@@ -505,10 +513,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-Native-Lighting-Live-R134
+          name: Control-FG-Native-Lighting-Live-R135
           path: |
-            Control-FG-Native-Lighting-Live-R134.zip
-            Control-FG-Native-Lighting-Live-R134.sha256
+            Control-FG-Native-Lighting-Live-R135.zip
+            Control-FG-Native-Lighting-Live-R135.sha256
             build/rt_spot_shadow_prototype.dxil
             build/rr_clamp_fixed.h
             build/rt_spot_blocker.dxil

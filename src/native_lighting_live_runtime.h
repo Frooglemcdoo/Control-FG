@@ -21,7 +21,6 @@ namespace native_lighting {
 namespace rt_spot_capture_audit { inline void ReleaseFinishedOwners() noexcept; }
 namespace rt_spot_table_audit { inline void Request() noexcept; }
 namespace rt_spot_capture_runtime {
-inline void Request() noexcept;
 inline void Poll() noexcept;
 inline void BeforeExecute(ID3D12CommandQueue*,UINT,ID3D12CommandList*const*) noexcept;
 inline void AfterExecute(ID3D12CommandQueue*,UINT,ID3D12CommandList*const*) noexcept;
@@ -152,7 +151,6 @@ inline bool SelectMode(Mode mode) noexcept {
     if (!ModeAvailable(mode,readyMask.load())) { Trace("selection_rejected mode=%s reason=shader_or_sample_hook_not_ready", ModeName(mode)); return false; }
     ReportRRPaths("before_selection");
     const auto state = selection.Select(mode);
-    if(mode==Mode::RoomBoth){rt_spot_table_audit::Request();rt_spot_capture_runtime::Request();}
     Trace("selection seq=%llu mode=%s ready_mask=%u", LiveSelection::Sequence(state), ModeName(mode), readyMask.load());
     return true;
 }

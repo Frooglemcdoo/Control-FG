@@ -1,5 +1,6 @@
 #pragma once
 #include "theme.h"
+#include "lighting_capture_suite.h"
 
 namespace native_lighting::ui {
 inline constexpr wchar_t kClass[] = L"ControlFGLightingDiagnosticR54";
@@ -70,9 +71,9 @@ inline void Paint(HWND window) noexcept {
         (observed & required) == required && (mode != Mode::SpotResolution2x || spot_resolution_runtime::Observed(state)) ? (IsRtSpotMode(mode) ? L"RT pair recorded" : L"native bindings recorded") : L"Waiting: return to game");
     DrawLabel(dc, detailFont, status, {14,kStatusY,kWidth-12,kStatusY+24}, theme::kMutedText);
     wchar_t shortcuts[128]{};
-    swprintf_s(shortcuts, L"F10: return to game    Ctrl+Shift+1..%u: live mode", kModeCount);
+    swprintf_s(shortcuts, L"F9: capture suite    F10: close    Ctrl+Shift+1..%u: mode", kModeCount);
     DrawLabel(dc, detailFont, shortcuts, {14,kFooterY,kWidth-12,kFooterY+24}, theme::kMutedText);
-    DrawLabel(dc, detailFont, selectionRejected ? L"Mode unavailable: shader or sample hook is not ready. Save Log." : savedNotice.load() == 2 ? L"Log write failed. Save Log shows the Windows error." : savedNotice.load() == 1 ? L"Log saved. See the folder shown in the confirmation." : L"XYZ: blue=negative; orange=near center plane; red=positive. RR bypassed.", {14,kFooterY+26,kWidth-12,kFooterY+56}, theme::kText);
+    DrawLabel(dc, detailFont, selectionRejected ? L"Mode unavailable: shader or sample hook is not ready. Save Log." : savedNotice.load() == 2 ? L"Log write failed. Save Log shows the Windows error." : savedNotice.load() == 1 ? L"Log saved. See the folder shown in the confirmation." : L"DEFAULT: proven clip. NO HISTORY: motion-trail comparison.", {14,kFooterY+26,kWidth-12,kFooterY+56}, theme::kText);
     EndPaint(window, &ps);
 }
 inline void SaveReport(HWND window) noexcept {
@@ -148,6 +149,7 @@ inline LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPA
     return DefWindowProcW(window,message,wParam,lParam);
 }
 inline DWORD WINAPI ThreadProc(LPVOID) noexcept {
+    const HRESULT comResult=CoInitializeEx(nullptr,COINIT_MULTITHREADED);
     namespace theme=control_ui::theme;
     headingFont=theme::CreateFontForStyle(theme::kHeadingFont);
     bodyFont=theme::CreateFontForStyle(theme::kHeadingFont);
@@ -160,7 +162,7 @@ inline DWORD WINAPI ThreadProc(LPVOID) noexcept {
     ULONGLONG nextRefresh=0, nextWindowSearch=0, nextLogDrain=0, nextRRReport=0;
     HWND cachedGame=nullptr;
     POINT lastOrigin{-1,-1};
-    Trace("session_start build=R134-authored-plane-comparison pid=%lu default=native log=user-diagnostics-folder",GetCurrentProcessId());
+    Trace("session_start build=R135-shadow-suite pid=%lu default=authored_clip_when_ready log=user-diagnostics-folder",GetCurrentProcessId());
     MSG msg{};
     while(GetMessageW(&msg,nullptr,0,0)>0){
         if (!panel || !IsDialogMessageW(panel, &msg)) {
@@ -169,19 +171,30 @@ inline DWORD WINAPI ThreadProc(LPVOID) noexcept {
         if(msg.message!=WM_TIMER||msg.wParam!=timer)continue;
         const ULONGLONG now=GetTickCount64();
         if(now>=nextRRReport){ReportRRPaths("heartbeat");nextRRReport=now+5000;}
-        if(now>=nextLogDrain){DrainDiagnosticLog();nextLogDrain=now+500;}
+        if(now>=nextLogDrain){DrainDiagnosticLog();nextLogDrain=now+(capture_suite::active?100:500);}
         if(cachedGame&&!IsWindow(cachedGame))cachedGame=nullptr;
         if(!cachedGame&&now>=nextWindowSearch){cachedGame=FindFGGameWindow();nextWindowSearch=now+1000;}
         HWND game=cachedGame;
         if(panel&&owner!=game){ClosePanel(panel);DestroyWindow(panel);panel=nullptr;}
         if(game&&!panel){panel=CreateWindowExW(WS_EX_TOOLWINDOW,kClass,L"Control lighting diagnostic",WS_POPUP,
             0,0,kWidth,kHeight,game,nullptr,selfModule,nullptr);owner=game;}
-        if(!panel)continue;
+        if(!panel){if(capture_suite::active)capture_suite::Finish(nullptr,"game_window_lost");continue;}
+        if(LiveSelection::Sequence(selection.Read())==0 && ModeAvailable(Mode::RoomAuthoredClip,readyMask.load()))SelectMode(Mode::RoomAuthoredClip);
+        static bool f9Held=false;
+        const bool f9Down=(GetAsyncKeyState(VK_F9)&0x8000)!=0;
+        const bool capturePress=f9Down&&!f9Held && !(GetAsyncKeyState(VK_CONTROL)&0x8000) && !(GetAsyncKeyState(VK_MENU)&0x8000);
+        f9Held=f9Down;
+        if(capturePress && (GetForegroundWindow()==game || PanelHasForeground(panel))) {
+            if(capture_suite::active)capture_suite::Finish(game,"cancelled");
+            else {if(panelOpen)ClosePanel(panel);
+                if(!capture_suite::Start())MessageBoxW(game,L"Could not start the capture. Use Save Log for details.",L"F9 capture",MB_OK|MB_ICONERROR);}
+        }
+        capture_suite::Tick(game,now);
         const bool foreground=GetForegroundWindow()==game || PanelHasForeground(panel);
         const bool modifier=(GetAsyncKeyState(VK_CONTROL)&0x8000)&&(GetAsyncKeyState(VK_SHIFT)&0x8000);
         static_assert(kModeCount <= 9, "Numeric shortcuts support nine choices");
         for(int i=0;i<int(kModeCount+1);++i){const bool down=(GetAsyncKeyState(i == 0 ? VK_F10 : '0' + i)&0x8000)!=0;
-            if(foreground&&down&&!held[i]&&(i==0||modifier)){
+            if(!capture_suite::active&&foreground&&down&&!held[i]&&(i==0||modifier)){
                 if(i==0){if(panelOpen)ClosePanel(panel);else OpenPanel(panel);}else {selectionRejected=!SelectMode(kModeChoices[i-1].mode);savedNotice=0;}
             }held[i]=down;
         }
@@ -199,7 +212,7 @@ inline DWORD WINAPI ThreadProc(LPVOID) noexcept {
     }
     DrainDiagnosticLog(true);
     KillTimer(nullptr,timer);RestoreCursorVisibility();if(panel)DestroyWindow(panel);
-    DeleteObject(headingFont);DeleteObject(bodyFont);DeleteObject(detailFont);return 0;
+    DeleteObject(headingFont);DeleteObject(bodyFont);DeleteObject(detailFont);if(SUCCEEDED(comResult))CoUninitialize();return 0;
 }
 } // namespace native_lighting::ui
 namespace native_lighting {

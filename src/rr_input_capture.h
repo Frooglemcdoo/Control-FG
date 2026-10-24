@@ -210,7 +210,11 @@ static void RRInputCaptureAfterEvaluation(ID3D12GraphicsCommandList* list,unsign
  ReleaseSRWLockExclusive(&rrInputCaptureLock);
 }
 static void RRInputCaptureAfterPresent(unsigned long long present) noexcept {
- static bool held=false;const bool down=(GetAsyncKeyState(VK_F9)&0x8000)!=0;const bool pressed=down&&!held;held=down;
+ static bool held=false;const bool down=(GetAsyncKeyState(VK_F9)&0x8000)!=0
+#if defined(CONTROL_CAPTURE_DIAGNOSTIC)
+ && (GetAsyncKeyState(VK_CONTROL)&0x8000) && (GetAsyncKeyState(VK_MENU)&0x8000)
+#endif
+ ;const bool pressed=down&&!held;held=down;
  if(!TryAcquireSRWLockExclusive(&rrInputCaptureLock))return;
  __try {
   using P=control_rr::InputCapturePolicy;

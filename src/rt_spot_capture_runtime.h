@@ -18,6 +18,7 @@ inline ComPtr<ID3D12GraphicsCommandList4> recordedList;
 inline ComPtr<ID3D12StateObject> recordedState,captureState;
 inline ComPtr<ID3D12CommandQueue> submittedQueue;
 inline unsigned attempts=0,exportCursor=0,exportStage=0;
+inline UINT64 fenceValue=1;
 inline UINT completionStatus[4]{},completionRays=0,completionHits=0;
 inline UINT frameTag=0,capturedWidth=0,capturedHeight=0,capturedTableRecords=0;
 inline bool readbackCopied=false;
@@ -85,14 +86,33 @@ inline void Fail(const char* reason) noexcept {
     phase.store(Phase::Failed,std::memory_order_release);
     Trace("rt_hit_gpu_failed reason=%s resources_retained=1",reason);
 }
-inline void Request() noexcept {
-    if constexpr (!rt_spot_capture::GpuCaptureEnabled) {
-        Trace("rt_hit_gpu_disabled reason=build_policy gameplay_modes_available=1");
-        return;
+// UI thread only. A failed or still-owned recording is never recycled.
+inline bool RequestFresh() noexcept {
+    if constexpr (!rt_spot_capture::GpuCaptureEnabled) return false;
+    if(!ready.load())return false;
+    AcquireSRWLockExclusive(&stateLock);
+    bool accepted=false;
+    if(phase.load()==Phase::Idle)accepted=true;
+    else if(phase.load()==Phase::Complete && exportStage==3 && readbackCopied) {
+        UINT64 generation=0;UINT size=sizeof(generation);
+        const bool reset=recordedList && SUCCEEDED(recordedList->GetPrivateData(rt_spot_table_audit::kGeneration,&size,&generation)) && generation!=recordedGeneration;
+        const auto completed=resources.fence->GetCompletedValue();
+        if(reset && completed!=UINT64_MAX && completed>=fenceValue) {
+            ++fenceValue;attempts=exportCursor=exportStage=0;readbackCopied=false;
+            recordedList.Reset();recordedState.Reset();captureState.Reset();recordedTable.Reset();recordedHeap.Reset();submittedQueue.Reset();
+            accepted=true;
+        }
     }
-    Phase expected=Phase::Idle;
-    if(ready.load() && phase.compare_exchange_strong(expected,Phase::Armed))Trace("rt_hit_gpu_requested grid=64 one_capture_per_session=1");
+    if(accepted){attempts=0;phase.store(Phase::Armed,std::memory_order_release);}
+    ReleaseSRWLockExclusive(&stateLock);
+    if(accepted){rt_spot_table_audit::Request();Trace("rt_hit_gpu_requested grid=64 repeatable=1 fence=%llu",fenceValue);}
+    return accepted;
 }
+inline void CancelPending() noexcept {
+    Phase expected=Phase::Armed;
+    if(phase.compare_exchange_strong(expected,Phase::Idle))Trace("rt_hit_gpu_cancelled reason=suite_ended_before_recording");
+}
+inline bool Exported() noexcept {return phase.load()==Phase::Complete && exportStage==3;}
 inline void BeginScope() noexcept {
     if constexpr (!rt_spot_capture::GpuCaptureEnabled) return;
     if(inScope || !ready.load())return;
@@ -286,10 +306,10 @@ inline void AfterExecute(ID3D12CommandQueue* queue,UINT count,ID3D12CommandList*
         contains|=lists[i] && SUCCEEDED(lists[i]->GetPrivateData(rt_spot_table_audit::kGeneration,&size,&generation)) && generation==recordedGeneration;
     }
     if(!contains)return;
-    const HRESULT hr=queue->Signal(resources.fence.Get(),1);
+    const HRESULT hr=queue->Signal(resources.fence.Get(),fenceValue);
     AcquireSRWLockExclusive(&stateLock);
     if(phase.load()==Phase::Submitting) {
-        if(SUCCEEDED(hr)){phase.store(Phase::Submitted);Trace("rt_hit_gpu_submitted generation=%llu fence=1",recordedGeneration);}
+        if(SUCCEEDED(hr)){phase.store(Phase::Submitted);Trace("rt_hit_gpu_submitted generation=%llu fence=%llu",recordedGeneration,fenceValue);}
         else Fail("completion_signal");
     }
     ReleaseSRWLockExclusive(&stateLock);
@@ -303,7 +323,7 @@ inline void Poll() noexcept {
     if(phase.load()==Phase::Submitted && TryAcquireSRWLockExclusive(&stateLock)) {
         const auto completed=resources.fence->GetCompletedValue();
         if(completed==UINT64_MAX)Fail("device_removed");
-        else if(completed>=1 && phase.load()==Phase::Submitted) {
+        else if(completed>=fenceValue && phase.load()==Phase::Submitted) {
             void* mapped=nullptr;D3D12_RANGE range{0,gpu::kReadbackBytes};
             if(FAILED(resources.readback->Map(0,&range,&mapped)))Fail("readback_map");
             else {
