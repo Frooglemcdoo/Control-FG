@@ -359,6 +359,10 @@ jobs:
           if errorlevel 1 exit /b 1
           build\test-native-lighting-live-warp.exe
           if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /O2 /DCONTROL_CAPTURE_DIAGNOSTIC tools\test-native-lighting-live-warp.cpp /Febuild\test-native-lighting-capture-warp.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
+          if errorlevel 1 exit /b 1
+          build\test-native-lighting-capture-warp.exe
+          if errorlevel 1 exit /b 1
 
       - name: Build and validate standalone capture preflight R131
         shell: cmd
@@ -413,7 +417,7 @@ jobs:
         shell: cmd
         run: |
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
-          cl /nologo /std:c++17 /EHsc /W4 /O2 /MT /LD /guard:cf /DUNICODE /D_UNICODE /I "third_party\streamline\include" src\probe.cpp /Fobuild\probe.obj /Febuild\dxgi.dll /link /DEF:src\dxgi.def /INCREMENTAL:NO /DYNAMICBASE /NXCOMPAT /GUARD:CF bcrypt.lib wintrust.lib user32.lib gdi32.lib
+          cl /nologo /std:c++17 /EHsc /W4 /O2 /MT /LD /guard:cf /DCONTROL_CAPTURE_DIAGNOSTIC /DUNICODE /D_UNICODE /I "third_party\streamline\include" src\probe.cpp /Fobuild\probe.obj /Febuild\dxgi.dll /link /DEF:src\dxgi.def /INCREMENTAL:NO /DYNAMICBASE /NXCOMPAT /GUARD:CF bcrypt.lib wintrust.lib user32.lib gdi32.lib
           if errorlevel 1 exit /b 1
           dumpbin /exports build\dxgi.dll > build\exports.txt
           dumpbin /imports build\dxgi.dll > build\imports.txt
@@ -456,11 +460,11 @@ jobs:
       - name: Preserve verified glass raygen across DXC updates
         run: python tools/prepare-canonical-glass.py
 
-      - name: Package live lighting diagnostic R129
+      - name: Package live lighting diagnostic R132
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-Native-Lighting-Live-R129'
+          $out='Control-FG-Native-Lighting-Live-R132'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
           Copy-Item build/rt_spot_selected_off.dxbc,build/rt_spot_selection.dxbc,build/rt_spot_visibility.dxbc,build/rt_spot_light_ids.dxbc,build/rt_spot_raw_history.dxbc,build/rt_spot_raw_spatial0.dxbc,build/rt_spot_raw_spatial1.dxbc,build/rt_spot_full.dxil,build/rt_spot_r94.dxil,build/rt_spot_light.dxbc,build/rt_spot_reset.dxbc,build/rt_spot_history.dxbc,build/rt_spot_spatial0.dxbc,build/rt_spot_spatial1.dxbc $out
@@ -478,21 +482,21 @@ jobs:
           Copy-Item Collect-RR-Blinds-Capture.ps1 "$out/Collect-RR-Blinds-Capture.ps1"
           Copy-Item Collect-ControlFG-Compact-Logs.cmd "$out/Collect-ControlFG-Compact-Logs.cmd"
           Copy-Item Collect-ControlFG-Compact-Logs.ps1 "$out/Collect-ControlFG-Compact-Logs.ps1"
-          Copy-Item docs/spot-capture-r129.md "$out/DIAGNOSTIC-NOTES.md"
+          Copy-Item docs/spot-capture-r132.md "$out/DIAGNOSTIC-NOTES.md"
           @'
-          CONTROL-FG R129 - Capture startup isolation
+          CONTROL-FG R132 - Validated input shader, in-game hit capture
           Close Control to install. Copy contents beside Control_DX12.exe.
           Preserve existing NVIDIA runtimes and the ControlFGStreamline folder.
-          First load the same save that crashed in R128.
-          F10 lighting modes remain available, including BOTH and centered shadows.
-          The R128 GPU hit capture is disabled at build time, including startup
-          pipeline creation, descriptor hooks and capture resource allocation.
-          BOTH does not re-enable it. This is crash containment, not a lighting fix.
-          Existing GI filtering, skin/hair guides, glass and 60% clamp are unchanged.
-          Logs save automatically under %LOCALAPPDATA%/Control-FG/Diagnostics.
-          SAVE LOG is optional; you do not need to open the overlay to create a log.
-          If the game still crashes, send the latest Lighting-R129 log from that
-          folder after the game closes. No 70-second capture run is required.
+          Load the affected room with RT Contact Shadows on, samples 1,
+          and FG and glass enhancements off. Face the affected light/table/floor.
+          Open F10, select BOTH once, then close the overlay.
+          Hold the view for a few seconds and let the game run for 70 seconds.
+          Send the Lighting-R132 log from %LOCALAPPDATA%/Control-FG/Diagnostics.
+          Logs save automatically; SAVE LOG is optional.
+          One bounded GPU capture is allowed per game session.
+          Uses the exact input shader validated by R131 on the RTX 5090.
+          This tests in-game capture; it is not a new lighting correction.
+          Existing centered shadows, GI filtering, guides, glass and clamp remain.
           See DIAGNOSTIC-NOTES.md for scope and limitations.
           '@ | Set-Content "$out/README.txt" -Encoding ASCII
           Compress-Archive -Path "$out/*" -DestinationPath "$out.zip" -Force
@@ -501,10 +505,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-Native-Lighting-Live-R129
+          name: Control-FG-Native-Lighting-Live-R132
           path: |
-            Control-FG-Native-Lighting-Live-R129.zip
-            Control-FG-Native-Lighting-Live-R129.sha256
+            Control-FG-Native-Lighting-Live-R132.zip
+            Control-FG-Native-Lighting-Live-R132.sha256
             build/rt_spot_shadow_prototype.dxil
             build/rr_clamp_fixed.h
             build/rt_spot_blocker.dxil

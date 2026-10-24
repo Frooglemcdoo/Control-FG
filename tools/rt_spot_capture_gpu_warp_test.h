@@ -49,9 +49,34 @@ static void TestHitCaptureExportRetry() {
     std::cout<<"PASS capture log retry: full queue preserves header, record cursor and final completion marker without render-thread waits\n";
 }
 
-// Exercise the real release entry points, including repeated installation and a
-// forged ready flag. Neither loading nor BOTH may arm the quarantined capture.
-static void TestDisabledGpuCapture(ID3D12Device* device) {
+// Exercise both ordinary-build isolation and the diagnostic opt-in entry points.
+static void TestGpuCapturePolicy(ID3D12Device* device) {
+#ifdef CONTROL_CAPTURE_DIAGNOSTIC
+    namespace capture=native_lighting::rt_spot_capture_runtime;
+    static_assert(rt_spot_capture::GpuCaptureEnabled);
+    const bool wasReady=capture::ready.exchange(false);capture::Request();
+    if(capture::phase.load()!=capture::Phase::Idle)throw std::runtime_error("capture armed before installation");
+    capture::ready.store(wasReady);capture::Install(device);
+    auto* inputs=capture::resources.inputs.Get();
+    auto* table=capture::resources.table.Get();
+    capture::Install(device);
+    if(!capture::ready.load() || !inputs || !table || inputs!=capture::resources.inputs.Get() || table!=capture::resources.table.Get() ||
+       !capture::originalCopy || !capture::originalRanges || !capture::originalCbv || !capture::originalSrv || !capture::originalUav)
+        throw std::runtime_error("capture installation missing or repeated allocations");
+    // The second invocation follows InstallLiveDiagnostic; Install is idempotent.
+    capture::ready.store(true);capture::Request();capture::Request();
+    if(capture::phase.load()!=capture::Phase::Armed)throw std::runtime_error("capture did not arm");
+    capture::BeginScope();capture::BeginScope();
+    if(!capture::inScope || capture::phase.load()!=capture::Phase::Recording)throw std::runtime_error("capture scope entry");
+    capture::EndScope();
+    if(capture::inScope || capture::phase.load()!=capture::Phase::Armed)throw std::runtime_error("unrecorded capture retry");
+    for(auto phase:{capture::Phase::Recorded,capture::Phase::Submitted,capture::Phase::Complete,capture::Phase::Failed}) {
+        capture::phase.store(phase);capture::Request();capture::BeginScope();
+        if(capture::phase.load()!=phase || capture::inScope)throw std::runtime_error("capture rearmed after recording");
+    }
+    capture::phase.store(capture::Phase::Idle);capture::attempts=0;
+    std::cout<<"PASS R132 capture policy: installation idempotent, explicit request, scope retry and one capture per session\n";
+#else
     namespace capture=native_lighting::rt_spot_capture_runtime;
     static_assert(!rt_spot_capture::GpuCaptureEnabled);
     auto** table=*reinterpret_cast<void***>(device);
@@ -71,4 +96,5 @@ static void TestDisabledGpuCapture(ID3D12Device* device) {
         throw std::runtime_error("disabled capture attempted pipeline preparation");
     capture::Record(nullptr,nullptr,nullptr);
     std::cout<<"PASS R129 capture isolation: no GPU allocations, descriptor mutations, startup compilation or BOTH capture activation\n";
+#endif
 }

@@ -87,7 +87,7 @@ inline void Fail(const char* reason) noexcept {
 }
 inline void Request() noexcept {
     if constexpr (!rt_spot_capture::GpuCaptureEnabled) {
-        Trace("rt_hit_gpu_disabled reason=R128_load_crash gameplay_modes_available=1");
+        Trace("rt_hit_gpu_disabled reason=build_policy gameplay_modes_available=1");
         return;
     }
     Phase expected=Phase::Idle;
@@ -351,7 +351,7 @@ inline void Install(ID3D12Device* device) noexcept {
     if constexpr (!rt_spot_capture::GpuCaptureEnabled) {
         static std::atomic<bool> reported{false};
         if (!reported.exchange(true))
-            Trace("rt_hit_gpu_setup ready=0 disabled=R128_load_crash descriptor_hooks=0 gpu_allocations=0");
+            Trace("rt_hit_gpu_setup ready=0 disabled=build_policy descriptor_hooks=0 gpu_allocations=0");
         return;
     }
     static bool attempted=false;if(attempted)return;attempted=true;
