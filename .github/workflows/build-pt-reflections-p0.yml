@@ -471,11 +471,11 @@ jobs:
           build\test-lighting-capture-plan.exe
           if errorlevel 1 exit /b 1
 
-      - name: Package live lighting diagnostic R135
+      - name: Package live lighting diagnostic R136
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-Native-Lighting-Live-R135'
+          $out='Control-FG-Native-Lighting-Live-R136'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
           Copy-Item build/rt_spot_selected_off.dxbc,build/rt_spot_selection.dxbc,build/rt_spot_visibility.dxbc,build/rt_spot_light_ids.dxbc,build/rt_spot_raw_history.dxbc,build/rt_spot_raw_spatial0.dxbc,build/rt_spot_raw_spatial1.dxbc,build/rt_spot_full.dxil,build/rt_spot_r94.dxil,build/rt_spot_light.dxbc,build/rt_spot_reset.dxbc,build/rt_spot_history.dxbc,build/rt_spot_spatial0.dxbc,build/rt_spot_spatial1.dxbc $out
@@ -493,18 +493,18 @@ jobs:
           Copy-Item Collect-RR-Blinds-Capture.ps1 "$out/Collect-RR-Blinds-Capture.ps1"
           Copy-Item Collect-ControlFG-Compact-Logs.cmd "$out/Collect-ControlFG-Compact-Logs.cmd"
           Copy-Item Collect-ControlFG-Compact-Logs.ps1 "$out/Collect-ControlFG-Compact-Logs.ps1"
-          Copy-Item docs/spot-shadow-suite-r135.md "$out/DIAGNOSTIC-NOTES.md"
+          Copy-Item docs/spot-shadow-isolation-r136.md "$out/DIAGNOSTIC-NOTES.md"
           @'
-          CONTROL-FG R135 - Shadow comparisons and F9 capture suite
+          CONTROL-FG R136 - Native lighting versus RR shadow isolation
           Close Control to install. Copy contents beside Control_DX12.exe.
           Preserve existing NVIDIA runtimes and the ControlFGStreamline folder.
           Keep RT Contact Shadows on, samples 1, FG/glass enhancements off.
           F10: NATIVE / BOTH / DEFAULT (CLIP). Default retains the working R134 fix.
-          Compare DEFAULT against NO HISTORY while moving Jesse near the light.
-          NO HISTORY tests motion trails while retaining spatial shadow softness.
-          F9: automatic comparison PNGs and GPU-hit/light-context capture.
+          Compare NATIVE / RR OFF and CLIP / RR OFF against their normal modes.
+          Leave RR enabled in the game settings; the tests bypass it temporarily.
+          F9: 16 comparisons, up to 48 PNGs and GPU hit/light-context capture.
           Keep camera still during the suite. F9 again cancels. Your mode is restored.
-          Send the Shadow-R135 folder shown in the completion dialog (zip it first).
+          Send the Shadow-R136 folder shown in the completion dialog (zip it first).
           The manifest lists unavailable modes, timeouts and capture errors.
           PNGs are display-referred, not raw HDR. See DIAGNOSTIC-NOTES.md.
           '@ | Set-Content "$out/README.txt" -Encoding ASCII
@@ -514,10 +514,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-Native-Lighting-Live-R135
+          name: Control-FG-Native-Lighting-Live-R136
           path: |
-            Control-FG-Native-Lighting-Live-R135.zip
-            Control-FG-Native-Lighting-Live-R135.sha256
+            Control-FG-Native-Lighting-Live-R136.zip
+            Control-FG-Native-Lighting-Live-R136.sha256
             build/rt_spot_shadow_prototype.dxil
             build/rr_clamp_fixed.h
             build/rt_spot_blocker.dxil

@@ -409,7 +409,7 @@ static bool RRNativeHookReset(unsigned outputWidth,unsigned outputHeight,unsigne
  const DWORD saved=GetLastError();unsigned long long frame=0;DWORD fault=0;bool supported=false,active=false;
  const bool known=ReadEngineFrameSafe(&frame,&fault)&&RRNativeReadMode(&supported,&active);
  const auto diagnosticMode=native_lighting::LiveSelection::GetMode(native_lighting::selection.Read());
- const bool diagnosticBypass=native_lighting::IsSignalDiagnostic(diagnosticMode);
+ const bool diagnosticBypass=native_lighting::BypassesRR(diagnosticMode);
  control_rr::RRSetDiagnosticBypass(diagnosticBypass);
  static bool previousDiagnosticBypass=false;
  if(previousDiagnosticBypass!=diagnosticBypass){

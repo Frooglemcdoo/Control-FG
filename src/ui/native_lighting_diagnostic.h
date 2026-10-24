@@ -73,7 +73,7 @@ inline void Paint(HWND window) noexcept {
     wchar_t shortcuts[128]{};
     swprintf_s(shortcuts, L"F9: capture suite    F10: close    Ctrl+Shift+1..%u: mode", kModeCount);
     DrawLabel(dc, detailFont, shortcuts, {14,kFooterY,kWidth-12,kFooterY+24}, theme::kMutedText);
-    DrawLabel(dc, detailFont, selectionRejected ? L"Mode unavailable: shader or sample hook is not ready. Save Log." : savedNotice.load() == 2 ? L"Log write failed. Save Log shows the Windows error." : savedNotice.load() == 1 ? L"Log saved. See the folder shown in the confirmation." : L"DEFAULT: proven clip. NO HISTORY: motion-trail comparison.", {14,kFooterY+26,kWidth-12,kFooterY+56}, theme::kText);
+    DrawLabel(dc, detailFont, selectionRejected ? L"Mode unavailable: shader or sample hook is not ready. Save Log." : savedNotice.load() == 2 ? L"Log write failed. Save Log shows the Windows error." : savedNotice.load() == 1 ? L"Log saved. See the folder shown in the confirmation." : L"RR OFF comparisons preserve your saved RR preference.", {14,kFooterY+26,kWidth-12,kFooterY+56}, theme::kText);
     EndPaint(window, &ps);
 }
 inline void SaveReport(HWND window) noexcept {
@@ -162,7 +162,7 @@ inline DWORD WINAPI ThreadProc(LPVOID) noexcept {
     ULONGLONG nextRefresh=0, nextWindowSearch=0, nextLogDrain=0, nextRRReport=0;
     HWND cachedGame=nullptr;
     POINT lastOrigin{-1,-1};
-    Trace("session_start build=R135-shadow-suite pid=%lu default=authored_clip_when_ready log=user-diagnostics-folder",GetCurrentProcessId());
+    Trace("session_start build=R136-rr-shadow-isolation pid=%lu default=authored_clip_when_ready log=user-diagnostics-folder",GetCurrentProcessId());
     MSG msg{};
     while(GetMessageW(&msg,nullptr,0,0)>0){
         if (!panel || !IsDialogMessageW(panel, &msg)) {
