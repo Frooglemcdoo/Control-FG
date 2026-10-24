@@ -15,7 +15,24 @@ from rt_spot_blocker import BASE_SHA
 EXPORT = r'\01?spotRayGeneration@@YAXXZ'
 NEW_EXPORT = 'captureNativeInputs'
 
-def transform(source):
+# The input-only export has no TraceRay payload. Leaving these stack objects
+# under nativeBody (after the new guard branches) was a compiler compatibility
+# hazard in R128. Match exact instructions; reject a changed native ABI.
+PAYLOAD_SETUP = (
+    '  %10 = alloca %struct.ShadowHitData, align 8\n',
+    '  %11 = alloca %struct.ShadowHitData, align 8\n',
+    '  %249 = getelementptr inbounds %struct.ShadowHitData, %struct.ShadowHitData* %11, i32 0, i32 0\n',
+    '  store float %SpotSegment0Max, float* %249, align 8\n',
+)
+
+def remove_payload_setup(prefix):
+    for line in PAYLOAD_SETUP:
+        if prefix.count(line) != 1:
+            raise ValueError('Native payload setup changed')
+        prefix = prefix.replace(line, '', 1)
+    return prefix
+
+def transform(source, *, remove_payload=True):
     start = source.index('define void @"' + EXPORT + '"()')
     body_start = source.index('\n', start) + 1
     trace = source.index('  call void @dx.op.traceRay.', body_start)
@@ -25,6 +42,7 @@ def transform(source):
         raise ValueError('Not the centered native ray')
     if prefix.count('label %.loopexit32') != 1:
         raise ValueError('Native spotlight selection changed')
+    if remove_payload: prefix = remove_payload_setup(prefix)
     # Name numeric SSA values/labels so added control flow cannot renumber them.
     prefix = re.sub(r'; <label>:(\d+)[^\n]*',r'native\1:',prefix)
     prefix = re.sub(r'%(\d+)\b',r'%native\1',prefix)
@@ -132,10 +150,16 @@ def generate(root,dxc,assembler,dxv):
     ir=build/'capture-input.ll';ir.write_text(patched)
     unsigned=build/'capture-input-unsigned.dxil';signed=build/'rt_spot_capture_inputs.dxil'
     subprocess.run([assembler,str(ir),str(unsigned)],check=True)
-    subprocess.run([dxv,str(unsigned),'-o='+str(signed)],check=True)
+    extracted=build/'capture-input-extracted.dxil'
+    subprocess.run([dxv,str(unsigned),'-o='+str(extracted)],check=True)
+    # Relink only the input export. DXC strips unrelated native hit/miss exports,
+    # local-root resources, gameplay UAVs and legacy type metadata from this library.
+    subprocess.run([dxc,'-link','-T','lib_6_3','-exports',NEW_EXPORT,
+                    '-Fo',str(signed),str(extracted)],check=True)
+    subprocess.run([dxv,str(signed)],check=True)
     output=signed.read_bytes();folder=root/'assets/rt-spot-capture-inputs';folder.mkdir(exist_ok=True)
     (folder/'rt_spot_capture_inputs.dxil.b64').write_text(base64.b64encode(output).decode()+'\n')
-    (folder/'manifest.json').write_text(json.dumps({'baseline_sha256':BASE_SHA,'sha256':hashlib.sha256(output).hexdigest(),'bytes':len(output),'grid':64,'record_bytes':48,'export':NEW_EXPORT,'traces_rays':False},indent=2)+'\n')
+    (folder/'manifest.json').write_text(json.dumps({'baseline_sha256':BASE_SHA,'sha256':hashlib.sha256(output).hexdigest(),'bytes':len(output),'grid':64,'record_bytes':48,'export':NEW_EXPORT,'traces_rays':False,'payload_setup_removed':True,'linked_export_only':True},indent=2)+'\n')
 
 if __name__=='__main__':
     parser=argparse.ArgumentParser(description=__doc__)

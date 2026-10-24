@@ -1,9 +1,11 @@
 {
   "baseline_sha256": "26688736d38b5ea056ae6bb37dc1a738334d94c784003a67957f3677f789a246",
-  "sha256": "dd92a6a3beff28e035ef0ac793b6d6072571978b5dd2be45c3d3c0f278d783d7",
-  "bytes": 51940,
+  "sha256": "472a3acd48496acbfda713d421de95a6e9e8bc188946389bf476239cf1e31684",
+  "bytes": 11748,
   "grid": 64,
   "record_bytes": 48,
   "export": "captureNativeInputs",
-  "traces_rays": false
+  "traces_rays": false,
+  "payload_setup_removed": true,
+  "linked_export_only": true
 }

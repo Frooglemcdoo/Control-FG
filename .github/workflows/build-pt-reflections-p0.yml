@@ -360,7 +360,7 @@ jobs:
           build\test-native-lighting-live-warp.exe
           if errorlevel 1 exit /b 1
 
-      - name: Build and validate standalone capture preflight R130
+      - name: Build and validate standalone capture preflight R131
         shell: cmd
         run: |
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
@@ -371,17 +371,17 @@ jobs:
           build\Capture-Preflight.exe --warp
           if errorlevel 1 exit /b 1
 
-      - name: Package standalone capture preflight R130
+      - name: Package standalone capture preflight R131
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-Capture-Preflight-R130'
+          $out='Control-FG-Capture-Preflight-R131'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/Capture-Preflight.exe "$out/Capture-Preflight.exe"
           Copy-Item tools/Run-Capture-Preflight.cmd "$out/Run-Capture-Preflight.cmd"
-          Copy-Item docs/capture-preflight-r130.md "$out/README.md"
+          Copy-Item docs/capture-preflight-r131.md "$out/README.md"
           New-Item -ItemType Directory -Force -Path build/preflight-logs | Out-Null
-          Copy-Item "$env:LOCALAPPDATA/Control-FG/Diagnostics/Capture-R130-*.log" build/preflight-logs
+          Copy-Item "$env:LOCALAPPDATA/Control-FG/Diagnostics/Capture-R131-*.log" build/preflight-logs
           Get-Content build/preflight-logs/*.log
           Compress-Archive -Path $out -DestinationPath "$out.zip" -Force
           (Get-FileHash "$out.zip" -Algorithm SHA256).Hash | Set-Content "$out.sha256" -Encoding ASCII
@@ -389,10 +389,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-Capture-Preflight-R130
+          name: Control-FG-Capture-Preflight-R131
           path: |
-            Control-FG-Capture-Preflight-R130.zip
-            Control-FG-Capture-Preflight-R130.sha256
+            Control-FG-Capture-Preflight-R131.zip
+            Control-FG-Capture-Preflight-R131.sha256
             build/preflight-logs/*.log
           retention-days: 7
 

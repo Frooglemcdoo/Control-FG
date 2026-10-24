@@ -6,7 +6,7 @@ import json
 import re
 import subprocess
 from pathlib import Path
-from rt_spot_capture_inputs import transform, EXPORT
+from rt_spot_capture_inputs import transform, EXPORT, remove_payload_setup, PAYLOAD_SETUP
 from rt_spot_blocker import BASE_SHA
 root=Path(__file__).resolve().parents[1]
 parser=argparse.ArgumentParser();parser.add_argument('--dxc');args=parser.parse_args()
@@ -27,6 +27,7 @@ if args.dxc:
     result=transform(source)
     start=source.index('define void @"'+EXPORT+'"()')
     original=source[source.index('\n',start)+1:source.index('  call void @dx.op.traceRay.',start)]
+    original=remove_payload_setup(original)
     expected=re.sub(r'; <label>:(\d+)[^\n]*',r'native\1:',original)
     expected=re.sub(r'%(\d+)\b',r'%native\1',expected).replace('label %.loopexit32','label %captureEnd')
     expected=re.sub(r'  %DispatchRaysIndex(?:164)? = call i32 @dx.op.dispatchRaysIndex.i32[^\n]*\n','',expected)
@@ -37,8 +38,23 @@ if args.dxc:
     assert body.count('call void @dx.op.rawBufferStore.i32')==6
     assert 'i32 %native147' in body and 'i32 %captureTag' in body
     assert 'float %SpotSegment0Max' in body
+    assert 'alloca' not in body and 'ShadowHitData' not in body
+    # R131 differs from R128 extraction only by four unused payload instructions.
+    legacy=transform(source,remove_payload=False)
+    for line in PAYLOAD_SETUP:
+        renamed=re.sub(r'%(\d+)\b',r'%native\1',line)
+        assert legacy.count(renamed)==1
+        legacy=legacy.replace(renamed,'',1)
+    assert legacy==result, 'Ray construction changed during payload cleanup'
+    prepared=root/'build/rt_spot_capture_inputs.dxil';prepared.write_bytes(data)
+    linked=subprocess.check_output([args.dxc,'-dumpbin',str(prepared)],text=True)
+    assert len(re.findall(r'^define ',linked,re.M))==1
+    for forbidden in ('alloca','ShadowHitData','traceRay','g_rtScene','g_rwtSingleSpotShadow','g_rwtSpotPointShadowHitT','g_cbRaytracingHit','shadowAlphaTestAnyHit'):
+        assert forbidden not in linked, forbidden
+    assert linked.count('call void @dx.op.rawBufferStore.i32')==6
+    assert manifest['payload_setup_removed'] and manifest['linked_export_only']
     for before,after in [('label %.loopexit32','label %other'),('float %SpotSegment0Max, %struct.ShadowHitData','float %wrong, %struct.ShadowHitData')]:
         try:transform(source.replace(before,after))
         except ValueError:pass
         else:raise AssertionError('Changed native shader accepted')
-print('PASS native input shader hash, bounded grid mapping, exact centered instruction extraction, no native output stores or ray traversal')
+print('PASS payload-free single-export library, unchanged R128 ray calculations, native input shader hash, bounded grid mapping, exact centered instruction extraction, no native output stores or ray traversal')
