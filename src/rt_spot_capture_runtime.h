@@ -222,7 +222,7 @@ inline void Record(ID3D12GraphicsCommandList4* list,ID3D12StateObject* owner,con
         originalCopy(resources.device.Get(),49,resources.At(base),resources.At(0),D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
         D3D12_CONSTANT_BUFFER_VIEW_DESC cb{resources.upload->GetGPUVirtualAddress()+i*256,256};originalCbv(resources.device.Get(),&cb,resources.At(base));
     }
-    resources.RawUav(resources.inputs.Get(),gpu::kInputBytes,49+43);
+    resources.RawUav(resources.inputs.Get(),gpu::kInputAllocationBytes,49+43);
     resources.RawSrv(source.Get(),offset,tableControls.bytes,98+13);
     resources.RawUav(resources.table.Get(),gpu::kTableBytes,98+43);
     resources.RawUav(resources.status.Get(),16,98+44);
@@ -258,7 +258,9 @@ inline void Record(ID3D12GraphicsCommandList4* list,ID3D12StateObject* owner,con
     list->CopyBufferRegion(resources.readback.Get(),gpu::kResultBytes,resources.status.Get(),0,16);
     gpu::Transition(list,resources.results.Get(),D3D12_RESOURCE_STATE_COPY_SOURCE,D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
     gpu::Transition(list,resources.status.Get(),D3D12_RESOURCE_STATE_COPY_SOURCE,D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-    gpu::Transition(list,resources.inputs.Get(),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+    gpu::Transition(list,resources.inputs.Get(),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,D3D12_RESOURCE_STATE_COPY_SOURCE);
+    list->CopyBufferRegion(resources.readback.Get(),gpu::kLightContextReadbackOffset,resources.inputs.Get(),gpu::kInputBytes,gpu::kLightContextBytes);
+    gpu::Transition(list,resources.inputs.Get(),D3D12_RESOURCE_STATE_COPY_SOURCE,D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
     gpu::Transition(list,resources.table.Get(),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
     list->SetComputeRootDescriptorTable(0,current.gpu);hooks.set(list,owner);
     phase.store(Phase::Recorded,std::memory_order_release);
@@ -329,7 +331,7 @@ inline void Poll() noexcept {
     // Retry canonical headers and records if the nonblocking log queue is busy.
     // Cursor advancement means successful enqueue, never merely an attempted write.
     if(exportStage==0) {
-        if(!Trace("rt_hit_gpu_recorded generation=%llu frame_tag=%u extent=%ux%u table_records=%u captured_present=%llu",recordedGeneration,frameTag,capturedWidth,capturedHeight,capturedTableRecords,recordedPresent))return;
+        if(!Trace("rt_hit_gpu_recorded generation=%llu frame_tag=%u extent=%ux%u table_records=%u captured_present=%llu light_context_bytes=128",recordedGeneration,frameTag,capturedWidth,capturedHeight,capturedTableRecords,recordedPresent))return;
         exportStage=1;
     }
     if(exportStage==1) {
@@ -342,7 +344,9 @@ inline void Poll() noexcept {
         const auto* record=completedBytes+exportCursor*80;UINT valid=0;memcpy(&valid,record+76,4);
         if(valid) {
             char hex[161]{};rt_spot_capture_audit::Hex(record,80,hex);
-            if(!Trace("rt_hit_gpu_record index=%u bytes=%s",exportCursor,hex))return;
+            char contextHex[gpu::kLightContextStride*2+1]{};
+            rt_spot_capture_audit::Hex(completedBytes+gpu::kLightContextReadbackOffset+exportCursor*gpu::kLightContextStride,gpu::kLightContextStride,contextHex);
+            if(!Trace("rt_hit_gpu_record index=%u bytes=%s light_context=%s",exportCursor,hex,contextHex))return;
         }
     }
     if(exportCursor==gpu::kRayCount && Trace("rt_hit_gpu_export_complete records_examined=4096 format=CaptureResult80 frame_tag=%u",frameTag))exportStage=3;

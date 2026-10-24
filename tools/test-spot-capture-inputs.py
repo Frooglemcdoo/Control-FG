@@ -35,11 +35,11 @@ if args.dxc:
     body=result[result.index('define void @"captureNativeInputs"'):]
     body=body[:body.index('\n}')]
     assert 'call void @dx.op.traceRay' not in body and 'textureStore' not in body
-    assert body.count('call void @dx.op.rawBufferStore.i32')==6
+    assert body.count('call void @dx.op.rawBufferStore.i32')==14
     assert 'i32 %native147' in body and 'i32 %captureTag' in body
     assert 'float %SpotSegment0Max' in body
     assert 'alloca' not in body and 'ShadowHitData' not in body
-    # R131 differs from R128 extraction only by four unused payload instructions.
+    # Payload cleanup still changes only four instructions; context is appended.
     legacy=transform(source,remove_payload=False)
     for line in PAYLOAD_SETUP:
         renamed=re.sub(r'%(\d+)\b',r'%native\1',line)
@@ -51,10 +51,20 @@ if args.dxc:
     assert len(re.findall(r'^define ',linked,re.M))==1
     for forbidden in ('alloca','ShadowHitData','traceRay','g_rtScene','g_rwtSingleSpotShadow','g_rwtSpotPointShadowHitT','g_cbRaytracingHit','shadowAlphaTestAnyHit'):
         assert forbidden not in linked, forbidden
-    assert linked.count('call void @dx.op.rawBufferStore.i32')==6
+    assert linked.count('call void @dx.op.rawBufferStore.i32')==14
     assert manifest['payload_setup_removed'] and manifest['linked_export_only']
+    assert manifest['light_context_bytes']==128 and manifest['light_context_offset']==4096*48
     for before,after in [('label %.loopexit32','label %other'),('float %SpotSegment0Max, %struct.ShadowHitData','float %wrong, %struct.ShadowHitData')]:
         try:transform(source.replace(before,after))
         except ValueError:pass
         else:raise AssertionError('Changed native shader accepted')
 print('PASS payload-free single-export library, unchanged R128 ray calculations, native input shader hash, bounded grid mapping, exact centered instruction extraction, no native output stores or ray traversal')
+# The metadata tail is disjoint from every ray record and stays in allocation.
+ray_bytes, context_stride, count = 48, 128, 4096
+ray_end = ray_bytes * count
+allocation_end = ray_end + context_stride * count
+for index in range(count):
+    start = ray_end + index * context_stride
+    assert start >= ray_end and start + context_stride <= allocation_end
+    assert all(start + block*16 + 16 <= start + context_stride for block in range(8))
+print('PASS all 4096 context writes are bounded and disjoint from the ray ABI')

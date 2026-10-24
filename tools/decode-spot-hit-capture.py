@@ -76,14 +76,19 @@ def decode_log(text):
     if not 0 < width <= 16384 or not 0 < height <= 16384: raise ValueError('Invalid native image extent')
     data = bytearray(MAX_RECORDS * RECORD.size)
     seen = set()
+    contexts = {}
+    context_bytes = begin.get("light_context_bytes", 0)
+    if context_bytes not in (0, 128): raise ValueError("Unsupported light context ABI")
     for line in text.splitlines():
         if ' rt_hit_gpu_record ' not in line: continue
         if not text.index(completed[0]) < text.index(line) < text.index(exported[0]):
             raise ValueError('Record is outside the completed export')
-        match = re.search(r'index=(\d+) bytes=([0-9a-fA-F]{160})$', line)
+        match = re.search(r'index=(\d+) bytes=([0-9a-fA-F]{160})(?: light_context=([0-9a-fA-F]{256}))?$', line)
         if not match: raise ValueError('Malformed capture record')
         index = int(match[1])
         if index >= MAX_RECORDS or index in seen: raise ValueError('Duplicate or out-of-range record')
+        if bool(match[3]) != bool(context_bytes): raise ValueError('Missing or unexpected light context')
+        if match[3]: contexts[index] = struct.unpack('<32f', bytes.fromhex(match[3]))
         seen.add(index); data[index*RECORD.size:(index+1)*RECORD.size] = bytes.fromhex(match[2])
     results = decode(data, begin['frame_tag'])
     valid = [record for record in results if record['valid']]
@@ -92,6 +97,14 @@ def decode_log(text):
         raise ValueError('Missing records or inconsistent capture totals')
     for record in valid:
         index = record['ordinal']
+        if context_bytes:
+            values = contexts[index]
+            # Width/falloff fields are retained as raw floats; interpretation is
+            # separate from capture validity. Never use them to alter a ray here.
+            record['light_context'] = dict(cone_view=list(values[:3]), near_distance=values[3],
+                emitter_view=list(values[4:7]), far_distance=values[7], direction_view=list(values[8:11]),
+                far_width=values[11], falloff=list(values[12:14]), radius=values[14], sin_half_cone_squared=values[15],
+                view_to_world=[list(values[16+i*4:20+i*4]) for i in range(4)])
         if record['pixel'] != [(2*(index%64)+1)*width//128, (2*(index//64)+1)*height//128]:
             raise ValueError('Record does not match its native sample pixel')
     return {'schema': 'control-spot-hit-capture-v1',

@@ -7,7 +7,10 @@ using Microsoft::WRL::ComPtr;
 #include "../build/rt_spot_capture_table.h"
 inline constexpr UINT kRayCount=rt_spot_capture::CaptureMaxRecords;
 inline constexpr UINT kInputBytes=kRayCount*rt_spot_capture::CaptureRayBytes, kResultBytes=kRayCount*rt_spot_capture::CaptureResultBytes;
-inline constexpr UINT kTableBytes=8*1024*1024, kReadbackBytes=kResultBytes+16;
+inline constexpr UINT kLightContextStride=128, kLightContextBytes=kRayCount*kLightContextStride;
+inline constexpr UINT kInputAllocationBytes=kInputBytes+kLightContextBytes;
+inline constexpr UINT kLightContextReadbackOffset=kResultBytes+16;
+inline constexpr UINT kTableBytes=8*1024*1024, kReadbackBytes=kLightContextReadbackOffset+kLightContextBytes;
 inline const GUID kInputState={0x964c9021,0x414a,0x43d4,{0xa1,0x11,0x70,0,0,0,0,3}};
 inline const GUID kTranslate={0x964c9021,0x414a,0x43d4,{0xa1,0x11,0x70,0,0,0,0,4}};
 inline const GUID kClear={0x964c9021,0x414a,0x43d4,{0xa1,0x11,0x70,0,0,0,0,5}};
@@ -30,7 +33,7 @@ struct Resources {
     HRESULT Initialize(ID3D12Device* owner) noexcept {
         if(device)return E_UNEXPECTED;
         device=owner;
-        HRESULT hr=Buffer(kInputBytes,D3D12_HEAP_TYPE_DEFAULT,D3D12_RESOURCE_STATE_UNORDERED_ACCESS,&inputs);
+        HRESULT hr=Buffer(kInputAllocationBytes,D3D12_HEAP_TYPE_DEFAULT,D3D12_RESOURCE_STATE_UNORDERED_ACCESS,&inputs);
         if(SUCCEEDED(hr))hr=Buffer(kResultBytes,D3D12_HEAP_TYPE_DEFAULT,D3D12_RESOURCE_STATE_UNORDERED_ACCESS,&results);
         if(SUCCEEDED(hr))hr=Buffer(kTableBytes,D3D12_HEAP_TYPE_DEFAULT,D3D12_RESOURCE_STATE_UNORDERED_ACCESS,&table);
         if(SUCCEEDED(hr))hr=Buffer(16,D3D12_HEAP_TYPE_DEFAULT,D3D12_RESOURCE_STATE_UNORDERED_ACCESS,&status);

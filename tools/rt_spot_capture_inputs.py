@@ -110,6 +110,26 @@ nativeBody:
     writes += store('captureByte',[f'%captureBits{i}' for i in range(4)])
     writes += store('captureByte16',[f'%captureBits{i}' for i in range(4,7)]+['%native147'])
     writes += store('captureByte32',['%DispatchRaysIndex','%DispatchRaysIndex164','%captureTag','0'])
+    # Separate context tail: first 48-byte ray ABI remains byte-for-byte intact.
+    # Four light float4s (offsets 0,16,32,64), then native view-to-world rows 6..9.
+    writes += '  %contextIndex = mul i32 %captureIndex, 128\n'
+    writes += '  %contextBase = add i32 %contextIndex, 196608\n'
+    for block in range(8):
+        if block < 4:
+            offset = (0, 16, 32, 64)[block]
+            writes += f'  %contextLoad{block} = call %dx.types.ResRet.f32 @dx.op.rawBufferLoad.f32(i32 139, %dx.types.Handle %native166, i32 %native147, i32 {offset}, i8 15, i32 4)\n'
+            value, value_type = f'%contextLoad{block}', '%dx.types.ResRet.f32'
+        else:
+            value, value_type = f'%native{(175,179,183,187)[block-4]}', '%dx.types.CBufRet.f32'
+        words = []
+        for lane in range(4):
+            name = f'context{block}Lane{lane}'
+            writes += f'  %{name} = extractvalue {value_type} {value}, {lane}\n'
+            writes += f'  %{name}Bits = bitcast float %{name} to i32\n'
+            words.append(f'%{name}Bits')
+        address = f'contextAddress{block}'
+        writes += f'  %{address} = add i32 %contextBase, {block*16}\n'
+        writes += store(address, words)
     writes += '  br label %captureEnd\ncaptureEnd:\n  ret void\n}'
     patched = source[:start] + 'define void @"'+EXPORT+'"() #0 {\n'+entry+prefix+writes+source[function_end:]
     # New resources live only in the capture export. The native outputs are never written.
@@ -159,7 +179,7 @@ def generate(root,dxc,assembler,dxv):
     subprocess.run([dxv,str(signed)],check=True)
     output=signed.read_bytes();folder=root/'assets/rt-spot-capture-inputs';folder.mkdir(exist_ok=True)
     (folder/'rt_spot_capture_inputs.dxil.b64').write_text(base64.b64encode(output).decode()+'\n')
-    (folder/'manifest.json').write_text(json.dumps({'baseline_sha256':BASE_SHA,'sha256':hashlib.sha256(output).hexdigest(),'bytes':len(output),'grid':64,'record_bytes':48,'export':NEW_EXPORT,'traces_rays':False,'payload_setup_removed':True,'linked_export_only':True},indent=2)+'\n')
+    (folder/'manifest.json').write_text(json.dumps({'baseline_sha256':BASE_SHA,'sha256':hashlib.sha256(output).hexdigest(),'bytes':len(output),'grid':64,'record_bytes':48,'export':NEW_EXPORT,'traces_rays':False,'payload_setup_removed':True,'linked_export_only':True,'light_context_bytes':128,'light_context_offset':196608},indent=2)+'\n')
 
 if __name__=='__main__':
     parser=argparse.ArgumentParser(description=__doc__)

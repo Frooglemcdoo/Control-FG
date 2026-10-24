@@ -57,3 +57,24 @@ for bad in [log.replace('gpu_completion_confirmed=1','gpu_completion_confirmed=0
     except ValueError:pass
     else:raise AssertionError('Invalid capture log accepted')
 print('PASS complete-log decoding: fenced provenance, record counts, exact grid pixels, partial/duplicate/replayed exports rejected')
+
+# R133 metadata is optional only for old logs, mandatory when declared.
+import struct
+context = struct.pack('<32f', *range(32)).hex()
+context_log = log.replace('table_records=2', 'table_records=2 light_context_bytes=128').replace(
+    packed(x=1,y=1).hex(), packed(x=1,y=1).hex()+' light_context='+context)
+result = decoder.decode_log(context_log)['records'][0]
+assert result['light_context']['cone_view']==[0,1,2]
+assert result['light_context']['near_distance']==3
+assert result['light_context']['emitter_view']==[4,5,6]
+assert result['light_context']['direction_view']==[8,9,10]
+assert result['light_context']['radius']==14
+assert result['light_context']['view_to_world']==[[16,17,18,19],[20,21,22,23],[24,25,26,27],[28,29,30,31]]
+for bad in [context_log.replace(' light_context='+context,''),
+            context_log.replace(' light_context_bytes=128',''),
+            context_log.replace('light_context_bytes=128','light_context_bytes=64'),
+            context_log.replace(context,context[:-2])]:
+    try:decoder.decode_log(bad)
+    except ValueError:pass
+    else:raise AssertionError('Missing, undeclared or truncated light context accepted')
+print('PASS R133 light context field offsets, versioning, completeness and R132 compatibility')
