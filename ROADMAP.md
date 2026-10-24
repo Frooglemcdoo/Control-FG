@@ -1,5 +1,14 @@
 # Control FG roadmap
 
+## Current investigation: room-transition shadow visibility
+
+User reports shadows disappearing during room brightness changes, also in Native.
+Exposure adaptation is acceptable and remains unchanged; its causal role is not
+established. R143 adds corrected Shadow Signal, Raw Signal and Light IDs modes
+while preserving the R142 default. See [diagnostic notes](docs/room-transition-shadow-signal-r143.md).
+No in-game fix or tone-mapping diagnosis is claimed.
+
+
 ## Current experimental priority — lighting stability
 
 Preserve the user-confirmed R134 authored-light fix and R139 direct-light normal

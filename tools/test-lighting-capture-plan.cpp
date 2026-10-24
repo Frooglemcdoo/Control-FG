@@ -86,6 +86,21 @@ int main(){
  assert(Applied(Mode::RoomCorrectedGuarded,kAllBits,true));
  guardedHistoryReady=false;
  assert(ModeAvailable(kDefaultMode,kRtSpotReadyBit));
+ for(auto m:{Mode::RoomCorrectedVisibility,Mode::RoomCorrectedRawVisibility,Mode::RoomCorrectedLightIds}) {
+  assert(modes.count(m)&&buttons.count(m));
+  assert(UsesDirectSurfaceNormals(m)&&UsesAuthoredClip(m)&&BypassesSpotHistory(m));
+  assert(PreservesGiFiltering(m)&&UsesWorldAlbedo(m)&&SpecularSampleRequest(m)==4);
+  assert(NeedsIsolationProducer(m)&&IsSignalDiagnostic(m)&&BypassesRR(m));
+  assert(UsesRawSpotVisibility(m)==(m==Mode::RoomCorrectedRawVisibility));
+  assert(ShowsSpotVisibility(m)==(m!=Mode::RoomCorrectedLightIds));
+  assert(ShowsSpotLightIds(m)==(m==Mode::RoomCorrectedLightIds));
+  assert(!Applied(m,kAllBits,true)&&!Applied(m,kDirectBit,false)&&Applied(m,kAllBits,false));
+  assert(ModeAvailable(m,kRtSpotReadyBit));
+  spotAuthoredClipReady=false;assert(!ModeAvailable(m,kRtSpotReadyBit));spotAuthoredClipReady=true;
+  bentNormalSelectorReady=false;assert(!ModeAvailable(m,kRtSpotReadyBit));bentNormalSelectorReady=true;
+  LiveSelection live;assert(LiveSelection::GetMode(live.Select(m))==m);
+ }
+ assert(count==28 && imagesPerStep*count==84);
  assert(gpu==1);assert(modes.count(Mode::Native)&&modes.count(Mode::RoomAuthoredClip));
  assert(modes.count(Mode::RoomAuthoredSpatial)&&modes.count(Mode::RoomAuthoredRaw));
  assert(!Settled(2499,100,true));assert(!Settled(4000,89,true));assert(!Settled(4000,100,false));assert(Settled(2500,90,true));

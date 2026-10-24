@@ -52,7 +52,7 @@ inline bool Start() noexcept {
     if(!DrainDiagnosticLog(true))return false;
     wchar_t root[MAX_PATH]{};wcscpy_s(root,report.Path());auto* slash=wcsrchr(root,L'\\');if(!slash)return false;*slash=0;
     SYSTEMTIME time{};GetLocalTime(&time);static unsigned serial=0;
-    if(swprintf_s(folder,L"%s\\Shadow-R142-%04u%02u%02u-%02u%02u%02u-%lu-%u",root,time.wYear,time.wMonth,time.wDay,time.wHour,time.wMinute,time.wSecond,GetCurrentProcessId(),serial++)<0)return false;
+    if(swprintf_s(folder,L"%s\\Shadow-R143-%04u%02u%02u-%02u%02u%02u-%lu-%u",root,time.wYear,time.wMonth,time.wDay,time.wHour,time.wMinute,time.wSecond,GetCurrentProcessId(),serial++)<0)return false;
     if(!CreateDirectoryW(folder,nullptr))return false;
     wchar_t path[MAX_PATH]{};swprintf_s(path,L"%s\\manifest.txt",folder);
     manifest=CreateFileW(path,GENERIC_WRITE,FILE_SHARE_READ,nullptr,CREATE_NEW,0,nullptr);
@@ -62,8 +62,8 @@ inline bool Start() noexcept {
         if(log!=INVALID_HANDLE_VALUE)CloseHandle(log);CloseHandle(manifest);manifest=INVALID_HANDLE_VALUE;return false;}
     CloseHandle(log);
     restore=LiveSelection::GetMode(selection.Read());active=true;entered=false;step=imageIndex=failures=0;
-    Note("build=R142 restore=%s steps=%u PNG=display_referred_not_raw_HDR\nKeep camera still. F9 cancels. Focus loss cancels. No GPU waits.\nUnavailable shader variants are explicitly skipped. Hit coordinates/visibility use unclipped reference rays.\nGPU capture is collected in BOTH, with native per-light context and hit identities.",ModeName(restore),capture_plan::count);
-    Trace("capture_suite_start build=R142 restore=%s steps=%u",ModeName(restore),capture_plan::count);
+    Note("build=R143 restore=%s steps=%u PNG=display_referred_not_raw_HDR\nKeep camera still. F9 cancels. Focus loss cancels. No GPU waits.\nUnavailable shader variants are explicitly skipped. Hit coordinates and legacy unclipped visibility use reference rays. Default spot signal/IDs retain authored clipping and corrected selection.\nGPU capture is collected in BOTH, with native per-light context and hit identities.",ModeName(restore),capture_plan::count);
+    Trace("capture_suite_start build=R143 restore=%s steps=%u",ModeName(restore),capture_plan::count);
     ReportRRPaths("f9_start");return true;
 }
 inline void Tick(HWND game,uint64_t now) noexcept {

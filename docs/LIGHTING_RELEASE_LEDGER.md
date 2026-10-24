@@ -25,6 +25,7 @@ The symptom is reported resolved; broader release validation remains open.
 
 | Issue | Current evidence | Next work / closure criterion |
 | --- | --- | --- |
+| Shadows disappear during room transitions | User reports the issue also in Native; exposure adaptation itself is acceptable. Video alone does not isolate visibility loss from contrast loss. | R143 adds corrected spotlight signal/raw/ID comparisons. Default and exposure unchanged. Await motion video and log; downstream processing still affects these views. |
 | Motion-only shadow flicker at stairs/railings | User reports No History fixes it with no visible smoothness/noise penalty; R141 Guard only partially helps. | [#14](https://github.com/Frooglemcdoo/Control-FG/issues/14): R142 promotes the tested current-frame spotlight path. Other-room/transition tests and frame-time comparisons remain release checks. |
 | Expensive specular sampling needed for some RR materials | User reported SPEC 16 clears the tested artifacts; 8 is the minimum useful level but still expensive. Prior temporal substitutes did not match 16. | Optimize without restoring noise/boiling. Keep specular filter and 90% clamp experiments classified as rejected; 60% clamp remains the intended baseline. No universal low-cost fix is claimed. |
 | Release integration and compatibility | Current F10/F9 panel is a diagnostic build; public settings use the game's menu architecture. | Choose validated defaults, integrate necessary controls using shared settings/font methods, remove unneeded diagnostic code from public packaging, and recheck overlay coexistence. |
@@ -50,7 +51,7 @@ represent the shipping UI. Preserve the accepted skin guide and glass fixes.
 | R139 | `83a126403066cb26d4e5509400298e672d2dadec` | [40106649871](https://github.com/Frooglemcdoo/Control-FG/actions/runs/40106649871) passed | Broad false shadow fixed; user observed no regressions. |
 | R140 | `daa61d649409ba74bbde387a0ab2b31a43bd3ee0` | [40108087558](https://github.com/Frooglemcdoo/Control-FG/actions/runs/40108087558) passed | No History appears to resolve motion flicker; permanent correction remains open. |
 | R141 | `8431746fee70b0ab0b8a0f990f0f8fc29ccaa7cd` | [40113754267](https://github.com/Frooglemcdoo/Control-FG/actions/runs/40113754267) passed | Guard partially helps; No History reported fully effective without visible noise/softness cost. |
-| R142 | Use the commit containing `current-frame-spot-default-r142.md` and its associated CI run | Default-policy promotion; consult commit checks | Reuses the accepted No History shader path unchanged. Broad release validation pending. |
+| R142 | `299a827cfd202db9f11f16e8049aabbbbb063936` | [40115047334](https://github.com/Frooglemcdoo/Control-FG/actions/runs/40115047334) passed | Reuses the accepted No History shader path unchanged. Broad release validation pending. |
 
 Evidence filenames: `20261024-1532-26.4811424.mp4` (original railing flicker),
 `20261024-1645-24.5201649.mp4` (user's No History test). Videos are private test
@@ -70,3 +71,5 @@ R140 download SHA256: `2a77f9b422ce55242c23c772e9c26c1f18bc3f3028169bc39ab2bd1f0
 - [ ] Publish exact commit, package hashes, supported configuration limits and remaining known issues.
 - [ ] Remove test-only panel/capture payloads from the public package where appropriate; keep a separate diagnostic package.
 - [ ] Review release notes against this ledger. No merge to main/master or public tag is implied by this tracking update.
+
+R143 adds diagnostics only; see `room-transition-shadow-signal-r143.md`. Source and build identity are the commit containing that document and its CI run. No shader binaries change. Private evidence: `20261024-1740-36.1166846.mp4`.

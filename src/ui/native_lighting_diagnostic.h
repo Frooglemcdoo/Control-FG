@@ -16,6 +16,11 @@ inline const wchar_t* ButtonLabel(unsigned index) noexcept {
     constexpr const wchar_t* actions[] = {L"ISSUE REMAINS", L"ISSUE GONE", L"SAVE LOG"};
     return actions[index - kModeCount];
 }
+inline const wchar_t* ModeHint(Mode mode) noexcept {
+    if(ShowsSpotLightIds(mode))return L"Colors=selected spotlight; magenta=no selected spotlight.";
+    if(IsCorrectedSignal(mode))return L"Dark=shadow; white=lit; magenta=no selected spotlight.";
+    return L"RR OFF comparisons preserve your saved RR preference.";
+}
 inline HFONT headingFont = nullptr, bodyFont = nullptr, detailFont = nullptr;
 inline std::atomic<bool> started{false};
 inline std::atomic<unsigned> savedNotice{0};
@@ -73,7 +78,7 @@ inline void Paint(HWND window) noexcept {
     wchar_t shortcuts[128]{};
     swprintf_s(shortcuts, L"F9: capture suite    F10: close    Ctrl+Shift+1..%u: mode", kModeCount);
     DrawLabel(dc, detailFont, shortcuts, {14,kFooterY,kWidth-12,kFooterY+24}, theme::kMutedText);
-    DrawLabel(dc, detailFont, selectionRejected ? L"Mode unavailable: shader or sample hook is not ready. Save Log." : savedNotice.load() == 2 ? L"Log write failed. Save Log shows the Windows error." : savedNotice.load() == 1 ? L"Log saved. See the folder shown in the confirmation." : L"RR OFF comparisons preserve your saved RR preference.", {14,kFooterY+26,kWidth-12,kFooterY+56}, theme::kText);
+    DrawLabel(dc, detailFont, selectionRejected ? L"Mode unavailable: shader or sample hook is not ready. Save Log." : savedNotice.load() == 2 ? L"Log write failed. Save Log shows the Windows error." : savedNotice.load() == 1 ? L"Log saved. See the folder shown in the confirmation." : ModeHint(mode), {14,kFooterY+26,kWidth-12,kFooterY+56}, theme::kText);
     EndPaint(window, &ps);
 }
 inline void SaveReport(HWND window) noexcept {
@@ -162,7 +167,7 @@ inline DWORD WINAPI ThreadProc(LPVOID) noexcept {
     ULONGLONG nextRefresh=0, nextWindowSearch=0, nextLogDrain=0, nextRRReport=0;
     HWND cachedGame=nullptr;
     POINT lastOrigin{-1,-1};
-    Trace("session_start build=R142-current-frame-spot-default pid=%lu default=authored_clip_surface_normals_current_spot_when_ready log=user-diagnostics-folder",GetCurrentProcessId());
+    Trace("session_start build=R143-room-transition-shadow-signal pid=%lu default=authored_clip_surface_normals_current_spot_when_ready log=user-diagnostics-folder",GetCurrentProcessId());
     MSG msg{};
     while(GetMessageW(&msg,nullptr,0,0)>0){
         if (!panel || !IsDialogMessageW(panel, &msg)) {

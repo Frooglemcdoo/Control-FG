@@ -1,5 +1,14 @@
 # Changelog
 
+## R143 diagnostic: corrected spotlight signal views
+
+User reports shadows disappearing during room brightness changes, also in Native.
+Exposure adaptation is acceptable and remains unchanged; its causal role is not
+established. R143 adds corrected Shadow Signal, Raw Signal and Light IDs modes
+while preserving the R142 default. See [diagnostic notes](docs/room-transition-shadow-signal-r143.md).
+No in-game fix or tone-mapping diagnosis is claimed.
+
+
 ## Unreleased — experimental lighting branch
 
 - R134: corrected authored spotlight ray clipping; tester confirmed missing

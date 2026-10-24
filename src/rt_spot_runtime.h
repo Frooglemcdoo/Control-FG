@@ -48,6 +48,19 @@ inline const GUID& IsolationVariant(Mode mode) noexcept {
     }
 }
 // Optional diagnostics share ownership with the native PSO and never disable Default.
+// Composition signal views override shading, while the earlier producer still
+// uses IsolationVariant to retain corrected light selection.
+inline const GUID& CompositionVariant(Mode mode) noexcept {
+    if(IsCorrectedSignal(mode))return ShowsSpotLightIds(mode)?kLightIdsVariant:kVisibilityVariant;
+    if(NeedsIsolationProducer(mode)||mode==Mode::RoomContactOff)return IsolationVariant(mode);
+    if(mode==Mode::RoomBlocker||IsHitPositionMode(mode))return kBandColorsVariant;
+    if(mode==Mode::RoomOpen)return kOpenVariant;
+    if(mode==Mode::RtSpotMapGuard||mode==Mode::RoomSelectedOff)return kSelectedOffVariant;
+    if(ShowsSpotVisibility(mode))return kVisibilityVariant;
+    if(ShowsSpotLightIds(mode))return kLightIdsVariant;
+    return kVariant;
+}
+
 inline void PrepareIsolation(ID3D12Device* device, D3D12_COMPUTE_PIPELINE_STATE_DESC desc,
     ID3D12PipelineState* owner, CreateComputeFn create, const unsigned char* bytes, size_t length,
     const GUID& key, std::atomic<bool>& ready, const char* label) noexcept {
@@ -153,7 +166,7 @@ inline void HookPass(void* a, void* b, void* c, void* d) {
                     LiveSelection::Sequence(pass.selectionState),ModeName(pass.mode),
                     unsigned(UsesRawSpotVisibility(pass.mode)),unsigned(pass.mode==Mode::RtSpotMapGuard),
                     unsigned(ExpandsSpotCasters(pass.mode)));
-            if (pass.reset && pass.fullRay && (ShowsSpotVisibility(pass.mode) || pass.mode==Mode::RtSpotLightIds))
+            if (pass.reset && pass.fullRay && (ShowsSpotVisibility(pass.mode) || ShowsSpotLightIds(pass.mode)))
                 Trace("rt_spot_debug mode=%s composition=signal_only invalid_light=magenta downstream_postprocessing=1",ModeName(pass.mode));
             if (pass.fullRay && pass.composed) selection.Observe(pass.selectionState,kDirectBit);
             previousFull = pass.fullRay;
@@ -337,12 +350,9 @@ inline ID3D12PipelineState* SelectCompute(ID3D12PipelineState* native) noexcept 
     const bool raw = active->fullRay &&
         ((UsesRawSpotVisibility(active->mode) && (spatial || kind == kResetComponent)) ||
          (BypassesSpotHistory(active->mode) && kind == kResetComponent));
-    const GUID& variant = kind == kLightComponent && (NeedsIsolationProducer(active->mode)||active->mode==Mode::RoomContactOff) ? IsolationVariant(active->mode) :
-        kind == kLightComponent && (active->mode == Mode::RoomBlocker || IsHitPositionMode(active->mode)) ? kBandColorsVariant :
-        kind == kLightComponent && active->mode == Mode::RoomOpen ? kOpenVariant :
-        kind == kLightComponent && (active->mode == Mode::RtSpotMapGuard || active->mode == Mode::RoomSelectedOff) ? kSelectedOffVariant :
-        kind == kLightComponent && ShowsSpotVisibility(active->mode) ? kVisibilityVariant :
-        kind == kLightComponent && active->mode == Mode::RtSpotLightIds ? kLightIdsVariant : raw ? kRawVariant : kind == kResetComponent && !active->reset ? (UsesGuardedSpotHistory(active->mode)?kGuardedHistoryVariant:kHistoryVariant) : kVariant;
+    const GUID& variant = kind == kLightComponent ? CompositionVariant(active->mode) :
+        raw ? kRawVariant : kind == kResetComponent && !active->reset ?
+        (UsesGuardedSpotHistory(active->mode)?kGuardedHistoryVariant:kHistoryVariant) : kVariant;
     if (FAILED(native->GetPrivateData(variant,&size,&alternate)) || !alternate) return nullptr;
     if(kind==kResetComponent) {
         static thread_local uint64_t reported=~uint64_t(0);
@@ -360,6 +370,7 @@ inline ID3D12PipelineState* SelectCompute(ID3D12PipelineState* native) noexcept 
         if (reported != sequence) {
             Trace("spot_light_isolation seq=%llu mode=%s selector=%s composition=%s gpu_confirmed=0",
                 sequence,ModeName(active->mode),UsesUnshadowedSpotSelection(active->mode)?"unshadowed":"native",
+                IsCorrectedSignal(active->mode)?(ShowsSpotLightIds(active->mode)?"corrected_selected_spot_ids":"corrected_selected_spot_visibility"):
                 active->mode==Mode::RoomCorrectedNoAO?"surface_normals_screen_occlusion_yw_one":
                 UsesDirectSurfaceNormals(active->mode)?"surface_normals":
                 active->mode==Mode::RoomLocalMapsOff?"local_map_visibility_one":
@@ -370,7 +381,7 @@ inline ID3D12PipelineState* SelectCompute(ID3D12PipelineState* native) noexcept 
                 IsHitPositionMode(active->mode)?"hit_position_bands":
                 active->mode==Mode::RoomBlocker?"blocker_bands":
                 ShowsSpotVisibility(active->mode)?"visibility_signal":
-                active->mode==Mode::RtSpotLightIds?"light_ids":
+                ShowsSpotLightIds(active->mode)?"light_ids":
                 UsesRawSpotVisibility(active->mode)?"raw_rt":"filtered_rt");
             reported = sequence;
         }

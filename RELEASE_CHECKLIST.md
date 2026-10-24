@@ -1,5 +1,7 @@
 # Release checklist — Control FG v2.1.2
 
+- [ ] Investigate room-transition shadow loss with R143 corrected spotlight signal/ID views; preserve acceptable exposure adaptation. Do not mark fixed from build success or display brightness alone.
+
 ## Experimental lighting release preparation
 
 Use [the lighting release gate](docs/LIGHTING_RELEASE_LEDGER.md#public-release-gate)
