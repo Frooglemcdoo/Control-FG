@@ -162,7 +162,7 @@ inline DWORD WINAPI ThreadProc(LPVOID) noexcept {
     ULONGLONG nextRefresh=0, nextWindowSearch=0, nextLogDrain=0, nextRRReport=0;
     HWND cachedGame=nullptr;
     POINT lastOrigin{-1,-1};
-    Trace("session_start build=R139-direct-surface-normal-fix pid=%lu default=authored_clip_surface_normals_when_ready log=user-diagnostics-folder",GetCurrentProcessId());
+    Trace("session_start build=R140-motion-shadow-isolation pid=%lu default=authored_clip_surface_normals_when_ready log=user-diagnostics-folder",GetCurrentProcessId());
     MSG msg{};
     while(GetMessageW(&msg,nullptr,0,0)>0){
         if (!panel || !IsDialogMessageW(panel, &msg)) {

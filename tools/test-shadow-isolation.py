@@ -43,3 +43,19 @@ for name,edits,neighbors in [
   assert instructions[offset]['operands']==[f'r[{register}].{mask}',f'l({value})']
  for offset,opcode in neighbors: assert instructions[offset]['name']==opcode
 print('PASS: bent-normal blend and local-map consumption boundaries remain intact')
+
+# The motion comparison must preserve every R139 correction and change only
+# the scalar screen-occlusion load, not sunlight or actual shadow visibility.
+for name,baseline,offset,register,address,resource in [
+ ('corrected_no_ao','bent_normal_off',338,7,(5,'xyww'),[0x002078d6,2,2]),
+ ('selector_corrected_no_ao','selector_bent_normal_off',4436,9,(9,'xyzw'),[0x002078d6,2,2])]:
+ original=(root/'build'/f'rt_spot_{baseline}.dxbc').read_bytes()
+ actual=(root/'build'/f'rt_spot_{name}.dxbc').read_bytes()
+ import hashlib
+ assert actual==module.neutralize_load(original,hashlib.sha256(original).hexdigest(),offset,register,3,address,resource)
+ old={i['dword']:i for i in decode(root/'build'/f'rt_spot_{baseline}.dxbc')['instructions']}
+ new={i['dword']:i for i in decode(root/'build'/f'rt_spot_{name}.dxbc')['instructions']}
+ assert new[offset]['operands']==[f'r[{register}].xy','l(1)']
+ for pos,instruction in old.items():
+  if pos!=offset: assert new[pos]==instruction
+print('PASS: combined motion variants preserve all R139 operands outside scalar AO')

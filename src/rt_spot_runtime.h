@@ -34,11 +34,13 @@ inline const GUID kContactOffVariant = {0xe631a601,0x6651,0x4911,{0x80,0x90,0x11
 inline const GUID kScreenOcclusionVariant = {0xe631a601,0x6651,0x4911,{0x80,0x90,0x11,0x71,0x14,0x28,0x30,0x0d}};
 inline const GUID kBentNormalVariant = {0xe631a601,0x6651,0x4911,{0x80,0x90,0x11,0x71,0x14,0x28,0x30,0x0e}};
 inline const GUID kLocalMapsVariant = {0xe631a601,0x6651,0x4911,{0x80,0x90,0x11,0x71,0x14,0x28,0x30,0x0f}};
+inline const GUID kCorrectedNoAOVariant = {0xe631a601,0x6651,0x4911,{0x80,0x90,0x11,0x71,0x14,0x28,0x30,0x10}};
 inline const GUID& IsolationVariant(Mode mode) noexcept {
+    if(mode==Mode::RoomCorrectedNoAO)return kCorrectedNoAOVariant;
+    if(UsesDirectSurfaceNormals(mode))return kBentNormalVariant;
     switch(mode) {
     case Mode::RoomContactOff:return kContactOffVariant;
     case Mode::RoomScreenOcclusionOff:return kScreenOcclusionVariant;
-    case Mode::RoomBentNormalOff:case Mode::RoomCorrectedNoRR:return kBentNormalVariant;
     case Mode::RoomLocalMapsOff:return kLocalMapsVariant;
     default:return kVariant;
     }
@@ -269,12 +271,14 @@ inline void ObserveCompute(ID3D12Device* device, const D3D12_COMPUTE_PIPELINE_ST
         Trace("rt_spot_open ready=%u hr=0x%08lX",unsigned(SUCCEEDED(openResult)),static_cast<unsigned long>(openResult));
     }
     if(SUCCEEDED(hr) && kind==kLightComponent) {
+        PrepareIsolation(device,*desc,owner,create,kCorrectedNoAOShader,sizeof(kCorrectedNoAOShader),kCorrectedNoAOVariant,correctedNoAOLightReady,"surface_normals_no_ao_composition");
         PrepareIsolation(device,*desc,owner,create,kBentNormalOffShader,sizeof(kBentNormalOffShader),kBentNormalVariant,bentNormalLightReady,"bent_normal_composition");
         PrepareIsolation(device,*desc,owner,create,kLocalMapsOffShader,sizeof(kLocalMapsOffShader),kLocalMapsVariant,localMapsLightReady,"local_maps_composition");
         PrepareIsolation(device,*desc,owner,create,kContactOffShader,sizeof(kContactOffShader),kContactOffVariant,contactOffReady,"contact_visibility");
         PrepareIsolation(device,*desc,owner,create,kScreenOcclusionOffShader,sizeof(kScreenOcclusionOffShader),kScreenOcclusionVariant,screenOcclusionLightReady,"screen_occlusion_composition");
     }
     if(SUCCEEDED(hr) && kind==kSelectorComponent) {
+        PrepareIsolation(device,*desc,owner,create,kSelectorCorrectedNoAOShader,sizeof(kSelectorCorrectedNoAOShader),kCorrectedNoAOVariant,correctedNoAOSelectorReady,"surface_normals_no_ao_producer");
         PrepareIsolation(device,*desc,owner,create,kSelectorBentNormalOffShader,sizeof(kSelectorBentNormalOffShader),kBentNormalVariant,bentNormalSelectorReady,"bent_normal_producer");
         PrepareIsolation(device,*desc,owner,create,kSelectorLocalMapsOffShader,sizeof(kSelectorLocalMapsOffShader),kLocalMapsVariant,localMapsSelectorReady,"local_maps_producer");
         PrepareIsolation(device,*desc,owner,create,kSelectorOcclusionOffShader,sizeof(kSelectorOcclusionOffShader),kScreenOcclusionVariant,screenOcclusionSelectorReady,"screen_occlusion_producer");
@@ -342,6 +346,7 @@ inline ID3D12PipelineState* SelectCompute(ID3D12PipelineState* native) noexcept 
         if (reported != sequence) {
             Trace("spot_light_isolation seq=%llu mode=%s selector=%s composition=%s gpu_confirmed=0",
                 sequence,ModeName(active->mode),UsesUnshadowedSpotSelection(active->mode)?"unshadowed":"native",
+                active->mode==Mode::RoomCorrectedNoAO?"surface_normals_screen_occlusion_yw_one":
                 UsesDirectSurfaceNormals(active->mode)?"surface_normals":
                 active->mode==Mode::RoomLocalMapsOff?"local_map_visibility_one":
                 active->mode==Mode::RoomContactOff?"spot_point_contact_visibility_one":

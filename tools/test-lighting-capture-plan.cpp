@@ -53,6 +53,23 @@ int main(){
  assert(ModeAvailable(kDefaultMode,kRtSpotReadyBit));
  assert(ModeAvailable(Mode::RoomCorrectedNoRR,kRtSpotReadyBit));
  assert(!ModeAvailable(kDefaultMode,0));
+ for(auto m:{Mode::RoomCorrectedNoAO,Mode::RoomCorrectedNoHistory,Mode::RoomCorrectedRaw}) {
+  assert(modes.count(m)&&UsesDirectSurfaceNormals(m)&&UsesAuthoredClip(m));
+  assert(PreservesGiFiltering(m)&&IsRtSpotMode(m)&&NeedsIsolationProducer(m));
+  assert(!BypassesRR(m)&&!IsSignalDiagnostic(m));
+  assert(BypassesSpotHistory(m)==(m!=Mode::RoomCorrectedNoAO));
+  assert(UsesRawSpotVisibility(m)==(m==Mode::RoomCorrectedRaw));
+  assert(!Applied(m,kDirectBit,true)&&!Applied(m,kGiBit,true)&&Applied(m,kAllBits,true));
+ }
+ assert(!ModeAvailable(Mode::RoomCorrectedNoAO,kRtSpotReadyBit));
+ correctedNoAOLightReady=true;
+ assert(!ModeAvailable(Mode::RoomCorrectedNoAO,kRtSpotReadyBit));
+ correctedNoAOSelectorReady=true;
+ assert(ModeAvailable(Mode::RoomCorrectedNoAO,kRtSpotReadyBit));
+ assert(ModeAvailable(Mode::RoomCorrectedNoHistory,kRtSpotReadyBit));
+ assert(ModeAvailable(Mode::RoomCorrectedRaw,kRtSpotReadyBit));
+ correctedNoAOLightReady=false;
+ assert(ModeAvailable(kDefaultMode,kRtSpotReadyBit)); // Optional failure cannot disable baseline.
  assert(gpu==1);assert(modes.count(Mode::Native)&&modes.count(Mode::RoomAuthoredClip));
  assert(modes.count(Mode::RoomAuthoredSpatial)&&modes.count(Mode::RoomAuthoredRaw));
  assert(!Settled(2499,100,true));assert(!Settled(4000,89,true));assert(!Settled(4000,100,false));assert(Settled(2500,90,true));

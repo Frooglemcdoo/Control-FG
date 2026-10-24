@@ -1,4 +1,4 @@
-"""R138: isolate contact visibility, screen occlusion, bent normals and local maps.
+"""R140: isolate contact visibility, screen occlusion, bent normals and local maps.
 
 Hash-locked operand edits only. Keep authored rays, map visibility, material
 response, resources and accumulation; only the named diagnostic input changes.
@@ -81,7 +81,17 @@ def generate():
         (out/f'rt_spot_{name}.dxbc').write_bytes(result)
         headers.append(f'static const unsigned char {symbol}[]={{\n'+','.join(f'0x{x:02x}' for x in result)+'\n};')
         print(f'PASS: {name}, one neutralized load, sha256={hashlib.sha256(result).hexdigest()}')
-    for name,symbol,result in remaining_isolation(light,selector):
+    isolated=remaining_isolation(light,selector)
+    # Compose the exact R139 correction with the existing scalar-AO isolation.
+    # Hash-lock the corrected intermediate too; never revert normal correction
+    # while comparing motion. Sun visibility (t2.x), maps and RT stay active.
+    bent_light=isolated[0][2]; bent_selector=isolated[1][2]
+    isolated += [
+        ('corrected_no_ao','kCorrectedNoAOShader',neutralize_load(bent_light,
+         '55bcdf543e60dee904c656bfed355aa1f10393a8f0a950467f25a9ed5ee76a1c',338,7,3,(5,'xyww'),[0x002078d6,2,2])),
+        ('selector_corrected_no_ao','kSelectorCorrectedNoAOShader',neutralize_load(bent_selector,
+         '29177f00d24b7c7bc9a9563bb04de4c62f16838a198b1275342bddafc3770bc9',4436,9,3,(9,'xyzw'),[0x002078d6,2,2]))]
+    for name,symbol,result in isolated:
         (out/f'rt_spot_{name}.dxbc').write_bytes(result)
         headers.append(f'static const unsigned char {symbol}[]={{\n'+','.join(f'0x{x:02x}' for x in result)+'\n};')
         print(f'PASS: {name}, fixed instruction edits, sha256={hashlib.sha256(result).hexdigest()}')

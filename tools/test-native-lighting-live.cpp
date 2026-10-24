@@ -16,7 +16,10 @@ int main(){
     assert(kModeChoices[0].mode==Mode::Native);
     assert(kModeChoices[1].mode==Mode::RoomBoth);
     assert(kModeChoices[2].mode==kDefaultMode);
-    assert(kModeChoices[4].mode==Mode::RoomAuthoredClip);
+    assert(kModeChoices[8].mode==Mode::RoomAuthoredClip);
+    assert(kModeChoices[3].mode==Mode::RoomCorrectedNoAO);
+    assert(kModeChoices[4].mode==Mode::RoomCorrectedNoHistory);
+    assert(kModeChoices[5].mode==Mode::RoomCorrectedNoRR);
     assert(UsesDirectSurfaceNormals(kDefaultMode)&&UsesAuthoredClip(kDefaultMode));
     LiveSelection live;
     assert(LiveSelection::GetMode(live.Read())==Mode::Native);
