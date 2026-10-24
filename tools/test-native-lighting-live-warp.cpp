@@ -817,5 +817,31 @@ int main() try {
     SelectMode(Mode::DisableDirect);render(cached.Get(),0,false);
     SelectMode(Mode::Native);render(cached.Get(),33,true);
     std::cout<<"PASS: serialized pipeline-library load observed and live native/off/native GPU output verified\n";
+    // Repeat F9 must not recycle a recording before both export and list reset.
+    {
+        namespace capture=rt_spot_capture_runtime;
+        if constexpr(rt_spot_capture::GpuCaptureEnabled) {
+            capture::ready=true;capture::phase=capture::Phase::Idle;
+            if(!capture::RequestFresh() || capture::RequestFresh())throw std::runtime_error("Capture arm must be exclusive");
+            capture::CancelPending();
+            for(auto phase:{capture::Phase::Recorded,capture::Phase::Submitted,capture::Phase::Failed}){
+                capture::phase=phase;if(capture::RequestFresh())throw std::runtime_error("In-flight/failed capture recycled");
+            }
+            Check(device->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(capture::resources.fence.ReleaseAndGetAddressOf())));
+            Check(list.As(&capture::recordedList));capture::recordedGeneration=500;capture::fenceValue=1;
+            UINT64 generation=500;Check(list->SetPrivateData(rt_spot_table_audit::kGeneration,sizeof(generation),&generation));
+            capture::phase=capture::Phase::Complete;capture::readbackCopied=true;capture::exportStage=2;
+            if(capture::RequestFresh())throw std::runtime_error("Partial export recycled");
+            capture::exportStage=3;
+            if(capture::RequestFresh())throw std::runtime_error("Unreset command list recycled");
+            generation=501;Check(list->SetPrivateData(rt_spot_table_audit::kGeneration,sizeof(generation),&generation));
+            if(capture::RequestFresh())throw std::runtime_error("Unfinished fence recycled");
+            Check(capture::resources.fence->Signal(1));
+            if(!capture::RequestFresh() || capture::fenceValue!=2 || capture::exportStage!=0 || capture::readbackCopied)
+                throw std::runtime_error("Completed reset recording did not rearm cleanly");
+            capture::CancelPending();capture::ready=false;
+            std::cout<<"PASS F9 rearm: in-flight, failure, partial export, reset and monotonic fence guards\n";
+        } else if(capture::RequestFresh())throw std::runtime_error("Capture enabled in disabled build");
+    }
     CloseHandle(event);std::cout<<"PASS: WARP live native/GI/direct switching through SetPipelineState and Reset; native restored without restart\n";return 0;
 } catch(const std::exception& error){std::cerr<<error.what()<<'\n';return 1;}
