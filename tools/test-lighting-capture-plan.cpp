@@ -100,6 +100,15 @@ int main(){
   bentNormalSelectorReady=false;assert(!ModeAvailable(m,kRtSpotReadyBit));bentNormalSelectorReady=true;
   LiveSelection live;assert(LiveSelection::GetMode(live.Select(m))==m);
  }
+ assert(SupportsLightContextCapture(kDefaultMode)&&SupportsLightContextCapture(Mode::RoomBoth));
+ assert(!SupportsLightContextCapture(Mode::Native)&&!SupportsLightContextCapture(Mode::RoomCorrectedVisibility));
+ assert(transitionSamples==6 && transitionStep.mode==kDefaultMode && transitionStep.gpu);
+ assert(!TransitionSettled(999,60,true,4000,true));
+ assert(!TransitionSettled(1000,29,true,4000,true));
+ assert(!TransitionSettled(1000,60,false,4000,true));
+ assert(TransitionSettled(1000,60,true,0,true));
+ assert(!TransitionSettled(1000,60,true,3999,false));
+ assert(TransitionSettled(1000,60,true,4000,false));
  assert(count==28 && imagesPerStep*count==84);
  assert(gpu==1);assert(modes.count(Mode::Native)&&modes.count(Mode::RoomAuthoredClip));
  assert(modes.count(Mode::RoomAuthoredSpatial)&&modes.count(Mode::RoomAuthoredRaw));

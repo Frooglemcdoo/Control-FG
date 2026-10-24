@@ -1,5 +1,13 @@
 # Known issues — v2.1.2
 
+## R144: room-transition shadow cause remains open
+
+Shift+F9 collects six asynchronous selected-light/context samples in Default
+without mode cycling. The offline analyzer compares world-space light geometry
+and distinguishes candidate ID renumbering from unmatched or ambiguous records.
+Exposure and accepted rendering are unchanged. See [R144 notes](docs/motion-light-context-r144.md).
+
+
 ## R143: room-transition shadow loss remains under investigation
 
 User reports shadows disappearing during room brightness changes, also in Native.

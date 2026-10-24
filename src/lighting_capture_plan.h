@@ -34,6 +34,15 @@ inline constexpr Step steps[]={
 };
 inline constexpr unsigned count=sizeof(steps)/sizeof(steps[0]);
 inline constexpr unsigned imagesPerStep=3;
+// Shift+F9 collects a bounded motion trace in the accepted default. Never
+// reselect between samples: that would reset history during the measured walk.
+inline constexpr Step transitionStep{kDefaultMode,L"transition-default",true};
+inline constexpr unsigned transitionSamples=6;
+inline constexpr uint64_t transitionSpacingMs=4000,transitionTimeoutMs=60000;
+inline bool TransitionSettled(uint64_t elapsed,uint64_t frames,bool observed,
+                              uint64_t sinceLastRequest,bool first) noexcept {
+    return elapsed>=1000 && frames>=30 && observed && (first||sinceLastRequest>=transitionSpacingMs);
+}
 inline constexpr uint64_t settleMs=2500,settleFrames=90,timeoutMs=20000,burstIntervalMs=200;
 // GI-only changes frame policy, not a direct-light PSO. Do not wait for the
 // RT replacement's binding marker when that replacement is intentionally off.

@@ -73,3 +73,5 @@ R140 download SHA256: `2a77f9b422ce55242c23c772e9c26c1f18bc3f3028169bc39ab2bd1f0
 - [ ] Review release notes against this ledger. No merge to main/master or public tag is implied by this tracking update.
 
 R143 adds diagnostics only; see `room-transition-shadow-signal-r143.md`. Source and build identity are the commit containing that document and its CI run. No shader binaries change. Private evidence: `20261024-1740-36.1166846.mp4`.
+
+R144 ([issue #15](https://github.com/Frooglemcdoo/Control-FG/issues/15)) follows the submitted R143 motion video/log with a bounded six-sample selected-light trace in Default. Raw signal and ID colors changed during traversal, but physical light switches are not proved. The analyzer reconstructs world-space geometry and reports ambiguous matches. See `motion-light-context-r144.md`. Exposure and final render shaders are unchanged; no rendering fix is claimed.

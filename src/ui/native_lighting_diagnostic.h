@@ -76,7 +76,7 @@ inline void Paint(HWND window) noexcept {
         (observed & required) == required && (mode != Mode::SpotResolution2x || spot_resolution_runtime::Observed(state)) ? (IsRtSpotMode(mode) ? L"RT pair recorded" : L"native bindings recorded") : L"Waiting: return to game");
     DrawLabel(dc, detailFont, status, {14,kStatusY,kWidth-12,kStatusY+24}, theme::kMutedText);
     wchar_t shortcuts[128]{};
-    swprintf_s(shortcuts, L"F9: capture suite    F10: close    Ctrl+Shift+1..%u: mode", kModeCount);
+    swprintf_s(shortcuts, L"F9: stills   Shift+F9: motion   F10: close   Ctrl+Shift+1..%u", kModeCount);
     DrawLabel(dc, detailFont, shortcuts, {14,kFooterY,kWidth-12,kFooterY+24}, theme::kMutedText);
     DrawLabel(dc, detailFont, selectionRejected ? L"Mode unavailable: shader or sample hook is not ready. Save Log." : savedNotice.load() == 2 ? L"Log write failed. Save Log shows the Windows error." : savedNotice.load() == 1 ? L"Log saved. See the folder shown in the confirmation." : ModeHint(mode), {14,kFooterY+26,kWidth-12,kFooterY+56}, theme::kText);
     EndPaint(window, &ps);
@@ -167,7 +167,7 @@ inline DWORD WINAPI ThreadProc(LPVOID) noexcept {
     ULONGLONG nextRefresh=0, nextWindowSearch=0, nextLogDrain=0, nextRRReport=0;
     HWND cachedGame=nullptr;
     POINT lastOrigin{-1,-1};
-    Trace("session_start build=R143-room-transition-shadow-signal pid=%lu default=authored_clip_surface_normals_current_spot_when_ready log=user-diagnostics-folder",GetCurrentProcessId());
+    Trace("session_start build=R144-motion-light-context pid=%lu default=authored_clip_surface_normals_current_spot_when_ready log=user-diagnostics-folder",GetCurrentProcessId());
     MSG msg{};
     while(GetMessageW(&msg,nullptr,0,0)>0){
         if (!panel || !IsDialogMessageW(panel, &msg)) {
@@ -192,7 +192,7 @@ inline DWORD WINAPI ThreadProc(LPVOID) noexcept {
         if(capturePress && (GetForegroundWindow()==game || PanelHasForeground(panel))) {
             if(capture_suite::active)capture_suite::Finish(game,"cancelled");
             else {if(panelOpen)ClosePanel(panel);
-                if(!capture_suite::Start())MessageBoxW(game,L"Could not start the capture. If a previous capture was cancelled, let its GPU export finish and try F9 again. Use Save Log for details.",L"F9 capture",MB_OK|MB_ICONERROR);}
+                if(!capture_suite::Start((GetAsyncKeyState(VK_SHIFT)&0x8000)!=0))MessageBoxW(game,L"Could not start capture. Return to gameplay and wait for Default and GPU capture readiness. If a previous capture was cancelled, let its export finish. Use Save Log for details.",L"F9 capture",MB_OK|MB_ICONERROR);}
         }
         capture_suite::Tick(game,now);
         const bool foreground=GetForegroundWindow()==game || PanelHasForeground(panel);

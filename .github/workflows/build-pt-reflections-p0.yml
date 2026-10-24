@@ -184,6 +184,8 @@ jobs:
           python tools/generate-spot-band-colors.py
           python tools/rt_spot_hit_position.py
           python tools/test-rt-spot-hit-position.py
+          python tools/test-light-transition.py
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
           python tools/test-spot-hit-capture.py
           python tools/rt_spot_authored_clip.py
           python tools/test-rt-spot-authored-clip.py
@@ -479,11 +481,11 @@ jobs:
           build\test-lighting-capture-plan.exe
           if errorlevel 1 exit /b 1
 
-      - name: Package live lighting diagnostic R143
+      - name: Package live lighting diagnostic R144
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-Native-Lighting-Live-R143'
+          $out='Control-FG-Native-Lighting-Live-R144'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
           Copy-Item build/rt_spot_selected_off.dxbc,build/rt_spot_selection.dxbc,build/rt_spot_visibility.dxbc,build/rt_spot_light_ids.dxbc,build/rt_spot_raw_history.dxbc,build/rt_spot_raw_spatial0.dxbc,build/rt_spot_raw_spatial1.dxbc,build/rt_spot_full.dxil,build/rt_spot_r94.dxil,build/rt_spot_light.dxbc,build/rt_spot_reset.dxbc,build/rt_spot_history.dxbc,build/rt_spot_spatial0.dxbc,build/rt_spot_spatial1.dxbc $out
@@ -501,27 +503,23 @@ jobs:
           Copy-Item Collect-RR-Blinds-Capture.ps1 "$out/Collect-RR-Blinds-Capture.ps1"
           Copy-Item Collect-ControlFG-Compact-Logs.cmd "$out/Collect-ControlFG-Compact-Logs.cmd"
           Copy-Item Collect-ControlFG-Compact-Logs.ps1 "$out/Collect-ControlFG-Compact-Logs.ps1"
-          Copy-Item docs/room-transition-shadow-signal-r143.md "$out/DIAGNOSTIC-NOTES.md"
+          Copy-Item docs/motion-light-context-r144.md "$out/DIAGNOSTIC-NOTES.md"
           @'
-          CONTROL-FG R143 - Room-transition shadow signals
+          CONTROL-FG R144 - Motion light-context capture
           Close Control to install. Copy contents beside Control_DX12.exe.
           Preserve existing NVIDIA runtimes and the ControlFGStreamline folder.
           Keep RT Contact Shadows on, samples 1, FG/glass enhancements off.
           F10: NATIVE / BOTH / DEFAULT (FIXED). Default includes authored clip, normal correction and current-frame spotlight shadows.
-          Default rendering and exposure are unchanged from R142.
-          Record the same movement in DEFAULT, RR OFF, SHADOW SIGNAL, RAW SIGNAL and LIGHT IDS.
-          SHADOW SIGNAL: dark=shadow, white=unoccluded, magenta=no selected spotlight.
-          RAW SIGNAL removes spotlight spatial filtering; LIGHT IDS colors selected lights.
-          All three signal modes retain corrected selection, authored clipping and No History.
-          Signal views still pass through postprocessing; compare shapes/IDs, not brightness.
-          Close the panel before moving. Return to DEFAULT and SAVE LOG afterwards.
-          Send one video and that log. History comparisons remain in F9.
-          Leave RR enabled in game settings; signal tests bypass it temporarily.
-          F9: 28 comparisons, up to 84 PNGs and GPU hit/light-context capture in BOTH.
-          Keep camera still during the suite. F9 again cancels. Your mode is restored.
-          Send the Shadow-R143 folder shown in the completion dialog (zip it first).
-          The manifest lists unavailable modes, timeouts and capture errors.
-          PNGs are display-referred, not raw HDR. See DIAGNOSTIC-NOTES.md.
+          Default rendering and exposure remain unchanged from R142.
+          Shift+F9: start a six-sample motion capture. Walk through the affected room and back.
+          Keep moving until the completion dialog appears, usually 25-40 seconds.
+          No mode cycling or screenshots. Default stays selected throughout the trace.
+          Zip and send the Shadow-R144 folder shown at completion, plus your video.
+          The folder contains one lighting.log and manifest.txt. No Python setup required.
+          F9 or Shift+F9 cancels; losing focus also cancels. Prior mode is restored.
+          Plain F9 still runs 28 stationary comparisons / up to 84 PNGs; keep still for that suite.
+          The trace captures selected-light geometry, not exposure or final shadow visibility.
+          Diagnostic hit rays remain unclipped references. See DIAGNOSTIC-NOTES.md.
           '@ | Set-Content "$out/README.txt" -Encoding ASCII
           Compress-Archive -Path "$out/*" -DestinationPath "$out.zip" -Force
           (Get-FileHash "$out.zip" -Algorithm SHA256).Hash | Set-Content "$out.sha256" -Encoding ASCII
@@ -529,10 +527,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-Native-Lighting-Live-R143
+          name: Control-FG-Native-Lighting-Live-R144
           path: |
-            Control-FG-Native-Lighting-Live-R143.zip
-            Control-FG-Native-Lighting-Live-R143.sha256
+            Control-FG-Native-Lighting-Live-R144.zip
+            Control-FG-Native-Lighting-Live-R144.sha256
             build/rt_spot_shadow_prototype.dxil
             build/rr_clamp_fixed.h
             build/rt_spot_blocker.dxil

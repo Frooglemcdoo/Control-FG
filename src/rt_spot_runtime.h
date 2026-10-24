@@ -142,7 +142,7 @@ inline void HookPass(void* a, void* b, void* c, void* d) {
     pass.requested = !previous && !disabled.load() && components.load() == kRequiredComponents &&
         IsRtSpotMode(pass.mode);
     active = &pass;
-    if(!previous && pass.mode==Mode::RoomBoth)rt_spot_capture_runtime::BeginScope();
+    if(!previous && SupportsLightContextCapture(pass.mode))rt_spot_capture_runtime::BeginScope();
     __try { originalPass(a,b,c,d); }
     __finally {
         if(!previous)rt_spot_capture_runtime::EndScope();
@@ -541,7 +541,7 @@ inline bool Dispatch(ID3D12GraphicsCommandList4* list,const D3D12_DISPATCH_RAYS_
         if (active->reset) Trace("rt_spot_ray_route mode=%s record_offset=%u blocker_bands=%u raw=%u gpu_confirmed=0",ModeName(active->mode),RayRecordOffset(active->mode),unsigned(active->mode==Mode::RoomBlocker),unsigned(UsesRawSpotVisibility(active->mode)));
         auto custom=*desc;custom.RayGenerationShaderRecord={record->GetGPUVirtualAddress() + RayRecordOffset(active->mode),32};
         rt_shadow_capture::Lookup(list).dispatch(list,&custom);
-        if(active->mode==Mode::RoomBoth)rt_spot_capture_runtime::Record(list,state,desc);
+        if(SupportsLightContextCapture(active->mode))rt_spot_capture_runtime::Record(list,state,desc);
     }
     state->Release();record->Release();return active->fullRay;
 }

@@ -1,5 +1,13 @@
 # Changelog
 
+## R144 diagnostic: bounded motion light-context capture
+
+Shift+F9 collects six asynchronous selected-light/context samples in Default
+without mode cycling. The offline analyzer compares world-space light geometry
+and distinguishes candidate ID renumbering from unmatched or ambiguous records.
+Exposure and accepted rendering are unchanged. See [R144 notes](docs/motion-light-context-r144.md).
+
+
 ## R143 diagnostic: corrected spotlight signal views
 
 User reports shadows disappearing during room brightness changes, also in Native.

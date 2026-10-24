@@ -17,6 +17,9 @@ inline constexpr bool ShowsSpotLightIds(Mode mode) noexcept {
 // User-confirmed motion fix: current-frame spotlight visibility with spatial softness.
 // Keep the R139 normal correction and authored clipping; point history stays native.
 inline constexpr Mode kDefaultMode = Mode::RoomCorrectedNoHistory;
+inline constexpr bool SupportsLightContextCapture(Mode mode) noexcept {
+    return mode==Mode::RoomBoth || mode==kDefaultMode;
+}
 inline constexpr bool UsesDirectSurfaceNormals(Mode mode) noexcept {
     return IsCorrectedSignal(mode) || mode==Mode::RoomBentNormalOff || mode==Mode::RoomCorrectedNoRR ||
         mode==Mode::RoomCorrectedNoHistory || mode==Mode::RoomCorrectedNoAO || mode==Mode::RoomCorrectedRaw || mode==Mode::RoomCorrectedGuarded;
