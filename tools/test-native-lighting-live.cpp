@@ -15,7 +15,9 @@ int main(){
     assert(!BypassesSpotHistory(Mode::RoomAuthoredClip));
     assert(kModeChoices[0].mode==Mode::Native);
     assert(kModeChoices[1].mode==Mode::RoomBoth);
-    assert(kModeChoices[2].mode==Mode::RoomAuthoredClip);
+    assert(kModeChoices[2].mode==kDefaultMode);
+    assert(kModeChoices[4].mode==Mode::RoomAuthoredClip);
+    assert(UsesDirectSurfaceNormals(kDefaultMode)&&UsesAuthoredClip(kDefaultMode));
     LiveSelection live;
     assert(LiveSelection::GetMode(live.Read())==Mode::Native);
     const auto first=live.Select(Mode::DisableBakedGi);

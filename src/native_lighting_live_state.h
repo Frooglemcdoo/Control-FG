@@ -4,7 +4,13 @@
 #include "rr_specular_temporal_policy.h"
 
 namespace native_lighting {
-enum class Mode : unsigned { Native, DisableBakedGi, DisableDirect, DisableDirectDiffuse, DisableDirectSpecular, BypassShadows, DisableLightPattern, BypassScreenShadows, BypassSpotShadows, BypassPointShadows, SpotVarianceLow, SpotVarianceHigh, SpotPcfCenter, SpotPcf32, SpotStableSoft, SpotStableTight, SpotBilinear, SpotResolution2x, RtSpot, RtSpotRaw, RtSpotMapGuard, RtSpotNativeCull, RtSpotVisibilityRaw, RtSpotVisibilityFiltered, RtSpotLightIds, RtSpotBaseline, RtSpotDiffuseFiltered, RtSpotGiFiltered, RtSpotWorldAlbedo, RtSpotSpecularFiltered, RtSpotViewAngle, RtSpotGi2, RtSpotGi4, RtSpotGi8, RtSpotGiMenu, RtSpotGi12, RtSpotGi16, RtSpotSpec1, RtSpotSpec2, RtSpotSpec4, RtSpotSpec8, RtSpotSpec12, RtSpotSpec16, RtSpotTemporal2, RtSpotTemporal4, RoomNative, RoomGi, RoomSpot, RoomBoth, RoomNativeSelection, RoomOpen, RoomSelectedOff, RoomRaw, RoomBlocker, RoomHitX, RoomHitY, RoomHitZ, RoomAuthoredClip, RoomAuthoredSpatial, RoomAuthoredRaw, RoomNativeNoRR, RoomClipNoRR, RoomContactOff, RoomScreenOcclusionOff, RoomBentNormalOff, RoomLocalMapsOff };
+enum class Mode : unsigned { Native, DisableBakedGi, DisableDirect, DisableDirectDiffuse, DisableDirectSpecular, BypassShadows, DisableLightPattern, BypassScreenShadows, BypassSpotShadows, BypassPointShadows, SpotVarianceLow, SpotVarianceHigh, SpotPcfCenter, SpotPcf32, SpotStableSoft, SpotStableTight, SpotBilinear, SpotResolution2x, RtSpot, RtSpotRaw, RtSpotMapGuard, RtSpotNativeCull, RtSpotVisibilityRaw, RtSpotVisibilityFiltered, RtSpotLightIds, RtSpotBaseline, RtSpotDiffuseFiltered, RtSpotGiFiltered, RtSpotWorldAlbedo, RtSpotSpecularFiltered, RtSpotViewAngle, RtSpotGi2, RtSpotGi4, RtSpotGi8, RtSpotGiMenu, RtSpotGi12, RtSpotGi16, RtSpotSpec1, RtSpotSpec2, RtSpotSpec4, RtSpotSpec8, RtSpotSpec12, RtSpotSpec16, RtSpotTemporal2, RtSpotTemporal4, RoomNative, RoomGi, RoomSpot, RoomBoth, RoomNativeSelection, RoomOpen, RoomSelectedOff, RoomRaw, RoomBlocker, RoomHitX, RoomHitY, RoomHitZ, RoomAuthoredClip, RoomAuthoredSpatial, RoomAuthoredRaw, RoomNativeNoRR, RoomClipNoRR, RoomContactOff, RoomScreenOcclusionOff, RoomBentNormalOff, RoomLocalMapsOff, RoomCorrectedNoRR };
+// R138 captures isolate the broad false shadow to direct-light bent normals.
+// Reuse the tested surface-normal variants; retain the old clip mode for A/B.
+inline constexpr Mode kDefaultMode = Mode::RoomBentNormalOff;
+inline constexpr bool UsesDirectSurfaceNormals(Mode mode) noexcept {
+    return mode==kDefaultMode || mode==Mode::RoomCorrectedNoRR;
+}
 inline bool IsGiSampleMode(Mode mode) noexcept {
     return mode==Mode::RtSpotGi2 || mode==Mode::RtSpotGi4 ||
            mode==Mode::RtSpotGi8 || mode==Mode::RtSpotGiMenu ||
@@ -14,7 +20,7 @@ inline constexpr bool IsHitPositionMode(Mode mode) noexcept {
     return mode==Mode::RoomHitX || mode==Mode::RoomHitY || mode==Mode::RoomHitZ;
 }
 inline constexpr bool UsesAuthoredClip(Mode mode) noexcept {
-    return mode==Mode::RoomBentNormalOff || mode==Mode::RoomLocalMapsOff || mode==Mode::RoomContactOff || mode==Mode::RoomScreenOcclusionOff || mode==Mode::RoomAuthoredClip || mode==Mode::RoomAuthoredSpatial || mode==Mode::RoomAuthoredRaw || mode==Mode::RoomClipNoRR || mode==Mode::RoomSelectedOff;
+    return UsesDirectSurfaceNormals(mode) || mode==Mode::RoomLocalMapsOff || mode==Mode::RoomContactOff || mode==Mode::RoomScreenOcclusionOff || mode==Mode::RoomAuthoredClip || mode==Mode::RoomAuthoredSpatial || mode==Mode::RoomAuthoredRaw || mode==Mode::RoomClipNoRR || mode==Mode::RoomSelectedOff;
 }
 inline bool BypassesSpotHistory(Mode mode) noexcept {
     return mode==Mode::RoomAuthoredSpatial || mode==Mode::RoomAuthoredRaw;
@@ -29,11 +35,11 @@ inline bool IsSignalDiagnostic(Mode mode) noexcept {
 // Full-color comparisons use the existing per-frame RR bypass, without changing
 // the saved RR preference or turning the output into a signal visualization.
 inline bool BypassesRR(Mode mode) noexcept {
-    return IsSignalDiagnostic(mode) || mode==Mode::RoomNativeNoRR || mode==Mode::RoomClipNoRR;
+    return mode==Mode::RoomCorrectedNoRR || IsSignalDiagnostic(mode) || mode==Mode::RoomNativeNoRR || mode==Mode::RoomClipNoRR;
 }
 inline std::atomic<bool> spotBandColorsReady{false}, spotHitPositionReady{false}, spotAuthoredClipReady{false};
 inline bool NeedsIsolationProducer(Mode mode) noexcept {
-    return mode==Mode::RoomScreenOcclusionOff || mode==Mode::RoomBentNormalOff || mode==Mode::RoomLocalMapsOff;
+    return mode==Mode::RoomScreenOcclusionOff || UsesDirectSurfaceNormals(mode) || mode==Mode::RoomLocalMapsOff;
 }
 inline std::atomic<bool> bentNormalLightReady{false}, bentNormalSelectorReady{false};
 inline std::atomic<bool> localMapsLightReady{false}, localMapsSelectorReady{false};
@@ -117,8 +123,8 @@ inline constexpr unsigned kSpotResolutionReadyBit = 1u << 16;
 inline constexpr unsigned kRtSpotReadyBit = 1u << 17;
 struct ModeChoice { Mode mode; const wchar_t* label; };
 inline constexpr ModeChoice kModeChoices[] = {
-    {Mode::Native, L"NATIVE"}, {Mode::RoomBoth, L"BOTH"}, {Mode::RoomAuthoredClip, L"DEFAULT (CLIP)"},
-    {Mode::RoomLocalMapsOff, L"LOCAL MAPS OFF"}, {Mode::RoomBentNormalOff, L"BENT NORMAL OFF"}, {Mode::RoomSelectedOff, L"LIGHT OFF"},
+    {Mode::Native, L"NATIVE"}, {Mode::RoomBoth, L"BOTH"}, {kDefaultMode, L"DEFAULT (FIXED)"},
+    {Mode::RoomLocalMapsOff, L"LOCAL MAPS OFF"}, {Mode::RoomAuthoredClip, L"CLIP ONLY"}, {Mode::RoomSelectedOff, L"LIGHT OFF"},
     {Mode::RoomContactOff, L"CONTACT OFF"}, {Mode::RoomScreenOcclusionOff, L"SCREEN AO OFF"}, {Mode::RtSpotLightIds, L"LIGHT IDS"}
 };
 inline constexpr unsigned kModeCount = sizeof(kModeChoices) / sizeof(kModeChoices[0]);
@@ -152,7 +158,7 @@ inline unsigned RequiredBinding(Mode mode) noexcept {
     return NeedsIsolationProducer(mode) ? kAllBits : mode == Mode::Native ? kAllBits : mode == Mode::DisableBakedGi ? kGiBit : kDirectBit;
 }
 inline bool ModeAvailable(Mode mode,unsigned ready) noexcept {
-    if(mode==Mode::RoomBentNormalOff&&(!bentNormalLightReady.load(std::memory_order_acquire)||!bentNormalSelectorReady.load(std::memory_order_acquire)))return false;
+    if(UsesDirectSurfaceNormals(mode)&&(!bentNormalLightReady.load(std::memory_order_acquire)||!bentNormalSelectorReady.load(std::memory_order_acquire)))return false;
     if(mode==Mode::RoomLocalMapsOff&&(!localMapsLightReady.load(std::memory_order_acquire)||!localMapsSelectorReady.load(std::memory_order_acquire)))return false;
     if(mode==Mode::RoomContactOff&&!contactOffReady.load(std::memory_order_acquire))return false;
     if(mode==Mode::RoomScreenOcclusionOff&&(!screenOcclusionLightReady.load(std::memory_order_acquire)||!screenOcclusionSelectorReady.load(std::memory_order_acquire)))return false;
@@ -181,7 +187,8 @@ inline const char* ModeName(Mode mode) noexcept {
     case Mode::RoomAuthoredSpatial:return "room_authored_spatial";
     case Mode::RoomAuthoredRaw:return "room_authored_raw";
     case Mode::RoomNativeNoRR:return "native_rr_off";
-    case Mode::RoomBentNormalOff:return "clip_bent_normal_off";
+    case Mode::RoomBentNormalOff:return "default_surface_normals";
+    case Mode::RoomCorrectedNoRR:return "default_surface_normals_rr_off";
     case Mode::RoomLocalMapsOff:return "clip_local_maps_off";
     case Mode::RoomContactOff:return "clip_contact_off";
     case Mode::RoomScreenOcclusionOff:return "clip_screen_occlusion_off";
@@ -251,7 +258,7 @@ class LiveSelection {
     static constexpr unsigned kSequenceShift = kModeBits + 2;
     static constexpr uint64_t kModeMask = (uint64_t(1) << kModeBits) - 1;
     static constexpr uint64_t kObservedMask = uint64_t(kAllBits) << kObservedShift;
-    static_assert(static_cast<unsigned>(Mode::RoomLocalMapsOff) <= kModeMask, "Mode storage exhausted");
+    static_assert(static_cast<unsigned>(Mode::RoomCorrectedNoRR) <= kModeMask, "Mode storage exhausted");
     std::atomic<uint64_t> state_{0};
 public:
     uint64_t Read() const noexcept { return state_.load(std::memory_order_acquire); }

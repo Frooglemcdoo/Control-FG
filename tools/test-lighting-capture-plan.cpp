@@ -36,6 +36,23 @@ int main(){
  assert(!Applied(Mode::RoomScreenOcclusionOff,kDirectBit,true));
  assert(!Applied(Mode::RoomScreenOcclusionOff,kGiBit,true));
  assert(Applied(Mode::RoomScreenOcclusionOff,kAllBits,true));
+ assert(modes.count(Mode::RoomCorrectedNoRR));
+ assert(UsesDirectSurfaceNormals(kDefaultMode)&&UsesDirectSurfaceNormals(Mode::RoomCorrectedNoRR));
+ assert(!UsesDirectSurfaceNormals(Mode::RoomAuthoredClip));
+ assert(UsesAuthoredClip(Mode::RoomCorrectedNoRR)&&PreservesGiFiltering(Mode::RoomCorrectedNoRR));
+ assert(BypassesRR(Mode::RoomCorrectedNoRR)&&!IsSignalDiagnostic(Mode::RoomCorrectedNoRR));
+ assert(!Applied(Mode::RoomCorrectedNoRR,kAllBits,true));
+ assert(!Applied(Mode::RoomCorrectedNoRR,kDirectBit,false));
+ assert(Applied(Mode::RoomCorrectedNoRR,kAllBits,false));
+ // The automatic default must await both normal PSOs, authored rays and samples.
+ spotAuthoredClipReady=true;specularSamplesReady=true;
+ assert(!ModeAvailable(kDefaultMode,kRtSpotReadyBit));
+ bentNormalLightReady=true;
+ assert(!ModeAvailable(kDefaultMode,kRtSpotReadyBit));
+ bentNormalSelectorReady=true;
+ assert(ModeAvailable(kDefaultMode,kRtSpotReadyBit));
+ assert(ModeAvailable(Mode::RoomCorrectedNoRR,kRtSpotReadyBit));
+ assert(!ModeAvailable(kDefaultMode,0));
  assert(gpu==1);assert(modes.count(Mode::Native)&&modes.count(Mode::RoomAuthoredClip));
  assert(modes.count(Mode::RoomAuthoredSpatial)&&modes.count(Mode::RoomAuthoredRaw));
  assert(!Settled(2499,100,true));assert(!Settled(4000,89,true));assert(!Settled(4000,100,false));assert(Settled(2500,90,true));

@@ -38,7 +38,7 @@ inline const GUID& IsolationVariant(Mode mode) noexcept {
     switch(mode) {
     case Mode::RoomContactOff:return kContactOffVariant;
     case Mode::RoomScreenOcclusionOff:return kScreenOcclusionVariant;
-    case Mode::RoomBentNormalOff:return kBentNormalVariant;
+    case Mode::RoomBentNormalOff:case Mode::RoomCorrectedNoRR:return kBentNormalVariant;
     case Mode::RoomLocalMapsOff:return kLocalMapsVariant;
     default:return kVariant;
     }
@@ -342,7 +342,7 @@ inline ID3D12PipelineState* SelectCompute(ID3D12PipelineState* native) noexcept 
         if (reported != sequence) {
             Trace("spot_light_isolation seq=%llu mode=%s selector=%s composition=%s gpu_confirmed=0",
                 sequence,ModeName(active->mode),UsesUnshadowedSpotSelection(active->mode)?"unshadowed":"native",
-                active->mode==Mode::RoomBentNormalOff?"geometric_normals":
+                UsesDirectSurfaceNormals(active->mode)?"surface_normals":
                 active->mode==Mode::RoomLocalMapsOff?"local_map_visibility_one":
                 active->mode==Mode::RoomContactOff?"spot_point_contact_visibility_one":
                 active->mode==Mode::RoomScreenOcclusionOff?"screen_occlusion_yw_one":

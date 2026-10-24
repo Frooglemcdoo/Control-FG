@@ -162,7 +162,7 @@ inline DWORD WINAPI ThreadProc(LPVOID) noexcept {
     ULONGLONG nextRefresh=0, nextWindowSearch=0, nextLogDrain=0, nextRRReport=0;
     HWND cachedGame=nullptr;
     POINT lastOrigin{-1,-1};
-    Trace("session_start build=R138-maps-bent-normal-isolation pid=%lu default=authored_clip_when_ready log=user-diagnostics-folder",GetCurrentProcessId());
+    Trace("session_start build=R139-direct-surface-normal-fix pid=%lu default=authored_clip_surface_normals_when_ready log=user-diagnostics-folder",GetCurrentProcessId());
     MSG msg{};
     while(GetMessageW(&msg,nullptr,0,0)>0){
         if (!panel || !IsDialogMessageW(panel, &msg)) {
@@ -179,7 +179,7 @@ inline DWORD WINAPI ThreadProc(LPVOID) noexcept {
         if(game&&!panel){panel=CreateWindowExW(WS_EX_TOOLWINDOW,kClass,L"Control lighting diagnostic",WS_POPUP,
             0,0,kWidth,kHeight,game,nullptr,selfModule,nullptr);owner=game;}
         if(!panel){if(capture_suite::active)capture_suite::Finish(nullptr,"game_window_lost");continue;}
-        if(LiveSelection::Sequence(selection.Read())==0 && ModeAvailable(Mode::RoomAuthoredClip,readyMask.load()))SelectMode(Mode::RoomAuthoredClip);
+        if(LiveSelection::Sequence(selection.Read())==0 && ModeAvailable(kDefaultMode,readyMask.load()))SelectMode(kDefaultMode);
         static bool f9Held=false;
         const bool f9Down=(GetAsyncKeyState(VK_F9)&0x8000)!=0;
         const bool capturePress=f9Down&&!f9Held && !(GetAsyncKeyState(VK_CONTROL)&0x8000) && !(GetAsyncKeyState(VK_MENU)&0x8000);
