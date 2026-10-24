@@ -185,6 +185,7 @@ jobs:
           python tools/rt_spot_hit_position.py
           python tools/test-rt-spot-hit-position.py
           python tools/test-light-transition.py
+          python tools/test-package-lighting-capture.py
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           python tools/test-spot-hit-capture.py
           python tools/rt_spot_authored_clip.py
@@ -503,6 +504,7 @@ jobs:
           Copy-Item Collect-RR-Blinds-Capture.ps1 "$out/Collect-RR-Blinds-Capture.ps1"
           Copy-Item Collect-ControlFG-Compact-Logs.cmd "$out/Collect-ControlFG-Compact-Logs.cmd"
           Copy-Item Collect-ControlFG-Compact-Logs.ps1 "$out/Collect-ControlFG-Compact-Logs.ps1"
+          Copy-Item Package-Lighting-Capture.cmd,tools/package-lighting-capture.py $out
           Copy-Item docs/motion-light-context-r144.md "$out/DIAGNOSTIC-NOTES.md"
           @'
           CONTROL-FG R144 - Motion light-context capture
@@ -514,7 +516,9 @@ jobs:
           Shift+F9: start a six-sample motion capture. Walk through the affected room and back.
           Keep moving until the completion dialog appears, usually 25-40 seconds.
           No mode cycling or screenshots. Default stays selected throughout the trace.
-          Zip and send the Shadow-R144 folder shown at completion, plus your video.
+          Drag the completed Shadow-R144 folder onto Package-Lighting-Capture.cmd.
+          Send ALL ZIPs from the new SEND folder (each below 200 MB), plus your video.
+          The packager uses installed Python 3.8+ without extra packages.
           The folder contains one lighting.log and manifest.txt. No Python setup required.
           F9 or Shift+F9 cancels; losing focus also cancels. Prior mode is restored.
           Plain F9 still runs 28 stationary comparisons / up to 84 PNGs; keep still for that suite.

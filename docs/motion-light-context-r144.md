@@ -70,3 +70,24 @@ Validation includes camera translation/rotation invariance, renumbering and
 ambiguous matches, finite/rigid transform checks, complete six-sample logs,
 replayed/stale/partial exports, readiness and bounded timing policy. In-game
 capture behavior and the reported shadow cause still need user evidence.
+
+
+### Upload-sized capture packaging
+
+Extract the separate Capture-Packager helper ZIP and drag the completed capture
+folder onto `Package-Lighting-Capture.cmd`. Or double-click it and paste the folder
+path. This uses installed Python 3.8+ with no additional packages or .NET runtime.
+Place any video to include in the completed capture folder before packaging.
+Send **all ZIP files**, including `capture-manifest.zip`, from the new sibling
+`Shadow-...-SEND-...` folder. Every ZIP is verified below 200,000,000 bytes.
+The originals are retained. Packaging is manual after capture completion and runs
+outside the game. Do not package a folder while capture is still writing to it.
+
+The helper splits even a single oversized file, streams bounded buffers, includes
+per-chunk SHA-256 metadata, checks ZIP CRCs and actual final sizes, and inventories
+all ZIP parts with hashes. Failed outputs are marked INCOMPLETE-DO-NOT-SEND.
+To reconstruct, keep every ZIP together and run:
+`python package-lighting-capture.py SEND_FOLDER --restore-to NEW_FOLDER`.
+Tests cover incompressible data, multi-part files, Unicode paths, empty files,
+exact reconstruction and missing-part rejection. A 201 MB random-file test
+produced parts of 180,055,310 and 21,006,810 bytes plus the manifest ZIP.
