@@ -13,16 +13,23 @@ inline HRESULT Save(HWND game,const wchar_t* path) noexcept {
     RECT rect{};if(!GetClientRect(game,&rect))return E_FAIL;
     const int width=rect.right,height=rect.bottom;
     if(width<=0 || height<=0 || width>16384 || height>16384)return E_INVALIDARG;
+    POINT origin{0,0};if(!ClientToScreen(game,&origin))return E_FAIL;
+    // Read the composed display at the client rectangle. A window GDI DC can
+    // contain only black pixels for DX12 flip-model presentation.
+    const RECT desktop{GetSystemMetrics(SM_XVIRTUALSCREEN),GetSystemMetrics(SM_YVIRTUALSCREEN),
+        GetSystemMetrics(SM_XVIRTUALSCREEN)+GetSystemMetrics(SM_CXVIRTUALSCREEN),
+        GetSystemMetrics(SM_YVIRTUALSCREEN)+GetSystemMetrics(SM_CYVIRTUALSCREEN)};
+    if(origin.x<desktop.left || origin.y<desktop.top || origin.x+width>desktop.right || origin.y+height>desktop.bottom)return E_ABORT;
     const UINT stride=(UINT(width)*3+3)&~3u;
     if(UINT64(stride)*height>512ull*1024*1024)return E_OUTOFMEMORY;
     BITMAPINFO info{};info.bmiHeader.biSize=sizeof(BITMAPINFOHEADER);
     info.bmiHeader.biWidth=width;info.bmiHeader.biHeight=-height;
     info.bmiHeader.biPlanes=1;info.bmiHeader.biBitCount=24;info.bmiHeader.biCompression=BI_RGB;
-    HDC screen=GetDC(game),memory=screen?CreateCompatibleDC(screen):nullptr;
+    HDC screen=GetDC(nullptr),memory=screen?CreateCompatibleDC(screen):nullptr;
     void* pixels=nullptr;HBITMAP bitmap=memory?CreateDIBSection(screen,&info,DIB_RGB_COLORS,&pixels,nullptr,0):nullptr;
     HGDIOBJ old=bitmap?SelectObject(memory,bitmap):nullptr;
     HRESULT hr=E_FAIL;
-    if(bitmap && BitBlt(memory,0,0,width,height,screen,0,0,SRCCOPY|CAPTUREBLT) && GdiFlush() && GetForegroundWindow()==game) {
+    if(bitmap && old && old!=HGDI_ERROR && BitBlt(memory,0,0,width,height,screen,origin.x,origin.y,SRCCOPY|CAPTUREBLT) && GdiFlush() && GetForegroundWindow()==game) {
         ComPtr<IWICImagingFactory> factory;ComPtr<IWICStream> stream;
         ComPtr<IWICBitmapEncoder> encoder;ComPtr<IWICBitmapFrameEncode> frame;
         hr=CoCreateInstance(CLSID_WICImagingFactory,nullptr,CLSCTX_INPROC_SERVER,IID_PPV_ARGS(&factory));
@@ -40,8 +47,8 @@ inline HRESULT Save(HWND game,const wchar_t* path) noexcept {
         if(SUCCEEDED(hr))hr=frame->Commit();
         if(SUCCEEDED(hr))hr=encoder->Commit();
     }
-    if(old)SelectObject(memory,old);if(bitmap)DeleteObject(bitmap);
-    if(memory)DeleteDC(memory);if(screen)ReleaseDC(game,screen);
+    if(old && old!=HGDI_ERROR)SelectObject(memory,old);if(bitmap)DeleteObject(bitmap);
+    if(memory)DeleteDC(memory);if(screen)ReleaseDC(nullptr,screen);
     if(FAILED(hr))DeleteFileW(path);
     return hr;
 }
