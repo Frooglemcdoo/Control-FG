@@ -129,6 +129,12 @@ inline void PackageRR(HWND window) noexcept {
         CloseHandle(process.hThread);CloseHandle(process.hProcess);
     } else MessageBoxW(window,L"Could not start packaging. Check Capture-RR-Boundary.ps1 is installed beside dxgi.dll.",L"Lighting packaging",MB_OK|MB_ICONERROR);
 }
+inline void RequestLightCapture(HWND panel) noexcept {
+    if(!capture_suite::active && LiveSelection::GetMode(selection.Read())==Mode::RoomNativeNoRR && control_rr_capture_ui::Request()) {
+        Trace("native_lighting_capture requested=1 mode=native_rr_off");
+        ClosePanel(panel);
+    } else MessageBoxW(panel,L"Select NATIVE RR OFF before capturing. If busy, failed, or both pairs are saved, read the status; PACKAGE LIGHT collects diagnostics.",L"Lighting capture",MB_OK);
+}
 inline LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPARAM lParam) noexcept {
     namespace theme = control_ui::theme;
     switch (message) {
@@ -175,13 +181,7 @@ inline LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPA
                     MessageBoxW(window, L"This mode has not applied yet. Press F10 to return to the game, wait for the image to settle, then reopen the panel and record your result.", L"Wait for mode to apply", MB_OK);
             }
             else if(index==kModeCount+2) SaveReport(window);
-            else if(index==kModeCount+3) {
-                if(!capture_suite::active && LiveSelection::GetMode(selection.Read())==Mode::RoomNativeNoRR && control_rr_capture_ui::Request()) {
-                    Trace("native_lighting_capture_button requested=1 mode=native_rr_off");
-                    // Hide the panel and restore game focus so focus-paused gameplay resumes.
-                    ClosePanel(window);
-                } else MessageBoxW(window,L"Select NATIVE RR OFF before capturing. If busy, failed, or both pairs are saved, read the status; PACKAGE LIGHT collects diagnostics.",L"Lighting capture",MB_OK);
-            }
+            else if(index==kModeCount+3) RequestLightCapture(window);
             else if(index==kModeCount+4) PackageRR(window);
             RedrawWindow(window,nullptr,nullptr,RDW_INVALIDATE|RDW_ALLCHILDREN);
             return 0;
@@ -205,7 +205,7 @@ inline DWORD WINAPI ThreadProc(LPVOID) noexcept {
     ULONGLONG nextRefresh=0, nextWindowSearch=0, nextLogDrain=0, nextRRReport=0;
     HWND cachedGame=nullptr;
     POINT lastOrigin{-1,-1};
-    Trace("session_start build=R156-overlay-rr-capture pid=%lu default=authored_clip_surface_normals_current_spot_when_ready log=user-diagnostics-folder",GetCurrentProcessId());
+    Trace("session_start build=R157-overlay-rr-capture pid=%lu default=authored_clip_surface_normals_current_spot_when_ready log=user-diagnostics-folder",GetCurrentProcessId());
     MSG msg{};
     while(GetMessageW(&msg,nullptr,0,0)>0){
         if (!panel || !IsDialogMessageW(panel, &msg)) {
@@ -228,9 +228,10 @@ inline DWORD WINAPI ThreadProc(LPVOID) noexcept {
         const bool capturePress=f9Down&&!f9Held && !(GetAsyncKeyState(VK_CONTROL)&0x8000) && !(GetAsyncKeyState(VK_MENU)&0x8000);
         f9Held=f9Down;
         if(capturePress && (GetForegroundWindow()==game || PanelHasForeground(panel))) {
-            if(capture_suite::active)capture_suite::Finish(game,"cancelled");
+            if(GetAsyncKeyState(VK_SHIFT)&0x8000) RequestLightCapture(panel);
+            else if(capture_suite::active)capture_suite::Finish(game,"cancelled");
             else {if(panelOpen)ClosePanel(panel);
-                if(!capture_suite::Start((GetAsyncKeyState(VK_SHIFT)&0x8000)!=0))MessageBoxW(game,L"Could not start capture. Return to gameplay and wait for Default and GPU capture readiness. If a previous capture was cancelled, let its export finish. Use Save Log for details.",L"F9 capture",MB_OK|MB_ICONERROR);}
+                if(!capture_suite::Start(false))MessageBoxW(game,L"Could not start capture. Return to gameplay and wait for Default and GPU capture readiness. If a previous capture was cancelled, let its export finish. Use Save Log for details.",L"F9 capture",MB_OK|MB_ICONERROR);}
         }
         capture_suite::Tick(game,now);
         const bool foreground=GetForegroundWindow()==game || PanelHasForeground(panel);

@@ -521,11 +521,11 @@ jobs:
           [System.Management.Automation.Language.Parser]::ParseFile((Join-Path $pwd 'Capture-RR-Boundary.ps1'),[ref]$tokens,[ref]$parseErrors) | Out-Null
           if($parseErrors.Count){throw ($parseErrors | Out-String)}
 
-      - name: Package live lighting diagnostic R156
+      - name: Package live lighting diagnostic R157
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-Native-Lighting-Live-R156'
+          $out='Control-FG-Native-Lighting-Live-R157'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
           Copy-Item build/rt_spot_selected_off.dxbc,build/rt_spot_selection.dxbc,build/rt_spot_visibility.dxbc,build/rt_spot_light_ids.dxbc,build/rt_spot_raw_history.dxbc,build/rt_spot_raw_spatial0.dxbc,build/rt_spot_raw_spatial1.dxbc,build/rt_spot_full.dxil,build/rt_spot_r94.dxil,build/rt_spot_light.dxbc,build/rt_spot_reset.dxbc,build/rt_spot_history.dxbc,build/rt_spot_spatial0.dxbc,build/rt_spot_spatial1.dxbc $out
@@ -545,9 +545,9 @@ jobs:
           Copy-Item Collect-ControlFG-Compact-Logs.ps1 "$out/Collect-ControlFG-Compact-Logs.ps1"
           Copy-Item Package-Lighting-Capture.cmd,tools/package-lighting-capture.py $out
           Copy-Item Capture-RR-Boundary.cmd,Capture-RR-Boundary.ps1,Collect-RR-Boundary-Status.cmd,tools/collect-rr-boundary.py $out
-          Copy-Item docs/native-lighting-r156.md "$out/DIAGNOSTIC-NOTES.md"
+          Copy-Item docs/native-lighting-r157.md "$out/DIAGNOSTIC-NOTES.md"
           @'
-          CONTROL-FG R156 - Native lighting capture with RR off
+          CONTROL-FG R157 - Native lighting capture with RR off
           Close Control to install. Copy contents beside Control_DX12.exe.
           Preserve NVIDIA runtimes and ControlFGStreamline.
           Start a fresh game session. Keep your usual DLSS Quality/DLAA and RT settings.
@@ -556,13 +556,13 @@ jobs:
           Open F10 from gameplay. The panel no longer takes focus or triggers focus-loss pause.
           Clicking CAPTURE LIGHT hides the overlay. Hold still.
           Capture waits for five seconds of consecutive native gameplay frames before recording.
-          Open F10 where the shadow is visible and click CAPTURE LIGHT.
+          Press Shift+F9 from gameplay where the shadow is visible, or click CAPTURE LIGHT.
           Gameplay regains focus. Allow the capture to finish, then reopen F10 to check Saved pairs: 1/2.
-          Move to where the shadow fades. Click CAPTURE LIGHT again and wait for Saved pairs: 2/2.
+          Move to where the shadow fades. Press Shift+F9 again and wait for Saved pairs: 2/2.
           Click PACKAGE LIGHT. It collects the frames and logs and opens the SEND folder.
           Send every ZIP plus video showing the two positions. ZIPs stay below 200 MB.
           If capture shows Failed or stays waiting, click PACKAGE LIGHT to collect diagnostics.
-          No capture hotkey, beep or separately launched helper is required.
+          Shift+F9 and CAPTURE LIGHT use the same request. Plain F9 retains the full stationary suite.
           Includes native diffuse/specular lighting accumulation, GI and native SR input/output.
           These are pre-tone-map buffers, not final display color.
           Rendering and exposure are unchanged. See DIAGNOSTIC-NOTES.md.
@@ -573,10 +573,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-Native-Lighting-Live-R156
+          name: Control-FG-Native-Lighting-Live-R157
           path: |
-            Control-FG-Native-Lighting-Live-R156.zip
-            Control-FG-Native-Lighting-Live-R156.sha256
+            Control-FG-Native-Lighting-Live-R157.zip
+            Control-FG-Native-Lighting-Live-R157.sha256
             build/rt_spot_shadow_prototype.dxil
             build/rr_clamp_fixed.h
             build/rt_spot_blocker.dxil

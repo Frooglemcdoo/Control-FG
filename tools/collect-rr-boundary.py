@@ -44,7 +44,7 @@ def read_pair(root, pid, ordinal, started, require_lighting=False, require_nativ
             if not data.get('lighting_buffers_captured') or any(
                 not any(n.startswith(role + '.') for n in names)
                 for role in ('lighting-diffuse', 'lighting-specular')):
-                raise ValueError('R156 lighting accumulation buffers missing')
+                raise ValueError('R157 lighting accumulation buffers missing')
         frames.append((folder, data))
     frames.sort(key=lambda item: item[1]['pair_index'])
     if len(frames) < 2:
@@ -101,9 +101,9 @@ def main():
     local = Path(os.environ['LOCALAPPDATA'])
     root = local / 'ControlFGProbe'
     started = 0 if args.collect_existing or args.diagnostics_only else time.time()
-    destination = args.output / ('Native-Lighting-R156-' + time.strftime('%Y%m%d-%H%M%S') + '-' + str(args.pid) + '-' + str(time.time_ns() % 1000000000))
+    destination = args.output / ('Native-Lighting-R157-' + time.strftime('%Y%m%d-%H%M%S') + '-' + str(args.pid) + '-' + str(time.time_ns() % 1000000000))
     destination.mkdir(parents=True, exist_ok=False)
-    report = {'schema': 'control-rr-boundary-r156', 'pid': args.pid, 'started_unix': started, 'pairs': [], 'complete': False, 'diagnostics_only': args.diagnostics_only}
+    report = {'schema': 'control-rr-boundary-r157', 'pid': args.pid, 'started_unix': started, 'pairs': [], 'complete': False, 'diagnostics_only': args.diagnostics_only}
     print('Collecting the overlay native-lighting captures for this game session.', flush=True)
     print('Use CAPTURE LIGHT in the overlay at each position, then PACKAGE LIGHT.', flush=True)
     print('Progress and failures are recorded below; no sound or hotkey is required.', flush=True)
