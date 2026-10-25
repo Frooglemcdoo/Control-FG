@@ -213,17 +213,18 @@ static void RRInputCaptureOneBeforeEvaluation(RRInputCaptureJob* c,ID3D12Graphic
 
 static void RRInputCaptureBeforeEvaluation(ID3D12GraphicsCommandList* list,unsigned long long frame,unsigned preset,
  ID3D12Resource* normal,ID3D12Resource* specular,ID3D12Resource* diffuse,ID3D12Resource* distance,ID3D12Resource* status,const float* projection,bool projectionValid,ID3D12Resource* rawAlbedo,ID3D12Resource* color,ID3D12Resource* depth,ID3D12Resource* motion,ID3D12Resource* output,ID3D12Resource* responsivity,void* parameters,bool nativeLighting=false) noexcept {
- // Worker publication is read under the same lock. Prepare both before the first copy.
+ // Observe every evaluated frame, including while a worker owns the capture lock.
+ // Allocation gaps are not gameplay gaps and must not restart the countdown.
+ int reset=1;
+ const bool resetKnown=ngxGetInt&&ngxGetInt(parameters,"Reset",&reset)==1;
+ const bool settled=rrInputCaptureSettle.Ready(frame,!resetKnown||reset!=0,GetTickCount64());
  if(!TryAcquireSRWLockExclusive(&rrInputCaptureLock))return;
  unsigned select=control_rr::SelectInputCapturePair(rrInputCaptures[0].policy.phase,
   rrInputCaptures[1].policy.phase,rrInputCaptures[0].frame,frame);
- if(select<2){
-  int reset=1;
-  const bool resetKnown=ngxGetInt&&ngxGetInt(parameters,"Reset",&reset)==1;
-  if(!rrInputCaptureSettle.Ready(frame,!resetKnown||reset!=0,GetTickCount64())){
-   control_rr_capture_ui::detail.store(L"Waiting for 5 seconds of gameplay. Hold still.");
-   select=2;
-  }
+ // Prepare both slots immediately; only actual GPU recording waits for settling.
+ if(select<2&&rrInputCaptures[select].policy.phase==control_rr::InputCapturePolicy::Ready&&!settled){
+  control_rr_capture_ui::detail.store(L"Waiting for 5 seconds of gameplay. Hold still.");
+  select=2;
  }
  ReleaseSRWLockExclusive(&rrInputCaptureLock);
  if(select<2)RRInputCaptureOneBeforeEvaluation(&rrInputCaptures[select],list,frame,preset,normal,specular,diffuse,distance,status,projection,projectionValid,rawAlbedo,color,depth,motion,output,responsivity,parameters,nativeLighting);

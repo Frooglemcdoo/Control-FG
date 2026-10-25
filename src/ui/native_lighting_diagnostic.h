@@ -52,10 +52,13 @@ inline void ClosePanel(HWND panel) noexcept {
 inline void OpenPanel(HWND panel) noexcept {
     panelOpen = true;
     ShowWindow(panel, SW_SHOWNOACTIVATE);
-    // Only called for an explicit F10 press while the game has foreground.
-    const BOOL activated = SetForegroundWindow(panel);
-    if (activated) SetFocus(GetDlgItem(panel, kButtonFirst));
-    Trace("overlay_open activation=%u", activated ? 1u : 0u);
+    // Keep Control active so opening this tool does not trigger its pause menu.
+    ClipCursor(nullptr);
+    if (!cursorVisibilityIncrements) {
+        int count;
+        do { count=ShowCursor(TRUE); ++cursorVisibilityIncrements; } while(count<0);
+    }
+    Trace("overlay_open activation=0 preserve_game_focus=1");
 }
 
 inline void DrawLabel(HDC dc, HFONT font, const wchar_t* text, RECT bounds, COLORREF color) noexcept {
@@ -129,7 +132,7 @@ inline void PackageRR(HWND window) noexcept {
 inline LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPARAM lParam) noexcept {
     namespace theme = control_ui::theme;
     switch (message) {
-    case WM_MOUSEACTIVATE: return MA_ACTIVATE;
+    case WM_MOUSEACTIVATE: return MA_NOACTIVATE;
     case WM_ACTIVATE:
         if (LOWORD(wParam) == WA_INACTIVE) RestoreCursorVisibility();
         else {
@@ -147,7 +150,7 @@ inline LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPA
     case WM_CREATE:
         for (unsigned i=0;i<kButtonCount;++i) {
             const int row=i<kModeCount ? i/3 : kModeRows, col=i<kModeCount ? i%3 : (i-kModeCount)%3;
-            HWND button=CreateWindowExW(0,L"BUTTON",ButtonLabel(i),WS_CHILD|WS_VISIBLE|WS_TABSTOP|BS_OWNERDRAW,
+            HWND button=CreateWindowExW(0,L"STATIC",ButtonLabel(i),WS_CHILD|WS_VISIBLE|SS_NOTIFY|SS_OWNERDRAW,
                 14+col*156,i<kModeCount ? 40+row*46 : i<kModeCount+3 ? kActionsY : kCaptureY,148,36,window,reinterpret_cast<HMENU>(INT_PTR(kButtonFirst+i)),selfModule,nullptr);
             SendMessageW(button,WM_SETFONT,reinterpret_cast<WPARAM>(bodyFont),TRUE);
         }
@@ -202,7 +205,7 @@ inline DWORD WINAPI ThreadProc(LPVOID) noexcept {
     ULONGLONG nextRefresh=0, nextWindowSearch=0, nextLogDrain=0, nextRRReport=0;
     HWND cachedGame=nullptr;
     POINT lastOrigin{-1,-1};
-    Trace("session_start build=R155-overlay-rr-capture pid=%lu default=authored_clip_surface_normals_current_spot_when_ready log=user-diagnostics-folder",GetCurrentProcessId());
+    Trace("session_start build=R156-overlay-rr-capture pid=%lu default=authored_clip_surface_normals_current_spot_when_ready log=user-diagnostics-folder",GetCurrentProcessId());
     MSG msg{};
     while(GetMessageW(&msg,nullptr,0,0)>0){
         if (!panel || !IsDialogMessageW(panel, &msg)) {
@@ -216,7 +219,7 @@ inline DWORD WINAPI ThreadProc(LPVOID) noexcept {
         if(!cachedGame&&now>=nextWindowSearch){cachedGame=FindFGGameWindow();nextWindowSearch=now+1000;}
         HWND game=cachedGame;
         if(panel&&owner!=game){ClosePanel(panel);DestroyWindow(panel);panel=nullptr;}
-        if(game&&!panel){panel=CreateWindowExW(WS_EX_TOOLWINDOW,kClass,L"Control lighting diagnostic",WS_POPUP,
+        if(game&&!panel){panel=CreateWindowExW(WS_EX_TOOLWINDOW|WS_EX_NOACTIVATE,kClass,L"Control lighting diagnostic",WS_POPUP,
             0,0,kWidth,kHeight,game,nullptr,selfModule,nullptr);owner=game;}
         if(!panel){if(capture_suite::active)capture_suite::Finish(nullptr,"game_window_lost");continue;}
         if(LiveSelection::Sequence(selection.Read())==0 && ModeAvailable(kDefaultMode,readyMask.load()))SelectMode(kDefaultMode);
@@ -246,7 +249,7 @@ inline DWORD WINAPI ThreadProc(LPVOID) noexcept {
                 lastOrigin=origin;
             }
             // Release confinement only while this panel owns input, never over other apps.
-            if (PanelHasForeground(panel)) ClipCursor(nullptr);
+            if (GetForegroundWindow()==game || PanelHasForeground(panel)) ClipCursor(nullptr);
             if(GetTickCount64()>=nextRefresh){RedrawWindow(panel,nullptr,nullptr,RDW_INVALIDATE|RDW_ALLCHILDREN);nextRefresh=GetTickCount64()+250;}
         }else {RestoreCursorVisibility();if(IsWindowVisible(panel))ShowWindow(panel,SW_HIDE);if(!foreground)panelOpen=false;}
     }

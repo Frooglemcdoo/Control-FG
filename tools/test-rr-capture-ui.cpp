@@ -14,6 +14,15 @@ int main(){
  assert(settle.Ready(203,false,14000));
  settle.Reset();assert(!settle.Ready(204,false,15000)); // failed evaluation / new request
 
+ // Worker preparation must not erase observed gameplay time. Production now
+ // observes before trying the worker lock, even while neither slot is selectable.
+ settle.Reset();
+ for(unsigned frame=0;frame<=500;++frame){
+  const bool ready=settle.Ready(frame,false,1000+frame*10);
+  assert(ready==(frame==500));
+ }
+ assert(settle.Ready(501,false,6010));
+ assert(!settle.Ready(600,false,6020)); // real missing evaluations still reset
  namespace ui=control_rr_capture_ui;using P=control_rr::InputCapturePolicy;
  assert(ui::Request());assert(!ui::Request());
  ui::Publish(P::Idle,P::Idle,0,false);assert(ui::state==ui::State::Queued);
