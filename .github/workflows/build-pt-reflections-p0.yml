@@ -503,11 +503,20 @@ jobs:
           build\test-lighting-capture-plan.exe
           if errorlevel 1 exit /b 1
 
-      - name: Package live lighting diagnostic R150
+      - name: Validate RR boundary collector
+        shell: powershell
+        run: |
+          python tools/test-rr-boundary-collector.py
+          if($LASTEXITCODE -ne 0){throw 'RR boundary collector tests failed'}
+          $tokens=$null; $parseErrors=$null
+          [System.Management.Automation.Language.Parser]::ParseFile((Join-Path $pwd 'Capture-RR-Boundary.ps1'),[ref]$tokens,[ref]$parseErrors) | Out-Null
+          if($parseErrors.Count){throw ($parseErrors | Out-String)}
+
+      - name: Package live lighting diagnostic R151
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-Native-Lighting-Live-R150'
+          $out='Control-FG-Native-Lighting-Live-R151'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
           Copy-Item build/rt_spot_selected_off.dxbc,build/rt_spot_selection.dxbc,build/rt_spot_visibility.dxbc,build/rt_spot_light_ids.dxbc,build/rt_spot_raw_history.dxbc,build/rt_spot_raw_spatial0.dxbc,build/rt_spot_raw_spatial1.dxbc,build/rt_spot_full.dxil,build/rt_spot_r94.dxil,build/rt_spot_light.dxbc,build/rt_spot_reset.dxbc,build/rt_spot_history.dxbc,build/rt_spot_spatial0.dxbc,build/rt_spot_spatial1.dxbc $out
@@ -526,21 +535,23 @@ jobs:
           Copy-Item Collect-ControlFG-Compact-Logs.cmd "$out/Collect-ControlFG-Compact-Logs.cmd"
           Copy-Item Collect-ControlFG-Compact-Logs.ps1 "$out/Collect-ControlFG-Compact-Logs.ps1"
           Copy-Item Package-Lighting-Capture.cmd,tools/package-lighting-capture.py $out
-          Copy-Item docs/paired-lighting-r150.md "$out/DIAGNOSTIC-NOTES.md"
+          Copy-Item Capture-RR-Boundary.cmd,Capture-RR-Boundary.ps1,tools/collect-rr-boundary.py $out
+          Copy-Item docs/rr-boundary-r151.md "$out/DIAGNOSTIC-NOTES.md"
           @'
-          CONTROL-FG R150 - Paired direct-light capture
+          CONTROL-FG R151 - RR input/output boundary comparison
           Close Control to install. Copy contents beside Control_DX12.exe.
           Preserve NVIDIA runtimes and ControlFGStreamline.
-          Load the affected room with your usual graphics settings.
-          Select DEFAULT in F10, then close the overlay and stand before the doorway.
-          Press Shift+F9 once, walk into the room and back slowly for about 25 seconds.
-          Keep the game focused until the completion message. F9 cancels.
-          This records six paired lighting samples without changing modes or darkening the room.
-          Package the resulting Shadow-R150 folder with Package-Lighting-Capture.cmd.
-          Send the ZIP parts and a video of the same walk. Parts stay below 200 MB.
-          No additional GI-off comparison is requested.
-          Default rendering, baked lighting and exposure are unchanged.
-          See DIAGNOSTIC-NOTES.md for scope and limits.
+          Start a fresh game session. Keep RR ON and DEFAULT selected.
+          Run Capture-RR-Boundary.cmd, then return to gameplay with F10 closed.
+          Where the shadow is visible, press Ctrl+Alt+F9 once. Hold still until the beep.
+          Move to where the shadow fades. Press Ctrl+Alt+F9 once more and hold still until the second beep.
+          Record video showing both positions. Do not change graphics settings between captures.
+          The helper collects the four RR input/output frames and session logs automatically.
+          Send every ZIP in the printed Desktop SEND folder, plus your video.
+          Each ZIP is below 200 MB. Original captures are retained.
+          This measures RR input/output, not final tone-mapped display color.
+          No GI-off comparison. Existing Shift+F9 capture remains available.
+          Rendering and exposure are unchanged. See DIAGNOSTIC-NOTES.md.
           '@ | Set-Content "$out/README.txt" -Encoding ASCII
           Compress-Archive -Path "$out/*" -DestinationPath "$out.zip" -Force
           (Get-FileHash "$out.zip" -Algorithm SHA256).Hash | Set-Content "$out.sha256" -Encoding ASCII
@@ -548,10 +559,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-Native-Lighting-Live-R150
+          name: Control-FG-Native-Lighting-Live-R151
           path: |
-            Control-FG-Native-Lighting-Live-R150.zip
-            Control-FG-Native-Lighting-Live-R150.sha256
+            Control-FG-Native-Lighting-Live-R151.zip
+            Control-FG-Native-Lighting-Live-R151.sha256
             build/rt_spot_shadow_prototype.dxil
             build/rr_clamp_fixed.h
             build/rt_spot_blocker.dxil
