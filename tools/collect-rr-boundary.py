@@ -1,4 +1,4 @@
-"""Collect two complete RR input/output pairs from one running game session."""
+"""Collect two complete native lighting input/output pairs from one running game session."""
 import argparse
 import importlib.util
 import json
@@ -8,7 +8,7 @@ import shutil
 import time
 
 
-def read_pair(root, pid, ordinal, started, require_lighting=False):
+def read_pair(root, pid, ordinal, started, require_lighting=False, require_native=False):
     frames = []
     for folder in root.glob(f'rr-input-c1-{pid}-*'):
         metadata = folder / 'metadata.json'
@@ -20,7 +20,7 @@ def read_pair(root, pid, ordinal, started, require_lighting=False):
         if data.get('schema') != 'control-rr-gi-r28':
             raise ValueError('Unsupported RR capture metadata schema')
         if not data.get('output_captured') or data.get('rr_result', 0) != 1:
-            raise ValueError('RR output capture/evaluation did not complete')
+            raise ValueError('Native output capture/evaluation did not complete')
         resources = data.get('resources', [])
         if not resources or len(resources) != data.get('buffers'):
             raise ValueError('Missing resource metadata')
@@ -34,13 +34,17 @@ def read_pair(root, pid, ordinal, started, require_lighting=False):
             expected = resource['width'] * resource['height'] * resource['pixel_bytes']
             if not resource.get('copied') or expected <= 0 or not path.is_file() or path.is_symlink() or path.stat().st_size != expected:
                 raise ValueError(f'Incomplete capture resource: {path.name}')
-        if not any(n.startswith('input-color.') for n in names) or not any(n.startswith('rr-output.') for n in names):
-            raise ValueError('RR input/output images missing')
+        native = data.get('evaluation_path') == 'native_sr'
+        if require_native and (not native or data.get('rr_active') is not False):
+            raise ValueError('Expected native lighting capture with RR inactive')
+        output_role = 'native-sr-output.' if native else 'rr-output.'
+        if not any(n.startswith('input-color.') for n in names) or not any(n.startswith(output_role) for n in names):
+            raise ValueError('Scene input/evaluation output images missing')
         if require_lighting:
             if not data.get('lighting_buffers_captured') or any(
                 not any(n.startswith(role + '.') for n in names)
                 for role in ('lighting-diffuse', 'lighting-specular')):
-                raise ValueError('R153 lighting accumulation buffers missing')
+                raise ValueError('R154 lighting accumulation buffers missing')
         frames.append((folder, data))
     frames.sort(key=lambda item: item[1]['pair_index'])
     if len(frames) < 2:
@@ -49,7 +53,7 @@ def read_pair(root, pid, ordinal, started, require_lighting=False):
         raise ValueError('Ambiguous RR pair; restart the game for a fresh session')
     first, second = [f[1] for f in frames]
     if second['frame'] != first['frame'] + 1 or second['previous_frame'] != first['frame'] or not second['consecutive']:
-        raise ValueError('RR frames were not consecutive; send the collected diagnostics')
+        raise ValueError('Captured frames were not consecutive; send the collected diagnostics')
     return frames
 
 
@@ -97,11 +101,11 @@ def main():
     local = Path(os.environ['LOCALAPPDATA'])
     root = local / 'ControlFGProbe'
     started = 0 if args.collect_existing or args.diagnostics_only else time.time()
-    destination = args.output / ('RR-Boundary-R153-' + time.strftime('%Y%m%d-%H%M%S') + '-' + str(args.pid) + '-' + str(time.time_ns() % 1000000000))
+    destination = args.output / ('Native-Lighting-R154-' + time.strftime('%Y%m%d-%H%M%S') + '-' + str(args.pid) + '-' + str(time.time_ns() % 1000000000))
     destination.mkdir(parents=True, exist_ok=False)
-    report = {'schema': 'control-rr-boundary-r153', 'pid': args.pid, 'started_unix': started, 'pairs': [], 'complete': False, 'diagnostics_only': args.diagnostics_only}
-    print('Collecting the overlay RR captures for this game session.', flush=True)
-    print('Use CAPTURE RR in the overlay at each position, then PACKAGE RR.', flush=True)
+    report = {'schema': 'control-rr-boundary-r154', 'pid': args.pid, 'started_unix': started, 'pairs': [], 'complete': False, 'diagnostics_only': args.diagnostics_only}
+    print('Collecting the overlay native-lighting captures for this game session.', flush=True)
+    print('Use CAPTURE LIGHT in the overlay at each position, then PACKAGE LIGHT.', flush=True)
     print('Progress and failures are recorded below; no sound or hotkey is required.', flush=True)
     try:
         if args.diagnostics_only:
@@ -114,7 +118,7 @@ def main():
             next_status = 0
             pair = None
             while time.monotonic() < deadline:
-                pair = read_pair(root, args.pid, ordinal, started, require_lighting=True)
+                pair = read_pair(root, args.pid, ordinal, started, require_lighting=True, require_native=True)
                 if pair:
                     break
                 if time.monotonic() >= next_status:

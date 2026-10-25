@@ -11,7 +11,7 @@ inline bool Request() noexcept {
     auto current=state.load();
     if(completedPairs.load()>=2 || (current!=State::Idle && current!=State::Complete))return false;
     if(!state.compare_exchange_strong(current,State::Queued))return false;
-    detail.store(L"Waiting for gameplay and an evaluated RR frame.");
+    detail.store(L"Waiting for gameplay and an evaluated native gameplay frame.");
     requested.store(true,std::memory_order_release);return true;
 }
 inline void Publish(control_rr::InputCapturePolicy::Phase first,control_rr::InputCapturePolicy::Phase second,
@@ -20,8 +20,8 @@ inline void Publish(control_rr::InputCapturePolicy::Phase first,control_rr::Inpu
     if(requested.load() || !requests)return;
     if(first==P::Failed || second==P::Failed){state.store(State::Failed);return;}
     if(first==P::Idle && second==P::Idle){
-        if(outputsValid){completedPairs.store(requests);detail.store(requests<2?L"Pair 1 saved. Move to the faded shadow and capture again.":L"Both pairs saved. Click PACKAGE RR to collect the ZIPs.");state.store(State::Complete);}
-        else {detail.store(L"RR pair incomplete. PACKAGE RR will collect diagnostics.");state.store(State::Failed);}
+        if(outputsValid){completedPairs.store(requests);detail.store(requests<2?L"Pair 1 saved. Move to the faded shadow and capture again.":L"Both pairs saved. Click PACKAGE LIGHT to collect the ZIPs.");state.store(State::Complete);}
+        else {detail.store(L"Native lighting pair incomplete. PACKAGE LIGHT will collect diagnostics.");state.store(State::Failed);}
     } else if(first==P::Exporting || second==P::Exporting){detail.store(L"Saving images on the background worker...");state.store(State::Saving);}
     else if(first==P::Preparing || second==P::Preparing){detail.store(L"Preparing capture buffers...");state.store(State::Preparing);}
     else {state.store(State::Capturing);}

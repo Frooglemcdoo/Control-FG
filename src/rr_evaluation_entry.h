@@ -89,8 +89,10 @@ static unsigned int RREvaluationEntry(unsigned int branch, ID3D12GraphicsCommand
             control_rr_diagnostic::Record(control_rr_diagnostic::Event::EvaluationRejected);
             SetLastError(incomingError);return 0xBAD00001u;
         }
+#if !defined(CONTROL_CAPTURE_DIAGNOSTIC)
         RRInputCaptureBeforeEvaluation(list,in.frame,activePreset,bindings.normal,bindings.specular,bindings.diffuse,
             hitDistance,hitDistance?rrDistanceLastStatus:nullptr,bindings.viewToClip,bindings.projectionValid,bindings.rawAlbedo,in.color,in.depth,in.motion,in.output,bindings.responsivity,parameters);
+#endif
         rrAttempt=true;
         if(call<=4||(call%240)==0||distanceReset)
             Log("RR_F_DISTANCE_D1 frame=%llu preset=%u bound=%u resource=%p history_reset=%u projection_valid=%u",in.frame,activePreset,unsigned(hitDistance!=nullptr),hitDistance,unsigned(distanceReset),unsigned(bindings.projectionValid));
@@ -103,6 +105,17 @@ static unsigned int RREvaluationEntry(unsigned int branch, ID3D12GraphicsCommand
     if(partial&&branch==1){
         Log("RR_PARTIAL_EVALUATION_FORWARD frame=%llu branch=1 feature=%p guides_overridden=0 distance_overridden=0 feature13_request=0 partial=1",in.frame,feature);
     }
+#if defined(CONTROL_CAPTURE_DIAGNOSTIC)
+    // The lighting investigation uses the original SR path with RR bypassed.
+    // No RR guides, preset resolution, or RR result is needed for this capture.
+    const bool nativeCapture=branch==0&&!partial&&!rrNativeFrame.Selected()&&
+        native_lighting::LiveSelection::GetMode(native_lighting::selection.Read())==native_lighting::Mode::RoomNativeNoRR;
+    if(nativeCapture&&in.valid==127&&!in.fault){
+        const float noProjection[16]{};
+        RRInputCaptureBeforeEvaluation(list,in.frame,0,nullptr,nullptr,nullptr,nullptr,nullptr,
+            noProjection,false,nullptr,in.color,in.depth,in.motion,in.output,nullptr,parameters,true);
+    }
+#endif
     const double perfGuidesCpu=RRPerfElapsed(perfEntry);
     RRGuideInputSnapshot perfContext{};const char* perfReason=nullptr;RRPerfTicket perf{};
     if(RRGuideReadRendererContext(&perfContext,&perfReason)&&perfContext.commandList==list&&perfContext.engineFrame==in.frame)
@@ -116,7 +129,11 @@ static unsigned int RREvaluationEntry(unsigned int branch, ID3D12GraphicsCommand
     if(rrAttempt)control_rr_diagnostic::Record((result&0xFFF00000u)!=0xBAD00000u
         ?control_rr_diagnostic::Event::RRSuccess:control_rr_diagnostic::Event::RRFailure);
     else if(branch==0)control_rr_diagnostic::Record(control_rr_diagnostic::Event::SRReturn);
+#if defined(CONTROL_CAPTURE_DIAGNOSTIC)
+    if(nativeCapture)RRInputCaptureAfterEvaluation(list,in.frame,in.output,result);
+#else
     if(rrAttempt)RRInputCaptureAfterEvaluation(list,in.frame,in.output,result);
+#endif
     const double perfNativeCpu=RRPerfElapsed(perfNativeStart);
     RRPerfEnd(perf);
     RRPerfEvaluation(in.frame,rrAttempt,(result&0xFFF00000u)!=0xBAD00000u,

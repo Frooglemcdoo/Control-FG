@@ -48,3 +48,25 @@ with tempfile.TemporaryDirectory() as tmp:
  out=root/'out';out.mkdir();c.retain_metadata(root,7,out)
  assert (out/'attempt-metadata'/attempt.name/'metadata.pending').read_text()=='{}'
 print('PASS R151 helper fix: bounded capture progress, missing shortcut evidence and incomplete metadata preservation')
+
+with tempfile.TemporaryDirectory() as tmp:
+ root=Path(tmp)
+ for i in range(2):
+  folder=root/f'rr-input-c1-9-{200+i}';folder.mkdir()
+  roles=['input-color.rgba16f','native-sr-output.rgba16f','lighting-diffuse.rgba16f','lighting-specular.rgba16f']
+  resources=[dict(file=n,width=2,height=2,pixel_bytes=8,copied=True) for n in roles]
+  for name in roles:(folder/name).write_bytes(bytes(32))
+  data=dict(schema='control-rr-gi-r28',pid=9,capture_ordinal=1,pair_index=i,frame=200+i,previous_frame=200 if i else 0,consecutive=bool(i),output_captured=True,rr_result=1,buffers=4,resources=resources,lighting_buffers_captured=True,evaluation_path='native_sr',rr_active=False)
+  (folder/'metadata.json').write_text(json.dumps(data))
+ assert len(c.read_pair(root,9,1,0,require_lighting=True,require_native=True))==2
+ meta=folder/'metadata.json'
+ for field,value in [('rr_active',True),('evaluation_path','rr')]:
+  changed=dict(data);changed[field]=value;meta.write_text(json.dumps(changed))
+  try:c.read_pair(root,9,1,0,require_lighting=True,require_native=True)
+  except ValueError:pass
+  else:raise AssertionError('RR capture accepted as native')
+ meta.write_text(json.dumps(data));(folder/'lighting-specular.rgba16f').unlink()
+ try:c.read_pair(root,9,1,0,require_lighting=True,require_native=True)
+ except ValueError:pass
+ else:raise AssertionError('missing lighting buffer accepted')
+print('PASS R154 native capture: no RR guides/output required; RR-active, wrong path and missing accumulation rejected')

@@ -1,4 +1,5 @@
 #pragma once
+#include <cmath>
 #include "rr_input_capture_policy.h"
 #include "rr_input_capture_limits.h"
 #include "rr_input_capture_settle.h"
@@ -13,11 +14,12 @@ struct RRInputCaptureJob {
  ID3D12Resource* sources[kRRInputCaptureMaxResources]{},*readback[kRRInputCaptureMaxResources]{};
  D3D12_RESOURCE_DESC descriptions[kRRInputCaptureMaxResources]{};
  D3D12_PLACED_SUBRESOURCE_FOOTPRINT footprint[kRRInputCaptureMaxResources]{};UINT64 bytes[kRRInputCaptureMaxResources]{};
- unsigned count=0,preset=0;bool distanceBound=false;unsigned rawIndex=kRRInputCaptureMaxResources;
+ unsigned count=0,preset=0;bool nativeLighting=false;bool distanceBound=false;unsigned rawIndex=kRRInputCaptureMaxResources;
  unsigned nativeIndex=kRRInputCaptureMaxResources;D3D12_RESOURCE_STATES states[kRRInputCaptureMaxResources]{};
  unsigned pixelBytes[kRRInputCaptureMaxResources]{};const wchar_t* names[kRRInputCaptureMaxResources]{};
  float jitterX=0,jitterY=0,mvScaleX=0,mvScaleY=0;bool motionScaleValid=false;
  unsigned pairIndex=0,outputIndex=kRRInputCaptureMaxResources;bool outputCaptured=false;unsigned long long previousFrame=0;
+ float preExposure=0,exposureScale=0;bool preExposureValid=false,exposureScaleValid=false;
  int reset=0;unsigned evaluationResult=0;UINT width=0,height=0;unsigned long long frame=0;
  float projection[16]{};bool projectionValid=false;
 };
@@ -63,7 +65,7 @@ static DWORD WINAPI RRInputCaptureExport(void* context) noexcept {
   }
   if(okay){
    std::ostringstream out;out.imbue(std::locale::classic());out<<std::setprecision(9);
-   out<<"{\"schema\":\"control-rr-gi-r28\",\"pid\":"<<GetCurrentProcessId()<<",\"frame\":"<<c->frame<<",\"present\":"<<c->policy.present<<",\"preset\":"<<c->preset<<",\"width\":"<<c->width<<",\"height\":"<<c->height<<",\"buffers\":"<<c->count<<",\"hit_distance_bound\":"<<(c->distanceBound?"true":"false")<<",\"raw_albedo_bound\":"<<(c->rawIndex<c->count?"true":"false")<<",\"capture_ordinal\":"<<c->policy.requests<<",\"projection_valid\":"<<(c->projectionValid?"true":"false")<<",\"row_padding_removed\":true,\"little_endian\":true,\"view_to_clip\":[";
+   out<<"{\"schema\":\"control-rr-gi-r28\",\"evaluation_path\":\""<<(c->nativeLighting?"native_sr":"rr")<<"\",\"rr_active\":"<<(c->nativeLighting?"false":"true")<<",\"pre_exposure_valid\":"<<(c->preExposureValid?"true":"false")<<",\"pre_exposure\":"<<c->preExposure<<",\"exposure_scale_valid\":"<<(c->exposureScaleValid?"true":"false")<<",\"exposure_scale\":"<<c->exposureScale<<",\"pid\":"<<GetCurrentProcessId()<<",\"frame\":"<<c->frame<<",\"present\":"<<c->policy.present<<",\"preset\":"<<c->preset<<",\"width\":"<<c->width<<",\"height\":"<<c->height<<",\"buffers\":"<<c->count<<",\"hit_distance_bound\":"<<(c->distanceBound?"true":"false")<<",\"raw_albedo_bound\":"<<(c->rawIndex<c->count?"true":"false")<<",\"capture_ordinal\":"<<c->policy.requests<<",\"projection_valid\":"<<(c->projectionValid?"true":"false")<<",\"row_padding_removed\":true,\"little_endian\":true,\"view_to_clip\":[";
    for(unsigned i=0;i<16;++i){if(i)out<<',';out<<c->projection[i];}out<<"],\"jitter\":["<<c->jitterX<<','<<c->jitterY<<"],\"motion_scale\":["<<c->mvScaleX<<','<<c->mvScaleY<<"],\"motion_scale_valid\":"<<(c->motionScaleValid?"true":"false")<<",\"native_inputs_bound\":true,\"lighting_buffers_captured\":true,\"resources\":[";
    for(unsigned i=0;i<c->count;++i){if(i)out<<',';std::string name;for(const wchar_t* p=c->names[i];*p;++p)name+=static_cast<char>(*p);
     out<<"{\"file\":\""<<name<<"\",\"dxgi_format\":"<<unsigned(c->descriptions[i].Format)<<",\"pixel_bytes\":"<<c->pixelBytes[i]<<",\"state_before_and_after\":"<<unsigned(c->states[i])<<",\"width\":"<<c->descriptions[i].Width<<",\"height\":"<<c->descriptions[i].Height<<",\"copied\":"<<((i!=c->outputIndex||c->outputCaptured)?"true":"false")<<'}';}
@@ -76,27 +78,27 @@ static DWORD WINAPI RRInputCaptureExport(void* context) noexcept {
  for(unsigned i=0;i<c->count;++i)if(mapped[i]){D3D12_RANGE written{0,0};c->readback[i]->Unmap(0,&written);}
  Log("RR_INPUT_CAPTURE_C1_EXPORTED success=%u frame=%llu preset=%u buffers=%u",unsigned(okay),c->frame,c->preset,c->count);
  RRInputCaptureRelease(c);
- if(okay)c->policy.Exported();else {c->policy.phase=control_rr::InputCapturePolicy::Failed;control_rr_capture_ui::detail.store(L"Image export failed. PACKAGE RR will collect diagnostics.");}
+ if(okay)c->policy.Exported();else {c->policy.phase=control_rr::InputCapturePolicy::Failed;control_rr_capture_ui::detail.store(L"Image export failed. PACKAGE LIGHT will collect diagnostics.");}
 
  ReleaseSRWLockExclusive(&rrInputCaptureLock);return 0;
 }
 #include "rr_input_capture_record.h"
 #include "rr_input_capture_guard.h"
 static void RRInputCaptureOneBeforeEvaluation(RRInputCaptureJob* c,ID3D12GraphicsCommandList* list,unsigned long long frame,unsigned preset,
- ID3D12Resource* normal,ID3D12Resource* specular,ID3D12Resource* diffuse,ID3D12Resource* distance,ID3D12Resource* status,const float* projection,bool projectionValid,ID3D12Resource* rawAlbedo,ID3D12Resource* color,ID3D12Resource* depth,ID3D12Resource* motion,ID3D12Resource* output,ID3D12Resource* responsivity,void* parameters) noexcept {
+ ID3D12Resource* normal,ID3D12Resource* specular,ID3D12Resource* diffuse,ID3D12Resource* distance,ID3D12Resource* status,const float* projection,bool projectionValid,ID3D12Resource* rawAlbedo,ID3D12Resource* color,ID3D12Resource* depth,ID3D12Resource* motion,ID3D12Resource* output,ID3D12Resource* responsivity,void* parameters,bool nativeLighting=false) noexcept {
  if(!TryAcquireSRWLockExclusive(&rrInputCaptureLock))return;
  __try {
   using Policy=control_rr::InputCapturePolicy;
   if(c->policy.phase!=Policy::Requested&&c->policy.phase!=Policy::Ready)__leave;
   // Capture the guides actually bound to RR. Hit distance is optional for F
   // too; waiting for it prevents capture in the production no-distance path.
-  ID3D12Resource* resources[kRRInputCaptureMaxResources]{normal,specular,diffuse,distance,status,nullptr};const bool distanceBound=distance&&status;const unsigned baseCount=distanceBound?5u:3u;
+  ID3D12Resource* resources[kRRInputCaptureMaxResources]{normal,specular,diffuse,distance,status,nullptr};const bool distanceBound=!nativeLighting&&distance&&status;const unsigned baseCount=nativeLighting?0u:(distanceBound?5u:3u);
   const unsigned rawIndex=rawAlbedo?baseCount:kRRInputCaptureMaxResources;const unsigned nativeIndex=baseCount+(rawAlbedo?1u:0u);const unsigned maskIndex=nativeIndex+kRRInputCaptureNativeCount;const unsigned outputIndex=maskIndex+(responsivity?1u:0u);const unsigned count=outputIndex+1u;
   if(rawAlbedo)resources[rawIndex]=rawAlbedo;
   resources[nativeIndex]=color;resources[nativeIndex+1]=depth;resources[nativeIndex+2]=motion;
   RRGuideInputTexture nativeInputs[kRRInputCaptureNativeCount]{};
   if(!RRInputCaptureFindNative(frame,resources+nativeIndex,nativeInputs)){
-   control_rr_capture_ui::detail.store(L"Waiting: native RR input state is not verified.");
+   control_rr_capture_ui::detail.store(L"Waiting: native scene input state is not verified.");
    static unsigned rejects=0;if(++rejects<=4||(rejects%240)==0)Log("RR_INPUT_CAPTURE_C1_REJECT reason=native_input_state_unproven frame=%llu",frame);__leave;
   }
   RRGuideInputSnapshot native{};const char* reason=nullptr;
@@ -115,7 +117,7 @@ static void RRInputCaptureOneBeforeEvaluation(RRInputCaptureJob* c,ID3D12Graphic
   // Read the accumulated light buffers at the same pre-RR boundary as color.
   // These are not albedo guides and are not isolated direct-light contributions.
   if(!RRInputCaptureReadLighting(&nativeInputs[6],&nativeInputs[7])){
-   control_rr_capture_ui::detail.store(L"Lighting buffers unavailable in a verified read state. Click PACKAGE RR.");
+   control_rr_capture_ui::detail.store(L"Lighting buffers unavailable in a verified read state. Click PACKAGE LIGHT.");
    Log("RR_INPUT_CAPTURE_C1_REJECT reason=lighting_read_state_unproven frame=%llu",frame);
    c->policy.phase=Policy::Failed;__leave;
   }
@@ -147,14 +149,14 @@ static void RRInputCaptureOneBeforeEvaluation(RRInputCaptureJob* c,ID3D12Graphic
   if(!valid){Log("RR_INPUT_CAPTURE_C1_REJECT reason=native_input_format_or_extent frame=%llu",frame);c->policy.phase=Policy::Failed;__leave;}
   if(c->policy.phase==Policy::Requested){
    if(FAILED(list->GetDevice(IID_PPV_ARGS(&c->device)))||!c->device){c->policy.phase=Policy::Failed;__leave;}
-   c->queue=native.queue;c->queue->AddRef();c->count=count;c->distanceBound=distanceBound;c->rawIndex=rawIndex;c->nativeIndex=nativeIndex;c->outputIndex=outputIndex;c->width=static_cast<UINT>(width);c->height=height;c->preset=preset;
+   c->queue=native.queue;c->queue->AddRef();c->count=count;c->distanceBound=distanceBound;c->rawIndex=rawIndex;c->nativeIndex=nativeIndex;c->outputIndex=outputIndex;c->width=static_cast<UINT>(width);c->height=height;c->preset=preset;c->nativeLighting=nativeLighting;
    const wchar_t* guideNames[]{L"normal-roughness.rgba16f",L"specular.rgba16f",L"diffuse.rgba16f",L"distance.r32f",L"distance-status.r32u"};
    for(unsigned i=0;i<count;++i){c->descriptions[i]=descriptions[i];c->pixelBytes[i]=(i<3||i==rawIndex)?8u:4u;
     c->names[i]=i==rawIndex?L"raw-albedo.rgba16f":i<nativeIndex?guideNames[i]:L"";
    }
    c->names[nativeIndex]=descriptions[nativeIndex].Format==DXGI_FORMAT_R11G11B10_FLOAT?L"input-color.r11g11b10f":L"input-color.rgba16f";
    c->pixelBytes[nativeIndex]=descriptions[nativeIndex].Format==DXGI_FORMAT_R11G11B10_FLOAT?4u:8u;
-   c->names[nativeIndex+1]=L"input-depth.r32f";
+   c->names[nativeIndex+1]=L"input-depth.r32f";c->pixelBytes[nativeIndex+1]=4;
    c->names[nativeIndex+2]=descriptions[nativeIndex+2].Format==DXGI_FORMAT_R16G16_FLOAT?L"input-motion.rg16f":L"input-motion.rg32f";
    c->pixelBytes[nativeIndex+2]=descriptions[nativeIndex+2].Format==DXGI_FORMAT_R16G16_FLOAT?4u:8u;
    c->names[nativeIndex+3]=L"native-gbuffer1.rgba8";c->names[nativeIndex+4]=L"native-gbuffer2.rgba8";
@@ -163,13 +165,15 @@ static void RRInputCaptureOneBeforeEvaluation(RRInputCaptureJob* c,ID3D12Graphic
    c->names[nativeIndex+7]=descriptions[nativeIndex+7].Format==DXGI_FORMAT_R11G11B10_FLOAT?L"lighting-specular.r11g11b10f":L"lighting-specular.rgba16f";
    for(unsigned i=nativeIndex+6;i<maskIndex;++i)c->pixelBytes[i]=descriptions[i].Format==DXGI_FORMAT_R11G11B10_FLOAT?4u:8u;
    if(responsivity){c->names[maskIndex]=L"hair-responsivity.r16f";c->pixelBytes[maskIndex]=2;}
-   c->names[outputIndex]=od.Format==DXGI_FORMAT_R11G11B10_FLOAT?L"rr-output.r11g11b10f":L"rr-output.rgba16f";
+   c->names[outputIndex]=nativeLighting?
+    (od.Format==DXGI_FORMAT_R11G11B10_FLOAT?L"native-sr-output.r11g11b10f":L"native-sr-output.rgba16f"):
+    (od.Format==DXGI_FORMAT_R11G11B10_FLOAT?L"rr-output.r11g11b10f":L"rr-output.rgba16f");
    c->pixelBytes[outputIndex]=od.Format==DXGI_FORMAT_R11G11B10_FLOAT?4u:8u;
    c->policy.BeginPrepare();
    if(!QueueUserWorkItem(&RRInputCapturePrepare,c,WT_EXECUTEDEFAULT)){RRInputCaptureRelease(c);c->policy.phase=Policy::Failed;}
    __leave;
   }
-  if(c->queue!=native.queue||c->count!=count||c->rawIndex!=rawIndex||c->distanceBound!=distanceBound||c->width!=width||c->height!=height||c->preset!=preset){
+  if(c->queue!=native.queue||c->count!=count||c->rawIndex!=rawIndex||c->distanceBound!=distanceBound||c->width!=width||c->height!=height||c->preset!=preset||c->nativeLighting!=nativeLighting){
    RRInputCaptureRelease(c);c->policy.phase=Policy::Requested;__leave; // No commands yet; reprepare safely.
   }
   bool formatsMatch=true;
@@ -180,6 +184,11 @@ static void RRInputCaptureOneBeforeEvaluation(RRInputCaptureJob* c,ID3D12Graphic
   c->jitterX=c->jitterY=c->mvScaleX=c->mvScaleY=0;
   if(ngxGetFloat){ngxGetFloat(parameters,"Jitter.Offset.X",&c->jitterX);ngxGetFloat(parameters,"Jitter.Offset.Y",&c->jitterY);}
   c->motionScaleValid=ngxGetFloat&&ngxGetFloat(parameters,"MV.Scale.X",&c->mvScaleX)==1&&ngxGetFloat(parameters,"MV.Scale.Y",&c->mvScaleY)==1;
+  c->preExposure=c->exposureScale=0;
+  c->preExposureValid=ngxGetFloat&&ngxGetFloat(parameters,"DLSS.Pre.Exposure",&c->preExposure)==1&&std::isfinite(c->preExposure);
+  c->exposureScaleValid=ngxGetFloat&&ngxGetFloat(parameters,"DLSS.Exposure.Scale",&c->exposureScale)==1&&std::isfinite(c->exposureScale);
+  if(!c->preExposureValid)c->preExposure=0;
+  if(!c->exposureScaleValid)c->exposureScale=0;
   c->frame=frame;c->projectionValid=projectionValid;memcpy(c->projection,projection,sizeof(c->projection));
   c->outputCaptured=false;c->evaluationResult=0;c->reset=0;
   if(ngxGetInt)ngxGetInt(parameters,"Reset",&c->reset);
@@ -196,14 +205,14 @@ static void RRInputCaptureOneBeforeEvaluation(RRInputCaptureJob* c,ID3D12Graphic
    __leave;
   }
   c->policy.Record(native.presentToken);rrInputCaptureRecording=c->pairIndex;
-  control_rr_capture_ui::detail.store(L"Frame recorded; waiting for RR output and GPU completion.");
+  control_rr_capture_ui::detail.store(L"Frame recorded; waiting for native output and GPU completion.");
   Log("RR_INPUT_CAPTURE_C1_RECORDED frame=%llu preset=%u buffers=%u",frame,preset,count);
  } __except(EXCEPTION_EXECUTE_HANDLER){c->policy.phase=control_rr::InputCapturePolicy::Failed;Log("RR_INPUT_CAPTURE_C1_FAILED reason=exception resources_retained=1");}
  ReleaseSRWLockExclusive(&rrInputCaptureLock);
 }
 
 static void RRInputCaptureBeforeEvaluation(ID3D12GraphicsCommandList* list,unsigned long long frame,unsigned preset,
- ID3D12Resource* normal,ID3D12Resource* specular,ID3D12Resource* diffuse,ID3D12Resource* distance,ID3D12Resource* status,const float* projection,bool projectionValid,ID3D12Resource* rawAlbedo,ID3D12Resource* color,ID3D12Resource* depth,ID3D12Resource* motion,ID3D12Resource* output,ID3D12Resource* responsivity,void* parameters) noexcept {
+ ID3D12Resource* normal,ID3D12Resource* specular,ID3D12Resource* diffuse,ID3D12Resource* distance,ID3D12Resource* status,const float* projection,bool projectionValid,ID3D12Resource* rawAlbedo,ID3D12Resource* color,ID3D12Resource* depth,ID3D12Resource* motion,ID3D12Resource* output,ID3D12Resource* responsivity,void* parameters,bool nativeLighting=false) noexcept {
  // Worker publication is read under the same lock. Prepare both before the first copy.
  if(!TryAcquireSRWLockExclusive(&rrInputCaptureLock))return;
  unsigned select=control_rr::SelectInputCapturePair(rrInputCaptures[0].policy.phase,
@@ -212,12 +221,12 @@ static void RRInputCaptureBeforeEvaluation(ID3D12GraphicsCommandList* list,unsig
   int reset=1;
   const bool resetKnown=ngxGetInt&&ngxGetInt(parameters,"Reset",&reset)==1;
   if(!rrInputCaptureSettle.Ready(frame,!resetKnown||reset!=0,GetTickCount64())){
-   control_rr_capture_ui::detail.store(L"Settling RR for 3 seconds of gameplay. Return to the game and hold still.");
+   control_rr_capture_ui::detail.store(L"Settling gameplay for 3 seconds. Resume the game and hold still.");
    select=2;
   }
  }
  ReleaseSRWLockExclusive(&rrInputCaptureLock);
- if(select<2)RRInputCaptureOneBeforeEvaluation(&rrInputCaptures[select],list,frame,preset,normal,specular,diffuse,distance,status,projection,projectionValid,rawAlbedo,color,depth,motion,output,responsivity,parameters);
+ if(select<2)RRInputCaptureOneBeforeEvaluation(&rrInputCaptures[select],list,frame,preset,normal,specular,diffuse,distance,status,projection,projectionValid,rawAlbedo,color,depth,motion,output,responsivity,parameters,nativeLighting);
 }
 static void RRInputCaptureAfterEvaluation(ID3D12GraphicsCommandList* list,unsigned long long frame,ID3D12Resource* output,unsigned result) noexcept {
  if(!TryAcquireSRWLockExclusive(&rrInputCaptureLock))return;
@@ -260,7 +269,7 @@ static void RRInputCaptureAfterPresent(unsigned long long present) noexcept {
     rrHairShaderAuditRequested.store(true,std::memory_order_release);
 #endif
     }
-    else if(buttonRequested){control_rr_capture_ui::detail.store(L"Capture busy or session limit reached. PACKAGE RR collects status.");control_rr_capture_ui::state.store(control_rr_capture_ui::State::Failed);}
+    else if(buttonRequested){control_rr_capture_ui::detail.store(L"Capture busy or session limit reached. PACKAGE LIGHT collects status.");control_rr_capture_ui::state.store(control_rr_capture_ui::State::Failed);}
     Log("RR_INPUT_CAPTURE_C1_REQUEST accepted=%u mode=overlay_pair slots=2 maximum_pairs=2",unsigned(accepted));
    }
   }

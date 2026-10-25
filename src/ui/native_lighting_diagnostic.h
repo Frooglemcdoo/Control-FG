@@ -15,7 +15,7 @@ inline constexpr int kHeight = kFooterY + 72;
 inline constexpr unsigned kButtonCount = kModeCount + 5;
 inline const wchar_t* ButtonLabel(unsigned index) noexcept {
     if (index < kModeCount) return kModeChoices[index].label;
-    constexpr const wchar_t* actions[] = {L"ISSUE REMAINS", L"ISSUE GONE", L"SAVE LOG", L"CAPTURE RR", L"PACKAGE RR"};
+    constexpr const wchar_t* actions[] = {L"ISSUE REMAINS", L"ISSUE GONE", L"SAVE LOG", L"CAPTURE LIGHT", L"PACKAGE LIGHT"};
     return actions[index - kModeCount];
 }
 inline const wchar_t* ModeHint(Mode mode) noexcept {
@@ -79,7 +79,7 @@ inline void Paint(HWND window) noexcept {
         (observed & required) == required && (mode != Mode::SpotResolution2x || spot_resolution_runtime::Observed(state)) ? (IsRtSpotMode(mode) ? L"RT pair recorded" : L"native bindings recorded") : L"Waiting: return to game");
     DrawLabel(dc, detailFont, status, {14,kStatusY,kWidth-12,kStatusY+24}, theme::kMutedText);
     wchar_t captureStatus[128]{};
-    swprintf_s(captureStatus,L"RR capture: %s   Saved pairs: %u/2",control_rr_capture_ui::Label(control_rr_capture_ui::state.load()),control_rr_capture_ui::completedPairs.load());
+    swprintf_s(captureStatus,L"Light capture: %s   Saved pairs: %u/2",control_rr_capture_ui::Label(control_rr_capture_ui::state.load()),control_rr_capture_ui::completedPairs.load());
     DrawLabel(dc,detailFont,captureStatus,{14,kCaptureStatusY,kWidth-12,kCaptureStatusY+22},theme::kText);
     DrawLabel(dc,detailFont,control_rr_capture_ui::detail.load(),{14,kCaptureStatusY+22,kWidth-12,kCaptureStatusY+46},theme::kMutedText);
     wchar_t shortcuts[128]{};
@@ -117,14 +117,14 @@ inline void SaveReport(HWND window) noexcept {
 }
 inline void PackageRR(HWND window) noexcept {
     wchar_t module[MAX_PATH]{};
-    if(!GetModuleFileNameW(selfModule,module,MAX_PATH)){MessageBoxW(window,L"Could not locate the capture helper.",L"RR packaging",MB_OK|MB_ICONERROR);return;}
+    if(!GetModuleFileNameW(selfModule,module,MAX_PATH)){MessageBoxW(window,L"Could not locate the capture helper.",L"Lighting packaging",MB_OK|MB_ICONERROR);return;}
     auto* slash=wcsrchr(module,L'\\');if(!slash)return;*slash=0;
     wchar_t command[2048]{};
     swprintf_s(command,L"powershell.exe -NoExit -NoProfile -ExecutionPolicy Bypass -File \"%s\\Capture-RR-Boundary.ps1\" -CollectExisting -GameProcessId %lu",module,GetCurrentProcessId());
     STARTUPINFOW startup{};startup.cb=sizeof(startup);PROCESS_INFORMATION process{};
     if(CreateProcessW(nullptr,command,nullptr,nullptr,FALSE,CREATE_NEW_CONSOLE,nullptr,module,&startup,&process)){
         CloseHandle(process.hThread);CloseHandle(process.hProcess);
-    } else MessageBoxW(window,L"Could not start packaging. Check Capture-RR-Boundary.ps1 is installed beside dxgi.dll.",L"RR packaging",MB_OK|MB_ICONERROR);
+    } else MessageBoxW(window,L"Could not start packaging. Check Capture-RR-Boundary.ps1 is installed beside dxgi.dll.",L"Lighting packaging",MB_OK|MB_ICONERROR);
 }
 inline LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPARAM lParam) noexcept {
     namespace theme = control_ui::theme;
@@ -173,10 +173,10 @@ inline LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPA
             }
             else if(index==kModeCount+2) SaveReport(window);
             else if(index==kModeCount+3) {
-                if(!capture_suite::active && control_rr_capture_ui::Request()) {
-                    Trace("rr_capture_button requested=1");
+                if(!capture_suite::active && LiveSelection::GetMode(selection.Read())==Mode::RoomNativeNoRR && control_rr_capture_ui::Request()) {
+                    Trace("native_lighting_capture_button requested=1 mode=native_rr_off");
                     RestoreCursorVisibility();SetForegroundWindow(GetWindow(window,GW_OWNER));
-                } else MessageBoxW(window,L"Capture is busy, failed, or both pairs are already saved. Read the status below the button; PACKAGE RR collects completed frames and diagnostics.",L"RR capture",MB_OK);
+                } else MessageBoxW(window,L"Select NATIVE RR OFF before capturing. If busy, failed, or both pairs are saved, read the status; PACKAGE LIGHT collects diagnostics.",L"Lighting capture",MB_OK);
             }
             else if(index==kModeCount+4) PackageRR(window);
             RedrawWindow(window,nullptr,nullptr,RDW_INVALIDATE|RDW_ALLCHILDREN);
@@ -201,7 +201,7 @@ inline DWORD WINAPI ThreadProc(LPVOID) noexcept {
     ULONGLONG nextRefresh=0, nextWindowSearch=0, nextLogDrain=0, nextRRReport=0;
     HWND cachedGame=nullptr;
     POINT lastOrigin{-1,-1};
-    Trace("session_start build=R153-overlay-rr-capture pid=%lu default=authored_clip_surface_normals_current_spot_when_ready log=user-diagnostics-folder",GetCurrentProcessId());
+    Trace("session_start build=R154-overlay-rr-capture pid=%lu default=authored_clip_surface_normals_current_spot_when_ready log=user-diagnostics-folder",GetCurrentProcessId());
     MSG msg{};
     while(GetMessageW(&msg,nullptr,0,0)>0){
         if (!panel || !IsDialogMessageW(panel, &msg)) {
