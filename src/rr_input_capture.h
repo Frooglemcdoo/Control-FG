@@ -86,7 +86,7 @@ static DWORD WINAPI RRInputCaptureExport(void* context) noexcept {
 #include "rr_input_capture_record.h"
 #include "rr_input_capture_guard.h"
 static void RRInputCaptureOneBeforeEvaluation(RRInputCaptureJob* c,ID3D12GraphicsCommandList* list,unsigned long long frame,unsigned preset,
- ID3D12Resource* normal,ID3D12Resource* specular,ID3D12Resource* diffuse,ID3D12Resource* distance,ID3D12Resource* status,const float* projection,bool projectionValid,ID3D12Resource* rawAlbedo,ID3D12Resource* color,ID3D12Resource* depth,ID3D12Resource* motion,ID3D12Resource* output,ID3D12Resource* responsivity,void* parameters,bool nativeLighting=false) noexcept {
+ ID3D12Resource* normal,ID3D12Resource* specular,ID3D12Resource* diffuse,ID3D12Resource* distance,ID3D12Resource* status,const float* projection,bool projectionValid,ID3D12Resource* rawAlbedo,ID3D12Resource* color,ID3D12Resource* depth,ID3D12Resource* motion,ID3D12Resource* output,ID3D12Resource* responsivity,void* parameters,bool nativeLighting=false,const char* lightingMode="rr") noexcept {
  if(!TryAcquireSRWLockExclusive(&rrInputCaptureLock))return;
  __try {
   using Policy=control_rr::InputCapturePolicy;
@@ -190,7 +190,7 @@ static void RRInputCaptureOneBeforeEvaluation(RRInputCaptureJob* c,ID3D12Graphic
   c->exposureScaleValid=ngxGetFloat&&ngxGetFloat(parameters,"DLSS.Exposure.Scale",&c->exposureScale)==1&&std::isfinite(c->exposureScale);
   if(!c->preExposureValid)c->preExposure=0;
   if(!c->exposureScaleValid)c->exposureScale=0;
-  c->lightingMode=nativeLighting?native_lighting::ModeName(native_lighting::LiveSelection::GetMode(native_lighting::selection.Read())):"rr";
+  c->lightingMode=lightingMode;
   c->frame=frame;c->projectionValid=projectionValid;memcpy(c->projection,projection,sizeof(c->projection));
   c->outputCaptured=false;c->evaluationResult=0;c->reset=0;
   if(ngxGetInt)ngxGetInt(parameters,"Reset",&c->reset);
@@ -214,7 +214,7 @@ static void RRInputCaptureOneBeforeEvaluation(RRInputCaptureJob* c,ID3D12Graphic
 }
 
 static void RRInputCaptureBeforeEvaluation(ID3D12GraphicsCommandList* list,unsigned long long frame,unsigned preset,
- ID3D12Resource* normal,ID3D12Resource* specular,ID3D12Resource* diffuse,ID3D12Resource* distance,ID3D12Resource* status,const float* projection,bool projectionValid,ID3D12Resource* rawAlbedo,ID3D12Resource* color,ID3D12Resource* depth,ID3D12Resource* motion,ID3D12Resource* output,ID3D12Resource* responsivity,void* parameters,bool nativeLighting=false) noexcept {
+ ID3D12Resource* normal,ID3D12Resource* specular,ID3D12Resource* diffuse,ID3D12Resource* distance,ID3D12Resource* status,const float* projection,bool projectionValid,ID3D12Resource* rawAlbedo,ID3D12Resource* color,ID3D12Resource* depth,ID3D12Resource* motion,ID3D12Resource* output,ID3D12Resource* responsivity,void* parameters,bool nativeLighting=false,const char* lightingMode="rr") noexcept {
  // Observe every evaluated frame, including while a worker owns the capture lock.
  // Allocation gaps are not gameplay gaps and must not restart the countdown.
  int reset=1;
@@ -229,7 +229,7 @@ static void RRInputCaptureBeforeEvaluation(ID3D12GraphicsCommandList* list,unsig
   select=2;
  }
  ReleaseSRWLockExclusive(&rrInputCaptureLock);
- if(select<2)RRInputCaptureOneBeforeEvaluation(&rrInputCaptures[select],list,frame,preset,normal,specular,diffuse,distance,status,projection,projectionValid,rawAlbedo,color,depth,motion,output,responsivity,parameters,nativeLighting);
+ if(select<2)RRInputCaptureOneBeforeEvaluation(&rrInputCaptures[select],list,frame,preset,normal,specular,diffuse,distance,status,projection,projectionValid,rawAlbedo,color,depth,motion,output,responsivity,parameters,nativeLighting,lightingMode);
 }
 static void RRInputCaptureAfterEvaluation(ID3D12GraphicsCommandList* list,unsigned long long frame,ID3D12Resource* output,unsigned result) noexcept {
  if(!TryAcquireSRWLockExclusive(&rrInputCaptureLock))return;

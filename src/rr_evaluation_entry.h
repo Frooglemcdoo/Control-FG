@@ -114,7 +114,8 @@ static unsigned int RREvaluationEntry(unsigned int branch, ID3D12GraphicsCommand
     if(nativeCapture&&in.valid==127&&!in.fault){
         const float noProjection[16]{};
         RRInputCaptureBeforeEvaluation(list,in.frame,0,nullptr,nullptr,nullptr,nullptr,nullptr,
-            noProjection,false,nullptr,in.color,in.depth,in.motion,in.output,nullptr,parameters,true);
+            noProjection,false,nullptr,in.color,in.depth,in.motion,in.output,nullptr,parameters,true,
+            native_lighting::ModeName(native_lighting::LiveSelection::GetMode(native_lighting::selection.Read())));
     }
 #endif
     const double perfGuidesCpu=RRPerfElapsed(perfEntry);
