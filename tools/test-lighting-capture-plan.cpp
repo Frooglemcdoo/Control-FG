@@ -42,6 +42,7 @@ int main(){
  assert(!UsesRawSpotVisibility(kDefaultMode)&&!UsesRawSpotVisibility(Mode::RoomCorrectedNoRR));
  assert(UsesDirectSurfaceNormals(Mode::RoomBentNormalOff)&&!BypassesSpotHistory(Mode::RoomBentNormalOff));
  std::set<Mode> buttons;for(auto choice:kModeChoices)assert(buttons.insert(choice.mode).second);
+ assert(buttons.count(Mode::RoomNativeNoRR)&&BypassesRR(Mode::RoomNativeNoRR));
  assert(!UsesDirectSurfaceNormals(Mode::RoomAuthoredClip));
  assert(UsesAuthoredClip(Mode::RoomCorrectedNoRR)&&PreservesGiFiltering(Mode::RoomCorrectedNoRR));
  assert(BypassesRR(Mode::RoomCorrectedNoRR)&&!IsSignalDiagnostic(Mode::RoomCorrectedNoRR));
@@ -101,7 +102,8 @@ int main(){
   LiveSelection live;assert(LiveSelection::GetMode(live.Select(m))==m);
  }
  for(auto m:{Mode::RoomCorrectedNoBakedGi,Mode::RoomCorrectedNoBakedGiNoRR}) {
-  assert(modes.count(m)&&buttons.count(m));
+  assert(modes.count(m));
+  assert(bool(buttons.count(m))==(m==Mode::RoomCorrectedNoBakedGiNoRR));
   assert(UsesDirectSurfaceNormals(m)&&UsesAuthoredClip(m)&&BypassesSpotHistory(m));
   assert(PreservesGiFiltering(m)&&UsesWorldAlbedo(m)&&SpecularSampleRequest(m)==4);
   assert(!UsesRawSpotVisibility(m)&&!IsSignalDiagnostic(m));
