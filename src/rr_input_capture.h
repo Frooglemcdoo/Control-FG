@@ -221,7 +221,7 @@ static void RRInputCaptureBeforeEvaluation(ID3D12GraphicsCommandList* list,unsig
   int reset=1;
   const bool resetKnown=ngxGetInt&&ngxGetInt(parameters,"Reset",&reset)==1;
   if(!rrInputCaptureSettle.Ready(frame,!resetKnown||reset!=0,GetTickCount64())){
-   control_rr_capture_ui::detail.store(L"Settling gameplay for 3 seconds. Resume the game and hold still.");
+   control_rr_capture_ui::detail.store(L"Waiting for 5 seconds of gameplay. Hold still.");
    select=2;
   }
  }

@@ -175,7 +175,8 @@ inline LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPA
             else if(index==kModeCount+3) {
                 if(!capture_suite::active && LiveSelection::GetMode(selection.Read())==Mode::RoomNativeNoRR && control_rr_capture_ui::Request()) {
                     Trace("native_lighting_capture_button requested=1 mode=native_rr_off");
-                    RestoreCursorVisibility();SetForegroundWindow(GetWindow(window,GW_OWNER));
+                    // Hide the panel and restore game focus so focus-paused gameplay resumes.
+                    ClosePanel(window);
                 } else MessageBoxW(window,L"Select NATIVE RR OFF before capturing. If busy, failed, or both pairs are saved, read the status; PACKAGE LIGHT collects diagnostics.",L"Lighting capture",MB_OK);
             }
             else if(index==kModeCount+4) PackageRR(window);
@@ -201,7 +202,7 @@ inline DWORD WINAPI ThreadProc(LPVOID) noexcept {
     ULONGLONG nextRefresh=0, nextWindowSearch=0, nextLogDrain=0, nextRRReport=0;
     HWND cachedGame=nullptr;
     POINT lastOrigin{-1,-1};
-    Trace("session_start build=R154-overlay-rr-capture pid=%lu default=authored_clip_surface_normals_current_spot_when_ready log=user-diagnostics-folder",GetCurrentProcessId());
+    Trace("session_start build=R155-overlay-rr-capture pid=%lu default=authored_clip_surface_normals_current_spot_when_ready log=user-diagnostics-folder",GetCurrentProcessId());
     MSG msg{};
     while(GetMessageW(&msg,nullptr,0,0)>0){
         if (!panel || !IsDialogMessageW(panel, &msg)) {
