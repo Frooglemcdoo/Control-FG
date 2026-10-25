@@ -419,6 +419,12 @@ jobs:
         shell: cmd
         run: |
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-lighting-shader-snapshot.cpp /Febuild\test-lighting-shader-snapshot.exe
+          if errorlevel 1 exit /b 1
+          build\test-lighting-shader-snapshot.exe
+          if errorlevel 1 exit /b 1
+          python tools/test-lighting-shader-decoder.py
+          if errorlevel 1 exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 tools\test-native-lighting-report.cpp /Febuild\test-native-lighting-report.exe
           if errorlevel 1 exit /b 1
           build\test-native-lighting-report.exe
@@ -484,11 +490,11 @@ jobs:
           build\test-lighting-capture-plan.exe
           if errorlevel 1 exit /b 1
 
-      - name: Package live lighting diagnostic R147
+      - name: Package live lighting diagnostic R148
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-Native-Lighting-Live-R147'
+          $out='Control-FG-Native-Lighting-Live-R148'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
           Copy-Item build/rt_spot_selected_off.dxbc,build/rt_spot_selection.dxbc,build/rt_spot_visibility.dxbc,build/rt_spot_light_ids.dxbc,build/rt_spot_raw_history.dxbc,build/rt_spot_raw_spatial0.dxbc,build/rt_spot_raw_spatial1.dxbc,build/rt_spot_full.dxil,build/rt_spot_r94.dxil,build/rt_spot_light.dxbc,build/rt_spot_reset.dxbc,build/rt_spot_history.dxbc,build/rt_spot_spatial0.dxbc,build/rt_spot_spatial1.dxbc $out
@@ -507,30 +513,21 @@ jobs:
           Copy-Item Collect-ControlFG-Compact-Logs.cmd "$out/Collect-ControlFG-Compact-Logs.cmd"
           Copy-Item Collect-ControlFG-Compact-Logs.ps1 "$out/Collect-ControlFG-Compact-Logs.ps1"
           Copy-Item Package-Lighting-Capture.cmd,tools/package-lighting-capture.py $out
-          Copy-Item docs/motion-light-context-r147.md "$out/DIAGNOSTIC-NOTES.md"
+          Copy-Item docs/shader-readiness-r148.md "$out/DIAGNOSTIC-NOTES.md"
           @'
-          CONTROL-FG R147 - Baked-GI shadow-contrast comparison
+          CONTROL-FG R148 - Shader identity export
           Close Control to install. Copy contents beside Control_DX12.exe.
-          Preserve existing NVIDIA runtimes and the ControlFGStreamline folder.
-          Keep RT Contact Shadows on, samples 1, FG/glass enhancements off.
-          F10: NATIVE / BOTH / DEFAULT (FIXED). Default includes authored clip, normal correction and current-frame spotlight shadows.
-          Default rendering and exposure remain unchanged from R142.
-          New F10 comparisons: BAKED GI OFF and GI + RR OFF.
-          Walk the same doorway in Default, BAKED GI OFF, RR OFF, then GI + RR OFF.
-          Record a video, return to Default, then SAVE LOG. No restart between modes.
-          These remove only the verified baked-GI pass, not all indirect lighting.
-          Shift+F9: start a six-sample motion capture. Walk through the affected room and back.
-          Keep moving until the completion dialog appears, usually 25-40 seconds.
-          No mode cycling or screenshots. Default stays selected throughout the trace.
-          Drag the completed Shadow-R147 folder onto Package-Lighting-Capture.cmd.
-          Send ALL ZIPs from the new SEND folder (each below 200 MB), plus your video.
-          The packager uses installed Python 3.8+ without extra packages.
-          The folder contains one lighting.log and manifest.txt. No Python setup required.
-          F9 or Shift+F9 cancels; losing focus also cancels. Prior mode is restored.
-          Plain F9 still runs 30 stationary comparisons / up to 90 PNGs; keep still for that suite.
-          The trace captures light geometry, filtered shadow visibility and native lighting output.
-          Values are captured before tone mapping; exposure itself is not captured.
-          Diagnostic hit rays remain unclipped references. See DIAGNOSTIC-NOTES.md.
+          Preserve NVIDIA runtimes and the ControlFGStreamline folder.
+          Keep the same game settings and load the affected room.
+          F10: try BAKED GI OFF once, then click SAVE LOG.
+          Send the Lighting-R148 log shown by the confirmation dialog.
+          No F9 capture, walking sequence or video needed for this shader audit.
+          Save Log includes bounded CPU copies of observed pixel/compute shaders.
+          No GPU capture or shader modification is added by this audit.
+          The unavailable modes remain guarded until the actual shader is verified.
+          Default rendering, exposure and R146 motion capture are unchanged.
+          Package-Lighting-Capture.cmd splits large files below 200 MB if needed.
+          See DIAGNOSTIC-NOTES.md for evidence and limitations.
           '@ | Set-Content "$out/README.txt" -Encoding ASCII
           Compress-Archive -Path "$out/*" -DestinationPath "$out.zip" -Force
           (Get-FileHash "$out.zip" -Algorithm SHA256).Hash | Set-Content "$out.sha256" -Encoding ASCII
@@ -538,10 +535,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-Native-Lighting-Live-R147
+          name: Control-FG-Native-Lighting-Live-R148
           path: |
-            Control-FG-Native-Lighting-Live-R147.zip
-            Control-FG-Native-Lighting-Live-R147.sha256
+            Control-FG-Native-Lighting-Live-R148.zip
+            Control-FG-Native-Lighting-Live-R148.sha256
             build/rt_spot_shadow_prototype.dxil
             build/rr_clamp_fixed.h
             build/rt_spot_blocker.dxil

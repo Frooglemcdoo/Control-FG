@@ -4,6 +4,7 @@
 #include "rr_lighting_diagnostic.h"
 #include "native_lighting_report.h"
 #include "native_lighting_log_queue.h"
+#include "lighting_shader_snapshot.h"
 #include "rt_shadow_capture_candidates.h"
 #include "rt_spot_capture_bounds.h"
 #include "rt_spot_table_coverage.h"
@@ -35,6 +36,9 @@ inline std::atomic<unsigned long long> graphicsSeen{0}, computeSeen{0}, bindings
 inline std::atomic<unsigned> candidateMismatches{0};
 inline SRWLOCK reportLock = SRWLOCK_INIT;
 inline SessionReport report;
+#if defined(CONTROL_CAPTURE_DIAGNOSTIC)
+inline LightingShaderSnapshot shaderSnapshot;
+#endif
 inline DiagnosticLogQueue diagnosticLog;
 inline std::atomic<bool> reportHealthy{false};
 inline const GUID kVariantGuid = {0x822329d7,0x3614,0x4f73,{0xa6,0x14,0xd0,0x8c,0x94,0xf2,0x54,0x01}};
@@ -124,8 +128,12 @@ inline void IdentifyPipeline(IUnknown* object, const D3D12_SHADER_BYTECODE& shad
     // Library loads can return an already-observed object. Keep its report flag.
     if (FAILED(pso->GetPrivateData(kIdentityGuid, &size, &identity)) || !identity.stage) {
         identity = {}; identity.stage = stage; identity.bytes = shader.BytecodeLength;
-        if (PTReflectionSha256(static_cast<const unsigned char*>(shader.pShaderBytecode), shader.BytecodeLength, identity.sha))
+        if (PTReflectionSha256(static_cast<const unsigned char*>(shader.pShaderBytecode), shader.BytecodeLength, identity.sha)) {
+#if defined(CONTROL_CAPTURE_DIAGNOSTIC)
+            shaderSnapshot.Record(stage,shader.pShaderBytecode,shader.BytecodeLength,identity.sha);
+#endif
             pso->SetPrivateData(kIdentityGuid, sizeof(identity), &identity);
+        }
     }
     pso->Release();
 }
@@ -150,7 +158,7 @@ inline void ReportBoundIdentity(ID3D12PipelineState* pso) noexcept {
     ReleaseSRWLockExclusive(&identityLock);
 }
 inline bool SelectMode(Mode mode) noexcept {
-    if (!ModeAvailable(mode,readyMask.load())) { Trace("selection_rejected mode=%s reason=shader_or_sample_hook_not_ready", ModeName(mode)); return false; }
+    if (!ModeAvailable(mode,readyMask.load())) { Trace("selection_rejected mode=%s reason=shader_or_sample_hook_not_ready ready_mask=%u required_mask=%u missing_mask=%u", ModeName(mode),readyMask.load(),RequiredVariant(mode),RequiredVariant(mode)&~readyMask.load()); return false; }
     ReportRRPaths("before_selection");
     const auto state = selection.Select(mode);
     Trace("selection seq=%llu mode=%s ready_mask=%u", LiveSelection::Sequence(state), ModeName(mode), readyMask.load());

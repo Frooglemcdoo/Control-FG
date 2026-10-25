@@ -79,7 +79,7 @@ inline void Paint(HWND window) noexcept {
     wchar_t shortcuts[128]{};
     swprintf_s(shortcuts, L"F9: stills   Shift+F9: motion   F10: close   Ctrl+Shift+1..%u", kModeCount);
     DrawLabel(dc, detailFont, shortcuts, {14,kFooterY,kWidth-12,kFooterY+24}, theme::kMutedText);
-    DrawLabel(dc, detailFont, selectionRejected ? L"Mode unavailable: shader or sample hook is not ready. Save Log." : savedNotice.load() == 2 ? L"Log write failed. Save Log shows the Windows error." : savedNotice.load() == 1 ? L"Log saved. See the folder shown in the confirmation." : ModeHint(mode), {14,kFooterY+26,kWidth-12,kFooterY+56}, theme::kText);
+    DrawLabel(dc, detailFont, selectionRejected ? L"Mode unavailable. Save Log exports shader evidence for diagnosis." : savedNotice.load() == 2 ? L"Log write failed. Save Log shows the Windows error." : savedNotice.load() == 1 ? L"Log saved. See the folder shown in the confirmation." : ModeHint(mode), {14,kFooterY+26,kWidth-12,kFooterY+56}, theme::kText);
     EndPaint(window, &ps);
 }
 inline void SaveReport(HWND window) noexcept {
@@ -91,6 +91,15 @@ inline void SaveReport(HWND window) noexcept {
     Trace("coverage graphics_pso=%llu compute_pso=%llu bindings=%llu same_size_mismatches=%u ready_mask=%u", graphicsSeen.load(), computeSeen.load(), bindingsSeen.load(), candidateMismatches.load(), readyMask.load());
     Trace("library_coverage graphics_loads=%llu compute_loads=%llu identities=%u", libraryGraphicsSeen.load(), libraryComputeSeen.load(), identityReports.load());
     DrainDiagnosticLog(true);
+#if defined(CONTROL_CAPTURE_DIAGNOSTIC)
+    // Export immutable CPU shader copies here only. Creation/binding callbacks
+    // never write files or wait on this report lock.
+    AcquireSRWLockExclusive(&reportLock);
+    const bool snapshotSaved=reportHealthy.load() && shaderSnapshot.Export(
+        [](const char* bytes,size_t length){return report.Write(bytes,static_cast<DWORD>(length));});
+    reportHealthy.store(snapshotSaved && report.Flush());
+    ReleaseSRWLockExclusive(&reportLock);
+#endif
     wchar_t message[1024]{};
     AcquireSRWLockShared(&reportLock);
     const bool saved = reportHealthy.load();
@@ -168,7 +177,7 @@ inline DWORD WINAPI ThreadProc(LPVOID) noexcept {
     ULONGLONG nextRefresh=0, nextWindowSearch=0, nextLogDrain=0, nextRRReport=0;
     HWND cachedGame=nullptr;
     POINT lastOrigin{-1,-1};
-    Trace("session_start build=R147-baked-gi-contrast-comparison pid=%lu default=authored_clip_surface_normals_current_spot_when_ready log=user-diagnostics-folder",GetCurrentProcessId());
+    Trace("session_start build=R148-shader-identity-export pid=%lu default=authored_clip_surface_normals_current_spot_when_ready log=user-diagnostics-folder",GetCurrentProcessId());
     MSG msg{};
     while(GetMessageW(&msg,nullptr,0,0)>0){
         if (!panel || !IsDialogMessageW(panel, &msg)) {
