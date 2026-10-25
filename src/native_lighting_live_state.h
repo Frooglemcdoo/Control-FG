@@ -4,7 +4,7 @@
 #include "rr_specular_temporal_policy.h"
 
 namespace native_lighting {
-enum class Mode : unsigned { Native, DisableBakedGi, DisableDirect, DisableDirectDiffuse, DisableDirectSpecular, BypassShadows, DisableLightPattern, BypassScreenShadows, BypassSpotShadows, BypassPointShadows, SpotVarianceLow, SpotVarianceHigh, SpotPcfCenter, SpotPcf32, SpotStableSoft, SpotStableTight, SpotBilinear, SpotResolution2x, RtSpot, RtSpotRaw, RtSpotMapGuard, RtSpotNativeCull, RtSpotVisibilityRaw, RtSpotVisibilityFiltered, RtSpotLightIds, RtSpotBaseline, RtSpotDiffuseFiltered, RtSpotGiFiltered, RtSpotWorldAlbedo, RtSpotSpecularFiltered, RtSpotViewAngle, RtSpotGi2, RtSpotGi4, RtSpotGi8, RtSpotGiMenu, RtSpotGi12, RtSpotGi16, RtSpotSpec1, RtSpotSpec2, RtSpotSpec4, RtSpotSpec8, RtSpotSpec12, RtSpotSpec16, RtSpotTemporal2, RtSpotTemporal4, RoomNative, RoomGi, RoomSpot, RoomBoth, RoomNativeSelection, RoomOpen, RoomSelectedOff, RoomRaw, RoomBlocker, RoomHitX, RoomHitY, RoomHitZ, RoomAuthoredClip, RoomAuthoredSpatial, RoomAuthoredRaw, RoomNativeNoRR, RoomClipNoRR, RoomContactOff, RoomScreenOcclusionOff, RoomBentNormalOff, RoomLocalMapsOff, RoomCorrectedNoRR, RoomCorrectedNoHistory, RoomCorrectedNoAO, RoomCorrectedRaw, RoomCorrectedGuarded, RoomCorrectedVisibility, RoomCorrectedRawVisibility, RoomCorrectedLightIds, RoomCorrectedNoBakedGi, RoomCorrectedNoBakedGiNoRR };
+enum class Mode : unsigned { Native, DisableBakedGi, DisableDirect, DisableDirectDiffuse, DisableDirectSpecular, BypassShadows, DisableLightPattern, BypassScreenShadows, BypassSpotShadows, BypassPointShadows, SpotVarianceLow, SpotVarianceHigh, SpotPcfCenter, SpotPcf32, SpotStableSoft, SpotStableTight, SpotBilinear, SpotResolution2x, RtSpot, RtSpotRaw, RtSpotMapGuard, RtSpotNativeCull, RtSpotVisibilityRaw, RtSpotVisibilityFiltered, RtSpotLightIds, RtSpotBaseline, RtSpotDiffuseFiltered, RtSpotGiFiltered, RtSpotWorldAlbedo, RtSpotSpecularFiltered, RtSpotViewAngle, RtSpotGi2, RtSpotGi4, RtSpotGi8, RtSpotGiMenu, RtSpotGi12, RtSpotGi16, RtSpotSpec1, RtSpotSpec2, RtSpotSpec4, RtSpotSpec8, RtSpotSpec12, RtSpotSpec16, RtSpotTemporal2, RtSpotTemporal4, RoomNative, RoomGi, RoomSpot, RoomBoth, RoomNativeSelection, RoomOpen, RoomSelectedOff, RoomRaw, RoomBlocker, RoomHitX, RoomHitY, RoomHitZ, RoomAuthoredClip, RoomAuthoredSpatial, RoomAuthoredRaw, RoomNativeNoRR, RoomClipNoRR, RoomContactOff, RoomScreenOcclusionOff, RoomBentNormalOff, RoomLocalMapsOff, RoomCorrectedNoRR, RoomCorrectedNoHistory, RoomCorrectedNoAO, RoomCorrectedRaw, RoomCorrectedGuarded, RoomCorrectedVisibility, RoomCorrectedRawVisibility, RoomCorrectedLightIds, RoomCorrectedNoBakedGi, RoomCorrectedNoBakedGiNoRR, RoomCorrectedOpen };
 // Signal views share the accepted lighting policy, but replace composition with
 // selected-spot visibility or ID. They are not unmodified-native signal views.
 inline constexpr bool IsCorrectedSignal(Mode mode) noexcept {
@@ -26,7 +26,7 @@ inline constexpr bool DisablesCorrectedBakedGi(Mode mode) noexcept {
     return mode==Mode::RoomCorrectedNoBakedGi || mode==Mode::RoomCorrectedNoBakedGiNoRR;
 }
 inline constexpr bool UsesDirectSurfaceNormals(Mode mode) noexcept {
-    return DisablesCorrectedBakedGi(mode) || IsCorrectedSignal(mode) || mode==Mode::RoomBentNormalOff || mode==Mode::RoomCorrectedNoRR ||
+    return mode==Mode::RoomCorrectedOpen || DisablesCorrectedBakedGi(mode) || IsCorrectedSignal(mode) || mode==Mode::RoomBentNormalOff || mode==Mode::RoomCorrectedNoRR ||
         mode==Mode::RoomCorrectedNoHistory || mode==Mode::RoomCorrectedNoAO || mode==Mode::RoomCorrectedRaw || mode==Mode::RoomCorrectedGuarded;
 }
 inline bool IsGiSampleMode(Mode mode) noexcept {
@@ -43,7 +43,7 @@ inline constexpr bool UsesAuthoredClip(Mode mode) noexcept {
 inline bool BypassesSpotHistory(Mode mode) noexcept {
     return DisablesCorrectedBakedGi(mode) || IsCorrectedSignal(mode) || mode==Mode::RoomAuthoredSpatial || mode==Mode::RoomAuthoredRaw ||
         mode==Mode::RoomCorrectedNoHistory || mode==Mode::RoomCorrectedRaw ||
-        mode==Mode::RoomCorrectedNoRR || mode==Mode::RoomCorrectedNoAO;
+        mode==Mode::RoomCorrectedOpen || mode==Mode::RoomCorrectedNoRR || mode==Mode::RoomCorrectedNoAO;
 }
 inline bool IsSpotIsolationMode(Mode mode) noexcept {
     return UsesAuthoredClip(mode)||IsHitPositionMode(mode)||mode==Mode::RoomRaw||mode==Mode::RoomBlocker||mode==Mode::RoomNativeSelection||mode==Mode::RoomOpen||mode==Mode::RoomSelectedOff;
@@ -55,12 +55,17 @@ inline bool IsSignalDiagnostic(Mode mode) noexcept {
 // Full-color comparisons use the existing per-frame RR bypass, without changing
 // the saved RR preference or turning the output into a signal visualization.
 inline bool BypassesRR(Mode mode) noexcept {
-    return mode==Mode::RoomCorrectedNoBakedGiNoRR || mode==Mode::RoomCorrectedNoRR || IsSignalDiagnostic(mode) || mode==Mode::RoomNativeNoRR || mode==Mode::RoomClipNoRR;
+    return mode==Mode::RoomCorrectedOpen || mode==Mode::RoomCorrectedNoBakedGiNoRR || mode==Mode::RoomCorrectedNoRR || IsSignalDiagnostic(mode) || mode==Mode::RoomNativeNoRR || mode==Mode::RoomClipNoRR;
 }
 inline std::atomic<bool> spotBandColorsReady{false}, spotHitPositionReady{false}, spotAuthoredClipReady{false};
 inline bool NeedsIsolationProducer(Mode mode) noexcept {
     return mode==Mode::RoomScreenOcclusionOff || UsesDirectSurfaceNormals(mode) || mode==Mode::RoomLocalMapsOff;
 }
+// Shared by the panel request and native SR capture hook.
+inline constexpr bool SupportsFocusedLightingCapture(Mode mode) noexcept {
+    return mode==Mode::RoomNativeNoRR || mode==Mode::RoomCorrectedNoRR || mode==Mode::RoomCorrectedOpen;
+}
+inline std::atomic<bool> correctedOpenLightReady{false};
 inline std::atomic<bool> guardedHistoryReady{false};
 inline bool UsesGuardedSpotHistory(Mode mode) noexcept { return mode==Mode::RoomCorrectedGuarded; }
 inline std::atomic<unsigned> rtBakedGiReadyMask{0};
@@ -152,7 +157,7 @@ struct ModeChoice { Mode mode; const wchar_t* label; };
 inline constexpr ModeChoice kModeChoices[] = {
     {Mode::Native, L"NATIVE"}, {Mode::RoomBoth, L"BOTH"}, {kDefaultMode, L"DEFAULT (FIXED)"},
     {Mode::RoomCorrectedVisibility, L"SHADOW SIGNAL"}, {Mode::RoomNativeNoRR, L"NATIVE RR OFF"}, {Mode::RoomCorrectedNoRR, L"RR OFF"},
-    {Mode::RoomCorrectedNoBakedGiNoRR, L"GI + RR OFF"}, {Mode::RoomCorrectedLightIds, L"LIGHT IDS"}, {Mode::RoomCorrectedNoAO, L"SCREEN AO OFF"}
+    {Mode::RoomCorrectedOpen, L"RT SPOT OPEN"}, {Mode::RoomCorrectedLightIds, L"LIGHT IDS"}, {Mode::RoomCorrectedNoAO, L"SCREEN AO OFF"}
 };
 inline constexpr unsigned kModeCount = sizeof(kModeChoices) / sizeof(kModeChoices[0]);
 inline unsigned RequiredVariant(Mode mode) noexcept {
@@ -189,6 +194,7 @@ inline unsigned RequiredBinding(Mode mode) noexcept {
 inline bool ModeAvailable(Mode mode,unsigned ready) noexcept {
     if(DisablesCorrectedBakedGi(mode) && rtBakedGiReadyMask.load(std::memory_order_acquire)!=3)return false;
     if(UsesGuardedSpotHistory(mode)&&!guardedHistoryReady.load(std::memory_order_acquire))return false;
+    if(mode==Mode::RoomCorrectedOpen&&!correctedOpenLightReady.load(std::memory_order_acquire))return false;
     if(mode==Mode::RoomCorrectedNoAO&&(!correctedNoAOLightReady.load(std::memory_order_acquire)||!correctedNoAOSelectorReady.load(std::memory_order_acquire)))return false;
     if(UsesDirectSurfaceNormals(mode)&&(!bentNormalLightReady.load(std::memory_order_acquire)||!bentNormalSelectorReady.load(std::memory_order_acquire)))return false;
     if(mode==Mode::RoomLocalMapsOff&&(!localMapsLightReady.load(std::memory_order_acquire)||!localMapsSelectorReady.load(std::memory_order_acquire)))return false;
@@ -229,6 +235,7 @@ inline const char* ModeName(Mode mode) noexcept {
     case Mode::RoomCorrectedNoHistory:return "default_no_spot_history";
     case Mode::RoomCorrectedNoAO:return "default_no_history_screen_ao_off";
     case Mode::RoomCorrectedRaw:return "default_raw_spot_visibility";
+    case Mode::RoomCorrectedOpen:return "default_no_history_rt_spot_open_rr_off";
     case Mode::RoomCorrectedNoRR:return "default_no_history_rr_off";
     case Mode::RoomLocalMapsOff:return "clip_local_maps_off";
     case Mode::RoomContactOff:return "clip_contact_off";

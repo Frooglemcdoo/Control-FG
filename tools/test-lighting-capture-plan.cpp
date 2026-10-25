@@ -58,6 +58,17 @@ int main(){
  assert(ModeAvailable(kDefaultMode,kRtSpotReadyBit));
  assert(ModeAvailable(Mode::RoomCorrectedNoRR,kRtSpotReadyBit));
  assert(!ModeAvailable(kDefaultMode,0));
+ const auto open=Mode::RoomCorrectedOpen;
+ assert(buttons.count(open)&&SupportsFocusedLightingCapture(open));
+ assert(UsesDirectSurfaceNormals(open)&&UsesAuthoredClip(open)&&PreservesGiFiltering(open));
+ assert(BypassesSpotHistory(open)&&BypassesRR(open)&&!UsesRawSpotVisibility(open));
+ assert(NeedsIsolationProducer(open)&&IsRtSpotMode(open)&&!IsSignalDiagnostic(open));
+ assert(!ModeAvailable(open,kRtSpotReadyBit));
+ correctedOpenLightReady=true;
+ assert(ModeAvailable(open,kRtSpotReadyBit));
+ correctedOpenLightReady=false;
+ assert(ModeAvailable(kDefaultMode,kRtSpotReadyBit));
+ assert(!SupportsFocusedLightingCapture(kDefaultMode));
  for(auto m:{Mode::RoomCorrectedNoAO,Mode::RoomCorrectedNoHistory,Mode::RoomCorrectedRaw}) {
   assert(modes.count(m)&&UsesDirectSurfaceNormals(m)&&UsesAuthoredClip(m));
   assert(PreservesGiFiltering(m)&&IsRtSpotMode(m)&&NeedsIsolationProducer(m));
@@ -103,7 +114,7 @@ int main(){
  }
  for(auto m:{Mode::RoomCorrectedNoBakedGi,Mode::RoomCorrectedNoBakedGiNoRR}) {
   assert(modes.count(m));
-  assert(bool(buttons.count(m))==(m==Mode::RoomCorrectedNoBakedGiNoRR));
+  assert(!buttons.count(m));
   assert(UsesDirectSurfaceNormals(m)&&UsesAuthoredClip(m)&&BypassesSpotHistory(m));
   assert(PreservesGiFiltering(m)&&UsesWorldAlbedo(m)&&SpecularSampleRequest(m)==4);
   assert(!UsesRawSpotVisibility(m)&&!IsSignalDiagnostic(m));

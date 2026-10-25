@@ -59,3 +59,15 @@ for name,baseline,offset,register,address,resource in [
  for pos,instruction in old.items():
   if pos!=offset: assert new[pos]==instruction
 print('PASS: combined motion variants preserve all R139 operands outside scalar AO')
+
+# Only selected spotlight visibility may change against the accepted baseline.
+old={i['dword']:i for i in decode(root/'build/rt_spot_bent_normal_off.dxbc')['instructions']}
+new={i['dword']:i for i in decode(root/'build/rt_spot_corrected_open.dxbc')['instructions']}
+assert old.keys()==new.keys()
+for pos,instruction in old.items():
+ if pos in (5986,6009):
+  assert new[pos]['name']==instruction['name']=='mad'
+  assert new[pos]['operands'][1]=='l(1)'
+  assert new[pos]['operands'][:1]+new[pos]['operands'][2:]==instruction['operands'][:1]+instruction['operands'][2:]
+ else: assert new[pos]==instruction
+print('PASS: corrected open changes only two selected spotlight visibility operands')

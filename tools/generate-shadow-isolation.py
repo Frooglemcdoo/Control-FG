@@ -91,6 +91,11 @@ def generate():
          '55bcdf543e60dee904c656bfed355aa1f10393a8f0a950467f25a9ed5ee76a1c',338,7,3,(5,'xyww'),[0x002078d6,2,2])),
         ('selector_corrected_no_ao','kSelectorCorrectedNoAOShader',neutralize_load(bent_selector,
          '29177f00d24b7c7bc9a9563bb04de4c62f16838a198b1275342bddafc3770bc9',4436,9,3,(9,'xyzw'),[0x002078d6,2,2]))]
+    # Matched full-color diagnostic: only the two selected-spot visibility
+    # operands become 1. Preserve corrected normals, all other lights and maps.
+    isolated.append(('corrected_open','kCorrectedOpenShader',fixed_edits(bent_light,
+        '55bcdf543e60dee904c656bfed355aa1f10393a8f0a950467f25a9ed5ee76a1c',
+        [(offset,source(7,'zzzz'),[0x00004001,0x3f800000]) for offset in (5989,6012)])))
     for name,symbol,result in isolated:
         (out/f'rt_spot_{name}.dxbc').write_bytes(result)
         headers.append(f'static const unsigned char {symbol}[]={{\n'+','.join(f'0x{x:02x}' for x in result)+'\n};')

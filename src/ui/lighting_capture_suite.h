@@ -57,7 +57,7 @@ inline bool Start(bool traceMotion=false) noexcept {
     if(!DrainDiagnosticLog(true))return false;
     wchar_t root[MAX_PATH]{};wcscpy_s(root,report.Path());auto* slash=wcsrchr(root,L'\\');if(!slash)return false;*slash=0;
     SYSTEMTIME time{};GetLocalTime(&time);static unsigned serial=0;
-    if(swprintf_s(folder,L"%s\\Shadow-R157-%04u%02u%02u-%02u%02u%02u-%lu-%u",root,time.wYear,time.wMonth,time.wDay,time.wHour,time.wMinute,time.wSecond,GetCurrentProcessId(),serial++)<0)return false;
+    if(swprintf_s(folder,L"%s\\Shadow-R158-%04u%02u%02u-%02u%02u%02u-%lu-%u",root,time.wYear,time.wMonth,time.wDay,time.wHour,time.wMinute,time.wSecond,GetCurrentProcessId(),serial++)<0)return false;
     if(!CreateDirectoryW(folder,nullptr))return false;
     wchar_t path[MAX_PATH]{};swprintf_s(path,L"%s\\manifest.txt",folder);
     manifest=CreateFileW(path,GENERIC_WRITE,FILE_SHARE_READ,nullptr,CREATE_NEW,0,nullptr);
@@ -68,8 +68,8 @@ inline bool Start(bool traceMotion=false) noexcept {
     CloseHandle(log);
     motion=traceMotion;traceStarted=0;lastRequest=0;
     restore=LiveSelection::GetMode(selection.Read());active=true;entered=false;step=imageIndex=failures=0;
-    Note("build=R157 restore=%s steps=%u PNG=display_referred_not_raw_HDR\nFor stationary suites keep camera still; motion traces require walking. F9 cancels. Focus loss cancels. No GPU waits.\nUnavailable shader variants are explicitly skipped. Hit coordinates and legacy unclipped visibility use reference rays. Default spot signal/IDs retain authored clipping and corrected selection.\nStationary GPU capture uses BOTH; motion capture uses DEFAULT. Context records identify sampled light geometry, not a persistent engine object. Composition pairs contain matching pixel/light/visibility and diffuse/specular before and after the direct-light pass, before tone mapping.",ModeName(restore),motion?capture_plan::transitionSamples:capture_plan::count);
-    Trace("capture_suite_start build=R157 restore=%s steps=%u",ModeName(restore),motion?capture_plan::transitionSamples:capture_plan::count);
+    Note("build=R158 restore=%s steps=%u PNG=display_referred_not_raw_HDR\nFor stationary suites keep camera still; motion traces require walking. F9 cancels. Focus loss cancels. No GPU waits.\nUnavailable shader variants are explicitly skipped. Hit coordinates and legacy unclipped visibility use reference rays. Default spot signal/IDs retain authored clipping and corrected selection.\nStationary GPU capture uses BOTH; motion capture uses DEFAULT. Context records identify sampled light geometry, not a persistent engine object. Composition pairs contain matching pixel/light/visibility and diffuse/specular before and after the direct-light pass, before tone mapping.",ModeName(restore),motion?capture_plan::transitionSamples:capture_plan::count);
+    Trace("capture_suite_start build=R158 restore=%s steps=%u",ModeName(restore),motion?capture_plan::transitionSamples:capture_plan::count);
     Note("capture_kind=%s requested_samples=%u",motion?"motion_light_context":"stationary_suite",
         motion?capture_plan::transitionSamples:capture_plan::count);
     if(motion)Trace("transition_trace_start samples=%u mode=%s",capture_plan::transitionSamples,ModeName(kDefaultMode));

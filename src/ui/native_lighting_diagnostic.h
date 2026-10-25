@@ -19,6 +19,7 @@ inline const wchar_t* ButtonLabel(unsigned index) noexcept {
     return actions[index - kModeCount];
 }
 inline const wchar_t* ModeHint(Mode mode) noexcept {
+    if(mode==Mode::RoomCorrectedOpen)return L"Test: selected RT spotlight unblocked; other shadows retained. RR off.";
     if(DisablesCorrectedBakedGi(mode))return L"Baked-brick samples removed from RT diffuse GI; shadows retained.";
     if(ShowsSpotLightIds(mode))return L"Colors=selected spotlight; magenta=no selected spotlight.";
     if(IsCorrectedSignal(mode))return L"Dark=shadow; white=lit; magenta=no selected spotlight.";
@@ -131,10 +132,10 @@ inline void PackageRR(HWND window) noexcept {
 }
 inline void RequestLightCapture(HWND panel) noexcept {
     const auto mode=LiveSelection::GetMode(selection.Read());
-    if(!capture_suite::active && (mode==Mode::RoomNativeNoRR || mode==Mode::RoomCorrectedNoRR) && control_rr_capture_ui::Request()) {
+    if(!capture_suite::active && SupportsFocusedLightingCapture(mode) && control_rr_capture_ui::Request()) {
         Trace("native_lighting_capture requested=1 mode=%s",ModeName(mode));
         ClosePanel(panel);
-    } else MessageBoxW(panel,L"Select RR OFF (corrected shadows) or NATIVE RR OFF before capturing. If busy, failed, or both pairs are saved, read the status; PACKAGE LIGHT collects diagnostics.",L"Lighting capture",MB_OK);
+    } else MessageBoxW(panel,L"Select RR OFF, RT SPOT OPEN, or NATIVE RR OFF before capturing. If busy, failed, or both pairs are saved, read the status; PACKAGE LIGHT collects diagnostics.",L"Lighting capture",MB_OK);
 }
 inline LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPARAM lParam) noexcept {
     namespace theme = control_ui::theme;
@@ -206,7 +207,7 @@ inline DWORD WINAPI ThreadProc(LPVOID) noexcept {
     ULONGLONG nextRefresh=0, nextWindowSearch=0, nextLogDrain=0, nextRRReport=0;
     HWND cachedGame=nullptr;
     POINT lastOrigin{-1,-1};
-    Trace("session_start build=R157-overlay-rr-capture pid=%lu default=authored_clip_surface_normals_current_spot_when_ready log=user-diagnostics-folder",GetCurrentProcessId());
+    Trace("session_start build=R158-overlay-rr-capture pid=%lu default=authored_clip_surface_normals_current_spot_when_ready log=user-diagnostics-folder",GetCurrentProcessId());
     MSG msg{};
     while(GetMessageW(&msg,nullptr,0,0)>0){
         if (!panel || !IsDialogMessageW(panel, &msg)) {
