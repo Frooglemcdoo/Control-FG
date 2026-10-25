@@ -8,12 +8,14 @@ inline constexpr int kWidth = 490, kButtonFirst = 5400;
 inline constexpr int kModeRows = (kModeCount + 2) / 3;
 inline constexpr int kStatusY = 40 + kModeRows * 46 - 2;
 inline constexpr int kActionsY = kStatusY + 28;
-inline constexpr int kFooterY = kActionsY + 52;
+inline constexpr int kCaptureY = kActionsY + 46;
+inline constexpr int kCaptureStatusY = kCaptureY + 40;
+inline constexpr int kFooterY = kCaptureStatusY + 50;
 inline constexpr int kHeight = kFooterY + 72;
-inline constexpr unsigned kButtonCount = kModeCount + 3;
+inline constexpr unsigned kButtonCount = kModeCount + 5;
 inline const wchar_t* ButtonLabel(unsigned index) noexcept {
     if (index < kModeCount) return kModeChoices[index].label;
-    constexpr const wchar_t* actions[] = {L"ISSUE REMAINS", L"ISSUE GONE", L"SAVE LOG"};
+    constexpr const wchar_t* actions[] = {L"ISSUE REMAINS", L"ISSUE GONE", L"SAVE LOG", L"CAPTURE RR", L"PACKAGE RR"};
     return actions[index - kModeCount];
 }
 inline const wchar_t* ModeHint(Mode mode) noexcept {
@@ -76,6 +78,10 @@ inline void Paint(HWND window) noexcept {
     swprintf_s(status, L"Selected mode: %s   %s", ModeAvailable(mode,ready) ? L"ready" : L"waiting",
         (observed & required) == required && (mode != Mode::SpotResolution2x || spot_resolution_runtime::Observed(state)) ? (IsRtSpotMode(mode) ? L"RT pair recorded" : L"native bindings recorded") : L"Waiting: return to game");
     DrawLabel(dc, detailFont, status, {14,kStatusY,kWidth-12,kStatusY+24}, theme::kMutedText);
+    wchar_t captureStatus[128]{};
+    swprintf_s(captureStatus,L"RR capture: %s   Saved pairs: %u/2",control_rr_capture_ui::Label(control_rr_capture_ui::state.load()),control_rr_capture_ui::completedPairs.load());
+    DrawLabel(dc,detailFont,captureStatus,{14,kCaptureStatusY,kWidth-12,kCaptureStatusY+22},theme::kText);
+    DrawLabel(dc,detailFont,control_rr_capture_ui::detail.load(),{14,kCaptureStatusY+22,kWidth-12,kCaptureStatusY+46},theme::kMutedText);
     wchar_t shortcuts[128]{};
     swprintf_s(shortcuts, L"F9: stills   Shift+F9: motion   F10: close   Ctrl+Shift+1..%u", kModeCount);
     DrawLabel(dc, detailFont, shortcuts, {14,kFooterY,kWidth-12,kFooterY+24}, theme::kMutedText);
@@ -109,6 +115,17 @@ inline void SaveReport(HWND window) noexcept {
     savedNotice = saved ? 1u : 2u;
     MessageBoxW(window, message, saved ? L"Lighting log saved" : L"Lighting log failed", MB_OK | (saved ? MB_ICONINFORMATION : MB_ICONERROR));
 }
+inline void PackageRR(HWND window) noexcept {
+    wchar_t module[MAX_PATH]{};
+    if(!GetModuleFileNameW(selfModule,module,MAX_PATH)){MessageBoxW(window,L"Could not locate the capture helper.",L"RR packaging",MB_OK|MB_ICONERROR);return;}
+    auto* slash=wcsrchr(module,L'\\');if(!slash)return;*slash=0;
+    wchar_t command[2048]{};
+    swprintf_s(command,L"powershell.exe -NoExit -NoProfile -ExecutionPolicy Bypass -File \"%s\\Capture-RR-Boundary.ps1\" -CollectExisting -GameProcessId %lu",module,GetCurrentProcessId());
+    STARTUPINFOW startup{};startup.cb=sizeof(startup);PROCESS_INFORMATION process{};
+    if(CreateProcessW(nullptr,command,nullptr,nullptr,FALSE,CREATE_NEW_CONSOLE,nullptr,module,&startup,&process)){
+        CloseHandle(process.hThread);CloseHandle(process.hProcess);
+    } else MessageBoxW(window,L"Could not start packaging. Check Capture-RR-Boundary.ps1 is installed beside dxgi.dll.",L"RR packaging",MB_OK|MB_ICONERROR);
+}
 inline LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPARAM lParam) noexcept {
     namespace theme = control_ui::theme;
     switch (message) {
@@ -129,9 +146,9 @@ inline LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPA
     case WM_PAINT: Paint(window); return 0;
     case WM_CREATE:
         for (unsigned i=0;i<kButtonCount;++i) {
-            const int row=i<kModeCount ? i/3 : kModeRows, col=i<kModeCount ? i%3 : i-kModeCount;
+            const int row=i<kModeCount ? i/3 : kModeRows, col=i<kModeCount ? i%3 : (i-kModeCount)%3;
             HWND button=CreateWindowExW(0,L"BUTTON",ButtonLabel(i),WS_CHILD|WS_VISIBLE|WS_TABSTOP|BS_OWNERDRAW,
-                14+col*156,i<kModeCount ? 40+row*46 : kActionsY,148,36,window,reinterpret_cast<HMENU>(INT_PTR(kButtonFirst+i)),selfModule,nullptr);
+                14+col*156,i<kModeCount ? 40+row*46 : i<kModeCount+3 ? kActionsY : kCaptureY,148,36,window,reinterpret_cast<HMENU>(INT_PTR(kButtonFirst+i)),selfModule,nullptr);
             SendMessageW(button,WM_SETFONT,reinterpret_cast<WPARAM>(bodyFont),TRUE);
         }
         return 0;
@@ -155,6 +172,13 @@ inline LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPA
                     MessageBoxW(window, L"This mode has not applied yet. Press F10 to return to the game, wait for the image to settle, then reopen the panel and record your result.", L"Wait for mode to apply", MB_OK);
             }
             else if(index==kModeCount+2) SaveReport(window);
+            else if(index==kModeCount+3) {
+                if(!capture_suite::active && control_rr_capture_ui::Request()) {
+                    Trace("rr_capture_button requested=1");
+                    RestoreCursorVisibility();SetForegroundWindow(GetWindow(window,GW_OWNER));
+                } else MessageBoxW(window,L"Capture is busy, failed, or both pairs are already saved. Read the status below the button; PACKAGE RR collects completed frames and diagnostics.",L"RR capture",MB_OK);
+            }
+            else if(index==kModeCount+4) PackageRR(window);
             RedrawWindow(window,nullptr,nullptr,RDW_INVALIDATE|RDW_ALLCHILDREN);
             return 0;
         }
@@ -177,7 +201,7 @@ inline DWORD WINAPI ThreadProc(LPVOID) noexcept {
     ULONGLONG nextRefresh=0, nextWindowSearch=0, nextLogDrain=0, nextRRReport=0;
     HWND cachedGame=nullptr;
     POINT lastOrigin{-1,-1};
-    Trace("session_start build=R151-rr-boundary-collector pid=%lu default=authored_clip_surface_normals_current_spot_when_ready log=user-diagnostics-folder",GetCurrentProcessId());
+    Trace("session_start build=R152-overlay-rr-capture pid=%lu default=authored_clip_surface_normals_current_spot_when_ready log=user-diagnostics-folder",GetCurrentProcessId());
     MSG msg{};
     while(GetMessageW(&msg,nullptr,0,0)>0){
         if (!panel || !IsDialogMessageW(panel, &msg)) {

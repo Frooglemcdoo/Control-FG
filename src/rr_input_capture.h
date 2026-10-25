@@ -1,5 +1,6 @@
 #pragma once
 #include "rr_input_capture_policy.h"
+#include "rr_capture_ui.h"
 #include "rr_input_capture_native.h"
 #include "rr_input_capture_gi.h"
 // R10 diagnostics: two prepared slots capture successive evaluated frames.
@@ -71,7 +72,8 @@ static DWORD WINAPI RRInputCaptureExport(void* context) noexcept {
  }catch(...){okay=false;}
  for(unsigned i=0;i<c->count;++i)if(mapped[i]){D3D12_RANGE written{0,0};c->readback[i]->Unmap(0,&written);}
  Log("RR_INPUT_CAPTURE_C1_EXPORTED success=%u frame=%llu preset=%u buffers=%u",unsigned(okay),c->frame,c->preset,c->count);
- RRInputCaptureRelease(c);c->policy.Exported();
+ RRInputCaptureRelease(c);
+ if(okay)c->policy.Exported();else {c->policy.phase=control_rr::InputCapturePolicy::Failed;control_rr_capture_ui::detail.store(L"Image export failed. PACKAGE RR will collect diagnostics.");}
 
  ReleaseSRWLockExclusive(&rrInputCaptureLock);return 0;
 }
@@ -91,6 +93,7 @@ static void RRInputCaptureOneBeforeEvaluation(RRInputCaptureJob* c,ID3D12Graphic
   resources[nativeIndex]=color;resources[nativeIndex+1]=depth;resources[nativeIndex+2]=motion;
   RRGuideInputTexture nativeInputs[6]{};
   if(!RRInputCaptureFindNative(frame,resources+nativeIndex,nativeInputs)){
+   control_rr_capture_ui::detail.store(L"Waiting: native RR input state is not verified.");
    static unsigned rejects=0;if(++rejects<=4||(rejects%240)==0)Log("RR_INPUT_CAPTURE_C1_REJECT reason=native_input_state_unproven frame=%llu",frame);__leave;
   }
   RRGuideInputSnapshot native{};const char* reason=nullptr;
@@ -102,6 +105,7 @@ static void RRInputCaptureOneBeforeEvaluation(RRInputCaptureJob* c,ID3D12Graphic
   resources[nativeIndex+3]=gb.gbuffer1.resource;resources[nativeIndex+4]=gb.gbuffer2.resource;
   nativeInputs[3]=gb.gbuffer1;nativeInputs[4]=gb.gbuffer2;
   if(!RRInputCaptureReadGI(&nativeInputs[5])){
+   control_rr_capture_ui::detail.store(L"Waiting: raw GI read state is not verified.");
    static unsigned rejects=0;if(++rejects<=4||(rejects%240)==0)Log("RR_INPUT_CAPTURE_R28_REJECT reason=raw_gi_read_state_unproven frame=%llu",frame);__leave;
   }
   resources[nativeIndex+5]=nativeInputs[5].resource;
@@ -174,6 +178,7 @@ static void RRInputCaptureOneBeforeEvaluation(RRInputCaptureJob* c,ID3D12Graphic
    __leave;
   }
   c->policy.Record(native.presentToken);rrInputCaptureRecording=c->pairIndex;
+  control_rr_capture_ui::detail.store(L"Frame recorded; waiting for RR output and GPU completion.");
   Log("RR_INPUT_CAPTURE_C1_RECORDED frame=%llu preset=%u buffers=%u",frame,preset,count);
  } __except(EXCEPTION_EXECUTE_HANDLER){c->policy.phase=control_rr::InputCapturePolicy::Failed;Log("RR_INPUT_CAPTURE_C1_FAILED reason=exception resources_retained=1");}
  ReleaseSRWLockExclusive(&rrInputCaptureLock);
@@ -210,19 +215,26 @@ static void RRInputCaptureAfterEvaluation(ID3D12GraphicsCommandList* list,unsign
  ReleaseSRWLockExclusive(&rrInputCaptureLock);
 }
 static void RRInputCaptureAfterPresent(unsigned long long present) noexcept {
- static bool held=false;const bool down=(GetAsyncKeyState(VK_F9)&0x8000)!=0
 #if defined(CONTROL_CAPTURE_DIAGNOSTIC)
- && (GetAsyncKeyState(VK_CONTROL)&0x8000) && (GetAsyncKeyState(VK_MENU)&0x8000)
+ const bool pressed=false; // Diagnostic captures are requested by the overlay button.
+#else
+ static bool held=false;const bool down=(GetAsyncKeyState(VK_F9)&0x8000)!=0;
+ const bool pressed=down&&!held;held=down;
 #endif
- ;const bool pressed=down&&!held;held=down;
  if(!TryAcquireSRWLockExclusive(&rrInputCaptureLock))return;
  __try {
   using P=control_rr::InputCapturePolicy;
-  if(pressed){DWORD foregroundPid=0;GetWindowThreadProcessId(GetForegroundWindow(),&foregroundPid);
-   if(foregroundPid==GetCurrentProcessId()){
+  const bool buttonRequested=control_rr_capture_ui::requested.exchange(false,std::memory_order_acq_rel);
+  if(pressed || buttonRequested){DWORD foregroundPid=0;GetWindowThreadProcessId(GetForegroundWindow(),&foregroundPid);
+   if(buttonRequested || foregroundPid==GetCurrentProcessId()){
     bool accepted=rrInputCaptures[0].policy.phase==P::Idle&&rrInputCaptures[1].policy.phase==P::Idle&&rrInputCaptures[0].policy.requests<2;
-    if(accepted){for(unsigned i=0;i<2;++i){rrInputCaptures[i].pairIndex=i;rrInputCaptures[i].frame=0;rrInputCaptures[i].policy.Request();}rrHairShaderAuditRequested.store(true,std::memory_order_release);}
-    Log("RR_INPUT_CAPTURE_C1_REQUEST accepted=%u mode=r10_pair slots=2 maximum_pairs=2",unsigned(accepted));
+    if(accepted){for(unsigned i=0;i<2;++i){rrInputCaptures[i].pairIndex=i;rrInputCaptures[i].frame=0;rrInputCaptures[i].policy.Request();}
+#if !defined(CONTROL_CAPTURE_DIAGNOSTIC)
+    rrHairShaderAuditRequested.store(true,std::memory_order_release);
+#endif
+    }
+    else if(buttonRequested){control_rr_capture_ui::detail.store(L"Capture busy or session limit reached. PACKAGE RR collects status.");control_rr_capture_ui::state.store(control_rr_capture_ui::State::Failed);}
+    Log("RR_INPUT_CAPTURE_C1_REQUEST accepted=%u mode=overlay_pair slots=2 maximum_pairs=2",unsigned(accepted));
    }
   }
   for(auto& job:rrInputCaptures){auto* c=&job;
@@ -232,6 +244,10 @@ static void RRInputCaptureAfterPresent(unsigned long long present) noexcept {
    if(c->policy.CanSubmit(present)){const HRESULT hr=c->queue->Signal(c->fence,1);c->policy.Submit(SUCCEEDED(hr));
     if(FAILED(hr))Log("RR_INPUT_CAPTURE_C1_FAILED reason=signal resources_retained=1");}
   }
+  control_rr_capture_ui::Publish(rrInputCaptures[0].policy.phase,rrInputCaptures[1].policy.phase,
+      rrInputCaptures[0].policy.requests,rrInputCaptures[0].outputCaptured && rrInputCaptures[1].outputCaptured &&
+      rrInputCaptures[0].evaluationResult==1 && rrInputCaptures[1].evaluationResult==1 &&
+      rrInputCaptures[1].frame==rrInputCaptures[0].frame+1 && rrInputCaptures[1].previousFrame==rrInputCaptures[0].frame);
  } __except(EXCEPTION_EXECUTE_HANDLER){for(auto& c:rrInputCaptures)c.policy.phase=control_rr::InputCapturePolicy::Failed;}
  ReleaseSRWLockExclusive(&rrInputCaptureLock);
 }

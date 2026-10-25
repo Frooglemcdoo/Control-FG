@@ -1,4 +1,5 @@
 #pragma once
+#include "rr_capture_ui.h"
 #include "native_lighting_isolation.h"
 #include "rt_baked_gi_patches.generated.h"
 #include "native_lighting_live_state.h"

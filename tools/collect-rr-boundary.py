@@ -58,34 +58,69 @@ def collect_logs(root, local, pid, destination):
             shutil.copy2(source, target)
 
 
+def capture_status(root, pid):
+    """Read only a bounded tail; never load a growing probe log in full."""
+    logs = list(root.glob(f'probe-*-{pid}.log'))
+    if not logs:
+        return 'No probe log found for this game process.'
+    latest = max(logs, key=lambda path: path.stat().st_mtime)
+    with latest.open('rb') as stream:
+        stream.seek(max(0, latest.stat().st_size - 256 * 1024))
+        lines = stream.read().decode('utf-8', errors='replace').splitlines()
+    events = [line for line in lines if 'RR_INPUT_CAPTURE_' in line]
+    return events[-1] if events else 'No RR capture event found in the log tail; shortcut detection is unconfirmed.'
+
+
+def retain_metadata(root, pid, destination):
+    """Keep incomplete attempts useful without claiming their raw data is valid."""
+    for folder in root.glob(f'rr-input-c1-{pid}-*'):
+        for name in ('metadata.json', 'metadata.pending'):
+            source = folder / name
+            if source.is_file():
+                target = destination / 'attempt-metadata' / folder.name / name
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(source, target)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--pid', type=int, required=True)
     parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--diagnostics-only', action='store_true')
+    parser.add_argument('--collect-existing', action='store_true')
     args = parser.parse_args()
     local = Path(os.environ['LOCALAPPDATA'])
     root = local / 'ControlFGProbe'
-    started = time.time()
-    destination = args.output / ('RR-Boundary-R151-' + time.strftime('%Y%m%d-%H%M%S') + '-' + str(args.pid))
+    started = 0 if args.collect_existing or args.diagnostics_only else time.time()
+    destination = args.output / ('RR-Boundary-R152-' + time.strftime('%Y%m%d-%H%M%S') + '-' + str(args.pid) + '-' + str(time.time_ns() % 1000000000))
     destination.mkdir(parents=True, exist_ok=False)
-    report = {'schema': 'control-rr-boundary-r151', 'pid': args.pid, 'started_unix': started, 'pairs': [], 'complete': False}
-    print('Keep RR ON, DEFAULT selected and the graphics settings unchanged.', flush=True)
-    print('1. Return to gameplay where the shadow is visible. Close F10.', flush=True)
-    print('   Press Ctrl+Alt+F9 once and hold the camera still until the beep.', flush=True)
-    print('2. Move to where the shadow fades, then press Ctrl+Alt+F9 again.', flush=True)
-    print('   Hold still until the second beep. Record video of both positions.', flush=True)
-    print('This captures RR input/output, not final tone-mapped display color.', flush=True)
+    report = {'schema': 'control-rr-boundary-r152', 'pid': args.pid, 'started_unix': started, 'pairs': [], 'complete': False, 'diagnostics_only': args.diagnostics_only}
+    print('Collecting the overlay RR captures for this game session.', flush=True)
+    print('Use CAPTURE RR in the overlay at each position, then PACKAGE RR.', flush=True)
+    print('Progress and failures are recorded below; no sound or hotkey is required.', flush=True)
     try:
+        if args.diagnostics_only:
+            report['status'] = capture_status(root, args.pid)
+            print(report['status'], flush=True)
         for ordinal, label in [(1, 'shadow-visible'), (2, 'shadow-faded')]:
+            if args.diagnostics_only:
+                break
             deadline = time.monotonic() + 180
+            next_status = 0
             pair = None
             while time.monotonic() < deadline:
                 pair = read_pair(root, args.pid, ordinal, started)
                 if pair:
                     break
+                if time.monotonic() >= next_status:
+                    print(f'Pair {ordinal}: ' + capture_status(root, args.pid), flush=True)
+                    next_status = time.monotonic() + 5
+                if args.collect_existing:
+                    break
                 time.sleep(.5)
             if pair is None:
-                raise TimeoutError(f'No complete pair {ordinal}. Keep the diagnostics; do not repeatedly press the shortcut.')
+                raise TimeoutError(f'Pair {ordinal} is not complete. Read the overlay status; diagnostics are being packaged.')
+            print(f'Pair {ordinal} validated. Copying images; this can take a moment...', flush=True)
             for folder, data in pair:
                 target = destination / label / folder.name
                 target.mkdir(parents=True)
@@ -93,14 +128,14 @@ def main():
                     shutil.copy2(folder / name, target / name)
             report['pairs'].append({'label': label, 'frames': [data for _, data in pair]})
             print(f'Pair {ordinal} saved: {label}.', flush=True)
-            if os.name == 'nt':
-                import winsound
-                winsound.MessageBeep()
-        report['complete'] = True
+            # Overlay status is the completion notification.
+        report['complete'] = not args.diagnostics_only
     except Exception as error:
         report['error'] = str(error)
         print('Capture incomplete: ' + str(error), flush=True)
     finally:
+        report['last_capture_status'] = capture_status(root, args.pid)
+        retain_metadata(root, args.pid, destination)
         collect_logs(root, local, args.pid, destination)
         (destination / 'boundary-report.json').write_text(json.dumps(report, indent=2))
     packager = Path(__file__).with_name('package-lighting-capture.py')
@@ -110,7 +145,9 @@ def main():
     output = module.package(destination)
     print(f'Send every ZIP in: {output}', flush=True)
     print('Original captures were retained. Include the video.', flush=True)
-    return 0 if report['complete'] else 1
+    if os.name == 'nt':
+        os.startfile(output)
+    return 0 if report['complete'] or args.diagnostics_only else 1
 
 
 if __name__ == '__main__':

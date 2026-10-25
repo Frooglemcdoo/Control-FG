@@ -26,3 +26,15 @@ with tempfile.TemporaryDirectory() as tmp:
  except ValueError:pass
  else:raise AssertionError('truncated image accepted')
 print('PASS R151 RR collector: session/ordinal separation, fresh complete consecutive pairs, output failures and truncated images rejected')
+
+with tempfile.TemporaryDirectory() as tmp:
+ root=Path(tmp)
+ assert 'No probe log' in c.capture_status(root,7)
+ log=root/'probe-test-7.log';log.write_text('unrelated\n')
+ assert 'unconfirmed' in c.capture_status(root,7)
+ log.write_text('qpc=1 RR_INPUT_CAPTURE_C1_REQUEST accepted=1\nqpc=2 RR_INPUT_CAPTURE_R28_REJECT reason=raw_gi_read_state_unproven\n')
+ assert 'raw_gi_read_state_unproven' in c.capture_status(root,7)
+ attempt=root/'rr-input-c1-7-100';attempt.mkdir();(attempt/'metadata.pending').write_text('{}')
+ out=root/'out';out.mkdir();c.retain_metadata(root,7,out)
+ assert (out/'attempt-metadata'/attempt.name/'metadata.pending').read_text()=='{}'
+print('PASS R151 helper fix: bounded capture progress, missing shortcut evidence and incomplete metadata preservation')
