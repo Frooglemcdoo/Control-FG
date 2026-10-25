@@ -28,7 +28,7 @@ enum class SignalPhase : unsigned { Waiting,Recording,Recorded,Submitting,Submit
 inline std::atomic<SignalPhase> signalPhase{SignalPhase::Waiting};
 inline ComPtr<ID3D12GraphicsCommandList4> recordedSignalList;
 inline ComPtr<ID3D12DescriptorHeap> recordedSignalHeap;
-inline ComPtr<ID3D12PipelineState> recordedSignalPipeline;
+inline ComPtr<ID3D12PipelineState> recordedSignalPipeline,recordedSignalBeforePipeline;
 inline ComPtr<ID3D12CommandQueue> signalQueue;
 inline UINT64 signalGeneration=0,signalPresent=0;
 inline std::atomic<bool> signalReady{false};
@@ -129,7 +129,7 @@ inline bool RequestFresh() noexcept {
            signalCompleted!=UINT64_MAX && signalCompleted>=fenceValue) {
             ++fenceValue;attempts=exportCursor=exportStage=0;readbackCopied=false;
             recordedList.Reset();recordedState.Reset();captureState.Reset();recordedTable.Reset();recordedHeap.Reset();submittedQueue.Reset();
-            recordedSignalList.Reset();recordedSignalHeap.Reset();recordedSignalPipeline.Reset();signalQueue.Reset();
+            recordedSignalList.Reset();recordedSignalHeap.Reset();recordedSignalPipeline.Reset();recordedSignalBeforePipeline.Reset();signalQueue.Reset();
             accepted=true;
         }
     }
@@ -248,13 +248,14 @@ inline void CaptureComposition(ID3D12GraphicsCommandList* list,UINT x,UINT y,UIN
     const auto generation=rt_spot_table_audit::Token(list);
     if(!generation){Fail("composition_signal_generation");return;}
     if(before) {
-        recordedSignalList=current.list;recordedSignalHeap=current.heap;recordedSignalPipeline=pipeline;
+        recordedSignalList=current.list;recordedSignalHeap=current.heap;recordedSignalBeforePipeline=pipeline;
         signalGeneration=generation;signalPresent=presentCount.load();
         signalPhase.store(SignalPhase::Recording);
     } else if(recordedSignalList.Get()!=list || recordedSignalHeap.Get()!=current.heap ||
               signalGeneration!=generation || signalPresent!=presentCount.load()) {
         Fail("composition_pair_provenance");return;
     }
+    if(!before)recordedSignalPipeline=pipeline;
     internal=true;
     constexpr UINT base=49*4;
     originalCopy(resources.device.Get(),49,resources.At(base),resources.At(0),D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
