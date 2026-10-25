@@ -551,7 +551,8 @@ jobs:
           Close Control to install. Copy contents beside Control_DX12.exe.
           Preserve NVIDIA runtimes and ControlFGStreamline.
           Start a fresh game session. Keep RR ON and DEFAULT selected throughout both captures.
-          Wait at least five seconds after enabling RR or entering each position before clicking.
+          After clicking, return to gameplay if the game menu is open and hold still.
+          Capture waits for three seconds of consecutive RR gameplay frames before recording.
           Open F10 where the shadow is visible and click CAPTURE RR.
           Gameplay regains focus; the panel shows progress. Hold still until Saved pairs: 1/2.
           Move to where the shadow fades. Click CAPTURE RR again and wait for Saved pairs: 2/2.

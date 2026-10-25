@@ -1,7 +1,18 @@
 #include "../src/rr_capture_ui.h"
+#include "../src/rr_input_capture_settle.h"
 #include <cassert>
 #include <iostream>
 int main(){
+ control_rr::InputCaptureSettle settle;
+ assert(!settle.Ready(100,false,1000));
+ assert(!settle.Ready(101,false,2000));
+ assert(settle.Ready(102,false,4000));
+ assert(!settle.Ready(200,false,5000)); // menu gap restarts the timer
+ assert(!settle.Ready(201,true,9000)); // an explicit history reset restarts it
+ assert(!settle.Ready(202,false,10000));
+ assert(settle.Ready(203,false,12000));
+ settle.Reset();assert(!settle.Ready(204,false,15000)); // failed evaluation / new request
+
  namespace ui=control_rr_capture_ui;using P=control_rr::InputCapturePolicy;
  assert(ui::Request());assert(!ui::Request());
  ui::Publish(P::Idle,P::Idle,0,false);assert(ui::state==ui::State::Queued);

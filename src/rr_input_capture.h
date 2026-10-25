@@ -1,6 +1,7 @@
 #pragma once
 #include "rr_input_capture_policy.h"
 #include "rr_input_capture_limits.h"
+#include "rr_input_capture_settle.h"
 #include "rr_capture_ui.h"
 #include "rr_input_capture_native.h"
 #include "rr_input_capture_gi.h"
@@ -23,6 +24,7 @@ struct RRInputCaptureJob {
 static SRWLOCK rrInputCaptureLock=SRWLOCK_INIT;
 static RRInputCaptureJob rrInputCaptures[2];
 static unsigned rrInputCaptureRecording=2;
+static control_rr::InputCaptureSettle rrInputCaptureSettle;
 static void RRInputCaptureRelease(RRInputCaptureJob* c) noexcept {
  for(unsigned i=0;i<kRRInputCaptureMaxResources;++i){RRGuideRelease(c->sources[i]);RRGuideRelease(c->readback[i]);}
  RRGuideRelease(c->fence);RRGuideRelease(c->queue);RRGuideRelease(c->device);
@@ -204,13 +206,22 @@ static void RRInputCaptureBeforeEvaluation(ID3D12GraphicsCommandList* list,unsig
  ID3D12Resource* normal,ID3D12Resource* specular,ID3D12Resource* diffuse,ID3D12Resource* distance,ID3D12Resource* status,const float* projection,bool projectionValid,ID3D12Resource* rawAlbedo,ID3D12Resource* color,ID3D12Resource* depth,ID3D12Resource* motion,ID3D12Resource* output,ID3D12Resource* responsivity,void* parameters) noexcept {
  // Worker publication is read under the same lock. Prepare both before the first copy.
  if(!TryAcquireSRWLockExclusive(&rrInputCaptureLock))return;
- const unsigned select=control_rr::SelectInputCapturePair(rrInputCaptures[0].policy.phase,
+ unsigned select=control_rr::SelectInputCapturePair(rrInputCaptures[0].policy.phase,
   rrInputCaptures[1].policy.phase,rrInputCaptures[0].frame,frame);
+ if(select<2){
+  int reset=1;
+  const bool resetKnown=ngxGetInt&&ngxGetInt(parameters,"Reset",&reset)==1;
+  if(!rrInputCaptureSettle.Ready(frame,!resetKnown||reset!=0,GetTickCount64())){
+   control_rr_capture_ui::detail.store(L"Settling RR for 3 seconds of gameplay. Return to the game and hold still.");
+   select=2;
+  }
+ }
  ReleaseSRWLockExclusive(&rrInputCaptureLock);
  if(select<2)RRInputCaptureOneBeforeEvaluation(&rrInputCaptures[select],list,frame,preset,normal,specular,diffuse,distance,status,projection,projectionValid,rawAlbedo,color,depth,motion,output,responsivity,parameters);
 }
 static void RRInputCaptureAfterEvaluation(ID3D12GraphicsCommandList* list,unsigned long long frame,ID3D12Resource* output,unsigned result) noexcept {
  if(!TryAcquireSRWLockExclusive(&rrInputCaptureLock))return;
+ if(result!=1)rrInputCaptureSettle.Reset();
  RRInputCaptureJob* active=nullptr;
  __try {
   if(rrInputCaptureRecording>=2)__leave;
@@ -241,7 +252,7 @@ static void RRInputCaptureAfterPresent(unsigned long long present) noexcept {
  __try {
   using P=control_rr::InputCapturePolicy;
   const bool buttonRequested=control_rr_capture_ui::requested.exchange(false,std::memory_order_acq_rel);
-  if(pressed || buttonRequested){DWORD foregroundPid=0;GetWindowThreadProcessId(GetForegroundWindow(),&foregroundPid);
+  if(pressed || buttonRequested){rrInputCaptureSettle.Reset();DWORD foregroundPid=0;GetWindowThreadProcessId(GetForegroundWindow(),&foregroundPid);
    if(buttonRequested || foregroundPid==GetCurrentProcessId()){
     bool accepted=rrInputCaptures[0].policy.phase==P::Idle&&rrInputCaptures[1].policy.phase==P::Idle&&rrInputCaptures[0].policy.requests<2;
     if(accepted){for(unsigned i=0;i<2;++i){rrInputCaptures[i].pairIndex=i;rrInputCaptures[i].frame=0;rrInputCaptures[i].policy.Request();}
