@@ -551,7 +551,8 @@ jobs:
           Close Control to install. Copy contents beside Control_DX12.exe.
           Preserve NVIDIA runtimes and ControlFGStreamline.
           Start a fresh game session. Keep your usual DLSS Quality/DLAA and RT settings.
-          Select NATIVE RR OFF in the overlay and leave it selected for both captures.
+          Select RR OFF (corrected shadows) in the overlay and leave it selected for both captures.
+          NATIVE RR OFF is also available for a separate baseline comparison.
           This capture uses native DLSS SR/DLAA; it does not require RR.
           Open F10 from gameplay. The panel no longer takes focus or triggers focus-loss pause.
           Clicking CAPTURE LIGHT hides the overlay. Hold still.

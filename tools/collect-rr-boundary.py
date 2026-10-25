@@ -52,6 +52,8 @@ def read_pair(root, pid, ordinal, started, require_lighting=False, require_nativ
     if len(frames) != 2 or [f[1]['pair_index'] for f in frames] != [0, 1]:
         raise ValueError('Ambiguous RR pair; restart the game for a fresh session')
     first, second = [f[1] for f in frames]
+    if first.get('lighting_mode') != second.get('lighting_mode'):
+        raise ValueError('Lighting mode changed within a capture pair')
     if second['frame'] != first['frame'] + 1 or second['previous_frame'] != first['frame'] or not second['consecutive']:
         raise ValueError('Captured frames were not consecutive; send the collected diagnostics')
     return frames
@@ -111,7 +113,7 @@ def main():
         if args.diagnostics_only:
             report['status'] = capture_status(root, args.pid)
             print(report['status'], flush=True)
-        for ordinal, label in [(1, 'shadow-visible'), (2, 'shadow-faded')]:
+        for ordinal, label in [(1, 'before-room'), (2, 'inside-room')]:
             if args.diagnostics_only:
                 break
             deadline = time.monotonic() + 180

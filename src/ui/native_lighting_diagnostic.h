@@ -130,10 +130,11 @@ inline void PackageRR(HWND window) noexcept {
     } else MessageBoxW(window,L"Could not start packaging. Check Capture-RR-Boundary.ps1 is installed beside dxgi.dll.",L"Lighting packaging",MB_OK|MB_ICONERROR);
 }
 inline void RequestLightCapture(HWND panel) noexcept {
-    if(!capture_suite::active && LiveSelection::GetMode(selection.Read())==Mode::RoomNativeNoRR && control_rr_capture_ui::Request()) {
-        Trace("native_lighting_capture requested=1 mode=native_rr_off");
+    const auto mode=LiveSelection::GetMode(selection.Read());
+    if(!capture_suite::active && (mode==Mode::RoomNativeNoRR || mode==Mode::RoomCorrectedNoRR) && control_rr_capture_ui::Request()) {
+        Trace("native_lighting_capture requested=1 mode=%s",ModeName(mode));
         ClosePanel(panel);
-    } else MessageBoxW(panel,L"Select NATIVE RR OFF before capturing. If busy, failed, or both pairs are saved, read the status; PACKAGE LIGHT collects diagnostics.",L"Lighting capture",MB_OK);
+    } else MessageBoxW(panel,L"Select RR OFF (corrected shadows) or NATIVE RR OFF before capturing. If busy, failed, or both pairs are saved, read the status; PACKAGE LIGHT collects diagnostics.",L"Lighting capture",MB_OK);
 }
 inline LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPARAM lParam) noexcept {
     namespace theme = control_ui::theme;

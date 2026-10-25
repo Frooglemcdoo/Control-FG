@@ -109,7 +109,8 @@ static unsigned int RREvaluationEntry(unsigned int branch, ID3D12GraphicsCommand
     // The lighting investigation uses the original SR path with RR bypassed.
     // No RR guides, preset resolution, or RR result is needed for this capture.
     const bool nativeCapture=branch==0&&!partial&&!rrNativeFrame.Selected()&&
-        native_lighting::LiveSelection::GetMode(native_lighting::selection.Read())==native_lighting::Mode::RoomNativeNoRR;
+        (native_lighting::LiveSelection::GetMode(native_lighting::selection.Read())==native_lighting::Mode::RoomNativeNoRR ||
+         native_lighting::LiveSelection::GetMode(native_lighting::selection.Read())==native_lighting::Mode::RoomCorrectedNoRR);
     if(nativeCapture&&in.valid==127&&!in.fault){
         const float noProjection[16]{};
         RRInputCaptureBeforeEvaluation(list,in.frame,0,nullptr,nullptr,nullptr,nullptr,nullptr,
