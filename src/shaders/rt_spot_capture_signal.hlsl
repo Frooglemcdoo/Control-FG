@@ -10,7 +10,10 @@ cbuffer CaptureLayout : register(b4) { uint width, height, frameTag, grid; }
 void captureComposition(uint3 id : SV_DispatchThreadID) {
     if (id.x >= 64 || id.y >= 64 || grid != 64) return;
     uint2 pixel = (2 * id.xy + 1) * uint2(width, height) / 128;
-    uint at = (id.y * 64 + id.x) * 64;
+    uint at = (id.y * 64 + id.x) * 128;
+#ifdef CAPTURE_BEFORE
+    at += 64;
+#endif
     uint2 selected = selectedLights.Load(int3(pixel, 0));
     captureSignal.Store4(at, uint4(pixel, selected));
     captureSignal.Store4(at + 16, asuint(shadowVisibility.Load(int3(pixel, 0))));

@@ -70,7 +70,13 @@ def summarize(capture, tolerance):
         if 'composition' in record:
             signal = record['composition']
             values = [signal['visibility'][0], *signal['diffuse'][:3], *signal['specular'][:3]]
-            stats = group.setdefault('composition', dict(count=0, sums=[0.0]*7, minimum=list(values), maximum=list(values)))
+            channels = ['spot_visibility','diffuse_r','diffuse_g','diffuse_b','specular_r','specular_g','specular_b']
+            if 'diffuse_before' in signal:
+                for field in ('diffuse_before','specular_before','diffuse_delta','specular_delta'):
+                    values.extend(signal[field][:3])
+                    channels.extend(field+'_'+component for component in ('r','g','b'))
+            stats = group.setdefault('composition', dict(count=0, channels=channels, sums=[0.0]*len(values), minimum=list(values), maximum=list(values)))
+            if stats['channels'] != channels: raise ValueError('Mixed composition ABIs in one capture')
             stats['count'] += 1
             stats['sums'] = [x+y for x,y in zip(stats['sums'],values)]
             stats['minimum'] = [min(x,y) for x,y in zip(stats['minimum'],values)]
@@ -82,7 +88,6 @@ def summarize(capture, tolerance):
     for group in groups.values():
         if 'composition' in group:
             stats = group['composition']
-            stats['channels'] = ['spot_visibility','diffuse_r','diffuse_g','diffuse_b','specular_r','specular_g','specular_b']
             stats['mean'] = [x/stats['count'] for x in stats.pop('sums')]
 
     return dict(capture_id=capture['capture_id'],extent=capture['extent'],lights=list(groups.values()))
@@ -135,7 +140,7 @@ def analyze(text,tolerance=.02):
         if summaries: summary['geometry_matches']=compare(summaries[-1],summary,tolerance)
         summaries.append(summary)
     return dict(schema='control-light-transition-v1',position_tolerance_engine_units=tolerance,
-        limitation='Geometry matches are candidates, not persistent IDs. Missing sampled lights do not prove culling. Hit rays are unclipped reference rays, not the final displayed visibility.',captures=summaries)
+        limitation='Geometry matches are candidates, not persistent IDs. Missing sampled lights do not prove culling. Hit rays are unclipped reference rays, not the final displayed visibility. Composition deltas are the net direct-pass change, not an isolated selected light. Frame-wide means compare different receivers and cannot prove temporal changes.',captures=summaries)
 
 
 def main():

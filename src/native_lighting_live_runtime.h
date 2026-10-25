@@ -25,6 +25,7 @@ namespace rt_spot_table_audit { inline void Request() noexcept; }
 namespace rt_spot_capture_runtime {
 inline void Poll() noexcept;
 inline void BindCompute(ID3D12GraphicsCommandList*,ID3D12PipelineState*,ID3D12PipelineState*) noexcept;
+inline void BeforeCompute(ID3D12GraphicsCommandList*,UINT,UINT,UINT) noexcept;
 inline void AfterCompute(ID3D12GraphicsCommandList*,UINT,UINT,UINT) noexcept;
 inline void BeforeExecute(ID3D12CommandQueue*,UINT,ID3D12CommandList*const*) noexcept;
 inline void AfterExecute(ID3D12CommandQueue*,UINT,ID3D12CommandList*const*) noexcept;
@@ -309,6 +310,7 @@ inline void STDMETHODCALLTYPE SetHook(ID3D12GraphicsCommandList* list, ID3D12Pip
 }
 inline void STDMETHODCALLTYPE ComputeDispatchHook(ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT z) {
     const auto original=Lookup(list).dispatch;if(!original)return;
+    rt_spot_capture_runtime::BeforeCompute(list,x,y,z);
     original(list,x,y,z);
     rt_spot_capture_runtime::AfterCompute(list,x,y,z);
 }

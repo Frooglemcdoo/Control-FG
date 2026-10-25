@@ -19,12 +19,19 @@ static void TestCompositionSignal(ID3D12Device* device) {
             visibility[p.xy]=float4((p.x%2)*.5,.75,2,3);
             diffuse[p.xy]=float4(p.x+8,p.y+4,2,1);
             specular[p.xy]=float4(p.x+16,p.y+8,4,1);
+        }
+        [numthreads(8,8,1)] void advance(uint3 p:SV_DispatchThreadID) {
+            diffuse[p.xy]+=float4(3,-1,2,0);
+            specular[p.xy]+=float4(5,2,-1,0);
         })";
     ComPtr<ID3DBlob> shader;Check(D3DCompile(fixture,strlen(fixture),nullptr,nullptr,nullptr,"main","cs_5_1",0,0,&shader,&error));
     D3D12_COMPUTE_PIPELINE_STATE_DESC desc{};desc.pRootSignature=root.Get();
-    ComPtr<ID3D12PipelineState> initialize,sample;
+    ComPtr<ID3D12PipelineState> initialize,sample,before,advance;
     desc.CS={shader->GetBufferPointer(),shader->GetBufferSize()};Check(device->CreateComputePipelineState(&desc,IID_PPV_ARGS(&initialize)));
     desc.CS={gpu::kSpotCaptureSignalShader,sizeof(gpu::kSpotCaptureSignalShader)};Check(device->CreateComputePipelineState(&desc,IID_PPV_ARGS(&sample)));
+    desc.CS={gpu::kSpotCaptureSignalBeforeShader,sizeof(gpu::kSpotCaptureSignalBeforeShader)};Check(device->CreateComputePipelineState(&desc,IID_PPV_ARGS(&before)));
+    shader.Reset();Check(D3DCompile(fixture,strlen(fixture),nullptr,nullptr,nullptr,"advance","cs_5_1",0,0,&shader,&error));
+    desc.CS={shader->GetBufferPointer(),shader->GetBufferSize()};Check(device->CreateComputePipelineState(&desc,IID_PPV_ARGS(&advance)));
     ComPtr<ID3D12Resource> textures[4];
     for(UINT i=0;i<4;++i) {
         D3D12_HEAP_PROPERTIES hp{};hp.Type=D3D12_HEAP_TYPE_DEFAULT;
@@ -56,6 +63,8 @@ static void TestCompositionSignal(ID3D12Device* device) {
     ID3D12DescriptorHeap* heaps[]={heap.Get()};list->SetDescriptorHeaps(1,heaps);list->SetComputeRootSignature(root.Get());list->SetComputeRootDescriptorTable(0,heap->GetGPUDescriptorHandleForHeapStart());
     list->SetPipelineState(initialize.Get());list->Dispatch(16,8,1);gpu::UavBarrier(list.Get());
     for(UINT i=2;i<4;++i)gpu::Transition(list.Get(),textures[i].Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+    list->SetPipelineState(before.Get());list->Dispatch(8,8,1);gpu::UavBarrier(list.Get());
+    list->SetPipelineState(advance.Get());list->Dispatch(16,8,1);gpu::UavBarrier(list.Get());
     list->SetPipelineState(sample.Get());list->Dispatch(8,8,1);
     gpu::Transition(list.Get(),resources.signal.Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS,D3D12_RESOURCE_STATE_COPY_SOURCE);
     list->CopyBufferRegion(resources.readback.Get(),0,resources.signal.Get(),0,gpu::kSignalBytes);
@@ -66,13 +75,17 @@ static void TestCompositionSignal(ID3D12Device* device) {
     D3D12_RANGE read{0,gpu::kSignalBytes};Check(resources.readback->Map(0,&read,&mapped));
     bool valid=true;
     for(UINT i=0;i<4096;++i) {
-        UINT ids[4]{};float values[12]{};auto* bytes=static_cast<unsigned char*>(mapped)+i*64;
+        UINT ids[4]{};float values[12]{};auto* bytes=static_cast<unsigned char*>(mapped)+i*gpu::kSignalStride;
         memcpy(ids,bytes,16);memcpy(values,bytes+16,48);const UINT x=2*(i%64)+1,y=i/64;
         valid&=ids[0]==x && ids[1]==y && ids[2]==x+100 && ids[3]==y+200;
-        const float expected[]={.5f,.75f,2,3,float(x+8),float(y+4),2,1,float(x+16),float(y+8),4,1};
+        const float expected[]={.5f,.75f,2,3,float(x+11),float(y+3),4,1,float(x+21),float(y+10),3,1};
         valid&=memcmp(values,expected,sizeof(values))==0;
+        UINT beforeIds[4]{};float beforeValues[12]{};
+        memcpy(beforeIds,bytes+64,16);memcpy(beforeValues,bytes+80,48);
+        const float original[]={.5f,.75f,2,3,float(x+8),float(y+4),2,1,float(x+16),float(y+8),4,1};
+        valid&=memcmp(beforeIds,ids,sizeof(ids))==0 && memcmp(beforeValues,original,sizeof(original))==0;
     }
     resources.readback->Unmap(0,&empty);
     if(!valid)throw std::runtime_error("composition signal differs from GPU fixture");
-    std::cout<<"PASS composition signal: 4096 exact grid pixels, light IDs, visibility and unclamped HDR diffuse/specular\n";
+    std::cout<<"PASS R150 composition pair: 4096 exact pixels, matching IDs/visibility, before/after HDR and known positive/negative pass deltas\n";
 }

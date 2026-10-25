@@ -229,10 +229,11 @@ inline void BindCompute(ID3D12GraphicsCommandList* list,ID3D12PipelineState* own
     if(!inScope || internal)return;
     signalList=list;signalOwner=owner;signalRendered=rendered;
 }
-inline void AfterCompute(ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT z) noexcept {
-    if(!inScope || internal || !WaitingForSignal() || list!=signalList)return;
+inline void CaptureComposition(ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT z,bool before) noexcept {
+    if(!inScope || internal || list!=signalList || phase.load()==Phase::Failed)return;
+    if(before ? !WaitingForSignal() : signalPhase.load()!=SignalPhase::Recording)return;
     ComPtr<ID3D12PipelineState> pipeline;
-    if(!signalOwner || !Attached(signalOwner.Get(),gpu::kSignalPipeline,pipeline))return;
+    if(!signalOwner || !Attached(signalOwner.Get(),before?gpu::kSignalBeforePipeline:gpu::kSignalPipeline,pipeline))return;
     constexpr UINT64 required=(1ull<<19)|(1ull<<20)|(1ull<<41)|(1ull<<42);
     Context current;
     if(presentCount.load()!=recordedPresent || x!=(capturedWidth+7)/8 || y!=(capturedHeight+7)/8 || z!=1 ||
@@ -244,10 +245,16 @@ inline void AfterCompute(ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT z) n
     if(!Fresh(current,table,destination)){Fail("composition_signal_table");return;}
     const auto original=Lookup(list).set;
     if(!original || !signalRendered){Fail("composition_signal_restore");return;}
-    recordedSignalList=current.list;recordedSignalHeap=current.heap;recordedSignalPipeline=pipeline;
-    signalGeneration=rt_spot_table_audit::Token(list);signalPresent=presentCount.load();
-    if(!signalGeneration){Fail("composition_signal_generation");return;}
-    signalPhase.store(SignalPhase::Recording);
+    const auto generation=rt_spot_table_audit::Token(list);
+    if(!generation){Fail("composition_signal_generation");return;}
+    if(before) {
+        recordedSignalList=current.list;recordedSignalHeap=current.heap;recordedSignalPipeline=pipeline;
+        signalGeneration=generation;signalPresent=presentCount.load();
+        signalPhase.store(SignalPhase::Recording);
+    } else if(recordedSignalList.Get()!=list || recordedSignalHeap.Get()!=current.heap ||
+              signalGeneration!=generation || signalPresent!=presentCount.load()) {
+        Fail("composition_pair_provenance");return;
+    }
     internal=true;
     constexpr UINT base=49*4;
     originalCopy(resources.device.Get(),49,resources.At(base),resources.At(0),D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
@@ -260,12 +267,22 @@ inline void AfterCompute(ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT z) n
     gpu::UavBarrier(list);
     list->SetComputeRootDescriptorTable(0,table);original(list,pipeline.Get());
     list->Dispatch(8,8,1);
-    gpu::Transition(list,resources.signal.Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS,D3D12_RESOURCE_STATE_COPY_SOURCE);
-    list->CopyBufferRegion(resources.signalReadback.Get(),0,resources.signal.Get(),0,gpu::kSignalBytes);
-    gpu::Transition(list,resources.signal.Get(),D3D12_RESOURCE_STATE_COPY_SOURCE,D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+    if(!before) {
+        gpu::Transition(list,resources.signal.Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS,D3D12_RESOURCE_STATE_COPY_SOURCE);
+        list->CopyBufferRegion(resources.signalReadback.Get(),0,resources.signal.Get(),0,gpu::kSignalBytes);
+        gpu::Transition(list,resources.signal.Get(),D3D12_RESOURCE_STATE_COPY_SOURCE,D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+    } else gpu::UavBarrier(list); // Finish diagnostic reads before native UAV writes.
     list->SetComputeRootDescriptorTable(0,current.gpu);original(list,signalRendered.Get());
-    internal=false;signalPhase.store(SignalPhase::Recorded,std::memory_order_release);
+    internal=false;
+    if(before)return;
+    signalPhase.store(SignalPhase::Recorded,std::memory_order_release);
     Trace("composition_signal_recorded generation=%llu ray_generation=%llu present=%llu independent_submission=1",signalGeneration,recordedGeneration,signalPresent);
+}
+inline void BeforeCompute(ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT z) noexcept {
+    CaptureComposition(list,x,y,z,true);
+}
+inline void AfterCompute(ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT z) noexcept {
+    CaptureComposition(list,x,y,z,false);
 }
 inline void Record(ID3D12GraphicsCommandList4* list,ID3D12StateObject* owner,const D3D12_DISPATCH_RAYS_DESC* desc) noexcept {
     if constexpr (!rt_spot_capture::GpuCaptureEnabled) return;
@@ -451,7 +468,7 @@ inline void Poll() noexcept {
     // Retry canonical headers and records if the nonblocking log queue is busy.
     // Cursor advancement means successful enqueue, never merely an attempted write.
     if(exportStage==0) {
-        if(!Trace("rt_hit_gpu_recorded generation=%llu frame_tag=%u extent=%ux%u table_records=%u captured_present=%llu light_context_bytes=128 signal_bytes=64 signal_generation=%llu signal_present=%llu",recordedGeneration,frameTag,capturedWidth,capturedHeight,capturedTableRecords,recordedPresent,signalGeneration,signalPresent))return;
+        if(!Trace("rt_hit_gpu_recorded generation=%llu frame_tag=%u extent=%ux%u table_records=%u captured_present=%llu light_context_bytes=128 signal_bytes=128 signal_generation=%llu signal_present=%llu",recordedGeneration,frameTag,capturedWidth,capturedHeight,capturedTableRecords,recordedPresent,signalGeneration,signalPresent))return;
         exportStage=1;
     }
     if(exportStage==1) {

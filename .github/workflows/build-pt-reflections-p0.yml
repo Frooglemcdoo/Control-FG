@@ -258,6 +258,8 @@ jobs:
           if($LASTEXITCODE -ne 0){throw 'GPU table status compile failed'}
           & $dxc -T cs_6_0 -E captureComposition -O3 -WX -Fo build/rt_spot_capture_signal.dxil src/shaders/rt_spot_capture_signal.hlsl
           if($LASTEXITCODE -ne 0){throw 'Composition signal capture compile failed'}
+          & $dxc -T cs_6_0 -E captureComposition -D CAPTURE_BEFORE=1 -O3 -WX -Fo build/rt_spot_capture_signal_before.dxil src/shaders/rt_spot_capture_signal.hlsl
+          if($LASTEXITCODE -ne 0){throw 'Composition pre-pass capture compile failed'}
           python tools/embed-spot-capture-table.py
           if($LASTEXITCODE -ne 0){throw 'GPU table embedding failed'}
           python tools/rt_spot_capture_inputs.py
@@ -501,11 +503,11 @@ jobs:
           build\test-lighting-capture-plan.exe
           if errorlevel 1 exit /b 1
 
-      - name: Package live lighting diagnostic R149
+      - name: Package live lighting diagnostic R150
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-Native-Lighting-Live-R149'
+          $out='Control-FG-Native-Lighting-Live-R150'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
           Copy-Item build/rt_spot_selected_off.dxbc,build/rt_spot_selection.dxbc,build/rt_spot_visibility.dxbc,build/rt_spot_light_ids.dxbc,build/rt_spot_raw_history.dxbc,build/rt_spot_raw_spatial0.dxbc,build/rt_spot_raw_spatial1.dxbc,build/rt_spot_full.dxil,build/rt_spot_r94.dxil,build/rt_spot_light.dxbc,build/rt_spot_reset.dxbc,build/rt_spot_history.dxbc,build/rt_spot_spatial0.dxbc,build/rt_spot_spatial1.dxbc $out
@@ -524,22 +526,21 @@ jobs:
           Copy-Item Collect-ControlFG-Compact-Logs.cmd "$out/Collect-ControlFG-Compact-Logs.cmd"
           Copy-Item Collect-ControlFG-Compact-Logs.ps1 "$out/Collect-ControlFG-Compact-Logs.ps1"
           Copy-Item Package-Lighting-Capture.cmd,tools/package-lighting-capture.py $out
-          Copy-Item docs/rt-baked-gi-r149.md "$out/DIAGNOSTIC-NOTES.md"
+          Copy-Item docs/paired-lighting-r150.md "$out/DIAGNOSTIC-NOTES.md"
           @'
-          CONTROL-FG R149 - RT baked-brick isolation
+          CONTROL-FG R150 - Paired direct-light capture
           Close Control to install. Copy contents beside Control_DX12.exe.
           Preserve NVIDIA runtimes and ControlFGStreamline.
-          Load the affected room with the same settings; RT Contact Shadows on, samples 1.
-          F10: compare DEFAULT, BAKED GI OFF, RR OFF, GI + RR OFF.
-          Baked GI Off zeros only GI-brick samples in the captured RT diffuse-GI shaders.
-          Direct-light calculations, hit outputs, filtering and corrected shadows remain.
-          Give each mode several seconds to settle, then repeat the doorway movement.
-          Record one video; return to Default and Save Log. Send video and log.
-          If unavailable, Save Log includes shader bytecode and missing masks.
-          No restart between modes. No F9 capture required for this comparison.
-          Default rendering and exposure are unchanged.
-          Package-Lighting-Capture.cmd splits large files below 200 MB if needed.
-          See DIAGNOSTIC-NOTES.md for the exact scope and limits.
+          Load the affected room with your usual graphics settings.
+          Select DEFAULT in F10, then close the overlay and stand before the doorway.
+          Press Shift+F9 once, walk into the room and back slowly for about 25 seconds.
+          Keep the game focused until the completion message. F9 cancels.
+          This records six paired lighting samples without changing modes or darkening the room.
+          Package the resulting Shadow-R150 folder with Package-Lighting-Capture.cmd.
+          Send the ZIP parts and a video of the same walk. Parts stay below 200 MB.
+          No additional GI-off comparison is requested.
+          Default rendering, baked lighting and exposure are unchanged.
+          See DIAGNOSTIC-NOTES.md for scope and limits.
           '@ | Set-Content "$out/README.txt" -Encoding ASCII
           Compress-Archive -Path "$out/*" -DestinationPath "$out.zip" -Force
           (Get-FileHash "$out.zip" -Algorithm SHA256).Hash | Set-Content "$out.sha256" -Encoding ASCII
@@ -547,10 +548,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-Native-Lighting-Live-R149
+          name: Control-FG-Native-Lighting-Live-R150
           path: |
-            Control-FG-Native-Lighting-Live-R149.zip
-            Control-FG-Native-Lighting-Live-R149.sha256
+            Control-FG-Native-Lighting-Live-R150.zip
+            Control-FG-Native-Lighting-Live-R150.sha256
             build/rt_spot_shadow_prototype.dxil
             build/rr_clamp_fixed.h
             build/rt_spot_blocker.dxil

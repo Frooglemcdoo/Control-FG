@@ -100,3 +100,14 @@ for bad in [separate.replace('signal_generation=987','signal_generation=0'),sepa
     except ValueError: pass
     else: raise AssertionError('Mismatched composition submission accepted')
 print('PASS R146 separate generation and matching captured frame')
+
+# Paired composition ABI preserves signed deltas and rejects mismatched pairs.
+before = struct.pack('<4I12f', 1, 1, light, 65535, .25, .75, 0, 0, 10, 3, 1, 1, 12, 7, 3, 1).hex()
+paired = signal_log.replace('signal_bytes=64', 'signal_bytes=128').replace('signal='+signal, 'signal='+signal+before)
+c = decoder.decode_log(paired)['records'][0]['composition']
+assert c['diffuse_delta'] == [-2, 1, 1, 0] and c['specular_delta'] == [4, 1, 1, 0]
+for bad in [paired.replace('signal_bytes=128','signal_bytes=64'), paired.replace(before, '00000000'+before[8:]), paired.replace(before, before[:32]+'0000807f'+before[40:])]:
+    try: decoder.decode_log(bad)
+    except ValueError: pass
+    else: raise AssertionError('Invalid paired composition accepted')
+print('PASS R150 paired composition: signed pass deltas, matching pixel/light/visibility, exact ABI')
