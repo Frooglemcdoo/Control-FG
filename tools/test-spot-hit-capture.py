@@ -92,3 +92,11 @@ for bad in [signal_log.replace(' signal='+signal, ''), signal_log.replace('signa
     except ValueError: pass
     else: raise AssertionError('Invalid composition capture accepted')
 print('PASS R145 signal decoding: HDR preserved, pixel provenance, finite visibility, complete ABI')
+
+separate = signal_log.replace('signal_bytes=64', 'signal_bytes=64 signal_generation=987 signal_present=42 captured_present=42')
+assert decoder.decode_log(separate)['records'][0]['composition']['diffuse'][0] == 8
+for bad in [separate.replace('signal_generation=987','signal_generation=0'),separate.replace('signal_present=42','signal_present=43')]:
+    try: decoder.decode_log(bad)
+    except ValueError: pass
+    else: raise AssertionError('Mismatched composition submission accepted')
+print('PASS R146 separate generation and matching captured frame')

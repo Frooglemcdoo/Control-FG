@@ -21,7 +21,16 @@ inline unsigned attempts=0,exportCursor=0,exportStage=0;
 inline UINT64 fenceValue=1;
 inline UINT completionStatus[4]{},completionRays=0,completionHits=0;
 inline UINT frameTag=0,capturedWidth=0,capturedHeight=0,capturedTableRecords=0;
-inline bool readbackCopied=false,signalRecorded=false;
+inline bool readbackCopied=false;
+// Composition may be recorded after the ray list was already submitted/reset.
+// Each stage owns its actual recording generation, queue and completion fence.
+enum class SignalPhase : unsigned { Waiting,Recording,Recorded,Submitting,Submitted };
+inline std::atomic<SignalPhase> signalPhase{SignalPhase::Waiting};
+inline ComPtr<ID3D12GraphicsCommandList4> recordedSignalList;
+inline ComPtr<ID3D12DescriptorHeap> recordedSignalHeap;
+inline ComPtr<ID3D12PipelineState> recordedSignalPipeline;
+inline ComPtr<ID3D12CommandQueue> signalQueue;
+inline UINT64 signalGeneration=0,signalPresent=0;
 inline std::atomic<bool> signalReady{false};
 inline thread_local ID3D12GraphicsCommandList* signalList=nullptr;
 inline thread_local ComPtr<ID3D12PipelineState> signalOwner,signalRendered;
@@ -89,6 +98,21 @@ inline void Fail(const char* reason) noexcept {
     phase.store(Phase::Failed,std::memory_order_release);
     Trace("rt_hit_gpu_failed reason=%s resources_retained=1",reason);
 }
+inline bool WaitingForSignal() noexcept {
+    const auto current=phase.load(std::memory_order_acquire);
+    return (current==Phase::Recorded || current==Phase::Submitting || current==Phase::Submitted) &&
+        signalPhase.load(std::memory_order_acquire)==SignalPhase::Waiting;
+}
+inline bool RecordingWasReset(ID3D12GraphicsCommandList* list,UINT64 recorded) noexcept {
+    UINT64 generation=0;UINT size=sizeof(generation);
+    return list && SUCCEEDED(list->GetPrivateData(rt_spot_table_audit::kGeneration,&size,&generation)) && generation!=recorded;
+}
+inline bool BothStagesCompleted() noexcept {
+    if(phase.load()!=Phase::Submitted || signalPhase.load()!=SignalPhase::Submitted)return false;
+    const auto ray=resources.fence->GetCompletedValue(),signal=resources.signalFence->GetCompletedValue();
+    if(ray==UINT64_MAX || signal==UINT64_MAX){Fail("device_removed");return false;}
+    return ray>=fenceValue && signal>=fenceValue;
+}
 // UI thread only. A failed or still-owned recording is never recycled.
 inline bool RequestFresh() noexcept {
     if constexpr (!rt_spot_capture::GpuCaptureEnabled) return false;
@@ -97,16 +121,19 @@ inline bool RequestFresh() noexcept {
     bool accepted=false;
     if(phase.load()==Phase::Idle)accepted=true;
     else if(phase.load()==Phase::Complete && exportStage==3 && readbackCopied) {
-        UINT64 generation=0;UINT size=sizeof(generation);
-        const bool reset=recordedList && SUCCEEDED(recordedList->GetPrivateData(rt_spot_table_audit::kGeneration,&size,&generation)) && generation!=recordedGeneration;
         const auto completed=resources.fence->GetCompletedValue();
-        if(reset && completed!=UINT64_MAX && completed>=fenceValue) {
+        const auto signalCompleted=resources.signalFence->GetCompletedValue();
+        if(RecordingWasReset(recordedList.Get(),recordedGeneration) &&
+           RecordingWasReset(recordedSignalList.Get(),signalGeneration) &&
+           completed!=UINT64_MAX && completed>=fenceValue &&
+           signalCompleted!=UINT64_MAX && signalCompleted>=fenceValue) {
             ++fenceValue;attempts=exportCursor=exportStage=0;readbackCopied=false;
             recordedList.Reset();recordedState.Reset();captureState.Reset();recordedTable.Reset();recordedHeap.Reset();submittedQueue.Reset();
+            recordedSignalList.Reset();recordedSignalHeap.Reset();recordedSignalPipeline.Reset();signalQueue.Reset();
             accepted=true;
         }
     }
-    if(accepted){attempts=0;signalRecorded=false;phase.store(Phase::Armed,std::memory_order_release);}
+    if(accepted){attempts=0;signalPhase.store(SignalPhase::Waiting);signalGeneration=signalPresent=0;phase.store(Phase::Armed,std::memory_order_release);}
     ReleaseSRWLockExclusive(&stateLock);
     if(accepted){rt_spot_table_audit::Request();Trace("rt_hit_gpu_requested grid=64 repeatable=1 fence=%llu",fenceValue);}
     return accepted;
@@ -125,14 +152,14 @@ inline void BeginScope() noexcept {
 inline void EndScope() noexcept {
     if(!inScope)return;
     inScope=false;signalList=nullptr;signalOwner.Reset();signalRendered.Reset();
-    if(phase.load()==Phase::Recorded && !signalRecorded){Fail("composition_signal_not_recorded");return;}
+    if(WaitingForSignal() || signalPhase.load()==SignalPhase::Recording){Fail("composition_signal_not_recorded");return;}
     Phase expected=Phase::Recording;
     if(phase.compare_exchange_strong(expected,Phase::Armed) && ++attempts>=240)Fail("binding_attempt_budget");
 }
 inline bool Mirror(D3D12_CPU_DESCRIPTOR_HANDLE to,UINT count,UINT& index,UINT& skip,UINT& copied) noexcept {
     if(!inScope || internal)return false;
     const auto phaseNow=phase.load();
-    if(phaseNow!=Phase::Recording && !(phaseNow==Phase::Recorded && !signalRecorded))return false;
+    if(phaseNow!=Phase::Recording && !WaitingForSignal())return false;
     Context current;if(!ReadContext(current))return false;
     if(current.list!=mirrored.list || current.heap!=mirrored.heap || current.gpu.ptr!=mirrored.gpu.ptr) {
         mirrored=current;observed=0;internal=true;
@@ -203,12 +230,12 @@ inline void BindCompute(ID3D12GraphicsCommandList* list,ID3D12PipelineState* own
     signalList=list;signalOwner=owner;signalRendered=rendered;
 }
 inline void AfterCompute(ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT z) noexcept {
-    if(!inScope || internal || phase.load()!=Phase::Recorded || signalRecorded || list!=signalList)return;
+    if(!inScope || internal || !WaitingForSignal() || list!=signalList)return;
     ComPtr<ID3D12PipelineState> pipeline;
     if(!signalOwner || !Attached(signalOwner.Get(),gpu::kSignalPipeline,pipeline))return;
     constexpr UINT64 required=(1ull<<19)|(1ull<<20)|(1ull<<41)|(1ull<<42);
     Context current;
-    if(list!=recordedList.Get() || x!=(capturedWidth+7)/8 || y!=(capturedHeight+7)/8 || z!=1 ||
+    if(presentCount.load()!=recordedPresent || x!=(capturedWidth+7)/8 || y!=(capturedHeight+7)/8 || z!=1 ||
        !ReadContext(current) || current.list!=list || current.list!=mirrored.list ||
        current.heap!=mirrored.heap || current.gpu.ptr!=mirrored.gpu.ptr || (observed&required)!=required) {
         Fail("composition_signal_bindings");return;
@@ -217,6 +244,10 @@ inline void AfterCompute(ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT z) n
     if(!Fresh(current,table,destination)){Fail("composition_signal_table");return;}
     const auto original=Lookup(list).set;
     if(!original || !signalRendered){Fail("composition_signal_restore");return;}
+    recordedSignalList=current.list;recordedSignalHeap=current.heap;recordedSignalPipeline=pipeline;
+    signalGeneration=rt_spot_table_audit::Token(list);signalPresent=presentCount.load();
+    if(!signalGeneration){Fail("composition_signal_generation");return;}
+    signalPhase.store(SignalPhase::Recording);
     internal=true;
     constexpr UINT base=49*4;
     originalCopy(resources.device.Get(),49,resources.At(base),resources.At(0),D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
@@ -230,10 +261,11 @@ inline void AfterCompute(ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT z) n
     list->SetComputeRootDescriptorTable(0,table);original(list,pipeline.Get());
     list->Dispatch(8,8,1);
     gpu::Transition(list,resources.signal.Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS,D3D12_RESOURCE_STATE_COPY_SOURCE);
-    list->CopyBufferRegion(resources.readback.Get(),gpu::kSignalReadbackOffset,resources.signal.Get(),0,gpu::kSignalBytes);
+    list->CopyBufferRegion(resources.signalReadback.Get(),0,resources.signal.Get(),0,gpu::kSignalBytes);
     gpu::Transition(list,resources.signal.Get(),D3D12_RESOURCE_STATE_COPY_SOURCE,D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
     list->SetComputeRootDescriptorTable(0,current.gpu);original(list,signalRendered.Get());
-    internal=false;signalRecorded=true;
+    internal=false;signalPhase.store(SignalPhase::Recorded,std::memory_order_release);
+    Trace("composition_signal_recorded generation=%llu ray_generation=%llu present=%llu independent_submission=1",signalGeneration,recordedGeneration,signalPresent);
 }
 inline void Record(ID3D12GraphicsCommandList4* list,ID3D12StateObject* owner,const D3D12_DISPATCH_RAYS_DESC* desc) noexcept {
     if constexpr (!rt_spot_capture::GpuCaptureEnabled) return;
@@ -331,51 +363,71 @@ inline void Record(ID3D12GraphicsCommandList4* list,ID3D12StateObject* owner,con
     phase.store(Phase::Recorded,std::memory_order_release);
     Trace("rt_hit_gpu_recording generation=%llu frame_tag=%u extent=%ux%u rays=4096 table_records=%u native_outputs_untouched=1 bindings_restored=1",recordedGeneration,frameTag,capturedWidth,capturedHeight,tableControls.count);
 }
+inline bool ContainsRecording(UINT count,ID3D12CommandList*const* lists,ID3D12CommandList* owner,UINT64 recorded) noexcept {
+    if(!owner || !recorded)return false;
+    for(UINT i=0;i<count;++i) {
+        if(lists[i]!=owner)continue;
+        UINT64 generation=0;UINT size=sizeof(generation);
+        if(SUCCEEDED(lists[i]->GetPrivateData(rt_spot_table_audit::kGeneration,&size,&generation)) && generation==recorded)return true;
+    }
+    return false;
+}
 inline void BeforeExecute(ID3D12CommandQueue* queue,UINT count,ID3D12CommandList*const* lists) noexcept {
     const auto current=phase.load(std::memory_order_acquire);
     if(current<Phase::Recorded || current==Phase::Complete || current==Phase::Failed)return;
-    for(UINT i=0;i<count;++i) {
-        if(!lists[i])continue;
-        UINT64 generation=0;UINT size=sizeof(generation);
-        if(FAILED(lists[i]->GetPrivateData(rt_spot_table_audit::kGeneration,&size,&generation)) || generation!=recordedGeneration)continue;
-        AcquireSRWLockExclusive(&stateLock);
-        if(phase.load()==Phase::Recorded){
-            if(!signalRecorded){Fail("submission_before_composition_signal");}
-            else {submittedQueue=queue;phase.store(Phase::Submitting);}
-        }
+    AcquireSRWLockExclusive(&stateLock);
+    if(ContainsRecording(count,lists,recordedList.Get(),recordedGeneration)) {
+        if(phase.load()==Phase::Recorded){submittedQueue=queue;phase.store(Phase::Submitting);}
         else if(!readbackCopied)Fail("recording_replayed_before_readback");
-        ReleaseSRWLockExclusive(&stateLock);
     }
+    if(phase.load()!=Phase::Failed && signalPhase.load()>=SignalPhase::Recorded &&
+       ContainsRecording(count,lists,recordedSignalList.Get(),signalGeneration)) {
+        if(signalPhase.load()==SignalPhase::Recorded){signalQueue=queue;signalPhase.store(SignalPhase::Submitting);}
+        else if(!readbackCopied)Fail("composition_replayed_before_readback");
+    }
+    ReleaseSRWLockExclusive(&stateLock);
 }
 inline void AfterExecute(ID3D12CommandQueue* queue,UINT count,ID3D12CommandList*const* lists) noexcept {
-    if(phase.load()!=Phase::Submitting || queue!=submittedQueue.Get())return;
-    bool contains=false;for(UINT i=0;i<count;++i) {
-        UINT64 generation=0;UINT size=sizeof(generation);
-        contains|=lists[i] && SUCCEEDED(lists[i]->GetPrivateData(rt_spot_table_audit::kGeneration,&size,&generation)) && generation==recordedGeneration;
-    }
-    if(!contains)return;
-    const HRESULT hr=queue->Signal(resources.fence.Get(),fenceValue);
+    const auto current=phase.load();
+    if(current<Phase::Recorded || current==Phase::Complete || current==Phase::Failed)return;
     AcquireSRWLockExclusive(&stateLock);
-    if(phase.load()==Phase::Submitting) {
-        if(SUCCEEDED(hr)){phase.store(Phase::Submitted);Trace("rt_hit_gpu_submitted generation=%llu fence=%llu",recordedGeneration,fenceValue);}
-        else Fail("completion_signal");
+    if(phase.load()==Phase::Submitting && queue==submittedQueue.Get() &&
+       ContainsRecording(count,lists,recordedList.Get(),recordedGeneration)) {
+        if(SUCCEEDED(queue->Signal(resources.fence.Get(),fenceValue))) {
+            phase.store(Phase::Submitted);
+            Trace("rt_hit_gpu_submitted generation=%llu fence=%llu independent_composition=1",recordedGeneration,fenceValue);
+        } else Fail("completion_signal");
+    }
+    if(phase.load()!=Phase::Failed && signalPhase.load()==SignalPhase::Submitting && queue==signalQueue.Get() &&
+       ContainsRecording(count,lists,recordedSignalList.Get(),signalGeneration)) {
+        if(SUCCEEDED(queue->Signal(resources.signalFence.Get(),fenceValue))) {
+            signalPhase.store(SignalPhase::Submitted);
+            Trace("composition_signal_submitted generation=%llu fence=%llu",signalGeneration,fenceValue);
+        } else Fail("composition_completion_signal");
     }
     ReleaseSRWLockExclusive(&stateLock);
 }
 inline void ResetObserved(ID3D12GraphicsCommandList* list) noexcept {
-    if(phase.load(std::memory_order_acquire)!=Phase::Recorded)return;
-    UINT64 generation=0;UINT size=sizeof(generation);
-    if(SUCCEEDED(list->GetPrivateData(rt_spot_table_audit::kGeneration,&size,&generation)) && generation==recordedGeneration)Fail("recording_discarded_before_submit");
+    if(phase.load()==Phase::Failed || phase.load()==Phase::Complete)return;
+    ID3D12CommandList* lists[]={list};
+    if(phase.load()==Phase::Recorded && ContainsRecording(1,lists,recordedList.Get(),recordedGeneration))
+        Fail("recording_discarded_before_submit");
+    if(signalPhase.load()==SignalPhase::Recorded && ContainsRecording(1,lists,recordedSignalList.Get(),signalGeneration))
+        Fail("composition_discarded_before_submit");
 }
 inline void Poll() noexcept {
     if(phase.load()==Phase::Submitted && TryAcquireSRWLockExclusive(&stateLock)) {
-        const auto completed=resources.fence->GetCompletedValue();
-        if(completed==UINT64_MAX)Fail("device_removed");
-        else if(completed>=fenceValue && phase.load()==Phase::Submitted) {
+        if(BothStagesCompleted()) {
             void* mapped=nullptr;D3D12_RANGE range{0,gpu::kReadbackBytes};
             if(FAILED(resources.readback->Map(0,&range,&mapped)))Fail("readback_map");
             else {
-                memcpy(completedBytes,mapped,sizeof(completedBytes));D3D12_RANGE written{0,0};resources.readback->Unmap(0,&written);
+                memcpy(completedBytes,mapped,gpu::kSignalReadbackOffset);D3D12_RANGE written{0,0};resources.readback->Unmap(0,&written);
+                D3D12_RANGE signalRange{0,gpu::kSignalBytes};
+                if(FAILED(resources.signalReadback->Map(0,&signalRange,&mapped))) {
+                    Fail("composition_readback_map");ReleaseSRWLockExclusive(&stateLock);return;
+                }
+                memcpy(completedBytes+gpu::kSignalReadbackOffset,mapped,gpu::kSignalBytes);
+                resources.signalReadback->Unmap(0,&written);
                 readbackCopied=true;phase.store(Phase::Complete);
                 UINT status[4]{};memcpy(status,completedBytes+gpu::kResultBytes,16);
                 const bool tableValid=!status[0] && !status[3] && status[1]+status[2]==capturedTableRecords;
@@ -399,7 +451,7 @@ inline void Poll() noexcept {
     // Retry canonical headers and records if the nonblocking log queue is busy.
     // Cursor advancement means successful enqueue, never merely an attempted write.
     if(exportStage==0) {
-        if(!Trace("rt_hit_gpu_recorded generation=%llu frame_tag=%u extent=%ux%u table_records=%u captured_present=%llu light_context_bytes=128 signal_bytes=64",recordedGeneration,frameTag,capturedWidth,capturedHeight,capturedTableRecords,recordedPresent))return;
+        if(!Trace("rt_hit_gpu_recorded generation=%llu frame_tag=%u extent=%ux%u table_records=%u captured_present=%llu light_context_bytes=128 signal_bytes=64 signal_generation=%llu signal_present=%llu",recordedGeneration,frameTag,capturedWidth,capturedHeight,capturedTableRecords,recordedPresent,signalGeneration,signalPresent))return;
         exportStage=1;
     }
     if(exportStage==1) {

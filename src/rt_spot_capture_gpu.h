@@ -1,5 +1,5 @@
 #pragma once
-// Included inside native_lighting. One capture per process; allocations remain
+// Included inside native_lighting. Repeat captures reuse fenced allocations; owners remain
 // alive even after reset, replay or failed submission. No frame-count retirement.
 namespace rt_spot_capture_gpu {
 using Microsoft::WRL::ComPtr;
@@ -22,9 +22,9 @@ struct TableControls {UINT count=0,bytes=0,version=1,reserved=0;unsigned char na
 static_assert(sizeof(TableControls)==144);
 struct Resources {
     ComPtr<ID3D12Device> device;
-    ComPtr<ID3D12Resource> inputs,results,table,status,upload,readback,signal;
+    ComPtr<ID3D12Resource> inputs,results,table,status,upload,readback,signal,signalReadback;
     ComPtr<ID3D12DescriptorHeap> staging;
-    ComPtr<ID3D12Fence> fence;
+    ComPtr<ID3D12Fence> fence,signalFence;
     UINT step=0;
     HRESULT Buffer(UINT bytes,D3D12_HEAP_TYPE heapType,D3D12_RESOURCE_STATES initial,ID3D12Resource** output) noexcept {
         D3D12_HEAP_PROPERTIES heap{};heap.Type=heapType;heap.CreationNodeMask=heap.VisibleNodeMask=1;
@@ -43,9 +43,11 @@ struct Resources {
         if(SUCCEEDED(hr))hr=Buffer(16,D3D12_HEAP_TYPE_DEFAULT,D3D12_RESOURCE_STATE_UNORDERED_ACCESS,&status);
         if(SUCCEEDED(hr))hr=Buffer(1024,D3D12_HEAP_TYPE_UPLOAD,D3D12_RESOURCE_STATE_GENERIC_READ,&upload);
         if(SUCCEEDED(hr))hr=Buffer(kReadbackBytes,D3D12_HEAP_TYPE_READBACK,D3D12_RESOURCE_STATE_COPY_DEST,&readback);
+        if(SUCCEEDED(hr))hr=Buffer(kSignalBytes,D3D12_HEAP_TYPE_READBACK,D3D12_RESOURCE_STATE_COPY_DEST,&signalReadback);
         D3D12_DESCRIPTOR_HEAP_DESC desc{};desc.Type=D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;desc.NumDescriptors=49*5;
         if(SUCCEEDED(hr))hr=owner->CreateDescriptorHeap(&desc,IID_PPV_ARGS(&staging));
         if(SUCCEEDED(hr))hr=owner->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&fence));
+        if(SUCCEEDED(hr))hr=owner->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&signalFence));
         if(SUCCEEDED(hr))step=owner->GetDescriptorHandleIncrementSize(desc.Type);
         return hr;
     }

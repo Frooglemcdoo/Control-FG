@@ -856,6 +856,8 @@ int main() try {
                 capture::phase=phase;if(capture::RequestFresh())throw std::runtime_error("In-flight/failed capture recycled");
             }
             Check(device->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(capture::resources.fence.ReleaseAndGetAddressOf())));
+            Check(device->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(capture::resources.signalFence.ReleaseAndGetAddressOf())));
+            Check(list.As(&capture::recordedSignalList));capture::signalGeneration=500;
             Check(list.As(&capture::recordedList));capture::recordedGeneration=500;capture::fenceValue=1;
             UINT64 generation=500;Check(list->SetPrivateData(rt_spot_table_audit::kGeneration,sizeof(generation),&generation));
             capture::phase=capture::Phase::Complete;capture::readbackCopied=true;capture::exportStage=2;
@@ -865,6 +867,8 @@ int main() try {
             generation=501;Check(list->SetPrivateData(rt_spot_table_audit::kGeneration,sizeof(generation),&generation));
             if(capture::RequestFresh())throw std::runtime_error("Unfinished fence recycled");
             Check(capture::resources.fence->Signal(1));
+            if(capture::RequestFresh())throw std::runtime_error("unfinished composition fence recycled");
+            Check(capture::resources.signalFence->Signal(1));
             if(!capture::RequestFresh() || capture::fenceValue!=2 || capture::exportStage!=0 || capture::readbackCopied)
                 throw std::runtime_error("Completed reset recording did not rearm cleanly");
             capture::CancelPending();capture::ready=false;

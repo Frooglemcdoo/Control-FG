@@ -70,6 +70,9 @@ def decode_log(text):
         end.get('records_examined') != MAX_RECORDS or
         finish.get('translated', -1) + finish.get('null', -1) != begin.get('table_records')):
         raise ValueError('Capture GPU validation or provenance failed')
+    if 'signal_generation' in begin or 'signal_present' in begin:
+        if not begin.get('signal_generation') or begin.get('signal_present') != begin.get('captured_present'):
+            raise ValueError('Composition submission/frame provenance mismatch')
     extent = re.search(r'extent=(\d+)x(\d+)', recorded[0])
     if not extent: raise ValueError('Missing native image extent')
     width, height = map(int, extent.groups())
