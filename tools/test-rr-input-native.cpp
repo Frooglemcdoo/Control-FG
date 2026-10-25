@@ -12,16 +12,16 @@ static RRGuideInputSnapshot current{};static unsigned acquired=0,released=0,reco
 static bool RRGuideReadRendererContext(RRGuideInputSnapshot* out,const char**){*out=current;return true;}
 static bool RRGuideTryAcquireNativeLock(void* p){if(p==busy)return false;++acquired;return true;}
 static void RRGuideReleaseNativeLock(void*){++released;}
-static bool RRInputCaptureRecord(RRInputCaptureJob*,const RRGuideInputSnapshot*,DWORD*,bool* started) {assert(acquired-released>=2&&acquired-released<=6);++records;*started=true;return true;}
+static bool RRInputCaptureRecord(RRInputCaptureJob*,const RRGuideInputSnapshot*,DWORD*,bool* started) {assert(acquired-released>=2&&acquired-released<=9);++records;*started=true;return true;}
 #include "../src/rr_input_capture_guard.h"
 int main(){
  IDXGIFactory4* factory=nullptr;IDXGIAdapter* adapter=nullptr;ID3D12Device* device=nullptr;
  assert(SUCCEEDED(CreateDXGIFactory1(IID_PPV_ARGS(&factory))));assert(SUCCEEDED(factory->EnumWarpAdapter(IID_PPV_ARGS(&adapter))));assert(SUCCEEDED(D3D12CreateDevice(adapter,D3D_FEATURE_LEVEL_11_0,IID_PPV_ARGS(&device))));
  D3D12_HEAP_PROPERTIES heap{};heap.Type=D3D12_HEAP_TYPE_DEFAULT;
  D3D12_RESOURCE_DESC desc{};desc.Dimension=D3D12_RESOURCE_DIMENSION_TEXTURE2D;desc.Width=64;desc.Height=64;desc.DepthOrArraySize=desc.MipLevels=1;desc.SampleDesc.Count=1;
- ID3D12Resource* resources[3]{};alignas(16) unsigned char wrappers[3][256]{};void* pointers[3]{wrappers[0],wrappers[1],wrappers[2]};
+ ID3D12Resource* resources[8]{};alignas(16) unsigned char wrappers[8][256]{};void* pointers[3]{wrappers[0],wrappers[1],wrappers[2]};
  const DXGI_FORMAT formats[]{DXGI_FORMAT_R11G11B10_FLOAT,DXGI_FORMAT_R32_TYPELESS,DXGI_FORMAT_R16G16_FLOAT};
- for(unsigned i=0;i<3;++i){desc.Format=formats[i];assert(SUCCEEDED(device->CreateCommittedResource(&heap,D3D12_HEAP_FLAG_NONE,&desc,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,nullptr,IID_PPV_ARGS(&resources[i]))));
+ for(unsigned i=0;i<8;++i){desc.Format=formats[i%3];assert(SUCCEEDED(device->CreateCommittedResource(&heap,D3D12_HEAP_FLAG_NONE,&desc,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,nullptr,IID_PPV_ARGS(&resources[i]))));
   *reinterpret_cast<ID3D12Resource**>(wrappers[i]+0x88)=resources[i];*reinterpret_cast<unsigned*>(wrappers[i]+0x60)=0xc0;
  }
  RRGuideInputTexture inputs[3]{};RRInputCaptureSetNativeTextures(pointers,3,42);
@@ -46,7 +46,16 @@ int main(){
  started=false;busy=inputs[0].stateTracker;assert(!RRInputCaptureRecordGuarded(&job,&current,six,&fault,&started,6));assert(!started&&acquired==released);busy=nullptr;
  six[5].desc.MipLevels+=1;
  started=false;assert(!RRInputCaptureRecordGuarded(&job,&current,six,&fault,&started,6));assert(!started&&acquired==released);
- assert(!RRInputCaptureRecordGuarded(&job,&current,six,&fault,&started,7));
+ assert(!RRInputCaptureRecordGuarded(&job,&current,six,&fault,&started,9));
+ // R153: validate both extra lighting inputs, including shared trackers.
+ RRGuideInputTexture eight[8]{};
+ for(unsigned i=0;i<8;++i)assert(RRInputCaptureReadNative(wrappers[i],resources[i],&eight[i]));
+ started=false;busy=eight[7].stateTracker;assert(!RRInputCaptureRecordGuarded(&job,&current,eight,&fault,&started,8));assert(!started&&acquired==released);busy=nullptr;
+ started=false;assert(RRInputCaptureRecordGuarded(&job,&current,eight,&fault,&started,8));assert(started&&acquired==released);
+ eight[7].trackedState=D3D12_RESOURCE_STATE_RENDER_TARGET;
+ started=false;assert(!RRInputCaptureRecordGuarded(&job,&current,eight,&fault,&started,8));assert(!started&&acquired==released);
+ assert(RRInputCaptureReadNative(wrappers[7],resources[7],&eight[7]));eight[6].desc.Width+=1;
+ started=false;assert(!RRInputCaptureRecordGuarded(&job,&current,eight,&fault,&started,8));assert(!started&&acquired==released);
  // Output copies accept only explicitly tracked UAV, never read-only or RT.
  RRGuideInputTexture output{};
  assert(!RRInputCaptureFindOutput(42,resources[0],&output));

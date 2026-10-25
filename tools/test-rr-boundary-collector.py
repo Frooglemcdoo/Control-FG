@@ -15,6 +15,16 @@ with tempfile.TemporaryDirectory() as tmp:
  assert len(c.read_pair(root,7,1,0))==2
  assert c.read_pair(root,8,1,0) is None and c.read_pair(root,7,2,0) is None
  assert c.read_pair(root,7,1,10**12) is None
+ try:c.read_pair(root,7,1,0,require_lighting=True)
+ except ValueError:pass
+ else:raise AssertionError('old capture accepted as lighting capture')
+ for meta in root.glob('*/metadata.json'):
+  extended=json.loads(meta.read_text());extended['lighting_buffers_captured']=True
+  for name in ['lighting-diffuse.rgba16f','lighting-specular.rgba16f']:
+   (meta.parent/name).write_bytes(bytes(32))
+   extended['resources'].append(dict(file=name,width=2,height=2,pixel_bytes=8,copied=True))
+  extended['buffers']=len(extended['resources']);meta.write_text(json.dumps(extended))
+ assert len(c.read_pair(root,7,1,0,require_lighting=True))==2
  second=root/'rr-input-c1-7-101'/'metadata.json';data=json.loads(second.read_text())
  for field,value in [('output_captured',False),('previous_frame',99),('consecutive',False),('rr_result',0xBAD00001)]:
   changed=dict(data);changed[field]=value;second.write_text(json.dumps(changed))

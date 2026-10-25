@@ -1,7 +1,8 @@
 #pragma once
+#include "rr_input_capture_limits.h"
 static bool RRInputCaptureRecord(RRInputCaptureJob* c,const RRGuideInputSnapshot* native,DWORD* fault,bool* started) noexcept {
  bool initialDone=false,restoreAttempted=false,okay=false;
- D3D12_RESOURCE_BARRIER barriers[14]{},restore[14]{};
+ D3D12_RESOURCE_BARRIER barriers[kRRInputCaptureMaxResources]{},restore[kRRInputCaptureMaxResources]{};
  auto* list=native->commandList;auto* commands=reinterpret_cast<unsigned long long*>(static_cast<unsigned char*>(native->commandContext)+8);
  RR_SEH_TRY {
   for(unsigned i=0;i<c->count;++i){auto& b=barriers[i];b.Type=D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;b.Transition.pResource=c->sources[i];b.Transition.Subresource=0;b.Transition.StateBefore=c->states[i];b.Transition.StateAfter=D3D12_RESOURCE_STATE_COPY_SOURCE;

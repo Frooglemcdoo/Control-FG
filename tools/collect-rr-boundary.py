@@ -8,7 +8,7 @@ import shutil
 import time
 
 
-def read_pair(root, pid, ordinal, started):
+def read_pair(root, pid, ordinal, started, require_lighting=False):
     frames = []
     for folder in root.glob(f'rr-input-c1-{pid}-*'):
         metadata = folder / 'metadata.json'
@@ -36,6 +36,11 @@ def read_pair(root, pid, ordinal, started):
                 raise ValueError(f'Incomplete capture resource: {path.name}')
         if not any(n.startswith('input-color.') for n in names) or not any(n.startswith('rr-output.') for n in names):
             raise ValueError('RR input/output images missing')
+        if require_lighting:
+            if not data.get('lighting_buffers_captured') or any(
+                not any(n.startswith(role + '.') for n in names)
+                for role in ('lighting-diffuse', 'lighting-specular')):
+                raise ValueError('R153 lighting accumulation buffers missing')
         frames.append((folder, data))
     frames.sort(key=lambda item: item[1]['pair_index'])
     if len(frames) < 2:
@@ -68,7 +73,7 @@ def capture_status(root, pid):
         stream.seek(max(0, latest.stat().st_size - 256 * 1024))
         lines = stream.read().decode('utf-8', errors='replace').splitlines()
     events = [line for line in lines if 'RR_INPUT_CAPTURE_' in line]
-    return events[-1] if events else 'No RR capture event found in the log tail; shortcut detection is unconfirmed.'
+    return events[-1] if events else 'No RR capture event found in the log tail; capture request detection is unconfirmed.'
 
 
 def retain_metadata(root, pid, destination):
@@ -92,9 +97,9 @@ def main():
     local = Path(os.environ['LOCALAPPDATA'])
     root = local / 'ControlFGProbe'
     started = 0 if args.collect_existing or args.diagnostics_only else time.time()
-    destination = args.output / ('RR-Boundary-R152-' + time.strftime('%Y%m%d-%H%M%S') + '-' + str(args.pid) + '-' + str(time.time_ns() % 1000000000))
+    destination = args.output / ('RR-Boundary-R153-' + time.strftime('%Y%m%d-%H%M%S') + '-' + str(args.pid) + '-' + str(time.time_ns() % 1000000000))
     destination.mkdir(parents=True, exist_ok=False)
-    report = {'schema': 'control-rr-boundary-r152', 'pid': args.pid, 'started_unix': started, 'pairs': [], 'complete': False, 'diagnostics_only': args.diagnostics_only}
+    report = {'schema': 'control-rr-boundary-r153', 'pid': args.pid, 'started_unix': started, 'pairs': [], 'complete': False, 'diagnostics_only': args.diagnostics_only}
     print('Collecting the overlay RR captures for this game session.', flush=True)
     print('Use CAPTURE RR in the overlay at each position, then PACKAGE RR.', flush=True)
     print('Progress and failures are recorded below; no sound or hotkey is required.', flush=True)
@@ -109,7 +114,7 @@ def main():
             next_status = 0
             pair = None
             while time.monotonic() < deadline:
-                pair = read_pair(root, args.pid, ordinal, started)
+                pair = read_pair(root, args.pid, ordinal, started, require_lighting=True)
                 if pair:
                     break
                 if time.monotonic() >= next_status:
