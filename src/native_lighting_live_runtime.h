@@ -1,5 +1,6 @@
 #pragma once
 #include "native_lighting_isolation.h"
+#include "rt_baked_gi_patches.generated.h"
 #include "native_lighting_live_state.h"
 #include "rr_lighting_diagnostic.h"
 #include "native_lighting_report.h"
@@ -196,7 +197,7 @@ inline bool Prepare(const ShaderPatch& patch, const D3D12_SHADER_BYTECODE& shade
     Trace("variant_failed contribution=%s reason=identity_or_allocation", patch.name);
     return false;
 }
-inline void AttachVariant(IUnknown* native, ID3D12PipelineState* variant, unsigned kind, HRESULT createHr, const GUID& variantGuid = kVariantGuid, unsigned readyBit = 0) noexcept {
+inline bool AttachVariant(IUnknown* native, ID3D12PipelineState* variant, unsigned kind, HRESULT createHr, const GUID& variantGuid = kVariantGuid, unsigned readyBit = 0) noexcept {
     HRESULT hr = createHr;
     ID3D12PipelineState* owner = nullptr;
     if (SUCCEEDED(hr) && variant && native && SUCCEEDED(native->QueryInterface(IID_PPV_ARGS(&owner)))) {
@@ -208,6 +209,7 @@ inline void AttachVariant(IUnknown* native, ID3D12PipelineState* variant, unsign
     if (owner) owner->Release();
     if (variant) variant->Release(); // Native PSO owns its alternate; no global PSO/device retention.
     Trace("variant contribution=%s ready=%u hr=0x%08lX ready_bit=%u", kind == kGiBit ? "BakedGi" : "Direct", unsigned(SUCCEEDED(hr)), static_cast<unsigned long>(hr), readyBit ? readyBit : kind);
+    return SUCCEEDED(hr);
 }
 using CreateCompute = HRESULT (STDMETHODCALLTYPE*)(ID3D12Device*, const D3D12_COMPUTE_PIPELINE_STATE_DESC*, REFIID, void**);
 namespace rt_spot_runtime {
@@ -223,6 +225,16 @@ inline void ObserveCompute(ID3D12Device* device, const D3D12_COMPUTE_PIPELINE_ST
     IdentifyPipeline(native, desc->CS, 2);
     rt_shadow_capture::RecordCompute(desc);
     rt_spot_runtime::ObserveCompute(device,desc,native,original);
+    for(unsigned i=0;i<2;++i) {
+        const auto& patch=*kRtBakedGiPatches[i];
+        std::vector<unsigned char> bytes;
+        if(!Prepare(patch,desc->CS,bytes))continue;
+        auto replacement=*desc;replacement.CS={bytes.data(),bytes.size()};replacement.CachedPSO={nullptr,0};
+        ID3D12PipelineState* variant=nullptr;
+        const auto hr=original(device,&replacement,IID_PPV_ARGS(&variant));
+        if(AttachVariant(native,variant,kGiBit,hr))rtBakedGiReadyMask.fetch_or(1u<<i,std::memory_order_release);
+        Trace("rt_baked_gi_prepare variant=%u ready_mask=%u native_sha=%s",i,rtBakedGiReadyMask.load(),patch.nativeSha);
+    }
     // Native shaders remain intact. Tag the captured direct-light shader solely
     // for the diagnostic's binding observation.
     if (desc->CS.BytecodeLength == kDirect.size && desc->CS.pShaderBytecode) {

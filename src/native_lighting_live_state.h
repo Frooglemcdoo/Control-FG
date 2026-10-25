@@ -63,6 +63,7 @@ inline bool NeedsIsolationProducer(Mode mode) noexcept {
 }
 inline std::atomic<bool> guardedHistoryReady{false};
 inline bool UsesGuardedSpotHistory(Mode mode) noexcept { return mode==Mode::RoomCorrectedGuarded; }
+inline std::atomic<unsigned> rtBakedGiReadyMask{0};
 inline std::atomic<bool> correctedNoAOLightReady{false}, correctedNoAOSelectorReady{false};
 inline std::atomic<bool> bentNormalLightReady{false}, bentNormalSelectorReady{false};
 inline std::atomic<bool> localMapsLightReady{false}, localMapsSelectorReady{false};
@@ -186,6 +187,7 @@ inline unsigned RequiredBinding(Mode mode) noexcept {
     return NeedsIsolationProducer(mode) ? kAllBits : mode == Mode::Native ? kAllBits : mode == Mode::DisableBakedGi ? kGiBit : kDirectBit;
 }
 inline bool ModeAvailable(Mode mode,unsigned ready) noexcept {
+    if(DisablesCorrectedBakedGi(mode) && rtBakedGiReadyMask.load(std::memory_order_acquire)!=3)return false;
     if(UsesGuardedSpotHistory(mode)&&!guardedHistoryReady.load(std::memory_order_acquire))return false;
     if(mode==Mode::RoomCorrectedNoAO&&(!correctedNoAOLightReady.load(std::memory_order_acquire)||!correctedNoAOSelectorReady.load(std::memory_order_acquire)))return false;
     if(UsesDirectSurfaceNormals(mode)&&(!bentNormalLightReady.load(std::memory_order_acquire)||!bentNormalSelectorReady.load(std::memory_order_acquire)))return false;

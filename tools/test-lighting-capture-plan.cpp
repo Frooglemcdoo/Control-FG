@@ -108,7 +108,10 @@ int main(){
   assert(BypassesRR(m)==(m==Mode::RoomCorrectedNoBakedGiNoRR));
   assert(Disables(m,kGiBit)&&!Disables(m,kDirectBit));
   assert(!ModeAvailable(m,kRtSpotReadyBit));
-  assert(ModeAvailable(m,kRtSpotReadyBit|kGiBit));
+  rtBakedGiReadyMask=0;assert(!ModeAvailable(m,kRtSpotReadyBit|kGiBit));
+  rtBakedGiReadyMask=1;assert(!ModeAvailable(m,kRtSpotReadyBit|kGiBit));
+  rtBakedGiReadyMask=2;assert(!ModeAvailable(m,kRtSpotReadyBit|kGiBit));
+  rtBakedGiReadyMask=3;assert(ModeAvailable(m,kRtSpotReadyBit|kGiBit));
   assert(!Applied(m,kAllBits,false));
   assert(!Applied(m,kBakedGiOverrideBit,false));
   assert(Applied(m,kBindingBits,false));

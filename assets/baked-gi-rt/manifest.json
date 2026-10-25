@@ -1,0 +1,12 @@
+[
+  {
+    "name": "diffuse_gi_0",
+    "sha256": "1dfb4c9b054037e030ff9eed6ed5e482c8c32f9f301bb02c89eb0084c52842de",
+    "bytes": 32888
+  },
+  {
+    "name": "diffuse_gi_1",
+    "sha256": "3cc459e63f23759d815aac0e7f41a86187c86be523031954706197673671cf17",
+    "bytes": 35144
+  }
+]

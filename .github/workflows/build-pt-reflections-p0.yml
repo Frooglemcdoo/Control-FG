@@ -415,6 +415,17 @@ jobs:
             build/preflight-logs/*.log
           retention-days: 7
 
+      - name: Validate captured RT baked GI shaders
+        shell: cmd
+        run: |
+          call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
+          python tools/generate-baked-gi-rt.py --check
+          if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-rt-baked-gi.cpp /Febuild\test-rt-baked-gi.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
+          if errorlevel 1 exit /b 1
+          build\test-rt-baked-gi.exe
+          if errorlevel 1 exit /b 1
+
       - name: Validate diagnostic report saving
         shell: cmd
         run: |
@@ -490,11 +501,11 @@ jobs:
           build\test-lighting-capture-plan.exe
           if errorlevel 1 exit /b 1
 
-      - name: Package live lighting diagnostic R148
+      - name: Package live lighting diagnostic R149
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-Native-Lighting-Live-R148'
+          $out='Control-FG-Native-Lighting-Live-R149'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
           Copy-Item build/rt_spot_selected_off.dxbc,build/rt_spot_selection.dxbc,build/rt_spot_visibility.dxbc,build/rt_spot_light_ids.dxbc,build/rt_spot_raw_history.dxbc,build/rt_spot_raw_spatial0.dxbc,build/rt_spot_raw_spatial1.dxbc,build/rt_spot_full.dxil,build/rt_spot_r94.dxil,build/rt_spot_light.dxbc,build/rt_spot_reset.dxbc,build/rt_spot_history.dxbc,build/rt_spot_spatial0.dxbc,build/rt_spot_spatial1.dxbc $out
@@ -513,21 +524,22 @@ jobs:
           Copy-Item Collect-ControlFG-Compact-Logs.cmd "$out/Collect-ControlFG-Compact-Logs.cmd"
           Copy-Item Collect-ControlFG-Compact-Logs.ps1 "$out/Collect-ControlFG-Compact-Logs.ps1"
           Copy-Item Package-Lighting-Capture.cmd,tools/package-lighting-capture.py $out
-          Copy-Item docs/shader-readiness-r148.md "$out/DIAGNOSTIC-NOTES.md"
+          Copy-Item docs/rt-baked-gi-r149.md "$out/DIAGNOSTIC-NOTES.md"
           @'
-          CONTROL-FG R148 - Shader identity export
+          CONTROL-FG R149 - RT baked-brick isolation
           Close Control to install. Copy contents beside Control_DX12.exe.
-          Preserve NVIDIA runtimes and the ControlFGStreamline folder.
-          Keep the same game settings and load the affected room.
-          F10: try BAKED GI OFF once, then click SAVE LOG.
-          Send the Lighting-R148 log shown by the confirmation dialog.
-          No F9 capture, walking sequence or video needed for this shader audit.
-          Save Log includes bounded CPU copies of observed pixel/compute shaders.
-          No GPU capture or shader modification is added by this audit.
-          The unavailable modes remain guarded until the actual shader is verified.
-          Default rendering, exposure and R146 motion capture are unchanged.
+          Preserve NVIDIA runtimes and ControlFGStreamline.
+          Load the affected room with the same settings; RT Contact Shadows on, samples 1.
+          F10: compare DEFAULT, BAKED GI OFF, RR OFF, GI + RR OFF.
+          Baked GI Off zeros only GI-brick samples in the captured RT diffuse-GI shaders.
+          Direct-light calculations, hit outputs, filtering and corrected shadows remain.
+          Give each mode several seconds to settle, then repeat the doorway movement.
+          Record one video; return to Default and Save Log. Send video and log.
+          If unavailable, Save Log includes shader bytecode and missing masks.
+          No restart between modes. No F9 capture required for this comparison.
+          Default rendering and exposure are unchanged.
           Package-Lighting-Capture.cmd splits large files below 200 MB if needed.
-          See DIAGNOSTIC-NOTES.md for evidence and limitations.
+          See DIAGNOSTIC-NOTES.md for the exact scope and limits.
           '@ | Set-Content "$out/README.txt" -Encoding ASCII
           Compress-Archive -Path "$out/*" -DestinationPath "$out.zip" -Force
           (Get-FileHash "$out.zip" -Algorithm SHA256).Hash | Set-Content "$out.sha256" -Encoding ASCII
@@ -535,10 +547,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-Native-Lighting-Live-R148
+          name: Control-FG-Native-Lighting-Live-R149
           path: |
-            Control-FG-Native-Lighting-Live-R148.zip
-            Control-FG-Native-Lighting-Live-R148.sha256
+            Control-FG-Native-Lighting-Live-R149.zip
+            Control-FG-Native-Lighting-Live-R149.sha256
             build/rt_spot_shadow_prototype.dxil
             build/rr_clamp_fixed.h
             build/rt_spot_blocker.dxil
