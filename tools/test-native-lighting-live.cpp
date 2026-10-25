@@ -18,7 +18,7 @@ int main(){
     assert(kModeChoices[2].mode==kDefaultMode);
     assert(kModeChoices[8].mode==Mode::RoomCorrectedNoAO);
     assert(kModeChoices[3].mode==Mode::RoomCorrectedVisibility);
-    assert(kModeChoices[4].mode==Mode::RoomCorrectedRawVisibility);
+    assert(kModeChoices[4].mode==Mode::RoomCorrectedNoBakedGi);
     assert(kDefaultMode==Mode::RoomCorrectedNoHistory);
     assert(BypassesSpotHistory(kDefaultMode)&&!UsesRawSpotVisibility(kDefaultMode));
     assert(!BypassesSpotHistory(Mode::RoomBentNormalOff));

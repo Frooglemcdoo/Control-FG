@@ -8,6 +8,8 @@ inline constexpr Step steps[]={
     {Mode::RoomBoth,L"both",true},
     {kDefaultMode,L"default-fixed-user-rr",false},
     {Mode::RoomCorrectedNoRR,L"default-fixed-rr-off",false},
+    {Mode::RoomCorrectedNoBakedGi,L"default-baked-gi-off",false},
+    {Mode::RoomCorrectedNoBakedGiNoRR,L"default-baked-gi-rr-off",false},
     {Mode::RoomCorrectedVisibility,L"default-spot-signal",false},
     {Mode::RoomCorrectedRawVisibility,L"default-raw-spot-signal",false},
     {Mode::RoomCorrectedLightIds,L"default-spot-light-ids",false},

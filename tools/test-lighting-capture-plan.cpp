@@ -87,7 +87,7 @@ int main(){
  guardedHistoryReady=false;
  assert(ModeAvailable(kDefaultMode,kRtSpotReadyBit));
  for(auto m:{Mode::RoomCorrectedVisibility,Mode::RoomCorrectedRawVisibility,Mode::RoomCorrectedLightIds}) {
-  assert(modes.count(m)&&buttons.count(m));
+  assert(modes.count(m));
   assert(UsesDirectSurfaceNormals(m)&&UsesAuthoredClip(m)&&BypassesSpotHistory(m));
   assert(PreservesGiFiltering(m)&&UsesWorldAlbedo(m)&&SpecularSampleRequest(m)==4);
   assert(NeedsIsolationProducer(m)&&IsSignalDiagnostic(m)&&BypassesRR(m));
@@ -100,6 +100,27 @@ int main(){
   bentNormalSelectorReady=false;assert(!ModeAvailable(m,kRtSpotReadyBit));bentNormalSelectorReady=true;
   LiveSelection live;assert(LiveSelection::GetMode(live.Select(m))==m);
  }
+ for(auto m:{Mode::RoomCorrectedNoBakedGi,Mode::RoomCorrectedNoBakedGiNoRR}) {
+  assert(modes.count(m)&&buttons.count(m));
+  assert(UsesDirectSurfaceNormals(m)&&UsesAuthoredClip(m)&&BypassesSpotHistory(m));
+  assert(PreservesGiFiltering(m)&&UsesWorldAlbedo(m)&&SpecularSampleRequest(m)==4);
+  assert(!UsesRawSpotVisibility(m)&&!IsSignalDiagnostic(m));
+  assert(BypassesRR(m)==(m==Mode::RoomCorrectedNoBakedGiNoRR));
+  assert(Disables(m,kGiBit)&&!Disables(m,kDirectBit));
+  assert(!ModeAvailable(m,kRtSpotReadyBit));
+  assert(ModeAvailable(m,kRtSpotReadyBit|kGiBit));
+  assert(!Applied(m,kAllBits,false));
+  assert(!Applied(m,kBakedGiOverrideBit,false));
+  assert(Applied(m,kBindingBits,false));
+  assert(Applied(m,kBindingBits,true)==!BypassesRR(m));
+  LiveSelection live;auto old=live.Select(m);
+  assert(live.Observe(old,kAllBits));assert(live.Observe(old,kBakedGiOverrideBit));
+  assert(LiveSelection::Observed(live.Read())==kBindingBits);
+  assert(LiveSelection::GetMode(live.Read())==m);
+  auto next=live.Select(kDefaultMode);
+  assert(LiveSelection::Sequence(next)==LiveSelection::Sequence(old)+1);
+  assert(LiveSelection::Observed(next)==0&&!live.Observe(old,kBakedGiOverrideBit));
+ }
  assert(SupportsLightContextCapture(kDefaultMode)&&SupportsLightContextCapture(Mode::RoomBoth));
  assert(!SupportsLightContextCapture(Mode::Native)&&!SupportsLightContextCapture(Mode::RoomCorrectedVisibility));
  assert(transitionSamples==6 && transitionStep.mode==kDefaultMode && transitionStep.gpu);
@@ -109,7 +130,7 @@ int main(){
  assert(TransitionSettled(1000,60,true,0,true));
  assert(!TransitionSettled(1000,60,true,3999,false));
  assert(TransitionSettled(1000,60,true,4000,false));
- assert(count==28 && imagesPerStep*count==84);
+ assert(count==30 && imagesPerStep*count==90);
  assert(gpu==1);assert(modes.count(Mode::Native)&&modes.count(Mode::RoomAuthoredClip));
  assert(modes.count(Mode::RoomAuthoredSpatial)&&modes.count(Mode::RoomAuthoredRaw));
  assert(!Settled(2499,100,true));assert(!Settled(4000,89,true));assert(!Settled(4000,100,false));assert(Settled(2500,90,true));

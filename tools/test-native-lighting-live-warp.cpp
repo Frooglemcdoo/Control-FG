@@ -697,8 +697,8 @@ int main() try {
         Check(owner->SetPrivateDataInterface(rt::kScreenOcclusionVariant,filtered.Get()));
         Check(owner->SetPrivateDataInterface(rt::kBandColorsVariant,filtered.Get()));
         rt::Pass pass; pass.raySeen=pass.fullRay=true; rt::active=&pass;
-        for (auto mode : {Mode::RtSpot,Mode::RtSpotRaw,Mode::RtSpotMapGuard,Mode::RtSpotNativeCull,Mode::RtSpotVisibilityRaw,Mode::RtSpotVisibilityFiltered,Mode::RtSpotLightIds,Mode::RtSpotBaseline,Mode::RtSpotDiffuseFiltered,Mode::RtSpotGiFiltered,Mode::RtSpotWorldAlbedo,Mode::RtSpotSpecularFiltered,Mode::RtSpotViewAngle,Mode::RtSpotGi2,Mode::RtSpotGi4,Mode::RtSpotGi8,Mode::RtSpotGiMenu,Mode::RtSpotGi12,Mode::RtSpotGi16,Mode::RtSpotSpec1,Mode::RtSpotSpec2,Mode::RtSpotSpec4,Mode::RtSpotSpec8,Mode::RtSpotSpec12,Mode::RtSpotSpec16,Mode::RtSpotTemporal2,Mode::RtSpotTemporal4,Mode::RoomSpot,Mode::RoomBoth,Mode::RoomCorrectedVisibility,Mode::RoomCorrectedRawVisibility,Mode::RoomCorrectedLightIds,Mode::RoomCorrectedGuarded,Mode::RoomCorrectedNoAO,Mode::RoomCorrectedNoHistory,Mode::RoomCorrectedRaw,Mode::RoomCorrectedNoRR,Mode::RoomBentNormalOff,Mode::RoomLocalMapsOff,Mode::RoomContactOff,Mode::RoomScreenOcclusionOff,Mode::RoomClipNoRR,Mode::RoomAuthoredClip,Mode::RoomAuthoredSpatial,Mode::RoomAuthoredRaw,Mode::RoomNativeSelection,Mode::RoomOpen,Mode::RoomSelectedOff,Mode::RoomRaw,Mode::RoomBlocker,Mode::RoomHitX,Mode::RoomHitY,Mode::RoomHitZ}) {
-            if (!IsRtSpotMode(mode) || Disables(mode,kDirectBit) || RequiredVariant(mode)!=kRtSpotReadyBit)
+        for (auto mode : {Mode::RtSpot,Mode::RtSpotRaw,Mode::RtSpotMapGuard,Mode::RtSpotNativeCull,Mode::RtSpotVisibilityRaw,Mode::RtSpotVisibilityFiltered,Mode::RtSpotLightIds,Mode::RtSpotBaseline,Mode::RtSpotDiffuseFiltered,Mode::RtSpotGiFiltered,Mode::RtSpotWorldAlbedo,Mode::RtSpotSpecularFiltered,Mode::RtSpotViewAngle,Mode::RtSpotGi2,Mode::RtSpotGi4,Mode::RtSpotGi8,Mode::RtSpotGiMenu,Mode::RtSpotGi12,Mode::RtSpotGi16,Mode::RtSpotSpec1,Mode::RtSpotSpec2,Mode::RtSpotSpec4,Mode::RtSpotSpec8,Mode::RtSpotSpec12,Mode::RtSpotSpec16,Mode::RtSpotTemporal2,Mode::RtSpotTemporal4,Mode::RoomSpot,Mode::RoomBoth,Mode::RoomCorrectedNoBakedGi,Mode::RoomCorrectedNoBakedGiNoRR,Mode::RoomCorrectedVisibility,Mode::RoomCorrectedRawVisibility,Mode::RoomCorrectedLightIds,Mode::RoomCorrectedGuarded,Mode::RoomCorrectedNoAO,Mode::RoomCorrectedNoHistory,Mode::RoomCorrectedRaw,Mode::RoomCorrectedNoRR,Mode::RoomBentNormalOff,Mode::RoomLocalMapsOff,Mode::RoomContactOff,Mode::RoomScreenOcclusionOff,Mode::RoomClipNoRR,Mode::RoomAuthoredClip,Mode::RoomAuthoredSpatial,Mode::RoomAuthoredRaw,Mode::RoomNativeSelection,Mode::RoomOpen,Mode::RoomSelectedOff,Mode::RoomRaw,Mode::RoomBlocker,Mode::RoomHitX,Mode::RoomHitY,Mode::RoomHitZ}) {
+            if (!IsRtSpotMode(mode) || Disables(mode,kDirectBit) || RequiredVariant(mode)!=(kRtSpotReadyBit|(DisablesCorrectedBakedGi(mode)?kGiBit:0)))
                 throw std::runtime_error("Diagnostic mode policy mismatch");
             pass.mode=mode;
             if(IsCorrectedSignal(mode) && rt::RayRecordOffset(mode)!=384)
@@ -748,7 +748,7 @@ int main() try {
         const unsigned producer=rt::kSelectorComponent;
         Check(owner->SetPrivateData(rt::kKind,sizeof(producer),&producer));
         rt::scopeReady=true;rt::components.store(rt::kRequiredComponents);rt::disabled.store(false);
-        for (auto mode : {Mode::Native,Mode::RtSpotBaseline,Mode::RtSpot,Mode::RtSpotVisibilityRaw,Mode::RtSpotLightIds,Mode::RtSpotDiffuseFiltered,Mode::RtSpotGiFiltered,Mode::RtSpotWorldAlbedo,Mode::RtSpotSpecularFiltered,Mode::RtSpotViewAngle,Mode::RtSpotGi2,Mode::RtSpotGi4,Mode::RtSpotGi8,Mode::RtSpotGiMenu,Mode::RtSpotGi12,Mode::RtSpotGi16,Mode::RtSpotSpec1,Mode::RtSpotSpec2,Mode::RtSpotSpec4,Mode::RtSpotSpec8,Mode::RtSpotSpec12,Mode::RtSpotSpec16,Mode::RtSpotTemporal2,Mode::RtSpotTemporal4,Mode::RoomSpot,Mode::RoomBoth,Mode::RoomCorrectedVisibility,Mode::RoomCorrectedRawVisibility,Mode::RoomCorrectedLightIds,Mode::RoomCorrectedGuarded,Mode::RoomCorrectedNoAO,Mode::RoomCorrectedNoHistory,Mode::RoomCorrectedRaw,Mode::RoomCorrectedNoRR,Mode::RoomBentNormalOff,Mode::RoomLocalMapsOff,Mode::RoomContactOff,Mode::RoomScreenOcclusionOff,Mode::RoomClipNoRR,Mode::RoomAuthoredClip,Mode::RoomAuthoredSpatial,Mode::RoomAuthoredRaw,Mode::RoomNativeSelection,Mode::RoomOpen,Mode::RoomSelectedOff,Mode::RoomRaw,Mode::RoomBlocker,Mode::RoomHitX,Mode::RoomHitY,Mode::RoomHitZ}) {
+        for (auto mode : {Mode::Native,Mode::RtSpotBaseline,Mode::RtSpot,Mode::RtSpotVisibilityRaw,Mode::RtSpotLightIds,Mode::RtSpotDiffuseFiltered,Mode::RtSpotGiFiltered,Mode::RtSpotWorldAlbedo,Mode::RtSpotSpecularFiltered,Mode::RtSpotViewAngle,Mode::RtSpotGi2,Mode::RtSpotGi4,Mode::RtSpotGi8,Mode::RtSpotGiMenu,Mode::RtSpotGi12,Mode::RtSpotGi16,Mode::RtSpotSpec1,Mode::RtSpotSpec2,Mode::RtSpotSpec4,Mode::RtSpotSpec8,Mode::RtSpotSpec12,Mode::RtSpotSpec16,Mode::RtSpotTemporal2,Mode::RtSpotTemporal4,Mode::RoomSpot,Mode::RoomBoth,Mode::RoomCorrectedNoBakedGi,Mode::RoomCorrectedNoBakedGiNoRR,Mode::RoomCorrectedVisibility,Mode::RoomCorrectedRawVisibility,Mode::RoomCorrectedLightIds,Mode::RoomCorrectedGuarded,Mode::RoomCorrectedNoAO,Mode::RoomCorrectedNoHistory,Mode::RoomCorrectedRaw,Mode::RoomCorrectedNoRR,Mode::RoomBentNormalOff,Mode::RoomLocalMapsOff,Mode::RoomContactOff,Mode::RoomScreenOcclusionOff,Mode::RoomClipNoRR,Mode::RoomAuthoredClip,Mode::RoomAuthoredSpatial,Mode::RoomAuthoredRaw,Mode::RoomNativeSelection,Mode::RoomOpen,Mode::RoomSelectedOff,Mode::RoomRaw,Mode::RoomBlocker,Mode::RoomHitX,Mode::RoomHitY,Mode::RoomHitZ}) {
             selection.Select(mode);
             auto* actual=rt::SelectCompute(owner.Get());
             auto* expected=NeedsIsolationProducer(mode)?filtered.Get():UsesUnshadowedSpotSelection(mode)?reset.Get():nullptr;
@@ -820,6 +820,31 @@ int main() try {
         SelectMode(Mode::DisableLightPattern);render(direct.Get(),15,reset);render(gi.Get(),22,reset);
         SelectMode(Mode::Native);render(direct.Get(),11,reset);render(gi.Get(),22,reset);
     }
+    // New comparisons must actually bind the GI variant, not just observe the
+    // corrected producer/composition. Test SetPipelineState and Reset routes.
+    for(bool reset : {false,true})for(auto mode:{Mode::RoomCorrectedNoBakedGi,Mode::RoomCorrectedNoBakedGiNoRR}) {
+        selection.Select(mode); // Exercise bindings independently of global readiness.
+        render(direct.Get(),11,reset);
+        if(LiveSelection::Observed(selection.Read())&kBakedGiOverrideBit)
+            throw std::runtime_error("Direct binding falsely confirmed baked GI removal");
+        render(gi.Get(),0,reset);
+        if(!(LiveSelection::Observed(selection.Read())&kBakedGiOverrideBit))
+            throw std::runtime_error("Baked GI override was not observed");
+        Binding stale(gi.Get());selection.Select(kDefaultMode);stale.Recorded();
+        if(LiveSelection::Observed(selection.Read())&kBakedGiOverrideBit)
+            throw std::runtime_error("Stale GI binding confirmed a different mode");
+        render(gi.Get(),22,reset);
+    }
+    {
+        ComPtr<ID3D12PipelineState> missing;missing.Attach(makePso(22));
+        unsigned kind=kGiBit;Check(missing->SetPrivateData(kKindGuid,sizeof(kind),&kind));
+        selection.Select(Mode::RoomCorrectedNoBakedGi);
+        Binding fallback(missing.Get());fallback.Recorded();
+        if(fallback.selected!=missing.Get() || (LiveSelection::Observed(selection.Read())&kBakedGiOverrideBit))
+            throw std::runtime_error("Missing baked GI variant falsely reported applied");
+        selection.Select(Mode::Native);
+    }
+    std::cout<<"PASS R147 baked-GI isolation: GPU output, Set/Reset bindings, stale observations, missing variant, baseline restoration\n";
     // Reload a serialized native PSO. Its public creation hook need not run;
     // the library load observer must still run, then live routing must work.
     ComPtr<ID3D12Device1> device1; Check(device.As(&device1));

@@ -4,7 +4,7 @@
 #include "rr_specular_temporal_policy.h"
 
 namespace native_lighting {
-enum class Mode : unsigned { Native, DisableBakedGi, DisableDirect, DisableDirectDiffuse, DisableDirectSpecular, BypassShadows, DisableLightPattern, BypassScreenShadows, BypassSpotShadows, BypassPointShadows, SpotVarianceLow, SpotVarianceHigh, SpotPcfCenter, SpotPcf32, SpotStableSoft, SpotStableTight, SpotBilinear, SpotResolution2x, RtSpot, RtSpotRaw, RtSpotMapGuard, RtSpotNativeCull, RtSpotVisibilityRaw, RtSpotVisibilityFiltered, RtSpotLightIds, RtSpotBaseline, RtSpotDiffuseFiltered, RtSpotGiFiltered, RtSpotWorldAlbedo, RtSpotSpecularFiltered, RtSpotViewAngle, RtSpotGi2, RtSpotGi4, RtSpotGi8, RtSpotGiMenu, RtSpotGi12, RtSpotGi16, RtSpotSpec1, RtSpotSpec2, RtSpotSpec4, RtSpotSpec8, RtSpotSpec12, RtSpotSpec16, RtSpotTemporal2, RtSpotTemporal4, RoomNative, RoomGi, RoomSpot, RoomBoth, RoomNativeSelection, RoomOpen, RoomSelectedOff, RoomRaw, RoomBlocker, RoomHitX, RoomHitY, RoomHitZ, RoomAuthoredClip, RoomAuthoredSpatial, RoomAuthoredRaw, RoomNativeNoRR, RoomClipNoRR, RoomContactOff, RoomScreenOcclusionOff, RoomBentNormalOff, RoomLocalMapsOff, RoomCorrectedNoRR, RoomCorrectedNoHistory, RoomCorrectedNoAO, RoomCorrectedRaw, RoomCorrectedGuarded, RoomCorrectedVisibility, RoomCorrectedRawVisibility, RoomCorrectedLightIds };
+enum class Mode : unsigned { Native, DisableBakedGi, DisableDirect, DisableDirectDiffuse, DisableDirectSpecular, BypassShadows, DisableLightPattern, BypassScreenShadows, BypassSpotShadows, BypassPointShadows, SpotVarianceLow, SpotVarianceHigh, SpotPcfCenter, SpotPcf32, SpotStableSoft, SpotStableTight, SpotBilinear, SpotResolution2x, RtSpot, RtSpotRaw, RtSpotMapGuard, RtSpotNativeCull, RtSpotVisibilityRaw, RtSpotVisibilityFiltered, RtSpotLightIds, RtSpotBaseline, RtSpotDiffuseFiltered, RtSpotGiFiltered, RtSpotWorldAlbedo, RtSpotSpecularFiltered, RtSpotViewAngle, RtSpotGi2, RtSpotGi4, RtSpotGi8, RtSpotGiMenu, RtSpotGi12, RtSpotGi16, RtSpotSpec1, RtSpotSpec2, RtSpotSpec4, RtSpotSpec8, RtSpotSpec12, RtSpotSpec16, RtSpotTemporal2, RtSpotTemporal4, RoomNative, RoomGi, RoomSpot, RoomBoth, RoomNativeSelection, RoomOpen, RoomSelectedOff, RoomRaw, RoomBlocker, RoomHitX, RoomHitY, RoomHitZ, RoomAuthoredClip, RoomAuthoredSpatial, RoomAuthoredRaw, RoomNativeNoRR, RoomClipNoRR, RoomContactOff, RoomScreenOcclusionOff, RoomBentNormalOff, RoomLocalMapsOff, RoomCorrectedNoRR, RoomCorrectedNoHistory, RoomCorrectedNoAO, RoomCorrectedRaw, RoomCorrectedGuarded, RoomCorrectedVisibility, RoomCorrectedRawVisibility, RoomCorrectedLightIds, RoomCorrectedNoBakedGi, RoomCorrectedNoBakedGiNoRR };
 // Signal views share the accepted lighting policy, but replace composition with
 // selected-spot visibility or ID. They are not unmodified-native signal views.
 inline constexpr bool IsCorrectedSignal(Mode mode) noexcept {
@@ -20,8 +20,13 @@ inline constexpr Mode kDefaultMode = Mode::RoomCorrectedNoHistory;
 inline constexpr bool SupportsLightContextCapture(Mode mode) noexcept {
     return mode==Mode::RoomBoth || mode==kDefaultMode;
 }
+// These comparisons remove only the hash-verified native baked-GI pass.
+// They retain the complete accepted spotlight policy and saved user settings.
+inline constexpr bool DisablesCorrectedBakedGi(Mode mode) noexcept {
+    return mode==Mode::RoomCorrectedNoBakedGi || mode==Mode::RoomCorrectedNoBakedGiNoRR;
+}
 inline constexpr bool UsesDirectSurfaceNormals(Mode mode) noexcept {
-    return IsCorrectedSignal(mode) || mode==Mode::RoomBentNormalOff || mode==Mode::RoomCorrectedNoRR ||
+    return DisablesCorrectedBakedGi(mode) || IsCorrectedSignal(mode) || mode==Mode::RoomBentNormalOff || mode==Mode::RoomCorrectedNoRR ||
         mode==Mode::RoomCorrectedNoHistory || mode==Mode::RoomCorrectedNoAO || mode==Mode::RoomCorrectedRaw || mode==Mode::RoomCorrectedGuarded;
 }
 inline bool IsGiSampleMode(Mode mode) noexcept {
@@ -36,7 +41,7 @@ inline constexpr bool UsesAuthoredClip(Mode mode) noexcept {
     return UsesDirectSurfaceNormals(mode) || mode==Mode::RoomLocalMapsOff || mode==Mode::RoomContactOff || mode==Mode::RoomScreenOcclusionOff || mode==Mode::RoomAuthoredClip || mode==Mode::RoomAuthoredSpatial || mode==Mode::RoomAuthoredRaw || mode==Mode::RoomClipNoRR || mode==Mode::RoomSelectedOff;
 }
 inline bool BypassesSpotHistory(Mode mode) noexcept {
-    return IsCorrectedSignal(mode) || mode==Mode::RoomAuthoredSpatial || mode==Mode::RoomAuthoredRaw ||
+    return DisablesCorrectedBakedGi(mode) || IsCorrectedSignal(mode) || mode==Mode::RoomAuthoredSpatial || mode==Mode::RoomAuthoredRaw ||
         mode==Mode::RoomCorrectedNoHistory || mode==Mode::RoomCorrectedRaw ||
         mode==Mode::RoomCorrectedNoRR || mode==Mode::RoomCorrectedNoAO;
 }
@@ -50,7 +55,7 @@ inline bool IsSignalDiagnostic(Mode mode) noexcept {
 // Full-color comparisons use the existing per-frame RR bypass, without changing
 // the saved RR preference or turning the output into a signal visualization.
 inline bool BypassesRR(Mode mode) noexcept {
-    return mode==Mode::RoomCorrectedNoRR || IsSignalDiagnostic(mode) || mode==Mode::RoomNativeNoRR || mode==Mode::RoomClipNoRR;
+    return mode==Mode::RoomCorrectedNoBakedGiNoRR || mode==Mode::RoomCorrectedNoRR || IsSignalDiagnostic(mode) || mode==Mode::RoomNativeNoRR || mode==Mode::RoomClipNoRR;
 }
 inline std::atomic<bool> spotBandColorsReady{false}, spotHitPositionReady{false}, spotAuthoredClipReady{false};
 inline bool NeedsIsolationProducer(Mode mode) noexcept {
@@ -128,6 +133,9 @@ inline bool ExpandsSpotCasters(Mode mode) noexcept {
     return false;
 }
 inline constexpr unsigned kGiBit = 1, kDirectBit = 2, kAllBits = 3;
+// Producer and composition evidence must not stand in for a baked-GI override.
+inline constexpr unsigned kBakedGiOverrideBit = 4;
+inline constexpr unsigned kBindingBits = kAllBits | kBakedGiOverrideBit;
 inline constexpr unsigned kDiffuseReadyBit = 4, kSpecularReadyBit = 8, kShadowReadyBit = 16, kPatternReadyBit = 32;
 inline constexpr unsigned kScreenReadyBit = 64, kSpotReadyBit = 128, kPointReadyBit = 256;
 inline constexpr unsigned kSpotVarianceLowReadyBit = 1u << 9;
@@ -142,11 +150,12 @@ inline constexpr unsigned kRtSpotReadyBit = 1u << 17;
 struct ModeChoice { Mode mode; const wchar_t* label; };
 inline constexpr ModeChoice kModeChoices[] = {
     {Mode::Native, L"NATIVE"}, {Mode::RoomBoth, L"BOTH"}, {kDefaultMode, L"DEFAULT (FIXED)"},
-    {Mode::RoomCorrectedVisibility, L"SHADOW SIGNAL"}, {Mode::RoomCorrectedRawVisibility, L"RAW SIGNAL"}, {Mode::RoomCorrectedNoRR, L"RR OFF"},
-    {Mode::RoomCorrectedRaw, L"RAW SHADOWS"}, {Mode::RoomCorrectedLightIds, L"LIGHT IDS"}, {Mode::RoomCorrectedNoAO, L"SCREEN AO OFF"}
+    {Mode::RoomCorrectedVisibility, L"SHADOW SIGNAL"}, {Mode::RoomCorrectedNoBakedGi, L"BAKED GI OFF"}, {Mode::RoomCorrectedNoRR, L"RR OFF"},
+    {Mode::RoomCorrectedNoBakedGiNoRR, L"GI + RR OFF"}, {Mode::RoomCorrectedLightIds, L"LIGHT IDS"}, {Mode::RoomCorrectedNoAO, L"SCREEN AO OFF"}
 };
 inline constexpr unsigned kModeCount = sizeof(kModeChoices) / sizeof(kModeChoices[0]);
 inline unsigned RequiredVariant(Mode mode) noexcept {
+    if(DisablesCorrectedBakedGi(mode))return kRtSpotReadyBit | kGiBit;
     if(mode==Mode::RoomNative||mode==Mode::RoomGi)return 0;
     if(IsSpecularSampleMode(mode)||IsGiSampleMode(mode))return kRtSpotReadyBit;
     switch (mode) {
@@ -173,6 +182,7 @@ inline unsigned RequiredVariant(Mode mode) noexcept {
     }
 }
 inline unsigned RequiredBinding(Mode mode) noexcept {
+    if(DisablesCorrectedBakedGi(mode))return kAllBits | kBakedGiOverrideBit;
     return NeedsIsolationProducer(mode) ? kAllBits : mode == Mode::Native ? kAllBits : mode == Mode::DisableBakedGi ? kGiBit : kDirectBit;
 }
 inline bool ModeAvailable(Mode mode,unsigned ready) noexcept {
@@ -208,6 +218,8 @@ inline const char* ModeName(Mode mode) noexcept {
     case Mode::RoomAuthoredRaw:return "room_authored_raw";
     case Mode::RoomNativeNoRR:return "native_rr_off";
     case Mode::RoomBentNormalOff:return "surface_normals_history_on";
+    case Mode::RoomCorrectedNoBakedGi:return "default_baked_gi_off";
+    case Mode::RoomCorrectedNoBakedGiNoRR:return "default_baked_gi_rr_off";
     case Mode::RoomCorrectedGuarded:return "default_guarded_history";
     case Mode::RoomCorrectedVisibility:return "default_spot_signal";
     case Mode::RoomCorrectedRawVisibility:return "default_raw_spot_signal";
@@ -274,6 +286,7 @@ inline bool CanReportVisual(Mode mode, unsigned observed) noexcept {
     return (observed & required) == required;
 }
 inline bool Disables(Mode mode, unsigned kind) noexcept {
+    if(DisablesCorrectedBakedGi(mode))return kind==kGiBit;
     if (mode == Mode::Native || mode == Mode::SpotResolution2x || IsRoomMode(mode) || IsRtSpotMode(mode)) return false;
     return kind == RequiredBinding(mode);
 }
@@ -282,16 +295,16 @@ inline bool Disables(Mode mode, unsigned kind) noexcept {
 // recordings cannot mark a newer selection as confirmed.
 class LiveSelection {
     static constexpr unsigned kModeBits = 7, kObservedShift = kModeBits;
-    static constexpr unsigned kSequenceShift = kModeBits + 2;
+    static constexpr unsigned kSequenceShift = kModeBits + 3;
     static constexpr uint64_t kModeMask = (uint64_t(1) << kModeBits) - 1;
-    static constexpr uint64_t kObservedMask = uint64_t(kAllBits) << kObservedShift;
-    static_assert(static_cast<unsigned>(Mode::RoomCorrectedLightIds) <= kModeMask, "Mode storage exhausted");
+    static constexpr uint64_t kObservedMask = uint64_t(kBindingBits) << kObservedShift;
+    static_assert(static_cast<unsigned>(Mode::RoomCorrectedNoBakedGiNoRR) <= kModeMask, "Mode storage exhausted");
     std::atomic<uint64_t> state_{0};
 public:
     uint64_t Read() const noexcept { return state_.load(std::memory_order_acquire); }
     static Mode GetMode(uint64_t state) noexcept { return static_cast<Mode>(state & kModeMask); }
     static uint64_t Sequence(uint64_t state) noexcept { return state >> kSequenceShift; }
-    static unsigned Observed(uint64_t state) noexcept { return unsigned((state >> kObservedShift) & kAllBits); }
+    static unsigned Observed(uint64_t state) noexcept { return unsigned((state >> kObservedShift) & kBindingBits); }
     uint64_t Select(Mode mode) noexcept {
         auto old = Read();
         uint64_t next;
@@ -302,7 +315,7 @@ public:
     bool Observe(uint64_t selected, unsigned kind) noexcept {
         auto current = Read();
         while ((current & ~kObservedMask) == (selected & ~kObservedMask)) {
-            const auto next = current | (uint64_t(kind & kAllBits) << kObservedShift);
+            const auto next = current | (uint64_t(kind & kBindingBits) << kObservedShift);
             if (next == current) return false;
             if (state_.compare_exchange_weak(current, next, std::memory_order_acq_rel)) return true;
         }

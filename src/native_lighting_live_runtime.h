@@ -250,6 +250,11 @@ struct Binding {
         }
     }
     void Recorded() const noexcept {
+        const auto mode=LiveSelection::GetMode(state);
+        if (DisablesCorrectedBakedGi(mode) && kind==kGiBit && alternate &&
+            selection.Observe(state,kBakedGiOverrideBit))
+            Trace("baked_gi_override_recorded seq=%llu mode=%s variant=1 cpu_binding_only=1",
+                LiveSelection::Sequence(state),ModeName(mode));
         if (kind && !IsRtSpotMode(LiveSelection::GetMode(state)) && selection.Observe(state, kind))
             Trace("binding_recorded seq=%llu mode=%s contribution=%s variant=%u", LiveSelection::Sequence(state),
                 ModeName(LiveSelection::GetMode(state)), kind == kGiBit ? "BakedGi" : "Direct", unsigned(alternate != nullptr));
