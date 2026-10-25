@@ -86,7 +86,7 @@ inline void Paint(HWND window) noexcept {
     DrawLabel(dc,detailFont,captureStatus,{14,kCaptureStatusY,kWidth-12,kCaptureStatusY+22},theme::kText);
     DrawLabel(dc,detailFont,control_rr_capture_ui::detail.load(),{14,kCaptureStatusY+22,kWidth-12,kCaptureStatusY+46},theme::kMutedText);
     wchar_t shortcuts[128]{};
-    swprintf_s(shortcuts, L"F9: stills   Shift+F9: motion   F10: close   Ctrl+Shift+1..%u", kModeCount);
+    swprintf_s(shortcuts, L"F9: suite   Shift+F9: light capture   F10: close   Ctrl+Shift+1..%u", kModeCount);
     DrawLabel(dc, detailFont, shortcuts, {14,kFooterY,kWidth-12,kFooterY+24}, theme::kMutedText);
     DrawLabel(dc, detailFont, selectionRejected ? L"Mode unavailable. Save Log exports shader evidence for diagnosis." : savedNotice.load() == 2 ? L"Log write failed. Save Log shows the Windows error." : savedNotice.load() == 1 ? L"Log saved. See the folder shown in the confirmation." : ModeHint(mode), {14,kFooterY+26,kWidth-12,kFooterY+56}, theme::kText);
     EndPaint(window, &ps);
