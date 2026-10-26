@@ -1,6 +1,7 @@
 #pragma once
 #include "theme.h"
 #include "lighting_capture_suite.h"
+#include "lighting_performance_capture.h"
 
 namespace native_lighting::ui {
 inline constexpr wchar_t kClass[] = L"ControlFGLightingDiagnosticR54";
@@ -9,13 +10,15 @@ inline constexpr int kModeRows = (kModeCount + 2) / 3;
 inline constexpr int kStatusY = 40 + kModeRows * 46 - 2;
 inline constexpr int kActionsY = kStatusY + 28;
 inline constexpr int kCaptureY = kActionsY + 46;
-inline constexpr int kCaptureStatusY = kCaptureY + 40;
+inline constexpr int kPerformanceY = kCaptureY + 46;
+inline constexpr int kCaptureStatusY = kPerformanceY + 46;
 inline constexpr int kFooterY = kCaptureStatusY + 50;
 inline constexpr int kHeight = kFooterY + 72;
-inline constexpr unsigned kButtonCount = kModeCount + 6;
+inline constexpr unsigned kButtonCount = kModeCount + 7;
 inline const wchar_t* ButtonLabel(unsigned index) noexcept {
     if (index < kModeCount) return kModeChoices[index].label;
-    constexpr const wchar_t* actions[] = {L"ISSUE REMAINS", L"ISSUE GONE", L"SAVE LOG", L"CAPTURE LIGHT", L"PACKAGE LIGHT", L"TRACE SHADOW"};
+    constexpr const wchar_t* actions[] = {L"ISSUE REMAINS", L"ISSUE GONE", L"SAVE LOG", L"CAPTURE LIGHT", L"PACKAGE LIGHT", L"TRACE SHADOW", L"PERF CAPTURE"};
+    if(index==kModeCount+6 && performance_capture::Active())return L"CANCEL PERF";
     return actions[index - kModeCount];
 }
 inline const wchar_t* ModeHint(Mode mode) noexcept {
@@ -88,7 +91,7 @@ inline void Paint(HWND window) noexcept {
     wchar_t captureStatus[128]{};
     swprintf_s(captureStatus,L"Light capture: %s   Saved pairs: %u/2",control_rr_capture_ui::Label(control_rr_capture_ui::state.load()),control_rr_capture_ui::completedPairs.load());
     DrawLabel(dc,detailFont,captureStatus,{14,kCaptureStatusY,kWidth-12,kCaptureStatusY+22},theme::kText);
-    DrawLabel(dc,detailFont,control_rr_capture_ui::detail.load(),{14,kCaptureStatusY+22,kWidth-12,kCaptureStatusY+46},theme::kMutedText);
+    DrawLabel(dc,detailFont,performance_capture::Active()?performance_capture::Status():control_rr_capture_ui::detail.load(),{14,kCaptureStatusY+22,kWidth-12,kCaptureStatusY+46},theme::kMutedText);
     wchar_t shortcuts[128]{};
     swprintf_s(shortcuts, L"F9: suite   Shift+F9: light capture   F10: close   Ctrl+Shift+1..%u", kModeCount);
     DrawLabel(dc, detailFont, shortcuts, {14,kFooterY,kWidth-12,kFooterY+24}, theme::kMutedText);
@@ -135,12 +138,13 @@ inline void PackageRR(HWND window) noexcept {
 }
 inline void RequestLightCapture(HWND panel) noexcept {
     const auto mode=LiveSelection::GetMode(selection.Read());
-    if(!capture_suite::active && SupportsFocusedLightingCapture(mode) && control_rr_capture_ui::Request()) {
+    if(!performance_capture::Active() && !capture_suite::active && SupportsFocusedLightingCapture(mode) && control_rr_capture_ui::Request()) {
         Trace("native_lighting_capture requested=1 mode=%s",ModeName(mode));
         ClosePanel(panel);
     } else MessageBoxW(panel,L"Select RR OFF, RT SPOT OPEN, or NATIVE RR OFF before capturing. If busy, failed, or both pairs are saved, read the status; PACKAGE LIGHT collects diagnostics.",L"Lighting capture",MB_OK);
 }
 inline void RequestShadowTrace(HWND panel) noexcept {
+    if(performance_capture::Active())return;
     using State=control_rr_capture_ui::State;
     const auto light=control_rr_capture_ui::state.load();
     if(control_rr_capture_ui::requested.load() ||
@@ -149,6 +153,19 @@ inline void RequestShadowTrace(HWND panel) noexcept {
     }
     if(capture_suite::Start(capture_suite::Kind::Blocker))ClosePanel(panel);
     else MessageBoxW(panel,L"Shadow trace unavailable. Return to gameplay until corrected shadows are ready. If a previous trace failed, restart the game; otherwise Save Log for diagnosis.",L"Shadow trace",MB_OK);
+}
+inline void RequestPerformanceCapture(HWND panel) noexcept {
+    if(performance_capture::Active()){
+        if(performance_capture::phase!=performance_capture::Phase::Package)performance_capture::Save(GetWindow(panel,GW_OWNER),"cancelled");
+        return;
+    }
+    using State=control_rr_capture_ui::State;
+    const auto light=control_rr_capture_ui::state.load();
+    if(control_rr_capture_ui::requested.load() || (light!=State::Idle && light!=State::Complete)){
+        MessageBoxW(panel,L"Finish the light capture before starting a performance capture.",L"Performance capture",MB_OK);return;
+    }
+    if(performance_capture::Start())ClosePanel(panel);
+    else MessageBoxW(panel,L"Performance capture unavailable. Return to gameplay first and finish any active capture. If timing resources failed or their bounded capacity is exhausted, restart the game.",L"Performance capture",MB_OK);
 }
 inline LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPARAM lParam) noexcept {
     namespace theme = control_ui::theme;
@@ -172,7 +189,7 @@ inline LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPA
         for (unsigned i=0;i<kButtonCount;++i) {
             const int row=i<kModeCount ? i/3 : kModeRows, col=i<kModeCount ? i%3 : (i-kModeCount)%3;
             HWND button=CreateWindowExW(0,L"STATIC",ButtonLabel(i),WS_CHILD|WS_VISIBLE|SS_NOTIFY|SS_OWNERDRAW,
-                14+col*156,i<kModeCount ? 40+row*46 : i<kModeCount+3 ? kActionsY : kCaptureY,148,36,window,reinterpret_cast<HMENU>(INT_PTR(kButtonFirst+i)),selfModule,nullptr);
+                14+col*156,i<kModeCount ? 40+row*46 : i<kModeCount+3 ? kActionsY : i<kModeCount+6 ? kCaptureY : kPerformanceY,148,36,window,reinterpret_cast<HMENU>(INT_PTR(kButtonFirst+i)),selfModule,nullptr);
             SendMessageW(button,WM_SETFONT,reinterpret_cast<WPARAM>(bodyFont),TRUE);
         }
         return 0;
@@ -190,6 +207,7 @@ inline LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPA
     case WM_COMMAND:
         if(HIWORD(wParam)==BN_CLICKED) {
             const unsigned index=LOWORD(wParam)-kButtonFirst;
+            if(performance_capture::Active() && index!=kModeCount+6)return 0;
             if(index<kModeCount){selectionRejected=!SelectMode(kModeChoices[index].mode);savedNotice=0;}
             else if(index==kModeCount||index==kModeCount+1) {
                 if (!ReportVisual(index==kModeCount))
@@ -199,6 +217,7 @@ inline LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPA
             else if(index==kModeCount+3) RequestLightCapture(window);
             else if(index==kModeCount+4) PackageRR(window);
             else if(index==kModeCount+5) RequestShadowTrace(window);
+            else if(index==kModeCount+6) RequestPerformanceCapture(window);
             RedrawWindow(window,nullptr,nullptr,RDW_INVALIDATE|RDW_ALLCHILDREN);
             return 0;
         }
@@ -221,7 +240,7 @@ inline DWORD WINAPI ThreadProc(LPVOID) noexcept {
     ULONGLONG nextRefresh=0, nextWindowSearch=0, nextLogDrain=0, nextRRReport=0;
     HWND cachedGame=nullptr;
     POINT lastOrigin{-1,-1};
-    Trace("session_start build=R165-overlay-rr-capture pid=%lu default=authored_clip_surface_normals_current_spot_when_ready log=user-diagnostics-folder",GetCurrentProcessId());
+    Trace("session_start build=R166-overlay-rr-capture pid=%lu default=authored_clip_surface_normals_current_spot_when_ready log=user-diagnostics-folder",GetCurrentProcessId());
     MSG msg{};
     while(GetMessageW(&msg,nullptr,0,0)>0){
         if (!panel || !IsDialogMessageW(panel, &msg)) {
@@ -230,31 +249,32 @@ inline DWORD WINAPI ThreadProc(LPVOID) noexcept {
         if(msg.message!=WM_TIMER||msg.wParam!=timer)continue;
         const ULONGLONG now=GetTickCount64();
         if(now>=nextRRReport){ReportRRPaths("heartbeat");nextRRReport=now+5000;}
-        if(now>=nextLogDrain){DrainDiagnosticLog();nextLogDrain=now+(capture_suite::active?100:500);}
+        if(now>=nextLogDrain){DrainDiagnosticLog();nextLogDrain=now+((capture_suite::active||performance_capture::Active())?100:500);}
         if(cachedGame&&!IsWindow(cachedGame))cachedGame=nullptr;
         if(!cachedGame&&now>=nextWindowSearch){cachedGame=FindFGGameWindow();nextWindowSearch=now+1000;}
         HWND game=cachedGame;
         if(panel&&owner!=game){ClosePanel(panel);DestroyWindow(panel);panel=nullptr;}
         if(game&&!panel){panel=CreateWindowExW(WS_EX_TOOLWINDOW|WS_EX_NOACTIVATE,kClass,L"Control lighting diagnostic",WS_POPUP,
             0,0,kWidth,kHeight,game,nullptr,selfModule,nullptr);owner=game;}
-        if(!panel){if(capture_suite::active)capture_suite::Finish(nullptr,"game_window_lost");continue;}
+        if(!panel){if(performance_capture::Active())performance_capture::Tick(nullptr,now);if(capture_suite::active)capture_suite::Finish(nullptr,"game_window_lost");continue;}
         if(LiveSelection::Sequence(selection.Read())==0 && ModeAvailable(kDefaultMode,readyMask.load()))SelectMode(kDefaultMode);
         static bool f9Held=false;
         const bool f9Down=(GetAsyncKeyState(VK_F9)&0x8000)!=0;
         const bool capturePress=f9Down&&!f9Held && !(GetAsyncKeyState(VK_CONTROL)&0x8000) && !(GetAsyncKeyState(VK_MENU)&0x8000);
         f9Held=f9Down;
-        if(capturePress && (GetForegroundWindow()==game || PanelHasForeground(panel))) {
+        if(!performance_capture::Active() && capturePress && (GetForegroundWindow()==game || PanelHasForeground(panel))) {
             if(GetAsyncKeyState(VK_SHIFT)&0x8000) RequestLightCapture(panel);
             else if(capture_suite::active)capture_suite::Finish(game,"cancelled");
             else {if(panelOpen)ClosePanel(panel);
                 if(!capture_suite::Start())MessageBoxW(game,L"Could not start capture. Return to gameplay and wait for Default and GPU capture readiness. If a previous capture was cancelled, let its export finish. Use Save Log for details.",L"F9 capture",MB_OK|MB_ICONERROR);}
         }
         capture_suite::Tick(game,now);
+        performance_capture::Tick(game,now);
         const bool foreground=GetForegroundWindow()==game || PanelHasForeground(panel);
         const bool modifier=(GetAsyncKeyState(VK_CONTROL)&0x8000)&&(GetAsyncKeyState(VK_SHIFT)&0x8000);
         static_assert(kModeCount <= 9, "Numeric shortcuts support nine choices");
         for(int i=0;i<int(kModeCount+1);++i){const bool down=(GetAsyncKeyState(i == 0 ? VK_F10 : '0' + i)&0x8000)!=0;
-            if(!capture_suite::active&&foreground&&down&&!held[i]&&(i==0||modifier)){
+            if(!capture_suite::active&&foreground&&down&&!held[i]&&(i==0||modifier)&&(!performance_capture::Active()||i==0)){
                 if(i==0){if(panelOpen)ClosePanel(panel);else OpenPanel(panel);}else {selectionRejected=!SelectMode(kModeChoices[i-1].mode);savedNotice=0;}
             }held[i]=down;
         }
@@ -282,3 +302,4 @@ inline void StartOverlay() noexcept {
     if(thread)CloseHandle(thread);else {ui::started=false;Trace("overlay_failed reason=thread");}
 }
 }
+

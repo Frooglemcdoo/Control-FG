@@ -255,6 +255,9 @@ inline void ObserveCompute(ID3D12Device* device, const D3D12_COMPUTE_PIPELINE_ST
     (void)device; (void)original;
 }
 
+#include "lighting_performance.h"
+inline performance::Stage PerformanceStage(ID3D12PipelineState*) noexcept;
+inline performance::Stage PerformanceRayStage() noexcept;
 struct Binding {
     ID3D12PipelineState* selected;
     ID3D12PipelineState* alternate = nullptr;
@@ -306,13 +309,16 @@ inline void STDMETHODCALLTYPE SetHook(ID3D12GraphicsCommandList* list, ID3D12Pip
     auto* alternate = rt_spot_runtime::SelectCompute(binding.selected);
     original(list, alternate ? alternate : binding.selected);
     rt_spot_capture_runtime::BindCompute(list,pso,alternate ? alternate : binding.selected);
+    performance::Bind(list,performance::enabled.load()?PerformanceStage(pso):performance::Stage::None);
     if (alternate) alternate->Release();
     binding.Recorded();
 }
 inline void STDMETHODCALLTYPE ComputeDispatchHook(ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT z) {
     const auto original=Lookup(list).dispatch;if(!original)return;
     rt_spot_capture_runtime::BeforeCompute(list,x,y,z);
+    const auto timing=performance::Begin(list,performance::ComputeStage(list),x,y,z);
     original(list,x,y,z);
+    performance::End(timing);
     rt_spot_capture_runtime::AfterCompute(list,x,y,z);
 }
 inline HRESULT STDMETHODCALLTYPE ResetHook(ID3D12GraphicsCommandList* list, ID3D12CommandAllocator* allocator, ID3D12PipelineState* pso) {
@@ -322,7 +328,7 @@ inline HRESULT STDMETHODCALLTYPE ResetHook(ID3D12GraphicsCommandList* list, ID3D
     auto* alternate = rt_spot_runtime::SelectCompute(binding.selected);
     const HRESULT hr = original(list, allocator, alternate ? alternate : binding.selected);
     if (alternate) alternate->Release();
-    if (SUCCEEDED(hr)) binding.Recorded();
+    if (SUCCEEDED(hr)) { performance::Reset(list);performance::Bind(list,performance::enabled.load()?PerformanceStage(pso):performance::Stage::None);binding.Recorded(); }
     return hr;
 }
 inline bool PatchSlot(void** slot, void* expected, void* hook) noexcept {
@@ -343,6 +349,19 @@ inline bool PatchSlot(void** slot, void* expected, void* hook) noexcept {
 #include "rt_spot_capture_runtime.h"
 #include "rt_spot_culling_runtime.h"
 #include "rt_spot_runtime.h"
+inline performance::Stage PerformanceRayStage() noexcept {return rt_spot_runtime::active?performance::Stage::ShadowRays:performance::Stage::OtherRays;}
+inline performance::Stage PerformanceStage(ID3D12PipelineState* pso) noexcept {
+    unsigned kind=0;UINT size=sizeof(kind);
+    if(!pso || FAILED(pso->GetPrivateData(rt_spot_runtime::kKind,&size,&kind)))return performance::Stage::None;
+    switch(kind){
+    case rt_spot_runtime::kSelectorComponent:return performance::Stage::Selector;
+    case rt_spot_runtime::kResetComponent:return performance::Stage::History;
+    case rt_spot_runtime::kSpatialComponents[0]:return performance::Stage::Spatial0;
+    case rt_spot_runtime::kSpatialComponents[1]:return performance::Stage::Spatial1;
+    case rt_spot_runtime::kLightComponent:return performance::Stage::Composition;
+    default:return performance::Stage::None;
+    }
+}
 inline void InstallList(ID3D12GraphicsCommandList* list) noexcept {
     rt_shadow_capture::InstallList(list);
     rt_spot_copy_audit::InstallList(list);
@@ -400,6 +419,7 @@ inline HRESULT STDMETHODCALLTYPE CreateListHook(ID3D12Device* device, UINT node,
 inline void StartOverlay() noexcept;
 inline void InstallLiveDiagnostic(ID3D12Device* device) noexcept {
     if (!device) return;
+    performance::RememberDevice(device);
     rt_spot_capture_audit::retentionEnabled.store(false);
     rt_spot_capture_audit::captured.store(true); // Retire speculative upload retention; R122 uses copy journals.
     rt_spot_table_audit::InstallQueues(device);
@@ -431,3 +451,4 @@ inline void InstallLiveDiagnostic(ID3D12Device* device) noexcept {
 #else
 namespace native_lighting { inline void StartOverlay() noexcept {} }
 #endif
+

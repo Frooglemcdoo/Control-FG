@@ -435,7 +435,9 @@ inline void STDMETHODCALLTYPE ExecuteHook(ID3D12CommandQueue* queue,UINT count,I
     ++submitDepth;CaptureLease lease;QueueCall call;
     if(lease)call=BeginQueueCall(queue,QueueOperation::Execute,count,lists);
     rt_spot_capture_runtime::BeforeExecute(queue,count,lists);
+    const auto timing=performance::BeforeExecute(queue,count,lists);
     original(queue,count,lists);
+    performance::AfterExecute(queue,timing);
     rt_spot_capture_runtime::AfterExecute(queue,count,lists);
     if(lease)EndQueueCall(call);
     --submitDepth;
@@ -511,3 +513,4 @@ inline void InstallQueues(ID3D12Device* device) noexcept {
     }
 }
 } // namespace rt_spot_table_audit
+

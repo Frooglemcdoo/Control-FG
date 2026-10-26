@@ -127,7 +127,9 @@ inline void STDMETHODCALLTYPE SetStateHook(ID3D12GraphicsCommandList4* list,ID3D
 inline void STDMETHODCALLTYPE DispatchHook(ID3D12GraphicsCommandList4* list,const D3D12_DISPATCH_RAYS_DESC* desc) {
     const auto hooks=Lookup(list);
     const auto replacement = replacementDispatch.load();
+    const auto timing=desc?performance::Begin(list,PerformanceRayStage(),desc->Width,desc->Height,desc->Depth,desc->HitGroupTable.SizeInBytes):performance::kInvalid;
     if (!replacement || !replacement(list,desc)) hooks.dispatch(list,desc);
+    performance::End(timing);
     if(desc && rayReports.fetch_add(1)<128)
         Trace("rt_dispatch list=%p extent=%ux%ux%u raygen=%llu hit_start=%llu hit_bytes=%llu hit_stride=%llu miss_start=%llu miss_bytes=%llu miss_stride=%llu gpu_confirmed=0",
             list,desc->Width,desc->Height,desc->Depth,desc->RayGenerationShaderRecord.StartAddress,
@@ -195,3 +197,4 @@ inline void Summary() noexcept {
         count,static_cast<unsigned long long>(bytes),rootReports.load(),stateReports.load(),sceneReports.load(),stateBindings.load(),rayReports.load(),unsigned(limitReported.load()));
 }
 } // namespace rt_shadow_capture
+

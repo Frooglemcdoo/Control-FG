@@ -31,7 +31,7 @@ class SessionReport {
         if (!Directory(directory)) return false;
         SYSTEMTIME time{}; GetLocalTime(&time);
         for (unsigned attempt = 0; attempt != 16; ++attempt) {
-            if (swprintf_s(path_, L"%s\\Lighting-R165-%04u%02u%02u-%02u%02u%02u-%lu-%u.log", directory,
+            if (swprintf_s(path_, L"%s\\Lighting-R166-%04u%02u%02u-%02u%02u%02u-%lu-%u.log", directory,
                 unsigned(time.wYear), unsigned(time.wMonth), unsigned(time.wDay), unsigned(time.wHour),
                 unsigned(time.wMinute), unsigned(time.wSecond), GetCurrentProcessId(), serial_.fetch_add(1)) < 0) {
                 error_ = ERROR_FILENAME_EXCED_RANGE; return false;
@@ -79,3 +79,4 @@ public:
     DWORD Error() const noexcept { return error_; }
 };
 } // namespace native_lighting
+
