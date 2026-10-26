@@ -50,7 +50,7 @@ int main(){
  assert(!Applied(Mode::RoomCorrectedNoRR,kDirectBit,false));
  assert(Applied(Mode::RoomCorrectedNoRR,kAllBits,false));
  // The automatic default must await both normal PSOs, authored rays and samples.
- spotAuthoredClipReady=true;spotProjectionReady=true;specularSamplesReady=true;
+ mapProbeReady=true;spotAuthoredClipReady=true;spotProjectionReady=true;specularSamplesReady=true;
  assert(!ModeAvailable(kDefaultMode,kRtSpotReadyBit));
  bentNormalLightReady=true;
  assert(!ModeAvailable(kDefaultMode,kRtSpotReadyBit));
@@ -137,6 +137,10 @@ int main(){
   assert(LiveSelection::Sequence(next)==LiveSelection::Sequence(old)+1);
   assert(LiveSelection::Observed(next)==0&&!live.Observe(old,kBakedGiOverrideBit));
  }
+ assert(capture_plan::BlockerMode(Mode::RoomMapProbe)==Mode::RoomMapProbe);
+ assert(UsesDirectSurfaceNormals(Mode::RoomMapProbe)&&BypassesSpotHistory(Mode::RoomMapProbe)&&BypassesRR(Mode::RoomMapProbe));
+ assert(ModeAvailable(Mode::RoomMapProbe,kRtSpotReadyBit));
+ mapProbeReady=false;assert(!ModeAvailable(Mode::RoomMapProbe,kRtSpotReadyBit));mapProbeReady=true;
  assert(UsesDirectSurfaceNormals(Mode::RoomProjectionOrigin)&&BypassesSpotHistory(Mode::RoomProjectionOrigin)&&BypassesRR(Mode::RoomProjectionOrigin));
  assert(ModeAvailable(Mode::RoomProjectionOrigin,kRtSpotReadyBit));
  spotProjectionReady=false;assert(!ModeAvailable(Mode::RoomProjectionOrigin,kRtSpotReadyBit));spotProjectionReady=true;

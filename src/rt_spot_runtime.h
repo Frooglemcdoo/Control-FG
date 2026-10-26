@@ -40,7 +40,9 @@ inline const GUID kCorrectedNoAOVariant = {0xe631a601,0x6651,0x4911,{0x80,0x90,0
 inline const GUID kGuardedHistoryVariant = {0xe631a601,0x6651,0x4911,{0x80,0x90,0x11,0x71,0x14,0x28,0x30,0x11}};
 inline const GUID kCorrectedOpenVariant = {0xe631a601,0x6651,0x4911,{0x80,0x90,0x11,0x71,0x14,0x28,0x30,0x12}};
 inline const GUID kMapPriorityVariant = {0xe631a601,0x6651,0x4911,{0x80,0x90,0x11,0x71,0x14,0x28,0x30,0x13}};
+inline const GUID kMapProbeVariant = {0xe631a601,0x6651,0x4911,{0x80,0x90,0x11,0x71,0x14,0x28,0x30,0x14}};
 inline const GUID& IsolationVariant(Mode mode) noexcept {
+    if(mode==Mode::RoomMapProbe)return kMapProbeVariant;
     if(mode==Mode::RoomCorrectedMapPriority)return kMapPriorityVariant;
     if(mode==Mode::RoomCorrectedNoAO)return kCorrectedNoAOVariant;
     if(UsesDirectSurfaceNormals(mode))return kBentNormalVariant;
@@ -55,7 +57,7 @@ inline const GUID& IsolationVariant(Mode mode) noexcept {
 // Composition signal views override shading, while the earlier producer still
 // uses IsolationVariant to retain corrected light selection.
 inline const GUID& CompositionVariant(Mode mode) noexcept {
-    if(mode==Mode::RoomCorrectedMapPriority)return kBentNormalVariant;
+    if(mode==Mode::RoomMapProbe || mode==Mode::RoomCorrectedMapPriority)return kBentNormalVariant;
     if(mode==Mode::RoomCorrectedOpen)return kCorrectedOpenVariant;
     if(IsCorrectedSignal(mode))return ShowsSpotLightIds(mode)?kLightIdsVariant:kVisibilityVariant;
     if(NeedsIsolationProducer(mode)||mode==Mode::RoomContactOff)return IsolationVariant(mode);
@@ -322,6 +324,7 @@ inline void ObserveCompute(ID3D12Device* device, const D3D12_COMPUTE_PIPELINE_ST
         PrepareIsolation(device,*desc,owner,create,kScreenOcclusionOffShader,sizeof(kScreenOcclusionOffShader),kScreenOcclusionVariant,screenOcclusionLightReady,"screen_occlusion_composition");
     }
     if(SUCCEEDED(hr) && kind==kSelectorComponent) {
+        PrepareIsolation(device,*desc,owner,create,kSelectorMapProbeShader,sizeof(kSelectorMapProbeShader),kMapProbeVariant,mapProbeReady,"selected_map_probe_producer");
         PrepareIsolation(device,*desc,owner,create,kSelectorMapPriorityShader,sizeof(kSelectorMapPriorityShader),kMapPriorityVariant,mapPrioritySelectorReady,"surface_normals_map_priority_producer");
         PrepareIsolation(device,*desc,owner,create,kSelectorCorrectedNoAOShader,sizeof(kSelectorCorrectedNoAOShader),kCorrectedNoAOVariant,correctedNoAOSelectorReady,"surface_normals_no_ao_producer");
         PrepareIsolation(device,*desc,owner,create,kSelectorBentNormalOffShader,sizeof(kSelectorBentNormalOffShader),kBentNormalVariant,bentNormalSelectorReady,"bent_normal_producer");

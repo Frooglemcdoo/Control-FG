@@ -9,7 +9,7 @@ import struct
 from pathlib import Path
 from dxbc_transform import transform_shex
 from rt_spot_history import dest, source
-from rt_spot_selection import map_priority_selection
+from rt_spot_selection import map_priority_selection, map_visibility_probe
 
 ROOT = Path(__file__).resolve().parents[1]
 LIGHT_SHA = 'a844888cdd5478605574157b323cb3376369ae9517c4954bf38bee21b664ecd7'
@@ -98,6 +98,7 @@ def generate():
         '55bcdf543e60dee904c656bfed355aa1f10393a8f0a950467f25a9ed5ee76a1c',
         [(offset,source(7,'zzzz'),[0x00004001,0x3f800000]) for offset in (5989,6012)])))
     isolated.append(('selector_map_priority','kSelectorMapPriorityShader',map_priority_selection(bent_selector)))
+    isolated.append(('selector_map_probe','kSelectorMapProbeShader',map_visibility_probe(bent_selector)))
     for name,symbol,result in isolated:
         (out/f'rt_spot_{name}.dxbc').write_bytes(result)
         headers.append(f'static const unsigned char {symbol}[]={{\n'+','.join(f'0x{x:02x}' for x in result)+'\n};')

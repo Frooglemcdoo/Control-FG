@@ -56,3 +56,33 @@ def map_priority_selection(data):
         # final map visibility. Do not restore native adjacent-score ranking.
         words[10459:10464]=[0x07000038,*dest(33,1),*source(13,'wwww'),*source(43,'xxxx')]
     return transform_shex(data,transform)
+
+
+def map_visibility_probe(data):
+    """Diagnostic only: encode the winning spotlight's native map visibility.
+
+    Preserve ranking, IDs and every atlas sample. A private register follows
+    the same winner predicate as r34.xy. After native output dithering, replace
+    diffuse RGB with (visibility, 1-visibility, selected ID + 1). The existing
+    composition-before capture reads this payload, not ordinary radiance.
+    """
+    if hashlib.sha256(data).hexdigest()!=CORRECTED_SELECTOR_SHA:
+        raise ValueError('Unsupported map probe selector')
+    def transform(w):
+        assert w[225]&2047==104 and w[226]==44
+        assert w[10549]&2047==55 and w[14948]&2047==164
+        w[226]=45
+        # Zero means no selected candidate; z is a separate validity/ID lane.
+        init=instruction('mov',dest(44,15),immediate([0,0,0,0]))
+        # movc r44.x, r14.w, r43.x, r44.x: exact existing winner predicate.
+        winner=[0x09000037,*dest(44,1),*source(14,'wwww'),*source(43,'xxxx'),*source(44,'xxxx')]
+        # r4.x still holds the selected spotlight ID at the final store.
+        encode=[0x05000056,*dest(44,4),*source(4,'xxxx')]
+        encode += [0x07000000,*dest(44,4),*source(44,'zzzz'),0x00004001,0x3f800000]
+        encode += [0x08000000,*dest(44,2),0x80100006,0x41,44,0x00004001,0x3f800000]
+        # Match the original UAV/address operand and change only the store value.
+        assert w[14948+5:14948+7]==source(1)
+        w[14953:14955]=source(44)
+        for at,words in sorted([(231,init),(10549,winner),(14948,encode)],reverse=True):
+            w[at:at]=words
+    return transform_shex(data,transform)

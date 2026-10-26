@@ -39,8 +39,7 @@ inline constexpr unsigned imagesPerStep=3;
 // One stable RR-off pose for blocker identity and current filtered visibility.
 inline constexpr Step blockerStep{Mode::RoomCorrectedNoRR,L"shadow-blocker",true};
 inline constexpr Mode BlockerMode(Mode selected) noexcept {
-    (void)selected;
-    return blockerStep.mode;
+    return selected==Mode::RoomMapProbe ? selected : blockerStep.mode;
 }
 inline constexpr uint64_t blockerSettleMs=5000;
 inline bool BlockerSettled(uint64_t elapsed,uint64_t frames,bool observed) noexcept {

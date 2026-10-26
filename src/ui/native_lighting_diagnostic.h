@@ -19,6 +19,7 @@ inline const wchar_t* ButtonLabel(unsigned index) noexcept {
     return actions[index - kModeCount];
 }
 inline const wchar_t* ModeHint(Mode mode) noexcept {
+    if(mode==Mode::RoomMapProbe)return L"Diagnostic colors. Click TRACE SHADOW; hold still. Restore DEFAULT afterward.";
     if(mode==Mode::RoomCorrectedMapPriority)return L"Test: rank RT lights using map-visible energy. RR off.";
     if(mode==Mode::RoomCorrectedOpen)return L"Test: selected RT spotlight unblocked; other shadows retained. RR off.";
     if(DisablesCorrectedBakedGi(mode))return L"Baked-brick samples removed from RT diffuse GI; shadows retained.";
@@ -219,7 +220,7 @@ inline DWORD WINAPI ThreadProc(LPVOID) noexcept {
     ULONGLONG nextRefresh=0, nextWindowSearch=0, nextLogDrain=0, nextRRReport=0;
     HWND cachedGame=nullptr;
     POINT lastOrigin{-1,-1};
-    Trace("session_start build=R162-overlay-rr-capture pid=%lu default=authored_clip_surface_normals_current_spot_when_ready log=user-diagnostics-folder",GetCurrentProcessId());
+    Trace("session_start build=R163-overlay-rr-capture pid=%lu default=authored_clip_surface_normals_current_spot_when_ready log=user-diagnostics-folder",GetCurrentProcessId());
     MSG msg{};
     while(GetMessageW(&msg,nullptr,0,0)>0){
         if (!panel || !IsDialogMessageW(panel, &msg)) {

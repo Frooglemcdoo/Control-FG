@@ -178,6 +178,8 @@ jobs:
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           python tools/generate-shadow-isolation.py
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python tools/test-map-visibility-probe.py
+          if($LASTEXITCODE -ne 0){throw "Map visibility probe checks failed"}
           python tools/test-shadow-isolation.py
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           python tools/generate-spot-open.py
@@ -529,11 +531,11 @@ jobs:
           [System.Management.Automation.Language.Parser]::ParseFile((Join-Path $pwd 'Capture-RR-Boundary.ps1'),[ref]$tokens,[ref]$parseErrors) | Out-Null
           if($parseErrors.Count){throw ($parseErrors | Out-String)}
 
-      - name: Package live lighting diagnostic R162
+      - name: Package live lighting diagnostic R163
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-Native-Lighting-Live-R162'
+          $out='Control-FG-Native-Lighting-Live-R163'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
           Copy-Item build/rt_spot_selected_off.dxbc,build/rt_spot_selection.dxbc,build/rt_spot_visibility.dxbc,build/rt_spot_light_ids.dxbc,build/rt_spot_raw_history.dxbc,build/rt_spot_raw_spatial0.dxbc,build/rt_spot_raw_spatial1.dxbc,build/rt_spot_full.dxil,build/rt_spot_r94.dxil,build/rt_spot_light.dxbc,build/rt_spot_reset.dxbc,build/rt_spot_history.dxbc,build/rt_spot_spatial0.dxbc,build/rt_spot_spatial1.dxbc $out
@@ -553,18 +555,18 @@ jobs:
           Copy-Item Collect-ControlFG-Compact-Logs.ps1 "$out/Collect-ControlFG-Compact-Logs.ps1"
           Copy-Item Package-Lighting-Capture.cmd,tools/package-lighting-capture.py $out
           Copy-Item Capture-RR-Boundary.cmd,Capture-RR-Boundary.ps1,Collect-RR-Boundary-Status.cmd,tools/collect-rr-boundary.py $out
-          Copy-Item docs/native-lighting-r162.md "$out/DIAGNOSTIC-NOTES.md"
+          Copy-Item docs/native-lighting-r163.md "$out/DIAGNOSTIC-NOTES.md"
           @'
-          CONTROL-FG R162 - Projection-origin RT spotlight comparison
+          CONTROL-FG R163 - Selected spotlight map visibility probe
           Close Control to install. Copy contents beside Control_DX12.exe.
           Preserve NVIDIA runtimes and ControlFGStreamline. Start a fresh game session.
           Stand on the stairs with the false diagonal shadow visible.
-          Compare RR OFF and PROJECTION RT from the same position. Both bypass RR.
-          Record a short video switching between them, then walking down the stairs.
-          Check Jesse, railings and previously fixed rooms for missing or altered soft shadows.
-          Click SAVE LOG and send the session log plus video/screenshots.
-          TRACE SHADOW still captures accepted RR OFF reference rays, not the new projection rays.
-          Default remains unchanged. This is an optional test, not a confirmed fix.
+          Open F10, select MAP PROBE, then click TRACE SHADOW.
+          Diagnostic colors/brightness are expected: diffuse RGB temporarily carries data.
+          Hold still for the five-second settle and capture. Do not walk into the room.
+          After completion, restore DEFAULT (FIXED).
+          Send the Shadow-R163 folder: lighting.log, manifest.txt and three PNGs.
+          Default rendering is unchanged. This measures a disagreement, not a shadow fix.
           See DIAGNOSTIC-NOTES.md.
           '@ | Set-Content "$out/README.txt" -Encoding ASCII
           Compress-Archive -Path "$out/*" -DestinationPath "$out.zip" -Force
@@ -573,10 +575,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-Native-Lighting-Live-R162
+          name: Control-FG-Native-Lighting-Live-R163
           path: |
-            Control-FG-Native-Lighting-Live-R162.zip
-            Control-FG-Native-Lighting-Live-R162.sha256
+            Control-FG-Native-Lighting-Live-R163.zip
+            Control-FG-Native-Lighting-Live-R163.sha256
             build/rt_spot_shadow_prototype.dxil
             build/rr_clamp_fixed.h
             build/rt_spot_blocker.dxil

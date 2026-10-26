@@ -16,7 +16,7 @@ int main(){
     assert(kModeChoices[0].mode==Mode::Native);
     assert(kModeChoices[1].mode==Mode::RoomBoth);
     assert(kModeChoices[2].mode==kDefaultMode);
-    assert(kModeChoices[8].mode==Mode::RoomProjectionOrigin);
+    assert(kModeChoices[8].mode==Mode::RoomMapProbe);
     assert(kModeChoices[3].mode==Mode::RoomCorrectedVisibility);
     assert(kModeChoices[4].mode==Mode::RoomNativeNoRR);
     assert(kDefaultMode==Mode::RoomCorrectedNoHistory);
