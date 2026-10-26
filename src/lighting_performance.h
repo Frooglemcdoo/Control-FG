@@ -42,7 +42,7 @@ inline bool Prepare() noexcept {
     HRESULT hr=device->CreateQueryHeap(&q,IID_PPV_ARGS(&queries));
     D3D12_HEAP_PROPERTIES heap{};heap.Type=D3D12_HEAP_TYPE_READBACK;heap.CreationNodeMask=heap.VisibleNodeMask=1;
     D3D12_RESOURCE_DESC d{};d.Dimension=D3D12_RESOURCE_DIMENSION_BUFFER;d.Width=kCapacity*16;
-    d.Height=1;d.DepthOrArraySize=d.MipLevels=d.SampleDesc.Count=1;d.Layout=D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+    d.Height=1;d.DepthOrArraySize=1;d.MipLevels=1;d.SampleDesc.Count=1;d.Layout=D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
     if(SUCCEEDED(hr))hr=device->CreateCommittedResource(&heap,D3D12_HEAP_FLAG_NONE,&d,D3D12_RESOURCE_STATE_COPY_DEST,nullptr,IID_PPV_ARGS(&readback));
     if(SUCCEEDED(hr))hr=device->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&fence));
     D3D12_RANGE range{0,kCapacity*16};
@@ -73,7 +73,7 @@ inline void End(unsigned index) noexcept {
 }
 inline void Reset(ID3D12GraphicsCommandList* list) noexcept {
     if(!watch.load())return;
-    if(!TryAcquireSRWLockExclusive(&lock)){fault=true;return;}
+    AcquireSRWLockExclusive(&lock); // Metadata only; UI never holds this lock during file I/O.
     for(unsigned i=0;i<count;++i)if(samples[i].list==list && samples[i].current){
         samples[i].current=false;
         if(samples[i].state==State::Recorded || samples[i].state==State::Recording)samples[i].state=State::Discarded;
@@ -83,7 +83,7 @@ inline void Reset(ID3D12GraphicsCommandList* list) noexcept {
 // Called before the actual ExecuteCommandLists; only its exact list set is leased.
 inline UINT64 BeforeExecute(ID3D12CommandQueue* q,UINT n,ID3D12CommandList*const* lists) noexcept {
     if(!watch.load() || fault.load())return 0;
-    if(!TryAcquireSRWLockExclusive(&lock)){fault=true;return 0;}
+    AcquireSRWLockExclusive(&lock); // Submission/reset bookkeeping must not be dropped on contention.
     bool found=false;
     for(unsigned i=0;i<count;++i){auto& s=samples[i];
         if(!s.current || s.state==State::Discarded)continue;
