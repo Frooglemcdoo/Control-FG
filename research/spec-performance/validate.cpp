@@ -11,8 +11,9 @@
 #include <cstdio>
 using Microsoft::WRL::ComPtr;
 static bool Check(HRESULT hr,const char* label) {if(FAILED(hr)){printf("FAIL %s: %08lx\n",label,hr);return false;}return true;}
-int main(int argc,char**argv){
- if(argc!=2)return 1;
+#include "execute-fixture.h"
+int main(int argc,char**argv){try{
+ if(argc!=2 && argc!=3)return 1;
  std::ifstream input(argv[1],std::ios::binary);std::vector<char> bytes((std::istreambuf_iterator<char>(input)),{});
  ComPtr<ID3D12ShaderReflection> reflection;
  if(!Check(D3DReflect(bytes.data(),bytes.size(),IID_PPV_ARGS(&reflection)),"reflection"))return 2;
@@ -40,5 +41,17 @@ int main(int argc,char**argv){
  ComPtr<ID3D12PipelineState> pso;
  if(!Check(device->CreateComputePipelineState(&pipeline,IID_PPV_ARGS(&pso)),"compute PSO"))return 6;
  printf("PASS reflection, compatible root signature and WARP compute PSO: %s\n",argv[1]);
+ if(argc==3){
+  std::ifstream other(argv[2],std::ios::binary);std::vector<char> parallel((std::istreambuf_iterator<char>(other)),{});
+  pipeline.CS={parallel.data(),parallel.size()};ComPtr<ID3D12PipelineState> alternative;Require(device->CreateComputePipelineState(&pipeline,IID_PPV_ARGS(&alternative)));
+  for(UINT count:{0u,1u,2u,4u,8u,12u,16u})for(float clamp:{-1.f,2.5f}){
+   auto a=ExecuteFixture(device.Get(),root.Get(),pso.Get(),reflection.Get(),false,13,19,count,clamp);
+   auto b=ExecuteFixture(device.Get(),root.Get(),alternative.Get(),reflection.Get(),true,13,19,count,clamp);
+   if(a!=b)throw std::runtime_error("fixture pixels differ: count="+std::to_string(count)+" clamp="+std::to_string(clamp));
+   bool nonzero=false;for(auto word:a)nonzero|=word!=0;if(count && !nonzero)throw std::runtime_error("vacuous all-zero fixture");
+   printf("PASS bitwise GPU equality: samples=%u clamp=%g partial edges and sentinel lanes\n",count,clamp);
+  }
+ }
  return 0;
-}
+}catch(const std::exception& e){printf("FAIL %s\n",e.what());return 10;}}
+

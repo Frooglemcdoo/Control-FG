@@ -100,3 +100,20 @@ if __name__=='__main__':
     data=base64.b64decode(args.source.read_text());result=parallelize(data)
     args.output.parent.mkdir(parents=True,exist_ok=True);args.output.write_bytes(result)
     print(json.dumps(dict(source_sha256=SOURCE_SHA,parallel_sha256=hashlib.sha256(result).hexdigest(),bytes=len(result),status='generated_not_gpu_validated')))
+
+# GPU differential fixtures retain the production scheduling, clamp and resolve.
+# Only hit shading is replaced by a positive, pixel/sample-dependent color.
+def fixture(data, native):
+    holder=[]
+    transform_shex(native,lambda w:holder.extend(instructions(w)))
+    body=sum(holder[143:956],[])
+    test=[]
+    for component in 'xyz':
+        index={'x':'z','y':'x','z':'y'}[component]
+        test+=inst('iadd',dst(29,component),src(1,index),imm(1))
+    test+=[(5<<24)|86,*dst(29,'xyz'),*src(29,'xyzx')] # utof
+    def patch(w):
+        positions=[i for i in range(len(w)) if w[i:i+len(body)]==body]
+        assert len(positions)==1
+        p=positions[0];w[p:p+len(body)]=test
+    return transform_shex(data,patch)

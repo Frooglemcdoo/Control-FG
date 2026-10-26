@@ -2,7 +2,7 @@ name: Audit SPEC resolve shader
 on:
   push:
     branches: [experiment/native-hit-capture-r118]
-    paths: ['.github/workflows/audit-spec-resolve.yml', 'research/spec-performance/**', 'tools/spec_parallel.py']
+    paths: ['.github/workflows/audit-spec-resolve.yml', 'research/spec-performance/**', 'tools/spec_parallel.py', 'tools/test-spec-parallel.py']
 permissions:
   contents: read
 jobs:
@@ -34,6 +34,10 @@ jobs:
           if($LASTEXITCODE){throw 'Native PSO failed'}
           ./validate.exe spec-parallel.dxbc
           if($LASTEXITCODE){throw 'Parallel PSO failed'}
+          python tools/test-spec-parallel.py build
+          if($LASTEXITCODE){throw 'Contract test failed'}
+          ./validate.exe build/spec-native-fixture.dxbc build/spec-parallel-fixture.dxbc
+          if($LASTEXITCODE){throw 'GPU differential test failed'}
       - uses: actions/upload-artifact@v4
         if: always()
         with:
