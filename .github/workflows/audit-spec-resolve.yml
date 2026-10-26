@@ -1,0 +1,27 @@
+name: Audit SPEC resolve shader
+on:
+  push:
+    branches: [experiment/native-hit-capture-r118]
+    paths: ['.github/workflows/audit-spec-resolve.yml', 'research/spec-performance/**']
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ilammy/msvc-dev-cmd@v1
+      - shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $bytes=[Convert]::FromBase64String((Get-Content research/spec-performance/spec-resolve.dxbc.b64 -Raw))
+          [IO.File]::WriteAllBytes("$pwd/spec-resolve.dxbc",$bytes)
+          if((Get-FileHash spec-resolve.dxbc -Algorithm SHA256).Hash -ne '4fc0a0e9cd3706bcb86e29444d86fa32616138e1712c53b1b5103b30d7a1ecc9'){throw 'Shader hash mismatch'}
+          cl /nologo /EHsc research/spec-performance/disassemble.cpp /Fe:disassemble.exe /link d3dcompiler.lib
+          if($LASTEXITCODE){throw 'Compiler failed'}
+          ./disassemble.exe spec-resolve.dxbc spec-resolve.asm
+          if($LASTEXITCODE){throw 'Disassembly failed'}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: spec-resolve-audit
+          path: spec-resolve.asm
