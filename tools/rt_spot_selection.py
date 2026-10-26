@@ -40,3 +40,19 @@ def unshadowed_selection(data):
         for at,(size,replacement) in sorted(edits.items(),reverse=True):
             w[at:at+size]=replacement
     return transform_shex(data,transform)
+
+
+CORRECTED_SELECTOR_SHA = '29177f00d24b7c7bc9a9563bb04de4c62f16838a198b1275342bddafc3770bc9'
+
+def map_priority_selection(data):
+    """Rank by mapped candidate energy; preserve all accumulation and normals."""
+    if hashlib.sha256(data).hexdigest()!=CORRECTED_SELECTOR_SHA:
+        raise ValueError('Unsupported corrected spotlight selector')
+    def transform(words):
+        expected=[0x05000036,*dest(33,1),*source(13,'wwww')]
+        if words[10459:10464]!=expected:
+            raise ValueError('Corrected candidate score anchor changed')
+        # r13.w is this candidate's unshadowed energy; r43.x is its saved
+        # final map visibility. Do not restore native adjacent-score ranking.
+        words[10459:10464]=[0x07000038,*dest(33,1),*source(13,'wwww'),*source(43,'xxxx')]
+    return transform_shex(data,transform)

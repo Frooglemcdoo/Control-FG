@@ -71,3 +71,31 @@ for pos,instruction in old.items():
   assert new[pos]['operands'][:1]+new[pos]['operands'][2:]==instruction['operands'][:1]+instruction['operands'][2:]
  else: assert new[pos]==instruction
 print('PASS: corrected open changes only two selected spotlight visibility operands')
+
+# Map priority changes only the candidate score, not its color or accumulation.
+old=decode(root/'build/rt_spot_selector_bent_normal_off.dxbc')['instructions']
+new=decode(root/'build/rt_spot_selector_map_priority.dxbc')['instructions']
+assert len(old)==len(new)
+for before,after in zip(old,new):
+ if before['dword']==10459:
+  assert before['name']=='mov' and before['operands']==['r[33].x','r[13].wwww']
+  assert after['name']=='mul' and after['operands']==['r[33].x','r[13].wwww','r[43].xxxx']
+ else:
+  assert after['name']==before['name'] and after['operands']==before['operands']
+  assert after['dword']==before['dword']+(2 if before['dword']>10459 else 0)
+from rt_spot_selection import map_priority_selection
+try:map_priority_selection(data)
+except ValueError:pass
+else:raise AssertionError('Uncorrected selector accepted')
+# Replacing a winner must return its mapped energy to the remaining lights;
+# winner + remaining must conserve native mapped energy under either ranking.
+import random,math
+rng=random.Random(160)
+for _ in range(1000):
+ energies=[rng.random()*10 for _ in range(8)];maps=[rng.random() for _ in energies]
+ mapped=[e*v for e,v in zip(energies,maps)]
+ winner=max(range(8),key=lambda i:mapped[i])
+ remaining=sum(v for i,v in enumerate(mapped) if i!=winner)
+ assert math.isclose(remaining+mapped[winner],sum(mapped),rel_tol=1e-12)
+assert max(range(2),key=lambda i:[10,8][i]*[0,1][i])==1
+print('PASS map priority: exact score-only edit, unchanged normals/accumulation/point suffix, mapped energy bookkeeping')

@@ -523,11 +523,11 @@ jobs:
           [System.Management.Automation.Language.Parser]::ParseFile((Join-Path $pwd 'Capture-RR-Boundary.ps1'),[ref]$tokens,[ref]$parseErrors) | Out-Null
           if($parseErrors.Count){throw ($parseErrors | Out-String)}
 
-      - name: Package live lighting diagnostic R159
+      - name: Package live lighting diagnostic R160
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-Native-Lighting-Live-R159'
+          $out='Control-FG-Native-Lighting-Live-R160'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
           Copy-Item build/rt_spot_selected_off.dxbc,build/rt_spot_selection.dxbc,build/rt_spot_visibility.dxbc,build/rt_spot_light_ids.dxbc,build/rt_spot_raw_history.dxbc,build/rt_spot_raw_spatial0.dxbc,build/rt_spot_raw_spatial1.dxbc,build/rt_spot_full.dxil,build/rt_spot_r94.dxil,build/rt_spot_light.dxbc,build/rt_spot_reset.dxbc,build/rt_spot_history.dxbc,build/rt_spot_spatial0.dxbc,build/rt_spot_spatial1.dxbc $out
@@ -547,22 +547,23 @@ jobs:
           Copy-Item Collect-ControlFG-Compact-Logs.ps1 "$out/Collect-ControlFG-Compact-Logs.ps1"
           Copy-Item Package-Lighting-Capture.cmd,tools/package-lighting-capture.py $out
           Copy-Item Capture-RR-Boundary.cmd,Capture-RR-Boundary.ps1,Collect-RR-Boundary-Status.cmd,tools/collect-rr-boundary.py $out
-          Copy-Item docs/native-lighting-r159.md "$out/DIAGNOSTIC-NOTES.md"
+          Copy-Item docs/native-lighting-r160.md "$out/DIAGNOSTIC-NOTES.md"
           @'
-          CONTROL-FG R159 - Focused shadow blocker trace
+          CONTROL-FG R160 - Spotlight map-priority comparison
           Close Control to install. Copy contents beside Control_DX12.exe.
           Preserve NVIDIA runtimes and ControlFGStreamline. Start a fresh game session.
           Keep usual DLSS Quality/DLAA and RT settings. Stand on the stairs with the false shadow visible.
-          Open F10 and click TRACE SHADOW. The overlay hides automatically.
-          Hold still: the trace selects RR OFF, waits five seconds and records one GPU batch and three PNGs.
-          Wait for the Shadow trace saved message. It shows the output folder.
-          Send lighting.log and the PNGs from that folder.
-          To ZIP the folder, drag it onto Package-Lighting-Capture.cmd. Parts stay below 200 MB.
-          Previous rendering mode is restored on completion or cancellation. Plain F9 cancels the trace.
-          Shift+F9 remains the separate lighting-buffer capture; it is not needed for this test.
-          Do not use PACKAGE LIGHT for the shadow trace; that button packages the separate image pairs.
-          If incomplete, retain and send the output folder and error. No rendering fix is claimed.
-          Default shaders are unchanged. See DIAGNOSTIC-NOTES.md for capture limits.
+          Open F10. Compare RR OFF with MAP PRIORITY from the same camera position.
+          Allow several seconds after each switch. Record a short video of both modes.
+          Check whether the diagonal boundary disappears, moves, or remains unchanged.
+          Also check Jesse's shadow, soft edges and previously fixed rooms for blobs/noise.
+          Leave MAP PRIORITY selected and click TRACE SHADOW. Hold still through the five-second delay.
+          The trace preserves MAP PRIORITY, saves one GPU batch and three screenshots, then restores that mode.
+          Send lighting.log, manifest.txt and PNGs from the folder shown, plus your video.
+          Drag the trace folder onto Package-Lighting-Capture.cmd to split ZIPs below 200 MB if needed.
+          Default and RR OFF retain the accepted selection. MAP PRIORITY is an optional test, not a confirmed fix.
+          Only candidate ranking changes. RT rays, authored clipping, softness and composition are unchanged.
+          See DIAGNOSTIC-NOTES.md.
           '@ | Set-Content "$out/README.txt" -Encoding ASCII
           Compress-Archive -Path "$out/*" -DestinationPath "$out.zip" -Force
           (Get-FileHash "$out.zip" -Algorithm SHA256).Hash | Set-Content "$out.sha256" -Encoding ASCII
@@ -570,10 +571,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-Native-Lighting-Live-R159
+          name: Control-FG-Native-Lighting-Live-R160
           path: |
-            Control-FG-Native-Lighting-Live-R159.zip
-            Control-FG-Native-Lighting-Live-R159.sha256
+            Control-FG-Native-Lighting-Live-R160.zip
+            Control-FG-Native-Lighting-Live-R160.sha256
             build/rt_spot_shadow_prototype.dxil
             build/rr_clamp_fixed.h
             build/rt_spot_blocker.dxil

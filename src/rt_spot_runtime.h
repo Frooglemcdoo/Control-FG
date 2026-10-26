@@ -38,7 +38,9 @@ inline const GUID kLocalMapsVariant = {0xe631a601,0x6651,0x4911,{0x80,0x90,0x11,
 inline const GUID kCorrectedNoAOVariant = {0xe631a601,0x6651,0x4911,{0x80,0x90,0x11,0x71,0x14,0x28,0x30,0x10}};
 inline const GUID kGuardedHistoryVariant = {0xe631a601,0x6651,0x4911,{0x80,0x90,0x11,0x71,0x14,0x28,0x30,0x11}};
 inline const GUID kCorrectedOpenVariant = {0xe631a601,0x6651,0x4911,{0x80,0x90,0x11,0x71,0x14,0x28,0x30,0x12}};
+inline const GUID kMapPriorityVariant = {0xe631a601,0x6651,0x4911,{0x80,0x90,0x11,0x71,0x14,0x28,0x30,0x13}};
 inline const GUID& IsolationVariant(Mode mode) noexcept {
+    if(mode==Mode::RoomCorrectedMapPriority)return kMapPriorityVariant;
     if(mode==Mode::RoomCorrectedNoAO)return kCorrectedNoAOVariant;
     if(UsesDirectSurfaceNormals(mode))return kBentNormalVariant;
     switch(mode) {
@@ -52,6 +54,7 @@ inline const GUID& IsolationVariant(Mode mode) noexcept {
 // Composition signal views override shading, while the earlier producer still
 // uses IsolationVariant to retain corrected light selection.
 inline const GUID& CompositionVariant(Mode mode) noexcept {
+    if(mode==Mode::RoomCorrectedMapPriority)return kBentNormalVariant;
     if(mode==Mode::RoomCorrectedOpen)return kCorrectedOpenVariant;
     if(IsCorrectedSignal(mode))return ShowsSpotLightIds(mode)?kLightIdsVariant:kVisibilityVariant;
     if(NeedsIsolationProducer(mode)||mode==Mode::RoomContactOff)return IsolationVariant(mode);
@@ -317,6 +320,7 @@ inline void ObserveCompute(ID3D12Device* device, const D3D12_COMPUTE_PIPELINE_ST
         PrepareIsolation(device,*desc,owner,create,kScreenOcclusionOffShader,sizeof(kScreenOcclusionOffShader),kScreenOcclusionVariant,screenOcclusionLightReady,"screen_occlusion_composition");
     }
     if(SUCCEEDED(hr) && kind==kSelectorComponent) {
+        PrepareIsolation(device,*desc,owner,create,kSelectorMapPriorityShader,sizeof(kSelectorMapPriorityShader),kMapPriorityVariant,mapPrioritySelectorReady,"surface_normals_map_priority_producer");
         PrepareIsolation(device,*desc,owner,create,kSelectorCorrectedNoAOShader,sizeof(kSelectorCorrectedNoAOShader),kCorrectedNoAOVariant,correctedNoAOSelectorReady,"surface_normals_no_ao_producer");
         PrepareIsolation(device,*desc,owner,create,kSelectorBentNormalOffShader,sizeof(kSelectorBentNormalOffShader),kBentNormalVariant,bentNormalSelectorReady,"bent_normal_producer");
         PrepareIsolation(device,*desc,owner,create,kSelectorLocalMapsOffShader,sizeof(kSelectorLocalMapsOffShader),kLocalMapsVariant,localMapsSelectorReady,"local_maps_producer");
@@ -344,7 +348,7 @@ inline ID3D12PipelineState* SelectCompute(ID3D12PipelineState* native) noexcept 
         static thread_local uint64_t lastSequence = ~uint64_t(0);
         if (lastSequence != LiveSelection::Sequence(state)) {
             Trace("rt_spot_selection seq=%llu policy=%s cpu_binding_only=1",LiveSelection::Sequence(state),
-                use ? "unshadowed_contribution" : "native_r93");
+                use ? (LiveSelection::GetMode(state)==Mode::RoomCorrectedMapPriority?"map_visible_contribution":"unshadowed_contribution") : "native_r93");
             lastSequence = LiveSelection::Sequence(state);
         }
         if (!use) return nullptr;
@@ -390,7 +394,7 @@ inline ID3D12PipelineState* SelectCompute(ID3D12PipelineState* native) noexcept 
         const auto sequence = LiveSelection::Sequence(active->selectionState);
         if (reported != sequence) {
             Trace("spot_light_isolation seq=%llu mode=%s selector=%s composition=%s gpu_confirmed=0",
-                sequence,ModeName(active->mode),UsesUnshadowedSpotSelection(active->mode)?"unshadowed":"native",
+                sequence,ModeName(active->mode),active->mode==Mode::RoomCorrectedMapPriority?"map_priority":UsesUnshadowedSpotSelection(active->mode)?"unshadowed":"native",
                 IsCorrectedSignal(active->mode)?(ShowsSpotLightIds(active->mode)?"corrected_selected_spot_ids":"corrected_selected_spot_visibility"):
                 active->mode==Mode::RoomCorrectedOpen?"surface_normals_rt_spot_visibility_one":
                 active->mode==Mode::RoomCorrectedNoAO?"surface_normals_screen_occlusion_yw_one":

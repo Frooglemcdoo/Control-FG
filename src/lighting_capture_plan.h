@@ -38,6 +38,9 @@ inline constexpr unsigned count=sizeof(steps)/sizeof(steps[0]);
 inline constexpr unsigned imagesPerStep=3;
 // One stable RR-off pose for blocker identity and current filtered visibility.
 inline constexpr Step blockerStep{Mode::RoomCorrectedNoRR,L"shadow-blocker",true};
+inline constexpr Mode BlockerMode(Mode selected) noexcept {
+    return selected==Mode::RoomCorrectedMapPriority?selected:blockerStep.mode;
+}
 inline constexpr uint64_t blockerSettleMs=5000;
 inline bool BlockerSettled(uint64_t elapsed,uint64_t frames,bool observed) noexcept {
     return elapsed>=blockerSettleMs && frames>=90 && observed;
