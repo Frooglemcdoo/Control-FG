@@ -3,7 +3,7 @@ name: Build native reflection enhancements and RR
 on:
   push:
     branches:
-      - work/r174-spec-zero-radius
+      - work/r175-spec-pass-profiling
       - experiment/native-hit-capture-r118
       - experiment/pt-reflections-p0
       - experiment/pt-verify-stages-20261010
@@ -273,7 +273,7 @@ jobs:
           if($LASTEXITCODE -ne 0){throw 'Area-light guard GPU differential test failed'}
           python tools/test-spec-serial-lifetimes.py
           if($LASTEXITCODE -ne 0){throw 'Serial SPEC load movement audit failed'}
-          python tools/spec_zero_radius.py --source research/spec-performance/spec-resolve.dxbc.b64 --output build/spec-serial-lifetimes.dxbc --header build/spec_serial_lifetimes.generated.h
+          python tools/spec_serial_lifetimes.py --source research/spec-performance/spec-resolve.dxbc.b64 --output build/spec-serial-lifetimes.dxbc --header build/spec_serial_lifetimes.generated.h
           if($LASTEXITCODE -ne 0){throw 'Serial SPEC shader generation failed'}
           ./build/spec-validate.exe build/spec-serial-lifetimes.dxbc
           if($LASTEXITCODE -ne 0){throw 'Serial SPEC PSO validation failed'}
@@ -585,11 +585,11 @@ jobs:
           & powershell.exe -NoProfile -File Package-Lighting-Performance.ps1 -Folder build/perf-package-test -ModuleFolder build
           if ($LASTEXITCODE -ne 0 -or !(Test-Path build/perf-package-test.zip)) { throw 'Performance package roundtrip failed' }
 
-      - name: Package live lighting diagnostic R174
+      - name: Package live lighting diagnostic R175
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-Native-Lighting-Live-R174'
+          $out='Control-FG-Native-Lighting-Live-R175'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
           Copy-Item build/rt_spot_selected_off.dxbc,build/rt_spot_selection.dxbc,build/rt_spot_visibility.dxbc,build/rt_spot_light_ids.dxbc,build/rt_spot_raw_history.dxbc,build/rt_spot_raw_spatial0.dxbc,build/rt_spot_raw_spatial1.dxbc,build/rt_spot_full.dxil,build/rt_spot_r94.dxil,build/rt_spot_light.dxbc,build/rt_spot_reset.dxbc,build/rt_spot_history.dxbc,build/rt_spot_spatial0.dxbc,build/rt_spot_spatial1.dxbc $out
@@ -609,9 +609,9 @@ jobs:
           Copy-Item Collect-ControlFG-Compact-Logs.ps1 "$out/Collect-ControlFG-Compact-Logs.ps1"
           Copy-Item Package-Lighting-Capture.cmd,tools/package-lighting-capture.py,Package-Lighting-Performance.ps1 $out
           Copy-Item Capture-RR-Boundary.cmd,Capture-RR-Boundary.ps1,Collect-RR-Boundary-Status.cmd,tools/collect-rr-boundary.py $out
-          Copy-Item docs/native-lighting-r174.md "$out/DIAGNOSTIC-NOTES.md"
+          Copy-Item docs/native-lighting-r175.md "$out/DIAGNOSTIC-NOTES.md"
           @'
-          CONTROL-FG R174 - Serial SPEC conditional area-light shading
+          CONTROL-FG R175 - Serial SPEC baseline with per-dispatch profiling
           Close Control to install. Copy contents beside Control_DX12.exe.
           Preserve NVIDIA runtimes and ControlFGStreamline. Start a fresh game session.
           Select NATIVE BLEND with RR on and FG off. Set SPEC: 16 and GI: 6.
@@ -632,10 +632,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-Native-Lighting-Live-R174
+          name: Control-FG-Native-Lighting-Live-R175
           path: |
-            Control-FG-Native-Lighting-Live-R174.zip
-            Control-FG-Native-Lighting-Live-R174.sha256
+            Control-FG-Native-Lighting-Live-R175.zip
+            Control-FG-Native-Lighting-Live-R175.sha256
             build/centered-original.ll
             build/centered-reuse.ll
             build/centered-reuse-validation.json

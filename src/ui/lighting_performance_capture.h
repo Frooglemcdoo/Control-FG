@@ -55,8 +55,8 @@ inline wchar_t mainPath[32768]{};
 inline void Emit(const performance::Sample& s,double ms) noexcept {
     if(!csv)return;
     const auto stage=static_cast<unsigned>(s.stage);
-    if(fprintf(csv,"%llu,%llu,%s,%.9f,%u,%u,%u,%llu,%s,%u,%u,%llu,%s\n",s.capture,s.present,performance::Name(s.stage),ms,s.x,s.y,s.z,s.tableBytes,
-        ModeName(LiveSelection::GetMode(s.selection)),unsigned(s.rr),s.effects,s.frequency,s.sourceShader)<0)++errors;
+    if(fprintf(csv,"%llu,%llu,%s,%.9f,%u,%u,%u,%llu,%s,%u,%u,%llu,%s,%u,%llu,%llu,%llu,%llu,%llu,%llu\n",s.capture,s.present,performance::Name(s.stage),ms,s.x,s.y,s.z,s.tableBytes,
+        ModeName(LiveSelection::GetMode(s.selection)),unsigned(s.rr),s.effects,s.frequency,s.sourceShader,s.recordIndex,s.raygenStart,s.raygenBytes,s.hitStart,s.hitStride,s.missStart,s.missStride)<0)++errors;
     sums[stage]+=ms;++counts[stage];++rows;
 }
 inline void Complete(HWND game,bool packed) noexcept {
@@ -101,12 +101,12 @@ inline bool Start() noexcept {
     if(!DrainDiagnosticLog(true) || !Offset(report.Path(),logOffset))return false;
     wchar_t root[MAX_PATH]{};wcscpy_s(root,report.Path());auto* slash=wcsrchr(root,L'\\');if(!slash)return false;*slash=0;
     SYSTEMTIME t{};GetLocalTime(&t);static unsigned serial=0;
-    swprintf_s(folder,L"%s\\Performance-R174-%04u%02u%02u-%02u%02u%02u-%lu-%u",root,t.wYear,t.wMonth,t.wDay,t.wHour,t.wMinute,t.wSecond,GetCurrentProcessId(),serial++);
+    swprintf_s(folder,L"%s\\Performance-R175-%04u%02u%02u-%02u%02u%02u-%lu-%u",root,t.wYear,t.wMonth,t.wDay,t.wHour,t.wMinute,t.wSecond,GetCurrentProcessId(),serial++);
     if(!CreateDirectoryW(folder,nullptr))return false;
     wchar_t path[MAX_PATH]{};swprintf_s(path,L"%s\\gpu-timings.csv",folder);_wfopen_s(&csv,path,L"wb");
     swprintf_s(path,L"%s\\manifest.txt",folder);_wfopen_s(&manifest,path,L"wb");
     if(!csv || !manifest){if(csv)fclose(csv);if(manifest)fclose(manifest);csv=manifest=nullptr;return false;}
-    fprintf(csv,"capture,present,stage,gpu_ms,width_or_groups,height_or_groups,depth_or_groups,hit_table_bytes,mode,rr_selected,rt_effects,timestamp_frequency,source_shader_sha256\n");
+    fprintf(csv,"capture,present,stage,gpu_ms,width_or_groups,height_or_groups,depth_or_groups,hit_table_bytes,mode,rr_selected,rt_effects,timestamp_frequency,source_shader_sha256,record_index,raygen_start,raygen_bytes,hit_start,hit_stride,miss_start,miss_stride\n");
     AcquireSRWLockExclusive(&performance::lock);
     for(unsigned i=0;i<performance::count;++i){performance::samples[i].current=false;performance::samples[i].state=performance::State::Discarded;}
     ReleaseSRWLockExclusive(&performance::lock);
@@ -116,7 +116,8 @@ inline bool Start() noexcept {
     session=performance::capture.fetch_add(1)+1;performance::skipped=0;state=selection.Read();contextRequested=false;
     *mainPath=0;mainOffset={};
     if(logFile==INVALID_HANDLE_VALUE || !GetFinalPathNameByHandleW(logFile,mainPath,32768,FILE_NAME_NORMALIZED) || !Offset(mainPath,mainOffset))++errors;
-    fprintf(manifest,"build=R174\nsession=%llu\nmode=%s\nsettle_ms=5000\nmeasure_ms=20000\nsample_every_presents=128\nsettings_changed=0\ngpu_waits=0\n",session,ModeName(LiveSelection::GetMode(state)));
+    fprintf(manifest,"ray_identity=GPU_virtual_addresses_capture_local_not_shader_hashes\nrecord_index=CPU_recording_order_not_GPU_execution_order\nray_tables_may_be_reused_or_updated=1\nother_rays_mean=pools_distinct_dispatches_use_CSV\n");
+    fprintf(manifest,"build=R175\nsession=%llu\nmode=%s\nsettle_ms=5000\nmeasure_ms=20000\nsample_every_presents=128\nsettings_changed=0\ngpu_waits=0\n",session,ModeName(LiveSelection::GetMode(state)));
     fprintf(manifest,"CSV dimensions are incoming native launch arguments, not TraceRay counts. Serial SPEC retains native dispatch dimensions. Shadow ray timing includes the combined native spotlight/point pass. GPU stages are per dispatch; do not sum means across different sample populations. Context capture happens after timing, uses reference rays, and cannot establish room ownership.\n");
     Settings("start");nextStatus=0;
     phase=Phase::Delay;began=phaseTime=GetTickCount64();startPresent=presentCount.load();

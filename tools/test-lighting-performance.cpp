@@ -34,7 +34,16 @@ int main(){try{
     Require(p::ComputeStage(list.Get())==p::Stage::OtherCompute);
     Require(p::ComputeShader(list.Get())[0]=='a' && p::ComputeShader(nullptr)==nullptr);
     p::Bind(list.Get(),p::Stage::None);Require(p::ComputeShader(list.Get())[0]==0);
-    unsigned ticket=p::Begin(list.Get(),p::Stage::ShadowRays,100,100,1,960,shader);Require(ticket!=p::kInvalid);p::End(ticket);Require(p::samples[ticket].sourceShader[63]=='a');
+    D3D12_DISPATCH_RAYS_DESC rayDesc{};
+    rayDesc.RayGenerationShaderRecord={0x10000,64};
+    rayDesc.HitGroupTable={0x20000,960,32};
+    rayDesc.MissShaderTable={0x30000,64,32};
+    unsigned ticket=p::Begin(list.Get(),p::Stage::ShadowRays,100,100,1,960,shader,&rayDesc);Require(ticket!=p::kInvalid);p::End(ticket);Require(p::samples[ticket].sourceShader[63]=='a');
+    rayDesc.RayGenerationShaderRecord.StartAddress=0; // metadata copied, no pointer retained
+    Require(p::samples[ticket].raygenStart==0x10000 && p::samples[ticket].raygenBytes==64);
+    Require(p::samples[ticket].hitStart==0x20000 && p::samples[ticket].hitStride==32);
+    Require(p::samples[ticket].missStart==0x30000 && p::samples[ticket].missStride==32);
+    Require(p::samples[ticket].recordIndex==ticket);
     unsigned rows=0;
     auto emit=[&](const p::Sample& s,double ms){Require(s.rr && s.effects==43 && s.x==100 && s.tableBytes==960 && ms>=0);++rows;};
     Require(p::Poll(1,emit)==1 && !rows); // recorded is not GPU completion
@@ -49,7 +58,7 @@ int main(){try{
     auto cancelled=p::Begin(list.Get(),p::Stage::History,1,1,1);p::End(cancelled);
     Check(list->Close());Check(list->Reset(allocator.Get(),nullptr));p::Reset(list.Get());
     Require(p::samples[cancelled].state==p::State::Discarded);
-    auto next=p::Begin(list.Get(),p::Stage::ShadowRays,100,100,1,960);p::End(next);Require(next>cancelled);
+    auto next=p::Begin(list.Get(),p::Stage::ShadowRays,100,100,1,960);p::End(next);Require(next>cancelled);Require(p::samples[next].raygenStart==0 && p::samples[next].recordIndex==next);
     Check(list->Close());value=p::BeforeExecute(queue.Get(),1,lists);Require(value!=0);
     queue->ExecuteCommandLists(1,lists);p::AfterExecute(queue.Get(),value);
     const auto second=GetTickCount64()+10000;

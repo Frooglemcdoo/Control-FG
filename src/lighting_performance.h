@@ -16,6 +16,8 @@ struct Sample {
     State state=State::Recording;Stage stage=Stage::None;
     UINT64 capture=0,present=0,selection=0,fence=0,frequency=0,tableBytes=0;
     char sourceShader[65]{};
+    UINT64 raygenStart=0,raygenBytes=0,hitStart=0,hitStride=0,missStart=0,missStride=0;
+    unsigned recordIndex=0;
     UINT x=0,y=0,z=0;bool rr=false,current=true;unsigned effects=0;
 };
 inline SRWLOCK lock=SRWLOCK_INIT;
@@ -51,7 +53,7 @@ inline bool Prepare() noexcept {
     if(SUCCEEDED(hr))hr=readback->Map(0,&range,reinterpret_cast<void**>(&mapped));
     if(FAILED(hr)){fault=true;return false;}return true;
 }
-inline unsigned Begin(ID3D12GraphicsCommandList* list,Stage stage,UINT x,UINT y,UINT z,UINT64 tableBytes=0,const char* sourceShader=nullptr) noexcept {
+inline unsigned Begin(ID3D12GraphicsCommandList* list,Stage stage,UINT x,UINT y,UINT z,UINT64 tableBytes=0,const char* sourceShader=nullptr,const D3D12_DISPATCH_RAYS_DESC* rays=nullptr) noexcept {
     if(!enabled.load(std::memory_order_acquire) || fault.load() || stage==Stage::None || !list)return kInvalid;
     const auto present=presentCount.load();if(present%kSampleInterval)return kInvalid;
     if(list->GetType()!=D3D12_COMMAND_LIST_TYPE_DIRECT)return kInvalid;
@@ -62,6 +64,12 @@ inline unsigned Begin(ID3D12GraphicsCommandList* list,Stage stage,UINT x,UINT y,
     auto& s=samples[index];s.list=list;list->AddRef();s.stage=stage;s.capture=capture.load();s.present=present;
     for(unsigned i=0;i<64;++i)s.sourceShader[i]=sourceShader?sourceShader[i]:0;
     s.sourceShader[64]=0;
+    s.recordIndex=index;
+    if(rays){
+        s.raygenStart=rays->RayGenerationShaderRecord.StartAddress;s.raygenBytes=rays->RayGenerationShaderRecord.SizeInBytes;
+        s.hitStart=rays->HitGroupTable.StartAddress;s.hitStride=rays->HitGroupTable.StrideInBytes;
+        s.missStart=rays->MissShaderTable.StartAddress;s.missStride=rays->MissShaderTable.StrideInBytes;
+    }
     s.selection=selection.Read();s.x=x;s.y=y;s.z=z;s.tableBytes=tableBytes;
     s.rr=control_rr_diagnostic::lastSelected.load();s.effects=control_rr_diagnostic::lastEffects.load();
     watch.store(true,std::memory_order_release);
