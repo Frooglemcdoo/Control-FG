@@ -28,6 +28,8 @@ struct RRAlbedoCallPatch {};
 static bool RRAlbedoPrepareCallPatch(void*, void*, void*, RRAlbedoCallPatch*) { return false; }
 static bool RRAlbedoExchangeCall(RRAlbedoCallPatch*, bool) { return false; }
 static bool PTReflectionLoadSidecar(const wchar_t*, const char*, std::vector<unsigned char>&, char*, bool&) { return false; }
+#include "../src/spec_serial_runtime.h"
+static HRESULT (STDMETHODCALLTYPE* ptReflectionOriginalCreateComputePipelineState)(ID3D12Device*,const D3D12_COMPUTE_PIPELINE_STATE_DESC*,REFIID,void**)=nullptr;
 #define CONTROL_LIGHTING_NO_OVERLAY
 #include "../src/native_lighting_live_runtime.h"
 using Microsoft::WRL::ComPtr;
