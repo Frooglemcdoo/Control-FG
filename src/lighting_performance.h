@@ -54,6 +54,7 @@ inline unsigned Begin(ID3D12GraphicsCommandList* list,Stage stage,UINT x,UINT y,
     const auto present=presentCount.load();if(present%kSampleInterval)return kInvalid;
     if(list->GetType()!=D3D12_COMMAND_LIST_TYPE_DIRECT)return kInvalid;
     if(!TryAcquireSRWLockExclusive(&lock)){++skipped;return kInvalid;}
+    if(!enabled.load(std::memory_order_acquire)){ReleaseSRWLockExclusive(&lock);return kInvalid;}
     if(count==kCapacity){++skipped;ReleaseSRWLockExclusive(&lock);return kInvalid;}
     const unsigned index=count++;
     auto& s=samples[index];s.list=list;list->AddRef();s.stage=stage;s.capture=capture.load();s.present=present;

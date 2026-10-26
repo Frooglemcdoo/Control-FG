@@ -134,7 +134,7 @@ inline void Tick(HWND game,uint64_t now) noexcept {
     if(phase==Phase::Measure && now>=nextStatus){Settings("sample");nextStatus=now+500;}
     const auto pending=performance::Poll(session,Emit);
     if(performance::fault.load()){++errors;Save(game,"timing_invalid");return;}
-    if(phase==Phase::Measure && now-phaseTime>=20000){performance::enabled=false;phase=Phase::Drain;phaseTime=now;}
+    if(phase==Phase::Measure && now-phaseTime>=20000){performance::enabled=false;phase=Phase::Drain;phaseTime=now;return;}
     if(phase==Phase::Drain){
         if(pending && now-phaseTime<5000)return;
         if(pending){++errors;Save(game,"gpu_retirement_timeout");return;}
