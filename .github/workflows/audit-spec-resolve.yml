@@ -2,7 +2,7 @@ name: Audit SPEC resolve shader
 on:
   push:
     branches: [experiment/native-hit-capture-r118]
-    paths: ['.github/workflows/audit-spec-resolve.yml', 'research/spec-performance/**']
+    paths: ['.github/workflows/audit-spec-resolve.yml', 'research/spec-performance/**', 'tools/spec_parallel.py']
 permissions:
   contents: read
 jobs:
@@ -21,7 +21,24 @@ jobs:
           if($LASTEXITCODE){throw 'Compiler failed'}
           ./disassemble.exe spec-resolve.dxbc spec-resolve.asm
           if($LASTEXITCODE){throw 'Disassembly failed'}
+      - shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          python tools/spec_parallel.py --source research/spec-performance/spec-resolve.dxbc.b64 --output spec-parallel.dxbc
+          if($LASTEXITCODE){throw 'Transform failed'}
+          ./disassemble.exe spec-parallel.dxbc spec-parallel.asm
+          if($LASTEXITCODE){throw 'Parallel disassembly failed'}
+          cl /nologo /EHsc research/spec-performance/validate.cpp /Fe:validate.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
+          if($LASTEXITCODE){throw 'Validator build failed'}
+          ./validate.exe spec-resolve.dxbc
+          if($LASTEXITCODE){throw 'Native PSO failed'}
+          ./validate.exe spec-parallel.dxbc
+          if($LASTEXITCODE){throw 'Parallel PSO failed'}
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: spec-resolve-audit
-          path: spec-resolve.asm
+          path: |
+            spec-resolve.asm
+            spec-parallel.asm
+            spec-parallel.dxbc
