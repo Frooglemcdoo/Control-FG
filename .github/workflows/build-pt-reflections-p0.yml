@@ -523,11 +523,11 @@ jobs:
           [System.Management.Automation.Language.Parser]::ParseFile((Join-Path $pwd 'Capture-RR-Boundary.ps1'),[ref]$tokens,[ref]$parseErrors) | Out-Null
           if($parseErrors.Count){throw ($parseErrors | Out-String)}
 
-      - name: Package live lighting diagnostic R160
+      - name: Package live lighting diagnostic R161
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-Native-Lighting-Live-R160'
+          $out='Control-FG-Native-Lighting-Live-R161'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
           Copy-Item build/rt_spot_selected_off.dxbc,build/rt_spot_selection.dxbc,build/rt_spot_visibility.dxbc,build/rt_spot_light_ids.dxbc,build/rt_spot_raw_history.dxbc,build/rt_spot_raw_spatial0.dxbc,build/rt_spot_raw_spatial1.dxbc,build/rt_spot_full.dxil,build/rt_spot_r94.dxil,build/rt_spot_light.dxbc,build/rt_spot_reset.dxbc,build/rt_spot_history.dxbc,build/rt_spot_spatial0.dxbc,build/rt_spot_spatial1.dxbc $out
@@ -547,22 +547,19 @@ jobs:
           Copy-Item Collect-ControlFG-Compact-Logs.ps1 "$out/Collect-ControlFG-Compact-Logs.ps1"
           Copy-Item Package-Lighting-Capture.cmd,tools/package-lighting-capture.py $out
           Copy-Item Capture-RR-Boundary.cmd,Capture-RR-Boundary.ps1,Collect-RR-Boundary-Status.cmd,tools/collect-rr-boundary.py $out
-          Copy-Item docs/native-lighting-r160.md "$out/DIAGNOSTIC-NOTES.md"
+          Copy-Item docs/native-lighting-r161.md "$out/DIAGNOSTIC-NOTES.md"
           @'
-          CONTROL-FG R160 - Spotlight map-priority comparison
+          CONTROL-FG R161 - Spotlight projection capture
           Close Control to install. Copy contents beside Control_DX12.exe.
           Preserve NVIDIA runtimes and ControlFGStreamline. Start a fresh game session.
-          Keep usual DLSS Quality/DLAA and RT settings. Stand on the stairs with the false shadow visible.
-          Open F10. Compare RR OFF with MAP PRIORITY from the same camera position.
-          Allow several seconds after each switch. Record a short video of both modes.
-          Check whether the diagonal boundary disappears, moves, or remains unchanged.
-          Also check Jesse's shadow, soft edges and previously fixed rooms for blobs/noise.
-          Leave MAP PRIORITY selected and click TRACE SHADOW. Hold still through the five-second delay.
-          The trace preserves MAP PRIORITY, saves one GPU batch and three screenshots, then restores that mode.
-          Send lighting.log, manifest.txt and PNGs from the folder shown, plus your video.
-          Drag the trace folder onto Package-Lighting-Capture.cmd to split ZIPs below 200 MB if needed.
-          Default and RR OFF retain the accepted selection. MAP PRIORITY is an optional test, not a confirmed fix.
-          Only candidate ranking changes. RT rays, authored clipping, softness and composition are unchanged.
+          Keep usual DLSS and RT settings. Stand on the stairs with the false diagonal shadow visible.
+          Open F10 and click TRACE SHADOW. Hold still through the five-second delay and capture.
+          TRACE SHADOW uses accepted corrected RR OFF, then restores the previous mode.
+          Send lighting.log, manifest.txt and the three PNGs from the folder shown.
+          The capture now includes the selected light full record, projection and shadow flags.
+          MAP PRIORITY was rejected because it removes legitimate shadows; its shortcut is removed.
+          This build improves diagnosis; it does not claim to fix the false shadow.
+          Gameplay shaders and default shadow selection are unchanged.
           See DIAGNOSTIC-NOTES.md.
           '@ | Set-Content "$out/README.txt" -Encoding ASCII
           Compress-Archive -Path "$out/*" -DestinationPath "$out.zip" -Force
@@ -571,10 +568,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-Native-Lighting-Live-R160
+          name: Control-FG-Native-Lighting-Live-R161
           path: |
-            Control-FG-Native-Lighting-Live-R160.zip
-            Control-FG-Native-Lighting-Live-R160.sha256
+            Control-FG-Native-Lighting-Live-R161.zip
+            Control-FG-Native-Lighting-Live-R161.sha256
             build/rt_spot_shadow_prototype.dxil
             build/rr_clamp_fixed.h
             build/rt_spot_blocker.dxil

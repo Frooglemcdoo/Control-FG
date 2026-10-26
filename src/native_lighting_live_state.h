@@ -158,7 +158,7 @@ struct ModeChoice { Mode mode; const wchar_t* label; };
 inline constexpr ModeChoice kModeChoices[] = {
     {Mode::Native, L"NATIVE"}, {Mode::RoomBoth, L"BOTH"}, {kDefaultMode, L"DEFAULT (FIXED)"},
     {Mode::RoomCorrectedVisibility, L"SHADOW SIGNAL"}, {Mode::RoomNativeNoRR, L"NATIVE RR OFF"}, {Mode::RoomCorrectedNoRR, L"RR OFF"},
-    {Mode::RoomCorrectedOpen, L"RT SPOT OPEN"}, {Mode::RoomCorrectedLightIds, L"LIGHT IDS"}, {Mode::RoomCorrectedMapPriority, L"MAP PRIORITY"}
+    {Mode::RoomCorrectedOpen, L"RT SPOT OPEN"}, {Mode::RoomCorrectedLightIds, L"LIGHT IDS"}, {Mode::RoomCorrectedNoAO, L"SCREEN AO OFF"}
 };
 inline constexpr unsigned kModeCount = sizeof(kModeChoices) / sizeof(kModeChoices[0]);
 inline unsigned RequiredVariant(Mode mode) noexcept {

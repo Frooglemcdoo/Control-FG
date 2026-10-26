@@ -111,3 +111,18 @@ for bad in [paired.replace('signal_bytes=128','signal_bytes=64'), paired.replace
     except ValueError: pass
     else: raise AssertionError('Invalid paired composition accepted')
 print('PASS R150 paired composition: signed pass deltas, matching pixel/light/visibility, exact ABI')
+
+# R161 retains old signal ABI and validates one full spotlight record per ray.
+spot = bytearray(336)
+struct.pack_into('<4I', spot, 0, light, light+1, 320, 1)
+struct.pack_into('<16f', spot, 96, *[float(i%5==0) for i in range(16)])
+line = ' rt_hit_gpu_light index=0 bytes='+spot.hex()
+projection_log = paired.replace('signal_bytes=128', 'signal_bytes=128 spot_record_bytes=336')
+projection_log = projection_log.replace('rt_hit_gpu_export_complete', line+'\nms=0 rt_hit_gpu_export_complete')
+assert decoder.decode_log(projection_log)['records'][0]['spot_record']['projection_rows'][0]==[1,0,0,0]
+for bad in [projection_log.replace(line, ''), projection_log.replace(line,line+'\n'+line),
+            projection_log.replace(spot.hex(),spot[:8].hex()+'00000000'+spot[12:].hex())]:
+    try: decoder.decode_log(bad)
+    except ValueError: pass
+    else: raise AssertionError('Invalid spotlight provenance accepted')
+print('PASS full spotlight records: projection decode, missing/duplicate/invalid stride rejected')

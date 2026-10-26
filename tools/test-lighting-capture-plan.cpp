@@ -138,8 +138,8 @@ int main(){
   assert(LiveSelection::Observed(next)==0&&!live.Observe(old,kBakedGiOverrideBit));
  }
  const auto priority=Mode::RoomCorrectedMapPriority;
- assert(buttons.count(priority)&&SupportsFocusedLightingCapture(priority)&&SupportsLightContextCapture(priority));
- assert(BlockerMode(priority)==priority&&BlockerMode(kDefaultMode)==Mode::RoomCorrectedNoRR);
+ assert(!buttons.count(priority)&&SupportsFocusedLightingCapture(priority)&&SupportsLightContextCapture(priority));
+ assert(BlockerMode(priority)==Mode::RoomCorrectedNoRR&&BlockerMode(kDefaultMode)==Mode::RoomCorrectedNoRR);
  assert(UsesDirectSurfaceNormals(priority)&&UsesAuthoredClip(priority)&&PreservesGiFiltering(priority));
  assert(BypassesRR(priority)&&BypassesSpotHistory(priority)&&!UsesRawSpotVisibility(priority));
  assert(!ModeAvailable(priority,kRtSpotReadyBit));mapPrioritySelectorReady=true;

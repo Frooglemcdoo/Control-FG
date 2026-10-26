@@ -234,7 +234,7 @@ inline void CaptureComposition(ID3D12GraphicsCommandList* list,UINT x,UINT y,UIN
     if(before ? !WaitingForSignal() : signalPhase.load()!=SignalPhase::Recording)return;
     ComPtr<ID3D12PipelineState> pipeline;
     if(!signalOwner || !Attached(signalOwner.Get(),before?gpu::kSignalBeforePipeline:gpu::kSignalPipeline,pipeline))return;
-    constexpr UINT64 required=(1ull<<19)|(1ull<<20)|(1ull<<41)|(1ull<<42);
+    constexpr UINT64 required=(1ull<<18)|(1ull<<19)|(1ull<<20)|(1ull<<41)|(1ull<<42);
     Context current;
     if(presentCount.load()!=recordedPresent || x!=(capturedWidth+7)/8 || y!=(capturedHeight+7)/8 || z!=1 ||
        !ReadContext(current) || current.list!=list || current.list!=mirrored.list ||
@@ -469,7 +469,7 @@ inline void Poll() noexcept {
     // Retry canonical headers and records if the nonblocking log queue is busy.
     // Cursor advancement means successful enqueue, never merely an attempted write.
     if(exportStage==0) {
-        if(!Trace("rt_hit_gpu_recorded generation=%llu frame_tag=%u extent=%ux%u table_records=%u captured_present=%llu light_context_bytes=128 signal_bytes=128 signal_generation=%llu signal_present=%llu",recordedGeneration,frameTag,capturedWidth,capturedHeight,capturedTableRecords,recordedPresent,signalGeneration,signalPresent))return;
+        if(!Trace("rt_hit_gpu_recorded generation=%llu frame_tag=%u extent=%ux%u table_records=%u captured_present=%llu light_context_bytes=128 signal_bytes=128 spot_record_bytes=336 signal_generation=%llu signal_present=%llu",recordedGeneration,frameTag,capturedWidth,capturedHeight,capturedTableRecords,recordedPresent,signalGeneration,signalPresent))return;
         exportStage=1;
     }
     if(exportStage==1) {
@@ -484,9 +484,12 @@ inline void Poll() noexcept {
             char hex[161]{};rt_spot_capture_audit::Hex(record,80,hex);
             char contextHex[gpu::kLightContextStride*2+1]{};
             rt_spot_capture_audit::Hex(completedBytes+gpu::kLightContextReadbackOffset+exportCursor*gpu::kLightContextStride,gpu::kLightContextStride,contextHex);
-            char signalHex[gpu::kSignalStride*2+1]{};
-            rt_spot_capture_audit::Hex(completedBytes+gpu::kSignalReadbackOffset+exportCursor*gpu::kSignalStride,gpu::kSignalStride,signalHex);
+            char signalHex[128*2+1]{};
+            rt_spot_capture_audit::Hex(completedBytes+gpu::kSignalReadbackOffset+exportCursor*gpu::kSignalStride,128,signalHex);
             if(!Trace("rt_hit_gpu_record index=%u bytes=%s light_context=%s signal=%s",exportCursor,hex,contextHex,signalHex))return;
+            char spotHex[336*2+1]{};
+            rt_spot_capture_audit::Hex(completedBytes+gpu::kSignalReadbackOffset+exportCursor*gpu::kSignalStride+128,336,spotHex);
+            if(!Trace("rt_hit_gpu_light index=%u bytes=%s",exportCursor,spotHex))return;
         }
     }
     if(exportCursor==gpu::kRayCount && Trace("rt_hit_gpu_export_complete records_examined=4096 format=CaptureResult80 frame_tag=%u",frameTag))exportStage=3;

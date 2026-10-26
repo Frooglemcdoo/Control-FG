@@ -101,6 +101,20 @@ def decode_log(text):
             signals[index] = struct.unpack('<4I12f' + ('4I12f' if signal_bytes == 128 else ''), raw_signal)
         if match[3]: contexts[index] = struct.unpack('<32f', bytes.fromhex(match[3]))
         seen.add(index); data[index*RECORD.size:(index+1)*RECORD.size] = bytes.fromhex(match[2])
+    spot_records = {}
+    spot_bytes = begin.get('spot_record_bytes', 0)
+    if spot_bytes not in (0, 336): raise ValueError('Unsupported spotlight record ABI')
+    for line in text.splitlines():
+        if ' rt_hit_gpu_light ' not in line: continue
+        if not spot_bytes or not text.index(completed[0]) < text.index(line) < text.index(exported[0]):
+            raise ValueError('Unexpected spotlight record or invalid export ordering')
+        match = re.search(r'index=(\d+) bytes=([0-9a-fA-F]{672})$', line)
+        if not match: raise ValueError('Malformed spotlight record')
+        index = int(match[1])
+        if index not in seen or index in spot_records: raise ValueError('Unmatched or duplicate spotlight record')
+        spot_records[index] = bytes.fromhex(match[2])
+    if spot_bytes and spot_records.keys() != seen:
+        raise ValueError('Missing spotlight records')
     results = decode(data, begin['frame_tag'])
     valid = [record for record in results if record['valid']]
     hits = sum(record['hit'] for record in valid)
@@ -133,6 +147,18 @@ def decode_log(text):
                 composition['specular_before'] = list(before[12:16])
                 composition['diffuse_delta'] = [a-b for a,b in zip(signal[8:12],before[8:12])]
                 composition['specular_delta'] = [a-b for a,b in zip(signal[12:16],before[12:16])]
+        if spot_bytes:
+            raw = spot_records[index]
+            light, count, stride, valid_record = struct.unpack_from('<4I', raw)
+            if valid_record != 1 or stride != 320 or light != record['light_id'] or light >= count:
+                raise ValueError('Invalid spotlight record provenance or stride')
+            # Keep flag bits as integers, never reinterpret the full record as floats.
+            matrix = struct.unpack_from('<16f', raw, 16 + 80)
+            if not all(math.isfinite(v) for v in matrix):
+                raise ValueError('Nonfinite spotlight projection')
+            record['spot_record'] = dict(light_id=light, count=count, stride=stride,
+                raw_hex=raw[16:].hex(), projection_rows=[list(matrix[i:i+4]) for i in range(0,16,4)],
+                shadow_flags=struct.unpack_from('<I', raw, 16+304)[0])
         if record['pixel'] != [(2*(index%64)+1)*width//128, (2*(index//64)+1)*height//128]:
             raise ValueError('Record does not match its native sample pixel')
     return {'schema': 'control-spot-hit-capture-v1',

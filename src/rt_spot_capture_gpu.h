@@ -10,7 +10,7 @@ inline constexpr UINT kInputBytes=kRayCount*rt_spot_capture::CaptureRayBytes, kR
 inline constexpr UINT kLightContextStride=128, kLightContextBytes=kRayCount*kLightContextStride;
 inline constexpr UINT kInputAllocationBytes=kInputBytes+kLightContextBytes;
 inline constexpr UINT kLightContextReadbackOffset=kResultBytes+16;
-inline constexpr UINT kSignalStride=128, kSignalBytes=kRayCount*kSignalStride;
+inline constexpr UINT kSignalStride=464, kSignalBytes=kRayCount*kSignalStride;
 inline constexpr UINT kSignalReadbackOffset=kLightContextReadbackOffset+kLightContextBytes;
 inline constexpr UINT kTableBytes=8*1024*1024, kReadbackBytes=kSignalReadbackOffset+kSignalBytes;
 inline const GUID kSignalBeforePipeline={0x964c9021,0x414a,0x43d4,{0xa1,0x11,0x70,0,0,0,0,8}};
