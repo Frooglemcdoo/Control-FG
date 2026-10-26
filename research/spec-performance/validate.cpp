@@ -47,6 +47,7 @@ int main(int argc,char**argv){try{
   for(UINT count:{0u,1u,2u,4u,8u,12u,16u})for(float clamp:{-1.f,2.5f}){
    auto a=ExecuteFixture(device.Get(),root.Get(),pso.Get(),reflection.Get(),false,13,19,count,clamp);
    auto b=ExecuteFixture(device.Get(),root.Get(),alternative.Get(),reflection.Get(),true,13,19,count,clamp);
+   if(a!=b){unsigned shown=0;for(unsigned i=0;i<a.size() && shown<12;++i)if(a[i]!=b[i]){printf("MISMATCH word=%u native=%08x parallel=%08x\n",i,a[i],b[i]);++shown;}}
    if(a!=b)throw std::runtime_error("fixture pixels differ: count="+std::to_string(count)+" clamp="+std::to_string(clamp));
    bool nonzero=false;for(auto word:a)nonzero|=word!=0;if(count && !nonzero)throw std::runtime_error("vacuous all-zero fixture");
    printf("PASS bitwise GPU equality: samples=%u clamp=%g partial edges and sentinel lanes\n",count,clamp);
