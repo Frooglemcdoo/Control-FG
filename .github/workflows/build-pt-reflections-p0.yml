@@ -190,6 +190,10 @@ jobs:
           python tools/test-package-lighting-capture.py
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           python tools/test-spot-hit-capture.py
+          python tools/rt_spot_projection.py
+          if($LASTEXITCODE -ne 0){throw "Projection shader preparation failed"}
+          python tools/test-rt-spot-projection.py
+          if($LASTEXITCODE -ne 0){throw "Projection shader checks failed"}
           python tools/rt_spot_authored_clip.py
           python tools/test-rt-spot-authored-clip.py
           python tools/rt_spot_blocker.py
@@ -248,6 +252,8 @@ jobs:
           }
           if(-not $dxc){throw 'dxc.exe was not found in the Windows SDK / Visual Studio installation.'}
           Write-Host "DXC: $dxc"
+          python tools/test-rt-spot-projection.py --dxc $dxc
+          if($LASTEXITCODE -ne 0){throw "Projection shader instruction validation failed"}
           & $dxc -T lib_6_3 -HV 2021 -O3 -I src/shaders -Fo build/pt_glass_raygen.dxil src/shaders/pt_glass_raygen.hlsl
           if($LASTEXITCODE -ne 0){throw "Glass DXC compile failed: $LASTEXITCODE"}
           & $dxc -T lib_6_3 -HV 2021 -O3 -I src/shaders -Fo build/rt_spot_shadow_prototype.dxil src/shaders/rt_spot_shadow_prototype.hlsl
@@ -523,11 +529,11 @@ jobs:
           [System.Management.Automation.Language.Parser]::ParseFile((Join-Path $pwd 'Capture-RR-Boundary.ps1'),[ref]$tokens,[ref]$parseErrors) | Out-Null
           if($parseErrors.Count){throw ($parseErrors | Out-String)}
 
-      - name: Package live lighting diagnostic R161
+      - name: Package live lighting diagnostic R162
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-Native-Lighting-Live-R161'
+          $out='Control-FG-Native-Lighting-Live-R162'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
           Copy-Item build/rt_spot_selected_off.dxbc,build/rt_spot_selection.dxbc,build/rt_spot_visibility.dxbc,build/rt_spot_light_ids.dxbc,build/rt_spot_raw_history.dxbc,build/rt_spot_raw_spatial0.dxbc,build/rt_spot_raw_spatial1.dxbc,build/rt_spot_full.dxil,build/rt_spot_r94.dxil,build/rt_spot_light.dxbc,build/rt_spot_reset.dxbc,build/rt_spot_history.dxbc,build/rt_spot_spatial0.dxbc,build/rt_spot_spatial1.dxbc $out
@@ -547,19 +553,18 @@ jobs:
           Copy-Item Collect-ControlFG-Compact-Logs.ps1 "$out/Collect-ControlFG-Compact-Logs.ps1"
           Copy-Item Package-Lighting-Capture.cmd,tools/package-lighting-capture.py $out
           Copy-Item Capture-RR-Boundary.cmd,Capture-RR-Boundary.ps1,Collect-RR-Boundary-Status.cmd,tools/collect-rr-boundary.py $out
-          Copy-Item docs/native-lighting-r161.md "$out/DIAGNOSTIC-NOTES.md"
+          Copy-Item docs/native-lighting-r162.md "$out/DIAGNOSTIC-NOTES.md"
           @'
-          CONTROL-FG R161 - Spotlight projection capture
+          CONTROL-FG R162 - Projection-origin RT spotlight comparison
           Close Control to install. Copy contents beside Control_DX12.exe.
           Preserve NVIDIA runtimes and ControlFGStreamline. Start a fresh game session.
-          Keep usual DLSS and RT settings. Stand on the stairs with the false diagonal shadow visible.
-          Open F10 and click TRACE SHADOW. Hold still through the five-second delay and capture.
-          TRACE SHADOW uses accepted corrected RR OFF, then restores the previous mode.
-          Send lighting.log, manifest.txt and the three PNGs from the folder shown.
-          The capture now includes the selected light full record, projection and shadow flags.
-          MAP PRIORITY was rejected because it removes legitimate shadows; its shortcut is removed.
-          This build improves diagnosis; it does not claim to fix the false shadow.
-          Gameplay shaders and default shadow selection are unchanged.
+          Stand on the stairs with the false diagonal shadow visible.
+          Compare RR OFF and PROJECTION RT from the same position. Both bypass RR.
+          Record a short video switching between them, then walking down the stairs.
+          Check Jesse, railings and previously fixed rooms for missing or altered soft shadows.
+          Click SAVE LOG and send the session log plus video/screenshots.
+          TRACE SHADOW still captures accepted RR OFF reference rays, not the new projection rays.
+          Default remains unchanged. This is an optional test, not a confirmed fix.
           See DIAGNOSTIC-NOTES.md.
           '@ | Set-Content "$out/README.txt" -Encoding ASCII
           Compress-Archive -Path "$out/*" -DestinationPath "$out.zip" -Force
@@ -568,10 +573,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-Native-Lighting-Live-R161
+          name: Control-FG-Native-Lighting-Live-R162
           path: |
-            Control-FG-Native-Lighting-Live-R161.zip
-            Control-FG-Native-Lighting-Live-R161.sha256
+            Control-FG-Native-Lighting-Live-R162.zip
+            Control-FG-Native-Lighting-Live-R162.sha256
             build/rt_spot_shadow_prototype.dxil
             build/rr_clamp_fixed.h
             build/rt_spot_blocker.dxil

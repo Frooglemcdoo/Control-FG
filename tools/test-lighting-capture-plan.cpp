@@ -50,7 +50,7 @@ int main(){
  assert(!Applied(Mode::RoomCorrectedNoRR,kDirectBit,false));
  assert(Applied(Mode::RoomCorrectedNoRR,kAllBits,false));
  // The automatic default must await both normal PSOs, authored rays and samples.
- spotAuthoredClipReady=true;specularSamplesReady=true;
+ spotAuthoredClipReady=true;spotProjectionReady=true;specularSamplesReady=true;
  assert(!ModeAvailable(kDefaultMode,kRtSpotReadyBit));
  bentNormalLightReady=true;
  assert(!ModeAvailable(kDefaultMode,kRtSpotReadyBit));
@@ -137,6 +137,9 @@ int main(){
   assert(LiveSelection::Sequence(next)==LiveSelection::Sequence(old)+1);
   assert(LiveSelection::Observed(next)==0&&!live.Observe(old,kBakedGiOverrideBit));
  }
+ assert(UsesDirectSurfaceNormals(Mode::RoomProjectionOrigin)&&BypassesSpotHistory(Mode::RoomProjectionOrigin)&&BypassesRR(Mode::RoomProjectionOrigin));
+ assert(ModeAvailable(Mode::RoomProjectionOrigin,kRtSpotReadyBit));
+ spotProjectionReady=false;assert(!ModeAvailable(Mode::RoomProjectionOrigin,kRtSpotReadyBit));spotProjectionReady=true;
  const auto priority=Mode::RoomCorrectedMapPriority;
  assert(!buttons.count(priority)&&SupportsFocusedLightingCapture(priority)&&SupportsLightContextCapture(priority));
  assert(BlockerMode(priority)==Mode::RoomCorrectedNoRR&&BlockerMode(kDefaultMode)==Mode::RoomCorrectedNoRR);
