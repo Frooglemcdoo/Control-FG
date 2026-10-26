@@ -137,6 +137,14 @@ int main(){
   assert(LiveSelection::Sequence(next)==LiveSelection::Sequence(old)+1);
   assert(LiveSelection::Observed(next)==0&&!live.Observe(old,kBakedGiOverrideBit));
  }
+ assert(blockerStep.mode==Mode::RoomCorrectedNoRR && blockerStep.gpu);
+ assert(SupportsLightContextCapture(blockerStep.mode));
+ assert(!BlockerSettled(4999,100,true));
+ assert(!BlockerSettled(5000,89,true));
+ assert(!BlockerSettled(5000,100,false));
+ assert(BlockerSettled(5000,90,true));
+ assert(!Applied(blockerStep.mode,kAllBits,true));
+ assert(Applied(blockerStep.mode,kAllBits,false));
  assert(SupportsLightContextCapture(kDefaultMode)&&SupportsLightContextCapture(Mode::RoomBoth));
  assert(!SupportsLightContextCapture(Mode::Native)&&!SupportsLightContextCapture(Mode::RoomCorrectedVisibility));
  assert(transitionSamples==6 && transitionStep.mode==kDefaultMode && transitionStep.gpu);

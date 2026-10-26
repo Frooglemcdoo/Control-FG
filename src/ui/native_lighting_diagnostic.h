@@ -12,10 +12,10 @@ inline constexpr int kCaptureY = kActionsY + 46;
 inline constexpr int kCaptureStatusY = kCaptureY + 40;
 inline constexpr int kFooterY = kCaptureStatusY + 50;
 inline constexpr int kHeight = kFooterY + 72;
-inline constexpr unsigned kButtonCount = kModeCount + 5;
+inline constexpr unsigned kButtonCount = kModeCount + 6;
 inline const wchar_t* ButtonLabel(unsigned index) noexcept {
     if (index < kModeCount) return kModeChoices[index].label;
-    constexpr const wchar_t* actions[] = {L"ISSUE REMAINS", L"ISSUE GONE", L"SAVE LOG", L"CAPTURE LIGHT", L"PACKAGE LIGHT"};
+    constexpr const wchar_t* actions[] = {L"ISSUE REMAINS", L"ISSUE GONE", L"SAVE LOG", L"CAPTURE LIGHT", L"PACKAGE LIGHT", L"TRACE SHADOW"};
     return actions[index - kModeCount];
 }
 inline const wchar_t* ModeHint(Mode mode) noexcept {
@@ -137,6 +137,16 @@ inline void RequestLightCapture(HWND panel) noexcept {
         ClosePanel(panel);
     } else MessageBoxW(panel,L"Select RR OFF, RT SPOT OPEN, or NATIVE RR OFF before capturing. If busy, failed, or both pairs are saved, read the status; PACKAGE LIGHT collects diagnostics.",L"Lighting capture",MB_OK);
 }
+inline void RequestShadowTrace(HWND panel) noexcept {
+    using State=control_rr_capture_ui::State;
+    const auto light=control_rr_capture_ui::state.load();
+    if(control_rr_capture_ui::requested.load() ||
+       (light!=State::Idle && light!=State::Complete)) {
+        MessageBoxW(panel,L"Finish the light capture first. If it failed, start a fresh game session before tracing.",L"Shadow trace",MB_OK);return;
+    }
+    if(capture_suite::Start(capture_suite::Kind::Blocker))ClosePanel(panel);
+    else MessageBoxW(panel,L"Shadow trace unavailable. Return to gameplay until corrected shadows are ready. If a previous trace failed, restart the game; otherwise Save Log for diagnosis.",L"Shadow trace",MB_OK);
+}
 inline LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPARAM lParam) noexcept {
     namespace theme = control_ui::theme;
     switch (message) {
@@ -185,6 +195,7 @@ inline LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPA
             else if(index==kModeCount+2) SaveReport(window);
             else if(index==kModeCount+3) RequestLightCapture(window);
             else if(index==kModeCount+4) PackageRR(window);
+            else if(index==kModeCount+5) RequestShadowTrace(window);
             RedrawWindow(window,nullptr,nullptr,RDW_INVALIDATE|RDW_ALLCHILDREN);
             return 0;
         }
@@ -207,7 +218,7 @@ inline DWORD WINAPI ThreadProc(LPVOID) noexcept {
     ULONGLONG nextRefresh=0, nextWindowSearch=0, nextLogDrain=0, nextRRReport=0;
     HWND cachedGame=nullptr;
     POINT lastOrigin{-1,-1};
-    Trace("session_start build=R158-overlay-rr-capture pid=%lu default=authored_clip_surface_normals_current_spot_when_ready log=user-diagnostics-folder",GetCurrentProcessId());
+    Trace("session_start build=R159-overlay-rr-capture pid=%lu default=authored_clip_surface_normals_current_spot_when_ready log=user-diagnostics-folder",GetCurrentProcessId());
     MSG msg{};
     while(GetMessageW(&msg,nullptr,0,0)>0){
         if (!panel || !IsDialogMessageW(panel, &msg)) {
@@ -233,7 +244,7 @@ inline DWORD WINAPI ThreadProc(LPVOID) noexcept {
             if(GetAsyncKeyState(VK_SHIFT)&0x8000) RequestLightCapture(panel);
             else if(capture_suite::active)capture_suite::Finish(game,"cancelled");
             else {if(panelOpen)ClosePanel(panel);
-                if(!capture_suite::Start(false))MessageBoxW(game,L"Could not start capture. Return to gameplay and wait for Default and GPU capture readiness. If a previous capture was cancelled, let its export finish. Use Save Log for details.",L"F9 capture",MB_OK|MB_ICONERROR);}
+                if(!capture_suite::Start())MessageBoxW(game,L"Could not start capture. Return to gameplay and wait for Default and GPU capture readiness. If a previous capture was cancelled, let its export finish. Use Save Log for details.",L"F9 capture",MB_OK|MB_ICONERROR);}
         }
         capture_suite::Tick(game,now);
         const bool foreground=GetForegroundWindow()==game || PanelHasForeground(panel);

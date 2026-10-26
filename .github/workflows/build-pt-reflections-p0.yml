@@ -184,6 +184,8 @@ jobs:
           python tools/generate-spot-band-colors.py
           python tools/rt_spot_hit_position.py
           python tools/test-rt-spot-hit-position.py
+          python tools/test-shadow-blocker-analysis.py
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
           python tools/test-light-transition.py
           python tools/test-package-lighting-capture.py
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
@@ -521,11 +523,11 @@ jobs:
           [System.Management.Automation.Language.Parser]::ParseFile((Join-Path $pwd 'Capture-RR-Boundary.ps1'),[ref]$tokens,[ref]$parseErrors) | Out-Null
           if($parseErrors.Count){throw ($parseErrors | Out-String)}
 
-      - name: Package live lighting diagnostic R158
+      - name: Package live lighting diagnostic R159
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-Native-Lighting-Live-R158'
+          $out='Control-FG-Native-Lighting-Live-R159'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
           Copy-Item build/rt_spot_selected_off.dxbc,build/rt_spot_selection.dxbc,build/rt_spot_visibility.dxbc,build/rt_spot_light_ids.dxbc,build/rt_spot_raw_history.dxbc,build/rt_spot_raw_spatial0.dxbc,build/rt_spot_raw_spatial1.dxbc,build/rt_spot_full.dxil,build/rt_spot_r94.dxil,build/rt_spot_light.dxbc,build/rt_spot_reset.dxbc,build/rt_spot_history.dxbc,build/rt_spot_spatial0.dxbc,build/rt_spot_spatial1.dxbc $out
@@ -545,28 +547,22 @@ jobs:
           Copy-Item Collect-ControlFG-Compact-Logs.ps1 "$out/Collect-ControlFG-Compact-Logs.ps1"
           Copy-Item Package-Lighting-Capture.cmd,tools/package-lighting-capture.py $out
           Copy-Item Capture-RR-Boundary.cmd,Capture-RR-Boundary.ps1,Collect-RR-Boundary-Status.cmd,tools/collect-rr-boundary.py $out
-          Copy-Item docs/native-lighting-r158.md "$out/DIAGNOSTIC-NOTES.md"
+          Copy-Item docs/native-lighting-r159.md "$out/DIAGNOSTIC-NOTES.md"
           @'
-          CONTROL-FG R158 - Native lighting capture with RR off
+          CONTROL-FG R159 - Focused shadow blocker trace
           Close Control to install. Copy contents beside Control_DX12.exe.
-          Preserve NVIDIA runtimes and ControlFGStreamline.
-          Start a fresh game session. Keep your usual DLSS Quality/DLAA and RT settings.
-          Select RR OFF at the incorrect shadow. Capture once with Shift+F9 and hold still for five seconds.
-          NATIVE RR OFF is also available for a separate baseline comparison.
-          This capture uses native DLSS SR/DLAA; it does not require RR.
-          Open F10 from gameplay. The panel no longer takes focus or triggers focus-loss pause.
-          Clicking CAPTURE LIGHT hides the overlay. Hold still.
-          Capture waits for five seconds of consecutive native gameplay frames before recording.
-          Use Shift+F9 or CAPTURE LIGHT only once per comparison mode.
-          Gameplay regains focus. Allow the capture to finish, then reopen F10 to check Saved pairs: 1/2.
-          Without moving the camera, select RT SPOT OPEN. Press Shift+F9 again and wait for Saved pairs: 2/2.
-          Click PACKAGE LIGHT. It collects the frames and logs and opens the SEND folder.
-          Send every ZIP plus video showing both modes from the same position. ZIPs stay below 200 MB.
-          If capture shows Failed or stays waiting, click PACKAGE LIGHT to collect diagnostics.
-          Shift+F9 and CAPTURE LIGHT use the same request. Plain F9 retains the full stationary suite.
-          Includes native diffuse/specular lighting accumulation, GI and native SR input/output.
-          These are pre-tone-map buffers, not final display color.
-          Default rendering is unchanged. RT SPOT OPEN is a diagnostic, not a fix. See DIAGNOSTIC-NOTES.md.
+          Preserve NVIDIA runtimes and ControlFGStreamline. Start a fresh game session.
+          Keep usual DLSS Quality/DLAA and RT settings. Stand on the stairs with the false shadow visible.
+          Open F10 and click TRACE SHADOW. The overlay hides automatically.
+          Hold still: the trace selects RR OFF, waits five seconds and records one GPU batch and three PNGs.
+          Wait for the Shadow trace saved message. It shows the output folder.
+          Send lighting.log and the PNGs from that folder.
+          To ZIP the folder, drag it onto Package-Lighting-Capture.cmd. Parts stay below 200 MB.
+          Previous rendering mode is restored on completion or cancellation. Plain F9 cancels the trace.
+          Shift+F9 remains the separate lighting-buffer capture; it is not needed for this test.
+          Do not use PACKAGE LIGHT for the shadow trace; that button packages the separate image pairs.
+          If incomplete, retain and send the output folder and error. No rendering fix is claimed.
+          Default shaders are unchanged. See DIAGNOSTIC-NOTES.md for capture limits.
           '@ | Set-Content "$out/README.txt" -Encoding ASCII
           Compress-Archive -Path "$out/*" -DestinationPath "$out.zip" -Force
           (Get-FileHash "$out.zip" -Algorithm SHA256).Hash | Set-Content "$out.sha256" -Encoding ASCII
@@ -574,10 +570,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-Native-Lighting-Live-R158
+          name: Control-FG-Native-Lighting-Live-R159
           path: |
-            Control-FG-Native-Lighting-Live-R158.zip
-            Control-FG-Native-Lighting-Live-R158.sha256
+            Control-FG-Native-Lighting-Live-R159.zip
+            Control-FG-Native-Lighting-Live-R159.sha256
             build/rt_spot_shadow_prototype.dxil
             build/rr_clamp_fixed.h
             build/rt_spot_blocker.dxil
