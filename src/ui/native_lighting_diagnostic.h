@@ -14,14 +14,22 @@ inline constexpr int kPerformanceY = kCaptureY + 46;
 inline constexpr int kCaptureStatusY = kPerformanceY + 46;
 inline constexpr int kFooterY = kCaptureStatusY + 50;
 inline constexpr int kHeight = kFooterY + 72;
-inline constexpr unsigned kButtonCount = kModeCount + 7;
+inline constexpr unsigned kButtonCount = kModeCount + 8;
 inline const wchar_t* ButtonLabel(unsigned index) noexcept {
     if (index < kModeCount) return kModeChoices[index].label;
     constexpr const wchar_t* actions[] = {L"ISSUE REMAINS", L"ISSUE GONE", L"SAVE LOG", L"CAPTURE LIGHT", L"PACKAGE LIGHT", L"TRACE SHADOW", L"PERF CAPTURE"};
     if(index==kModeCount+6 && performance_capture::Active())return L"CANCEL PERF";
+    if(index==kModeCount+7) {
+        static wchar_t label[32]{};
+        const unsigned samples=specularSampleChoice.load();
+        if(samples)swprintf_s(label,L"SPEC: %u",samples);
+        else wcscpy_s(label,L"SPEC: NATIVE");
+        return label;
+    }
     return actions[index - kModeCount];
 }
 inline const wchar_t* ModeHint(Mode mode) noexcept {
+    if(mode==Mode::Native)return L"Native lighting. SPEC is shared with other modes; NATIVE removes its override.";
     if(mode==Mode::RoomNativeBlend)return L"Native PCF-only shadow fade applied to RT. Uses your saved RR setting.";
     if(mode==Mode::RoomMapProbe)return L"Diagnostic colors. Click TRACE SHADOW; hold still. Restore DEFAULT afterward.";
     if(mode==Mode::RoomCorrectedMapPriority)return L"Test: rank RT lights using map-visible energy. RR off.";
@@ -218,6 +226,15 @@ inline LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPA
             else if(index==kModeCount+4) PackageRR(window);
             else if(index==kModeCount+5) RequestShadowTrace(window);
             else if(index==kModeCount+6) RequestPerformanceCapture(window);
+            else if(index==kModeCount+7 && !capture_suite::active) {
+                const unsigned next=NextSpecularSampleChoice(specularSampleChoice.load());
+                if(next && !specularSamplesReady.load()) {
+                    MessageBoxW(window,L"Specular sampling is not ready. Return to gameplay and try again.",L"Specular quality",MB_OK);
+                } else {
+                    SetSpecularSampleChoice(next);
+                    Trace("specular_quality user_request=%u independent_of_lighting=1",next);
+                }
+            }
             RedrawWindow(window,nullptr,nullptr,RDW_INVALIDATE|RDW_ALLCHILDREN);
             return 0;
         }
@@ -240,7 +257,7 @@ inline DWORD WINAPI ThreadProc(LPVOID) noexcept {
     ULONGLONG nextRefresh=0, nextWindowSearch=0, nextLogDrain=0, nextRRReport=0;
     HWND cachedGame=nullptr;
     POINT lastOrigin{-1,-1};
-    Trace("session_start build=R166-overlay-rr-capture pid=%lu default=authored_clip_surface_normals_current_spot_when_ready log=user-diagnostics-folder",GetCurrentProcessId());
+    Trace("session_start build=R167-overlay-rr-capture pid=%lu default=authored_clip_surface_normals_current_spot_when_ready log=user-diagnostics-folder",GetCurrentProcessId());
     MSG msg{};
     while(GetMessageW(&msg,nullptr,0,0)>0){
         if (!panel || !IsDialogMessageW(panel, &msg)) {

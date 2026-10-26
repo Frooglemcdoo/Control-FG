@@ -4,7 +4,8 @@ namespace native_lighting::performance_capture {
 enum class Phase { Idle, Delay, Measure, Drain, Context, Package };
 inline Phase phase=Phase::Idle;
 inline uint64_t began=0,session=0,state=0,startPresent=0,phaseTime=0;
-inline unsigned rows=0,errors=0;
+inline unsigned rows=0,errors=0,capturedSpecularChoice=4;
+inline uint64_t measureStartMs=0,measureStartPresent=0;
 inline bool contextRequested=false;
 inline wchar_t folder[MAX_PATH]{};
 inline FILE* csv=nullptr;
@@ -96,7 +97,7 @@ inline bool Start() noexcept {
     if(!DrainDiagnosticLog(true) || !Offset(report.Path(),logOffset))return false;
     wchar_t root[MAX_PATH]{};wcscpy_s(root,report.Path());auto* slash=wcsrchr(root,L'\\');if(!slash)return false;*slash=0;
     SYSTEMTIME t{};GetLocalTime(&t);static unsigned serial=0;
-    swprintf_s(folder,L"%s\\Performance-R166-%04u%02u%02u-%02u%02u%02u-%lu-%u",root,t.wYear,t.wMonth,t.wDay,t.wHour,t.wMinute,t.wSecond,GetCurrentProcessId(),serial++);
+    swprintf_s(folder,L"%s\\Performance-R167-%04u%02u%02u-%02u%02u%02u-%lu-%u",root,t.wYear,t.wMonth,t.wDay,t.wHour,t.wMinute,t.wSecond,GetCurrentProcessId(),serial++);
     if(!CreateDirectoryW(folder,nullptr))return false;
     wchar_t path[MAX_PATH]{};swprintf_s(path,L"%s\\gpu-timings.csv",folder);_wfopen_s(&csv,path,L"wb");
     swprintf_s(path,L"%s\\manifest.txt",folder);_wfopen_s(&manifest,path,L"wb");
@@ -106,10 +107,11 @@ inline bool Start() noexcept {
     for(unsigned i=0;i<performance::count;++i){performance::samples[i].current=false;performance::samples[i].state=performance::State::Discarded;}
     ReleaseSRWLockExclusive(&performance::lock);
     rows=errors=0;for(unsigned i=0;i<8;++i){sums[i]=0;counts[i]=0;}
+    capturedSpecularChoice=specularSampleChoice.load();measureStartMs=measureStartPresent=0;
     session=performance::capture.fetch_add(1)+1;performance::skipped=0;state=selection.Read();contextRequested=false;
     *mainPath=0;mainOffset={};
     if(logFile==INVALID_HANDLE_VALUE || !GetFinalPathNameByHandleW(logFile,mainPath,32768,FILE_NAME_NORMALIZED) || !Offset(mainPath,mainOffset))++errors;
-    fprintf(manifest,"build=R166\nsession=%llu\nmode=%s\nsettle_ms=5000\nmeasure_ms=20000\nsample_every_presents=16\nsettings_changed=0\ngpu_waits=0\n",session,ModeName(LiveSelection::GetMode(state)));
+    fprintf(manifest,"build=R167\nsession=%llu\nmode=%s\nsettle_ms=5000\nmeasure_ms=20000\nsample_every_presents=16\nsettings_changed=0\ngpu_waits=0\n",session,ModeName(LiveSelection::GetMode(state)));
     fprintf(manifest,"Dispatch dimensions are launch dimensions, not actual TraceRay counts. Shadow ray timing includes the combined native spotlight/point pass. GPU stages are per dispatch; do not sum means across different sample populations. Context capture happens after timing, uses reference rays, and cannot establish room ownership.\n");
     Settings("start");nextStatus=0;
     phase=Phase::Delay;began=phaseTime=GetTickCount64();startPresent=presentCount.load();
@@ -123,18 +125,24 @@ inline void Tick(HWND game,uint64_t now) noexcept {
         if(GetExitCodeProcess(packager,&code) && code!=STILL_ACTIVE){CloseHandle(packager);packager=nullptr;if(code)++errors;Complete(game,code==0);}
         return;
     }
+    if(specularSampleChoice.load()!=capturedSpecularChoice){++errors;Save(game,"specular_quality_changed");return;}
     if(LiveSelection::Sequence(selection.Read())!=LiveSelection::Sequence(state)){++errors;Save(game,"mode_changed");return;}
     if(phase==Phase::Delay){
         if(!game || GetForegroundWindow()!=game || IsIconic(game)){phaseTime=now;startPresent=presentCount.load();}
         if(now-began>30000){++errors;Save(game,"game_not_resumed");return;}
-        if(now-phaseTime>=5000 && presentCount.load()-startPresent>=30){phase=Phase::Measure;phaseTime=now;performance::enabled=true;Trace("performance_measure_begin session=%llu",session);}
+        if(now-phaseTime>=5000 && presentCount.load()-startPresent>=30){phase=Phase::Measure;phaseTime=now;measureStartMs=now;measureStartPresent=presentCount.load();performance::enabled=true;Trace("performance_measure_begin session=%llu",session);}
         return;
     }
     if(!game || GetForegroundWindow()!=game || IsIconic(game)){++errors;Save(game,"focus_lost");return;}
     if(phase==Phase::Measure && now>=nextStatus){Settings("sample");nextStatus=now+500;}
     const auto pending=performance::Poll(session,Emit);
     if(performance::fault.load()){++errors;Save(game,"timing_invalid");return;}
-    if(phase==Phase::Measure && now-phaseTime>=20000){performance::enabled=false;phase=Phase::Drain;phaseTime=now;return;}
+    if(phase==Phase::Measure && now-phaseTime>=20000){
+        performance::enabled=false;
+        const uint64_t elapsed=now-measureStartMs, presents=presentCount.load()-measureStartPresent;
+        fprintf(manifest,"measure_elapsed_ms=%llu\nmeasure_presents=%llu\nmeasure_present_fps=%.6f\n",elapsed,presents,elapsed?1000.0*presents/elapsed:0.0);
+        phase=Phase::Drain;phaseTime=now;return;
+    }
     if(phase==Phase::Drain){
         if(pending && now-phaseTime<5000)return;
         if(pending){++errors;Save(game,"gpu_retirement_timeout");return;}

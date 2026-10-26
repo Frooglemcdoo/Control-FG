@@ -182,5 +182,16 @@ int main(){
  assert(modes.count(Mode::RoomAuthoredSpatial)&&modes.count(Mode::RoomAuthoredRaw));
  assert(!Settled(2499,100,true));assert(!Settled(4000,89,true));assert(!Settled(4000,100,false));assert(Settled(2500,90,true));
  assert(timeoutMs>settleMs+imagesPerStep*burstIntervalMs);
+ // Switching lighting must not silently alter specular quality.
+ for(unsigned samples:kSpecularSampleChoices) {
+  assert(SetSpecularSampleChoice(samples));
+  for(auto mode:{Mode::Native,Mode::RoomNative,Mode::RoomBoth,kDefaultMode,Mode::RoomNativeBlend})
+   assert(SpecularSampleRequest(mode)==samples);
+  assert(SpecularSampleRequest(Mode::RtSpotSpec16)==16);
+  assert(SpecularSampleRequest(Mode::RtSpotTemporal2)==2);
+ }
+ assert(!SetSpecularSampleChoice(3));assert(specularSampleChoice.load()==16);
+ assert(NextSpecularSampleChoice(16)==0);assert(NextSpecularSampleChoice(0)==1);
+ assert(SetSpecularSampleChoice(4));
 }
 

@@ -84,20 +84,34 @@ inline bool IsRoomMode(Mode mode) noexcept {
 inline bool UsesSpecularTemporalOnly(Mode mode) noexcept {
     return mode==Mode::RtSpotTemporal2||mode==Mode::RtSpotTemporal4;
 }
-// Specular tests leave GI at its saved value and retain the working light policies.
+// Shared diagnostic quality is independent of lighting selection. Four preserves
+// the accepted corrected-lighting baseline; zero requests the native sample policy.
+inline constexpr unsigned kSpecularSampleChoices[] = {0, 1, 2, 4, 8, 12, 16};
+inline std::atomic<unsigned> specularSampleChoice{4};
+inline bool SetSpecularSampleChoice(unsigned value) noexcept {
+    for (unsigned choice : kSpecularSampleChoices) {
+        if (choice == value) { specularSampleChoice.store(value); return true; }
+    }
+    return false;
+}
+inline unsigned NextSpecularSampleChoice(unsigned value) noexcept {
+    constexpr unsigned count = sizeof(kSpecularSampleChoices) / sizeof(kSpecularSampleChoices[0]);
+    for (unsigned i = 0; i < count; ++i)
+        if (kSpecularSampleChoices[i] == value) return kSpecularSampleChoices[(i + 1) % count];
+    return 4;
+}
+// Explicit legacy specular test modes retain their named sample count.
 inline unsigned SpecularSampleRequest(Mode mode) noexcept {
-    if(IsSpotIsolationMode(mode))return 4;
     switch(mode){
     case Mode::RtSpotTemporal2:return 2;
     case Mode::RtSpotTemporal4:return 4;
-    case Mode::RoomNative:case Mode::RoomGi:case Mode::RoomSpot:case Mode::RoomBoth:return 4;
     case Mode::RtSpotSpec1:return 1;
     case Mode::RtSpotSpec2:return 2;
     case Mode::RtSpotSpec4:return 4;
     case Mode::RtSpotSpec8:return 8;
     case Mode::RtSpotSpec12:return 12;
     case Mode::RtSpotSpec16:return 16;
-    default:return 0;
+    default:return specularSampleChoice.load();
     }
 }
 inline std::atomic<bool> specularSamplesReady{false};
