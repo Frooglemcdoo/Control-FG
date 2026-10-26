@@ -1,6 +1,7 @@
 #pragma once
 #include <cstring>
 #include <stdexcept>
+#include <string>
 #include <cfloat>
 static void Require(HRESULT hr){if(FAILED(hr))throw std::runtime_error("GPU fixture HRESULT "+std::to_string(unsigned(hr)));}
 static ComPtr<ID3D12Resource> Buffer(ID3D12Device* d,UINT64 bytes,D3D12_HEAP_TYPE type){
