@@ -18,7 +18,7 @@ inline constexpr bool ShowsSpotLightIds(Mode mode) noexcept {
 // Keep the R139 normal correction and authored clipping; point history stays native.
 inline constexpr Mode kDefaultMode = Mode::RoomCorrectedNoHistory;
 inline constexpr bool SupportsLightContextCapture(Mode mode) noexcept {
-    return mode==Mode::RoomMapProbe || mode==Mode::RoomBoth || mode==kDefaultMode || mode==Mode::RoomCorrectedNoRR || mode==Mode::RoomCorrectedMapPriority;
+    return mode==Mode::RoomNativeBlend || mode==Mode::RoomMapProbe || mode==Mode::RoomBoth || mode==kDefaultMode || mode==Mode::RoomCorrectedNoRR || mode==Mode::RoomCorrectedMapPriority;
 }
 // These comparisons remove only the hash-verified native baked-GI pass.
 // They retain the complete accepted spotlight policy and saved user settings.
@@ -344,3 +344,4 @@ public:
     }
 };
 } // namespace native_lighting
+

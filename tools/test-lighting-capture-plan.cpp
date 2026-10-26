@@ -143,6 +143,7 @@ int main(){
  assert(Applied(Mode::RoomNativeBlend,kAllBits,true));
  assert(Applied(Mode::RoomNativeBlend,kAllBits,false));
  assert(!Applied(Mode::RoomNativeBlend,kDirectBit,true));
+ assert(SupportsLightContextCapture(Mode::RoomNativeBlend));
  assert(BlockerMode(Mode::RoomNativeBlend)==Mode::RoomCorrectedNoRR);
  assert(capture_plan::BlockerMode(Mode::RoomMapProbe)==Mode::RoomMapProbe);
  assert(UsesDirectSurfaceNormals(Mode::RoomMapProbe)&&BypassesSpotHistory(Mode::RoomMapProbe)&&BypassesRR(Mode::RoomMapProbe));
@@ -182,3 +183,4 @@ int main(){
  assert(!Settled(2499,100,true));assert(!Settled(4000,89,true));assert(!Settled(4000,100,false));assert(Settled(2500,90,true));
  assert(timeoutMs>settleMs+imagesPerStep*burstIntervalMs);
 }
+
