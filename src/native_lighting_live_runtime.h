@@ -420,6 +420,12 @@ inline void StartOverlay() noexcept;
 inline void InstallLiveDiagnostic(ID3D12Device* device) noexcept {
     if (!device) return;
     performance::RememberDevice(device);
+    rt_shadow_capture::endTiming=&performance::End;
+    rt_shadow_capture::beginTiming=+[](ID3D12GraphicsCommandList4* list,const D3D12_DISPATCH_RAYS_DESC* desc) noexcept -> unsigned {
+        return desc?performance::Begin(list,PerformanceRayStage(),desc->Width,desc->Height,desc->Depth,desc->HitGroupTable.SizeInBytes):performance::kInvalid;
+    };
+    rt_spot_table_audit::endTiming=&performance::AfterExecute;
+    rt_spot_table_audit::beginTiming=&performance::BeforeExecute;
     rt_spot_capture_audit::retentionEnabled.store(false);
     rt_spot_capture_audit::captured.store(true); // Retire speculative upload retention; R122 uses copy journals.
     rt_spot_table_audit::InstallQueues(device);

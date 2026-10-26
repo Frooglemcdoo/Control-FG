@@ -429,15 +429,20 @@ inline QueueHook LookupQueue(ID3D12CommandQueue* queue) noexcept {
     for(const auto& entry:queueHooks)if(entry.table==table){result=entry;break;}
     ReleaseSRWLockShared(&queueHookLock);return result;
 }
+using BeginTiming = UINT64 (*)(ID3D12CommandQueue*,UINT,ID3D12CommandList*const*) noexcept;
+using EndTiming = void (*)(ID3D12CommandQueue*,UINT64) noexcept;
+inline std::atomic<BeginTiming> beginTiming{nullptr};
+inline std::atomic<EndTiming> endTiming{nullptr};
 inline void STDMETHODCALLTYPE ExecuteHook(ID3D12CommandQueue* queue,UINT count,ID3D12CommandList*const* lists) {
     const auto original=LookupQueue(queue).execute;
     if(submitDepth){original(queue,count,lists);return;}
     ++submitDepth;CaptureLease lease;QueueCall call;
     if(lease)call=BeginQueueCall(queue,QueueOperation::Execute,count,lists);
     rt_spot_capture_runtime::BeforeExecute(queue,count,lists);
-    const auto timing=performance::BeforeExecute(queue,count,lists);
+    const auto timer=beginTiming.load();
+    const auto timing=timer?timer(queue,count,lists):0;
     original(queue,count,lists);
-    performance::AfterExecute(queue,timing);
+    if(const auto end=endTiming.load())end(queue,timing);
     rt_spot_capture_runtime::AfterExecute(queue,count,lists);
     if(lease)EndQueueCall(call);
     --submitDepth;

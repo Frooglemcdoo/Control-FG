@@ -124,12 +124,17 @@ inline void STDMETHODCALLTYPE SetStateHook(ID3D12GraphicsCommandList4* list,ID3D
     if (const auto observer = onState.load()) observer(list,state);
     if(stateBindings.fetch_add(1)<128) Trace("rt_state_bound list=%p state=%p",list,state);
 }
+using BeginTiming = unsigned (*)(ID3D12GraphicsCommandList4*,const D3D12_DISPATCH_RAYS_DESC*) noexcept;
+using EndTiming = void (*)(unsigned) noexcept;
+inline std::atomic<BeginTiming> beginTiming{nullptr};
+inline std::atomic<EndTiming> endTiming{nullptr};
 inline void STDMETHODCALLTYPE DispatchHook(ID3D12GraphicsCommandList4* list,const D3D12_DISPATCH_RAYS_DESC* desc) {
     const auto hooks=Lookup(list);
     const auto replacement = replacementDispatch.load();
-    const auto timing=desc?performance::Begin(list,PerformanceRayStage(),desc->Width,desc->Height,desc->Depth,desc->HitGroupTable.SizeInBytes):performance::kInvalid;
+    const auto timer=beginTiming.load();
+    const auto timing=timer?timer(list,desc):~0u;
     if (!replacement || !replacement(list,desc)) hooks.dispatch(list,desc);
-    performance::End(timing);
+    if(const auto end=endTiming.load())end(timing);
     if(desc && rayReports.fetch_add(1)<128)
         Trace("rt_dispatch list=%p extent=%ux%ux%u raygen=%llu hit_start=%llu hit_bytes=%llu hit_stride=%llu miss_start=%llu miss_bytes=%llu miss_stride=%llu gpu_confirmed=0",
             list,desc->Width,desc->Height,desc->Depth,desc->RayGenerationShaderRecord.StartAddress,
