@@ -533,11 +533,11 @@ jobs:
           [System.Management.Automation.Language.Parser]::ParseFile((Join-Path $pwd 'Capture-RR-Boundary.ps1'),[ref]$tokens,[ref]$parseErrors) | Out-Null
           if($parseErrors.Count){throw ($parseErrors | Out-String)}
 
-      - name: Package live lighting diagnostic R164
+      - name: Package live lighting diagnostic R165
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-Native-Lighting-Live-R164'
+          $out='Control-FG-Native-Lighting-Live-R165'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
           Copy-Item build/rt_spot_selected_off.dxbc,build/rt_spot_selection.dxbc,build/rt_spot_visibility.dxbc,build/rt_spot_light_ids.dxbc,build/rt_spot_raw_history.dxbc,build/rt_spot_raw_spatial0.dxbc,build/rt_spot_raw_spatial1.dxbc,build/rt_spot_full.dxil,build/rt_spot_r94.dxil,build/rt_spot_light.dxbc,build/rt_spot_reset.dxbc,build/rt_spot_history.dxbc,build/rt_spot_spatial0.dxbc,build/rt_spot_spatial1.dxbc $out
@@ -557,18 +557,17 @@ jobs:
           Copy-Item Collect-ControlFG-Compact-Logs.ps1 "$out/Collect-ControlFG-Compact-Logs.ps1"
           Copy-Item Package-Lighting-Capture.cmd,tools/package-lighting-capture.py $out
           Copy-Item Capture-RR-Boundary.cmd,Capture-RR-Boundary.ps1,Collect-RR-Boundary-Status.cmd,tools/collect-rr-boundary.py $out
-          Copy-Item docs/native-lighting-r164.md "$out/DIAGNOSTIC-NOTES.md"
+          Copy-Item docs/native-lighting-r165.md "$out/DIAGNOSTIC-NOTES.md"
           @'
-          CONTROL-FG R164 - Native PCF-only spotlight blend comparison
+          CONTROL-FG R165 - Native shadow blending with saved RR preference
           Close Control to install. Copy contents beside Control_DX12.exe.
           Preserve NVIDIA runtimes and ControlFGStreamline. Start a fresh game session.
-          Stand on the stairs with the false diagonal shadow visible.
-          Compare RR OFF and NATIVE BLEND from the same view, then walk downstairs.
-          Both bypass RR. NATIVE BLEND uses the light's native PCF-only fade factor.
-          Check Jesse, railings, nearby soft shadows and previously fixed rooms.
-          Click SAVE LOG and send the session log plus a short comparison video.
-          Do not use TRACE SHADOW: it captures baseline RR OFF, not the new blend.
-          Default remains unchanged. In-game visual confirmation is pending.
+          Enable RR in the game settings, then select NATIVE BLEND in the overlay.
+          NATIVE BLEND now honors your saved RR setting instead of forcing RR off.
+          The user-confirmed R164 shadow shader is unchanged.
+          Check the stairs and previously affected rooms with RR on.
+          Click SAVE LOG after testing if confirmation of the active RR path is needed.
+          TRACE SHADOW remains an RR-off diagnostic; do not use it to validate RR on.
           See DIAGNOSTIC-NOTES.md.
           '@ | Set-Content "$out/README.txt" -Encoding ASCII
           Compress-Archive -Path "$out/*" -DestinationPath "$out.zip" -Force
@@ -577,10 +576,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-Native-Lighting-Live-R164
+          name: Control-FG-Native-Lighting-Live-R165
           path: |
-            Control-FG-Native-Lighting-Live-R164.zip
-            Control-FG-Native-Lighting-Live-R164.sha256
+            Control-FG-Native-Lighting-Live-R165.zip
+            Control-FG-Native-Lighting-Live-R165.sha256
             build/rt_spot_shadow_prototype.dxil
             build/rr_clamp_fixed.h
             build/rt_spot_blocker.dxil

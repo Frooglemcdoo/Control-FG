@@ -137,9 +137,12 @@ int main(){
   assert(LiveSelection::Sequence(next)==LiveSelection::Sequence(old)+1);
   assert(LiveSelection::Observed(next)==0&&!live.Observe(old,kBakedGiOverrideBit));
  }
- assert(UsesDirectSurfaceNormals(Mode::RoomNativeBlend)&&BypassesSpotHistory(Mode::RoomNativeBlend)&&BypassesRR(Mode::RoomNativeBlend));
+ assert(UsesDirectSurfaceNormals(Mode::RoomNativeBlend)&&BypassesSpotHistory(Mode::RoomNativeBlend)&&!BypassesRR(Mode::RoomNativeBlend));
  assert(!ModeAvailable(Mode::RoomNativeBlend,kRtSpotReadyBit));nativeBlendReady=true;
  assert(ModeAvailable(Mode::RoomNativeBlend,kRtSpotReadyBit));
+ assert(Applied(Mode::RoomNativeBlend,kAllBits,true));
+ assert(Applied(Mode::RoomNativeBlend,kAllBits,false));
+ assert(!Applied(Mode::RoomNativeBlend,kDirectBit,true));
  assert(BlockerMode(Mode::RoomNativeBlend)==Mode::RoomCorrectedNoRR);
  assert(capture_plan::BlockerMode(Mode::RoomMapProbe)==Mode::RoomMapProbe);
  assert(UsesDirectSurfaceNormals(Mode::RoomMapProbe)&&BypassesSpotHistory(Mode::RoomMapProbe)&&BypassesRR(Mode::RoomMapProbe));

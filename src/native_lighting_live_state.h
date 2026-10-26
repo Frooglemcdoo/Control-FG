@@ -55,7 +55,7 @@ inline bool IsSignalDiagnostic(Mode mode) noexcept {
 // Full-color comparisons use the existing per-frame RR bypass, without changing
 // the saved RR preference or turning the output into a signal visualization.
 inline bool BypassesRR(Mode mode) noexcept {
-    return mode==Mode::RoomNativeBlend || mode==Mode::RoomMapProbe || mode==Mode::RoomProjectionOrigin || mode==Mode::RoomCorrectedMapPriority || mode==Mode::RoomCorrectedOpen || mode==Mode::RoomCorrectedNoBakedGiNoRR || mode==Mode::RoomCorrectedNoRR || IsSignalDiagnostic(mode) || mode==Mode::RoomNativeNoRR || mode==Mode::RoomClipNoRR;
+    return mode==Mode::RoomMapProbe || mode==Mode::RoomProjectionOrigin || mode==Mode::RoomCorrectedMapPriority || mode==Mode::RoomCorrectedOpen || mode==Mode::RoomCorrectedNoBakedGiNoRR || mode==Mode::RoomCorrectedNoRR || IsSignalDiagnostic(mode) || mode==Mode::RoomNativeNoRR || mode==Mode::RoomClipNoRR;
 }
 inline std::atomic<bool> nativeBlendReady{false};
 inline std::atomic<bool> mapProbeReady{false};
@@ -243,7 +243,7 @@ inline const char* ModeName(Mode mode) noexcept {
     case Mode::RoomCorrectedNoHistory:return "default_no_spot_history";
     case Mode::RoomCorrectedNoAO:return "default_no_history_screen_ao_off";
     case Mode::RoomCorrectedRaw:return "default_raw_spot_visibility";
-    case Mode::RoomNativeBlend:return "native_pcf_blend_rr_off";
+    case Mode::RoomNativeBlend:return "native_pcf_blend";
     case Mode::RoomMapProbe:return "selected_map_probe_rr_off";
     case Mode::RoomProjectionOrigin:return "default_projection_origin_rr_off";
     case Mode::RoomCorrectedMapPriority:return "default_no_history_map_priority_rr_off";
