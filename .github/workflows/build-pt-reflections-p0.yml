@@ -3,6 +3,7 @@ name: Build native reflection enhancements and RR
 on:
   push:
     branches:
+      - work/r172-spec-load-lifetimes
       - experiment/native-hit-capture-r118
       - experiment/pt-reflections-p0
       - experiment/pt-verify-stages-20261010
@@ -266,6 +267,12 @@ jobs:
           }
           if(-not $dxc){throw 'dxc.exe was not found in the Windows SDK / Visual Studio installation.'}
           Write-Host "DXC: $dxc"
+          python tools/test-spec-serial-lifetimes.py
+          if($LASTEXITCODE -ne 0){throw 'Serial SPEC load movement audit failed'}
+          python tools/spec_serial_lifetimes.py --source research/spec-performance/spec-resolve.dxbc.b64 --output build/spec-serial-lifetimes.dxbc --header build/spec_serial_lifetimes.generated.h
+          if($LASTEXITCODE -ne 0){throw 'Serial SPEC shader generation failed'}
+          ./build/spec-validate.exe build/spec-serial-lifetimes.dxbc
+          if($LASTEXITCODE -ne 0){throw 'Serial SPEC PSO validation failed'}
           python tools/spec_parallel.py --source research/spec-performance/spec-resolve.dxbc.b64 --output build/spec-parallel.dxbc --header build/spec_parallel.generated.h
           if($LASTEXITCODE -ne 0){throw 'Parallel SPEC shader generation failed'}
           python tools/test-spec-parallel.py build
@@ -570,11 +577,11 @@ jobs:
           & powershell.exe -NoProfile -File Package-Lighting-Performance.ps1 -Folder build/perf-package-test -ModuleFolder build
           if ($LASTEXITCODE -ne 0 -or !(Test-Path build/perf-package-test.zip)) { throw 'Performance package roundtrip failed' }
 
-      - name: Package live lighting diagnostic R170
+      - name: Package live lighting diagnostic R172
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-Native-Lighting-Live-R170'
+          $out='Control-FG-Native-Lighting-Live-R172'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
           Copy-Item build/rt_spot_selected_off.dxbc,build/rt_spot_selection.dxbc,build/rt_spot_visibility.dxbc,build/rt_spot_light_ids.dxbc,build/rt_spot_raw_history.dxbc,build/rt_spot_raw_spatial0.dxbc,build/rt_spot_raw_spatial1.dxbc,build/rt_spot_full.dxil,build/rt_spot_r94.dxil,build/rt_spot_light.dxbc,build/rt_spot_reset.dxbc,build/rt_spot_history.dxbc,build/rt_spot_spatial0.dxbc,build/rt_spot_spatial1.dxbc $out
@@ -594,19 +601,19 @@ jobs:
           Copy-Item Collect-ControlFG-Compact-Logs.ps1 "$out/Collect-ControlFG-Compact-Logs.ps1"
           Copy-Item Package-Lighting-Capture.cmd,tools/package-lighting-capture.py,Package-Lighting-Performance.ps1 $out
           Copy-Item Capture-RR-Boundary.cmd,Capture-RR-Boundary.ps1,Collect-RR-Boundary-Status.cmd,tools/collect-rr-boundary.py $out
-          Copy-Item docs/native-lighting-r170.md "$out/DIAGNOSTIC-NOTES.md"
+          Copy-Item docs/native-lighting-r172.md "$out/DIAGNOSTIC-NOTES.md"
           @'
-          CONTROL-FG R170 - Parallel SPEC 16 test
+          CONTROL-FG R172 - Serial SPEC material load lifetimes
           Close Control to install. Copy contents beside Control_DX12.exe.
           Preserve NVIDIA runtimes and ControlFGStreamline. Start a fresh game session.
-          Select NATIVE BLEND with RR on and FG off. Set SPEC: 16.
-          PARALLEL: ON uses concurrent hit shading for the captured shader at SPEC 16 only.
-          PARALLEL: OFF restores original sequential shading; both retain 16 ray samples.
-          Compare the same view with ON and OFF. Look for image changes before timing.
-          Click PERF CAPTURE once with each setting and send both Performance-R170 ZIPs.
+          Select NATIVE BLEND with RR on and FG off. Set SPEC: 16 and GI: 6.
+          SPEC SHADING: SERIAL confirms the parallel experiment is disabled.
+          All 16 samples and native serial shading are retained.
+          Compare PERF CAPTURE with R171 at SPEC 16 from the same view.
+          SPEC Native is a secondary scaling check, not an unmodified shader A/B.
           The panel closes; five-second delay then 20 seconds of sampling.
           Resume gameplay if paused. Keep graphics settings and camera route consistent.
-          SPEC resets to Native on restart; PARALLEL starts ON but requires SPEC 16.
+          SPEC resets to Native on restart.
           Existing R168 spotlight rendering and RR policy remain unchanged.
           No performance gain claimed until measured on your GPU.
           See DIAGNOSTIC-NOTES.md for validation and limitations.
@@ -617,10 +624,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-Native-Lighting-Live-R170
+          name: Control-FG-Native-Lighting-Live-R172
           path: |
-            Control-FG-Native-Lighting-Live-R170.zip
-            Control-FG-Native-Lighting-Live-R170.sha256
+            Control-FG-Native-Lighting-Live-R172.zip
+            Control-FG-Native-Lighting-Live-R172.sha256
             build/centered-original.ll
             build/centered-reuse.ll
             build/centered-reuse-validation.json

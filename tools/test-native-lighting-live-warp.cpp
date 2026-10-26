@@ -647,6 +647,10 @@ static void TestCopyAudit(ID3D12Device* device) {
 #include "rt_spot_capture_gpu_warp_test.h"
 #include "rt_spot_capture_signal_test.h"
 
+// Historical R170 experiment remains tested, but is not included by the runtime.
+namespace native_lighting {
+#include "../src/spec_parallel_runtime.h"
+}
 static ID3D12PipelineState* specSetCalls[2]{};
 static unsigned specSets=0,specDispatches=0,specDimensions[3]{};
 static void STDMETHODCALLTYPE SpecTestSet(ID3D12GraphicsCommandList*,ID3D12PipelineState* pso){
@@ -670,7 +674,7 @@ static void TestSpecParallelBinding(ID3D12Device* device,ID3D12PipelineState* ow
     spec_parallel::Bind(list.Get(),alternate);if(dispatch())throw std::runtime_error("SPEC stale binding survived unrelated PSO");
     spec_parallel::Bind(list.Get(),owner);spec_parallel::Bind(list.Get(),nullptr);if(dispatch())throw std::runtime_error("SPEC stale binding survived null reset");
     if(specDispatches!=1||specSets!=2)throw std::runtime_error("SPEC fallback modified recording");
-    SetSpecularSampleChoice(0);specularParallelDispatches=0;Check(list->Close());
+    SetSpecularSampleChoice(0);specularParallelEnabled=false;specularParallelDispatches=0;Check(list->Close());
     puts("PASS SPEC16 binding, dispatch expansion, PSO restore, off/non-16/depth fallback and stale binding clearing");
 }
 int main() try {

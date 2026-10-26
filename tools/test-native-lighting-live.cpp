@@ -6,6 +6,11 @@
 #include <iostream>
 int main(){
     using namespace native_lighting;
+    assert(!specularParallelEnabled.load() && !specularParallelReady.load());
+    assert(specularParallelDispatches.load()==0);
+    assert(SpecularSampleRequest(Mode::Native)==0); // Native on startup.
+    // Legacy mode checks below deliberately exercise the independent SPEC 4 choice.
+    assert(SetSpecularSampleChoice(4));
     for(auto mode:{Mode::RoomAuthoredSpatial,Mode::RoomAuthoredRaw}) {
         assert(UsesAuthoredClip(mode) && BypassesSpotHistory(mode));
         assert(IsRtSpotMode(mode) && PreservesGiFiltering(mode));

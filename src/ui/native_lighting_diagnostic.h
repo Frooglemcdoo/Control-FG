@@ -26,7 +26,7 @@ inline const wchar_t* ButtonLabel(unsigned index) noexcept {
         else wcscpy_s(label,L"SPEC: NATIVE");
         return label;
     }
-    if(index==kModeCount+8)return specularParallelEnabled.load()?L"PARALLEL: ON":L"PARALLEL: OFF";
+    if(index==kModeCount+8)return L"SPEC SHADING: SERIAL";
     return actions[index - kModeCount];
 }
 inline const wchar_t* ModeHint(Mode mode) noexcept {
@@ -238,8 +238,7 @@ inline LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPA
                 }
             }
             else if(index==kModeCount+8 && !capture_suite::active) {
-                specularParallelEnabled.store(!specularParallelEnabled.load());
-                Trace("spec_parallel user_request=%u ready=%u dispatches=%llu requires_spec=16",unsigned(specularParallelEnabled.load()),unsigned(specularParallelReady.load()),specularParallelDispatches.load());
+                Trace("spec_parallel unavailable=1 reason=r170_performance_regression shading=serial");
             }
             RedrawWindow(window,nullptr,nullptr,RDW_INVALIDATE|RDW_ALLCHILDREN);
             return 0;
@@ -263,7 +262,7 @@ inline DWORD WINAPI ThreadProc(LPVOID) noexcept {
     ULONGLONG nextRefresh=0, nextWindowSearch=0, nextLogDrain=0, nextRRReport=0;
     HWND cachedGame=nullptr;
     POINT lastOrigin{-1,-1};
-    Trace("session_start build=R170-overlay-rr-capture pid=%lu default=authored_clip_surface_normals_current_spot_when_ready log=user-diagnostics-folder",GetCurrentProcessId());
+    Trace("session_start build=R172-overlay-rr-capture pid=%lu default=authored_clip_surface_normals_current_spot_when_ready log=user-diagnostics-folder",GetCurrentProcessId());
     MSG msg{};
     while(GetMessageW(&msg,nullptr,0,0)>0){
         if (!panel || !IsDialogMessageW(panel, &msg)) {

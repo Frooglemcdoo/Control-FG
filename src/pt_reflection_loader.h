@@ -788,6 +788,7 @@ static bool PTReflectionEnsureCapturedCompositePso() noexcept {
 }
 
 #include "native_lighting_live_runtime.h"
+#include "../build/spec_serial_lifetimes.generated.h"
 
 static HRESULT STDMETHODCALLTYPE PTReflectionHookCreateComputePipelineState(
     ID3D12Device* device,const D3D12_COMPUTE_PIPELINE_STATE_DESC* desc,
@@ -797,18 +798,31 @@ static HRESULT STDMETHODCALLTYPE PTReflectionHookCreateComputePipelineState(
 
     char sha[65]{};
     bool target=false;
-    if(ptReflectionP2InjectionEnabled&&desc&&desc->CS.pShaderBytecode&&desc->CS.BytecodeLength==42408u){
+    if(desc&&desc->CS.pShaderBytecode&&desc->CS.BytecodeLength==42408u){
         target=PTReflectionSha256(
             static_cast<const unsigned char*>(desc->CS.pShaderBytecode),
             desc->CS.BytecodeLength,sha)&&
             strcmp(sha,"4fc0a0e9cd3706bcb86e29444d86fa32616138e1712c53b1b5103b30d7a1ecc9")==0;
     }
 
-    const HRESULT nativeHr=ptReflectionOriginalCreateComputePipelineState(device,desc,riid,out);
+    // R172: one hash-locked serial shader replacement at PSO creation only.
+    // No dispatch/bind metadata, extra PSO, or sample-count-dependent routing.
+    HRESULT nativeHr=E_FAIL;
+    bool optimized=false;
+    if(target&&out){
+        auto serialDesc=*desc;
+        serialDesc.CS={kSpecSerialLifetimesShader,sizeof(kSpecSerialLifetimesShader)};
+        serialDesc.CachedPSO={nullptr,0};
+        nativeHr=ptReflectionOriginalCreateComputePipelineState(device,&serialDesc,riid,out);
+        optimized=SUCCEEDED(nativeHr)&&*out;
+        if(!optimized)Log("SPEC_SERIAL_LIFETIMES fallback=1 hr=0x%08lX",static_cast<unsigned long>(nativeHr));
+    }
+    if(!optimized)nativeHr=ptReflectionOriginalCreateComputePipelineState(device,desc,riid,out);
+    if(target)Log("SPEC_SERIAL_LIFETIMES build=R172 active=%u source_sha=%s moved_loads=2 samples=unchanged dispatch=unchanged",unsigned(optimized),sha);
     if(SUCCEEDED(nativeHr)&&out&&*out&&desc)
         native_lighting::ObserveCompute(device,desc,reinterpret_cast<IUnknown*>(*out),ptReflectionOriginalCreateComputePipelineState);
     if(SUCCEEDED(nativeHr)&&out&&*out)PTGlassRuntime::ObserveCompute(device,desc,*out);
-    if(!target||FAILED(nativeHr)||!out||!*out||!desc)return nativeHr;
+    if(!ptReflectionP2InjectionEnabled||!target||FAILED(nativeHr)||!out||!*out||!desc)return nativeHr;
 
     AcquireSRWLockExclusive(&ptReflectionCompositePsoLock);
     if(!ptReflectionCompositePsoCaptured.load(std::memory_order_acquire)){
