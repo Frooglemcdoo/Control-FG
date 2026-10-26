@@ -45,6 +45,16 @@ inline HRESULT STDMETHODCALLTYPE LoadComputeHook(ID3D12PipelineLibrary* library,
     if (SUCCEEDED(hr) && out && *out && desc) {
         ID3D12Device* device = nullptr;
         if (SUCCEEDED(library->GetDevice(IID_PPV_ARGS(&device)))) {
+            // Load the native cache entry first. Replace only a successful exact
+            // target load; failure keeps its valid native object and HRESULT.
+            void* replacement=nullptr;
+            HRESULT replacementHr=E_FAIL;
+            if(spec_serial::TryCreate(device,desc,iid,&replacement,
+                ptReflectionOriginalCreateComputePipelineState,true,replacementHr)){
+                auto* native=reinterpret_cast<IUnknown*>(*out);
+                *out=replacement;
+                native->Release();
+            }
             const auto create = reinterpret_cast<CreateCompute>((*reinterpret_cast<void***>(device))[11]);
             ObserveCompute(device, desc, reinterpret_cast<IUnknown*>(*out), create);
             device->Release();

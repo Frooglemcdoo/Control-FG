@@ -17,6 +17,8 @@ inline double sums[performance::kStageCount]{};inline unsigned counts[performanc
 inline uint64_t nextStatus=0;
 inline void Settings(const char* label) noexcept {
     if(!manifest)return;
+    fprintf(manifest,"spec_serial settings=%s direct_matched=%llu direct_created=%llu library_matched=%llu library_created=%llu failures=%llu creation_only=1 gpu_execution_proven=0\n",
+        label,spec_serial::directMatched.load(),spec_serial::directCreated.load(),spec_serial::libraryMatched.load(),spec_serial::libraryCreated.load(),spec_serial::failures.load());
     fprintf(manifest,"spec_parallel settings=%s enabled=%u ready=%u recorded_dispatches=%llu\n",label,unsigned(specularParallelEnabled.load()),unsigned(specularParallelReady.load()),specularParallelDispatches.load());
     fprintf(manifest,"settings=%s ms=%llu present=%llu rr_requested=%u rr_selected=%u fg_selection=%u fg_enabled=%u dynamic_target=%u gi_request=%u specular_request=%u glass=%u streaming_ms=%u hdr_known=%u hdr=%u vram_sample_valid=%u vram_usage=%llu vram_budget=%llu\n",
         label,GetTickCount64(),presentCount.load(),unsigned(control_rr::RRUserRequested()),unsigned(control_rr_diagnostic::lastSelected.load()),
@@ -99,7 +101,7 @@ inline bool Start() noexcept {
     if(!DrainDiagnosticLog(true) || !Offset(report.Path(),logOffset))return false;
     wchar_t root[MAX_PATH]{};wcscpy_s(root,report.Path());auto* slash=wcsrchr(root,L'\\');if(!slash)return false;*slash=0;
     SYSTEMTIME t{};GetLocalTime(&t);static unsigned serial=0;
-    swprintf_s(folder,L"%s\\Performance-R172-%04u%02u%02u-%02u%02u%02u-%lu-%u",root,t.wYear,t.wMonth,t.wDay,t.wHour,t.wMinute,t.wSecond,GetCurrentProcessId(),serial++);
+    swprintf_s(folder,L"%s\\Performance-R173-%04u%02u%02u-%02u%02u%02u-%lu-%u",root,t.wYear,t.wMonth,t.wDay,t.wHour,t.wMinute,t.wSecond,GetCurrentProcessId(),serial++);
     if(!CreateDirectoryW(folder,nullptr))return false;
     wchar_t path[MAX_PATH]{};swprintf_s(path,L"%s\\gpu-timings.csv",folder);_wfopen_s(&csv,path,L"wb");
     swprintf_s(path,L"%s\\manifest.txt",folder);_wfopen_s(&manifest,path,L"wb");
@@ -114,8 +116,8 @@ inline bool Start() noexcept {
     session=performance::capture.fetch_add(1)+1;performance::skipped=0;state=selection.Read();contextRequested=false;
     *mainPath=0;mainOffset={};
     if(logFile==INVALID_HANDLE_VALUE || !GetFinalPathNameByHandleW(logFile,mainPath,32768,FILE_NAME_NORMALIZED) || !Offset(mainPath,mainOffset))++errors;
-    fprintf(manifest,"build=R172\nsession=%llu\nmode=%s\nsettle_ms=5000\nmeasure_ms=20000\nsample_every_presents=128\nsettings_changed=0\ngpu_waits=0\n",session,ModeName(LiveSelection::GetMode(state)));
-    fprintf(manifest,"CSV dimensions are incoming native launch arguments, not TraceRay counts. Parallel SPEC expands its target Z from 1 to 16. Shadow ray timing includes the combined native spotlight/point pass. GPU stages are per dispatch; do not sum means across different sample populations. Context capture happens after timing, uses reference rays, and cannot establish room ownership.\n");
+    fprintf(manifest,"build=R173\nsession=%llu\nmode=%s\nsettle_ms=5000\nmeasure_ms=20000\nsample_every_presents=128\nsettings_changed=0\ngpu_waits=0\n",session,ModeName(LiveSelection::GetMode(state)));
+    fprintf(manifest,"CSV dimensions are incoming native launch arguments, not TraceRay counts. Serial SPEC retains native dispatch dimensions. Shadow ray timing includes the combined native spotlight/point pass. GPU stages are per dispatch; do not sum means across different sample populations. Context capture happens after timing, uses reference rays, and cannot establish room ownership.\n");
     Settings("start");nextStatus=0;
     phase=Phase::Delay;began=phaseTime=GetTickCount64();startPresent=presentCount.load();
     ReportRRPaths("performance_capture_start");Trace("performance_capture_start session=%llu mode=%s",session,ModeName(LiveSelection::GetMode(state)));

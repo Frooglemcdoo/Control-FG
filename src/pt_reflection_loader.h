@@ -787,8 +787,8 @@ static bool PTReflectionEnsureCapturedCompositePso() noexcept {
     return ready;
 }
 
+#include "spec_serial_runtime.h"
 #include "native_lighting_live_runtime.h"
-#include "../build/spec_serial_lifetimes.generated.h"
 
 static HRESULT STDMETHODCALLTYPE PTReflectionHookCreateComputePipelineState(
     ID3D12Device* device,const D3D12_COMPUTE_PIPELINE_STATE_DESC* desc,
@@ -805,20 +805,10 @@ static HRESULT STDMETHODCALLTYPE PTReflectionHookCreateComputePipelineState(
             strcmp(sha,"4fc0a0e9cd3706bcb86e29444d86fa32616138e1712c53b1b5103b30d7a1ecc9")==0;
     }
 
-    // R172: one hash-locked serial shader replacement at PSO creation only.
-    // No dispatch/bind metadata, extra PSO, or sample-count-dependent routing.
     HRESULT nativeHr=E_FAIL;
-    bool optimized=false;
-    if(target&&out){
-        auto serialDesc=*desc;
-        serialDesc.CS={kSpecSerialLifetimesShader,sizeof(kSpecSerialLifetimesShader)};
-        serialDesc.CachedPSO={nullptr,0};
-        nativeHr=ptReflectionOriginalCreateComputePipelineState(device,&serialDesc,riid,out);
-        optimized=SUCCEEDED(nativeHr)&&*out;
-        if(!optimized)Log("SPEC_SERIAL_LIFETIMES fallback=1 hr=0x%08lX",static_cast<unsigned long>(nativeHr));
-    }
+    const bool optimized=spec_serial::TryCreate(device,desc,riid,out,
+        ptReflectionOriginalCreateComputePipelineState,false,nativeHr);
     if(!optimized)nativeHr=ptReflectionOriginalCreateComputePipelineState(device,desc,riid,out);
-    if(target)Log("SPEC_SERIAL_LIFETIMES build=R172 active=%u source_sha=%s moved_loads=2 samples=unchanged dispatch=unchanged",unsigned(optimized),sha);
     if(SUCCEEDED(nativeHr)&&out&&*out&&desc)
         native_lighting::ObserveCompute(device,desc,reinterpret_cast<IUnknown*>(*out),ptReflectionOriginalCreateComputePipelineState);
     if(SUCCEEDED(nativeHr)&&out&&*out)PTGlassRuntime::ObserveCompute(device,desc,*out);
