@@ -2,7 +2,7 @@
 import argparse, base64, hashlib, json, pathlib, struct
 from dxbc_transform import transform_shex
 SOURCE_SHA='4fc0a0e9cd3706bcb86e29444d86fa32616138e1712c53b1b5103b30d7a1ecc9'
-OP=dict(add=0,and_=1,breakc=3,endif=21,endloop=22,iadd=30,if_=31,ieq=32,ilt=33,imad=35,loop=48,mov=54,ld=45,ld_structured=167,store_structured=168,sync=190)
+OP=dict(add=0,and_=1,breakc=3,endif=21,endloop=22,iadd=30,if_=31,ieq=32,ilt=34,imad=35,loop=48,mov=54,ld=45,ld_structured=167,store_structured=168,sync=190)
 def reg(n, components='xyzw', dest=False, ty=0, indices=None):
     indices=([n] if ty==0 or ty==31 else []) if indices is None else indices
     token=2|(ty<<12)|(len(indices)<<20)
@@ -33,6 +33,7 @@ def parallelize(data):
     def patch(w):
         a=instructions(w);assert len(a)==984
         assert a[138][0]&2047==48 and a[964][0]&2047==22
+        assert OP['ilt']==(a[140][0]&2047) # retain native signed sample-limit comparison
         out=[]
         def emit(name,*args,flags=0):out.extend(inst(name,*args,flags=flags))
         def copy(lo,hi):
@@ -96,8 +97,11 @@ def parallelize(data):
     return transform_shex(data,patch)
 
 if __name__=='__main__':
-    p=argparse.ArgumentParser();p.add_argument('--source',type=pathlib.Path,required=True);p.add_argument('--output',type=pathlib.Path,required=True);args=p.parse_args()
+    p=argparse.ArgumentParser();p.add_argument('--source',type=pathlib.Path,required=True);p.add_argument('--output',type=pathlib.Path,required=True);p.add_argument('--header',type=pathlib.Path);args=p.parse_args()
     data=base64.b64decode(args.source.read_text());result=parallelize(data)
+    if args.header:
+        args.header.parent.mkdir(parents=True,exist_ok=True)
+        args.header.write_text('inline constexpr unsigned char kSpecParallelShader[] = {\n'+','.join(str(b) for b in result)+'\n};\n')
     args.output.parent.mkdir(parents=True,exist_ok=True);args.output.write_bytes(result)
     print(json.dumps(dict(source_sha256=SOURCE_SHA,parallel_sha256=hashlib.sha256(result).hexdigest(),bytes=len(result),status='generated_not_gpu_validated')))
 
