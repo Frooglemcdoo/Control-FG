@@ -88,6 +88,9 @@ inline bool UsesSpecularTemporalOnly(Mode mode) noexcept {
 // the user-accepted R167 performance setting: native specular sample policy.
 inline constexpr unsigned kSpecularSampleChoices[] = {0, 1, 2, 4, 8, 12, 16};
 inline std::atomic<unsigned> specularSampleChoice{0};
+inline std::atomic<bool> specularParallelEnabled{true};
+inline std::atomic<bool> specularParallelReady{false};
+inline std::atomic<unsigned long long> specularParallelDispatches{0};
 inline bool SetSpecularSampleChoice(unsigned value) noexcept {
     for (unsigned choice : kSpecularSampleChoices) {
         if (choice == value) { specularSampleChoice.store(value); return true; }

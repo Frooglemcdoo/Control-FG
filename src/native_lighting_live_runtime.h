@@ -214,6 +214,7 @@ inline bool AttachVariant(IUnknown* native, ID3D12PipelineState* variant, unsign
     return SUCCEEDED(hr);
 }
 using CreateCompute = HRESULT (STDMETHODCALLTYPE*)(ID3D12Device*, const D3D12_COMPUTE_PIPELINE_STATE_DESC*, REFIID, void**);
+#include "spec_parallel_runtime.h"
 namespace rt_spot_runtime {
 inline void ObserveCompute(ID3D12Device*, const D3D12_COMPUTE_PIPELINE_STATE_DESC*, IUnknown*, CreateCompute) noexcept;
 inline ID3D12PipelineState* SelectCompute(ID3D12PipelineState*) noexcept;
@@ -225,6 +226,7 @@ inline void RecordCompute(const D3D12_COMPUTE_PIPELINE_STATE_DESC*) noexcept;
 inline void ObserveCompute(ID3D12Device* device, const D3D12_COMPUTE_PIPELINE_STATE_DESC* desc, IUnknown* native, CreateCompute original) noexcept {
     computeSeen.fetch_add(1);
     IdentifyPipeline(native, desc->CS, 2);
+    spec_parallel::Observe(device,desc,native,original);
     rt_shadow_capture::RecordCompute(desc);
     rt_spot_runtime::ObserveCompute(device,desc,native,original);
     for(unsigned i=0;i<2;++i) {
@@ -309,16 +311,17 @@ inline void STDMETHODCALLTYPE SetHook(ID3D12GraphicsCommandList* list, ID3D12Pip
     Binding binding(pso);
     auto* alternate = rt_spot_runtime::SelectCompute(binding.selected);
     original(list, alternate ? alternate : binding.selected);
+    spec_parallel::Bind(list,alternate ? alternate : binding.selected);
     rt_spot_capture_runtime::BindCompute(list,pso,alternate ? alternate : binding.selected);
     BindPerformance(list,pso);
     if (alternate) alternate->Release();
     binding.Recorded();
 }
 inline void STDMETHODCALLTYPE ComputeDispatchHook(ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT z) {
-    const auto original=Lookup(list).dispatch;if(!original)return;
+    const auto hooks=Lookup(list);const auto original=hooks.dispatch;if(!original)return;
     rt_spot_capture_runtime::BeforeCompute(list,x,y,z);
     const auto timing=performance::Begin(list,performance::ComputeStage(list),x,y,z,0,performance::ComputeShader(list));
-    original(list,x,y,z);
+    if(!spec_parallel::Dispatch(list,x,y,z,original,hooks.set))original(list,x,y,z);
     performance::End(timing);
     rt_spot_capture_runtime::AfterCompute(list,x,y,z);
 }
@@ -328,6 +331,7 @@ inline HRESULT STDMETHODCALLTYPE ResetHook(ID3D12GraphicsCommandList* list, ID3D
     Binding binding(pso);
     auto* alternate = rt_spot_runtime::SelectCompute(binding.selected);
     const HRESULT hr = original(list, allocator, alternate ? alternate : binding.selected);
+    if (SUCCEEDED(hr))spec_parallel::Bind(list,alternate ? alternate : binding.selected);
     if (alternate) alternate->Release();
     if (SUCCEEDED(hr)) { performance::Reset(list);BindPerformance(list,pso);binding.Recorded(); }
     return hr;

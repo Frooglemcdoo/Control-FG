@@ -14,7 +14,7 @@ inline constexpr int kPerformanceY = kCaptureY + 46;
 inline constexpr int kCaptureStatusY = kPerformanceY + 46;
 inline constexpr int kFooterY = kCaptureStatusY + 50;
 inline constexpr int kHeight = kFooterY + 72;
-inline constexpr unsigned kButtonCount = kModeCount + 8;
+inline constexpr unsigned kButtonCount = kModeCount + 9;
 inline const wchar_t* ButtonLabel(unsigned index) noexcept {
     if (index < kModeCount) return kModeChoices[index].label;
     constexpr const wchar_t* actions[] = {L"ISSUE REMAINS", L"ISSUE GONE", L"SAVE LOG", L"CAPTURE LIGHT", L"PACKAGE LIGHT", L"TRACE SHADOW", L"PERF CAPTURE"};
@@ -26,6 +26,7 @@ inline const wchar_t* ButtonLabel(unsigned index) noexcept {
         else wcscpy_s(label,L"SPEC: NATIVE");
         return label;
     }
+    if(index==kModeCount+8)return specularParallelEnabled.load()?L"PARALLEL: ON":L"PARALLEL: OFF";
     return actions[index - kModeCount];
 }
 inline const wchar_t* ModeHint(Mode mode) noexcept {
@@ -108,6 +109,7 @@ inline void Paint(HWND window) noexcept {
 }
 inline void SaveReport(HWND window) noexcept {
     ReportRRPaths("save_log");
+    Trace("spec_parallel_save enabled=%u ready=%u dispatches=%llu requires_spec=16",unsigned(specularParallelEnabled.load()),unsigned(specularParallelReady.load()),specularParallelDispatches.load());
     rt_shadow_capture::Summary();
     const auto state = selection.Read();
     Trace("save_log seq=%llu mode=%s recorded_mask=%u", LiveSelection::Sequence(state),
@@ -235,6 +237,10 @@ inline LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPA
                     Trace("specular_quality user_request=%u independent_of_lighting=1",next);
                 }
             }
+            else if(index==kModeCount+8 && !capture_suite::active) {
+                specularParallelEnabled.store(!specularParallelEnabled.load());
+                Trace("spec_parallel user_request=%u ready=%u dispatches=%llu requires_spec=16",unsigned(specularParallelEnabled.load()),unsigned(specularParallelReady.load()),specularParallelDispatches.load());
+            }
             RedrawWindow(window,nullptr,nullptr,RDW_INVALIDATE|RDW_ALLCHILDREN);
             return 0;
         }
@@ -257,7 +263,7 @@ inline DWORD WINAPI ThreadProc(LPVOID) noexcept {
     ULONGLONG nextRefresh=0, nextWindowSearch=0, nextLogDrain=0, nextRRReport=0;
     HWND cachedGame=nullptr;
     POINT lastOrigin{-1,-1};
-    Trace("session_start build=R169-overlay-rr-capture pid=%lu default=authored_clip_surface_normals_current_spot_when_ready log=user-diagnostics-folder",GetCurrentProcessId());
+    Trace("session_start build=R170-overlay-rr-capture pid=%lu default=authored_clip_surface_normals_current_spot_when_ready log=user-diagnostics-folder",GetCurrentProcessId());
     MSG msg{};
     while(GetMessageW(&msg,nullptr,0,0)>0){
         if (!panel || !IsDialogMessageW(panel, &msg)) {

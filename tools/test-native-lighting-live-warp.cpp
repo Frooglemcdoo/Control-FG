@@ -647,6 +647,32 @@ static void TestCopyAudit(ID3D12Device* device) {
 #include "rt_spot_capture_gpu_warp_test.h"
 #include "rt_spot_capture_signal_test.h"
 
+static ID3D12PipelineState* specSetCalls[2]{};
+static unsigned specSets=0,specDispatches=0,specDimensions[3]{};
+static void STDMETHODCALLTYPE SpecTestSet(ID3D12GraphicsCommandList*,ID3D12PipelineState* pso){
+    if(specSets>=2)throw std::runtime_error("extra SPEC pipeline switch");specSetCalls[specSets++]=pso;
+}
+static void STDMETHODCALLTYPE SpecTestDispatch(ID3D12GraphicsCommandList*,UINT x,UINT y,UINT z){
+    ++specDispatches;specDimensions[0]=x;specDimensions[1]=y;specDimensions[2]=z;
+}
+static void TestSpecParallelBinding(ID3D12Device* device,ID3D12PipelineState* owner,ID3D12PipelineState* alternate){
+    using namespace native_lighting;
+    ComPtr<ID3D12CommandAllocator> allocator;Check(device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT,IID_PPV_ARGS(&allocator)));
+    ComPtr<ID3D12GraphicsCommandList> list;Check(device->CreateCommandList(0,D3D12_COMMAND_LIST_TYPE_DIRECT,allocator.Get(),nullptr,IID_PPV_ARGS(&list)));
+    unsigned tagged=1;Check(owner->SetPrivateDataInterface(spec_parallel::kVariant,alternate));Check(owner->SetPrivateData(spec_parallel::kTagged,sizeof(tagged),&tagged));
+    selection.Select(Mode::Native);SetSpecularSampleChoice(16);specularParallelEnabled=true;
+    spec_parallel::Bind(list.Get(),owner);
+    auto dispatch=[&](unsigned z=1){return spec_parallel::Dispatch(list.Get(),320,90,z,&SpecTestDispatch,&SpecTestSet);};
+    if(!dispatch()||specSets!=2||specDispatches!=1||specSetCalls[0]!=alternate||specSetCalls[1]!=owner||specDimensions[2]!=16||specDimensions[0]!=320||specDimensions[1]!=90)throw std::runtime_error("SPEC substitution or restore failed");
+    specularParallelEnabled=false;if(dispatch())throw std::runtime_error("SPEC disabled dispatch");specularParallelEnabled=true;
+    SetSpecularSampleChoice(8);if(dispatch())throw std::runtime_error("SPEC changed non-16 sampling");SetSpecularSampleChoice(16);
+    if(dispatch(2))throw std::runtime_error("SPEC changed non-native depth");
+    spec_parallel::Bind(list.Get(),alternate);if(dispatch())throw std::runtime_error("SPEC stale binding survived unrelated PSO");
+    spec_parallel::Bind(list.Get(),owner);spec_parallel::Bind(list.Get(),nullptr);if(dispatch())throw std::runtime_error("SPEC stale binding survived null reset");
+    if(specDispatches!=1||specSets!=2)throw std::runtime_error("SPEC fallback modified recording");
+    SetSpecularSampleChoice(0);specularParallelDispatches=0;Check(list->Close());
+    puts("PASS SPEC16 binding, dispatch expansion, PSO restore, off/non-16/depth fallback and stale binding clearing");
+}
 int main() try {
     TestCapturePipelineDescription();
     TestSpotCulling();
@@ -677,6 +703,10 @@ int main() try {
         D3D12_COMPUTE_PIPELINE_STATE_DESC desc{};desc.pRootSignature=root.Get();desc.CS={shader->GetBufferPointer(),shader->GetBufferSize()};
         ID3D12PipelineState* pso=nullptr;Check(device->CreateComputePipelineState(&desc,IID_PPV_ARGS(&pso)));return pso;
     };
+    {
+        ComPtr<ID3D12PipelineState> owner,alternate;owner.Attach(makePso(91));alternate.Attach(makePso(92));
+        TestSpecParallelBinding(device.Get(),owner.Get(),alternate.Get());
+    }
     {
         namespace rt = rt_spot_runtime;
         ComPtr<ID3D12PipelineState> owner, filtered, raw, reset, signal;
@@ -908,3 +938,4 @@ int main() try {
     }
     CloseHandle(event);std::cout<<"PASS: WARP live native/GI/direct switching through SetPipelineState and Reset; native restored without restart\n";return 0;
 } catch(const std::exception& error){std::cerr<<error.what()<<'\n';return 1;}
+
