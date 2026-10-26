@@ -18,6 +18,7 @@ inline ComPtr<ID3D12GraphicsCommandList4> recordedList;
 inline ComPtr<ID3D12StateObject> recordedState,captureState;
 inline ComPtr<ID3D12CommandQueue> submittedQueue;
 inline unsigned attempts=0,exportCursor=0,exportStage=0;
+inline bool exportLightPending=false;
 inline UINT64 fenceValue=1;
 inline UINT completionStatus[4]{},completionRays=0,completionHits=0;
 inline UINT frameTag=0,capturedWidth=0,capturedHeight=0,capturedTableRecords=0;
@@ -127,7 +128,7 @@ inline bool RequestFresh() noexcept {
            RecordingWasReset(recordedSignalList.Get(),signalGeneration) &&
            completed!=UINT64_MAX && completed>=fenceValue &&
            signalCompleted!=UINT64_MAX && signalCompleted>=fenceValue) {
-            ++fenceValue;attempts=exportCursor=exportStage=0;readbackCopied=false;
+            ++fenceValue;attempts=exportCursor=exportStage=0;exportLightPending=false;readbackCopied=false;
             recordedList.Reset();recordedState.Reset();captureState.Reset();recordedTable.Reset();recordedHeap.Reset();submittedQueue.Reset();
             recordedSignalList.Reset();recordedSignalHeap.Reset();recordedSignalPipeline.Reset();recordedSignalBeforePipeline.Reset();signalQueue.Reset();
             accepted=true;
@@ -486,10 +487,14 @@ inline void Poll() noexcept {
             rt_spot_capture_audit::Hex(completedBytes+gpu::kLightContextReadbackOffset+exportCursor*gpu::kLightContextStride,gpu::kLightContextStride,contextHex);
             char signalHex[128*2+1]{};
             rt_spot_capture_audit::Hex(completedBytes+gpu::kSignalReadbackOffset+exportCursor*gpu::kSignalStride,128,signalHex);
-            if(!Trace("rt_hit_gpu_record index=%u bytes=%s light_context=%s signal=%s",exportCursor,hex,contextHex,signalHex))return;
+            if(!exportLightPending) {
+                if(!Trace("rt_hit_gpu_record index=%u bytes=%s light_context=%s signal=%s",exportCursor,hex,contextHex,signalHex))return;
+                exportLightPending=true;
+            }
             char spotHex[336*2+1]{};
             rt_spot_capture_audit::Hex(completedBytes+gpu::kSignalReadbackOffset+exportCursor*gpu::kSignalStride+128,336,spotHex);
             if(!Trace("rt_hit_gpu_light index=%u bytes=%s",exportCursor,spotHex))return;
+            exportLightPending=false;
         }
     }
     if(exportCursor==gpu::kRayCount && Trace("rt_hit_gpu_export_complete records_examined=4096 format=CaptureResult80 frame_tag=%u",frameTag))exportStage=3;
