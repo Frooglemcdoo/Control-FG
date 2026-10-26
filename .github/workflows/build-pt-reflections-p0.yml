@@ -243,6 +243,8 @@ jobs:
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\assemble-validated-dxil.cpp /Febuild\assemble-validated-dxil.exe
           if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc research\spec-performance\validate.cpp /Febuild\spec-validate.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
+          if errorlevel 1 exit /b 1
 
       - name: Compile PT reflection DXIL libraries
         shell: powershell
@@ -268,8 +270,6 @@ jobs:
           if($LASTEXITCODE -ne 0){throw 'Parallel SPEC shader generation failed'}
           python tools/test-spec-parallel.py build
           if($LASTEXITCODE -ne 0){throw 'Parallel SPEC contract checks failed'}
-          cl /nologo /EHsc research/spec-performance/validate.cpp /Fe:build/spec-validate.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
-          if($LASTEXITCODE -ne 0){throw 'Parallel SPEC validator compile failed'}
           ./build/spec-validate.exe build/spec-parallel.dxbc
           if($LASTEXITCODE -ne 0){throw 'Parallel SPEC PSO validation failed'}
           ./build/spec-validate.exe build/spec-native-fixture.dxbc build/spec-parallel-fixture.dxbc
