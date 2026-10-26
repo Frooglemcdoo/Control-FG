@@ -3,17 +3,19 @@
 // retained for the process lifetime: a native list may be submitted again.
 // Query indices are never recycled, including after a cancelled capture.
 namespace performance {
-enum class Stage : unsigned { None, ShadowRays, OtherRays, Selector, History, Spatial0, Spatial1, Composition };
+enum class Stage : unsigned { None, ShadowRays, OtherRays, Selector, History, Spatial0, Spatial1, Composition, OtherCompute, Count };
+inline constexpr unsigned kStageCount=static_cast<unsigned>(Stage::Count);
 inline const char* Name(Stage s) noexcept {
-    constexpr const char* names[]={"none","shadow_rays","other_rays","selector","history","spatial0","spatial1","composition"};
+    constexpr const char* names[]={"none","shadow_rays","other_rays","selector","history","spatial0","spatial1","composition","other_compute"};
     return names[static_cast<unsigned>(s)];
 }
 enum class State : unsigned { Recording, Recorded, Submitting, Submitted, Read, Discarded };
-inline constexpr unsigned kCapacity=16384,kSampleInterval=16,kInvalid=~0u;
+inline constexpr unsigned kCapacity=16384,kSampleInterval=128,kInvalid=~0u;
 struct Sample {
     ID3D12GraphicsCommandList* list=nullptr;
     State state=State::Recording;Stage stage=Stage::None;
     UINT64 capture=0,present=0,selection=0,fence=0,frequency=0,tableBytes=0;
+    char sourceShader[65]{};
     UINT x=0,y=0,z=0;bool rr=false,current=true;unsigned effects=0;
 };
 inline SRWLOCK lock=SRWLOCK_INIT;
@@ -49,7 +51,7 @@ inline bool Prepare() noexcept {
     if(SUCCEEDED(hr))hr=readback->Map(0,&range,reinterpret_cast<void**>(&mapped));
     if(FAILED(hr)){fault=true;return false;}return true;
 }
-inline unsigned Begin(ID3D12GraphicsCommandList* list,Stage stage,UINT x,UINT y,UINT z,UINT64 tableBytes=0) noexcept {
+inline unsigned Begin(ID3D12GraphicsCommandList* list,Stage stage,UINT x,UINT y,UINT z,UINT64 tableBytes=0,const char* sourceShader=nullptr) noexcept {
     if(!enabled.load(std::memory_order_acquire) || fault.load() || stage==Stage::None || !list)return kInvalid;
     const auto present=presentCount.load();if(present%kSampleInterval)return kInvalid;
     if(list->GetType()!=D3D12_COMMAND_LIST_TYPE_DIRECT)return kInvalid;
@@ -58,6 +60,8 @@ inline unsigned Begin(ID3D12GraphicsCommandList* list,Stage stage,UINT x,UINT y,
     if(count==kCapacity){++skipped;ReleaseSRWLockExclusive(&lock);return kInvalid;}
     const unsigned index=count++;
     auto& s=samples[index];s.list=list;list->AddRef();s.stage=stage;s.capture=capture.load();s.present=present;
+    for(unsigned i=0;i<64;++i)s.sourceShader[i]=sourceShader?sourceShader[i]:0;
+    s.sourceShader[64]=0;
     s.selection=selection.Read();s.x=x;s.y=y;s.z=z;s.tableBytes=tableBytes;
     s.rr=control_rr_diagnostic::lastSelected.load();s.effects=control_rr_diagnostic::lastEffects.load();
     watch.store(true,std::memory_order_release);
@@ -144,6 +148,14 @@ template<class Emit> inline unsigned Poll(UINT64 session,Emit emit) noexcept {
 
 inline thread_local ID3D12GraphicsCommandList* computeList=nullptr;
 inline thread_local Stage computeStage=Stage::None;
-inline void Bind(ID3D12GraphicsCommandList* list,Stage stage) noexcept {computeList=list;computeStage=stage;}
+inline thread_local char computeSourceShader[65]{};
+inline void Bind(ID3D12GraphicsCommandList* list,Stage stage,const char* shader=nullptr) noexcept {
+    computeList=list;computeStage=stage;
+    for(unsigned i=0;i<64;++i)computeSourceShader[i]=shader?shader[i]:0;
+    computeSourceShader[64]=0;
+}
+inline const char* ComputeShader(ID3D12GraphicsCommandList* list) noexcept {
+    return computeList==list?computeSourceShader:nullptr;
+}
 inline Stage ComputeStage(ID3D12GraphicsCommandList* list) noexcept {return computeList==list?computeStage:Stage::None;}
 } // namespace performance

@@ -258,6 +258,7 @@ inline void ObserveCompute(ID3D12Device* device, const D3D12_COMPUTE_PIPELINE_ST
 #include "lighting_performance.h"
 inline performance::Stage PerformanceStage(ID3D12PipelineState*) noexcept;
 inline performance::Stage PerformanceRayStage() noexcept;
+inline void BindPerformance(ID3D12GraphicsCommandList*,ID3D12PipelineState*) noexcept;
 struct Binding {
     ID3D12PipelineState* selected;
     ID3D12PipelineState* alternate = nullptr;
@@ -309,14 +310,14 @@ inline void STDMETHODCALLTYPE SetHook(ID3D12GraphicsCommandList* list, ID3D12Pip
     auto* alternate = rt_spot_runtime::SelectCompute(binding.selected);
     original(list, alternate ? alternate : binding.selected);
     rt_spot_capture_runtime::BindCompute(list,pso,alternate ? alternate : binding.selected);
-    performance::Bind(list,performance::enabled.load()?PerformanceStage(pso):performance::Stage::None);
+    BindPerformance(list,pso);
     if (alternate) alternate->Release();
     binding.Recorded();
 }
 inline void STDMETHODCALLTYPE ComputeDispatchHook(ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT z) {
     const auto original=Lookup(list).dispatch;if(!original)return;
     rt_spot_capture_runtime::BeforeCompute(list,x,y,z);
-    const auto timing=performance::Begin(list,performance::ComputeStage(list),x,y,z);
+    const auto timing=performance::Begin(list,performance::ComputeStage(list),x,y,z,0,performance::ComputeShader(list));
     original(list,x,y,z);
     performance::End(timing);
     rt_spot_capture_runtime::AfterCompute(list,x,y,z);
@@ -328,7 +329,7 @@ inline HRESULT STDMETHODCALLTYPE ResetHook(ID3D12GraphicsCommandList* list, ID3D
     auto* alternate = rt_spot_runtime::SelectCompute(binding.selected);
     const HRESULT hr = original(list, allocator, alternate ? alternate : binding.selected);
     if (alternate) alternate->Release();
-    if (SUCCEEDED(hr)) { performance::Reset(list);performance::Bind(list,performance::enabled.load()?PerformanceStage(pso):performance::Stage::None);binding.Recorded(); }
+    if (SUCCEEDED(hr)) { performance::Reset(list);BindPerformance(list,pso);binding.Recorded(); }
     return hr;
 }
 inline bool PatchSlot(void** slot, void* expected, void* hook) noexcept {
@@ -352,7 +353,12 @@ inline bool PatchSlot(void** slot, void* expected, void* hook) noexcept {
 inline performance::Stage PerformanceRayStage() noexcept {return rt_spot_runtime::active?performance::Stage::ShadowRays:performance::Stage::OtherRays;}
 inline performance::Stage PerformanceStage(ID3D12PipelineState* pso) noexcept {
     unsigned kind=0;UINT size=sizeof(kind);
-    if(!pso || FAILED(pso->GetPrivateData(rt_spot_runtime::kKind,&size,&kind)))return performance::Stage::None;
+    if(!pso)return performance::Stage::None;
+    if(FAILED(pso->GetPrivateData(rt_spot_runtime::kKind,&size,&kind))){
+        PipelineIdentity identity{};size=sizeof(identity);
+        return SUCCEEDED(pso->GetPrivateData(kIdentityGuid,&size,&identity)) && identity.stage==2
+            ? performance::Stage::OtherCompute : performance::Stage::None;
+    }
     switch(kind){
     case rt_spot_runtime::kSelectorComponent:return performance::Stage::Selector;
     case rt_spot_runtime::kResetComponent:return performance::Stage::History;
@@ -361,6 +367,12 @@ inline performance::Stage PerformanceStage(ID3D12PipelineState* pso) noexcept {
     case rt_spot_runtime::kLightComponent:return performance::Stage::Composition;
     default:return performance::Stage::None;
     }
+}
+inline void BindPerformance(ID3D12GraphicsCommandList* list,ID3D12PipelineState* pso) noexcept {
+    if(!performance::enabled.load()){performance::Bind(list,performance::Stage::None);return;}
+    PipelineIdentity identity{};UINT size=sizeof(identity);
+    if(pso)pso->GetPrivateData(kIdentityGuid,&size,&identity);
+    performance::Bind(list,PerformanceStage(pso),identity.sha);
 }
 inline void InstallList(ID3D12GraphicsCommandList* list) noexcept {
     rt_shadow_capture::InstallList(list);

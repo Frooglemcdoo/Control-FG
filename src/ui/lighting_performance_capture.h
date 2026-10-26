@@ -12,7 +12,7 @@ inline FILE* csv=nullptr;
 inline FILE* manifest=nullptr;
 inline HANDLE packager=nullptr;
 inline LARGE_INTEGER logOffset{},mainOffset{};
-inline double sums[8]{};inline unsigned counts[8]{};
+inline double sums[performance::kStageCount]{};inline unsigned counts[performance::kStageCount]{};
 inline uint64_t nextStatus=0;
 inline void Settings(const char* label) noexcept {
     if(!manifest)return;
@@ -51,8 +51,8 @@ inline wchar_t mainPath[32768]{};
 inline void Emit(const performance::Sample& s,double ms) noexcept {
     if(!csv)return;
     const auto stage=static_cast<unsigned>(s.stage);
-    if(fprintf(csv,"%llu,%llu,%s,%.9f,%u,%u,%u,%llu,%s,%u,%u,%llu\n",s.capture,s.present,performance::Name(s.stage),ms,s.x,s.y,s.z,s.tableBytes,
-        ModeName(LiveSelection::GetMode(s.selection)),unsigned(s.rr),s.effects,s.frequency)<0)++errors;
+    if(fprintf(csv,"%llu,%llu,%s,%.9f,%u,%u,%u,%llu,%s,%u,%u,%llu,%s\n",s.capture,s.present,performance::Name(s.stage),ms,s.x,s.y,s.z,s.tableBytes,
+        ModeName(LiveSelection::GetMode(s.selection)),unsigned(s.rr),s.effects,s.frequency,s.sourceShader)<0)++errors;
     sums[stage]+=ms;++counts[stage];++rows;
 }
 inline void Complete(HWND game,bool packed) noexcept {
@@ -79,7 +79,7 @@ inline void Save(HWND game,const char* reason) noexcept {
     if(manifest){
         Settings("end");
         fprintf(manifest,"end=%s\ngpu_samples=%u\nskipped=%llu\ntiming_fault=%u\nerrors=%u\n",reason,rows,performance::skipped.load(),unsigned(performance::fault.load()),errors);
-        for(unsigned i=1;i<8;++i)fprintf(manifest,"stage=%s samples=%u mean_dispatch_ms=%.9f\n",performance::Name(static_cast<performance::Stage>(i)),counts[i],counts[i]?sums[i]/counts[i]:0);
+        for(unsigned i=1;i<performance::kStageCount;++i)fprintf(manifest,"stage=%s samples=%u mean_dispatch_ms=%.9f\n",performance::Name(static_cast<performance::Stage>(i)),counts[i],counts[i]?sums[i]/counts[i]:0);
         if(fclose(manifest)!=0)++errors;manifest=nullptr;
     }
     wchar_t module[MAX_PATH]{};GetModuleFileNameW(selfModule,module,MAX_PATH);auto* slash=wcsrchr(module,L'\\');if(!slash){Complete(game,false);return;}*slash=0;
@@ -97,21 +97,21 @@ inline bool Start() noexcept {
     if(!DrainDiagnosticLog(true) || !Offset(report.Path(),logOffset))return false;
     wchar_t root[MAX_PATH]{};wcscpy_s(root,report.Path());auto* slash=wcsrchr(root,L'\\');if(!slash)return false;*slash=0;
     SYSTEMTIME t{};GetLocalTime(&t);static unsigned serial=0;
-    swprintf_s(folder,L"%s\\Performance-R168-%04u%02u%02u-%02u%02u%02u-%lu-%u",root,t.wYear,t.wMonth,t.wDay,t.wHour,t.wMinute,t.wSecond,GetCurrentProcessId(),serial++);
+    swprintf_s(folder,L"%s\\Performance-R169-%04u%02u%02u-%02u%02u%02u-%lu-%u",root,t.wYear,t.wMonth,t.wDay,t.wHour,t.wMinute,t.wSecond,GetCurrentProcessId(),serial++);
     if(!CreateDirectoryW(folder,nullptr))return false;
     wchar_t path[MAX_PATH]{};swprintf_s(path,L"%s\\gpu-timings.csv",folder);_wfopen_s(&csv,path,L"wb");
     swprintf_s(path,L"%s\\manifest.txt",folder);_wfopen_s(&manifest,path,L"wb");
     if(!csv || !manifest){if(csv)fclose(csv);if(manifest)fclose(manifest);csv=manifest=nullptr;return false;}
-    fprintf(csv,"capture,present,stage,gpu_ms,width_or_groups,height_or_groups,depth_or_groups,hit_table_bytes,mode,rr_selected,rt_effects,timestamp_frequency\n");
+    fprintf(csv,"capture,present,stage,gpu_ms,width_or_groups,height_or_groups,depth_or_groups,hit_table_bytes,mode,rr_selected,rt_effects,timestamp_frequency,source_shader_sha256\n");
     AcquireSRWLockExclusive(&performance::lock);
     for(unsigned i=0;i<performance::count;++i){performance::samples[i].current=false;performance::samples[i].state=performance::State::Discarded;}
     ReleaseSRWLockExclusive(&performance::lock);
-    rows=errors=0;for(unsigned i=0;i<8;++i){sums[i]=0;counts[i]=0;}
+    rows=errors=0;for(unsigned i=0;i<performance::kStageCount;++i){sums[i]=0;counts[i]=0;}
     capturedSpecularChoice=specularSampleChoice.load();measureStartMs=measureStartPresent=0;
     session=performance::capture.fetch_add(1)+1;performance::skipped=0;state=selection.Read();contextRequested=false;
     *mainPath=0;mainOffset={};
     if(logFile==INVALID_HANDLE_VALUE || !GetFinalPathNameByHandleW(logFile,mainPath,32768,FILE_NAME_NORMALIZED) || !Offset(mainPath,mainOffset))++errors;
-    fprintf(manifest,"build=R168\nsession=%llu\nmode=%s\nsettle_ms=5000\nmeasure_ms=20000\nsample_every_presents=16\nsettings_changed=0\ngpu_waits=0\n",session,ModeName(LiveSelection::GetMode(state)));
+    fprintf(manifest,"build=R169\nsession=%llu\nmode=%s\nsettle_ms=5000\nmeasure_ms=20000\nsample_every_presents=128\nsettings_changed=0\ngpu_waits=0\n",session,ModeName(LiveSelection::GetMode(state)));
     fprintf(manifest,"Dispatch dimensions are launch dimensions, not actual TraceRay counts. Shadow ray timing includes the combined native spotlight/point pass. GPU stages are per dispatch; do not sum means across different sample populations. Context capture happens after timing, uses reference rays, and cannot establish room ownership.\n");
     Settings("start");nextStatus=0;
     phase=Phase::Delay;began=phaseTime=GetTickCount64();startPresent=presentCount.load();

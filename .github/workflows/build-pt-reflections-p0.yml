@@ -560,11 +560,11 @@ jobs:
           & powershell.exe -NoProfile -File Package-Lighting-Performance.ps1 -Folder build/perf-package-test -ModuleFolder build
           if ($LASTEXITCODE -ne 0 -or !(Test-Path build/perf-package-test.zip)) { throw 'Performance package roundtrip failed' }
 
-      - name: Package live lighting diagnostic R168
+      - name: Package live lighting diagnostic R169
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-Native-Lighting-Live-R168'
+          $out='Control-FG-Native-Lighting-Live-R169'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
           Copy-Item build/rt_spot_selected_off.dxbc,build/rt_spot_selection.dxbc,build/rt_spot_visibility.dxbc,build/rt_spot_light_ids.dxbc,build/rt_spot_raw_history.dxbc,build/rt_spot_raw_spatial0.dxbc,build/rt_spot_raw_spatial1.dxbc,build/rt_spot_full.dxil,build/rt_spot_r94.dxil,build/rt_spot_light.dxbc,build/rt_spot_reset.dxbc,build/rt_spot_history.dxbc,build/rt_spot_spatial0.dxbc,build/rt_spot_spatial1.dxbc $out
@@ -584,20 +584,20 @@ jobs:
           Copy-Item Collect-ControlFG-Compact-Logs.ps1 "$out/Collect-ControlFG-Compact-Logs.ps1"
           Copy-Item Package-Lighting-Capture.cmd,tools/package-lighting-capture.py,Package-Lighting-Performance.ps1 $out
           Copy-Item Capture-RR-Boundary.cmd,Capture-RR-Boundary.ps1,Collect-RR-Boundary-Status.cmd,tools/collect-rr-boundary.py $out
-          Copy-Item docs/native-lighting-r168.md "$out/DIAGNOSTIC-NOTES.md"
+          Copy-Item docs/native-lighting-r169.md "$out/DIAGNOSTIC-NOTES.md"
           @'
-          CONTROL-FG R168 - Centered spotlight ray reuse
+          CONTROL-FG R169 - SPEC 16 compute profiling
           Close Control to install. Copy contents beside Control_DX12.exe.
           Preserve NVIDIA runtimes and ControlFGStreamline. Start a fresh game session.
-          Leave RR enabled and SPEC at NATIVE. Capture NATIVE, then NATIVE BLEND at the same view.
+          Select NATIVE BLEND with RR on and FG off. Capture SPEC 16, then SPEC NATIVE at the same view.
           Open F10 and click PERF CAPTURE for each mode. SPEC remains fixed across mode changes.
           The panel closes. Resume gameplay if paused; five-second delay then 20 seconds of sampling.
           Move through the affected area. Keep graphics settings unchanged during recording.
           A light-context snapshot follows timing. The completed ZIP path appears automatically.
-          Send Performance-R168-....zip. No mode switching or external capture application required.
-          Centered spotlight traces reuse one identical hit instead of tracing it four times.
+          Send Performance-R169-....zip. No mode switching or external capture application required.
+          R168 rendering is unchanged. Additional compute GPU timings identify native source shader hashes.
           SPEC cycles Native/1/2/4/8/12/16; it resets to Native on game restart.
-          Soft-edge filters and authored clipping are retained. Performance gain needs measurement.
+          No performance gain claimed. Sparse samples cover one in 128 native presents.
           See DIAGNOSTIC-NOTES.md for coverage and explicit capture limitations.
           '@ | Set-Content "$out/README.txt" -Encoding ASCII
           Compress-Archive -Path "$out/*" -DestinationPath "$out.zip" -Force
@@ -606,10 +606,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-Native-Lighting-Live-R168
+          name: Control-FG-Native-Lighting-Live-R169
           path: |
-            Control-FG-Native-Lighting-Live-R168.zip
-            Control-FG-Native-Lighting-Live-R168.sha256
+            Control-FG-Native-Lighting-Live-R169.zip
+            Control-FG-Native-Lighting-Live-R169.sha256
             build/centered-original.ll
             build/centered-reuse.ll
             build/centered-reuse-validation.json

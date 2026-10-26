@@ -1,0 +1,11 @@
+# R169: SPEC 16 compute profiling
+
+R168 Diagnostics1.zip verifies effective 16 samples versus native 1, both Native Blend, GI 6, RR on and FG off. FPS: 38.75 versus 76.90. The first non-shadow ray dispatch averages 7.56894 versus 0.50149 ms; RR evaluation averages 3.51067 versus 3.24266 ms. Capture timing completed with no errors. Approximately 12.8 ms separates overall cadence; current ray timings account for about 7 ms, not the full gap. CPU replay timings cannot be added to GPU durations to explain the remainder.
+
+The archived reflection raygen varies sampling directions by reflectionRayIndex and writes an individual sample index into the hit payload. This is not the centered spotlight duplication. Its active shader variant still needs correlation; no sample reuse or quality-reducing replacement is justified by the current evidence.
+
+R169 expands PERF CAPTURE to all identified compute PSOs observed by the existing command-list hooks. Rows add source_shader_sha256: the native/source PSO hash, not a claim that a substituted variant has those exact bytes. Existing shadow stage names remain; otherwise identified compute dispatches are other_compute. Unidentified pipelines, graphics/draw work, indirect dispatches and unobserved command lists remain outside coverage. Dispatch order is not a persistent semantic shader identity. RR evaluation remains in runtime.log.
+
+Sampling now occurs every 128 native presents for all GPU stages to bound query volume. Only capture-enabled bindings read identity metadata; no new per-frame hashing, shader patch, GPU waits or render-thread file writes. Existing finite query capacity, exact submission/fence/reset checks and explicit skipped/fault reporting remain. Sparse timing is a diagnostic, not an uninstrumented benchmark or complete GPU frame timer. Analyze each shader's total per sampled present, including repeated dispatches; do not sum unrelated per-dispatch means.
+
+Rendering and SPEC choices/default are unchanged from accepted R168. Install with Control closed. In the affected area select Native Blend, RR on, FG off, SPEC 16; run PERF CAPTURE while standing still. Repeat at SPEC Native from the same view without changing other settings. Send both ZIPs. This build measures the remaining work; it does not claim a performance fix.

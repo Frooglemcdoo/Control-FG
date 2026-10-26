@@ -28,8 +28,13 @@ int main(){try{
     Require(p::Begin(list.Get(),p::Stage::ShadowRays,100,100,1)==p::kInvalid);
     p::capture=1;p::enabled=true;presentCount=17;
     Require(p::Begin(list.Get(),p::Stage::ShadowRays,100,100,1)==p::kInvalid);
-    presentCount=32;
-    unsigned ticket=p::Begin(list.Get(),p::Stage::ShadowRays,100,100,1,960);Require(ticket!=p::kInvalid);p::End(ticket);
+    presentCount=p::kSampleInterval;
+    char shader[65]{};for(unsigned i=0;i<64;++i)shader[i]='a';
+    p::Bind(list.Get(),p::Stage::OtherCompute,shader);
+    Require(p::ComputeStage(list.Get())==p::Stage::OtherCompute);
+    Require(p::ComputeShader(list.Get())[0]=='a' && p::ComputeShader(nullptr)==nullptr);
+    p::Bind(list.Get(),p::Stage::None);Require(p::ComputeShader(list.Get())[0]==0);
+    unsigned ticket=p::Begin(list.Get(),p::Stage::ShadowRays,100,100,1,960,shader);Require(ticket!=p::kInvalid);p::End(ticket);Require(p::samples[ticket].sourceShader[63]=='a');
     unsigned rows=0;
     auto emit=[&](const p::Sample& s,double ms){Require(s.rr && s.effects==43 && s.x==100 && s.tableBytes==960 && ms>=0);++rows;};
     Require(p::Poll(1,emit)==1 && !rows); // recorded is not GPU completion
