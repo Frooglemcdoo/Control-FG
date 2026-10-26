@@ -41,6 +41,7 @@ inline const GUID kGuardedHistoryVariant = {0xe631a601,0x6651,0x4911,{0x80,0x90,
 inline const GUID kCorrectedOpenVariant = {0xe631a601,0x6651,0x4911,{0x80,0x90,0x11,0x71,0x14,0x28,0x30,0x12}};
 inline const GUID kMapPriorityVariant = {0xe631a601,0x6651,0x4911,{0x80,0x90,0x11,0x71,0x14,0x28,0x30,0x13}};
 inline const GUID kMapProbeVariant = {0xe631a601,0x6651,0x4911,{0x80,0x90,0x11,0x71,0x14,0x28,0x30,0x14}};
+inline const GUID kNativeBlendVariant = {0xe631a601,0x6651,0x4911,{0x80,0x90,0x11,0x71,0x14,0x28,0x30,0x15}};
 inline const GUID& IsolationVariant(Mode mode) noexcept {
     if(mode==Mode::RoomMapProbe)return kMapProbeVariant;
     if(mode==Mode::RoomCorrectedMapPriority)return kMapPriorityVariant;
@@ -57,6 +58,7 @@ inline const GUID& IsolationVariant(Mode mode) noexcept {
 // Composition signal views override shading, while the earlier producer still
 // uses IsolationVariant to retain corrected light selection.
 inline const GUID& CompositionVariant(Mode mode) noexcept {
+    if(mode==Mode::RoomNativeBlend)return kNativeBlendVariant;
     if(mode==Mode::RoomMapProbe || mode==Mode::RoomCorrectedMapPriority)return kBentNormalVariant;
     if(mode==Mode::RoomCorrectedOpen)return kCorrectedOpenVariant;
     if(IsCorrectedSignal(mode))return ShowsSpotLightIds(mode)?kLightIdsVariant:kVisibilityVariant;
@@ -316,6 +318,7 @@ inline void ObserveCompute(ID3D12Device* device, const D3D12_COMPUTE_PIPELINE_ST
         Trace("rt_spot_open ready=%u hr=0x%08lX",unsigned(SUCCEEDED(openResult)),static_cast<unsigned long>(openResult));
     }
     if(SUCCEEDED(hr) && kind==kLightComponent) {
+        PrepareIsolation(device,*desc,owner,create,kNativeBlendShader,sizeof(kNativeBlendShader),kNativeBlendVariant,nativeBlendReady,"native_pcf_blend_composition");
         PrepareIsolation(device,*desc,owner,create,kCorrectedOpenShader,sizeof(kCorrectedOpenShader),kCorrectedOpenVariant,correctedOpenLightReady,"surface_normals_rt_spot_open");
         PrepareIsolation(device,*desc,owner,create,kCorrectedNoAOShader,sizeof(kCorrectedNoAOShader),kCorrectedNoAOVariant,correctedNoAOLightReady,"surface_normals_no_ao_composition");
         PrepareIsolation(device,*desc,owner,create,kBentNormalOffShader,sizeof(kBentNormalOffShader),kBentNormalVariant,bentNormalLightReady,"bent_normal_composition");
