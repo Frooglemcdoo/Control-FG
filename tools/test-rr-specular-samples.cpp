@@ -96,7 +96,12 @@ int main(){
   assert(GiSampleRequest(mode,6)==6&&RequiredVariant(mode)==kRtSpotReadyBit);
   const auto selection=live.Select(mode);assert(LiveSelection::GetMode(selection)==mode&&LiveSelection::Observed(selection)==0);
  }
+ assert(SpecularSampleRequest(Mode::RtSpotWorldAlbedo)==4);
+ assert(SpecularSampleRequest(Mode::Native)==4);
+ assert(SetSpecularSampleChoice(0));
  assert(SpecularSampleRequest(Mode::RtSpotWorldAlbedo)==0);
  assert(SpecularSampleRequest(Mode::Native)==0);
+ assert(!IsSpecularSampleMode(Mode::Native));
+ assert(SetSpecularSampleChoice(4));
  puts("PASS: executed specular relay; 126 near/far combinations; RAX/flags/options preserved; option and state beyond relay RIP range; invalid values pass through; exact-site/range rejection; mode policies");
 }
