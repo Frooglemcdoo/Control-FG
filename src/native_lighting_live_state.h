@@ -115,7 +115,18 @@ inline unsigned SpecularSampleRequest(Mode mode) noexcept {
     }
 }
 inline std::atomic<bool> specularSamplesReady{false};
-inline bool IsSpecularSampleMode(Mode mode) noexcept { return SpecularSampleRequest(mode)!=0; }
+// Legacy mode classification controls material guides and shader readiness.
+// It must never depend on the separately selected sample count.
+inline bool IsSpecularSampleMode(Mode mode) noexcept {
+    if(IsSpotIsolationMode(mode))return true;
+    switch(mode){
+    case Mode::RtSpotTemporal2:case Mode::RtSpotTemporal4:
+    case Mode::RoomNative:case Mode::RoomGi:case Mode::RoomSpot:case Mode::RoomBoth:
+    case Mode::RtSpotSpec1:case Mode::RtSpotSpec2:case Mode::RtSpotSpec4:
+    case Mode::RtSpotSpec8:case Mode::RtSpotSpec12:case Mode::RtSpotSpec16:return true;
+    default:return false;
+    }
+}
 // A per-frame diagnostic override; never writes the user's saved GI setting.
 inline unsigned GiSampleRequest(Mode mode,unsigned saved) noexcept {
     switch(mode){

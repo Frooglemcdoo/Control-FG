@@ -187,6 +187,11 @@ int main(){
   assert(SetSpecularSampleChoice(samples));
   for(auto mode:{Mode::Native,Mode::RoomNative,Mode::RoomBoth,kDefaultMode,Mode::RoomNativeBlend})
    assert(SpecularSampleRequest(mode)==samples);
+  assert(!IsSpecularSampleMode(Mode::Native));
+  assert(!UsesWorldAlbedo(Mode::Native));
+  assert(!PreservesGiFiltering(Mode::Native));
+  assert(UsesWorldAlbedo(Mode::RoomNativeBlend));
+  assert(PreservesGiFiltering(Mode::RoomNativeBlend));
   assert(SpecularSampleRequest(Mode::RtSpotSpec16)==16);
   assert(SpecularSampleRequest(Mode::RtSpotTemporal2)==2);
  }
