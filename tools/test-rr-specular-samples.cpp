@@ -82,6 +82,8 @@ static void ExecuteLayout(bool farLayout){
 #endif
 }
 int main(){
+ assert(native_lighting::specularSampleChoice.load()==0);
+ assert(native_lighting::SetSpecularSampleChoice(4));
  ExecuteLayout(false);ExecuteLayout(true);
  using namespace native_lighting;
  LiveSelection live;
@@ -105,3 +107,4 @@ int main(){
  assert(SetSpecularSampleChoice(4));
  puts("PASS: executed specular relay; 126 near/far combinations; RAX/flags/options preserved; option and state beyond relay RIP range; invalid values pass through; exact-site/range rejection; mode policies");
 }
+

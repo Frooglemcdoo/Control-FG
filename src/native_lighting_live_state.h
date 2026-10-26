@@ -84,10 +84,10 @@ inline bool IsRoomMode(Mode mode) noexcept {
 inline bool UsesSpecularTemporalOnly(Mode mode) noexcept {
     return mode==Mode::RtSpotTemporal2||mode==Mode::RtSpotTemporal4;
 }
-// Shared diagnostic quality is independent of lighting selection. Four preserves
-// the accepted corrected-lighting baseline; zero requests the native sample policy.
+// Shared diagnostic quality is independent of lighting selection. Zero preserves
+// the user-accepted R167 performance setting: native specular sample policy.
 inline constexpr unsigned kSpecularSampleChoices[] = {0, 1, 2, 4, 8, 12, 16};
-inline std::atomic<unsigned> specularSampleChoice{4};
+inline std::atomic<unsigned> specularSampleChoice{0};
 inline bool SetSpecularSampleChoice(unsigned value) noexcept {
     for (unsigned choice : kSpecularSampleChoices) {
         if (choice == value) { specularSampleChoice.store(value); return true; }

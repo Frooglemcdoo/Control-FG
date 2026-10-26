@@ -237,6 +237,13 @@ jobs:
           $ErrorActionPreference='Stop'
           python tools/audit-pt-reflection-native.py build/pt-reflection-native-audit.json
           if($LASTEXITCODE -ne 0){throw "Native reflection audit failed: $LASTEXITCODE"}
+      - name: Build audited DXIL assembler and validator
+        shell: cmd
+        run: |
+          call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\assemble-validated-dxil.cpp /Febuild\assemble-validated-dxil.exe
+          if errorlevel 1 exit /b 1
+
       - name: Compile PT reflection DXIL libraries
         shell: powershell
         run: |
@@ -251,11 +258,16 @@ jobs:
           $dxc=$null
           foreach($root in $roots){
             $candidate=Get-ChildItem -LiteralPath $root -Filter dxc.exe -File -Recurse -ErrorAction SilentlyContinue |
+              Where-Object { $_.FullName -match '\\x64\\' } |
               Sort-Object FullName -Descending | Select-Object -First 1
             if($candidate){$dxc=$candidate.FullName;break}
           }
           if(-not $dxc){throw 'dxc.exe was not found in the Windows SDK / Visual Studio installation.'}
           Write-Host "DXC: $dxc"
+          python tools/rt_spot_centered_reuse.py --dxc $dxc --assembler build/assemble-validated-dxil.exe
+          if($LASTEXITCODE -ne 0){throw "Centered ray validation failed"}
+          python tools/test-rt-spot-centered-reuse.py build/centered-original.ll
+          if($LASTEXITCODE -ne 0){throw "Centered ray contract checks failed"}
           python tools/test-rt-spot-projection.py --dxc $dxc
           if($LASTEXITCODE -ne 0){throw "Projection shader instruction validation failed"}
           & $dxc -T lib_6_3 -HV 2021 -O3 -I src/shaders -Fo build/pt_glass_raygen.dxil src/shaders/pt_glass_raygen.hlsl
@@ -548,11 +560,11 @@ jobs:
           & powershell.exe -NoProfile -File Package-Lighting-Performance.ps1 -Folder build/perf-package-test -ModuleFolder build
           if ($LASTEXITCODE -ne 0 -or !(Test-Path build/perf-package-test.zip)) { throw 'Performance package roundtrip failed' }
 
-      - name: Package live lighting diagnostic R167
+      - name: Package live lighting diagnostic R168
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-Native-Lighting-Live-R167'
+          $out='Control-FG-Native-Lighting-Live-R168'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
           Copy-Item build/rt_spot_selected_off.dxbc,build/rt_spot_selection.dxbc,build/rt_spot_visibility.dxbc,build/rt_spot_light_ids.dxbc,build/rt_spot_raw_history.dxbc,build/rt_spot_raw_spatial0.dxbc,build/rt_spot_raw_spatial1.dxbc,build/rt_spot_full.dxil,build/rt_spot_r94.dxil,build/rt_spot_light.dxbc,build/rt_spot_reset.dxbc,build/rt_spot_history.dxbc,build/rt_spot_spatial0.dxbc,build/rt_spot_spatial1.dxbc $out
@@ -572,20 +584,20 @@ jobs:
           Copy-Item Collect-ControlFG-Compact-Logs.ps1 "$out/Collect-ControlFG-Compact-Logs.ps1"
           Copy-Item Package-Lighting-Capture.cmd,tools/package-lighting-capture.py,Package-Lighting-Performance.ps1 $out
           Copy-Item Capture-RR-Boundary.cmd,Capture-RR-Boundary.ps1,Collect-RR-Boundary-Status.cmd,tools/collect-rr-boundary.py $out
-          Copy-Item docs/native-lighting-r167.md "$out/DIAGNOSTIC-NOTES.md"
+          Copy-Item docs/native-lighting-r168.md "$out/DIAGNOSTIC-NOTES.md"
           @'
-          CONTROL-FG R167 - Independent specular quality comparison
+          CONTROL-FG R168 - Centered spotlight ray reuse
           Close Control to install. Copy contents beside Control_DX12.exe.
           Preserve NVIDIA runtimes and ControlFGStreamline. Start a fresh game session.
-          Leave RR enabled and SPEC at 4. Capture NATIVE, then NATIVE BLEND at the same view.
+          Leave RR enabled and SPEC at NATIVE. Capture NATIVE, then NATIVE BLEND at the same view.
           Open F10 and click PERF CAPTURE for each mode. SPEC remains fixed across mode changes.
           The panel closes. Resume gameplay if paused; five-second delay then 20 seconds of sampling.
           Move through the affected area. Keep graphics settings unchanged during recording.
           A light-context snapshot follows timing. The completed ZIP path appears automatically.
-          Send Performance-R167-....zip. No mode switching or external capture application required.
-          Rendering shaders are unchanged. SPEC defaults to 4 in both comparison modes.
-          SPEC cycles Native/1/2/4/8/12/16; it resets to 4 on game restart.
-          This is a controlled comparison build, not a claimed performance optimization.
+          Send Performance-R168-....zip. No mode switching or external capture application required.
+          Centered spotlight traces reuse one identical hit instead of tracing it four times.
+          SPEC cycles Native/1/2/4/8/12/16; it resets to Native on game restart.
+          Soft-edge filters and authored clipping are retained. Performance gain needs measurement.
           See DIAGNOSTIC-NOTES.md for coverage and explicit capture limitations.
           '@ | Set-Content "$out/README.txt" -Encoding ASCII
           Compress-Archive -Path "$out/*" -DestinationPath "$out.zip" -Force
@@ -594,10 +606,14 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-Native-Lighting-Live-R167
+          name: Control-FG-Native-Lighting-Live-R168
           path: |
-            Control-FG-Native-Lighting-Live-R167.zip
-            Control-FG-Native-Lighting-Live-R167.sha256
+            Control-FG-Native-Lighting-Live-R168.zip
+            Control-FG-Native-Lighting-Live-R168.sha256
+            build/centered-original.ll
+            build/centered-reuse.ll
+            build/centered-reuse-validation.json
+            build/rt_spot_centered_reuse.dxil
             build/rt_spot_shadow_prototype.dxil
             build/rr_clamp_fixed.h
             build/rt_spot_blocker.dxil
