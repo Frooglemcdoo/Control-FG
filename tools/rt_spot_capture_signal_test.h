@@ -47,13 +47,28 @@ static void TestCompositionSignal(ID3D12Device* device) {
             device->CreateShaderResourceView(textures[i].Get(),&srv,resources.At(19+i-2));
         }
     }
+    // Pattern every word, so matrix offsets and integer flag bits are checked.
+    constexpr UINT spotCount=256, spotStride=320;
+    ComPtr<ID3D12Resource> spots;
+    Check(resources.Buffer(spotCount*spotStride,D3D12_HEAP_TYPE_UPLOAD,D3D12_RESOURCE_STATE_GENERIC_READ,&spots));
+    void* spotMapped=nullptr;D3D12_RANGE spotEmpty{0,0};
+    Check(spots->Map(0,&spotEmpty,&spotMapped));
+    for(UINT record=0;record<spotCount;++record)
+        for(UINT word=0;word<spotStride/4;++word)
+            static_cast<UINT*>(spotMapped)[record*(spotStride/4)+word]=record*1000+word;
+    spots->Unmap(0,nullptr);
+    D3D12_SHADER_RESOURCE_VIEW_DESC spotSrv{};spotSrv.Format=DXGI_FORMAT_UNKNOWN;
+    spotSrv.ViewDimension=D3D12_SRV_DIMENSION_BUFFER;
+    spotSrv.Shader4ComponentMapping=D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+    spotSrv.Buffer.NumElements=spotCount;spotSrv.Buffer.StructureByteStride=spotStride;
+    device->CreateShaderResourceView(spots.Get(),&spotSrv,resources.At(18));
     void* mapped=nullptr;D3D12_RANGE empty{0,0};Check(resources.upload->Map(0,&empty,&mapped));
     const UINT controls[]={128,64,123,64};memcpy(mapped,controls,sizeof(controls));resources.upload->Unmap(0,nullptr);
     D3D12_CONSTANT_BUFFER_VIEW_DESC cb{resources.upload->GetGPUVirtualAddress(),256};device->CreateConstantBufferView(&cb,resources.At(0));
     resources.RawUav(resources.signal.Get(),gpu::kSignalBytes,43);
     D3D12_DESCRIPTOR_HEAP_DESC hd{};hd.Type=D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;hd.NumDescriptors=49;hd.Flags=D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
     ComPtr<ID3D12DescriptorHeap> heap;Check(device->CreateDescriptorHeap(&hd,IID_PPV_ARGS(&heap)));
-    for(UINT slot:{0u,19u,20u,41u,42u,43u,44u,45u}) {
+    for(UINT slot:{0u,18u,19u,20u,41u,42u,43u,44u,45u}) {
         auto dst=heap->GetCPUDescriptorHandleForHeapStart();dst.ptr+=SIZE_T(slot)*resources.step;
         device->CopyDescriptorsSimple(1,dst,resources.At(slot),hd.Type);
     }
@@ -80,6 +95,12 @@ static void TestCompositionSignal(ID3D12Device* device) {
         valid&=ids[0]==x && ids[1]==y && ids[2]==x+100 && ids[3]==y+200;
         const float expected[]={.5f,.75f,2,3,float(x+11),float(y+3),4,1,float(x+21),float(y+10),3,1};
         valid&=memcmp(values,expected,sizeof(values))==0;
+        UINT header[4]{};memcpy(header,bytes+128,16);
+        valid&=header[0]==x+100 && header[1]==spotCount && header[2]==spotStride && header[3]==1;
+        for(UINT word=0;word<spotStride/4;++word) {
+            UINT actual=0;memcpy(&actual,bytes+144+word*4,4);
+            valid&=actual==(x+100)*1000+word;
+        }
         UINT beforeIds[4]{};float beforeValues[12]{};
         memcpy(beforeIds,bytes+64,16);memcpy(beforeValues,bytes+80,48);
         const float original[]={.5f,.75f,2,3,float(x+8),float(y+4),2,1,float(x+16),float(y+8),4,1};
@@ -87,5 +108,5 @@ static void TestCompositionSignal(ID3D12Device* device) {
     }
     resources.readback->Unmap(0,&empty);
     if(!valid)throw std::runtime_error("composition signal differs from GPU fixture");
-    std::cout<<"PASS R150 composition pair: 4096 exact pixels, matching IDs/visibility, before/after HDR and known positive/negative pass deltas\n";
+    std::cout<<"PASS R161 full spotlight records and composition pair: 4096 exact pixels, matching IDs/visibility, before/after HDR and known positive/negative pass deltas\n";
 }
