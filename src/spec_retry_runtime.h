@@ -3,6 +3,9 @@
 // native reflection library observed in the R175 capture; unknown variants pass.
 namespace spec_retry {
 #include "../build/spec_retry_reuse.generated.h"
+#ifdef CONTROL_SPEC_PHASE_PRECISION
+#include "../build/spec_phase_precision.generated.h"
+#endif
 using Create = HRESULT (STDMETHODCALLTYPE*)(ID3D12Device5*,const D3D12_STATE_OBJECT_DESC*,REFIID,void**);
 inline std::atomic<unsigned long long> matched{0},created{0},failures{0};
 inline HRESULT CreateState(Create next,ID3D12Device5* device,const D3D12_STATE_OBJECT_DESC* desc,REFIID iid,void** out) {
@@ -29,6 +32,9 @@ inline HRESULT CreateState(Create next,ID3D12Device5* device,const D3D12_STATE_O
         std::vector<D3D12_SUBOBJECT_TO_EXPORTS_ASSOCIATION> associations(desc->NumSubobjects);
         auto library=*static_cast<const D3D12_DXIL_LIBRARY_DESC*>(objects[index].pDesc);
         library.DXILLibrary={kSpecRetryReuseShader,sizeof(kSpecRetryReuseShader)};
+#ifdef CONTROL_SPEC_PHASE_PRECISION
+        library.DXILLibrary={kSpecPhasePrecisionShader,sizeof(kSpecPhasePrecisionShader)};
+#endif
         objects[index].pDesc=&library;
         // Associations point INTO the descriptor array; rebase every one.
         for(UINT i=0;i<desc->NumSubobjects;++i){
@@ -47,13 +53,16 @@ inline HRESULT CreateState(Create next,ID3D12Device5* device,const D3D12_STATE_O
         const HRESULT hr=next(device,&replacement,iid,&candidate);
         if(SUCCEEDED(hr)&&candidate){
             *out=candidate;++created;
-            Trace("spec_retry_create build=R184 created=1 variant=0 cache_values=4 rays=unchanged");
+            Trace("spec_retry_create build=R185 created=1 variant=0 cache_values=4 rays=unchanged");
+#ifdef CONTROL_SPEC_PHASE_PRECISION
+            Trace("SPEC_PHASE_PRECISION build=R185 applied=1 native_fallback=0 fractional_bits=24 sequence=native_r2 rays=unchanged weights=unchanged");
+#endif
             return hr;
         }
         if(candidate)static_cast<IUnknown*>(candidate)->Release();
         ++failures;
-        Trace("spec_retry_create build=R184 created=0 hr=0x%08lX native_fallback=1",static_cast<unsigned long>(hr));
-    }catch(...){++failures;Trace("spec_retry_create build=R184 exception=1 native_fallback=1");}
+        Trace("spec_retry_create build=R185 created=0 hr=0x%08lX native_fallback=1",static_cast<unsigned long>(hr));
+    }catch(...){++failures;Trace("spec_retry_create build=R185 exception=1 native_fallback=1");}
     return next(device,desc,iid,out);
 }
 }
