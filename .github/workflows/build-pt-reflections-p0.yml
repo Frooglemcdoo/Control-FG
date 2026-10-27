@@ -289,10 +289,6 @@ jobs:
           if($LASTEXITCODE -ne 0){throw 'SPEC retry equivalence audit failed'}
           python tools/spec_retry_reuse.py --dxc $dxc --assembler build/assemble-validated-dxil.exe
           if($LASTEXITCODE -ne 0){throw 'SPEC retry DXIL validation failed'}
-          cl /nologo /std:c++17 /EHsc /W4 tools\test-spec-retry-runtime.cpp /Febuild\test-spec-retry-runtime.exe
-          if($LASTEXITCODE -ne 0){throw 'SPEC retry creation test compilation failed'}
-          build\test-spec-retry-runtime.exe
-          if($LASTEXITCODE -ne 0){throw 'SPEC retry creation fallback tests failed'}
           python tools/rt_spot_centered_reuse.py --dxc $dxc --assembler build/assemble-validated-dxil.exe
           if($LASTEXITCODE -ne 0){throw "Centered ray validation failed"}
           python tools/test-rt-spot-centered-reuse.py build/centered-original.ll
@@ -416,6 +412,10 @@ jobs:
           cl /nologo /std:c++17 /EHsc /W4 /O2 tools\test-lighting-performance.cpp /Febuild\test-lighting-performance.exe /link d3d12.lib dxgi.lib
           if errorlevel 1 exit /b 1
           build\test-lighting-performance.exe
+          if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 tools\test-spec-retry-runtime.cpp /Febuild\test-spec-retry-runtime.exe
+          if errorlevel 1 exit /b 1
+          build\test-spec-retry-runtime.exe
           if errorlevel 1 exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 tools\test-spec-serial-runtime.cpp /Febuild\test-spec-serial-runtime.exe
           if errorlevel 1 exit /b 1
