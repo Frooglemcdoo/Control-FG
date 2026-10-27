@@ -240,6 +240,11 @@ static void RRDiffusePrepare(void* callback,void* table) noexcept {
         rrDiffuseStage.store(RRDiffuseStage::Recording,std::memory_order_release);
         RRPerfReplayPrepared(frame,RRGuideElapsedMs(start));
         const auto n=++c->prepared;
+        if(n<=4 || (n&(n-1))==0 || frame%240ull==0)
+            Log("RR_VALIDATION_CACHE frame=%llu hits=%llu parses=%llu retained_bytes=%llu scope=one_preparation exact_bytes=1",
+                frame,static_cast<unsigned long long>(shaders.ValidationStats().Hits()+worldShaders.ValidationStats().Hits()),
+                static_cast<unsigned long long>(shaders.ValidationStats().Parses()+worldShaders.ValidationStats().Parses()),
+                static_cast<unsigned long long>(shaders.ValidationStats().Bytes()+worldShaders.ValidationStats().Bytes()));
         if(n<=4 || (n&(n-1))==0) Log("RR_G12_DIFFUSE_PREPARED count=%llu frame=%llu accepted=%u rejected=%u targets=%u width=%u height=%u prepare_ms=%.3f coverage_proven=0 rr_eval=disabled standard=%u character=%u cloth=%u foliage=%u hair=%u eye=%u",n,frame,c->accepted,c->rejected,targets,c->width,c->height,RRGuideElapsedMs(start),familyCounts[1],familyCounts[2],familyCounts[3],familyCounts[4],familyCounts[5],familyCounts[6]);
     } catch(...) {RRDiffuseStop("preparation_exception");}
 }

@@ -1,0 +1,30 @@
+{
+  "src/rr_albedo_shader.h": [
+    [
+      "struct Result { uint32_t targetCount",
+      "#include \"rr_shader_validation_cache.h\"\nstruct Result { uint32_t targetCount"
+    ],
+    [
+      "    size_t copiedBytes_ = 0;",
+      "    size_t copiedBytes_ = 0;\n    ValidationCache validationCache_;"
+    ],
+    [
+      "    size_t PairCount() const noexcept { return pairs_.size(); }",
+      "    size_t PairCount() const noexcept { return pairs_.size(); }\n    const ValidationCache& ValidationStats() const noexcept { return validationCache_; }"
+    ],
+    [
+      "            if (!ParseVertex(originalVertex.data(), originalVertex.size(), &why)) return fail(why);",
+      "            Contract vertexContract{};\n            if (!validationCache_.Validate(originalVertex, false, vertexContract, &why)) return fail(why);"
+    ],
+    [
+      "            if (!ParsePixelContract(captured.data(), captured.size(), contract, &why)) return fail(why);",
+      "            if (!validationCache_.Validate(captured, true, contract, &why)) return fail(why);"
+    ]
+  ],
+  "src/rr_diffuse_replay.h": [
+    [
+      "        const auto n=++c->prepared;",
+      "        const auto n=++c->prepared;\n        if(n<=4 || (n&(n-1))==0 || frame%240ull==0)\n            Log(\"RR_VALIDATION_CACHE frame=%llu hits=%llu parses=%llu retained_bytes=%llu scope=one_preparation exact_bytes=1\",\n                frame,static_cast<unsigned long long>(shaders.ValidationStats().Hits()+worldShaders.ValidationStats().Hits()),\n                static_cast<unsigned long long>(shaders.ValidationStats().Parses()+worldShaders.ValidationStats().Parses()),\n                static_cast<unsigned long long>(shaders.ValidationStats().Bytes()+worldShaders.ValidationStats().Bytes()));"
+    ]
+  ]
+}

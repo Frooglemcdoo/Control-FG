@@ -3,7 +3,7 @@ name: Build native reflection enhancements and RR
 on:
   push:
     branches:
-      - work/r177-spec-probe-lifetimes
+      - work/r178-rr-validation-cache
       - experiment/native-hit-capture-r118
       - experiment/pt-reflections-p0
       - experiment/pt-verify-stages-20261010
@@ -275,7 +275,7 @@ jobs:
           if($LASTEXITCODE -ne 0){throw 'Serial SPEC load movement audit failed'}
           python tools/test-spec-probe-lifetimes.py
           if($LASTEXITCODE -ne 0){throw 'Probe load movement audit failed'}
-          python tools/spec_probe_lifetimes.py --source research/spec-performance/spec-resolve.dxbc.b64 --output build/spec-serial-lifetimes.dxbc --header build/spec_serial_lifetimes.generated.h
+          python tools/spec_serial_lifetimes.py --source research/spec-performance/spec-resolve.dxbc.b64 --output build/spec-serial-lifetimes.dxbc --header build/spec_serial_lifetimes.generated.h
           if($LASTEXITCODE -ne 0){throw 'Serial SPEC shader generation failed'}
           ./build/spec-validate.exe build/spec-serial-lifetimes.dxbc
           if($LASTEXITCODE -ne 0){throw 'Serial SPEC PSO validation failed'}
@@ -376,6 +376,8 @@ jobs:
           build\test-specular-filter.exe
           if errorlevel 1 exit /b 1
           python tools/test-rr-gi-filter.py
+          if errorlevel 1 exit /b 1
+          python tools/test-rr-validation-cache.py
           if errorlevel 1 exit /b 1
           python tools/test-clean-baseline.py
           if errorlevel 1 exit /b 1
@@ -595,11 +597,11 @@ jobs:
           & powershell.exe -NoProfile -File Package-Lighting-Performance.ps1 -Folder build/perf-package-test -ModuleFolder build
           if ($LASTEXITCODE -ne 0 -or !(Test-Path build/perf-package-test.zip)) { throw 'Performance package roundtrip failed' }
 
-      - name: Package live lighting diagnostic R177
+      - name: Package live lighting diagnostic R178
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-Native-Lighting-Live-R177'
+          $out='Control-FG-Native-Lighting-Live-R178'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
           Copy-Item build/rt_spot_selected_off.dxbc,build/rt_spot_selection.dxbc,build/rt_spot_visibility.dxbc,build/rt_spot_light_ids.dxbc,build/rt_spot_raw_history.dxbc,build/rt_spot_raw_spatial0.dxbc,build/rt_spot_raw_spatial1.dxbc,build/rt_spot_full.dxil,build/rt_spot_r94.dxil,build/rt_spot_light.dxbc,build/rt_spot_reset.dxbc,build/rt_spot_history.dxbc,build/rt_spot_spatial0.dxbc,build/rt_spot_spatial1.dxbc $out
@@ -619,9 +621,9 @@ jobs:
           Copy-Item Collect-ControlFG-Compact-Logs.ps1 "$out/Collect-ControlFG-Compact-Logs.ps1"
           Copy-Item Package-Lighting-Capture.cmd,tools/package-lighting-capture.py,Package-Lighting-Performance.ps1 $out
           Copy-Item Capture-RR-Boundary.cmd,Capture-RR-Boundary.ps1,Collect-RR-Boundary-Status.cmd,tools/collect-rr-boundary.py $out
-          Copy-Item docs/native-lighting-r177.md "$out/DIAGNOSTIC-NOTES.md"
+          Copy-Item docs/native-lighting-r178.md "$out/DIAGNOSTIC-NOTES.md"
           @'
-          CONTROL-FG R177 - SPEC probe load lifetime reduction
+          CONTROL-FG R178 - RR shader validation cache with accepted SPEC baseline
           Close Control to install. Copy contents beside Control_DX12.exe.
           Preserve NVIDIA runtimes and ControlFGStreamline. Start a fresh game session.
           Select NATIVE BLEND with RR on and FG off. Set SPEC: 16 and GI: 6.
@@ -642,10 +644,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-Native-Lighting-Live-R177
+          name: Control-FG-Native-Lighting-Live-R178
           path: |
-            Control-FG-Native-Lighting-Live-R177.zip
-            Control-FG-Native-Lighting-Live-R177.sha256
+            Control-FG-Native-Lighting-Live-R178.zip
+            Control-FG-Native-Lighting-Live-R178.sha256
             build/spec-retry-original.ll
             build/spec-retry-reuse.ll
             build/spec-retry-validation.json

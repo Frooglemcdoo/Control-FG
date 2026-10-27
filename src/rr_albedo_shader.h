@@ -512,6 +512,7 @@ struct CapturedPixelShader {
     uint64_t hashFNV1a = 0;
     Contract contract{};
 };
+#include "rr_shader_validation_cache.h"
 struct Result { uint32_t targetCount = 0; size_t selectedIndex = 0; size_t vertexEvidenceIndex = RRVertexEvidence::Missing; };
 
 #if defined(_WIN32)
@@ -552,6 +553,7 @@ class Session {
     std::vector<CachedPair> pairs_;
     std::vector<CapturedPixelShader> shaders_;
     size_t copiedBytes_ = 0;
+    ValidationCache validationCache_;
     bool captureVertexEvidence_ = false;
     RRVertexEvidence::Store vertexEvidence_;
     bool Read(uintptr_t shader, size_t slot, uint32_t stage, std::vector<uint8_t>& bytes,
@@ -575,6 +577,7 @@ public:
     const std::vector<CapturedPixelShader>& PixelShaders() const noexcept { return shaders_; }
     size_t CopiedBytes() const noexcept { return copiedBytes_; }
     size_t PairCount() const noexcept { return pairs_.size(); }
+    const ValidationCache& ValidationStats() const noexcept { return validationCache_; }
     bool ValidatePair(uintptr_t originalShader, uintptr_t albedoShader, Result& out,
                       const char** reason = nullptr) noexcept {
         out = {}; if (reason) *reason = nullptr;
@@ -609,10 +612,11 @@ public:
                 if (captureVertexEvidence_) out.vertexEvidenceIndex=vertexEvidence_.Add(originalVertex,albedoVertex,shaders_[selected].bytes);
                 return fail("native_vertex_bytecode_differs");
             }
-            if (!ParseVertex(originalVertex.data(), originalVertex.size(), &why)) return fail(why);
+            Contract vertexContract{};
+            if (!validationCache_.Validate(originalVertex, false, vertexContract, &why)) return fail(why);
             Contract contract{};
             const auto& captured = shaders_[selected].bytes;
-            if (!ParsePixelContract(captured.data(), captured.size(), contract, &why)) return fail(why);
+            if (!validationCache_.Validate(captured, true, contract, &why)) return fail(why);
             shaders_[selected].contract = contract;
             out.targetCount = contract.targetCount;
             pairs_[pairIndex].result = out;
