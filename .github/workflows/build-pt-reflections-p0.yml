@@ -3,7 +3,7 @@ name: Build native reflection enhancements and RR
 on:
   push:
     branches:
-      - work/r182-spec-component-capture
+      - work/r183-component-launch-fix
       - experiment/native-hit-capture-r118
       - experiment/pt-reflections-p0
       - experiment/pt-verify-stages-20261010
@@ -51,6 +51,10 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
+
+      - name: Verify actual CMD component selection
+        shell: cmd
+        run: python tools/test-spec-component-launch.py
 
       - name: Configure MSVC
         shell: cmd
@@ -611,11 +615,11 @@ jobs:
           & powershell.exe -NoProfile -File Package-Lighting-Performance.ps1 -Folder build/perf-package-test -ModuleFolder build
           if ($LASTEXITCODE -ne 0 -or !(Test-Path build/perf-package-test.zip)) { throw 'Performance package roundtrip failed' }
 
-      - name: Package live lighting diagnostic R182
+      - name: Package live lighting diagnostic R183
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-Native-Lighting-Live-R182'
+          $out='Control-FG-Native-Lighting-Live-R183'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item Start-Spec-Component-Test.cmd "$out/Start-Spec-Component-Test.cmd"
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
@@ -636,14 +640,14 @@ jobs:
           Copy-Item Collect-ControlFG-Compact-Logs.ps1 "$out/Collect-ControlFG-Compact-Logs.ps1"
           Copy-Item Package-Lighting-Capture.cmd,tools/package-lighting-capture.py,Package-Lighting-Performance.ps1 $out
           Copy-Item Capture-RR-Boundary.cmd,Capture-RR-Boundary.ps1,Collect-RR-Boundary-Status.cmd,tools/collect-rr-boundary.py $out
-          Copy-Item docs/native-lighting-r182.md "$out/DIAGNOSTIC-NOTES.md"
+          Copy-Item docs/native-lighting-r183.md "$out/DIAGNOSTIC-NOTES.md"
           @'
-          CONTROL-FG R182 - reflection contribution isolation (diagnostic)
+          CONTROL-FG R183 - reflection contribution isolation (diagnostic)
           Close Control. Copy package beside Control_DX12.exe; keep NVIDIA runtimes.
           Run Start-Spec-Component-Test.cmd and select 2 (emission removed).
           Select NATIVE BLEND, RR on, FG off, SPEC 4; keep other settings fixed.
           CAPTURE RR at the painting and elevator, holding still for each capture.
-          Click PACKAGE RR and retain all ZIPs. Save the Lighting-R182 log.
+          Click PACKAGE RR and retain all ZIPs. Save the Lighting-R183 log.
           Close Control and repeat with launcher option 3 (emission only).
           Send both capture packages and logs, labeled with their launcher option.
           Missing reflected light is intentional. This is not a quality/FPS fix.
@@ -657,10 +661,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-Native-Lighting-Live-R182
+          name: Control-FG-Native-Lighting-Live-R183
           path: |
-            Control-FG-Native-Lighting-Live-R182.zip
-            Control-FG-Native-Lighting-Live-R182.sha256
+            Control-FG-Native-Lighting-Live-R183.zip
+            Control-FG-Native-Lighting-Live-R183.sha256
             build/spec-components-validation.json
             build/spec-component-emission.dxbc
             build/spec-component-shading.dxbc

@@ -46,10 +46,10 @@ inline bool TryCreate(ID3D12Device* device,const D3D12_COMPUTE_PIPELINE_STATE_DE
         if(candidate)reinterpret_cast<IUnknown*>(candidate)->Release();
         failures.fetch_add(1,std::memory_order_relaxed);
     }
-    Log("SPEC_SERIAL_LIFETIMES build=R182 route=%s created=%u hr=0x%08lX source_sha=%s area_guards=0 moved_loads=2 samples=unchanged dispatch=unchanged",
+    Log("SPEC_SERIAL_LIFETIMES build=R183 route=%s created=%u hr=0x%08lX source_sha=%s area_guards=0 moved_loads=2 samples=unchanged dispatch=unchanged",
         library?"library":"direct",unsigned(ready),static_cast<unsigned long>(result),sourceSha);
 #ifdef CONTROL_RR_COMPONENT_CAPTURE
-    Log("SPEC_COMPONENT build=R182 requested=%s applied=%u native_fallback=%u cap_basis=original_total",spec_component::Name(component),unsigned(ready),unsigned(!ready));
+    Log("SPEC_COMPONENT build=R183 requested=%s applied=%u native_fallback=%u cap_basis=original_total",spec_component::Name(component),unsigned(ready),unsigned(!ready));
 #endif
     return ready;
 }
