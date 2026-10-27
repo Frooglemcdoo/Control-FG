@@ -3,7 +3,7 @@ name: Build native reflection enhancements and RR
 on:
   push:
     branches:
-      - work/r175-spec-pass-profiling
+      - work/r176-spec-fallback-reuse
       - experiment/native-hit-capture-r118
       - experiment/pt-reflections-p0
       - experiment/pt-verify-stages-20261010
@@ -285,6 +285,14 @@ jobs:
           if($LASTEXITCODE -ne 0){throw 'Parallel SPEC PSO validation failed'}
           ./build/spec-validate.exe build/spec-native-fixture.dxbc build/spec-parallel-fixture.dxbc
           if($LASTEXITCODE -ne 0){throw 'Parallel SPEC GPU equality failed'}
+          python tools/test-spec-retry-reuse.py
+          if($LASTEXITCODE -ne 0){throw 'SPEC retry equivalence audit failed'}
+          python tools/spec_retry_reuse.py --dxc $dxc --assembler build/assemble-validated-dxil.exe
+          if($LASTEXITCODE -ne 0){throw 'SPEC retry DXIL validation failed'}
+          cl /nologo /std:c++17 /EHsc /W4 tools\test-spec-retry-runtime.cpp /Febuild\test-spec-retry-runtime.exe
+          if($LASTEXITCODE -ne 0){throw 'SPEC retry creation test compilation failed'}
+          build\test-spec-retry-runtime.exe
+          if($LASTEXITCODE -ne 0){throw 'SPEC retry creation fallback tests failed'}
           python tools/rt_spot_centered_reuse.py --dxc $dxc --assembler build/assemble-validated-dxil.exe
           if($LASTEXITCODE -ne 0){throw "Centered ray validation failed"}
           python tools/test-rt-spot-centered-reuse.py build/centered-original.ll
@@ -585,11 +593,11 @@ jobs:
           & powershell.exe -NoProfile -File Package-Lighting-Performance.ps1 -Folder build/perf-package-test -ModuleFolder build
           if ($LASTEXITCODE -ne 0 -or !(Test-Path build/perf-package-test.zip)) { throw 'Performance package roundtrip failed' }
 
-      - name: Package live lighting diagnostic R175
+      - name: Package live lighting diagnostic R176
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-Native-Lighting-Live-R175'
+          $out='Control-FG-Native-Lighting-Live-R176'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
           Copy-Item build/rt_spot_selected_off.dxbc,build/rt_spot_selection.dxbc,build/rt_spot_visibility.dxbc,build/rt_spot_light_ids.dxbc,build/rt_spot_raw_history.dxbc,build/rt_spot_raw_spatial0.dxbc,build/rt_spot_raw_spatial1.dxbc,build/rt_spot_full.dxil,build/rt_spot_r94.dxil,build/rt_spot_light.dxbc,build/rt_spot_reset.dxbc,build/rt_spot_history.dxbc,build/rt_spot_spatial0.dxbc,build/rt_spot_spatial1.dxbc $out
@@ -609,15 +617,15 @@ jobs:
           Copy-Item Collect-ControlFG-Compact-Logs.ps1 "$out/Collect-ControlFG-Compact-Logs.ps1"
           Copy-Item Package-Lighting-Capture.cmd,tools/package-lighting-capture.py,Package-Lighting-Performance.ps1 $out
           Copy-Item Capture-RR-Boundary.cmd,Capture-RR-Boundary.ps1,Collect-RR-Boundary-Status.cmd,tools/collect-rr-boundary.py $out
-          Copy-Item docs/native-lighting-r175.md "$out/DIAGNOSTIC-NOTES.md"
+          Copy-Item docs/native-lighting-r176.md "$out/DIAGNOSTIC-NOTES.md"
           @'
-          CONTROL-FG R175 - Serial SPEC baseline with per-dispatch profiling
+          CONTROL-FG R176 - SPEC rejection fallback reuse
           Close Control to install. Copy contents beside Control_DX12.exe.
           Preserve NVIDIA runtimes and ControlFGStreamline. Start a fresh game session.
           Select NATIVE BLEND with RR on and FG off. Set SPEC: 16 and GI: 6.
           SPEC SHADING: SERIAL confirms the parallel experiment is disabled.
           All 16 samples and native serial shading are retained.
-          Compare PERF CAPTURE with R172 at SPEC 16 from the same view.
+          Compare PERF CAPTURE with R175 at SPEC 16 from the same view.
           SPEC Native is a secondary scaling check, not an unmodified shader A/B.
           The panel closes; five-second delay then 20 seconds of sampling.
           Resume gameplay if paused. Keep graphics settings and camera route consistent.
@@ -632,10 +640,14 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-Native-Lighting-Live-R175
+          name: Control-FG-Native-Lighting-Live-R176
           path: |
-            Control-FG-Native-Lighting-Live-R175.zip
-            Control-FG-Native-Lighting-Live-R175.sha256
+            Control-FG-Native-Lighting-Live-R176.zip
+            Control-FG-Native-Lighting-Live-R176.sha256
+            build/spec-retry-original.ll
+            build/spec-retry-reuse.ll
+            build/spec-retry-validation.json
+            build/spec-retry-reuse.dxil
             build/centered-original.ll
             build/centered-reuse.ll
             build/centered-reuse-validation.json

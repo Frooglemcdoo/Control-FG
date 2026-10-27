@@ -109,6 +109,7 @@ inline void Paint(HWND window) noexcept {
 }
 inline void SaveReport(HWND window) noexcept {
     ReportRRPaths("save_log");
+    Trace("spec_retry_save matched=%llu created=%llu failures=%llu creation_only=1",spec_retry::matched.load(),spec_retry::created.load(),spec_retry::failures.load());
     Trace("spec_serial_save direct_matched=%llu direct_created=%llu library_matched=%llu library_created=%llu failures=%llu creation_only=1",
         spec_serial::directMatched.load(),spec_serial::directCreated.load(),spec_serial::libraryMatched.load(),spec_serial::libraryCreated.load(),spec_serial::failures.load());
     Trace("spec_parallel_save enabled=%u ready=%u dispatches=%llu requires_spec=16",unsigned(specularParallelEnabled.load()),unsigned(specularParallelReady.load()),specularParallelDispatches.load());
@@ -264,7 +265,7 @@ inline DWORD WINAPI ThreadProc(LPVOID) noexcept {
     ULONGLONG nextRefresh=0, nextWindowSearch=0, nextLogDrain=0, nextRRReport=0;
     HWND cachedGame=nullptr;
     POINT lastOrigin{-1,-1};
-    Trace("session_start build=R175-overlay-rr-capture pid=%lu default=authored_clip_surface_normals_current_spot_when_ready log=user-diagnostics-folder",GetCurrentProcessId());
+    Trace("session_start build=R176-overlay-rr-capture pid=%lu default=authored_clip_surface_normals_current_spot_when_ready log=user-diagnostics-folder",GetCurrentProcessId());
     MSG msg{};
     while(GetMessageW(&msg,nullptr,0,0)>0){
         if (!panel || !IsDialogMessageW(panel, &msg)) {
