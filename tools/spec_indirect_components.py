@@ -62,6 +62,10 @@ def fixture(data,environment,reference,miss=False):
         else:
             body+=blocks(environment)[404]
             if not miss:body+=blocks(environment)[942]+blocks(environment)[953]
+        if miss and not environment:
+            # Test-only nonzero witness: verifies that the isolated diffuse
+            # miss is zero without triggering the harness's vacuous-test guard.
+            body+=op(0,dst(43,'xyz'),src(43,'xyzx'),f(.125))
         if not miss:body+=a[942]+a[953]+a[954]
         # Reference applies gain to the component before cap scaling; production
         # applies it after. Power-of-two gain preserves the same finite result.

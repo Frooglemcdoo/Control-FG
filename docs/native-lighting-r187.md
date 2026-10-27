@@ -65,5 +65,7 @@ sample counts, cap settings, partial groups and sentinel termination. The 8x
 gain is tested independently of the cap factor. Full-shader PSO validation,
 runtime routing/failure tests and actual Windows CMD menu tests are separate
 build gates. These tests do not establish in-game RR image quality.
+The zero-diffuse miss fixture adds a test-only nonzero reference marker after
+isolation so the harness can reject unwritten output; the game shader has none.
 
 Experimental branch only. No production branch or release changes.
