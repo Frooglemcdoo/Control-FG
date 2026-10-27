@@ -89,7 +89,7 @@ static unsigned int RREvaluationEntry(unsigned int branch, ID3D12GraphicsCommand
             control_rr_diagnostic::Record(control_rr_diagnostic::Event::EvaluationRejected);
             SetLastError(incomingError);return 0xBAD00001u;
         }
-#if !defined(CONTROL_CAPTURE_DIAGNOSTIC)
+#if !defined(CONTROL_CAPTURE_DIAGNOSTIC) || defined(CONTROL_RR_MATERIAL_CAPTURE)
         RRInputCaptureBeforeEvaluation(list,in.frame,activePreset,bindings.normal,bindings.specular,bindings.diffuse,
             hitDistance,hitDistance?rrDistanceLastStatus:nullptr,bindings.viewToClip,bindings.projectionValid,bindings.rawAlbedo,in.color,in.depth,in.motion,in.output,bindings.responsivity,parameters);
 #endif
@@ -105,7 +105,7 @@ static unsigned int RREvaluationEntry(unsigned int branch, ID3D12GraphicsCommand
     if(partial&&branch==1){
         Log("RR_PARTIAL_EVALUATION_FORWARD frame=%llu branch=1 feature=%p guides_overridden=0 distance_overridden=0 feature13_request=0 partial=1",in.frame,feature);
     }
-#if defined(CONTROL_CAPTURE_DIAGNOSTIC)
+#if defined(CONTROL_CAPTURE_DIAGNOSTIC) && !defined(CONTROL_RR_MATERIAL_CAPTURE)
     // The lighting investigation uses the original SR path with RR bypassed.
     // No RR guides, preset resolution, or RR result is needed for this capture.
     const bool nativeCapture=branch==0&&!partial&&!rrNativeFrame.Selected()&&
@@ -130,7 +130,7 @@ static unsigned int RREvaluationEntry(unsigned int branch, ID3D12GraphicsCommand
     if(rrAttempt)control_rr_diagnostic::Record((result&0xFFF00000u)!=0xBAD00000u
         ?control_rr_diagnostic::Event::RRSuccess:control_rr_diagnostic::Event::RRFailure);
     else if(branch==0)control_rr_diagnostic::Record(control_rr_diagnostic::Event::SRReturn);
-#if defined(CONTROL_CAPTURE_DIAGNOSTIC)
+#if defined(CONTROL_CAPTURE_DIAGNOSTIC) && !defined(CONTROL_RR_MATERIAL_CAPTURE)
     if(nativeCapture)RRInputCaptureAfterEvaluation(list,in.frame,in.output,result);
 #else
     if(rrAttempt)RRInputCaptureAfterEvaluation(list,in.frame,in.output,result);

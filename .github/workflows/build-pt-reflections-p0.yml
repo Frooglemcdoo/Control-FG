@@ -3,7 +3,7 @@ name: Build native reflection enhancements and RR
 on:
   push:
     branches:
-      - work/r176-spec-fallback-reuse
+      - work/r180-rr-material-capture
       - experiment/native-hit-capture-r118
       - experiment/pt-reflections-p0
       - experiment/pt-verify-stages-20261010
@@ -512,7 +512,7 @@ jobs:
         shell: cmd
         run: |
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
-          cl /nologo /std:c++17 /EHsc /W4 /O2 /MT /LD /guard:cf /DCONTROL_CAPTURE_DIAGNOSTIC /DUNICODE /D_UNICODE /I "third_party\streamline\include" src\probe.cpp /Fobuild\probe.obj /Febuild\dxgi.dll /link /DEF:src\dxgi.def /INCREMENTAL:NO /DYNAMICBASE /NXCOMPAT /GUARD:CF bcrypt.lib wintrust.lib user32.lib gdi32.lib
+          cl /nologo /std:c++17 /EHsc /W4 /O2 /MT /LD /guard:cf /DCONTROL_RR_MATERIAL_CAPTURE /DCONTROL_CAPTURE_DIAGNOSTIC /DUNICODE /D_UNICODE /I "third_party\streamline\include" src\probe.cpp /Fobuild\probe.obj /Febuild\dxgi.dll /link /DEF:src\dxgi.def /INCREMENTAL:NO /DYNAMICBASE /NXCOMPAT /GUARD:CF bcrypt.lib wintrust.lib user32.lib gdi32.lib
           if errorlevel 1 exit /b 1
           dumpbin /exports build\dxgi.dll > build\exports.txt
           dumpbin /imports build\dxgi.dll > build\imports.txt
@@ -593,11 +593,11 @@ jobs:
           & powershell.exe -NoProfile -File Package-Lighting-Performance.ps1 -Folder build/perf-package-test -ModuleFolder build
           if ($LASTEXITCODE -ne 0 -or !(Test-Path build/perf-package-test.zip)) { throw 'Performance package roundtrip failed' }
 
-      - name: Package live lighting diagnostic R176
+      - name: Package live lighting diagnostic R180
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-Native-Lighting-Live-R176'
+          $out='Control-FG-Native-Lighting-Live-R180'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
           Copy-Item build/rt_spot_selected_off.dxbc,build/rt_spot_selection.dxbc,build/rt_spot_visibility.dxbc,build/rt_spot_light_ids.dxbc,build/rt_spot_raw_history.dxbc,build/rt_spot_raw_spatial0.dxbc,build/rt_spot_raw_spatial1.dxbc,build/rt_spot_full.dxil,build/rt_spot_r94.dxil,build/rt_spot_light.dxbc,build/rt_spot_reset.dxbc,build/rt_spot_history.dxbc,build/rt_spot_spatial0.dxbc,build/rt_spot_spatial1.dxbc $out
@@ -617,22 +617,22 @@ jobs:
           Copy-Item Collect-ControlFG-Compact-Logs.ps1 "$out/Collect-ControlFG-Compact-Logs.ps1"
           Copy-Item Package-Lighting-Capture.cmd,tools/package-lighting-capture.py,Package-Lighting-Performance.ps1 $out
           Copy-Item Capture-RR-Boundary.cmd,Capture-RR-Boundary.ps1,Collect-RR-Boundary-Status.cmd,tools/collect-rr-boundary.py $out
-          Copy-Item docs/native-lighting-r176.md "$out/DIAGNOSTIC-NOTES.md"
+          Copy-Item docs/native-lighting-r180.md "$out/DIAGNOSTIC-NOTES.md"
           @'
-          CONTROL-FG R176 - SPEC rejection fallback reuse
+          CONTROL-FG R180 - RR material input/output capture
+          Diagnostic only. Rendering uses the accepted R176 baseline.
           Close Control to install. Copy contents beside Control_DX12.exe.
-          Preserve NVIDIA runtimes and ControlFGStreamline. Start a fresh game session.
-          Select NATIVE BLEND with RR on and FG off. Set SPEC: 16 and GI: 6.
-          SPEC SHADING: SERIAL confirms the parallel experiment is disabled.
-          All 16 samples and native serial shading are retained.
-          Compare PERF CAPTURE with R175 at SPEC 16 from the same view.
-          SPEC Native is a secondary scaling check, not an unmodified shader A/B.
-          The panel closes; five-second delay then 20 seconds of sampling.
-          Resume gameplay if paused. Keep graphics settings and camera route consistent.
-          SPEC resets to Native on restart.
-          Existing R168 spotlight rendering and RR policy remain unchanged.
-          No performance gain claimed until measured on your GPU.
-          See DIAGNOSTIC-NOTES.md for validation and limitations.
+          Preserve NVIDIA runtimes and ControlFGStreamline. Restart Control.
+          Select NATIVE BLEND, RR on, FG off, GI 6 and SPEC 4.
+          At the painting click CAPTURE RR, then hold still until Saved pairs: 1/2.
+          At the elevator highlight click CAPTURE RR; wait for Saved pairs: 2/2.
+          Click PACKAGE RR and send every ZIP in the opened SEND folder.
+          The capture waits for five seconds of settled gameplay.
+          Keep RR on and SPEC 4 for both captures. No SPEC 8/16 comparison needed.
+          If capture fails, PACKAGE RR collects diagnostics.
+          FPS during readback is not a normal performance measurement.
+          SPEC resets to Native on restart; explicitly select 4.
+          See DIAGNOSTIC-NOTES.md for scope and limitations.
           '@ | Set-Content "$out/README.txt" -Encoding ASCII
           Compress-Archive -Path "$out/*" -DestinationPath "$out.zip" -Force
           (Get-FileHash "$out.zip" -Algorithm SHA256).Hash | Set-Content "$out.sha256" -Encoding ASCII
@@ -640,10 +640,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-Native-Lighting-Live-R176
+          name: Control-FG-Native-Lighting-Live-R180
           path: |
-            Control-FG-Native-Lighting-Live-R176.zip
-            Control-FG-Native-Lighting-Live-R176.sha256
+            Control-FG-Native-Lighting-Live-R180.zip
+            Control-FG-Native-Lighting-Live-R180.sha256
             build/spec-retry-original.ll
             build/spec-retry-reuse.ll
             build/spec-retry-validation.json

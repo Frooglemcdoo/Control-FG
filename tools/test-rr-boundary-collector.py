@@ -70,3 +70,45 @@ with tempfile.TemporaryDirectory() as tmp:
  except ValueError:pass
  else:raise AssertionError('missing lighting buffer accepted')
 print('PASS R154 native capture: no RR guides/output required; RR-active, wrong path and missing accumulation rejected')
+
+with tempfile.TemporaryDirectory() as tmp:
+ root=Path(tmp)
+ for i in range(2):
+  folder=root/f'rr-input-c1-10-{300+i}';folder.mkdir()
+  roles=['input-color.rgba16f','rr-output.rgba16f','lighting-diffuse.rgba16f','lighting-specular.rgba16f',
+         'normal-roughness.rgba16f','diffuse.rgba16f','specular.rgba16f',
+         'native-gbuffer1.rgba8','native-gbuffer2.rgba8','input-depth.r32f','input-motion.rg16f']
+  resources=[]
+  for name in roles:
+   size=8 if name.endswith('rgba16f') else 4
+   resources.append(dict(file=name,width=2,height=2,pixel_bytes=size,dxgi_format=10 if size==8 else 0,copied=True))
+   (folder/name).write_bytes(bytes(4*size))
+  data=dict(schema='control-rr-gi-r28',pid=10,capture_ordinal=1,pair_index=i,frame=300+i,
+            previous_frame=300 if i else 0,consecutive=bool(i),output_captured=True,rr_result=1,
+            buffers=len(resources),resources=resources,lighting_buffers_captured=True,
+            evaluation_path='rr',rr_active=True,reset=0,width=2,height=2)
+  (folder/'metadata.json').write_text(json.dumps(data))
+ def read():return c.read_pair(root,10,1,0,require_lighting=True,require_rr=True)
+ assert len(read())==2
+ meta=folder/'metadata.json'
+ for field,value in [('rr_active',False),('evaluation_path','native_sr'),('reset',1),('width',3)]:
+  changed=dict(data);changed[field]=value;meta.write_text(json.dumps(changed))
+  try:read()
+  except ValueError:pass
+  else:raise AssertionError('Invalid RR capture admitted: '+field)
+ for missing in ['normal-roughness.rgba16f','specular.rgba16f','diffuse.rgba16f','native-gbuffer1.rgba8','input-motion.rg16f']:
+  changed=dict(data);changed['resources']=[r for r in resources if r['file']!=missing];changed['buffers']=len(changed['resources'])
+  meta.write_text(json.dumps(changed))
+  try:read()
+  except ValueError:pass
+  else:raise AssertionError('Missing guide/input admitted: '+missing)
+ changed=json.loads(json.dumps(data));changed['resources'][4]['dxgi_format']=2;meta.write_text(json.dumps(changed))
+ try:read()
+ except ValueError:pass
+ else:raise AssertionError('Wrong guide format admitted')
+ meta.write_text(json.dumps(data))
+ assert len(read())==2
+ try:c.read_pair(root,10,1,0,require_native=True,require_rr=True)
+ except ValueError:pass
+ else:raise AssertionError('Conflicting path requirements admitted')
+print('PASS R180 RR materials: active settled RR pair, exact guide formats/extents, required native inputs, wrong paths/resets/missing guides rejected')

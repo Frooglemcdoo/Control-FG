@@ -8,7 +8,9 @@ import shutil
 import time
 
 
-def read_pair(root, pid, ordinal, started, require_lighting=False, require_native=False):
+def read_pair(root, pid, ordinal, started, require_lighting=False, require_native=False, require_rr=False):
+    if require_native and require_rr:
+        raise ValueError('Choose one evaluation path')
     frames = []
     for folder in root.glob(f'rr-input-c1-{pid}-*'):
         metadata = folder / 'metadata.json'
@@ -37,6 +39,23 @@ def read_pair(root, pid, ordinal, started, require_lighting=False, require_nativ
         native = data.get('evaluation_path') == 'native_sr'
         if require_native and (not native or data.get('rr_active') is not False):
             raise ValueError('Expected native lighting capture with RR inactive')
+        if require_rr:
+            if data.get('evaluation_path') != 'rr' or data.get('rr_active') is not True:
+                raise ValueError('Expected an active RR material capture')
+            if data.get('reset') != 0:
+                raise ValueError('RR history was reset on the captured frame')
+            guides = {'normal-roughness.rgba16f', 'diffuse.rgba16f', 'specular.rgba16f'}
+            if not guides.issubset(names):
+                raise ValueError('Actual RR material guides are missing')
+            for resource in resources:
+                if resource['file'] in guides and (
+                    resource.get('dxgi_format') != 10 or resource['pixel_bytes'] != 8 or
+                    resource['width'] != data.get('width') or resource['height'] != data.get('height')):
+                    raise ValueError('RR guide format or extent mismatch')
+            if not {'native-gbuffer1.rgba8', 'native-gbuffer2.rgba8', 'input-depth.r32f'}.issubset(names):
+                raise ValueError('Native material/depth inputs are missing')
+            if not any(n.startswith('input-motion.') for n in names):
+                raise ValueError('Native motion input is missing')
         output_role = 'native-sr-output.' if native else 'rr-output.'
         if not any(n.startswith('input-color.') for n in names) or not any(n.startswith(output_role) for n in names):
             raise ValueError('Scene input/evaluation output images missing')
@@ -99,28 +118,34 @@ def main():
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--diagnostics-only', action='store_true')
     parser.add_argument('--collect-existing', action='store_true')
+    parser.add_argument('--require-rr', action='store_true', help='Require settled RR output and actual material guides')
     args = parser.parse_args()
     local = Path(os.environ['LOCALAPPDATA'])
     root = local / 'ControlFGProbe'
     started = 0 if args.collect_existing or args.diagnostics_only else time.time()
-    destination = args.output / ('Native-Lighting-R157-' + time.strftime('%Y%m%d-%H%M%S') + '-' + str(args.pid) + '-' + str(time.time_ns() % 1000000000))
+    prefix = 'RR-Materials-R180-' if args.require_rr else 'Native-Lighting-R157-'
+    destination = args.output / (prefix + time.strftime('%Y%m%d-%H%M%S') + '-' + str(args.pid) + '-' + str(time.time_ns() % 1000000000))
     destination.mkdir(parents=True, exist_ok=False)
     report = {'schema': 'control-rr-boundary-r157', 'pid': args.pid, 'started_unix': started, 'pairs': [], 'complete': False, 'diagnostics_only': args.diagnostics_only}
-    print('Collecting the overlay native-lighting captures for this game session.', flush=True)
-    print('Use CAPTURE LIGHT in the overlay at each position, then PACKAGE LIGHT.', flush=True)
+    report['expected_path'] = 'rr' if args.require_rr else 'native_sr'
+    print('Collecting the overlay input/output captures for this game session.', flush=True)
+    print('Use CAPTURE RR at the painting and elevator, then PACKAGE RR.' if args.require_rr else
+          'Use CAPTURE LIGHT in the overlay at each position, then PACKAGE LIGHT.', flush=True)
     print('Progress and failures are recorded below; no sound or hotkey is required.', flush=True)
     try:
         if args.diagnostics_only:
             report['status'] = capture_status(root, args.pid)
             print(report['status'], flush=True)
-        for ordinal, label in [(1, 'before-room'), (2, 'inside-room')]:
+        positions = [(1, 'painting'), (2, 'elevator')] if args.require_rr else [(1, 'before-room'), (2, 'inside-room')]
+        for ordinal, label in positions:
             if args.diagnostics_only:
                 break
             deadline = time.monotonic() + 180
             next_status = 0
             pair = None
             while time.monotonic() < deadline:
-                pair = read_pair(root, args.pid, ordinal, started, require_lighting=True, require_native=True)
+                pair = read_pair(root, args.pid, ordinal, started, require_lighting=True,
+                                 require_native=not args.require_rr, require_rr=args.require_rr)
                 if pair:
                     break
                 if time.monotonic() >= next_status:
