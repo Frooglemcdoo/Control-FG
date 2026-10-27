@@ -351,6 +351,10 @@ inline bool PatchSlot(void** slot, void* expected, void* hook) noexcept {
 #include "rt_spot_capture_runtime.h"
 #include "rt_spot_culling_runtime.h"
 #include "rt_spot_runtime.h"
+#include "spec_retry_runtime.h"
+inline HRESULT STDMETHODCALLTYPE CreateLightingState(ID3D12Device5* device,const D3D12_STATE_OBJECT_DESC* desc,REFIID iid,void** out) {
+    return spec_retry::CreateState(&rt_spot_runtime::CreateAugmented,device,desc,iid,out);
+}
 inline performance::Stage PerformanceRayStage() noexcept {return rt_spot_runtime::active?performance::Stage::ShadowRays:performance::Stage::OtherRays;}
 inline performance::Stage PerformanceStage(ID3D12PipelineState* pso) noexcept {
     unsigned kind=0;UINT size=sizeof(kind);
@@ -444,7 +448,7 @@ inline void InstallLiveDiagnostic(ID3D12Device* device) noexcept {
     rt_spot_table_audit::InstallQueues(device);
     rt_spot_runtime::Install();
     rt_shadow_capture::onRoot = &rt_spot_capture_audit::RememberRoot;
-    rt_shadow_capture::replacementState = &rt_spot_runtime::CreateAugmented;
+    rt_shadow_capture::replacementState = &CreateLightingState;
     rt_shadow_capture::onState = &rt_spot_runtime::OnState;
     rt_shadow_capture::replacementDispatch = &rt_spot_runtime::Dispatch;
     rt_shadow_capture::Install(device);

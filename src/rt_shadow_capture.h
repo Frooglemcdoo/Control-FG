@@ -1,7 +1,6 @@
 #pragma once
-// Included inside native_lighting after Trace and PatchSlot. Observers record
-// native descriptors; the explicit creation wrappers may substitute shaders.
-#include "spec_retry_runtime.h"
+// Included inside native_lighting after Trace and PatchSlot. This observer never
+// changes a descriptor, shader, root signature, state object or native result.
 namespace rt_shadow_capture {
 using CreateRoot = HRESULT (STDMETHODCALLTYPE*)(ID3D12Device*, UINT, const void*, SIZE_T, REFIID, void**);
 using CreateState = HRESULT (STDMETHODCALLTYPE*)(ID3D12Device5*, const D3D12_STATE_OBJECT_DESC*, REFIID, void**);
@@ -69,7 +68,7 @@ inline void STDMETHODCALLTYPE SrvHook(ID3D12Device* device,ID3D12Resource* resou
 }
 inline HRESULT STDMETHODCALLTYPE StateHook(ID3D12Device5* device,const D3D12_STATE_OBJECT_DESC* desc,REFIID iid,void** out) {
     const auto replacement = replacementState.load();
-    const HRESULT hr=spec_retry::CreateState(replacement ? replacement : originalState,device,desc,iid,out);
+    const HRESULT hr=(replacement ? replacement : originalState)(device,desc,iid,out);
     if(!desc || FAILED(hr) || !out || !*out || stateReports.fetch_add(1)>=128) return hr;
     Trace("rt_state object=%p type=%u subobjects=%u",*out,unsigned(desc->Type),desc->NumSubobjects);
     for(UINT i=0;i<desc->NumSubobjects;++i) {
