@@ -47,13 +47,13 @@ inline HRESULT CreateState(Create next,ID3D12Device5* device,const D3D12_STATE_O
         const HRESULT hr=next(device,&replacement,iid,&candidate);
         if(SUCCEEDED(hr)&&candidate){
             *out=candidate;++created;
-            Trace("spec_retry_create build=R176 created=1 variant=0 cache_values=4 rays=unchanged");
+            Trace("spec_retry_create build=R179 created=1 variant=0 low_sample_retries=2,4 other_counts=R176 rays=unchanged");
             return hr;
         }
         if(candidate)static_cast<IUnknown*>(candidate)->Release();
         ++failures;
-        Trace("spec_retry_create build=R176 created=0 hr=0x%08lX native_fallback=1",static_cast<unsigned long>(hr));
-    }catch(...){++failures;Trace("spec_retry_create build=R176 exception=1 native_fallback=1");}
+        Trace("spec_retry_create build=R179 created=0 hr=0x%08lX native_fallback=1",static_cast<unsigned long>(hr));
+    }catch(...){++failures;Trace("spec_retry_create build=R179 exception=1 native_fallback=1");}
     return next(device,desc,iid,out);
 }
 }

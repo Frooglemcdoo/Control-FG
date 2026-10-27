@@ -27,7 +27,7 @@ inline bool TryCreate(ID3D12Device* device,const D3D12_COMPUTE_PIPELINE_STATE_DE
         if(candidate)reinterpret_cast<IUnknown*>(candidate)->Release();
         failures.fetch_add(1,std::memory_order_relaxed);
     }
-    Log("SPEC_SERIAL_LIFETIMES build=R176 route=%s created=%u hr=0x%08lX source_sha=%s area_guards=0 moved_loads=2 samples=unchanged dispatch=unchanged",
+    Log("SPEC_SERIAL_LIFETIMES build=R179 route=%s created=%u hr=0x%08lX source_sha=%s area_guards=0 moved_loads=2 samples=unchanged dispatch=unchanged",
         library?"library":"direct",unsigned(ready),static_cast<unsigned long>(result),sourceSha);
     return ready;
 }
