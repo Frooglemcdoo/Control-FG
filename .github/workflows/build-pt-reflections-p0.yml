@@ -3,7 +3,7 @@ name: Build native reflection enhancements and RR
 on:
   push:
     branches:
-      - work/r188-spec-environment-sources
+      - work/r189-spec-volume-roughness
       - experiment/native-hit-capture-r118
       - experiment/pt-reflections-p0
       - experiment/pt-verify-stages-20261010
@@ -62,6 +62,8 @@ jobs:
           python tools/test-spec-indirect-launch.py
           if errorlevel 1 exit /b 1
           python tools/test-spec-environment-launch.py
+          if errorlevel 1 exit /b 1
+          python tools/test-spec-volume-launch.py
           if errorlevel 1 exit /b 1
 
       - name: Configure MSVC
@@ -309,6 +311,18 @@ jobs:
           if($LASTEXITCODE -ne 0){throw 'SPEC hit-view shifted-camera GPU fixture failed'}
           ./build/spec-validate.exe build/spec-hit-view-1-0.dxbc build/spec-hit-view-1-1.dxbc --serial-pair
           if($LASTEXITCODE -ne 0){throw 'SPEC hit-view degenerate GPU fixture failed'}
+          python tools/test-spec-volume-roughness.py
+          if($LASTEXITCODE -ne 0){throw 'Volume roughness audit failed'}
+          python tools/spec_volume_roughness.py
+          if($LASTEXITCODE -ne 0){throw 'Volume roughness generation failed'}
+          ./build/spec-validate.exe build/spec-volume-roughness.dxbc
+          if($LASTEXITCODE -ne 0){throw 'Volume roughness PSO failed'}
+          foreach($smooth in @(0,1,2)){
+            foreach($miss in @(0,1)){
+              ./build/spec-validate.exe "build/spec-volume-$smooth-$miss-1.dxbc" "build/spec-volume-$smooth-$miss-0.dxbc" --serial-pair
+              if($LASTEXITCODE -ne 0){throw 'Volume roughness GPU fixture failed'}
+            }
+          }
           python tools/test-spec-local-components.py
           if($LASTEXITCODE -ne 0){throw 'SPEC local attribution audit failed'}
           python tools/spec_local_components.py
@@ -529,6 +543,16 @@ jobs:
           if errorlevel 1 exit /b 1
           build\test-spec-indirect-runtime.exe invalid
           if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 tools\test-spec-volume-runtime.cpp /Febuild\test-spec-volume-runtime.exe
+          if errorlevel 1 exit /b 1
+          build\test-spec-volume-runtime.exe
+          if errorlevel 1 exit /b 1
+          build\test-spec-volume-runtime.exe off
+          if errorlevel 1 exit /b 1
+          build\test-spec-volume-runtime.exe on
+          if errorlevel 1 exit /b 1
+          build\test-spec-volume-runtime.exe invalid
+          if errorlevel 1 exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 tools\test-spec-hit-view-runtime.cpp /Febuild\test-spec-hit-view-runtime.exe
           if errorlevel 1 exit /b 1
           build\test-spec-hit-view-runtime.exe
@@ -628,7 +652,7 @@ jobs:
         shell: cmd
         run: |
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
-          cl /nologo /std:c++17 /EHsc /W4 /O2 /MT /LD /guard:cf /DCONTROL_SPEC_INDIRECT_CAPTURE /DCONTROL_SPEC_HIT_VIEW /DCONTROL_RR_MATERIAL_CAPTURE /DCONTROL_CAPTURE_DIAGNOSTIC /DUNICODE /D_UNICODE /I "third_party\streamline\include" src\probe.cpp /Fobuild\probe.obj /Febuild\dxgi.dll /link /DEF:src\dxgi.def /INCREMENTAL:NO /DYNAMICBASE /NXCOMPAT /GUARD:CF bcrypt.lib wintrust.lib user32.lib gdi32.lib
+          cl /nologo /std:c++17 /EHsc /W4 /O2 /MT /LD /guard:cf /DCONTROL_SPEC_VOLUME_ROUGHNESS /DCONTROL_SPEC_HIT_VIEW /DCONTROL_RR_MATERIAL_CAPTURE /DCONTROL_CAPTURE_DIAGNOSTIC /DUNICODE /D_UNICODE /I "third_party\streamline\include" src\probe.cpp /Fobuild\probe.obj /Febuild\dxgi.dll /link /DEF:src\dxgi.def /INCREMENTAL:NO /DYNAMICBASE /NXCOMPAT /GUARD:CF bcrypt.lib wintrust.lib user32.lib gdi32.lib
           if errorlevel 1 exit /b 1
           dumpbin /exports build\dxgi.dll > build\exports.txt
           dumpbin /imports build\dxgi.dll > build\imports.txt
@@ -709,11 +733,11 @@ jobs:
           & powershell.exe -NoProfile -File Package-Lighting-Performance.ps1 -Folder build/perf-package-test -ModuleFolder build
           if ($LASTEXITCODE -ne 0 -or !(Test-Path build/perf-package-test.zip)) { throw 'Performance package roundtrip failed' }
 
-      - name: Package live lighting diagnostic R188
+      - name: Package live lighting diagnostic R189
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-Native-Lighting-Live-R188'
+          $out='Control-FG-Native-Lighting-Live-R189'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
           Copy-Item build/rt_spot_selected_off.dxbc,build/rt_spot_selection.dxbc,build/rt_spot_visibility.dxbc,build/rt_spot_light_ids.dxbc,build/rt_spot_raw_history.dxbc,build/rt_spot_raw_spatial0.dxbc,build/rt_spot_raw_spatial1.dxbc,build/rt_spot_full.dxil,build/rt_spot_r94.dxil,build/rt_spot_light.dxbc,build/rt_spot_reset.dxbc,build/rt_spot_history.dxbc,build/rt_spot_spatial0.dxbc,build/rt_spot_spatial1.dxbc $out
@@ -733,22 +757,21 @@ jobs:
           Copy-Item Collect-ControlFG-Compact-Logs.ps1 "$out/Collect-ControlFG-Compact-Logs.ps1"
           Copy-Item Package-Lighting-Capture.cmd,tools/package-lighting-capture.py,Package-Lighting-Performance.ps1 $out
           Copy-Item Capture-RR-Boundary.cmd,Capture-RR-Boundary.ps1,Collect-RR-Boundary-Status.cmd,tools/collect-rr-boundary.py $out
-          Copy-Item Start-Spec-Environment-Test.cmd $out
-          Copy-Item docs/native-lighting-r188.md "$out/DIAGNOSTIC-NOTES.md"
+          Copy-Item Start-Spec-Volume-Test.cmd $out
+          Copy-Item docs/native-lighting-r189.md "$out/DIAGNOSTIC-NOTES.md"
           @'
-          CONTROL-FG R188 - environment volume / cubemap isolation
-          Close Control. Copy package beside Control_DX12.exe; keep NVIDIA runtimes.
-          Launch Start-Spec-Environment-Test.cmd. Inspect option 2, then option 3.
-          Each launch: select NATIVE BLEND, RR on, FG off and SPEC4.
+          CONTROL-FG R189 - roughness-dependent volume specular filtering
+          Close Control. Install beside Control_DX12.exe; keep NVIDIA runtimes.
+          Launch Start-Spec-Volume-Test.cmd. Option 1 filtered, option 2 baseline.
+          Each launch: NATIVE BLEND, RR on, FG off and SPEC4.
           SPEC resets on restart. Set it to 4 each time.
-          Option 2 F10: ENV VOLUME x8. Option 3: ENV CUBE x8.
-          Inspect painting and elevator stationary splatter. SAVE LOG for each mode.
-          Both isolated modes are intentionally boosted eightfold for visibility, not a quality fix.
-          Report which mode retains splatter, or whether both/neither do.
-          If a mode is still too dim or clipped, report inconclusive, not clean.
+          Check F10: VOLUME: ROUGHNESS or VOLUME: BASELINE.
+          Inspect stationary painting/elevator splatter, lighting detail and FPS.
+          Both options keep full lighting at normal brightness. SAVE LOG each run.
           No full capture or exact camera matching is needed initially.
-          Option 1 / normal launch restores full R184 reflections.
-          R185 phase correction remains disabled. See DIAGNOSTIC-NOTES.md.
+          Normal launch enables filtering. Option 2 restores full R184 baseline.
+          This approximation needs in-game quality/performance assessment.
+          See DIAGNOSTIC-NOTES.md.
           '@ | Set-Content "$out/README.txt" -Encoding ASCII
           Compress-Archive -Path "$out/*" -DestinationPath "$out.zip" -Force
           (Get-FileHash "$out.zip" -Algorithm SHA256).Hash | Set-Content "$out.sha256" -Encoding ASCII
@@ -756,10 +779,12 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-Native-Lighting-Live-R188
+          name: Control-FG-Native-Lighting-Live-R189
           path: |
-            Control-FG-Native-Lighting-Live-R188.zip
-            Control-FG-Native-Lighting-Live-R188.sha256
+            Control-FG-Native-Lighting-Live-R189.zip
+            Control-FG-Native-Lighting-Live-R189.sha256
+            build/spec-volume-roughness-validation.json
+            build/spec-volume-roughness.dxbc
             build/spec-environment-validation.json
             build/spec-environment-volume.dxbc
             build/spec-environment-cube.dxbc

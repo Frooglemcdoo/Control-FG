@@ -44,7 +44,9 @@ inline const wchar_t* ButtonLabel(unsigned index) noexcept {
         if(local==1)return L"REFLECTION: OTHER";
         if(local==2)return L"REFLECTION: LOCAL SPEC";
 #endif
-#if defined(CONTROL_SPEC_PHASE_PRECISION)
+#if defined(CONTROL_SPEC_VOLUME_ROUGHNESS)
+        return spec_serial::VolumeRoughnessEnabled()?L"VOLUME: ROUGHNESS":L"VOLUME: BASELINE";
+#elif defined(CONTROL_SPEC_PHASE_PRECISION)
         return L"SPEC: PHASE";
 #elif defined(CONTROL_SPEC_HIT_VIEW)
         return L"SPEC: HIT VIEW";
@@ -133,9 +135,12 @@ inline void Paint(HWND window) noexcept {
     EndPaint(window, &ps);
 }
 inline void ReportSpecIsolation(const char* reason) noexcept {
-#if defined(CONTROL_SPEC_INDIRECT_CAPTURE)
+#if defined(CONTROL_SPEC_VOLUME_ROUGHNESS)
+    Trace("spec_volume_status build=R189 reason=%s enabled=%u diagnostic_gain=1 direct_created=%llu library_created=%llu failures=%llu evidence=creation_counters",
+        reason,unsigned(spec_serial::VolumeRoughnessEnabled()),spec_serial::directCreated.load(),spec_serial::libraryCreated.load(),spec_serial::failures.load());
+#elif defined(CONTROL_SPEC_INDIRECT_CAPTURE)
     const auto mode=spec_serial::ComponentMode();
-    Trace("spec_indirect_status build=R188 reason=%s requested=%s diagnostic_gain=%u direct_created=%llu library_created=%llu failures=%llu evidence=creation_counters",
+    Trace("spec_indirect_status build=R189 reason=%s requested=%s diagnostic_gain=%u direct_created=%llu library_created=%llu failures=%llu evidence=creation_counters",
         reason,spec_indirect::Name(mode),spec_indirect::Gain(mode),spec_serial::directCreated.load(),spec_serial::libraryCreated.load(),spec_serial::failures.load());
 #elif defined(CONTROL_SPEC_LOCAL_CAPTURE)
     Trace("spec_local_status reason=%s requested=%s direct_created=%llu library_created=%llu failures=%llu evidence=creation_counters",
@@ -303,7 +308,7 @@ inline DWORD WINAPI ThreadProc(LPVOID) noexcept {
     ULONGLONG nextRefresh=0, nextWindowSearch=0, nextLogDrain=0, nextRRReport=0;
     HWND cachedGame=nullptr;
     POINT lastOrigin{-1,-1};
-    Trace("session_start build=R188-overlay-rr-capture pid=%lu default=authored_clip_surface_normals_current_spot_when_ready log=user-diagnostics-folder",GetCurrentProcessId());
+    Trace("session_start build=R189-overlay-rr-capture pid=%lu default=authored_clip_surface_normals_current_spot_when_ready log=user-diagnostics-folder",GetCurrentProcessId());
 #ifdef CONTROL_RR_COMPONENT_CAPTURE
     Trace("spec_component_session requested=%s direct_created=%llu library_created=%llu failures=%llu",
         spec_component::Name(spec_serial::ComponentMode()),

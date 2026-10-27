@@ -27,7 +27,20 @@
 #error Indirect isolation requires hit-view baseline and excludes other isolation modes
 #endif
 #endif
+#ifdef CONTROL_SPEC_VOLUME_ROUGHNESS
+#include "../build/spec_volume_roughness.generated.h"
+#if !defined(CONTROL_SPEC_HIT_VIEW) || defined(CONTROL_SPEC_INDIRECT_CAPTURE) || defined(CONTROL_SPEC_LOCAL_CAPTURE) || defined(CONTROL_RR_COMPONENT_CAPTURE)
+#error Volume roughness requires full hit-view baseline, without isolation
+#endif
+#endif
 namespace spec_serial {
+#ifdef CONTROL_SPEC_VOLUME_ROUGHNESS
+inline bool VolumeRoughnessEnabled() noexcept {
+    static const bool enabled=[](){char value[32]{};const auto n=GetEnvironmentVariableA("CONTROLFG_SPEC_VOLUME_ROUGHNESS",value,sizeof(value));
+        return !(n&&n<sizeof(value)&&!std::strcmp(value,"off"));}();
+    return enabled;
+}
+#endif
 inline unsigned ComponentMode() noexcept {
 #if defined(CONTROL_SPEC_INDIRECT_CAPTURE)
     static const unsigned mode=[](){char value[32]{};const auto n=GetEnvironmentVariableA("CONTROLFG_SPEC_INDIRECT_COMPONENT",value,sizeof(value));
@@ -79,6 +92,9 @@ inline bool TryCreate(ID3D12Device* device,const D3D12_COMPUTE_PIPELINE_STATE_DE
     if(component==1)replacement.CS={kSpecComponentEmission,sizeof(kSpecComponentEmission)};
     if(component==2)replacement.CS={kSpecComponentShading,sizeof(kSpecComponentShading)};
 #endif
+#ifdef CONTROL_SPEC_VOLUME_ROUGHNESS
+    if(VolumeRoughnessEnabled())replacement.CS={kSpecVolumeRoughness,sizeof(kSpecVolumeRoughness)};
+#endif
     replacement.CachedPSO={nullptr,0};
     void* candidate=nullptr;
     result=original(device,&replacement,iid,&candidate);
@@ -90,19 +106,22 @@ inline bool TryCreate(ID3D12Device* device,const D3D12_COMPUTE_PIPELINE_STATE_DE
         if(candidate)reinterpret_cast<IUnknown*>(candidate)->Release();
         failures.fetch_add(1,std::memory_order_relaxed);
     }
-    Log("SPEC_SERIAL_LIFETIMES build=R188 route=%s created=%u hr=0x%08lX source_sha=%s area_guards=0 moved_loads=2 samples=unchanged dispatch=unchanged",
+    Log("SPEC_SERIAL_LIFETIMES build=R189 route=%s created=%u hr=0x%08lX source_sha=%s area_guards=0 moved_loads=2 samples=unchanged dispatch=unchanged",
         library?"library":"direct",unsigned(ready),static_cast<unsigned long>(result),sourceSha);
 #ifdef CONTROL_SPEC_HIT_VIEW
-    Log("SPEC_HIT_VIEW build=R188 applied=%u native_fallback=%u extra_rays=0 extra_texture_reads=0 near_zero_fallback=1",unsigned(ready),unsigned(!ready));
+    Log("SPEC_HIT_VIEW build=R189 applied=%u native_fallback=%u extra_rays=0 extra_texture_reads=0 near_zero_fallback=1",unsigned(ready),unsigned(!ready));
 #endif
 #ifdef CONTROL_SPEC_LOCAL_CAPTURE
-    Log("SPEC_LOCAL_COMPONENT build=R188 requested=%s applied=%u native_fallback=%u cap_basis=original_total",spec_local::Name(localComponent),unsigned(ready),unsigned(!ready));
+    Log("SPEC_LOCAL_COMPONENT build=R189 requested=%s applied=%u native_fallback=%u cap_basis=original_total",spec_local::Name(localComponent),unsigned(ready),unsigned(!ready));
 #endif
 #ifdef CONTROL_SPEC_INDIRECT_CAPTURE
-    Log("SPEC_INDIRECT_COMPONENT build=R188 requested=%s diagnostic_gain=%u applied=%u native_fallback=%u cap_basis=original_total",spec_indirect::Name(indirectComponent),spec_indirect::Gain(indirectComponent),unsigned(ready),unsigned(!ready));
+    Log("SPEC_INDIRECT_COMPONENT build=R189 requested=%s diagnostic_gain=%u applied=%u native_fallback=%u cap_basis=original_total",spec_indirect::Name(indirectComponent),spec_indirect::Gain(indirectComponent),unsigned(ready),unsigned(!ready));
 #endif
 #ifdef CONTROL_RR_COMPONENT_CAPTURE
-    Log("SPEC_COMPONENT build=R188 requested=%s applied=%u native_fallback=%u cap_basis=original_total",spec_component::Name(component),unsigned(ready),unsigned(!ready));
+    Log("SPEC_COMPONENT build=R189 requested=%s applied=%u native_fallback=%u cap_basis=original_total",spec_component::Name(component),unsigned(ready),unsigned(!ready));
+#endif
+#ifdef CONTROL_SPEC_VOLUME_ROUGHNESS
+    Log("SPEC_VOLUME_ROUGHNESS build=R189 enabled=%u applied=%u native_fallback=%u extra_rays=0 extra_texture_reads=0 gain=1",unsigned(VolumeRoughnessEnabled()),unsigned(ready&&VolumeRoughnessEnabled()),unsigned(!ready));
 #endif
     return ready;
 }
