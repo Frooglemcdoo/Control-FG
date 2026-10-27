@@ -32,6 +32,11 @@ inline const wchar_t* ButtonLabel(unsigned index) noexcept {
         if(component==1)return L"REFLECTION: EMISSION";
         if(component==2)return L"REFLECTION: SHADING";
 #endif
+#ifdef CONTROL_SPEC_LOCAL_CAPTURE
+        const auto local=spec_serial::ComponentMode();
+        if(local==1)return L"REFLECTION: OTHER";
+        if(local==2)return L"REFLECTION: LOCAL SPEC";
+#endif
 #if defined(CONTROL_SPEC_PHASE_PRECISION)
         return L"SPEC: PHASE";
 #elif defined(CONTROL_SPEC_HIT_VIEW)
@@ -278,7 +283,7 @@ inline DWORD WINAPI ThreadProc(LPVOID) noexcept {
     ULONGLONG nextRefresh=0, nextWindowSearch=0, nextLogDrain=0, nextRRReport=0;
     HWND cachedGame=nullptr;
     POINT lastOrigin{-1,-1};
-    Trace("session_start build=R185-overlay-rr-capture pid=%lu default=authored_clip_surface_normals_current_spot_when_ready log=user-diagnostics-folder",GetCurrentProcessId());
+    Trace("session_start build=R186-overlay-rr-capture pid=%lu default=authored_clip_surface_normals_current_spot_when_ready log=user-diagnostics-folder",GetCurrentProcessId());
 #ifdef CONTROL_RR_COMPONENT_CAPTURE
     Trace("spec_component_session requested=%s direct_created=%llu library_created=%llu failures=%llu",
         spec_component::Name(spec_serial::ComponentMode()),

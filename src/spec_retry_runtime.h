@@ -53,16 +53,16 @@ inline HRESULT CreateState(Create next,ID3D12Device5* device,const D3D12_STATE_O
         const HRESULT hr=next(device,&replacement,iid,&candidate);
         if(SUCCEEDED(hr)&&candidate){
             *out=candidate;++created;
-            Trace("spec_retry_create build=R185 created=1 variant=0 cache_values=4 rays=unchanged");
+            Trace("spec_retry_create build=R186 created=1 variant=0 cache_values=4 rays=unchanged");
 #ifdef CONTROL_SPEC_PHASE_PRECISION
-            Trace("SPEC_PHASE_PRECISION build=R185 applied=1 native_fallback=0 fractional_bits=24 sequence=native_r2 rays=unchanged weights=unchanged");
+            Trace("SPEC_PHASE_PRECISION build=R186 applied=1 native_fallback=0 fractional_bits=24 sequence=native_r2 rays=unchanged weights=unchanged");
 #endif
             return hr;
         }
         if(candidate)static_cast<IUnknown*>(candidate)->Release();
         ++failures;
-        Trace("spec_retry_create build=R185 created=0 hr=0x%08lX native_fallback=1",static_cast<unsigned long>(hr));
-    }catch(...){++failures;Trace("spec_retry_create build=R185 exception=1 native_fallback=1");}
+        Trace("spec_retry_create build=R186 created=0 hr=0x%08lX native_fallback=1",static_cast<unsigned long>(hr));
+    }catch(...){++failures;Trace("spec_retry_create build=R186 exception=1 native_fallback=1");}
     return next(device,desc,iid,out);
 }
 }
