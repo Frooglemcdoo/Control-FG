@@ -1,0 +1,72 @@
+{
+  "2": {
+    "painting": {
+      "roi": [
+        1200,
+        770,
+        1360,
+        900
+      ],
+      "mean_luminance": 0.00012313004929916216,
+      "p99": 0.0005917802114486691,
+      "max": 0.0009205230712890626,
+      "nonzero_fraction": 1.0,
+      "frame_rms": 0.00016788711649636486,
+      "hf_rms": 0.0001138637252845188,
+      "roughness_median": 0.356689453125
+    },
+    "elevator": {
+      "roi": [
+        740,
+        800,
+        900,
+        1000
+      ],
+      "mean_luminance": 0.0012559780316334218,
+      "p99": 0.0027922235908508283,
+      "max": 0.004631857681274414,
+      "nonzero_fraction": 1.0,
+      "frame_rms": 0.0007274579516459757,
+      "hf_rms": 0.0004919932652257604,
+      "roughness_median": 0.317626953125
+    }
+  },
+  "3": {
+    "painting": {
+      "roi": [
+        1160,
+        540,
+        1360,
+        740
+      ],
+      "mean_luminance": 0.0,
+      "p99": 0.0,
+      "max": 0.0,
+      "nonzero_fraction": 0.0,
+      "frame_rms": 0.0,
+      "hf_rms": 0.0,
+      "roughness_median": 0.344970703125
+    },
+    "elevator": {
+      "roi": [
+        740,
+        650,
+        940,
+        850
+      ],
+      "mean_luminance": 2.213859538346529e-05,
+      "p99": 0.0,
+      "max": 0.01400655517578125,
+      "nonzero_fraction": 0.006025,
+      "frame_rms": 0.0004854107038101297,
+      "hf_rms": 0.0003228893503938158,
+      "roughness_median": 0.317626953125
+    }
+  },
+  "limitations": [
+    "Different camera positions between modes; no pixelwise subtraction or energy-share inference.",
+    "Two jittered frames per scene; frame difference includes subpixel changes.",
+    "lighting-specular is accumulated lighting, not an isolated per-hit contribution readback.",
+    "Later clamping and RR/exposure processing are nonlinear."
+  ]
+}

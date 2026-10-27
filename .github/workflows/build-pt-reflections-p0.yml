@@ -3,7 +3,7 @@ name: Build native reflection enhancements and RR
 on:
   push:
     branches:
-      - work/r183-component-launch-fix
+      - work/r184-spec-hit-view
       - experiment/native-hit-capture-r118
       - experiment/pt-reflections-p0
       - experiment/pt-verify-stages-20261010
@@ -289,6 +289,16 @@ jobs:
           if($LASTEXITCODE -ne 0){throw 'SPEC emission PSO validation failed'}
           ./build/spec-validate.exe build/spec-component-shading.dxbc
           if($LASTEXITCODE -ne 0){throw 'SPEC shading PSO validation failed'}
+          python tools/test-spec-hit-view.py
+          if($LASTEXITCODE -ne 0){throw 'SPEC hit-view provenance and token audit failed'}
+          python tools/spec_hit_view.py
+          if($LASTEXITCODE -ne 0){throw 'SPEC hit-view generation failed'}
+          ./build/spec-validate.exe build/spec-hit-view.dxbc
+          if($LASTEXITCODE -ne 0){throw 'SPEC hit-view PSO validation failed'}
+          ./build/spec-validate.exe build/spec-hit-view-0-0.dxbc build/spec-hit-view-0-1.dxbc --serial-pair
+          if($LASTEXITCODE -ne 0){throw 'SPEC hit-view shifted-camera GPU fixture failed'}
+          ./build/spec-validate.exe build/spec-hit-view-1-0.dxbc build/spec-hit-view-1-1.dxbc --serial-pair
+          if($LASTEXITCODE -ne 0){throw 'SPEC hit-view degenerate GPU fixture failed'}
           python tools/spec_parallel.py --source research/spec-performance/spec-resolve.dxbc.b64 --output build/spec-parallel.dxbc --header build/spec_parallel.generated.h
           if($LASTEXITCODE -ne 0){throw 'Parallel SPEC shader generation failed'}
           python tools/test-spec-parallel.py build
@@ -439,6 +449,10 @@ jobs:
           if errorlevel 1 exit /b 1
           build\test-spec-component-runtime.exe invalid
           if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 tools\test-spec-hit-view-runtime.cpp /Febuild\test-spec-hit-view-runtime.exe
+          if errorlevel 1 exit /b 1
+          build\test-spec-hit-view-runtime.exe
+          if errorlevel 1 exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 tools\test-spec-serial-runtime.cpp /Febuild\test-spec-serial-runtime.exe
           if errorlevel 1 exit /b 1
           build\test-spec-serial-runtime.exe
@@ -534,7 +548,7 @@ jobs:
         shell: cmd
         run: |
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
-          cl /nologo /std:c++17 /EHsc /W4 /O2 /MT /LD /guard:cf /DCONTROL_RR_COMPONENT_CAPTURE /DCONTROL_RR_MATERIAL_CAPTURE /DCONTROL_CAPTURE_DIAGNOSTIC /DUNICODE /D_UNICODE /I "third_party\streamline\include" src\probe.cpp /Fobuild\probe.obj /Febuild\dxgi.dll /link /DEF:src\dxgi.def /INCREMENTAL:NO /DYNAMICBASE /NXCOMPAT /GUARD:CF bcrypt.lib wintrust.lib user32.lib gdi32.lib
+          cl /nologo /std:c++17 /EHsc /W4 /O2 /MT /LD /guard:cf /DCONTROL_SPEC_HIT_VIEW /DCONTROL_RR_MATERIAL_CAPTURE /DCONTROL_CAPTURE_DIAGNOSTIC /DUNICODE /D_UNICODE /I "third_party\streamline\include" src\probe.cpp /Fobuild\probe.obj /Febuild\dxgi.dll /link /DEF:src\dxgi.def /INCREMENTAL:NO /DYNAMICBASE /NXCOMPAT /GUARD:CF bcrypt.lib wintrust.lib user32.lib gdi32.lib
           if errorlevel 1 exit /b 1
           dumpbin /exports build\dxgi.dll > build\exports.txt
           dumpbin /imports build\dxgi.dll > build\imports.txt
@@ -615,13 +629,12 @@ jobs:
           & powershell.exe -NoProfile -File Package-Lighting-Performance.ps1 -Folder build/perf-package-test -ModuleFolder build
           if ($LASTEXITCODE -ne 0 -or !(Test-Path build/perf-package-test.zip)) { throw 'Performance package roundtrip failed' }
 
-      - name: Package live lighting diagnostic R183
+      - name: Package live lighting diagnostic R184
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-Native-Lighting-Live-R183'
+          $out='Control-FG-Native-Lighting-Live-R184'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
-          Copy-Item Start-Spec-Component-Test.cmd "$out/Start-Spec-Component-Test.cmd"
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
           Copy-Item build/rt_spot_selected_off.dxbc,build/rt_spot_selection.dxbc,build/rt_spot_visibility.dxbc,build/rt_spot_light_ids.dxbc,build/rt_spot_raw_history.dxbc,build/rt_spot_raw_spatial0.dxbc,build/rt_spot_raw_spatial1.dxbc,build/rt_spot_full.dxil,build/rt_spot_r94.dxil,build/rt_spot_light.dxbc,build/rt_spot_reset.dxbc,build/rt_spot_history.dxbc,build/rt_spot_spatial0.dxbc,build/rt_spot_spatial1.dxbc $out
           New-Item -ItemType Directory -Force -Path "$out/ControlFGStreamline" | Out-Null
@@ -640,20 +653,20 @@ jobs:
           Copy-Item Collect-ControlFG-Compact-Logs.ps1 "$out/Collect-ControlFG-Compact-Logs.ps1"
           Copy-Item Package-Lighting-Capture.cmd,tools/package-lighting-capture.py,Package-Lighting-Performance.ps1 $out
           Copy-Item Capture-RR-Boundary.cmd,Capture-RR-Boundary.ps1,Collect-RR-Boundary-Status.cmd,tools/collect-rr-boundary.py $out
-          Copy-Item docs/native-lighting-r183.md "$out/DIAGNOSTIC-NOTES.md"
+          Copy-Item docs/native-lighting-r184.md "$out/DIAGNOSTIC-NOTES.md"
           @'
-          CONTROL-FG R183 - reflection contribution isolation (diagnostic)
+          CONTROL-FG R184 - secondary-hit highlight direction correction
           Close Control. Copy package beside Control_DX12.exe; keep NVIDIA runtimes.
-          Run Start-Spec-Component-Test.cmd and select 2 (emission removed).
-          Select NATIVE BLEND, RR on, FG off, SPEC 4; keep other settings fixed.
-          CAPTURE RR at the painting and elevator, holding still for each capture.
-          Click PACKAGE RR and retain all ZIPs. Save the Lighting-R183 log.
-          Close Control and repeat with launcher option 3 (emission only).
-          Send both capture packages and logs, labeled with their launcher option.
-          Missing reflected light is intentional. This is not a quality/FPS fix.
-          Launch normally or choose option 1 to restore accepted baseline rendering.
-          No need to repeat SPEC8/16 comparisons.
-          See DIAGNOSTIC-NOTES.md for scope and limits.
+          Launch Control normally. Do not use the old component-test launcher.
+          Select NATIVE BLEND, RR on, FG off and SPEC 4. Keep other settings fixed.
+          The bottom F10 label should read SPEC: HIT VIEW.
+          Inspect the painting and elevator stationary highlights, then move normally.
+          Report splatter, highlight brightness/shape, and FPS. SAVE LOG.
+          This restores full reflections; emission isolation is disabled.
+          No exact camera matching or SPEC8/16 comparison is requested.
+          CAPTURE RR and PACKAGE RR remain available if needed.
+          Quality and GPU performance are experimental, not established by CI.
+          See DIAGNOSTIC-NOTES.md.
           '@ | Set-Content "$out/README.txt" -Encoding ASCII
           Compress-Archive -Path "$out/*" -DestinationPath "$out.zip" -Force
           (Get-FileHash "$out.zip" -Algorithm SHA256).Hash | Set-Content "$out.sha256" -Encoding ASCII
@@ -661,10 +674,12 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-Native-Lighting-Live-R183
+          name: Control-FG-Native-Lighting-Live-R184
           path: |
-            Control-FG-Native-Lighting-Live-R183.zip
-            Control-FG-Native-Lighting-Live-R183.sha256
+            Control-FG-Native-Lighting-Live-R184.zip
+            Control-FG-Native-Lighting-Live-R184.sha256
+            build/spec-hit-view-validation.json
+            build/spec-hit-view.dxbc
             build/spec-components-validation.json
             build/spec-component-emission.dxbc
             build/spec-component-shading.dxbc

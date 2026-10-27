@@ -2,6 +2,12 @@
 // Shared by direct creation and successful native pipeline-library loads.
 // Only PSO setup changes: there is no per-bind or per-dispatch tracking.
 #include "../build/spec_serial_lifetimes.generated.h"
+#ifdef CONTROL_SPEC_HIT_VIEW
+#include "../build/spec_hit_view.generated.h"
+#endif
+#if defined(CONTROL_SPEC_HIT_VIEW) && defined(CONTROL_RR_COMPONENT_CAPTURE)
+#error Hit-view correction and component isolation must be tested separately
+#endif
 #ifdef CONTROL_RR_COMPONENT_CAPTURE
 #include "../build/spec_components.generated.h"
 #include "spec_component_policy.h"
@@ -30,6 +36,9 @@ inline bool TryCreate(ID3D12Device* device,const D3D12_COMPUTE_PIPELINE_STATE_DE
     (library?libraryMatched:directMatched).fetch_add(1,std::memory_order_relaxed);
     auto replacement=*desc;
     replacement.CS={kSpecSerialLifetimesShader,sizeof(kSpecSerialLifetimesShader)};
+#ifdef CONTROL_SPEC_HIT_VIEW
+    replacement.CS={kSpecHitViewShader,sizeof(kSpecHitViewShader)};
+#endif
 #ifdef CONTROL_RR_COMPONENT_CAPTURE
     const auto component=ComponentMode();
     if(component==1)replacement.CS={kSpecComponentEmission,sizeof(kSpecComponentEmission)};
@@ -46,10 +55,13 @@ inline bool TryCreate(ID3D12Device* device,const D3D12_COMPUTE_PIPELINE_STATE_DE
         if(candidate)reinterpret_cast<IUnknown*>(candidate)->Release();
         failures.fetch_add(1,std::memory_order_relaxed);
     }
-    Log("SPEC_SERIAL_LIFETIMES build=R183 route=%s created=%u hr=0x%08lX source_sha=%s area_guards=0 moved_loads=2 samples=unchanged dispatch=unchanged",
+    Log("SPEC_SERIAL_LIFETIMES build=R184 route=%s created=%u hr=0x%08lX source_sha=%s area_guards=0 moved_loads=2 samples=unchanged dispatch=unchanged",
         library?"library":"direct",unsigned(ready),static_cast<unsigned long>(result),sourceSha);
+#ifdef CONTROL_SPEC_HIT_VIEW
+    Log("SPEC_HIT_VIEW build=R184 applied=%u native_fallback=%u extra_rays=0 extra_texture_reads=0 near_zero_fallback=1",unsigned(ready),unsigned(!ready));
+#endif
 #ifdef CONTROL_RR_COMPONENT_CAPTURE
-    Log("SPEC_COMPONENT build=R183 requested=%s applied=%u native_fallback=%u cap_basis=original_total",spec_component::Name(component),unsigned(ready),unsigned(!ready));
+    Log("SPEC_COMPONENT build=R184 requested=%s applied=%u native_fallback=%u cap_basis=original_total",spec_component::Name(component),unsigned(ready),unsigned(!ready));
 #endif
     return ready;
 }
