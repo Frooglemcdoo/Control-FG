@@ -21,6 +21,7 @@
 #endif
 #ifdef CONTROL_SPEC_INDIRECT_CAPTURE
 #include "../build/spec_indirect_components.generated.h"
+#include "../build/spec_environment_sources.generated.h"
 #include "spec_indirect_policy.h"
 #if !defined(CONTROL_SPEC_HIT_VIEW) || defined(CONTROL_RR_COMPONENT_CAPTURE) || defined(CONTROL_SPEC_LOCAL_CAPTURE)
 #error Indirect isolation requires hit-view baseline and excludes other isolation modes
@@ -70,6 +71,8 @@ inline bool TryCreate(ID3D12Device* device,const D3D12_COMPUTE_PIPELINE_STATE_DE
     const auto indirectComponent=ComponentMode();
     if(indirectComponent==1)replacement.CS={kSpecIndirectDiffuse,sizeof(kSpecIndirectDiffuse)};
     if(indirectComponent==2)replacement.CS={kSpecIndirectEnvironment,sizeof(kSpecIndirectEnvironment)};
+    if(indirectComponent==3)replacement.CS={kSpecEnvironmentVolume,sizeof(kSpecEnvironmentVolume)};
+    if(indirectComponent==4)replacement.CS={kSpecEnvironmentCube,sizeof(kSpecEnvironmentCube)};
 #endif
 #ifdef CONTROL_RR_COMPONENT_CAPTURE
     const auto component=ComponentMode();
@@ -87,19 +90,19 @@ inline bool TryCreate(ID3D12Device* device,const D3D12_COMPUTE_PIPELINE_STATE_DE
         if(candidate)reinterpret_cast<IUnknown*>(candidate)->Release();
         failures.fetch_add(1,std::memory_order_relaxed);
     }
-    Log("SPEC_SERIAL_LIFETIMES build=R187 route=%s created=%u hr=0x%08lX source_sha=%s area_guards=0 moved_loads=2 samples=unchanged dispatch=unchanged",
+    Log("SPEC_SERIAL_LIFETIMES build=R188 route=%s created=%u hr=0x%08lX source_sha=%s area_guards=0 moved_loads=2 samples=unchanged dispatch=unchanged",
         library?"library":"direct",unsigned(ready),static_cast<unsigned long>(result),sourceSha);
 #ifdef CONTROL_SPEC_HIT_VIEW
-    Log("SPEC_HIT_VIEW build=R187 applied=%u native_fallback=%u extra_rays=0 extra_texture_reads=0 near_zero_fallback=1",unsigned(ready),unsigned(!ready));
+    Log("SPEC_HIT_VIEW build=R188 applied=%u native_fallback=%u extra_rays=0 extra_texture_reads=0 near_zero_fallback=1",unsigned(ready),unsigned(!ready));
 #endif
 #ifdef CONTROL_SPEC_LOCAL_CAPTURE
-    Log("SPEC_LOCAL_COMPONENT build=R187 requested=%s applied=%u native_fallback=%u cap_basis=original_total",spec_local::Name(localComponent),unsigned(ready),unsigned(!ready));
+    Log("SPEC_LOCAL_COMPONENT build=R188 requested=%s applied=%u native_fallback=%u cap_basis=original_total",spec_local::Name(localComponent),unsigned(ready),unsigned(!ready));
 #endif
 #ifdef CONTROL_SPEC_INDIRECT_CAPTURE
-    Log("SPEC_INDIRECT_COMPONENT build=R187 requested=%s diagnostic_gain=%u applied=%u native_fallback=%u cap_basis=original_total",spec_indirect::Name(indirectComponent),spec_indirect::Gain(indirectComponent),unsigned(ready),unsigned(!ready));
+    Log("SPEC_INDIRECT_COMPONENT build=R188 requested=%s diagnostic_gain=%u applied=%u native_fallback=%u cap_basis=original_total",spec_indirect::Name(indirectComponent),spec_indirect::Gain(indirectComponent),unsigned(ready),unsigned(!ready));
 #endif
 #ifdef CONTROL_RR_COMPONENT_CAPTURE
-    Log("SPEC_COMPONENT build=R187 requested=%s applied=%u native_fallback=%u cap_basis=original_total",spec_component::Name(component),unsigned(ready),unsigned(!ready));
+    Log("SPEC_COMPONENT build=R188 requested=%s applied=%u native_fallback=%u cap_basis=original_total",spec_component::Name(component),unsigned(ready),unsigned(!ready));
 #endif
     return ready;
 }

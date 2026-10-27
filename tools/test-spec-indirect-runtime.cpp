@@ -32,8 +32,8 @@ static unsigned calls=0,behavior=0;
 static HRESULT Create(ID3D12Device*,const D3D12_COMPUTE_PIPELINE_STATE_DESC* desc,REFIID iid,void** out){
  ++calls;
  const auto mode=spec_indirect::Parse(environment);
- const void* expected=mode==1? kSpecIndirectDiffuse:mode==2?kSpecIndirectEnvironment:kSpecHitViewShader;
- const auto bytes=mode==1?sizeof(kSpecIndirectDiffuse):mode==2?sizeof(kSpecIndirectEnvironment):sizeof(kSpecHitViewShader);
+ const void* expected=mode==1? kSpecIndirectDiffuse:mode==2?kSpecIndirectEnvironment:mode==3?kSpecEnvironmentVolume:mode==4?kSpecEnvironmentCube:kSpecHitViewShader;
+ const auto bytes=mode==1?sizeof(kSpecIndirectDiffuse):mode==2?sizeof(kSpecIndirectEnvironment):mode==3?sizeof(kSpecEnvironmentVolume):mode==4?sizeof(kSpecEnvironmentCube):sizeof(kSpecHitViewShader);
  assert(desc->CS.pShaderBytecode==expected && desc->CS.BytecodeLength==bytes);
  assert(!desc->CachedPSO.pCachedBlob&&!desc->CachedPSO.CachedBlobSizeInBytes);
  assert(desc->pRootSignature==&object&&desc->NodeMask==7&&desc->Flags==9&&iid==42);

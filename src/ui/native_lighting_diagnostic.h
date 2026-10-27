@@ -36,6 +36,8 @@ inline const wchar_t* ButtonLabel(unsigned index) noexcept {
         const auto indirect=spec_serial::ComponentMode();
         if(indirect==1)return L"REFLECTION: DIFFUSE";
         if(indirect==2)return L"ENV SPEC x8";
+        if(indirect==3)return L"ENV VOLUME x8";
+        if(indirect==4)return L"ENV CUBE x8";
 #endif
 #ifdef CONTROL_SPEC_LOCAL_CAPTURE
         const auto local=spec_serial::ComponentMode();
@@ -133,7 +135,7 @@ inline void Paint(HWND window) noexcept {
 inline void ReportSpecIsolation(const char* reason) noexcept {
 #if defined(CONTROL_SPEC_INDIRECT_CAPTURE)
     const auto mode=spec_serial::ComponentMode();
-    Trace("spec_indirect_status build=R187 reason=%s requested=%s diagnostic_gain=%u direct_created=%llu library_created=%llu failures=%llu evidence=creation_counters",
+    Trace("spec_indirect_status build=R188 reason=%s requested=%s diagnostic_gain=%u direct_created=%llu library_created=%llu failures=%llu evidence=creation_counters",
         reason,spec_indirect::Name(mode),spec_indirect::Gain(mode),spec_serial::directCreated.load(),spec_serial::libraryCreated.load(),spec_serial::failures.load());
 #elif defined(CONTROL_SPEC_LOCAL_CAPTURE)
     Trace("spec_local_status reason=%s requested=%s direct_created=%llu library_created=%llu failures=%llu evidence=creation_counters",
@@ -301,7 +303,7 @@ inline DWORD WINAPI ThreadProc(LPVOID) noexcept {
     ULONGLONG nextRefresh=0, nextWindowSearch=0, nextLogDrain=0, nextRRReport=0;
     HWND cachedGame=nullptr;
     POINT lastOrigin{-1,-1};
-    Trace("session_start build=R187-overlay-rr-capture pid=%lu default=authored_clip_surface_normals_current_spot_when_ready log=user-diagnostics-folder",GetCurrentProcessId());
+    Trace("session_start build=R188-overlay-rr-capture pid=%lu default=authored_clip_surface_normals_current_spot_when_ready log=user-diagnostics-folder",GetCurrentProcessId());
 #ifdef CONTROL_RR_COMPONENT_CAPTURE
     Trace("spec_component_session requested=%s direct_created=%llu library_created=%llu failures=%llu",
         spec_component::Name(spec_serial::ComponentMode()),
