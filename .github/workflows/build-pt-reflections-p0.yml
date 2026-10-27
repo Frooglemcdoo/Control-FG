@@ -78,6 +78,7 @@ jobs:
       - name: Validate compact reflection capture on WARP
         shell: cmd
         run: |
+          call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
           if not exist build mkdir build
           cl /nologo /std:c++17 /EHsc /W4 /Isrc validation\reflection-backend\test_backend.cpp /Febuild\backend-full.exe
           if errorlevel 1 exit /b 1
