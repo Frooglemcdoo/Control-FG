@@ -60,7 +60,7 @@ jobs:
           python tools/test-spec-local-launch.py
           if errorlevel 1 exit /b 1
           python tools/test-spec-indirect-launch.py
-          if($LASTEXITCODE -ne 0){throw 'Indirect launcher failed'}
+          if errorlevel 1 exit /b 1
           python tools/test-spec-environment-launch.py
           if errorlevel 1 exit /b 1
 
@@ -524,9 +524,9 @@ jobs:
           build\test-spec-indirect-runtime.exe environment
           if errorlevel 1 exit /b 1
           build\test-spec-indirect-runtime.exe volume
-          if($LASTEXITCODE -ne 0){throw 'Volume runtime failed'}
+          if errorlevel 1 exit /b 1
           build\test-spec-indirect-runtime.exe cube
-          if($LASTEXITCODE -ne 0){throw 'Cube runtime failed'}
+          if errorlevel 1 exit /b 1
           build\test-spec-indirect-runtime.exe invalid
           if errorlevel 1 exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 tools\test-spec-hit-view-runtime.cpp /Febuild\test-spec-hit-view-runtime.exe
