@@ -26,7 +26,14 @@ inline const wchar_t* ButtonLabel(unsigned index) noexcept {
         else wcscpy_s(label,L"SPEC: NATIVE");
         return label;
     }
-    if(index==kModeCount+8)return L"SPEC SHADING: SERIAL";
+    if(index==kModeCount+8) {
+#ifdef CONTROL_RR_COMPONENT_CAPTURE
+        const auto component=spec_serial::ComponentMode();
+        if(component==1)return L"REFLECTION: EMISSION";
+        if(component==2)return L"REFLECTION: SHADING";
+#endif
+        return L"SPEC SHADING: SERIAL";
+    }
     return actions[index - kModeCount];
 }
 inline const wchar_t* ModeHint(Mode mode) noexcept {
@@ -265,7 +272,12 @@ inline DWORD WINAPI ThreadProc(LPVOID) noexcept {
     ULONGLONG nextRefresh=0, nextWindowSearch=0, nextLogDrain=0, nextRRReport=0;
     HWND cachedGame=nullptr;
     POINT lastOrigin{-1,-1};
-    Trace("session_start build=R180-overlay-rr-capture pid=%lu default=authored_clip_surface_normals_current_spot_when_ready log=user-diagnostics-folder",GetCurrentProcessId());
+    Trace("session_start build=R182-overlay-rr-capture pid=%lu default=authored_clip_surface_normals_current_spot_when_ready log=user-diagnostics-folder",GetCurrentProcessId());
+#ifdef CONTROL_RR_COMPONENT_CAPTURE
+    Trace("spec_component_session requested=%s direct_created=%llu library_created=%llu failures=%llu",
+        spec_component::Name(spec_serial::ComponentMode()),
+        spec_serial::directCreated.load(),spec_serial::libraryCreated.load(),spec_serial::failures.load());
+#endif
     MSG msg{};
     while(GetMessageW(&msg,nullptr,0,0)>0){
         if (!panel || !IsDialogMessageW(panel, &msg)) {
