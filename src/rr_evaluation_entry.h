@@ -80,6 +80,9 @@ static unsigned int RREvaluationEntry(unsigned int branch, ID3D12GraphicsCommand
         if(beginEvaluation)worldReset=worldHistory.Update(in.frame!=0 &&
             rrWorldAlbedoGuideFrame.load(std::memory_order_acquire)==in.frame);
         if(beginEvaluation)viewAngleReset=viewAngleHistory.Update(bindings.viewAngleApplied);
+#ifdef CONTROL_RR_COMPACT_DISTANCE
+        rr_compact_distance::lastBound.store(false);
+#endif
         distanceReset=distanceHistory.Update(hitDistance!=nullptr);
         clampReset=clampHistory.Update(control_rr_clamp::effective.load(std::memory_order_acquire));
         if(clampReset)Log("RR_CLAMP_CS3_HISTORY_RESET frame=%llu effective=%u",in.frame,control_rr_clamp::effective.load());
@@ -89,6 +92,11 @@ static unsigned int RREvaluationEntry(unsigned int branch, ID3D12GraphicsCommand
             control_rr_diagnostic::Record(control_rr_diagnostic::Event::EvaluationRejected);
             SetLastError(incomingError);return 0xBAD00001u;
         }
+#ifdef CONTROL_RR_COMPACT_DISTANCE
+        ++rr_compact_distance::evaluations;
+        rr_compact_distance::lastBound.store(hitDistance!=nullptr);
+        if(hitDistance)++rr_compact_distance::boundEvaluations;
+#endif
 #if !defined(CONTROL_CAPTURE_DIAGNOSTIC) || defined(CONTROL_RR_MATERIAL_CAPTURE)
         RRInputCaptureBeforeEvaluation(list,in.frame,activePreset,bindings.normal,bindings.specular,bindings.diffuse,
             hitDistance,hitDistance?rrDistanceLastStatus:nullptr,bindings.viewToClip,bindings.projectionValid,bindings.rawAlbedo,in.color,in.depth,in.motion,in.output,bindings.responsivity,parameters);

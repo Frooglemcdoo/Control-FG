@@ -106,22 +106,22 @@ inline bool TryCreate(ID3D12Device* device,const D3D12_COMPUTE_PIPELINE_STATE_DE
         if(candidate)reinterpret_cast<IUnknown*>(candidate)->Release();
         failures.fetch_add(1,std::memory_order_relaxed);
     }
-    Log("SPEC_SERIAL_LIFETIMES build=R189 route=%s created=%u hr=0x%08lX source_sha=%s area_guards=0 moved_loads=2 samples=unchanged dispatch=unchanged",
+    Log("SPEC_SERIAL_LIFETIMES build=R190 route=%s created=%u hr=0x%08lX source_sha=%s area_guards=0 moved_loads=2 samples=unchanged dispatch=unchanged",
         library?"library":"direct",unsigned(ready),static_cast<unsigned long>(result),sourceSha);
 #ifdef CONTROL_SPEC_HIT_VIEW
-    Log("SPEC_HIT_VIEW build=R189 applied=%u native_fallback=%u extra_rays=0 extra_texture_reads=0 near_zero_fallback=1",unsigned(ready),unsigned(!ready));
+    Log("SPEC_HIT_VIEW build=R190 applied=%u native_fallback=%u extra_rays=0 extra_texture_reads=0 near_zero_fallback=1",unsigned(ready),unsigned(!ready));
 #endif
 #ifdef CONTROL_SPEC_LOCAL_CAPTURE
-    Log("SPEC_LOCAL_COMPONENT build=R189 requested=%s applied=%u native_fallback=%u cap_basis=original_total",spec_local::Name(localComponent),unsigned(ready),unsigned(!ready));
+    Log("SPEC_LOCAL_COMPONENT build=R190 requested=%s applied=%u native_fallback=%u cap_basis=original_total",spec_local::Name(localComponent),unsigned(ready),unsigned(!ready));
 #endif
 #ifdef CONTROL_SPEC_INDIRECT_CAPTURE
-    Log("SPEC_INDIRECT_COMPONENT build=R189 requested=%s diagnostic_gain=%u applied=%u native_fallback=%u cap_basis=original_total",spec_indirect::Name(indirectComponent),spec_indirect::Gain(indirectComponent),unsigned(ready),unsigned(!ready));
+    Log("SPEC_INDIRECT_COMPONENT build=R190 requested=%s diagnostic_gain=%u applied=%u native_fallback=%u cap_basis=original_total",spec_indirect::Name(indirectComponent),spec_indirect::Gain(indirectComponent),unsigned(ready),unsigned(!ready));
 #endif
 #ifdef CONTROL_RR_COMPONENT_CAPTURE
-    Log("SPEC_COMPONENT build=R189 requested=%s applied=%u native_fallback=%u cap_basis=original_total",spec_component::Name(component),unsigned(ready),unsigned(!ready));
+    Log("SPEC_COMPONENT build=R190 requested=%s applied=%u native_fallback=%u cap_basis=original_total",spec_component::Name(component),unsigned(ready),unsigned(!ready));
 #endif
 #ifdef CONTROL_SPEC_VOLUME_ROUGHNESS
-    Log("SPEC_VOLUME_ROUGHNESS build=R189 enabled=%u applied=%u native_fallback=%u extra_rays=0 extra_texture_reads=0 gain=1",unsigned(VolumeRoughnessEnabled()),unsigned(ready&&VolumeRoughnessEnabled()),unsigned(!ready));
+    Log("SPEC_VOLUME_ROUGHNESS build=R190 enabled=%u applied=%u native_fallback=%u extra_rays=0 extra_texture_reads=0 gain=1",unsigned(VolumeRoughnessEnabled()),unsigned(ready&&VolumeRoughnessEnabled()),unsigned(!ready));
 #endif
     return ready;
 }

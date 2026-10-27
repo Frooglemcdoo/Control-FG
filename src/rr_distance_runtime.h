@@ -67,7 +67,12 @@ static ID3D12Resource* RRDistanceBeforeEvaluation(ID3D12GraphicsCommandList* lis
  rrDistanceLastStatus=nullptr;
  const char* rejection="reflection_unavailable";std::uintptr_t expectedDepth=0;
  ID3D12Resource* result=nullptr;void* depthTracker=nullptr;void* recording=nullptr;bool depthLocked=false,recordingLocked=false;
- if(!TryAcquireSRWLockExclusive(&rrReflectionLock))return nullptr;
+ if(!TryAcquireSRWLockExclusive(&rrReflectionLock)){
+#ifdef CONTROL_RR_COMPACT_DISTANCE
+  rr_compact_distance::reason.store("reflection_lock_busy");
+#endif
+  return nullptr;
+ }
  __try {
   auto* reflection=rrReflection;if(!reflection||!reflection->prepared||reflection->preparing||reflection->stopped||!depth)__leave;
   RRGuideInputSnapshot native{};const char* reason=nullptr;
@@ -78,7 +83,12 @@ static ID3D12Resource* RRDistanceBeforeEvaluation(ID3D12GraphicsCommandList* lis
   for(std::size_t i=0;i<3;++i){const auto& state=reflection->capture.Inspect()[i];if(state.state==control_rr::SlotState::Ready&&state.key.frame==frame){lease={i,state.serial};break;}}
   rejection="current_reflection_lease_missing";
   if(lease.index>=3)__leave;
-  const auto input=reflection->distanceInputs[lease.index];
+  auto input=reflection->distanceInputs[lease.index];
+#ifdef CONTROL_RR_COMPACT_DISTANCE
+  // Producer constants were authenticated against the full native arrays.
+  // This private copy and its SRV expose only layer zero to the unchanged shader.
+  input.constants.layers=1;
+#endif
   expectedDepth=input.depthResource;rejection="producer_constants_unavailable";if(!input.valid)__leave;
   rejection="producer_thread_or_present_differs";
   if(reflection->recordingThread!=GetCurrentThreadId()||!reflection->presents.Matches(lease,native.presentToken))__leave;
@@ -153,6 +163,9 @@ static ID3D12Resource* RRDistanceBeforeEvaluation(ID3D12GraphicsCommandList* lis
  } __except(EXCEPTION_EXECUTE_HANDLER){if(rrDistance)rrDistance->stopped=true;RRReflectionStop("distance_snapshot_fault");}
  __try {if(recordingLocked)RRGuideReleaseNativeLock(recording);if(depthLocked)RRGuideReleaseNativeLock(depthTracker);}
  __except(EXCEPTION_EXECUTE_HANDLER){result=nullptr;if(rrDistance)rrDistance->stopped=true;RRReflectionStop("distance_unlock_fault");}
+#ifdef CONTROL_RR_COMPACT_DISTANCE
+ rr_compact_distance::reason.store(result?"distance_recorded":rejection);
+#endif
  control_rr::RRUserDistanceDispatch(result!=nullptr,rejection);
  if(!result){const auto count=++rrDistanceRejected;if(count<=4||(count%240)==0)Log("RR_DISTANCE_SKIP count=%llu frame=%llu reason=%s expected_depth=%p ngx_depth=%p",count,frame,rejection,reinterpret_cast<void*>(expectedDepth),depth);}
  ReleaseSRWLockExclusive(&rrReflectionLock);return result;

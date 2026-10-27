@@ -59,9 +59,15 @@ public:
    }
   }
   if(m.width!=p.width||m.height!=p.height||m.layers!=p.layers){prepareReport_.failure=PrepareFailure::InvalidShape;return false;}
+  // Preserve native shapes for source admission. Private destinations can
+  // contain only ray zero because the distance consumer never reads others.
+  Shape allocationPair[2]{m,p};
+#ifdef CONTROL_RR_COMPACT_DISTANCE
+  allocationPair[0].layers=allocationPair[1].layers=1;
+#endif
   auto& size=prepareReport_.resourceBytes;
   for(unsigned i=0;i<2;++i){
-   if(!api_.AllocationSize(device,pair[i],size[i])||!size[i]||size[i]==UINT64_MAX){
+   if(!api_.AllocationSize(device,allocationPair[i],size[i])||!size[i]||size[i]==UINT64_MAX){
     prepareReport_.failure=PrepareFailure::AllocationInfo;prepareReport_.failedResource=i+1;return false;
    }
   }
@@ -77,7 +83,7 @@ public:
   if(prepareReport_.requiredBytes>prepareReport_.budgetBytes){prepareReport_.failure=PrepareFailure::Budget;return false;}
   for(unsigned i=0;i<6;++i){
    auto& destination=destinations_[i/2][i%2];
-   if(!api_.Create(device,pair[i%2],destination)||!destination){
+   if(!api_.Create(device,allocationPair[i%2],destination)||!destination){
     prepareReport_.failure=PrepareFailure::Create;prepareReport_.failedResource=i+1;
     for(auto& slot:destinations_)for(auto& d:slot){if(d)api_.Release(d);d=0;}
     return false;
@@ -117,7 +123,11 @@ public:
  }
  bool Copy(Address destination,Address source) {
   if(poisoned_||!destination||!source)return false;
+#ifdef CONTROL_RR_COMPACT_DISTANCE
+  if(!api_.CopyFirstRay(recording_,destination,source)){poisoned_=true;return false;}
+#else
   if(!api_.Copy(recording_,destination,source)){poisoned_=true;return false;}
+#endif
   return true;
  }
  void ReleaseSources(std::size_t slot) {

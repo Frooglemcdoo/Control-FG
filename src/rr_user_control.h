@@ -1,6 +1,7 @@
 #pragma once
 #include <atomic>
 #include <cstring>
+#include "rr_compact_distance_policy.h"
 namespace control_rr {
 // r21y production: native Control energy clamp is fixed in the public runtime.
 // The r21w ReShade reference enum/helper remains only for archived source comparison; the

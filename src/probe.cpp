@@ -1452,8 +1452,21 @@ static BOOL CALLBACK Configure(PINIT_ONCE, PVOID, PVOID*) noexcept {
         wchar_t d1VramProbeValue[8]{};
         const DWORD d1VramProbeLength=GetEnvironmentVariableW(
             L"CONTROLFG_RR_VRAM_ENABLE_D1",d1VramProbeValue,_countof(d1VramProbeValue));
+#ifdef CONTROL_RR_COMPACT_DISTANCE
+        char compactValue[16]{};
+        const auto compactLength=GetEnvironmentVariableA("CONTROLFG_RR_COMPACT_DISTANCE",compactValue,sizeof(compactValue));
+        const bool d1VramProbeEnabled=compactLength<sizeof(compactValue)&&rr_compact_distance::Parse(compactValue);
+        rr_compact_distance::enabled.store(d1VramProbeEnabled);
+        rr_compact_distance::reason.store(d1VramProbeEnabled?"awaiting_reflection":"disabled");
+#else
         const bool d1VramProbeEnabled=d1VramProbeLength>0&&d1VramProbeLength<_countof(d1VramProbeValue)&&d1VramProbeValue[0]!=L'0';
+#endif
         const bool distanceHooksReady=temporalAccessReady&&d1VramProbeEnabled&&RRReflectionInstall(renderer,d3d);
+#ifdef CONTROL_RR_COMPACT_DISTANCE
+        rr_compact_distance::installed.store(distanceHooksReady);
+        if(d1VramProbeEnabled&&!distanceHooksReady)rr_compact_distance::reason.store("hook_install_failed");
+        Log("RR_COMPACT_DISTANCE_INSTALL build=R190 requested=%u installed=%u copied_layers=1 representative_ray=0",unsigned(d1VramProbeEnabled),unsigned(distanceHooksReady));
+#endif
         Log("RR_F_DISTANCE_D1_INSTALL ready=%u capture=%s fallback=unbound saved_vram=full_array_capture vram_probe_default=disabled",
             unsigned(distanceHooksReady),d1VramProbeEnabled?"enabled_by_env":"disabled_vram_lifecycle_r1");
         // Load persisted RR preset before the native feature-create hook can be consumed.

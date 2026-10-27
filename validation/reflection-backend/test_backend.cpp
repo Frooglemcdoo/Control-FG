@@ -15,13 +15,24 @@ struct Api {
  control_rr::MemoryBudget memory{8ull<<30,2ull<<30};
  unsigned budgetQueries=0;
  bool QueryBudget(Address,control_rr::MemoryBudget& out){++budgetQueries;out=memory;return !budgetQueryFail;}
- bool AllocationSize(Address,const Shape& s,std::uint64_t& size){++allocations;size=sizes[s.format==10];return !allocationInfoFail;}
- bool Create(Address,const Shape&,Address& result){++creates;if(creates==createFail)return false;result=0x10000+creates*0x1000;refs[result]=1;return true;}
+ bool AllocationSize(Address,const Shape& s,std::uint64_t& size){
+#ifdef CONTROL_RR_COMPACT_DISTANCE
+ assert(s.layers==1);
+#endif
+ ++allocations;size=sizes[s.format==10];return !allocationInfoFail;}
+ bool Create(Address,const Shape& shape,Address& result){
+#ifdef CONTROL_RR_COMPACT_DISTANCE
+ assert(shape.layers==1);
+#else
+ (void)shape;
+#endif
+ ++creates;if(creates==createFail)return false;result=0x10000+creates*0x1000;refs[result]=1;return true;}
  void Release(Address r){assert(refs[r]);--refs[r];++releases;}
  bool Hold(Address r){++holds;++refs[r];return holds!=holdFail;}
  bool Current(const Context& c){return Same(c,current);}
  bool Barriers(const Context&,const Transition* t,std::size_t n){++commands;if(commands==commandFail)return false;barriers.insert(barriers.end(),t,t+n);return true;}
  bool Copy(const Context&,Address d,Address s){++commands;if(commands==commandFail)return false;copies.emplace_back(d,s);return true;}
+ bool CopyFirstRay(const Context& c,Address d,Address s){return Copy(c,d,s);}
  bool Signal(Address,Address,std::uint64_t v){if(signalFail)return false;signal=v;return true;}
  std::uint64_t Completed(Address){return completed;}
 };

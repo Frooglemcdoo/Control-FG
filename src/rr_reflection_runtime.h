@@ -72,11 +72,17 @@ static bool RRReflectionCurrent(void* user,control_rr_reflection::Context& out) 
  if(!good)out={};return good;
 }
 static void RRReflectionSkip(const char* reason) noexcept {
+#ifdef CONTROL_RR_COMPACT_DISTANCE
+ rr_compact_distance::captureReason.store(reason);
+#endif
  const auto n=++rrReflectionRejected;
  if(rrReflection)++rrReflection->skips;
  if(n<=8||(n&(n-1))==0)Log("RR_REFLECTION_SKIP count=%llu reason=%s stage=reflection_capture",n,reason);
 }
 static void RRReflectionStop(const char* reason) noexcept {
+#ifdef CONTROL_RR_COMPACT_DISTANCE
+ rr_compact_distance::captureReason.store(reason);
+#endif
  if(rrReflection)rrReflection->stopped=true;
  Log("RR_REFLECTION_STOP reason=%s resources_retained=1 stage=reflection_capture",reason);
 }
@@ -111,6 +117,10 @@ static DWORD WINAPI RRReflectionPrepare(void* argument) noexcept {
   }
   if(!c->capture.Bind(c->backend.Key())||c->epoch==UINT64_MAX){RRReflectionStop("capture_bind_failed");__leave;}
   c->allocated[0]=c->requested[0];c->allocated[1]=c->requested[1];++c->epoch;c->prepared=true;
+#ifdef CONTROL_RR_COMPACT_DISTANCE
+  rr_compact_distance::captureBytes.store(c->backend.AllocationBytes());
+  rr_compact_distance::captureReason.store("prepared");
+#endif
   control_rr::RRUserCaptureFailure(control_rr::RRWaitReason::Guides);
   const auto& admission=c->backend.LastPrepare();
   Log("RR_REFLECTION_MEMORY os_budget_bytes=%llu process_usage_bytes=%llu reserve_bytes=%llu allowed_bytes=%llu required_bytes=%llu policy=dxgi_local_headroom_minus_ten_percent",

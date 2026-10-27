@@ -3,7 +3,7 @@ name: Build native reflection enhancements and RR
 on:
   push:
     branches:
-      - work/r189-spec-volume-roughness
+      - work/r190-compact-hit-distance
       - experiment/native-hit-capture-r118
       - experiment/pt-reflections-p0
       - experiment/pt-verify-stages-20261010
@@ -65,6 +65,8 @@ jobs:
           if errorlevel 1 exit /b 1
           python tools/test-spec-volume-launch.py
           if errorlevel 1 exit /b 1
+          python tools/test-compact-distance-launch.py
+          if errorlevel 1 exit /b 1
 
       - name: Configure MSVC
         shell: cmd
@@ -72,6 +74,27 @@ jobs:
           for /f "usebackq tokens=*" %%I in (`"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath`) do set "VSROOT=%%I"
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
           echo VSROOT=%VSROOT%>>%GITHUB_ENV%
+
+      - name: Validate compact reflection capture on WARP
+        shell: cmd
+        run: |
+          if not exist build mkdir build
+          cl /nologo /std:c++17 /EHsc /W4 /Isrc validation\reflection-backend\test_backend.cpp /Febuild\backend-full.exe
+          if errorlevel 1 exit /b 1
+          build\backend-full.exe
+          if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /Isrc /DCONTROL_RR_COMPACT_DISTANCE validation\reflection-backend\test_backend.cpp /Febuild\backend-compact.exe
+          if errorlevel 1 exit /b 1
+          build\backend-compact.exe
+          if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 tools\test-compact-distance-policy.cpp /Febuild\compact-policy.exe
+          if errorlevel 1 exit /b 1
+          build\compact-policy.exe
+          if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 tools\test-compact-distance-copy.cpp /Febuild\compact-copy.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
+          if errorlevel 1 exit /b 1
+          build\compact-copy.exe
+          if errorlevel 1 exit /b 1
 
       - name: Validate emitted spotlight PCF instructions on WARP
         shell: cmd
@@ -652,7 +675,7 @@ jobs:
         shell: cmd
         run: |
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
-          cl /nologo /std:c++17 /EHsc /W4 /O2 /MT /LD /guard:cf /DCONTROL_SPEC_VOLUME_ROUGHNESS /DCONTROL_SPEC_HIT_VIEW /DCONTROL_RR_MATERIAL_CAPTURE /DCONTROL_CAPTURE_DIAGNOSTIC /DUNICODE /D_UNICODE /I "third_party\streamline\include" src\probe.cpp /Fobuild\probe.obj /Febuild\dxgi.dll /link /DEF:src\dxgi.def /INCREMENTAL:NO /DYNAMICBASE /NXCOMPAT /GUARD:CF bcrypt.lib wintrust.lib user32.lib gdi32.lib
+          cl /nologo /std:c++17 /EHsc /W4 /O2 /MT /LD /guard:cf /DCONTROL_RR_COMPACT_DISTANCE /DCONTROL_SPEC_HIT_VIEW /DCONTROL_RR_MATERIAL_CAPTURE /DCONTROL_CAPTURE_DIAGNOSTIC /DUNICODE /D_UNICODE /I "third_party\streamline\include" src\probe.cpp /Fobuild\probe.obj /Febuild\dxgi.dll /link /DEF:src\dxgi.def /INCREMENTAL:NO /DYNAMICBASE /NXCOMPAT /GUARD:CF bcrypt.lib wintrust.lib user32.lib gdi32.lib
           if errorlevel 1 exit /b 1
           dumpbin /exports build\dxgi.dll > build\exports.txt
           dumpbin /imports build\dxgi.dll > build\imports.txt
@@ -733,11 +756,11 @@ jobs:
           & powershell.exe -NoProfile -File Package-Lighting-Performance.ps1 -Folder build/perf-package-test -ModuleFolder build
           if ($LASTEXITCODE -ne 0 -or !(Test-Path build/perf-package-test.zip)) { throw 'Performance package roundtrip failed' }
 
-      - name: Package live lighting diagnostic R189
+      - name: Package live lighting diagnostic R190
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-Native-Lighting-Live-R189'
+          $out='Control-FG-Native-Lighting-Live-R190'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
           Copy-Item build/rt_spot_selected_off.dxbc,build/rt_spot_selection.dxbc,build/rt_spot_visibility.dxbc,build/rt_spot_light_ids.dxbc,build/rt_spot_raw_history.dxbc,build/rt_spot_raw_spatial0.dxbc,build/rt_spot_raw_spatial1.dxbc,build/rt_spot_full.dxil,build/rt_spot_r94.dxil,build/rt_spot_light.dxbc,build/rt_spot_reset.dxbc,build/rt_spot_history.dxbc,build/rt_spot_spatial0.dxbc,build/rt_spot_spatial1.dxbc $out
@@ -757,21 +780,22 @@ jobs:
           Copy-Item Collect-ControlFG-Compact-Logs.ps1 "$out/Collect-ControlFG-Compact-Logs.ps1"
           Copy-Item Package-Lighting-Capture.cmd,tools/package-lighting-capture.py,Package-Lighting-Performance.ps1 $out
           Copy-Item Capture-RR-Boundary.cmd,Capture-RR-Boundary.ps1,Collect-RR-Boundary-Status.cmd,tools/collect-rr-boundary.py $out
-          Copy-Item Start-Spec-Volume-Test.cmd $out
-          Copy-Item docs/native-lighting-r189.md "$out/DIAGNOSTIC-NOTES.md"
+          Copy-Item Start-Compact-Distance-Test.cmd $out
+          Copy-Item docs/native-lighting-r190.md "$out/DIAGNOSTIC-NOTES.md"
           @'
-          CONTROL-FG R189 - roughness-dependent volume specular filtering
+          CONTROL-FG R190 - compact specular hit distance for RR
           Close Control. Install beside Control_DX12.exe; keep NVIDIA runtimes.
-          Launch Start-Spec-Volume-Test.cmd. Option 1 filtered, option 2 baseline.
+          Launch Start-Compact-Distance-Test.cmd. Option 1 ON, option 2 baseline OFF.
           Each launch: NATIVE BLEND, RR on, FG off and SPEC4.
           SPEC resets on restart. Set it to 4 each time.
-          Check F10: VOLUME: ROUGHNESS or VOLUME: BASELINE.
-          Inspect stationary painting/elevator splatter, lighting detail and FPS.
-          Both options keep full lighting at normal brightness. SAVE LOG each run.
+          Check F10: HIT DIST: REQUESTED or HIT DIST: BASELINE.
+          Inspect stationary painting/elevator splatter and FPS; SAVE LOG each run.
+          Requested does not mean successfully bound: the log verifies that.
+          Both options use full R184 lighting at normal brightness.
+          The failed R189 roughness blend is disabled.
+          First-ray capture adds memory/copy work but no new rays.
           No full capture or exact camera matching is needed initially.
-          Normal launch enables filtering. Option 2 restores full R184 baseline.
-          This approximation needs in-game quality/performance assessment.
-          See DIAGNOSTIC-NOTES.md.
+          Normal launch requests compact hit distance. See DIAGNOSTIC-NOTES.md.
           '@ | Set-Content "$out/README.txt" -Encoding ASCII
           Compress-Archive -Path "$out/*" -DestinationPath "$out.zip" -Force
           (Get-FileHash "$out.zip" -Algorithm SHA256).Hash | Set-Content "$out.sha256" -Encoding ASCII
@@ -779,10 +803,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-Native-Lighting-Live-R189
+          name: Control-FG-Native-Lighting-Live-R190
           path: |
-            Control-FG-Native-Lighting-Live-R189.zip
-            Control-FG-Native-Lighting-Live-R189.sha256
+            Control-FG-Native-Lighting-Live-R190.zip
+            Control-FG-Native-Lighting-Live-R190.sha256
             build/spec-volume-roughness-validation.json
             build/spec-volume-roughness.dxbc
             build/spec-environment-validation.json

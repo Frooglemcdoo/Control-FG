@@ -101,6 +101,21 @@ struct D3D12Api {
     reinterpret_cast<ID3D12Resource*>(destination),reinterpret_cast<ID3D12Resource*>(source));return true;
   } __except(EXCEPTION_EXECUTE_HANDLER){return false;}
  }
+ bool CopyFirstRay(const Context& context,Address destination,Address source) noexcept {
+  __try {
+   if(!Current(context)||!destination||!source||destination==source||*commandCount==UINT64_MAX)return false;
+   auto* dst=reinterpret_cast<ID3D12Resource*>(destination);auto* src=reinterpret_cast<ID3D12Resource*>(source);
+   const auto d=dst->GetDesc(),s=src->GetDesc();
+   if(d.Dimension!=D3D12_RESOURCE_DIMENSION_TEXTURE2D||s.Dimension!=d.Dimension||d.DepthOrArraySize!=1||!s.DepthOrArraySize||
+      d.MipLevels!=1||s.MipLevels!=1||d.Width!=s.Width||d.Height!=s.Height||d.Format!=s.Format||
+      d.SampleDesc.Count!=1||s.SampleDesc.Count!=1||d.SampleDesc.Quality||s.SampleDesc.Quality)return false;
+   D3D12_TEXTURE_COPY_LOCATION from{},to{};
+   from.pResource=src;from.Type=D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;from.SubresourceIndex=0;
+   to.pResource=dst;to.Type=D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;to.SubresourceIndex=0;
+   ++*commandCount;reinterpret_cast<ID3D12GraphicsCommandList*>(context.list)->CopyTextureRegion(&to,0,0,0,&from,nullptr);
+   return true;
+  } __except(EXCEPTION_EXECUTE_HANDLER){return false;}
+ }
  bool Signal(Address queue,Address fence,std::uint64_t value) noexcept {
   __try {return SUCCEEDED(reinterpret_cast<ID3D12CommandQueue*>(queue)->Signal(reinterpret_cast<ID3D12Fence*>(fence),value));}
   __except(EXCEPTION_EXECUTE_HANDLER){return false;}
