@@ -32,6 +32,11 @@ inline const wchar_t* ButtonLabel(unsigned index) noexcept {
         if(component==1)return L"REFLECTION: EMISSION";
         if(component==2)return L"REFLECTION: SHADING";
 #endif
+#ifdef CONTROL_SPEC_INDIRECT_CAPTURE
+        const auto indirect=spec_serial::ComponentMode();
+        if(indirect==1)return L"REFLECTION: DIFFUSE";
+        if(indirect==2)return L"ENV SPEC x8";
+#endif
 #ifdef CONTROL_SPEC_LOCAL_CAPTURE
         const auto local=spec_serial::ComponentMode();
         if(local==1)return L"REFLECTION: OTHER";
@@ -125,7 +130,20 @@ inline void Paint(HWND window) noexcept {
     DrawLabel(dc, detailFont, selectionRejected ? L"Mode unavailable. Save Log exports shader evidence for diagnosis." : savedNotice.load() == 2 ? L"Log write failed. Save Log shows the Windows error." : savedNotice.load() == 1 ? L"Log saved. See the folder shown in the confirmation." : ModeHint(mode), {14,kFooterY+26,kWidth-12,kFooterY+56}, theme::kText);
     EndPaint(window, &ps);
 }
+inline void ReportSpecIsolation(const char* reason) noexcept {
+#if defined(CONTROL_SPEC_INDIRECT_CAPTURE)
+    const auto mode=spec_serial::ComponentMode();
+    Trace("spec_indirect_status build=R187 reason=%s requested=%s diagnostic_gain=%u direct_created=%llu library_created=%llu failures=%llu evidence=creation_counters",
+        reason,spec_indirect::Name(mode),spec_indirect::Gain(mode),spec_serial::directCreated.load(),spec_serial::libraryCreated.load(),spec_serial::failures.load());
+#elif defined(CONTROL_SPEC_LOCAL_CAPTURE)
+    Trace("spec_local_status reason=%s requested=%s direct_created=%llu library_created=%llu failures=%llu evidence=creation_counters",
+        reason,spec_local::Name(spec_serial::ComponentMode()),spec_serial::directCreated.load(),spec_serial::libraryCreated.load(),spec_serial::failures.load());
+#else
+    (void)reason;
+#endif
+}
 inline void SaveReport(HWND window) noexcept {
+    ReportSpecIsolation("save_log");
     ReportRRPaths("save_log");
     Trace("spec_retry_save matched=%llu created=%llu failures=%llu creation_only=1",spec_retry::matched.load(),spec_retry::created.load(),spec_retry::failures.load());
     Trace("spec_serial_save direct_matched=%llu direct_created=%llu library_matched=%llu library_created=%llu failures=%llu creation_only=1",
@@ -283,7 +301,7 @@ inline DWORD WINAPI ThreadProc(LPVOID) noexcept {
     ULONGLONG nextRefresh=0, nextWindowSearch=0, nextLogDrain=0, nextRRReport=0;
     HWND cachedGame=nullptr;
     POINT lastOrigin{-1,-1};
-    Trace("session_start build=R186-overlay-rr-capture pid=%lu default=authored_clip_surface_normals_current_spot_when_ready log=user-diagnostics-folder",GetCurrentProcessId());
+    Trace("session_start build=R187-overlay-rr-capture pid=%lu default=authored_clip_surface_normals_current_spot_when_ready log=user-diagnostics-folder",GetCurrentProcessId());
 #ifdef CONTROL_RR_COMPONENT_CAPTURE
     Trace("spec_component_session requested=%s direct_created=%llu library_created=%llu failures=%llu",
         spec_component::Name(spec_serial::ComponentMode()),
@@ -296,7 +314,7 @@ inline DWORD WINAPI ThreadProc(LPVOID) noexcept {
         }
         if(msg.message!=WM_TIMER||msg.wParam!=timer)continue;
         const ULONGLONG now=GetTickCount64();
-        if(now>=nextRRReport){ReportRRPaths("heartbeat");nextRRReport=now+5000;}
+        if(now>=nextRRReport){ReportSpecIsolation("heartbeat");ReportRRPaths("heartbeat");nextRRReport=now+5000;}
         if(now>=nextLogDrain){DrainDiagnosticLog();nextLogDrain=now+((capture_suite::active||performance_capture::Active())?100:500);}
         if(cachedGame&&!IsWindow(cachedGame))cachedGame=nullptr;
         if(!cachedGame&&now>=nextWindowSearch){cachedGame=FindFGGameWindow();nextWindowSearch=now+1000;}

@@ -3,7 +3,7 @@ name: Build native reflection enhancements and RR
 on:
   push:
     branches:
-      - work/r186-spec-local-isolation
+      - work/r187-spec-indirect-isolation
       - experiment/native-hit-capture-r118
       - experiment/pt-reflections-p0
       - experiment/pt-verify-stages-20261010
@@ -58,6 +58,8 @@ jobs:
           python tools/test-spec-component-launch.py
           if errorlevel 1 exit /b 1
           python tools/test-spec-local-launch.py
+          if errorlevel 1 exit /b 1
+          python tools/test-spec-indirect-launch.py
           if errorlevel 1 exit /b 1
 
       - name: Configure MSVC
@@ -317,6 +319,18 @@ jobs:
           if($LASTEXITCODE -ne 0){throw 'SPEC local-only GPU attribution failed'}
           ./build/spec-validate.exe build/spec-local-other-1.dxbc build/spec-local-other-0.dxbc --serial-pair
           if($LASTEXITCODE -ne 0){throw 'SPEC other-only GPU attribution failed'}
+          python tools/test-spec-indirect-components.py
+          if($LASTEXITCODE -ne 0){throw 'SPEC indirect attribution audit failed'}
+          python tools/spec_indirect_components.py
+          if($LASTEXITCODE -ne 0){throw 'SPEC indirect shader generation failed'}
+          foreach($signal in @('diffuse','environment')) {
+            ./build/spec-validate.exe "build/spec-indirect-$signal.dxbc"
+            if($LASTEXITCODE -ne 0){throw 'SPEC indirect PSO failed'}
+            foreach($miss in @(0,1)) {
+              ./build/spec-validate.exe "build/spec-indirect-$signal-$miss-1.dxbc" "build/spec-indirect-$signal-$miss-0.dxbc" --serial-pair
+              if($LASTEXITCODE -ne 0){throw 'SPEC indirect GPU attribution failed'}
+            }
+          }
           python tools/spec_parallel.py --source research/spec-performance/spec-resolve.dxbc.b64 --output build/spec-parallel.dxbc --header build/spec_parallel.generated.h
           if($LASTEXITCODE -ne 0){throw 'Parallel SPEC shader generation failed'}
           python tools/test-spec-parallel.py build
@@ -487,6 +501,16 @@ jobs:
           if errorlevel 1 exit /b 1
           build\test-spec-local-runtime.exe invalid
           if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 tools\test-spec-indirect-runtime.cpp /Febuild\test-spec-indirect-runtime.exe
+          if errorlevel 1 exit /b 1
+          build\test-spec-indirect-runtime.exe
+          if errorlevel 1 exit /b 1
+          build\test-spec-indirect-runtime.exe diffuse
+          if errorlevel 1 exit /b 1
+          build\test-spec-indirect-runtime.exe environment
+          if errorlevel 1 exit /b 1
+          build\test-spec-indirect-runtime.exe invalid
+          if errorlevel 1 exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 tools\test-spec-hit-view-runtime.cpp /Febuild\test-spec-hit-view-runtime.exe
           if errorlevel 1 exit /b 1
           build\test-spec-hit-view-runtime.exe
@@ -586,7 +610,7 @@ jobs:
         shell: cmd
         run: |
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
-          cl /nologo /std:c++17 /EHsc /W4 /O2 /MT /LD /guard:cf /DCONTROL_SPEC_LOCAL_CAPTURE /DCONTROL_SPEC_HIT_VIEW /DCONTROL_RR_MATERIAL_CAPTURE /DCONTROL_CAPTURE_DIAGNOSTIC /DUNICODE /D_UNICODE /I "third_party\streamline\include" src\probe.cpp /Fobuild\probe.obj /Febuild\dxgi.dll /link /DEF:src\dxgi.def /INCREMENTAL:NO /DYNAMICBASE /NXCOMPAT /GUARD:CF bcrypt.lib wintrust.lib user32.lib gdi32.lib
+          cl /nologo /std:c++17 /EHsc /W4 /O2 /MT /LD /guard:cf /DCONTROL_SPEC_INDIRECT_CAPTURE /DCONTROL_SPEC_HIT_VIEW /DCONTROL_RR_MATERIAL_CAPTURE /DCONTROL_CAPTURE_DIAGNOSTIC /DUNICODE /D_UNICODE /I "third_party\streamline\include" src\probe.cpp /Fobuild\probe.obj /Febuild\dxgi.dll /link /DEF:src\dxgi.def /INCREMENTAL:NO /DYNAMICBASE /NXCOMPAT /GUARD:CF bcrypt.lib wintrust.lib user32.lib gdi32.lib
           if errorlevel 1 exit /b 1
           dumpbin /exports build\dxgi.dll > build\exports.txt
           dumpbin /imports build\dxgi.dll > build\imports.txt
@@ -667,11 +691,11 @@ jobs:
           & powershell.exe -NoProfile -File Package-Lighting-Performance.ps1 -Folder build/perf-package-test -ModuleFolder build
           if ($LASTEXITCODE -ne 0 -or !(Test-Path build/perf-package-test.zip)) { throw 'Performance package roundtrip failed' }
 
-      - name: Package live lighting diagnostic R186
+      - name: Package live lighting diagnostic R187
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-Native-Lighting-Live-R186'
+          $out='Control-FG-Native-Lighting-Live-R187'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
           Copy-Item build/rt_spot_selected_off.dxbc,build/rt_spot_selection.dxbc,build/rt_spot_visibility.dxbc,build/rt_spot_light_ids.dxbc,build/rt_spot_raw_history.dxbc,build/rt_spot_raw_spatial0.dxbc,build/rt_spot_raw_spatial1.dxbc,build/rt_spot_full.dxil,build/rt_spot_r94.dxil,build/rt_spot_light.dxbc,build/rt_spot_reset.dxbc,build/rt_spot_history.dxbc,build/rt_spot_spatial0.dxbc,build/rt_spot_spatial1.dxbc $out
@@ -691,23 +715,22 @@ jobs:
           Copy-Item Collect-ControlFG-Compact-Logs.ps1 "$out/Collect-ControlFG-Compact-Logs.ps1"
           Copy-Item Package-Lighting-Capture.cmd,tools/package-lighting-capture.py,Package-Lighting-Performance.ps1 $out
           Copy-Item Capture-RR-Boundary.cmd,Capture-RR-Boundary.ps1,Collect-RR-Boundary-Status.cmd,tools/collect-rr-boundary.py $out
-          Copy-Item Start-Spec-Local-Test.cmd $out
-          Copy-Item docs/native-lighting-r186.md "$out/DIAGNOSTIC-NOTES.md"
+          Copy-Item Start-Spec-Indirect-Test.cmd $out
+          Copy-Item docs/native-lighting-r187.md "$out/DIAGNOSTIC-NOTES.md"
           @'
-          CONTROL-FG R186 - secondary point/spot highlight isolation
+          CONTROL-FG R187 - reflected diffuse / environment isolation
           Close Control. Copy package beside Control_DX12.exe; keep NVIDIA runtimes.
-          Launch with Start-Spec-Local-Test.cmd. Start with option 2, then option 3.
-          Each launch: select NATIVE BLEND, RR on, FG off and SPEC 4.
+          Launch Start-Spec-Indirect-Test.cmd. Inspect option 2, then option 3.
+          Each launch: select NATIVE BLEND, RR on, FG off and SPEC4.
           SPEC resets on restart. Set it to 4 each time.
-          Option 2 F10: REFLECTION: OTHER. Option 3: REFLECTION: LOCAL SPEC.
+          Option 2 F10: REFLECTION: DIFFUSE. Option 3: ENV SPEC x8.
           Inspect painting and elevator stationary splatter. SAVE LOG for each mode.
-          Report which mode retains the splatter, or whether both do.
-          Dark/missing reflected lighting is intentional. This is not a quality/FPS build.
-          No exact camera matching or SPEC8/16 comparison is requested.
-          No full capture upload is required initially. Screenshots are useful if unclear.
-          Option 1 restores full R184 reflections. Launch normally for full reflections.
-          R185 phase correction is disabled; R184 hit-view correction remains.
-          See DIAGNOSTIC-NOTES.md.
+          Option 3 is intentionally boosted eightfold for visibility, not a quality fix.
+          Report which mode retains splatter, or whether both/neither do.
+          If a mode is still too dim or clipped, report inconclusive, not clean.
+          No full capture or exact camera matching is needed initially.
+          Option 1 / normal launch restores full R184 reflections.
+          R185 phase correction remains disabled. See DIAGNOSTIC-NOTES.md.
           '@ | Set-Content "$out/README.txt" -Encoding ASCII
           Compress-Archive -Path "$out/*" -DestinationPath "$out.zip" -Force
           (Get-FileHash "$out.zip" -Algorithm SHA256).Hash | Set-Content "$out.sha256" -Encoding ASCII
@@ -715,10 +738,13 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-Native-Lighting-Live-R186
+          name: Control-FG-Native-Lighting-Live-R187
           path: |
-            Control-FG-Native-Lighting-Live-R186.zip
-            Control-FG-Native-Lighting-Live-R186.sha256
+            Control-FG-Native-Lighting-Live-R187.zip
+            Control-FG-Native-Lighting-Live-R187.sha256
+            build/spec-indirect-validation.json
+            build/spec-indirect-diffuse.dxbc
+            build/spec-indirect-environment.dxbc
             build/spec-local-validation.json
             build/spec-local-local.dxbc
             build/spec-local-other.dxbc

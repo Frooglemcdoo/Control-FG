@@ -102,7 +102,7 @@ inline bool Start() noexcept {
     if(!DrainDiagnosticLog(true) || !Offset(report.Path(),logOffset))return false;
     wchar_t root[MAX_PATH]{};wcscpy_s(root,report.Path());auto* slash=wcsrchr(root,L'\\');if(!slash)return false;*slash=0;
     SYSTEMTIME t{};GetLocalTime(&t);static unsigned serial=0;
-    swprintf_s(folder,L"%s\\Performance-R186-%04u%02u%02u-%02u%02u%02u-%lu-%u",root,t.wYear,t.wMonth,t.wDay,t.wHour,t.wMinute,t.wSecond,GetCurrentProcessId(),serial++);
+    swprintf_s(folder,L"%s\\Performance-R187-%04u%02u%02u-%02u%02u%02u-%lu-%u",root,t.wYear,t.wMonth,t.wDay,t.wHour,t.wMinute,t.wSecond,GetCurrentProcessId(),serial++);
     if(!CreateDirectoryW(folder,nullptr))return false;
     wchar_t path[MAX_PATH]{};swprintf_s(path,L"%s\\gpu-timings.csv",folder);_wfopen_s(&csv,path,L"wb");
     swprintf_s(path,L"%s\\manifest.txt",folder);_wfopen_s(&manifest,path,L"wb");
@@ -118,7 +118,7 @@ inline bool Start() noexcept {
     *mainPath=0;mainOffset={};
     if(logFile==INVALID_HANDLE_VALUE || !GetFinalPathNameByHandleW(logFile,mainPath,32768,FILE_NAME_NORMALIZED) || !Offset(mainPath,mainOffset))++errors;
     fprintf(manifest,"ray_identity=GPU_virtual_addresses_capture_local_not_shader_hashes\nrecord_index=CPU_recording_order_not_GPU_execution_order\nray_tables_may_be_reused_or_updated=1\nother_rays_mean=pools_distinct_dispatches_use_CSV\n");
-    fprintf(manifest,"build=R186\nsession=%llu\nmode=%s\nsettle_ms=5000\nmeasure_ms=20000\nsample_every_presents=128\nsettings_changed=0\ngpu_waits=0\n",session,ModeName(LiveSelection::GetMode(state)));
+    fprintf(manifest,"build=R187\nsession=%llu\nmode=%s\nsettle_ms=5000\nmeasure_ms=20000\nsample_every_presents=128\nsettings_changed=0\ngpu_waits=0\n",session,ModeName(LiveSelection::GetMode(state)));
     fprintf(manifest,"CSV dimensions are incoming native launch arguments, not TraceRay counts. Serial SPEC retains native dispatch dimensions. Shadow ray timing includes the combined native spotlight/point pass. GPU stages are per dispatch; do not sum means across different sample populations. Context capture happens after timing, uses reference rays, and cannot establish room ownership.\n");
     Settings("start");nextStatus=0;
     phase=Phase::Delay;began=phaseTime=GetTickCount64();startPresent=presentCount.load();
