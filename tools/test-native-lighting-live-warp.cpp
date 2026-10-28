@@ -939,7 +939,40 @@ int main() try {
             Check(capture::resources.signalFence->Signal(1));
             if(!capture::RequestFresh() || capture::fenceValue!=2 || capture::exportStage!=0 || capture::readbackCopied)
                 throw std::runtime_error("Completed reset recording did not rearm cleanly");
-            capture::CancelPending();capture::ready=false;
+            capture::CancelPending();
+            // Exercise the real submission guard with independent recording IDs.
+            ComPtr<ID3D12CommandAllocator> mapAllocator;
+            Check(device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT,IID_PPV_ARGS(&mapAllocator)));
+            ComPtr<ID3D12GraphicsCommandList> mapCommands;
+            Check(device->CreateCommandList(0,D3D12_COMMAND_LIST_TYPE_DIRECT,mapAllocator.Get(),nullptr,IID_PPV_ARGS(&mapCommands)));
+            Check(mapCommands->Close());
+            UINT64 mapTag=600;Check(mapCommands->SetPrivateData(rt_spot_table_audit::kGeneration,sizeof(mapTag),&mapTag));
+            Check(mapCommands.As(&capture::mapList));capture::mapGeneration=mapTag;
+            Check(list.As(&capture::recordedSignalList));capture::signalGeneration=501;
+            capture::recordedList.Reset();capture::mapRequested=true;capture::mapRecorded=true;
+            auto prepareOrder=[&](){capture::phase=capture::Phase::Submitted;capture::signalPhase=capture::SignalPhase::Recorded;
+                capture::mapSubmitted=false;capture::mapQueue.Reset();};
+            ID3D12CommandList* ordered[]={mapCommands.Get(),list.Get()};
+            ID3D12CommandList* reversed[]={list.Get(),mapCommands.Get()};
+            prepareOrder();capture::BeforeExecute(queue.Get(),2,ordered);
+            if(capture::signalPhase!=capture::SignalPhase::Submitting || capture::phase==capture::Phase::Failed)
+                throw std::runtime_error("Ordered map/composition submission rejected");
+            prepareOrder();capture::BeforeExecute(queue.Get(),2,reversed);
+            if(capture::phase!=capture::Phase::Failed)throw std::runtime_error("Reversed map submission accepted");
+            prepareOrder();capture::mapSubmitted=true;capture::mapQueue=queue;
+            capture::BeforeExecute(queue.Get(),1,reversed);
+            if(capture::signalPhase!=capture::SignalPhase::Submitting)throw std::runtime_error("Earlier same-queue map rejected");
+            ComPtr<ID3D12CommandQueue> differentQueue;Check(device->CreateCommandQueue(&queueDesc,IID_PPV_ARGS(&differentQueue)));
+            prepareOrder();capture::mapSubmitted=true;capture::mapQueue=differentQueue;
+            capture::BeforeExecute(queue.Get(),1,reversed);
+            if(capture::phase!=capture::Phase::Failed)throw std::runtime_error("Unordered cross-queue map accepted");
+            prepareOrder();capture::ResetObserved(mapCommands.Get());
+            if(capture::phase!=capture::Phase::Failed)throw std::runtime_error("Unsubmitted map reset accepted");
+            prepareOrder();capture::mapSubmitted=true;capture::mapQueue=queue;
+            capture::BeforeExecute(queue.Get(),1,ordered);
+            if(capture::phase!=capture::Phase::Failed)throw std::runtime_error("Map replay accepted");
+            capture::phase=capture::Phase::Complete;capture::ready=false;
+            std::cout<<"PASS R196 map submission: ordered same-queue accepted; reversed, cross-queue, reset and replay rejected\n";
             std::cout<<"PASS F9 rearm: in-flight, failure, partial export, reset and monotonic fence guards\n";
         } else if(capture::RequestFresh())throw std::runtime_error("Capture enabled in disabled build");
     }
