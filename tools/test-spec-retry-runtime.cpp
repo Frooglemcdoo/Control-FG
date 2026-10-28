@@ -20,7 +20,9 @@ static HRESULT STDMETHODCALLTYPE Next(ID3D12Device5*,const D3D12_STATE_OBJECT_DE
     Require(desc->NumSubobjects==3&&desc->Type==nativeDesc->Type);
     const auto& lib=*static_cast<const D3D12_DXIL_LIBRARY_DESC*>(desc->pSubobjects[0].pDesc);
     const auto& nativeLib=*static_cast<const D3D12_DXIL_LIBRARY_DESC*>(nativeDesc->pSubobjects[0].pDesc);
-#ifdef CONTROL_SPEC_PHASE_PRECISION
+#if defined(CONTROL_SPEC_LONG_SEQUENCE)
+    Require(lib.DXILLibrary.pShaderBytecode==spec_retry::kSpecLongSequenceShader);
+#elif defined(CONTROL_SPEC_PHASE_PRECISION)
     Require(lib.DXILLibrary.pShaderBytecode==spec_retry::kSpecPhasePrecisionShader);
 #else
     Require(lib.DXILLibrary.pShaderBytecode==spec_retry::kSpecRetryReuseShader);

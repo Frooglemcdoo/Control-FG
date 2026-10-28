@@ -3,7 +3,7 @@ name: Build native reflection enhancements and RR
 on:
   push:
     branches:
-      - work/r192-volume-sampling-audit
+      - work/r193-reflection-long-sequence
       - experiment/native-hit-capture-r118
       - experiment/pt-reflections-p0
       - experiment/pt-verify-stages-20261010
@@ -413,6 +413,10 @@ jobs:
           if($LASTEXITCODE -ne 0){throw 'SPEC retry equivalence audit failed'}
           python tools/spec_retry_reuse.py --dxc $dxc --assembler build/assemble-validated-dxil.exe
           if($LASTEXITCODE -ne 0){throw 'SPEC retry DXIL validation failed'}
+          python tools/test-spec-long-sequence.py
+          if($LASTEXITCODE -ne 0){throw 'Long sequence source audit failed'}
+          python tools/spec_long_sequence.py --dxc $dxc --assembler build/assemble-validated-dxil.exe
+          if($LASTEXITCODE -ne 0){throw 'Long sequence DXIL validation failed'}
           python tools/test-spec-phase-precision.py
           if($LASTEXITCODE -ne 0){throw 'SPEC phase precision oracle audit failed'}
           python tools/spec_phase_precision.py --dxc $dxc --assembler build/assemble-validated-dxil.exe
@@ -546,6 +550,10 @@ jobs:
           cl /nologo /std:c++17 /EHsc /W4 tools\test-spec-retry-runtime.cpp /Febuild\test-spec-retry-runtime.exe
           if errorlevel 1 exit /b 1
           build\test-spec-retry-runtime.exe
+          if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /DCONTROL_SPEC_LONG_SEQUENCE tools\test-spec-retry-runtime.cpp /Febuild\test-spec-long-runtime.exe
+          if errorlevel 1 exit /b 1
+          build\test-spec-long-runtime.exe
           if errorlevel 1 exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /DCONTROL_SPEC_PHASE_PRECISION tools\test-spec-retry-runtime.cpp /Febuild\test-spec-phase-runtime.exe
           if errorlevel 1 exit /b 1
@@ -694,7 +702,7 @@ jobs:
         shell: cmd
         run: |
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
-          cl /nologo /std:c++17 /EHsc /W4 /O2 /MT /LD /guard:cf /DCONTROL_RR_TEMPORAL_PROBE /DCONTROL_RR_F9_SUITE /DCONTROL_RR_COMPACT_DISTANCE /DCONTROL_SPEC_HIT_VIEW /DCONTROL_RR_MATERIAL_CAPTURE /DCONTROL_CAPTURE_DIAGNOSTIC /DUNICODE /D_UNICODE /I "third_party\streamline\include" src\probe.cpp /Fobuild\probe.obj /Febuild\dxgi.dll /link /DEF:src\dxgi.def /INCREMENTAL:NO /DYNAMICBASE /NXCOMPAT /GUARD:CF bcrypt.lib wintrust.lib user32.lib gdi32.lib
+          cl /nologo /std:c++17 /EHsc /W4 /O2 /MT /LD /guard:cf /DCONTROL_SPEC_LONG_SEQUENCE /DCONTROL_RR_TEMPORAL_PROBE /DCONTROL_RR_F9_SUITE /DCONTROL_RR_COMPACT_DISTANCE /DCONTROL_SPEC_HIT_VIEW /DCONTROL_RR_MATERIAL_CAPTURE /DCONTROL_CAPTURE_DIAGNOSTIC /DUNICODE /D_UNICODE /I "third_party\streamline\include" src\probe.cpp /Fobuild\probe.obj /Febuild\dxgi.dll /link /DEF:src\dxgi.def /INCREMENTAL:NO /DYNAMICBASE /NXCOMPAT /GUARD:CF bcrypt.lib wintrust.lib user32.lib gdi32.lib
           if errorlevel 1 exit /b 1
           dumpbin /exports build\dxgi.dll > build\exports.txt
           dumpbin /imports build\dxgi.dll > build\imports.txt
@@ -788,11 +796,11 @@ jobs:
           build\suite-controller.exe
           if errorlevel 1 exit /b 1
 
-      - name: Package live lighting diagnostic R192
+      - name: Package live lighting diagnostic R193
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-Native-Lighting-Live-R192'
+          $out='Control-FG-Native-Lighting-Live-R193'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
           Copy-Item build/rt_spot_selected_off.dxbc,build/rt_spot_selection.dxbc,build/rt_spot_visibility.dxbc,build/rt_spot_light_ids.dxbc,build/rt_spot_raw_history.dxbc,build/rt_spot_raw_spatial0.dxbc,build/rt_spot_raw_spatial1.dxbc,build/rt_spot_full.dxil,build/rt_spot_r94.dxil,build/rt_spot_light.dxbc,build/rt_spot_reset.dxbc,build/rt_spot_history.dxbc,build/rt_spot_spatial0.dxbc,build/rt_spot_spatial1.dxbc $out
@@ -813,16 +821,16 @@ jobs:
           Copy-Item Package-Lighting-Capture.cmd,tools/package-lighting-capture.py,Package-Lighting-Performance.ps1 $out
           Copy-Item Capture-RR-Boundary.cmd,Capture-RR-Boundary.ps1,Collect-RR-Boundary-Status.cmd,tools/collect-rr-boundary.py $out
           Copy-Item Start-Compact-Distance-Test.cmd,Capture-RR-Suite.ps1,tools/collect-rr-suite.py $out
-          Copy-Item docs/native-lighting-r192.md "$out/DIAGNOSTIC-NOTES.md"
+          Copy-Item docs/native-lighting-r193.md "$out/DIAGNOSTIC-NOTES.md"
           @'
-          CONTROL-FG R192 - read-only temporal provider diagnostic
+          CONTROL-FG R193 - bounded reflection sequence experiment
           Install beside Control_DX12.exe. Keep NVIDIA runtimes. Launch normally.
           Enable RR, choose NATIVE BLEND and SPEC 4. Disable frame generation.
           Stay still at the painting for 30 seconds. No F9 capture is needed.
-          Send the Lighting-R192 log. No image archive is needed for this check.
+          Send the Lighting-R193 log and a screenshot after settling.
           The probe records at most 1024 eligible frames, then stops until restart.
           This is CPU provider evidence, not proof of GPU constant consumption.
-          Rendering remains R191. This is not a quality or performance fix.
+          Only primary reflection sampling changes. Quality and FPS are unverified.
           Read DIAGNOSTIC-NOTES.md.
           '@ | Set-Content "$out/README.txt" -Encoding ASCII
           Compress-Archive -Path "$out/*" -DestinationPath "$out.zip" -Force
@@ -831,10 +839,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-Native-Lighting-Live-R192
+          name: Control-FG-Native-Lighting-Live-R193
           path: |
-            Control-FG-Native-Lighting-Live-R192.zip
-            Control-FG-Native-Lighting-Live-R192.sha256
+            Control-FG-Native-Lighting-Live-R193.zip
+            Control-FG-Native-Lighting-Live-R193.sha256
             build/spec-volume-roughness-validation.json
             build/spec-volume-roughness.dxbc
             build/spec-environment-validation.json

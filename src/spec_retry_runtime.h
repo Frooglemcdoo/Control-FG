@@ -2,6 +2,12 @@
 // Included inside native_lighting. Creation-only substitution for the exact
 // native reflection library observed in the R175 capture; unknown variants pass.
 namespace spec_retry {
+#if defined(CONTROL_SPEC_LONG_SEQUENCE) && defined(CONTROL_SPEC_PHASE_PRECISION)
+#error Long sequence and phase precision are separate experiments
+#endif
+#ifdef CONTROL_SPEC_LONG_SEQUENCE
+#include "../build/spec_long_sequence.generated.h"
+#endif
 #include "../build/spec_retry_reuse.generated.h"
 #ifdef CONTROL_SPEC_PHASE_PRECISION
 #include "../build/spec_phase_precision.generated.h"
@@ -35,6 +41,9 @@ inline HRESULT CreateState(Create next,ID3D12Device5* device,const D3D12_STATE_O
 #ifdef CONTROL_SPEC_PHASE_PRECISION
         library.DXILLibrary={kSpecPhasePrecisionShader,sizeof(kSpecPhasePrecisionShader)};
 #endif
+#ifdef CONTROL_SPEC_LONG_SEQUENCE
+        library.DXILLibrary={kSpecLongSequenceShader,sizeof(kSpecLongSequenceShader)};
+#endif
         objects[index].pDesc=&library;
         // Associations point INTO the descriptor array; rebase every one.
         for(UINT i=0;i<desc->NumSubobjects;++i){
@@ -56,6 +65,9 @@ inline HRESULT CreateState(Create next,ID3D12Device5* device,const D3D12_STATE_O
             Trace("spec_retry_create build=R191 created=1 variant=0 cache_values=4 rays=unchanged");
 #ifdef CONTROL_SPEC_PHASE_PRECISION
             Trace("SPEC_PHASE_PRECISION build=R191 applied=1 native_fallback=0 fractional_bits=24 sequence=native_r2 rays=unchanged weights=unchanged");
+#endif
+#ifdef CONTROL_SPEC_LONG_SEQUENCE
+            Trace("SPEC_LONG_SEQUENCE build=R193 applied=1 native_fallback=0 counter=current_frame counter_component=69z frame_mask=255 primary_only=1 rays=unchanged mapping=unchanged retries=unchanged");
 #endif
             return hr;
         }

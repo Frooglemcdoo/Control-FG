@@ -14,3 +14,8 @@ for key,value in [('valid=1','valid=0'),('camera_cut=0','camera_cut=1'),('sample
 lines=base.splitlines();del lines[128];assert not m.analyze('\n'.join(lines))['sufficient_window']
 assert not m.analyze('')['sufficient_window']
 print('PASS: cycles, constant values, uint32 wrap, short windows, cuts, gaps, invalid reads and provenance rejection')
+
+longlog='\n'.join(line.replace('build=R192','build=R193')+f' current={i}' for i,line in enumerate(log([i%4 for i in range(512)]).splitlines()))
+r=m.analyze(longlog);assert r['segments'][0]['current_increments_by_one']
+assert r['segments'][0]['observed_period_up_to_64']==4
+r=m.analyze(longlog.replace(' current=128',''));assert r['invalid_rows']==1 and [s['frames'] for s in r['segments']]==[128,383]
