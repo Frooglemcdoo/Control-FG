@@ -50,3 +50,10 @@ records[0]['raw_shadow']['spot_visibility']=0
 r=analysis.summarize(dict(records=records))
 assert r['map_center_lit_raw_blocked']==1
 print('PASS PCF-only center categories: raw evidence and explicit center required; combined static layer excluded')
+
+records[0]['projection_pair']=dict(supported=True,emitter=dict(hit=True),projection=dict(hit=False))
+records[1]['projection_pair']=dict(supported=False)
+r=analysis.summarize(dict(records=records))
+assert r['projection_pairs_for_center_samples']==2 and r['projection_pairs_unsupported']==1
+assert r['clipped_emitter_hit_projection_miss']==1 and r['both_clipped_paths_miss']==0
+print('PASS projection classification: supported comparisons separated from unsupported geometry')

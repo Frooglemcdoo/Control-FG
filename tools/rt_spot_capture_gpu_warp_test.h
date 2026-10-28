@@ -114,6 +114,13 @@ static void TestHitCaptureExportRetry() {
     drain();capture::Poll();length=drain();text.assign(bytes.data(),length);
     if(capture::exportRawPending || capture::exportCursor!=64 || text.find("rt_hit_gpu_raw ")!=std::string::npos ||
        text.find("rt_hit_gpu_eligibility index=0 ")==std::string::npos)throw std::runtime_error("Raw export replayed or lost following part");
+    // A projection already enqueued must not replay if the eligibility export stalls.
+    capture::exportCursor=0;capture::exportLightPending=capture::exportEligibilityPending=capture::exportRawPending=capture::exportProjectionPending=true;
+    fill();capture::Poll();
+    if(!capture::exportProjectionPending || capture::exportCursor)throw std::runtime_error("Busy queue lost projection progress");
+    drain();capture::Poll();length=drain();text.assign(bytes.data(),length);
+    if(capture::exportProjectionPending || capture::exportCursor!=64 || text.find("rt_hit_gpu_projection ")!=std::string::npos ||
+       text.find("rt_hit_gpu_eligibility index=0 ")==std::string::npos)throw std::runtime_error("Projection export replayed or lost following part");
     capture::mapRequested=false;
     drain();queue.TakeDropped();capture::exportCursor=capture::exportStage=0;capture::phase.store(capture::Phase::Idle);
     std::cout<<"PASS capture log retry: full queue preserves header, record cursor and final completion marker without render-thread waits\n";

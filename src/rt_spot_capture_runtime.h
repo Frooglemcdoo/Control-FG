@@ -18,7 +18,7 @@ inline ComPtr<ID3D12GraphicsCommandList4> recordedList;
 inline ComPtr<ID3D12StateObject> recordedState,captureState;
 inline ComPtr<ID3D12CommandQueue> submittedQueue;
 inline unsigned attempts=0,exportCursor=0,exportStage=0;
-inline bool exportLightPending=false,exportEligibilityPending=false,exportRawPending=false;
+inline bool exportLightPending=false,exportEligibilityPending=false,exportRawPending=false,exportProjectionPending=false;
 inline UINT64 fenceValue=1;
 inline UINT completionStatus[4]{},completionRays=0,completionHits=0;
 inline UINT frameTag=0,capturedWidth=0,capturedHeight=0,capturedTableRecords=0;
@@ -139,7 +139,7 @@ inline bool RequestFresh(bool compareMap=false) noexcept {
            (!mapRecorded || RecordingWasReset(mapList.Get(),mapGeneration)) &&
            completed!=UINT64_MAX && completed>=fenceValue &&
            signalCompleted!=UINT64_MAX && signalCompleted>=fenceValue) {
-            ++fenceValue;attempts=exportCursor=exportStage=0;exportLightPending=exportEligibilityPending=exportRawPending=false;readbackCopied=false;
+            ++fenceValue;attempts=exportCursor=exportStage=0;exportLightPending=exportEligibilityPending=exportRawPending=exportProjectionPending=false;readbackCopied=false;
             recordedList.Reset();recordedState.Reset();captureState.Reset();recordedTable.Reset();recordedHeap.Reset();submittedQueue.Reset();
             recordedSignalList.Reset();recordedSignalHeap.Reset();recordedSignalPipeline.Reset();recordedSignalBeforePipeline.Reset();signalQueue.Reset();
             accepted=true;
@@ -435,7 +435,7 @@ inline void Record(ID3D12GraphicsCommandList4* list,ID3D12StateObject* owner,con
     rays.Buffer.NumElements=gpu::kRayCount;rays.Buffer.StructureByteStride=48;
     originalSrv(resources.device.Get(),resources.inputs.Get(),&rays,resources.At(147+13));
     resources.RawSrv(resources.status.Get(),0,16,147+14);
-    D3D12_UNORDERED_ACCESS_VIEW_DESC output{};output.ViewDimension=D3D12_UAV_DIMENSION_BUFFER;output.Buffer.NumElements=3*gpu::kRayCount;output.Buffer.StructureByteStride=80;
+    D3D12_UNORDERED_ACCESS_VIEW_DESC output{};output.ViewDimension=D3D12_UAV_DIMENSION_BUFFER;output.Buffer.NumElements=5*gpu::kRayCount;output.Buffer.StructureByteStride=80;
     originalUav(resources.device.Get(),resources.results.Get(),nullptr,&output,resources.At(147+43));
     for(UINT i=0;i<3;++i)originalCopy(resources.device.Get(),49,destinations[i],resources.At((i+1)*49),D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
     internal=false;
@@ -587,6 +587,21 @@ inline void Poll() noexcept {
                             reinterpret_cast<const unsigned char*>(&result)+32,48) ||
                             (probe.hit.hitKind!=0 && probe.hit.hitKind!=254 && probe.hit.hitKind!=255))++invalidRecords;
                     }
+                    if(mapRequested) {
+                        rt_spot_capture::CaptureResult pair[2]{};
+                        for(UINT bank=0;bank<2;++bank) {
+                            auto& probe=pair[bank];
+                            memcpy(&probe,completedBytes+(bank+3)*gpu::kResultBankBytes+i*sizeof(probe),sizeof(probe));
+                            if(!probe.valid)continue; // Explicit unsupported projection, never a miss.
+                            const float length=probe.direction.x*probe.direction.x+probe.direction.y*probe.direction.y+probe.direction.z*probe.direction.z;
+                            if(probe.valid!=1 || probe.frameTag!=result.frameTag || probe.lightId!=result.lightId ||
+                               probe.pixelX!=result.pixelX || probe.pixelY!=result.pixelY || memcmp(&probe.origin,&result.origin,sizeof(probe.origin)) ||
+                               !std::isfinite(length) || fabsf(length-1)>0.0002f || !std::isfinite(probe.maxDistance) || probe.maxDistance<=0 ||
+                               !std::isfinite(probe.hit.distance) || probe.hit.distance<0 || probe.hit.distance>probe.maxDistance ||
+                               (probe.hit.hitKind!=0 && probe.hit.hitKind!=254 && probe.hit.hitKind!=255))++invalidRecords;
+                        }
+                        if(pair[0].valid!=pair[1].valid)++invalidRecords;
+                    }
                     ++validRays;if(result.hit.hitKind)++hits;
                 }
                 Trace("rt_hit_gpu_readback generation=%llu frame_tag=%u unknown=%u translated=%u null=%u invalid_layout=%u valid_rays=%u hits=%u misses=%u invalid_records=%u gpu_completion_confirmed=1 gpu_hit_capture=%u",recordedGeneration,frameTag,status[0],status[1],status[2],status[3],validRays,hits,validRays-hits,invalidRecords,unsigned(tableValid && !invalidRecords));
@@ -601,7 +616,7 @@ inline void Poll() noexcept {
     // Retry canonical headers and records if the nonblocking log queue is busy.
     // Cursor advancement means successful enqueue, never merely an attempted write.
     if(exportStage==0) {
-        if(!Trace("rt_hit_gpu_recorded generation=%llu frame_tag=%u extent=%ux%u table_records=%u captured_present=%llu light_context_bytes=128 signal_bytes=128 spot_record_bytes=336 signal_generation=%llu signal_present=%llu map_bytes=%u map_generation=%llu map_present=%llu eligibility_bytes=%u raw_bytes=%u map_center=%u",recordedGeneration,frameTag,capturedWidth,capturedHeight,capturedTableRecords,recordedPresent,signalGeneration,signalPresent,mapRequested?16u:0u,mapGeneration,mapPresent,mapRequested?160u:0u,mapRequested?32u:0u,unsigned(mapRequested)))return;
+        if(!Trace("rt_hit_gpu_recorded generation=%llu frame_tag=%u extent=%ux%u table_records=%u captured_present=%llu light_context_bytes=128 signal_bytes=128 spot_record_bytes=336 signal_generation=%llu signal_present=%llu map_bytes=%u map_generation=%llu map_present=%llu eligibility_bytes=%u raw_bytes=%u map_center=%u projection_bytes=%u",recordedGeneration,frameTag,capturedWidth,capturedHeight,capturedTableRecords,recordedPresent,signalGeneration,signalPresent,mapRequested?16u:0u,mapGeneration,mapPresent,mapRequested?160u:0u,mapRequested?32u:0u,unsigned(mapRequested),mapRequested?160u:0u))return;
         exportStage=1;
     }
     if(exportStage==1) {
@@ -637,6 +652,13 @@ inline void Poll() noexcept {
                 if(!Trace("rt_hit_gpu_raw index=%u bytes=%s",exportCursor,rawHex))return;
                 exportRawPending=true;
             }
+            if(mapRequested && !exportProjectionPending) {
+                char pair[321]{};
+                for(UINT bank=3;bank<=4;++bank)
+                    rt_spot_capture_audit::Hex(completedBytes+bank*gpu::kResultBankBytes+exportCursor*80,80,pair+(bank-3)*160);
+                if(!Trace("rt_hit_gpu_projection index=%u bytes=%s",exportCursor,pair))return;
+                exportProjectionPending=true;
+            }
             UINT hitKind=0;memcpy(&hitKind,record+24,4);
             if(mapRequested && !hitKind) {
                 char probes[321]{};
@@ -644,7 +666,7 @@ inline void Poll() noexcept {
                     rt_spot_capture_audit::Hex(completedBytes+bank*gpu::kResultBankBytes+exportCursor*80,80,probes+(bank-1)*160);
                 if(!Trace("rt_hit_gpu_eligibility index=%u bytes=%s",exportCursor,probes))return;
             }
-            exportLightPending=exportEligibilityPending=exportRawPending=false;
+            exportLightPending=exportEligibilityPending=exportRawPending=exportProjectionPending=false;
         }
     }
     if(exportCursor==gpu::kRayCount && Trace("rt_hit_gpu_export_complete records_examined=4096 format=CaptureResult80 frame_tag=%u",frameTag))exportStage=3;

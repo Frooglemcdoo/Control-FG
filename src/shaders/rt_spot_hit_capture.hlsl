@@ -1,7 +1,12 @@
 #include "../rt_spot_capture_layout.h"
+#include "rt_spot_projection_probe.hlsli"
 
 // These bindings fit the verified native contact-ray global root. A dedicated
 // capture table must bind private buffers; NEVER bind the gameplay UAV here.
+// Original t4 and b0 remain bound; the probe reads the exact native light record.
+struct ProjectionSpotRecord { uint4 blocks[20]; };
+StructuredBuffer<ProjectionSpotRecord> projectionSpotData : register(t4);
+cbuffer ProjectionNativeView : register(b0) { float4 projectionNativeConstants[10]; }
 RaytracingAccelerationStructure captureScene : register(t6);
 StructuredBuffer<CaptureRay> captureRays : register(t8);
 ByteAddressBuffer captureStatus : register(t9);
@@ -69,9 +74,11 @@ void captureRayGeneration() {
     CaptureResult result = (CaptureResult)0;
     captureResults[index] = result;
     if (captureEligibility == 1) {
-        if (outputCount < CaptureMaxRecords * 3) return;
+        if (outputCount < CaptureMaxRecords * 5) return;
         captureResults[index + CaptureMaxRecords] = result;
         captureResults[index + CaptureMaxRecords * 2] = result;
+        captureResults[index + CaptureMaxRecords * 3] = result;
+        captureResults[index + CaptureMaxRecords * 4] = result;
     }
     uint statusBytes; captureStatus.GetDimensions(statusBytes);
     if (statusBytes < 16 || captureStatus.Load(0) != 0 || captureStatus.Load(12) != 0) return;
@@ -114,6 +121,45 @@ void captureRayGeneration() {
     result.frameTag = input.frameTag;
     result.valid = 1;
     captureResults[index] = result;
+    // R203: paired emitter/projection segments, both independently clipped.
+    // Same TLAS, alpha any-hit, mask, receiver and table as the original ray.
+    if (captureEligibility == 1) {
+        uint count,stride; projectionSpotData.GetDimensions(count,stride);
+        if (stride == 320 && input.lightId < count) {
+            ProjectionSpotRecord light=projectionSpotData[input.lightId];
+            float4 projection[4], view[4];
+            [unroll] for(uint i=0;i<4;++i) {
+                projection[i]=asfloat(light.blocks[5+i]);
+                view[i]=projectionNativeConstants[6+i];
+            }
+            float3 apexView;
+            if(captureProjectionApex(projection,apexView)) {
+                float4 coneNear=asfloat(light.blocks[0]);
+                float3 cone=captureWorld(coneNear.xyz,view,true);
+                float3 axis=captureWorld(asfloat(light.blocks[2]).xyz,view,false);
+                float3 emitter=captureWorld(asfloat(light.blocks[1]).xyz,view,true);
+                float3 apex=captureWorld(apexView,view,true);
+                float3 directions[2];float limits[2];
+                bool validEmitter=captureClippedSegment(input.origin,emitter,cone,axis,coneNear.w,directions[0],limits[0]);
+                bool validProjection=captureClippedSegment(input.origin,apex,cone,axis,coneNear.w,directions[1],limits[1]);
+                if(validEmitter && validProjection) {
+                    [unroll] for(uint bank=0;bank<2;++bank) {
+                        RayDesc pairedRay=ray;pairedRay.Direction=directions[bank];pairedRay.TMax=limits[bank];
+                        HitPayload pairedHit=(HitPayload)0;pairedHit.distance=pairedRay.TMax;
+                        pairedHit.instanceIndex=pairedHit.instanceId=pairedHit.primitiveIndex=pairedHit.geometryIndex=0xffffffff;
+                        TraceRay(captureScene,RAY_FLAG_NONE,1,hitRecordOffset,hitGeometryStride,missRecordIndex,pairedRay,pairedHit);
+                        if(!pairedHit.hitKind) {
+                            pairedHit=(HitPayload)0;pairedHit.distance=pairedRay.TMax;
+                            pairedHit.instanceIndex=pairedHit.instanceId=pairedHit.primitiveIndex=pairedHit.geometryIndex=0xffffffff;
+                        }
+                        CaptureResult paired=result;paired.hit=pairedHit;
+                        paired.direction=pairedRay.Direction;paired.maxDistance=pairedRay.TMax;
+                        captureResults[index+CaptureMaxRecords*(3+bank)]=paired;
+                    }
+                }
+            }
+        }
+    }
     // Only investigate native misses. The displayed shadow path is untouched.
     if (captureEligibility == 1 && !hit.hitKind) {
         result.hit = geometryProbe(ray, 1);

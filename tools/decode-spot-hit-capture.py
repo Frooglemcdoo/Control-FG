@@ -223,6 +223,29 @@ def decode_log(text):
                 shadow_flags=struct.unpack_from('<I', raw, 16+304)[0])
         if record['pixel'] != [(2*(index%64)+1)*width//128, (2*(index//64)+1)*height//128]:
             raise ValueError('Record does not match its native sample pixel')
+    # R203: both clipped paths carry independent complete result records.
+    projection_bytes=begin.get('projection_bytes',0)
+    if projection_bytes not in (0,160) or (projection_bytes and (map_bytes!=16 or spot_bytes!=336 or context_bytes!=128)):
+        raise ValueError('Unsupported projection pair ABI')
+    pairs={}
+    for line in text.splitlines():
+        if ' rt_hit_gpu_projection ' not in line:continue
+        if not projection_bytes or not text.index(completed[0]) < text.index(line) < text.index(exported[0]):
+            raise ValueError('Unexpected projection pair or export ordering')
+        match=re.search(r'index=(\d+) bytes=([0-9a-fA-F]{320})$',line)
+        if not match:raise ValueError('Malformed projection pair')
+        index=int(match[1])
+        if index not in seen or index in pairs:raise ValueError('Duplicate or unmatched projection pair')
+        raw=bytes.fromhex(match[2]);pair=decode(raw,begin['frame_tag'])
+        for i,probe in enumerate(pair):
+            if not probe['valid'] and raw[i*80:(i+1)*80]!=bytes(80):
+                raise ValueError('Unsupported projection retained stale data')
+        pairs[index]=pair
+    if set(pairs)!=(seen if projection_bytes else set()):raise ValueError('Missing projection pairs')
+    if projection_bytes:
+        from rt_spot_projection_pair import validate_pair
+        for record in valid:
+            record['projection_pair']=validate_pair(record,pairs[record['ordinal']])
     return {'schema': 'control-spot-hit-capture-v1',
             'capture_id': f"generation-{begin['generation']}-frame-{begin['frame_tag']}",
             'extent': [width, height], 'records': results}

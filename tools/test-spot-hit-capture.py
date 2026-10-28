@@ -197,3 +197,35 @@ try:decoder.decode_log(center_log.replace('map_center=1','map_center=2'))
 except ValueError:pass
 else:raise AssertionError('Unknown PCF center schema accepted')
 print('PASS R202 PCF center: explicit version, valid/sentinel values, legacy compatibility and invalid data rejection')
+
+# R203: complete paired paths, independent geometry validation and explicit unsupported state.
+from rt_spot_projection_pair import segments
+import copy
+ctx=struct.pack('<32f',0,0,0,1, 2,0,0,10, 0,0,1,1, 0,0,1,0, *[float(i%5==0) for i in range(16)]).hex()
+spot203=bytearray(spot)
+struct.pack_into('<16f',spot203,96,1,0,0,0, 0,1,0,0, 0,0,1,1, 0,0,-1,0)
+new_base=packed(x=1,y=1,ox=0,oy=0,oz=4,dx=0,dy=0,dz=-1,distance=2)
+base203=sidecar.replace(context,ctx).replace(spot.hex(),spot203.hex()).replace(base_hit.hex(),new_base.hex())
+reference=decoder.decode_log(base203)['records'][0]
+expected=segments(reference)
+def make_pair(geometry):
+ return packed(x=1,y=1,ox=0,oy=0,oz=4,dx=geometry['direction'][0],dy=geometry['direction'][1],dz=geometry['direction'][2],maximum=geometry['t_max'],distance=geometry['t_max'],kind=0,instance=0xffffffff,instance_id=0xffffffff,primitive=0xffffffff,geometry=0xffffffff,u=0,v=0)
+pair_bytes=b''.join(make_pair(g) for g in expected)
+pair_line='ms=3 rt_hit_gpu_projection index=0 bytes='+pair_bytes.hex()
+pair_log=base203.replace('map_bytes=16','map_bytes=16 projection_bytes=160').replace('ms=0 rt_hit_gpu_export_complete',pair_line+'\nms=0 rt_hit_gpu_export_complete')
+pair=decoder.decode_log(pair_log)['records'][0]['projection_pair']
+assert pair['supported'] and not pair['projection']['hit'] and pair['emitter']['direction']!=pair['projection']['direction']
+unsupported=pair_log.replace(pair_bytes.hex(),bytes(160).hex())
+assert decoder.decode_log(unsupported)['records'][0]['projection_pair']=={'supported':False}
+wrong_identity=bytearray(pair_bytes);struct.pack_into('<I',wrong_identity,64,2)
+wrong_limit=bytearray(pair_bytes);struct.pack_into('<f',wrong_limit,44,10)
+for bad in [pair_log.replace(pair_line,''),pair_log.replace(pair_line,pair_line+'\n'+pair_line),
+ pair_log.replace('projection_bytes=160','projection_bytes=80'),pair_log.replace('projection_bytes=160','projection_bytes=0'),
+ pair_log.replace(pair_bytes.hex(),(bytes(80)+pair_bytes[80:]).hex()),
+ pair_log.replace(pair_bytes.hex(),wrong_identity.hex()),pair_log.replace(pair_bytes.hex(),wrong_limit.hex()),
+ pair_log.replace(pair_bytes.hex(),(pair_bytes[80:]+pair_bytes[:80]).hex()),
+ pair_log.replace('index=0 bytes='+pair_bytes.hex(),'index=1 bytes='+pair_bytes.hex())]:
+ try:decoder.decode_log(bad)
+ except ValueError:pass
+ else:raise AssertionError('Invalid projection pair accepted')
+print('PASS R203 paired rays: matching geometry, complete export, unsupported state, independent limits, swapped/missing/duplicate/stale pairs rejected')

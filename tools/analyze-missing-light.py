@@ -63,6 +63,14 @@ def summarize(capture, threshold=.25):
     result['pcf_only_center_samples_for_darker_rt']=len(centers)
     result['map_center_blocked_raw_blocked']=sum(r['native_pcf_center']==0 and r['raw_shadow']['spot_visibility']==0 for r,s in centers)
     result['map_center_lit_raw_blocked']=sum(r['native_pcf_center']==1 and r['raw_shadow']['spot_visibility']==0 for r,s in centers)
+    paired=[r['projection_pair'] for r,s in centers if 'projection_pair' in r]
+    supported=[p for p in paired if p['supported']]
+    result['projection_pairs_for_center_samples']=len(paired)
+    result['projection_pairs_unsupported']=len(paired)-len(supported)
+    result['clipped_emitter_hit_projection_miss']=sum(p['emitter']['hit'] and not p['projection']['hit'] for p in supported)
+    result['both_clipped_paths_hit']=sum(p['emitter']['hit'] and p['projection']['hit'] for p in supported)
+    result['clipped_emitter_miss_projection_hit']=sum(not p['emitter']['hit'] and p['projection']['hit'] for p in supported)
+    result['both_clipped_paths_miss']=sum(not p['emitter']['hit'] and not p['projection']['hit'] for p in supported)
     return result
 
 
