@@ -769,6 +769,15 @@ jobs:
           & powershell.exe -NoProfile -File Package-Lighting-Performance.ps1 -Folder build/perf-package-test -ModuleFolder build
           if ($LASTEXITCODE -ne 0 -or !(Test-Path build/perf-package-test.zip)) { throw 'Performance package roundtrip failed' }
 
+      - name: Validate F9 scoped pipeline dispatch
+        shell: cmd
+        run: |
+          call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
+          cl /nologo /std:c++17 /EHsc tools\test-rr-suite-dispatch.cpp /Febuild\suite-dispatch.exe
+          if errorlevel 1 exit /b 1
+          build\suite-dispatch.exe
+          if errorlevel 1 exit /b 1
+
       - name: Package live lighting diagnostic R191
         shell: powershell
         run: |

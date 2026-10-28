@@ -202,6 +202,11 @@ inline void PackageRR(HWND window) noexcept {
     } else MessageBoxW(window,L"Could not start packaging. Check Capture-RR-Boundary.ps1 is installed beside dxgi.dll.",L"RR material packaging",MB_OK|MB_ICONERROR);
 }
 inline void RequestLightCapture(HWND panel) noexcept {
+#ifdef CONTROL_RR_F9_SUITE
+    ClosePanel(panel);
+    if(!reflection_suite::Start(GetTickCount64()))MessageBoxW(panel,L"Use RR ON and FG OFF. Wait for gameplay readiness, or restart after an incomplete sequence.",L"F9 reflection sequence",MB_OK);
+    return;
+#endif
     const auto mode=LiveSelection::GetMode(selection.Read());
     if(!performance_capture::Active() && !capture_suite::active && mode==Mode::RoomNativeBlend && control_rr::RRUserRuntimeWorkRequested() && control_rr_capture_ui::Request()) {
         Trace("rr_material_capture requested=1 mode=%s spec_requested=%u",ModeName(mode),specularSampleChoice.load());
