@@ -12,12 +12,15 @@ inline constexpr int kStatusY = 40 + kModeRows * 46 - 2;
 inline constexpr int kActionsY = kStatusY + 28;
 inline constexpr int kCaptureY = kActionsY + 46;
 inline constexpr int kPerformanceY = kCaptureY + 46;
-inline constexpr int kCaptureStatusY = kPerformanceY + 46;
+inline constexpr int kCameraY = kPerformanceY + 46;
+inline constexpr int kCaptureStatusY = kCameraY + 46;
 inline constexpr int kFooterY = kCaptureStatusY + 50;
 inline constexpr int kHeight = kFooterY + 72;
-inline constexpr unsigned kButtonCount = kModeCount + 9;
+inline constexpr unsigned kButtonCount = kModeCount + 11;
 inline const wchar_t* ButtonLabel(unsigned index) noexcept {
     if (index < kModeCount) return kModeChoices[index].label;
+    if (index == kModeCount + 9) return L"FREE CAMERA";
+    if (index == kModeCount + 10) return L"NORMAL CAMERA";
     constexpr const wchar_t* actions[] = {L"ISSUE REMAINS", L"ISSUE GONE", L"SAVE LOG", L"CAPTURE RR", L"PACKAGE RR", L"TRACE SHADOW", L"PERF CAPTURE"};
     if(index==kModeCount+6 && performance_capture::Active())return L"CANCEL PERF";
     if(index==kModeCount+7) {
@@ -75,6 +78,7 @@ inline std::atomic<bool> started{false};
 inline std::atomic<unsigned> savedNotice{0};
 inline bool selectionRejected = false;
 inline bool panelOpen = false; // Owned exclusively by the diagnostic UI thread.
+inline ULONGLONG cameraRequestedAt = 0;
 inline int cursorVisibilityIncrements = 0;
 
 inline bool PanelHasForeground(HWND panel) noexcept {
@@ -127,6 +131,7 @@ inline void Paint(HWND window) noexcept {
     swprintf_s(status, L"Selected mode: %s   %s", ModeAvailable(mode,ready) ? L"ready" : L"waiting",
         (observed & required) == required && (mode != Mode::SpotResolution2x || spot_resolution_runtime::Observed(state)) ? (IsRtSpotMode(mode) ? L"RT pair recorded" : L"native bindings recorded") : L"Waiting: return to game");
     DrawLabel(dc, detailFont, status, {14,kStatusY,kWidth-12,kStatusY+24}, theme::kMutedText);
+    DrawLabel(dc, detailFont, free_camera::Status(), {326,kCameraY,kWidth-12,kCameraY+36}, theme::kMutedText);
     wchar_t captureStatus[128]{};
     swprintf_s(captureStatus,L"RR capture: %s   Saved pairs: %u",control_rr_capture_ui::Label(control_rr_capture_ui::state.load()),control_rr_capture_ui::completedPairs.load());
     DrawLabel(dc,detailFont,captureStatus,{14,kCaptureStatusY,kWidth-12,kCaptureStatusY+22},theme::kText);
@@ -156,6 +161,9 @@ inline void ReportSpecIsolation(const char* reason) noexcept {
 #endif
 }
 inline void SaveReport(HWND window) noexcept {
+    Trace("free_camera_status installed=%u mode=%d generation=%llu pending=%u result=%u updates=%llu thread=%lu",
+        unsigned(free_camera::installed.load()),free_camera::commands.Mode(),static_cast<unsigned long long>(free_camera::commands.Generation()),
+        unsigned(free_camera::commands.Pending()),unsigned(free_camera::commands.Status()),free_camera::updates.load(),free_camera::updateThread.load());
     ReportSpecIsolation("save_log");
     ReportRRPaths("save_log");
     Trace("spec_retry_save matched=%llu created=%llu failures=%llu creation_only=1",spec_retry::matched.load(),spec_retry::created.load(),spec_retry::failures.load());
@@ -202,6 +210,7 @@ inline void PackageRR(HWND window) noexcept {
     } else MessageBoxW(window,L"Could not start packaging. Check Capture-RR-Boundary.ps1 is installed beside dxgi.dll.",L"RR material packaging",MB_OK|MB_ICONERROR);
 }
 inline void RequestLightCapture(HWND panel) noexcept {
+    if(free_camera::commands.Pending())return;
 #ifdef CONTROL_RR_F9_SUITE
     ClosePanel(panel);
     if(!reflection_suite::Start(GetTickCount64()))MessageBoxW(panel,L"Use RR ON and FG OFF. Wait for gameplay readiness, or restart after an incomplete sequence.",L"F9 reflection sequence",MB_OK);
@@ -215,6 +224,9 @@ inline void RequestLightCapture(HWND panel) noexcept {
 }
 inline void RequestShadowTrace(HWND panel) noexcept {
     if(performance_capture::Active())return;
+    if(free_camera::commands.Pending()) {
+        MessageBoxW(panel,L"Wait for the camera change to finish, then start TRACE SHADOW.",L"Shadow trace",MB_OK);return;
+    }
     using State=control_rr_capture_ui::State;
     const auto light=control_rr_capture_ui::state.load();
     if(control_rr_capture_ui::requested.load() ||
@@ -225,6 +237,7 @@ inline void RequestShadowTrace(HWND panel) noexcept {
     else MessageBoxW(panel,native_blend_capture::Message(capture_suite::lastFailure),L"Shadow trace",MB_OK);
 }
 inline void RequestPerformanceCapture(HWND panel) noexcept {
+    if(free_camera::commands.Pending())return;
     if(performance_capture::Active()){
         if(performance_capture::phase!=performance_capture::Phase::Package)performance_capture::Save(GetWindow(panel,GW_OWNER),"cancelled");
         return;
@@ -236,6 +249,20 @@ inline void RequestPerformanceCapture(HWND panel) noexcept {
     }
     if(performance_capture::Start())ClosePanel(panel);
     else MessageBoxW(panel,L"Performance capture unavailable. Return to gameplay first and finish any active capture. If timing resources failed or their bounded capacity is exhausted, restart the game.",L"Performance capture",MB_OK);
+}
+inline void RequestCamera(HWND panel,int mode) noexcept {
+    using State=control_rr_capture_ui::State;
+    const auto light=control_rr_capture_ui::state.load();
+    if(capture_suite::active || performance_capture::Active() || control_rr_capture_ui::requested.load() ||
+       (light!=State::Idle && light!=State::Complete)) {
+        MessageBoxW(panel,L"Finish or cancel the active capture before changing cameras.",L"Camera",MB_OK);return;
+    }
+    if(!free_camera::installed.load() || !free_camera::updates.load() || !free_camera::commands.Request(mode)) {
+        MessageBoxW(panel,L"Camera controls are unavailable or a change is pending. Return to gameplay and try again. SAVE LOG records hook status.",L"Camera",MB_OK);return;
+    }
+    cameraRequestedAt=GetTickCount64();
+    Trace("free_camera_request target=%d previous=%d",mode,free_camera::commands.Mode());
+    ClosePanel(panel);
 }
 inline LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPARAM lParam) noexcept {
     namespace theme = control_ui::theme;
@@ -259,7 +286,7 @@ inline LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPA
         for (unsigned i=0;i<kButtonCount;++i) {
             const int row=i<kModeCount ? i/3 : kModeRows, col=i<kModeCount ? i%3 : (i-kModeCount)%3;
             HWND button=CreateWindowExW(0,L"STATIC",ButtonLabel(i),WS_CHILD|WS_VISIBLE|SS_NOTIFY|SS_OWNERDRAW,
-                14+col*156,i<kModeCount ? 40+row*46 : i<kModeCount+3 ? kActionsY : i<kModeCount+6 ? kCaptureY : kPerformanceY,148,36,window,reinterpret_cast<HMENU>(INT_PTR(kButtonFirst+i)),selfModule,nullptr);
+                14+col*156,i<kModeCount ? 40+row*46 : i<kModeCount+3 ? kActionsY : i<kModeCount+6 ? kCaptureY : i<kModeCount+9 ? kPerformanceY : kCameraY,148,36,window,reinterpret_cast<HMENU>(INT_PTR(kButtonFirst+i)),selfModule,nullptr);
             SendMessageW(button,WM_SETFONT,reinterpret_cast<WPARAM>(bodyFont),TRUE);
         }
         return 0;
@@ -303,6 +330,8 @@ inline LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPA
             else if(index==kModeCount+8 && !capture_suite::active) {
                 Trace("spec_parallel unavailable=1 reason=r170_performance_regression shading=serial");
             }
+            else if(index==kModeCount+9) RequestCamera(window,1);
+            else if(index==kModeCount+10) RequestCamera(window,0);
             RedrawWindow(window,nullptr,nullptr,RDW_INVALIDATE|RDW_ALLCHILDREN);
             return 0;
         }
@@ -338,6 +367,8 @@ inline DWORD WINAPI ThreadProc(LPVOID) noexcept {
         }
         if(msg.message!=WM_TIMER||msg.wParam!=timer)continue;
         const ULONGLONG now=GetTickCount64();
+        if(cameraRequestedAt && now-cameraRequestedAt>=3000 && free_camera::commands.Timeout())
+            Trace("free_camera_request_expired reason=no_camera_update target_not_applied=1");
         if(now>=nextRRReport){ReportSpecIsolation("heartbeat");ReportRRPaths("heartbeat");nextRRReport=now+5000;}
         if(now>=nextLogDrain){DrainDiagnosticLog();nextLogDrain=now+((capture_suite::active||performance_capture::Active())?100:500);}
         if(cachedGame&&!IsWindow(cachedGame))cachedGame=nullptr;
@@ -355,7 +386,7 @@ inline DWORD WINAPI ThreadProc(LPVOID) noexcept {
         const bool f9Down=(GetAsyncKeyState(VK_F9)&0x8000)!=0;
         const bool capturePress=f9Down&&!f9Held && !(GetAsyncKeyState(VK_CONTROL)&0x8000) && !(GetAsyncKeyState(VK_MENU)&0x8000);
         f9Held=f9Down;
-        if(!performance_capture::Active() && capturePress && (GetForegroundWindow()==game || PanelHasForeground(panel))) {
+        if(!free_camera::commands.Pending() && !performance_capture::Active() && capturePress && (GetForegroundWindow()==game || PanelHasForeground(panel))) {
 #ifdef CONTROL_RR_F9_SUITE
             if(capture_suite::active)capture_suite::Finish(game,"cancelled");
             else if(reflection_suite::active)reflection_suite::Cancel("cancelled");

@@ -3,7 +3,7 @@ name: Build native reflection enhancements and RR
 on:
   push:
     branches:
-      - work/r198-window-blocker-probes
+      - work/r199-native-free-camera
       - experiment/native-hit-capture-r118
       - experiment/pt-reflections-p0
       - experiment/pt-verify-stages-20261010
@@ -87,6 +87,10 @@ jobs:
           cl /nologo /std:c++17 /EHsc tools\test-rr-temporal-probe.cpp /Febuild\temporal-probe.exe
           if errorlevel 1 exit /b 1
           build\temporal-probe.exe
+          if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 tools\test-free-camera-control.cpp /Febuild\free-camera-control.exe
+          if errorlevel 1 exit /b 1
+          build\free-camera-control.exe
           if errorlevel 1 exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 tools\test-native-blend-capture.cpp /Febuild\native-blend-capture.exe
           if errorlevel 1 exit /b 1
@@ -802,11 +806,11 @@ jobs:
           build\suite-controller.exe
           if errorlevel 1 exit /b 1
 
-      - name: Package live lighting diagnostic R198
+      - name: Package live lighting diagnostic R199
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-Native-Lighting-Live-R198'
+          $out='Control-FG-Native-Lighting-Live-R199'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
           Copy-Item build/rt_spot_selected_off.dxbc,build/rt_spot_selection.dxbc,build/rt_spot_visibility.dxbc,build/rt_spot_light_ids.dxbc,build/rt_spot_raw_history.dxbc,build/rt_spot_raw_spatial0.dxbc,build/rt_spot_raw_spatial1.dxbc,build/rt_spot_full.dxil,build/rt_spot_r94.dxil,build/rt_spot_light.dxbc,build/rt_spot_reset.dxbc,build/rt_spot_history.dxbc,build/rt_spot_spatial0.dxbc,build/rt_spot_spatial1.dxbc $out
@@ -827,15 +831,18 @@ jobs:
           Copy-Item Package-Lighting-Capture.cmd,tools/package-lighting-capture.py,Package-Lighting-Performance.ps1 $out
           Copy-Item Capture-RR-Boundary.cmd,Capture-RR-Boundary.ps1,Collect-RR-Boundary-Status.cmd,tools/collect-rr-boundary.py $out
           Copy-Item Start-Compact-Distance-Test.cmd,Capture-RR-Suite.ps1,tools/collect-rr-suite.py $out
-          Copy-Item docs/native-lighting-r198.md "$out/DIAGNOSTIC-NOTES.md"
+          Copy-Item docs/native-lighting-r199.md "$out/DIAGNOSTIC-NOTES.md"
           @'
-          CONTROL-FG R198 - paired window blocker geometry probes
+          CONTROL-FG R199 - native free camera and paired window blocker probes
           Launch normally. Hit distance is OFF by default; SPEC defaults to Native.
           Enable RR and the game RT settings used in your accepted baseline.
           Ray Traced Contact Shadows must be enabled for the spotlight/ray pipeline.
           Native Blend is selected automatically once ready.
+          F10 - FREE CAMERA enters the native developer camera; NORMAL CAMERA restores player controls.
+          A controller is recommended; mouse wheel changes camera speed. Time keeps running.
           F10 - TRACE SHADOW records Native Blend without switching mode or RR.
-          Hold still until completion; send the Shadow-R198 log, manifest and PNGs.
+          Capture outside the window, then move into the room and capture again.
+          Hold still until completion; send the Shadow-R199 log, manifest and PNGs.
           Private map capture retains displayed lighting and RR. Diagnostic, not a lighting fix.
           No diagnostic colors. F9 cancels an active light capture.
           Read DIAGNOSTIC-NOTES.md.
@@ -846,10 +853,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-Native-Lighting-Live-R198
+          name: Control-FG-Native-Lighting-Live-R199
           path: |
-            Control-FG-Native-Lighting-Live-R198.zip
-            Control-FG-Native-Lighting-Live-R198.sha256
+            Control-FG-Native-Lighting-Live-R199.zip
+            Control-FG-Native-Lighting-Live-R199.sha256
             build/spec-volume-roughness-validation.json
             build/spec-volume-roughness.dxbc
             build/spec-environment-validation.json

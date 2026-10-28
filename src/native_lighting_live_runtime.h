@@ -19,6 +19,7 @@
 #include "rt_spot_culling_policy.h"
 #include <intrin.h>
 #include <string>
+#include "free_camera_control.h"
 
 namespace native_lighting {
 namespace rt_spot_capture_audit { inline void ReleaseFinishedOwners() noexcept; }
@@ -86,6 +87,7 @@ inline bool Trace(const char* format, ...) noexcept {
         GetTickCount64(), presentCount.load(), detail);
     return length > 0 && diagnosticLog.Push(line, size_t(length < int(sizeof(line)) ? length : sizeof(line)-1));
 }
+#include "free_camera_runtime.h"
 // UI-thread snapshots: totals are independent atomic observations, not one GPU frame.
 inline void ReportRRPaths(const char* reason) noexcept {
     namespace diagnostic = control_rr_diagnostic;

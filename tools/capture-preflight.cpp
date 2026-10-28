@@ -22,7 +22,7 @@ static std::atomic<unsigned long long> presentCount{0};
 static void Log(const char*, ...) {}
 static bool PTReflectionSha256(const unsigned char*,size_t,char*) {return false;}
 static HMODULE verifiedRenderer=nullptr,verifiedD3d=nullptr;
-struct RRAlbedoCallPatch {};
+struct RRAlbedoCallPatch { bool writeHealthy = false; };
 static bool RRAlbedoPrepareCallPatch(void*,void*,void*,RRAlbedoCallPatch*) {return false;}
 static bool RRAlbedoExchangeCall(RRAlbedoCallPatch*,bool) {return false;}
 static bool PTReflectionLoadSidecar(const wchar_t*,const char*,std::vector<unsigned char>&,char*,bool&) {return false;}

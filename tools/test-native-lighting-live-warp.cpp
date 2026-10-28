@@ -24,7 +24,7 @@ static bool PTReflectionSha256(const unsigned char*, size_t, char*) { return fal
 // Renderer and sidecar operations are unavailable in the standalone WARP test.
 static HMODULE verifiedRenderer = nullptr;
 static HMODULE verifiedD3d = nullptr;
-struct RRAlbedoCallPatch {};
+struct RRAlbedoCallPatch { bool writeHealthy = false; };
 static bool RRAlbedoPrepareCallPatch(void*, void*, void*, RRAlbedoCallPatch*) { return false; }
 static bool RRAlbedoExchangeCall(RRAlbedoCallPatch*, bool) { return false; }
 static bool PTReflectionLoadSidecar(const wchar_t*, const char*, std::vector<unsigned char>&, char*, bool&) { return false; }
@@ -34,6 +34,46 @@ static HRESULT (STDMETHODCALLTYPE* ptReflectionOriginalCreateComputePipelineStat
 #include "../src/native_lighting_live_runtime.h"
 using Microsoft::WRL::ComPtr;
 static void Check(HRESULT hr) { if(FAILED(hr)) throw std::runtime_error("D3D failure " + std::to_string(static_cast<unsigned long>(hr))); }
+static void TestFreeCameraForwarding() {
+    namespace camera=native_lighting::free_camera;
+    using Result=control_free_camera::Result;
+    std::vector<unsigned char> module(0x1300000);
+    unsigned char client[0x38]{},session[0x6d8]{};
+    int dummy=0;void* controller=&dummy;void* instance=&dummy;void** instanceAddress=&instance;
+    auto put=[&](size_t offset,void* pointer){memcpy(module.data()+offset,&pointer,sizeof(pointer));};
+    put(0x129a640,client);put(0x129a648,&dummy);
+    put(0x129a670,&dummy);put(0x129a678,&dummy);put(0xd9c848,instanceAddress);
+    void* sessionPointer=session;
+    memcpy(client+0x30,&sessionPointer,sizeof(sessionPointer));
+    memcpy(session+0x6d0,&controller,sizeof(controller));
+    static unsigned nativeCalls=0,setCalls=0;
+    static bool inputFlag=false,avatarPresent=true;
+    camera::image=module.data();
+    camera::getSession=+[](void* object)->void*{return object;};
+    camera::getAvatar=+[](void* object)->void*{return avatarPresent?object:nullptr;};
+    camera::getInputFlag=+[](void*)->bool{return inputFlag;};
+    camera::originalUpdate=+[]{++nativeCalls;};
+    camera::setMode=+[](int mode){
+        if(nativeCalls!=setCalls+1)throw std::runtime_error("setter must follow native update");
+        ++setCalls;memcpy(camera::image+0x129a5cc,&mode,sizeof(mode));inputFlag=mode==1;
+    };
+    if(camera::Install(nullptr,false))throw std::runtime_error("unsupported camera target accepted");
+    camera::installed.store(true);
+    if(!camera::GameplayReady())throw std::runtime_error("valid mock player rejected");
+    camera::commands.Request(1);camera::UpdateHook();
+    if(nativeCalls!=1 || setCalls!=1 || camera::commands.Mode()!=1 || !inputFlag || camera::commands.Status()!=Result::Applied)
+        throw std::runtime_error("free camera native wrapper failed");
+    camera::commands.Request(0);camera::UpdateHook();
+    if(nativeCalls!=2 || setCalls!=2 || camera::commands.Mode()!=0 || inputFlag || camera::commands.Status()!=Result::Applied)
+        throw std::runtime_error("normal camera/input restoration failed");
+    avatarPresent=false;camera::commands.Request(1);camera::UpdateHook();
+    if(nativeCalls!=3 || setCalls!=2 || camera::commands.Status()!=Result::NotGameplay)
+        throw std::runtime_error("avatar guard did not preserve native update");
+    camera::UpdateHook();
+    if(nativeCalls!=4 || setCalls!=2)throw std::runtime_error("idle native update forwarding failed");
+    camera::installed.store(false);camera::image=nullptr;
+    puts("PASS actual free-camera wrapper: native update forwarding, game object guards, mode/input restoration");
+}
 static native_lighting::spot_resolution::Extent seenExtent{};
 static unsigned seenDynamic=0, seenId=0;
 static float seenDistance=0;
@@ -684,6 +724,7 @@ int main() try {
     TestSpotCulling();
     TestSpotPassSelection();
     using namespace native_lighting;
+    TestFreeCameraForwarding();
     TestAllocatorForwarding();
     ComPtr<IDXGIFactory4> factory; Check(CreateDXGIFactory1(IID_PPV_ARGS(&factory)));
     ComPtr<IDXGIAdapter> adapter; Check(factory->EnumWarpAdapter(IID_PPV_ARGS(&adapter)));
