@@ -155,6 +155,20 @@ int main(){
  assert(UsesWorldAlbedo(Mode::RoomNativeBlendLegacy)&&PreservesGiFiltering(Mode::RoomNativeBlendLegacy));
  assert(SpecularSampleRequest(Mode::RoomNativeBlendLegacy)==SpecularSampleRequest(Mode::RoomNativeBlend));
  assert(Applied(Mode::RoomNativeBlendLegacy,kAllBits,true));
+ for(auto mode:{Mode::RoomNativeBlendProjection,Mode::RoomNativeBlendProjectionLegacy}) {
+  spotProjectionReady=false;assert(!ModeAvailable(mode,kRtSpotReadyBit));
+  spotProjectionReady=true;assert(ModeAvailable(mode,kRtSpotReadyBit));
+  assert(IsNativeBlend(mode)&&UsesNativeBlendProjection(mode)&&UsesAuthoredClip(mode));
+  assert(!BypassesRR(mode)&&BypassesSpotHistory(mode)&&PreservesGiFiltering(mode)&&UsesWorldAlbedo(mode));
+  assert(SupportsLightContextCapture(mode)&&Applied(mode,kAllBits,true));
+  assert(SpecularSampleRequest(mode)==SpecularSampleRequest(Mode::RoomNativeBlend));
+  assert(NativeBlendMode(NativeBlendMapGuard(mode),true)==mode);
+  assert(!UsesNativeBlendProjection(NativeBlendMode(NativeBlendMapGuard(mode),false)));
+  LiveSelection request;const auto state=request.Select(mode);
+  assert(LiveSelection::GetMode(state)==mode);
+  request.Select(NativeBlendMode(NativeBlendMapGuard(mode),false));
+  assert(!request.Observe(state,kDirectBit));
+ }
  assert(BlockerMode(Mode::RoomNativeBlend)==Mode::RoomCorrectedNoRR);
  assert(capture_plan::BlockerMode(Mode::RoomMapProbe)==Mode::RoomMapProbe);
  assert(UsesDirectSurfaceNormals(Mode::RoomMapProbe)&&BypassesSpotHistory(Mode::RoomMapProbe)&&BypassesRR(Mode::RoomMapProbe));

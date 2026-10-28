@@ -59,8 +59,8 @@ inline const GUID& IsolationVariant(Mode mode) noexcept {
 // Composition signal views override shading, while the earlier producer still
 // uses IsolationVariant to retain corrected light selection.
 inline const GUID& CompositionVariant(Mode mode) noexcept {
-    if(mode==Mode::RoomNativeBlend)return kNativeBlendVariant;
-    if(mode==Mode::RoomNativeBlendLegacy)return kNativeBlendLegacyVariant;
+    if(NativeBlendMapGuard(mode))return kNativeBlendVariant;
+    if(IsNativeBlend(mode))return kNativeBlendLegacyVariant;
     if(mode==Mode::RoomMapProbe || mode==Mode::RoomCorrectedMapPriority)return kBentNormalVariant;
     if(mode==Mode::RoomCorrectedOpen)return kCorrectedOpenVariant;
     if(IsCorrectedSignal(mode))return ShowsSpotLightIds(mode)?kLightIdsVariant:kVisibilityVariant;
@@ -107,7 +107,7 @@ inline constexpr UINT kRayRecordStride = D3D12_RAYTRACING_SHADER_TABLE_BYTE_ALIG
 inline constexpr unsigned kOptionalRayCount = 5; // X/Y/Z, authored clip, optional projection origin.
 inline constexpr UINT kRayRecordBufferSize = (3 + kOptionalRayCount) * kRayRecordStride;
 inline constexpr UINT RayRecordOffset(Mode mode) noexcept {
-    if (mode==Mode::RoomProjectionOrigin) return 7*kRayRecordStride;
+    if (mode==Mode::RoomProjectionOrigin || UsesNativeBlendProjection(mode)) return 7*kRayRecordStride;
     if (UsesAuthoredClip(mode)) return 6 * kRayRecordStride;
     if (mode == Mode::RoomBlocker) return 2 * kRayRecordStride;
     if (IsHitPositionMode(mode)) return (3 + static_cast<UINT>(mode)-static_cast<UINT>(Mode::RoomHitX))*kRayRecordStride;

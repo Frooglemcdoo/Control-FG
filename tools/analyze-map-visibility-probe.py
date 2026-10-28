@@ -36,7 +36,7 @@ def sample(record):
 
 def analyze(text):
     starts=re.findall(r'blocker_trace_start mode=(\S+)',text)
-    sidecar=len(starts)==1 and starts[0] in ('native_pcf_blend','native_map_guard','native_pcf_blend_r199')
+    sidecar=len(starts)==1 and starts[0] in ('native_pcf_blend','native_map_guard','native_pcf_blend_r199','native_projection_map_guard','native_projection_blend')
     if not sidecar and starts!=['selected_map_probe_rr_off']:
         raise ValueError('Requires exactly one Native Blend or MAP PROBE blocker trace')
     capture=decoder.decode_log(text)
@@ -50,7 +50,7 @@ def analyze(text):
             item['hit_position']=record.get('hit_position')
             records.append(item)
     if not records:raise ValueError('No validated map visibility payloads')
-    return dict(schema='control-selected-map-sidecar-r196' if sidecar else 'control-selected-map-probe-r163',capture_id=capture['capture_id'],extent=capture['extent'],composition=starts[0],map_guard=starts[0]=='native_map_guard',
+    return dict(schema='control-selected-map-sidecar-r196' if sidecar else 'control-selected-map-probe-r163',capture_id=capture['capture_id'],extent=capture['extent'],composition=starts[0],map_guard=starts[0] in ('native_map_guard','native_projection_map_guard'),
         counts=dict(counts),map_lit_rt_blocked=sum(r['map_visibility']>.9 and r['rt_visibility']<.1 for r in records),
         map_blocked_rt_lit=sum(r['map_visibility']<.1 and r['rt_visibility']>.9 for r in records),records=records,
         limitations=('Float32 private native-map output; displayed Native Blend lighting retained. ' if sidecar else 'Legacy diagnostic diffuse payload; blue-lane IDs >=64 rejected. ')+ 'Native map samples use native bias/filtering; RT is the accepted filtered result. Agreement does not prove the shadow is physically correct; disagreement does not alone distinguish caster, bias or filtering.')

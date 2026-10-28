@@ -3,7 +3,7 @@ name: Build native reflection enhancements and RR
 on:
   push:
     branches:
-      - work/r203-paired-projection-rays
+      - work/r204-native-blend-projection
       - experiment/native-hit-capture-r118
       - experiment/pt-reflections-p0
       - experiment/pt-verify-stages-20261010
@@ -439,6 +439,8 @@ jobs:
           if($LASTEXITCODE -ne 0){throw "Centered ray contract checks failed"}
           python tools/test-rt-spot-projection.py --dxc $dxc
           if($LASTEXITCODE -ne 0){throw "Projection shader instruction validation failed"}
+          python tools/rt_spot_projection_reuse.py --dxc $dxc --assembler build/assemble-validated-dxil.exe
+          if($LASTEXITCODE -ne 0){throw 'Projection ray reuse validation failed'}
           & $dxc -T lib_6_3 -HV 2021 -O3 -I src/shaders -Fo build/pt_glass_raygen.dxil src/shaders/pt_glass_raygen.hlsl
           if($LASTEXITCODE -ne 0){throw "Glass DXC compile failed: $LASTEXITCODE"}
           & $dxc -T lib_6_3 -HV 2021 -O3 -I src/shaders -Fo build/rt_spot_shadow_prototype.dxil src/shaders/rt_spot_shadow_prototype.hlsl
@@ -816,11 +818,11 @@ jobs:
           build\suite-controller.exe
           if errorlevel 1 exit /b 1
 
-      - name: Package live lighting diagnostic R203
+      - name: Package live lighting diagnostic R204
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-Native-Lighting-Live-R203'
+          $out='Control-FG-Native-Lighting-Live-R204'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
           Copy-Item build/rt_spot_selected_off.dxbc,build/rt_spot_selection.dxbc,build/rt_spot_visibility.dxbc,build/rt_spot_light_ids.dxbc,build/rt_spot_raw_history.dxbc,build/rt_spot_raw_spatial0.dxbc,build/rt_spot_raw_spatial1.dxbc,build/rt_spot_full.dxil,build/rt_spot_r94.dxil,build/rt_spot_light.dxbc,build/rt_spot_reset.dxbc,build/rt_spot_history.dxbc,build/rt_spot_spatial0.dxbc,build/rt_spot_spatial1.dxbc $out
@@ -841,9 +843,9 @@ jobs:
           Copy-Item Package-Lighting-Capture.cmd,tools/package-lighting-capture.py,Package-Lighting-Performance.ps1 $out
           Copy-Item Capture-RR-Boundary.cmd,Capture-RR-Boundary.ps1,Collect-RR-Boundary-Status.cmd,tools/collect-rr-boundary.py $out
           Copy-Item Start-Compact-Distance-Test.cmd,Capture-RR-Suite.ps1,tools/collect-rr-suite.py $out
-          Copy-Item docs/native-lighting-r203.md "$out/DIAGNOSTIC-NOTES.md"
+          Copy-Item docs/native-lighting-r204.md "$out/DIAGNOSTIC-NOTES.md"
           @'
-          CONTROL-FG R203 - paired clipped emitter/projection rays; R200 rendering retained
+          CONTROL-FG R204 - Native Blend emitter/projection comparison; emitter remains default
           Launch normally. Hit distance is OFF by default; SPEC defaults to Native.
           Enable RR and the game RT settings used in your accepted baseline.
           Ray Traced Contact Shadows must be enabled for the spotlight/ray pipeline.
@@ -853,8 +855,8 @@ jobs:
           F10 - FREE CAMERA enters the native developer camera; NORMAL CAMERA restores player controls.
           A controller is recommended; mouse wheel changes camera speed. Time keeps running.
           F10 - TRACE SHADOW records Native Blend without switching mode or RR.
-          Use MAP GUARD OFF at the affected outside-window view. One trace is enough.
-          Hold still until completion; send the Shadow-R203 log, manifest and PNGs.
+          Use MAP GUARD OFF. Compare RAYS: EMITTER and RAYS: PROJECTION at the same view.
+          Let each view settle after closing F10. Send matched screenshots; trace each ray setting if possible.
           TRACE SHADOW preserves the selected map-guard setting and RR.
           Trace includes paired clipped emitter/projection rays, PCF center and raw/filtered RT visibility.
           No diagnostic colors. F9 cancels an active light capture.
@@ -866,10 +868,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-Native-Lighting-Live-R203
+          name: Control-FG-Native-Lighting-Live-R204
           path: |
-            Control-FG-Native-Lighting-Live-R203.zip
-            Control-FG-Native-Lighting-Live-R203.sha256
+            Control-FG-Native-Lighting-Live-R204.zip
+            Control-FG-Native-Lighting-Live-R204.sha256
             build/spec-volume-roughness-validation.json
             build/spec-volume-roughness.dxbc
             build/spec-environment-validation.json
@@ -898,6 +900,8 @@ jobs:
             build/centered-reuse.ll
             build/centered-reuse-validation.json
             build/rt_spot_centered_reuse.dxil
+            build/rt_spot_projection_reuse.dxil
+            build/projection-reuse-validation.json
             build/spec-parallel.dxbc
             build/rt_spot_shadow_prototype.dxil
             build/rr_clamp_fixed.h

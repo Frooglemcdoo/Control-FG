@@ -13,12 +13,16 @@ inline constexpr int kActionsY = kStatusY + 28;
 inline constexpr int kCaptureY = kActionsY + 46;
 inline constexpr int kPerformanceY = kCaptureY + 46;
 inline constexpr int kCameraY = kPerformanceY + 46;
-inline constexpr int kCaptureStatusY = kCameraY + 46;
+inline constexpr int kCaptureStatusY = kCameraY + 70;
 inline constexpr int kFooterY = kCaptureStatusY + 50;
 inline constexpr int kHeight = kFooterY + 72;
-inline constexpr unsigned kButtonCount = kModeCount + 11;
+inline constexpr unsigned kButtonCount = kModeCount + 12;
 inline const wchar_t* ButtonLabel(unsigned index) noexcept {
     if (index < kModeCount) return kModeChoices[index].label;
+    if (index == kModeCount + 11) {
+        const auto mode=LiveSelection::GetMode(selection.Read());
+        return UsesNativeBlendProjection(mode)?L"RAYS: PROJECTION":L"RAYS: EMITTER";
+    }
     if (index == kModeCount + 9) return L"FREE CAMERA";
     if (index == kModeCount + 10) return L"NORMAL CAMERA";
     constexpr const wchar_t* actions[] = {L"ISSUE REMAINS", L"ISSUE GONE", L"SAVE LOG", L"CAPTURE RR", L"PACKAGE RR", L"TRACE SHADOW", L"PERF CAPTURE"};
@@ -32,11 +36,12 @@ inline const wchar_t* ButtonLabel(unsigned index) noexcept {
     }
     if(index==kModeCount+8) {
         const auto mode=LiveSelection::GetMode(selection.Read());
-        return mode==Mode::RoomNativeBlend?L"MAP GUARD: ON":mode==Mode::RoomNativeBlendLegacy?L"MAP GUARD: OFF":L"MAP GUARD";
+        return NativeBlendMapGuard(mode)?L"MAP GUARD: ON":IsNativeBlend(mode)?L"MAP GUARD: OFF":L"MAP GUARD";
     }
     return actions[index - kModeCount];
 }
 inline const wchar_t* ModeHint(Mode mode) noexcept {
+    if(UsesNativeBlendProjection(mode))return L"Projection-ray comparison. RR retained; check light recovery and new shadows.";
     if(mode==Mode::Native)return L"Native lighting. SPEC is shared with other modes; NATIVE removes its override.";
     if(mode==Mode::RoomNativeBlend)return L"Native map blockers retained with RT. MAP GUARD toggles the R199 comparison.";
     if(mode==Mode::RoomNativeBlendLegacy)return L"R199 comparison: RT with native fade. Native map blockers are not retained.";
@@ -106,7 +111,7 @@ inline void Paint(HWND window) noexcept {
     swprintf_s(status, L"Selected mode: %s   %s", ModeAvailable(mode,ready) ? L"ready" : L"waiting",
         (observed & required) == required && (mode != Mode::SpotResolution2x || spot_resolution_runtime::Observed(state)) ? (IsRtSpotMode(mode) ? L"RT pair recorded" : L"native bindings recorded") : L"Waiting: return to game");
     DrawLabel(dc, detailFont, status, {14,kStatusY,kWidth-12,kStatusY+24}, theme::kMutedText);
-    DrawLabel(dc, detailFont, free_camera::Status(), {326,kCameraY,kWidth-12,kCameraY+36}, theme::kMutedText);
+    DrawLabel(dc, detailFont, free_camera::Status(), {14,kCameraY+36,kWidth-12,kCameraY+64}, theme::kMutedText);
     wchar_t captureStatus[128]{};
     swprintf_s(captureStatus,L"RR capture: %s   Saved pairs: %u",control_rr_capture_ui::Label(control_rr_capture_ui::state.load()),control_rr_capture_ui::completedPairs.load());
     DrawLabel(dc,detailFont,captureStatus,{14,kCaptureStatusY,kWidth-12,kCaptureStatusY+22},theme::kText);
@@ -305,11 +310,17 @@ inline LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPA
             }
             else if(index==kModeCount+8 && !capture_suite::active) {
                 const auto current=LiveSelection::GetMode(selection.Read());
-                const auto next=current==Mode::RoomNativeBlend?Mode::RoomNativeBlendLegacy:Mode::RoomNativeBlend;
+                const auto next=NativeBlendMode(!NativeBlendMapGuard(current),UsesNativeBlendProjection(current));
                 selectionRejected=!SelectMode(next);savedNotice=0;
             }
             else if(index==kModeCount+9) RequestCamera(window,1);
             else if(index==kModeCount+10) RequestCamera(window,0);
+            else if(index==kModeCount+11 && !capture_suite::active) {
+                const auto current=LiveSelection::GetMode(selection.Read());
+                const auto next=NativeBlendMode(IsNativeBlend(current)?NativeBlendMapGuard(current):true,!UsesNativeBlendProjection(current));
+                selectionRejected=!SelectMode(next);savedNotice=0;
+                Trace("native_blend_ray_request projection=%u accepted=%u",unsigned(UsesNativeBlendProjection(next)),unsigned(!selectionRejected));
+            }
             RedrawWindow(window,nullptr,nullptr,RDW_INVALIDATE|RDW_ALLCHILDREN);
             return 0;
         }
