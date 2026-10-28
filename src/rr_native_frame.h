@@ -542,11 +542,11 @@ static void RRNativeHookTemporalBind(void* technique) {
  if(scope->preserveNativeFiltering){
   rrNativeTemporalBindOriginal(technique);
   scope->nativeFilterBound=true;
-  rrClampFrameStrength=control_rr_clamp::Requested();
+  rrClampFrameStrength=control_rr_clamp::RuntimeRequested();
   return;
  }
  const DWORD saved=GetLastError();
- rrClampFrameStrength=control_rr_clamp::Requested();
+ rrClampFrameStrength=control_rr_clamp::RuntimeRequested();
  rrNativeClampLease={};scope->nativeClampPrepared=false;scope->nativeClampRestoreFailed=false;
  const HMODULE fullRenoDX=GetModuleHandleW(L"renodx-control-rr.addon64");
  // r21y production owns one signal path. If the full RenoDX Control RR add-on is
