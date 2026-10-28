@@ -253,7 +253,12 @@ inline void BeginMap(ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT z) noexc
     if(mapRecorded || !x || !y || z!=1 || x>1024 || y>1024 || UINT64(x)*y>262144){Fail("map_extent_or_duplicate");return;}
     Context current;D3D12_GPU_DESCRIPTOR_HANDLE table{};D3D12_CPU_DESCRIPTOR_HANDLE destination{};
     const auto original=Lookup(list).set;
-    if(!original || !signalRendered || !ReadContext(current) || current.list!=list || !Fresh(current,table,destination)){Fail("map_bindings");return;}
+    constexpr UINT64 required=(((1ull<<21)-1)<<5)|(7ull<<41);
+    if(!original || !signalRendered || !ReadContext(current) || current.list!=list ||
+       current.list!=mirrored.list || current.heap!=mirrored.heap || current.gpu.ptr!=mirrored.gpu.ptr ||
+       (observed&required)!=required || !Fresh(current,table,destination)) {
+        Trace("native_map_bindings observed=%llx required=%llx",observed,required);Fail("map_bindings");return;
+    }
     const UINT width=x*8,height=y*8;
     if(!mapTexture || mapWidth!=width || mapHeight!=height) {
         // Previous ownership has been retired by RequestFresh before resizing.
@@ -268,8 +273,9 @@ inline void BeginMap(ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT z) noexc
     mapList=current.list;mapHeap=current.heap;mapPipeline=pipeline;mapRendered=signalRendered;
     mapOriginalTable=current.gpu;mapPresent=presentCount.load();
     internal=true;
-    // Copy the actual verified native table; change only its unused u3 slot.
-    originalCopy(resources.device.Get(),49,destination,current.cpu,D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+    // Copy the verified CPU mirror: shader-visible heaps cannot be copy sources.
+    // Preserve all native descriptors and change only the unused u3 slot.
+    originalCopy(resources.device.Get(),49,destination,resources.At(0),D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
     D3D12_UNORDERED_ACCESS_VIEW_DESC uav{};uav.Format=DXGI_FORMAT_R32G32B32A32_FLOAT;uav.ViewDimension=D3D12_UAV_DIMENSION_TEXTURE2D;
     auto slot=destination;slot.ptr+=44*SIZE_T(resources.step);
     originalUav(resources.device.Get(),mapTexture.Get(),nullptr,&uav,slot);
