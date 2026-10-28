@@ -38,7 +38,7 @@ int main(){
  control_rr::RRSetDiagnosticBypass(true);native_lighting::SelectMode(Mode::RoomNativeNoRR);
  unsigned long long now=1;
  for(unsigned location=1;location<=2;++location){
-  assert(s::Start(now));assert(!s::Start(now));assert(native_lighting::LiveSelection::GetMode(native_lighting::selection.Read())==Mode::RoomNativeBlend);
+  assert(s::Start(now));assert(!s::Start(now));assert(native_lighting::LiveSelection::GetMode(native_lighting::selection.Read())==native_lighting::kNativeBlendDefaultMode);
   for(unsigned step=1;step<=8;++step){
    rr_suite::Latch(step);rr_suite::dispatchStep=step;
    native_lighting::selection.Observe(native_lighting::selection.Read(),1); // observation bits aren't a user mode change

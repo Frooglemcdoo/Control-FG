@@ -28,7 +28,7 @@ inline bool Start(uint64_t now) noexcept {
     control_rr_capture_ui::requested.load()||(state!=S::Idle&&state!=S::Complete)||control_rr_capture_ui::completedPairs.load()!=rr_suite::session.load()*rr_suite::count||
     !rr_suite::ready.load()||!specularSamplesReady.load()||!control_rr::RRUserRequested()||slFgEnabledByApi.load())return false;
  restore=LiveSelection::GetMode(selection.Read());
- if(!SelectMode(Mode::RoomNativeBlend))return false;
+ if(!SelectMode(kNativeBlendDefaultMode))return false;
  selectionToken=LiveSelection::Sequence(selection.Read());++rr_suite::session;step=0;active=true;waiting=false;cancelling=false;began=now;
  rr_suite::requested.store(1);
  Trace("rr_suite_start session=%u steps=%u frames_per_step=2 gain=1 restore=%s",rr_suite::session.load(),rr_suite::count,ModeName(restore));return true;

@@ -14,6 +14,7 @@ inline constexpr bool NativeBlendMapGuard(Mode mode) noexcept {
 inline constexpr bool IsNativeBlend(Mode mode) noexcept {
     return mode==Mode::RoomNativeBlend || mode==Mode::RoomNativeBlendLegacy || UsesNativeBlendProjection(mode);
 }
+inline constexpr Mode kNativeBlendDefaultMode=Mode::RoomNativeBlendProjectionLegacy;
 inline constexpr Mode NativeBlendMode(bool guard, bool projection) noexcept {
     return projection ? (guard?Mode::RoomNativeBlendProjection:Mode::RoomNativeBlendProjectionLegacy)
                       : (guard?Mode::RoomNativeBlend:Mode::RoomNativeBlendLegacy);
@@ -202,7 +203,7 @@ struct ModeChoice { Mode mode; const wchar_t* label; };
 inline constexpr ModeChoice kModeChoices[] = {
     {Mode::Native, L"NATIVE"}, {Mode::RoomBoth, L"BOTH"}, {kDefaultMode, L"DEFAULT (FIXED)"},
     {Mode::RoomCorrectedVisibility, L"SHADOW SIGNAL"}, {Mode::RoomNativeNoRR, L"NATIVE RR OFF"}, {Mode::RoomCorrectedNoRR, L"RR OFF"},
-    {Mode::RoomCorrectedOpen, L"RT SPOT OPEN"}, {Mode::RoomCorrectedLightIds, L"LIGHT IDS"}, {Mode::RoomNativeBlend, L"NATIVE BLEND"}
+    {Mode::RoomCorrectedOpen, L"RT SPOT OPEN"}, {Mode::RoomCorrectedLightIds, L"LIGHT IDS"}, {kNativeBlendDefaultMode, L"NATIVE BLEND"}
 };
 inline constexpr unsigned kModeCount = sizeof(kModeChoices) / sizeof(kModeChoices[0]);
 inline unsigned RequiredVariant(Mode mode) noexcept {

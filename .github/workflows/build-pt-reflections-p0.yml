@@ -845,17 +845,17 @@ jobs:
           Copy-Item Start-Compact-Distance-Test.cmd,Capture-RR-Suite.ps1,tools/collect-rr-suite.py $out
           Copy-Item docs/native-lighting-r205.md "$out/DIAGNOSTIC-NOTES.md"
           @'
-          CONTROL-FG R205 - Restore native reflected-light view direction; R204 ray controls retained
+          CONTROL-FG R205 - Native Blend projection rays and map guard OFF; native reflection view restored
           Launch normally. Hit distance is OFF by default; SPEC defaults to Native.
           Enable RR and the game RT settings used in your accepted baseline.
           Ray Traced Contact Shadows must be enabled for the spotlight/ray pipeline.
-          Native Blend with MAP GUARD ON is selected automatically once ready.
-          F10 - MAP GUARD toggles ON (R200) / OFF (R199) for matched comparisons.
+          Native Blend with projection rays and MAP GUARD OFF is selected automatically once ready.
+          F10 - MAP GUARD and RAYS retain optional comparison settings.
           Close the panel and wait for settling before comparing quality or FPS.
           F10 - FREE CAMERA enters the native developer camera; NORMAL CAMERA restores player controls.
           A controller is recommended; mouse wheel changes camera speed. Time keeps running.
           F10 - TRACE SHADOW records Native Blend without switching mode or RR.
-          Use MAP GUARD OFF. Compare RAYS: EMITTER and RAYS: PROJECTION at the same view.
+          Use the default RAYS: PROJECTION and MAP GUARD OFF for accepted Native Blend lighting.
           Let each view settle after closing F10. Send matched screenshots; trace each ray setting if possible.
           TRACE SHADOW preserves the selected map-guard setting and RR.
           Trace includes paired clipped emitter/projection rays, PCF center and raw/filtered RT visibility.

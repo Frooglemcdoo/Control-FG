@@ -41,7 +41,7 @@ inline const wchar_t* ButtonLabel(unsigned index) noexcept {
     return actions[index - kModeCount];
 }
 inline const wchar_t* ModeHint(Mode mode) noexcept {
-    if(UsesNativeBlendProjection(mode))return L"Projection-ray comparison. RR retained; check light recovery and new shadows.";
+    if(UsesNativeBlendProjection(mode))return L"Native Blend with projection rays. RR retained; MAP GUARD is optional.";
     if(mode==Mode::Native)return L"Native lighting. SPEC is shared with other modes; NATIVE removes its override.";
     if(mode==Mode::RoomNativeBlend)return L"Native map blockers retained with RT. MAP GUARD toggles the R199 comparison.";
     if(mode==Mode::RoomNativeBlendLegacy)return L"R199 comparison: RT with native fade. Native map blockers are not retained.";
@@ -275,7 +275,7 @@ inline LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPA
         const unsigned index=item->CtlID-kButtonFirst;
         if(index>=kButtonCount)return FALSE;
         const auto selected=LiveSelection::GetMode(selection.Read());
-        const bool active=index<kModeCount && (selected==kModeChoices[index].mode || (kModeChoices[index].mode==Mode::RoomNativeBlend && IsNativeBlend(selected)));
+        const bool active=index<kModeCount && (selected==kModeChoices[index].mode || (IsNativeBlend(kModeChoices[index].mode) && IsNativeBlend(selected)));
         HBRUSH brush=CreateSolidBrush(active?theme::kAccent:RGB(35,35,35)); FillRect(item->hDC,&item->rcItem,brush); DeleteObject(brush);
         HBRUSH border=CreateSolidBrush(theme::kBorder); FrameRect(item->hDC,&item->rcItem,border); DeleteObject(border);
         const auto previous=SelectObject(item->hDC,bodyFont); SetBkMode(item->hDC,TRANSPARENT); SetTextColor(item->hDC,theme::kText);
@@ -310,14 +310,14 @@ inline LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPA
             }
             else if(index==kModeCount+8 && !capture_suite::active) {
                 const auto current=LiveSelection::GetMode(selection.Read());
-                const auto next=NativeBlendMode(!NativeBlendMapGuard(current),UsesNativeBlendProjection(current));
+                const auto next=NativeBlendMode(!NativeBlendMapGuard(current),IsNativeBlend(current)?UsesNativeBlendProjection(current):UsesNativeBlendProjection(kNativeBlendDefaultMode));
                 selectionRejected=!SelectMode(next);savedNotice=0;
             }
             else if(index==kModeCount+9) RequestCamera(window,1);
             else if(index==kModeCount+10) RequestCamera(window,0);
             else if(index==kModeCount+11 && !capture_suite::active) {
                 const auto current=LiveSelection::GetMode(selection.Read());
-                const auto next=NativeBlendMode(IsNativeBlend(current)?NativeBlendMapGuard(current):true,!UsesNativeBlendProjection(current));
+                const auto next=NativeBlendMode(IsNativeBlend(current)?NativeBlendMapGuard(current):NativeBlendMapGuard(kNativeBlendDefaultMode),!UsesNativeBlendProjection(current));
                 selectionRejected=!SelectMode(next);savedNotice=0;
                 Trace("native_blend_ray_request projection=%u accepted=%u",unsigned(UsesNativeBlendProjection(next)),unsigned(!selectionRejected));
             }
@@ -370,7 +370,7 @@ inline DWORD WINAPI ThreadProc(LPVOID) noexcept {
         if(!panel)reflection_suite::Tick(nullptr,now);
 #endif
         if(!panel){if(performance_capture::Active())performance_capture::Tick(nullptr,now);if(capture_suite::active)capture_suite::Finish(nullptr,"game_window_lost");continue;}
-        if(LiveSelection::Sequence(selection.Read())==0 && ModeAvailable(Mode::RoomNativeBlend,readyMask.load()))SelectMode(Mode::RoomNativeBlend);
+        if(LiveSelection::Sequence(selection.Read())==0 && ModeAvailable(kNativeBlendDefaultMode,readyMask.load()))SelectMode(kNativeBlendDefaultMode);
         static bool f9Held=false;
         const bool f9Down=(GetAsyncKeyState(VK_F9)&0x8000)!=0;
         const bool capturePress=f9Down&&!f9Held && !(GetAsyncKeyState(VK_CONTROL)&0x8000) && !(GetAsyncKeyState(VK_MENU)&0x8000);

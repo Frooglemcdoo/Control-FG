@@ -1,6 +1,6 @@
 # R205: restore native reflected-light view direction
 
-R204 projection rays were visually accepted in the supplied 2026-10-28 capture.
+R204 projection rays passed the user's full visual regression and were accepted in the supplied 2026-10-28 capture.
 Its manifest reports native_projection_blend, MAP GUARD OFF, RR ON, SPEC Native,
 hit distance OFF, effects 0x6B, and a complete capture with no failures.
 
@@ -15,10 +15,11 @@ missing angled highlights still needs an in-game comparison. It does not enable
 a previously disabled reflection component: the full reflection signal was
 already active. RR noise may differ when highlights move or brighten.
 
-R204 ray selection, authored clipping, filtering, map guard, and R193 long
-reflection sequence remain unchanged. Startup still uses emitter rays with
-MAP GUARD ON. For the accepted lighting setup choose F10 RAYS: PROJECTION and
-MAP GUARD OFF, leave RR ON and SPEC Native, then close F10 and let it settle.
+Native Blend now defaults to projection rays with MAP GUARD OFF, both on
+startup and when selecting NATIVE BLEND. The F9 suite uses this lighting
+default too. The F10 ray and guard toggles retain comparison modes.
+Authored clipping, filtering and R193 long reflection sequence are unchanged.
+Leave RR ON and SPEC Native, then close F10 and let it settle.
 Compare the reflective surface at the same grazing angle where its light
 highlight went missing. Send a screenshot and F10 SAVE LOG if still absent.
 
