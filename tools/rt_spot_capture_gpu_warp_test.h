@@ -107,6 +107,13 @@ static void TestHitCaptureExportRetry() {
     if(capture::exportCursor!=64 || capture::exportEligibilityPending ||
        text.find("rt_hit_gpu_eligibility index=0 ")==std::string::npos || text.find("rt_hit_gpu_light index=0 ")!=std::string::npos)
         throw std::runtime_error("Eligibility retry duplicated or omitted export");
+    // A queued raw record must not be replayed when the eligibility part retries.
+    capture::exportCursor=0;capture::exportLightPending=capture::exportEligibilityPending=capture::exportRawPending=true;
+    fill();capture::Poll();
+    if(!capture::exportRawPending || capture::exportCursor)throw std::runtime_error("Busy queue lost raw progress");
+    drain();capture::Poll();length=drain();text.assign(bytes.data(),length);
+    if(capture::exportRawPending || capture::exportCursor!=64 || text.find("rt_hit_gpu_raw ")!=std::string::npos ||
+       text.find("rt_hit_gpu_eligibility index=0 ")==std::string::npos)throw std::runtime_error("Raw export replayed or lost following part");
     capture::mapRequested=false;
     drain();queue.TakeDropped();capture::exportCursor=capture::exportStage=0;capture::phase.store(capture::Phase::Idle);
     std::cout<<"PASS capture log retry: full queue preserves header, record cursor and final completion marker without render-thread waits\n";

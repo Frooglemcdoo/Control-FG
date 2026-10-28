@@ -18,6 +18,7 @@
 #include <thread>
 #include <future>
 #include <chrono>
+#include <cmath>
 static std::atomic<unsigned long long> presentCount{0};
 static void Log(const char*, ...) {}
 static bool PTReflectionSha256(const unsigned char*, size_t, char*) { return false; }

@@ -165,3 +165,20 @@ try:blockers.classify({'hit':False})
 except ValueError:pass
 else:raise AssertionError('Legacy miss accepted as new probe evidence')
 print('PASS geometry-probe interpretation: separate opacity/mask/no-hit outcomes; legacy evidence rejected')
+
+raw_payload=struct.pack('<4I4f',1,1,19,7,.75,.25,4.,50000.).hex()
+raw_line='ms=3 rt_hit_gpu_raw index=0 bytes='+raw_payload
+raw_log=sidecar.replace('map_bytes=16','map_bytes=16 raw_bytes=32').replace('ms=0 rt_hit_gpu_export_complete',raw_line+'\nms=0 rt_hit_gpu_export_complete')
+assert decoder.decode_log(raw_log)['records'][0]['raw_shadow']['spot_visibility']==.75
+for bad in [raw_log.replace(raw_line+'\n',''),raw_log.replace(raw_line,raw_line+'\n'+raw_line),
+            raw_log.replace('raw_bytes=32','raw_bytes=0'),raw_log.replace('raw_bytes=32','raw_bytes=16'),
+            raw_log.replace(raw_payload,struct.pack('<4I4f',1,1,20,7,.75,.25,4.,50000.).hex()),
+            raw_log.replace(raw_payload,struct.pack('<4I4f',1,1,19,8,.75,.25,4.,50000.).hex()),
+            raw_log.replace(raw_payload,struct.pack('<4I4f',2,1,19,7,.75,.25,4.,50000.).hex()),
+            raw_log.replace(raw_payload,struct.pack('<4I4f',1,1,19,7,float('nan'),.25,4.,50000.).hex()),
+            raw_log.replace(raw_payload,struct.pack('<4I4f',1,1,19,7,1.25,.25,4.,50000.).hex()),
+            raw_log.replace(raw_payload,struct.pack('<4I4f',1,1,19,7,.75,.25,-1.,50000.).hex())]:
+    try:decoder.decode_log(bad)
+    except ValueError:pass
+    else:raise AssertionError('Invalid raw shadow capture accepted')
+print('PASS R201 raw shadow: exact values; missing, duplicate, stale, wrong-light/pixel and invalid values rejected')

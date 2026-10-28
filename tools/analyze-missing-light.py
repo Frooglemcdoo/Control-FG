@@ -39,7 +39,7 @@ def summarize(capture, threshold=.25):
                          max(r['hit_position'][i] for r in records)] for i in range(3)],
             hit_distance_range=[min(r['hit_distance'] for r in records),
                                 max(r['hit_distance'] for r in records)]))
-    return dict(schema='control-missing-light-analysis-r200', threshold=threshold,
+    result = dict(schema='control-missing-light-analysis-r201', threshold=threshold,
         valid_samples=len(valid), darker_rt_samples=len(targets),
         reference_hits=sum(r['hit'] for r, s in targets),
         reference_misses=sum(not r['hit'] for r, s in targets),
@@ -53,6 +53,12 @@ def summarize(capture, threshold=.25):
             'does not prove a filter error. Partial native visibility can reflect filtering '
             'or authored fade. Geometry identifiers are local to one capture. The map '
             'sidecar and composition evaluate the native map separately.')
+    raw = [(r, s) for r, s in targets if 'raw_shadow' in r]
+    result['raw_samples_for_darker_rt'] = len(raw)
+    result['raw_lit_filtered_blocked'] = sum(r['raw_shadow']['spot_visibility'] > .9 and s['rt_visibility'] < .1 for r, s in raw)
+    result['filter_visibility_drop_gt_threshold'] = sum(r['raw_shadow']['spot_visibility'] - s['rt_visibility'] > threshold for r, s in raw)
+    result['raw_already_below_map_gt_threshold'] = sum(s['map_visibility'] - r['raw_shadow']['spot_visibility'] > threshold for r, s in raw)
+    return result
 
 
 def main():

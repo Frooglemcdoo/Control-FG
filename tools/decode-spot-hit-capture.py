@@ -126,6 +126,29 @@ def decode_log(text):
     hits = sum(record['hit'] for record in valid)
     if len(seen) != len(valid) or len(valid) != finish.get('valid_rays') or hits != finish.get('hits') or len(valid)-hits != finish.get('misses'):
         raise ValueError('Missing records or inconsistent capture totals')
+    raw_bytes=begin.get('raw_bytes',0)
+    if raw_bytes not in (0,32) or (raw_bytes and map_bytes!=16):
+        raise ValueError('Unsupported raw shadow ABI')
+    raw_records={}
+    for line in text.splitlines():
+        if ' rt_hit_gpu_raw ' not in line: continue
+        if not raw_bytes or not text.index(completed[0]) < text.index(line) < text.index(exported[0]):
+            raise ValueError('Unexpected raw shadow record or export ordering')
+        match=re.search(r'index=(\d+) bytes=([0-9a-fA-F]{64})$',line)
+        if not match: raise ValueError('Malformed raw shadow record')
+        index=int(match[1])
+        if index not in seen or index in raw_records: raise ValueError('Duplicate or unmatched raw shadow record')
+        raw_records[index]=struct.unpack('<4I4f',bytes.fromhex(match[2]))
+    if raw_bytes and raw_records.keys()!=seen: raise ValueError('Missing raw shadow records')
+    for record in valid:
+        if not raw_bytes: continue
+        raw=raw_records[record['ordinal']]
+        if list(raw[:2])!=record['pixel'] or raw[2]!=record['frame_tag'] or raw[3]!=record['light_id']:
+            raise ValueError('Raw shadow pixel/frame/light mismatch')
+        if not all(math.isfinite(x) for x in raw[4:]) or not all(0<=x<=1 for x in raw[4:6]) or min(raw[6:])<0:
+            raise ValueError('Invalid raw shadow values')
+        record['raw_shadow']=dict(spot_visibility=raw[4],point_visibility=raw[5],
+            spot_hit_distance=raw[6],point_hit_distance=raw[7])
     eligibility_bytes=begin.get('eligibility_bytes',0)
     if eligibility_bytes not in (0,160) or (eligibility_bytes and map_bytes!=16):
         raise ValueError('Unsupported eligibility ABI')

@@ -3,7 +3,7 @@ name: Build native reflection enhancements and RR
 on:
   push:
     branches:
-      - work/r200-native-map-guard
+      - work/r201-raw-shadow-capture
       - experiment/native-hit-capture-r118
       - experiment/pt-reflections-p0
       - experiment/pt-verify-stages-20261010
@@ -453,6 +453,12 @@ jobs:
           if($LASTEXITCODE -ne 0){throw 'Composition signal capture compile failed'}
           & $dxc -T cs_6_0 -E captureComposition -D CAPTURE_BEFORE=1 -O3 -WX -Fo build/rt_spot_capture_signal_before.dxil src/shaders/rt_spot_capture_signal.hlsl
           if($LASTEXITCODE -ne 0){throw 'Composition pre-pass capture compile failed'}
+          & $dxc -T cs_6_0 -E captureRawShadow -O3 -WX -Fo build/rt_spot_capture_raw.dxil src/shaders/rt_spot_capture_raw.hlsl
+          if($LASTEXITCODE -ne 0){throw 'Raw shadow capture shader compilation failed'}
+          python tools/test-raw-shadow-capture.py --dxc $dxc
+          if($LASTEXITCODE -ne 0){throw 'Raw shadow binding contract failed'}
+          python tools/test-missing-light-analysis.py
+          if($LASTEXITCODE -ne 0){throw 'Missing-light classifier failed'}
           python tools/embed-spot-capture-table.py
           if($LASTEXITCODE -ne 0){throw 'GPU table embedding failed'}
           python tools/rt_spot_capture_inputs.py
@@ -806,11 +812,11 @@ jobs:
           build\suite-controller.exe
           if errorlevel 1 exit /b 1
 
-      - name: Package live lighting diagnostic R200
+      - name: Package live lighting diagnostic R201
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-Native-Lighting-Live-R200'
+          $out='Control-FG-Native-Lighting-Live-R201'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
           Copy-Item build/rt_spot_selected_off.dxbc,build/rt_spot_selection.dxbc,build/rt_spot_visibility.dxbc,build/rt_spot_light_ids.dxbc,build/rt_spot_raw_history.dxbc,build/rt_spot_raw_spatial0.dxbc,build/rt_spot_raw_spatial1.dxbc,build/rt_spot_full.dxil,build/rt_spot_r94.dxil,build/rt_spot_light.dxbc,build/rt_spot_reset.dxbc,build/rt_spot_history.dxbc,build/rt_spot_spatial0.dxbc,build/rt_spot_spatial1.dxbc $out
@@ -831,9 +837,9 @@ jobs:
           Copy-Item Package-Lighting-Capture.cmd,tools/package-lighting-capture.py,Package-Lighting-Performance.ps1 $out
           Copy-Item Capture-RR-Boundary.cmd,Capture-RR-Boundary.ps1,Collect-RR-Boundary-Status.cmd,tools/collect-rr-boundary.py $out
           Copy-Item Start-Compact-Distance-Test.cmd,Capture-RR-Suite.ps1,tools/collect-rr-suite.py $out
-          Copy-Item docs/native-lighting-r200.md "$out/DIAGNOSTIC-NOTES.md"
+          Copy-Item docs/native-lighting-r201.md "$out/DIAGNOSTIC-NOTES.md"
           @'
-          CONTROL-FG R200 - preserve native-map spotlight blockers in Native Blend
+          CONTROL-FG R201 - raw and filtered spotlight capture; R200 rendering retained
           Launch normally. Hit distance is OFF by default; SPEC defaults to Native.
           Enable RR and the game RT settings used in your accepted baseline.
           Ray Traced Contact Shadows must be enabled for the spotlight/ray pipeline.
@@ -843,10 +849,10 @@ jobs:
           F10 - FREE CAMERA enters the native developer camera; NORMAL CAMERA restores player controls.
           A controller is recommended; mouse wheel changes camera speed. Time keeps running.
           F10 - TRACE SHADOW records Native Blend without switching mode or RR.
-          Compare MAP GUARD ON/OFF from the same outside-window position.
-          Hold still until completion; send the Shadow-R200 log, manifest and PNGs.
+          Use MAP GUARD ON at the affected outside-window view. One trace is enough.
+          Hold still until completion; send the Shadow-R201 log, manifest and PNGs.
           TRACE SHADOW preserves the selected map-guard setting and RR.
-          Map guard is a shadow fallback; it does not repair missing RT geometry.
+          Trace includes raw gameplay visibility and blocker distance before shadow filtering.
           No diagnostic colors. F9 cancels an active light capture.
           Read DIAGNOSTIC-NOTES.md.
           '@ | Set-Content "$out/README.txt" -Encoding ASCII
@@ -856,10 +862,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-Native-Lighting-Live-R200
+          name: Control-FG-Native-Lighting-Live-R201
           path: |
-            Control-FG-Native-Lighting-Live-R200.zip
-            Control-FG-Native-Lighting-Live-R200.sha256
+            Control-FG-Native-Lighting-Live-R201.zip
+            Control-FG-Native-Lighting-Live-R201.sha256
             build/spec-volume-roughness-validation.json
             build/spec-volume-roughness.dxbc
             build/spec-environment-validation.json

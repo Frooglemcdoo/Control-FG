@@ -18,7 +18,7 @@ inline ComPtr<ID3D12GraphicsCommandList4> recordedList;
 inline ComPtr<ID3D12StateObject> recordedState,captureState;
 inline ComPtr<ID3D12CommandQueue> submittedQueue;
 inline unsigned attempts=0,exportCursor=0,exportStage=0;
-inline bool exportLightPending=false,exportEligibilityPending=false;
+inline bool exportLightPending=false,exportEligibilityPending=false,exportRawPending=false;
 inline UINT64 fenceValue=1;
 inline UINT completionStatus[4]{},completionRays=0,completionHits=0;
 inline UINT frameTag=0,capturedWidth=0,capturedHeight=0,capturedTableRecords=0;
@@ -139,7 +139,7 @@ inline bool RequestFresh(bool compareMap=false) noexcept {
            (!mapRecorded || RecordingWasReset(mapList.Get(),mapGeneration)) &&
            completed!=UINT64_MAX && completed>=fenceValue &&
            signalCompleted!=UINT64_MAX && signalCompleted>=fenceValue) {
-            ++fenceValue;attempts=exportCursor=exportStage=0;exportLightPending=exportEligibilityPending=false;readbackCopied=false;
+            ++fenceValue;attempts=exportCursor=exportStage=0;exportLightPending=exportEligibilityPending=exportRawPending=false;readbackCopied=false;
             recordedList.Reset();recordedState.Reset();captureState.Reset();recordedTable.Reset();recordedHeap.Reset();submittedQueue.Reset();
             recordedSignalList.Reset();recordedSignalHeap.Reset();recordedSignalPipeline.Reset();recordedSignalBeforePipeline.Reset();signalQueue.Reset();
             accepted=true;
@@ -381,7 +381,7 @@ inline void Record(ID3D12GraphicsCommandList4* list,ID3D12StateObject* owner,con
         if(attempts<4)Trace("rt_hit_gpu_pending reason=map_warmup table_bytes=%llu",desc->HitGroupTable.SizeInBytes);
         return;
     }
-    Context current;constexpr UINT64 required=(1ull<<5)|(1ull<<6)|(1ull<<7)|(1ull<<9)|(1ull<<10)|(1ull<<11)|(1ull<<12);
+    Context current;const UINT64 required=(mapRequested?((1ull<<41)|(1ull<<42)):0)|(1ull<<5)|(1ull<<6)|(1ull<<7)|(1ull<<9)|(1ull<<10)|(1ull<<11)|(1ull<<12);
     if(!ReadContext(current) || current.list!=list || current.list!=mirrored.list || current.heap!=mirrored.heap ||
         current.gpu.ptr!=mirrored.gpu.ptr || (observed&required)!=required) {
         if(attempts<4)Trace("rt_hit_gpu_pending reason=descriptor_snapshot observed=%llx required=%llx",observed,required);
@@ -394,9 +394,10 @@ inline void Record(ID3D12GraphicsCommandList4* list,ID3D12StateObject* owner,con
     }
     ReleaseSRWLockShared(&ownerLock);
     if(!source){if(attempts<4)Trace("rt_hit_gpu_pending reason=table_resource");return;}
-    ComPtr<ID3D12StateObject> inputs,capture;ComPtr<ID3D12PipelineState> translate,clear;
+    ComPtr<ID3D12StateObject> inputs,capture;ComPtr<ID3D12PipelineState> translate,clear,raw;
     if(!Attached(owner,gpu::kInputState,inputs) || !Attached(owner,rt_spot_hit_pipeline::kPipeline,capture) ||
-        !Attached(owner,gpu::kTranslate,translate) || !Attached(owner,gpu::kClear,clear)){Fail("pipelines_unavailable");return;}
+        !Attached(owner,gpu::kTranslate,translate) || !Attached(owner,gpu::kClear,clear) ||
+        (mapRequested && !Attached(owner,gpu::kRawPipeline,raw))){Fail("pipelines_unavailable");return;}
     unsigned char ids[4][32]{},inputId[32]{};UINT size=sizeof(ids);
     if(FAILED(owner->GetPrivateData(rt_spot_hit_pipeline::kIdentifiers,&size,ids)) || size!=sizeof(ids)){Fail("capture_identifiers");return;}
     size=32;if(FAILED(owner->GetPrivateData(gpu::kInputIdentifier,&size,inputId)) || size!=32){Fail("input_identifier");return;}
@@ -446,6 +447,12 @@ inline void Record(ID3D12GraphicsCommandList4* list,ID3D12StateObject* owner,con
     list->SetComputeRootDescriptorTable(0,tables[0]);hooks.set(list,inputs.Get());
     D3D12_DISPATCH_RAYS_DESC inputDispatch{};inputDispatch.RayGenerationShaderRecord={resources.upload->GetGPUVirtualAddress()+768,32};
     inputDispatch.Width=inputDispatch.Height=64;inputDispatch.Depth=1;hooks.dispatch(list,&inputDispatch);
+    if(mapRequested) {
+        // Both native outputs and capture identities are now complete. Read only;
+        // write the private input-buffer tail, covered by the existing ray fence.
+        gpu::UavBarrier(list);
+        list->SetPipelineState(raw.Get());list->Dispatch(8,8,1);
+    }
     gpu::Transition(list,resources.inputs.Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
     list->SetComputeRootDescriptorTable(0,tables[1]);list->SetPipelineState(clear.Get());list->Dispatch(1,1,1);gpu::UavBarrier(list);
     list->SetPipelineState(translate.Get());list->Dispatch((tableControls.count+63)/64,1,1);
@@ -464,6 +471,7 @@ inline void Record(ID3D12GraphicsCommandList4* list,ID3D12StateObject* owner,con
     gpu::Transition(list,resources.status.Get(),D3D12_RESOURCE_STATE_COPY_SOURCE,D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
     gpu::Transition(list,resources.inputs.Get(),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,D3D12_RESOURCE_STATE_COPY_SOURCE);
     list->CopyBufferRegion(resources.readback.Get(),gpu::kLightContextReadbackOffset,resources.inputs.Get(),gpu::kInputBytes,gpu::kLightContextBytes);
+    if(mapRequested)list->CopyBufferRegion(resources.readback.Get(),gpu::kRawReadbackOffset,resources.inputs.Get(),gpu::kRawInputOffset,gpu::kRawBytes);
     gpu::Transition(list,resources.inputs.Get(),D3D12_RESOURCE_STATE_COPY_SOURCE,D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
     gpu::Transition(list,resources.table.Get(),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
     list->SetComputeRootDescriptorTable(0,current.gpu);hooks.set(list,owner);
@@ -563,6 +571,14 @@ inline void Poll() noexcept {
                     if(!result.valid)continue;
                     if(result.valid!=1 || result.frameTag!=frameTag || result.pixelX>=capturedWidth || result.pixelY>=capturedHeight ||
                         (result.hit.hitKind!=0 && result.hit.hitKind!=254 && result.hit.hitKind!=255)){++invalidRecords;continue;}
+                    if(mapRequested) {
+                        UINT identity[4]{};float raw[4]{};
+                        const auto* sample=completedBytes+gpu::kRawReadbackOffset+i*gpu::kRawStride;
+                        memcpy(identity,sample,16);memcpy(raw,sample+16,16);
+                        if(identity[0]!=result.pixelX || identity[1]!=result.pixelY || identity[2]!=frameTag || identity[3]!=result.lightId ||
+                           !std::isfinite(raw[0]) || !std::isfinite(raw[1]) || !std::isfinite(raw[2]) || !std::isfinite(raw[3]) ||
+                           raw[0]<0 || raw[0]>1 || raw[1]<0 || raw[1]>1 || raw[2]<0 || raw[3]<0)++invalidRecords;
+                    }
                     if(mapRequested)for(UINT bank=1;bank<=2;++bank) {
                         rt_spot_capture::CaptureResult probe{};
                         memcpy(&probe,completedBytes+bank*gpu::kResultBankBytes+i*sizeof(probe),sizeof(probe));
@@ -585,7 +601,7 @@ inline void Poll() noexcept {
     // Retry canonical headers and records if the nonblocking log queue is busy.
     // Cursor advancement means successful enqueue, never merely an attempted write.
     if(exportStage==0) {
-        if(!Trace("rt_hit_gpu_recorded generation=%llu frame_tag=%u extent=%ux%u table_records=%u captured_present=%llu light_context_bytes=128 signal_bytes=128 spot_record_bytes=336 signal_generation=%llu signal_present=%llu map_bytes=%u map_generation=%llu map_present=%llu eligibility_bytes=%u",recordedGeneration,frameTag,capturedWidth,capturedHeight,capturedTableRecords,recordedPresent,signalGeneration,signalPresent,mapRequested?16u:0u,mapGeneration,mapPresent,mapRequested?160u:0u))return;
+        if(!Trace("rt_hit_gpu_recorded generation=%llu frame_tag=%u extent=%ux%u table_records=%u captured_present=%llu light_context_bytes=128 signal_bytes=128 spot_record_bytes=336 signal_generation=%llu signal_present=%llu map_bytes=%u map_generation=%llu map_present=%llu eligibility_bytes=%u raw_bytes=%u",recordedGeneration,frameTag,capturedWidth,capturedHeight,capturedTableRecords,recordedPresent,signalGeneration,signalPresent,mapRequested?16u:0u,mapGeneration,mapPresent,mapRequested?160u:0u,mapRequested?32u:0u))return;
         exportStage=1;
     }
     if(exportStage==1) {
@@ -615,6 +631,12 @@ inline void Poll() noexcept {
                 else if(!Trace("rt_hit_gpu_light index=%u bytes=%s",exportCursor,spotHex))return;
                 exportEligibilityPending=true;
             }
+            if(mapRequested && !exportRawPending) {
+                char rawHex[65]{};
+                rt_spot_capture_audit::Hex(completedBytes+gpu::kRawReadbackOffset+exportCursor*gpu::kRawStride,gpu::kRawStride,rawHex);
+                if(!Trace("rt_hit_gpu_raw index=%u bytes=%s",exportCursor,rawHex))return;
+                exportRawPending=true;
+            }
             UINT hitKind=0;memcpy(&hitKind,record+24,4);
             if(mapRequested && !hitKind) {
                 char probes[321]{};
@@ -622,7 +644,7 @@ inline void Poll() noexcept {
                     rt_spot_capture_audit::Hex(completedBytes+bank*gpu::kResultBankBytes+exportCursor*80,80,probes+(bank-1)*160);
                 if(!Trace("rt_hit_gpu_eligibility index=%u bytes=%s",exportCursor,probes))return;
             }
-            exportLightPending=exportEligibilityPending=false;
+            exportLightPending=exportEligibilityPending=exportRawPending=false;
         }
     }
     if(exportCursor==gpu::kRayCount && Trace("rt_hit_gpu_export_complete records_examined=4096 format=CaptureResult80 frame_tag=%u",frameTag))exportStage=3;

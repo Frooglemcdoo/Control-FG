@@ -1,6 +1,8 @@
 #pragma once
+#include "rt_spot_capture_raw_test.h"
 // Exercise the real embedded sampler against patterned native-layout textures.
 static void TestCompositionSignal(ID3D12Device* device) {
+    TestRawShadowSignal(device);TestRawShadowSignal(device,true);
     namespace gpu=native_lighting::rt_spot_capture_gpu;
     gpu::Resources resources;Check(resources.Initialize(device));
     D3D12_DESCRIPTOR_RANGE ranges[]={{D3D12_DESCRIPTOR_RANGE_TYPE_CBV,5,4,0,0},
