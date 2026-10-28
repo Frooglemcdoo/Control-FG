@@ -113,6 +113,8 @@ inline bool TryCreate(ID3D12Device* device,const D3D12_COMPUTE_PIPELINE_STATE_DE
         library?"library":"direct",unsigned(ready),static_cast<unsigned long>(result),sourceSha);
 #ifdef CONTROL_SPEC_HIT_VIEW
     Log("SPEC_HIT_VIEW build=R191 applied=%u native_fallback=%u extra_rays=0 extra_texture_reads=0 near_zero_fallback=1",unsigned(ready),unsigned(!ready));
+#else
+    Log("SPEC_NATIVE_VIEW build=R205 applied=%u native_fallback=%u direction=hit_to_camera serial_lifetimes=1",unsigned(ready),unsigned(!ready));
 #endif
 #ifdef CONTROL_SPEC_LOCAL_CAPTURE
     Log("SPEC_LOCAL_COMPONENT build=R191 requested=%s applied=%u native_fallback=%u cap_basis=original_total",spec_local::Name(localComponent),unsigned(ready),unsigned(!ready));
