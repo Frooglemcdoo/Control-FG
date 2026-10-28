@@ -780,10 +780,14 @@ static void RRNativeHookBroadDiffuseCommon(unsigned site, void* color, void* his
 }
 static void RRNativeHookBroadDiffuseA(void* color,void* history,unsigned passes) {RRNativeHookBroadDiffuseCommon(0,color,history,passes);}
 static void RRNativeHookBroadDiffuseB(void* color,void* history,unsigned passes) {RRNativeHookBroadDiffuseCommon(1,color,history,passes);}
+#include "rr_temporal_probe.h"
 static void RRReportSpecularProducer() noexcept {
  const auto* observation=rrNativeSpecularSamplePatch.observation;
  if(!observation||!observation->seen)return;
  const auto now=*observation;
+#ifdef CONTROL_RR_TEMPORAL_PROBE
+ RRTemporalProbe(rrNativeFrame.Key().frame,now.effectiveCount);
+#endif
 #ifdef CONTROL_RR_F9_SUITE
  rr_suite::effectiveSamples.store(now.effectiveCount);rr_suite::sampleFrame.store(rrNativeFrame.Key().frame);
 #endif

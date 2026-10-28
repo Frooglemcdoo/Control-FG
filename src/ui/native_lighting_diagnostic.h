@@ -139,14 +139,14 @@ inline void Paint(HWND window) noexcept {
 }
 inline void ReportSpecIsolation(const char* reason) noexcept {
 #if defined(CONTROL_RR_COMPACT_DISTANCE)
-    Trace("rr_compact_distance build=R191 reason=%s requested=%u installed=%u evaluations=%llu bound_evaluations=%llu last_bound=%u copied_layers=1 status=%s capture_status=%s capture_bytes=%llu",
+    Trace("rr_compact_distance build=R192 reason=%s requested=%u installed=%u evaluations=%llu bound_evaluations=%llu last_bound=%u copied_layers=1 status=%s capture_status=%s capture_bytes=%llu",
         reason,unsigned(rr_compact_distance::enabled.load()),unsigned(rr_compact_distance::installed.load()),rr_compact_distance::evaluations.load(),rr_compact_distance::boundEvaluations.load(),unsigned(rr_compact_distance::lastBound.load()),rr_compact_distance::reason.load(),rr_compact_distance::captureReason.load(),rr_compact_distance::captureBytes.load());
 #elif defined(CONTROL_SPEC_VOLUME_ROUGHNESS)
-    Trace("spec_volume_status build=R191 reason=%s enabled=%u diagnostic_gain=1 direct_created=%llu library_created=%llu failures=%llu evidence=creation_counters",
+    Trace("spec_volume_status build=R192 reason=%s enabled=%u diagnostic_gain=1 direct_created=%llu library_created=%llu failures=%llu evidence=creation_counters",
         reason,unsigned(spec_serial::VolumeRoughnessEnabled()),spec_serial::directCreated.load(),spec_serial::libraryCreated.load(),spec_serial::failures.load());
 #elif defined(CONTROL_SPEC_INDIRECT_CAPTURE)
     const auto mode=spec_serial::ComponentMode();
-    Trace("spec_indirect_status build=R191 reason=%s requested=%s diagnostic_gain=%u direct_created=%llu library_created=%llu failures=%llu evidence=creation_counters",
+    Trace("spec_indirect_status build=R192 reason=%s requested=%s diagnostic_gain=%u direct_created=%llu library_created=%llu failures=%llu evidence=creation_counters",
         reason,spec_indirect::Name(mode),spec_indirect::Gain(mode),spec_serial::directCreated.load(),spec_serial::libraryCreated.load(),spec_serial::failures.load());
 #elif defined(CONTROL_SPEC_LOCAL_CAPTURE)
     Trace("spec_local_status reason=%s requested=%s direct_created=%llu library_created=%llu failures=%llu evidence=creation_counters",
@@ -325,7 +325,7 @@ inline DWORD WINAPI ThreadProc(LPVOID) noexcept {
     ULONGLONG nextRefresh=0, nextWindowSearch=0, nextLogDrain=0, nextRRReport=0;
     HWND cachedGame=nullptr;
     POINT lastOrigin{-1,-1};
-    Trace("session_start build=R191-overlay-rr-capture pid=%lu default=authored_clip_surface_normals_current_spot_when_ready log=user-diagnostics-folder",GetCurrentProcessId());
+    Trace("session_start build=R192-overlay-rr-capture pid=%lu default=authored_clip_surface_normals_current_spot_when_ready log=user-diagnostics-folder",GetCurrentProcessId());
 #ifdef CONTROL_RR_COMPONENT_CAPTURE
     Trace("spec_component_session requested=%s direct_created=%llu library_created=%llu failures=%llu",
         spec_component::Name(spec_serial::ComponentMode()),
