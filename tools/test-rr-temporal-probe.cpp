@@ -7,6 +7,9 @@
 #define __try try
 #define __except(x) catch(...)
 #endif
+#ifndef EXCEPTION_EXECUTE_HANDLER
+#define EXCEPTION_EXECUTE_HANDLER 1
+#endif
 #define CONTROL_RR_TEMPORAL_PROBE
 using DWORD=unsigned long;
 DWORD lastError=77;
