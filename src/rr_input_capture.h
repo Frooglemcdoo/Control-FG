@@ -290,7 +290,13 @@ static void RRInputCaptureAfterPresent(unsigned long long present) noexcept {
    }
   }
   for(auto& job:rrInputCaptures){auto* c=&job;
-   if(c->policy.Retire(c->fence?c->fence->GetCompletedValue():0)){
+   const bool mayExport=
+#ifdef CONTROL_RR_F9_SUITE
+    control_rr::InputCapturePairMayExport(rrInputCaptures[0].policy.phase,rrInputCaptures[1].policy.phase,rr_suite::cancelled.load());
+#else
+    true;
+#endif
+   if(mayExport&&c->policy.Retire(c->fence?c->fence->GetCompletedValue():0)){
     if(!QueueUserWorkItem(&RRInputCaptureExport,c,WT_EXECUTEDEFAULT))c->policy.phase=P::Failed;
    }
    if(c->policy.CanSubmit(present)){const HRESULT hr=c->queue->Signal(c->fence,1);c->policy.Submit(SUCCEEDED(hr));

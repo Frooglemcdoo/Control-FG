@@ -6,6 +6,11 @@
 #include <initializer_list>
 int main(){
  using namespace rr_suite;using P=control_rr::InputCapturePolicy;namespace ui=control_rr_capture_ui;
+ assert(!control_rr::InputCapturePairMayExport(P::Submitted,P::Ready,false));
+ assert(!control_rr::InputCapturePairMayExport(P::Ready,P::Submitted,false));
+ assert(control_rr::InputCapturePairMayExport(P::Submitted,P::Submitted,false));
+ assert(control_rr::InputCapturePairMayExport(P::Exporting,P::Recorded,false));
+ assert(control_rr::InputCapturePairMayExport(P::Submitted,P::Ready,true));
  P a,b;
  for(unsigned n=1;n<=16;++n){
   const unsigned s=(n-1)%count+1;requested=s;assert(Latch(n));

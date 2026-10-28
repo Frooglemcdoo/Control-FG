@@ -19,6 +19,13 @@ struct InputCapturePolicy {
  bool Retire(std::uint64_t completed){if(phase!=Submitted)return false;if(completed==UINT64_MAX){phase=Failed;return false;}if(completed<1)return false;phase=Exporting;return true;}
  void Exported(){if(phase==Exporting)phase=Idle;}
 };
+// Do not let a first-frame export worker hold the capture lock while the
+// second consecutive frame still needs recording. Cancellation may drain it.
+inline bool InputCapturePairMayExport(InputCapturePolicy::Phase first,InputCapturePolicy::Phase second,bool cancelled) noexcept {
+ using P=InputCapturePolicy;
+ const auto pending=[](P::Phase phase){return phase==P::Requested||phase==P::Preparing||phase==P::Ready;};
+ return cancelled||(!pending(first)&&!pending(second));
+}
 // Returns 2 while waiting. Both readback slots must be ready before any copy.
 inline unsigned SelectInputCapturePair(InputCapturePolicy::Phase first,InputCapturePolicy::Phase second,
  std::uint64_t firstFrame,std::uint64_t frame){
