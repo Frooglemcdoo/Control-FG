@@ -777,6 +777,10 @@ jobs:
           if errorlevel 1 exit /b 1
           build\suite-dispatch.exe
           if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc tools\test-rr-suite-controller.cpp /Febuild\suite-controller.exe
+          if errorlevel 1 exit /b 1
+          build\suite-controller.exe
+          if errorlevel 1 exit /b 1
 
       - name: Package live lighting diagnostic R191
         shell: powershell

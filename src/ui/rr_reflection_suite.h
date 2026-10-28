@@ -26,7 +26,7 @@ inline bool Start(uint64_t now) noexcept {
  const auto state=control_rr_capture_ui::state.load();
  if(active||capture_suite::active||performance_capture::Active()||rr_suite::session.load()>=2||rr_suite::cancelled.load()||
     control_rr_capture_ui::requested.load()||(state!=S::Idle&&state!=S::Complete)||control_rr_capture_ui::completedPairs.load()!=rr_suite::session.load()*rr_suite::count||
-    !rr_suite::ready.load()||!specularSamplesReady.load()||!control_rr::RRUserRuntimeWorkRequested()||slFgEnabledByApi.load())return false;
+    !rr_suite::ready.load()||!specularSamplesReady.load()||!control_rr::RRUserRequested()||slFgEnabledByApi.load())return false;
  restore=LiveSelection::GetMode(selection.Read());
  if(!SelectMode(Mode::RoomNativeBlend))return false;
  selectionToken=LiveSelection::Sequence(selection.Read());++rr_suite::session;step=0;active=true;waiting=false;cancelling=false;began=now;
@@ -40,7 +40,7 @@ inline void Tick(HWND game,uint64_t now) noexcept {
  auto state=control_rr_capture_ui::state.load();
  if(!game||GetForegroundWindow()!=game||IsIconic(game))Cancel("focus_lost");
  if(LiveSelection::Sequence(selection.Read())!=selectionToken)Cancel("selection_changed");
- if(!control_rr::RRUserRuntimeWorkRequested()||slFgEnabledByApi.load())Cancel("rr_or_fg_changed");
+ if(!control_rr::RRUserRequested()||slFgEnabledByApi.load())Cancel("rr_or_fg_changed");
  if(state==S::Failed){rr_suite::cancelled.store(true);Finish("capture_failed");return;}
  // Cancellation stops future recording. Submitted GPU copies still retire normally.
  if(cancelling){rr_suite::cancelled.store(true);Finish(stopReason);return;}
