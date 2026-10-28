@@ -139,14 +139,14 @@ inline void Paint(HWND window) noexcept {
 }
 inline void ReportSpecIsolation(const char* reason) noexcept {
 #if defined(CONTROL_RR_COMPACT_DISTANCE)
-    Trace("rr_compact_distance build=R193 reason=%s requested=%u installed=%u evaluations=%llu bound_evaluations=%llu last_bound=%u copied_layers=1 status=%s capture_status=%s capture_bytes=%llu",
+    Trace("rr_compact_distance build=R194 reason=%s requested=%u installed=%u evaluations=%llu bound_evaluations=%llu last_bound=%u copied_layers=1 status=%s capture_status=%s capture_bytes=%llu",
         reason,unsigned(rr_compact_distance::enabled.load()),unsigned(rr_compact_distance::installed.load()),rr_compact_distance::evaluations.load(),rr_compact_distance::boundEvaluations.load(),unsigned(rr_compact_distance::lastBound.load()),rr_compact_distance::reason.load(),rr_compact_distance::captureReason.load(),rr_compact_distance::captureBytes.load());
 #elif defined(CONTROL_SPEC_VOLUME_ROUGHNESS)
-    Trace("spec_volume_status build=R193 reason=%s enabled=%u diagnostic_gain=1 direct_created=%llu library_created=%llu failures=%llu evidence=creation_counters",
+    Trace("spec_volume_status build=R194 reason=%s enabled=%u diagnostic_gain=1 direct_created=%llu library_created=%llu failures=%llu evidence=creation_counters",
         reason,unsigned(spec_serial::VolumeRoughnessEnabled()),spec_serial::directCreated.load(),spec_serial::libraryCreated.load(),spec_serial::failures.load());
 #elif defined(CONTROL_SPEC_INDIRECT_CAPTURE)
     const auto mode=spec_serial::ComponentMode();
-    Trace("spec_indirect_status build=R193 reason=%s requested=%s diagnostic_gain=%u direct_created=%llu library_created=%llu failures=%llu evidence=creation_counters",
+    Trace("spec_indirect_status build=R194 reason=%s requested=%s diagnostic_gain=%u direct_created=%llu library_created=%llu failures=%llu evidence=creation_counters",
         reason,spec_indirect::Name(mode),spec_indirect::Gain(mode),spec_serial::directCreated.load(),spec_serial::libraryCreated.load(),spec_serial::failures.load());
 #elif defined(CONTROL_SPEC_LOCAL_CAPTURE)
     Trace("spec_local_status reason=%s requested=%s direct_created=%llu library_created=%llu failures=%llu evidence=creation_counters",
@@ -221,7 +221,7 @@ inline void RequestShadowTrace(HWND panel) noexcept {
        (light!=State::Idle && light!=State::Complete)) {
         MessageBoxW(panel,L"Finish the light capture first. If it failed, start a fresh game session before tracing.",L"Shadow trace",MB_OK);return;
     }
-    if(capture_suite::Start(capture_suite::Kind::Blocker))ClosePanel(panel);
+    if(capture_suite::Start(capture_suite::Kind::MapProbe))ClosePanel(panel);
     else MessageBoxW(panel,L"Shadow trace unavailable. Return to gameplay until corrected shadows are ready. If a previous trace failed, restart the game; otherwise Save Log for diagnosis.",L"Shadow trace",MB_OK);
 }
 inline void RequestPerformanceCapture(HWND panel) noexcept {
@@ -325,7 +325,7 @@ inline DWORD WINAPI ThreadProc(LPVOID) noexcept {
     ULONGLONG nextRefresh=0, nextWindowSearch=0, nextLogDrain=0, nextRRReport=0;
     HWND cachedGame=nullptr;
     POINT lastOrigin{-1,-1};
-    Trace("session_start build=R193-overlay-rr-capture pid=%lu default=authored_clip_surface_normals_current_spot_when_ready log=user-diagnostics-folder",GetCurrentProcessId());
+    Trace("session_start build=R194-overlay-rr-capture pid=%lu default=authored_clip_surface_normals_current_spot_when_ready log=user-diagnostics-folder",GetCurrentProcessId());
 #ifdef CONTROL_RR_COMPONENT_CAPTURE
     Trace("spec_component_session requested=%s direct_created=%llu library_created=%llu failures=%llu",
         spec_component::Name(spec_serial::ComponentMode()),
@@ -357,7 +357,8 @@ inline DWORD WINAPI ThreadProc(LPVOID) noexcept {
         f9Held=f9Down;
         if(!performance_capture::Active() && capturePress && (GetForegroundWindow()==game || PanelHasForeground(panel))) {
 #ifdef CONTROL_RR_F9_SUITE
-            if(reflection_suite::active)reflection_suite::Cancel("cancelled");
+            if(capture_suite::active)capture_suite::Finish(game,"cancelled");
+            else if(reflection_suite::active)reflection_suite::Cancel("cancelled");
             else {if(panelOpen)ClosePanel(panel);
                 if(!reflection_suite::Start(now))MessageBoxW(game,L"Return to gameplay with RR ON and FG OFF. Wait for reflection shaders to be ready. Two complete locations are supported per launch; restart after an incomplete sequence.",L"F9 reflection sequence",MB_OK);}
 #else

@@ -3,7 +3,7 @@ name: Build native reflection enhancements and RR
 on:
   push:
     branches:
-      - work/r193-reflection-long-sequence
+      - work/r194-native-rt-light-capture
       - experiment/native-hit-capture-r118
       - experiment/pt-reflections-p0
       - experiment/pt-verify-stages-20261010
@@ -796,11 +796,11 @@ jobs:
           build\suite-controller.exe
           if errorlevel 1 exit /b 1
 
-      - name: Package live lighting diagnostic R193
+      - name: Package live lighting diagnostic R194
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-Native-Lighting-Live-R193'
+          $out='Control-FG-Native-Lighting-Live-R194'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
           Copy-Item build/rt_spot_selected_off.dxbc,build/rt_spot_selection.dxbc,build/rt_spot_visibility.dxbc,build/rt_spot_light_ids.dxbc,build/rt_spot_raw_history.dxbc,build/rt_spot_raw_spatial0.dxbc,build/rt_spot_raw_spatial1.dxbc,build/rt_spot_full.dxil,build/rt_spot_r94.dxil,build/rt_spot_light.dxbc,build/rt_spot_reset.dxbc,build/rt_spot_history.dxbc,build/rt_spot_spatial0.dxbc,build/rt_spot_spatial1.dxbc $out
@@ -821,16 +821,16 @@ jobs:
           Copy-Item Package-Lighting-Capture.cmd,tools/package-lighting-capture.py,Package-Lighting-Performance.ps1 $out
           Copy-Item Capture-RR-Boundary.cmd,Capture-RR-Boundary.ps1,Collect-RR-Boundary-Status.cmd,tools/collect-rr-boundary.py $out
           Copy-Item Start-Compact-Distance-Test.cmd,Capture-RR-Suite.ps1,tools/collect-rr-suite.py $out
-          Copy-Item docs/native-lighting-r193.md "$out/DIAGNOSTIC-NOTES.md"
+          Copy-Item docs/native-lighting-r194.md "$out/DIAGNOSTIC-NOTES.md"
           @'
-          CONTROL-FG R193 - bounded reflection sequence experiment
-          Install beside Control_DX12.exe. Keep NVIDIA runtimes. Launch normally.
-          Enable RR, choose NATIVE BLEND and SPEC 4. Disable frame generation.
-          Stay still at the painting for 30 seconds. No F9 capture is needed.
-          Send the Lighting-R193 log and a screenshot after settling.
-          The probe records at most 1024 eligible frames, then stops until restart.
-          This is CPU provider evidence, not proof of GPU constant consumption.
-          Only primary reflection sampling changes. Quality and FPS are unverified.
+          CONTROL-FG R194 - native map versus RT light capture
+          Keep the accepted R193 reflection settings. Hit distance OFF, SPEC Native.
+          Face the affected Board Room area, open F10, click TRACE SHADOW.
+          This selects MAP PROBE temporarily; odd colors and RR off are expected.
+          Hold still until the completion dialog. Previous lighting mode restores.
+          Send lighting.log, manifest.txt and the three PNGs from Shadow-R194.
+          F9 cancels this light trace; do not start the separate reflection suite.
+          This is diagnostic instrumentation, not a missing-light fix.
           Read DIAGNOSTIC-NOTES.md.
           '@ | Set-Content "$out/README.txt" -Encoding ASCII
           Compress-Archive -Path "$out/*" -DestinationPath "$out.zip" -Force
@@ -839,10 +839,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-Native-Lighting-Live-R193
+          name: Control-FG-Native-Lighting-Live-R194
           path: |
-            Control-FG-Native-Lighting-Live-R193.zip
-            Control-FG-Native-Lighting-Live-R193.sha256
+            Control-FG-Native-Lighting-Live-R194.zip
+            Control-FG-Native-Lighting-Live-R194.sha256
             build/spec-volume-roughness-validation.json
             build/spec-volume-roughness.dxbc
             build/spec-environment-validation.json

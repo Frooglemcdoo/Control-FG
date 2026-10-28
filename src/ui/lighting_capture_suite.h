@@ -3,7 +3,7 @@
 #include "lighting_screenshot.h"
 namespace native_lighting::capture_suite {
 // All suite state and file I/O belong to the diagnostic UI thread.
-enum class Kind { Stationary, Motion, Blocker };
+enum class Kind { Stationary, Motion, Blocker, MapProbe };
 inline bool active=false,entered=false,gpuAccepted=false,motion=false,blocker=false;
 inline uint64_t traceStarted=0,lastRequest=0;
 inline unsigned step=0,imageIndex=0,failures=0;
@@ -52,8 +52,8 @@ inline void Finish(HWND game,const char* reason) noexcept {
     MessageBoxW(game,message,L"Control-FG F9 capture",MB_OK);
 }
 inline bool Start(Kind kind=Kind::Stationary) noexcept {
-    const bool traceMotion=kind==Kind::Motion,traceBlocker=kind==Kind::Blocker;
-    const Mode captureMode=traceBlocker?capture_plan::BlockerMode(LiveSelection::GetMode(selection.Read())):kDefaultMode;
+    const bool traceMotion=kind==Kind::Motion,traceBlocker=kind==Kind::Blocker||kind==Kind::MapProbe;
+    const Mode captureMode=kind==Kind::MapProbe?Mode::RoomMapProbe:traceBlocker?capture_plan::BlockerMode(LiveSelection::GetMode(selection.Read())):kDefaultMode;
     if(active)return false;
     if((traceMotion||traceBlocker) && (!rt_spot_capture_runtime::ready.load() || !rt_spot_capture_runtime::signalReady.load() ||
        !ModeAvailable(captureMode,readyMask.load()))) {
@@ -71,7 +71,7 @@ inline bool Start(Kind kind=Kind::Stationary) noexcept {
     if(!DrainDiagnosticLog(true))return false;
     wchar_t root[MAX_PATH]{};wcscpy_s(root,report.Path());auto* slash=wcsrchr(root,L'\\');if(!slash)return false;*slash=0;
     SYSTEMTIME time{};GetLocalTime(&time);static unsigned serial=0;
-    if(swprintf_s(folder,L"%s\\Shadow-R191-%04u%02u%02u-%02u%02u%02u-%lu-%u",root,time.wYear,time.wMonth,time.wDay,time.wHour,time.wMinute,time.wSecond,GetCurrentProcessId(),serial++)<0)return false;
+    if(swprintf_s(folder,L"%s\\Shadow-R194-%04u%02u%02u-%02u%02u%02u-%lu-%u",root,time.wYear,time.wMonth,time.wDay,time.wHour,time.wMinute,time.wSecond,GetCurrentProcessId(),serial++)<0)return false;
     if(!CreateDirectoryW(folder,nullptr))return false;
     wchar_t path[MAX_PATH]{};swprintf_s(path,L"%s\\manifest.txt",folder);
     manifest=CreateFileW(path,GENERIC_WRITE,FILE_SHARE_READ,nullptr,CREATE_NEW,0,nullptr);
@@ -83,8 +83,8 @@ inline bool Start(Kind kind=Kind::Stationary) noexcept {
     focusedBlockerStep={captureMode,L"shadow-blocker",true};
     motion=traceMotion;blocker=traceBlocker;traceStarted=0;lastRequest=0;
     restore=LiveSelection::GetMode(selection.Read());active=true;entered=false;step=imageIndex=failures=0;
-    Note("build=R191 restore=%s steps=%u PNG=display_referred_not_raw_HDR\nFor stationary suites keep camera still; motion traces require walking. F9 cancels. Focus loss cancels. No GPU waits.\nUnavailable shader variants are explicitly skipped. Hit coordinates and legacy unclipped visibility use reference rays. Default spot signal/IDs retain authored clipping and corrected selection.\nFull suite GPU capture uses BOTH; motion uses DEFAULT; focused blocker preserves MAP PROBE when selected, otherwise corrected RR OFF. MAP PROBE diffuse-before RGB is encoded visibility/complement/ID, not radiance. Context records identify sampled light geometry, not a persistent engine object. Composition pairs contain matching pixel/light/visibility and diffuse/specular before and after the direct-light pass, before tone mapping.",ModeName(restore),blocker?1u:motion?capture_plan::transitionSamples:capture_plan::count);
-    Trace("capture_suite_start build=R191 restore=%s steps=%u",ModeName(restore),blocker?1u:motion?capture_plan::transitionSamples:capture_plan::count);
+    Note("build=R194 restore=%s steps=%u PNG=display_referred_not_raw_HDR\nFor stationary suites keep camera still; motion traces require walking. F9 cancels. Focus loss cancels. No GPU waits.\nUnavailable shader variants are explicitly skipped. Hit coordinates and legacy unclipped visibility use reference rays. Default spot signal/IDs retain authored clipping and corrected selection.\nFull suite GPU capture uses BOTH; motion uses DEFAULT; focused blocker preserves MAP PROBE when selected, otherwise corrected RR OFF. MAP PROBE diffuse-before RGB is encoded visibility/complement/ID, not radiance. Context records identify sampled light geometry, not a persistent engine object. Composition pairs contain matching pixel/light/visibility and diffuse/specular before and after the direct-light pass, before tone mapping.",ModeName(restore),blocker?1u:motion?capture_plan::transitionSamples:capture_plan::count);
+    Trace("capture_suite_start build=R194 restore=%s steps=%u",ModeName(restore),blocker?1u:motion?capture_plan::transitionSamples:capture_plan::count);
     Note("capture_kind=%s requested_samples=%u",blocker?"stationary_shadow_blocker":motion?"motion_light_context":"stationary_suite",
         blocker?1u:motion?capture_plan::transitionSamples:capture_plan::count);
     if(blocker)Trace("blocker_trace_start mode=%s settle_ms=%llu reference_rays=full_length",ModeName(focusedBlockerStep.mode),capture_plan::blockerSettleMs);
