@@ -29,7 +29,7 @@ RWTexture2D<float4> output : register(u0);
  ComPtr<ID3D11Device> d;ComPtr<ID3D11DeviceContext> c;
  check(SUCCEEDED(D3D11CreateDevice(nullptr,D3D_DRIVER_TYPE_WARP,nullptr,0,nullptr,0,D3D11_SDK_VERSION,&d,nullptr,&c)));
  ComPtr<ID3DBlob> code,error;
- HRESULT hr=D3DCompile(source,strlen(source),"src/shaders/projection-pair-test.hlsl",nullptr,D3D_COMPILE_STANDARD_FILE_INCLUDE,"main","cs_5_0",D3DCOMPILE_WARNINGS_ARE_ERRORS,0,&code,&error);
+ HRESULT hr=D3DCompile(source,strlen(source),"src/shaders/projection-pair-test.hlsl",nullptr,D3D_COMPILE_STANDARD_FILE_INCLUDE,"main","cs_5_0",D3DCOMPILE_WARNINGS_ARE_ERRORS|D3DCOMPILE_IEEE_STRICTNESS,0,&code,&error);
  if(error)fwrite(error->GetBufferPointer(),1,error->GetBufferSize(),stderr);check(SUCCEEDED(hr));
  ComPtr<ID3D11ComputeShader> cs;check(SUCCEEDED(d->CreateComputeShader(code->GetBufferPointer(),code->GetBufferSize(),nullptr,&cs)));
  D3D11_TEXTURE2D_DESC desc{};desc.Width=8;desc.Height=1;desc.MipLevels=desc.ArraySize=1;desc.Format=DXGI_FORMAT_R32G32B32A32_FLOAT;desc.SampleDesc.Count=1;desc.BindFlags=D3D11_BIND_UNORDERED_ACCESS;
