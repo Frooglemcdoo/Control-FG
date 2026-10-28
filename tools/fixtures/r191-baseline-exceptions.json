@@ -1,0 +1,18 @@
+{
+  "src/rr_clamp_strength.h": [
+    [
+      "#include <cstdint>\n#include <new>\n#include \"rr_clamp_strength_policy.h\"\n#include \"rr_specular_temporal_policy.h\"\n#include \"../build/rr_clamp_temporal.h\"\n#include \"../build/rr_clamp_variants.h\"\n",
+      "#include <cstdint>\n#include <new>\n#include \"rr_clamp_strength_policy.h\"\n#include \"rr_suite_pipelines.h\"\n#include \"rr_specular_temporal_policy.h\"\n#include \"../build/rr_clamp_temporal.h\"\n#include \"../build/rr_clamp_variants.h\"\n"
+    ],
+    [
+      " if(!native)return nullptr;for(auto& slot:bundles){auto* b=slot.load(std::memory_order_acquire);if(b&&b->native==native)return b;}return nullptr;\n}\ninline void STDMETHODCALLTYPE Set(ID3D12GraphicsCommandList* list,ID3D12PipelineState* pipeline) {\n setOriginal(list,pipeline);if(active&&active->list==list)active->observed=pipeline;\n}\ninline void STDMETHODCALLTYPE Dispatch(ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT z) {\n auto* request=active;\n if(!request||request->list!=list){dispatchOriginal(list,x,y,z);return;}\n ++request->count;auto* b=Find(request->observed);const int variant=Variant(request->strength);\n auto* replacement=request->temporal?(b?b->temporal:nullptr):((b&&variant>=0)?b->variants[variant]:nullptr);\n if(!Admit(true,true,b!=nullptr,replacement!=nullptr,request->count)){dispatchOriginal(list,x,y,z);return;}\n",
+      " if(!native)return nullptr;for(auto& slot:bundles){auto* b=slot.load(std::memory_order_acquire);if(b&&b->native==native)return b;}return nullptr;\n}\ninline void STDMETHODCALLTYPE Set(ID3D12GraphicsCommandList* list,ID3D12PipelineState* pipeline) {\n#ifdef CONTROL_RR_F9_SUITE\n rr_suite::Observe(list,pipeline);\n#endif\n setOriginal(list,pipeline);if(active&&active->list==list)active->observed=pipeline;\n}\ninline void STDMETHODCALLTYPE Dispatch(ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT z) {\n auto* request=active;\n if(!request||request->list!=list){\n#ifdef CONTROL_RR_F9_SUITE\n  if(rr_suite::Run(list,x,y,z,setOriginal,dispatchOriginal))return;\n#endif\n  dispatchOriginal(list,x,y,z);return;}\n ++request->count;auto* b=Find(request->observed);const int variant=Variant(request->strength);\n auto* replacement=request->temporal?(b?b->temporal:nullptr):((b&&variant>=0)?b->variants[variant]:nullptr);\n if(!Admit(true,true,b!=nullptr,replacement!=nullptr,request->count)){dispatchOriginal(list,x,y,z);return;}\n"
+    ]
+  ],
+  "src/rr_clamp_strength_policy.h": [
+    [
+      "#pragma once\n#include <cstdint>\n#include <atomic>\nnamespace control_rr_clamp {\ninline constexpr unsigned kReflectionDetailPercent = 60;\ninline std::atomic<unsigned> effective{100};\ninline std::atomic<bool> applied{true};\ninline constexpr unsigned Requested() noexcept {return kReflectionDetailPercent;}\ninline constexpr unsigned VariantCount=1;\ninline int Variant(unsigned v) noexcept {return v==kReflectionDetailPercent?0:-1;}\ninline bool Admit(bool scoped,bool listMatches,bool originalObserved,bool variantReady,unsigned dispatchCount) noexcept {\n",
+      "#pragma once\n#include <cstdint>\n#include <atomic>\n#include \"rr_suite_policy.h\"\nnamespace control_rr_clamp {\ninline constexpr unsigned kReflectionDetailPercent = 60;\ninline std::atomic<unsigned> effective{100};\ninline std::atomic<bool> applied{true};\ninline unsigned Requested() noexcept {\n#ifdef CONTROL_RR_F9_SUITE\n const auto* step=rr_suite::Current();if(step&&step->raw)return 0;\n#endif\n return kReflectionDetailPercent;\n}\ninline constexpr unsigned VariantCount=1;\ninline int Variant(unsigned v) noexcept {return v==kReflectionDetailPercent?0:-1;}\ninline bool Admit(bool scoped,bool listMatches,bool originalObserved,bool variantReady,unsigned dispatchCount) noexcept {\n"
+    ]
+  ]
+}

@@ -15,6 +15,7 @@ struct RRInputCaptureJob {
  D3D12_RESOURCE_DESC descriptions[kRRInputCaptureMaxResources]{};
  D3D12_PLACED_SUBRESOURCE_FOOTPRINT footprint[kRRInputCaptureMaxResources]{};UINT64 bytes[kRRInputCaptureMaxResources]{};
  const char* lightingMode="unavailable";
+ unsigned suiteSession=0,suiteStep=0,suiteSamples=0;bool suiteRaw=false;
  unsigned count=0,preset=0;bool nativeLighting=false;bool distanceBound=false;unsigned rawIndex=kRRInputCaptureMaxResources;
  unsigned nativeIndex=kRRInputCaptureMaxResources;D3D12_RESOURCE_STATES states[kRRInputCaptureMaxResources]{};
  unsigned pixelBytes[kRRInputCaptureMaxResources]{};const wchar_t* names[kRRInputCaptureMaxResources]{};
@@ -66,7 +67,7 @@ static DWORD WINAPI RRInputCaptureExport(void* context) noexcept {
   }
   if(okay){
    std::ostringstream out;out.imbue(std::locale::classic());out<<std::setprecision(9);
-   out<<"{\"lighting_mode\":\""<<c->lightingMode<<"\",\"schema\":\"control-rr-gi-r28\",\"evaluation_path\":\""<<(c->nativeLighting?"native_sr":"rr")<<"\",\"rr_active\":"<<(c->nativeLighting?"false":"true")<<",\"pre_exposure_valid\":"<<(c->preExposureValid?"true":"false")<<",\"pre_exposure\":"<<c->preExposure<<",\"exposure_scale_valid\":"<<(c->exposureScaleValid?"true":"false")<<",\"exposure_scale\":"<<c->exposureScale<<",\"pid\":"<<GetCurrentProcessId()<<",\"frame\":"<<c->frame<<",\"present\":"<<c->policy.present<<",\"preset\":"<<c->preset<<",\"width\":"<<c->width<<",\"height\":"<<c->height<<",\"buffers\":"<<c->count<<",\"hit_distance_bound\":"<<(c->distanceBound?"true":"false")<<",\"raw_albedo_bound\":"<<(c->rawIndex<c->count?"true":"false")<<",\"capture_ordinal\":"<<c->policy.requests<<",\"projection_valid\":"<<(c->projectionValid?"true":"false")<<",\"row_padding_removed\":true,\"little_endian\":true,\"view_to_clip\":[";
+   out<<"{\"suite_session\":"<<c->suiteSession<<",\"suite_step\":"<<c->suiteStep<<",\"suite_samples\":"<<c->suiteSamples<<",\"suite_raw_rr_clamp\":"<<(c->suiteRaw?"true":"false")<<",\"lighting_mode\":\""<<c->lightingMode<<"\",\"schema\":\"control-rr-gi-r28\",\"evaluation_path\":\""<<(c->nativeLighting?"native_sr":"rr")<<"\",\"rr_active\":"<<(c->nativeLighting?"false":"true")<<",\"pre_exposure_valid\":"<<(c->preExposureValid?"true":"false")<<",\"pre_exposure\":"<<c->preExposure<<",\"exposure_scale_valid\":"<<(c->exposureScaleValid?"true":"false")<<",\"exposure_scale\":"<<c->exposureScale<<",\"pid\":"<<GetCurrentProcessId()<<",\"frame\":"<<c->frame<<",\"present\":"<<c->policy.present<<",\"preset\":"<<c->preset<<",\"width\":"<<c->width<<",\"height\":"<<c->height<<",\"buffers\":"<<c->count<<",\"hit_distance_bound\":"<<(c->distanceBound?"true":"false")<<",\"raw_albedo_bound\":"<<(c->rawIndex<c->count?"true":"false")<<",\"capture_ordinal\":"<<c->policy.requests<<",\"projection_valid\":"<<(c->projectionValid?"true":"false")<<",\"row_padding_removed\":true,\"little_endian\":true,\"view_to_clip\":[";
    for(unsigned i=0;i<16;++i){if(i)out<<',';out<<c->projection[i];}out<<"],\"jitter\":["<<c->jitterX<<','<<c->jitterY<<"],\"motion_scale\":["<<c->mvScaleX<<','<<c->mvScaleY<<"],\"motion_scale_valid\":"<<(c->motionScaleValid?"true":"false")<<",\"native_inputs_bound\":true,\"lighting_buffers_captured\":true,\"resources\":[";
    for(unsigned i=0;i<c->count;++i){if(i)out<<',';std::string name;for(const wchar_t* p=c->names[i];*p;++p)name+=static_cast<char>(*p);
     out<<"{\"file\":\""<<name<<"\",\"dxgi_format\":"<<unsigned(c->descriptions[i].Format)<<",\"pixel_bytes\":"<<c->pixelBytes[i]<<",\"state_before_and_after\":"<<unsigned(c->states[i])<<",\"width\":"<<c->descriptions[i].Width<<",\"height\":"<<c->descriptions[i].Height<<",\"copied\":"<<((i!=c->outputIndex||c->outputCaptured)?"true":"false")<<'}';}
@@ -191,6 +192,15 @@ static void RRInputCaptureOneBeforeEvaluation(RRInputCaptureJob* c,ID3D12Graphic
   if(!c->preExposureValid)c->preExposure=0;
   if(!c->exposureScaleValid)c->exposureScale=0;
   c->lightingMode=lightingMode;
+#ifdef CONTROL_RR_F9_SUITE
+  if(rr_suite::requested.load()&&!rr_suite::Verified(frame)){
+   for(unsigned i=0;i<count;++i)RRGuideRelease(c->sources[i]);
+   control_rr_capture_ui::detail.store(L"Waiting for verified diagnostic shader dispatch.");__leave;
+  }
+  c->suiteSession=rr_suite::session.load();c->suiteStep=rr_suite::latched.load();
+  c->suiteSamples=rr_suite::Current()?rr_suite::Current()->samples:0;
+  c->suiteRaw=rr_suite::Current()&&rr_suite::Current()->raw;
+#endif
   c->frame=frame;c->projectionValid=projectionValid;memcpy(c->projection,projection,sizeof(c->projection));
   c->outputCaptured=false;c->evaluationResult=0;c->reset=0;
   if(ngxGetInt)ngxGetInt(parameters,"Reset",&c->reset);
@@ -215,6 +225,9 @@ static void RRInputCaptureOneBeforeEvaluation(RRInputCaptureJob* c,ID3D12Graphic
 
 static void RRInputCaptureBeforeEvaluation(ID3D12GraphicsCommandList* list,unsigned long long frame,unsigned preset,
  ID3D12Resource* normal,ID3D12Resource* specular,ID3D12Resource* diffuse,ID3D12Resource* distance,ID3D12Resource* status,const float* projection,bool projectionValid,ID3D12Resource* rawAlbedo,ID3D12Resource* color,ID3D12Resource* depth,ID3D12Resource* motion,ID3D12Resource* output,ID3D12Resource* responsivity,void* parameters,bool nativeLighting=false,const char* lightingMode="rr") noexcept {
+#ifdef CONTROL_RR_F9_SUITE
+ if(rr_suite::cancelled.load())return;
+#endif
  // Observe every evaluated frame, including while a worker owns the capture lock.
  // Allocation gaps are not gameplay gaps and must not restart the countdown.
  int reset=1;
@@ -266,7 +279,7 @@ static void RRInputCaptureAfterPresent(unsigned long long present) noexcept {
   const bool buttonRequested=control_rr_capture_ui::requested.exchange(false,std::memory_order_acq_rel);
   if(pressed || buttonRequested){rrInputCaptureSettle.Reset();DWORD foregroundPid=0;GetWindowThreadProcessId(GetForegroundWindow(),&foregroundPid);
    if(buttonRequested || foregroundPid==GetCurrentProcessId()){
-    bool accepted=rrInputCaptures[0].policy.phase==P::Idle&&rrInputCaptures[1].policy.phase==P::Idle&&rrInputCaptures[0].policy.requests<2;
+    bool accepted=rrInputCaptures[0].policy.phase==P::Idle&&rrInputCaptures[1].policy.phase==P::Idle&&rrInputCaptures[0].policy.requests<kRRCapturePairs;
     if(accepted){for(unsigned i=0;i<2;++i){rrInputCaptures[i].pairIndex=i;rrInputCaptures[i].frame=0;rrInputCaptures[i].policy.Request();}
 #if !defined(CONTROL_CAPTURE_DIAGNOSTIC)
     rrHairShaderAuditRequested.store(true,std::memory_order_release);

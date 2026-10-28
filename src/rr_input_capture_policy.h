@@ -4,7 +4,13 @@ namespace control_rr {
 struct InputCapturePolicy {
  enum Phase {Idle,Requested,Preparing,Ready,Recorded,Submitted,Exporting,Failed};
  Phase phase=Idle;unsigned requests=0;std::uint64_t present=0;
- bool Request(){if(phase!=Idle||requests>=4)return false;++requests;phase=Requested;return true;}
+ bool Request(){if(phase!=Idle||requests>=
+#ifdef CONTROL_RR_F9_SUITE
+ 32
+#else
+ 4
+#endif
+ )return false;++requests;phase=Requested;return true;}
  bool BeginPrepare(){if(phase!=Requested)return false;phase=Preparing;return true;}
  void Prepared(bool okay){phase=okay?Ready:Failed;}
  bool Record(std::uint64_t token){if(phase!=Ready)return false;present=token;phase=Recorded;return true;}

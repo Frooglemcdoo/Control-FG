@@ -428,9 +428,18 @@ static bool RRNativeHookReset(unsigned outputWidth,unsigned outputHeight,unsigne
  const auto previousKey=rrNativeFrame.Key();const auto previousStage=rrNativeFrame.Stage();
  const bool wasRecovering=rrNativeFrame.Recovering(),wasStopped=rrNativeFrame.Stopped();
  const bool selected=rrNativeFrame.Begin({frame,outputWidth,outputHeight,width,height,effects},runtimeRequested,ready);
+#ifdef CONTROL_RR_F9_SUITE
+ if(rr_suite::Latch(frame))rrNativeFrame.ResetForSignalChange();
+#endif
  // Snapshot diagnostic selection before either producer allocates hit arrays.
  const auto lightingMode=native_lighting::LiveSelection::GetMode(native_lighting::selection.Read());
- const unsigned specularRequest=selected&&rrNativeSpecularSamplesAvailable?native_lighting::SpecularSampleRequest(lightingMode):0;
+ const unsigned specularRequest=selected&&rrNativeSpecularSamplesAvailable?
+#ifdef CONTROL_RR_F9_SUITE
+ (rr_suite::Current()?rr_suite::Current()->samples:native_lighting::SpecularSampleRequest(lightingMode))
+#else
+ native_lighting::SpecularSampleRequest(lightingMode)
+#endif
+ :0;
  if(specularRequest!=rrNativeSpecularSampleRequest){
   rrNativeSpecularSampleRequest=specularRequest;
   rrNativeSpecularHistoryPending=true;
@@ -635,6 +644,9 @@ static void RRNativeHookDispatch(void* state,const void* groups) {
     control_rr_diagnostic::Record(control_rr_diagnostic::Event::ReflectionClamp);
     scope->recorded=true;scope->nativeClampDispatched=true;scope->failed=!restored;
     scope->reason=restored?"native_control_energy_clamp":"native_control_energy_clamp_restore_failed";
+#ifdef CONTROL_RR_F9_SUITE
+    rr_suite::clampPercent.store(control_rr_clamp::effective.load());rr_suite::clampFrame.store(scope->frame.frame);
+#endif
     const auto count=rrNativeClampDispatches.fetch_add(1,std::memory_order_relaxed)+1;
     if(count<=4||(scope->frame.frame%240)==0||!restored)
      Log("RR_SPECULAR_SIGNAL frame=%llu mode=native_control_energy_clamp count=%llu camera_cut_provider=%d original=%u forced=1 native_dispatch=1 raw_copy=0 restore=%u",
@@ -666,6 +678,9 @@ static void RRNativeHookDispatch(void* state,const void* groups) {
   substituted=control_rr_specular::Substitute(*scope,access.Callbacks(),rrNativeCopy,reinterpret_cast<std::uintptr_t>(verifiedRenderer),
    control_rr_specular::TemporalDispatchRva,reinterpret_cast<std::uintptr_t>(state));
  } __except(EXCEPTION_EXECUTE_HANDLER){scope->failed=true;scope->reason="substitution_exception";}
+#ifdef CONTROL_RR_F9_SUITE
+ if(substituted){rr_suite::clampPercent.store(0);rr_suite::clampFrame.store(scope->frame.frame);}
+#endif
  if(!substituted){
   rrNativeFrame.Fail();Log("RR_FRAME_STOP frame=%llu reason=temporal_substitution detail=%s attempted=%u",static_cast<unsigned long long>(scope->frame.frame),scope->reason,unsigned(scope->attempted));
   const auto& pair=scope->pair;
@@ -769,6 +784,9 @@ static void RRReportSpecularProducer() noexcept {
  const auto* observation=rrNativeSpecularSamplePatch.observation;
  if(!observation||!observation->seen)return;
  const auto now=*observation;
+#ifdef CONTROL_RR_F9_SUITE
+ rr_suite::effectiveSamples.store(now.effectiveCount);rr_suite::sampleFrame.store(rrNativeFrame.Key().frame);
+#endif
  static control_rr::SpecularSampleObservation previous{};
  const auto frame=rrNativeFrame.Key().frame;
  if(std::memcmp(&now,&previous,sizeof(now))||frame%240==0){

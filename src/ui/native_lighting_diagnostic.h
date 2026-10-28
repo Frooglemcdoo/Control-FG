@@ -2,6 +2,7 @@
 #include "theme.h"
 #include "lighting_capture_suite.h"
 #include "lighting_performance_capture.h"
+#include "rr_reflection_suite.h"
 
 namespace native_lighting::ui {
 inline constexpr wchar_t kClass[] = L"ControlFGLightingDiagnosticR54";
@@ -127,25 +128,25 @@ inline void Paint(HWND window) noexcept {
         (observed & required) == required && (mode != Mode::SpotResolution2x || spot_resolution_runtime::Observed(state)) ? (IsRtSpotMode(mode) ? L"RT pair recorded" : L"native bindings recorded") : L"Waiting: return to game");
     DrawLabel(dc, detailFont, status, {14,kStatusY,kWidth-12,kStatusY+24}, theme::kMutedText);
     wchar_t captureStatus[128]{};
-    swprintf_s(captureStatus,L"RR capture: %s   Saved pairs: %u/2",control_rr_capture_ui::Label(control_rr_capture_ui::state.load()),control_rr_capture_ui::completedPairs.load());
+    swprintf_s(captureStatus,L"RR capture: %s   Saved pairs: %u",control_rr_capture_ui::Label(control_rr_capture_ui::state.load()),control_rr_capture_ui::completedPairs.load());
     DrawLabel(dc,detailFont,captureStatus,{14,kCaptureStatusY,kWidth-12,kCaptureStatusY+22},theme::kText);
     DrawLabel(dc,detailFont,performance_capture::Active()?performance_capture::Status():control_rr_capture_ui::detail.load(),{14,kCaptureStatusY+22,kWidth-12,kCaptureStatusY+46},theme::kMutedText);
     wchar_t shortcuts[128]{};
-    swprintf_s(shortcuts, L"F9: suite   Shift+F9: light capture   F10: close   Ctrl+Shift+1..%u", kModeCount);
+    swprintf_s(shortcuts, L"F9: reflection sequence / cancel   F10: close   Ctrl+Shift+1..%u", kModeCount);
     DrawLabel(dc, detailFont, shortcuts, {14,kFooterY,kWidth-12,kFooterY+24}, theme::kMutedText);
     DrawLabel(dc, detailFont, selectionRejected ? L"Mode unavailable. Save Log exports shader evidence for diagnosis." : savedNotice.load() == 2 ? L"Log write failed. Save Log shows the Windows error." : savedNotice.load() == 1 ? L"Log saved. See the folder shown in the confirmation." : ModeHint(mode), {14,kFooterY+26,kWidth-12,kFooterY+56}, theme::kText);
     EndPaint(window, &ps);
 }
 inline void ReportSpecIsolation(const char* reason) noexcept {
 #if defined(CONTROL_RR_COMPACT_DISTANCE)
-    Trace("rr_compact_distance build=R190 reason=%s requested=%u installed=%u evaluations=%llu bound_evaluations=%llu last_bound=%u copied_layers=1 status=%s capture_status=%s capture_bytes=%llu",
+    Trace("rr_compact_distance build=R191 reason=%s requested=%u installed=%u evaluations=%llu bound_evaluations=%llu last_bound=%u copied_layers=1 status=%s capture_status=%s capture_bytes=%llu",
         reason,unsigned(rr_compact_distance::enabled.load()),unsigned(rr_compact_distance::installed.load()),rr_compact_distance::evaluations.load(),rr_compact_distance::boundEvaluations.load(),unsigned(rr_compact_distance::lastBound.load()),rr_compact_distance::reason.load(),rr_compact_distance::captureReason.load(),rr_compact_distance::captureBytes.load());
 #elif defined(CONTROL_SPEC_VOLUME_ROUGHNESS)
-    Trace("spec_volume_status build=R190 reason=%s enabled=%u diagnostic_gain=1 direct_created=%llu library_created=%llu failures=%llu evidence=creation_counters",
+    Trace("spec_volume_status build=R191 reason=%s enabled=%u diagnostic_gain=1 direct_created=%llu library_created=%llu failures=%llu evidence=creation_counters",
         reason,unsigned(spec_serial::VolumeRoughnessEnabled()),spec_serial::directCreated.load(),spec_serial::libraryCreated.load(),spec_serial::failures.load());
 #elif defined(CONTROL_SPEC_INDIRECT_CAPTURE)
     const auto mode=spec_serial::ComponentMode();
-    Trace("spec_indirect_status build=R190 reason=%s requested=%s diagnostic_gain=%u direct_created=%llu library_created=%llu failures=%llu evidence=creation_counters",
+    Trace("spec_indirect_status build=R191 reason=%s requested=%s diagnostic_gain=%u direct_created=%llu library_created=%llu failures=%llu evidence=creation_counters",
         reason,spec_indirect::Name(mode),spec_indirect::Gain(mode),spec_serial::directCreated.load(),spec_serial::libraryCreated.load(),spec_serial::failures.load());
 #elif defined(CONTROL_SPEC_LOCAL_CAPTURE)
     Trace("spec_local_status reason=%s requested=%s direct_created=%llu library_created=%llu failures=%llu evidence=creation_counters",
@@ -187,6 +188,9 @@ inline void SaveReport(HWND window) noexcept {
     MessageBoxW(window, message, saved ? L"Lighting log saved" : L"Lighting log failed", MB_OK | (saved ? MB_ICONINFORMATION : MB_ICONERROR));
 }
 inline void PackageRR(HWND window) noexcept {
+#ifdef CONTROL_RR_F9_SUITE
+    if(rr_suite::session.load()){reflection_suite::Package();return;}
+#endif
     wchar_t module[MAX_PATH]{};
     if(!GetModuleFileNameW(selfModule,module,MAX_PATH)){MessageBoxW(window,L"Could not locate the capture helper.",L"RR material packaging",MB_OK|MB_ICONERROR);return;}
     auto* slash=wcsrchr(module,L'\\');if(!slash)return;*slash=0;
@@ -268,6 +272,9 @@ inline LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPA
     case WM_COMMAND:
         if(HIWORD(wParam)==BN_CLICKED) {
             const unsigned index=LOWORD(wParam)-kButtonFirst;
+#ifdef CONTROL_RR_F9_SUITE
+            if(reflection_suite::active)return 0;
+#endif
             if(performance_capture::Active() && index!=kModeCount+6)return 0;
             if(index<kModeCount){selectionRejected=!SelectMode(kModeChoices[index].mode);savedNotice=0;}
             else if(index==kModeCount||index==kModeCount+1) {
@@ -313,7 +320,7 @@ inline DWORD WINAPI ThreadProc(LPVOID) noexcept {
     ULONGLONG nextRefresh=0, nextWindowSearch=0, nextLogDrain=0, nextRRReport=0;
     HWND cachedGame=nullptr;
     POINT lastOrigin{-1,-1};
-    Trace("session_start build=R190-overlay-rr-capture pid=%lu default=authored_clip_surface_normals_current_spot_when_ready log=user-diagnostics-folder",GetCurrentProcessId());
+    Trace("session_start build=R191-overlay-rr-capture pid=%lu default=authored_clip_surface_normals_current_spot_when_ready log=user-diagnostics-folder",GetCurrentProcessId());
 #ifdef CONTROL_RR_COMPONENT_CAPTURE
     Trace("spec_component_session requested=%s direct_created=%llu library_created=%llu failures=%llu",
         spec_component::Name(spec_serial::ComponentMode()),
@@ -334,6 +341,9 @@ inline DWORD WINAPI ThreadProc(LPVOID) noexcept {
         if(panel&&owner!=game){ClosePanel(panel);DestroyWindow(panel);panel=nullptr;}
         if(game&&!panel){panel=CreateWindowExW(WS_EX_TOOLWINDOW|WS_EX_NOACTIVATE,kClass,L"Control lighting diagnostic",WS_POPUP,
             0,0,kWidth,kHeight,game,nullptr,selfModule,nullptr);owner=game;}
+#ifdef CONTROL_RR_F9_SUITE
+        if(!panel)reflection_suite::Tick(nullptr,now);
+#endif
         if(!panel){if(performance_capture::Active())performance_capture::Tick(nullptr,now);if(capture_suite::active)capture_suite::Finish(nullptr,"game_window_lost");continue;}
         if(LiveSelection::Sequence(selection.Read())==0 && ModeAvailable(kDefaultMode,readyMask.load()))SelectMode(kDefaultMode);
         static bool f9Held=false;
@@ -341,18 +351,31 @@ inline DWORD WINAPI ThreadProc(LPVOID) noexcept {
         const bool capturePress=f9Down&&!f9Held && !(GetAsyncKeyState(VK_CONTROL)&0x8000) && !(GetAsyncKeyState(VK_MENU)&0x8000);
         f9Held=f9Down;
         if(!performance_capture::Active() && capturePress && (GetForegroundWindow()==game || PanelHasForeground(panel))) {
+#ifdef CONTROL_RR_F9_SUITE
+            if(reflection_suite::active)reflection_suite::Cancel("cancelled");
+            else {if(panelOpen)ClosePanel(panel);
+                if(!reflection_suite::Start(now))MessageBoxW(game,L"Return to gameplay with RR ON and FG OFF. Wait for reflection shaders to be ready. Two complete locations are supported per launch; restart after an incomplete sequence.",L"F9 reflection sequence",MB_OK);}
+#else
             if(GetAsyncKeyState(VK_SHIFT)&0x8000) RequestLightCapture(panel);
             else if(capture_suite::active)capture_suite::Finish(game,"cancelled");
             else {if(panelOpen)ClosePanel(panel);
                 if(!capture_suite::Start())MessageBoxW(game,L"Could not start capture. Return to gameplay and wait for Default and GPU capture readiness. If a previous capture was cancelled, let its export finish. Use Save Log for details.",L"F9 capture",MB_OK|MB_ICONERROR);}
+#endif
         }
+#ifdef CONTROL_RR_F9_SUITE
+        reflection_suite::Tick(game,now);
+#endif
         capture_suite::Tick(game,now);
         performance_capture::Tick(game,now);
         const bool foreground=GetForegroundWindow()==game || PanelHasForeground(panel);
         const bool modifier=(GetAsyncKeyState(VK_CONTROL)&0x8000)&&(GetAsyncKeyState(VK_SHIFT)&0x8000);
         static_assert(kModeCount <= 9, "Numeric shortcuts support nine choices");
         for(int i=0;i<int(kModeCount+1);++i){const bool down=(GetAsyncKeyState(i == 0 ? VK_F10 : '0' + i)&0x8000)!=0;
-            if(!capture_suite::active&&foreground&&down&&!held[i]&&(i==0||modifier)&&(!performance_capture::Active()||i==0)){
+            if(
+#ifdef CONTROL_RR_F9_SUITE
+               !reflection_suite::active&&
+#endif
+               !capture_suite::active&&foreground&&down&&!held[i]&&(i==0||modifier)&&(!performance_capture::Active()||i==0)){
                 if(i==0){if(panelOpen)ClosePanel(panel);else OpenPanel(panel);}else {selectionRejected=!SelectMode(kModeChoices[i-1].mode);savedNotice=0;}
             }held[i]=down;
         }

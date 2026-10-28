@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <new>
 #include "rr_clamp_strength_policy.h"
+#include "rr_suite_pipelines.h"
 #include "rr_specular_temporal_policy.h"
 #include "../build/rr_clamp_temporal.h"
 #include "../build/rr_clamp_variants.h"
@@ -85,11 +86,18 @@ inline Bundle* Find(ID3D12PipelineState* native) noexcept {
  if(!native)return nullptr;for(auto& slot:bundles){auto* b=slot.load(std::memory_order_acquire);if(b&&b->native==native)return b;}return nullptr;
 }
 inline void STDMETHODCALLTYPE Set(ID3D12GraphicsCommandList* list,ID3D12PipelineState* pipeline) {
+#ifdef CONTROL_RR_F9_SUITE
+ rr_suite::Observe(list,pipeline);
+#endif
  setOriginal(list,pipeline);if(active&&active->list==list)active->observed=pipeline;
 }
 inline void STDMETHODCALLTYPE Dispatch(ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT z) {
  auto* request=active;
- if(!request||request->list!=list){dispatchOriginal(list,x,y,z);return;}
+ if(!request||request->list!=list){
+#ifdef CONTROL_RR_F9_SUITE
+  if(rr_suite::Run(list,x,y,z,setOriginal,dispatchOriginal))return;
+#endif
+  dispatchOriginal(list,x,y,z);return;}
  ++request->count;auto* b=Find(request->observed);const int variant=Variant(request->strength);
  auto* replacement=request->temporal?(b?b->temporal:nullptr):((b&&variant>=0)?b->variants[variant]:nullptr);
  if(!Admit(true,true,b!=nullptr,replacement!=nullptr,request->count)){dispatchOriginal(list,x,y,z);return;}
