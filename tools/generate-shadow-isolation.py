@@ -10,7 +10,7 @@ from pathlib import Path
 from dxbc_transform import transform_shex
 from rt_spot_history import dest, source
 from rt_spot_native_blend import native_blend
-from rt_spot_selection import map_priority_selection, map_visibility_probe
+from rt_spot_selection import map_priority_selection, map_visibility_probe, map_visibility_sidecar
 
 ROOT = Path(__file__).resolve().parents[1]
 LIGHT_SHA = 'a844888cdd5478605574157b323cb3376369ae9517c4954bf38bee21b664ecd7'
@@ -100,6 +100,7 @@ def generate():
         [(offset,source(7,'zzzz'),[0x00004001,0x3f800000]) for offset in (5989,6012)])))
     isolated.append(('selector_map_priority','kSelectorMapPriorityShader',map_priority_selection(bent_selector)))
     isolated.append(('selector_map_probe','kSelectorMapProbeShader',map_visibility_probe(bent_selector)))
+    isolated.append(('selector_map_sidecar','kSelectorMapSidecarShader',map_visibility_sidecar(bent_selector)))
     isolated.append(('native_blend','kNativeBlendShader',native_blend(bent_light)))
     for name,symbol,result in isolated:
         (out/f'rt_spot_{name}.dxbc').write_bytes(result)

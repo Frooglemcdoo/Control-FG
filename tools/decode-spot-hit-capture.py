@@ -101,17 +101,23 @@ def decode_log(text):
             signals[index] = struct.unpack('<4I12f' + ('4I12f' if signal_bytes == 128 else ''), raw_signal)
         if match[3]: contexts[index] = struct.unpack('<32f', bytes.fromhex(match[3]))
         seen.add(index); data[index*RECORD.size:(index+1)*RECORD.size] = bytes.fromhex(match[2])
-    spot_records = {}
+    spot_records = {}; map_records = {}
+    map_bytes = begin.get('map_bytes', 0)
+    if map_bytes not in (0,16): raise ValueError('Unsupported native map ABI')
+    if map_bytes and (not begin.get('map_generation') or begin.get('map_present') != begin.get('captured_present')):
+        raise ValueError('Native map frame provenance mismatch')
     spot_bytes = begin.get('spot_record_bytes', 0)
     if spot_bytes not in (0, 336): raise ValueError('Unsupported spotlight record ABI')
     for line in text.splitlines():
         if ' rt_hit_gpu_light ' not in line: continue
         if not spot_bytes or not text.index(completed[0]) < text.index(line) < text.index(exported[0]):
             raise ValueError('Unexpected spotlight record or invalid export ordering')
-        match = re.search(r'index=(\d+) bytes=([0-9a-fA-F]{672})$', line)
+        match = re.search(r'index=(\d+) bytes=([0-9a-fA-F]{672})(?: map=([0-9a-fA-F]{32}))?$', line)
         if not match: raise ValueError('Malformed spotlight record')
         index = int(match[1])
         if index not in seen or index in spot_records: raise ValueError('Unmatched or duplicate spotlight record')
+        if bool(match[3]) != bool(map_bytes): raise ValueError('Missing or unexpected native map payload')
+        if map_bytes: map_records[index] = list(struct.unpack('<4f', bytes.fromhex(match[3])))
         spot_records[index] = bytes.fromhex(match[2])
     if spot_bytes and spot_records.keys() != seen:
         raise ValueError('Missing spotlight records')
@@ -122,6 +128,7 @@ def decode_log(text):
         raise ValueError('Missing records or inconsistent capture totals')
     for record in valid:
         index = record['ordinal']
+        if map_bytes: record['native_map'] = map_records[index]
         if context_bytes:
             values = contexts[index]
             # Width/falloff fields are retained as raw floats; interpretation is

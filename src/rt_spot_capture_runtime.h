@@ -32,7 +32,17 @@ inline ComPtr<ID3D12DescriptorHeap> recordedSignalHeap;
 inline ComPtr<ID3D12PipelineState> recordedSignalPipeline,recordedSignalBeforePipeline;
 inline ComPtr<ID3D12CommandQueue> signalQueue;
 inline UINT64 signalGeneration=0,signalPresent=0;
-inline std::atomic<bool> signalReady{false};
+inline std::atomic<bool> signalReady{false},mapReady{false};
+inline bool mapRequested=false,mapBound=false;
+inline std::atomic<bool> mapRecorded{false},mapSubmitted{false};
+inline UINT mapWidth=0,mapHeight=0;
+inline UINT64 mapGeneration=0,mapPresent=0;
+inline ComPtr<ID3D12Resource> mapTexture;
+inline ComPtr<ID3D12GraphicsCommandList4> mapList;
+inline ComPtr<ID3D12DescriptorHeap> mapHeap;
+inline ComPtr<ID3D12PipelineState> mapPipeline,mapRendered;
+inline ComPtr<ID3D12CommandQueue> mapQueue;
+inline D3D12_GPU_DESCRIPTOR_HANDLE mapOriginalTable{};
 inline thread_local ID3D12GraphicsCommandList* signalList=nullptr;
 inline thread_local ComPtr<ID3D12PipelineState> signalOwner,signalRendered;
 inline unsigned char completedBytes[gpu::kReadbackBytes]{};
@@ -115,9 +125,9 @@ inline bool BothStagesCompleted() noexcept {
     return ray>=fenceValue && signal>=fenceValue;
 }
 // UI thread only. A failed or still-owned recording is never recycled.
-inline bool RequestFresh() noexcept {
+inline bool RequestFresh(bool compareMap=false) noexcept {
     if constexpr (!rt_spot_capture::GpuCaptureEnabled) return false;
-    if(!ready.load() || !signalReady.load())return false;
+    if(!ready.load() || !signalReady.load() || (compareMap && !mapReady.load()))return false;
     AcquireSRWLockExclusive(&stateLock);
     bool accepted=false;
     if(phase.load()==Phase::Idle)accepted=true;
@@ -126,6 +136,7 @@ inline bool RequestFresh() noexcept {
         const auto signalCompleted=resources.signalFence->GetCompletedValue();
         if(RecordingWasReset(recordedList.Get(),recordedGeneration) &&
            RecordingWasReset(recordedSignalList.Get(),signalGeneration) &&
+           (!mapRecorded || RecordingWasReset(mapList.Get(),mapGeneration)) &&
            completed!=UINT64_MAX && completed>=fenceValue &&
            signalCompleted!=UINT64_MAX && signalCompleted>=fenceValue) {
             ++fenceValue;attempts=exportCursor=exportStage=0;exportLightPending=false;readbackCopied=false;
@@ -134,7 +145,9 @@ inline bool RequestFresh() noexcept {
             accepted=true;
         }
     }
-    if(accepted){attempts=0;signalPhase.store(SignalPhase::Waiting);signalGeneration=signalPresent=0;phase.store(Phase::Armed,std::memory_order_release);}
+    if(accepted){mapRequested=compareMap;mapRecorded=mapSubmitted=mapBound=false;
+        mapGeneration=mapPresent=0;mapList.Reset();mapHeap.Reset();mapPipeline.Reset();mapRendered.Reset();mapQueue.Reset();
+        attempts=0;signalPhase.store(SignalPhase::Waiting);signalGeneration=signalPresent=0;phase.store(Phase::Armed,std::memory_order_release);}
     ReleaseSRWLockExclusive(&stateLock);
     if(accepted){rt_spot_table_audit::Request();Trace("rt_hit_gpu_requested grid=64 repeatable=1 fence=%llu",fenceValue);}
     return accepted;
@@ -154,6 +167,7 @@ inline void EndScope() noexcept {
     if(!inScope)return;
     inScope=false;signalList=nullptr;signalOwner.Reset();signalRendered.Reset();
     if(WaitingForSignal() || signalPhase.load()==SignalPhase::Recording){Fail("composition_signal_not_recorded");return;}
+    if(mapRecorded && phase.load()==Phase::Recording){Fail("map_without_ray_capture");return;}
     Phase expected=Phase::Recording;
     if(phase.compare_exchange_strong(expected,Phase::Armed) && ++attempts>=240)Fail("binding_attempt_budget");
 }
@@ -230,6 +244,45 @@ inline void BindCompute(ID3D12GraphicsCommandList* list,ID3D12PipelineState* own
     if(!inScope || internal)return;
     signalList=list;signalOwner=owner;signalRendered=rendered;
 }
+// Instrument only the hash-locked selector during this capture. The normal
+// dispatch and native UAV stores are retained; u3 is exclusively our texture.
+inline void BeginMap(ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT z) noexcept {
+    if(!mapRequested || !inScope || internal || phase.load()!=Phase::Recording || list!=signalList)return;
+    ComPtr<ID3D12PipelineState> pipeline;
+    if(!signalOwner || !Attached(signalOwner.Get(),gpu::kMapSidecarPipeline,pipeline))return;
+    if(mapRecorded || !x || !y || z!=1 || x>1024 || y>1024 || UINT64(x)*y>262144){Fail("map_extent_or_duplicate");return;}
+    Context current;D3D12_GPU_DESCRIPTOR_HANDLE table{};D3D12_CPU_DESCRIPTOR_HANDLE destination{};
+    const auto original=Lookup(list).set;
+    if(!original || !signalRendered || !ReadContext(current) || current.list!=list || !Fresh(current,table,destination)){Fail("map_bindings");return;}
+    const UINT width=x*8,height=y*8;
+    if(!mapTexture || mapWidth!=width || mapHeight!=height) {
+        // Previous ownership has been retired by RequestFresh before resizing.
+        mapTexture.Reset();D3D12_HEAP_PROPERTIES heap{};heap.Type=D3D12_HEAP_TYPE_DEFAULT;
+        D3D12_RESOURCE_DESC desc{};desc.Dimension=D3D12_RESOURCE_DIMENSION_TEXTURE2D;desc.Width=width;desc.Height=height;
+        desc.DepthOrArraySize=desc.MipLevels=desc.SampleDesc.Count=1;desc.Format=DXGI_FORMAT_R32G32B32A32_FLOAT;
+        desc.Flags=D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+        if(FAILED(resources.device->CreateCommittedResource(&heap,D3D12_HEAP_FLAG_NONE,&desc,D3D12_RESOURCE_STATE_UNORDERED_ACCESS,nullptr,IID_PPV_ARGS(&mapTexture)))){Fail("map_allocation");return;}
+        mapWidth=width;mapHeight=height;
+    }
+    mapGeneration=rt_spot_table_audit::Token(list);if(!mapGeneration){Fail("map_generation");return;}
+    mapList=current.list;mapHeap=current.heap;mapPipeline=pipeline;mapRendered=signalRendered;
+    mapOriginalTable=current.gpu;mapPresent=presentCount.load();
+    internal=true;
+    // Copy the actual verified native table; change only its unused u3 slot.
+    originalCopy(resources.device.Get(),49,destination,current.cpu,D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+    D3D12_UNORDERED_ACCESS_VIEW_DESC uav{};uav.Format=DXGI_FORMAT_R32G32B32A32_FLOAT;uav.ViewDimension=D3D12_UAV_DIMENSION_TEXTURE2D;
+    auto slot=destination;slot.ptr+=44*SIZE_T(resources.step);
+    originalUav(resources.device.Get(),mapTexture.Get(),nullptr,&uav,slot);
+    list->SetComputeRootDescriptorTable(0,table);original(list,pipeline.Get());
+    mapRecorded=mapBound=true;internal=false;
+}
+inline void EndMap(ID3D12GraphicsCommandList* list) noexcept {
+    if(!mapBound || internal || list!=mapList.Get())return;
+    internal=true;gpu::UavBarrier(list);
+    list->SetComputeRootDescriptorTable(0,mapOriginalTable);Lookup(list).set(list,mapRendered.Get());
+    mapBound=false;internal=false;
+    Trace("native_map_sidecar_recorded generation=%llu present=%llu extent=%ux%u native_stores_retained=1",mapGeneration,mapPresent,mapWidth,mapHeight);
+}
 inline void CaptureComposition(ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT z,bool before) noexcept {
     if(!inScope || internal || list!=signalList || phase.load()==Phase::Failed)return;
     if(before ? !WaitingForSignal() : signalPhase.load()!=SignalPhase::Recording)return;
@@ -248,6 +301,9 @@ inline void CaptureComposition(ID3D12GraphicsCommandList* list,UINT x,UINT y,UIN
     if(!original || !signalRendered){Fail("composition_signal_restore");return;}
     const auto generation=rt_spot_table_audit::Token(list);
     if(!generation){Fail("composition_signal_generation");return;}
+    if(before && mapRequested && (!mapRecorded || mapBound || mapPresent!=recordedPresent || mapWidth!=x*8 || mapHeight!=y*8)) {
+        Fail("map_composition_provenance");return;
+    }
     if(before) {
         recordedSignalList=current.list;recordedSignalHeap=current.heap;recordedSignalBeforePipeline=pipeline;
         signalGeneration=generation;signalPresent=presentCount.load();
@@ -263,6 +319,8 @@ inline void CaptureComposition(ID3D12GraphicsCommandList* list,UINT x,UINT y,UIN
     D3D12_CONSTANT_BUFFER_VIEW_DESC cb{resources.upload->GetGPUVirtualAddress(),256};
     originalCbv(resources.device.Get(),&cb,resources.At(base));
     resources.RawUav(resources.signal.Get(),gpu::kSignalBytes,base+43);
+    D3D12_UNORDERED_ACCESS_VIEW_DESC mapView{};mapView.Format=DXGI_FORMAT_R32G32B32A32_FLOAT;mapView.ViewDimension=D3D12_UAV_DIMENSION_TEXTURE2D;
+    originalUav(resources.device.Get(),mapRequested?mapTexture.Get():nullptr,nullptr,&mapView,resources.At(base+44));
     originalCopy(resources.device.Get(),49,destination,resources.At(base),D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
     // Order the native UAV writes before diagnostic reads. Native resources stay
     // in their existing states; only our private buffer transitions for copying.
@@ -281,9 +339,11 @@ inline void CaptureComposition(ID3D12GraphicsCommandList* list,UINT x,UINT y,UIN
     Trace("composition_signal_recorded generation=%llu ray_generation=%llu present=%llu independent_submission=1",signalGeneration,recordedGeneration,signalPresent);
 }
 inline void BeforeCompute(ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT z) noexcept {
+    BeginMap(list,x,y,z);
     CaptureComposition(list,x,y,z,true);
 }
 inline void AfterCompute(ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT z) noexcept {
+    EndMap(list);
     CaptureComposition(list,x,y,z,false);
 }
 inline void Record(ID3D12GraphicsCommandList4* list,ID3D12StateObject* owner,const D3D12_DISPATCH_RAYS_DESC* desc) noexcept {
@@ -319,7 +379,7 @@ inline void Record(ID3D12GraphicsCommandList4* list,ID3D12StateObject* owner,con
     }
     frameTag=static_cast<UINT>(rt_spot_table_audit::Token(list));if(!frameTag){Fail("frame_tag");return;}
     capturedTableRecords=tableControls.count;
-    const UINT inputControls[]={desc->Width,desc->Height,frameTag,64};
+    const UINT inputControls[]={desc->Width,desc->Height,frameTag,64,UINT(mapRequested)};
     const UINT captureControls[]={gpu::kRayCount,frameTag,0,2,0,1,0,0};
     void* mapped=nullptr;D3D12_RANGE empty{0,0};
     if(FAILED(resources.upload->Map(0,&empty,&mapped))){Fail("upload_map");return;}
@@ -393,23 +453,40 @@ inline bool ContainsRecording(UINT count,ID3D12CommandList*const* lists,ID3D12Co
 }
 inline void BeforeExecute(ID3D12CommandQueue* queue,UINT count,ID3D12CommandList*const* lists) noexcept {
     const auto current=phase.load(std::memory_order_acquire);
-    if(current<Phase::Recorded || current==Phase::Complete || current==Phase::Failed)return;
+    if(current<Phase::Recording || current==Phase::Complete || current==Phase::Failed)return;
     AcquireSRWLockExclusive(&stateLock);
+    if(mapRequested && mapRecorded && ContainsRecording(count,lists,mapList.Get(),mapGeneration)) {
+        if(mapSubmitted){Fail("map_recording_replayed");ReleaseSRWLockExclusive(&stateLock);return;}
+        mapQueue=queue;
+    }
+    if(current<Phase::Recorded){ReleaseSRWLockExclusive(&stateLock);return;}
     if(ContainsRecording(count,lists,recordedList.Get(),recordedGeneration)) {
         if(phase.load()==Phase::Recorded){submittedQueue=queue;phase.store(Phase::Submitting);}
         else if(!readbackCopied)Fail("recording_replayed_before_readback");
     }
     if(phase.load()!=Phase::Failed && signalPhase.load()>=SignalPhase::Recorded &&
        ContainsRecording(count,lists,recordedSignalList.Get(),signalGeneration)) {
-        if(signalPhase.load()==SignalPhase::Recorded){signalQueue=queue;signalPhase.store(SignalPhase::Submitting);}
+        if(signalPhase.load()==SignalPhase::Recorded){
+            bool ordered=mapSubmitted && mapQueue.Get()==queue;
+            if(mapRequested && !ordered && mapQueue.Get()==queue) {
+                for(UINT i=0;i<count;++i) {
+                    if(lists[i]==mapList.Get())ordered=true;
+                    if(lists[i]==recordedSignalList.Get())break;
+                }
+            }
+            if(mapRequested && !ordered)Fail("map_submission_order_or_queue");
+            else {signalQueue=queue;signalPhase.store(SignalPhase::Submitting);}
+        }
         else if(!readbackCopied)Fail("composition_replayed_before_readback");
     }
     ReleaseSRWLockExclusive(&stateLock);
 }
 inline void AfterExecute(ID3D12CommandQueue* queue,UINT count,ID3D12CommandList*const* lists) noexcept {
-    const auto current=phase.load();
-    if(current<Phase::Recorded || current==Phase::Complete || current==Phase::Failed)return;
+    const auto current=phase.load(std::memory_order_acquire);
+    if(current<Phase::Recording || current==Phase::Complete || current==Phase::Failed)return;
     AcquireSRWLockExclusive(&stateLock);
+    if(mapRecorded && mapQueue.Get()==queue && ContainsRecording(count,lists,mapList.Get(),mapGeneration))mapSubmitted=true;
+    if(current<Phase::Recorded){ReleaseSRWLockExclusive(&stateLock);return;}
     if(phase.load()==Phase::Submitting && queue==submittedQueue.Get() &&
        ContainsRecording(count,lists,recordedList.Get(),recordedGeneration)) {
         if(SUCCEEDED(queue->Signal(resources.fence.Get(),fenceValue))) {
@@ -429,6 +506,7 @@ inline void AfterExecute(ID3D12CommandQueue* queue,UINT count,ID3D12CommandList*
 inline void ResetObserved(ID3D12GraphicsCommandList* list) noexcept {
     if(phase.load()==Phase::Failed || phase.load()==Phase::Complete)return;
     ID3D12CommandList* lists[]={list};
+    if(mapRecorded && !mapSubmitted && ContainsRecording(1,lists,mapList.Get(),mapGeneration))Fail("map_discarded_before_submit");
     if(phase.load()==Phase::Recorded && ContainsRecording(1,lists,recordedList.Get(),recordedGeneration))
         Fail("recording_discarded_before_submit");
     if(signalPhase.load()==SignalPhase::Recorded && ContainsRecording(1,lists,recordedSignalList.Get(),signalGeneration))
@@ -470,7 +548,7 @@ inline void Poll() noexcept {
     // Retry canonical headers and records if the nonblocking log queue is busy.
     // Cursor advancement means successful enqueue, never merely an attempted write.
     if(exportStage==0) {
-        if(!Trace("rt_hit_gpu_recorded generation=%llu frame_tag=%u extent=%ux%u table_records=%u captured_present=%llu light_context_bytes=128 signal_bytes=128 spot_record_bytes=336 signal_generation=%llu signal_present=%llu",recordedGeneration,frameTag,capturedWidth,capturedHeight,capturedTableRecords,recordedPresent,signalGeneration,signalPresent))return;
+        if(!Trace("rt_hit_gpu_recorded generation=%llu frame_tag=%u extent=%ux%u table_records=%u captured_present=%llu light_context_bytes=128 signal_bytes=128 spot_record_bytes=336 signal_generation=%llu signal_present=%llu map_bytes=%u map_generation=%llu map_present=%llu",recordedGeneration,frameTag,capturedWidth,capturedHeight,capturedTableRecords,recordedPresent,signalGeneration,signalPresent,mapRequested?16u:0u,mapGeneration,mapPresent))return;
         exportStage=1;
     }
     if(exportStage==1) {
@@ -493,7 +571,10 @@ inline void Poll() noexcept {
             }
             char spotHex[336*2+1]{};
             rt_spot_capture_audit::Hex(completedBytes+gpu::kSignalReadbackOffset+exportCursor*gpu::kSignalStride+128,336,spotHex);
-            if(!Trace("rt_hit_gpu_light index=%u bytes=%s",exportCursor,spotHex))return;
+            char mapHex[33]{};
+            rt_spot_capture_audit::Hex(completedBytes+gpu::kSignalReadbackOffset+exportCursor*gpu::kSignalStride+464,16,mapHex);
+            if(mapRequested) {if(!Trace("rt_hit_gpu_light index=%u bytes=%s map=%s",exportCursor,spotHex,mapHex))return;}
+            else if(!Trace("rt_hit_gpu_light index=%u bytes=%s",exportCursor,spotHex))return;
             exportLightPending=false;
         }
     }

@@ -86,3 +86,25 @@ def map_visibility_probe(data):
         for at,words in sorted([(231,init),(10549,winner),(14948,encode)],reverse=True):
             w[at:at]=words
     return transform_shex(data,transform)
+
+
+def map_visibility_sidecar(data):
+    """Capture-only instrumentation: retain every normal UAV store and add u3.
+
+    Float32 private output avoids the old R11G11B10 ID precision limit.
+    No change to ranking, native atlas samples or displayed lighting.
+    """
+    probe = map_visibility_probe(data)
+    def transform(w):
+        assert w[14985+5:14985+7] == source(44)
+        assert w[202:209] == [0x0700189c, 0x0031ee46, 0, 0, 0, 0x5555, 0]
+        declaration = list(w[202:209]); declaration[2:5] = [3,3,3]
+        store = list(w[14985:14992]); store[2:4] = [3,3]
+        # Restore native diffuse value, then independently export the probe.
+        w[14990:14992] = source(1)
+        w[14992:14992] = store
+        # Cleared/background pixels must never retain a previous capture value.
+        clear = list(w[362:372]); clear[2:4] = [3,3]
+        w[372:372] = clear
+        w[223:223] = declaration
+    return transform_shex(probe, transform)

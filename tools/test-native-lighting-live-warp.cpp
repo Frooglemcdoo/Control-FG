@@ -917,6 +917,7 @@ int main() try {
         if constexpr(rt_spot_capture::GpuCaptureEnabled) {
             capture::ready=true;capture::phase=capture::Phase::Idle;
             capture::signalReady=true;
+            if(capture::RequestFresh(true))throw std::runtime_error("Map capture armed without its pipeline");
             if(!capture::RequestFresh() || capture::RequestFresh())throw std::runtime_error("Capture arm must be exclusive");
             capture::CancelPending();
             for(auto phase:{capture::Phase::Recorded,capture::Phase::Submitted,capture::Phase::Failed}){

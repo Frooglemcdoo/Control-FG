@@ -5,14 +5,15 @@ Texture2D<float4> shadowVisibility : register(t15);
 RWTexture2D<float4> diffuseOutput : register(u0);
 RWTexture2D<float4> specularOutput : register(u1);
 RWByteAddressBuffer captureSignal : register(u2);
+RWTexture2D<float4> nativeMap : register(u3);
 struct SpotRecord { uint4 blocks[20]; };
 StructuredBuffer<SpotRecord> spotData : register(t13);
-cbuffer CaptureLayout : register(b4) { uint width, height, frameTag, grid; }
+cbuffer CaptureLayout : register(b4) { uint width, height, frameTag, grid, mapEnabled; }
 [numthreads(8,8,1)]
 void captureComposition(uint3 id : SV_DispatchThreadID) {
     if (id.x >= 64 || id.y >= 64 || grid != 64) return;
     uint2 pixel = (2 * id.xy + 1) * uint2(width, height) / 128;
-    uint at = (id.y * 64 + id.x) * 464;
+    uint at = (id.y * 64 + id.x) * 480;
 #ifdef CAPTURE_BEFORE
     at += 64;
 #endif
@@ -22,6 +23,7 @@ void captureComposition(uint3 id : SV_DispatchThreadID) {
     captureSignal.Store4(at + 32, asuint(diffuseOutput[pixel]));
     captureSignal.Store4(at + 48, asuint(specularOutput[pixel]));
 #ifndef CAPTURE_BEFORE
+    captureSignal.Store4(at + 464, mapEnabled ? asuint(nativeMap[pixel]) : uint4(0,0,0,0));
     // Read the exact selected-light record bound to this composition pass.
     // The first 128 bytes retain the before/after signal ABI.
     uint count, stride;

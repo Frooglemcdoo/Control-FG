@@ -17,13 +17,14 @@ decoder=importlib.util.module_from_spec(spec);spec.loader.exec_module(decoder)
 
 def sample(record):
     if not record['valid']:return {'status':'invalid_ray'}
-    rgb=record.get('composition',{}).get('diffuse_before',[])[:3]
+    sidecar='native_map' in record
+    rgb=(record['native_map'] if sidecar else record.get('composition',{}).get('diffuse_before',[]))[:3]
     if len(rgb)!=3 or not all(math.isfinite(x) for x in rgb):return {'status':'missing_payload'}
     visibility,complement,encoded_id=rgb
     light=record['light_id']
     # R11G11B10 can encode ID+1 exactly through 64 in the blue lane.
     # Reject larger indices rather than trusting an ambiguous rounded identity.
-    if light>=64:return {'status':'id_precision_limit'}
+    if (not sidecar and light>=64) or light>=65535:return {'status':'id_precision_limit'}
     if abs(encoded_id-(light+1))>1e-4:return {'status':'id_mismatch'}
     if not 0<=visibility<=1 or not 0<=complement<=1 or abs(visibility+complement-1)>0.012:
         return {'status':'payload_changed'}
@@ -35,9 +36,12 @@ def sample(record):
 
 def analyze(text):
     starts=re.findall(r'blocker_trace_start mode=(\S+)',text)
-    if starts!=['selected_map_probe_rr_off']:
+    sidecar=starts==['native_pcf_blend']
+    if not sidecar and starts!=['selected_map_probe_rr_off']:
         raise ValueError('Requires exactly one MAP PROBE blocker trace')
     capture=decoder.decode_log(text)
+    if sidecar and any(r['valid'] and 'native_map' not in r for r in capture['records']):
+        raise ValueError('Native Blend capture lacks private map payload')
     counts=Counter();records=[]
     for record in capture['records']:
         item=sample(record);counts[item['status']]+=1
@@ -46,10 +50,10 @@ def analyze(text):
             item['hit_position']=record.get('hit_position')
             records.append(item)
     if not records:raise ValueError('No validated map visibility payloads')
-    return dict(schema='control-selected-map-probe-r163',capture_id=capture['capture_id'],extent=capture['extent'],
+    return dict(schema='control-selected-map-sidecar-r196' if sidecar else 'control-selected-map-probe-r163',capture_id=capture['capture_id'],extent=capture['extent'],
         counts=dict(counts),map_lit_rt_blocked=sum(r['map_visibility']>.9 and r['rt_visibility']<.1 for r in records),
         map_blocked_rt_lit=sum(r['map_visibility']<.1 and r['rt_visibility']>.9 for r in records),records=records,
-        limitations='Native map samples use native bias/filtering; RT is the accepted filtered result. Map values are render-target quantized. Diffuse RGB is diagnostic, not radiance. IDs >=64 are rejected for blue-lane precision. Agreement does not prove the shadow is physically correct; disagreement does not alone distinguish caster, bias or filtering.')
+        limitations=('Float32 private native-map output; displayed Native Blend lighting retained. ' if sidecar else 'Legacy diagnostic diffuse payload; blue-lane IDs >=64 rejected. ')+ 'Native map samples use native bias/filtering; RT is the accepted filtered result. Agreement does not prove the shadow is physically correct; disagreement does not alone distinguish caster, bias or filtering.')
 
 
 def main():

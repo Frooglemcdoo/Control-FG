@@ -126,3 +126,13 @@ for bad in [projection_log.replace(line, ''), projection_log.replace(line,line+'
     except ValueError: pass
     else: raise AssertionError('Invalid spotlight provenance accepted')
 print('PASS full spotlight records: projection decode, missing/duplicate/invalid stride rejected')
+
+# Private map ABI cannot be confused with ordinary diffuse radiance.
+map_hex=struct.pack('<4f',.25,.75,float(light+1),0).hex()
+sidecar=projection_log.replace('spot_record_bytes=336', 'spot_record_bytes=336 map_bytes=16 map_generation=12 map_present=42 captured_present=42').replace(line,line+' map='+map_hex)
+assert decoder.decode_log(sidecar)['records'][0]['native_map']==[.25,.75,float(light+1),0]
+for bad in [sidecar.replace('map_present=42','map_present=43'),sidecar.replace('map_generation=12','map_generation=0'),sidecar.replace(' map='+map_hex,''),sidecar.replace('map_bytes=16','map_bytes=0'),sidecar.replace('map_bytes=16','map_bytes=32')]:
+    try:decoder.decode_log(bad)
+    except ValueError:pass
+    else:raise AssertionError('Invalid private map provenance accepted')
+print('PASS R196 private map payload, frame identity and missing/malformed data rejection')

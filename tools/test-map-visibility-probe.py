@@ -51,3 +51,10 @@ try:probe.analyze('blocker_trace_start mode=default_no_history_rr_off')
 except ValueError:pass
 else:raise AssertionError('Ordinary lighting accepted as probe data')
 print('PASS map probe: exact instruction scope, winner predicate, post-dither payload, precision/provenance rejection')
+
+sidecar=record([99,99,99],light=112)
+sidecar['native_map']=[1,0,113,0]
+assert probe.sample(sidecar)['status']=='valid'
+sidecar['native_map'][2]=112
+assert probe.sample(sidecar)['status']=='id_mismatch'
+print('PASS float32 map sidecar supports IDs above 63 and ignores displayed diffuse radiance')

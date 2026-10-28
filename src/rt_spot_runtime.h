@@ -327,6 +327,7 @@ inline void ObserveCompute(ID3D12Device* device, const D3D12_COMPUTE_PIPELINE_ST
         PrepareIsolation(device,*desc,owner,create,kScreenOcclusionOffShader,sizeof(kScreenOcclusionOffShader),kScreenOcclusionVariant,screenOcclusionLightReady,"screen_occlusion_composition");
     }
     if(SUCCEEDED(hr) && kind==kSelectorComponent) {
+        PrepareIsolation(device,*desc,owner,create,kSelectorMapSidecarShader,sizeof(kSelectorMapSidecarShader),rt_spot_capture_gpu::kMapSidecarPipeline,rt_spot_capture_runtime::mapReady,"native_map_sidecar");
         PrepareIsolation(device,*desc,owner,create,kSelectorMapProbeShader,sizeof(kSelectorMapProbeShader),kMapProbeVariant,mapProbeReady,"selected_map_probe_producer");
         PrepareIsolation(device,*desc,owner,create,kSelectorMapPriorityShader,sizeof(kSelectorMapPriorityShader),kMapPriorityVariant,mapPrioritySelectorReady,"surface_normals_map_priority_producer");
         PrepareIsolation(device,*desc,owner,create,kSelectorCorrectedNoAOShader,sizeof(kSelectorCorrectedNoAOShader),kCorrectedNoAOVariant,correctedNoAOSelectorReady,"surface_normals_no_ao_producer");
