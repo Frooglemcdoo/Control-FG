@@ -3,7 +3,7 @@ name: Build native reflection enhancements and RR
 on:
   push:
     branches:
-      - work/r194-native-rt-light-capture
+      - work/r195-native-blend-baseline
       - experiment/native-hit-capture-r118
       - experiment/pt-reflections-p0
       - experiment/pt-verify-stages-20261010
@@ -87,6 +87,10 @@ jobs:
           cl /nologo /std:c++17 /EHsc tools\test-rr-temporal-probe.cpp /Febuild\temporal-probe.exe
           if errorlevel 1 exit /b 1
           build\temporal-probe.exe
+          if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 tools\test-native-blend-capture.cpp /Febuild\native-blend-capture.exe
+          if errorlevel 1 exit /b 1
+          build\native-blend-capture.exe
           if errorlevel 1 exit /b 1
           cl /nologo /std:c++17 /EHsc tools\test-rr-suite-policy.cpp /Febuild\suite-policy.exe
           if errorlevel 1 exit /b 1
@@ -702,7 +706,7 @@ jobs:
         shell: cmd
         run: |
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
-          cl /nologo /std:c++17 /EHsc /W4 /O2 /MT /LD /guard:cf /DCONTROL_SPEC_LONG_SEQUENCE /DCONTROL_RR_TEMPORAL_PROBE /DCONTROL_RR_F9_SUITE /DCONTROL_RR_COMPACT_DISTANCE /DCONTROL_SPEC_HIT_VIEW /DCONTROL_RR_MATERIAL_CAPTURE /DCONTROL_CAPTURE_DIAGNOSTIC /DUNICODE /D_UNICODE /I "third_party\streamline\include" src\probe.cpp /Fobuild\probe.obj /Febuild\dxgi.dll /link /DEF:src\dxgi.def /INCREMENTAL:NO /DYNAMICBASE /NXCOMPAT /GUARD:CF bcrypt.lib wintrust.lib user32.lib gdi32.lib
+          cl /nologo /std:c++17 /EHsc /W4 /O2 /MT /LD /guard:cf /DCONTROL_SPEC_LONG_SEQUENCE /DCONTROL_RR_F9_SUITE /DCONTROL_RR_COMPACT_DISTANCE /DCONTROL_SPEC_HIT_VIEW /DCONTROL_RR_MATERIAL_CAPTURE /DCONTROL_CAPTURE_DIAGNOSTIC /DUNICODE /D_UNICODE /I "third_party\streamline\include" src\probe.cpp /Fobuild\probe.obj /Febuild\dxgi.dll /link /DEF:src\dxgi.def /INCREMENTAL:NO /DYNAMICBASE /NXCOMPAT /GUARD:CF bcrypt.lib wintrust.lib user32.lib gdi32.lib
           if errorlevel 1 exit /b 1
           dumpbin /exports build\dxgi.dll > build\exports.txt
           dumpbin /imports build\dxgi.dll > build\imports.txt
@@ -796,11 +800,11 @@ jobs:
           build\suite-controller.exe
           if errorlevel 1 exit /b 1
 
-      - name: Package live lighting diagnostic R194
+      - name: Package live lighting diagnostic R195
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-Native-Lighting-Live-R194'
+          $out='Control-FG-Native-Lighting-Live-R195'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
           Copy-Item build/rt_spot_selected_off.dxbc,build/rt_spot_selection.dxbc,build/rt_spot_visibility.dxbc,build/rt_spot_light_ids.dxbc,build/rt_spot_raw_history.dxbc,build/rt_spot_raw_spatial0.dxbc,build/rt_spot_raw_spatial1.dxbc,build/rt_spot_full.dxil,build/rt_spot_r94.dxil,build/rt_spot_light.dxbc,build/rt_spot_reset.dxbc,build/rt_spot_history.dxbc,build/rt_spot_spatial0.dxbc,build/rt_spot_spatial1.dxbc $out
@@ -821,16 +825,16 @@ jobs:
           Copy-Item Package-Lighting-Capture.cmd,tools/package-lighting-capture.py,Package-Lighting-Performance.ps1 $out
           Copy-Item Capture-RR-Boundary.cmd,Capture-RR-Boundary.ps1,Collect-RR-Boundary-Status.cmd,tools/collect-rr-boundary.py $out
           Copy-Item Start-Compact-Distance-Test.cmd,Capture-RR-Suite.ps1,tools/collect-rr-suite.py $out
-          Copy-Item docs/native-lighting-r194.md "$out/DIAGNOSTIC-NOTES.md"
+          Copy-Item docs/native-lighting-r195.md "$out/DIAGNOSTIC-NOTES.md"
           @'
-          CONTROL-FG R194 - native map versus RT light capture
-          Keep the accepted R193 reflection settings. Hit distance OFF, SPEC Native.
-          Face the affected Board Room area, open F10, click TRACE SHADOW.
-          This selects MAP PROBE temporarily; odd colors and RR off are expected.
-          Hold still until the completion dialog. Previous lighting mode restores.
-          Send lighting.log, manifest.txt and the three PNGs from Shadow-R194.
-          F9 cancels this light trace; do not start the separate reflection suite.
-          This is diagnostic instrumentation, not a missing-light fix.
+          CONTROL-FG R195 - accepted Native Blend baseline and in-place ray capture
+          Launch normally. Hit distance is OFF by default; SPEC defaults to Native.
+          Enable RR and the game RT settings used in your accepted baseline.
+          Ray Traced Contact Shadows must be enabled for the spotlight/ray pipeline.
+          Native Blend is selected automatically once ready.
+          F10 - TRACE SHADOW records Native Blend without switching mode or RR.
+          Hold still until completion; send the Shadow-R195 log, manifest and PNGs.
+          No diagnostic colors. F9 cancels an active light capture.
           Read DIAGNOSTIC-NOTES.md.
           '@ | Set-Content "$out/README.txt" -Encoding ASCII
           Compress-Archive -Path "$out/*" -DestinationPath "$out.zip" -Force
@@ -839,10 +843,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-Native-Lighting-Live-R194
+          name: Control-FG-Native-Lighting-Live-R195
           path: |
-            Control-FG-Native-Lighting-Live-R194.zip
-            Control-FG-Native-Lighting-Live-R194.sha256
+            Control-FG-Native-Lighting-Live-R195.zip
+            Control-FG-Native-Lighting-Live-R195.sha256
             build/spec-volume-roughness-validation.json
             build/spec-volume-roughness.dxbc
             build/spec-environment-validation.json

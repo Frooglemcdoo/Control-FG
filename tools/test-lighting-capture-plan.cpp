@@ -167,6 +167,8 @@ int main(){
  assert(!BlockerSettled(4999,100,true));
  assert(!BlockerSettled(5000,89,true));
  assert(!BlockerSettled(5000,100,false));
+ assert(Applied(Mode::RoomNativeBlend,RequiredBinding(Mode::RoomNativeBlend),true));
+ assert(!Applied(Mode::RoomNativeBlend,0,true));
  assert(BlockerSettled(5000,90,true));
  assert(!Applied(blockerStep.mode,kAllBits,true));
  assert(Applied(blockerStep.mode,kAllBits,false));
