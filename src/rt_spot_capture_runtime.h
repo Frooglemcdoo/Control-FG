@@ -146,6 +146,9 @@ inline bool RequestFresh(bool compareMap=false) noexcept {
         }
     }
     if(accepted){mapRequested=compareMap;mapRecorded=mapSubmitted=mapBound=false;
+        // Each map trace discovers the current ray table before writing a map.
+        // A retained owner from a previous trace is not current-frame evidence.
+        if(compareMap){wantedAddress.store(0);wantedBytes.store(0);}
         mapGeneration=mapPresent=0;mapList.Reset();mapHeap.Reset();mapPipeline.Reset();mapRendered.Reset();mapQueue.Reset();
         attempts=0;signalPhase.store(SignalPhase::Waiting);signalGeneration=signalPresent=0;phase.store(Phase::Armed,std::memory_order_release);}
     ReleaseSRWLockExclusive(&stateLock);
@@ -236,6 +239,16 @@ inline void ObserveTableOwner(ID3D12Resource* resource) noexcept {
     if(!rt_spot_capture::ContainsGpuRange(address,desc.Width,wanted,wantedBytes.load()) || !TryAcquireSRWLockExclusive(&ownerLock))return;
     tableOwner=resource;tableBase=address;tableExtent=desc.Width;ReleaseSRWLockExclusive(&ownerLock);
 }
+// The selector precedes ray dispatch. Delay its private output until a prior
+// dispatch has advertised a table range and the resource observer has resolved
+// that range. Lock contention is a retry, not an incomplete GPU recording.
+inline bool MapTableReady() noexcept {
+    const auto address=wantedAddress.load(std::memory_order_acquire);
+    const auto bytes=wantedBytes.load();
+    if(!address || !bytes || !TryAcquireSRWLockShared(&ownerLock))return false;
+    const bool available=tableOwner && rt_spot_capture::ContainsGpuRange(tableBase,tableExtent,address,bytes);
+    ReleaseSRWLockShared(&ownerLock);return available;
+}
 template<class T> inline bool Attached(ID3D12Object* owner,REFGUID key,ComPtr<T>& object) noexcept {
     UINT size=sizeof(T*);return SUCCEEDED(owner->GetPrivateData(key,&size,object.ReleaseAndGetAddressOf())) && object;
 }
@@ -251,6 +264,10 @@ inline void BeginMap(ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT z) noexc
     ComPtr<ID3D12PipelineState> pipeline;
     if(!signalOwner || !Attached(signalOwner.Get(),gpu::kMapSidecarPipeline,pipeline))return;
     if(mapRecorded || !x || !y || z!=1 || x>1024 || y>1024 || UINT64(x)*y>262144){Fail("map_extent_or_duplicate");return;}
+    if(!MapTableReady()) {
+        if(attempts<4)Trace("native_map_pending reason=ray_table_warmup attempt=%u",attempts);
+        return;
+    }
     Context current;D3D12_GPU_DESCRIPTOR_HANDLE table{};D3D12_CPU_DESCRIPTOR_HANDLE destination{};
     const auto original=Lookup(list).set;
     constexpr UINT64 required=(((1ull<<21)-1)<<5)|(7ull<<41);
@@ -358,6 +375,12 @@ inline void Record(ID3D12GraphicsCommandList4* list,ID3D12StateObject* owner,con
     if(desc->Depth!=1 || !desc->Width || desc->Width>16384 || !desc->Height || desc->Height>16384 ||
         !rt_spot_capture::NativeHitTableLayout(desc->HitGroupTable.StartAddress,desc->HitGroupTable.SizeInBytes,desc->HitGroupTable.StrideInBytes))return;
     wantedBytes.store(desc->HitGroupTable.SizeInBytes);wantedAddress.store(desc->HitGroupTable.StartAddress,std::memory_order_release);
+    // Publish discovery even when the earlier selector was deliberately skipped.
+    // Do not consume the capture with rays that have no same-frame map partner.
+    if(mapRequested && !mapRecorded) {
+        if(attempts<4)Trace("rt_hit_gpu_pending reason=map_warmup table_bytes=%llu",desc->HitGroupTable.SizeInBytes);
+        return;
+    }
     Context current;constexpr UINT64 required=(1ull<<5)|(1ull<<6)|(1ull<<7)|(1ull<<9)|(1ull<<10)|(1ull<<11)|(1ull<<12);
     if(!ReadContext(current) || current.list!=list || current.list!=mirrored.list || current.heap!=mirrored.heap ||
         current.gpu.ptr!=mirrored.gpu.ptr || (observed&required)!=required) {

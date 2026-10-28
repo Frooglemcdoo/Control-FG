@@ -920,6 +920,50 @@ int main() try {
             if(capture::RequestFresh(true))throw std::runtime_error("Map capture armed without its pipeline");
             if(!capture::RequestFresh() || capture::RequestFresh())throw std::runtime_error("Capture arm must be exclusive");
             capture::CancelPending();
+            // Reproduce R196 cold start: selector skipped, ray address discovered,
+            // resource observed later, then next frame is eligible. No GPU map
+            // write may be started or reused during the resource-discovery wait.
+            capture::mapReady=true;capture::wantedAddress=1234;capture::wantedBytes=96;
+            if(!capture::RequestFresh(true) || capture::wantedAddress || capture::wantedBytes)
+                throw std::runtime_error("Map request reused stale discovery");
+            ComPtr<ID3D12Resource> warmupTable;
+            D3D12_HEAP_PROPERTIES warmupHeap{};warmupHeap.Type=D3D12_HEAP_TYPE_UPLOAD;
+            D3D12_RESOURCE_DESC warmupDesc{};warmupDesc.Dimension=D3D12_RESOURCE_DIMENSION_BUFFER;
+            warmupDesc.Width=1024;warmupDesc.Height=warmupDesc.DepthOrArraySize=warmupDesc.MipLevels=warmupDesc.SampleDesc.Count=1;
+            warmupDesc.Layout=D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+            Check(device->CreateCommittedResource(&warmupHeap,D3D12_HEAP_FLAG_NONE,&warmupDesc,D3D12_RESOURCE_STATE_GENERIC_READ,nullptr,IID_PPV_ARGS(&warmupTable)));
+            D3D12_DISPATCH_RAYS_DESC warmupRays{};warmupRays.Width=128;warmupRays.Height=64;warmupRays.Depth=1;
+            warmupRays.HitGroupTable={warmupTable->GetGPUVirtualAddress()+64,192,96};
+            capture::tableOwner.Reset();
+            for(unsigned attempt=0;attempt<3;++attempt) {
+                capture::BeginScope();
+                if(capture::MapTableReady())throw std::runtime_error("Unobserved table accepted");
+                // Early return must precede bindings, pipelines, upload or rays.
+                capture::Record(nullptr,nullptr,&warmupRays);
+                capture::EndScope();
+                if(capture::phase!=capture::Phase::Armed || capture::mapRecorded || capture::attempts!=attempt+1 ||
+                   capture::wantedAddress!=warmupRays.HitGroupTable.StartAddress || capture::wantedBytes!=192)
+                    throw std::runtime_error("Cold map warmup failed to rearm safely");
+            }
+            capture::ObserveTableOwner(warmupTable.Get());
+            if(!capture::MapTableReady())throw std::runtime_error("Observed ray table did not enable map capture");
+            capture::wantedAddress=warmupTable->GetGPUVirtualAddress()+1024;
+            if(capture::MapTableReady())throw std::runtime_error("Out-of-range table accepted");
+            capture::wantedAddress=warmupRays.HitGroupTable.StartAddress;
+            capture::BeginScope();
+            if(!capture::MapTableReady())throw std::runtime_error("Ready table lost at next frame");
+            // Preserve the hard guard after actual map writes: never silently
+            // recycle an orphaned GPU map if a later ray prerequisite changes.
+            capture::mapRecorded=true;capture::EndScope();
+            if(capture::phase!=capture::Phase::Failed)throw std::runtime_error("Orphaned map write recycled");
+            capture::phase=capture::Phase::Idle;capture::mapRecorded=false;
+            if(!capture::RequestFresh(true))throw std::runtime_error("Test warmup reset failed");
+            capture::BeginScope();capture::attempts=239;capture::EndScope();
+            if(capture::phase!=capture::Phase::Failed)throw std::runtime_error("Warmup budget unbounded");
+            capture::phase=capture::Phase::Idle;
+            if(!capture::RequestFresh())throw std::runtime_error("Legacy capture failed after warmup");
+            capture::CancelPending();
+            std::cout<<"PASS R197 cold map capture: delayed table discovery retries, current-range admission, bounded wait, orphaned-map guard and legacy capture retained\n";
             for(auto phase:{capture::Phase::Recorded,capture::Phase::Submitted,capture::Phase::Failed}){
                 capture::phase=phase;if(capture::RequestFresh())throw std::runtime_error("In-flight/failed capture recycled");
             }
