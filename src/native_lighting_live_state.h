@@ -4,7 +4,10 @@
 #include "rr_specular_temporal_policy.h"
 
 namespace native_lighting {
-enum class Mode : unsigned { Native, DisableBakedGi, DisableDirect, DisableDirectDiffuse, DisableDirectSpecular, BypassShadows, DisableLightPattern, BypassScreenShadows, BypassSpotShadows, BypassPointShadows, SpotVarianceLow, SpotVarianceHigh, SpotPcfCenter, SpotPcf32, SpotStableSoft, SpotStableTight, SpotBilinear, SpotResolution2x, RtSpot, RtSpotRaw, RtSpotMapGuard, RtSpotNativeCull, RtSpotVisibilityRaw, RtSpotVisibilityFiltered, RtSpotLightIds, RtSpotBaseline, RtSpotDiffuseFiltered, RtSpotGiFiltered, RtSpotWorldAlbedo, RtSpotSpecularFiltered, RtSpotViewAngle, RtSpotGi2, RtSpotGi4, RtSpotGi8, RtSpotGiMenu, RtSpotGi12, RtSpotGi16, RtSpotSpec1, RtSpotSpec2, RtSpotSpec4, RtSpotSpec8, RtSpotSpec12, RtSpotSpec16, RtSpotTemporal2, RtSpotTemporal4, RoomNative, RoomGi, RoomSpot, RoomBoth, RoomNativeSelection, RoomOpen, RoomSelectedOff, RoomRaw, RoomBlocker, RoomHitX, RoomHitY, RoomHitZ, RoomAuthoredClip, RoomAuthoredSpatial, RoomAuthoredRaw, RoomNativeNoRR, RoomClipNoRR, RoomContactOff, RoomScreenOcclusionOff, RoomBentNormalOff, RoomLocalMapsOff, RoomCorrectedNoRR, RoomCorrectedNoHistory, RoomCorrectedNoAO, RoomCorrectedRaw, RoomCorrectedGuarded, RoomCorrectedVisibility, RoomCorrectedRawVisibility, RoomCorrectedLightIds, RoomCorrectedNoBakedGi, RoomCorrectedNoBakedGiNoRR, RoomCorrectedOpen, RoomCorrectedMapPriority, RoomProjectionOrigin, RoomMapProbe, RoomNativeBlend };
+enum class Mode : unsigned { Native, DisableBakedGi, DisableDirect, DisableDirectDiffuse, DisableDirectSpecular, BypassShadows, DisableLightPattern, BypassScreenShadows, BypassSpotShadows, BypassPointShadows, SpotVarianceLow, SpotVarianceHigh, SpotPcfCenter, SpotPcf32, SpotStableSoft, SpotStableTight, SpotBilinear, SpotResolution2x, RtSpot, RtSpotRaw, RtSpotMapGuard, RtSpotNativeCull, RtSpotVisibilityRaw, RtSpotVisibilityFiltered, RtSpotLightIds, RtSpotBaseline, RtSpotDiffuseFiltered, RtSpotGiFiltered, RtSpotWorldAlbedo, RtSpotSpecularFiltered, RtSpotViewAngle, RtSpotGi2, RtSpotGi4, RtSpotGi8, RtSpotGiMenu, RtSpotGi12, RtSpotGi16, RtSpotSpec1, RtSpotSpec2, RtSpotSpec4, RtSpotSpec8, RtSpotSpec12, RtSpotSpec16, RtSpotTemporal2, RtSpotTemporal4, RoomNative, RoomGi, RoomSpot, RoomBoth, RoomNativeSelection, RoomOpen, RoomSelectedOff, RoomRaw, RoomBlocker, RoomHitX, RoomHitY, RoomHitZ, RoomAuthoredClip, RoomAuthoredSpatial, RoomAuthoredRaw, RoomNativeNoRR, RoomClipNoRR, RoomContactOff, RoomScreenOcclusionOff, RoomBentNormalOff, RoomLocalMapsOff, RoomCorrectedNoRR, RoomCorrectedNoHistory, RoomCorrectedNoAO, RoomCorrectedRaw, RoomCorrectedGuarded, RoomCorrectedVisibility, RoomCorrectedRawVisibility, RoomCorrectedLightIds, RoomCorrectedNoBakedGi, RoomCorrectedNoBakedGiNoRR, RoomCorrectedOpen, RoomCorrectedMapPriority, RoomProjectionOrigin, RoomMapProbe, RoomNativeBlend, RoomNativeBlendLegacy };
+inline constexpr bool IsNativeBlend(Mode mode) noexcept {
+    return mode==Mode::RoomNativeBlend || mode==Mode::RoomNativeBlendLegacy;
+}
 // Signal views share the accepted lighting policy, but replace composition with
 // selected-spot visibility or ID. They are not unmodified-native signal views.
 inline constexpr bool IsCorrectedSignal(Mode mode) noexcept {
@@ -18,7 +21,7 @@ inline constexpr bool ShowsSpotLightIds(Mode mode) noexcept {
 // Keep the R139 normal correction and authored clipping; point history stays native.
 inline constexpr Mode kDefaultMode = Mode::RoomCorrectedNoHistory;
 inline constexpr bool SupportsLightContextCapture(Mode mode) noexcept {
-    return mode==Mode::RoomNativeBlend || mode==Mode::RoomMapProbe || mode==Mode::RoomBoth || mode==kDefaultMode || mode==Mode::RoomCorrectedNoRR || mode==Mode::RoomCorrectedMapPriority;
+    return IsNativeBlend(mode) || mode==Mode::RoomMapProbe || mode==Mode::RoomBoth || mode==kDefaultMode || mode==Mode::RoomCorrectedNoRR || mode==Mode::RoomCorrectedMapPriority;
 }
 // These comparisons remove only the hash-verified native baked-GI pass.
 // They retain the complete accepted spotlight policy and saved user settings.
@@ -26,7 +29,7 @@ inline constexpr bool DisablesCorrectedBakedGi(Mode mode) noexcept {
     return mode==Mode::RoomCorrectedNoBakedGi || mode==Mode::RoomCorrectedNoBakedGiNoRR;
 }
 inline constexpr bool UsesDirectSurfaceNormals(Mode mode) noexcept {
-    return mode==Mode::RoomNativeBlend || mode==Mode::RoomMapProbe || mode==Mode::RoomProjectionOrigin || mode==Mode::RoomCorrectedMapPriority || mode==Mode::RoomCorrectedOpen || DisablesCorrectedBakedGi(mode) || IsCorrectedSignal(mode) || mode==Mode::RoomBentNormalOff || mode==Mode::RoomCorrectedNoRR ||
+    return IsNativeBlend(mode) || mode==Mode::RoomMapProbe || mode==Mode::RoomProjectionOrigin || mode==Mode::RoomCorrectedMapPriority || mode==Mode::RoomCorrectedOpen || DisablesCorrectedBakedGi(mode) || IsCorrectedSignal(mode) || mode==Mode::RoomBentNormalOff || mode==Mode::RoomCorrectedNoRR ||
         mode==Mode::RoomCorrectedNoHistory || mode==Mode::RoomCorrectedNoAO || mode==Mode::RoomCorrectedRaw || mode==Mode::RoomCorrectedGuarded;
 }
 inline bool IsGiSampleMode(Mode mode) noexcept {
@@ -41,7 +44,7 @@ inline constexpr bool UsesAuthoredClip(Mode mode) noexcept {
     return UsesDirectSurfaceNormals(mode) || mode==Mode::RoomLocalMapsOff || mode==Mode::RoomContactOff || mode==Mode::RoomScreenOcclusionOff || mode==Mode::RoomAuthoredClip || mode==Mode::RoomAuthoredSpatial || mode==Mode::RoomAuthoredRaw || mode==Mode::RoomClipNoRR || mode==Mode::RoomSelectedOff;
 }
 inline bool BypassesSpotHistory(Mode mode) noexcept {
-    return mode==Mode::RoomNativeBlend || mode==Mode::RoomMapProbe || mode==Mode::RoomProjectionOrigin || DisablesCorrectedBakedGi(mode) || IsCorrectedSignal(mode) || mode==Mode::RoomAuthoredSpatial || mode==Mode::RoomAuthoredRaw ||
+    return IsNativeBlend(mode) || mode==Mode::RoomMapProbe || mode==Mode::RoomProjectionOrigin || DisablesCorrectedBakedGi(mode) || IsCorrectedSignal(mode) || mode==Mode::RoomAuthoredSpatial || mode==Mode::RoomAuthoredRaw ||
         mode==Mode::RoomCorrectedNoHistory || mode==Mode::RoomCorrectedRaw ||
         mode==Mode::RoomCorrectedMapPriority || mode==Mode::RoomCorrectedOpen || mode==Mode::RoomCorrectedNoRR || mode==Mode::RoomCorrectedNoAO;
 }
@@ -57,7 +60,7 @@ inline bool IsSignalDiagnostic(Mode mode) noexcept {
 inline bool BypassesRR(Mode mode) noexcept {
     return mode==Mode::RoomMapProbe || mode==Mode::RoomProjectionOrigin || mode==Mode::RoomCorrectedMapPriority || mode==Mode::RoomCorrectedOpen || mode==Mode::RoomCorrectedNoBakedGiNoRR || mode==Mode::RoomCorrectedNoRR || IsSignalDiagnostic(mode) || mode==Mode::RoomNativeNoRR || mode==Mode::RoomClipNoRR;
 }
-inline std::atomic<bool> nativeBlendReady{false};
+inline std::atomic<bool> nativeBlendReady{false}, nativeBlendLegacyReady{false};
 inline std::atomic<bool> mapProbeReady{false};
 inline std::atomic<bool> spotProjectionReady{false};
 inline std::atomic<bool> spotBandColorsReady{false}, spotHitPositionReady{false}, spotAuthoredClipReady{false};
@@ -227,6 +230,7 @@ inline bool ModeAvailable(Mode mode,unsigned ready) noexcept {
     if(mode==Mode::RoomProjectionOrigin&&!spotProjectionReady.load(std::memory_order_acquire))return false;
     if(DisablesCorrectedBakedGi(mode) && rtBakedGiReadyMask.load(std::memory_order_acquire)!=3)return false;
     if(UsesGuardedSpotHistory(mode)&&!guardedHistoryReady.load(std::memory_order_acquire))return false;
+    if(mode==Mode::RoomNativeBlendLegacy&&!nativeBlendLegacyReady.load(std::memory_order_acquire))return false;
     if(mode==Mode::RoomNativeBlend&&!nativeBlendReady.load(std::memory_order_acquire))return false;
     if(mode==Mode::RoomMapProbe&&!mapProbeReady.load(std::memory_order_acquire))return false;
     if(mode==Mode::RoomCorrectedMapPriority&&!mapPrioritySelectorReady.load(std::memory_order_acquire))return false;
@@ -271,7 +275,8 @@ inline const char* ModeName(Mode mode) noexcept {
     case Mode::RoomCorrectedNoHistory:return "default_no_spot_history";
     case Mode::RoomCorrectedNoAO:return "default_no_history_screen_ao_off";
     case Mode::RoomCorrectedRaw:return "default_raw_spot_visibility";
-    case Mode::RoomNativeBlend:return "native_pcf_blend";
+    case Mode::RoomNativeBlend:return "native_map_guard";
+    case Mode::RoomNativeBlendLegacy:return "native_pcf_blend_r199";
     case Mode::RoomMapProbe:return "selected_map_probe_rr_off";
     case Mode::RoomProjectionOrigin:return "default_projection_origin_rr_off";
     case Mode::RoomCorrectedMapPriority:return "default_no_history_map_priority_rr_off";
@@ -347,7 +352,7 @@ class LiveSelection {
     static constexpr unsigned kSequenceShift = kModeBits + 3;
     static constexpr uint64_t kModeMask = (uint64_t(1) << kModeBits) - 1;
     static constexpr uint64_t kObservedMask = uint64_t(kBindingBits) << kObservedShift;
-    static_assert(static_cast<unsigned>(Mode::RoomCorrectedNoBakedGiNoRR) <= kModeMask, "Mode storage exhausted");
+    static_assert(static_cast<unsigned>(Mode::RoomNativeBlendLegacy) <= kModeMask, "Mode storage exhausted");
     std::atomic<uint64_t> state_{0};
 public:
     uint64_t Read() const noexcept { return state_.load(std::memory_order_acquire); }

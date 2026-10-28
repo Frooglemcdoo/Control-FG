@@ -31,40 +31,15 @@ inline const wchar_t* ButtonLabel(unsigned index) noexcept {
         return label;
     }
     if(index==kModeCount+8) {
-#ifdef CONTROL_RR_COMPONENT_CAPTURE
-        const auto component=spec_serial::ComponentMode();
-        if(component==1)return L"REFLECTION: EMISSION";
-        if(component==2)return L"REFLECTION: SHADING";
-#endif
-#ifdef CONTROL_SPEC_INDIRECT_CAPTURE
-        const auto indirect=spec_serial::ComponentMode();
-        if(indirect==1)return L"REFLECTION: DIFFUSE";
-        if(indirect==2)return L"ENV SPEC x8";
-        if(indirect==3)return L"ENV VOLUME x8";
-        if(indirect==4)return L"ENV CUBE x8";
-#endif
-#ifdef CONTROL_SPEC_LOCAL_CAPTURE
-        const auto local=spec_serial::ComponentMode();
-        if(local==1)return L"REFLECTION: OTHER";
-        if(local==2)return L"REFLECTION: LOCAL SPEC";
-#endif
-#if defined(CONTROL_RR_COMPACT_DISTANCE)
-        return rr_compact_distance::enabled.load()?L"HIT DIST: REQUESTED":L"HIT DIST: BASELINE";
-#elif defined(CONTROL_SPEC_VOLUME_ROUGHNESS)
-        return spec_serial::VolumeRoughnessEnabled()?L"VOLUME: ROUGHNESS":L"VOLUME: BASELINE";
-#elif defined(CONTROL_SPEC_PHASE_PRECISION)
-        return L"SPEC: PHASE";
-#elif defined(CONTROL_SPEC_HIT_VIEW)
-        return L"SPEC: HIT VIEW";
-#else
-        return L"SPEC SHADING: SERIAL";
-#endif
+        const auto mode=LiveSelection::GetMode(selection.Read());
+        return mode==Mode::RoomNativeBlend?L"MAP GUARD: ON":mode==Mode::RoomNativeBlendLegacy?L"MAP GUARD: OFF":L"MAP GUARD";
     }
     return actions[index - kModeCount];
 }
 inline const wchar_t* ModeHint(Mode mode) noexcept {
     if(mode==Mode::Native)return L"Native lighting. SPEC is shared with other modes; NATIVE removes its override.";
-    if(mode==Mode::RoomNativeBlend)return L"Native PCF-only shadow fade applied to RT. Uses your saved RR setting.";
+    if(mode==Mode::RoomNativeBlend)return L"Native map blockers retained with RT. MAP GUARD toggles the R199 comparison.";
+    if(mode==Mode::RoomNativeBlendLegacy)return L"R199 comparison: RT with native fade. Native map blockers are not retained.";
     if(mode==Mode::RoomMapProbe)return L"Diagnostic colors. Click TRACE SHADOW; hold still. Restore DEFAULT afterward.";
     if(mode==Mode::RoomCorrectedMapPriority)return L"Test: rank RT lights using map-visible energy. RR off.";
     if(mode==Mode::RoomCorrectedOpen)return L"Test: selected RT spotlight unblocked; other shadows retained. RR off.";
@@ -217,7 +192,7 @@ inline void RequestLightCapture(HWND panel) noexcept {
     return;
 #endif
     const auto mode=LiveSelection::GetMode(selection.Read());
-    if(!performance_capture::Active() && !capture_suite::active && mode==Mode::RoomNativeBlend && control_rr::RRUserRuntimeWorkRequested() && control_rr_capture_ui::Request()) {
+    if(!performance_capture::Active() && !capture_suite::active && IsNativeBlend(mode) && control_rr::RRUserRuntimeWorkRequested() && control_rr_capture_ui::Request()) {
         Trace("rr_material_capture requested=1 mode=%s spec_requested=%u",ModeName(mode),specularSampleChoice.load());
         ClosePanel(panel);
     } else MessageBoxW(panel,L"Select NATIVE BLEND with RR enabled. Capture the painting, then the elevator, at SPEC 4. If busy, failed, or both pairs are saved, PACKAGE RR collects diagnostics.",L"Lighting capture",MB_OK);
@@ -294,7 +269,8 @@ inline LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPA
         const auto* item=reinterpret_cast<const DRAWITEMSTRUCT*>(lParam);
         const unsigned index=item->CtlID-kButtonFirst;
         if(index>=kButtonCount)return FALSE;
-        const bool active=index<kModeCount && LiveSelection::GetMode(selection.Read())==kModeChoices[index].mode;
+        const auto selected=LiveSelection::GetMode(selection.Read());
+        const bool active=index<kModeCount && (selected==kModeChoices[index].mode || (kModeChoices[index].mode==Mode::RoomNativeBlend && IsNativeBlend(selected)));
         HBRUSH brush=CreateSolidBrush(active?theme::kAccent:RGB(35,35,35)); FillRect(item->hDC,&item->rcItem,brush); DeleteObject(brush);
         HBRUSH border=CreateSolidBrush(theme::kBorder); FrameRect(item->hDC,&item->rcItem,border); DeleteObject(border);
         const auto previous=SelectObject(item->hDC,bodyFont); SetBkMode(item->hDC,TRANSPARENT); SetTextColor(item->hDC,theme::kText);
@@ -328,7 +304,9 @@ inline LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPA
                 }
             }
             else if(index==kModeCount+8 && !capture_suite::active) {
-                Trace("spec_parallel unavailable=1 reason=r170_performance_regression shading=serial");
+                const auto current=LiveSelection::GetMode(selection.Read());
+                const auto next=current==Mode::RoomNativeBlend?Mode::RoomNativeBlendLegacy:Mode::RoomNativeBlend;
+                selectionRejected=!SelectMode(next);savedNotice=0;
             }
             else if(index==kModeCount+9) RequestCamera(window,1);
             else if(index==kModeCount+10) RequestCamera(window,0);

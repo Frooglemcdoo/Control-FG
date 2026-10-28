@@ -6,7 +6,7 @@
 // Execute the shipped diagnostics on synthetic light IDs and visibility values.
 // GPU waits/readback exist only in this standalone validation executable.
 static void TestSpotDebugView(ID3D12Device* device, ID3D12RootSignature* root,
-    ID3D12PipelineState* pipeline, bool ids, bool bands=false) {
+    ID3D12PipelineState* pipeline, bool ids, bool bands=false, bool mapGuard=false) {
     constexpr UINT extent=8;
     D3D12_HEAP_PROPERTIES gpu{};gpu.Type=D3D12_HEAP_TYPE_DEFAULT;
     D3D12_HEAP_PROPERTIES uploadHeap{};uploadHeap.Type=D3D12_HEAP_TYPE_UPLOAD;
@@ -28,9 +28,11 @@ static void TestSpotDebugView(ID3D12Device* device, ID3D12RootSignature* root,
     auto upload=buffer(4096,uploadHeap,D3D12_RESOURCE_STATE_GENERIC_READ);
     auto readback=buffer(4096,readbackHeap,D3D12_RESOURCE_STATE_COPY_DEST);
     unsigned char* mapped=nullptr;D3D12_RANGE empty{0,0};Check(upload->Map(0,&empty,reinterpret_cast<void**>(&mapped)));
+    constexpr UINT layerFlags[]={0,256,257,258,512,514,770,769};
     for(UINT y=0;y<extent;++y)for(UINT x=0;x<extent;++x){
         const UINT id=(x==7)?65535:y*extent+x;
-        const UINT pair[2]={id,65535};const float v[2]={float((x+y)%5)/4,1-float((x+y)%5)/4};
+        UINT pair[2]={id,65535};float v[2]={float((x+y)%5)/4,1-float((x+y)%5)/4};
+        if(mapGuard){const float fade=float(x)/7;pair[0]=layerFlags[y];memcpy(&pair[1],&fade,4);v[1]=float((x+2*y)%5)/4;}
         memcpy(mapped+y*256+x*8,pair,sizeof(pair));memcpy(mapped+2048+y*256+x*8,v,sizeof(v));
     }
     upload->Unmap(0,nullptr);
@@ -89,6 +91,13 @@ static void TestSpotDebugView(ID3D12Device* device, ID3D12RootSignature* root,
             }
             if(c<3 && ids){const float value=float(y*extent+x)*factors[c];expected=value-std::floor(value);}
             if(c<3 && x==7)expected=c==1?0.0f:1.0f;
+            if(mapGuard){
+                const float rt=float((x+y)%5)/4,mapInput=float((x+2*y)%5)/4,fade=float(x)/7;
+                const UINT flags=layerFlags[y];
+                const float prior=(flags&0x302)==0x100?(1-fade)+fade*rt:rt;
+                const float map=(flags&2) && (flags&768)==512 ? mapInput*.5f : mapInput;
+                expected=c==0?(prior<map?prior:map):c==1?map:c==2?mapInput:1.0f;
+            }
             if(!std::isfinite(actual[c]) || std::abs(actual[c]-expected)>0.0001f || spec[c]!=0)
                 throw std::runtime_error("Diagnostic pixel/channel/invalid-ID mismatch");
         }

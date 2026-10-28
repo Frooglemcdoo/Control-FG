@@ -146,6 +146,15 @@ int main(){
  assert(Applied(Mode::RoomNativeBlend,kAllBits,false));
  assert(!Applied(Mode::RoomNativeBlend,kDirectBit,true));
  assert(SupportsLightContextCapture(Mode::RoomNativeBlend));
+ assert(IsNativeBlend(Mode::RoomNativeBlendLegacy));
+ assert(!ModeAvailable(Mode::RoomNativeBlendLegacy,kRtSpotReadyBit));nativeBlendLegacyReady=true;
+ assert(ModeAvailable(Mode::RoomNativeBlendLegacy,kRtSpotReadyBit));
+ assert(UsesDirectSurfaceNormals(Mode::RoomNativeBlendLegacy));
+ assert(BypassesSpotHistory(Mode::RoomNativeBlendLegacy)&&!BypassesRR(Mode::RoomNativeBlendLegacy));
+ assert(UsesAuthoredClip(Mode::RoomNativeBlendLegacy)&&SupportsLightContextCapture(Mode::RoomNativeBlendLegacy));
+ assert(UsesWorldAlbedo(Mode::RoomNativeBlendLegacy)&&PreservesGiFiltering(Mode::RoomNativeBlendLegacy));
+ assert(SpecularSampleRequest(Mode::RoomNativeBlendLegacy)==SpecularSampleRequest(Mode::RoomNativeBlend));
+ assert(Applied(Mode::RoomNativeBlendLegacy,kAllBits,true));
  assert(BlockerMode(Mode::RoomNativeBlend)==Mode::RoomCorrectedNoRR);
  assert(capture_plan::BlockerMode(Mode::RoomMapProbe)==Mode::RoomMapProbe);
  assert(UsesDirectSurfaceNormals(Mode::RoomMapProbe)&&BypassesSpotHistory(Mode::RoomMapProbe)&&BypassesRR(Mode::RoomMapProbe));

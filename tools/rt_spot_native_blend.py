@@ -35,3 +35,26 @@ def native_blend(data):
 
 def visibility(flags,fade,rt):
     return 1+fade*(rt-1) if flags & LAYER_MASK == PCF_ONLY else rt
+
+
+def native_map_guard(data):
+    """R200: preserve the native selected-spot map as an occlusion ceiling.
+
+    Save the native final static/dynamic selection before its RT bypass. Keep
+    the bypass (r0.x=1) for material evaluation, then apply min once to r7.z.
+    This avoids multiplying two penumbras or applying the authored fade twice.
+    """
+    baseline = native_blend(data)
+    def patch(w):
+        assert w[1707:1716] == [0x05000036,0x00100012,0,0x00004001,0x3f800000]+[0x0100003a]*4
+        assert w[1755]&2047 == 57
+        # The exact original native movc, redirected to the unused r22.z lane.
+        save=[0x09000037,*dest(22,4),0x0010003a,1,0x0010003a,6,0x0010000a,0]
+        guard=[0x07000033,*dest(7,4),*source(7,'zzzz'),*source(22,'zzzz')]
+        w[1755:1755]=guard
+        w[1707:1707]=save
+    return transform_shex(baseline,patch)
+
+
+def guarded_visibility(flags,fade,rt,native_map):
+    return min(visibility(flags,fade,rt),native_map)
