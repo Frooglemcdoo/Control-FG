@@ -61,7 +61,7 @@ inline void Finish(HWND game,const char* reason) noexcept {
 inline bool Start(Kind kind=Kind::Stationary) noexcept {
     if(free_camera::commands.Pending()) {lastFailure=native_blend_capture::Failure::Busy;return false;}
     const bool traceMotion=kind==Kind::Motion,traceBlocker=kind==Kind::Blocker||kind==Kind::MapProbe||kind==Kind::NativeBlend;
-    const Mode captureMode=kind==Kind::NativeBlend?(IsNativeBlend(LiveSelection::GetMode(selection.Read()))?LiveSelection::GetMode(selection.Read()):Mode::RoomNativeBlend):kind==Kind::MapProbe?Mode::RoomMapProbe:traceBlocker?capture_plan::BlockerMode(LiveSelection::GetMode(selection.Read())):kDefaultMode;
+    const Mode captureMode=kind==Kind::NativeBlend?(IsNativeBlend(LiveSelection::GetMode(selection.Read()))?LiveSelection::GetMode(selection.Read()):kNativeBlendDefaultMode):kind==Kind::MapProbe?Mode::RoomMapProbe:traceBlocker?capture_plan::BlockerMode(LiveSelection::GetMode(selection.Read())):kDefaultMode;
     lastFailure=native_blend_capture::Failure::None;
     if(kind==Kind::NativeBlend){
         using P=rt_spot_capture_runtime::Phase;
