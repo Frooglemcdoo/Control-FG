@@ -6,7 +6,7 @@
 // Execute the shipped diagnostics on synthetic light IDs and visibility values.
 // GPU waits/readback exist only in this standalone validation executable.
 static void TestSpotDebugView(ID3D12Device* device, ID3D12RootSignature* root,
-    ID3D12PipelineState* pipeline, bool ids, bool bands=false, bool mapGuard=false) {
+    ID3D12PipelineState* pipeline, bool ids, bool bands=false, bool mapGuard=false, bool mapCenter=false) {
     constexpr UINT extent=8;
     D3D12_HEAP_PROPERTIES gpu{};gpu.Type=D3D12_HEAP_TYPE_DEFAULT;
     D3D12_HEAP_PROPERTIES uploadHeap{};uploadHeap.Type=D3D12_HEAP_TYPE_UPLOAD;
@@ -62,6 +62,7 @@ static void TestSpotDebugView(ID3D12Device* device, ID3D12RootSignature* root,
         D3D12_SHADER_RESOURCE_VIEW_DESC sd{};sd.Format=formats[i];sd.ViewDimension=D3D12_SRV_DIMENSION_TEXTURE2D;
         sd.Shader4ComponentMapping=D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;sd.Texture2D.MipLevels=1;
         device->CreateShaderResourceView(inputs[i],&sd,handle(30+i));
+        if(mapCenter && i==1)device->CreateShaderResourceView(inputs[i],&sd,handle(28));
     }
     ID3D12Resource* outputs[]={diffuse.Get(),specular.Get()};
     for(UINT i=0;i<2;++i){D3D12_UNORDERED_ACCESS_VIEW_DESC ud{};ud.Format=DXGI_FORMAT_R32G32B32A32_FLOAT;
@@ -98,6 +99,7 @@ static void TestSpotDebugView(ID3D12Device* device, ID3D12RootSignature* root,
                 const float map=(flags&2) && (flags&768)==512 ? mapInput*.5f : mapInput;
                 expected=c==0?(prior<map?prior:map):c==1?map:c==2?mapInput:1.0f;
             }
+            if(mapCenter)expected=c==3?1.0f:y>=4?.25f:x==7?-1.0f:float((x+y)%5)/4>=.5f?1.0f:0.0f;
             if(!std::isfinite(actual[c]) || std::abs(actual[c]-expected)>0.0001f || spec[c]!=0)
                 throw std::runtime_error("Diagnostic pixel/channel/invalid-ID mismatch");
         }

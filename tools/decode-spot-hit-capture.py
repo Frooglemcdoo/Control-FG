@@ -103,6 +103,8 @@ def decode_log(text):
         seen.add(index); data[index*RECORD.size:(index+1)*RECORD.size] = bytes.fromhex(match[2])
     spot_records = {}; map_records = {}
     map_bytes = begin.get('map_bytes', 0)
+    map_center=begin.get('map_center',0)
+    if map_center not in (0,1) or (map_center and map_bytes!=16): raise ValueError('Unsupported map center ABI')
     if map_bytes not in (0,16): raise ValueError('Unsupported native map ABI')
     if map_bytes and (not begin.get('map_generation') or begin.get('map_present') != begin.get('captured_present')):
         raise ValueError('Native map frame provenance mismatch')
@@ -178,6 +180,10 @@ def decode_log(text):
         index = record['ordinal']
         if index in probes: record['eligibility']=probes[index]
         if map_bytes: record['native_map'] = map_records[index]
+        if map_center:
+            center=record['native_map'][3]
+            if center not in (-1.,0.,1.): raise ValueError('Invalid PCF center visibility')
+            record['native_pcf_center']=None if center==-1 else center
         if context_bytes:
             values = contexts[index]
             # Width/falloff fields are retained as raw floats; interpretation is

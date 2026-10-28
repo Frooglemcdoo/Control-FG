@@ -182,3 +182,18 @@ for bad in [raw_log.replace(raw_line+'\n',''),raw_log.replace(raw_line,raw_line+
     except ValueError:pass
     else:raise AssertionError('Invalid raw shadow capture accepted')
 print('PASS R201 raw shadow: exact values; missing, duplicate, stale, wrong-light/pixel and invalid values rejected')
+
+center_log=raw_log.replace('map_bytes=16','map_bytes=16 map_center=1')
+assert decoder.decode_log(center_log)['records'][0]['native_pcf_center']==0
+assert 'native_pcf_center' not in decoder.decode_log(raw_log)['records'][0]
+for center in (-1.,0.,1.):
+ changed=center_log.replace(' map='+map_hex,' map='+struct.pack('<4f',.25,.75,float(light+1),center).hex())
+ assert decoder.decode_log(changed)['records'][0]['native_pcf_center']==(None if center==-1 else center)
+for center in (-2.,.5,float('nan'),float('inf')):
+ try:decoder.decode_log(center_log.replace(' map='+map_hex,' map='+struct.pack('<4f',.25,.75,float(light+1),center).hex()))
+ except ValueError:pass
+ else:raise AssertionError('Invalid PCF center accepted')
+try:decoder.decode_log(center_log.replace('map_center=1','map_center=2'))
+except ValueError:pass
+else:raise AssertionError('Unknown PCF center schema accepted')
+print('PASS R202 PCF center: explicit version, valid/sentinel values, legacy compatibility and invalid data rejection')

@@ -40,3 +40,13 @@ assert result['raw_lit_filtered_blocked']==1
 assert result['filter_visibility_drop_gt_threshold']==2
 assert result['raw_already_below_map_gt_threshold']==2
 print('PASS raw-versus-filtered classification: measured raw values required; overlapping contributions retained')
+records[0]['native_pcf_center']=1;records[0]['spot_record']=dict(shadow_flags=257)
+records[1]['native_pcf_center']=0;records[1]['spot_record']=dict(shadow_flags=257)
+records[2]['native_pcf_center']=1;records[2]['spot_record']=dict(shadow_flags=259)
+r=analysis.summarize(dict(records=records))
+assert r['pcf_only_center_samples_for_darker_rt']==2
+assert r['map_center_blocked_raw_blocked']==1 and r['map_center_lit_raw_blocked']==0
+records[0]['raw_shadow']['spot_visibility']=0
+r=analysis.summarize(dict(records=records))
+assert r['map_center_lit_raw_blocked']==1
+print('PASS PCF-only center categories: raw evidence and explicit center required; combined static layer excluded')

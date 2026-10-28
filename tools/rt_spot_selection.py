@@ -107,4 +107,36 @@ def map_visibility_sidecar(data):
         clear = list(w[362:372]); clear[2:4] = [3,3]
         w[372:372] = clear
         w[223:223] = declaration
-    return transform_shex(probe, transform)
+    return map_center_sidecar(transform_shex(probe, transform), data)
+
+
+def map_center_sidecar(sidecar, original):
+    """R202 capture-only PCF center result in u3.w; -1 means no PCF sample.
+
+    Duplicate native sample/compare instructions at the unoffset atlas center.
+    The original sixteen samples, map fade/layers and radiance are untouched.
+    """
+    native=[]
+    transform_shex(original, lambda w: native.extend(w))
+    def patch(w):
+        def locate(sequence):
+            hits=[i for i in range(len(w)-len(sequence)+1) if w[i:i+len(sequence)]==sequence]
+            if len(hits)!=1: raise ValueError('Ambiguous map center anchor')
+            return hits[0]
+        # Use the literal native output lane (.w) so the atlas swizzle is exact.
+        sample=list(native[6209:6236])
+        assert sample[0]&2047==72 and sample[13]&2047==29 and sample[20]&2047==1
+        assert [sample[i] for i in (2,15,17,22,24)]==[29]*5
+        for i in (2,15,17,22,24): sample[i]=45
+        assert sample[4]==42
+        sample[4]=40  # atlas center from the preceding native mad, before offsets
+        center_at=locate(native[6162:6171])+9
+        init_at=locate(instruction('mov',dest(43,1),immediate([0,0,0,0])))
+        winner=[0x09000037,*dest(44,1),*source(14,'wwww'),*source(43,'xxxx'),*source(44,'xxxx')]
+        winner_at=locate(winner)+len(winner)
+        temps=locate([0x02000068,45]);w[temps+1]=46
+        init=instruction('mov',dest(45,8),immediate([0xbf800000]*4))
+        save=[0x09000037,*dest(44,8),*source(14,'wwww'),*source(45,'wwww'),*source(44,'wwww')]
+        for at,extra in sorted([(center_at,sample),(init_at,init),(winner_at,save)],reverse=True):
+            w[at:at]=extra
+    return transform_shex(sidecar,patch)

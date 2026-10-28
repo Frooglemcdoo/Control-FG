@@ -601,7 +601,7 @@ inline void Poll() noexcept {
     // Retry canonical headers and records if the nonblocking log queue is busy.
     // Cursor advancement means successful enqueue, never merely an attempted write.
     if(exportStage==0) {
-        if(!Trace("rt_hit_gpu_recorded generation=%llu frame_tag=%u extent=%ux%u table_records=%u captured_present=%llu light_context_bytes=128 signal_bytes=128 spot_record_bytes=336 signal_generation=%llu signal_present=%llu map_bytes=%u map_generation=%llu map_present=%llu eligibility_bytes=%u raw_bytes=%u",recordedGeneration,frameTag,capturedWidth,capturedHeight,capturedTableRecords,recordedPresent,signalGeneration,signalPresent,mapRequested?16u:0u,mapGeneration,mapPresent,mapRequested?160u:0u,mapRequested?32u:0u))return;
+        if(!Trace("rt_hit_gpu_recorded generation=%llu frame_tag=%u extent=%ux%u table_records=%u captured_present=%llu light_context_bytes=128 signal_bytes=128 spot_record_bytes=336 signal_generation=%llu signal_present=%llu map_bytes=%u map_generation=%llu map_present=%llu eligibility_bytes=%u raw_bytes=%u map_center=%u",recordedGeneration,frameTag,capturedWidth,capturedHeight,capturedTableRecords,recordedPresent,signalGeneration,signalPresent,mapRequested?16u:0u,mapGeneration,mapPresent,mapRequested?160u:0u,mapRequested?32u:0u,unsigned(mapRequested)))return;
         exportStage=1;
     }
     if(exportStage==1) {

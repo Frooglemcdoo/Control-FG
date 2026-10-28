@@ -58,6 +58,11 @@ def summarize(capture, threshold=.25):
     result['raw_lit_filtered_blocked'] = sum(r['raw_shadow']['spot_visibility'] > .9 and s['rt_visibility'] < .1 for r, s in raw)
     result['filter_visibility_drop_gt_threshold'] = sum(r['raw_shadow']['spot_visibility'] - s['rt_visibility'] > threshold for r, s in raw)
     result['raw_already_below_map_gt_threshold'] = sum(s['map_visibility'] - r['raw_shadow']['spot_visibility'] > threshold for r, s in raw)
+    centers=[(r,s) for r,s in raw if r.get('native_pcf_center') is not None and
+        r.get('spot_record',{}).get('shadow_flags',0)&0x302==0x100]
+    result['pcf_only_center_samples_for_darker_rt']=len(centers)
+    result['map_center_blocked_raw_blocked']=sum(r['native_pcf_center']==0 and r['raw_shadow']['spot_visibility']==0 for r,s in centers)
+    result['map_center_lit_raw_blocked']=sum(r['native_pcf_center']==1 and r['raw_shadow']['spot_visibility']==0 for r,s in centers)
     return result
 
 
