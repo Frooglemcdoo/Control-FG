@@ -136,3 +136,32 @@ for bad in [sidecar.replace('map_present=42','map_present=43'),sidecar.replace('
     except ValueError:pass
     else:raise AssertionError('Invalid private map provenance accepted')
 print('PASS R196 private map payload, frame identity and missing/malformed data rejection')
+
+# R198: exact same ray in two geometry-only probes; only native misses qualify.
+base_hit=packed(x=1,y=1)
+base_miss=packed(x=1,y=1,kind=0,distance=5.,instance=0xffffffff,instance_id=0xffffffff,primitive=0xffffffff,geometry=0xffffffff,u=0.,v=0.)
+probe_log=sidecar.replace('map_bytes=16','map_bytes=16 eligibility_bytes=160').replace(base_hit.hex(),base_miss.hex()).replace('hits=1 misses=0','hits=0 misses=1')
+probe_line='ms=3 rt_hit_gpu_eligibility index=0 bytes='+(base_hit+base_hit).hex()
+probe_log=probe_log.replace('ms=0 rt_hit_gpu_export_complete',probe_line+'\nms=0 rt_hit_gpu_export_complete')
+item=decoder.decode_log(probe_log)['records'][0]
+assert item['eligibility']['mask1_opaque']['hit'] and item['eligibility']['mask255_opaque']['hit']
+for bad in [probe_log.replace((base_hit+base_hit).hex(),(base_hit+base_miss).hex()),probe_log.replace(probe_line,''),probe_log.replace(probe_line,probe_line+'\n'+probe_line),
+            probe_log.replace('eligibility_bytes=160','eligibility_bytes=0'),
+            probe_log.replace((base_hit+base_hit).hex(),(packed(x=1,y=1,frame=20)+base_miss).hex()),
+            probe_log.replace((base_hit+base_hit).hex(),(packed(x=1,y=1,dx=1)+base_miss).hex()),
+            probe_log.replace((base_hit+base_hit).hex(),(packed(x=1,y=1,distance=6)+base_miss).hex())]:
+    try:decoder.decode_log(bad)
+    except ValueError:pass
+    else:raise AssertionError('Invalid eligibility provenance accepted')
+print('PASS R198 eligibility records: exact ray/frame/pixel match, sparse completeness, duplicate/truncated/invalid hit rejection')
+spec=importlib.util.spec_from_file_location('blockers',Path(__file__).with_name('analyze-window-blockers.py'))
+blockers=importlib.util.module_from_spec(spec);spec.loader.exec_module(blockers)
+assert blockers.classify(item)=='same_mask_geometry_hit'
+item['eligibility']['mask1_opaque']['hit']=False;item['eligibility']['mask255_opaque']['hit']=True
+assert blockers.classify(item)=='wider_mask_only_hit'
+item['eligibility']['mask255_opaque']['hit']=False
+assert blockers.classify(item)=='both_geometry_queries_miss'
+try:blockers.classify({'hit':False})
+except ValueError:pass
+else:raise AssertionError('Legacy miss accepted as new probe evidence')
+print('PASS geometry-probe interpretation: separate opacity/mask/no-hit outcomes; legacy evidence rejected')

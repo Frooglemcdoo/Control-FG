@@ -13,7 +13,7 @@ cbuffer CaptureLayout : register(b4) {
     uint hitGeometryStride;
     uint missRecordIndex;
     uint captureLayoutVersion;
-    uint captureReserved0;
+    uint captureEligibility;
     uint captureReserved1;
 }
 
@@ -36,6 +36,28 @@ void captureMiss(inout HitPayload hit) {
     hit.hitKind = 0;
 }
 
+// Geometry-only queries deliberately avoid the native hit table and alpha shader.
+// Widening a native TraceRay mask could select unrelated hit-table groups.
+HitPayload geometryProbe(RayDesc ray, uint mask) {
+    HitPayload hit = (HitPayload)0;
+    hit.distance = ray.TMax;
+    hit.instanceIndex = hit.instanceId = hit.primitiveIndex = hit.geometryIndex = 0xffffffff;
+    RayQuery<RAY_FLAG_FORCE_OPAQUE | RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES> query;
+    query.TraceRayInline(captureScene, RAY_FLAG_NONE, mask, ray);
+    while (query.Proceed()) {}
+    if (query.CommittedStatus() == COMMITTED_TRIANGLE_HIT) {
+        hit.distance = query.CommittedRayT();
+        hit.instanceIndex = query.CommittedInstanceIndex();
+        hit.instanceId = query.CommittedInstanceID();
+        hit.primitiveIndex = query.CommittedPrimitiveIndex();
+        hit.geometryIndex = query.CommittedGeometryIndex();
+        float2 bary = query.CommittedTriangleBarycentrics();
+        hit.barycentricU = bary.x; hit.barycentricV = bary.y;
+        hit.hitKind = query.CommittedTriangleFrontFace() ? 254 : 255;
+    }
+    return hit;
+}
+
 [shader("raygeneration")]
 void captureRayGeneration() {
     if (any(DispatchRaysIndex().yz)) return;
@@ -46,13 +68,18 @@ void captureRayGeneration() {
     if (outputStride != CaptureResultBytes || index >= outputCount || index >= CaptureMaxRecords) return;
     CaptureResult result = (CaptureResult)0;
     captureResults[index] = result;
+    if (captureEligibility == 1) {
+        if (outputCount < CaptureMaxRecords * 3) return;
+        captureResults[index + CaptureMaxRecords] = result;
+        captureResults[index + CaptureMaxRecords * 2] = result;
+    }
     uint statusBytes; captureStatus.GetDimensions(statusBytes);
     if (statusBytes < 16 || captureStatus.Load(0) != 0 || captureStatus.Load(12) != 0) return;
     // One bounded batch; invalid input yields an explicit invalid record.
     if (captureCount > CaptureMaxRecords || index >= captureCount || index >= inputCount ||
         inputStride != CaptureRayBytes || captureLayoutVersion != CaptureLayoutVersion || expectedFrameTag == 0 ||
         hitRecordOffset != 0 || hitGeometryStride != 2 || missRecordIndex != 0 ||
-        captureReserved0 != 0 || captureReserved1 != 0) return;
+        captureEligibility > 1 || captureReserved1 != 0) return;
     CaptureRay input = captureRays[index];
     if (input.frameTag != expectedFrameTag || input.reserved != 0 ||
         !all(isfinite(input.origin)) || !all(isfinite(input.direction)) ||
@@ -87,4 +114,11 @@ void captureRayGeneration() {
     result.frameTag = input.frameTag;
     result.valid = 1;
     captureResults[index] = result;
+    // Only investigate native misses. The displayed shadow path is untouched.
+    if (captureEligibility == 1 && !hit.hitKind) {
+        result.hit = geometryProbe(ray, 1);
+        captureResults[index + CaptureMaxRecords] = result;
+        result.hit = geometryProbe(ray, 255);
+        captureResults[index + CaptureMaxRecords * 2] = result;
+    }
 }

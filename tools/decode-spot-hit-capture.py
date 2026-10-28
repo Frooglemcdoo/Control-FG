@@ -126,8 +126,34 @@ def decode_log(text):
     hits = sum(record['hit'] for record in valid)
     if len(seen) != len(valid) or len(valid) != finish.get('valid_rays') or hits != finish.get('hits') or len(valid)-hits != finish.get('misses'):
         raise ValueError('Missing records or inconsistent capture totals')
+    eligibility_bytes=begin.get('eligibility_bytes',0)
+    if eligibility_bytes not in (0,160) or (eligibility_bytes and map_bytes!=16):
+        raise ValueError('Unsupported eligibility ABI')
+    probes={}
+    for line in text.splitlines():
+        if ' rt_hit_gpu_eligibility ' not in line: continue
+        if not eligibility_bytes or not text.index(completed[0]) < text.index(line) < text.index(exported[0]):
+            raise ValueError('Unexpected eligibility record or export ordering')
+        match=re.search(r'index=(\d+) bytes=([0-9a-fA-F]{320})$',line)
+        if not match: raise ValueError('Malformed eligibility record')
+        index=int(match[1])
+        if index not in seen or index in probes: raise ValueError('Duplicate or unmatched eligibility record')
+        raw=bytes.fromhex(match[2]);items=[]
+        for bank in range(2):
+            part=raw[bank*80:(bank+1)*80]
+            if part[32:]!=data[index*80+32:(index+1)*80]:
+                raise ValueError('Eligibility ray/frame/pixel provenance mismatch')
+            item=decode(part,begin['frame_tag'])[0]
+            if not item['valid']: raise ValueError('Invalid eligibility probe')
+            item['ordinal']=index;items.append(item)
+        if items[0]['hit'] and (not items[1]['hit'] or items[1]['hit_distance']>items[0]['hit_distance']+1e-4*max(1,items[0]['t_max'])):
+            raise ValueError('Geometry mask superset is inconsistent')
+        probes[index]=dict(mask1_opaque=items[0],mask255_opaque=items[1])
+    expected={r['ordinal'] for r in valid if not r['hit']} if eligibility_bytes else set()
+    if set(probes)!=expected: raise ValueError('Eligibility probes missing or attached to a native hit')
     for record in valid:
         index = record['ordinal']
+        if index in probes: record['eligibility']=probes[index]
         if map_bytes: record['native_map'] = map_records[index]
         if context_bytes:
             values = contexts[index]

@@ -18,7 +18,7 @@ inline ComPtr<ID3D12GraphicsCommandList4> recordedList;
 inline ComPtr<ID3D12StateObject> recordedState,captureState;
 inline ComPtr<ID3D12CommandQueue> submittedQueue;
 inline unsigned attempts=0,exportCursor=0,exportStage=0;
-inline bool exportLightPending=false;
+inline bool exportLightPending=false,exportEligibilityPending=false;
 inline UINT64 fenceValue=1;
 inline UINT completionStatus[4]{},completionRays=0,completionHits=0;
 inline UINT frameTag=0,capturedWidth=0,capturedHeight=0,capturedTableRecords=0;
@@ -139,7 +139,7 @@ inline bool RequestFresh(bool compareMap=false) noexcept {
            (!mapRecorded || RecordingWasReset(mapList.Get(),mapGeneration)) &&
            completed!=UINT64_MAX && completed>=fenceValue &&
            signalCompleted!=UINT64_MAX && signalCompleted>=fenceValue) {
-            ++fenceValue;attempts=exportCursor=exportStage=0;exportLightPending=false;readbackCopied=false;
+            ++fenceValue;attempts=exportCursor=exportStage=0;exportLightPending=exportEligibilityPending=false;readbackCopied=false;
             recordedList.Reset();recordedState.Reset();captureState.Reset();recordedTable.Reset();recordedHeap.Reset();submittedQueue.Reset();
             recordedSignalList.Reset();recordedSignalHeap.Reset();recordedSignalPipeline.Reset();recordedSignalBeforePipeline.Reset();signalQueue.Reset();
             accepted=true;
@@ -409,7 +409,7 @@ inline void Record(ID3D12GraphicsCommandList4* list,ID3D12StateObject* owner,con
     frameTag=static_cast<UINT>(rt_spot_table_audit::Token(list));if(!frameTag){Fail("frame_tag");return;}
     capturedTableRecords=tableControls.count;
     const UINT inputControls[]={desc->Width,desc->Height,frameTag,64,UINT(mapRequested)};
-    const UINT captureControls[]={gpu::kRayCount,frameTag,0,2,0,1,0,0};
+    const UINT captureControls[]={gpu::kRayCount,frameTag,0,2,0,1,UINT(mapRequested),0};
     void* mapped=nullptr;D3D12_RANGE empty{0,0};
     if(FAILED(resources.upload->Map(0,&empty,&mapped))){Fail("upload_map");return;}
     memset(mapped,0,1024);auto* data=static_cast<unsigned char*>(mapped);
@@ -434,7 +434,7 @@ inline void Record(ID3D12GraphicsCommandList4* list,ID3D12StateObject* owner,con
     rays.Buffer.NumElements=gpu::kRayCount;rays.Buffer.StructureByteStride=48;
     originalSrv(resources.device.Get(),resources.inputs.Get(),&rays,resources.At(147+13));
     resources.RawSrv(resources.status.Get(),0,16,147+14);
-    D3D12_UNORDERED_ACCESS_VIEW_DESC output{};output.ViewDimension=D3D12_UAV_DIMENSION_BUFFER;output.Buffer.NumElements=gpu::kRayCount;output.Buffer.StructureByteStride=80;
+    D3D12_UNORDERED_ACCESS_VIEW_DESC output{};output.ViewDimension=D3D12_UAV_DIMENSION_BUFFER;output.Buffer.NumElements=3*gpu::kRayCount;output.Buffer.StructureByteStride=80;
     originalUav(resources.device.Get(),resources.results.Get(),nullptr,&output,resources.At(147+43));
     for(UINT i=0;i<3;++i)originalCopy(resources.device.Get(),49,destinations[i],resources.At((i+1)*49),D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
     internal=false;
@@ -563,6 +563,14 @@ inline void Poll() noexcept {
                     if(!result.valid)continue;
                     if(result.valid!=1 || result.frameTag!=frameTag || result.pixelX>=capturedWidth || result.pixelY>=capturedHeight ||
                         (result.hit.hitKind!=0 && result.hit.hitKind!=254 && result.hit.hitKind!=255)){++invalidRecords;continue;}
+                    if(mapRequested)for(UINT bank=1;bank<=2;++bank) {
+                        rt_spot_capture::CaptureResult probe{};
+                        memcpy(&probe,completedBytes+bank*gpu::kResultBankBytes+i*sizeof(probe),sizeof(probe));
+                        if(result.hit.hitKind) {if(probe.valid)++invalidRecords;}
+                        else if(probe.valid!=1 || memcmp(reinterpret_cast<const unsigned char*>(&probe)+32,
+                            reinterpret_cast<const unsigned char*>(&result)+32,48) ||
+                            (probe.hit.hitKind!=0 && probe.hit.hitKind!=254 && probe.hit.hitKind!=255))++invalidRecords;
+                    }
                     ++validRays;if(result.hit.hitKind)++hits;
                 }
                 Trace("rt_hit_gpu_readback generation=%llu frame_tag=%u unknown=%u translated=%u null=%u invalid_layout=%u valid_rays=%u hits=%u misses=%u invalid_records=%u gpu_completion_confirmed=1 gpu_hit_capture=%u",recordedGeneration,frameTag,status[0],status[1],status[2],status[3],validRays,hits,validRays-hits,invalidRecords,unsigned(tableValid && !invalidRecords));
@@ -577,7 +585,7 @@ inline void Poll() noexcept {
     // Retry canonical headers and records if the nonblocking log queue is busy.
     // Cursor advancement means successful enqueue, never merely an attempted write.
     if(exportStage==0) {
-        if(!Trace("rt_hit_gpu_recorded generation=%llu frame_tag=%u extent=%ux%u table_records=%u captured_present=%llu light_context_bytes=128 signal_bytes=128 spot_record_bytes=336 signal_generation=%llu signal_present=%llu map_bytes=%u map_generation=%llu map_present=%llu",recordedGeneration,frameTag,capturedWidth,capturedHeight,capturedTableRecords,recordedPresent,signalGeneration,signalPresent,mapRequested?16u:0u,mapGeneration,mapPresent))return;
+        if(!Trace("rt_hit_gpu_recorded generation=%llu frame_tag=%u extent=%ux%u table_records=%u captured_present=%llu light_context_bytes=128 signal_bytes=128 spot_record_bytes=336 signal_generation=%llu signal_present=%llu map_bytes=%u map_generation=%llu map_present=%llu eligibility_bytes=%u",recordedGeneration,frameTag,capturedWidth,capturedHeight,capturedTableRecords,recordedPresent,signalGeneration,signalPresent,mapRequested?16u:0u,mapGeneration,mapPresent,mapRequested?160u:0u))return;
         exportStage=1;
     }
     if(exportStage==1) {
@@ -602,9 +610,19 @@ inline void Poll() noexcept {
             rt_spot_capture_audit::Hex(completedBytes+gpu::kSignalReadbackOffset+exportCursor*gpu::kSignalStride+128,336,spotHex);
             char mapHex[33]{};
             rt_spot_capture_audit::Hex(completedBytes+gpu::kSignalReadbackOffset+exportCursor*gpu::kSignalStride+464,16,mapHex);
-            if(mapRequested) {if(!Trace("rt_hit_gpu_light index=%u bytes=%s map=%s",exportCursor,spotHex,mapHex))return;}
-            else if(!Trace("rt_hit_gpu_light index=%u bytes=%s",exportCursor,spotHex))return;
-            exportLightPending=false;
+            if(!exportEligibilityPending) {
+                if(mapRequested) {if(!Trace("rt_hit_gpu_light index=%u bytes=%s map=%s",exportCursor,spotHex,mapHex))return;}
+                else if(!Trace("rt_hit_gpu_light index=%u bytes=%s",exportCursor,spotHex))return;
+                exportEligibilityPending=true;
+            }
+            UINT hitKind=0;memcpy(&hitKind,record+24,4);
+            if(mapRequested && !hitKind) {
+                char probes[321]{};
+                for(UINT bank=1;bank<=2;++bank)
+                    rt_spot_capture_audit::Hex(completedBytes+bank*gpu::kResultBankBytes+exportCursor*80,80,probes+(bank-1)*160);
+                if(!Trace("rt_hit_gpu_eligibility index=%u bytes=%s",exportCursor,probes))return;
+            }
+            exportLightPending=exportEligibilityPending=false;
         }
     }
     if(exportCursor==gpu::kRayCount && Trace("rt_hit_gpu_export_complete records_examined=4096 format=CaptureResult80 frame_tag=%u",frameTag))exportStage=3;

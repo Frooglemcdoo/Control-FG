@@ -98,6 +98,16 @@ static void TestHitCaptureExportRetry() {
     capture::exportCursor=4096;fill();capture::Poll();
     if(capture::exportStage!=2)throw std::runtime_error("busy log discarded completion marker");
     drain();capture::Poll();if(capture::exportStage!=3)throw std::runtime_error("capture completion retry failed");
+    // New third export part must resume without replaying its light record.
+    capture::mapRequested=true;capture::exportStage=2;capture::exportCursor=0;
+    capture::exportLightPending=capture::exportEligibilityPending=true;
+    fill();capture::Poll();
+    if(capture::exportCursor || !capture::exportEligibilityPending)throw std::runtime_error("Busy queue lost eligibility retry");
+    drain();capture::Poll();length=drain();text.assign(bytes.data(),length);
+    if(capture::exportCursor!=64 || capture::exportEligibilityPending ||
+       text.find("rt_hit_gpu_eligibility index=0 ")==std::string::npos || text.find("rt_hit_gpu_light index=0 ")!=std::string::npos)
+        throw std::runtime_error("Eligibility retry duplicated or omitted export");
+    capture::mapRequested=false;
     drain();queue.TakeDropped();capture::exportCursor=capture::exportStage=0;capture::phase.store(capture::Phase::Idle);
     std::cout<<"PASS capture log retry: full queue preserves header, record cursor and final completion marker without render-thread waits\n";
 }

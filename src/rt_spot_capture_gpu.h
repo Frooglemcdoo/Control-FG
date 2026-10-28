@@ -6,7 +6,8 @@ using Microsoft::WRL::ComPtr;
 #include "../build/rt_spot_capture_inputs.h"
 #include "../build/rt_spot_capture_table.h"
 inline constexpr UINT kRayCount=rt_spot_capture::CaptureMaxRecords;
-inline constexpr UINT kInputBytes=kRayCount*rt_spot_capture::CaptureRayBytes, kResultBytes=kRayCount*rt_spot_capture::CaptureResultBytes;
+inline constexpr UINT kInputBytes=kRayCount*rt_spot_capture::CaptureRayBytes, kResultBankBytes=kRayCount*rt_spot_capture::CaptureResultBytes;
+inline constexpr UINT kResultBytes=3*kResultBankBytes;
 inline constexpr UINT kLightContextStride=128, kLightContextBytes=kRayCount*kLightContextStride;
 inline constexpr UINT kInputAllocationBytes=kInputBytes+kLightContextBytes;
 inline constexpr UINT kLightContextReadbackOffset=kResultBytes+16;
