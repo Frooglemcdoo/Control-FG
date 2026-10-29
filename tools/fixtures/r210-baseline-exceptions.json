@@ -2,7 +2,7 @@
   "src/pt_reflection_loader.h": [
     [
       "static const char* PTReflectionHookShaderStorageGet(int id) {",
-      "#include \"../build/gi_motion_history.generated.h\"\nstatic constexpr int kGIMotionHistoryStorageId=0x6F474931;\nstatic std::atomic<bool> rrGIMotionStorageReady{false};\nstatic const char* PTReflectionHookShaderStorageGet(int id) {\n    if(id==kGIMotionHistoryStorageId&&rrGIMotionStorageReady.load(std::memory_order_acquire)){\n        static std::atomic<unsigned> gets{0};\n        if(gets.fetch_add(1,std::memory_order_relaxed)<4)native_lighting::Trace(\"gi_temporal_shader_get build=R210 bytes=%u\",unsigned(sizeof(kGIMotionHistoryShader)));\n        return reinterpret_cast<const char*>(kGIMotionHistoryShader);\n    }"
+      "#include \"../build/gi_motion_history.generated.h\"\nstatic constexpr int kGIMotionHistoryStorageId=0x6F474931;\nstatic std::atomic<bool> rrGIMotionStorageReady{false};\nstatic std::atomic<unsigned> rrGIMotionShaderGets{0};\nstatic const char* PTReflectionHookShaderStorageGet(int id) {\n    if(id==kGIMotionHistoryStorageId&&rrGIMotionStorageReady.load(std::memory_order_acquire)){\n        if(rrGIMotionShaderGets.fetch_add(1,std::memory_order_relaxed)<4)Log(\"gi_temporal_shader_get build=R210 bytes=%u\",unsigned(sizeof(kGIMotionHistoryShader)));\n        return reinterpret_cast<const char*>(kGIMotionHistoryShader);\n    }"
     ],
     [
       "    rrHairOpacityStorageReady.store(storageReady,std::memory_order_release);",

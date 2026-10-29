@@ -78,7 +78,7 @@ static void RRNativeRunGIFilter(void* color,void* history,unsigned passes){
   rrNativeGIMotionBound=false;
   static unsigned long long calls=0; ++calls;
   if(calls<=4||calls%240==0)
-   native_lighting::Trace("gi_temporal_adaptive build=R210 applied=%u calls=%llu dispatches=%u spatial_passes=%u history_clear=0 provider_override=0 motion_scale=400 depth_threshold=0.01 reason=%s rr_selected=%u",unsigned(okay),calls,rrNativeGIHistoryDispatches,passes,rrNativeGIHistoryReason,unsigned(rrNativeFrame.Selected()));
+   native_lighting::Trace("gi_temporal_adaptive build=R210 applied=%u calls=%llu dispatches=%u spatial_passes=%u history_clear=0 provider_override=0 shader_gets=%u motion_scale=400 depth_threshold=0.01 reason=%s rr_selected=%u",unsigned(okay),calls,rrNativeGIHistoryDispatches,passes,rrGIMotionShaderGets.load(std::memory_order_relaxed),rrNativeGIHistoryReason,unsigned(rrNativeFrame.Selected()));
   SetLastError(saved);
  }
 }

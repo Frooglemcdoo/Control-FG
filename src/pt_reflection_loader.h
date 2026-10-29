@@ -479,10 +479,10 @@ static void* PTReflectionHookTechniqueLookup(void* rfx,const char* technique) {
 #include "../build/gi_motion_history.generated.h"
 static constexpr int kGIMotionHistoryStorageId=0x6F474931;
 static std::atomic<bool> rrGIMotionStorageReady{false};
+static std::atomic<unsigned> rrGIMotionShaderGets{0};
 static const char* PTReflectionHookShaderStorageGet(int id) {
     if(id==kGIMotionHistoryStorageId&&rrGIMotionStorageReady.load(std::memory_order_acquire)){
-        static std::atomic<unsigned> gets{0};
-        if(gets.fetch_add(1,std::memory_order_relaxed)<4)native_lighting::Trace("gi_temporal_shader_get build=R210 bytes=%u",unsigned(sizeof(kGIMotionHistoryShader)));
+        if(rrGIMotionShaderGets.fetch_add(1,std::memory_order_relaxed)<4)Log("gi_temporal_shader_get build=R210 bytes=%u",unsigned(sizeof(kGIMotionHistoryShader)));
         return reinterpret_cast<const char*>(kGIMotionHistoryShader);
     }
     if(id>=kRRWorldAlbedoStorageBase && id<kRRWorldAlbedoStorageBase+4 &&

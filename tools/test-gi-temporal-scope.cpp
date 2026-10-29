@@ -13,6 +13,7 @@ static void* verifiedRenderer=reinterpret_cast<void*>(0x10000000);
 static unsigned fault=0,binds=0,dispatches=0,spatials=0,clones=0,filters=0;
 static void* record=nullptr;static void* bound=nullptr;
 static std::atomic<bool> rrGIMotionStorageReady{true};
+static std::atomic<unsigned> rrGIMotionShaderGets{0};
 static constexpr int kGIMotionHistoryStorageId=0x6F474931;
 #include "../build/gi_motion_history.generated.h"
 namespace RRAlbedoShader {
