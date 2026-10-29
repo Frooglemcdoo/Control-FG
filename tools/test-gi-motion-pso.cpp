@@ -42,7 +42,7 @@ int main(){try{
   return d->CreateComputePipelineState(desc,iid,out);
  };
  control_rr_gi::Capture(gpu.device.Get(),&p,native.Get(),create);
- auto* bundle=control_rr_gi::Find(native.Get());Require(bundle&&bundle->adaptive,"adaptive pipeline missing");
+ auto* bundle=control_rr_gi::Find(native.Get());Require(bundle&&bundle->adaptive&&bundle->noHistory,"adaptive pipeline missing");
  control_rr_gi::Capture(gpu.device.Get(),&p,native.Get(),create);Require(control_rr_gi::ready.load()==1,"duplicate capture");
  p.CS={kGIMotionHistoryShader,sizeof(kGIMotionHistoryShader)};
  control_rr_gi::Capture(gpu.device.Get(),&p,pso.Get(),create);Require(control_rr_gi::ready.load()==1,"unknown shader captured");
@@ -53,12 +53,16 @@ int main(){try{
  currentList=gpu.list.Get();currentNative=native.Get();expected=bundle->adaptive;
  Require(control_rr_clamp::InvokeGI(NativeDispatch,nullptr,nullptr,currentList),"GI scope not applied");
  Require(dispatched==1&&observed==native.Get()&&!control_rr_clamp::active,"native PSO or scope not restored");
+ control_rr_gi::historyDisabled=true;expected=bundle->noHistory;
+ Require(control_rr_clamp::InvokeGI(NativeDispatch,nullptr,nullptr,currentList),"no-history scope not applied");
+ Require(dispatched==2&&observed==native.Get(),"no-history native restore");
+ control_rr_gi::historyDisabled=false;
  currentNative=pso.Get();expected=pso.Get();
  Require(!control_rr_clamp::InvokeGI(NativeDispatch,nullptr,nullptr,currentList),"unknown PSO should fall back");
- Require(dispatched==2&&observed==pso.Get(),"fallback dispatch missing");
+ Require(dispatched==3&&observed==pso.Get(),"fallback dispatch missing");
  currentNative=native.Get();expected=bundle->adaptive;throwDispatch=true;bool caught=false;
  InvokeCatching(caught);Require(caught&&observed==native.Get()&&!control_rr_clamp::active,"exception restoration failed");
  control_rr_clamp::dispatchOriginal=realDispatch;control_rr_clamp::setOriginal=realSet;
- RunHistoryPixels(gpu,root.Get(),pso.Get(),native.Get());
- std::cout<<"PASS R212 actual native/adaptive WARP PSOs, exact-source capture, duplicate rejection, production dispatch scope, native fallback and exception restoration\n";
+ RunHistoryPixels(gpu,root.Get(),pso.Get(),native.Get(),bundle->noHistory);
+ std::cout<<"PASS R213 actual native/adaptive WARP PSOs, exact-source capture, duplicate rejection, production dispatch scope, native fallback and exception restoration\n";
 }catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}

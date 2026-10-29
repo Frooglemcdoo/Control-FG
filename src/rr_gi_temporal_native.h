@@ -1,4 +1,5 @@
 #pragma once
+#include "rr_gi_stage_policy.h"
 // Exact native bind/dispatch callsites; engine shader records are always forwarded intact.
 static bool rrNativeGIHistoryZeroThisFrame=false; // existing frame-latched Native Blend eligibility
 static thread_local bool rrNativeGIHistoryScope=false;
@@ -28,15 +29,22 @@ static void RRNativeRunGIFilter(void* color,void* history,unsigned passes){
   rrNativeFrame.Selected()&&rrNativeFrame.Stage()==control_rr::RRFrameStage::Lighting&&color&&passes&&
   reinterpret_cast<std::uintptr_t>(history)==reinterpret_cast<std::uintptr_t>(verifiedRenderer)+0x90eac8;
  if(!eligible||rrNativeGIHistoryScope){rrNativeDiffuseFilterOriginal(color,history,passes);return;}
+ const auto mode=control_rr_gi::stageMode.load(std::memory_order_acquire);
+ const unsigned effectivePasses=control_rr_gi::SpatialPasses(mode,passes);
+ const bool previousHistoryDisabled=control_rr_gi::historyDisabled;
+ control_rr_gi::historyDisabled=!control_rr_gi::Temporal(mode);
  rrNativeGIHistoryScope=true;rrNativeGIMotionBound=false;rrNativeGIHistoryDispatches=0;rrNativeGIHistoryReason="no_temporal_bind";
- __try {rrNativeDiffuseFilterOriginal(color,history,passes);}
+ __try {rrNativeDiffuseFilterOriginal(color,history,effectivePasses);}
  __finally {
   const DWORD saved=GetLastError();
   const bool okay=rrNativeGIHistoryDispatches==1;
+  control_rr_gi::historyDisabled=previousHistoryDisabled;
   rrNativeGIHistoryScope=false;rrNativeGIMotionBound=false;
   static unsigned long long calls=0; ++calls;
-  if(calls<=4||calls%240==0)
-   native_lighting::Trace("gi_temporal_adaptive build=R212 applied=%u calls=%llu dispatches=%u spatial_passes=%u pipeline_ready=%u engine_record_copy=0 provider_override=0 reason=%s rr_selected=%u",unsigned(okay),calls,rrNativeGIHistoryDispatches,passes,control_rr_gi::ready.load(),rrNativeGIHistoryReason,unsigned(rrNativeFrame.Selected()));
+  static auto lastMode=control_rr_gi::StageMode::Both;
+  if(calls<=4||calls%240==0||mode!=lastMode)
+   native_lighting::Trace("gi_temporal_adaptive build=R213 stage=%s temporal=%u spatial_requested=%u applied=%u calls=%llu dispatches=%u spatial_passes=%u pipeline_ready=%u engine_record_copy=0 provider_override=0 reason=%s rr_selected=%u",control_rr_gi::StageName(mode),unsigned(control_rr_gi::Temporal(mode)),passes,unsigned(okay),calls,rrNativeGIHistoryDispatches,effectivePasses,control_rr_gi::ready.load(),rrNativeGIHistoryReason,unsigned(rrNativeFrame.Selected()));
+  lastMode=mode;
   SetLastError(saved);
  }
 }

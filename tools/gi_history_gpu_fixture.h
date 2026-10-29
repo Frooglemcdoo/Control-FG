@@ -24,8 +24,8 @@ static HistoryTexture HistoryInput(Device& gpu,float base,float filtered,UINT in
  auto cpu=gpu.views->GetCPUDescriptorHandleForHeapStart();cpu.ptr+=static_cast<SIZE_T>(index)*gpu.descriptorSize;
  gpu.device->CreateShaderResourceView(t.resource.Get(),&view,cpu);gpu.retained.push_back(t.resource);return t;
 }
-static void RunHistoryPixels(Device& gpu,ID3D12RootSignature* root,ID3D12PipelineState* adaptive,ID3D12PipelineState* native) {
- struct Case {const char* name;float current,filtered,history,depth;bool cut,native;float expected;};
+static void RunHistoryPixels(Device& gpu,ID3D12RootSignature* root,ID3D12PipelineState* adaptive,ID3D12PipelineState* native,ID3D12PipelineState* noHistory) {
+ struct Case {const char* name;float current,filtered,history,depth;bool cut,native;float expected;bool noHistory=false;};
  const Case cases[]={
   {"stable history",.2f,.2f,.22f,.5f,false,false,.214f},
   {"bright trail",.2f,.2f,2.f,.5f,false,false,.2357f},
@@ -35,6 +35,8 @@ static void RunHistoryPixels(Device& gpu,ID3D12RootSignature* root,ID3D12Pipelin
   {"camera cut",.2f,.2f,2.f,.5f,true,false,.2f},
   {"native bright trail control",.2f,.2f,2.f,.5f,false,true,1.46f},
   {"dark stable noise",.01f,.01f,.012f,.5f,false,false,.0114f},
+  {"zero history bright trail",.2f,.2f,2.f,.5f,false,false,.2f,true},
+  {"zero history dark trail",.8f,.8f,.02f,.5f,false,false,.8f,true},
  };
  std::vector<ComPtr<ID3D12Resource>> outputs;std::vector<D3D12_PLACED_SUBRESOURCE_FOOTPRINT> layouts;
  for(UINT i=0;i<sizeof(cases)/sizeof(cases[0]);++i){auto c=cases[i];UINT first=6*i;
@@ -54,7 +56,7 @@ static void RunHistoryPixels(Device& gpu,ID3D12RootSignature* root,ID3D12Pipelin
   auto srv=gpu.views->GetGPUDescriptorHandleForHeapStart();srv.ptr+=static_cast<UINT64>(first)*gpu.descriptorSize;auto target=srv;target.ptr+=5*gpu.descriptorSize;
   gpu.list->SetComputeRootSignature(root);gpu.list->SetComputeRootConstantBufferView(0,cb0->GetGPUVirtualAddress());gpu.list->SetComputeRootConstantBufferView(1,cb1->GetGPUVirtualAddress());
   gpu.list->SetComputeRootDescriptorTable(2,srv);gpu.list->SetComputeRootDescriptorTable(3,target);
-  gpu.list->SetPipelineState(c.native?native:adaptive);gpu.list->Dispatch(2,1,1);
+  gpu.list->SetPipelineState(c.noHistory?noHistory:c.native?native:adaptive);gpu.list->Dispatch(2,1,1);
   gpu.Transition(output.Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS,D3D12_RESOURCE_STATE_COPY_SOURCE);
   D3D12_PLACED_SUBRESOURCE_FOOTPRINT footprint{};UINT64 bytes=0;gpu.device->GetCopyableFootprints(&desc,0,1,0,&footprint,nullptr,nullptr,&bytes);
   auto readback=gpu.Buffer(bytes,D3D12_HEAP_TYPE_READBACK,D3D12_RESOURCE_STATE_COPY_DEST);
@@ -67,6 +69,6 @@ static void RunHistoryPixels(Device& gpu,ID3D12RootSignature* root,ID3D12Pipelin
   for(UINT y=0;y<8;++y)for(UINT x=0;x<16;++x){auto* pixel=reinterpret_cast<const float*>(static_cast<const unsigned char*>(mapped)+f.Offset+y*f.Footprint.RowPitch)+4*x;
    for(UINT ch=0;ch<3;++ch)Require(std::isfinite(pixel[ch])&&std::abs(pixel[ch]-cases[i].expected)<.0001f,cases[i].name);
   }
-  outputs[i]->Unmap(0,nullptr);std::cout<<"PASS R212 GPU pixels: "<<cases[i].name<<'\n';
+  outputs[i]->Unmap(0,nullptr);std::cout<<"PASS R213 GPU pixels: "<<cases[i].name<<'\n';
  }
 }

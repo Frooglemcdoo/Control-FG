@@ -3,7 +3,7 @@ import base64,hashlib,struct
 from pathlib import Path
 from dxbc_transform import transform_shex
 SOURCE_SHA='d54d94fdbb783796cc33bc78ab20dde687d90d9cba6f24c8092a6b177eec5d15'
-def generate(data):
+def generate(data,history=True):
  if hashlib.sha256(data).hexdigest()!=SOURCE_SHA:raise ValueError('Unknown native GI shader')
  def patch(w):
   # SM5.1 operands. Reuse the audited native sample/coordinate operands;
@@ -35,7 +35,7 @@ def generate(data):
   neg7=[0x80100e46,0x41,7]
   pad+=ins(0,dst(5),src(5),neg7)+ins(52,dst(5),src(5),imm(0))
   clip=ins(52,dst(1),src(1),src(5))+ins(51,dst(1),src(1),src(6))
-  for start,end,old,new in [(311,318,.03,.01),(356,366,40.,400.)]:
+  for start,end,old,new in [(311,318,.03,.01),(356,366,40.,400.)]+([] if history else [(219,226,.7,0.)]):
    bits=struct.unpack('<I',struct.pack('<f',old))[0]
    matches=[i for i in range(start+1,end) if w[i]==bits]
    if len(matches)!=1:raise ValueError('Unexpected GI immediate layout')
@@ -51,4 +51,6 @@ if __name__=='__main__':
  result=generate(source);out=root/'build';out.mkdir(exist_ok=True)
  (out/'gi-motion-history.dxbc').write_bytes(result)
  (out/'gi_motion_history.generated.h').write_text('#pragma once\ninline constexpr unsigned char kGIMotionHistoryShader[]={\n'+','.join(map(str,result))+'\n};\ninline constexpr unsigned char kGINativeHistoryShader[]={\n'+','.join(map(str,source))+'\n};\n')
+ with (out/'gi_motion_history.generated.h').open('a') as f:
+  f.write('inline constexpr unsigned char kGINoHistoryShader[]={\n'+','.join(map(str,generate(source,False)))+'\n};\n')
  print('GI motion shader SHA256',hashlib.sha256(result).hexdigest())

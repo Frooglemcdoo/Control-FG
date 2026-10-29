@@ -44,3 +44,14 @@ print('PASS R212 preserved native instruction stream and bindings, four filtered
 assert {(v['slot'],v['space']) for v in j['bindings'] if v['kind']==3}=={(6,1),(11,1)}
 fixture=(root/'tools/test-gi-motion-pso.cpp').read_text()
 assert 'samplers[0].RegisterSpace=1' in fixture and 'samplers[1].RegisterSpace=1' in fixture
+
+# The zero-history variant differs from R212 at exactly the blend coefficient.
+zero=generate(source,False)
+z=chunks(zero)
+assert zero[4:20]==checksum(zero)
+x=struct.unpack('<'+'I'*(len(b[b'SHEX'])//4),b[b'SHEX'])
+y=struct.unpack('<'+'I'*(len(z[b'SHEX'])//4),z[b'SHEX'])
+diff=[(a,b) for a,b in zip(x,y) if a!=b]
+assert diff==[(struct.unpack('<I',struct.pack('<f',.7))[0],0)]
+assert all(z[k]==b[k] for k in z if k!=b'SHEX')
+print('PASS R213 zero-history variant differs only at native blend coefficient')
