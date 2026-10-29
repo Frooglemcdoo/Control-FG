@@ -6,7 +6,7 @@
 #include "../build/gi_motion_history.generated.h"
 // Immutable GPU objects, never copies of the engine's shader/lock/cache records.
 namespace control_rr_gi {
-struct Bundle {ID3D12PipelineState* native=nullptr;ID3D12PipelineState* adaptive=nullptr;ID3D12PipelineState* noHistory=nullptr;ID3D12PipelineState* outlier=nullptr;};
+struct Bundle {ID3D12PipelineState* native=nullptr;ID3D12PipelineState* adaptive=nullptr;ID3D12PipelineState* noHistory=nullptr;ID3D12PipelineState* outlier=nullptr;ID3D12PipelineState* mask=nullptr;ID3D12PipelineState* zero=nullptr;};
 inline std::atomic<Bundle*> bundles[8]{};
 inline std::atomic<unsigned> reserved{0},ready{0},failed{0};
 inline Bundle* Find(ID3D12PipelineState* native) noexcept {
@@ -33,26 +33,35 @@ template<class Create> void Capture(ID3D12Device* device,const D3D12_COMPUTE_PIP
  auto replacement=*desc;replacement.CachedPSO={};replacement.CS={kGIMotionHistoryShader,sizeof(kGIMotionHistoryShader)};
  const HRESULT hr=create(device,&replacement,IID_PPV_ARGS(&b->adaptive));
  if(FAILED(hr)||!b->adaptive){if(b->adaptive)b->adaptive->Release();native->Release();delete b;++failed;
-  Log("GI_PIPELINE_R214 ready=0 hr=0x%08lX native_fallback=1",static_cast<unsigned long>(hr));return;}
+  Log("GI_PIPELINE_R215 ready=0 hr=0x%08lX native_fallback=1",static_cast<unsigned long>(hr));return;}
  replacement.CS={kGINoHistoryShader,sizeof(kGINoHistoryShader)};
  const HRESULT noHistoryResult=create(device,&replacement,IID_PPV_ARGS(&b->noHistory));
  if(FAILED(noHistoryResult)||!b->noHistory){
   if(b->noHistory)b->noHistory->Release();b->adaptive->Release();native->Release();delete b;++failed;
-  Log("GI_PIPELINE_R214 ready=0 no_history_hr=0x%08lX native_fallback=1",static_cast<unsigned long>(noHistoryResult));return;
+  Log("GI_PIPELINE_R215 ready=0 no_history_hr=0x%08lX native_fallback=1",static_cast<unsigned long>(noHistoryResult));return;
  }
  replacement.CS={kGIOutlierShader,sizeof(kGIOutlierShader)};
  const HRESULT outlierResult=create(device,&replacement,IID_PPV_ARGS(&b->outlier));
  if(FAILED(outlierResult)||!b->outlier){
   if(b->outlier)b->outlier->Release();b->noHistory->Release();b->adaptive->Release();native->Release();delete b;++failed;
-  Log("GI_PIPELINE_R214 ready=0 outlier_hr=0x%08lX native_fallback=1",static_cast<unsigned long>(outlierResult));return;
+  Log("GI_PIPELINE_R215 ready=0 outlier_hr=0x%08lX native_fallback=1",static_cast<unsigned long>(outlierResult));return;
  }
+ replacement.CS={kGICleanupMaskShader,sizeof(kGICleanupMaskShader)};
+ const HRESULT maskResult=create(device,&replacement,IID_PPV_ARGS(&b->mask));
+ if(FAILED(maskResult)){if(b->mask)b->mask->Release();b->mask=nullptr;++failed;}
+ replacement.CS={kGIZeroShader,sizeof(kGIZeroShader)};
+ const HRESULT zeroResult=create(device,&replacement,IID_PPV_ARGS(&b->zero));
+ if(FAILED(zeroResult)){if(b->zero)b->zero->Release();b->zero=nullptr;++failed;}
+ Log("GI_DIAGNOSTIC_R215 mask_ready=%u zero_ready=%u",unsigned(b->mask!=nullptr),unsigned(b->zero!=nullptr));
  bundles[index].store(b,std::memory_order_release);++ready;
- Log("GI_PIPELINE_R214 ready=1 native=%p adaptive=%p native_root_preserved=1 engine_record_copy=0",native,b->adaptive);
+ Log("GI_PIPELINE_R215 ready=1 native=%p adaptive=%p native_root_preserved=1 engine_record_copy=0",native,b->adaptive);
 }
 template<class Set,class DispatchFn> void Dispatch(ID3D12PipelineState* observed,unsigned count,bool& used,
  ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT z,Set set,DispatchFn dispatch) {
  auto* b=Find(observed);
  auto* replacement=b?(historyDisabled?(outlierEnabled?b->outlier:b->noHistory):b->adaptive):nullptr;
+ if(b&&historyDisabled&&activeView==DiagnosticView::Mask)replacement=b->mask;
+ if(b&&historyDisabled&&activeView==DiagnosticView::Zero)replacement=b->zero;
  if(!replacement||count!=1){dispatch(list,x,y,z);return;}
  // Called only after DeviceUtil commits its native PSO and bindings.
  __try {set(list,replacement);dispatch(list,x,y,z);used=true;}

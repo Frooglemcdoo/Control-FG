@@ -81,3 +81,19 @@ assert sum(i['name']=='sample_l' for i in new)==sum(i['name']=='sample_l' for i 
 try:generate(source,True,True);raise AssertionError('Outlier history unexpectedly allowed')
 except ValueError:pass
 print('PASS R214 current-frame outlier insertion, unchanged native color normalization, zero history, original bindings')
+
+for view in (1,2):
+ data=generate(source,False,True,view)
+ assert data[4:20]==checksum(data)
+ c=chunks(data)
+ assert all(c[k]==a[k] for k in a if k!=b'SHEX')
+ with tempfile.TemporaryDirectory() as d:
+  p=Path(d)/'view.dxbc';p.write_bytes(data);v=decode(p)
+ ins=v['instructions'];last=next(i for i,x in enumerate(ins) if x['name']=='store_uav_typed')
+ assert ins[last-1]['name']==('mul' if view==1 else 'mov')
+ assert ins[last-1]['operands']==(['r[1].xyzw','r[6].xxxx','l(8,0,8,8)'] if view==1 else ['r[1].xyzw','l(0)'])
+ if view==1:
+  assert any(i['operands']==['r[6].x','r[6].xxxx','-r[0].zzzz'] for i in ins)
+  assert any(i['name']=='lt' and i['operands']==['r[6].x','l(9.99999997e-07)','r[6].xxxx'] for i in ins)
+ assert any(i['name']=='mul' and i['operands']==['r[0].w','r[0].w','l(0)'] for i in ins)
+print('PASS R215 mask predicate, magenta/zero outputs, zero history and unchanged resource bindings')

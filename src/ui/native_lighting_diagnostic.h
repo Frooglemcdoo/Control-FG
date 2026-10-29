@@ -17,9 +17,10 @@ inline constexpr int kCameraY = kPerformanceY + 46;
 inline constexpr int kCaptureStatusY = kCameraY + 116;
 inline constexpr int kFooterY = kCaptureStatusY + 50;
 inline constexpr int kHeight = kFooterY + 72;
-inline constexpr unsigned kButtonCount = kModeCount + 14;
+inline constexpr unsigned kButtonCount = kModeCount + 15;
 inline const wchar_t* ButtonLabel(unsigned index) noexcept {
-    if(index==kModeCount+13)return control_rr_gi::stageMode.load()!=control_rr_gi::StageMode::ClampOnly?L"CLEANUP: N/A":control_rr_gi::outlierRequested.load()?L"CLEANUP: ON":L"CLEANUP: OFF";
+    if(index==kModeCount+14)return control_rr_gi::stageMode.load()!=control_rr_gi::StageMode::ClampOnly?L"GI VIEW: N/A":control_rr_gi::ViewLabel(control_rr_gi::viewRequested.load());
+    if(index==kModeCount+13)return control_rr_gi::stageMode.load()!=control_rr_gi::StageMode::ClampOnly||control_rr_gi::viewRequested.load()!=control_rr_gi::DiagnosticView::Normal?L"CLEANUP: N/A":control_rr_gi::outlierRequested.load()?L"CLEANUP: ON":L"CLEANUP: OFF";
     if(index==kModeCount+12)return control_rr_gi::StageLabel(control_rr_gi::stageMode.load());
     if (index < kModeCount) return kModeChoices[index].label;
     if (index == kModeCount + 11) {
@@ -44,6 +45,7 @@ inline const wchar_t* ButtonLabel(unsigned index) noexcept {
     return actions[index - kModeCount];
 }
 inline const wchar_t* ModeHint(Mode mode) noexcept {
+    if(IsNativeBlend(mode)&&control_rr_gi::stageMode.load()==control_rr_gi::StageMode::ClampOnly&&control_rr_gi::viewRequested.load()!=control_rr_gi::DiagnosticView::Normal)return L"GI diagnostic active. Return GI VIEW to NORMAL after testing.";
     if(UsesNativeBlendProjection(mode))return L"Native Blend with projection rays. RR retained; MAP GUARD is optional.";
     if(mode==Mode::Native)return L"Native lighting. SPEC is shared with other modes; NATIVE removes its override.";
     if(mode==Mode::RoomNativeBlend)return L"Native map blockers retained with RT. MAP GUARD toggles the R199 comparison.";
@@ -147,7 +149,8 @@ inline void SaveReport(HWND window) noexcept {
     Trace("free_camera_status installed=%u mode=%d generation=%llu pending=%u result=%u updates=%llu thread=%lu",
         unsigned(free_camera::installed.load()),free_camera::commands.Mode(),static_cast<unsigned long long>(free_camera::commands.Generation()),
         unsigned(free_camera::commands.Pending()),unsigned(free_camera::commands.Status()),free_camera::updates.load(),free_camera::updateThread.load());
-    Trace("gi_stage_save build=R214 requested=%s outlier_requested=%u",control_rr_gi::StageName(control_rr_gi::stageMode.load()),unsigned(control_rr_gi::outlierRequested.load()));
+    Trace("gi_view_save build=R215 requested=%s",control_rr_gi::ViewName(control_rr_gi::viewRequested.load()));
+    Trace("gi_stage_save build=R215 requested=%s outlier_requested=%u",control_rr_gi::StageName(control_rr_gi::stageMode.load()),unsigned(control_rr_gi::outlierRequested.load()));
     ReportSpecIsolation("save_log");
     ReportRRPaths("save_log");
     Trace("spec_retry_save matched=%llu created=%llu failures=%llu creation_only=1",spec_retry::matched.load(),spec_retry::created.load(),spec_retry::failures.load());
@@ -317,16 +320,21 @@ inline LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPA
                 const auto next=NativeBlendMode(!NativeBlendMapGuard(current),IsNativeBlend(current)?UsesNativeBlendProjection(current):UsesNativeBlendProjection(kNativeBlendDefaultMode));
                 selectionRejected=!SelectMode(next);savedNotice=0;
             }
-            else if(index==kModeCount+13 && !capture_suite::active && control_rr_gi::stageMode.load()==control_rr_gi::StageMode::ClampOnly) {
+            else if(index==kModeCount+14 && !capture_suite::active && control_rr_gi::stageMode.load()==control_rr_gi::StageMode::ClampOnly) {
+                const auto next=static_cast<control_rr_gi::DiagnosticView>((unsigned(control_rr_gi::viewRequested.load())+1)%3);
+                control_rr_gi::viewRequested.store(next,std::memory_order_release);
+                Trace("gi_view_request build=R215 view=%s",control_rr_gi::ViewName(next));savedNotice=0;
+            }
+            else if(index==kModeCount+13 && control_rr_gi::viewRequested.load()==control_rr_gi::DiagnosticView::Normal && !capture_suite::active && control_rr_gi::stageMode.load()==control_rr_gi::StageMode::ClampOnly) {
                 const bool next=!control_rr_gi::outlierRequested.load();
                 control_rr_gi::outlierRequested.store(next,std::memory_order_release);
-                Trace("gi_outlier_request build=R214 enabled=%u clamp_only=1",unsigned(next));
+                Trace("gi_outlier_request build=R215 enabled=%u clamp_only=1",unsigned(next));
                 savedNotice=0;
             }
             else if(index==kModeCount+12 && !capture_suite::active) {
                 const auto next=control_rr_gi::NextStage(control_rr_gi::stageMode.load());
                 control_rr_gi::stageMode.store(next,std::memory_order_release);
-                Trace("gi_stage_request build=R214 stage=%s native_blend_only=1",control_rr_gi::StageName(next));
+                Trace("gi_stage_request build=R215 stage=%s native_blend_only=1",control_rr_gi::StageName(next));
                 savedNotice=0;
             }
             else if(index==kModeCount+9) RequestCamera(window,1);

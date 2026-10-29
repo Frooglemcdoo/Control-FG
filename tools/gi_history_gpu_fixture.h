@@ -30,8 +30,8 @@ static HistoryTexture HistoryInput(Device& gpu,float base,float filtered,UINT in
  auto cpu=gpu.views->GetCPUDescriptorHandleForHeapStart();cpu.ptr+=static_cast<SIZE_T>(index)*gpu.descriptorSize;
  gpu.device->CreateShaderResourceView(t.resource.Get(),&view,cpu);gpu.retained.push_back(t.resource);return t;
 }
-static void RunHistoryPixels(Device& gpu,ID3D12RootSignature* root,ID3D12PipelineState* adaptive,ID3D12PipelineState* native,ID3D12PipelineState* noHistory,ID3D12PipelineState* outlier) {
- struct Case {const char* name;float current,filtered,history,depth;bool cut,native;float expected;bool noHistory=false;bool outlier=false;UINT pattern=0;};
+static void RunHistoryPixels(Device& gpu,ID3D12RootSignature* root,ID3D12PipelineState* adaptive,ID3D12PipelineState* native,ID3D12PipelineState* noHistory,ID3D12PipelineState* outlier,ID3D12PipelineState* mask,ID3D12PipelineState* zero) {
+ struct Case {const char* name;float current,filtered,history,depth;bool cut,native;float expected;bool noHistory=false;bool outlier=false;UINT pattern=0;UINT view=0;};
  const Case cases[]={
   {"stable history",.2f,.2f,.22f,.5f,false,false,.214f},
   {"bright trail",.2f,.2f,2.f,.5f,false,false,.2357f},
@@ -49,6 +49,11 @@ static void RunHistoryPixels(Device& gpu,ID3D12RootSignature* root,ID3D12Pipelin
   {"bright region edge",10.f,.5f,100.f,.5f,false,false,0,true,true,4},
   {"uniform bright radiance",10.f,10.f,100.f,.5f,false,false,0,true,true,0},
   {"black radiance",0.f,0.f,100.f,.5f,false,false,0,true,true,0},
+  {"mask isolated outlier",10.f,.5f,100.f,.5f,false,false,0,true,true,1,1},
+  {"mask bright region",10.f,.5f,100.f,.5f,false,false,0,true,true,4,1},
+  {"mask uniform radiance",10.f,10.f,100.f,.5f,false,false,0,true,true,0,1},
+  {"zero GI ignores current and history",10.f,10.f,100.f,.5f,false,false,0,true,true,0,2},
+  {"mask adjacent outliers",10.f,.5f,100.f,.5f,false,false,0,true,true,2,1},
  };
  D3D12_DESCRIPTOR_HEAP_DESC heapDesc{};heapDesc.Type=D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
  heapDesc.NumDescriptors=128;heapDesc.Flags=D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
@@ -73,7 +78,7 @@ static void RunHistoryPixels(Device& gpu,ID3D12RootSignature* root,ID3D12Pipelin
   auto srv=gpu.views->GetGPUDescriptorHandleForHeapStart();srv.ptr+=static_cast<UINT64>(first)*gpu.descriptorSize;auto target=srv;target.ptr+=5*gpu.descriptorSize;
   gpu.list->SetComputeRootSignature(root);gpu.list->SetComputeRootConstantBufferView(0,cb0->GetGPUVirtualAddress());gpu.list->SetComputeRootConstantBufferView(1,cb1->GetGPUVirtualAddress());
   gpu.list->SetComputeRootDescriptorTable(2,srv);gpu.list->SetComputeRootDescriptorTable(3,target);
-  gpu.list->SetPipelineState(c.outlier?outlier:c.noHistory?noHistory:c.native?native:adaptive);gpu.list->Dispatch(2,1,1);
+  gpu.list->SetPipelineState(c.view==1?mask:c.view==2?zero:c.outlier?outlier:c.noHistory?noHistory:c.native?native:adaptive);gpu.list->Dispatch(2,1,1);
   gpu.Transition(output.Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS,D3D12_RESOURCE_STATE_COPY_SOURCE);
   D3D12_PLACED_SUBRESOURCE_FOOTPRINT footprint{};UINT64 bytes=0;gpu.device->GetCopyableFootprints(&desc,0,1,0,&footprint,nullptr,nullptr,&bytes);
   auto readback=gpu.Buffer(bytes,D3D12_HEAP_TYPE_READBACK,D3D12_RESOURCE_STATE_COPY_DEST);
@@ -90,8 +95,12 @@ static void RunHistoryPixels(Device& gpu,ID3D12RootSignature* root,ID3D12Pipelin
     std::sort(neighbors,neighbors+4);
     expected=std::min(std::min(value(x,y),c.filtered),neighbors[2]*1.5f+.002f);
    }
-   for(UINT ch=0;ch<3;++ch)Require(std::isfinite(pixel[ch])&&std::abs(pixel[ch]-expected)<.0001f,cases[i].name);
+   if(cases[i].view==1)expected=std::min(PatternValue(cases[i].current,cases[i].pattern,x,y),cases[i].filtered)-expected>1e-6f?8.f:0.f;
+   if(cases[i].view==2)expected=0;
+   for(UINT ch=0;ch<3;++ch){const float channelExpected=cases[i].view==1&&ch==1?0.f:expected;
+    Require(std::isfinite(pixel[ch])&&std::abs(pixel[ch]-channelExpected)<.0001f,cases[i].name);
+   }
   }
-  outputs[i]->Unmap(0,nullptr);std::cout<<"PASS R214 GPU pixels: "<<cases[i].name<<'\n';
+  outputs[i]->Unmap(0,nullptr);std::cout<<"PASS R215 GPU pixels: "<<cases[i].name<<'\n';
  }
 }

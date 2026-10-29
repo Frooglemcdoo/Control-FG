@@ -3,7 +3,8 @@ import base64,hashlib,struct
 from pathlib import Path
 from dxbc_transform import transform_shex
 SOURCE_SHA='d54d94fdbb783796cc33bc78ab20dde687d90d9cba6f24c8092a6b177eec5d15'
-def generate(data,history=True,outliers=False):
+def generate(data,history=True,outliers=False,view=0):
+ if view not in (0,1,2) or (view and (history or not outliers)):raise ValueError("Diagnostic requires zero-history outlier path")
  if outliers and history:raise ValueError("Outlier variant must have zero history")
  if hashlib.sha256(data).hexdigest()!=SOURCE_SHA:raise ValueError('Unknown native GI shader')
  def patch(w):
@@ -57,6 +58,17 @@ def generate(data,history=True,outliers=False):
     guard+=ins(52,dst(5,1),src(5,0),src(7,0))
    guard+=ins(50,dst(5,1),src(5,0x55),imm(1.5),imm(.002))
    guard+=ins(51,dst(0,4),src(0,0xaa),src(5,0))
+   if view==1:
+    # Preserve the pre-cleanup native clamp luminance. Native code uses r0-r4;
+    # r6 remains untouched until the final diagnostic output override.
+    guard=ins(54,dst(6,1),src(0,0xaa))+guard
+    negZ=[0x80100aa6,0x41,0]
+    guard+=ins(0,dst(6,1),src(6,0),negZ)
+    guard+=ins(49,dst(6,1),imm(.000001),src(6,0))
+    guard+=ins(1,dst(6,1),src(6,0),imm(1))
+    w[412:412]=ins(56,dst(1,15),src(6,0),vec((8,0,8,8)))
+   elif view==2:
+    w[412:412]=ins(54,dst(1,15),imm(0))
    w[197:197]=guard
    return
   # Insert backwards to preserve original audited dword positions.
@@ -74,4 +86,7 @@ if __name__=='__main__':
   f.write('inline constexpr unsigned char kGINoHistoryShader[]={\n'+','.join(map(str,generate(source,False)))+'\n};\n')
  with (out/'gi_motion_history.generated.h').open('a') as f:
   f.write('inline constexpr unsigned char kGIOutlierShader[]={\n'+','.join(map(str,generate(source,False,True)))+'\n};\n')
+ with (out/'gi_motion_history.generated.h').open('a') as f:
+  for name,view in [('kGICleanupMaskShader',1),('kGIZeroShader',2)]:
+   f.write('inline constexpr unsigned char '+name+'[]={\n'+','.join(map(str,generate(source,False,True,view)))+'\n};\n')
  print('GI motion shader SHA256',hashlib.sha256(result).hexdigest())
