@@ -20,7 +20,7 @@ inline constexpr int kHeight = kFooterY + 72;
 inline constexpr unsigned kButtonCount = kModeCount + 15;
 inline const wchar_t* ButtonLabel(unsigned index) noexcept {
     if(index==kModeCount+14)return control_rr_gi::stageMode.load()!=control_rr_gi::StageMode::ClampOnly?L"GI VIEW: N/A":control_rr_gi::ViewLabel(control_rr_gi::viewRequested.load());
-    if(index==kModeCount+13)return control_rr_gi::stageMode.load()!=control_rr_gi::StageMode::ClampOnly||control_rr_gi::viewRequested.load()!=control_rr_gi::DiagnosticView::Normal?L"CLEANUP: N/A":control_rr_gi::outlierRequested.load()?L"CLEANUP: ON":L"CLEANUP: OFF";
+    if(index==kModeCount+13)return control_rr_gi::stageMode.load()!=control_rr_gi::StageMode::ClampOnly||control_rr_gi::viewRequested.load()!=control_rr_gi::DiagnosticView::Normal?L"SMOOTH: N/A":control_rr_gi::outlierRequested.load()?L"SMOOTH: ON":L"SMOOTH: OFF";
     if(index==kModeCount+12)return control_rr_gi::StageLabel(control_rr_gi::stageMode.load());
     if (index < kModeCount) return kModeChoices[index].label;
     if (index == kModeCount + 11) {
@@ -153,8 +153,8 @@ inline void SaveReport(HWND window) noexcept {
     Trace("free_camera_status installed=%u mode=%d generation=%llu pending=%u result=%u updates=%llu thread=%lu",
         unsigned(free_camera::installed.load()),free_camera::commands.Mode(),static_cast<unsigned long long>(free_camera::commands.Generation()),
         unsigned(free_camera::commands.Pending()),unsigned(free_camera::commands.Status()),free_camera::updates.load(),free_camera::updateThread.load());
-    Trace("gi_view_save build=R215 requested=%s",control_rr_gi::ViewName(control_rr_gi::viewRequested.load()));
-    Trace("gi_stage_save build=R215 requested=%s outlier_requested=%u",control_rr_gi::StageName(control_rr_gi::stageMode.load()),unsigned(control_rr_gi::outlierRequested.load()));
+    Trace("gi_view_save build=R217 requested=%s",control_rr_gi::ViewName(control_rr_gi::viewRequested.load()));
+    Trace("gi_stage_save build=R217 requested=%s smooth_requested=%u",control_rr_gi::StageName(control_rr_gi::stageMode.load()),unsigned(control_rr_gi::outlierRequested.load()));
     ReportSpecIsolation("save_log");
     ReportRRPaths("save_log");
     Trace("spec_retry_save matched=%llu created=%llu failures=%llu creation_only=1",spec_retry::matched.load(),spec_retry::created.load(),spec_retry::failures.load());
@@ -213,8 +213,8 @@ inline void RequestLightCapture(HWND panel) noexcept {
     const auto mode=LiveSelection::GetMode(selection.Read());
 #ifdef CONTROL_GI_BOUNDARY_CAPTURE
     const auto expected=control_rr_capture_ui::completedPairs.load()==0?control_rr_gi::StageMode::ClampOnly:control_rr_gi::StageMode::Both;
-    if(control_rr_gi::stageMode.load()!=expected || control_rr_gi::outlierRequested.load() || control_rr_gi::viewRequested.load()!=control_rr_gi::DiagnosticView::Normal) {
-        MessageBoxW(panel,L"Capture 1: GI CLAMP ONLY. Capture 2: GI BOTH. Keep CLEANUP OFF and GI VIEW NORMAL for both; use the same camera position.",L"GI buffer capture",MB_OK);return;
+    if(control_rr_gi::stageMode.load()!=expected || (expected==control_rr_gi::StageMode::ClampOnly&&!control_rr_gi::outlierRequested.load()) || control_rr_gi::viewRequested.load()!=control_rr_gi::DiagnosticView::Normal) {
+        MessageBoxW(panel,L"Capture 1: GI CLAMP ONLY. Capture 2: GI BOTH. Use SMOOTH ON for CLAMP ONLY and GI VIEW NORMAL for both; use the same camera position.",L"GI buffer capture",MB_OK);return;
     }
 #endif
     if(!performance_capture::Active() && !capture_suite::active && IsNativeBlend(mode) && control_rr::RRUserRuntimeWorkRequested() && control_rr_capture_ui::Request()) {
@@ -339,18 +339,18 @@ inline LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPA
             else if(index==kModeCount+14 && !capture_suite::active && control_rr_gi::stageMode.load()==control_rr_gi::StageMode::ClampOnly) {
                 const auto next=static_cast<control_rr_gi::DiagnosticView>((unsigned(control_rr_gi::viewRequested.load())+1)%3);
                 control_rr_gi::viewRequested.store(next,std::memory_order_release);
-                Trace("gi_view_request build=R215 view=%s",control_rr_gi::ViewName(next));savedNotice=0;
+                Trace("gi_view_request build=R217 view=%s",control_rr_gi::ViewName(next));savedNotice=0;
             }
             else if(index==kModeCount+13 && control_rr_gi::viewRequested.load()==control_rr_gi::DiagnosticView::Normal && !capture_suite::active && control_rr_gi::stageMode.load()==control_rr_gi::StageMode::ClampOnly) {
                 const bool next=!control_rr_gi::outlierRequested.load();
                 control_rr_gi::outlierRequested.store(next,std::memory_order_release);
-                Trace("gi_outlier_request build=R215 enabled=%u clamp_only=1",unsigned(next));
+                Trace("gi_outlier_request build=R217 enabled=%u clamp_only=1",unsigned(next));
                 savedNotice=0;
             }
             else if(index==kModeCount+12 && !capture_suite::active) {
                 const auto next=control_rr_gi::NextStage(control_rr_gi::stageMode.load());
                 control_rr_gi::stageMode.store(next,std::memory_order_release);
-                Trace("gi_stage_request build=R215 stage=%s native_blend_only=1",control_rr_gi::StageName(next));
+                Trace("gi_stage_request build=R217 stage=%s native_blend_only=1",control_rr_gi::StageName(next));
                 savedNotice=0;
             }
             else if(index==kModeCount+9) RequestCamera(window,1);

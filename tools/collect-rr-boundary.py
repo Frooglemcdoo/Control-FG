@@ -84,7 +84,7 @@ def validate_gi_pair(pair, ordinal):
         b = data.get('gi_boundary', {})
         if (b.get('valid') is not True or b.get('frame') != data['frame'] or
                 b.get('applied') is not True or b.get('stage') != expected or
-                b.get('view') != 'normal' or b.get('cleanup') is not False or
+                b.get('view') != 'normal' or b.get('cleanup') is not (ordinal == 1) or b.get('filter_build') != 'R217' or
                 not isinstance(b.get('filter_color_identity'), int) or b['filter_color_identity'] <= 0):
             raise ValueError('Missing, stale or wrong GI filter observation; send diagnostics')
         if (expected == 'clamp_only' and b.get('spatial_passes') != 0) or (expected == 'both' and b.get('spatial_passes', 0) <= 0):
@@ -148,7 +148,7 @@ def main():
     started = 0 if args.collect_existing or args.diagnostics_only else time.time()
     prefix = 'RR-Materials-R180-' if args.require_rr else 'Native-Lighting-R157-'
     if args.gi_boundary:
-        prefix = 'GI-Boundary-R216-'
+        prefix = 'GI-Boundary-R217-'
     destination = args.output / (prefix + time.strftime('%Y%m%d-%H%M%S') + '-' + str(args.pid) + '-' + str(time.time_ns() % 1000000000))
     destination.mkdir(parents=True, exist_ok=False)
     report = {'schema': 'control-rr-boundary-r157', 'pid': args.pid, 'started_unix': started, 'pairs': [], 'complete': False, 'diagnostics_only': args.diagnostics_only}

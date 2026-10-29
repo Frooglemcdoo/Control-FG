@@ -73,7 +73,7 @@ static DWORD WINAPI RRInputCaptureExport(void* context) noexcept {
    out<<"{";
 #ifdef CONTROL_GI_BOUNDARY_CAPTURE
    const auto& b=c->giBoundary;
-   out<<"\"gi_boundary\":{\"valid\":"<<(b.valid?"true":"false")<<",\"frame\":"<<b.frame
+   out<<"\"gi_boundary\":{\"filter_build\":\"R217\",\"valid\":"<<(b.valid?"true":"false")<<",\"frame\":"<<b.frame
       <<",\"stage\":\""<<control_rr_gi::StageName(b.stage)<<"\",\"view\":\""<<control_rr_gi::ViewName(b.view)
       <<"\",\"cleanup\":"<<(b.cleanup?"true":"false")<<",\"applied\":"<<(b.applied?"true":"false")
       <<",\"spatial_passes\":"<<b.spatialPasses<<",\"filter_color_identity\":"<<b.color<<"},";

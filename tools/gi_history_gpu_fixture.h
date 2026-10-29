@@ -5,6 +5,7 @@ struct HistoryTexture {ComPtr<ID3D12Resource> resource;D3D12_PLACED_SUBRESOURCE_
 static float PatternValue(float value,UINT pattern,int x,int y) {
  x=std::max(0,std::min(15,x));y=std::max(0,std::min(7,y));
  if(!pattern)return value;
+ if(pattern==5)return ((x+y)%2)?value:.2f;
  const bool bright=pattern==1?(x==8&&y==4):pattern==2?((x==8||x==9)&&y==4):pattern==3?x==8:x>=8;
  return bright?value:.2f;
 }
@@ -30,8 +31,8 @@ static HistoryTexture HistoryInput(Device& gpu,float base,float filtered,UINT in
  auto cpu=gpu.views->GetCPUDescriptorHandleForHeapStart();cpu.ptr+=static_cast<SIZE_T>(index)*gpu.descriptorSize;
  gpu.device->CreateShaderResourceView(t.resource.Get(),&view,cpu);gpu.retained.push_back(t.resource);return t;
 }
-static void RunHistoryPixels(Device& gpu,ID3D12RootSignature* root,ID3D12PipelineState* adaptive,ID3D12PipelineState* native,ID3D12PipelineState* noHistory,ID3D12PipelineState* outlier,ID3D12PipelineState* mask,ID3D12PipelineState* zero) {
- struct Case {const char* name;float current,filtered,history,depth;bool cut,native;float expected;bool noHistory=false;bool outlier=false;UINT pattern=0;UINT view=0;};
+static void RunHistoryPixels(Device& gpu,ID3D12RootSignature* root,ID3D12PipelineState* adaptive,ID3D12PipelineState* native,ID3D12PipelineState* noHistory,ID3D12PipelineState* outlier,ID3D12PipelineState* mask,ID3D12PipelineState* zero,ID3D12PipelineState* smooth) {
+ struct Case {const char* name;float current,filtered,history,depth;bool cut,native;float expected;bool noHistory=false;bool outlier=false;UINT pattern=0;UINT view=0;bool smooth=false;bool depthEdge=false;};
  const Case cases[]={
   {"stable history",.2f,.2f,.22f,.5f,false,false,.214f},
   {"bright trail",.2f,.2f,2.f,.5f,false,false,.2357f},
@@ -54,15 +55,23 @@ static void RunHistoryPixels(Device& gpu,ID3D12RootSignature* root,ID3D12Pipelin
   {"mask uniform radiance",10.f,10.f,100.f,.5f,false,false,0,true,true,0,1},
   {"zero GI ignores current and history",10.f,10.f,100.f,.5f,false,false,0,true,true,0,2},
   {"mask adjacent outliers",10.f,.5f,100.f,.5f,false,false,0,true,true,2,1},
+  {"smooth flat radiance",.2f,.2f,100.f,.5f,false,false,0,true,false,0,0,true},
+  {"smooth black",0.f,0.f,100.f,.5f,false,false,0,true,false,0,0,true},
+  {"smooth checker noise",.4f,.5f,100.f,.5f,false,false,0,true,false,5,0,true},
+  {"smooth checker ignores dark history",.4f,.5f,0.f,.5f,false,false,0,true,false,5,0,true},
+  {"smooth isolated peak",10.f,.5f,100.f,.5f,false,false,0,true,false,1,0,true},
+  {"smooth thin line",10.f,.5f,100.f,.5f,false,false,0,true,false,3,0,true},
+  {"smooth rejects depth edge",10.f,.5f,100.f,.5f,false,false,0,true,false,4,0,true,true},
+  {"smooth depth edge and camera cut",10.f,.5f,100.f,.5f,true,false,0,true,false,4,0,true,true},
  };
  D3D12_DESCRIPTOR_HEAP_DESC heapDesc{};heapDesc.Type=D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
- heapDesc.NumDescriptors=128;heapDesc.Flags=D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+ heapDesc.NumDescriptors=256;heapDesc.Flags=D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
  auto previousViews=gpu.views; // Keep previously recorded heap state alive through Submit.
  gpu.views.Reset();Check(gpu.device->CreateDescriptorHeap(&heapDesc,IID_PPV_ARGS(&gpu.views)));
  ID3D12DescriptorHeap* heaps[]={gpu.views.Get()};gpu.list->SetDescriptorHeaps(1,heaps);
  std::vector<ComPtr<ID3D12Resource>> outputs;std::vector<D3D12_PLACED_SUBRESOURCE_FOOTPRINT> layouts;
  for(UINT i=0;i<sizeof(cases)/sizeof(cases[0]);++i){auto c=cases[i];UINT first=6*i;
-  HistoryInput(gpu,.5f,.5f,first);HistoryInput(gpu,c.depth,c.depth,first+1);HistoryInput(gpu,0,0,first+2);
+  HistoryInput(gpu,c.depthEdge?.8f:.5f,.5f,first,1,c.depthEdge?4:0);HistoryInput(gpu,c.depth,c.depth,first+1);HistoryInput(gpu,0,0,first+2);
   HistoryInput(gpu,c.current,c.filtered,first+3,4,c.pattern);HistoryInput(gpu,c.history,c.history,first+4);
   std::array<float,192> sys{};sys[0]=16;sys[1]=8;sys[2]=1.f/16;sys[3]=1.f/8;
   sys[4]=16;sys[5]=8;sys[6]=1.f/16;sys[7]=1.f/8;
@@ -78,7 +87,7 @@ static void RunHistoryPixels(Device& gpu,ID3D12RootSignature* root,ID3D12Pipelin
   auto srv=gpu.views->GetGPUDescriptorHandleForHeapStart();srv.ptr+=static_cast<UINT64>(first)*gpu.descriptorSize;auto target=srv;target.ptr+=5*gpu.descriptorSize;
   gpu.list->SetComputeRootSignature(root);gpu.list->SetComputeRootConstantBufferView(0,cb0->GetGPUVirtualAddress());gpu.list->SetComputeRootConstantBufferView(1,cb1->GetGPUVirtualAddress());
   gpu.list->SetComputeRootDescriptorTable(2,srv);gpu.list->SetComputeRootDescriptorTable(3,target);
-  gpu.list->SetPipelineState(c.view==1?mask:c.view==2?zero:c.outlier?outlier:c.noHistory?noHistory:c.native?native:adaptive);gpu.list->Dispatch(2,1,1);
+  gpu.list->SetPipelineState(c.smooth?smooth:c.view==1?mask:c.view==2?zero:c.outlier?outlier:c.noHistory?noHistory:c.native?native:adaptive);gpu.list->Dispatch(2,1,1);
   gpu.Transition(output.Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS,D3D12_RESOURCE_STATE_COPY_SOURCE);
   D3D12_PLACED_SUBRESOURCE_FOOTPRINT footprint{};UINT64 bytes=0;gpu.device->GetCopyableFootprints(&desc,0,1,0,&footprint,nullptr,nullptr,&bytes);
   auto readback=gpu.Buffer(bytes,D3D12_HEAP_TYPE_READBACK,D3D12_RESOURCE_STATE_COPY_DEST);
@@ -94,6 +103,14 @@ static void RunHistoryPixels(Device& gpu,ID3D12RootSignature* root,ID3D12Pipelin
     float neighbors[]={value(int(x)-1,y),value(int(x)+1,y),value(x,int(y)-1),value(x,int(y)+1)};
     std::sort(neighbors,neighbors+4);
     expected=std::min(std::min(value(x,y),c.filtered),neighbors[2]*1.5f+.002f);
+   }
+   if(cases[i].smooth){auto c=cases[i];float sum=0,weightSum=0;
+    for(int dy=-1;dy<=1;++dy)for(int dx=-1;dx<=1;++dx){
+     if(c.depthEdge && ((std::max(0,std::min(15,int(x)+dx))>=8)!=(x>=8)))continue;
+     const float weight=float((dx==0?2:1)*(dy==0?2:1));
+     sum+=weight*std::min(PatternValue(c.current,c.pattern,int(x)+dx,int(y)+dy),c.filtered);weightSum+=weight;
+    }
+    expected=sum/weightSum;
    }
    if(cases[i].view==1)expected=std::min(PatternValue(cases[i].current,cases[i].pattern,x,y),cases[i].filtered)-expected>1e-6f?8.f:0.f;
    if(cases[i].view==2)expected=0;

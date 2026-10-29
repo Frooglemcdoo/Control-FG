@@ -117,15 +117,15 @@ print('PASS R180 RR materials: active settled RR pair, exact guide formats/exten
 from copy import deepcopy
 base = dict(frame=400, resources=[dict(file='raw-gi.rgba16f',resource_identity=123)],
             gi_boundary=dict(valid=True,frame=400,applied=True,stage='clamp_only',view='normal',
-                             cleanup=False,spatial_passes=0,filter_color_identity=123))
+                             cleanup=True,filter_build='R217',spatial_passes=0,filter_color_identity=123))
 c.validate_gi_pair([(None,base)],1)
 assert base['gi_filter_color_matches']==['raw-gi.rgba16f']
-for field,value in [('valid',False),('frame',399),('applied',False),('stage','both'),('view','zero_gi'),('cleanup',True),('spatial_passes',6),('filter_color_identity',0)]:
+for field,value in [('valid',False),('frame',399),('applied',False),('stage','both'),('view','zero_gi'),('cleanup',False),('spatial_passes',6),('filter_color_identity',0)]:
  changed=deepcopy(base);changed['gi_boundary'][field]=value
  try:c.validate_gi_pair([(None,changed)],1)
  except ValueError:pass
  else:raise AssertionError(field)
-both=deepcopy(base);both['gi_boundary'].update(stage='both',spatial_passes=6,filter_color_identity=456)
+both=deepcopy(base);both['gi_boundary'].update(stage='both',cleanup=False,spatial_passes=6,filter_color_identity=456)
 c.validate_gi_pair([(None,both)],2)
 assert both['gi_filter_color_matches']==[] # Unknown provenance remains explicit.
 try:c.validate_gi_pair([(None,base),(None,both)],1)

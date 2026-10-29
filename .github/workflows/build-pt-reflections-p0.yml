@@ -3,7 +3,7 @@ name: Build native reflection enhancements and RR
 on:
   push:
     branches:
-      - work/r216-gi-boundary-capture
+      - work/r217-gi-current-smoothing
       - experiment/native-hit-capture-r118
       - experiment/pt-reflections-p0
       - experiment/pt-verify-stages-20261010
@@ -837,11 +837,11 @@ jobs:
           build\suite-controller.exe
           if errorlevel 1 exit /b 1
 
-      - name: Package live lighting diagnostic R216
+      - name: Package live lighting diagnostic R217
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-Native-Lighting-Live-R216'
+          $out='Control-FG-Native-Lighting-Live-R217'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
           Copy-Item build/rt_spot_selected_off.dxbc,build/rt_spot_selection.dxbc,build/rt_spot_visibility.dxbc,build/rt_spot_light_ids.dxbc,build/rt_spot_raw_history.dxbc,build/rt_spot_raw_spatial0.dxbc,build/rt_spot_raw_spatial1.dxbc,build/rt_spot_full.dxil,build/rt_spot_r94.dxil,build/rt_spot_light.dxbc,build/rt_spot_reset.dxbc,build/rt_spot_history.dxbc,build/rt_spot_spatial0.dxbc,build/rt_spot_spatial1.dxbc $out
@@ -862,14 +862,14 @@ jobs:
           Copy-Item Package-Lighting-Capture.cmd,tools/package-lighting-capture.py,Package-Lighting-Performance.ps1 $out
           Copy-Item Capture-RR-Boundary.cmd,Capture-RR-Boundary.ps1,Collect-RR-Boundary-Status.cmd,tools/collect-rr-boundary.py $out
           Copy-Item Start-Compact-Distance-Test.cmd,Capture-RR-Suite.ps1,tools/collect-rr-suite.py $out
-          Copy-Item docs/native-lighting-r216.md "$out/DIAGNOSTIC-NOTES.md"
+          Copy-Item docs/native-lighting-r217.md "$out/DIAGNOSTIC-NOTES.md"
           @'
-          CONTROL-FG R216 - Read-only GI boundary capture on R205 baseline
-          Default: GI CLAMP ONLY, CLEANUP OFF, GI VIEW NORMAL.
-          Keep GI VIEW NORMAL and CLEANUP OFF throughout this test.
+          CONTROL-FG R217 - Depth-aware current-frame GI smoothing on R205 baseline
+          Default: GI CLAMP ONLY, SMOOTH ON, GI VIEW NORMAL.
+          Keep GI VIEW NORMAL. Toggle SMOOTH ON/OFF in CLAMP ONLY for comparison.
           No CameraCut override or history clears. Projection rays, MAP GUARD OFF and restored reflections retained.
           Use Native Blend, RR ON, SPEC Native, hit distance OFF and FG OFF.
-          CAPTURE RR in CLAMP ONLY, then BOTH at the same stationary view; wait for Saved each time. PACKAGE RR collects raw buffers and logs.
+          Test motion with SMOOTH ON, OFF, and GI BOTH. Save the lighting log. Optional CAPTURE RR compares smoothed Clamp Only to Both.
           No F9 suite required. Read DIAGNOSTIC-NOTES.md.
           '@ | Set-Content "$out/README.txt" -Encoding ASCII
           Compress-Archive -Path "$out/*" -DestinationPath "$out.zip" -Force
@@ -878,10 +878,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-Native-Lighting-Live-R216
+          name: Control-FG-Native-Lighting-Live-R217
           path: |
-            Control-FG-Native-Lighting-Live-R216.zip
-            Control-FG-Native-Lighting-Live-R216.sha256
+            Control-FG-Native-Lighting-Live-R217.zip
+            Control-FG-Native-Lighting-Live-R217.sha256
             build/spec-volume-roughness-validation.json
             build/spec-volume-roughness.dxbc
             build/spec-environment-validation.json

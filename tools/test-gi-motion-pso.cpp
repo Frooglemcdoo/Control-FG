@@ -42,7 +42,7 @@ int main(){try{
   return d->CreateComputePipelineState(desc,iid,out);
  };
  control_rr_gi::Capture(gpu.device.Get(),&p,native.Get(),create);
- auto* bundle=control_rr_gi::Find(native.Get());Require(bundle&&bundle->adaptive&&bundle->noHistory&&bundle->outlier&&bundle->mask&&bundle->zero,"adaptive pipeline missing");
+ auto* bundle=control_rr_gi::Find(native.Get());Require(bundle&&bundle->adaptive&&bundle->noHistory&&bundle->outlier&&bundle->mask&&bundle->zero&&bundle->smooth,"adaptive pipeline missing");
  control_rr_gi::Capture(gpu.device.Get(),&p,native.Get(),create);Require(control_rr_gi::ready.load()==1,"duplicate capture");
  p.CS={kGIMotionHistoryShader,sizeof(kGIMotionHistoryShader)};
  control_rr_gi::Capture(gpu.device.Get(),&p,pso.Get(),create);Require(control_rr_gi::ready.load()==1,"unknown shader captured");
@@ -56,21 +56,24 @@ int main(){try{
  control_rr_gi::historyDisabled=true;expected=bundle->noHistory;
  Require(control_rr_clamp::InvokeGI(NativeDispatch,nullptr,nullptr,currentList),"no-history scope not applied");
  Require(dispatched==2&&observed==native.Get(),"no-history native restore");
- control_rr_gi::outlierEnabled=true;expected=bundle->outlier;
- Require(control_rr_clamp::InvokeGI(NativeDispatch,nullptr,nullptr,currentList),"outlier scope not applied");
- Require(dispatched==3&&observed==native.Get(),"outlier native restore");
+ control_rr_gi::outlierEnabled=true;expected=bundle->smooth;
+ Require(control_rr_clamp::InvokeGI(NativeDispatch,nullptr,nullptr,currentList),"smooth scope not applied");
+ Require(dispatched==3&&observed==native.Get(),"smooth native restore");
  for(unsigned view=1;view<=2;++view){control_rr_gi::activeView=static_cast<control_rr_gi::DiagnosticView>(view);expected=view==1?bundle->mask:bundle->zero;
   Require(control_rr_clamp::InvokeGI(NativeDispatch,nullptr,nullptr,currentList),"diagnostic scope not applied");
   Require(observed==native.Get(),"diagnostic native restore");
  }
  control_rr_gi::activeView=control_rr_gi::DiagnosticView::Normal;
+ auto* savedSmooth=bundle->smooth;bundle->smooth=nullptr;expected=bundle->noHistory;
+ Require(control_rr_clamp::InvokeGI(NativeDispatch,nullptr,nullptr,currentList),"missing smooth must retain no-history baseline");
+ Require(observed==native.Get(),"missing smooth native restore");bundle->smooth=savedSmooth;
  control_rr_gi::historyDisabled=false;control_rr_gi::outlierEnabled=false;
  currentNative=pso.Get();expected=pso.Get();
  Require(!control_rr_clamp::InvokeGI(NativeDispatch,nullptr,nullptr,currentList),"unknown PSO should fall back");
- Require(dispatched==6&&observed==pso.Get(),"fallback dispatch missing");
+ Require(dispatched==7&&observed==pso.Get(),"fallback dispatch missing");
  currentNative=native.Get();expected=bundle->adaptive;throwDispatch=true;bool caught=false;
  InvokeCatching(caught);Require(caught&&observed==native.Get()&&!control_rr_clamp::active,"exception restoration failed");
  control_rr_clamp::dispatchOriginal=realDispatch;control_rr_clamp::setOriginal=realSet;
- RunHistoryPixels(gpu,root.Get(),pso.Get(),native.Get(),bundle->noHistory,bundle->outlier,bundle->mask,bundle->zero);
- std::cout<<"PASS R215 actual native/adaptive WARP PSOs, exact-source capture, duplicate rejection, production dispatch scope, native fallback and exception restoration\n";
+ RunHistoryPixels(gpu,root.Get(),pso.Get(),native.Get(),bundle->noHistory,bundle->outlier,bundle->mask,bundle->zero,bundle->smooth);
+ std::cout<<"PASS R217 actual native/adaptive WARP PSOs, exact-source capture, duplicate rejection, production dispatch scope, native fallback and exception restoration\n";
 }catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}

@@ -3,7 +3,8 @@ import base64,hashlib,struct
 from pathlib import Path
 from dxbc_transform import transform_shex
 SOURCE_SHA='d54d94fdbb783796cc33bc78ab20dde687d90d9cba6f24c8092a6b177eec5d15'
-def generate(data,history=True,outliers=False,view=0):
+def generate(data,history=True,outliers=False,view=0,smooth=False):
+ if smooth and (history or outliers or view):raise ValueError("Smoothing requires a normal zero-history path")
  if view not in (0,1,2) or (view and (history or not outliers)):raise ValueError("Diagnostic requires zero-history outlier path")
  if outliers and history:raise ValueError("Outlier variant must have zero history")
  if hashlib.sha256(data).hexdigest()!=SOURCE_SHA:raise ValueError('Unknown native GI shader')
@@ -42,6 +43,38 @@ def generate(data,history=True,outliers=False,view=0):
    matches=[i for i in range(start+1,end) if w[i]==bits]
    if len(matches)!=1:raise ValueError('Unexpected GI immediate layout')
    w[matches[0]]=struct.unpack('<I',struct.pack('<f',new))[0]
+  if smooth:
+   # R217: 3x3 binomial current-frame average, independently energy-clamp
+   # every neighbor, reject relative depth jumps. No extra resources/history.
+   w[76]=11
+   def sample(r,mask,uv,texture,lod):
+    code=list(w[131:144]);code[1:3]=dst(r,mask);code[3:5]=uv
+    code[6]=code[7]=texture;code[-1]=imm(lod)[1]
+    if texture==0:code[5]=0x207006;code[9:11]=[0,6] # Native current-depth sampler.
+    return code
+   smooth_code=ins(56,dst(5),src(3),imm(4))+ins(54,dst(5,8),imm(4))
+   smooth_code+=sample(6,1,src(1,0xae),0,0)
+   smooth_code+=ins(52,dst(6,2),src(6,0),imm(.000001))
+   smooth_code+=ins(56,dst(6,2),src(6,0x55),imm(.01))
+   for x,y,weight in ((-1,0,2),(1,0,2),(0,-1,2),(0,1,2),(-1,-1,1),(1,-1,1),(-1,1,1),(1,1,1)):
+    smooth_code+=ins(50,dst(8,3),vec((x,y,0,0)),inv,src(1,0xae))
+    smooth_code+=sample(7,7,src(8),3,0)+sample(9,7,src(8),3,1.2)
+    for reg,mask,inputreg in ((10,1,7),(10,2,9)):
+     luma=list(w[144:154]);luma[1:3]=dst(reg,mask);luma[3:5]=src(inputreg);smooth_code+=luma
+    smooth_code+=ins(51,dst(10,2),src(10,0),src(10,0x55))
+    smooth_code+=ins(52,dst(10,1),src(10,0),imm(.00000001))
+    smooth_code+=ins(14,dst(10,2),src(10,0x55),src(10,0))
+    smooth_code+=ins(56,dst(7),src(7),src(10,0x55))
+    smooth_code+=sample(9,8,src(8),0,0)
+    # abs(neighborDepth-centerDepth) <= max(centerDepth,1e-6)*.01
+    smooth_code+=ins(0,dst(9,8),src(9,0xff),[0x80100006,0x41,6])
+    smooth_code+=ins(29,dst(10,4),src(6,0x55),[0x80100ff6,0x81,9])
+    smooth_code+=ins(1,dst(10,4),src(10,0xaa),imm(weight))
+    smooth_code+=ins(50,dst(5),src(7),src(10,0xaa),src(5))
+    smooth_code+=ins(0,dst(5,8),src(5,0xff),src(10,0xaa))
+   smooth_code+=ins(14,dst(3),src(5),src(5,0xff))
+   w[204:204]=smooth_code
+   return
   if outliers:
    # Current-frame-only radiance limit. Use the second-largest of four
    # adjacent LOD0 luminances; one bright neighbor cannot lift the limit.
@@ -89,4 +122,6 @@ if __name__=='__main__':
  with (out/'gi_motion_history.generated.h').open('a') as f:
   for name,view in [('kGICleanupMaskShader',1),('kGIZeroShader',2)]:
    f.write('inline constexpr unsigned char '+name+'[]={\n'+','.join(map(str,generate(source,False,True,view)))+'\n};\n')
+ with (out/'gi_motion_history.generated.h').open('a') as f:
+  f.write('inline constexpr unsigned char kGISmoothShader[]={\n'+','.join(map(str,generate(source,False,smooth=True)))+'\n};\n')
  print('GI motion shader SHA256',hashlib.sha256(result).hexdigest())

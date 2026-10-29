@@ -5,7 +5,7 @@ enum class StageMode : unsigned {Both,TemporalOnly,SpatialOnly,ClampOnly};
 inline std::atomic<StageMode> stageMode{StageMode::ClampOnly};
 // Render-thread scoped, never re-read the UI request during a filter invocation.
 inline thread_local bool historyDisabled=false;
-inline std::atomic<bool> outlierRequested{false};
+inline std::atomic<bool> outlierRequested{true};
 inline thread_local bool outlierEnabled=false;
 inline bool UseOutlier(StageMode mode,bool requested){return mode==StageMode::ClampOnly&&requested;}
 enum class DiagnosticView : unsigned {Normal,Mask,Zero};

@@ -97,3 +97,22 @@ for view in (1,2):
   assert any(i['name']=='lt' and i['operands']==['r[6].x','l(9.99999997e-07)','r[6].xxxx'] for i in ins)
  assert any(i['name']=='mul' and i['operands']==['r[0].w','r[0].w','l(0)'] for i in ins)
 print('PASS R215 mask predicate, magenta/zero outputs, zero history and unchanged resource bindings')
+
+# R217 uses the original descriptor ABI and zero native history, with a 3x3
+# current-frame gather inserted only after native center energy clamping.
+smooth=generate(source,False,smooth=True)
+assert smooth[4:20]==checksum(smooth)
+with tempfile.TemporaryDirectory() as d:
+ p=Path(d)/'smooth.dxbc';p.write_bytes(smooth);sj=decode(p)
+assert sj['bindings']==original['bindings']
+sn=sj['instructions']
+assert sum(i['name']=='sample_l' for i in sn)==sum(i['name']=='sample_l' for i in old)+25
+assert sum(i['name']=='ge' for i in sn)==sum(i['name']=='ge' for i in old)+8
+assert any(i['name']=='div' and i['operands']==['r[3].xyz','r[5].xyzw','r[5].wwww'] for i in sn)
+assert any(i['name']=='mul' and i['operands']==['r[0].w','r[0].w','l(0)'] for i in sn)
+assert sum(i['name']=='store_uav_typed' for i in sn)==1
+for kwargs in [dict(history=True,smooth=True),dict(history=False,outliers=True,smooth=True),dict(history=False,view=1,smooth=True)]:
+ try:generate(source,**kwargs)
+ except ValueError:pass
+ else:raise AssertionError('Invalid smoothing combination accepted')
+print('PASS R217 current-frame gather: unchanged bindings, 8 depth tests, no history blend, one output store')

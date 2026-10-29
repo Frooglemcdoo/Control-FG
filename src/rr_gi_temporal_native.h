@@ -77,7 +77,7 @@ static void RRNativeRunGIFilter(void* color,void* history,unsigned passes){
   static bool lastOutlier=false;
   static auto lastView=control_rr_gi::DiagnosticView::Normal;
   if(calls<=4||calls%240==0||mode!=lastMode||outlier!=lastOutlier||view!=lastView)
-   native_lighting::Trace("gi_temporal_adaptive build=R216 stage=%s view=%s outlier=%u temporal=%u spatial_requested=%u applied=%u calls=%llu dispatches=%u spatial_passes=%u pipeline_ready=%u engine_record_copy=0 provider_override=0 reason=%s rr_selected=%u",control_rr_gi::StageName(mode),control_rr_gi::ViewName(view),unsigned(outlier),unsigned(control_rr_gi::Temporal(mode)),passes,unsigned(okay),calls,rrNativeGIHistoryDispatches,effectivePasses,control_rr_gi::ready.load(),rrNativeGIHistoryReason,unsigned(rrNativeFrame.Selected()));
+   native_lighting::Trace("gi_temporal_adaptive build=R217 stage=%s view=%s smooth=%u temporal=%u spatial_requested=%u applied=%u calls=%llu dispatches=%u spatial_passes=%u pipeline_ready=%u engine_record_copy=0 provider_override=0 reason=%s rr_selected=%u",control_rr_gi::StageName(mode),control_rr_gi::ViewName(view),unsigned(outlier),unsigned(control_rr_gi::Temporal(mode)),passes,unsigned(okay),calls,rrNativeGIHistoryDispatches,effectivePasses,control_rr_gi::ready.load(),rrNativeGIHistoryReason,unsigned(rrNativeFrame.Selected()));
   lastMode=mode;lastOutlier=outlier;lastView=view;
   SetLastError(saved);
  }
