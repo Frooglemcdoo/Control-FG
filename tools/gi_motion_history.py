@@ -1,4 +1,4 @@
-"""R210: tighten native GI history rejection, preserving every other token."""
+"""R212: bound reprojected GI history by current filtered neighborhood color."""
 import base64,hashlib,struct
 from pathlib import Path
 from dxbc_transform import transform_shex
@@ -6,11 +6,44 @@ SOURCE_SHA='d54d94fdbb783796cc33bc78ab20dde687d90d9cba6f24c8092a6b177eec5d15'
 def generate(data):
  if hashlib.sha256(data).hexdigest()!=SOURCE_SHA:raise ValueError('Unknown native GI shader')
  def patch(w):
+  # SM5.1 operands. Reuse the audited native sample/coordinate operands;
+  # only scratch registers r5-r8 are introduced. Native r0-r4 stay intact.
+  def dst(r,mask=7):return [0x100002|(mask<<4),r]
+  def src(r,swizzle=0xe4):return [0x100006|(swizzle<<4),r]
+  def imm(v):return [0x4001,struct.unpack('<I',struct.pack('<f',v))[0]]
+  def vec(v):return [0x4002]+[struct.unpack('<I',struct.pack('<f',x))[0] for x in v]
+  def ins(op,*args):
+   body=sum(args,[]);return [((len(body)+1)<<24)|op]+body
+  assert w[76]==5
+  w[76]=9
+  # r5/r6 hold RGB bounds initialized from the native mip-filtered current sample.
+  bounds=ins(54,dst(5),src(3))+ins(54,dst(6),src(3))
+  # Four one-texel offsets around that sample, at the same native LOD (1.2).
+  # Native UV is r1.zw; cb0[0].zw is the current texture inverse size.
+  inv=list(w[111:115]);inv[0]=(inv[0]&~0xff0)|(0xae<<4)
+  assert len(inv)==4
+  for x,y in ((-1,0),(1,0),(0,-1),(0,1)):
+   bounds+=ins(50,dst(8,3),vec((x,y,0,0)),inv,src(1,0xae))
+   sample=list(w[131:144]);sample[1:3]=dst(7);sample[3:5]=src(8)
+   bounds+=sample
+   bounds+=ins(51,dst(5),src(5),src(7))+ins(52,dst(6),src(6),src(7))
+  # Include the native energy-clamped center; retain a 25% + 0.001
+  # radiance margin so ordinary noise can still be temporally averaged.
+  pad=ins(51,dst(5),src(5),src(3))+ins(52,dst(6),src(6),src(3))
+  pad+=ins(50,dst(7),src(6),imm(.25),imm(.001))
+  pad+=ins(0,dst(6),src(6),src(7))
+  neg7=[0x80100e46,0x41,7]
+  pad+=ins(0,dst(5),src(5),neg7)+ins(52,dst(5),src(5),imm(0))
+  clip=ins(52,dst(1),src(1),src(5))+ins(51,dst(1),src(1),src(6))
   for start,end,old,new in [(311,318,.03,.01),(356,366,40.,400.)]:
    bits=struct.unpack('<I',struct.pack('<f',old))[0]
    matches=[i for i in range(start+1,end) if w[i]==bits]
    if len(matches)!=1:raise ValueError('Unexpected GI immediate layout')
    w[matches[0]]=struct.unpack('<I',struct.pack('<f',new))[0]
+  # Insert backwards to preserve original audited dword positions.
+  w[393:393]=clip
+  w[204:204]=pad
+  w[144:144]=bounds
  return transform_shex(data,patch)
 if __name__=='__main__':
  root=Path(__file__).resolve().parents[1]

@@ -2,6 +2,7 @@
 #include "gpu_test_device.h"
 static void Log(const char*,...) {}
 #include "../src/rr_clamp_strength.h"
+#include "gi_history_gpu_fixture.h"
 static ID3D12PipelineState* observed=nullptr;
 static ID3D12PipelineState* expected=nullptr;
 static unsigned dispatched=0,sets=0;
@@ -47,6 +48,7 @@ int main(){try{
  control_rr_gi::Capture(gpu.device.Get(),&p,pso.Get(),create);Require(control_rr_gi::ready.load()==1,"unknown shader captured");
  // Use the real scoped hooks with a recording dispatch callback, not an unbound GPU dispatch.
  Require(control_rr_clamp::InstallList(gpu.list.Get()),"list hook installation");
+ auto realDispatch=control_rr_clamp::dispatchOriginal;
  realSet=control_rr_clamp::setOriginal;control_rr_clamp::setOriginal=&TrackSet;control_rr_clamp::dispatchOriginal=&StubDispatch;
  currentList=gpu.list.Get();currentNative=native.Get();expected=bundle->adaptive;
  Require(control_rr_clamp::InvokeGI(NativeDispatch,nullptr,nullptr,currentList),"GI scope not applied");
@@ -56,5 +58,7 @@ int main(){try{
  Require(dispatched==2&&observed==pso.Get(),"fallback dispatch missing");
  currentNative=native.Get();expected=bundle->adaptive;throwDispatch=true;bool caught=false;
  InvokeCatching(caught);Require(caught&&observed==native.Get()&&!control_rr_clamp::active,"exception restoration failed");
- std::cout<<"PASS R211 actual native/adaptive WARP PSOs, exact-source capture, duplicate rejection, production dispatch scope, native fallback and exception restoration\n";
+ control_rr_clamp::dispatchOriginal=realDispatch;control_rr_clamp::setOriginal=realSet;
+ RunHistoryPixels(gpu,root.Get(),pso.Get(),native.Get());
+ std::cout<<"PASS R212 actual native/adaptive WARP PSOs, exact-source capture, duplicate rejection, production dispatch scope, native fallback and exception restoration\n";
 }catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}

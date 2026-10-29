@@ -7,27 +7,39 @@ sys.path.insert(0,str(root/'research/native-integration-audit/tools'))
 from decode_dxbc import decode
 source=base64.b64decode((root/'research/gi-temporal-r208/diffuse-temporal.dxbc.b64').read_text())
 result=generate(source)
-assert len(result)==len(source)==5076 and result[4:20]==checksum(result)
+assert len(source)==5076 and len(result)>len(source) and result[4:20]==checksum(result)
 def chunks(data):
  return {data[o:o+4]:data[o+8:o+8+struct.unpack_from('<I',data,o+4)[0]] for o in struct.unpack_from('<'+'I'*struct.unpack_from('<I',data,28)[0],data,32)}
 a,b=chunks(source),chunks(result)
 assert a.keys()==b.keys()
 for k in a:
  if k!=b'SHEX':assert a[k]==b[k],k
-w1=struct.unpack('<'+'I'*(len(a[b'SHEX'])//4),a[b'SHEX']);w2=struct.unpack('<'+'I'*(len(b[b'SHEX'])//4),b[b'SHEX'])
-assert len([i for i,(x,y) in enumerate(zip(w1,w2)) if x!=y])==2
 with tempfile.TemporaryDirectory() as d:
  p=Path(d)/'gi.dxbc';p.write_bytes(result);j=decode(p)
-ins={i['dword']:i for i in j['instructions']}
-assert ins[356]['operands']==['r[1].x','-r[1].x','l(400)','l(1)']
-assert ins[311]['operands']==['r[1].z','l(0.00999999978)','r[1].z']
-assert ins[219]['operands'][-1]=='l(0.699999988)'
+ p.write_bytes(source);original=decode(p)
+# Every original instruction survives in order, except temp count and the two
+# audited R211 constants. Additional code appears only at three boundaries.
+new=j['instructions'];old=original['instructions']
+added={144:18,204:6,393:2}
+pos=0
+for instruction in old:
+ pos+=added.get(instruction['dword'],0)
+ actual=new[pos];expected=dict(instruction);expected.pop('dword');actual={k:v for k,v in actual.items() if k!='dword'}
+ if instruction['dword']==75:expected['operands']=['raw:0x9']
+ if instruction['dword']==311:expected['operands']=['r[1].z','l(0.00999999978)','r[1].z']
+ if instruction['dword']==356:expected['operands']=['r[1].x','-r[1].x','l(400)','l(1)']
+ assert actual==expected,(instruction,actual)
+ pos+=1
+assert pos==len(new)
+coords=[i for i in new if i['name']=='mad' and i['operands'][0]=='r[8].xy']
+assert len(coords)==4 and all(i['operands'][2:]==['cb[0][0][0].zwzz','r[1].zwzz'] for i in coords)
+assert sum(i['name']=='sample_l' for i in new)==sum(i['name']=='sample_l' for i in old)+4
 def weight(motion,depth,cut=0):return (1-cut)*.7*(depth<=.01)*max(0,1-400*motion)
 assert weight(0,0)==.7 and weight(.0025,0)==0 and weight(0,.011)==0 and weight(0,0,1)==0
 assert 0<weight(.001,0)<.7
 try:generate(source[:-1]);raise AssertionError('Unknown shader accepted')
 except ValueError:pass
-print('PASS exact two-immediate transform, unchanged bindings/clamp/history factor, stable history and stricter motion/depth rejection')
+print('PASS R212 preserved native instruction stream and bindings, four filtered neighborhood taps, RGB clipping, R211 motion/depth and history factor')
 
 assert {(v['slot'],v['space']) for v in j['bindings'] if v['kind']==3}=={(6,1),(11,1)}
 fixture=(root/'tools/test-gi-motion-pso.cpp').read_text()

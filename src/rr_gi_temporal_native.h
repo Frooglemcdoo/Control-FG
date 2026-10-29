@@ -36,7 +36,7 @@ static void RRNativeRunGIFilter(void* color,void* history,unsigned passes){
   rrNativeGIHistoryScope=false;rrNativeGIMotionBound=false;
   static unsigned long long calls=0; ++calls;
   if(calls<=4||calls%240==0)
-   native_lighting::Trace("gi_temporal_adaptive build=R211 applied=%u calls=%llu dispatches=%u spatial_passes=%u pipeline_ready=%u engine_record_copy=0 provider_override=0 reason=%s rr_selected=%u",unsigned(okay),calls,rrNativeGIHistoryDispatches,passes,control_rr_gi::ready.load(),rrNativeGIHistoryReason,unsigned(rrNativeFrame.Selected()));
+   native_lighting::Trace("gi_temporal_adaptive build=R212 applied=%u calls=%llu dispatches=%u spatial_passes=%u pipeline_ready=%u engine_record_copy=0 provider_override=0 reason=%s rr_selected=%u",unsigned(okay),calls,rrNativeGIHistoryDispatches,passes,control_rr_gi::ready.load(),rrNativeGIHistoryReason,unsigned(rrNativeFrame.Selected()));
   SetLastError(saved);
  }
 }

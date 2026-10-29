@@ -32,9 +32,9 @@ template<class Create> void Capture(ID3D12Device* device,const D3D12_COMPUTE_PIP
  auto replacement=*desc;replacement.CachedPSO={};replacement.CS={kGIMotionHistoryShader,sizeof(kGIMotionHistoryShader)};
  const HRESULT hr=create(device,&replacement,IID_PPV_ARGS(&b->adaptive));
  if(FAILED(hr)||!b->adaptive){if(b->adaptive)b->adaptive->Release();native->Release();delete b;++failed;
-  Log("GI_PIPELINE_R211 ready=0 hr=0x%08lX native_fallback=1",static_cast<unsigned long>(hr));return;}
+  Log("GI_PIPELINE_R212 ready=0 hr=0x%08lX native_fallback=1",static_cast<unsigned long>(hr));return;}
  bundles[index].store(b,std::memory_order_release);++ready;
- Log("GI_PIPELINE_R211 ready=1 native=%p adaptive=%p native_root_preserved=1 engine_record_copy=0",native,b->adaptive);
+ Log("GI_PIPELINE_R212 ready=1 native=%p adaptive=%p native_root_preserved=1 engine_record_copy=0",native,b->adaptive);
 }
 template<class Set,class DispatchFn> void Dispatch(ID3D12PipelineState* observed,unsigned count,bool& used,
  ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT z,Set set,DispatchFn dispatch) {
