@@ -114,7 +114,7 @@ static void RunHistoryPixels(Device& gpu,ID3D12RootSignature* root,ID3D12Pipelin
    }
    if(cases[i].view==1)expected=std::min(PatternValue(cases[i].current,cases[i].pattern,x,y),cases[i].filtered)-expected>1e-6f?8.f:0.f;
    if(cases[i].view==2)expected=0;
-   for(UINT ch=0;ch<3;++ch){const float channelExpected=cases[i].view==1&&ch==1?0.f:expected;
+   for(UINT ch=0;ch<(cases[i].smooth?4u:3u);++ch){const float channelExpected=cases[i].view==1&&ch==1?0.f:expected;
     Require(std::isfinite(pixel[ch])&&std::abs(pixel[ch]-channelExpected)<.0001f,cases[i].name);
    }
   }

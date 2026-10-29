@@ -73,6 +73,8 @@ def generate(data,history=True,outliers=False,view=0,smooth=False):
     smooth_code+=ins(50,dst(5),src(7),src(10,0xaa),src(5))
     smooth_code+=ins(0,dst(5,8),src(5,0xff),src(10,0xaa))
    smooth_code+=ins(14,dst(3),src(5),src(5,0xff))
+   # Native zero-history output stores red again in alpha. Preserve that ABI.
+   smooth_code+=ins(54,dst(3,8),src(3,0))
    w[204:204]=smooth_code
    return
   if outliers:

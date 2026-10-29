@@ -111,6 +111,7 @@ assert sum(i['name']=='ge' for i in sn)==sum(i['name']=='ge' for i in old)+8
 assert any(i['name']=='div' and i['operands']==['r[3].xyz','r[5].xyzw','r[5].wwww'] for i in sn)
 assert any(i['name']=='mul' and i['operands']==['r[0].w','r[0].w','l(0)'] for i in sn)
 assert sum(i['name']=='store_uav_typed' for i in sn)==1
+assert any(i['name']=='mov' and i['operands']==['r[3].w','r[3].xxxx'] for i in sn)
 for kwargs in [dict(history=True,smooth=True),dict(history=False,outliers=True,smooth=True),dict(history=False,view=1,smooth=True)]:
  try:generate(source,**kwargs)
  except ValueError:pass
