@@ -31,9 +31,17 @@ struct Cell {
         return false;
     }
 };
+// Intentional tail padding keeps distinct worker counters on separate cache lines.
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable:4324)
+#endif
 struct alignas(64) Thread {
     std::atomic<unsigned long> tid{0};Cell cells[kStages];
 };
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif
 inline Thread threads[kThreads];
 inline std::atomic<unsigned> nextThread{0};
 inline std::atomic<U64> overflowThreads{0};

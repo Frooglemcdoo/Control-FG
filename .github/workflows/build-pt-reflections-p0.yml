@@ -76,6 +76,19 @@ jobs:
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
           echo VSROOT=%VSROOT%>>%GITHUB_ENV%
 
+      - name: Validate native CPU timing and call patches
+        shell: cmd
+        run: |
+          call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
+          cl /nologo /std:c++17 /EHsc /W4 /WX /O2 tools\test-native-cpu-metrics.cpp /Febuild\test-native-cpu-metrics.exe
+          if errorlevel 1 exit /b 1
+          build\test-native-cpu-metrics.exe
+          if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /O2 tools\test-native-cpu-runtime.cpp /Febuild\test-native-cpu-runtime.exe
+          if errorlevel 1 exit /b 1
+          build\test-native-cpu-runtime.exe
+          if errorlevel 1 exit /b 1
+
       - name: Validate compact reflection capture on WARP
         shell: cmd
         run: |
@@ -733,19 +746,6 @@ jobs:
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-native-lighting-log-queue.cpp /Febuild\test-native-lighting-log-queue.exe
           if errorlevel 1 exit /b 1
           build\test-native-lighting-log-queue.exe
-          if errorlevel 1 exit /b 1
-
-      - name: Validate native CPU timing and call patches
-        shell: cmd
-        run: |
-          call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
-          cl /nologo /std:c++17 /EHsc /W4 /WX /O2 tools\test-native-cpu-metrics.cpp /Febuild\test-native-cpu-metrics.exe
-          if errorlevel 1 exit /b 1
-          build\test-native-cpu-metrics.exe
-          if errorlevel 1 exit /b 1
-          cl /nologo /std:c++17 /EHsc /W4 /O2 tools\test-native-cpu-runtime.cpp /Febuild\test-native-cpu-runtime.exe
-          if errorlevel 1 exit /b 1
-          build\test-native-cpu-runtime.exe
           if errorlevel 1 exit /b 1
 
       - name: Compile experimental proxy
