@@ -183,14 +183,14 @@ def main():
                 time.sleep(.5)
             if pair is None:
                 raise TimeoutError(f'Pair {ordinal} is not complete. Read the overlay status; diagnostics are being packaged.')
-            if args.gi_boundary:
-                validate_gi_pair(pair, ordinal)
             print(f'Pair {ordinal} validated. Copying images; this can take a moment...', flush=True)
             for folder, data in pair:
                 target = destination / label / folder.name
                 target.mkdir(parents=True)
                 for name in ['metadata.json'] + [r['file'] for r in data['resources']]:
                     shutil.copy2(folder / name, target / name)
+            if args.gi_boundary:
+                validate_gi_pair(pair, ordinal)
             report['pairs'].append({'label': label, 'frames': [data for _, data in pair]})
             print(f'Pair {ordinal} saved: {label}.', flush=True)
             # Overlay status is the completion notification.
