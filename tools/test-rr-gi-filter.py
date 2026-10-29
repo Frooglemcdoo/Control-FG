@@ -40,6 +40,7 @@ static void Native(void* color,void* history,unsigned passes){
  *static_cast<std::uintptr_t*>(history)=keepHistory?1234:0;
 }
 static auto rrNativeDiffuseFilterOriginal=&Native;
+static void RRNativeRunGIFilter(void* c,void* h,unsigned p){rrNativeDiffuseFilterOriginal(c,h,p);}
 '''
 main=r'''
 int main(){

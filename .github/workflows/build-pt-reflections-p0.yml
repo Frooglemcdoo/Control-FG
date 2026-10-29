@@ -3,7 +3,7 @@ name: Build native reflection enhancements and RR
 on:
   push:
     branches:
-      - work/r205-restore-reflection-view
+      - work/r208-gi-temporal-audit
       - experiment/native-hit-capture-r118
       - experiment/pt-reflections-p0
       - experiment/pt-verify-stages-20261010
@@ -531,6 +531,12 @@ jobs:
           if errorlevel 1 exit /b 1
           python tools/test-rr-gi-filter.py
           if errorlevel 1 exit /b 1
+          python tools/test-gi-temporal-audit.py
+          if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 tools\test-gi-temporal-scope.cpp /Febuild\test-gi-temporal-scope.exe
+          if errorlevel 1 exit /b 1
+          build\test-gi-temporal-scope.exe
+          if errorlevel 1 exit /b 1
           python tools/test-clean-baseline.py
           if errorlevel 1 exit /b 1
           python tools/test-rr-character-shader-match.py
@@ -818,11 +824,11 @@ jobs:
           build\suite-controller.exe
           if errorlevel 1 exit /b 1
 
-      - name: Package live lighting diagnostic R205
+      - name: Package live lighting diagnostic R208
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-Native-Lighting-Live-R205'
+          $out='Control-FG-Native-Lighting-Live-R208'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
           Copy-Item build/rt_spot_selected_off.dxbc,build/rt_spot_selection.dxbc,build/rt_spot_visibility.dxbc,build/rt_spot_light_ids.dxbc,build/rt_spot_raw_history.dxbc,build/rt_spot_raw_spatial0.dxbc,build/rt_spot_raw_spatial1.dxbc,build/rt_spot_full.dxil,build/rt_spot_r94.dxil,build/rt_spot_light.dxbc,build/rt_spot_reset.dxbc,build/rt_spot_history.dxbc,build/rt_spot_spatial0.dxbc,build/rt_spot_spatial1.dxbc $out
@@ -843,24 +849,15 @@ jobs:
           Copy-Item Package-Lighting-Capture.cmd,tools/package-lighting-capture.py,Package-Lighting-Performance.ps1 $out
           Copy-Item Capture-RR-Boundary.cmd,Capture-RR-Boundary.ps1,Collect-RR-Boundary-Status.cmd,tools/collect-rr-boundary.py $out
           Copy-Item Start-Compact-Distance-Test.cmd,Capture-RR-Suite.ps1,tools/collect-rr-suite.py $out
-          Copy-Item docs/native-lighting-r205.md "$out/DIAGNOSTIC-NOTES.md"
+          Copy-Item docs/native-lighting-r208.md "$out/DIAGNOSTIC-NOTES.md"
           @'
-          CONTROL-FG R205 - Native Blend projection rays and map guard OFF; native reflection view restored
-          Launch normally. Hit distance is OFF by default; SPEC defaults to Native.
-          Enable RR and the game RT settings used in your accepted baseline.
-          Ray Traced Contact Shadows must be enabled for the spotlight/ray pipeline.
-          Native Blend with projection rays and MAP GUARD OFF is selected automatically once ready.
-          F10 - MAP GUARD and RAYS retain optional comparison settings.
-          Close the panel and wait for settling before comparing quality or FPS.
-          F10 - FREE CAMERA enters the native developer camera; NORMAL CAMERA restores player controls.
-          A controller is recommended; mouse wheel changes camera speed. Time keeps running.
-          F10 - TRACE SHADOW records Native Blend without switching mode or RR.
-          Use the default RAYS: PROJECTION and MAP GUARD OFF for accepted Native Blend lighting.
-          Let each view settle after closing F10. Send matched screenshots; trace each ray setting if possible.
-          TRACE SHADOW preserves the selected map-guard setting and RR.
-          Trace includes paired clipped emitter/projection rays, PCF center and raw/filtered RT visibility.
-          No diagnostic colors. F9 cancels an active light capture.
-          Read DIAGNOSTIC-NOTES.md.
+          CONTROL-FG R208 - GI temporal history weight isolation on R205 baseline
+          Native Blend retains spatial filtering and current-frame energy clamp.
+          Only the audited GI temporal bind/dispatch sees CameraCut=1; it is restored immediately.
+          No history clears. Projection rays, MAP GUARD OFF and restored reflections retained.
+          Use Native Blend, RR ON, SPEC Native, hit distance OFF and FG OFF.
+          Test carpet ghosting and projector-room floor speckles. Then F10 SAVE LOG.
+          No F9 suite required. Read DIAGNOSTIC-NOTES.md.
           '@ | Set-Content "$out/README.txt" -Encoding ASCII
           Compress-Archive -Path "$out/*" -DestinationPath "$out.zip" -Force
           (Get-FileHash "$out.zip" -Algorithm SHA256).Hash | Set-Content "$out.sha256" -Encoding ASCII
@@ -868,10 +865,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-Native-Lighting-Live-R205
+          name: Control-FG-Native-Lighting-Live-R208
           path: |
-            Control-FG-Native-Lighting-Live-R205.zip
-            Control-FG-Native-Lighting-Live-R205.sha256
+            Control-FG-Native-Lighting-Live-R208.zip
+            Control-FG-Native-Lighting-Live-R208.sha256
             build/spec-volume-roughness-validation.json
             build/spec-volume-roughness.dxbc
             build/spec-environment-validation.json

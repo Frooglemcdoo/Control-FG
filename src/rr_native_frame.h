@@ -359,10 +359,11 @@ static void RRNativeHookGIRelease(void* history) {
  }
  SetLastError(saved);
 }
+#include "rr_gi_temporal_native.h"
 // Verified native GI filter call at renderer+0x12cd96. Never synthesize its arguments.
 static void RRNativeHookGIFilter(void* color,void* history,unsigned passes) {
  control_rr_diagnostic::Record(control_rr_diagnostic::Event::GIFilterEntry);
- rrNativeDiffuseFilterOriginal(color,history,passes);
+ RRNativeRunGIFilter(color,history,passes);
  const DWORD saved=GetLastError();
  if(rrNativeFrameEnabled&&rrNativeGIKeepThisFrame){
   unsigned long long frame=0;DWORD fault=0;std::uintptr_t retained=0;
@@ -464,6 +465,7 @@ static bool RRNativeHookReset(unsigned outputWidth,unsigned outputHeight,unsigne
  }
  if(rrNativeGIKeepThisFrame!=giFiltered)rrNativeFrame.ResetForSignalChange();
  rrNativeGIKeepThisFrame=giFiltered;
+ rrNativeGIHistoryZeroThisFrame=giFiltered&&native_lighting::IsNativeBlend(lightingMode);
  const bool temporalOnly=selected&&native_lighting::UsesSpecularTemporalOnly(lightingMode)&&control_rr_temporal::ready.load(std::memory_order_acquire);
  const bool specularFiltered=selected&&(native_lighting::PreservesSpecularFiltering(lightingMode)||temporalOnly);
  if(rrNativeSpecularKeepThisFrame!=specularFiltered||rrNativeSpecularTemporalThisFrame!=temporalOnly){
@@ -903,7 +905,9 @@ static bool RRNativeInstallFrame(HMODULE renderer,HMODULE d3d) noexcept {
  const bool specularPrepared=rrNativeSpecularSamplePatch.Prepare(base+0x128ff4,base+0x9137e0);
  native_lighting::Trace("specular_sample_hook stage=prepare ready=%u reason=%s baseline_rr_independent=1",
   unsigned(specularPrepared),rrNativeSpecularSamplePatch.failure);
- if(!RRAlbedoPrepareCallPatch(base+0x12ba17,reinterpret_cast<void*>(rrNativeGISampleOriginal),reinterpret_cast<void*>(&RRNativeGISampleCount),&rrNativeGISamplePatch)||
+ if(!RRAlbedoPrepareCallPatch(base+0x15691,reinterpret_cast<void*>(rrNativeTemporalBindOriginal),reinterpret_cast<void*>(&RRNativeHookGITemporalBind),&rrNativeGITemporalBindPatch)||
+  !rrNativeGITemporalDispatchPatch.Prepare(base+0x156d3,reinterpret_cast<void**>(base+0x5dfcc0),reinterpret_cast<void*>(rrNativeDispatchOriginal),reinterpret_cast<void*>(&RRNativeHookGITemporalDispatch))||
+  !RRAlbedoPrepareCallPatch(base+0x12ba17,reinterpret_cast<void*>(rrNativeGISampleOriginal),reinterpret_cast<void*>(&RRNativeGISampleCount),&rrNativeGISamplePatch)||
   !rrNativeResetPatch.Prepare(base+0x11b697,reinterpret_cast<void**>(base+0x5df758),reinterpret_cast<void*>(rrNativeResetOriginal),reinterpret_cast<void*>(&RRNativeHookReset))||
   !rrNativeDispatchPatch.Prepare(base+0x16786,reinterpret_cast<void**>(base+0x5dfcc0),reinterpret_cast<void*>(rrNativeDispatchOriginal),reinterpret_cast<void*>(&RRNativeHookDispatch))||
   !RRAlbedoPrepareCallPatch(base+0x16744,reinterpret_cast<void*>(rrNativeTemporalBindOriginal),reinterpret_cast<void*>(&RRNativeHookTemporalBind),&rrNativeTemporalBindPatch)||
@@ -923,7 +927,9 @@ static bool RRNativeInstallFrame(HMODULE renderer,HMODULE d3d) noexcept {
  if(!RRNativeKeepRegisteredOptionOff()||!rrNativeJitterOptionPatch.Set(false))return false;
 
  bool temporalBind=false,reflectionOption=false,giRadiusOption=false,giBypassOption=false,filter=false,gi=false,contactShadow=false,broadA=false,broadB=false,jitter=false,giSamples=false,giFilter=false;
- giFilter=RRAlbedoExchangeCall(&rrNativeGIFilterPatch,true);
+ const bool giTemporalBind=RRAlbedoExchangeCall(&rrNativeGITemporalBindPatch,true);
+ const bool giTemporalDispatch=giTemporalBind&&rrNativeGITemporalBindPatch.writeHealthy&&rrNativeGITemporalDispatchPatch.Exchange(true)&&rrNativeGITemporalDispatchPatch.healthy;
+ giFilter=giTemporalDispatch&&RRAlbedoExchangeCall(&rrNativeGIFilterPatch,true);
  if(giFilter&&rrNativeGIFilterPatch.writeHealthy&&rrNativeDispatchPatch.Exchange(true)&&rrNativeDispatchPatch.healthy){
   temporalBind=RRAlbedoExchangeCall(&rrNativeTemporalBindPatch,true);
   if(temporalBind&&rrNativeTemporalBindPatch.writeHealthy){
@@ -975,6 +981,8 @@ static bool RRNativeInstallFrame(HMODULE renderer,HMODULE d3d) noexcept {
  rrNativeSpecularSamplePatch.BeginFrame(0);
  if(rrNativeSpecularSamplePatch.changed)rrNativeSpecularSamplePatch.Exchange(false);
  if(rrNativeResetPatch.changed)rrNativeResetPatch.Exchange(false);
+ if(rrNativeGITemporalDispatchPatch.changed)rrNativeGITemporalDispatchPatch.Exchange(false);
+ if(giTemporalBind)RRAlbedoExchangeCall(&rrNativeGITemporalBindPatch,false);
  if(giFilter)RRAlbedoExchangeCall(&rrNativeGIFilterPatch,false);
  if(giSamples)RRAlbedoExchangeCall(&rrNativeGISamplePatch,false);
  if(jitter)rrNativeJitterOptionPatch.Exchange(false);
