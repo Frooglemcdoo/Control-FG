@@ -3,6 +3,7 @@ name: Build native reflection enhancements and RR
 on:
   push:
     branches:
+      - work/r218-native-cpu-timing
       - work/r217-gi-current-smoothing
       - experiment/native-hit-capture-r118
       - experiment/pt-reflections-p0
@@ -734,6 +735,19 @@ jobs:
           build\test-native-lighting-log-queue.exe
           if errorlevel 1 exit /b 1
 
+      - name: Validate native CPU timing and call patches
+        shell: cmd
+        run: |
+          call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
+          cl /nologo /std:c++17 /EHsc /W4 /WX /O2 tools\test-native-cpu-metrics.cpp /Febuild\test-native-cpu-metrics.exe
+          if errorlevel 1 exit /b 1
+          build\test-native-cpu-metrics.exe
+          if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /O2 tools\test-native-cpu-runtime.cpp /Febuild\test-native-cpu-runtime.exe
+          if errorlevel 1 exit /b 1
+          build\test-native-cpu-runtime.exe
+          if errorlevel 1 exit /b 1
+
       - name: Compile experimental proxy
         shell: cmd
         run: |
@@ -837,11 +851,11 @@ jobs:
           build\suite-controller.exe
           if errorlevel 1 exit /b 1
 
-      - name: Package live lighting diagnostic R217
+      - name: Package native CPU timing R218
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-Native-Lighting-Live-R217'
+          $out='Control-FG-Native-CPU-Timing-R218'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
           Copy-Item build/rt_spot_selected_off.dxbc,build/rt_spot_selection.dxbc,build/rt_spot_visibility.dxbc,build/rt_spot_light_ids.dxbc,build/rt_spot_raw_history.dxbc,build/rt_spot_raw_spatial0.dxbc,build/rt_spot_raw_spatial1.dxbc,build/rt_spot_full.dxil,build/rt_spot_r94.dxil,build/rt_spot_light.dxbc,build/rt_spot_reset.dxbc,build/rt_spot_history.dxbc,build/rt_spot_spatial0.dxbc,build/rt_spot_spatial1.dxbc $out
@@ -862,15 +876,15 @@ jobs:
           Copy-Item Package-Lighting-Capture.cmd,tools/package-lighting-capture.py,Package-Lighting-Performance.ps1 $out
           Copy-Item Capture-RR-Boundary.cmd,Capture-RR-Boundary.ps1,Collect-RR-Boundary-Status.cmd,tools/collect-rr-boundary.py $out
           Copy-Item Start-Compact-Distance-Test.cmd,Capture-RR-Suite.ps1,tools/collect-rr-suite.py $out
-          Copy-Item docs/native-lighting-r217.md "$out/DIAGNOSTIC-NOTES.md"
+          Copy-Item docs/native-cpu-r218.md "$out/DIAGNOSTIC-NOTES.md"
           @'
-          CONTROL-FG R217 - Depth-aware current-frame GI smoothing on R205 baseline
-          Default: GI CLAMP ONLY, SMOOTH ON, GI VIEW NORMAL.
-          Keep GI VIEW NORMAL. Toggle SMOOTH ON/OFF in CLAMP ONLY for comparison.
-          No CameraCut override or history clears. Projection rays, MAP GUARD OFF and restored reflections retained.
-          Use Native Blend, RR ON, SPEC Native, hit distance OFF and FG OFF.
-          Test motion with SMOOTH ON, OFF, and GI BOTH. Save the lighting log. Optional CAPTURE RR compares smoothed Clamp Only to Both.
-          No F9 suite required. Read DIAGNOSTIC-NOTES.md.
+          CONTROL-FG R218 - Targeted native CPU timing on the accepted R217 visuals
+          Keep your normal Native Blend / RR settings. CPU timing starts automatically.
+          Play the low-GPU-utilization area for 30-60 seconds without screen recording.
+          Exit and run Collect-ControlFG-Compact-Logs.cmd; send its ZIP.
+          No WPR or video capture needed. This build measures; it does not change worker scheduling.
+          R217 smoothing, MAP GUARD OFF and restored angled reflections retained.
+          Read DIAGNOSTIC-NOTES.md for scope, limits and disabling timing.
           '@ | Set-Content "$out/README.txt" -Encoding ASCII
           Compress-Archive -Path "$out/*" -DestinationPath "$out.zip" -Force
           (Get-FileHash "$out.zip" -Algorithm SHA256).Hash | Set-Content "$out.sha256" -Encoding ASCII
@@ -878,10 +892,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-Native-Lighting-Live-R217
+          name: Control-FG-Native-CPU-Timing-R218
           path: |
-            Control-FG-Native-Lighting-Live-R217.zip
-            Control-FG-Native-Lighting-Live-R217.sha256
+            Control-FG-Native-CPU-Timing-R218.zip
+            Control-FG-Native-CPU-Timing-R218.sha256
             build/spec-volume-roughness-validation.json
             build/spec-volume-roughness.dxbc
             build/spec-environment-validation.json

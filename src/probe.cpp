@@ -771,6 +771,8 @@ static void HookBegin() {
 
 static void RRVramLifecycleAfterPresent(unsigned long long present) noexcept;
 
+static void NativeCpuPoll(unsigned long long present) noexcept;
+
 static void HookPresent() {
     auto count = ++presentCount;
     const bool windowTrace = ShouldPathTrace(count);
@@ -806,6 +808,7 @@ static void HookPresent() {
     RRInputCaptureAfterPresent(count);
     RRDiffuseAfterPresent(count);
     RRPerfAfterPresent(count);
+    NativeCpuPoll(count);
     if (trace) Log("PRESENT_RETURN count=%llu aa=%llu begin=%llu hud_dispatch=%llu hud_render=%llu", count, aaCount.load(), beginCount.load(), hudCount.load(), hudRenderCount.load());
     TryConfigureSLNativeDeviceDeferred("post_present_after_control_dlss");
 
@@ -1024,6 +1027,8 @@ static bool Exchange(Patch& p, bool install) {
 }
 
 #include "rr_albedo_hooks.h"
+#include "native_cpu_runtime.h"
+static void NativeCpuPoll(unsigned long long present) noexcept { native_cpu::Poll(present); }
 #include "pt_reflection_loader.h"
 #include "rr_hair_opacity_runtime.h"
 #include "rr_character_base_albedo_runtime.h"
@@ -1432,6 +1437,7 @@ static BOOL CALLBACK Configure(PINIT_ONCE, PVOID, PVOID*) noexcept {
             return TRUE;
         }
         Log("HOOK_INSTALLED label=CONTROL_COMMAND_QUEUE_CTOR");
+        Log("NATIVE_CPU_R218_INSTALL ready=%u",unsigned(native_cpu::Install(renderer)));
         const bool guideInputsReady = RRGuideInitializeInputs(d3d);
         const unsigned int rrObserverHooks = InstallRRObservationHooks(renderer,d3d);
         Log("PT_REFLECTION_P0_OBSERVER ready=%u expected=5 scope=reflection_dispatch_identification gpu_work=unchanged allocations=0",rrObserverHooks);

@@ -1,0 +1,23 @@
+{
+  "renderer_sha256": "ebfb5b47cebc2d4482e912b8090bd343f717bab8a178b5a6385dec9105e7c433",
+  "material_call": {
+    "rva": "0x12491D",
+    "bytes": "e89e32faff",
+    "target": "0xC7BC0",
+    "abi": "void(manager*)"
+  },
+  "join_call": {
+    "rva": "0x12404D",
+    "bytes": "ff1515c44b00",
+    "iat": "0x5E0468",
+    "symbol": "?waitJob@JobSystem@experimental@r@@QEAAXAEAVJobHandle@3@@Z",
+    "abi": "void(JobSystem*, JobHandle*)"
+  },
+  "job_slots": {
+    "0x6281F0": "0xA8F80",
+    "0x6281D8": "0xA8F70"
+  },
+  "job_abi": "void(JobCallable*); original thunk adds +0x18 before tail call",
+  "validation": "PASS exact bytes, imported member signature, execute slots and thunks",
+  "runtime_game_test": "pending"
+}
