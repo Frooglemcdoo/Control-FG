@@ -16,6 +16,8 @@
 #include "rr_gi_sample_control.h"
 #include "rr_sample_diagnostic.h"
 #include "rr_specular_sample_windows.h"
+#include "rr_gi_spatial_windows.h"
+static bool rrNativeGISpatialOnlyThisFrame=false;
 static control_rr::RRFrameCoordinator rrNativeFrame;
 static control_rr::RRRTFrame rrNativeRTFrame;
 static control_rr_specular::NativeCopyApi rrNativeCopy;
@@ -362,6 +364,13 @@ static void RRNativeHookGIRelease(void* history) {
 // Verified native GI filter call at renderer+0x12cd96. Never synthesize its arguments.
 static void RRNativeHookGIFilter(void* color,void* history,unsigned passes) {
  control_rr_diagnostic::Record(control_rr_diagnostic::Event::GIFilterEntry);
+ if(rrNativeFrameEnabled&&rrNativeGIKeepThisFrame&&rrNativeGISpatialOnlyThisFrame&&rrNativeFrame.Selected()&&
+    rrNativeFrame.Stage()==control_rr::RRFrameStage::Lighting){
+  const DWORD entryError=GetLastError();
+  const bool prepared=color&&passes&&RRNativePrepareGISpatial(history);
+  if(!prepared)rrNativeFrame.Fail("gi_spatial_history_clear_failed");
+  SetLastError(entryError);
+ }
  rrNativeDiffuseFilterOriginal(color,history,passes);
  const DWORD saved=GetLastError();
  if(rrNativeFrameEnabled&&rrNativeGIKeepThisFrame){
@@ -464,6 +473,7 @@ static bool RRNativeHookReset(unsigned outputWidth,unsigned outputHeight,unsigne
  }
  if(rrNativeGIKeepThisFrame!=giFiltered)rrNativeFrame.ResetForSignalChange();
  rrNativeGIKeepThisFrame=giFiltered;
+ rrNativeGISpatialOnlyThisFrame=giFiltered&&native_lighting::IsNativeBlend(lightingMode);
  const bool temporalOnly=selected&&native_lighting::UsesSpecularTemporalOnly(lightingMode)&&control_rr_temporal::ready.load(std::memory_order_acquire);
  const bool specularFiltered=selected&&(native_lighting::PreservesSpecularFiltering(lightingMode)||temporalOnly);
  if(rrNativeSpecularKeepThisFrame!=specularFiltered||rrNativeSpecularTemporalThisFrame!=temporalOnly){

@@ -24,7 +24,9 @@ static Frame rrNativeFrame;
 static control_rr::RRRTFrame rrNativeRTFrame;
 static unsigned char renderer[0x90eb00]{};
 static void* verifiedRenderer=renderer;
-static bool rrNativeFrameEnabled=true,rrNativeGIKeepThisFrame=true;
+static bool rrNativeFrameEnabled=true,rrNativeGIKeepThisFrame=true,rrNativeGISpatialOnlyThisFrame=false;
+static bool prepared=true;static unsigned preparations=0;
+static bool RRNativePrepareGISpatial(void*){++preparations;lastError=77;return prepared;}
 static unsigned long long currentFrame=42;
 static bool readable=true,throwNative=false,keepHistory=true;
 static unsigned calls=0;static void* seenColor=nullptr;static void* seenHistory=nullptr;static unsigned seenPasses=0;
@@ -70,6 +72,18 @@ int main(){
  rrNativeRTFrame.Begin(42,107,true);
  assert(!rrNativeRTFrame.ObserveFilteredGI(42,true,true,true,4));
  assert(rrNativeRTFrame.ObserveGI(42,true,true,true));
+ // Clearing is scoped to selected Native Blend filtering, before the native call.
+ for(unsigned scenario=0;scenario<4;++scenario){
+  rrNativeFrame={};rrNativeRTFrame.Begin(42,107,true,true);rrNativeGIKeepThisFrame=true;
+  rrNativeGISpatialOnlyThisFrame=scenario!=0;prepared=scenario!=2;
+  if(scenario==3)rrNativeFrame.selected=false;
+  auto previous=preparations;lastError=11;
+  RRNativeHookGIFilter(renderer,history,4);
+  assert(preparations-previous==unsigned(scenario==1||scenario==2));
+  assert(GetLastError()==18);
+  if(scenario==2)assert(rrNativeFrame.stopped);
+ }
+ rrNativeGISpatialOnlyThisFrame=false;
  rrNativeRTFrame.Begin(42,107,false);rrNativeGIKeepThisFrame=false;
  unsigned before=calls;RRNativeHookGIFilter(renderer,history,4);
  assert(calls==before+1&&!rrNativeRTFrame.giObserved&&GetLastError()==18);

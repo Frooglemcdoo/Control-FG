@@ -1,0 +1,16 @@
+{
+  "src/rr_native_frame.h": [
+    [
+      "#include \"rr_specular_sample_windows.h\"",
+      "#include \"rr_specular_sample_windows.h\"\n#include \"rr_gi_spatial_windows.h\"\nstatic bool rrNativeGISpatialOnlyThisFrame=false;"
+    ],
+    [
+      " rrNativeGIKeepThisFrame=giFiltered;",
+      " rrNativeGIKeepThisFrame=giFiltered;\n rrNativeGISpatialOnlyThisFrame=giFiltered&&native_lighting::IsNativeBlend(lightingMode);"
+    ],
+    [
+      " control_rr_diagnostic::Record(control_rr_diagnostic::Event::GIFilterEntry);\n rrNativeDiffuseFilterOriginal(color,history,passes);",
+      " control_rr_diagnostic::Record(control_rr_diagnostic::Event::GIFilterEntry);\n if(rrNativeFrameEnabled&&rrNativeGIKeepThisFrame&&rrNativeGISpatialOnlyThisFrame&&rrNativeFrame.Selected()&&\n    rrNativeFrame.Stage()==control_rr::RRFrameStage::Lighting){\n  const DWORD entryError=GetLastError();\n  const bool prepared=color&&passes&&RRNativePrepareGISpatial(history);\n  if(!prepared)rrNativeFrame.Fail(\"gi_spatial_history_clear_failed\");\n  SetLastError(entryError);\n }\n rrNativeDiffuseFilterOriginal(color,history,passes);"
+    ]
+  ]
+}

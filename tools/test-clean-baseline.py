@@ -26,11 +26,18 @@ diagnostic_exceptions = json.loads((root/'tools/fixtures/r116-baseline-exception
 compact_exceptions = json.loads((root/'tools/fixtures/r190-baseline-exceptions.json').read_text())
 suite_exceptions = json.loads((root/'tools/fixtures/r191-baseline-exceptions.json').read_text())
 camera_exceptions = json.loads((root/'tools/fixtures/r199-baseline-exceptions.json').read_text())
+spatial_exceptions = json.loads((root/'tools/fixtures/r207-baseline-exceptions.json').read_text())
 for name, expected in manifest['files'].items():
     if name == 'src/fg_overlay.h':
         assert not (root / name).exists(), 'Legacy settings popup must remain removed'
         continue # R42 replaces UI-only code with fg_settings.h; renderer hashes remain enforced.
     data = (root / name).read_bytes().replace(b'\r\n', b'\n')
+    if name in spatial_exceptions:
+        text=data.decode()
+        for before,after in reversed(spatial_exceptions[name]):
+            assert text.count(after)==1, (name, 'R207 GI spatial scope changed or duplicated')
+            text=text.replace(after,before,1)
+        data=text.encode()
     if name in camera_exceptions:
         text=data.decode()
         for before,after in reversed(camera_exceptions[name]):

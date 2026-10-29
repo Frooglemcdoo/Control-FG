@@ -3,7 +3,7 @@ name: Build native reflection enhancements and RR
 on:
   push:
     branches:
-      - work/r206-native-blend-gi-isolation
+      - work/r207-gi-spatial-only
       - experiment/native-hit-capture-r118
       - experiment/pt-reflections-p0
       - experiment/pt-verify-stages-20261010
@@ -530,6 +530,10 @@ jobs:
           build\test-specular-filter.exe
           if errorlevel 1 exit /b 1
           python tools/test-rr-gi-filter.py
+          cl /nologo /std:c++17 /EHsc /W4 tools\test-rr-gi-spatial.cpp /Febuild\test-rr-gi-spatial.exe
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          build\test-rr-gi-spatial.exe
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           if errorlevel 1 exit /b 1
           python tools/test-clean-baseline.py
           if errorlevel 1 exit /b 1
@@ -818,11 +822,11 @@ jobs:
           build\suite-controller.exe
           if errorlevel 1 exit /b 1
 
-      - name: Package live lighting diagnostic R206
+      - name: Package live lighting diagnostic R207
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-Native-Lighting-Live-R206'
+          $out='Control-FG-Native-Lighting-Live-R207'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
           Copy-Item build/rt_spot_selected_off.dxbc,build/rt_spot_selection.dxbc,build/rt_spot_visibility.dxbc,build/rt_spot_light_ids.dxbc,build/rt_spot_raw_history.dxbc,build/rt_spot_raw_spatial0.dxbc,build/rt_spot_raw_spatial1.dxbc,build/rt_spot_full.dxil,build/rt_spot_r94.dxil,build/rt_spot_light.dxbc,build/rt_spot_reset.dxbc,build/rt_spot_history.dxbc,build/rt_spot_spatial0.dxbc,build/rt_spot_spatial1.dxbc $out
@@ -843,15 +847,15 @@ jobs:
           Copy-Item Package-Lighting-Capture.cmd,tools/package-lighting-capture.py,Package-Lighting-Performance.ps1 $out
           Copy-Item Capture-RR-Boundary.cmd,Capture-RR-Boundary.ps1,Collect-RR-Boundary-Status.cmd,tools/collect-rr-boundary.py $out
           Copy-Item Start-Compact-Distance-Test.cmd,Capture-RR-Suite.ps1,tools/collect-rr-suite.py $out
-          Copy-Item docs/native-lighting-r206.md "$out/DIAGNOSTIC-NOTES.md"
+          Copy-Item docs/native-lighting-r207.md "$out/DIAGNOSTIC-NOTES.md"
           @'
-          CONTROL-FG R206 - Native Blend GI-filter ghosting isolation
-          Native Blend bypasses the native GI temporal/spatial prefilter under RR.
+          CONTROL-FG R207 - Native Blend GI spatial-only isolation
+          Native Blend clears GI history before filtering, retaining native spatial passes.
           GI lighting stays enabled. This is an isolation test, not a confirmed fix.
           Projection rays, MAP GUARD OFF and restored reflection view match R205.
           Keep RR ON, SPEC Native and hit distance OFF. Disable frame generation for comparisons.
           Repeat the same movement across the carpet from the supplied ghosting video.
-          Compare R205 Native Blend against R206 Native Blend with identical settings.
+          Compare R205 (filtered), R206 (bypass), and R207 (history cleared) with identical settings.
           Let the scene settle after loading. Record movement and a few seconds after stopping.
           F10 SAVE LOG after reproducing. Check both trailing and any increased GI noise.
           No F9 suite or stationary shadow trace is needed for this motion test.
@@ -863,10 +867,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-Native-Lighting-Live-R206
+          name: Control-FG-Native-Lighting-Live-R207
           path: |
-            Control-FG-Native-Lighting-Live-R206.zip
-            Control-FG-Native-Lighting-Live-R206.sha256
+            Control-FG-Native-Lighting-Live-R207.zip
+            Control-FG-Native-Lighting-Live-R207.sha256
             build/spec-volume-roughness-validation.json
             build/spec-volume-roughness.dxbc
             build/spec-environment-validation.json
