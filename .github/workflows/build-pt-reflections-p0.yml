@@ -531,9 +531,9 @@ jobs:
           if errorlevel 1 exit /b 1
           python tools/test-rr-gi-filter.py
           cl /nologo /std:c++17 /EHsc /W4 tools\test-rr-gi-spatial.cpp /Febuild\test-rr-gi-spatial.exe
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if errorlevel 1 exit /b 1
           build\test-rr-gi-spatial.exe
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if errorlevel 1 exit /b 1
           if errorlevel 1 exit /b 1
           python tools/test-clean-baseline.py
           if errorlevel 1 exit /b 1
