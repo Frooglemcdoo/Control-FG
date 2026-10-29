@@ -14,6 +14,9 @@ struct RRInputCaptureJob {
  ID3D12Resource* sources[kRRInputCaptureMaxResources]{},*readback[kRRInputCaptureMaxResources]{};
  D3D12_RESOURCE_DESC descriptions[kRRInputCaptureMaxResources]{};
  D3D12_PLACED_SUBRESOURCE_FOOTPRINT footprint[kRRInputCaptureMaxResources]{};UINT64 bytes[kRRInputCaptureMaxResources]{};
+#ifdef CONTROL_GI_BOUNDARY_CAPTURE
+ control_rr_gi::Boundary giBoundary{};
+#endif
  const char* lightingMode="unavailable";
  unsigned suiteSession=0,suiteStep=0,suiteSamples=0;bool suiteRaw=false;
  unsigned count=0,preset=0;bool nativeLighting=false;bool distanceBound=false;unsigned rawIndex=kRRInputCaptureMaxResources;
@@ -67,10 +70,22 @@ static DWORD WINAPI RRInputCaptureExport(void* context) noexcept {
   }
   if(okay){
    std::ostringstream out;out.imbue(std::locale::classic());out<<std::setprecision(9);
-   out<<"{\"suite_session\":"<<c->suiteSession<<",\"suite_step\":"<<c->suiteStep<<",\"suite_samples\":"<<c->suiteSamples<<",\"suite_raw_rr_clamp\":"<<(c->suiteRaw?"true":"false")<<",\"lighting_mode\":\""<<c->lightingMode<<"\",\"schema\":\"control-rr-gi-r28\",\"evaluation_path\":\""<<(c->nativeLighting?"native_sr":"rr")<<"\",\"rr_active\":"<<(c->nativeLighting?"false":"true")<<",\"pre_exposure_valid\":"<<(c->preExposureValid?"true":"false")<<",\"pre_exposure\":"<<c->preExposure<<",\"exposure_scale_valid\":"<<(c->exposureScaleValid?"true":"false")<<",\"exposure_scale\":"<<c->exposureScale<<",\"pid\":"<<GetCurrentProcessId()<<",\"frame\":"<<c->frame<<",\"present\":"<<c->policy.present<<",\"preset\":"<<c->preset<<",\"width\":"<<c->width<<",\"height\":"<<c->height<<",\"buffers\":"<<c->count<<",\"hit_distance_bound\":"<<(c->distanceBound?"true":"false")<<",\"raw_albedo_bound\":"<<(c->rawIndex<c->count?"true":"false")<<",\"capture_ordinal\":"<<c->policy.requests<<",\"projection_valid\":"<<(c->projectionValid?"true":"false")<<",\"row_padding_removed\":true,\"little_endian\":true,\"view_to_clip\":[";
+   out<<"{";
+#ifdef CONTROL_GI_BOUNDARY_CAPTURE
+   const auto& b=c->giBoundary;
+   out<<"\"gi_boundary\":{\"valid\":"<<(b.valid?"true":"false")<<",\"frame\":"<<b.frame
+      <<",\"stage\":\""<<control_rr_gi::StageName(b.stage)<<"\",\"view\":\""<<control_rr_gi::ViewName(b.view)
+      <<"\",\"cleanup\":"<<(b.cleanup?"true":"false")<<",\"applied\":"<<(b.applied?"true":"false")
+      <<",\"spatial_passes\":"<<b.spatialPasses<<",\"filter_color_identity\":"<<b.color<<"},";
+#endif
+   out<<"\"suite_session\":"<<c->suiteSession<<",\"suite_step\":"<<c->suiteStep<<",\"suite_samples\":"<<c->suiteSamples<<",\"suite_raw_rr_clamp\":"<<(c->suiteRaw?"true":"false")<<",\"lighting_mode\":\""<<c->lightingMode<<"\",\"schema\":\"control-rr-gi-r28\",\"evaluation_path\":\""<<(c->nativeLighting?"native_sr":"rr")<<"\",\"rr_active\":"<<(c->nativeLighting?"false":"true")<<",\"pre_exposure_valid\":"<<(c->preExposureValid?"true":"false")<<",\"pre_exposure\":"<<c->preExposure<<",\"exposure_scale_valid\":"<<(c->exposureScaleValid?"true":"false")<<",\"exposure_scale\":"<<c->exposureScale<<",\"pid\":"<<GetCurrentProcessId()<<",\"frame\":"<<c->frame<<",\"present\":"<<c->policy.present<<",\"preset\":"<<c->preset<<",\"width\":"<<c->width<<",\"height\":"<<c->height<<",\"buffers\":"<<c->count<<",\"hit_distance_bound\":"<<(c->distanceBound?"true":"false")<<",\"raw_albedo_bound\":"<<(c->rawIndex<c->count?"true":"false")<<",\"capture_ordinal\":"<<c->policy.requests<<",\"projection_valid\":"<<(c->projectionValid?"true":"false")<<",\"row_padding_removed\":true,\"little_endian\":true,\"view_to_clip\":[";
    for(unsigned i=0;i<16;++i){if(i)out<<',';out<<c->projection[i];}out<<"],\"jitter\":["<<c->jitterX<<','<<c->jitterY<<"],\"motion_scale\":["<<c->mvScaleX<<','<<c->mvScaleY<<"],\"motion_scale_valid\":"<<(c->motionScaleValid?"true":"false")<<",\"native_inputs_bound\":true,\"lighting_buffers_captured\":true,\"resources\":[";
    for(unsigned i=0;i<c->count;++i){if(i)out<<',';std::string name;for(const wchar_t* p=c->names[i];*p;++p)name+=static_cast<char>(*p);
-    out<<"{\"file\":\""<<name<<"\",\"dxgi_format\":"<<unsigned(c->descriptions[i].Format)<<",\"pixel_bytes\":"<<c->pixelBytes[i]<<",\"state_before_and_after\":"<<unsigned(c->states[i])<<",\"width\":"<<c->descriptions[i].Width<<",\"height\":"<<c->descriptions[i].Height<<",\"copied\":"<<((i!=c->outputIndex||c->outputCaptured)?"true":"false")<<'}';}
+    out<<"{";
+#ifdef CONTROL_GI_BOUNDARY_CAPTURE
+    out<<"\"resource_identity\":"<<reinterpret_cast<std::uintptr_t>(c->sources[i])<<",";
+#endif
+    out<<"\"file\":\""<<name<<"\",\"dxgi_format\":"<<unsigned(c->descriptions[i].Format)<<",\"pixel_bytes\":"<<c->pixelBytes[i]<<",\"state_before_and_after\":"<<unsigned(c->states[i])<<",\"width\":"<<c->descriptions[i].Width<<",\"height\":"<<c->descriptions[i].Height<<",\"copied\":"<<((i!=c->outputIndex||c->outputCaptured)?"true":"false")<<'}';}
    out<<"],\"pair_index\":"<<c->pairIndex<<",\"previous_frame\":"<<c->previousFrame<<",\"consecutive\":"<<((c->pairIndex==1&&c->frame==c->previousFrame+1)?"true":"false")<<",\"reset\":"<<c->reset<<",\"rr_result\":"<<c->evaluationResult<<",\"output_captured\":"<<(c->outputCaptured?"true":"false")<<"}\n";
    const auto bytes=out.str();RRGuideExportDetail::File file(directory+L"\\metadata.pending");
    okay=file.Write(bytes.data(),bytes.size())&&file.Finish();
@@ -200,6 +215,9 @@ static void RRInputCaptureOneBeforeEvaluation(RRInputCaptureJob* c,ID3D12Graphic
   c->suiteSession=rr_suite::session.load();c->suiteStep=rr_suite::latched.load();
   c->suiteSamples=rr_suite::Current()?rr_suite::Current()->samples:0;
   c->suiteRaw=rr_suite::Current()&&rr_suite::Current()->raw;
+#endif
+#ifdef CONTROL_GI_BOUNDARY_CAPTURE
+  c->giBoundary=control_rr_gi::ReadBoundary(frame);
 #endif
   c->frame=frame;c->projectionValid=projectionValid;memcpy(c->projection,projection,sizeof(c->projection));
   c->outputCaptured=false;c->evaluationResult=0;c->reset=0;

@@ -3,7 +3,7 @@ name: Build native reflection enhancements and RR
 on:
   push:
     branches:
-      - work/r215-gi-cleanup-diagnostic
+      - work/r216-gi-boundary-capture
       - experiment/native-hit-capture-r118
       - experiment/pt-reflections-p0
       - experiment/pt-verify-stages-20261010
@@ -738,7 +738,7 @@ jobs:
         shell: cmd
         run: |
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
-          cl /nologo /std:c++17 /EHsc /W4 /O2 /MT /LD /guard:cf /DCONTROL_SPEC_LONG_SEQUENCE /DCONTROL_RR_F9_SUITE /DCONTROL_RR_COMPACT_DISTANCE /DCONTROL_RR_MATERIAL_CAPTURE /DCONTROL_CAPTURE_DIAGNOSTIC /DUNICODE /D_UNICODE /I "third_party\streamline\include" src\probe.cpp /Fobuild\probe.obj /Febuild\dxgi.dll /link /DEF:src\dxgi.def /INCREMENTAL:NO /DYNAMICBASE /NXCOMPAT /GUARD:CF bcrypt.lib wintrust.lib user32.lib gdi32.lib
+          cl /nologo /std:c++17 /EHsc /W4 /O2 /MT /LD /guard:cf /DCONTROL_SPEC_LONG_SEQUENCE /DCONTROL_RR_F9_SUITE /DCONTROL_GI_BOUNDARY_CAPTURE /DCONTROL_RR_COMPACT_DISTANCE /DCONTROL_RR_MATERIAL_CAPTURE /DCONTROL_CAPTURE_DIAGNOSTIC /DUNICODE /D_UNICODE /I "third_party\streamline\include" src\probe.cpp /Fobuild\probe.obj /Febuild\dxgi.dll /link /DEF:src\dxgi.def /INCREMENTAL:NO /DYNAMICBASE /NXCOMPAT /GUARD:CF bcrypt.lib wintrust.lib user32.lib gdi32.lib
           if errorlevel 1 exit /b 1
           dumpbin /exports build\dxgi.dll > build\exports.txt
           dumpbin /imports build\dxgi.dll > build\imports.txt
@@ -799,6 +799,11 @@ jobs:
           build\test-rr-capture-ui.exe
           if errorlevel 1 exit /b 1
 
+          cl /nologo /std:c++17 /EHsc /W4 /WX /DCONTROL_GI_BOUNDARY_CAPTURE /DCONTROL_RR_F9_SUITE tools\test-rr-capture-ui.cpp /Febuild\test-gi-boundary-ui.exe
+          if errorlevel 1 exit /b 1
+          build\test-gi-boundary-ui.exe
+          if errorlevel 1 exit /b 1
+
       - name: Validate RR boundary collector
         shell: powershell
         run: |
@@ -832,11 +837,11 @@ jobs:
           build\suite-controller.exe
           if errorlevel 1 exit /b 1
 
-      - name: Package live lighting diagnostic R215
+      - name: Package live lighting diagnostic R216
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-Native-Lighting-Live-R215'
+          $out='Control-FG-Native-Lighting-Live-R216'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
           Copy-Item build/rt_spot_selected_off.dxbc,build/rt_spot_selection.dxbc,build/rt_spot_visibility.dxbc,build/rt_spot_light_ids.dxbc,build/rt_spot_raw_history.dxbc,build/rt_spot_raw_spatial0.dxbc,build/rt_spot_raw_spatial1.dxbc,build/rt_spot_full.dxil,build/rt_spot_r94.dxil,build/rt_spot_light.dxbc,build/rt_spot_reset.dxbc,build/rt_spot_history.dxbc,build/rt_spot_spatial0.dxbc,build/rt_spot_spatial1.dxbc $out
@@ -857,14 +862,14 @@ jobs:
           Copy-Item Package-Lighting-Capture.cmd,tools/package-lighting-capture.py,Package-Lighting-Performance.ps1 $out
           Copy-Item Capture-RR-Boundary.cmd,Capture-RR-Boundary.ps1,Collect-RR-Boundary-Status.cmd,tools/collect-rr-boundary.py $out
           Copy-Item Start-Compact-Distance-Test.cmd,Capture-RR-Suite.ps1,tools/collect-rr-suite.py $out
-          Copy-Item docs/native-lighting-r215.md "$out/DIAGNOSTIC-NOTES.md"
+          Copy-Item docs/native-lighting-r216.md "$out/DIAGNOSTIC-NOTES.md"
           @'
-          CONTROL-FG R215 - GI cleanup mask and zero-signal diagnostics on R205 baseline
+          CONTROL-FG R216 - Read-only GI boundary capture on R205 baseline
           Default: GI CLAMP ONLY, CLEANUP OFF, GI VIEW NORMAL.
-          F10 GI VIEW cycles NORMAL, MASK, ZERO. Mask marks cleanup removals; Zero removes this GI signal.
+          Keep GI VIEW NORMAL and CLEANUP OFF throughout this test.
           No CameraCut override or history clears. Projection rays, MAP GUARD OFF and restored reflections retained.
           Use Native Blend, RR ON, SPEC Native, hit distance OFF and FG OFF.
-          Capture the same stationary view in NORMAL, MASK and ZERO, settling 10 seconds each. Restore NORMAL and save log.
+          CAPTURE RR in CLAMP ONLY, then BOTH at the same stationary view; wait for Saved each time. PACKAGE RR collects raw buffers and logs.
           No F9 suite required. Read DIAGNOSTIC-NOTES.md.
           '@ | Set-Content "$out/README.txt" -Encoding ASCII
           Compress-Archive -Path "$out/*" -DestinationPath "$out.zip" -Force
@@ -873,10 +878,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-Native-Lighting-Live-R215
+          name: Control-FG-Native-Lighting-Live-R216
           path: |
-            Control-FG-Native-Lighting-Live-R215.zip
-            Control-FG-Native-Lighting-Live-R215.sha256
+            Control-FG-Native-Lighting-Live-R216.zip
+            Control-FG-Native-Lighting-Live-R216.sha256
             build/spec-volume-roughness-validation.json
             build/spec-volume-roughness.dxbc
             build/spec-environment-validation.json

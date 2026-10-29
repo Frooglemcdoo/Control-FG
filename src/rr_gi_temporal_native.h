@@ -1,5 +1,17 @@
 #pragma once
 #include "rr_gi_stage_policy.h"
+#ifdef CONTROL_GI_BOUNDARY_CAPTURE
+#include "rr_gi_boundary.h"
+static std::uintptr_t RRNativeGIColorIdentity(void* color) noexcept {
+ using Get=void*(*)(void*);
+ auto getter=reinterpret_cast<Get>(GetProcAddress(verifiedD3d,"?getNativeTexture@NativeTextureContainer@d3d@@QEBAPEAVNativeTexture@2@XZ"));
+ if(!getter||!color)return 0;
+ __try {
+  void* texture=getter(color);
+  return texture?*reinterpret_cast<std::uintptr_t*>(static_cast<unsigned char*>(texture)+0x88):0;
+ }__except(EXCEPTION_EXECUTE_HANDLER){return 0;}
+}
+#endif
 // Exact native bind/dispatch callsites; engine shader records are always forwarded intact.
 static bool rrNativeGIHistoryZeroThisFrame=false; // existing frame-latched Native Blend eligibility
 static thread_local bool rrNativeGIHistoryScope=false;
@@ -39,7 +51,20 @@ static void RRNativeRunGIFilter(void* color,void* history,unsigned passes){
  const bool previousHistoryDisabled=control_rr_gi::historyDisabled;
  control_rr_gi::historyDisabled=!control_rr_gi::Temporal(mode);
  rrNativeGIHistoryScope=true;rrNativeGIMotionBound=false;rrNativeGIHistoryDispatches=0;rrNativeGIHistoryReason="no_temporal_bind";
- __try {rrNativeDiffuseFilterOriginal(color,history,effectivePasses);}
+ __try {
+  rrNativeDiffuseFilterOriginal(color,history,effectivePasses);
+#ifdef CONTROL_GI_BOUNDARY_CAPTURE
+  if(control_rr_gi::boundaryRequested.load()) {
+   const DWORD saved=GetLastError();
+   control_rr_gi::Boundary observation{};
+   observation.frame=rrNativeFrame.Key().frame;observation.color=RRNativeGIColorIdentity(color);
+   observation.stage=mode;observation.view=view;observation.spatialPasses=effectivePasses;
+   observation.cleanup=outlier;observation.applied=rrNativeGIHistoryDispatches==1;
+   observation.valid=observation.color!=0;
+   control_rr_gi::PublishBoundary(observation);SetLastError(saved);
+  }
+#endif
+ }
  __finally {
   const DWORD saved=GetLastError();
   const bool okay=rrNativeGIHistoryDispatches==1;
@@ -52,7 +77,7 @@ static void RRNativeRunGIFilter(void* color,void* history,unsigned passes){
   static bool lastOutlier=false;
   static auto lastView=control_rr_gi::DiagnosticView::Normal;
   if(calls<=4||calls%240==0||mode!=lastMode||outlier!=lastOutlier||view!=lastView)
-   native_lighting::Trace("gi_temporal_adaptive build=R215 stage=%s view=%s outlier=%u temporal=%u spatial_requested=%u applied=%u calls=%llu dispatches=%u spatial_passes=%u pipeline_ready=%u engine_record_copy=0 provider_override=0 reason=%s rr_selected=%u",control_rr_gi::StageName(mode),control_rr_gi::ViewName(view),unsigned(outlier),unsigned(control_rr_gi::Temporal(mode)),passes,unsigned(okay),calls,rrNativeGIHistoryDispatches,effectivePasses,control_rr_gi::ready.load(),rrNativeGIHistoryReason,unsigned(rrNativeFrame.Selected()));
+   native_lighting::Trace("gi_temporal_adaptive build=R216 stage=%s view=%s outlier=%u temporal=%u spatial_requested=%u applied=%u calls=%llu dispatches=%u spatial_passes=%u pipeline_ready=%u engine_record_copy=0 provider_override=0 reason=%s rr_selected=%u",control_rr_gi::StageName(mode),control_rr_gi::ViewName(view),unsigned(outlier),unsigned(control_rr_gi::Temporal(mode)),passes,unsigned(okay),calls,rrNativeGIHistoryDispatches,effectivePasses,control_rr_gi::ready.load(),rrNativeGIHistoryReason,unsigned(rrNativeFrame.Selected()));
   lastMode=mode;lastOutlier=outlier;lastView=view;
   SetLastError(saved);
  }

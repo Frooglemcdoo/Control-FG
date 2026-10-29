@@ -78,6 +78,26 @@ def read_pair(root, pid, ordinal, started, require_lighting=False, require_nativ
     return frames
 
 
+def validate_gi_pair(pair, ordinal):
+    expected = 'clamp_only' if ordinal == 1 else 'both'
+    for _, data in pair:
+        b = data.get('gi_boundary', {})
+        if (b.get('valid') is not True or b.get('frame') != data['frame'] or
+                b.get('applied') is not True or b.get('stage') != expected or
+                b.get('view') != 'normal' or b.get('cleanup') is not False or
+                not isinstance(b.get('filter_color_identity'), int) or b['filter_color_identity'] <= 0):
+            raise ValueError('Missing, stale or wrong GI filter observation; send diagnostics')
+        if (expected == 'clamp_only' and b.get('spatial_passes') != 0) or (expected == 'both' and b.get('spatial_passes', 0) <= 0):
+            raise ValueError('GI spatial pass count does not match the requested comparison')
+        resources = data['resources']
+        if not any(r['file'] == 'raw-gi.rgba16f' for r in resources):
+            raise ValueError('GI boundary texture missing')
+        if any(not isinstance(r.get('resource_identity'), int) or r['resource_identity'] <= 0 for r in resources):
+            raise ValueError('Captured resource identities missing')
+        # No match is useful evidence too; do not assert that a label proves provenance.
+        data['gi_filter_color_matches'] = [r['file'] for r in resources if r['resource_identity'] == b['filter_color_identity']]
+
+
 def collect_logs(root, local, pid, destination):
     for directory, pattern in [(root, f'probe-*-{pid}.log'), (local / 'Control-FG' / 'Diagnostics', f'Lighting-*-{pid}-*.log'), (Path(os.environ.get('TEMP', str(local))) / 'Control-FG' / 'Diagnostics', f'Lighting-*-{pid}-*.log')]:
         if not directory.exists():
@@ -119,17 +139,22 @@ def main():
     parser.add_argument('--diagnostics-only', action='store_true')
     parser.add_argument('--collect-existing', action='store_true')
     parser.add_argument('--require-rr', action='store_true', help='Require settled RR output and actual material guides')
+    parser.add_argument('--gi-boundary', action='store_true')
     args = parser.parse_args()
+    if args.gi_boundary:
+        args.require_rr = True
     local = Path(os.environ['LOCALAPPDATA'])
     root = local / 'ControlFGProbe'
     started = 0 if args.collect_existing or args.diagnostics_only else time.time()
     prefix = 'RR-Materials-R180-' if args.require_rr else 'Native-Lighting-R157-'
+    if args.gi_boundary:
+        prefix = 'GI-Boundary-R216-'
     destination = args.output / (prefix + time.strftime('%Y%m%d-%H%M%S') + '-' + str(args.pid) + '-' + str(time.time_ns() % 1000000000))
     destination.mkdir(parents=True, exist_ok=False)
     report = {'schema': 'control-rr-boundary-r157', 'pid': args.pid, 'started_unix': started, 'pairs': [], 'complete': False, 'diagnostics_only': args.diagnostics_only}
     report['expected_path'] = 'rr' if args.require_rr else 'native_sr'
     print('Collecting the overlay input/output captures for this game session.', flush=True)
-    print('Use CAPTURE RR at the painting and elevator, then PACKAGE RR.' if args.require_rr else
+    print('Use CAPTURE RR in CLAMP ONLY, then BOTH at the same camera position.' if args.gi_boundary else 'Use CAPTURE RR at the painting and elevator, then PACKAGE RR.' if args.require_rr else
           'Use CAPTURE LIGHT in the overlay at each position, then PACKAGE LIGHT.', flush=True)
     print('Progress and failures are recorded below; no sound or hotkey is required.', flush=True)
     try:
@@ -137,6 +162,8 @@ def main():
             report['status'] = capture_status(root, args.pid)
             print(report['status'], flush=True)
         positions = [(1, 'painting'), (2, 'elevator')] if args.require_rr else [(1, 'before-room'), (2, 'inside-room')]
+        if args.gi_boundary:
+            positions = [(1, 'clamp-only'), (2, 'both')]
         for ordinal, label in positions:
             if args.diagnostics_only:
                 break
@@ -156,6 +183,8 @@ def main():
                 time.sleep(.5)
             if pair is None:
                 raise TimeoutError(f'Pair {ordinal} is not complete. Read the overlay status; diagnostics are being packaged.')
+            if args.gi_boundary:
+                validate_gi_pair(pair, ordinal)
             print(f'Pair {ordinal} validated. Copying images; this can take a moment...', flush=True)
             for folder, data in pair:
                 target = destination / label / folder.name

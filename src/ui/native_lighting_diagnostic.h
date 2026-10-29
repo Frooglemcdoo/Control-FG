@@ -191,6 +191,9 @@ inline void PackageRR(HWND window) noexcept {
     auto* slash=wcsrchr(module,L'\\');if(!slash)return;*slash=0;
     wchar_t command[2048]{};
     swprintf_s(command,L"powershell.exe -NoExit -NoProfile -ExecutionPolicy Bypass -File \"%s\\Capture-RR-Boundary.ps1\" -CollectExisting -RequireRR -GameProcessId %lu",module,GetCurrentProcessId());
+#ifdef CONTROL_GI_BOUNDARY_CAPTURE
+    wcscat_s(command,L" -GiBoundary");
+#endif
     STARTUPINFOW startup{};startup.cb=sizeof(startup);PROCESS_INFORMATION process{};
     if(CreateProcessW(nullptr,command,nullptr,nullptr,FALSE,CREATE_NEW_CONSOLE,nullptr,module,&startup,&process)){
         CloseHandle(process.hThread);CloseHandle(process.hProcess);
@@ -198,16 +201,22 @@ inline void PackageRR(HWND window) noexcept {
 }
 inline void RequestLightCapture(HWND panel) noexcept {
     if(free_camera::commands.Pending())return;
-#ifdef CONTROL_RR_F9_SUITE
+#if defined(CONTROL_RR_F9_SUITE) && !defined(CONTROL_GI_BOUNDARY_CAPTURE)
     ClosePanel(panel);
     if(!reflection_suite::Start(GetTickCount64()))MessageBoxW(panel,L"Use RR ON and FG OFF. Wait for gameplay readiness, or restart after an incomplete sequence.",L"F9 reflection sequence",MB_OK);
     return;
 #endif
     const auto mode=LiveSelection::GetMode(selection.Read());
+#ifdef CONTROL_GI_BOUNDARY_CAPTURE
+    const auto expected=control_rr_capture_ui::completedPairs.load()==0?control_rr_gi::StageMode::ClampOnly:control_rr_gi::StageMode::Both;
+    if(control_rr_gi::stageMode.load()!=expected || control_rr_gi::outlierRequested.load() || control_rr_gi::viewRequested.load()!=control_rr_gi::DiagnosticView::Normal) {
+        MessageBoxW(panel,L"Capture 1: GI CLAMP ONLY. Capture 2: GI BOTH. Keep CLEANUP OFF and GI VIEW NORMAL for both; use the same camera position.",L"GI buffer capture",MB_OK);return;
+    }
+#endif
     if(!performance_capture::Active() && !capture_suite::active && IsNativeBlend(mode) && control_rr::RRUserRuntimeWorkRequested() && control_rr_capture_ui::Request()) {
         Trace("rr_material_capture requested=1 mode=%s spec_requested=%u",ModeName(mode),specularSampleChoice.load());
         ClosePanel(panel);
-    } else MessageBoxW(panel,L"Select NATIVE BLEND with RR enabled. Capture the painting, then the elevator, at SPEC 4. If busy, failed, or both pairs are saved, PACKAGE RR collects diagnostics.",L"Lighting capture",MB_OK);
+    } else MessageBoxW(panel,L"Select NATIVE BLEND with RR enabled. Keep FG OFF. If busy, failed, or both pairs are saved, PACKAGE RR collects diagnostics.",L"Lighting capture",MB_OK);
 }
 inline void RequestShadowTrace(HWND panel) noexcept {
     if(performance_capture::Active())return;
@@ -292,6 +301,9 @@ inline LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPA
     case WM_COMMAND:
         if(HIWORD(wParam)==BN_CLICKED) {
             const unsigned index=LOWORD(wParam)-kButtonFirst;
+#ifdef CONTROL_GI_BOUNDARY_CAPTURE
+            if(control_rr_capture_ui::Busy() && index!=kModeCount+2)return 0;
+#endif
 #ifdef CONTROL_RR_F9_SUITE
             if(reflection_suite::active)return 0;
 #endif
@@ -400,7 +412,9 @@ inline DWORD WINAPI ThreadProc(LPVOID) noexcept {
         const bool capturePress=f9Down&&!f9Held && !(GetAsyncKeyState(VK_CONTROL)&0x8000) && !(GetAsyncKeyState(VK_MENU)&0x8000);
         f9Held=f9Down;
         if(!free_camera::commands.Pending() && !performance_capture::Active() && capturePress && (GetForegroundWindow()==game || PanelHasForeground(panel))) {
-#ifdef CONTROL_RR_F9_SUITE
+#ifdef CONTROL_GI_BOUNDARY_CAPTURE
+            RequestLightCapture(panel);
+#elif defined(CONTROL_RR_F9_SUITE)
             if(capture_suite::active)capture_suite::Finish(game,"cancelled");
             else if(reflection_suite::active)reflection_suite::Cancel("cancelled");
             else {if(panelOpen)ClosePanel(panel);
@@ -424,6 +438,9 @@ inline DWORD WINAPI ThreadProc(LPVOID) noexcept {
             if(
 #ifdef CONTROL_RR_F9_SUITE
                !reflection_suite::active&&
+#endif
+#ifdef CONTROL_GI_BOUNDARY_CAPTURE
+               (!control_rr_capture_ui::Busy()||i==0)&&
 #endif
                !capture_suite::active&&foreground&&down&&!held[i]&&(i==0||modifier)&&(!performance_capture::Active()||i==0)){
                 if(i==0){if(panelOpen)ClosePanel(panel);else OpenPanel(panel);}else {selectionRejected=!SelectMode(kModeChoices[i-1].mode);savedNotice=0;}

@@ -24,13 +24,29 @@ int main(){
  assert(settle.Ready(501,false,6010));
  assert(!settle.Ready(600,false,6020)); // real missing evaluations still reset
  namespace ui=control_rr_capture_ui;using P=control_rr::InputCapturePolicy;
- assert(ui::Request());assert(!ui::Request());
+ assert(!ui::Busy());
+ assert(ui::Request());assert(!ui::Request());assert(ui::Busy());
+#ifdef CONTROL_GI_BOUNDARY_CAPTURE
+ assert(control_rr_gi::boundaryRequested.load());
+ control_rr_gi::Boundary b{};b.frame=77;b.color=123;b.valid=true;
+ control_rr_gi::PublishBoundary(b);
+ assert(control_rr_gi::ReadBoundary(77).color==123);
+ assert(!control_rr_gi::ReadBoundary(78).valid);
+ control_rr_gi::boundaryLock.test_and_set();
+ assert(!control_rr_gi::ReadBoundary(77).valid);
+ b.frame=78;control_rr_gi::PublishBoundary(b); // Contention cannot publish a partial observation.
+ control_rr_gi::boundaryLock.clear();assert(control_rr_gi::ReadBoundary(77).valid);
+#endif
  ui::Publish(P::Idle,P::Idle,0,false);assert(ui::state==ui::State::Queued);
  assert(ui::requested.exchange(false));
  ui::Publish(P::Requested,P::Requested,1,false);assert(ui::state==ui::State::Capturing);
  ui::Publish(P::Preparing,P::Ready,1,false);assert(ui::state==ui::State::Preparing);
  ui::Publish(P::Exporting,P::Submitted,1,true);assert(ui::state==ui::State::Saving);
  ui::Publish(P::Idle,P::Idle,1,true);assert(ui::state==ui::State::Complete && ui::completedPairs==1);
+ assert(!ui::Busy());
+#ifdef CONTROL_GI_BOUNDARY_CAPTURE
+ assert(!control_rr_gi::boundaryRequested.load());
+#endif
  assert(ui::Request());ui::requested=false;
  ui::Publish(P::Idle,P::Idle,2,true);assert(ui::completedPairs==2 && !ui::Request());
  ui::Publish(P::Failed,P::Idle,2,false);assert(ui::state==ui::State::Failed);
