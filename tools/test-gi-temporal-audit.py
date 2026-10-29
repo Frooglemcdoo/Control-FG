@@ -27,3 +27,10 @@ a=(root/'research/native-integration-audit/evidence/diffuse-filter.asm').read_te
 assert '180015691:' in a and '1800156d3:' in a
 assert a.index("'temporal_feedback'")<a.index("'filter_color'")
 print('PASS exact shader identity, CameraCut operand, native 70% history factor, current-frame clamp and temporal/spatial call order')
+
+# Native binder copies every 0x10 slot; the previous odd-slot scan omitted compute.
+bind=(root/'research/gi-temporal-r208/native-technique-bind.asm').read_text()
+assert '1801db79a:' in bind and '[rcx+0x60]' in bind
+header=(root/'src/rr_gi_temporal_native.h').read_text()
+assert '0x60,&d' in header and 'd.stage!=5' in header
+print('PASS native compute descriptor slot provenance')
