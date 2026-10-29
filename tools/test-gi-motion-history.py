@@ -55,3 +55,29 @@ diff=[(a,b) for a,b in zip(x,y) if a!=b]
 assert diff==[(struct.unpack('<I',struct.pack('<f',.7))[0],0)]
 assert all(z[k]==b[k] for k in z if k!=b'SHEX')
 print('PASS R213 zero-history variant differs only at native blend coefficient')
+
+# The outlier variant preserves the native sequence around one insertion,
+# including the existing energy clamp and RGB normalization. No history limit
+# or filtered-neighborhood samples from R212 are added to this variant.
+outlier=generate(source,False,True)
+o=chunks(outlier)
+assert outlier[4:20]==checksum(outlier)
+assert all(o[k]==a[k] for k in a if k!=b'SHEX')
+with tempfile.TemporaryDirectory() as d:
+ p=Path(d)/'outlier.dxbc';p.write_bytes(outlier);oj=decode(p)
+new=oj['instructions'];pos=0
+for instruction in original['instructions']:
+ if instruction['dword']==197:pos+=27 # init + 4*(UV, sample, luma, min, max, max) + cap + min
+ actual={k:v for k,v in new[pos].items() if k!='dword'}
+ expected={k:v for k,v in instruction.items() if k!='dword'}
+ if instruction['dword']==75:expected['operands']=['raw:0x9']
+ if instruction['dword']==219:expected['operands']=['r[0].w','r[0].w','l(0)']
+ if instruction['dword']==311:expected['operands']=['r[1].z','l(0.00999999978)','r[1].z']
+ if instruction['dword']==356:expected['operands']=['r[1].x','-r[1].x','l(400)','l(1)']
+ assert actual==expected,(instruction,actual)
+ pos+=1
+assert pos==len(new)
+assert sum(i['name']=='sample_l' for i in new)==sum(i['name']=='sample_l' for i in original['instructions'])+4
+try:generate(source,True,True);raise AssertionError('Outlier history unexpectedly allowed')
+except ValueError:pass
+print('PASS R214 current-frame outlier insertion, unchanged native color normalization, zero history, original bindings')

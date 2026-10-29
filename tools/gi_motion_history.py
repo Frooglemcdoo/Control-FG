@@ -3,7 +3,8 @@ import base64,hashlib,struct
 from pathlib import Path
 from dxbc_transform import transform_shex
 SOURCE_SHA='d54d94fdbb783796cc33bc78ab20dde687d90d9cba6f24c8092a6b177eec5d15'
-def generate(data,history=True):
+def generate(data,history=True,outliers=False):
+ if outliers and history:raise ValueError("Outlier variant must have zero history")
  if hashlib.sha256(data).hexdigest()!=SOURCE_SHA:raise ValueError('Unknown native GI shader')
  def patch(w):
   # SM5.1 operands. Reuse the audited native sample/coordinate operands;
@@ -40,6 +41,24 @@ def generate(data,history=True):
    matches=[i for i in range(start+1,end) if w[i]==bits]
    if len(matches)!=1:raise ValueError('Unexpected GI immediate layout')
    w[matches[0]]=struct.unpack('<I',struct.pack('<f',new))[0]
+  if outliers:
+   # Current-frame-only radiance limit. Use the second-largest of four
+   # adjacent LOD0 luminances; one bright neighbor cannot lift the limit.
+   # Two supporting neighbors preserve lines/edges and broad bright regions.
+   guard=ins(54,dst(5,3),imm(0))
+   for x,y in ((-1,0),(1,0),(0,-1),(0,1)):
+    guard+=ins(50,dst(8,3),vec((x,y,0,0)),inv,src(1,0xae))
+    sample=list(w[131:144]);sample[1:3]=dst(7);sample[3:5]=src(8);sample[-1]=0
+    guard+=sample
+    luma=list(w[144:154]);luma[1:3]=dst(7,1);luma[3:5]=src(7)
+    guard+=luma
+    guard+=ins(51,dst(7,2),src(5,0),src(7,0))
+    guard+=ins(52,dst(5,2),src(5,0x55),src(7,0x55))
+    guard+=ins(52,dst(5,1),src(5,0),src(7,0))
+   guard+=ins(50,dst(5,1),src(5,0x55),imm(1.5),imm(.002))
+   guard+=ins(51,dst(0,4),src(0,0xaa),src(5,0))
+   w[197:197]=guard
+   return
   # Insert backwards to preserve original audited dword positions.
   w[393:393]=clip
   w[204:204]=pad
@@ -53,4 +72,6 @@ if __name__=='__main__':
  (out/'gi_motion_history.generated.h').write_text('#pragma once\ninline constexpr unsigned char kGIMotionHistoryShader[]={\n'+','.join(map(str,result))+'\n};\ninline constexpr unsigned char kGINativeHistoryShader[]={\n'+','.join(map(str,source))+'\n};\n')
  with (out/'gi_motion_history.generated.h').open('a') as f:
   f.write('inline constexpr unsigned char kGINoHistoryShader[]={\n'+','.join(map(str,generate(source,False)))+'\n};\n')
+ with (out/'gi_motion_history.generated.h').open('a') as f:
+  f.write('inline constexpr unsigned char kGIOutlierShader[]={\n'+','.join(map(str,generate(source,False,True)))+'\n};\n')
  print('GI motion shader SHA256',hashlib.sha256(result).hexdigest())

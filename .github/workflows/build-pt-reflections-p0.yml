@@ -3,7 +3,7 @@ name: Build native reflection enhancements and RR
 on:
   push:
     branches:
-      - work/r213-gi-stage-isolation
+      - work/r214-gi-outlier-clamp
       - experiment/native-hit-capture-r118
       - experiment/pt-reflections-p0
       - experiment/pt-verify-stages-20261010
@@ -832,11 +832,11 @@ jobs:
           build\suite-controller.exe
           if errorlevel 1 exit /b 1
 
-      - name: Package live lighting diagnostic R213
+      - name: Package live lighting diagnostic R214
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-Native-Lighting-Live-R213'
+          $out='Control-FG-Native-Lighting-Live-R214'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
           Copy-Item build/rt_spot_selected_off.dxbc,build/rt_spot_selection.dxbc,build/rt_spot_visibility.dxbc,build/rt_spot_light_ids.dxbc,build/rt_spot_raw_history.dxbc,build/rt_spot_raw_spatial0.dxbc,build/rt_spot_raw_spatial1.dxbc,build/rt_spot_full.dxil,build/rt_spot_r94.dxil,build/rt_spot_light.dxbc,build/rt_spot_reset.dxbc,build/rt_spot_history.dxbc,build/rt_spot_spatial0.dxbc,build/rt_spot_spatial1.dxbc $out
@@ -857,14 +857,14 @@ jobs:
           Copy-Item Package-Lighting-Capture.cmd,tools/package-lighting-capture.py,Package-Lighting-Performance.ps1 $out
           Copy-Item Capture-RR-Boundary.cmd,Capture-RR-Boundary.ps1,Collect-RR-Boundary-Status.cmd,tools/collect-rr-boundary.py $out
           Copy-Item Start-Compact-Distance-Test.cmd,Capture-RR-Suite.ps1,tools/collect-rr-suite.py $out
-          Copy-Item docs/native-lighting-r213.md "$out/DIAGNOSTIC-NOTES.md"
+          Copy-Item docs/native-lighting-r214.md "$out/DIAGNOSTIC-NOTES.md"
           @'
-          CONTROL-FG R213 - GI temporal/spatial stage isolation on R205 baseline
-          Native Blend retains spatial filtering and current-frame energy clamp.
-          F10 GI button cycles BOTH, TEMP ONLY, SPATIAL ONLY, CLAMP ONLY.
+          CONTROL-FG R214 - GI current-frame outlier cleanup on R205 baseline
+          Default: GI CLAMP ONLY, CLEANUP ON. No GI history or native spatial passes.
+          F10 CLEANUP toggles the new outlier limit; OFF is the R213 Clamp Only comparison.
           No CameraCut override or history clears. Projection rays, MAP GUARD OFF and restored reflections retained.
           Use Native Blend, RR ON, SPEC Native, hit distance OFF and FG OFF.
-          Test each GI mode for 10 seconds on the same carpet/shadow view. Then F10 SAVE LOG.
+          Compare CLEANUP ON/OFF for speckles, ghosting, boiling and thin lighting detail. Then F10 SAVE LOG.
           No F9 suite required. Read DIAGNOSTIC-NOTES.md.
           '@ | Set-Content "$out/README.txt" -Encoding ASCII
           Compress-Archive -Path "$out/*" -DestinationPath "$out.zip" -Force
@@ -873,10 +873,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-Native-Lighting-Live-R213
+          name: Control-FG-Native-Lighting-Live-R214
           path: |
-            Control-FG-Native-Lighting-Live-R213.zip
-            Control-FG-Native-Lighting-Live-R213.sha256
+            Control-FG-Native-Lighting-Live-R214.zip
+            Control-FG-Native-Lighting-Live-R214.sha256
             build/spec-volume-roughness-validation.json
             build/spec-volume-roughness.dxbc
             build/spec-environment-validation.json

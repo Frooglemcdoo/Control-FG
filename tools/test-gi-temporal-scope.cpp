@@ -27,9 +27,10 @@ static auto rrNativeTemporalBindOriginal=&Bind;static auto rrNativeDispatchOrigi
 #include "../src/rr_gi_temporal_native.h"
 static void Bind(void* p){++binds;bound=p;assert(p==record);if(fault==1)RaiseException(0xE0420001,0,0,nullptr);SetLastError(18);}
 static void Dispatch(void*,const void*){++dispatches;if(fault==2)RaiseException(0xE0420002,0,0,nullptr);SetLastError(19);}
-static void Filter(void*,void*,unsigned passes){++filters;assert(passes==expectedPasses);assert(control_rr_gi::historyDisabled==expectedHistoryDisabled);RRNativeHookGITemporalBind(record);RRNativeHookGITemporalDispatch(nullptr,nullptr);++spatials;SetLastError(20);}
+static void Filter(void*,void*,unsigned passes){++filters;assert(passes==expectedPasses);assert(control_rr_gi::historyDisabled==expectedHistoryDisabled);assert(control_rr_gi::outlierEnabled==(expectedHistoryDisabled&&expectedPasses==0&&control_rr_gi::outlierRequested.load()));RRNativeHookGITemporalBind(record);RRNativeHookGITemporalDispatch(nullptr,nullptr);++spatials;SetLastError(20);}
 int main(){auto* history=reinterpret_cast<void*>(std::uintptr_t(verifiedRenderer)+0x90eac8);
- for(unsigned mode=0;mode<4;++mode)for(fault=0;fault<11;++fault){
+ for(unsigned cleanup=0;cleanup<2;++cleanup)for(unsigned mode=0;mode<4;++mode)for(fault=0;fault<11;++fault){
+  control_rr_gi::outlierRequested.store(cleanup!=0);
   auto stage=static_cast<control_rr_gi::StageMode>(mode);control_rr_gi::stageMode.store(stage);
   const bool eligible=fault<4||fault>=8;
   expectedPasses=eligible?control_rr_gi::SpatialPasses(stage,6):6;
@@ -42,12 +43,12 @@ int main(){auto* history=reinterpret_cast<void*>(std::uintptr_t(verifiedRenderer
   if(fault==7)rrNativeGIKeepThisFrame=false;
   __try {RRNativeRunGIFilter(verifiedRenderer,history,6);}
   __except(EXCEPTION_EXECUTE_HANDLER){caught=true;}
-  assert(caught==(fault==1||fault==2));assert(!rrNativeGIHistoryScope&&!rrNativeGIMotionBound&&filters==1&&!control_rr_gi::historyDisabled);
+  assert(caught==(fault==1||fault==2));assert(!rrNativeGIHistoryScope&&!rrNativeGIMotionBound&&filters==1&&!control_rr_gi::historyDisabled&&!control_rr_gi::outlierEnabled);
   assert(!rrNativeFrame.failed&&rrNativeFrame.selected==(fault!=5));assert(bound==record);
   if(fault==0)assert(rrNativeGIHistoryDispatches==1&&invokes==1);
   if(fault==3)assert(rrNativeGIHistoryDispatches==0&&invokes==1);
   if(fault>=4)assert(invokes==0);
   if(!caught)assert(spatials==1&&GetLastError()==20);
  }
- puts("PASS R213 all four GI stages, scoped history flag restoration, original-record forwarding, scoped pipeline invocation, context/frame gates, native fallback and exception cleanup");
+ puts("PASS R214 all four GI stages and cleanup toggle, scoped history flag restoration, original-record forwarding, scoped pipeline invocation, context/frame gates, native fallback and exception cleanup");
 }

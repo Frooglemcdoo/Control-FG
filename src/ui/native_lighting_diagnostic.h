@@ -17,8 +17,9 @@ inline constexpr int kCameraY = kPerformanceY + 46;
 inline constexpr int kCaptureStatusY = kCameraY + 116;
 inline constexpr int kFooterY = kCaptureStatusY + 50;
 inline constexpr int kHeight = kFooterY + 72;
-inline constexpr unsigned kButtonCount = kModeCount + 13;
+inline constexpr unsigned kButtonCount = kModeCount + 14;
 inline const wchar_t* ButtonLabel(unsigned index) noexcept {
+    if(index==kModeCount+13)return control_rr_gi::stageMode.load()!=control_rr_gi::StageMode::ClampOnly?L"CLEANUP: N/A":control_rr_gi::outlierRequested.load()?L"CLEANUP: ON":L"CLEANUP: OFF";
     if(index==kModeCount+12)return control_rr_gi::StageLabel(control_rr_gi::stageMode.load());
     if (index < kModeCount) return kModeChoices[index].label;
     if (index == kModeCount + 11) {
@@ -146,7 +147,7 @@ inline void SaveReport(HWND window) noexcept {
     Trace("free_camera_status installed=%u mode=%d generation=%llu pending=%u result=%u updates=%llu thread=%lu",
         unsigned(free_camera::installed.load()),free_camera::commands.Mode(),static_cast<unsigned long long>(free_camera::commands.Generation()),
         unsigned(free_camera::commands.Pending()),unsigned(free_camera::commands.Status()),free_camera::updates.load(),free_camera::updateThread.load());
-    Trace("gi_stage_save build=R213 requested=%s",control_rr_gi::StageName(control_rr_gi::stageMode.load()));
+    Trace("gi_stage_save build=R214 requested=%s outlier_requested=%u",control_rr_gi::StageName(control_rr_gi::stageMode.load()),unsigned(control_rr_gi::outlierRequested.load()));
     ReportSpecIsolation("save_log");
     ReportRRPaths("save_log");
     Trace("spec_retry_save matched=%llu created=%llu failures=%llu creation_only=1",spec_retry::matched.load(),spec_retry::created.load(),spec_retry::failures.load());
@@ -316,10 +317,16 @@ inline LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPA
                 const auto next=NativeBlendMode(!NativeBlendMapGuard(current),IsNativeBlend(current)?UsesNativeBlendProjection(current):UsesNativeBlendProjection(kNativeBlendDefaultMode));
                 selectionRejected=!SelectMode(next);savedNotice=0;
             }
+            else if(index==kModeCount+13 && !capture_suite::active && control_rr_gi::stageMode.load()==control_rr_gi::StageMode::ClampOnly) {
+                const bool next=!control_rr_gi::outlierRequested.load();
+                control_rr_gi::outlierRequested.store(next,std::memory_order_release);
+                Trace("gi_outlier_request build=R214 enabled=%u clamp_only=1",unsigned(next));
+                savedNotice=0;
+            }
             else if(index==kModeCount+12 && !capture_suite::active) {
                 const auto next=control_rr_gi::NextStage(control_rr_gi::stageMode.load());
                 control_rr_gi::stageMode.store(next,std::memory_order_release);
-                Trace("gi_stage_request build=R213 stage=%s native_blend_only=1",control_rr_gi::StageName(next));
+                Trace("gi_stage_request build=R214 stage=%s native_blend_only=1",control_rr_gi::StageName(next));
                 savedNotice=0;
             }
             else if(index==kModeCount+9) RequestCamera(window,1);
