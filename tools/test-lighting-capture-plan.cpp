@@ -152,14 +152,14 @@ int main(){
  assert(UsesDirectSurfaceNormals(Mode::RoomNativeBlendLegacy));
  assert(BypassesSpotHistory(Mode::RoomNativeBlendLegacy)&&!BypassesRR(Mode::RoomNativeBlendLegacy));
  assert(UsesAuthoredClip(Mode::RoomNativeBlendLegacy)&&SupportsLightContextCapture(Mode::RoomNativeBlendLegacy));
- assert(UsesWorldAlbedo(Mode::RoomNativeBlendLegacy)&&PreservesGiFiltering(Mode::RoomNativeBlendLegacy));
+ assert(UsesWorldAlbedo(Mode::RoomNativeBlendLegacy)&&!PreservesGiFiltering(Mode::RoomNativeBlendLegacy));
  assert(SpecularSampleRequest(Mode::RoomNativeBlendLegacy)==SpecularSampleRequest(Mode::RoomNativeBlend));
  assert(Applied(Mode::RoomNativeBlendLegacy,kAllBits,true));
  for(auto mode:{Mode::RoomNativeBlendProjection,Mode::RoomNativeBlendProjectionLegacy}) {
   spotProjectionReady=false;assert(!ModeAvailable(mode,kRtSpotReadyBit));
   spotProjectionReady=true;assert(ModeAvailable(mode,kRtSpotReadyBit));
   assert(IsNativeBlend(mode)&&UsesNativeBlendProjection(mode)&&UsesAuthoredClip(mode));
-  assert(!BypassesRR(mode)&&BypassesSpotHistory(mode)&&PreservesGiFiltering(mode)&&UsesWorldAlbedo(mode));
+  assert(!BypassesRR(mode)&&BypassesSpotHistory(mode)&&!PreservesGiFiltering(mode)&&UsesWorldAlbedo(mode));
   assert(SupportsLightContextCapture(mode)&&Applied(mode,kAllBits,true));
   assert(SpecularSampleRequest(mode)==SpecularSampleRequest(Mode::RoomNativeBlend));
   assert(NativeBlendMode(NativeBlendMapGuard(mode),true)==mode);
@@ -218,7 +218,7 @@ int main(){
   assert(!UsesWorldAlbedo(Mode::Native));
   assert(!PreservesGiFiltering(Mode::Native));
   assert(UsesWorldAlbedo(Mode::RoomNativeBlend));
-  assert(PreservesGiFiltering(Mode::RoomNativeBlend));
+  assert(!PreservesGiFiltering(Mode::RoomNativeBlend));
   assert(SpecularSampleRequest(Mode::RtSpotSpec16)==16);
   assert(SpecularSampleRequest(Mode::RtSpotTemporal2)==2);
  }

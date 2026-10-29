@@ -166,7 +166,9 @@ inline bool UsesWorldAlbedo(Mode mode) noexcept { return IsSpecularSampleMode(mo
 inline bool UsesPerspectiveGuide(Mode mode) noexcept { return mode == Mode::RtSpotViewAngle; }
 inline bool PreservesSpecularFiltering(Mode mode) noexcept { return mode == Mode::RtSpotSpecularFiltered; }
 // These denoising diagnostics retain the centered, filtered shadow routes.
-inline bool PreservesGiFiltering(Mode mode) noexcept { if(IsRoomMode(mode))return IsSpotIsolationMode(mode)||mode==Mode::RoomGi||mode==Mode::RoomBoth; return IsSpecularSampleMode(mode) || IsGiSampleMode(mode) || mode == Mode::RtSpotGiFiltered || mode == Mode::RtSpotWorldAlbedo || mode == Mode::RtSpotSpecularFiltered || mode == Mode::RtSpotViewAngle; }
+// R206 isolation: bypass the native GI prefilter only in Native Blend.
+// RR remains responsible for reconstruction; GI lighting itself stays enabled.
+inline bool PreservesGiFiltering(Mode mode) noexcept { if(IsNativeBlend(mode))return false; if(IsRoomMode(mode))return IsSpotIsolationMode(mode)||mode==Mode::RoomGi||mode==Mode::RoomBoth; return IsSpecularSampleMode(mode) || IsGiSampleMode(mode) || mode == Mode::RtSpotGiFiltered || mode == Mode::RtSpotWorldAlbedo || mode == Mode::RtSpotSpecularFiltered || mode == Mode::RtSpotViewAngle; }
 inline bool PreservesBroadDiffuseFiltering(Mode mode) noexcept {
     return mode == Mode::RtSpotDiffuseFiltered;
 }
