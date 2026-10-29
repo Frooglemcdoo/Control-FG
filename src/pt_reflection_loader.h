@@ -476,7 +476,15 @@ static void* PTReflectionHookTechniqueLookup(void* rfx,const char* technique) {
 
 #include "pt_glass_runtime.h"
 
+#include "../build/gi_motion_history.generated.h"
+static constexpr int kGIMotionHistoryStorageId=0x6F474931;
+static std::atomic<bool> rrGIMotionStorageReady{false};
 static const char* PTReflectionHookShaderStorageGet(int id) {
+    if(id==kGIMotionHistoryStorageId&&rrGIMotionStorageReady.load(std::memory_order_acquire)){
+        static std::atomic<unsigned> gets{0};
+        if(gets.fetch_add(1,std::memory_order_relaxed)<4)native_lighting::Trace("gi_temporal_shader_get build=R210 bytes=%u",unsigned(sizeof(kGIMotionHistoryShader)));
+        return reinterpret_cast<const char*>(kGIMotionHistoryShader);
+    }
     if(id>=kRRWorldAlbedoStorageBase && id<kRRWorldAlbedoStorageBase+4 &&
        rrWorldAlbedoStorageReady.load(std::memory_order_acquire))
         return reinterpret_cast<const char*>(kRRWorldVariants[id-kRRWorldAlbedoStorageBase].replay);
@@ -1970,6 +1978,7 @@ static bool PTReflectionInstallShaderLookupHooks(HMODULE renderer,HMODULE d3d) n
     ptReflectionP2InjectionEnabled=false;
     ptReflectionForcedNativeVariant=-1;
     const bool storageReady=PTReflectionInstallStorageGetHooks(d3d);
+    rrGIMotionStorageReady.store(storageReady,std::memory_order_release);
     rrHairOpacityStorageReady.store(storageReady,std::memory_order_release);
     rrCharacterBaseAlbedoStorageReady.store(storageReady,std::memory_order_release);
     rrWorldAlbedoStorageReady.store(storageReady,std::memory_order_release);

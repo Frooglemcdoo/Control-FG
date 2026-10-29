@@ -1,11 +1,11 @@
 #pragma once
-// Audited diffuse-000: history weight = (1-CameraCut)*0.7 times confidence.
+// R210: native stable history, tighter per-pixel motion/depth rejection.
 // Preserve the current-frame energy clamp and all native spatial passes.
 static bool rrNativeGIHistoryZeroThisFrame=false;
 static thread_local bool rrNativeGIHistoryScope=false;
 static thread_local unsigned rrNativeGIHistoryDispatches=0;
 static thread_local const char* rrNativeGIHistoryReason="idle";
-static thread_local control_rr_native_clamp::Lease rrNativeGIHistoryLease{};
+static thread_local bool rrNativeGIMotionBound=false;
 static RRAlbedoCallPatch rrNativeGITemporalBindPatch{};
 static RRIndirectCallPatch rrNativeGITemporalDispatchPatch{};
 static bool RRNativeGITemporalIdentity(void* record) noexcept {
@@ -16,7 +16,7 @@ static bool RRNativeGITemporalIdentity(void* record) noexcept {
  rrNativeGIHistoryReason="compute_descriptor";
  if(!RRAlbedoShader::ReadDescriptor(reinterpret_cast<std::uintptr_t>(record),0x60,&d))return false;
  static unsigned reports=0;
- if(reports++<4)native_lighting::Trace("gi_temporal_identity build=R209 slot=0x60 stage=%u id=%d bytes=%llu",d.stage,d.identifier,static_cast<unsigned long long>(d.size));
+ if(reports++<4)native_lighting::Trace("gi_temporal_identity build=R210 slot=0x60 stage=%u id=%d bytes=%llu",d.stage,d.identifier,static_cast<unsigned long long>(d.size));
  rrNativeGIHistoryReason="compute_contract";
  if(d.stage!=5||d.identifier<0||d.size!=5076)return false;
  if(record==cached&&d.shaderBase==cachedDescriptor.shaderBase&&d.identifier==cachedDescriptor.identifier&&d.stage==cachedDescriptor.stage)return true;
@@ -29,68 +29,56 @@ static bool RRNativeGITemporalIdentity(void* record) noexcept {
  rrNativeGIHistoryReason="shader_hash";
  if(!PTReflectionSha256(bytes,sizeof(bytes),hash))return false;
  if(std::strcmp(hash,"d54d94fdbb783796cc33bc78ab20dde687d90d9cba6f24c8092a6b177eec5d15")){
-  if(reports<=4)native_lighting::Trace("gi_temporal_identity build=R209 rejected_sha256=%s",hash);
+  if(reports<=4)native_lighting::Trace("gi_temporal_identity build=R210 rejected_sha256=%s",hash);
   return false;
  }
  cached=record;cachedDescriptor=d;return true;
 }
-static bool RRNativeGIArm() noexcept {
- // Keep the snapshot live even when a write succeeds but verification fails.
- auto& lease=rrNativeGIHistoryLease;
- rrNativeGIHistoryReason="camera_cut_resolve";
- if(!rrNativeClampApi.ResolveCameraCut(lease.provider))return false;
- rrNativeGIHistoryReason="camera_cut_snapshot";
- if(!rrNativeClampApi.ReadCurrent(lease.provider,lease.original)||lease.original>1)return false;
- lease.armed=true;
- rrNativeGIHistoryReason="camera_cut_force";
- if(!rrNativeClampApi.SetVerified(lease.provider,1)){
-  if(!rrNativeClampApi.Restore(lease))rrNativeFrame.Fail("gi_temporal_arm_restore_failed");
-  return false;
- }
- return true;
+// One immutable clone for the admitted native record; never overwrite a live descriptor.
+alignas(16) static unsigned char rrGIMotionRecord[0xA8]{},rrGIMotionDescriptor[0x100]{};
+static void* rrGIMotionSource=nullptr;
+static RRAlbedoShader::NativeDescriptor rrGIMotionSourceDescriptor{};
+static bool RRNativeGIPrepareMotion(void* record) noexcept {
+ rrNativeGIHistoryReason="storage_unavailable";
+ if(!rrGIMotionStorageReady.load(std::memory_order_acquire))return false;
+ if(!RRNativeGITemporalIdentity(record))return false;
+ RRAlbedoShader::NativeDescriptor d{};
+ if(!RRAlbedoShader::ReadDescriptor(reinterpret_cast<std::uintptr_t>(record),0x60,&d))return false;
+ rrNativeGIHistoryReason="clone_identity_changed";
+ if(rrGIMotionSource)return record==rrGIMotionSource&&d.shaderBase==rrGIMotionSourceDescriptor.shaderBase&&
+  d.identifier==rrGIMotionSourceDescriptor.identifier&&d.stage==rrGIMotionSourceDescriptor.stage&&d.size==rrGIMotionSourceDescriptor.size;
+ rrNativeGIHistoryReason="clone_failed";
+ if(!PTReflectionCloneShaderRecord(record,0x60,5,kGIMotionHistoryStorageId,sizeof(kGIMotionHistoryShader),rrGIMotionRecord,rrGIMotionDescriptor))return false;
+ rrGIMotionSource=record;rrGIMotionSourceDescriptor=d;return true;
 }
 static void RRNativeHookGITemporalBind(void* record){
  if(!rrNativeGIHistoryScope){rrNativeTemporalBindOriginal(record);return;}
  const DWORD saved=GetLastError();
- if(!RRNativeGITemporalIdentity(record)||!RRNativeGIArm()){
-  // Optional experiment rejected: native GI filtering and RR remain active.
-  SetLastError(saved);rrNativeTemporalBindOriginal(record);return;
- }
+ const bool apply=RRNativeGIPrepareMotion(record);
  SetLastError(saved);
- rrNativeTemporalBindOriginal(record);
- rrNativeGIHistoryLease.bindReturned=true;
+ rrNativeTemporalBindOriginal(apply?rrGIMotionRecord:record);
+ rrNativeGIMotionBound=apply;
+ if(apply)rrNativeGIHistoryReason="motion_history_bound";
 }
 static void RRNativeHookGITemporalDispatch(void* state,const void* groups){
- if(!rrNativeGIHistoryScope){rrNativeDispatchOriginal(state,groups);return;}
- const DWORD saved=GetLastError();
- const bool forced=rrNativeGIHistoryLease.bindReturned&&rrNativeClampApi.StillForced(rrNativeGIHistoryLease);
- if(rrNativeGIHistoryLease.bindReturned&&!forced)rrNativeGIHistoryReason="dispatch_not_forced";
- SetLastError(saved);
- __try {
-  rrNativeDispatchOriginal(state,groups);
-  if(forced){++rrNativeGIHistoryDispatches;rrNativeGIHistoryReason="applied";}
- } __finally {
-  const DWORD nativeError=GetLastError();
-  if(!rrNativeClampApi.Restore(rrNativeGIHistoryLease))rrNativeFrame.Fail("gi_temporal_restore_failed");
-  SetLastError(nativeError);
- }
+ rrNativeDispatchOriginal(state,groups);
+ if(rrNativeGIHistoryScope&&rrNativeGIMotionBound){++rrNativeGIHistoryDispatches;rrNativeGIHistoryReason="applied";}
 }
 static void RRNativeRunGIFilter(void* color,void* history,unsigned passes){
  const bool eligible=rrNativeFrameEnabled&&rrNativeGIKeepThisFrame&&rrNativeGIHistoryZeroThisFrame&&
   rrNativeFrame.Selected()&&rrNativeFrame.Stage()==control_rr::RRFrameStage::Lighting&&color&&passes&&
   reinterpret_cast<std::uintptr_t>(history)==reinterpret_cast<std::uintptr_t>(verifiedRenderer)+0x90eac8;
  if(!eligible||rrNativeGIHistoryScope){rrNativeDiffuseFilterOriginal(color,history,passes);return;}
- rrNativeGIHistoryScope=true;rrNativeGIHistoryLease={};rrNativeGIHistoryDispatches=0;rrNativeGIHistoryReason="no_temporal_bind";
+ rrNativeGIHistoryScope=true;rrNativeGIMotionBound=false;rrNativeGIHistoryDispatches=0;rrNativeGIHistoryReason="no_temporal_bind";
  __try {rrNativeDiffuseFilterOriginal(color,history,passes);}
  __finally {
   const DWORD saved=GetLastError();
-  const bool restored=rrNativeClampApi.Restore(rrNativeGIHistoryLease);
-  const bool okay=restored&&rrNativeGIHistoryDispatches==1;
+  const bool okay=rrNativeGIHistoryDispatches==1;
   rrNativeGIHistoryScope=false;
-  if(!restored)rrNativeFrame.Fail("gi_temporal_scope_restore_failed");
+  rrNativeGIMotionBound=false;
   static unsigned long long calls=0; ++calls;
   if(calls<=4||calls%240==0)
-   native_lighting::Trace("gi_temporal_zero build=R209 applied=%u calls=%llu dispatches=%u restored=%u spatial_passes=%u history_clear=0 reason=%s rr_selected=%u",unsigned(okay),calls,rrNativeGIHistoryDispatches,unsigned(restored),passes,rrNativeGIHistoryReason,unsigned(rrNativeFrame.Selected()));
+   native_lighting::Trace("gi_temporal_adaptive build=R210 applied=%u calls=%llu dispatches=%u spatial_passes=%u history_clear=0 provider_override=0 motion_scale=400 depth_threshold=0.01 reason=%s rr_selected=%u",unsigned(okay),calls,rrNativeGIHistoryDispatches,passes,rrNativeGIHistoryReason,unsigned(rrNativeFrame.Selected()));
   SetLastError(saved);
  }
 }
