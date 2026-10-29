@@ -26,4 +26,22 @@ inline unsigned char* AppendIfRoom(Array* array,const void* source) noexcept {
     std::memcpy(destination,source,64);
     return destination;
 }
+// Separate eight-byte material-reference append used by the same RT builder.
+// Keep the accepted 64-byte implementation above unchanged for an isolated A/B.
+inline unsigned char* AppendPointerIfRoom(Array* array,const void* source) noexcept {
+    if(!array||!source||!array->data)return nullptr;
+    const auto size=array->size;
+    if(size>=(array->capacityFlags&0x3fffffffu))return nullptr;
+    auto* destination=array->data+std::size_t(size)*8;
+    const auto dst=reinterpret_cast<std::uintptr_t>(destination),header=reinterpret_cast<std::uintptr_t>(array);
+    if(Overlap(dst,8,header,sizeof(Array)))return nullptr;
+    // Native order: increment count, load one whole pointer, store it. Unlike
+    // the 64-byte interleaved copy, one temporary preserves source overlap
+    // and source/header aliasing exactly. Never dereference the copied pointer.
+    array->size=size+1;
+    std::uint64_t value;
+    std::memcpy(&value,source,8);
+    std::memcpy(destination,&value,8);
+    return destination;
+}
 }

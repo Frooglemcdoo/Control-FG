@@ -56,6 +56,14 @@ static void TestAppend(){
     auto* src=pages+pageSize-64;auto* dst=pages+pageSize*3-64;
     for(unsigned i=0;i<64;++i)src[i]=static_cast<unsigned char>(i+3);
     Array bounded{dst,0,1};assert(AppendIfRoom(&bounded,src)==dst&&memcmp(dst,src,64)==0);
+    // Eight-byte copies at both read and write guard-page boundaries.
+    bounded={pages+pageSize*3-8,0,1};src=pages+pageSize-8;
+    assert(AppendPointerIfRoom(&bounded,src)==bounded.data&&memcmp(bounded.data,src,8)==0);
+    native_rt_pointer::original=&AppendFallback;native_rt_pointer::enabled=true;
+    a.size=0;SetLastError(123);assert(native_rt_pointer::Hook(&a,source)==data&&a.size==1&&GetLastError()==123);
+    native_rt_pointer::enabled=false;SetLastError(123);assert(native_rt_pointer::Hook(&a,source)==reinterpret_cast<void*>(0x1234)&&GetLastError()==456);
+    native_rt_pointer::enabled=true;a.size=2;SetLastError(123);assert(native_rt_pointer::Hook(&a,source)==reinterpret_cast<void*>(0x1234)&&a.size==2);
+    native_rt_pointer::enabled=false;
     VirtualFree(pages,0,MEM_RELEASE);enabled=false;
 }
 int main(){
