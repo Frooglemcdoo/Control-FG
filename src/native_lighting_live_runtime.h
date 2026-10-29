@@ -1,5 +1,6 @@
 #pragma once
 #include "rr_capture_ui.h"
+#include "rr_gi_pipeline.h"
 #include "native_lighting_isolation.h"
 #include "rt_baked_gi_patches.generated.h"
 #include "native_lighting_live_state.h"
@@ -226,6 +227,7 @@ inline void RecordCompute(const D3D12_COMPUTE_PIPELINE_STATE_DESC*) noexcept;
 }
 inline void ObserveCompute(ID3D12Device* device, const D3D12_COMPUTE_PIPELINE_STATE_DESC* desc, IUnknown* native, CreateCompute original) noexcept {
     computeSeen.fetch_add(1);
+    control_rr_gi::Capture(device,desc,native,original);
     IdentifyPipeline(native, desc->CS, 2);
     rt_shadow_capture::RecordCompute(desc);
     rt_spot_runtime::ObserveCompute(device,desc,native,original);

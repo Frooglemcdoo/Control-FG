@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <new>
 #include "rr_clamp_strength_policy.h"
+#include "rr_gi_pipeline.h"
 #include "rr_suite_pipelines.h"
 #include "rr_specular_temporal_policy.h"
 #include "../build/rr_clamp_temporal.h"
@@ -26,7 +27,7 @@ inline ID3D12Device* hostDevice=nullptr; // held for the bounded process-lifetim
 struct Bundle {ID3D12PipelineState* native=nullptr;ID3D12PipelineState* variants[VariantCount]{};ID3D12PipelineState* temporal=nullptr;};
 inline std::atomic<Bundle*> bundles[8]{};
 inline std::atomic<unsigned> bundleCount{0};
-struct Request {ID3D12GraphicsCommandList* list=nullptr;ID3D12PipelineState* observed=nullptr;unsigned strength=100,count=0;bool used=false,temporal=false;};
+struct Request {ID3D12GraphicsCommandList* list=nullptr;ID3D12PipelineState* observed=nullptr;unsigned strength=100,count=0;bool used=false,temporal=false,gi=false;};
 inline thread_local Request* active=nullptr;
 inline bool Exchange(void** slot,void* expected,void* replacement) noexcept {
  DWORD protection=0;if(!VirtualProtect(slot,sizeof(void*),PAGE_READWRITE,&protection))return false;
@@ -98,7 +99,12 @@ inline void STDMETHODCALLTYPE Dispatch(ID3D12GraphicsCommandList* list,UINT x,UI
   if(rr_suite::Run(list,x,y,z,setOriginal,dispatchOriginal))return;
 #endif
   dispatchOriginal(list,x,y,z);return;}
- ++request->count;auto* b=Find(request->observed);const int variant=Variant(request->strength);
+ ++request->count;
+ if(request->gi){
+  control_rr_gi::Dispatch(request->observed,request->count,request->used,list,x,y,z,setOriginal,dispatchOriginal);
+  return;
+ }
+ auto* b=Find(request->observed);const int variant=Variant(request->strength);
  auto* replacement=request->temporal?(b?b->temporal:nullptr):((b&&variant>=0)?b->variants[variant]:nullptr);
  if(!Admit(true,true,b!=nullptr,replacement!=nullptr,request->count)){dispatchOriginal(list,x,y,z);return;}
  // This runs after the native DeviceUtil has committed its root/descriptors/PSO.
@@ -122,6 +128,14 @@ inline bool InstallList(ID3D12GraphicsCommandList* list) noexcept {
 // Internal fallback=100 and RR OFF never substitute shaders. A missed creation path or
 // unobserved native PSO gives an explicit native fallback, not a guessed binding.
 using NativeDispatchFn=void (*)(void*,const void*);
+inline bool InvokeGI(NativeDispatchFn fn,void* state,const void* groups,ID3D12GraphicsCommandList* list) {
+ Request request{};request.gi=true;request.list=list;auto* previous=active;
+ const DWORD incoming=GetLastError();DWORD nativeError=incoming;
+ const bool armed=!previous&&InstallList(list);
+ __try {if(armed)active=&request;SetLastError(incoming);fn(state,groups);nativeError=GetLastError();}
+ __finally {active=previous;}
+ SetLastError(nativeError);return armed&&request.used&&request.count==1;
+}
 inline bool Invoke(NativeDispatchFn fn,void* state,const void* groups,ID3D12GraphicsCommandList* list,unsigned strength,bool temporal=false,bool* used=nullptr) {
  Request request{};request.temporal=temporal;request.list=list;request.strength=strength;auto* previous=active;
  const DWORD incoming=GetLastError();DWORD nativeError=incoming;

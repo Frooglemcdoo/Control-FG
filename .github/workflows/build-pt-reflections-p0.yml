@@ -3,7 +3,7 @@ name: Build native reflection enhancements and RR
 on:
   push:
     branches:
-      - work/r210-gi-motion-history
+      - work/r211-gi-pipeline-scope
       - experiment/native-hit-capture-r118
       - experiment/pt-reflections-p0
       - experiment/pt-verify-stages-20261010
@@ -832,11 +832,11 @@ jobs:
           build\suite-controller.exe
           if errorlevel 1 exit /b 1
 
-      - name: Package live lighting diagnostic R210
+      - name: Package live lighting diagnostic R211
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-Native-Lighting-Live-R210'
+          $out='Control-FG-Native-Lighting-Live-R211'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
           Copy-Item build/rt_spot_selected_off.dxbc,build/rt_spot_selection.dxbc,build/rt_spot_visibility.dxbc,build/rt_spot_light_ids.dxbc,build/rt_spot_raw_history.dxbc,build/rt_spot_raw_spatial0.dxbc,build/rt_spot_raw_spatial1.dxbc,build/rt_spot_full.dxil,build/rt_spot_r94.dxil,build/rt_spot_light.dxbc,build/rt_spot_reset.dxbc,build/rt_spot_history.dxbc,build/rt_spot_spatial0.dxbc,build/rt_spot_spatial1.dxbc $out
@@ -857,9 +857,9 @@ jobs:
           Copy-Item Package-Lighting-Capture.cmd,tools/package-lighting-capture.py,Package-Lighting-Performance.ps1 $out
           Copy-Item Capture-RR-Boundary.cmd,Capture-RR-Boundary.ps1,Collect-RR-Boundary-Status.cmd,tools/collect-rr-boundary.py $out
           Copy-Item Start-Compact-Distance-Test.cmd,Capture-RR-Suite.ps1,tools/collect-rr-suite.py $out
-          Copy-Item docs/native-lighting-r210.md "$out/DIAGNOSTIC-NOTES.md"
+          Copy-Item docs/native-lighting-r211.md "$out/DIAGNOSTIC-NOTES.md"
           @'
-          CONTROL-FG R210 - GI motion-aware history on R205 baseline
+          CONTROL-FG R211 - GI motion-aware history on R205 baseline
           Native Blend retains spatial filtering and current-frame energy clamp.
           Stable pixels retain native GI history; motion and depth changes reject history sooner.
           No CameraCut override or history clears. Projection rays, MAP GUARD OFF and restored reflections retained.
@@ -873,10 +873,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-Native-Lighting-Live-R210
+          name: Control-FG-Native-Lighting-Live-R211
           path: |
-            Control-FG-Native-Lighting-Live-R210.zip
-            Control-FG-Native-Lighting-Live-R210.sha256
+            Control-FG-Native-Lighting-Live-R211.zip
+            Control-FG-Native-Lighting-Live-R211.sha256
             build/spec-volume-roughness-validation.json
             build/spec-volume-roughness.dxbc
             build/spec-environment-validation.json

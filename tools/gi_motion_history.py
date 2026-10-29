@@ -17,5 +17,5 @@ if __name__=='__main__':
  source=base64.b64decode((root/'research/gi-temporal-r208/diffuse-temporal.dxbc.b64').read_text())
  result=generate(source);out=root/'build';out.mkdir(exist_ok=True)
  (out/'gi-motion-history.dxbc').write_bytes(result)
- (out/'gi_motion_history.generated.h').write_text('#pragma once\ninline constexpr unsigned char kGIMotionHistoryShader[]={\n'+','.join(map(str,result))+'\n};\n')
+ (out/'gi_motion_history.generated.h').write_text('#pragma once\ninline constexpr unsigned char kGIMotionHistoryShader[]={\n'+','.join(map(str,result))+'\n};\ninline constexpr unsigned char kGINativeHistoryShader[]={\n'+','.join(map(str,source))+'\n};\n')
  print('GI motion shader SHA256',hashlib.sha256(result).hexdigest())

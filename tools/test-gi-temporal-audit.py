@@ -32,5 +32,6 @@ print('PASS exact shader identity, CameraCut operand, native 70% history factor,
 bind=(root/'research/gi-temporal-r208/native-technique-bind.asm').read_text()
 assert '1801db79a:' in bind and '[rcx+0x60]' in bind
 header=(root/'src/rr_gi_temporal_native.h').read_text()
-assert '0x60,&d' in header and 'd.stage!=5' in header
+assert 'rrNativeTemporalBindOriginal(record)' in header
+assert 'PTReflectionCloneShaderRecord' not in header and 'CopyResident' not in header
 print('PASS native compute descriptor slot provenance')

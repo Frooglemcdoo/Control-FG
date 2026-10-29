@@ -1,0 +1,40 @@
+{
+  "src/pt_reflection_loader.h": [
+    [
+      "    rrGIMotionStorageReady.store(storageReady,std::memory_order_release);\n    rrHairOpacityStorageReady.store(storageReady,std::memory_order_release);",
+      "    rrHairOpacityStorageReady.store(storageReady,std::memory_order_release);"
+    ],
+    [
+      "#include \"../build/gi_motion_history.generated.h\"\nstatic constexpr int kGIMotionHistoryStorageId=0x6F474931;\nstatic std::atomic<bool> rrGIMotionStorageReady{false};\nstatic std::atomic<unsigned> rrGIMotionShaderGets{0};\nstatic const char* PTReflectionHookShaderStorageGet(int id) {\n    if(id==kGIMotionHistoryStorageId&&rrGIMotionStorageReady.load(std::memory_order_acquire)){\n        if(rrGIMotionShaderGets.fetch_add(1,std::memory_order_relaxed)<4)Log(\"gi_temporal_shader_get build=R210 bytes=%u\",unsigned(sizeof(kGIMotionHistoryShader)));\n        return reinterpret_cast<const char*>(kGIMotionHistoryShader);\n    }",
+      "static const char* PTReflectionHookShaderStorageGet(int id) {"
+    ]
+  ],
+  "src/rr_clamp_strength.h": [
+    [
+      "#include \"rr_clamp_strength_policy.h\"",
+      "#include \"rr_clamp_strength_policy.h\"\n#include \"rr_gi_pipeline.h\""
+    ],
+    [
+      "bool used=false,temporal=false;",
+      "bool used=false,temporal=false,gi=false;"
+    ],
+    [
+      " ++request->count;auto* b=Find(request->observed);const int variant=Variant(request->strength);",
+      " ++request->count;\n if(request->gi){\n  control_rr_gi::Dispatch(request->observed,request->count,request->used,list,x,y,z,setOriginal,dispatchOriginal);\n  return;\n }\n auto* b=Find(request->observed);const int variant=Variant(request->strength);"
+    ],
+    [
+      "inline bool Invoke(NativeDispatchFn fn,",
+      "inline bool InvokeGI(NativeDispatchFn fn,void* state,const void* groups,ID3D12GraphicsCommandList* list) {\n Request request{};request.gi=true;request.list=list;auto* previous=active;\n const DWORD incoming=GetLastError();DWORD nativeError=incoming;\n const bool armed=!previous&&InstallList(list);\n __try {if(armed)active=&request;SetLastError(incoming);fn(state,groups);nativeError=GetLastError();}\n __finally {active=previous;}\n SetLastError(nativeError);return armed&&request.used&&request.count==1;\n}\ninline bool Invoke(NativeDispatchFn fn,"
+    ]
+  ],
+  "src/native_lighting_live_runtime.h": [
+    [
+      "    computeSeen.fetch_add(1);",
+      "    computeSeen.fetch_add(1);\n    control_rr_gi::Capture(device,desc,native,original);"
+    ],
+    [
+      "#include \"rr_capture_ui.h\"",
+      "#include \"rr_capture_ui.h\"\n#include \"rr_gi_pipeline.h\""
+    ]
+  ]
+}
