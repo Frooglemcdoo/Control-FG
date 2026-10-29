@@ -28,3 +28,7 @@ assert 0<weight(.001,0)<.7
 try:generate(source[:-1]);raise AssertionError('Unknown shader accepted')
 except ValueError:pass
 print('PASS exact two-immediate transform, unchanged bindings/clamp/history factor, stable history and stricter motion/depth rejection')
+
+assert {(v['slot'],v['space']) for v in j['bindings'] if v['kind']==3}=={(6,1),(11,1)}
+fixture=(root/'tools/test-gi-motion-pso.cpp').read_text()
+assert 'samplers[0].RegisterSpace=1' in fixture and 'samplers[1].RegisterSpace=1' in fixture
