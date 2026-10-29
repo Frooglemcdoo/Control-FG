@@ -38,7 +38,28 @@ static unsigned calls=0;
 static void Original(void* self){assert(GetLastError()==123);observed=self;++calls;SetLastError(456);}
 static void OriginalWait(void* self,void* handle){Original(self);observedHandle=handle;}
 static void Throw(void*){throw std::runtime_error("native exception");}
+static unsigned appendFallbacks=0;
+static void* AppendFallback(native_rt_append::Array* array,const void* source){
+    assert(array&&source);++appendFallbacks;assert(GetLastError()==123);SetLastError(456);return reinterpret_cast<void*>(0x1234);
+}
+static void TestAppend(){
+    using namespace native_rt_append;
+    unsigned char data[128]{},source[64]{};for(unsigned i=0;i<64;++i)source[i]=static_cast<unsigned char>(i);
+    Array a{data,0,2};original=&AppendFallback;enabled=true;
+    SetLastError(123);assert(Hook(&a,source)==data&&a.size==1&&memcmp(data,source,64)==0&&GetLastError()==123&&appendFallbacks==0);
+    enabled=false;SetLastError(123);assert(Hook(&a,source)==reinterpret_cast<void*>(0x1234)&&GetLastError()==456&&appendFallbacks==1);
+    enabled=true;a.size=2;SetLastError(123);Hook(&a,source);assert(appendFallbacks==2&&a.size==2);
+    a.size=0;SetLastError(123);Hook(&a,data+1);assert(appendFallbacks==3&&a.size==0);
+    SYSTEM_INFO info{};GetSystemInfo(&info);const auto pageSize=info.dwPageSize;
+    auto* pages=static_cast<unsigned char*>(VirtualAlloc(nullptr,pageSize*4,MEM_RESERVE|MEM_COMMIT,PAGE_READWRITE));assert(pages);
+    DWORD old=0;assert(VirtualProtect(pages+pageSize,pageSize,PAGE_NOACCESS,&old));assert(VirtualProtect(pages+pageSize*3,pageSize,PAGE_NOACCESS,&old));
+    auto* src=pages+pageSize-64;auto* dst=pages+pageSize*3-64;
+    for(unsigned i=0;i<64;++i)src[i]=static_cast<unsigned char>(i+3);
+    Array bounded{dst,0,1};assert(AppendIfRoom(&bounded,src)==dst&&memcmp(dst,src,64)==0);
+    VirtualFree(pages,0,MEM_RELEASE);enabled=false;
+}
 int main(){
+    TestAppend();
     using namespace native_cpu;
     material=preparation=recording=&Original;wait=&OriginalWait;
     int object=0,handle=0;
@@ -68,5 +89,5 @@ int main(){
     assert(six.Exchange(true)&&six.healthy);SetLastError(123);reinterpret_cast<Callback>(page)(&object);assert(GetLastError()==456);
     assert(six.Exchange(false)&&!six.changed);SetLastError(123);reinterpret_cast<Callback>(page)(&object);
     VirtualFree(page,0,MEM_RELEASE);
-    std::puts("PASS native CPU runtime: forwarding, last-error, exceptions, exact call validation, executable relays and rollback");
+    std::puts("PASS RT append forwarding and guard pages; native CPU runtime: forwarding, last-error, exceptions, exact call validation, executable relays and rollback");
 }

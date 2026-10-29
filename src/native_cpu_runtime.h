@@ -1,5 +1,6 @@
 #pragma once
 #include "native_cpu_metrics.h"
+#include "native_rt_append_runtime.h"
 #include "native_cpu_call_patch.h"
 #include "rr_indirect_call_windows.h"
 // Included after the existing startup-only call/slot patch helpers.
@@ -40,7 +41,11 @@ struct Scope {
     }
 };
 inline void MaterialHook(void* self){Scope scope(Material);material(self);}
-inline void PreparationHook(void* self){Scope scope(Preparation);preparation(self);}
+inline void PreparationHook(void* self){
+    const auto before=native_rt_append::counts;
+    {Scope scope(Preparation);preparation(self);}
+    native_rt_append::Publish(before);
+}
 inline void RecordingHook(void* self){Scope scope(Recording);recording(self);}
 inline void JoinHook(void* self,void* handle){Scope scope(Join);wait(self,handle);}
 inline bool Install(HMODULE renderer) noexcept {
@@ -83,6 +88,8 @@ inline bool Install(HMODULE renderer) noexcept {
 inline void Poll(U64 present) noexcept {
     if(!installed||present%60)return;
     const auto now=GetTickCount64();if(now<nextReport)return;nextReport=now+5000;
+    Log("NATIVE_RT_APPEND_R219_STATUS present=%llu installed=%u enabled=%u completed_job_fast_appends=%llu completed_job_native_appends=%llu",
+        present,unsigned(native_rt_append::installed),unsigned(native_rt_append::enabled),native_rt_append::completedFast.load(),native_rt_append::completedNative.load());
     // Called on Present, never under a native material lock or from a worker.
     // Cumulative snapshots remain usable if a report races an in-flight sample.
     for(unsigned stage=0;stage<kStages;++stage){
