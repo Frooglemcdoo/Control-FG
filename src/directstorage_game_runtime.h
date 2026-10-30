@@ -141,7 +141,7 @@ inline bool Install() noexcept {
         if(packPatch.changed&&!packPatch.Exchange(false))Log("DIRECTSTORAGE_R233 pack_rollback_failed=1");
         Log("DIRECTSTORAGE_R233 pack_scope=0");return false;
     }
-    Log("DIRECTSTORAGE_R233 pack_scope=1 thread_slot_zero=native cache_mib=32 max_read_mib=2");
+    Log("DIRECTSTORAGE_R234 pack_scope=1 thread_slot_zero=native cache_mib=32 max_read_mib=2 window_kib=64 next_block_prefetch=0");
     Log("DIRECTSTORAGE_R230 installed=1 path=archive_prefetch source=real_rmdp destination=cpu_memory cache_mib=32 decode=native gpu_decompression=0 fallback=native phase_hooks=unchanged");
     return true;
 }
@@ -156,6 +156,8 @@ inline void Poll(unsigned long long present) noexcept {
         present,syncEligible.load(),syncServed.load(),syncServedBytes.load(),syncFallback.load(),syncPositionFailures.load());
     if(!cache)return;
     auto& c=cache->counters;
+    Log("DIRECTSTORAGE_R234_CACHE present=%llu submitted_requests=%llu submitted_bytes=%llu unused_evicted_bytes=%llu pending_covered=%llu capacity_misses=%llu",
+        present,c.submittedRequests.load(),c.submittedBytes.load(),c.unusedEvictedBytes.load(),c.pendingCovered.load(),c.capacityMisses.load());
     Log("DIRECTSTORAGE_R230_STATUS present=%llu calls=%llu served=%llu native_fallback=%llu served_bytes=%llu prefetched_bytes=%llu io_failures=%llu busy_fallback=%llu",
         present,calls.load(),served.load(),fallbacks.load(),c.hitBytes.load(),c.submittedBytes.load(),c.failures.load(),c.busy.load());
 }

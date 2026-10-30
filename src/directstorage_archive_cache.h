@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <cstring>
 #include <cwchar>
+#include "directstorage_prefetch_window.h"
 namespace control_storage {
 using Microsoft::WRL::ComPtr;
 constexpr unsigned BlockBytes=2*1024*1024,BlockCount=16,FileCount=16;
@@ -19,12 +20,13 @@ inline bool ArchivePath(const wchar_t* path) noexcept {
 }
 struct Counters {
     std::atomic<unsigned long long> requests{0},hits{0},hitBytes{0},submittedBytes{0},failures{0},busy{0};
+    std::atomic<unsigned long long> submittedRequests{0},unusedEvictedBytes{0},pendingCovered{0},capacityMisses{0};
 };
 // Process-owned storage: never retain the game's destination, OVERLAPPED or
 // event. Only completed, successful blocks can be copied into a native request.
 class ArchiveCache {
     struct File {ComPtr<IDStorageFile> source;HANDLE guard=INVALID_HANDLE_VALUE;BY_HANDLE_FILE_INFORMATION info{};};
-    struct Block {unsigned char* data=nullptr;int file=-1;std::uint64_t offset=0,age=0;unsigned size=0;bool pending=false,ready=false;};
+    struct Block {unsigned char* data=nullptr;int file=-1;std::uint64_t offset=0,age=0;unsigned size=0;bool pending=false,ready=false,used=false;};
     File files[FileCount];Block blocks[BlockCount];
     ComPtr<IDStorageFactory> factory;ComPtr<IDStorageQueue> queue;ComPtr<IDStorageStatusArray> status;
     SRWLOCK lock=SRWLOCK_INIT;std::uint64_t clock=0;bool disabled=false;
@@ -57,24 +59,31 @@ class ArchiveCache {
             }
         }
     }
-    bool Prefetch(int file,std::uint64_t offset,std::uint64_t fileSize) noexcept {
-        if(offset>=fileSize)return false;
-        for(const auto& b:blocks)if(b.file==file&&b.offset==offset&&(b.pending||b.ready))return false;
+    bool Prefetch(int file,std::uint64_t offset,unsigned count,std::uint64_t fileSize) noexcept {
+        for(const auto& b:blocks)if(b.file==file&&(b.pending||b.ready)&&offset>=b.offset&&
+            offset-b.offset<=b.size&&count<=b.size-(offset-b.offset)){
+            if(b.pending)counters.pendingCovered.fetch_add(1,std::memory_order_relaxed);
+            return false;
+        }
+        const auto window=RequestWindow(offset,count,fileSize,BlockBytes);
+        if(!window.size)return false;
         unsigned choice=BlockCount;std::uint64_t oldest=UINT64_MAX;
         for(unsigned i=0;i<BlockCount;++i){const auto& b=blocks[i];
             if(!b.pending&&b.age<oldest){choice=i;oldest=b.age;}
         }
-        if(choice==BlockCount)return false;
-        auto& b=blocks[choice];b.file=file;b.offset=offset;b.age=++clock;b.ready=false;
-        const auto available=fileSize-offset;b.size=available<BlockBytes?static_cast<unsigned>(available):BlockBytes;
+        if(choice==BlockCount){counters.capacityMisses.fetch_add(1,std::memory_order_relaxed);return false;}
+        auto& b=blocks[choice];
+        if(b.ready&&!b.used)counters.unusedEvictedBytes.fetch_add(b.size,std::memory_order_relaxed);
+        b.file=file;b.offset=window.offset;b.size=window.size;b.age=++clock;b.ready=false;b.used=false;
         DSTORAGE_REQUEST request{};
         request.Options.SourceType=DSTORAGE_REQUEST_SOURCE_FILE;
         request.Options.DestinationType=DSTORAGE_REQUEST_DESTINATION_MEMORY;
         request.Options.CompressionFormat=DSTORAGE_COMPRESSION_FORMAT_NONE;
-        request.Source.File={files[file].source.Get(),offset,b.size};
+        request.Source.File={files[file].source.Get(),b.offset,b.size};
         request.Destination.Memory={b.data,b.size};request.UncompressedSize=b.size;
         queue->EnqueueRequest(&request);queue->EnqueueStatus(status.Get(),choice);b.pending=true;
-        counters.submittedBytes.fetch_add(b.size,std::memory_order_relaxed);return true;
+        counters.submittedBytes.fetch_add(b.size,std::memory_order_relaxed);
+        counters.submittedRequests.fetch_add(1,std::memory_order_relaxed);return true;
     }
 public:
     Counters counters;
@@ -102,13 +111,12 @@ public:
         Unlock unlock{&lock};const int file=FindFile(native,info);if(file<0)return false;
         Harvest();if(disabled)return false;bool hit=false;
         for(auto& b:blocks)if(b.ready&&b.file==file&&offset>=b.offset&&offset-b.offset<=b.size&&count<=b.size-(offset-b.offset)){
-            memcpy(destination,b.data+static_cast<size_t>(offset-b.offset),count);b.age=++clock;hit=true;break;
+            memcpy(destination,b.data+static_cast<size_t>(offset-b.offset),count);b.age=++clock;b.used=true;hit=true;break;
         }
         // At most 16 outstanding requests + 16 statuses, below queue capacity.
         // Never recycle an in-flight destination or wait for its completion.
-        const auto base=offset-offset%BlockBytes;
-        bool submitted=Prefetch(file,base,size);submitted=Prefetch(file,base+BlockBytes,size)||submitted;
-        if(submitted)queue->Submit();
+        // Hits submit no I/O; misses fetch only a rounded demand window.
+        if(!hit&&Prefetch(file,offset,count,size))queue->Submit();
         if(hit){counters.hits.fetch_add(1,std::memory_order_relaxed);counters.hitBytes.fetch_add(count,std::memory_order_relaxed);}
         return hit;
     }

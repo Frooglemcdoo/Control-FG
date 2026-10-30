@@ -66,6 +66,7 @@ int wmain(){
     Check(GetOverlappedResult(file,&ov,&received,FALSE)&&received==1367,"native fallback result");
     Check(memcmp(output,expected.data()+713,1367)==0&&output[1367]==0xcc,"native fallback bytes");
     Check(native_directstorage::fallbacks.load()==1,"cold native fallback");
+    Check(cache.counters.submittedRequests.load()==1&&cache.counters.submittedBytes.load()==PrefetchGranularity,"small cold demand submits one 64KiB window only");
     const auto deadline=GetTickCount64()+30000;
     while(!cache.TryRead(file,713,output,1367)){
         Check(GetTickCount64()<deadline,"cache completion timeout");Sleep(1);
@@ -76,6 +77,7 @@ int wmain(){
     Check(WaitForSingleObject(event,0)==WAIT_OBJECT_0,"hit completion event");
     Check(memcmp(output,expected.data()+713,1367)==0&&output[1367]==0xcc,"hit exact bytes");
     Check(native_directstorage::served.load()==1,"real served counter");
+    Check(cache.counters.submittedRequests.load()==1&&cache.counters.submittedBytes.load()==PrefetchGranularity,"pending repeats and hits submit no extra read-ahead");
     // The synthetic leaf reproduces mov rax,[rcx]; jmp [rax+90h]. It
     // exercises the real tail patch, scoped wrapper and native bookkeeping.
     syncFile=CreateFileW(path.c_str(),GENERIC_READ,FILE_SHARE_READ,nullptr,OPEN_EXISTING,FILE_ATTRIBUTE_NORMAL,nullptr);
@@ -119,6 +121,14 @@ int wmain(){
     Check(!cache.TryRead(file,0,output,0),"zero fallback");
     Check(!cache.TryRead(file,0,output,BlockBytes+1),"large fallback before touching destination");
     Check(!cache.TryRead(file,BlockBytes-10,output,20),"cross block fallback");
+    const auto crossDeadline=GetTickCount64()+30000;
+    while(!cache.TryRead(file,BlockBytes-10,output,20)){Check(GetTickCount64()<crossDeadline,"cross window completion");Sleep(1);}
+    Check(memcmp(output,expected.data()+BlockBytes-10,20)==0,"cross old 2MiB boundary exact bytes");
+    std::vector<unsigned char> large(BlockBytes+1,0xcc);
+    const auto largeDeadline=GetTickCount64()+30000;
+    while(!cache.TryRead(file,BlockBytes+713,large.data(),BlockBytes)){Check(GetTickCount64()<largeDeadline,"unaligned maximum demand completion");Sleep(1);}
+    Check(memcmp(large.data(),expected.data()+BlockBytes+713,BlockBytes)==0&&large[BlockBytes]==0xcc,"unaligned 2MiB demand and guard byte");
+    puts("PASS R234 request windows: one 64KiB small-demand fetch, no next-block fetch, no duplicate pending/hit submissions, exact crossing and maximum-size unaligned reads");
     HANDLE mutation=CreateFileW(path.c_str(),GENERIC_WRITE,FILE_SHARE_READ|FILE_SHARE_WRITE|FILE_SHARE_DELETE,nullptr,OPEN_EXISTING,FILE_ATTRIBUTE_NORMAL,nullptr);
     Check(mutation==INVALID_HANDLE_VALUE,"archive mutation blocked while cached");
     HANDLE second=CreateFileW(other.c_str(),GENERIC_READ,FILE_SHARE_READ,nullptr,OPEN_EXISTING,FILE_FLAG_OVERLAPPED,nullptr);
