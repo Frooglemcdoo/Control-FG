@@ -5,6 +5,7 @@
 #include "native_rt_append_runtime.h"
 #include "native_rt_pointer_runtime.h"
 #include "native_cpu_call_patch.h"
+#include "native_material_diff_runtime.h"
 #include "rr_indirect_call_windows.h"
 // Included after the existing startup-only call/slot patch helpers.
 namespace native_cpu {
@@ -158,6 +159,7 @@ inline void Poll(U64 present) noexcept {
     Log("NATIVE_RT_POINTER_R220_STATUS present=%llu installed=%u enabled=%u completed_job_fast_appends=%llu completed_job_native_appends=%llu",
         present,unsigned(native_rt_pointer::installed),unsigned(native_rt_pointer::enabled),native_rt_pointer::completedFast.load(),native_rt_pointer::completedNative.load());
     native_dirty::Poll(present);
+    native_material_diff::Poll(present);
     if(workloadEnabled){
         for(unsigned t=0;t<kThreads;++t){
             const auto tid=threads[t].tid.load();if(!tid)continue;

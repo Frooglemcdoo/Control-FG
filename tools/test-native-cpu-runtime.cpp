@@ -116,8 +116,37 @@ static void TestDirtyWriters(){
     }
     std::puts("PASS all eight dirty-store probes: original writes, flags, LastError, exact counters, unwind at instruction boundaries and rollback");
 }
+static unsigned diffCalls=0;
+static void* diffExpected[4]{};
+static bool diffMutate=true;
+static void DiffOriginal(void* manager,void* handle,void* source,void* textures){
+    assert(GetLastError()==123);assert(manager==diffExpected[0]&&handle==diffExpected[1]&&source==diffExpected[2]&&textures==diffExpected[3]);++diffCalls;
+    if(diffMutate){
+        using native_workload::Load;
+        auto* hash=Load<std::uint32_t*>(manager,0x98);auto* record=Load<std::uint32_t*>(manager,0x88);
+        ++*hash;record[3]=99;record[0x148/4]=77;
+    }
+    SetLastError(456);
+}
+static void TestMaterialDiff(){
+    using namespace native_material_diff;
+    unsigned char manager[0x100]{};std::uint32_t handle=0,count=1,hash=10,record[Words]{},incoming[Words]{};
+    std::uint64_t key=5;const void* pair[2]{&key,incoming};
+    void* hashes=&hash;void* records=record;void* keys=&key;
+    memcpy(manager+0x80,&count,4);memcpy(manager+0x98,&hashes,8);memcpy(manager+0x88,&records,8);memcpy(manager+0x78,&keys,8);
+    diffExpected[0]=manager;diffExpected[1]=&handle;diffExpected[2]=pair;diffExpected[3]=reinterpret_cast<void*>(0x1234);
+    original=&DiffOriginal;ordinal=0;
+    SetLastError(123);Hook(manager,&handle,pair,diffExpected[3]);assert(GetLastError()==456&&diffCalls==1);
+    Event event;assert(queue.Pop(event)&&event.entry==0&&event.oldHash==10&&event.newHash==11&&event.changes==2&&event.offset[0]==12&&event.committedDerived==77);
+    SetLastError(123);Hook(manager,&handle,pair,diffExpected[3]);assert(GetLastError()==456&&!queue.Pop(event));
+    diffMutate=false;SetLastError(123);Hook(manager,&handle,pair,diffExpected[3]);assert(changed==2&&!queue.Pop(event));
+    handle=2;SetLastError(123);Hook(manager,&handle,pair,diffExpected[3]);assert(invalid==1&&GetLastError()==456);
+    diffExpected[1]=nullptr;SetLastError(123);Hook(manager,nullptr,pair,diffExpected[3]);assert(GetLastError()==456&&diffCalls==5);
+    std::puts("PASS material diff runtime: four-argument forwarding, committed changes, sampling, unchanged/invalid/null paths and LastError");
+}
 int main(){
     TestDirtyWriters();
+    TestMaterialDiff();
     // No opt-in (or malformed opt-in) must never inspect renderer memory.
     for(const char* value:{static_cast<const char*>(nullptr),"0","10","true","123456789"}){
         SetEnvironmentVariableA("CONTROLFG_CPU_APPEND_HOOKS",value);

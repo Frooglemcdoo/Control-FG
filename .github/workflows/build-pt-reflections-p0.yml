@@ -3,6 +3,7 @@ name: Build native reflection enhancements and RR
 on:
   push:
     branches:
+      - work/r224-native-material-diffs
       - work/r223-native-dirty-writers
       - work/r222-native-cpu-investigation
       - work/r221-native-append-bypass
@@ -97,6 +98,10 @@ jobs:
           cl /nologo /std:c++17 /EHsc /W4 /WX /O2 tools\test-native-cpu-workload.cpp /Febuild\test-native-cpu-workload.exe
           if errorlevel 1 exit /b 1
           build\test-native-cpu-workload.exe
+          if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX /O2 tools\test-native-material-diff.cpp /Febuild\test-native-material-diff.exe
+          if errorlevel 1 exit /b 1
+          build\test-native-material-diff.exe
           if errorlevel 1 exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /O2 tools\test-native-cpu-runtime.cpp /Febuild\test-native-cpu-runtime.exe
           if errorlevel 1 exit /b 1
@@ -865,11 +870,11 @@ jobs:
           build\suite-controller.exe
           if errorlevel 1 exit /b 1
 
-      - name: Package native dirty writer diagnosis R223
+      - name: Package native material diff diagnosis R224
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-Native-Dirty-Writers-R223'
+          $out='Control-FG-Native-Material-Diffs-R224'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
           Copy-Item build/rt_spot_selected_off.dxbc,build/rt_spot_selection.dxbc,build/rt_spot_visibility.dxbc,build/rt_spot_light_ids.dxbc,build/rt_spot_raw_history.dxbc,build/rt_spot_raw_spatial0.dxbc,build/rt_spot_raw_spatial1.dxbc,build/rt_spot_full.dxil,build/rt_spot_r94.dxil,build/rt_spot_light.dxbc,build/rt_spot_reset.dxbc,build/rt_spot_history.dxbc,build/rt_spot_spatial0.dxbc,build/rt_spot_spatial1.dxbc $out
@@ -890,14 +895,14 @@ jobs:
           Copy-Item Package-Lighting-Capture.cmd,tools/package-lighting-capture.py,Package-Lighting-Performance.ps1 $out
           Copy-Item Capture-RR-Boundary.cmd,Capture-RR-Boundary.ps1,Collect-RR-Boundary-Status.cmd,tools/collect-rr-boundary.py $out
           Copy-Item Start-Compact-Distance-Test.cmd,Capture-RR-Suite.ps1,tools/collect-rr-suite.py $out
-          Copy-Item tools/diagnostics/Start-CPU-R223.cmd $out
-          Copy-Item docs/native-cpu-r223.md "$out/DIAGNOSTIC-NOTES.md"
+          Copy-Item tools/diagnostics/Start-CPU-R224.cmd $out
+          Copy-Item docs/native-cpu-r224.md "$out/DIAGNOSTIC-NOTES.md"
           @'
-          CONTROL-FG R223 - material dirty-writer diagnosis
-          Run Start-CPU-R223.cmd. Hold the problem-area camera for 30-60 seconds.
+          CONTROL-FG R224 - changed material entry and field diagnosis
+          Run Start-CPU-R224.cmd. Hold the problem-area camera for 30-60 seconds.
           Exit and run Collect-ControlFG-Compact-Logs.cmd; send ZIP and FPS range.
-          Counts all eight identified direct native material dirty writes.
-          Original writes remain intact. Both append experiments remain bypassed.
+          Samples changed entry IDs and record fields before/after native updates.
+          Original updates remain intact. Both append experiments remain bypassed.
           R217 visuals, Map Guard OFF and angled reflections remain unchanged.
           Diagnostic only; no performance gain claimed. Read DIAGNOSTIC-NOTES.md.
           '@ | Set-Content "$out/README.txt" -Encoding ASCII
@@ -907,10 +912,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-Native-Dirty-Writers-R223
+          name: Control-FG-Native-Material-Diffs-R224
           path: |
-            Control-FG-Native-Dirty-Writers-R223.zip
-            Control-FG-Native-Dirty-Writers-R223.sha256
+            Control-FG-Native-Material-Diffs-R224.zip
+            Control-FG-Native-Material-Diffs-R224.sha256
             build/spec-volume-roughness-validation.json
             build/spec-volume-roughness.dxbc
             build/spec-environment-validation.json
