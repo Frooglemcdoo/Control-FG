@@ -17,6 +17,10 @@ using OfferEarly=void(*)(const loader_candidate::Candidate*,unsigned,U64,U64);
 using ReadEarly=bool(*)(HANDLE,const loader_candidate::Candidate&,void*,DWORD,LPDWORD);
 inline OfferEarly offerEarly=nullptr;
 inline ReadEarly readEarly=nullptr;
+using ObserveConstruct=void(*)(U64,void*);
+using ObserveRead=void(*)(HANDLE,const loader_candidate::Candidate&,DWORD,bool);
+inline ObserveConstruct observeConstruct=nullptr;
+inline ObserveRead observeRead=nullptr;
 struct Batch {loader_candidate::Candidate entries[16]{};unsigned count=0;};
 inline thread_local Batch* currentBatch=nullptr;
 using SelectedCopy=void(*)(void*,void*);inline SelectedCopy selectedCopy=nullptr;
@@ -111,6 +115,7 @@ inline BOOL WINAPI ReadHook(HANDLE file,LPVOID out,DWORD bytes,LPDWORD received,
     const auto begin=Tick();SetLastError(incoming);
     const BOOL result=read(file,out,bytes,received,overlapped);const DWORD error=GetLastError();
     readTime.Add(Tick()-begin);if(result&&received)readBytes.fetch_add(*received,std::memory_order_relaxed);if(!result)++readFailures;
+    if(observeRead&&current->reading)observeRead(file,current->actual,result&&received?*received:0,result!=FALSE);
     SetLastError(error);return result;
 }
 using Wait=BOOL(WINAPI*)(PCONDITION_VARIABLE,PSRWLOCK,DWORD,ULONG);

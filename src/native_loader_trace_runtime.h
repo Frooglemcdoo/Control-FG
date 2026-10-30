@@ -22,7 +22,9 @@ inline loader_trace::U64 Tick(){LARGE_INTEGER value{};QueryPerformanceCounter(&v
 inline loader_trace::U64 Field(void* request,unsigned offset){loader_trace::U64 value=0;memcpy(&value,static_cast<unsigned char*>(request)+offset,sizeof(value));return value;}
 inline void Construct(void* arguments,void* request){
     construct(arguments,request);const DWORD error=GetLastError();
-    if(requestOwner)tracker.Enqueue(Field(request,0x178),Tick(),Field(request,0x150),requestOwner);SetLastError(error);
+    if(requestOwner){tracker.Enqueue(Field(request,0x178),Tick(),Field(request,0x150),requestOwner);
+        if(native_loader_stages::observeConstruct)native_loader_stages::observeConstruct(requestOwner,request);}
+    SetLastError(error);
 }
 inline void Execute(void* self,void* request,Callback original,bool onLoader){
     const DWORD incoming=GetLastError();const auto begin=Tick();

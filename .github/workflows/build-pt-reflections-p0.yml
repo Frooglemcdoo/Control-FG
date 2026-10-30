@@ -3,6 +3,7 @@ name: Build native reflection enhancements and RR
 on:
   push:
     branches:
+      - work/r240-native-texture-contract
       - work/r238-queue-order-completion
       - work/r237-early-archive-reads
       - work/r236-loader-stages
@@ -154,6 +155,15 @@ jobs:
         run: |
           & build/DirectStorage/ControlFG-DirectStorage-Validate.exe | Tee-Object build/DirectStorage/CI-Validation.log
           if ($LASTEXITCODE -ne 0) { throw 'DirectStorage byte validation failed' }
+
+      - name: Validate native texture contracts and D3D12 layouts
+        shell: cmd
+        run: |
+          call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
+          cl /nologo /std:c++17 /EHsc /W4 /O2 tools\test-native-texture-contract.cpp /Febuild\TestNativeTextureContract.exe /link d3d12.lib dxgi.lib
+          if errorlevel 1 exit /b 1
+          build\TestNativeTextureContract.exe
+          if errorlevel 1 exit /b 1
 
       - name: Validate native DirectStorage archive cache
         shell: cmd
@@ -965,11 +975,11 @@ jobs:
           build\suite-controller.exe
           if errorlevel 1 exit /b 1
 
-      - name: Package queue-order storage R238
+      - name: Package native texture contracts R240
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-QueueStorage-R238'
+          $out='Control-FG-TextureContract-R240'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
           Copy-Item build/rt_spot_selected_off.dxbc,build/rt_spot_selection.dxbc,build/rt_spot_visibility.dxbc,build/rt_spot_light_ids.dxbc,build/rt_spot_raw_history.dxbc,build/rt_spot_raw_spatial0.dxbc,build/rt_spot_raw_spatial1.dxbc,build/rt_spot_full.dxil,build/rt_spot_r94.dxil,build/rt_spot_light.dxbc,build/rt_spot_reset.dxbc,build/rt_spot_history.dxbc,build/rt_spot_spatial0.dxbc,build/rt_spot_spatial1.dxbc $out
@@ -990,20 +1000,20 @@ jobs:
           Copy-Item Package-Lighting-Capture.cmd,tools/package-lighting-capture.py,Package-Lighting-Performance.ps1 $out
           Copy-Item Capture-RR-Boundary.cmd,Capture-RR-Boundary.ps1,Collect-RR-Boundary-Status.cmd,tools/collect-rr-boundary.py $out
           Copy-Item Start-Compact-Distance-Test.cmd,Capture-RR-Suite.ps1,tools/collect-rr-suite.py $out
-          Copy-Item tools/diagnostics/Start-CPU-R238-QueueStorage.cmd $out
+          Copy-Item tools/diagnostics/Start-CPU-R240-TextureContract.cmd $out
           Copy-Item build/DirectStorage "$out/DirectStorage" -Recurse
           Copy-Item build/DirectStorage/dstorage.dll,build/DirectStorage/dstoragecore.dll $out
           Copy-Item tools/directstorage/Validate-DirectStorage.cmd "$out/DirectStorage"
-          Copy-Item docs/native-cpu-r238.md "$out/DIAGNOSTIC-NOTES.md"
+          Copy-Item docs/native-cpu-r240.md "$out/DIAGNOSTIC-NOTES.md"
           @'
-          CONTROL-FG R238 - Queue-order early reads and completion timing
-          Copy dxgi.dll, dstorage.dll and dstoragecore.dll beside Control_DX12.exe.
-          Run Start-CPU-R238-QueueStorage.cmd; 8 ms, 16 partitions, phase hooks off.
-          The DirectStorage subfolder alone is insufficient for the game backend.
-          Expect LOADER_R236 installed=1 and DIRECTSTORAGE_R237 ready=1 / STATUS reports.
-          Demand-time DirectStorage cache is disabled in this launcher.
-          Send compact logs plus texture arrival, stutter and FPS observations.
-          Early reads are bounded and submitted outside native selection locks; cold and late requests remain native.
+          CONTROL-FG R240 - Native texture contract validation
+          Copy package contents beside Control_DX12.exe, replacing the previous mod files.
+          Run Start-CPU-R240-TextureContract.cmd; pinned 8 ms, 16 partitions.
+          Expect TEXTURE_R240 installed=1 and native_gpu_redirect=0.
+          Native request, archive read, mip layout and publication metadata are sampled.
+          CPU read-ahead and per-poll completion timing are disabled.
+          This build does not yet redirect game textures through DirectStorage.
+          Run one normal traversal and send compact logs and texture/stutter observations.
           No Reference or standalone validator run is required.
           '@ | Set-Content "$out/README.txt" -Encoding ASCII
           Compress-Archive -Path "$out/*" -DestinationPath "$out.zip" -Force
@@ -1012,10 +1022,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-QueueStorage-R238
+          name: Control-FG-TextureContract-R240
           path: |
-            Control-FG-QueueStorage-R238.zip
-            Control-FG-QueueStorage-R238.sha256
+            Control-FG-TextureContract-R240.zip
+            Control-FG-TextureContract-R240.sha256
             build/spec-volume-roughness-validation.json
             build/spec-volume-roughness.dxbc
             build/spec-environment-validation.json

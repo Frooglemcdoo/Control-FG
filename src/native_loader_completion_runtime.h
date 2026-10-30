@@ -36,6 +36,10 @@ inline void ObserveWait(U64 owner){
     loader_trace::Tracker::Max(completionMax,completions);loader_trace::Tracker::Max(heapMax,heap);
 }
 inline bool Install(){
+    char enabled[8]{};
+    if(GetEnvironmentVariableA("CONTROLFG_COMPLETION_TRACE",enabled,sizeof(enabled))!=1||enabled[0]!='1'){
+        Log("LOADER_R238_COMPLETION disabled=explicit_opt_in_required");return false;
+    }
     auto runtime=GetModuleHandleW(L"rl_rmdwin10_f.dll"),renderer=GetModuleHandleW(L"renderer_rmdwin10_f.dll");
     if(!runtime||!renderer||!HashMatches(runtime,"A79234E4B34C2488DEAAC3459E8054BE206B5AF78A37723D834C1CBD826CE484")||
        !HashMatches(renderer,"EBFB5B47CEBC2D4482E912B8090BD343F717BAB8A178B5A6385DEC9105E7C433")){
