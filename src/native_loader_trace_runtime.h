@@ -1,6 +1,7 @@
 #pragma once
 #include "native_loader_trace_metrics.h"
 #include "native_loader_stages_runtime.h"
+#include "native_loader_completion_runtime.h"
 // Included after native_cpu_runtime.h: startup call patch helpers already exist.
 namespace native_loader_trace {
 using Callback=void(*)(void*,void*);
@@ -8,7 +9,7 @@ inline Callback construct=nullptr,worker=nullptr,loaderWorker=nullptr;
 using Request=std::int64_t(*)(void*,void*);
 inline Request request=nullptr;
 inline thread_local std::uintptr_t requestOwner=0;
-inline NativeCpuCallPatch patches[10]{};
+inline NativeCpuCallPatch patches[11]{};
 inline std::int64_t RequestHook(void* self,void* arguments){
     struct Scope {std::uintptr_t previous;~Scope(){requestOwner=previous;}} scope{requestOwner};
     requestOwner=reinterpret_cast<std::uintptr_t>(self);return request(self,arguments);
@@ -45,6 +46,7 @@ inline bool Install(){
     construct=reinterpret_cast<Callback>(base+0xfa320);worker=reinterpret_cast<Callback>(base+0xfb440);loaderWorker=reinterpret_cast<Callback>(base+0xfbae0);
     request=reinterpret_cast<Request>(base+0xff080);
     namespace stages=native_loader_stages;
+    stages::selectedCopy=reinterpret_cast<stages::SelectedCopy>(base+0xfc4e0);
     stages::selectNew=reinterpret_cast<stages::Select>(base+0xfc5e0);
     stages::selectOld=reinterpret_cast<stages::Select>(base+0xfbdc0);
     stages::lookup=reinterpret_cast<stages::Lookup>(base+0x18f760);
@@ -52,31 +54,32 @@ inline bool Install(){
     stages::interleave=reinterpret_cast<stages::Interleave>(base+0xfaa00);
     stages::read=reinterpret_cast<stages::Read>(GetProcAddress(GetModuleHandleW(L"kernel32.dll"),"ReadFile"));
     stages::wait=reinterpret_cast<stages::Wait>(GetProcAddress(GetModuleHandleW(L"kernel32.dll"),"SleepConditionVariableSRW"));
-    const unsigned sites[]={0xff15c,0xff280,0xfcae3,0xfcaea,0xfa30f,0xfca82,0xfca89,0xfc853,0x18e4f5,0xfb8f3};
+    const unsigned sites[]={0xff15c,0xff280,0xfcae3,0xfcaea,0xfa30f,0xfca82,0xfca89,0xfc853,0x18e4f5,0xfb8f3,0xfc8f6};
     void* originals[]={reinterpret_cast<void*>(construct),reinterpret_cast<void*>(construct),reinterpret_cast<void*>(worker),reinterpret_cast<void*>(loaderWorker),reinterpret_cast<void*>(request),
-        reinterpret_cast<void*>(stages::selectNew),reinterpret_cast<void*>(stages::selectOld),reinterpret_cast<void*>(stages::lookup),reinterpret_cast<void*>(stages::packRead),reinterpret_cast<void*>(stages::interleave)};
+        reinterpret_cast<void*>(stages::selectNew),reinterpret_cast<void*>(stages::selectOld),reinterpret_cast<void*>(stages::lookup),reinterpret_cast<void*>(stages::packRead),reinterpret_cast<void*>(stages::interleave),reinterpret_cast<void*>(stages::selectedCopy)};
     void* hooks[]={reinterpret_cast<void*>(&Construct),reinterpret_cast<void*>(&Construct),reinterpret_cast<void*>(&Worker),reinterpret_cast<void*>(&LoaderWorker),reinterpret_cast<void*>(&RequestHook),
-        reinterpret_cast<void*>(&stages::SelectNew),reinterpret_cast<void*>(&stages::SelectOld),reinterpret_cast<void*>(&stages::LookupHook),reinterpret_cast<void*>(&stages::PackReadHook),reinterpret_cast<void*>(&stages::InterleaveHook)};
-    for(unsigned i=0;i<10;++i)if(!NativeCpuPrepareCallPatch(base+sites[i],originals[i],hooks[i],&patches[i])){Log("LOADER_R236 disabled=prepare index=%u",i);return false;}
+        reinterpret_cast<void*>(&stages::SelectNew),reinterpret_cast<void*>(&stages::SelectOld),reinterpret_cast<void*>(&stages::LookupHook),reinterpret_cast<void*>(&stages::PackReadHook),reinterpret_cast<void*>(&stages::InterleaveHook),reinterpret_cast<void*>(&stages::SelectedCopyHook)};
+    for(unsigned i=0;i<11;++i)if(!NativeCpuPrepareCallPatch(base+sites[i],originals[i],hooks[i],&patches[i])){Log("LOADER_R236 disabled=prepare index=%u",i);return false;}
     const unsigned importSites[]={0x1933f1,0xfb6b4,0xfb80a};
     for(unsigned i=0;i<3;++i)if(!stageImports[i].Prepare(base+importSites[i],reinterpret_cast<void**>(base+(i?0x20f170:0x20f110)),
         i?reinterpret_cast<void*>(stages::wait):reinterpret_cast<void*>(stages::read),i?reinterpret_cast<void*>(&stages::WaitHook):reinterpret_cast<void*>(&stages::ReadHook))){Log("LOADER_R236 disabled=import_prepare index=%u",i);return false;}
     unsigned applied=0,importsApplied=0;
-    for(;applied<10;){const auto i=applied;if(!NativeCpuExchangeCall(&patches[i],true))break;++applied;if(!patches[i].writeHealthy)break;}
-    if(applied==10&&patches[9].writeHealthy){
+    for(;applied<11;){const auto i=applied;if(!NativeCpuExchangeCall(&patches[i],true))break;++applied;if(!patches[i].writeHealthy)break;}
+    if(applied==11&&patches[10].writeHealthy){
         for(;importsApplied<3;){const auto i=importsApplied;if(!stageImports[i].Exchange(true))break;++importsApplied;if(!stageImports[i].healthy)break;}
     }
-    if(applied!=10||!patches[9].writeHealthy||importsApplied!=3||!stageImports[2].healthy){
+    if(applied!=11||!patches[10].writeHealthy||importsApplied!=3||!stageImports[2].healthy){
         while(importsApplied){--importsApplied;if(!stageImports[importsApplied].Exchange(false))Log("LOADER_R236 import_rollback_failed=%u",importsApplied);}
         while(applied){--applied;if(!NativeCpuExchangeCall(&patches[applied],false))Log("LOADER_R236 rollback_failed=%u",applied);}return false;
     }
     Log("LOADER_R236 installed=1 candidate_io=%u batch_cap=256 stage_timing=1 retained_native_pointers=0",unsigned(stages::offerEarly!=nullptr));
-    installed=true;Log("LOADER_R235 installed=1 scope=partial_requests request_id=0x178 retained_native_pointers=0 cache_required=0");return true;
+    installed=true;native_loader_completion::Install();Log("LOADER_R235 installed=1 scope=partial_requests request_id=0x178 retained_native_pointers=0 cache_required=0");return true;
 }
 inline void Poll(unsigned long long present){
     static ULONGLONG next=0;if(!installed||present%60)return;const auto now=GetTickCount64();if(now<next)return;next=now+5000;
     LARGE_INTEGER frequency{};QueryPerformanceFrequency(&frequency);const double scale=frequency.QuadPart?1000.0/frequency.QuadPart:0;
     native_loader_stages::Poll(present,scale);
+    native_loader_completion::Poll(present,scale);
     Log("LOADER_R235_QUEUE present=%llu queued=%llu matched=%llu unmatched=%llu dropped=%llu replaced=%llu matched_bytes=%llu queue_ms=%.3f queue_max_ms=%.3f worker_count=%llu worker_ms=%.3f worker_max_ms=%.3f loader_count=%llu loader_ms=%.3f loader_max_ms=%.3f",
         present,tracker.queued.load(),tracker.matched.load(),tracker.unmatched.load(),tracker.dropped.load(),tracker.replaced.load(),tracker.bytes.load(),tracker.waitTicks.load()*scale,tracker.waitMax.load()*scale,
         workerCount.load(),workerTicks.load()*scale,workerMax.load()*scale,inlineCount.load(),inlineTicks.load()*scale,inlineMax.load()*scale);

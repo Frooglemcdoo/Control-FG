@@ -34,8 +34,22 @@ static BOOL WINAPI WaitMock(PCONDITION_VARIABLE cv,PSRWLOCK lock,DWORD ms,ULONG 
 static void InterleaveMock(void* p){assert(p==owner&&GetLastError()==501);SetLastError(502);}
 static unsigned char many[257*0x188]{};
 static void LookupMany(void*,void* records,U64 count,int stride){assert(records==many&&count==257&&stride==0x188);SetLastError(601);}
+alignas(8) static unsigned char loader[0x820]{},queueRecords[40*0x188]{};
+static unsigned expectedCount=16;
+static void CopyMock(void* out,void* selected){assert(insideSelection&&GetLastError()==701);memcpy(out,selected,0x188);SetLastError(702);}
+static bool QueueSelect(void* self,void* out){
+ assert(self==loader);insideSelection=true;SelectedCopyHook(out,queueRecords+39*0x188);assert(GetLastError()==702);insideSelection=false;return true;
+}
 static void OfferMock(const loader_candidate::Candidate* values,unsigned count,U64 selected,U64 selectedOwner){
- assert(!insideSelection&&count==1&&selected==7&&selectedOwner==reinterpret_cast<U64>(owner)&&values[0].range.offset==132&&values[0].range.bytes==512);++offered;SetLastError(999);
+ assert(!insideSelection&&count==expectedCount&&selected==40&&selectedOwner==reinterpret_cast<U64>(loader));
+ for(unsigned i=0;i<count;++i){assert(values[i].id==39-i&&values[i].owner==selectedOwner&&values[i].range.offset==132&&values[i].range.bytes==512);}
+ ++offered;SetLastError(999);
+}
+static unsigned CompleteMock(void* self,unsigned limit){assert(self==loader&&limit==17&&GetLastError()==801);SetLastError(802);return 9;}
+static void ReleaseMock(void* self,void* loaded){assert(self==loader&&loaded==record&&GetLastError()==901);SetLastError(902);}
+static unsigned NestedComplete(void* self,unsigned limit){
+ assert(self==loader&&limit==18&&GetLastError()==803);native_loader_completion::complete=&CompleteMock;
+ SetLastError(801);assert(native_loader_completion::Renderer(self,17)==9&&GetLastError()==802);SetLastError(804);return 10;
 }
 static bool EarlyMock(HANDLE,const loader_candidate::Candidate& value,void*,DWORD bytes,LPDWORD received){
  assert(value.owner==reinterpret_cast<U64>(owner)&&value.id==7&&value.pack==reinterpret_cast<U64>(pack)&&value.range.offset==132&&bytes==512);*received=512;SetLastError(998);return true;
@@ -61,10 +75,29 @@ int main(){
  selectionOwner=0;SetLastError(101);LookupHook(pack,record,1,0x188);assert(candidates.stored==1);
  lookup=&LookupMany;selectionOwner=reinterpret_cast<U64>(owner);LookupHook(pack,many,257,0x188);
  assert(capped==1&&invalid==256&&inspected==257&&GetLastError()==601);selectionOwner=0;
- offerEarly=&OfferMock;SetLastError(101);lookup=&LookupMock;assert(SelectNew(owner,record)&&offered==1&&GetLastError()==102&&currentBatch==nullptr);
+ // Snapshot the next records in native tail order, excluding the selected tail.
+ for(unsigned i=0;i<40;++i){auto* r=queueRecords+i*0x188;memcpy(r,record,0x188);Put(r,0x178,i+1);}
+ Put(loader,0x508,reinterpret_cast<U64>(queueRecords));Put(loader,0x510,40);
+ offerEarly=&OfferMock;selectedCopy=&CopyMock;selectNew=&QueueSelect;
+ SetLastError(701);assert(SelectNew(loader,record)&&offered==1&&GetLastError()==702&&currentBatch==nullptr&&queueCandidates==16);
+ // Only 32 records may be examined: an eligible far-away record is ignored.
+ for(unsigned i=7;i<39;++i)Put(queueRecords+i*0x188,0x120,0);
+ SetLastError(701);assert(SelectNew(loader,record)&&offered==1&&queueCandidates==16&&queueSnapshots==2);
+ // Incorrect list shape fails closed without an offer.
+ Put(loader,0x510,39);SetLastError(701);assert(SelectNew(loader,record)&&offered==1&&queueShapeRejected==1);
+ Put(record,0x178,7);
+ // Completion wrappers retain limits, return values, LastError and exclude nested timing.
+ using namespace native_loader_completion;complete=&CompleteMock;release=&ReleaseMock;
+ SetLastError(801);assert(Runtime(loader,17)==9&&GetLastError()==802&&runtimeTime.count==1);
+ SetLastError(901);ReleaseHook(loader,record);assert(GetLastError()==902&&releaseTime.count==1);
+ complete=&NestedComplete;SetLastError(803);assert(Runtime(loader,18)==10&&GetLastError()==804&&runtimeTime.count==2&&rendererTime.count==0&&nested==1&&depth==0);
+ Put(loader,0x818,3);unsigned heap=2;memcpy(loader+0x54c,&heap,4);ObserveWait(reinterpret_cast<U64>(loader));
+ SetLastError(801);assert(Renderer(loader,17)==9&&GetLastError()==802&&rendererTime.count==1);
+ assert(waitSamples==1&&waitingCompletions==3&&waitingHeap==2&&completionMax==3&&heapMax==2);
  readEarly=&EarlyMock;packRead=&PackEarlyMock;
  {WorkerScope scope(owner,record);const auto reads=readTime.count.load();assert(PackReadHook(pack,handle,output,32,512)==512&&readTime.count==reads&&!current->reading);}
  offerEarly=nullptr;readEarly=nullptr;
+ puts("PASS R238 queue order, scan cap, selected exclusion, completion nesting and forwarding");
  puts("PASS R237 handoff: post-selection callback, copied range metadata, scoped serving and native API timing excludes served reads");
  puts("PASS R236 stage forwarding: five-argument read ABI, native results, LastError, resolved range comparison and nested worker scopes");
 }

@@ -19,6 +19,30 @@ inline OfferEarly offerEarly=nullptr;
 inline ReadEarly readEarly=nullptr;
 struct Batch {loader_candidate::Candidate entries[16]{};unsigned count=0;};
 inline thread_local Batch* currentBatch=nullptr;
+using SelectedCopy=void(*)(void*,void*);inline SelectedCopy selectedCopy=nullptr;
+inline std::atomic<U64> queueSnapshots{0},queueCandidates{0},queueShapeRejected{0};
+using ObserveWait=void(*)(U64);inline ObserveWait observeWait=nullptr;
+inline void SelectedCopyHook(void* destination,void* selected){
+    selectedCopy(destination,selected);const DWORD error=GetLastError();
+    if(currentBatch&&selectionOwner){
+        currentBatch->count=0;
+        auto* self=reinterpret_cast<unsigned char*>(selectionOwner);
+        unsigned count=0;memcpy(&count,self+0x510,4);
+        auto* list=reinterpret_cast<unsigned char*>(Field(self,0x508));
+        if(count&&list&&selected==list+static_cast<U64>(count-1)*0x188){
+            ++queueSnapshots;
+            // Native selection removes the last element after this copy returns.
+            // Inspect its next candidates in reverse order while its lock is held.
+            unsigned visited=0;
+            for(U64 i=count-1;i&&visited<32&&currentBatch->count<16;++visited){
+                auto* record=list+(--i)*0x188;auto* pack=reinterpret_cast<void*>(Field(record,0x120));loader_candidate::Range range{};
+                if(!pack||!loader_candidate::Resolve(Field(record,0x128),Field(pack,0x288),Field(record,0x130),Field(record,0x158),Field(record,0x150),range)||range.bytes>2*1024*1024)continue;
+                currentBatch->entries[currentBatch->count++]={Field(record,0x178),selectionOwner,reinterpret_cast<U64>(pack),0,range};++queueCandidates;
+            }
+        }else ++queueShapeRejected;
+    }
+    SetLastError(error);
+}
 struct Context {bool candidate=false,observed=false,reading=false;U64 owner=0,id=0;loader_candidate::Candidate value{},actual{};};
 inline thread_local Context* current=nullptr;
 struct WorkerScope {
@@ -58,7 +82,6 @@ inline void LookupHook(void* self,void* records,U64 count,int stride){
             if(!pack||!loader_candidate::Resolve(Field(record,0x128),Field(pack,0x288),Field(record,0x130),Field(record,0x158),Field(record,0x150),range)){++invalid;continue;}
             const loader_candidate::Candidate value{Field(record,0x178),selectionOwner,reinterpret_cast<U64>(pack),Tick(),range};
             candidates.Put(value);
-            if(currentBatch&&currentBatch->count<16&&range.bytes<=2*1024*1024)currentBatch->entries[currentBatch->count++]=value;
         }
     }
     SetLastError(error);
@@ -94,7 +117,7 @@ using Wait=BOOL(WINAPI*)(PCONDITION_VARIABLE,PSRWLOCK,DWORD,ULONG);
 inline Wait wait=nullptr;
 inline BOOL WINAPI WaitHook(PCONDITION_VARIABLE condition,PSRWLOCK lock,DWORD milliseconds,ULONG flags){
     if(!current)return wait(condition,lock,milliseconds,flags);
-    const DWORD incoming=GetLastError();const auto begin=Tick();SetLastError(incoming);
+    const DWORD incoming=GetLastError();if(observeWait)observeWait(current->owner);const auto begin=Tick();SetLastError(incoming);
     const BOOL result=wait(condition,lock,milliseconds,flags);const DWORD error=GetLastError();bufferWait.Add(Tick()-begin);SetLastError(error);return result;
 }
 using Interleave=void(*)(void*);
@@ -105,6 +128,7 @@ inline void InterleaveHook(void* self){
     const DWORD error=GetLastError();interleaveTime.Add(Tick()-begin);SetLastError(error);
 }
 inline void Poll(U64 present,double scale){
+    Log("LOADER_R238_QUEUE present=%llu snapshots=%llu candidates=%llu shape_rejected=%llu order=native_tail scan_cap=32 offer_cap=16",present,queueSnapshots.load(),queueCandidates.load(),queueShapeRejected.load());
     Log("LOADER_R236_CANDIDATES present=%llu new_select=%llu old_select=%llu batches=%llu entries=%llu inspected=%llu capped=%llu invalid=%llu stored=%llu matched=%llu missing=%llu dropped=%llu replaced=%llu range_equal=%llu range_mismatch=%llu no_pack_read=%llu workers=%llu read_bytes=%llu read_failures=%llu",
         present,newSelections.load(),oldSelections.load(),batches.load(),batchEntries.load(),inspected.load(),capped.load(),invalid.load(),candidates.stored.load(),candidates.matched.load(),candidates.missing.load(),candidates.dropped.load(),candidates.replaced.load(),rangeEqual.load(),rangeMismatch.load(),noPackRead.load(),workers.load(),readBytes.load(),readFailures.load());
     const char* names[]={"readfile","pack_read","buffer_wait","interleave","lookup","resolved_lead"};
