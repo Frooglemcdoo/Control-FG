@@ -9,7 +9,7 @@ template<class T> using Ptr=Microsoft::WRL::ComPtr<T>;
 using Request=native_texture_contract::Request;
 using QueueResolver=HRESULT(*)(ID3D12CommandQueue*,ID3D12CommandQueue**);inline QueueResolver resolveQueue=nullptr;
 using AdjustPending=void(*)(void*,int);
-inline void AdjustNativePending(void* owner,int delta){InterlockedExchangeAdd(reinterpret_cast<volatile LONG*>(static_cast<unsigned char*>(owner)+0x528),delta);}
+inline void AdjustNativePending(void* owner,int delta){InterlockedExchangeAdd(reinterpret_cast<volatile LONG*>(static_cast<unsigned char*>(owner)+0x818),delta);}
 inline AdjustPending adjustPending=&AdjustNativePending;
 using Ref=void(*)(void*);using Finish=void(*)(void*,int,bool);using Lookup=void(*)(void*,void*,U64,int);
 inline Request original=nullptr;inline Ref addRef=nullptr,removeRef=nullptr;inline Finish finish=nullptr;inline Lookup lookup=nullptr;
@@ -62,9 +62,11 @@ inline void Retire(Job& job,bool success,bool retry){
     else if(retry){original(job.owner,job.name.c_str(),job.texture,job.offset,job.size,nullptr,job.thread,job.priority,false,reinterpret_cast<void*>(U64(job.level)));++fallback;}
     else finish(job.texture,static_cast<int>(job.level),false);
     removeRef(job.texture);
-    // hasLoadsRemaining = files-to-load (528) + native completions (818).
-    // Keep our accepted request visible until publication is queued or the
-    // native retry has been enqueued. Never fabricate native completion records.
+    // hasLoadsRemaining = queued files (528) + pending completions (818).
+    // Reserve only a global pending completion, never a phantom disk-queue
+    // item: the loader thread must not spin selecting nonexistent requests.
+    // Release after publication/retry is queued. Per-thread native completion
+    // arrays remain untouched and cannot consume this reservation.
     adjustPending(job.owner,-1);
     AcquireSRWLockExclusive(&lock);reservedBytes-=job.size;active[job.slot]=nullptr;ReleaseSRWLockExclusive(&lock);--pending;job={};
 }

@@ -42,10 +42,12 @@ Counters include startup and traversal, not just the affected area.
    Native references (12E160/12E190) and COM references cover accepted jobs.
    Loading mip state 1 blocks normal unload through canFinishUnload (157520);
    the streaming-mip unload loop at 15AD34 also requires loaded state 2.
-   Accepted jobs increment Loader's files-to-load counter at +528, which
-   hasLoadsRemaining (F88A0) sums with native completions at +818. The count is
-   released only after publication or native retry is queued, so native waits
-   continue to see outstanding GPU work. No native completion record is forged.
+   Accepted jobs reserve a global pending completion at Loader +818, which
+   hasLoadsRemaining (F88A0) sums with queued files at +528. The reservation is
+   released only after publication or native retry is queued. The disk queue
+   and its +528 count remain unchanged, avoiding loader-thread work on phantom
+   reads. Per-thread completion arrays are untouched; no native completion
+   record is forged or consumed for a GPU job.
    Failed I/O retries native only after the accepted DirectStorage batch retires.
 
 The special returned request ticket is local to this exact renderer call site,
