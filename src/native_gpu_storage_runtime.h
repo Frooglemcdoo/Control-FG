@@ -129,8 +129,10 @@ inline bool Resolve(const char* name,U64 offset,U64 size,Job& job){
     loader_candidate::Range range{};
     if(!pack||!loader_candidate::Resolve(base,Field(pack,0x288),length,offset,size,range))return false;
     auto* host=reinterpret_cast<const char*>(Field(pack,0x170));if(!host||strnlen_s(host,1024)>=1024)return false;
-    wchar_t wide[1024]{},full[32768]{};if(!MultiByteToWideChar(CP_UTF8,MB_ERR_INVALID_CHARS,host,-1,wide,1024))return false;
-    const DWORD n=GetFullPathNameW(wide,32768,full,nullptr);if(!n||n>=32768||!SourceFile(full,job.file))return false;
+    wchar_t wide[1024]{};if(!MultiByteToWideChar(CP_UTF8,MB_ERR_INVALID_CHARS,host,-1,wide,1024))return false;
+    const DWORD required=GetFullPathNameW(wide,0,nullptr,nullptr);if(!required||required>32768)return false;
+    std::wstring full(required,L'\0');const DWORD n=GetFullPathNameW(wide,required,full.data(),nullptr);
+    if(!n||n>=required)return false;full.resize(n);if(!SourceFile(full,job.file))return false;
     job.sourceOffset=range.offset;return true;
 }
 using DescribeFn=bool(*)(void*,unsigned,U64,Job&);using ResolveFn=bool(*)(const char*,U64,U64,Job&);
