@@ -34,6 +34,20 @@ static void Finish(void*,int level,bool success){Check(level==2&&success&&refs==
 static std::int64_t Native(void*,const char*,void*,std::uint64_t offset,std::uint64_t size,char*,int thread,int priority,bool,void*){Check(offset==17&&size==64&&thread==14&&priority==7,"native fallback arguments");++native;SetLastError(456);return 123;}
 static bool Describe(void*,unsigned,std::uint64_t,native_gpu_storage::Job& job){job.resource=testResource;return true;}
 static bool Resolve(const char*,std::uint64_t,std::uint64_t,native_gpu_storage::Job&){return true;}
+static unsigned char lookupPack[0x300]{};
+static void Put(void* p,unsigned offset,std::uint64_t v){memcpy(static_cast<unsigned char*>(p)+offset,&v,8);}
+static void Lookup(void* fs,void* record,std::uint64_t count,int stride){
+ Check(fs==reinterpret_cast<void*>(0x8888)&&count==1&&stride==0x188,"native lookup ABI");
+ Put(record,0x120,reinterpret_cast<std::uint64_t>(lookupPack));Put(record,0x128,900713);Put(record,0x130,10000);
+}
+static void ResolveRange(IDStorageFactory* factory,const wchar_t* path){
+ namespace n=native_gpu_storage;std::vector<unsigned char> runtime(0x3a3180);n::runtime=runtime.data();n::lookup=&Lookup;n::factory=factory;
+ Put(runtime.data(),0x3a3178,0x8888);Put(lookupPack,0x288,900000);
+ char host[1024]{};Check(WideCharToMultiByte(CP_UTF8,0,path,-1,host,1024,nullptr,nullptr)!=0,"host path");Put(lookupPack,0x170,reinterpret_cast<std::uint64_t>(host));
+ n::Job job;Check(n::Resolve("texture",17,64,job)&&job.sourceOffset==730&&job.file,"archive sort bias is not a physical offset");
+ Check(!n::Resolve("texture",9999,64,job),"native asset range checked before archive read");
+ job={};for(auto& s:n::sources){s.file.Reset();if(s.guard!=INVALID_HANDLE_VALUE)CloseHandle(s.guard);s={};}n::factory.Reset();n::runtime=nullptr;
+}
 static void Admission(){
  namespace n=native_gpu_storage;n::describe=&Describe;n::resolve=&Resolve;n::addRef=&Add;n::removeRef=&Remove;n::finish=&Finish;n::original=&Native;
  n::wake=CreateEventW(nullptr,FALSE,FALSE,nullptr);n::available=true;
@@ -70,6 +84,13 @@ int main(){
  for(unsigned pass=0;pass<2;++pass){Hr(transfer.Submit(inputs,8),"packed batch submit");Check(!transfer.Close(),"pending resources cannot retire");HRESULT result=E_PENDING;
   const auto deadline=GetTickCount64()+30000;while(!transfer.Poll(result)){Check(GetTickCount64()<deadline,"GPU completion deadline");WaitForSingleObject(transfer.Event(),100);}
   Hr(result,"packed completion");Check(transfer.CurrentPhase()==Batch::Phase::Idle,"batch reuse");}
+ // Independent lanes overlap storage/GPU work while retaining disjoint targets.
+ Batch parallel;Hr(parallel.Initialize(factory.Get(),queue.Get()),"parallel lane");
+ Hr(transfer.Submit(inputs,4),"lane zero");Hr(parallel.Submit(inputs+4,4),"lane one");
+ bool done[2]{};Batch* lanes[]={&transfer,&parallel};const auto deadline=GetTickCount64()+30000;
+ while(!done[0]||!done[1]){for(unsigned i=0;i<2;++i)if(!done[i]){HRESULT result=E_PENDING;done[i]=lanes[i]->Poll(result);if(done[i])Hr(result,"overlapped completion");}
+  Check(GetTickCount64()<deadline,"parallel deadline");if(!done[0])WaitForSingleObject(transfer.Event(),10);else if(!done[1])WaitForSingleObject(parallel.Event(),10);}
+ Check(parallel.Close(),"parallel retired");
  // Readback belongs exclusively to this test, never to runtime payload handling.
  ComPtr<ID3D12Fence> fence;Hr(device->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&fence)),"readback fence");HANDLE event=CreateEventW(nullptr,FALSE,FALSE,nullptr);
  for(unsigned t=0;t<8;++t){auto& f=fixtures[t];D3D12_PLACED_SUBRESOURCE_FOOTPRINT fp[8]{};UINT rows[8]{};UINT64 rowBytes[8]{},total=0;device->GetCopyableFootprints(&f.desc,0,8,0,fp,rows,rowBytes,&total);
@@ -83,6 +104,6 @@ int main(){
   for(unsigned m=0;m<8;++m)for(unsigned r=0;r<rows[m];++r)Check(memcmp(static_cast<unsigned char*>(mapped)+fp[m].Offset+size_t(r)*fp[m].Footprint.RowPitch,f.compact.data()+f.layout.mips[m].compactOffset+r*rowBytes[m],static_cast<size_t>(rowBytes[m]))==0,"packed GPU mip byte equality");
   D3D12_RANGE empty{};readback->Unmap(0,&empty);
  }
- testResource=fixtures[0].texture;Admission();testResource.Reset();Check(transfer.Close(),"drained close");source.Reset();CloseHandle(event);Check(DeleteFileW(path)!=FALSE,"file ownership released");
- puts("PASS R241: file-to-GPU packed rows, eight formats / 64 mips, repeated batches, native state restoration, bounds, overlap rejection, admission ownership and deferred publication; runtime CPU payload bytes=0");
+ ResolveRange(factory.Get(),path);testResource=fixtures[0].texture;Admission();testResource.Reset();Check(transfer.Close(),"drained close");source.Reset();CloseHandle(event);Check(DeleteFileW(path)!=FALSE,"file ownership released");
+ puts("PASS R241: file-to-GPU packed rows, eight formats / 64 mips, repeated batches, native state restoration, bounds, native archive bias resolution, overlap rejection, admission ownership and deferred publication; runtime CPU payload bytes=0");
 }

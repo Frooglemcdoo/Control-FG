@@ -129,7 +129,11 @@ cbuffer Layout : register(b0) { uint srcOffset; uint dstOffset; uint rowWords; u
         }
         if(phase==Phase::Gpu){const auto done=fence->GetCompletedValue();if(done==UINT64_MAX){result=DXGI_ERROR_DEVICE_REMOVED;Clear();return true;}
             if(done<fenceValue)return false;result=S_OK;Clear();return true;}
-        if(phase==Phase::FailedSubmission&&FAILED(device->GetDeviceRemovedReason())){result=failure;Clear();return true;}
+        if(phase==Phase::FailedSubmission){
+            if(FAILED(device->GetDeviceRemovedReason())){result=DXGI_ERROR_DEVICE_REMOVED;Clear();return true;}
+            // Recover a transient Signal failure without retiring submitted work.
+            if(SUCCEEDED(graphics->Signal(fence.Get(),fenceValue))){phase=Phase::Gpu;ResetEvent(gpuEvent);fence->SetEventOnCompletion(fenceValue,gpuEvent);}
+        }
         return false;
     }
     bool Close(){if(phase!=Phase::Idle)return false;Clear();list.Reset();allocator.Reset();pipeline.Reset();root.Reset();storage.Reset();status.Reset();fence.Reset();graphics.Reset();device.Reset();

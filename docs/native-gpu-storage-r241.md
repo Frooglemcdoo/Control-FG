@@ -27,7 +27,8 @@ Counters include startup and traversal, not just the affected area.
    metadata is processed on the CPU. Open archive identities are checked and
    held read-only against replacement/write. No archive payload cache is built.
 3. A dedicated worker submits up to 16 raw archive ranges per DirectStorage
-   batch to DEFAULT-heap GPU buffers. There is no CPU payload buffer, Map,
+   batch to DEFAULT-heap GPU buffers. Two independent batch lanes overlap I/O
+   and GPU completion. There is no CPU payload buffer, Map,
    memcpy or CPU decompression in this path.
 4. A compute shader repacks compact mip rows into D3D12 copy footprints. On the
    engine's direct queue, GPU copies write each texture mip and restore its

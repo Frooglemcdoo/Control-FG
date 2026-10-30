@@ -17,6 +17,7 @@ inline thread_local Allocation allocation{};
 inline RRIndirectCallPatch patch;inline HMODULE storageModule=nullptr;inline Ptr<IDStorageFactory> factory;
 inline SRWLOCK lock=SRWLOCK_INIT,fileLock=SRWLOCK_INIT;inline HANDLE wake=nullptr,worker=nullptr;
 inline std::atomic<bool> available{false};
+inline std::atomic<U64> ineligible{0},layoutRejected{0},sourceRejected{0},capacityRejected{0};
 inline std::atomic<U64> offered{0},accepted{0},completed{0},fallback{0},bytes{0},failed{0},batches{0},pending{0};
 struct Job {
     bool used=false;U64 serial=0,offset=0,sourceOffset=0;UINT size=0;unsigned level=0,slot=64;int thread=0,priority=0;
@@ -59,32 +60,38 @@ inline void Retire(Job& job,bool success,bool retry){
     AcquireSRWLockExclusive(&lock);reservedBytes-=job.size;active[job.slot]=nullptr;ReleaseSRWLockExclusive(&lock);--pending;job={};
 }
 inline DWORD WINAPI Work(void*){
-    control_storage::PackedTextureBatch transfer;bool initialized=false;
+    struct Lane {control_storage::PackedTextureBatch transfer;Job jobs[control_storage::PackedTextureBatch::Capacity];unsigned count=0;bool initialized=false;};
+    Lane lanes[2];
     for(;;){
-        WaitForSingleObject(wake,INFINITE);
-        for(;;){
-            Job batch[control_storage::PackedTextureBatch::Capacity];unsigned count=0;
-            AcquireSRWLockExclusive(&lock);
-            for(;count<control_storage::PackedTextureBatch::Capacity;++count){
-                Job* best=nullptr;for(auto& j:jobs)if(j.used&&(!best||j.priority>best->priority||(j.priority==best->priority&&j.serial<best->serial)))best=&j;
-                if(!best)break;batch[count]=std::move(*best);*best={};
+        for(auto& lane:lanes){
+            if(lane.count){
+                HRESULT result=E_PENDING;
+                if(!lane.transfer.Poll(result))continue;
+                const bool success=SUCCEEDED(result);const bool lost=result==DXGI_ERROR_DEVICE_REMOVED||result==DXGI_ERROR_DEVICE_RESET;
+                if(!success){++failed;Log("DIRECTSTORAGE_R241 batch_failed=1 hr=0x%08lX count=%u",static_cast<unsigned long>(result),lane.count);}
+                if(lost)available=false;
+                for(unsigned i=0;i<lane.count;++i)Retire(lane.jobs[i],success,!lost);lane.count=0;
             }
-            ReleaseSRWLockExclusive(&lock);if(!count)break;
-            HRESULT hr=S_OK;
-            if(!initialized){hr=transfer.Initialize(factory.Get(),batch[0].queue.Get());initialized=SUCCEEDED(hr);if(!initialized){available=false;transfer.Close();}}
+            AcquireSRWLockExclusive(&lock);
+            for(;lane.count<control_storage::PackedTextureBatch::Capacity;++lane.count){
+                Job* best=nullptr;for(auto& j:jobs)if(j.used&&(!best||j.priority>best->priority||(j.priority==best->priority&&j.serial<best->serial)))best=&j;
+                if(!best)break;lane.jobs[lane.count]=std::move(*best);*best={};
+            }
+            ReleaseSRWLockExclusive(&lock);if(!lane.count)continue;
+            HRESULT hr=available?S_OK:E_ABORT;
+            if(SUCCEEDED(hr)&&!lane.initialized){hr=lane.transfer.Initialize(factory.Get(),lane.jobs[0].queue.Get());lane.initialized=SUCCEEDED(hr);if(!lane.initialized){available=false;lane.transfer.Close();}}
             control_storage::PackedTextureBatch::Input inputs[control_storage::PackedTextureBatch::Capacity]{};
-            for(unsigned i=0;i<count;++i)inputs[i]={batch[i].file.Get(),batch[i].resource.Get(),batch[i].sourceOffset,batch[i].size,D3D12_RESOURCE_STATES(0xc0)};
-            if(SUCCEEDED(hr)&&initialized)hr=transfer.Submit(inputs,count);
-            if(FAILED(hr)||!initialized){++failed;Log("DIRECTSTORAGE_R241 batch_rejected=1 hr=0x%08lX count=%u",static_cast<unsigned long>(hr),count);
-                for(unsigned i=0;i<count;++i)Retire(batch[i],false,true);continue;}
-            ++batches;
-            // Only this owned worker waits. Native loader and renderer threads
-            // do not wait on storage/GPU completion. Timeout detects device loss.
-            while(!transfer.Poll(hr))WaitForSingleObject(transfer.Event(),1000);
-            const bool success=SUCCEEDED(hr);if(!success){++failed;Log("DIRECTSTORAGE_R241 batch_failed=1 hr=0x%08lX count=%u",static_cast<unsigned long>(hr),count);}
-            const bool lost=hr==DXGI_ERROR_DEVICE_REMOVED||hr==DXGI_ERROR_DEVICE_RESET;if(lost)available=false;
-            for(unsigned i=0;i<count;++i)Retire(batch[i],success,!lost);
+            for(unsigned i=0;i<lane.count;++i){const auto& j=lane.jobs[i];inputs[i]={j.file.Get(),j.resource.Get(),j.sourceOffset,j.size,D3D12_RESOURCE_STATES(0xc0)};}
+            if(SUCCEEDED(hr))hr=lane.transfer.Submit(inputs,lane.count);
+            if(FAILED(hr)){++failed;Log("DIRECTSTORAGE_R241 batch_rejected=1 hr=0x%08lX count=%u",static_cast<unsigned long>(hr),lane.count);
+                for(unsigned i=0;i<lane.count;++i)Retire(lane.jobs[i],false,true);lane.count=0;
+            }else ++batches;
         }
+        HANDLE events[3]={wake};DWORD count=1;
+        for(auto& lane:lanes)if(lane.count)events[count++]=lane.transfer.Event();
+        // New requests can fill the other lane while I/O or GPU work is pending.
+        // Timeout is only for device-loss / event-registration recovery.
+        WaitForMultipleObjects(count,events,FALSE,count>1?1000:INFINITE);
     }
 }
 inline bool Describe(void* texture,unsigned level,U64 size,Job& job){
@@ -115,11 +122,12 @@ inline bool Resolve(const char* name,U64 offset,U64 size,Job& job){
     alignas(16) unsigned char record[0x188]{};const auto nameAddress=reinterpret_cast<U64>(name);memcpy(record+8,&nameAddress,8);
     lookup(fs,record,1,0x188);auto* pack=reinterpret_cast<void*>(Field(record,0x120));
     const U64 base=Field(record,0x128),length=Field(record,0x130);
-    if(!pack||offset>length||size>length-offset||base>UINT64_MAX-offset)return false;
+    loader_candidate::Range range{};
+    if(!pack||!loader_candidate::Resolve(base,Field(pack,0x288),length,offset,size,range))return false;
     auto* host=reinterpret_cast<const char*>(Field(pack,0x170));if(!host||strnlen_s(host,1024)>=1024)return false;
     wchar_t wide[1024]{},full[32768]{};if(!MultiByteToWideChar(CP_UTF8,MB_ERR_INVALID_CHARS,host,-1,wide,1024))return false;
     const DWORD n=GetFullPathNameW(wide,32768,full,nullptr);if(!n||n>=32768||!SourceFile(full,job.file))return false;
-    job.sourceOffset=base+offset;return true;
+    job.sourceOffset=range.offset;return true;
 }
 using DescribeFn=bool(*)(void*,unsigned,U64,Job&);using ResolveFn=bool(*)(const char*,U64,U64,Job&);
 inline DescribeFn describe=&Describe;inline ResolveFn resolve=&Resolve;
@@ -128,7 +136,9 @@ inline std::int64_t RequestHook(void* owner,const char* name,void* texture,U64 o
     const auto fresh=allocation;allocation={};
     if(available&&fresh.texture==texture&&fresh.level==reinterpret_cast<U64>(user)&&fresh.container&&!buffer&&!flag&&size&&size<=32u*1024u*1024u&&(thread==3||thread==14)&&reinterpret_cast<U64>(user)<32){
         Job j{};j.owner=owner;j.texture=texture;j.offset=offset;j.size=static_cast<UINT>(size);j.level=static_cast<unsigned>(reinterpret_cast<U64>(user));j.thread=thread;j.priority=priority;
-        if(describe(texture,j.level,size,j)&&resolve(name,offset,size,j)){
+        if(!describe(texture,j.level,size,j))++layoutRejected;
+        else if(!resolve(name,offset,size,j))++sourceRejected;
+        else {
             j.name=name;U64 ticket=0;
             AcquireSRWLockExclusive(&lock);bool duplicate=false;for(auto* p:active)if(p&&p==j.resource.Get())duplicate=true;
             if(!duplicate&&available&&pending.load()<64&&reservedBytes+size<=128ull*1024*1024){
@@ -136,8 +146,9 @@ inline std::int64_t RequestHook(void* owner,const char* name,void* texture,U64 o
             }
             ReleaseSRWLockExclusive(&lock);
             if(ticket){SetEvent(wake);SetLastError(incoming);return static_cast<std::int64_t>(ticket|0x8000000000000000ull);}
+            ++capacityRejected;
         }
-    }
+    }else ++ineligible;
     ++fallback;SetLastError(incoming);return original(owner,name,texture,offset,size,buffer,thread,priority,flag,user);
 }
 inline bool Install(){
@@ -162,6 +173,6 @@ inline bool Install(){
 }
 inline void Poll(U64 present){
     static ULONGLONG next=0;if(!worker||present%60)return;const auto now=GetTickCount64();if(now<next)return;next=now+5000;
-    Log("DIRECTSTORAGE_R241_STATUS present=%llu available=%u offered=%llu accepted=%llu completed=%llu fallback=%llu failed=%llu pending=%llu batches=%llu accepted_bytes=%llu cpu_payload_bytes=0",present,unsigned(available.load()),offered.load(),accepted.load(),completed.load(),fallback.load(),failed.load(),pending.load(),batches.load(),bytes.load());
+    Log("DIRECTSTORAGE_R241_STATUS present=%llu available=%u offered=%llu accepted=%llu completed=%llu fallback=%llu failed=%llu pending=%llu batches=%llu accepted_bytes=%llu ineligible=%llu layout_rejected=%llu source_rejected=%llu capacity_rejected=%llu cpu_payload_bytes=0",present,unsigned(available.load()),offered.load(),accepted.load(),completed.load(),fallback.load(),failed.load(),pending.load(),batches.load(),bytes.load(),ineligible.load(),layoutRejected.load(),sourceRejected.load(),capacityRejected.load());
 }
 }
