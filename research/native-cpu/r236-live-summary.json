@@ -1,0 +1,167 @@
+{
+  "source": "probe-20261030-195947-890-57940.log",
+  "scope": "Latest session only. Timings are cumulative API/worker wall durations, not frame costs or physical disk latency.",
+  "final_candidates": {
+    "present": 7740,
+    "new_select": 16558,
+    "old_select": 0,
+    "batches": 1576,
+    "entries": 16558,
+    "inspected": 8563,
+    "capped": 7995,
+    "invalid": 3714,
+    "stored": 4849,
+    "matched": 4830,
+    "missing": 11728,
+    "dropped": 0,
+    "replaced": 19,
+    "range_equal": 4830,
+    "range_mismatch": 0,
+    "no_pack_read": 0,
+    "workers": 16558,
+    "read_bytes": 3579960518,
+    "read_failures": 0
+  },
+  "final_stages": {
+    "readfile": {
+      "count": 16558.0,
+      "total_ms": 36230.185,
+      "max_ms": 204.642
+    },
+    "pack_read": {
+      "count": 16558.0,
+      "total_ms": 36269.301,
+      "max_ms": 204.646
+    },
+    "buffer_wait": {
+      "count": 469.0,
+      "total_ms": 823.074,
+      "max_ms": 267.756
+    },
+    "interleave": {
+      "count": 16556.0,
+      "total_ms": 1.341,
+      "max_ms": 0.002
+    },
+    "lookup": {
+      "count": 1576.0,
+      "total_ms": 74.146,
+      "max_ms": 22.972
+    },
+    "resolved_lead": {
+      "count": 4830.0,
+      "total_ms": 5820218.055,
+      "max_ms": 13657.867
+    }
+  },
+  "intervals": [
+    {
+      "from_present": 4440,
+      "to_present": 7740,
+      "stages": {
+        "readfile": {
+          "count": 4346.0,
+          "total_ms": 10208.256,
+          "mean_ms": 2.348885411872986
+        },
+        "pack_read": {
+          "count": 4346.0,
+          "total_ms": 10221.299,
+          "mean_ms": 2.3518865623561895
+        },
+        "buffer_wait": {
+          "count": 405.0,
+          "total_ms": 341.535,
+          "mean_ms": 0.8432962962962962
+        },
+        "interleave": {
+          "count": 4346.0,
+          "total_ms": 0.433,
+          "mean_ms": 9.963184537505751e-05
+        },
+        "lookup": {
+          "count": 1356.0,
+          "total_ms": 14.739,
+          "mean_ms": 0.010869469026548676
+        },
+        "resolved_lead": {
+          "count": 3285.0,
+          "total_ms": 126921.593,
+          "mean_ms": 38.63671019786892
+        }
+      }
+    },
+    {
+      "from_present": 6420,
+      "to_present": 7740,
+      "stages": {
+        "readfile": {
+          "count": 1867.0,
+          "total_ms": 1235.389,
+          "mean_ms": 0.6616973754686639
+        },
+        "pack_read": {
+          "count": 1867.0,
+          "total_ms": 1240.55,
+          "mean_ms": 0.6644617032672753
+        },
+        "buffer_wait": {
+          "count": 6.0,
+          "total_ms": 4.687,
+          "mean_ms": 0.7811666666666687
+        },
+        "interleave": {
+          "count": 1867.0,
+          "total_ms": 0.169,
+          "mean_ms": 9.051955008034281e-05
+        },
+        "lookup": {
+          "count": 856.0,
+          "total_ms": 5.896,
+          "mean_ms": 0.006887850467289721
+        },
+        "resolved_lead": {
+          "count": 1810.0,
+          "total_ms": 6906.208,
+          "mean_ms": 3.8155845303865386
+        }
+      }
+    },
+    {
+      "from_present": 6840,
+      "to_present": 7740,
+      "stages": {
+        "readfile": {
+          "count": 1412.0,
+          "total_ms": 770.939,
+          "mean_ms": 0.5459907932011321
+        },
+        "pack_read": {
+          "count": 1412.0,
+          "total_ms": 774.736,
+          "mean_ms": 0.5486798866855503
+        },
+        "buffer_wait": {
+          "count": 3.0,
+          "total_ms": 3.707,
+          "mean_ms": 1.2356666666666645
+        },
+        "interleave": {
+          "count": 1412.0,
+          "total_ms": 0.124,
+          "mean_ms": 8.781869688385262e-05
+        },
+        "lookup": {
+          "count": 654.0,
+          "total_ms": 4.26,
+          "mean_ms": 0.006513761467889916
+        },
+        "resolved_lead": {
+          "count": 1412.0,
+          "total_ms": 4678.263,
+          "mean_ms": 3.3132174220958475
+        }
+      }
+    }
+  ]
+}
