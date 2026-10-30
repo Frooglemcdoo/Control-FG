@@ -28,7 +28,7 @@ Counters include startup and traversal, not just the affected area.
    held read-only against replacement/write. No archive payload cache is built.
 3. A dedicated worker submits up to 16 raw archive ranges per DirectStorage
    batch to DEFAULT-heap GPU buffers. Two independent batch lanes overlap I/O
-   and GPU completion. The descriptor queue holds up to 4,096 pending jobs
+   and GPU completion. The descriptor queue holds up to 2,048 pending jobs
    without allocating payload buffers for queued jobs. Each active lane has
    a conservative 128 MiB transfer-buffer budget. There is no CPU payload buffer, Map,
    memcpy or CPU decompression in this path.
@@ -79,7 +79,7 @@ mean a physically direct SSD-to-VRAM transaction with no CPU involvement.
 
 ## Validation and limits
 
-Windows CI validates eight RGBA/BGRA/BC format variants and all 64 mip contents
+Windows CI validates eight RGBA/BGRA/BC format variants and all 72 mip contents
 against a synthetic compact archive after GPU repacking and copy. A blocked
 consumer-queue test requires transfers to complete before the native frame
 queue is released, detecting a loading-barrier deadlock. It exercises
@@ -107,15 +107,35 @@ availability change into that counter, so the logs cannot prove that all 958
 were queue-full events. R242 separates capacity, duplicate and unavailable
 rejections and reports peak pending depth plus configured queue capacity.
 
-R242 doubles descriptor capacity from 2,048 to 4,096 for loading bursts. It
-keeps two transfer lanes and the 128 MiB conservative per-lane staging budget.
-Queued descriptors retain already-created destination textures and engine
-references; admitting more jobs can therefore retain more destination VRAM,
-even though active staging allocation is unchanged. The queue remains bounded
-and never waits on the renderer/request thread for a free slot.
+R242 keeps the descriptor capacity at 2,048 after the user reported substantial
+frame spikes in the R241 run. It replaces two temporary committed GPU buffers
+per texture with two reusable arenas per lane. Each batch assigns disjoint
+source and footprint regions; all repacking precedes the shared copy-source
+transition. Both arenas return to COMMON before the GPU fence completes.
+Arenas can only be reused or resized while the batch owner is idle, after its
+storage and GPU work have retired. Both active and retained arena capacities
+are bounded to 128 MiB per lane (256 MiB across two lanes). Rounded growth is
+trimmed to exact allocation-aligned needs if it would exceed that bound.
 
-The admission regression fixture crosses the former limit, fills the final
-slot, checks full-queue fallback, separates an active duplicate from capacity
-pressure, and verifies retirement plus slot reuse. Live improvement still
-requires a pinned traversal; this change does not establish faster service or
-remove the native path for unsupported assets.
+The R241 path made two successful temporary buffer allocations for each of the
+7,692 completed requests: at least 15,384 allocations in this session. This is
+a concrete source of allocation churn, not proof that it caused every spike.
+R242 removes that per-texture churn after arena sizes stabilize. Native target
+texture creation, resource metadata and driver work still consume CPU time.
+
+Counters now include staging allocation count, fully reused batches, and
+maximum worker elapsed microseconds in initialization, submission and polling.
+These are CPU-side wall durations (including scheduling), not GPU timestamp
+measurements or frame-time attribution. The run still needs traversal feedback;
+no smoothness improvement is claimed from transfer correctness alone.
+
+The regression fixture checks reuse without new allocations, growth followed
+by smaller/larger reuse, all 72 mip contents across eight format variants,
+concurrent disjoint lanes, blocked consumer queue independence, invalid batch
+rejection, pool retirement, bounded admission, duplicate protection and slot
+reuse. No payload is mapped or copied by the CPU in the game path.
+
+References:
+- https://github.com/microsoft/DirectStorage/blob/main/Docs/DeveloperGuidance.md
+- https://learn.microsoft.com/en-us/windows/win32/dstorage/dstorage/ns-dstorage-dstorage_destination_buffer
+- https://learn.microsoft.com/en-us/windows/win32/direct3d12/fence-based-resource-management

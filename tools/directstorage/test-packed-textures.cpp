@@ -73,15 +73,15 @@ static void Admission(){
  n::Retire(job,true,false);Check(refs==0&&enginePending==0&&published==1&&n::pending==0&&n::active[0]==nullptr,"publication and retirement");
  n::cursor=0;n::allocation={texture,2,0x9999};n::RequestHook(nullptr,"fixture",texture,17,64,nullptr,14,7,false,user);
  job=std::move(n::jobs[0]);n::jobs[0]={};n::Retire(job,false,true);Check(native==2&&refs==0&&enginePending==0&&n::pending==0&&published==1,"retired failure retries native exactly once");
- // A loading burst exceeding the old 2,048 descriptor limit must still
- // admit to the final slot. Synthetic reservations avoid allocating thousands
+ // Fill the bounded descriptor queue to its final slot. Synthetic
+ // reservations avoid allocating thousands
  // of GPU resources: this fixture tests admission, not the GPU memory budget.
- static_assert(n::QueueCapacity==4096,"burst descriptor capacity");
+ static_assert(n::QueueCapacity==2048,"bounded descriptor capacity");
  const auto oldCapacity=n::capacityRejected.load(),oldDuplicate=n::duplicateRejected.load();
  for(unsigned i=0;i<n::QueueCapacity-1;++i)n::active[i]=reinterpret_cast<ID3D12Resource*>(1);
  n::pending=n::QueueCapacity-1;n::cursor=n::QueueCapacity-1;
  n::allocation={texture,2,0x9999};SetLastError(101);
- Check(n::RequestHook(nullptr,"fixture",texture,17,64,nullptr,14,7,false,user)<0&&GetLastError()==101,"burst above old capacity admitted");
+ Check(n::RequestHook(nullptr,"fixture",texture,17,64,nullptr,14,7,false,user)<0&&GetLastError()==101,"final queue slot admitted");
  Check(n::pending==n::QueueCapacity&&n::peakPending==n::QueueCapacity&&refs==1&&enginePending==1,"burst peak and lifetime accounting");
  n::allocation={texture,2,0x9999};
  Check(n::RequestHook(nullptr,"fixture",texture,17,64,nullptr,14,7,false,user)==123&&n::capacityRejected==oldCapacity+1,"full queue falls back without reservation");
@@ -104,9 +104,9 @@ int main(){
  ComPtr<ID3D12CommandQueue> queue;D3D12_COMMAND_QUEUE_DESC q{};q.Type=D3D12_COMMAND_LIST_TYPE_DIRECT;Hr(device->CreateCommandQueue(&q,IID_PPV_ARGS(&queue)),"queue");
  ComPtr<IDStorageFactory> factory;Hr(DStorageGetFactory(IID_PPV_ARGS(&factory)),"factory");Batch transfer;Hr(transfer.Initialize(factory.Get(),queue.Get()),"packed backend");
  struct Fixture {ComPtr<ID3D12Resource> texture;D3D12_RESOURCE_DESC desc{};native_texture_layout::Layout layout{};std::vector<unsigned char> compact;};
- Fixture fixtures[8];const DXGI_FORMAT formats[]={DXGI_FORMAT_R8G8B8A8_UNORM,DXGI_FORMAT_BC1_TYPELESS,DXGI_FORMAT_BC3_TYPELESS,DXGI_FORMAT_BC4_UNORM,DXGI_FORMAT_BC5_UNORM,DXGI_FORMAT_B8G8R8A8_UNORM,DXGI_FORMAT_B8G8R8A8_TYPELESS,DXGI_FORMAT_BC7_UNORM};
- std::vector<unsigned char> archive(713,0x5a);Batch::Input inputs[8]{};
- for(unsigned t=0;t<8;++t){auto& f=fixtures[t];auto& d=f.desc;d.Dimension=D3D12_RESOURCE_DIMENSION_TEXTURE2D;d.Width=t==0?129:128;d.Height=t==0?65:64;d.DepthOrArraySize=1;d.MipLevels=8;d.Format=formats[t];d.SampleDesc.Count=1;
+ Fixture fixtures[9];const DXGI_FORMAT formats[]={DXGI_FORMAT_R8G8B8A8_UNORM,DXGI_FORMAT_BC1_TYPELESS,DXGI_FORMAT_BC3_TYPELESS,DXGI_FORMAT_BC4_UNORM,DXGI_FORMAT_BC5_UNORM,DXGI_FORMAT_B8G8R8A8_UNORM,DXGI_FORMAT_B8G8R8A8_TYPELESS,DXGI_FORMAT_BC7_UNORM,DXGI_FORMAT_R8G8B8A8_UNORM};
+ std::vector<unsigned char> archive(713,0x5a);Batch::Input inputs[9]{};
+ for(unsigned t=0;t<9;++t){auto& f=fixtures[t];auto& d=f.desc;d.Dimension=D3D12_RESOURCE_DIMENSION_TEXTURE2D;d.Width=t==8?1024:(t==0?129:128);d.Height=t==8?1024:(t==0?65:64);d.DepthOrArraySize=1;d.MipLevels=8;d.Format=formats[t];d.SampleDesc.Count=1;
   f.texture=Resource(device.Get(),d,D3D12_HEAP_TYPE_DEFAULT,D3D12_RESOURCE_STATES(0xc0));Check(native_texture_layout::Build(device.Get(),d,f.layout),"layout");
   f.compact.resize(static_cast<size_t>(f.layout.compactBytes));
   for(unsigned m=0;m<8;++m){const auto& l=f.layout.mips[m];for(unsigned r=0;r<l.rows;++r)for(UINT64 c=0;c<l.rowBytes;++c)f.compact[size_t(l.compactOffset+r*l.rowBytes+c)]=static_cast<unsigned char>((t*31+m*17+r*7+c*3)%251);}
@@ -131,10 +131,20 @@ int main(){
  bool done[2]{};Batch* lanes[]={&transfer,&parallel};const auto deadline=GetTickCount64()+30000;
  while(!done[0]||!done[1]){for(unsigned i=0;i<2;++i)if(!done[i]){HRESULT result=E_PENDING;done[i]=lanes[i]->Poll(result);if(done[i])Hr(result,"overlapped completion");}
   Check(GetTickCount64()<deadline,"parallel deadline");if(!done[0])WaitForSingleObject(transfer.Event(),10);else if(!done[1])WaitForSingleObject(parallel.Event(),10);}
- Check(parallel.Close(),"parallel retired");
+ Check(parallel.Close()&&parallel.RetainedBytes()==0,"parallel retired and pool released");
+ Check(transfer.BufferAllocations()==2&&transfer.ReusedBatches()==2,"small repeated batches reuse two arenas");
+ for(unsigned pass=0;pass<3;++pass){
+  Hr(transfer.Submit(pass==2?inputs:inputs+8,pass==2?8:1),"growth and smaller reuse submit");
+  HRESULT result=E_PENDING;const auto until=GetTickCount64()+30000;
+  while(!transfer.Poll(result)){Check(GetTickCount64()<until,"growth completion deadline");WaitForSingleObject(transfer.Event(),100);}
+  Hr(result,"growth completion");Check(transfer.RetainedBytes()<=Batch::StagingBudget,"retained pool bounded");
+ }
+ Check(transfer.BufferAllocations()==4&&transfer.ReusedBatches()==4,"growth once then reuse for large and small batches");
+ const auto allocations=transfer.BufferAllocations();bad=inputs[0];++bad.bytes;
+ Check(FAILED(transfer.Submit(&bad,1))&&transfer.BufferAllocations()==allocations,"invalid batch does not resize arenas");
  // Readback belongs exclusively to this test, never to runtime payload handling.
  ComPtr<ID3D12Fence> fence;Hr(device->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&fence)),"readback fence");HANDLE event=CreateEventW(nullptr,FALSE,FALSE,nullptr);
- for(unsigned t=0;t<8;++t){auto& f=fixtures[t];D3D12_PLACED_SUBRESOURCE_FOOTPRINT fp[8]{};UINT rows[8]{};UINT64 rowBytes[8]{},total=0;device->GetCopyableFootprints(&f.desc,0,8,0,fp,rows,rowBytes,&total);
+ for(unsigned t=0;t<9;++t){auto& f=fixtures[t];D3D12_PLACED_SUBRESOURCE_FOOTPRINT fp[8]{};UINT rows[8]{};UINT64 rowBytes[8]{},total=0;device->GetCopyableFootprints(&f.desc,0,8,0,fp,rows,rowBytes,&total);
   D3D12_RESOURCE_DESC d{};d.Dimension=D3D12_RESOURCE_DIMENSION_BUFFER;d.Width=total;d.Height=1;d.DepthOrArraySize=1;d.MipLevels=1;d.SampleDesc.Count=1;d.Layout=D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
   auto readback=Resource(device.Get(),d,D3D12_HEAP_TYPE_READBACK,D3D12_RESOURCE_STATE_COPY_DEST);ComPtr<ID3D12CommandAllocator> allocator;ComPtr<ID3D12GraphicsCommandList> list;
   Hr(device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT,IID_PPV_ARGS(&allocator)),"allocator");Hr(device->CreateCommandList(0,D3D12_COMMAND_LIST_TYPE_DIRECT,allocator.Get(),nullptr,IID_PPV_ARGS(&list)),"list");
@@ -146,5 +156,5 @@ int main(){
   D3D12_RANGE empty{};readback->Unmap(0,&empty);
  }
  AllocationGate();ResolveRange(factory.Get(),path);testResource=fixtures[0].texture;Admission();testResource.Reset();Check(transfer.Close(),"drained close");source.Reset();CloseHandle(event);Check(DeleteFileW(path)!=FALSE,"file ownership released");
- puts("PASS R242: file-to-GPU packed rows, eight formats / 64 mips, repeated batches, native state restoration, blocked consumer queue independence, bounds, native archive bias resolution, overlap rejection, 4096-slot burst admission, capacity/duplicate separation, slot reuse, ownership and deferred publication; runtime CPU payload bytes=0");
+ puts("PASS R242: file-to-GPU packed rows, eight formats / 72 mips, repeated and growing arena reuse, bounded staging, native state restoration, blocked consumer queue independence, bounds, native archive bias resolution, overlap rejection, bounded queue admission, capacity/duplicate separation, slot reuse, ownership and deferred publication; runtime CPU payload bytes=0");
 }

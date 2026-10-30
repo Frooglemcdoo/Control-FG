@@ -14,19 +14,40 @@ class PackedTextureBatch {
     template<class T> using Ptr=Microsoft::WRL::ComPtr<T>;
 public:
     static constexpr unsigned Capacity=16;
+    static constexpr UINT64 StagingBudget=128ull*1024*1024;
     struct Input {IDStorageFile* file=nullptr;ID3D12Resource* texture=nullptr;UINT64 offset=0;UINT bytes=0;D3D12_RESOURCE_STATES state=D3D12_RESOURCE_STATE_COMMON;};
     enum class Phase {Idle,Storage,Gpu,FailedSubmission};
 private:
     struct Item {
         Ptr<IDStorageFile> file;Ptr<ID3D12Resource> target,packed,padded;
         native_texture_layout::Layout layout{};D3D12_PLACED_SUBRESOURCE_FOOTPRINT footprints[16]{};
-        D3D12_RESOURCE_STATES state{};UINT64 paddedBytes=0;
+        D3D12_RESOURCE_STATES state{};UINT64 paddedBytes=0,packedOffset=0;
     } items[Capacity];
     Ptr<ID3D12Device> device;Ptr<ID3D12CommandQueue> graphics,transferQueue;Ptr<IDStorageQueue2> storage;
     Ptr<IDStorageStatusArray> status;Ptr<ID3D12RootSignature> root;Ptr<ID3D12PipelineState> pipeline;
     Ptr<ID3D12CommandAllocator> allocator;Ptr<ID3D12GraphicsCommandList> list;Ptr<ID3D12Fence> fence;
     HANDLE storageEvent=nullptr,gpuEvent=nullptr;UINT64 fenceValue=0;unsigned count=0;Phase phase=Phase::Idle;
     HRESULT failure=S_OK;
+    Ptr<ID3D12Resource> packedArena,paddedArena;
+    UINT64 packedCapacity=0,paddedCapacity=0,bufferAllocations=0,reusedBatches=0;
+    static UINT64 Aligned(UINT64 n,UINT64 alignment){return (n+alignment-1)&~(alignment-1);}
+    static UINT64 Growth(UINT64 need){UINT64 n=1024*1024;while(n<need)n*=2;return n;}
+    HRESULT EnsureArenas(UINT64 packed,UINT64 padded){
+        packed=Aligned(packed,65536);padded=Aligned(padded,65536);
+        if(packed+padded>StagingBudget)return E_OUTOFMEMORY;
+        if(packed<=packedCapacity&&padded<=paddedCapacity){++reusedBatches;return S_OK;}
+        UINT64 a=packedCapacity>=packed?packedCapacity:Growth(packed);
+        UINT64 b=paddedCapacity>=padded?paddedCapacity:Growth(padded);
+        if(a+b>StagingBudget){a=packed;b=padded;}
+        // Submit is idle: storage and GPU fences retired before these arenas
+        // can be resized. Release old allocations first to bound peak memory.
+        if(a!=packedCapacity){packedArena.Reset();packedCapacity=0;}
+        if(b!=paddedCapacity){paddedArena.Reset();paddedCapacity=0;}
+        HRESULT hr=S_OK;
+        if(!packedArena){hr=Buffer(a,D3D12_RESOURCE_FLAG_NONE,&packedArena);if(FAILED(hr))return hr;packedCapacity=a;++bufferAllocations;}
+        if(!paddedArena){hr=Buffer(b,D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS,&paddedArena);if(FAILED(hr))return hr;paddedCapacity=b;++bufferAllocations;}
+        return S_OK;
+    }
     static bool Same(IUnknown* a,IUnknown* b){Ptr<IUnknown> x,y;return a&&b&&SUCCEEDED(a->QueryInterface(IID_PPV_ARGS(&x)))&&SUCCEEDED(b->QueryInterface(IID_PPV_ARGS(&y)))&&x.Get()==y.Get();}
     HRESULT Buffer(UINT64 size,D3D12_RESOURCE_FLAGS flags,ID3D12Resource** out){
         D3D12_RESOURCE_DESC d{};d.Dimension=D3D12_RESOURCE_DIMENSION_BUFFER;d.Width=size;d.Height=1;d.DepthOrArraySize=1;d.MipLevels=1;d.SampleDesc.Count=1;d.Layout=D3D12_TEXTURE_LAYOUT_ROW_MAJOR;d.Flags=flags;
@@ -40,15 +61,17 @@ private:
     HRESULT Upload(){
         HRESULT hr=allocator->Reset();if(FAILED(hr))return hr;hr=list->Reset(allocator.Get(),pipeline.Get());if(FAILED(hr))return hr;
         list->SetComputeRootSignature(root.Get());
+        Barrier(packedArena.Get(),D3D12_RESOURCE_STATE_COMMON,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+        Barrier(paddedArena.Get(),D3D12_RESOURCE_STATE_COMMON,D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
         for(unsigned j=0;j<count;++j){auto& i=items[j];
-            Barrier(i.packed.Get(),D3D12_RESOURCE_STATE_COMMON,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-            Barrier(i.padded.Get(),D3D12_RESOURCE_STATE_COMMON,D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
             list->SetComputeRootShaderResourceView(0,i.packed->GetGPUVirtualAddress());list->SetComputeRootUnorderedAccessView(1,i.padded->GetGPUVirtualAddress());
             for(unsigned m=0;m<i.layout.count;++m){const auto& l=i.layout.mips[m];const auto& fp=i.footprints[m];
-                const UINT data[]={UINT(l.compactOffset),UINT(fp.Offset),UINT(l.rowBytes/4),l.rows,fp.Footprint.RowPitch/4};
+                const UINT data[]={UINT(i.packedOffset+l.compactOffset),UINT(fp.Offset),UINT(l.rowBytes/4),l.rows,fp.Footprint.RowPitch/4};
                 list->SetComputeRoot32BitConstants(2,5,data,0);list->Dispatch((data[2]+63)/64,data[3],1);
             }
-            Barrier(i.padded.Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS,D3D12_RESOURCE_STATE_COPY_SOURCE);
+        }
+        Barrier(paddedArena.Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS,D3D12_RESOURCE_STATE_COPY_SOURCE);
+        for(unsigned j=0;j<count;++j){auto& i=items[j];
             Barrier(i.target.Get(),i.state,D3D12_RESOURCE_STATE_COPY_DEST);
             for(unsigned m=0;m<i.layout.count;++m){D3D12_TEXTURE_COPY_LOCATION dst{},src{};
                 dst.pResource=i.target.Get();dst.Type=D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;dst.SubresourceIndex=m;
@@ -57,6 +80,8 @@ private:
             }
             Barrier(i.target.Get(),D3D12_RESOURCE_STATE_COPY_DEST,i.state);
         }
+        Barrier(packedArena.Get(),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,D3D12_RESOURCE_STATE_COMMON);
+        Barrier(paddedArena.Get(),D3D12_RESOURCE_STATE_COPY_SOURCE,D3D12_RESOURCE_STATE_COMMON);
         hr=list->Close();if(FAILED(hr))return hr;
         ID3D12CommandList* lists[]={list.Get()};transferQueue->ExecuteCommandLists(1,lists);
         // Once submitted, no resource may retire without a fence or device loss.
@@ -68,6 +93,9 @@ private:
 public:
     PackedTextureBatch()=default;PackedTextureBatch(const PackedTextureBatch&)=delete;PackedTextureBatch& operator=(const PackedTextureBatch&)=delete;
     Phase CurrentPhase()const{return phase;}
+    UINT64 BufferAllocations()const{return bufferAllocations;}
+    UINT64 ReusedBatches()const{return reusedBatches;}
+    UINT64 RetainedBytes()const{return packedCapacity+paddedCapacity;}
     HANDLE Event()const{return phase==Phase::Storage?storageEvent:gpuEvent;}
     HRESULT Initialize(IDStorageFactory* factory,ID3D12CommandQueue* queue){
         if(!factory||!queue||device||queue->GetDesc().Type!=D3D12_COMMAND_LIST_TYPE_DIRECT)return E_INVALIDARG;
@@ -100,7 +128,7 @@ cbuffer Layout : register(b0) { uint srcOffset; uint dstOffset; uint rowWords; u
     }
     HRESULT Submit(const Input* inputs,unsigned n){
         if(!storage||phase!=Phase::Idle||!inputs||!n||n>Capacity)return E_INVALIDARG;
-        DSTORAGE_REQUEST requests[Capacity]{};UINT64 memory=0;
+        DSTORAGE_REQUEST requests[Capacity]{};UINT64 packedBytes=0,paddedBytes=0;
         for(unsigned j=0;j<n;++j){const auto& in=inputs[j];auto& i=items[j];HRESULT hr=E_INVALIDARG;
             if(!in.file||!in.texture||!in.bytes||in.bytes>32u*1024u*1024u){Clear();return hr;}
             for(unsigned k=0;k<j;++k)if(Same(in.texture,inputs[k].texture)){Clear();return hr;}
@@ -113,12 +141,16 @@ cbuffer Layout : register(b0) { uint srcOffset; uint dstOffset; uint rowWords; u
             BY_HANDLE_FILE_INFORMATION info{};hr=in.file->GetFileInformation(&info);const UINT64 length=(UINT64(info.nFileSizeHigh)<<32)|info.nFileSizeLow;
             if(FAILED(hr)||in.offset>length||in.bytes>length-in.offset){Clear();return E_INVALIDARG;}
             device->GetCopyableFootprints(&desc,0,i.layout.count,0,i.footprints,nullptr,nullptr,&i.paddedBytes);
-            memory+=i.paddedBytes+in.bytes;if(i.paddedBytes>UINT_MAX||memory>256ull*1024*1024){Clear();return E_OUTOFMEMORY;}
-            hr=Buffer(in.bytes,D3D12_RESOURCE_FLAG_NONE,&i.packed);if(FAILED(hr)){Clear();return hr;}
-            hr=Buffer(i.paddedBytes,D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS,&i.padded);if(FAILED(hr)){Clear();return hr;}
+            i.packedOffset=Aligned(packedBytes,512);packedBytes=i.packedOffset+in.bytes;
+            const UINT64 paddedOffset=Aligned(paddedBytes,512);paddedBytes=paddedOffset+i.paddedBytes;
+            if(packedBytes+paddedBytes>StagingBudget){Clear();return E_OUTOFMEMORY;}
+            for(unsigned m=0;m<i.layout.count;++m)i.footprints[m].Offset+=paddedOffset;
             i.file=in.file;i.target=in.texture;i.state=in.state;
+        }
+        const HRESULT prepared=EnsureArenas(packedBytes,paddedBytes);if(FAILED(prepared)){Clear();return prepared;}
+        for(unsigned j=0;j<n;++j){const auto& in=inputs[j];auto& i=items[j];i.packed=packedArena;i.padded=paddedArena;
             auto& r=requests[j];r.Options.SourceType=DSTORAGE_REQUEST_SOURCE_FILE;r.Options.DestinationType=DSTORAGE_REQUEST_DESTINATION_BUFFER;
-            r.Options.CompressionFormat=DSTORAGE_COMPRESSION_FORMAT_NONE;r.Source.File={in.file,in.offset,in.bytes};r.Destination.Buffer={i.packed.Get(),0,in.bytes};r.UncompressedSize=in.bytes;
+            r.Options.CompressionFormat=DSTORAGE_COMPRESSION_FORMAT_NONE;r.Source.File={in.file,in.offset,in.bytes};r.Destination.Buffer={i.packed.Get(),i.packedOffset,in.bytes};r.UncompressedSize=in.bytes;
         }
         count=n;failure=S_OK;ResetEvent(storageEvent);
         for(unsigned j=0;j<n;++j)storage->EnqueueRequest(&requests[j]);storage->EnqueueStatus(status.Get(),0);storage->EnqueueSetEvent(storageEvent);phase=Phase::Storage;storage->Submit();return S_OK;
@@ -144,7 +176,7 @@ cbuffer Layout : register(b0) { uint srcOffset; uint dstOffset; uint rowWords; u
         }
         return false;
     }
-    bool Close(){if(phase!=Phase::Idle)return false;Clear();list.Reset();allocator.Reset();pipeline.Reset();root.Reset();storage.Reset();status.Reset();fence.Reset();transferQueue.Reset();graphics.Reset();device.Reset();
+    bool Close(){if(phase!=Phase::Idle)return false;Clear();packedArena.Reset();paddedArena.Reset();packedCapacity=paddedCapacity=0;list.Reset();allocator.Reset();pipeline.Reset();root.Reset();storage.Reset();status.Reset();fence.Reset();transferQueue.Reset();graphics.Reset();device.Reset();
         if(storageEvent)CloseHandle(storageEvent);if(gpuEvent)CloseHandle(gpuEvent);storageEvent=gpuEvent=nullptr;return true;}
 };
 }

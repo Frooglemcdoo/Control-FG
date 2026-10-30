@@ -1016,11 +1016,12 @@ jobs:
           Copy-Item tools/directstorage/Validate-DirectStorage.cmd "$out/DirectStorage"
           Copy-Item docs/native-gpu-storage-r242.md "$out/DIAGNOSTIC-NOTES.md"
           @'
-          CONTROL-FG R242 - Native GPU texture streaming
+          CONTROL-FG R242 - Reusable GPU texture streaming buffers
           Copy package contents beside Control_DX12.exe, replacing previous mod files.
           Run Start-CPU-R242-NativeGPUStorage.cmd; pinned 8 ms, 16 partitions.
           Newly allocated supported 2D texture loads use DirectStorage GPU buffers,
           GPU row repacking and GPU texture copy before native publication.
+          R242 reuses bounded GPU staging arenas instead of allocating per texture.
           Unsupported assets and requests rejected before admission remain native.
           Expect DIRECTSTORAGE_R242 installed=1 and increasing accepted/completed counters.
           Speculative CPU read-ahead and loader/completion diagnostic hooks are disabled.

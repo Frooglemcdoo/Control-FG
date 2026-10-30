@@ -21,9 +21,9 @@ inline thread_local Allocation allocation{};
 inline RRIndirectCallPatch patch;inline HMODULE storageModule=nullptr;inline Ptr<IDStorageFactory> factory;
 inline SRWLOCK lock=SRWLOCK_INIT,fileLock=SRWLOCK_INIT;inline HANDLE wake=nullptr,worker=nullptr;
 inline std::atomic<bool> available{false};
-inline std::atomic<U64> ineligible{0},layoutRejected{0},sourceRejected{0},capacityRejected{0},duplicateRejected{0},unavailableRejected{0},peakPending{0};
+inline std::atomic<U64> ineligible{0},layoutRejected{0},sourceRejected{0},capacityRejected{0},duplicateRejected{0},unavailableRejected{0},peakPending{0},stagingAllocations{0},stagingReuses{0},submitMaxUs{0},initMaxUs{0},pollMaxUs{0};
 inline std::atomic<U64> offered{0},accepted{0},completed{0},fallback{0},bytes{0},failed{0},batches{0},pending{0};
-inline constexpr unsigned QueueCapacity=4096;
+inline constexpr unsigned QueueCapacity=2048;
 struct Job {
     bool used=false;U64 serial=0,offset=0,sourceOffset=0,gpuBytes=0;UINT size=0;unsigned level=0,slot=QueueCapacity;int thread=0,priority=0;
     void* owner=nullptr;void* texture=nullptr;std::string name;
@@ -70,6 +70,9 @@ inline void Retire(Job& job,bool success,bool retry){
     adjustPending(job.owner,-1);
     AcquireSRWLockExclusive(&lock);reservedBytes-=job.size;active[job.slot]=nullptr;ReleaseSRWLockExclusive(&lock);--pending;job={};
 }
+inline U64 ClockUs(){static const U64 frequency=[](){LARGE_INTEGER f;QueryPerformanceFrequency(&f);return U64(f.QuadPart);}();LARGE_INTEGER t;QueryPerformanceCounter(&t);return U64(t.QuadPart)/frequency*1000000+(U64(t.QuadPart)%frequency)*1000000/frequency;}
+// These are worker CPU/wall elapsed times, not GPU timestamp-query durations.
+inline void MaxElapsed(std::atomic<U64>& maximum,U64 start){const U64 elapsed=ClockUs()-start;if(elapsed>maximum.load(std::memory_order_relaxed))maximum.store(elapsed,std::memory_order_relaxed);}
 inline DWORD WINAPI Work(void*){
     struct Lane {control_storage::PackedTextureBatch transfer;Job jobs[control_storage::PackedTextureBatch::Capacity];unsigned count=0;bool initialized=false;};
     Lane lanes[2];
@@ -77,7 +80,7 @@ inline DWORD WINAPI Work(void*){
         for(auto& lane:lanes){
             if(lane.count){
                 HRESULT result=E_PENDING;
-                if(!lane.transfer.Poll(result))continue;
+                const U64 pollStart=ClockUs();const bool retired=lane.transfer.Poll(result);MaxElapsed(pollMaxUs,pollStart);if(!retired)continue;
                 const bool success=SUCCEEDED(result);const bool lost=result==DXGI_ERROR_DEVICE_REMOVED||result==DXGI_ERROR_DEVICE_RESET;
                 if(!success){++failed;Log("DIRECTSTORAGE_R242 batch_failed=1 hr=0x%08lX count=%u",static_cast<unsigned long>(result),lane.count);}
                 if(lost)available=false;
@@ -91,10 +94,11 @@ inline DWORD WINAPI Work(void*){
             }
             ReleaseSRWLockExclusive(&lock);if(!lane.count)continue;
             HRESULT hr=available?S_OK:E_ABORT;
-            if(SUCCEEDED(hr)&&!lane.initialized){hr=lane.transfer.Initialize(factory.Get(),lane.jobs[0].queue.Get());lane.initialized=SUCCEEDED(hr);if(!lane.initialized){available=false;lane.transfer.Close();}}
+            if(SUCCEEDED(hr)&&!lane.initialized){const U64 start=ClockUs();hr=lane.transfer.Initialize(factory.Get(),lane.jobs[0].queue.Get());MaxElapsed(initMaxUs,start);lane.initialized=SUCCEEDED(hr);if(!lane.initialized){available=false;lane.transfer.Close();}}
             control_storage::PackedTextureBatch::Input inputs[control_storage::PackedTextureBatch::Capacity]{};
             for(unsigned i=0;i<lane.count;++i){const auto& j=lane.jobs[i];inputs[i]={j.file.Get(),j.resource.Get(),j.sourceOffset,j.size,D3D12_RESOURCE_STATES(0xc0)};}
-            if(SUCCEEDED(hr))hr=lane.transfer.Submit(inputs,lane.count);
+            if(SUCCEEDED(hr)){const U64 allocations=lane.transfer.BufferAllocations(),reuses=lane.transfer.ReusedBatches(),start=ClockUs();
+                hr=lane.transfer.Submit(inputs,lane.count);MaxElapsed(submitMaxUs,start);stagingAllocations+=lane.transfer.BufferAllocations()-allocations;stagingReuses+=lane.transfer.ReusedBatches()-reuses;}
             if(FAILED(hr)){++failed;Log("DIRECTSTORAGE_R242 batch_rejected=1 hr=0x%08lX count=%u",static_cast<unsigned long>(hr),lane.count);
                 for(unsigned i=0;i<lane.count;++i)Retire(lane.jobs[i],false,true);lane.count=0;
             }else ++batches;
@@ -194,6 +198,6 @@ inline bool Install(){
 }
 inline void Poll(U64 present){
     static ULONGLONG next=0;if(!worker||present%60)return;const auto now=GetTickCount64();if(now<next)return;next=now+5000;
-    Log("DIRECTSTORAGE_R242_STATUS present=%llu available=%u offered=%llu accepted=%llu completed=%llu fallback=%llu failed=%llu pending=%llu batches=%llu accepted_bytes=%llu ineligible=%llu layout_rejected=%llu source_rejected=%llu capacity_rejected=%llu duplicate_rejected=%llu unavailable_rejected=%llu peak_pending=%llu queue_capacity=%u cpu_payload_bytes=0",present,unsigned(available.load()),offered.load(),accepted.load(),completed.load(),fallback.load(),failed.load(),pending.load(),batches.load(),bytes.load(),ineligible.load(),layoutRejected.load(),sourceRejected.load(),capacityRejected.load(),duplicateRejected.load(),unavailableRejected.load(),peakPending.load(),QueueCapacity);
+    Log("DIRECTSTORAGE_R242_STATUS present=%llu available=%u offered=%llu accepted=%llu completed=%llu fallback=%llu failed=%llu pending=%llu batches=%llu accepted_bytes=%llu ineligible=%llu layout_rejected=%llu source_rejected=%llu capacity_rejected=%llu duplicate_rejected=%llu unavailable_rejected=%llu peak_pending=%llu queue_capacity=%u staging_allocations=%llu staging_reuse_batches=%llu submit_cpu_wall_max_us=%llu init_cpu_wall_max_us=%llu poll_cpu_wall_max_us=%llu cpu_payload_bytes=0",present,unsigned(available.load()),offered.load(),accepted.load(),completed.load(),fallback.load(),failed.load(),pending.load(),batches.load(),bytes.load(),ineligible.load(),layoutRejected.load(),sourceRejected.load(),capacityRejected.load(),duplicateRejected.load(),unavailableRejected.load(),peakPending.load(),QueueCapacity,stagingAllocations.load(),stagingReuses.load(),submitMaxUs.load(),initMaxUs.load(),pollMaxUs.load());
 }
 }
