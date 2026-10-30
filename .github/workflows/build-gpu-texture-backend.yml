@@ -1,0 +1,53 @@
+name: Validate GPU texture backend
+on:
+  push:
+    branches: [work/r239-gpu-texture-backend]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch pinned DirectStorage 1.3
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          New-Item -ItemType Directory -Force build | Out-Null
+          Invoke-WebRequest 'https://api.nuget.org/v3-flatcontainer/microsoft.direct3d.directstorage/1.3.0/microsoft.direct3d.directstorage.1.3.0.nupkg' -OutFile build/sdk.zip
+          if ((Get-FileHash build/sdk.zip -Algorithm SHA256).Hash.ToLower() -ne '8ab6c1082537565388b79050d94fdd7f5f437cd0f1d909e7b19f786042b97177') { throw 'SDK hash mismatch' }
+          Expand-Archive build/sdk.zip build/sdk
+          Copy-Item build/sdk/native/bin/x64/dstorage.dll,build/sdk/native/bin/x64/dstoragecore.dll build
+      - name: Compile GPU texture backend validator
+        shell: cmd
+        run: |
+          for /f "usebackq tokens=*" %%I in (`"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath`) do set "VSROOT=%%I"
+          call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
+          cl /nologo /std:c++17 /EHsc /W4 /O2 /Ibuild\sdk\native\include tools\directstorage\test-gpu-textures.cpp /Febuild\ControlFG-GpuTexture-Test.exe /link /LIBPATH:build\sdk\native\lib\x64 dstorage.lib d3d12.lib dxgi.lib
+          if errorlevel 1 exit /b 1
+      - name: Validate raw and compressed texture mips
+        shell: powershell
+        run: |
+          & build/ControlFG-GpuTexture-Test.exe | Tee-Object build/GPU-Texture-Validation.log
+          if ($LASTEXITCODE -ne 0) { throw 'Texture validation failed' }
+      - name: Verify explicit CPU fallback rejection
+        shell: powershell
+        run: |
+          & build/ControlFG-GpuTexture-Test.exe --force-cpu | Tee-Object build/CPU-Fallback-Validation.log
+          if ($LASTEXITCODE -ne 0) { throw 'CPU fallback policy validation failed' }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Control-FG-GPU-Texture-Backend-R239-Developer
+          path: |
+            build/ControlFG-GpuTexture-Test.exe
+            build/dstorage.dll
+            build/dstoragecore.dll
+            build/*Validation.log
+            build/sdk/LICENSE.txt
+            build/sdk/LICENSE-CODE.txt
+            build/sdk/NOTICES.txt
+            docs/native-gpu-texture-backend-r239.md
+          retention-days: 7
