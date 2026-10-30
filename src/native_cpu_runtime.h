@@ -8,6 +8,7 @@
 #include "native_material_diff_runtime.h"
 #include "native_material_resolver_runtime.h"
 #include "rr_indirect_call_windows.h"
+#include "native_preparation_phases_runtime.h"
 // Included after the existing startup-only call/slot patch helpers.
 namespace native_cpu {
 inline bool installed=false;
@@ -103,12 +104,12 @@ inline void InstallAppendHooks(HMODULE renderer) noexcept {
 }
 inline void PreparationHook(void* self){
     if(!native_rt_append::installed&&!native_rt_pointer::installed){
-        {Scope scope(Preparation);preparation(self);}
+        {Scope scope(Preparation);native_prep::Frame phases(Sample(local.ordinal[Preparation]),local.slot);preparation(self);phases.Finish();}
         CapturePreparation(self);return;
     }
     const auto before=native_rt_append::counts;
     const auto pointersBefore=native_rt_pointer::counts;
-    {Scope scope(Preparation);preparation(self);}
+    {Scope scope(Preparation);native_prep::Frame phases(Sample(local.ordinal[Preparation]),local.slot);preparation(self);phases.Finish();}
     CapturePreparation(self);
     native_rt_append::Publish(before);
     native_rt_pointer::Publish(pointersBefore);
@@ -159,6 +160,7 @@ inline void Poll(U64 present) noexcept {
         present,unsigned(native_rt_append::installed),unsigned(native_rt_append::enabled),native_rt_append::completedFast.load(),native_rt_append::completedNative.load());
     Log("NATIVE_RT_POINTER_R220_STATUS present=%llu installed=%u enabled=%u completed_job_fast_appends=%llu completed_job_native_appends=%llu",
         present,unsigned(native_rt_pointer::installed),unsigned(native_rt_pointer::enabled),native_rt_pointer::completedFast.load(),native_rt_pointer::completedNative.load());
+    native_prep::Poll(present,double(clockFrequency.QuadPart));
     native_dirty::Poll(present);
     native_material_diff::Poll(present);
     if(workloadEnabled){

@@ -3,6 +3,7 @@ name: Build native reflection enhancements and RR
 on:
   push:
     branches:
+      - work/r227-preparation-streaming-foundation
       - work/r226-native-material-resolver
       - work/r224-native-material-diffs
       - work/r223-native-dirty-writers
@@ -871,11 +872,43 @@ jobs:
           build\suite-controller.exe
           if errorlevel 1 exit /b 1
 
-      - name: Package native material resolver R226
+      - name: Build and validate preparation phase accounting
+        shell: cmd
+        run: |
+          cl /nologo /std:c++17 /EHsc /W4 /O2 tools\test-native-preparation-phases.cpp /Febuild\test-native-preparation-phases.exe
+          if errorlevel 1 exit /b 1
+          build\test-native-preparation-phases.exe
+          if errorlevel 1 exit /b 1
+
+      - name: Fetch pinned DirectStorage SDK 1.3
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-Native-Material-Resolver-R226'
+          $url='https://api.nuget.org/v3-flatcontainer/microsoft.direct3d.directstorage/1.3.0/microsoft.direct3d.directstorage.1.3.0.nupkg'
+          Invoke-WebRequest $url -OutFile build/dstorage-sdk.zip
+          if ((Get-FileHash build/dstorage-sdk.zip -Algorithm SHA256).Hash.ToLower() -ne '8ab6c1082537565388b79050d94fdd7f5f437cd0f1d909e7b19f786042b97177') { throw 'DirectStorage SDK hash mismatch' }
+          Expand-Archive build/dstorage-sdk.zip build/dstorage-sdk -Force
+          New-Item -ItemType Directory -Force build/DirectStorage | Out-Null
+          Copy-Item build/dstorage-sdk/native/bin/x64/dstorage.dll,build/dstorage-sdk/native/bin/x64/dstoragecore.dll build/DirectStorage
+          Copy-Item build/dstorage-sdk/LICENSE.txt,build/dstorage-sdk/LICENSE-CODE.txt,build/dstorage-sdk/NOTICES.txt build/DirectStorage
+
+      - name: Build DirectStorage file-to-GPU validator
+        shell: cmd
+        run: |
+          cl /nologo /std:c++17 /EHsc /W4 /O2 /Ibuild\dstorage-sdk\native\include tools\directstorage\validate.cpp /Febuild\DirectStorage\ControlFG-DirectStorage-Validate.exe /link /LIBPATH:build\dstorage-sdk\native\lib\x64 dstorage.lib d3d12.lib dxgi.lib
+          if errorlevel 1 exit /b 1
+
+      - name: Validate DirectStorage payload transfer
+        shell: powershell
+        run: |
+          & build/DirectStorage/ControlFG-DirectStorage-Validate.exe | Tee-Object build/DirectStorage/CI-Validation.log
+          if ($LASTEXITCODE -ne 0) { throw 'DirectStorage byte validation failed' }
+
+      - name: Package preparation and streaming foundation R227
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $out='Control-FG-Preparation-Streaming-R227'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
           Copy-Item build/rt_spot_selected_off.dxbc,build/rt_spot_selection.dxbc,build/rt_spot_visibility.dxbc,build/rt_spot_light_ids.dxbc,build/rt_spot_raw_history.dxbc,build/rt_spot_raw_spatial0.dxbc,build/rt_spot_raw_spatial1.dxbc,build/rt_spot_full.dxil,build/rt_spot_r94.dxil,build/rt_spot_light.dxbc,build/rt_spot_reset.dxbc,build/rt_spot_history.dxbc,build/rt_spot_spatial0.dxbc,build/rt_spot_spatial1.dxbc $out
@@ -896,17 +929,21 @@ jobs:
           Copy-Item Package-Lighting-Capture.cmd,tools/package-lighting-capture.py,Package-Lighting-Performance.ps1 $out
           Copy-Item Capture-RR-Boundary.cmd,Capture-RR-Boundary.ps1,Collect-RR-Boundary-Status.cmd,tools/collect-rr-boundary.py $out
           Copy-Item Start-Compact-Distance-Test.cmd,Capture-RR-Suite.ps1,tools/collect-rr-suite.py $out
-          Copy-Item tools/diagnostics/Start-CPU-R226-Native.cmd,tools/diagnostics/Start-CPU-R226-Resolver.cmd $out
-          Copy-Item docs/native-cpu-r226.md "$out/DIAGNOSTIC-NOTES.md"
+          Copy-Item tools/diagnostics/Start-CPU-R227-Baseline.cmd,tools/diagnostics/Start-CPU-R227-Phases.cmd $out
+          Copy-Item build/DirectStorage "$out/DirectStorage" -Recurse
+          Copy-Item tools/directstorage/Validate-DirectStorage.cmd "$out/DirectStorage"
+          Copy-Item docs/native-cpu-r227.md "$out/DIAGNOSTIC-NOTES.md"
           @'
-          CONTROL-FG R226 - live material descriptor resolver candidate
-          Compare Start-CPU-R226-Native.cmd with Start-CPU-R226-Resolver.cmd.
-          Exit between runs. Same problem-area camera/settings for 30-60 seconds.
-          Exit and run Collect-ControlFG-Compact-Logs.cmd; send ZIP and FPS ranges.
-          Resolver performs the same live reads and descriptor/version writes directly.
-          No cross-frame cache. Animation, material IDs and visual fixes retained.
-          Both launchers bypass append experiments and disable verbose writer/diff probes.
-          Normal launch does not opt in to the resolver. Read DIAGNOSTIC-NOTES.md.
+          CONTROL-FG R227 - preparation timings and DirectStorage foundation
+          Both game launchers force the agreed 8 ms / 16-partition streaming reference.
+          Start-CPU-R227-Baseline.cmd: phase hooks absent.
+          Start-CPU-R227-Phases.cmd: sampled RT preparation phase timings enabled.
+          Exit between runs; same settings/view and a short traversal.
+          Collect-ControlFG-Compact-Logs.cmd collects game logs.
+          DirectStorage/Validate-DirectStorage.cmd runs a separate synthetic byte-validation test.
+          Send DirectStorage/DirectStorage-Validation.log separately with compact logs.
+          No game texture redirection or static RT cache is enabled yet.
+          R226 Resolver is disabled. Accepted visual fixes remain unchanged.
           '@ | Set-Content "$out/README.txt" -Encoding ASCII
           Compress-Archive -Path "$out/*" -DestinationPath "$out.zip" -Force
           (Get-FileHash "$out.zip" -Algorithm SHA256).Hash | Set-Content "$out.sha256" -Encoding ASCII
@@ -914,10 +951,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-Native-Material-Resolver-R226
+          name: Control-FG-Preparation-Streaming-R227
           path: |
-            Control-FG-Native-Material-Resolver-R226.zip
-            Control-FG-Native-Material-Resolver-R226.sha256
+            Control-FG-Preparation-Streaming-R227.zip
+            Control-FG-Preparation-Streaming-R227.sha256
             build/spec-volume-roughness-validation.json
             build/spec-volume-roughness.dxbc
             build/spec-environment-validation.json

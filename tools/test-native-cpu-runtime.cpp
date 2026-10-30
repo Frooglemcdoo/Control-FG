@@ -218,7 +218,32 @@ static void TestMaterialResolver(){
     VirtualFree(reference,0,MEM_RELEASE);VirtualFree(candidate,0,MEM_RELEASE);
     std::puts("PASS material resolver against native machine-code loop: 256 mixed resource cases, all 35 descriptors, nulls, live registers, counter wrap, LastError, unwind and rollback");
 }
+static native_prep::AccelerationInfo EstimateFixture(int flags,int count){
+    assert(flags==4&&count==123&&GetLastError()==123);
+    SetLastError(456);return {{111,222,333}};
+}
+static void* MapFixture(void* p){assert(GetLastError()==123);SetLastError(456);return p;}
+static void UnmapFixture(void*){assert(GetLastError()==123);SetLastError(456);}
+static void TestPreparationPhases(){
+    using namespace native_prep;
+    estimateOriginal=&EstimateFixture;mapOriginal=&MapFixture;unmapOriginal=&UnmapFixture;
+    installed=true;
+    {
+        Frame frame(true,0);int object=0;
+        SetLastError(123);assert(MapHook(&object)==&object&&GetLastError()==456);
+        SetLastError(123);UnmapHook(&object);assert(GetLastError()==456);
+        {Frame nested(false,0);assert(current==&nested);}assert(current==&frame);
+        SetLastError(123);auto result=EstimateHook(4,123);
+        assert(result.bytes[0]==111&&result.bytes[1]==222&&result.bytes[2]==333&&GetLastError()==456);
+        frame.Finish();assert(GetLastError()==456);
+    }
+    assert(current==nullptr);for(auto& c:cells[0]){native_cpu::Snapshot s;assert(c.Read(s)&&s.samples==1);}
+    {Frame incomplete(true,0);incomplete.Finish();}assert(rejected.load()==1);
+    installed=false;
+    puts("PASS preparation hooks: hidden return ABI, forwarding, LastError, nested frame and incomplete rejection");
+}
 int main(){
+    TestPreparationPhases();
     TestDirtyWriters();
     TestMaterialDiff();
     TestMaterialResolver();

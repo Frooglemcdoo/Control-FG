@@ -1,0 +1,76 @@
+{
+  "renderer_sha256": "ebfb5b47cebc2d4482e912b8090bd343f717bab8a178b5a6385dec9105e7c433",
+  "budget_rva": "0x9186a0",
+  "slice_rva": "0x919010",
+  "request_routine": "0x15ab30",
+  "request_body": "0x158060",
+  "pool_scan_routine": "0x168ed0",
+  "evidence": [
+    {
+      "rva": "0x15ab5b",
+      "instruction": "movss xmm0, dword ptr [rip + 0x7bdb3d]"
+    },
+    {
+      "rva": "0x15ab63",
+      "instruction": "divss xmm0, dword ptr [rip + 0x5248ad]"
+    },
+    {
+      "rva": "0x15ab97",
+      "instruction": "comisd xmm1, xmmword ptr [rbx + 0x80]"
+    },
+    {
+      "rva": "0x15ac04",
+      "instruction": "call 0x158060"
+    },
+    {
+      "rva": "0x15ac46",
+      "instruction": "addsd xmm1, qword ptr [rbx + 0x80]"
+    },
+    {
+      "rva": "0x15ac93",
+      "instruction": "addsd xmm1, qword ptr [rbx + 0x80]"
+    },
+    {
+      "rva": "0x158247",
+      "instruction": "call qword ptr [rip + 0x487ef3]"
+    },
+    {
+      "rva": "0x169138",
+      "instruction": "movsxd r14, dword ptr [rip + 0x7afed1]"
+    },
+    {
+      "rva": "0x16913f",
+      "instruction": "cmp qword ptr [rbp + 0x88], r14"
+    },
+    {
+      "rva": "0x169148",
+      "instruction": "mov qword ptr [rbp + 0x88], r13"
+    },
+    {
+      "rva": "0x169198",
+      "instruction": "mov rax, qword ptr [rsi + 0xc8]"
+    },
+    {
+      "rva": "0x1691c5",
+      "instruction": "add rdi, r14"
+    },
+    {
+      "rva": "0x169255",
+      "instruction": "inc qword ptr [rbp + 0x88]"
+    },
+    {
+      "rva": "0x169360",
+      "instruction": "movsxd rdx, dword ptr [rip + 0x7afca9]"
+    },
+    {
+      "rva": "0x16936e",
+      "instruction": "lea rax, [rax + rdx + 1]"
+    }
+  ],
+  "partial_file_import": "?requestFilePartialLoad@Loader@r@@QEAA_JPEBDPEAVLoader_FileLoadListener@2@_K2PEADW4ThreadID@2@H_NPEAX@Z",
+  "limits": [
+    "Static inspection does not measure time or prove which streaming stage limits throughput.",
+    "Slice invocation frequency and budget-accumulator reset cadence remain to be traced.",
+    "Archive codec, chunk layout, and loader completion ownership are not established."
+  ]
+}

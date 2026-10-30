@@ -160,8 +160,16 @@ static bool ApplyTextureStreamingExperimental(unsigned int requestedMs) noexcept
         return false;
     }
 
-    const float targetBudget=requestedMs?static_cast<float>(requestedMs):1.0f;
-    const int targetSlices=requestedMs?16:8;
+    float targetBudget=requestedMs?static_cast<float>(requestedMs):1.0f;
+    int targetSlices=requestedMs?16:8;
+    // Diagnostic overrides are process-local; saved menu settings remain unchanged.
+    char budgetOverride[8]{},sliceOverride[8]{};
+    const DWORD budgetLength=GetEnvironmentVariableA("CONTROLFG_STREAMING_BUDGET_MS",budgetOverride,sizeof(budgetOverride));
+    const DWORD sliceLength=GetEnvironmentVariableA("CONTROLFG_STREAMING_SLICES",sliceOverride,sizeof(sliceOverride));
+    if(budgetLength==1&&(budgetOverride[0]=='1'||budgetOverride[0]=='4'||budgetOverride[0]=='6'||budgetOverride[0]=='8'))targetBudget=float(budgetOverride[0]-'0');
+    if(sliceLength==1&&sliceOverride[0]=='8')targetSlices=8;
+    else if(sliceLength==2&&sliceOverride[0]=='1'&&sliceOverride[1]=='6')targetSlices=16;
+    Log("STREAMING_R227 requested_menu_ms=%u effective_budget_ms=%.0f effective_slices=%d process_override=%u",requestedMs,double(targetBudget),targetSlices,unsigned(budgetLength||sliceLength));
     __try {
         auto* budget=reinterpret_cast<float*>(reinterpret_cast<unsigned char*>(verifiedRenderer)+kTextureStreamingBudgetRva);
         auto* slices=reinterpret_cast<int*>(reinterpret_cast<unsigned char*>(verifiedRenderer)+kTextureStreamingSlicesRva);
@@ -1442,7 +1450,9 @@ static BOOL CALLBACK Configure(PINIT_ONCE, PVOID, PVOID*) noexcept {
         Log("NATIVE_CPU_R222_INSTALL ready=%u",unsigned(native_cpu::InstallWorkload(renderer)));
         Log("NATIVE_CPU_R223_INSTALL ready=%u",unsigned(native_dirty::Install(renderer)));
         Log("NATIVE_CPU_R224_INSTALL ready=%u",unsigned(native_material_diff::Install(renderer)));
-        Log("NATIVE_CPU_R226_INSTALL ready=%u",unsigned(native_material_resolver::Install(renderer,d3d)));
+        // R226 rejected in live testing: delayed texture visibility and no FPS gain.
+        Log("NATIVE_CPU_R226 installed=0 native_loop=1 reason=rejected_live_streaming_regression");
+        Log("NATIVE_CPU_R227_INSTALL ready=%u",unsigned(native_cpu::installed&&native_prep::Install(renderer,d3d)));
         const bool guideInputsReady = RRGuideInitializeInputs(d3d);
         const unsigned int rrObserverHooks = InstallRRObservationHooks(renderer,d3d);
         Log("PT_REFLECTION_P0_OBSERVER ready=%u expected=5 scope=reflection_dispatch_identification gpu_work=unchanged allocations=0",rrObserverHooks);

@@ -1,8 +1,16 @@
-# R226: direct live material descriptor resolution
+# R226: direct live material descriptor resolution — rejected
+
+## Live-test result (2026-10-30)
+
+The user reported no FPS gain and textures remaining hidden until they streamed in. The Resolver log (`probe-20261030-125344-260-80612.log`) confirms installed=1/ready=1, append bypass, and disabled R223/R224 diagnostics. Native baseline was reported as 69–73 FPS. Resolver material-update samples over presents 3600–5100 averaged (102.240−63.145)/(55−31) = 1.62896 ms; Native presents 7260–10140 averaged 1.43189 ms. Replay batches were 772 versus 770, and material counts differed, so this is not a controlled percentage regression. It supplies no evidence of a benefit.
+
+Reject the candidate on visual correctness alone. The production startup path no longer calls its installer, even if the environment opts in; the old Resolver launcher now selects Native. Retain the implementation and fixture only for forensic investigation. The fixture did not establish equivalence during live streaming; the precise cause remains unproven. Previously distributed R226 binaries are unchanged: exit the game and use `Start-CPU-R226-Native.cmd` to restore the native loop without a new DLL. Preserve R217 visuals, Map Guard OFF and restored angled reflections.
+
+The design and procedure below describe the rejected experiment.
 
 R225's offline audit identified the changing R224 fields as emission intensity and wrinkle-animation weights. These affect material hashes and native sort/deduplication, so freezing values or writing only an old output slot is incorrect. R226 preserves those operations and targets the repeated descriptor helper calls inside each 35-slot material loop.
 
-## Compare
+## Historical comparison procedure
 
 Install over R224. Run `Start-CPU-R226-Native.cmd`, hold the same problem-area view for30–60seconds, and note FPS. Exit completely. Repeat with `Start-CPU-R226-Resolver.cmd`. Exit and run `Collect-ControlFG-Compact-Logs.cmd`; send the ZIP, FPS ranges and any visual difference. No video/profiler capture is needed.
 

@@ -1,5 +1,6 @@
 @echo off
 setlocal
+echo R226 Resolver was rejected due to texture visibility regressions. Using Native.
 cd /d "%~dp0"
 if not exist "Control_DX12.exe" (
   echo Place this file beside Control_DX12.exe and exit any running Control session first.
@@ -8,7 +9,7 @@ if not exist "Control_DX12.exe" (
 )
 set "CONTROLFG_NATIVE_CPU_TIMING=1"
 set "CONTROLFG_CPU_WORKLOAD=1"
-set "CONTROLFG_CPU_MATERIAL_RESOLVER=1"
+set "CONTROLFG_CPU_MATERIAL_RESOLVER=0"
 set "CONTROLFG_CPU_DIRTY_WRITERS=0"
 set "CONTROLFG_CPU_MATERIAL_DIFF=0"
 set "CONTROLFG_CPU_APPEND_HOOKS=0"
