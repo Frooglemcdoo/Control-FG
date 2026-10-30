@@ -3,6 +3,7 @@ name: Build native reflection enhancements and RR
 on:
   push:
     branches:
+      - work/r230-directstorage-archive-cache
       - work/r229-streaming-pin-range
       - work/r228-streaming-policy
       - work/r227-preparation-streaming-foundation
@@ -145,6 +146,15 @@ jobs:
         run: |
           & build/DirectStorage/ControlFG-DirectStorage-Validate.exe | Tee-Object build/DirectStorage/CI-Validation.log
           if ($LASTEXITCODE -ne 0) { throw 'DirectStorage byte validation failed' }
+
+      - name: Validate native DirectStorage archive cache
+        shell: cmd
+        run: |
+          call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
+          cl /nologo /std:c++17 /EHsc /W4 /O2 /Ibuild\dstorage-sdk\native\include tools\directstorage\test-archive-cache.cpp /Febuild\DirectStorage\ControlFG-Archive-Validate.exe /link /LIBPATH:build\dstorage-sdk\native\lib\x64 dstorage.lib
+          if errorlevel 1 exit /b 1
+          build\DirectStorage\ControlFG-Archive-Validate.exe
+          if errorlevel 1 exit /b 1
 
       - name: Validate compact reflection capture on WARP
         shell: cmd
@@ -809,7 +819,7 @@ jobs:
         shell: cmd
         run: |
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
-          cl /nologo /std:c++17 /EHsc /W4 /O2 /MT /LD /guard:cf /DCONTROL_SPEC_LONG_SEQUENCE /DCONTROL_RR_F9_SUITE /DCONTROL_GI_BOUNDARY_CAPTURE /DCONTROL_RR_COMPACT_DISTANCE /DCONTROL_RR_MATERIAL_CAPTURE /DCONTROL_CAPTURE_DIAGNOSTIC /DUNICODE /D_UNICODE /I "third_party\streamline\include" src\probe.cpp /Fobuild\probe.obj /Febuild\dxgi.dll /link /DEF:src\dxgi.def /INCREMENTAL:NO /DYNAMICBASE /NXCOMPAT /GUARD:CF bcrypt.lib wintrust.lib user32.lib gdi32.lib
+          cl /nologo /std:c++17 /EHsc /W4 /O2 /MT /LD /guard:cf /DCONTROL_SPEC_LONG_SEQUENCE /DCONTROL_RR_F9_SUITE /DCONTROL_GI_BOUNDARY_CAPTURE /DCONTROL_RR_COMPACT_DISTANCE /DCONTROL_RR_MATERIAL_CAPTURE /DCONTROL_CAPTURE_DIAGNOSTIC /DUNICODE /D_UNICODE /I "third_party\streamline\include" /Ibuild\dstorage-sdk\native\include src\probe.cpp /Fobuild\probe.obj /Febuild\dxgi.dll /link /DEF:src\dxgi.def /INCREMENTAL:NO /DYNAMICBASE /NXCOMPAT /GUARD:CF bcrypt.lib wintrust.lib user32.lib gdi32.lib
           if errorlevel 1 exit /b 1
           dumpbin /exports build\dxgi.dll > build\exports.txt
           dumpbin /imports build\dxgi.dll > build\imports.txt
@@ -908,11 +918,11 @@ jobs:
           build\suite-controller.exe
           if errorlevel 1 exit /b 1
 
-      - name: Package streaming pin range fix R229
+      - name: Package native DirectStorage archive cache R230
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-Streaming-Pin-R229'
+          $out='Control-FG-DirectStorage-Archive-R230'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
           Copy-Item build/rt_spot_selected_off.dxbc,build/rt_spot_selection.dxbc,build/rt_spot_visibility.dxbc,build/rt_spot_light_ids.dxbc,build/rt_spot_raw_history.dxbc,build/rt_spot_raw_spatial0.dxbc,build/rt_spot_raw_spatial1.dxbc,build/rt_spot_full.dxil,build/rt_spot_r94.dxil,build/rt_spot_light.dxbc,build/rt_spot_reset.dxbc,build/rt_spot_history.dxbc,build/rt_spot_spatial0.dxbc,build/rt_spot_spatial1.dxbc $out
@@ -933,18 +943,20 @@ jobs:
           Copy-Item Package-Lighting-Capture.cmd,tools/package-lighting-capture.py,Package-Lighting-Performance.ps1 $out
           Copy-Item Capture-RR-Boundary.cmd,Capture-RR-Boundary.ps1,Collect-RR-Boundary-Status.cmd,tools/collect-rr-boundary.py $out
           Copy-Item Start-Compact-Distance-Test.cmd,Capture-RR-Suite.ps1,tools/collect-rr-suite.py $out
-          Copy-Item tools/diagnostics/Start-CPU-R229-Pinned.cmd $out
+          Copy-Item tools/diagnostics/Start-CPU-R230-DirectStorage.cmd $out
           Copy-Item build/DirectStorage "$out/DirectStorage" -Recurse
           Copy-Item tools/directstorage/Validate-DirectStorage.cmd "$out/DirectStorage"
-          Copy-Item docs/native-cpu-r229.md "$out/DIAGNOSTIC-NOTES.md"
+          Copy-Item docs/native-cpu-r230.md "$out/DIAGNOSTIC-NOTES.md"
           @'
-          CONTROL-FG R229 - streaming pin allocation fix
-          Run Start-CPU-R229-Pinned.cmd only; 8 ms, 16 partitions, phase hooks off.
-          Expect STREAMING_R229_INSTALL ready=1 and STATE pin_installed=1 slices=16.
-          Same problem area and short traversal; collect compact logs afterward.
-          No Reference run or repeat DirectStorage validation is needed.
-          No game DirectStorage redirection or static RT cache is enabled yet.
-          R226 Resolver is disabled. Accepted visual fixes remain unchanged.
+          CONTROL-FG R230 - native DirectStorage archive prefetch integration
+          Run Start-CPU-R230-DirectStorage.cmd; 8 ms, 16 partitions, phase hooks off.
+          Keep the DirectStorage folder beside dxgi.dll.
+          Expect DIRECTSTORAGE_R230_INSTALL ready=1 and increasing served counters.
+          Readiness alone does not prove game reads hit the cache: send compact logs.
+          Real .rmdp reads use a bounded 32 MiB CPU cache; native fallback on misses.
+          Native texture decoding/publication remain unchanged. No GPU decompression yet.
+          Use the same problem area and traversal; report texture arrival and stutter.
+          No Reference run or standalone validator run is required.
           '@ | Set-Content "$out/README.txt" -Encoding ASCII
           Compress-Archive -Path "$out/*" -DestinationPath "$out.zip" -Force
           (Get-FileHash "$out.zip" -Algorithm SHA256).Hash | Set-Content "$out.sha256" -Encoding ASCII
@@ -952,10 +964,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-Streaming-Pin-R229
+          name: Control-FG-DirectStorage-Archive-R230
           path: |
-            Control-FG-Streaming-Pin-R229.zip
-            Control-FG-Streaming-Pin-R229.sha256
+            Control-FG-DirectStorage-Archive-R230.zip
+            Control-FG-DirectStorage-Archive-R230.sha256
             build/spec-volume-roughness-validation.json
             build/spec-volume-roughness.dxbc
             build/spec-environment-validation.json
