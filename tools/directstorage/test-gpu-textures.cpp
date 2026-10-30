@@ -43,7 +43,7 @@ int wmain(int argc,wchar_t** argv){
  if(requireGpu)Check(strict.UsesGpuDecompression()&&reader.UsesGpuDecompression()&&(adapterDesc.Flags&DXGI_ADAPTER_FLAG_SOFTWARE)==0,"hardware GPU decompression required; CPU fallback is not a pass");
  Texture textures[2];std::vector<Reader::Input> requests;std::vector<unsigned char> archive(713,0x5a);
  for(unsigned t=0;t<2;++t){
-  auto& f=textures[t];f.desc.Dimension=D3D12_RESOURCE_DIMENSION_TEXTURE2D;f.desc.Width=t?128:127;f.desc.Height=t?64:65;f.desc.DepthOrArraySize=1;f.desc.MipLevels=8;
+  auto& f=textures[t];f.desc.Dimension=D3D12_RESOURCE_DIMENSION_TEXTURE2D;f.desc.Width=t?128:129;f.desc.Height=t?64:65;f.desc.DepthOrArraySize=1;f.desc.MipLevels=8;
   f.desc.Format=t?DXGI_FORMAT_BC7_UNORM:DXGI_FORMAT_R8G8B8A8_UNORM;f.desc.SampleDesc.Count=1;f.desc.Layout=D3D12_TEXTURE_LAYOUT_UNKNOWN;
   f.resource=Resource(device.Get(),f.desc,D3D12_HEAP_TYPE_DEFAULT,D3D12_RESOURCE_STATE_COMMON);
   for(UINT mip=0;mip<f.desc.MipLevels;++mip){
