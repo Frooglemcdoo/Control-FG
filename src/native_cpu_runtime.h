@@ -6,6 +6,7 @@
 #include "native_rt_pointer_runtime.h"
 #include "native_cpu_call_patch.h"
 #include "native_material_diff_runtime.h"
+#include "native_material_resolver_runtime.h"
 #include "rr_indirect_call_windows.h"
 // Included after the existing startup-only call/slot patch helpers.
 namespace native_cpu {

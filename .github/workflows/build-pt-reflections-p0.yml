@@ -3,6 +3,7 @@ name: Build native reflection enhancements and RR
 on:
   push:
     branches:
+      - work/r226-native-material-resolver
       - work/r224-native-material-diffs
       - work/r223-native-dirty-writers
       - work/r222-native-cpu-investigation
@@ -870,11 +871,11 @@ jobs:
           build\suite-controller.exe
           if errorlevel 1 exit /b 1
 
-      - name: Package native material diff diagnosis R224
+      - name: Package native material resolver R226
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-Native-Material-Diffs-R224'
+          $out='Control-FG-Native-Material-Resolver-R226'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
           Copy-Item build/rt_spot_selected_off.dxbc,build/rt_spot_selection.dxbc,build/rt_spot_visibility.dxbc,build/rt_spot_light_ids.dxbc,build/rt_spot_raw_history.dxbc,build/rt_spot_raw_spatial0.dxbc,build/rt_spot_raw_spatial1.dxbc,build/rt_spot_full.dxil,build/rt_spot_r94.dxil,build/rt_spot_light.dxbc,build/rt_spot_reset.dxbc,build/rt_spot_history.dxbc,build/rt_spot_spatial0.dxbc,build/rt_spot_spatial1.dxbc $out
@@ -895,16 +896,17 @@ jobs:
           Copy-Item Package-Lighting-Capture.cmd,tools/package-lighting-capture.py,Package-Lighting-Performance.ps1 $out
           Copy-Item Capture-RR-Boundary.cmd,Capture-RR-Boundary.ps1,Collect-RR-Boundary-Status.cmd,tools/collect-rr-boundary.py $out
           Copy-Item Start-Compact-Distance-Test.cmd,Capture-RR-Suite.ps1,tools/collect-rr-suite.py $out
-          Copy-Item tools/diagnostics/Start-CPU-R224.cmd $out
-          Copy-Item docs/native-cpu-r224.md "$out/DIAGNOSTIC-NOTES.md"
+          Copy-Item tools/diagnostics/Start-CPU-R226-Native.cmd,tools/diagnostics/Start-CPU-R226-Resolver.cmd $out
+          Copy-Item docs/native-cpu-r226.md "$out/DIAGNOSTIC-NOTES.md"
           @'
-          CONTROL-FG R224 - changed material entry and field diagnosis
-          Run Start-CPU-R224.cmd. Hold the problem-area camera for 30-60 seconds.
-          Exit and run Collect-ControlFG-Compact-Logs.cmd; send ZIP and FPS range.
-          Samples changed entry IDs and record fields before/after native updates.
-          Original updates remain intact. Both append experiments remain bypassed.
-          R217 visuals, Map Guard OFF and angled reflections remain unchanged.
-          Diagnostic only; no performance gain claimed. Read DIAGNOSTIC-NOTES.md.
+          CONTROL-FG R226 - live material descriptor resolver candidate
+          Compare Start-CPU-R226-Native.cmd with Start-CPU-R226-Resolver.cmd.
+          Exit between runs. Same problem-area camera/settings for 30-60 seconds.
+          Exit and run Collect-ControlFG-Compact-Logs.cmd; send ZIP and FPS ranges.
+          Resolver performs the same live reads and descriptor/version writes directly.
+          No cross-frame cache. Animation, material IDs and visual fixes retained.
+          Both launchers bypass append experiments and disable verbose writer/diff probes.
+          Normal launch does not opt in to the resolver. Read DIAGNOSTIC-NOTES.md.
           '@ | Set-Content "$out/README.txt" -Encoding ASCII
           Compress-Archive -Path "$out/*" -DestinationPath "$out.zip" -Force
           (Get-FileHash "$out.zip" -Algorithm SHA256).Hash | Set-Content "$out.sha256" -Encoding ASCII
@@ -912,10 +914,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-Native-Material-Diffs-R224
+          name: Control-FG-Native-Material-Resolver-R226
           path: |
-            Control-FG-Native-Material-Diffs-R224.zip
-            Control-FG-Native-Material-Diffs-R224.sha256
+            Control-FG-Native-Material-Resolver-R226.zip
+            Control-FG-Native-Material-Resolver-R226.sha256
             build/spec-volume-roughness-validation.json
             build/spec-volume-roughness.dxbc
             build/spec-environment-validation.json

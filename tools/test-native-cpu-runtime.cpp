@@ -10,7 +10,7 @@
 #include <initializer_list>
 #include <thread>
 // Hook lifecycle is tested separately against synthetic executable callsites.
-static HMODULE verifiedRenderer=nullptr;
+static HMODULE verifiedRenderer=nullptr,verifiedD3d=nullptr;
 static void Log(const char*,...) noexcept {}
 struct Patch {void** slot;void* original;void* hook;const char* label;};
 static bool Exchange(Patch& p,bool install){
@@ -144,9 +144,84 @@ static void TestMaterialDiff(){
     diffExpected[1]=nullptr;SetLastError(123);Hook(manager,nullptr,pair,diffExpected[3]);assert(GetLastError()==456&&diffCalls==5);
     std::puts("PASS material diff runtime: four-argument forwarding, committed changes, sampling, unchanged/invalid/null paths and LastError");
 }
+#include "native-material-resolver-fixture.h"
+static void TestMaterialResolver(){
+    using namespace native_material_resolver;
+    const unsigned char prologue[]={
+        0x55,0x53,0x56,0x57,0x41,0x54,0x41,0x55,
+        0x48,0x81,0xec,8,2,0,0,0x48,0x89,0xe5,
+        0x49,0x89,0xcc,0x49,0x89,0xd5,
+        0x4c,0x89,0x85,0x60,1,0,0,
+        0x4c,0x89,0x8d,0x80,1,0,0,0xbe,0x11,1,0,0
+    };
+    const unsigned char epilogue[]={
+        0x48,0x8b,0x85,0x80,1,0,0,
+        0x48,0x89,0x18,0x4c,0x89,0x68,8,0x48,0x89,0x78,0x10,0x48,0x89,0x70,0x18,
+        0x48,0x81,0xc4,8,2,0,0,0x41,0x5d,0x41,0x5c,0x5f,0x5e,0x5b,0x5d,0xc3
+    };
+    auto* reference=static_cast<unsigned char*>(VirtualAlloc(nullptr,4096,MEM_RESERVE|MEM_COMMIT,PAGE_EXECUTE_READWRITE));assert(reference);
+    auto* candidate=static_cast<unsigned char*>(VirtualAlloc(nullptr,4096,MEM_RESERVE|MEM_COMMIT,PAGE_EXECUTE_READWRITE));assert(candidate);
+    for(auto* page:{reference,candidate}){
+        memcpy(page,prologue,sizeof(prologue));memcpy(page+sizeof(prologue),kNativeMaterialLoop,sizeof(kNativeMaterialLoop));
+        memcpy(page+sizeof(prologue)+sizeof(kNativeMaterialLoop),epilogue,sizeof(epilogue));
+    }
+    auto* block=reference+sizeof(prologue);
+    const unsigned char* functions[]={kFixtureGetTexture,kFixtureConstructTexture,kFixtureNullTexture,kFixtureSetDescriptor};
+    const size_t lengths[]={sizeof(kFixtureGetTexture),sizeof(kFixtureConstructTexture),sizeof(kFixtureNullTexture),sizeof(kFixtureSetDescriptor)};
+    for(unsigned i=0;i<4;++i){auto* fn=reference+0xb00+i*0x100;memcpy(fn,functions[i],lengths[i]);memcpy(reference+0x800+i*8,&fn,8);}
+    auto* global=reference+0x900;memcpy(reference+0x820,&global,8);
+    struct Relocation {unsigned offset,size,displacement,slot;};
+    const Relocation relocations[]={
+        {0x56,6,2,0},{0x6a,6,2,1},{0x7f,7,3,4},{0x89,6,2,2},{0x96,7,3,4},
+        {0xa0,6,2,3},{0xc7,7,3,4},{0xd1,6,2,2},{0xde,7,3,4},{0xe8,6,2,3}};
+    for(const auto& r:relocations){const auto delta=static_cast<std::int32_t>((reference+0x800+r.slot*8)-(block+r.offset+r.size));memcpy(block+r.offset+r.displacement,&delta,4);}
+    descriptorImport=reference+0x820;
+    assert(Prepare(candidate+sizeof(prologue)));assert(Exchange(true));
+    FlushInstructionCache(GetCurrentProcess(),reference,4096);FlushInstructionCache(GetCurrentProcess(),candidate,4096);
+    using Run=void(*)(void*,std::uint64_t,std::uint64_t,std::uint64_t*);
+    unsigned char manager[0xb0]{},slots[0x10+35*0x20]{},resources[35][0xf0]{},variants[35][0xc0]{},containers[35][2][16]{},textures[35][0x98]{};
+    void* tables[3]{};Write<void*>(manager,0xa8,tables);
+    unsigned char expected[0x1000],actual[0x1000];
+    for(unsigned trial=0;trial<256;++trial){
+        tables[2]=trial%13?slots:nullptr;
+        for(unsigned i=0;i<35;++i){
+            const unsigned mode=(trial+i)%9;
+            const std::int32_t index=trial%17?static_cast<std::int32_t>((trial+i)%4):-1;
+            auto* variantBase=variants[i]+(index<0?40:0);
+            Write<void*>(slots,0x10+i*0x20,mode==0?nullptr:resources[i]);
+            Write<std::int32_t>(resources[i],0xb4,static_cast<std::int32_t>(index));Write<void*>(resources[i],0xe8,variantBase);
+            Write<void*>(variantBase,index*40+0x10,mode==1?nullptr:containers[i][0]);
+            Write<void*>(variantBase,index*40+0x18,mode<3?nullptr:containers[i][1]);
+            for(unsigned j=0;j<2;++j)Write<void*>(containers[i][j],8,mode==3?nullptr:textures[i]);
+            Write<std::uint64_t>(textures[i],0x90,mode==4?0:0x1000+trial*35+i);
+        }
+        memset(expected,0xa5,sizeof(expected));memcpy(actual,expected,sizeof(actual));
+        Write<std::uint64_t>(expected,8,UINT64_MAX-20);Write<std::uint64_t>(actual,8,UINT64_MAX-20);
+        Write<std::uint64_t>(expected,0x80,0xdeadbeef);Write<std::uint64_t>(actual,0x80,0xdeadbeef);
+        std::uint64_t nativeLive[4]{},fastLive[4]{};
+        Write<void*>(global,0,expected);SetLastError(123);reinterpret_cast<Run>(reference)(manager,2,17,nativeLive);assert(GetLastError()==123);
+        Write<void*>(global,0,actual);SetLastError(123);reinterpret_cast<Run>(candidate)(manager,2,17,fastLive);assert(GetLastError()==123);
+        assert(!memcmp(expected,actual,sizeof(actual))&&!memcmp(nativeLive,fastLive,sizeof(nativeLive)));
+        assert(Read<std::uint64_t>(actual,8)==14&&fastLive[0]==35&&fastLive[1]==0&&fastLive[2]==17);
+    }
+    // Verify stack reconstruction at entry and after allocating ABI shadow space.
+    for(unsigned offset:{0u,4u,29u}){
+        alignas(16) DWORD64 stack[8]{};stack[5]=0x12345678;
+        CONTEXT ctx{};ctx.ContextFlags=CONTEXT_FULL;ctx.Rip=reinterpret_cast<DWORD64>(relay+offset);
+        ctx.Rsp=reinterpret_cast<DWORD64>(stack+(offset==0?5:0));DWORD64 base=0;
+        auto* entry=RtlLookupFunctionEntry(ctx.Rip,&base,nullptr);assert(entry);void* handler=nullptr;DWORD64 frame=0;
+        RtlVirtualUnwind(UNW_FLAG_NHANDLER,base,ctx.Rip,entry,&ctx,&handler,&frame,nullptr);
+        assert(ctx.Rip==0x12345678&&ctx.Rsp==reinterpret_cast<DWORD64>(stack+6));
+    }
+    assert(Exchange(false));assert(!memcmp(candidate+sizeof(prologue),kNativeMaterialLoop,sizeof(kNativeMaterialLoop)));
+    assert(RtlDeleteFunctionTable(&function));VirtualFree(relay,0,MEM_RELEASE);relay=nullptr;site=nullptr;descriptorImport=nullptr;
+    VirtualFree(reference,0,MEM_RELEASE);VirtualFree(candidate,0,MEM_RELEASE);
+    std::puts("PASS material resolver against native machine-code loop: 256 mixed resource cases, all 35 descriptors, nulls, live registers, counter wrap, LastError, unwind and rollback");
+}
 int main(){
     TestDirtyWriters();
     TestMaterialDiff();
+    TestMaterialResolver();
     // No opt-in (or malformed opt-in) must never inspect renderer memory.
     for(const char* value:{static_cast<const char*>(nullptr),"0","10","true","123456789"}){
         SetEnvironmentVariableA("CONTROLFG_CPU_APPEND_HOOKS",value);

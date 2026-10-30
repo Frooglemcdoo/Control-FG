@@ -1442,6 +1442,7 @@ static BOOL CALLBACK Configure(PINIT_ONCE, PVOID, PVOID*) noexcept {
         Log("NATIVE_CPU_R222_INSTALL ready=%u",unsigned(native_cpu::InstallWorkload(renderer)));
         Log("NATIVE_CPU_R223_INSTALL ready=%u",unsigned(native_dirty::Install(renderer)));
         Log("NATIVE_CPU_R224_INSTALL ready=%u",unsigned(native_material_diff::Install(renderer)));
+        Log("NATIVE_CPU_R226_INSTALL ready=%u",unsigned(native_material_resolver::Install(renderer,d3d)));
         const bool guideInputsReady = RRGuideInitializeInputs(d3d);
         const unsigned int rrObserverHooks = InstallRRObservationHooks(renderer,d3d);
         Log("PT_REFLECTION_P0_OBSERVER ready=%u expected=5 scope=reflection_dispatch_identification gpu_work=unchanged allocations=0",rrObserverHooks);
