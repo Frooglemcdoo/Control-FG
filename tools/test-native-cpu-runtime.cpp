@@ -36,9 +36,19 @@ static void** FindImport(HMODULE,const char*,const char*){return nullptr;}
 #include "../src/native_cpu_runtime.h"
 #include "../src/native_streaming_policy_runtime.h"
 static void TestStreamingWriters(){
+    std::uintptr_t low=0,high=0;
+    constexpr std::uintptr_t siteAddress=0x400000000ull,targetAddress=siteAddress+0x800000ull;
+    assert(native_streaming_policy::RelayRange(siteAddress,targetAddress,0x10000,0x7fffffffffff,low,high));
+    assert(low==targetAddress-0x7fff0000ull&&high==siteAddress+0x7fff0000ull);
+    // The production allocator's old lower candidate could reach the CALL but
+    // not a global 8 MiB above it. Test this layout, not only adjacent cells.
+    const auto oldCandidate=siteAddress-0x7fff0000ull;
+    assert(targetAddress-(oldCandidate+10)>INT32_MAX);
+    assert(targetAddress-(low+10)<=INT32_MAX);
+    assert(!native_streaming_policy::RelayRange(0x10000,0x400000000ull,0x10000,0x7fffffffffff,low,high));
     for(unsigned size:{7u,10u})for(int target:{8,16}){
-        auto* page=static_cast<unsigned char*>(VirtualAlloc(nullptr,4096,MEM_RESERVE|MEM_COMMIT,PAGE_EXECUTE_READWRITE));assert(page);
-        auto* value=reinterpret_cast<int*>(page+256);
+        auto* page=static_cast<unsigned char*>(VirtualAlloc(nullptr,0x810000,MEM_RESERVE|MEM_COMMIT,PAGE_EXECUTE_READWRITE));assert(page);
+        auto* value=reinterpret_cast<int*>(page+0x800000);
         // Preserve R12, load native value 2, establish known arithmetic flags.
         const unsigned char prefix[]={0x41,0x54,0x41,0xbc,2,0,0,0,0x31,0xc0,0xf9};
         memcpy(page,prefix,sizeof(prefix));auto* site=page+sizeof(prefix);
@@ -63,7 +73,7 @@ static void TestStreamingWriters(){
         assert((fn()&0x8c5)==0x45&&*value==(size==7?2:8));
         VirtualFree(writer.relay,0,MEM_RELEASE);VirtualFree(page,0,MEM_RELEASE);
     }
-    std::puts("PASS R228 native streaming writers: both encodings, 8/16 overrides, flags, R12, LastError, mismatch rejection and rollback");
+    std::puts("PASS R229 streaming relay intersection: old boundary failure, 8 MiB data gap, both encodings, 8/16 overrides, flags, R12, LastError and rollback");
 }
 static void* observed=nullptr;static void* observedHandle=nullptr;
 static unsigned calls=0;

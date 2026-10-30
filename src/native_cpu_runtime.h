@@ -9,6 +9,7 @@
 #include "native_material_resolver_runtime.h"
 #include "rr_indirect_call_windows.h"
 #include "native_preparation_phases_runtime.h"
+#include "native_streaming_policy_runtime.h"
 // Included after the existing startup-only call/slot patch helpers.
 namespace native_cpu {
 inline bool installed=false;
@@ -156,6 +157,7 @@ inline bool Install(HMODULE renderer) noexcept {
 inline void Poll(U64 present) noexcept {
     if(!installed||present%60)return;
     const auto now=GetTickCount64();if(now<nextReport)return;nextReport=now+5000;
+    native_streaming_policy::Report(present);
     Log("NATIVE_RT_APPEND_R219_STATUS present=%llu installed=%u enabled=%u completed_job_fast_appends=%llu completed_job_native_appends=%llu",
         present,unsigned(native_rt_append::installed),unsigned(native_rt_append::enabled),native_rt_append::completedFast.load(),native_rt_append::completedNative.load());
     Log("NATIVE_RT_POINTER_R220_STATUS present=%llu installed=%u enabled=%u completed_job_fast_appends=%llu completed_job_native_appends=%llu",

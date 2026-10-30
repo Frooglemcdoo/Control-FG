@@ -1036,7 +1036,6 @@ static bool Exchange(Patch& p, bool install) {
 
 #include "rr_albedo_hooks.h"
 #include "native_cpu_runtime.h"
-#include "native_streaming_policy_runtime.h"
 static void NativeCpuPoll(unsigned long long present) noexcept { native_cpu::Poll(present); }
 #include "pt_reflection_loader.h"
 #include "rr_hair_opacity_runtime.h"
@@ -1454,7 +1453,7 @@ static BOOL CALLBACK Configure(PINIT_ONCE, PVOID, PVOID*) noexcept {
         // R226 rejected in live testing: delayed texture visibility and no FPS gain.
         Log("NATIVE_CPU_R226 installed=0 native_loop=1 reason=rejected_live_streaming_regression");
         Log("NATIVE_CPU_R227_INSTALL ready=%u",unsigned(native_cpu::installed&&native_prep::Install(renderer,d3d)));
-        Log("STREAMING_R228_INSTALL ready=%u",unsigned(native_streaming_policy::Install(renderer)));
+        Log("STREAMING_R229_INSTALL ready=%u",unsigned(native_streaming_policy::Install(renderer)));
         const bool guideInputsReady = RRGuideInitializeInputs(d3d);
         const unsigned int rrObserverHooks = InstallRRObservationHooks(renderer,d3d);
         Log("PT_REFLECTION_P0_OBSERVER ready=%u expected=5 scope=reflection_dispatch_identification gpu_work=unchanged allocations=0",rrObserverHooks);
