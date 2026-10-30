@@ -70,7 +70,7 @@ inline bool Install(){
         while(importsApplied){--importsApplied;if(!stageImports[importsApplied].Exchange(false))Log("LOADER_R236 import_rollback_failed=%u",importsApplied);}
         while(applied){--applied;if(!NativeCpuExchangeCall(&patches[applied],false))Log("LOADER_R236 rollback_failed=%u",applied);}return false;
     }
-    Log("LOADER_R236 installed=1 candidate_io=0 batch_cap=256 stage_timing=1 retained_native_pointers=0");
+    Log("LOADER_R236 installed=1 candidate_io=%u batch_cap=256 stage_timing=1 retained_native_pointers=0",unsigned(stages::offerEarly!=nullptr));
     installed=true;Log("LOADER_R235 installed=1 scope=partial_requests request_id=0x178 retained_native_pointers=0 cache_required=0");return true;
 }
 inline void Poll(unsigned long long present){
