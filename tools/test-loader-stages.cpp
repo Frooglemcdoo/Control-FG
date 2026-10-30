@@ -91,7 +91,7 @@ int main(){
  SetLastError(801);assert(Runtime(loader,17)==9&&GetLastError()==802&&runtimeTime.count==1);
  SetLastError(901);ReleaseHook(loader,record);assert(GetLastError()==902&&releaseTime.count==1);
  complete=&NestedComplete;SetLastError(803);assert(Runtime(loader,18)==10&&GetLastError()==804&&runtimeTime.count==2&&rendererTime.count==0&&nested==1&&depth==0);
- Put(loader,0x818,3);unsigned heap=2;memcpy(loader+0x54c,&heap,4);ObserveWait(reinterpret_cast<U64>(loader));
+ Put(loader,0x818,3);unsigned heap=2;memcpy(loader+0x54c,&heap,4);native_loader_completion::ObserveWait(reinterpret_cast<U64>(loader));
  SetLastError(801);assert(Renderer(loader,17)==9&&GetLastError()==802&&rendererTime.count==1);
  assert(waitSamples==1&&waitingCompletions==3&&waitingHeap==2&&completionMax==3&&heapMax==2);
  readEarly=&EarlyMock;packRead=&PackEarlyMock;
