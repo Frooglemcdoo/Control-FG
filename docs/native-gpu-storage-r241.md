@@ -28,7 +28,9 @@ Counters include startup and traversal, not just the affected area.
    held read-only against replacement/write. No archive payload cache is built.
 3. A dedicated worker submits up to 16 raw archive ranges per DirectStorage
    batch to DEFAULT-heap GPU buffers. Two independent batch lanes overlap I/O
-   and GPU completion. There is no CPU payload buffer, Map,
+   and GPU completion. The descriptor queue holds up to 2,048 pending jobs
+   without allocating payload buffers for queued jobs. Each active lane has
+   a conservative 128 MiB transfer-buffer budget. There is no CPU payload buffer, Map,
    memcpy or CPU decompression in this path.
 4. A compute shader repacks compact mip rows into D3D12 copy footprints. On the
    engine's direct queue, GPU copies write each texture mip and restore its
@@ -69,7 +71,7 @@ mean a physically direct SSD-to-VRAM transaction with no CPU involvement.
 
 Windows CI validates eight RGBA/BGRA/BC format variants and all 64 mip contents
 against a synthetic compact archive after GPU repacking and copy. It exercises
-batch reuse, range/size rejection, duplicate destination rejection, state
+new-versus-existing allocation gating, batch reuse, range/size rejection, duplicate destination rejection, state
 restoration and native admission/reference/publication forwarding. CPU
 readback exists only in the test executable. Existing rendering checks remain.
 

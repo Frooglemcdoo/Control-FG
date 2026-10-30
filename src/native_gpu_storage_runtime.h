@@ -19,12 +19,13 @@ inline SRWLOCK lock=SRWLOCK_INIT,fileLock=SRWLOCK_INIT;inline HANDLE wake=nullpt
 inline std::atomic<bool> available{false};
 inline std::atomic<U64> ineligible{0},layoutRejected{0},sourceRejected{0},capacityRejected{0};
 inline std::atomic<U64> offered{0},accepted{0},completed{0},fallback{0},bytes{0},failed{0},batches{0},pending{0};
+inline constexpr unsigned QueueCapacity=2048;
 struct Job {
-    bool used=false;U64 serial=0,offset=0,sourceOffset=0;UINT size=0;unsigned level=0,slot=64;int thread=0,priority=0;
+    bool used=false;U64 serial=0,offset=0,sourceOffset=0,gpuBytes=0;UINT size=0;unsigned level=0,slot=QueueCapacity;int thread=0,priority=0;
     void* owner=nullptr;void* texture=nullptr;std::string name;
     Ptr<IDStorageFile> file;Ptr<ID3D12Resource> resource;Ptr<ID3D12CommandQueue> queue;
 };
-inline Job jobs[64];inline ID3D12Resource* active[64]{};inline U64 serial=0,reservedBytes=0;
+inline Job jobs[QueueCapacity];inline ID3D12Resource* active[QueueCapacity]{};inline U64 serial=0,reservedBytes=0;inline unsigned cursor=0;
 struct Source {std::wstring path;HANDLE guard=INVALID_HANDLE_VALUE;Ptr<IDStorageFile> file;};
 // Archives remain open read-only, just as the native mounted packs do. The guard
 // denies replacement/write so resolved ranges cannot silently refer to new data.
@@ -72,10 +73,11 @@ inline DWORD WINAPI Work(void*){
                 if(lost)available=false;
                 for(unsigned i=0;i<lane.count;++i)Retire(lane.jobs[i],success,!lost);lane.count=0;
             }
+            U64 laneBytes=0;
             AcquireSRWLockExclusive(&lock);
             for(;lane.count<control_storage::PackedTextureBatch::Capacity;++lane.count){
                 Job* best=nullptr;for(auto& j:jobs)if(j.used&&(!best||j.priority>best->priority||(j.priority==best->priority&&j.serial<best->serial)))best=&j;
-                if(!best)break;lane.jobs[lane.count]=std::move(*best);*best={};
+                if(!best||laneBytes+best->gpuBytes>128ull*1024*1024)break;laneBytes+=best->gpuBytes;lane.jobs[lane.count]=std::move(*best);*best={};
             }
             ReleaseSRWLockExclusive(&lock);if(!lane.count)continue;
             HRESULT hr=available?S_OK:E_ABORT;
@@ -114,6 +116,8 @@ inline bool Describe(void* texture,unsigned level,U64 size,Job& job){
     auto* queue=reinterpret_cast<ID3D12CommandQueue*>(Field(engineQueue,0x10));if(!queue)return false;
     // An unregistered worker (thread zero) must take locked deferred publication.
     if(!Dword(renderer,0x7ec134))return false;
+    job.gpuBytes=layout.compactBytes+layout.footprintBytes+U64(layout.count)*512;
+    if(job.gpuBytes>128ull*1024*1024)return false;
     job.resource=resource;job.queue=queue;return true;
 }
 inline bool Resolve(const char* name,U64 offset,U64 size,Job& job){
@@ -134,6 +138,7 @@ inline DescribeFn describe=&Describe;inline ResolveFn resolve=&Resolve;
 inline std::int64_t RequestHook(void* owner,const char* name,void* texture,U64 offset,U64 size,char* buffer,int thread,int priority,bool flag,void* user){
     const DWORD incoming=GetLastError();++offered;
     const auto fresh=allocation;allocation={};
+    if(pending.load(std::memory_order_relaxed)>=QueueCapacity){++capacityRejected;++fallback;SetLastError(incoming);return original(owner,name,texture,offset,size,buffer,thread,priority,flag,user);}
     if(available&&fresh.texture==texture&&fresh.level==reinterpret_cast<U64>(user)&&fresh.container&&!buffer&&!flag&&size&&size<=32u*1024u*1024u&&(thread==3||thread==14)&&reinterpret_cast<U64>(user)<32){
         Job j{};j.owner=owner;j.texture=texture;j.offset=offset;j.size=static_cast<UINT>(size);j.level=static_cast<unsigned>(reinterpret_cast<U64>(user));j.thread=thread;j.priority=priority;
         if(!describe(texture,j.level,size,j))++layoutRejected;
@@ -141,8 +146,8 @@ inline std::int64_t RequestHook(void* owner,const char* name,void* texture,U64 o
         else {
             j.name=name;U64 ticket=0;
             AcquireSRWLockExclusive(&lock);bool duplicate=false;for(auto* p:active)if(p&&p==j.resource.Get())duplicate=true;
-            if(!duplicate&&available&&pending.load()<64&&reservedBytes+size<=128ull*1024*1024){
-                for(unsigned i=0;i<64;++i)if(!active[i]&&!jobs[i].used){addRef(texture);j.used=true;j.serial=++serial;j.slot=i;ticket=j.serial;active[i]=j.resource.Get();jobs[i]=std::move(j);reservedBytes+=size;++pending;++accepted;bytes+=size;break;}
+            if(!duplicate&&available&&pending.load()<QueueCapacity){
+                for(unsigned scan=0;scan<QueueCapacity;++scan){const unsigned i=cursor++%QueueCapacity;if(!active[i]&&!jobs[i].used){addRef(texture);j.used=true;j.serial=++serial;j.slot=i;ticket=j.serial;active[i]=j.resource.Get();jobs[i]=std::move(j);reservedBytes+=size;++pending;++accepted;bytes+=size;break;}}
             }
             ReleaseSRWLockExclusive(&lock);
             if(ticket){SetEvent(wake);SetLastError(incoming);return static_cast<std::int64_t>(ticket|0x8000000000000000ull);}

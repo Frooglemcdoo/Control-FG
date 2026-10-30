@@ -48,16 +48,28 @@ static void ResolveRange(IDStorageFactory* factory,const wchar_t* path){
  Check(!n::Resolve("texture",9999,64,job),"native asset range checked before archive read");
  job={};for(auto& s:n::sources){s.file.Reset();if(s.guard!=INVALID_HANDLE_VALUE)CloseHandle(s.guard);s={};}n::factory.Reset();n::runtime=nullptr;
 }
+static unsigned char allocationTexture[0x100]{},allocationLevels[3*0x28]{};
+static bool allocationSuccess=true;
+static bool Allocate(void* texture,unsigned level){
+ Check(texture==allocationTexture&&level==2&&GetLastError()==77,"native allocation ABI");
+ if(allocationSuccess)Put(allocationLevels,2*0x28+0x10,0x9999);SetLastError(78);return allocationSuccess;
+}
+static void AllocationGate(){
+ namespace n=native_gpu_storage;n::allocate=&Allocate;Put(allocationTexture,0xe8,reinterpret_cast<std::uint64_t>(allocationLevels));
+ SetLastError(77);Check(n::AllocateHook(allocationTexture,2)&&GetLastError()==78&&n::allocation.texture==allocationTexture&&n::allocation.container==0x9999,"new unpublished allocation accepted");
+ SetLastError(77);Check(n::AllocateHook(allocationTexture,2)&&!n::allocation.texture&&GetLastError()==78,"existing allocation excluded");
+ allocationSuccess=false;SetLastError(77);Check(!n::AllocateHook(allocationTexture,2)&&!n::allocation.texture&&GetLastError()==78,"failed allocation excluded");
+}
 static void Admission(){
  namespace n=native_gpu_storage;n::describe=&Describe;n::resolve=&Resolve;n::addRef=&Add;n::removeRef=&Remove;n::finish=&Finish;n::original=&Native;
- n::wake=CreateEventW(nullptr,FALSE,FALSE,nullptr);n::available=true;
+ n::wake=CreateEventW(nullptr,FALSE,FALSE,nullptr);n::available=true;n::cursor=0;
  auto texture=reinterpret_cast<void*>(0x1234);auto user=reinterpret_cast<void*>(2);
  SetLastError(101);Check(n::RequestHook(nullptr,"fixture",texture,17,64,nullptr,14,7,false,user)==123&&GetLastError()==456&&native==1,"existing resource remains native");
  n::allocation={texture,2,0x9999};SetLastError(101);const auto id=n::RequestHook(nullptr,"fixture",texture,17,64,nullptr,14,7,false,user);
  Check(id<0&&GetLastError()==101&&refs==1&&native==1&&n::pending==1&&n::accepted==1,"accepted request bypasses native payload read");
  auto job=std::move(n::jobs[0]);n::jobs[0]={};Check(n::active[0]==testResource.Get(),"active target stays reserved after dequeue");
  n::Retire(job,true,false);Check(refs==0&&published==1&&n::pending==0&&n::active[0]==nullptr,"publication and retirement");
- n::allocation={texture,2,0x9999};n::RequestHook(nullptr,"fixture",texture,17,64,nullptr,14,7,false,user);
+ n::cursor=0;n::allocation={texture,2,0x9999};n::RequestHook(nullptr,"fixture",texture,17,64,nullptr,14,7,false,user);
  job=std::move(n::jobs[0]);n::jobs[0]={};n::Retire(job,false,true);Check(native==2&&refs==0&&n::pending==0&&published==1,"retired failure retries native exactly once");
  CloseHandle(n::wake);n::wake=nullptr;n::available=false;
 }
@@ -104,6 +116,6 @@ int main(){
   for(unsigned m=0;m<8;++m)for(unsigned r=0;r<rows[m];++r)Check(memcmp(static_cast<unsigned char*>(mapped)+fp[m].Offset+size_t(r)*fp[m].Footprint.RowPitch,f.compact.data()+f.layout.mips[m].compactOffset+r*rowBytes[m],static_cast<size_t>(rowBytes[m]))==0,"packed GPU mip byte equality");
   D3D12_RANGE empty{};readback->Unmap(0,&empty);
  }
- ResolveRange(factory.Get(),path);testResource=fixtures[0].texture;Admission();testResource.Reset();Check(transfer.Close(),"drained close");source.Reset();CloseHandle(event);Check(DeleteFileW(path)!=FALSE,"file ownership released");
+ AllocationGate();ResolveRange(factory.Get(),path);testResource=fixtures[0].texture;Admission();testResource.Reset();Check(transfer.Close(),"drained close");source.Reset();CloseHandle(event);Check(DeleteFileW(path)!=FALSE,"file ownership released");
  puts("PASS R241: file-to-GPU packed rows, eight formats / 64 mips, repeated batches, native state restoration, bounds, native archive bias resolution, overlap rejection, admission ownership and deferred publication; runtime CPU payload bytes=0");
 }
