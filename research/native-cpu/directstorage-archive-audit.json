@@ -1,11 +1,43 @@
 {
   "runtime_sha256": "a79234e4b34c2488deaac3459e8054be206b5af78a37723d834c1cbd826ce484",
-  "scope": "WinFileSystem::readFileAsync ReadFile call only",
+  "scope": "WinFileSystem async cache and synchronous observation only",
   "native_offset": "OVERLAPPED.Offset/OffsetHigh",
   "native_event": "FileEvent HANDLE, reset by caller before ReadFile",
   "cache_rule": "only completed successful raw archive bytes; misses use original ReadFile",
   "retained_native_objects": [],
   "evidence": [
+    {
+      "rva": "0x1933dd",
+      "instruction": "mov qword ptr [rsp + 0x20], r12"
+    },
+    {
+      "rva": "0x1933e2",
+      "instruction": "lea r9, [rsp + 0x30]"
+    },
+    {
+      "rva": "0x1933e7",
+      "instruction": "mov r8d, r15d"
+    },
+    {
+      "rva": "0x1933ea",
+      "instruction": "mov rdx, rbp"
+    },
+    {
+      "rva": "0x1933ed",
+      "instruction": "mov rcx, qword ptr [rdi + 8]"
+    },
+    {
+      "rva": "0x1933f1",
+      "instruction": "call qword ptr [rip + 0x7bd19]"
+    },
+    {
+      "rva": "0x193464",
+      "instruction": "mov eax, dword ptr [rsp + 0x30]"
+    },
+    {
+      "rva": "0x193468",
+      "instruction": "add qword ptr [rdi + 0x18], rax"
+    },
     {
       "rva": "0x1934e1",
       "instruction": "mov qword ptr [rsp + 0x38], r15"

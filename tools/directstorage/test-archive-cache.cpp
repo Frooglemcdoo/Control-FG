@@ -37,6 +37,18 @@ int wmain(){
     }
     HANDLE file=CreateFileW(path.c_str(),GENERIC_READ,FILE_SHARE_READ|FILE_SHARE_DELETE,nullptr,OPEN_EXISTING,FILE_FLAG_OVERLAPPED,nullptr);
     Check(file!=INVALID_HANDLE_VALUE,"open");
+    HANDLE syncFile=CreateFileW(path.c_str(),GENERIC_READ,FILE_SHARE_READ|FILE_SHARE_DELETE,nullptr,OPEN_EXISTING,FILE_ATTRIBUTE_NORMAL,nullptr);
+    Check(syncFile!=INVALID_HANDLE_VALUE,"sync open");
+    native_directstorage::original=&ReadFile;
+    unsigned char syncOutput[127]{};DWORD syncReceived=0;
+    for(unsigned index=0;index<65;++index){
+        Check(native_directstorage::SyncReadHook(syncFile,syncOutput,127,&syncReceived,nullptr)&&syncReceived==127,"sync passthrough");
+        Check(memcmp(syncOutput,expected.data()+index*127,127)==0,"sync bytes and implicit position");
+    }
+    Check(native_directstorage::syncCalls.load()==65&&native_directstorage::syncSamples.load()==2,"sync sampling stride");
+    Check(native_directstorage::syncArchiveSamples.load()==2&&native_directstorage::syncBytes.load()==65*127,"sync archive identification and byte count");
+    Check(!native_directstorage::SyncReadHook(INVALID_HANDLE_VALUE,syncOutput,127,&syncReceived,nullptr)&&GetLastError()==ERROR_INVALID_HANDLE,"sync failure preserves error");
+    CloseHandle(syncFile);
     HANDLE event=CreateEventW(nullptr,TRUE,FALSE,nullptr);Check(event!=nullptr,"event");
     native_directstorage::original=&ReadFile;native_directstorage::cache=&cache;
     unsigned char output[4096];memset(output,0xcc,sizeof(output));OVERLAPPED ov{};ov.hEvent=event;ov.Offset=713;

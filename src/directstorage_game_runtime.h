@@ -7,7 +7,9 @@ using Read=BOOL(WINAPI*)(HANDLE,LPVOID,DWORD,LPDWORD,LPOVERLAPPED);
 inline Read original=nullptr;
 inline control_storage::ArchiveCache* cache=nullptr;
 inline HMODULE storageModule=nullptr;
-inline RRIndirectCallPatch patch;
+inline RRIndirectCallPatch patch, syncPatch;
+inline std::atomic<unsigned long long> syncCalls{0},syncBytes{0},syncFailures{0},syncSamples{0},syncTicks{0},syncMaxTicks{0},syncArchiveSamples{0},syncPathFailures{0};
+inline bool syncInstalled=false;
 inline std::atomic<unsigned long long> calls{0},served{0},fallbacks{0};
 inline BOOL WINAPI ReadHook(HANDLE file,LPVOID output,DWORD count,LPDWORD received,LPOVERLAPPED overlapped){
     const DWORD saved=GetLastError();calls.fetch_add(1,std::memory_order_relaxed);
@@ -26,6 +28,32 @@ inline BOOL WINAPI ReadHook(HANDLE file,LPVOID output,DWORD count,LPDWORD receiv
     fallbacks.fetch_add(1,std::memory_order_relaxed);SetLastError(saved);
     return original(file,output,count,received,overlapped);
 }
+// Observe the exact WinFileSystem::readFile call. Never replace a synchronous
+// read or alter its implicit file position. Timing/path checks are 1 in 64 calls.
+inline BOOL WINAPI SyncReadHook(HANDLE file,LPVOID output,DWORD count,LPDWORD received,LPOVERLAPPED overlapped){
+    const DWORD incoming=GetLastError();
+    const bool sample=(syncCalls.fetch_add(1,std::memory_order_relaxed)&63)==0;
+    LARGE_INTEGER start{},end{};
+    if(sample)QueryPerformanceCounter(&start);
+    SetLastError(incoming);
+    const BOOL result=original(file,output,count,received,overlapped);
+    const DWORD error=GetLastError();
+    if(sample)QueryPerformanceCounter(&end);
+    if(result&&received)syncBytes.fetch_add(*received,std::memory_order_relaxed);
+    if(!result)syncFailures.fetch_add(1,std::memory_order_relaxed);
+    if(sample){
+        const auto ticks=static_cast<unsigned long long>(end.QuadPart-start.QuadPart);
+        syncSamples.fetch_add(1,std::memory_order_relaxed);
+        syncTicks.fetch_add(ticks,std::memory_order_relaxed);
+        auto maximum=syncMaxTicks.load(std::memory_order_relaxed);
+        while(maximum<ticks&&!syncMaxTicks.compare_exchange_weak(maximum,ticks,std::memory_order_relaxed)){}
+        wchar_t path[1024]{};
+        const DWORD size=GetFinalPathNameByHandleW(file,path,1024,FILE_NAME_NORMALIZED);
+        if(!size||size>=1024)syncPathFailures.fetch_add(1,std::memory_order_relaxed);
+        else if(control_storage::ArchivePath(path))syncArchiveSamples.fetch_add(1,std::memory_order_relaxed);
+    }
+    SetLastError(error);return result;
+}
 inline bool Install() noexcept {
     char enabled[8]{};
     if(GetEnvironmentVariableA("CONTROLFG_DIRECTSTORAGE",enabled,sizeof(enabled))!=1||enabled[0]!='1')return false;
@@ -39,6 +67,17 @@ inline bool Install() noexcept {
     auto** slot=FindImport(runtime,"KERNEL32.dll","ReadFile");
     const auto read=reinterpret_cast<Read>(GetProcAddress(GetModuleHandleW(L"kernel32.dll"),"ReadFile"));
     if(!slot||*slot!=reinterpret_cast<void*>(read)){Log("DIRECTSTORAGE_R230 disabled=readfile_import");return false;}
+    constexpr unsigned char syncExpected[]={0xff,0x15,0x19,0xbd,0x07,0};
+    if(memcmp(base+0x1933f1,syncExpected,6)){Log("DIRECTSTORAGE_R232 disabled=sync_callsite");return false;}
+    original=read;
+    if(syncPatch.Prepare(base+0x1933f1,slot,reinterpret_cast<void*>(read),reinterpret_cast<void*>(&SyncReadHook))&&
+       syncPatch.Exchange(true)&&syncPatch.healthy){
+        syncInstalled=true;
+        Log("DIRECTSTORAGE_R232 sync_observer=1 sample_stride=64 native_reads=unchanged");
+    }else{
+        if(syncPatch.changed&&!syncPatch.Exchange(false))Log("DIRECTSTORAGE_R232 sync_rollback_failed=1");
+        Log("DIRECTSTORAGE_R232 sync_observer=0");return false;
+    }
     control_storage::ComPtr<IDStorageFactory> factory;
     control_storage::RuntimeLoadResult load;
     if(!control_storage::LoadRuntimeFactory(ModulePath(selfModule),storageModule,factory,load)){
@@ -60,8 +99,13 @@ inline bool Install() noexcept {
     return true;
 }
 inline void Poll(unsigned long long present) noexcept {
-    static ULONGLONG next=0;if(!cache||present%60)return;
+    static ULONGLONG next=0;if((!cache&&!syncInstalled)||present%60)return;
     const auto now=GetTickCount64();if(now<next)return;next=now+5000;
+    LARGE_INTEGER frequency{};QueryPerformanceFrequency(&frequency);
+    const double scale=frequency.QuadPart?1000.0/frequency.QuadPart:0;
+    Log("DIRECTSTORAGE_R232_SYNC present=%llu calls=%llu completed_bytes=%llu failures=%llu samples=%llu archive_samples=%llu path_failures=%llu sampled_ms=%.3f sampled_max_ms=%.3f",
+        present,syncCalls.load(),syncBytes.load(),syncFailures.load(),syncSamples.load(),syncArchiveSamples.load(),syncPathFailures.load(),syncTicks.load()*scale,syncMaxTicks.load()*scale);
+    if(!cache)return;
     auto& c=cache->counters;
     Log("DIRECTSTORAGE_R230_STATUS present=%llu calls=%llu served=%llu native_fallback=%llu served_bytes=%llu prefetched_bytes=%llu io_failures=%llu busy_fallback=%llu",
         present,calls.load(),served.load(),fallbacks.load(),c.hitBytes.load(),c.submittedBytes.load(),c.failures.load(),c.busy.load());

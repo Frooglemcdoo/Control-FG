@@ -3,6 +3,7 @@ name: Build native reflection enhancements and RR
 on:
   push:
     branches:
+      - work/r232-directstorage-read-path
       - work/r231-directstorage-runtime-loading
       - work/r230-directstorage-archive-cache
       - work/r229-streaming-pin-range
@@ -934,11 +935,11 @@ jobs:
           build\suite-controller.exe
           if errorlevel 1 exit /b 1
 
-      - name: Package DirectStorage runtime loading fix R231
+      - name: Package DirectStorage read path diagnostic R232
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-DirectStorage-R231'
+          $out='Control-FG-DirectStorage-R232'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
           Copy-Item build/rt_spot_selected_off.dxbc,build/rt_spot_selection.dxbc,build/rt_spot_visibility.dxbc,build/rt_spot_light_ids.dxbc,build/rt_spot_raw_history.dxbc,build/rt_spot_raw_spatial0.dxbc,build/rt_spot_raw_spatial1.dxbc,build/rt_spot_full.dxil,build/rt_spot_r94.dxil,build/rt_spot_light.dxbc,build/rt_spot_reset.dxbc,build/rt_spot_history.dxbc,build/rt_spot_spatial0.dxbc,build/rt_spot_spatial1.dxbc $out
@@ -959,17 +960,17 @@ jobs:
           Copy-Item Package-Lighting-Capture.cmd,tools/package-lighting-capture.py,Package-Lighting-Performance.ps1 $out
           Copy-Item Capture-RR-Boundary.cmd,Capture-RR-Boundary.ps1,Collect-RR-Boundary-Status.cmd,tools/collect-rr-boundary.py $out
           Copy-Item Start-Compact-Distance-Test.cmd,Capture-RR-Suite.ps1,tools/collect-rr-suite.py $out
-          Copy-Item tools/diagnostics/Start-CPU-R231-DirectStorage.cmd $out
+          Copy-Item tools/diagnostics/Start-CPU-R232-DirectStorage.cmd $out
           Copy-Item build/DirectStorage "$out/DirectStorage" -Recurse
           Copy-Item build/DirectStorage/dstorage.dll,build/DirectStorage/dstoragecore.dll $out
           Copy-Item tools/directstorage/Validate-DirectStorage.cmd "$out/DirectStorage"
-          Copy-Item docs/native-cpu-r231.md "$out/DIAGNOSTIC-NOTES.md"
+          Copy-Item docs/native-cpu-r232.md "$out/DIAGNOSTIC-NOTES.md"
           @'
-          CONTROL-FG R231 - DirectStorage runtime loading repair
+          CONTROL-FG R232 - Native archive read path diagnostic
           Copy dxgi.dll, dstorage.dll and dstoragecore.dll beside Control_DX12.exe.
-          Run Start-CPU-R231-DirectStorage.cmd; 8 ms, 16 partitions, phase hooks off.
+          Run Start-CPU-R232-DirectStorage.cmd; 8 ms, 16 partitions, phase hooks off.
           The DirectStorage subfolder alone is insufficient for the game backend.
-          Expect DIRECTSTORAGE_R231 factory_ready=1 and DIRECTSTORAGE_R230_INSTALL ready=1.
+          Expect DIRECTSTORAGE_R232 sync_observer=1 and DIRECTSTORAGE_R232_SYNC reports.
           Increasing served counters prove archive reads consumed DirectStorage data.
           Send compact logs plus texture arrival, stutter and FPS observations.
           Archive-cache behavior and native decode/fallback are unchanged from R230.
@@ -981,10 +982,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-DirectStorage-R231
+          name: Control-FG-DirectStorage-R232
           path: |
-            Control-FG-DirectStorage-R231.zip
-            Control-FG-DirectStorage-R231.sha256
+            Control-FG-DirectStorage-R232.zip
+            Control-FG-DirectStorage-R232.sha256
             build/spec-volume-roughness-validation.json
             build/spec-volume-roughness.dxbc
             build/spec-environment-validation.json
