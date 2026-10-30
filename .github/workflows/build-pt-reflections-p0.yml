@@ -110,6 +110,40 @@ jobs:
           build\test-native-cpu-runtime.exe
           if errorlevel 1 exit /b 1
 
+      - name: Build and validate preparation phase accounting
+        shell: cmd
+        run: |
+          call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
+          cl /nologo /std:c++17 /EHsc /W4 /O2 tools\test-native-preparation-phases.cpp /Febuild\test-native-preparation-phases.exe
+          if errorlevel 1 exit /b 1
+          build\test-native-preparation-phases.exe
+          if errorlevel 1 exit /b 1
+
+      - name: Fetch pinned DirectStorage SDK 1.3
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $url='https://api.nuget.org/v3-flatcontainer/microsoft.direct3d.directstorage/1.3.0/microsoft.direct3d.directstorage.1.3.0.nupkg'
+          Invoke-WebRequest $url -OutFile build/dstorage-sdk.zip
+          if ((Get-FileHash build/dstorage-sdk.zip -Algorithm SHA256).Hash.ToLower() -ne '8ab6c1082537565388b79050d94fdd7f5f437cd0f1d909e7b19f786042b97177') { throw 'DirectStorage SDK hash mismatch' }
+          Expand-Archive build/dstorage-sdk.zip build/dstorage-sdk -Force
+          New-Item -ItemType Directory -Force build/DirectStorage | Out-Null
+          Copy-Item build/dstorage-sdk/native/bin/x64/dstorage.dll,build/dstorage-sdk/native/bin/x64/dstoragecore.dll build/DirectStorage
+          Copy-Item build/dstorage-sdk/LICENSE.txt,build/dstorage-sdk/LICENSE-CODE.txt,build/dstorage-sdk/NOTICES.txt build/DirectStorage
+
+      - name: Build DirectStorage file-to-GPU validator
+        shell: cmd
+        run: |
+          call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
+          cl /nologo /std:c++17 /EHsc /W4 /O2 /Ibuild\dstorage-sdk\native\include tools\directstorage\validate.cpp /Febuild\DirectStorage\ControlFG-DirectStorage-Validate.exe /link /LIBPATH:build\dstorage-sdk\native\lib\x64 dstorage.lib d3d12.lib dxgi.lib
+          if errorlevel 1 exit /b 1
+
+      - name: Validate DirectStorage payload transfer
+        shell: powershell
+        run: |
+          & build/DirectStorage/ControlFG-DirectStorage-Validate.exe | Tee-Object build/DirectStorage/CI-Validation.log
+          if ($LASTEXITCODE -ne 0) { throw 'DirectStorage byte validation failed' }
+
       - name: Validate compact reflection capture on WARP
         shell: cmd
         run: |
@@ -871,38 +905,6 @@ jobs:
           if errorlevel 1 exit /b 1
           build\suite-controller.exe
           if errorlevel 1 exit /b 1
-
-      - name: Build and validate preparation phase accounting
-        shell: cmd
-        run: |
-          cl /nologo /std:c++17 /EHsc /W4 /O2 tools\test-native-preparation-phases.cpp /Febuild\test-native-preparation-phases.exe
-          if errorlevel 1 exit /b 1
-          build\test-native-preparation-phases.exe
-          if errorlevel 1 exit /b 1
-
-      - name: Fetch pinned DirectStorage SDK 1.3
-        shell: powershell
-        run: |
-          $ErrorActionPreference='Stop'
-          $url='https://api.nuget.org/v3-flatcontainer/microsoft.direct3d.directstorage/1.3.0/microsoft.direct3d.directstorage.1.3.0.nupkg'
-          Invoke-WebRequest $url -OutFile build/dstorage-sdk.zip
-          if ((Get-FileHash build/dstorage-sdk.zip -Algorithm SHA256).Hash.ToLower() -ne '8ab6c1082537565388b79050d94fdd7f5f437cd0f1d909e7b19f786042b97177') { throw 'DirectStorage SDK hash mismatch' }
-          Expand-Archive build/dstorage-sdk.zip build/dstorage-sdk -Force
-          New-Item -ItemType Directory -Force build/DirectStorage | Out-Null
-          Copy-Item build/dstorage-sdk/native/bin/x64/dstorage.dll,build/dstorage-sdk/native/bin/x64/dstoragecore.dll build/DirectStorage
-          Copy-Item build/dstorage-sdk/LICENSE.txt,build/dstorage-sdk/LICENSE-CODE.txt,build/dstorage-sdk/NOTICES.txt build/DirectStorage
-
-      - name: Build DirectStorage file-to-GPU validator
-        shell: cmd
-        run: |
-          cl /nologo /std:c++17 /EHsc /W4 /O2 /Ibuild\dstorage-sdk\native\include tools\directstorage\validate.cpp /Febuild\DirectStorage\ControlFG-DirectStorage-Validate.exe /link /LIBPATH:build\dstorage-sdk\native\lib\x64 dstorage.lib d3d12.lib dxgi.lib
-          if errorlevel 1 exit /b 1
-
-      - name: Validate DirectStorage payload transfer
-        shell: powershell
-        run: |
-          & build/DirectStorage/ControlFG-DirectStorage-Validate.exe | Tee-Object build/DirectStorage/CI-Validation.log
-          if ($LASTEXITCODE -ne 0) { throw 'DirectStorage byte validation failed' }
 
       - name: Package preparation and streaming foundation R227
         shell: powershell
