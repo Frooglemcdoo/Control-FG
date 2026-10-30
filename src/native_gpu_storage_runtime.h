@@ -7,6 +7,7 @@ namespace native_gpu_storage {
 using U64=std::uint64_t;
 template<class T> using Ptr=Microsoft::WRL::ComPtr<T>;
 using Request=native_texture_contract::Request;
+using QueueResolver=HRESULT(*)(ID3D12CommandQueue*,ID3D12CommandQueue**);inline QueueResolver resolveQueue=nullptr;
 using Ref=void(*)(void*);using Finish=void(*)(void*,int,bool);using Lookup=void(*)(void*,void*,U64,int);
 inline Request original=nullptr;inline Ref addRef=nullptr,removeRef=nullptr;inline Finish finish=nullptr;inline Lookup lookup=nullptr;
 inline unsigned char *runtime=nullptr,*renderer=nullptr,*d3d=nullptr;
@@ -118,7 +119,11 @@ inline bool Describe(void* texture,unsigned level,U64 size,Job& job){
     if(!Dword(renderer,0x7ec134))return false;
     job.gpuBytes=layout.compactBytes+layout.footprintBytes+U64(layout.count)*512;
     if(job.gpuBytes>128ull*1024*1024)return false;
-    job.resource=resource;job.queue=queue;return true;
+    Ptr<ID3D12CommandQueue> nativeQueue;
+    const HRESULT resolved=resolveQueue?resolveQueue(queue,&nativeQueue):queue->QueryInterface(IID_PPV_ARGS(&nativeQueue));
+    if(FAILED(resolved)||!nativeQueue||nativeQueue->GetDesc().Type!=D3D12_COMMAND_LIST_TYPE_DIRECT)return false;
+    Ptr<ID3D12Device> queueDevice;if(FAILED(nativeQueue->GetDevice(IID_PPV_ARGS(&queueDevice)))||queueDevice.Get()!=device.Get())return false;
+    job.resource=resource;job.queue=nativeQueue;return true;
 }
 inline bool Resolve(const char* name,U64 offset,U64 size,Job& job){
     if(!name||strnlen_s(name,512)>=512)return false;

@@ -33,7 +33,8 @@ Counters include startup and traversal, not just the affected area.
    a conservative 128 MiB transfer-buffer budget. There is no CPU payload buffer, Map,
    memcpy or CPU decompression in this path.
 4. A compute shader repacks compact mip rows into D3D12 copy footprints. On the
-   engine's direct queue, GPU copies write each texture mip and restore its
+   engine's direct queue (unwrapped from Streamline and checked against the
+   native resource device), GPU copies write each texture mip and restore its
    original combined pixel/non-pixel shader-read state. The native state
    tracker is not rewritten.
 5. After the GPU fence completes, native finishLoadLevel (158390) dispatches

@@ -1463,6 +1463,15 @@ static BOOL CALLBACK Configure(PINIT_ONCE, PVOID, PVOID*) noexcept {
         Log("DIRECTSTORAGE_R237_INSTALL ready=%u",unsigned(native_loader_early::Install()));
         Log("LOADER_R235_INSTALL ready=%u",unsigned(native_loader_trace::Install()));
         Log("TEXTURE_R240_INSTALL ready=%u",unsigned(native_texture_contract::Install()));
+        native_gpu_storage::resolveQueue=[](ID3D12CommandQueue* queue,ID3D12CommandQueue** out)->HRESULT {
+            if(!queue||!out)return E_INVALIDARG;*out=nullptr;
+            void* raw=nullptr;
+            const bool resolved=slGetNativeInterfaceApi&&slGetNativeInterfaceApi(queue,&raw)==sl::Result::eOk;
+            HRESULT hr=E_NOINTERFACE;
+            if(resolved&&raw)hr=static_cast<IUnknown*>(raw)->QueryInterface(__uuidof(ID3D12CommandQueue),reinterpret_cast<void**>(out));
+            if(raw)static_cast<IUnknown*>(raw)->Release();
+            return SUCCEEDED(hr)?hr:queue->QueryInterface(__uuidof(ID3D12CommandQueue),reinterpret_cast<void**>(out));
+        };
         Log("DIRECTSTORAGE_R241_INSTALL ready=%u",unsigned(native_gpu_storage::Install()));
         const bool guideInputsReady = RRGuideInitializeInputs(d3d);
         const unsigned int rrObserverHooks = InstallRRObservationHooks(renderer,d3d);
