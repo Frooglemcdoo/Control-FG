@@ -32,11 +32,13 @@ Counters include startup and traversal, not just the affected area.
    without allocating payload buffers for queued jobs. Each active lane has
    a conservative 128 MiB transfer-buffer budget. There is no CPU payload buffer, Map,
    memcpy or CPU decompression in this path.
-4. A compute shader repacks compact mip rows into D3D12 copy footprints. On the
-   engine's direct queue (unwrapped from Streamline and checked against the
-   native resource device), GPU copies write each texture mip and restore its
-   original combined pixel/non-pixel shader-read state. The native state
-   tracker is not rewritten.
+4. A compute shader repacks compact mip rows into D3D12 copy footprints. An
+   owned direct queue writes the unpublished texture and restores its original
+   combined pixel/non-pixel shader-read state. This work does not depend on a
+   future native frame submission. The engine's consumer queue is unwrapped
+   from Streamline, checked against the native resource device, and receives
+   an explicit wait on the completed transfer fence before publication. The
+   native state tracker is not rewritten.
 5. After the GPU fence completes, native finishLoadLevel (158390) dispatches
    publication through the renderer's existing locked deferred-work path.
    Native references (12E160/12E190) and COM references cover accepted jobs.
@@ -78,7 +80,9 @@ mean a physically direct SSD-to-VRAM transaction with no CPU involvement.
 ## Validation and limits
 
 Windows CI validates eight RGBA/BGRA/BC format variants and all 64 mip contents
-against a synthetic compact archive after GPU repacking and copy. It exercises
+against a synthetic compact archive after GPU repacking and copy. A blocked
+consumer-queue test requires transfers to complete before the native frame
+queue is released, detecting a loading-barrier deadlock. It exercises
 new-versus-existing allocation gating, batch reuse, range/size rejection, duplicate destination rejection, state
 restoration and native admission/reference/publication forwarding. CPU
 readback exists only in the test executable. Existing rendering checks remain.

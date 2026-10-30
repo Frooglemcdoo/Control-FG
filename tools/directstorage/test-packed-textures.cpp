@@ -95,9 +95,13 @@ int main(){
  ComPtr<IDStorageFile> source;Hr(factory->OpenFile(path,IID_PPV_ARGS(&source)),"source");for(auto& in:inputs)in.file=source.Get();
  auto bad=inputs[0];++bad.bytes;Check(FAILED(transfer.Submit(&bad,1)),"wrong compact size rejects");bad=inputs[0];bad.offset=archive.size();Check(FAILED(transfer.Submit(&bad,1)),"EOF rejects");
  Batch::Input duplicate[]={inputs[0],inputs[0]};Check(FAILED(transfer.Submit(duplicate,2)),"duplicate target rejects");
+ // Model loading code that cannot submit the next frame until textures finish.
+ // The consumer queue is deliberately blocked until the transfer has retired.
+ ComPtr<ID3D12Fence> frameGate;Hr(device->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&frameGate)),"frame gate");
+ Hr(queue->Wait(frameGate.Get(),1),"block native frame queue");
  for(unsigned pass=0;pass<2;++pass){Hr(transfer.Submit(inputs,8),"packed batch submit");Check(!transfer.Close(),"pending resources cannot retire");HRESULT result=E_PENDING;
   const auto deadline=GetTickCount64()+30000;while(!transfer.Poll(result)){Check(GetTickCount64()<deadline,"GPU completion deadline");WaitForSingleObject(transfer.Event(),100);}
-  Hr(result,"packed completion");Check(transfer.CurrentPhase()==Batch::Phase::Idle,"batch reuse");}
+  Hr(result,"packed completion");if(pass==0)Hr(frameGate->Signal(1),"release native frame after GPU transfer");Check(transfer.CurrentPhase()==Batch::Phase::Idle,"batch reuse");}
  // Independent lanes overlap storage/GPU work while retaining disjoint targets.
  Batch parallel;Hr(parallel.Initialize(factory.Get(),queue.Get()),"parallel lane");
  Hr(transfer.Submit(inputs,4),"lane zero");Hr(parallel.Submit(inputs+4,4),"lane one");
@@ -119,5 +123,5 @@ int main(){
   D3D12_RANGE empty{};readback->Unmap(0,&empty);
  }
  AllocationGate();ResolveRange(factory.Get(),path);testResource=fixtures[0].texture;Admission();testResource.Reset();Check(transfer.Close(),"drained close");source.Reset();CloseHandle(event);Check(DeleteFileW(path)!=FALSE,"file ownership released");
- puts("PASS R241: file-to-GPU packed rows, eight formats / 64 mips, repeated batches, native state restoration, bounds, native archive bias resolution, overlap rejection, admission ownership and deferred publication; runtime CPU payload bytes=0");
+ puts("PASS R241: file-to-GPU packed rows, eight formats / 64 mips, repeated batches, native state restoration, blocked consumer queue independence, bounds, native archive bias resolution, overlap rejection, admission ownership and deferred publication; runtime CPU payload bytes=0");
 }

@@ -8,7 +8,8 @@
 namespace control_storage {
 // One event-driven batch owner. Payloads are never mapped by the CPU.
 // Caller holds exclusive engine ownership of each unpublished destination until
-// Poll completes, and supplies its actual before/after state on this direct queue.
+// Poll completes, and supplies its actual before/after state. Destinations must be newly
+// allocated/unpublished or otherwise exclusively handed off to this transport.
 class PackedTextureBatch {
     template<class T> using Ptr=Microsoft::WRL::ComPtr<T>;
 public:
@@ -21,7 +22,7 @@ private:
         native_texture_layout::Layout layout{};D3D12_PLACED_SUBRESOURCE_FOOTPRINT footprints[16]{};
         D3D12_RESOURCE_STATES state{};UINT64 paddedBytes=0;
     } items[Capacity];
-    Ptr<ID3D12Device> device;Ptr<ID3D12CommandQueue> graphics;Ptr<IDStorageQueue2> storage;
+    Ptr<ID3D12Device> device;Ptr<ID3D12CommandQueue> graphics,transferQueue;Ptr<IDStorageQueue2> storage;
     Ptr<IDStorageStatusArray> status;Ptr<ID3D12RootSignature> root;Ptr<ID3D12PipelineState> pipeline;
     Ptr<ID3D12CommandAllocator> allocator;Ptr<ID3D12GraphicsCommandList> list;Ptr<ID3D12Fence> fence;
     HANDLE storageEvent=nullptr,gpuEvent=nullptr;UINT64 fenceValue=0;unsigned count=0;Phase phase=Phase::Idle;
@@ -57,9 +58,9 @@ private:
             Barrier(i.target.Get(),D3D12_RESOURCE_STATE_COPY_DEST,i.state);
         }
         hr=list->Close();if(FAILED(hr))return hr;
-        ID3D12CommandList* lists[]={list.Get()};graphics->ExecuteCommandLists(1,lists);
+        ID3D12CommandList* lists[]={list.Get()};transferQueue->ExecuteCommandLists(1,lists);
         // Once submitted, no resource may retire without a fence or device loss.
-        phase=Phase::FailedSubmission;hr=graphics->Signal(fence.Get(),++fenceValue);if(FAILED(hr))return hr;
+        phase=Phase::FailedSubmission;hr=transferQueue->Signal(fence.Get(),++fenceValue);if(FAILED(hr))return hr;
         phase=Phase::Gpu;ResetEvent(gpuEvent);hr=fence->SetEventOnCompletion(fenceValue,gpuEvent);
         // A failed event registration is recoverable through fence polling.
         if(FAILED(hr))failure=hr;return S_OK;
@@ -71,6 +72,10 @@ public:
     HRESULT Initialize(IDStorageFactory* factory,ID3D12CommandQueue* queue){
         if(!factory||!queue||device||queue->GetDesc().Type!=D3D12_COMMAND_LIST_TYPE_DIRECT)return E_INVALIDARG;
         graphics=queue;HRESULT hr=queue->GetDevice(IID_PPV_ARGS(&device));if(FAILED(hr))return hr;
+        // Loading can wait for GPU jobs while the renderer has unsubmitted lists.
+        // An owned queue avoids making those jobs depend on future frame submits.
+        D3D12_COMMAND_QUEUE_DESC uploadQueue{};uploadQueue.Type=D3D12_COMMAND_LIST_TYPE_DIRECT;
+        hr=device->CreateCommandQueue(&uploadQueue,IID_PPV_ARGS(&transferQueue));if(FAILED(hr))return hr;
         DSTORAGE_QUEUE_DESC d{};d.SourceType=DSTORAGE_REQUEST_SOURCE_FILE;d.Device=device.Get();d.Capacity=128;d.Priority=DSTORAGE_PRIORITY_NORMAL;d.Name="ControlFG native packed textures";
         hr=factory->CreateQueue(&d,IID_PPV_ARGS(&storage));if(FAILED(hr))return hr;
         hr=factory->CreateStatusArray(1,"ControlFG packed batch",IID_PPV_ARGS(&status));if(FAILED(hr))return hr;
@@ -128,15 +133,18 @@ cbuffer Layout : register(b0) { uint srcOffset; uint dstOffset; uint rowWords; u
             result=Upload();if(FAILED(result)){failure=result;if(phase!=Phase::FailedSubmission){Clear();return true;}}
         }
         if(phase==Phase::Gpu){const auto done=fence->GetCompletedValue();if(done==UINT64_MAX){result=DXGI_ERROR_DEVICE_REMOVED;Clear();return true;}
-            if(done<fenceValue)return false;result=S_OK;Clear();return true;}
+            if(done<fenceValue)return false;
+            // Queue the explicit consumer dependency before native publication.
+            // The fence is already complete, so this does not wait for CPU work.
+            result=graphics->Wait(fence.Get(),fenceValue);Clear();return true;}
         if(phase==Phase::FailedSubmission){
             if(FAILED(device->GetDeviceRemovedReason())){result=DXGI_ERROR_DEVICE_REMOVED;Clear();return true;}
             // Recover a transient Signal failure without retiring submitted work.
-            if(SUCCEEDED(graphics->Signal(fence.Get(),fenceValue))){phase=Phase::Gpu;ResetEvent(gpuEvent);fence->SetEventOnCompletion(fenceValue,gpuEvent);}
+            if(SUCCEEDED(transferQueue->Signal(fence.Get(),fenceValue))){phase=Phase::Gpu;ResetEvent(gpuEvent);fence->SetEventOnCompletion(fenceValue,gpuEvent);}
         }
         return false;
     }
-    bool Close(){if(phase!=Phase::Idle)return false;Clear();list.Reset();allocator.Reset();pipeline.Reset();root.Reset();storage.Reset();status.Reset();fence.Reset();graphics.Reset();device.Reset();
+    bool Close(){if(phase!=Phase::Idle)return false;Clear();list.Reset();allocator.Reset();pipeline.Reset();root.Reset();storage.Reset();status.Reset();fence.Reset();transferQueue.Reset();graphics.Reset();device.Reset();
         if(storageEvent)CloseHandle(storageEvent);if(gpuEvent)CloseHandle(gpuEvent);storageEvent=gpuEvent=nullptr;return true;}
 };
 }
