@@ -34,6 +34,37 @@ static void** FindImport(HMODULE,const char*,const char*){return nullptr;}
 // Reuse the actual direct-call helper without unrelated albedo installation.
 #include "../src/native_cpu_call_patch.h"
 #include "../src/native_cpu_runtime.h"
+#include "../src/native_streaming_policy_runtime.h"
+static void TestStreamingWriters(){
+    for(unsigned size:{7u,10u})for(int target:{8,16}){
+        auto* page=static_cast<unsigned char*>(VirtualAlloc(nullptr,4096,MEM_RESERVE|MEM_COMMIT,PAGE_EXECUTE_READWRITE));assert(page);
+        auto* value=reinterpret_cast<int*>(page+256);
+        // Preserve R12, load native value 2, establish known arithmetic flags.
+        const unsigned char prefix[]={0x41,0x54,0x41,0xbc,2,0,0,0,0x31,0xc0,0xf9};
+        memcpy(page,prefix,sizeof(prefix));auto* site=page+sizeof(prefix);
+        if(size==7){site[0]=0x44;site[1]=0x89;site[2]=0x25;}
+        else{site[0]=0xc7;site[1]=0x05;const int eight=8;memcpy(site+6,&eight,4);}
+        const int delta=static_cast<int>(reinterpret_cast<unsigned char*>(value)-(site+size));
+        memcpy(site+(size==7?3:2),&delta,4);
+        // Capture flags in RAX and R12 in a separate cell, then restore R12.
+        unsigned char suffix[]={0x9c,0x58,0x4c,0x89,0x25,0,0,0,0,0x41,0x5c,0xc3};
+        const int savedDelta=static_cast<int>((page+264)-(site+size+9));memcpy(suffix+5,&savedDelta,4);
+        memcpy(site+size,suffix,sizeof(suffix));assert(FlushInstructionCache(GetCurrentProcess(),page,64));
+        using Fn=unsigned long long(*)();auto fn=reinterpret_cast<Fn>(page);
+        assert((fn()&0x8c5)==0x45&&*value==(size==7?2:8));
+        native_streaming_policy::Writer bad,writer;
+        assert(!bad.Prepare(site,value+1,target));assert(!bad.Prepare(site,value,2));
+        assert(writer.Prepare(site,value,target));assert(writer.Exchange(true)&&writer.healthy);
+        SetLastError(123);*value=0;
+        assert((fn()&0x8c5)==0x45&&*value==target&&GetLastError()==123);
+        assert(*reinterpret_cast<unsigned long long*>(page+264)==2);
+        assert(!writer.Exchange(true)); // Reject an already modified site.
+        assert(writer.Exchange(false)&&writer.healthy&&!writer.changed);
+        assert((fn()&0x8c5)==0x45&&*value==(size==7?2:8));
+        VirtualFree(writer.relay,0,MEM_RELEASE);VirtualFree(page,0,MEM_RELEASE);
+    }
+    std::puts("PASS R228 native streaming writers: both encodings, 8/16 overrides, flags, R12, LastError, mismatch rejection and rollback");
+}
 static void* observed=nullptr;static void* observedHandle=nullptr;
 static unsigned calls=0;
 static void Original(void* self){assert(GetLastError()==123);observed=self;++calls;SetLastError(456);}
@@ -243,6 +274,7 @@ static void TestPreparationPhases(){
     puts("PASS preparation hooks: hidden return ABI, forwarding, LastError, nested frame and incomplete rejection");
 }
 int main(){
+    TestStreamingWriters();
     TestPreparationPhases();
     TestDirtyWriters();
     TestMaterialDiff();

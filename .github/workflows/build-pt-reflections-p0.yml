@@ -3,6 +3,7 @@ name: Build native reflection enhancements and RR
 on:
   push:
     branches:
+      - work/r228-streaming-policy
       - work/r227-preparation-streaming-foundation
       - work/r226-native-material-resolver
       - work/r224-native-material-diffs
@@ -906,11 +907,11 @@ jobs:
           build\suite-controller.exe
           if errorlevel 1 exit /b 1
 
-      - name: Package preparation and streaming foundation R227
+      - name: Package streaming policy comparison R228
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-Preparation-Streaming-R227'
+          $out='Control-FG-Streaming-Policy-R228'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
           Copy-Item build/rt_spot_selected_off.dxbc,build/rt_spot_selection.dxbc,build/rt_spot_visibility.dxbc,build/rt_spot_light_ids.dxbc,build/rt_spot_raw_history.dxbc,build/rt_spot_raw_spatial0.dxbc,build/rt_spot_raw_spatial1.dxbc,build/rt_spot_full.dxil,build/rt_spot_r94.dxil,build/rt_spot_light.dxbc,build/rt_spot_reset.dxbc,build/rt_spot_history.dxbc,build/rt_spot_spatial0.dxbc,build/rt_spot_spatial1.dxbc $out
@@ -931,20 +932,19 @@ jobs:
           Copy-Item Package-Lighting-Capture.cmd,tools/package-lighting-capture.py,Package-Lighting-Performance.ps1 $out
           Copy-Item Capture-RR-Boundary.cmd,Capture-RR-Boundary.ps1,Collect-RR-Boundary-Status.cmd,tools/collect-rr-boundary.py $out
           Copy-Item Start-Compact-Distance-Test.cmd,Capture-RR-Suite.ps1,tools/collect-rr-suite.py $out
-          Copy-Item tools/diagnostics/Start-CPU-R227-Baseline.cmd,tools/diagnostics/Start-CPU-R227-Phases.cmd $out
+          Copy-Item tools/diagnostics/Start-CPU-R228-Reference.cmd,tools/diagnostics/Start-CPU-R228-Pinned.cmd $out
           Copy-Item build/DirectStorage "$out/DirectStorage" -Recurse
           Copy-Item tools/directstorage/Validate-DirectStorage.cmd "$out/DirectStorage"
-          Copy-Item docs/native-cpu-r227.md "$out/DIAGNOSTIC-NOTES.md"
+          Copy-Item docs/native-cpu-r228.md "$out/DIAGNOSTIC-NOTES.md"
           @'
-          CONTROL-FG R227 - preparation timings and DirectStorage foundation
-          Both game launchers force the agreed 8 ms / 16-partition streaming reference.
-          Start-CPU-R227-Baseline.cmd: phase hooks absent.
-          Start-CPU-R227-Phases.cmd: sampled RT preparation phase timings enabled.
-          Exit between runs; same settings/view and a short traversal.
+          CONTROL-FG R228 - consistent streaming policy comparison
+          Both launchers use 8 ms and disable preparation phase hooks.
+          Start-CPU-R228-Reference.cmd: R227 behavior; native settings may reset partitions.
+          Start-CPU-R228-Pinned.cmd: preserve 16 partitions through native settings changes.
+          Exit between runs; same settings/view and short traversal.
           Collect-ControlFG-Compact-Logs.cmd collects game logs.
-          DirectStorage/Validate-DirectStorage.cmd runs a separate synthetic byte-validation test.
-          Send DirectStorage/DirectStorage-Validation.log separately with compact logs.
-          No game texture redirection or static RT cache is enabled yet.
+          No game DirectStorage redirection or static RT cache is enabled yet.
+          DirectStorage/Validate-DirectStorage.cmd is the unchanged standalone validator.
           R226 Resolver is disabled. Accepted visual fixes remain unchanged.
           '@ | Set-Content "$out/README.txt" -Encoding ASCII
           Compress-Archive -Path "$out/*" -DestinationPath "$out.zip" -Force
@@ -953,10 +953,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-Preparation-Streaming-R227
+          name: Control-FG-Streaming-Policy-R228
           path: |
-            Control-FG-Preparation-Streaming-R227.zip
-            Control-FG-Preparation-Streaming-R227.sha256
+            Control-FG-Streaming-Policy-R228.zip
+            Control-FG-Streaming-Policy-R228.sha256
             build/spec-volume-roughness-validation.json
             build/spec-volume-roughness.dxbc
             build/spec-environment-validation.json

@@ -5,6 +5,14 @@
   "request_routine": "0x15ab30",
   "request_body": "0x158060",
   "pool_scan_routine": "0x168ed0",
+  "native_settings_routine": "0x1374b0",
+  "native_partition_policy": {
+    "source_field": "renderer+0x6b0",
+    "value_4": 2,
+    "values_0_through_3": 8,
+    "other_values": "no store on this branch",
+    "field_semantics": "not yet established"
+  },
   "evidence": [
     {
       "rva": "0x15ab5b",
@@ -65,6 +73,22 @@
     {
       "rva": "0x16936e",
       "instruction": "lea rax, [rax + rdx + 1]"
+    },
+    {
+      "rva": "0x137608",
+      "instruction": "mov r12d, 2"
+    },
+    {
+      "rva": "0x137744",
+      "instruction": "mov ecx, dword ptr [rdi + 0x6b0]"
+    },
+    {
+      "rva": "0x1377a2",
+      "instruction": "mov dword ptr [rip + 0x7e1867], r12d"
+    },
+    {
+      "rva": "0x13781e",
+      "instruction": "mov dword ptr [rip + 0x7e17e8], 8"
     }
   ],
   "partial_file_import": "?requestFilePartialLoad@Loader@r@@QEAA_JPEBDPEAVLoader_FileLoadListener@2@_K2PEADW4ThreadID@2@H_NPEAX@Z",

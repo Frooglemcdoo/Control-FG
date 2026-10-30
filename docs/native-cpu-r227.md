@@ -1,5 +1,7 @@
 # R227: RT preparation measurement and DirectStorage foundation
 
+**R228 correction:** the R227 process override is applied only at startup and mod-menu changes. Native graphics-settings application can subsequently overwrite the partition count (observed 16 → 2). The effective-value log is an application-time snapshot, not proof of persistent configuration. See native-cpu-r228.md for the opt-in lifecycle correction and phase-hooks-off comparison.
+
 This is the first implementation milestone, not a claimed FPS optimization. R226 Resolver is disabled in startup code. Existing accepted lighting/GI/reflection changes remain intact. The shipped menu defaults are unchanged.
 
 ## Game comparison
