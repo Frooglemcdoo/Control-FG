@@ -3,6 +3,7 @@ name: Build native reflection enhancements and RR
 on:
   push:
     branches:
+      - work/r235-upstream-loader-trace
       - work/r234-directstorage-demand-windows
       - work/r233-directstorage-sync-cache
       - work/r232-directstorage-read-path
@@ -155,6 +156,14 @@ jobs:
         shell: cmd
         run: |
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
+          cl /nologo /std:c++17 /EHsc /W4 /O2 tools\test-loader-trace.cpp /Febuild\TestLoaderTrace.exe
+          if errorlevel 1 exit /b 1
+          build\TestLoaderTrace.exe
+          if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /O2 tools\test-loader-trace-runtime.cpp /Febuild\TestLoaderTraceRuntime.exe
+          if errorlevel 1 exit /b 1
+          build\TestLoaderTraceRuntime.exe
+          if errorlevel 1 exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /O2 tools\directstorage\test-prefetch-window.cpp /Febuild\TestPrefetchWindow.exe
           if errorlevel 1 exit /b 1
           build\TestPrefetchWindow.exe
@@ -941,11 +950,11 @@ jobs:
           build\suite-controller.exe
           if errorlevel 1 exit /b 1
 
-      - name: Package DirectStorage demand windows R234
+      - name: Package upstream loader trace R235
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-DirectStorage-R234'
+          $out='Control-FG-LoaderTrace-R235'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
           Copy-Item build/rt_spot_selected_off.dxbc,build/rt_spot_selection.dxbc,build/rt_spot_visibility.dxbc,build/rt_spot_light_ids.dxbc,build/rt_spot_raw_history.dxbc,build/rt_spot_raw_spatial0.dxbc,build/rt_spot_raw_spatial1.dxbc,build/rt_spot_full.dxil,build/rt_spot_r94.dxil,build/rt_spot_light.dxbc,build/rt_spot_reset.dxbc,build/rt_spot_history.dxbc,build/rt_spot_spatial0.dxbc,build/rt_spot_spatial1.dxbc $out
@@ -966,20 +975,20 @@ jobs:
           Copy-Item Package-Lighting-Capture.cmd,tools/package-lighting-capture.py,Package-Lighting-Performance.ps1 $out
           Copy-Item Capture-RR-Boundary.cmd,Capture-RR-Boundary.ps1,Collect-RR-Boundary-Status.cmd,tools/collect-rr-boundary.py $out
           Copy-Item Start-Compact-Distance-Test.cmd,Capture-RR-Suite.ps1,tools/collect-rr-suite.py $out
-          Copy-Item tools/diagnostics/Start-CPU-R234-DirectStorage.cmd $out
+          Copy-Item tools/diagnostics/Start-CPU-R235-LoaderTrace.cmd $out
           Copy-Item build/DirectStorage "$out/DirectStorage" -Recurse
           Copy-Item build/DirectStorage/dstorage.dll,build/DirectStorage/dstoragecore.dll $out
           Copy-Item tools/directstorage/Validate-DirectStorage.cmd "$out/DirectStorage"
-          Copy-Item docs/native-cpu-r234.md "$out/DIAGNOSTIC-NOTES.md"
+          Copy-Item docs/native-cpu-r235.md "$out/DIAGNOSTIC-NOTES.md"
           @'
-          CONTROL-FG R234 - DirectStorage request-sized read-ahead
+          CONTROL-FG R235 - Upstream native loader trace
           Copy dxgi.dll, dstorage.dll and dstoragecore.dll beside Control_DX12.exe.
-          Run Start-CPU-R234-DirectStorage.cmd; 8 ms, 16 partitions, phase hooks off.
+          Run Start-CPU-R235-LoaderTrace.cmd; 8 ms, 16 partitions, phase hooks off.
           The DirectStorage subfolder alone is insufficient for the game backend.
-          Expect DIRECTSTORAGE_R234 pack_scope=1, R233_SYNC_CACHE served, and R234_CACHE traffic reports.
-          Increasing R233_SYNC_CACHE served counters prove native archive reads consumed DirectStorage data.
+          Expect LOADER_R235 installed=1 and LOADER_R235_QUEUE reports.
+          Demand-time DirectStorage cache is disabled in this launcher.
           Send compact logs plus texture arrival, stutter and FPS observations.
-          Registered PackFile workers can consume completed cache data; misses and shared handles use native reads.
+          This diagnostic correlates native partial request admission with worker execution.
           No Reference or standalone validator run is required.
           '@ | Set-Content "$out/README.txt" -Encoding ASCII
           Compress-Archive -Path "$out/*" -DestinationPath "$out.zip" -Force
@@ -988,10 +997,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-DirectStorage-R234
+          name: Control-FG-LoaderTrace-R235
           path: |
-            Control-FG-DirectStorage-R234.zip
-            Control-FG-DirectStorage-R234.sha256
+            Control-FG-LoaderTrace-R235.zip
+            Control-FG-LoaderTrace-R235.sha256
             build/spec-volume-roughness-validation.json
             build/spec-volume-roughness.dxbc
             build/spec-environment-validation.json
