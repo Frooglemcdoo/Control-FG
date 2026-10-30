@@ -42,7 +42,25 @@ struct Scope {
     }
 };
 inline void MaterialHook(void* self){Scope scope(Material);material(self);}
+// Startup-only opt-in. Default leaves all three native append callsites untouched.
+inline bool AppendHooksRequested() noexcept {
+    char value[8]{};
+    const DWORD n=GetEnvironmentVariableA("CONTROLFG_CPU_APPEND_HOOKS",value,sizeof(value));
+    return n==1&&value[0]=='1';
+}
+inline void InstallAppendHooks(HMODULE renderer) noexcept {
+    if(!AppendHooksRequested()){
+        Log("NATIVE_CPU_R221 append_hooks=0 native_calls_untouched=1 counters=0");
+        return;
+    }
+    Log("NATIVE_RT_APPEND_R219_INSTALL ready=%u",unsigned(native_rt_append::Install(renderer)));
+    Log("NATIVE_RT_POINTER_R220_INSTALL ready=%u",unsigned(native_rt_pointer::Install(renderer)));
+    Log("NATIVE_CPU_R221 append_hooks=1 record_installed=%u pointer_installed=%u",unsigned(native_rt_append::installed),unsigned(native_rt_pointer::installed));
+}
 inline void PreparationHook(void* self){
+    if(!native_rt_append::installed&&!native_rt_pointer::installed){
+        Scope scope(Preparation);preparation(self);return;
+    }
     const auto before=native_rt_append::counts;
     const auto pointersBefore=native_rt_pointer::counts;
     {Scope scope(Preparation);preparation(self);}

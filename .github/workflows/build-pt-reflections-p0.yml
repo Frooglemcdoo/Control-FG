@@ -3,6 +3,7 @@ name: Build native reflection enhancements and RR
 on:
   push:
     branches:
+      - work/r221-native-append-bypass
       - work/r220-native-rt-pointer
       - work/r219-native-rt-append
       - work/r218-native-cpu-timing
@@ -858,11 +859,11 @@ jobs:
           build\suite-controller.exe
           if errorlevel 1 exit /b 1
 
-      - name: Package native RT pointer R220
+      - name: Package native append bypass R221
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-Native-RT-Pointer-R220'
+          $out='Control-FG-Native-Append-Bypass-R221'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
           Copy-Item build/rt_spot_selected_off.dxbc,build/rt_spot_selection.dxbc,build/rt_spot_visibility.dxbc,build/rt_spot_light_ids.dxbc,build/rt_spot_raw_history.dxbc,build/rt_spot_raw_spatial0.dxbc,build/rt_spot_raw_spatial1.dxbc,build/rt_spot_full.dxil,build/rt_spot_r94.dxil,build/rt_spot_light.dxbc,build/rt_spot_reset.dxbc,build/rt_spot_history.dxbc,build/rt_spot_spatial0.dxbc,build/rt_spot_spatial1.dxbc $out
@@ -883,17 +884,17 @@ jobs:
           Copy-Item Package-Lighting-Capture.cmd,tools/package-lighting-capture.py,Package-Lighting-Performance.ps1 $out
           Copy-Item Capture-RR-Boundary.cmd,Capture-RR-Boundary.ps1,Collect-RR-Boundary-Status.cmd,tools/collect-rr-boundary.py $out
           Copy-Item Start-Compact-Distance-Test.cmd,Capture-RR-Suite.ps1,tools/collect-rr-suite.py $out
-          Copy-Item tools/diagnostics/Start-CPU-R219.cmd,tools/diagnostics/Start-CPU-R220.cmd $out
-          Copy-Item docs/native-cpu-r220.md "$out/DIAGNOSTIC-NOTES.md"
+          Copy-Item tools/diagnostics/Start-CPU-R221-Native.cmd,tools/diagnostics/Start-CPU-R221-R219.cmd,tools/diagnostics/Start-CPU-R221-R220.cmd $out
+          Copy-Item docs/native-cpu-r221.md "$out/DIAGNOSTIC-NOTES.md"
           @'
-          CONTROL-FG R220 - RT material-reference append fast path
-          Retains the accepted R219 64-byte fast path and R217 visuals.
-          Compare Start-CPU-R219.cmd with Start-CPU-R220.cmd, exiting the game between runs.
-          Both keep the 64-byte fast path ON; only the new 8-byte path changes.
-          Use the same problem-area view/settings for 30-60 seconds without video recording.
-          Exit and run Collect-ControlFG-Compact-Logs.cmd; send its ZIP and FPS ranges.
-          Normal launch enables both fast paths. In-game incremental speedup is unconfirmed.
-          Read DIAGNOSTIC-NOTES.md. MAP GUARD OFF and restored angled reflections retained.
+          CONTROL-FG R221 - native append bypass baseline
+          Normal launch installs neither experimental append hook. R217 visuals retained.
+          First run Start-CPU-R221-Native.cmd in the problem area.
+          Optional comparison: Start-CPU-R221-R219.cmd or Start-CPU-R221-R220.cmd.
+          Exit between runs. Same camera/settings for 30-60 seconds without recording.
+          Exit and run Collect-ControlFG-Compact-Logs.cmd; send ZIP and FPS ranges.
+          Older launchers do not opt in to append hooks in R221. Use the new launchers.
+          Read DIAGNOSTIC-NOTES.md. MAP GUARD OFF and angled reflections retained.
           '@ | Set-Content "$out/README.txt" -Encoding ASCII
           Compress-Archive -Path "$out/*" -DestinationPath "$out.zip" -Force
           (Get-FileHash "$out.zip" -Algorithm SHA256).Hash | Set-Content "$out.sha256" -Encoding ASCII
@@ -901,10 +902,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-Native-RT-Pointer-R220
+          name: Control-FG-Native-Append-Bypass-R221
           path: |
-            Control-FG-Native-RT-Pointer-R220.zip
-            Control-FG-Native-RT-Pointer-R220.sha256
+            Control-FG-Native-Append-Bypass-R221.zip
+            Control-FG-Native-Append-Bypass-R221.sha256
             build/spec-volume-roughness-validation.json
             build/spec-volume-roughness.dxbc
             build/spec-environment-validation.json

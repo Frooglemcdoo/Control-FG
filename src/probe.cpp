@@ -1438,8 +1438,7 @@ static BOOL CALLBACK Configure(PINIT_ONCE, PVOID, PVOID*) noexcept {
         }
         Log("HOOK_INSTALLED label=CONTROL_COMMAND_QUEUE_CTOR");
         Log("NATIVE_CPU_R218_INSTALL ready=%u",unsigned(native_cpu::Install(renderer)));
-        Log("NATIVE_RT_APPEND_R219_INSTALL ready=%u",unsigned(native_rt_append::Install(renderer)));
-        Log("NATIVE_RT_POINTER_R220_INSTALL ready=%u",unsigned(native_rt_pointer::Install(renderer)));
+        native_cpu::InstallAppendHooks(renderer);
         const bool guideInputsReady = RRGuideInitializeInputs(d3d);
         const unsigned int rrObserverHooks = InstallRRObservationHooks(renderer,d3d);
         Log("PT_REFLECTION_P0_OBSERVER ready=%u expected=5 scope=reflection_dispatch_identification gpu_work=unchanged allocations=0",rrObserverHooks);

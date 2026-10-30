@@ -67,6 +67,16 @@ static void TestAppend(){
     VirtualFree(pages,0,MEM_RELEASE);enabled=false;
 }
 int main(){
+    // No opt-in (or malformed opt-in) must never inspect renderer memory.
+    for(const char* value:{static_cast<const char*>(nullptr),"0","10","true","123456789"}){
+        SetEnvironmentVariableA("CONTROLFG_CPU_APPEND_HOOKS",value);
+        assert(!native_cpu::AppendHooksRequested());
+        native_cpu::InstallAppendHooks(reinterpret_cast<HMODULE>(1));
+        assert(!native_rt_append::installed&&!native_rt_pointer::installed);
+    }
+    SetEnvironmentVariableA("CONTROLFG_CPU_APPEND_HOOKS","1");
+    assert(native_cpu::AppendHooksRequested());
+    SetEnvironmentVariableA("CONTROLFG_CPU_APPEND_HOOKS",nullptr);
     TestAppend();
     using namespace native_cpu;
     material=preparation=recording=&Original;wait=&OriginalWait;
@@ -75,6 +85,8 @@ int main(){
         SetLastError(123);fn(&object);assert(observed==&object&&GetLastError()==456);
     }
     SetLastError(123);JoinHook(&object,&handle);assert(observedHandle==&handle&&calls==4&&GetLastError()==456);
+    assert(native_rt_append::completedFast.load()==0&&native_rt_append::completedNative.load()==0);
+    assert(native_rt_pointer::completedFast.load()==0&&native_rt_pointer::completedNative.load()==0);
     Snapshot s;for(unsigned i=0;i<kStages;++i)assert(threads[local.slot].cells[i].Read(s)&&s.samples==1&&threads[local.slot].cells[i].calls==1);
     material=&Throw;bool caught=false;try{MaterialHook(&object);}catch(const std::runtime_error&){caught=true;}assert(caught);
     material=&Original;
