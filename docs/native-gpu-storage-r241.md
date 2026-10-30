@@ -40,7 +40,12 @@ Counters include startup and traversal, not just the affected area.
 5. After the GPU fence completes, native finishLoadLevel (158390) dispatches
    publication through the renderer's existing locked deferred-work path.
    Native references (12E160/12E190) and COM references cover accepted jobs.
-   Loading mip state 1 blocks normal unload through canFinishUnload (157520).
+   Loading mip state 1 blocks normal unload through canFinishUnload (157520);
+   the streaming-mip unload loop at 15AD34 also requires loaded state 2.
+   Accepted jobs increment Loader's files-to-load counter at +528, which
+   hasLoadsRemaining (F88A0) sums with native completions at +818. The count is
+   released only after publication or native retry is queued, so native waits
+   continue to see outstanding GPU work. No native completion record is forged.
    Failed I/O retries native only after the accepted DirectStorage batch retires.
 
 The special returned request ticket is local to this exact renderer call site,

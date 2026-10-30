@@ -8,6 +8,9 @@ using U64=std::uint64_t;
 template<class T> using Ptr=Microsoft::WRL::ComPtr<T>;
 using Request=native_texture_contract::Request;
 using QueueResolver=HRESULT(*)(ID3D12CommandQueue*,ID3D12CommandQueue**);inline QueueResolver resolveQueue=nullptr;
+using AdjustPending=void(*)(void*,int);
+inline void AdjustNativePending(void* owner,int delta){InterlockedExchangeAdd(reinterpret_cast<volatile LONG*>(static_cast<unsigned char*>(owner)+0x528),delta);}
+inline AdjustPending adjustPending=&AdjustNativePending;
 using Ref=void(*)(void*);using Finish=void(*)(void*,int,bool);using Lookup=void(*)(void*,void*,U64,int);
 inline Request original=nullptr;inline Ref addRef=nullptr,removeRef=nullptr;inline Finish finish=nullptr;inline Lookup lookup=nullptr;
 inline unsigned char *runtime=nullptr,*renderer=nullptr,*d3d=nullptr;
@@ -59,6 +62,10 @@ inline void Retire(Job& job,bool success,bool retry){
     else if(retry){original(job.owner,job.name.c_str(),job.texture,job.offset,job.size,nullptr,job.thread,job.priority,false,reinterpret_cast<void*>(U64(job.level)));++fallback;}
     else finish(job.texture,static_cast<int>(job.level),false);
     removeRef(job.texture);
+    // hasLoadsRemaining = files-to-load (528) + native completions (818).
+    // Keep our accepted request visible until publication is queued or the
+    // native retry has been enqueued. Never fabricate native completion records.
+    adjustPending(job.owner,-1);
     AcquireSRWLockExclusive(&lock);reservedBytes-=job.size;active[job.slot]=nullptr;ReleaseSRWLockExclusive(&lock);--pending;job={};
 }
 inline DWORD WINAPI Work(void*){
@@ -154,7 +161,7 @@ inline std::int64_t RequestHook(void* owner,const char* name,void* texture,U64 o
             j.name=name;U64 ticket=0;
             AcquireSRWLockExclusive(&lock);bool duplicate=false;for(auto* p:active)if(p&&p==j.resource.Get())duplicate=true;
             if(!duplicate&&available&&pending.load()<QueueCapacity){
-                for(unsigned scan=0;scan<QueueCapacity;++scan){const unsigned i=cursor++%QueueCapacity;if(!active[i]&&!jobs[i].used){addRef(texture);j.used=true;j.serial=++serial;j.slot=i;ticket=j.serial;active[i]=j.resource.Get();jobs[i]=std::move(j);reservedBytes+=size;++pending;++accepted;bytes+=size;break;}}
+                for(unsigned scan=0;scan<QueueCapacity;++scan){const unsigned i=cursor++%QueueCapacity;if(!active[i]&&!jobs[i].used){addRef(texture);adjustPending(owner,1);j.used=true;j.serial=++serial;j.slot=i;ticket=j.serial;active[i]=j.resource.Get();jobs[i]=std::move(j);reservedBytes+=size;++pending;++accepted;bytes+=size;break;}}
             }
             ReleaseSRWLockExclusive(&lock);
             if(ticket){SetEvent(wake);SetLastError(incoming);return static_cast<std::int64_t>(ticket|0x8000000000000000ull);}

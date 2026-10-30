@@ -27,10 +27,12 @@ static ComPtr<ID3D12Resource> Resource(ID3D12Device* d,const D3D12_RESOURCE_DESC
  D3D12_HEAP_PROPERTIES h{};h.Type=type;ComPtr<ID3D12Resource> r;Hr(d->CreateCommittedResource(&h,D3D12_HEAP_FLAG_NONE,&desc,state,nullptr,IID_PPV_ARGS(&r)),"resource");return r;
 }
 static unsigned refs=0,published=0,native=0;
+static int enginePending=0;
+static void Adjust(void*,int delta){enginePending+=delta;Check(enginePending>=0,"native pending count never underflows");}
 static ComPtr<ID3D12Resource> testResource;
 static void Add(void*){++refs;}
 static void Remove(void*){Check(refs!=0,"balanced engine reference");--refs;}
-static void Finish(void*,int level,bool success){Check(level==2&&success&&refs==1,"publish while reference held");++published;}
+static void Finish(void*,int level,bool success){Check(level==2&&success&&refs==1&&enginePending==1,"publish while reference held");++published;}
 static std::int64_t Native(void*,const char*,void*,std::uint64_t offset,std::uint64_t size,char*,int thread,int priority,bool,void*){Check(offset==17&&size==64&&thread==14&&priority==7,"native fallback arguments");++native;SetLastError(456);return 123;}
 static bool Describe(void*,unsigned,std::uint64_t,native_gpu_storage::Job& job){job.resource=testResource;return true;}
 static bool Resolve(const char*,std::uint64_t,std::uint64_t,native_gpu_storage::Job&){return true;}
@@ -61,16 +63,16 @@ static void AllocationGate(){
  allocationSuccess=false;SetLastError(77);Check(!n::AllocateHook(allocationTexture,2)&&!n::allocation.texture&&GetLastError()==78,"failed allocation excluded");
 }
 static void Admission(){
- namespace n=native_gpu_storage;n::describe=&Describe;n::resolve=&Resolve;n::addRef=&Add;n::removeRef=&Remove;n::finish=&Finish;n::original=&Native;
+ namespace n=native_gpu_storage;n::adjustPending=&Adjust;n::describe=&Describe;n::resolve=&Resolve;n::addRef=&Add;n::removeRef=&Remove;n::finish=&Finish;n::original=&Native;
  n::wake=CreateEventW(nullptr,FALSE,FALSE,nullptr);n::available=true;n::cursor=0;
  auto texture=reinterpret_cast<void*>(0x1234);auto user=reinterpret_cast<void*>(2);
  SetLastError(101);Check(n::RequestHook(nullptr,"fixture",texture,17,64,nullptr,14,7,false,user)==123&&GetLastError()==456&&native==1,"existing resource remains native");
  n::allocation={texture,2,0x9999};SetLastError(101);const auto id=n::RequestHook(nullptr,"fixture",texture,17,64,nullptr,14,7,false,user);
- Check(id<0&&GetLastError()==101&&refs==1&&native==1&&n::pending==1&&n::accepted==1,"accepted request bypasses native payload read");
+ Check(id<0&&GetLastError()==101&&refs==1&&native==1&&n::pending==1&&enginePending==1&&n::accepted==1,"accepted request bypasses native payload read");
  auto job=std::move(n::jobs[0]);n::jobs[0]={};Check(n::active[0]==testResource.Get(),"active target stays reserved after dequeue");
- n::Retire(job,true,false);Check(refs==0&&published==1&&n::pending==0&&n::active[0]==nullptr,"publication and retirement");
+ n::Retire(job,true,false);Check(refs==0&&enginePending==0&&published==1&&n::pending==0&&n::active[0]==nullptr,"publication and retirement");
  n::cursor=0;n::allocation={texture,2,0x9999};n::RequestHook(nullptr,"fixture",texture,17,64,nullptr,14,7,false,user);
- job=std::move(n::jobs[0]);n::jobs[0]={};n::Retire(job,false,true);Check(native==2&&refs==0&&n::pending==0&&published==1,"retired failure retries native exactly once");
+ job=std::move(n::jobs[0]);n::jobs[0]={};n::Retire(job,false,true);Check(native==2&&refs==0&&enginePending==0&&n::pending==0&&published==1,"retired failure retries native exactly once");
  CloseHandle(n::wake);n::wake=nullptr;n::available=false;
 }
 int main(){
