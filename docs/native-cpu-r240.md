@@ -65,3 +65,27 @@ necessary; the intended offload is payload movement and eligible decompression.
 Windows CI tests argument/return/error forwarding, nested requests, owner
 matching, collision rejection, ambiguous uploads, sampling limits, failed read
 counts and real WARP GetCopyableFootprints behavior for RGBA/BC7 mips.
+
+## Hardware run: texture-arrival regression
+
+The 2026-10-30 17:04 compact-log upload reported plants appearing without their
+textures. The run confirmed 8 ms / 16 partitions, early storage disabled and
+native_gpu_redirect=0. Of 96 sampled attempts, 79 correlated requests were
+recorded (17 dropped); 78 reads/uploads and 79 publication events were observed.
+All 79 requests matched the compact mip byte total, all reported DEFAULT heaps
+and tracked state 0xc0, and all 78 observed uploads used mode zero. These samples
+support the compact mip layout hypothesis; they do not establish every asset's
+codec or synchronization/lifetime contract.
+
+There were 19,691 native reads, zero failures, 40,239.596 ms aggregate read time,
+and a 451.314 ms maximum. Aggregate times include concurrent work and loading;
+they are not frame times or a controlled comparison with earlier runs.
+Disabling prior read-ahead is a plausible contributor to worse arrival, not a
+proven cause from this capture alone.
+
+Use `Start-CPU-R240-StreamingRestore.cmd` with the same R240 DLL to restore
+EARLY_STORAGE=1 and disable TEXTURE_CONTRACT=0. All other launcher flags remain
+identical, including completion timing off and 8 ms / 16 pinned. This restores
+the earlier compatibility read-ahead path, which uses CPU memory; it is not the
+planned native GPU payload integration. The effect on visible texture arrival
+still requires an in-game run. No new DLL build is needed for these flags.

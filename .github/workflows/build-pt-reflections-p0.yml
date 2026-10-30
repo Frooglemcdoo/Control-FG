@@ -3,6 +3,7 @@ name: Build native reflection enhancements and RR
 on:
   push:
     branches:
+      - work/r241-native-gpu-storage
       - work/r240-native-texture-contract
       - work/r238-queue-order-completion
       - work/r237-early-archive-reads
@@ -163,6 +164,15 @@ jobs:
           cl /nologo /std:c++17 /EHsc /W4 /O2 tools\test-native-texture-contract.cpp /Febuild\TestNativeTextureContract.exe /link d3d12.lib dxgi.lib
           if errorlevel 1 exit /b 1
           build\TestNativeTextureContract.exe
+          if errorlevel 1 exit /b 1
+
+      - name: Validate native packed texture GPU transport
+        shell: cmd
+        run: |
+          call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
+          cl /nologo /std:c++17 /EHsc /W4 /O2 /Ibuild\dstorage-sdk\native\include tools\directstorage\test-packed-textures.cpp /Febuild\DirectStorage\TestPackedTextures.exe /link /LIBPATH:build\dstorage-sdk\native\lib\x64 dstorage.lib d3d12.lib dxgi.lib d3dcompiler.lib
+          if errorlevel 1 exit /b 1
+          build\DirectStorage\TestPackedTextures.exe
           if errorlevel 1 exit /b 1
 
       - name: Validate native DirectStorage archive cache
@@ -876,7 +886,7 @@ jobs:
         shell: cmd
         run: |
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
-          cl /nologo /std:c++17 /EHsc /W4 /O2 /MT /LD /guard:cf /DCONTROL_SPEC_LONG_SEQUENCE /DCONTROL_RR_F9_SUITE /DCONTROL_GI_BOUNDARY_CAPTURE /DCONTROL_RR_COMPACT_DISTANCE /DCONTROL_RR_MATERIAL_CAPTURE /DCONTROL_CAPTURE_DIAGNOSTIC /DUNICODE /D_UNICODE /I "third_party\streamline\include" /Ibuild\dstorage-sdk\native\include src\probe.cpp /Fobuild\probe.obj /Febuild\dxgi.dll /link /DEF:src\dxgi.def /INCREMENTAL:NO /DYNAMICBASE /NXCOMPAT /GUARD:CF bcrypt.lib wintrust.lib user32.lib gdi32.lib
+          cl /nologo /std:c++17 /EHsc /W4 /O2 /MT /LD /guard:cf /DCONTROL_SPEC_LONG_SEQUENCE /DCONTROL_RR_F9_SUITE /DCONTROL_GI_BOUNDARY_CAPTURE /DCONTROL_RR_COMPACT_DISTANCE /DCONTROL_RR_MATERIAL_CAPTURE /DCONTROL_CAPTURE_DIAGNOSTIC /DUNICODE /D_UNICODE /I "third_party\streamline\include" /Ibuild\dstorage-sdk\native\include src\probe.cpp /Fobuild\probe.obj /Febuild\dxgi.dll /link /DEF:src\dxgi.def /INCREMENTAL:NO /DYNAMICBASE /NXCOMPAT /GUARD:CF bcrypt.lib wintrust.lib user32.lib gdi32.lib d3d12.lib d3dcompiler.lib
           if errorlevel 1 exit /b 1
           dumpbin /exports build\dxgi.dll > build\exports.txt
           dumpbin /imports build\dxgi.dll > build\imports.txt
@@ -975,11 +985,11 @@ jobs:
           build\suite-controller.exe
           if errorlevel 1 exit /b 1
 
-      - name: Package native texture contracts R240
+      - name: Package native GPU storage R241
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-TextureContract-R240'
+          $out='Control-FG-NativeGPUStorage-R241'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
           Copy-Item build/rt_spot_selected_off.dxbc,build/rt_spot_selection.dxbc,build/rt_spot_visibility.dxbc,build/rt_spot_light_ids.dxbc,build/rt_spot_raw_history.dxbc,build/rt_spot_raw_spatial0.dxbc,build/rt_spot_raw_spatial1.dxbc,build/rt_spot_full.dxil,build/rt_spot_r94.dxil,build/rt_spot_light.dxbc,build/rt_spot_reset.dxbc,build/rt_spot_history.dxbc,build/rt_spot_spatial0.dxbc,build/rt_spot_spatial1.dxbc $out
@@ -1000,20 +1010,21 @@ jobs:
           Copy-Item Package-Lighting-Capture.cmd,tools/package-lighting-capture.py,Package-Lighting-Performance.ps1 $out
           Copy-Item Capture-RR-Boundary.cmd,Capture-RR-Boundary.ps1,Collect-RR-Boundary-Status.cmd,tools/collect-rr-boundary.py $out
           Copy-Item Start-Compact-Distance-Test.cmd,Capture-RR-Suite.ps1,tools/collect-rr-suite.py $out
-          Copy-Item tools/diagnostics/Start-CPU-R240-TextureContract.cmd $out
+          Copy-Item tools/diagnostics/Start-CPU-R241-NativeGPUStorage.cmd $out
           Copy-Item build/DirectStorage "$out/DirectStorage" -Recurse
           Copy-Item build/DirectStorage/dstorage.dll,build/DirectStorage/dstoragecore.dll $out
           Copy-Item tools/directstorage/Validate-DirectStorage.cmd "$out/DirectStorage"
-          Copy-Item docs/native-cpu-r240.md "$out/DIAGNOSTIC-NOTES.md"
+          Copy-Item docs/native-gpu-storage-r241.md "$out/DIAGNOSTIC-NOTES.md"
           @'
-          CONTROL-FG R240 - Native texture contract validation
-          Copy package contents beside Control_DX12.exe, replacing the previous mod files.
-          Run Start-CPU-R240-TextureContract.cmd; pinned 8 ms, 16 partitions.
-          Expect TEXTURE_R240 installed=1 and native_gpu_redirect=0.
-          Native request, archive read, mip layout and publication metadata are sampled.
-          CPU read-ahead and per-poll completion timing are disabled.
-          This build does not yet redirect game textures through DirectStorage.
-          Run one normal traversal and send compact logs and texture/stutter observations.
+          CONTROL-FG R241 - Native GPU texture streaming
+          Copy package contents beside Control_DX12.exe, replacing previous mod files.
+          Run Start-CPU-R241-NativeGPUStorage.cmd; pinned 8 ms, 16 partitions.
+          Newly allocated supported 2D texture loads use DirectStorage GPU buffers,
+          GPU row repacking and GPU texture copy before native publication.
+          Unsupported assets and requests rejected before admission remain native.
+          Expect DIRECTSTORAGE_R241 installed=1 and increasing accepted/completed counters.
+          Speculative CPU read-ahead and loader/completion diagnostic hooks are disabled.
+          Run one normal traversal and send compact logs plus texture/stutter observations.
           No Reference or standalone validator run is required.
           '@ | Set-Content "$out/README.txt" -Encoding ASCII
           Compress-Archive -Path "$out/*" -DestinationPath "$out.zip" -Force
@@ -1022,10 +1033,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-TextureContract-R240
+          name: Control-FG-NativeGPUStorage-R241
           path: |
-            Control-FG-TextureContract-R240.zip
-            Control-FG-TextureContract-R240.sha256
+            Control-FG-NativeGPUStorage-R241.zip
+            Control-FG-NativeGPUStorage-R241.sha256
             build/spec-volume-roughness-validation.json
             build/spec-volume-roughness.dxbc
             build/spec-environment-validation.json
