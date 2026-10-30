@@ -8,6 +8,7 @@
 #include <cassert>
 #include <stdexcept>
 #include <initializer_list>
+#include <thread>
 // Hook lifecycle is tested separately against synthetic executable callsites.
 static HMODULE verifiedRenderer=nullptr;
 static void Log(const char*,...) noexcept {}
@@ -66,7 +67,57 @@ static void TestAppend(){
     native_rt_pointer::enabled=false;
     VirtualFree(pages,0,MEM_RELEASE);enabled=false;
 }
+static void TestDirtyWriters(){
+    for(const auto& source:native_dirty::sites){
+        native_dirty::Site probe=source;
+        auto* page=static_cast<unsigned char*>(VirtualAlloc(nullptr,4096,MEM_RESERVE|MEM_COMMIT,PAGE_EXECUTE_READWRITE));assert(page);
+        unsigned n=0;
+        const bool r14=probe.bytes[0]==0x41&&probe.bytes[2]==0x86;
+        const bool r15=probe.bytes[0]==0x41&&probe.bytes[2]==0x87;
+        const bool rsi=probe.bytes[0]==0xc6&&probe.bytes[1]==0x86;
+        if(r14||r15){page[n++]=0x41;page[n++]=r14?0x56:0x57;}else if(rsi)page[n++]=0x56;
+        page[n++]=0x31;page[n++]=0xc0;page[n++]=0xf9; // xor eax,eax; stc
+        if(r14||r15){page[n++]=0x49;page[n++]=0x89;page[n++]=r14?0xce:0xcf;}
+        else if(rsi){page[n++]=0x48;page[n++]=0x89;page[n++]=0xce;}
+        else if(probe.bytes[1]==0x80){page[n++]=0x48;page[n++]=0x89;page[n++]=0xc8;}
+        auto* site=page+n;memcpy(site,probe.bytes,probe.size);n+=probe.size;
+        page[n++]=0x9c;page[n++]=0x58; // capture flags in return register
+        if(r14||r15){page[n++]=0x41;page[n++]=r14?0x5e:0x5f;}else if(rsi)page[n++]=0x5e;
+        page[n++]=0xc3;FlushInstructionCache(GetCurrentProcess(),page,n);
+        using Fn=unsigned long long(*)(void*);auto fn=reinterpret_cast<Fn>(page);
+        unsigned char manager[0x119]{};
+        assert((fn(manager)&0x8c5)==0x45&&manager[0x118]==1);
+        assert(!native_dirty::Prepare(probe,site+1));
+        assert(native_dirty::Prepare(probe,site));
+        assert(native_dirty::Exchange(probe,true)&&probe.healthy);
+        manager[0x118]=0;SetLastError(123);
+        assert((fn(manager)&0x8c5)==0x45&&manager[0x118]==1&&GetLastError()==123);
+        assert(InterlockedCompareExchange64(probe.count,0,0)==1);
+        // Validate unwind at entry, after pushfq, at counter, at popfq and ret.
+        for(unsigned offset:{0u,1u,1u+probe.size,9u+probe.size,10u+probe.size}){
+            alignas(16) DWORD64 stack[4]{0x246,0x12345678,0,0};
+            CONTEXT ctx{};ctx.ContextFlags=CONTEXT_FULL;
+            ctx.Rip=reinterpret_cast<DWORD64>(probe.code+offset);
+            ctx.Rsp=reinterpret_cast<DWORD64>(stack+((offset==0||offset==10+probe.size)?1:0));
+            DWORD64 imageBase=0;auto* entry=RtlLookupFunctionEntry(ctx.Rip,&imageBase,nullptr);assert(entry);
+            void* handler=nullptr;DWORD64 frame=0;
+            RtlVirtualUnwind(UNW_FLAG_NHANDLER,imageBase,ctx.Rip,entry,&ctx,&handler,&frame,nullptr);
+            assert(ctx.Rip==0x12345678&&ctx.Rsp==reinterpret_cast<DWORD64>(stack+2));
+        }
+        std::thread workers[4];
+        for(auto& worker:workers)worker=std::thread([&]{unsigned char own[0x119]{};for(unsigned j=0;j<1000;++j){assert((fn(own)&0x8c5)==0x45&&own[0x118]==1);}});
+        for(auto& worker:workers)worker.join();
+        assert(InterlockedCompareExchange64(probe.count,0,0)==4001);
+        assert(native_dirty::Exchange(probe,false)&&probe.healthy);
+        manager[0x118]=0;assert((fn(manager)&0x8c5)==0x45&&manager[0x118]==1);
+        assert(InterlockedCompareExchange64(probe.count,0,0)==4001);
+        assert(RtlDeleteFunctionTable(&probe.unwind));
+        VirtualFree(probe.code,0,MEM_RELEASE);VirtualFree(const_cast<LONG64*>(probe.count),0,MEM_RELEASE);VirtualFree(page,0,MEM_RELEASE);
+    }
+    std::puts("PASS all eight dirty-store probes: original writes, flags, LastError, exact counters, unwind at instruction boundaries and rollback");
+}
 int main(){
+    TestDirtyWriters();
     // No opt-in (or malformed opt-in) must never inspect renderer memory.
     for(const char* value:{static_cast<const char*>(nullptr),"0","10","true","123456789"}){
         SetEnvironmentVariableA("CONTROLFG_CPU_APPEND_HOOKS",value);
