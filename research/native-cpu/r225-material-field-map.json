@@ -1,0 +1,136 @@
+{
+  "record_bytes": 336,
+  "record_stack_base": "rbp-0x80",
+  "verified_fields": [
+    {
+      "offset": "0x34",
+      "parameter": "g_vColorMultiplier",
+      "destination_instruction": "0xc6218"
+    },
+    {
+      "offset": "0x44",
+      "parameter": "g_vSmoothnessRange",
+      "destination_instruction": "0xc623e"
+    },
+    {
+      "offset": "0x64",
+      "parameter": "g_vEmissionMultiplier",
+      "destination_instruction": "0xc6264"
+    },
+    {
+      "offset": "0x30",
+      "parameter": "g_fEmissionIntensity",
+      "destination_instruction": "0xc628a"
+    },
+    {
+      "offset": "0x98",
+      "parameter": "g_fBaseDetailAmount",
+      "destination_instruction": "0xc6324"
+    },
+    {
+      "offset": "0x88",
+      "parameter": "g_vSmoothnessRange2",
+      "destination_instruction": "0xc634a"
+    },
+    {
+      "offset": "0x9c",
+      "parameter": "g_fBlendUVMultiplier",
+      "destination_instruction": "0xc6370"
+    },
+    {
+      "offset": "0x70",
+      "parameter": "g_vColorMultiplier2",
+      "destination_instruction": "0xc6396"
+    },
+    {
+      "offset": "0xa0",
+      "parameter": "g_fBlendDetailAmount",
+      "destination_instruction": "0xc6430"
+    },
+    {
+      "offset": "0xa4",
+      "parameter": "g_fFuzzUVMultiplier",
+      "destination_instruction": "0xc6456"
+    },
+    {
+      "offset": "0xa8",
+      "parameter": "g_fPupilDilation",
+      "destination_instruction": "0xc647c"
+    },
+    {
+      "offset": "0xac",
+      "parameter": "g_fPupilOuterRadius",
+      "destination_instruction": "0xc64a2"
+    },
+    {
+      "offset": "0x124",
+      "parameter": "g_fEdgeSharpness",
+      "destination_instruction": "0xc6502"
+    },
+    {
+      "offset": "0xb0",
+      "parameter": "g_vIntensity",
+      "destination_instruction": "0xc652b"
+    },
+    {
+      "offset": "0xc0",
+      "parameter": "g_vWrinkleWeights0",
+      "destination_instruction": "0xc6551"
+    },
+    {
+      "offset": "0xd0",
+      "parameter": "g_vWrinkleWeights1",
+      "destination_instruction": "0xc6577"
+    },
+    {
+      "offset": "0xe0",
+      "parameter": "g_vWrinkleWeights2",
+      "destination_instruction": "0xc659d"
+    },
+    {
+      "offset": "0xf0",
+      "parameter": "g_vWrinkleWeights3",
+      "destination_instruction": "0xc65c3"
+    },
+    {
+      "offset": "0x100",
+      "parameter": "g_vWrinkleWeights4",
+      "destination_instruction": "0xc65e9"
+    },
+    {
+      "offset": "0x110",
+      "parameter": "g_vWrinkleWeights5",
+      "destination_instruction": "0xc6612"
+    },
+    {
+      "offset": "0x128",
+      "parameter": "g_fTrunkBendFactor",
+      "destination_instruction": "0xc663b"
+    },
+    {
+      "offset": "0x12c",
+      "parameter": "g_fTrunkPivotOffset",
+      "destination_instruction": "0xc6664"
+    },
+    {
+      "offset": "0x13c",
+      "parameter": "g_fWindFactor",
+      "destination_instruction": "0xc668d"
+    },
+    {
+      "offset": "0x140",
+      "parameter": "g_fDecalMaterialBlendFactor",
+      "destination_instruction": "0xc66b6"
+    },
+    {
+      "offset": "0x144",
+      "parameter": "g_fDecalAlbedoBlendFactor",
+      "destination_instruction": "0xc66df"
+    },
+    {
+      "offset": "0x130",
+      "parameter": "g_vColorRgbMultiplier",
+      "destination_instruction": "0xc6708"
+    }
+  ]
+}
