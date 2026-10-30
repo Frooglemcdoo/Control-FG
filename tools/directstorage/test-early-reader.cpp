@@ -28,7 +28,7 @@ int wmain(){
  // Registration's duplicate is owned independently and never seeks the native handle.
  CloseHandle(file);file=CreateFileW(path.c_str(),GENERIC_READ,FILE_SHARE_READ|FILE_SHARE_DELETE,nullptr,OPEN_EXISTING,FILE_ATTRIBUTE_NORMAL,nullptr);
  Await([&]{return reader.counters.filesReady==1;},"background registration");
- reader.Offer(&request,1,1,10);Sleep(5);Check(reader.counters.admitted==0,"exclude selected request");
+ Await([&]{reader.Offer(&request,1,1,10);return reader.counters.offered>0;},"selected offer inspected");Check(reader.counters.admitted==0,"exclude selected request");
  request.id=2;const auto completed=reader.counters.completed.load();Await([&]{reader.Offer(&request,1,1,10);return reader.counters.admitted>0;},"offer ready request");
  Await([&]{return reader.counters.completed>completed;},"early completion");
  const auto submissions=reader.counters.submitted.load();Await([&]{reader.Offer(&request,1,1,10);return reader.counters.duplicates>0;},"duplicate suppression");Check(reader.counters.submitted==submissions,"duplicates submit no work");
@@ -41,8 +41,14 @@ int wmain(){
  memset(output,0xcc,sizeof(output));Seek(different,713);Await([&]{Check(!reader.TryConsume(different,request,output,1024,&received)&&output[0]==0xcc&&Position(different)==713,"different file rejects without mutation");return reader.counters.identityRejected==1;},"identity rejection observed");
  Await([&]{return reader.counters.filesReady==2;},"second identity registered");
  // Invalidating native archives forbids old ready data and safely retires sources.
- reader.Invalidate();Await([&]{Check(!reader.TryConsume(file,request,output,1024,&received),"generation invalidation fallback");return reader.counters.registered>=3;},"epoch registration handoff");
- Await([&]{return reader.counters.filesReady>=3;},"new epoch registration");
+ Await([&]{Check(!reader.TryConsume(file,request,output,1024,&received),"restore original mapping");return reader.counters.registered>=3;},"restore registration");
+ Await([&]{return reader.counters.filesReady>=3;},"restored mapping ready");
+ Candidate stale{30,10,20,0,{713,1024}};before=reader.counters.completed.load();admitted=reader.counters.admitted.load();
+ Await([&]{reader.Offer(&stale,1,1,10);return reader.counters.admitted>admitted;},"offer stale fixture");
+ Await([&]{return reader.counters.completed>before;},"stale fixture was ready");
+ Seek(file,713);const auto servedBeforeInvalidation=reader.counters.served.load();reader.Invalidate();
+ Await([&]{Check(!reader.TryConsume(file,stale,output,1024,&received)&&Position(file)==713&&reader.counters.served==servedBeforeInvalidation,"ready old generation must not serve");return reader.counters.registered>=4;},"epoch registration handoff");
+ Await([&]{return reader.counters.filesReady>=4;},"new epoch registration");
  request.id=4;before=reader.counters.completed.load();admitted=reader.counters.admitted.load();Await([&]{reader.Offer(&request,1,1,10);return reader.counters.admitted>admitted;},"offer position fixture");Await([&]{return reader.counters.completed>before;},"position fixture ready");
  Seek(file,714);Await([&]{Check(!reader.TryConsume(file,request,output,1024,&received)&&Position(file)==714,"wrong position falls back unchanged");return reader.counters.positionRejected==1;},"position rejection observed");
  request.id=5;before=reader.counters.completed.load();admitted=reader.counters.admitted.load();Await([&]{reader.Offer(&request,1,1,10);return reader.counters.admitted>admitted;},"offer expiry fixture");Await([&]{return reader.counters.completed>before;},"expiry fixture ready");
