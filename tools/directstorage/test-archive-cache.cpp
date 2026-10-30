@@ -18,6 +18,14 @@ static void* AllocateExecutableRelayNear(const void*) noexcept {return nullptr;}
 static void** FindImport(HMODULE,const char*,const char*) {return nullptr;}
 #include "../../src/directstorage_game_runtime.h"
 static void Check(bool condition,const char* label){if(!condition){printf("FAIL %s error=%lu\n",label,GetLastError());fflush(stdout);ExitProcess(1);}}
+static int testThreadIndex=1;
+static int TestIndex(){return testThreadIndex;}
+struct NativeFileFixture {void* unused=nullptr;HANDLE handle=nullptr;std::uint64_t mode=0,position=0;};
+static std::uint64_t NativeSync(void*,void* opaque,void* output,std::uint64_t count){
+    auto* f=static_cast<NativeFileFixture*>(opaque);DWORD got=0;
+    if(!native_directstorage::SyncReadHook(f->handle,output,static_cast<DWORD>(count),&got,nullptr))return 0;
+    f->position+=got;return got;
+}
 int wmain(){
     using namespace control_storage;
     ComPtr<IDStorageFactory> factory;Check(SUCCEEDED(DStorageGetFactory(IID_PPV_ARGS(&factory))),"factory");
@@ -68,6 +76,44 @@ int wmain(){
     Check(WaitForSingleObject(event,0)==WAIT_OBJECT_0,"hit completion event");
     Check(memcmp(output,expected.data()+713,1367)==0&&output[1367]==0xcc,"hit exact bytes");
     Check(native_directstorage::served.load()==1,"real served counter");
+    // The synthetic leaf reproduces mov rax,[rcx]; jmp [rax+90h]. It
+    // exercises the real tail patch, scoped wrapper and native bookkeeping.
+    syncFile=CreateFileW(path.c_str(),GENERIC_READ,FILE_SHARE_READ,nullptr,OPEN_EXISTING,FILE_ATTRIBUTE_NORMAL,nullptr);
+    Check(syncFile!=INVALID_HANDLE_VALUE,"sync cache open");
+    NativeFileFixture nativeFile{};nativeFile.handle=syncFile;
+    void* table[19]{};table[18]=reinterpret_cast<void*>(&NativeSync);void** fs=table;
+    native_directstorage::nativeRead=&NativeSync;native_directstorage::threadIndex=&TestIndex;
+    auto* code=static_cast<unsigned char*>(VirtualAlloc(nullptr,8192,MEM_RESERVE|MEM_COMMIT,PAGE_EXECUTE_READWRITE));
+    Check(code!=nullptr,"tail fixture allocate");
+    const unsigned char leaf[]={0x48,0x8b,0x01,0x48,0xff,0xa0,0x90,0,0,0};memcpy(code,leaf,sizeof(leaf));
+    control_storage::PackTailPatch tailPatch;
+    Check(tailPatch.Prepare(code+3,reinterpret_cast<void*>(&native_directstorage::PackReadHook),code+4096),"tail prepare");
+    Check(tailPatch.Exchange(true)&&tailPatch.healthy,"tail install");
+    auto invoke=reinterpret_cast<native_directstorage::NativeRead>(code);
+    LARGE_INTEGER seek{};seek.QuadPart=713;Check(SetFilePointerEx(syncFile,seek,nullptr,FILE_BEGIN)!=FALSE,"sync seek");nativeFile.position=713;
+    SetLastError(123);memset(output,0xcc,sizeof(output));
+    Check(invoke(&fs,&nativeFile,output,1367)==1367,"sync cache through tail");
+    Check(GetLastError()==123&&nativeFile.position==2080,"sync last error and native bookkeeping");
+    Check(native_directstorage::syncServed.load()==1&&native_directstorage::ownedArchiveHandle==nullptr,"scoped cache served and restored");
+    LARGE_INTEGER current{},zero{};Check(SetFilePointerEx(syncFile,zero,&current,FILE_CURRENT)&&current.QuadPart==2080,"OS pointer advanced");
+    Check(memcmp(output,expected.data()+713,1367)==0&&output[1367]==0xcc,"sync exact cached bytes");
+    // An unscoped caller and shared slot zero must always use native ReadFile.
+    Check(NativeSync(&fs,&nativeFile,output,127)==127,"unscoped native read");
+    testThreadIndex=0;Check(invoke(&fs,&nativeFile,output,127)==127,"shared slot native read");
+    Check(native_directstorage::syncServed.load()==1,"unowned reads cannot consume cache");testThreadIndex=1;
+    // Force a cold synchronous read on a separate file identity.
+    HANDLE cold=CreateFileW(other.c_str(),GENERIC_READ,FILE_SHARE_READ,nullptr,OPEN_EXISTING,FILE_ATTRIBUTE_NORMAL,nullptr);
+    Check(cold!=INVALID_HANDLE_VALUE,"cold sync open");NativeFileFixture coldFile{};coldFile.handle=cold;
+    Check(invoke(&fs,&coldFile,output,127)==127&&coldFile.position==127,"cold scoped native fallback");
+    for(unsigned i=0;i<127;++i)Check(output[i]==static_cast<unsigned char>(expected[i]^0x5a),"cold scoped bytes");
+    Check(native_directstorage::syncServed.load()==1,"cold scoped read not claimed as served");CloseHandle(cold);
+    seek.QuadPart=size-10;Check(SetFilePointerEx(syncFile,seek,nullptr,FILE_BEGIN)!=FALSE,"EOF seek");nativeFile.position=size-10;
+    Check(invoke(&fs,&nativeFile,output,127)==10&&nativeFile.position==size,"EOF native short read");
+    Check(memcmp(output,expected.data()+size-10,10)==0,"EOF exact bytes");
+    Check(tailPatch.Exchange(false)&&memcmp(code,leaf,sizeof(leaf))==0,"tail restore");
+    Check(!tailPatch.Exchange(false),"tail double rollback rejected");
+    VirtualFree(code,0,MEM_RELEASE);CloseHandle(syncFile);
+    puts("PASS R233 synchronous archive cache: executable tail dispatch, registered-worker scope, slot-zero and unscoped fallback, exact cached bytes, native and OS positions, LastError, short EOF, patch rollback");
     Check(!cache.TryRead(file,size-10,output,11),"EOF fallback");
     Check(!cache.TryRead(INVALID_HANDLE_VALUE,0,output,1),"invalid handle fallback");
     Check(!cache.TryRead(file,0,output,0),"zero fallback");

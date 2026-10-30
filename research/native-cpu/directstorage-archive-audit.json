@@ -7,6 +7,58 @@
   "retained_native_objects": [],
   "evidence": [
     {
+      "rva": "0x19668a",
+      "instruction": "call 0x1676e0"
+    },
+    {
+      "rva": "0x196692",
+      "instruction": "lea r14, [rdi + rcx*8 + 0x2a0]"
+    },
+    {
+      "rva": "0x1966b6",
+      "instruction": "call qword ptr [rax + 0x20]"
+    },
+    {
+      "rva": "0x1966bc",
+      "instruction": "mov qword ptr [r14], rax"
+    },
+    {
+      "rva": "0x1966d1",
+      "instruction": "call qword ptr [rax + 0x78]"
+    },
+    {
+      "rva": "0x1966ef",
+      "instruction": "call qword ptr [r10 + 0x80]"
+    },
+    {
+      "rva": "0x19671b",
+      "instruction": "jmp qword ptr [rax + 0x90]"
+    },
+    {
+      "rva": "0x1676e6",
+      "instruction": "mov rax, qword ptr gs:[0x58]"
+    },
+    {
+      "rva": "0x167701",
+      "instruction": "mov eax, dword ptr [rbx]"
+    },
+    {
+      "rva": "0x167707",
+      "instruction": "call qword ptr [rip + 0xa79eb]"
+    },
+    {
+      "rva": "0x167722",
+      "instruction": "cmp dword ptr [rax], edx"
+    },
+    {
+      "rva": "0x167731",
+      "instruction": "xor eax, eax"
+    },
+    {
+      "rva": "0x167739",
+      "instruction": "mov dword ptr [rbx], ecx"
+    },
+    {
       "rva": "0x1933dd",
       "instruction": "mov qword ptr [rsp + 0x20], r12"
     },
