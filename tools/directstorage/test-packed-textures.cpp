@@ -73,6 +73,29 @@ static void Admission(){
  n::Retire(job,true,false);Check(refs==0&&enginePending==0&&published==1&&n::pending==0&&n::active[0]==nullptr,"publication and retirement");
  n::cursor=0;n::allocation={texture,2,0x9999};n::RequestHook(nullptr,"fixture",texture,17,64,nullptr,14,7,false,user);
  job=std::move(n::jobs[0]);n::jobs[0]={};n::Retire(job,false,true);Check(native==2&&refs==0&&enginePending==0&&n::pending==0&&published==1,"retired failure retries native exactly once");
+ // A loading burst exceeding the old 2,048 descriptor limit must still
+ // admit to the final slot. Synthetic reservations avoid allocating thousands
+ // of GPU resources: this fixture tests admission, not the GPU memory budget.
+ static_assert(n::QueueCapacity==4096,"burst descriptor capacity");
+ const auto oldCapacity=n::capacityRejected.load(),oldDuplicate=n::duplicateRejected.load();
+ for(unsigned i=0;i<n::QueueCapacity-1;++i)n::active[i]=reinterpret_cast<ID3D12Resource*>(1);
+ n::pending=n::QueueCapacity-1;n::cursor=n::QueueCapacity-1;
+ n::allocation={texture,2,0x9999};SetLastError(101);
+ Check(n::RequestHook(nullptr,"fixture",texture,17,64,nullptr,14,7,false,user)<0&&GetLastError()==101,"burst above old capacity admitted");
+ Check(n::pending==n::QueueCapacity&&n::peakPending==n::QueueCapacity&&refs==1&&enginePending==1,"burst peak and lifetime accounting");
+ n::allocation={texture,2,0x9999};
+ Check(n::RequestHook(nullptr,"fixture",texture,17,64,nullptr,14,7,false,user)==123&&n::capacityRejected==oldCapacity+1,"full queue falls back without reservation");
+ const unsigned last=n::QueueCapacity-1;job=std::move(n::jobs[last]);n::jobs[last]={};
+ // Free one synthetic reservation while the real target stays active. This
+ // must count as duplicate rejection, independently of capacity pressure.
+ n::active[0]=nullptr;--n::pending;n::allocation={texture,2,0x9999};
+ Check(n::RequestHook(nullptr,"fixture",texture,17,64,nullptr,14,7,false,user)==123&&n::duplicateRejected==oldDuplicate+1&&n::capacityRejected==oldCapacity+1,"duplicate has distinct rejection reason");
+ n::Retire(job,true,false);Check(refs==0&&enginePending==0&&n::reservedBytes==0,"burst retirement balances ownership");
+ for(auto& target:n::active)target=nullptr;n::pending=0;
+ n::cursor=last;n::allocation={texture,2,0x9999};
+ Check(n::RequestHook(nullptr,"fixture",texture,17,64,nullptr,14,7,false,user)<0,"retired slot reusable");
+ job=std::move(n::jobs[last]);n::jobs[last]={};n::Retire(job,true,false);
+ Check(refs==0&&enginePending==0&&n::pending==0,"slot reuse balances pending");
  CloseHandle(n::wake);n::wake=nullptr;n::available=false;
 }
 int main(){
@@ -123,5 +146,5 @@ int main(){
   D3D12_RANGE empty{};readback->Unmap(0,&empty);
  }
  AllocationGate();ResolveRange(factory.Get(),path);testResource=fixtures[0].texture;Admission();testResource.Reset();Check(transfer.Close(),"drained close");source.Reset();CloseHandle(event);Check(DeleteFileW(path)!=FALSE,"file ownership released");
- puts("PASS R241: file-to-GPU packed rows, eight formats / 64 mips, repeated batches, native state restoration, blocked consumer queue independence, bounds, native archive bias resolution, overlap rejection, admission ownership and deferred publication; runtime CPU payload bytes=0");
+ puts("PASS R242: file-to-GPU packed rows, eight formats / 64 mips, repeated batches, native state restoration, blocked consumer queue independence, bounds, native archive bias resolution, overlap rejection, 4096-slot burst admission, capacity/duplicate separation, slot reuse, ownership and deferred publication; runtime CPU payload bytes=0");
 }

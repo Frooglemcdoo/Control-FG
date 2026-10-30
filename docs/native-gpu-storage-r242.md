@@ -1,0 +1,121 @@
+# R242 native GPU texture streaming
+
+R242 replaces the native payload read/upload for accepted, newly allocated 2D
+texture requests. This is an integrated experimental game path, not the R237
+CPU-memory read-ahead bridge or another metadata-only observer. It still needs
+live-game validation before it can be considered production-complete.
+
+## Run
+
+Copy the package contents beside Control_DX12.exe. Launch with
+`Start-CPU-R242-NativeGPUStorage.cmd`. The launcher keeps 8 ms / 16 partitions
+pinned and the accepted rendering baseline. It disables speculative read-ahead,
+the legacy cache, loader tracing, completion polling instrumentation and R240
+layout sampling. Functional integration does not depend on those diagnostics.
+
+The five-second `DIRECTSTORAGE_R242_STATUS` report distinguishes offered,
+accepted, completed, fallback, failed, pending and batch counts. `installed=1`
+alone is not proof of successful GPU texture delivery; completed must increase.
+Counters include startup and traversal, not just the affected area.
+
+## Payload path
+
+1. The exact renderer allocation call at 1580D7 identifies newly allocated mip
+   containers; existing containers remain native. The request call at 158247
+   admits supported requests before the native loader reads payload bytes.
+2. Native pack lookup 18F760 supplies the archive range. Only filename/range
+   metadata is processed on the CPU. Open archive identities are checked and
+   held read-only against replacement/write. No archive payload cache is built.
+3. A dedicated worker submits up to 16 raw archive ranges per DirectStorage
+   batch to DEFAULT-heap GPU buffers. Two independent batch lanes overlap I/O
+   and GPU completion. The descriptor queue holds up to 4,096 pending jobs
+   without allocating payload buffers for queued jobs. Each active lane has
+   a conservative 128 MiB transfer-buffer budget. There is no CPU payload buffer, Map,
+   memcpy or CPU decompression in this path.
+4. A compute shader repacks compact mip rows into D3D12 copy footprints. An
+   owned direct queue writes the unpublished texture and restores its original
+   combined pixel/non-pixel shader-read state. This work does not depend on a
+   future native frame submission. The engine's consumer queue is unwrapped
+   from Streamline, checked against the native resource device, and receives
+   an explicit wait on the completed transfer fence before publication. The
+   native state tracker is not rewritten.
+5. After the GPU fence completes, native finishLoadLevel (158390) dispatches
+   publication through the renderer's existing locked deferred-work path.
+   Native references (12E160/12E190) and COM references cover accepted jobs.
+   Loading mip state 1 blocks normal unload through canFinishUnload (157520);
+   the streaming-mip unload loop at 15AD34 also requires loaded state 2.
+   Accepted jobs reserve a global pending completion at Loader +818, which
+   hasLoadsRemaining (F88A0) sums with queued files at +528. The reservation is
+   released only after publication or native retry is queued. The disk queue
+   and its +528 count remain unchanged, avoiding loader-thread work on phantom
+   reads. Per-thread completion arrays are untouched; no native completion
+   record is forged or consumed for a GPU job.
+   Failed I/O retries native only after the accepted DirectStorage batch retires.
+
+The special returned request ticket is local to this exact renderer call site,
+whose native caller discards the return value. It is not a replacement for the
+public Loader request-ID/cancellation API. Native loader listeners and buffer
+allocation are bypassed for accepted requests; renderer completion accounting
+is performed by finishLoadLevel.
+
+## Supported scope
+
+Admission requires an unpublished new container, positive engine reference
+count, mode-zero 2D metadata, no alias container, no special native texture
+flags, DEFAULT heap, one array slice/plane/sample, at most 16 mips, and compact
+rows divisible by four bytes. It requires the expected shader-read tracker
+state and an exact compact-size match. Requests above 32 MiB, existing
+containers, unsupported texture types/layouts, other completion-thread IDs,
+capacity pressure and unmatched module hashes use native behavior.
+
+The source bytes in this native path are raw BC/RGBA texture payloads, so
+compression is NONE. BC texture formats are already GPU-sampleable blocks;
+they are not GDeflate streams. R239's GPU GDeflate capability remains validated,
+but no GDeflate claim is made for these native archive bytes.
+
+The CPU still performs metadata lookup, resource creation, scheduling and
+submission. DirectStorage may use internal staging. GPU destination does not
+mean a physically direct SSD-to-VRAM transaction with no CPU involvement.
+
+## Validation and limits
+
+Windows CI validates eight RGBA/BGRA/BC format variants and all 64 mip contents
+against a synthetic compact archive after GPU repacking and copy. A blocked
+consumer-queue test requires transfers to complete before the native frame
+queue is released, detecting a loading-barrier deadlock. It exercises
+new-versus-existing allocation gating, batch reuse, range/size rejection, duplicate destination rejection, state
+restoration and native admission/reference/publication forwarding. CPU
+readback exists only in the test executable. Existing rendering checks remain.
+
+The first game run must verify accepted/completed coverage, normal level load,
+traversal, texture arrival, unloading and device/error behavior. These cannot
+be established by WARP fixtures alone. No frame-rate or starvation improvement
+is claimed before live validation. Cube/volume/array textures and in-place
+reloads remain native; this is not universal replacement of every game read.
+
+## R241 live evidence and R242 change
+
+The latest session in the 2026-10-30 18:04:16 compact bundle reports 8,652
+requests offered, 7,692 accepted and completed, 2,427,218,776 accepted bytes,
+1,536 batches, zero failed batches and zero pending jobs at the last sample.
+The pinned budget remained 8 ms / 16 partitions. This establishes functional
+GPU delivery for the admitted scope, not a measured frame-time improvement.
+
+960 requests used native fallback: two layout rejections and 958 reported as
+capacity rejection. R241 grouped duplicate destinations and a concurrent
+availability change into that counter, so the logs cannot prove that all 958
+were queue-full events. R242 separates capacity, duplicate and unavailable
+rejections and reports peak pending depth plus configured queue capacity.
+
+R242 doubles descriptor capacity from 2,048 to 4,096 for loading bursts. It
+keeps two transfer lanes and the 128 MiB conservative per-lane staging budget.
+Queued descriptors retain already-created destination textures and engine
+references; admitting more jobs can therefore retain more destination VRAM,
+even though active staging allocation is unchanged. The queue remains bounded
+and never waits on the renderer/request thread for a free slot.
+
+The admission regression fixture crosses the former limit, fills the final
+slot, checks full-queue fallback, separates an active duplicate from capacity
+pressure, and verifies retirement plus slot reuse. Live improvement still
+requires a pinned traversal; this change does not establish faster service or
+remove the native path for unsupported assets.

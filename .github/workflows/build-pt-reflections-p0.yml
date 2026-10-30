@@ -3,7 +3,7 @@ name: Build native reflection enhancements and RR
 on:
   push:
     branches:
-      - work/r241-native-gpu-storage
+      - work/r242-native-gpu-storage
       - work/r240-native-texture-contract
       - work/r238-queue-order-completion
       - work/r237-early-archive-reads
@@ -985,11 +985,11 @@ jobs:
           build\suite-controller.exe
           if errorlevel 1 exit /b 1
 
-      - name: Package native GPU storage R241
+      - name: Package native GPU storage R242
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-NativeGPUStorage-R241'
+          $out='Control-FG-NativeGPUStorage-R242'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
           Copy-Item build/rt_spot_selected_off.dxbc,build/rt_spot_selection.dxbc,build/rt_spot_visibility.dxbc,build/rt_spot_light_ids.dxbc,build/rt_spot_raw_history.dxbc,build/rt_spot_raw_spatial0.dxbc,build/rt_spot_raw_spatial1.dxbc,build/rt_spot_full.dxil,build/rt_spot_r94.dxil,build/rt_spot_light.dxbc,build/rt_spot_reset.dxbc,build/rt_spot_history.dxbc,build/rt_spot_spatial0.dxbc,build/rt_spot_spatial1.dxbc $out
@@ -1010,19 +1010,19 @@ jobs:
           Copy-Item Package-Lighting-Capture.cmd,tools/package-lighting-capture.py,Package-Lighting-Performance.ps1 $out
           Copy-Item Capture-RR-Boundary.cmd,Capture-RR-Boundary.ps1,Collect-RR-Boundary-Status.cmd,tools/collect-rr-boundary.py $out
           Copy-Item Start-Compact-Distance-Test.cmd,Capture-RR-Suite.ps1,tools/collect-rr-suite.py $out
-          Copy-Item tools/diagnostics/Start-CPU-R241-NativeGPUStorage.cmd $out
+          Copy-Item tools/diagnostics/Start-CPU-R242-NativeGPUStorage.cmd $out
           Copy-Item build/DirectStorage "$out/DirectStorage" -Recurse
           Copy-Item build/DirectStorage/dstorage.dll,build/DirectStorage/dstoragecore.dll $out
           Copy-Item tools/directstorage/Validate-DirectStorage.cmd "$out/DirectStorage"
-          Copy-Item docs/native-gpu-storage-r241.md "$out/DIAGNOSTIC-NOTES.md"
+          Copy-Item docs/native-gpu-storage-r242.md "$out/DIAGNOSTIC-NOTES.md"
           @'
-          CONTROL-FG R241 - Native GPU texture streaming
+          CONTROL-FG R242 - Native GPU texture streaming
           Copy package contents beside Control_DX12.exe, replacing previous mod files.
-          Run Start-CPU-R241-NativeGPUStorage.cmd; pinned 8 ms, 16 partitions.
+          Run Start-CPU-R242-NativeGPUStorage.cmd; pinned 8 ms, 16 partitions.
           Newly allocated supported 2D texture loads use DirectStorage GPU buffers,
           GPU row repacking and GPU texture copy before native publication.
           Unsupported assets and requests rejected before admission remain native.
-          Expect DIRECTSTORAGE_R241 installed=1 and increasing accepted/completed counters.
+          Expect DIRECTSTORAGE_R242 installed=1 and increasing accepted/completed counters.
           Speculative CPU read-ahead and loader/completion diagnostic hooks are disabled.
           Run one normal traversal and send compact logs plus texture/stutter observations.
           No Reference or standalone validator run is required.
@@ -1033,10 +1033,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-NativeGPUStorage-R241
+          name: Control-FG-NativeGPUStorage-R242
           path: |
-            Control-FG-NativeGPUStorage-R241.zip
-            Control-FG-NativeGPUStorage-R241.sha256
+            Control-FG-NativeGPUStorage-R242.zip
+            Control-FG-NativeGPUStorage-R242.sha256
             build/spec-volume-roughness-validation.json
             build/spec-volume-roughness.dxbc
             build/spec-environment-validation.json
