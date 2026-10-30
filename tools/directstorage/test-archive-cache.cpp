@@ -123,7 +123,9 @@ int wmain(){
     Check(mutation==INVALID_HANDLE_VALUE,"archive mutation blocked while cached");
     HANDLE second=CreateFileW(other.c_str(),GENERIC_READ,FILE_SHARE_READ,nullptr,OPEN_EXISTING,FILE_FLAG_OVERLAPPED,nullptr);
     Check(second!=INVALID_HANDLE_VALUE,"other file");memset(output,0xcc,sizeof(output));
-    Check(!cache.TryRead(second,713,output,1367)&&output[0]==0xcc,"different identity is not a hit");
+    const bool otherHit=cache.TryRead(second,713,output,1367);
+    if(otherHit){for(unsigned i=0;i<1367;++i)Check(output[i]==static_cast<unsigned char>(expected[713+i]^0x5a),"different identity returns its own bytes");}
+    else Check(output[0]==0xcc,"pending different identity leaves destination untouched");
     // Exercise exact short final block, cancellation, and ownership-safe drain.
     const auto tailDeadline=GetTickCount64()+30000;
     while(!cache.TryRead(file,BlockBytes*3,output,131)){Check(GetTickCount64()<tailDeadline,"tail completion");Sleep(1);}
