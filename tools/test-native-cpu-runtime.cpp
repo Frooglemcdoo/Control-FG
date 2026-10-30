@@ -109,5 +109,20 @@ int main(){
     assert(six.Exchange(true)&&six.healthy);SetLastError(123);reinterpret_cast<Callback>(page)(&object);assert(GetLastError()==456);
     assert(six.Exchange(false)&&!six.changed);SetLastError(123);reinterpret_cast<Callback>(page)(&object);
     VirtualFree(page,0,MEM_RELEASE);
+    // Scalar workload capture forwards the native tail and preserves LastError.
+    unsigned char manager[0x108]{},context[0x9c]{},job[0x20]{};
+    std::uint32_t rebuilds=42,entries=12;std::uint64_t unique=9;
+    memcpy(manager+0x80,&entries,4);memcpy(manager+0xd0,&entries,4);memcpy(manager+0x100,&unique,8);
+    const void* contextPtr=context;memcpy(job+0x18,&contextPtr,sizeof(contextPtr));
+    memcpy(context+0x18,&entries,4);
+    materialTail=&Original;rebuildCounter=&rebuilds;workloadEnabled=true;
+    local.ordinal[Material]=65;local.ordinal[Preparation]=65;
+    SetLastError(123);MaterialTailHook(manager);assert(observed==manager&&GetLastError()==456);
+    CapturePreparation(job);assert(GetLastError()==456);
+    native_workload::Snapshot workload;
+    assert(materialWorkload[local.slot].Read(workload)&&workload.samples==1&&workload.last[2]==9&&workload.last[3]==42);
+    assert(preparationWorkload[local.slot].Read(workload)&&workload.samples==1&&workload.last[0]==12);
+    local.ordinal[Preparation]=66;CapturePreparation(reinterpret_cast<void*>(1));
+    workloadEnabled=false;CapturePreparation(reinterpret_cast<void*>(1));
     std::puts("PASS RT append forwarding and guard pages; native CPU runtime: forwarding, last-error, exceptions, exact call validation, executable relays and rollback");
 }

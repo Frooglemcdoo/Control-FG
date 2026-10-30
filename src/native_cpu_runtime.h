@@ -1,5 +1,6 @@
 #pragma once
 #include "native_cpu_metrics.h"
+#include "native_cpu_workload.h"
 #include "native_rt_append_runtime.h"
 #include "native_rt_pointer_runtime.h"
 #include "native_cpu_call_patch.h"
@@ -17,6 +18,46 @@ inline NativeCpuCallPatch materialPatch{};
 inline RRIndirectCallPatch joinPatch{};
 struct Local {unsigned slot=kThreads;bool registered=false;U64 ordinal[kStages]{};};
 inline thread_local Local local;
+inline bool workloadEnabled=false;
+inline native_workload::Cell materialWorkload[kThreads],preparationWorkload[kThreads];
+inline Callback materialTail=nullptr;
+inline const void* rebuildCounter=nullptr;
+inline NativeCpuCallPatch materialTailPatch{};
+inline void CapturePreparation(void* self) noexcept {
+    if(!workloadEnabled||local.slot>=kThreads||!Sample(local.ordinal[Preparation]))return;
+    native_workload::U64 values[4]{};
+    native_workload::PreparationValues(self,values);
+    preparationWorkload[local.slot].Add(values);
+}
+inline void MaterialTailHook(void* self){
+    materialTail(self);
+    // The native manager lock is still held at this callsite.
+    if(!workloadEnabled||local.slot>=kThreads||!local.ordinal[Material]||!Sample(local.ordinal[Material]))return;
+    native_workload::U64 values[4]{};
+    native_workload::MaterialValues(self,native_workload::Load<std::uint32_t>(rebuildCounter,0),values);
+    materialWorkload[local.slot].Add(values);
+}
+inline bool InstallWorkload(HMODULE renderer) noexcept {
+    if(!installed||!renderer||renderer!=verifiedRenderer)return false;
+    char setting[8]{};GetEnvironmentVariableA("CONTROLFG_CPU_WORKLOAD",setting,sizeof(setting));
+    if(setting[0]=='0'){Log("NATIVE_CPU_R222 workload=0 reason=environment");return false;}
+    auto* base=reinterpret_cast<unsigned char*>(renderer);
+    constexpr unsigned char tail[]={0xe8,0x3c,0,0,0};
+    constexpr unsigned char counter[]={0xff,0x05,0xe1,0x58,0x1c,0x01};
+    constexpr unsigned char prep[]={0x48,0x8b,0x01,0x89,0x98,0x98,0,0,0,0x48,0x8b,0x01,0x89,0x98,0x88,0,0,0};
+    if(memcmp(base+0xc83af,tail,sizeof(tail))||memcmp(base+0xc7ea1,counter,sizeof(counter))||memcmp(base+0xa81f8,prep,sizeof(prep)))return false;
+    materialTail=reinterpret_cast<Callback>(base+0xc83f0);
+    rebuildCounter=base+0x128d788;
+    if(!NativeCpuPrepareCallPatch(base+0xc83af,reinterpret_cast<void*>(materialTail),reinterpret_cast<void*>(&MaterialTailHook),&materialTailPatch))return false;
+    const bool changed=NativeCpuExchangeCall(&materialTailPatch,true);
+    if(!changed||!materialTailPatch.writeHealthy){
+        if(changed&&!NativeCpuExchangeCall(&materialTailPatch,false))Log("NATIVE_CPU_R222 rollback_failed=material_tail");
+        return false;
+    }
+    workloadEnabled=true;
+    Log("NATIVE_CPU_R222 workload=1 sample_interval=64 material_lock=native rt_snapshot=job_completion append_hooks=unchanged");
+    return true;
+}
 struct Scope {
     Cell* cell=nullptr;LARGE_INTEGER start{};ULONG64 firstCycles=0;bool cyclesValid=false;
     explicit Scope(Stage stage) noexcept {
@@ -59,11 +100,13 @@ inline void InstallAppendHooks(HMODULE renderer) noexcept {
 }
 inline void PreparationHook(void* self){
     if(!native_rt_append::installed&&!native_rt_pointer::installed){
-        Scope scope(Preparation);preparation(self);return;
+        {Scope scope(Preparation);preparation(self);}
+        CapturePreparation(self);return;
     }
     const auto before=native_rt_append::counts;
     const auto pointersBefore=native_rt_pointer::counts;
     {Scope scope(Preparation);preparation(self);}
+    CapturePreparation(self);
     native_rt_append::Publish(before);
     native_rt_pointer::Publish(pointersBefore);
 }
@@ -113,6 +156,16 @@ inline void Poll(U64 present) noexcept {
         present,unsigned(native_rt_append::installed),unsigned(native_rt_append::enabled),native_rt_append::completedFast.load(),native_rt_append::completedNative.load());
     Log("NATIVE_RT_POINTER_R220_STATUS present=%llu installed=%u enabled=%u completed_job_fast_appends=%llu completed_job_native_appends=%llu",
         present,unsigned(native_rt_pointer::installed),unsigned(native_rt_pointer::enabled),native_rt_pointer::completedFast.load(),native_rt_pointer::completedNative.load());
+    if(workloadEnabled){
+        for(unsigned t=0;t<kThreads;++t){
+            const auto tid=threads[t].tid.load();if(!tid)continue;
+            native_workload::Snapshot m{},p{};
+            if(materialWorkload[t].Read(m)&&m.samples)Log("NATIVE_CPU_R222_MATERIAL present=%llu worker_tid=%lu samples=%llu entries_sum=%llu sorted_sum=%llu unique_sum=%llu entries_last=%llu sorted_last=%llu unique_last=%llu native_rebuild_counter=%llu",
+                present,tid,m.samples,m.sum[0],m.sum[1],m.sum[2],m.last[0],m.last[1],m.last[2],m.last[3]);
+            if(preparationWorkload[t].Read(p)&&p.samples)Log("NATIVE_CPU_R222_PREPARATION present=%llu worker_tid=%lu samples=%llu objects_sum=%llu instances_sum=%llu geometry_sum=%llu material_refs_sum=%llu objects_last=%llu instances_last=%llu geometry_last=%llu material_refs_last=%llu",
+                present,tid,p.samples,p.sum[0],p.sum[1],p.sum[2],p.sum[3],p.last[0],p.last[1],p.last[2],p.last[3]);
+        }
+    }
     // Called on Present, never under a native material lock or from a worker.
     // Cumulative snapshots remain usable if a report races an in-flight sample.
     for(unsigned stage=0;stage<kStages;++stage){
