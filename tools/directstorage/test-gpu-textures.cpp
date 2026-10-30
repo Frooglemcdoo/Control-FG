@@ -23,7 +23,9 @@ struct Texture {
  std::vector<std::vector<unsigned char>> payloads;
 };
 int wmain(int argc,wchar_t** argv){
+ const bool requireGpu=argc==2&&wcscmp(argv[1],L"--require-gpu")==0;
  const bool forceCpu=argc==2&&wcscmp(argv[1],L"--force-cpu")==0;
+ Check(argc==1||(argc==2&&(forceCpu||requireGpu)),"arguments");
  if(forceCpu){DSTORAGE_CONFIGURATION config{};config.DisableGpuDecompression=TRUE;Hr(DStorageSetConfiguration(&config),"force CPU fixture configuration");}
  ComPtr<IDXGIFactory6> dxgi;Hr(CreateDXGIFactory2(0,IID_PPV_ARGS(&dxgi)),"DXGI");
  ComPtr<IDXGIAdapter1> adapter;ComPtr<ID3D12Device> device;
@@ -38,6 +40,7 @@ int wmain(int argc,wchar_t** argv){
  Reader strict,reader;Hr(strict.Initialize(factory.Get(),device.Get()),"strict reader");Hr(reader.Initialize(factory.Get(),device.Get(),true),"explicit compatibility reader");
  printf("adapter_vendor=%x software_adapter=%u force_cpu=%u compression_support=%x gpu_decompression=%u native_game_integration=0\n",adapterDesc.VendorId,unsigned((adapterDesc.Flags&DXGI_ADAPTER_FLAG_SOFTWARE)!=0),unsigned(forceCpu),unsigned(reader.CompressionSupport()),unsigned(reader.UsesGpuDecompression()));
  if(forceCpu)Check(!strict.UsesGpuDecompression(),"forced CPU must be reported");
+ if(requireGpu)Check(strict.UsesGpuDecompression()&&reader.UsesGpuDecompression()&&(adapterDesc.Flags&DXGI_ADAPTER_FLAG_SOFTWARE)==0,"hardware GPU decompression required; CPU fallback is not a pass");
  Texture textures[2];std::vector<Reader::Input> requests;std::vector<unsigned char> archive(713,0x5a);
  for(unsigned t=0;t<2;++t){
   auto& f=textures[t];f.desc.Dimension=D3D12_RESOURCE_DIMENSION_TEXTURE2D;f.desc.Width=t?128:127;f.desc.Height=t?64:65;f.desc.DepthOrArraySize=1;f.desc.MipLevels=8;

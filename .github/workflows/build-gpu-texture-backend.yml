@@ -37,17 +37,19 @@ jobs:
         run: |
           & build/ControlFG-GpuTexture-Test.exe --force-cpu | Tee-Object build/CPU-Fallback-Validation.log
           if ($LASTEXITCODE -ne 0) { throw 'CPU fallback policy validation failed' }
+      - name: Package hardware texture validation
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $out='Control-FG-GPU-Texture-R239'
+          New-Item -ItemType Directory -Force $out | Out-Null
+          Copy-Item build/ControlFG-GpuTexture-Test.exe,build/dstorage.dll,build/dstoragecore.dll $out
+          Copy-Item build/*Validation.log,build/sdk/LICENSE.txt,build/sdk/LICENSE-CODE.txt,build/sdk/NOTICES.txt $out
+          Copy-Item tools/directstorage/Validate-GPU-Textures-R239.cmd $out
+          Copy-Item docs/native-gpu-texture-backend-r239.md "$out/README.md"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-GPU-Texture-Backend-R239-Developer
-          path: |
-            build/ControlFG-GpuTexture-Test.exe
-            build/dstorage.dll
-            build/dstoragecore.dll
-            build/*Validation.log
-            build/sdk/LICENSE.txt
-            build/sdk/LICENSE-CODE.txt
-            build/sdk/NOTICES.txt
-            docs/native-gpu-texture-backend-r239.md
+          name: Control-FG-GPU-Texture-R239
+          path: Control-FG-GPU-Texture-R239/
           retention-days: 7

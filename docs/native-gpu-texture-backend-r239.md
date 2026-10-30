@@ -27,3 +27,9 @@ These findings identify why replacing only the resource pointer is unsafe: the n
 ## Remaining integration work
 
 Connect requestFilePartialLoad's texture-specific admission to archive identity and exact mip ranges; choose a GPU repack path or preprocessed GPU-ready streams where native row packing differs. Preserve callback/thread semantics and native resource retention. Coordinate native resource transitions and queue fences, then publish a mip only after successful transport. Separate integration from R238's per-poll diagnostic hooks and CPU read-ahead cache. The target is reduced CPU-induced graphics starvation and traversal stalls, not a synthetic utilization increase.
+
+## RTX hardware validation
+
+The Windows CI runner reported adapter vendor 1414 and compression support 4 (CPU fallback), so CI establishes texture byte correctness, lifecycle behavior and strict-policy rejection, not hardware GPU decompression. For the RTX test, extract the hardware-validation package into a separate folder and run Validate-GPU-Textures-R239.cmd. This invokes --require-gpu, refuses CPU decompression, and saves GPU-Texture-Hardware-R239.log. It does not launch or modify Control. There is no GPU readback in the proposed runtime path; the validator uses readback only to compare the resulting mip bytes.
+
+Further native lifetime findings: renderer canFinishUnload at 157520 rejects mip states 1, 3 and 4 (while allowing 2); unloadLevel at 158AA0 sets state 3 and queues its operation. Completion publication at 160370 dispatches to 158410, directly on the designated thread or through a queued operation otherwise. These state/queue relationships are evidence to preserve, not permission to bypass the native unload protocol. Native GPU command-list submission and actual fence retirement remain to be connected.
