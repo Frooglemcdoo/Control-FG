@@ -3,6 +3,7 @@ name: Build native reflection enhancements and RR
 on:
   push:
     branches:
+      - work/r231-directstorage-runtime-loading
       - work/r230-directstorage-archive-cache
       - work/r229-streaming-pin-range
       - work/r228-streaming-policy
@@ -155,6 +156,21 @@ jobs:
           if errorlevel 1 exit /b 1
           build\DirectStorage\ControlFG-Archive-Validate.exe
           if errorlevel 1 exit /b 1
+
+      - name: Validate EXE-adjacent DirectStorage dynamic loading
+        shell: cmd
+        run: |
+          call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
+          if not exist build\StorageIntegration mkdir build\StorageIntegration
+          copy /y build\DirectStorage\dstorage.dll build\StorageIntegration\dstorage.dll
+          copy /y build\DirectStorage\dstoragecore.dll build\StorageIntegration\dstoragecore.dll
+          cl /nologo /std:c++17 /EHsc /W4 /O2 /Ibuild\dstorage-sdk\native\include tools\directstorage\test-runtime-loading.cpp /Febuild\StorageIntegration\ControlFG-Storage-Loading-Test.exe
+          if errorlevel 1 exit /b 1
+          pushd "%SystemRoot%"
+          "%GITHUB_WORKSPACE%\build\StorageIntegration\ControlFG-Storage-Loading-Test.exe"
+          set "STORAGE_TEST_EXIT=%ERRORLEVEL%"
+          popd
+          exit /b %STORAGE_TEST_EXIT%
 
       - name: Validate compact reflection capture on WARP
         shell: cmd
@@ -918,11 +934,11 @@ jobs:
           build\suite-controller.exe
           if errorlevel 1 exit /b 1
 
-      - name: Package native DirectStorage archive cache R230
+      - name: Package DirectStorage runtime loading fix R231
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-DirectStorage-Archive-R230'
+          $out='Control-FG-DirectStorage-R231'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
           Copy-Item build/rt_spot_selected_off.dxbc,build/rt_spot_selection.dxbc,build/rt_spot_visibility.dxbc,build/rt_spot_light_ids.dxbc,build/rt_spot_raw_history.dxbc,build/rt_spot_raw_spatial0.dxbc,build/rt_spot_raw_spatial1.dxbc,build/rt_spot_full.dxil,build/rt_spot_r94.dxil,build/rt_spot_light.dxbc,build/rt_spot_reset.dxbc,build/rt_spot_history.dxbc,build/rt_spot_spatial0.dxbc,build/rt_spot_spatial1.dxbc $out
@@ -943,20 +959,21 @@ jobs:
           Copy-Item Package-Lighting-Capture.cmd,tools/package-lighting-capture.py,Package-Lighting-Performance.ps1 $out
           Copy-Item Capture-RR-Boundary.cmd,Capture-RR-Boundary.ps1,Collect-RR-Boundary-Status.cmd,tools/collect-rr-boundary.py $out
           Copy-Item Start-Compact-Distance-Test.cmd,Capture-RR-Suite.ps1,tools/collect-rr-suite.py $out
-          Copy-Item tools/diagnostics/Start-CPU-R230-DirectStorage.cmd $out
+          Copy-Item tools/diagnostics/Start-CPU-R231-DirectStorage.cmd $out
           Copy-Item build/DirectStorage "$out/DirectStorage" -Recurse
+          Copy-Item build/DirectStorage/dstorage.dll,build/DirectStorage/dstoragecore.dll $out
           Copy-Item tools/directstorage/Validate-DirectStorage.cmd "$out/DirectStorage"
-          Copy-Item docs/native-cpu-r230.md "$out/DIAGNOSTIC-NOTES.md"
+          Copy-Item docs/native-cpu-r231.md "$out/DIAGNOSTIC-NOTES.md"
           @'
-          CONTROL-FG R230 - native DirectStorage archive prefetch integration
-          Run Start-CPU-R230-DirectStorage.cmd; 8 ms, 16 partitions, phase hooks off.
-          Keep the DirectStorage folder beside dxgi.dll.
-          Expect DIRECTSTORAGE_R230_INSTALL ready=1 and increasing served counters.
-          Readiness alone does not prove game reads hit the cache: send compact logs.
-          Real .rmdp reads use a bounded 32 MiB CPU cache; native fallback on misses.
-          Native texture decoding/publication remain unchanged. No GPU decompression yet.
-          Use the same problem area and traversal; report texture arrival and stutter.
-          No Reference run or standalone validator run is required.
+          CONTROL-FG R231 - DirectStorage runtime loading repair
+          Copy dxgi.dll, dstorage.dll and dstoragecore.dll beside Control_DX12.exe.
+          Run Start-CPU-R231-DirectStorage.cmd; 8 ms, 16 partitions, phase hooks off.
+          The DirectStorage subfolder alone is insufficient for the game backend.
+          Expect DIRECTSTORAGE_R231 factory_ready=1 and DIRECTSTORAGE_R230_INSTALL ready=1.
+          Increasing served counters prove archive reads consumed DirectStorage data.
+          Send compact logs plus texture arrival, stutter and FPS observations.
+          Archive-cache behavior and native decode/fallback are unchanged from R230.
+          No Reference or standalone validator run is required.
           '@ | Set-Content "$out/README.txt" -Encoding ASCII
           Compress-Archive -Path "$out/*" -DestinationPath "$out.zip" -Force
           (Get-FileHash "$out.zip" -Algorithm SHA256).Hash | Set-Content "$out.sha256" -Encoding ASCII
@@ -964,10 +981,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-DirectStorage-Archive-R230
+          name: Control-FG-DirectStorage-R231
           path: |
-            Control-FG-DirectStorage-Archive-R230.zip
-            Control-FG-DirectStorage-Archive-R230.sha256
+            Control-FG-DirectStorage-R231.zip
+            Control-FG-DirectStorage-R231.sha256
             build/spec-volume-roughness-validation.json
             build/spec-volume-roughness.dxbc
             build/spec-environment-validation.json

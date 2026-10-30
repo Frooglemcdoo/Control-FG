@@ -1,5 +1,6 @@
 #pragma once
 #include "directstorage_archive_cache.h"
+#include "directstorage_runtime_loader.h"
 #include "rr_indirect_call_windows.h"
 namespace native_directstorage {
 using Read=BOOL(WINAPI*)(HANDLE,LPVOID,DWORD,LPDWORD,LPOVERLAPPED);
@@ -38,15 +39,12 @@ inline bool Install() noexcept {
     auto** slot=FindImport(runtime,"KERNEL32.dll","ReadFile");
     const auto read=reinterpret_cast<Read>(GetProcAddress(GetModuleHandleW(L"kernel32.dll"),"ReadFile"));
     if(!slot||*slot!=reinterpret_cast<void*>(read)){Log("DIRECTSTORAGE_R230 disabled=readfile_import");return false;}
-    const auto modulePath=ModulePath(selfModule);const auto slash=modulePath.find_last_of(L"\\/");
-    if(slash==std::wstring::npos)return false;
-    const auto path=modulePath.substr(0,slash+1)+L"DirectStorage\\dstorage.dll";
-    storageModule=LoadLibraryExW(path.c_str(),nullptr,LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR|LOAD_LIBRARY_SEARCH_DEFAULT_DIRS);
-    if(!storageModule){Log("DIRECTSTORAGE_R230 disabled=runtime_load error=%lu",GetLastError());return false;}
-    using GetFactory=HRESULT(WINAPI*)(REFIID,void**);
-    auto get=reinterpret_cast<GetFactory>(GetProcAddress(storageModule,"DStorageGetFactory"));
     control_storage::ComPtr<IDStorageFactory> factory;
-    if(!get||FAILED(get(IID_PPV_ARGS(&factory)))){Log("DIRECTSTORAGE_R230 disabled=factory");return false;}
+    control_storage::RuntimeLoadResult load;
+    if(!control_storage::LoadRuntimeFactory(ModulePath(selfModule),storageModule,factory,load)){
+        Log("DIRECTSTORAGE_R231 disabled=%s hr=0x%08lX win32=%lu",load.stage,static_cast<unsigned long>(load.hr),load.win32);return false;
+    }
+    Log("DIRECTSTORAGE_R231 factory_ready=1 deployment=exe_directory hr=0x%08lX",static_cast<unsigned long>(load.hr));
     cache=new(std::nothrow) control_storage::ArchiveCache;
     if(!cache||!cache->Initialize(factory.Get())){
         if(cache){cache->CloseIfIdle();delete cache;cache=nullptr;}
