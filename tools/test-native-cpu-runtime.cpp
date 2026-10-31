@@ -330,6 +330,13 @@ int main(){
     RRIndirectCallPatch six;assert(six.Prepare(page+4,slot,target,reinterpret_cast<void*>(&MaterialHook)));
     assert(six.Exchange(true)&&six.healthy);SetLastError(123);reinterpret_cast<Callback>(page)(&object);assert(GetLastError()==456);
     assert(six.Exchange(false)&&!six.changed);SetLastError(123);reinterpret_cast<Callback>(page)(&object);
+    // Tail relay must preserve the caller return address, argument and LastError.
+    page[320]=0xe9;const int tailDelta=static_cast<int>(original-(page+325));memcpy(page+321,&tailDelta,4);
+    NativeCpuCallPatch tail{};assert(!NativeCpuPrepareCallPatch(page+320,original,reinterpret_cast<void*>(&MaterialHook),&tail));
+    assert(NativeCpuPrepareCallPatch(page+320,original,reinterpret_cast<void*>(&MaterialHook),&tail,0xe9));
+    assert(NativeCpuExchangeCall(&tail,true)&&tail.writeHealthy);
+    SetLastError(123);reinterpret_cast<Callback>(page+320)(&object);assert(observed==&object&&GetLastError()==456);
+    assert(NativeCpuExchangeCall(&tail,false));SetLastError(123);reinterpret_cast<Callback>(page+320)(&object);assert(GetLastError()==456);
     VirtualFree(page,0,MEM_RELEASE);
     // Scalar workload capture forwards the native tail and preserves LastError.
     unsigned char manager[0x108]{},context[0x9c]{},job[0x20]{};

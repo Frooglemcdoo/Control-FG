@@ -8,8 +8,8 @@ struct NativeCpuCallPatch {
     bool writeHealthy;
 };
 static bool NativeCpuPrepareCallPatch(unsigned char* site, void* original, void* hook,
-    NativeCpuCallPatch* patch) noexcept {
-    if (!site || !original || !hook || !patch || site[0] != 0xE8) return false;
+    NativeCpuCallPatch* patch, unsigned char opcode=0xE8) noexcept {
+    if (!site || !original || !hook || !patch || (opcode!=0xE8&&opcode!=0xE9) || site[0] != opcode) return false;
     int displacement = 0; memcpy(&displacement, site + 1, 4);
     if (site + 5 + displacement != original) return false;
     patch->site = site; memcpy(patch->original, site, 5);
@@ -21,7 +21,7 @@ static bool NativeCpuPrepareCallPatch(unsigned char* site, void* original, void*
     if (!VirtualProtect(patch->relay, 4096, PAGE_EXECUTE_READ, &previous) ||
         !FlushInstructionCache(GetCurrentProcess(), patch->relay, sizeof(stub)) ||
         !Rel32Fits(site + 5, patch->relay)) return false;
-    patch->replacement[0] = 0xE8;
+    patch->replacement[0] = opcode;
     const auto delta = static_cast<int>(reinterpret_cast<std::intptr_t>(patch->relay) -
         reinterpret_cast<std::intptr_t>(site + 5));
     memcpy(patch->replacement + 1, &delta, 4);

@@ -124,7 +124,31 @@ static void Admission(){
  Check(n::endToEndTime.count==beforeLatency,"terminal failure excluded from success latency");
  CloseHandle(n::wake);n::wake=nullptr;n::available=false;n::traceLatency=false;
 }
+static void PublicationObservation(){
+ namespace n=native_gpu_storage;
+ storage_publication::Tracker tracker;
+ Check(tracker.Begin(16,2,99,100),"publication tracked");
+ Check(tracker.Take(16,3,99,200)==0,"different mip does not match");
+ Check(tracker.Take(16,2,99,200)==100&&tracker.Take(16,2,99,201)==0,"publication consumes once");
+ Check(tracker.Begin(16,2,99,100)&&tracker.Take(16,2,100,200)==0,"replaced container rejected");
+ Check(tracker.Begin(16,2,99,100)&&tracker.Begin(16,2,100,200)&&tracker.Take(16,2,100,300)==200,"new generation replaces pending identity");
+ Check(tracker.Begin(16,2,99,100)&&tracker.Take(16,2,99,30000101)==0,"stale identity expires");
+ Check(tracker.Begin(16,2,99,100)&&tracker.Take(16,2,99,99)==0,"clock regression rejected");
+ for(unsigned i=0;i<8;++i)Check(tracker.Begin(16+65536ull*i,2,99,100),"bounded collision slot");
+ Check(!tracker.Begin(16+65536ull*8,2,99,100),"full probe range drops observation");
+ unsigned char texture[256]{},levels[3*0x28]{},record[16]{};
+ Put(texture,0xe8,reinterpret_cast<std::uint64_t>(levels));Put(texture,0xf0,3);Put(levels,2*0x28+0x10,99);
+ Put(record,0,reinterpret_cast<std::uint64_t>(texture));unsigned level=2;memcpy(record+8,&level,4);record[12]=1;
+ n::consume=[](void* r){Check(GetLastError()==123,"publication observer preserves incoming LastError");Check(static_cast<unsigned char*>(r)[12]==1,"native completion forwarded unchanged");SetLastError(456);};
+ n::publicationInstalled=true;n::Job job;job.texture=texture;job.level=2;job.container=99;
+ const auto before=n::publicationDelay.count.load();n::PublicationBegin(job,n::ClockUs());
+ SetLastError(123);n::PublicationHook(record);Check(GetLastError()==456&&n::publicationDelay.count==before+1,"matched publication measured and native LastError preserved");
+ SetLastError(123);n::PublicationHook(record);Check(GetLastError()==456&&n::publicationDelay.count==before+1,"unmatched native completion still forwarded without sample");
+ n::publicationInstalled=false;n::consume=nullptr;
+ puts("PASS R250 publication: mip/container matching, replacement, expiry, collisions, one-shot consumption, native forwarding and LastError");
+}
 int main(){
+ PublicationObservation();
  ComPtr<IDXGIFactory4> dxgi;ComPtr<IDXGIAdapter> adapter;ComPtr<ID3D12Device> device;
  Hr(CreateDXGIFactory1(IID_PPV_ARGS(&dxgi)),"DXGI");Hr(dxgi->EnumWarpAdapter(IID_PPV_ARGS(&adapter)),"WARP");Hr(D3D12CreateDevice(adapter.Get(),D3D_FEATURE_LEVEL_12_0,IID_PPV_ARGS(&device)),"device");
  ComPtr<ID3D12CommandQueue> queue;D3D12_COMMAND_QUEUE_DESC q{};q.Type=D3D12_COMMAND_LIST_TYPE_DIRECT;Hr(device->CreateCommandQueue(&q,IID_PPV_ARGS(&queue)),"queue");
