@@ -9,6 +9,7 @@
 #include <cstdio>
 #include <cstring>
 #include <string>
+#include <thread>
 static void Log(const char*,...){}
 static bool HashMatches(HMODULE,const char*){return false;}
 static void* AllocateExecutableRelayNear(const void*){return nullptr;}
@@ -116,6 +117,21 @@ int main(){
  ComPtr<IDXGIFactory4> dxgi;ComPtr<IDXGIAdapter> adapter;ComPtr<ID3D12Device> device;
  Hr(CreateDXGIFactory1(IID_PPV_ARGS(&dxgi)),"DXGI");Hr(dxgi->EnumWarpAdapter(IID_PPV_ARGS(&adapter)),"WARP");Hr(D3D12CreateDevice(adapter.Get(),D3D_FEATURE_LEVEL_12_0,IID_PPV_ARGS(&device)),"device");
  ComPtr<ID3D12CommandQueue> queue;D3D12_COMMAND_QUEUE_DESC q{};q.Type=D3D12_COMMAND_LIST_TYPE_DIRECT;Hr(device->CreateCommandQueue(&q,IID_PPV_ARGS(&queue)),"queue");
+ // Prewarm mailbox: invalid queue rejection, concurrent single admission,
+ // retained ownership and one-shot consumption without issuing GPU work.
+ namespace n=native_gpu_storage;
+ Check(!n::PostWarmQueue(nullptr),"null warm queue rejects");
+ ComPtr<ID3D12CommandQueue> copyQueue;auto copyDesc=q;copyDesc.Type=D3D12_COMMAND_LIST_TYPE_COPY;
+ Hr(device->CreateCommandQueue(&copyDesc,IID_PPV_ARGS(&copyQueue)),"copy queue");
+ Check(!n::PostWarmQueue(copyQueue.Get())&&!n::warmPosted,"copy warm queue rejects without consuming slot");
+ n::wake=CreateEventW(nullptr,FALSE,FALSE,nullptr);Check(n::wake!=nullptr,"warm wake event");
+ std::atomic<unsigned> posted{0};std::thread posters[8];
+ for(auto& thread:posters)thread=std::thread([&](){if(n::PostWarmQueue(queue.Get()))++posted;});
+ for(auto& thread:posters)thread.join();
+ Check(posted==1&&n::warmPosted&&WaitForSingleObject(n::wake,0)==WAIT_OBJECT_0,"one warm post wakes worker");
+ auto warm=n::TakeWarmQueue();Check(warm.Get()==queue.Get()&&!n::TakeWarmQueue(),"warm queue retained and consumed once");
+ Check(!n::PostWarmQueue(queue.Get()),"no repeated initialization after consume");
+ warm.Reset();CloseHandle(n::wake);n::wake=nullptr;n::warmPosted=false;
  ComPtr<IDStorageFactory> factory;Hr(DStorageGetFactory(IID_PPV_ARGS(&factory)),"factory");Batch transfer;Hr(transfer.Initialize(factory.Get(),queue.Get()),"packed backend");transfer.SetLatencyTracking(true);
  struct Fixture {ComPtr<ID3D12Resource> texture;D3D12_RESOURCE_DESC desc{};native_texture_layout::Layout layout{};std::vector<unsigned char> compact;};
  Fixture fixtures[9];const DXGI_FORMAT formats[]={DXGI_FORMAT_R8G8B8A8_UNORM,DXGI_FORMAT_BC1_TYPELESS,DXGI_FORMAT_BC3_TYPELESS,DXGI_FORMAT_BC4_UNORM,DXGI_FORMAT_BC5_UNORM,DXGI_FORMAT_B8G8R8A8_UNORM,DXGI_FORMAT_B8G8R8A8_TYPELESS,DXGI_FORMAT_BC7_UNORM,DXGI_FORMAT_R8G8B8A8_UNORM};
@@ -173,5 +189,5 @@ int main(){
  }
  storage_latency::Timing metric;metric.Record(100);metric.Record(16000);metric.Record(100000);Check(metric.count==3&&metric.total==116100&&metric.maximum==100000&&metric.over16ms==2&&metric.over100ms==1,"latency totals and threshold boundaries");
  Scheduling();AllocationGate();ResolveRange(factory.Get(),path);testResource=fixtures[0].texture;Admission();testResource.Reset();Check(transfer.Close(),"drained close");source.Reset();CloseHandle(event);Check(DeleteFileW(path)!=FALSE,"file ownership released");
- puts("PASS R245: file-to-GPU packed rows, eight formats / 72 mips, repeated and growing arena reuse, bounded staging, native state restoration, blocked consumer queue independence, bounds, native archive bias resolution, overlap rejection, optional stage timings, threshold accounting, embedded shader, shared pipeline, priority/FIFO burst scheduling, bounded queue admission, capacity/duplicate separation, slot reuse, ownership and deferred publication; runtime CPU payload bytes=0");
+ puts("PASS R247: prewarm single-admission race, queue-type guard, retained handoff, wake and one-shot consumption; file-to-GPU packed rows, eight formats / 72 mips, repeated and growing arena reuse, bounded staging, native state restoration, blocked consumer queue independence, bounds, native archive bias resolution, overlap rejection, optional stage timings, threshold accounting, embedded shader, shared pipeline, priority/FIFO burst scheduling, bounded queue admission, capacity/duplicate separation, slot reuse, ownership and deferred publication; runtime CPU payload bytes=0");
 }
