@@ -1477,10 +1477,10 @@ static BOOL CALLBACK Configure(PINIT_ONCE, PVOID, PVOID*) noexcept {
         storage_startup_policy::supported=steamTarget&&HashMatches(GetModuleHandleW(L"rl_rmdwin10_f.dll"),"A79234E4B34C2488DEAAC3459E8054BE206B5AF78A37723D834C1CBD826CE484");
         FGSettingsLoadStoragePreference();
         storage_startup_policy::active=storage_startup_policy::supported&&native_gpu_storage::Install();
-        if(!steamTarget)Log("DIRECTSTORAGE_R256 disabled=unvalidated_storefront");
-        Log("DIRECTSTORAGE_R256_INSTALL ready=%u",unsigned(storage_startup_policy::active));
+        if(!steamTarget)Log("DIRECTSTORAGE_R257 disabled=unvalidated_storefront");
+        Log("DIRECTSTORAGE_R257_INSTALL ready=%u",unsigned(storage_startup_policy::active));
         Log("STREAMING_R229_INSTALL ready=%u",unsigned(steamTarget&&native_streaming_policy::Install(renderer,storage_startup_policy::active)));
-        Log("STORAGE_DEFAULTS_R256 active=%u automatic_budget_ms=%u pinned_slices=%d latency=%u publication=%u asset_trace=%u cpu_timing=%u",
+        Log("STORAGE_DEFAULTS_R257 active=%u automatic_budget_ms=%u pinned_slices=%d latency=%u publication=%u asset_trace=%u cpu_timing=%u",
             unsigned(storage_startup_policy::active),storage_startup_policy::active?4u:1u,storage_startup_policy::pinnedSlices,
             unsigned(native_gpu_storage::traceLatency),unsigned(native_gpu_storage::publicationInstalled),unsigned(native_gpu_storage::assetTraceEnabled),unsigned(native_cpu::installed));
         const bool guideInputsReady = RRGuideInitializeInputs(d3d);

@@ -10,7 +10,7 @@ inline const char* stopReason="cancelled";
 inline void Package() noexcept {
  wchar_t path[MAX_PATH]{};if(!GetModuleFileNameW(selfModule,path,MAX_PATH))return;
  auto* slash=wcsrchr(path,L'\\');if(!slash)return;*slash=0;
- wchar_t command[2048]{};swprintf_s(command,L"powershell.exe -NoExit -NoProfile -ExecutionPolicy Bypass -File \"%s\\Capture-RR-Suite.ps1\" -GameProcessId %lu -Session %u",path,GetCurrentProcessId(),rr_suite::session.load());
+ wchar_t command[2048]{};swprintf_s(command,L"powershell.exe -NoExit -NoProfile -ExecutionPolicy Bypass -File \"%s\\ControlTOH\\Diagnostics\\Capture-RR-Suite.ps1\" -GameProcessId %lu -Session %u",path,GetCurrentProcessId(),rr_suite::session.load());
  STARTUPINFOW startup{};startup.cb=sizeof(startup);PROCESS_INFORMATION process{};
  if(CreateProcessW(nullptr,command,nullptr,nullptr,FALSE,CREATE_NEW_CONSOLE,nullptr,path,&startup,&process)){CloseHandle(process.hThread);CloseHandle(process.hProcess);}
  else Trace("rr_suite_package_failed error=%lu",GetLastError());

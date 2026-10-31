@@ -89,7 +89,7 @@ inline void Save(HWND game,const char* reason) noexcept {
     }
     wchar_t module[MAX_PATH]{};GetModuleFileNameW(selfModule,module,MAX_PATH);auto* slash=wcsrchr(module,L'\\');if(!slash){Complete(game,false);return;}*slash=0;
     wchar_t command[2048]{};
-    swprintf_s(command,L"powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"%s\\Package-Lighting-Performance.ps1\" -Folder \"%s\" -ModuleFolder \"%s\"",module,folder,module);
+    swprintf_s(command,L"powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"%s\\ControlTOH\\Diagnostics\\Package-Lighting-Performance.ps1\" -Folder \"%s\" -ModuleFolder \"%s\"",module,folder,module);
     STARTUPINFOW startup{};startup.cb=sizeof(startup);PROCESS_INFORMATION process{};
     if(!CreateProcessW(nullptr,command,nullptr,nullptr,FALSE,CREATE_NO_WINDOW,nullptr,module,&startup,&process)){++errors;Complete(game,false);return;}
     CloseHandle(process.hThread);packager=process.hProcess;phase=Phase::Package;phaseTime=GetTickCount64();

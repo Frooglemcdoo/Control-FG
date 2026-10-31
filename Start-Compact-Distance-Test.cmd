@@ -1,8 +1,9 @@
 @echo off
 setlocal
 cd /d "%~dp0"
+if exist "%~dp0..\..\Control_DX12.exe" cd /d "%~dp0..\.."
 if not exist "Control_DX12.exe" (
-  echo Copy this package beside Control_DX12.exe before running it.
+  echo Install the complete package beside Control_DX12.exe before running it.
   pause
   exit /b 1
 )
@@ -31,5 +32,5 @@ echo Starting Control. Select NATIVE BLEND, RR on, FG off, SPEC 4.
 echo Option 1 F10: HIT DIST: REQUESTED. Option 2: HIT DIST: BASELINE.
 echo Check stationary painting/elevator splatter, lighting detail and FPS.
 echo SPEC resets on restart: select SPEC 4 each time. SAVE LOG after inspection.
-start "" /wait "%~dp0Control_DX12.exe"
+start "" /wait "%CD%\Control_DX12.exe"
 endlocal

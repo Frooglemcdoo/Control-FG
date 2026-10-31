@@ -84,7 +84,7 @@
             });
             engine.on("CFG_STORAGE_RESTART_FAILED", function () {
                 storageBusy = false;
-                label("CFG_STORAGE_INFO", "Could not save the setting or prepare the restart. DirectStorage remains unchanged. Check that the complete mod package, including ControlFG-Restart.exe, is installed.");
+                label("CFG_STORAGE_INFO", "Could not save the setting or prepare the restart. DirectStorage remains unchanged. Check that the complete mod package, including ControlTOH/Tools/ControlFG-Restart.exe, is installed.");
                 mobx.runInAction(refresh);
             });
             var pending = Object.create(null), confirmed = Object.create(null);

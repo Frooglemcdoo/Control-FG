@@ -194,14 +194,14 @@ inline void PackageRR(HWND window) noexcept {
     if(!GetModuleFileNameW(selfModule,module,MAX_PATH)){MessageBoxW(window,L"Could not locate the capture helper.",L"RR material packaging",MB_OK|MB_ICONERROR);return;}
     auto* slash=wcsrchr(module,L'\\');if(!slash)return;*slash=0;
     wchar_t command[2048]{};
-    swprintf_s(command,L"powershell.exe -NoExit -NoProfile -ExecutionPolicy Bypass -File \"%s\\Capture-RR-Boundary.ps1\" -CollectExisting -RequireRR -GameProcessId %lu",module,GetCurrentProcessId());
+    swprintf_s(command,L"powershell.exe -NoExit -NoProfile -ExecutionPolicy Bypass -File \"%s\\ControlTOH\\Diagnostics\\Capture-RR-Boundary.ps1\" -CollectExisting -RequireRR -GameProcessId %lu",module,GetCurrentProcessId());
 #ifdef CONTROL_GI_BOUNDARY_CAPTURE
     wcscat_s(command,L" -GiBoundary");
 #endif
     STARTUPINFOW startup{};startup.cb=sizeof(startup);PROCESS_INFORMATION process{};
     if(CreateProcessW(nullptr,command,nullptr,nullptr,FALSE,CREATE_NEW_CONSOLE,nullptr,module,&startup,&process)){
         CloseHandle(process.hThread);CloseHandle(process.hProcess);
-    } else MessageBoxW(window,L"Could not start packaging. Check Capture-RR-Boundary.ps1 is installed beside dxgi.dll.",L"RR material packaging",MB_OK|MB_ICONERROR);
+    } else MessageBoxW(window,L"Could not start packaging. Check Capture-RR-Boundary.ps1 is installed in ControlTOH/Diagnostics.",L"RR material packaging",MB_OK|MB_ICONERROR);
 }
 inline void RequestLightCapture(HWND panel) noexcept {
     if(free_camera::commands.Pending())return;

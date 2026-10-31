@@ -231,16 +231,16 @@ static bool FGSettingsRestartStorage(unsigned requested) noexcept {
         fgDirectStorageEnabled=previous;FGSettingsSaveSettingsNow();return false;
     }
     bool prepared=false;
-    try {prepared=storage_restart::Prepare(path.substr(0,slash+1)+L"ControlFG-Restart.exe",path,directory,GetCommandLineW(),fgStorageRestart);}
+    try {prepared=storage_restart::Prepare(path.substr(0,slash+1)+L"ControlTOH\\Tools\\ControlFG-Restart.exe",path,directory,GetCommandLineW(),fgStorageRestart);}
     catch(...){prepared=false;}
     if(!prepared){
         fgDirectStorageEnabled=previous;
         const bool rolledBack=FGSettingsSaveSettingsNow();
-        Log("STORAGE_RESTART_R256 prepared=0 rollback_saved=%u",unsigned(rolledBack));return false;
+        Log("STORAGE_RESTART_R257 prepared=0 rollback_saved=%u",unsigned(rolledBack));return false;
     }
     fgStorageRestartPending=true;
     fgSettingsDirty=false;
-    Log("STORAGE_RESTART_R256 prepared=1 enabled=%u wait_for_normal_exit=1",requested);
+    Log("STORAGE_RESTART_R257 prepared=1 enabled=%u wait_for_normal_exit=1",requested);
     return true;
 }
 

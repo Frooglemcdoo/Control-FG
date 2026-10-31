@@ -79,7 +79,10 @@ try {
         $collectorDirectory=Split-Path -Parent $MyInvocation.MyCommand.Path
     }
     $OutputDirectory=Resolve-CollectorDirectory $OutputDirectory $collectorDirectory 'Output'
-    $ProjectDirectory=Resolve-CollectorDirectory $ProjectDirectory $collectorDirectory 'Project'
+    $projectDefault=$collectorDirectory
+    $installedRoot=[IO.Path]::GetFullPath((Join-Path $collectorDirectory '..\..'))
+    if (Test-Path -LiteralPath (Join-Path $installedRoot 'Control_DX12.exe') -PathType Leaf) { $projectDefault=$installedRoot }
+    $ProjectDirectory=Resolve-CollectorDirectory $ProjectDirectory $projectDefault 'Project'
     if ([string]::IsNullOrWhiteSpace($LogDirectory)) {
         if ([string]::IsNullOrWhiteSpace($env:LOCALAPPDATA)) { throw 'LOCALAPPDATA is unavailable; specify -LogDirectory.' }
         $LogDirectory=Join-Path $env:LOCALAPPDATA 'ControlFGProbe'

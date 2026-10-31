@@ -150,7 +150,7 @@ static bool PTReflectionLoadSidecar(const wchar_t* fileName,const char* label,
     if(self.empty())return false;
     const auto slash=self.find_last_of(L"\\/");
     if(slash==std::wstring::npos)return false;
-    const std::wstring path=self.substr(0,slash+1)+fileName;
+    const std::wstring path=self.substr(0,slash+1)+L"ControlTOH\\Shaders\\"+fileName;
     HANDLE file=CreateFileW(path.c_str(),GENERIC_READ,FILE_SHARE_READ|FILE_SHARE_DELETE,
         nullptr,OPEN_EXISTING,FILE_ATTRIBUTE_NORMAL,nullptr);
     if(file==INVALID_HANDLE_VALUE){

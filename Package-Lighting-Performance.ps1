@@ -3,9 +3,14 @@ $ErrorActionPreference='Stop'
 try {
     $source=(Resolve-Path -LiteralPath $Folder).Path
     $module=(Resolve-Path -LiteralPath $ModuleFolder).Path
-    $hashes=@(Get-ChildItem -LiteralPath $module -File | Where-Object { $_.Name -eq 'dxgi.dll' -or $_.Extension -in '.dxil','.dxbc' } | ForEach-Object {
+    $installed=@(Get-Item -LiteralPath (Join-Path $module 'dxgi.dll'))
+    $shaders=Join-Path $module 'ControlTOH\Shaders'
+    if (Test-Path -LiteralPath $shaders -PathType Container) {
+        $installed+=@(Get-ChildItem -LiteralPath $shaders -File | Where-Object { $_.Extension -in '.dxil','.dxbc' })
+    }
+    $hashes=@($installed | ForEach-Object {
         $h=Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256
-        [pscustomobject]@{name=$_.Name;bytes=$_.Length;sha256=$h.Hash}
+        [pscustomobject]@{name=$_.FullName.Substring($module.Length+1);bytes=$_.Length;sha256=$h.Hash}
     })
     $hashes | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $source 'installed-files.json') -Encoding UTF8
     Get-CimInstance Win32_VideoController | Select-Object Name,DriverVersion,PNPDeviceID | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $source 'gpu-driver.json') -Encoding UTF8

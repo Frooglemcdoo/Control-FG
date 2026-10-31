@@ -3,7 +3,7 @@ name: Build native reflection enhancements and RR
 on:
   push:
     branches:
-      - work/r256-storage-checkbox
+      - work/r257-organized-package
       - work/r250-texture-publication-timing
       - work/r247-storage-prewarm
       - work/r245-native-gpu-storage
@@ -1012,64 +1012,80 @@ jobs:
           build\suite-controller.exe
           if errorlevel 1 exit /b 1
 
-      - name: Package native GPU storage R256
+      - name: Package native GPU storage R257
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-NativeGPUStorage-R256'
-          New-Item -ItemType Directory -Force -Path $out | Out-Null
+          $out='ControlTOH-R257'
+          $shader="$out/ControlTOH/Shaders"
+          $tools="$out/ControlTOH/Tools"
+          $diagnostics="$out/ControlTOH/Diagnostics"
+          New-Item -ItemType Directory -Force -Path $out,$shader,$tools,$diagnostics | Out-Null
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
-          Copy-Item build/ControlFG-Restart.exe $out
-          Copy-Item build/rt_spot_selected_off.dxbc,build/rt_spot_selection.dxbc,build/rt_spot_visibility.dxbc,build/rt_spot_light_ids.dxbc,build/rt_spot_raw_history.dxbc,build/rt_spot_raw_spatial0.dxbc,build/rt_spot_raw_spatial1.dxbc,build/rt_spot_full.dxil,build/rt_spot_r94.dxil,build/rt_spot_light.dxbc,build/rt_spot_reset.dxbc,build/rt_spot_history.dxbc,build/rt_spot_spatial0.dxbc,build/rt_spot_spatial1.dxbc $out
+          Copy-Item build/ControlFG-Restart.exe $tools
+          Copy-Item build/rt_spot_selected_off.dxbc,build/rt_spot_selection.dxbc,build/rt_spot_visibility.dxbc,build/rt_spot_light_ids.dxbc,build/rt_spot_raw_history.dxbc,build/rt_spot_raw_spatial0.dxbc,build/rt_spot_raw_spatial1.dxbc,build/rt_spot_full.dxil,build/rt_spot_r94.dxil,build/rt_spot_light.dxbc,build/rt_spot_reset.dxbc,build/rt_spot_history.dxbc,build/rt_spot_spatial0.dxbc,build/rt_spot_spatial1.dxbc $shader
           New-Item -ItemType Directory -Force -Path "$out/ControlFGStreamline" | Out-Null
           Copy-Item build/ControlFG.RTX40MFG.dll "$out/ControlFGStreamline/ControlFG.RTX40MFG.dll"
-          Copy-Item build/pt_glass_raygen.dxil "$out/pt_glass_raygen.dxil"
-          Copy-Item build/pt_glass_secondary.dxbc "$out/pt_glass_secondary.dxbc"
-          Copy-Item build/pt_glass_composite.dxbc "$out/pt_glass_composite.dxbc"
-          Copy-Item Collect-Character-R39.cmd "$out/Collect-Character-R39.cmd"
-          Copy-Item Collect-Character-R39.ps1 "$out/Collect-Character-R39.ps1"
-          Copy-Item Collect-RR-Skin-Capture.cmd "$out/Collect-RR-Skin-Capture.cmd"
-          Copy-Item Collect-RR-Skin-Capture.ps1 "$out/Collect-RR-Skin-Capture.ps1"
-          Copy-Item Collect-RR-Material-Capture.cmd,Collect-RR-Material-Capture.ps1 $out
-          Copy-Item Collect-RR-Blinds-Capture.cmd "$out/Collect-RR-Blinds-Capture.cmd"
-          Copy-Item Collect-RR-Blinds-Capture.ps1 "$out/Collect-RR-Blinds-Capture.ps1"
-          Copy-Item Collect-ControlFG-Compact-Logs.cmd "$out/Collect-ControlFG-Compact-Logs.cmd"
-          Copy-Item Collect-ControlFG-Compact-Logs.ps1 "$out/Collect-ControlFG-Compact-Logs.ps1"
-          Copy-Item Package-Lighting-Capture.cmd,tools/package-lighting-capture.py,Package-Lighting-Performance.ps1 $out
-          Copy-Item Capture-RR-Boundary.cmd,Capture-RR-Boundary.ps1,Collect-RR-Boundary-Status.cmd,tools/collect-rr-boundary.py $out
-          Copy-Item Start-Compact-Distance-Test.cmd,Capture-RR-Suite.ps1,tools/collect-rr-suite.py $out
-          Copy-Item tools/diagnostics/Start-R256-Storage-Diagnostics.cmd $out
-          Copy-Item tools/diagnostics/Collect-Texture-Trace.cmd,tools/diagnostics/Collect-Texture-Trace.ps1 $out
-          Copy-Item build/DirectStorage "$out/DirectStorage" -Recurse
+          Copy-Item build/pt_glass_raygen.dxil "$shader/pt_glass_raygen.dxil"
+          Copy-Item build/pt_glass_secondary.dxbc "$shader/pt_glass_secondary.dxbc"
+          Copy-Item build/pt_glass_composite.dxbc "$shader/pt_glass_composite.dxbc"
+          Copy-Item Collect-Character-R39.cmd "$tools/Collect-Character-R39.cmd"
+          Copy-Item Collect-Character-R39.ps1 "$tools/Collect-Character-R39.ps1"
+          Copy-Item Collect-RR-Skin-Capture.cmd "$tools/Collect-RR-Skin-Capture.cmd"
+          Copy-Item Collect-RR-Skin-Capture.ps1 "$tools/Collect-RR-Skin-Capture.ps1"
+          Copy-Item Collect-RR-Material-Capture.cmd,Collect-RR-Material-Capture.ps1 $tools
+          Copy-Item Collect-RR-Blinds-Capture.cmd "$tools/Collect-RR-Blinds-Capture.cmd"
+          Copy-Item Collect-RR-Blinds-Capture.ps1 "$tools/Collect-RR-Blinds-Capture.ps1"
+          Copy-Item Collect-ControlFG-Compact-Logs.cmd "$tools/Collect-ControlFG-Compact-Logs.cmd"
+          Copy-Item Collect-ControlFG-Compact-Logs.ps1 "$tools/Collect-ControlFG-Compact-Logs.ps1"
+          Copy-Item Package-Lighting-Capture.cmd,tools/package-lighting-capture.py,Package-Lighting-Performance.ps1 $diagnostics
+          Copy-Item Capture-RR-Boundary.cmd,Capture-RR-Boundary.ps1,Collect-RR-Boundary-Status.cmd,tools/collect-rr-boundary.py $diagnostics
+          Copy-Item Start-Compact-Distance-Test.cmd,Capture-RR-Suite.ps1,tools/collect-rr-suite.py $diagnostics
+          Copy-Item tools/diagnostics/Start-R257-Storage-Diagnostics.cmd $diagnostics
+          Copy-Item tools/diagnostics/Collect-Texture-Trace.cmd,tools/diagnostics/Collect-Texture-Trace.ps1 $tools
+          Copy-Item build/DirectStorage "$diagnostics/DirectStorage" -Recurse
           Copy-Item build/DirectStorage/dstorage.dll,build/DirectStorage/dstoragecore.dll $out
-          Copy-Item tools/directstorage/Validate-DirectStorage.cmd "$out/DirectStorage"
-          Copy-Item docs/native-gpu-storage-r256.md "$out/DIAGNOSTIC-NOTES.md"
+          Copy-Item tools/directstorage/Validate-DirectStorage.cmd "$diagnostics/DirectStorage"
+          Copy-Item docs/native-gpu-storage-r257.md "$out/ControlTOH/DIAGNOSTIC-NOTES.md"
+          Copy-Item tools/Organize-Existing-Install.cmd,tools/Organize-Existing-Install.ps1 $tools
           @'
-          CONTROL-FG R256 - Integrated native GPU storage
-          Copy package contents beside Control_DX12.exe, replacing previous mod files.
-          Launch Control normally through Steam or Control_DX12.exe. No test launcher or F6 needed.
-          Texture streaming uses 4 ms and 16 pinned partitions on the verified Steam build.
-          Texture streaming budget is internal: 4 ms with DirectStorage, native 1 ms otherwise.
-          R254 GPU transport, worker prewarm and all-texture upgrade eligibility are retained.
-          Graphics > Quality > DirectStorage is a native checkbox with confirmation to save and restart.
-          Cancel leaves the setting unchanged. Confirm exits normally and relaunches after exit.
-          Optional CPU timing, per-asset capture and publication observers are off by default.
-          Expect DIRECTSTORAGE_R256 installed=1, TEXTURE_UPGRADE_R256 installed=1,
-          and STORAGE_DEFAULTS_R256 active=1 automatic_budget_ms=4 pinned_slices=16.
-          Unsupported requests remain native. Unvalidated storefronts retain native storage.
-          If diagnostics are requested, use Start-R256-Storage-Diagnostics.cmd and Collect-Texture-Trace.cmd.
-          See DIAGNOSTIC-NOTES.md for overrides and validation scope.
-          '@ | Set-Content "$out/README.txt" -Encoding ASCII
+          Control The Oldest House: Visual and Performance Overhaul
+          R257 - Organized installation
+
+          Copy all package contents beside Control_DX12.exe. Preserve the folder structure.
+          Launch normally through Steam. No F6 or test launcher is needed.
+          Root files: dxgi.dll, dstorage.dll, dstoragecore.dll.
+          ControlTOH/Shaders: runtime shaders. ControlTOH/Tools: restart helper and collectors.
+          ControlTOH/Diagnostics: optional launchers and DirectStorage validation tools.
+          ControlFGStreamline retains its existing runtime location.
+          Existing settings and log locations are preserved.
+
+          Upgrading: close the game, copy the complete package, then run
+          ControlTOH/Tools/Organize-Existing-Install.cmd once to archive recognized old root files.
+          This helper keeps a timestamped backup under ControlTOH/LegacyBackup.
+          It does not delete game files or touch other mods.
+
+          Graphics > Quality > DirectStorage uses the native checkbox and restart confirmation.
+          Texture streaming remains automatic (4 ms / 16 pinned partitions with DirectStorage).
+          Optional diagnostics: ControlTOH/Diagnostics/Start-R257-Storage-Diagnostics.cmd.
+          Collect logs using ControlTOH/Tools/Collect-ControlFG-Compact-Logs.cmd.
+          See ControlTOH/DIAGNOSTIC-NOTES.md for scope and validation.
+          '@ | Set-Content "$out/ControlTOH/README.txt" -Encoding ASCII
+          python tools/test-organized-package.py "$out"
+          if ($LASTEXITCODE -ne 0) { throw 'Package layout validation failed' }
+          & build/TestStorageRestart.exe "$((Resolve-Path $tools).Path)/ControlFG-Restart.exe"
+          if ($LASTEXITCODE -ne 0) { throw 'Relocated restart helper failed' }
           Compress-Archive -Path "$out/*" -DestinationPath "$out.zip" -Force
           (Get-FileHash "$out.zip" -Algorithm SHA256).Hash | Set-Content "$out.sha256" -Encoding ASCII
+
 
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-NativeGPUStorage-R256
+          name: ControlTOH-R257
           path: |
-            Control-FG-NativeGPUStorage-R256.zip
-            Control-FG-NativeGPUStorage-R256.sha256
+            ControlTOH-R257.zip
+            ControlTOH-R257.sha256
             build/spec-volume-roughness-validation.json
             build/spec-volume-roughness.dxbc
             build/spec-environment-validation.json
