@@ -7,7 +7,7 @@
 #include "../build/gi_spatial_history.generated.h"
 // Immutable GPU objects, never copies of the engine's shader/lock/cache records.
 namespace control_rr_gi {
-struct Bundle {bool spatial=false;ID3D12PipelineState* native=nullptr;ID3D12PipelineState* adaptive=nullptr;ID3D12PipelineState* noHistory=nullptr;ID3D12PipelineState* outlier=nullptr;ID3D12PipelineState* mask=nullptr;ID3D12PipelineState* zero=nullptr;ID3D12PipelineState* smooth=nullptr;};
+struct Bundle {bool spatial=false;ID3D12PipelineState* bounded=nullptr;ID3D12PipelineState* native=nullptr;ID3D12PipelineState* adaptive=nullptr;ID3D12PipelineState* noHistory=nullptr;ID3D12PipelineState* outlier=nullptr;ID3D12PipelineState* mask=nullptr;ID3D12PipelineState* zero=nullptr;ID3D12PipelineState* smooth=nullptr;};
 inline std::atomic<Bundle*> bundles[8]{};
 inline std::atomic<unsigned> reserved{0},ready{0},failed{0};
 inline Bundle* Find(ID3D12PipelineState* native) noexcept {
@@ -45,6 +45,10 @@ template<class Create> void Capture(ID3D12Device* device,const D3D12_COMPUTE_PIP
   replacement.CS=spatial==0?D3D12_SHADER_BYTECODE{kGISingleHistorySpatial0,sizeof(kGISingleHistorySpatial0)}:D3D12_SHADER_BYTECODE{kGISingleHistorySpatial1,sizeof(kGISingleHistorySpatial1)};
   const HRESULT hr=create(device,&replacement,IID_PPV_ARGS(&b->adaptive));
   if(FAILED(hr)||!b->adaptive){if(b->adaptive)b->adaptive->Release();native->Release();delete b;++failed;return;}
+  replacement.CS=spatial==0?D3D12_SHADER_BYTECODE{kGIBoundedHistorySpatial0,sizeof(kGIBoundedHistorySpatial0)}:D3D12_SHADER_BYTECODE{kGIBoundedHistorySpatial1,sizeof(kGIBoundedHistorySpatial1)};
+  const HRESULT boundedResult=create(device,&replacement,IID_PPV_ARGS(&b->bounded));
+  if(FAILED(boundedResult)){if(b->bounded)b->bounded->Release();b->bounded=nullptr;++failed;}
+  Log("GI_SPATIAL_R260 bounded_ready=%u variant=%d",unsigned(b->bounded!=nullptr),spatial);
   bundles[index].store(b,std::memory_order_release);++ready;
   Log("GI_SPATIAL_R259 ready=1 variant=%d second_history_weight=0 spatial_math_unchanged=1",spatial);return;
  }
@@ -85,7 +89,7 @@ template<class Set,class DispatchFn> void Dispatch(ID3D12PipelineState* observed
  if(b&&!b->spatial&&!spatialDispatch&&historyDisabled&&outlierEnabled&&!replacement)replacement=b->noHistory;
  if(b&&!b->spatial&&!spatialDispatch&&historyDisabled&&activeView==DiagnosticView::Mask)replacement=b->mask;
  if(b&&!b->spatial&&!spatialDispatch&&historyDisabled&&activeView==DiagnosticView::Zero)replacement=b->zero;
- if(b&&b->spatial&&spatialDispatch)replacement=b->adaptive;
+ if(b&&b->spatial&&spatialDispatch)replacement=spatialHistoryBounded?b->bounded:b->adaptive;
  if(!replacement||count!=1){dispatch(list,x,y,z);return;}
  // Called only after DeviceUtil commits its native PSO and bindings.
  __try {set(list,replacement);dispatch(list,x,y,z);used=true;}

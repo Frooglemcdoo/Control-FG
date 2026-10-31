@@ -33,6 +33,29 @@ for variant in range(2):
     assert by_offset[1914]['name'] == 'if'
     assert by_offset[2108]['operands'][2] == 't[6][6].xyzw'
     assert by_offset[2174]['name'] == 'store_uav_typed'
+    bounded = generate(source, bounded=True)
+    assert bounded[4:20] == checksum(bounded)
+    bc = chunks(bounded)
+    assert all(bc[tag] == a[tag] for tag in a if tag != b'SHEX')
+    with tempfile.TemporaryDirectory() as directory:
+        p = Path(directory) / 'bounded.dxbc'; p.write_bytes(bounded); bj = decode(p)
+    actual = bj['instructions']; pos = 0
+    for instruction in audit['instructions']:
+        if instruction['dword'] == 2121:
+            inserted = actual[pos:pos+5]
+            assert [i['name'] for i in inserted] == ['mad','max','mad','max','min']
+            assert inserted[0]['operands'][:3] == ['r[13].xyz','r[1].xyzw','l(0.75)']
+            assert inserted[2]['operands'][:3] == ['r[14].xyz','r[1].xyzw','l(1.25)']
+            assert inserted[3]['operands'] == ['r[3].xyz','r[3].xyzw','r[13].xyzw']
+            assert inserted[4]['operands'] == ['r[3].xyz','r[3].xyzw','r[14].xyzw']
+            pos += 5
+        expected = {k:v for k,v in instruction.items() if k != 'dword'}
+        if instruction['dword'] == 90:
+            expected['operands'] = ['raw:0xf']
+        assert {k:v for k,v in actual[pos].items() if k != 'dword'} == expected
+        pos += 1
+    assert pos == len(actual)
+    assert bj['bindings'] == audit['bindings']
     try:
         generate(source[:-1])
     except ValueError:
@@ -40,3 +63,4 @@ for variant in range(2):
     else:
         raise AssertionError('unknown bytecode accepted')
 print('PASS R259 both spatial variants: only final history coefficient changes; spatial math, descriptors, control flow and output ABI unchanged')
+print('PASS R260 both bounded variants: five RGB-bound instructions; all original instructions preserved except scratch register count; no new samples or bindings')

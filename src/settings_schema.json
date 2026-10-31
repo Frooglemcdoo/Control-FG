@@ -1,6 +1,6 @@
 {
   "protocol": {
-    "version": 259,
+    "version": 260,
     "firstId": 10000,
     "endId": 11000,
     "handshakeId": 10999,

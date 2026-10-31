@@ -65,7 +65,9 @@ static void RRNativeRunGIFilter(void* color,void* history,unsigned passes){
  control_rr_gi::outlierEnabled=outlier;
  const bool previousHistoryDisabled=control_rr_gi::historyDisabled;
  control_rr_gi::historyDisabled=!control_rr_gi::Temporal(mode);
- rrNativeGISingleHistory=mode==control_rr_gi::StageMode::BothSingleHistory;rrNativeGISpatialApplied=0;
+ const bool previousBounded=control_rr_gi::spatialHistoryBounded;
+ control_rr_gi::spatialHistoryBounded=mode==control_rr_gi::StageMode::BothBoundedHistory;
+ rrNativeGISingleHistory=mode==control_rr_gi::StageMode::BothSingleHistory||control_rr_gi::spatialHistoryBounded;rrNativeGISpatialApplied=0;
  rrNativeGIHistoryScope=true;rrNativeGIMotionBound=false;rrNativeGIHistoryDispatches=0;rrNativeGIHistoryReason="no_temporal_bind";
  __try {
   rrNativeDiffuseFilterOriginal(color,history,effectivePasses);
@@ -90,8 +92,9 @@ static void RRNativeRunGIFilter(void* color,void* history,unsigned passes){
   if(rrNativeGISingleHistory){
    static unsigned long long samples=0;++samples;
    if(samples<=4||samples%240==0||rrNativeGISpatialApplied!=effectivePasses)
-    native_lighting::Trace("gi_single_history build=R259 frame=%llu temporal_applied=%u spatial_expected=%u spatial_applied=%u complete=%u",rrNativeFrame.Key().frame,rrNativeGIHistoryDispatches,effectivePasses,rrNativeGISpatialApplied,unsigned(okay&&rrNativeGISpatialApplied==effectivePasses));
+    native_lighting::Trace("gi_spatial_history build=R260 bounded=%u frame=%llu temporal_applied=%u spatial_expected=%u spatial_applied=%u complete=%u",unsigned(control_rr_gi::spatialHistoryBounded),rrNativeFrame.Key().frame,rrNativeGIHistoryDispatches,effectivePasses,rrNativeGISpatialApplied,unsigned(okay&&rrNativeGISpatialApplied==effectivePasses));
   }
+  control_rr_gi::spatialHistoryBounded=previousBounded;
   rrNativeGISingleHistory=false;
   rrNativeGIHistoryScope=false;rrNativeGIMotionBound=false;
   static unsigned long long calls=0; ++calls;
