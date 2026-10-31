@@ -147,7 +147,30 @@ static void PublicationObservation(){
  n::publicationInstalled=false;n::consume=nullptr;
  puts("PASS R250 publication: mip/container matching, replacement, expiry, collisions, one-shot consumption, native forwarding and LastError");
 }
+static void AssetTraceObservation(){
+ static storage_asset_trace::Capture c;
+ Check(c.Begin(100)&&!c.Begin(200),"capture cannot restart while active");
+ Check(!c.Add("early",99,100,0,0,1),"pre-window request excluded");
+ const auto token=c.Add("sign\nname",100,110,2,7,4096);
+ Check(token&&c.count==1&&strcmp(c.rows[0].name,"sign_name")==0,"metadata captured and control characters sanitized");
+ c.Submit(token,120);c.Retire(token,130,1);c.Publish(token,140);
+ Check(c.rows[0].submitted==120&&c.rows[0].retired==130&&c.rows[0].published==140&&c.rows[0].result==1,"events correlated");
+ Check(!c.Add("late",15000100,15000101,0,0,1),"window end excluded");
+ char longName[600];memset(longName,'x',sizeof(longName));longName[599]=0;
+ c.Add(longName,101,102,0,0,1);Check(c.rows[1].truncated&&strlen(c.rows[1].name)==511,"bounded name copy");
+ for(unsigned i=c.count;i<c.Capacity;++i)Check(c.Add("fill",102,103,0,0,1)!=0,"capture slot");
+ Check(!c.Add("overflow",102,103,0,0,1)&&c.overflow==1,"capture capacity bounded");
+ Check(!c.Finish(20000099)&&c.Finish(20000100),"completion grace enforced");
+ Check(!c.Find(token)&&c.Begin(30000000),"completed capture can rearm");
+ const auto next=c.Add("new",30000000,30000001,0,0,1);c.Publish(token,30000002);
+ Check(next!=token&&!c.rows[0].published,"old generation cannot mutate new capture");
+ storage_publication::Tracker tracker;std::uint64_t out=999;
+ Check(tracker.Begin(16,2,99,100,next)&&tracker.Take(16,2,99,200,&out)==100&&out==next,"publication carries asset token");
+ Check(!tracker.Take(16,2,99,201,&out)&&out==0,"unmatched publication clears token");
+ puts("PASS R251 asset trace: bounded capture, time window, grace, sanitization, event correlation and stale-token rejection");
+}
 int main(){
+ AssetTraceObservation();
  PublicationObservation();
  ComPtr<IDXGIFactory4> dxgi;ComPtr<IDXGIAdapter> adapter;ComPtr<ID3D12Device> device;
  Hr(CreateDXGIFactory1(IID_PPV_ARGS(&dxgi)),"DXGI");Hr(dxgi->EnumWarpAdapter(IID_PPV_ARGS(&adapter)),"WARP");Hr(D3D12CreateDevice(adapter.Get(),D3D_FEATURE_LEVEL_12_0,IID_PPV_ARGS(&device)),"device");
