@@ -25,7 +25,7 @@ struct Option {
     const wchar_t* storageKey;
     std::initializer_list<Dependency> dependencies;
 };
-inline constexpr int kVersion = 260;
+inline constexpr int kVersion = 261;
 inline constexpr int kFirstId = 10000;
 inline constexpr int kEndId = 11000;
 inline constexpr int kHandshakeId = 10999;

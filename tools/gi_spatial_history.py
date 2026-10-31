@@ -10,7 +10,9 @@ HASHES = (
     '80af0f6bec196ab7d0816589246b19ffbaf92b07cb10aecdfa9da4acb0c66cb3',
 )
 
-def generate(data, bounded=False):
+def generate(data, bounded=False, steady=False):
+    if bounded and steady:
+        raise ValueError('Steady spatial test requires the R259 zero final-history path')
     if hashlib.sha256(data).hexdigest() not in HASHES:
         raise ValueError('Unknown native GI spatial shader')
     def patch(w):
@@ -20,6 +22,12 @@ def generate(data, bounded=False):
                                0x0010003a, 0, 0x00004001, 0x3f333333]
         if not bounded:
             w[1962] = 0
+            if steady:
+                assert w[1807:1814] == [0x07000033, 0x00100042, 0,
+                                       0x0010002a, 0, 0x4001, 0x3f800000]
+                # Replace only the radiance-variance multiplier. Existing
+                # geometry/material/hit weights and stencil remain intact.
+                w[1807:1814] = [0x05000036, 0x00100042, 0, 0x4001, 0x3f800000]
             return
         # Bound the history sample against the final current spatial result,
         # not an earlier noisy input. Preserve native depth/motion confidence.
@@ -45,7 +53,7 @@ def write_header(root):
     text = '#pragma once\n'
     for i in range(2):
         source = base64.b64decode((root / f'research/gi-temporal-r208/diffuse-spatial-{i}.dxbc.b64').read_bytes())
-        for name, data in [(f'kGINativeSpatial{i}', source), (f'kGISingleHistorySpatial{i}', generate(source)), (f'kGIBoundedHistorySpatial{i}', generate(source, bounded=True))]:
+        for name, data in [(f'kGINativeSpatial{i}', source), (f'kGISingleHistorySpatial{i}', generate(source)), (f'kGIBoundedHistorySpatial{i}', generate(source, bounded=True)), (f'kGISteadySpatial{i}', generate(source, steady=True))]:
             text += 'inline constexpr unsigned char '+name+'[]={\n'+','.join(map(str,data))+'\n};\n'
     out.write_text(text)
 

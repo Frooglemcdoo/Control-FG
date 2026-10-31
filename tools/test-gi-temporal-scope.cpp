@@ -29,7 +29,7 @@ static void Bind(void* p){++binds;bound=p;assert(p==record);if(fault==1)RaiseExc
 static void Dispatch(void*,const void*){++dispatches;if(fault==2||(fault==11&&dispatches==2))RaiseException(0xE0420002,0,0,nullptr);SetLastError(19);}
 static void Filter(void*,void*,unsigned passes){++filters;assert(passes==expectedPasses);assert(control_rr_gi::historyDisabled==expectedHistoryDisabled);assert(unsigned(control_rr_gi::activeView)==expectedView);assert(control_rr_gi::outlierEnabled==((expectedHistoryDisabled&&expectedPasses==0&&control_rr_gi::outlierRequested.load())||expectedView==1));RRNativeHookGITemporalBind(record);RRNativeHookGITemporalDispatch(nullptr,nullptr);for(unsigned i=0;i<passes;++i)RRNativeHookGISpatialDispatch(nullptr,nullptr);++spatials;SetLastError(20);}
 int main(){auto* history=reinterpret_cast<void*>(std::uintptr_t(verifiedRenderer)+0x90eac8);
- for(unsigned view=0;view<3;++view)for(unsigned cleanup=0;cleanup<2;++cleanup)for(unsigned mode=0;mode<6;++mode)for(fault=0;fault<12;++fault){
+ for(unsigned view=0;view<3;++view)for(unsigned cleanup=0;cleanup<2;++cleanup)for(unsigned mode=0;mode<7;++mode)for(fault=0;fault<12;++fault){
   control_rr_gi::viewRequested.store(static_cast<control_rr_gi::DiagnosticView>(view));
   control_rr_gi::outlierRequested.store(cleanup!=0);
   auto stage=static_cast<control_rr_gi::StageMode>(mode);control_rr_gi::stageMode.store(stage);
@@ -49,7 +49,7 @@ int main(){auto* history=reinterpret_cast<void*>(std::uintptr_t(verifiedRenderer
   assert(!rrNativeFrame.failed&&rrNativeFrame.selected==(fault!=5));assert(bound==record);
   if(fault==0)assert(rrNativeGIHistoryDispatches==1&&invokes==(mode>=4?7u:1u));
   if(fault==0)assert(rrNativeGISpatialApplied==(mode>=4?6u:0u));
-  assert(!control_rr_gi::spatialHistoryBounded&&!control_rr_gi::spatialDispatch&&!rrNativeGISingleHistory);
+  assert(!control_rr_gi::spatialSteady&&!control_rr_gi::spatialHistoryBounded&&!control_rr_gi::spatialDispatch&&!rrNativeGISingleHistory);
   if(fault==3)assert(rrNativeGIHistoryDispatches==0&&invokes==1);
   if(fault>=4&&fault<=10)assert(invokes==0);
   if(!caught)assert(spatials==1&&GetLastError()==20);

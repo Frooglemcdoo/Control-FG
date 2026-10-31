@@ -3,7 +3,7 @@ name: Build native reflection enhancements and RR
 on:
   push:
     branches:
-      - work/r260-gi-bounded-history
+      - work/r261-gi-steady-spatial
       - work/r250-texture-publication-timing
       - work/r247-storage-prewarm
       - work/r245-native-gpu-storage
@@ -1018,11 +1018,11 @@ jobs:
           build\suite-controller.exe
           if errorlevel 1 exit /b 1
 
-      - name: Package bounded GI history test R260
+      - name: Package steady GI spatial test R261
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='ControlTOH-R260'
+          $out='ControlTOH-R261'
           $shader="$out/ControlTOH/Shaders"
           $tools="$out/ControlTOH/Tools"
           $diagnostics="$out/ControlTOH/Diagnostics"
@@ -1052,14 +1052,14 @@ jobs:
           Copy-Item build/DirectStorage "$diagnostics/DirectStorage" -Recurse
           Copy-Item build/DirectStorage/dstorage.dll,build/DirectStorage/dstoragecore.dll $out
           Copy-Item tools/directstorage/Validate-DirectStorage.cmd "$diagnostics/DirectStorage"
-          Copy-Item docs/native-lighting-r260.md "$out/ControlTOH/DIAGNOSTIC-NOTES.md"
+          Copy-Item docs/native-lighting-r261.md "$out/ControlTOH/DIAGNOSTIC-NOTES.md"
           Copy-Item tools/Organize-Existing-Install.cmd,tools/Organize-Existing-Install.ps1 $tools
           Copy-Item tools/diagnostics/Collect-ControlTOH-Materials.cmd,tools/diagnostics/Collect-ControlTOH-Materials.ps1 $tools
           & powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/diagnostics/test-material-collector.ps1
           if ($LASTEXITCODE -ne 0) { throw 'Material collector integration test failed' }
           @'
           Control The Oldest House: Visual and Performance Overhaul
-          R260 - Bounded final-pass GI history
+          R261 - Steady spatial weighting with final history disabled
 
           Copy all package contents beside Control_DX12.exe. Preserve the folder structure.
           Launch normally through Steam. No F6 or test launcher is needed.
@@ -1078,7 +1078,7 @@ jobs:
           Texture streaming remains automatic (4 ms / 16 pinned partitions with DirectStorage).
           Optional diagnostics: ControlTOH/Diagnostics/Start-R258-Storage-Diagnostics.cmd.
           Collect logs using ControlTOH/Tools/Collect-ControlFG-Compact-Logs.cmd.
-          F10: select GI: BOTH BOUNDED. Close F10 and wait 10 seconds, then walk and pan.
+          F10: select GI: BOTH STEADY. Close F10 and wait 10 seconds, then walk and pan.
           Compare GI: BOTH TEST at the same location. Keep RR ON, Native Blend, FG OFF.
           Report ghosting, speckles and boiling; send compact logs.
           Clamp Only and the original Both mode remain available. No material capture needed.
@@ -1095,10 +1095,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: ControlTOH-R260
+          name: ControlTOH-R261
           path: |
-            ControlTOH-R260.zip
-            ControlTOH-R260.sha256
+            ControlTOH-R261.zip
+            ControlTOH-R261.sha256
             build/spec-volume-roughness-validation.json
             build/spec-volume-roughness.dxbc
             build/spec-environment-validation.json

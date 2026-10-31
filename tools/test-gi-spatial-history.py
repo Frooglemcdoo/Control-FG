@@ -56,6 +56,27 @@ for variant in range(2):
         pos += 1
     assert pos == len(actual)
     assert bj['bindings'] == audit['bindings']
+    steady = generate(source, steady=True)
+    assert steady[4:20] == checksum(steady)
+    sc = chunks(steady)
+    assert all(sc[tag] == a[tag] for tag in a if tag != b'SHEX')
+    with tempfile.TemporaryDirectory() as directory:
+        p = Path(directory) / 'steady.dxbc'; p.write_bytes(steady); sj = decode(p)
+    assert len(sj['instructions']) == len(audit['instructions'])
+    for old_instruction, new_instruction in zip(audit['instructions'], sj['instructions']):
+        expected = {k:v for k,v in old_instruction.items() if k != 'dword'}
+        if old_instruction['dword'] == 1807:
+            expected = {'name':'mov', 'operands':['r[0].z','l(1)']}
+        if old_instruction['dword'] == 1956:
+            expected['operands'] = ['r[0].w','r[0].w','l(0)']
+        assert {k:v for k,v in new_instruction.items() if k != 'dword'} == expected
+    assert sj['bindings'] == audit['bindings']
+    try:
+        generate(source, bounded=True, steady=True)
+    except ValueError:
+        pass
+    else:
+        raise AssertionError('steady test accidentally permits final history')
     try:
         generate(source[:-1])
     except ValueError:
@@ -64,3 +85,4 @@ for variant in range(2):
         raise AssertionError('unknown bytecode accepted')
 print('PASS R259 both spatial variants: only final history coefficient changes; spatial math, descriptors, control flow and output ABI unchanged')
 print('PASS R260 both bounded variants: five RGB-bound instructions; all original instructions preserved except scratch register count; no new samples or bindings')
+print('PASS R261 both steady variants: fixed variance multiplier and zero final history only; geometry/material/hit weights, stencil, bindings and ABI preserved')
