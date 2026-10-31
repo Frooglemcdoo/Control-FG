@@ -1472,7 +1472,7 @@ static BOOL CALLBACK Configure(PINIT_ONCE, PVOID, PVOID*) noexcept {
             if(raw)static_cast<IUnknown*>(raw)->Release();
             return SUCCEEDED(hr)?hr:queue->QueryInterface(__uuidof(ID3D12CommandQueue),reinterpret_cast<void**>(out));
         };
-        Log("DIRECTSTORAGE_R242_INSTALL ready=%u",unsigned(native_gpu_storage::Install()));
+        Log("DIRECTSTORAGE_R243_INSTALL ready=%u",unsigned(native_gpu_storage::Install()));
         const bool guideInputsReady = RRGuideInitializeInputs(d3d);
         const unsigned int rrObserverHooks = InstallRRObservationHooks(renderer,d3d);
         Log("PT_REFLECTION_P0_OBSERVER ready=%u expected=5 scope=reflection_dispatch_identification gpu_work=unchanged allocations=0",rrObserverHooks);

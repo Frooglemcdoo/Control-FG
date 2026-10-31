@@ -2,7 +2,7 @@
 #include "native_texture_layout.h"
 #include <windows.h>
 #include <dstorage.h>
-#include <d3dcompiler.h>
+#include "../build/native_texture_repack_bytecode.h"
 #include <dxgi.h>
 #include <wrl/client.h>
 namespace control_storage {
@@ -15,6 +15,7 @@ class PackedTextureBatch {
 public:
     static constexpr unsigned Capacity=16;
     static constexpr UINT64 StagingBudget=128ull*1024*1024;
+    struct InitTiming {UINT64 queuesUs=0,pipelineUs=0,commandsUs=0;bool sharedPipeline=false;};
     struct Input {IDStorageFile* file=nullptr;ID3D12Resource* texture=nullptr;UINT64 offset=0;UINT bytes=0;D3D12_RESOURCE_STATES state=D3D12_RESOURCE_STATE_COMMON;};
     enum class Phase {Idle,Storage,Gpu,FailedSubmission};
 private:
@@ -27,7 +28,8 @@ private:
     Ptr<IDStorageStatusArray> status;Ptr<ID3D12RootSignature> root;Ptr<ID3D12PipelineState> pipeline;
     Ptr<ID3D12CommandAllocator> allocator;Ptr<ID3D12GraphicsCommandList> list;Ptr<ID3D12Fence> fence;
     HANDLE storageEvent=nullptr,gpuEvent=nullptr;UINT64 fenceValue=0;unsigned count=0;Phase phase=Phase::Idle;
-    HRESULT failure=S_OK;
+    HRESULT failure=S_OK;InitTiming initTiming{};
+    static UINT64 NowUs(){static const UINT64 f=[](){LARGE_INTEGER n;QueryPerformanceFrequency(&n);return UINT64(n.QuadPart);}();LARGE_INTEGER t;QueryPerformanceCounter(&t);return UINT64(t.QuadPart)/f*1000000+(UINT64(t.QuadPart)%f)*1000000/f;}
     Ptr<ID3D12Resource> packedArena,paddedArena;
     UINT64 packedCapacity=0,paddedCapacity=0,bufferAllocations=0,reusedBatches=0;
     static UINT64 Aligned(UINT64 n,UINT64 alignment){return (n+alignment-1)&~(alignment-1);}
@@ -93,13 +95,14 @@ private:
 public:
     PackedTextureBatch()=default;PackedTextureBatch(const PackedTextureBatch&)=delete;PackedTextureBatch& operator=(const PackedTextureBatch&)=delete;
     Phase CurrentPhase()const{return phase;}
+    const InitTiming& InitializationTiming()const{return initTiming;}
     UINT64 BufferAllocations()const{return bufferAllocations;}
     UINT64 ReusedBatches()const{return reusedBatches;}
     UINT64 RetainedBytes()const{return packedCapacity+paddedCapacity;}
     HANDLE Event()const{return phase==Phase::Storage?storageEvent:gpuEvent;}
-    HRESULT Initialize(IDStorageFactory* factory,ID3D12CommandQueue* queue){
+    HRESULT Initialize(IDStorageFactory* factory,ID3D12CommandQueue* queue,const PackedTextureBatch* shared=nullptr){
         if(!factory||!queue||device||queue->GetDesc().Type!=D3D12_COMMAND_LIST_TYPE_DIRECT)return E_INVALIDARG;
-        graphics=queue;HRESULT hr=queue->GetDevice(IID_PPV_ARGS(&device));if(FAILED(hr))return hr;
+        initTiming={};UINT64 start=NowUs();graphics=queue;HRESULT hr=queue->GetDevice(IID_PPV_ARGS(&device));if(FAILED(hr))return hr;
         // Loading can wait for GPU jobs while the renderer has unsubmitted lists.
         // An owned queue avoids making those jobs depend on future frame submits.
         D3D12_COMMAND_QUEUE_DESC uploadQueue{};uploadQueue.Type=D3D12_COMMAND_LIST_TYPE_DIRECT;
@@ -107,24 +110,21 @@ public:
         DSTORAGE_QUEUE_DESC d{};d.SourceType=DSTORAGE_REQUEST_SOURCE_FILE;d.Device=device.Get();d.Capacity=128;d.Priority=DSTORAGE_PRIORITY_NORMAL;d.Name="ControlFG native packed textures";
         hr=factory->CreateQueue(&d,IID_PPV_ARGS(&storage));if(FAILED(hr))return hr;
         hr=factory->CreateStatusArray(1,"ControlFG packed batch",IID_PPV_ARGS(&status));if(FAILED(hr))return hr;
-        D3D12_ROOT_PARAMETER params[3]{};params[0].ParameterType=D3D12_ROOT_PARAMETER_TYPE_SRV;params[1].ParameterType=D3D12_ROOT_PARAMETER_TYPE_UAV;
-        params[2].ParameterType=D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;params[2].Constants.Num32BitValues=5;
-        D3D12_ROOT_SIGNATURE_DESC rd{};rd.NumParameters=3;rd.pParameters=params;Ptr<ID3DBlob> signature,error,shader;
-        hr=D3D12SerializeRootSignature(&rd,D3D_ROOT_SIGNATURE_VERSION_1,&signature,&error);if(FAILED(hr))return hr;
-        hr=device->CreateRootSignature(0,signature->GetBufferPointer(),signature->GetBufferSize(),IID_PPV_ARGS(&root));if(FAILED(hr))return hr;
-        const char source[]=R"(ByteAddressBuffer inputBytes : register(t0); RWByteAddressBuffer outputBytes : register(u0);
-cbuffer Layout : register(b0) { uint srcOffset; uint dstOffset; uint rowWords; uint rows; uint pitchWords; };
-[numthreads(64,1,1)] void main(uint3 id:SV_DispatchThreadID) {
- if(id.x<rowWords && id.y<rows) outputBytes.Store(dstOffset+4*(id.y*pitchWords+id.x),inputBytes.Load(srcOffset+4*(id.y*rowWords+id.x)));
-})";
-        hr=D3DCompile(source,sizeof(source)-1,nullptr,nullptr,nullptr,"main","cs_5_0",D3DCOMPILE_OPTIMIZATION_LEVEL3,0,&shader,&error);if(FAILED(hr))return hr;
-        D3D12_COMPUTE_PIPELINE_STATE_DESC pd{};pd.pRootSignature=root.Get();pd.CS={shader->GetBufferPointer(),shader->GetBufferSize()};
-        hr=device->CreateComputePipelineState(&pd,IID_PPV_ARGS(&pipeline));if(FAILED(hr))return hr;
+        initTiming.queuesUs=NowUs()-start;start=NowUs();
+        if(shared){
+            if(!shared->root||!shared->pipeline||!Same(device.Get(),shared->device.Get()))return E_INVALIDARG;
+            root=shared->root;pipeline=shared->pipeline;initTiming.sharedPipeline=true;
+        }else{
+            hr=device->CreateRootSignature(0,ControlFGPackedRoot,sizeof(ControlFGPackedRoot),IID_PPV_ARGS(&root));if(FAILED(hr))return hr;
+            D3D12_COMPUTE_PIPELINE_STATE_DESC pd{};pd.pRootSignature=root.Get();pd.CS={ControlFGPackedShader,sizeof(ControlFGPackedShader)};
+            hr=device->CreateComputePipelineState(&pd,IID_PPV_ARGS(&pipeline));if(FAILED(hr))return hr;
+        }
+        initTiming.pipelineUs=NowUs()-start;start=NowUs();
         hr=device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT,IID_PPV_ARGS(&allocator));if(FAILED(hr))return hr;
         hr=device->CreateCommandList(0,D3D12_COMMAND_LIST_TYPE_DIRECT,allocator.Get(),pipeline.Get(),IID_PPV_ARGS(&list));if(FAILED(hr))return hr;
         hr=list->Close();if(FAILED(hr))return hr;hr=device->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&fence));if(FAILED(hr))return hr;
         storageEvent=CreateEventW(nullptr,TRUE,FALSE,nullptr);gpuEvent=CreateEventW(nullptr,TRUE,FALSE,nullptr);
-        return storageEvent&&gpuEvent?S_OK:HRESULT_FROM_WIN32(GetLastError());
+        initTiming.commandsUs=NowUs()-start;return storageEvent&&gpuEvent?S_OK:HRESULT_FROM_WIN32(GetLastError());
     }
     HRESULT Submit(const Input* inputs,unsigned n){
         if(!storage||phase!=Phase::Idle||!inputs||!n||n>Capacity)return E_INVALIDARG;

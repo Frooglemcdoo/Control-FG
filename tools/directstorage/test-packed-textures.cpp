@@ -62,6 +62,19 @@ static void AllocationGate(){
  SetLastError(77);Check(n::AllocateHook(allocationTexture,2)&&!n::allocation.texture&&GetLastError()==78,"existing allocation excluded");
  allocationSuccess=false;SetLastError(77);Check(!n::AllocateHook(allocationTexture,2)&&!n::allocation.texture&&GetLastError()==78,"failed allocation excluded");
 }
+static void Scheduling(){
+ namespace n=native_gpu_storage;
+ for(unsigned i=0;i<n::QueueCapacity;++i){auto& j=n::jobs[i];j.used=true;j.priority=int(i%4);j.serial=i+1;j.gpuBytes=64;}
+ n::Job out[16];Check(n::Dequeue(out,16)==16,"full burst selects batch");
+ for(unsigned i=0;i<16;++i)Check(out[i].priority==3&&out[i].serial==4+4*i,"priority then FIFO ordering");
+ unsigned remaining=0;for(const auto& j:n::jobs)remaining+=j.used;Check(remaining==n::QueueCapacity-16,"unselected jobs retained");
+ for(auto& j:n::jobs)j={};for(auto& j:out)j={};
+ n::jobs[0].used=true;n::jobs[0].gpuBytes=70ull*1024*1024;n::jobs[0].serial=1;
+ n::jobs[1].used=true;n::jobs[1].gpuBytes=70ull*1024*1024;n::jobs[1].serial=2;
+ Check(n::Dequeue(out,16)==1&&n::jobs[1].used,"batch respects staging budget");
+ for(auto& j:n::jobs)j={};
+ Check(n::Dequeue(out,16)==0,"empty queue");
+}
 static void Admission(){
  namespace n=native_gpu_storage;n::adjustPending=&Adjust;n::describe=&Describe;n::resolve=&Resolve;n::addRef=&Add;n::removeRef=&Remove;n::finish=&Finish;n::original=&Native;
  n::wake=CreateEventW(nullptr,FALSE,FALSE,nullptr);n::available=true;n::cursor=0;
@@ -76,7 +89,7 @@ static void Admission(){
  // Fill the bounded descriptor queue to its final slot. Synthetic
  // reservations avoid allocating thousands
  // of GPU resources: this fixture tests admission, not the GPU memory budget.
- static_assert(n::QueueCapacity==2048,"bounded descriptor capacity");
+ static_assert(n::QueueCapacity==4096,"bounded descriptor capacity");
  const auto oldCapacity=n::capacityRejected.load(),oldDuplicate=n::duplicateRejected.load();
  for(unsigned i=0;i<n::QueueCapacity-1;++i)n::active[i]=reinterpret_cast<ID3D12Resource*>(1);
  n::pending=n::QueueCapacity-1;n::cursor=n::QueueCapacity-1;
@@ -126,7 +139,8 @@ int main(){
   const auto deadline=GetTickCount64()+30000;while(!transfer.Poll(result)){Check(GetTickCount64()<deadline,"GPU completion deadline");WaitForSingleObject(transfer.Event(),100);}
   Hr(result,"packed completion");if(pass==0)Hr(frameGate->Signal(1),"release native frame after GPU transfer");Check(transfer.CurrentPhase()==Batch::Phase::Idle,"batch reuse");}
  // Independent lanes overlap storage/GPU work while retaining disjoint targets.
- Batch parallel;Hr(parallel.Initialize(factory.Get(),queue.Get()),"parallel lane");
+ Batch parallel;Hr(parallel.Initialize(factory.Get(),queue.Get(),&transfer),"parallel lane");
+ Check(parallel.InitializationTiming().sharedPipeline&&!transfer.InitializationTiming().sharedPipeline,"second lane shares same-device compiled pipeline");
  Hr(transfer.Submit(inputs,4),"lane zero");Hr(parallel.Submit(inputs+4,4),"lane one");
  bool done[2]{};Batch* lanes[]={&transfer,&parallel};const auto deadline=GetTickCount64()+30000;
  while(!done[0]||!done[1]){for(unsigned i=0;i<2;++i)if(!done[i]){HRESULT result=E_PENDING;done[i]=lanes[i]->Poll(result);if(done[i])Hr(result,"overlapped completion");}
@@ -155,6 +169,6 @@ int main(){
   for(unsigned m=0;m<8;++m)for(unsigned r=0;r<rows[m];++r)Check(memcmp(static_cast<unsigned char*>(mapped)+fp[m].Offset+size_t(r)*fp[m].Footprint.RowPitch,f.compact.data()+f.layout.mips[m].compactOffset+r*rowBytes[m],static_cast<size_t>(rowBytes[m]))==0,"packed GPU mip byte equality");
   D3D12_RANGE empty{};readback->Unmap(0,&empty);
  }
- AllocationGate();ResolveRange(factory.Get(),path);testResource=fixtures[0].texture;Admission();testResource.Reset();Check(transfer.Close(),"drained close");source.Reset();CloseHandle(event);Check(DeleteFileW(path)!=FALSE,"file ownership released");
- puts("PASS R242: file-to-GPU packed rows, eight formats / 72 mips, repeated and growing arena reuse, bounded staging, native state restoration, blocked consumer queue independence, bounds, native archive bias resolution, overlap rejection, bounded queue admission, capacity/duplicate separation, slot reuse, ownership and deferred publication; runtime CPU payload bytes=0");
+ Scheduling();AllocationGate();ResolveRange(factory.Get(),path);testResource=fixtures[0].texture;Admission();testResource.Reset();Check(transfer.Close(),"drained close");source.Reset();CloseHandle(event);Check(DeleteFileW(path)!=FALSE,"file ownership released");
+ puts("PASS R243: file-to-GPU packed rows, eight formats / 72 mips, repeated and growing arena reuse, bounded staging, native state restoration, blocked consumer queue independence, bounds, native archive bias resolution, overlap rejection, embedded shader, shared pipeline, priority/FIFO burst scheduling, bounded queue admission, capacity/duplicate separation, slot reuse, ownership and deferred publication; runtime CPU payload bytes=0");
 }
