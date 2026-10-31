@@ -3,7 +3,7 @@ name: Build native reflection enhancements and RR
 on:
   push:
     branches:
-      - work/r255-storage-defaults
+      - work/r256-storage-checkbox
       - work/r250-texture-publication-timing
       - work/r247-storage-prewarm
       - work/r245-native-gpu-storage
@@ -1012,11 +1012,11 @@ jobs:
           build\suite-controller.exe
           if errorlevel 1 exit /b 1
 
-      - name: Package native GPU storage R255
+      - name: Package native GPU storage R256
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='Control-FG-NativeGPUStorage-R255'
+          $out='Control-FG-NativeGPUStorage-R256'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
           Copy-Item build/ControlFG-Restart.exe $out
@@ -1038,26 +1038,26 @@ jobs:
           Copy-Item Package-Lighting-Capture.cmd,tools/package-lighting-capture.py,Package-Lighting-Performance.ps1 $out
           Copy-Item Capture-RR-Boundary.cmd,Capture-RR-Boundary.ps1,Collect-RR-Boundary-Status.cmd,tools/collect-rr-boundary.py $out
           Copy-Item Start-Compact-Distance-Test.cmd,Capture-RR-Suite.ps1,tools/collect-rr-suite.py $out
-          Copy-Item tools/diagnostics/Start-R255-Storage-Diagnostics.cmd $out
+          Copy-Item tools/diagnostics/Start-R256-Storage-Diagnostics.cmd $out
           Copy-Item tools/diagnostics/Collect-Texture-Trace.cmd,tools/diagnostics/Collect-Texture-Trace.ps1 $out
           Copy-Item build/DirectStorage "$out/DirectStorage" -Recurse
           Copy-Item build/DirectStorage/dstorage.dll,build/DirectStorage/dstoragecore.dll $out
           Copy-Item tools/directstorage/Validate-DirectStorage.cmd "$out/DirectStorage"
-          Copy-Item docs/native-gpu-storage-r255.md "$out/DIAGNOSTIC-NOTES.md"
+          Copy-Item docs/native-gpu-storage-r256.md "$out/DIAGNOSTIC-NOTES.md"
           @'
-          CONTROL-FG R255 - Integrated native GPU storage
+          CONTROL-FG R256 - Integrated native GPU storage
           Copy package contents beside Control_DX12.exe, replacing previous mod files.
           Launch Control normally through Steam or Control_DX12.exe. No test launcher or F6 needed.
-          Automatic texture streaming uses 4 ms and 16 pinned partitions on the verified Steam build.
-          Existing explicit menu budgets remain selected; choose Automatic for the accepted baseline.
+          Texture streaming uses 4 ms and 16 pinned partitions on the verified Steam build.
+          Texture streaming budget is internal: 4 ms with DirectStorage, native 1 ms otherwise.
           R254 GPU transport, worker prewarm and all-texture upgrade eligibility are retained.
-          Graphics > Quality > DirectStorage uses the native confirmation dialog to save and restart.
+          Graphics > Quality > DirectStorage is a native checkbox with confirmation to save and restart.
           Cancel leaves the setting unchanged. Confirm exits normally and relaunches after exit.
           Optional CPU timing, per-asset capture and publication observers are off by default.
-          Expect DIRECTSTORAGE_R255 installed=1, TEXTURE_UPGRADE_R255 installed=1,
-          and STORAGE_DEFAULTS_R255 active=1 automatic_budget_ms=4 pinned_slices=16.
+          Expect DIRECTSTORAGE_R256 installed=1, TEXTURE_UPGRADE_R256 installed=1,
+          and STORAGE_DEFAULTS_R256 active=1 automatic_budget_ms=4 pinned_slices=16.
           Unsupported requests remain native. Unvalidated storefronts retain native storage.
-          If diagnostics are requested, use Start-R255-Storage-Diagnostics.cmd and Collect-Texture-Trace.cmd.
+          If diagnostics are requested, use Start-R256-Storage-Diagnostics.cmd and Collect-Texture-Trace.cmd.
           See DIAGNOSTIC-NOTES.md for overrides and validation scope.
           '@ | Set-Content "$out/README.txt" -Encoding ASCII
           Compress-Archive -Path "$out/*" -DestinationPath "$out.zip" -Force
@@ -1066,10 +1066,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Control-FG-NativeGPUStorage-R255
+          name: Control-FG-NativeGPUStorage-R256
           path: |
-            Control-FG-NativeGPUStorage-R255.zip
-            Control-FG-NativeGPUStorage-R255.sha256
+            Control-FG-NativeGPUStorage-R256.zip
+            Control-FG-NativeGPUStorage-R256.sha256
             build/spec-volume-roughness-validation.json
             build/spec-volume-roughness.dxbc
             build/spec-environment-validation.json

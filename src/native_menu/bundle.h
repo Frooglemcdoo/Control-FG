@@ -20,8 +20,12 @@ inline bool PatchCommons(const std::string& input, const std::string& config, st
     // Fail closed if another game build/mod changes the shared UI implementation.
     if (input.size() != 615195 || Hash(input) != 0xb5a45dfc86f79619ull) return false;
     std::string s(input);
-    if (!ReplaceOnce(s, "renderProperty(e,t){let n=null",
-        "renderProperty(e,t){if(e.cfgDefinition&&e.cfgDefinition.presentation===\"restartButton\")return window.__controlFG.restartButton(e);let n=null")) return false;
+    // Keep the game's Toggle component and its exact checkbox layout. Add only
+    // confirmation props to its existing EventButton for restart-only mod rows.
+    if (!ReplaceOnce(s, "o.createElement(r.default,{event:`On${t}${n}PropertySet`",
+        "o.createElement(r.default,Object.assign(window.__controlFG.confirmProps(e),{event:`On${t}${n}PropertySet`")) return false;
+    if (!ReplaceOnce(s, "isDisabled:e.m_bIsDisabled},o.createElement(l.default,{className:d",
+        "isDisabled:e.m_bIsDisabled}),o.createElement(l.default,{className:d")) return false;
     if (!ReplaceOnce(s, "renderOptions(){const e=[",
         "renderOptions(){const e=[...(this.props.sectionType===\"Graphics\"?window.__controlFG.rows(n,this.props.modelProperties):[]),")) return false;
     if (!ReplaceOnce(s,

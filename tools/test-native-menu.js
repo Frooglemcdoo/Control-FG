@@ -48,7 +48,7 @@ function exercise(rtx40) {
     ]};
     const menu=context.window.__controlFG, rows=menu.rows(requireModule,nativeModel);
     const byId=Object.fromEntries(rows.map(row=>[row.m_iPropertyID,row]));
-    assert.equal(rows.length,rtx40?10:9);
+    assert.equal(rows.length,rtx40?9:8);
     assert(!byId[10004] && !byId[10005]);
     [10003,10007,10009].concat(rtx40?[10010]:[]).forEach(id=>{
         assert.equal(byId[id].m_eDataType,0);
@@ -61,7 +61,7 @@ function exercise(rtx40) {
     const style=menu.sliderValueStyle(byId[10006]);
     assert.equal(style.alignItems,'center');assert.equal(style.justifyContent,'center');
     assert.strictEqual(style,menu.sliderValueStyle(byId[10002]));
-    assert.strictEqual(style,menu.sliderValueStyle(byId[10008]));
+    assert(!byId[10008]); // Streaming budget is internal, never rendered.
     assert.equal(menu.sliderValueStyle({}),undefined);
     events.splice(1); // Discard checkbox round-trip events; retain the initial handshake.
     assert.equal(byId[10000].m_vecPossibleValues.length,rtx40?2:7);
@@ -85,11 +85,9 @@ function exercise(rtx40) {
     assert.equal(byId[10003].m_value,1);
     engine.trigger('OnIntGraphicsPropertySet',10005,75);
     assert(!byId[10005]);
-    engine.reject=true;
+    const beforeHidden=events.length;
     engine.trigger('OnIntGraphicsPropertySet',10008,2);
-    assert.deepEqual(events.at(-1),['OnIntGraphicsPropertySet',10008,6]);
-    assert.equal(byId[10008].m_value,0); // Rejected native writes roll back the displayed value.
-    engine.reject=false;
+    assert.equal(events.length,beforeHidden);
     assert.equal(byId[10006].m_bIsDisabled,false); // Contact Shadows off does not disable GI.
     engine.trigger('OnIntGraphicsPropertySet',10006,3);
     assert.equal(byId[10006].m_value,6);
@@ -133,15 +131,17 @@ function exercise(rtx40) {
     const ordered=menu.order(native.concat(rows));
     const position=name=>ordered.findIndex(row=>row.m_strNameLocID===name);
     assert(position('CFG_FG')>position('VSYNC') && position('CFG_FG')<position('MENU_OPTIONS_HDR'));
-    assert(position('CFG_TEXTURE')>position('QUALITY_LAST') && position('CFG_TEXTURE')<position('MENU_OPTIONS_RT_QUALITY_PRESET'));
+    assert(position('CFG_STORAGE')>position('QUALITY_LAST') && position('CFG_STORAGE')<position('MENU_OPTIONS_RT_QUALITY_PRESET'));
     ['CFG_RR','CFG_GI','CFG_GLASS'].forEach(name=>assert(position(name)>position('RT_LAST')));
     assert.equal(new Set(ordered).size,ordered.length);
     assert.deepEqual(ordered.filter(row=>!row.cfgDefinition),native);
     const storage=byId[10011];
-    const button=menu.restartButton(storage);
-    assert.equal(button.type,'./northlight/LinkComponents/EventButton/EventButton.tsx');
+    assert.equal(storage.m_eDataType,0);
+    const button={props:menu.confirmProps(storage)};
+    button.props.event='OnBoolGraphicsPropertySet';button.props.eventArgs=[10011,false];
     assert.equal(button.props.needsConfirm,true);assert.equal(button.props.useHold,false);
     assert.equal(button.props.confirmLocId,'CFG_STORAGE_DISABLE');
+    assert.deepEqual(Object.keys(menu.confirmProps({})),[]); // Native checkboxes remain untouched.
     assert.equal(storage.m_value,1); // Creating/opening a native button cannot change the preference.
     const beforeRestart=events.length;
     handlers.CFG_STORAGE_RESTART_READY();assert.equal(events.length,beforeRestart); // Ignore unsolicited/duplicate ready.
@@ -155,7 +155,7 @@ function exercise(rtx40) {
     handlers.CFG_STORAGE_RESTART_READY();assert.equal(events.at(-1)[0],'OnExitClicked');
     const afterRestart=events.length;handlers.CFG_STORAGE_RESTART_READY();assert.equal(events.length,afterRestart);
     handlers.CFG_STORAGE_RESTART_FAILED(); // Simulate next view's non-busy state for rendering checks.
-    const enable=menu.restartButton(storage);assert.equal(enable.props.confirmLocId,'CFG_STORAGE_ENABLE');
+    const enable=menu.confirmProps(storage);assert.equal(enable.confirmLocId,'CFG_STORAGE_ENABLE');
     engine.trigger('OnGraphicsReset');assert.equal(storage.m_value,0); // Reset cannot silently change restart-only preference.
     config.storageSupported=false;menu.rows(requireModule,nativeModel);assert.equal(storage.m_bIsDisabled,true);
     config.storageSupported=true;menu.rows(requireModule,nativeModel);
@@ -178,6 +178,7 @@ if(process.argv[2] && process.argv[2] !== '--config') {
         if(name.includes('mobx/lib')||name.includes('OptionToDescriptionModeMap')||name==='northlight/vendor/coherent')return requireModule(name);
         if(name.includes('classnames'))return (...args)=>args.join(' ');
         if(name.endsWith('/types.ts'))return types;
+        if(name.endsWith('/constants.ts'))return {Symbols:{CHECK:'native-check'},IconSize:{LARGE:'large'}};
         if(name.includes('ControlsHacks'))return {BannedPauseMenuOptions:[],DropdownSelectOnHover:[],BannedBindings:[]};
         if(name.includes('/Description.ts'))return {DescriptionMode:{TITLE_ONLY:2,NONE:23}};
         return {default:name};
@@ -185,7 +186,7 @@ if(process.argv[2] && process.argv[2] !== '--config') {
     modules['./northlight/LinkComponents/OptionsTab/OptionsTab.tsx']({},exports,req);
     const model={};['Bool','DisplayMode','Enum','Float','Int','Str','KeyBind'].forEach(t=>model['m_vec'+t+'Properties']=[]);
     const graphics=new exports.default({sectionType:'Graphics',modelProperties:model});
-    assert.equal(graphics.renderOptions().length,9);
+    assert.equal(graphics.renderOptions().length,8);
     const audio=new exports.default({sectionType:'Audio',modelProperties:model});
     assert.equal(audio.renderOptions().length,0);
     const rendered=graphics.renderOptions();
@@ -194,11 +195,23 @@ if(process.argv[2] && process.argv[2] !== '--config') {
     const toggle=rendered.find(element=>element.props.eventType==='Bool');
     assert.equal(toggle.props.property.m_strNameLocID,'CFG_RR');
     assert.equal(rendered[4].props.max,6); // GI choice slider.
-    const storageButton=rendered.find(e=>e.props.eventArgs&&e.props.eventArgs[0]===10011);
-    assert.equal(storageButton.props.needsConfirm,true);
-    const textureSlider=rendered.find(e=>e.props.propertyId===10008);
-    assert.equal(textureSlider.props.max,5);
-    assert.deepEqual(Array.from(textureSlider.props.strValues),['Automatic','4 ms','6 ms','8 ms','10 ms','12 ms']);
+    const storageToggle=rendered.find(e=>e.props.property&&e.props.property.m_iPropertyID===10011);
+    assert.equal(storageToggle.type,'./northlight/LinkComponents/Toggle/Toggle.tsx');
+    assert(!rendered.some(e=>e.props.propertyId===10008));
+    // Execute the patched native Toggle itself: the actual layout/classes and
+    // native check symbol must be identical for SSAO and DirectStorage.
+    const toggleExports={};
+    modules['./northlight/LinkComponents/Toggle/Toggle.tsx']({},toggleExports,req);
+    const renderToggle=property=>new toggleExports.default({property,eventType:'Bool',sectionType:'Graphics'}).render();
+    const ds=renderToggle(storageToggle.props.property);
+    const ssao=renderToggle({m_iPropertyID:14,m_value:1,m_strNameLocID:'SSAO'});
+    const dsButton=ds.children[0],ssaoButton=ssao.children[0];
+    assert.equal(ds.props.className,ssao.props.className);
+    assert.equal(dsButton.props.className,ssaoButton.props.className);
+    assert.equal(dsButton.props.needsConfirm,true);assert.equal(ssaoButton.props.needsConfirm,undefined);
+    assert.equal(dsButton.children[1].props.className,'toggle');
+    assert.equal(dsButton.children[1].children[0].props.id,ssaoButton.children[1].children[0].props.id);
+
 
 }
 console.log('PASS native menu labels, choices, events, reset, capability filtering and native component rendering');

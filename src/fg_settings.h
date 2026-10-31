@@ -152,8 +152,8 @@ static void FGSettingsLoadSettings() noexcept {
     const unsigned int manualTarget = ClampFGDynamicManualTargetFps(rawTarget);
     control_rr::GISampleSelect(FGSettingsReadStored(control_settings::Key::GlobalIlluminationSamples));
     const bool rrEnabled = FGSettingsReadStored(control_settings::Key::RayReconstruction) != 0;
-    const unsigned int rawTextureStreamingMs = FGSettingsReadStored(control_settings::Key::TextureStreamingBudget);
-    const unsigned int textureStreamingMs = NormalizeFGTextureStreamingBudgetMs(rawTextureStreamingMs);
+    // Retired menu setting: old explicit budgets must not override the accepted baseline.
+    const unsigned int textureStreamingMs = 0;
     const bool vramMonitorEnabled = FGSettingsReadStored(control_settings::Key::VideoMemoryMonitor) != 0;
 
     slFgUserMultiplier.store(selection, std::memory_order_release);
@@ -236,11 +236,11 @@ static bool FGSettingsRestartStorage(unsigned requested) noexcept {
     if(!prepared){
         fgDirectStorageEnabled=previous;
         const bool rolledBack=FGSettingsSaveSettingsNow();
-        Log("STORAGE_RESTART_R255 prepared=0 rollback_saved=%u",unsigned(rolledBack));return false;
+        Log("STORAGE_RESTART_R256 prepared=0 rollback_saved=%u",unsigned(rolledBack));return false;
     }
     fgStorageRestartPending=true;
     fgSettingsDirty=false;
-    Log("STORAGE_RESTART_R255 prepared=1 enabled=%u wait_for_normal_exit=1",requested);
+    Log("STORAGE_RESTART_R256 prepared=1 enabled=%u wait_for_normal_exit=1",requested);
     return true;
 }
 

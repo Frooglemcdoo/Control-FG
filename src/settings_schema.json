@@ -1,6 +1,6 @@
 {
   "protocol": {
-    "version": 255,
+    "version": 256,
     "firstId": 10000,
     "endId": 11000,
     "handshakeId": 10999,
@@ -232,8 +232,9 @@
         "section": "DirectStorage",
         "key": "Enabled"
       },
-      "presentation": "restartButton",
-      "group": "quality"
+      "presentation": "checkbox",
+      "group": "quality",
+      "restartRequired": true
     },
     {
       "key": "TextureStreamingBudget",
@@ -274,7 +275,8 @@
         "key": "TextureStreamingBudgetMs"
       },
       "presentation": "slider",
-      "group": "quality"
+      "group": "quality",
+      "hidden": true
     },
     {
       "key": "VideoMemoryMonitor",
