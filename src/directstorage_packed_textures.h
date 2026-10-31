@@ -15,6 +15,7 @@ class PackedTextureBatch {
 public:
     static constexpr unsigned Capacity=16;
     static constexpr UINT64 StagingBudget=128ull*1024*1024;
+    struct BatchTiming {UINT64 storageObservedUs=0,gpuObservedUs=0,recordSubmitUs=0;bool storageDone=false,gpuDone=false;};
     struct InitTiming {UINT64 queuesUs=0,pipelineUs=0,commandsUs=0;bool sharedPipeline=false;};
     struct Input {IDStorageFile* file=nullptr;ID3D12Resource* texture=nullptr;UINT64 offset=0;UINT bytes=0;D3D12_RESOURCE_STATES state=D3D12_RESOURCE_STATE_COMMON;};
     enum class Phase {Idle,Storage,Gpu,FailedSubmission};
@@ -28,7 +29,7 @@ private:
     Ptr<IDStorageStatusArray> status;Ptr<ID3D12RootSignature> root;Ptr<ID3D12PipelineState> pipeline;
     Ptr<ID3D12CommandAllocator> allocator;Ptr<ID3D12GraphicsCommandList> list;Ptr<ID3D12Fence> fence;
     HANDLE storageEvent=nullptr,gpuEvent=nullptr;UINT64 fenceValue=0;unsigned count=0;Phase phase=Phase::Idle;
-    HRESULT failure=S_OK;InitTiming initTiming{};
+    HRESULT failure=S_OK;InitTiming initTiming{};BatchTiming batchTiming{};bool latencyTracking=false;UINT64 storageStarted=0,gpuStarted=0;
     static UINT64 NowUs(){static const UINT64 f=[](){LARGE_INTEGER n;QueryPerformanceFrequency(&n);return UINT64(n.QuadPart);}();LARGE_INTEGER t;QueryPerformanceCounter(&t);return UINT64(t.QuadPart)/f*1000000+(UINT64(t.QuadPart)%f)*1000000/f;}
     Ptr<ID3D12Resource> packedArena,paddedArena;
     UINT64 packedCapacity=0,paddedCapacity=0,bufferAllocations=0,reusedBatches=0;
@@ -61,6 +62,7 @@ private:
     }
     void Clear(){for(auto& i:items)i={};count=0;phase=Phase::Idle;}
     HRESULT Upload(){
+        const UINT64 recordStart=latencyTracking?NowUs():0;
         HRESULT hr=allocator->Reset();if(FAILED(hr))return hr;hr=list->Reset(allocator.Get(),pipeline.Get());if(FAILED(hr))return hr;
         list->SetComputeRootSignature(root.Get());
         Barrier(packedArena.Get(),D3D12_RESOURCE_STATE_COMMON,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
@@ -85,16 +87,18 @@ private:
         Barrier(packedArena.Get(),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,D3D12_RESOURCE_STATE_COMMON);
         Barrier(paddedArena.Get(),D3D12_RESOURCE_STATE_COPY_SOURCE,D3D12_RESOURCE_STATE_COMMON);
         hr=list->Close();if(FAILED(hr))return hr;
-        ID3D12CommandList* lists[]={list.Get()};transferQueue->ExecuteCommandLists(1,lists);
+        ID3D12CommandList* lists[]={list.Get()};if(latencyTracking)gpuStarted=NowUs();transferQueue->ExecuteCommandLists(1,lists);
         // Once submitted, no resource may retire without a fence or device loss.
         phase=Phase::FailedSubmission;hr=transferQueue->Signal(fence.Get(),++fenceValue);if(FAILED(hr))return hr;
         phase=Phase::Gpu;ResetEvent(gpuEvent);hr=fence->SetEventOnCompletion(fenceValue,gpuEvent);
         // A failed event registration is recoverable through fence polling.
-        if(FAILED(hr))failure=hr;return S_OK;
+        if(FAILED(hr))failure=hr;if(latencyTracking)batchTiming.recordSubmitUs=NowUs()-recordStart;return S_OK;
     }
 public:
     PackedTextureBatch()=default;PackedTextureBatch(const PackedTextureBatch&)=delete;PackedTextureBatch& operator=(const PackedTextureBatch&)=delete;
     Phase CurrentPhase()const{return phase;}
+    void SetLatencyTracking(bool enabled){if(phase==Phase::Idle)latencyTracking=enabled;}
+    const BatchTiming& LastBatchTiming()const{return batchTiming;}
     const InitTiming& InitializationTiming()const{return initTiming;}
     UINT64 BufferAllocations()const{return bufferAllocations;}
     UINT64 ReusedBatches()const{return reusedBatches;}
@@ -128,7 +132,7 @@ public:
     }
     HRESULT Submit(const Input* inputs,unsigned n){
         if(!storage||phase!=Phase::Idle||!inputs||!n||n>Capacity)return E_INVALIDARG;
-        DSTORAGE_REQUEST requests[Capacity]{};UINT64 packedBytes=0,paddedBytes=0;
+        batchTiming={};DSTORAGE_REQUEST requests[Capacity]{};UINT64 packedBytes=0,paddedBytes=0;
         for(unsigned j=0;j<n;++j){const auto& in=inputs[j];auto& i=items[j];HRESULT hr=E_INVALIDARG;
             if(!in.file||!in.texture||!in.bytes||in.bytes>32u*1024u*1024u){Clear();return hr;}
             for(unsigned k=0;k<j;++k)if(Same(in.texture,inputs[k].texture)){Clear();return hr;}
@@ -153,7 +157,7 @@ public:
             r.Options.CompressionFormat=DSTORAGE_COMPRESSION_FORMAT_NONE;r.Source.File={in.file,in.offset,in.bytes};r.Destination.Buffer={i.packed.Get(),i.packedOffset,in.bytes};r.UncompressedSize=in.bytes;
         }
         count=n;failure=S_OK;ResetEvent(storageEvent);
-        for(unsigned j=0;j<n;++j)storage->EnqueueRequest(&requests[j]);storage->EnqueueStatus(status.Get(),0);storage->EnqueueSetEvent(storageEvent);phase=Phase::Storage;storage->Submit();return S_OK;
+        for(unsigned j=0;j<n;++j)storage->EnqueueRequest(&requests[j]);storage->EnqueueStatus(status.Get(),0);storage->EnqueueSetEvent(storageEvent);phase=Phase::Storage;if(latencyTracking)storageStarted=NowUs();storage->Submit();return S_OK;
     }
     // true means the whole batch has retired, with destinations restored to the
     // supplied state on success. No destination is published by this class.
@@ -161,11 +165,13 @@ public:
         if(phase==Phase::Idle)return false;
         if(phase==Phase::Storage){
             if(WaitForSingleObject(storageEvent,0)!=WAIT_OBJECT_0)return false;
+            if(latencyTracking){batchTiming.storageObservedUs=NowUs()-storageStarted;batchTiming.storageDone=true;}
             result=status->GetHResult(0);if(FAILED(result)){Clear();return true;}
             result=Upload();if(FAILED(result)){failure=result;if(phase!=Phase::FailedSubmission){Clear();return true;}}
         }
         if(phase==Phase::Gpu){const auto done=fence->GetCompletedValue();if(done==UINT64_MAX){result=DXGI_ERROR_DEVICE_REMOVED;Clear();return true;}
             if(done<fenceValue)return false;
+            if(latencyTracking){batchTiming.gpuObservedUs=NowUs()-gpuStarted;batchTiming.gpuDone=true;}
             // Queue the explicit consumer dependency before native publication.
             // The fence is already complete, so this does not wait for CPU work.
             result=graphics->Wait(fence.Get(),fenceValue);Clear();return true;}

@@ -77,13 +77,14 @@ static void Scheduling(){
 }
 static void Admission(){
  namespace n=native_gpu_storage;n::adjustPending=&Adjust;n::describe=&Describe;n::resolve=&Resolve;n::addRef=&Add;n::removeRef=&Remove;n::finish=&Finish;n::original=&Native;
- n::wake=CreateEventW(nullptr,FALSE,FALSE,nullptr);n::available=true;n::cursor=0;
+ n::wake=CreateEventW(nullptr,FALSE,FALSE,nullptr);n::available=true;n::cursor=0;n::traceLatency=true;
  auto texture=reinterpret_cast<void*>(0x1234);auto user=reinterpret_cast<void*>(2);
  SetLastError(101);Check(n::RequestHook(nullptr,"fixture",texture,17,64,nullptr,14,7,false,user)==123&&GetLastError()==456&&native==1,"existing resource remains native");
  n::allocation={texture,2,0x9999};SetLastError(101);const auto id=n::RequestHook(nullptr,"fixture",texture,17,64,nullptr,14,7,false,user);
  Check(id<0&&GetLastError()==101&&refs==1&&native==1&&n::pending==1&&enginePending==1&&n::accepted==1,"accepted request bypasses native payload read");
  auto job=std::move(n::jobs[0]);n::jobs[0]={};Check(n::active[0]==testResource.Get(),"active target stays reserved after dequeue");
  n::Retire(job,true,false);Check(refs==0&&enginePending==0&&published==1&&n::pending==0&&n::active[0]==nullptr,"publication and retirement");
+ Check(n::endToEndTime.count==1&&n::handoffTime.count==1&&n::levelLatency[2].count==1,"successful native handoff latency recorded");
  n::cursor=0;n::allocation={texture,2,0x9999};n::RequestHook(nullptr,"fixture",texture,17,64,nullptr,14,7,false,user);
  job=std::move(n::jobs[0]);n::jobs[0]={};n::Retire(job,false,true);Check(native==2&&refs==0&&enginePending==0&&n::pending==0&&published==1,"retired failure retries native exactly once");
  // Fill the bounded descriptor queue to its final slot. Synthetic
@@ -109,13 +110,13 @@ static void Admission(){
  Check(n::RequestHook(nullptr,"fixture",texture,17,64,nullptr,14,7,false,user)<0,"retired slot reusable");
  job=std::move(n::jobs[last]);n::jobs[last]={};n::Retire(job,true,false);
  Check(refs==0&&enginePending==0&&n::pending==0,"slot reuse balances pending");
- CloseHandle(n::wake);n::wake=nullptr;n::available=false;
+ CloseHandle(n::wake);n::wake=nullptr;n::available=false;n::traceLatency=false;
 }
 int main(){
  ComPtr<IDXGIFactory4> dxgi;ComPtr<IDXGIAdapter> adapter;ComPtr<ID3D12Device> device;
  Hr(CreateDXGIFactory1(IID_PPV_ARGS(&dxgi)),"DXGI");Hr(dxgi->EnumWarpAdapter(IID_PPV_ARGS(&adapter)),"WARP");Hr(D3D12CreateDevice(adapter.Get(),D3D_FEATURE_LEVEL_12_0,IID_PPV_ARGS(&device)),"device");
  ComPtr<ID3D12CommandQueue> queue;D3D12_COMMAND_QUEUE_DESC q{};q.Type=D3D12_COMMAND_LIST_TYPE_DIRECT;Hr(device->CreateCommandQueue(&q,IID_PPV_ARGS(&queue)),"queue");
- ComPtr<IDStorageFactory> factory;Hr(DStorageGetFactory(IID_PPV_ARGS(&factory)),"factory");Batch transfer;Hr(transfer.Initialize(factory.Get(),queue.Get()),"packed backend");
+ ComPtr<IDStorageFactory> factory;Hr(DStorageGetFactory(IID_PPV_ARGS(&factory)),"factory");Batch transfer;Hr(transfer.Initialize(factory.Get(),queue.Get()),"packed backend");transfer.SetLatencyTracking(true);
  struct Fixture {ComPtr<ID3D12Resource> texture;D3D12_RESOURCE_DESC desc{};native_texture_layout::Layout layout{};std::vector<unsigned char> compact;};
  Fixture fixtures[9];const DXGI_FORMAT formats[]={DXGI_FORMAT_R8G8B8A8_UNORM,DXGI_FORMAT_BC1_TYPELESS,DXGI_FORMAT_BC3_TYPELESS,DXGI_FORMAT_BC4_UNORM,DXGI_FORMAT_BC5_UNORM,DXGI_FORMAT_B8G8R8A8_UNORM,DXGI_FORMAT_B8G8R8A8_TYPELESS,DXGI_FORMAT_BC7_UNORM,DXGI_FORMAT_R8G8B8A8_UNORM};
  std::vector<unsigned char> archive(713,0x5a);Batch::Input inputs[9]{};
@@ -137,7 +138,7 @@ int main(){
  Hr(queue->Wait(frameGate.Get(),1),"block native frame queue");
  for(unsigned pass=0;pass<2;++pass){Hr(transfer.Submit(inputs,8),"packed batch submit");Check(!transfer.Close(),"pending resources cannot retire");HRESULT result=E_PENDING;
   const auto deadline=GetTickCount64()+30000;while(!transfer.Poll(result)){Check(GetTickCount64()<deadline,"GPU completion deadline");WaitForSingleObject(transfer.Event(),100);}
-  Hr(result,"packed completion");if(pass==0)Hr(frameGate->Signal(1),"release native frame after GPU transfer");Check(transfer.CurrentPhase()==Batch::Phase::Idle,"batch reuse");}
+  Hr(result,"packed completion");Check(transfer.LastBatchTiming().storageDone&&transfer.LastBatchTiming().gpuDone,"observed completion stages recorded");if(pass==0)Hr(frameGate->Signal(1),"release native frame after GPU transfer");Check(transfer.CurrentPhase()==Batch::Phase::Idle,"batch reuse");}
  // Independent lanes overlap storage/GPU work while retaining disjoint targets.
  Batch parallel;Hr(parallel.Initialize(factory.Get(),queue.Get(),&transfer),"parallel lane");
  Check(parallel.InitializationTiming().sharedPipeline&&!transfer.InitializationTiming().sharedPipeline,"second lane shares same-device compiled pipeline");
@@ -145,6 +146,7 @@ int main(){
  bool done[2]{};Batch* lanes[]={&transfer,&parallel};const auto deadline=GetTickCount64()+30000;
  while(!done[0]||!done[1]){for(unsigned i=0;i<2;++i)if(!done[i]){HRESULT result=E_PENDING;done[i]=lanes[i]->Poll(result);if(done[i])Hr(result,"overlapped completion");}
   Check(GetTickCount64()<deadline,"parallel deadline");if(!done[0])WaitForSingleObject(transfer.Event(),10);else if(!done[1])WaitForSingleObject(parallel.Event(),10);}
+ Check(!parallel.LastBatchTiming().storageDone&&!parallel.LastBatchTiming().gpuDone,"disabled latency leaves transfer behavior intact");
  Check(parallel.Close()&&parallel.RetainedBytes()==0,"parallel retired and pool released");
  Check(transfer.BufferAllocations()==2&&transfer.ReusedBatches()==2,"small repeated batches reuse two arenas");
  for(unsigned pass=0;pass<3;++pass){
@@ -169,6 +171,7 @@ int main(){
   for(unsigned m=0;m<8;++m)for(unsigned r=0;r<rows[m];++r)Check(memcmp(static_cast<unsigned char*>(mapped)+fp[m].Offset+size_t(r)*fp[m].Footprint.RowPitch,f.compact.data()+f.layout.mips[m].compactOffset+r*rowBytes[m],static_cast<size_t>(rowBytes[m]))==0,"packed GPU mip byte equality");
   D3D12_RANGE empty{};readback->Unmap(0,&empty);
  }
+ storage_latency::Timing metric;metric.Record(100);metric.Record(16000);metric.Record(100000);Check(metric.count==3&&metric.total==116100&&metric.maximum==100000&&metric.over16ms==2&&metric.over100ms==1,"latency totals and threshold boundaries");
  Scheduling();AllocationGate();ResolveRange(factory.Get(),path);testResource=fixtures[0].texture;Admission();testResource.Reset();Check(transfer.Close(),"drained close");source.Reset();CloseHandle(event);Check(DeleteFileW(path)!=FALSE,"file ownership released");
- puts("PASS R244: file-to-GPU packed rows, eight formats / 72 mips, repeated and growing arena reuse, bounded staging, native state restoration, blocked consumer queue independence, bounds, native archive bias resolution, overlap rejection, embedded shader, shared pipeline, priority/FIFO burst scheduling, bounded queue admission, capacity/duplicate separation, slot reuse, ownership and deferred publication; runtime CPU payload bytes=0");
+ puts("PASS R245: file-to-GPU packed rows, eight formats / 72 mips, repeated and growing arena reuse, bounded staging, native state restoration, blocked consumer queue independence, bounds, native archive bias resolution, overlap rejection, optional stage timings, threshold accounting, embedded shader, shared pipeline, priority/FIFO burst scheduling, bounded queue admission, capacity/duplicate separation, slot reuse, ownership and deferred publication; runtime CPU payload bytes=0");
 }

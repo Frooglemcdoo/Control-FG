@@ -4,8 +4,14 @@
 #include <string>
 #include <new>
 #include <algorithm>
+#include "storage_latency.h"
 namespace native_gpu_storage {
 using U64=std::uint64_t;
+inline U64 ClockUs(){static const U64 frequency=[](){LARGE_INTEGER f;QueryPerformanceFrequency(&f);return U64(f.QuadPart);}();LARGE_INTEGER t;QueryPerformanceCounter(&t);return U64(t.QuadPart)/frequency*1000000+(U64(t.QuadPart)%frequency)*1000000/frequency;}
+inline bool traceLatency=false;
+inline storage_latency::Timing allocationTime,admissionTime,queueTime,endToEndTime,handoffTime,storageTime,gpuObservedTime,recordTime;
+inline storage_latency::Timing levelLatency[32];
+
 template<class T> using Ptr=Microsoft::WRL::ComPtr<T>;
 using Request=native_texture_contract::Request;
 using QueueResolver=HRESULT(*)(ID3D12CommandQueue*,ID3D12CommandQueue**);inline QueueResolver resolveQueue=nullptr;
@@ -17,7 +23,7 @@ inline Request original=nullptr;inline Ref addRef=nullptr,removeRef=nullptr;inli
 inline unsigned char *runtime=nullptr,*renderer=nullptr,*d3d=nullptr;
 using Allocate=bool(*)(void*,unsigned);inline Allocate allocate=nullptr;
 inline NativeCpuCallPatch allocationPatch{};
-struct Allocation {void* texture=nullptr;unsigned level=0;U64 container=0;};
+struct Allocation {void* texture=nullptr;unsigned level=0;U64 container=0,allocationUs=0;};
 inline thread_local Allocation allocation{};
 inline RRIndirectCallPatch patch;inline HMODULE storageModule=nullptr;inline Ptr<IDStorageFactory> factory;
 inline SRWLOCK lock=SRWLOCK_INIT,fileLock=SRWLOCK_INIT;inline HANDLE wake=nullptr,worker=nullptr;
@@ -26,7 +32,7 @@ inline std::atomic<U64> ineligible{0},layoutRejected{0},sourceRejected{0},capaci
 inline std::atomic<U64> offered{0},accepted{0},completed{0},fallback{0},bytes{0},failed{0},batches{0},pending{0};
 inline constexpr unsigned QueueCapacity=4096;
 struct Job {
-    bool used=false;U64 serial=0,offset=0,sourceOffset=0,gpuBytes=0;UINT size=0;unsigned level=0,slot=QueueCapacity;int thread=0,priority=0;
+    bool used=false;U64 serial=0,offset=0,sourceOffset=0,gpuBytes=0,requestedUs=0,admittedUs=0;UINT size=0;unsigned level=0,slot=QueueCapacity;int thread=0,priority=0;
     void* owner=nullptr;void* texture=nullptr;std::string name;
     Ptr<IDStorageFile> file;Ptr<ID3D12Resource> resource;Ptr<ID3D12CommandQueue> queue;
 };
@@ -42,10 +48,10 @@ inline unsigned Dword(const void* p,unsigned offset){return native_texture_contr
 inline bool AllocateHook(void* texture,unsigned level){
     const DWORD incoming=GetLastError();auto* levels=reinterpret_cast<unsigned char*>(Field(texture,0xe8));
     const U64 before=levels?Field(levels+U64(level)*0x28,0x10):0;
-    SetLastError(incoming);const bool result=allocate(texture,level);const DWORD error=GetLastError();
+    const U64 start=traceLatency?ClockUs():0;SetLastError(incoming);const bool result=allocate(texture,level);const DWORD error=GetLastError();const U64 elapsed=traceLatency?ClockUs()-start:0;
     levels=reinterpret_cast<unsigned char*>(Field(texture,0xe8));
     const U64 after=levels?Field(levels+U64(level)*0x28,0x10):0;
-    allocation=result&&!before&&after?Allocation{texture,level,after}:Allocation{};
+    allocation=result&&!before&&after?Allocation{texture,level,after,elapsed}:Allocation{};
     SetLastError(error);return result;
 }
 inline bool SourceFile(const std::wstring& path,Ptr<IDStorageFile>& file){
@@ -59,7 +65,14 @@ inline bool SourceFile(const std::wstring& path,Ptr<IDStorageFile>& file){
     if(!ok){CloseHandle(guard);return false;}empty->path=path;empty->guard=guard;empty->file=opened;file=opened;return true;
 }
 inline void Retire(Job& job,bool success,bool retry){
-    if(success){finish(job.texture,static_cast<int>(job.level),true);++completed;}
+    if(success){
+        const U64 ready=traceLatency?ClockUs():0;
+        finish(job.texture,static_cast<int>(job.level),true);
+        if(traceLatency){const U64 handedOff=ClockUs();
+            if(job.requestedUs){const U64 latency=ready-job.requestedUs;endToEndTime.Record(latency);levelLatency[job.level].Record(latency);}
+            handoffTime.Record(handedOff-ready);}
+        ++completed;
+    }
     else if(retry){original(job.owner,job.name.c_str(),job.texture,job.offset,job.size,nullptr,job.thread,job.priority,false,reinterpret_cast<void*>(U64(job.level)));++fallback;}
     else finish(job.texture,static_cast<int>(job.level),false);
     removeRef(job.texture);
@@ -71,7 +84,6 @@ inline void Retire(Job& job,bool success,bool retry){
     adjustPending(job.owner,-1);
     AcquireSRWLockExclusive(&lock);reservedBytes-=job.size;active[job.slot]=nullptr;ReleaseSRWLockExclusive(&lock);--pending;job={};
 }
-inline U64 ClockUs(){static const U64 frequency=[](){LARGE_INTEGER f;QueryPerformanceFrequency(&f);return U64(f.QuadPart);}();LARGE_INTEGER t;QueryPerformanceCounter(&t);return U64(t.QuadPart)/frequency*1000000+(U64(t.QuadPart)%frequency)*1000000/frequency;}
 // These are worker CPU/wall elapsed times, not GPU timestamp-query durations.
 inline void MaxElapsed(std::atomic<U64>& maximum,U64 start){const U64 elapsed=ClockUs()-start;if(elapsed>maximum.load(std::memory_order_relaxed))maximum.store(elapsed,std::memory_order_relaxed);}
 // Select one priority/FIFO batch in O(queue size * log(batch size)), rather
@@ -98,7 +110,10 @@ inline DWORD WINAPI Work(void*){
                 HRESULT result=E_PENDING;
                 const U64 pollStart=ClockUs();const bool retired=lane.transfer.Poll(result);MaxElapsed(pollMaxUs,pollStart);if(!retired)continue;
                 const bool success=SUCCEEDED(result);const bool lost=result==DXGI_ERROR_DEVICE_REMOVED||result==DXGI_ERROR_DEVICE_RESET;
-                if(!success){++failed;Log("DIRECTSTORAGE_R244 batch_failed=1 hr=0x%08lX count=%u",static_cast<unsigned long>(result),lane.count);}
+                if(!success){++failed;Log("DIRECTSTORAGE_R245 batch_failed=1 hr=0x%08lX count=%u",static_cast<unsigned long>(result),lane.count);}
+                if(traceLatency&&success){const auto& t=lane.transfer.LastBatchTiming();
+                    if(t.storageDone)storageTime.Record(t.storageObservedUs);
+                    if(t.gpuDone){gpuObservedTime.Record(t.gpuObservedUs);recordTime.Record(t.recordSubmitUs);}}
                 if(lost)available=false;
                 for(unsigned i=0;i<lane.count;++i)Retire(lane.jobs[i],success,!lost);lane.count=0;
             }
@@ -109,15 +124,16 @@ inline DWORD WINAPI Work(void*){
                 const control_storage::PackedTextureBatch* shared=nullptr;
                 for(const auto& other:lanes)if(other.initialized){shared=&other.transfer;break;}
                 const U64 start=ClockUs();hr=lane.transfer.Initialize(factory.Get(),lane.jobs[0].queue.Get(),shared);MaxElapsed(initMaxUs,start);
-                lane.initialized=SUCCEEDED(hr);const auto& t=lane.transfer.InitializationTiming();
-                Log("DIRECTSTORAGE_R244_INIT lane=%u ready=%u hr=0x%08lX shader=build_embedded shared_pipeline=%u queues_us=%llu pipeline_us=%llu commands_us=%llu",unsigned(&lane-lanes),unsigned(lane.initialized),static_cast<unsigned long>(hr),unsigned(t.sharedPipeline),t.queuesUs,t.pipelineUs,t.commandsUs);
+                lane.transfer.SetLatencyTracking(traceLatency);lane.initialized=SUCCEEDED(hr);const auto& t=lane.transfer.InitializationTiming();
+                Log("DIRECTSTORAGE_R245_INIT lane=%u ready=%u hr=0x%08lX shader=build_embedded shared_pipeline=%u queues_us=%llu pipeline_us=%llu commands_us=%llu",unsigned(&lane-lanes),unsigned(lane.initialized),static_cast<unsigned long>(hr),unsigned(t.sharedPipeline),t.queuesUs,t.pipelineUs,t.commandsUs);
                 if(!lane.initialized){available=false;lane.transfer.Close();}
             }
             control_storage::PackedTextureBatch::Input inputs[control_storage::PackedTextureBatch::Capacity]{};
             for(unsigned i=0;i<lane.count;++i){const auto& j=lane.jobs[i];inputs[i]={j.file.Get(),j.resource.Get(),j.sourceOffset,j.size,D3D12_RESOURCE_STATES(0xc0)};}
             if(SUCCEEDED(hr)){const U64 allocations=lane.transfer.BufferAllocations(),reuses=lane.transfer.ReusedBatches(),start=ClockUs();
+                if(traceLatency)for(unsigned i=0;i<lane.count;++i)if(lane.jobs[i].admittedUs)queueTime.Record(start-lane.jobs[i].admittedUs);
                 hr=lane.transfer.Submit(inputs,lane.count);MaxElapsed(submitMaxUs,start);stagingAllocations+=lane.transfer.BufferAllocations()-allocations;stagingReuses+=lane.transfer.ReusedBatches()-reuses;}
-            if(FAILED(hr)){++failed;Log("DIRECTSTORAGE_R244 batch_rejected=1 hr=0x%08lX count=%u",static_cast<unsigned long>(hr),lane.count);
+            if(FAILED(hr)){++failed;Log("DIRECTSTORAGE_R245 batch_rejected=1 hr=0x%08lX count=%u",static_cast<unsigned long>(hr),lane.count);
                 for(unsigned i=0;i<lane.count;++i)Retire(lane.jobs[i],false,true);lane.count=0;
             }else ++batches;
         }
@@ -178,7 +194,7 @@ inline bool Resolve(const char* name,U64 offset,U64 size,Job& job){
 using DescribeFn=bool(*)(void*,unsigned,U64,Job&);using ResolveFn=bool(*)(const char*,U64,U64,Job&);
 inline DescribeFn describe=&Describe;inline ResolveFn resolve=&Resolve;
 inline std::int64_t RequestHook(void* owner,const char* name,void* texture,U64 offset,U64 size,char* buffer,int thread,int priority,bool flag,void* user){
-    const DWORD incoming=GetLastError();++offered;
+    const DWORD incoming=GetLastError();const U64 requested=traceLatency?ClockUs():0;++offered;
     const auto fresh=allocation;allocation={};
     if(pending.load(std::memory_order_relaxed)>=QueueCapacity){++capacityRejected;++fallback;SetLastError(incoming);return original(owner,name,texture,offset,size,buffer,thread,priority,flag,user);}
     if(available&&fresh.texture==texture&&fresh.level==reinterpret_cast<U64>(user)&&fresh.container&&!buffer&&!flag&&size&&size<=32u*1024u*1024u&&(thread==3||thread==14)&&reinterpret_cast<U64>(user)<32){
@@ -186,10 +202,10 @@ inline std::int64_t RequestHook(void* owner,const char* name,void* texture,U64 o
         if(!describe(texture,j.level,size,j))++layoutRejected;
         else if(!resolve(name,offset,size,j))++sourceRejected;
         else {
-            j.name=name;U64 ticket=0;
+            j.name=name;j.requestedUs=requested;U64 ticket=0;
             AcquireSRWLockExclusive(&lock);bool duplicate=false;for(auto* p:active)if(p&&p==j.resource.Get())duplicate=true;
             if(!duplicate&&available&&pending.load()<QueueCapacity){
-                for(unsigned scan=0;scan<QueueCapacity;++scan){const unsigned i=cursor++%QueueCapacity;if(!active[i]&&!jobs[i].used){addRef(texture);adjustPending(owner,1);j.used=true;j.serial=++serial;j.slot=i;ticket=j.serial;active[i]=j.resource.Get();jobs[i]=std::move(j);reservedBytes+=size;const U64 depth=++pending;if(depth>peakPending.load(std::memory_order_relaxed))peakPending.store(depth,std::memory_order_relaxed);++accepted;bytes+=size;break;}}
+                for(unsigned scan=0;scan<QueueCapacity;++scan){const unsigned i=cursor++%QueueCapacity;if(!active[i]&&!jobs[i].used){addRef(texture);adjustPending(owner,1);if(traceLatency){j.admittedUs=ClockUs();admissionTime.Record(j.admittedUs-requested);allocationTime.Record(fresh.allocationUs);}j.used=true;j.serial=++serial;j.slot=i;ticket=j.serial;active[i]=j.resource.Get();jobs[i]=std::move(j);reservedBytes+=size;const U64 depth=++pending;if(depth>peakPending.load(std::memory_order_relaxed))peakPending.store(depth,std::memory_order_relaxed);++accepted;bytes+=size;break;}}
             }
             if(!ticket){if(duplicate)++duplicateRejected;else if(!available)++unavailableRejected;else ++capacityRejected;}
             ReleaseSRWLockExclusive(&lock);
@@ -200,15 +216,16 @@ inline std::int64_t RequestHook(void* owner,const char* name,void* texture,U64 o
 }
 inline bool Install(){
     char value[8]{};if(GetEnvironmentVariableA("CONTROLFG_NATIVE_GPU_STORAGE",value,8)!=1||value[0]!='1')return false;
+    char latencyValue[8]{};traceLatency=GetEnvironmentVariableA("CONTROLFG_STORAGE_LATENCY",latencyValue,8)==1&&latencyValue[0]=='1';
     const char* conflicts[]={"CONTROLFG_TEXTURE_CONTRACT","CONTROLFG_EARLY_STORAGE","CONTROLFG_DIRECTSTORAGE"};
-    for(const auto* key:conflicts)if(GetEnvironmentVariableA(key,value,8)==1&&value[0]=='1'){Log("DIRECTSTORAGE_R244 disabled=conflicting_mode key=%s",key);return false;}
+    for(const auto* key:conflicts)if(GetEnvironmentVariableA(key,value,8)==1&&value[0]=='1'){Log("DIRECTSTORAGE_R245 disabled=conflicting_mode key=%s",key);return false;}
     auto r=GetModuleHandleW(L"renderer_rmdwin10_f.dll"),n=GetModuleHandleW(L"rl_rmdwin10_f.dll"),d=GetModuleHandleW(L"d3d_rmdwin10_f.dll");
-    if(!r||!n||!d||!HashMatches(r,"EBFB5B47CEBC2D4482E912B8090BD343F717BAB8A178B5A6385DEC9105E7C433")||!HashMatches(n,"A79234E4B34C2488DEAAC3459E8054BE206B5AF78A37723D834C1CBD826CE484")||!HashMatches(d,"CCEB99CBD9C019AF907C24C44701A53C8D230965C1FB31C325233E4C80214AA5")){Log("DIRECTSTORAGE_R244 disabled=module_hash");return false;}
+    if(!r||!n||!d||!HashMatches(r,"EBFB5B47CEBC2D4482E912B8090BD343F717BAB8A178B5A6385DEC9105E7C433")||!HashMatches(n,"A79234E4B34C2488DEAAC3459E8054BE206B5AF78A37723D834C1CBD826CE484")||!HashMatches(d,"CCEB99CBD9C019AF907C24C44701A53C8D230965C1FB31C325233E4C80214AA5")){Log("DIRECTSTORAGE_R245 disabled=module_hash");return false;}
     renderer=reinterpret_cast<unsigned char*>(r);runtime=reinterpret_cast<unsigned char*>(n);d3d=reinterpret_cast<unsigned char*>(d);
     original=reinterpret_cast<Request>(runtime+0xfa2b0);addRef=reinterpret_cast<Ref>(runtime+0x12e160);removeRef=reinterpret_cast<Ref>(runtime+0x12e190);
     allocate=reinterpret_cast<Allocate>(renderer+0x159960);
     finish=reinterpret_cast<Finish>(renderer+0x158390);lookup=reinterpret_cast<Lookup>(runtime+0x18f760);
-    control_storage::RuntimeLoadResult result;if(!control_storage::LoadRuntimeFactory(ModulePath(selfModule),storageModule,factory,result)){Log("DIRECTSTORAGE_R244 disabled=%s hr=0x%08lX",result.stage,static_cast<unsigned long>(result.hr));return false;}
+    control_storage::RuntimeLoadResult result;if(!control_storage::LoadRuntimeFactory(ModulePath(selfModule),storageModule,factory,result)){Log("DIRECTSTORAGE_R245 disabled=%s hr=0x%08lX",result.stage,static_cast<unsigned long>(result.hr));return false;}
     if(!patch.Prepare(renderer+0x158247,reinterpret_cast<void**>(renderer+0x5e0140),reinterpret_cast<void*>(original),reinterpret_cast<void*>(&RequestHook)))return false;
     if(!NativeCpuPrepareCallPatch(renderer+0x1580d7,reinterpret_cast<void*>(allocate),reinterpret_cast<void*>(&AllocateHook),&allocationPatch))return false;
     wake=CreateEventW(nullptr,FALSE,FALSE,nullptr);if(!wake)return false;worker=CreateThread(nullptr,0,&Work,nullptr,0,nullptr);if(!worker)return false;
@@ -216,10 +233,21 @@ inline bool Install(){
     if(!allocationPatch.writeHealthy){NativeCpuExchangeCall(&allocationPatch,false);return false;}
     if(!patch.Exchange(true)){NativeCpuExchangeCall(&allocationPatch,false);return false;}
     if(!patch.healthy){patch.Exchange(false);NativeCpuExchangeCall(&allocationPatch,false);return false;}
-    available=true;Log("DIRECTSTORAGE_R244 installed=1 native_gpu_redirect=1 source=archive destination=gpu_buffer repack=gpu texture_copy=gpu native_cpu_payload_read=0 compression=none unsupported=native");return true;
+    available=true;Log("DIRECTSTORAGE_R245 installed=1 native_gpu_redirect=1 source=archive destination=gpu_buffer repack=gpu texture_copy=gpu native_cpu_payload_read=0 compression=none unsupported=native");return true;
+}
+inline void ReportLatency(const char* stage,const storage_latency::Timing& t,int level=-1){
+    const U64 n=t.count.load(std::memory_order_relaxed);if(!n)return;
+    Log("DIRECTSTORAGE_R245_LATENCY stage=%s level=%d samples=%llu mean_us=%.1f max_us=%llu ge16ms=%llu ge100ms=%llu scope=cumulative_cpu_observed",stage,level,n,double(t.total.load(std::memory_order_relaxed))/double(n),t.maximum.load(std::memory_order_relaxed),t.over16ms.load(std::memory_order_relaxed),t.over100ms.load(std::memory_order_relaxed));
 }
 inline void Poll(U64 present){
     static ULONGLONG next=0;if(!worker||present%60)return;const auto now=GetTickCount64();if(now<next)return;next=now+5000;
-    Log("DIRECTSTORAGE_R244_STATUS present=%llu available=%u offered=%llu accepted=%llu completed=%llu fallback=%llu failed=%llu pending=%llu batches=%llu accepted_bytes=%llu ineligible=%llu layout_rejected=%llu source_rejected=%llu capacity_rejected=%llu duplicate_rejected=%llu unavailable_rejected=%llu peak_pending=%llu queue_capacity=%u staging_allocations=%llu staging_reuse_batches=%llu submit_cpu_wall_max_us=%llu init_cpu_wall_max_us=%llu poll_cpu_wall_max_us=%llu cpu_payload_bytes=0",present,unsigned(available.load()),offered.load(),accepted.load(),completed.load(),fallback.load(),failed.load(),pending.load(),batches.load(),bytes.load(),ineligible.load(),layoutRejected.load(),sourceRejected.load(),capacityRejected.load(),duplicateRejected.load(),unavailableRejected.load(),peakPending.load(),QueueCapacity,stagingAllocations.load(),stagingReuses.load(),submitMaxUs.load(),initMaxUs.load(),pollMaxUs.load());
+    Log("DIRECTSTORAGE_R245_STATUS present=%llu available=%u offered=%llu accepted=%llu completed=%llu fallback=%llu failed=%llu pending=%llu batches=%llu accepted_bytes=%llu ineligible=%llu layout_rejected=%llu source_rejected=%llu capacity_rejected=%llu duplicate_rejected=%llu unavailable_rejected=%llu peak_pending=%llu queue_capacity=%u staging_allocations=%llu staging_reuse_batches=%llu submit_cpu_wall_max_us=%llu init_cpu_wall_max_us=%llu poll_cpu_wall_max_us=%llu cpu_payload_bytes=0",present,unsigned(available.load()),offered.load(),accepted.load(),completed.load(),fallback.load(),failed.load(),pending.load(),batches.load(),bytes.load(),ineligible.load(),layoutRejected.load(),sourceRejected.load(),capacityRejected.load(),duplicateRejected.load(),unavailableRejected.load(),peakPending.load(),QueueCapacity,stagingAllocations.load(),stagingReuses.load(),submitMaxUs.load(),initMaxUs.load(),pollMaxUs.load());
+    if(traceLatency){
+        ReportLatency("native_allocation",allocationTime);ReportLatency("request_admission",admissionTime);
+        ReportLatency("queue_to_submit_begin",queueTime);ReportLatency("storage_completion_observed_batch",storageTime);
+        ReportLatency("gpu_completion_observed_batch",gpuObservedTime);ReportLatency("gpu_record_submit_cpu_batch",recordTime);
+        ReportLatency("request_to_handoff_begin",endToEndTime);ReportLatency("native_handoff_call",handoffTime);
+        for(unsigned level=0;level<32;++level)ReportLatency("request_to_handoff_begin_level",levelLatency[level],int(level));
+    }
 }
 }
