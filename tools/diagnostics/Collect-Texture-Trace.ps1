@@ -1,7 +1,17 @@
 #requires -Version 5.1
 [CmdletBinding()]
-param([string]$LogDirectory=(Join-Path $env:LOCALAPPDATA 'ControlFGProbe'),[string]$OutputDirectory=$PSScriptRoot)
+param([string]$LogDirectory=(Join-Path $env:LOCALAPPDATA 'ControlFGProbe'),[string]$OutputDirectory='')
 $ErrorActionPreference='Stop'
+# Resolve script-location defaults in the body: $PSScriptRoot can be empty
+# during parameter-default evaluation under Windows PowerShell -File.
+if ([string]::IsNullOrWhiteSpace($OutputDirectory)) {
+    $OutputDirectory=$PSScriptRoot
+    if ([string]::IsNullOrWhiteSpace($OutputDirectory)) {
+        $OutputDirectory=Split-Path -Parent $MyInvocation.MyCommand.Path
+    }
+}
+if ([string]::IsNullOrWhiteSpace($OutputDirectory)) { throw 'Cannot determine output folder; specify -OutputDirectory.' }
+$OutputDirectory=$ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($OutputDirectory)
 Add-Type -AssemblyName System.IO.Compression
 $source=Get-ChildItem -LiteralPath $LogDirectory -Filter 'probe-*.log' -File | Where-Object { -not ($_.Attributes -band [IO.FileAttributes]::ReparsePoint) } | Sort-Object LastWriteTimeUtc -Descending | Select-Object -First 1
 if (-not $source) { throw 'No probe log found.' }

@@ -16,5 +16,12 @@ try {
         $stream=$entry.Open();$sha=[Security.Cryptography.SHA256]::Create()
         try {$actual=[Convert]::ToBase64String($sha.ComputeHash($stream));$expected=[Convert]::ToBase64String($sha.ComputeHash($bytes));if($actual -ne $expected){throw 'Byte mismatch'}} finally {$sha.Dispose();$stream.Dispose()}
     } finally {$archive.Dispose();$file.Dispose()}
-    Write-Host 'PASS R252 full-session collector: 5 MiB byte equality, middle preserved, active writer sharing'
+    $defaultFolder=Join-Path $root 'Default Output With Spaces'
+    [void][IO.Directory]::CreateDirectory($defaultFolder)
+    $script=Join-Path $defaultFolder 'Collect-Texture-Trace.ps1'
+    Copy-Item -LiteralPath "$PSScriptRoot/Collect-Texture-Trace.ps1" -Destination $script
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $script -LogDirectory $root
+    if ($LASTEXITCODE -ne 0) {throw 'Default output -File invocation failed'}
+    if (@(Get-ChildItem -LiteralPath $defaultFolder -Filter '*.zip').Count -ne 1) {throw 'Default ZIP missing'}
+    Write-Host 'PASS R254 full-session collector: byte equality, active writer sharing, default output via PowerShell -File and paths with spaces'
 } finally {Remove-Item -LiteralPath $root -Recurse -Force}
