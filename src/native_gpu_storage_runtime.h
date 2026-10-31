@@ -121,8 +121,12 @@ inline DWORD WINAPI Work(void*){
                 for(unsigned i=0;i<lane.count;++i)Retire(lane.jobs[i],false,true);lane.count=0;
             }else ++batches;
         }
-        HANDLE events[3]={wake};DWORD count=1;
-        for(auto& lane:lanes)if(lane.count)events[count++]=lane.transfer.Event();
+        HANDLE events[3]={wake};DWORD count=1;unsigned inFlight=0;
+        for(auto& lane:lanes)if(lane.count){events[count++]=lane.transfer.Event();inFlight+=lane.count;}
+        // A rejected batch can leave a lane idle with queued jobs remaining.
+        // Drain those jobs/retries instead of waiting for a new request/event
+        // that might never arrive. Pending includes queued plus active jobs.
+        if(count<3&&pending.load()>inFlight)continue;
         // New requests can fill the other lane while I/O or GPU work is pending.
         // Timeout is only for device-loss / event-registration recovery.
         WaitForMultipleObjects(count,events,FALSE,count>1?1000:INFINITE);
