@@ -80,6 +80,7 @@ static void Scheduling(){
 static void Admission(){
  namespace n=native_gpu_storage;n::adjustPending=&Adjust;n::describe=&Describe;n::resolve=&Resolve;n::addRef=&Add;n::removeRef=&Remove;n::finish=&Finish;n::original=&Native;
  n::wake=CreateEventW(nullptr,FALSE,FALSE,nullptr);n::available=true;n::cursor=0;n::traceLatency=true;
+ n::assetTraceEnabled=true;n::assetCapture.Begin(n::ClockUs());n::assetDeadline=n::assetCapture.flushAt;
  auto texture=reinterpret_cast<void*>(0x1234);auto user=reinterpret_cast<void*>(2);
  SetLastError(101);Check(n::RequestHook(nullptr,"fixture",texture,17,64,nullptr,14,7,false,user)==123&&GetLastError()==456&&native==1,"existing resource remains native");
  n::allocation={texture,2,0x9999};SetLastError(101);const auto id=n::RequestHook(nullptr,"fixture",texture,17,64,nullptr,14,7,false,user);
@@ -122,6 +123,10 @@ static void Admission(){
  Check(failedPublished==1&&native==beforeNative&&published==beforePublished,"terminal failure does not retry or publish success");
  Check(refs==0&&enginePending==0&&n::pending==0&&n::reservedBytes==0&&!n::active[0],"terminal failure balances ownership");
  Check(n::endToEndTime.count==beforeLatency,"terminal failure excluded from success latency");
+ Check(n::assetCapture.count==8,"all request attempts captured including native and queue-full fallbacks");
+ Check(n::assetCapture.rows[0].path==2&&n::assetCapture.rows[1].path==1&&n::assetCapture.rows[2].path==2,"native, GPU and retry routes distinguished");
+ Check(n::assetCapture.rows[0].texture==0x1234&&n::assetCapture.rows[0].offset==17,"identity and archive offset preserved");
+ n::assetTraceEnabled=false;n::assetDeadline=0;n::assetCapture.active=false;
  CloseHandle(n::wake);n::wake=nullptr;n::available=false;n::traceLatency=false;
 }
 static void PublicationObservation(){
@@ -155,19 +160,19 @@ static void AssetTraceObservation(){
  Check(token&&c.count==1&&strcmp(c.rows[0].name,"sign_name")==0,"metadata captured and control characters sanitized");
  c.Submit(token,120);c.Retire(token,130,1);c.Publish(token,140);
  Check(c.rows[0].submitted==120&&c.rows[0].retired==130&&c.rows[0].published==140&&c.rows[0].result==1,"events correlated");
- Check(!c.Add("late",15000100,15000101,0,0,1),"window end excluded");
+ Check(!c.Add("late",30000100,30000101,0,0,1),"window end excluded");
  char longName[600];memset(longName,'x',sizeof(longName));longName[599]=0;
  c.Add(longName,101,102,0,0,1);Check(c.rows[1].truncated&&strlen(c.rows[1].name)==511,"bounded name copy");
  for(unsigned i=c.count;i<c.Capacity;++i)Check(c.Add("fill",102,103,0,0,1)!=0,"capture slot");
  Check(!c.Add("overflow",102,103,0,0,1)&&c.overflow==1,"capture capacity bounded");
- Check(!c.Finish(20000099)&&c.Finish(20000100),"completion grace enforced");
- Check(!c.Find(token)&&c.Begin(30000000),"completed capture can rearm");
- const auto next=c.Add("new",30000000,30000001,0,0,1);c.Publish(token,30000002);
+ Check(!c.Finish(40000099)&&c.Finish(40000100),"completion grace enforced");
+ Check(!c.Find(token)&&c.Begin(50000000),"completed capture can rearm");
+ const auto next=c.Add("new",50000000,50000001,0,0,1);c.Publish(token,50000002);
  Check(next!=token&&!c.rows[0].published,"old generation cannot mutate new capture");
  storage_publication::Tracker tracker;std::uint64_t out=999;
  Check(tracker.Begin(16,2,99,100,next)&&tracker.Take(16,2,99,200,&out)==100&&out==next,"publication carries asset token");
  Check(!tracker.Take(16,2,99,201,&out)&&out==0,"unmatched publication clears token");
- puts("PASS R251 asset trace: bounded capture, time window, grace, sanitization, event correlation and stale-token rejection");
+ puts("PASS R252 asset trace: bounded capture, time window, grace, sanitization, event correlation and stale-token rejection");
 }
 int main(){
  AssetTraceObservation();
