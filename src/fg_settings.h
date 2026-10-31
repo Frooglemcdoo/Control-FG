@@ -129,7 +129,7 @@ static void FGSettingsLoadSettings() noexcept {
         control_rr::RRUserRequest(false);
         SetFGTextureStreamingBudgetMs(0u);
         SetFGVramMonitorEnabled(true);
-        Log("FG_SETTINGS_LOAD success=0 reason=path_unavailable defaults=4x,dynamic_auto,rr_off,rr_model_F,texture_streaming_off,vram_monitor_on ui=fg_full_rr_toggle_model_E_F");
+        Log("FG_SETTINGS_LOAD success=0 reason=path_unavailable defaults=4x,dynamic_auto,rr_off,rr_model_F,texture_streaming_auto,vram_monitor_on ui=fg_full_rr_toggle_model_E_F");
         return;
     }
 

@@ -138,10 +138,8 @@ static bool PTReflectionInstallComputePsoHookOnDevice(ID3D12Device* device) noex
 static HRESULT SubmitFGUIRecompositionBeforePresent(unsigned long long present) noexcept;
 #include "hdr10_bridge.h"
 
-// Experimental texture-streaming control recovered from the validated P6 R1/R2/R3
-// tests. Non-OFF modes keep the proven 16 update slices and vary only the
-// per-update texture-request budget: 4 ms, 6 ms, or 8 ms. OFF restores Control's
-// native 1 ms budget and 8 update slices.
+// Automatic uses the accepted R254 budget only when native GPU storage installed.
+// Explicit menu budgets remain supported; installed partition pins take precedence.
 static constexpr size_t kTextureStreamingBudgetRva = 0x9186A0;
 static constexpr size_t kTextureStreamingSlicesRva = 0x919010;
 
@@ -150,6 +148,7 @@ static bool TextureStreamingPlausibleBudget(float value) noexcept {
 }
 
 #include "texture_streaming_budget.h"
+#include "storage_startup_policy.h"
 
 static unsigned int NormalizeTextureStreamingExperimentalMs(unsigned int value) noexcept {
     return texture_streaming_budget::Normalize(value);
@@ -162,8 +161,9 @@ static bool ApplyTextureStreamingExperimental(unsigned int requestedMs) noexcept
         return false;
     }
 
-    float targetBudget=requestedMs?static_cast<float>(requestedMs):1.0f;
-    int targetSlices=requestedMs?16:8;
+    const auto policy=storage_startup_policy::Resolve(requestedMs,storage_startup_policy::active,storage_startup_policy::pinnedSlices);
+    float targetBudget=policy.budget;
+    int targetSlices=policy.slices;
     // Diagnostic overrides are process-local; saved menu settings remain unchanged.
     char budgetOverride[8]{},sliceOverride[8]{};
     const DWORD budgetLength=GetEnvironmentVariableA("CONTROLFG_STREAMING_BUDGET_MS",budgetOverride,sizeof(budgetOverride));
@@ -171,6 +171,7 @@ static bool ApplyTextureStreamingExperimental(unsigned int requestedMs) noexcept
     texture_streaming_budget::Override(budgetOverride,budgetLength,targetBudget);
     if(sliceLength==1&&sliceOverride[0]=='8')targetSlices=8;
     else if(sliceLength==2&&sliceOverride[0]=='1'&&sliceOverride[1]=='6')targetSlices=16;
+    if(storage_startup_policy::pinnedSlices)targetSlices=storage_startup_policy::pinnedSlices;
     Log("STREAMING_R227 requested_menu_ms=%u effective_budget_ms=%.0f effective_slices=%d process_override=%u",requestedMs,double(targetBudget),targetSlices,unsigned(budgetLength||sliceLength));
     __try {
         auto* budget=reinterpret_cast<float*>(reinterpret_cast<unsigned char*>(verifiedRenderer)+kTextureStreamingBudgetRva);
@@ -203,7 +204,7 @@ static bool ApplyTextureStreamingExperimental(unsigned int requestedMs) noexcept
         }
 
         Log("TEXTURE_EXPERIMENTAL_APPLY requested_ms=%u mode=%s success=%u previous_budget_ms=%.3f previous_slices=%d applied_budget_ms=%.3f applied_slices=%d target_budget_ms=%.3f target_slices=%d source=p6_r1_r2_r3 live_switch=1 traversal_stutter_warning=1 pool=native lod=native residency=native async=native",
-            requestedMs,requestedMs?"experimental":"off",unsigned(ok),double(previousBudget),previousSlices,
+            requestedMs,requestedMs?"explicit":"automatic",unsigned(ok),double(previousBudget),previousSlices,
             double(appliedBudget),appliedSlices,double(targetBudget),targetSlices);
         return ok;
     } __except(EXCEPTION_EXECUTE_HANDLER) {
@@ -1460,7 +1461,6 @@ static BOOL CALLBACK Configure(PINIT_ONCE, PVOID, PVOID*) noexcept {
         // R226 rejected in live testing: delayed texture visibility and no FPS gain.
         Log("NATIVE_CPU_R226 installed=0 native_loop=1 reason=rejected_live_streaming_regression");
         Log("NATIVE_CPU_R227_INSTALL ready=%u",unsigned(native_cpu::installed&&native_prep::Install(renderer,d3d)));
-        Log("STREAMING_R229_INSTALL ready=%u",unsigned(native_streaming_policy::Install(renderer)));
         Log("DIRECTSTORAGE_R230_INSTALL ready=%u",unsigned(native_directstorage::Install()));
         Log("DIRECTSTORAGE_R237_INSTALL ready=%u",unsigned(native_loader_early::Install()));
         Log("LOADER_R235_INSTALL ready=%u",unsigned(native_loader_trace::Install()));
@@ -1474,7 +1474,13 @@ static BOOL CALLBACK Configure(PINIT_ONCE, PVOID, PVOID*) noexcept {
             if(raw)static_cast<IUnknown*>(raw)->Release();
             return SUCCEEDED(hr)?hr:queue->QueryInterface(__uuidof(ID3D12CommandQueue),reinterpret_cast<void**>(out));
         };
-        Log("DIRECTSTORAGE_R254_INSTALL ready=%u",unsigned(native_gpu_storage::Install()));
+        storage_startup_policy::active=steamTarget&&native_gpu_storage::Install();
+        if(!steamTarget)Log("DIRECTSTORAGE_R255 disabled=unvalidated_storefront");
+        Log("DIRECTSTORAGE_R255_INSTALL ready=%u",unsigned(storage_startup_policy::active));
+        Log("STREAMING_R229_INSTALL ready=%u",unsigned(steamTarget&&native_streaming_policy::Install(renderer,storage_startup_policy::active)));
+        Log("STORAGE_DEFAULTS_R255 active=%u automatic_budget_ms=%u pinned_slices=%d latency=%u publication=%u asset_trace=%u cpu_timing=%u",
+            unsigned(storage_startup_policy::active),storage_startup_policy::active?4u:1u,storage_startup_policy::pinnedSlices,
+            unsigned(native_gpu_storage::traceLatency),unsigned(native_gpu_storage::publicationInstalled),unsigned(native_gpu_storage::assetTraceEnabled),unsigned(native_cpu::installed));
         const bool guideInputsReady = RRGuideInitializeInputs(d3d);
         const unsigned int rrObserverHooks = InstallRRObservationHooks(renderer,d3d);
         Log("PT_REFLECTION_P0_OBSERVER ready=%u expected=5 scope=reflection_dispatch_identification gpu_work=unchanged allocations=0",rrObserverHooks);

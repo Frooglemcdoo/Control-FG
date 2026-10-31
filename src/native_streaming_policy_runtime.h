@@ -1,4 +1,5 @@
 #pragma once
+#include "storage_startup_policy.h"
 // Startup-only replacement of the two verified native scan-partition stores.
 // The leaf relay executes MOV [RIP+disp32], imm32; RET: no register/flag changes,
 // no API calls, allocations, locks or logging while native settings are applied.
@@ -88,13 +89,13 @@ inline void Report(unsigned long long present) noexcept {
     memcpy(&budget,observedRenderer+0x9186a0,4);memcpy(&slices,observedRenderer+0x919010,4);
     Log("STREAMING_R229_STATE present=%llu pin_installed=%u budget_ms=%.3f slices=%d",present,unsigned(installed),double(budget),slices);
 }
-inline bool Install(HMODULE renderer) noexcept {
+inline bool Install(HMODULE renderer,bool defaultEnabled=false) noexcept {
     if(!renderer||renderer!=verifiedRenderer){Log("STREAMING_R229 disabled=unverified_renderer");return false;}
     observedRenderer=reinterpret_cast<unsigned char*>(renderer);
-    char enabled[8]{},slices[8]{};
-    if(GetEnvironmentVariableA("CONTROLFG_STREAMING_PIN_SLICES",enabled,sizeof(enabled))!=1||enabled[0]!='1'){Log("STREAMING_R229 disabled=environment");return false;}
+    char slices[8]{};
+    if(!storage_startup_policy::EnvironmentFlag("CONTROLFG_STREAMING_PIN_SLICES",defaultEnabled)){Log("STREAMING_R229 disabled=environment");return false;}
     const DWORD n=GetEnvironmentVariableA("CONTROLFG_STREAMING_SLICES",slices,sizeof(slices));
-    const int value=n==1&&slices[0]=='8'?8:n==2&&slices[0]=='1'&&slices[1]=='6'?16:0;
+    const int value=!n&&defaultEnabled?16:n==1&&slices[0]=='8'?8:n==2&&slices[0]=='1'&&slices[1]=='6'?16:0;
     if(!value){Log("STREAMING_R229 disabled=invalid_slices");return false;}
     auto* base=reinterpret_cast<unsigned char*>(renderer);
     constexpr unsigned char first[]={0x44,0x89,0x25,0x67,0x18,0x7e,0};
@@ -110,6 +111,7 @@ inline bool Install(HMODULE renderer) noexcept {
         }
     }
     installed=true;
+    storage_startup_policy::pinnedSlices=value;
     Log("STREAMING_R229 pin_slices=%d writers=2 phase_hooks=independent scope=process_only",value);
     return true;
 }

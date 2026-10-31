@@ -215,13 +215,13 @@
       "id": 10008,
       "localizationKey": "TEXTURE",
       "label": "Texture Streaming Budget",
-      "description": "Set the time budget for texture streaming work. Native leaves the game budget unchanged. 4, 6, 8, 10 or 12 ms can help textures reach full detail sooner, but higher budgets may cause frame-time spikes and traversal stutter. Try 4 ms first, and increase only if texture pop-in improves enough to justify the cost.",
+      "description": "Set the time budget for texture streaming work. Automatic uses 4 ms when the improved storage path is active, otherwise the native 1 ms budget. Explicit choices override that budget. Higher budgets allow more request preparation per update and may increase frame times; they do not guarantee faster texture loading.",
       "type": "choice",
       "default": 0,
       "choices": [
         {
           "value": 0,
-          "label": "Native"
+          "label": "Automatic"
         },
         {
           "value": 4,

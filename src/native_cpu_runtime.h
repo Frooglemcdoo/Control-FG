@@ -118,8 +118,7 @@ inline void PreparationHook(void* self){
 inline void RecordingHook(void* self){Scope scope(Recording);recording(self);}
 inline void JoinHook(void* self,void* handle){Scope scope(Join);wait(self,handle);}
 inline bool Install(HMODULE renderer) noexcept {
-    char value[8]{};GetEnvironmentVariableA("CONTROLFG_NATIVE_CPU_TIMING",value,sizeof(value));
-    if(value[0]=='0'){Log("NATIVE_CPU_R218 enabled=0 reason=environment");return false;}
+    if(!storage_startup_policy::EnvironmentFlag("CONTROLFG_NATIVE_CPU_TIMING",false)){Log("NATIVE_CPU_R218 enabled=0 reason=environment");return false;}
     if(!renderer||renderer!=verifiedRenderer||!QueryPerformanceFrequency(&clockFrequency)||clockFrequency.QuadPart<=0)return false;
     auto* base=reinterpret_cast<unsigned char*>(renderer);
     // Exact renderer image hash is verified by Configure before reaching here.
