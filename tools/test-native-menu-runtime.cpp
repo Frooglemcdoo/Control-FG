@@ -23,6 +23,8 @@ static void* InterlockedExchangePointer(void** p,void* v){auto old=*p;*p=v;retur
 static std::recursive_mutex fgSettingsMutex;
 static std::atomic<bool> fgNativeMenuReady{true};
 static std::atomic<unsigned> slRtx40MfgRequested{0};
+#include "../src/texture_streaming_budget.h"
+
 static unsigned mode=4,target=0,texture=0,saveCount=0,dirtyCount=0,nativeCalls=0;
 static bool vram=true,glass=true,rtx40=false,textureApply=true;
 static void Log(const char*,...){}
@@ -112,6 +114,16 @@ int main(int argc,char** argv){
     EnumHook(nullptr,10001,1);assert(target==240);
     textureApply=false;EnumHook(nullptr,10008,6);assert(texture==0);
     textureApply=true;EnumHook(nullptr,10008,6);assert(texture==6);
+    for(unsigned budget:{10u,12u}){
+        EnumHook(nullptr,10008,budget);assert(texture==budget);
+        assert(texture_streaming_budget::Normalize(budget)==budget);
+    }
+    float budget=8;assert(texture_streaming_budget::Override("10",2,budget)&&budget==10);
+    assert(texture_streaming_budget::Override("12",2,budget)&&budget==12);
+    assert(!texture_streaming_budget::Override("12junk",6,budget)&&budget==12);
+    assert(!texture_streaming_budget::Override("14",2,budget)&&budget==12);
+    assert(texture_streaming_budget::Normalize(14)==0);
+
     rtx40=true;EnumHook(nullptr,10000,6);assert(mode==1);
     assert(control_settings::RestoreFG(0)==0);
     assert(control_settings::RestoreFG(6)==2);

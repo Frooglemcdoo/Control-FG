@@ -170,5 +170,5 @@ int main(){
   D3D12_RANGE empty{};readback->Unmap(0,&empty);
  }
  Scheduling();AllocationGate();ResolveRange(factory.Get(),path);testResource=fixtures[0].texture;Admission();testResource.Reset();Check(transfer.Close(),"drained close");source.Reset();CloseHandle(event);Check(DeleteFileW(path)!=FALSE,"file ownership released");
- puts("PASS R243: file-to-GPU packed rows, eight formats / 72 mips, repeated and growing arena reuse, bounded staging, native state restoration, blocked consumer queue independence, bounds, native archive bias resolution, overlap rejection, embedded shader, shared pipeline, priority/FIFO burst scheduling, bounded queue admission, capacity/duplicate separation, slot reuse, ownership and deferred publication; runtime CPU payload bytes=0");
+ puts("PASS R244: file-to-GPU packed rows, eight formats / 72 mips, repeated and growing arena reuse, bounded staging, native state restoration, blocked consumer queue independence, bounds, native archive bias resolution, overlap rejection, embedded shader, shared pipeline, priority/FIFO burst scheduling, bounded queue admission, capacity/duplicate separation, slot reuse, ownership and deferred publication; runtime CPU payload bytes=0");
 }

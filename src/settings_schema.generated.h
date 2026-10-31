@@ -36,7 +36,7 @@ inline const Option kOptions[] = {
     {Key::RayReconstruction, 10003, 0, 0, 0, 1, {0, 1}, L"RayReconstruction", L"Enabled", {}},
     {Key::GlobalIlluminationSamples, 10006, 4, 0, 0, 1, {0, 2, 4, 6, 8, 12, 16}, L"RayReconstruction", L"GISamples", {{Key::RayReconstruction, 1}}},
     {Key::GlassReflections, 10007, 1, 0, 0, 1, {0, 1}, L"GlassReflections", L"Enabled", {}},
-    {Key::TextureStreamingBudget, 10008, 0, 0, 0, 1, {0, 4, 6, 8}, L"Experimental", L"TextureStreamingBudgetMs", {}},
+    {Key::TextureStreamingBudget, 10008, 0, 0, 0, 1, {0, 4, 6, 8, 10, 12}, L"Experimental", L"TextureStreamingBudgetMs", {}},
     {Key::VideoMemoryMonitor, 10009, 1, 0, 0, 1, {0, 1}, L"Overlay", L"VramMonitorEnabled", {}},
     {Key::ExperimentalMultiFrameGeneration, 10010, 0, 0, 0, 1, {0, 1}, L"Experimental", L"RTX40MultiFG", {}},
 };

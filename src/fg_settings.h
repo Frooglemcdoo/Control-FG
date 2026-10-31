@@ -1,5 +1,6 @@
 #pragma once
 #include <mutex>
+#include "texture_streaming_budget.h"
 #include "rr_user_control.h"
 #include "pt_reflection_user_control.h"
 #include "rr_gi_sample_control.h"
@@ -32,7 +33,7 @@ static void SetFGVramMonitorEnabled(bool enabled) noexcept {
 static std::atomic<unsigned int> fgTextureStreamingBudgetMs{0};
 
 static unsigned int NormalizeFGTextureStreamingBudgetMs(unsigned int value) noexcept {
-    return value==4u||value==6u||value==8u ? value : 0u;
+    return texture_streaming_budget::Normalize(value);
 }
 static unsigned int GetFGTextureStreamingBudgetMs() noexcept {
     return NormalizeFGTextureStreamingBudgetMs(fgTextureStreamingBudgetMs.load(std::memory_order_acquire));

@@ -149,8 +149,10 @@ static bool TextureStreamingPlausibleBudget(float value) noexcept {
     return value>=0.09f&&value<=33.01f;
 }
 
+#include "texture_streaming_budget.h"
+
 static unsigned int NormalizeTextureStreamingExperimentalMs(unsigned int value) noexcept {
-    return value==4u||value==6u||value==8u ? value : 0u;
+    return texture_streaming_budget::Normalize(value);
 }
 
 static bool ApplyTextureStreamingExperimental(unsigned int requestedMs) noexcept {
@@ -166,7 +168,7 @@ static bool ApplyTextureStreamingExperimental(unsigned int requestedMs) noexcept
     char budgetOverride[8]{},sliceOverride[8]{};
     const DWORD budgetLength=GetEnvironmentVariableA("CONTROLFG_STREAMING_BUDGET_MS",budgetOverride,sizeof(budgetOverride));
     const DWORD sliceLength=GetEnvironmentVariableA("CONTROLFG_STREAMING_SLICES",sliceOverride,sizeof(sliceOverride));
-    if(budgetLength==1&&(budgetOverride[0]=='1'||budgetOverride[0]=='4'||budgetOverride[0]=='6'||budgetOverride[0]=='8'))targetBudget=float(budgetOverride[0]-'0');
+    texture_streaming_budget::Override(budgetOverride,budgetLength,targetBudget);
     if(sliceLength==1&&sliceOverride[0]=='8')targetSlices=8;
     else if(sliceLength==2&&sliceOverride[0]=='1'&&sliceOverride[1]=='6')targetSlices=16;
     Log("STREAMING_R227 requested_menu_ms=%u effective_budget_ms=%.0f effective_slices=%d process_override=%u",requestedMs,double(targetBudget),targetSlices,unsigned(budgetLength||sliceLength));
@@ -235,7 +237,7 @@ static void OpenLog() {
     Log("CAPABILITIES fg=fixed_2x_to_6x_plus_dynamic rr=models_E_F_default_F hdr10_bridge=1 rr_guides=gbuffer_material_envbrdf rr_hit_distance=off rr_specular_mvec=off rr_diagnostic_readbacks=off streamline_sdk=2.14.1");
     Log("MONITORING profile=%s rr_perf_sample=240 support_events=startup_settings_fg_rr_model_resize_recovery_failures_fallbacks_performance verbose_env=CONTROLFG_VERBOSE_LOG",verboseAuditLogging?"verbose_audit":"release_support");
     Log("RR_VRAM_LIFECYCLE build=R4 base=v2.1.1 clean_release_tag=1 d1_capture=disabled native_rr_cache=single_live_extent preset_switch=full_native_feature_epoch cache_layout=key_feature_parameters state_layout=feature_parameters release_old_extent_after_fence=1 lazy_recreate_cached_extent=1 streamline_free=nonowning_options_only owned_guides_release=rr_off");
-    Log("TEXTURE_EXPERIMENTAL_CONFIG build=R2 options=off,4ms,6ms,8ms off=native_1ms_8slices enabled=16slices source=p6_r1_r2_r3 live_switch=1 live_state_range_guard=1 vram_toggle=1 warning=traversal_stutter");
+    Log("TEXTURE_EXPERIMENTAL_CONFIG build=R2 options=off,4ms,6ms,8ms,10ms,12ms off=native_1ms_8slices enabled=16slices source=p6_r1_r2_r3 live_switch=1 live_state_range_guard=1 vram_toggle=1 warning=traversal_stutter");
 }
 
 // +0x88 was observed at multiple resource loads in the hash-locked doAntiAliasing
@@ -1472,7 +1474,7 @@ static BOOL CALLBACK Configure(PINIT_ONCE, PVOID, PVOID*) noexcept {
             if(raw)static_cast<IUnknown*>(raw)->Release();
             return SUCCEEDED(hr)?hr:queue->QueryInterface(__uuidof(ID3D12CommandQueue),reinterpret_cast<void**>(out));
         };
-        Log("DIRECTSTORAGE_R243_INSTALL ready=%u",unsigned(native_gpu_storage::Install()));
+        Log("DIRECTSTORAGE_R244_INSTALL ready=%u",unsigned(native_gpu_storage::Install()));
         const bool guideInputsReady = RRGuideInitializeInputs(d3d);
         const unsigned int rrObserverHooks = InstallRRObservationHooks(renderer,d3d);
         Log("PT_REFLECTION_P0_OBSERVER ready=%u expected=5 scope=reflection_dispatch_identification gpu_work=unchanged allocations=0",rrObserverHooks);
