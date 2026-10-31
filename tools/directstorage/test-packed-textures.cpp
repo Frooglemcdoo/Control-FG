@@ -174,19 +174,20 @@ static void AssetTraceObservation(){
  Check(!tracker.Take(16,2,99,201,&out)&&out==0,"unmatched publication clears token");
  puts("PASS R252 asset trace: bounded capture, time window, grace, sanitization, event correlation and stale-token rejection");
 }
+static void Put32(void* p,unsigned offset,unsigned value){memcpy(static_cast<unsigned char*>(p)+offset,&value,4);}
 static void SelectionObservation(){
  namespace n=native_gpu_storage;
  static unsigned char rendererFixture[0x9186a4]{};unsigned char texture[0x160]{},levels[3*0x28]{};
  auto* oldRenderer=n::renderer;n::renderer=rendererFixture;
- Put(texture,0xe8,reinterpret_cast<std::uint64_t>(levels));Put(texture,0xf0,3);texture[0x111]=1;
- Put(texture,0xb4,2);Put(texture,0xb8,2);Put(texture,0xc4,1);Put(levels,0x28+0x20,0);
+ Put(texture,0xe8,reinterpret_cast<std::uint64_t>(levels));Put32(texture,0xf0,3);texture[0x111]=1;
+ Put32(texture,0xb4,2);Put32(texture,0xb8,2);Put32(texture,0xc4,1);Put32(levels,0x28+0x20,0);
  n::assetTraceEnabled=true;n::assetCapture.Begin(n::ClockUs());n::assetDeadline=n::assetCapture.flushAt;n::selectionTrace.Reset();
  n::RegisterSelection(texture,"data_pc\\textures\\props\\signs\\wayfinding_text_luck_probability_a.tex");
  Check(n::selectionTrace.Contains(reinterpret_cast<std::uint64_t>(texture)),"wayfinding target registered before scan");
- n::requestLevel=[](void* t,int level){Check(GetLastError()==123&&level==1,"budget call ABI and incoming error");Put(t,0xc0,9);SetLastError(456);return false;};
+ n::requestLevel=[](void* t,int level){Check(GetLastError()==123&&level==1,"budget call ABI and incoming error");Put32(t,0xc0,9);SetLastError(456);return false;};
  SetLastError(123);Check(!n::RequestLevelHook(texture,1)&&GetLastError()==456,"budget result and outgoing error preserved");
  Check(n::selectionTrace.count==1&&n::selectionTrace.rows[0].kind==1&&n::selectionTrace.rows[0].before.delta==0&&n::selectionTrace.rows[0].after.delta==9,"budget before/after state captured");
- n::selectTexture=[](void* t,bool a,bool b,bool c){Check(GetLastError()==123&&a&&!b&&c,"selector arguments forwarded");Put(t,0xc4,2);SetLastError(789);};
+ n::selectTexture=[](void* t,bool a,bool b,bool c){Check(GetLastError()==123&&a&&!b&&c,"selector arguments forwarded");Put32(t,0xc4,2);SetLastError(789);};
  SetLastError(123);n::SelectTextureHook(texture,true,false,true);Check(GetLastError()==789&&n::selectionTrace.count==2,"selector forwarded exactly once");
  Check(n::selectionTrace.rows[1].before.wanted==1&&n::selectionTrace.rows[1].after.wanted==2,"target change captured");
  n::RegisterSelection(texture,"other.tex");Check(!n::selectionTrace.Contains(reinterpret_cast<std::uint64_t>(texture)),"reused identity invalidated");
@@ -194,6 +195,7 @@ static void SelectionObservation(){
  puts("PASS R253 selection: target registration, identity invalidation, before/after snapshots, selector/budget forwarding, return and LastError");
 }
 int main(){
+ setvbuf(stdout,nullptr,_IONBF,0);
  SelectionObservation();
  AssetTraceObservation();
  PublicationObservation();

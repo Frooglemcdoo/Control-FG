@@ -24,7 +24,7 @@ struct Trace {
   for(auto& t:targets)if(!t.texture){Copy(t,texture,name);++targetsCount;return;}
   ++targetOverflow;
  }
- static void Copy(Target& t,U64 texture,const char* name){t={};t.texture=texture;std::strncpy(t.name,name,sizeof(t.name)-1);}
+ static void Copy(Target& t,U64 texture,const char* name){t={};t.texture=texture;for(unsigned i=0;i<sizeof(t.name)-1&&name[i];++i)t.name[i]=name[i];}
  bool Contains(U64 texture)const{for(const auto& t:targets)if(t.texture==texture&&texture)return true;return false;}
  void Reset(){count=overflow=0;}
  void Add(const Row& row){if(count==Capacity){++overflow;return;}rows[count++]=row;}
