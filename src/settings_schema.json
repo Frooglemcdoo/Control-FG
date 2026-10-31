@@ -1,6 +1,6 @@
 {
   "protocol": {
-    "version": 41,
+    "version": 255,
     "firstId": 10000,
     "endId": 11000,
     "handshakeId": 10999,
@@ -209,6 +209,31 @@
       },
       "group": "rayTracing",
       "presentation": "checkbox"
+    },
+    {
+      "key": "DirectStorage",
+      "id": 10011,
+      "localizationKey": "STORAGE",
+      "label": "DirectStorage",
+      "description": "Use the improved texture streaming path. Select to enable or disable, then confirm to restart Control. Changes apply after restarting. Available on the verified Steam build.",
+      "type": "choice",
+      "default": 1,
+      "choices": [
+        {
+          "value": 0,
+          "label": "Off"
+        },
+        {
+          "value": 1,
+          "label": "On"
+        }
+      ],
+      "storage": {
+        "section": "DirectStorage",
+        "key": "Enabled"
+      },
+      "presentation": "restartButton",
+      "group": "quality"
     },
     {
       "key": "TextureStreamingBudget",

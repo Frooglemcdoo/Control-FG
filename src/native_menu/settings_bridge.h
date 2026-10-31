@@ -14,6 +14,7 @@ static std::string Configuration() {
     std::lock_guard<std::recursive_mutex> lock(fgSettingsMutex);
     std::ostringstream output;
     output << "{\"rtx40\":" << (IsFGRtx40Series() ? "true" : "false");
+    output << ",\"storageSupported\":" << (IsFGDirectStorageSupported() ? "true" : "false");
     auto appendValues = [&](const char* name, bool defaults) {
         output << ",\"" << name << "\":[";
         const auto values = control_settings::Snapshot(defaults);
@@ -94,6 +95,14 @@ static void Dispatch(void* model, int id, int value, PropertyFn original) {
         return; }
     if(id>=control_settings::kFirstId&&id<control_settings::kEndId) {
         std::lock_guard<std::recursive_mutex> lock(fgSettingsMutex);
+        if(id==control_settings::Definition(control_settings::Key::DirectStorage).id){
+            const bool valid=fgNativeMenuReady.load()&&value>=0&&value<=1&&IsFGDirectStorageSupported();
+            if(valid)originalSave(model);
+            const bool ok=valid&&FGSettingsRestartStorage(static_cast<unsigned>(value));
+            Notify(model,id,ok);
+            Emit(model,ok?"CFG_STORAGE_RESTART_READY":"CFG_STORAGE_RESTART_FAILED");
+            return;
+        }
         const bool ok = fgNativeMenuReady.load() && Apply(id,value);
         Log("NATIVE_MENU_SETTING id=%d value=%d applied=%u",id,value,unsigned(ok));
         Notify(model,id,ok);

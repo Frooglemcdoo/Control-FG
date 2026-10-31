@@ -12,8 +12,14 @@
     }
     var schema = window.__controlFGSchema;
     var definitions = schema.options, protocol = schema.protocol;
-    var nativeModel = null;
+    var nativeModel = null, nativeRequire = null;
     var rowsByKey = Object.create(null), rowsById = Object.create(null);
+    var storageBusy = false, storageRestartIssued = false;
+    label("CFG_STORAGE_ON", "DirectStorage: On");
+    label("CFG_STORAGE_OFF", "DirectStorage: Off");
+    label("CFG_STORAGE_UNAVAILABLE", "DirectStorage: Unavailable");
+    label("CFG_STORAGE_ENABLE", "Enabling DirectStorage requires restarting Control. Restart now? Progress since the last checkpoint will be lost.");
+    label("CFG_STORAGE_DISABLE", "Disabling DirectStorage requires restarting Control. Restart now? Progress since the last checkpoint will be lost.");
     function makeRows() {
         return definitions.map(function (definition, slot) {
             var key = "CFG_" + definition.localizationKey;
@@ -52,7 +58,7 @@
     }
     function refresh() {
         rows.forEach(function (row) {
-            row.m_bIsDisabled = (row.cfgDefinition.requires || []).some(function (dependency) {
+            row.m_bIsDisabled = (row.cfgDefinition.key === "DirectStorage" && (!cfg.storageSupported || storageBusy)) || (row.cfgDefinition.requires || []).some(function (dependency) {
                 var source = rowsByKey[dependency.key];
                 return !source || source.m_value !== dependency.value;
             }) || (row.cfgDefinition.nativeRequires || []).some(function (name) { return !nativeOptionEnabled(name); });
@@ -60,7 +66,7 @@
     }
     window.__controlFG = {
         rows: function (require, model) {
-            nativeModel = model || null;
+            nativeModel = model || null; nativeRequire = require;
             if (rows) { mobx.runInAction(refresh); return rows; }
             mobx = require("./node_modules/mobx/lib/mobx.module.js");
             rows = mobx.observable.array(makeRows());
@@ -74,6 +80,16 @@
                 map.NO_WARNING_WHEN_DISABLED[r.m_strNameLocID] = true;
             });
             var engine = require("northlight/vendor/coherent"), original = engine.trigger;
+            engine.on("CFG_STORAGE_RESTART_READY", function () {
+                if (!storageBusy || storageRestartIssued) return;
+                storageRestartIssued = true;
+                original.call(engine, "OnExitClicked");
+            });
+            engine.on("CFG_STORAGE_RESTART_FAILED", function () {
+                storageBusy = false;
+                label("CFG_STORAGE_INFO", "Could not save the setting or prepare the restart. DirectStorage remains unchanged. Check that the complete mod package, including ControlFG-Restart.exe, is installed.");
+                mobx.runInAction(refresh);
+            });
             var pending = Object.create(null), confirmed = Object.create(null);
             rows.forEach(function (r) {
                 var id = r.m_iPropertyID;
@@ -158,11 +174,16 @@
                         value = selected.value;
                     }
                     if (row.cfgDefinition.type === "choice" ? !row.m_vecPossibleValues.some(function (v) { return v.m_value === value; }) : value < row.m_minValue || value > row.m_maxValue || (value - row.m_minValue) % row.m_valueStep !== 0) return;
+                    if (row.cfgDefinition.presentation === "restartButton") {
+                        if (value === row.m_value) return;
+                        storageBusy = true;
+                    }
                     pending[id].push(value);
                     mobx.runInAction(function () { row.m_value = value; refresh(); });
                 } else if (event === "OnGraphicsReset") {
                     mobx.runInAction(function () {
                         rows.forEach(function (r) {
+                            if (r.cfgDefinition.presentation === "restartButton") return;
                             r.m_value = cfg.defaults[r.cfgSlot];
                             pending[r.m_iPropertyID].push(r.m_value);
                         });
@@ -198,6 +219,20 @@
             // Keep controls usable if a native group is absent; never discard rows.
             customRows.forEach(function (row) { if (!inserted[row.cfgDefinition.group]) result.push(row); });
             return result;
+        },
+        restartButton: function (row) {
+            var require = nativeRequire;
+            var react = require("./node_modules/react/index.js");
+            var EventButton = require("./northlight/LinkComponents/EventButton/EventButton.tsx").default;
+            var Text = require("./northlight/components/Text/Text.tsx").default;
+            return react.createElement(EventButton, {
+                key: "Graphics" + row.m_iPropertyID,
+                event: "OnEnumGraphicsPropertySet", eventArgs: [row.m_iPropertyID, row.m_value ? 0 : 1],
+                label: row.m_strNameLocID, descriptionMode: 2,
+                className: "options-tile", width: 3, autoScroll: true,
+                needsConfirm: true, useHold: false, isDisabled: row.m_bIsDisabled,
+                confirmLocId: row.m_value ? "CFG_STORAGE_DISABLE" : "CFG_STORAGE_ENABLE"
+            }, react.createElement(Text, {locId: !cfg.storageSupported ? "CFG_STORAGE_UNAVAILABLE" : row.m_value ? "CFG_STORAGE_ON" : "CFG_STORAGE_OFF", autoUpdate: true}));
         },
         slider: function (row) {
             var values = row.cfgDefinition.choices;

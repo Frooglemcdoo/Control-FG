@@ -29,8 +29,8 @@ def generate(schema=None):
         assert type(option_id) is int and key.isascii()
         assert option['localizationKey'] not in localization_keys
         localization_keys.add(option['localizationKey'])
-        assert option.get('presentation') in (None, 'slider', 'checkbox')
-        if option.get('presentation') == 'checkbox':
+        assert option.get('presentation') in (None, 'slider', 'checkbox', 'restartButton')
+        if option.get('presentation') in ('checkbox', 'restartButton'):
             assert option['type'] == 'choice' and [c['value'] for c in option['choices']] == [0, 1]
         if option.get('presentation') == 'slider':
             assert option['type'] == 'choice'

@@ -3,6 +3,7 @@
 namespace storage_startup_policy {
 // Set only after the verified runtime installs; never inferred from an env flag.
 inline bool active=false;
+inline bool supported=false;
 inline int pinnedSlices=0;
 constexpr bool Flag(const char* text,unsigned length,bool fallback) noexcept {
     return !length?fallback:text&&length==1&&text[0]=='1';

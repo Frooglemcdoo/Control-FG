@@ -57,6 +57,7 @@ inline unsigned Read(Key key) {
     case Key::GlobalIlluminationSamples: return control_rr::GISampleRequested();
     case Key::GlassReflections: return unsigned(PTReflectionUserRequested());
     case Key::TextureStreamingBudget: return GetFGTextureStreamingBudgetMs();
+    case Key::DirectStorage: return unsigned(GetFGDirectStorageEnabled());
     case Key::VideoMemoryMonitor: return unsigned(IsFGVramMonitorEnabled());
     case Key::ExperimentalMultiFrameGeneration: return unsigned(IsRTX40MFGRequested());
     }
@@ -76,6 +77,7 @@ inline std::array<unsigned, kOptionCount> Snapshot(bool defaults = false) {
 }
 inline bool Enabled(const Option& option) {
     if (!Visible(option)) return false;
+    if (option.key == Key::DirectStorage && !IsFGDirectStorageSupported()) return false;
     for (const auto& dependency : option.dependencies)
         if (Read(dependency.key) != dependency.value) return false;
     return true;
@@ -106,6 +108,7 @@ inline bool Write(const Option& option, int value, WriteReason reason = WriteRea
         if (!ApplyTextureStreamingExperimental(requested)) return false;
         SetFGTextureStreamingBudgetMs(requested);
         break;
+    case Key::DirectStorage: return false; // Confirmed restart dispatch owns this write; reset must not restart.
     case Key::VideoMemoryMonitor: SetFGVramMonitorEnabled(requested != 0); break;
     case Key::ExperimentalMultiFrameGeneration: slRtx40MfgRequested.store(requested); break;
     default: return false; // New schema entries must supply a renderer writer.

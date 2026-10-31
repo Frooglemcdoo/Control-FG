@@ -8,7 +8,7 @@ if (process.argv[2] === '--config') {
     assert.deepEqual(native.fgChoices, schema.options.find(option => option.key === 'FrameGeneration').choices.map(choice => choice.value));
 }
 function exercise(rtx40) {
-    const config = {rtx40,
+    const config = {rtx40,storageSupported:true,
         values:schema.options.map(o=>o.default),defaults:schema.options.map(o=>o.default),
         fgChoices:rtx40?[0,2]:[0,1,2,3,4,5,6]};
     if(rtx40) config.values[0]=config.defaults[0]=2;
@@ -32,21 +32,23 @@ function exercise(rtx40) {
             handlers.CFG_STATE_END();
         }
         else if(args[0]==='OnGraphicsReset')Object.keys(handlers).filter(k=>k.startsWith('CFG_OK_')).forEach(k=>handlers[k]());
-        else if(args[1]>=10000&&args[1]<=10010) {
+        else if(args[1]>=10000&&args[1]<=10011) {
             const key=(engine.reject?'CFG_FAIL_':'CFG_OK_')+args[1];
             if(handlers[key])handlers[key]();
         }
     }};
     const maps={default:{},NO_WARNING_WHEN_DISABLED:{}};
     const requireModule=name=>name.includes('mobx/lib')?{observable:{array:x=>x},runInAction:f=>f()}:
-        name.includes('OptionToDescriptionModeMap')?maps:engine;
+        name.includes('OptionToDescriptionModeMap')?maps:
+        name.includes('react/index.js')?{createElement:(type,props,...children)=>({type,props,children})}:
+        name.includes('EventButton.tsx')||name.includes('/Text.tsx')?{default:name}:engine;
     const nativeModel={m_vecBoolProperties:[
         {m_strNameLocID:'MENU_OPTIONS_RT_INDIRECT_DIFFUSE_QUALITY',m_value:true},
         {m_strNameLocID:'MENU_OPTIONS_RT_SPOT_CONTACT_SHADOW_QUALITY',m_value:false}
     ]};
     const menu=context.window.__controlFG, rows=menu.rows(requireModule,nativeModel);
     const byId=Object.fromEntries(rows.map(row=>[row.m_iPropertyID,row]));
-    assert.equal(rows.length,rtx40?9:8);
+    assert.equal(rows.length,rtx40?10:9);
     assert(!byId[10004] && !byId[10005]);
     [10003,10007,10009].concat(rtx40?[10010]:[]).forEach(id=>{
         assert.equal(byId[id].m_eDataType,0);
@@ -135,6 +137,28 @@ function exercise(rtx40) {
     ['CFG_RR','CFG_GI','CFG_GLASS'].forEach(name=>assert(position(name)>position('RT_LAST')));
     assert.equal(new Set(ordered).size,ordered.length);
     assert.deepEqual(ordered.filter(row=>!row.cfgDefinition),native);
+    const storage=byId[10011];
+    const button=menu.restartButton(storage);
+    assert.equal(button.type,'./northlight/LinkComponents/EventButton/EventButton.tsx');
+    assert.equal(button.props.needsConfirm,true);assert.equal(button.props.useHold,false);
+    assert.equal(button.props.confirmLocId,'CFG_STORAGE_DISABLE');
+    assert.equal(storage.m_value,1); // Creating/opening a native button cannot change the preference.
+    const beforeRestart=events.length;
+    handlers.CFG_STORAGE_RESTART_READY();assert.equal(events.length,beforeRestart); // Ignore unsolicited/duplicate ready.
+    engine.reject=true;
+    engine.trigger(button.props.event,...button.props.eventArgs);
+    handlers.CFG_STORAGE_RESTART_FAILED();assert.equal(storage.m_value,1);
+    assert.equal(storage.m_bIsDisabled,false);
+    engine.reject=false;
+    engine.trigger(button.props.event,...button.props.eventArgs);
+    assert.equal(storage.m_value,0);assert.equal(storage.m_bIsDisabled,true);
+    handlers.CFG_STORAGE_RESTART_READY();assert.equal(events.at(-1)[0],'OnExitClicked');
+    const afterRestart=events.length;handlers.CFG_STORAGE_RESTART_READY();assert.equal(events.length,afterRestart);
+    handlers.CFG_STORAGE_RESTART_FAILED(); // Simulate next view's non-busy state for rendering checks.
+    const enable=menu.restartButton(storage);assert.equal(enable.props.confirmLocId,'CFG_STORAGE_ENABLE');
+    engine.trigger('OnGraphicsReset');assert.equal(storage.m_value,0); // Reset cannot silently change restart-only preference.
+    config.storageSupported=false;menu.rows(requireModule,nativeModel);assert.equal(storage.m_bIsDisabled,true);
+    config.storageSupported=true;menu.rows(requireModule,nativeModel);
     engine.trigger('OnSaveOptions');assert.equal(events.at(-1)[0],'OnSaveOptions');
     return {context, requireModule, rows};
 }
@@ -161,7 +185,7 @@ if(process.argv[2] && process.argv[2] !== '--config') {
     modules['./northlight/LinkComponents/OptionsTab/OptionsTab.tsx']({},exports,req);
     const model={};['Bool','DisplayMode','Enum','Float','Int','Str','KeyBind'].forEach(t=>model['m_vec'+t+'Properties']=[]);
     const graphics=new exports.default({sectionType:'Graphics',modelProperties:model});
-    assert.equal(graphics.renderOptions().length,8);
+    assert.equal(graphics.renderOptions().length,9);
     const audio=new exports.default({sectionType:'Audio',modelProperties:model});
     assert.equal(audio.renderOptions().length,0);
     const rendered=graphics.renderOptions();
@@ -169,9 +193,12 @@ if(process.argv[2] && process.argv[2] !== '--config') {
     assert.equal(rendered[0].props.valueDataType,3);
     const toggle=rendered.find(element=>element.props.eventType==='Bool');
     assert.equal(toggle.props.property.m_strNameLocID,'CFG_RR');
-    assert.equal(rendered[4].props.max,4); // GI choice slider.
-    assert.equal(rendered[6].props.max,3); // Texture budget slider.
-    assert.deepEqual(Array.from(rendered[6].props.strValues),['Native','4 ms','6 ms','8 ms']);
+    assert.equal(rendered[4].props.max,6); // GI choice slider.
+    const storageButton=rendered.find(e=>e.props.eventArgs&&e.props.eventArgs[0]===10011);
+    assert.equal(storageButton.props.needsConfirm,true);
+    const textureSlider=rendered.find(e=>e.props.propertyId===10008);
+    assert.equal(textureSlider.props.max,5);
+    assert.deepEqual(Array.from(textureSlider.props.strValues),['Automatic','4 ms','6 ms','8 ms','10 ms','12 ms']);
 
 }
 console.log('PASS native menu labels, choices, events, reset, capability filtering and native component rendering');

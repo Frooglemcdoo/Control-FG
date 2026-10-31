@@ -19,6 +19,7 @@ static std::wstring ModulePath(HMODULE){return L"";}
 #include "../../src/native_cpu_call_patch.h"
 #include "../../src/native_loader_trace_runtime.h"
 #include "../../src/native_texture_contract_runtime.h"
+static bool GetFGDirectStorageEnabled(){return true;}
 #include "../../src/native_gpu_storage_runtime.h"
 using Microsoft::WRL::ComPtr;
 using Batch=control_storage::PackedTextureBatch;

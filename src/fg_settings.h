@@ -1,6 +1,8 @@
 #pragma once
 #include <mutex>
 #include "texture_streaming_budget.h"
+#include "storage_startup_policy.h"
+#include "storage_restart.h"
 #include "rr_user_control.h"
 #include "pt_reflection_user_control.h"
 #include "rr_gi_sample_control.h"
@@ -31,6 +33,11 @@ static void SetFGVramMonitorEnabled(bool enabled) noexcept {
 }
 
 static std::atomic<unsigned int> fgTextureStreamingBudgetMs{0};
+static std::atomic<bool> fgDirectStorageEnabled{true};
+static bool GetFGDirectStorageEnabled() noexcept {return fgDirectStorageEnabled.load();}
+static bool IsFGDirectStorageSupported() noexcept {return storage_startup_policy::supported;}
+static storage_restart::Pending fgStorageRestart;
+static bool fgStorageRestartPending=false;
 
 static unsigned int NormalizeFGTextureStreamingBudgetMs(unsigned int value) noexcept {
     return texture_streaming_budget::Normalize(value);
@@ -107,6 +114,12 @@ static bool FGSettingsResolveSettingsPath() noexcept {
     const std::wstring originalSettings=dir+L"\\settings.ini";
     CopyFileW(originalSettings.c_str(),fgSettingsPath.c_str(),TRUE);
     return true;
+}
+
+static void FGSettingsLoadStoragePreference() noexcept {
+    std::lock_guard<std::recursive_mutex> lock(fgSettingsMutex);
+    if(FGSettingsResolveSettingsPath())
+        fgDirectStorageEnabled=GetPrivateProfileIntW(L"DirectStorage",L"Enabled",1,fgSettingsPath.c_str())!=0;
 }
 
 static unsigned FGSettingsReadStored(control_settings::Key key) noexcept {
@@ -200,6 +213,35 @@ static void FGSettingsFlushSettingsIfDue(bool force = false) noexcept {
     const ULONGLONG now = GetTickCount64();
     if (!force && now - fgSettingsDirtyMs < kFGSettingsDebounceMs) return;
     if (FGSettingsSaveSettingsNow()) fgSettingsDirty = false;
+}
+
+// Invoked only by the native menu's confirmed restart action, under the settings lock.
+static bool FGSettingsRestartStorage(unsigned requested) noexcept {
+    if(requested>1||!IsFGDirectStorageSupported()||fgStorageRestartPending)return false;
+    const bool previous=GetFGDirectStorageEnabled();
+    if(previous==(requested!=0))return false;
+    wchar_t exe[32768]{},directory[32768]{};
+    const auto count=GetModuleFileNameW(nullptr,exe,_countof(exe));
+    const auto dirCount=GetCurrentDirectoryW(_countof(directory),directory);
+    if(!count||count>=_countof(exe)||!dirCount||dirCount>=_countof(directory))return false;
+    const std::wstring path=exe;const auto slash=path.find_last_of(L"\\/");
+    if(slash==std::wstring::npos)return false;
+    fgDirectStorageEnabled=requested!=0;
+    if(!FGSettingsSaveSettingsNow()){
+        fgDirectStorageEnabled=previous;FGSettingsSaveSettingsNow();return false;
+    }
+    bool prepared=false;
+    try {prepared=storage_restart::Prepare(path.substr(0,slash+1)+L"ControlFG-Restart.exe",path,directory,GetCommandLineW(),fgStorageRestart);}
+    catch(...){prepared=false;}
+    if(!prepared){
+        fgDirectStorageEnabled=previous;
+        const bool rolledBack=FGSettingsSaveSettingsNow();
+        Log("STORAGE_RESTART_R255 prepared=0 rollback_saved=%u",unsigned(rolledBack));return false;
+    }
+    fgStorageRestartPending=true;
+    fgSettingsDirty=false;
+    Log("STORAGE_RESTART_R255 prepared=1 enabled=%u wait_for_normal_exit=1",requested);
+    return true;
 }
 
 static unsigned int FGSettingsDetectDisplayRefreshMilliHz(HWND game, const char** sourceOut) noexcept {

@@ -193,6 +193,12 @@ jobs:
           if errorlevel 1 exit /b 1
           build\TestStorageStartup.exe
           if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX /O2 tools\directstorage\restart-game.cpp /Febuild\ControlFG-Restart.exe
+          if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX /O2 tools\diagnostics\test-storage-restart.cpp /Febuild\TestStorageRestart.exe
+          if errorlevel 1 exit /b 1
+          build\TestStorageRestart.exe "%CD%\build\ControlFG-Restart.exe"
+          if errorlevel 1 exit /b 1
 
       - name: Validate native DirectStorage archive cache
         shell: cmd
@@ -1013,6 +1019,7 @@ jobs:
           $out='Control-FG-NativeGPUStorage-R255'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
+          Copy-Item build/ControlFG-Restart.exe $out
           Copy-Item build/rt_spot_selected_off.dxbc,build/rt_spot_selection.dxbc,build/rt_spot_visibility.dxbc,build/rt_spot_light_ids.dxbc,build/rt_spot_raw_history.dxbc,build/rt_spot_raw_spatial0.dxbc,build/rt_spot_raw_spatial1.dxbc,build/rt_spot_full.dxil,build/rt_spot_r94.dxil,build/rt_spot_light.dxbc,build/rt_spot_reset.dxbc,build/rt_spot_history.dxbc,build/rt_spot_spatial0.dxbc,build/rt_spot_spatial1.dxbc $out
           New-Item -ItemType Directory -Force -Path "$out/ControlFGStreamline" | Out-Null
           Copy-Item build/ControlFG.RTX40MFG.dll "$out/ControlFGStreamline/ControlFG.RTX40MFG.dll"
@@ -1044,6 +1051,8 @@ jobs:
           Automatic texture streaming uses 4 ms and 16 pinned partitions on the verified Steam build.
           Existing explicit menu budgets remain selected; choose Automatic for the accepted baseline.
           R254 GPU transport, worker prewarm and all-texture upgrade eligibility are retained.
+          Graphics > Quality > DirectStorage uses the native confirmation dialog to save and restart.
+          Cancel leaves the setting unchanged. Confirm exits normally and relaunches after exit.
           Optional CPU timing, per-asset capture and publication observers are off by default.
           Expect DIRECTSTORAGE_R255 installed=1, TEXTURE_UPGRADE_R255 installed=1,
           and STORAGE_DEFAULTS_R255 active=1 automatic_budget_ms=4 pinned_slices=16.

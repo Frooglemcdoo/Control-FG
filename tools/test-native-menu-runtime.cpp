@@ -27,6 +27,11 @@ static std::atomic<unsigned> slRtx40MfgRequested{0};
 
 static unsigned mode=4,target=0,texture=0,saveCount=0,dirtyCount=0,nativeCalls=0;
 static bool vram=true,glass=true,rtx40=false,textureApply=true;
+static bool storageEnabled=true,storageSupported=true,restartAllowed=true;
+static unsigned restartCalls=0;
+static bool GetFGDirectStorageEnabled(){return storageEnabled;}
+static bool IsFGDirectStorageSupported(){return storageSupported;}
+static bool FGSettingsRestartStorage(unsigned v){++restartCalls;if(!restartAllowed||v>1||bool(v)==storageEnabled)return false;storageEnabled=v!=0;return true;}
 static void Log(const char*,...){}
 static unsigned maxMultiplier=6;
 static unsigned GetFGMaxSupportedMultiplier(){return maxMultiplier;}
@@ -93,7 +98,7 @@ int main(int argc,char** argv){
     void* viewPointer=&view;
     memcpy(model+0xd0,&viewPointer,sizeof(viewPointer));
     mode=6;target=1000;
-    EnumHook(model,10999,41);
+    EnumHook(model,10999,control_settings::kVersion);
     assert(emitted.front()=="CFG_CHOICES_BEGIN"&&emitted.back()=="CFG_STATE_END");
     unsigned decoded[control_settings::kOptionCount]{};
     for(const auto& event:emitted){unsigned i,b;if(std::sscanf(event.c_str(),"CFG_STATE_%u_%u",&i,&b)==2){assert(i<control_settings::kOptionCount&&b<10);decoded[i]|=1u<<b;}}
@@ -133,6 +138,17 @@ int main(int argc,char** argv){
     ResetHook(nullptr);assert(mode==2&&target==0&&glass&&texture==0&&!control_rr::rr);
     assert(control_rr::gi==4&&control_rr_clamp::value==60&&saveCount==1&&nativeCalls==2);
     SaveHook(nullptr);assert(saveCount==2&&nativeCalls==3);
+    // Restart-only setting: no generic write/reset, no exit-ready event on rejection.
+    assert(!Apply(10011,0)&&storageEnabled);
+    restartAllowed=false;EnumHook(model,10011,0);
+    assert(storageEnabled&&emitted.back()=="CFG_STORAGE_RESTART_FAILED");
+    restartAllowed=true;EnumHook(model,10011,0);
+    assert(!storageEnabled&&emitted.back()=="CFG_STORAGE_RESTART_READY");
+    const auto restartBefore=restartCalls;EnumHook(model,10011,2);assert(restartCalls==restartBefore);
+    storageSupported=false;EnumHook(model,10011,1);assert(!storageEnabled&&restartCalls==restartBefore);
+    storageSupported=true;
+    ResetHook(model);assert(!storageEnabled&&restartCalls==restartBefore);
+    EnumHook(model,10011,1);assert(storageEnabled&&emitted.back()=="CFG_STORAGE_RESTART_READY");
     if(argc==2){
         rtx40=false;
         std::ifstream in(argv[1],std::ios::binary);
@@ -160,6 +176,7 @@ int main(int argc,char** argv){
     rtx40 = true;
     for (const auto& option : control_settings::kOptions) {
         const unsigned expected = control_settings::Default(option);
+        if(option.key==control_settings::Key::DirectStorage){assert(!control_settings::Write(option,expected,control_settings::WriteReason::Reset));continue;}
         assert(control_settings::Write(option, expected, control_settings::WriteReason::Reset));
         assert(control_settings::Read(option.key) == expected);
     }

@@ -1474,7 +1474,9 @@ static BOOL CALLBACK Configure(PINIT_ONCE, PVOID, PVOID*) noexcept {
             if(raw)static_cast<IUnknown*>(raw)->Release();
             return SUCCEEDED(hr)?hr:queue->QueryInterface(__uuidof(ID3D12CommandQueue),reinterpret_cast<void**>(out));
         };
-        storage_startup_policy::active=steamTarget&&native_gpu_storage::Install();
+        storage_startup_policy::supported=steamTarget&&HashMatches(GetModuleHandleW(L"rl_rmdwin10_f.dll"),"A79234E4B34C2488DEAAC3459E8054BE206B5AF78A37723D834C1CBD826CE484");
+        FGSettingsLoadStoragePreference();
+        storage_startup_policy::active=storage_startup_policy::supported&&native_gpu_storage::Install();
         if(!steamTarget)Log("DIRECTSTORAGE_R255 disabled=unvalidated_storefront");
         Log("DIRECTSTORAGE_R255_INSTALL ready=%u",unsigned(storage_startup_policy::active));
         Log("STREAMING_R229_INSTALL ready=%u",unsigned(steamTarget&&native_streaming_policy::Install(renderer,storage_startup_policy::active)));

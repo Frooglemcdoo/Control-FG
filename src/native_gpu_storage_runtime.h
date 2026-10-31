@@ -432,7 +432,7 @@ inline std::int64_t RequestHook(void* owner,const char* name,void* texture,U64 o
     ++fallback;routeNative();SetLastError(incoming);return original(owner,name,texture,offset,size,buffer,thread,priority,flag,user);
 }
 inline bool Install(){
-    char value[8]{};if(!storage_startup_policy::EnvironmentFlag("CONTROLFG_NATIVE_GPU_STORAGE",true)){Log("DIRECTSTORAGE_R255 disabled=environment");return false;}
+    char value[8]{};if(!storage_startup_policy::EnvironmentFlag("CONTROLFG_NATIVE_GPU_STORAGE",GetFGDirectStorageEnabled())){Log("DIRECTSTORAGE_R255 disabled=settings_or_environment");return false;}
     char latencyValue[8]{};traceLatency=GetEnvironmentVariableA("CONTROLFG_STORAGE_LATENCY",latencyValue,8)==1&&latencyValue[0]=='1';
     char assetValue[8]{};assetTraceEnabled=GetEnvironmentVariableA("CONTROLFG_STORAGE_ASSET_TRACE",assetValue,8)==1&&assetValue[0]=='1';
     if(assetTraceEnabled)traceLatency=true;

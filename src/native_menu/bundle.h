@@ -20,6 +20,8 @@ inline bool PatchCommons(const std::string& input, const std::string& config, st
     // Fail closed if another game build/mod changes the shared UI implementation.
     if (input.size() != 615195 || Hash(input) != 0xb5a45dfc86f79619ull) return false;
     std::string s(input);
+    if (!ReplaceOnce(s, "renderProperty(e,t){let n=null",
+        "renderProperty(e,t){if(e.cfgDefinition&&e.cfgDefinition.presentation===\"restartButton\")return window.__controlFG.restartButton(e);let n=null")) return false;
     if (!ReplaceOnce(s, "renderOptions(){const e=[",
         "renderOptions(){const e=[...(this.props.sectionType===\"Graphics\"?window.__controlFG.rows(n,this.props.modelProperties):[]),")) return false;
     if (!ReplaceOnce(s,

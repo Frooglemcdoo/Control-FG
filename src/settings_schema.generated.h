@@ -10,6 +10,7 @@ enum class Key {
     RayReconstruction,
     GlobalIlluminationSamples,
     GlassReflections,
+    DirectStorage,
     TextureStreamingBudget,
     VideoMemoryMonitor,
     ExperimentalMultiFrameGeneration,
@@ -24,7 +25,7 @@ struct Option {
     const wchar_t* storageKey;
     std::initializer_list<Dependency> dependencies;
 };
-inline constexpr int kVersion = 41;
+inline constexpr int kVersion = 255;
 inline constexpr int kFirstId = 10000;
 inline constexpr int kEndId = 11000;
 inline constexpr int kHandshakeId = 10999;
@@ -36,6 +37,7 @@ inline const Option kOptions[] = {
     {Key::RayReconstruction, 10003, 0, 0, 0, 1, {0, 1}, L"RayReconstruction", L"Enabled", {}},
     {Key::GlobalIlluminationSamples, 10006, 4, 0, 0, 1, {0, 2, 4, 6, 8, 12, 16}, L"RayReconstruction", L"GISamples", {{Key::RayReconstruction, 1}}},
     {Key::GlassReflections, 10007, 1, 0, 0, 1, {0, 1}, L"GlassReflections", L"Enabled", {}},
+    {Key::DirectStorage, 10011, 1, 0, 0, 1, {0, 1}, L"DirectStorage", L"Enabled", {}},
     {Key::TextureStreamingBudget, 10008, 0, 0, 0, 1, {0, 4, 6, 8, 10, 12}, L"Experimental", L"TextureStreamingBudgetMs", {}},
     {Key::VideoMemoryMonitor, 10009, 1, 0, 0, 1, {0, 1}, L"Overlay", L"VramMonitorEnabled", {}},
     {Key::ExperimentalMultiFrameGeneration, 10010, 0, 0, 0, 1, {0, 1}, L"Experimental", L"RTX40MultiFG", {}},
