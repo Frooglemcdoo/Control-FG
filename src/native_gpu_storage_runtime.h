@@ -7,6 +7,7 @@
 #include "storage_latency.h"
 #include "storage_publication_tracker.h"
 #include "storage_asset_trace.h"
+#include "storage_selection_trace.h"
 namespace native_gpu_storage {
 using U64=std::uint64_t;
 inline U64 ClockUs(){static const U64 frequency=[](){LARGE_INTEGER f;QueryPerformanceFrequency(&f);return U64(f.QuadPart);}();LARGE_INTEGER t;QueryPerformanceCounter(&t);return U64(t.QuadPart)/frequency*1000000+(U64(t.QuadPart)%frequency)*1000000/frequency;}
@@ -15,6 +16,9 @@ inline storage_asset_trace::Capture assetCapture,assetSnapshot;
 inline SRWLOCK assetLock=SRWLOCK_INIT;
 inline std::atomic<U64> assetDeadline{0},assetContention{0};
 inline bool assetHeld=false;
+inline storage_selection_trace::Trace selectionTrace,selectionSnapshot;
+inline bool selectionInstalled=false;
+inline std::atomic<U64> selectionDrops{0};
 inline storage_publication::Tracker nativeAssetTracker;
 inline std::atomic<U64> nativeAssetDropped{0};
 inline U64 AssetAdmit(const char* name,U64 requested,U64 admitted,unsigned level,int priority,U64 bytes,U64 texture=0,U64 offset=0,U64 allocationUs=0){
@@ -42,13 +46,23 @@ inline void FlushAssets(){
     const auto deadline=assetDeadline.load(std::memory_order_acquire);if(!deadline||ClockUs()<deadline)return;
     if(!TryAcquireSRWLockExclusive(&assetLock))return;
     const bool finished=assetCapture.Finish(ClockUs());
-    if(finished){assetSnapshot=assetCapture;assetDeadline.store(0,std::memory_order_release);}
+    if(finished){assetSnapshot=assetCapture;selectionSnapshot=selectionTrace;assetDeadline.store(0,std::memory_order_release);}
     ReleaseSRWLockExclusive(&assetLock);if(!finished)return;
-    Log("TEXTURE_ASSET_R252_BEGIN epoch=%llu start_us=%llu end_us=%llu rows=%u overflow=%u contention_total=%llu native_tracking_drops_total=%llu capacity=16384",assetSnapshot.epoch,assetSnapshot.start,assetSnapshot.end,assetSnapshot.count,assetSnapshot.overflow,assetContention.load(),nativeAssetDropped.load());
+    Log("TEXTURE_ASSET_R253_BEGIN epoch=%llu start_us=%llu end_us=%llu rows=%u overflow=%u contention_total=%llu native_tracking_drops_total=%llu capacity=16384",assetSnapshot.epoch,assetSnapshot.start,assetSnapshot.end,assetSnapshot.count,assetSnapshot.overflow,assetContention.load(),nativeAssetDropped.load());
     for(unsigned i=0;i<assetSnapshot.count;++i){const auto& r=assetSnapshot.rows[i];
-        Log("TEXTURE_ASSET_R252_ROW epoch=%llu token=%llu request_us=%llu admitted_us=%llu submit_us=%llu retired_us=%llu publication_us=%llu level=%u priority=%d bytes=%llu result=%d truncated=%u path=%d texture=%llu offset=%llu allocation_us=%llu name=%s",assetSnapshot.epoch,r.token,r.requested,r.admitted,r.submitted,r.retired,r.published,r.level,r.priority,r.bytes,r.result,unsigned(r.truncated),r.path,r.texture,r.offset,r.allocationUs,r.name);
+        Log("TEXTURE_ASSET_R253_ROW epoch=%llu token=%llu request_us=%llu admitted_us=%llu submit_us=%llu retired_us=%llu publication_us=%llu level=%u priority=%d bytes=%llu result=%d truncated=%u path=%d texture=%llu offset=%llu allocation_us=%llu name=%s",assetSnapshot.epoch,r.token,r.requested,r.admitted,r.submitted,r.retired,r.published,r.level,r.priority,r.bytes,r.result,unsigned(r.truncated),r.path,r.texture,r.offset,r.allocationUs,r.name);
     }
-    Log("TEXTURE_ASSET_R252_END epoch=%llu rows=%u",assetSnapshot.epoch,assetSnapshot.count);
+    Log("TEXTURE_ASSET_R253_END epoch=%llu rows=%u",assetSnapshot.epoch,assetSnapshot.count);
+    Log("TEXTURE_SELECT_R253_BEGIN epoch=%llu rows=%u overflow=%u targets=%u target_overflow_total=%u contention_total=%llu installed=%u",assetSnapshot.epoch,selectionSnapshot.count,selectionSnapshot.overflow,selectionSnapshot.targetsCount,selectionSnapshot.targetOverflow,selectionDrops.load(),unsigned(selectionInstalled));
+    for(const auto& t:selectionSnapshot.targets)if(t.texture)Log("TEXTURE_SELECT_R253_TARGET epoch=%llu texture=%llu name=%s",assetSnapshot.epoch,t.texture,t.name);
+    for(unsigned i=0;i<selectionSnapshot.count;++i){const auto& r=selectionSnapshot.rows[i];
+        Log("TEXTURE_SELECT_R253_ROW epoch=%llu texture=%llu begin_us=%llu end_us=%llu kind=%u level=%d result=%d row=%u",assetSnapshot.epoch,r.texture,r.begin,r.end,r.kind,r.level,r.result,i);
+        const storage_selection_trace::Trace::State* states[]={&r.before,&r.after};
+        for(unsigned phase=0;phase<2;++phase){const auto& v=*states[phase];
+            Log("TEXTURE_SELECT_R253_STATE epoch=%llu row=%u phase=%u scan=%llu cycle=%llu pending_bytes=%llu base=%d resident=%d wanted=%d retain=%d delta=%d wanted_state=%d priority_min=%d priority_max=%d deferred=%u enabled=%u special=%u bypass=%u policy=%u direction=%u spent_ms=%.6f budget_ms=%.3f distance_metric=%.6g",assetSnapshot.epoch,i,phase,v.scan,v.cycle,v.pendingBytes,v.base,v.resident,v.wanted,v.retain,v.delta,v.wantedState,v.priorityMin,v.priorityMax,v.deferred,v.enabled,v.special,v.bypass,v.policy,v.direction,v.spentMs,double(v.budgetMs),double(v.distanceMetric));
+        }
+    }
+    Log("TEXTURE_SELECT_R253_END epoch=%llu rows=%u",assetSnapshot.epoch,selectionSnapshot.count);
 }
 inline bool traceLatency=false;
 inline storage_latency::Timing allocationTime,admissionTime,queueTime,endToEndTime,handoffTime,storageTime,gpuObservedTime,recordTime;
@@ -101,6 +115,60 @@ struct Source {std::wstring path;HANDLE guard=INVALID_HANDLE_VALUE;Ptr<IDStorage
 inline Source sources[32];
 inline U64 Field(const void* p,unsigned offset){return native_loader_stages::Field(p,offset);}
 inline unsigned Dword(const void* p,unsigned offset){return native_texture_contract::Dword(p,offset);}
+using SelectTexture=void(*)(void*,bool,bool,bool);
+using RequestLevel=bool(*)(void*,int);
+inline SelectTexture selectTexture=nullptr;inline RequestLevel requestLevel=nullptr;
+inline NativeCpuCallPatch selectionPatches[3]{};
+inline void RegisterSelection(void* texture,const char* name){
+    if(!assetTraceEnabled)return;
+    if(!TryAcquireSRWLockExclusive(&assetLock)){++selectionDrops;return;}
+    selectionTrace.Register(reinterpret_cast<U64>(texture),name);ReleaseSRWLockExclusive(&assetLock);
+}
+inline U64 SelectionBegin(void* texture){
+    if(!assetTraceEnabled||!assetDeadline.load(std::memory_order_relaxed))return 0;
+    if(!TryAcquireSRWLockExclusive(&assetLock)){++selectionDrops;return 0;}
+    const auto now=ClockUs();const auto epoch=assetCapture.active&&now<assetCapture.end&&selectionTrace.Contains(reinterpret_cast<U64>(texture))?assetCapture.epoch:0;
+    ReleaseSRWLockExclusive(&assetLock);return epoch;
+}
+inline storage_selection_trace::Trace::State SelectionState(void* texture){
+    storage_selection_trace::Trace::State v;
+    v.base=int(Dword(texture,0xb4));v.resident=int(Dword(texture,0xb8));v.wanted=int(Dword(texture,0xc4));v.retain=int(Dword(texture,0xc8));v.delta=int(Dword(texture,0xc0));
+    const auto* p=static_cast<const unsigned char*>(texture);v.deferred=p[0xcc];v.special=p[0xcd];v.enabled=p[0x111];memcpy(&v.distanceMetric,p+0xd4,4);
+    const auto levels=Field(texture,0xe8);const auto count=Dword(texture,0xf0);
+    if(levels&&v.wanted>=0&&unsigned(v.wanted)<count&&count<=32)v.wantedState=int(Dword(reinterpret_cast<void*>(levels+U64(v.wanted)*0x28),0x20));
+    const auto manager=Field(renderer,0x802c48);
+    if(manager){auto* m=reinterpret_cast<void*>(manager);v.scan=Field(m,0x88);v.cycle=Field(m,0x90);memcpy(&v.spentMs,reinterpret_cast<unsigned char*>(m)+0x80,8);v.spentMs*=1000;}
+    v.pendingBytes=Field(renderer,0x90f0e8);v.priorityMin=int(Dword(renderer,0x802c08));v.priorityMax=int(Dword(renderer,0x802c0c));
+    v.bypass=renderer[0x802c10];v.policy=renderer[0x7ec192];v.direction=renderer[0x802a85];memcpy(&v.budgetMs,renderer+0x9186a0,4);return v;
+}
+inline void SelectionEnd(U64 epoch,const storage_selection_trace::Trace::Row& row){
+    if(!TryAcquireSRWLockExclusive(&assetLock)){++selectionDrops;return;}
+    if(assetCapture.active&&assetCapture.epoch==epoch)selectionTrace.Add(row);else ++selectionDrops;
+    ReleaseSRWLockExclusive(&assetLock);
+}
+inline void SelectTextureHook(void* texture,bool a,bool b,bool c){
+    const DWORD incoming=GetLastError();const auto epoch=SelectionBegin(texture);
+    storage_selection_trace::Trace::Row row; if(epoch){row.texture=reinterpret_cast<U64>(texture);row.begin=ClockUs();row.before=SelectionState(texture);}
+    SetLastError(incoming);selectTexture(texture,a,b,c);const DWORD error=GetLastError();
+    if(epoch){row.end=ClockUs();row.after=SelectionState(texture);SelectionEnd(epoch,row);}SetLastError(error);
+}
+inline bool RequestLevelHook(void* texture,int level){
+    const DWORD incoming=GetLastError();const auto epoch=SelectionBegin(texture);
+    storage_selection_trace::Trace::Row row;if(epoch){row.texture=reinterpret_cast<U64>(texture);row.kind=1;row.level=level;row.begin=ClockUs();row.before=SelectionState(texture);}
+    SetLastError(incoming);const bool result=requestLevel(texture,level);const DWORD error=GetLastError();
+    if(epoch){row.end=ClockUs();row.result=int(result);row.after=SelectionState(texture);SelectionEnd(epoch,row);}SetLastError(error);return result;
+}
+inline bool InstallSelection(){
+    if(!assetTraceEnabled)return false;
+    selectTexture=reinterpret_cast<SelectTexture>(renderer+0x15a5e0);requestLevel=reinterpret_cast<RequestLevel>(renderer+0x15ab30);
+    const unsigned sites[]={0x16923e,0x15aaab,0x15aac2};
+    for(unsigned i=0;i<3;++i)if(!NativeCpuPrepareCallPatch(renderer+sites[i],i?reinterpret_cast<void*>(requestLevel):reinterpret_cast<void*>(selectTexture),i?reinterpret_cast<void*>(&RequestLevelHook):reinterpret_cast<void*>(&SelectTextureHook),&selectionPatches[i])){
+        Log("TEXTURE_SELECT_R253_INSTALL installed=0 reason=prepare site=%u",i);return false;
+    }
+    unsigned applied=0;for(;applied<3;){auto& p=selectionPatches[applied];if(!NativeCpuExchangeCall(&p,true))break;++applied;if(!p.writeHealthy)break;}
+    if(applied!=3||!selectionPatches[2].writeHealthy){while(applied){--applied;if(!NativeCpuExchangeCall(&selectionPatches[applied],false))Log("TEXTURE_SELECT_R253_INSTALL rollback_failed=%u",applied);}return false;}
+    selectionInstalled=true;Log("TEXTURE_SELECT_R253_INSTALL installed=1 sites=3 scope=wayfinding_text policy_changed=0");return true;
+}
 // Admit only a newly allocated, unpublished container. Existing mip resources
 // can already be referenced by recorded rendering work and remain native.
 inline bool AllocateHook(void* texture,unsigned level){
@@ -171,15 +239,15 @@ inline bool InstallPublication(){
     const unsigned sites[]={0x1603b9,0x1605d0,0x162b74};
     const unsigned char opcodes[]={0xe8,0xe9,0xe9};
     for(unsigned i=0;i<3;++i)if(!NativeCpuPrepareCallPatch(renderer+sites[i],reinterpret_cast<void*>(consume),reinterpret_cast<void*>(&PublicationHook),&publicationPatches[i],opcodes[i])){
-        Log("DIRECTSTORAGE_R252_PUBLICATION installed=0 reason=prepare site=%u",i);return false;
+        Log("DIRECTSTORAGE_R253_PUBLICATION installed=0 reason=prepare site=%u",i);return false;
     }
     unsigned applied=0;
     for(;applied<3;){auto& p=publicationPatches[applied];if(!NativeCpuExchangeCall(&p,true))break;++applied;if(!p.writeHealthy)break;}
     if(applied!=3||!publicationPatches[2].writeHealthy){
-        while(applied){--applied;if(!NativeCpuExchangeCall(&publicationPatches[applied],false))Log("DIRECTSTORAGE_R252_PUBLICATION rollback_failed=%u",applied);}
+        while(applied){--applied;if(!NativeCpuExchangeCall(&publicationPatches[applied],false))Log("DIRECTSTORAGE_R253_PUBLICATION rollback_failed=%u",applied);}
         return false;
     }
-    publicationInstalled=true;Log("DIRECTSTORAGE_R252_PUBLICATION installed=1 sites=3 visible_draw_measured=0");return true;
+    publicationInstalled=true;Log("DIRECTSTORAGE_R253_PUBLICATION installed=1 sites=3 visible_draw_measured=0");return true;
 }
 inline void Retire(Job& job,bool success,bool retry){
     if(job.assetToken)AssetEvent(job.assetToken,ClockUs(),1,success?1:retry?2:3);
@@ -231,7 +299,7 @@ inline DWORD WINAPI Work(void*){
         const U64 start=ClockUs();const HRESULT hr=lane.transfer.Initialize(factory.Get(),queue,shared);MaxElapsed(initMaxUs,start);
         lane.transfer.SetLatencyTracking(traceLatency);lane.initialized=SUCCEEDED(hr);const auto& t=lane.transfer.InitializationTiming();
         if(lane.initialized)++readyLanes;
-        Log("DIRECTSTORAGE_R252_INIT lane=%u ready=%u hr=0x%08lX reason=%s shader=build_embedded shared_pipeline=%u queues_us=%llu pipeline_us=%llu commands_us=%llu",unsigned(&lane-lanes),unsigned(lane.initialized),static_cast<unsigned long>(hr),reason,unsigned(t.sharedPipeline),t.queuesUs,t.pipelineUs,t.commandsUs);
+        Log("DIRECTSTORAGE_R253_INIT lane=%u ready=%u hr=0x%08lX reason=%s shader=build_embedded shared_pipeline=%u queues_us=%llu pipeline_us=%llu commands_us=%llu",unsigned(&lane-lanes),unsigned(lane.initialized),static_cast<unsigned long>(hr),reason,unsigned(t.sharedPipeline),t.queuesUs,t.pipelineUs,t.commandsUs);
         if(!lane.initialized){available=false;lane.transfer.Close();}
         return hr;
     };
@@ -241,14 +309,14 @@ inline DWORD WINAPI Work(void*){
         // screen. Never hold the admission lock while creating driver objects.
         if(auto queue=TakeWarmQueue()){
             for(auto& lane:lanes)if(FAILED(initialize(lane,queue.Get(),"prewarm")))break;
-            Log("DIRECTSTORAGE_R252_PREWARM finished=1 ready_lanes=%u pending=%llu",readyLanes.load(),pending.load());
+            Log("DIRECTSTORAGE_R253_PREWARM finished=1 ready_lanes=%u pending=%llu",readyLanes.load(),pending.load());
         }
         for(auto& lane:lanes){
             if(lane.count){
                 HRESULT result=E_PENDING;
                 const U64 pollStart=ClockUs();const bool retired=lane.transfer.Poll(result);MaxElapsed(pollMaxUs,pollStart);if(!retired)continue;
                 const bool success=SUCCEEDED(result);const bool lost=result==DXGI_ERROR_DEVICE_REMOVED||result==DXGI_ERROR_DEVICE_RESET;
-                if(!success){++failed;Log("DIRECTSTORAGE_R252 batch_failed=1 hr=0x%08lX count=%u",static_cast<unsigned long>(result),lane.count);}
+                if(!success){++failed;Log("DIRECTSTORAGE_R253 batch_failed=1 hr=0x%08lX count=%u",static_cast<unsigned long>(result),lane.count);}
                 if(traceLatency&&success){const auto& t=lane.transfer.LastBatchTiming();
                     if(t.storageDone)storageTime.Record(t.storageObservedUs);
                     if(t.gpuDone){gpuObservedTime.Record(t.gpuObservedUs);recordTime.Record(t.recordSubmitUs);}}
@@ -265,7 +333,7 @@ inline DWORD WINAPI Work(void*){
                 if(traceLatency)for(unsigned i=0;i<lane.count;++i)if(lane.jobs[i].admittedUs)queueTime.Record(start-lane.jobs[i].admittedUs);
                 for(unsigned i=0;i<lane.count;++i)AssetEvent(lane.jobs[i].assetToken,start,0);
                 hr=lane.transfer.Submit(inputs,lane.count);MaxElapsed(submitMaxUs,start);stagingAllocations+=lane.transfer.BufferAllocations()-allocations;stagingReuses+=lane.transfer.ReusedBatches()-reuses;}
-            if(FAILED(hr)){++failed;Log("DIRECTSTORAGE_R252 batch_rejected=1 hr=0x%08lX count=%u",static_cast<unsigned long>(hr),lane.count);
+            if(FAILED(hr)){++failed;Log("DIRECTSTORAGE_R253 batch_rejected=1 hr=0x%08lX count=%u",static_cast<unsigned long>(hr),lane.count);
                 for(unsigned i=0;i<lane.count;++i)Retire(lane.jobs[i],false,true);lane.count=0;
             }else ++batches;
         }
@@ -328,6 +396,7 @@ inline DescribeFn describe=&Describe;inline ResolveFn resolve=&Resolve;
 inline std::int64_t RequestHook(void* owner,const char* name,void* texture,U64 offset,U64 size,char* buffer,int thread,int priority,bool flag,void* user){
     const DWORD incoming=GetLastError();const U64 requested=traceLatency?ClockUs():0;++offered;
     const auto fresh=allocation;allocation={};
+    RegisterSelection(texture,name);
     const auto level=static_cast<unsigned>(reinterpret_cast<U64>(user));
     const U64 assetToken=AssetAdmit(name,requested,0,level,priority,size,reinterpret_cast<U64>(texture),offset,fresh.texture==texture?fresh.allocationUs:0);
     // Container is supplied by the already verified allocation hook; do not
@@ -357,14 +426,14 @@ inline bool Install(){
     char assetValue[8]{};assetTraceEnabled=GetEnvironmentVariableA("CONTROLFG_STORAGE_ASSET_TRACE",assetValue,8)==1&&assetValue[0]=='1';
     if(assetTraceEnabled)traceLatency=true;
     const char* conflicts[]={"CONTROLFG_TEXTURE_CONTRACT","CONTROLFG_EARLY_STORAGE","CONTROLFG_DIRECTSTORAGE"};
-    for(const auto* key:conflicts)if(GetEnvironmentVariableA(key,value,8)==1&&value[0]=='1'){Log("DIRECTSTORAGE_R252 disabled=conflicting_mode key=%s",key);return false;}
+    for(const auto* key:conflicts)if(GetEnvironmentVariableA(key,value,8)==1&&value[0]=='1'){Log("DIRECTSTORAGE_R253 disabled=conflicting_mode key=%s",key);return false;}
     auto r=GetModuleHandleW(L"renderer_rmdwin10_f.dll"),n=GetModuleHandleW(L"rl_rmdwin10_f.dll"),d=GetModuleHandleW(L"d3d_rmdwin10_f.dll");
-    if(!r||!n||!d||!HashMatches(r,"EBFB5B47CEBC2D4482E912B8090BD343F717BAB8A178B5A6385DEC9105E7C433")||!HashMatches(n,"A79234E4B34C2488DEAAC3459E8054BE206B5AF78A37723D834C1CBD826CE484")||!HashMatches(d,"CCEB99CBD9C019AF907C24C44701A53C8D230965C1FB31C325233E4C80214AA5")){Log("DIRECTSTORAGE_R252 disabled=module_hash");return false;}
+    if(!r||!n||!d||!HashMatches(r,"EBFB5B47CEBC2D4482E912B8090BD343F717BAB8A178B5A6385DEC9105E7C433")||!HashMatches(n,"A79234E4B34C2488DEAAC3459E8054BE206B5AF78A37723D834C1CBD826CE484")||!HashMatches(d,"CCEB99CBD9C019AF907C24C44701A53C8D230965C1FB31C325233E4C80214AA5")){Log("DIRECTSTORAGE_R253 disabled=module_hash");return false;}
     renderer=reinterpret_cast<unsigned char*>(r);runtime=reinterpret_cast<unsigned char*>(n);d3d=reinterpret_cast<unsigned char*>(d);
     original=reinterpret_cast<Request>(runtime+0xfa2b0);addRef=reinterpret_cast<Ref>(runtime+0x12e160);removeRef=reinterpret_cast<Ref>(runtime+0x12e190);
     allocate=reinterpret_cast<Allocate>(renderer+0x159960);
     finish=reinterpret_cast<Finish>(renderer+0x158390);lookup=reinterpret_cast<Lookup>(runtime+0x18f760);
-    control_storage::RuntimeLoadResult result;if(!control_storage::LoadRuntimeFactory(ModulePath(selfModule),storageModule,factory,result)){Log("DIRECTSTORAGE_R252 disabled=%s hr=0x%08lX",result.stage,static_cast<unsigned long>(result.hr));return false;}
+    control_storage::RuntimeLoadResult result;if(!control_storage::LoadRuntimeFactory(ModulePath(selfModule),storageModule,factory,result)){Log("DIRECTSTORAGE_R253 disabled=%s hr=0x%08lX",result.stage,static_cast<unsigned long>(result.hr));return false;}
     if(!patch.Prepare(renderer+0x158247,reinterpret_cast<void**>(renderer+0x5e0140),reinterpret_cast<void*>(original),reinterpret_cast<void*>(&RequestHook)))return false;
     if(!NativeCpuPrepareCallPatch(renderer+0x1580d7,reinterpret_cast<void*>(allocate),reinterpret_cast<void*>(&AllocateHook),&allocationPatch))return false;
     wake=CreateEventW(nullptr,FALSE,FALSE,nullptr);if(!wake)return false;worker=CreateThread(nullptr,0,&Work,nullptr,0,nullptr);if(!worker)return false;
@@ -372,12 +441,12 @@ inline bool Install(){
     if(!allocationPatch.writeHealthy){NativeCpuExchangeCall(&allocationPatch,false);return false;}
     if(!patch.Exchange(true)){NativeCpuExchangeCall(&allocationPatch,false);return false;}
     if(!patch.healthy){patch.Exchange(false);NativeCpuExchangeCall(&allocationPatch,false);return false;}
-    InstallPublication();
-    available=true;Log("DIRECTSTORAGE_R252 installed=1 native_gpu_redirect=1 source=archive destination=gpu_buffer repack=gpu texture_copy=gpu native_cpu_payload_read=0 compression=none unsupported=native");return true;
+    InstallPublication();InstallSelection();
+    available=true;Log("DIRECTSTORAGE_R253 installed=1 native_gpu_redirect=1 source=archive destination=gpu_buffer repack=gpu texture_copy=gpu native_cpu_payload_read=0 compression=none unsupported=native");return true;
 }
 inline void ReportLatency(const char* stage,const storage_latency::Timing& t,int level=-1){
     const U64 n=t.count.load(std::memory_order_relaxed);if(!n)return;
-    Log("DIRECTSTORAGE_R252_LATENCY stage=%s level=%d samples=%llu mean_us=%.1f max_us=%llu ge16ms=%llu ge100ms=%llu scope=cumulative_cpu_observed",stage,level,n,double(t.total.load(std::memory_order_relaxed))/double(n),t.maximum.load(std::memory_order_relaxed),t.over16ms.load(std::memory_order_relaxed),t.over100ms.load(std::memory_order_relaxed));
+    Log("DIRECTSTORAGE_R253_LATENCY stage=%s level=%d samples=%llu mean_us=%.1f max_us=%llu ge16ms=%llu ge100ms=%llu scope=cumulative_cpu_observed",stage,level,n,double(t.total.load(std::memory_order_relaxed))/double(n),t.maximum.load(std::memory_order_relaxed),t.over16ms.load(std::memory_order_relaxed),t.over100ms.load(std::memory_order_relaxed));
 }
 inline void Poll(U64 present){
     if(!worker)return;
@@ -386,10 +455,10 @@ inline void Poll(U64 present){
         if(down&&!assetHeld){
             if(TryAcquireSRWLockExclusive(&assetLock)){
                 const auto mark=ClockUs();const bool started=assetCapture.Begin(mark);const auto epoch=assetCapture.epoch;
-                if(started)assetDeadline.store(assetCapture.flushAt,std::memory_order_release);
+                if(started){selectionTrace.Reset();assetDeadline.store(assetCapture.flushAt,std::memory_order_release);}
                 ReleaseSRWLockExclusive(&assetLock);
-                Log("TEXTURE_ASSET_R252_ARM started=%u epoch=%llu present=%llu mark_us=%llu capture_seconds=30 flush_after_seconds=40",unsigned(started),epoch,present,mark);
-            }else Log("TEXTURE_ASSET_R252_ARM started=0 reason=busy");
+                Log("TEXTURE_ASSET_R253_ARM started=%u epoch=%llu present=%llu mark_us=%llu capture_seconds=30 flush_after_seconds=40",unsigned(started),epoch,present,mark);
+            }else Log("TEXTURE_ASSET_R253_ARM started=0 reason=busy");
         }
         assetHeld=down;
         const auto deadline=assetDeadline.load(std::memory_order_acquire);if(deadline&&ClockUs()>=deadline)SetEvent(wake);
@@ -399,12 +468,12 @@ inline void Poll(U64 present){
         auto* queue=engineQueue?reinterpret_cast<ID3D12CommandQueue*>(Field(engineQueue,0x10)):nullptr;
         Ptr<ID3D12CommandQueue> nativeQueue;
         if(queue&&SUCCEEDED(resolveQueue?resolveQueue(queue,&nativeQueue):queue->QueryInterface(IID_PPV_ARGS(&nativeQueue)))&&PostWarmQueue(nativeQueue.Get()))
-            Log("DIRECTSTORAGE_R252_PREWARM posted=1 present=%llu pending=%llu",present,pending.load());
+            Log("DIRECTSTORAGE_R253_PREWARM posted=1 present=%llu pending=%llu",present,pending.load());
     }
     static ULONGLONG next=0;if(present%60)return;const auto now=GetTickCount64();if(now<next)return;next=now+5000;
-    Log("DIRECTSTORAGE_R252_STATUS present=%llu available=%u offered=%llu accepted=%llu completed=%llu fallback=%llu failed=%llu pending=%llu batches=%llu accepted_bytes=%llu ineligible=%llu layout_rejected=%llu source_rejected=%llu capacity_rejected=%llu duplicate_rejected=%llu unavailable_rejected=%llu peak_pending=%llu queue_capacity=%u staging_allocations=%llu staging_reuse_batches=%llu submit_cpu_wall_max_us=%llu init_cpu_wall_max_us=%llu poll_cpu_wall_max_us=%llu cpu_payload_bytes=0",present,unsigned(available.load()),offered.load(),accepted.load(),completed.load(),fallback.load(),failed.load(),pending.load(),batches.load(),bytes.load(),ineligible.load(),layoutRejected.load(),sourceRejected.load(),capacityRejected.load(),duplicateRejected.load(),unavailableRejected.load(),peakPending.load(),QueueCapacity,stagingAllocations.load(),stagingReuses.load(),submitMaxUs.load(),initMaxUs.load(),pollMaxUs.load());
+    Log("DIRECTSTORAGE_R253_STATUS present=%llu available=%u offered=%llu accepted=%llu completed=%llu fallback=%llu failed=%llu pending=%llu batches=%llu accepted_bytes=%llu ineligible=%llu layout_rejected=%llu source_rejected=%llu capacity_rejected=%llu duplicate_rejected=%llu unavailable_rejected=%llu peak_pending=%llu queue_capacity=%u staging_allocations=%llu staging_reuse_batches=%llu submit_cpu_wall_max_us=%llu init_cpu_wall_max_us=%llu poll_cpu_wall_max_us=%llu cpu_payload_bytes=0",present,unsigned(available.load()),offered.load(),accepted.load(),completed.load(),fallback.load(),failed.load(),pending.load(),batches.load(),bytes.load(),ineligible.load(),layoutRejected.load(),sourceRejected.load(),capacityRejected.load(),duplicateRejected.load(),unavailableRejected.load(),peakPending.load(),QueueCapacity,stagingAllocations.load(),stagingReuses.load(),submitMaxUs.load(),initMaxUs.load(),pollMaxUs.load());
     if(publicationInstalled){
-        Log("DIRECTSTORAGE_R252_PUBLICATION present=%llu tracked=%llu matched=%llu dropped=%llu callbacks=%llu",present,publicationTracked.load(),publicationDelay.count.load(),publicationDropped.load(),publicationCallbacks.load());
+        Log("DIRECTSTORAGE_R253_PUBLICATION present=%llu tracked=%llu matched=%llu dropped=%llu callbacks=%llu",present,publicationTracked.load(),publicationDelay.count.load(),publicationDropped.load(),publicationCallbacks.load());
         ReportLatency("gpu_ready_to_renderer_publication",publicationDelay);ReportLatency("renderer_publication_call",publicationCall);
     }
     if(traceLatency){
