@@ -1,0 +1,63 @@
+name: Validate R247 storage lifetime
+on:
+  push:
+    branches: [work/r248-storage-lifetime-validation]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify production baseline unchanged
+        shell: powershell
+        run: |
+          git fetch --depth=1 origin 25fbd3f1e2359c0429190ed7b247f7bead726bc8
+          if ($LASTEXITCODE) { throw 'Could not fetch baseline' }
+          git diff --exit-code 25fbd3f1e2359c0429190ed7b247f7bead726bc8 HEAD -- src shaders native_menu tools/diagnostics
+          if ($LASTEXITCODE) { throw 'Production differs from accepted R247 baseline' }
+          New-Item -ItemType Directory -Force build | Out-Null
+      - name: Configure MSVC
+        shell: cmd
+        run: |
+          for /f "usebackq tokens=*" %%I in (`"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath`) do set "VSROOT=%%I"
+          call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
+          echo VSROOT=%VSROOT%>>%GITHUB_ENV%
+
+      - name: Fetch pinned DirectStorage SDK 1.3
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $url='https://api.nuget.org/v3-flatcontainer/microsoft.direct3d.directstorage/1.3.0/microsoft.direct3d.directstorage.1.3.0.nupkg'
+          Invoke-WebRequest $url -OutFile build/dstorage-sdk.zip
+          if ((Get-FileHash build/dstorage-sdk.zip -Algorithm SHA256).Hash.ToLower() -ne '8ab6c1082537565388b79050d94fdd7f5f437cd0f1d909e7b19f786042b97177') { throw 'DirectStorage SDK hash mismatch' }
+          Expand-Archive build/dstorage-sdk.zip build/dstorage-sdk -Force
+          New-Item -ItemType Directory -Force build/DirectStorage | Out-Null
+          Copy-Item build/dstorage-sdk/native/bin/x64/dstorage.dll,build/dstorage-sdk/native/bin/x64/dstoragecore.dll build/DirectStorage
+          Copy-Item build/dstorage-sdk/LICENSE.txt,build/dstorage-sdk/LICENSE-CODE.txt,build/dstorage-sdk/NOTICES.txt build/DirectStorage
+
+      - name: Validate native packed texture GPU transport
+        shell: cmd
+        run: |
+          call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
+          cl /nologo /std:c++17 /EHsc /W4 /O2 tools\directstorage\compile-packed-shader.cpp /Febuild\CompilePackedShader.exe /link d3d12.lib d3dcompiler.lib
+          if errorlevel 1 exit /b 1
+          build\CompilePackedShader.exe
+          if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /O2 /Ibuild\dstorage-sdk\native\include tools\directstorage\test-packed-textures.cpp /Febuild\DirectStorage\TestPackedTextures.exe /link /LIBPATH:build\dstorage-sdk\native\lib\x64 dstorage.lib d3d12.lib dxgi.lib d3dcompiler.lib
+          if errorlevel 1 exit /b 1
+          build\DirectStorage\TestPackedTextures.exe
+          if errorlevel 1 exit /b 1
+
+      - name: Repeat lifetime test and preserve results
+        shell: powershell
+        run: |
+          & build/DirectStorage/TestPackedTextures.exe | Tee-Object build/DirectStorage/Lifetime-Validation.log
+          if ($LASTEXITCODE) { throw 'Repeated lifetime validation failed' }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: R247-Lifetime-Validation-Results
+          path: build/DirectStorage/Lifetime-Validation.log
+          if-no-files-found: error

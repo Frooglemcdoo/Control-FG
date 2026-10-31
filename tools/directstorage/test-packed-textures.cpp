@@ -27,13 +27,14 @@ static void Hr(HRESULT hr,const char* name){if(FAILED(hr)){printf("FAIL %s hr=%0
 static ComPtr<ID3D12Resource> Resource(ID3D12Device* d,const D3D12_RESOURCE_DESC& desc,D3D12_HEAP_TYPE type,D3D12_RESOURCE_STATES state){
  D3D12_HEAP_PROPERTIES h{};h.Type=type;ComPtr<ID3D12Resource> r;Hr(d->CreateCommittedResource(&h,D3D12_HEAP_FLAG_NONE,&desc,state,nullptr,IID_PPV_ARGS(&r)),"resource");return r;
 }
-static unsigned refs=0,published=0,native=0;
+static unsigned refs=0,published=0,native=0,failedPublished=0;
+static bool expectFinishSuccess=true;
 static int enginePending=0;
 static void Adjust(void*,int delta){enginePending+=delta;Check(enginePending>=0,"native pending count never underflows");}
 static ComPtr<ID3D12Resource> testResource;
 static void Add(void*){++refs;}
 static void Remove(void*){Check(refs!=0,"balanced engine reference");--refs;}
-static void Finish(void*,int level,bool success){Check(level==2&&success&&refs==1&&enginePending==1,"publish while reference held");++published;}
+static void Finish(void*,int level,bool success){Check(level==2&&success==expectFinishSuccess&&refs==1&&enginePending==1,"publish while reference held");if(success)++published;else ++failedPublished;}
 static std::int64_t Native(void*,const char*,void*,std::uint64_t offset,std::uint64_t size,char*,int thread,int priority,bool,void*){Check(offset==17&&size==64&&thread==14&&priority==7,"native fallback arguments");++native;SetLastError(456);return 123;}
 static bool Describe(void*,unsigned,std::uint64_t,native_gpu_storage::Job& job){job.resource=testResource;return true;}
 static bool Resolve(const char*,std::uint64_t,std::uint64_t,native_gpu_storage::Job&){return true;}
@@ -111,6 +112,16 @@ static void Admission(){
  Check(n::RequestHook(nullptr,"fixture",texture,17,64,nullptr,14,7,false,user)<0,"retired slot reusable");
  job=std::move(n::jobs[last]);n::jobs[last]={};n::Retire(job,true,false);
  Check(refs==0&&enginePending==0&&n::pending==0,"slot reuse balances pending");
+ // Terminal failure must finish once, without retry or successful latency data.
+ const auto beforeNative=native,beforePublished=published;
+ const auto beforeLatency=n::endToEndTime.count.load();
+ n::cursor=0;n::allocation={texture,2,0x9999};
+ Check(n::RequestHook(nullptr,"fixture",texture,17,64,nullptr,14,7,false,user)<0,"terminal fixture admitted");
+ job=std::move(n::jobs[0]);n::jobs[0]={};expectFinishSuccess=false;
+ n::Retire(job,false,false);expectFinishSuccess=true;
+ Check(failedPublished==1&&native==beforeNative&&published==beforePublished,"terminal failure does not retry or publish success");
+ Check(refs==0&&enginePending==0&&n::pending==0&&n::reservedBytes==0&&!n::active[0],"terminal failure balances ownership");
+ Check(n::endToEndTime.count==beforeLatency,"terminal failure excluded from success latency");
  CloseHandle(n::wake);n::wake=nullptr;n::available=false;n::traceLatency=false;
 }
 int main(){
@@ -174,6 +185,28 @@ int main(){
  Check(transfer.BufferAllocations()==4&&transfer.ReusedBatches()==4,"growth once then reuse for large and small batches");
  const auto allocations=transfer.BufferAllocations();bad=inputs[0];++bad.bytes;
  Check(FAILED(transfer.Submit(&bad,1))&&transfer.BufferAllocations()==allocations,"invalid batch does not resize arenas");
+ // Exercise fresh resource turnover while the transport holds the only
+ // application-owned COM references during its Storage phase. Recover the
+ // caller references before retirement for the existing byte-equality checks.
+ for(unsigned pass=0;pass<32;++pass){
+  const unsigned t=pass%9;auto& f=fixtures[t];
+  f.texture=Resource(device.Get(),f.desc,D3D12_HEAP_TYPE_DEFAULT,D3D12_RESOURCE_STATES(0xc0));
+  inputs[t].texture=f.texture.Get();
+  Batch::Input invalid[]={inputs[t],inputs[(t+1)%9]};++invalid[1].bytes;
+  Check(FAILED(transfer.Submit(invalid,2))&&transfer.CurrentPhase()==Batch::Phase::Idle,"partial preparation rejection returns idle");
+  Hr(transfer.Submit(inputs+t,1),"lifetime turnover submit");
+  Check(transfer.CurrentPhase()==Batch::Phase::Storage,"storage owns submitted references");
+  Check(FAILED(transfer.Submit(inputs+t,1))&&!transfer.Close(),"busy submit and close preserve live transfer");
+  auto* rawTexture=f.texture.Get();auto* rawFile=source.Get();f.texture.Reset();source.Reset();
+  Check(rawTexture->GetDesc().Width==f.desc.Width,"batch retains destination after caller releases");
+  BY_HANDLE_FILE_INFORMATION info{};Hr(rawFile->GetFileInformation(&info),"batch retains source after caller releases");
+  f.texture=rawTexture;source=rawFile;
+  HRESULT result=E_PENDING;const auto until=GetTickCount64()+30000;
+  while(!transfer.Poll(result)){Check(GetTickCount64()<until,"turnover completion deadline");WaitForSingleObject(transfer.Event(),100);}
+  Hr(result,"turnover completion");
+  Check(transfer.CurrentPhase()==Batch::Phase::Idle&&transfer.BufferAllocations()==allocations,"turnover reuses arenas without allocation growth");
+ }
+ puts("PASS R248 lifetime: 32 fresh-resource turnover cycles, caller reference release, busy-operation rejection, partial preparation recovery, no arena growth");
  // Readback belongs exclusively to this test, never to runtime payload handling.
  ComPtr<ID3D12Fence> fence;Hr(device->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&fence)),"readback fence");HANDLE event=CreateEventW(nullptr,FALSE,FALSE,nullptr);
  for(unsigned t=0;t<9;++t){auto& f=fixtures[t];D3D12_PLACED_SUBRESOURCE_FOOTPRINT fp[8]{};UINT rows[8]{};UINT64 rowBytes[8]{},total=0;device->GetCopyableFootprints(&f.desc,0,8,0,fp,rows,rowBytes,&total);
@@ -188,6 +221,6 @@ int main(){
   D3D12_RANGE empty{};readback->Unmap(0,&empty);
  }
  storage_latency::Timing metric;metric.Record(100);metric.Record(16000);metric.Record(100000);Check(metric.count==3&&metric.total==116100&&metric.maximum==100000&&metric.over16ms==2&&metric.over100ms==1,"latency totals and threshold boundaries");
- Scheduling();AllocationGate();ResolveRange(factory.Get(),path);testResource=fixtures[0].texture;Admission();testResource.Reset();Check(transfer.Close(),"drained close");source.Reset();CloseHandle(event);Check(DeleteFileW(path)!=FALSE,"file ownership released");
+ Scheduling();AllocationGate();ResolveRange(factory.Get(),path);testResource=fixtures[0].texture;Admission();puts("PASS R248 terminal retirement: failure completion once, no native retry, balanced references/reservations, no success latency");testResource.Reset();Check(transfer.Close(),"drained close");source.Reset();CloseHandle(event);Check(DeleteFileW(path)!=FALSE,"file ownership released");
  puts("PASS R247: prewarm single-admission race, queue-type guard, retained handoff, wake and one-shot consumption; file-to-GPU packed rows, eight formats / 72 mips, repeated and growing arena reuse, bounded staging, native state restoration, blocked consumer queue independence, bounds, native archive bias resolution, overlap rejection, optional stage timings, threshold accounting, embedded shader, shared pipeline, priority/FIFO burst scheduling, bounded queue admission, capacity/duplicate separation, slot reuse, ownership and deferred publication; runtime CPU payload bytes=0");
 }
