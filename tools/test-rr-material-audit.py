@@ -69,6 +69,15 @@ int main(){
  oldWrites=copies;Capture(400,1,0,80000,90000);assert(copies==oldWrites&&!Wants(1));
  // Invalid/null descriptors never publish a job or consume a worker slot.
  request(500);Capture(500,1,0,0,10);assert(jobs.empty());
+ // Foliage-only request cannot spend its budget on preceding world/hair draws.
+ rrFoliageShaderAuditRequested=true;BeginFrame(600);
+ assert(Wants(4)&&!Wants(1)&&!Wants(2)&&!Wants(5));
+ oldWrites=copies;Capture(600,1,0,100,200);assert(copies==oldWrites);
+ Capture(600,4,9,100,200);assert(jobs.size()==1);
+ auto* foliage=static_cast<Slot*>(jobs[0].second);assert(foliage->foliageOnly&&foliage->family==4);
+ oldWrites=writes;drain();assert(writes==oldWrites+6); // Four shaders, metadata, completion marker.
+ request(700);assert(!foliageOnly&&Wants(1)); // Existing general capture behavior restored.
+
 }
 '''
 with tempfile.TemporaryDirectory() as d:

@@ -127,7 +127,17 @@ static void RRDiffusePrepare(void* callback,void* table) noexcept {
         RRAlbedoShader::Session shaders; // Preserve the character/hair validation budget.
         RRAlbedoShader::Session worldShaders; // Independent bounded world validation.
         const control_rr_albedo::Access access{&RRAlbedoRead,&RRAlbedoGetShader,nullptr,&shaders,&RRAlbedoValidateEyeCandidate};
-        if(!control_rr_albedo::prepare(access,c->manager,c->replay,true)) {rrDiffuseStage.store(RRDiffuseStage::Idle);return;}
+        const bool prepared=control_rr_albedo::prepare(access,c->manager,c->replay,true);
+        if(RRMaterialAudit::foliageOnly && RRMaterialAudit::framesLeft==RRMaterialAudit::FrameLimit-1) {
+            unsigned foliageCandidates=0;
+            for(auto family:c->replay.familyKinds)if(family==4)++foliageCandidates;
+            Log("RR_FOLIAGE_SELECTION_R258 frame=%llu source_batches=%u selected_foliage=%u selection_rejected=%u rendering_admission=excluded_by_textured_family_policy",
+                frame,c->replay.coverage.sourceBatches,foliageCandidates,c->replay.rejectionAudit.total);
+            for(const auto& e:c->replay.rejectionAudit.examples)
+                Log("RR_FOLIAGE_SELECTION_REJECT_R258 frame=%llu source=%u family=%s reason=%s key=%u predicted=%u effective=%u actual=%u",
+                    frame,e.sourceIndex,e.materialFamily,control_rr_albedo::RejectReasonName(e.reason),e.shaderKey,e.predictedAlbedoKey,e.effectiveAlbedoKey,e.actualReplacementKey);
+        }
+        if(!prepared) {rrDiffuseStage.store(RRDiffuseStage::Idle);return;}
         std::uintptr_t source=0;memcpy(&source,c->replay.manager.data()+0x30,sizeof(source));
         size_t kept=0;UINT targets=0;
         for(size_t i=0;i<c->replay.batches.size();++i) {

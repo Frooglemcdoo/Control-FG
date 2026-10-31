@@ -19,6 +19,9 @@ inline constexpr int kFooterY = kCaptureStatusY + 50;
 inline constexpr int kHeight = kFooterY + 72;
 inline constexpr unsigned kButtonCount = kModeCount + 15;
 inline const wchar_t* ButtonLabel(unsigned index) noexcept {
+#ifdef CONTROL_RR_FOLIAGE_AUDIT
+    if(index==kModeCount+2)return L"CAPTURE MATERIALS";
+#endif
     if(index==kModeCount+14)return control_rr_gi::stageMode.load()!=control_rr_gi::StageMode::ClampOnly?L"GI VIEW: N/A":control_rr_gi::ViewLabel(control_rr_gi::viewRequested.load());
     if(index==kModeCount+13)return control_rr_gi::stageMode.load()!=control_rr_gi::StageMode::ClampOnly||control_rr_gi::viewRequested.load()!=control_rr_gi::DiagnosticView::Normal?L"SMOOTH: N/A":control_rr_gi::outlierRequested.load()?L"SMOOTH: ON":L"SMOOTH: OFF";
     if(index==kModeCount+12)return control_rr_gi::StageLabel(control_rr_gi::stageMode.load());
@@ -150,6 +153,14 @@ inline void ReportSpecIsolation(const char* reason) noexcept {
 #endif
 }
 inline void SaveReport(HWND window) noexcept {
+#ifdef CONTROL_RR_FOLIAGE_AUDIT
+    if(!control_rr::RRUserRuntimeWorkRequested()) {
+        MessageBoxW(window,L"Enable Ray Reconstruction, return to the plant, then capture materials.",L"Material capture",MB_OK);return;
+    }
+    rrFoliageShaderAuditRequested.store(true,std::memory_order_release);
+    Trace("RR_FOLIAGE_AUDIT_R258 requested=1 max_frames=120 max_pairs=24 image_readback=0 replay_admission_changed=0");
+    control_rr_capture_ui::detail.store(L"Materials requested. Close F10, wait 10 seconds, then run Collect-ControlTOH-Materials.cmd.");
+#endif
     Trace("free_camera_status installed=%u mode=%d generation=%llu pending=%u result=%u updates=%llu thread=%lu",
         unsigned(free_camera::installed.load()),free_camera::commands.Mode(),static_cast<unsigned long long>(free_camera::commands.Generation()),
         unsigned(free_camera::commands.Pending()),unsigned(free_camera::commands.Status()),free_camera::updates.load(),free_camera::updateThread.load());

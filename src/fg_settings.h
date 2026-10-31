@@ -236,11 +236,11 @@ static bool FGSettingsRestartStorage(unsigned requested) noexcept {
     if(!prepared){
         fgDirectStorageEnabled=previous;
         const bool rolledBack=FGSettingsSaveSettingsNow();
-        Log("STORAGE_RESTART_R257 prepared=0 rollback_saved=%u",unsigned(rolledBack));return false;
+        Log("STORAGE_RESTART_R258 prepared=0 rollback_saved=%u",unsigned(rolledBack));return false;
     }
     fgStorageRestartPending=true;
     fgSettingsDirty=false;
-    Log("STORAGE_RESTART_R257 prepared=1 enabled=%u wait_for_normal_exit=1",requested);
+    Log("STORAGE_RESTART_R258 prepared=1 enabled=%u wait_for_normal_exit=1",requested);
     return true;
 }
 

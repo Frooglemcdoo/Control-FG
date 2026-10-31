@@ -27,3 +27,7 @@ Reproduce with Python, NumPy and SciPy:
 `python tools/analyze-rr-plant-guides.py <restored-capture> --output pixel-audit.json`
 
 Metrics and source capture metadata are evidence; the raw game captures are not checked into this repository.
+
+## Follow-up source trace
+
+The recurring replay has two explicit family allowlists in `src/rr_diffuse_replay.h`; both exclude foliage before `ValidatePair` runs. Therefore zero foliage admission in this build is explained directly by policy, not proof of a current vertex mismatch. Additionally `CONTROL_CAPTURE_DIAGNOSTIC` disables the material-bytecode request in `RRInputCaptureAfterPresent`, explaining why the submitted image capture has no shader pairs. R258 adds a separately requested foliage-only bytecode probe and compact collector. It does not remove either admission guard or change the shader validation policy.
