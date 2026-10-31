@@ -19,7 +19,22 @@ static thread_local unsigned rrNativeGIHistoryDispatches=0;
 static thread_local const char* rrNativeGIHistoryReason="idle";
 static thread_local bool rrNativeGIMotionBound=false;
 static RRAlbedoCallPatch rrNativeGITemporalBindPatch{};
-static RRIndirectCallPatch rrNativeGITemporalDispatchPatch{};
+static RRIndirectCallPatch rrNativeGITemporalDispatchPatch{},rrNativeGISpatialDispatchPatch{};
+static thread_local bool rrNativeGISingleHistory=false;
+static thread_local unsigned rrNativeGISpatialApplied=0;
+static void RRNativeHookGISpatialDispatch(void* state,const void* groups){
+ const DWORD saved=GetLastError();control_rr_reflection::Context context{};
+ const bool eligible=rrNativeGIHistoryScope&&rrNativeGISingleHistory&&rrNativeGIHistoryDispatches==1&&
+  rrNativeCopy.StateMatches(reinterpret_cast<std::uintptr_t>(state))&&RRReflectionCurrent(nullptr,context)&&
+  context.list&&context.frame==rrNativeFrame.Key().frame;
+ SetLastError(saved);
+ if(!eligible){rrNativeDispatchOriginal(state,groups);return;}
+ const bool previous=control_rr_gi::spatialDispatch;
+ __try {
+  control_rr_gi::spatialDispatch=true;
+  if(control_rr_clamp::InvokeGI(rrNativeDispatchOriginal,state,groups,reinterpret_cast<ID3D12GraphicsCommandList*>(context.list)))++rrNativeGISpatialApplied;
+ }__finally {control_rr_gi::spatialDispatch=previous;}
+}
 static void RRNativeHookGITemporalBind(void* record){
  rrNativeTemporalBindOriginal(record);
  if(rrNativeGIHistoryScope){rrNativeGIMotionBound=true;rrNativeGIHistoryReason="native_bind_returned";}
@@ -50,6 +65,7 @@ static void RRNativeRunGIFilter(void* color,void* history,unsigned passes){
  control_rr_gi::outlierEnabled=outlier;
  const bool previousHistoryDisabled=control_rr_gi::historyDisabled;
  control_rr_gi::historyDisabled=!control_rr_gi::Temporal(mode);
+ rrNativeGISingleHistory=mode==control_rr_gi::StageMode::BothSingleHistory;rrNativeGISpatialApplied=0;
  rrNativeGIHistoryScope=true;rrNativeGIMotionBound=false;rrNativeGIHistoryDispatches=0;rrNativeGIHistoryReason="no_temporal_bind";
  __try {
   rrNativeDiffuseFilterOriginal(color,history,effectivePasses);
@@ -71,6 +87,12 @@ static void RRNativeRunGIFilter(void* color,void* history,unsigned passes){
   control_rr_gi::historyDisabled=previousHistoryDisabled;
   control_rr_gi::outlierEnabled=previousOutlier;
   control_rr_gi::activeView=previousView;
+  if(rrNativeGISingleHistory){
+   static unsigned long long samples=0;++samples;
+   if(samples<=4||samples%240==0||rrNativeGISpatialApplied!=effectivePasses)
+    native_lighting::Trace("gi_single_history build=R259 frame=%llu temporal_applied=%u spatial_expected=%u spatial_applied=%u complete=%u",rrNativeFrame.Key().frame,rrNativeGIHistoryDispatches,effectivePasses,rrNativeGISpatialApplied,unsigned(okay&&rrNativeGISpatialApplied==effectivePasses));
+  }
+  rrNativeGISingleHistory=false;
   rrNativeGIHistoryScope=false;rrNativeGIMotionBound=false;
   static unsigned long long calls=0; ++calls;
   static auto lastMode=control_rr_gi::StageMode::Both;

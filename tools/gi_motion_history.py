@@ -113,6 +113,8 @@ def generate(data,history=True,outliers=False,view=0,smooth=False):
  return transform_shex(data,patch)
 if __name__=='__main__':
  root=Path(__file__).resolve().parents[1]
+ from gi_spatial_history import write_header
+ write_header(root)
  source=base64.b64decode((root/'research/gi-temporal-r208/diffuse-temporal.dxbc.b64').read_text())
  result=generate(source);out=root/'build';out.mkdir(exist_ok=True)
  (out/'gi-motion-history.dxbc').write_bytes(result)

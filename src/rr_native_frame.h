@@ -906,6 +906,7 @@ static bool RRNativeInstallFrame(HMODULE renderer,HMODULE d3d) noexcept {
  native_lighting::Trace("specular_sample_hook stage=prepare ready=%u reason=%s baseline_rr_independent=1",
   unsigned(specularPrepared),rrNativeSpecularSamplePatch.failure);
  if(!RRAlbedoPrepareCallPatch(base+0x15691,reinterpret_cast<void*>(rrNativeTemporalBindOriginal),reinterpret_cast<void*>(&RRNativeHookGITemporalBind),&rrNativeGITemporalBindPatch)||
+  !rrNativeGISpatialDispatchPatch.Prepare(base+0x15a28,reinterpret_cast<void**>(base+0x5dfcc0),reinterpret_cast<void*>(rrNativeDispatchOriginal),reinterpret_cast<void*>(&RRNativeHookGISpatialDispatch))||
   !rrNativeGITemporalDispatchPatch.Prepare(base+0x156d3,reinterpret_cast<void**>(base+0x5dfcc0),reinterpret_cast<void*>(rrNativeDispatchOriginal),reinterpret_cast<void*>(&RRNativeHookGITemporalDispatch))||
   !RRAlbedoPrepareCallPatch(base+0x12ba17,reinterpret_cast<void*>(rrNativeGISampleOriginal),reinterpret_cast<void*>(&RRNativeGISampleCount),&rrNativeGISamplePatch)||
   !rrNativeResetPatch.Prepare(base+0x11b697,reinterpret_cast<void**>(base+0x5df758),reinterpret_cast<void*>(rrNativeResetOriginal),reinterpret_cast<void*>(&RRNativeHookReset))||
@@ -929,7 +930,8 @@ static bool RRNativeInstallFrame(HMODULE renderer,HMODULE d3d) noexcept {
  bool temporalBind=false,reflectionOption=false,giRadiusOption=false,giBypassOption=false,filter=false,gi=false,contactShadow=false,broadA=false,broadB=false,jitter=false,giSamples=false,giFilter=false;
  const bool giTemporalBind=RRAlbedoExchangeCall(&rrNativeGITemporalBindPatch,true);
  const bool giTemporalDispatch=giTemporalBind&&rrNativeGITemporalBindPatch.writeHealthy&&rrNativeGITemporalDispatchPatch.Exchange(true)&&rrNativeGITemporalDispatchPatch.healthy;
- giFilter=giTemporalDispatch&&RRAlbedoExchangeCall(&rrNativeGIFilterPatch,true);
+ const bool giSpatialDispatch=giTemporalDispatch&&rrNativeGISpatialDispatchPatch.Exchange(true)&&rrNativeGISpatialDispatchPatch.healthy;
+ giFilter=giSpatialDispatch&&RRAlbedoExchangeCall(&rrNativeGIFilterPatch,true);
  if(giFilter&&rrNativeGIFilterPatch.writeHealthy&&rrNativeDispatchPatch.Exchange(true)&&rrNativeDispatchPatch.healthy){
   temporalBind=RRAlbedoExchangeCall(&rrNativeTemporalBindPatch,true);
   if(temporalBind&&rrNativeTemporalBindPatch.writeHealthy){
@@ -981,6 +983,7 @@ static bool RRNativeInstallFrame(HMODULE renderer,HMODULE d3d) noexcept {
  rrNativeSpecularSamplePatch.BeginFrame(0);
  if(rrNativeSpecularSamplePatch.changed)rrNativeSpecularSamplePatch.Exchange(false);
  if(rrNativeResetPatch.changed)rrNativeResetPatch.Exchange(false);
+ if(rrNativeGISpatialDispatchPatch.changed)rrNativeGISpatialDispatchPatch.Exchange(false);
  if(rrNativeGITemporalDispatchPatch.changed)rrNativeGITemporalDispatchPatch.Exchange(false);
  if(giTemporalBind)RRAlbedoExchangeCall(&rrNativeGITemporalBindPatch,false);
  if(giFilter)RRAlbedoExchangeCall(&rrNativeGIFilterPatch,false);

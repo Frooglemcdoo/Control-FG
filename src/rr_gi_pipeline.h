@@ -4,15 +4,24 @@
 #include <cstring>
 #include <new>
 #include "../build/gi_motion_history.generated.h"
+#include "../build/gi_spatial_history.generated.h"
 // Immutable GPU objects, never copies of the engine's shader/lock/cache records.
 namespace control_rr_gi {
-struct Bundle {ID3D12PipelineState* native=nullptr;ID3D12PipelineState* adaptive=nullptr;ID3D12PipelineState* noHistory=nullptr;ID3D12PipelineState* outlier=nullptr;ID3D12PipelineState* mask=nullptr;ID3D12PipelineState* zero=nullptr;ID3D12PipelineState* smooth=nullptr;};
+struct Bundle {bool spatial=false;ID3D12PipelineState* native=nullptr;ID3D12PipelineState* adaptive=nullptr;ID3D12PipelineState* noHistory=nullptr;ID3D12PipelineState* outlier=nullptr;ID3D12PipelineState* mask=nullptr;ID3D12PipelineState* zero=nullptr;ID3D12PipelineState* smooth=nullptr;};
 inline std::atomic<Bundle*> bundles[8]{};
 inline std::atomic<unsigned> reserved{0},ready{0},failed{0};
 inline Bundle* Find(ID3D12PipelineState* native) noexcept {
  if(!native)return nullptr;
  for(auto& slot:bundles){auto* b=slot.load(std::memory_order_acquire);if(b&&b->native==native)return b;}
  return nullptr;
+}
+inline int SpatialVariant(const D3D12_COMPUTE_PIPELINE_STATE_DESC* desc) noexcept {
+ __try {
+  if(!desc||!desc->pRootSignature||!desc->CS.pShaderBytecode)return -1;
+  if(desc->CS.BytecodeLength==sizeof(kGINativeSpatial0)&&!std::memcmp(desc->CS.pShaderBytecode,kGINativeSpatial0,sizeof(kGINativeSpatial0)))return 0;
+  if(desc->CS.BytecodeLength==sizeof(kGINativeSpatial1)&&!std::memcmp(desc->CS.pShaderBytecode,kGINativeSpatial1,sizeof(kGINativeSpatial1)))return 1;
+ }__except(EXCEPTION_EXECUTE_HANDLER){}
+ return -1;
 }
 inline bool Target(const D3D12_COMPUTE_PIPELINE_STATE_DESC* desc) noexcept {
  __try {return desc&&desc->pRootSignature&&desc->CS.pShaderBytecode&&
@@ -21,7 +30,8 @@ inline bool Target(const D3D12_COMPUTE_PIPELINE_STATE_DESC* desc) noexcept {
  __except(EXCEPTION_EXECUTE_HANDLER){return false;}
 }
 template<class Create> void Capture(ID3D12Device* device,const D3D12_COMPUTE_PIPELINE_STATE_DESC* desc,IUnknown* result,Create create) noexcept {
- if(!device||!result||!create||!Target(desc))return;
+ const int spatial=SpatialVariant(desc);
+ if(!device||!result||!create||(!Target(desc)&&spatial<0))return;
  ID3D12PipelineState* native=nullptr;
  if(FAILED(result->QueryInterface(IID_PPV_ARGS(&native)))||!native)return;
  if(Find(native)){native->Release();return;}
@@ -30,6 +40,14 @@ template<class Create> void Capture(ID3D12Device* device,const D3D12_COMPUTE_PIP
  auto* b=new(std::nothrow) Bundle{};
  if(!b){native->Release();return;}
  b->native=native;
+ if(spatial>=0){
+  b->spatial=true;auto replacement=*desc;replacement.CachedPSO={};
+  replacement.CS=spatial==0?D3D12_SHADER_BYTECODE{kGISingleHistorySpatial0,sizeof(kGISingleHistorySpatial0)}:D3D12_SHADER_BYTECODE{kGISingleHistorySpatial1,sizeof(kGISingleHistorySpatial1)};
+  const HRESULT hr=create(device,&replacement,IID_PPV_ARGS(&b->adaptive));
+  if(FAILED(hr)||!b->adaptive){if(b->adaptive)b->adaptive->Release();native->Release();delete b;++failed;return;}
+  bundles[index].store(b,std::memory_order_release);++ready;
+  Log("GI_SPATIAL_R259 ready=1 variant=%d second_history_weight=0 spatial_math_unchanged=1",spatial);return;
+ }
  auto replacement=*desc;replacement.CachedPSO={};replacement.CS={kGIMotionHistoryShader,sizeof(kGIMotionHistoryShader)};
  const HRESULT hr=create(device,&replacement,IID_PPV_ARGS(&b->adaptive));
  if(FAILED(hr)||!b->adaptive){if(b->adaptive)b->adaptive->Release();native->Release();delete b;++failed;
@@ -63,10 +81,11 @@ template<class Create> void Capture(ID3D12Device* device,const D3D12_COMPUTE_PIP
 template<class Set,class DispatchFn> void Dispatch(ID3D12PipelineState* observed,unsigned count,bool& used,
  ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT z,Set set,DispatchFn dispatch) {
  auto* b=Find(observed);
- auto* replacement=b?(historyDisabled?(outlierEnabled?b->smooth:b->noHistory):b->adaptive):nullptr;
- if(b&&historyDisabled&&outlierEnabled&&!replacement)replacement=b->noHistory;
- if(b&&historyDisabled&&activeView==DiagnosticView::Mask)replacement=b->mask;
- if(b&&historyDisabled&&activeView==DiagnosticView::Zero)replacement=b->zero;
+ auto* replacement=(b&&!b->spatial&&!spatialDispatch)?(historyDisabled?(outlierEnabled?b->smooth:b->noHistory):b->adaptive):nullptr;
+ if(b&&!b->spatial&&!spatialDispatch&&historyDisabled&&outlierEnabled&&!replacement)replacement=b->noHistory;
+ if(b&&!b->spatial&&!spatialDispatch&&historyDisabled&&activeView==DiagnosticView::Mask)replacement=b->mask;
+ if(b&&!b->spatial&&!spatialDispatch&&historyDisabled&&activeView==DiagnosticView::Zero)replacement=b->zero;
+ if(b&&b->spatial&&spatialDispatch)replacement=b->adaptive;
  if(!replacement||count!=1){dispatch(list,x,y,z);return;}
  // Called only after DeviceUtil commits its native PSO and bindings.
  __try {set(list,replacement);dispatch(list,x,y,z);used=true;}

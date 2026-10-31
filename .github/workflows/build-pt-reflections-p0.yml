@@ -3,7 +3,7 @@ name: Build native reflection enhancements and RR
 on:
   push:
     branches:
-      - work/r258-foliage-contract
+      - work/r259-gi-single-history
       - work/r250-texture-publication-timing
       - work/r247-storage-prewarm
       - work/r245-native-gpu-storage
@@ -712,6 +712,12 @@ jobs:
           if errorlevel 1 exit /b 1
           build\test-gi-motion-pso.exe
           if errorlevel 1 exit /b 1
+          python tools/test-gi-spatial-history.py
+          if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 tools\test-gi-spatial-pso.cpp /Febuild\test-gi-spatial-pso.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
+          if errorlevel 1 exit /b 1
+          build\test-gi-spatial-pso.exe
+          if errorlevel 1 exit /b 1
           python tools/test-gi-temporal-audit.py
           if errorlevel 1 exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 tools\test-gi-temporal-scope.cpp /Febuild\test-gi-temporal-scope.exe
@@ -1012,11 +1018,11 @@ jobs:
           build\suite-controller.exe
           if errorlevel 1 exit /b 1
 
-      - name: Package native GPU storage R258
+      - name: Package GI single-history test R259
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='ControlTOH-R258'
+          $out='ControlTOH-R259'
           $shader="$out/ControlTOH/Shaders"
           $tools="$out/ControlTOH/Tools"
           $diagnostics="$out/ControlTOH/Diagnostics"
@@ -1046,14 +1052,14 @@ jobs:
           Copy-Item build/DirectStorage "$diagnostics/DirectStorage" -Recurse
           Copy-Item build/DirectStorage/dstorage.dll,build/DirectStorage/dstoragecore.dll $out
           Copy-Item tools/directstorage/Validate-DirectStorage.cmd "$diagnostics/DirectStorage"
-          Copy-Item docs/native-gpu-storage-r258.md "$out/ControlTOH/DIAGNOSTIC-NOTES.md"
+          Copy-Item docs/native-lighting-r259.md "$out/ControlTOH/DIAGNOSTIC-NOTES.md"
           Copy-Item tools/Organize-Existing-Install.cmd,tools/Organize-Existing-Install.ps1 $tools
           Copy-Item tools/diagnostics/Collect-ControlTOH-Materials.cmd,tools/diagnostics/Collect-ControlTOH-Materials.ps1 $tools
           & powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/diagnostics/test-material-collector.ps1
           if ($LASTEXITCODE -ne 0) { throw 'Material collector integration test failed' }
           @'
           Control The Oldest House: Visual and Performance Overhaul
-          R258 - Foliage material contract probe
+          R259 - GI second-history blend isolation
 
           Copy all package contents beside Control_DX12.exe. Preserve the folder structure.
           Launch normally through Steam. No F6 or test launcher is needed.
@@ -1072,9 +1078,10 @@ jobs:
           Texture streaming remains automatic (4 ms / 16 pinned partitions with DirectStorage).
           Optional diagnostics: ControlTOH/Diagnostics/Start-R258-Storage-Diagnostics.cmd.
           Collect logs using ControlTOH/Tools/Collect-ControlFG-Compact-Logs.cmd.
-          At the plant, use F10 > CAPTURE MATERIALS, close F10 and wait 10 seconds.
-          Run ControlTOH/Tools/Collect-ControlTOH-Materials.cmd and send its ZIP.
-          No new RR image capture is needed. This probe does not alter rendering.
+          F10: select GI: BOTH TEST. Close F10 and wait 10 seconds, then walk and pan.
+          Compare GI: BOTH at the same location. Keep RR ON, Native Blend, FG OFF.
+          Report ghosting, speckles and boiling; send compact logs.
+          Clamp Only and the original Both mode remain available. No material capture needed.
           See ControlTOH/DIAGNOSTIC-NOTES.md for scope and validation.
           '@ | Set-Content "$out/ControlTOH/README.txt" -Encoding ASCII
           python tools/test-organized-package.py "$out"
@@ -1088,10 +1095,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: ControlTOH-R258
+          name: ControlTOH-R259
           path: |
-            ControlTOH-R258.zip
-            ControlTOH-R258.sha256
+            ControlTOH-R259.zip
+            ControlTOH-R259.sha256
             build/spec-volume-roughness-validation.json
             build/spec-volume-roughness.dxbc
             build/spec-environment-validation.json
