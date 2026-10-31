@@ -167,7 +167,7 @@ inline bool InstallSelection(){
     }
     unsigned applied=0;for(;applied<3;){auto& p=selectionPatches[applied];if(!NativeCpuExchangeCall(&p,true))break;++applied;if(!p.writeHealthy)break;}
     if(applied!=3||!selectionPatches[2].writeHealthy){while(applied){--applied;if(!NativeCpuExchangeCall(&selectionPatches[applied],false))Log("TEXTURE_SELECT_R253_INSTALL rollback_failed=%u",applied);}return false;}
-    selectionInstalled=true;Log("TEXTURE_SELECT_R253_INSTALL installed=1 sites=3 scope=wayfinding_text policy_changed=0");return true;
+    selectionInstalled=true;Log("TEXTURE_SELECT_R253_INSTALL installed=1 sites=3 scope=sign_and_wayfinding_paths policy_changed=0");return true;
 }
 // Admit only a newly allocated, unpublished container. Existing mip resources
 // can already be referenced by recorded rendering work and remain native.

@@ -1,4 +1,4 @@
-# R253: native selection timing for wayfinding text
+# R253: native selection timing for sign textures
 
 R253 adds observation BEFORE the request hook, to investigate the confirmed
 Luck & Probability delay. R247 transfer behavior and the 4 ms / 16 pinned
@@ -46,9 +46,11 @@ new selector/budget forwarding fixtures exercise the wrappers on Windows.
 
 R252's broad request capture remains: 16,384 rows, 30 seconds plus 10 seconds
 completion grace. Its fields now use the R253 prefix. Selection names are learned
-from texture requests throughout the session; only paths containing
-\\props\\signs\\wayfinding_text_ enter the 64-identity registry. It includes the
-confirmed sign and nearby wayfinding text. No dynamic name getter is called
+from texture requests throughout the session; paths containing lowercase `sign` or `wayfinding` enter the 512-identity
+registry. This covers sign folders, sign-named assets and wayfinding decals,
+including the confirmed sign and neighboring text. Matching is deliberately broad
+and may include unrelated names such as `design`; assets without either token
+are not automatically classified as signs. No dynamic name getter is called
 inside the selector. Requests can invalidate or rename reused numeric identities;
 unobserved object reuse remains a diagnostic correlation limitation. A target
 not yet registered cannot have earlier selector observations. Inspect TARGET
@@ -74,7 +76,7 @@ earlier scan eligibility checks, missing registration and observation drops also
 matter. Nested gate rows can precede the enclosing selector row in dump order;
 use timestamps and row indices, not physical row order, for the timeline.
 
-8,192 selection rows are buffered, then logged at the 40-second flush alongside
+32,768 selection rows are buffered, then logged at the 40-second flush alongside
 request rows. Capture overflow, target overflow and cumulative contention/drop
 counts are explicit. Try-lock observers never wait for the diagnostic lock.
 Zero timestamps/unmatched identities remain unknown, not zero delay. First

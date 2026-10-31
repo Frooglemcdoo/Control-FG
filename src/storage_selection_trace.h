@@ -4,7 +4,7 @@
 namespace storage_selection_trace {
 using U64=std::uint64_t;
 struct Trace {
- static constexpr unsigned TargetCapacity=64,Capacity=8192;
+ static constexpr unsigned TargetCapacity=512,Capacity=32768;
  struct Target {U64 texture=0;char name[256]{};};
  struct State {
   U64 scan=0,cycle=0,pendingBytes=0;
@@ -15,7 +15,7 @@ struct Trace {
  struct Row {U64 texture=0,begin=0,end=0;unsigned kind=0;int level=-1,result=-1;State before,after;};
  Target targets[TargetCapacity]{};Row rows[Capacity]{};
  unsigned targetsCount=0,count=0,overflow=0,targetOverflow=0;
- static bool Matches(const char* name){return name&&std::strstr(name,"\\props\\signs\\wayfinding_text_")!=nullptr;}
+ static bool Matches(const char* name){return name&&(std::strstr(name,"sign")||std::strstr(name,"wayfinding"));}
  void Register(U64 texture,const char* name){
   // Update or invalidate reused numeric identities whenever a request supplies a name.
   const bool match=Matches(name);
