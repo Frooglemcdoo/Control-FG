@@ -1,4 +1,4 @@
-"""Exact native GI contribution isolation. No brightness or filtering changes."""
+"""Exact native GI source and spotlight visibility isolation diagnostics."""
 import base64
 import hashlib
 import importlib.util
@@ -57,14 +57,30 @@ def main():
         count = struct.unpack_from('<I', raw, 28)[0]
         start = next(o + 8 for o in struct.unpack_from('<'+'I'*count, raw, 32) if raw[o:o+4] == b'SHEX')
         native_words = list(struct.unpack_from('<'+'I'*((len(raw)-start)//4), raw, start))
-        for mode, selected in enumerate(((sites[0],), (sites[1],), tuple(sites)), 1):
+        # Final static/dynamic visibility blend immediately controls the spotlight
+        # zero-visibility early-out. Replace it before that branch, so fully
+        # shadowed samples are tested too. Near-plane and cookie gates stay native.
+        visibility = []
+        for j, ins in enumerate(instructions[:-3]):
+            if ins['name'] != 'movc': continue
+            following = instructions[j+1:j+4]
+            if [x['name'] for x in following] != ['ne','if','ld_structured']: continue
+            if following[0]['operands'][1] != ins['operands'][0]: continue
+            if following[0]['operands'][2] != 'l(0)': continue
+            if ins not in loops[sites[1]]: continue
+            visibility.append(ins['dword'])
+        assert len(visibility) == 1, (variant, visibility)
+        for mode, selected in enumerate(((sites[0],), (sites[1],), tuple(sites), tuple(visibility)), 1):
             edits = []
             for offset in selected:
                 expected = native_words[offset:offset+9]
-                assert expected[0] == 0x09000032  # MAD, four simple temp operands
-                assert expected[2] == expected[8]  # accumulator preserved
-                # MOV destination, old accumulator; pad with NOP, same length.
-                replacement = [0x05000036, *expected[1:3], *expected[7:9]] + [0x0100003a]*4
+                if mode == 4:
+                    assert expected[0] == 0x09000037  # MOVC, four simple temps
+                    replacement = [0x05000036, *expected[1:3], 0x4001, 0x3f800000] + [0x0100003a]*4
+                else:
+                    assert expected[0] == 0x09000032
+                    assert expected[2] == expected[8]
+                    replacement = [0x05000036, *expected[1:3], *expected[7:9]] + [0x0100003a]*4
                 edits.append((offset, expected, replacement))
             def transform(words):
                 for offset, expected, replacement in edits:
@@ -79,6 +95,9 @@ def main():
                 permitted.update(range(start+offset*4, start+(offset+9)*4))
             assert all(a == b for n, (a, b) in enumerate(zip(raw, changed)) if n not in permitted)
             assert decoder.decode(target)['bindings'] == decoded['bindings']
+            def undo(words):
+                for offset, expected, _ in edits: words[offset:offset+9] = expected
+            assert transform_shex(changed, undo) == raw
             symbol = f'kGISource{variant}Mode{mode}'
             for number, (_, expected, replacement) in enumerate(edits):
                 for suffix, words in (('Expected', expected), ('Replacement', replacement)):
@@ -87,8 +106,8 @@ def main():
             header.append(f'inline constexpr unsigned char {symbol}Checksum[]={{'+','.join(map(str, changed[4:20]))+'};')
             header.append(f'inline constexpr ShaderPatch {symbol}={{"GI source {variant} mode {mode}",{len(raw)},"{identity["sha256"]}","{hashlib.sha256(changed).hexdigest()}",{start+edits[0][0]*4},{symbol}Expected0,9,nullptr,0,{symbol}Checksum,{symbol}Edits,{len(edits)}}};')
             symbols.append('&'+symbol)
-        print(f'PASS GI variant {variant}: point MAD {sites[0]}, spot MAD {sites[1]}; all unrelated bytes preserved')
-    header.append('inline constexpr const ShaderPatch* kGISourcePatches[8][3]={'+','.join('{'+','.join(symbols[i:i+3])+'}' for i in range(0,24,3))+'};')
+        print(f'PASS GI variant {variant}: point MAD {sites[0]}, spot MAD {sites[1]}, visibility {visibility[0]}; all unrelated bytes preserved')
+    header.append('inline constexpr const ShaderPatch* kGISourcePatches[8][4]={'+','.join('{'+','.join(symbols[i:i+4])+'}' for i in range(0,32,4))+'};')
     header.append('}')
     text = '\n'.join(header)+'\n'
     path = ROOT / 'src/gi_source_patches.generated.h'

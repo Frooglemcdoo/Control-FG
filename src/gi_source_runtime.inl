@@ -6,8 +6,8 @@ inline unsigned Requested() noexcept {
  static const unsigned mode=[] {
   char value[32]{};
   const DWORD length=GetEnvironmentVariableA("CONTROLTOH_GI_SOURCE",value,sizeof(value));
-  const unsigned result=length&&length<sizeof(value)?gi_source::Parse(value):0;
-  Trace("GI_SOURCE_R267 request=%s restart_scoped=1 diagnostic_only=1",gi_source::Name(result));
+  const unsigned result=!length?4:(length<sizeof(value)?gi_source::Parse(value):0);
+  Trace("GI_SOURCE_R269 request=%s restart_scoped=1 diagnostic_only=1",gi_source::Name(result));
   return result;
  }();
  return mode;
@@ -30,7 +30,7 @@ inline void Observe(ID3D12Device* device,const D3D12_COMPUTE_PIPELINE_STATE_DESC
   }else if(SUCCEEDED(hr))hr=E_UNEXPECTED;
   if(owner)owner->Release();
   if(alternate)alternate->Release();
-  Trace("GI_SOURCE_R267 prepare=%s variant=%u ready=%u hr=0x%08lX native_sha=%s patched_sha=%s",
+  Trace("GI_SOURCE_R269 prepare=%s variant=%u ready=%u hr=0x%08lX native_sha=%s patched_sha=%s",
    gi_source::Name(mode),variant,unsigned(SUCCEEDED(hr)),static_cast<unsigned long>(hr),patch.nativeSha,patch.patchedSha);
   return;
  }
@@ -43,7 +43,7 @@ inline ID3D12PipelineState* Select(ID3D12PipelineState* native) noexcept {
  if(size!=sizeof(result)){if(result)result->Release();return nullptr;}
  if(result){
   const auto count=++bound;
-  if(count<=4||(count%240)==0)Trace("GI_SOURCE_R267 bound=%s count=%llu cpu_recording_only=1",gi_source::Name(Requested()),count);
+  if(count<=4||(count%240)==0)Trace("GI_SOURCE_R269 bound=%s count=%llu cpu_recording_only=1",gi_source::Name(Requested()),count);
  }
  return result;
 }

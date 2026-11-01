@@ -3,6 +3,7 @@ name: Build native reflection enhancements and RR
 on:
   push:
     branches:
+      - work/r269-gi-shadow-isolation
       - work/r268-gi-spot-pcf
       - work/r267-gi-audit
       - work/r266-foliage-variant
@@ -1071,11 +1072,11 @@ jobs:
           build\test-gi-spot-pcf.exe
           if errorlevel 1 exit /b 1
 
-      - name: Package GI spotlight PCF R268
+      - name: Package GI shadow isolation R269
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='ControlTOH-R268'
+          $out='ControlTOH-R269'
           $shader="$out/ControlTOH/Shaders"
           $tools="$out/ControlTOH/Tools"
           $diagnostics="$out/ControlTOH/Diagnostics"
@@ -1105,17 +1106,17 @@ jobs:
           Copy-Item build/DirectStorage "$diagnostics/DirectStorage" -Recurse
           Copy-Item build/DirectStorage/dstorage.dll,build/DirectStorage/dstoragecore.dll $out
           Copy-Item tools/directstorage/Validate-DirectStorage.cmd "$diagnostics/DirectStorage"
-          Copy-Item docs/native-lighting-r268.md "$out/ControlTOH/DIAGNOSTIC-NOTES.md"
+          Copy-Item docs/native-lighting-r269.md "$out/ControlTOH/DIAGNOSTIC-NOTES.md"
           Copy-Item tools/Organize-Existing-Install.cmd,tools/Organize-Existing-Install.ps1 $tools
           Copy-Item tools/diagnostics/Collect-ControlTOH-Materials.cmd,tools/diagnostics/Collect-ControlTOH-Materials.ps1 $tools
           & powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/diagnostics/test-material-collector.ps1
           if ($LASTEXITCODE -ne 0) { throw 'Material collector integration test failed' }
           @'
           Control The Oldest House: Visual and Performance Overhaul
-          R268 - GI spotlight PCF correction test; full spotlight contribution retained
+          R269 - Spotlight GI shadow isolation diagnostic
 
           Copy all package contents beside Control_DX12.exe. Preserve the folder structure.
-          Normal Steam launch enables the PCF test with full GI. Native comparison:
+          Normal Steam launch bypasses secondary spotlight GI shadow visibility. Comparison:
           ControlTOH/Diagnostics/Start-GI-Shadow-Test.cmd
           Root files: dxgi.dll, dstorage.dll, dstoragecore.dll.
           ControlTOH/Shaders: runtime shaders. ControlTOH/Tools: restart helper and collectors.
@@ -1134,8 +1135,9 @@ jobs:
           Collect logs using ControlTOH/Tools/Collect-ControlFG-Compact-Logs.cmd.
           F10: select GI: RAW BYPASS. Keep RR ON, Native Blend, GI samples 6, FG OFF.
           Keep the lamp intact and RT indirect lighting ON.
-          Check F10 for GI SHADOW: PCF TEST after returning to gameplay.
-          Both shadow-test options retain full spotlight GI.
+          Check F10 for GI SHADOW: BYPASS after returning to gameplay.
+          Shadow launcher: 1 bypass, 2 native baseline, 3 no spotlight GI.
+          Brighter bounced light or leaks are expected in bypass; this is not a final fix.
           Compare speckles, lighting/shadow edges, motion and performance.
           The older source probe is separate and still removes contributions.
           CAPTURE RR and PACKAGE RR retain the existing multi-pair capture behavior.
@@ -1152,10 +1154,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: ControlTOH-R268
+          name: ControlTOH-R269
           path: |
-            ControlTOH-R268.zip
-            ControlTOH-R268.sha256
+            ControlTOH-R269.zip
+            ControlTOH-R269.sha256
             build/gi-spot-pcf-validation.json
             build/gi-sequence-validation.json
             build/gi-sequence-0.dxil

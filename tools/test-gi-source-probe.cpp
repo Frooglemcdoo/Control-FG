@@ -31,7 +31,7 @@ int main()try{
  D3D12_ROOT_SIGNATURE_DESC rd{1,&parameter,20,samplers,D3D12_ROOT_SIGNATURE_FLAG_NONE};
  ComPtr<ID3DBlob> serialized,error;Check(D3D12SerializeRootSignature(&rd,D3D_ROOT_SIGNATURE_VERSION_1,&serialized,&error));
  ComPtr<ID3D12RootSignature> root;Check(device->CreateRootSignature(0,serialized->GetBufferPointer(),serialized->GetBufferSize(),IID_PPV_ARGS(&root)));
- for(unsigned i=0;i<8;++i)for(unsigned mode=1;mode<=3;++mode){
+ for(unsigned i=0;i<8;++i)for(unsigned mode=1;mode<=4;++mode){
   const auto prefix="build/gi-source-"+std::to_string(i);
   auto native=Read(prefix+".dxbc"),expected=Read(prefix+"-"+std::to_string(mode)+".dxbc");std::vector<unsigned char> result;
   const auto& patch=*native_lighting::kGISourcePatches[i][mode-1];
@@ -44,5 +44,5 @@ int main()try{
   native[patch.edits[0].offset]^=1;
   if(native_lighting::MakeDisabledContribution(patch,native.data(),native.size(),patch.nativeSha,result))throw std::runtime_error("Changed instruction accepted");
  }
- std::cout<<"PASS R267 all 24 GI source variants: exact C++ patches, instruction rejection, disassembly and WARP PSO creation\n";
+ std::cout<<"PASS R269 all 32 GI source variants: exact C++ patches, instruction rejection, disassembly and WARP PSO creation\n";
 }catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}

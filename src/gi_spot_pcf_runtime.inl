@@ -5,7 +5,7 @@ inline std::atomic<unsigned long long> bound{0};
 inline bool Enabled() noexcept {
  static const bool enabled=[] {
   char value[32]{};const DWORD length=GetEnvironmentVariableA("CONTROLTOH_GI_SHADOW",value,sizeof(value));
-  const bool active=!length||(length<sizeof(value)&&!std::strcmp(value,"pcf"));
+  const bool active=length&&length<sizeof(value)&&!std::strcmp(value,"pcf");
   Trace("GI_SPOT_PCF_R268 requested=%u native_comparison=%u diagnostic_only=1",unsigned(active),unsigned(!active));
   return active;
  }();
