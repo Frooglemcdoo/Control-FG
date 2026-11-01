@@ -431,6 +431,8 @@ inline QueueHook LookupQueue(ID3D12CommandQueue* queue) noexcept {
 }
 using BeginTiming = UINT64 (*)(ID3D12CommandQueue*,UINT,ID3D12CommandList*const*) noexcept;
 using EndTiming = void (*)(ID3D12CommandQueue*,UINT64) noexcept;
+using InstanceObserver=void (*)(ID3D12CommandQueue*,UINT,ID3D12CommandList*const*) noexcept;
+inline std::atomic<InstanceObserver> instanceObserver{nullptr};
 inline std::atomic<BeginTiming> beginTiming{nullptr};
 inline std::atomic<EndTiming> endTiming{nullptr};
 inline void STDMETHODCALLTYPE ExecuteHook(ID3D12CommandQueue* queue,UINT count,ID3D12CommandList*const* lists) {
@@ -441,6 +443,7 @@ inline void STDMETHODCALLTYPE ExecuteHook(ID3D12CommandQueue* queue,UINT count,I
     rt_spot_capture_runtime::BeforeExecute(queue,count,lists);
     const auto timer=beginTiming.load();
     const auto timing=timer?timer(queue,count,lists):0;
+    if(const auto observe=instanceObserver.load())observe(queue,count,lists);
     original(queue,count,lists);
     if(const auto end=endTiming.load())end(queue,timing);
     rt_spot_capture_runtime::AfterExecute(queue,count,lists);

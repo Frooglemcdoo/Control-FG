@@ -3,6 +3,7 @@ name: Build native reflection enhancements and RR
 on:
   push:
     branches:
+      - work/r280-gi-instance-submissions
       - work/r279-gi-geometry-bindings
       - work/r278-gi-runtime-accounting
       - work/r277-complete-gi-rays
@@ -1135,11 +1136,11 @@ jobs:
           build\test-gi-spot-pcf.exe
           if errorlevel 1 exit /b 1
 
-      - name: Package GI geometry descriptor inventory R279
+      - name: Package GI instance submission metadata R280
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='ControlTOH-R279'
+          $out='ControlTOH-R280'
           $shader="$out/ControlTOH/Shaders"
           $tools="$out/ControlTOH/Tools"
           $diagnostics="$out/ControlTOH/Diagnostics"
@@ -1169,14 +1170,14 @@ jobs:
           Copy-Item build/DirectStorage "$diagnostics/DirectStorage" -Recurse
           Copy-Item build/DirectStorage/dstorage.dll,build/DirectStorage/dstoragecore.dll $out
           Copy-Item tools/directstorage/Validate-DirectStorage.cmd "$diagnostics/DirectStorage"
-          Copy-Item docs/native-lighting-r279.md "$out/ControlTOH/DIAGNOSTIC-NOTES.md"
+          Copy-Item docs/native-lighting-r280.md "$out/ControlTOH/DIAGNOSTIC-NOTES.md"
           Copy-Item tools/Organize-Existing-Install.cmd,tools/Organize-Existing-Install.ps1 $tools
           Copy-Item tools/diagnostics/Collect-ControlTOH-Materials.cmd,tools/diagnostics/Collect-ControlTOH-Materials.ps1 $tools
           & powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/diagnostics/test-material-collector.ps1
           if ($LASTEXITCODE -ne 0) { throw 'Material collector integration test failed' }
           @'
           Control The Oldest House: Visual and Performance Overhaul
-          R279 - GI geometry descriptor inventory
+          R280 - GI instance submission metadata
 
           Copy all package contents beside Control_DX12.exe, preserving folders.
           Run ControlTOH/Diagnostics/Start-GI-Geometry-Probe.cmd.
@@ -1200,10 +1201,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: ControlTOH-R279
+          name: ControlTOH-R280
           path: |
-            ControlTOH-R279.zip
-            ControlTOH-R279.sha256
+            ControlTOH-R280.zip
+            ControlTOH-R280.sha256
             build/gi-ray-trace-validation.json
             build/gi-spot-trace-validation.json
             build/gi-spot-pcf-validation.json

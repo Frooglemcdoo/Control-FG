@@ -27,6 +27,7 @@
 #include "free_camera_control.h"
 
 namespace native_lighting {
+namespace gi_geometry_probe { inline void ResetInstances(ID3D12GraphicsCommandList*) noexcept; }
 namespace gi_spot_trace {
 inline void Poll() noexcept;
 inline void Observe(ID3D12Device*,const D3D12_COMPUTE_PIPELINE_STATE_DESC*,IUnknown*,HRESULT(STDMETHODCALLTYPE*)(ID3D12Device*,const D3D12_COMPUTE_PIPELINE_STATE_DESC*,REFIID,void**)) noexcept;
@@ -365,7 +366,7 @@ inline HRESULT STDMETHODCALLTYPE ResetHook(ID3D12GraphicsCommandList* list, ID3D
     if(!alternate)alternate=gi_spot_pcf_probe::Select(binding.selected);
     const HRESULT hr = original(list, allocator, alternate ? alternate : binding.selected);
     gi_binding_audit::Bind(list,SUCCEEDED(hr)?(alternate?alternate:binding.selected):nullptr);
-    if(SUCCEEDED(hr))gi_spot_trace::Reset(list);
+    if(SUCCEEDED(hr)){gi_spot_trace::Reset(list);gi_geometry_probe::ResetInstances(list);}
     gi_spot_trace::Bind(list,SUCCEEDED(hr)?(alternate?alternate:binding.selected):nullptr);
     if (alternate) alternate->Release();
     if (SUCCEEDED(hr)) { performance::Reset(list);BindPerformance(list,pso);binding.Recorded(); }
@@ -493,6 +494,8 @@ inline void InstallLiveDiagnostic(ID3D12Device* device) noexcept {
         return desc?performance::Begin(list,PerformanceRayStage(),desc->Width,desc->Height,desc->Depth,desc->HitGroupTable.SizeInBytes,nullptr,desc):performance::kInvalid;
     };
     rt_spot_table_audit::endTiming=&performance::AfterExecute;
+    rt_spot_table_audit::instanceObserver=&gi_geometry_probe::BeforeExecute;
+    gi_spot_trace::instanceRequest=&gi_geometry_probe::RequestInstances;
     rt_spot_table_audit::beginTiming=&performance::BeforeExecute;
     rt_spot_capture_audit::retentionEnabled.store(false);
     rt_spot_capture_audit::captured.store(true); // Retire speculative upload retention; R122 uses copy journals.

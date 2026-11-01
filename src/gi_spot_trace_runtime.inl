@@ -53,6 +53,8 @@ inline const wchar_t* Status() noexcept {
  case Phase::Failed:return failure.load();
  }return L"Unknown capture state.";
 }
+using InstanceRequest=void (*)() noexcept;
+inline std::atomic<InstanceRequest> instanceRequest{nullptr};
 inline bool Request(const char* source) noexcept {
  if(!Enabled())return false;
  if(!enabledReady.load()){notice.store(L"NOT ARMED: probe not ready. Load the level first.");Trace("GI_SPOT_R275_REQUEST accepted=0 source=%s reason=not_ready",source);return false;}
@@ -65,7 +67,7 @@ inline bool Request(const char* source) noexcept {
 }
 inline void AdvanceCountdown(UINT64 now,bool foreground) noexcept {
  if(phase.load()==Phase::Countdown&&now-armedAt>=5000&&foreground){
-  Phase expected=Phase::Countdown;if(phase.compare_exchange_strong(expected,Phase::Armed)){armedAt=now;Trace("GI_SPOT_R275_ARMED countdown_complete=1");}
+  Phase expected=Phase::Countdown;if(phase.compare_exchange_strong(expected,Phase::Armed)){armedAt=now;Trace("GI_SPOT_R275_ARMED countdown_complete=1");if(const auto request=instanceRequest.load())request();}
  }
 }
 // Called every 50 ms by the diagnostic UI, independent of disk/log draining.

@@ -11,7 +11,45 @@ inline Hook Lookup(ID3D12GraphicsCommandList4* list) noexcept {
  Hook found{};auto** table=*reinterpret_cast<void***>(list);
  AcquireSRWLockShared(&lock);for(const auto& h:hooks)if(h.table==table){found=h;break;}ReleaseSRWLockShared(&lock);return found;
 }
+// Per-list TLAS metadata is independent of the startup BLAS text budget.
+inline const GUID instanceKey={0x2800a981,0x2131,0x41bd,{0x98,0x11,0x11,0x82,0x43,0x01,0x00,0x01}};
+struct InstanceBuild {UINT64 destination=0,source=0,instances=0;UINT count=0,flags=0,layout=0;};
+struct InstanceState {UINT64 generation=0;UINT count=0;bool overflow=false;InstanceBuild records[8]{};};
+inline std::atomic<UINT64> nextGeneration{1},submissionSerial{0};
+inline std::atomic<unsigned> submissionReports{0};
+inline InstanceState ReadInstances(ID3D12Object* list) noexcept {
+ InstanceState s{};UINT bytes=sizeof(s);if(FAILED(list->GetPrivateData(instanceKey,&bytes,&s))||bytes!=sizeof(s))s={};return s;
+}
+inline void ResetInstances(ID3D12GraphicsCommandList* list) noexcept {
+ if(!Enabled())return;InstanceState s{};s.generation=nextGeneration.fetch_add(1);
+ if(FAILED(list->SetPrivateData(instanceKey,sizeof(s),&s)))Trace("GI_INSTANCE_R280_FAILED reason=reset_state");
+}
+inline void RecordInstances(ID3D12GraphicsCommandList4* list,const D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC& d) noexcept {
+ auto s=ReadInstances(list);if(!s.generation)s.generation=nextGeneration.fetch_add(1);
+ if(s.count<8)s.records[s.count++]={d.DestAccelerationStructureData,d.SourceAccelerationStructureData,d.Inputs.InstanceDescs,d.Inputs.NumDescs,unsigned(d.Inputs.Flags),unsigned(d.Inputs.DescsLayout)};
+ else s.overflow=true;
+ if(FAILED(list->SetPrivateData(instanceKey,sizeof(s),&s)))Trace("GI_INSTANCE_R280_FAILED reason=record_state");
+}
+inline void RequestInstances() noexcept {
+ if(!Enabled())return;submissionReports.store(0);Trace("GI_INSTANCE_R280_ARM metadata_only=1 submission_report_budget=32");
+}
+// Called immediately before the native ExecuteCommandLists call. These are CPU
+// submission observations, NOT GPU-completed bytes or proven cross-queue order.
+inline void BeforeExecute(ID3D12CommandQueue* queue,UINT count,ID3D12CommandList*const* lists) noexcept {
+ if(!Enabled()||submissionReports.load()>=32)return;
+ const auto serial=submissionSerial.fetch_add(1);
+ for(UINT i=0;i<count;++i){
+  if(!lists[i])continue;const auto s=ReadInstances(lists[i]);if(!s.count&&!s.overflow)continue;
+  const auto report=submissionReports.fetch_add(1);if(report>=32)return;
+  Trace("GI_INSTANCE_R280_SUBMIT serial=%llu queue=%p list=%p array_index=%u generation=%llu count=%u overflow=%u gpu_completion_confirmed=0 ordering_verified=0",serial,queue,lists[i],i,s.generation,s.count,unsigned(s.overflow));
+  for(UINT j=0;j<s.count&&j<8;++j){const auto& b=s.records[j];
+   Trace("GI_INSTANCE_R280_TLAS serial=%llu array_index=%u record=%u dst=%llu src=%llu instances_va=%llu count=%u flags=%u layout=%u instance_bytes_not_read=1",serial,i,j,b.destination,b.source,b.instances,b.count,b.flags,b.layout);
+  }
+  if(report==31)Trace("GI_INSTANCE_R280_LIMIT kind=submission_reports limit=32 rearm_with_F7=1");
+ }
+}
 inline void Observe(ID3D12GraphicsCommandList4* list,const D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC* d) noexcept {
+ if(d&&d->Inputs.Type==D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL)RecordInstances(list,*d);
  const unsigned serial=builds.fetch_add(1);
  if(serial>=512){if(serial==512)Trace("GI_GEOMETRY_R279_LIMIT kind=build limit=512 inventory_incomplete=1");return;}
  if(!d){Trace("GI_GEOMETRY_R279_NULL serial=%u",serial);return;}
