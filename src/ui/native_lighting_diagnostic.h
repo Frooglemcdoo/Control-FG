@@ -48,6 +48,12 @@ inline const wchar_t* ButtonLabel(unsigned index) noexcept {
     return actions[index - kModeCount];
 }
 inline const wchar_t* ModeHint(Mode mode) noexcept {
+    if(gi_source_probe::Requested()) {
+        if(!gi_source_probe::bound.load())return L"GI source probe requested; no matching shader bound yet. Check log.";
+        if(gi_source_probe::Requested()==1)return L"GI SOURCE: NO POINT. Direct lights retained. Diagnostic only.";
+        if(gi_source_probe::Requested()==2)return L"GI SOURCE: NO SPOT. Direct lights retained. Diagnostic only.";
+        return L"GI SOURCE: NO LOCAL. Baked GI retained. Diagnostic only.";
+    }
     if(IsNativeBlend(mode)&&control_rr_gi::stageMode.load()==control_rr_gi::StageMode::ClampOnly&&control_rr_gi::viewRequested.load()!=control_rr_gi::DiagnosticView::Normal)return L"GI diagnostic active. Return GI VIEW to NORMAL after testing.";
     if(UsesNativeBlendProjection(mode))return L"Native Blend with projection rays. RR retained; MAP GUARD is optional.";
     if(mode==Mode::Native)return L"Native lighting. SPEC is shared with other modes; NATIVE removes its override.";

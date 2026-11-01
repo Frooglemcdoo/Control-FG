@@ -3,6 +3,8 @@
 #include "rr_gi_pipeline.h"
 #include "native_lighting_isolation.h"
 #include "rt_baked_gi_patches.generated.h"
+#include "gi_source_patches.generated.h"
+#include "gi_source_policy.h"
 #include "native_lighting_live_state.h"
 #include "rr_lighting_diagnostic.h"
 #include "native_lighting_report.h"
@@ -225,9 +227,11 @@ namespace rt_shadow_capture {
 inline void RecordDirect(const D3D12_COMPUTE_PIPELINE_STATE_DESC*) noexcept;
 inline void RecordCompute(const D3D12_COMPUTE_PIPELINE_STATE_DESC*) noexcept;
 }
+#include "gi_source_runtime.inl"
 inline void ObserveCompute(ID3D12Device* device, const D3D12_COMPUTE_PIPELINE_STATE_DESC* desc, IUnknown* native, CreateCompute original) noexcept {
     computeSeen.fetch_add(1);
     control_rr_gi::Capture(device,desc,native,original);
+    gi_source_probe::Observe(device,desc,native,original);
     IdentifyPipeline(native, desc->CS, 2);
     rt_shadow_capture::RecordCompute(desc);
     rt_spot_runtime::ObserveCompute(device,desc,native,original);
@@ -312,6 +316,7 @@ inline void STDMETHODCALLTYPE SetHook(ID3D12GraphicsCommandList* list, ID3D12Pip
     if (!original) return;
     Binding binding(pso);
     auto* alternate = rt_spot_runtime::SelectCompute(binding.selected);
+    if(!alternate)alternate=gi_source_probe::Select(binding.selected);
     original(list, alternate ? alternate : binding.selected);
     rt_spot_capture_runtime::BindCompute(list,pso,alternate ? alternate : binding.selected);
     BindPerformance(list,pso);
@@ -332,6 +337,7 @@ inline HRESULT STDMETHODCALLTYPE ResetHook(ID3D12GraphicsCommandList* list, ID3D
     if (!original) return E_UNEXPECTED;
     Binding binding(pso);
     auto* alternate = rt_spot_runtime::SelectCompute(binding.selected);
+    if(!alternate)alternate=gi_source_probe::Select(binding.selected);
     const HRESULT hr = original(list, allocator, alternate ? alternate : binding.selected);
     if (alternate) alternate->Release();
     if (SUCCEEDED(hr)) { performance::Reset(list);BindPerformance(list,pso);binding.Recorded(); }
