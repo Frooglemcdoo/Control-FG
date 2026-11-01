@@ -6,6 +6,7 @@
 #include <wrl/client.h>
 #include <cstdint>
 #include <stdexcept>
+#include <string>
 #include <iostream>
 #include <cstring>
 #include "../src/rr_input_capture_limits.h"
