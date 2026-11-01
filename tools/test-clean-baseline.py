@@ -29,11 +29,18 @@ camera_exceptions = json.loads((root/'tools/fixtures/r199-baseline-exceptions.js
 gi_temporal_exceptions=json.loads((root/'tools/fixtures/r208-baseline-exceptions.json').read_text())
 motion_exceptions=json.loads((root/'tools/fixtures/r210-baseline-exceptions.json').read_text())
 pipeline_exceptions=json.loads((root/'tools/fixtures/r211-baseline-exceptions.json').read_text())
+foliage_exceptions=json.loads((root/'tools/fixtures/r265-baseline-exceptions.json').read_text())
 for name, expected in manifest['files'].items():
     if name == 'src/fg_overlay.h':
         assert not (root / name).exists(), 'Legacy settings popup must remain removed'
         continue # R42 replaces UI-only code with fg_settings.h; renderer hashes remain enforced.
     data = (root / name).read_bytes().replace(b'\r\n', b'\n')
+    if name in foliage_exceptions:
+        text=data.decode()
+        for before,after in reversed(foliage_exceptions[name]):
+            assert text.count(after)==1,(name,'R265 exact foliage evidence guard changed')
+            text=text.replace(after,before,1)
+        data=text.encode()
     if name in pipeline_exceptions:
         text=data.decode()
         for before,after in reversed(pipeline_exceptions[name]):
