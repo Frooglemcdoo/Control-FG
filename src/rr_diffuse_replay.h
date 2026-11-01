@@ -156,10 +156,12 @@ static void RRDiffusePrepare(void* callback,void* table) noexcept {
             if(control_rr::RRTexturedCharacterGuides &&
                family!=2 && family!=5 && !(c->worldAlbedo && (family==1 || family==4))) continue;
             auto& batchShaders=family==4?foliageShaders:(family==1?worldShaders:shaders);
-            if(!batchShaders.ValidatePair(original.shader,c->replay.batches[i].shader,result,&reason,family==4?&kRRFoliageEvidence:nullptr) ||
+            const bool validPair=family==4?RRValidateFoliagePair(batchShaders,original.shader,c->replay.batches[i].shader,result,&reason):
+                batchShaders.ValidatePair(original.shader,c->replay.batches[i].shader,result,&reason);
+            if(!validPair ||
                (control_rr::RRTexturedCharacterGuides && result.targetCount!=1) ||
                result.targetCount<1 || result.targetCount>2 || (targets && targets!=result.targetCount)) {
-                if(family==4){++foliageRejected;if(frame%240==0)Log("RR_FOLIAGE_R265_REJECT frame=%llu source=%u reason=%s",frame,c->replay.sourceIndices[i],reason?reason:"target_contract");}
+                if(family==4){++foliageRejected;if(frame%240==0)Log("RR_FOLIAGE_R266_REJECT frame=%llu source=%u reason=%s",frame,c->replay.sourceIndices[i],reason?reason:"target_contract");}
                 continue;
             }
             if(family==4){++foliageAccepted;++c->worldBatches;}
@@ -178,7 +180,7 @@ static void RRDiffusePrepare(void* callback,void* table) noexcept {
         }
         if(foliageAccepted||foliageRejected){
             static unsigned long long records=0;
-            if(++records<=4||frame%240==0)Log("RR_FOLIAGE_R265 frame=%llu accepted=%u rejected=%u exact_original_ps=1 exact_vertex=1 exact_replay_ps=1 pixel_coverage_proven=0",frame,foliageAccepted,foliageRejected);
+            if(++records<=4||frame%240==0)Log("RR_FOLIAGE_R266 frame=%llu accepted=%u rejected=%u exact_original_ps=1 exact_vertex=1 exact_replay_ps=1 pixel_coverage_proven=0",frame,foliageAccepted,foliageRejected);
         }
         c->replay.batches.resize(kept);c->replay.sourceIndices.resize(kept);c->replay.familyKinds.resize(kept);
         c->accepted=static_cast<UINT>(kept);c->rejected=c->replay.coverage.sourceBatches-c->accepted;

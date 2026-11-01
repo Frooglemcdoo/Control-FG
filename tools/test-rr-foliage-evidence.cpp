@@ -34,6 +34,14 @@ static void NativeSessionTests(){
     blobs[3][100]^=1;blobs[2][100]^=1;
     {RRAlbedoShader::Session s;Require(!s.ValidatePair(original.Address(),replay.Address(),result,&reason,&kRRFoliageEvidence));Require(!std::strcmp(reason,"native_exact_evidence_mismatch"));}
     blobs[2][100]^=1;
+    {RRAlbedoShader::Session s;Require(RRValidateFoliagePair(s,original.Address(),replay.Address(),result,&reason));}
+    blobs[1]={kRRFoliageOriginalPixelR266,kRRFoliageOriginalPixelR266+sizeof(kRRFoliageOriginalPixelR266)};
+    FakeShader secondOriginal(0,1);
+    {RRAlbedoShader::Session s;Require(RRValidateFoliagePair(s,secondOriginal.Address(),replay.Address(),result,&reason));
+     const auto copied=s.CopiedBytes();Require(RRValidateFoliagePair(s,secondOriginal.Address(),replay.Address(),result,&reason));Require(s.CopiedBytes()==copied);}
+    blobs[1][100]^=1;
+    {RRAlbedoShader::Session s;Require(!RRValidateFoliagePair(s,secondOriginal.Address(),replay.Address(),result,&reason));}
+    blobs[1]={kRRFoliageOriginalPixel,kRRFoliageOriginalPixel+sizeof(kRRFoliageOriginalPixel)};
     RRAlbedoShader::ExactEvidence wrong=kRRFoliageEvidence;wrong.replayPixelSize--;
     {RRAlbedoShader::Session s;Require(s.ValidatePair(original.Address(),replay.Address(),result,&reason,&kRRFoliageEvidence));Require(!s.ValidatePair(original.Address(),replay.Address(),result,&reason,&wrong));}
 }
