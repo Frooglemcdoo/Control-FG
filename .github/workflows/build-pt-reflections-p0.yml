@@ -104,6 +104,23 @@ jobs:
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
           echo VSROOT=%VSROOT%>>%GITHUB_ENV%
 
+      - name: Validate GI batch capture R271
+        shell: cmd
+        run: |
+          if not exist build mkdir build
+          python tools/test-gi-hit-collector.py
+          if errorlevel 1 exit /b 1
+          call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
+          if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-batch-capture-policy.cpp /Febuild\test-gi-batch-capture-policy.exe
+          if errorlevel 1 exit /b 1
+          build\test-gi-batch-capture-policy.exe
+          if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-slice-copy.cpp /Febuild\test-gi-slice-copy.exe /link d3d12.lib dxgi.lib
+          if errorlevel 1 exit /b 1
+          build\test-gi-slice-copy.exe
+          if errorlevel 1 exit /b 1
+
       - name: Validate native CPU timing and call patches
         shell: cmd
         run: |
@@ -1071,22 +1088,6 @@ jobs:
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-spot-pcf.cpp /Febuild\test-gi-spot-pcf.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
           if errorlevel 1 exit /b 1
           build\test-gi-spot-pcf.exe
-          if errorlevel 1 exit /b 1
-
-      - name: Validate GI batch capture R271
-        shell: cmd
-        run: |
-          python tools/test-gi-hit-collector.py
-          if errorlevel 1 exit /b 1
-          call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
-          if errorlevel 1 exit /b 1
-          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-batch-capture-policy.cpp /Febuild\test-gi-batch-capture-policy.exe
-          if errorlevel 1 exit /b 1
-          build\test-gi-batch-capture-policy.exe
-          if errorlevel 1 exit /b 1
-          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-slice-copy.cpp /Febuild\test-gi-slice-copy.exe /link d3d12.lib dxgi.lib
-          if errorlevel 1 exit /b 1
-          build\test-gi-slice-copy.exe
           if errorlevel 1 exit /b 1
 
       - name: Package GI hit capture R271

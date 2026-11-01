@@ -45,7 +45,7 @@ static void Run(DXGI_FORMAT format,unsigned pixelBytes){
  for(unsigned slice=0;slice<3;++slice)for(unsigned y=0;y<24;++y)for(unsigned x=0;x<32;++x){
   auto* pixel=static_cast<unsigned char*>(p)+fp[slice].Offset+y*fp[slice].Footprint.RowPitch+x*pixelBytes;
   const unsigned value=slice*10000+y*100+x;
-  if(pixelBytes==2){const auto small=static_cast<std::uint16_t>(value);std::memcpy(pixel,&small,2);}
+  if(pixelBytes==2){const auto pixel16=static_cast<std::uint16_t>(value);std::memcpy(pixel,&pixel16,2);}
   else {unsigned pair[2]{value,~value};std::memcpy(pixel,pair,8);}
  }upload->Unmap(0,nullptr);
  for(unsigned slice=0;slice<3;++slice){D3D12_TEXTURE_COPY_LOCATION from{},to{};from.pResource=upload.Get();from.Type=D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;from.PlacedFootprint=fp[slice];to.pResource=source.Get();to.Type=D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;to.SubresourceIndex=slice;list->CopyTextureRegion(&to,0,0,0,&from,nullptr);}
