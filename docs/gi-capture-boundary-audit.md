@@ -33,3 +33,5 @@ Correlate that record with the existing pre-filter GI image, RR input and RR out
 The capture contract audit is implemented and passes for the supplied renderer and all eight GI variants. Runtime per-batch GPU capture is **not implemented** by this commit. No new test build is claimed.
 
 The local runtime default is restored from R270's white-cookie diagnostic to full native GI lighting. Explicit diagnostic launch options still work. This source change has not yet been packaged/deployed to the user's game. The accepted R264 ray sequence and existing lighting/filter settings are untouched.
+
+R271 follow-up: bounded physical hit-array capture is now implemented at the audited dispatch, with contiguous batch validation and collection alongside RR image pairs. See `docs/native-lighting-r271.md`. Spotlight records, per-light operands and verified SRV-to-ray mapping remain outstanding; the complete producer trace described above is not claimed.

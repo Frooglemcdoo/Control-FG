@@ -152,7 +152,8 @@ static void RRNativeHookGIProducerDispatch(void* state,const void* groups){
  control_rr_reflection::Context context{};
  if(rrNativeFrameEnabled&&rrNativeFrame.Selected()&&rrNativeCopy.StateMatches(reinterpret_cast<std::uintptr_t>(state))&&
     RRReflectionCurrent(nullptr,context)&&context.list&&context.frame==rrNativeFrame.Key().frame){
-  unsigned values[3]{};bool valid=true;
+  // GI providers are registered lazily by the engine; resolve after the native dispatch.
+  unsigned values[3]{};bool valid=RRNativeGIProducerProviders();
   for(unsigned i=0;i<3;++i)valid=rrNativeClampApi.ReadCurrent(rrGIProducerProviderIds[i],values[i])&&valid;
   RRInputCaptureGIBatch(context.frame,reinterpret_cast<ID3D12GraphicsCommandList*>(context.list),values[0],values[1],values[2],valid);
  }
@@ -160,7 +161,7 @@ static void RRNativeHookGIProducerDispatch(void* state,const void* groups){
 }
 static void RRNativeInstallGIProducerCapture(unsigned char* base) noexcept {
  if(!GIBatchCaptureEnabled())return;
- bool ready=RRNativeGIProducerProviders()&&rrNativeGIProducerDispatchPatch.Prepare(base+0x12cc16,reinterpret_cast<void**>(base+0x5dfcc0),
+ bool ready=rrNativeGIProducerDispatchPatch.Prepare(base+0x12cc16,reinterpret_cast<void**>(base+0x5dfcc0),
    reinterpret_cast<void*>(rrNativeDispatchOriginal),reinterpret_cast<void*>(&RRNativeHookGIProducerDispatch));
  if(ready)ready=rrNativeGIProducerDispatchPatch.Exchange(true)&&rrNativeGIProducerDispatchPatch.healthy;
  if(!ready&&rrNativeGIProducerDispatchPatch.changed)rrNativeGIProducerDispatchPatch.Exchange(false);
