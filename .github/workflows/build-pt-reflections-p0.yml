@@ -107,6 +107,20 @@ jobs:
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
           echo VSROOT=%VSROOT%>>%GITHUB_ENV%
 
+      - name: Validate GI spotlight trace R274
+        shell: cmd
+        run: |
+          call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
+          if errorlevel 1 exit /b 1
+          python tools/gi_spot_trace.py
+          if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-spot-trace.cpp /Febuild\test-gi-spot-trace.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
+          if errorlevel 1 exit /b 1
+          build\test-gi-spot-trace.exe
+          if errorlevel 1 exit /b 1
+          python tools/test-gi-spot-collector.py
+          if errorlevel 1 exit /b 1
+
       - name: Validate GI batch capture R271
         shell: cmd
         run: |
@@ -1095,16 +1109,6 @@ jobs:
           build\test-gi-spot-pcf.exe
           if errorlevel 1 exit /b 1
 
-      - name: Validate GI spotlight trace R274
-        shell: cmd
-        run: |
-          call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
-          if errorlevel 1 exit /b 1
-          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-spot-trace.cpp /Febuild\test-gi-spot-trace.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
-          if errorlevel 1 exit /b 1
-          build\test-gi-spot-trace.exe
-          if errorlevel 1 exit /b 1
-
       - name: Package GI spotlight trace R274
         shell: powershell
         run: |
@@ -1175,6 +1179,7 @@ jobs:
           path: |
             ControlTOH-R274.zip
             ControlTOH-R274.sha256
+            build/gi-spot-trace-validation.json
             build/gi-spot-pcf-validation.json
             build/gi-sequence-validation.json
             build/gi-sequence-0.dxil

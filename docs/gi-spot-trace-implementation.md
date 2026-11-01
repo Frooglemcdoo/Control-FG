@@ -37,3 +37,14 @@ this checkpoint. Required work before asking for a run:
 
 Do not reuse the primary spotlight diagnostic as evidence about GI's secondary
 shadow lookup. Do not label this static contract as a completed runtime trace.
+
+## R274 follow-up
+
+R273 gameplay verified the shared root layout above and active variant 6.
+R274 adds a dedicated raw UAV through an appended root parameter, avoiding a
+copy of the game's descriptor tables. It restores every observed native root
+argument and PSO; bundles/indirect commands invalidate observations.
+The initial runtime trace targets variant 6 and samples every 32 pixels, with
+explicit stage validity and overflow. It captures secondary albedo and primary
+throughput, but final depth/ray normalization remains outside this trace.
+See `native-lighting-r274.md` for the exact scope and Windows GPU validation.

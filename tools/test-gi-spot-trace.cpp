@@ -7,6 +7,7 @@
 #include <d3dcompiler.h>
 #include <wrl/client.h>
 #include <fstream>
+#include <string>
 #include <iterator>
 #include <iostream>
 #include <stdexcept>

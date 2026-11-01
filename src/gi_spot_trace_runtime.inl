@@ -13,7 +13,9 @@ using Root=void(STDMETHODCALLTYPE*)(ID3D12GraphicsCommandList*,ID3D12RootSignatu
 using Table=void(STDMETHODCALLTYPE*)(ID3D12GraphicsCommandList*,UINT,D3D12_GPU_DESCRIPTOR_HANDLE);
 using Cbv=void(STDMETHODCALLTYPE*)(ID3D12GraphicsCommandList*,UINT,D3D12_GPU_VIRTUAL_ADDRESS);
 using Heaps=void(STDMETHODCALLTYPE*)(ID3D12GraphicsCommandList*,UINT,ID3D12DescriptorHeap*const*);
-struct Hooks{void** table=nullptr;Root root=nullptr;Table descriptor=nullptr;Cbv cbv=nullptr;Heaps heaps=nullptr;};
+using Bundle=void(STDMETHODCALLTYPE*)(ID3D12GraphicsCommandList*,ID3D12GraphicsCommandList*);
+using Indirect=void(STDMETHODCALLTYPE*)(ID3D12GraphicsCommandList*,ID3D12CommandSignature*,UINT,ID3D12Resource*,UINT64,ID3D12Resource*,UINT64);
+struct Hooks{Bundle bundle=nullptr;Indirect indirect=nullptr;void** table=nullptr;Root root=nullptr;Table descriptor=nullptr;Cbv cbv=nullptr;Heaps heaps=nullptr;};
 inline Hooks hooks[8]{};inline SRWLOCK hooksLock=SRWLOCK_INIT,lock=SRWLOCK_INIT;
 inline std::atomic<bool> enabledReady{false};
 enum class Phase{Idle,Armed,Recording,Recorded,Submitted,Exporting,Complete,Failed};
@@ -47,11 +49,21 @@ inline void STDMETHODCALLTYPE HeapsHook(ID3D12GraphicsCommandList* list,UINT cou
  if(next[0]!=s.heaps[0]||next[1]!=s.heaps[1])s.mask&=~0xc3u;
  memcpy(s.heaps,next,sizeof(next));Save(list,s);
 }
+// Bundles and indirect commands can change root arguments without invoking
+// the public root setters. Invalidate our observation rather than reuse it.
+inline void STDMETHODCALLTYPE BundleHook(ID3D12GraphicsCommandList* list,ID3D12GraphicsCommandList* bundle){
+ LookupHooks(list).bundle(list,bundle);State s=Read(list);s.mask=0;s.root=nullptr;s.heaps[0]=s.heaps[1]=0;Save(list,s);list->SetPrivateDataInterface(rootKey,nullptr);list->SetPrivateDataInterface(psoKey,nullptr);
+}
+inline void STDMETHODCALLTYPE IndirectHook(ID3D12GraphicsCommandList* list,ID3D12CommandSignature* signature,UINT count,ID3D12Resource* arguments,UINT64 offset,ID3D12Resource* counter,UINT64 counterOffset){
+ LookupHooks(list).indirect(list,signature,count,arguments,offset,counter,counterOffset);State s=Read(list);s.mask=0;Save(list,s);
+}
 inline void InstallList(ID3D12GraphicsCommandList* list) noexcept {
  if(!Enabled())return;auto** table=*reinterpret_cast<void***>(list);AcquireSRWLockExclusive(&hooksLock);
  for(const auto& h:hooks)if(h.table==table){ReleaseSRWLockExclusive(&hooksLock);return;}
- for(auto& h:hooks)if(!h.table){h={table,reinterpret_cast<Root>(table[29]),reinterpret_cast<Table>(table[31]),reinterpret_cast<Cbv>(table[37]),reinterpret_cast<Heaps>(table[28])};
- bool ok=PatchSlot(&table[29],reinterpret_cast<void*>(h.root),reinterpret_cast<void*>(&RootHook));
+ for(auto& h:hooks)if(!h.table){h={reinterpret_cast<Bundle>(table[27]),reinterpret_cast<Indirect>(table[59]),table,reinterpret_cast<Root>(table[29]),reinterpret_cast<Table>(table[31]),reinterpret_cast<Cbv>(table[37]),reinterpret_cast<Heaps>(table[28])};
+ bool ok=PatchSlot(&table[27],reinterpret_cast<void*>(h.bundle),reinterpret_cast<void*>(&BundleHook));
+ ok=PatchSlot(&table[59],reinterpret_cast<void*>(h.indirect),reinterpret_cast<void*>(&IndirectHook))&&ok;
+ ok=PatchSlot(&table[29],reinterpret_cast<void*>(h.root),reinterpret_cast<void*>(&RootHook))&&ok;
  ok=PatchSlot(&table[31],reinterpret_cast<void*>(h.descriptor),reinterpret_cast<void*>(&TableHook))&&ok;
  ok=PatchSlot(&table[37],reinterpret_cast<void*>(h.cbv),reinterpret_cast<void*>(&CbvHook))&&ok;
  ok=PatchSlot(&table[28],reinterpret_cast<void*>(h.heaps),reinterpret_cast<void*>(&HeapsHook))&&ok;
@@ -70,7 +82,7 @@ inline HRESULT Buffer(ID3D12Device* d,D3D12_HEAP_TYPE heap,D3D12_RESOURCE_STATES
  return d->CreateCommittedResource(&hp,D3D12_HEAP_FLAG_NONE,&rd,state,nullptr,IID_PPV_ARGS(&out));
 }
 inline bool Initialize(ID3D12Device* d) noexcept {
- if(device)return enabledReady.load();device=d;
+ if(device)return device.Get()==d&&enabledReady.load();device=d;
  HRESULT hr=Buffer(d,D3D12_HEAP_TYPE_DEFAULT,D3D12_RESOURCE_STATE_COPY_DEST,D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS,output);
  if(SUCCEEDED(hr))hr=Buffer(d,D3D12_HEAP_TYPE_READBACK,D3D12_RESOURCE_STATE_COPY_DEST,D3D12_RESOURCE_FLAG_NONE,readback);
  if(SUCCEEDED(hr))hr=Buffer(d,D3D12_HEAP_TYPE_UPLOAD,D3D12_RESOURCE_STATE_GENERIC_READ,D3D12_RESOURCE_FLAG_NONE,zero);
@@ -101,7 +113,7 @@ inline void Observe(ID3D12Device* d,const D3D12_COMPUTE_PIPELINE_STATE_DESC* des
  if(SUCCEEDED(hr))hr=pso->SetPrivateDataInterface(traceRootKey,root.Get());
  if(SUCCEEDED(hr))hr=pso->SetPrivateDataInterface(nativeRootKey,desc->pRootSignature);
  if(SUCCEEDED(hr))hr=owner->SetPrivateDataInterface(variantKey,pso.Get());
- if(SUCCEEDED(hr)){AcquireSRWLockExclusive(&lock);Initialize(d);ReleaseSRWLockExclusive(&lock);}
+ if(SUCCEEDED(hr)){AcquireSRWLockExclusive(&lock);const bool ready=Initialize(d);ReleaseSRWLockExclusive(&lock);if(!ready){owner->SetPrivateDataInterface(variantKey,nullptr);hr=E_FAIL;}}
  Trace("GI_SPOT_R274_PIPELINE variant=6 ready=%u hr=0x%08lX",unsigned(SUCCEEDED(hr)),static_cast<unsigned long>(hr));
 }
 inline void Rebind(ID3D12GraphicsCommandList* list,const Hooks& h,ID3D12RootSignature* root,const State& s) noexcept {
@@ -134,7 +146,7 @@ inline void AfterExecute(ID3D12CommandQueue* queue,UINT count,ID3D12CommandList*
 }
 inline void Poll() noexcept {
  if(!Enabled())return;
- static bool held=false;const bool down=(GetAsyncKeyState(VK_F7)&0x8000)!=0;
+ static bool held=false;const bool down=(GetAsyncKeyState(VK_F7)&0x8000)!=0&&!(GetAsyncKeyState(VK_CONTROL)&0x8000)&&!(GetAsyncKeyState(VK_SHIFT)&0x8000);
  DWORD foregroundPid=0;GetWindowThreadProcessId(GetForegroundWindow(),&foregroundPid);
  if(down&&!held&&foregroundPid==GetCurrentProcessId()&&enabledReady.load()&&phase.load()==Phase::Idle){armedAt=GetTickCount64();phase.store(Phase::Armed);Trace("GI_SPOT_R274_ARMED bounded_capture=1 key=F7");}held=down;
  auto p=phase.load();if((p==Phase::Armed||p==Phase::Recorded||p==Phase::Submitted)&&GetTickCount64()-armedAt>30000){phase.store(Phase::Failed);Trace("GI_SPOT_R274_FAILED reason=timeout resources_retained=1");return;}
