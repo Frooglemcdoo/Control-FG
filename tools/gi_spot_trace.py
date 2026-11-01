@@ -45,6 +45,8 @@ def generate(raw,path,identity):
  assert ray_inc['operands'][0]=='r[0].z'
  light_token=words[coef['dword']+3:coef['dword']+5]
  assert len(light_token)==2
+ assert ((light_token[0]>>2)&3)==2
+ light_token=src(light_token[1],((light_token[0]>>4)&3)*0x55)
  # Only one pixel in each 32x32 cell; full scene coverage, no material exclusions.
  code=ins('mov',dst(a,1),uint(0xffffffff))+ins('mov',dst(a,2),uint(0))
  code+=ins('and',dst(q,3),src(0),uint(31))
@@ -98,7 +100,7 @@ def generate(raw,path,identity):
  fixture=words[:2]+words[2:3]+decl+ins('dcl_temps',[temp+3])+ins('dcl_thread_group',[1,1,1])
  def floats(*values):return [0x4002]+[struct.unpack('<I',struct.pack('<f',x))[0] for x in values]
  for sample in range(4):
-  fixture+=ins('mov',dst(0),[0x4002,16,16,sample//2,0])
+  fixture+=ins('mov',dst(0,15),[0x4002,16,16,sample//2,0])
   fixture+=ins('mov',dst(10,8),uint(100+sample))
   fixture+=inserts[coef['dword']]
   for index,(name,offset,bit) in enumerate([('light_coefficients',16,1)]+fields):
@@ -109,9 +111,9 @@ def generate(raw,path,identity):
    fixture+=ins('mov',destination,floats(index+.125,index+.25,index+.5,0 if name=='shadow_visibility_before_early_out' and sample==0 else index+.75))
    fixture+=inserts[after(item)]
   if sample:
-   fixture+=ins('mov',dst(14),floats(.1,.2,.3,.4))+ins('mov',dst(20),floats(2,3,4,5))
-   fixture+=ins('mov',dst(17),floats(.5,.6,.7,.8))+ins('mov',dst(3),floats(.9,1,1.1,1.2))
-   fixture+=ins('mov',dst(12),floats(10,11,12,13))+ins('mov',dst(13),floats(0,1,0,14))
+   fixture+=ins('mov',dst(14,15),floats(.1,.2,.3,.4))+ins('mov',dst(20,15),floats(2,3,4,5))
+   fixture+=ins('mov',dst(17,15),floats(.5,.6,.7,.8))+ins('mov',dst(3,15),floats(.9,1,1.1,1.2))
+   fixture+=ins('mov',dst(12,15),floats(10,11,12,13))+ins('mov',dst(13,15),floats(0,1,0,14))
    fixture+=inserts[mad['dword']]
  fixture+=ins('ret')
  def fixture_patch(w):w[:]=fixture
