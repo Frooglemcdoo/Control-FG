@@ -1045,6 +1045,8 @@ jobs:
       - name: Validate native GI source isolation R267
         shell: cmd
         run: |
+          call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
+          if errorlevel 1 exit /b 1
           python tools/generate-gi-source-probe.py --check
           if errorlevel 1 exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-source-probe.cpp /Febuild\test-gi-source-probe.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
