@@ -92,7 +92,9 @@ pd.CS={oracle.data(),oracle.size()};ComPtr<ID3D12PipelineState> oraclePso;Check(
     Require(scalar(176)==.75f&&scalar(180)==2.25f&&scalar(184)==6&&scalar(188)==1,"final GI");
     Require(scalar(192)==2&&scalar(200)==16&&scalar(208)==.75f,"sum and normalization");
    }
-   for(UINT offset=224;offset<256;offset+=4)Require(integer(offset)==0,"unwritten record padding");
+   if(sample<2){for(UINT offset=224;offset<256;offset+=4)Require(integer(offset)==0,"unwritten record padding");}
+   else{Require(integer(236)==0x278&&integer(252)==0,"accounting schema/padding");
+    for(UINT offset : {224u,240u})Require(scalar(offset)==.375f&&scalar(offset+4)==1.125f&&scalar(offset+8)==3.f,"runtime surface/fallback accounting");}
 #else
    if(!(id[0]==16&&id[1]==16&&id[2]==sample/2&&id[3]==100+sample))std::cerr<<"run="<<run<<" sample="<<sample<<" index="<<index<<" id="<<id[0]<<","<<id[1]<<","<<id[2]<<","<<id[3]<<" valid="<<valid<<"\n";
    Require(id[0]==16&&id[1]==16&&id[2]==sample/2&&id[3]==100+sample,"pixel/ray/light identity");

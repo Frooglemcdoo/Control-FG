@@ -3,6 +3,7 @@ name: Build native reflection enhancements and RR
 on:
   push:
     branches:
+      - work/r278-gi-runtime-accounting
       - work/r277-complete-gi-rays
       - work/r276-reflection-clamp-ab
       - work/r275-gi-trace-confirmation
@@ -1122,11 +1123,11 @@ jobs:
           build\test-gi-spot-pcf.exe
           if errorlevel 1 exit /b 1
 
-      - name: Package Complete GI ray trace R277
+      - name: Package GI runtime accounting comparison R278
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='ControlTOH-R277'
+          $out='ControlTOH-R278'
           $shader="$out/ControlTOH/Shaders"
           $tools="$out/ControlTOH/Tools"
           $diagnostics="$out/ControlTOH/Diagnostics"
@@ -1156,14 +1157,14 @@ jobs:
           Copy-Item build/DirectStorage "$diagnostics/DirectStorage" -Recurse
           Copy-Item build/DirectStorage/dstorage.dll,build/DirectStorage/dstoragecore.dll $out
           Copy-Item tools/directstorage/Validate-DirectStorage.cmd "$diagnostics/DirectStorage"
-          Copy-Item docs/native-lighting-r277.md "$out/ControlTOH/DIAGNOSTIC-NOTES.md"
+          Copy-Item docs/native-lighting-r278.md "$out/ControlTOH/DIAGNOSTIC-NOTES.md"
           Copy-Item tools/Organize-Existing-Install.cmd,tools/Organize-Existing-Install.ps1 $tools
           Copy-Item tools/diagnostics/Collect-ControlTOH-Materials.cmd,tools/diagnostics/Collect-ControlTOH-Materials.ps1 $tools
           & powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/diagnostics/test-material-collector.ps1
           if ($LASTEXITCODE -ne 0) { throw 'Material collector integration test failed' }
           @'
           Control The Oldest House: Visual and Performance Overhaul
-          R277 - Complete GI ray trace
+          R278 - GI runtime accounting comparison
 
           Copy all package contents beside Control_DX12.exe, preserving folders.
           Run ControlTOH/Diagnostics/Start-GI-Ray-Trace.cmd.
@@ -1187,10 +1188,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: ControlTOH-R277
+          name: ControlTOH-R278
           path: |
-            ControlTOH-R277.zip
-            ControlTOH-R277.sha256
+            ControlTOH-R278.zip
+            ControlTOH-R278.sha256
             build/gi-ray-trace-validation.json
             build/gi-spot-trace-validation.json
             build/gi-spot-pcf-validation.json

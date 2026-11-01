@@ -26,6 +26,18 @@ class RayTraceTests(unittest.TestCase):
         self.assertEqual(result['rays'],2)
         self.assertEqual(result['miss_or_invalid_rays'],1)
         self.assertTrue(all(x==0 for x in result['errors'].values()))
+    def test_runtime_accounting(self):
+        data=fixture();p=16+512
+        struct.pack_into('<I',data,p+236,0x278)
+        for off in (224,240):struct.pack_into('<3f',data,p+off,.375,1.125,3)
+        self.assertTrue(analyze(data)['runtime_accounting']['verified'])
+        struct.pack_into('<f',data,p+224,0)
+        with self.assertRaisesRegex(ValueError,'accounting mismatch'):analyze(data)
+    def test_runtime_accounting_nonfinite(self):
+        data=fixture();p=16+512
+        struct.pack_into('<I',data,p+236,0x278)
+        struct.pack_into('<f',data,p+224,float('nan'))
+        with self.assertRaisesRegex(ValueError,'nonfinite'):analyze(data)
     def test_truncation(self):
         with self.assertRaisesRegex(ValueError,'length'):analyze(fixture()[:-1])
     def test_missing_ray(self):
