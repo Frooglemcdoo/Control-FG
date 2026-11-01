@@ -444,6 +444,7 @@ inline void STDMETHODCALLTYPE ExecuteHook(ID3D12CommandQueue* queue,UINT count,I
     original(queue,count,lists);
     if(const auto end=endTiming.load())end(queue,timing);
     rt_spot_capture_runtime::AfterExecute(queue,count,lists);
+    gi_spot_trace::AfterExecute(queue,count,lists);
     if(lease)EndQueueCall(call);
     --submitDepth;
 }

@@ -6,6 +6,7 @@
 #include "gi_source_patches.generated.h"
 #include "gi_source_policy.h"
 #include "../build/gi_spot_pcf.generated.h"
+#include "../build/gi_spot_trace.generated.h"
 #include "native_lighting_live_state.h"
 #include "rr_lighting_diagnostic.h"
 #include "native_lighting_report.h"
@@ -26,6 +27,14 @@
 #include "free_camera_control.h"
 
 namespace native_lighting {
+namespace gi_spot_trace {
+inline void Poll() noexcept;
+inline void Observe(ID3D12Device*,const D3D12_COMPUTE_PIPELINE_STATE_DESC*,IUnknown*,HRESULT(STDMETHODCALLTYPE*)(ID3D12Device*,const D3D12_COMPUTE_PIPELINE_STATE_DESC*,REFIID,void**)) noexcept;
+inline void Bind(ID3D12GraphicsCommandList*,ID3D12PipelineState*) noexcept;
+inline void Reset(ID3D12GraphicsCommandList*) noexcept;
+inline bool Dispatch(ID3D12GraphicsCommandList*,UINT,UINT,UINT) noexcept;
+inline void AfterExecute(ID3D12CommandQueue*,UINT,ID3D12CommandList*const*) noexcept;
+}
 namespace rt_spot_capture_audit { inline void ReleaseFinishedOwners() noexcept; }
 namespace rt_spot_table_audit { inline void Request() noexcept; }
 namespace rt_spot_capture_runtime {
@@ -106,6 +115,7 @@ inline void ReportRRPaths(const char* reason) noexcept {
 // The diagnostic UI thread owns all report I/O; no disk lock is shared with
 // render-side producers. Routine drains use buffered writes; SAVE LOG flushes.
 inline bool DrainDiagnosticLog(bool flush = false) noexcept {
+    gi_spot_trace::Poll();
     rt_spot_capture_runtime::Poll();
     rt_spot_capture_audit::ReleaseFinishedOwners();
     static char batch[DiagnosticLogQueue::Capacity()];
@@ -240,6 +250,7 @@ inline void ObserveCompute(ID3D12Device* device, const D3D12_COMPUTE_PIPELINE_ST
     control_rr_gi::Capture(device,desc,native,original);
     gi_source_probe::Observe(device,desc,native,original);
     gi_binding_audit::Observe(desc,native);
+    gi_spot_trace::Observe(device,desc,native,original);
     gi_spot_pcf_probe::Observe(device,desc,native,original);
     IdentifyPipeline(native, desc->CS, 2);
     rt_shadow_capture::RecordCompute(desc);
@@ -329,6 +340,7 @@ inline void STDMETHODCALLTYPE SetHook(ID3D12GraphicsCommandList* list, ID3D12Pip
     if(!alternate)alternate=gi_spot_pcf_probe::Select(binding.selected);
     original(list, alternate ? alternate : binding.selected);
     gi_binding_audit::Bind(list,alternate ? alternate : binding.selected);
+    gi_spot_trace::Bind(list,alternate ? alternate : binding.selected);
     rt_spot_capture_runtime::BindCompute(list,pso,alternate ? alternate : binding.selected);
     BindPerformance(list,pso);
     if (alternate) alternate->Release();
@@ -340,7 +352,7 @@ inline void STDMETHODCALLTYPE ComputeDispatchHook(ID3D12GraphicsCommandList* lis
     rt_spot_capture_runtime::BeforeCompute(list,x,y,z);
     const auto timing=performance::Begin(list,performance::ComputeStage(list),x,y,z,0,performance::ComputeShader(list));
     // R171: preserve native serial shading and dispatch dimensions.
-    original(list,x,y,z);
+    if(!gi_spot_trace::Dispatch(list,x,y,z))original(list,x,y,z);
     performance::End(timing);
     rt_spot_capture_runtime::AfterCompute(list,x,y,z);
 }
@@ -353,6 +365,8 @@ inline HRESULT STDMETHODCALLTYPE ResetHook(ID3D12GraphicsCommandList* list, ID3D
     if(!alternate)alternate=gi_spot_pcf_probe::Select(binding.selected);
     const HRESULT hr = original(list, allocator, alternate ? alternate : binding.selected);
     gi_binding_audit::Bind(list,SUCCEEDED(hr)?(alternate?alternate:binding.selected):nullptr);
+    if(SUCCEEDED(hr))gi_spot_trace::Reset(list);
+    gi_spot_trace::Bind(list,SUCCEEDED(hr)?(alternate?alternate:binding.selected):nullptr);
     if (alternate) alternate->Release();
     if (SUCCEEDED(hr)) { performance::Reset(list);BindPerformance(list,pso);binding.Recorded(); }
     return hr;
@@ -368,6 +382,7 @@ inline bool PatchSlot(void** slot, void* expected, void* hook) noexcept {
 #include "spot_shadow_resolution_runtime.h"
 #include "rt_spot_capture_audit.h"
 #include "gi_binding_audit.inl"
+#include "gi_spot_trace_runtime.inl"
 #include "rt_shadow_capture.h"
 #include "rt_spot_hit_pipeline.h"
 #include "rt_spot_capture_gpu.h"
@@ -413,6 +428,7 @@ inline void BindPerformance(ID3D12GraphicsCommandList* list,ID3D12PipelineState*
     performance::Bind(list,PerformanceStage(pso),identity.sha);
 }
 inline void InstallList(ID3D12GraphicsCommandList* list) noexcept {
+    gi_spot_trace::InstallList(list);
     rt_shadow_capture::InstallList(list);
     rt_spot_copy_audit::InstallList(list);
     void** table = *reinterpret_cast<void***>(list);

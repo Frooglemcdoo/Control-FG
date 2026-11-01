@@ -1,0 +1,75 @@
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
+#include <windows.h>
+#include <d3d12.h>
+#include <d3d12sdklayers.h>
+#include <dxgi1_6.h>
+#include <d3dcompiler.h>
+#include <wrl/client.h>
+#include <fstream>
+#include <iterator>
+#include <iostream>
+#include <stdexcept>
+#include <vector>
+#include <cstring>
+#include <cmath>
+#include "../build/gi_spot_trace.generated.h"
+using Microsoft::WRL::ComPtr;
+void Check(HRESULT hr){if(FAILED(hr))throw std::runtime_error("HRESULT "+std::to_string(static_cast<unsigned long>(hr)));}
+void Require(bool b,const char* what){if(!b)throw std::runtime_error(what);}
+std::vector<unsigned char> Read(const char* p){std::ifstream f(p,std::ios::binary);Require(bool(f),p);return {(std::istreambuf_iterator<char>(f)),{}};}
+constexpr UINT capacity=65536,stride=256,bytes=16+capacity*stride,allocated=bytes+256;
+ComPtr<ID3D12Resource> Buffer(ID3D12Device* d,D3D12_HEAP_TYPE type,D3D12_RESOURCE_STATES state,D3D12_RESOURCE_FLAGS flags){
+ D3D12_HEAP_PROPERTIES hp{};hp.Type=type;hp.CreationNodeMask=hp.VisibleNodeMask=1;
+ D3D12_RESOURCE_DESC rd{};rd.Dimension=D3D12_RESOURCE_DIMENSION_BUFFER;rd.Width=allocated;rd.Height=1;rd.DepthOrArraySize=1;rd.MipLevels=1;rd.SampleDesc.Count=1;rd.Layout=D3D12_TEXTURE_LAYOUT_ROW_MAJOR;rd.Flags=flags;
+ ComPtr<ID3D12Resource> p;Check(d->CreateCommittedResource(&hp,D3D12_HEAP_FLAG_NONE,&rd,state,nullptr,IID_PPV_ARGS(&p)));return p;
+}
+void Transition(ID3D12GraphicsCommandList* l,ID3D12Resource* r,D3D12_RESOURCE_STATES a,D3D12_RESOURCE_STATES b){D3D12_RESOURCE_BARRIER x{};x.Type=D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;x.Transition={r,D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,a,b};l->ResourceBarrier(1,&x);}
+int main()try{
+ ComPtr<ID3D12Debug> debug;Check(D3D12GetDebugInterface(IID_PPV_ARGS(&debug)));debug->EnableDebugLayer();
+ ComPtr<IDXGIFactory4> factory;Check(CreateDXGIFactory1(IID_PPV_ARGS(&factory)));ComPtr<IDXGIAdapter> warp;Check(factory->EnumWarpAdapter(IID_PPV_ARGS(&warp)));
+ ComPtr<ID3D12Device> d;Check(D3D12CreateDevice(warp.Get(),D3D_FEATURE_LEVEL_11_0,IID_PPV_ARGS(&d)));
+ // Exact observed eight-parameter native layout, plus our raw UAV in space 2.
+ D3D12_DESCRIPTOR_RANGE ranges[]={{D3D12_DESCRIPTOR_RANGE_TYPE_CBV,5,4,0,UINT_MAX},{D3D12_DESCRIPTOR_RANGE_TYPE_SRV,36,0,0,UINT_MAX},{D3D12_DESCRIPTOR_RANGE_TYPE_UAV,8,0,0,UINT_MAX},{D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER,4,0,0,UINT_MAX},{D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER,64,0,1,UINT_MAX},{D3D12_DESCRIPTOR_RANGE_TYPE_SRV,244000,0,1,UINT_MAX}};
+ D3D12_ROOT_PARAMETER parameters[9]{};
+ parameters[0].ParameterType=D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;parameters[0].DescriptorTable={3,ranges};
+ parameters[1].ParameterType=D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;parameters[1].DescriptorTable={1,ranges+3};
+ for(UINT i=2;i<6;++i){parameters[i].ParameterType=D3D12_ROOT_PARAMETER_TYPE_CBV;parameters[i].Descriptor={i-2,0};}
+ parameters[6].ParameterType=D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;parameters[6].DescriptorTable={1,ranges+4};
+ parameters[7].ParameterType=D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;parameters[7].DescriptorTable={1,ranges+5};
+ parameters[8].ParameterType=D3D12_ROOT_PARAMETER_TYPE_UAV;parameters[8].Descriptor={0,2};
+ D3D12_ROOT_SIGNATURE_DESC rd{9,parameters,0,nullptr,D3D12_ROOT_SIGNATURE_FLAG_NONE};ComPtr<ID3DBlob> blob,error;Check(D3D12SerializeRootSignature(&rd,D3D_ROOT_SIGNATURE_VERSION_1,&blob,&error));
+ ComPtr<ID3D12RootSignature> root;Check(d->CreateRootSignature(0,blob->GetBufferPointer(),blob->GetBufferSize(),IID_PPV_ARGS(&root)));
+ const auto& shader=gi_spot_trace_shader::shaders[0];const auto embedded=Read("build/gi-spot-trace-6.dxbc");Require(embedded.size()==shader.size&&!memcmp(embedded.data(),shader.bytes,shader.size),"embedded bytes differ");
+ ComPtr<ID3DBlob> disassembly;Check(D3DDisassemble(shader.bytes,shader.size,0,nullptr,&disassembly));
+ D3D12_COMPUTE_PIPELINE_STATE_DESC pd{};pd.pRootSignature=root.Get();pd.CS={shader.bytes,shader.size};ComPtr<ID3D12PipelineState> nativeTrace;Check(d->CreateComputePipelineState(&pd,IID_PPV_ARGS(&nativeTrace)));
+ auto oracle=Read("build/gi-spot-trace-oracle.dxbc");pd.CS={oracle.data(),oracle.size()};ComPtr<ID3D12PipelineState> oraclePso;Check(d->CreateComputePipelineState(&pd,IID_PPV_ARGS(&oraclePso)));
+ D3D12_COMMAND_QUEUE_DESC qd{};ComPtr<ID3D12CommandQueue> queue;Check(d->CreateCommandQueue(&qd,IID_PPV_ARGS(&queue)));
+ ComPtr<ID3D12CommandAllocator> allocator;Check(d->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT,IID_PPV_ARGS(&allocator)));
+ ComPtr<ID3D12GraphicsCommandList> list;Check(d->CreateCommandList(0,D3D12_COMMAND_LIST_TYPE_DIRECT,allocator.Get(),nullptr,IID_PPV_ARGS(&list)));Check(list->Close());
+ ComPtr<ID3D12Fence> fence;Check(d->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&fence)));HANDLE event=CreateEventW(nullptr,FALSE,FALSE,nullptr);Require(event!=nullptr,"event");
+ for(UINT run=0;run<2;++run){
+  auto gpu=Buffer(d.Get(),D3D12_HEAP_TYPE_DEFAULT,D3D12_RESOURCE_STATE_COPY_DEST,D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
+  auto upload=Buffer(d.Get(),D3D12_HEAP_TYPE_UPLOAD,D3D12_RESOURCE_STATE_GENERIC_READ,D3D12_RESOURCE_FLAG_NONE);
+  auto readback=Buffer(d.Get(),D3D12_HEAP_TYPE_READBACK,D3D12_RESOURCE_STATE_COPY_DEST,D3D12_RESOURCE_FLAG_NONE);
+  void* mapped=nullptr;D3D12_RANGE none{0,0};Check(upload->Map(0,&none,&mapped));memset(mapped,0,allocated);if(run){UINT seed=capacity-1;memcpy(mapped,&seed,4);}memset(static_cast<unsigned char*>(mapped)+bytes,0xa5,256);upload->Unmap(0,nullptr);
+  Check(allocator->Reset());Check(list->Reset(allocator.Get(),oraclePso.Get()));list->CopyBufferRegion(gpu.Get(),0,upload.Get(),0,allocated);
+  Transition(list.Get(),gpu.Get(),D3D12_RESOURCE_STATE_COPY_DEST,D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+  list->SetComputeRootSignature(root.Get());list->SetComputeRootUnorderedAccessView(8,gpu->GetGPUVirtualAddress());list->Dispatch(1,1,1);
+  Transition(list.Get(),gpu.Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS,D3D12_RESOURCE_STATE_COPY_SOURCE);list->CopyBufferRegion(readback.Get(),0,gpu.Get(),0,allocated);Check(list->Close());
+  ID3D12CommandList* lists[]={list.Get()};queue->ExecuteCommandLists(1,lists);Check(queue->Signal(fence.Get(),run+1));Check(fence->SetEventOnCompletion(run+1,event));Require(WaitForSingleObject(event,30000)==WAIT_OBJECT_0,"GPU timeout");
+  D3D12_RANGE range{0,allocated};Check(readback->Map(0,&range,&mapped));auto* p=static_cast<unsigned char*>(mapped);UINT total=0;memcpy(&total,p,4);Require(total==(run?capacity+3:4),"record allocation count");
+  for(UINT j=0;j<256;++j)Require(p[bytes+j]==0xa5,"overflow touched guard");
+  for(UINT sample=0;sample<(run?1u:4u);++sample){const UINT index=run?capacity-1:sample;auto* record=p+16+index*stride;UINT id[4]{},valid=0;memcpy(id,record,16);memcpy(&valid,record+192,4);
+   Require(id[0]==16&&id[1]==16&&id[2]==sample/2&&id[3]==100+sample,"pixel/ray/light identity");
+   Require(valid==(sample==0?3u:sample==1?16255u:16383u),"valid-stage mask");
+   auto scalar=[&](UINT offset){float f=0;memcpy(&f,record+offset,4);return f;};
+   Require(scalar(16)==.125f&&scalar(20)==.25f&&scalar(24)==.5f,"coefficients");
+   if(sample){Require(scalar(48)==3.75f&&scalar(52)==4.75f&&scalar(56)==5.75f&&scalar(60)==6.75f,"attenuation-stage scalar stores");Require(scalar(96)==.4f&&scalar(112)==2&&scalar(128)==.5f&&scalar(144)==.9f,"MAD operands/material factors");}
+   else Require(scalar(64)==0&&scalar(96)==0,"shadow early-out");
+  }readback->Unmap(0,&none);
+ }
+ CloseHandle(event);ComPtr<ID3D12InfoQueue> messages;Check(d.As(&messages));
+ for(UINT64 i=0;i<messages->GetNumStoredMessagesAllowedByRetrievalFilter();++i){SIZE_T size=0;messages->GetMessage(i,nullptr,&size);std::vector<unsigned char> storage(size);auto* m=reinterpret_cast<D3D12_MESSAGE*>(storage.data());Check(messages->GetMessage(i,m,&size));if(m->Severity<=D3D12_MESSAGE_SEVERITY_ERROR)throw std::runtime_error(m->pDescription);}
+ std::cout<<"PASS R274: native trace PSO, exact inserted GPU blocks, stage masks, shadow early-out, cookie skip, multiple rays/lights, overflow guard; D3D12 debug clean\n";
+}catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}

@@ -3,6 +3,7 @@ name: Build native reflection enhancements and RR
 on:
   push:
     branches:
+      - work/r274-gi-spot-trace
       - work/r273-gi-binding-audit
       - work/r272-capture-recovery
       - work/r271-gi-hit-capture
@@ -731,6 +732,8 @@ jobs:
           if errorlevel 1 exit /b 1
           python tools/test-rr-gi-filter.py
           if errorlevel 1 exit /b 1
+          python tools/gi_spot_trace.py
+          if errorlevel 1 exit /b 1
           python tools/gi_spot_pcf.py
           if errorlevel 1 exit /b 1
           python tools/gi_motion_history.py
@@ -1092,11 +1095,21 @@ jobs:
           build\test-gi-spot-pcf.exe
           if errorlevel 1 exit /b 1
 
-      - name: Package GI binding audit R273
+      - name: Validate GI spotlight trace R274
+        shell: cmd
+        run: |
+          call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
+          if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-spot-trace.cpp /Febuild\test-gi-spot-trace.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
+          if errorlevel 1 exit /b 1
+          build\test-gi-spot-trace.exe
+          if errorlevel 1 exit /b 1
+
+      - name: Package GI spotlight trace R274
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='ControlTOH-R273'
+          $out='ControlTOH-R274'
           $shader="$out/ControlTOH/Shaders"
           $tools="$out/ControlTOH/Tools"
           $diagnostics="$out/ControlTOH/Diagnostics"
@@ -1121,28 +1134,30 @@ jobs:
           Copy-Item Package-Lighting-Capture.cmd,tools/package-lighting-capture.py,Package-Lighting-Performance.ps1 $diagnostics
           Copy-Item Capture-RR-Boundary.cmd,Capture-RR-Boundary.ps1,Collect-RR-Boundary-Status.cmd,tools/collect-rr-boundary.py $diagnostics
           Copy-Item Start-Compact-Distance-Test.cmd,Capture-RR-Suite.ps1,tools/collect-rr-suite.py $diagnostics
-          Copy-Item tools/diagnostics/Start-R258-Storage-Diagnostics.cmd,tools/diagnostics/Start-GI-Source-Probe.cmd,tools/diagnostics/Start-GI-Shadow-Test.cmd,tools/diagnostics/Start-GI-Lighting-Test.cmd,tools/diagnostics/Start-GI-Hit-Capture.cmd,tools/diagnostics/Start-GI-Binding-Audit.cmd $diagnostics
+          Copy-Item tools/diagnostics/Start-R258-Storage-Diagnostics.cmd,tools/diagnostics/Start-GI-Source-Probe.cmd,tools/diagnostics/Start-GI-Shadow-Test.cmd,tools/diagnostics/Start-GI-Lighting-Test.cmd,tools/diagnostics/Start-GI-Hit-Capture.cmd,tools/diagnostics/Start-GI-Binding-Audit.cmd,tools/diagnostics/Start-GI-Spot-Trace.cmd $diagnostics
           Copy-Item tools/diagnostics/Collect-Texture-Trace.cmd,tools/diagnostics/Collect-Texture-Trace.ps1 $tools
           Copy-Item build/DirectStorage "$diagnostics/DirectStorage" -Recurse
           Copy-Item build/DirectStorage/dstorage.dll,build/DirectStorage/dstoragecore.dll $out
           Copy-Item tools/directstorage/Validate-DirectStorage.cmd "$diagnostics/DirectStorage"
-          Copy-Item docs/native-lighting-r273.md "$out/ControlTOH/DIAGNOSTIC-NOTES.md"
+          Copy-Item docs/native-lighting-r274.md "$out/ControlTOH/DIAGNOSTIC-NOTES.md"
           Copy-Item tools/Organize-Existing-Install.cmd,tools/Organize-Existing-Install.ps1 $tools
           Copy-Item tools/diagnostics/Collect-ControlTOH-Materials.cmd,tools/diagnostics/Collect-ControlTOH-Materials.ps1 $tools
           & powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/diagnostics/test-material-collector.ps1
           if ($LASTEXITCODE -ne 0) { throw 'Material collector integration test failed' }
           @'
           Control The Oldest House: Visual and Performance Overhaul
-          R273 - GI binding audit
+          R274 - GI spotlight trace
 
           Copy all package contents beside Control_DX12.exe, preserving folders.
           Normal launch restores native spotlight GI lighting.
-          Run ControlTOH/Diagnostics/Start-GI-Binding-Audit.cmd.
+          Run ControlTOH/Diagnostics/Start-GI-Spot-Trace.cmd.
           Load the original plant area with the lamp intact, RT indirect and RR ON.
-          Remain in gameplay 15 seconds, then exit normally.
+          Select GI RAW BYPASS; keep Native Blend and FG off.
+          Aim at the original plant and Jesse hair; close overlay, hold F7 for one second.
+          Hold still for 10 seconds, then exit normally.
           Do not click CAPTURE RR. The launcher packages logs after exit.
-          This records GI shader/root identities and observed dispatches.
-          It does not yet record per-light radiance or fix speckles.
+          This records sampled secondary-hit spotlight arithmetic.
+          It preserves native lighting and is diagnostic, not a speckle fix.
           See ControlTOH/DIAGNOSTIC-NOTES.md for exact scope and limits.
           '@ | Set-Content "$out/ControlTOH/README.txt" -Encoding ASCII
           python tools/test-organized-package.py "$out"
@@ -1156,10 +1171,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: ControlTOH-R273
+          name: ControlTOH-R274
           path: |
-            ControlTOH-R273.zip
-            ControlTOH-R273.sha256
+            ControlTOH-R274.zip
+            ControlTOH-R274.sha256
             build/gi-spot-pcf-validation.json
             build/gi-sequence-validation.json
             build/gi-sequence-0.dxil
