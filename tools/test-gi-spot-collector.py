@@ -9,6 +9,8 @@ with tempfile.TemporaryDirectory() as tmp:
  root=Path(tmp);local=root/'local';logs=local/'Control-FG/Diagnostics';logs.mkdir(parents=True)
  game=root/'game';game.mkdir();output=root/'output';output.mkdir()
  blob=bytes(range(256))*2
+ (logs/'GI-Ray-R278-123.bin').write_bytes(blob)
+ (logs/'GI-Ray-R278-124.bin').write_bytes(b'other session')
  (logs/'GI-Ray-R277-123.bin').write_bytes(blob)
  (logs/'GI-Ray-R277-124.bin').write_bytes(b'other session')
  (logs/'GI-Spot-R274-123.bin').write_bytes(blob)
@@ -19,6 +21,8 @@ with tempfile.TemporaryDirectory() as tmp:
  finally:
   if old is None:os.environ.pop('TEMP',None)
   else:os.environ['TEMP']=old
+ assert (output/'logs/GI-Ray-R278-123.bin').read_bytes()==blob
+ assert not (output/'logs/GI-Ray-R278-124.bin').exists()
  assert (output/'logs/GI-Ray-R277-123.bin').read_bytes()==blob
  assert not (output/'logs/GI-Ray-R277-124.bin').exists()
  assert (output/'logs/GI-Spot-R274-123.bin').read_bytes()==blob
