@@ -209,14 +209,17 @@ inline void SaveReport(HWND window) noexcept {
     MessageBoxW(window, message, saved ? L"Lighting log saved" : L"Lighting log failed", MB_OK | (saved ? MB_ICONINFORMATION : MB_ICONERROR));
 }
 inline void PackageRR(HWND window) noexcept {
-#ifdef CONTROL_RR_F9_SUITE
+#if defined(CONTROL_RR_F9_SUITE) && !defined(CONTROL_GI_BOUNDARY_CAPTURE)
     if(rr_suite::session.load()){reflection_suite::Package();return;}
 #endif
     wchar_t module[MAX_PATH]{};
     if(!GetModuleFileNameW(selfModule,module,MAX_PATH)){MessageBoxW(window,L"Could not locate the capture helper.",L"RR material packaging",MB_OK|MB_ICONERROR);return;}
     auto* slash=wcsrchr(module,L'\\');if(!slash)return;*slash=0;
     wchar_t command[2048]{};
-    swprintf_s(command,L"powershell.exe -NoExit -NoProfile -ExecutionPolicy Bypass -File \"%s\\ControlTOH\\Diagnostics\\Capture-RR-Boundary.ps1\" -CollectExisting -RequireRR -GameProcessId %lu",module,GetCurrentProcessId());
+    // Never inspect partially written image payloads while a worker is saving.
+    // DiagnosticsOnly collects logs/metadata without waiting for another pair.
+    const bool diagnosticsOnly=control_rr_capture_ui::Busy();
+    swprintf_s(command,L"powershell.exe -NoExit -NoProfile -ExecutionPolicy Bypass -File \"%s\\ControlTOH\\Diagnostics\\Capture-RR-Boundary.ps1\" %s -RequireRR -GameProcessId %lu",module,diagnosticsOnly?L"-DiagnosticsOnly":L"-CollectExisting",GetCurrentProcessId());
 #ifdef CONTROL_RR_GI_SEQUENCE
     wcscat_s(command,L" -GiSequence");
 #elif defined(CONTROL_GI_BOUNDARY_CAPTURE)
@@ -333,13 +336,14 @@ inline LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPA
     case WM_COMMAND:
         if(HIWORD(wParam)==BN_CLICKED) {
             const unsigned index=LOWORD(wParam)-kButtonFirst;
+            const bool recoveryAction=index==kModeCount+2||index==kModeCount+4;
 #ifdef CONTROL_GI_BOUNDARY_CAPTURE
-            if(control_rr_capture_ui::Busy() && index!=kModeCount+2)return 0;
+            if(!control_rr_capture_ui::ActionAllowed(recoveryAction))return 0;
 #endif
 #ifdef CONTROL_RR_F9_SUITE
-            if(reflection_suite::active)return 0;
+            if(reflection_suite::active&&!recoveryAction)return 0;
 #endif
-            if(performance_capture::Active() && index!=kModeCount+6)return 0;
+            if(performance_capture::Active() && index!=kModeCount+6&&!recoveryAction)return 0;
             if(index<kModeCount){selectionRejected=!SelectMode(kModeChoices[index].mode);savedNotice=0;}
             else if(index==kModeCount||index==kModeCount+1) {
                 if (!ReportVisual(index==kModeCount))

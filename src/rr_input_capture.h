@@ -39,6 +39,8 @@ struct RRInputCaptureJob {
  float projection[16]{};bool projectionValid=false;
 };
 static SRWLOCK rrInputCaptureLock=SRWLOCK_INIT;
+// Serialize large disk exports without blocking render-side capture progress.
+static SRWLOCK rrInputCaptureExportLock=SRWLOCK_INIT;
 static RRInputCaptureJob rrInputCaptures[2];
 static unsigned rrInputCaptureRecording=2;
 static control_rr::InputCaptureSettle rrInputCaptureSettle;
@@ -70,8 +72,15 @@ static DWORD WINAPI RRInputCapturePrepare(void* context) noexcept {
 }
 static DWORD WINAPI RRInputCaptureExport(void* context) noexcept {
  auto* c=static_cast<RRInputCaptureJob*>(context);
+ AcquireSRWLockExclusive(&rrInputCaptureExportLock);
  AcquireSRWLockExclusive(&rrInputCaptureLock);
- if(c->policy.phase!=control_rr::InputCapturePolicy::Exporting){ReleaseSRWLockExclusive(&rrInputCaptureLock);return 0;}
+ if(c->policy.phase!=control_rr::InputCapturePolicy::Exporting){ReleaseSRWLockExclusive(&rrInputCaptureLock);ReleaseSRWLockExclusive(&rrInputCaptureExportLock);return 0;}
+ // Exporting reserves this slot. Rendering cannot record/reprepare it, and
+ // timeout only changes policy, never ownership. Keep disk I/O outside the
+ // shared lock; reacquire before releasing resources or publishing completion.
+ ReleaseSRWLockExclusive(&rrInputCaptureLock);
+ const auto exportStarted=GetTickCount64();
+ Log("RR_INPUT_CAPTURE_EXPORT_BEGIN frame=%llu buffers=%u",c->frame,c->count);
  bool okay=true;void* mapped[kRRInputCaptureMaxResources]{};
  try {
   wchar_t env[32768]{};const DWORD length=GetEnvironmentVariableW(L"LOCALAPPDATA",env,32768);
@@ -82,8 +91,14 @@ static DWORD WINAPI RRInputCaptureExport(void* context) noexcept {
   for(unsigned i=0;i<c->count&&okay;++i){
    if(i==c->outputIndex&&!c->outputCaptured)continue;
    D3D12_RANGE range{0,static_cast<SIZE_T>(c->bytes[i])};
+   const auto mapStarted=GetTickCount64();
+   Log("RR_INPUT_CAPTURE_EXPORT_MAP_BEGIN frame=%llu index=%u bytes=%llu",c->frame,i,c->bytes[i]);
    okay=SUCCEEDED(c->readback[i]->Map(0,&range,&mapped[i]))&&mapped[i];
+   const auto writeStarted=GetTickCount64();
+   Log("RR_INPUT_CAPTURE_EXPORT_MAP_END frame=%llu index=%u success=%u elapsed_ms=%llu",c->frame,i,unsigned(okay),writeStarted-mapStarted);
    if(okay)okay=RRGuideExportDetail::WriteRaw(directory+L"\\"+c->names[i],static_cast<unsigned char*>(mapped[i])+c->footprint[i].Offset,c->footprint[i].Footprint.RowPitch,size_t(c->descriptions[i].Width)*c->pixelBytes[i],c->descriptions[i].Height);
+   if(mapped[i]){D3D12_RANGE written{0,0};c->readback[i]->Unmap(0,&written);mapped[i]=nullptr;}
+   Log("RR_INPUT_CAPTURE_EXPORT_WRITE_END frame=%llu index=%u success=%u elapsed_ms=%llu",c->frame,i,unsigned(okay),GetTickCount64()-writeStarted);
   }
   if(okay)okay=GIBatchCaptureExport(c->giHits,directory);
   if(okay){
@@ -126,10 +141,13 @@ static DWORD WINAPI RRInputCaptureExport(void* context) noexcept {
  }catch(...){okay=false;}
  for(unsigned i=0;i<c->count;++i)if(mapped[i]){D3D12_RANGE written{0,0};c->readback[i]->Unmap(0,&written);}
  Log("RR_INPUT_CAPTURE_C1_EXPORTED success=%u frame=%llu preset=%u buffers=%u",unsigned(okay),c->frame,c->preset,c->count);
+ Log("RR_INPUT_CAPTURE_EXPORT_END frame=%llu elapsed_ms=%llu",c->frame,GetTickCount64()-exportStarted);
+ AcquireSRWLockExclusive(&rrInputCaptureLock);
  RRInputCaptureRelease(c);
  if(okay)c->policy.Exported();else {c->policy.phase=control_rr::InputCapturePolicy::Failed;control_rr_capture_ui::detail.store(L"Image export failed. PACKAGE LIGHT will collect diagnostics.");}
 
- ReleaseSRWLockExclusive(&rrInputCaptureLock);return 0;
+ ReleaseSRWLockExclusive(&rrInputCaptureLock);
+ ReleaseSRWLockExclusive(&rrInputCaptureExportLock);return 0;
 }
 #include "rr_input_capture_record.h"
 #include "rr_input_capture_guard.h"

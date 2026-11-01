@@ -27,6 +27,9 @@ inline std::atomic<const wchar_t*> detail{L"F9: capture sequence at painting, th
 inline bool Busy() noexcept {
  const auto s=state.load();return s==State::Queued||s==State::Preparing||s==State::Capturing||s==State::Saving;
 }
+// Recovery only reads existing files; it must remain available if the render
+// thread or capture worker stops publishing progress. Do not reset GPU owners.
+inline bool ActionAllowed(bool recoveryAction) noexcept { return recoveryAction || !Busy(); }
 inline bool Request() noexcept {
     auto current=state.load();
     if(completedPairs.load()>=kRRCapturePairs || (current!=State::Idle && current!=State::Complete))return false;

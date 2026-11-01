@@ -235,7 +235,7 @@ def main():
     report = {'schema': 'control-rr-boundary-r157', 'pid': args.pid, 'started_unix': started, 'pairs': [], 'complete': False, 'diagnostics_only': args.diagnostics_only}
     report['expected_path'] = 'rr' if args.require_rr else 'native_sr'
     print('Collecting the overlay input/output captures for this game session.', flush=True)
-    print('Select GI RAW BYPASS, click CAPTURE RR once, hold still for all four pairs, then PACKAGE RR.' if args.gi_sequence else 'Use CAPTURE RR in CLAMP ONLY, then BOTH at the same camera position.' if args.gi_boundary else 'Use CAPTURE RR at the painting and elevator, then PACKAGE RR.' if args.require_rr else
+    print('Recovery collection only. Do not start another capture; existing files will be retained.' if args.diagnostics_only else 'Select GI RAW BYPASS, click CAPTURE RR once, hold still for all four pairs, then PACKAGE RR.' if args.gi_sequence else 'Use CAPTURE RR in CLAMP ONLY, then BOTH at the same camera position.' if args.gi_boundary else 'Use CAPTURE RR at the painting and elevator, then PACKAGE RR.' if args.require_rr else
           'Use CAPTURE LIGHT in the overlay at each position, then PACKAGE LIGHT.', flush=True)
     print('Progress and failures are recorded below; no sound or hotkey is required.', flush=True)
     try:

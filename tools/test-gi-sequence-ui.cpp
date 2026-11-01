@@ -3,7 +3,15 @@
 #include "../src/rr_capture_ui.h"
 #include <cassert>
 #include <cstdio>
+#include <initializer_list>
 int main(){namespace ui=control_rr_capture_ui;using P=control_rr::InputCapturePolicy;
+ for(auto state:{ui::State::Idle,ui::State::Queued,ui::State::Preparing,ui::State::Capturing,ui::State::Saving,ui::State::Complete,ui::State::Failed}){
+  ui::state=state;
+  assert(ui::ActionAllowed(true)); // SAVE LOG / PACKAGE RR always reachable.
+  assert(ui::ActionAllowed(false)==!ui::Busy()); // No lighting mutation mid-capture.
+  assert(ui::state==state); // Recovery must not cancel or free in-flight work.
+ }
+ ui::state=ui::State::Idle;
  assert(kRRCapturePairs==4);assert(ui::Request());assert(!ui::Request());
  for(unsigned pair=1;pair<=4;++pair){
   assert(ui::requested.exchange(false));assert(control_rr_gi::boundaryRequested);

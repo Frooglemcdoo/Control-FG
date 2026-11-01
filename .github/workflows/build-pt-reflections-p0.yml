@@ -3,6 +3,7 @@ name: Build native reflection enhancements and RR
 on:
   push:
     branches:
+      - work/r272-capture-recovery
       - work/r271-gi-hit-capture
       - work/r269-gi-shadow-isolation
       - work/r268-gi-spot-pcf
@@ -1090,11 +1091,11 @@ jobs:
           build\test-gi-spot-pcf.exe
           if errorlevel 1 exit /b 1
 
-      - name: Package GI hit capture R271
+      - name: Package capture recovery R272
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='ControlTOH-R271'
+          $out='ControlTOH-R272'
           $shader="$out/ControlTOH/Shaders"
           $tools="$out/ControlTOH/Tools"
           $diagnostics="$out/ControlTOH/Diagnostics"
@@ -1124,20 +1125,21 @@ jobs:
           Copy-Item build/DirectStorage "$diagnostics/DirectStorage" -Recurse
           Copy-Item build/DirectStorage/dstorage.dll,build/DirectStorage/dstoragecore.dll $out
           Copy-Item tools/directstorage/Validate-DirectStorage.cmd "$diagnostics/DirectStorage"
-          Copy-Item docs/native-lighting-r271.md "$out/ControlTOH/DIAGNOSTIC-NOTES.md"
+          Copy-Item docs/native-lighting-r272.md "$out/ControlTOH/DIAGNOSTIC-NOTES.md"
           Copy-Item tools/Organize-Existing-Install.cmd,tools/Organize-Existing-Install.ps1 $tools
           Copy-Item tools/diagnostics/Collect-ControlTOH-Materials.cmd,tools/diagnostics/Collect-ControlTOH-Materials.ps1 $tools
           & powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/diagnostics/test-material-collector.ps1
           if ($LASTEXITCODE -ne 0) { throw 'Material collector integration test failed' }
           @'
           Control The Oldest House: Visual and Performance Overhaul
-          R271 - Native GI hit-array capture
+          R272 - Capture recovery and export diagnostics
 
           Copy all package contents beside Control_DX12.exe, preserving folders.
           Normal launch restores native spotlight GI lighting.
           Capture: ControlTOH/Diagnostics/Start-GI-Hit-Capture.cmd
           Keep lamp intact, RT indirect ON, RR ON, Native Blend, GI RAW BYPASS, FG OFF.
-          F10 CAPTURE RR, close overlay and hold still. Then PACKAGE RR.
+          Existing R271 captures remain usable. No repeat capture requested.
+          PACKAGE RR stays available while busy and collects diagnostics.
           Send every generated capture-part ZIP plus logs.
           This is an input diagnostic, not a speckle fix or performance benchmark.
           The new data includes all physical hit-array slices in two small regions.
@@ -1155,10 +1157,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: ControlTOH-R271
+          name: ControlTOH-R272
           path: |
-            ControlTOH-R271.zip
-            ControlTOH-R271.sha256
+            ControlTOH-R272.zip
+            ControlTOH-R272.sha256
             build/gi-spot-pcf-validation.json
             build/gi-sequence-validation.json
             build/gi-sequence-0.dxil
