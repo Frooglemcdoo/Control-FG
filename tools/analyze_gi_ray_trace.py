@@ -50,11 +50,15 @@ def analyze(data):
     peak_sum = peak_output = peak_scale = 0.
     misses = 0
     brightest = []
+    normalized_terms = []
+    dominant_pixels = 0
+    luminance = lambda rgb: sum(a*b for a,b in zip(rgb,(.2126,.7152,.0722)))
     for pixel, group in sorted(groups.items()):
         summary = group['summary']
         if summary is None or set(group['rays']) != set(range(summary['ray_count'])):
             raise ValueError(f'Incomplete ray set at {pixel}')
         total = [0.,0.,0.]
+        pixel_terms = []
         for index,ray in sorted(group['rays'].items()):
             if any(ray[k] != summary[k] for k in ('ray_count','primary_material','fade_constants')):
                 raise ValueError('Inconsistent per-pixel constants')
@@ -66,6 +70,11 @@ def analyze(data):
                     raise ValueError('Miss/invalid record contains a surface normal')
             brightest.append(dict(pixel=list(pixel),ray=index,primary_material=ray['primary_material'],
                                   secondary_material=ray['material'],contribution=ray['contribution']))
+            term = luminance(ray['contribution'])*summary['scale'][0]/summary['ray_count']
+            pixel_terms.append(term)
+            normalized_terms.append((term,ray['material']))
+        if sum(pixel_terms)>1e-8 and max(pixel_terms)>0.9*sum(pixel_terms):
+            dominant_pixels += 1
         peak_sum = max(peak_sum,*(abs(a-b) for a,b in zip(total,summary['accumulation'])))
         reconstructed = [a*summary['scale'][0]/summary['ray_count'] for a in summary['accumulation']]
         peak_output = max(peak_output,*(abs(a-b) for a,b in zip(reconstructed,summary['output'])))
@@ -77,15 +86,25 @@ def analyze(data):
         expected_scale = z+(w-z)*t*t*(3-2*t)
         peak_scale = max(peak_scale,abs(expected_scale-summary['scale'][0]))
     brightest.sort(key=lambda r:max(r['contribution']),reverse=True)
+    energy = sum(v for v,m in normalized_terms)
+    ordered = sorted((v for v,m in normalized_terms),reverse=True)
     return dict(schema='gi-ray-trace-analysis-r277',sha256=hashlib.sha256(data).hexdigest(),
                 records=count,pixels=len(groups),rays=sum(len(g['rays']) for g in groups.values()),
                 miss_or_invalid_rays=misses,complete_ray_sets=True,
+                sampled_grid_concentration=dict(
+                    metric='luminance after recorded depth scale and ray-count normalization',
+                    luminance_sum=energy,
+                    miss_fallback_share=sum(v for v,m in normalized_terms if m==65535)/energy if energy else None,
+                    top10_ray_share=sum(ordered[:10])/energy if energy else None,
+                    pixels_one_ray_over_90_percent=dominant_pixels),
                 errors=dict(accumulation_max_absolute=peak_sum,output_max_absolute=peak_output,
                             depth_scale_max_absolute=peak_scale),brightest_rays=brightest[:20],
                 limits=['One dispatch; not a temporal variance or converged reference measurement.',
                         'Output is the native float32 register before UAV format conversion.',
                         'Separate product versus native fused accumulation can differ by rounding.',
                         'Material IDs do not identify named scene objects.',
+                        'Concentration describes this sampled grid, not full-image energy or temporal variance.',
+                        'Misses contribute native fallback lighting; exclude from surface reuse, not from GI output.',
                         'Consumer geometry does not establish the ray producer PDF.'])
 
 
