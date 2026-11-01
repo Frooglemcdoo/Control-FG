@@ -39,4 +39,10 @@ with tempfile.TemporaryDirectory() as tmp:
         bad=copy.deepcopy(valid);bad[key]=value;check(bad,False)
     bad=copy.deepcopy(valid);bad['batches'][0]['resources'][1]['offset']=0;check(bad,False)
     binary.write_bytes(bytes(valid['bytes']-1));check(valid,False)
+    binary.write_bytes(bytes(valid['bytes']));check(valid,True)
+    data=dict(gi_hit_capture_requested=True,frame=100,resources=[])
+    (folder/'metadata.json').write_text(json.dumps(data))
+    collector.copy_capture_frame(folder,data,folder/'package')
+    assert {p.name for p in (folder/'package').iterdir()} == {'metadata.json','gi-hit-slices.json','gi-hit-slices.bin'}
+    collector.validate_gi_hits(folder/'package',100)
 print('PASS GI hit collector: completed data accepted; wrong frame, incomplete GPU/batches/slices, overlaps and truncated bytes rejected')

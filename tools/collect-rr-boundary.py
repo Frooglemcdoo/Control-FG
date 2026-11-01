@@ -39,6 +39,16 @@ def validate_gi_hits(folder, frame):
         raise ValueError('Incomplete GI physical-slice bytes')
 
 
+def copy_capture_frame(folder, data, target):
+    names = ['metadata.json'] + [r['file'] for r in data['resources']]
+    if data.get('gi_hit_capture_requested'):
+        validate_gi_hits(folder, data['frame'])
+        names += ['gi-hit-slices.json', 'gi-hit-slices.bin']
+    target.mkdir(parents=True)
+    for name in names:
+        shutil.copy2(folder / name, target / name)
+
+
 def read_pair(root, pid, ordinal, started, require_lighting=False, require_native=False, require_rr=False):
     if require_native and require_rr:
         raise ValueError('Choose one evaluation path')
@@ -261,9 +271,7 @@ def main():
             print(f'Pair {ordinal} validated. Copying images; this can take a moment...', flush=True)
             for folder, data in pair:
                 target = destination / label / folder.name
-                target.mkdir(parents=True)
-                for name in ['metadata.json'] + [r['file'] for r in data['resources']]:
-                    shutil.copy2(folder / name, target / name)
+                copy_capture_frame(folder, data, target)
             if args.gi_boundary:
                 validate_gi_pair(pair, ordinal)
             if args.gi_sequence:

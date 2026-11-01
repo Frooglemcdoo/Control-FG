@@ -68,6 +68,6 @@ static void Run(DXGI_FORMAT format,unsigned pixelBytes){
  }readback->Unmap(0,&empty);
 }
 int main()try{
- Run(DXGI_FORMAT_R16_UINT,2);Run(DXGI_FORMAT_R32G32_UINT,8);
- std::cout<<"PASS GPU completed R16_UINT and R32G32_UINT, all three slices and both ROI origins with exact pixel values\n";
+ Run(DXGI_FORMAT_R16_UINT,2);Run(DXGI_FORMAT_R32G32_UINT,8);Run(DXGI_FORMAT_R16G16B16A16_FLOAT,8);
+ std::cout<<"PASS GPU completed R16_UINT, R32G32_UINT and RGBA16_FLOAT, all three slices and both ROI origins with exact pixel values\n";
 }catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}
