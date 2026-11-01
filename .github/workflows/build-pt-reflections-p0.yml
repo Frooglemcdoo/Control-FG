@@ -3,6 +3,7 @@ name: Build native reflection enhancements and RR
 on:
   push:
     branches:
+      - work/r279-gi-geometry-bindings
       - work/r278-gi-runtime-accounting
       - work/r277-complete-gi-rays
       - work/r276-reflection-clamp-ab
@@ -110,6 +111,16 @@ jobs:
           for /f "usebackq tokens=*" %%I in (`"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath`) do set "VSROOT=%%I"
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
           echo VSROOT=%VSROOT%>>%GITHUB_ENV%
+
+      - name: Validate geometry descriptor probe R279
+        shell: cmd
+        run: |
+          call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
+          if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-geometry-probe.cpp /Febuild\test-gi-geometry-probe.exe /link d3d12.lib dxgi.lib
+          if errorlevel 1 exit /b 1
+          build\test-gi-geometry-probe.exe
+          if errorlevel 1 exit /b 1
 
       - name: Validate GI spotlight trace R274
         shell: cmd
@@ -1123,11 +1134,11 @@ jobs:
           build\test-gi-spot-pcf.exe
           if errorlevel 1 exit /b 1
 
-      - name: Package GI runtime accounting comparison R278
+      - name: Package GI geometry descriptor inventory R279
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='ControlTOH-R278'
+          $out='ControlTOH-R279'
           $shader="$out/ControlTOH/Shaders"
           $tools="$out/ControlTOH/Tools"
           $diagnostics="$out/ControlTOH/Diagnostics"
@@ -1152,22 +1163,22 @@ jobs:
           Copy-Item Package-Lighting-Capture.cmd,tools/package-lighting-capture.py,Package-Lighting-Performance.ps1 $diagnostics
           Copy-Item Capture-RR-Boundary.cmd,Capture-RR-Boundary.ps1,Collect-RR-Boundary-Status.cmd,tools/collect-rr-boundary.py $diagnostics
           Copy-Item Start-Compact-Distance-Test.cmd,Capture-RR-Suite.ps1,tools/collect-rr-suite.py $diagnostics
-          Copy-Item tools/diagnostics/Start-R258-Storage-Diagnostics.cmd,tools/diagnostics/Start-GI-Source-Probe.cmd,tools/diagnostics/Start-GI-Shadow-Test.cmd,tools/diagnostics/Start-GI-Lighting-Test.cmd,tools/diagnostics/Start-GI-Hit-Capture.cmd,tools/diagnostics/Start-GI-Binding-Audit.cmd,tools/diagnostics/Start-GI-Spot-Trace.cmd,tools/diagnostics/Start-Reflection-Clamp-Test.cmd,tools/diagnostics/Start-GI-Ray-Trace.cmd $diagnostics
+          Copy-Item tools/diagnostics/Start-R258-Storage-Diagnostics.cmd,tools/diagnostics/Start-GI-Source-Probe.cmd,tools/diagnostics/Start-GI-Shadow-Test.cmd,tools/diagnostics/Start-GI-Lighting-Test.cmd,tools/diagnostics/Start-GI-Hit-Capture.cmd,tools/diagnostics/Start-GI-Binding-Audit.cmd,tools/diagnostics/Start-GI-Spot-Trace.cmd,tools/diagnostics/Start-Reflection-Clamp-Test.cmd,tools/diagnostics/Start-GI-Ray-Trace.cmd,tools/diagnostics/Start-GI-Geometry-Probe.cmd $diagnostics
           Copy-Item tools/diagnostics/Collect-Texture-Trace.cmd,tools/diagnostics/Collect-Texture-Trace.ps1 $tools
           Copy-Item build/DirectStorage "$diagnostics/DirectStorage" -Recurse
           Copy-Item build/DirectStorage/dstorage.dll,build/DirectStorage/dstoragecore.dll $out
           Copy-Item tools/directstorage/Validate-DirectStorage.cmd "$diagnostics/DirectStorage"
-          Copy-Item docs/native-lighting-r278.md "$out/ControlTOH/DIAGNOSTIC-NOTES.md"
+          Copy-Item docs/native-lighting-r279.md "$out/ControlTOH/DIAGNOSTIC-NOTES.md"
           Copy-Item tools/Organize-Existing-Install.cmd,tools/Organize-Existing-Install.ps1 $tools
           Copy-Item tools/diagnostics/Collect-ControlTOH-Materials.cmd,tools/diagnostics/Collect-ControlTOH-Materials.ps1 $tools
           & powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/diagnostics/test-material-collector.ps1
           if ($LASTEXITCODE -ne 0) { throw 'Material collector integration test failed' }
           @'
           Control The Oldest House: Visual and Performance Overhaul
-          R278 - GI runtime accounting comparison
+          R279 - GI geometry descriptor inventory
 
           Copy all package contents beside Control_DX12.exe, preserving folders.
-          Run ControlTOH/Diagnostics/Start-GI-Ray-Trace.cmd.
+          Run ControlTOH/Diagnostics/Start-GI-Geometry-Probe.cmd.
           Load the original plant area with the lamp intact, RT indirect and RR ON.
           Select GI RAW BYPASS and REF CLAMP: BYPASS; keep Native Blend and FG off.
           Aim at the plant and Jesse hair. Mouse zoom may remain held.
@@ -1188,10 +1199,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: ControlTOH-R278
+          name: ControlTOH-R279
           path: |
-            ControlTOH-R278.zip
-            ControlTOH-R278.sha256
+            ControlTOH-R279.zip
+            ControlTOH-R279.sha256
             build/gi-ray-trace-validation.json
             build/gi-spot-trace-validation.json
             build/gi-spot-pcf-validation.json

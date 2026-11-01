@@ -382,6 +382,7 @@ inline bool PatchSlot(void** slot, void* expected, void* hook) noexcept {
 #include "spot_shadow_resolution_runtime.h"
 #include "rt_spot_capture_audit.h"
 #include "gi_binding_audit.inl"
+#include "gi_geometry_probe.inl"
 #include "gi_spot_trace_runtime.inl"
 #include "rt_shadow_capture.h"
 #include "rt_spot_hit_pipeline.h"
@@ -428,6 +429,7 @@ inline void BindPerformance(ID3D12GraphicsCommandList* list,ID3D12PipelineState*
     performance::Bind(list,PerformanceStage(pso),identity.sha);
 }
 inline void InstallList(ID3D12GraphicsCommandList* list) noexcept {
+    gi_geometry_probe::InstallList(list);
     gi_spot_trace::InstallList(list);
     rt_shadow_capture::InstallList(list);
     rt_spot_copy_audit::InstallList(list);
