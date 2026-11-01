@@ -28,6 +28,13 @@ inline bool PatchSlot(void** slot,void* expected,void* hook) noexcept{DWORD old=
 namespace rt_spot_capture_audit {inline const GUID kRootBytes={};}
 #include "../src/gi_spot_trace_runtime.inl"
 }
+#include "../src/ui/theme.h"
+namespace native_lighting::ui {
+inline HINSTANCE selfModule=GetModuleHandleW(nullptr);
+inline HFONT headingFont=nullptr,detailFont=nullptr;
+inline void DrawLabel(HDC dc,HFONT,const wchar_t* text,RECT bounds,COLORREF color) noexcept {SetTextColor(dc,color);DrawTextW(dc,text,-1,&bounds,DT_LEFT|DT_SINGLELINE);}
+#include "../src/ui/gi_spot_trace_status.h"
+}
 using Microsoft::WRL::ComPtr;
 void Check(HRESULT hr){if(FAILED(hr))throw std::runtime_error("D3D12 call failed");}
 void Require(bool ok,const char* message){if(!ok)throw std::runtime_error(message);}
@@ -54,5 +61,17 @@ int main()try{
  list->SetDescriptorHeaps(0,nullptr);Require((probe::Read(list.Get()).mask&0xc3)==0,"heap change failed to invalidate tables");list->SetDescriptorHeaps(2,heaps);set();
  ComPtr<ID3D12CommandAllocator> ba;Check(d->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_BUNDLE,IID_PPV_ARGS(&ba)));ComPtr<ID3D12GraphicsCommandList> bundle;Check(d->CreateCommandList(0,D3D12_COMMAND_LIST_TYPE_BUNDLE,ba.Get(),nullptr,IID_PPV_ARGS(&bundle)));Check(bundle->Close());list->ExecuteBundle(bundle.Get());Require(probe::Read(list.Get()).mask==0&&probe::Read(list.Get()).root==nullptr,"bundle failed to invalidate");
  const auto generation=probe::Read(list.Get()).generation;probe::Reset(list.Get());Require(probe::Read(list.Get()).mask==0&&probe::Read(list.Get()).generation==generation+1,"reset generation");Check(list->Close());
+ probe::phase.store(probe::Phase::Idle);probe::enabledReady.store(false);Require(!probe::Request("test_not_ready"),"unready request accepted");
+ probe::enabledReady.store(true);Require(probe::Request("test_button"),"ready button request rejected");Require(probe::phase.load()==probe::Phase::Countdown,"missing armed countdown");Require(wcsstr(probe::Status(),L"ARMED")!=nullptr,"no visible armed confirmation");
+ const auto began=probe::armedAt;Require(!probe::Request("test_duplicate"),"duplicate request accepted");Require(probe::armedAt==began,"duplicate reset countdown");
+ probe::AdvanceCountdown(began+4999,true);Require(probe::phase.load()==probe::Phase::Countdown,"early capture");probe::AdvanceCountdown(began+5000,false);Require(probe::phase.load()==probe::Phase::Countdown,"background capture");probe::AdvanceCountdown(began+5000,true);Require(probe::phase.load()==probe::Phase::Armed,"countdown did not arm");
+ probe::phase.store(probe::Phase::Complete);Require(wcsstr(probe::Status(),L"SAVED")!=nullptr&&!probe::Request("test_complete"),"saved status or rearm");
+ probe::Fail("test_failure",L"FAILED: test reason");Require(wcsstr(probe::Status(),L"test reason")!=nullptr&&!probe::Request("test_failed"),"failure reason or rearm");
+ HWND game=CreateWindowExW(0,L"STATIC",L"GI status test",WS_OVERLAPPEDWINDOW,0,0,1280,720,nullptr,nullptr,GetModuleHandleW(nullptr),nullptr);Require(game!=nullptr,"test game window");
+ const HWND before=GetForegroundWindow();native_lighting::ui::gi_trace_status::Tick(game);HWND banner=native_lighting::ui::gi_trace_status::window;Require(banner!=nullptr,"status window creation");
+ const auto style=GetWindowLongPtrW(banner,GWL_EXSTYLE);Require((style&(WS_EX_NOACTIVATE|WS_EX_TRANSPARENT|WS_EX_LAYERED))==(WS_EX_NOACTIVATE|WS_EX_TRANSPARENT|WS_EX_LAYERED),"status input styles");Require(GetForegroundWindow()==before,"status stole focus");
+ Require(SendMessageW(banner,WM_NCHITTEST,0,0)==HTTRANSPARENT,"status intercepted mouse");Require(SendMessageW(banner,WM_MOUSEACTIVATE,0,0)==MA_NOACTIVATE,"status activated");native_lighting::ui::gi_trace_status::Close();DestroyWindow(game);
+ std::cout<<"PASS R275 status window: creation, no activation, transparent hit testing and cleanup\n";
+ std::cout<<"PASS R275 confirmation: readiness, visible armed/countdown, duplicate rejection, foreground gate, saved/failed status, no unsafe rearm\n";
  std::cout<<"PASS R274 production hooks: root/table/CBV slots, heap/root invalidation, duplicate bindings, private rebinding, bundle invalidation, reset generation\n";
 }catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}

@@ -19,6 +19,7 @@ inline constexpr int kFooterY = kCaptureStatusY + 50;
 inline constexpr int kHeight = kFooterY + 72;
 inline constexpr unsigned kButtonCount = kModeCount + 15;
 inline const wchar_t* ButtonLabel(unsigned index) noexcept {
+    if(index==kModeCount+3&&gi_spot_trace::Enabled())return L"ARM GI TRACE";
 #ifdef CONTROL_RR_FOLIAGE_AUDIT
     if(index==kModeCount+2)return L"CAPTURE MATERIALS";
 #endif
@@ -116,6 +117,7 @@ inline void DrawLabel(HDC dc, HFONT font, const wchar_t* text, RECT bounds, COLO
     DrawTextW(dc, text, -1, &bounds, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
     SelectObject(dc, previous);
 }
+#include "gi_spot_trace_status.h"
 inline void Paint(HWND window) noexcept {
     namespace theme = control_ui::theme;
     PAINTSTRUCT ps{}; HDC dc = BeginPaint(window, &ps);
@@ -133,6 +135,7 @@ inline void Paint(HWND window) noexcept {
     DrawLabel(dc, detailFont, free_camera::Status(), {14,kCameraY+36,kWidth-12,kCameraY+64}, theme::kMutedText);
     wchar_t captureStatus[128]{};
     swprintf_s(captureStatus,L"RR capture: %s   Saved pairs: %u",control_rr_capture_ui::Label(control_rr_capture_ui::state.load()),control_rr_capture_ui::completedPairs.load());
+    if(gi_spot_trace::Enabled())swprintf_s(captureStatus,L"GI trace: %s",gi_spot_trace::Status());
     DrawLabel(dc,detailFont,captureStatus,{14,kCaptureStatusY,kWidth-12,kCaptureStatusY+22},theme::kText);
     DrawLabel(dc,detailFont,performance_capture::Active()?performance_capture::Status():control_rr_capture_ui::detail.load(),{14,kCaptureStatusY+22,kWidth-12,kCaptureStatusY+46},theme::kMutedText);
     wchar_t shortcuts[128]{};
@@ -141,6 +144,7 @@ inline void Paint(HWND window) noexcept {
 #else
     swprintf_s(shortcuts, L"F9: reflection sequence / cancel   F10: close   Ctrl+Shift+1..%u", kModeCount);
 #endif
+    if(gi_spot_trace::Enabled())wcscpy_s(shortcuts,L"F7: arm GI trace   F10: close   Mouse zoom supported");
     DrawLabel(dc, detailFont, shortcuts, {14,kFooterY,kWidth-12,kFooterY+24}, theme::kMutedText);
     DrawLabel(dc, detailFont, selectionRejected ? L"Mode unavailable. Save Log exports shader evidence for diagnosis." : savedNotice.load() == 2 ? L"Log write failed. Save Log shows the Windows error." : savedNotice.load() == 1 ? L"Log saved. See the folder shown in the confirmation." : ModeHint(mode), {14,kFooterY+26,kWidth-12,kFooterY+56}, theme::kText);
     EndPaint(window, &ps);
@@ -231,6 +235,7 @@ inline void PackageRR(HWND window) noexcept {
     } else MessageBoxW(window,L"Could not start packaging. Check Capture-RR-Boundary.ps1 is installed in ControlTOH/Diagnostics.",L"RR material packaging",MB_OK|MB_ICONERROR);
 }
 inline void RequestLightCapture(HWND panel) noexcept {
+    if(gi_spot_trace::Enabled()){if(gi_spot_trace::Request("capture_action"))ClosePanel(panel);return;}
     if(free_camera::commands.Pending())return;
 #if defined(CONTROL_RR_F9_SUITE) && !defined(CONTROL_GI_BOUNDARY_CAPTURE)
     ClosePanel(panel);
@@ -336,6 +341,8 @@ inline LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPA
     case WM_COMMAND:
         if(HIWORD(wParam)==BN_CLICKED) {
             const unsigned index=LOWORD(wParam)-kButtonFirst;
+            const bool traceAction=index==kModeCount+3&&gi_spot_trace::Enabled();
+            if(traceAction){if(gi_spot_trace::Request("overlay_button"))ClosePanel(window);InvalidateRect(window,nullptr,FALSE);return 0;}
             const bool recoveryAction=index==kModeCount+2||index==kModeCount+4;
 #ifdef CONTROL_GI_BOUNDARY_CAPTURE
             if(!control_rr_capture_ui::ActionAllowed(recoveryAction))return 0;
@@ -428,6 +435,7 @@ inline DWORD WINAPI ThreadProc(LPVOID) noexcept {
         }
         if(msg.message!=WM_TIMER||msg.wParam!=timer)continue;
         const ULONGLONG now=GetTickCount64();
+        gi_spot_trace::InputTick();
         if(cameraRequestedAt && now-cameraRequestedAt>=3000 && free_camera::commands.Timeout())
             Trace("free_camera_request_expired reason=no_camera_update target_not_applied=1");
         if(now>=nextRRReport){ReportSpecIsolation("heartbeat");ReportRRPaths("heartbeat");nextRRReport=now+5000;}
@@ -435,6 +443,7 @@ inline DWORD WINAPI ThreadProc(LPVOID) noexcept {
         if(cachedGame&&!IsWindow(cachedGame))cachedGame=nullptr;
         if(!cachedGame&&now>=nextWindowSearch){cachedGame=FindFGGameWindow();nextWindowSearch=now+1000;}
         HWND game=cachedGame;
+        gi_trace_status::Tick(game);
         if(panel&&owner!=game){ClosePanel(panel);DestroyWindow(panel);panel=nullptr;}
         if(game&&!panel){panel=CreateWindowExW(WS_EX_TOOLWINDOW|WS_EX_NOACTIVATE,kClass,L"Control lighting diagnostic",WS_POPUP,
             0,0,kWidth,kHeight,game,nullptr,selfModule,nullptr);owner=game;}
@@ -495,6 +504,7 @@ inline DWORD WINAPI ThreadProc(LPVOID) noexcept {
         }else {RestoreCursorVisibility();if(IsWindowVisible(panel))ShowWindow(panel,SW_HIDE);if(!foreground)panelOpen=false;}
     }
     DrainDiagnosticLog(true);
+    gi_trace_status::Close();
     KillTimer(nullptr,timer);RestoreCursorVisibility();if(panel)DestroyWindow(panel);
     DeleteObject(headingFont);DeleteObject(bodyFont);DeleteObject(detailFont);if(SUCCEEDED(comResult))CoUninitialize();return 0;
 }

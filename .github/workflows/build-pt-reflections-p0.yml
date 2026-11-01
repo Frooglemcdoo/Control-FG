@@ -3,6 +3,7 @@ name: Build native reflection enhancements and RR
 on:
   push:
     branches:
+      - work/r275-gi-trace-confirmation
       - work/r274-gi-spot-trace
       - work/r273-gi-binding-audit
       - work/r272-capture-recovery
@@ -118,7 +119,7 @@ jobs:
           if errorlevel 1 exit /b 1
           build\test-gi-spot-trace.exe
           if errorlevel 1 exit /b 1
-          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-spot-bindings.cpp /Febuild\test-gi-spot-bindings.exe /link d3d12.lib dxgi.lib d3dcompiler.lib user32.lib
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-spot-bindings.cpp /Febuild\test-gi-spot-bindings.exe /link d3d12.lib dxgi.lib d3dcompiler.lib user32.lib gdi32.lib
           if errorlevel 1 exit /b 1
           build\test-gi-spot-bindings.exe
           if errorlevel 1 exit /b 1
@@ -1113,11 +1114,11 @@ jobs:
           build\test-gi-spot-pcf.exe
           if errorlevel 1 exit /b 1
 
-      - name: Package GI spotlight trace R274
+      - name: Package GI trace confirmation R275
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='ControlTOH-R274'
+          $out='ControlTOH-R275'
           $shader="$out/ControlTOH/Shaders"
           $tools="$out/ControlTOH/Tools"
           $diagnostics="$out/ControlTOH/Diagnostics"
@@ -1147,22 +1148,22 @@ jobs:
           Copy-Item build/DirectStorage "$diagnostics/DirectStorage" -Recurse
           Copy-Item build/DirectStorage/dstorage.dll,build/DirectStorage/dstoragecore.dll $out
           Copy-Item tools/directstorage/Validate-DirectStorage.cmd "$diagnostics/DirectStorage"
-          Copy-Item docs/native-lighting-r274.md "$out/ControlTOH/DIAGNOSTIC-NOTES.md"
+          Copy-Item docs/native-lighting-r275.md "$out/ControlTOH/DIAGNOSTIC-NOTES.md"
           Copy-Item tools/Organize-Existing-Install.cmd,tools/Organize-Existing-Install.ps1 $tools
           Copy-Item tools/diagnostics/Collect-ControlTOH-Materials.cmd,tools/diagnostics/Collect-ControlTOH-Materials.ps1 $tools
           & powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/diagnostics/test-material-collector.ps1
           if ($LASTEXITCODE -ne 0) { throw 'Material collector integration test failed' }
           @'
           Control The Oldest House: Visual and Performance Overhaul
-          R274 - GI spotlight trace
+          R275 - GI trace confirmation
 
           Copy all package contents beside Control_DX12.exe, preserving folders.
           Normal launch restores native spotlight GI lighting.
           Run ControlTOH/Diagnostics/Start-GI-Spot-Trace.cmd.
           Load the original plant area with the lamp intact, RT indirect and RR ON.
           Select GI RAW BYPASS; keep Native Blend and FG off.
-          Aim at the original plant and Jesse hair; close overlay, hold F7 for one second.
-          Hold still for 10 seconds, then exit normally.
+          Aim at the original plant and Jesse hair; press F7 or click ARM GI TRACE in F10.
+          Look for ARMED, close F10, hold mouse zoom, then wait for SAVED before exiting.
           Do not click CAPTURE RR. The launcher packages logs after exit.
           This records sampled secondary-hit spotlight arithmetic.
           It preserves native lighting and is diagnostic, not a speckle fix.
@@ -1179,10 +1180,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: ControlTOH-R274
+          name: ControlTOH-R275
           path: |
-            ControlTOH-R274.zip
-            ControlTOH-R274.sha256
+            ControlTOH-R275.zip
+            ControlTOH-R275.sha256
             build/gi-spot-trace-validation.json
             build/gi-spot-pcf-validation.json
             build/gi-sequence-validation.json

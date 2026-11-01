@@ -18,7 +18,7 @@ using Indirect=void(STDMETHODCALLTYPE*)(ID3D12GraphicsCommandList*,ID3D12Command
 struct Hooks{Bundle bundle=nullptr;Indirect indirect=nullptr;void** table=nullptr;Root root=nullptr;Table descriptor=nullptr;Cbv cbv=nullptr;Heaps heaps=nullptr;};
 inline Hooks hooks[8]{};inline SRWLOCK hooksLock=SRWLOCK_INIT,lock=SRWLOCK_INIT;
 inline std::atomic<bool> enabledReady{false};
-enum class Phase{Idle,Armed,Recording,Recorded,Submitted,Exporting,Complete,Failed};
+enum class Phase{Idle,Countdown,Armed,Recording,Recorded,Submitted,Exporting,Complete,Failed};
 inline std::atomic<Phase> phase{Phase::Idle};
 inline ComPtr<ID3D12Device> device;
 inline ComPtr<ID3D12Resource> output,readback,zero;
@@ -28,10 +28,63 @@ inline ComPtr<ID3D12PipelineState> retainedPso,retainedTrace;
 inline ComPtr<ID3D12RootSignature> retainedRoot,retainedTraceRoot;
 inline ComPtr<ID3D12CommandQueue> submittedQueue;
 inline UINT64 generation=0,capturedPresent=0,armedAt=0;
-inline UINT groups[3]{};
 inline bool Enabled() noexcept {static const bool value=[] {char b[4]{};return GetEnvironmentVariableA("CONTROLTOH_GI_SPOT_TRACE",b,4)==1&&b[0]=='1';}();return value;}
+inline UINT groups[3]{};
+inline std::atomic<const wchar_t*> failure{L"Trace failed. Restart the diagnostic launcher; send logs."};
+inline std::atomic<const wchar_t*> notice{L"Press F7 or use ARM GI TRACE in F10."};
+inline void Fail(const char* code,const wchar_t* message) noexcept {
+ if(phase.exchange(Phase::Failed)==Phase::Failed)return;failure.store(message);Trace("GI_SPOT_R275_FAILED reason=%s resources_retained=1",code);
+}
+inline const wchar_t* Status() noexcept {
+ switch(phase.load()) {
+ case Phase::Idle:return enabledReady.load()?notice.load():L"WAITING: GI probe is not ready. Load the level.";
+ case Phase::Countdown:{
+  static wchar_t text[128]{};const auto elapsed=GetTickCount64()-armedAt;
+  if(elapsed>=5000)return L"ARMED: return to Control to start capture. Keep zoom held.";
+  swprintf_s(text,L"ARMED: capture in %llu seconds. Hold your zoom and keep still.",(5000-elapsed+999)/1000);return text;
+ }
+ case Phase::Armed:return L"ARMED: waiting for the matching GI dispatch. Keep still.";
+ case Phase::Recording:return L"CAPTURING: keep the camera and zoom steady.";
+ case Phase::Recorded:return L"CAPTURE RECORDED: waiting for GPU submission.";
+ case Phase::Submitted:return L"CAPTURE SUBMITTED: waiting for GPU completion.";
+ case Phase::Exporting:return L"SAVING: writing the spotlight trace.";
+ case Phase::Complete:return L"SAVED: exit normally to package the trace and logs.";
+ case Phase::Failed:return failure.load();
+ }return L"Unknown capture state.";
+}
+inline bool Request(const char* source) noexcept {
+ if(!Enabled())return false;
+ if(!enabledReady.load()){notice.store(L"NOT ARMED: probe not ready. Load the level first.");Trace("GI_SPOT_R275_REQUEST accepted=0 source=%s reason=not_ready",source);return false;}
+ AcquireSRWLockExclusive(&lock);
+ const bool accepted=phase.load()==Phase::Idle;
+ if(accepted){armedAt=GetTickCount64();phase.store(Phase::Countdown);}
+ ReleaseSRWLockExclusive(&lock);
+ Trace("GI_SPOT_R275_REQUEST accepted=%u source=%s phase=%u delay_ms=5000",unsigned(accepted),source,unsigned(phase.load()));
+ return accepted;
+}
+inline void AdvanceCountdown(UINT64 now,bool foreground) noexcept {
+ if(phase.load()==Phase::Countdown&&now-armedAt>=5000&&foreground){
+  Phase expected=Phase::Countdown;if(phase.compare_exchange_strong(expected,Phase::Armed)){armedAt=now;Trace("GI_SPOT_R275_ARMED countdown_complete=1");}
+ }
+}
+// Called every 50 ms by the diagnostic UI, independent of disk/log draining.
+inline void InputTick() noexcept {
+ if(!Enabled())return;
+ static bool held=false;const bool down=(GetAsyncKeyState(VK_F7)&0x8000)!=0;
+ DWORD foregroundPid=0;GetWindowThreadProcessId(GetForegroundWindow(),&foregroundPid);
+ const bool foreground=foregroundPid==GetCurrentProcessId();
+ const bool control=(GetAsyncKeyState(VK_CONTROL)&0x8000)!=0,shift=(GetAsyncKeyState(VK_SHIFT)&0x8000)!=0;
+ if(down&&!held){
+  Trace("GI_SPOT_R275_KEY foreground=%u phase=%u ready=%u ctrl=%u shift=%u left=%u right=%u",unsigned(foreground),unsigned(phase.load()),unsigned(enabledReady.load()),unsigned(control),unsigned(shift),unsigned((GetAsyncKeyState(VK_LBUTTON)&0x8000)!=0),unsigned((GetAsyncKeyState(VK_RBUTTON)&0x8000)!=0));
+  if(foreground&&!(control&&shift))Request("F7");
+  else notice.store(control&&shift?L"NOT ARMED: release Ctrl+Shift and press F7 again.":L"NOT ARMED: focus Control and press F7 again.");
+ }held=down;
+ AdvanceCountdown(GetTickCount64(),foreground);
+}
+
+
 inline State Read(ID3D12GraphicsCommandList* list) noexcept {State s{};UINT n=sizeof(s);if(FAILED(list->GetPrivateData(stateKey,&n,&s))||n!=sizeof(s))s={};return s;}
-inline void Save(ID3D12GraphicsCommandList* list,const State& s) noexcept {if(FAILED(list->SetPrivateData(stateKey,sizeof(s),&s)))phase.store(Phase::Failed);}
+inline void Save(ID3D12GraphicsCommandList* list,const State& s) noexcept {const HRESULT hr=list->SetPrivateData(stateKey,sizeof(s),&s);if(FAILED(hr))Fail("binding_state_storage",L"FAILED: could not store command-list state. Send logs.");}
 template<class T> inline bool Attached(ID3D12Object* o,REFGUID key,ComPtr<T>& p) noexcept {UINT n=sizeof(T*);return o&&SUCCEEDED(o->GetPrivateData(key,&n,p.ReleaseAndGetAddressOf()))&&n==sizeof(T*)&&p;}
 inline Hooks LookupHooks(ID3D12GraphicsCommandList* list) noexcept {Hooks h{};auto** table=*reinterpret_cast<void***>(list);AcquireSRWLockShared(&hooksLock);for(const auto& x:hooks)if(x.table==table){h=x;break;}ReleaseSRWLockShared(&hooksLock);return h;}
 inline void STDMETHODCALLTYPE RootHook(ID3D12GraphicsCommandList* list,ID3D12RootSignature* root){
@@ -67,13 +120,13 @@ inline void InstallList(ID3D12GraphicsCommandList* list) noexcept {
  ok=PatchSlot(&table[31],reinterpret_cast<void*>(h.descriptor),reinterpret_cast<void*>(&TableHook))&&ok;
  ok=PatchSlot(&table[37],reinterpret_cast<void*>(h.cbv),reinterpret_cast<void*>(&CbvHook))&&ok;
  ok=PatchSlot(&table[28],reinterpret_cast<void*>(h.heaps),reinterpret_cast<void*>(&HeapsHook))&&ok;
- if(!ok)phase.store(Phase::Failed);Trace("GI_SPOT_R274_HOOKS ready=%u",unsigned(ok));ReleaseSRWLockExclusive(&hooksLock);return;}
- phase.store(Phase::Failed);ReleaseSRWLockExclusive(&hooksLock);
+ if(!ok)Fail("hook_install",L"FAILED: binding hook setup. Restart and send logs.");Trace("GI_SPOT_R274_HOOKS ready=%u",unsigned(ok));ReleaseSRWLockExclusive(&hooksLock);return;}
+ Fail("hook_capacity",L"FAILED: binding hook capacity. Send logs.");ReleaseSRWLockExclusive(&hooksLock);
 }
 inline void Bind(ID3D12GraphicsCommandList* list,ID3D12PipelineState* pso) noexcept {if(Enabled())list->SetPrivateDataInterface(psoKey,pso);}
 inline void Reset(ID3D12GraphicsCommandList* list) noexcept {
  if(!Enabled())return;AcquireSRWLockExclusive(&lock);
- if(recordedList.Get()==list&&(phase.load()==Phase::Recorded||phase.load()==Phase::Recording)){phase.store(Phase::Failed);Trace("GI_SPOT_R274_FAILED reason=discarded_before_submission");}
+ if(recordedList.Get()==list&&(phase.load()==Phase::Recorded||phase.load()==Phase::Recording)){Fail("discarded_before_submission",L"FAILED: recording reset before submission. Send logs.");}
  State s=Read(list);const UINT64 next=s.generation+1;s={};s.generation=next;Save(list,s);list->SetPrivateDataInterface(rootKey,nullptr);ReleaseSRWLockExclusive(&lock);
 }
 inline HRESULT Buffer(ID3D12Device* d,D3D12_HEAP_TYPE heap,D3D12_RESOURCE_STATES state,D3D12_RESOURCE_FLAGS flags,ComPtr<ID3D12Resource>& out) noexcept {
@@ -140,17 +193,14 @@ inline bool Dispatch(ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT z) noexc
 inline void AfterExecute(ID3D12CommandQueue* queue,UINT count,ID3D12CommandList*const* lists) noexcept {
  if(!Enabled()||phase.load()!=Phase::Recorded)return;AcquireSRWLockExclusive(&lock);
  if(phase.load()==Phase::Recorded)for(UINT i=0;i<count;++i)if(lists[i]==recordedList.Get()){
- if(Read(recordedList.Get()).generation!=generation){phase.store(Phase::Failed);break;}
- submittedQueue=queue;const HRESULT hr=queue->Signal(fence.Get(),1);phase.store(SUCCEEDED(hr)?Phase::Submitted:Phase::Failed);Trace("GI_SPOT_R274_SUBMITTED hr=0x%08lX generation=%llu",static_cast<unsigned long>(hr),generation);break;}
+ if(Read(recordedList.Get()).generation!=generation){Fail("submission_generation",L"FAILED: submission generation changed. Send logs.");break;}
+ submittedQueue=queue;const HRESULT hr=queue->Signal(fence.Get(),1);if(SUCCEEDED(hr))phase.store(Phase::Submitted);else Fail("fence_signal",L"FAILED: GPU completion signal. Send logs.");Trace("GI_SPOT_R274_SUBMITTED hr=0x%08lX generation=%llu",static_cast<unsigned long>(hr),generation);break;}
  ReleaseSRWLockExclusive(&lock);
 }
 inline void Poll() noexcept {
  if(!Enabled())return;
- static bool held=false;const bool down=(GetAsyncKeyState(VK_F7)&0x8000)!=0&&!(GetAsyncKeyState(VK_CONTROL)&0x8000)&&!(GetAsyncKeyState(VK_SHIFT)&0x8000);
- DWORD foregroundPid=0;GetWindowThreadProcessId(GetForegroundWindow(),&foregroundPid);
- if(down&&!held&&foregroundPid==GetCurrentProcessId()&&enabledReady.load()&&phase.load()==Phase::Idle){armedAt=GetTickCount64();phase.store(Phase::Armed);Trace("GI_SPOT_R274_ARMED bounded_capture=1 key=F7");}held=down;
- auto p=phase.load();if((p==Phase::Armed||p==Phase::Recorded||p==Phase::Submitted)&&GetTickCount64()-armedAt>30000){phase.store(Phase::Failed);Trace("GI_SPOT_R274_FAILED reason=timeout resources_retained=1");return;}
- if(p!=Phase::Submitted)return;const auto completed=fence->GetCompletedValue();if(completed==UINT64_MAX){phase.store(Phase::Failed);return;}if(completed<1)return;
+ auto p=phase.load();if((p==Phase::Armed||p==Phase::Recorded||p==Phase::Submitted)&&GetTickCount64()-armedAt>30000){Fail("timeout",L"FAILED: capture timed out. Exit and send logs.");return;}
+ if(p!=Phase::Submitted)return;const auto completed=fence->GetCompletedValue();if(completed==UINT64_MAX){Fail("device_removed",L"FAILED: graphics device removed. Send logs.");return;}if(completed<1)return;
  phase.store(Phase::Exporting);void* mapped=nullptr;D3D12_RANGE range{0,bytes};HRESULT hr=readback->Map(0,&range,&mapped);
  bool ok=false;UINT records=0;wchar_t path[MAX_PATH]{};
  if(SUCCEEDED(hr)){
@@ -161,6 +211,6 @@ inline void Poll() noexcept {
   }}D3D12_RANGE none{0,0};readback->Unmap(0,&none);
  }
  Trace("GI_SPOT_R274_EXPORT complete=%u gpu_completion_confirmed=1 records=%u retained=%u overflow=%u stride=%u present=%llu groups=%u,%u,%u variant=6 sampling_step=32",unsigned(ok),records,(std::min)(records,capacity),unsigned(records>capacity),stride,capturedPresent,groups[0],groups[1],groups[2]);
- phase.store(ok?Phase::Complete:Phase::Failed);
+ if(ok)phase.store(Phase::Complete);else Fail("export",L"FAILED: could not save trace. Exit and send logs.");
 }
 }

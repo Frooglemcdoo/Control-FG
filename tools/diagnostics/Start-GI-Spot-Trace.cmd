@@ -17,11 +17,13 @@ set "CONTROLTOH_GI_SPOT_TRACE=1"
 set "CONTROLTOH_GI_CAPTURE=0"
 set "CONTROLTOH_GI_SOURCE=full"
 set "CONTROLTOH_GI_SHADOW=native"
-echo R274 - Bounded GI spotlight arithmetic capture.
+echo R275 - GI trace with visible confirmation.
 echo Load the original plant and desk-lamp area with RT indirect and RR ON.
 echo Use Native Blend and FG OFF. Leave the lamp intact.
 echo Select GI RAW BYPASS. Aim at the plant and Jesse hair, close the overlay.
-echo Hold F7 for one second, release, stay still 10 seconds, then exit normally.
+echo Press F7 OR click ARM GI TRACE in F10. A visible ARMED countdown must appear.
+echo Close F10 and hold your mouse zoom. Wait for SAVED before exiting.
+echo If it says FAILED or stays WAITING, send the status text and packaged logs.
 echo Do not click CAPTURE RR. Logs will be packaged after the game closes.
 start "" /wait "Control_DX12.exe"
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0Capture-RR-Boundary.ps1" -DiagnosticsOnly
