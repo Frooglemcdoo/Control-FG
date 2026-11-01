@@ -34,6 +34,7 @@ static HRESULT GIBatchCapturePrepare(GIBatchCapture& c,ID3D12Device* device) noe
 }
 static unsigned GIBatchCapturePixelBytes(DXGI_FORMAT format) noexcept {
  switch(format){
+ case DXGI_FORMAT_R16_UINT:return 2;
  case DXGI_FORMAT_R32_UINT:return 4;
  case DXGI_FORMAT_R32G32_UINT:case DXGI_FORMAT_R16G16B16A16_FLOAT:return 8;
  case DXGI_FORMAT_R32G32B32A32_UINT:case DXGI_FORMAT_R32G32B32A32_FLOAT:return 16;

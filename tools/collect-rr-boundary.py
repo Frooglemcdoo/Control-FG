@@ -31,7 +31,7 @@ def validate_gi_hits(folder, frame):
             pitch = resource.get('row_pitch', 0)
             pixel = resource.get('pixel_bytes', 0)
             if (resource.get('kind') != kind or not hit['rays_per_batch'] <= slices <= 16
-                    or pixel not in (4, 8, 16) or pitch != 128 * pixel
+                    or pixel not in (2, 4, 8, 16) or pitch != 128 * pixel
                     or resource.get('slice_region_bytes') != pitch * 128 or resource.get('offset') != cursor):
                 raise ValueError('Invalid GI physical-slice layout')
             cursor += slices * 2 * pitch * 128

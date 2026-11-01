@@ -28,6 +28,13 @@ with tempfile.TemporaryDirectory() as tmp:
         else:
             if not succeeds:raise RuntimeError('Invalid capture accepted')
     check(valid, True)
+    small=copy.deepcopy(valid)
+    offset=0
+    for resource in small['batches'][0]['resources']:
+        if resource['kind']=='material':resource.update(pixel_bytes=2,row_pitch=256,slice_region_bytes=128*256)
+        resource['offset']=offset;offset+=resource['slice_region_bytes']*2
+    small['bytes']=offset;binary.write_bytes(bytes(offset));check(small,True)
+    binary.write_bytes(bytes(valid['bytes']))
     for key, value in [('frame',101),('gpu_fence_completed',False),('recorded_batches',0),('rays_per_batch',2),('bytes',1)]:
         bad=copy.deepcopy(valid);bad[key]=value;check(bad,False)
     bad=copy.deepcopy(valid);bad['batches'][0]['resources'][1]['offset']=0;check(bad,False)

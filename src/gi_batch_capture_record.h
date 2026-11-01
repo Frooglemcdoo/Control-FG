@@ -23,7 +23,7 @@ static void RRInputCaptureGIBatch(unsigned long long frame,ID3D12GraphicsCommand
   for(unsigned i=0;i<3&&valid;++i){const auto& d=input[i].desc;
    valid=d.Dimension==D3D12_RESOURCE_DIMENSION_TEXTURE2D&&d.Width>=128&&d.Width<=4096&&d.Height>=128&&d.Height<=2160&&
     d.DepthOrArraySize>=rays&&d.DepthOrArraySize<=gi_batch_capture::MaxSlices&&d.MipLevels==1&&d.SampleDesc.Count==1&&d.SampleDesc.Quality==0&&GIBatchCapturePixelBytes(d.Format)!=0;
-   valid=valid&&(i==0?(d.Format==DXGI_FORMAT_R32_UINT||d.Format==DXGI_FORMAT_R32G32_UINT||d.Format==DXGI_FORMAT_R32G32B32A32_UINT):
+   valid=valid&&(i==0?(d.Format==DXGI_FORMAT_R16_UINT||d.Format==DXGI_FORMAT_R32_UINT||d.Format==DXGI_FORMAT_R32G32_UINT||d.Format==DXGI_FORMAT_R32G32B32A32_UINT):
                          (d.Format==DXGI_FORMAT_R16G16B16A16_FLOAT||d.Format==DXGI_FORMAT_R32G32B32A32_FLOAT));
    if(i)valid=valid&&d.Width==input[0].desc.Width&&d.Height==input[0].desc.Height&&d.DepthOrArraySize==input[0].desc.DepthOrArraySize;
    for(unsigned j=0;j<i;++j)if(input[i].resource==input[j].resource)valid=false;
