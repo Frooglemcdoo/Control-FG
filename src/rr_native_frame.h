@@ -961,6 +961,9 @@ static bool RRNativeInstallFrame(HMODULE renderer,HMODULE d3d) noexcept {
          }
          native_lighting::specularSamplesReady.store(rrNativeSpecularSamplesAvailable,std::memory_order_release);
          native_lighting::Trace("specular_sample_hook stage=install ready=%u baseline_rr_independent=1",unsigned(rrNativeSpecularSamplesAvailable));
+#ifdef CONTROL_RR_GI_SEQUENCE
+         RRNativeInstallGIProducerCapture(base);
+#endif
          rrNativeFrameEnabled=true;
          control_rr_diagnostic::Record(control_rr_diagnostic::Event::HooksInstalled);
          Log("RR_NATIVE_OPTION_ISOLATION ready=1 registered_option=forced_off_never_true reflection=mod_state gi_radius=mod_state gi_bypass=mod_state jitter=private_mirror partial_mode=mod_owned_option_reads_no_feature13");

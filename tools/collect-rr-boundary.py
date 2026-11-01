@@ -8,6 +8,37 @@ import shutil
 import time
 
 
+def validate_gi_hits(folder, frame):
+    metadata = folder / 'gi-hit-slices.json'
+    binary = folder / 'gi-hit-slices.bin'
+    if not metadata.is_file() or metadata.is_symlink() or not binary.is_file() or binary.is_symlink():
+        raise ValueError('Missing GI hit-slice capture')
+    hit = json.loads(metadata.read_text())
+    if (hit.get('schema') != 'gi-hit-slices-r271' or hit.get('frame') != frame
+            or hit.get('gpu_fence_completed') is not True or hit.get('all_batches_recorded') is not True):
+        raise ValueError('Uncompleted or mismatched GI hit capture')
+    count = hit.get('expected_batches', 0)
+    if not 1 <= count <= 8 or hit.get('recorded_batches') != count or len(hit.get('batches', [])) != count:
+        raise ValueError('Incomplete GI batch sequence')
+    if not 1 <= hit.get('rays_per_batch', 0) <= 16:
+        raise ValueError('Invalid GI ray count')
+    cursor = 0
+    for index, batch in enumerate(hit['batches']):
+        if batch.get('batch') != index or len(batch.get('resources', [])) != 3:
+            raise ValueError('Missing GI batch or hit resource')
+        for kind, resource in zip(('material', 'normal_uvx', 'position_uvy'), batch['resources']):
+            slices = resource.get('slices', 0)
+            pitch = resource.get('row_pitch', 0)
+            pixel = resource.get('pixel_bytes', 0)
+            if (resource.get('kind') != kind or not hit['rays_per_batch'] <= slices <= 16
+                    or pixel not in (4, 8, 16) or pitch != 128 * pixel
+                    or resource.get('slice_region_bytes') != pitch * 128 or resource.get('offset') != cursor):
+                raise ValueError('Invalid GI physical-slice layout')
+            cursor += slices * 2 * pitch * 128
+    if not 0 < cursor <= 128 * 1024 * 1024 or hit.get('bytes') != cursor or binary.stat().st_size != cursor:
+        raise ValueError('Incomplete GI physical-slice bytes')
+
+
 def read_pair(root, pid, ordinal, started, require_lighting=False, require_native=False, require_rr=False):
     if require_native and require_rr:
         raise ValueError('Choose one evaluation path')
@@ -36,6 +67,8 @@ def read_pair(root, pid, ordinal, started, require_lighting=False, require_nativ
             expected = resource['width'] * resource['height'] * resource['pixel_bytes']
             if not resource.get('copied') or expected <= 0 or not path.is_file() or path.is_symlink() or path.stat().st_size != expected:
                 raise ValueError(f'Incomplete capture resource: {path.name}')
+        if data.get('gi_hit_capture_requested'):
+            validate_gi_hits(folder, data['frame'])
         native = data.get('evaluation_path') == 'native_sr'
         if require_native and (not native or data.get('rr_active') is not False):
             raise ValueError('Expected native lighting capture with RR inactive')

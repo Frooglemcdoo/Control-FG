@@ -6,7 +6,7 @@ inline unsigned Requested() noexcept {
  static const unsigned mode=[] {
   char value[32]{};
   const DWORD length=GetEnvironmentVariableA("CONTROLTOH_GI_SOURCE",value,sizeof(value));
-  const unsigned result=!length?5:(length<sizeof(value)?gi_source::Parse(value):0);
+  const unsigned result=length&&length<sizeof(value)?gi_source::Parse(value):0;
   Trace("GI_SOURCE_R270 request=%s restart_scoped=1 diagnostic_only=1",gi_source::Name(result));
   return result;
  }();

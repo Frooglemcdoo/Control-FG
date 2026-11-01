@@ -1,0 +1,1188 @@
+{
+  "schema": "control-gi-capture-contract-v1",
+  "renderer": {
+    "sha256": "ebfb5b47cebc2d4482e912b8090bd343f717bab8a178b5a6385dec9105e7c433",
+    "checks": [
+      {
+        "name": "GI hit resources bound as SRVs",
+        "rva": "0x12c61c",
+        "bytes": "e81f73f7ff"
+      },
+      {
+        "name": "GI shading shader bound",
+        "rva": "0x12cbd2",
+        "bytes": "e879eb0a00"
+      },
+      {
+        "name": "GI compute dispatch import",
+        "rva": "0x12cc16",
+        "bytes": "ff15a4304b00"
+      },
+      {
+        "name": "Batch increment and comparison",
+        "rva": "0x12cc1c",
+        "bytes": "8b85f0030000ffc08985f00300003b8500040000"
+      },
+      {
+        "name": "Batch back edge",
+        "rva": "0x12cc37",
+        "bytes": "0f8269f3ffff"
+      },
+      {
+        "name": "Hit container cleanup after all batches",
+        "rva": "0x12cc4f",
+        "bytes": "e83c65f7ff"
+      },
+      {
+        "name": "GI filter is later than cleanup",
+        "rva": "0x12cd96",
+        "bytes": "e8f57eeeff"
+      },
+      {
+        "name": "Cleanup zeros material container",
+        "rva": "0xa31a7",
+        "bytes": "488b1133ff488939"
+      },
+      {
+        "name": "Cleanup zeros normal container",
+        "rva": "0xa31c1",
+        "bytes": "488b530848897b08"
+      },
+      {
+        "name": "Cleanup zeros position container",
+        "rva": "0xa31db",
+        "bytes": "488b531048897b10"
+      },
+      {
+        "name": "Material container passed to cleanup helper",
+        "rva": "0xa31bb",
+        "bytes": "e8406c0000"
+      },
+      {
+        "name": "Normal container passed to cleanup helper",
+        "rva": "0xa31d5",
+        "bytes": "e8266c0000"
+      },
+      {
+        "name": "Position container passed to cleanup helper",
+        "rva": "0xa31ef",
+        "bytes": "e80c6c0000"
+      },
+      {
+        "name": "g_tMaterialId ShaderTexture address",
+        "rva": "0xa3a1b",
+        "bytes": "488d2d66de1e01"
+      },
+      {
+        "name": "g_tNormal_TexcoordX ShaderTexture address",
+        "rva": "0xa3af0",
+        "bytes": "488d2db9dd1e01"
+      },
+      {
+        "name": "g_tPosition_TexcoordY ShaderTexture address",
+        "rva": "0xa3bc6",
+        "bytes": "488d2d0bdd1e01"
+      }
+    ],
+    "providers": [
+      {
+        "name": "g_tMaterialId",
+        "shader_texture_rva": "0x1291888"
+      },
+      {
+        "name": "g_tNormal_TexcoordX",
+        "shader_texture_rva": "0x12918b0"
+      },
+      {
+        "name": "g_tPosition_TexcoordY",
+        "shader_texture_rva": "0x12918d8"
+      }
+    ],
+    "capture_callsite": "0x12cc16",
+    "capture_timing": "after native dispatch returns, before batch back edge",
+    "warning": "Static call ordering and container cleanup proven; GPU resource lifetime/state at runtime still requires validation."
+  },
+  "shaders": [
+    {
+      "file": "gi-0.dxbc",
+      "sha256": "280a106cdf9ee35d3aeeaac16879e76521b7e9204fca394ec8fe31c076071e49",
+      "hit_loads": [
+        {
+          "binding": {
+            "name": "g_tMaterialId",
+            "kind": 2,
+            "return_type": 4,
+            "dimension": 5,
+            "samples": 4294967295,
+            "slot": 24,
+            "count": 1,
+            "flags": 0,
+            "space": 0,
+            "identifier": 19
+          },
+          "instruction": {
+            "dword": 1002,
+            "name": "ld",
+            "operands": [
+              "r[7].w",
+              "r[0].xyzw",
+              "t[19][24].yzwx"
+            ]
+          }
+        },
+        {
+          "binding": {
+            "name": "g_tNormal_TexcoordX",
+            "kind": 2,
+            "return_type": 5,
+            "dimension": 5,
+            "samples": 4294967295,
+            "slot": 25,
+            "count": 1,
+            "flags": 12,
+            "space": 0,
+            "identifier": 20
+          },
+          "instruction": {
+            "dword": 1058,
+            "name": "ld",
+            "operands": [
+              "r[13].xyzw",
+              "r[0].xyzw",
+              "t[20][25].xyzw"
+            ]
+          }
+        },
+        {
+          "binding": {
+            "name": "g_tPosition_TexcoordY",
+            "kind": 2,
+            "return_type": 5,
+            "dimension": 5,
+            "samples": 4294967295,
+            "slot": 26,
+            "count": 1,
+            "flags": 12,
+            "space": 0,
+            "identifier": 21
+          },
+          "instruction": {
+            "dword": 1010,
+            "name": "ld",
+            "operands": [
+              "r[11].xyzw",
+              "r[0].xyzw",
+              "t[21][26].xyzw"
+            ]
+          }
+        }
+      ],
+      "ray_count": {
+        "binding": {
+          "name": "DiffuseGIConstants",
+          "kind": 0,
+          "return_type": 0,
+          "dimension": 0,
+          "samples": 0,
+          "slot": 4,
+          "count": 1,
+          "flags": 0,
+          "space": 0,
+          "identifier": 4
+        },
+        "variable": {
+          "name": "g_uRTDiffuseRayCount",
+          "offset": 8,
+          "size": 4,
+          "flags": 2,
+          "type": {
+            "type_offset": 4508,
+            "cls": 0,
+            "base": 19,
+            "rows": 1,
+            "cols": 1,
+            "array": 0,
+            "members": []
+          }
+        }
+      },
+      "loop_bound": {
+        "dword": 990,
+        "name": "ige",
+        "operands": [
+          "r[7].w",
+          "r[0].z",
+          "cb[4][4][0].z"
+        ]
+      },
+      "loop_increment": {
+        "dword": 5045,
+        "name": "iadd",
+        "operands": [
+          "r[0].z",
+          "r[0].z",
+          "l(1)"
+        ]
+      },
+      "spot_records": {
+        "name": "g_sbDeferredLightSpotData",
+        "kind": 5,
+        "return_type": 6,
+        "dimension": 1,
+        "samples": 320,
+        "slot": 11,
+        "count": 1,
+        "flags": 0,
+        "space": 0,
+        "identifier": 11
+      }
+    },
+    {
+      "file": "gi-1.dxbc",
+      "sha256": "202de942debbac7d621ffc0cbcdf63b0165997779376be96d01798bc759cf7a2",
+      "hit_loads": [
+        {
+          "binding": {
+            "name": "g_tMaterialId",
+            "kind": 2,
+            "return_type": 4,
+            "dimension": 5,
+            "samples": 4294967295,
+            "slot": 26,
+            "count": 1,
+            "flags": 0,
+            "space": 0,
+            "identifier": 21
+          },
+          "instruction": {
+            "dword": 1146,
+            "name": "ld",
+            "operands": [
+              "r[8].w",
+              "r[0].xyzw",
+              "t[21][26].yzwx"
+            ]
+          }
+        },
+        {
+          "binding": {
+            "name": "g_tNormal_TexcoordX",
+            "kind": 2,
+            "return_type": 5,
+            "dimension": 5,
+            "samples": 4294967295,
+            "slot": 27,
+            "count": 1,
+            "flags": 12,
+            "space": 0,
+            "identifier": 22
+          },
+          "instruction": {
+            "dword": 1202,
+            "name": "ld",
+            "operands": [
+              "r[18].xyzw",
+              "r[0].xyzw",
+              "t[22][27].xyzw"
+            ]
+          }
+        },
+        {
+          "binding": {
+            "name": "g_tPosition_TexcoordY",
+            "kind": 2,
+            "return_type": 5,
+            "dimension": 5,
+            "samples": 4294967295,
+            "slot": 28,
+            "count": 1,
+            "flags": 12,
+            "space": 0,
+            "identifier": 23
+          },
+          "instruction": {
+            "dword": 1154,
+            "name": "ld",
+            "operands": [
+              "r[16].xyzw",
+              "r[0].xyzw",
+              "t[23][28].xyzw"
+            ]
+          }
+        }
+      ],
+      "ray_count": {
+        "binding": {
+          "name": "DiffuseGIConstants",
+          "kind": 0,
+          "return_type": 0,
+          "dimension": 0,
+          "samples": 0,
+          "slot": 4,
+          "count": 1,
+          "flags": 0,
+          "space": 0,
+          "identifier": 4
+        },
+        "variable": {
+          "name": "g_uRTDiffuseRayCount",
+          "offset": 8,
+          "size": 4,
+          "flags": 2,
+          "type": {
+            "type_offset": 4732,
+            "cls": 0,
+            "base": 19,
+            "rows": 1,
+            "cols": 1,
+            "array": 0,
+            "members": []
+          }
+        }
+      },
+      "loop_bound": {
+        "dword": 1134,
+        "name": "ige",
+        "operands": [
+          "r[8].w",
+          "r[0].z",
+          "cb[4][4][0].z"
+        ]
+      },
+      "loop_increment": {
+        "dword": 5412,
+        "name": "iadd",
+        "operands": [
+          "r[0].z",
+          "r[0].z",
+          "l(1)"
+        ]
+      },
+      "spot_records": {
+        "name": "g_sbDeferredLightSpotData",
+        "kind": 5,
+        "return_type": 6,
+        "dimension": 1,
+        "samples": 320,
+        "slot": 11,
+        "count": 1,
+        "flags": 0,
+        "space": 0,
+        "identifier": 11
+      }
+    },
+    {
+      "file": "gi-2.dxbc",
+      "sha256": "baef8b2ddd6e06661200f54044699e440f72db5122dcf21e81c29407a16946da",
+      "hit_loads": [
+        {
+          "binding": {
+            "name": "g_tMaterialId",
+            "kind": 2,
+            "return_type": 4,
+            "dimension": 5,
+            "samples": 4294967295,
+            "slot": 24,
+            "count": 1,
+            "flags": 0,
+            "space": 0,
+            "identifier": 19
+          },
+          "instruction": {
+            "dword": 1101,
+            "name": "ld",
+            "operands": [
+              "r[7].w",
+              "r[1].xyzw",
+              "t[19][24].yzwx"
+            ]
+          }
+        },
+        {
+          "binding": {
+            "name": "g_tNormal_TexcoordX",
+            "kind": 2,
+            "return_type": 5,
+            "dimension": 5,
+            "samples": 4294967295,
+            "slot": 25,
+            "count": 1,
+            "flags": 12,
+            "space": 0,
+            "identifier": 20
+          },
+          "instruction": {
+            "dword": 1157,
+            "name": "ld",
+            "operands": [
+              "r[13].xyzw",
+              "r[1].xyzw",
+              "t[20][25].xyzw"
+            ]
+          }
+        },
+        {
+          "binding": {
+            "name": "g_tPosition_TexcoordY",
+            "kind": 2,
+            "return_type": 5,
+            "dimension": 5,
+            "samples": 4294967295,
+            "slot": 26,
+            "count": 1,
+            "flags": 12,
+            "space": 0,
+            "identifier": 21
+          },
+          "instruction": {
+            "dword": 1109,
+            "name": "ld",
+            "operands": [
+              "r[11].xyzw",
+              "r[1].xyzw",
+              "t[21][26].xyzw"
+            ]
+          }
+        }
+      ],
+      "ray_count": {
+        "binding": {
+          "name": "DiffuseGIConstants",
+          "kind": 0,
+          "return_type": 0,
+          "dimension": 0,
+          "samples": 0,
+          "slot": 4,
+          "count": 1,
+          "flags": 0,
+          "space": 0,
+          "identifier": 4
+        },
+        "variable": {
+          "name": "g_uRTDiffuseRayCount",
+          "offset": 8,
+          "size": 4,
+          "flags": 2,
+          "type": {
+            "type_offset": 4692,
+            "cls": 0,
+            "base": 19,
+            "rows": 1,
+            "cols": 1,
+            "array": 0,
+            "members": []
+          }
+        }
+      },
+      "loop_bound": {
+        "dword": 1089,
+        "name": "ige",
+        "operands": [
+          "r[7].w",
+          "r[1].z",
+          "cb[4][4][0].z"
+        ]
+      },
+      "loop_increment": {
+        "dword": 5144,
+        "name": "iadd",
+        "operands": [
+          "r[1].z",
+          "r[1].z",
+          "l(1)"
+        ]
+      },
+      "spot_records": {
+        "name": "g_sbDeferredLightSpotData",
+        "kind": 5,
+        "return_type": 6,
+        "dimension": 1,
+        "samples": 320,
+        "slot": 11,
+        "count": 1,
+        "flags": 0,
+        "space": 0,
+        "identifier": 11
+      }
+    },
+    {
+      "file": "gi-3.dxbc",
+      "sha256": "2fe6a05d6c4ab9d80fdb1b54b9ae02989779c74c07f05a9a409049f92ce2a5af",
+      "hit_loads": [
+        {
+          "binding": {
+            "name": "g_tMaterialId",
+            "kind": 2,
+            "return_type": 4,
+            "dimension": 5,
+            "samples": 4294967295,
+            "slot": 26,
+            "count": 1,
+            "flags": 0,
+            "space": 0,
+            "identifier": 21
+          },
+          "instruction": {
+            "dword": 1245,
+            "name": "ld",
+            "operands": [
+              "r[8].w",
+              "r[1].xyzw",
+              "t[21][26].yzwx"
+            ]
+          }
+        },
+        {
+          "binding": {
+            "name": "g_tNormal_TexcoordX",
+            "kind": 2,
+            "return_type": 5,
+            "dimension": 5,
+            "samples": 4294967295,
+            "slot": 27,
+            "count": 1,
+            "flags": 12,
+            "space": 0,
+            "identifier": 22
+          },
+          "instruction": {
+            "dword": 1301,
+            "name": "ld",
+            "operands": [
+              "r[18].xyzw",
+              "r[1].xyzw",
+              "t[22][27].xyzw"
+            ]
+          }
+        },
+        {
+          "binding": {
+            "name": "g_tPosition_TexcoordY",
+            "kind": 2,
+            "return_type": 5,
+            "dimension": 5,
+            "samples": 4294967295,
+            "slot": 28,
+            "count": 1,
+            "flags": 12,
+            "space": 0,
+            "identifier": 23
+          },
+          "instruction": {
+            "dword": 1253,
+            "name": "ld",
+            "operands": [
+              "r[16].xyzw",
+              "r[1].xyzw",
+              "t[23][28].xyzw"
+            ]
+          }
+        }
+      ],
+      "ray_count": {
+        "binding": {
+          "name": "DiffuseGIConstants",
+          "kind": 0,
+          "return_type": 0,
+          "dimension": 0,
+          "samples": 0,
+          "slot": 4,
+          "count": 1,
+          "flags": 0,
+          "space": 0,
+          "identifier": 4
+        },
+        "variable": {
+          "name": "g_uRTDiffuseRayCount",
+          "offset": 8,
+          "size": 4,
+          "flags": 2,
+          "type": {
+            "type_offset": 4916,
+            "cls": 0,
+            "base": 19,
+            "rows": 1,
+            "cols": 1,
+            "array": 0,
+            "members": []
+          }
+        }
+      },
+      "loop_bound": {
+        "dword": 1233,
+        "name": "ige",
+        "operands": [
+          "r[8].w",
+          "r[1].z",
+          "cb[4][4][0].z"
+        ]
+      },
+      "loop_increment": {
+        "dword": 5511,
+        "name": "iadd",
+        "operands": [
+          "r[1].z",
+          "r[1].z",
+          "l(1)"
+        ]
+      },
+      "spot_records": {
+        "name": "g_sbDeferredLightSpotData",
+        "kind": 5,
+        "return_type": 6,
+        "dimension": 1,
+        "samples": 320,
+        "slot": 11,
+        "count": 1,
+        "flags": 0,
+        "space": 0,
+        "identifier": 11
+      }
+    },
+    {
+      "file": "gi-4.dxbc",
+      "sha256": "9b1befce3d950466556ba3119a8365f9c540cbde48a6a363dff81e26cfc76401",
+      "hit_loads": [
+        {
+          "binding": {
+            "name": "g_tMaterialId",
+            "kind": 2,
+            "return_type": 4,
+            "dimension": 5,
+            "samples": 4294967295,
+            "slot": 24,
+            "count": 1,
+            "flags": 0,
+            "space": 0,
+            "identifier": 19
+          },
+          "instruction": {
+            "dword": 997,
+            "name": "ld",
+            "operands": [
+              "r[5].w",
+              "r[0].xyzw",
+              "t[19][24].yzwx"
+            ]
+          }
+        },
+        {
+          "binding": {
+            "name": "g_tNormal_TexcoordX",
+            "kind": 2,
+            "return_type": 5,
+            "dimension": 5,
+            "samples": 4294967295,
+            "slot": 25,
+            "count": 1,
+            "flags": 12,
+            "space": 0,
+            "identifier": 20
+          },
+          "instruction": {
+            "dword": 1053,
+            "name": "ld",
+            "operands": [
+              "r[13].xyzw",
+              "r[0].xyzw",
+              "t[20][25].xyzw"
+            ]
+          }
+        },
+        {
+          "binding": {
+            "name": "g_tPosition_TexcoordY",
+            "kind": 2,
+            "return_type": 5,
+            "dimension": 5,
+            "samples": 4294967295,
+            "slot": 26,
+            "count": 1,
+            "flags": 12,
+            "space": 0,
+            "identifier": 21
+          },
+          "instruction": {
+            "dword": 1005,
+            "name": "ld",
+            "operands": [
+              "r[11].xyzw",
+              "r[0].xyzw",
+              "t[21][26].xyzw"
+            ]
+          }
+        }
+      ],
+      "ray_count": {
+        "binding": {
+          "name": "DiffuseGIConstants",
+          "kind": 0,
+          "return_type": 0,
+          "dimension": 0,
+          "samples": 0,
+          "slot": 4,
+          "count": 1,
+          "flags": 0,
+          "space": 0,
+          "identifier": 4
+        },
+        "variable": {
+          "name": "g_uRTDiffuseRayCount",
+          "offset": 8,
+          "size": 4,
+          "flags": 2,
+          "type": {
+            "type_offset": 4508,
+            "cls": 0,
+            "base": 19,
+            "rows": 1,
+            "cols": 1,
+            "array": 0,
+            "members": []
+          }
+        }
+      },
+      "loop_bound": {
+        "dword": 985,
+        "name": "ige",
+        "operands": [
+          "r[5].w",
+          "r[0].z",
+          "cb[4][4][0].z"
+        ]
+      },
+      "loop_increment": {
+        "dword": 5029,
+        "name": "iadd",
+        "operands": [
+          "r[0].z",
+          "r[0].z",
+          "l(1)"
+        ]
+      },
+      "spot_records": {
+        "name": "g_sbDeferredLightSpotData",
+        "kind": 5,
+        "return_type": 6,
+        "dimension": 1,
+        "samples": 320,
+        "slot": 11,
+        "count": 1,
+        "flags": 0,
+        "space": 0,
+        "identifier": 11
+      }
+    },
+    {
+      "file": "gi-5.dxbc",
+      "sha256": "2691f3888a89c9b3fff8d9d08327a77a1d6e2037f59e04986e11f2e53bac498b",
+      "hit_loads": [
+        {
+          "binding": {
+            "name": "g_tMaterialId",
+            "kind": 2,
+            "return_type": 4,
+            "dimension": 5,
+            "samples": 4294967295,
+            "slot": 26,
+            "count": 1,
+            "flags": 0,
+            "space": 0,
+            "identifier": 21
+          },
+          "instruction": {
+            "dword": 1141,
+            "name": "ld",
+            "operands": [
+              "r[7].w",
+              "r[0].xyzw",
+              "t[21][26].yzwx"
+            ]
+          }
+        },
+        {
+          "binding": {
+            "name": "g_tNormal_TexcoordX",
+            "kind": 2,
+            "return_type": 5,
+            "dimension": 5,
+            "samples": 4294967295,
+            "slot": 27,
+            "count": 1,
+            "flags": 12,
+            "space": 0,
+            "identifier": 22
+          },
+          "instruction": {
+            "dword": 1197,
+            "name": "ld",
+            "operands": [
+              "r[18].xyzw",
+              "r[0].xyzw",
+              "t[22][27].xyzw"
+            ]
+          }
+        },
+        {
+          "binding": {
+            "name": "g_tPosition_TexcoordY",
+            "kind": 2,
+            "return_type": 5,
+            "dimension": 5,
+            "samples": 4294967295,
+            "slot": 28,
+            "count": 1,
+            "flags": 12,
+            "space": 0,
+            "identifier": 23
+          },
+          "instruction": {
+            "dword": 1149,
+            "name": "ld",
+            "operands": [
+              "r[16].xyzw",
+              "r[0].xyzw",
+              "t[23][28].xyzw"
+            ]
+          }
+        }
+      ],
+      "ray_count": {
+        "binding": {
+          "name": "DiffuseGIConstants",
+          "kind": 0,
+          "return_type": 0,
+          "dimension": 0,
+          "samples": 0,
+          "slot": 4,
+          "count": 1,
+          "flags": 0,
+          "space": 0,
+          "identifier": 4
+        },
+        "variable": {
+          "name": "g_uRTDiffuseRayCount",
+          "offset": 8,
+          "size": 4,
+          "flags": 2,
+          "type": {
+            "type_offset": 4732,
+            "cls": 0,
+            "base": 19,
+            "rows": 1,
+            "cols": 1,
+            "array": 0,
+            "members": []
+          }
+        }
+      },
+      "loop_bound": {
+        "dword": 1129,
+        "name": "ige",
+        "operands": [
+          "r[7].w",
+          "r[0].z",
+          "cb[4][4][0].z"
+        ]
+      },
+      "loop_increment": {
+        "dword": 5396,
+        "name": "iadd",
+        "operands": [
+          "r[0].z",
+          "r[0].z",
+          "l(1)"
+        ]
+      },
+      "spot_records": {
+        "name": "g_sbDeferredLightSpotData",
+        "kind": 5,
+        "return_type": 6,
+        "dimension": 1,
+        "samples": 320,
+        "slot": 11,
+        "count": 1,
+        "flags": 0,
+        "space": 0,
+        "identifier": 11
+      }
+    },
+    {
+      "file": "gi-6.dxbc",
+      "sha256": "1dfb4c9b054037e030ff9eed6ed5e482c8c32f9f301bb02c89eb0084c52842de",
+      "hit_loads": [
+        {
+          "binding": {
+            "name": "g_tMaterialId",
+            "kind": 2,
+            "return_type": 4,
+            "dimension": 5,
+            "samples": 4294967295,
+            "slot": 24,
+            "count": 1,
+            "flags": 0,
+            "space": 0,
+            "identifier": 19
+          },
+          "instruction": {
+            "dword": 995,
+            "name": "ld",
+            "operands": [
+              "r[7].w",
+              "r[0].xyzw",
+              "t[19][24].yzwx"
+            ]
+          }
+        },
+        {
+          "binding": {
+            "name": "g_tNormal_TexcoordX",
+            "kind": 2,
+            "return_type": 5,
+            "dimension": 5,
+            "samples": 4294967295,
+            "slot": 25,
+            "count": 1,
+            "flags": 12,
+            "space": 0,
+            "identifier": 20
+          },
+          "instruction": {
+            "dword": 1051,
+            "name": "ld",
+            "operands": [
+              "r[13].xyzw",
+              "r[0].xyzw",
+              "t[20][25].xyzw"
+            ]
+          }
+        },
+        {
+          "binding": {
+            "name": "g_tPosition_TexcoordY",
+            "kind": 2,
+            "return_type": 5,
+            "dimension": 5,
+            "samples": 4294967295,
+            "slot": 26,
+            "count": 1,
+            "flags": 12,
+            "space": 0,
+            "identifier": 21
+          },
+          "instruction": {
+            "dword": 1003,
+            "name": "ld",
+            "operands": [
+              "r[11].xyzw",
+              "r[0].xyzw",
+              "t[21][26].xyzw"
+            ]
+          }
+        }
+      ],
+      "ray_count": {
+        "binding": {
+          "name": "DiffuseGIConstants",
+          "kind": 0,
+          "return_type": 0,
+          "dimension": 0,
+          "samples": 0,
+          "slot": 4,
+          "count": 1,
+          "flags": 0,
+          "space": 0,
+          "identifier": 4
+        },
+        "variable": {
+          "name": "g_uRTDiffuseRayCount",
+          "offset": 8,
+          "size": 4,
+          "flags": 2,
+          "type": {
+            "type_offset": 4444,
+            "cls": 0,
+            "base": 19,
+            "rows": 1,
+            "cols": 1,
+            "array": 0,
+            "members": []
+          }
+        }
+      },
+      "loop_bound": {
+        "dword": 983,
+        "name": "ige",
+        "operands": [
+          "r[7].w",
+          "r[0].z",
+          "cb[4][4][0].z"
+        ]
+      },
+      "loop_increment": {
+        "dword": 5038,
+        "name": "iadd",
+        "operands": [
+          "r[0].z",
+          "r[0].z",
+          "l(1)"
+        ]
+      },
+      "spot_records": {
+        "name": "g_sbDeferredLightSpotData",
+        "kind": 5,
+        "return_type": 6,
+        "dimension": 1,
+        "samples": 320,
+        "slot": 11,
+        "count": 1,
+        "flags": 0,
+        "space": 0,
+        "identifier": 11
+      }
+    },
+    {
+      "file": "gi-7.dxbc",
+      "sha256": "3cc459e63f23759d815aac0e7f41a86187c86be523031954706197673671cf17",
+      "hit_loads": [
+        {
+          "binding": {
+            "name": "g_tMaterialId",
+            "kind": 2,
+            "return_type": 4,
+            "dimension": 5,
+            "samples": 4294967295,
+            "slot": 26,
+            "count": 1,
+            "flags": 0,
+            "space": 0,
+            "identifier": 21
+          },
+          "instruction": {
+            "dword": 1139,
+            "name": "ld",
+            "operands": [
+              "r[8].w",
+              "r[0].xyzw",
+              "t[21][26].yzwx"
+            ]
+          }
+        },
+        {
+          "binding": {
+            "name": "g_tNormal_TexcoordX",
+            "kind": 2,
+            "return_type": 5,
+            "dimension": 5,
+            "samples": 4294967295,
+            "slot": 27,
+            "count": 1,
+            "flags": 12,
+            "space": 0,
+            "identifier": 22
+          },
+          "instruction": {
+            "dword": 1195,
+            "name": "ld",
+            "operands": [
+              "r[18].xyzw",
+              "r[0].xyzw",
+              "t[22][27].xyzw"
+            ]
+          }
+        },
+        {
+          "binding": {
+            "name": "g_tPosition_TexcoordY",
+            "kind": 2,
+            "return_type": 5,
+            "dimension": 5,
+            "samples": 4294967295,
+            "slot": 28,
+            "count": 1,
+            "flags": 12,
+            "space": 0,
+            "identifier": 23
+          },
+          "instruction": {
+            "dword": 1147,
+            "name": "ld",
+            "operands": [
+              "r[16].xyzw",
+              "r[0].xyzw",
+              "t[23][28].xyzw"
+            ]
+          }
+        }
+      ],
+      "ray_count": {
+        "binding": {
+          "name": "DiffuseGIConstants",
+          "kind": 0,
+          "return_type": 0,
+          "dimension": 0,
+          "samples": 0,
+          "slot": 4,
+          "count": 1,
+          "flags": 0,
+          "space": 0,
+          "identifier": 4
+        },
+        "variable": {
+          "name": "g_uRTDiffuseRayCount",
+          "offset": 8,
+          "size": 4,
+          "flags": 2,
+          "type": {
+            "type_offset": 4664,
+            "cls": 0,
+            "base": 19,
+            "rows": 1,
+            "cols": 1,
+            "array": 0,
+            "members": []
+          }
+        }
+      },
+      "loop_bound": {
+        "dword": 1127,
+        "name": "ige",
+        "operands": [
+          "r[8].w",
+          "r[0].z",
+          "cb[4][4][0].z"
+        ]
+      },
+      "loop_increment": {
+        "dword": 5405,
+        "name": "iadd",
+        "operands": [
+          "r[0].z",
+          "r[0].z",
+          "l(1)"
+        ]
+      },
+      "spot_records": {
+        "name": "g_sbDeferredLightSpotData",
+        "kind": 5,
+        "return_type": 6,
+        "dimension": 1,
+        "samples": 320,
+        "slot": 11,
+        "count": 1,
+        "flags": 0,
+        "space": 0,
+        "identifier": 11
+      }
+    }
+  ],
+  "runtime_capture_complete": false,
+  "requirements": [
+    "Copy all used array slices for every observed GI batch, before container cleanup.",
+    "Capture the actual variant-specific bindings and SRV slice range; do not assume fixed slots across variants.",
+    "Save constants, light records and clustered indices at the same dispatch as hit textures.",
+    "Maintain original resource states and retain owners through GPU completion.",
+    "Reject overflow, missing batches/slices, mismatched generations and uncompleted GPU copies.",
+    "Per-light intermediate operands require shader instrumentation or verified replay; textures alone do not provide them."
+  ]
+}

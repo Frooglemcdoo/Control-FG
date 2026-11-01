@@ -6,10 +6,15 @@
 #include "rr_capture_ui.h"
 #include "rr_input_capture_native.h"
 #include "rr_input_capture_gi.h"
+#include "gi_batch_capture.h"
 // R10 diagnostics: two prepared slots capture successive evaluated frames.
 // Inputs and post-RR output are copied on the original list, with exact restoration.
 struct RRInputCaptureJob {
  control_rr::InputCapturePolicy policy{};
+ GIBatchCapture giHits{};
+ unsigned copySubresource[kRRInputCaptureMaxResources]{};
+ D3D12_BOX copyBox[kRRInputCaptureMaxResources]{};
+ bool copyHasBox=false;
  ID3D12Device* device=nullptr;ID3D12CommandQueue* queue=nullptr;ID3D12Fence* fence=nullptr;
  ID3D12Resource* sources[kRRInputCaptureMaxResources]{},*readback[kRRInputCaptureMaxResources]{};
  D3D12_RESOURCE_DESC descriptions[kRRInputCaptureMaxResources]{};
@@ -42,6 +47,7 @@ static unsigned long long rrInputCaptureSettledFrame=0,rrInputCaptureRequestTick
 #endif
 static void RRInputCaptureRelease(RRInputCaptureJob* c) noexcept {
  for(unsigned i=0;i<kRRInputCaptureMaxResources;++i){RRGuideRelease(c->sources[i]);RRGuideRelease(c->readback[i]);}
+ GIBatchCaptureRelease(c->giHits);
  RRGuideRelease(c->fence);RRGuideRelease(c->queue);RRGuideRelease(c->device);
 }
 static DWORD WINAPI RRInputCapturePrepare(void* context) noexcept {
@@ -56,6 +62,7 @@ static DWORD WINAPI RRInputCapturePrepare(void* context) noexcept {
   desc.DepthOrArraySize=desc.MipLevels=1;desc.SampleDesc.Count=1;desc.Layout=D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
   hr=c->bytes[i]?c->device->CreateCommittedResource(&heap,D3D12_HEAP_FLAG_NONE,&desc,D3D12_RESOURCE_STATE_COPY_DEST,nullptr,IID_PPV_ARGS(&c->readback[i])):E_INVALIDARG;
  }
+ if(SUCCEEDED(hr))hr=GIBatchCapturePrepare(c->giHits,c->device);
  c->policy.Prepared(SUCCEEDED(hr));
  if(FAILED(hr))RRInputCaptureRelease(c); // No commands recorded during allocation.
  Log("RR_INPUT_CAPTURE_C1_PREPARED success=%u width=%u height=%u buffers=%u",unsigned(SUCCEEDED(hr)),c->width,c->height,c->count);
@@ -78,9 +85,10 @@ static DWORD WINAPI RRInputCaptureExport(void* context) noexcept {
    okay=SUCCEEDED(c->readback[i]->Map(0,&range,&mapped[i]))&&mapped[i];
    if(okay)okay=RRGuideExportDetail::WriteRaw(directory+L"\\"+c->names[i],static_cast<unsigned char*>(mapped[i])+c->footprint[i].Offset,c->footprint[i].Footprint.RowPitch,size_t(c->descriptions[i].Width)*c->pixelBytes[i],c->descriptions[i].Height);
   }
+  if(okay)okay=GIBatchCaptureExport(c->giHits,directory);
   if(okay){
    std::ostringstream out;out.imbue(std::locale::classic());out<<std::setprecision(9);
-   out<<"{";
+   out<<"{\"gi_hit_capture_requested\":"<<(c->giHits.enabled?"true":"false")<<",";
 #ifdef CONTROL_RR_GI_SEQUENCE
 #ifdef CONTROL_GI_LONG_SEQUENCE
    out<<"\"gi_sampling_experiment\":\"R264_current_frame_256_creation\",";
@@ -126,6 +134,7 @@ static DWORD WINAPI RRInputCaptureExport(void* context) noexcept {
 #include "rr_input_capture_record.h"
 #include "rr_input_capture_guard.h"
 #ifdef CONTROL_RR_GI_SEQUENCE
+#include "gi_batch_capture_record.h"
 #include "rr_input_capture_early_gi.h"
 #endif
 static void RRInputCaptureOneBeforeEvaluation(RRInputCaptureJob* c,ID3D12GraphicsCommandList* list,unsigned long long frame,unsigned preset,
@@ -235,7 +244,7 @@ static void RRInputCaptureOneBeforeEvaluation(RRInputCaptureJob* c,ID3D12Graphic
   }
   if(c->queue!=native.queue||c->count!=count||c->rawIndex!=rawIndex||c->distanceBound!=distanceBound||c->width!=width||c->height!=height||c->preset!=preset||c->nativeLighting!=nativeLighting){
 #ifdef CONTROL_RR_GI_SEQUENCE
-   if(c->preGICaptured){c->policy.phase=Policy::Failed;__leave;}
+   if(c->preGICaptured||c->giHits.commandsStarted){c->policy.phase=Policy::Failed;__leave;}
 #endif
    RRInputCaptureRelease(c);c->policy.phase=Policy::Requested;__leave; // No commands yet; reprepare safely.
   }
@@ -243,7 +252,7 @@ static void RRInputCaptureOneBeforeEvaluation(RRInputCaptureJob* c,ID3D12Graphic
   for(unsigned i=0;i<count;++i)if(c->descriptions[i].Format!=descriptions[i].Format||c->descriptions[i].Width!=descriptions[i].Width||c->descriptions[i].Height!=descriptions[i].Height)formatsMatch=false;
   if(!formatsMatch){
 #ifdef CONTROL_RR_GI_SEQUENCE
-   if(c->preGICaptured){c->policy.phase=Policy::Failed;__leave;}
+   if(c->preGICaptured||c->giHits.commandsStarted){c->policy.phase=Policy::Failed;__leave;}
 #endif
    RRInputCaptureRelease(c);c->policy.phase=Policy::Requested;__leave;}
 #ifdef CONTROL_RR_GI_SEQUENCE
@@ -263,7 +272,7 @@ static void RRInputCaptureOneBeforeEvaluation(RRInputCaptureJob* c,ID3D12Graphic
 #ifdef CONTROL_RR_F9_SUITE
   if(rr_suite::requested.load()&&!rr_suite::Verified(frame)){
 #ifdef CONTROL_RR_GI_SEQUENCE
-   if(c->preGICaptured){c->policy.phase=Policy::Failed;__leave;}
+   if(c->preGICaptured||c->giHits.commandsStarted){c->policy.phase=Policy::Failed;__leave;}
 #endif
    for(unsigned i=0;i<count;++i)RRGuideRelease(c->sources[i]);
    control_rr_capture_ui::detail.store(L"Waiting for verified diagnostic shader dispatch.");__leave;
@@ -295,7 +304,7 @@ static void RRInputCaptureOneBeforeEvaluation(RRInputCaptureJob* c,ID3D12Graphic
    if(commandsStarted){c->policy.phase=Policy::Failed;Log("RR_INPUT_CAPTURE_C1_FAILED reason=record fault=0x%08lX resources_retained=1",fault);}
    else {
 #ifdef CONTROL_RR_GI_SEQUENCE
-    if(c->preGICaptured){c->policy.phase=Policy::Failed;__leave;}
+    if(c->preGICaptured||c->giHits.commandsStarted){c->policy.phase=Policy::Failed;__leave;}
 #endif
     for(unsigned i=0;i<count;++i)RRGuideRelease(c->sources[i]);
     static unsigned rejects=0;if(++rejects<=4||(rejects%240)==0)Log("RR_INPUT_CAPTURE_C1_REJECT reason=guard_revalidation_or_lock frame=%llu fault=0x%08lX",frame,fault);
@@ -399,7 +408,7 @@ DWORD foregroundPid=0;GetWindowThreadProcessId(GetForegroundWindow(),&foreground
   for(auto& job:rrInputCaptures){auto* c=&job;
 #ifdef CONTROL_RR_GI_SEQUENCE
    // An early copy without matching RR must never be overwritten or freed in flight.
-   if(c->preGICaptured&&c->policy.phase==P::Ready&&present>c->preGIPresent){
+   if(c->policy.phase==P::Ready&&((c->preGICaptured&&present>c->preGIPresent)||(c->giHits.commandsStarted&&present>c->giHits.present))){
     c->policy.phase=P::Failed;
     Log("RR_INPUT_CAPTURE_R263_FAILED reason=early_gi_without_matching_rr frame=%llu resources_retained=1",c->preGIFrame);
    }

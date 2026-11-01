@@ -6,8 +6,9 @@
 #define RR_SEH_EXCEPT(x) catch(...)
 using UINT=unsigned;using DWORD=unsigned long;
 constexpr UINT D3D12_RESOURCE_BARRIER_TYPE_TRANSITION=0,D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES=~0u,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE=64,D3D12_RESOURCE_STATE_COPY_SOURCE=2048,D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX=0,D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT=1;
+struct D3D12_BOX{unsigned left,top,front,right,bottom,back;};
 struct ID3D12Resource{};struct Footprint{unsigned marker;};
-struct D3D12_TEXTURE_COPY_LOCATION{ID3D12Resource* pResource;UINT Type;Footprint PlacedFootprint;};
+struct D3D12_TEXTURE_COPY_LOCATION{ID3D12Resource* pResource;UINT Type;UINT SubresourceIndex;Footprint PlacedFootprint;};
 struct D3D12_RESOURCE_BARRIER{UINT Type;struct{ID3D12Resource*pResource;UINT Subresource,StateBefore,StateAfter;}Transition;};
 static ID3D12Resource sources[13],outputs[13];static unsigned seen=0,failAt=0,total=0;
 static unsigned long long* counter=nullptr;
@@ -15,10 +16,10 @@ static unsigned states[13]{};
 static DWORD GetExceptionCode(){return 123;}
 static void Step(){++seen;assert(*counter==seen);if(failAt==seen)throw std::runtime_error("command fault");}
 struct List{
- void ResourceBarrier(UINT n,D3D12_RESOURCE_BARRIER*b){Step();assert(n==total);for(UINT i=0;i<n;++i){assert(b[i].Transition.pResource==&sources[i]);assert(b[i].Transition.Subresource==~0u);assert(b[i].Transition.StateBefore==(seen==1?states[i]:2048u));assert(b[i].Transition.StateAfter==(seen==1?2048u:states[i]));}}
+ void ResourceBarrier(UINT n,D3D12_RESOURCE_BARRIER*b){Step();assert(n==total);for(UINT i=0;i<n;++i){assert(b[i].Transition.pResource==&sources[i]);assert(b[i].Transition.Subresource==0u);assert(b[i].Transition.StateBefore==(seen==1?states[i]:2048u));assert(b[i].Transition.StateAfter==(seen==1?2048u:states[i]));}}
  void CopyTextureRegion(D3D12_TEXTURE_COPY_LOCATION*d,UINT x,UINT y,UINT z,D3D12_TEXTURE_COPY_LOCATION*s,void*box){Step();assert(!x&&!y&&!z&&!box);assert(s->Type==0&&d->Type==1);assert(s->pResource==&sources[seen-2]);assert(d->pResource==&outputs[seen-2]);assert(d->PlacedFootprint.marker==seen-2);}
 };
-struct RRInputCaptureJob{unsigned count=0;ID3D12Resource*sources[13]{},*readback[13]{};Footprint footprint[13]{};unsigned states[13]{};};
+struct RRInputCaptureJob{unsigned count=0;ID3D12Resource*sources[13]{},*readback[13]{};Footprint footprint[13]{};unsigned states[13]{};unsigned copySubresource[13]{};D3D12_BOX copyBox[13]{};bool copyHasBox=false;};
 struct RRGuideInputSnapshot{List*commandList;void*commandContext;};
 #include "../../src/rr_input_capture_record.h"
 #include "../../src/rr_input_capture_policy.h"

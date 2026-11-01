@@ -128,3 +128,42 @@ static void RRNativeRunGIFilter(void* color,void* history,unsigned passes){
   SetLastError(saved);
  }
 }
+
+#ifdef CONTROL_RR_GI_SEQUENCE
+static RRIndirectCallPatch rrNativeGIProducerDispatchPatch{};
+static int rrGIProducerProviderIds[3]{-1,-1,-1};
+static bool RRNativeGIProducerProviders() noexcept {
+ const char* names[3]{"g_uDGIPass","g_uDGIPassCount","g_uRTDiffuseRayCount"};
+ __try {
+  for(unsigned i=0;i<3;++i){
+   struct Slot {int id,tag;} slot{-1,0};
+   rrNativeClampApi.resolve(&slot,names[i]);
+   control_rr_native_clamp::Entry metadata{};
+   if(!rrNativeClampApi.EntryFor(slot.id,metadata))return false;
+   rrGIProducerProviderIds[i]=slot.id;
+  }
+  return true;
+ }__except(EXCEPTION_EXECUTE_HANDLER){return false;}
+}
+static void RRNativeHookGIProducerDispatch(void* state,const void* groups){
+ rrNativeDispatchOriginal(state,groups);
+ if(!GIBatchCaptureEnabled()||!control_rr_gi::boundaryRequested.load())return;
+ const DWORD saved=GetLastError();
+ control_rr_reflection::Context context{};
+ if(rrNativeFrameEnabled&&rrNativeFrame.Selected()&&rrNativeCopy.StateMatches(reinterpret_cast<std::uintptr_t>(state))&&
+    RRReflectionCurrent(nullptr,context)&&context.list&&context.frame==rrNativeFrame.Key().frame){
+  unsigned values[3]{};bool valid=true;
+  for(unsigned i=0;i<3;++i)valid=rrNativeClampApi.ReadCurrent(rrGIProducerProviderIds[i],values[i])&&valid;
+  RRInputCaptureGIBatch(context.frame,reinterpret_cast<ID3D12GraphicsCommandList*>(context.list),values[0],values[1],values[2],valid);
+ }
+ SetLastError(saved);
+}
+static void RRNativeInstallGIProducerCapture(unsigned char* base) noexcept {
+ if(!GIBatchCaptureEnabled())return;
+ bool ready=RRNativeGIProducerProviders()&&rrNativeGIProducerDispatchPatch.Prepare(base+0x12cc16,reinterpret_cast<void**>(base+0x5dfcc0),
+   reinterpret_cast<void*>(rrNativeDispatchOriginal),reinterpret_cast<void*>(&RRNativeHookGIProducerDispatch));
+ if(ready)ready=rrNativeGIProducerDispatchPatch.Exchange(true)&&rrNativeGIProducerDispatchPatch.healthy;
+ if(!ready&&rrNativeGIProducerDispatchPatch.changed)rrNativeGIProducerDispatchPatch.Exchange(false);
+ Log("GI_HITS_R271_HOOK ready=%u callsite=0x12cc16 native_lighting_unchanged=1",unsigned(ready));
+}
+#endif

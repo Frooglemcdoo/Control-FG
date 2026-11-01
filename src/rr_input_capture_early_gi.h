@@ -12,6 +12,9 @@ static void RRInputCaptureAtGI(unsigned long long frame,ID3D12GraphicsCommandLis
   if(slot>=2)__leave;
   auto* c=&rrInputCaptures[slot];active=c;
   if(c->policy.phase!=P::Ready||c->preGICaptured||c->preGIIndex>=c->count)__leave;
+  if(c->giHits.enabled&&!c->giHits.ledger.Seal(frame)){
+   c->policy.phase=P::Failed;Log("GI_HITS_R271_FAILED reason=incomplete_batches frame=%llu recorded=%u expected=%u",frame,c->giHits.ledger.recorded,c->giHits.ledger.expected);__leave;
+  }
   RRGuideInputTexture input{};RRGuideInputSnapshot native{};const char* reason=nullptr;
   if(!RRInputCaptureReadShaderTexture(0x128f3c8,&input)||
      !RRGuideReadRendererContext(&native,&reason)||native.engineFrame!=frame||native.commandList!=list||native.queue!=c->queue){

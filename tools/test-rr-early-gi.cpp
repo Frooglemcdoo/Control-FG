@@ -6,10 +6,14 @@
 #include "../src/rr_input_capture_limits.h"
 #include <cstdint>
 #include <cassert>
+#include "../src/gi_batch_capture_policy.h"
 struct RRGuideInputTexture {void* nativeTexture;ID3D12Resource* resource;D3D12_RESOURCE_DESC desc;void* stateTracker;unsigned trackedState,nativeFlags,manualStateDisabled;};
 struct RRGuideInputSnapshot {ID3D12GraphicsCommandList* commandList;void* commandContext;ID3D12CommandQueue* queue;void* recordingLock;unsigned long long engineFrame,presentToken;};
 struct RRInputCaptureJob {
  control_rr::InputCapturePolicy policy{};
+ struct { bool enabled=false;gi_batch_capture::Ledger ledger{}; } giHits;
+ unsigned copySubresource[kRRInputCaptureMaxResources]{};
+ D3D12_BOX copyBox[kRRInputCaptureMaxResources]{};bool copyHasBox=false;
  ID3D12Device* device=nullptr;ID3D12CommandQueue* queue=nullptr;
  ID3D12Resource* sources[kRRInputCaptureMaxResources]{},*readback[kRRInputCaptureMaxResources]{};
  D3D12_RESOURCE_DESC descriptions[kRRInputCaptureMaxResources]{};

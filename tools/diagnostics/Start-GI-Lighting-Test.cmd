@@ -13,7 +13,7 @@ if not errorlevel 1 (
   exit /b 1
 )
 echo R270 - Spotlight GI lighting isolation, diagnostic only
-echo 1. White projection texture - normal R270 launch default
+echo 1. White projection texture - optional diagnostic
 echo 2. Flat distance falloff
 echo 3. Bypass secondary Fresnel reduction
 echo 4. Native spotlight GI - baseline
