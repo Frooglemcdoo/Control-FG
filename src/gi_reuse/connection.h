@@ -38,9 +38,10 @@ GI_INLINE GIConnectionResult GIEvaluateConnection(GIConnection c,uint frameTag) 
 #else
     GIConnectionResult r=(GIConnectionResult)0;
 #endif
-    // Bit 0: actual geometric normal; bit 1: verified source proposal PDF/support.
+    // Bit 0: actual geometric normal; bit 1: verified source proposal PDF.
+    // Bit 2: randomized finite-ray support accounted for in the estimator.
     // R278 consumer normals/weighted colors alone do NOT satisfy these flags.
-    if((c.verified&3)!=3 || c.frameTag!=frameTag || c.material>=65534 || c.twoSided>1 ||
+    if((c.verified&7)!=7 || c.frameTag!=frameTag || c.material>=65534 || c.twoSided>1 ||
        !GIFinitePoint(c.source)||!GIFinitePoint(c.target)||!GIFinitePoint(c.secondary)||
        !GIFinitePoint(c.secondaryGeometricNormal)||!GIFinite(c.sourceSolidAnglePdf)||
        c.sourceSolidAnglePdf<=0 || !GIFinite(c.sourceMaxDistance)||c.sourceMaxDistance<=0 ||

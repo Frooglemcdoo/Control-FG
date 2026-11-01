@@ -1,5 +1,5 @@
 {
-  "schema": "gi-sampling-audit-v1",
+  "schema": "gi-sampling-audit-v2",
   "ray_variants": [
     {
       "variant": 0,
@@ -14,6 +14,40 @@
       "mapping": "x=cos(2*pi*u)*sqrt(1-v), y=sin(2*pi*u)*sqrt(1-v), z=sqrt(v)",
       "pdf_for_uniform_uv": "cos(theta)/pi",
       "r264_changes_phase_only": true
+    }
+  ],
+  "producer_support": [
+    {
+      "variant": 0,
+      "hit_position": "O + D * (RayTCurrent - 0.01), stored in view space",
+      "stored_normal": "Barycentrically interpolated packed vertex normal transformed to world space; not a proven geometric face normal",
+      "tmax": "DiffuseGIConstants[0].x * (0.8 + 0.4 * third_fractional_sequence_coordinate)",
+      "trace": {
+        "flags": 0,
+        "instance_mask": 1,
+        "hit_offset": 0,
+        "geometry_stride": 2,
+        "miss_index": 0
+      },
+      "uniform_independent_random_coordinates_verified": false,
+      "geometric_normal_available_in_captured_output": false,
+      "reuse_ready": false
+    },
+    {
+      "variant": 1,
+      "hit_position": "O + D * (RayTCurrent - 0.01), stored in view space",
+      "stored_normal": "Barycentrically interpolated packed vertex normal transformed to world space; not a proven geometric face normal",
+      "tmax": "DiffuseGIConstants[0].x * (0.8 + 0.4 * third_fractional_sequence_coordinate)",
+      "trace": {
+        "flags": 0,
+        "instance_mask": 1,
+        "hit_offset": 0,
+        "geometry_stride": 2,
+        "miss_index": 0
+      },
+      "uniform_independent_random_coordinates_verified": false,
+      "geometric_normal_available_in_captured_output": false,
+      "reuse_ready": false
     }
   ],
   "hit_contract": {

@@ -7,6 +7,7 @@ from pathlib import Path
 import subprocess
 import tempfile
 from gi_long_sequence import HASHES, ROOT, transform, edits
+from gi_producer_support import audit_source
 
 def require(source, fragments):
     for fragment in fragments:
@@ -15,6 +16,7 @@ def require(source, fragments):
 
 def audit(dxc):
     results = []
+    producer_support = []
     with tempfile.TemporaryDirectory() as tmp:
         for variant in (0, 1):
             data = base64.b64decode((ROOT / f'research/gi-sequence-r264/gi-ray-{variant}.dxbc.b64').read_bytes())
@@ -23,6 +25,7 @@ def audit(dxc):
             path = Path(tmp) / 'native.dxbc'
             path.write_bytes(data)
             source = subprocess.check_output([dxc, '-dumpbin', str(path)], text=True)
+            producer_support.append(audit_source(source, variant))
             if variant == 0:
                 # Producer ABI: the texture position is view-space, not a ready
                 # world-space candidate. Misses leave the normal texture unwritten.
@@ -75,7 +78,7 @@ def audit(dxc):
     for opcode, operands in checks:
         if sum(i['name'] == opcode and i['operands'] == operands for i in instructions) != 1:
             raise ValueError('Unreviewed GI6 normalization: ' + str((opcode, operands)))
-    return dict(schema='gi-sampling-audit-v1', ray_variants=results,
+    return dict(schema='gi-sampling-audit-v2', ray_variants=results, producer_support=producer_support,
         hit_contract=dict(producer_variant=0, material_miss_sentinel=65535,
             position_storage='view-space xyz, texture-coordinate y in w on hits',
             hit_position_bias='world origin + direction * (RayTCurrent - 0.01), then WorldToView',
