@@ -8,7 +8,7 @@ struct Boundary {
  std::uintptr_t color=0;
  StageMode stage=StageMode::ClampOnly;
  DiagnosticView view=DiagnosticView::Normal;
- unsigned spatialPasses=0;
+ unsigned spatialPasses=0,spatialObserved=0;
  bool cleanup=false,applied=false,valid=false;
 };
 // Identity only: no borrowed resource is retained or dereferenced by the reader.

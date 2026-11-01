@@ -1,4 +1,4 @@
-param([switch]$DiagnosticsOnly, [switch]$CollectExisting, [int]$GameProcessId=0, [switch]$RequireRR, [switch]$GiBoundary)
+param([switch]$DiagnosticsOnly, [switch]$CollectExisting, [int]$GameProcessId=0, [switch]$RequireRR, [switch]$GiBoundary, [switch]$GiSequence)
 $ErrorActionPreference = 'Stop'
 $games = @(Get-Process -Name 'Control_DX12' -ErrorAction SilentlyContinue)
 $root = Join-Path $env:LOCALAPPDATA 'ControlFGProbe'
@@ -20,6 +20,7 @@ $collectorArgs = @($collector, '--pid', $gameId, '--output', $output)
 if ($DiagnosticsOnly) { $collectorArgs += '--diagnostics-only' }
 if ($CollectExisting) { $collectorArgs += '--collect-existing' }
 if ($GiBoundary) { $collectorArgs += '--gi-boundary' }
+if ($GiSequence) { $collectorArgs += '--gi-sequence' }
 if ($RequireRR) { $collectorArgs += '--require-rr' }
 if (Get-Command py -ErrorAction SilentlyContinue) { & py -3 @collectorArgs }
 else { & python @collectorArgs }

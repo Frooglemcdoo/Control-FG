@@ -132,3 +132,25 @@ try:c.validate_gi_pair([(None,base),(None,both)],1)
 except ValueError:pass
 else:raise AssertionError('Mixed-stage pair admitted')
 print('PASS R216: applied frame-matched GI observations, stage order, normal view and buffer provenance')
+
+# R263: early copy and actual RR-input GI must describe the same evaluated frame.
+seq=dict(frame=800,capture_ordinal=1,gi_sequence_build='R263',sequence_pairs=4,
+         pre_gi_captured=True,pre_gi_frame=800,pre_gi_tick_ms=100,evaluation_tick_ms=101,
+         projection_valid=True,motion_scale_valid=True,width=16,height=8,preset=6,lighting_mode='native_blend',
+         gi_boundary=dict(valid=True,frame=800,applied=True,stage='raw_bypass',view='normal',cleanup=False,
+                          filter_build='R263',spatial_passes=0,spatial_observed=0,filter_color_identity=123),
+         resources=[dict(file=name,dxgi_format=10,pixel_bytes=8,width=16,height=8,resource_identity=123)
+                    for name in ['pre-filter-gi.rgba16f','gi-at-rr-input.rgba16f']])
+second=deepcopy(seq);second['frame']=second['pre_gi_frame']=second['gi_boundary']['frame']=801
+pair=[(None,seq),(None,second)];c.validate_gi_sequence_pair(pair,1)
+for key,value in [('pre_gi_frame',799),('pre_gi_captured',False),('pre_gi_tick_ms',102),('gi_sequence_build','R262'),('motion_scale_valid',False),('projection_valid',False)]:
+ bad=deepcopy(pair);bad[0][1][key]=value
+ try:c.validate_gi_sequence_pair(bad,1)
+ except ValueError:pass
+ else:raise AssertionError(key)
+for key,value in [('stage','both_steady_spatial'),('applied',False),('spatial_observed',1),('filter_color_identity',999)]:
+ bad=deepcopy(pair);bad[0][1]['gi_boundary'][key]=value
+ try:c.validate_gi_sequence_pair(bad,1)
+ except ValueError:pass
+ else:raise AssertionError(key)
+print('PASS R263 stationary sequence: same-frame early GI, verified bypass, actual RR GI identity, projection/motion metadata and pair configuration')

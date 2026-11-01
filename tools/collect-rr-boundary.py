@@ -98,6 +98,39 @@ def validate_gi_pair(pair, ordinal):
         data['gi_filter_color_matches'] = [r['file'] for r in resources if r['resource_identity'] == b['filter_color_identity']]
 
 
+def validate_gi_sequence_pair(pair, ordinal):
+    if ordinal not in range(1, 5):
+        raise ValueError('Invalid stationary sequence ordinal')
+    for _, data in pair:
+        b = data.get('gi_boundary', {})
+        if (data.get('gi_sequence_build') != 'R263' or data.get('sequence_pairs') != 4 or
+                data.get('capture_ordinal') != ordinal or
+                data.get('pre_gi_captured') is not True or data.get('pre_gi_frame') != data['frame'] or
+                not 0 < data.get('pre_gi_tick_ms', 0) <= data.get('evaluation_tick_ms', 0)):
+            raise ValueError('Missing or stale early GI copy')
+        if (b.get('valid') is not True or b.get('frame') != data['frame'] or
+                b.get('applied') is not True or b.get('stage') != 'raw_bypass' or
+                b.get('view') != 'normal' or b.get('cleanup') is not False or
+                b.get('filter_build') != 'R263' or b.get('spatial_passes') != 0 or
+                b.get('spatial_observed') != 0):
+            raise ValueError('Raw GI bypass was not verified for this frame')
+        if not data.get('projection_valid') or not data.get('motion_scale_valid'):
+            raise ValueError('Projection or motion scale metadata missing')
+        resources = {r['file']: r for r in data['resources']}
+        for name in ('pre-filter-gi.rgba16f', 'gi-at-rr-input.rgba16f'):
+            r = resources.get(name, {})
+            if (r.get('dxgi_format') != 10 or r.get('pixel_bytes') != 8 or
+                    r.get('width') != data.get('width') or r.get('height') != data.get('height') or
+                    not isinstance(r.get('resource_identity'), int) or r['resource_identity'] <= 0):
+                raise ValueError('Missing or invalid GI sequence texture')
+        if resources['gi-at-rr-input.rgba16f']['resource_identity'] != b.get('filter_color_identity'):
+            raise ValueError('GI at RR boundary does not match the filtered color resource')
+    first, second = [data for _, data in pair]
+    for key in ('preset', 'width', 'height', 'lighting_mode'):
+        if first.get(key) != second.get(key):
+            raise ValueError('Sequence configuration changed within a pair')
+
+
 def collect_logs(root, local, pid, destination):
     for directory, pattern in [(root, f'probe-*-{pid}.log'), (local / 'Control-FG' / 'Diagnostics', f'Lighting-*-{pid}-*.log'), (Path(os.environ.get('TEMP', str(local))) / 'Control-FG' / 'Diagnostics', f'Lighting-*-{pid}-*.log')]:
         if not directory.exists():
@@ -140,21 +173,26 @@ def main():
     parser.add_argument('--collect-existing', action='store_true')
     parser.add_argument('--require-rr', action='store_true', help='Require settled RR output and actual material guides')
     parser.add_argument('--gi-boundary', action='store_true')
+    parser.add_argument('--gi-sequence', action='store_true')
     args = parser.parse_args()
-    if args.gi_boundary:
+    if args.gi_boundary or args.gi_sequence:
         args.require_rr = True
+    if args.gi_boundary and args.gi_sequence:
+        parser.error("Choose one GI capture protocol")
     local = Path(os.environ['LOCALAPPDATA'])
     root = local / 'ControlFGProbe'
     started = 0 if args.collect_existing or args.diagnostics_only else time.time()
     prefix = 'RR-Materials-R180-' if args.require_rr else 'Native-Lighting-R157-'
     if args.gi_boundary:
         prefix = 'GI-Boundary-R217-'
+    if args.gi_sequence:
+        prefix = 'GI-Sequence-R263-'
     destination = args.output / (prefix + time.strftime('%Y%m%d-%H%M%S') + '-' + str(args.pid) + '-' + str(time.time_ns() % 1000000000))
     destination.mkdir(parents=True, exist_ok=False)
     report = {'schema': 'control-rr-boundary-r157', 'pid': args.pid, 'started_unix': started, 'pairs': [], 'complete': False, 'diagnostics_only': args.diagnostics_only}
     report['expected_path'] = 'rr' if args.require_rr else 'native_sr'
     print('Collecting the overlay input/output captures for this game session.', flush=True)
-    print('Use CAPTURE RR in CLAMP ONLY, then BOTH at the same camera position.' if args.gi_boundary else 'Use CAPTURE RR at the painting and elevator, then PACKAGE RR.' if args.require_rr else
+    print('Select GI RAW BYPASS, click CAPTURE RR once, hold still for all four pairs, then PACKAGE RR.' if args.gi_sequence else 'Use CAPTURE RR in CLAMP ONLY, then BOTH at the same camera position.' if args.gi_boundary else 'Use CAPTURE RR at the painting and elevator, then PACKAGE RR.' if args.require_rr else
           'Use CAPTURE LIGHT in the overlay at each position, then PACKAGE LIGHT.', flush=True)
     print('Progress and failures are recorded below; no sound or hotkey is required.', flush=True)
     try:
@@ -164,6 +202,10 @@ def main():
         positions = [(1, 'painting'), (2, 'elevator')] if args.require_rr else [(1, 'before-room'), (2, 'inside-room')]
         if args.gi_boundary:
             positions = [(1, 'clamp-only'), (2, 'both')]
+        if args.gi_sequence:
+            positions = [(i, f'stationary-pair-{i}') for i in range(1, 5)]
+            report['sequence_build'] = 'R263'
+            report['inter_pair_gaps_expected'] = True
         for ordinal, label in positions:
             if args.diagnostics_only:
                 break
@@ -191,6 +233,13 @@ def main():
                     shutil.copy2(folder / name, target / name)
             if args.gi_boundary:
                 validate_gi_pair(pair, ordinal)
+            if args.gi_sequence:
+                validate_gi_sequence_pair(pair, ordinal)
+                if report['pairs']:
+                    previous = report['pairs'][-1]['frames'][-1]
+                    current = pair[0][1]
+                    if current['frame'] <= previous['frame'] or any(current.get(k) != previous.get(k) for k in ('preset', 'width', 'height', 'lighting_mode')):
+                        raise ValueError('Sequence configuration changed or frames are out of order')
             report['pairs'].append({'label': label, 'frames': [data for _, data in pair]})
             print(f'Pair {ordinal} saved: {label}.', flush=True)
             # Overlay status is the completion notification.

@@ -3,7 +3,7 @@ name: Build native reflection enhancements and RR
 on:
   push:
     branches:
-      - work/r262-gi-raw-bypass
+      - work/r263-gi-sequence
       - work/r250-texture-publication-timing
       - work/r247-storage-prewarm
       - work/r245-native-gpu-storage
@@ -919,7 +919,7 @@ jobs:
         shell: cmd
         run: |
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
-          cl /nologo /std:c++17 /EHsc /W4 /O2 /MT /LD /guard:cf /DCONTROL_RR_FOLIAGE_AUDIT /DCONTROL_SPEC_LONG_SEQUENCE /DCONTROL_RR_F9_SUITE /DCONTROL_GI_BOUNDARY_CAPTURE /DCONTROL_RR_COMPACT_DISTANCE /DCONTROL_RR_MATERIAL_CAPTURE /DCONTROL_CAPTURE_DIAGNOSTIC /DUNICODE /D_UNICODE /I "third_party\streamline\include" /Ibuild\dstorage-sdk\native\include src\probe.cpp /Fobuild\probe.obj /Febuild\dxgi.dll /link /DEF:src\dxgi.def /INCREMENTAL:NO /DYNAMICBASE /NXCOMPAT /GUARD:CF bcrypt.lib wintrust.lib user32.lib gdi32.lib d3d12.lib d3dcompiler.lib
+          cl /nologo /std:c++17 /EHsc /W4 /O2 /MT /LD /guard:cf /DCONTROL_RR_GI_SEQUENCE /DCONTROL_RR_FOLIAGE_AUDIT /DCONTROL_SPEC_LONG_SEQUENCE /DCONTROL_RR_F9_SUITE /DCONTROL_GI_BOUNDARY_CAPTURE /DCONTROL_RR_COMPACT_DISTANCE /DCONTROL_RR_MATERIAL_CAPTURE /DCONTROL_CAPTURE_DIAGNOSTIC /DUNICODE /D_UNICODE /I "third_party\streamline\include" /Ibuild\dstorage-sdk\native\include src\probe.cpp /Fobuild\probe.obj /Febuild\dxgi.dll /link /DEF:src\dxgi.def /INCREMENTAL:NO /DYNAMICBASE /NXCOMPAT /GUARD:CF bcrypt.lib wintrust.lib user32.lib gdi32.lib d3d12.lib d3dcompiler.lib
           if errorlevel 1 exit /b 1
           dumpbin /exports build\dxgi.dll > build\exports.txt
           dumpbin /imports build\dxgi.dll > build\imports.txt
@@ -985,6 +985,15 @@ jobs:
           build\test-gi-boundary-ui.exe
           if errorlevel 1 exit /b 1
 
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-sequence-ui.cpp /Febuild\test-gi-sequence-ui.exe
+          if errorlevel 1 exit /b 1
+          build\test-gi-sequence-ui.exe
+          if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 tools\test-rr-early-gi.cpp /Febuild\test-rr-early-gi.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
+          if errorlevel 1 exit /b 1
+          build\test-rr-early-gi.exe
+          if errorlevel 1 exit /b 1
+
       - name: Validate RR boundary collector
         shell: powershell
         run: |
@@ -1018,11 +1027,11 @@ jobs:
           build\suite-controller.exe
           if errorlevel 1 exit /b 1
 
-      - name: Package raw GI bypass test R262
+      - name: Package stationary GI sequence R263
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='ControlTOH-R262'
+          $out='ControlTOH-R263'
           $shader="$out/ControlTOH/Shaders"
           $tools="$out/ControlTOH/Tools"
           $diagnostics="$out/ControlTOH/Diagnostics"
@@ -1052,14 +1061,14 @@ jobs:
           Copy-Item build/DirectStorage "$diagnostics/DirectStorage" -Recurse
           Copy-Item build/DirectStorage/dstorage.dll,build/DirectStorage/dstoragecore.dll $out
           Copy-Item tools/directstorage/Validate-DirectStorage.cmd "$diagnostics/DirectStorage"
-          Copy-Item docs/native-lighting-r262.md "$out/ControlTOH/DIAGNOSTIC-NOTES.md"
+          Copy-Item docs/native-lighting-r263.md "$out/ControlTOH/DIAGNOSTIC-NOTES.md"
           Copy-Item tools/Organize-Existing-Install.cmd,tools/Organize-Existing-Install.ps1 $tools
           Copy-Item tools/diagnostics/Collect-ControlTOH-Materials.cmd,tools/diagnostics/Collect-ControlTOH-Materials.ps1 $tools
           & powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/diagnostics/test-material-collector.ps1
           if ($LASTEXITCODE -ne 0) { throw 'Material collector integration test failed' }
           @'
           Control The Oldest House: Visual and Performance Overhaul
-          R262 - Current-frame GI copy with native denoising bypassed
+          R263 - Stationary GI-to-RR capture sequence (rendering unchanged from R262)
 
           Copy all package contents beside Control_DX12.exe. Preserve the folder structure.
           Launch normally through Steam. No F6 or test launcher is needed.
@@ -1078,9 +1087,10 @@ jobs:
           Texture streaming remains automatic (4 ms / 16 pinned partitions with DirectStorage).
           Optional diagnostics: ControlTOH/Diagnostics/Start-R258-Storage-Diagnostics.cmd.
           Collect logs using ControlTOH/Tools/Collect-ControlFG-Compact-Logs.cmd.
-          F10: select GI: RAW BYPASS. Close F10 and wait 10 seconds, then walk and pan.
-          Compare GI: BOTH STEADY at the same location. Keep RR ON, Native Blend, FG OFF.
-          Report ghosting, speckles and boiling; send compact logs.
+          F10: select GI: RAW BYPASS, then click CAPTURE RR once. Hold the camera still.
+          Four consecutive-frame pairs are saved automatically with settling gaps.
+          Wait for Saved pairs: 4, then click PACKAGE RR. Send every resulting ZIP.
+          Keep RR ON, Native Blend, FG OFF. Use a fresh game launch for this sequence.
           Clamp Only and the original Both mode remain available. No material capture needed.
           See ControlTOH/DIAGNOSTIC-NOTES.md for scope and validation.
           '@ | Set-Content "$out/ControlTOH/README.txt" -Encoding ASCII
@@ -1095,10 +1105,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: ControlTOH-R262
+          name: ControlTOH-R263
           path: |
-            ControlTOH-R262.zip
-            ControlTOH-R262.sha256
+            ControlTOH-R263.zip
+            ControlTOH-R263.sha256
             build/spec-volume-roughness-validation.json
             build/spec-volume-roughness.dxbc
             build/spec-environment-validation.json

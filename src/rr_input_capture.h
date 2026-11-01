@@ -19,6 +19,11 @@ struct RRInputCaptureJob {
 #endif
  const char* lightingMode="unavailable";
  unsigned suiteSession=0,suiteStep=0,suiteSamples=0;bool suiteRaw=false;
+#ifdef CONTROL_RR_GI_SEQUENCE
+ unsigned preGIIndex=kRRInputCaptureMaxResources;
+ unsigned long long preGIFrame=0,preGIPresent=0,preGITick=0,evaluationTick=0;
+ bool preGICaptured=false;
+#endif
  unsigned count=0,preset=0;bool nativeLighting=false;bool distanceBound=false;unsigned rawIndex=kRRInputCaptureMaxResources;
  unsigned nativeIndex=kRRInputCaptureMaxResources;D3D12_RESOURCE_STATES states[kRRInputCaptureMaxResources]{};
  unsigned pixelBytes[kRRInputCaptureMaxResources]{};const wchar_t* names[kRRInputCaptureMaxResources]{};
@@ -32,6 +37,9 @@ static SRWLOCK rrInputCaptureLock=SRWLOCK_INIT;
 static RRInputCaptureJob rrInputCaptures[2];
 static unsigned rrInputCaptureRecording=2;
 static control_rr::InputCaptureSettle rrInputCaptureSettle;
+#ifdef CONTROL_RR_GI_SEQUENCE
+static unsigned long long rrInputCaptureSettledFrame=0,rrInputCaptureRequestTick=0;
+#endif
 static void RRInputCaptureRelease(RRInputCaptureJob* c) noexcept {
  for(unsigned i=0;i<kRRInputCaptureMaxResources;++i){RRGuideRelease(c->sources[i]);RRGuideRelease(c->readback[i]);}
  RRGuideRelease(c->fence);RRGuideRelease(c->queue);RRGuideRelease(c->device);
@@ -71,12 +79,23 @@ static DWORD WINAPI RRInputCaptureExport(void* context) noexcept {
   if(okay){
    std::ostringstream out;out.imbue(std::locale::classic());out<<std::setprecision(9);
    out<<"{";
+#ifdef CONTROL_RR_GI_SEQUENCE
+   out<<"\"gi_sequence_build\":\"R263\",\"sequence_pairs\":4,\"gi_signal_boundary\":\"after_filter_at_rr_input\","
+      <<"\"pre_gi_frame\":"<<c->preGIFrame<<",\"pre_gi_captured\":"<<(c->preGICaptured?"true":"false")
+      <<",\"pre_gi_tick_ms\":"<<c->preGITick<<",\"evaluation_tick_ms\":"<<c->evaluationTick<<",";
+#endif
 #ifdef CONTROL_GI_BOUNDARY_CAPTURE
    const auto& b=c->giBoundary;
-   out<<"\"gi_boundary\":{\"filter_build\":\"R217\",\"valid\":"<<(b.valid?"true":"false")<<",\"frame\":"<<b.frame
+   out<<"\"gi_boundary\":{\"filter_build\":\""
+#ifdef CONTROL_RR_GI_SEQUENCE
+      <<"R263"
+#else
+      <<"R217"
+#endif
+      <<"\",\"valid\":"<<(b.valid?"true":"false")<<",\"frame\":"<<b.frame
       <<",\"stage\":\""<<control_rr_gi::StageName(b.stage)<<"\",\"view\":\""<<control_rr_gi::ViewName(b.view)
       <<"\",\"cleanup\":"<<(b.cleanup?"true":"false")<<",\"applied\":"<<(b.applied?"true":"false")
-      <<",\"spatial_passes\":"<<b.spatialPasses<<",\"filter_color_identity\":"<<b.color<<"},";
+      <<",\"spatial_observed\":"<<b.spatialObserved<<",\"spatial_passes\":"<<b.spatialPasses<<",\"filter_color_identity\":"<<b.color<<"},";
 #endif
    out<<"\"suite_session\":"<<c->suiteSession<<",\"suite_step\":"<<c->suiteStep<<",\"suite_samples\":"<<c->suiteSamples<<",\"suite_raw_rr_clamp\":"<<(c->suiteRaw?"true":"false")<<",\"lighting_mode\":\""<<c->lightingMode<<"\",\"schema\":\"control-rr-gi-r28\",\"evaluation_path\":\""<<(c->nativeLighting?"native_sr":"rr")<<"\",\"rr_active\":"<<(c->nativeLighting?"false":"true")<<",\"pre_exposure_valid\":"<<(c->preExposureValid?"true":"false")<<",\"pre_exposure\":"<<c->preExposure<<",\"exposure_scale_valid\":"<<(c->exposureScaleValid?"true":"false")<<",\"exposure_scale\":"<<c->exposureScale<<",\"pid\":"<<GetCurrentProcessId()<<",\"frame\":"<<c->frame<<",\"present\":"<<c->policy.present<<",\"preset\":"<<c->preset<<",\"width\":"<<c->width<<",\"height\":"<<c->height<<",\"buffers\":"<<c->count<<",\"hit_distance_bound\":"<<(c->distanceBound?"true":"false")<<",\"raw_albedo_bound\":"<<(c->rawIndex<c->count?"true":"false")<<",\"capture_ordinal\":"<<c->policy.requests<<",\"projection_valid\":"<<(c->projectionValid?"true":"false")<<",\"row_padding_removed\":true,\"little_endian\":true,\"view_to_clip\":[";
    for(unsigned i=0;i<16;++i){if(i)out<<',';out<<c->projection[i];}out<<"],\"jitter\":["<<c->jitterX<<','<<c->jitterY<<"],\"motion_scale\":["<<c->mvScaleX<<','<<c->mvScaleY<<"],\"motion_scale_valid\":"<<(c->motionScaleValid?"true":"false")<<",\"native_inputs_bound\":true,\"lighting_buffers_captured\":true,\"resources\":[";
@@ -101,6 +120,9 @@ static DWORD WINAPI RRInputCaptureExport(void* context) noexcept {
 }
 #include "rr_input_capture_record.h"
 #include "rr_input_capture_guard.h"
+#ifdef CONTROL_RR_GI_SEQUENCE
+#include "rr_input_capture_early_gi.h"
+#endif
 static void RRInputCaptureOneBeforeEvaluation(RRInputCaptureJob* c,ID3D12GraphicsCommandList* list,unsigned long long frame,unsigned preset,
  ID3D12Resource* normal,ID3D12Resource* specular,ID3D12Resource* diffuse,ID3D12Resource* distance,ID3D12Resource* status,const float* projection,bool projectionValid,ID3D12Resource* rawAlbedo,ID3D12Resource* color,ID3D12Resource* depth,ID3D12Resource* motion,ID3D12Resource* output,ID3D12Resource* responsivity,void* parameters,bool nativeLighting=false,const char* lightingMode="rr") noexcept {
  if(!TryAcquireSRWLockExclusive(&rrInputCaptureLock))return;
@@ -110,7 +132,11 @@ static void RRInputCaptureOneBeforeEvaluation(RRInputCaptureJob* c,ID3D12Graphic
   // Capture the guides actually bound to RR. Hit distance is optional for F
   // too; waiting for it prevents capture in the production no-distance path.
   ID3D12Resource* resources[kRRInputCaptureMaxResources]{normal,specular,diffuse,distance,status,nullptr};const bool distanceBound=!nativeLighting&&distance&&status;const unsigned baseCount=nativeLighting?0u:(distanceBound?5u:3u);
-  const unsigned rawIndex=rawAlbedo?baseCount:kRRInputCaptureMaxResources;const unsigned nativeIndex=baseCount+(rawAlbedo?1u:0u);const unsigned maskIndex=nativeIndex+kRRInputCaptureNativeCount;const unsigned outputIndex=maskIndex+(responsivity?1u:0u);const unsigned count=outputIndex+1u;
+  const unsigned rawIndex=rawAlbedo?baseCount:kRRInputCaptureMaxResources;const unsigned nativeIndex=baseCount+(rawAlbedo?1u:0u);const unsigned maskIndex=nativeIndex+kRRInputCaptureNativeCount;const unsigned outputIndex=maskIndex+(responsivity?1u:0u);const unsigned count=outputIndex+1u
+#ifdef CONTROL_RR_GI_SEQUENCE
+   +1u
+#endif
+  ;
   if(rawAlbedo)resources[rawIndex]=rawAlbedo;
   resources[nativeIndex]=color;resources[nativeIndex+1]=depth;resources[nativeIndex+2]=motion;
   RRGuideInputTexture nativeInputs[kRRInputCaptureNativeCount]{};
@@ -142,6 +168,10 @@ static void RRInputCaptureOneBeforeEvaluation(RRInputCaptureJob* c,ID3D12Graphic
   resources[nativeIndex+7]=nativeInputs[7].resource;
   if(responsivity)resources[maskIndex]=responsivity;
   resources[outputIndex]=output;
+#ifdef CONTROL_RR_GI_SEQUENCE
+  // Allocation shape only; this slot is copied earlier at GI dispatch, never here.
+  resources[outputIndex+1]=resources[nativeIndex+5];
+#endif
   D3D12_RESOURCE_DESC descriptions[kRRInputCaptureMaxResources]{};
   for(unsigned i=0;i<count;++i){if(!resources[i])__leave;descriptions[i]=resources[i]->GetDesc();}
   if(!resources[0]||!resources[1]||!resources[2])__leave;
@@ -162,7 +192,7 @@ static void RRInputCaptureOneBeforeEvaluation(RRInputCaptureJob* c,ID3D12Graphic
   }
   const auto& od=descriptions[outputIndex];
   valid=valid&&od.Dimension==D3D12_RESOURCE_DIMENSION_TEXTURE2D&&od.Width>0&&od.Width<=4096&&od.Height>0&&od.Height<=2160&&od.DepthOrArraySize==1&&od.MipLevels==1&&od.SampleDesc.Count==1&&(od.Format==DXGI_FORMAT_R11G11B10_FLOAT||od.Format==DXGI_FORMAT_R16G16B16A16_FLOAT);
-  for(unsigned i=0;i<count;++i)for(unsigned j=0;j<i;++j)if(resources[i]==resources[j])valid=false;
+  for(unsigned i=0;i<=outputIndex;++i)for(unsigned j=0;j<i;++j)if(resources[i]==resources[j])valid=false;
   if(!valid){Log("RR_INPUT_CAPTURE_C1_REJECT reason=native_input_format_or_extent frame=%llu",frame);c->policy.phase=Policy::Failed;__leave;}
   if(c->policy.phase==Policy::Requested){
    if(FAILED(list->GetDevice(IID_PPV_ARGS(&c->device)))||!c->device){c->policy.phase=Policy::Failed;__leave;}
@@ -177,7 +207,12 @@ static void RRInputCaptureOneBeforeEvaluation(RRInputCaptureJob* c,ID3D12Graphic
    c->names[nativeIndex+2]=descriptions[nativeIndex+2].Format==DXGI_FORMAT_R16G16_FLOAT?L"input-motion.rg16f":L"input-motion.rg32f";
    c->pixelBytes[nativeIndex+2]=descriptions[nativeIndex+2].Format==DXGI_FORMAT_R16G16_FLOAT?4u:8u;
    c->names[nativeIndex+3]=L"native-gbuffer1.rgba8";c->names[nativeIndex+4]=L"native-gbuffer2.rgba8";
-   c->names[nativeIndex+5]=L"raw-gi.rgba16f";c->pixelBytes[nativeIndex+5]=8;
+#ifdef CONTROL_RR_GI_SEQUENCE
+   c->names[nativeIndex+5]=L"gi-at-rr-input.rgba16f";
+#else
+   c->names[nativeIndex+5]=L"raw-gi.rgba16f";
+#endif
+   c->pixelBytes[nativeIndex+5]=8;
    c->names[nativeIndex+6]=descriptions[nativeIndex+6].Format==DXGI_FORMAT_R11G11B10_FLOAT?L"lighting-diffuse.r11g11b10f":L"lighting-diffuse.rgba16f";
    c->names[nativeIndex+7]=descriptions[nativeIndex+7].Format==DXGI_FORMAT_R11G11B10_FLOAT?L"lighting-specular.r11g11b10f":L"lighting-specular.rgba16f";
    for(unsigned i=nativeIndex+6;i<maskIndex;++i)c->pixelBytes[i]=descriptions[i].Format==DXGI_FORMAT_R11G11B10_FLOAT?4u:8u;
@@ -186,18 +221,31 @@ static void RRInputCaptureOneBeforeEvaluation(RRInputCaptureJob* c,ID3D12Graphic
     (od.Format==DXGI_FORMAT_R11G11B10_FLOAT?L"native-sr-output.r11g11b10f":L"native-sr-output.rgba16f"):
     (od.Format==DXGI_FORMAT_R11G11B10_FLOAT?L"rr-output.r11g11b10f":L"rr-output.rgba16f");
    c->pixelBytes[outputIndex]=od.Format==DXGI_FORMAT_R11G11B10_FLOAT?4u:8u;
+#ifdef CONTROL_RR_GI_SEQUENCE
+   c->preGIIndex=outputIndex+1;c->names[c->preGIIndex]=L"pre-filter-gi.rgba16f";c->pixelBytes[c->preGIIndex]=8;
+#endif
    c->policy.BeginPrepare();
    if(!QueueUserWorkItem(&RRInputCapturePrepare,c,WT_EXECUTEDEFAULT)){RRInputCaptureRelease(c);c->policy.phase=Policy::Failed;}
    __leave;
   }
   if(c->queue!=native.queue||c->count!=count||c->rawIndex!=rawIndex||c->distanceBound!=distanceBound||c->width!=width||c->height!=height||c->preset!=preset||c->nativeLighting!=nativeLighting){
+#ifdef CONTROL_RR_GI_SEQUENCE
+   if(c->preGICaptured){c->policy.phase=Policy::Failed;__leave;}
+#endif
    RRInputCaptureRelease(c);c->policy.phase=Policy::Requested;__leave; // No commands yet; reprepare safely.
   }
   bool formatsMatch=true;
   for(unsigned i=0;i<count;++i)if(c->descriptions[i].Format!=descriptions[i].Format||c->descriptions[i].Width!=descriptions[i].Width||c->descriptions[i].Height!=descriptions[i].Height)formatsMatch=false;
-  if(!formatsMatch){RRInputCaptureRelease(c);c->policy.phase=Policy::Requested;__leave;}
+  if(!formatsMatch){
+#ifdef CONTROL_RR_GI_SEQUENCE
+   if(c->preGICaptured){c->policy.phase=Policy::Failed;__leave;}
+#endif
+   RRInputCaptureRelease(c);c->policy.phase=Policy::Requested;__leave;}
+#ifdef CONTROL_RR_GI_SEQUENCE
+  if(!c->preGICaptured||c->preGIFrame!=frame)__leave;
+#endif
   for(unsigned i=0;i<count;++i){ID3D12Device* device=nullptr;const HRESULT hr=resources[i]->GetDevice(IID_PPV_ARGS(&device));const bool same=SUCCEEDED(hr)&&device==c->device;if(device)device->Release();if(!same)__leave;}
-  for(unsigned i=0;i<count;++i){c->sources[i]=resources[i];resources[i]->AddRef();c->states[i]=i>=nativeIndex&&i<nativeIndex+kRRInputCaptureNativeCount?static_cast<D3D12_RESOURCE_STATES>(nativeInputs[i-nativeIndex].trackedState):i==outputIndex?D3D12_RESOURCE_STATE_UNORDERED_ACCESS:D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;}
+  for(unsigned i=0;i<=outputIndex;++i){c->sources[i]=resources[i];resources[i]->AddRef();c->states[i]=i>=nativeIndex&&i<nativeIndex+kRRInputCaptureNativeCount?static_cast<D3D12_RESOURCE_STATES>(nativeInputs[i-nativeIndex].trackedState):i==outputIndex?D3D12_RESOURCE_STATE_UNORDERED_ACCESS:D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;}
   c->jitterX=c->jitterY=c->mvScaleX=c->mvScaleY=0;
   if(ngxGetFloat){ngxGetFloat(parameters,"Jitter.Offset.X",&c->jitterX);ngxGetFloat(parameters,"Jitter.Offset.Y",&c->jitterY);}
   c->motionScaleValid=ngxGetFloat&&ngxGetFloat(parameters,"MV.Scale.X",&c->mvScaleX)==1&&ngxGetFloat(parameters,"MV.Scale.Y",&c->mvScaleY)==1;
@@ -209,6 +257,9 @@ static void RRInputCaptureOneBeforeEvaluation(RRInputCaptureJob* c,ID3D12Graphic
   c->lightingMode=lightingMode;
 #ifdef CONTROL_RR_F9_SUITE
   if(rr_suite::requested.load()&&!rr_suite::Verified(frame)){
+#ifdef CONTROL_RR_GI_SEQUENCE
+   if(c->preGICaptured){c->policy.phase=Policy::Failed;__leave;}
+#endif
    for(unsigned i=0;i<count;++i)RRGuideRelease(c->sources[i]);
    control_rr_capture_ui::detail.store(L"Waiting for verified diagnostic shader dispatch.");__leave;
   }
@@ -218,6 +269,14 @@ static void RRInputCaptureOneBeforeEvaluation(RRInputCaptureJob* c,ID3D12Graphic
 #endif
 #ifdef CONTROL_GI_BOUNDARY_CAPTURE
   c->giBoundary=control_rr_gi::ReadBoundary(frame);
+#ifdef CONTROL_RR_GI_SEQUENCE
+  if(!c->giBoundary.valid||!c->giBoundary.applied||c->giBoundary.stage!=control_rr_gi::StageMode::RawBypass||c->giBoundary.spatialPasses||c->giBoundary.spatialObserved){
+   c->policy.phase=Policy::Failed;__leave;
+  }
+#endif
+#endif
+#ifdef CONTROL_RR_GI_SEQUENCE
+  c->evaluationTick=GetTickCount64();
 #endif
   c->frame=frame;c->projectionValid=projectionValid;memcpy(c->projection,projection,sizeof(c->projection));
   c->outputCaptured=false;c->evaluationResult=0;c->reset=0;
@@ -229,7 +288,11 @@ static void RRInputCaptureOneBeforeEvaluation(RRInputCaptureJob* c,ID3D12Graphic
   c->count=allocatedCount;
   if(!recorded){
    if(commandsStarted){c->policy.phase=Policy::Failed;Log("RR_INPUT_CAPTURE_C1_FAILED reason=record fault=0x%08lX resources_retained=1",fault);}
-   else {for(unsigned i=0;i<count;++i)RRGuideRelease(c->sources[i]);
+   else {
+#ifdef CONTROL_RR_GI_SEQUENCE
+    if(c->preGICaptured){c->policy.phase=Policy::Failed;__leave;}
+#endif
+    for(unsigned i=0;i<count;++i)RRGuideRelease(c->sources[i]);
     static unsigned rejects=0;if(++rejects<=4||(rejects%240)==0)Log("RR_INPUT_CAPTURE_C1_REJECT reason=guard_revalidation_or_lock frame=%llu fault=0x%08lX",frame,fault);
    }
    __leave;
@@ -251,6 +314,9 @@ static void RRInputCaptureBeforeEvaluation(ID3D12GraphicsCommandList* list,unsig
  int reset=1;
  const bool resetKnown=ngxGetInt&&ngxGetInt(parameters,"Reset",&reset)==1;
  const bool settled=rrInputCaptureSettle.Ready(frame,!resetKnown||reset!=0,GetTickCount64());
+#ifdef CONTROL_RR_GI_SEQUENCE
+ rrInputCaptureSettledFrame=settled?frame:0;
+#endif
  if(!TryAcquireSRWLockExclusive(&rrInputCaptureLock))return;
  unsigned select=control_rr::SelectInputCapturePair(rrInputCaptures[0].policy.phase,
   rrInputCaptures[1].policy.phase,rrInputCaptures[0].frame,frame);
@@ -259,6 +325,10 @@ static void RRInputCaptureBeforeEvaluation(ID3D12GraphicsCommandList* list,unsig
   control_rr_capture_ui::detail.store(L"Waiting for 5 seconds of gameplay. Hold still.");
   select=2;
  }
+#ifdef CONTROL_RR_GI_SEQUENCE
+ if(select<2&&rrInputCaptures[select].policy.phase==control_rr::InputCapturePolicy::Ready&&
+    (!rrInputCaptures[select].preGICaptured||rrInputCaptures[select].preGIFrame!=frame))select=2;
+#endif
  ReleaseSRWLockExclusive(&rrInputCaptureLock);
  if(select<2)RRInputCaptureOneBeforeEvaluation(&rrInputCaptures[select],list,frame,preset,normal,specular,diffuse,distance,status,projection,projectionValid,rawAlbedo,color,depth,motion,output,responsivity,parameters,nativeLighting,lightingMode);
 }
@@ -295,19 +365,40 @@ static void RRInputCaptureAfterPresent(unsigned long long present) noexcept {
  __try {
   using P=control_rr::InputCapturePolicy;
   const bool buttonRequested=control_rr_capture_ui::requested.exchange(false,std::memory_order_acq_rel);
-  if(pressed || buttonRequested){rrInputCaptureSettle.Reset();DWORD foregroundPid=0;GetWindowThreadProcessId(GetForegroundWindow(),&foregroundPid);
+  if(pressed || buttonRequested){rrInputCaptureSettle.Reset();
+#ifdef CONTROL_RR_GI_SEQUENCE
+   rrInputCaptureSettledFrame=0;rrInputCaptureRequestTick=GetTickCount64();
+#endif
+DWORD foregroundPid=0;GetWindowThreadProcessId(GetForegroundWindow(),&foregroundPid);
    if(buttonRequested || foregroundPid==GetCurrentProcessId()){
     bool accepted=rrInputCaptures[0].policy.phase==P::Idle&&rrInputCaptures[1].policy.phase==P::Idle&&rrInputCaptures[0].policy.requests<kRRCapturePairs;
-    if(accepted){for(unsigned i=0;i<2;++i){rrInputCaptures[i].pairIndex=i;rrInputCaptures[i].frame=0;rrInputCaptures[i].policy.Request();}
+    if(accepted){for(unsigned i=0;i<2;++i){rrInputCaptures[i].pairIndex=i;rrInputCaptures[i].frame=0;
+#ifdef CONTROL_RR_GI_SEQUENCE
+     rrInputCaptures[i].preGICaptured=false;rrInputCaptures[i].preGIFrame=0;
+#endif
+     rrInputCaptures[i].policy.Request();}
 #if !defined(CONTROL_CAPTURE_DIAGNOSTIC)
     rrHairShaderAuditRequested.store(true,std::memory_order_release);
 #endif
     }
     else if(buttonRequested){control_rr_capture_ui::detail.store(L"Capture busy or session limit reached. PACKAGE LIGHT collects status.");control_rr_capture_ui::state.store(control_rr_capture_ui::State::Failed);}
-    Log("RR_INPUT_CAPTURE_C1_REQUEST accepted=%u mode=overlay_pair slots=2 maximum_pairs=2",unsigned(accepted));
+    Log("RR_INPUT_CAPTURE_C1_REQUEST accepted=%u mode=overlay_pair slots=2 maximum_pairs=%u",unsigned(accepted),kRRCapturePairs);
    }
   }
+#ifdef CONTROL_RR_GI_SEQUENCE
+  if(control_rr_capture_ui::Busy()&&rrInputCaptureRequestTick&&GetTickCount64()-rrInputCaptureRequestTick>120000){
+   for(auto& job:rrInputCaptures)job.policy.phase=P::Failed;
+   control_rr_capture_ui::detail.store(L"Sequence timed out. PACKAGE RR will collect diagnostics.");
+  }
+#endif
   for(auto& job:rrInputCaptures){auto* c=&job;
+#ifdef CONTROL_RR_GI_SEQUENCE
+   // An early copy without matching RR must never be overwritten or freed in flight.
+   if(c->preGICaptured&&c->policy.phase==P::Ready&&present>c->preGIPresent){
+    c->policy.phase=P::Failed;
+    Log("RR_INPUT_CAPTURE_R263_FAILED reason=early_gi_without_matching_rr frame=%llu resources_retained=1",c->preGIFrame);
+   }
+#endif
    const bool mayExport=
 #ifdef CONTROL_RR_F9_SUITE
     control_rr::InputCapturePairMayExport(rrInputCaptures[0].policy.phase,rrInputCaptures[1].policy.phase,rr_suite::cancelled.load());

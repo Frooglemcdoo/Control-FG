@@ -50,6 +50,13 @@ static void RRNativeHookGITemporalDispatch(void* state,const void* groups){
  SetLastError(saved);
  if(!eligible){rrNativeDispatchOriginal(state,groups);return;}
  const bool used=control_rr_clamp::InvokeGI(rrNativeDispatchOriginal,state,groups,reinterpret_cast<ID3D12GraphicsCommandList*>(context.list));
+#ifdef CONTROL_RR_GI_SEQUENCE
+ if(used&&control_rr_gi::rawBypass){
+  const DWORD captureSaved=GetLastError();
+  RRInputCaptureAtGI(context.frame,reinterpret_cast<ID3D12GraphicsCommandList*>(context.list));
+  SetLastError(captureSaved);
+ }
+#endif
  if(used){++rrNativeGIHistoryDispatches;rrNativeGIHistoryReason="applied";}
  else rrNativeGIHistoryReason="native_pipeline_fallback";
 }
@@ -83,7 +90,7 @@ static void RRNativeRunGIFilter(void* color,void* history,unsigned passes){
    const DWORD saved=GetLastError();
    control_rr_gi::Boundary observation{};
    observation.frame=rrNativeFrame.Key().frame;observation.color=RRNativeGIColorIdentity(color);
-   observation.stage=mode;observation.view=view;observation.spatialPasses=effectivePasses;
+   observation.stage=mode;observation.view=view;observation.spatialPasses=effectivePasses;observation.spatialObserved=rrNativeGISpatialObserved;
    observation.cleanup=outlier;observation.applied=rrNativeGIHistoryDispatches==1;
    observation.valid=observation.color!=0;
    control_rr_gi::PublishBoundary(observation);SetLastError(saved);

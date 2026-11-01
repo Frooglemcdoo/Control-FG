@@ -206,7 +206,9 @@ inline void PackageRR(HWND window) noexcept {
     auto* slash=wcsrchr(module,L'\\');if(!slash)return;*slash=0;
     wchar_t command[2048]{};
     swprintf_s(command,L"powershell.exe -NoExit -NoProfile -ExecutionPolicy Bypass -File \"%s\\ControlTOH\\Diagnostics\\Capture-RR-Boundary.ps1\" -CollectExisting -RequireRR -GameProcessId %lu",module,GetCurrentProcessId());
-#ifdef CONTROL_GI_BOUNDARY_CAPTURE
+#ifdef CONTROL_RR_GI_SEQUENCE
+    wcscat_s(command,L" -GiSequence");
+#elif defined(CONTROL_GI_BOUNDARY_CAPTURE)
     wcscat_s(command,L" -GiBoundary");
 #endif
     STARTUPINFOW startup{};startup.cb=sizeof(startup);PROCESS_INFORMATION process{};
@@ -222,7 +224,11 @@ inline void RequestLightCapture(HWND panel) noexcept {
     return;
 #endif
     const auto mode=LiveSelection::GetMode(selection.Read());
-#ifdef CONTROL_GI_BOUNDARY_CAPTURE
+#ifdef CONTROL_RR_GI_SEQUENCE
+    if(control_rr_gi::stageMode.load()!=control_rr_gi::StageMode::RawBypass){
+      MessageBoxW(panel,L"Select GI RAW BYPASS, then CAPTURE RR once. Keep the camera still until all four pairs are saved.",L"Stationary GI sequence",MB_OK);return;
+    }
+#elif defined(CONTROL_GI_BOUNDARY_CAPTURE)
     const auto expected=control_rr_capture_ui::completedPairs.load()==0?control_rr_gi::StageMode::ClampOnly:control_rr_gi::StageMode::Both;
     if(control_rr_gi::stageMode.load()!=expected || (expected==control_rr_gi::StageMode::ClampOnly&&!control_rr_gi::outlierRequested.load()) || control_rr_gi::viewRequested.load()!=control_rr_gi::DiagnosticView::Normal) {
         MessageBoxW(panel,L"Capture 1: GI CLAMP ONLY. Capture 2: GI BOTH. Use SMOOTH ON for CLAMP ONLY and GI VIEW NORMAL for both; use the same camera position.",L"GI buffer capture",MB_OK);return;

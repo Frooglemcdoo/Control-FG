@@ -5,7 +5,9 @@
 #ifdef CONTROL_GI_BOUNDARY_CAPTURE
 #include "rr_gi_boundary.h"
 #endif
-#if defined(CONTROL_RR_F9_SUITE) && !defined(CONTROL_GI_BOUNDARY_CAPTURE)
+#if defined(CONTROL_RR_GI_SEQUENCE)
+inline constexpr unsigned kRRCapturePairs=4;
+#elif defined(CONTROL_RR_F9_SUITE) && !defined(CONTROL_GI_BOUNDARY_CAPTURE)
 inline constexpr unsigned kRRCapturePairs=rr_suite::maxPairs;
 #else
 inline constexpr unsigned kRRCapturePairs=2;
@@ -15,7 +17,9 @@ enum class State { Idle, Queued, Preparing, Capturing, Saving, Complete, Failed 
 inline std::atomic<State> state{State::Idle};
 inline std::atomic<bool> requested{false};
 inline std::atomic<unsigned> completedPairs{0};
-#ifdef CONTROL_GI_BOUNDARY_CAPTURE
+#ifdef CONTROL_RR_GI_SEQUENCE
+inline std::atomic<const wchar_t*> detail{L"Select GI RAW BYPASS. CAPTURE RR records 4 stationary pairs automatically."};
+#elif defined(CONTROL_GI_BOUNDARY_CAPTURE)
 inline std::atomic<const wchar_t*> detail{L"Capture GI CLAMP ONLY, then GI BOTH at the same view. RR ON, FG OFF."};
 #else
 inline std::atomic<const wchar_t*> detail{L"F9: capture sequence at painting, then elevator. RR ON, FG OFF."};
@@ -38,12 +42,22 @@ inline void Publish(control_rr::InputCapturePolicy::Phase first,control_rr::Inpu
     using P=control_rr::InputCapturePolicy;
     if(requested.load() || !requests)return;
 #ifdef CONTROL_GI_BOUNDARY_CAPTURE
-    if(first==P::Failed || second==P::Failed || (first==P::Idle && second==P::Idle))control_rr_gi::boundaryRequested.store(false);
+    if(first==P::Failed || second==P::Failed || (first==P::Idle && second==P::Idle
+#ifdef CONTROL_RR_GI_SEQUENCE
+     && (requests>=kRRCapturePairs||!outputsValid)
+#endif
+    ))control_rr_gi::boundaryRequested.store(false);
 #endif
     if(first==P::Failed || second==P::Failed){state.store(State::Failed);return;}
     if(first==P::Idle && second==P::Idle){
         if(outputsValid){completedPairs.store(requests);
-#ifdef CONTROL_GI_BOUNDARY_CAPTURE
+#ifdef CONTROL_RR_GI_SEQUENCE
+ if(requests<kRRCapturePairs){
+  detail.store(L"Pair saved. Next stationary pair queued automatically; hold still.");
+  state.store(State::Queued);requested.store(true,std::memory_order_release);return;
+ }
+ detail.store(L"All 4 pairs saved. Click PACKAGE RR and send every ZIP.");
+#elif defined(CONTROL_GI_BOUNDARY_CAPTURE)
  detail.store(requests<2?L"Clamp pair saved. Select GI BOTH at the same view and capture again.":L"Both pairs saved. Click PACKAGE RR to collect the ZIPs.");
 #elif defined(CONTROL_RR_F9_SUITE)
  detail.store(L"Pair saved. F9 sequence advances automatically; hold still.");
