@@ -111,6 +111,19 @@ def generate(data,history=True,outliers=False,view=0,smooth=False):
   w[204:204]=pad
   w[144:144]=bounds
  return transform_shex(data,patch)
+def generate_bypass(data):
+ # R262: preserve native dispatch coordinates and output ABI, copy only t3 mip0.
+ # No samplers, history, luminance clamp, spatial neighbors or camera constants.
+ if hashlib.sha256(data).hexdigest()!=SOURCE_SHA:raise ValueError('Unknown native GI shader')
+ def patch(w):
+  assert w[123] & 0x7ff == 45 and w[412] & 0x7ff == 164
+  declarations=w[:81]
+  coordinates=w[81:91]+w[115:123]
+  current=w[123:131] # ld r2.xyz, integer dispatch coordinates, t3
+  output=[0x05000036,0x001000f2,1,0x00100246,2] # mov r1.xyzw, r2.xyzx
+  w[:]=declarations+coordinates+current+output+w[412:421]
+ return transform_shex(data,patch)
+
 if __name__=='__main__':
  root=Path(__file__).resolve().parents[1]
  from gi_spatial_history import write_header
@@ -129,3 +142,6 @@ if __name__=='__main__':
  with (out/'gi_motion_history.generated.h').open('a') as f:
   f.write('inline constexpr unsigned char kGISmoothShader[]={\n'+','.join(map(str,generate(source,False,smooth=True)))+'\n};\n')
  print('GI motion shader SHA256',hashlib.sha256(result).hexdigest())
+
+ with (out/'gi_motion_history.generated.h').open('a') as f:
+  f.write('inline constexpr unsigned char kGIBypassShader[]={\n'+','.join(map(str,generate_bypass(source)))+'\n};\n')

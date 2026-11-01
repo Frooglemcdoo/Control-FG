@@ -22,7 +22,9 @@ static RRAlbedoCallPatch rrNativeGITemporalBindPatch{};
 static RRIndirectCallPatch rrNativeGITemporalDispatchPatch{},rrNativeGISpatialDispatchPatch{};
 static thread_local bool rrNativeGISingleHistory=false;
 static thread_local unsigned rrNativeGISpatialApplied=0;
+static thread_local unsigned rrNativeGISpatialObserved=0;
 static void RRNativeHookGISpatialDispatch(void* state,const void* groups){
+ if(rrNativeGIHistoryScope)++rrNativeGISpatialObserved;
  const DWORD saved=GetLastError();control_rr_reflection::Context context{};
  const bool eligible=rrNativeGIHistoryScope&&rrNativeGISingleHistory&&rrNativeGIHistoryDispatches==1&&
   rrNativeCopy.StateMatches(reinterpret_cast<std::uintptr_t>(state))&&RRReflectionCurrent(nullptr,context)&&
@@ -59,6 +61,9 @@ static void RRNativeRunGIFilter(void* color,void* history,unsigned passes){
  const auto mode=control_rr_gi::stageMode.load(std::memory_order_acquire);
  const unsigned effectivePasses=control_rr_gi::SpatialPasses(mode,passes);
  const auto view=control_rr_gi::EffectiveView(mode,control_rr_gi::viewRequested.load(std::memory_order_acquire));
+ const bool previousRaw=control_rr_gi::rawBypass;
+ control_rr_gi::rawBypass=mode==control_rr_gi::StageMode::RawBypass;
+ rrNativeGISpatialObserved=0;
  const auto previousView=control_rr_gi::activeView;control_rr_gi::activeView=view;
  const bool outlier=control_rr_gi::UseOutlier(mode,control_rr_gi::outlierRequested.load(std::memory_order_acquire))||view==control_rr_gi::DiagnosticView::Mask;
  const bool previousOutlier=control_rr_gi::outlierEnabled;
@@ -94,8 +99,14 @@ static void RRNativeRunGIFilter(void* color,void* history,unsigned passes){
   if(rrNativeGISingleHistory){
    static unsigned long long samples=0;++samples;
    if(samples<=4||samples%240==0||rrNativeGISpatialApplied!=effectivePasses)
-    native_lighting::Trace("gi_spatial_history build=R261 steady=%u bounded=%u frame=%llu temporal_applied=%u spatial_expected=%u spatial_applied=%u complete=%u",unsigned(control_rr_gi::spatialSteady),unsigned(control_rr_gi::spatialHistoryBounded),rrNativeFrame.Key().frame,rrNativeGIHistoryDispatches,effectivePasses,rrNativeGISpatialApplied,unsigned(okay&&rrNativeGISpatialApplied==effectivePasses));
+    Log("gi_spatial_history build=R261 steady=%u bounded=%u frame=%llu temporal_applied=%u spatial_expected=%u spatial_applied=%u complete=%u",unsigned(control_rr_gi::spatialSteady),unsigned(control_rr_gi::spatialHistoryBounded),rrNativeFrame.Key().frame,rrNativeGIHistoryDispatches,effectivePasses,rrNativeGISpatialApplied,unsigned(okay&&rrNativeGISpatialApplied==effectivePasses));
   }
+  if(control_rr_gi::rawBypass){
+   static unsigned long long bypassCalls=0;++bypassCalls;
+   if(bypassCalls<=4||bypassCalls%240==0||!okay||rrNativeGISpatialObserved)
+    Log("GI_BYPASS_R262 frame=%llu mode=raw_bypass copy_applied=%u spatial_requested=%u spatial_observed=%u complete=%u calls=%llu",rrNativeFrame.Key().frame,rrNativeGIHistoryDispatches,effectivePasses,rrNativeGISpatialObserved,unsigned(okay&&rrNativeGISpatialObserved==0),bypassCalls);
+  }
+  control_rr_gi::rawBypass=previousRaw;
   control_rr_gi::spatialSteady=previousSteady;
   control_rr_gi::spatialHistoryBounded=previousBounded;
   rrNativeGISingleHistory=false;
@@ -105,7 +116,7 @@ static void RRNativeRunGIFilter(void* color,void* history,unsigned passes){
   static bool lastOutlier=false;
   static auto lastView=control_rr_gi::DiagnosticView::Normal;
   if(calls<=4||calls%240==0||mode!=lastMode||outlier!=lastOutlier||view!=lastView)
-   native_lighting::Trace("gi_temporal_adaptive build=R217 stage=%s view=%s smooth=%u temporal=%u spatial_requested=%u applied=%u calls=%llu dispatches=%u spatial_passes=%u pipeline_ready=%u engine_record_copy=0 provider_override=0 reason=%s rr_selected=%u",control_rr_gi::StageName(mode),control_rr_gi::ViewName(view),unsigned(outlier),unsigned(control_rr_gi::Temporal(mode)),passes,unsigned(okay),calls,rrNativeGIHistoryDispatches,effectivePasses,control_rr_gi::ready.load(),rrNativeGIHistoryReason,unsigned(rrNativeFrame.Selected()));
+   Log("gi_temporal_adaptive build=R217 stage=%s view=%s smooth=%u temporal=%u spatial_requested=%u applied=%u calls=%llu dispatches=%u spatial_passes=%u pipeline_ready=%u engine_record_copy=0 provider_override=0 reason=%s rr_selected=%u",control_rr_gi::StageName(mode),control_rr_gi::ViewName(view),unsigned(outlier),unsigned(control_rr_gi::Temporal(mode)),passes,unsigned(okay),calls,rrNativeGIHistoryDispatches,effectivePasses,control_rr_gi::ready.load(),rrNativeGIHistoryReason,unsigned(rrNativeFrame.Selected()));
   lastMode=mode;lastOutlier=outlier;lastView=view;
   SetLastError(saved);
  }

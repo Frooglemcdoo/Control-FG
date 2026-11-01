@@ -117,3 +117,23 @@ for kwargs in [dict(history=True,smooth=True),dict(history=False,outliers=True,s
  except ValueError:pass
  else:raise AssertionError('Invalid smoothing combination accepted')
 print('PASS R217 current-frame gather: unchanged bindings, 8 depth tests, no history blend, one output store')
+
+# R262 bypass: exact current-frame integer load and native RGB/red output ABI.
+from gi_motion_history import generate_bypass
+raw=generate_bypass(source)
+assert raw[4:20]==checksum(raw)
+rc=chunks(raw)
+assert all(rc[k]==a[k] for k in a if k!=b'SHEX')
+with tempfile.TemporaryDirectory() as d:
+ p=Path(d)/'raw.dxbc';p.write_bytes(raw);rj=decode(p)
+ri=rj['instructions'];runtime=[i for i in ri if not i['name'].startswith('dcl_')]
+assert [(i['name'],i['operands']) for i in runtime]==[
+ ('imad',['r[0].xy','type33.xyxx','l(8,8,0,0)','type34.xyxx']),
+ ('mov',['r[0].zw','l(0,0,0,0)']),
+ ('ld',['r[2].xyz','r[0].xyzw','t[3][3].xyzw']),
+ ('mov',['r[1].xyzw','r[2].xyzx']),
+ ('store_uav_typed',['type30[0][0].xyzw','r[0].xyyy','r[1].xyzw']),('ret',[])]
+assert rj['bindings']==original['bindings']
+try:generate_bypass(source[:-1]);raise AssertionError('Unknown bypass source accepted')
+except ValueError:pass
+print('PASS R262 exact mip0 current pixel copy, RGB/red ABI, no history/depth/motion/mip/clamp/filter reads')

@@ -42,7 +42,7 @@ int main(){try{
   return d->CreateComputePipelineState(desc,iid,out);
  };
  control_rr_gi::Capture(gpu.device.Get(),&p,native.Get(),create);
- auto* bundle=control_rr_gi::Find(native.Get());Require(bundle&&bundle->adaptive&&bundle->noHistory&&bundle->outlier&&bundle->mask&&bundle->zero&&bundle->smooth,"adaptive pipeline missing");
+ auto* bundle=control_rr_gi::Find(native.Get());Require(bundle&&bundle->adaptive&&bundle->noHistory&&bundle->outlier&&bundle->mask&&bundle->zero&&bundle->smooth&&bundle->bypass,"adaptive pipeline missing");
  control_rr_gi::Capture(gpu.device.Get(),&p,native.Get(),create);Require(control_rr_gi::ready.load()==1,"duplicate capture");
  p.CS={kGIMotionHistoryShader,sizeof(kGIMotionHistoryShader)};
  control_rr_gi::Capture(gpu.device.Get(),&p,pso.Get(),create);Require(control_rr_gi::ready.load()==1,"unknown shader captured");
@@ -73,7 +73,13 @@ int main(){try{
  Require(dispatched==7&&observed==pso.Get(),"fallback dispatch missing");
  currentNative=native.Get();expected=bundle->adaptive;throwDispatch=true;bool caught=false;
  InvokeCatching(caught);Require(caught&&observed==native.Get()&&!control_rr_clamp::active,"exception restoration failed");
+ control_rr_gi::rawBypass=true;throwDispatch=false;expected=bundle->bypass;
+ Require(control_rr_clamp::InvokeGI(NativeDispatch,nullptr,nullptr,currentList),"raw bypass not applied");
+ Require(observed==native.Get(),"raw bypass native restore");
+ auto* savedBypass=bundle->bypass;bundle->bypass=nullptr;expected=native.Get();
+ Require(!control_rr_clamp::InvokeGI(NativeDispatch,nullptr,nullptr,currentList),"missing bypass must report native fallback");
+ bundle->bypass=savedBypass;control_rr_gi::rawBypass=false;
  control_rr_clamp::dispatchOriginal=realDispatch;control_rr_clamp::setOriginal=realSet;
- RunHistoryPixels(gpu,root.Get(),pso.Get(),native.Get(),bundle->noHistory,bundle->outlier,bundle->mask,bundle->zero,bundle->smooth);
+ RunHistoryPixels(gpu,root.Get(),pso.Get(),native.Get(),bundle->noHistory,bundle->outlier,bundle->mask,bundle->zero,bundle->smooth,bundle->bypass);
  std::cout<<"PASS R217 actual native/adaptive WARP PSOs, exact-source capture, duplicate rejection, production dispatch scope, native fallback and exception restoration\n";
 }catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}

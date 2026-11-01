@@ -7,7 +7,7 @@
 #include "../build/gi_spatial_history.generated.h"
 // Immutable GPU objects, never copies of the engine's shader/lock/cache records.
 namespace control_rr_gi {
-struct Bundle {bool spatial=false;ID3D12PipelineState* bounded=nullptr;ID3D12PipelineState* steady=nullptr;ID3D12PipelineState* native=nullptr;ID3D12PipelineState* adaptive=nullptr;ID3D12PipelineState* noHistory=nullptr;ID3D12PipelineState* outlier=nullptr;ID3D12PipelineState* mask=nullptr;ID3D12PipelineState* zero=nullptr;ID3D12PipelineState* smooth=nullptr;};
+struct Bundle {bool spatial=false;ID3D12PipelineState* bypass=nullptr;ID3D12PipelineState* bounded=nullptr;ID3D12PipelineState* steady=nullptr;ID3D12PipelineState* native=nullptr;ID3D12PipelineState* adaptive=nullptr;ID3D12PipelineState* noHistory=nullptr;ID3D12PipelineState* outlier=nullptr;ID3D12PipelineState* mask=nullptr;ID3D12PipelineState* zero=nullptr;ID3D12PipelineState* smooth=nullptr;};
 inline std::atomic<Bundle*> bundles[8]{};
 inline std::atomic<unsigned> reserved{0},ready{0},failed{0};
 inline Bundle* Find(ID3D12PipelineState* native) noexcept {
@@ -81,6 +81,10 @@ template<class Create> void Capture(ID3D12Device* device,const D3D12_COMPUTE_PIP
  replacement.CS={kGISmoothShader,sizeof(kGISmoothShader)};
  const HRESULT smoothResult=create(device,&replacement,IID_PPV_ARGS(&b->smooth));
  if(FAILED(smoothResult)){if(b->smooth)b->smooth->Release();b->smooth=nullptr;++failed;}
+ replacement.CS={kGIBypassShader,sizeof(kGIBypassShader)};
+ const HRESULT bypassResult=create(device,&replacement,IID_PPV_ARGS(&b->bypass));
+ if(FAILED(bypassResult)){if(b->bypass)b->bypass->Release();b->bypass=nullptr;++failed;}
+ Log("GI_BYPASS_R262 ready=%u",unsigned(b->bypass!=nullptr));
  Log("GI_SMOOTH_R217 ready=%u",unsigned(b->smooth!=nullptr));
  Log("GI_DIAGNOSTIC_R217 mask_ready=%u zero_ready=%u",unsigned(b->mask!=nullptr),unsigned(b->zero!=nullptr));
  bundles[index].store(b,std::memory_order_release);++ready;
@@ -94,6 +98,7 @@ template<class Set,class DispatchFn> void Dispatch(ID3D12PipelineState* observed
  if(b&&!b->spatial&&!spatialDispatch&&historyDisabled&&activeView==DiagnosticView::Mask)replacement=b->mask;
  if(b&&!b->spatial&&!spatialDispatch&&historyDisabled&&activeView==DiagnosticView::Zero)replacement=b->zero;
  if(b&&b->spatial&&spatialDispatch)replacement=spatialSteady?b->steady:spatialHistoryBounded?b->bounded:b->adaptive;
+ if(b&&!b->spatial&&!spatialDispatch&&rawBypass)replacement=b->bypass;
  if(!replacement||count!=1){dispatch(list,x,y,z);return;}
  // Called only after DeviceUtil commits its native PSO and bindings.
  __try {set(list,replacement);dispatch(list,x,y,z);used=true;}
