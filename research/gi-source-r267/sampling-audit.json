@@ -1,0 +1,26 @@
+{
+  "schema": "gi-sampling-audit-v1",
+  "ray_variants": [
+    {
+      "variant": 0,
+      "native_sha256": "6297319e1fec315c06ee75993e797b51def658e7d41f1588d7df3feb41a1ea2f",
+      "mapping": "x=cos(2*pi*u)*sqrt(1-v), y=sin(2*pi*u)*sqrt(1-v), z=sqrt(v)",
+      "pdf_for_uniform_uv": "cos(theta)/pi",
+      "r264_changes_phase_only": true
+    },
+    {
+      "variant": 1,
+      "native_sha256": "1ff8a93460d94f58fc0e70afff994a334f1c45be292e3e858a63f51070e5734a",
+      "mapping": "x=cos(2*pi*u)*sqrt(1-v), y=sin(2*pi*u)*sqrt(1-v), z=sqrt(v)",
+      "pdf_for_uniform_uv": "cos(theta)/pi",
+      "r264_changes_phase_only": true
+    }
+  ],
+  "gi6_normalization": "depth_scale * sum(primary_throughput * secondary_shading) / configured_ray_count",
+  "limits": [
+    "Static shader audit, not proof of runtime constant-buffer agreement.",
+    "Cosine PDF assumes uniform input coordinates and a valid orthonormal basis.",
+    "No inference that six rays adequately sample a small bright indirect source.",
+    "No change to lighting, ray distribution or sample count."
+  ]
+}

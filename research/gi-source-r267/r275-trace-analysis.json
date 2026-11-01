@@ -1,0 +1,249 @@
+{
+  "schema": "gi-spot-trace-analysis-v1",
+  "sha256": "9f1810000154dcca73e196b470f1756f204b8cfb01a623e49687b5e6bda17c0a",
+  "attempted_records": 27953,
+  "retained_records": 27953,
+  "overflow": false,
+  "sampled_pixels": 3304,
+  "ray_indices": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5
+  ],
+  "validity_counts": {
+    "1": 27655,
+    "3": 174,
+    "16383": 124
+  },
+  "per_light": [
+    {
+      "light": 5,
+      "records": 4609,
+      "validity_counts": {
+        "1": 4609
+      }
+    },
+    {
+      "light": 6,
+      "records": 4609,
+      "validity_counts": {
+        "1": 4311,
+        "3": 174,
+        "16383": 124
+      }
+    },
+    {
+      "light": 13,
+      "records": 4609,
+      "validity_counts": {
+        "1": 4609
+      }
+    },
+    {
+      "light": 14,
+      "records": 4609,
+      "validity_counts": {
+        "1": 4609
+      }
+    },
+    {
+      "light": 15,
+      "records": 95,
+      "validity_counts": {
+        "1": 95
+      }
+    },
+    {
+      "light": 16,
+      "records": 95,
+      "validity_counts": {
+        "1": 95
+      }
+    },
+    {
+      "light": 22,
+      "records": 95,
+      "validity_counts": {
+        "1": 95
+      }
+    },
+    {
+      "light": 26,
+      "records": 9067,
+      "validity_counts": {
+        "1": 9067
+      }
+    },
+    {
+      "light": 27,
+      "records": 165,
+      "validity_counts": {
+        "1": 165
+      }
+    }
+  ],
+  "full_stage_records": 124,
+  "arithmetic": {
+    "denominator_max_abs_error": 9.99999949513608e-09,
+    "attenuation_max_abs_error": 6.098924276720652e-08
+  },
+  "partial_term_concentration": {
+    "metric": "max RGB per record, before depth/ray normalization",
+    "top10_share": 0.8289850267801653,
+    "distance_squared_below_one_share": 0.9922074158940144
+  },
+  "brightest_partial_terms": [
+    {
+      "pixel": [
+        112,
+        1040
+      ],
+      "ray": 0,
+      "light": 6,
+      "rgb": [
+        0.7203329553170612,
+        0.5147688340294595,
+        0.28029994064815117
+      ],
+      "distance_squared": 0.25153282284736633
+    },
+    {
+      "pixel": [
+        240,
+        464
+      ],
+      "ray": 0,
+      "light": 6,
+      "rgb": [
+        0.18317274787421517,
+        0.16484446567756927,
+        0.14238176121654675
+      ],
+      "distance_squared": 0.3261599540710449
+    },
+    {
+      "pixel": [
+        432,
+        432
+      ],
+      "ray": 5,
+      "light": 6,
+      "rgb": [
+        0.16078932315069197,
+        0.12921781900056228,
+        0.09029547395670065
+      ],
+      "distance_squared": 0.284237265586853
+    },
+    {
+      "pixel": [
+        240,
+        1072
+      ],
+      "ray": 0,
+      "light": 6,
+      "rgb": [
+        0.15474878064085368,
+        0.12755803126841486,
+        0.09205025286850832
+      ],
+      "distance_squared": 0.32025453448295593
+    },
+    {
+      "pixel": [
+        144,
+        1168
+      ],
+      "ray": 5,
+      "light": 6,
+      "rgb": [
+        0.1381782167064686,
+        0.12261273857599263,
+        0.10308533455315151
+      ],
+      "distance_squared": 0.3366953134536743
+    },
+    {
+      "pixel": [
+        304,
+        1328
+      ],
+      "ray": 5,
+      "light": 6,
+      "rgb": [
+        0.12714920598209017,
+        0.10664047412877047,
+        0.07973972776940966
+      ],
+      "distance_squared": 0.405836284160614
+    },
+    {
+      "pixel": [
+        144,
+        1200
+      ],
+      "ray": 1,
+      "light": 6,
+      "rgb": [
+        0.1196014483592945,
+        0.10303625721131354,
+        0.08057976722867038
+      ],
+      "distance_squared": 0.39689624309539795
+    },
+    {
+      "pixel": [
+        208,
+        1424
+      ],
+      "ray": 0,
+      "light": 6,
+      "rgb": [
+        0.07516183508971755,
+        0.052346274448165586,
+        0.03377837304984954
+      ],
+      "distance_squared": 0.35756543278694153
+    },
+    {
+      "pixel": [
+        1264,
+        592
+      ],
+      "ray": 4,
+      "light": 6,
+      "rgb": [
+        0.07001806937907523,
+        0.054728765356032,
+        0.037443095223071744
+      ],
+      "distance_squared": 0.33520346879959106
+    },
+    {
+      "pixel": [
+        208,
+        1168
+      ],
+      "ray": 3,
+      "light": 6,
+      "rgb": [
+        0.04833332784190805,
+        0.04184410174444843,
+        0.025762394738172715
+      ],
+      "distance_squared": 0.3376832604408264
+    }
+  ],
+  "limitations": [
+    "One dispatch; no temporal variance or unbiased reference measured.",
+    "Grid sample; no material IDs or aligned image for hair/plant classification.",
+    "Invalid stages are absent, not zero-valued observations.",
+    "Partial term concentration is not final image energy or proof of faulty sampling.",
+    "Spotlight records do not count rays that never entered a spotlight loop.",
+    "Light indices are session-local, not identified scene objects.",
+    "Header does not contain frame/dimensions/shader identity; pair with export log."
+  ]
+}

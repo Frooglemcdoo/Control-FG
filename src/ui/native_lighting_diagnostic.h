@@ -1,6 +1,7 @@
 #pragma once
 #include "theme.h"
 #include "../rr_gi_stage_policy.h"
+#include "../rr_clamp_strength_policy.h"
 #include "lighting_capture_suite.h"
 #include "lighting_performance_capture.h"
 #include "rr_reflection_suite.h"
@@ -14,11 +15,12 @@ inline constexpr int kActionsY = kStatusY + 28;
 inline constexpr int kCaptureY = kActionsY + 46;
 inline constexpr int kPerformanceY = kCaptureY + 46;
 inline constexpr int kCameraY = kPerformanceY + 46;
-inline constexpr int kCaptureStatusY = kCameraY + 116;
+inline constexpr int kCaptureStatusY = kCameraY + 162;
 inline constexpr int kFooterY = kCaptureStatusY + 50;
 inline constexpr int kHeight = kFooterY + 72;
-inline constexpr unsigned kButtonCount = kModeCount + 15;
+inline constexpr unsigned kButtonCount = kModeCount + 16;
 inline const wchar_t* ButtonLabel(unsigned index) noexcept {
+    if(index==kModeCount+15)return control_rr_clamp::diagnosticBypass.load()?L"REF CLAMP: BYPASS":L"REF CLAMP: 60%";
     if(index==kModeCount+3&&gi_spot_trace::Enabled())return L"ARM GI TRACE";
 #ifdef CONTROL_RR_FOLIAGE_AUDIT
     if(index==kModeCount+2)return L"CAPTURE MATERIALS";
@@ -322,7 +324,7 @@ inline LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPA
         for (unsigned i=0;i<kButtonCount;++i) {
             const int row=i<kModeCount ? i/3 : kModeRows, col=i<kModeCount ? i%3 : (i-kModeCount)%3;
             HWND button=CreateWindowExW(0,L"STATIC",ButtonLabel(i),WS_CHILD|WS_VISIBLE|SS_NOTIFY|SS_OWNERDRAW,
-                14+col*156,i<kModeCount ? 40+row*46 : i<kModeCount+3 ? kActionsY : i<kModeCount+6 ? kCaptureY : i<kModeCount+9 ? kPerformanceY : i<kModeCount+12 ? kCameraY : kCameraY+70,148,36,window,reinterpret_cast<HMENU>(INT_PTR(kButtonFirst+i)),selfModule,nullptr);
+                14+col*156,i<kModeCount ? 40+row*46 : i<kModeCount+3 ? kActionsY : i<kModeCount+6 ? kCaptureY : i<kModeCount+9 ? kPerformanceY : i<kModeCount+12 ? kCameraY : i<kModeCount+15 ? kCameraY+70 : kCameraY+116,148,36,window,reinterpret_cast<HMENU>(INT_PTR(kButtonFirst+i)),selfModule,nullptr);
             SendMessageW(button,WM_SETFONT,reinterpret_cast<WPARAM>(bodyFont),TRUE);
         }
         return 0;
@@ -355,6 +357,11 @@ inline LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPA
             else if(index==kModeCount||index==kModeCount+1) {
                 if (!ReportVisual(index==kModeCount))
                     MessageBoxW(window, L"This mode has not applied yet. Press F10 to return to the game, wait for the image to settle, then reopen the panel and record your result.", L"Wait for mode to apply", MB_OK);
+            }
+            else if(index==kModeCount+15 && !capture_suite::active) {
+                const bool bypass=!control_rr_clamp::diagnosticBypass.load();
+                control_rr_clamp::diagnosticBypass.store(bypass,std::memory_order_release);
+                Trace("REF_CLAMP_R276 requested=%u other_settings_unchanged=1",bypass?0u:60u);
             }
             else if(index==kModeCount+2) SaveReport(window);
             else if(index==kModeCount+3) RequestLightCapture(window);

@@ -3,6 +3,7 @@ name: Build native reflection enhancements and RR
 on:
   push:
     branches:
+      - work/r276-reflection-clamp-ab
       - work/r275-gi-trace-confirmation
       - work/r274-gi-spot-trace
       - work/r273-gi-binding-audit
@@ -1114,11 +1115,11 @@ jobs:
           build\test-gi-spot-pcf.exe
           if errorlevel 1 exit /b 1
 
-      - name: Package GI trace confirmation R275
+      - name: Package Reflection clamp comparison R276
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='ControlTOH-R275'
+          $out='ControlTOH-R276'
           $shader="$out/ControlTOH/Shaders"
           $tools="$out/ControlTOH/Tools"
           $diagnostics="$out/ControlTOH/Diagnostics"
@@ -1143,29 +1144,29 @@ jobs:
           Copy-Item Package-Lighting-Capture.cmd,tools/package-lighting-capture.py,Package-Lighting-Performance.ps1 $diagnostics
           Copy-Item Capture-RR-Boundary.cmd,Capture-RR-Boundary.ps1,Collect-RR-Boundary-Status.cmd,tools/collect-rr-boundary.py $diagnostics
           Copy-Item Start-Compact-Distance-Test.cmd,Capture-RR-Suite.ps1,tools/collect-rr-suite.py $diagnostics
-          Copy-Item tools/diagnostics/Start-R258-Storage-Diagnostics.cmd,tools/diagnostics/Start-GI-Source-Probe.cmd,tools/diagnostics/Start-GI-Shadow-Test.cmd,tools/diagnostics/Start-GI-Lighting-Test.cmd,tools/diagnostics/Start-GI-Hit-Capture.cmd,tools/diagnostics/Start-GI-Binding-Audit.cmd,tools/diagnostics/Start-GI-Spot-Trace.cmd $diagnostics
+          Copy-Item tools/diagnostics/Start-R258-Storage-Diagnostics.cmd,tools/diagnostics/Start-GI-Source-Probe.cmd,tools/diagnostics/Start-GI-Shadow-Test.cmd,tools/diagnostics/Start-GI-Lighting-Test.cmd,tools/diagnostics/Start-GI-Hit-Capture.cmd,tools/diagnostics/Start-GI-Binding-Audit.cmd,tools/diagnostics/Start-GI-Spot-Trace.cmd,tools/diagnostics/Start-Reflection-Clamp-Test.cmd $diagnostics
           Copy-Item tools/diagnostics/Collect-Texture-Trace.cmd,tools/diagnostics/Collect-Texture-Trace.ps1 $tools
           Copy-Item build/DirectStorage "$diagnostics/DirectStorage" -Recurse
           Copy-Item build/DirectStorage/dstorage.dll,build/DirectStorage/dstoragecore.dll $out
           Copy-Item tools/directstorage/Validate-DirectStorage.cmd "$diagnostics/DirectStorage"
-          Copy-Item docs/native-lighting-r275.md "$out/ControlTOH/DIAGNOSTIC-NOTES.md"
+          Copy-Item docs/native-lighting-r276.md "$out/ControlTOH/DIAGNOSTIC-NOTES.md"
           Copy-Item tools/Organize-Existing-Install.cmd,tools/Organize-Existing-Install.ps1 $tools
           Copy-Item tools/diagnostics/Collect-ControlTOH-Materials.cmd,tools/diagnostics/Collect-ControlTOH-Materials.ps1 $tools
           & powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/diagnostics/test-material-collector.ps1
           if ($LASTEXITCODE -ne 0) { throw 'Material collector integration test failed' }
           @'
           Control The Oldest House: Visual and Performance Overhaul
-          R275 - GI trace confirmation
+          R276 - Reflection clamp comparison
 
           Copy all package contents beside Control_DX12.exe, preserving folders.
           Normal launch restores native spotlight GI lighting.
-          Run ControlTOH/Diagnostics/Start-GI-Spot-Trace.cmd.
+          Run ControlTOH/Diagnostics/Start-Reflection-Clamp-Test.cmd.
           Load the original plant area with the lamp intact, RT indirect and RR ON.
           Select GI RAW BYPASS; keep Native Blend and FG off.
-          Aim at the original plant and Jesse hair; press F7 or click ARM GI TRACE in F10.
-          Look for ARMED, close F10, hold mouse zoom, then wait for SAVED before exiting.
+          Use F10 REF CLAMP: 60% / BYPASS to compare the same view.
+          Close F10 and allow RR to settle after each change. Return to 60% to confirm.
           Do not click CAPTURE RR. The launcher packages logs after exit.
-          This records sampled secondary-hit spotlight arithmetic.
+          No F7 or image capture is needed. Compare stationary and moving views.
           It preserves native lighting and is diagnostic, not a speckle fix.
           See ControlTOH/DIAGNOSTIC-NOTES.md for exact scope and limits.
           '@ | Set-Content "$out/ControlTOH/README.txt" -Encoding ASCII
@@ -1180,10 +1181,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: ControlTOH-R275
+          name: ControlTOH-R276
           path: |
-            ControlTOH-R275.zip
-            ControlTOH-R275.sha256
+            ControlTOH-R276.zip
+            ControlTOH-R276.sha256
             build/gi-spot-trace-validation.json
             build/gi-spot-pcf-validation.json
             build/gi-sequence-validation.json
