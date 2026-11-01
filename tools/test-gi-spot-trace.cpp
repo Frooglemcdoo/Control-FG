@@ -62,6 +62,7 @@ int main()try{
   D3D12_RANGE range{0,allocated};Check(readback->Map(0,&range,&mapped));auto* p=static_cast<unsigned char*>(mapped);UINT total=0;memcpy(&total,p,4);Require(total==(run?capacity+3:4),"record allocation count");
   for(UINT j=0;j<256;++j)Require(p[bytes+j]==0xa5,"overflow touched guard");
   for(UINT sample=0;sample<(run?1u:4u);++sample){const UINT index=run?capacity-1:sample;auto* record=p+16+index*stride;UINT id[4]{},valid=0;memcpy(id,record,16);memcpy(&valid,record+192,4);
+   if(!(id[0]==16&&id[1]==16&&id[2]==sample/2&&id[3]==100+sample))std::cerr<<"run="<<run<<" sample="<<sample<<" index="<<index<<" id="<<id[0]<<","<<id[1]<<","<<id[2]<<","<<id[3]<<" valid="<<valid<<"\n";
    Require(id[0]==16&&id[1]==16&&id[2]==sample/2&&id[3]==100+sample,"pixel/ray/light identity");
    Require(valid==(sample==0?3u:sample==1?16255u:16383u),"valid-stage mask");
    auto scalar=[&](UINT offset){float f=0;memcpy(&f,record+offset,4);return f;};

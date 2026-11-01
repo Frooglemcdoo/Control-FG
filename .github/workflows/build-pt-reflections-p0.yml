@@ -118,6 +118,10 @@ jobs:
           if errorlevel 1 exit /b 1
           build\test-gi-spot-trace.exe
           if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-spot-bindings.cpp /Febuild\test-gi-spot-bindings.exe /link d3d12.lib dxgi.lib d3dcompiler.lib user32.lib
+          if errorlevel 1 exit /b 1
+          build\test-gi-spot-bindings.exe
+          if errorlevel 1 exit /b 1
           python tools/test-gi-spot-collector.py
           if errorlevel 1 exit /b 1
 
