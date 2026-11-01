@@ -230,10 +230,16 @@ inline void RecordCompute(const D3D12_COMPUTE_PIPELINE_STATE_DESC*) noexcept;
 }
 #include "gi_source_runtime.inl"
 #include "gi_spot_pcf_runtime.inl"
+namespace gi_binding_audit {
+inline void Observe(const D3D12_COMPUTE_PIPELINE_STATE_DESC*,IUnknown*) noexcept;
+inline void Bind(ID3D12GraphicsCommandList*,ID3D12PipelineState*) noexcept;
+inline void Dispatch(ID3D12GraphicsCommandList*,UINT,UINT,UINT) noexcept;
+}
 inline void ObserveCompute(ID3D12Device* device, const D3D12_COMPUTE_PIPELINE_STATE_DESC* desc, IUnknown* native, CreateCompute original) noexcept {
     computeSeen.fetch_add(1);
     control_rr_gi::Capture(device,desc,native,original);
     gi_source_probe::Observe(device,desc,native,original);
+    gi_binding_audit::Observe(desc,native);
     gi_spot_pcf_probe::Observe(device,desc,native,original);
     IdentifyPipeline(native, desc->CS, 2);
     rt_shadow_capture::RecordCompute(desc);
@@ -322,6 +328,7 @@ inline void STDMETHODCALLTYPE SetHook(ID3D12GraphicsCommandList* list, ID3D12Pip
     if(!alternate)alternate=gi_source_probe::Select(binding.selected);
     if(!alternate)alternate=gi_spot_pcf_probe::Select(binding.selected);
     original(list, alternate ? alternate : binding.selected);
+    gi_binding_audit::Bind(list,alternate ? alternate : binding.selected);
     rt_spot_capture_runtime::BindCompute(list,pso,alternate ? alternate : binding.selected);
     BindPerformance(list,pso);
     if (alternate) alternate->Release();
@@ -329,6 +336,7 @@ inline void STDMETHODCALLTYPE SetHook(ID3D12GraphicsCommandList* list, ID3D12Pip
 }
 inline void STDMETHODCALLTYPE ComputeDispatchHook(ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT z) {
     const auto hooks=Lookup(list);const auto original=hooks.dispatch;if(!original)return;
+    gi_binding_audit::Dispatch(list,x,y,z);
     rt_spot_capture_runtime::BeforeCompute(list,x,y,z);
     const auto timing=performance::Begin(list,performance::ComputeStage(list),x,y,z,0,performance::ComputeShader(list));
     // R171: preserve native serial shading and dispatch dimensions.
@@ -344,6 +352,7 @@ inline HRESULT STDMETHODCALLTYPE ResetHook(ID3D12GraphicsCommandList* list, ID3D
     if(!alternate)alternate=gi_source_probe::Select(binding.selected);
     if(!alternate)alternate=gi_spot_pcf_probe::Select(binding.selected);
     const HRESULT hr = original(list, allocator, alternate ? alternate : binding.selected);
+    gi_binding_audit::Bind(list,SUCCEEDED(hr)?(alternate?alternate:binding.selected):nullptr);
     if (alternate) alternate->Release();
     if (SUCCEEDED(hr)) { performance::Reset(list);BindPerformance(list,pso);binding.Recorded(); }
     return hr;
@@ -358,6 +367,7 @@ inline bool PatchSlot(void** slot, void* expected, void* hook) noexcept {
 }
 #include "spot_shadow_resolution_runtime.h"
 #include "rt_spot_capture_audit.h"
+#include "gi_binding_audit.inl"
 #include "rt_shadow_capture.h"
 #include "rt_spot_hit_pipeline.h"
 #include "rt_spot_capture_gpu.h"

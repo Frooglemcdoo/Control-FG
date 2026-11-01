@@ -1,0 +1,1046 @@
+{
+  "schema": "gi-spot-trace-sites-v1",
+  "runtime_ready": false,
+  "variants": [
+    {
+      "native_sha256": "280a106cdf9ee35d3aeeaac16879e76521b7e9204fca394ec8fe31c076071e49",
+      "spotlight_binding": {
+        "name": "g_sbDeferredLightSpotData",
+        "kind": 5,
+        "return_type": 6,
+        "dimension": 1,
+        "samples": 320,
+        "slot": 11,
+        "count": 1,
+        "flags": 0,
+        "space": 0,
+        "identifier": 11
+      },
+      "sites": {
+        "light_coefficients": {
+          "instruction_shex_dword": 3876,
+          "sample_after_instruction": true,
+          "opcode": "ld_structured",
+          "operands": [
+            "r[20].xyzw",
+            "r[10].w",
+            "l(68)",
+            "t[11][11].xyzw"
+          ],
+          "light_index": "r[10].w",
+          "coefficient_bytes": [
+            68,
+            72,
+            76
+          ]
+        },
+        "light_color_range": {
+          "instruction_shex_dword": 4578,
+          "sample_after_instruction": true,
+          "opcode": "ld_structured",
+          "operands": [
+            "r[26].xyzw",
+            "r[10].w",
+            "l(48)",
+            "t[11][11].xyzw"
+          ]
+        },
+        "shadow_visibility_before_early_out": {
+          "instruction_shex_dword": 4549,
+          "sample_after_instruction": true,
+          "opcode": "movc",
+          "operands": [
+            "r[15].w",
+            "r[15].w",
+            "r[20].w",
+            "r[16].w"
+          ]
+        },
+        "distance_squared": {
+          "instruction_shex_dword": 4641,
+          "sample_after_instruction": true,
+          "opcode": "dp3",
+          "operands": [
+            "r[18].w",
+            "r[23].xyzx",
+            "r[23].xyzx"
+          ]
+        },
+        "denominator_before_floor": {
+          "instruction_shex_dword": 4655,
+          "sample_after_instruction": true,
+          "opcode": "mad",
+          "operands": [
+            "r[18].w",
+            "r[20].z",
+            "r[18].w",
+            "r[19].y"
+          ]
+        },
+        "attenuation": {
+          "instruction_shex_dword": 4691,
+          "sample_after_instruction": true,
+          "opcode": "max",
+          "operands": [
+            "r[18].w",
+            "r[18].w",
+            "l(0)"
+          ]
+        },
+        "range_times_attenuation": {
+          "instruction_shex_dword": 4698,
+          "sample_after_instruction": true,
+          "opcode": "mul",
+          "operands": [
+            "r[16].w",
+            "r[16].w",
+            "r[18].w"
+          ]
+        },
+        "projection_color": {
+          "instruction_shex_dword": 4804,
+          "sample_after_instruction": true,
+          "opcode": "sample_l",
+          "operands": [
+            "r[21].xyz",
+            "r[21].xyxx",
+            "t[10][10].xyzw",
+            "s[2][11]",
+            "l(0)"
+          ],
+          "conditional": true
+        },
+        "spot_diffuse_accumulation": {
+          "instruction_shex_dword": 4989,
+          "sample_after_instruction": false,
+          "opcode": "mad",
+          "operands": [
+            "r[9].xyz",
+            "r[14].wwww",
+            "r[20].xyzx",
+            "r[9].xyzx"
+          ],
+          "sample_before_instruction": true,
+          "diffuse_factor": "r[14].wwww",
+          "gated_light_rgb": "r[20].xyzx",
+          "includes_secondary_albedo": false,
+          "includes_primary_throughput": false,
+          "includes_ray_count_normalization": false
+        }
+      },
+      "native_lighting_modified": false,
+      "runtime_binding_validated": false,
+      "variant": 0
+    },
+    {
+      "native_sha256": "202de942debbac7d621ffc0cbcdf63b0165997779376be96d01798bc759cf7a2",
+      "spotlight_binding": {
+        "name": "g_sbDeferredLightSpotData",
+        "kind": 5,
+        "return_type": 6,
+        "dimension": 1,
+        "samples": 320,
+        "slot": 11,
+        "count": 1,
+        "flags": 0,
+        "space": 0,
+        "identifier": 11
+      },
+      "sites": {
+        "light_coefficients": {
+          "instruction_shex_dword": 4243,
+          "sample_after_instruction": true,
+          "opcode": "ld_structured",
+          "operands": [
+            "r[25].xyzw",
+            "r[10].z",
+            "l(68)",
+            "t[11][11].xyzw"
+          ],
+          "light_index": "r[10].z",
+          "coefficient_bytes": [
+            68,
+            72,
+            76
+          ]
+        },
+        "light_color_range": {
+          "instruction_shex_dword": 4945,
+          "sample_after_instruction": true,
+          "opcode": "ld_structured",
+          "operands": [
+            "r[31].xyzw",
+            "r[10].z",
+            "l(48)",
+            "t[11][11].xyzw"
+          ]
+        },
+        "shadow_visibility_before_early_out": {
+          "instruction_shex_dword": 4916,
+          "sample_after_instruction": true,
+          "opcode": "movc",
+          "operands": [
+            "r[16].x",
+            "r[16].x",
+            "r[23].w",
+            "r[18].y"
+          ]
+        },
+        "distance_squared": {
+          "instruction_shex_dword": 5008,
+          "sample_after_instruction": true,
+          "opcode": "dp3",
+          "operands": [
+            "r[21].w",
+            "r[28].xyzx",
+            "r[28].xyzx"
+          ]
+        },
+        "denominator_before_floor": {
+          "instruction_shex_dword": 5022,
+          "sample_after_instruction": true,
+          "opcode": "mad",
+          "operands": [
+            "r[21].w",
+            "r[25].z",
+            "r[21].w",
+            "r[22].w"
+          ]
+        },
+        "attenuation": {
+          "instruction_shex_dword": 5058,
+          "sample_after_instruction": true,
+          "opcode": "max",
+          "operands": [
+            "r[21].w",
+            "r[21].w",
+            "l(0)"
+          ]
+        },
+        "range_times_attenuation": {
+          "instruction_shex_dword": 5065,
+          "sample_after_instruction": true,
+          "opcode": "mul",
+          "operands": [
+            "r[18].y",
+            "r[18].y",
+            "r[21].w"
+          ]
+        },
+        "projection_color": {
+          "instruction_shex_dword": 5171,
+          "sample_after_instruction": true,
+          "opcode": "sample_l",
+          "operands": [
+            "r[26].xyz",
+            "r[26].xyxx",
+            "t[10][10].xyzw",
+            "s[3][11]",
+            "l(0)"
+          ],
+          "conditional": true
+        },
+        "spot_diffuse_accumulation": {
+          "instruction_shex_dword": 5356,
+          "sample_after_instruction": false,
+          "opcode": "mad",
+          "operands": [
+            "r[24].xyz",
+            "r[13].wwww",
+            "r[25].xyzx",
+            "r[24].xyzx"
+          ],
+          "sample_before_instruction": true,
+          "diffuse_factor": "r[13].wwww",
+          "gated_light_rgb": "r[25].xyzx",
+          "includes_secondary_albedo": false,
+          "includes_primary_throughput": false,
+          "includes_ray_count_normalization": false
+        }
+      },
+      "native_lighting_modified": false,
+      "runtime_binding_validated": false,
+      "variant": 1
+    },
+    {
+      "native_sha256": "baef8b2ddd6e06661200f54044699e440f72db5122dcf21e81c29407a16946da",
+      "spotlight_binding": {
+        "name": "g_sbDeferredLightSpotData",
+        "kind": 5,
+        "return_type": 6,
+        "dimension": 1,
+        "samples": 320,
+        "slot": 11,
+        "count": 1,
+        "flags": 0,
+        "space": 0,
+        "identifier": 11
+      },
+      "sites": {
+        "light_coefficients": {
+          "instruction_shex_dword": 3975,
+          "sample_after_instruction": true,
+          "opcode": "ld_structured",
+          "operands": [
+            "r[20].xyzw",
+            "r[10].w",
+            "l(68)",
+            "t[11][11].xyzw"
+          ],
+          "light_index": "r[10].w",
+          "coefficient_bytes": [
+            68,
+            72,
+            76
+          ]
+        },
+        "light_color_range": {
+          "instruction_shex_dword": 4677,
+          "sample_after_instruction": true,
+          "opcode": "ld_structured",
+          "operands": [
+            "r[26].xyzw",
+            "r[10].w",
+            "l(48)",
+            "t[11][11].xyzw"
+          ]
+        },
+        "shadow_visibility_before_early_out": {
+          "instruction_shex_dword": 4648,
+          "sample_after_instruction": true,
+          "opcode": "movc",
+          "operands": [
+            "r[15].w",
+            "r[15].w",
+            "r[20].w",
+            "r[16].w"
+          ]
+        },
+        "distance_squared": {
+          "instruction_shex_dword": 4740,
+          "sample_after_instruction": true,
+          "opcode": "dp3",
+          "operands": [
+            "r[18].w",
+            "r[23].xyzx",
+            "r[23].xyzx"
+          ]
+        },
+        "denominator_before_floor": {
+          "instruction_shex_dword": 4754,
+          "sample_after_instruction": true,
+          "opcode": "mad",
+          "operands": [
+            "r[18].w",
+            "r[20].z",
+            "r[18].w",
+            "r[19].y"
+          ]
+        },
+        "attenuation": {
+          "instruction_shex_dword": 4790,
+          "sample_after_instruction": true,
+          "opcode": "max",
+          "operands": [
+            "r[18].w",
+            "r[18].w",
+            "l(0)"
+          ]
+        },
+        "range_times_attenuation": {
+          "instruction_shex_dword": 4797,
+          "sample_after_instruction": true,
+          "opcode": "mul",
+          "operands": [
+            "r[16].w",
+            "r[16].w",
+            "r[18].w"
+          ]
+        },
+        "projection_color": {
+          "instruction_shex_dword": 4903,
+          "sample_after_instruction": true,
+          "opcode": "sample_l",
+          "operands": [
+            "r[21].xyz",
+            "r[21].xyxx",
+            "t[10][10].xyzw",
+            "s[2][11]",
+            "l(0)"
+          ],
+          "conditional": true
+        },
+        "spot_diffuse_accumulation": {
+          "instruction_shex_dword": 5088,
+          "sample_after_instruction": false,
+          "opcode": "mad",
+          "operands": [
+            "r[9].xyz",
+            "r[14].wwww",
+            "r[20].xyzx",
+            "r[9].xyzx"
+          ],
+          "sample_before_instruction": true,
+          "diffuse_factor": "r[14].wwww",
+          "gated_light_rgb": "r[20].xyzx",
+          "includes_secondary_albedo": false,
+          "includes_primary_throughput": false,
+          "includes_ray_count_normalization": false
+        }
+      },
+      "native_lighting_modified": false,
+      "runtime_binding_validated": false,
+      "variant": 2
+    },
+    {
+      "native_sha256": "2fe6a05d6c4ab9d80fdb1b54b9ae02989779c74c07f05a9a409049f92ce2a5af",
+      "spotlight_binding": {
+        "name": "g_sbDeferredLightSpotData",
+        "kind": 5,
+        "return_type": 6,
+        "dimension": 1,
+        "samples": 320,
+        "slot": 11,
+        "count": 1,
+        "flags": 0,
+        "space": 0,
+        "identifier": 11
+      },
+      "sites": {
+        "light_coefficients": {
+          "instruction_shex_dword": 4342,
+          "sample_after_instruction": true,
+          "opcode": "ld_structured",
+          "operands": [
+            "r[25].xyzw",
+            "r[10].z",
+            "l(68)",
+            "t[11][11].xyzw"
+          ],
+          "light_index": "r[10].z",
+          "coefficient_bytes": [
+            68,
+            72,
+            76
+          ]
+        },
+        "light_color_range": {
+          "instruction_shex_dword": 5044,
+          "sample_after_instruction": true,
+          "opcode": "ld_structured",
+          "operands": [
+            "r[31].xyzw",
+            "r[10].z",
+            "l(48)",
+            "t[11][11].xyzw"
+          ]
+        },
+        "shadow_visibility_before_early_out": {
+          "instruction_shex_dword": 5015,
+          "sample_after_instruction": true,
+          "opcode": "movc",
+          "operands": [
+            "r[16].x",
+            "r[16].x",
+            "r[23].w",
+            "r[18].y"
+          ]
+        },
+        "distance_squared": {
+          "instruction_shex_dword": 5107,
+          "sample_after_instruction": true,
+          "opcode": "dp3",
+          "operands": [
+            "r[21].w",
+            "r[28].xyzx",
+            "r[28].xyzx"
+          ]
+        },
+        "denominator_before_floor": {
+          "instruction_shex_dword": 5121,
+          "sample_after_instruction": true,
+          "opcode": "mad",
+          "operands": [
+            "r[21].w",
+            "r[25].z",
+            "r[21].w",
+            "r[22].w"
+          ]
+        },
+        "attenuation": {
+          "instruction_shex_dword": 5157,
+          "sample_after_instruction": true,
+          "opcode": "max",
+          "operands": [
+            "r[21].w",
+            "r[21].w",
+            "l(0)"
+          ]
+        },
+        "range_times_attenuation": {
+          "instruction_shex_dword": 5164,
+          "sample_after_instruction": true,
+          "opcode": "mul",
+          "operands": [
+            "r[18].y",
+            "r[18].y",
+            "r[21].w"
+          ]
+        },
+        "projection_color": {
+          "instruction_shex_dword": 5270,
+          "sample_after_instruction": true,
+          "opcode": "sample_l",
+          "operands": [
+            "r[26].xyz",
+            "r[26].xyxx",
+            "t[10][10].xyzw",
+            "s[3][11]",
+            "l(0)"
+          ],
+          "conditional": true
+        },
+        "spot_diffuse_accumulation": {
+          "instruction_shex_dword": 5455,
+          "sample_after_instruction": false,
+          "opcode": "mad",
+          "operands": [
+            "r[24].xyz",
+            "r[13].wwww",
+            "r[25].xyzx",
+            "r[24].xyzx"
+          ],
+          "sample_before_instruction": true,
+          "diffuse_factor": "r[13].wwww",
+          "gated_light_rgb": "r[25].xyzx",
+          "includes_secondary_albedo": false,
+          "includes_primary_throughput": false,
+          "includes_ray_count_normalization": false
+        }
+      },
+      "native_lighting_modified": false,
+      "runtime_binding_validated": false,
+      "variant": 3
+    },
+    {
+      "native_sha256": "9b1befce3d950466556ba3119a8365f9c540cbde48a6a363dff81e26cfc76401",
+      "spotlight_binding": {
+        "name": "g_sbDeferredLightSpotData",
+        "kind": 5,
+        "return_type": 6,
+        "dimension": 1,
+        "samples": 320,
+        "slot": 11,
+        "count": 1,
+        "flags": 0,
+        "space": 0,
+        "identifier": 11
+      },
+      "sites": {
+        "light_coefficients": {
+          "instruction_shex_dword": 3860,
+          "sample_after_instruction": true,
+          "opcode": "ld_structured",
+          "operands": [
+            "r[20].xyzw",
+            "r[7].w",
+            "l(68)",
+            "t[11][11].xyzw"
+          ],
+          "light_index": "r[7].w",
+          "coefficient_bytes": [
+            68,
+            72,
+            76
+          ]
+        },
+        "light_color_range": {
+          "instruction_shex_dword": 4562,
+          "sample_after_instruction": true,
+          "opcode": "ld_structured",
+          "operands": [
+            "r[26].xyzw",
+            "r[7].w",
+            "l(48)",
+            "t[11][11].xyzw"
+          ]
+        },
+        "shadow_visibility_before_early_out": {
+          "instruction_shex_dword": 4533,
+          "sample_after_instruction": true,
+          "opcode": "movc",
+          "operands": [
+            "r[14].w",
+            "r[14].w",
+            "r[19].y",
+            "r[15].w"
+          ]
+        },
+        "distance_squared": {
+          "instruction_shex_dword": 4625,
+          "sample_after_instruction": true,
+          "opcode": "dp3",
+          "operands": [
+            "r[17].w",
+            "r[23].xyzx",
+            "r[23].xyzx"
+          ]
+        },
+        "denominator_before_floor": {
+          "instruction_shex_dword": 4639,
+          "sample_after_instruction": true,
+          "opcode": "mad",
+          "operands": [
+            "r[17].w",
+            "r[20].z",
+            "r[17].w",
+            "r[18].w"
+          ]
+        },
+        "attenuation": {
+          "instruction_shex_dword": 4675,
+          "sample_after_instruction": true,
+          "opcode": "max",
+          "operands": [
+            "r[17].w",
+            "r[17].w",
+            "l(0)"
+          ]
+        },
+        "range_times_attenuation": {
+          "instruction_shex_dword": 4682,
+          "sample_after_instruction": true,
+          "opcode": "mul",
+          "operands": [
+            "r[15].w",
+            "r[15].w",
+            "r[17].w"
+          ]
+        },
+        "projection_color": {
+          "instruction_shex_dword": 4788,
+          "sample_after_instruction": true,
+          "opcode": "sample_l",
+          "operands": [
+            "r[21].xyz",
+            "r[21].xyxx",
+            "t[10][10].xyzw",
+            "s[2][11]",
+            "l(0)"
+          ],
+          "conditional": true
+        },
+        "spot_diffuse_accumulation": {
+          "instruction_shex_dword": 4973,
+          "sample_after_instruction": false,
+          "opcode": "mad",
+          "operands": [
+            "r[9].xyz",
+            "r[13].wwww",
+            "r[20].xyzx",
+            "r[9].xyzx"
+          ],
+          "sample_before_instruction": true,
+          "diffuse_factor": "r[13].wwww",
+          "gated_light_rgb": "r[20].xyzx",
+          "includes_secondary_albedo": false,
+          "includes_primary_throughput": false,
+          "includes_ray_count_normalization": false
+        }
+      },
+      "native_lighting_modified": false,
+      "runtime_binding_validated": false,
+      "variant": 4
+    },
+    {
+      "native_sha256": "2691f3888a89c9b3fff8d9d08327a77a1d6e2037f59e04986e11f2e53bac498b",
+      "spotlight_binding": {
+        "name": "g_sbDeferredLightSpotData",
+        "kind": 5,
+        "return_type": 6,
+        "dimension": 1,
+        "samples": 320,
+        "slot": 11,
+        "count": 1,
+        "flags": 0,
+        "space": 0,
+        "identifier": 11
+      },
+      "sites": {
+        "light_coefficients": {
+          "instruction_shex_dword": 4227,
+          "sample_after_instruction": true,
+          "opcode": "ld_structured",
+          "operands": [
+            "r[24].xyzw",
+            "r[13].w",
+            "l(68)",
+            "t[11][11].xyzw"
+          ],
+          "light_index": "r[13].w",
+          "coefficient_bytes": [
+            68,
+            72,
+            76
+          ]
+        },
+        "light_color_range": {
+          "instruction_shex_dword": 4929,
+          "sample_after_instruction": true,
+          "opcode": "ld_structured",
+          "operands": [
+            "r[30].xyzw",
+            "r[13].w",
+            "l(48)",
+            "t[11][11].xyzw"
+          ]
+        },
+        "shadow_visibility_before_early_out": {
+          "instruction_shex_dword": 4900,
+          "sample_after_instruction": true,
+          "opcode": "movc",
+          "operands": [
+            "r[20].w",
+            "r[20].w",
+            "r[25].z",
+            "r[21].w"
+          ]
+        },
+        "distance_squared": {
+          "instruction_shex_dword": 4992,
+          "sample_after_instruction": true,
+          "opcode": "dp3",
+          "operands": [
+            "r[23].w",
+            "r[27].xyzx",
+            "r[27].xyzx"
+          ]
+        },
+        "denominator_before_floor": {
+          "instruction_shex_dword": 5006,
+          "sample_after_instruction": true,
+          "opcode": "mad",
+          "operands": [
+            "r[23].w",
+            "r[24].z",
+            "r[23].w",
+            "r[24].y"
+          ]
+        },
+        "attenuation": {
+          "instruction_shex_dword": 5042,
+          "sample_after_instruction": true,
+          "opcode": "max",
+          "operands": [
+            "r[23].w",
+            "r[23].w",
+            "l(0)"
+          ]
+        },
+        "range_times_attenuation": {
+          "instruction_shex_dword": 5049,
+          "sample_after_instruction": true,
+          "opcode": "mul",
+          "operands": [
+            "r[21].w",
+            "r[21].w",
+            "r[23].w"
+          ]
+        },
+        "projection_color": {
+          "instruction_shex_dword": 5155,
+          "sample_after_instruction": true,
+          "opcode": "sample_l",
+          "operands": [
+            "r[25].xyz",
+            "r[25].xyxx",
+            "t[10][10].xyzw",
+            "s[3][11]",
+            "l(0)"
+          ],
+          "conditional": true
+        },
+        "spot_diffuse_accumulation": {
+          "instruction_shex_dword": 5340,
+          "sample_after_instruction": false,
+          "opcode": "mad",
+          "operands": [
+            "r[10].xyz",
+            "r[19].wwww",
+            "r[24].xyzx",
+            "r[10].xyzx"
+          ],
+          "sample_before_instruction": true,
+          "diffuse_factor": "r[19].wwww",
+          "gated_light_rgb": "r[24].xyzx",
+          "includes_secondary_albedo": false,
+          "includes_primary_throughput": false,
+          "includes_ray_count_normalization": false
+        }
+      },
+      "native_lighting_modified": false,
+      "runtime_binding_validated": false,
+      "variant": 5
+    },
+    {
+      "native_sha256": "1dfb4c9b054037e030ff9eed6ed5e482c8c32f9f301bb02c89eb0084c52842de",
+      "spotlight_binding": {
+        "name": "g_sbDeferredLightSpotData",
+        "kind": 5,
+        "return_type": 6,
+        "dimension": 1,
+        "samples": 320,
+        "slot": 11,
+        "count": 1,
+        "flags": 0,
+        "space": 0,
+        "identifier": 11
+      },
+      "sites": {
+        "light_coefficients": {
+          "instruction_shex_dword": 3869,
+          "sample_after_instruction": true,
+          "opcode": "ld_structured",
+          "operands": [
+            "r[20].xyzw",
+            "r[10].w",
+            "l(68)",
+            "t[11][11].xyzw"
+          ],
+          "light_index": "r[10].w",
+          "coefficient_bytes": [
+            68,
+            72,
+            76
+          ]
+        },
+        "light_color_range": {
+          "instruction_shex_dword": 4571,
+          "sample_after_instruction": true,
+          "opcode": "ld_structured",
+          "operands": [
+            "r[26].xyzw",
+            "r[10].w",
+            "l(48)",
+            "t[11][11].xyzw"
+          ]
+        },
+        "shadow_visibility_before_early_out": {
+          "instruction_shex_dword": 4542,
+          "sample_after_instruction": true,
+          "opcode": "movc",
+          "operands": [
+            "r[15].w",
+            "r[15].w",
+            "r[20].w",
+            "r[16].w"
+          ]
+        },
+        "distance_squared": {
+          "instruction_shex_dword": 4634,
+          "sample_after_instruction": true,
+          "opcode": "dp3",
+          "operands": [
+            "r[18].w",
+            "r[23].xyzx",
+            "r[23].xyzx"
+          ]
+        },
+        "denominator_before_floor": {
+          "instruction_shex_dword": 4648,
+          "sample_after_instruction": true,
+          "opcode": "mad",
+          "operands": [
+            "r[18].w",
+            "r[20].z",
+            "r[18].w",
+            "r[19].y"
+          ]
+        },
+        "attenuation": {
+          "instruction_shex_dword": 4684,
+          "sample_after_instruction": true,
+          "opcode": "max",
+          "operands": [
+            "r[18].w",
+            "r[18].w",
+            "l(0)"
+          ]
+        },
+        "range_times_attenuation": {
+          "instruction_shex_dword": 4691,
+          "sample_after_instruction": true,
+          "opcode": "mul",
+          "operands": [
+            "r[16].w",
+            "r[16].w",
+            "r[18].w"
+          ]
+        },
+        "projection_color": {
+          "instruction_shex_dword": 4797,
+          "sample_after_instruction": true,
+          "opcode": "sample_l",
+          "operands": [
+            "r[21].xyz",
+            "r[21].xyxx",
+            "t[10][10].xyzw",
+            "s[2][11]",
+            "l(0)"
+          ],
+          "conditional": true
+        },
+        "spot_diffuse_accumulation": {
+          "instruction_shex_dword": 4982,
+          "sample_after_instruction": false,
+          "opcode": "mad",
+          "operands": [
+            "r[9].xyz",
+            "r[14].wwww",
+            "r[20].xyzx",
+            "r[9].xyzx"
+          ],
+          "sample_before_instruction": true,
+          "diffuse_factor": "r[14].wwww",
+          "gated_light_rgb": "r[20].xyzx",
+          "includes_secondary_albedo": false,
+          "includes_primary_throughput": false,
+          "includes_ray_count_normalization": false
+        }
+      },
+      "native_lighting_modified": false,
+      "runtime_binding_validated": false,
+      "variant": 6
+    },
+    {
+      "native_sha256": "3cc459e63f23759d815aac0e7f41a86187c86be523031954706197673671cf17",
+      "spotlight_binding": {
+        "name": "g_sbDeferredLightSpotData",
+        "kind": 5,
+        "return_type": 6,
+        "dimension": 1,
+        "samples": 320,
+        "slot": 11,
+        "count": 1,
+        "flags": 0,
+        "space": 0,
+        "identifier": 11
+      },
+      "sites": {
+        "light_coefficients": {
+          "instruction_shex_dword": 4236,
+          "sample_after_instruction": true,
+          "opcode": "ld_structured",
+          "operands": [
+            "r[25].xyzw",
+            "r[10].z",
+            "l(68)",
+            "t[11][11].xyzw"
+          ],
+          "light_index": "r[10].z",
+          "coefficient_bytes": [
+            68,
+            72,
+            76
+          ]
+        },
+        "light_color_range": {
+          "instruction_shex_dword": 4938,
+          "sample_after_instruction": true,
+          "opcode": "ld_structured",
+          "operands": [
+            "r[31].xyzw",
+            "r[10].z",
+            "l(48)",
+            "t[11][11].xyzw"
+          ]
+        },
+        "shadow_visibility_before_early_out": {
+          "instruction_shex_dword": 4909,
+          "sample_after_instruction": true,
+          "opcode": "movc",
+          "operands": [
+            "r[16].x",
+            "r[16].x",
+            "r[23].w",
+            "r[18].y"
+          ]
+        },
+        "distance_squared": {
+          "instruction_shex_dword": 5001,
+          "sample_after_instruction": true,
+          "opcode": "dp3",
+          "operands": [
+            "r[21].w",
+            "r[28].xyzx",
+            "r[28].xyzx"
+          ]
+        },
+        "denominator_before_floor": {
+          "instruction_shex_dword": 5015,
+          "sample_after_instruction": true,
+          "opcode": "mad",
+          "operands": [
+            "r[21].w",
+            "r[25].z",
+            "r[21].w",
+            "r[22].w"
+          ]
+        },
+        "attenuation": {
+          "instruction_shex_dword": 5051,
+          "sample_after_instruction": true,
+          "opcode": "max",
+          "operands": [
+            "r[21].w",
+            "r[21].w",
+            "l(0)"
+          ]
+        },
+        "range_times_attenuation": {
+          "instruction_shex_dword": 5058,
+          "sample_after_instruction": true,
+          "opcode": "mul",
+          "operands": [
+            "r[18].y",
+            "r[18].y",
+            "r[21].w"
+          ]
+        },
+        "projection_color": {
+          "instruction_shex_dword": 5164,
+          "sample_after_instruction": true,
+          "opcode": "sample_l",
+          "operands": [
+            "r[26].xyz",
+            "r[26].xyxx",
+            "t[10][10].xyzw",
+            "s[3][11]",
+            "l(0)"
+          ],
+          "conditional": true
+        },
+        "spot_diffuse_accumulation": {
+          "instruction_shex_dword": 5349,
+          "sample_after_instruction": false,
+          "opcode": "mad",
+          "operands": [
+            "r[24].xyz",
+            "r[13].wwww",
+            "r[25].xyzx",
+            "r[24].xyzx"
+          ],
+          "sample_before_instruction": true,
+          "diffuse_factor": "r[13].wwww",
+          "gated_light_rgb": "r[25].xyzx",
+          "includes_secondary_albedo": false,
+          "includes_primary_throughput": false,
+          "includes_ray_count_normalization": false
+        }
+      },
+      "native_lighting_modified": false,
+      "runtime_binding_validated": false,
+      "variant": 7
+    }
+  ]
+}
