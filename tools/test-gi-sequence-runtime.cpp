@@ -7,7 +7,7 @@
 #include <cstdio>
 #include <stdexcept>
 static bool hashMatches=true;
-static bool PTReflectionSha256(const unsigned char*,size_t size,char* out){std::strcpy(out,hashMatches?(size==24472?"6297319e1fec315c06ee75993e797b51def658e7d41f1588d7df3feb41a1ea2f":"1ff8a93460d94f58fc0e70afff994a334f1c45be292e3e858a63f51070e5734a"):"unknown");return true;}
+static bool PTReflectionSha256(const unsigned char*,size_t size,char* out){strcpy_s(out,65,hashMatches?(size==24472?"6297319e1fec315c06ee75993e797b51def658e7d41f1588d7df3feb41a1ea2f":"1ff8a93460d94f58fc0e70afff994a334f1c45be292e3e858a63f51070e5734a"):"unknown");return true;}
 static void Log(const char*,...){}
 #include "../src/gi_sequence_runtime.h"
 static const D3D12_STATE_OBJECT_DESC* nativeDesc=nullptr;
