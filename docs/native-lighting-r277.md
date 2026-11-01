@@ -27,10 +27,12 @@ shadows, projection, sample count, material weighting and output writes.
 
 One pixel per 32x32 cell is sampled. Every executed ray at those pixels is
 recorded, followed by the final result. Records include primary/secondary
-material IDs, consumer geometry, primary throughput, secondary radiance,
+material IDs, world-space consumer geometry, primary throughput, secondary radiance,
 weighted per-ray contribution, running sum, depth-fade constants, configured
 ray count, actual depth scale and final float32 GI before UAV conversion.
-Miss normals are zeroed in the diagnostic output, never reused as surface data.
+Secondary geometry is saved immediately after the hit loads, before later
+shading branches reuse those registers in view space. Miss normals are zeroed
+in the diagnostic output, never reused as surface data.
 
 The 65,536-record cap and overflow counter remain. At 2560x1440 with six rays,
 at most 25,200 records are needed for one full dispatch. Overflow, duplicate rays,

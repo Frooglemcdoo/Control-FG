@@ -26,6 +26,7 @@ def generate(raw, path, identity):
         661: ('ld', ['r[8].xyz', 'r[0].xyww', 't[1][1].yzwx']),
         698: ('dp3', ['r[4].x', 'r[6].xyzx', '-r[3].xyzx']),
         995: ('ld', ['r[7].w', 'r[0].xyzw', 't[19][24].yzwx']),
+        1051: ('ld', ['r[13].xyzw', 'r[0].xyzw', 't[20][25].xyzw']),
         5029: ('mad', ['r[10].xyz', 'r[3].xyzx', 'r[15].xyzx', 'r[10].xyzx']),
         5136: ('mul', ['r[0].xyz', 'r[0].xxxx', 'r[10].xyzx']),
         5164: ('mov', ['r[1].w', 'l(1)']),
@@ -38,7 +39,7 @@ def generate(raw, path, identity):
     words = list(struct.unpack_from('<'+'I'*(size//4), raw, start))
     td = next(i for i in inst if inst[i]['name'] == 'dcl_temps')
     temp = words[td+1]
-    a, q, v, context, extra, fade = range(temp, temp+6)
+    a, q, v, context, extra, fade, hit_position, hit_normal = range(temp, temp+8)
     inserts = {}
     def add(at, code): inserts.setdefault(at, []).extend(code)
     def store(offset, value, mask=15):
@@ -64,12 +65,16 @@ def generate(raw, path, identity):
     add(977, ins('mov', dst(extra,2), list(words[988:992])) +
         ins('mov', dst(fade,15), [0x308e46,1,1,17]))
     add(1003, ins('mov', dst(extra,8), src(7,0xff)))
+    # Later hit-shading branches reuse r12/r13 in view space. Snapshot their
+    # world-space values immediately after the hit loads, before that reuse.
+    geometry = ins('mov',dst(hit_position,7),src(12)) + ins('mov',dst(hit_normal,7),src(13))
+    add(1059,geometry)
     ray = begin(1)
     ray += ins('mul', dst(v,7), src(3), src(15)) + store(16,src(v),7)
     ray += store(32,src(15),7) + store(48,src(3),7) + store(64,src(10),7)
-    ray += store(80,src(1)) + store(96,src(context)) + store(112,src(12),7)
+    ray += store(80,src(1)) + store(96,src(context)) + store(112,src(hit_position),7)
     ray += ins('ult',dst(q,2),src(extra,0xff),uint(65534)) + branch(src(q,0x55))
-    ray += store(128,src(13),7) + ins('endif')
+    ray += store(128,src(hit_normal),7) + ins('endif')
     ray += ins('mov',dst(v,1),src(extra,0xff)) + ins('mov',dst(v,2),src(extra,0x55))
     ray += store(144,src(v),3) + store(160,src(fade)) + end()
     add(5038,ray) # after native accumulation, before ray index increment
@@ -85,7 +90,7 @@ def generate(raw, path, identity):
         out = w[:2]
         for i in range(2,len(w)):
             out += inserts.get(i,[])
-            out.append(temp+6 if i == td+1 else w[i])
+            out.append(temp+8 if i == td+1 else w[i])
         w[:] = out
     changed = transform_shex(raw,patch)
     def undo(w):
@@ -99,7 +104,7 @@ def generate(raw, path, identity):
     path.write_bytes(changed)
     # A GPU fixture executes these exact append-only blocks. Sample 1 is a miss.
     def floats(*xs): return [0x4002]+[struct.unpack('<I',struct.pack('<f',x))[0] for x in xs]
-    fixture = words[:2]+words[2:3]+decl+ins('dcl_input',[0x20032])+ins('dcl_temps',[temp+6])+ins('dcl_thread_group',[32,32,1])
+    fixture = words[:2]+words[2:3]+decl+ins('dcl_input',[0x20032])+ins('dcl_temps',[temp+8])+ins('dcl_thread_group',[32,32,1])
     fixture += ins('mov',dst(context,15),floats(0,1,0,0)) + ins('mov',dst(context,8),uint(42))
     fixture += ins('mov',dst(extra,2),uint(2)) + ins('mov',dst(fade,15),floats(1,2,3,4))
     for sample in range(2):
@@ -108,7 +113,8 @@ def generate(raw, path, identity):
         fixture += ins('mov',dst(3,15),floats(.5,1,2,0)) + ins('mov',dst(15,15),floats(2,3,4,0))
         fixture += ins('mov',dst(10,15),floats(1*(sample+1),3*(sample+1),8*(sample+1),0))
         fixture += ins('mov',dst(1,15),floats(1,2,3,4)) + ins('mov',dst(12,15),floats(5,6,7,0))
-        fixture += ins('mov',dst(13,15),floats(0,0,1,0)) + ray
+        fixture += ins('mov',dst(13,15),floats(0,0,1,0)) + geometry
+        fixture += ins('mov',dst(12,15),floats(-5,-6,-7,0)) + ins('mov',dst(13,15),floats(1,0,0,0)) + ray
     fixture += ins('mov',dst(1,15),floats(.75,2.25,6,1))
     fixture += ins('mov',dst(extra,1),[0x4001,0x3f400000]) + summary + ins('ret')
     def fixture_patch(w): w[:] = fixture
