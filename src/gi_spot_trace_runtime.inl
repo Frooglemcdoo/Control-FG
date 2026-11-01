@@ -117,7 +117,7 @@ inline void Observe(ID3D12Device* d,const D3D12_COMPUTE_PIPELINE_STATE_DESC* des
  Trace("GI_SPOT_R274_PIPELINE variant=6 ready=%u hr=0x%08lX",unsigned(SUCCEEDED(hr)),static_cast<unsigned long>(hr));
 }
 inline void Rebind(ID3D12GraphicsCommandList* list,const Hooks& h,ID3D12RootSignature* root,const State& s) noexcept {
- h.root(list,root);for(UINT i=0;i<8;++i){if(i>=2&&i<=5)h.cbv(list,i,s.values[i]);else h.descriptor(list,i,{s.values[i]});}
+ h.root(list,root);for(UINT i=0;i<8;++i){if(!(s.mask&(1u<<i)))continue;if(i>=2&&i<=5)h.cbv(list,i,s.values[i]);else h.descriptor(list,i,{s.values[i]});}
 }
 inline void Transition(ID3D12GraphicsCommandList* list,D3D12_RESOURCE_STATES before,D3D12_RESOURCE_STATES after) noexcept {
  D3D12_RESOURCE_BARRIER b{};b.Type=D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;b.Transition={output.Get(),D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,before,after};list->ResourceBarrier(1,&b);
@@ -128,7 +128,7 @@ inline bool Dispatch(ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT z) noexc
  ComPtr<ID3D12PipelineState> pso,trace;ComPtr<ID3D12RootSignature> root,nativeRoot;
  if(!Attached(list,psoKey,pso)||!Attached(pso.Get(),variantKey,trace)||!Attached(trace.Get(),traceRootKey,root)||!Attached(trace.Get(),nativeRootKey,nativeRoot))return false;
  const State s=Read(list);const auto h=LookupHooks(list);const auto native=Lookup(list);
- if(s.mask!=255||s.root!=nativeRoot.Get()||!h.root||!h.descriptor||!h.cbv||!native.set||!native.dispatch){Trace("GI_SPOT_R274_WAIT binding_mask=%u",s.mask);return false;}
+ if((s.mask&0xfdu)!=0xfdu||s.root!=nativeRoot.Get()||!h.root||!h.descriptor||!h.cbv||!native.set||!native.dispatch){Trace("GI_SPOT_R274_WAIT binding_mask=%u",s.mask);return false;}
  AcquireSRWLockExclusive(&lock);if(phase.load()!=Phase::Armed){ReleaseSRWLockExclusive(&lock);return false;}
  phase.store(Phase::Recording);recordedList=list;retainedPso=pso;retainedTrace=trace;retainedRoot=nativeRoot;retainedTraceRoot=root;generation=s.generation;capturedPresent=presentCount.load();groups[0]=x;groups[1]=y;groups[2]=z;
  list->CopyBufferRegion(output.Get(),0,zero.Get(),0,bytes);Transition(list,D3D12_RESOURCE_STATE_COPY_DEST,D3D12_RESOURCE_STATE_UNORDERED_ACCESS);

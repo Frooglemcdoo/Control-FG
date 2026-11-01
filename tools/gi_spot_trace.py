@@ -17,6 +17,7 @@ def generate(raw,path,identity):
  count=struct.unpack_from('<I',raw,28)[0]
  start=next(o+8 for o in struct.unpack_from('<'+'I'*count,raw,32) if raw[o:o+4]==b'SHEX')
  size=struct.unpack_from('<I',raw,start-4)[0];words=list(struct.unpack_from('<'+'I'*(size//4),raw,start))
+ assert all(b['space']==1 for b in decoded['bindings'] if b['kind']==3), 'Unreviewed space-0 sampler usage'
  inst=decoded['instructions'];by={i['dword']:i for i in inst}
  td=next(i['dword'] for i in inst if i['name']=='dcl_temps');temp=words[td+1]
  # a.x=record byte address, a.y=valid stages; q scratch, v scratch.

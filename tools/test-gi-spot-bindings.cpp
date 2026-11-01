@@ -44,6 +44,8 @@ int main()try{
  namespace probe=native_lighting::gi_spot_trace;probe::InstallList(list.Get());Require(probe::phase.load()!=probe::Phase::Failed,"hook install");
  ID3D12DescriptorHeap* heaps[]={descriptors.Get(),samplers.Get()};list->SetDescriptorHeaps(2,heaps);list->SetComputeRootSignature(root.Get());
  auto set=[&] {for(UINT i=0;i<8;++i){if(i>=2&&i<=5)list->SetComputeRootConstantBufferView(i,0x10000ull*i);else list->SetComputeRootDescriptorTable(i,(i==1||i==6)?samplers->GetGPUDescriptorHandleForHeapStart():descriptors->GetGPUDescriptorHandleForHeapStart());}};
+ for(UINT i=0;i<8;++i){if(i==1)continue;if(i>=2&&i<=5)list->SetComputeRootConstantBufferView(i,0x10000ull*i);else list->SetComputeRootDescriptorTable(i,i==6?samplers->GetGPUDescriptorHandleForHeapStart():descriptors->GetGPUDescriptorHandleForHeapStart());}
+ auto partial=probe::Read(list.Get());Require(partial.mask==0xfd,"seven shader-used arguments");auto partialHooks=probe::LookupHooks(list.Get());probe::Rebind(list.Get(),partialHooks,extended.Get(),partial);probe::Rebind(list.Get(),partialHooks,root.Get(),partial);Require(probe::Read(list.Get()).mask==0xfd,"unset unused sampler table changed");
  set();auto s=probe::Read(list.Get());Require(s.mask==255&&s.root==root.Get(),"root arguments not observed");
  for(UINT i=2;i<6;++i)Require(s.values[i]==0x10000ull*i,"CBV root slot");
  list->SetComputeRootSignature(root.Get());Require(probe::Read(list.Get()).mask==255,"same-root state incorrectly discarded");list->SetDescriptorHeaps(2,heaps);Require(probe::Read(list.Get()).mask==255,"same-heap state incorrectly discarded");

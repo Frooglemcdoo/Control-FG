@@ -41,7 +41,9 @@ The instrumented shader retains every original instruction, operand and order;
 inverting only inserted instructions and the temp-count change recovers the
 native DXBC container exactly. It adds a private raw UAV at u0/space2 via an
 appended root parameter. Existing descriptor heaps are not copied or replaced.
-All eight native root arguments and the original PSO are explicitly restored.
+All observed native root arguments and the original PSO are explicitly restored.
+All seven arguments used by GI variant 6 are required. Its unused space-0 sampler
+table may remain unset; the probe does not invent a binding for it.
 Capture is rejected if complete root bindings or the exact identities are absent.
 
 The buffer is bounded at 16 MiB plus 16 bytes. Initialization is done during
