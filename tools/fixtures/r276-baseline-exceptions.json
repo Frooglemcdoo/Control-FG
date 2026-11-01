@@ -1,0 +1,16 @@
+{
+  "src/rr_clamp_strength_policy.h": [
+    [
+      "inline constexpr unsigned Requested()",
+      "inline std::atomic<bool> diagnosticBypass{false};\ninline constexpr unsigned Requested()"
+    ],
+    [
+      "if(step&&step->raw)return 0;",
+      "if(step)return step->raw?0:Requested();"
+    ],
+    [
+      " return Requested();",
+      " return diagnosticBypass.load(std::memory_order_acquire)?0:Requested();"
+    ]
+  ]
+}
