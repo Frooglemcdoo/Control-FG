@@ -604,10 +604,6 @@ jobs:
           if($LASTEXITCODE -ne 0){throw 'GI sequence source/index audit failed'}
           python tools/gi_long_sequence.py --dxc $dxc --assembler build/assemble-validated-dxil.exe
           if($LASTEXITCODE -ne 0){throw 'GI sequence DXIL validation failed'}
-          cl /nologo /std:c++17 /EHsc /W4 /WX tools/test-gi-sequence-runtime.cpp /Febuild/test-gi-sequence-runtime.exe
-          if($LASTEXITCODE -ne 0){throw 'GI sequence runtime test compilation failed'}
-          ./build/test-gi-sequence-runtime.exe
-          if($LASTEXITCODE -ne 0){throw 'GI sequence runtime test failed'}
           python tools/test-spec-phase-precision.py
           if($LASTEXITCODE -ne 0){throw 'SPEC phase precision oracle audit failed'}
           python tools/spec_phase_precision.py --dxc $dxc --assembler build/assemble-validated-dxil.exe
@@ -773,6 +769,10 @@ jobs:
           cl /nologo /std:c++17 /EHsc /W4 tools\test-spec-retry-runtime.cpp /Febuild\test-spec-retry-runtime.exe
           if errorlevel 1 exit /b 1
           build\test-spec-retry-runtime.exe
+          if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-sequence-runtime.cpp /Febuild\test-gi-sequence-runtime.exe
+          if errorlevel 1 exit /b 1
+          build\test-gi-sequence-runtime.exe
           if errorlevel 1 exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /DCONTROL_SPEC_LONG_SEQUENCE tools\test-spec-retry-runtime.cpp /Febuild\test-spec-long-runtime.exe
           if errorlevel 1 exit /b 1
