@@ -47,6 +47,7 @@ static void RRInputCaptureRelease(RRInputCaptureJob* c) noexcept {
 static DWORD WINAPI RRInputCapturePrepare(void* context) noexcept {
  auto* c=static_cast<RRInputCaptureJob*>(context);
  AcquireSRWLockExclusive(&rrInputCaptureLock);
+ if(c->policy.phase!=control_rr::InputCapturePolicy::Preparing){ReleaseSRWLockExclusive(&rrInputCaptureLock);return 0;}
  HRESULT hr=c->device->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&c->fence));
  for(unsigned i=0;i<c->count&&SUCCEEDED(hr);++i){
   c->device->GetCopyableFootprints(&c->descriptions[i],0,1,0,&c->footprint[i],nullptr,nullptr,&c->bytes[i]);
@@ -63,6 +64,7 @@ static DWORD WINAPI RRInputCapturePrepare(void* context) noexcept {
 static DWORD WINAPI RRInputCaptureExport(void* context) noexcept {
  auto* c=static_cast<RRInputCaptureJob*>(context);
  AcquireSRWLockExclusive(&rrInputCaptureLock);
+ if(c->policy.phase!=control_rr::InputCapturePolicy::Exporting){ReleaseSRWLockExclusive(&rrInputCaptureLock);return 0;}
  bool okay=true;void* mapped[kRRInputCaptureMaxResources]{};
  try {
   wchar_t env[32768]{};const DWORD length=GetEnvironmentVariableW(L"LOCALAPPDATA",env,32768);
