@@ -78,6 +78,7 @@ pd.CS={oracle.data(),oracle.size()};ComPtr<ID3D12PipelineState> oraclePso;Check(
    Require(id[0]==16&&id[1]==16&&id[3]==(sample==2?2u:1u),"ray record identity");
    auto scalar=[&](UINT offset){float f=0;memcpy(&f,record+offset,4);return f;};
    auto integer=[&](UINT offset){UINT n=0;memcpy(&n,record+offset,4);return n;};
+   if(integer(108)!=42||integer(148)!=2)std::cerr<<"sample="<<sample<<" material="<<integer(108)<<" count="<<integer(148)<<'\n';
    Require(integer(108)==42&&integer(148)==2,"material and ray count");
    Require(scalar(160)==1&&scalar(172)==4,"depth constants");
    if(sample<2){

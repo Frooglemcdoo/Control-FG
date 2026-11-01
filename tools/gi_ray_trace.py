@@ -75,7 +75,7 @@ def generate(raw, path, identity):
     add(5038,ray) # after native accumulation, before ray index increment
     add(5136,ins('mov',dst(extra,1),src(0,0)))
     summary = begin(2)
-    summary += store(96,src(context)) + store(144,src(extra,0x55),2)
+    summary += store(96,src(context)) + store(148,src(extra,0x55),1)
     summary += store(160,src(fade)) + store(176,src(1)) + store(192,src(10),7)
     summary += store(208,src(extra,0),1) + end()
     add(5169,summary) # valid-pixel branch only, after final output alpha assignment
