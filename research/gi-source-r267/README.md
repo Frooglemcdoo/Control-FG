@@ -77,3 +77,28 @@ history increase, or material exclusion as a proven fix from this audit.
 
 The independent R266 foliage admission expansion does not explain or resolve
 the original affected plant, whose shader was already admitted.
+
+## R267 user result, November 1
+
+The user reports no visible improvement with option 2 (no point-light GI).
+Option 3 (no spot-light GI) removes visible hair speckles and most plant
+speckles; minor plant speckles remain. Supplied video:
+`20261101-1424-31.2275511.mp4`, 31.07 seconds, 2986x2138 at 30 fps.
+Frames inspected at 1, 7, 22 and 29 seconds show the affected original plant
+and Jesse's hair, but do not show the diagnostic mode or binding log. Treat
+mode attribution as user-reported, not independently verified from the video.
+
+This prioritizes the spotlight contribution. It does not establish that all
+remaining plant noise has the same origin, or prove an attenuation defect.
+In particular, the previous point-light denominator candidate is deprioritized.
+
+The traced secondary-hit spotlight visibility uses the native PCF/VSM shadow
+atlases (variant 0 offsets 4182, 4325, 4372), followed by visibility combination
+at 4494–4549 and application at 4846. The PCF branch performs a depth texture
+sample followed by comparison at 4338. The traced GI shader does not read the
+primary-surface RT spotlight visibility result. Consequently, primary spotlight
+shadow improvements cannot be assumed to fix secondary-hit GI visibility.
+Which atlas branch is active for this lamp remains unknown. Next investigation
+must distinguish visibility/projection sampling from light falloff and BRDF
+weighting while restoring the full spot-light contribution. Removing that
+contribution is an isolation result, not the intended final correction.

@@ -3,6 +3,7 @@ name: Build native reflection enhancements and RR
 on:
   push:
     branches:
+      - work/r268-gi-spot-pcf
       - work/r267-gi-audit
       - work/r266-foliage-variant
       - work/r250-texture-publication-timing
@@ -709,6 +710,8 @@ jobs:
           if errorlevel 1 exit /b 1
           python tools/test-rr-gi-filter.py
           if errorlevel 1 exit /b 1
+          python tools/gi_spot_pcf.py
+          if errorlevel 1 exit /b 1
           python tools/gi_motion_history.py
           if errorlevel 1 exit /b 1
           python tools/test-gi-motion-history.py
@@ -1054,11 +1057,25 @@ jobs:
           build\test-gi-source-probe.exe
           if errorlevel 1 exit /b 1
 
-      - name: Package GI source isolation R267
+      - name: Validate GI spotlight PCF R268
+        shell: cmd
+        run: |
+          call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
+          if errorlevel 1 exit /b 1
+          python -m pip install numpy
+          if errorlevel 1 exit /b 1
+          python tools/test-gi-spot-pcf.py
+          if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-spot-pcf.cpp /Febuild\test-gi-spot-pcf.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
+          if errorlevel 1 exit /b 1
+          build\test-gi-spot-pcf.exe
+          if errorlevel 1 exit /b 1
+
+      - name: Package GI spotlight PCF R268
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='ControlTOH-R267'
+          $out='ControlTOH-R268'
           $shader="$out/ControlTOH/Shaders"
           $tools="$out/ControlTOH/Tools"
           $diagnostics="$out/ControlTOH/Diagnostics"
@@ -1083,23 +1100,23 @@ jobs:
           Copy-Item Package-Lighting-Capture.cmd,tools/package-lighting-capture.py,Package-Lighting-Performance.ps1 $diagnostics
           Copy-Item Capture-RR-Boundary.cmd,Capture-RR-Boundary.ps1,Collect-RR-Boundary-Status.cmd,tools/collect-rr-boundary.py $diagnostics
           Copy-Item Start-Compact-Distance-Test.cmd,Capture-RR-Suite.ps1,tools/collect-rr-suite.py $diagnostics
-          Copy-Item tools/diagnostics/Start-R258-Storage-Diagnostics.cmd,tools/diagnostics/Start-GI-Source-Probe.cmd $diagnostics
+          Copy-Item tools/diagnostics/Start-R258-Storage-Diagnostics.cmd,tools/diagnostics/Start-GI-Source-Probe.cmd,tools/diagnostics/Start-GI-Shadow-Test.cmd $diagnostics
           Copy-Item tools/diagnostics/Collect-Texture-Trace.cmd,tools/diagnostics/Collect-Texture-Trace.ps1 $tools
           Copy-Item build/DirectStorage "$diagnostics/DirectStorage" -Recurse
           Copy-Item build/DirectStorage/dstorage.dll,build/DirectStorage/dstoragecore.dll $out
           Copy-Item tools/directstorage/Validate-DirectStorage.cmd "$diagnostics/DirectStorage"
-          Copy-Item docs/native-lighting-r267.md "$out/ControlTOH/DIAGNOSTIC-NOTES.md"
+          Copy-Item docs/native-lighting-r268.md "$out/ControlTOH/DIAGNOSTIC-NOTES.md"
           Copy-Item tools/Organize-Existing-Install.cmd,tools/Organize-Existing-Install.ps1 $tools
           Copy-Item tools/diagnostics/Collect-ControlTOH-Materials.cmd,tools/diagnostics/Collect-ControlTOH-Materials.ps1 $tools
           & powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/diagnostics/test-material-collector.ps1
           if ($LASTEXITCODE -ne 0) { throw 'Material collector integration test failed' }
           @'
           Control The Oldest House: Visual and Performance Overhaul
-          R267 - Native GI source isolation diagnostic; not a visual fix
+          R268 - GI spotlight PCF correction test; full spotlight contribution retained
 
           Copy all package contents beside Control_DX12.exe. Preserve the folder structure.
-          Normal Steam launch retains full GI. Optional source probe launcher:
-          ControlTOH/Diagnostics/Start-GI-Source-Probe.cmd
+          Normal Steam launch enables the PCF test with full GI. Native comparison:
+          ControlTOH/Diagnostics/Start-GI-Shadow-Test.cmd
           Root files: dxgi.dll, dstorage.dll, dstoragecore.dll.
           ControlTOH/Shaders: runtime shaders. ControlTOH/Tools: restart helper and collectors.
           ControlTOH/Diagnostics: optional launchers and DirectStorage validation tools.
@@ -1117,9 +1134,10 @@ jobs:
           Collect logs using ControlTOH/Tools/Collect-ControlFG-Compact-Logs.cmd.
           F10: select GI: RAW BYPASS. Keep RR ON, Native Blend, GI samples 6, FG OFF.
           Keep the lamp intact and RT indirect lighting ON.
-          The source launcher removes only selected indirect contributions.
-          Check F10 for the GI SOURCE hint. Missing bounced light is intentional.
-          This is not a performance comparison. Normal launch restores full GI.
+          Check F10 for GI SHADOW: PCF TEST after returning to gameplay.
+          Both shadow-test options retain full spotlight GI.
+          Compare speckles, lighting/shadow edges, motion and performance.
+          The older source probe is separate and still removes contributions.
           CAPTURE RR and PACKAGE RR retain the existing multi-pair capture behavior.
           See ControlTOH/DIAGNOSTIC-NOTES.md for scope and validation.
           '@ | Set-Content "$out/ControlTOH/README.txt" -Encoding ASCII
@@ -1134,10 +1152,11 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: ControlTOH-R267
+          name: ControlTOH-R268
           path: |
-            ControlTOH-R267.zip
-            ControlTOH-R267.sha256
+            ControlTOH-R268.zip
+            ControlTOH-R268.sha256
+            build/gi-spot-pcf-validation.json
             build/gi-sequence-validation.json
             build/gi-sequence-0.dxil
             build/gi-sequence-1.dxil
