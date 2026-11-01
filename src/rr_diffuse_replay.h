@@ -1,5 +1,6 @@
 #pragma once
 #include "rr_hair_shader_audit.h"
+#include "rr_foliage_evidence.h"
 #include "rr_world_albedo.h"
 #include "rr_lighting_diagnostic.h"
 #include "rr_hair_opacity.h"
@@ -125,13 +126,14 @@ static void RRDiffusePrepare(void* callback,void* table) noexcept {
         c->worldAlbedo=RRWorldAlbedoRequested();c->worldBatches=0;
         RRMaterialAudit::BeginFrame(frame);
         RRAlbedoShader::Session shaders; // Preserve the character/hair validation budget.
+        RRAlbedoShader::Session foliageShaders; // Separate budget; exact native/replay evidence only.
         RRAlbedoShader::Session worldShaders; // Independent bounded world validation.
         const control_rr_albedo::Access access{&RRAlbedoRead,&RRAlbedoGetShader,nullptr,&shaders,&RRAlbedoValidateEyeCandidate};
         const bool prepared=control_rr_albedo::prepare(access,c->manager,c->replay,true);
         if(RRMaterialAudit::foliageOnly && RRMaterialAudit::framesLeft==RRMaterialAudit::FrameLimit-1) {
             unsigned foliageCandidates=0;
             for(auto family:c->replay.familyKinds)if(family==4)++foliageCandidates;
-            Log("RR_FOLIAGE_SELECTION_R258 frame=%llu source_batches=%u selected_foliage=%u selection_rejected=%u rendering_admission=excluded_by_textured_family_policy",
+            Log("RR_FOLIAGE_SELECTION_R258 frame=%llu source_batches=%u selected_foliage=%u selection_rejected=%u rendering_admission=exact_evidence_required",
                 frame,c->replay.coverage.sourceBatches,foliageCandidates,c->replay.rejectionAudit.total);
             for(const auto& e:c->replay.rejectionAudit.examples)
                 Log("RR_FOLIAGE_SELECTION_REJECT_R258 frame=%llu source=%u family=%s reason=%s key=%u predicted=%u effective=%u actual=%u",
@@ -139,10 +141,10 @@ static void RRDiffusePrepare(void* callback,void* table) noexcept {
         }
         if(!prepared) {rrDiffuseStage.store(RRDiffuseStage::Idle);return;}
         std::uintptr_t source=0;memcpy(&source,c->replay.manager.data()+0x30,sizeof(source));
-        size_t kept=0;UINT targets=0;
+        size_t kept=0;UINT targets=0;unsigned foliageAccepted=0,foliageRejected=0;
         for(size_t i=0;i<c->replay.batches.size();++i) {
             const auto family=c->replay.familyKinds[i];
-            if(control_rr::RRTexturedCharacterGuides && family!=2 && family!=5 && !(c->worldAlbedo && family==1) &&
+            if(control_rr::RRTexturedCharacterGuides && family!=2 && family!=5 && !(c->worldAlbedo && (family==1 || family==4)) &&
                !RRMaterialAudit::Wants(family)) continue;
             control_rr_albedo::OpaqueBatch original{};RRAlbedoShader::Result result{};
             if(!RRAlbedoRead(source+size_t(c->replay.sourceIndices[i])*sizeof(original),&original,sizeof(original))) continue;
@@ -150,13 +152,17 @@ static void RRDiffusePrepare(void* callback,void* table) noexcept {
             // shader contract does not prove that its RGB is diffuse albedo.
             RRMaterialAudit::Capture(frame,c->replay.familyKinds[i],c->replay.sourceIndices[i],
                 original.shader,c->replay.batches[i].shader);
-            // Admit only exact audited Standard variants in the world test mode.
+            // Admit audited Standard variants and the exact captured Foliage contract.
             if(control_rr::RRTexturedCharacterGuides &&
-               family!=2 && family!=5 && !(c->worldAlbedo && family==1)) continue;
-            auto& batchShaders=family==1?worldShaders:shaders;
-            if(!batchShaders.ValidatePair(original.shader,c->replay.batches[i].shader,result,&reason) ||
+               family!=2 && family!=5 && !(c->worldAlbedo && (family==1 || family==4))) continue;
+            auto& batchShaders=family==4?foliageShaders:(family==1?worldShaders:shaders);
+            if(!batchShaders.ValidatePair(original.shader,c->replay.batches[i].shader,result,&reason,family==4?&kRRFoliageEvidence:nullptr) ||
                (control_rr::RRTexturedCharacterGuides && result.targetCount!=1) ||
-               result.targetCount<1 || result.targetCount>2 || (targets && targets!=result.targetCount)) continue;
+               result.targetCount<1 || result.targetCount>2 || (targets && targets!=result.targetCount)) {
+                if(family==4){++foliageRejected;if(frame%240==0)Log("RR_FOLIAGE_R265_REJECT frame=%llu source=%u reason=%s",frame,c->replay.sourceIndices[i],reason?reason:"target_contract");}
+                continue;
+            }
+            if(family==4){++foliageAccepted;++c->worldBatches;}
             if(family==1) {
                 const int variant=RRWorldAlbedoVariant(batchShaders.PixelShaders()[result.selectedIndex]);
                 const auto replacement=RRWorldAlbedoReplacement(c->replay.batches[i].shader,variant);
@@ -169,6 +175,10 @@ static void RRDiffusePrepare(void* callback,void* table) noexcept {
                 c->replay.batches[i].shader=RRCharacterBaseAlbedoReplacement(original.shader,c->replay.batches[i].shader,shaders.PixelShaders()[result.selectedIndex]);
             targets=result.targetCount;c->replay.batches[kept]=c->replay.batches[i];
             c->replay.sourceIndices[kept]=c->replay.sourceIndices[i];c->replay.familyKinds[kept]=c->replay.familyKinds[i];++kept;
+        }
+        if(foliageAccepted||foliageRejected){
+            static unsigned long long records=0;
+            if(++records<=4||frame%240==0)Log("RR_FOLIAGE_R265 frame=%llu accepted=%u rejected=%u exact_original_ps=1 exact_vertex=1 exact_replay_ps=1 pixel_coverage_proven=0",frame,foliageAccepted,foliageRejected);
         }
         c->replay.batches.resize(kept);c->replay.sourceIndices.resize(kept);c->replay.familyKinds.resize(kept);
         c->accepted=static_cast<UINT>(kept);c->rejected=c->replay.coverage.sourceBatches-c->accepted;

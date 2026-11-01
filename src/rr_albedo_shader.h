@@ -514,6 +514,14 @@ struct CapturedPixelShader {
 };
 struct Result { uint32_t targetCount = 0; size_t selectedIndex = 0; size_t vertexEvidenceIndex = RRVertexEvidence::Missing; };
 
+struct ExactEvidence {
+    const uint8_t* vertex; size_t vertexSize;
+    const uint8_t* originalPixel; size_t originalPixelSize;
+    const uint8_t* replayPixel; size_t replayPixelSize;
+};
+inline bool ExactBytes(const std::vector<uint8_t>& bytes,const uint8_t* expected,size_t size) noexcept {
+    return expected && bytes.size()==size && size>=32 && std::memcmp(bytes.data(),expected,size)==0;
+}
 #if defined(_WIN32)
 using ResidentGetter = const char* (__cdecl*)(int);
 inline ResidentGetter residentGetter = nullptr;
@@ -548,7 +556,7 @@ inline bool CopyResident(const NativeDescriptor* descriptor, uint8_t* output, si
     } __except (EXCEPTION_EXECUTE_HANDLER) { return false; }
 }
 class Session {
-    struct CachedPair { uintptr_t original, albedo; Result result; bool valid; const char* reason; };
+    struct CachedPair { uintptr_t original, albedo; Result result; bool valid; const char* reason; const ExactEvidence* evidence; };
     std::vector<CachedPair> pairs_;
     std::vector<CapturedPixelShader> shaders_;
     size_t copiedBytes_ = 0;
@@ -576,17 +584,17 @@ public:
     size_t CopiedBytes() const noexcept { return copiedBytes_; }
     size_t PairCount() const noexcept { return pairs_.size(); }
     bool ValidatePair(uintptr_t originalShader, uintptr_t albedoShader, Result& out,
-                      const char** reason = nullptr) noexcept {
+                      const char** reason = nullptr, const ExactEvidence* evidence = nullptr) noexcept {
         out = {}; if (reason) *reason = nullptr;
         if (!residentGetter) return Reject(reason, "native_shader_getter_unavailable");
-        for (const auto& p : pairs_) if (p.original == originalShader && p.albedo == albedoShader) {
+        for (const auto& p : pairs_) if (p.original == originalShader && p.albedo == albedoShader && p.evidence == evidence) {
             out = p.result;
             return p.valid ? true : Reject(reason, p.reason);
         }
         if (pairs_.size() >= kMaximumPairs) return Reject(reason, "native_shader_pair_cap");
         const size_t pairIndex = pairs_.size();
         try {
-            pairs_.push_back({originalShader, albedoShader, {}, false, "native_shader_validation_incomplete"});
+            pairs_.push_back({originalShader, albedoShader, {}, false, "native_shader_validation_incomplete", evidence});
             const auto fail = [&](const char* why) {
                 pairs_[pairIndex].reason = why;
                 pairs_[pairIndex].result = out;
@@ -608,6 +616,15 @@ public:
             if (originalVertex != albedoVertex) {
                 if (captureVertexEvidence_) out.vertexEvidenceIndex=vertexEvidence_.Add(originalVertex,albedoVertex,shaders_[selected].bytes);
                 return fail("native_vertex_bytecode_differs");
+            }
+            if(evidence) {
+                if(!ExactBytes(originalVertex,evidence->vertex,evidence->vertexSize) ||
+                   !ExactBytes(shaders_[selected].bytes,evidence->replayPixel,evidence->replayPixelSize))
+                    return fail("native_exact_evidence_mismatch");
+                std::vector<uint8_t> originalPixel;
+                if(!Read(originalShader,0x50,4,originalPixel,&why))return fail(why);
+                if(!ExactBytes(originalPixel,evidence->originalPixel,evidence->originalPixelSize))
+                    return fail("native_exact_original_pixel_mismatch");
             }
             if (!ParseVertex(originalVertex.data(), originalVertex.size(), &why)) return fail(why);
             Contract contract{};
