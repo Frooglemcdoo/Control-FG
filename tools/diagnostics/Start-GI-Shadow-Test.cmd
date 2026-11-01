@@ -13,7 +13,7 @@ if not errorlevel 1 (
   exit /b 1
 )
 echo R269 - Spotlight GI shadow isolation, diagnostic only
-echo 1. Spotlight GI shadow bypass - normal R269 launch default
+echo 1. Spotlight GI shadow bypass - previous R269 diagnostic
 echo 2. Native spotlight GI shadows - baseline
 echo 3. Remove spotlight GI - previous successful isolation
 choice /C 123 /N /M "Select 1, 2 or 3: "

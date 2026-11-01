@@ -41,6 +41,6 @@ echo Keep the lamp intact, RT indirect lighting ON, RR ON, and Native Blend.
 echo Use the same GI sample count and GI RAW BYPASS in each run. Keep FG OFF.
 echo Missing bounced light is intentional. Direct lighting stays enabled.
 echo This is not a performance comparison. Use CAPTURE RR then PACKAGE RR.
-echo Normal R269 launch uses shadow bypass; no setting is saved by this launcher.
+echo Normal R270 launch uses white-cookie diagnostic; no setting is saved by this launcher.
 start "" /wait "Control_DX12.exe"
 endlocal

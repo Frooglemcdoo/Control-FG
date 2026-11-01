@@ -70,11 +70,43 @@ def main():
             if ins not in loops[sites[1]]: continue
             visibility.append(ins['dword'])
         assert len(visibility) == 1, (variant, visibility)
-        for mode, selected in enumerate(((sites[0],), (sites[1],), tuple(sites), tuple(visibility)), 1):
+        # Independent spotlight-lighting probes, all built from native bytes.
+        cookie_binding = next(b for b in decoded['bindings'] if b['name']=='g_tSpotLightProjectionAtlas')
+        cookie_samples = [j for j,x in enumerate(instructions) if x['name']=='sample_l'
+                          and x['operands'][2].startswith(f"t[{cookie_binding['identifier']}][")]
+        assert len(cookie_samples)==1
+        j = cookie_samples[0]
+        cookie = instructions[j+1]
+        assert cookie in loops[sites[1]] and cookie['name']=='mul'
+        assert cookie['operands'][1]==cookie['operands'][0]+'x'
+        assert cookie['operands'][2]==instructions[j]['operands'][0]+'x'
+        falloffs = [x for x in instructions[j-25:j] if x['name']=='max' and x['operands'][-1]=='l(0)']
+        assert len(falloffs)==1 and falloffs[0] in loops[sites[1]]
+        k = instructions.index(falloffs[0])
+        assert [x['name'] for x in instructions[k-4:k+3]]==['max','mul','rcp','add','max','mul','mul']
+        assert instructions[k-4]['operands'][-1]=='l(0.25)'
+        assert instructions[k-3]['operands'][-1]=='l(3.14159274)'
+        assert instructions[k+1]['operands'][-1]==falloffs[0]['operands'][0]
+        fresnels = [x for x in instructions[j:] if x['dword']<sites[1] and x['name']=='add_sat']
+        assert len(fresnels)==1 and fresnels[0] in loops[sites[1]]
+        k = instructions.index(fresnels[0])
+        assert [x['name'] for x in instructions[k-1:k+4]]==['mad','add_sat','mul','mul','mad']
+        assert instructions[k+1]['operands'][-1]==fresnels[0]['operands'][0]
+        for mode, selected in enumerate(((sites[0],), (sites[1],), tuple(sites), tuple(visibility),
+                                         (cookie['dword'],), (falloffs[0]['dword'],), (fresnels[0]['dword'],)), 1):
             edits = []
             for offset in selected:
-                expected = native_words[offset:offset+9]
-                if mode == 4:
+                length = (native_words[offset] >> 24) & 127
+                expected = native_words[offset:offset+length]
+                if mode == 5:
+                    assert expected[0] == 0x07000038  # RGB cookie MUL
+                    replacement = [0x05000036, *expected[1:3], *expected[3:5]] + [0x0100003a]*2
+                elif mode in (6,7):
+                    # Flatten distance attenuation / bypass secondary Fresnel reduction.
+                    assert (expected[0]&0x7ff)==(52 if mode==6 else 0)
+                    constant = 0x3ea2f983 if mode==6 else 0x3f800000  # 1/pi or 1
+                    replacement = [0x05000036, *expected[1:3], 0x4001, constant] + [0x0100003a]*(length-5)
+                elif mode == 4:
                     assert expected[0] == 0x09000037  # MOVC, four simple temps
                     replacement = [0x05000036, *expected[1:3], 0x4001, 0x3f800000] + [0x0100003a]*4
                 else:
@@ -84,30 +116,30 @@ def main():
                 edits.append((offset, expected, replacement))
             def transform(words):
                 for offset, expected, replacement in edits:
-                    assert words[offset:offset+9] == expected
-                    words[offset:offset+9] = replacement
+                    assert words[offset:offset+len(expected)] == expected
+                    words[offset:offset+len(expected)] = replacement
             changed = transform_shex(raw, transform)
             target = out / f'gi-source-{variant}-{mode}.dxbc'
             target.write_bytes(changed)
             assert len(changed) == len(raw)
             permitted = set(range(4, 20))
-            for offset, _, _ in edits:
-                permitted.update(range(start+offset*4, start+(offset+9)*4))
+            for offset, expected, _ in edits:
+                permitted.update(range(start+offset*4, start+(offset+len(expected))*4))
             assert all(a == b for n, (a, b) in enumerate(zip(raw, changed)) if n not in permitted)
             assert decoder.decode(target)['bindings'] == decoded['bindings']
             def undo(words):
-                for offset, expected, _ in edits: words[offset:offset+9] = expected
+                for offset, expected, _ in edits: words[offset:offset+len(expected)] = expected
             assert transform_shex(changed, undo) == raw
             symbol = f'kGISource{variant}Mode{mode}'
             for number, (_, expected, replacement) in enumerate(edits):
                 for suffix, words in (('Expected', expected), ('Replacement', replacement)):
                     header.append(f'inline constexpr uint32_t {symbol}{suffix}{number}[]={{'+','.join(hex(v)+'u' for v in words)+'};')
-            header.append(f'inline constexpr InstructionEdit {symbol}Edits[]={{'+','.join('{'+f'{start+offset*4},{symbol}Expected{n},{symbol}Replacement{n},9'+'}' for n, (offset, _, _) in enumerate(edits))+'};')
+            header.append(f'inline constexpr InstructionEdit {symbol}Edits[]={{'+','.join('{'+f'{start+offset*4},{symbol}Expected{n},{symbol}Replacement{n},{len(expected)}'+'}' for n, (offset, expected, _) in enumerate(edits))+'};')
             header.append(f'inline constexpr unsigned char {symbol}Checksum[]={{'+','.join(map(str, changed[4:20]))+'};')
-            header.append(f'inline constexpr ShaderPatch {symbol}={{"GI source {variant} mode {mode}",{len(raw)},"{identity["sha256"]}","{hashlib.sha256(changed).hexdigest()}",{start+edits[0][0]*4},{symbol}Expected0,9,nullptr,0,{symbol}Checksum,{symbol}Edits,{len(edits)}}};')
+            header.append(f'inline constexpr ShaderPatch {symbol}={{"GI source {variant} mode {mode}",{len(raw)},"{identity["sha256"]}","{hashlib.sha256(changed).hexdigest()}",{start+edits[0][0]*4},{symbol}Expected0,{len(edits[0][1])},nullptr,0,{symbol}Checksum,{symbol}Edits,{len(edits)}}};')
             symbols.append('&'+symbol)
-        print(f'PASS GI variant {variant}: point MAD {sites[0]}, spot MAD {sites[1]}, visibility {visibility[0]}; all unrelated bytes preserved')
-    header.append('inline constexpr const ShaderPatch* kGISourcePatches[8][4]={'+','.join('{'+','.join(symbols[i:i+4])+'}' for i in range(0,32,4))+'};')
+        print(f'PASS GI variant {variant}: point MAD {sites[0]}, spot MAD {sites[1]}, visibility {visibility[0]}, cookie {cookie["dword"]}, falloff {falloffs[0]["dword"]}, Fresnel {fresnels[0]["dword"]}; all unrelated bytes preserved')
+    header.append('inline constexpr const ShaderPatch* kGISourcePatches[8][7]={'+','.join('{'+','.join(symbols[i:i+7])+'}' for i in range(0,56,7))+'};')
     header.append('}')
     text = '\n'.join(header)+'\n'
     path = ROOT / 'src/gi_source_patches.generated.h'

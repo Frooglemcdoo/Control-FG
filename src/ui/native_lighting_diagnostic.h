@@ -50,6 +50,9 @@ inline const wchar_t* ButtonLabel(unsigned index) noexcept {
 inline const wchar_t* ModeHint(Mode mode) noexcept {
     if(gi_source_probe::Requested()) {
         if(!gi_source_probe::bound.load())return L"GI source probe requested; no matching shader bound yet. Check log.";
+        if(gi_source_probe::Requested()==5)return L"GI SPOT: WHITE COOKIE. Native shadows; diagnostic only.";
+        if(gi_source_probe::Requested()==6)return L"GI SPOT: FLAT FALLOFF. Native shadows; diagnostic only.";
+        if(gi_source_probe::Requested()==7)return L"GI SPOT: NO FRESNEL. Native shadows; diagnostic only.";
         if(gi_source_probe::Requested()==4)return L"GI SHADOW: BYPASS. Spotlight bounce retained; diagnostic only.";
         if(gi_source_probe::Requested()==1)return L"GI SOURCE: NO POINT. Direct lights retained. Diagnostic only.";
         if(gi_source_probe::Requested()==2)return L"GI SOURCE: NO SPOT. Direct lights retained. Diagnostic only.";

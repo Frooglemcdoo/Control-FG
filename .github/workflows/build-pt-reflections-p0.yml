@@ -3,6 +3,7 @@ name: Build native reflection enhancements and RR
 on:
   push:
     branches:
+      - work/r270-gi-lighting-isolation
       - work/r269-gi-shadow-isolation
       - work/r268-gi-spot-pcf
       - work/r267-gi-audit
@@ -1046,7 +1047,7 @@ jobs:
           build\suite-controller.exe
           if errorlevel 1 exit /b 1
 
-      - name: Validate native GI source isolation R267
+      - name: Validate native GI lighting isolation R270
         shell: cmd
         run: |
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
@@ -1072,11 +1073,11 @@ jobs:
           build\test-gi-spot-pcf.exe
           if errorlevel 1 exit /b 1
 
-      - name: Package GI shadow isolation R269
+      - name: Package GI lighting isolation R270
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='ControlTOH-R269'
+          $out='ControlTOH-R270'
           $shader="$out/ControlTOH/Shaders"
           $tools="$out/ControlTOH/Tools"
           $diagnostics="$out/ControlTOH/Diagnostics"
@@ -1101,23 +1102,23 @@ jobs:
           Copy-Item Package-Lighting-Capture.cmd,tools/package-lighting-capture.py,Package-Lighting-Performance.ps1 $diagnostics
           Copy-Item Capture-RR-Boundary.cmd,Capture-RR-Boundary.ps1,Collect-RR-Boundary-Status.cmd,tools/collect-rr-boundary.py $diagnostics
           Copy-Item Start-Compact-Distance-Test.cmd,Capture-RR-Suite.ps1,tools/collect-rr-suite.py $diagnostics
-          Copy-Item tools/diagnostics/Start-R258-Storage-Diagnostics.cmd,tools/diagnostics/Start-GI-Source-Probe.cmd,tools/diagnostics/Start-GI-Shadow-Test.cmd $diagnostics
+          Copy-Item tools/diagnostics/Start-R258-Storage-Diagnostics.cmd,tools/diagnostics/Start-GI-Source-Probe.cmd,tools/diagnostics/Start-GI-Shadow-Test.cmd,tools/diagnostics/Start-GI-Lighting-Test.cmd $diagnostics
           Copy-Item tools/diagnostics/Collect-Texture-Trace.cmd,tools/diagnostics/Collect-Texture-Trace.ps1 $tools
           Copy-Item build/DirectStorage "$diagnostics/DirectStorage" -Recurse
           Copy-Item build/DirectStorage/dstorage.dll,build/DirectStorage/dstoragecore.dll $out
           Copy-Item tools/directstorage/Validate-DirectStorage.cmd "$diagnostics/DirectStorage"
-          Copy-Item docs/native-lighting-r269.md "$out/ControlTOH/DIAGNOSTIC-NOTES.md"
+          Copy-Item docs/native-lighting-r270.md "$out/ControlTOH/DIAGNOSTIC-NOTES.md"
           Copy-Item tools/Organize-Existing-Install.cmd,tools/Organize-Existing-Install.ps1 $tools
           Copy-Item tools/diagnostics/Collect-ControlTOH-Materials.cmd,tools/diagnostics/Collect-ControlTOH-Materials.ps1 $tools
           & powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/diagnostics/test-material-collector.ps1
           if ($LASTEXITCODE -ne 0) { throw 'Material collector integration test failed' }
           @'
           Control The Oldest House: Visual and Performance Overhaul
-          R269 - Spotlight GI shadow isolation diagnostic
+          R270 - Spotlight GI lighting isolation diagnostics
 
           Copy all package contents beside Control_DX12.exe. Preserve the folder structure.
-          Normal Steam launch bypasses secondary spotlight GI shadow visibility. Comparison:
-          ControlTOH/Diagnostics/Start-GI-Shadow-Test.cmd
+          Normal Steam launch uses a white spotlight GI projection texture. Other tests:
+          ControlTOH/Diagnostics/Start-GI-Lighting-Test.cmd
           Root files: dxgi.dll, dstorage.dll, dstoragecore.dll.
           ControlTOH/Shaders: runtime shaders. ControlTOH/Tools: restart helper and collectors.
           ControlTOH/Diagnostics: optional launchers and DirectStorage validation tools.
@@ -1135,9 +1136,9 @@ jobs:
           Collect logs using ControlTOH/Tools/Collect-ControlFG-Compact-Logs.cmd.
           F10: select GI: RAW BYPASS. Keep RR ON, Native Blend, GI samples 6, FG OFF.
           Keep the lamp intact and RT indirect lighting ON.
-          Check F10 for GI SHADOW: BYPASS after returning to gameplay.
-          Shadow launcher: 1 bypass, 2 native baseline, 3 no spotlight GI.
-          Brighter bounced light or leaks are expected in bypass; this is not a final fix.
+          Check F10 for GI SPOT: WHITE COOKIE after returning to gameplay.
+          Lighting launcher: 1 white cookie, 2 flat falloff, 3 no Fresnel, 4 native, 5 no spot.
+          Tests 1-3 retain native shadows; brightness changes are expected diagnostics.
           Compare speckles, lighting/shadow edges, motion and performance.
           The older source probe is separate and still removes contributions.
           CAPTURE RR and PACKAGE RR retain the existing multi-pair capture behavior.
@@ -1154,10 +1155,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: ControlTOH-R269
+          name: ControlTOH-R270
           path: |
-            ControlTOH-R269.zip
-            ControlTOH-R269.sha256
+            ControlTOH-R270.zip
+            ControlTOH-R270.sha256
             build/gi-spot-pcf-validation.json
             build/gi-sequence-validation.json
             build/gi-sequence-0.dxil
