@@ -1,0 +1,317 @@
+{
+  "schema": "gi-ray-trace-analysis-r277",
+  "sha256": "4071818993311c0fd91d24cc3d5c786dd2e8e9552066d7e5f2788a7fa749959f",
+  "runtime_accounting": {
+    "pixels": 3600,
+    "max_absolute_error": 1.7229467630386353e-08,
+    "verified": true
+  },
+  "records": 25200,
+  "pixels": 3600,
+  "rays": 21600,
+  "miss_or_invalid_rays": 12026,
+  "complete_ray_sets": true,
+  "sampled_grid_concentration": {
+    "metric": "luminance after recorded depth scale and ray-count normalization",
+    "luminance_sum": 10.607978847334358,
+    "miss_fallback_share": 0.832019678575716,
+    "top10_ray_share": 0.0674638539364314,
+    "pixels_one_ray_over_90_percent": 16
+  },
+  "errors": {
+    "accumulation_max_absolute": 1.1082738637924194e-07,
+    "output_max_absolute": 9.934107453313246e-09,
+    "depth_scale_max_absolute": 0.0
+  },
+  "brightest_rays": [
+    {
+      "pixel": [
+        240,
+        560
+      ],
+      "ray": 0,
+      "primary_material": 839,
+      "secondary_material": 345,
+      "contribution": [
+        1.439637303352356,
+        1.1636930704116821,
+        0.7524482011795044
+      ]
+    },
+    {
+      "pixel": [
+        144,
+        1232
+      ],
+      "ray": 4,
+      "primary_material": 1684,
+      "secondary_material": 345,
+      "contribution": [
+        0.9147422313690186,
+        0.7104567289352417,
+        0.4349669814109802
+      ]
+    },
+    {
+      "pixel": [
+        80,
+        944
+      ],
+      "ray": 1,
+      "primary_material": 1684,
+      "secondary_material": 345,
+      "contribution": [
+        0.8904789090156555,
+        0.5881467461585999,
+        0.28586137294769287
+      ]
+    },
+    {
+      "pixel": [
+        304,
+        1200
+      ],
+      "ray": 5,
+      "primary_material": 1684,
+      "secondary_material": 345,
+      "contribution": [
+        0.800262987613678,
+        0.5238403677940369,
+        0.2533813714981079
+      ]
+    },
+    {
+      "pixel": [
+        48,
+        1040
+      ],
+      "ray": 0,
+      "primary_material": 1684,
+      "secondary_material": 345,
+      "contribution": [
+        0.6188457608222961,
+        0.4860799014568329,
+        0.3036595284938812
+      ]
+    },
+    {
+      "pixel": [
+        336,
+        464
+      ],
+      "ray": 2,
+      "primary_material": 839,
+      "secondary_material": 1346,
+      "contribution": [
+        0.2000730335712433,
+        0.1857347935438156,
+        0.15520837903022766
+      ]
+    },
+    {
+      "pixel": [
+        144,
+        1424
+      ],
+      "ray": 4,
+      "primary_material": 1684,
+      "secondary_material": 1346,
+      "contribution": [
+        0.16747339069843292,
+        0.15406985580921173,
+        0.10866674780845642
+      ]
+    },
+    {
+      "pixel": [
+        112,
+        1328
+      ],
+      "ray": 0,
+      "primary_material": 1684,
+      "secondary_material": 1346,
+      "contribution": [
+        0.14311249554157257,
+        0.12287148088216782,
+        0.08192936331033707
+      ]
+    },
+    {
+      "pixel": [
+        48,
+        976
+      ],
+      "ray": 2,
+      "primary_material": 1684,
+      "secondary_material": 1346,
+      "contribution": [
+        0.13955137133598328,
+        0.11788102239370346,
+        0.07891735434532166
+      ]
+    },
+    {
+      "pixel": [
+        80,
+        1424
+      ],
+      "ray": 1,
+      "primary_material": 1684,
+      "secondary_material": 1346,
+      "contribution": [
+        0.10232213139533997,
+        0.08582514524459839,
+        0.05891857668757439
+      ]
+    },
+    {
+      "pixel": [
+        240,
+        1424
+      ],
+      "ray": 0,
+      "primary_material": 1684,
+      "secondary_material": 1346,
+      "contribution": [
+        0.09857670962810516,
+        0.08743622153997421,
+        0.06713444739580154
+      ]
+    },
+    {
+      "pixel": [
+        336,
+        1232
+      ],
+      "ray": 2,
+      "primary_material": 1684,
+      "secondary_material": 1346,
+      "contribution": [
+        0.06711828708648682,
+        0.05106521025300026,
+        0.03886362537741661
+      ]
+    },
+    {
+      "pixel": [
+        16,
+        752
+      ],
+      "ray": 5,
+      "primary_material": 839,
+      "secondary_material": 1346,
+      "contribution": [
+        0.06569251418113708,
+        0.05338994786143303,
+        0.03531695157289505
+      ]
+    },
+    {
+      "pixel": [
+        432,
+        432
+      ],
+      "ray": 1,
+      "primary_material": 839,
+      "secondary_material": 1346,
+      "contribution": [
+        0.06210842356085777,
+        0.054907120764255524,
+        0.03520074486732483
+      ]
+    },
+    {
+      "pixel": [
+        976,
+        368
+      ],
+      "ray": 3,
+      "primary_material": 1142,
+      "secondary_material": 1346,
+      "contribution": [
+        0.04016308858990669,
+        0.03222319111227989,
+        0.0224310290068388
+      ]
+    },
+    {
+      "pixel": [
+        144,
+        1008
+      ],
+      "ray": 3,
+      "primary_material": 1684,
+      "secondary_material": 1346,
+      "contribution": [
+        0.03640395775437355,
+        0.027828926220536232,
+        0.019376834854483604
+      ]
+    },
+    {
+      "pixel": [
+        48,
+        1424
+      ],
+      "ray": 0,
+      "primary_material": 1684,
+      "secondary_material": 1346,
+      "contribution": [
+        0.03556014597415924,
+        0.02721502259373665,
+        0.01685032621026039
+      ]
+    },
+    {
+      "pixel": [
+        112,
+        1200
+      ],
+      "ray": 1,
+      "primary_material": 1684,
+      "secondary_material": 1346,
+      "contribution": [
+        0.026332488283514977,
+        0.022902537137269974,
+        0.017008032649755478
+      ]
+    },
+    {
+      "pixel": [
+        272,
+        1392
+      ],
+      "ray": 5,
+      "primary_material": 1684,
+      "secondary_material": 1346,
+      "contribution": [
+        0.026180950924754143,
+        0.020979739725589752,
+        0.013358407653868198
+      ]
+    },
+    {
+      "pixel": [
+        272,
+        1136
+      ],
+      "ray": 0,
+      "primary_material": 1684,
+      "secondary_material": 1346,
+      "contribution": [
+        0.024668404832482338,
+        0.020575745031237602,
+        0.013272354379296303
+      ]
+    }
+  ],
+  "limits": [
+    "One dispatch; not a temporal variance or converged reference measurement.",
+    "Output is the native float32 register before UAV format conversion.",
+    "Separate product versus native fused accumulation can differ by rounding.",
+    "Material IDs do not identify named scene objects.",
+    "Concentration describes this sampled grid, not full-image energy or temporal variance.",
+    "Misses contribute native fallback lighting; exclude from surface reuse, not from GI output.",
+    "Consumer geometry does not establish the ray producer PDF."
+  ]
+}
