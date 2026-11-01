@@ -11,6 +11,7 @@
 #include <iterator>
 #include <iostream>
 #include <stdexcept>
+#include <string>
 #include <cmath>
 #include <cstring>
 #include "../build/gi_candidate_fixture.h"
