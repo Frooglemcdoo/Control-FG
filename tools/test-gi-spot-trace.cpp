@@ -41,10 +41,22 @@ int main()try{
  parameters[8].ParameterType=D3D12_ROOT_PARAMETER_TYPE_UAV;parameters[8].Descriptor={0,2};
  D3D12_ROOT_SIGNATURE_DESC rd{9,parameters,0,nullptr,D3D12_ROOT_SIGNATURE_FLAG_NONE};ComPtr<ID3DBlob> blob,error;Check(D3D12SerializeRootSignature(&rd,D3D_ROOT_SIGNATURE_VERSION_1,&blob,&error));
  ComPtr<ID3D12RootSignature> root;Check(d->CreateRootSignature(0,blob->GetBufferPointer(),blob->GetBufferSize(),IID_PPV_ARGS(&root)));
- const auto& shader=gi_spot_trace_shader::shaders[0];const auto embedded=Read("build/gi-spot-trace-6.dxbc");Require(embedded.size()==shader.size&&!memcmp(embedded.data(),shader.bytes,shader.size),"embedded bytes differ");
+#ifdef CONTROL_TEST_GI_RAY_TRACE
+ const auto& shader=gi_spot_trace_shader::rayShader;const auto embedded=Read("build/gi-ray-trace-6.dxbc");
+#else
+ const auto& shader=gi_spot_trace_shader::shaders[0];const auto embedded=Read("build/gi-spot-trace-6.dxbc");
+#endif
+Require(embedded.size()==shader.size&&!memcmp(embedded.data(),shader.bytes,shader.size),"embedded bytes differ");
  ComPtr<ID3DBlob> disassembly;Check(D3DDisassemble(shader.bytes,shader.size,0,nullptr,&disassembly));
  D3D12_COMPUTE_PIPELINE_STATE_DESC pd{};pd.pRootSignature=root.Get();pd.CS={shader.bytes,shader.size};ComPtr<ID3D12PipelineState> nativeTrace;Check(d->CreateComputePipelineState(&pd,IID_PPV_ARGS(&nativeTrace)));
- auto oracle=Read("build/gi-spot-trace-oracle.dxbc");pd.CS={oracle.data(),oracle.size()};ComPtr<ID3D12PipelineState> oraclePso;Check(d->CreateComputePipelineState(&pd,IID_PPV_ARGS(&oraclePso)));
+#ifdef CONTROL_TEST_GI_RAY_TRACE
+ auto oracle=Read("build/gi-ray-trace-oracle.dxbc");
+ constexpr UINT expectedRecords=3;
+#else
+ auto oracle=Read("build/gi-spot-trace-oracle.dxbc");
+ constexpr UINT expectedRecords=4;
+#endif
+pd.CS={oracle.data(),oracle.size()};ComPtr<ID3D12PipelineState> oraclePso;Check(d->CreateComputePipelineState(&pd,IID_PPV_ARGS(&oraclePso)));
  D3D12_COMMAND_QUEUE_DESC qd{};ComPtr<ID3D12CommandQueue> queue;Check(d->CreateCommandQueue(&qd,IID_PPV_ARGS(&queue)));
  ComPtr<ID3D12CommandAllocator> allocator;Check(d->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT,IID_PPV_ARGS(&allocator)));
  ComPtr<ID3D12GraphicsCommandList> list;Check(d->CreateCommandList(0,D3D12_COMMAND_LIST_TYPE_DIRECT,allocator.Get(),nullptr,IID_PPV_ARGS(&list)));Check(list->Close());
@@ -59,9 +71,28 @@ int main()try{
   list->SetComputeRootSignature(root.Get());list->SetComputeRootUnorderedAccessView(8,gpu->GetGPUVirtualAddress());list->Dispatch(1,1,1);
   Transition(list.Get(),gpu.Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS,D3D12_RESOURCE_STATE_COPY_SOURCE);list->CopyBufferRegion(readback.Get(),0,gpu.Get(),0,allocated);Check(list->Close());
   ID3D12CommandList* lists[]={list.Get()};queue->ExecuteCommandLists(1,lists);Check(queue->Signal(fence.Get(),run+1));Check(fence->SetEventOnCompletion(run+1,event));Require(WaitForSingleObject(event,30000)==WAIT_OBJECT_0,"GPU timeout");
-  D3D12_RANGE range{0,allocated};Check(readback->Map(0,&range,&mapped));auto* p=static_cast<unsigned char*>(mapped);UINT total=0;memcpy(&total,p,4);Require(total==(run?capacity+3:4),"record allocation count");
+  D3D12_RANGE range{0,allocated};Check(readback->Map(0,&range,&mapped));auto* p=static_cast<unsigned char*>(mapped);UINT total=0;memcpy(&total,p,4);Require(total==(run?capacity+expectedRecords-1:expectedRecords),"record allocation count");
   for(UINT j=0;j<256;++j)Require(p[bytes+j]==0xa5,"overflow touched guard");
-  for(UINT sample=0;sample<(run?1u:4u);++sample){const UINT index=run?capacity-1:sample;auto* record=p+16+index*stride;UINT id[4]{},valid=0;memcpy(id,record,16);memcpy(&valid,record+192,4);
+  for(UINT sample=0;sample<(run?1u:expectedRecords);++sample){const UINT index=run?capacity-1:sample;auto* record=p+16+index*stride;UINT id[4]{},valid=0;memcpy(id,record,16);memcpy(&valid,record+192,4);
+#ifdef CONTROL_TEST_GI_RAY_TRACE
+   Require(id[0]==16&&id[1]==16&&id[3]==(sample==2?2u:1u),"ray record identity");
+   auto scalar=[&](UINT offset){float f=0;memcpy(&f,record+offset,4);return f;};
+   auto integer=[&](UINT offset){UINT n=0;memcpy(&n,record+offset,4);return n;};
+   Require(integer(108)==42&&integer(148)==2,"material and ray count");
+   Require(scalar(160)==1&&scalar(172)==4,"depth constants");
+   if(sample<2){
+    Require(id[2]==sample&&integer(144)==(sample?65535u:7u),"hit/miss sentinel");
+    Require(scalar(16)==1&&scalar(20)==3&&scalar(24)==8,"weighted contribution");
+    Require(scalar(64)==float(sample+1)&&scalar(72)==float(8*(sample+1)),"native accumulation");
+    Require(scalar(80)==1&&scalar(92)==4&&scalar(112)==5,"primary and secondary geometry");
+    Require(scalar(136)==(sample?0.f:1.f),"miss normal must be zero");
+   }else{
+    Require(id[2]==UINT_MAX,"summary sentinel");
+    Require(scalar(176)==.75f&&scalar(180)==2.25f&&scalar(184)==6&&scalar(188)==1,"final GI");
+    Require(scalar(192)==2&&scalar(200)==16&&scalar(208)==.75f,"sum and normalization");
+   }
+   for(UINT offset=224;offset<256;offset+=4)Require(integer(offset)==0,"unwritten record padding");
+#else
    if(!(id[0]==16&&id[1]==16&&id[2]==sample/2&&id[3]==100+sample))std::cerr<<"run="<<run<<" sample="<<sample<<" index="<<index<<" id="<<id[0]<<","<<id[1]<<","<<id[2]<<","<<id[3]<<" valid="<<valid<<"\n";
    Require(id[0]==16&&id[1]==16&&id[2]==sample/2&&id[3]==100+sample,"pixel/ray/light identity");
    Require(valid==(sample==0?3u:sample==1?16255u:16383u),"valid-stage mask");
@@ -69,9 +100,10 @@ int main()try{
    Require(scalar(16)==.125f&&scalar(20)==.25f&&scalar(24)==.5f,"coefficients");
    if(sample){Require(scalar(48)==3.75f&&scalar(52)==4.75f&&scalar(56)==5.75f&&scalar(60)==6.75f,"attenuation-stage scalar stores");Require(scalar(96)==.4f&&scalar(112)==2&&scalar(128)==.5f&&scalar(144)==.9f,"MAD operands/material factors");}
    else Require(scalar(64)==0&&scalar(96)==0,"shadow early-out");
+#endif
   }readback->Unmap(0,&none);
  }
  CloseHandle(event);ComPtr<ID3D12InfoQueue> messages;Check(d.As(&messages));
  for(UINT64 i=0;i<messages->GetNumStoredMessagesAllowedByRetrievalFilter();++i){SIZE_T size=0;messages->GetMessage(i,nullptr,&size);std::vector<unsigned char> storage(size);auto* m=reinterpret_cast<D3D12_MESSAGE*>(storage.data());Check(messages->GetMessage(i,m,&size));if(m->Severity<=D3D12_MESSAGE_SEVERITY_ERROR)throw std::runtime_error(m->pDescription);}
- std::cout<<"PASS R274: native trace PSO, exact inserted GPU blocks, stage masks, shadow early-out, cookie skip, multiple rays/lights, overflow guard; D3D12 debug clean\n";
+ std::cout<<"PASS GPU trace: native trace PSO, exact inserted GPU blocks, stage masks, shadow early-out, cookie skip, multiple rays/lights, overflow guard; D3D12 debug clean\n";
 }catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}

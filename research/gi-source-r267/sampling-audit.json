@@ -16,6 +16,15 @@
       "r264_changes_phase_only": true
     }
   ],
+  "hit_contract": {
+    "producer_variant": 0,
+    "material_miss_sentinel": 65535,
+    "position_storage": "view-space xyz, texture-coordinate y in w on hits",
+    "hit_position_bias": "world origin + direction * (RayTCurrent - 0.01), then WorldToView",
+    "normal_on_miss": "not written by miss shader; reject as a surface candidate",
+    "consumer_position_transform": "GI6 cb0 registers 6..9, ViewToWorld",
+    "limitations": "Pinned static instructions, not runtime matrix agreement or visibility validation"
+  },
   "gi6_normalization": "depth_scale * sum(primary_throughput * secondary_shading) / configured_ray_count",
   "limits": [
     "Static shader audit, not proof of runtime constant-buffer agreement.",

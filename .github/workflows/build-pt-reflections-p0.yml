@@ -3,6 +3,7 @@ name: Build native reflection enhancements and RR
 on:
   push:
     branches:
+      - work/r277-complete-gi-rays
       - work/r276-reflection-clamp-ab
       - work/r275-gi-trace-confirmation
       - work/r274-gi-spot-trace
@@ -119,6 +120,12 @@ jobs:
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-spot-trace.cpp /Febuild\test-gi-spot-trace.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
           if errorlevel 1 exit /b 1
           build\test-gi-spot-trace.exe
+          if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX /DCONTROL_TEST_GI_RAY_TRACE tools\test-gi-spot-trace.cpp /Febuild\test-gi-ray-trace.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
+          if errorlevel 1 exit /b 1
+          build\test-gi-ray-trace.exe
+          if errorlevel 1 exit /b 1
+          python tools/test-analyze-gi-ray-trace.py
           if errorlevel 1 exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-spot-bindings.cpp /Febuild\test-gi-spot-bindings.exe /link d3d12.lib dxgi.lib d3dcompiler.lib user32.lib gdi32.lib
           if errorlevel 1 exit /b 1
@@ -1115,11 +1122,11 @@ jobs:
           build\test-gi-spot-pcf.exe
           if errorlevel 1 exit /b 1
 
-      - name: Package Reflection clamp comparison R276
+      - name: Package Complete GI ray trace R277
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='ControlTOH-R276'
+          $out='ControlTOH-R277'
           $shader="$out/ControlTOH/Shaders"
           $tools="$out/ControlTOH/Tools"
           $diagnostics="$out/ControlTOH/Diagnostics"
@@ -1144,30 +1151,29 @@ jobs:
           Copy-Item Package-Lighting-Capture.cmd,tools/package-lighting-capture.py,Package-Lighting-Performance.ps1 $diagnostics
           Copy-Item Capture-RR-Boundary.cmd,Capture-RR-Boundary.ps1,Collect-RR-Boundary-Status.cmd,tools/collect-rr-boundary.py $diagnostics
           Copy-Item Start-Compact-Distance-Test.cmd,Capture-RR-Suite.ps1,tools/collect-rr-suite.py $diagnostics
-          Copy-Item tools/diagnostics/Start-R258-Storage-Diagnostics.cmd,tools/diagnostics/Start-GI-Source-Probe.cmd,tools/diagnostics/Start-GI-Shadow-Test.cmd,tools/diagnostics/Start-GI-Lighting-Test.cmd,tools/diagnostics/Start-GI-Hit-Capture.cmd,tools/diagnostics/Start-GI-Binding-Audit.cmd,tools/diagnostics/Start-GI-Spot-Trace.cmd,tools/diagnostics/Start-Reflection-Clamp-Test.cmd $diagnostics
+          Copy-Item tools/diagnostics/Start-R258-Storage-Diagnostics.cmd,tools/diagnostics/Start-GI-Source-Probe.cmd,tools/diagnostics/Start-GI-Shadow-Test.cmd,tools/diagnostics/Start-GI-Lighting-Test.cmd,tools/diagnostics/Start-GI-Hit-Capture.cmd,tools/diagnostics/Start-GI-Binding-Audit.cmd,tools/diagnostics/Start-GI-Spot-Trace.cmd,tools/diagnostics/Start-Reflection-Clamp-Test.cmd,tools/diagnostics/Start-GI-Ray-Trace.cmd $diagnostics
           Copy-Item tools/diagnostics/Collect-Texture-Trace.cmd,tools/diagnostics/Collect-Texture-Trace.ps1 $tools
           Copy-Item build/DirectStorage "$diagnostics/DirectStorage" -Recurse
           Copy-Item build/DirectStorage/dstorage.dll,build/DirectStorage/dstoragecore.dll $out
           Copy-Item tools/directstorage/Validate-DirectStorage.cmd "$diagnostics/DirectStorage"
-          Copy-Item docs/native-lighting-r276.md "$out/ControlTOH/DIAGNOSTIC-NOTES.md"
+          Copy-Item docs/native-lighting-r277.md "$out/ControlTOH/DIAGNOSTIC-NOTES.md"
           Copy-Item tools/Organize-Existing-Install.cmd,tools/Organize-Existing-Install.ps1 $tools
           Copy-Item tools/diagnostics/Collect-ControlTOH-Materials.cmd,tools/diagnostics/Collect-ControlTOH-Materials.ps1 $tools
           & powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/diagnostics/test-material-collector.ps1
           if ($LASTEXITCODE -ne 0) { throw 'Material collector integration test failed' }
           @'
           Control The Oldest House: Visual and Performance Overhaul
-          R276 - Reflection clamp comparison
+          R277 - Complete GI ray trace
 
           Copy all package contents beside Control_DX12.exe, preserving folders.
-          Normal launch restores native spotlight GI lighting.
-          Run ControlTOH/Diagnostics/Start-Reflection-Clamp-Test.cmd.
+          Run ControlTOH/Diagnostics/Start-GI-Ray-Trace.cmd.
           Load the original plant area with the lamp intact, RT indirect and RR ON.
-          Select GI RAW BYPASS; keep Native Blend and FG off.
-          Use F10 REF CLAMP: 60% / BYPASS to compare the same view.
-          Close F10 and allow RR to settle after each change. Return to 60% to confirm.
-          Do not click CAPTURE RR. The launcher packages logs after exit.
-          No F7 or image capture is needed. Compare stationary and moving views.
-          It preserves native lighting and is diagnostic, not a speckle fix.
+          Select GI RAW BYPASS and REF CLAMP: BYPASS; keep Native Blend and FG off.
+          Aim at the plant and Jesse hair. Mouse zoom may remain held.
+          Press F7 OR click ARM GI TRACE in F10; wait for the visible ARMED countdown.
+          Close F10 and hold the view until SAVED. Exit normally to package logs.
+          Do not click CAPTURE RR or PACKAGE RR.
+          This records one complete GI dispatch; it does not change lighting.
           See ControlTOH/DIAGNOSTIC-NOTES.md for exact scope and limits.
           '@ | Set-Content "$out/ControlTOH/README.txt" -Encoding ASCII
           python tools/test-organized-package.py "$out"
@@ -1181,10 +1187,11 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: ControlTOH-R276
+          name: ControlTOH-R277
           path: |
-            ControlTOH-R276.zip
-            ControlTOH-R276.sha256
+            ControlTOH-R277.zip
+            ControlTOH-R277.sha256
+            build/gi-ray-trace-validation.json
             build/gi-spot-trace-validation.json
             build/gi-spot-pcf-validation.json
             build/gi-sequence-validation.json

@@ -19,8 +19,8 @@ existing raw reflection-copy path; it is not a 100% clamp setting. The fixed
 
 No F7 or CAPTURE RR is needed. This launcher disables GI tracing, so no trace
 buffer/readback is allocated. The change does not disable RR or GI, change
-sample counts, alter lights, or enable history in the reflection clamp. It does
-not reset RR history when toggled; wait for the transient to settle before judging.
+sample counts, alter lights, or enable history in the reflection clamp. The evaluation path resets RR history when the effective clamp state changes;
+wait for that transient to settle before judging.
 The test may reveal more raw reflection noise; this is not a permanent removal.
 
 The UI label is the requested state. Logs verify the render path:

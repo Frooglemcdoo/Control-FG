@@ -23,6 +23,15 @@ def audit(dxc):
             path = Path(tmp) / 'native.dxbc'
             path.write_bytes(data)
             source = subprocess.check_output([dxc, '-dumpbin', str(path)], text=True)
+            if variant == 0:
+                # Producer ABI: the texture position is view-space, not a ready
+                # world-space candidate. Misses leave the normal texture unwritten.
+                require(source, [
+                    '%105 = fadd fast float %RayTCurrent, 0xBF847AE140000000',
+                    'float %123, float %125, float %127, float %tmp157, i8 15)',
+                    'i32 65535, i32 65535, i32 65535, i32 65535, i8 15)',
+                    'float %23, float %25, float %27, float 0.000000e+00, i8 15)',
+                ])
             angle, inv, cosine, sine, z = ((237, 238, 239, 240, 'Frc26') if variant == 0
                                           else (297, 298, 299, 300, 'Frc85'))
             require(source, [
@@ -58,11 +67,21 @@ def audit(dxc):
         ('mul', ['r[0].xyz', 'r[0].xxxx', 'r[10].xyzx']),
         ('itof', ['r[0].w', 'cb[4][4][0].z']),
         ('div', ['r[1].xyz', 'r[0].xyzx', 'r[0].wwww']),
+        ('mul', ['r[12].xyz', 'r[11].yyyy', 'cb[0][0][7].xyzx']),
+        ('mad', ['r[12].xyz', 'cb[0][0][6].xyzx', 'r[11].xxxx', 'r[12].xyzx']),
+        ('mad', ['r[12].xyz', 'cb[0][0][8].xyzx', 'r[11].zzzz', 'r[12].xyzx']),
+        ('add', ['r[12].xyz', 'r[12].xyzx', 'cb[0][0][9].xyzx']),
     ]
     for opcode, operands in checks:
         if sum(i['name'] == opcode and i['operands'] == operands for i in instructions) != 1:
             raise ValueError('Unreviewed GI6 normalization: ' + str((opcode, operands)))
     return dict(schema='gi-sampling-audit-v1', ray_variants=results,
+        hit_contract=dict(producer_variant=0, material_miss_sentinel=65535,
+            position_storage='view-space xyz, texture-coordinate y in w on hits',
+            hit_position_bias='world origin + direction * (RayTCurrent - 0.01), then WorldToView',
+            normal_on_miss='not written by miss shader; reject as a surface candidate',
+            consumer_position_transform='GI6 cb0 registers 6..9, ViewToWorld',
+            limitations='Pinned static instructions, not runtime matrix agreement or visibility validation'),
         gi6_normalization='depth_scale * sum(primary_throughput * secondary_shading) / configured_ray_count',
         limits=['Static shader audit, not proof of runtime constant-buffer agreement.',
                 'Cosine PDF assumes uniform input coordinates and a valid orthonormal basis.',

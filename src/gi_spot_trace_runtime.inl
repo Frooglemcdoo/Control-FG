@@ -29,6 +29,7 @@ inline ComPtr<ID3D12RootSignature> retainedRoot,retainedTraceRoot;
 inline ComPtr<ID3D12CommandQueue> submittedQueue;
 inline UINT64 generation=0,capturedPresent=0,armedAt=0;
 inline bool Enabled() noexcept {static const bool value=[] {char b[4]{};return GetEnvironmentVariableA("CONTROLTOH_GI_SPOT_TRACE",b,4)==1&&b[0]=='1';}();return value;}
+inline bool RayTrace() noexcept {static const bool value=[] {char b[4]{};return GetEnvironmentVariableA("CONTROLTOH_GI_RAY_TRACE",b,4)==1&&b[0]=='1';}();return value;}
 inline UINT groups[3]{};
 inline std::atomic<const wchar_t*> failure{L"Trace failed. Restart the diagnostic launcher; send logs."};
 inline std::atomic<const wchar_t*> notice{L"Press F7 or use ARM GI TRACE in F10."};
@@ -145,7 +146,7 @@ inline bool Initialize(ID3D12Device* d) noexcept {
 }
 inline void Observe(ID3D12Device* d,const D3D12_COMPUTE_PIPELINE_STATE_DESC* desc,IUnknown* native,CreateCompute create) noexcept {
  if(!Enabled()||!desc||!desc->pRootSignature||!desc->CS.pShaderBytecode)return;
- const auto& shader=gi_spot_trace_shader::shaders[0];if(desc->CS.BytecodeLength!=shader.nativeSize)return;
+ const auto& shader=RayTrace()?gi_spot_trace_shader::rayShader:gi_spot_trace_shader::shaders[0];if(desc->CS.BytecodeLength!=shader.nativeSize)return;
  char sha[65]{};if(!PTReflectionSha256(static_cast<const unsigned char*>(desc->CS.pShaderBytecode),desc->CS.BytecodeLength,sha)||strcmp(sha,shader.nativeSha))return;
  unsigned char data[8192]{};UINT size=sizeof(data);
  if(FAILED(desc->pRootSignature->GetPrivateData(rt_spot_capture_audit::kRootBytes,&size,data)))return;
@@ -205,12 +206,13 @@ inline void Poll() noexcept {
  bool ok=false;UINT records=0;wchar_t path[MAX_PATH]{};
  if(SUCCEEDED(hr)){
   memcpy(&records,mapped,4);AcquireSRWLockExclusive(&reportLock);const bool opened=report.OpenDefault();if(opened)wcscpy_s(path,report.Path());ReleaseSRWLockExclusive(&reportLock);
-  if(opened){auto* slash=wcsrchr(path,L'\\');if(slash){*(slash+1)=0;wchar_t name[80]{};swprintf_s(name,L"GI-Spot-R274-%lu.bin",GetCurrentProcessId());wcscat_s(path,name);
+  if(opened){auto* slash=wcsrchr(path,L'\\');if(slash){*(slash+1)=0;wchar_t name[80]{};swprintf_s(name,RayTrace()?L"GI-Ray-R277-%lu.bin":L"GI-Spot-R274-%lu.bin",GetCurrentProcessId());wcscat_s(path,name);
    const HANDLE file=CreateFileW(path,GENERIC_WRITE,FILE_SHARE_READ,nullptr,CREATE_NEW,FILE_ATTRIBUTE_NORMAL,nullptr);
    if(file!=INVALID_HANDLE_VALUE){DWORD written=0;const DWORD size=16+(std::min)(records,capacity)*stride;ok=WriteFile(file,mapped,size,&written,nullptr)&&written==size;CloseHandle(file);}
   }}D3D12_RANGE none{0,0};readback->Unmap(0,&none);
  }
  Trace("GI_SPOT_R274_EXPORT complete=%u gpu_completion_confirmed=1 records=%u retained=%u overflow=%u stride=%u present=%llu groups=%u,%u,%u variant=6 sampling_step=32",unsigned(ok),records,(std::min)(records,capacity),unsigned(records>capacity),stride,capturedPresent,groups[0],groups[1],groups[2]);
+ if(RayTrace())Trace("GI_RAY_R277_EXPORT complete=%u records=%u overflow=%u present=%llu final_sum_and_rays=1",unsigned(ok),records,unsigned(records>capacity),capturedPresent);
  if(ok)phase.store(Phase::Complete);else Fail("export",L"FAILED: could not save trace. Exit and send logs.");
 }
 }
