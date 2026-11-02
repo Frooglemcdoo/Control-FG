@@ -126,7 +126,10 @@ heaps. The expanded WARP fixture runs a different shader afterward that consumes
 a descriptor table, CBV, SRV, UAV and sparse root constants. Portable tests cover
 root/heap/reset transitions, sparse constants including bit 63, invalid ranges,
 and independent frozen copies. Local GCC warnings-as-errors and UBSan passed;
-Windows validation is pending for this component.
+Windows foundation run `41520993739`, job `125536658194`, passed at remote
+commit `48bf65082ecbff6a46315695c25ff4d20729b968`. Decoded logs confirm
+all portable cases and the expanded GPU restore fixture passed with no
+debug-layer errors. The real DXR restore branch is not exercised on WARP.
 
 Microsoft's documented semantics were rechecked: there is one active pipeline
 state across SetPipelineState/SetPipelineState1; setting a PSO does not set the
@@ -142,3 +145,22 @@ calls. Restore must immediately follow capture on that same recording with no
 intervening heap/native changes. WARP covers compute restoration, not actual
 DXR dispatch restoration. Descriptor resource lifetimes, placed geometry heaps,
 alias safety and per-queue retirement remain separate requirements.
+
+## Geometry backing-storage leases
+
+`d3d12_storage_lease.h` attaches observed storage kind and a strong placed-heap
+interface to each successfully observed committed/placed buffer. Runtime creation
+observation now sets that data before inventory admission. Barrier-only discovery
+and unsupported/reserved creation routes do not manufacture storage proof.
+`AcquireStorageLease` returns separate resource and heap references; missing or
+malformed metadata refuses the lease. Resource private data follows resource
+lifetime even across inventory eviction/readmission. This runs only with the
+existing GI metadata observer enabled.
+
+The owner budget still measures logical buffer bytes, not total retained heap
+allocations. Keeping a small placed buffer may retain its larger heap; physical
+heap budgeting, alias activation and GPU retirement remain admission requirements
+for the eventual snapshot path. Object retention does not establish any of them.
+The Windows runtime fixture now checks real intercepted committed/placed creation,
+backing heap identity, independent lease retention and unknown-creation refusal.
+Validation of these storage changes is pending.

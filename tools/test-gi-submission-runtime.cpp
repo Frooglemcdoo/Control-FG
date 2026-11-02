@@ -125,6 +125,25 @@ int main(){
  ComPtr<ID3D12Heap> placedHeap;Check(device->CreateHeap(&placedHeapDesc,IID_PPV_ARGS(&placedHeap)));
  ComPtr<ID3D12Resource> placed;Check(device->CreatePlacedResource(placedHeap.Get(),0,&buffer,D3D12_RESOURCE_STATE_COMMON,nullptr,IID_PPV_ARGS(&placed)));
  assert(rt::owners.Resolve(placed->GetGPUVirtualAddress(),64,owner,offset));
+ gi_reuse::BufferStorageLease storageLease;
+ assert(!gi_reuse::AcquireStorageLease(resources[0].Get(),storageLease)); // Created before hooks.
+ assert(gi_reuse::AcquireStorageLease(placed.Get(),storageLease));
+ assert(storageLease.kind==gi_reuse::BufferStorageKind::Placed && storageLease.heap.Get()==placedHeap.Get());
+ // Independent lease survives the caller releasing its resource/heap references.
+ const auto placedAddress=placed->GetGPUVirtualAddress();
+ placed.Reset(); placedHeap.Reset();
+ assert(storageLease.resource->GetGPUVirtualAddress()==placedAddress && storageLease.heap->GetDesc().SizeInBytes==65536);
+ placed=storageLease.resource; placedHeap=storageLease.heap;
+ gi_reuse::BufferStorageLease committedLease;
+ assert(gi_reuse::AcquireStorageLease(owner.Get(),committedLease)); // Resolved placed owner.
+ assert(committedLease.kind==gi_reuse::BufferStorageKind::Placed);
+ ComPtr<ID3D12Resource> storageCommitted;
+ Check(device->CreateCommittedResource(&gpuHeap,D3D12_HEAP_FLAG_NONE,&buffer,D3D12_RESOURCE_STATE_COMMON,nullptr,IID_PPV_ARGS(&storageCommitted)));
+ assert(gi_reuse::AcquireStorageLease(storageCommitted.Get(),committedLease));
+ assert(committedLease.kind==gi_reuse::BufferStorageKind::Committed && !committedLease.heap);
+ assert(!gi_reuse::AcquireStorageLease(nullptr,committedLease) && !committedLease.resource);
+ std::puts("PASS geometry storage lease: observed committed/placed creation, retained backing heap, unknown creation refusal and independent lease lifetime");
+
  // Synthetic AS classification only: WARP resources are ordinary buffers.
  // Verify lifetime tokens/heap retention without issuing unsupported DXR work.
  gi_reuse::ASResourceOwners<2,128> asRegistry;

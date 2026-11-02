@@ -9,7 +9,9 @@
 namespace gi_reuse {
 inline const GUID asStorageKey={0x289a1134,0x12ab,0x41b7,{0x9a,0x11,0x43,0x12,0x28,0x91,0x00,0x01}};
 // Development inventory only. Strong references prevent destruction of observed
-// resource objects; they do not freeze contents, own placed heaps, or prove states.
+// resource objects; they do not freeze contents or prove states. Observed
+// committed/placed creations carry separate storage leases; barrier-only
+// discoveries have no backing-heap proof. Budget measures logical buffer bytes.
 template<std::size_t Capacity=8192,UINT64 ByteBudget=512ull*1024*1024> class BasicBufferOwners {
  struct Entry {Microsoft::WRL::ComPtr<ID3D12Resource> owner;UINT64 address=0,bytes=0,touched=0;bool geometry=false,scene=false,candidate=false,index=false;UINT64 identity=0;};
  static unsigned Rank(const Entry& e) noexcept {return e.index?3u:(e.candidate?2u:(e.scene?1u:0u));}

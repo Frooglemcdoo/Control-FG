@@ -10,6 +10,7 @@
 #include "local_buffer_states.h"
 #include "d3d12_buffer_owners.h"
 #include "d3d12_as_owners.h"
+#include "d3d12_storage_lease.h"
 namespace gi_reuse::runtime {
 using Microsoft::WRL::ComPtr;
 inline bool Enabled() noexcept {static const bool value=[] {char b[4]{};return GetEnvironmentVariableA("CONTROLTOH_GI_METADATA",b,4)==1&&b[0]=='1';}();return value;}
@@ -29,7 +30,11 @@ inline void ObserveCreated(IUnknown* object,D3D12_RESOURCE_STATES initialState=D
                            bool supportedASStorage=false,ID3D12Heap* placedHeap=nullptr) noexcept {
  if(!Enabled()||!object)return;ComPtr<ID3D12Resource> resource;
  if(SUCCEEDED(object->QueryInterface(IID_PPV_ARGS(&resource)))&&resource->GetDesc().Dimension==D3D12_RESOURCE_DIMENSION_BUFFER){
-  ++creationObservations;owners.Observe(resource.Get(),initialState);
+  ++creationObservations;
+  // A creation hook supplies backing-storage proof. Barrier-only discoveries
+  // and reserved/tiled resources deliberately remain ineligible for snapshots.
+  if(supportedASStorage)RetainCreatedStorage(resource.Get(),placedHeap);
+  owners.Observe(resource.Get(),initialState);
   if(supportedASStorage&&(initialState&D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE))asOwners.Created(resource.Get(),placedHeap);
  }
 }
