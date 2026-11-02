@@ -120,8 +120,6 @@ int main(int argc, char** argv) try {
  D3D12_RANGE range{0,516}; Check(read->Map(0,&range,&mapped));
  for(UINT i=0;i<512;++i){const UINT index=i<plan.copyBytes?256+i:i;Require(static_cast<unsigned char*>(mapped)[i]==static_cast<unsigned char>((index*17+39)%251),"copied bytes or untouched dispatch guard");}
  UINT restored=0; memcpy(&restored,static_cast<unsigned char*>(mapped)+512,4); Require(restored==value+extras[0]+extras[1]+sourceWord+tableWord+tableWord,"restored root/PSO/UAV/constants"); read->Unmap(0,&none);
- ComPtr<ID3D12InfoQueue> messages; Check(d.As(&messages));
- for(UINT64 i=0;i<messages->GetNumStoredMessagesAllowedByRetrievalFilter();++i){SIZE_T n=0;Check(messages->GetMessage(i,nullptr,&n));std::vector<unsigned char> storage(n);auto* m=reinterpret_cast<D3D12_MESSAGE*>(storage.data());Check(messages->GetMessage(i,m,&n));Require(m->Severity>D3D12_MESSAGE_SEVERITY_ERROR,m->pDescription);}
  // Successful Reset advances generation and discards prior root arguments.
  Check(allocator->Reset()); Check(list->Reset(allocator.Get(),nativePipeline.Get()));
  Require(fixture::gi_compute_hooks::Read(list.Get())->generation>capturedEpoch,"reset generation");
@@ -152,6 +150,10 @@ int main(int argc, char** argv) try {
  Check(bundle->Close());list->ExecuteBundle(bundle.Get());
  Require(!fixture::gi_compute_hooks::Capture(list.Get(),unobserved,epoch),"bundle invalidates tracked state");
  Check(list->Close());
+ ComPtr<ID3D12InfoQueue> messages; Check(d.As(&messages));
+ for(UINT64 i=0;i<messages->GetNumStoredMessagesAllowedByRetrievalFilter();++i){SIZE_T n=0;Check(messages->GetMessage(i,nullptr,&n));std::vector<unsigned char> storage(n);auto* m=reinterpret_cast<D3D12_MESSAGE*>(storage.data());Check(messages->GetMessage(i,m,&n));Require(m->Severity>D3D12_MESSAGE_SEVERITY_ERROR,m->pDescription);}
+ list.Reset();
+ Require(fixture::gi_compute_hooks::liveStates.load()==0,"command-list destruction releases tracker");
  std::cout<<"PASS live binding hooks: real COM setters, late attachment refusal, mute, reset success/failure, ClearState, indirect forwarding and bundle invalidation\n";
  std::cout<<"PASS GPU raw snapshot: uint16 offset, source unchanged state, guard bytes, tracked compute restore: PSO/root/table/CBV/SRV/UAV/sparse constants, debug layer clean\n";
 } catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}
