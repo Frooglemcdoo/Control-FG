@@ -93,7 +93,13 @@ isolated WARP fixture; that is not proof of native hook restoration.
 Local exhaustive short-range tests pass with GCC warnings as errors. The Windows
 workflow now compiles the snapshot shader and runs a WARP byte-copy/guard-byte
 fixture with a different sentinel compute pipeline after manual restoration.
-Windows results must be checked before claiming that fixture passes.
+Windows foundation run `41518506065`, job `125528129798`, passed at remote
+commit `6ab09cda4a7966c3d2bb3706b861a08f29ae330c`. Decoded logs confirm the
+raw snapshot shader compiled, bytes/guards/manual restoration passed on WARP
+with no debug-layer errors, and the existing GI foundation tests passed. The
+first run exposed a Windows `max` macro conflict; the tested commit fixes it.
+The local planner also passes UndefinedBehaviorSanitizer. These results do not
+validate native binding hooks, real DXR geometry reads or in-game visual output.
 
 Still required for live use: complete per-list binding observation/restoration,
 placed geometry heap retention, alias and split-barrier rejection, bounded total
