@@ -169,3 +169,24 @@ the real creation-hook storage lease test, binding tests and GPU snapshot
 restore fixture all passed. Full Windows build/regression run `41521688899`, job `125539041555`,
 also passed at that code revision. Decoded logs show no compiler or workflow
 errors. The artifact still uses the R294 label and is not a new public test build.
+
+## Opt-in native binding observation
+
+`gi_compute_hooks.inl` connects the tracker to real command-list setters under
+both `CONTROLTOH_GI_METADATA=1` and `CONTROLTOH_GI_BINDINGS=1`. It is off by default.
+Per-list COM private state survives the separate GI journal's replacement.
+Observed creation establishes the initial PSO; late attachment is unknown until
+successful Reset/ClearState. Failed Reset preserves the previous generation.
+SetPipelineState, SetPipelineState1, compute root/table/constants/descriptors and
+heap setters forward unchanged before updating observation. Common methods are
+patched on both base and list4 interface tables if distinct. Coverage failure
+blocks captures. Capacity is eight table classes and 4096 live tracker objects.
+
+ExecuteIndirect and ExecuteBundle conservatively invalidate capture until a
+known reset/clear. Mute excludes injected setters without blocking forwarding.
+No geometry-copy call was added to native AS builds. The WARP fixture now uses
+actual vtable interception for its GPU restore test; it also checks late attach,
+successful reset, ClearState and bundle invalidation. Saved-forwarder stubs check
+failed-reset preservation and indirect argument forwarding without submitting
+invalid API calls. Actual DXR pipeline restoration still needs hardware coverage.
+Validation of this hook integration is pending.

@@ -11,6 +11,7 @@
 #include "d3d12_buffer_owners.h"
 #include "d3d12_as_owners.h"
 #include "d3d12_storage_lease.h"
+#include "d3d12_compute_bindings.h"
 namespace gi_reuse::runtime {
 using Microsoft::WRL::ComPtr;
 inline bool Enabled() noexcept {static const bool value=[] {char b[4]{};return GetEnvironmentVariableA("CONTROLTOH_GI_METADATA",b,4)==1&&b[0]=='1';}();return value;}

@@ -80,6 +80,7 @@ public:
         if (next[0].Get()!=state_.heaps[0].Get() || next[1].Get()!=state_.heaps[1].Get()) state_.arguments.HeapChange();
         state_.heaps=std::move(next);
     }
+    bool Ready() const noexcept { return state_.Ready(); }
     bool Capture(ComputeBindingSnapshot& snapshot) const noexcept {
         snapshot = {};
         if (!state_.Ready()) return false;

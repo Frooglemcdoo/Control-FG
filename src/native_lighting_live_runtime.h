@@ -385,6 +385,7 @@ inline bool PatchSlot(void** slot, void* expected, void* hook) noexcept {
 #include "spot_shadow_resolution_runtime.h"
 #include "rt_spot_capture_audit.h"
 #include "gi_binding_audit.inl"
+#include "gi_compute_hooks.inl"
 #include "gi_geometry_probe.inl"
 #include "gi_spot_trace_runtime.inl"
 #include "rt_shadow_capture.h"
@@ -433,6 +434,7 @@ inline void BindPerformance(ID3D12GraphicsCommandList* list,ID3D12PipelineState*
 }
 inline void InstallList(ID3D12GraphicsCommandList* list) noexcept {
     gi_reuse::runtime::Initialize(list);
+    gi_compute_hooks::InstallList(list);
     gi_geometry_probe::InstallList(list);
     gi_spot_trace::InstallList(list);
     rt_shadow_capture::InstallList(list);
@@ -482,7 +484,7 @@ inline HRESULT STDMETHODCALLTYPE CreateListHook(ID3D12Device* device, UINT node,
     const HRESULT hr = originalCreateList(device, node, type, allocator, binding.selected, iid, out);
     if (SUCCEEDED(hr) && out && *out) {
         ID3D12GraphicsCommandList* list = nullptr;
-        if (SUCCEEDED(reinterpret_cast<IUnknown*>(*out)->QueryInterface(IID_PPV_ARGS(&list)))) { InstallList(list); list->Release(); }
+        if (SUCCEEDED(reinterpret_cast<IUnknown*>(*out)->QueryInterface(IID_PPV_ARGS(&list)))) { InstallList(list); gi_compute_hooks::Begin(list,binding.selected); list->Release(); }
         binding.Recorded();
     }
     return hr;
