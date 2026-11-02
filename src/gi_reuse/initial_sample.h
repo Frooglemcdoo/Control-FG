@@ -1,5 +1,10 @@
-#pragma once
+#ifndef CONTROL_GI_INITIAL_SAMPLE_H
+#define CONTROL_GI_INITIAL_SAMPLE_H
+#ifdef __cplusplus
 #include "connection.h"
+#else
+#include "../gi_reuse/connection.h"
+#endif
 // Initial GI sample in solid-angle measure. No spatial/temporal reuse here.
 // The adapter supplies secondary radiance BEFORE primary throughput, and the
 // primary BRDF*cos separately. Native already-weighted RGB is not radiance.
@@ -79,3 +84,5 @@ static_assert(sizeof(GIInitialResult)==48);
 }
 #endif
 #undef GI_SAMPLE_INLINE
+
+#endif // CONTROL_GI_INITIAL_SAMPLE_H

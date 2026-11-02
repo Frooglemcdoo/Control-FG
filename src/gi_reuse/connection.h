@@ -1,4 +1,5 @@
-#pragma once
+#ifndef CONTROL_GI_CONNECTION_H
+#define CONTROL_GI_CONNECTION_H
 // Geometry/PDF conversion only. This is not a reservoir or a final lighting weight.
 #ifdef __cplusplus
 #include <cmath>
@@ -71,3 +72,5 @@ static_assert(sizeof(GIConnectionResult)==32);
 } // namespace gi_reuse
 #endif
 #undef GI_INLINE
+
+#endif // CONTROL_GI_CONNECTION_H
