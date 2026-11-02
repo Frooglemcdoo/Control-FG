@@ -1,0 +1,51 @@
+{
+  "source_sha256": "9f94038fddf123b33b0942a4ad46c5f26d3de96b6766a734380f265948c21d9b",
+  "reports": 34,
+  "first_owner_limit": {
+    "ms": 181550031,
+    "present": 2650,
+    "status": "OBSERVING",
+    "reason": "none",
+    "builds": 0,
+    "copies": 0,
+    "buffer_owners": 2048,
+    "retained_bytes": 244434024,
+    "owner_limit": 1,
+    "resolved_ranges": 0,
+    "missing_ranges": 0,
+    "gpu_bytes_captured": 0,
+    "reuse_ready": 0
+  },
+  "first_metadata_fault": {
+    "ms": 181557171,
+    "present": 3284,
+    "status": "INCOMPLETE",
+    "reason": "metadata_error",
+    "builds": 1692,
+    "copies": 0,
+    "buffer_owners": 2048,
+    "retained_bytes": 244434024,
+    "owner_limit": 1,
+    "resolved_ranges": 867,
+    "missing_ranges": 483,
+    "gpu_bytes_captured": 0,
+    "reuse_ready": 0
+  },
+  "last_report": {
+    "ms": 181682265,
+    "present": 12910,
+    "status": "INCOMPLETE",
+    "reason": "metadata_error",
+    "builds": 249379,
+    "copies": 2850,
+    "buffer_owners": 2048,
+    "retained_bytes": 244434024,
+    "owner_limit": 1,
+    "resolved_ranges": 867,
+    "missing_ranges": 483,
+    "gpu_bytes_captured": 0,
+    "reuse_ready": 0
+  },
+  "conclusion": "Inventory reached 2048 owners before the first logged AS builds. Later generic metadata_error cannot identify the failing branch. Missing buffer ranges and metadata failure are separate observations; causality is unproven.",
+  "r287_change": "Replace unused cache entries; protect uniquely resolved geometry owners. Keep original bounds and explicit misses; use operation-specific failure causes."
+}

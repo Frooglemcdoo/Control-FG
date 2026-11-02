@@ -119,3 +119,22 @@ https://microsoft.github.io/DirectX-Specs/d3d/Raytracing.html#acceleration-struc
 Use the R286 metadata launcher for one automatic session covering startup,
 traversal, updates, copies and owner coverage. GI_METADATA_R286 reports status and
 an incompleteness reason without a GPU dump. No F7 or stationary view is needed.
+
+## R287 retention correction
+
+R286 filled all 2048 owner entries before AS builds were first logged. R287
+keeps recent unused entries replaceable and protects uniquely resolved geometry
+entries. Eviction is explicit telemetry and can cause a later range to be missing;
+it never validates an unavailable owner. Strong references release after unlocking.
+The 512 MiB logical extent and 2048-entry limits remain. All-protected exhaustion
+still rejects new owners. This remains an observational development inventory,
+not complete GPU resource lifetime or content tracking.
+
+Runtime failures now distinguish journal allocation/attachment/capacity, invalid
+build descriptors, unsupported BLAS/TLAS layouts, copy modes, missing update
+sources, queue/fence failures and ledger contracts. R286 cannot retrospectively
+identify which generic failure branch triggered.
+
+Windows focused validation run 41473829266 passed cache churn, geometry retention,
+all-protected exhaustion, specific journal-overflow reporting and existing GPU
+adapter tests. Diagnostics-only collection no longer asks for an RR capture.
