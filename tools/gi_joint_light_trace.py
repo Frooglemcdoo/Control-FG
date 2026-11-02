@@ -1,4 +1,4 @@
-"""R283: native spotlight terms and complete GI rays in one dense ROI stream."""
+"""R284: native spotlight terms and complete GI rays in one dense ROI stream."""
 import hashlib,struct
 from gi_ray_trace import generate as ray_generate, uint, CAPACITY, STRIDE
 from gi_spot_pcf import decoder, dst, src, ins
@@ -7,7 +7,7 @@ from dxbc_transform import transform_shex
 
 def generate(raw,path,identity):
     plan={};seed=path.parent/'joint-baseline'/'seed.dxbc';seed.parent.mkdir(exist_ok=True)
-    ray_generate(raw,seed,identity,instrumentation_plan=plan,roi=True)
+    ray_generate(raw,seed,identity,instrumentation_plan=plan,roi=True,wide=True,capacity=262144)
     path.write_bytes(raw);decoded=decoder.decode(path);instructions={i['dword']:i for i in decoded['instructions']}
     expected={
         3869:('ld_structured',['r[20].xyzw','r[10].w','l(68)','t[11][11].xyzw']),
@@ -72,7 +72,7 @@ def generate(raw,path,identity):
     candidate+=store(104,src(plan['extra'],0xff),1)+store(108,src(plan['context'],0xff),1)
     candidate+=store(160,src(plan['hit_position']),7)+store(176,uint(0x282),1)+store(180,src(plan['extra'],0x55),1)+plan['end']()
     add(4993,candidate)
-    # R283: measure the native volume lookup on both hit and miss rays.
+    # R284: measure the native volume lookup on both hit and miss rays.
     lookup, lookup_normal, ray_direction, volume_sum, volume_mean, volume_local, brick_uv = range(temp+26,temp+33)
     volume_stages={
         1093:ins('mov',dst(ray_direction,7),src(14)),
@@ -110,10 +110,22 @@ def generate(raw,path,identity):
     code+=store(152,src(plan['extra'],0xff),1)+store(156,src(plan['context'],0xff),1)
     code+=store(160,src(plan['hit_position']),7)+store(172,uint(0x281),1)+plan['end']()
     add(4982,code)
+    point_sum, surface_volume = temp+33,temp+34
+    add(3775,ins('mov',dst(point_sum,7),src(14)))
+    add(4999,ins('mov',dst(surface_volume,7),src(4)))
+    point=plan['begin'](1)+store(12,uint(7),1)
+    point+=ins('mul',dst(v,7),src(15,0xff),src(20))+ins('mul',dst(v,7),src(v),src(17))+ins('mul',dst(v,7),src(v),src(3))+store(16,src(v),7)
+    point+=store(32,src(20),7)+store(48,src(3),7)+store(64,src(17),7)+store(80,src(15,0xff),1)
+    point+=store(96,src(14,0xff),1)+store(100,src(plan['extra'],0x55),1)+store(104,src(plan['extra'],0xff),1)+store(108,src(plan['context'],0xff),1)+store(112,uint(0x284),1)+plan['end']()
+    add(3743,point)
+    surface=plan['begin'](1)+store(12,uint(8),1)
+    for offset,reg in [(16,surface_volume),(32,point_sum),(48,9),(64,4),(80,17),(96,3)]:surface+=store(offset,src(reg),7)
+    surface+=store(112,src(plan['extra'],0x55),1)+store(116,src(plan['extra'],0xff),1)+store(120,src(plan['context'],0xff),1)+store(124,uint(0x284),1)+plan['end']()
+    add(5011,surface)
     def patch(w):
         out=w[:2]
         for i in range(2,len(words)):
-            out+=inserts.get(i,[]);out.append(temp+33 if i==plan['temp_count_offset'] else w[i])
+            out+=inserts.get(i,[]);out.append(temp+35 if i==plan['temp_count_offset'] else w[i])
         w[:]=out
     changed=transform_shex(raw,patch)
     def undo(w):
@@ -125,7 +137,7 @@ def generate(raw,path,identity):
     if transform_shex(changed,undo)!=raw:raise ValueError('native recovery failed')
     # GPU oracle runs the exact new stores and existing complete-ray/accounting blocks.
     def floats(*xs):return [0x4002]+[struct.unpack('<I',struct.pack('<f',x))[0] for x in xs]
-    fixture=words[:2]+words[2:3]+plan['declaration']+ins('dcl_constant_buffer',[0x308e46,2,2,2,2,0])+ins('dcl_input',[0x20032])+ins('dcl_temps',[temp+33])+ins('dcl_thread_group',[32,32,1])
+    fixture=words[:2]+words[2:3]+plan['declaration']+ins('dcl_constant_buffer',[0x308e46,2,2,2,2,0])+ins('dcl_input',[0x20032])+ins('dcl_temps',[temp+35])+ins('dcl_thread_group',[32,32,1])
     fixture+=ins('mov',dst(plan['context'],15),floats(0,1,0,0))+ins('mov',dst(plan['context'],8),uint(42))
     fixture+=ins('mov',dst(plan['extra'],2),uint(2))+ins('mov',dst(plan['fade'],15),floats(1,2,3,4))+plan['initialize_code']
     for sample in range(2):
@@ -167,14 +179,18 @@ def generate(raw,path,identity):
         fixture+=ins('mov',dst(14,8),uint(0))+ins('mov',dst(23,1),uint(123))+ins('mov',dst(23,4),floats(1,1,1,1))+volume
         fixture+=volume_stages[2234]+ins('mov',dst(4,7),floats(.5,1,1.5,0))+volume_stages[2250]
         fixture+=ins('mov',dst(4,7),floats(1,1.5,2,0))+ins('mov',dst(3,8),floats(2,2,2,2))+volume_summary
+        if not sample:
+            fixture+=ins('mov',dst(15,8),floats(.5,.5,.5,.5))+ins('mov',dst(20,7),floats(2,4,6,0))+ins('mov',dst(17,7),floats(1,1,1,0))+ins('mov',dst(14,8),uint(9))+point
+            fixture+=ins('mov',dst(surface_volume,7),floats(0,0,0,0))+ins('mov',dst(point_sum,7),floats(1,2,3,0))
+            fixture+=ins('mov',dst(9,7),floats(2,3,4,0))+ins('mov',dst(4,7),floats(2,3,4,0))+surface
         fixture+=ins('mov',dst(15,7),floats(2,3,4,0))+plan['account_code']+plan['ray_code']
     fixture+=ins('mov',dst(1,15),floats(.75,2.25,6,1))+ins('mov',dst(plan['extra'],1),[0x4001,0x3f400000])+plan['summary_code']+ins('ret')
     def fixture_patch(w):w[:]=fixture
     (path.parent/'gi-joint-light-oracle.dxbc').write_bytes(transform_shex(raw,fixture_patch))
     path.write_bytes(changed);parsed=decoder.decode(path)
-    return changed,dict(schema='gi-joint-light-r283',sha256=hashlib.sha256(changed).hexdigest(),native_sha256=identity['sha256'],
+    return changed,dict(schema='gi-joint-light-r284',sha256=hashlib.sha256(changed).hexdigest(),native_sha256=identity['sha256'],
                        native_instruction_recovery=True,decoded_instruction_count=len(parsed['instructions']),
-                       capacity=CAPACITY,stride=STRIDE,spot_record_kind=3,sampling_step=1,roi_extent=[32,32],
+                       capacity=262144,stride=STRIDE,spot_record_kind=3,sampling_step=2,dense_center_extent=[32,32],roi_extent=[128,128],
                        runtime_enabled=False,gpu_validated=False,
                        limits=['Kind 4 records visited lights, with stage validity; kind 3 records executed contributions.',
                                'Per-light multiplication is separately rounded, not a subtraction of native fused accumulation.',

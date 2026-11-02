@@ -9,6 +9,9 @@ with tempfile.TemporaryDirectory() as tmp:
  root=Path(tmp);local=root/'local';logs=local/'Control-FG/Diagnostics';logs.mkdir(parents=True)
  game=root/'game';game.mkdir();output=root/'output';output.mkdir()
  blob=bytes(range(256))*2
+ for suffix in [*(f'frame{i:02}.bin' for i in range(1,9)),'reference.bmp']:
+  (logs/f'GI-Joint-R284-123-{suffix}').write_bytes(blob)
+  (logs/f'GI-Joint-R284-1234-{suffix}').write_bytes(b'other session')
  (logs/'GI-Joint-R283-123.bin').write_bytes(blob)
  (logs/'GI-Joint-R283-124.bin').write_bytes(b'other session')
  (logs/'GI-Joint-R282-123.bin').write_bytes(blob)
@@ -27,6 +30,9 @@ with tempfile.TemporaryDirectory() as tmp:
  finally:
   if old is None:os.environ.pop('TEMP',None)
   else:os.environ['TEMP']=old
+ for suffix in [*(f'frame{i:02}.bin' for i in range(1,9)),'reference.bmp']:
+  assert (output/f'logs/GI-Joint-R284-123-{suffix}').read_bytes()==blob
+  assert not (output/f'logs/GI-Joint-R284-1234-{suffix}').exists()
  assert (output/'logs/GI-Joint-R283-123.bin').read_bytes()==blob
  assert not (output/'logs/GI-Joint-R283-124.bin').exists()
  assert (output/'logs/GI-Joint-R282-123.bin').read_bytes()==blob

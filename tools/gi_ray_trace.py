@@ -16,7 +16,7 @@ def branch(value):
     return code
 
 
-def generate(raw, path, identity, *, instrumentation_plan=None, roi=False):
+def generate(raw, path, identity, *, instrumentation_plan=None, roi=False, wide=False, capacity=CAPACITY):
     assert identity['sha256'] == '1dfb4c9b054037e030ff9eed6ed5e482c8c32f9f301bb02c89eb0084c52842de'
     assert hashlib.sha256(raw).hexdigest() == identity['sha256']
     path.write_bytes(raw)
@@ -52,13 +52,22 @@ def generate(raw, path, identity, *, instrumentation_plan=None, roi=False):
             # b0 space2 holds integer origin XY and extent XY, no native CB changes.
             code += ins('ineg',dst(q,3),[0x308e46,5,0,0])
             code += ins('iadd',dst(q,3),src(v),src(q))
+            if wide:
+                # Wide ROI: even/even pixels plus every pixel in the center 32x32.
+                code += ins('and',dst(a,2),src(q,0),uint(1))+ins('and',dst(a,4),src(q,0x55),uint(1))
+                code += ins('or',dst(a,2),src(a,0x55),src(a,0xaa))+ins('ieq',dst(a,2),src(a,0x55),uint(0))
+                code += ins('iadd',dst(a,12),src(q,0x44),uint(0xffffffd0))
+                code += ins('ult',dst(a,12),src(a),uint(32))
+                code += ins('and',dst(a,4),src(a,0xaa),src(a,0xff))+ins('or',dst(a,2),src(a,0x55),src(a,0xaa))
             code += ins('ult',dst(q,3),src(q),[0x308ee6,5,0,0])
         else:
             code += ins('and', dst(q,3), src(v), uint(31))
             code += ins('ieq', dst(q,3), src(q), uint(16))
-        code += ins('and', dst(q,1), src(q,0), src(q,0x55)) + branch(src(q,0))
+        code += ins('and', dst(q,1), src(q,0), src(q,0x55))
+        if wide:code += ins('and',dst(q,1),src(q,0),src(a,0x55))
+        code += branch(src(q,0))
         code += ins('imm_atomic_iadd', dst(q,1), uav(1), uint(0), uint(1))
-        code += ins('ult', dst(q,2), src(q,0), uint(CAPACITY)) + branch(src(q,0x55))
+        code += ins('ult', dst(q,2), src(q,0), uint(capacity)) + branch(src(q,0x55))
         code += ins('ishl', dst(a,1), src(q,0), uint(8)) + ins('iadd', dst(a,1), src(a,0), uint(16))
         code += ins('mov', dst(v,4), src(0,0xaa) if kind == 1 else uint(0xffffffff))
         code += ins('mov', dst(v,8), uint(kind)) + store(0,src(v))

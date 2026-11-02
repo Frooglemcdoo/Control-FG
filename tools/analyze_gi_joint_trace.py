@@ -7,12 +7,13 @@ from analyze_gi_ray_trace import analyze,CAPACITY,STRIDE
 def analyze_joint(data):
  if len(data)<16:raise ValueError('missing header')
  count,magic,ox,oy=struct.unpack_from('<4I',data)
- dense=magic in (0x281,0x282,0x283)
- if (not dense and any((magic,ox,oy))) or count>CAPACITY or len(data)!=16+count*STRIDE:raise ValueError('invalid or overflowed stream')
- rays={};summaries={};spots=[];native=[];candidates=[];volume_summaries={};volumes=defaultdict(list)
+ dense=magic in (0x281,0x282,0x283,0x284)
+ if (not dense and any((magic,ox,oy))) or count>(262144 if magic==0x284 else CAPACITY) or len(data)!=16+count*STRIDE:raise ValueError('invalid or overflowed stream')
+ points=[];surfaces={};rays={};summaries={};spots=[];native=[];candidates=[];volume_summaries={};volumes=defaultdict(list)
  for offset in range(16,len(data),STRIDE):
   b=data[offset:offset+STRIDE];x,y,ray,kind=struct.unpack_from('<4I',b)
-  if dense and not (ox<=x<ox+32 and oy<=y<oy+32):raise ValueError('record outside ROI')
+  if dense and not (ox<=x<ox+(128 if magic==0x284 else 32) and oy<=y<oy+(128 if magic==0x284 else 32)):raise ValueError('record outside ROI')
+  if magic==0x284 and not (((x-ox)%2==0 and (y-oy)%2==0) or (48<=x-ox<80 and 48<=y-oy<80)):raise ValueError('record outside sampling mask')
   if kind in (1,2):
    native.append(b)
    if kind==1:rays[x,y,ray]=b
@@ -20,11 +21,15 @@ def analyze_joint(data):
   elif kind==3:
    if struct.unpack_from('<I',b,172)[0]!=0x281:raise ValueError('unknown spotlight marker')
    spots.append((x,y,ray,b))
-  elif kind==4 and magic in (0x282,0x283):candidates.append((x,y,ray,b))
-  elif kind==5 and magic==0x283:
+  elif kind==4 and magic in (0x282,0x283,0x284):candidates.append((x,y,ray,b))
+  elif kind==5 and magic in (0x283,0x284):
    if (x,y,ray) in volume_summaries:raise ValueError('duplicate volume summary')
    volume_summaries[x,y,ray]=b
-  elif kind==6 and magic==0x283:volumes[x,y,ray].append(b)
+  elif kind==6 and magic in (0x283,0x284):volumes[x,y,ray].append(b)
+  elif kind==7 and magic==0x284:points.append((x,y,ray,b))
+  elif kind==8 and magic==0x284:
+   if (x,y,ray) in surfaces:raise ValueError('duplicate surface summary')
+   surfaces[x,y,ray]=b
   else:raise ValueError('unknown mixed record kind')
  verified=analyze(struct.pack('<4I',len(native),0,0,0)+b''.join(native),sampling_step=1 if dense else 32)
  totals=defaultdict(lambda:[0.,0.,0.]);seen=set();records=[];spot_by_key={}
@@ -82,9 +87,9 @@ def analyze_joint(data):
    record.update(response=list(fs(48,4)),cookie=list(fs(64)),shading_normal=list(fs(112)),light_direction=list(fs(128)),pre_cookie=list(fs(192)),post_cookie=list(fs(208)),gated_rgb=list(fs(224)))
    if bits&16:record['cookie_uv']=list(fs(144,2))
   candidate_records.append(record)
- if magic in (0x282,0x283) and executed_keys!=seen:raise ValueError('contribution missing candidate')
+ if magic in (0x282,0x283,0x284) and executed_keys!=seen:raise ValueError('contribution missing candidate')
  volume_records=[]
- if magic==0x283:
+ if magic in (0x283,0x284):
   if volume_summaries.keys()!=rays.keys() or any(k not in rays for k in volumes):raise ValueError('incomplete volume/ray coverage')
   def close(a,b):return all(abs(x-y)<=1e-6+1e-5*abs(y) for x,y in zip(a,b))
   for key,b in volume_summaries.items():
@@ -109,7 +114,34 @@ def analyze_joint(data):
    if not close(fs(128),struct.unpack_from('<3f',r,48)):raise ValueError('volume throughput mismatch')
    if secondary==65535 and not close([v*fs(140,1)[0] for v in fs(112)],struct.unpack_from('<3f',r,32)):raise ValueError('fallback radiance mismatch')
    volume_records.append({'pixel':list(key[:2]),'ray':key[2],'primary_material':primary,'secondary_material':secondary,'lookup_world':list(fs(16)),'lookup_normal':list(fs(32)),'ray_direction':list(fs(48)),'total_weight':weight,'mean_rgb':list(fs(80)),'ambient_rgb':list(fs(96)),'final_rgb':list(fs(112)),'miss_scale':fs(140,1)[0],'active_volumes':active,'volumes':vrecords})
- return {'schema':'gi-joint-light-analysis-v2','source_marker':hex(magic),'volume_ray_count':len(volume_records),'volume_rays':volume_records,
+ point_records=[];point_totals=defaultdict(lambda:[0.,0.,0.]);point_keys=set()
+ def close(a,b):return all(abs(x-y)<=1e-6+2e-5*max(abs(x),abs(y)) for x,y in zip(a,b))
+ for x,y,ray,b in points:
+  fs=lambda o,n=3:struct.unpack_from('<'+'f'*n,b,o)
+  light,n,secondary,primary,marker=struct.unpack_from('<5I',b,96);key=(x,y,ray);r=rays.get(key)
+  if (*key,light) in point_keys:raise ValueError('duplicate point light')
+  point_keys.add((*key,light))
+  if r is None or key not in surfaces or marker!=0x284 or (secondary,n)!=struct.unpack_from('<2I',r,144) or primary!=struct.unpack_from('<I',r,108)[0]:raise ValueError('point context mismatch')
+  if not all(math.isfinite(v) for o,nc in [(16,3),(32,3),(48,3),(64,3),(80,1)] for v in fs(o,nc)):raise ValueError('nonfinite point data')
+  if not close(fs(16),[a*c*d*fs(80,1)[0] for a,c,d in zip(fs(32),fs(48),fs(64))]):raise ValueError('point product mismatch')
+  if not close(fs(48),struct.unpack_from('<3f',r,48)):raise ValueError('point throughput mismatch')
+  point_totals[key]=[a+c for a,c in zip(point_totals[key],fs(16))]
+  point_records.append({'pixel':[x,y],'ray':ray,'light':light,'weighted_rgb':list(fs(16))})
+ surface_records=[];spot_totals=defaultdict(lambda:[0.,0.,0.])
+ for x,y,ray,b in spots:spot_totals[x,y,ray]=[a+c for a,c in zip(spot_totals[x,y,ray],struct.unpack_from('<3f',b,16))]
+ for key,b in surfaces.items():
+  fs=lambda o:struct.unpack_from('<3f',b,o)
+  n,secondary,primary,marker=struct.unpack_from('<4I',b,112);r=rays.get(key)
+  if r is None or secondary>=65534 or marker!=0x284 or (secondary,n)!=struct.unpack_from('<2I',r,144) or primary!=struct.unpack_from('<I',r,108)[0]:raise ValueError('surface context mismatch')
+  if not all(math.isfinite(v) for o in (16,32,48,64,80,96) for v in fs(o)):raise ValueError('nonfinite surface data')
+  weighted=lambda rgb:[a*c*d for a,c,d in zip(rgb,fs(80),fs(96))]
+  if not close(fs(96),struct.unpack_from('<3f',r,48)):raise ValueError('surface throughput mismatch')
+  if not close(weighted(fs(32)),point_totals[key]):raise ValueError('point sum mismatch')
+  if not close(weighted([a-c for a,c in zip(fs(48),fs(32))]),spot_totals[key]):raise ValueError('spot sum mismatch')
+  if not close([a/math.pi+c for a,c in zip(fs(16),fs(48))],fs(64)):raise ValueError('surface sum mismatch')
+  if not close([a*c for a,c in zip(fs(64),fs(80))],struct.unpack_from('<3f',r,32)):raise ValueError('surface radiance mismatch')
+  surface_records.append({'pixel':list(key[:2]),'ray':key[2],'volume_before_pi':list(fs(16)),'point_sum':list(fs(32)),'local_light_sum':list(fs(48)),'pre_albedo':list(fs(64)),'albedo':list(fs(80))})
+ return {'schema':'gi-joint-light-analysis-v2','source_marker':hex(magic),'point_records':point_records,'surface_records':surface_records,'volume_ray_count':len(volume_records),'volume_rays':volume_records,
          'candidate_count':len(candidates),'candidate_stages':candidate_records,
          'candidate_counts':{'outside_projection':sum(not r['validity']&2 for r in candidate_records),
                              'zero_visibility':sum(bool(r['validity']&4) and not r['validity']&8 for r in candidate_records),

@@ -19,7 +19,12 @@ using Microsoft::WRL::ComPtr;
 void Check(HRESULT hr){if(FAILED(hr))throw std::runtime_error("HRESULT "+std::to_string(static_cast<unsigned long>(hr)));}
 void Require(bool b,const char* what){if(!b)throw std::runtime_error(what);}
 std::vector<unsigned char> Read(const char* p){std::ifstream f(p,std::ios::binary);Require(bool(f),p);return {(std::istreambuf_iterator<char>(f)),{}};}
-constexpr UINT capacity=65536,stride=256,bytes=16+capacity*stride,allocated=bytes+256;
+#ifdef CONTROL_TEST_GI_JOINT_TRACE
+constexpr UINT capacity=262144;
+#else
+constexpr UINT capacity=65536;
+#endif
+constexpr UINT stride=256,bytes=16+capacity*stride,allocated=bytes+256;
 ComPtr<ID3D12Resource> Buffer(ID3D12Device* d,D3D12_HEAP_TYPE type,D3D12_RESOURCE_STATES state,D3D12_RESOURCE_FLAGS flags){
  D3D12_HEAP_PROPERTIES hp{};hp.Type=type;hp.CreationNodeMask=hp.VisibleNodeMask=1;
  D3D12_RESOURCE_DESC rd{};rd.Dimension=D3D12_RESOURCE_DIMENSION_BUFFER;rd.Width=allocated;rd.Height=1;rd.DepthOrArraySize=1;rd.MipLevels=1;rd.SampleDesc.Count=1;rd.Layout=D3D12_TEXTURE_LAYOUT_ROW_MAJOR;rd.Flags=flags;
@@ -59,7 +64,7 @@ Require(embedded.size()==shader.size&&!memcmp(embedded.data(),shader.bytes,shade
  D3D12_COMPUTE_PIPELINE_STATE_DESC pd{};pd.pRootSignature=root.Get();pd.CS={shader.bytes,shader.size};ComPtr<ID3D12PipelineState> nativeTrace;Check(d->CreateComputePipelineState(&pd,IID_PPV_ARGS(&nativeTrace)));
 #ifdef CONTROL_TEST_GI_JOINT_TRACE
  auto oracle=Read("build/gi-joint-light-oracle.dxbc");
- constexpr UINT expectedRecords=11;
+ constexpr UINT expectedRecords=13;
 #elif defined(CONTROL_TEST_GI_RAY_TRACE)
  auto oracle=Read("build/gi-ray-trace-oracle.dxbc");
  constexpr UINT expectedRecords=3;
@@ -83,7 +88,7 @@ pd.CS={oracle.data(),oracle.size()};ComPtr<ID3D12PipelineState> oraclePso;Check(
   auto readback=Buffer(d.Get(),D3D12_HEAP_TYPE_READBACK,D3D12_RESOURCE_STATE_COPY_DEST,D3D12_RESOURCE_FLAG_NONE);
   void* mapped=nullptr;D3D12_RANGE none{0,0};Check(upload->Map(0,&none,&mapped));memset(mapped,0,allocated);if(run){UINT seed=capacity-1;memcpy(mapped,&seed,4);}memset(static_cast<unsigned char*>(mapped)+bytes,0xa5,256);
 #ifdef CONTROL_TEST_GI_JOINT_TRACE
-  const UINT coordinate=run?31:16;UINT header[3]={0x283,coordinate,coordinate};memcpy(static_cast<unsigned char*>(mapped)+4,header,sizeof(header));
+  const UINT coordinate=run?31:16;UINT header[3]={0x284,coordinate,coordinate};memcpy(static_cast<unsigned char*>(mapped)+4,header,sizeof(header));
 #endif
   upload->Unmap(0,nullptr);
   Check(allocator->Reset());Check(list->Reset(allocator.Get(),oraclePso.Get()));list->CopyBufferRegion(gpu.Get(),0,upload.Get(),0,allocated);
@@ -131,10 +136,10 @@ pd.CS={oracle.data(),oracle.size()};ComPtr<ID3D12PipelineState> oraclePso;Check(
     }
     continue;
    }
-   if(sample==4||sample==5||sample==7||sample==8){
+   if(sample==4||sample==5||sample==9||sample==10){
     auto f=[&](UINT offset){float value=0;memcpy(&value,record+offset,4);return value;};
     auto u=[&](UINT offset){UINT value=0;memcpy(&value,record+offset,4);return value;};
-    const bool summary=sample==5||sample==8;const UINT ray=sample>=7?1:0;
+    const bool summary=sample==5||sample==10;const UINT ray=sample>=9?1:0;
     Require(id[0]==coordinate&&id[1]==coordinate&&id[2]==ray&&id[3]==(summary?5u:6u),"volume identity");
     if(summary){
      Require(u(144)==42&&u(148)==2&&u(152)==(ray?65535u:7u)&&u(156)==0x283&&u(160)==1,"volume summary metadata");
@@ -148,7 +153,15 @@ pd.CS={oracle.data(),oracle.size()};ComPtr<ID3D12PipelineState> oraclePso;Check(
     }
     continue;
    }
-   raySample=sample==6?0:sample==9?1:2;
+   if(sample==6||sample==7){
+    auto f=[&](UINT offset){float value=0;memcpy(&value,record+offset,4);return value;};
+    auto u=[&](UINT offset){UINT value=0;memcpy(&value,record+offset,4);return value;};
+    Require(id[0]==coordinate&&id[1]==coordinate&&id[2]==0&&id[3]==(sample==6?7u:8u),"point/surface identity");
+    if(sample==6){Require(f(16)==.5f&&f(20)==2&&f(24)==6&&f(80)==.5f,"point product");Require(u(96)==9&&u(100)==2&&u(104)==7&&u(108)==42&&u(112)==0x284,"point context");}
+    else{Require(f(16)==0&&f(32)==1&&f(36)==2&&f(40)==3&&f(48)==2&&f(52)==3&&f(56)==4&&f(64)==2&&f(80)==1&&f(96)==.5f,"surface operands");Require(u(112)==2&&u(116)==7&&u(120)==42&&u(124)==0x284,"surface context");}
+    continue;
+   }
+   raySample=sample==8?0:sample==11?1:2;
 #endif
    Require(id[0]==expectedCoordinate&&id[1]==expectedCoordinate&&id[3]==(raySample==2?2u:1u),"ray record identity");
    auto scalar=[&](UINT offset){float f=0;memcpy(&f,record+offset,4);return f;};
@@ -185,6 +198,28 @@ pd.CS={oracle.data(),oracle.size()};ComPtr<ID3D12PipelineState> oraclePso;Check(
 #endif
   readback->Unmap(0,&none);
  }
+#ifdef CONTROL_TEST_GI_JOINT_TRACE
+ // Reuse the same output/readback after fence completion; clear only the header.
+ auto wideGpu=Buffer(d.Get(),D3D12_HEAP_TYPE_DEFAULT,D3D12_RESOURCE_STATE_COPY_DEST,D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
+ auto wideUpload=Buffer(d.Get(),D3D12_HEAP_TYPE_UPLOAD,D3D12_RESOURCE_STATE_GENERIC_READ,D3D12_RESOURCE_FLAG_NONE);
+ auto wideReadback=Buffer(d.Get(),D3D12_HEAP_TYPE_READBACK,D3D12_RESOURCE_STATE_COPY_DEST,D3D12_RESOURCE_FLAG_NONE);
+ for(UINT frame=0;frame<8;++frame){
+  void* mapped=nullptr;D3D12_RANGE none{0,0};Check(wideUpload->Map(0,&none,&mapped));const UINT header[4]={0,0x284,0,0};memcpy(mapped,header,16);wideUpload->Unmap(0,nullptr);
+  Check(allocator->Reset());Check(list->Reset(allocator.Get(),oraclePso.Get()));
+  if(frame)Transition(list.Get(),wideGpu.Get(),D3D12_RESOURCE_STATE_COPY_SOURCE,D3D12_RESOURCE_STATE_COPY_DEST);
+  list->CopyBufferRegion(wideGpu.Get(),0,wideUpload.Get(),0,16);
+  Transition(list.Get(),wideGpu.Get(),D3D12_RESOURCE_STATE_COPY_DEST,D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+  list->SetComputeRootSignature(root.Get());list->SetComputeRootUnorderedAccessView(8,wideGpu->GetGPUVirtualAddress());list->SetComputeRootConstantBufferView(4,volumeConstants->GetGPUVirtualAddress());
+  const UINT roi[4]={0,0,128,128};list->SetComputeRoot32BitConstants(9,4,roi,0);list->Dispatch(4,4,1);
+  Transition(list.Get(),wideGpu.Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS,D3D12_RESOURCE_STATE_COPY_SOURCE);list->CopyBufferRegion(wideReadback.Get(),0,wideGpu.Get(),0,bytes);Check(list->Close());
+  ID3D12CommandList* lists[]={list.Get()};queue->ExecuteCommandLists(1,lists);Check(queue->Signal(fence.Get(),3+frame));Check(fence->SetEventOnCompletion(3+frame,event));Require(WaitForSingleObject(event,30000)==WAIT_OBJECT_0,"wide GPU timeout");
+  D3D12_RANGE range{0,bytes};Check(wideReadback->Map(0,&range,&mapped));const auto* data=static_cast<const unsigned char*>(mapped);UINT count=0;memcpy(&count,data,4);Require(count==4864*expectedRecords,"wide sampling count");
+  std::vector<UINT> pixelCounts(128*128);
+  for(UINT i=0;i<count;++i){UINT id[4];memcpy(id,data+16+i*stride,16);Require(id[0]<128&&id[1]<128,"wide ROI bounds");++pixelCounts[id[1]*128+id[0]];}
+  for(UINT y=0;y<128;++y)for(UINT x=0;x<128;++x){const bool selected=(!(x&1)&&!(y&1))||(x>=48&&x<80&&y>=48&&y<80);Require(pixelCounts[y*128+x]==(selected?expectedRecords:0),"wide mask per-pixel coverage");}
+  wideReadback->Unmap(0,&none);
+ }
+#endif
  CloseHandle(event);ComPtr<ID3D12InfoQueue> messages;Check(d.As(&messages));
  for(UINT64 i=0;i<messages->GetNumStoredMessagesAllowedByRetrievalFilter();++i){SIZE_T size=0;messages->GetMessage(i,nullptr,&size);std::vector<unsigned char> storage(size);auto* m=reinterpret_cast<D3D12_MESSAGE*>(storage.data());Check(messages->GetMessage(i,m,&size));if(m->Severity<=D3D12_MESSAGE_SEVERITY_ERROR)throw std::runtime_error(m->pDescription);}
  std::cout<<"PASS GPU trace: native trace PSO, exact inserted GPU blocks, stage masks, shadow early-out, cookie skip, multiple rays/lights, overflow guard; D3D12 debug clean\n";

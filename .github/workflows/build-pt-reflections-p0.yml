@@ -3,6 +3,7 @@ name: Build native reflection enhancements and RR
 on:
   push:
     branches:
+      - work/r284-gi-wide-sequence
       - work/r283-gi-volume-source
       - work/r280-gi-instance-submissions
       - work/r279-gi-geometry-bindings
@@ -1145,11 +1146,11 @@ jobs:
           build\test-gi-spot-pcf.exe
           if errorlevel 1 exit /b 1
 
-      - name: Package joint spotlight and GI capture R283
+      - name: Package joint spotlight and GI capture R284
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='ControlTOH-R283'
+          $out='ControlTOH-R284'
           $shader="$out/ControlTOH/Shaders"
           $tools="$out/ControlTOH/Tools"
           $diagnostics="$out/ControlTOH/Diagnostics"
@@ -1179,14 +1180,14 @@ jobs:
           Copy-Item build/DirectStorage "$diagnostics/DirectStorage" -Recurse
           Copy-Item build/DirectStorage/dstorage.dll,build/DirectStorage/dstoragecore.dll $out
           Copy-Item tools/directstorage/Validate-DirectStorage.cmd "$diagnostics/DirectStorage"
-          Copy-Item docs/native-lighting-r283.md "$out/ControlTOH/DIAGNOSTIC-NOTES.md"
+          Copy-Item docs/native-lighting-r284.md "$out/ControlTOH/DIAGNOSTIC-NOTES.md"
           Copy-Item tools/Organize-Existing-Install.cmd,tools/Organize-Existing-Install.ps1 $tools
           Copy-Item tools/diagnostics/Collect-ControlTOH-Materials.cmd,tools/diagnostics/Collect-ControlTOH-Materials.ps1 $tools
           & powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/diagnostics/test-material-collector.ps1
           if ($LASTEXITCODE -ne 0) { throw 'Material collector integration test failed' }
           @'
           Control The Oldest House: Visual and Performance Overhaul
-          R283 - Same-dispatch spotlight and GI capture
+          R284 - Same-dispatch spotlight and GI capture
 
           Copy all package contents beside Control_DX12.exe, preserving folders.
           Run ControlTOH/Diagnostics/Start-GI-Joint-Trace.cmd.
@@ -1196,7 +1197,8 @@ jobs:
           Press F7 OR click ARM GI TRACE in F10; wait for the visible ARMED countdown.
           Close F10 and hold the view until SAVED. Exit normally to package logs.
           Do not click CAPTURE RR or PACKAGE RR.
-          This records one complete GI dispatch; it does not change lighting.
+          One F7 action records eight frames. Red outline: 128x128 area; white: dense 32x32 center.
+          Keep the camera and zoom steady until SAVED. All lighting math stays unchanged.
           See ControlTOH/DIAGNOSTIC-NOTES.md for exact scope and limits.
           '@ | Set-Content "$out/ControlTOH/README.txt" -Encoding ASCII
           python tools/test-organized-package.py "$out"
@@ -1210,10 +1212,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: ControlTOH-R283
+          name: ControlTOH-R284
           path: |
-            ControlTOH-R283.zip
-            ControlTOH-R283.sha256
+            ControlTOH-R284.zip
+            ControlTOH-R284.sha256
             build/gi-joint-light-validation.json
             build/gi-joint-oracle-analysis.json
             build/gi-ray-trace-validation.json
