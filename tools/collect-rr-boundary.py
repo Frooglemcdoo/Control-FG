@@ -175,7 +175,7 @@ def validate_gi_sequence_pair(pair, ordinal):
 
 
 def collect_logs(root, local, pid, destination):
-    for directory, pattern in [(root, f'probe-*-{pid}.log'), (local / 'Control-FG' / 'Diagnostics', f'GI-Joint-R28[123]-{pid}.bin'), (local / 'Control-FG' / 'Diagnostics', f'GI-Joint-R284-{pid}-frame[0-9][0-9].bin'), (local / 'Control-FG' / 'Diagnostics', f'GI-Joint-R284-{pid}-reference.bmp'), (local / 'Control-FG' / 'Diagnostics', f'GI-Spot-R274-{pid}.bin'), (local / 'Control-FG' / 'Diagnostics', f'GI-Ray-R27[78]-{pid}.bin'), (local / 'Control-FG' / 'Diagnostics', f'Lighting-*-{pid}-*.log'), (Path(os.environ.get('TEMP', str(local))) / 'Control-FG' / 'Diagnostics', f'GI-Joint-R28[123]-{pid}.bin'), (Path(os.environ.get('TEMP', str(local))) / 'Control-FG' / 'Diagnostics', f'GI-Joint-R284-{pid}-frame[0-9][0-9].bin'), (Path(os.environ.get('TEMP', str(local))) / 'Control-FG' / 'Diagnostics', f'GI-Joint-R284-{pid}-reference.bmp'), (Path(os.environ.get('TEMP', str(local))) / 'Control-FG' / 'Diagnostics', f'GI-Spot-R274-{pid}.bin'), (Path(os.environ.get('TEMP', str(local))) / 'Control-FG' / 'Diagnostics', f'GI-Ray-R27[78]-{pid}.bin'), (Path(os.environ.get('TEMP', str(local))) / 'Control-FG' / 'Diagnostics', f'Lighting-*-{pid}-*.log')]:
+    for directory, pattern in [(root, f'probe-*-{pid}.log'), (local / 'Control-FG' / 'Diagnostics', f'GI-Joint-R28[123]-{pid}.bin'), (local / 'Control-FG' / 'Diagnostics', f'GI-Joint-R284-{pid}-frame[0-9][0-9].bin'), (local / 'Control-FG' / 'Diagnostics', f'GI-Joint-R284-{pid}-reference.bmp'), (local / 'Control-FG' / 'Diagnostics', f'GI-Joint-R285-{pid}-frame[0-9][0-9].bin'), (local / 'Control-FG' / 'Diagnostics', f'GI-Joint-R285-{pid}-frame[0-9][0-9].json'), (local / 'Control-FG' / 'Diagnostics', f'GI-Joint-R285-{pid}-reference.bmp'), (local / 'Control-FG' / 'Diagnostics', f'GI-Spot-R274-{pid}.bin'), (local / 'Control-FG' / 'Diagnostics', f'GI-Ray-R27[78]-{pid}.bin'), (local / 'Control-FG' / 'Diagnostics', f'Lighting-*-{pid}-*.log'), (Path(os.environ.get('TEMP', str(local))) / 'Control-FG' / 'Diagnostics', f'GI-Joint-R28[123]-{pid}.bin'), (Path(os.environ.get('TEMP', str(local))) / 'Control-FG' / 'Diagnostics', f'GI-Joint-R284-{pid}-frame[0-9][0-9].bin'), (Path(os.environ.get('TEMP', str(local))) / 'Control-FG' / 'Diagnostics', f'GI-Joint-R284-{pid}-reference.bmp'), (Path(os.environ.get('TEMP', str(local))) / 'Control-FG' / 'Diagnostics', f'GI-Joint-R285-{pid}-frame[0-9][0-9].bin'), (Path(os.environ.get('TEMP', str(local))) / 'Control-FG' / 'Diagnostics', f'GI-Joint-R285-{pid}-frame[0-9][0-9].json'), (Path(os.environ.get('TEMP', str(local))) / 'Control-FG' / 'Diagnostics', f'GI-Joint-R285-{pid}-reference.bmp'), (Path(os.environ.get('TEMP', str(local))) / 'Control-FG' / 'Diagnostics', f'GI-Spot-R274-{pid}.bin'), (Path(os.environ.get('TEMP', str(local))) / 'Control-FG' / 'Diagnostics', f'GI-Ray-R27[78]-{pid}.bin'), (Path(os.environ.get('TEMP', str(local))) / 'Control-FG' / 'Diagnostics', f'Lighting-*-{pid}-*.log')]:
         if not directory.exists():
             continue
         for source in directory.rglob(pattern):
@@ -208,6 +208,23 @@ def retain_metadata(root, pid, destination):
                 shutil.copy2(source, target)
 
 
+def validate_stack_sources(local,pid,rr_frame):
+    import struct
+    roots={local/'Control-FG'/'Diagnostics',Path(os.environ.get('TEMP',str(local)))/'Control-FG'/'Diagnostics'}
+    paths={p.name:p for root in roots for p in root.glob(f'GI-Joint-R285-{pid}-frame[0-9][0-9].json')}
+    if len(paths)!=8:raise ValueError('Expected all eight GI source frames')
+    records=[]
+    for index,p in enumerate(sorted(paths.values()),1):
+        m=json.loads(p.read_text());binary=p.with_suffix('.bin')
+        if m.get('schema')!='gi-stack-r285' or m.get('pid')!=pid or m.get('frame_index')!=index or m.get('overflow') is not False:raise ValueError('Incomplete GI source metadata')
+        with binary.open('rb') as f:count,magic,step,phase=struct.unpack('<4I',f.read(16))
+        if not 0<count<=1048576 or count!=m['records'] or binary.stat().st_size!=16+256*count or magic!=0x285 or step!=m['step'] or phase!=m['phase_x']+(m['phase_y']<<16):raise ValueError('Incomplete or inconsistent GI source bytes')
+        if index==1 and m['engine_frame']!=rr_frame:raise ValueError('GI source and RR buffers are not the same engine frame')
+        if records and (m['present']<=records[-1]['present'] or (m['width'],m['height'])!=(records[0]['width'],records[0]['height'])):raise ValueError('GI source ordering or resolution mismatch')
+        records.append(m)
+    return dict(same_frame_verified=True,engine_frame=rr_frame,source_frames=records)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--pid', type=int, required=True)
@@ -217,8 +234,9 @@ def main():
     parser.add_argument('--require-rr', action='store_true', help='Require settled RR output and actual material guides')
     parser.add_argument('--gi-boundary', action='store_true')
     parser.add_argument('--gi-sequence', action='store_true')
+    parser.add_argument('--gi-stack', action='store_true')
     args = parser.parse_args()
-    if args.gi_boundary or args.gi_sequence:
+    if args.gi_boundary or args.gi_sequence or args.gi_stack:
         args.require_rr = True
     if args.gi_boundary and args.gi_sequence:
         parser.error("Choose one GI capture protocol")
@@ -230,6 +248,7 @@ def main():
         prefix = 'GI-Boundary-R217-'
     if args.gi_sequence:
         prefix = 'GI-Sequence-R263-'
+    if args.gi_stack:prefix='GI-Stack-R285-'
     destination = args.output / (prefix + time.strftime('%Y%m%d-%H%M%S') + '-' + str(args.pid) + '-' + str(time.time_ns() % 1000000000))
     destination.mkdir(parents=True, exist_ok=False)
     report = {'schema': 'control-rr-boundary-r157', 'pid': args.pid, 'started_unix': started, 'pairs': [], 'complete': False, 'diagnostics_only': args.diagnostics_only}
@@ -249,6 +268,7 @@ def main():
             positions = [(i, f'stationary-pair-{i}') for i in range(1, 5)]
             report['sequence_build'] = 'R263'
             report['inter_pair_gaps_expected'] = True
+        if args.gi_stack:positions=[(1,'full-screen-rr')]
         for ordinal, label in positions:
             if args.diagnostics_only:
                 break
@@ -274,7 +294,7 @@ def main():
                 copy_capture_frame(folder, data, target)
             if args.gi_boundary:
                 validate_gi_pair(pair, ordinal)
-            if args.gi_sequence:
+            if args.gi_sequence or args.gi_stack:
                 validate_gi_sequence_pair(pair, ordinal)
                 if report['pairs']:
                     previous = report['pairs'][-1]['frames'][-1]
@@ -284,6 +304,8 @@ def main():
             report['pairs'].append({'label': label, 'frames': [data for _, data in pair]})
             print(f'Pair {ordinal} saved: {label}.', flush=True)
             # Overlay status is the completion notification.
+        if args.gi_stack:
+            report['source_join']=validate_stack_sources(local,args.pid,report['pairs'][0]['frames'][0]['frame'])
         report['complete'] = not args.diagnostics_only
     except Exception as error:
         report['error'] = str(error)

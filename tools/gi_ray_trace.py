@@ -16,7 +16,7 @@ def branch(value):
     return code
 
 
-def generate(raw, path, identity, *, instrumentation_plan=None, roi=False, wide=False, capacity=CAPACITY):
+def generate(raw, path, identity, *, instrumentation_plan=None, roi=False, wide=False, screen=False, capacity=CAPACITY):
     assert identity['sha256'] == '1dfb4c9b054037e030ff9eed6ed5e482c8c32f9f301bb02c89eb0084c52842de'
     assert hashlib.sha256(raw).hexdigest() == identity['sha256']
     path.write_bytes(raw)
@@ -52,6 +52,10 @@ def generate(raw, path, identity, *, instrumentation_plan=None, roi=False, wide=
             # b0 space2 holds integer origin XY and extent XY, no native CB changes.
             code += ins('ineg',dst(q,3),[0x308e46,5,0,0])
             code += ins('iadd',dst(q,3),src(v),src(q))
+            if screen:
+                code += ins('and',dst(a,6),src(q,0x44),[0x308006,5,0,1])
+                code += ins('ieq',dst(a,6),src(a),uint(0))
+                code += ins('and',dst(a,2),src(a,0x55),src(a,0xaa))
             if wide:
                 # Wide ROI: even/even pixels plus every pixel in the center 32x32.
                 code += ins('and',dst(a,2),src(q,0),uint(1))+ins('and',dst(a,4),src(q,0x55),uint(1))
@@ -64,7 +68,7 @@ def generate(raw, path, identity, *, instrumentation_plan=None, roi=False, wide=
             code += ins('and', dst(q,3), src(v), uint(31))
             code += ins('ieq', dst(q,3), src(q), uint(16))
         code += ins('and', dst(q,1), src(q,0), src(q,0x55))
-        if wide:code += ins('and',dst(q,1),src(q,0),src(a,0x55))
+        if wide or screen:code += ins('and',dst(q,1),src(q,0),src(a,0x55))
         code += branch(src(q,0))
         code += ins('imm_atomic_iadd', dst(q,1), uav(1), uint(0), uint(1))
         code += ins('ult', dst(q,2), src(q,0), uint(capacity)) + branch(src(q,0x55))
@@ -110,7 +114,7 @@ def generate(raw, path, identity, *, instrumentation_plan=None, roi=False, wide=
     summary += store(236,uint(0x278),1) + end()
     add(5169,summary) # valid-pixel branch only, after final output alpha assignment
     decl = ins('dcl_unordered_access_view_raw',[0x31ee46,7,0,0,2])
-    if roi: decl += ins('dcl_constant_buffer',[0x308e46,5,0,0,1,2])
+    if roi: decl += ins('dcl_constant_buffer',[0x308e46,5,0,0,2 if screen else 1,2])
     add(245,decl)
     def patch(w):
         out = w[:2]

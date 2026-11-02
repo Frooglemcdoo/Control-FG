@@ -25,5 +25,11 @@ int main(){namespace ui=control_rr_capture_ui;using P=control_rr::InputCapturePo
  assert(!ui::Request());
  ui::completedPairs=0;ui::state=ui::State::Idle;assert(ui::Request());ui::requested=false;
  ui::Publish(P::Idle,P::Idle,1,false);assert(ui::state==ui::State::Failed&&!ui::requested);assert(!ui::Request());
+ gi_stack_capture::enabled=true;ui::completedPairs=0;ui::state=ui::State::Idle;ui::requested=false;
+ assert(ui::PairLimit()==1);assert(gi_stack_capture::request.load()());ui::requested=false;
+ ui::Publish(P::Ready,P::Ready,1,false);assert(gi_stack_capture::status.load()()==0);
+ ui::Publish(P::Idle,P::Idle,1,true);assert(gi_stack_capture::status.load()()==1&&!ui::requested&&!control_rr_gi::boundaryRequested);assert(!ui::Request());
+ ui::state=ui::State::Failed;assert(gi_stack_capture::status.load()()==-1);
+ puts("PASS R285 stack: exactly one pair, shared request/status, no auto-repeat, explicit failure");
  puts("PASS R263 sequence: one click queues four pairs, no duplicate clicks, no export before pair recorded, explicit failure, hard session limit");
 }

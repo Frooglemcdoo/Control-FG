@@ -19,7 +19,7 @@ set "CONTROLTOH_GI_CAPTURE=0"
 set "CONTROLTOH_GI_SOURCE=full"
 set "CONTROLTOH_GI_SHADOW=native"
 if "%CONTROLTOH_GI_JOINT_TRACE%"=="1" (
-  echo R284 - eight-frame GI spotlight, point, volume and material capture.
+  echo R285 - screen-wide GI, point/spot shadows, material guides and RR boundary capture.
 ) else (
   echo R278 - GI runtime accounting and native output comparison.
 )
@@ -32,7 +32,11 @@ echo Close F10 and hold your mouse zoom. Wait for SAVED before exiting.
 echo If it says FAILED or stays WAITING, send the status text and packaged logs.
 echo Do not click CAPTURE RR. Logs will be packaged after the game closes.
 start "" /wait "Control_DX12.exe"
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0Capture-RR-Boundary.ps1" -DiagnosticsOnly
+if "%CONTROLTOH_GI_STACK_CAPTURE%"=="1" (
+  powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0Capture-RR-Boundary.ps1" -GiStack -CollectExisting -RequireRR
+) else (
+  powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0Capture-RR-Boundary.ps1" -DiagnosticsOnly
+)
 if errorlevel 1 echo Collection failed. Keep the console error and existing logs.
 pause
 endlocal

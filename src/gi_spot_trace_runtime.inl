@@ -23,7 +23,7 @@ using Indirect=void(STDMETHODCALLTYPE*)(ID3D12GraphicsCommandList*,ID3D12Command
 struct Hooks{Bundle bundle=nullptr;Indirect indirect=nullptr;void** table=nullptr;Root root=nullptr;Table descriptor=nullptr;Cbv cbv=nullptr;Heaps heaps=nullptr;};
 inline Hooks hooks[8]{};inline SRWLOCK hooksLock=SRWLOCK_INIT,lock=SRWLOCK_INIT;
 inline std::atomic<bool> enabledReady{false};
-enum class Phase{Idle,Countdown,Armed,Recording,Recorded,Submitted,Exporting,Gap,Complete,Failed};
+enum class Phase{Idle,Countdown,Armed,Recording,Recorded,Submitted,Exporting,Gap,StackWait,Complete,Failed};
 inline std::atomic<Phase> phase{Phase::Idle};
 inline ComPtr<ID3D12Device> device;
 inline ComPtr<ID3D12Resource> output,readback,zero;
@@ -35,8 +35,16 @@ inline ComPtr<ID3D12CommandQueue> submittedQueue;
 inline UINT64 generation=0,capturedPresent=0,armedAt=0;
 inline bool Enabled() noexcept {static const bool value=[] {char b[4]{};return GetEnvironmentVariableA("CONTROLTOH_GI_SPOT_TRACE",b,4)==1&&b[0]=='1';}();return value;}
 inline bool JointTrace() noexcept {static const bool value=[] {char b[4]{};return GetEnvironmentVariableA("CONTROLTOH_GI_JOINT_TRACE",b,4)==1&&b[0]=='1';}();return value;}
-inline UINT Capacity() noexcept {return JointTrace()?262144:65536;}
+inline UINT Capacity() noexcept {return JointTrace()?1048576:65536;}
 inline UINT FrameCount() noexcept {return JointTrace()?8:1;}
+inline bool StackCapture() noexcept {static const bool value=[] {char b[4]{};return GetEnvironmentVariableA("CONTROLTOH_GI_STACK_CAPTURE",b,4)==1&&b[0]=='1';}();return JointTrace()&&value;}
+inline UINT sampleStep=16,phaseX=0,phaseY=0;
+inline UINT64 engineFrame=0,stackStarted=0;
+inline UINT SampleStep(UINT width,UINT height) noexcept {
+ char b[16]{};GetEnvironmentVariableA("CONTROLTOH_GI_SAMPLE_STEP",b,16);const int requested=atoi(b);
+ if(requested==8||requested==16||requested==32||requested==64)return static_cast<UINT>(requested);
+ UINT step=16;while((UINT64(width)+step-1)/step*((UINT64(height)+step-1)/step)>18000&&step<64)step*=2;return step;
+}
 inline bool RayTrace() noexcept {static const bool value=[] {char b[4]{};return GetEnvironmentVariableA("CONTROLTOH_GI_RAY_TRACE",b,4)==1&&b[0]=='1';}();return value;}
 inline UINT groups[3]{};
 inline std::atomic<const wchar_t*> failure{L"Trace failed. Restart the diagnostic launcher; send logs."};
@@ -58,6 +66,7 @@ inline const wchar_t* Status() noexcept {
  case Phase::Submitted:return L"CAPTURE SUBMITTED: waiting for GPU completion.";
  case Phase::Exporting:return L"SAVING: writing this frame. Keep still.";
  case Phase::Gap:{static wchar_t text[128]{};swprintf_s(text,L"CAPTURING: %u / %u frames saved. Keep camera and zoom steady.",savedFrames.load(),FrameCount());return text;}
+ case Phase::StackWait:return L"GI SAVED: waiting for full-screen RR buffers. Keep still.";
  case Phase::Complete:return L"SAVED: exit normally to package the trace and logs.";
  case Phase::Failed:return failure.load();
  }return L"Unknown capture state.";
@@ -69,7 +78,13 @@ inline bool Request(const char* source) noexcept {
  if(!enabledReady.load()){notice.store(L"NOT ARMED: probe not ready. Load the level first.");Trace("GI_SPOT_R275_REQUEST accepted=0 source=%s reason=not_ready",source);return false;}
  AcquireSRWLockExclusive(&lock);
  const bool accepted=phase.load()==Phase::Idle;
- if(accepted){armedAt=GetTickCount64();phase.store(Phase::Countdown);}
+ if(accepted){
+  if(StackCapture()){
+   gi_stack_capture::enabled.store(true);const auto request=gi_stack_capture::request.load();
+   if(!request||!request()){Fail("stack_request",L"FAILED: full-stack capture unavailable or busy. Exit and send logs.");ReleaseSRWLockExclusive(&lock);return false;}
+  }
+  armedAt=GetTickCount64();stackStarted=armedAt;phase.store(Phase::Countdown);
+ }
  ReleaseSRWLockExclusive(&lock);
  Trace("GI_SPOT_R275_REQUEST accepted=%u source=%s phase=%u delay_ms=5000",unsigned(accepted),source,unsigned(phase.load()));
  return accepted;
@@ -169,7 +184,7 @@ inline void Observe(ID3D12Device* d,const D3D12_COMPUTE_PIPELINE_STATE_DESC* des
  auto rd=version->Desc_1_0;if(rd.NumParameters!=8)return;
  D3D12_ROOT_PARAMETER parameters[10]{};memcpy(parameters,rd.pParameters,8*sizeof(*parameters));
  parameters[8].ParameterType=D3D12_ROOT_PARAMETER_TYPE_UAV;parameters[8].Descriptor={0,2};parameters[8].ShaderVisibility=D3D12_SHADER_VISIBILITY_ALL;
- parameters[9].ParameterType=D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;parameters[9].Constants={0,2,4};
+ parameters[9].ParameterType=D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;parameters[9].Constants={0,2,8};
  rd.NumParameters=JointTrace()?10:9;rd.pParameters=parameters;
  ComPtr<ID3DBlob> blob,error;HRESULT hr=D3D12SerializeRootSignature(&rd,D3D_ROOT_SIGNATURE_VERSION_1,&blob,&error);
  ComPtr<ID3D12RootSignature> root;ComPtr<ID3D12PipelineState> pso,owner;
@@ -196,23 +211,30 @@ inline bool Dispatch(ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT z) noexc
  if(!Attached(list,psoKey,pso)||!Attached(pso.Get(),variantKey,trace)||!Attached(trace.Get(),traceRootKey,root)||!Attached(trace.Get(),nativeRootKey,nativeRoot))return false;
  gridWidth.store(x*8);gridHeight.store(y*16);
  if(phase.load()!=Phase::Armed)return false;
+ UINT64 sourceFrame=0;
+ if(StackCapture()&&!savedFrames.load()){
+  const auto ready=gi_stack_capture::readySource.load();sourceFrame=ready?ready(list):0;
+  if(!sourceFrame)return false;
+ }
  const State s=Read(list);const auto h=LookupHooks(list);const auto native=Lookup(list);
  if((s.mask&0xfdu)!=0xfdu||s.root!=nativeRoot.Get()||!h.root||!h.descriptor||!h.cbv||!native.set||!native.dispatch){Trace("GI_SPOT_R274_WAIT binding_mask=%u",s.mask);return false;}
  AcquireSRWLockExclusive(&lock);if(phase.load()!=Phase::Armed){ReleaseSRWLockExclusive(&lock);return false;}
  if(savedFrames.load()&&(groups[0]!=x||groups[1]!=y||groups[2]!=z)){Fail("sequence_grid_changed",L"FAILED: resolution changed during capture. Exit and send logs.");ReleaseSRWLockExclusive(&lock);return false;}
  phase.store(Phase::Recording);recordedList=list;retainedPso=pso;retainedTrace=trace;retainedRoot=nativeRoot;retainedTraceRoot=root;generation=s.generation;capturedPresent=presentCount.load();groups[0]=x;groups[1]=y;groups[2]=z;
- UINT roi[4]={(x*8>128)?x*4-64:0,(y*16>128)?y*8-64:0,128,128};
+ sampleStep=SampleStep(x*8,y*16);phaseX=(savedFrames.load()*5)%sampleStep;phaseY=(savedFrames.load()*9)%sampleStep;
+ UINT roi[8]={phaseX,phaseY,x*8,y*16,sampleStep-1,0,0,0};engineFrame=sourceFrame;
  if(JointTrace()){
   void* initial=nullptr;D3D12_RANGE none{0,0};const HRESULT mapHr=zero->Map(0,&none,&initial);
   if(FAILED(mapHr)){Fail("joint_header_map",L"FAILED: joint trace header. Send logs.");ReleaseSRWLockExclusive(&lock);return false;}
-  auto* header=static_cast<UINT*>(initial);header[0]=0;header[1]=0x284;header[2]=roi[0];header[3]=roi[1];D3D12_RANGE written{0,16};zero->Unmap(0,&written);
-  Trace("GI_JOINT_R284_ROI x=%u y=%u width=128 height=128 stride=2 dense_center=32 frame=%u grid_center=1",roi[0],roi[1],savedFrames.load()+1);
+  auto* header=static_cast<UINT*>(initial);header[0]=0;header[1]=0x285;header[2]=sampleStep;header[3]=phaseX|(phaseY<<16);D3D12_RANGE written{0,16};zero->Unmap(0,&written);
+  Trace("GI_JOINT_R285_SCREEN width=%u height=%u step=%u phase_x=%u phase_y=%u frame=%u engine_frame=%llu",x*8,y*16,sampleStep,phaseX,phaseY,savedFrames.load()+1,engineFrame);
  }
  if(savedFrames.load())Transition(list,D3D12_RESOURCE_STATE_COPY_SOURCE,D3D12_RESOURCE_STATE_COPY_DEST);
  list->CopyBufferRegion(output.Get(),0,zero.Get(),0,16);Transition(list,D3D12_RESOURCE_STATE_COPY_DEST,D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
- Rebind(list,h,root.Get(),s);list->SetComputeRootUnorderedAccessView(8,output->GetGPUVirtualAddress());if(JointTrace())list->SetComputeRoot32BitConstants(9,4,roi,0);native.set(list,trace.Get());native.dispatch(list,x,y,z);
+ Rebind(list,h,root.Get(),s);list->SetComputeRootUnorderedAccessView(8,output->GetGPUVirtualAddress());if(JointTrace())list->SetComputeRoot32BitConstants(9,8,roi,0);native.set(list,trace.Get());native.dispatch(list,x,y,z);
  Rebind(list,h,nativeRoot.Get(),s);native.set(list,pso.Get());
  Transition(list,D3D12_RESOURCE_STATE_UNORDERED_ACCESS,D3D12_RESOURCE_STATE_COPY_SOURCE);list->CopyBufferRegion(readback.Get(),0,output.Get(),0,Bytes());
+ if(StackCapture()&&!savedFrames.load())gi_stack_capture::sourceFrame.store(sourceFrame);
  phase.store(Phase::Recorded);Trace("GI_SPOT_R274_RECORDED present=%llu generation=%llu groups=%u,%u,%u root_and_pso_restored=1 native_dispatches=1",capturedPresent,generation,x,y,z);ReleaseSRWLockExclusive(&lock);return true;
 }
 inline void AfterExecute(ID3D12CommandQueue* queue,UINT count,ID3D12CommandList*const* lists) noexcept {
@@ -224,6 +246,14 @@ inline void AfterExecute(ID3D12CommandQueue* queue,UINT count,ID3D12CommandList*
 }
 inline void Poll() noexcept {
  if(!Enabled())return;
+ if(StackCapture()){
+  const auto status=gi_stack_capture::status.load();const int result=status?status():-1;
+  if(phase.load()!=Phase::Idle&&phase.load()!=Phase::Failed&&phase.load()!=Phase::Complete){
+   if(result<0){Fail("rr_stack_failed",L"FAILED: RR stack capture. Exit and send all saved files.");return;}
+   if(GetTickCount64()-stackStarted>120000){Fail("stack_timeout",L"FAILED: full-stack capture timed out. Exit and send logs.");return;}
+   if(phase.load()==Phase::StackWait){if(result==1)phase.store(Phase::Complete);return;}
+  }
+ }
  auto p=phase.load();if((p==Phase::Armed||p==Phase::Recorded||p==Phase::Submitted)&&GetTickCount64()-armedAt>30000){Fail("timeout",L"FAILED: capture timed out. Exit and send logs.");return;}
  if(p!=Phase::Submitted)return;const auto completed=fence->GetCompletedValue();if(completed==UINT64_MAX){Fail("device_removed",L"FAILED: graphics device removed. Send logs.");return;}if(completed<savedFrames.load()+1)return;
  Phase expected=Phase::Submitted;if(!phase.compare_exchange_strong(expected,Phase::Exporting))return;
@@ -231,14 +261,22 @@ inline void Poll() noexcept {
  bool ok=false;UINT records=0;wchar_t path[MAX_PATH]{};
  if(SUCCEEDED(hr)){
   memcpy(&records,mapped,4);AcquireSRWLockExclusive(&reportLock);const bool opened=report.OpenDefault();if(opened)wcscpy_s(path,report.Path());ReleaseSRWLockExclusive(&reportLock);
-  if(opened){auto* slash=wcsrchr(path,L'\\');if(slash){*(slash+1)=0;wchar_t name[80]{};if(JointTrace())swprintf_s(name,L"GI-Joint-R284-%lu-frame%02u.bin",GetCurrentProcessId(),savedFrames.load()+1);else swprintf_s(name,RayTrace()?L"GI-Ray-R278-%lu.bin":L"GI-Spot-R274-%lu.bin",GetCurrentProcessId());wcscat_s(path,name);
+  if(opened){auto* slash=wcsrchr(path,L'\\');if(slash){*(slash+1)=0;wchar_t name[80]{};if(JointTrace())swprintf_s(name,L"GI-Joint-R285-%lu-frame%02u.bin",GetCurrentProcessId(),savedFrames.load()+1);else swprintf_s(name,RayTrace()?L"GI-Ray-R278-%lu.bin":L"GI-Spot-R274-%lu.bin",GetCurrentProcessId());wcscat_s(path,name);
    const HANDLE file=CreateFileW(path,GENERIC_WRITE,FILE_SHARE_READ,nullptr,CREATE_NEW,FILE_ATTRIBUTE_NORMAL,nullptr);
    if(file!=INVALID_HANDLE_VALUE){DWORD written=0;const DWORD size=16+(std::min)(records,Capacity())*stride;ok=WriteFile(file,mapped,size,&written,nullptr)&&written==size;CloseHandle(file);}
   }}D3D12_RANGE none{0,0};readback->Unmap(0,&none);
  }
  Trace("GI_SPOT_R274_EXPORT complete=%u gpu_completion_confirmed=1 records=%u retained=%u overflow=%u stride=%u present=%llu groups=%u,%u,%u variant=6 sampling_step=32",unsigned(ok&&records&&records<=Capacity()),records,(std::min)(records,Capacity()),unsigned(records>Capacity()),stride,capturedPresent,groups[0],groups[1],groups[2]);
- if(JointTrace())Trace("GI_JOINT_R284_EXPORT complete=%u records=%u overflow=%u present=%llu frame=%u frames=8 same_dispatch=1",unsigned(ok&&records&&records<=Capacity()),records,unsigned(records>Capacity()),capturedPresent,savedFrames.load()+1);
+ if(JointTrace())Trace("GI_JOINT_R285_EXPORT complete=%u records=%u overflow=%u present=%llu frame=%u frames=8 same_dispatch=1",unsigned(ok&&records&&records<=Capacity()),records,unsigned(records>Capacity()),capturedPresent,savedFrames.load()+1);
  else if(RayTrace())Trace("GI_RAY_R278_EXPORT complete=%u records=%u overflow=%u present=%llu final_sum_and_rays=1 no_reuse_accounting=1",unsigned(ok),records,unsigned(records>Capacity()),capturedPresent);
+ if(ok&&JointTrace()){
+  auto* extension=wcsrchr(path,L'.');if(extension)wcscpy_s(extension,6,L".json");
+  HANDLE file=CreateFileW(path,GENERIC_WRITE,FILE_SHARE_READ,nullptr,CREATE_NEW,FILE_ATTRIBUTE_NORMAL,nullptr);
+  if(file==INVALID_HANDLE_VALUE)ok=false;else{
+   char metadata[512]{};const int length=sprintf_s(metadata,"{\"schema\":\"gi-stack-r285\",\"pid\":%lu,\"frame_index\":%u,\"present\":%llu,\"engine_frame\":%llu,\"width\":%u,\"height\":%u,\"step\":%u,\"phase_x\":%u,\"phase_y\":%u,\"records\":%u,\"overflow\":%s}\n",GetCurrentProcessId(),savedFrames.load()+1,capturedPresent,engineFrame,groups[0]*8,groups[1]*16,sampleStep,phaseX,phaseY,records,records>Capacity()?"true":"false");
+   DWORD written=0;ok=length>0&&WriteFile(file,metadata,static_cast<DWORD>(length),&written,nullptr)&&written==static_cast<DWORD>(length);CloseHandle(file);
+  }
+ }
  if(ok&&!records){Fail("empty_capture",L"FAILED: no GI samples recorded. Exit and send logs.");return;}
  if(ok&&records>Capacity()){Fail("overflow",L"FAILED: record capacity exceeded. Partial frame saved; send logs.");return;}
  if(ok){
@@ -246,7 +284,7 @@ inline void Poll() noexcept {
   if(phase.load()!=Phase::Exporting){ReleaseSRWLockExclusive(&lock);return;}
   const auto saved=++savedFrames;
   recordedList.Reset();retainedPso.Reset();retainedTrace.Reset();retainedRoot.Reset();retainedTraceRoot.Reset();submittedQueue.Reset();
-  nextFrameAt=GetTickCount64()+250;phase.store(saved<FrameCount()?Phase::Gap:Phase::Complete);ReleaseSRWLockExclusive(&lock);
+  nextFrameAt=GetTickCount64()+250;phase.store(saved<FrameCount()?Phase::Gap:(StackCapture()?Phase::StackWait:Phase::Complete));ReleaseSRWLockExclusive(&lock);
  }else Fail("export",L"FAILED: could not save trace. Exit and send logs.");
 }
 }

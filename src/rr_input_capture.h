@@ -450,3 +450,18 @@ DWORD foregroundPid=0;GetWindowThreadProcessId(GetForegroundWindow(),&foreground
  } __except(EXCEPTION_EXECUTE_HANDLER){for(auto& c:rrInputCaptures)c.policy.phase=control_rr::InputCapturePolicy::Failed;}
  ReleaseSRWLockExclusive(&rrInputCaptureLock);
 }
+
+#ifdef CONTROL_RR_GI_SEQUENCE
+static std::uint64_t RRStackSourceReady(void* commandList) noexcept {
+ if(!gi_stack_capture::enabled.load()||!TryAcquireSRWLockShared(&rrInputCaptureLock))return 0;
+ std::uint64_t frame=0;
+ __try {
+  using P=control_rr::InputCapturePolicy;
+  if(rrInputCaptures[0].policy.phase!=P::Ready||rrInputCaptures[1].policy.phase!=P::Ready)__leave;
+  RRGuideInputSnapshot native{};const char* reason=nullptr;
+  if(RRGuideReadRendererContext(&native,&reason)&&native.commandList==commandList&&rrInputCaptureSettledFrame&&native.engineFrame==rrInputCaptureSettledFrame+1)frame=native.engineFrame;
+ }__except(EXCEPTION_EXECUTE_HANDLER){}
+ ReleaseSRWLockShared(&rrInputCaptureLock);return frame;
+}
+static const bool rrStackRegistered=[] {gi_stack_capture::readySource.store(&RRStackSourceReady);return true;}();
+#endif

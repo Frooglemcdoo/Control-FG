@@ -20,7 +20,7 @@ void Check(HRESULT hr){if(FAILED(hr))throw std::runtime_error("HRESULT "+std::to
 void Require(bool b,const char* what){if(!b)throw std::runtime_error(what);}
 std::vector<unsigned char> Read(const char* p){std::ifstream f(p,std::ios::binary);Require(bool(f),p);return {(std::istreambuf_iterator<char>(f)),{}};}
 #ifdef CONTROL_TEST_GI_JOINT_TRACE
-constexpr UINT capacity=262144;
+constexpr UINT capacity=1048576;
 #else
 constexpr UINT capacity=65536;
 #endif
@@ -44,7 +44,7 @@ int main()try{
  parameters[6].ParameterType=D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;parameters[6].DescriptorTable={1,ranges+4};
  parameters[7].ParameterType=D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;parameters[7].DescriptorTable={1,ranges+5};
  parameters[8].ParameterType=D3D12_ROOT_PARAMETER_TYPE_UAV;parameters[8].Descriptor={0,2};
- parameters[9].ParameterType=D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;parameters[9].Constants={0,2,4};
+ parameters[9].ParameterType=D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;parameters[9].Constants={0,2,8};
 #ifdef CONTROL_TEST_GI_JOINT_TRACE
  constexpr UINT rootCount=10;
 #else
@@ -64,7 +64,7 @@ Require(embedded.size()==shader.size&&!memcmp(embedded.data(),shader.bytes,shade
  D3D12_COMPUTE_PIPELINE_STATE_DESC pd{};pd.pRootSignature=root.Get();pd.CS={shader.bytes,shader.size};ComPtr<ID3D12PipelineState> nativeTrace;Check(d->CreateComputePipelineState(&pd,IID_PPV_ARGS(&nativeTrace)));
 #ifdef CONTROL_TEST_GI_JOINT_TRACE
  auto oracle=Read("build/gi-joint-light-oracle.dxbc");
- constexpr UINT expectedRecords=13;
+ constexpr UINT expectedRecords=14;
 #elif defined(CONTROL_TEST_GI_RAY_TRACE)
  auto oracle=Read("build/gi-ray-trace-oracle.dxbc");
  constexpr UINT expectedRecords=3;
@@ -88,7 +88,7 @@ pd.CS={oracle.data(),oracle.size()};ComPtr<ID3D12PipelineState> oraclePso;Check(
   auto readback=Buffer(d.Get(),D3D12_HEAP_TYPE_READBACK,D3D12_RESOURCE_STATE_COPY_DEST,D3D12_RESOURCE_FLAG_NONE);
   void* mapped=nullptr;D3D12_RANGE none{0,0};Check(upload->Map(0,&none,&mapped));memset(mapped,0,allocated);if(run){UINT seed=capacity-1;memcpy(mapped,&seed,4);}memset(static_cast<unsigned char*>(mapped)+bytes,0xa5,256);
 #ifdef CONTROL_TEST_GI_JOINT_TRACE
-  const UINT coordinate=run?31:16;UINT header[3]={0x284,coordinate,coordinate};memcpy(static_cast<unsigned char*>(mapped)+4,header,sizeof(header));
+  const UINT coordinate=run?31:16;UINT header[3]={0x285,16,0};memcpy(static_cast<unsigned char*>(mapped)+4,header,sizeof(header));
 #endif
   upload->Unmap(0,nullptr);
   Check(allocator->Reset());Check(list->Reset(allocator.Get(),oraclePso.Get()));list->CopyBufferRegion(gpu.Get(),0,upload.Get(),0,allocated);
@@ -96,7 +96,7 @@ pd.CS={oracle.data(),oracle.size()};ComPtr<ID3D12PipelineState> oraclePso;Check(
   list->SetComputeRootSignature(root.Get());list->SetComputeRootUnorderedAccessView(8,gpu->GetGPUVirtualAddress());
 #ifdef CONTROL_TEST_GI_JOINT_TRACE
   list->SetComputeRootConstantBufferView(4,volumeConstants->GetGPUVirtualAddress());
-  const UINT roi[4]={coordinate,coordinate,1,1};list->SetComputeRoot32BitConstants(9,4,roi,0);
+  const UINT roi[8]={coordinate,coordinate,1,1,15,0,0,0};list->SetComputeRoot32BitConstants(9,8,roi,0);
 #endif
   list->Dispatch(1,1,1);
   Transition(list.Get(),gpu.Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS,D3D12_RESOURCE_STATE_COPY_SOURCE);list->CopyBufferRegion(readback.Get(),0,gpu.Get(),0,allocated);Check(list->Close());
@@ -136,10 +136,10 @@ pd.CS={oracle.data(),oracle.size()};ComPtr<ID3D12PipelineState> oraclePso;Check(
     }
     continue;
    }
-   if(sample==4||sample==5||sample==9||sample==10){
+   if(sample==4||sample==5||sample==11||sample==11){
     auto f=[&](UINT offset){float value=0;memcpy(&value,record+offset,4);return value;};
     auto u=[&](UINT offset){UINT value=0;memcpy(&value,record+offset,4);return value;};
-    const bool summary=sample==5||sample==10;const UINT ray=sample>=9?1:0;
+    const bool summary=sample==5||sample==11;const UINT ray=sample>=10?1:0;
     Require(id[0]==coordinate&&id[1]==coordinate&&id[2]==ray&&id[3]==(summary?5u:6u),"volume identity");
     if(summary){
      Require(u(144)==42&&u(148)==2&&u(152)==(ray?65535u:7u)&&u(156)==0x283&&u(160)==1,"volume summary metadata");
@@ -153,7 +153,7 @@ pd.CS={oracle.data(),oracle.size()};ComPtr<ID3D12PipelineState> oraclePso;Check(
     }
     continue;
    }
-   if(sample==6||sample==7){
+   if(sample==6||sample==8){
     auto f=[&](UINT offset){float value=0;memcpy(&value,record+offset,4);return value;};
     auto u=[&](UINT offset){UINT value=0;memcpy(&value,record+offset,4);return value;};
     Require(id[0]==coordinate&&id[1]==coordinate&&id[2]==0&&id[3]==(sample==6?7u:8u),"point/surface identity");
@@ -161,7 +161,8 @@ pd.CS={oracle.data(),oracle.size()};ComPtr<ID3D12PipelineState> oraclePso;Check(
     else{Require(f(16)==0&&f(32)==1&&f(36)==2&&f(40)==3&&f(48)==2&&f(52)==3&&f(56)==4&&f(64)==2&&f(80)==1&&f(96)==.5f,"surface operands");Require(u(112)==2&&u(116)==7&&u(120)==42&&u(124)==0x284,"surface context");}
     continue;
    }
-   raySample=sample==8?0:sample==11?1:2;
+   if(sample==7){auto f=[&](UINT offset){float value=0;memcpy(&value,record+offset,4);return value;};UINT marker=0;memcpy(&marker,record+176,4);Require(id[3]==9&&f(112)==4&&f(116)==8&&f(120)==12&&f(128)==2&&f(132)==4&&f(136)==6&&f(76)==.5f&&marker==0x285,"point stages");continue;}
+   raySample=sample==9?0:sample==12?1:2;
 #endif
    Require(id[0]==expectedCoordinate&&id[1]==expectedCoordinate&&id[3]==(raySample==2?2u:1u),"ray record identity");
    auto scalar=[&](UINT offset){float f=0;memcpy(&f,record+offset,4);return f;};
@@ -204,19 +205,19 @@ pd.CS={oracle.data(),oracle.size()};ComPtr<ID3D12PipelineState> oraclePso;Check(
  auto wideUpload=Buffer(d.Get(),D3D12_HEAP_TYPE_UPLOAD,D3D12_RESOURCE_STATE_GENERIC_READ,D3D12_RESOURCE_FLAG_NONE);
  auto wideReadback=Buffer(d.Get(),D3D12_HEAP_TYPE_READBACK,D3D12_RESOURCE_STATE_COPY_DEST,D3D12_RESOURCE_FLAG_NONE);
  for(UINT frame=0;frame<8;++frame){
-  void* mapped=nullptr;D3D12_RANGE none{0,0};Check(wideUpload->Map(0,&none,&mapped));const UINT header[4]={0,0x284,0,0};memcpy(mapped,header,16);wideUpload->Unmap(0,nullptr);
+  void* mapped=nullptr;D3D12_RANGE none{0,0};Check(wideUpload->Map(0,&none,&mapped));const UINT header[4]={0,0x285,16,0};memcpy(mapped,header,16);wideUpload->Unmap(0,nullptr);
   Check(allocator->Reset());Check(list->Reset(allocator.Get(),oraclePso.Get()));
   if(frame)Transition(list.Get(),wideGpu.Get(),D3D12_RESOURCE_STATE_COPY_SOURCE,D3D12_RESOURCE_STATE_COPY_DEST);
   list->CopyBufferRegion(wideGpu.Get(),0,wideUpload.Get(),0,16);
   Transition(list.Get(),wideGpu.Get(),D3D12_RESOURCE_STATE_COPY_DEST,D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
   list->SetComputeRootSignature(root.Get());list->SetComputeRootUnorderedAccessView(8,wideGpu->GetGPUVirtualAddress());list->SetComputeRootConstantBufferView(4,volumeConstants->GetGPUVirtualAddress());
-  const UINT roi[4]={0,0,128,128};list->SetComputeRoot32BitConstants(9,4,roi,0);list->Dispatch(4,4,1);
+  const UINT roi[8]={frame,frame,128,128,15,0,0,0};list->SetComputeRoot32BitConstants(9,8,roi,0);list->Dispatch(4,4,1);
   Transition(list.Get(),wideGpu.Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS,D3D12_RESOURCE_STATE_COPY_SOURCE);list->CopyBufferRegion(wideReadback.Get(),0,wideGpu.Get(),0,bytes);Check(list->Close());
   ID3D12CommandList* lists[]={list.Get()};queue->ExecuteCommandLists(1,lists);Check(queue->Signal(fence.Get(),3+frame));Check(fence->SetEventOnCompletion(3+frame,event));Require(WaitForSingleObject(event,30000)==WAIT_OBJECT_0,"wide GPU timeout");
-  D3D12_RANGE range{0,bytes};Check(wideReadback->Map(0,&range,&mapped));const auto* data=static_cast<const unsigned char*>(mapped);UINT count=0;memcpy(&count,data,4);Require(count==4864*expectedRecords,"wide sampling count");
+  D3D12_RANGE range{0,bytes};Check(wideReadback->Map(0,&range,&mapped));const auto* data=static_cast<const unsigned char*>(mapped);UINT count=0;memcpy(&count,data,4);Require(count==64*expectedRecords,"wide sampling count");
   std::vector<UINT> pixelCounts(128*128);
   for(UINT i=0;i<count;++i){UINT id[4];memcpy(id,data+16+i*stride,16);Require(id[0]<128&&id[1]<128,"wide ROI bounds");++pixelCounts[id[1]*128+id[0]];}
-  for(UINT y=0;y<128;++y)for(UINT x=0;x<128;++x){const bool selected=(!(x&1)&&!(y&1))||(x>=48&&x<80&&y>=48&&y<80);Require(pixelCounts[y*128+x]==(selected?expectedRecords:0),"wide mask per-pixel coverage");}
+  for(UINT y=0;y<128;++y)for(UINT x=0;x<128;++x){const bool selected=(x%16==frame&&y%16==frame);Require(pixelCounts[y*128+x]==(selected?expectedRecords:0),"wide mask per-pixel coverage");}
   wideReadback->Unmap(0,&none);
  }
 #endif

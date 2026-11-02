@@ -12,6 +12,9 @@ with tempfile.TemporaryDirectory() as tmp:
  for suffix in [*(f'frame{i:02}.bin' for i in range(1,9)),'reference.bmp']:
   (logs/f'GI-Joint-R284-123-{suffix}').write_bytes(blob)
   (logs/f'GI-Joint-R284-1234-{suffix}').write_bytes(b'other session')
+ for suffix in [*(f'frame{i:02}.{ext}' for i in range(1,9) for ext in ('bin','json')),'reference.bmp']:
+  (logs/f'GI-Joint-R285-123-{suffix}').write_bytes(blob)
+  (logs/f'GI-Joint-R285-1234-{suffix}').write_bytes(b'other session')
  (logs/'GI-Joint-R283-123.bin').write_bytes(blob)
  (logs/'GI-Joint-R283-124.bin').write_bytes(b'other session')
  (logs/'GI-Joint-R282-123.bin').write_bytes(blob)
@@ -33,6 +36,9 @@ with tempfile.TemporaryDirectory() as tmp:
  for suffix in [*(f'frame{i:02}.bin' for i in range(1,9)),'reference.bmp']:
   assert (output/f'logs/GI-Joint-R284-123-{suffix}').read_bytes()==blob
   assert not (output/f'logs/GI-Joint-R284-1234-{suffix}').exists()
+ for suffix in [*(f'frame{i:02}.{ext}' for i in range(1,9) for ext in ('bin','json')),'reference.bmp']:
+  assert (output/f'logs/GI-Joint-R285-123-{suffix}').read_bytes()==blob
+  assert not (output/f'logs/GI-Joint-R285-1234-{suffix}').exists()
  assert (output/'logs/GI-Joint-R283-123.bin').read_bytes()==blob
  assert not (output/'logs/GI-Joint-R283-124.bin').exists()
  assert (output/'logs/GI-Joint-R282-123.bin').read_bytes()==blob

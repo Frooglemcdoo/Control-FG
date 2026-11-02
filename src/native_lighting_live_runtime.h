@@ -1,4 +1,5 @@
 #pragma once
+#include "gi_stack_capture.h"
 #include "rr_capture_ui.h"
 #include "rr_gi_pipeline.h"
 #include "native_lighting_isolation.h"

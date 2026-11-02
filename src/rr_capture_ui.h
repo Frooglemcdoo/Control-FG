@@ -1,5 +1,6 @@
 #pragma once
 #include <atomic>
+#include "gi_stack_capture.h"
 #include "rr_input_capture_policy.h"
 #include "rr_suite_policy.h"
 #ifdef CONTROL_GI_BOUNDARY_CAPTURE
@@ -30,9 +31,10 @@ inline bool Busy() noexcept {
 // Recovery only reads existing files; it must remain available if the render
 // thread or capture worker stops publishing progress. Do not reset GPU owners.
 inline bool ActionAllowed(bool recoveryAction) noexcept { return recoveryAction || !Busy(); }
+inline unsigned PairLimit() noexcept {return gi_stack_capture::enabled.load()?1:kRRCapturePairs;}
 inline bool Request() noexcept {
     auto current=state.load();
-    if(completedPairs.load()>=kRRCapturePairs || (current!=State::Idle && current!=State::Complete))return false;
+    if(completedPairs.load()>=PairLimit() || (current!=State::Idle && current!=State::Complete))return false;
     if(!state.compare_exchange_strong(current,State::Queued))return false;
 #ifdef CONTROL_GI_BOUNDARY_CAPTURE
     control_rr_gi::boundaryRequested.store(true);
@@ -47,7 +49,7 @@ inline void Publish(control_rr::InputCapturePolicy::Phase first,control_rr::Inpu
 #ifdef CONTROL_GI_BOUNDARY_CAPTURE
     if(first==P::Failed || second==P::Failed || (first==P::Idle && second==P::Idle
 #ifdef CONTROL_RR_GI_SEQUENCE
-     && (requests>=kRRCapturePairs||!outputsValid)
+     && (requests>=PairLimit()||!outputsValid)
 #endif
     ))control_rr_gi::boundaryRequested.store(false);
 #endif
@@ -55,11 +57,11 @@ inline void Publish(control_rr::InputCapturePolicy::Phase first,control_rr::Inpu
     if(first==P::Idle && second==P::Idle){
         if(outputsValid){completedPairs.store(requests);
 #ifdef CONTROL_RR_GI_SEQUENCE
- if(requests<kRRCapturePairs){
+ if(requests<PairLimit()){
   detail.store(L"Pair saved. Next stationary pair queued automatically; hold still.");
   state.store(State::Queued);requested.store(true,std::memory_order_release);return;
  }
- detail.store(L"All 4 pairs saved. Click PACKAGE RR and send every ZIP.");
+ detail.store(gi_stack_capture::enabled.load()?L"Full-screen RR pair saved. GI sequence continues automatically.":L"All 4 pairs saved. Click PACKAGE RR and send every ZIP.");
 #elif defined(CONTROL_GI_BOUNDARY_CAPTURE)
  detail.store(requests<2?L"Clamp pair saved. Select GI BOTH at the same view and capture again.":L"Both pairs saved. Click PACKAGE RR to collect the ZIPs.");
 #elif defined(CONTROL_RR_F9_SUITE)
@@ -73,6 +75,8 @@ state.store(State::Complete);}
     else if(first==P::Preparing || second==P::Preparing){detail.store(L"Preparing capture buffers...");state.store(State::Preparing);}
     else {state.store(State::Capturing);}
 }
+inline int StackStatus() noexcept {const auto s=state.load();return s==State::Failed?-1:s==State::Complete&&completedPairs.load()==1?1:0;}
+inline const bool stackRegistered=[] {gi_stack_capture::request.store(&Request);gi_stack_capture::status.store(&StackStatus);return true;}();
 inline const wchar_t* Label(State value) noexcept {
     switch(value){
     case State::Idle:return L"Ready";case State::Queued:return L"Requested";

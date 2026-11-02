@@ -3,6 +3,7 @@ name: Build native reflection enhancements and RR
 on:
   push:
     branches:
+      - work/r285-gi-stack-capture
       - work/r284-gi-wide-sequence
       - work/r283-gi-volume-source
       - work/r280-gi-instance-submissions
@@ -1146,11 +1147,11 @@ jobs:
           build\test-gi-spot-pcf.exe
           if errorlevel 1 exit /b 1
 
-      - name: Package joint spotlight and GI capture R284
+      - name: Package joint spotlight and GI capture R285
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='ControlTOH-R284'
+          $out='ControlTOH-R285'
           $shader="$out/ControlTOH/Shaders"
           $tools="$out/ControlTOH/Tools"
           $diagnostics="$out/ControlTOH/Diagnostics"
@@ -1180,24 +1181,24 @@ jobs:
           Copy-Item build/DirectStorage "$diagnostics/DirectStorage" -Recurse
           Copy-Item build/DirectStorage/dstorage.dll,build/DirectStorage/dstoragecore.dll $out
           Copy-Item tools/directstorage/Validate-DirectStorage.cmd "$diagnostics/DirectStorage"
-          Copy-Item docs/native-lighting-r284.md "$out/ControlTOH/DIAGNOSTIC-NOTES.md"
+          Copy-Item docs/native-lighting-r285.md "$out/ControlTOH/DIAGNOSTIC-NOTES.md"
           Copy-Item tools/Organize-Existing-Install.cmd,tools/Organize-Existing-Install.ps1 $tools
           Copy-Item tools/diagnostics/Collect-ControlTOH-Materials.cmd,tools/diagnostics/Collect-ControlTOH-Materials.ps1 $tools
           & powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/diagnostics/test-material-collector.ps1
           if ($LASTEXITCODE -ne 0) { throw 'Material collector integration test failed' }
           @'
           Control The Oldest House: Visual and Performance Overhaul
-          R284 - Same-dispatch spotlight and GI capture
+          R285 - Same-dispatch spotlight and GI capture
 
           Copy all package contents beside Control_DX12.exe, preserving folders.
           Run ControlTOH/Diagnostics/Start-GI-Joint-Trace.cmd.
           Load the original plant area with the lamp intact, RT indirect and RR ON.
           Select GI RAW BYPASS and REF CLAMP: BYPASS; keep Native Blend and FG off.
-          Center the crosshair directly on a speckled leaf or hair patch. Mouse zoom may remain held.
+          Frame the plant and Jesse hair together anywhere on screen. Mouse zoom may remain held.
           Press F7 OR click ARM GI TRACE in F10; wait for the visible ARMED countdown.
           Close F10 and hold the view until SAVED. Exit normally to package logs.
           Do not click CAPTURE RR or PACKAGE RR.
-          One F7 action records eight frames. Red outline: 128x128 area; white: dense 32x32 center.
+          One F7 action records eight screen-wide source samples and a full-resolution RR pair.
           Keep the camera and zoom steady until SAVED. All lighting math stays unchanged.
           See ControlTOH/DIAGNOSTIC-NOTES.md for exact scope and limits.
           '@ | Set-Content "$out/ControlTOH/README.txt" -Encoding ASCII
@@ -1212,10 +1213,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: ControlTOH-R284
+          name: ControlTOH-R285
           path: |
-            ControlTOH-R284.zip
-            ControlTOH-R284.sha256
+            ControlTOH-R285.zip
+            ControlTOH-R285.sha256
             build/gi-joint-light-validation.json
             build/gi-joint-oracle-analysis.json
             build/gi-ray-trace-validation.json

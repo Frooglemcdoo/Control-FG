@@ -23,7 +23,7 @@ inline LRESULT CALLBACK FrameProc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) no
  if(message==WM_PAINT){PAINTSTRUCT ps{};HDC dc=BeginPaint(hwnd,&ps);RECT r{};GetClientRect(hwnd,&r);
   FillRect(dc,&r,static_cast<HBRUSH>(GetStockObject(BLACK_BRUSH)));
   HBRUSH b=CreateSolidBrush(RGB(255,80,20));FrameRect(dc,&r,b);DeleteObject(b);
-  RECT inner{r.right*3/8,r.bottom*3/8,r.right*5/8,r.bottom*5/8};b=CreateSolidBrush(RGB(255,255,255));FrameRect(dc,&inner,b);DeleteObject(b);EndPaint(hwnd,&ps);return 0;}
+EndPaint(hwnd,&ps);return 0;}
  return DefWindowProcW(hwnd,message,wp,lp);
 }
 // Best-effort SDR desktop framing reference, NOT a synchronized GPU/HDR capture.
@@ -35,7 +35,7 @@ inline void SaveReference(HWND game) noexcept {
  if(memory&&bitmap){auto old=SelectObject(memory,bitmap);
   if(BitBlt(memory,0,0,r.right,r.bottom,screen,origin.x,origin.y,SRCCOPY|CAPTUREBLT)){
    GdiFlush();wchar_t path[MAX_PATH]{};AcquireSRWLockExclusive(&reportLock);const bool opened=report.OpenDefault();if(opened)wcscpy_s(path,report.Path());ReleaseSRWLockExclusive(&reportLock);
-   if(opened){auto* slash=wcsrchr(path,static_cast<wchar_t>(92));if(slash){*(slash+1)=0;wchar_t name[80]{};swprintf_s(name,L"GI-Joint-R284-%lu-reference.bmp",GetCurrentProcessId());wcscat_s(path,name);
+   if(opened){auto* slash=wcsrchr(path,static_cast<wchar_t>(92));if(slash){*(slash+1)=0;wchar_t name[80]{};swprintf_s(name,L"GI-Joint-R285-%lu-reference.bmp",GetCurrentProcessId());wcscat_s(path,name);
     HANDLE f=CreateFileW(path,GENERIC_WRITE,FILE_SHARE_READ,nullptr,CREATE_NEW,FILE_ATTRIBUTE_NORMAL,nullptr);
     if(f!=INVALID_HANDLE_VALUE){BITMAPFILEHEADER h{};h.bfType=0x4d42;h.bfOffBits=sizeof(h)+sizeof(BITMAPINFOHEADER);const DWORD size=static_cast<DWORD>(r.right*r.bottom*4);h.bfSize=h.bfOffBits+size;DWORD n=0;
      ok=WriteFile(f,&h,sizeof(h),&n,nullptr)&&n==sizeof(h)&&WriteFile(f,&info.bmiHeader,sizeof(BITMAPINFOHEADER),&n,nullptr)&&n==sizeof(BITMAPINFOHEADER)&&WriteFile(f,pixels,size,&n,nullptr)&&n==size;CloseHandle(f);
@@ -44,7 +44,7 @@ inline void SaveReference(HWND game) noexcept {
   }SelectObject(memory,old);
  }
  if(bitmap)DeleteObject(bitmap);if(memory)DeleteDC(memory);if(screen)ReleaseDC(nullptr,screen);
- Trace("GI_JOINT_R284_REFERENCE saved=%u width=%ld height=%ld present=%llu framing_only=1 synchronized=0 hdr=0",unsigned(ok),r.right,r.bottom,presentCount.load());
+ Trace("GI_JOINT_R285_REFERENCE saved=%u width=%ld height=%ld present=%llu framing_only=1 synchronized=0 hdr=0",unsigned(ok),r.right,r.bottom,presentCount.load());
 }
 inline void FrameTick(HWND game,const RECT& client) noexcept {
  if(!gi_spot_trace::JointTrace())return;
@@ -56,8 +56,8 @@ inline void FrameTick(HWND game,const RECT& client) noexcept {
  }
  const auto phase=gi_spot_trace::phase.load();const bool visible=phase==gi_spot_trace::Phase::Idle||phase==gi_spot_trace::Phase::Countdown;
  if(!visible){ShowWindow(frameWindow,SW_HIDE);return;}
- const int width=MulDiv(128,client.right,static_cast<int>(gx)),height=MulDiv(128,client.bottom,static_cast<int>(gy));
- POINT at{MulDiv(gx>128?static_cast<int>(gx/2-64):0,client.right,static_cast<int>(gx)),MulDiv(gy>128?static_cast<int>(gy/2-64):0,client.bottom,static_cast<int>(gy))};ClientToScreen(game,&at);
+ const int width=client.right,height=client.bottom;
+ POINT at{};ClientToScreen(game,&at);
  SetWindowPos(frameWindow,HWND_TOPMOST,at.x,at.y,width,height,SWP_NOACTIVATE|SWP_SHOWWINDOW);InvalidateRect(frameWindow,nullptr,FALSE);
  if(!referenceAttempted&&phase==gi_spot_trace::Phase::Countdown&&GetTickCount64()-gi_spot_trace::armedAt>=4000){referenceAttempted=true;SaveReference(game);}
 }
