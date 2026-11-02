@@ -36,3 +36,10 @@ The existing 65536-event journal and 65536-range plan bounds remain.
 Research: Microsoft's resource-barrier documentation explains buffer decay after
 ExecuteCommandLists and the prohibition on access during pending split barriers:
 https://learn.microsoft.com/en-us/windows/win32/direct3d12/using-resource-barriers-to-synchronize-resource-states-in-direct3d-12
+
+Validation: focused Windows run 41507985035 passed, including local transition
+sequence/capacity tests, runtime recording checks, pending split handling, alias
+invalidation and inventory-generation isolation. Full Windows run 41507985122
+passed all 53 steps. Actual logs showed no compiler/assertion/HRESULT failures.
+Build commit: b67c03dec0c11bf7247605a4bea281c8c7104516. In-game local-state coverage
+remains pending; these tests do not certify GPU-copy safety.

@@ -281,3 +281,25 @@ GPU bytes, states, heap/alias lifetime and dependencies remain unverified.
 
 Windows validation 41499202417 (focused) and 41499202853 (53-step full build)
 passed at e36dd765d01ae9836ff60f53a383cdaf2410f1f7. Game coverage remains pending.
+
+## R294 local transition evidence
+
+R293's supplied run resolved all 875984 build-time lookups and all 23195 final
+planned ranges, with no tracking fault across 3056 AS submissions. Byte capture
+still requires state/lifetime/dependency evidence. Microsoft documents buffer
+state decay after ExecuteCommandLists completion and prohibits GPU access during
+pending split transitions; last global CPU-recorded state is insufficient.
+
+R294 records legacy buffer transitions in the command-list-owned Journal. Unique
+inventory admission identities prevent pointer/address reuse from borrowing state.
+Aliasing clears prior evidence; reset replaces the tracker; matching split pairs
+are required, and invalid sequences remain quarantined until clear/reset. Each
+tracker is bounded to 8192 entries, with allocation/capacity failure disabling
+claims until reset. Per-kind build-time bins report unknown, explicit nonpixel,
+pending split and other explicit states. These describe recording observations,
+not submission-ordered or GPU-completed state; no initial/implicit/promoted/decayed
+state is guessed. Enhanced barriers and other-list/queue dependencies remain open.
+No GPU copy, barrier, wait, Map or rendering consumer is enabled.
+
+Focused Windows validation 41507985035 and full 53-step build 41507985122 passed
+at b67c03dec0c11bf7247605a4bea281c8c7104516; actual job logs were inspected.
