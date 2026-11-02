@@ -248,3 +248,63 @@ Full mod Windows build/regression run `41529405730`, job `125565421070`,
 also passed at `dca2c3a65de2c8ef3b4bc90ddfab3f549b90ba47`. Decoded logs
 show no compiler or workflow errors. No native snapshot dispatch was enabled;
 this checkpoint has no new user-facing build or capture request.
+
+## R295 consolidated live integration rehearsal
+
+Added `d3d12_snapshot_retirement.h`, adapting R103's persistent private queue
+fences to the tested recording publication policy. Queue identities retain their
+canonical IUnknown, queue and fence; slots are never reused. Before/After calls
+are serialized by the host, without holding the lock across native Execute.
+The successful private Signal follows its native submission. Intervening queue
+work can delay completion but cannot make that signal complete before the
+submission it covers. Poll does not block. Failed signals quarantine ownership;
+unresolved state is deliberately pinned at runtime teardown. Owners are detached
+before COM destruction outside the host lock. This is completion accounting,
+not a cross-queue dependency graph or permission to record GPU copies.
+
+Microsoft's ExecuteCommandLists contract clarifies that replay must wait for the
+previous execution to finish; concurrent resubmission is not legal native usage.
+That corrects the earlier implication that arbitrary overlapping native replays
+must be supported. Future replay can still overwrite completed snapshot data,
+so this conservative publication policy continues to require Reset/destruction.
+Cross-queue replay remains rejected even if the application may legally order it.
+Reference: https://learn.microsoft.com/en-us/windows/win32/api/d3d12/nf-d3d12-id3d12commandqueue-executecommandlists
+
+`gi_snapshot_probe.inl` exercises this lifetime path in the real hooks using
+CPU-only owner records, not rendering resources. It checks compute bindings at
+AS build boundaries, follows successful Reset/private-data destruction and tracks
+private queue fences. The diagnostic launcher now enables GI_BINDINGS together
+with GI_METADATA. Input preflight reuses existing owner resolution to check
+committed/placed/unknown storage, DENY_SHADER_RESOURCE and aligned range bounds.
+One run reports these together with the existing R294 state/geometry evidence.
+
+No native snapshot dispatch, source barriers, GPU waits, readback, lighting or
+RR filtering changes are enabled. `local_preflight_pass` is not copy-ready.
+Actual geometry snapshots still need alias/residency proof, physical heap budget
+accounting and a GPU consumer/version protocol. Binding readiness and native
+lifetime coverage must be measured in-game; WARP cannot establish Control's DXR
+state-object coverage. The monitor reports refusals, batch overflow and retained
+quarantined records rather than claiming complete coverage.
+
+New WARP coverage includes an actual buffer copy/readback, legal completed replay,
+a queue blocked on a test fence, command-list Reset using a different allocator
+while the second execution is pending, delayed publication, copied-byte validation,
+deferred owner destruction and failed-signal quarantine. The existing raw snapshot
+fixture also runs the real integration probe's admission/submission/reset path.
+The storage test distinguishes known committed/placed from unknown creation and
+rejects an overrun. Portable lifetime/root/range tests passed locally with UBSan.
+
+Final-code foundation validation: run `41533278708`, job `125578667886`, at
+`69b6564b4f714c56d0bab7278cd333779dfde8fc` passed. Decoded logs confirm the
+actual buffer-copy/readback retirement test, input preflight, binding-hook fixture
+and raw snapshot/restoration fixture passed with a clean D3D12 debug layer.
+
+Full Windows mod regression/package run `41533278568`, job `125578667525`, passed
+at the same code commit. Decoded logs show no compiler/workflow errors and confirm
+package paths, migration preservation, material collector and relocated restart
+helper tests. Verified the downloaded artifact SHA-256, nested package checksum,
+ZIP integrity, R295 binary markers, diagnostic launcher flags and install layout.
+User package `ControlTOH-R295.zip`: 4,190,503 bytes, 73 members, SHA-256
+`fb84a09acd8969eadd48994e254a7a3b9bf9cfdf947f096a75ef6821178747ad`.
+In-game binding and lifetime coverage is now the next required input; no visual
+speckle improvement is claimed by this integration test.
