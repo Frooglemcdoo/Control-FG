@@ -12,6 +12,7 @@
 #include "d3d12_as_owners.h"
 #include "d3d12_storage_lease.h"
 #include "d3d12_compute_bindings.h"
+#include "raw_snapshot_plan.h"
 namespace gi_reuse::runtime {
 using Microsoft::WRL::ComPtr;
 inline bool Enabled() noexcept {static const bool value=[] {char b[4]{};return GetEnvironmentVariableA("CONTROLTOH_GI_METADATA",b,4)==1&&b[0]=='1';}();return value;}
@@ -55,10 +56,24 @@ inline std::array<std::atomic<UINT64>,4> missingByKind{};
 inline std::atomic<UINT64> absentRanges{0},ambiguousRanges{0},invalidRanges{0};
 inline std::array<std::array<std::atomic<UINT64>,4>,4> localStateCounts{};
 inline std::atomic<UINT64> localStateLimits{0},localAliasInvalidations{0};
+// R295 input preflight uses the already-resolved owner. These counters do not
+// establish alias/residency/queue correctness and never authorize a GPU read.
+inline bool InputAuditEnabled() noexcept {static const bool enabled=[] {char v[4]{};return GetEnvironmentVariableA("CONTROLTOH_GI_BINDINGS",v,4)==1&&v[0]=='1';}();return enabled;}
+inline std::array<std::array<std::atomic<UINT64>,6>,4> inputAudit{};
+inline void AuditInput(ID3D12Resource* resource,UINT64 offset,UINT64 bytes,OwnerKind kind) noexcept {
+ if(!InputAuditEnabled())return;auto& counts=inputAudit[static_cast<unsigned>(kind)];
+ const auto desc=resource->GetDesc();BufferStorageLease lease;RawSnapshotPlan plan;
+ const bool storage=AcquireStorageLease(resource,lease);
+ ++counts[storage?(lease.kind==BufferStorageKind::Placed?1u:0u):2u];
+ if(desc.Flags&D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE)++counts[3];
+ if(!RawSnapshotPlan::Make(desc.Width,offset,bytes,plan))++counts[4];
+ if(storage&&!(desc.Flags&D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE)&&RawSnapshotPlan::Make(desc.Width,offset,bytes,plan))++counts[5];
+}
+
 inline void CheckOwner(UINT64 address,UINT64 bytes,OwnerKind kind,LocalBufferStates<>* states=nullptr) noexcept {
  ComPtr<ID3D12Resource> owner;UINT64 offset=0;RangeMatch reason{};
  if(owners.Resolve(address,bytes,owner,offset,&reason)){
-  ++resolvedRanges;
+  ++resolvedRanges;AuditInput(owner.Get(),offset,bytes,kind);
   if(states){const auto state=states->Find(owners.Identity(owner.Get()));unsigned category=0;
    if(state.kind==LocalStateKind::Pending)category=2;
    else if(state.kind==LocalStateKind::Explicit)category=(state.after&D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE)?1u:3u;

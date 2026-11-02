@@ -437,6 +437,8 @@ inline std::atomic<BeginTiming> beginTiming{nullptr};
 inline std::atomic<EndTiming> endTiming{nullptr};
 inline std::atomic<BeginTiming> beginGeometry{nullptr};
 inline std::atomic<EndTiming> endGeometry{nullptr};
+inline std::atomic<BeginTiming> beginIntegration{nullptr};
+inline std::atomic<EndTiming> endIntegration{nullptr};
 inline void STDMETHODCALLTYPE ExecuteHook(ID3D12CommandQueue* queue,UINT count,ID3D12CommandList*const* lists) {
     const auto original=LookupQueue(queue).execute;
     if(submitDepth){original(queue,count,lists);return;}
@@ -448,7 +450,10 @@ inline void STDMETHODCALLTYPE ExecuteHook(ID3D12CommandQueue* queue,UINT count,I
     if(const auto observe=instanceObserver.load())observe(queue,count,lists);
     const auto geometryBegin=beginGeometry.load();
     const auto geometryToken=geometryBegin?geometryBegin(queue,count,lists):0;
+    const auto integration=beginIntegration.load();
+    const auto integrationToken=integration?integration(queue,count,lists):0;
     original(queue,count,lists);
+    if(const auto end=endIntegration.load())end(queue,integrationToken);
     if(const auto end=endGeometry.load())end(queue,geometryToken);
     if(const auto end=endTiming.load())end(queue,timing);
     rt_spot_capture_runtime::AfterExecute(queue,count,lists);

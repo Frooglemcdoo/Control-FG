@@ -14,13 +14,16 @@
 #include <iterator>
 #include "../src/gi_reuse/d3d12_raw_snapshot.h"
 #include "../src/gi_reuse/d3d12_submission_metadata.h"
+#include "../src/gi_reuse/d3d12_snapshot_retirement.h"
 namespace fixture {
+inline void Trace(const char*,...) {}
 inline bool PatchSlot(void** slot,void* expected,void* replacement) noexcept {
  DWORD old=0;if(!VirtualProtect(slot,sizeof(void*),PAGE_EXECUTE_READWRITE,&old))return false;
  const bool ok=InterlockedCompareExchangePointer(slot,replacement,expected)==expected;
  DWORD ignored=0;VirtualProtect(slot,sizeof(void*),old,&ignored);return ok;
 }
 #include "../src/gi_compute_hooks.inl"
+#include "../src/gi_snapshot_probe.inl"
 }
 using Microsoft::WRL::ComPtr;using namespace gi_reuse;
 void Check(HRESULT h){if(FAILED(h))throw std::runtime_error("HRESULT "+std::to_string(static_cast<unsigned long>(h)));}
@@ -100,6 +103,8 @@ int main(int argc, char** argv) try {
  list->SetComputeRootDescriptorTable(4,heap->GetGPUDescriptorHandleForHeapStart());
  ComputeBindingSnapshot captured; Require(fixture::gi_compute_hooks::Capture(list.Get(),captured,epoch),"capture intercepted compute bindings");
  const auto capturedEpoch=epoch;
+ gi_reuse::runtime::Initialize(list.Get());fixture::gi_snapshot_probe::Build(list.Get(),nullptr);
+ Require(fixture::gi_snapshot_probe::bindingReady.load()==1 && fixture::gi_snapshot_probe::admitted.load()==1,"native-boundary probe admission");
  fixture::gi_compute_hooks::Read(list.Get())->tracker.Invalidate(); ComputeBindingSnapshot rejected; Require(!fixture::gi_compute_hooks::Capture(list.Get(),rejected,epoch),"reject invalidated recording");
  RawSnapshotPlan plan;
  Require(!snapshot.RecordRestoring(list.Get(),source.Get(),258,250,output.Get(),rejected,plan),"reject missing bindings without dispatch");
@@ -113,7 +118,9 @@ int main(int argc, char** argv) try {
  transition(output.Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS,D3D12_RESOURCE_STATE_COPY_SOURCE);
  transition(sentinel.Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS,D3D12_RESOURCE_STATE_COPY_SOURCE);
  list->CopyBufferRegion(read.Get(),0,output.Get(),0,512); list->CopyBufferRegion(read.Get(),512,sentinel.Get(),0,4);
- Check(list->Close()); ID3D12CommandList* lists[]={list.Get()}; queue->ExecuteCommandLists(1,lists);
+ Check(list->Close()); ID3D12CommandList* lists[]={list.Get()};
+ const auto probeToken=fixture::gi_snapshot_probe::Before(queue.Get(),1,lists);Require(probeToken!=0,"probe submission");
+ queue->ExecuteCommandLists(1,lists);fixture::gi_snapshot_probe::After(queue.Get(),probeToken);
  ComPtr<ID3D12Fence> fence; Check(d->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&fence)));
  HANDLE event=CreateEventW(nullptr,FALSE,FALSE,nullptr); Require(event!=nullptr,"event");
  Check(queue->Signal(fence.Get(),1)); Check(fence->SetEventOnCompletion(1,event)); Require(WaitForSingleObject(event,30000)==WAIT_OBJECT_0,"GPU timeout"); CloseHandle(event);
@@ -122,6 +129,8 @@ int main(int argc, char** argv) try {
  UINT restored=0; memcpy(&restored,static_cast<unsigned char*>(mapped)+512,4); Require(restored==value+extras[0]+extras[1]+sourceWord+tableWord+tableWord,"restored root/PSO/UAV/constants"); read->Unmap(0,&none);
  // Successful Reset advances generation and discards prior root arguments.
  Check(allocator->Reset()); Check(list->Reset(allocator.Get(),nativePipeline.Get()));
+ fixture::gi_snapshot_probe::Reset(list.Get());fixture::gi_snapshot_probe::Poll();
+ Require(fixture::gi_snapshot_probe::completed.load()==1,"probe completed sealed recording");
  Require(fixture::gi_compute_hooks::Read(list.Get())->generation>capturedEpoch,"reset generation");
  Require(!fixture::gi_compute_hooks::Capture(list.Get(),unobserved,epoch),"reset clears root state");
  list->SetComputeRootSignature(nativeRoot.Get());

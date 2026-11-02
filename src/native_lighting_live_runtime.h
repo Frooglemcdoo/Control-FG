@@ -1,6 +1,7 @@
 #pragma once
 #include "gi_stack_capture.h"
 #include "gi_reuse/d3d12_submission_metadata.h"
+#include "gi_reuse/d3d12_snapshot_retirement.h"
 #include "rr_capture_ui.h"
 #include "rr_gi_pipeline.h"
 #include "native_lighting_isolation.h"
@@ -386,6 +387,7 @@ inline bool PatchSlot(void** slot, void* expected, void* hook) noexcept {
 #include "rt_spot_capture_audit.h"
 #include "gi_binding_audit.inl"
 #include "gi_compute_hooks.inl"
+#include "gi_snapshot_probe.inl"
 #include "gi_geometry_probe.inl"
 #include "gi_spot_trace_runtime.inl"
 #include "rt_shadow_capture.h"
@@ -502,6 +504,11 @@ inline void InstallLiveDiagnostic(ID3D12Device* device) noexcept {
     };
     rt_spot_table_audit::endTiming=&performance::AfterExecute;
     rt_spot_table_audit::instanceObserver=&gi_geometry_probe::BeforeExecute;
+    gi_geometry_probe::integrationBuild=&gi_snapshot_probe::Build;
+    gi_geometry_probe::integrationReset=&gi_snapshot_probe::Reset;
+    gi_geometry_probe::integrationReport=&gi_snapshot_probe::Report;
+    rt_spot_table_audit::beginIntegration=&gi_snapshot_probe::Before;
+    rt_spot_table_audit::endIntegration=&gi_snapshot_probe::After;
     rt_spot_table_audit::beginGeometry=&gi_reuse::runtime::BeforeExecute;
     rt_spot_table_audit::endGeometry=&gi_reuse::runtime::AfterExecute;
     gi_spot_trace::instanceRequest=&gi_geometry_probe::RequestInstances;
