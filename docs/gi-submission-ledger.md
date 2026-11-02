@@ -186,8 +186,8 @@ space. Limits remain 2048 objects / 512 MiB logical extents.
 The first R289 runtime fixture exposed an open command-list/allocator conflict
 in the test and a CI exit-code check that missed negative assertion exits.
 The fixture now closes the unrelated empty list, and the validation batch rejects
-all nonzero exits. Validation must be confirmed from the rerun, not that first
-job's success badge. Tests cover unrelated submissions between AS callbacks,
+all nonzero exits. The rerun 41484181379 passed, including the runtime PASS marker and no
+assertion/HRESULT failures; the first job badge is not used as evidence. Tests cover unrelated submissions between AS callbacks,
 genuine second-AS-queue rejection, input candidate retention, atomic admission,
 and AS/readback exclusion. WARP executes empty lists, not synthetic AS builds.
 Live geometry bytes and reuse remain unverified.
