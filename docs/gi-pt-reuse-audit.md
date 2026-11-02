@@ -73,3 +73,29 @@ Primary references reviewed 2026-11-02:
 4. Request one consolidated live validation only for integration facts that existing source/tests/captures cannot establish. Do not repeat M6/M7 geometry-format or binding-discovery tests.
 
 No runtime include, hook, copy, shader or default setting changes in this checkpoint. Replacement GI remains disabled. The earlier estimate of 2–3 capture rounds was made before this audit and is withdrawn.
+
+## Isolated compute snapshot prototype
+
+Added `raw_snapshot_plan.h`, `d3d12_raw_snapshot.h` and `gi_raw_snapshot.hlsl`.
+The planner rounds raw reads to complete DWORDs within the resource extent,
+preserves the prefix for 16-bit indices, rejects overflow and caps each dispatch
+at 65,535 groups (just below 16 MiB). The recorder rejects unsuitable resources,
+missing UAV capability, same-resource reads/writes and unsupported list types
+before recording. It does not change descriptor heaps or source resource state.
+
+The existing `rt_lights::NativeBindings` is specific to an eight-slot lighting
+root layout and tracks neither arbitrary root constants/SRV/UAV arguments nor a
+complete general DXR pipeline binding. It is not sufficient for injection at an
+arbitrary AS-build boundary. This prototype therefore remains disconnected from
+native hooks. Caller-controlled manual binding restoration is exercised in an
+isolated WARP fixture; that is not proof of native hook restoration.
+
+Local exhaustive short-range tests pass with GCC warnings as errors. The Windows
+workflow now compiles the snapshot shader and runs a WARP byte-copy/guard-byte
+fixture with a different sentinel compute pipeline after manual restoration.
+Windows results must be checked before claiming that fixture passes.
+
+Still required for live use: complete per-list binding observation/restoration,
+placed geometry heap retention, alias and split-barrier rejection, bounded total
+admission and exact-queue retirement/replay lifetime handling. The per-dispatch
+cap is not a session memory budget. No in-game copying or GI setting changes.

@@ -25,6 +25,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Initial shader compile failed' }
           & $dxc.FullName -T cs_6_0 -E main -WX -I .validation-rtxdi/Include src/shaders/gi_rtxdi_initial.hlsl -Fo gi-rtxdi.dxil
           if ($LASTEXITCODE -ne 0) { throw 'RTXDI shader compile failed' }
+          & $dxc.FullName -T cs_6_0 -E main -WX src/shaders/gi_raw_snapshot.hlsl -Fo gi-raw-snapshot.dxil
+          if ($LASTEXITCODE -ne 0) { throw 'Raw snapshot shader compile failed' }
           $commands=@"
           call "$vs\VC\Auxiliary\Build\vcvars64.bat"
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-geometry-metadata.cpp /Fe:gi-geometry-metadata.exe
@@ -64,6 +66,14 @@ jobs:
           gi-initial-cpu.exe
           if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-initial-gpu.cpp /Fe:gi-initial-gpu.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
+          if not "%errorlevel%"=="0" exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-raw-snapshot-plan.cpp /Fe:gi-raw-snapshot-plan.exe
+          if not "%errorlevel%"=="0" exit /b 1
+          gi-raw-snapshot-plan.exe
+          if not "%errorlevel%"=="0" exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-raw-snapshot-gpu.cpp /Fe:gi-raw-snapshot-gpu.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
+          if not "%errorlevel%"=="0" exit /b 1
+          gi-raw-snapshot-gpu.exe gi-raw-snapshot.dxil
           if not "%errorlevel%"=="0" exit /b 1
           gi-initial-gpu.exe gi-initial.dxil initial
           if not "%errorlevel%"=="0" exit /b 1
