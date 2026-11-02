@@ -1,8 +1,11 @@
 // CPU descriptor inventory only. Does not read GPU memory or change AS builds.
 namespace gi_geometry_probe {
-inline void (*integrationBuild)(ID3D12GraphicsCommandList4*,const D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC*) noexcept=nullptr;
-inline void (*integrationReset)(ID3D12GraphicsCommandList*) noexcept=nullptr;
-inline void (*integrationReport)() noexcept=nullptr;
+using IntegrationBuild=void (*)(ID3D12GraphicsCommandList4*,const D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC*) noexcept;
+inline std::atomic<IntegrationBuild> integrationBuild{nullptr};
+using IntegrationReset=void (*)(ID3D12GraphicsCommandList*) noexcept;
+inline std::atomic<IntegrationReset> integrationReset{nullptr};
+using IntegrationReport=void (*)() noexcept;
+inline std::atomic<IntegrationReport> integrationReport{nullptr};
 using Build=void(STDMETHODCALLTYPE*)(ID3D12GraphicsCommandList4*,const D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC*,UINT,const D3D12_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO_DESC*);
 using Copy=void(STDMETHODCALLTYPE*)(ID3D12GraphicsCommandList4*,D3D12_GPU_VIRTUAL_ADDRESS,D3D12_GPU_VIRTUAL_ADDRESS,D3D12_RAYTRACING_ACCELERATION_STRUCTURE_COPY_MODE);
 struct Hook {void** table=nullptr;Build build=nullptr;Copy copy=nullptr;};
@@ -24,7 +27,7 @@ inline InstanceState ReadInstances(ID3D12Object* list) noexcept {
  InstanceState s{};UINT bytes=sizeof(s);if(FAILED(list->GetPrivateData(instanceKey,&bytes,&s))||bytes!=sizeof(s))s={};return s;
 }
 inline void ResetInstances(ID3D12GraphicsCommandList* list) noexcept {
- if(!Enabled()&&!gi_reuse::runtime::Enabled())return;gi_reuse::runtime::Reset(list);if(integrationReset)integrationReset(list);InstanceState s{};s.generation=nextGeneration.fetch_add(1);
+ if(!Enabled()&&!gi_reuse::runtime::Enabled())return;gi_reuse::runtime::Reset(list);if(const auto reset=integrationReset.load())reset(list);InstanceState s{};s.generation=nextGeneration.fetch_add(1);
  if(FAILED(list->SetPrivateData(instanceKey,sizeof(s),&s)))Trace("GI_INSTANCE_R280_FAILED reason=reset_state");
 }
 inline void RecordInstances(ID3D12GraphicsCommandList4* list,const D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC& d) noexcept {
@@ -42,7 +45,7 @@ inline void BeforeExecute(ID3D12CommandQueue* queue,UINT count,ID3D12CommandList
  if(gi_reuse::runtime::Enabled()){
   static std::atomic<UINT64> next{0};static std::atomic<unsigned> reports{0};const auto now=GetTickCount64();auto due=next.load();
   if(now>=due&&reports.load()<64&&next.compare_exchange_strong(due,now+5000)){
-   ++reports;if(integrationReport)integrationReport();unsigned owners=0;UINT64 bytes=0;bool limited=false;gi_reuse::runtime::owners.Stats(owners,bytes,limited);
+   ++reports;if(const auto report=integrationReport.load())report();unsigned owners=0;UINT64 bytes=0;bool limited=false;gi_reuse::runtime::owners.Stats(owners,bytes,limited);
    unsigned geometryOwners=0;UINT64 evictions=0;gi_reuse::runtime::owners.RetentionStats(geometryOwners,evictions);
    UINT64 geometryBytes=0,candidateBytes=0,rejected=0,excluded=0;gi_reuse::runtime::owners.DetailStats(geometryBytes,candidateBytes,rejected,excluded);
    UINT64 issued=0,completed=0;bool fenceReady=false;gi_reuse::runtime::CompletionStats(issued,completed,fenceReady);
@@ -98,7 +101,7 @@ inline void Observe(ID3D12GraphicsCommandList4* list,const D3D12_BUILD_RAYTRACIN
  }
 }
 inline void STDMETHODCALLTYPE BuildHook(ID3D12GraphicsCommandList4* list,const D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC* d,UINT count,const D3D12_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO_DESC* info){
- const auto h=Lookup(list);gi_reuse::runtime::RecordBuild(list,d);if(integrationBuild)integrationBuild(list,d);if(Enabled())Observe(list,d);h.build(list,d,count,info);
+ const auto h=Lookup(list);gi_reuse::runtime::RecordBuild(list,d);if(const auto build=integrationBuild.load())build(list,d);if(Enabled())Observe(list,d);h.build(list,d,count,info);
 }
 inline void STDMETHODCALLTYPE CopyHook(ID3D12GraphicsCommandList4* list,D3D12_GPU_VIRTUAL_ADDRESS dst,D3D12_GPU_VIRTUAL_ADDRESS src,D3D12_RAYTRACING_ACCELERATION_STRUCTURE_COPY_MODE mode){
  const auto h=Lookup(list);gi_reuse::runtime::RecordCopy(list,dst,src,mode);const auto serial=copies.fetch_add(1);
