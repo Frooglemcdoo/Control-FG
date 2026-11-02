@@ -101,7 +101,7 @@ pd.CS={oracle.data(),oracle.size()};ComPtr<ID3D12PipelineState> oraclePso;Check(
   list->Dispatch(1,1,1);
   Transition(list.Get(),gpu.Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS,D3D12_RESOURCE_STATE_COPY_SOURCE);list->CopyBufferRegion(readback.Get(),0,gpu.Get(),0,allocated);Check(list->Close());
   ID3D12CommandList* lists[]={list.Get()};queue->ExecuteCommandLists(1,lists);Check(queue->Signal(fence.Get(),run+1));Check(fence->SetEventOnCompletion(run+1,event));Require(WaitForSingleObject(event,30000)==WAIT_OBJECT_0,"GPU timeout");
-  D3D12_RANGE range{0,allocated};Check(readback->Map(0,&range,&mapped));auto* p=static_cast<unsigned char*>(mapped);UINT total=0;memcpy(&total,p,4);Require(total==(run?capacity+expectedRecords-1:expectedRecords),"record allocation count");
+  D3D12_RANGE range{0,allocated};Check(readback->Map(0,&range,&mapped));auto* p=static_cast<unsigned char*>(mapped);UINT total=0;memcpy(&total,p,4);if(total!=(run?capacity+expectedRecords-1:expectedRecords)) std::cerr << "run=" << run << " actual=" << total << " expected=" << (run?capacity+expectedRecords-1:expectedRecords) << std::endl;Require(total==(run?capacity+expectedRecords-1:expectedRecords),"record allocation count");
   for(UINT j=0;j<256;++j)Require(p[bytes+j]==0xa5,"overflow touched guard");
   for(UINT sample=0;sample<(run?1u:expectedRecords);++sample){const UINT index=run?capacity-1:sample;auto* record=p+16+index*stride;UINT id[4]{},valid=0;memcpy(id,record,16);memcpy(&valid,record+192,4);
 #if defined(CONTROL_TEST_GI_RAY_TRACE) || defined(CONTROL_TEST_GI_JOINT_TRACE)
@@ -136,7 +136,7 @@ pd.CS={oracle.data(),oracle.size()};ComPtr<ID3D12PipelineState> oraclePso;Check(
     }
     continue;
    }
-   if(sample==4||sample==5||sample==11||sample==11){
+   if(sample==4||sample==5||sample==10||sample==11){
     auto f=[&](UINT offset){float value=0;memcpy(&value,record+offset,4);return value;};
     auto u=[&](UINT offset){UINT value=0;memcpy(&value,record+offset,4);return value;};
     const bool summary=sample==5||sample==11;const UINT ray=sample>=10?1:0;
