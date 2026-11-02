@@ -14,7 +14,7 @@ struct RawSnapshotPlan {
         result = {};
         if (!bytes || offset > ownerBytes || bytes > ownerBytes - offset) return false;
         const auto end = offset + bytes;
-        if (end > std::numeric_limits<std::uint64_t>::max() - 3) return false;
+        if (end > (std::numeric_limits<std::uint64_t>::max)() - 3) return false;
         const auto roundedEnd = (end + 3) & ~std::uint64_t(3);
         const auto start = offset & ~std::uint64_t(3);
         if (roundedEnd > ownerBytes || roundedEnd - start > MaxBytes) return false;
