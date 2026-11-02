@@ -351,3 +351,47 @@ restart-helper checks. Downloaded artifact digest, nested checksum, ZIP integrit
 R296 binary markers, new shader sidecar and all three launcher flags were verified.
 `ControlTOH-R296.zip`: 4,201,754 bytes, 74 members, SHA-256
 `52965751c4fc4cba5f32a982ae5c86c769188b0b423dd96e70617d68aa20fedd`.
+
+## R296 user capture and R297 history correction
+
+Verified the uploaded part checksum and all three payload sizes/hashes from the
+November 2 R296 diagnostics (session 50560). All 32 index samples completed:
+16 ordinary and 16 legacy padding-rejected observations, no copy failures, invalid
+indices or nonzero output padding. Reservation total was 21,168,128 bytes; this
+is not live VRAM usage. All 14,718 rejected preflight observations were
+padding-outside-source; dispatch-limit and invalid-range counts were zero.
+The exact uint16 path was eligible for all 435,456 observed index ranges before
+metadata fault. The 32 observations contained eight distinct offset/size/hash combinations;
+these are not guaranteed unique meshes. This is not whole-scene proof.
+
+Later the historical AS ledger hit its 8,192-address capacity at submission 3,258.
+The snapshot probe correctly quarantined after that metadata fault but continued
+admitting empty records, filling its 256 slots. All 32 GPU samples had already
+completed before the fault. There were zero signal failures or batch overflows.
+
+R297 uses ordered map storage with logarithmic address lookup and a 65,536-record
+hard limit. It retains old copy/update sources and only removes records on an
+explicit invalidation event. We do not yet have native destruction/active-membership
+proof, so no age eviction is introduced. This is bounded history scaling, not
+complete lifetime reclamation. Snapshot copies handle allocation failure without
+publishing a partial result. The probe stops admitting after metadata fault.
+GI_LEDGER_R297 reports occupancy; the legacy integration summary now reports the
+actual captured-copy count rather than a hardcoded zero.
+
+Portable tests passed with warnings-as-errors and UBSan: 12,000 distinct addresses,
+copy from an early record, completion-fence gating, immutable snapshot, explicit
+slot reclamation and rejection at a small configured hard limit.
+
+Windows foundation run `41545790482`, job `125620954257`, passed at
+`31ebad65a8601c4af4c931743da5b4e929c26bc8`. Decoded logs confirm the 12,000-address
+ledger test, exact uint16 GPU fixtures and integrated native index sampler passed
+with a clean D3D12 debug layer.
+
+Full mod run `41545790591`, job `125620954841`, passed at the same code commit.
+Decoded logs show no compiler/workflow errors; package layout, migration and
+restart-helper checks passed. Artifact digest, nested checksum, ZIP integrity,
+R297 ledger marker, R296 sampler markers, sidecar and launcher flags verified.
+`ControlTOH-R297.zip`: 4,201,127 bytes, 74 members, SHA-256
+`3d0b0b337cb25b58661bcfc94d068c5622e576e78deaead76511926f6e70332a`.
+Next evidence: two-minute traversal via the metadata launcher, examining occupancy
+and continued tracking past R296's failure point. No replacement GI is enabled.
