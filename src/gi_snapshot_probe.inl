@@ -84,6 +84,11 @@ inline void After(ID3D12CommandQueue*,UINT64 token) noexcept {
 }
 inline void Report() noexcept {
     if(!Enabled())return;
+    unsigned active=0,quarantined=0;
+    AcquireSRWLockExclusive(&lock);
+    if(runtime)for(const auto id:records)if(id){++active;if(runtime->Quarantined(id))++quarantined;}
+    ReleaseSRWLockExclusive(&lock);
+    Trace("GI_LIFETIME_R295 active=%u quarantined=%u cpu_metadata_owners_only=1 publication_requires_reset_and_gpu_completion=1",active,quarantined);
     for(unsigned kind=0;kind<4;++kind){const auto& c=gi_reuse::runtime::inputAudit[kind];
         Trace("GI_INPUT_R295 kind=%u committed=%llu placed=%llu storage_unknown=%llu deny_srv=%llu range_rejected=%llu local_preflight_pass=%llu alias_verified=0 gpu_copies=0",kind,c[0].load(),c[1].load(),c[2].load(),c[3].load(),c[4].load(),c[5].load());
     }

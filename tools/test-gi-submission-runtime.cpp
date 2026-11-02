@@ -21,6 +21,7 @@ void CheckAt(HRESULT hr,int line){if(FAILED(hr)){std::fprintf(stderr,"HRESULT fa
 #define Check(expression) CheckAt((expression),__LINE__)
 int main(){
  SetEnvironmentVariableA("CONTROLTOH_GI_METADATA","1");
+ SetEnvironmentVariableA("CONTROLTOH_GI_BINDINGS","1");
  ComPtr<IDXGIFactory4> factory;Check(CreateDXGIFactory1(IID_PPV_ARGS(&factory)));
  ComPtr<IDXGIAdapter> adapter;Check(factory->EnumWarpAdapter(IID_PPV_ARGS(&adapter)));
  ComPtr<ID3D12Device> device;Check(D3D12CreateDevice(adapter.Get(),D3D_FEATURE_LEVEL_11_0,IID_PPV_ARGS(&device)));
@@ -142,6 +143,15 @@ int main(){
  assert(gi_reuse::AcquireStorageLease(storageCommitted.Get(),committedLease));
  assert(committedLease.kind==gi_reuse::BufferStorageKind::Committed && !committedLease.heap);
  assert(!gi_reuse::AcquireStorageLease(nullptr,committedLease) && !committedLease.resource);
+ // Preflight must distinguish storage proof from mere owner resolution.
+ for(auto& c:rt::inputAudit[2])c=0;
+ rt::AuditInput(resources[0].Get(),0,4,rt::OwnerKind::Transform);
+ rt::AuditInput(placed.Get(),2,6,rt::OwnerKind::Transform);
+ rt::AuditInput(storageCommitted.Get(),0,4,rt::OwnerKind::Transform);
+ rt::AuditInput(storageCommitted.Get(),buffer.Width-1,2,rt::OwnerKind::Transform);
+ assert(rt::inputAudit[2][0]==2 && rt::inputAudit[2][1]==1 && rt::inputAudit[2][2]==1);
+ assert(rt::inputAudit[2][4]==1 && rt::inputAudit[2][5]==2);
+ std::puts("PASS input preflight: committed/placed/unknown storage, alignment and overrun rejection");
  std::puts("PASS geometry storage lease: observed committed/placed creation, retained backing heap, unknown creation refusal and independent lease lifetime");
 
  // Synthetic AS classification only: WARP resources are ordinary buffers.
