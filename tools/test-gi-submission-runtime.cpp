@@ -16,6 +16,15 @@ int main(){
  D3D12_COMMAND_QUEUE_DESC qd{};ComPtr<ID3D12CommandQueue> queue;Check(device->CreateCommandQueue(&qd,IID_PPV_ARGS(&queue)));
  ComPtr<ID3D12CommandAllocator> allocator;Check(device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT,IID_PPV_ARGS(&allocator)));
  ComPtr<ID3D12GraphicsCommandList4> list;Check(device->CreateCommandList(0,D3D12_COMMAND_LIST_TYPE_DIRECT,allocator.Get(),nullptr,IID_PPV_ARGS(&list)));
+ // Observe and retain a real resource without mapping or copying its bytes.
+ D3D12_HEAP_PROPERTIES heap{};heap.Type=D3D12_HEAP_TYPE_UPLOAD;
+ D3D12_RESOURCE_DESC buffer{};buffer.Dimension=D3D12_RESOURCE_DIMENSION_BUFFER;buffer.Width=64;buffer.Height=1;
+ buffer.DepthOrArraySize=1;buffer.MipLevels=1;buffer.SampleDesc.Count=1;buffer.Layout=D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+ ComPtr<ID3D12Resource> owner;Check(device->CreateCommittedResource(&heap,D3D12_HEAP_FLAG_NONE,&buffer,D3D12_RESOURCE_STATE_GENERIC_READ,nullptr,IID_PPV_ARGS(&owner)));
+ const auto address=owner->GetGPUVirtualAddress();rt::ObserveBuffer(owner.Get());rt::ObserveBuffer(owner.Get());owner.Reset();
+ UINT64 offset=0;assert(rt::owners.Resolve(address+16,48,owner,offset)&&offset==16);
+ assert(!rt::owners.Resolve(address+16,49,owner,offset));assert(!rt::owners.Resolve(UINT64_MAX,2,owner,offset));
+ unsigned owned=0;UINT64 retained=0;bool limited=false;rt::owners.Stats(owned,retained,limited);assert(owned==1&&retained==64&&!limited);
  rt::Initialize(list.Get());auto initial=rt::Read(list.Get());assert(initial&&initial->data.size==0);
  const auto generation=initial->data.generation;rt::Initialize(list.Get());assert(rt::Read(list.Get())->data.generation==generation);
  D3D12_RAYTRACING_GEOMETRY_DESC geometry{};geometry.Type=D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES;

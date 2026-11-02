@@ -12,8 +12,9 @@ struct ASRecord {
     std::uint32_t count=0;
     bool topLevel=false;
     std::shared_ptr<const GeometryMetadata> geometry{};
+    bool allowUpdate=false;
 };
-enum class ASOperation { Build, Copy, Invalidate };
+enum class ASOperation { Build, Copy, Invalidate, Update };
 struct ASEvent { ASOperation operation{}; ASRecord record{}; std::uint64_t source=0; };
 template<std::size_t Capacity> struct ASJournal {
     std::array<ASEvent,Capacity> events{};
@@ -75,6 +76,13 @@ public:
                 const auto* source=Find(e.source);
                 if(!source){Invalidate();return false;}
                 next=*source;next.address=address;
+            }else if(e.operation==ASOperation::Update){
+                const auto* source=Find(e.source);
+                if(!source||!source->allowUpdate||next.topLevel!=source->topLevel||next.count!=source->count||
+                   (!next.topLevel&&(!next.geometry||!source->geometry||!next.geometry->CanUpdateFrom(*source->geometry)))){
+                    Invalidate();return false;
+                }
+                next.allowUpdate=true;
             }else if(e.operation!=ASOperation::Build){Invalidate();return false;}
             if(next.geometry&&(next.topLevel||next.count!=next.geometry->Size())){
                 Invalidate();return false;

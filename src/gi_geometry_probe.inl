@@ -36,6 +36,14 @@ inline void RequestInstances() noexcept {
 // Called immediately before the native ExecuteCommandLists call. These are CPU
 // submission observations, NOT GPU-completed bytes or proven cross-queue order.
 inline void BeforeExecute(ID3D12CommandQueue* queue,UINT count,ID3D12CommandList*const* lists) noexcept {
+ if(gi_reuse::runtime::Enabled()){
+  static std::atomic<UINT64> next{0};static std::atomic<unsigned> reports{0};const auto now=GetTickCount64();auto due=next.load();
+  if(now>=due&&reports.load()<64&&next.compare_exchange_strong(due,now+5000)){
+   ++reports;unsigned owners=0;UINT64 bytes=0;bool limited=false;gi_reuse::runtime::owners.Stats(owners,bytes,limited);
+   const auto reason=gi_reuse::runtime::failureReason.load();
+   Trace("GI_METADATA_R286 status=%s reason=%s builds=%llu copies=%llu buffer_owners=%u retained_bytes=%llu owner_limit=%u resolved_ranges=%llu missing_ranges=%llu gpu_bytes_captured=0 reuse_ready=0",gi_reuse::runtime::fault.load()?"INCOMPLETE":"OBSERVING",reason?reason:"none",gi_reuse::runtime::buildCount.load(),gi_reuse::runtime::copyCount.load(),owners,bytes,unsigned(limited),gi_reuse::runtime::resolvedRanges.load(),gi_reuse::runtime::missingRanges.load());
+  }
+ }
  if(!Enabled()||submissionReports.load()>=32)return;
  const auto serial=submissionSerial.fetch_add(1);
  for(UINT i=0;i<count;++i){
@@ -72,7 +80,7 @@ inline void Observe(ID3D12GraphicsCommandList4* list,const D3D12_BUILD_RAYTRACIN
  }
 }
 inline void STDMETHODCALLTYPE BuildHook(ID3D12GraphicsCommandList4* list,const D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC* d,UINT count,const D3D12_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO_DESC* info){
- const auto h=Lookup(list);gi_reuse::runtime::RecordBuild(list,d);Observe(list,d);h.build(list,d,count,info);
+ const auto h=Lookup(list);gi_reuse::runtime::RecordBuild(list,d);if(Enabled())Observe(list,d);h.build(list,d,count,info);
 }
 inline void STDMETHODCALLTYPE CopyHook(ID3D12GraphicsCommandList4* list,D3D12_GPU_VIRTUAL_ADDRESS dst,D3D12_GPU_VIRTUAL_ADDRESS src,D3D12_RAYTRACING_ACCELERATION_STRUCTURE_COPY_MODE mode){
  const auto h=Lookup(list);gi_reuse::runtime::RecordCopy(list,dst,src,mode);const auto serial=copies.fetch_add(1);
@@ -89,10 +97,10 @@ inline void InstallList(ID3D12GraphicsCommandList* list) noexcept {
   *available={table,reinterpret_cast<Build>(table[72]),reinterpret_cast<Copy>(table[74])};
   const bool b=PatchSlot(&table[72],reinterpret_cast<void*>(available->build),reinterpret_cast<void*>(&BuildHook));
   const bool c=PatchSlot(&table[74],reinterpret_cast<void*>(available->copy),reinterpret_cast<void*>(&CopyHook));
-  if(gi_reuse::runtime::Enabled()&&(!b||!c))gi_reuse::runtime::fault=true;
+  if(gi_reuse::runtime::Enabled()&&(!b||!c))gi_reuse::runtime::Fail("hook_coverage");
   if(!b&&!c)*available={};
   Trace("GI_GEOMETRY_R279_HOOK build=%u copy=%u read_only=1",unsigned(b),unsigned(c));
- }else if(!exists){if(gi_reuse::runtime::Enabled())gi_reuse::runtime::fault=true;Trace("GI_GEOMETRY_R279_LIMIT kind=vtable limit=8 inventory_incomplete=1");}
+ }else if(!exists){if(gi_reuse::runtime::Enabled())gi_reuse::runtime::Fail("hook_coverage");Trace("GI_GEOMETRY_R279_LIMIT kind=vtable limit=8 inventory_incomplete=1");}
  ReleaseSRWLockExclusive(&lock);ray->Release();
 }
 } // namespace gi_geometry_probe

@@ -33,6 +33,14 @@ public:
         // Copy prevents caller mutation of already-recorded build metadata.
         return std::shared_ptr<const GeometryMetadata>(new GeometryMetadata(triangles));
     }
+    bool CanUpdateFrom(const GeometryMetadata& old) const noexcept {
+        if(Size()!=old.Size())return false;
+        for(std::size_t i=0;i<Size();++i){const auto& a=triangles_[i];const auto& b=old.triangles_[i];
+            if(a.vertexCount!=b.vertexCount||a.indexCount!=b.indexCount||a.vertexFormat!=b.vertexFormat||
+               a.indexFormat!=b.indexFormat||a.indices!=b.indices||a.flags!=b.flags||bool(a.transform)!=bool(b.transform))return false;
+        }
+        return true; // Descriptor compatibility only, not unchanged index bytes.
+    }
     std::size_t Size() const noexcept {return triangles_.size();}
     const TriangleMetadata* At(std::uint32_t geometry) const noexcept {
         return geometry<triangles_.size()?&triangles_[geometry]:nullptr;

@@ -43,5 +43,17 @@ int main(){
  assert(!invalid.Submit(1,1,journal,journal.generation));assert(!invalid.Find(256));
  ASLedger<4> tlas;mismatch=Build(256,geometry);mismatch.record.topLevel=true;journal.Reset();journal.Append(mismatch);
  assert(!tlas.Submit(1,1,journal,journal.generation));
+ // Native update changes vertex positions while topology/order stays fixed.
+ ASLedger<4> dynamic;ASJournal<4> updates;auto first=Build(256,geometry);first.record.allowUpdate=true;
+ updates.Append(first);assert(dynamic.Submit(1,1,updates,0));
+ auto vertices=Triangle(32768);auto updated=GeometryMetadata::Create({vertices,Triangle(16384)});
+ auto event=Build(512,updated);event.operation=ASOperation::Update;event.source=256;
+ updates.Reset();updates.Append(event);assert(dynamic.Submit(1,2,updates,updates.generation));
+ assert(dynamic.Find(512)->allowUpdate&&dynamic.Find(512)->geometry->At(0)->vertices==32768);
+ assert(dynamic.Find(256)->geometry->At(0)->vertices==4096);
+ vertices.indexCount=3;event.record.geometry=GeometryMetadata::Create({vertices,Triangle(16384)});event.source=512;
+ updates.Reset();updates.Append(event);assert(!dynamic.Submit(1,3,updates,updates.generation));
+ ASLedger<4> forbidden;updates.Reset();updates.Append(Build(256,geometry));assert(forbidden.Submit(1,1,updates,updates.generation));
+ event.record.geometry=updated;event.source=256;updates.Reset();updates.Append(event);assert(!forbidden.Submit(1,2,updates,updates.generation));
  std::puts("PASS immutable BLAS geometry, ordered indices, copy/update lineage, stale revision rejection, bounded read plans, unsupported layout and overflow rejection");
 }

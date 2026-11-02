@@ -73,6 +73,7 @@ inline void Observe(ID3D12Resource* destination, UINT64 destinationOffset,
 }
 inline void STDMETHODCALLTYPE BufferHook(ID3D12GraphicsCommandList* list,ID3D12Resource* destination,UINT64 destinationOffset,ID3D12Resource* source,UINT64 sourceOffset,UINT64 bytes) {
     const auto original = Lookup(list).buffer;
+    gi_reuse::runtime::ObserveBuffer(destination);gi_reuse::runtime::ObserveBuffer(source);
     rt_spot_capture_runtime::ObserveTableOwner(destination);
     rt_spot_table_audit::Observe(list,destination,destinationOffset,source,sourceOffset,bytes);
     Observe(destination,destinationOffset,source,sourceOffset,bytes);
@@ -80,6 +81,7 @@ inline void STDMETHODCALLTYPE BufferHook(ID3D12GraphicsCommandList* list,ID3D12R
 }
 inline void STDMETHODCALLTYPE ResourceHook(ID3D12GraphicsCommandList* list,ID3D12Resource* destination,ID3D12Resource* source) {
     const auto original = Lookup(list).resource;
+    gi_reuse::runtime::ObserveBuffer(destination);gi_reuse::runtime::ObserveBuffer(source);
     rt_spot_capture_runtime::ObserveTableOwner(destination);
     if (destination && source && rt_spot_table_audit::Enabled())
         rt_spot_table_audit::Observe(list,destination,0,source,0,destination->GetDesc().Width);

@@ -6,12 +6,22 @@
 #include <new>
 #include "d3d12_geometry_metadata.h"
 #include "submission_ledger.h"
+#include "d3d12_buffer_owners.h"
 namespace gi_reuse::runtime {
 using Microsoft::WRL::ComPtr;
 inline bool Enabled() noexcept {static const bool value=[] {char b[4]{};return GetEnvironmentVariableA("CONTROLTOH_GI_METADATA",b,4)==1&&b[0]=='1';}();return value;}
 inline const GUID journalKey={0x28611345,0x28ab,0x4127,{0x93,0x44,0x12,0x10,0x16,0x85,0x42,0x31}};
 inline std::atomic<UINT64> generation{1};
 inline std::atomic<bool> fault{false};
+inline std::atomic<const char*> failureReason{nullptr};
+inline void Fail(const char* reason) noexcept {const char* empty=nullptr;failureReason.compare_exchange_strong(empty,reason);fault=true;}
+inline BufferOwners owners;
+inline std::atomic<UINT64> buildCount{0},copyCount{0},resolvedRanges{0},missingRanges{0};
+inline void ObserveBuffer(ID3D12Resource* resource) noexcept {if(Enabled())owners.Observe(resource);}
+inline void CheckOwner(UINT64 address,UINT64 bytes) noexcept {
+ ComPtr<ID3D12Resource> owner;UINT64 offset=0;
+ if(owners.Resolve(address,bytes,owner,offset))++resolvedRanges;else ++missingRanges;
+}
 // The COM private-data owner follows command-list destruction and successful
 // resets. No raw command-list pointers or native descriptor pointers are kept.
 class Journal final:public IUnknown {
@@ -35,34 +45,36 @@ inline ComPtr<Journal> Read(ID3D12Object* list) noexcept {
 }
 inline void Reset(ID3D12GraphicsCommandList* list) noexcept {
  if(!Enabled()||fault.load()||!list)return;
- auto* next=new(std::nothrow) Journal;if(!next){fault=true;return;}
- if(FAILED(list->SetPrivateDataInterface(journalKey,next)))fault=true;
+ auto* next=new(std::nothrow) Journal;if(!next){Fail("metadata_error");return;}
+ if(FAILED(list->SetPrivateDataInterface(journalKey,next)))Fail("metadata_error");
  next->Release();
 }
 inline void Initialize(ID3D12GraphicsCommandList* list) noexcept {
  if(!Enabled()||fault.load())return;if(!Read(list))Reset(list);
 }
 inline void RecordBuild(ID3D12GraphicsCommandList4* list,const D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC* desc) noexcept {
- if(!Enabled()||fault.load())return;
+ if(!Enabled())return;++buildCount;if(fault.load())return;
  try {
-  auto journal=Read(list);if(!journal||!desc||!desc->DestAccelerationStructureData){fault=true;return;}
+  auto journal=Read(list);if(!journal||!desc||!desc->DestAccelerationStructureData){Fail("metadata_error");return;}
   ASRecord r{};r.address=desc->DestAccelerationStructureData;r.count=desc->Inputs.NumDescs;
-  // Updates require resolved prior descriptors and same-generation resources.
-  // They are not equivalent to a fresh fully resolved Build event yet.
-  if(desc->Inputs.Flags&D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PERFORM_UPDATE){fault=true;return;}
+  const bool update=(desc->Inputs.Flags&D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PERFORM_UPDATE)!=0;
+  r.allowUpdate=(desc->Inputs.Flags&D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_ALLOW_UPDATE)!=0;
+  if(update&&!desc->SourceAccelerationStructureData){Fail("metadata_error");return;}
   if(desc->Inputs.Type==D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL){
-   if(desc->Inputs.DescsLayout!=D3D12_ELEMENTS_LAYOUT_ARRAY||!desc->Inputs.InstanceDescs){fault=true;return;}
+   if(desc->Inputs.DescsLayout!=D3D12_ELEMENTS_LAYOUT_ARRAY||!desc->Inputs.InstanceDescs){Fail("metadata_error");return;}
    r.topLevel=true;r.instances=desc->Inputs.InstanceDescs;
   }else{
-   r.geometry=CopyBLASGeometry(desc->Inputs);if(!r.geometry){fault=true;return;}
+   r.geometry=CopyBLASGeometry(desc->Inputs);if(!r.geometry){Fail("metadata_error");return;}
   }
-  if(!journal->data.Append({ASOperation::Build,r,0}))fault=true;
- }catch(...){fault=true;}
+  if(r.topLevel)CheckOwner(r.instances,UINT64(r.count)*64);
+  else for(UINT i=0;i<r.count;++i){const auto* t=r.geometry->At(i);CheckOwner(t->vertices,UINT64(t->vertexCount)*t->stride);CheckOwner(t->indices,UINT64(t->indexCount)*2);if(t->transform)CheckOwner(t->transform,48);}
+  if(!journal->data.Append({update?ASOperation::Update:ASOperation::Build,r,update?desc->SourceAccelerationStructureData:0}))Fail("metadata_error");
+ }catch(...){Fail("metadata_error");}
 }
 inline void RecordCopy(ID3D12GraphicsCommandList4* list,UINT64 destination,UINT64 source,D3D12_RAYTRACING_ACCELERATION_STRUCTURE_COPY_MODE mode) noexcept {
- if(!Enabled()||fault.load())return;auto journal=Read(list);
- if(!journal||!destination||!source||(mode!=D3D12_RAYTRACING_ACCELERATION_STRUCTURE_COPY_MODE_CLONE&&mode!=D3D12_RAYTRACING_ACCELERATION_STRUCTURE_COPY_MODE_COMPACT)){fault=true;return;}
- if(!journal->data.Append({ASOperation::Copy,{destination},source}))fault=true;
+ if(!Enabled())return;++copyCount;if(fault.load())return;auto journal=Read(list);
+ if(!journal||!destination||!source||(mode!=D3D12_RAYTRACING_ACCELERATION_STRUCTURE_COPY_MODE_CLONE&&mode!=D3D12_RAYTRACING_ACCELERATION_STRUCTURE_COPY_MODE_COMPACT)){Fail("metadata_error");return;}
+ if(!journal->data.Append({ASOperation::Copy,{destination},source}))Fail("metadata_error");
 }
 // No CPU wait, queue splitting, or GPU buffer access. A second queue, concurrent
 // Execute, or multiple AS-bearing lists in one batch invalidates this restricted
@@ -78,17 +90,17 @@ inline UINT64 BeforeExecute(ID3D12CommandQueue* q,UINT count,ID3D12CommandList*c
  if(!Enabled()||fault.load())return 0;
  AcquireSRWLockExclusive(&stateLock);
  UINT64 token=0;
- if(submitting||!q||(count&&!lists)){fault=true;}
- else if(queue&&queue.Get()!=q){fault=true;}
+ if(submitting||!q||(count&&!lists)){Fail("concurrent_or_invalid_submission");}
+ else if(queue&&queue.Get()!=q){Fail("multiple_queues");}
  else {
   unsigned relevant=0;pending={};
   for(UINT i=0;i<count&&!fault.load();++i){auto j=Read(lists[i]);
    // Uninstrumented lists can contain unseen builds. No partial coverage claim.
-   if(!j||!j->data.complete){fault=true;break;}
-   if(j->data.size){if(++relevant>1){fault=true;break;}pending=j->data;}
+   if(!j||!j->data.complete){Fail("unobserved_or_incomplete_list");break;}
+   if(j->data.size){if(++relevant>1){Fail("multiple_as_lists_in_batch");break;}pending=j->data;}
   }
   if(!fault.load()&&relevant){
-   if(!fence){ComPtr<ID3D12Device> d;if(FAILED(q->GetDevice(IID_PPV_ARGS(&d)))||FAILED(d->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&fence))))fault=true;else queue=q;}
+   if(!fence){ComPtr<ID3D12Device> d;if(FAILED(q->GetDevice(IID_PPV_ARGS(&d)))||FAILED(d->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&fence))))Fail("metadata_error");else queue=q;}
    if(!fault.load()){submitting=true;token=activeToken=++nextFence;}
   }
  }
@@ -97,9 +109,9 @@ inline UINT64 BeforeExecute(ID3D12CommandQueue* q,UINT count,ID3D12CommandList*c
 inline void AfterExecute(ID3D12CommandQueue* q,UINT64 token) noexcept {
  if(!Enabled()||!token)return;
  AcquireSRWLockExclusive(&stateLock);
- if(!submitting||token!=activeToken||q!=queue.Get())fault=true;
+ if(!submitting||token!=activeToken||q!=queue.Get())Fail("metadata_error");
  if(!fault.load()){
-  if(FAILED(q->Signal(fence.Get(),token))||!ledger.Submit(reinterpret_cast<UINT64>(q),token,pending,pending.generation))fault=true;
+  if(FAILED(q->Signal(fence.Get(),token))||!ledger.Submit(reinterpret_cast<UINT64>(q),token,pending,pending.generation))Fail("metadata_error");
  }
  pending={};submitting=false;activeToken=0;
  ReleaseSRWLockExclusive(&stateLock);

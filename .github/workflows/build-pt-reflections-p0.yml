@@ -1148,11 +1148,11 @@ jobs:
           build\test-gi-spot-pcf.exe
           if errorlevel 1 exit /b 1
 
-      - name: Package joint spotlight and GI capture R285
+      - name: Package GI geometry integration R286
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='ControlTOH-R285'
+          $out='ControlTOH-R286'
           $shader="$out/ControlTOH/Shaders"
           $tools="$out/ControlTOH/Tools"
           $diagnostics="$out/ControlTOH/Diagnostics"
@@ -1178,29 +1178,27 @@ jobs:
           Copy-Item Capture-RR-Boundary.cmd,Capture-RR-Boundary.ps1,Collect-RR-Boundary-Status.cmd,tools/collect-rr-boundary.py $diagnostics
           Copy-Item Start-Compact-Distance-Test.cmd,Capture-RR-Suite.ps1,tools/collect-rr-suite.py $diagnostics
           Copy-Item tools/diagnostics/Start-R258-Storage-Diagnostics.cmd,tools/diagnostics/Start-GI-Source-Probe.cmd,tools/diagnostics/Start-GI-Shadow-Test.cmd,tools/diagnostics/Start-GI-Lighting-Test.cmd,tools/diagnostics/Start-GI-Hit-Capture.cmd,tools/diagnostics/Start-GI-Binding-Audit.cmd,tools/diagnostics/Start-GI-Spot-Trace.cmd,tools/diagnostics/Start-Reflection-Clamp-Test.cmd,tools/diagnostics/Start-GI-Ray-Trace.cmd,tools/diagnostics/Start-GI-Geometry-Probe.cmd,tools/diagnostics/Start-GI-Joint-Trace.cmd $diagnostics
+          Copy-Item tools/diagnostics/Start-GI-Metadata-Test.cmd $diagnostics
           Copy-Item tools/diagnostics/Collect-Texture-Trace.cmd,tools/diagnostics/Collect-Texture-Trace.ps1 $tools
           Copy-Item build/DirectStorage "$diagnostics/DirectStorage" -Recurse
           Copy-Item build/DirectStorage/dstorage.dll,build/DirectStorage/dstoragecore.dll $out
           Copy-Item tools/directstorage/Validate-DirectStorage.cmd "$diagnostics/DirectStorage"
-          Copy-Item docs/native-lighting-r285.md "$out/ControlTOH/DIAGNOSTIC-NOTES.md"
+          Copy-Item docs/native-lighting-r286.md "$out/ControlTOH/DIAGNOSTIC-NOTES.md"
           Copy-Item tools/Organize-Existing-Install.cmd,tools/Organize-Existing-Install.ps1 $tools
           Copy-Item tools/diagnostics/Collect-ControlTOH-Materials.cmd,tools/diagnostics/Collect-ControlTOH-Materials.ps1 $tools
           & powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/diagnostics/test-material-collector.ps1
           if ($LASTEXITCODE -ne 0) { throw 'Material collector integration test failed' }
           @'
           Control The Oldest House: Visual and Performance Overhaul
-          R285 - Same-dispatch spotlight and GI capture
+          R286 - GI geometry integration test
 
           Copy all package contents beside Control_DX12.exe, preserving folders.
-          Run ControlTOH/Diagnostics/Start-GI-Joint-Trace.cmd.
-          Load the original plant area with the lamp intact, RT indirect and RR ON.
-          Select GI RAW BYPASS and REF CLAMP: BYPASS; keep Native Blend and FG off.
-          Frame the plant and Jesse hair together anywhere on screen. Mouse zoom may remain held.
-          Press F7 OR click ARM GI TRACE in F10; wait for the visible ARMED countdown.
-          Close F10 and hold the view until SAVED. Exit normally to package logs.
-          Do not click CAPTURE RR or PACKAGE RR.
-          One F7 action records eight screen-wide source samples and a full-resolution RR pair.
-          Keep the camera and zoom steady until SAVED. All lighting math stays unchanged.
+          Run ControlTOH/Diagnostics/Start-GI-Metadata-Test.cmd.
+          Load your usual save, move around for one minute, then exit normally.
+          No F7, F9, CAPTURE RR, fixed camera or zoom is needed.
+          Logs are packaged automatically. Send the diagnostics ZIP.
+          Replacement GI remains disabled; no speckle fix is claimed.
+          Launch normally to leave the test observer off.
           See ControlTOH/DIAGNOSTIC-NOTES.md for exact scope and limits.
           '@ | Set-Content "$out/ControlTOH/README.txt" -Encoding ASCII
           python tools/test-organized-package.py "$out"
@@ -1214,10 +1212,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: ControlTOH-R285
+          name: ControlTOH-R286
           path: |
-            ControlTOH-R285.zip
-            ControlTOH-R285.sha256
+            ControlTOH-R286.zip
+            ControlTOH-R286.sha256
             build/gi-joint-light-validation.json
             build/gi-joint-oracle-analysis.json
             build/gi-ray-trace-validation.json
