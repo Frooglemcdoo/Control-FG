@@ -138,3 +138,30 @@ identify which generic failure branch triggered.
 Windows focused validation run 41473829266 passed cache churn, geometry retention,
 all-protected exhaustion, specific journal-overflow reporting and existing GPU
 adapter tests. Diagnostics-only collection no longer asks for an RR capture.
+
+## R288 observation coverage and journal growth
+
+R287 identified `build_journal_capacity`, with zero resolved and 1642 missing
+ranges before detailed tracking stopped. It does not prove the individual causes
+of those missing ranges. Copy-only discovery and undifferentiated upload/scene
+retention were coverage gaps found in source review.
+
+R288 adds observation at base committed/placed/reserved resource creation and
+native transition/UAV/aliasing barriers. It preserves original native arguments
+and does not add barriers. Newer resource-creation entry points are not separately
+hooked. Default-heap scene entries outrank unreferenced upload entries for
+retention; uniquely resolved geometry remains protected. Limits remain 2048
+objects / 512 MiB logical extents. This is still incomplete coverage, not a claim
+of placed-heap ownership, residency, aliasing synchronization or stable bytes.
+
+Per-list journals grow on the heap to 65536 events; submission snapshots copy
+owned events while sharing immutable geometry snapshots. No events are silently
+truncated. Allocation/limit failures invalidate the observer. `journal_peak`,
+`creation_observations`, and `barrier_observations` report which paths were reached.
+Windows validation run 41477747314 passed actual committed/placed interception,
+barrier discovery, scene retention under upload churn, 1024-event submission,
+reset snapshot independence, and rejection at the hard journal ceiling.
+
+Primary references checked 2026-11-02:
+- https://learn.microsoft.com/en-us/windows/win32/api/d3d12/nf-d3d12-id3d12graphicscommandlist-resourcebarrier
+- https://learn.microsoft.com/en-us/windows/win32/api/d3d12/nf-d3d12-id3d12device-createcommittedresource
