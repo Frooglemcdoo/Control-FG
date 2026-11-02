@@ -7,6 +7,7 @@
 #include <iterator>
 #include <vector>
 #include <stdexcept>
+#include <string>
 #include <cstdio>
 #include <cstring>
 #include "../src/gi_reuse/d3d12_index_snapshot.h"
