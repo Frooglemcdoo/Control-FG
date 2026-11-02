@@ -111,13 +111,16 @@ public:
     }
     // Caller must have finished all consumers of the borrowed View first.
     // Render consumers require their own completion leases; not implemented here.
-    bool Release(U64 recording) noexcept {
-        auto* e=Find(recording);if(!e || !e->sealed || !Complete(*e))return false;
-        bytes_-=e->bytes;*e={};return true;
+    // Destroy the returned owner AFTER releasing host locks: COM releases can
+    // reenter observation hooks. Detached owners remain the caller's budget responsibility.
+    bool Retire(U64 recording,std::unique_ptr<Owner>& retired) noexcept {
+        auto* e=Find(recording);if(retired || !e || !e->sealed || !Complete(*e))return false;
+        retired=std::move(e->owner);bytes_-=e->bytes;*e={};return true;
     }
     U64 RetainedBytes() const noexcept {return bytes_;}
     bool Quarantined(U64 recording) noexcept {const auto* e=Find(recording);return e && e->quarantined;}
-    // Explicit teardown after GPU/device shutdown, never a recovery shortcut.
+    // Explicit teardown after GPU/device shutdown without host locks held,
+    // never a recovery shortcut.
     void DeviceStopped() noexcept {for(auto& e:entries_)e={};bytes_=0;}
 };
 }

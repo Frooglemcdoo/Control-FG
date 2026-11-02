@@ -222,7 +222,10 @@ Cross-queue replay is quarantined rather than certified. Completion cannot
 invent unissued fence values; regression and device-removal sentinels refuse
 release. Explicit DeviceStopped teardown is only valid after GPU shutdown.
 The manager itself must outlive GPU use. Borrowed output views require finished
-consumers before Release; render-consumer fence leases are not implemented.
+consumers before Retire; render-consumer fence leases are not implemented.
+Retire detaches the owner for destruction outside host locks, avoiding COM
+release reentry while a queue/observer lock is held. Detached owners remain
+the host's memory-budget responsibility.
 
 This is not a synchronization primitive and is not wired into native Execute.
 Quarantining an unexpected replay cannot undo already-recorded GPU commands or
