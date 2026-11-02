@@ -308,3 +308,46 @@ User package `ControlTOH-R295.zip`: 4,190,503 bytes, 73 members, SHA-256
 `fb84a09acd8969eadd48994e254a7a3b9bf9cfdf947f096a75ef6821178747ad`.
 In-game binding and lifetime coverage is now the next required input; no visual
 speckle improvement is claimed by this integration test.
+
+## R296 — exact uint16 transport at native AS boundaries
+
+The R295 user capture contained 93,481 AS builds with bindings ready for every
+build, zero missing geometry ranges and zero lifetime/fence quarantine failures.
+The old raw planner rejected 17,352 of 391,339 index observations (4.434%); these
+are repeated observations, not unique objects. Its aggregate counter could not
+separate DWORD tail padding from the old single-axis dispatch limit.
+
+R296 adds exact 16-bit ByteAddressBuffer loads with SM 6.2/native16 capability
+checks and two-dimensional dispatch. This avoids switching descriptor heaps,
+which would also invalidate graphics tables that the compute-only tracker does
+not restore. Only private output is DWORD padded. The standalone planner supports
+up to 256 MiB; the native diagnostic samples at most 256 KiB from each range tail.
+Sources: https://github.com/microsoft/DirectXShaderCompiler/wiki/16-Bit-Scalar-Types
+and https://github.com/microsoft/DirectXShaderCompiler/wiki/ByteAddressBuffer-Load-Store-Additions
+
+The opt-in diagnostic admits at most 16 ordinary and 16 legacy-rejected samples,
+with a 128 MiB monotonic allocation reservation for committed sources, private
+outputs and readbacks. Existing inventory, binding references and driver costs
+are separate. It rejects placed/reserved sources and conflicting local states;
+unknown local state relies on the native AS input NON_PIXEL_SHADER_RESOURCE
+contract. No source barriers or CPU waits are inserted. Ownership is established
+before dispatch, and retained native bindings plus the injected PSO/root survive
+until recording seal and private-fence completion. Future base-device queue
+creation is intercepted; coverage loss and batch overflow quarantine owners.
+
+Foundation run `41539388584`, job `125599370286`, passed at code commit
+`85185fa38df40f97a0b5584d867e0ed7df494c8f`. Decoded logs confirm exact GPU
+copies of six-byte sources, final two-byte elements, offset-two ranges, copies
+above 16 MiB, output padding/guards and native binding restoration. The integrated
+probe also passed its real copy/hash, fence/reset publication and queue-creation
+hook tests with a clean D3D12 debug layer. This establishes transport fixtures;
+in-game R296 evidence is still needed. No replacement lighting is enabled and no
+speckle fix is claimed.
+
+Full mod regression/package run `41539388575`, job `125599371080`, passed at
+that same code commit. Decoded logs show no compiler/workflow errors and confirm
+lighting shader, material collector, installation layout/migration and relocated
+restart-helper checks. Downloaded artifact digest, nested checksum, ZIP integrity,
+R296 binary markers, new shader sidecar and all three launcher flags were verified.
+`ControlTOH-R296.zip`: 4,201,754 bytes, 74 members, SHA-256
+`52965751c4fc4cba5f32a982ae5c86c769188b0b423dd96e70617d68aa20fedd`.
