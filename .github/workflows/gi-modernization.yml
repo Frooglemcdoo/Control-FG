@@ -67,6 +67,10 @@ jobs:
           if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-initial-gpu.cpp /Fe:gi-initial-gpu.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
           if not "%errorlevel%"=="0" exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-snapshot-retirement.cpp /Fe:gi-snapshot-retirement.exe
+          if not "%errorlevel%"=="0" exit /b 1
+          gi-snapshot-retirement.exe
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-compute-root-arguments.cpp /Fe:gi-compute-root-arguments.exe
           if not "%errorlevel%"=="0" exit /b 1
           gi-compute-root-arguments.exe

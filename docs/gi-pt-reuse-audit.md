@@ -198,3 +198,41 @@ access error; both are fixed in the tested revision. Full Windows mod build
 and regression run `41526470375`, job `125555376044`, also passed at the
 same code revision. Decoded logs show no compiler or workflow errors.
 The packaged artifact still bears R294 and is not a new user-facing release.
+
+## Snapshot recording lifetime and publication policy
+
+Re-read R103 `pt_geometry_snapshot.h::Retirement` at
+`2f314e8992aec822f13cafbf7efa8bb55dc3915c`: its persistent exact-queue
+fences, recording ownership through Reset and retention of unproven flights
+remain the D3D12 integration reference. A completed execution alone does not
+make a snapshot immutable: a closed native list can replay the same writes.
+
+Added portable `snapshot_retirement.h` to define and test the admission,
+ownership and publication rules before adapting that fence runtime. Admission
+is bounded by record count and caller-supplied retained bytes and precedes GPU
+command insertion. A unique owner package stays retained across every execution.
+Successful signals raise the required completion value; batch entries can share
+one signal. Output is available only after the recording is sealed (successful
+Reset/final destruction, never Close) and all recorded writes have completed.
+Unsubmitted sealed records can be freed without publishing nonexistent output.
+
+Failed signals, missing queues, counter exhaustion, stale generations, duplicate
+pending submissions and unexpected replay after sealing quarantine ownership.
+Cross-queue replay is quarantined rather than certified. Completion cannot
+invent unissued fence values; regression and device-removal sentinels refuse
+release. Explicit DeviceStopped teardown is only valid after GPU shutdown.
+The manager itself must outlive GPU use. Borrowed output views require finished
+consumers before Release; render-consumer fence leases are not implemented.
+
+This is not a synchronization primitive and is not wired into native Execute.
+Quarantining an unexpected replay cannot undo already-recorded GPU commands or
+make overlapping writes safe. Live copying remains blocked on an execution/
+synchronization protocol, queue/fence lifetime identities, physical heap budget
+accounting and consumer retirement. Static command lists that never reset cannot
+publish under this conservative policy; no latency or coverage guarantee is made.
+
+Local GCC warnings-as-errors and UndefinedBehaviorSanitizer tests passed replay,
+reset during outstanding GPU work, batched fence cuts, budget refusal, wrong
+queue/generation, failed signals, counter exhaustion, device-removal sentinel,
+completion regression, unknown queues and unissued completion rejection. The
+Windows foundation workflow includes the same portable test; its result is pending.
