@@ -35,6 +35,14 @@ jobs:
           if not "%errorlevel%"=="0" exit /b 1
           gi-submission-ledger.exe
           if not "%errorlevel%"=="0" exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-recovered-scene-order.cpp /Fe:gi-recovered-scene-order.exe
+          if not "%errorlevel%"=="0" exit /b 1
+          gi-recovered-scene-order.exe
+          if not "%errorlevel%"=="0" exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-ordered-as-metadata.cpp /Fe:gi-ordered-as-metadata.exe
+          if not "%errorlevel%"=="0" exit /b 1
+          gi-ordered-as-metadata.exe
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-d3d12-geometry.cpp /Fe:gi-d3d12-geometry.exe
           if not "%errorlevel%"=="0" exit /b 1
           gi-d3d12-geometry.exe

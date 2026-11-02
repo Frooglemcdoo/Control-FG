@@ -9,6 +9,7 @@
 #include "scene_read_plan.h"
 #include "local_buffer_states.h"
 #include "d3d12_buffer_owners.h"
+#include "d3d12_as_owners.h"
 namespace gi_reuse::runtime {
 using Microsoft::WRL::ComPtr;
 inline bool Enabled() noexcept {static const bool value=[] {char b[4]{};return GetEnvironmentVariableA("CONTROLTOH_GI_METADATA",b,4)==1&&b[0]=='1';}();return value;}
@@ -18,13 +19,19 @@ inline std::atomic<bool> fault{false};
 inline std::atomic<const char*> failureReason{nullptr};
 inline void Fail(const char* reason) noexcept {const char* empty=nullptr;failureReason.compare_exchange_strong(empty,reason);fault=true;}
 inline BufferOwners owners;
+inline ASResourceOwners<> asOwners;
+inline std::atomic<UINT64> asIdentityResolved{0},asIdentityMissing{0},asIdentityAmbiguous{0};
 inline std::atomic<UINT64> journalPeak{0}, creationObservations{0}, barrierObservations{0};
 inline void JournalPeak(std::size_t size) noexcept {auto old=journalPeak.load();while(old<size&&!journalPeak.compare_exchange_weak(old,size)){};}
 inline std::atomic<UINT64> buildCount{0},copyCount{0},resolvedRanges{0},missingRanges{0};
 inline void ObserveBuffer(ID3D12Resource* resource) noexcept {if(Enabled())owners.Observe(resource);}
-inline void ObserveCreated(IUnknown* object,D3D12_RESOURCE_STATES initialState=D3D12_RESOURCE_STATE_COMMON) noexcept {
+inline void ObserveCreated(IUnknown* object,D3D12_RESOURCE_STATES initialState=D3D12_RESOURCE_STATE_COMMON,
+                           bool supportedASStorage=false,ID3D12Heap* placedHeap=nullptr) noexcept {
  if(!Enabled()||!object)return;ComPtr<ID3D12Resource> resource;
- if(SUCCEEDED(object->QueryInterface(IID_PPV_ARGS(&resource)))&&resource->GetDesc().Dimension==D3D12_RESOURCE_DIMENSION_BUFFER){++creationObservations;owners.Observe(resource.Get(),initialState);}
+ if(SUCCEEDED(object->QueryInterface(IID_PPV_ARGS(&resource)))&&resource->GetDesc().Dimension==D3D12_RESOURCE_DIMENSION_BUFFER){
+  ++creationObservations;owners.Observe(resource.Get(),initialState);
+  if(supportedASStorage&&(initialState&D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE))asOwners.Created(resource.Get(),placedHeap);
+ }
 }
 inline void ObserveBarriers(UINT count,const D3D12_RESOURCE_BARRIER* barriers) noexcept {
  if(!Enabled()||!barriers)return;
@@ -68,6 +75,7 @@ class Journal final:public IUnknown {
  std::atomic<ULONG> references_{1};
 public:
  GrowingASJournal<65536> data;
+ std::vector<std::pair<UINT64,UINT64>> asTokens;
  LocalBufferStates<> states;
  Journal(){data.generation=generation.fetch_add(1);}
  HRESULT STDMETHODCALLTYPE QueryInterface(REFIID iid,void** out) override {
@@ -77,6 +85,13 @@ public:
  ULONG STDMETHODCALLTYPE AddRef() override {return ++references_;}
  ULONG STDMETHODCALLTYPE Release() override {const auto n=--references_;if(!n)delete this;return n;}
 };
+inline std::pair<UINT64,UINT64> ASIdentities(UINT64 destination,UINT64 source) noexcept {
+ const auto lookup=[](UINT64 address){ASResourceOwners<>::Lease lease;RangeMatch reason{};
+  if(asOwners.Resolve(address,lease,&reason)){++asIdentityResolved;return lease.token;}
+  ++asIdentityMissing;if(reason==RangeMatch::Ambiguous)++asIdentityAmbiguous;return UINT64(0);
+ };
+ return {lookup(destination),source?lookup(source):0};
+}
 inline ComPtr<Journal> Read(ID3D12Object* list) noexcept {
  ComPtr<Journal> result;if(!list)return result;UINT size=sizeof(IUnknown*);IUnknown* value=nullptr;
  if(SUCCEEDED(list->GetPrivateData(journalKey,&size,&value))&&value){
@@ -122,7 +137,9 @@ inline void RecordBuild(ID3D12GraphicsCommandList4* list,const D3D12_BUILD_RAYTR
   }
   if(r.topLevel)CheckOwner(r.instances,UINT64(r.count)*64,OwnerKind::Instances,&journal->states);
   else for(UINT i=0;i<r.count;++i){const auto* t=r.geometry->At(i);CheckOwner(t->vertices,UINT64(t->vertexCount)*t->stride,OwnerKind::Vertex,&journal->states);CheckOwner(t->indices,UINT64(t->indexCount)*2,OwnerKind::Index,&journal->states);if(t->transform)CheckOwner(t->transform,48,OwnerKind::Transform,&journal->states);}
-  if(!journal->data.Append({update?ASOperation::Update:ASOperation::Build,r,update?desc->SourceAccelerationStructureData:0}))Fail("build_journal_capacity");
+  const auto source=update?desc->SourceAccelerationStructureData:0;
+  journal->asTokens.push_back(ASIdentities(r.address,source));
+  if(!journal->data.Append({update?ASOperation::Update:ASOperation::Build,r,source}))Fail("build_journal_capacity");
   JournalPeak(journal->data.size);
  }catch(...){Fail("build_allocation_exception");}
 }
@@ -130,7 +147,7 @@ inline void RecordCopy(ID3D12GraphicsCommandList4* list,UINT64 destination,UINT6
  if(!Enabled())return;++copyCount;if(fault.load())return;auto journal=Read(list);
  if(!journal){Fail("copy_missing_journal");return;}
  if(!destination||!source||(mode!=D3D12_RAYTRACING_ACCELERATION_STRUCTURE_COPY_MODE_CLONE&&mode!=D3D12_RAYTRACING_ACCELERATION_STRUCTURE_COPY_MODE_COMPACT)){Fail("copy_address_or_mode");return;}
- try {if(!journal->data.Append({ASOperation::Copy,{destination},source}))Fail("copy_journal_capacity");JournalPeak(journal->data.size);}
+ try {journal->asTokens.push_back(ASIdentities(destination,source));if(!journal->data.Append({ASOperation::Copy,{destination},source}))Fail("copy_journal_capacity");JournalPeak(journal->data.size);}
  catch(...){Fail("copy_allocation_exception");}
 }
 // No CPU wait, queue splitting, or GPU buffer access. A second queue, concurrent

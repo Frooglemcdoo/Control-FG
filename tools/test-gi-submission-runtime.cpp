@@ -125,6 +125,26 @@ int main(){
  ComPtr<ID3D12Heap> placedHeap;Check(device->CreateHeap(&placedHeapDesc,IID_PPV_ARGS(&placedHeap)));
  ComPtr<ID3D12Resource> placed;Check(device->CreatePlacedResource(placedHeap.Get(),0,&buffer,D3D12_RESOURCE_STATE_COMMON,nullptr,IID_PPV_ARGS(&placed)));
  assert(rt::owners.Resolve(placed->GetGPUVirtualAddress(),64,owner,offset));
+ // Synthetic AS classification only: WARP resources are ordinary buffers.
+ // Verify lifetime tokens/heap retention without issuing unsupported DXR work.
+ gi_reuse::ASResourceOwners<2,128> asRegistry;
+ assert(asRegistry.Created(scene.Get()));assert(asRegistry.Created(scene.Get()));
+ gi_reuse::ASResourceOwners<2,128>::Lease asLease;
+ assert(asRegistry.Resolve(scene->GetGPUVirtualAddress()+16,asLease)&&asLease.token&&asLease.offset==16);
+ const auto asToken=asLease.token;
+ assert(asRegistry.Created(placed.Get(),placedHeap.Get()));
+ assert(asRegistry.Resolve(placed->GetGPUVirtualAddress(),asLease)&&asLease.heap.Get()==placedHeap.Get()&&asLease.token!=asToken);
+ assert(!asRegistry.Created(defaults[1].Get()));
+ assert(asRegistry.Resolve(scene->GetGPUVirtualAddress(),asLease)&&asLease.token==asToken);
+ UINT64 asCount=0,asBytes=0,asRejected=0;asRegistry.Stats(asCount,asBytes,asRejected);
+ assert(asCount==2&&asBytes==128&&asRejected==1);
+ assert(!asRegistry.Resolve(UINT64_MAX,asLease)&&!asLease.token);
+ rt::ObserveCreated(defaults[4].Get(),D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE,true);
+ const auto knownIdentity=rt::ASIdentities(defaults[4]->GetGPUVirtualAddress(),defaults[4]->GetGPUVirtualAddress());
+ assert(knownIdentity.first&&knownIdentity.first==knownIdentity.second);
+ rt::ObserveCreated(defaults[1].Get(),D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE,false);
+ assert(!rt::ASIdentities(defaults[1]->GetGPUVirtualAddress(),0).first);
+ std::puts("PASS AS resource identity: retained committed/placed owners, distinct tokens, bounded refusal and unsupported-storage rejection");
  // Buffers created before hook installation are discovered at native barriers.
  D3D12_RESOURCE_BARRIER barrier{};barrier.Type=D3D12_RESOURCE_BARRIER_TYPE_UAV;barrier.UAV.pResource=scene.Get();
  rt::ObserveBarriers(1,&barrier);assert(rt::owners.Resolve(scene->GetGPUVirtualAddress(),64,owner,offset));
