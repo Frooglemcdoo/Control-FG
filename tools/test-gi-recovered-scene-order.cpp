@@ -124,7 +124,35 @@ static void TestIndexedSceneSelection(){
     assert(graph.Select(cut,{5000,4354*4096},selected)==Status::ready&&selected.version==5000);
     assert(graph.Select(cut,{4354,4354*4096},selected)==Status::missing);
 }
+static void TestAppendClockReuse(){
+    const Key key{800,0x8000};Selection chosen;
+    Graph cached;assert(cached.Write(1,key,1));const auto oldCut=cached.Mark(1);
+    assert(cached.Select(oldCut,key,chosen)==Status::ready&&chosen.version==1);
+    assert(cached.Mark(2));assert(cached.Select(oldCut,key,chosen)==Status::ready);
+    assert(cached.Write(2,key,2)); // A cached cut must still check newly appended writes.
+    assert(cached.Select(oldCut,key,chosen)==Status::unordered);
+    assert(cached.Signal(2,20,1));assert(cached.Wait(1,20,1));
+    assert(cached.Write(1,key,3));
+    assert(cached.Select(cached.Mark(1),key,chosen)==Status::ready&&chosen.version==3);
+    Graph late;assert(late.Write(1,key,10));assert(late.Wait(2,30,1));const auto waiting=late.Mark(2);
+    assert(late.Select(waiting,key,chosen)==Status::pending);
+    assert(late.Mark(3));assert(late.Select(waiting,key,chosen)==Status::pending);
+    assert(late.Signal(1,30,1));assert(late.Select(waiting,key,chosen)==Status::ready&&chosen.version==10);
+    Graph cycle;assert(cycle.Write(1,key,50));const auto before=cycle.Mark(1);
+    assert(cycle.Wait(1,40,1));assert(cycle.Signal(1,40,1));const auto cyclic=cycle.Mark(1);
+    assert(cycle.Select(cyclic,key,chosen)==Status::invalid);
+    assert(cycle.Mark(2)); // A previous cyclic traversal must not poison independent cuts.
+    assert(cycle.Select(before,key,chosen)==Status::ready&&chosen.version==50);
+    Graph lanes;
+    for(U64 q=1;q<=16;++q){assert(lanes.Write(q,key,q));assert(lanes.Signal(q,100+q,1));}
+    for(U64 q=1;q<16;++q)assert(lanes.Wait(16,100+q,1));
+    assert(lanes.Select(lanes.Mark(16),key,chosen)==Status::unordered);
+    assert(lanes.Write(16,key,99));
+    assert(lanes.Select(lanes.Mark(16),key,chosen)==Status::ready&&chosen.version==99);
+    std::puts("PASS append clock reuse: new competing writes, late signals, cycle recovery and 16-lane antichains.");
+}
 int main(){
+    TestAppendClockReuse();
     TestSampledProgress();
     TestIndexedSceneSelection();
     TestObservedFenceCompletion();

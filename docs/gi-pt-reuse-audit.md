@@ -21,7 +21,7 @@ The recovered barrier tracker also sets pending from BEGIN_ONLY and accepts othe
 
 ## Validation and scope
 
-Recovered `pt_scene_order.h` and `pt_progress_sampling.h` preserve the pinned PT implementation. A follow-up splits one misleadingly indented line into three statements without changing behavior. The recovered test changes only its include paths. Run:
+Recovered ordering started from R46 and was then advanced to the R103 revision described below. `pt_progress_sampling.h` retains the R46 implementation. One misleadingly indented line is split into three statements without changing behavior. The recovered test changes only its include paths. Run:
 
 ```sh
 g++ -std=c++17 -O2 -Wall -Wextra tools/test-gi-recovered-scene-order.cpp -o /tmp/test-gi-recovered-scene-order
@@ -50,7 +50,20 @@ Build/update/copy journals now record these tokens alongside their descriptors. 
 
 Also inspected `experiment/pt-glass-integration` at `2f314e8992aec822f13cafbf7efa8bb55dc3915c` (R103), beyond the earlier R46 audit. Its `pt_geometry_snapshot.h` already implements persistent retirement fences per exact queue, monotonic values, queue identity checks and failed-signal quarantine. The per-batch fence problem above describes R46, not this later revision. Use R103 as the retirement reference; do not rebuild that fix from scratch.
 
+Advanced the recovered graph and its tests to R103: reuse cached ancestry across ordinary appends, invalidate it on signals/completion changes, and use a fixed 17-entry candidate array rather than per-selection tree allocations. The added tests cover newly appended competing writes against cached cuts, late signals, cycle recovery and 16 queue lanes. Both recovered and GI-adapter tests pass locally with warnings as errors after this update. The Windows run cited above predates this graph-only update; it validates the native AS ownership changes and the earlier graph revision.
+
 R103 `pt_command_bindings.h::BufferState` still normalizes missing local state from native read flags to COMMON. Its queue runtime still takes a global recursive mutex around native forwarding while capture is active. The capture class still preserves BLAS copies when preservation is enabled, independently of its renderingRequested flag; this local condition does not alone establish the complete R103 startup/menu lifecycle. No claim is made that R103 retained every R46 performance symptom.
+
+## Alternative to COPY_SOURCE transitions
+
+Microsoft's triangle descriptor contract requires vertex, index and geometry-transform inputs to be readable in NON_PIXEL_SHADER_RESOURCE state at an actual AS build. The TLAS input contract specifies the same for instance descriptors. This suggests a compute-shader snapshot immediately at that boundary could read the inputs without moving them to COPY_SOURCE. This is an engineering inference, not proof that Control's current buffers and binding setup admit that path.
+
+Before implementation, validate shader-readable resource flags, exact bounded raw-view alignment (including 16-bit index tails), same-list ordering, source/heap retention, pending split/alias rejection and complete native compute binding restoration. Only mod-owned output transitions would be needed. A native build's API precondition does not substitute for observing the correct boundary, and this approach must not reinterpret a later arbitrary read as safe. It may simplify source state handling; it does not remove lifetime or synchronization requirements. No shader snapshot is enabled by this checkpoint.
+
+Primary references reviewed 2026-11-02:
+- https://learn.microsoft.com/en-us/windows/win32/api/d3d12/ns-d3d12-d3d12_raytracing_geometry_triangles_desc
+- https://learn.microsoft.com/en-us/windows/win32/api/d3d12/ns-d3d12-d3d12_build_raytracing_acceleration_structure_inputs
+- https://learn.microsoft.com/en-us/windows/win32/api/d3d12/ne-d3d12-d3d12_resource_flags
 
 ## Integration boundary
 
