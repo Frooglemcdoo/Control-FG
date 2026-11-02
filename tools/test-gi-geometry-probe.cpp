@@ -9,6 +9,7 @@ std::atomic<unsigned long long> presentCount{42};
 std::string logText;
 void Trace(const char* fmt, ...) { char b[2048]; va_list a; va_start(a,fmt); vsnprintf(b,sizeof(b),fmt,a); va_end(a); logText+=b; logText+='\n'; }
 bool PatchSlot(void** slot,void* expected,void* replacement) {if(*slot!=expected)return false;*slot=replacement;return true;}
+#include "../src/gi_reuse/d3d12_submission_metadata.h"
 #include "../src/gi_geometry_probe.inl"
 void Check(bool ok){if(!ok){std::fprintf(stderr,"FAILED\n%s",logText.c_str());std::exit(1);}}
 unsigned buildCalls=0,copyCalls=0;

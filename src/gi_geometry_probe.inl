@@ -21,7 +21,7 @@ inline InstanceState ReadInstances(ID3D12Object* list) noexcept {
  InstanceState s{};UINT bytes=sizeof(s);if(FAILED(list->GetPrivateData(instanceKey,&bytes,&s))||bytes!=sizeof(s))s={};return s;
 }
 inline void ResetInstances(ID3D12GraphicsCommandList* list) noexcept {
- if(!Enabled())return;InstanceState s{};s.generation=nextGeneration.fetch_add(1);
+ if(!Enabled()&&!gi_reuse::runtime::Enabled())return;gi_reuse::runtime::Reset(list);InstanceState s{};s.generation=nextGeneration.fetch_add(1);
  if(FAILED(list->SetPrivateData(instanceKey,sizeof(s),&s)))Trace("GI_INSTANCE_R280_FAILED reason=reset_state");
 }
 inline void RecordInstances(ID3D12GraphicsCommandList4* list,const D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC& d) noexcept {
@@ -31,7 +31,7 @@ inline void RecordInstances(ID3D12GraphicsCommandList4* list,const D3D12_BUILD_R
  if(FAILED(list->SetPrivateData(instanceKey,sizeof(s),&s)))Trace("GI_INSTANCE_R280_FAILED reason=record_state");
 }
 inline void RequestInstances() noexcept {
- if(!Enabled())return;submissionReports.store(0);Trace("GI_INSTANCE_R280_ARM metadata_only=1 submission_report_budget=32");
+ if(!Enabled()&&!gi_reuse::runtime::Enabled())return;submissionReports.store(0);Trace("GI_INSTANCE_R280_ARM metadata_only=1 submission_report_budget=32");
 }
 // Called immediately before the native ExecuteCommandLists call. These are CPU
 // submission observations, NOT GPU-completed bytes or proven cross-queue order.
@@ -72,16 +72,16 @@ inline void Observe(ID3D12GraphicsCommandList4* list,const D3D12_BUILD_RAYTRACIN
  }
 }
 inline void STDMETHODCALLTYPE BuildHook(ID3D12GraphicsCommandList4* list,const D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC* d,UINT count,const D3D12_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO_DESC* info){
- const auto h=Lookup(list);Observe(list,d);h.build(list,d,count,info);
+ const auto h=Lookup(list);gi_reuse::runtime::RecordBuild(list,d);Observe(list,d);h.build(list,d,count,info);
 }
 inline void STDMETHODCALLTYPE CopyHook(ID3D12GraphicsCommandList4* list,D3D12_GPU_VIRTUAL_ADDRESS dst,D3D12_GPU_VIRTUAL_ADDRESS src,D3D12_RAYTRACING_ACCELERATION_STRUCTURE_COPY_MODE mode){
- const auto h=Lookup(list);const auto serial=copies.fetch_add(1);
+ const auto h=Lookup(list);gi_reuse::runtime::RecordCopy(list,dst,src,mode);const auto serial=copies.fetch_add(1);
  if(serial<512)Trace("GI_GEOMETRY_R279_COPY serial=%u list=%p present=%llu dst=%llu src=%llu mode=%u cpu_descriptor_only=1",serial,list,presentCount.load(),dst,src,unsigned(mode));
  else if(serial==512)Trace("GI_GEOMETRY_R279_LIMIT kind=copy limit=512 inventory_incomplete=1");
  h.copy(list,dst,src,mode);
 }
 inline void InstallList(ID3D12GraphicsCommandList* list) noexcept {
- if(!Enabled())return;
+ if(!Enabled()&&!gi_reuse::runtime::Enabled())return;
  ID3D12GraphicsCommandList4* ray=nullptr;if(FAILED(list->QueryInterface(IID_PPV_ARGS(&ray))))return;
  auto** table=*reinterpret_cast<void***>(ray);AcquireSRWLockExclusive(&lock);
  Hook* available=nullptr;bool exists=false;for(auto& h:hooks){if(h.table==table)exists=true;if(!h.table&&!available)available=&h;}
@@ -89,9 +89,10 @@ inline void InstallList(ID3D12GraphicsCommandList* list) noexcept {
   *available={table,reinterpret_cast<Build>(table[72]),reinterpret_cast<Copy>(table[74])};
   const bool b=PatchSlot(&table[72],reinterpret_cast<void*>(available->build),reinterpret_cast<void*>(&BuildHook));
   const bool c=PatchSlot(&table[74],reinterpret_cast<void*>(available->copy),reinterpret_cast<void*>(&CopyHook));
+  if(gi_reuse::runtime::Enabled()&&(!b||!c))gi_reuse::runtime::fault=true;
   if(!b&&!c)*available={};
   Trace("GI_GEOMETRY_R279_HOOK build=%u copy=%u read_only=1",unsigned(b),unsigned(c));
- }else if(!exists)Trace("GI_GEOMETRY_R279_LIMIT kind=vtable limit=8 inventory_incomplete=1");
+ }else if(!exists){if(gi_reuse::runtime::Enabled())gi_reuse::runtime::fault=true;Trace("GI_GEOMETRY_R279_LIMIT kind=vtable limit=8 inventory_incomplete=1");}
  ReleaseSRWLockExclusive(&lock);ray->Release();
 }
 } // namespace gi_geometry_probe

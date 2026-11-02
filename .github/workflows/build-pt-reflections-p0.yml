@@ -3,6 +3,7 @@ name: Build native reflection enhancements and RR
 on:
   push:
     branches:
+      - work/gi-modernization
       - work/r285-gi-stack-capture
       - work/r284-gi-wide-sequence
       - work/r283-gi-volume-source

@@ -1,5 +1,6 @@
 #pragma once
 #include "gi_stack_capture.h"
+#include "gi_reuse/d3d12_submission_metadata.h"
 #include "rr_capture_ui.h"
 #include "rr_gi_pipeline.h"
 #include "native_lighting_isolation.h"
@@ -431,6 +432,7 @@ inline void BindPerformance(ID3D12GraphicsCommandList* list,ID3D12PipelineState*
     performance::Bind(list,PerformanceStage(pso),identity.sha);
 }
 inline void InstallList(ID3D12GraphicsCommandList* list) noexcept {
+    gi_reuse::runtime::Initialize(list);
     gi_geometry_probe::InstallList(list);
     gi_spot_trace::InstallList(list);
     rt_shadow_capture::InstallList(list);
@@ -496,6 +498,8 @@ inline void InstallLiveDiagnostic(ID3D12Device* device) noexcept {
     };
     rt_spot_table_audit::endTiming=&performance::AfterExecute;
     rt_spot_table_audit::instanceObserver=&gi_geometry_probe::BeforeExecute;
+    rt_spot_table_audit::beginGeometry=&gi_reuse::runtime::BeforeExecute;
+    rt_spot_table_audit::endGeometry=&gi_reuse::runtime::AfterExecute;
     gi_spot_trace::instanceRequest=&gi_geometry_probe::RequestInstances;
     rt_spot_table_audit::beginTiming=&performance::BeforeExecute;
     rt_spot_capture_audit::retentionEnabled.store(false);
