@@ -1,7 +1,8 @@
 # Submission-ordered GI geometry metadata
 
 `src/gi_reuse/submission_ledger.h` is a bounded, portable metadata core. It is
-not hooked into Control yet and does not capture GPU bytes or change rendering.
+now reached by an opt-in native submission observer. It does not capture GPU
+bytes or change lighting.
 
 CPU recording order cannot establish the AS state at a GI dispatch. The adapter
 must collect a journal for each command-list generation, then process journals
@@ -58,13 +59,43 @@ resources/same-generation bytes before acting on the plan. Stale plans must not
 be used after resource destruction or aliasing. AS metadata ownership does not
 retain ID3D12Resource objects or their contents.
 
-The existing runtime probe still only inventories descriptors. The new adapter
-is not yet called from its hooks: command-list journals, queue submission ordering,
-resource lifetime, compaction/update events and GPU buffer access must be wired
-together before claiming a live triangle mapping. No producer PDF is inferred
+The opt-in runtime observer now calls the adapter from build/copy hooks, owns
+per-command-list journals via COM private data, and freezes the journal at queue
+submission. Resource lifetime, resolved updates and GPU buffer access are still
+required before claiming a live triangle mapping. No producer PDF is inferred
 from this metadata, and no game lighting change is enabled.
 
 Tests: `test-gi-geometry-metadata.cpp` covers geometry-index preservation, immutable
 ownership, copy/update lineage, snapshots, stale revisions, arithmetic bounds and
 unsupported inputs. `test-gi-d3d12-geometry.cpp` covers actual D3D12 array and pointer
 layouts, source-array mutation, null descriptors and unsupported geometry types.
+
+## Opt-in runtime submission wiring
+
+`CONTROLTOH_GI_METADATA=1` enables `d3d12_submission_metadata.h`. Initialization
+attaches a reference-counted journal to each instrumented command list. Successful
+native resets install a new generation; destruction releases the journal. Build
+and clone/compact-copy hooks record metadata before forwarding the exact native
+call. Descriptor snapshots survive native descriptor-array reuse.
+
+Execute callbacks freeze metadata before the native queue call, then enqueue a
+fence afterward. Snapshot only checks the fence; it never waits. There are no
+inserted command lists, split submissions or GPU buffer copies. CPU allocations
+and an extra queue signal are confined to the development observer; it remains
+disabled by default.
+
+This first observer deliberately invalidates on unknown list coverage, concurrent
+Execute calls, a second queue, multiple AS-bearing lists in one batch, capacity
+exhaustion, unsupported geometry, serialization/deserialization, or PERFORM_UPDATE.
+It cannot yet follow Control's complete dynamic scene. There is no automatic
+recovery that could hide missing events. A successful metadata snapshot proves
+only completion of observed descriptor submissions, not ownership or contents of
+vertex/index/instance buffers. No rendering path consumes it.
+
+The WARP runtime fixture executes an empty native command list with synthetic AS
+metadata, tests actual private-data ownership and queue fences, and checks reset,
+missing coverage, update, concurrent-submit and unsupported-copy rejection. It
+**does not execute acceleration-structure builds or validate GPU geometry bytes**.
+The existing native-hook mock checks original call forwarding unchanged.
+
+Validation on 2026-11-02: [Windows runtime and adapter run 41464800786](https://github.com/Frooglemcdoo/Control-FG/actions/runs/41464800786) passed the new WARP journal/fence fixture, native hook-forwarding tests, descriptor/ledger checks, and both RTXDI initialization shaders.

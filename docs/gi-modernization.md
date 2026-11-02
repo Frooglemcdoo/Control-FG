@@ -83,6 +83,6 @@ This is software-device execution, not NVIDIA hardware or in-game validation.
 Geometry integration checkpoint: the submission ledger now retains validated,
 immutable BLAS triangle descriptors, and the native D3D12 adapter copies either
 descriptor layout. Copy lineage and AS revisions guard triangle read plans.
-These components are tested independently; live hooks, resource retention and
-same-generation GPU reads remain unimplemented. No additional capture is required
+Opt-in build/copy and queue hooks now feed these components. Resource retention,
+resolved dynamic updates and same-generation GPU reads remain unimplemented. No additional capture is required
 for this metadata stage.
