@@ -97,4 +97,29 @@ class Joint(unittest.TestCase):
    b=bytearray(original);struct.pack_into('<4f',b,64,0,0,0,0);struct.pack_into('<3f',b,80,0,0,0)
    struct.pack_into('<3f',b,96,1,1.5,2);struct.pack_into('<I',b,160,0);empty+=b
   self.assertEqual(analyze_joint(empty)['volume_ray_count'],2)
+ def test_wide_point_surface_accounting(self):
+  from analyze_gi_joint_trace import analyze_joint
+  spec=importlib.util.spec_from_file_location('ray_fixture',ROOT/'tools/test-analyze-gi-ray-trace.py');m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m);data=m.fixture()
+  # Ambient-only volume summaries match the existing two-ray oracle fixture.
+  for ray,material in [(0,7),(1,65535)]:
+   b=bytearray(256);struct.pack_into('<4I',b,0,16,16,ray,5)
+   for o,v in [(96,[1,1.5,2]),(112,[1,1.5,2]),(128,[.5,1,2,2])]:struct.pack_into('<'+'f'*len(v),b,o,*v)
+   struct.pack_into('<4I',b,144,42,2,material,0x283);data+=b
+  point=bytearray(256);surface=bytearray(256)
+  struct.pack_into('<4I',point,0,16,16,0,7);struct.pack_into('<4I',surface,0,16,16,0,8)
+  for o,v in [(16,[1,3,8]),(32,[2,3,4]),(48,[.5,1,2]),(64,[1,1,1])]:struct.pack_into('<3f',point,o,*v)
+  struct.pack_into('<f',point,80,1);struct.pack_into('<5I',point,96,9,2,7,42,0x284)
+  for o,v in [(32,[2,3,4]),(48,[2,3,4]),(64,[2,3,4]),(80,[1,1,1]),(96,[.5,1,2])]:struct.pack_into('<3f',surface,o,*v)
+  struct.pack_into('<4I',surface,112,2,7,42,0x284);data+=point+surface
+  struct.pack_into('<4I',data,0,7,0x284,0,0)
+  report=analyze_joint(data);self.assertEqual(len(report['point_records']),1);self.assertEqual(len(report['surface_records']),1)
+  for record,offset in [(5,16),(5,48),(5,104),(5,112),(6,16),(6,32),(6,48),(6,64),(6,80),(6,96),(6,124)]:
+   bad=bytearray(data);struct.pack_into('<f',bad,16+record*256+offset,99)
+   with self.assertRaises(ValueError):analyze_joint(bad)
+  for x,y,valid in [(0,0,True),(126,126,True),(48,49,True),(79,79,True),(47,49,False),(80,79,False),(127,127,False),(128,0,False)]:
+   moved=bytearray(data)
+   for offset in range(16,len(moved),256):struct.pack_into('<2I',moved,offset,x,y)
+   if valid:self.assertEqual(len(analyze_joint(moved)['surface_records']),1)
+   else:
+    with self.assertRaises(ValueError):analyze_joint(moved)
 if __name__=='__main__':unittest.main()

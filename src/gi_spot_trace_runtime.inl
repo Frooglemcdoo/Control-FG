@@ -199,6 +199,7 @@ inline bool Dispatch(ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT z) noexc
  const State s=Read(list);const auto h=LookupHooks(list);const auto native=Lookup(list);
  if((s.mask&0xfdu)!=0xfdu||s.root!=nativeRoot.Get()||!h.root||!h.descriptor||!h.cbv||!native.set||!native.dispatch){Trace("GI_SPOT_R274_WAIT binding_mask=%u",s.mask);return false;}
  AcquireSRWLockExclusive(&lock);if(phase.load()!=Phase::Armed){ReleaseSRWLockExclusive(&lock);return false;}
+ if(savedFrames.load()&&(groups[0]!=x||groups[1]!=y||groups[2]!=z)){Fail("sequence_grid_changed",L"FAILED: resolution changed during capture. Exit and send logs.");ReleaseSRWLockExclusive(&lock);return false;}
  phase.store(Phase::Recording);recordedList=list;retainedPso=pso;retainedTrace=trace;retainedRoot=nativeRoot;retainedTraceRoot=root;generation=s.generation;capturedPresent=presentCount.load();groups[0]=x;groups[1]=y;groups[2]=z;
  UINT roi[4]={(x*8>128)?x*4-64:0,(y*16>128)?y*8-64:0,128,128};
  if(JointTrace()){

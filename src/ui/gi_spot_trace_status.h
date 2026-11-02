@@ -35,7 +35,7 @@ inline void SaveReference(HWND game) noexcept {
  if(memory&&bitmap){auto old=SelectObject(memory,bitmap);
   if(BitBlt(memory,0,0,r.right,r.bottom,screen,origin.x,origin.y,SRCCOPY|CAPTUREBLT)){
    GdiFlush();wchar_t path[MAX_PATH]{};AcquireSRWLockExclusive(&reportLock);const bool opened=report.OpenDefault();if(opened)wcscpy_s(path,report.Path());ReleaseSRWLockExclusive(&reportLock);
-   if(opened){auto* slash=wcsrchr(path,L'\');if(slash){*(slash+1)=0;wchar_t name[80]{};swprintf_s(name,L"GI-Joint-R284-%lu-reference.bmp",GetCurrentProcessId());wcscat_s(path,name);
+   if(opened){auto* slash=wcsrchr(path,static_cast<wchar_t>(92));if(slash){*(slash+1)=0;wchar_t name[80]{};swprintf_s(name,L"GI-Joint-R284-%lu-reference.bmp",GetCurrentProcessId());wcscat_s(path,name);
     HANDLE f=CreateFileW(path,GENERIC_WRITE,FILE_SHARE_READ,nullptr,CREATE_NEW,FILE_ATTRIBUTE_NORMAL,nullptr);
     if(f!=INVALID_HANDLE_VALUE){BITMAPFILEHEADER h{};h.bfType=0x4d42;h.bfOffBits=sizeof(h)+sizeof(BITMAPINFOHEADER);const DWORD size=static_cast<DWORD>(r.right*r.bottom*4);h.bfSize=h.bfOffBits+size;DWORD n=0;
      ok=WriteFile(f,&h,sizeof(h),&n,nullptr)&&n==sizeof(h)&&WriteFile(f,&info.bmiHeader,sizeof(BITMAPINFOHEADER),&n,nullptr)&&n==sizeof(BITMAPINFOHEADER)&&WriteFile(f,pixels,size,&n,nullptr)&&n==size;CloseHandle(f);
