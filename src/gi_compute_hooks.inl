@@ -76,7 +76,7 @@ struct Hooks {void** table=nullptr;
     BundleFn bundle=nullptr;
     HeapsFn heaps=nullptr;
     RootFn root=nullptr;
-    TableFn table=nullptr;
+    TableFn tableBinding=nullptr;
     ConstantFn constant=nullptr;
     ConstantsFn constants=nullptr;
     CbvFn cbv=nullptr;
@@ -115,7 +115,7 @@ inline void STDMETHODCALLTYPE RootHook(ID3D12GraphicsCommandList* list,ID3D12Roo
     Change(list,[&](State& s){s.tracker.Root(root);});
 }
 inline void STDMETHODCALLTYPE TableHook(ID3D12GraphicsCommandList* list,UINT index,D3D12_GPU_DESCRIPTOR_HANDLE handle) {
-    Lookup(list).table(list,index,handle);
+    Lookup(list).tableBinding(list,index,handle);
     Change(list,[&](State& s){s.tracker.Descriptor(index,gi_reuse::RootArgumentKind::Table,handle.ptr);});
 }
 inline void STDMETHODCALLTYPE ConstantHook(ID3D12GraphicsCommandList* list,UINT index,UINT value,UINT offset) {
@@ -171,7 +171,7 @@ inline void InstallList(ID3D12GraphicsCommandList* list) noexcept {
         available->bundle=reinterpret_cast<BundleFn>(table[27]);
         available->heaps=reinterpret_cast<HeapsFn>(table[28]);
         available->root=reinterpret_cast<RootFn>(table[29]);
-        available->table=reinterpret_cast<TableFn>(table[31]);
+        available->tableBinding=reinterpret_cast<TableFn>(table[31]);
         available->constant=reinterpret_cast<ConstantFn>(table[33]);
         available->constants=reinterpret_cast<ConstantsFn>(table[35]);
         available->cbv=reinterpret_cast<CbvFn>(table[37]);
@@ -184,7 +184,7 @@ inline void InstallList(ID3D12GraphicsCommandList* list) noexcept {
         if(!PatchSlot(&table[27],reinterpret_cast<void*>(available->bundle),reinterpret_cast<void*>(&BundleHook)))failed=true;
         if(!PatchSlot(&table[28],reinterpret_cast<void*>(available->heaps),reinterpret_cast<void*>(&HeapsHook)))failed=true;
         if(!PatchSlot(&table[29],reinterpret_cast<void*>(available->root),reinterpret_cast<void*>(&RootHook)))failed=true;
-        if(!PatchSlot(&table[31],reinterpret_cast<void*>(available->table),reinterpret_cast<void*>(&TableHook)))failed=true;
+        if(!PatchSlot(&table[31],reinterpret_cast<void*>(available->tableBinding),reinterpret_cast<void*>(&TableHook)))failed=true;
         if(!PatchSlot(&table[33],reinterpret_cast<void*>(available->constant),reinterpret_cast<void*>(&ConstantHook)))failed=true;
         if(!PatchSlot(&table[35],reinterpret_cast<void*>(available->constants),reinterpret_cast<void*>(&ConstantsHook)))failed=true;
         if(!PatchSlot(&table[37],reinterpret_cast<void*>(available->cbv),reinterpret_cast<void*>(&CbvHook)))failed=true;
