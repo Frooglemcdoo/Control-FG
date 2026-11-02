@@ -163,4 +163,9 @@ heap budgeting, alias activation and GPU retirement remain admission requirement
 for the eventual snapshot path. Object retention does not establish any of them.
 The Windows runtime fixture now checks real intercepted committed/placed creation,
 backing heap identity, independent lease retention and unknown-creation refusal.
-Validation of these storage changes is pending.
+Windows foundation run `41521688959`, job `125539041446`, passed at remote
+commit `348a73d5249979c0e934265c6cd567656fc9207f`. Decoded logs confirm
+the real creation-hook storage lease test, binding tests and GPU snapshot
+restore fixture all passed. Full Windows build/regression run `41521688899`, job `125539041555`,
+also passed at that code revision. Decoded logs show no compiler or workflow
+errors. The artifact still uses the R294 label and is not a new public test build.
