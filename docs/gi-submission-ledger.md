@@ -222,3 +222,24 @@ ranges and 100000 comparisons against exhaustive overlapping-range containment),
 actual runtime retention/exclusion, miss sampling and fence-readiness checks,
 plus prior journal/queue/adapter tests and both GPU initial-sample variants.
 The runtime PASS marker was verified in the log, with no assertion/HRESULT errors.
+
+## R291 index coverage and historical evidence
+
+R290 stayed OBSERVING across 3419 AS submissions and reached completed metadata
+fences. Its final counters were 773443 resolved / 48776 missing repeated lookups,
+zero ambiguous/invalid ranges. All 128 distinct retained sample keys were index
+ranges. The 8192-slot inventory hit its unchanged 512 MiB extent budget; individual
+misses cannot yet be attributed to eviction from R290's evidence alone.
+
+R291 gives default-heap INDEX_BUFFER-capable observations priority over generic
+shader-readable buffers, including known-pointer promotion. Protected resolved
+geometry remains ineligible for eviction. A bounded 16384-base-address CPU
+history records admission, eviction, rejection and exclusion, without COM owners.
+Sample history is read at report time, may include reused addresses, and cannot
+substitute for a live unique owner. Overwrite/drop counters expose lost history;
+per-kind session counters avoid relying on sample composition alone. No GPU byte
+capture, state changes, dependency assumptions, or rendering consumer is added.
+
+Focused Windows validation 41492681813 and full build 41492681970 passed for
+code commit ef859dc8632fda43eb0659e816318d88e8c1fb5a. Game coverage remains to be
+measured with R291; no speckle fix or coverage improvement is claimed yet.

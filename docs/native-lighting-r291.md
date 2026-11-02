@@ -33,3 +33,10 @@ Journals retain their 65536-event limit. metadata_fence_ready proves only observ
 submission completion, not stable GPU geometry bytes, states, heap ownership,
 residency, aliasing, or cross-queue byte dependencies. Replacement GI stays off.
 This build tests geometry coverage; it does not claim to fix the speckles yet.
+
+Validation: focused Windows run 41492681813 passed, including actual runtime
+priority/refusal/history assertions, descriptor/index/ledger checks, and both
+GPU adapter executions. Full Windows run 41492681970 passed all 53 steps.
+Build commit: ef859dc8632fda43eb0659e816318d88e8c1fb5a. Initial build attempts
+caught a reporting-call argument mismatch; the corrected source was rebuilt
+and both final job logs were checked for assertion, HRESULT, and compiler errors.
