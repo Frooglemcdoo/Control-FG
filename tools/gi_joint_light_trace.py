@@ -1,6 +1,6 @@
-"""R282: native spotlight terms and complete GI rays in one dense ROI stream."""
+"""R283: native spotlight terms and complete GI rays in one dense ROI stream."""
 import hashlib,struct
-from gi_ray_trace import generate as ray_generate, uint, branch, CAPACITY, STRIDE
+from gi_ray_trace import generate as ray_generate, uint, CAPACITY, STRIDE
 from gi_spot_pcf import decoder, dst, src, ins
 from dxbc_transform import transform_shex
 
@@ -72,6 +72,31 @@ def generate(raw,path,identity):
     candidate+=store(104,src(plan['extra'],0xff),1)+store(108,src(plan['context'],0xff),1)
     candidate+=store(160,src(plan['hit_position']),7)+store(176,uint(0x282),1)+store(180,src(plan['extra'],0x55),1)+plan['end']()
     add(4993,candidate)
+    # R283: measure the native volume lookup on both hit and miss rays.
+    lookup, lookup_normal, ray_direction, volume_sum, volume_mean, volume_local, brick_uv = range(temp+26,temp+33)
+    volume_stages={
+        1093:ins('mov',dst(ray_direction,7),src(14)),
+        1122:ins('mov',dst(lookup,7),src(4))+ins('mov',dst(lookup_normal,7),src(15)),
+        1192:ins('mov',dst(volume_local,7),src(17)),
+        1866:ins('mov',dst(brick_uv,7),src(17)),
+        2234:ins('mov',dst(volume_sum,7),src(16))+ins('mov',dst(volume_sum,8),src(12,0xff)),
+        2250:ins('mov',dst(volume_mean,7),src(4)),
+    }
+    for at,block in volume_stages.items():
+        if at not in instructions:raise ValueError('volume stage not an instruction boundary')
+        add(at,block)
+    volume=plan['begin'](1)+store(12,uint(6),1)
+    volume+=store(16,src(volume_local),7)+store(32,src(brick_uv),7)+store(48,src(17))
+    volume+=store(64,src(16),7)+store(76,src(12,0xff),1)
+    volume+=store(80,src(14,0xff),1)+store(84,src(23,0),1)+store(88,src(23,0xaa),1)
+    volume+=store(96,src(plan['context'],0xff),1)+store(100,src(plan['extra'],0x55),1)+store(104,src(plan['extra'],0xff),1)+store(108,uint(0x283),1)+plan['end']()
+    add(2218,volume) # after native weighted RGB and weight accumulation, inside volume bounds
+    volume_summary=plan['begin'](1)+store(12,uint(5),1)
+    for offset,reg,mask in [(16,lookup,7),(32,lookup_normal,7),(48,ray_direction,7),(64,volume_sum,15),(80,volume_mean,7),(112,4,7),(128,3,15)]:volume_summary+=store(offset,src(reg),mask)
+    volume_summary+=store(96,[0x308e46,2,2,1],7)
+    volume_summary+=store(144,src(plan['context'],0xff),1)+store(148,src(plan['extra'],0x55),1)+store(152,src(plan['extra'],0xff),1)+store(156,uint(0x283),1)
+    volume_summary+=store(160,[0x308ff6,2,2,0],1)+plan['end']()
+    add(2259,volume_summary)
     code=plan['begin'](1)+store(12,uint(3),1)
     # Exact algebraic per-light term: gated RGB * secondary diffuse factor,
     # then secondary albedo and primary throughput. Normalize with paired summary.
@@ -88,7 +113,7 @@ def generate(raw,path,identity):
     def patch(w):
         out=w[:2]
         for i in range(2,len(words)):
-            out+=inserts.get(i,[]);out.append(temp+26 if i==plan['temp_count_offset'] else w[i])
+            out+=inserts.get(i,[]);out.append(temp+33 if i==plan['temp_count_offset'] else w[i])
         w[:]=out
     changed=transform_shex(raw,patch)
     def undo(w):
@@ -100,7 +125,7 @@ def generate(raw,path,identity):
     if transform_shex(changed,undo)!=raw:raise ValueError('native recovery failed')
     # GPU oracle runs the exact new stores and existing complete-ray/accounting blocks.
     def floats(*xs):return [0x4002]+[struct.unpack('<I',struct.pack('<f',x))[0] for x in xs]
-    fixture=words[:2]+words[2:3]+plan['declaration']+ins('dcl_input',[0x20032])+ins('dcl_temps',[temp+26])+ins('dcl_thread_group',[32,32,1])
+    fixture=words[:2]+words[2:3]+plan['declaration']+ins('dcl_constant_buffer',[0x308e46,2,2,2,2,0])+ins('dcl_input',[0x20032])+ins('dcl_temps',[temp+33])+ins('dcl_thread_group',[32,32,1])
     fixture+=ins('mov',dst(plan['context'],15),floats(0,1,0,0))+ins('mov',dst(plan['context'],8),uint(42))
     fixture+=ins('mov',dst(plan['extra'],2),uint(2))+ins('mov',dst(plan['fade'],15),floats(1,2,3,4))+plan['initialize_code']
     for sample in range(2):
@@ -134,12 +159,20 @@ def generate(raw,path,identity):
             # Rejected candidates have no kind-3 contribution and reset stale data.
             fixture+=reset+ins('mov',dst(10,8),uint(7))+mark(1)+mark(2)+mark(4)+candidate
             fixture+=reset+ins('mov',dst(10,8),uint(8))+mark(1)+candidate
-        fixture+=plan['account_code']+plan['ray_code']
+        fixture+=ins('mov',dst(14,7),floats(0,0,1,0))+volume_stages[1093]
+        fixture+=ins('mov',dst(4,7),floats(5,6,7,0))+ins('mov',dst(15,7),floats(0,1,0,0))+volume_stages[1122]
+        fixture+=ins('mov',dst(17,7),floats(1,2,3,0))+volume_stages[1192]
+        fixture+=ins('mov',dst(17,7),floats(.1,.2,.3,0))+volume_stages[1866]
+        fixture+=ins('mov',dst(17,15),floats(.5,1,1.5,2))+ins('mov',dst(16,7),floats(1,2,3,0))+ins('mov',dst(12,8),floats(2,2,2,2))
+        fixture+=ins('mov',dst(14,8),uint(0))+ins('mov',dst(23,1),uint(123))+ins('mov',dst(23,4),floats(1,1,1,1))+volume
+        fixture+=volume_stages[2234]+ins('mov',dst(4,7),floats(.5,1,1.5,0))+volume_stages[2250]
+        fixture+=ins('mov',dst(4,7),floats(1,1.5,2,0))+ins('mov',dst(3,8),floats(2,2,2,2))+volume_summary
+        fixture+=ins('mov',dst(15,7),floats(2,3,4,0))+plan['account_code']+plan['ray_code']
     fixture+=ins('mov',dst(1,15),floats(.75,2.25,6,1))+ins('mov',dst(plan['extra'],1),[0x4001,0x3f400000])+plan['summary_code']+ins('ret')
     def fixture_patch(w):w[:]=fixture
     (path.parent/'gi-joint-light-oracle.dxbc').write_bytes(transform_shex(raw,fixture_patch))
     path.write_bytes(changed);parsed=decoder.decode(path)
-    return changed,dict(schema='gi-joint-light-r282',sha256=hashlib.sha256(changed).hexdigest(),native_sha256=identity['sha256'],
+    return changed,dict(schema='gi-joint-light-r283',sha256=hashlib.sha256(changed).hexdigest(),native_sha256=identity['sha256'],
                        native_instruction_recovery=True,decoded_instruction_count=len(parsed['instructions']),
                        capacity=CAPACITY,stride=STRIDE,spot_record_kind=3,sampling_step=1,roi_extent=[32,32],
                        runtime_enabled=False,gpu_validated=False,

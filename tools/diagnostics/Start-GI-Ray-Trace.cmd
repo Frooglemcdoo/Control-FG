@@ -19,7 +19,7 @@ set "CONTROLTOH_GI_CAPTURE=0"
 set "CONTROLTOH_GI_SOURCE=full"
 set "CONTROLTOH_GI_SHADOW=native"
 if "%CONTROLTOH_GI_JOINT_TRACE%"=="1" (
-  echo R282 - GI spotlight stages and complete ray accounting.
+  echo R283 - GI spotlight, volume and complete ray accounting.
 ) else (
   echo R278 - GI runtime accounting and native output comparison.
 )

@@ -59,7 +59,7 @@ Require(embedded.size()==shader.size&&!memcmp(embedded.data(),shader.bytes,shade
  D3D12_COMPUTE_PIPELINE_STATE_DESC pd{};pd.pRootSignature=root.Get();pd.CS={shader.bytes,shader.size};ComPtr<ID3D12PipelineState> nativeTrace;Check(d->CreateComputePipelineState(&pd,IID_PPV_ARGS(&nativeTrace)));
 #ifdef CONTROL_TEST_GI_JOINT_TRACE
  auto oracle=Read("build/gi-joint-light-oracle.dxbc");
- constexpr UINT expectedRecords=7;
+ constexpr UINT expectedRecords=11;
 #elif defined(CONTROL_TEST_GI_RAY_TRACE)
  auto oracle=Read("build/gi-ray-trace-oracle.dxbc");
  constexpr UINT expectedRecords=3;
@@ -72,19 +72,25 @@ pd.CS={oracle.data(),oracle.size()};ComPtr<ID3D12PipelineState> oraclePso;Check(
  ComPtr<ID3D12CommandAllocator> allocator;Check(d->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT,IID_PPV_ARGS(&allocator)));
  ComPtr<ID3D12GraphicsCommandList> list;Check(d->CreateCommandList(0,D3D12_COMMAND_LIST_TYPE_DIRECT,allocator.Get(),nullptr,IID_PPV_ARGS(&list)));Check(list->Close());
  ComPtr<ID3D12Fence> fence;Check(d->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&fence)));HANDLE event=CreateEventW(nullptr,FALSE,FALSE,nullptr);Require(event!=nullptr,"event");
+#ifdef CONTROL_TEST_GI_JOINT_TRACE
+ auto volumeConstants=Buffer(d.Get(),D3D12_HEAP_TYPE_UPLOAD,D3D12_RESOURCE_STATE_GENERIC_READ,D3D12_RESOURCE_FLAG_NONE);
+ void* constants=nullptr;D3D12_RANGE emptyRange{0,0};Check(volumeConstants->Map(0,&emptyRange,&constants));memset(constants,0,256);
+ const UINT volumeData[8]={0,0,0,1,0x3f000000,0x3f000000,0x3f000000,0};memcpy(constants,volumeData,sizeof(volumeData));volumeConstants->Unmap(0,nullptr);
+#endif
  for(UINT run=0;run<2;++run){
   auto gpu=Buffer(d.Get(),D3D12_HEAP_TYPE_DEFAULT,D3D12_RESOURCE_STATE_COPY_DEST,D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
   auto upload=Buffer(d.Get(),D3D12_HEAP_TYPE_UPLOAD,D3D12_RESOURCE_STATE_GENERIC_READ,D3D12_RESOURCE_FLAG_NONE);
   auto readback=Buffer(d.Get(),D3D12_HEAP_TYPE_READBACK,D3D12_RESOURCE_STATE_COPY_DEST,D3D12_RESOURCE_FLAG_NONE);
   void* mapped=nullptr;D3D12_RANGE none{0,0};Check(upload->Map(0,&none,&mapped));memset(mapped,0,allocated);if(run){UINT seed=capacity-1;memcpy(mapped,&seed,4);}memset(static_cast<unsigned char*>(mapped)+bytes,0xa5,256);
 #ifdef CONTROL_TEST_GI_JOINT_TRACE
-  const UINT coordinate=run?31:16;UINT header[3]={0x282,coordinate,coordinate};memcpy(static_cast<unsigned char*>(mapped)+4,header,sizeof(header));
+  const UINT coordinate=run?31:16;UINT header[3]={0x283,coordinate,coordinate};memcpy(static_cast<unsigned char*>(mapped)+4,header,sizeof(header));
 #endif
   upload->Unmap(0,nullptr);
   Check(allocator->Reset());Check(list->Reset(allocator.Get(),oraclePso.Get()));list->CopyBufferRegion(gpu.Get(),0,upload.Get(),0,allocated);
   Transition(list.Get(),gpu.Get(),D3D12_RESOURCE_STATE_COPY_DEST,D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
   list->SetComputeRootSignature(root.Get());list->SetComputeRootUnorderedAccessView(8,gpu->GetGPUVirtualAddress());
 #ifdef CONTROL_TEST_GI_JOINT_TRACE
+  list->SetComputeRootConstantBufferView(4,volumeConstants->GetGPUVirtualAddress());
   const UINT roi[4]={coordinate,coordinate,1,1};list->SetComputeRoot32BitConstants(9,4,roi,0);
 #endif
   list->Dispatch(1,1,1);
@@ -125,7 +131,24 @@ pd.CS={oracle.data(),oracle.size()};ComPtr<ID3D12PipelineState> oraclePso;Check(
     }
     continue;
    }
-   raySample=sample-4;
+   if(sample==4||sample==5||sample==7||sample==8){
+    auto f=[&](UINT offset){float value=0;memcpy(&value,record+offset,4);return value;};
+    auto u=[&](UINT offset){UINT value=0;memcpy(&value,record+offset,4);return value;};
+    const bool summary=sample==5||sample==8;const UINT ray=sample>=7?1:0;
+    Require(id[0]==coordinate&&id[1]==coordinate&&id[2]==ray&&id[3]==(summary?5u:6u),"volume identity");
+    if(summary){
+     Require(u(144)==42&&u(148)==2&&u(152)==(ray?65535u:7u)&&u(156)==0x283&&u(160)==1,"volume summary metadata");
+     Require(f(16)==5&&f(24)==7&&f(36)==1&&f(56)==1,"volume lookup snapshots");
+     Require(f(64)==1&&f(72)==3&&f(76)==2&&f(80)==.5f&&f(88)==1.5f,"volume blend snapshots");
+     Require(f(96)==.5f&&f(104)==.5f&&f(112)==1&&f(120)==2&&f(140)==2,"volume ambient and final");
+    }else{
+     Require(u(80)==0&&u(84)==123&&u(96)==42&&u(100)==2&&u(104)==(ray?65535u:7u)&&u(108)==0x283,"volume metadata");
+     Require(f(16)==1&&f(24)==3&&f(32)==.1f&&f(40)==.3f,"volume coordinate snapshots");
+     Require(f(48)==.5f&&f(56)==1.5f&&f(60)==2&&f(64)==1&&f(72)==3&&f(76)==2&&f(88)==1,"volume weighted result");
+    }
+    continue;
+   }
+   raySample=sample==6?0:sample==9?1:2;
 #endif
    Require(id[0]==expectedCoordinate&&id[1]==expectedCoordinate&&id[3]==(raySample==2?2u:1u),"ray record identity");
    auto scalar=[&](UINT offset){float f=0;memcpy(&f,record+offset,4);return f;};

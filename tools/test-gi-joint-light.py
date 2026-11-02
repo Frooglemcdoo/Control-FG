@@ -66,4 +66,35 @@ class Joint(unittest.TestCase):
   # Nonfinite rejected projection is recorded as invalid, never JSON NaN.
   bad=bytearray(data);struct.pack_into('<f',bad,len(bad)-256+16,float('inf'))
   report=analyze_joint(bad);self.assertIsNone(report['candidate_stages'][-1]['projection']);json.dumps(report,allow_nan=False)
+ def test_volume_accounting_and_rejection(self):
+  from analyze_gi_joint_trace import analyze_joint
+  spec=importlib.util.spec_from_file_location('ray_fixture',ROOT/'tools/test-analyze-gi-ray-trace.py');m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m);data=m.fixture()
+  records=[]
+  for ray,material in [(0,7),(1,65535)]:
+   summary=bytearray(256);volume=bytearray(256)
+   struct.pack_into('<4I',summary,0,16,16,ray,5);struct.pack_into('<4I',volume,0,16,16,ray,6)
+   for offset,values in [(64,[1,2,3,2]),(80,[.5,1,1.5]),(96,[.5,.5,.5]),(112,[1,1.5,2]),(128,[.5,1,2,2])]:struct.pack_into('<'+'f'*len(values),summary,offset,*values)
+   struct.pack_into('<4I',summary,144,42,2,material,0x283);struct.pack_into('<I',summary,160,1)
+   struct.pack_into('<4f',volume,48,.5,1,1.5,2);struct.pack_into('<4f',volume,64,1,2,3,2)
+   struct.pack_into('<2I',volume,80,0,123);struct.pack_into('<4I',volume,96,42,2,material,0x283)
+   records.extend([summary,volume])
+  data+=b''.join(records);struct.pack_into('<4I',data,0,7,0x283,0,0)
+  report=analyze_joint(data);self.assertEqual(report['volume_ray_count'],2);self.assertEqual(report['volume_rays'][1]['final_rgb'],[1,1.5,2])
+  for relative in (64,76,80,96,112,128):
+   bad=bytearray(data);struct.pack_into('<f',bad,16+3*256+relative,9)
+   with self.assertRaises(ValueError):analyze_joint(bad)
+  bad=bytearray(data);struct.pack_into('<f',bad,16+5*256+140,9)
+  with self.assertRaisesRegex(ValueError,'fallback radiance'):analyze_joint(bad)
+  bad=bytearray(data);struct.pack_into('<I',bad,16+4*256+80,1)
+  with self.assertRaisesRegex(ValueError,'volume index'):analyze_joint(bad)
+  bad=bytearray(data[:-256]);struct.pack_into('<I',bad,0,6)
+  with self.assertRaisesRegex(ValueError,'blend accounting'):analyze_joint(bad)
+  bad=bytearray(data)+records[-1];struct.pack_into('<I',bad,0,8)
+  with self.assertRaisesRegex(ValueError,'duplicate'):analyze_joint(bad)
+  # No contributing volume is legitimate: zero weight, ambient-only fallback.
+  empty=bytearray(m.fixture());struct.pack_into('<4I',empty,0,5,0x283,0,0)
+  for original in records[::2]:
+   b=bytearray(original);struct.pack_into('<4f',b,64,0,0,0,0);struct.pack_into('<3f',b,80,0,0,0)
+   struct.pack_into('<3f',b,96,1,1.5,2);struct.pack_into('<I',b,160,0);empty+=b
+  self.assertEqual(analyze_joint(empty)['volume_ray_count'],2)
 if __name__=='__main__':unittest.main()
