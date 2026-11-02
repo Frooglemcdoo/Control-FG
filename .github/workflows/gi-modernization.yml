@@ -1,0 +1,28 @@
+name: Validate GI modernization foundation
+on:
+  push:
+    branches: [work/gi-modernization]
+  workflow_dispatch:
+jobs:
+  validate:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: CPU and GPU initial sample adapter
+        shell: powershell
+        run: |
+          $vs=& "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          $commands=@"
+          call "$vs\VC\Auxiliary\Build\vcvars64.bat"
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-initial-sample.cpp /Fe:gi-initial-cpu.exe
+          if errorlevel 1 exit /b 1
+          gi-initial-cpu.exe
+          if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-initial-gpu.cpp /Fe:gi-initial-gpu.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
+          if errorlevel 1 exit /b 1
+          gi-initial-gpu.exe
+          if errorlevel 1 exit /b 1
+          "@
+          $commands | Set-Content run-gi-validation.cmd
+          cmd /c run-gi-validation.cmd
+          if ($LASTEXITCODE -ne 0) { throw 'GI adapter validation failed' }
