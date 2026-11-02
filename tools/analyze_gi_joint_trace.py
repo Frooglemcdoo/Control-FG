@@ -31,7 +31,7 @@ def analyze_joint(data):
    if (x,y,ray) in surfaces:raise ValueError('duplicate surface summary')
    surfaces[x,y,ray]=b
   else:raise ValueError('unknown mixed record kind')
- verified=analyze(struct.pack('<4I',len(native),0,0,0)+b''.join(native),sampling_step=1 if dense else 32)
+ verified=analyze(struct.pack('<4I',len(native),0,0,0)+b''.join(native),sampling_step=1 if dense else 32,capacity=262144 if magic==0x284 else CAPACITY)
  totals=defaultdict(lambda:[0.,0.,0.]);seen=set();records=[];spot_by_key={}
  for x,y,ray,b in spots:
   light,n,secondary,primary=struct.unpack_from('<4I',b,144);key=(x,y,ray,light)

@@ -10,13 +10,13 @@ import struct
 CAPACITY, STRIDE = 65536, 256
 
 
-def analyze(data, *, sampling_step=32):
+def analyze(data, *, sampling_step=32, capacity=CAPACITY):
     if len(data) < 16:
         raise ValueError('Missing header')
     count, *reserved = struct.unpack_from('<4I', data)
-    if any(reserved) or len(data) != 16+min(count,CAPACITY)*STRIDE:
+    if any(reserved) or len(data) != 16+min(count,capacity)*STRIDE:
         raise ValueError('Unknown header or malformed length')
-    if count > CAPACITY:
+    if count > capacity:
         raise ValueError('Overflow: cannot certify complete per-ray sets')
     groups = defaultdict(lambda: dict(rays={}, summary=None))
     nonfinite = 0

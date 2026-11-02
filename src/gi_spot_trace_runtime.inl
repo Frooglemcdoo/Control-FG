@@ -226,7 +226,8 @@ inline void Poll() noexcept {
  if(!Enabled())return;
  auto p=phase.load();if((p==Phase::Armed||p==Phase::Recorded||p==Phase::Submitted)&&GetTickCount64()-armedAt>30000){Fail("timeout",L"FAILED: capture timed out. Exit and send logs.");return;}
  if(p!=Phase::Submitted)return;const auto completed=fence->GetCompletedValue();if(completed==UINT64_MAX){Fail("device_removed",L"FAILED: graphics device removed. Send logs.");return;}if(completed<savedFrames.load()+1)return;
- phase.store(Phase::Exporting);void* mapped=nullptr;D3D12_RANGE range{0,Bytes()};HRESULT hr=readback->Map(0,&range,&mapped);
+ Phase expected=Phase::Submitted;if(!phase.compare_exchange_strong(expected,Phase::Exporting))return;
+ void* mapped=nullptr;D3D12_RANGE range{0,Bytes()};HRESULT hr=readback->Map(0,&range,&mapped);
  bool ok=false;UINT records=0;wchar_t path[MAX_PATH]{};
  if(SUCCEEDED(hr)){
   memcpy(&records,mapped,4);AcquireSRWLockExclusive(&reportLock);const bool opened=report.OpenDefault();if(opened)wcscpy_s(path,report.Path());ReleaseSRWLockExclusive(&reportLock);
@@ -240,9 +241,11 @@ inline void Poll() noexcept {
  else if(RayTrace())Trace("GI_RAY_R278_EXPORT complete=%u records=%u overflow=%u present=%llu final_sum_and_rays=1 no_reuse_accounting=1",unsigned(ok),records,unsigned(records>Capacity()),capturedPresent);
  if(ok&&records>Capacity()){Fail("overflow",L"FAILED: record capacity exceeded. Partial frame saved; send logs.");return;}
  if(ok){
+  AcquireSRWLockExclusive(&lock);
+  if(phase.load()!=Phase::Exporting){ReleaseSRWLockExclusive(&lock);return;}
   const auto saved=++savedFrames;
   recordedList.Reset();retainedPso.Reset();retainedTrace.Reset();retainedRoot.Reset();retainedTraceRoot.Reset();submittedQueue.Reset();
-  nextFrameAt=GetTickCount64()+250;phase.store(saved<FrameCount()?Phase::Gap:Phase::Complete);
+  nextFrameAt=GetTickCount64()+250;phase.store(saved<FrameCount()?Phase::Gap:Phase::Complete);ReleaseSRWLockExclusive(&lock);
  }else Fail("export",L"FAILED: could not save trace. Exit and send logs.");
 }
 }
