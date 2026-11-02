@@ -12,7 +12,13 @@ source solid-angle PDF. The source PDF is divided exactly once. It preserves
 miss fallback separately and normalizes by all configured rays, including black
 and miss rays. It rejects stale frames, missing verification, invalid sentinels,
 nonfinite input and overflow. `gi_initial_sample.hlsl` supplies a bounded GPU
-entry point. This is **not yet RTXDI integration or a game-bound renderer**.
+entry point. This is **not yet a game-bound renderer**.
+
+`rtxdi_initial.hlsli` now calls the pinned NVIDIA `RTXDI_MakeGIReservoir`
+implementation and reconstructs a single candidate without reuse. Surface
+samples require a verified unit geometric normal; misses retain their separate
+fallback. `gi_rtxdi_initial.hlsl` exposes this bridge for isolated D3D12 tests.
+The SDK is fetched at an exact revision in CI, not vendored or loaded by the mod.
 
 The existing R277 native-throughput accounting prototype remains the reference.
 Do not reconstruct a physical PDF by arbitrarily splitting captured throughput
@@ -64,6 +70,12 @@ https://github.com/NVIDIA-RTX/RTXDI/blob/main/Doc/RtxdiApplicationBridge.md
 
 Portable test: `g++ -std=c++17 -Wall -Wextra -Werror tools/test-gi-initial-sample.cpp`.
 Windows workflow `gi-modernization.yml` compiles the shared CPU code and shader,
-executes the shader on D3D12 WARP, compares CPU/GPU results, checks invalid inputs
+uses DXC Shader Model 6.0 and executes both shaders on D3D12 WARP, compares CPU/GPU results, checks invalid inputs
 and nonmultiple dispatch bounds, and checks the D3D12 debug layer.
 No in-game quality or performance improvement is claimed by these tests.
+
+Validated 2026-11-02: Linux CPU adapter and connection checks pass. Windows
+workflow run [41462051199](https://github.com/Frooglemcdoo/Control-FG/actions/runs/41462051199)
+passes CPU tests, DXC compilation, and D3D12 WARP execution of both the shared
+adapter and actual pinned RTXDI initialization bridge with a clean debug layer.
+This is software-device execution, not NVIDIA hardware or in-game validation.
