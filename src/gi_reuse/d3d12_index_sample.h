@@ -45,12 +45,12 @@ struct IndexSample {
         source=input;offset=inputOffset;bytes=inputBytes;bindings=native;return S_OK;
     }
     bool Record(ID3D12GraphicsCommandList4* list,const IndexSnapshotPipeline& pipeline) noexcept {
-        if(!source||!output||!readback)return false;IndexSnapshotPlan recorded;
+        if(!source||!output||!readback)return false;IndexSnapshotPlan recordedPlan;
         retainedPipeline=pipeline;
-        if(!pipeline.RecordRestoring(list,source.Get(),offset,bytes,output.Get(),bindings,recorded))return false;
+        if(!pipeline.RecordRestoring(list,source.Get(),offset,bytes,output.Get(),bindings,recordedPlan))return false;
         D3D12_RESOURCE_BARRIER b{};b.Type=D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
         b.Transition={output.Get(),D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,D3D12_RESOURCE_STATE_UNORDERED_ACCESS,D3D12_RESOURCE_STATE_COPY_SOURCE};list->ResourceBarrier(1,&b);
-        list->CopyBufferRegion(readback.Get(),0,output.Get(),0,recorded.copyBytes);
+        list->CopyBufferRegion(readback.Get(),0,output.Get(),0,recordedPlan.copyBytes);
         // Leave the private output in its initial state for legal closed-list replay.
         std::swap(b.Transition.StateBefore,b.Transition.StateAfter);list->ResourceBarrier(1,&b);recorded=true;return true;
     }
