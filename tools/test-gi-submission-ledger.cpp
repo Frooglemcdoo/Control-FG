@@ -1,6 +1,7 @@
 #include "../src/gi_reuse/submission_ledger.h"
 #include <cassert>
 #include <cstdio>
+#include "../src/gi_reuse/scene_read_plan.h"
 using namespace gi_reuse;
 static ASEvent Build(std::uint64_t address,std::uint64_t instances=0){return {ASOperation::Build,{address,0,instances,3,instances!=0},0};}
 int main(){
@@ -23,5 +24,25 @@ int main(){
  auto frozen=growing;growing.Reset();assert(growing.size==0&&growing.events.empty());
  ASLedger<4> growingLedger;assert(growingLedger.Submit(1,1,frozen,0));assert(growingLedger.Find(256)->instances==1024);
  assert(!frozen.Append(Build(512)));assert(!growingLedger.Submit(1,2,frozen,0));
+ TriangleMetadata t{4096,8192,12288,12,3,3,6,57,0};
+ auto geometry=GeometryMetadata::Create({t});assert(geometry);
+ ASLedger<4> scene,sceneSnapshot;ASJournal<4> sceneEvents;
+ sceneEvents.Append({ASOperation::Build,{256,0,0,1,false,geometry},0});
+ sceneEvents.Append({ASOperation::Copy,{512},256});
+ sceneEvents.Append({ASOperation::Build,{768,0,16384,2,true},0});
+ assert(scene.Submit(1,1,sceneEvents,0));assert(scene.Snapshot(1,1,sceneSnapshot));
+ SceneReadPlan<> plan;assert(plan.Build(sceneSnapshot)&&plan.Complete());
+ assert(plan.BLASCount()==2&&plan.TLASCount()==1&&plan.Ranges().size()==7);
+ assert(plan.Ranges()[0].asAddress==256&&plan.Ranges()[0].revision==1&&plan.Ranges()[0].bytes==36);
+ assert(plan.Ranges()[1].kind==ReadKind::Index&&plan.Ranges()[1].bytes==6);
+ assert(plan.Ranges()[2].kind==ReadKind::Transform&&plan.Ranges()[2].bytes==48);
+ assert(plan.Ranges()[3].asAddress==512&&plan.Ranges()[3].revision==2);
+ assert(plan.Ranges()[6].kind==ReadKind::Instances&&plan.Ranges()[6].bytes==128);
+ SceneReadPlan<6> tooSmall;assert(!tooSmall.Build(sceneSnapshot)&&tooSmall.Ranges().empty());
+ scene.Invalidate();assert(!plan.Build(scene)&&!plan.Complete()&&plan.Ranges().empty());
+ assert(plan.Build(sceneSnapshot)); // prior immutable snapshot remains usable as metadata
+ ASLedger<4> malformed;ASJournal<1> bad;bad.Append({ASOperation::Build,{256,0,UINT64_MAX-10,2,true},0});
+ assert(malformed.Submit(1,1,bad,0));assert(!plan.Build(malformed)&&plan.Ranges().empty());
+ std::puts("PASS R292 scene read plan: AS revisions, copy lineage, all four range kinds, capacity/invalid rejection and prior snapshot isolation");
  std::puts("PASS submission ordering, reset generations, copy lineage, immutable snapshots, fence gating, capacity and multi-queue rejection");
 }

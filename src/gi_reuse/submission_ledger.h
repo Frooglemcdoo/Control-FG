@@ -53,6 +53,7 @@ template<std::size_t Capacity> class ASLedger {
         return empty;
     }
 public:
+    std::uint64_t SubmissionFence() const noexcept {return fence_;}
     bool Complete() const noexcept {return complete_;}
     // Any unobserved mutation/order invalidates the entire claim. No silent eviction.
     void Invalidate(const char* reason="ledger_invalidated") noexcept {complete_=false;if(!failure_)failure_=reason;}
@@ -61,6 +62,12 @@ public:
         if(!complete_||!address)return nullptr;
         for(const auto& r:records_)if(r.address==address)return &r;
         return nullptr;
+    }
+    // Includes retained historical AS records, not a claim of active TLAS membership.
+    template<class Visitor> bool Visit(Visitor&& visitor) const {
+        if(!complete_)return false;
+        for(const auto& r:records_)if(r.address&&!visitor(r))return false;
+        return true;
     }
     // Plans only the six-byte index read. Vertex IDs must be decoded from
     // same-generation bytes and bounded against vertexCount before GPU loads.

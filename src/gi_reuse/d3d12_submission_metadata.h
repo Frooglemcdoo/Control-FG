@@ -6,6 +6,8 @@
 #include <new>
 #include "d3d12_geometry_metadata.h"
 #include "submission_ledger.h"
+#include "scene_read_plan.h"
+#include <unordered_set>
 #include "d3d12_buffer_owners.h"
 namespace gi_reuse::runtime {
 using Microsoft::WRL::ComPtr;
@@ -162,6 +164,36 @@ inline bool Snapshot(ASLedger<8192>& result) noexcept {
 inline void CompletionStats(UINT64& issued,UINT64& completed,bool& ready) noexcept {
  AcquireSRWLockShared(&stateLock);issued=nextFence;completed=fence?fence->GetCompletedValue():0;
  ready=!fault.load()&&!submitting&&fence&&completed!=UINT64_MAX&&completed>=issued&&ledger.Complete();ReleaseSRWLockShared(&stateLock);
+}
+struct ScenePlanStats {
+ bool snapshot=false,planned=false;
+ UINT64 fenceValue=0,blas=0,tlas=0,ranges=0,owners=0,resolved=0,missing=0;
+ UINT64 defaultRanges=0,uploadRanges=0,otherRanges=0,requestedBytes=0;
+};
+inline ScenePlanStats InspectScenePlan() noexcept {
+ ScenePlanStats s{};
+ try {
+  auto snapshot=std::make_unique<ASLedger<8192>>();
+  if(!Snapshot(*snapshot))return s;
+  s.snapshot=true;s.fenceValue=snapshot->SubmissionFence();
+  SceneReadPlan<> plan;if(!plan.Build(*snapshot))return s;
+  s.planned=true;s.blas=plan.BLASCount();s.tlas=plan.TLASCount();s.ranges=plan.Ranges().size();
+  std::unordered_set<ID3D12Resource*> unique;
+  for(const auto& r:plan.Ranges()){
+   if(r.bytes>UINT64_MAX-s.requestedBytes){s.planned=false;return s;}
+   s.requestedBytes+=r.bytes;
+   ComPtr<ID3D12Resource> owner;UINT64 offset=0;
+   if(!owners.Resolve(r.address,r.bytes,owner,offset)){++s.missing;continue;}
+   ++s.resolved;unique.insert(owner.Get());
+   D3D12_HEAP_PROPERTIES heap{};D3D12_HEAP_FLAGS flags{};
+   if(FAILED(owner->GetHeapProperties(&heap,&flags)))++s.otherRanges;
+   else if(heap.Type==D3D12_HEAP_TYPE_DEFAULT)++s.defaultRanges;
+   else if(heap.Type==D3D12_HEAP_TYPE_UPLOAD)++s.uploadRanges;
+   else ++s.otherRanges;
+  }
+  s.owners=unique.size();
+ }catch(...){s.planned=false;}
+ return s;
 }
 // Snapshot proves only observed descriptor submission completion, never lifetime
 // of vertex/index/instance resources or same-generation bytes. No rendering user.
