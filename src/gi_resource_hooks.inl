@@ -10,15 +10,15 @@ inline Hooks Lookup(ID3D12Device* device) noexcept {
  const auto table=*reinterpret_cast<void***>(device);Hooks found{};AcquireSRWLockShared(&lock);
  for(const auto& h:hooks)if(h.table==table){found=h;break;}ReleaseSRWLockShared(&lock);return found;
 }
-inline void Observe(HRESULT hr,void** out) noexcept {if(SUCCEEDED(hr)&&out&&*out)gi_reuse::runtime::ObserveCreated(static_cast<IUnknown*>(*out));}
+inline void Observe(HRESULT hr,void** out,D3D12_RESOURCE_STATES state) noexcept {if(SUCCEEDED(hr)&&out&&*out)gi_reuse::runtime::ObserveCreated(static_cast<IUnknown*>(*out),state);}
 inline HRESULT STDMETHODCALLTYPE CommittedHook(ID3D12Device* d,const D3D12_HEAP_PROPERTIES* h,D3D12_HEAP_FLAGS f,const D3D12_RESOURCE_DESC* r,D3D12_RESOURCE_STATES s,const D3D12_CLEAR_VALUE* c,REFIID iid,void** out){
- const auto hr=Lookup(d).committed(d,h,f,r,s,c,iid,out);Observe(hr,out);return hr;
+ const auto hr=Lookup(d).committed(d,h,f,r,s,c,iid,out);Observe(hr,out,s);return hr;
 }
 inline HRESULT STDMETHODCALLTYPE PlacedHook(ID3D12Device* d,ID3D12Heap* h,UINT64 offset,const D3D12_RESOURCE_DESC* r,D3D12_RESOURCE_STATES s,const D3D12_CLEAR_VALUE* c,REFIID iid,void** out){
- const auto hr=Lookup(d).placed(d,h,offset,r,s,c,iid,out);Observe(hr,out);return hr;
+ const auto hr=Lookup(d).placed(d,h,offset,r,s,c,iid,out);Observe(hr,out,s);return hr;
 }
 inline HRESULT STDMETHODCALLTYPE ReservedHook(ID3D12Device* d,const D3D12_RESOURCE_DESC* r,D3D12_RESOURCE_STATES s,const D3D12_CLEAR_VALUE* c,REFIID iid,void** out){
- const auto hr=Lookup(d).reserved(d,r,s,c,iid,out);Observe(hr,out);return hr;
+ const auto hr=Lookup(d).reserved(d,r,s,c,iid,out);Observe(hr,out,s);return hr;
 }
 inline void Install(ID3D12Device* device) noexcept {
  if(!device||!gi_reuse::runtime::Enabled())return;auto table=*reinterpret_cast<void***>(device);AcquireSRWLockExclusive(&lock);

@@ -20,14 +20,14 @@ inline std::atomic<UINT64> journalPeak{0}, creationObservations{0}, barrierObser
 inline void JournalPeak(std::size_t size) noexcept {auto old=journalPeak.load();while(old<size&&!journalPeak.compare_exchange_weak(old,size)){};}
 inline std::atomic<UINT64> buildCount{0},copyCount{0},resolvedRanges{0},missingRanges{0};
 inline void ObserveBuffer(ID3D12Resource* resource) noexcept {if(Enabled())owners.Observe(resource);}
-inline void ObserveCreated(IUnknown* object) noexcept {
+inline void ObserveCreated(IUnknown* object,D3D12_RESOURCE_STATES initialState=D3D12_RESOURCE_STATE_COMMON) noexcept {
  if(!Enabled()||!object)return;ComPtr<ID3D12Resource> resource;
- if(SUCCEEDED(object->QueryInterface(IID_PPV_ARGS(&resource)))&&resource->GetDesc().Dimension==D3D12_RESOURCE_DIMENSION_BUFFER){++creationObservations;owners.Observe(resource.Get());}
+ if(SUCCEEDED(object->QueryInterface(IID_PPV_ARGS(&resource)))&&resource->GetDesc().Dimension==D3D12_RESOURCE_DIMENSION_BUFFER){++creationObservations;owners.Observe(resource.Get(),initialState);}
 }
 inline void ObserveBarriers(UINT count,const D3D12_RESOURCE_BARRIER* barriers) noexcept {
  if(!Enabled()||!barriers)return;
  for(UINT i=0;i<count;++i){const auto& b=barriers[i];++barrierObservations;
-  if(b.Type==D3D12_RESOURCE_BARRIER_TYPE_TRANSITION)owners.Observe(b.Transition.pResource);
+  if(b.Type==D3D12_RESOURCE_BARRIER_TYPE_TRANSITION)owners.Observe(b.Transition.pResource,b.Transition.StateAfter);
   else if(b.Type==D3D12_RESOURCE_BARRIER_TYPE_UAV)owners.Observe(b.UAV.pResource);
   else if(b.Type==D3D12_RESOURCE_BARRIER_TYPE_ALIASING){owners.Observe(b.Aliasing.pResourceBefore);owners.Observe(b.Aliasing.pResourceAfter);}
  }
@@ -104,22 +104,28 @@ inline ComPtr<ID3D12CommandQueue> queue;
 inline ComPtr<ID3D12Fence> fence;
 inline GrowingASJournal<65536> pending;
 inline ASLedger<8192> ledger;
+inline std::atomic<UINT64> ignoredCopySubmissions{0},ignoredEmptySubmissions{0},asSubmissions{0};
 inline UINT64 BeforeExecute(ID3D12CommandQueue* q,UINT count,ID3D12CommandList*const* lists) noexcept {
  if(!Enabled()||fault.load())return 0;
+ if(!q||(count&&!lists)){Fail("invalid_submission");return 0;}
+ // Copy queues cannot contain AS build/copy commands. This says nothing about
+ // geometry byte dependencies; those remain unverified by this metadata observer.
+ if(q->GetDesc().Type==D3D12_COMMAND_LIST_TYPE_COPY){++ignoredCopySubmissions;return 0;}
  AcquireSRWLockExclusive(&stateLock);
- UINT64 token=0;
- if(submitting||!q||(count&&!lists)){Fail("concurrent_or_invalid_submission");}
- else if(queue&&queue.Get()!=q){Fail("multiple_queues");}
- else {
-  unsigned relevant=0;pending={};
-  for(UINT i=0;i<count&&!fault.load();++i){auto j=Read(lists[i]);
-   // Uninstrumented lists can contain unseen builds. No partial coverage claim.
-   if(!j||!j->data.complete){Fail("unobserved_or_incomplete_list");break;}
-   if(j->data.size){if(++relevant>1){Fail("multiple_as_lists_in_batch");break;}try{pending=j->data;}catch(...){Fail("submission_snapshot_allocation");break;}}
-  }
-  if(!fault.load()&&relevant){
-   if(!fence){ComPtr<ID3D12Device> d;if(FAILED(q->GetDevice(IID_PPV_ARGS(&d))))Fail("queue_device");else if(FAILED(d->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&fence))))Fail("fence_creation");else queue=q;}
-   if(!fault.load()){submitting=true;token=activeToken=++nextFence;}
+ UINT64 token=0;unsigned relevant=0;ComPtr<Journal> selected;
+ for(UINT i=0;i<count&&!fault.load();++i){auto j=Read(lists[i]);
+  // Unknown direct/compute lists remain unknown, never assumed empty.
+  if(!j||!j->data.complete){Fail("unobserved_or_incomplete_list");break;}
+  if(j->data.size){if(++relevant>1){Fail("multiple_as_lists_in_batch");break;}selected=j;}
+ }
+ if(!fault.load()&&!relevant)++ignoredEmptySubmissions;
+ if(!fault.load()&&relevant){
+  if(submitting)Fail("concurrent_as_submission");
+  else if(queue&&queue.Get()!=q)Fail("multiple_as_queues");
+  else {
+   try{pending=selected->data;}catch(...){Fail("submission_snapshot_allocation");}
+   if(!fault.load()&&!fence){ComPtr<ID3D12Device> d;if(FAILED(q->GetDevice(IID_PPV_ARGS(&d))))Fail("queue_device");else if(FAILED(d->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&fence))))Fail("fence_creation");else queue=q;}
+   if(!fault.load()){submitting=true;token=activeToken=++nextFence;++asSubmissions;}
   }
  }
  ReleaseSRWLockExclusive(&stateLock);return token;

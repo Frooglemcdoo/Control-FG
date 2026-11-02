@@ -53,6 +53,29 @@ int main(){
  ComPtr<ID3D12Resource> scene;Check(device->CreateCommittedResource(&gpuHeap,D3D12_HEAP_FLAG_NONE,&buffer,D3D12_RESOURCE_STATE_COMMON,nullptr,IID_PPV_ARGS(&scene)));
  priority.Observe(scene.Get());for(auto& r:resources)priority.Observe(r.Get());
  assert(priority.Resolve(scene->GetGPUVirtualAddress(),64,owner,offset));
+ // Shader-readable default buffers outrank unrelated default allocations.
+ gi_reuse::BasicBufferOwners<4,256> candidates;
+ candidates.Observe(scene.Get(),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+ ComPtr<ID3D12Resource> defaults[6];
+ for(auto& r:defaults){Check(device->CreateCommittedResource(&gpuHeap,D3D12_HEAP_FLAG_NONE,&buffer,D3D12_RESOURCE_STATE_COMMON,nullptr,IID_PPV_ARGS(&r)));candidates.Observe(r.Get());}
+ assert(candidates.Resolve(scene->GetGPUVirtualAddress(),64,owner,offset));
+ // Rejected admission is atomic: no useful entries evicted for a buffer that
+ // cannot fit even after all permissible eviction.
+ gi_reuse::BasicBufferOwners<4,256> admission;admission.Observe(resources[0].Get());
+ assert(admission.Resolve(resources[0]->GetGPUVirtualAddress(),64,owner,offset));admission.Observe(resources[1].Get());
+ auto largeDesc=buffer;largeDesc.Width=224;ComPtr<ID3D12Resource> large;
+ Check(device->CreateCommittedResource(&heap,D3D12_HEAP_FLAG_NONE,&largeDesc,D3D12_RESOURCE_STATE_GENERIC_READ,nullptr,IID_PPV_ARGS(&large)));
+ admission.Observe(large.Get());admission.Stats(owned,retained,limited);assert(limited&&owned==2&&retained==128);
+ admission.RetentionStats(protectedCount,evictions);assert(evictions==0);
+ assert(admission.Resolve(resources[1]->GetGPUVirtualAddress(),64,owner,offset));
+ // Excluded AS-storage classification persists across later untyped observations.
+ // Synthetic state hint only; WARP does not execute an AS allocation/build here.
+ gi_reuse::BasicBufferOwners<4,256> excluded;excluded.Observe(defaults[0].Get());
+ excluded.Observe(defaults[0].Get(),D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE);
+ excluded.Observe(defaults[0].Get());assert(!excluded.Resolve(defaults[0]->GetGPUVirtualAddress(),64,owner,offset));
+ D3D12_HEAP_PROPERTIES readbackHeap{};readbackHeap.Type=D3D12_HEAP_TYPE_READBACK;ComPtr<ID3D12Resource> readback;
+ Check(device->CreateCommittedResource(&readbackHeap,D3D12_HEAP_FLAG_NONE,&buffer,D3D12_RESOURCE_STATE_COPY_DEST,nullptr,IID_PPV_ARGS(&readback)));
+ excluded.Observe(readback.Get());excluded.Stats(owned,retained,limited);assert(owned==0&&retained==0);
  // Actual creation interception discovers a CPU-written buffer without any copy.
  fixture::gi_resource_hooks::Install(device.Get());const auto created=rt::creationObservations.load();
  ComPtr<ID3D12Resource> createdBuffer;Check(device->CreateCommittedResource(&heap,D3D12_HEAP_FLAG_NONE,&buffer,D3D12_RESOURCE_STATE_GENERIC_READ,nullptr,IID_PPV_ARGS(&createdBuffer)));
@@ -90,6 +113,24 @@ int main(){
  assert(!rt::fault&&rt::Read(list.Get())->data.size==1024);
  const auto grown=rt::BeforeExecute(queue.Get(),1,lists);assert(grown&&!rt::fault);
  rt::Reset(list.Get());assert(rt::pending.size==1024);queue->ExecuteCommandLists(1,lists);rt::AfterExecute(queue.Get(),grown);assert(!rt::fault);
+ // Known empty submissions on another direct queue cannot invalidate AS metadata,
+ // including while an AS-bearing submission is between Before/AfterExecute.
+ ComPtr<ID3D12CommandQueue> unrelated;Check(device->CreateCommandQueue(&qd,IID_PPV_ARGS(&unrelated)));
+ ComPtr<ID3D12GraphicsCommandList> empty;Check(device->CreateCommandList(0,D3D12_COMMAND_LIST_TYPE_DIRECT,allocator.Get(),nullptr,IID_PPV_ARGS(&empty)));
+ rt::Initialize(empty.Get());ID3D12CommandList* emptyLists[]={empty.Get()};
+ assert(!rt::BeforeExecute(unrelated.Get(),1,emptyLists)&&!rt::fault);
+ auto copyDesc=qd;copyDesc.Type=D3D12_COMMAND_LIST_TYPE_COPY;ComPtr<ID3D12CommandQueue> copyQueue;Check(device->CreateCommandQueue(&copyDesc,IID_PPV_ARGS(&copyQueue)));
+ ComPtr<ID3D12CommandAllocator> copyAllocator;Check(device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_COPY,IID_PPV_ARGS(&copyAllocator)));
+ ComPtr<ID3D12GraphicsCommandList> copyList;Check(device->CreateCommandList(0,D3D12_COMMAND_LIST_TYPE_COPY,copyAllocator.Get(),nullptr,IID_PPV_ARGS(&copyList)));
+ ID3D12CommandList* copyLists[]={copyList.Get()};assert(!rt::BeforeExecute(copyQueue.Get(),1,copyLists)&&!rt::fault);
+ rt::RecordBuild(list.Get(),&build);const auto concurrent=rt::BeforeExecute(queue.Get(),1,lists);assert(concurrent);
+ const auto preservedSize=rt::pending.size;
+ assert(!rt::BeforeExecute(unrelated.Get(),1,emptyLists)&&!rt::fault&&rt::pending.size==preservedSize&&rt::activeToken==concurrent);
+ assert(!rt::BeforeExecute(copyQueue.Get(),1,copyLists)&&!rt::fault&&rt::activeToken==concurrent);
+ queue->ExecuteCommandLists(1,lists);rt::AfterExecute(queue.Get(),concurrent);assert(!rt::fault);
+ // A genuinely AS-bearing second queue remains rejected.
+ rt::failureReason=nullptr;assert(!rt::BeforeExecute(unrelated.Get(),1,lists)&&rt::fault);
+ assert(std::string(rt::failureReason.load())=="multiple_as_queues");rt::fault=false;rt::failureReason=nullptr;
  // Missing coverage must invalidate even an otherwise valid prior snapshot.
  ComPtr<ID3D12GraphicsCommandList> unknown;Check(device->CreateCommandList(0,D3D12_COMMAND_LIST_TYPE_DIRECT,allocator.Get(),nullptr,IID_PPV_ARGS(&unknown)));
  ID3D12CommandList* missing[]={unknown.Get()};assert(!rt::BeforeExecute(queue.Get(),1,missing)&&rt::fault);assert(!rt::Snapshot(*snapshot));
