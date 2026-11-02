@@ -61,7 +61,7 @@ retain ID3D12Resource objects or their contents.
 
 The opt-in runtime observer now calls the adapter from build/copy hooks, owns
 per-command-list journals via COM private data, and freezes the journal at queue
-submission. Resource lifetime, resolved updates and GPU buffer access are still
+submission. Full resource lifetime and GPU buffer access are still
 required before claiming a live triangle mapping. No producer PDF is inferred
 from this metadata, and no game lighting change is enabled.
 
@@ -86,8 +86,8 @@ disabled by default.
 
 This first observer deliberately invalidates on unknown list coverage, concurrent
 Execute calls, a second queue, multiple AS-bearing lists in one batch, capacity
-exhaustion, unsupported geometry, serialization/deserialization, or PERFORM_UPDATE.
-It cannot yet follow Control's complete dynamic scene. There is no automatic
+exhaustion, unsupported geometry, serialization/deserialization, or incompatible update metadata.
+Updates now require an ALLOW_UPDATE source, stable geometry order/counts/formats/flags/index addresses and preserved transform presence. TLAS updates preserve instance count. Index contents and GPU resource state remain unverified. It cannot yet establish Control's complete dynamic scene. There is no automatic
 recovery that could hide missing events. A successful metadata snapshot proves
 only completion of observed descriptor submissions, not ownership or contents of
 vertex/index/instance buffers. No rendering path consumes it.
@@ -99,3 +99,23 @@ missing coverage, update, concurrent-submit and unsupported-copy rejection. It
 The existing native-hook mock checks original call forwarding unchanged.
 
 Validation on 2026-11-02: [Windows runtime and adapter run 41464800786](https://github.com/Frooglemcdoo/Control-FG/actions/runs/41464800786) passed the new WARP journal/fence fixture, native hook-forwarding tests, descriptor/ledger checks, and both RTXDI initialization shaders.
+
+## R286 buffer inventory and dynamic updates
+
+The native copy hooks now observe source/destination buffer objects. The inventory
+retains at most 2048 objects / 512 MiB of logical buffer extents until process exit,
+rejects ambiguous address resolution, and reports missing ranges. Objects retained
+this way cannot be destroyed, but contents can still change; placed heaps, aliasing,
+CPU writes, reserved-resource mappings and resource states are not established.
+No geometry readback or rendering consumer uses these observations.
+
+Build events carry ALLOW_UPDATE. An Update event resolves its source at submission
+time, validates descriptor invariants and creates a fresh destination revision.
+Copies preserve update eligibility. This validates descriptors only; unchanged
+index-buffer contents remain a native API requirement, not an observed fact.
+Reference checked 2026-11-02:
+https://microsoft.github.io/DirectX-Specs/d3d/Raytracing.html#acceleration-structure-update-constraints
+
+Use the R286 metadata launcher for one automatic session covering startup,
+traversal, updates, copies and owner coverage. GI_METADATA_R286 reports status and
+an incompleteness reason without a GPU dump. No F7 or stationary view is needed.

@@ -83,6 +83,9 @@ This is software-device execution, not NVIDIA hardware or in-game validation.
 Geometry integration checkpoint: the submission ledger now retains validated,
 immutable BLAS triangle descriptors, and the native D3D12 adapter copies either
 descriptor layout. Copy lineage and AS revisions guard triangle read plans.
-Opt-in build/copy and queue hooks now feed these components. Resource retention,
-resolved dynamic updates and same-generation GPU reads remain unimplemented. No additional capture is required
+Opt-in build/copy and queue hooks now feed these components. Bounded buffer-object retention and descriptor-validated dynamic updates are now
+implemented. Full lifetime/state tracking and same-generation GPU reads remain
+unimplemented. No additional capture is required
 for this metadata stage.
+
+R286 validation: the focused Windows run [41467978525](https://github.com/Frooglemcdoo/Control-FG/actions/runs/41467978525) passes update/ownership metadata checks, native hook tests and both initialization shaders. See `native-lighting-r286.md` for the single-session integration test and explicit rendering limitations.
