@@ -8,6 +8,8 @@
 #include <iostream>
 #include <stdexcept>
 #include <limits>
+#include <string>
+#include <cstring>
 #include "../src/gi_reuse/initial_sample.h"
 using Microsoft::WRL::ComPtr;using namespace gi_reuse;
 void Check(HRESULT h){if(FAILED(h))throw std::runtime_error("HRESULT "+std::to_string(static_cast<unsigned long>(h)));}
