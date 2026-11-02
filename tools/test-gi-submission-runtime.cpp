@@ -61,6 +61,24 @@ int main(){
  ComPtr<ID3D12Resource> defaults[6];
  for(auto& r:defaults){Check(device->CreateCommittedResource(&gpuHeap,D3D12_HEAP_FLAG_NONE,&buffer,D3D12_RESOURCE_STATE_COMMON,nullptr,IID_PPV_ARGS(&r)));candidates.Observe(r.Get());}
  assert(candidates.Resolve(scene->GetGPUVirtualAddress(),64,owner,offset));
+ // Index-capable default buffers survive generic shader-read churn, including
+ // promotion through the known-pointer fast path before their first AS lookup.
+ gi_reuse::BasicBufferOwners<2,128> indexPriority;
+ indexPriority.Observe(scene.Get());indexPriority.Observe(scene.Get(),D3D12_RESOURCE_STATE_INDEX_BUFFER);
+ for(auto& r:defaults)indexPriority.Observe(r.Get(),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+ assert(indexPriority.Resolve(scene->GetGPUVirtualAddress(),64,owner,offset));
+ assert(indexPriority.HistoricalEvidence(defaults[0]->GetGPUVirtualAddress(),64).event==gi_reuse::BufferEvent::Evicted);
+ // A large lower-priority arrival cannot evict the index candidate, even before
+ // its first Resolve protects it. Refusal is atomic under byte-budget pressure.
+ gi_reuse::BasicBufferOwners<2,128> indexBudget;
+ indexBudget.Observe(scene.Get(),D3D12_RESOURCE_STATE_INDEX_BUFFER);
+ auto shaderDesc=buffer;shaderDesc.Width=128;ComPtr<ID3D12Resource> shaderBuffer;
+ Check(device->CreateCommittedResource(&gpuHeap,D3D12_HEAP_FLAG_NONE,&shaderDesc,D3D12_RESOURCE_STATE_COMMON,nullptr,IID_PPV_ARGS(&shaderBuffer)));
+ indexBudget.Observe(shaderBuffer.Get(),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+ assert(indexBudget.HistoricalEvidence(shaderBuffer->GetGPUVirtualAddress(),128).event==gi_reuse::BufferEvent::Rejected);
+ assert(indexBudget.Resolve(scene->GetGPUVirtualAddress(),64,owner,offset));
+ indexBudget.Stats(owned,retained,limited);assert(owned==1&&retained==64&&limited);
+ std::puts("PASS R291 index priority, fast-path promotion, byte-budget refusal and eviction/rejection evidence");
  // Rejected admission is atomic: no useful entries evicted for a buffer that
  // cannot fit even after all permissible eviction.
  gi_reuse::BasicBufferOwners<4,256> admission;admission.Observe(resources[0].Get());

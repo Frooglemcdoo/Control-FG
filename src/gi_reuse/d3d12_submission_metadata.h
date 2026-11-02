@@ -36,11 +36,12 @@ enum class OwnerKind:unsigned {Vertex,Index,Transform,Instances};
 struct MissingRange {UINT64 address=0,bytes=0,hits=0,lastBuild=0;OwnerKind kind{};RangeMatch reason{};};
 inline SRWLOCK missingLock=SRWLOCK_INIT;
 inline std::array<MissingRange,128> missingSamples{};inline unsigned missingCursor=0;
+inline std::array<std::atomic<UINT64>,4> missingByKind{};
 inline std::atomic<UINT64> absentRanges{0},ambiguousRanges{0},invalidRanges{0};
 inline void CheckOwner(UINT64 address,UINT64 bytes,OwnerKind kind) noexcept {
  ComPtr<ID3D12Resource> owner;UINT64 offset=0;RangeMatch reason{};
  if(owners.Resolve(address,bytes,owner,offset,&reason)){++resolvedRanges;return;}
- ++missingRanges;if(reason==RangeMatch::Ambiguous)++ambiguousRanges;else if(reason==RangeMatch::Invalid)++invalidRanges;else ++absentRanges;
+ ++missingRanges;++missingByKind[static_cast<unsigned>(kind)];if(reason==RangeMatch::Ambiguous)++ambiguousRanges;else if(reason==RangeMatch::Invalid)++invalidRanges;else ++absentRanges;
  AcquireSRWLockExclusive(&missingLock);MissingRange* found=nullptr;
  for(auto& sample:missingSamples)if(sample.hits&&sample.address==address&&sample.bytes==bytes&&sample.kind==kind&&sample.reason==reason){found=&sample;break;}
  if(!found){found=&missingSamples[missingCursor++%missingSamples.size()];*found={address,bytes,0,0,kind,reason};}

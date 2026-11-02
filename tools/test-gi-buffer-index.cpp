@@ -1,4 +1,5 @@
 #include "../src/gi_reuse/buffer_range_index.h"
+#include "../src/gi_reuse/buffer_observation_history.h"
 #include <cassert>
 #include <random>
 #include <memory>
@@ -22,5 +23,22 @@ int main(){
    const auto actual=overlap.Find(address,bytes,slot);assert(actual==(matches>1?RangeMatch::Ambiguous:matches?RangeMatch::Unique:RangeMatch::Missing));if(matches==1)assert(slot==expected);
   }
  }
+ BufferObservationHistory<3> history;
+ history.Record(100,100,BufferEvent::Admitted,3);
+ history.Record(100,100,BufferEvent::Evicted,3);
+ assert(history.Find(110,90).event==BufferEvent::Evicted);
+ assert(history.Find(110,91).event==BufferEvent::Unknown);
+ history.Record(120,20,BufferEvent::Rejected,1);
+ assert(history.Find(125,5).event==BufferEvent::Rejected);
+ assert(history.Find(125,30).event==BufferEvent::Evicted);
+ history.Record(300,10,BufferEvent::Excluded,0);
+ history.Record(400,10,BufferEvent::Admitted,2);
+ assert(history.Find(100,1).event==BufferEvent::Unknown);
+ history.Record(120,20,BufferEvent::Admitted,3);
+ assert(history.Find(125,5).event==BufferEvent::Admitted);
+ history.Record(UINT64_MAX,2,BufferEvent::Evicted,0);
+ assert(history.Find(UINT64_MAX,2).event==BufferEvent::Unknown);
+ std::uint64_t overwritten=0,dropped=0;history.Stats(overwritten,dropped);assert(overwritten==1&&dropped==0);
+ std::puts("PASS bounded observation evidence: latest containing range, address reuse, overwrite, invalid bounds; no resource ownership");
  std::puts("PASS 6000 indexed ranges, single-range pruning, overlap ambiguity, bounds, removal/reuse, 100000 exhaustive-oracle comparisons");
 }
