@@ -5,6 +5,7 @@
 #include <cassert>
 #include <cstdio>
 #include <string>
+#include <cstdlib>
 #include "../src/gi_reuse/d3d12_submission_metadata.h"
 namespace fixture {
 inline bool PatchSlot(void** slot,void* expected,void* replacement) noexcept {
@@ -16,7 +17,8 @@ inline bool PatchSlot(void** slot,void* expected,void* replacement) noexcept {
 }
 using Microsoft::WRL::ComPtr;
 namespace rt=gi_reuse::runtime;
-void Check(HRESULT hr){assert(SUCCEEDED(hr));}
+void CheckAt(HRESULT hr,int line){if(FAILED(hr)){std::fprintf(stderr,"HRESULT failure line=%d hr=0x%08lX\n",line,static_cast<unsigned long>(hr));std::exit(1);}}
+#define Check(expression) CheckAt((expression),__LINE__)
 int main(){
  SetEnvironmentVariableA("CONTROLTOH_GI_METADATA","1");
  ComPtr<IDXGIFactory4> factory;Check(CreateDXGIFactory1(IID_PPV_ARGS(&factory)));
@@ -117,7 +119,7 @@ int main(){
  // including while an AS-bearing submission is between Before/AfterExecute.
  ComPtr<ID3D12CommandQueue> unrelated;Check(device->CreateCommandQueue(&qd,IID_PPV_ARGS(&unrelated)));
  ComPtr<ID3D12GraphicsCommandList> empty;Check(device->CreateCommandList(0,D3D12_COMMAND_LIST_TYPE_DIRECT,allocator.Get(),nullptr,IID_PPV_ARGS(&empty)));
- rt::Initialize(empty.Get());ID3D12CommandList* emptyLists[]={empty.Get()};
+ rt::Initialize(empty.Get());Check(empty->Close());ID3D12CommandList* emptyLists[]={empty.Get()};
  assert(!rt::BeforeExecute(unrelated.Get(),1,emptyLists)&&!rt::fault);
  auto copyDesc=qd;copyDesc.Type=D3D12_COMMAND_LIST_TYPE_COPY;ComPtr<ID3D12CommandQueue> copyQueue;Check(device->CreateCommandQueue(&copyDesc,IID_PPV_ARGS(&copyQueue)));
  ComPtr<ID3D12CommandAllocator> copyAllocator;Check(device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_COPY,IID_PPV_ARGS(&copyAllocator)));

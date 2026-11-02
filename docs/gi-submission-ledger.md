@@ -165,3 +165,33 @@ reset snapshot independence, and rejection at the hard journal ceiling.
 Primary references checked 2026-11-02:
 - https://learn.microsoft.com/en-us/windows/win32/api/d3d12/nf-d3d12-id3d12graphicscommandlist-resourcebarrier
 - https://learn.microsoft.com/en-us/windows/win32/api/d3d12/nf-d3d12-id3d12device-createcommittedresource
+
+## R289 relevant-queue classification and input inventory
+
+R288 progressed to a 1692-event journal with 191 resolved / 5066 missing range
+lookups, then stopped at multiple_queues. The old guard ran before classifying
+AS relevance; this is not evidence that AS work spans queues. R289 ignores copy
+queues and known-empty instrumented journals before enforcing single-AS-queue and
+concurrent-AS-submission limits. Unknown direct/compute journals remain fatal.
+An unrelated submission cannot overwrite a pending AS snapshot or its token.
+This does not establish cross-queue dependencies of geometry bytes.
+
+Known AS-storage resources and readback allocations no longer occupy the input
+inventory. Shader-readable/index-buffer state observations give default buffers
+higher admission priority; they are hints only, not proof of AS usage or state.
+Protected geometry still cannot be evicted. A failed admission leaves existing
+entries intact instead of partly evicting them and then discovering insufficient
+space. Limits remain 2048 objects / 512 MiB logical extents.
+
+The first R289 runtime fixture exposed an open command-list/allocator conflict
+in the test and a CI exit-code check that missed negative assertion exits.
+The fixture now closes the unrelated empty list, and the validation batch rejects
+all nonzero exits. Validation must be confirmed from the rerun, not that first
+job's success badge. Tests cover unrelated submissions between AS callbacks,
+genuine second-AS-queue rejection, input candidate retention, atomic admission,
+and AS/readback exclusion. WARP executes empty lists, not synthetic AS builds.
+Live geometry bytes and reuse remain unverified.
+
+Primary references checked 2026-11-02:
+- https://learn.microsoft.com/en-us/windows/win32/api/d3d12/ne-d3d12-d3d12_resource_states
+- https://learn.microsoft.com/en-us/windows/win32/api/d3d12/ns-d3d12-d3d12_build_raytracing_acceleration_structure_inputs
