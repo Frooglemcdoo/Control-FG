@@ -238,4 +238,13 @@ Local GCC warnings-as-errors and UndefinedBehaviorSanitizer tests passed replay,
 reset during outstanding GPU work, batched fence cuts, budget refusal, wrong
 queue/generation, failed signals, counter exhaustion, device-removal sentinel,
 completion regression, unknown queues and unissued completion rejection. The
-Windows foundation workflow includes the same portable test; its result is pending.
+Windows foundation run `41529405918`, job `125565421444`, passed at remote
+commit `dca2c3a65de2c8ef3b4bc90ddfab3f549b90ba47`. Decoded logs confirm the
+retirement policy, live binding-hook fixture and GPU copy/restore fixture all
+passed. The retirement policy remains CPU-tested logic, not a GPU-fence runtime
+integration; the GPU fixtures still exercise copying/restoration separately.
+
+Full mod Windows build/regression run `41529405730`, job `125565421070`,
+also passed at `dca2c3a65de2c8ef3b4bc90ddfab3f549b90ba47`. Decoded logs
+show no compiler or workflow errors. No native snapshot dispatch was enabled;
+this checkpoint has no new user-facing build or capture request.
