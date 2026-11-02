@@ -44,7 +44,7 @@ inline bool Attach(ID3D12GraphicsCommandList* list) noexcept {
 }
 template<class F> inline void Change(ID3D12GraphicsCommandList* list,F&& fn) noexcept {
     if(muted || failed.load())return;
-    if(auto state=Read(list))fn(*state);
+    if(auto state=Read(list))fn(*state.Get());
 }
 inline void Begin(ID3D12GraphicsCommandList* list,ID3D12PipelineState* initial) noexcept {
     if(!Enabled())return;
