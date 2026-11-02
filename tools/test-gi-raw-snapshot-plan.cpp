@@ -4,6 +4,12 @@
 using gi_reuse::RawSnapshotPlan;
 int main() {
     RawSnapshotPlan p;
+    gi_reuse::RawSnapshotReject reason;
+    assert(!RawSnapshotPlan::Make(6,0,6,p,&reason)&&reason==gi_reuse::RawSnapshotReject::PaddingOutsideResource);
+    assert(!RawSnapshotPlan::Make(8,8,2,p,&reason)&&reason==gi_reuse::RawSnapshotReject::InvalidRange);
+    assert(!RawSnapshotPlan::Make(UINT64_MAX,UINT64_MAX-1,1,p,&reason)&&reason==gi_reuse::RawSnapshotReject::AddressOverflow);
+    assert(!RawSnapshotPlan::Make(32ull*1024*1024,0,32ull*1024*1024,p,&reason)&&reason==gi_reuse::RawSnapshotReject::DispatchLimit);
+    assert(RawSnapshotPlan::Make(8,0,8,p,&reason)&&reason==gi_reuse::RawSnapshotReject::None);
     assert(RawSnapshotPlan::Make(512, 258, 6, p));
     assert(p.sourceOffset == 256 && p.prefixBytes == 2 && p.copyBytes == 8);
     assert(RawSnapshotPlan::Make(512, 2, 266, p));

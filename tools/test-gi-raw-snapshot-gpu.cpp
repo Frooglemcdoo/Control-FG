@@ -15,6 +15,7 @@
 #include "../src/gi_reuse/d3d12_raw_snapshot.h"
 #include "../src/gi_reuse/d3d12_submission_metadata.h"
 #include "../src/gi_reuse/d3d12_snapshot_retirement.h"
+#include "../src/gi_reuse/d3d12_index_sample.h"
 namespace fixture {
 inline void Trace(const char*,...) {}
 inline bool PatchSlot(void** slot,void* expected,void* replacement) noexcept {
@@ -39,8 +40,9 @@ void STDMETHODCALLTYPE ObservedIndirect(ID3D12GraphicsCommandList*,ID3D12Command
  Require(count==7 && offset==16 && countOffset==32,"indirect arguments preserved");++indirectForwards;
 }
 int main(int argc, char** argv) try {
- Require(argc == 2, "usage: test shader.dxil");
+ Require(argc == 3, "usage: test raw-shader.dxil index-shader.dxil");
  SetEnvironmentVariableA("CONTROLTOH_GI_METADATA","1"); SetEnvironmentVariableA("CONTROLTOH_GI_BINDINGS","1");
+ SetEnvironmentVariableA("CONTROLTOH_GI_INDEX_SNAPSHOTS","1");
  ComPtr<ID3D12Debug> debug; Check(D3D12GetDebugInterface(IID_PPV_ARGS(&debug))); debug->EnableDebugLayer();
  ComPtr<IDXGIFactory4> factory; Check(CreateDXGIFactory1(IID_PPV_ARGS(&factory)));
  ComPtr<IDXGIAdapter> warp; Check(factory->EnumWarpAdapter(IID_PPV_ARGS(&warp)));
@@ -48,6 +50,11 @@ int main(int argc, char** argv) try {
  std::ifstream file(argv[1], std::ios::binary); Require(file.good(), "shader file");
  std::vector<char> shader((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
  RawSnapshotPipeline snapshot; Check(snapshot.Initialize(d.Get(), shader.data(), shader.size()));
+ std::ifstream indexFile(argv[2],std::ios::binary);Require(indexFile.good(),"index shader file");
+ std::vector<char> indexShader((std::istreambuf_iterator<char>(indexFile)),std::istreambuf_iterator<char>());
+ fixture::gi_snapshot_probe::queueCoverage=+[]() noexcept {return true;};
+ fixture::gi_snapshot_probe::Configure(d.Get(),indexShader.data(),indexShader.size());
+ Require(fixture::gi_snapshot_probe::captureReady.load(),"index sampler configured");
  // A different root layout and pipeline detect incomplete tracked restoration.
  D3D12_ROOT_PARAMETER params[5]{};
  D3D12_DESCRIPTOR_RANGE tableRange{D3D12_DESCRIPTOR_RANGE_TYPE_SRV,1,1,0,0};
@@ -103,7 +110,15 @@ int main(int argc, char** argv) try {
  list->SetComputeRootDescriptorTable(4,heap->GetGPUDescriptorHandleForHeapStart());
  ComputeBindingSnapshot captured; Require(fixture::gi_compute_hooks::Capture(list.Get(),captured,epoch),"capture intercepted compute bindings");
  const auto capturedEpoch=epoch;
- gi_reuse::runtime::Initialize(list.Get());fixture::gi_snapshot_probe::Build(list.Get(),nullptr);
+ gi_reuse::runtime::Initialize(list.Get());
+ gi_reuse::runtime::ObserveCreated(source.Get(),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,true);
+ D3D12_RAYTRACING_GEOMETRY_DESC sampleGeometry{};sampleGeometry.Type=D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES;
+ sampleGeometry.Triangles.IndexBuffer=source->GetGPUVirtualAddress()+258;sampleGeometry.Triangles.IndexCount=125;
+ sampleGeometry.Triangles.IndexFormat=DXGI_FORMAT_R16_UINT;sampleGeometry.Triangles.VertexCount=65536;
+ D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC sampleBuild{};sampleBuild.Inputs.Type=D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL;
+ sampleBuild.Inputs.DescsLayout=D3D12_ELEMENTS_LAYOUT_ARRAY;sampleBuild.Inputs.NumDescs=1;sampleBuild.Inputs.pGeometryDescs=&sampleGeometry;
+ fixture::gi_snapshot_probe::Build(list.Get(),&sampleBuild);
+ Require(fixture::gi_snapshot_probe::captureRecorded.load()==1,"actual bounded native-boundary index copy recorded");
  Require(fixture::gi_snapshot_probe::bindingReady.load()==1 && fixture::gi_snapshot_probe::admitted.load()==1,"native-boundary probe admission");
  fixture::gi_compute_hooks::Read(list.Get())->tracker.Invalidate(); ComputeBindingSnapshot rejected; Require(!fixture::gi_compute_hooks::Capture(list.Get(),rejected,epoch),"reject invalidated recording");
  RawSnapshotPlan plan;
@@ -131,6 +146,9 @@ int main(int argc, char** argv) try {
  Check(allocator->Reset()); Check(list->Reset(allocator.Get(),nativePipeline.Get()));
  fixture::gi_snapshot_probe::Reset(list.Get());fixture::gi_snapshot_probe::Poll();
  Require(fixture::gi_snapshot_probe::completed.load()==1,"probe completed sealed recording");
+ Require(fixture::gi_snapshot_probe::captureRead.load()==1&&fixture::gi_snapshot_probe::captureFailed.load()==0,"sample readback only after completion and reset");
+ UINT64 expectedHash=14695981039346656037ull;for(UINT64 i=258;i<508;++i){expectedHash^=static_cast<unsigned char>((i*17+39)%251);expectedHash*=1099511628211ull;}
+ Require(fixture::gi_snapshot_probe::lastCaptureHash.load()==expectedHash&&fixture::gi_snapshot_probe::captureBadPadding.load()==0&&fixture::gi_snapshot_probe::captureBadIndices.load()==0,"native sampler hash, index bounds and padding");
  Require(fixture::gi_compute_hooks::Read(list.Get())->generation>capturedEpoch,"reset generation");
  Require(!fixture::gi_compute_hooks::Capture(list.Get(),unobserved,epoch),"reset clears root state");
  list->SetComputeRootSignature(nativeRoot.Get());
@@ -163,6 +181,7 @@ int main(int argc, char** argv) try {
  for(UINT64 i=0;i<messages->GetNumStoredMessagesAllowedByRetrievalFilter();++i){SIZE_T n=0;Check(messages->GetMessage(i,nullptr,&n));std::vector<unsigned char> storage(n);auto* m=reinterpret_cast<D3D12_MESSAGE*>(storage.data());Check(messages->GetMessage(i,m,&n));Require(m->Severity>D3D12_MESSAGE_SEVERITY_ERROR,m->pDescription);}
  list.Reset();
  Require(fixture::gi_compute_hooks::liveStates.load()==0,"command-list destruction releases tracker");
+ std::cout<<"PASS native index sampler: ownership before dispatch, exact source window, fence/reset gate and readback outside lock\n";
  std::cout<<"PASS live binding hooks: real COM setters, late attachment refusal, mute, reset success/failure, ClearState, indirect forwarding and bundle invalidation\n";
  std::cout<<"PASS GPU raw snapshot: uint16 offset, source unchanged state, guard bytes, tracked compute restore: PSO/root/table/CBV/SRV/UAV/sparse constants, debug layer clean\n";
 } catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}

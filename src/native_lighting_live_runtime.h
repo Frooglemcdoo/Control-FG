@@ -2,6 +2,7 @@
 #include "gi_stack_capture.h"
 #include "gi_reuse/d3d12_submission_metadata.h"
 #include "gi_reuse/d3d12_snapshot_retirement.h"
+#include "gi_reuse/d3d12_index_sample.h"
 #include "rr_capture_ui.h"
 #include "rr_gi_pipeline.h"
 #include "native_lighting_isolation.h"
@@ -496,6 +497,7 @@ inline HRESULT STDMETHODCALLTYPE CreateListHook(ID3D12Device* device, UINT node,
 inline void StartOverlay() noexcept;
 inline void InstallLiveDiagnostic(ID3D12Device* device) noexcept {
     if (!device) return;
+    gi_resource_hooks::queueObserver=&rt_spot_table_audit::InstallQueue;
     gi_resource_hooks::Install(device);
     performance::RememberDevice(device);
     rt_shadow_capture::endTiming=&performance::End;
@@ -516,6 +518,13 @@ inline void InstallLiveDiagnostic(ID3D12Device* device) noexcept {
     rt_spot_capture_audit::retentionEnabled.store(false);
     rt_spot_capture_audit::captured.store(true); // Retire speculative upload retention; R122 uses copy journals.
     rt_spot_table_audit::InstallQueues(device);
+    gi_snapshot_probe::queueCoverage=+[]() noexcept {return gi_resource_hooks::queueInstalled.load()&&rt_spot_table_audit::queueTypesProbed.load()&&!rt_spot_table_audit::queueHooksFailed.load();};
+    if(gi_snapshot_probe::CaptureEnabled()){
+        std::vector<unsigned char> shader;char sha[65]{};bool loaded=false;
+        if(PTReflectionLoadSidecar(L"gi_index_snapshot.dxil","GI_INDEX_SNAPSHOT",shader,sha,loaded))
+            gi_snapshot_probe::Configure(device,shader.data(),shader.size());
+        else Trace("GI_INDEX_INIT_R296 ready=0 reason=shader_missing_or_invalid");
+    }
     rt_spot_runtime::Install();
     rt_shadow_capture::onRoot = &rt_spot_capture_audit::RememberRoot;
     rt_shadow_capture::replacementState = &CreateLightingState;

@@ -117,6 +117,7 @@ public:
         auto* e=Find(recording);if(retired || !e || !e->sealed || !Complete(*e))return false;
         retired=std::move(e->owner);bytes_-=e->bytes;*e={};return true;
     }
+    void QuarantineAll() noexcept {for(auto& e:entries_)if(e.id)e.quarantined=true;}
     U64 RetainedBytes() const noexcept {return bytes_;}
     bool Quarantined(U64 recording) noexcept {const auto* e=Find(recording);return e && e->quarantined;}
     // Explicit teardown after GPU/device shutdown without host locks held,

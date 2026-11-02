@@ -1148,16 +1148,25 @@ jobs:
           build\test-gi-spot-pcf.exe
           if errorlevel 1 exit /b 1
 
-      - name: Package GI geometry integration R295
+      - name: Compile exact uint16 snapshot kernel R296
+        shell: powershell
+        run: |
+          $dxc=Get-ChildItem "${env:ProgramFiles(x86)}/Windows Kits/10/bin/*/x64/dxc.exe" | Sort-Object FullName -Descending | Select-Object -First 1
+          if (!$dxc) { throw 'Windows SDK DXC not found' }
+          & $dxc.FullName -T cs_6_2 -E main -enable-16bit-types -WX src/shaders/gi_index_snapshot.hlsl -Fo build/gi_index_snapshot.dxil
+          if ($LASTEXITCODE -ne 0) { throw 'Exact index snapshot compile failed' }
+
+      - name: Package GI geometry integration R296
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='ControlTOH-R295'
+          $out='ControlTOH-R296'
           $shader="$out/ControlTOH/Shaders"
           $tools="$out/ControlTOH/Tools"
           $diagnostics="$out/ControlTOH/Diagnostics"
           New-Item -ItemType Directory -Force -Path $out,$shader,$tools,$diagnostics | Out-Null
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
+          Copy-Item build/gi_index_snapshot.dxil $shader
           Copy-Item build/ControlFG-Restart.exe $tools
           Copy-Item build/rt_spot_selected_off.dxbc,build/rt_spot_selection.dxbc,build/rt_spot_visibility.dxbc,build/rt_spot_light_ids.dxbc,build/rt_spot_raw_history.dxbc,build/rt_spot_raw_spatial0.dxbc,build/rt_spot_raw_spatial1.dxbc,build/rt_spot_full.dxil,build/rt_spot_r94.dxil,build/rt_spot_light.dxbc,build/rt_spot_reset.dxbc,build/rt_spot_history.dxbc,build/rt_spot_spatial0.dxbc,build/rt_spot_spatial1.dxbc $shader
           New-Item -ItemType Directory -Force -Path "$out/ControlFGStreamline" | Out-Null
@@ -1183,14 +1192,14 @@ jobs:
           Copy-Item build/DirectStorage "$diagnostics/DirectStorage" -Recurse
           Copy-Item build/DirectStorage/dstorage.dll,build/DirectStorage/dstoragecore.dll $out
           Copy-Item tools/directstorage/Validate-DirectStorage.cmd "$diagnostics/DirectStorage"
-          Copy-Item docs/native-lighting-r295.md "$out/ControlTOH/DIAGNOSTIC-NOTES.md"
+          Copy-Item docs/native-lighting-r296.md "$out/ControlTOH/DIAGNOSTIC-NOTES.md"
           Copy-Item tools/Organize-Existing-Install.cmd,tools/Organize-Existing-Install.ps1 $tools
           Copy-Item tools/diagnostics/Collect-ControlTOH-Materials.cmd,tools/diagnostics/Collect-ControlTOH-Materials.ps1 $tools
           & powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/diagnostics/test-material-collector.ps1
           if ($LASTEXITCODE -ne 0) { throw 'Material collector integration test failed' }
           @'
           Control The Oldest House: Visual and Performance Overhaul
-          R295 - GI binding and lifetime integration test
+          R296 - GI exact index snapshot test
 
           Copy all package contents beside Control_DX12.exe, preserving folders.
           Run ControlTOH/Diagnostics/Start-GI-Metadata-Test.cmd.
@@ -1212,10 +1221,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: ControlTOH-R295
+          name: ControlTOH-R296
           path: |
-            ControlTOH-R295.zip
-            ControlTOH-R295.sha256
+            ControlTOH-R296.zip
+            ControlTOH-R296.sha256
             build/gi-joint-light-validation.json
             build/gi-joint-oracle-analysis.json
             build/gi-ray-trace-validation.json

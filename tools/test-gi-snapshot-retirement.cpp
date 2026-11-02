@@ -72,5 +72,7 @@ int main(){
  const auto back=regression.Admit(1,64,owner);write=regression.BeforeExecute(back,1,11);
  assert(regression.AfterExecute(write,11,2,true)&&regression.ObserveCompletion(11,2));
  assert(!regression.ObserveCompletion(11,1)&&regression.Quarantined(back));regression.DeviceStopped();
+ Policy coverage;owner=std::make_unique<Owner>(destroyed);const auto lost=coverage.Admit(1,64,owner);
+ coverage.Seal(lost,1);coverage.QuarantineAll();assert(coverage.Quarantined(lost)&&!Release(coverage,lost));coverage.DeviceStopped();
  std::cout<<"PASS snapshot lifetime: replay/reset, batch fence cuts, budgets, stale/wrong-queue proofs, failures and quarantine\n";
 }

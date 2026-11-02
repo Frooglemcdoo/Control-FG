@@ -506,6 +506,7 @@ inline void InstallFence(ID3D12Fence* fence) noexcept {
     } else resetTracking.store(false);
     ReleaseSRWLockExclusive(&queueHookLock);
 }
+inline std::atomic<bool> queueHooksFailed{false},queueTypesProbed{false};
 inline void InstallQueue(ID3D12CommandQueue* queue) noexcept {
     auto** table=*reinterpret_cast<void***>(queue);AcquireSRWLockExclusive(&queueHookLock);
     QueueHook* slot=nullptr;
@@ -515,9 +516,9 @@ inline void InstallQueue(ID3D12CommandQueue* queue) noexcept {
         const bool execute=PatchSlot(&table[10],reinterpret_cast<void*>(slot->execute),reinterpret_cast<void*>(&ExecuteHook));
         const bool signal=PatchSlot(&table[14],reinterpret_cast<void*>(slot->signal),reinterpret_cast<void*>(&SignalHook));
         const bool wait=PatchSlot(&table[15],reinterpret_cast<void*>(slot->wait),reinterpret_cast<void*>(&WaitHook));
-        if(!execute || !signal || !wait)resetTracking.store(false);
+        if(!execute || !signal || !wait){resetTracking.store(false);queueHooksFailed=true;}
         Trace("rt_hit_table_queue_hook ready=%u type=%u signal=%u wait=%u",unsigned(execute&&signal&&wait),unsigned(queue->GetDesc().Type),unsigned(signal),unsigned(wait));
-    } else resetTracking.store(false);
+    } else {resetTracking.store(false);queueHooksFailed=true;}
     ReleaseSRWLockExclusive(&queueHookLock);
 }
 inline void InstallQueues(ID3D12Device* device) noexcept {
@@ -528,8 +529,9 @@ inline void InstallQueues(ID3D12Device* device) noexcept {
     for(auto type:{D3D12_COMMAND_LIST_TYPE_DIRECT,D3D12_COMMAND_LIST_TYPE_COMPUTE,D3D12_COMMAND_LIST_TYPE_COPY}) {
         D3D12_COMMAND_QUEUE_DESC desc{};desc.Type=type;Microsoft::WRL::ComPtr<ID3D12CommandQueue> queue;
         if(SUCCEEDED(device->CreateCommandQueue(&desc,IID_PPV_ARGS(&queue))))InstallQueue(queue.Get());
-        else Trace("rt_hit_table_queue_hook probe_failed=1 type=%u",unsigned(type));
+        else {queueHooksFailed=true;Trace("rt_hit_table_queue_hook probe_failed=1 type=%u",unsigned(type));}
     }
+    queueTypesProbed=true;
 }
 } // namespace rt_spot_table_audit
 

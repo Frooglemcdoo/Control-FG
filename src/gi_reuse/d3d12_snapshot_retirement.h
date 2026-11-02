@@ -90,6 +90,7 @@ public:
     }
     const Owner* View(U64 id) noexcept {return state_?state_->policy.View(id):nullptr;}
     bool Take(U64 id,std::unique_ptr<Owner>& out) noexcept {return state_ && state_->policy.Retire(id,out);}
+    void QuarantineAll() noexcept {if(state_)state_->policy.QuarantineAll();}
     U64 RetainedBytes() const noexcept {return state_?state_->policy.RetainedBytes():0;}
     bool Quarantined(U64 id) noexcept {return state_ && state_->policy.Quarantined(id);}
     // Only after the application has stopped all relevant GPU work. Caller must

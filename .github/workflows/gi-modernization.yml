@@ -96,7 +96,7 @@ jobs:
           if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-raw-snapshot-gpu.cpp /Fe:gi-raw-snapshot-gpu.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
           if not "%errorlevel%"=="0" exit /b 1
-          gi-raw-snapshot-gpu.exe gi-raw-snapshot.dxil
+          gi-raw-snapshot-gpu.exe gi-raw-snapshot.dxil gi-index-snapshot.dxil
           if not "%errorlevel%"=="0" exit /b 1
           gi-initial-gpu.exe gi-initial.dxil initial
           if not "%errorlevel%"=="0" exit /b 1

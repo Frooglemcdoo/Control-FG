@@ -13,6 +13,7 @@
 #include "d3d12_storage_lease.h"
 #include "d3d12_compute_bindings.h"
 #include "raw_snapshot_plan.h"
+#include "index_snapshot_plan.h"
 namespace gi_reuse::runtime {
 using Microsoft::WRL::ComPtr;
 inline bool Enabled() noexcept {static const bool value=[] {char b[4]{};return GetEnvironmentVariableA("CONTROLTOH_GI_METADATA",b,4)==1&&b[0]=='1';}();return value;}
@@ -60,14 +61,20 @@ inline std::atomic<UINT64> localStateLimits{0},localAliasInvalidations{0};
 // establish alias/residency/queue correctness and never authorize a GPU read.
 inline bool InputAuditEnabled() noexcept {static const bool enabled=[] {char v[4]{};return GetEnvironmentVariableA("CONTROLTOH_GI_BINDINGS",v,4)==1&&v[0]=='1';}();return enabled;}
 inline std::array<std::array<std::atomic<UINT64>,6>,4> inputAudit{};
+inline std::array<std::atomic<UINT64>,5> indexRawReasons{};
+inline std::atomic<UINT64> exactIndexEligible{0};
 inline void AuditInput(ID3D12Resource* resource,UINT64 offset,UINT64 bytes,OwnerKind kind) noexcept {
  if(!InputAuditEnabled())return;auto& counts=inputAudit[static_cast<unsigned>(kind)];
  const auto desc=resource->GetDesc();BufferStorageLease lease;RawSnapshotPlan plan;
  const bool storage=AcquireStorageLease(resource,lease);
  ++counts[storage?(lease.kind==BufferStorageKind::Placed?1u:0u):2u];
  if(desc.Flags&D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE)++counts[3];
- if(!RawSnapshotPlan::Make(desc.Width,offset,bytes,plan))++counts[4];
- if(storage&&!(desc.Flags&D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE)&&RawSnapshotPlan::Make(desc.Width,offset,bytes,plan))++counts[5];
+ RawSnapshotReject reason;const bool rawOK=RawSnapshotPlan::Make(desc.Width,offset,bytes,plan,&reason);
+ if(!rawOK)++counts[4];
+ if(storage&&!(desc.Flags&D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE)&&rawOK)++counts[5];
+ if(kind==OwnerKind::Index){++indexRawReasons[static_cast<unsigned>(reason)];IndexSnapshotPlan exact;
+  if(storage&&!(desc.Flags&D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE)&&IndexSnapshotPlan::Make(desc.Width,offset,bytes,exact))++exactIndexEligible;
+ }
 }
 
 inline void CheckOwner(UINT64 address,UINT64 bytes,OwnerKind kind,LocalBufferStates<>* states=nullptr) noexcept {

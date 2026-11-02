@@ -118,9 +118,15 @@ int main(){
  identities.Observe(resources[1].Get());assert(!identities.Identity(resources[0].Get()));
  identities.Observe(resources[0].Get());assert(identities.Identity(resources[0].Get())!=firstIdentity);
  // Actual creation interception discovers a CPU-written buffer without any copy.
+ fixture::gi_resource_hooks::queueObserver=+[](ID3D12CommandQueue* q) noexcept {UINT marker=1;q->SetPrivateData(gi_reuse::storageKindKey,sizeof(marker),&marker);};
  fixture::gi_resource_hooks::Install(device.Get());const auto created=rt::creationObservations.load();
  ComPtr<ID3D12Resource> createdBuffer;Check(device->CreateCommittedResource(&heap,D3D12_HEAP_FLAG_NONE,&buffer,D3D12_RESOURCE_STATE_GENERIC_READ,nullptr,IID_PPV_ARGS(&createdBuffer)));
  assert(rt::creationObservations==created+1);assert(rt::owners.Resolve(createdBuffer->GetGPUVirtualAddress(),64,owner,offset));
+ D3D12_COMMAND_QUEUE_DESC observedQueueDesc{};ComPtr<ID3D12CommandQueue> observedQueue;
+ Check(device->CreateCommandQueue(&observedQueueDesc,IID_PPV_ARGS(&observedQueue)));
+ UINT queueMarker=0,queueMarkerBytes=sizeof(queueMarker);Check(observedQueue->GetPrivateData(gi_reuse::storageKindKey,&queueMarkerBytes,&queueMarker));
+ assert(queueMarker==1&&fixture::gi_resource_hooks::queueInstalled.load());
+ std::puts("PASS future queue creation interception and observer forwarding");
  // Placed-resource path has a distinct native signature and vtable slot.
  D3D12_HEAP_DESC placedHeapDesc{};placedHeapDesc.SizeInBytes=65536;placedHeapDesc.Properties=gpuHeap;placedHeapDesc.Flags=D3D12_HEAP_FLAG_ALLOW_ONLY_BUFFERS;
  ComPtr<ID3D12Heap> placedHeap;Check(device->CreateHeap(&placedHeapDesc,IID_PPV_ARGS(&placedHeap)));
