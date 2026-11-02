@@ -236,9 +236,10 @@ inline void Poll() noexcept {
    if(file!=INVALID_HANDLE_VALUE){DWORD written=0;const DWORD size=16+(std::min)(records,Capacity())*stride;ok=WriteFile(file,mapped,size,&written,nullptr)&&written==size;CloseHandle(file);}
   }}D3D12_RANGE none{0,0};readback->Unmap(0,&none);
  }
- Trace("GI_SPOT_R274_EXPORT complete=%u gpu_completion_confirmed=1 records=%u retained=%u overflow=%u stride=%u present=%llu groups=%u,%u,%u variant=6 sampling_step=32",unsigned(ok),records,(std::min)(records,Capacity()),unsigned(records>Capacity()),stride,capturedPresent,groups[0],groups[1],groups[2]);
- if(JointTrace())Trace("GI_JOINT_R284_EXPORT complete=%u records=%u overflow=%u present=%llu frame=%u frames=8 same_dispatch=1",unsigned(ok),records,unsigned(records>Capacity()),capturedPresent,savedFrames.load()+1);
+ Trace("GI_SPOT_R274_EXPORT complete=%u gpu_completion_confirmed=1 records=%u retained=%u overflow=%u stride=%u present=%llu groups=%u,%u,%u variant=6 sampling_step=32",unsigned(ok&&records&&records<=Capacity()),records,(std::min)(records,Capacity()),unsigned(records>Capacity()),stride,capturedPresent,groups[0],groups[1],groups[2]);
+ if(JointTrace())Trace("GI_JOINT_R284_EXPORT complete=%u records=%u overflow=%u present=%llu frame=%u frames=8 same_dispatch=1",unsigned(ok&&records&&records<=Capacity()),records,unsigned(records>Capacity()),capturedPresent,savedFrames.load()+1);
  else if(RayTrace())Trace("GI_RAY_R278_EXPORT complete=%u records=%u overflow=%u present=%llu final_sum_and_rays=1 no_reuse_accounting=1",unsigned(ok),records,unsigned(records>Capacity()),capturedPresent);
+ if(ok&&!records){Fail("empty_capture",L"FAILED: no GI samples recorded. Exit and send logs.");return;}
  if(ok&&records>Capacity()){Fail("overflow",L"FAILED: record capacity exceeded. Partial frame saved; send logs.");return;}
  if(ok){
   AcquireSRWLockExclusive(&lock);
