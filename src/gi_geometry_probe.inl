@@ -42,7 +42,7 @@ inline void BeforeExecute(ID3D12CommandQueue* queue,UINT count,ID3D12CommandList
    ++reports;unsigned owners=0;UINT64 bytes=0;bool limited=false;gi_reuse::runtime::owners.Stats(owners,bytes,limited);
    unsigned geometryOwners=0;UINT64 evictions=0;gi_reuse::runtime::owners.RetentionStats(geometryOwners,evictions);
    const auto reason=gi_reuse::runtime::failureReason.load();
-   Trace("GI_METADATA_R287 status=%s reason=%s builds=%llu copies=%llu buffer_owners=%u retained_bytes=%llu owner_limit=%u geometry_owners=%u cache_evictions=%llu resolved_ranges=%llu missing_ranges=%llu gpu_bytes_captured=0 reuse_ready=0",gi_reuse::runtime::fault.load()?"INCOMPLETE":"OBSERVING",reason?reason:"none",gi_reuse::runtime::buildCount.load(),gi_reuse::runtime::copyCount.load(),owners,bytes,unsigned(limited),geometryOwners,evictions,gi_reuse::runtime::resolvedRanges.load(),gi_reuse::runtime::missingRanges.load());
+   Trace("GI_METADATA_R288 status=%s reason=%s builds=%llu copies=%llu buffer_owners=%u retained_bytes=%llu owner_limit=%u geometry_owners=%u cache_evictions=%llu resolved_ranges=%llu missing_ranges=%llu journal_peak=%llu creation_observations=%llu barrier_observations=%llu gpu_bytes_captured=0 reuse_ready=0",gi_reuse::runtime::fault.load()?"INCOMPLETE":"OBSERVING",reason?reason:"none",gi_reuse::runtime::buildCount.load(),gi_reuse::runtime::copyCount.load(),owners,bytes,unsigned(limited),geometryOwners,evictions,gi_reuse::runtime::resolvedRanges.load(),gi_reuse::runtime::missingRanges.load(),gi_reuse::runtime::journalPeak.load(),gi_reuse::runtime::creationObservations.load(),gi_reuse::runtime::barrierObservations.load());
   }
  }
  if(!Enabled()||submissionReports.load()>=32)return;

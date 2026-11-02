@@ -7,7 +7,7 @@ namespace gi_reuse {
 // Development inventory only. Strong references prevent destruction of observed
 // resource objects; they do not freeze contents, own placed heaps, or prove states.
 template<std::size_t Capacity=2048,UINT64 ByteBudget=512ull*1024*1024> class BasicBufferOwners {
- struct Entry {Microsoft::WRL::ComPtr<ID3D12Resource> owner;UINT64 address=0,bytes=0,touched=0;bool geometry=false;};
+ struct Entry {Microsoft::WRL::ComPtr<ID3D12Resource> owner;UINT64 address=0,bytes=0,touched=0;bool geometry=false,scene=false;};
  std::array<Entry,Capacity> entries_{};
  SRWLOCK lock_=SRWLOCK_INIT;
  UINT64 bytes_=0,clock_=0,evictions_=0;unsigned count_=0;bool limited_=false;
@@ -18,17 +18,19 @@ public:
   if(desc.Dimension!=D3D12_RESOURCE_DIMENSION_BUFFER)return;
   const auto address=resource->GetGPUVirtualAddress();
   if(!address||!desc.Width||desc.Width>UINT64_MAX-address)return;
+  D3D12_HEAP_PROPERTIES heap{};D3D12_HEAP_FLAGS flags{};
+  const bool scene=SUCCEEDED(resource->GetHeapProperties(&heap,&flags))&&heap.Type==D3D12_HEAP_TYPE_DEFAULT;
   // Release evicted objects after unlocking: COM destruction can reenter hooks.
   std::array<Microsoft::WRL::ComPtr<ID3D12Resource>,Capacity> retired{};std::size_t retireCount=0;
   AcquireSRWLockExclusive(&lock_);
   bool known=false;for(auto& e:entries_)if(e.owner.Get()==resource){known=true;e.touched=++clock_;break;}
   if(!known&&desc.Width<=Budget){
    while(count_==Capacity||desc.Width>Budget-bytes_){
-    Entry* victim=nullptr;for(auto& e:entries_)if(e.owner&&!e.geometry&&(!victim||e.touched<victim->touched))victim=&e;
+    Entry* victim=nullptr;for(auto& e:entries_)if(e.owner&&!e.geometry&&(scene||!e.scene)&&(!victim||(victim->scene&&!e.scene)||(victim->scene==e.scene&&e.touched<victim->touched)))victim=&e;
     if(!victim){limited_=true;break;}
     bytes_-=victim->bytes;--count_;++evictions_;retired[retireCount++]=std::move(victim->owner);*victim={};
    }
-   if(count_<Capacity&&desc.Width<=Budget-bytes_){for(auto& e:entries_)if(!e.owner){e={resource,address,desc.Width,++clock_,false};++count_;bytes_+=desc.Width;break;}}
+   if(count_<Capacity&&desc.Width<=Budget-bytes_){for(auto& e:entries_)if(!e.owner){e={resource,address,desc.Width,++clock_,false,scene};++count_;bytes_+=desc.Width;break;}}
   }else if(!known)limited_=true;
   ReleaseSRWLockExclusive(&lock_);
  }

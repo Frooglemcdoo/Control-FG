@@ -488,9 +488,11 @@ inline HRESULT STDMETHODCALLTYPE CreateListHook(ID3D12Device* device, UINT node,
     return hr;
 }
 #include "native_lighting_pipeline_library.h"
+#include "gi_resource_hooks.inl"
 inline void StartOverlay() noexcept;
 inline void InstallLiveDiagnostic(ID3D12Device* device) noexcept {
     if (!device) return;
+    gi_resource_hooks::Install(device);
     performance::RememberDevice(device);
     rt_shadow_capture::endTiming=&performance::End;
     rt_shadow_capture::beginTiming=+[](ID3D12GraphicsCommandList4* list,const D3D12_DISPATCH_RAYS_DESC* desc) noexcept -> unsigned {

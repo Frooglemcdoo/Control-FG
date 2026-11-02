@@ -16,8 +16,22 @@ inline std::atomic<bool> fault{false};
 inline std::atomic<const char*> failureReason{nullptr};
 inline void Fail(const char* reason) noexcept {const char* empty=nullptr;failureReason.compare_exchange_strong(empty,reason);fault=true;}
 inline BufferOwners owners;
+inline std::atomic<UINT64> journalPeak{0}, creationObservations{0}, barrierObservations{0};
+inline void JournalPeak(std::size_t size) noexcept {auto old=journalPeak.load();while(old<size&&!journalPeak.compare_exchange_weak(old,size)){};}
 inline std::atomic<UINT64> buildCount{0},copyCount{0},resolvedRanges{0},missingRanges{0};
 inline void ObserveBuffer(ID3D12Resource* resource) noexcept {if(Enabled())owners.Observe(resource);}
+inline void ObserveCreated(IUnknown* object) noexcept {
+ if(!Enabled()||!object)return;ComPtr<ID3D12Resource> resource;
+ if(SUCCEEDED(object->QueryInterface(IID_PPV_ARGS(&resource)))&&resource->GetDesc().Dimension==D3D12_RESOURCE_DIMENSION_BUFFER){++creationObservations;owners.Observe(resource.Get());}
+}
+inline void ObserveBarriers(UINT count,const D3D12_RESOURCE_BARRIER* barriers) noexcept {
+ if(!Enabled()||!barriers)return;
+ for(UINT i=0;i<count;++i){const auto& b=barriers[i];++barrierObservations;
+  if(b.Type==D3D12_RESOURCE_BARRIER_TYPE_TRANSITION)owners.Observe(b.Transition.pResource);
+  else if(b.Type==D3D12_RESOURCE_BARRIER_TYPE_UAV)owners.Observe(b.UAV.pResource);
+  else if(b.Type==D3D12_RESOURCE_BARRIER_TYPE_ALIASING){owners.Observe(b.Aliasing.pResourceBefore);owners.Observe(b.Aliasing.pResourceAfter);}
+ }
+}
 inline void CheckOwner(UINT64 address,UINT64 bytes) noexcept {
  ComPtr<ID3D12Resource> owner;UINT64 offset=0;
  if(owners.Resolve(address,bytes,owner,offset))++resolvedRanges;else ++missingRanges;
@@ -27,7 +41,7 @@ inline void CheckOwner(UINT64 address,UINT64 bytes) noexcept {
 class Journal final:public IUnknown {
  std::atomic<ULONG> references_{1};
 public:
- ASJournal<512> data;
+ GrowingASJournal<65536> data;
  Journal(){data.generation=generation.fetch_add(1);}
  HRESULT STDMETHODCALLTYPE QueryInterface(REFIID iid,void** out) override {
   if(!out)return E_POINTER;*out=nullptr;if(iid!=__uuidof(IUnknown))return E_NOINTERFACE;
@@ -70,13 +84,15 @@ inline void RecordBuild(ID3D12GraphicsCommandList4* list,const D3D12_BUILD_RAYTR
   if(r.topLevel)CheckOwner(r.instances,UINT64(r.count)*64);
   else for(UINT i=0;i<r.count;++i){const auto* t=r.geometry->At(i);CheckOwner(t->vertices,UINT64(t->vertexCount)*t->stride);CheckOwner(t->indices,UINT64(t->indexCount)*2);if(t->transform)CheckOwner(t->transform,48);}
   if(!journal->data.Append({update?ASOperation::Update:ASOperation::Build,r,update?desc->SourceAccelerationStructureData:0}))Fail("build_journal_capacity");
+  JournalPeak(journal->data.size);
  }catch(...){Fail("build_allocation_exception");}
 }
 inline void RecordCopy(ID3D12GraphicsCommandList4* list,UINT64 destination,UINT64 source,D3D12_RAYTRACING_ACCELERATION_STRUCTURE_COPY_MODE mode) noexcept {
  if(!Enabled())return;++copyCount;if(fault.load())return;auto journal=Read(list);
  if(!journal){Fail("copy_missing_journal");return;}
  if(!destination||!source||(mode!=D3D12_RAYTRACING_ACCELERATION_STRUCTURE_COPY_MODE_CLONE&&mode!=D3D12_RAYTRACING_ACCELERATION_STRUCTURE_COPY_MODE_COMPACT)){Fail("copy_address_or_mode");return;}
- if(!journal->data.Append({ASOperation::Copy,{destination},source}))Fail("copy_journal_capacity");
+ try {if(!journal->data.Append({ASOperation::Copy,{destination},source}))Fail("copy_journal_capacity");JournalPeak(journal->data.size);}
+ catch(...){Fail("copy_allocation_exception");}
 }
 // No CPU wait, queue splitting, or GPU buffer access. A second queue, concurrent
 // Execute, or multiple AS-bearing lists in one batch invalidates this restricted
@@ -86,7 +102,7 @@ inline bool submitting=false;
 inline UINT64 nextFence=0,activeToken=0;
 inline ComPtr<ID3D12CommandQueue> queue;
 inline ComPtr<ID3D12Fence> fence;
-inline ASJournal<512> pending;
+inline GrowingASJournal<65536> pending;
 inline ASLedger<8192> ledger;
 inline UINT64 BeforeExecute(ID3D12CommandQueue* q,UINT count,ID3D12CommandList*const* lists) noexcept {
  if(!Enabled()||fault.load())return 0;
@@ -99,7 +115,7 @@ inline UINT64 BeforeExecute(ID3D12CommandQueue* q,UINT count,ID3D12CommandList*c
   for(UINT i=0;i<count&&!fault.load();++i){auto j=Read(lists[i]);
    // Uninstrumented lists can contain unseen builds. No partial coverage claim.
    if(!j||!j->data.complete){Fail("unobserved_or_incomplete_list");break;}
-   if(j->data.size){if(++relevant>1){Fail("multiple_as_lists_in_batch");break;}pending=j->data;}
+   if(j->data.size){if(++relevant>1){Fail("multiple_as_lists_in_batch");break;}try{pending=j->data;}catch(...){Fail("submission_snapshot_allocation");break;}}
   }
   if(!fault.load()&&relevant){
    if(!fence){ComPtr<ID3D12Device> d;if(FAILED(q->GetDevice(IID_PPV_ARGS(&d))))Fail("queue_device");else if(FAILED(d->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&fence))))Fail("fence_creation");else queue=q;}

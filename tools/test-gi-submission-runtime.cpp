@@ -6,6 +6,14 @@
 #include <cstdio>
 #include <string>
 #include "../src/gi_reuse/d3d12_submission_metadata.h"
+namespace fixture {
+inline bool PatchSlot(void** slot,void* expected,void* replacement) noexcept {
+ DWORD old=0;if(!VirtualProtect(slot,sizeof(void*),PAGE_EXECUTE_READWRITE,&old))return false;
+ const bool ok=InterlockedCompareExchangePointer(slot,replacement,expected)==expected;
+ DWORD ignored=0;VirtualProtect(slot,sizeof(void*),old,&ignored);return ok;
+}
+#include "../src/gi_resource_hooks.inl"
+}
 using Microsoft::WRL::ComPtr;
 namespace rt=gi_reuse::runtime;
 void Check(HRESULT hr){assert(SUCCEEDED(hr));}
@@ -39,6 +47,24 @@ int main(){
  cache.Observe(resources[1].Get());cache.Stats(owned,retained,limited);assert(limited&&owned==4);
  unsigned protectedCount=0;UINT64 evictions=0;cache.RetentionStats(protectedCount,evictions);assert(protectedCount==4&&evictions==4);
  assert(!cache.Resolve(resources[1]->GetGPUVirtualAddress(),64,owner,offset));
+ // Upload churn must not displace default-heap scene buffers before first build.
+ gi_reuse::BasicBufferOwners<4,256> priority;
+ D3D12_HEAP_PROPERTIES gpuHeap{};gpuHeap.Type=D3D12_HEAP_TYPE_DEFAULT;
+ ComPtr<ID3D12Resource> scene;Check(device->CreateCommittedResource(&gpuHeap,D3D12_HEAP_FLAG_NONE,&buffer,D3D12_RESOURCE_STATE_COMMON,nullptr,IID_PPV_ARGS(&scene)));
+ priority.Observe(scene.Get());for(auto& r:resources)priority.Observe(r.Get());
+ assert(priority.Resolve(scene->GetGPUVirtualAddress(),64,owner,offset));
+ // Actual creation interception discovers a CPU-written buffer without any copy.
+ fixture::gi_resource_hooks::Install(device.Get());const auto created=rt::creationObservations.load();
+ ComPtr<ID3D12Resource> createdBuffer;Check(device->CreateCommittedResource(&heap,D3D12_HEAP_FLAG_NONE,&buffer,D3D12_RESOURCE_STATE_GENERIC_READ,nullptr,IID_PPV_ARGS(&createdBuffer)));
+ assert(rt::creationObservations==created+1);assert(rt::owners.Resolve(createdBuffer->GetGPUVirtualAddress(),64,owner,offset));
+ // Placed-resource path has a distinct native signature and vtable slot.
+ D3D12_HEAP_DESC placedHeapDesc{};placedHeapDesc.SizeInBytes=65536;placedHeapDesc.Properties=gpuHeap;placedHeapDesc.Flags=D3D12_HEAP_FLAG_ALLOW_ONLY_BUFFERS;
+ ComPtr<ID3D12Heap> placedHeap;Check(device->CreateHeap(&placedHeapDesc,IID_PPV_ARGS(&placedHeap)));
+ ComPtr<ID3D12Resource> placed;Check(device->CreatePlacedResource(placedHeap.Get(),0,&buffer,D3D12_RESOURCE_STATE_COMMON,nullptr,IID_PPV_ARGS(&placed)));
+ assert(rt::owners.Resolve(placed->GetGPUVirtualAddress(),64,owner,offset));
+ // Buffers created before hook installation are discovered at native barriers.
+ D3D12_RESOURCE_BARRIER barrier{};barrier.Type=D3D12_RESOURCE_BARRIER_TYPE_UAV;barrier.UAV.pResource=scene.Get();
+ rt::ObserveBarriers(1,&barrier);assert(rt::owners.Resolve(scene->GetGPUVirtualAddress(),64,owner,offset));
  rt::Initialize(list.Get());auto initial=rt::Read(list.Get());assert(initial&&initial->data.size==0);
  const auto generation=initial->data.generation;rt::Initialize(list.Get());assert(rt::Read(list.Get())->data.generation==generation);
  D3D12_RAYTRACING_GEOMETRY_DESC geometry{};geometry.Type=D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES;
@@ -59,6 +85,11 @@ int main(){
  queue->ExecuteCommandLists(1,lists);rt::AfterExecute(queue.Get(),token);assert(!rt::fault);
  HANDLE event=CreateEventW(nullptr,FALSE,FALSE,nullptr);assert(event);Check(rt::fence->SetEventOnCompletion(token,event));assert(WaitForSingleObject(event,30000)==WAIT_OBJECT_0);CloseHandle(event);
  auto snapshot=std::make_unique<gi_reuse::ASLedger<8192>>();assert(rt::Snapshot(*snapshot));assert(snapshot->Find(512)->geometry->At(0)->vertices==4096);
+ // More than 512 events now survive recording, snapshot, and ordered submission.
+ rt::Reset(list.Get());for(unsigned i=0;i<1024;++i)rt::RecordBuild(list.Get(),&build);
+ assert(!rt::fault&&rt::Read(list.Get())->data.size==1024);
+ const auto grown=rt::BeforeExecute(queue.Get(),1,lists);assert(grown&&!rt::fault);
+ rt::Reset(list.Get());assert(rt::pending.size==1024);queue->ExecuteCommandLists(1,lists);rt::AfterExecute(queue.Get(),grown);assert(!rt::fault);
  // Missing coverage must invalidate even an otherwise valid prior snapshot.
  ComPtr<ID3D12GraphicsCommandList> unknown;Check(device->CreateCommandList(0,D3D12_COMMAND_LIST_TYPE_DIRECT,allocator.Get(),nullptr,IID_PPV_ARGS(&unknown)));
  ID3D12CommandList* missing[]={unknown.Get()};assert(!rt::BeforeExecute(queue.Get(),1,missing)&&rt::fault);assert(!rt::Snapshot(*snapshot));
@@ -70,7 +101,7 @@ int main(){
  assert(!rt::BeforeExecute(queue.Get(),1,lists)&&rt::fault);rt::AfterExecute(queue.Get(),pending);assert(!rt::submitting);
  rt::fault=false;rt::Reset(list.Get());rt::RecordCopy(list.Get(),1024,256,D3D12_RAYTRACING_ACCELERATION_STRUCTURE_COPY_MODE_SERIALIZE);assert(rt::fault);
  rt::fault=false;rt::failureReason=nullptr;rt::Reset(list.Get());
- for(unsigned i=0;i<513;++i)rt::RecordBuild(list.Get(),&build);
+ for(unsigned i=0;i<65537;++i)rt::RecordBuild(list.Get(),&build);
  assert(rt::fault&&std::string(rt::failureReason.load())=="build_journal_capacity");
  std::puts("PASS runtime journal ownership, descriptor snapshots, submission freeze, real queue fence, reset lifetime and fail-closed coverage/update/concurrency/copy modes; no GPU geometry bytes tested");
 }

@@ -18,5 +18,10 @@ int main(){
  ASLedger<4> missing;assert(!missing.Submit(1,1,copy,copy.generation));
  ASJournal<1> overflow;assert(overflow.Append(Build(256)));assert(!overflow.Append(Build(512)));ASLedger<4> reject;assert(!reject.Submit(1,1,overflow,0));
  ASLedger<4> invalidated;ASJournal<4> reset;reset.Append(Build(256));reset.Append({ASOperation::Invalidate,{256},0});assert(invalidated.Submit(1,1,reset,0));assert(!invalidated.Find(256));
+ GrowingASJournal<1024> growing;
+ for(unsigned i=0;i<1024;++i)assert(growing.Append(Build(256,i+1)));
+ auto frozen=growing;growing.Reset();assert(growing.size==0&&growing.events.empty());
+ ASLedger<4> growingLedger;assert(growingLedger.Submit(1,1,frozen,0));assert(growingLedger.Find(256)->instances==1024);
+ assert(!frozen.Append(Build(512)));assert(!growingLedger.Submit(1,2,frozen,0));
  std::puts("PASS submission ordering, reset generations, copy lineage, immutable snapshots, fence gating, capacity and multi-queue rejection");
 }

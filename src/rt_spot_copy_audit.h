@@ -7,7 +7,8 @@ namespace audit = rt_spot_capture_audit;
 using CopyBuffer = void (STDMETHODCALLTYPE*)(ID3D12GraphicsCommandList*,ID3D12Resource*,UINT64,ID3D12Resource*,UINT64,UINT64);
 using CopyResource = void (STDMETHODCALLTYPE*)(ID3D12GraphicsCommandList*,ID3D12Resource*,ID3D12Resource*);
 using Reset = HRESULT (STDMETHODCALLTYPE*)(ID3D12GraphicsCommandList*,ID3D12CommandAllocator*,ID3D12PipelineState*);
-struct Hooks { void** table = nullptr; CopyBuffer buffer = nullptr; CopyResource resource = nullptr; Reset reset = nullptr; };
+using Barrier = void (STDMETHODCALLTYPE*)(ID3D12GraphicsCommandList*,UINT,const D3D12_RESOURCE_BARRIER*);
+struct Hooks { void** table = nullptr; CopyBuffer buffer = nullptr; CopyResource resource = nullptr; Reset reset = nullptr; Barrier barrier=nullptr; };
 inline Hooks hooks[16]{};
 inline SRWLOCK hookLock = SRWLOCK_INIT;
 inline std::atomic<unsigned> calls{0}, matches{0}, samples{0};
@@ -91,6 +92,9 @@ inline void STDMETHODCALLTYPE ResourceHook(ID3D12GraphicsCommandList* list,ID3D1
         Observe(destination,0,source,0,destination->GetDesc().Width);
     original(list,destination,source);
 }
+inline void STDMETHODCALLTYPE BarrierHook(ID3D12GraphicsCommandList* list,UINT count,const D3D12_RESOURCE_BARRIER* barriers) {
+    gi_reuse::runtime::ObserveBarriers(count,barriers);Lookup(list).barrier(list,count,barriers);
+}
 inline HRESULT STDMETHODCALLTYPE ResetHook(ID3D12GraphicsCommandList* list,ID3D12CommandAllocator* allocator,ID3D12PipelineState* pipeline) {
     const auto hr=Lookup(list).reset(list,allocator,pipeline);
     if(SUCCEEDED(hr)){rt_spot_capture_runtime::ResetObserved(list);rt_spot_table_audit::Token(list,true);}
@@ -106,10 +110,11 @@ inline void InstallList(ID3D12GraphicsCommandList* list) noexcept {
         if (!entry.table && !slot) slot = &entry;
     }
     if (slot) {
-        *slot = {table,reinterpret_cast<CopyBuffer>(table[15]),reinterpret_cast<CopyResource>(table[17]),reinterpret_cast<Reset>(table[10])};
+        *slot = {table,reinterpret_cast<CopyBuffer>(table[15]),reinterpret_cast<CopyResource>(table[17]),reinterpret_cast<Reset>(table[10]),reinterpret_cast<Barrier>(table[26])};
         const bool buffer = PatchSlot(&table[15],reinterpret_cast<void*>(slot->buffer),reinterpret_cast<void*>(&BufferHook));
         const bool resource = PatchSlot(&table[17],reinterpret_cast<void*>(slot->resource),reinterpret_cast<void*>(&ResourceHook));
         const bool reset = PatchSlot(&table[10],reinterpret_cast<void*>(slot->reset),reinterpret_cast<void*>(&ResetHook));
+        if(gi_reuse::runtime::Enabled()&&!PatchSlot(&table[26],reinterpret_cast<void*>(slot->barrier),reinterpret_cast<void*>(&BarrierHook)))gi_reuse::runtime::Fail("barrier_hook_coverage");
         Trace("rt_hit_copy_hooks buffer=%u resource=%u reset=%u",unsigned(buffer),unsigned(resource),unsigned(reset));
         if (!reset) rt_spot_table_audit::resetTracking.store(false); // No reuse tracking means no safe correlation.
         if (!buffer && !resource && !reset) *slot = {};

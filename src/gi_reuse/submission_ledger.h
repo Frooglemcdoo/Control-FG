@@ -2,6 +2,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <vector>
 #include "geometry_metadata.h"
 
 namespace gi_reuse {
@@ -17,6 +18,7 @@ struct ASRecord {
 enum class ASOperation { Build, Copy, Invalidate, Update };
 struct ASEvent { ASOperation operation{}; ASRecord record{}; std::uint64_t source=0; };
 template<std::size_t Capacity> struct ASJournal {
+    static constexpr std::size_t Limit=Capacity;
     std::array<ASEvent,Capacity> events{};
     std::size_t size=0;
     std::uint64_t generation=0;
@@ -25,6 +27,20 @@ template<std::size_t Capacity> struct ASJournal {
     bool Append(ASEvent event) noexcept {
         if(size==Capacity){complete=false;return false;}
         events[size++]=event;return true;
+    }
+};
+// Grow on the heap, never create a large temporary on the render-thread stack.
+// A hard limit still fails closed; events and referenced geometry are not dropped.
+template<std::size_t Capacity> struct GrowingASJournal {
+    static constexpr std::size_t Limit=Capacity;
+    std::vector<ASEvent> events;
+    std::size_t size=0;
+    std::uint64_t generation=0;
+    bool complete=true;
+    void Reset() noexcept {++generation;events.clear();size=0;complete=true;}
+    bool Append(ASEvent event) {
+        if(size==Capacity){complete=false;return false;}
+        events.push_back(std::move(event));size=events.size();return true;
     }
 };
 template<std::size_t Capacity> class ASLedger {
@@ -59,9 +75,9 @@ public:
         output={*t,r->revision,t->indices+std::uint64_t(primitive)*6,primitive};
         return true;
     }
-    template<std::size_t N> bool Submit(std::uint64_t queue,std::uint64_t fence,
-                                      const ASJournal<N>& journal,std::uint64_t expectedGeneration) noexcept {
-        if(!complete_||!queue||!fence||!journal.complete||journal.size>N||journal.generation!=expectedGeneration||
+    template<class Journal> bool Submit(std::uint64_t queue,std::uint64_t fence,
+                                      const Journal& journal,std::uint64_t expectedGeneration) noexcept {
+        if(!complete_||!queue||!fence||!journal.complete||journal.size>Journal::Limit||journal.generation!=expectedGeneration||
            (queue_&&queue_!=queue)||fence<=fence_){Invalidate("ledger_submission_contract");return false;}
         // Caller supplies a fresh increasing completion fence for each submission.
         queue_=queue;fence_=fence;
