@@ -259,7 +259,7 @@ def main():
     print('Progress and failures are recorded below; no sound or hotkey is required.', flush=True)
     try:
         if args.diagnostics_only:
-            report['status'] = capture_status(root, args.pid)
+            report['status'] = 'Diagnostics-only collection; no RR capture is required.'
             print(report['status'], flush=True)
         positions = [(1, 'painting'), (2, 'elevator')] if args.require_rr else [(1, 'before-room'), (2, 'inside-room')]
         if args.gi_boundary:
@@ -311,7 +311,7 @@ def main():
         report['error'] = str(error)
         print('Capture incomplete: ' + str(error), flush=True)
     finally:
-        report['last_capture_status'] = capture_status(root, args.pid)
+        report['last_capture_status'] = 'Not requested (diagnostics-only).' if args.diagnostics_only else capture_status(root, args.pid)
         retain_metadata(root, args.pid, destination)
         collect_logs(root, local, args.pid, destination)
         (destination / 'boundary-report.json').write_text(json.dumps(report, indent=2))
@@ -321,7 +321,7 @@ def main():
     spec.loader.exec_module(module)
     output = module.package(destination)
     print(f'Send every ZIP in: {output}', flush=True)
-    print('Original captures were retained. Include the video.', flush=True)
+    print('Existing diagnostics were retained. No video is required.' if args.diagnostics_only else 'Original captures were retained. Include the video.', flush=True)
     if os.name == 'nt':
         os.startfile(output)
     return 0 if report['complete'] or args.diagnostics_only else 1

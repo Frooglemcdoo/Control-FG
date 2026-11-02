@@ -4,6 +4,7 @@
 #include <wrl/client.h>
 #include <cassert>
 #include <cstdio>
+#include <string>
 #include "../src/gi_reuse/d3d12_submission_metadata.h"
 using Microsoft::WRL::ComPtr;
 namespace rt=gi_reuse::runtime;
@@ -25,6 +26,19 @@ int main(){
  UINT64 offset=0;assert(rt::owners.Resolve(address+16,48,owner,offset)&&offset==16);
  assert(!rt::owners.Resolve(address+16,49,owner,offset));assert(!rt::owners.Resolve(UINT64_MAX,2,owner,offset));
  unsigned owned=0;UINT64 retained=0;bool limited=false;rt::owners.Stats(owned,retained,limited);assert(owned==1&&retained==64&&!limited);
+ // Startup churn exceeds cache capacity; referenced geometry remains protected.
+ gi_reuse::BasicBufferOwners<4,256> cache;
+ ComPtr<ID3D12Resource> resources[8];
+ for(auto& resource:resources)Check(device->CreateCommittedResource(&heap,D3D12_HEAP_FLAG_NONE,&buffer,D3D12_RESOURCE_STATE_GENERIC_READ,nullptr,IID_PPV_ARGS(&resource)));
+ cache.Observe(resources[0].Get());assert(cache.Resolve(resources[0]->GetGPUVirtualAddress(),64,owner,offset));
+ for(unsigned i=1;i<8;++i)cache.Observe(resources[i].Get());
+ cache.Stats(owned,retained,limited);assert(owned==4&&retained==256&&!limited);
+ assert(cache.Resolve(resources[0]->GetGPUVirtualAddress(),64,owner,offset));
+ assert(!cache.Resolve(resources[1]->GetGPUVirtualAddress(),64,owner,offset));
+ for(unsigned i=5;i<8;++i)assert(cache.Resolve(resources[i]->GetGPUVirtualAddress(),64,owner,offset));
+ cache.Observe(resources[1].Get());cache.Stats(owned,retained,limited);assert(limited&&owned==4);
+ unsigned protectedCount=0;UINT64 evictions=0;cache.RetentionStats(protectedCount,evictions);assert(protectedCount==4&&evictions==4);
+ assert(!cache.Resolve(resources[1]->GetGPUVirtualAddress(),64,owner,offset));
  rt::Initialize(list.Get());auto initial=rt::Read(list.Get());assert(initial&&initial->data.size==0);
  const auto generation=initial->data.generation;rt::Initialize(list.Get());assert(rt::Read(list.Get())->data.generation==generation);
  D3D12_RAYTRACING_GEOMETRY_DESC geometry{};geometry.Type=D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES;
@@ -50,10 +64,13 @@ int main(){
  ID3D12CommandList* missing[]={unknown.Get()};assert(!rt::BeforeExecute(queue.Get(),1,missing)&&rt::fault);assert(!rt::Snapshot(*snapshot));
  // Isolated rejection fixtures reset fault solely for testing, never in runtime.
  rt::fault=false;build.Inputs.Flags=D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PERFORM_UPDATE;
- rt::RecordBuild(list.Get(),&build);assert(rt::fault);rt::fault=false;build.Inputs.Flags=D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_NONE;
+ rt::failureReason=nullptr;rt::RecordBuild(list.Get(),&build);assert(rt::fault&&std::string(rt::failureReason.load())=="update_missing_source");rt::fault=false;build.Inputs.Flags=D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_NONE;
  rt::Reset(list.Get());rt::RecordBuild(list.Get(),&build);
  const auto pending=rt::BeforeExecute(queue.Get(),1,lists);assert(pending);
  assert(!rt::BeforeExecute(queue.Get(),1,lists)&&rt::fault);rt::AfterExecute(queue.Get(),pending);assert(!rt::submitting);
  rt::fault=false;rt::Reset(list.Get());rt::RecordCopy(list.Get(),1024,256,D3D12_RAYTRACING_ACCELERATION_STRUCTURE_COPY_MODE_SERIALIZE);assert(rt::fault);
+ rt::fault=false;rt::failureReason=nullptr;rt::Reset(list.Get());
+ for(unsigned i=0;i<513;++i)rt::RecordBuild(list.Get(),&build);
+ assert(rt::fault&&std::string(rt::failureReason.load())=="build_journal_capacity");
  std::puts("PASS runtime journal ownership, descriptor snapshots, submission freeze, real queue fence, reset lifetime and fail-closed coverage/update/concurrency/copy modes; no GPU geometry bytes tested");
 }

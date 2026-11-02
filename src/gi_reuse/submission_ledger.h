@@ -30,7 +30,7 @@ template<std::size_t Capacity> struct ASJournal {
 template<std::size_t Capacity> class ASLedger {
     std::array<ASRecord,Capacity> records_{};
     std::uint64_t queue_=0, revision_=0, fence_=0;
-    bool complete_=true;
+    bool complete_=true;const char* failure_=nullptr;
     ASRecord* Slot(std::uint64_t address) noexcept {
         ASRecord* empty=nullptr;
         for(auto& r:records_){if(r.address==address)return &r;if(!r.address&&!empty)empty=&r;}
@@ -39,7 +39,8 @@ template<std::size_t Capacity> class ASLedger {
 public:
     bool Complete() const noexcept {return complete_;}
     // Any unobserved mutation/order invalidates the entire claim. No silent eviction.
-    void Invalidate() noexcept {complete_=false;}
+    void Invalidate(const char* reason="ledger_invalidated") noexcept {complete_=false;if(!failure_)failure_=reason;}
+    const char* FailureReason() const noexcept {return failure_?failure_:"none";}
     const ASRecord* Find(std::uint64_t address) const noexcept {
         if(!complete_||!address)return nullptr;
         for(const auto& r:records_)if(r.address==address)return &r;
@@ -61,12 +62,12 @@ public:
     template<std::size_t N> bool Submit(std::uint64_t queue,std::uint64_t fence,
                                       const ASJournal<N>& journal,std::uint64_t expectedGeneration) noexcept {
         if(!complete_||!queue||!fence||!journal.complete||journal.size>N||journal.generation!=expectedGeneration||
-           (queue_&&queue_!=queue)||fence<=fence_){Invalidate();return false;}
+           (queue_&&queue_!=queue)||fence<=fence_){Invalidate("ledger_submission_contract");return false;}
         // Caller supplies a fresh increasing completion fence for each submission.
         queue_=queue;fence_=fence;
         for(std::size_t i=0;i<journal.size;++i){
             const auto& e=journal.events[i];const auto address=e.record.address;
-            if(!address){Invalidate();return false;}
+            if(!address){Invalidate("ledger_zero_address");return false;}
             if(e.operation==ASOperation::Invalidate){
                 for(auto& r:records_)if(r.address==address)r={};
                 continue;
@@ -74,21 +75,21 @@ public:
             ASRecord next=e.record;
             if(e.operation==ASOperation::Copy){
                 const auto* source=Find(e.source);
-                if(!source){Invalidate();return false;}
+                if(!source){Invalidate("ledger_copy_source_missing");return false;}
                 next=*source;next.address=address;
             }else if(e.operation==ASOperation::Update){
                 const auto* source=Find(e.source);
                 if(!source||!source->allowUpdate||next.topLevel!=source->topLevel||next.count!=source->count||
                    (!next.topLevel&&(!next.geometry||!source->geometry||!next.geometry->CanUpdateFrom(*source->geometry)))){
-                    Invalidate();return false;
+                    Invalidate("ledger_update_contract");return false;
                 }
                 next.allowUpdate=true;
-            }else if(e.operation!=ASOperation::Build){Invalidate();return false;}
+            }else if(e.operation!=ASOperation::Build){Invalidate("ledger_unknown_operation");return false;}
             if(next.geometry&&(next.topLevel||next.count!=next.geometry->Size())){
-                Invalidate();return false;
+                Invalidate("ledger_geometry_count");return false;
             }
             auto* slot=Slot(address);
-            if(!slot){Invalidate();return false;}
+            if(!slot){Invalidate("ledger_capacity");return false;}
             next.revision=++revision_;*slot=next;
         }
         return true;
