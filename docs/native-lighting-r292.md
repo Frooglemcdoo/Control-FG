@@ -30,3 +30,9 @@ The R291 index-priority policy, 8192 owner slots, 512 MiB logical extent budget,
 16384-address metadata history, and 65536-event journals remain in place.
 Replacement GI remains disabled; this is preparation for GPU byte capture and
 triangle reconstruction, not a speckle-fix build.
+
+Validation: focused Windows run 41495677744 passed, including scene read-plan
+lineage, all four range kinds, bounds/capacity rejection, completed runtime
+snapshot inspection and both GPU adapters. Full Windows run 41495677206 passed
+all 53 steps. Actual logs were checked for compiler/assertion/HRESULT failures.
+Build commit: 7eb061b0b2fce57a018c46744756d7b3ae2bf323.

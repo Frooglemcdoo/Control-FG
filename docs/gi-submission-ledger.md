@@ -243,3 +243,22 @@ capture, state changes, dependency assumptions, or rendering consumer is added.
 Focused Windows validation 41492681813 and full build 41492681970 passed for
 code commit ef859dc8632fda43eb0659e816318d88e8c1fb5a. Game coverage remains to be
 measured with R291; no speckle fix or coverage improvement is claimed yet.
+
+## R292 completed metadata read plans
+
+R291 supplied-run evidence: 676495 successful build-time range lookups, no misses,
+2557 AS submissions, final metadata fence complete. This closes the observed owner
+lookup gap for that run, not scene-wide lifetime/state/byte-generation validation.
+
+R292 adds immutable ledger enumeration and bounded SceneReadPlan construction,
+preserving each AS revision and geometry index across copy lineage. Vertex, index,
+transform and instance ranges are validated; malformed/incomplete/oversized plans
+are cleared. Runtime inspection uses only a completed metadata snapshot, rechecks
+owners and classifies heap types. No GPU reads or resource-state assumptions are
+introduced. Retained AS counts may include historical structures; requested byte
+sums include overlaps. active_membership_verified, copy_ready and reuse_ready stay
+zero. Separate status/coverage/plan lines avoid R291's long-line truncation.
+
+Portable plan tests and Windows runs 41495677744 (focused) / 41495677206 (full,
+53 steps) passed at 7eb061b0b2fce57a018c46744756d7b3ae2bf323. The next game run
+must establish completed-plan coverage and heap distribution before byte capture.
