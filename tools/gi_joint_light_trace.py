@@ -1,14 +1,13 @@
-"""Offline prototype: native spotlight terms and complete GI rays in one stream.
-Not selected by the game runtime. Uses existing sparse grid until ROI integration.
-"""
-import hashlib
+"""R281: native spotlight terms and complete GI rays in one dense ROI stream."""
+import hashlib,struct
 from gi_ray_trace import generate as ray_generate, uint, CAPACITY, STRIDE
 from gi_spot_pcf import decoder, dst, src, ins
 from dxbc_transform import transform_shex
 
 
 def generate(raw,path,identity):
-    plan={};ray_generate(raw,path,identity,instrumentation_plan=plan)
+    plan={};seed=path.parent/'joint-baseline'/'seed.dxbc';seed.parent.mkdir(exist_ok=True)
+    ray_generate(raw,seed,identity,instrumentation_plan=plan,roi=True)
     path.write_bytes(raw);decoded=decoder.decode(path);instructions={i['dword']:i for i in decoded['instructions']}
     expected={
         3869:('ld_structured',['r[20].xyzw','r[10].w','l(68)','t[11][11].xyzw']),
@@ -58,12 +57,31 @@ def generate(raw,path,identity):
         if cursor!=len(w):raise ValueError('unaccounted shader instruction')
         w[:]=out
     if transform_shex(changed,undo)!=raw:raise ValueError('native recovery failed')
+    # GPU oracle runs the exact new stores and existing complete-ray/accounting blocks.
+    def floats(*xs):return [0x4002]+[struct.unpack('<I',struct.pack('<f',x))[0] for x in xs]
+    fixture=words[:2]+words[2:3]+plan['declaration']+ins('dcl_input',[0x20032])+ins('dcl_temps',[temp+14])+ins('dcl_thread_group',[32,32,1])
+    fixture+=ins('mov',dst(plan['context'],15),floats(0,1,0,0))+ins('mov',dst(plan['context'],8),uint(42))
+    fixture+=ins('mov',dst(plan['extra'],2),uint(2))+ins('mov',dst(plan['fade'],15),floats(1,2,3,4))+plan['initialize_code']
+    for sample in range(2):
+        fixture+=ins('mov',dst(0,4),uint(sample))+ins('mov',dst(plan['extra'],8),uint(65535 if sample else 7))
+        fixture+=ins('mov',dst(3,15),floats(.5,1,2,0))+ins('mov',dst(15,15),floats(2,3,4,0))
+        fixture+=ins('mov',dst(10,15),floats(1*(sample+1),3*(sample+1),8*(sample+1),0))
+        fixture+=ins('mov',dst(1,15),floats(1,2,3,4))+ins('mov',dst(12,15),floats(5,6,7,0))+ins('mov',dst(13,15),floats(0,0,1,0))+plan['geometry_code']
+        if not sample:
+            fixture+=ins('mov',dst(10,8),uint(6))+ins('mov',dst(14,8),floats(.5,.5,.5,.5))
+            fixture+=ins('mov',dst(20,7),floats(2,2,2,0))+ins('mov',dst(17,7),floats(1,1,1,0))
+            fixture+=ins('mov',dst(coefficients,15),floats(.1,.2,.3,0))+ins('mov',dst(position,7),floats(10,11,12,0))
+            fixture+=ins('mov',dst(color,15),floats(2,3,4,5))+ins('mov',dst(attenuation,7),floats(6,7,8,0))+code
+        fixture+=plan['account_code']+plan['ray_code']
+    fixture+=ins('mov',dst(1,15),floats(.75,2.25,6,1))+ins('mov',dst(plan['extra'],1),[0x4001,0x3f400000])+plan['summary_code']+ins('ret')
+    def fixture_patch(w):w[:]=fixture
+    (path.parent/'gi-joint-light-oracle.dxbc').write_bytes(transform_shex(raw,fixture_patch))
     path.write_bytes(changed);parsed=decoder.decode(path)
-    return changed,dict(schema='gi-joint-light-prototype',sha256=hashlib.sha256(changed).hexdigest(),native_sha256=identity['sha256'],
+    return changed,dict(schema='gi-joint-light-r281',sha256=hashlib.sha256(changed).hexdigest(),native_sha256=identity['sha256'],
                        native_instruction_recovery=True,decoded_instruction_count=len(parsed['instructions']),
-                       capacity=CAPACITY,stride=STRIDE,spot_record_kind=3,sampling_step=32,
+                       capacity=CAPACITY,stride=STRIDE,spot_record_kind=3,sampling_step=1,roi_extent=[32,32],
                        runtime_enabled=False,gpu_validated=False,
                        limits=['Only spot accumulation branches that execute are recorded; absence is not a measured zero.',
                                'Per-light multiplication is separately rounded, not a subtraction of native fused accumulation.',
                                'Light index is session-local; no named-lamp identification.',
-                               'ROI selection and mixed-record parser remain required before deployment.'])
+                               'GPU validation and runtime selection must be verified before delivery.'])

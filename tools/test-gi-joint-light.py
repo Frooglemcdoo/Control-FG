@@ -24,11 +24,14 @@ class Joint(unittest.TestCase):
   for offset,values in [(16,[.5,1,2]),(32,[2,2,2]),(48,[.5,1,2]),(64,[1,1,1])]:struct.pack_into('<3f',spot,offset,*values)
   struct.pack_into('<f',spot,140,.5);struct.pack_into('<4I',spot,144,6,2,7,42);struct.pack_into('<I',spot,172,0x281)
   data+=spot;struct.pack_into('<I',data,0,4)
+  struct.pack_into('<3I',data,4,0x281,0,0)
   report=analyze_joint(data);self.assertEqual(report['executed_spot_records'],1);self.assertEqual(report['brightest_spot_terms'][0]['normalized_rgb'],[.1875,.375,.75])
   for offset,value in [(144,7),(152,65535),(156,99)]:
    bad=bytearray(data);struct.pack_into('<I',bad,len(bad)-256+offset,value)
    if offset==144:continue # Another light ID is valid, unlike mismatched material context.
    with self.assertRaises(ValueError):analyze_joint(bad)
+  outside=bytearray(data);struct.pack_into('<I',outside,16,32)
+  with self.assertRaisesRegex(ValueError,'outside ROI'):analyze_joint(outside)
   duplicate=bytearray(data)+spot;struct.pack_into('<I',duplicate,0,5)
   with self.assertRaisesRegex(ValueError,'duplicate'):analyze_joint(duplicate)
 if __name__=='__main__':unittest.main()

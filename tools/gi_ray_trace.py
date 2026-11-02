@@ -16,7 +16,7 @@ def branch(value):
     return code
 
 
-def generate(raw, path, identity, *, instrumentation_plan=None):
+def generate(raw, path, identity, *, instrumentation_plan=None, roi=False):
     assert identity['sha256'] == '1dfb4c9b054037e030ff9eed6ed5e482c8c32f9f301bb02c89eb0084c52842de'
     assert hashlib.sha256(raw).hexdigest() == identity['sha256']
     path.write_bytes(raw)
@@ -48,8 +48,14 @@ def generate(raw, path, identity, *, instrumentation_plan=None):
     def begin(kind):
         # Dispatch coordinates survive the native register reuse at final output.
         code = ins('mov', dst(v,3), [0x20e46])
-        code += ins('and', dst(q,3), src(v), uint(31))
-        code += ins('ieq', dst(q,3), src(q), uint(16))
+        if roi:
+            # b0 space2 holds integer origin XY and extent XY, no native CB changes.
+            code += ins('ineg',dst(q,3),[0x308e46,5,0,0])
+            code += ins('iadd',dst(q,3),src(v),src(q))
+            code += ins('ult',dst(q,3),src(q),[0x308ee6,5,0,0])
+        else:
+            code += ins('and', dst(q,3), src(v), uint(31))
+            code += ins('ieq', dst(q,3), src(q), uint(16))
         code += ins('and', dst(q,1), src(q,0), src(q,0x55)) + branch(src(q,0))
         code += ins('imm_atomic_iadd', dst(q,1), uav(1), uint(0), uint(1))
         code += ins('ult', dst(q,2), src(q,0), uint(CAPACITY)) + branch(src(q,0x55))
@@ -95,6 +101,7 @@ def generate(raw, path, identity, *, instrumentation_plan=None):
     summary += store(236,uint(0x278),1) + end()
     add(5169,summary) # valid-pixel branch only, after final output alpha assignment
     decl = ins('dcl_unordered_access_view_raw',[0x31ee46,7,0,0,2])
+    if roi: decl += ins('dcl_constant_buffer',[0x308e46,5,0,0,1,2])
     add(245,decl)
     def patch(w):
         out = w[:2]
@@ -105,7 +112,8 @@ def generate(raw, path, identity, *, instrumentation_plan=None):
     if instrumentation_plan is not None:
         instrumentation_plan.update(words=words, inserts=inserts, temp=temp, temp_count_offset=td+1,
                                     begin=begin, end=end, store=store, scratch=v, context=context,
-                                    extra=extra, fade=fade, hit_position=hit_position, hit_normal=hit_normal)
+                                    extra=extra, fade=fade, hit_position=hit_position, hit_normal=hit_normal,
+                                    initialize_code=initialize, account_code=account, ray_code=ray, summary_code=summary, geometry_code=geometry, declaration=decl)
     changed = transform_shex(raw,patch)
     def undo(w):
         out=w[:2]; cursor=2

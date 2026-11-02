@@ -137,6 +137,11 @@ def main():
  header.append('inline constexpr unsigned char rayShader6[]={'+','.join(map(str,ray))+'};')
  header.append('inline constexpr Shader rayShader={'+f'{identities[6]["bytes"]},"{identities[6]["sha256"]}",rayShader6,sizeof(rayShader6)'+'};')
  (out/'gi-ray-trace-validation.json').write_text(json.dumps(ray_report,indent=2)+'\n')
+ from gi_joint_light_trace import generate as generate_joint
+ joint,joint_report=generate_joint(raw,out/'gi-joint-light-6.dxbc',identities[6])
+ header.append('inline constexpr unsigned char jointShader6[]={'+','.join(map(str,joint))+'};')
+ header.append('inline constexpr Shader jointShader={'+f'{identities[6]["bytes"]},"{identities[6]["sha256"]}",jointShader6,sizeof(jointShader6)'+'};')
+ (out/'gi-joint-light-validation.json').write_text(json.dumps(joint_report,indent=2)+'\n')
  header.append('}')
  (out/'gi_spot_trace.generated.h').write_text('\n'.join(header)+'\n')
  (out/'gi-spot-trace-validation.json').write_text(json.dumps(audit,indent=2)+'\n')

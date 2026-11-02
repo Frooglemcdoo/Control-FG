@@ -32,16 +32,24 @@ int main()try{
  ComPtr<ID3D12Device> d;Check(D3D12CreateDevice(warp.Get(),D3D_FEATURE_LEVEL_11_0,IID_PPV_ARGS(&d)));
  // Exact observed eight-parameter native layout, plus our raw UAV in space 2.
  D3D12_DESCRIPTOR_RANGE ranges[]={{D3D12_DESCRIPTOR_RANGE_TYPE_CBV,5,4,0,UINT_MAX},{D3D12_DESCRIPTOR_RANGE_TYPE_SRV,36,0,0,UINT_MAX},{D3D12_DESCRIPTOR_RANGE_TYPE_UAV,8,0,0,UINT_MAX},{D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER,4,0,0,UINT_MAX},{D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER,64,0,1,UINT_MAX},{D3D12_DESCRIPTOR_RANGE_TYPE_SRV,244000,0,1,UINT_MAX}};
- D3D12_ROOT_PARAMETER parameters[9]{};
+ D3D12_ROOT_PARAMETER parameters[10]{};
  parameters[0].ParameterType=D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;parameters[0].DescriptorTable={3,ranges};
  parameters[1].ParameterType=D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;parameters[1].DescriptorTable={1,ranges+3};
  for(UINT i=2;i<6;++i){parameters[i].ParameterType=D3D12_ROOT_PARAMETER_TYPE_CBV;parameters[i].Descriptor={i-2,0};}
  parameters[6].ParameterType=D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;parameters[6].DescriptorTable={1,ranges+4};
  parameters[7].ParameterType=D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;parameters[7].DescriptorTable={1,ranges+5};
  parameters[8].ParameterType=D3D12_ROOT_PARAMETER_TYPE_UAV;parameters[8].Descriptor={0,2};
- D3D12_ROOT_SIGNATURE_DESC rd{9,parameters,0,nullptr,D3D12_ROOT_SIGNATURE_FLAG_NONE};ComPtr<ID3DBlob> blob,error;Check(D3D12SerializeRootSignature(&rd,D3D_ROOT_SIGNATURE_VERSION_1,&blob,&error));
+ parameters[9].ParameterType=D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;parameters[9].Constants={0,2,4};
+#ifdef CONTROL_TEST_GI_JOINT_TRACE
+ constexpr UINT rootCount=10;
+#else
+ constexpr UINT rootCount=9;
+#endif
+ D3D12_ROOT_SIGNATURE_DESC rd{rootCount,parameters,0,nullptr,D3D12_ROOT_SIGNATURE_FLAG_NONE};ComPtr<ID3DBlob> blob,error;Check(D3D12SerializeRootSignature(&rd,D3D_ROOT_SIGNATURE_VERSION_1,&blob,&error));
  ComPtr<ID3D12RootSignature> root;Check(d->CreateRootSignature(0,blob->GetBufferPointer(),blob->GetBufferSize(),IID_PPV_ARGS(&root)));
-#ifdef CONTROL_TEST_GI_RAY_TRACE
+#ifdef CONTROL_TEST_GI_JOINT_TRACE
+ const auto& shader=gi_spot_trace_shader::jointShader;const auto embedded=Read("build/gi-joint-light-6.dxbc");
+#elif defined(CONTROL_TEST_GI_RAY_TRACE)
  const auto& shader=gi_spot_trace_shader::rayShader;const auto embedded=Read("build/gi-ray-trace-6.dxbc");
 #else
  const auto& shader=gi_spot_trace_shader::shaders[0];const auto embedded=Read("build/gi-spot-trace-6.dxbc");
@@ -49,7 +57,10 @@ int main()try{
 Require(embedded.size()==shader.size&&!memcmp(embedded.data(),shader.bytes,shader.size),"embedded bytes differ");
  ComPtr<ID3DBlob> disassembly;Check(D3DDisassemble(shader.bytes,shader.size,0,nullptr,&disassembly));
  D3D12_COMPUTE_PIPELINE_STATE_DESC pd{};pd.pRootSignature=root.Get();pd.CS={shader.bytes,shader.size};ComPtr<ID3D12PipelineState> nativeTrace;Check(d->CreateComputePipelineState(&pd,IID_PPV_ARGS(&nativeTrace)));
-#ifdef CONTROL_TEST_GI_RAY_TRACE
+#ifdef CONTROL_TEST_GI_JOINT_TRACE
+ auto oracle=Read("build/gi-joint-light-oracle.dxbc");
+ constexpr UINT expectedRecords=4;
+#elif defined(CONTROL_TEST_GI_RAY_TRACE)
  auto oracle=Read("build/gi-ray-trace-oracle.dxbc");
  constexpr UINT expectedRecords=3;
 #else
@@ -65,34 +76,56 @@ pd.CS={oracle.data(),oracle.size()};ComPtr<ID3D12PipelineState> oraclePso;Check(
   auto gpu=Buffer(d.Get(),D3D12_HEAP_TYPE_DEFAULT,D3D12_RESOURCE_STATE_COPY_DEST,D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
   auto upload=Buffer(d.Get(),D3D12_HEAP_TYPE_UPLOAD,D3D12_RESOURCE_STATE_GENERIC_READ,D3D12_RESOURCE_FLAG_NONE);
   auto readback=Buffer(d.Get(),D3D12_HEAP_TYPE_READBACK,D3D12_RESOURCE_STATE_COPY_DEST,D3D12_RESOURCE_FLAG_NONE);
-  void* mapped=nullptr;D3D12_RANGE none{0,0};Check(upload->Map(0,&none,&mapped));memset(mapped,0,allocated);if(run){UINT seed=capacity-1;memcpy(mapped,&seed,4);}memset(static_cast<unsigned char*>(mapped)+bytes,0xa5,256);upload->Unmap(0,nullptr);
+  void* mapped=nullptr;D3D12_RANGE none{0,0};Check(upload->Map(0,&none,&mapped));memset(mapped,0,allocated);if(run){UINT seed=capacity-1;memcpy(mapped,&seed,4);}memset(static_cast<unsigned char*>(mapped)+bytes,0xa5,256);
+#ifdef CONTROL_TEST_GI_JOINT_TRACE
+  const UINT coordinate=run?31:16;UINT header[3]={0x281,coordinate,coordinate};memcpy(static_cast<unsigned char*>(mapped)+4,header,sizeof(header));
+#endif
+  upload->Unmap(0,nullptr);
   Check(allocator->Reset());Check(list->Reset(allocator.Get(),oraclePso.Get()));list->CopyBufferRegion(gpu.Get(),0,upload.Get(),0,allocated);
   Transition(list.Get(),gpu.Get(),D3D12_RESOURCE_STATE_COPY_DEST,D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-  list->SetComputeRootSignature(root.Get());list->SetComputeRootUnorderedAccessView(8,gpu->GetGPUVirtualAddress());list->Dispatch(1,1,1);
+  list->SetComputeRootSignature(root.Get());list->SetComputeRootUnorderedAccessView(8,gpu->GetGPUVirtualAddress());
+#ifdef CONTROL_TEST_GI_JOINT_TRACE
+  const UINT roi[4]={coordinate,coordinate,1,1};list->SetComputeRoot32BitConstants(9,4,roi,0);
+#endif
+  list->Dispatch(1,1,1);
   Transition(list.Get(),gpu.Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS,D3D12_RESOURCE_STATE_COPY_SOURCE);list->CopyBufferRegion(readback.Get(),0,gpu.Get(),0,allocated);Check(list->Close());
   ID3D12CommandList* lists[]={list.Get()};queue->ExecuteCommandLists(1,lists);Check(queue->Signal(fence.Get(),run+1));Check(fence->SetEventOnCompletion(run+1,event));Require(WaitForSingleObject(event,30000)==WAIT_OBJECT_0,"GPU timeout");
   D3D12_RANGE range{0,allocated};Check(readback->Map(0,&range,&mapped));auto* p=static_cast<unsigned char*>(mapped);UINT total=0;memcpy(&total,p,4);Require(total==(run?capacity+expectedRecords-1:expectedRecords),"record allocation count");
   for(UINT j=0;j<256;++j)Require(p[bytes+j]==0xa5,"overflow touched guard");
   for(UINT sample=0;sample<(run?1u:expectedRecords);++sample){const UINT index=run?capacity-1:sample;auto* record=p+16+index*stride;UINT id[4]{},valid=0;memcpy(id,record,16);memcpy(&valid,record+192,4);
-#ifdef CONTROL_TEST_GI_RAY_TRACE
-   Require(id[0]==16&&id[1]==16&&id[3]==(sample==2?2u:1u),"ray record identity");
+#if defined(CONTROL_TEST_GI_RAY_TRACE) || defined(CONTROL_TEST_GI_JOINT_TRACE)
+   UINT raySample=sample,expectedCoordinate=16;
+#ifdef CONTROL_TEST_GI_JOINT_TRACE
+   expectedCoordinate=coordinate;
+   if(sample==0){
+    auto f=[&](UINT offset){float value=0;memcpy(&value,record+offset,4);return value;};
+    auto u=[&](UINT offset){UINT value=0;memcpy(&value,record+offset,4);return value;};
+    Require(id[0]==coordinate&&id[1]==coordinate&&id[2]==0&&id[3]==3,"joint spotlight identity/ROI");
+    Require(f(16)==.5f&&f(20)==1&&f(24)==2,"joint weighted spotlight term");
+    Require(f(80)==10&&f(112)==2&&f(128)==6&&f(132)==7&&f(136)==8&&f(140)==.5f,"joint native operands");
+    Require(u(144)==6&&u(148)==2&&u(152)==7&&u(156)==42&&u(172)==0x281,"joint context");
+    continue;
+   }
+   raySample=sample-1;
+#endif
+   Require(id[0]==expectedCoordinate&&id[1]==expectedCoordinate&&id[3]==(raySample==2?2u:1u),"ray record identity");
    auto scalar=[&](UINT offset){float f=0;memcpy(&f,record+offset,4);return f;};
    auto integer=[&](UINT offset){UINT n=0;memcpy(&n,record+offset,4);return n;};
-   if(integer(108)!=42||integer(148)!=2)std::cerr<<"sample="<<sample<<" material="<<integer(108)<<" count="<<integer(148)<<'\n';
+   if(integer(108)!=42||integer(148)!=2)std::cerr<<"raySample="<<raySample<<" material="<<integer(108)<<" count="<<integer(148)<<'\n';
    Require(integer(108)==42&&integer(148)==2,"material and ray count");
    Require(scalar(160)==1&&scalar(172)==4,"depth constants");
-   if(sample<2){
-    Require(id[2]==sample&&integer(144)==(sample?65535u:7u),"hit/miss sentinel");
+   if(raySample<2){
+    Require(id[2]==raySample&&integer(144)==(raySample?65535u:7u),"hit/miss sentinel");
     Require(scalar(16)==1&&scalar(20)==3&&scalar(24)==8,"weighted contribution");
-    Require(scalar(64)==float(sample+1)&&scalar(72)==float(8*(sample+1)),"native accumulation");
+    Require(scalar(64)==float(raySample+1)&&scalar(72)==float(8*(raySample+1)),"native accumulation");
     Require(scalar(80)==1&&scalar(92)==4&&scalar(112)==5,"primary and secondary geometry");
-    Require(scalar(136)==(sample?0.f:1.f),"miss normal must be zero");
+    Require(scalar(136)==(raySample?0.f:1.f),"miss normal must be zero");
    }else{
     Require(id[2]==UINT_MAX,"summary sentinel");
     Require(scalar(176)==.75f&&scalar(180)==2.25f&&scalar(184)==6&&scalar(188)==1,"final GI");
     Require(scalar(192)==2&&scalar(200)==16&&scalar(208)==.75f,"sum and normalization");
    }
-   if(sample<2){for(UINT offset=224;offset<256;offset+=4)Require(integer(offset)==0,"unwritten record padding");}
+   if(raySample<2){for(UINT offset=224;offset<256;offset+=4)Require(integer(offset)==0,"unwritten record padding");}
    else{Require(integer(236)==0x278&&integer(252)==0,"accounting schema/padding");
     for(UINT offset : {224u,240u})Require(scalar(offset)==.375f&&scalar(offset+4)==1.125f&&scalar(offset+8)==3.f,"runtime surface/fallback accounting");}
 #else
@@ -104,7 +137,11 @@ pd.CS={oracle.data(),oracle.size()};ComPtr<ID3D12PipelineState> oraclePso;Check(
    if(sample){Require(scalar(48)==3.75f&&scalar(52)==4.75f&&scalar(56)==5.75f&&scalar(60)==6.75f,"attenuation-stage scalar stores");Require(scalar(96)==.4f&&scalar(112)==2&&scalar(128)==.5f&&scalar(144)==.9f,"MAD operands/material factors");}
    else Require(scalar(64)==0&&scalar(96)==0,"shadow early-out");
 #endif
-  }readback->Unmap(0,&none);
+  }
+#ifdef CONTROL_TEST_GI_JOINT_TRACE
+  if(!run){std::ofstream capture("build/gi-joint-oracle-readback.bin",std::ios::binary);capture.write(reinterpret_cast<const char*>(p),16+expectedRecords*stride);Require(bool(capture),"oracle export");}
+#endif
+  readback->Unmap(0,&none);
  }
  CloseHandle(event);ComPtr<ID3D12InfoQueue> messages;Check(d.As(&messages));
  for(UINT64 i=0;i<messages->GetNumStoredMessagesAllowedByRetrievalFilter();++i){SIZE_T size=0;messages->GetMessage(i,nullptr,&size);std::vector<unsigned char> storage(size);auto* m=reinterpret_cast<D3D12_MESSAGE*>(storage.data());Check(messages->GetMessage(i,m,&size));if(m->Severity<=D3D12_MESSAGE_SEVERITY_ERROR)throw std::runtime_error(m->pDescription);}

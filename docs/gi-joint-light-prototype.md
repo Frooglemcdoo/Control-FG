@@ -39,3 +39,6 @@ Before shipping: add focused ROI selection instead of the inherited sparse
 32-pixel grid; execute exact injected blocks with a GPU oracle; extend the
 runtime/collector for the mixed format; capture same-frame boundary evidence.
 No in-game improvement or root cause is claimed by this prototype.
+
+R281 follow-up: dense ROI, optional runtime selection, PID-specific collection
+and GPU oracle execution are integrated in the R281 branch. See native-lighting-r281.md.

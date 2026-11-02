@@ -1,15 +1,18 @@
 """Validate mixed same-dispatch spotlight/ray records; never join separate runs."""
-import math,struct
+import math,struct,argparse,json
+from pathlib import Path
 from collections import defaultdict
 from analyze_gi_ray_trace import analyze,CAPACITY,STRIDE
 
 def analyze_joint(data):
  if len(data)<16:raise ValueError('missing header')
- count,*reserved=struct.unpack_from('<4I',data)
- if any(reserved) or count>CAPACITY or len(data)!=16+count*STRIDE:raise ValueError('invalid or overflowed stream')
+ count,magic,ox,oy=struct.unpack_from('<4I',data)
+ dense=magic==0x281
+ if (not dense and any((magic,ox,oy))) or count>CAPACITY or len(data)!=16+count*STRIDE:raise ValueError('invalid or overflowed stream')
  rays={};summaries={};spots=[];native=[]
  for offset in range(16,len(data),STRIDE):
   b=data[offset:offset+STRIDE];x,y,ray,kind=struct.unpack_from('<4I',b)
+  if dense and not (ox<=x<ox+32 and oy<=y<oy+32):raise ValueError('record outside ROI')
   if kind in (1,2):
    native.append(b)
    if kind==1:rays[x,y,ray]=b
@@ -18,7 +21,7 @@ def analyze_joint(data):
    if struct.unpack_from('<I',b,172)[0]!=0x281:raise ValueError('unknown spotlight marker')
    spots.append((x,y,ray,b))
   else:raise ValueError('unknown mixed record kind')
- verified=analyze(struct.pack('<4I',len(native),0,0,0)+b''.join(native))
+ verified=analyze(struct.pack('<4I',len(native),0,0,0)+b''.join(native),sampling_step=1 if dense else 32)
  totals=defaultdict(lambda:[0.,0.,0.]);seen=set();records=[]
  for x,y,ray,b in spots:
   light,n,secondary,primary=struct.unpack_from('<4I',b,144);key=(x,y,ray,light)
@@ -41,3 +44,7 @@ def analyze_joint(data):
  return {'schema':'gi-joint-light-analysis-v1','native_accounting':verified,'executed_spot_records':len(spots),
          'pixels_with_executed_spots':len(totals),'brightest_spot_terms':sorted(records,key=lambda r:max(r['normalized_rgb']),reverse=True)[:20],
          'limits':['Absence of a light record is not a measured zero.','Session-local light ID does not identify the desk lamp.','Spatial measurements do not establish temporal variance or invalid shading.']}
+
+if __name__=='__main__':
+ p=argparse.ArgumentParser(description=__doc__);p.add_argument('trace',type=Path);p.add_argument('--output',required=True,type=Path);a=p.parse_args()
+ a.output.write_text(json.dumps(analyze_joint(a.trace.read_bytes()),indent=2,allow_nan=False)+'\n')

@@ -3,6 +3,7 @@ name: Build native reflection enhancements and RR
 on:
   push:
     branches:
+      - work/r281-gi-joint-light
       - work/r280-gi-instance-submissions
       - work/r279-gi-geometry-bindings
       - work/r278-gi-runtime-accounting
@@ -138,6 +139,14 @@ jobs:
           cl /nologo /std:c++17 /EHsc /W4 /WX /DCONTROL_TEST_GI_RAY_TRACE tools\test-gi-spot-trace.cpp /Febuild\test-gi-ray-trace.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
           if errorlevel 1 exit /b 1
           build\test-gi-ray-trace.exe
+          if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX /DCONTROL_TEST_GI_JOINT_TRACE tools\test-gi-spot-trace.cpp /Febuild\test-gi-joint-light.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
+          if errorlevel 1 exit /b 1
+          build\test-gi-joint-light.exe
+          if errorlevel 1 exit /b 1
+          python tools/analyze_gi_joint_trace.py build/gi-joint-oracle-readback.bin --output build/gi-joint-oracle-analysis.json
+          if errorlevel 1 exit /b 1
+          python tools/test-gi-joint-light.py
           if errorlevel 1 exit /b 1
           python tools/test-analyze-gi-ray-trace.py
           if errorlevel 1 exit /b 1
@@ -1136,11 +1145,11 @@ jobs:
           build\test-gi-spot-pcf.exe
           if errorlevel 1 exit /b 1
 
-      - name: Package GI instance submission metadata R280
+      - name: Package joint spotlight and GI capture R281
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='ControlTOH-R280'
+          $out='ControlTOH-R281'
           $shader="$out/ControlTOH/Shaders"
           $tools="$out/ControlTOH/Tools"
           $diagnostics="$out/ControlTOH/Diagnostics"
@@ -1165,25 +1174,25 @@ jobs:
           Copy-Item Package-Lighting-Capture.cmd,tools/package-lighting-capture.py,Package-Lighting-Performance.ps1 $diagnostics
           Copy-Item Capture-RR-Boundary.cmd,Capture-RR-Boundary.ps1,Collect-RR-Boundary-Status.cmd,tools/collect-rr-boundary.py $diagnostics
           Copy-Item Start-Compact-Distance-Test.cmd,Capture-RR-Suite.ps1,tools/collect-rr-suite.py $diagnostics
-          Copy-Item tools/diagnostics/Start-R258-Storage-Diagnostics.cmd,tools/diagnostics/Start-GI-Source-Probe.cmd,tools/diagnostics/Start-GI-Shadow-Test.cmd,tools/diagnostics/Start-GI-Lighting-Test.cmd,tools/diagnostics/Start-GI-Hit-Capture.cmd,tools/diagnostics/Start-GI-Binding-Audit.cmd,tools/diagnostics/Start-GI-Spot-Trace.cmd,tools/diagnostics/Start-Reflection-Clamp-Test.cmd,tools/diagnostics/Start-GI-Ray-Trace.cmd,tools/diagnostics/Start-GI-Geometry-Probe.cmd $diagnostics
+          Copy-Item tools/diagnostics/Start-R258-Storage-Diagnostics.cmd,tools/diagnostics/Start-GI-Source-Probe.cmd,tools/diagnostics/Start-GI-Shadow-Test.cmd,tools/diagnostics/Start-GI-Lighting-Test.cmd,tools/diagnostics/Start-GI-Hit-Capture.cmd,tools/diagnostics/Start-GI-Binding-Audit.cmd,tools/diagnostics/Start-GI-Spot-Trace.cmd,tools/diagnostics/Start-Reflection-Clamp-Test.cmd,tools/diagnostics/Start-GI-Ray-Trace.cmd,tools/diagnostics/Start-GI-Geometry-Probe.cmd,tools/diagnostics/Start-GI-Joint-Trace.cmd $diagnostics
           Copy-Item tools/diagnostics/Collect-Texture-Trace.cmd,tools/diagnostics/Collect-Texture-Trace.ps1 $tools
           Copy-Item build/DirectStorage "$diagnostics/DirectStorage" -Recurse
           Copy-Item build/DirectStorage/dstorage.dll,build/DirectStorage/dstoragecore.dll $out
           Copy-Item tools/directstorage/Validate-DirectStorage.cmd "$diagnostics/DirectStorage"
-          Copy-Item docs/native-lighting-r280.md "$out/ControlTOH/DIAGNOSTIC-NOTES.md"
+          Copy-Item docs/native-lighting-r281.md "$out/ControlTOH/DIAGNOSTIC-NOTES.md"
           Copy-Item tools/Organize-Existing-Install.cmd,tools/Organize-Existing-Install.ps1 $tools
           Copy-Item tools/diagnostics/Collect-ControlTOH-Materials.cmd,tools/diagnostics/Collect-ControlTOH-Materials.ps1 $tools
           & powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/diagnostics/test-material-collector.ps1
           if ($LASTEXITCODE -ne 0) { throw 'Material collector integration test failed' }
           @'
           Control The Oldest House: Visual and Performance Overhaul
-          R280 - GI instance submission metadata
+          R281 - Same-dispatch spotlight and GI capture
 
           Copy all package contents beside Control_DX12.exe, preserving folders.
-          Run ControlTOH/Diagnostics/Start-GI-Geometry-Probe.cmd.
+          Run ControlTOH/Diagnostics/Start-GI-Joint-Trace.cmd.
           Load the original plant area with the lamp intact, RT indirect and RR ON.
           Select GI RAW BYPASS and REF CLAMP: BYPASS; keep Native Blend and FG off.
-          Aim at the plant and Jesse hair. Mouse zoom may remain held.
+          Center the crosshair directly on a speckled leaf or hair patch. Mouse zoom may remain held.
           Press F7 OR click ARM GI TRACE in F10; wait for the visible ARMED countdown.
           Close F10 and hold the view until SAVED. Exit normally to package logs.
           Do not click CAPTURE RR or PACKAGE RR.
@@ -1201,10 +1210,12 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: ControlTOH-R280
+          name: ControlTOH-R281
           path: |
-            ControlTOH-R280.zip
-            ControlTOH-R280.sha256
+            ControlTOH-R281.zip
+            ControlTOH-R281.sha256
+            build/gi-joint-light-validation.json
+            build/gi-joint-oracle-analysis.json
             build/gi-ray-trace-validation.json
             build/gi-spot-trace-validation.json
             build/gi-spot-pcf-validation.json

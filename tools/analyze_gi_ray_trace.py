@@ -10,7 +10,7 @@ import struct
 CAPACITY, STRIDE = 65536, 256
 
 
-def analyze(data):
+def analyze(data, *, sampling_step=32):
     if len(data) < 16:
         raise ValueError('Missing header')
     count, *reserved = struct.unpack_from('<4I', data)
@@ -22,7 +22,7 @@ def analyze(data):
     nonfinite = 0
     for offset in range(16,len(data),STRIDE):
         x,y,ray,kind = struct.unpack_from('<4I',data,offset)
-        if x%32 != 16 or y%32 != 16 or kind not in (1,2):
+        if (sampling_step==32 and (x%32 != 16 or y%32 != 16)) or sampling_step not in (1,32) or kind not in (1,2):
             raise ValueError('Unknown record kind or sampling coordinate')
         def fs(at,n=3): return list(struct.unpack_from('<'+'f'*n,data,offset+at))
         material, rays = struct.unpack_from('<2I',data,offset+144)

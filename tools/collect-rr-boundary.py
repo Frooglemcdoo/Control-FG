@@ -175,7 +175,7 @@ def validate_gi_sequence_pair(pair, ordinal):
 
 
 def collect_logs(root, local, pid, destination):
-    for directory, pattern in [(root, f'probe-*-{pid}.log'), (local / 'Control-FG' / 'Diagnostics', f'GI-Spot-R274-{pid}.bin'), (local / 'Control-FG' / 'Diagnostics', f'GI-Ray-R27[78]-{pid}.bin'), (local / 'Control-FG' / 'Diagnostics', f'Lighting-*-{pid}-*.log'), (Path(os.environ.get('TEMP', str(local))) / 'Control-FG' / 'Diagnostics', f'GI-Spot-R274-{pid}.bin'), (Path(os.environ.get('TEMP', str(local))) / 'Control-FG' / 'Diagnostics', f'GI-Ray-R27[78]-{pid}.bin'), (Path(os.environ.get('TEMP', str(local))) / 'Control-FG' / 'Diagnostics', f'Lighting-*-{pid}-*.log')]:
+    for directory, pattern in [(root, f'probe-*-{pid}.log'), (local / 'Control-FG' / 'Diagnostics', f'GI-Joint-R281-{pid}.bin'), (local / 'Control-FG' / 'Diagnostics', f'GI-Spot-R274-{pid}.bin'), (local / 'Control-FG' / 'Diagnostics', f'GI-Ray-R27[78]-{pid}.bin'), (local / 'Control-FG' / 'Diagnostics', f'Lighting-*-{pid}-*.log'), (Path(os.environ.get('TEMP', str(local))) / 'Control-FG' / 'Diagnostics', f'GI-Joint-R281-{pid}.bin'), (Path(os.environ.get('TEMP', str(local))) / 'Control-FG' / 'Diagnostics', f'GI-Spot-R274-{pid}.bin'), (Path(os.environ.get('TEMP', str(local))) / 'Control-FG' / 'Diagnostics', f'GI-Ray-R27[78]-{pid}.bin'), (Path(os.environ.get('TEMP', str(local))) / 'Control-FG' / 'Diagnostics', f'Lighting-*-{pid}-*.log')]:
         if not directory.exists():
             continue
         for source in directory.rglob(pattern):
