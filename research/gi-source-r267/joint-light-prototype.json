@@ -1,0 +1,19 @@
+{
+  "schema": "gi-joint-light-prototype",
+  "sha256": "2cc4504b335870fd0718e0f7e59347cc659a8921d055ff70007261817a662732",
+  "native_sha256": "1dfb4c9b054037e030ff9eed6ed5e482c8c32f9f301bb02c89eb0084c52842de",
+  "native_instruction_recovery": true,
+  "decoded_instruction_count": 957,
+  "capacity": 65536,
+  "stride": 256,
+  "spot_record_kind": 3,
+  "sampling_step": 32,
+  "runtime_enabled": false,
+  "gpu_validated": false,
+  "limits": [
+    "Only spot accumulation branches that execute are recorded; absence is not a measured zero.",
+    "Per-light multiplication is separately rounded, not a subtraction of native fused accumulation.",
+    "Light index is session-local; no named-lamp identification.",
+    "ROI selection and mixed-record parser remain required before deployment."
+  ]
+}

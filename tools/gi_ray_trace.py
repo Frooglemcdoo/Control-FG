@@ -16,7 +16,7 @@ def branch(value):
     return code
 
 
-def generate(raw, path, identity):
+def generate(raw, path, identity, *, instrumentation_plan=None):
     assert identity['sha256'] == '1dfb4c9b054037e030ff9eed6ed5e482c8c32f9f301bb02c89eb0084c52842de'
     assert hashlib.sha256(raw).hexdigest() == identity['sha256']
     path.write_bytes(raw)
@@ -102,6 +102,10 @@ def generate(raw, path, identity):
             out += inserts.get(i,[])
             out.append(temp+10 if i == td+1 else w[i])
         w[:] = out
+    if instrumentation_plan is not None:
+        instrumentation_plan.update(words=words, inserts=inserts, temp=temp, temp_count_offset=td+1,
+                                    begin=begin, end=end, store=store, scratch=v, context=context,
+                                    extra=extra, fade=fade, hit_position=hit_position, hit_normal=hit_normal)
     changed = transform_shex(raw,patch)
     def undo(w):
         out=w[:2]; cursor=2
