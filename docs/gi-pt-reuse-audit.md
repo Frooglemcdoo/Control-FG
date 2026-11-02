@@ -110,3 +110,35 @@ Full Windows build/regression run `41518506100`, job `125528129227`, also passed
 at the same code revision. Decoded logs confirm compilation and regression/
 packaging completion without compiler errors or failed workflow steps. Its
 artifact retains the existing R294 label and is not a new user-facing release.
+
+## General compute binding restoration component
+
+Added `compute_root_arguments.h` and `d3d12_compute_bindings.h`. The recorder
+stores all root descriptor kinds and individual known constant DWORDs, preserves
+bindings when the same root is set, clears arguments on root changes, and clears
+tables on heap changes. Frozen snapshots retain roots, heaps and the active PSO
+or raytracing state object. Invalid setter ranges/kinds or explicit invalidation
+refuse capture until reset. Root setters allocate no memory.
+
+`RawSnapshotPipeline::RecordRestoring` refuses absent binding snapshots before
+recording, copies geometry, then restores the captured state without switching
+heaps. The expanded WARP fixture runs a different shader afterward that consumes
+a descriptor table, CBV, SRV, UAV and sparse root constants. Portable tests cover
+root/heap/reset transitions, sparse constants including bit 63, invalid ranges,
+and independent frozen copies. Local GCC warnings-as-errors and UBSan passed;
+Windows validation is pending for this component.
+
+Microsoft's documented semantics were rechecked: there is one active pipeline
+state across SetPipelineState/SetPipelineState1; setting a PSO does not set the
+root signature; changing a root invalidates its arguments, setting the same root
+does not. References:
+- https://learn.microsoft.com/en-us/windows/win32/api/d3d12/nf-d3d12-id3d12graphicscommandlist4-setpipelinestate1
+- https://learn.microsoft.com/en-us/windows/win32/direct3d12/using-a-root-signature
+
+This is still a component, not live hook coverage. The host must associate one
+tracker with each command-list recording, cover all setters and reset/clear,
+invalidate unmodelled ExecuteIndirect/ExecuteBundle effects, and mute injected
+calls. Restore must immediately follow capture on that same recording with no
+intervening heap/native changes. WARP covers compute restoration, not actual
+DXR dispatch restoration. Descriptor resource lifetimes, placed geometry heaps,
+alias safety and per-queue retirement remain separate requirements.

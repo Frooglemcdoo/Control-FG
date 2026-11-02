@@ -1,5 +1,6 @@
 #pragma once
 #include "raw_snapshot_plan.h"
+#include "d3d12_compute_bindings.h"
 #include <d3d12.h>
 #include <d3dcompiler.h>
 #include <wrl/client.h>
@@ -29,6 +30,17 @@ public:
         D3D12_COMPUTE_PIPELINE_STATE_DESC pso{};
         pso.pRootSignature = root_.Get(); pso.CS = {shader, bytes};
         return device->CreateComputePipelineState(&pso, IID_PPV_ARGS(&pipeline_));
+    }
+    // Valid only on the same recording that produced bindings, without a heap
+    // switch or intervening native commands. Injected calls must be muted in
+    // the observer. All source/output lifetime and state preconditions remain.
+    bool RecordRestoring(ID3D12GraphicsCommandList4* list, ID3D12Resource* source,
+                         std::uint64_t offset, std::uint64_t bytes, ID3D12Resource* output,
+                         const ComputeBindingSnapshot& bindings, RawSnapshotPlan& plan) const noexcept {
+        plan = {};
+        if (!bindings.Ready()) return false;
+        if (!Record(list,source,offset,bytes,output,plan)) return false;
+        return bindings.Restore(list);
     }
     bool Record(ID3D12GraphicsCommandList* list, ID3D12Resource* source,
                 std::uint64_t offset, std::uint64_t bytes, ID3D12Resource* output,
