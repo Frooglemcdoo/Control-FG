@@ -1,0 +1,84 @@
+{
+  "source": "Lighting-R204-20261102-121234-40980-0.log",
+  "sha256": "a7017b358be00bac8ca9dace6ae3532cb8a8ddab52b1bbfc99eb0b13d083fc67",
+  "GI_METADATA_R292": {
+    "reports": 23,
+    "final": {
+      "ms": "2289390",
+      "present": "5812",
+      "status": "OBSERVING",
+      "reason": "none",
+      "builds": "91714",
+      "copies": "3345",
+      "buffer_owners": "4038",
+      "retained_bytes": "536413648",
+      "owner_limit": "1",
+      "geometry_owners": "3051",
+      "cache_evictions": "35501",
+      "resolved_ranges": "740826",
+      "missing_ranges": "1581",
+      "journal_peak": "1894",
+      "creation_observations": "16497",
+      "barrier_observations": "2666364",
+      "geometry_bytes": "326466572",
+      "candidate_bytes": "209160644",
+      "admission_rejects": "212231",
+      "excluded_observations": "3648",
+      "ignored_copy_submissions": "21654",
+      "ignored_empty_submissions": "64118",
+      "as_submissions": "3349"
+    }
+  },
+  "GI_COVERAGE_R292": {
+    "reports": 23,
+    "final": {
+      "ms": "2289390",
+      "present": "5812",
+      "owner_capacity": "8192",
+      "owner_budget": "536870912",
+      "absent_ranges": "1581",
+      "ambiguous_ranges": "0",
+      "invalid_ranges": "0",
+      "issued_fence": "3349",
+      "completed_fence": "3349",
+      "metadata_fence_ready": "1",
+      "history_overwritten": "0",
+      "history_dropped": "0",
+      "missing_vertex": "1581",
+      "missing_index": "0",
+      "missing_transform": "0",
+      "missing_instances": "0",
+      "gpu_bytes_captured": "0",
+      "reuse_ready": "0"
+    }
+  },
+  "GI_PLAN_R292": {
+    "reports": 23,
+    "final": {
+      "ms": "2289406",
+      "present": "5812",
+      "snapshot": "1",
+      "planned": "1",
+      "fence": "3349",
+      "retained_blas": "7978",
+      "retained_tlas": "1",
+      "ranges": "24797",
+      "distinct_owners": "3040",
+      "resolved": "22011",
+      "missing": "2786",
+      "default_ranges": "22011",
+      "upload_ranges": "0",
+      "other_ranges": "0",
+      "requested_bytes_with_overlap": "527494838",
+      "active_membership_verified": "0",
+      "gpu_bytes_captured": "0",
+      "copy_ready": "0",
+      "reuse_ready": "0"
+    }
+  },
+  "sample_keys": 128,
+  "sample_event_rank_counts": {
+    "('2', '2')": 128
+  },
+  "limits": "Historical address matches are not live resource identity; retained AS records are not verified active scene members."
+}

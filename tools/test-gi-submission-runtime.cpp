@@ -96,11 +96,19 @@ int main(){
  D3D12_HEAP_PROPERTIES readbackHeap{};readbackHeap.Type=D3D12_HEAP_TYPE_READBACK;ComPtr<ID3D12Resource> readback;
  Check(device->CreateCommittedResource(&readbackHeap,D3D12_HEAP_FLAG_NONE,&buffer,D3D12_RESOURCE_STATE_COPY_DEST,nullptr,IID_PPV_ARGS(&readback)));
  excluded.Observe(readback.Get());excluded.Stats(owned,retained,limited);assert(owned==0&&retained==0);
+ // Historical inspection must not pin a candidate that a real build never used.
+ gi_reuse::BasicBufferOwners<1,64> inspectOnly;
+ inspectOnly.Observe(resources[0].Get());assert(inspectOnly.Resolve(resources[0]->GetGPUVirtualAddress(),64,owner,offset,nullptr,false));
+ inspectOnly.RetentionStats(protectedCount,evictions);assert(protectedCount==0);
+ inspectOnly.Observe(resources[1].Get());assert(!inspectOnly.Resolve(resources[0]->GetGPUVirtualAddress(),64,owner,offset,nullptr,false));
+ assert(inspectOnly.Resolve(resources[1]->GetGPUVirtualAddress(),64,owner,offset));
+ inspectOnly.RetentionStats(protectedCount,evictions);assert(protectedCount==1&&evictions==1);
+ std::puts("PASS R293 historical inspection leaves candidates evictable; build lookup still protects geometry");
  // Pointer and range indexes must stay consistent through eviction/exclusion.
  gi_reuse::RangeMatch missingReason{};
  assert(!admission.Resolve(1,1,owner,offset,&missingReason)&&missingReason==gi_reuse::RangeMatch::Missing);
  assert(!admission.Resolve(UINT64_MAX,2,owner,offset,&missingReason)&&missingReason==gi_reuse::RangeMatch::Invalid);
- static_assert(gi_reuse::BufferOwners::MaxOwners==8192&&gi_reuse::BufferOwners::Budget==512ull*1024*1024,"R290 metadata capacity must not expand byte retention");
+ static_assert(gi_reuse::BufferOwners::MaxOwners==8192&&gi_reuse::BufferOwners::Budget==1024ull*1024*1024,"R293 diagnostic extent budget is 1 GiB");
  rt::CheckOwner(1,1,rt::OwnerKind::Vertex);rt::CheckOwner(1,1,rt::OwnerKind::Vertex);rt::CheckOwner(UINT64_MAX,2,rt::OwnerKind::Index);
  std::array<rt::MissingRange,128> misses{};rt::ReadMissing(misses);assert(misses[0].hits==2&&misses[0].reason==gi_reuse::RangeMatch::Missing&&misses[1].reason==gi_reuse::RangeMatch::Invalid);
  // Actual creation interception discovers a CPU-written buffer without any copy.
@@ -138,6 +146,7 @@ int main(){
  auto snapshot=std::make_unique<gi_reuse::ASLedger<8192>>();assert(rt::Snapshot(*snapshot));assert(snapshot->Find(512)->geometry->At(0)->vertices==4096);
  const auto planned=rt::InspectScenePlan();assert(planned.snapshot&&planned.planned&&planned.fenceValue==token);
  assert(planned.blas==2&&planned.tlas==0&&planned.ranges==4&&planned.resolved+planned.missing==4);
+ assert(planned.missing==planned.missingByKind[0]+planned.missingByKind[1]+planned.missingByKind[2]+planned.missingByKind[3]);
  std::puts("PASS R292 completed scene-plan inspection and bounded owner coverage accounting; no GPU bytes read");
  // More than 512 events now survive recording, snapshot, and ordered submission.
  rt::Reset(list.Get());for(unsigned i=0;i<1024;++i)rt::RecordBuild(list.Get(),&build);

@@ -168,6 +168,7 @@ inline void CompletionStats(UINT64& issued,UINT64& completed,bool& ready) noexce
 struct ScenePlanStats {
  bool snapshot=false,planned=false;
  UINT64 fenceValue=0,blas=0,tlas=0,ranges=0,owners=0,resolved=0,missing=0;
+ std::array<UINT64,4> missingByKind{};
  UINT64 defaultRanges=0,uploadRanges=0,otherRanges=0,requestedBytes=0;
 };
 inline ScenePlanStats InspectScenePlan() noexcept {
@@ -178,13 +179,13 @@ inline ScenePlanStats InspectScenePlan() noexcept {
   s.snapshot=true;s.fenceValue=snapshot->SubmissionFence();
   SceneReadPlan<> plan;if(!plan.Build(*snapshot))return s;
   s.planned=true;s.blas=plan.BLASCount();s.tlas=plan.TLASCount();s.ranges=plan.Ranges().size();
-  std::unordered_set<ID3D12Resource*> unique;
+  std::unordered_map<ID3D12Resource*,ComPtr<ID3D12Resource>> unique;
   for(const auto& r:plan.Ranges()){
    if(r.bytes>UINT64_MAX-s.requestedBytes){s.planned=false;return s;}
    s.requestedBytes+=r.bytes;
    ComPtr<ID3D12Resource> owner;UINT64 offset=0;
-   if(!owners.Resolve(r.address,r.bytes,owner,offset)){++s.missing;continue;}
-   ++s.resolved;unique.insert(owner.Get());
+   if(!owners.Resolve(r.address,r.bytes,owner,offset,nullptr,false)){++s.missing;++s.missingByKind[static_cast<unsigned>(r.kind)];continue;}
+   ++s.resolved;unique.emplace(owner.Get(),owner);
    D3D12_HEAP_PROPERTIES heap{};D3D12_HEAP_FLAGS flags{};
    if(FAILED(owner->GetHeapProperties(&heap,&flags)))++s.otherRanges;
    else if(heap.Type==D3D12_HEAP_TYPE_DEFAULT)++s.defaultRanges;

@@ -79,10 +79,10 @@ private:
   ReleaseSRWLockExclusive(&lock_);
  }
 public:
- bool Resolve(UINT64 address,UINT64 bytes,Microsoft::WRL::ComPtr<ID3D12Resource>& owner,UINT64& offset,RangeMatch* result=nullptr) noexcept {
+ bool Resolve(UINT64 address,UINT64 bytes,Microsoft::WRL::ComPtr<ID3D12Resource>& owner,UINT64& offset,RangeMatch* result=nullptr,bool protect=true) noexcept {
   owner.Reset();offset=0;AcquireSRWLockExclusive(&lock_);std::size_t slot=0;
   const auto match=ranges_.Find(address,bytes,slot);if(result)*result=match;
-  if(match==RangeMatch::Unique){auto& e=entries_[slot];e.geometry=true;e.touched=++clock_;owner=e.owner;offset=address-e.address;}
+  if(match==RangeMatch::Unique){auto& e=entries_[slot];if(protect){e.geometry=true;e.touched=++clock_;}owner=e.owner;offset=address-e.address;}
   ReleaseSRWLockExclusive(&lock_);return match==RangeMatch::Unique;
  }
  BufferEvidence HistoricalEvidence(UINT64 address,UINT64 bytes) noexcept {
@@ -103,5 +103,6 @@ public:
   AcquireSRWLockShared(&lock_);geometry=0;for(const auto& e:entries_)if(e.owner&&e.geometry)++geometry;evictions=evictions_;ReleaseSRWLockShared(&lock_);
  }
 };
-using BufferOwners=BasicBufferOwners<>;
+// Development observer budget; no allocation or retention when observer is off.
+using BufferOwners=BasicBufferOwners<8192,1024ull*1024*1024>;
 } // namespace gi_reuse
