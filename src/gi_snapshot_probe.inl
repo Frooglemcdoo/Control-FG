@@ -37,6 +37,7 @@ inline bool Reserve(std::atomic<UINT64>& value,UINT64 amount,UINT64 limit) noexc
 inline void Capture(ID3D12GraphicsCommandList4* list,const D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC* desc,
                     Owner& owner,const gi_reuse::ComputeBindingSnapshot& bindings) noexcept {
     if(!CaptureEnabled()||!captureReady.load()||owner.sample||!bindings.Ready()||!Coverage()||!desc)return;
+    if(captureAttempts[0].load()>=16&&captureAttempts[1].load()>=16)return;
     ComPtr<ID3D12Device> recordingDevice;if(FAILED(list->GetDevice(IID_PPV_ARGS(&recordingDevice)))||recordingDevice.Get()!=captureDevice.Get())return;
     const auto& input=desc->Inputs;
     if(input.Type!=D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL||!input.NumDescs||input.NumDescs>gi_reuse::GeometryMetadata::MaxGeometries)return;

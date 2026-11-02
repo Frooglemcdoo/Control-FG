@@ -29,6 +29,8 @@ struct IndexSample {
     HRESULT Prepare(ID3D12Device* device,ID3D12Resource* input,std::uint64_t inputOffset,std::uint64_t inputBytes,
                     const ComputeBindingSnapshot& native) noexcept {
         if(!device||!input||!native.Ready()||inputBytes>MaxSampleBytes)return E_INVALIDARG;
+        Microsoft::WRL::ComPtr<ID3D12Device> sourceDevice;
+        if(FAILED(input->GetDevice(IID_PPV_ARGS(&sourceDevice)))||sourceDevice.Get()!=device)return E_INVALIDARG;
         BufferStorageLease lease;const auto desc=input->GetDesc();D3D12_HEAP_PROPERTIES properties{};D3D12_HEAP_FLAGS flags{};
         if(!AcquireStorageLease(input,lease)||lease.kind!=BufferStorageKind::Committed||
            FAILED(input->GetHeapProperties(&properties,&flags))||properties.Type!=D3D12_HEAP_TYPE_DEFAULT||

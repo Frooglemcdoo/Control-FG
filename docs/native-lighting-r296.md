@@ -23,7 +23,7 @@ use a tail window, explicitly labelled in the log. At most one sample is attache
 to a command-list recording. The session reservation cap is 128 MiB, charging
 actual allocation sizes for the retained committed source, private output and
 readback. Reservation counters include unsuccessful attempts and are not live
-VRAM measurements. Pipeline/driver bookkeeping and the existing owner inventory
+VRAM measurements. Retained native binding objects, pipeline/driver bookkeeping and the existing owner inventory
 have separate costs. Placed/reserved sources are not copied by this probe.
 
 Copies are inserted immediately before the native AS build. Source state is not
