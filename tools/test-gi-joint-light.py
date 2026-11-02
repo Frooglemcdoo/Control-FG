@@ -34,4 +34,36 @@ class Joint(unittest.TestCase):
   with self.assertRaisesRegex(ValueError,'outside ROI'):analyze_joint(outside)
   duplicate=bytearray(data)+spot;struct.pack_into('<I',duplicate,0,5)
   with self.assertRaisesRegex(ValueError,'duplicate'):analyze_joint(duplicate)
+ def test_candidate_stages_and_missing_data(self):
+  from analyze_gi_joint_trace import analyze_joint
+  spec=importlib.util.spec_from_file_location('ray_fixture',ROOT/'tools/test-analyze-gi-ray-trace.py');m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m);data=m.fixture()
+  spot=bytearray(256);struct.pack_into('<4I',spot,0,16,16,0,3)
+  for offset,values in [(16,[.5,1,2]),(32,[2,2,2]),(48,[.5,1,2]),(64,[1,1,1])]:struct.pack_into('<3f',spot,offset,*values)
+  struct.pack_into('<f',spot,140,.5);struct.pack_into('<4I',spot,144,6,2,7,42);struct.pack_into('<I',spot,172,0x281)
+  candidate=bytearray(256);struct.pack_into('<4I',candidate,0,16,16,0,4)
+  struct.pack_into('<4I',candidate,96,257,6,7,42);struct.pack_into('<2I',candidate,176,0x282,2)
+  struct.pack_into('<I',candidate,76,63)
+  for offset,values in [(16,[.25,.75,.5,2]),(32,[1,.5,.25,1]),(48,[.8,.5,.5,1]),(80,[.25,.75,.5,.6])]:struct.pack_into('<4f',candidate,offset,*values)
+  for offset,values in [(64,[.5,.25,1]),(192,[4,8,2]),(208,[2,2,2]),(224,[2,2,2])]:struct.pack_into('<3f',candidate,offset,*values)
+  rejected=[]
+  for light,bits in [(7,7),(8,1)]:
+   b=bytearray(256);struct.pack_into('<4I',b,0,16,16,0,4);struct.pack_into('<4I',b,96,0,light,7,42)
+   struct.pack_into('<I',b,76,bits);struct.pack_into('<2I',b,176,0x282,2);rejected.append(b)
+  data+=spot+candidate+b''.join(rejected);struct.pack_into('<4I',data,0,7,0x282,0,0)
+  report=analyze_joint(data)
+  self.assertEqual(report['candidate_counts'],dict(outside_projection=1,zero_visibility=1,executed=1,cookie_sampled=1))
+  start=16+4*256
+  for offset,value in [(76,1),(104,99),(176,0),(180,9)]:
+   bad=bytearray(data);struct.pack_into('<I',bad,start+offset,value)
+   with self.assertRaises(ValueError):analyze_joint(bad)
+  for offset in (56,208,224):
+   bad=bytearray(data);struct.pack_into('<f',bad,start+offset,9)
+   with self.assertRaises(ValueError):analyze_joint(bad)
+  missing=bytearray(data[:start]+data[start+256:]);struct.pack_into('<I',missing,0,6)
+  with self.assertRaisesRegex(ValueError,'missing candidate'):analyze_joint(missing)
+  duplicate=bytearray(data)+candidate;struct.pack_into('<I',duplicate,0,8)
+  with self.assertRaisesRegex(ValueError,'duplicate candidate'):analyze_joint(duplicate)
+  # Nonfinite rejected projection is recorded as invalid, never JSON NaN.
+  bad=bytearray(data);struct.pack_into('<f',bad,len(bad)-256+16,float('inf'))
+  report=analyze_joint(bad);self.assertIsNone(report['candidate_stages'][-1]['projection']);json.dumps(report,allow_nan=False)
 if __name__=='__main__':unittest.main()

@@ -59,7 +59,7 @@ Require(embedded.size()==shader.size&&!memcmp(embedded.data(),shader.bytes,shade
  D3D12_COMPUTE_PIPELINE_STATE_DESC pd{};pd.pRootSignature=root.Get();pd.CS={shader.bytes,shader.size};ComPtr<ID3D12PipelineState> nativeTrace;Check(d->CreateComputePipelineState(&pd,IID_PPV_ARGS(&nativeTrace)));
 #ifdef CONTROL_TEST_GI_JOINT_TRACE
  auto oracle=Read("build/gi-joint-light-oracle.dxbc");
- constexpr UINT expectedRecords=4;
+ constexpr UINT expectedRecords=7;
 #elif defined(CONTROL_TEST_GI_RAY_TRACE)
  auto oracle=Read("build/gi-ray-trace-oracle.dxbc");
  constexpr UINT expectedRecords=3;
@@ -78,7 +78,7 @@ pd.CS={oracle.data(),oracle.size()};ComPtr<ID3D12PipelineState> oraclePso;Check(
   auto readback=Buffer(d.Get(),D3D12_HEAP_TYPE_READBACK,D3D12_RESOURCE_STATE_COPY_DEST,D3D12_RESOURCE_FLAG_NONE);
   void* mapped=nullptr;D3D12_RANGE none{0,0};Check(upload->Map(0,&none,&mapped));memset(mapped,0,allocated);if(run){UINT seed=capacity-1;memcpy(mapped,&seed,4);}memset(static_cast<unsigned char*>(mapped)+bytes,0xa5,256);
 #ifdef CONTROL_TEST_GI_JOINT_TRACE
-  const UINT coordinate=run?31:16;UINT header[3]={0x281,coordinate,coordinate};memcpy(static_cast<unsigned char*>(mapped)+4,header,sizeof(header));
+  const UINT coordinate=run?31:16;UINT header[3]={0x282,coordinate,coordinate};memcpy(static_cast<unsigned char*>(mapped)+4,header,sizeof(header));
 #endif
   upload->Unmap(0,nullptr);
   Check(allocator->Reset());Check(list->Reset(allocator.Get(),oraclePso.Get()));list->CopyBufferRegion(gpu.Get(),0,upload.Get(),0,allocated);
@@ -106,7 +106,26 @@ pd.CS={oracle.data(),oracle.size()};ComPtr<ID3D12PipelineState> oraclePso;Check(
     Require(u(144)==6&&u(148)==2&&u(152)==7&&u(156)==42&&u(172)==0x281,"joint context");
     continue;
    }
-   raySample=sample-1;
+   if(sample>=1&&sample<=3){
+    auto f=[&](UINT offset){float value=0;memcpy(&value,record+offset,4);return value;};
+    auto u=[&](UINT offset){UINT value=0;memcpy(&value,record+offset,4);return value;};
+    Require(id[0]==coordinate&&id[1]==coordinate&&id[2]==0&&id[3]==4,"candidate identity/ROI");
+    Require(u(100)==5+sample&&u(104)==7&&u(108)==42&&u(176)==0x282&&u(180)==2,"candidate context");
+    Require(u(76)==(sample==1?63u:sample==2?7u:1u),"candidate validity/reset");
+    if(sample==1){
+     Require(f(16)==.25f&&f(20)==.75f&&f(24)==.5f&&f(28)==2,"candidate projection");
+     Require(f(32)==1&&f(36)==.5f&&f(40)==.25f&&f(44)==1,"candidate visibility");
+     Require(f(48)==.8f&&f(52)==.5f&&f(56)==.5f&&f(60)==1,"candidate response");
+     Require(f(64)==.5f&&f(68)==.25f&&f(72)==1&&u(96)==257,"candidate cookie/flags");
+     Require(f(80)==.25f&&f(84)==.75f&&f(88)==.5f&&f(92)==.6f,"candidate shadow lookup");
+     Require(f(112)==0&&f(120)==1&&f(136)==1&&f(144)==.1f&&f(148)==.2f,"candidate directions/UV");
+     Require(f(192)==4&&f(196)==8&&f(200)==2&&f(208)==2&&f(224)==2,"candidate product chain");
+    }else{
+     Require(f(44)==0&&f(64)==1&&f(68)==1&&f(72)==1&&f(192)==0&&f(208)==0&&f(224)==0,"candidate reject stale values");
+    }
+    continue;
+   }
+   raySample=sample-4;
 #endif
    Require(id[0]==expectedCoordinate&&id[1]==expectedCoordinate&&id[3]==(raySample==2?2u:1u),"ray record identity");
    auto scalar=[&](UINT offset){float f=0;memcpy(&f,record+offset,4);return f;};

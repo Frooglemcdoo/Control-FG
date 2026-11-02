@@ -1,6 +1,6 @@
-"""R281: native spotlight terms and complete GI rays in one dense ROI stream."""
+"""R282: native spotlight terms and complete GI rays in one dense ROI stream."""
 import hashlib,struct
-from gi_ray_trace import generate as ray_generate, uint, CAPACITY, STRIDE
+from gi_ray_trace import generate as ray_generate, uint, branch, CAPACITY, STRIDE
 from gi_spot_pcf import decoder, dst, src, ins
 from dxbc_transform import transform_shex
 
@@ -31,7 +31,48 @@ def generate(raw,path,identity):
     add(after(4571),ins('mov',dst(color,15),src(26)))
     for offset,mask in [(4634,1),(4648,2),(4684,4)]:
         add(after(offset),ins('mov',dst(attenuation,mask),src(18,0xff)))
-    store=plan['store'];code=plan['begin'](1)+store(12,uint(3),1)
+    # R282 records every visited spotlight, including projection/visibility rejects.
+    # Private snapshots are reset at each light iteration; validity marks executed
+    # stages. No native register, branch, texture lookup or lighting math changes.
+    projection, visibility, response, cookie, depth, metadata, normal, direction, cookie_uv, pre_cookie, post_cookie, gated = range(temp+14,temp+26)
+    def mark(bit):return ins('or',dst(cookie,8),src(cookie,0xff),uint(bit))
+    reset=[]
+    for reg in range(temp+14,temp+26):reset+=ins('mov',dst(reg,15),uint(0))
+    reset+=ins('mov',dst(cookie,7),[0x4002,0x3f800000,0x3f800000,0x3f800000,0])
+    add(3869,reset)
+    # Each site is additionally protected by the complete native SHA contract.
+    stages={
+        4022:ins('mov',dst(projection,8),src(14,0xff)),
+        4049:ins('mov',dst(projection,7),src(22))+mark(1),
+        4078:mark(2),
+        4128:ins('mov',dst(metadata,1),src(17,0xff)),
+        4318:ins('mov',dst(depth,3),src(25,0xcc))+ins('mov',dst(depth,4),src(21,0xaa)),
+        4331:ins('mov',dst(depth,8),src(19,0x55))+mark(32),
+        4289:mark(64),
+        4479:mark(128),
+        4487:ins('mov',dst(visibility,1),src(18,0xff))+ins('mov',dst(visibility,2),src(19,0x55))+ins('mov',dst(visibility,4),src(16,0xff)),
+        4551:ins('mov',dst(visibility,8),src(15,0xff))+mark(4),
+        4691:ins('mov',dst(response,1),src(16,0xff)),
+        4705:ins('mov',dst(pre_cookie,7),src(20)),
+        4797:ins('mov',dst(cookie_uv,3),src(21)),
+        4810:ins('mov',dst(cookie,7),src(21))+mark(16),
+        4818:ins('mov',dst(post_cookie,7),src(20)),
+        4832:ins('mov',dst(response,8),src(14,0xff)),
+        4846:ins('mov',dst(gated,7),src(20)),
+        4915:ins('mov',dst(response,2),src(15,0xff)),
+        4982:ins('mov',dst(response,4),src(14,0xff))+ins('mov',dst(normal,7),src(13))+ins('mov',dst(direction,7),src(22))+mark(8),
+    }
+    for at,block in stages.items():
+        if at not in instructions:raise ValueError('stage site is not an instruction boundary')
+        add(at,block)
+    store=plan['store']
+    candidate=plan['begin'](1)+store(12,uint(4),1)
+    for offset,reg in [(16,projection),(32,visibility),(48,response),(64,cookie),(80,depth),(112,normal),(128,direction),(144,cookie_uv),(192,pre_cookie),(208,post_cookie),(224,gated)]:candidate+=store(offset,src(reg))
+    candidate+=store(96,src(metadata,0),1)+store(100,src(10,0xff),1)
+    candidate+=store(104,src(plan['extra'],0xff),1)+store(108,src(plan['context'],0xff),1)
+    candidate+=store(160,src(plan['hit_position']),7)+store(176,uint(0x282),1)+store(180,src(plan['extra'],0x55),1)+plan['end']()
+    add(4993,candidate)
+    code=plan['begin'](1)+store(12,uint(3),1)
     # Exact algebraic per-light term: gated RGB * secondary diffuse factor,
     # then secondary albedo and primary throughput. Normalize with paired summary.
     code+=ins('mul',dst(v,7),src(14,0xff),src(20))
@@ -47,7 +88,7 @@ def generate(raw,path,identity):
     def patch(w):
         out=w[:2]
         for i in range(2,len(words)):
-            out+=inserts.get(i,[]);out.append(temp+14 if i==plan['temp_count_offset'] else w[i])
+            out+=inserts.get(i,[]);out.append(temp+26 if i==plan['temp_count_offset'] else w[i])
         w[:]=out
     changed=transform_shex(raw,patch)
     def undo(w):
@@ -59,7 +100,7 @@ def generate(raw,path,identity):
     if transform_shex(changed,undo)!=raw:raise ValueError('native recovery failed')
     # GPU oracle runs the exact new stores and existing complete-ray/accounting blocks.
     def floats(*xs):return [0x4002]+[struct.unpack('<I',struct.pack('<f',x))[0] for x in xs]
-    fixture=words[:2]+words[2:3]+plan['declaration']+ins('dcl_input',[0x20032])+ins('dcl_temps',[temp+14])+ins('dcl_thread_group',[32,32,1])
+    fixture=words[:2]+words[2:3]+plan['declaration']+ins('dcl_input',[0x20032])+ins('dcl_temps',[temp+26])+ins('dcl_thread_group',[32,32,1])
     fixture+=ins('mov',dst(plan['context'],15),floats(0,1,0,0))+ins('mov',dst(plan['context'],8),uint(42))
     fixture+=ins('mov',dst(plan['extra'],2),uint(2))+ins('mov',dst(plan['fade'],15),floats(1,2,3,4))+plan['initialize_code']
     for sample in range(2):
@@ -72,16 +113,37 @@ def generate(raw,path,identity):
             fixture+=ins('mov',dst(20,7),floats(2,2,2,0))+ins('mov',dst(17,7),floats(1,1,1,0))
             fixture+=ins('mov',dst(coefficients,15),floats(.1,.2,.3,0))+ins('mov',dst(position,7),floats(10,11,12,0))
             fixture+=ins('mov',dst(color,15),floats(2,3,4,5))+ins('mov',dst(attenuation,7),floats(6,7,8,0))+code
+            fixture+=reset
+            fixture_inputs={
+                4022:[(14,8,(2,2,2,2))],4049:[(22,7,(.25,.75,.5,0))],4078:[],
+                4128:[],4318:[(25,15,(.25,0,0,.75)),(21,4,(.5,.5,.5,.5))],
+                4331:[(19,2,(.6,.6,.6,.6))],
+                4487:[(18,8,(1,1,1,1)),(19,2,(.5,.5,.5,.5)),(16,8,(.25,.25,.25,.25))],
+                4551:[(15,8,(1,1,1,1))],4691:[(16,8,(.8,.8,.8,.8))],
+                4705:[(20,7,(4,8,2,0))],4797:[(21,3,(.1,.2,0,0))],
+                4810:[(21,7,(.5,.25,1,0))],4818:[(20,7,(2,2,2,0))],
+                4832:[(14,8,(1,1,1,1))],4846:[(20,7,(2,2,2,0))],
+                4915:[(15,8,(.5,.5,.5,.5))],
+                4982:[(14,8,(.5,.5,.5,.5)),(13,7,(0,0,1,0)),(22,7,(0,0,1,0))],
+            }
+            for at,inputs in fixture_inputs.items():
+                for reg,mask,values in inputs:fixture+=ins('mov',dst(reg,mask),floats(*values))
+                if at==4128:fixture+=ins('mov',dst(17,8),uint(257))
+                fixture+=stages[at]
+            fixture+=candidate
+            # Rejected candidates have no kind-3 contribution and reset stale data.
+            fixture+=reset+ins('mov',dst(10,8),uint(7))+mark(1)+mark(2)+mark(4)+candidate
+            fixture+=reset+ins('mov',dst(10,8),uint(8))+mark(1)+candidate
         fixture+=plan['account_code']+plan['ray_code']
     fixture+=ins('mov',dst(1,15),floats(.75,2.25,6,1))+ins('mov',dst(plan['extra'],1),[0x4001,0x3f400000])+plan['summary_code']+ins('ret')
     def fixture_patch(w):w[:]=fixture
     (path.parent/'gi-joint-light-oracle.dxbc').write_bytes(transform_shex(raw,fixture_patch))
     path.write_bytes(changed);parsed=decoder.decode(path)
-    return changed,dict(schema='gi-joint-light-r281',sha256=hashlib.sha256(changed).hexdigest(),native_sha256=identity['sha256'],
+    return changed,dict(schema='gi-joint-light-r282',sha256=hashlib.sha256(changed).hexdigest(),native_sha256=identity['sha256'],
                        native_instruction_recovery=True,decoded_instruction_count=len(parsed['instructions']),
                        capacity=CAPACITY,stride=STRIDE,spot_record_kind=3,sampling_step=1,roi_extent=[32,32],
                        runtime_enabled=False,gpu_validated=False,
-                       limits=['Only spot accumulation branches that execute are recorded; absence is not a measured zero.',
+                       limits=['Kind 4 records visited lights, with stage validity; kind 3 records executed contributions.',
                                'Per-light multiplication is separately rounded, not a subtraction of native fused accumulation.',
                                'Light index is session-local; no named-lamp identification.',
                                'GPU validation and runtime selection must be verified before delivery.'])

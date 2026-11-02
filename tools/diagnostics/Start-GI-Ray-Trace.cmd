@@ -18,7 +18,11 @@ set "CONTROLTOH_GI_RAY_TRACE=1"
 set "CONTROLTOH_GI_CAPTURE=0"
 set "CONTROLTOH_GI_SOURCE=full"
 set "CONTROLTOH_GI_SHADOW=native"
-echo R278 - GI runtime accounting and native output comparison.
+if "%CONTROLTOH_GI_JOINT_TRACE%"=="1" (
+  echo R282 - GI spotlight stages and complete ray accounting.
+) else (
+  echo R278 - GI runtime accounting and native output comparison.
+)
 echo Load the original plant and desk-lamp area with RT indirect and RR ON.
 echo Use Native Blend and FG OFF. Leave the lamp intact.
 echo Select GI RAW BYPASS and REF CLAMP: BYPASS.

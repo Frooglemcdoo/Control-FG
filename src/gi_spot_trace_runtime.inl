@@ -193,8 +193,8 @@ inline bool Dispatch(ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT z) noexc
  if(JointTrace()){
   void* initial=nullptr;D3D12_RANGE none{0,0};const HRESULT mapHr=zero->Map(0,&none,&initial);
   if(FAILED(mapHr)){Fail("joint_header_map",L"FAILED: joint trace header. Send logs.");ReleaseSRWLockExclusive(&lock);return false;}
-  auto* header=static_cast<UINT*>(initial);header[0]=0;header[1]=0x281;header[2]=roi[0];header[3]=roi[1];D3D12_RANGE written{0,16};zero->Unmap(0,&written);
-  Trace("GI_JOINT_R281_ROI x=%u y=%u width=32 height=32 grid_center=1",roi[0],roi[1]);
+  auto* header=static_cast<UINT*>(initial);header[0]=0;header[1]=0x282;header[2]=roi[0];header[3]=roi[1];D3D12_RANGE written{0,16};zero->Unmap(0,&written);
+  Trace("GI_JOINT_R282_ROI x=%u y=%u width=32 height=32 grid_center=1",roi[0],roi[1]);
  }
  list->CopyBufferRegion(output.Get(),0,zero.Get(),0,bytes);Transition(list,D3D12_RESOURCE_STATE_COPY_DEST,D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
  Rebind(list,h,root.Get(),s);list->SetComputeRootUnorderedAccessView(8,output->GetGPUVirtualAddress());if(JointTrace())list->SetComputeRoot32BitConstants(9,4,roi,0);native.set(list,trace.Get());native.dispatch(list,x,y,z);
@@ -217,13 +217,13 @@ inline void Poll() noexcept {
  bool ok=false;UINT records=0;wchar_t path[MAX_PATH]{};
  if(SUCCEEDED(hr)){
   memcpy(&records,mapped,4);AcquireSRWLockExclusive(&reportLock);const bool opened=report.OpenDefault();if(opened)wcscpy_s(path,report.Path());ReleaseSRWLockExclusive(&reportLock);
-  if(opened){auto* slash=wcsrchr(path,L'\\');if(slash){*(slash+1)=0;wchar_t name[80]{};swprintf_s(name,JointTrace()?L"GI-Joint-R281-%lu.bin":RayTrace()?L"GI-Ray-R278-%lu.bin":L"GI-Spot-R274-%lu.bin",GetCurrentProcessId());wcscat_s(path,name);
+  if(opened){auto* slash=wcsrchr(path,L'\\');if(slash){*(slash+1)=0;wchar_t name[80]{};swprintf_s(name,JointTrace()?L"GI-Joint-R282-%lu.bin":RayTrace()?L"GI-Ray-R278-%lu.bin":L"GI-Spot-R274-%lu.bin",GetCurrentProcessId());wcscat_s(path,name);
    const HANDLE file=CreateFileW(path,GENERIC_WRITE,FILE_SHARE_READ,nullptr,CREATE_NEW,FILE_ATTRIBUTE_NORMAL,nullptr);
    if(file!=INVALID_HANDLE_VALUE){DWORD written=0;const DWORD size=16+(std::min)(records,capacity)*stride;ok=WriteFile(file,mapped,size,&written,nullptr)&&written==size;CloseHandle(file);}
   }}D3D12_RANGE none{0,0};readback->Unmap(0,&none);
  }
  Trace("GI_SPOT_R274_EXPORT complete=%u gpu_completion_confirmed=1 records=%u retained=%u overflow=%u stride=%u present=%llu groups=%u,%u,%u variant=6 sampling_step=32",unsigned(ok),records,(std::min)(records,capacity),unsigned(records>capacity),stride,capturedPresent,groups[0],groups[1],groups[2]);
- if(JointTrace())Trace("GI_JOINT_R281_EXPORT complete=%u records=%u overflow=%u present=%llu same_dispatch=1",unsigned(ok),records,unsigned(records>capacity),capturedPresent);
+ if(JointTrace())Trace("GI_JOINT_R282_EXPORT complete=%u records=%u overflow=%u present=%llu same_dispatch=1",unsigned(ok),records,unsigned(records>capacity),capturedPresent);
  else if(RayTrace())Trace("GI_RAY_R278_EXPORT complete=%u records=%u overflow=%u present=%llu final_sum_and_rays=1 no_reuse_accounting=1",unsigned(ok),records,unsigned(records>capacity),capturedPresent);
  if(ok)phase.store(Phase::Complete);else Fail("export",L"FAILED: could not save trace. Exit and send logs.");
 }
