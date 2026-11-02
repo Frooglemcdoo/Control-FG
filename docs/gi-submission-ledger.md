@@ -195,3 +195,30 @@ Live geometry bytes and reuse remain unverified.
 Primary references checked 2026-11-02:
 - https://learn.microsoft.com/en-us/windows/win32/api/d3d12/ne-d3d12-d3d12_resource_states
 - https://learn.microsoft.com/en-us/windows/win32/api/d3d12/ns-d3d12-d3d12_build_raytracing_acceleration_structure_inputs
+
+## R290 indexed ownership lookup and remaining coverage
+
+R289 stayed OBSERVING across 5006 AS submissions, with 1416967 successful and
+3765 failed range lookups. Those repeated lookup counts are not unique scene
+coverage. The owner inventory filled 2048 slots below its byte cap later in the
+run, while byte pressure also occurred earlier. Missing-range causes were not
+individually identified.
+
+R290 expands only metadata slots to 8192, retaining the 512 MiB logical-extent
+limit. Pointer-index hits avoid repeated COM metadata queries and inventory scans.
+A sorted range index with prefix maxima prunes ordinary address lookups while
+rejecting overlapping aliases. Insert/remove updates keep both indexes tied to
+owned resource slots. Evicted COM objects still release after the inventory lock.
+
+The runtime records absent/ambiguous/invalid lookup counters and 128 rolling
+missing-range samples with kind, extent and counts while retained. Samples are
+bounded observations, not a session-wide unique set. Reports include issued and
+completed fence values; metadata_fence_ready proves only the latest tracked
+metadata submission has completed. Geometry bytes, aliasing, heap lifetime and
+cross-queue byte dependencies remain unverified. No rendering consumer is enabled.
+
+Windows validation run 41488635596 passed the indexed-range test (6000 disjoint
+ranges and 100000 comparisons against exhaustive overlapping-range containment),
+actual runtime retention/exclusion, miss sampling and fence-readiness checks,
+plus prior journal/queue/adapter tests and both GPU initial-sample variants.
+The runtime PASS marker was verified in the log, with no assertion/HRESULT errors.
