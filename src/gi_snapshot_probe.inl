@@ -98,7 +98,7 @@ inline void Reset(ID3D12GraphicsCommandList* list) noexcept {
     if(Enabled()&&FAILED(list->SetPrivateDataInterface(key,nullptr)))++refused;
 }
 inline void Build(ID3D12GraphicsCommandList4* list,const D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC* desc) noexcept {
-    if(!Enabled())return;++builds;
+    if(!Enabled()||gi_reuse::runtime::fault.load())return;++builds;
     gi_reuse::ComputeBindingSnapshot bindings;UINT64 generation=0;
     if(gi_compute_hooks::Capture(list,bindings,generation)){
         ++bindingReady;if(bindings.rays)++rayBindings;else ++ordinaryBindings;
@@ -169,6 +169,6 @@ inline void Report() noexcept {
     for(unsigned kind=0;kind<4;++kind){const auto& c=gi_reuse::runtime::inputAudit[kind];
         Trace("GI_INPUT_R295 kind=%u committed=%llu placed=%llu storage_unknown=%llu deny_srv=%llu range_rejected=%llu local_preflight_pass=%llu alias_verified=0 gpu_copies=0",kind,c[0].load(),c[1].load(),c[2].load(),c[3].load(),c[4].load(),c[5].load());
     }
-    Trace("GI_INTEGRATION_R295 builds=%llu binding_ready=%llu binding_missing=%llu ordinary_pso=%llu ray_pso=%llu hook_failed=%u live_trackers=%u admitted_recordings=%llu completed_sealed_recordings=%llu admission_refused=%llu signal_failures=%llu batch_overflow=%llu gpu_copies=0 replacement_gi=0",builds.load(),bindingReady.load(),bindingMissing.load(),ordinaryBindings.load(),rayBindings.load(),unsigned(gi_compute_hooks::failed.load()),gi_compute_hooks::liveStates.load(),admitted.load(),completed.load(),refused.load(),signalsFailed.load(),batchOverflow.load());
+    Trace("GI_INTEGRATION_R295 builds=%llu binding_ready=%llu binding_missing=%llu ordinary_pso=%llu ray_pso=%llu hook_failed=%u live_trackers=%u admitted_recordings=%llu completed_sealed_recordings=%llu admission_refused=%llu signal_failures=%llu batch_overflow=%llu gpu_copies=%llu replacement_gi=0",builds.load(),bindingReady.load(),bindingMissing.load(),ordinaryBindings.load(),rayBindings.load(),unsigned(gi_compute_hooks::failed.load()),gi_compute_hooks::liveStates.load(),admitted.load(),completed.load(),refused.load(),signalsFailed.load(),batchOverflow.load(),captureRecorded.load());
 }
 }

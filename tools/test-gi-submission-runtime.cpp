@@ -214,7 +214,7 @@ int main(){
  queue->ExecuteCommandLists(1,lists);rt::AfterExecute(queue.Get(),token);assert(!rt::fault);
  HANDLE event=CreateEventW(nullptr,FALSE,FALSE,nullptr);assert(event);Check(rt::fence->SetEventOnCompletion(token,event));assert(WaitForSingleObject(event,30000)==WAIT_OBJECT_0);CloseHandle(event);
  UINT64 issued=0,completed=0;bool ready=false;rt::CompletionStats(issued,completed,ready);assert(ready&&issued==token&&completed>=token);
- auto snapshot=std::make_unique<gi_reuse::ASLedger<8192>>();assert(rt::Snapshot(*snapshot));assert(snapshot->Find(512)->geometry->At(0)->vertices==4096);
+ auto snapshot=std::make_unique<rt::MetadataLedger>();assert(rt::Snapshot(*snapshot));assert(snapshot->Find(512)->geometry->At(0)->vertices==4096);
  const auto planned=rt::InspectScenePlan();assert(planned.snapshot&&planned.planned&&planned.fenceValue==token);
  assert(planned.blas==2&&planned.tlas==0&&planned.ranges==4&&planned.resolved+planned.missing==4);
  assert(planned.missing==planned.missingByKind[0]+planned.missingByKind[1]+planned.missingByKind[2]+planned.missingByKind[3]);

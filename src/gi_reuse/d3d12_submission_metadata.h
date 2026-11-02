@@ -187,7 +187,8 @@ inline UINT64 nextFence=0,activeToken=0;
 inline ComPtr<ID3D12CommandQueue> queue;
 inline ComPtr<ID3D12Fence> fence;
 inline GrowingASJournal<65536> pending;
-inline ASLedger<8192> ledger;
+using MetadataLedger=ASLedger<65536>;
+inline MetadataLedger ledger;
 inline std::atomic<UINT64> ignoredCopySubmissions{0},ignoredEmptySubmissions{0},asSubmissions{0};
 inline UINT64 BeforeExecute(ID3D12CommandQueue* q,UINT count,ID3D12CommandList*const* lists) noexcept {
  if(!Enabled()||fault.load())return 0;
@@ -224,7 +225,7 @@ inline void AfterExecute(ID3D12CommandQueue* q,UINT64 token) noexcept {
  pending={};submitting=false;activeToken=0;
  ReleaseSRWLockExclusive(&stateLock);
 }
-inline bool Snapshot(ASLedger<8192>& result) noexcept {
+inline bool Snapshot(MetadataLedger& result) noexcept {
  if(!Enabled()||fault.load())return false;AcquireSRWLockExclusive(&stateLock);
  const bool valid=!fault.load()&&!submitting&&fence&&ledger.Snapshot(reinterpret_cast<UINT64>(queue.Get()),fence->GetCompletedValue(),result);
  ReleaseSRWLockExclusive(&stateLock);return valid;
@@ -232,6 +233,9 @@ inline bool Snapshot(ASLedger<8192>& result) noexcept {
 inline void CompletionStats(UINT64& issued,UINT64& completed,bool& ready) noexcept {
  AcquireSRWLockShared(&stateLock);issued=nextFence;completed=fence?fence->GetCompletedValue():0;
  ready=!fault.load()&&!submitting&&fence&&completed!=UINT64_MAX&&completed>=issued&&ledger.Complete();ReleaseSRWLockShared(&stateLock);
+}
+inline UINT64 LedgerSize() noexcept {
+ AcquireSRWLockShared(&stateLock);const auto size=ledger.Size();ReleaseSRWLockShared(&stateLock);return static_cast<UINT64>(size);
 }
 struct ScenePlanStats {
  bool snapshot=false,planned=false;
@@ -242,7 +246,7 @@ struct ScenePlanStats {
 inline ScenePlanStats InspectScenePlan() noexcept {
  ScenePlanStats s{};
  try {
-  auto snapshot=std::make_unique<ASLedger<8192>>();
+  auto snapshot=std::make_unique<MetadataLedger>();
   if(!Snapshot(*snapshot))return s;
   s.snapshot=true;s.fenceValue=snapshot->SubmissionFence();
   SceneReadPlan<> plan;if(!plan.Build(*snapshot))return s;

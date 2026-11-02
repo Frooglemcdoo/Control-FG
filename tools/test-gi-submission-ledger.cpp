@@ -43,6 +43,25 @@ int main(){
  assert(plan.Build(sceneSnapshot)); // prior immutable snapshot remains usable as metadata
  ASLedger<4> malformed;ASJournal<1> bad;bad.Append({ASOperation::Build,{256,0,UINT64_MAX-10,2,true},0});
  assert(malformed.Submit(1,1,bad,0));assert(!plan.Build(malformed)&&plan.Ranges().empty());
+ // Traverse beyond the former 8192-address ceiling without losing old copy
+ // sources. Explicit invalidation reclaims a slot; age alone never does.
+ ASLedger<16384> large,largeSnapshot;ASJournal<4> batch;
+ for(std::uint64_t i=1;i<=12000;++i){batch.Reset();batch.Append(Build(i*256,i));assert(large.Submit(1,i,batch,batch.generation));}
+ assert(large.Size()==12000&&large.Find(256)->instances==1);
+ batch.Reset();batch.Append({ASOperation::Copy,{13000*256},256});
+ assert(large.Submit(1,12001,batch,batch.generation));
+ assert(large.Find(13000*256)->instances==1);
+ assert(!large.Snapshot(1,12000,largeSnapshot));assert(large.Snapshot(1,12001,largeSnapshot));
+ batch.Reset();batch.Append({ASOperation::Invalidate,{256},0});batch.Append(Build(256,999));
+ assert(large.Submit(1,12002,batch,batch.generation));
+ assert(large.Size()==12001&&large.Find(256)->instances==999&&largeSnapshot.Find(256)->instances==1);
+ ASLedger<2> bounded;batch.Reset();batch.Append(Build(256));batch.Append(Build(512));
+ assert(bounded.Submit(1,1,batch,batch.generation));
+ batch.Reset();batch.Append({ASOperation::Invalidate,{256},0});batch.Append(Build(768));
+ assert(bounded.Submit(1,2,batch,batch.generation)&&bounded.Size()==2&&!bounded.Find(256));
+ batch.Reset();batch.Append(Build(1024));assert(!bounded.Submit(1,3,batch,batch.generation));
+ assert(!bounded.Complete()&&!bounded.Find(512));
+ std::puts("PASS R297 indexed ledger: 12000 addresses, old copy source, immutable fence-gated snapshot, explicit reclamation and hard-cap rejection");
  std::puts("PASS R292 scene read plan: AS revisions, copy lineage, all four range kinds, capacity/invalid rejection and prior snapshot isolation");
  std::puts("PASS submission ordering, reset generations, copy lineage, immutable snapshots, fence gating, capacity and multi-queue rejection");
 }

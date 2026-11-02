@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <vector>
+#include <map>
 #include "geometry_metadata.h"
 
 namespace gi_reuse {
@@ -44,15 +45,14 @@ template<std::size_t Capacity> struct GrowingASJournal {
     }
 };
 template<std::size_t Capacity> class ASLedger {
-    std::array<ASRecord,Capacity> records_{};
+    // Address-indexed heap storage: bounded history without a render-stack array
+    // or an O(history) scan for every submitted build. No age-based eviction.
+    std::map<std::uint64_t,ASRecord> records_;
     std::uint64_t queue_=0, revision_=0, fence_=0;
     bool complete_=true;const char* failure_=nullptr;
-    ASRecord* Slot(std::uint64_t address) noexcept {
-        ASRecord* empty=nullptr;
-        for(auto& r:records_){if(r.address==address)return &r;if(!r.address&&!empty)empty=&r;}
-        return empty;
-    }
 public:
+    static constexpr std::size_t Limit=Capacity;
+    std::size_t Size() const noexcept {return records_.size();}
     std::uint64_t SubmissionFence() const noexcept {return fence_;}
     bool Complete() const noexcept {return complete_;}
     // Any unobserved mutation/order invalidates the entire claim. No silent eviction.
@@ -60,13 +60,13 @@ public:
     const char* FailureReason() const noexcept {return failure_?failure_:"none";}
     const ASRecord* Find(std::uint64_t address) const noexcept {
         if(!complete_||!address)return nullptr;
-        for(const auto& r:records_)if(r.address==address)return &r;
-        return nullptr;
+        const auto found=records_.find(address);
+        return found==records_.end()?nullptr:&found->second;
     }
     // Includes retained historical AS records, not a claim of active TLAS membership.
     template<class Visitor> bool Visit(Visitor&& visitor) const {
         if(!complete_)return false;
-        for(const auto& r:records_)if(r.address&&!visitor(r))return false;
+        for(const auto& entry:records_)if(!visitor(entry.second))return false;
         return true;
     }
     // Plans only the six-byte index read. Vertex IDs must be decoded from
@@ -92,7 +92,7 @@ public:
             const auto& e=journal.events[i];const auto address=e.record.address;
             if(!address){Invalidate("ledger_zero_address");return false;}
             if(e.operation==ASOperation::Invalidate){
-                for(auto& r:records_)if(r.address==address)r={};
+                records_.erase(address);
                 continue;
             }
             ASRecord next=e.record;
@@ -111,9 +111,11 @@ public:
             if(next.geometry&&(next.topLevel||next.count!=next.geometry->Size())){
                 Invalidate("ledger_geometry_count");return false;
             }
-            auto* slot=Slot(address);
-            if(!slot){Invalidate("ledger_capacity");return false;}
-            next.revision=++revision_;*slot=next;
+            const auto found=records_.find(address);
+            if(found==records_.end()&&records_.size()==Capacity){Invalidate("ledger_capacity");return false;}
+            next.revision=++revision_;
+            try {if(found!=records_.end())found->second=next;else records_.emplace(address,std::move(next));}
+            catch(...){Invalidate("ledger_allocation");return false;}
         }
         return true;
     }
@@ -121,7 +123,10 @@ public:
     // UINT64_MAX is D3D12's device-removed sentinel, never successful completion.
     bool Snapshot(std::uint64_t queue,std::uint64_t completedFence,ASLedger& output) const noexcept {
         if(!complete_||!queue_||queue!=queue_||completedFence==UINT64_MAX||completedFence<fence_)return false;
-        output=*this;return true;
+        // Build the copy before touching output. Allocation failure cannot publish
+        // a partial snapshot or corrupt an earlier immutable snapshot.
+        try {ASLedger copy=*this;output=std::move(copy);return true;}
+        catch(...){return false;}
     }
 };
 } // namespace gi_reuse
