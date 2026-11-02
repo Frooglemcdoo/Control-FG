@@ -189,4 +189,12 @@ actual vtable interception for its GPU restore test; it also checks late attach,
 successful reset, ClearState and bundle invalidation. Saved-forwarder stubs check
 failed-reset preservation and indirect argument forwarding without submitting
 invalid API calls. Actual DXR pipeline restoration still needs hardware coverage.
-Validation of this hook integration is pending.
+Windows foundation run `41526470326`, job `125555375721`, passed at remote
+commit `042b8d7173ea4dcfad80a8a39026887494d42094`. Decoded logs confirm
+the real setter interception, GPU binding restoration, lifecycle/invalidation
+cases and command-list tracker release passed with no debug-layer errors.
+Compilation first exposed a setter/vtable field collision and a WRL pointer
+access error; both are fixed in the tested revision. Full Windows mod build
+and regression run `41526470375`, job `125555376044`, also passed at the
+same code revision. Decoded logs show no compiler or workflow errors.
+The packaged artifact still bears R294 and is not a new user-facing release.
