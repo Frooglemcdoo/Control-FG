@@ -39,6 +39,10 @@ jobs:
           if not "%errorlevel%"=="0" exit /b 1
           gi-d3d12-geometry.exe
           if not "%errorlevel%"=="0" exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-buffer-index.cpp /Fe:gi-buffer-index.exe
+          if not "%errorlevel%"=="0" exit /b 1
+          gi-buffer-index.exe
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-submission-runtime.cpp /Fe:gi-submission-runtime.exe /link d3d12.lib dxgi.lib
           if not "%errorlevel%"=="0" exit /b 1
           gi-submission-runtime.exe

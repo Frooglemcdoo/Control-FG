@@ -78,6 +78,13 @@ int main(){
  D3D12_HEAP_PROPERTIES readbackHeap{};readbackHeap.Type=D3D12_HEAP_TYPE_READBACK;ComPtr<ID3D12Resource> readback;
  Check(device->CreateCommittedResource(&readbackHeap,D3D12_HEAP_FLAG_NONE,&buffer,D3D12_RESOURCE_STATE_COPY_DEST,nullptr,IID_PPV_ARGS(&readback)));
  excluded.Observe(readback.Get());excluded.Stats(owned,retained,limited);assert(owned==0&&retained==0);
+ // Pointer and range indexes must stay consistent through eviction/exclusion.
+ gi_reuse::RangeMatch missingReason{};
+ assert(!admission.Resolve(1,1,owner,offset,&missingReason)&&missingReason==gi_reuse::RangeMatch::Missing);
+ assert(!admission.Resolve(UINT64_MAX,2,owner,offset,&missingReason)&&missingReason==gi_reuse::RangeMatch::Invalid);
+ static_assert(gi_reuse::BufferOwners::MaxOwners==8192&&gi_reuse::BufferOwners::Budget==512ull*1024*1024,"R290 metadata capacity must not expand byte retention");
+ rt::CheckOwner(1,1,rt::OwnerKind::Vertex);rt::CheckOwner(1,1,rt::OwnerKind::Vertex);rt::CheckOwner(UINT64_MAX,2,rt::OwnerKind::Index);
+ std::array<rt::MissingRange,128> misses{};rt::ReadMissing(misses);assert(misses[0].hits==2&&misses[0].reason==gi_reuse::RangeMatch::Missing&&misses[1].reason==gi_reuse::RangeMatch::Invalid);
  // Actual creation interception discovers a CPU-written buffer without any copy.
  fixture::gi_resource_hooks::Install(device.Get());const auto created=rt::creationObservations.load();
  ComPtr<ID3D12Resource> createdBuffer;Check(device->CreateCommittedResource(&heap,D3D12_HEAP_FLAG_NONE,&buffer,D3D12_RESOURCE_STATE_GENERIC_READ,nullptr,IID_PPV_ARGS(&createdBuffer)));
@@ -109,6 +116,7 @@ int main(){
  rt::Reset(list.Get());assert(rt::Read(list.Get())->data.generation!=generation&&initial->data.size==2);
  queue->ExecuteCommandLists(1,lists);rt::AfterExecute(queue.Get(),token);assert(!rt::fault);
  HANDLE event=CreateEventW(nullptr,FALSE,FALSE,nullptr);assert(event);Check(rt::fence->SetEventOnCompletion(token,event));assert(WaitForSingleObject(event,30000)==WAIT_OBJECT_0);CloseHandle(event);
+ UINT64 issued=0,completed=0;bool ready=false;rt::CompletionStats(issued,completed,ready);assert(ready&&issued==token&&completed>=token);
  auto snapshot=std::make_unique<gi_reuse::ASLedger<8192>>();assert(rt::Snapshot(*snapshot));assert(snapshot->Find(512)->geometry->At(0)->vertices==4096);
  // More than 512 events now survive recording, snapshot, and ordered submission.
  rt::Reset(list.Get());for(unsigned i=0;i<1024;++i)rt::RecordBuild(list.Get(),&build);

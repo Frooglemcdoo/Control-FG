@@ -32,9 +32,22 @@ inline void ObserveBarriers(UINT count,const D3D12_RESOURCE_BARRIER* barriers) n
   else if(b.Type==D3D12_RESOURCE_BARRIER_TYPE_ALIASING){owners.Observe(b.Aliasing.pResourceBefore);owners.Observe(b.Aliasing.pResourceAfter);}
  }
 }
-inline void CheckOwner(UINT64 address,UINT64 bytes) noexcept {
- ComPtr<ID3D12Resource> owner;UINT64 offset=0;
- if(owners.Resolve(address,bytes,owner,offset))++resolvedRanges;else ++missingRanges;
+enum class OwnerKind:unsigned {Vertex,Index,Transform,Instances};
+struct MissingRange {UINT64 address=0,bytes=0,hits=0,lastBuild=0;OwnerKind kind{};RangeMatch reason{};};
+inline SRWLOCK missingLock=SRWLOCK_INIT;
+inline std::array<MissingRange,128> missingSamples{};inline unsigned missingCursor=0;
+inline std::atomic<UINT64> absentRanges{0},ambiguousRanges{0},invalidRanges{0};
+inline void CheckOwner(UINT64 address,UINT64 bytes,OwnerKind kind) noexcept {
+ ComPtr<ID3D12Resource> owner;UINT64 offset=0;RangeMatch reason{};
+ if(owners.Resolve(address,bytes,owner,offset,&reason)){++resolvedRanges;return;}
+ ++missingRanges;if(reason==RangeMatch::Ambiguous)++ambiguousRanges;else if(reason==RangeMatch::Invalid)++invalidRanges;else ++absentRanges;
+ AcquireSRWLockExclusive(&missingLock);MissingRange* found=nullptr;
+ for(auto& sample:missingSamples)if(sample.hits&&sample.address==address&&sample.bytes==bytes&&sample.kind==kind&&sample.reason==reason){found=&sample;break;}
+ if(!found){found=&missingSamples[missingCursor++%missingSamples.size()];*found={address,bytes,0,0,kind,reason};}
+ ++found->hits;found->lastBuild=buildCount.load();ReleaseSRWLockExclusive(&missingLock);
+}
+inline void ReadMissing(std::array<MissingRange,128>& output) noexcept {
+ AcquireSRWLockShared(&missingLock);output=missingSamples;ReleaseSRWLockShared(&missingLock);
 }
 // The COM private-data owner follows command-list destruction and successful
 // resets. No raw command-list pointers or native descriptor pointers are kept.
@@ -81,8 +94,8 @@ inline void RecordBuild(ID3D12GraphicsCommandList4* list,const D3D12_BUILD_RAYTR
   }else{
    r.geometry=CopyBLASGeometry(desc->Inputs);if(!r.geometry){Fail("blas_unsupported_descriptor");return;}
   }
-  if(r.topLevel)CheckOwner(r.instances,UINT64(r.count)*64);
-  else for(UINT i=0;i<r.count;++i){const auto* t=r.geometry->At(i);CheckOwner(t->vertices,UINT64(t->vertexCount)*t->stride);CheckOwner(t->indices,UINT64(t->indexCount)*2);if(t->transform)CheckOwner(t->transform,48);}
+  if(r.topLevel)CheckOwner(r.instances,UINT64(r.count)*64,OwnerKind::Instances);
+  else for(UINT i=0;i<r.count;++i){const auto* t=r.geometry->At(i);CheckOwner(t->vertices,UINT64(t->vertexCount)*t->stride,OwnerKind::Vertex);CheckOwner(t->indices,UINT64(t->indexCount)*2,OwnerKind::Index);if(t->transform)CheckOwner(t->transform,48,OwnerKind::Transform);}
   if(!journal->data.Append({update?ASOperation::Update:ASOperation::Build,r,update?desc->SourceAccelerationStructureData:0}))Fail("build_journal_capacity");
   JournalPeak(journal->data.size);
  }catch(...){Fail("build_allocation_exception");}
@@ -144,6 +157,10 @@ inline bool Snapshot(ASLedger<8192>& result) noexcept {
  if(!Enabled()||fault.load())return false;AcquireSRWLockExclusive(&stateLock);
  const bool valid=!fault.load()&&!submitting&&fence&&ledger.Snapshot(reinterpret_cast<UINT64>(queue.Get()),fence->GetCompletedValue(),result);
  ReleaseSRWLockExclusive(&stateLock);return valid;
+}
+inline void CompletionStats(UINT64& issued,UINT64& completed,bool& ready) noexcept {
+ AcquireSRWLockShared(&stateLock);issued=nextFence;completed=fence?fence->GetCompletedValue():0;
+ ready=!fault.load()&&!submitting&&fence&&completed!=UINT64_MAX&&completed>=issued&&ledger.Complete();ReleaseSRWLockShared(&stateLock);
 }
 // Snapshot proves only observed descriptor submission completion, never lifetime
 // of vertex/index/instance resources or same-generation bytes. No rendering user.
