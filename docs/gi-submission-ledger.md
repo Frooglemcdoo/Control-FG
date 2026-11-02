@@ -26,9 +26,8 @@ call may overlap; metadata order alone does not establish a GPU memory dependenc
 Do not split native submissions or insert blocking waits to fit this model.
 
 A Build event represents a fully resolved descriptor snapshot, including an
-in-place update's resulting metadata. ASRecord currently carries the AS identity,
-revision and TLAS instance-buffer metadata; it is not yet a full BLAS triangle
-registry. Opaque or unsupported copy/update operations must invalidate tracking.
+in-place update's resulting metadata. ASRecord now also carries an immutable BLAS geometry snapshot when supplied.
+Copies preserve that snapshot; builds replace it and assign a new AS revision. Opaque or unsupported copy/update operations must invalidate tracking.
 The adapter and GPU snapshot remain required before this can decode live GI hits.
 
 Validation: `g++ -std=c++17 -Wall -Wextra -Werror
@@ -41,3 +40,31 @@ LeakSanitizer cannot inspect process threads in this execution environment.
 Primary references, checked 2026-11-01:
 - https://learn.microsoft.com/en-us/windows/win32/api/d3d12/nf-d3d12-id3d12commandqueue-executecommandlists
 - https://learn.microsoft.com/en-us/windows/win32/api/d3d12/nf-d3d12-id3d12fence-getcompletedvalue
+
+## Native descriptor adapter
+
+`geometry_metadata.h` validates and owns copied triangle descriptors.
+`d3d12_geometry_metadata.h` converts both D3D12 descriptor-array layouts without
+retaining pointers into the application's temporary arrays. The supported subset
+is float3 positions with 12-byte stride and uint16 indices, matching R279's
+observed builds. Unknown formats, procedural geometry, malformed ranges and
+unsupported flags reject the entire snapshot; geometry indices are never compacted.
+Geometry transform addresses are retained but their matrices are not yet read.
+
+`PlanTriangle` requires a matching AS revision and returns a bounded six-byte
+index-read plan. It does not decode indices, dereference addresses, or establish
+GPU completion. Use completion-qualified snapshots and separately retained
+resources/same-generation bytes before acting on the plan. Stale plans must not
+be used after resource destruction or aliasing. AS metadata ownership does not
+retain ID3D12Resource objects or their contents.
+
+The existing runtime probe still only inventories descriptors. The new adapter
+is not yet called from its hooks: command-list journals, queue submission ordering,
+resource lifetime, compaction/update events and GPU buffer access must be wired
+together before claiming a live triangle mapping. No producer PDF is inferred
+from this metadata, and no game lighting change is enabled.
+
+Tests: `test-gi-geometry-metadata.cpp` covers geometry-index preservation, immutable
+ownership, copy/update lineage, snapshots, stale revisions, arithmetic bounds and
+unsupported inputs. `test-gi-d3d12-geometry.cpp` covers actual D3D12 array and pointer
+layouts, source-array mutation, null descriptors and unsupported geometry types.

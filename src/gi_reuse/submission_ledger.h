@@ -2,6 +2,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include "geometry_metadata.h"
 
 namespace gi_reuse {
 // Metadata only: caller must retain resources and capture buffer bytes separately.
@@ -10,6 +11,7 @@ struct ASRecord {
     std::uint64_t address=0, revision=0, instances=0;
     std::uint32_t count=0;
     bool topLevel=false;
+    std::shared_ptr<const GeometryMetadata> geometry{};
 };
 enum class ASOperation { Build, Copy, Invalidate };
 struct ASEvent { ASOperation operation{}; ASRecord record{}; std::uint64_t source=0; };
@@ -42,9 +44,22 @@ public:
         for(const auto& r:records_)if(r.address==address)return &r;
         return nullptr;
     }
+    // Plans only the six-byte index read. Vertex IDs must be decoded from
+    // same-generation bytes and bounded against vertexCount before GPU loads.
+    bool PlanTriangle(std::uint64_t address,std::uint64_t expectedRevision,
+                      std::uint32_t geometryIndex,std::uint32_t primitive,
+                      TriangleReadPlan& output) const noexcept {
+        output={};
+        const auto* r=Find(address);
+        if(!r||!expectedRevision||r->revision!=expectedRevision||r->topLevel||!r->geometry)return false;
+        const auto* t=r->geometry->At(geometryIndex);
+        if(!t||primitive>=t->indexCount/3)return false;
+        output={*t,r->revision,t->indices+std::uint64_t(primitive)*6,primitive};
+        return true;
+    }
     template<std::size_t N> bool Submit(std::uint64_t queue,std::uint64_t fence,
                                       const ASJournal<N>& journal,std::uint64_t expectedGeneration) noexcept {
-        if(!complete_||!queue||!fence||!journal.complete||journal.generation!=expectedGeneration||
+        if(!complete_||!queue||!fence||!journal.complete||journal.size>N||journal.generation!=expectedGeneration||
            (queue_&&queue_!=queue)||fence<=fence_){Invalidate();return false;}
         // Caller supplies a fresh increasing completion fence for each submission.
         queue_=queue;fence_=fence;
@@ -61,6 +76,9 @@ public:
                 if(!source){Invalidate();return false;}
                 next=*source;next.address=address;
             }else if(e.operation!=ASOperation::Build){Invalidate();return false;}
+            if(next.geometry&&(next.topLevel||next.count!=next.geometry->Size())){
+                Invalidate();return false;
+            }
             auto* slot=Slot(address);
             if(!slot){Invalidate();return false;}
             next.revision=++revision_;*slot=next;

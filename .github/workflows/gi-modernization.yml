@@ -27,6 +27,18 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'RTXDI shader compile failed' }
           $commands=@"
           call "$vs\VC\Auxiliary\Build\vcvars64.bat"
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-geometry-metadata.cpp /Fe:gi-geometry-metadata.exe
+          if errorlevel 1 exit /b 1
+          gi-geometry-metadata.exe
+          if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-submission-ledger.cpp /Fe:gi-submission-ledger.exe
+          if errorlevel 1 exit /b 1
+          gi-submission-ledger.exe
+          if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-d3d12-geometry.cpp /Fe:gi-d3d12-geometry.exe
+          if errorlevel 1 exit /b 1
+          gi-d3d12-geometry.exe
+          if errorlevel 1 exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-initial-sample.cpp /Fe:gi-initial-cpu.exe
           if errorlevel 1 exit /b 1
           gi-initial-cpu.exe

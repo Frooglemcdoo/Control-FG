@@ -79,3 +79,10 @@ workflow run [41462051199](https://github.com/Frooglemcdoo/Control-FG/actions/ru
 passes CPU tests, DXC compilation, and D3D12 WARP execution of both the shared
 adapter and actual pinned RTXDI initialization bridge with a clean debug layer.
 This is software-device execution, not NVIDIA hardware or in-game validation.
+
+Geometry integration checkpoint: the submission ledger now retains validated,
+immutable BLAS triangle descriptors, and the native D3D12 adapter copies either
+descriptor layout. Copy lineage and AS revisions guard triangle read plans.
+These components are tested independently; live hooks, resource retention and
+same-generation GPU reads remain unimplemented. No additional capture is required
+for this metadata stage.
