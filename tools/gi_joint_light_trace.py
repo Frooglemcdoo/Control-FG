@@ -133,7 +133,7 @@ def generate(raw,path,identity):
         3626:ins('mov',dst(point_response,8),src(15,0xff)),
         3729:ins('mov',dst(point_response,4),src(16,0xff)),
     }
-    for at,code in point_stages.items():add(at,code)
+    for at,block in point_stages.items():add(at,block)
     point_sum, surface_volume = temp+33,temp+34
     add(3775,ins('mov',dst(point_sum,7),src(14)))
     add(4999,ins('mov',dst(surface_volume,7),src(4)))
