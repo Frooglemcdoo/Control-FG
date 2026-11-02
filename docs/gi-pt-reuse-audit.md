@@ -105,3 +105,8 @@ Still required for live use: complete per-list binding observation/restoration,
 placed geometry heap retention, alias and split-barrier rejection, bounded total
 admission and exact-queue retirement/replay lifetime handling. The per-dispatch
 cap is not a session memory budget. No in-game copying or GI setting changes.
+
+Full Windows build/regression run `41518506100`, job `125528129227`, also passed
+at the same code revision. Decoded logs confirm compilation and regression/
+packaging completion without compiler errors or failed workflow steps. Its
+artifact retains the existing R294 label and is not a new user-facing release.
