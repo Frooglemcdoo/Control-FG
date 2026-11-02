@@ -111,6 +111,11 @@ int main(){
  static_assert(gi_reuse::BufferOwners::MaxOwners==8192&&gi_reuse::BufferOwners::Budget==1024ull*1024*1024,"R293 diagnostic extent budget is 1 GiB");
  rt::CheckOwner(1,1,rt::OwnerKind::Vertex);rt::CheckOwner(1,1,rt::OwnerKind::Vertex);rt::CheckOwner(UINT64_MAX,2,rt::OwnerKind::Index);
  std::array<rt::MissingRange,128> misses{};rt::ReadMissing(misses);assert(misses[0].hits==2&&misses[0].reason==gi_reuse::RangeMatch::Missing&&misses[1].reason==gi_reuse::RangeMatch::Invalid);
+ // Inventory generations cannot inherit evidence after eviction/re-admission.
+ gi_reuse::BasicBufferOwners<1,64> identities;identities.Observe(resources[0].Get());
+ const auto firstIdentity=identities.Identity(resources[0].Get());assert(firstIdentity);
+ identities.Observe(resources[1].Get());assert(!identities.Identity(resources[0].Get()));
+ identities.Observe(resources[0].Get());assert(identities.Identity(resources[0].Get())!=firstIdentity);
  // Actual creation interception discovers a CPU-written buffer without any copy.
  fixture::gi_resource_hooks::Install(device.Get());const auto created=rt::creationObservations.load();
  ComPtr<ID3D12Resource> createdBuffer;Check(device->CreateCommittedResource(&heap,D3D12_HEAP_FLAG_NONE,&buffer,D3D12_RESOURCE_STATE_GENERIC_READ,nullptr,IID_PPV_ARGS(&createdBuffer)));
@@ -124,6 +129,17 @@ int main(){
  D3D12_RESOURCE_BARRIER barrier{};barrier.Type=D3D12_RESOURCE_BARRIER_TYPE_UAV;barrier.UAV.pResource=scene.Get();
  rt::ObserveBarriers(1,&barrier);assert(rt::owners.Resolve(scene->GetGPUVirtualAddress(),64,owner,offset));
  rt::Initialize(list.Get());auto initial=rt::Read(list.Get());assert(initial&&initial->data.size==0);
+ D3D12_RESOURCE_BARRIER stateBarrier{};stateBarrier.Type=D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+ stateBarrier.Transition.pResource=createdBuffer.Get();stateBarrier.Transition.Subresource=D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+ stateBarrier.Transition.StateBefore=D3D12_RESOURCE_STATE_COPY_DEST;stateBarrier.Transition.StateAfter=D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+ rt::RecordBarriers(list.Get(),1,&stateBarrier);
+ rt::CheckOwner(createdBuffer->GetGPUVirtualAddress(),32,rt::OwnerKind::Vertex,&initial->states);
+ assert(rt::localStateCounts[0][1]==1);
+ stateBarrier.Flags=D3D12_RESOURCE_BARRIER_FLAG_BEGIN_ONLY;rt::RecordBarriers(list.Get(),1,&stateBarrier);
+ rt::CheckOwner(createdBuffer->GetGPUVirtualAddress(),32,rt::OwnerKind::Vertex,&initial->states);assert(rt::localStateCounts[0][2]==1);
+ D3D12_RESOURCE_BARRIER alias{};alias.Type=D3D12_RESOURCE_BARRIER_TYPE_ALIASING;rt::RecordBarriers(list.Get(),1,&alias);
+ rt::CheckOwner(createdBuffer->GetGPUVirtualAddress(),32,rt::OwnerKind::Vertex,&initial->states);assert(rt::localStateCounts[0][0]==1);
+ std::puts("PASS R294 runtime recording evidence, pending split, alias invalidation and inventory-generation isolation");
  const auto generation=initial->data.generation;rt::Initialize(list.Get());assert(rt::Read(list.Get())->data.generation==generation);
  D3D12_RAYTRACING_GEOMETRY_DESC geometry{};geometry.Type=D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES;
  geometry.Triangles.VertexBuffer={4096,12};geometry.Triangles.VertexCount=3;geometry.Triangles.VertexFormat=DXGI_FORMAT_R32G32B32_FLOAT;

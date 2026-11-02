@@ -93,7 +93,7 @@ inline void STDMETHODCALLTYPE ResourceHook(ID3D12GraphicsCommandList* list,ID3D1
     original(list,destination,source);
 }
 inline void STDMETHODCALLTYPE BarrierHook(ID3D12GraphicsCommandList* list,UINT count,const D3D12_RESOURCE_BARRIER* barriers) {
-    gi_reuse::runtime::ObserveBarriers(count,barriers);Lookup(list).barrier(list,count,barriers);
+    gi_reuse::runtime::ObserveBarriers(count,barriers);gi_reuse::runtime::RecordBarriers(list,count,barriers);Lookup(list).barrier(list,count,barriers);
 }
 inline HRESULT STDMETHODCALLTYPE ResetHook(ID3D12GraphicsCommandList* list,ID3D12CommandAllocator* allocator,ID3D12PipelineState* pipeline) {
     const auto hr=Lookup(list).reset(list,allocator,pipeline);

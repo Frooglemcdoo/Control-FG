@@ -11,14 +11,14 @@ inline const GUID asStorageKey={0x289a1134,0x12ab,0x41b7,{0x9a,0x11,0x43,0x12,0x
 // Development inventory only. Strong references prevent destruction of observed
 // resource objects; they do not freeze contents, own placed heaps, or prove states.
 template<std::size_t Capacity=8192,UINT64 ByteBudget=512ull*1024*1024> class BasicBufferOwners {
- struct Entry {Microsoft::WRL::ComPtr<ID3D12Resource> owner;UINT64 address=0,bytes=0,touched=0;bool geometry=false,scene=false,candidate=false,index=false;};
+ struct Entry {Microsoft::WRL::ComPtr<ID3D12Resource> owner;UINT64 address=0,bytes=0,touched=0;bool geometry=false,scene=false,candidate=false,index=false;UINT64 identity=0;};
  static unsigned Rank(const Entry& e) noexcept {return e.index?3u:(e.candidate?2u:(e.scene?1u:0u));}
  std::array<Entry,Capacity> entries_{};
  std::unordered_map<ID3D12Resource*,std::size_t> slots_;
  BufferRangeIndex<Capacity> ranges_;
  BufferObservationHistory<(Capacity<4096?Capacity*4:16384)> history_;
  SRWLOCK lock_=SRWLOCK_INIT;
- UINT64 bytes_=0,clock_=0,evictions_=0,rejected_=0,excluded_=0;unsigned count_=0;bool limited_=false;
+ UINT64 bytes_=0,clock_=0,nextIdentity_=0,evictions_=0,rejected_=0,excluded_=0;unsigned count_=0;bool limited_=false;
 public:
  static constexpr UINT64 Budget=ByteBudget;
  static constexpr std::size_t MaxOwners=Capacity;
@@ -74,7 +74,7 @@ private:
     if(!victim){limited_=true;++rejected_;history_.Record(address,desc.Width,BufferEvent::Rejected,rank);slots_.erase(resource);ReleaseSRWLockExclusive(&lock_);return;}
     history_.Record(victim->address,victim->bytes,BufferEvent::Evicted,Rank(*victim));bytes_-=victim->bytes;--count_;++evictions_;ranges_.Remove(static_cast<std::size_t>(victim-entries_.data()));slots_.erase(victim->owner.Get());retired[retireCount++]=std::move(victim->owner);*victim={};
    }
-   if(count_<Capacity&&desc.Width<=Budget-bytes_){for(auto& e:entries_)if(!e.owner){e={resource,address,desc.Width,++clock_,false,scene,candidate,index};history_.Record(address,desc.Width,BufferEvent::Admitted,rank);++count_;bytes_+=desc.Width;const auto slot=static_cast<std::size_t>(&e-entries_.data());slots_.find(resource)->second=slot;ranges_.Insert(address,desc.Width,slot);break;}}
+   if(count_<Capacity&&desc.Width<=Budget-bytes_){for(auto& e:entries_)if(!e.owner){e={resource,address,desc.Width,++clock_,false,scene,candidate,index,++nextIdentity_};history_.Record(address,desc.Width,BufferEvent::Admitted,rank);++count_;bytes_+=desc.Width;const auto slot=static_cast<std::size_t>(&e-entries_.data());slots_.find(resource)->second=slot;ranges_.Insert(address,desc.Width,slot);break;}}
   }else if(!known){limited_=true;++rejected_;history_.Record(address,desc.Width,BufferEvent::Rejected,rank);}
   ReleaseSRWLockExclusive(&lock_);
  }
@@ -84,6 +84,9 @@ public:
   const auto match=ranges_.Find(address,bytes,slot);if(result)*result=match;
   if(match==RangeMatch::Unique){auto& e=entries_[slot];if(protect){e.geometry=true;e.touched=++clock_;}owner=e.owner;offset=address-e.address;}
   ReleaseSRWLockExclusive(&lock_);return match==RangeMatch::Unique;
+ }
+ UINT64 Identity(ID3D12Resource* resource) noexcept {
+  AcquireSRWLockShared(&lock_);const auto it=slots_.find(resource);const auto id=it==slots_.end()?0:entries_[it->second].identity;ReleaseSRWLockShared(&lock_);return id;
  }
  BufferEvidence HistoricalEvidence(UINT64 address,UINT64 bytes) noexcept {
   AcquireSRWLockShared(&lock_);const auto result=history_.Find(address,bytes);ReleaseSRWLockShared(&lock_);return result;

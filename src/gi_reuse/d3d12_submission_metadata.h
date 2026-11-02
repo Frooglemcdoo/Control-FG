@@ -7,7 +7,7 @@
 #include "d3d12_geometry_metadata.h"
 #include "submission_ledger.h"
 #include "scene_read_plan.h"
-#include <unordered_set>
+#include "local_buffer_states.h"
 #include "d3d12_buffer_owners.h"
 namespace gi_reuse::runtime {
 using Microsoft::WRL::ComPtr;
@@ -40,9 +40,19 @@ inline SRWLOCK missingLock=SRWLOCK_INIT;
 inline std::array<MissingRange,128> missingSamples{};inline unsigned missingCursor=0;
 inline std::array<std::atomic<UINT64>,4> missingByKind{};
 inline std::atomic<UINT64> absentRanges{0},ambiguousRanges{0},invalidRanges{0};
-inline void CheckOwner(UINT64 address,UINT64 bytes,OwnerKind kind) noexcept {
+inline std::array<std::array<std::atomic<UINT64>,4>,4> localStateCounts{};
+inline std::atomic<UINT64> localStateLimits{0},localAliasInvalidations{0};
+inline void CheckOwner(UINT64 address,UINT64 bytes,OwnerKind kind,LocalBufferStates<>* states=nullptr) noexcept {
  ComPtr<ID3D12Resource> owner;UINT64 offset=0;RangeMatch reason{};
- if(owners.Resolve(address,bytes,owner,offset,&reason)){++resolvedRanges;return;}
+ if(owners.Resolve(address,bytes,owner,offset,&reason)){
+  ++resolvedRanges;
+  if(states){const auto state=states->Find(owners.Identity(owner.Get()));unsigned category=0;
+   if(state.kind==LocalStateKind::Pending)category=2;
+   else if(state.kind==LocalStateKind::Explicit)category=(state.after&D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE)?1u:3u;
+   ++localStateCounts[static_cast<unsigned>(kind)][category];
+  }
+  return;
+ }
  ++missingRanges;++missingByKind[static_cast<unsigned>(kind)];if(reason==RangeMatch::Ambiguous)++ambiguousRanges;else if(reason==RangeMatch::Invalid)++invalidRanges;else ++absentRanges;
  AcquireSRWLockExclusive(&missingLock);MissingRange* found=nullptr;
  for(auto& sample:missingSamples)if(sample.hits&&sample.address==address&&sample.bytes==bytes&&sample.kind==kind&&sample.reason==reason){found=&sample;break;}
@@ -58,6 +68,7 @@ class Journal final:public IUnknown {
  std::atomic<ULONG> references_{1};
 public:
  GrowingASJournal<65536> data;
+ LocalBufferStates<> states;
  Journal(){data.generation=generation.fetch_add(1);}
  HRESULT STDMETHODCALLTYPE QueryInterface(REFIID iid,void** out) override {
   if(!out)return E_POINTER;*out=nullptr;if(iid!=__uuidof(IUnknown))return E_NOINTERFACE;
@@ -72,6 +83,18 @@ inline ComPtr<Journal> Read(ID3D12Object* list) noexcept {
   if(size==sizeof(value))result.Attach(static_cast<Journal*>(value));else value->Release();
  }
  return result;
+}
+inline void RecordBarriers(ID3D12GraphicsCommandList* list,UINT count,const D3D12_RESOURCE_BARRIER* barriers) noexcept {
+ if(!Enabled()||fault.load()||!list||!barriers)return;auto j=Read(list);if(!j)return;
+ const bool wasComplete=j->states.Complete();
+ for(UINT i=0;i<count;++i){const auto& b=barriers[i];
+  if(b.Type==D3D12_RESOURCE_BARRIER_TYPE_ALIASING){j->states.Clear();++localAliasInvalidations;continue;}
+  if(b.Type!=D3D12_RESOURCE_BARRIER_TYPE_TRANSITION||!b.Transition.pResource)continue;
+  const auto id=owners.Identity(b.Transition.pResource);if(!id)continue;
+  if(b.Transition.Subresource!=0&&b.Transition.Subresource!=D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES){j->states.Clear();continue;}
+  j->states.Transition(id,unsigned(b.Transition.StateBefore),unsigned(b.Transition.StateAfter),unsigned(b.Flags));
+ }
+ if(wasComplete&&!j->states.Complete())++localStateLimits;
 }
 inline void Reset(ID3D12GraphicsCommandList* list) noexcept {
  if(!Enabled()||fault.load()||!list)return;
@@ -97,8 +120,8 @@ inline void RecordBuild(ID3D12GraphicsCommandList4* list,const D3D12_BUILD_RAYTR
   }else{
    r.geometry=CopyBLASGeometry(desc->Inputs);if(!r.geometry){Fail("blas_unsupported_descriptor");return;}
   }
-  if(r.topLevel)CheckOwner(r.instances,UINT64(r.count)*64,OwnerKind::Instances);
-  else for(UINT i=0;i<r.count;++i){const auto* t=r.geometry->At(i);CheckOwner(t->vertices,UINT64(t->vertexCount)*t->stride,OwnerKind::Vertex);CheckOwner(t->indices,UINT64(t->indexCount)*2,OwnerKind::Index);if(t->transform)CheckOwner(t->transform,48,OwnerKind::Transform);}
+  if(r.topLevel)CheckOwner(r.instances,UINT64(r.count)*64,OwnerKind::Instances,&journal->states);
+  else for(UINT i=0;i<r.count;++i){const auto* t=r.geometry->At(i);CheckOwner(t->vertices,UINT64(t->vertexCount)*t->stride,OwnerKind::Vertex,&journal->states);CheckOwner(t->indices,UINT64(t->indexCount)*2,OwnerKind::Index,&journal->states);if(t->transform)CheckOwner(t->transform,48,OwnerKind::Transform,&journal->states);}
   if(!journal->data.Append({update?ASOperation::Update:ASOperation::Build,r,update?desc->SourceAccelerationStructureData:0}))Fail("build_journal_capacity");
   JournalPeak(journal->data.size);
  }catch(...){Fail("build_allocation_exception");}

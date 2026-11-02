@@ -1,0 +1,95 @@
+{
+  "source": "Lighting-R204-20261102-125956-39716-0.log",
+  "sha256": "c85b9233e388dc426ea72bd8c05baf294b30739fe0273335eed605f3f23dea4e",
+  "GI_METADATA_R293": {
+    "reports": 24,
+    "final": {
+      "ms": "5137484",
+      "present": "5877",
+      "status": "OBSERVING",
+      "reason": "none",
+      "builds": "92649",
+      "copies": "3051",
+      "buffer_owners": "5243",
+      "retained_bytes": "1073373514",
+      "owner_limit": "1",
+      "geometry_owners": "3182",
+      "cache_evictions": "27514",
+      "resolved_ranges": "875984",
+      "missing_ranges": "0",
+      "journal_peak": "1893",
+      "creation_observations": "15393",
+      "barrier_observations": "2526118",
+      "geometry_bytes": "320729350",
+      "candidate_bytes": "752250948",
+      "admission_rejects": "216426",
+      "excluded_observations": "3394",
+      "ignored_copy_submissions": "21118",
+      "ignored_empty_submissions": "61864",
+      "as_submissions": "3056"
+    }
+  },
+  "GI_COVERAGE_R293": {
+    "reports": 24,
+    "final": {
+      "ms": "5137484",
+      "present": "5877",
+      "owner_capacity": "8192",
+      "owner_budget": "1073741824",
+      "absent_ranges": "0",
+      "ambiguous_ranges": "0",
+      "invalid_ranges": "0",
+      "issued_fence": "3056",
+      "completed_fence": "3056",
+      "metadata_fence_ready": "1",
+      "history_overwritten": "0",
+      "history_dropped": "0",
+      "missing_vertex": "0",
+      "missing_index": "0",
+      "missing_transform": "0",
+      "missing_instances": "0",
+      "gpu_bytes_captured": "0",
+      "reuse_ready": "0"
+    }
+  },
+  "GI_PLAN_R293": {
+    "reports": 24,
+    "final": {
+      "ms": "5137500",
+      "present": "5877",
+      "snapshot": "1",
+      "planned": "1",
+      "fence": "3056",
+      "retained_blas": "7347",
+      "retained_tlas": "1",
+      "ranges": "23195",
+      "distinct_owners": "3181",
+      "resolved": "23195",
+      "missing": "0",
+      "default_ranges": "23195",
+      "upload_ranges": "0",
+      "other_ranges": "0",
+      "requested_bytes_with_overlap": "503722200",
+      "active_membership_verified": "0",
+      "gpu_bytes_captured": "0",
+      "copy_ready": "0",
+      "reuse_ready": "0"
+    }
+  },
+  "GI_PLAN_COVERAGE_R293": {
+    "reports": 24,
+    "final": {
+      "ms": "5137500",
+      "present": "5877",
+      "fence": "3056",
+      "missing_vertex": "0",
+      "missing_index": "0",
+      "missing_transform": "0",
+      "missing_instances": "0",
+      "inspection_ms": "16",
+      "retained_as_capacity": "8192",
+      "historical_owners_promoted": "0"
+    }
+  },
+  "limitations": "Successful supplied-run lookup coverage does not establish stable GPU bytes, state or active scene membership. Inspection timing uses coarse GetTickCount64."
+}

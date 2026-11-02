@@ -1,5 +1,6 @@
 #include "../src/gi_reuse/buffer_range_index.h"
 #include "../src/gi_reuse/buffer_observation_history.h"
+#include "../src/gi_reuse/local_buffer_states.h"
 #include <cassert>
 #include <random>
 #include <memory>
@@ -39,6 +40,20 @@ int main(){
  history.Record(UINT64_MAX,2,BufferEvent::Evicted,0);
  assert(history.Find(UINT64_MAX,2).event==BufferEvent::Unknown);
  std::uint64_t overwritten=0,dropped=0;history.Stats(overwritten,dropped);assert(overwritten==1&&dropped==0);
+ LocalBufferStates<2> states;
+ assert(states.Find(1).kind==LocalStateKind::Unknown);
+ states.Transition(1,1024,64,0);assert(states.Find(1).kind==LocalStateKind::Explicit&&states.Find(1).after==64);
+ states.Transition(1,64,2048,1);assert(states.Find(1).kind==LocalStateKind::Pending);
+ states.Transition(1,64,2048,2);assert(states.Find(1).kind==LocalStateKind::Explicit&&states.Find(1).after==2048);
+ states.Transition(2,0,64,2);assert(states.Find(2).kind==LocalStateKind::Invalid);
+ states.Transition(2,0,64,0);assert(states.Find(2).kind==LocalStateKind::Invalid);
+ states.Clear();assert(states.Find(1).kind==LocalStateKind::Unknown);
+ states.Transition(1,0,64,1);states.Transition(1,0,64,1);assert(states.Find(1).kind==LocalStateKind::Invalid);
+ states.Clear();states.Transition(1,0,64,1);states.Transition(1,0,128,2);assert(states.Find(1).kind==LocalStateKind::Invalid);
+ states.Clear();states.Transition(1,0,64,0);states.Transition(2,0,64,0);states.Transition(3,0,64,0);
+ assert(!states.Complete()&&states.Find(1).kind==LocalStateKind::Unknown);
+ states.Clear();assert(!states.Complete());
+ std::puts("PASS R294 local transition evidence: unknown defaults, split pairing, invalid sequence quarantine, alias clear and fail-closed capacity");
  std::puts("PASS bounded observation evidence: latest containing range, address reuse, overwrite, invalid bounds; no resource ownership");
  std::puts("PASS 6000 indexed ranges, single-range pruning, overlap ambiguity, bounds, removal/reuse, 100000 exhaustive-oracle comparisons");
 }
