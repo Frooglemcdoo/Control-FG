@@ -8,10 +8,23 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Fetch pinned RTXDI shader library
+        shell: powershell
+        run: |
+          git clone https://github.com/NVIDIA-RTX/RTXDI-Library.git .validation-rtxdi
+          if ($LASTEXITCODE -ne 0) { throw 'RTXDI clone failed' }
+          git -C .validation-rtxdi checkout f12037fa8e97ebc08e9e3edfd2de528ed1772a4b
+          if ($LASTEXITCODE -ne 0) { throw 'RTXDI revision unavailable' }
       - name: CPU and GPU initial sample adapter
         shell: powershell
         run: |
           $vs=& "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          $dxc=Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\dxc.exe" | Sort-Object FullName -Descending | Select-Object -First 1
+          if (!$dxc) { throw 'Windows SDK DXC not found' }
+          & $dxc.FullName -T cs_6_0 -E main -WX src/shaders/gi_initial_sample.hlsl -Fo gi-initial.dxil
+          if ($LASTEXITCODE -ne 0) { throw 'Initial shader compile failed' }
+          & $dxc.FullName -T cs_6_0 -E main -WX -I .validation-rtxdi/Include src/shaders/gi_rtxdi_initial.hlsl -Fo gi-rtxdi.dxil
+          if ($LASTEXITCODE -ne 0) { throw 'RTXDI shader compile failed' }
           $commands=@"
           call "$vs\VC\Auxiliary\Build\vcvars64.bat"
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-initial-sample.cpp /Fe:gi-initial-cpu.exe
@@ -20,7 +33,9 @@ jobs:
           if errorlevel 1 exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-initial-gpu.cpp /Fe:gi-initial-gpu.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
           if errorlevel 1 exit /b 1
-          gi-initial-gpu.exe
+          gi-initial-gpu.exe gi-initial.dxil initial
+          if errorlevel 1 exit /b 1
+          gi-initial-gpu.exe gi-rtxdi.dxil rtxdi
           if errorlevel 1 exit /b 1
           "@
           $commands | Set-Content run-gi-validation.cmd
