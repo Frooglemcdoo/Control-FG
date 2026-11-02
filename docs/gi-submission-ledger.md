@@ -262,3 +262,22 @@ zero. Separate status/coverage/plan lines avoid R291's long-line truncation.
 Portable plan tests and Windows runs 41495677744 (focused) / 41495677206 (full,
 53 steps) passed at 7eb061b0b2fce57a018c46744756d7b3ae2bf323. The next game run
 must establish completed-plan coverage and heap distribution before byte capture.
+
+## R293 pressure experiment and non-promoting inspection
+
+R292 exposed 1581 missing vertex lookups after R291's zero-miss run; index misses
+stayed zero. All 128 retained sample keys matched historically evicted rank-2
+ranges. The completed ledger held 7978 BLAS and one TLAS, with 2786 missing planned
+ranges. These may include historical structures and cannot be counted as active
+scene gaps. All resolved planned ranges were default heap resources.
+
+R293 raises diagnostic logical retention from 512 MiB to 1 GiB, retaining 8192
+slots and priority rules. This can increase diagnostic memory retention and is
+not a production requirement or a measured physical VRAM allocation. Historical
+inspection no longer promotes/touches cache candidates; actual build lookup still
+protects them. Temporary inspection references retain unique owners only for that
+inspection. Per-kind planned misses and inspection milliseconds are reported.
+GPU bytes, states, heap/alias lifetime and dependencies remain unverified.
+
+Windows validation 41499202417 (focused) and 41499202853 (53-step full build)
+passed at e36dd765d01ae9836ff60f53a383cdaf2410f1f7. Game coverage remains pending.

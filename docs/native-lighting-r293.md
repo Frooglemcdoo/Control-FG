@@ -31,3 +31,10 @@ are held temporarily until that inspection finishes; they do not become permanen
 cache pins. GI_PLAN_COVERAGE_R293 adds per-kind missing counts and inspection_ms.
 The 65536-range plan and 65536-event journals remain bounded. Replacement GI stays
 disabled; no GPU copies, Map, barriers, queue waits or rendering changes are added.
+
+Validation: focused Windows run 41499202417 passed, including non-promoting
+historical lookups, preserved build protection, per-kind plan accounting, bounded
+owner eviction and existing GPU adapters. Full Windows run 41499202853 passed
+all 53 steps; actual logs contained no compiler/assertion/HRESULT failures.
+Build commit: e36dd765d01ae9836ff60f53a383cdaf2410f1f7. In-game coverage and
+inspection time remain to be measured; the larger budget is not a guaranteed fix.
