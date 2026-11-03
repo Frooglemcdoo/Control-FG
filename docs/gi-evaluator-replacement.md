@@ -328,3 +328,9 @@ The descriptor contents and their lifetime still must be bound by the runtime.
 Shader compilation, source invariants and ABI checks pass locally. The pass is
 not selected in Control yet: native alpha linkage, admitted live scene mapping,
 producer dispatch/resource ownership, and spatial/temporal reuse remain open.
+
+Windows foundation run 41711803133 / job 126181476372 passed at commit
+`c5ede2970c1ecc07acaf38b7fb20404a98a54b49`. The log explicitly confirms producer
+shading PSO creation against the captured native root (t27/u2/b5), alongside the
+initial-reservoir GPU checks. This proves resource-layout compatibility, not a
+resource-bound full-scene dispatch. R309 remains the last user-facing game build.

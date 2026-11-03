@@ -13,7 +13,8 @@ cbuffer GIPrivateHit : register(b0,space3) {
 }
 bool GIReadIndex(uint element,out uint index) {
     index=0;
-    if((indexStride!=2&&indexStride!=4)||indexOffset%indexStride||
+    if(indexStride!=2&&indexStride!=4)return false;
+    if(indexOffset%indexStride||
        indexOffset>indexBufferBytes||element>=(indexBufferBytes-indexOffset)/indexStride)return false;
     uint address=indexOffset+element*indexStride;
     uint wordAddress=address&~3u;
@@ -23,7 +24,8 @@ bool GIReadIndex(uint element,out uint index) {
 }
 bool GIReadPosition(uint index,out GIPoint vertex) {
     vertex=(GIPoint)0;
-    if(positionStride<12||(positionStride&3)||positionBytes<12||index>(positionBytes-12)/positionStride)return false;
+    if(positionStride<12||(positionStride&3)||positionBytes<12)return false;
+    if(index>(positionBytes-12)/positionStride)return false;
     float3 p=asfloat(giPositions.Load3(index*positionStride));
     float3 world=mul(ObjectToWorld3x4(),float4(p,1));
     vertex.x=world.x;vertex.y=world.y;vertex.z=world.z;
