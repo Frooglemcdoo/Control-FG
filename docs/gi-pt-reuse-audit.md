@@ -616,3 +616,76 @@ ControlTOH-R302.zip: 4,210,949 bytes, 74 files, SHA-256
 80679512ae80ae6c22c195555f721120660f93f13b4215a840bcfbc310a6a89f.
 Ready for a game run through Start-GI-Metadata-Test.cmd with RT indirect lighting
 on; exit normally for collection. No overlay capture buttons are required.
+
+## R302 capture and R303 submission-event descriptor mapping
+
+Verified capture-manifest/part 20261103-122848 and all three payload hashes/sizes.
+R302 completed four instance arrays containing 6,264, 6,264, 9,019 and 9,018
+records, with zero null BLAS, masked instances, alignment errors, nonfinite
+transforms or unknown flags. Forty paired geometry captures covered 210,427
+triangle observations without copy failures, out-of-range indices or nonfinite
+positions. The same 65,490 degenerate observations remain diagnostic evidence,
+not grounds to reject meshes. Metadata stayed OBSERVING through 134,529 builds,
+with zero missing ranges reported. The configured owner cache reached its cap;
+this is not a claim of exhaustive scene capture or zero diagnostic overhead.
+
+Only the first eight records have detailed logging. Those records retain their
+transforms across all four snapshots, while their BLAS addresses change in the
+last one. Do not extrapolate that observation to every instance or infer why
+addresses changed. It reinforces that lookup must use the captured event's
+metadata rather than the latest table at readback time.
+
+R303 attaches a shared receipt to the exact TLAS journal event sampled on the
+GPU. ASLedger retains address-sorted descriptor metadata at that event in actual
+submission order, after earlier builds/copies and before later same-list writes.
+Receipts publish only after successful ledger submission; replay replaces them,
+and failed replay clears the prior receipt. CPU mapping uses the same existing
+recording-seal/completion gate, plus a check that metadata publication is not in
+progress. Immutable copies held by earlier consumers remain unchanged.
+
+Each captured instance is classified against that cut as matched descriptor,
+missing address, null BLAS, wrong AS type or absent geometry metadata. The cut
+records queue, fence, generation, event ordinal and TLAS destination. Native
+resources/lighting are not changed. Bounds remain four instance capture attempts
+and a 65,536-record ledger per retained cut; CPU descriptor copying can add
+capture-time overhead. This is metadata-only: historical address records do not
+prove live AS allocation identity or matching captured vertex/index bytes.
+Accepted-hit and material mapping remain outstanding; replacement GI stays off.
+
+Local portable tests passed with -Wall -Wextra -Werror and UBSan, covering exact
+event ordering, preceding copies, later same-list writes, replay, immutable
+snapshots, failure clearing, and missing/null/type classification. Existing
+submission-ledger tests also passed. The Windows GPU fixture now executes the
+metadata submission path alongside its actual upload-array GPU copy and requires
+a successful descriptor match after fence/reset; it does not build a real TLAS.
+
+Also reviewed DXR v1.49 sections on TLAS updates and AS synchronization. Instance
+BLAS references can change on TLAS updates; AS memory accesses require explicit
+UAV synchronization rather than AS state transitions. Descriptor ordering here
+must not be represented as an independent proof of those native GPU barriers.
+https://microsoft.github.io/DirectX-Specs/d3d/Raytracing.html#top-level-acceleration-structure-updates
+https://microsoft.github.io/DirectX-Specs/d3d/Raytracing.html#synchronizing-acceleration-structure-memory-writesreads
+
+R302's AS identity observer reached its 512 MiB retention budget (297 owners,
+279 rejected creations, 119,687 resolved and 126,189 missing identity lookups).
+This is separate from successful geometry input range coverage. R303 deliberately
+reports metadata-only and does not promote those missing identities to proven
+live allocation matches. Existing ordered-AS adapter/resource identity work is
+already in the project and remains the reference for subsequent live integration.
+
+Added concrete first-failure address/index and first-match revision/geometry-count
+witnesses to R303 so failed mappings do not require a new build just to identify
+the missing lookup. Full arrays are classified, but these logs are not a full
+per-instance raw dump. Initial foundation run 41637047759 passed; the witness
+addition is being revalidated in the final build rather than relying on that run.
+
+Final Windows foundation run 41637442190 / job 125922087800 passed, including
+all five GPU snapshot invocations and the new event-cut mapping fixture. Full
+mod run 41637442355 / job 125922089194 passed at
+841106e42a59b26c07aeaae6f3c88e7c89d571d6. Decoded logs confirm package, migration,
+restart, lighting and capture checks. Downloaded artifact SHA-256 and nested
+package checksum, ZIP integrity, R303 binary marker, five launcher flags and
+shader sidecar verified. ControlTOH-R303.zip: 4,215,468 bytes, 74 files, SHA-256
+5c060f2403d1dcbbc7bb45eefb1c082cd07e2f9ee2b6f0402cd08b1b9c880860.
+Ready for the normal automatic diagnostic launcher run; native game mapping
+coverage is not inferred from WARP and requires the resulting R303 logs.
