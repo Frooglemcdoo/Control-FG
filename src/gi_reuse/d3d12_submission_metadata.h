@@ -104,6 +104,8 @@ class Journal final:public IUnknown {
 public:
  GrowingASJournal<65536> data;
  std::vector<std::pair<UINT64,UINT64>> asTokens;
+ std::unordered_map<UINT64,ASResourceOwners<>::Lease> asLeases;
+ UINT64 missingASLeases=0;
  LocalBufferStates<> states;
  Journal(){data.generation=generation.fetch_add(1);}
  HRESULT STDMETHODCALLTYPE QueryInterface(REFIID iid,void** out) override {
@@ -113,9 +115,11 @@ public:
  ULONG STDMETHODCALLTYPE AddRef() override {return ++references_;}
  ULONG STDMETHODCALLTYPE Release() override {const auto n=--references_;if(!n)delete this;return n;}
 };
-inline std::pair<UINT64,UINT64> ASIdentities(UINT64 destination,UINT64 source) noexcept {
- const auto lookup=[](UINT64 address){ASResourceOwners<>::Lease lease;RangeMatch reason{};
-  if(asOwners.Resolve(address,lease,&reason)){++asIdentityResolved;return lease.token;}
+inline std::pair<UINT64,UINT64> ASIdentities(UINT64 destination,UINT64 source,Journal* journal=nullptr) {
+ const auto lookup=[journal](UINT64 address){ASResourceOwners<>::Lease lease;RangeMatch reason{};
+  if(asOwners.Resolve(address,lease,&reason)){++asIdentityResolved;const auto token=lease.token;
+   if(journal)journal->asLeases.emplace(token,std::move(lease));return token;}
+  if(journal)++journal->missingASLeases;
   ++asIdentityMissing;if(reason==RangeMatch::Ambiguous)++asIdentityAmbiguous;return UINT64(0);
  };
  return {lookup(destination),source?lookup(source):0};
@@ -178,7 +182,7 @@ inline void RecordBuild(ID3D12GraphicsCommandList4* list,const D3D12_BUILD_RAYTR
   if(r.topLevel)CheckOwner(r.instances,UINT64(r.count)*64,OwnerKind::Instances,&journal->states);
   else for(UINT i=0;i<r.count;++i){const auto* t=r.geometry->At(i);CheckOwner(t->vertices,GeometryMetadata::VertexBytes(*t),OwnerKind::Vertex,&journal->states);CheckOwner(t->indices,GeometryMetadata::IndexBytes(*t),OwnerKind::Index,&journal->states);if(t->transform)CheckOwner(t->transform,48,OwnerKind::Transform,&journal->states);}
   const auto source=update?desc->SourceAccelerationStructureData:0;
-  journal->asTokens.push_back(ASIdentities(r.address,source));
+  journal->asTokens.push_back(ASIdentities(r.address,source,journal.Get()));
   if(!journal->data.Append({update?ASOperation::Update:ASOperation::Build,r,source}))Fail("build_journal_capacity");
   JournalPeak(journal->data.size);
  }catch(...){Fail("build_allocation_exception");}
@@ -187,7 +191,7 @@ inline void RecordCopy(ID3D12GraphicsCommandList4* list,UINT64 destination,UINT6
  if(!Enabled())return;++copyCount;if(fault.load())return;auto journal=Read(list);
  if(!journal){Fail("copy_missing_journal");return;}
  if(!destination||!source||(mode!=D3D12_RAYTRACING_ACCELERATION_STRUCTURE_COPY_MODE_CLONE&&mode!=D3D12_RAYTRACING_ACCELERATION_STRUCTURE_COPY_MODE_COMPACT)){Fail("copy_address_or_mode");return;}
- try {journal->asTokens.push_back(ASIdentities(destination,source));if(!journal->data.Append({ASOperation::Copy,{destination},source}))Fail("copy_journal_capacity");JournalPeak(journal->data.size);}
+ try {journal->asTokens.push_back(ASIdentities(destination,source,journal.Get()));if(!journal->data.Append({ASOperation::Copy,{destination},source}))Fail("copy_journal_capacity");JournalPeak(journal->data.size);}
  catch(...){Fail("copy_allocation_exception");}
 }
 // No CPU wait, queue splitting, or GPU buffer access. A second queue, concurrent
@@ -202,8 +206,25 @@ inline GrowingASJournal<65536> pending;
 using MetadataLedger=ASLedger<65536>;
 inline MetadataLedger ledger;
 inline std::atomic<UINT64> ignoredCopySubmissions{0},ignoredEmptySubmissions{0},asSubmissions{0};
+// Keep recorded AS references through actual completion even if the native
+// command list resets. A failed signal or uncertain submission pins the entry.
+// Native retirement remains disabled: this covers recorded build/copy roots,
+// not every BLAS referenced by TLAS traversal or every DispatchRays use.
+struct ASFlight {ComPtr<Journal> journal;UINT64 fenceValue=0;bool signaled=false;};
+inline std::array<ASFlight,256> asFlights;
+inline std::size_t activeFlight=asFlights.size();
+inline std::atomic<UINT64> asLeaseSubmitted{0},asLeaseRetired{0},asLeaseMissing{0};
+inline void PollASLeases() noexcept {
+ std::array<ComPtr<Journal>,256> released;
+ AcquireSRWLockExclusive(&stateLock);
+ const auto completed=fence?fence->GetCompletedValue():0;
+ if(completed!=UINT64_MAX)for(std::size_t i=0;i<asFlights.size();++i){auto& f=asFlights[i];
+  if(f.journal&&f.signaled&&f.fenceValue<=completed){released[i]=std::move(f.journal);f={};++asLeaseRetired;}
+ }
+ ReleaseSRWLockExclusive(&stateLock); // Destroy references outside observer locks.
+}
 inline UINT64 BeforeExecute(ID3D12CommandQueue* q,UINT count,ID3D12CommandList*const* lists) noexcept {
- if(!Enabled()||fault.load())return 0;
+ if(!Enabled())return 0;PollASLeases();if(fault.load())return 0;
  if(!q||(count&&!lists)){Fail("invalid_submission");return 0;}
  // Copy queues cannot contain AS build/copy commands. This says nothing about
  // geometry byte dependencies; those remain unverified by this metadata observer.
@@ -222,7 +243,13 @@ inline UINT64 BeforeExecute(ID3D12CommandQueue* q,UINT count,ID3D12CommandList*c
   else {
    try{pending=selected->data;}catch(...){Fail("submission_snapshot_allocation");}
    if(!fault.load()&&!fence){ComPtr<ID3D12Device> d;if(FAILED(q->GetDevice(IID_PPV_ARGS(&d))))Fail("queue_device");else if(FAILED(d->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&fence))))Fail("fence_creation");else queue=q;}
-   if(!fault.load()){submitting=true;token=activeToken=++nextFence;++asSubmissions;}
+   if(!fault.load()){
+    std::size_t slot=0;while(slot<asFlights.size()&&asFlights[slot].journal)++slot;
+    if(slot==asFlights.size())Fail("as_lease_submission_capacity");
+    else if(nextFence>=UINT64_MAX-1)Fail("as_lease_fence_overflow");
+    else {submitting=true;token=activeToken=++nextFence;++asSubmissions;activeFlight=slot;
+     asFlights[slot]={selected,token,false};++asLeaseSubmitted;asLeaseMissing+=selected->missingASLeases;}
+   }
   }
  }
  ReleaseSRWLockExclusive(&stateLock);return token;
@@ -232,9 +259,11 @@ inline void AfterExecute(ID3D12CommandQueue* q,UINT64 token) noexcept {
  AcquireSRWLockExclusive(&stateLock);
  if(!submitting||token!=activeToken||q!=queue.Get())Fail("submission_token_mismatch");
  if(!fault.load()){
-  if(FAILED(q->Signal(fence.Get(),token)))Fail("queue_signal");else if(!ledger.Submit(reinterpret_cast<UINT64>(q),token,pending,pending.generation))Fail(ledger.FailureReason());
+  if(FAILED(q->Signal(fence.Get(),token)))Fail("queue_signal");
+  else {if(activeFlight<asFlights.size())asFlights[activeFlight].signaled=true;
+   if(!ledger.Submit(reinterpret_cast<UINT64>(q),token,pending,pending.generation))Fail(ledger.FailureReason());}
  }
- pending={};submitting=false;activeToken=0;
+ pending={};submitting=false;activeToken=0;activeFlight=asFlights.size();
  ReleaseSRWLockExclusive(&stateLock);
 }
 inline bool Snapshot(MetadataLedger& result) noexcept {

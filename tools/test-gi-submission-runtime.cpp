@@ -259,6 +259,33 @@ int main(){
  assert(planned.blas==2&&planned.tlas==0&&planned.ranges==4&&planned.resolved+planned.missing==4);
  assert(planned.missing==planned.missingByKind[0]+planned.missingByKind[1]+planned.missingByKind[2]+planned.missingByKind[3]);
  std::puts("PASS R292 completed scene-plan inspection and bounded owner coverage accounting; no GPU bytes read");
+ // Real queue blocked on a CPU-controlled fence: both replay submissions must
+ // retain the recorded AS resource after registry retirement and metadata reset.
+ // Commands remain empty on WARP; AS addresses here are metadata, not DXR work.
+ ComPtr<ID3D12Fence> blocker;Check(device->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&blocker)));
+ Check(queue->Wait(blocker.Get(),1));rt::Reset(list.Get());
+ const auto savedDestination=build.DestAccelerationStructureData;
+ build.DestAccelerationStructureData=defaults[4]->GetGPUVirtualAddress();
+ rt::RecordBuild(list.Get(),&build);auto heldJournal=rt::Read(list.Get());
+ assert(heldJournal->asLeases.size()==1&&heldJournal->missingASLeases==0);
+ const auto heldToken=heldJournal->asTokens[0].first;
+ gi_reuse::ASResourceOwners<>::Lease retiredNative;
+ assert(rt::asOwners.Retire(defaults[4].Get(),heldToken,retiredNative));
+ const auto leaseSubmission=rt::BeforeExecute(queue.Get(),1,lists);assert(leaseSubmission);
+ queue->ExecuteCommandLists(1,lists);rt::AfterExecute(queue.Get(),leaseSubmission);
+ const auto replaySubmission=rt::BeforeExecute(queue.Get(),1,lists);assert(replaySubmission>leaseSubmission);
+ queue->ExecuteCommandLists(1,lists);rt::AfterExecute(queue.Get(),replaySubmission);
+ rt::Reset(list.Get());heldJournal.Reset();retiredNative={};rt::PollASLeases();
+ unsigned blockedFlights=0;
+ for(const auto& flight:rt::asFlights)if(flight.journal&&flight.fenceValue>=leaseSubmission){
+  ++blockedFlights;assert(flight.journal->asLeases.at(heldToken).resource.Get()==defaults[4].Get());
+ }
+ assert(blockedFlights==2&&rt::fence->GetCompletedValue()<leaseSubmission);
+ Check(blocker->Signal(1));event=CreateEventW(nullptr,FALSE,FALSE,nullptr);assert(event);
+ Check(rt::fence->SetEventOnCompletion(replaySubmission,event));assert(WaitForSingleObject(event,30000)==WAIT_OBJECT_0);CloseHandle(event);
+ rt::PollASLeases();for(const auto& flight:rt::asFlights)assert(!flight.journal);
+ build.DestAccelerationStructureData=savedDestination;
+ std::puts("PASS AS submission leases: blocked real WARP queue, replay, registry retirement, list reset, fence-gated release");
  // More than 512 events now survive recording, snapshot, and ordered submission.
  rt::Reset(list.Get());for(unsigned i=0;i<1024;++i)rt::RecordBuild(list.Get(),&build);
  assert(!rt::fault&&rt::Read(list.Get())->data.size==1024);

@@ -1148,7 +1148,7 @@ jobs:
           build\test-gi-spot-pcf.exe
           if errorlevel 1 exit /b 1
 
-      - name: Compile exact uint16 snapshot kernel R303
+      - name: Compile exact uint16 snapshot kernel R304
         shell: powershell
         run: |
           $dxc=Get-ChildItem "${env:ProgramFiles(x86)}/Windows Kits/10/bin/*/x64/dxc.exe" | Sort-Object FullName -Descending | Select-Object -First 1
@@ -1156,11 +1156,11 @@ jobs:
           & $dxc.FullName -T cs_6_2 -E main -enable-16bit-types -WX src/shaders/gi_index_snapshot.hlsl -Fo build/gi_index_snapshot.dxil
           if ($LASTEXITCODE -ne 0) { throw 'Exact index snapshot compile failed' }
 
-      - name: Package GI geometry integration R303
+      - name: Package GI geometry integration R304
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='ControlTOH-R303'
+          $out='ControlTOH-R304'
           $shader="$out/ControlTOH/Shaders"
           $tools="$out/ControlTOH/Tools"
           $diagnostics="$out/ControlTOH/Diagnostics"
@@ -1192,91 +1192,34 @@ jobs:
           Copy-Item build/DirectStorage "$diagnostics/DirectStorage" -Recurse
           Copy-Item build/DirectStorage/dstorage.dll,build/DirectStorage/dstoragecore.dll $out
           Copy-Item tools/directstorage/Validate-DirectStorage.cmd "$diagnostics/DirectStorage"
-          Copy-Item docs/native-lighting-r303.md "$out/ControlTOH/DIAGNOSTIC-NOTES.md"
+          Copy-Item docs/native-lighting-r304.md "$out/ControlTOH/DIAGNOSTIC-NOTES.md"
           Copy-Item tools/Organize-Existing-Install.cmd,tools/Organize-Existing-Install.ps1 $tools
           Copy-Item tools/diagnostics/Collect-ControlTOH-Materials.cmd,tools/diagnostics/Collect-ControlTOH-Materials.ps1 $tools
-          & powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/diagnostics/test-material-collector.ps1
-          if ($LASTEXITCODE -ne 0) { throw 'Material collector integration test failed' }
-          @'
-          Control The Oldest House: Visual and Performance Overhaul
-          R303 - GI exact index snapshot test
+          & powershell.exe -NoProfile -Executi…1095 tokens truncated…ailed signals or
+uncertain submissions retain their references. Tracking is bounded at 256 pending
+submissions; exhaustion disables the observer without suppressing native commands.
 
-          Copy all package contents beside Control_DX12.exe, preserving folders.
-          Run ControlTOH/Diagnostics/Start-GI-Metadata-Test.cmd.
-          Load your usual save, move around for two minutes, then exit normally.
-          No F7, F9, CAPTURE RR, fixed camera or zoom is needed.
-          Logs are packaged automatically. Send the diagnostics ZIP.
-          Replacement GI remains disabled; no speckle fix is claimed.
-          Launch normally to leave the test observer off.
-          See ControlTOH/DIAGNOSTIC-NOTES.md for exact scope and limits.
-          '@ | Set-Content "$out/ControlTOH/README.txt" -Encoding ASCII
-          python tools/test-organized-package.py "$out"
-          if ($LASTEXITCODE -ne 0) { throw 'Package layout validation failed' }
-          & build/TestStorageRestart.exe "$((Resolve-Path $tools).Path)/ControlFG-Restart.exe"
-          if ($LASTEXITCODE -ne 0) { throw 'Relocated restart helper failed' }
-          Compress-Archive -Path "$out/*" -DestinationPath "$out.zip" -Force
-          (Get-FileHash "$out.zip" -Algorithm SHA256).Hash | Set-Content "$out.sha256" -Encoding ASCII
+The combined offline scene consumer validates geometry, instance placement and
+native material records using recovered PT code. It is not yet game-connected.
 
+Native resource retirement and replacement GI remain disabled. Retaining build
+and copy roots does not cover all BLAS traversal references or DispatchRays uses.
+The existing 512 MiB AS registry cap is unchanged; this build does not claim to
+fix saturation, speckles, or improve performance. No shader lighting changes.
 
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: ControlTOH-R303
-          path: |
-            ControlTOH-R303.zip
-            ControlTOH-R303.sha256
-            build/gi-joint-light-validation.json
-            build/gi-joint-oracle-analysis.json
-            build/gi-ray-trace-validation.json
-            build/gi-spot-trace-validation.json
-            build/gi-spot-pcf-validation.json
-            build/gi-sequence-validation.json
-            build/gi-sequence-0.dxil
-            build/gi-sequence-1.dxil
-            build/spec-volume-roughness-validation.json
-            build/spec-volume-roughness.dxbc
-            build/spec-environment-validation.json
-            build/spec-environment-volume.dxbc
-            build/spec-environment-cube.dxbc
-            build/spec-indirect-validation.json
-            build/spec-indirect-diffuse.dxbc
-            build/spec-indirect-environment.dxbc
-            build/spec-local-validation.json
-            build/spec-local-local.dxbc
-            build/spec-local-other.dxbc
-            build/spec-phase-validation.json
-            build/spec-phase-audit.json
-            build/spec-phase-precision.ll
-            build/spec-phase-precision.dxil
-            build/spec-hit-view-validation.json
-            build/spec-hit-view.dxbc
-            build/spec-components-validation.json
-            build/spec-component-emission.dxbc
-            build/spec-component-shading.dxbc
-            build/spec-retry-original.ll
-            build/spec-retry-reuse.ll
-            build/spec-retry-validation.json
-            build/spec-retry-reuse.dxil
-            build/centered-original.ll
-            build/centered-reuse.ll
-            build/centered-reuse-validation.json
-            build/rt_spot_centered_reuse.dxil
-            build/rt_spot_projection_reuse.dxil
-            build/projection-reuse-validation.json
-            build/spec-parallel.dxbc
-            build/rt_spot_shadow_prototype.dxil
-            build/rr_clamp_fixed.h
-            build/rt_spot_blocker.dxil
-            build/rt_spot_hit_*.dxil
-            build/rt_spot_capture_*.dxil
-            build/rt_spot_band_colors.dxbc
-            build/rt_spot_open.dxbc
-            build/rr_clamp_temporal.h
-            build/exports.txt
-            build/imports.txt
-            build/pt_glass_raygen.dxil
-            build/pt_glass_secondary.dxbc
-            build/pt_glass_composite.dxbc
-          if-no-files-found: warn
-          retention-days: 7
+## Optional integration run
 
+Install the complete package beside Control_DX12.exe, preserving folders.
+Run ControlTOH/Diagnostics/Start-GI-Metadata-Test.cmd, load the usual save,
+move around for two minutes, then exit normally. No hotkeys or fixed camera.
+The launcher packages logs automatically. GI_AS_LEASE_R304 records submitted,
+completed and unresolved root counts alongside existing whole-scene metadata
+and bounded geometry/instance snapshots. Launching normally leaves the observer off.
+
+## Validation
+
+Windows validation covers combined geometry/material admission and a real WARP
+queue blocked by a fence. The latter submits and replays an empty command list,
+retires a synthetic AS resource identity, resets the list's metadata, verifies
+leases remain held, then releases them only after queue completion. This tests
+resource lifetime, not hardware DXR execution or in-game visual quality.
