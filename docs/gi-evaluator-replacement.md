@@ -143,3 +143,14 @@ from requested UI state. They do not establish GPU completion. No extra shading
 pass, new resource capture, AS inventory or readback is added. This is the editable
 native evaluator port, not the new GI estimator. Full in-game parity is the next
 user-visible check; existing captures cannot execute this newly integrated binary.
+
+R309 validation/delivery: foundation run 41696986671 / job 126130003207 passed,
+including actual runtime Prepare/Select/Bind/Reset state tests on WARP and reused
+capture accounting. Full mod run 41696986502 / job 126130003685 passed at remote
+commit 49096dca1fd9c110f78bda263228e770aba287df (local e062238, tree
+60c961f4002ebd1d60a080fef59f5c78dc258820). Artifact 13262940252 contains the
+verified 76-entry install ZIP, 4,295,163 bytes, SHA256
+5aaa33811017d99ba90f4d97a0bf52245f1ad1c3ed9ebca5f602e9e6d2c2281f.
+The packaged DLL contains the R309 evaluator route and differs from R308.
+Library delivery: libfile_7dbe0c126f688191be72cdc5a4c4ca71.
+In-game visual comparison remains pending; no complete lighting parity claim.
