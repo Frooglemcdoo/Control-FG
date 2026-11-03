@@ -46,7 +46,8 @@ static void Capture(GINativeJobRuntime::Phase phase,const GINativeJobRoute::Tick
  ++attempts;
  try {
   auto e=std::make_unique<Export>();e->ticket=ticket;
-  if(!gi_reuse::SnapshotNativeGIWriter(ticket,e->inputs)){++failed;Log("GI_WRITER_R305_REJECT serial=%llu stage=cpu_inputs",ticket.serial);return;}
+  const char* failure="unknown";
+  if(!gi_reuse::SnapshotNativeGIWriter(ticket,e->inputs,&failure)){++failed;Log("GI_WRITER_R305_REJECT serial=%llu stage=%s pipeline=%llx buffer=%llx state=%llx bindings=%llx count=%d bytes=%d",ticket.serial,failure,ticket.pipeline,ticket.writer.buffer,ticket.writer.state,ticket.writer.bindings,ticket.writer.count,ticket.writer.bytes);return;}
   e->ordinal=++accepted;
   const HANDLE thread=CreateThread(nullptr,0,&Save,e.get(),0,nullptr);
   if(!thread){++failed;Log("GI_WRITER_R305_REJECT serial=%llu stage=export_thread",ticket.serial);return;}

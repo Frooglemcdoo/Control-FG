@@ -16,7 +16,7 @@ static GINativeJobRoute::Router router;
 static thread_local Ticket pending;
 enum class RouteFailure : unsigned {none,input,frame,worker,state,buffers,counter,pipeline,layout,raygen,miss,hit,shape,frameChanged,exception,count};
 static std::atomic<UINT64> routes[static_cast<unsigned>(RouteFailure::count)]{};
-static std::atomic<UINT64> scheduled{0},scheduleRejected{0},writerFinished{0};
+static std::atomic<UINT64> scheduled{0},scheduleRejected{0},writerFinished{0},observedGI{0};
 template<class F> [[maybe_unused]] static void Diagnostics(F&& log){
     log("GI_NATIVE_JOB_ROUTE accepted=%llu input=%llu frame=%llu worker=%llu state=%llu buffers=%llu counter=%llu pipeline=%llu layout=%llu raygen=%llu miss=%llu hit=%llu shape=%llu frame_changed=%llu exception=%llu scheduled=%llu schedule_rejected=%llu writer_finished=%llu",
         routes[0].load(),routes[1].load(),routes[2].load(),routes[3].load(),routes[4].load(),routes[5].load(),routes[6].load(),routes[7].load(),routes[8].load(),routes[9].load(),routes[10].load(),routes[11].load(),routes[12].load(),routes[13].load(),routes[14].load(),scheduled.load(),scheduleRejected.load(),writerFinished.load());
@@ -81,6 +81,8 @@ static void Recorded(ID3D12GraphicsCommandList4* list,const D3D12_DISPATCH_RAYS_
     if(read){
         pending.serial=serial.fetch_add(1);if(pending.serial)callback(Phase::recorded,pending);
     }
+    if(rrNativeGIDispatchScope){const auto n=++observedGI;
+        if(n<=8||(n%960)==0)Diagnostics([](const char* format,auto... args){Log(format,args...);});}
     SetLastError(error);
 }
 static bool ReadJob(void* handle,unsigned& slot,Writer& writer)noexcept {
