@@ -75,3 +75,32 @@ The previously supplied d3d_rmdwin10_f DLL is available locally. GNU objdump
 confirms the R103 documented 0x34378 binding-row increment of 0x40 in the
 0x33a40 writer. This is only a checked instruction, not a completed GI route
 or full writer audit. Further native integration must retain hash/version gates.
+
+## Verified Windows checkpoint and lifecycle audit
+
+Foundation run 41640744822, job 125933318948, passed on Windows at remote
+commit a235045852d36f79deda32701b20772559685c2d. The combined scene-packet
+executable passed under MSVC /W4 /WX, alongside existing CPU and WARP tests.
+This is not a live-game visual validation.
+
+`tools/audit-gi-native-lifecycle.py` now checks the supplied DLL by SHA-256,
+PE executable-section mapping, direct-call opcode and signed relative target.
+`docs/gi-native-lifecycle-audit.json` records all 27 R103 creation/release sites
+and two binding-writer sites. All 29 match; 58 opcode/target mutations are
+rejected. The tool never modifies the DLL. It also checks the 64-byte writer
+row increment. These are listed sites, not a proof of exhaustive callers.
+
+Static inspection of native release at 0x25f00 shows that it reads the wrapper's
+resource at offset 0, calls its vtable slot 2 at 0x25f20, and clears wrapper
+fields 0, 0x10, 0x18 and 0x40 before returning. Thus a future retirement bridge
+must snapshot/retain the identity before forwarding release, not read the
+wrapper afterwards. The old PT BeforeRelease/AfterRelease sequencing supplies
+a reusable design, but it is not connected to the current AS registry yet.
+
+The current registry retains historical owners without retirement. Raising its
+512 MiB cap alone would postpone saturation rather than fix that lifetime.
+The next live integration must remove retired identities from new lookups while
+preserving independent leases for pending GPU work and old scene cuts. Native
+release does not itself prove GPU completion, alias validity, or that every
+AS allocation passes these callsites. No release hook or larger cap is enabled
+by this checkpoint; replacement GI remains disabled.
