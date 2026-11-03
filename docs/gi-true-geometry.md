@@ -47,3 +47,28 @@ The current reuse gate therefore remains disabled until the producer adapter,
 range accounting, destination shading and fresh visibility are established.
 
 No game shader is replaced and no new user capture is requested at this stage.
+
+## Accepted-hit GPU producer
+
+`gi_producer_geometry.hlsl` uses the existing recovered PT private-record ABI:
+index SRV t0/space3, attribute slot t1 retained for native material handlers,
+position SRV t2/space3, and the twelve admitted local constants. It reads the
+accepted primitive's indices and actual float3 positions, applies the instance
+object-to-world transform, derives a winding-preserving geometric normal from
+world-space triangle edges, and returns `O + D * RayTCurrent` without the native
+0.01 position shift. This reuses `GIRecoverTrueHit` and the earlier PT table/geometry
+admission contracts instead of interpreting interpolated shading normals as faces.
+
+The payload is 64 bytes with a reserved first DWORD for the native GI payload
+prefix. This is NOT by itself proof that a native any-hit export can be linked:
+the host must use the admitted export, its material resources and matching local
+root. A native 96-byte record cannot be used directly; the existing private table
+converter supplies the extra position binding. Geometry transforms must be absent
+as already required by PTSceneAdmission; no transform is silently omitted.
+
+The shader requires Shader Model 6.5 for GeometryIndex. The eventual host must
+check that capability before creating/selecting it. DXC compilation passed;
+actual producer traversal and native alpha linkage are not yet executed or bound
+in Control. Existing 5090 visibility testing validates the separate four-byte
+visibility payload, not this new producer payload or geometry reads. No repeat
+of the earlier test is requested for that unrelated contract.

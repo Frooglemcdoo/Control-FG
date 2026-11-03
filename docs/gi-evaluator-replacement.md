@@ -295,3 +295,10 @@ NVIDIA: https://github.com/NVIDIA-RTX/RTXDI/blob/main/Doc/RestirGI.md
 The game's direction-dependent secondary shading and finite-radius proposal
 must remain explicit when implementing later reservoir transport; this initial
 batch does not establish spatial MIS or visibility-correct reservoir merging.
+
+Windows foundation run 41708831805 / job 126171222290 passed at remote commit
+`48568c357e731d2448756777a40fb4cd940e597b` (local `85b82fb`, tree
+`73c6acbe38a8214b1a23cb8ddd16c2e9e6c69fb4`). Logs confirm the CPU expectation
+checks and actual WARP execution of 1,024 initial-reservoir batches, selection,
+reconstruction, miss fallback, malformed inputs and output guard all passed.
+This is GPU execution of the initial reservoir kernel, not in-game reuse quality.
