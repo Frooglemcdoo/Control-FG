@@ -3,6 +3,7 @@
 #include <wrl/client.h>
 #include <array>
 #include <unordered_map>
+#include <vector>
 #include "buffer_range_index.h"
 namespace gi_reuse {
 // Diagnostic AS resource identities, deliberately separate from geometry inputs.
@@ -40,6 +41,23 @@ public:
   const auto match=ranges_.Find(address,1,slot);if(reason)*reason=match;
   if(match==RangeMatch::Unique){const auto& e=entries_[slot];out={e.resource,e.heap,e.token,address-e.address};}
   ReleaseSRWLockShared(&lock_);return match==RangeMatch::Unique;
+ }
+ struct Reference {UINT64 address=0,token=0;};
+ // Validate all identities and AddRef under one owner transaction, following
+ // the recovered PT PrepareLease contract. No partial output on failure.
+ // This proves retained resource identity, not alias state or GPU contents.
+ bool ResolveBatch(const std::vector<Reference>& references,std::vector<Lease>& out) noexcept {
+  out.clear();if(references.empty()||references.size()>8193)return false;
+  std::vector<Lease> candidate;
+  try{candidate.resize(references.size());}catch(...){return false;}
+  bool valid=true;AcquireSRWLockShared(&lock_);
+  for(std::size_t i=0;i<references.size();++i){const auto& r=references[i];std::size_t slot=0;
+   if(!r.token||ranges_.Find(r.address,1,slot)!=RangeMatch::Unique||entries_[slot].token!=r.token){valid=false;break;}
+   const auto& e=entries_[slot];candidate[i]={e.resource,e.heap,e.token,r.address-e.address};
+  }
+  ReleaseSRWLockShared(&lock_);
+  if(valid)out=std::move(candidate);
+  return valid; // Failed candidates release only after leaving the lock.
  }
  // Remove only the exact observed generation. Caller must hold a valid native
  // resource reference and obtain the token before forwarding native release.

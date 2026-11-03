@@ -172,3 +172,20 @@ Windows foundation run 41652270346, job 125973246312 passed at remote commit
 de92569d4aed96fc4c1408039663a449cd770661. Local and remote trees match
 99746349f6e7804b9432e603a0d06e29a0abdc1f. No new package delivered and no
 user capture requested for this offline closure-admission change.
+
+## Atomic traversal resource retention
+
+Recovered PT Runtime::PrepareLease validates allocation tokens and retains their
+resources under the same owner mutex. ASResourceOwners::ResolveBatch now applies
+that transaction to a bounded set of expected address/token pairs. It allocates
+output storage before locking, rejects missing/ambiguous/stale identities, retains
+resource plus placed heap together, and publishes only after the entire set passes.
+Rejected candidates release their COM references outside the registry lock.
+
+RetainTraversalClosure connects the complete-array admission result to this batch
+acquisition. Host code still supplies a validated closure and preserves metadata
+and byte provenance. The transaction excludes registry retirement, not native GPU
+writes or alias changes. The Windows fixture covers late-member failure rollback,
+exact identities, placed heap retention and leases surviving registry retirement.
+No live DispatchRays hook is enabled by these helpers; native retirement remains
+disconnected. No new user capture is requested.

@@ -7,6 +7,7 @@
 #include <string>
 #include <cstdlib>
 #include "../src/gi_reuse/d3d12_submission_metadata.h"
+#include "../src/gi_reuse/d3d12_scene_traversal_lease.h"
 namespace fixture {
 inline bool PatchSlot(void** slot,void* expected,void* replacement) noexcept {
  DWORD old=0;if(!VirtualProtect(slot,sizeof(void*),PAGE_EXECUTE_READWRITE,&old))return false;
@@ -174,12 +175,30 @@ int main(){
  UINT64 asCount=0,asBytes=0,asRejected=0;asRegistry.Stats(asCount,asBytes,asRejected);
  assert(asCount==2&&asBytes==128&&asRejected==1);
  assert(!asRegistry.Resolve(UINT64_MAX,asLease)&&!asLease.token);
+ // Atomic allocation-set acquisition: no partial leases on late failure.
+ using ASRegistry=gi_reuse::ASResourceOwners<2,128>;
+ assert(asRegistry.Resolve(placed->GetGPUVirtualAddress(),asLease));
+ std::vector<ASRegistry::Reference> sceneRefs={{scene->GetGPUVirtualAddress(),asToken},{placed->GetGPUVirtualAddress(),asLease.token}};
+ std::vector<ASRegistry::Lease> sceneLeases;
+ assert(asRegistry.ResolveBatch(sceneRefs,sceneLeases)&&sceneLeases.size()==2&&sceneLeases[1].heap.Get()==placedHeap.Get());
+ gi_reuse::SceneTraversalClosure leaseClosure;
+ leaseClosure.cut=1;leaseClosure.epoch=1;leaseClosure.top={sceneRefs[0].address,sceneRefs[0].token,1};
+ leaseClosure.bottoms.push_back({sceneRefs[1].address,sceneRefs[1].token,2});
+ assert(gi_reuse::RetainTraversalClosure(asRegistry,leaseClosure,sceneLeases)&&sceneLeases.size()==2);
+ auto retainedScene=sceneLeases;
+ auto wrongRefs=sceneRefs;++wrongRefs[1].token;
+ assert(!asRegistry.ResolveBatch(wrongRefs,sceneLeases)&&sceneLeases.empty());
+ wrongRefs=sceneRefs;wrongRefs[1].address=UINT64_MAX;
+ assert(!asRegistry.ResolveBatch(wrongRefs,sceneLeases)&&sceneLeases.empty());
+ assert(!asRegistry.ResolveBatch({},sceneLeases));
  // Retirement is an offline API until every submitted use holds its own lease.
  gi_reuse::ASResourceOwners<2,128>::Lease pendingAS,retiredAS;
  assert(asRegistry.Resolve(scene->GetGPUVirtualAddress(),pendingAS));
  assert(!asRegistry.Retire(scene.Get(),asToken+100,retiredAS)&&!retiredAS.resource);
  assert(asRegistry.Retire(scene.Get(),asToken,retiredAS));
  assert(!asRegistry.Resolve(scene->GetGPUVirtualAddress(),asLease));
+ assert(retainedScene[0].resource.Get()==scene.Get());
+ assert(!asRegistry.ResolveBatch(sceneRefs,sceneLeases)&&sceneLeases.empty());
  assert(pendingAS.resource->GetGPUVirtualAddress()==scene->GetGPUVirtualAddress());
  assert(retiredAS.token==asToken&&retiredAS.resource.Get()==scene.Get());
  assert(!asRegistry.Retire(scene.Get(),asToken,asLease));
@@ -199,6 +218,7 @@ int main(){
   assert(asRegistry.Retire(placed.Get(),asLease.token,retiredAS));
  }
  asRegistry.Stats(asCount,asBytes,asRejected);assert(asCount==1&&asBytes==64);
+ std::puts("PASS atomic AS set acquisition: exact tokens, partial failure rollback, placed heaps and independent retirement lifetime");
  std::puts("PASS AS retirement: exact generation, stale/duplicate refusal, independent leases, placed heap retention and 1000 slot reuse cycles");
  rt::ObserveCreated(defaults[4].Get(),D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE,true);
  const auto knownIdentity=rt::ASIdentities(defaults[4]->GetGPUVirtualAddress(),defaults[4]->GetGPUVirtualAddress());
