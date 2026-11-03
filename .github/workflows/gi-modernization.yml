@@ -43,6 +43,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Evaluator accounting replay compile failed' }
           python tools/embed-gi-evaluator.py gi-evaluator-reference.dxil build/gi_evaluator.generated.h
           if ($LASTEXITCODE -ne 0) { throw 'Evaluator embedding failed' }
+          & $dxc.FullName -T cs_6_0 -E main -WX src/shaders/gi_range_proposal_test.hlsl -Fo gi-range-proposal.dxil
+          if ($LASTEXITCODE -ne 0) { throw 'Finite-range proposal shader compile failed' }
           $commands=@"
           call "$vs\VC\Auxiliary\Build\vcvars64.bat"
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-evaluator-pipeline.cpp /Fe:gi-evaluator-pipeline.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
@@ -102,6 +104,10 @@ jobs:
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-geometry-probe.cpp /Fe:gi-geometry-probe.exe
           if not "%errorlevel%"=="0" exit /b 1
           gi-geometry-probe.exe
+          if not "%errorlevel%"=="0" exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-finite-range.cpp /Fe:gi-finite-range.exe
+          if not "%errorlevel%"=="0" exit /b 1
+          gi-finite-range.exe
           if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-initial-sample.cpp /Fe:gi-initial-cpu.exe
           if not "%errorlevel%"=="0" exit /b 1

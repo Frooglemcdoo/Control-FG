@@ -154,3 +154,36 @@ verified 76-entry install ZIP, 4,295,163 bytes, SHA256
 The packaged DLL contains the R309 evaluator route and differs from R308.
 Library delivery: libfile_7dbe0c126f688191be72cdc5a4c4ca71.
 In-game visual comparison remains pending; no complete lighting parity claim.
+
+## R309 user run and finite-range estimator work
+
+PID 20276 (capture part SHA256
+`d8b185ac91ada31bd3a76e6d05d0baf998962567c4b823c5a7e1a7212ef5843f`):
+all three indexed files verified. Evaluator preparation succeeded without fallback;
+nine requested switches were followed by matching recorded native/translated
+modes. RAW BYPASS was active and the R307 sampler stayed selected. The user asked
+whether a difference was expected; no objective full-frame comparison was supplied.
+This establishes routing and a reported lack of obvious difference, not measured
+pixel equivalence or a new image-quality result. Do not repeat this route test.
+
+`finite_range_proposal.h` implements a continuous proposal model for an owned
+cosine sampler whose range variate is independent uniform. It is NOT asserted for
+the original native correlated sequence, and does not set producer verification
+flags. The R307 hashing/strata contract and true unshifted hit metadata still need
+to be connected explicitly before enabling this model in runtime reuse.
+
+For reach probability q(d), the surface proposal is cosine/pi * q_source.
+The receiving response carries q_receiver. Source-only shading cancels the two
+q factors, retaining the finite-radius hit estimator; moving a sample changes the
+ratio q_receiver/q_source. Dropping the receiving q factor would over-brighten
+hits near the range limit. Miss fallback stays separate and normalized by all
+configured rays. This is only the reach term; primary BRDF, geometric Jacobian,
+true hit geometry, direction-dependent secondary shading and fresh connection
+visibility remain separate required inputs.
+
+The shared CPU/HLSL implementation is not game-bound. Local tests verify original
+sample energy cancellation, destination/source reach ratio, independent numerical
+integration of the range variate and hit/miss expected energy, plus invalid inputs.
+DXC compiles the validation kernel with warnings as errors. Windows checks are
+added to foundation CI. No new user capture or game package is needed for this
+algebraic change.
