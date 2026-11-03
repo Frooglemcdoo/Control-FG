@@ -564,3 +564,55 @@ Portable ASan/UBSan run passed with leak detection disabled: the environment
 prevented LeakSanitizer from reading /proc task metadata. No leak check claimed.
 R301 still requires a new game run for raw coordinate evidence absent from R300;
 no zero-area cause, scene mapping completion or visual fix is claimed.
+
+## R301 capture and R302 scene-instance transport
+
+Verified the 20261103-120301 capture part and every payload size/checksum. R301
+completed 39 paired samples / 208,410 triangle observations with zero copy
+failures, invalid indices, nonfinite positions or quarantines. The metadata
+observer remained OBSERVING through 120,935 builds. Descriptor diversity reached
+geometry ordinals 0, 1, 2 and 3; 633 duplicate attempts were skipped.
+
+The 91,799-vertex descriptor's three geometry sections explain the observed
+65,490 zero-area triangles: 65,484 coincident all-zero positions and six collinear
+triangles, with no repeated-index triangles. The middle section also contains
+3,387 nondegenerate triangles per captured sample. Distinct indices reference
+captured zero coordinates. This is not proof of intentional native collapse
+versus producer readiness/timing, and does not justify discarding the entire
+mesh. Preserve primitive identity. No repeated R301 run is required.
+
+R302 adds a separate four-attempt TLAS instance-array snapshot path alongside
+geometry sampling. Captures are limited to 4 MiB each and a conservative 32 MiB
+allocation reservation. Observed committed DEFAULT and UPLOAD buffers on the same
+device are eligible; unknown/placed storage and conflicting local state evidence
+are refused. Resources are retained before recording; CPU decoding waits for the
+existing recording-seal and GPU-completion gate. No blocking GPU wait or source
+transition is added to the game.
+
+All captured 64-byte records contribute to the byte hash and structural counts;
+the first eight additionally log transforms, masks, BLAS addresses, application
+InstanceIDs and shader-table offsets. These fields follow Microsoft's
+D3D12_RAYTRACING_INSTANCE_DESC contract (row-major 3x4 transform; 24/8-bit packed
+fields; 256-byte BLAS address alignment):
+https://learn.microsoft.com/en-us/windows/win32/api/d3d12/ns-d3d12-d3d12_raytracing_instance_desc
+
+InstanceID is not the instance-array index. A shader-table contribution is not a
+material identity. R302 does not join these BLAS references to immutable geometry
+at the same submission cut, establish accepted-hit identity, or validate native
+materials. Replacement GI remains disabled.
+
+Portable instance decoding passed warnings-as-errors and UBSan. Windows foundation
+run 41633158075 / job 125907567031 passed at
+431b6b56e22c7f61d04171e639a4c6de28f140f3. All five GPU sampler invocations passed,
+including an actual UPLOAD-buffer instance-array copy alongside geometry with
+exact hash comparison after fence/reset and native compute-binding restoration.
+The fixture does not build a real TLAS on WARP; it validates capture transport.
+
+Full mod run 41633158141 / job 125907567320 passed at the same code commit.
+Decoded build logs confirm lighting, capture, package layout, migration and
+restart-helper checks. Downloaded artifact digest and nested package checksum,
+ZIP integrity, R302 binary marker, five launcher flags and shader sidecar verified.
+ControlTOH-R302.zip: 4,210,949 bytes, 74 files, SHA-256
+80679512ae80ae6c22c195555f721120660f93f13b4215a840bcfbc310a6a89f.
+Ready for a game run through Start-GI-Metadata-Test.cmd with RT indirect lighting
+on; exit normally for collection. No overlay capture buttons are required.
