@@ -474,3 +474,47 @@ Two download attempts failed with transfer-storage ServerBusy/account ingress
 limit. Therefore no local artifact digest or nested ZIP verification is claimed.
 The build artifact remains available through GitHub Actions. R299 package contents
 were verified by CI; local download and Library delivery remain pending.
+
+## R299 capture and R300 paired geometry
+
+Verified capture-manifest(20261103-112744).zip's part checksum and all three
+payload sizes and SHA-256 hashes. R299 completed 45 copies: 32 uint16 and 13
+uint32. All returned zero out-of-range indices and zero padding failures.
+The previously rejected descriptor's 112,344-byte index range was copied; these
+samples reached max index 45,382, so this particular game sample does not exercise
+indices above 65,535 (the GPU fixture does). Repeated hashes are repeated content,
+not evidence for 45 distinct meshes.
+
+Last heartbeat: metadata OBSERVING/reason none, 91,271 builds, 6,558 historical
+records, no missing ranges, no quarantines, no signal failures or admission
+refusals in snapshot retirement. The separate 1 GiB buffer owner cache reached
+its cap and evicted/refused candidates; this was not a metadata failure.
+No R299 repeat capture is required.
+
+R300 captures a triangle-aligned index window and corresponding full vertex span
+at the same AS-build boundary, with committed source ownership established before
+GPU commands. Both private copies are retained under the same recording/fence
+lifetime. Readback validates object-space float3 positions using actual stride and
+index width, recording exact byte hash, invalid indices, NaN/Inf and degeneracy.
+This does not apply geometry/TLAS transforms or establish material/hit identity.
+Vertex spans over 16 MiB are skipped; the 128 MiB reservation cap remains. Thus
+this is bounded evidence, not an exhaustive scene export or production GI path.
+
+Portable validation passed with warnings-as-errors and UBSan: uint16/uint32,
+indices above 65,535, padded stride, exact extent, truncated bytes, invalid index,
+nonfinite and degenerate positions. Windows foundation run 41628387142, job
+125891427077 passed. Logs confirm --tri16, --tri32 and both prior index-only GPU
+runs completed. Paired fixtures assert exact vertex/index hashes, one valid
+triangle, fence/reset gating and restored native bindings; debug layer clean.
+
+Full Windows run 41628387441, job 125891428254 passed at
+37533b180a82c32dc311e2a066f0abfd4e682ead. Decoded logs confirm package layout,
+migration, restart helper and lighting checks passed. Downloaded artifact digest,
+nested checksum, ZIP integrity, R300 triangle marker and all four launcher flags
+verified. ControlTOH-R300.zip is 4,206,983 bytes, 74 files, SHA-256
+2a295512634a15bd184f90179f23b6ef1e6372d9bacc671bf879828987bce762.
+Saved deliverable identity: libfile_b94c04690c0c8191bf41f668355c714e.
+Next user test is one automatic paired-geometry run. Additional in-game tests
+cannot yet be bounded: scene-instance/material mapping and replacement-GI visual
+integration remain. Combine their validation where possible rather than requiring
+one user build for each internal layer.
