@@ -27,6 +27,7 @@ inline void Fail(const char* reason) noexcept {const char* empty=nullptr;failure
 inline std::atomic<void(*)(ID3D12GraphicsCommandList4*,const D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC*) noexcept> liveBuild{nullptr};
 inline std::atomic<void(*)(ID3D12GraphicsCommandList4*,UINT64,UINT64,D3D12_RAYTRACING_ACCELERATION_STRUCTURE_COPY_MODE) noexcept> liveCopy{nullptr};
 inline std::atomic<void(*)(ID3D12GraphicsCommandList*) noexcept> liveReset{nullptr};
+inline std::atomic<void(*)(ID3D12GraphicsCommandList*,UINT,const D3D12_RESOURCE_BARRIER*) noexcept> liveBarriers{nullptr};
 inline BufferOwners owners;
 inline ASResourceOwners<> asOwners;
 inline std::atomic<UINT64> asIdentityResolved{0},asIdentityMissing{0},asIdentityAmbiguous{0};
@@ -137,6 +138,7 @@ inline ComPtr<Journal> Read(ID3D12Object* list) noexcept {
  return result;
 }
 inline void RecordBarriers(ID3D12GraphicsCommandList* list,UINT count,const D3D12_RESOURCE_BARRIER* barriers) noexcept {
+ if(const auto callback=liveBarriers.load())callback(list,count,barriers);
  if(!Enabled()||fault.load()||!list||!barriers)return;auto j=Read(list);if(!j)return;
  const bool wasComplete=j->states.Complete();
  for(UINT i=0;i<count;++i){const auto& b=barriers[i];

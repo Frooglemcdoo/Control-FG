@@ -8,6 +8,7 @@ struct GISceneBuild {
  SceneByteView instances;
  std::vector<SceneASReference> bottoms; // build-time identities, revisions resolved at use
  std::vector<PTOwnedScene::Triangle> geometry;
+ std::vector<std::shared_ptr<const GIFrozenGeometry>> frozen;
 };
 class GILiveSceneCatalog {
  using U64=std::uint64_t;
@@ -56,7 +57,9 @@ public:
    ref.revision=bottom.revision;if(!visited.emplace(ref.token,ref.address).second)continue;
    const auto source=payloads_.find(bottom.revision);
    if(source==payloads_.end()||source->second->geometry.size()!=bottom.count)return false;
-   for(std::uint32_t g=0;g<bottom.count;++g)next.geometry.push_back({ref,g,source->second->geometry[g]});
+   const auto& frozen=source->second->frozen;
+   if(!frozen.empty()&&frozen.size()!=bottom.count)return false;
+   for(std::uint32_t g=0;g<bottom.count;++g)next.geometry.push_back({ref,g,source->second->geometry[g],frozen.empty()?nullptr:frozen[g]});
   }
   SceneTraversalClosure closure;
   if(ResolveTraversalClosure(order_,cut,epoch,next.top,next.instances,next.perInstance,closure)!=TraversalError::None)return false;

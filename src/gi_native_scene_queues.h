@@ -50,7 +50,7 @@ static void Poll(){
  }
 }
 static std::shared_ptr<const gi_reuse::GISceneBuild> Payload(const Event& input){
- auto output=std::make_shared<gi_reuse::GISceneBuild>();output->build=input.build;output->geometry=input.geometry;
+ auto output=std::make_shared<gi_reuse::GISceneBuild>();output->build=input.build;output->geometry=input.geometry;output->frozen=input.frozen;
  if(input.instances){output->instances={input.instances->address,input.instances->token,1,
    std::shared_ptr<const std::vector<unsigned char>>(input.instances,&input.instances->bytes)};
   output->bottoms.reserve(input.bottoms.size());for(const auto& ref:input.bottoms)output->bottoms.push_back({ref.address,ref.token,0});}
@@ -59,31 +59,39 @@ static std::shared_ptr<const gi_reuse::GISceneBuild> Payload(const Event& input)
 // Paired callbacks bracket the exact native call, including independent queues.
 // All failure paths preserve forwarding. The recursive lock also covers nested
 // observer signals; those calls are suppressed by the native hook's depth guard.
+static void Quarantine(UINT count,ID3D12CommandList*const* lists) noexcept {
+ // Submission must still forward. If a fence/flight cannot be established,
+ // deliberately retain these owners until process exit rather than freeing
+ // storage already referenced by recorded GPU copies on the next Reset.
+ if(!lists)return;for(UINT i=0;i<count;++i){auto r=ReadRecording(lists[i],false);if(r)(void)r.Detach();}
+}
 static UINT64 Before(ID3D12CommandQueue* input,UINT count,ID3D12CommandList*const* lists) noexcept {
  if(!Active())return 0;mutex.lock();const DWORD error=GetLastError();
  try {
   Poll();auto* q=FindQueue(input);
-  if(!q||!catalog.Healthy()||count>256||(count&&!lists)||flights.size()>=256){catalog.Invalidate("live_submission_preflight");SetLastError(error);return 1;}
+  if(!q||count>256||(count&&!lists)||flights.size()>=256){catalog.Invalidate("live_submission_preflight");Quarantine(count,lists);SetLastError(error);return 1;}
   Flight flight;flight.queue=q->id;flight.value=++q->next;
-  if(!flight.value||flight.value==UINT64_MAX){catalog.Invalidate("live_fence_overflow");SetLastError(error);return 1;}
+  if(!flight.value||flight.value==UINT64_MAX){catalog.Invalidate("live_fence_overflow");Quarantine(count,lists);SetLastError(error);return 1;}
   if(input->GetDesc().Type!=D3D12_COMMAND_LIST_TYPE_COPY){
-   std::set<UINT64> unique;
+   std::set<UINT64> unique;flight.recordings.reserve(count);
    for(UINT i=0;i<count;++i){auto recording=ReadRecording(lists[i],false);
-    if(!recording||!recording->complete||recording->submitted||!unique.insert(recording->generation).second){catalog.Invalidate("live_missing_or_replayed_recording");break;}
+    if(!recording){catalog.Invalidate("live_missing_recording");continue;}
+    if(!recording->complete||recording->submitted||!unique.insert(recording->generation).second)
+     catalog.Invalidate("live_incomplete_or_replayed_recording");
+    // Retain every recording even if an earlier list invalidated admission.
+    // GPU lifetime is independent of whether replacement lighting is allowed.
     flight.recordings.push_back(std::move(recording));
    }
-   if(catalog.Healthy())for(const auto& recording:flight.recordings){recording->submitted=true;
-    for(const auto& event:recording->events){
+   for(const auto& recording:flight.recordings){recording->submitted=true;
+    if(catalog.Healthy())for(const auto& event:recording->events){
      if(event.writer){if(!catalog.Mark(q->id))break;++marks;}
      else if(!catalog.Submit(q->id,recording->generation,Payload(event)))break;
     }
    }
   }
-  // Even an empty submission has a tail marker, so completion never authorizes
-  // history retirement past an unobserved native queue operation.
   if(catalog.Healthy())catalog.Mark(q->id);
   flight.stamp=catalog.TailStamp(q->id);flights.push_back(std::move(flight));++submits;
- }catch(...){catalog.Invalidate("live_submission_exception");}
+ }catch(...){catalog.Invalidate("live_submission_exception");Quarantine(count,lists);}
  SetLastError(error);return 1;
 }
 static void After(ID3D12CommandQueue* input,UINT64 locked) noexcept {

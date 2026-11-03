@@ -35,6 +35,7 @@ public:
     struct Lease {
         GISceneProducerPlan plan;
         std::vector<BufferStorageLease> buffers;
+        std::vector<std::shared_ptr<const GIFrozenGeometry>> frozen;
     };
     bool Created(U64 wrapper,IUnknown* native,U64 address,U64 nativeBytes) noexcept {
         // Keep evicted references outside the lock: final COM Release may enter
@@ -102,6 +103,7 @@ public:
             if(!healthy_)return GISceneProducerError::Identity;
             const auto result=PrepareGISceneProducer(history,cut,epoch,top,instances,perInstance,geometry,index_,native,bindings,pipeline,exports,next.plan);
             if(result!=GISceneProducerError::None)return result;
+            for(const auto& g:geometry)if(g.frozen)next.frozen.push_back(g.frozen);
             auto tokens=next.plan.allocationTokens;tokens.push_back(top.token);
             for(const auto& bottom:next.plan.closure.bottoms)tokens.push_back(bottom.token);
             std::sort(tokens.begin(),tokens.end());tokens.erase(std::unique(tokens.begin(),tokens.end()),tokens.end());
@@ -119,6 +121,12 @@ public:
         {std::lock_guard<std::mutex> guard(mutex_);if(!healthy_)return false;
             const auto found=tokens_.find(token);if(found==tokens_.end())return false;next=found->second->storage;}
         output=std::move(next);return true;
+    }
+    bool Inspect(U64 token,BufferStorageLease& output,U64& wrapper) noexcept {
+        wrapper=0;std::lock_guard<std::mutex> guard(mutex_);if(!healthy_)return false;
+        const auto found=tokens_.find(token);if(found==tokens_.end())return false;
+        for(const auto& item:wrappers_)if(item.second==found->second){output=found->second->storage;wrapper=item.first;return true;}
+        return false;
     }
     U64 RetainedBytes() {std::lock_guard<std::mutex> guard(mutex_);return bytes_;}
 };

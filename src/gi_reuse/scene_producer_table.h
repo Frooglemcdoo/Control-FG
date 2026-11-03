@@ -1,6 +1,7 @@
 #pragma once
 #include "scene_traversal_closure.h"
 #include "producer_table.h"
+#include "frozen_geometry.h"
 #include "pt_owned_scene.h"
 #include <set>
 #include <tuple>
@@ -11,6 +12,7 @@ struct GISceneGeometry {
     SceneASReference blas;
     std::uint32_t geometry=0;
     PTOwnedScene::Triangle triangle{};
+    std::shared_ptr<const GIFrozenGeometry> frozen;
 };
 struct GISceneProducerPlan {
     SceneTraversalClosure closure;
@@ -43,10 +45,10 @@ template<std::size_t Capacity> GISceneProducerError PrepareGISceneProducer(
         if(!BuildNativeGITable(native.pipeline,native.version,1,bindings,exports.nativeOpaque,exports.nativeAlpha,rebuilt)||
            rebuilt.bytes!=native.bytes||rebuilt.active!=native.active)return GISceneProducerError::Table;
         using Key=std::tuple<std::uint64_t,std::uint64_t,std::uint64_t,std::uint32_t>;
-        std::map<Key,const PTOwnedScene::Triangle*> witnesses;
+        std::map<Key,const GISceneGeometry*> witnesses;
         for(const auto& g:capturedGeometry){
             if(!g.blas.address||!g.blas.token||!g.blas.revision||
-               !witnesses.emplace(Key{g.blas.address,g.blas.token,g.blas.revision,g.geometry},&g.triangle).second)
+               !witnesses.emplace(Key{g.blas.address,g.blas.token,g.blas.revision,g.geometry},&g).second)
                 return GISceneProducerError::Geometry;
         }
         ASRecord tlas;
@@ -71,7 +73,7 @@ template<std::size_t Capacity> GISceneProducerError PrepareGISceneProducer(
                 if((row&1)||row>=table.records.size())return GISceneProducerError::Mapping;
                 const auto found=witnesses.find(Key{ref.address,ref.token,ref.revision,g});
                 if(found==witnesses.end())return GISceneProducerError::Geometry;
-                const auto& witness=*found->second;const auto* triangle=bottom.geometry->At(g);
+                const auto& witness=found->second->triangle;const auto* triangle=bottom.geometry->At(g);
                 if(!triangle||GeometryMetadata::Validate(*triangle)!=GeometryReject::None||triangle->transform||
                    witness.indices!=triangle->indices||witness.positions!=triangle->vertices||
                    witness.positionStride!=triangle->stride||witness.indexStride!=GeometryMetadata::IndexSize(*triangle)||
@@ -83,6 +85,8 @@ template<std::size_t Capacity> GISceneProducerError PrepareGISceneProducer(
                 PTShaderTableAdapter::Bytes converted;
                 if(Convert(native.bytes.data()+row*NativeStride,NativeStride,exports,&resolved.geometry,converted)!=Status::ready)
                     return GISceneProducerError::Table;
+                if(found->second->frozen&&!RebaseConvertedGeometry(*found->second->frozen,resolved.geometry,converted))
+                    return GISceneProducerError::Geometry;
                 if(table.bound[binding]&&table.records[row]!=converted)return GISceneProducerError::Conflict;
                 table.records[row]=converted;table.geometry[binding]=resolved.geometry;table.bound[binding]=1;
                 for(auto token:resolved.tokens)tokens.insert(token);

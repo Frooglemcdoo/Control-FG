@@ -2,6 +2,7 @@
 #include "gi_reuse/d3d12_live_scene_owners.h"
 #include "gi_reuse/live_scene_catalog.h"
 #include "gi_reuse/native_gi_identity.h"
+#include "gi_reuse/d3d12_geometry_snapshot.h"
 #include "gi_native_lifetime_runtime.h"
 // Recovered R103 creation boundaries. These observe native ownership only;
 // installing them does not enable the replacement lighting dispatch.
@@ -10,10 +11,10 @@ static gi_reuse::D3D12LiveSceneOwners owners;
 static std::atomic<bool> ready{false};
 static std::atomic<UINT64> created{0},rejected{0};
 static bool Enabled() noexcept {static const bool value=[] {char b[4]{};return GetEnvironmentVariableA("CONTROLTOH_GI_OWNED",b,4)==1&&b[0]=='1';}();return value;}
-struct Wrapper {IUnknown* resource=nullptr;UINT64 bytes=0,address=0;};
+struct Wrapper {IUnknown* resource=nullptr;UINT64 bytes=0,address=0;UINT state=0;};
 static bool Read(void* pointer,Wrapper& output) noexcept {
  output={};__try{if(!pointer)return false;auto* p=static_cast<unsigned char*>(pointer);
-  output.resource=*reinterpret_cast<IUnknown**>(p);output.bytes=*reinterpret_cast<UINT64*>(p+0x30);output.address=*reinterpret_cast<UINT64*>(p+0x48);
+  output.resource=*reinterpret_cast<IUnknown**>(p);output.state=*reinterpret_cast<UINT*>(p+0x20);output.bytes=*reinterpret_cast<UINT64*>(p+0x30);output.address=*reinterpret_cast<UINT64*>(p+0x48);
   return output.resource&&output.bytes&&output.address;
  }__except(EXCEPTION_EXECUTE_HANDLER){return false;}
 }
@@ -82,6 +83,8 @@ struct Event {
  std::shared_ptr<const InstanceUpload> instances;
  std::vector<gi_reuse::D3D12LiveSceneOwners::Identity> bottoms;
  std::vector<PTOwnedScene::Triangle> geometry;
+ std::vector<std::shared_ptr<const gi_reuse::GIFrozenGeometry>> frozen;
+ std::shared_ptr<GIGeometrySnapshot::Transfer> transfer;
  std::shared_ptr<const Writer> writer;
 };
 static const GUID recordingKey={0x310e0001,0x1739,0x4401,{0x91,0x33,0x41,0x51,0x61,0x71,0x81,0x91}};
@@ -92,6 +95,7 @@ public:
  const UINT64 generation=generations.fetch_add(1);
  bool complete=true,submitted=false;
  std::vector<Event> events;
+ gi_reuse::LocalBufferStates<> states;
  HRESULT STDMETHODCALLTYPE QueryInterface(REFIID iid,void** out)override {if(!out)return E_POINTER;*out=nullptr;if(iid!=__uuidof(IUnknown))return E_NOINTERFACE;*out=static_cast<IUnknown*>(this);AddRef();return S_OK;}
  ULONG STDMETHODCALLTYPE AddRef()override{return ++refs;}
  ULONG STDMETHODCALLTYPE Release()override{const auto n=--refs;if(!n)delete this;return n;}
@@ -110,12 +114,87 @@ static void Reset(ID3D12GraphicsCommandList* list) noexcept {
  list->SetPrivateDataInterface(recordingKey,nullptr);
  ReadRecording(list);
 }
+static thread_local bool copyingGeometry=false;
+static const auto geometryBudget=std::make_shared<PTOwnedScene::LeaseBudget>(512ull*1024*1024);
+static const auto geometryPool=std::make_shared<GIGeometrySnapshot::Pool>();
+static void Barriers(ID3D12GraphicsCommandList* list,UINT count,const D3D12_RESOURCE_BARRIER* barriers) noexcept {
+ if(copyingGeometry||!ready.load())return;auto recording=ReadRecording(list);if(!recording||!recording->complete)return;
+ if(count&&!barriers){recording->complete=false;return;}
+ for(UINT i=0;i<count;++i){const auto& b=barriers[i];
+  if(b.Type==D3D12_RESOURCE_BARRIER_TYPE_ALIASING){recording->complete=false;return;}
+  if(b.Type!=D3D12_RESOURCE_BARRIER_TYPE_TRANSITION||!b.Transition.pResource)continue;
+  const auto desc=b.Transition.pResource->GetDesc();if(desc.Dimension!=D3D12_RESOURCE_DIMENSION_BUFFER)continue;
+  gi_reuse::D3D12LiveSceneOwners::Identity id;
+  if(!owners.Identify(b.Transition.pResource->GetGPUVirtualAddress(),desc.Width,id))continue;
+  if(b.Transition.Subresource!=0&&b.Transition.Subresource!=D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES){recording->complete=false;return;}
+  recording->states.Transition(id.token,unsigned(b.Transition.StateBefore),unsigned(b.Transition.StateAfter),unsigned(b.Flags));
+ }
+ if(!recording->states.Complete())recording->complete=false;
+}
+static bool FreezeGeometry(ID3D12GraphicsCommandList4* list,Recording& recording,Event& event){
+ if(event.geometry.empty())return false;
+ std::map<UINT64,GIGeometrySnapshot::Source> sources;
+ for(const auto& g:event.geometry)for(const auto token:{g.indexToken,g.positionToken}){
+  if(sources.count(token))continue;
+  gi_reuse::BufferStorageLease lease;UINT64 wrapper=0;Wrapper native;
+  if(!owners.Inspect(token,lease,wrapper)||!Read(reinterpret_cast<void*>(wrapper),native))return false;
+  Microsoft::WRL::ComPtr<IUnknown> expected,actual;
+  if(FAILED(lease.resource.As(&expected))||FAILED(native.resource->QueryInterface(IID_PPV_ARGS(&actual)))||actual.Get()!=expected.Get())return false;
+  const auto address=lease.resource->GetGPUVirtualAddress(),bytes=lease.resource->GetDesc().Width;
+  if(address!=native.address||native.bytes>bytes)return false;
+  const auto local=recording.states.Find(token);D3D12_RESOURCE_STATES state{};
+  if(local.kind==gi_reuse::LocalStateKind::Pending||local.kind==gi_reuse::LocalStateKind::Invalid)return false;
+  if(local.kind==gi_reuse::LocalStateKind::Explicit)state=static_cast<D3D12_RESOURCE_STATES>(local.after);
+  else {
+   // Recovered R103 policy: static native wrappers retain creation read flags
+   // across buffer decay. Only these exact read defaults normalize to COMMON;
+   // never infer completion of UAV/COPY_DEST or a pending local transition.
+   constexpr unsigned reads=D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER|D3D12_RESOURCE_STATE_INDEX_BUFFER|
+    D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE|D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+   state=native.state&&!(native.state&~reads)?D3D12_RESOURCE_STATE_COMMON:static_cast<D3D12_RESOURCE_STATES>(native.state);
+  }
+  sources.emplace(token,GIGeometrySnapshot::Source{{token,address,bytes},lease.resource,state,0,0,lease});
+ }
+ std::map<UINT64,std::pair<UINT64,UINT64>> spans;
+ const auto include=[&](UINT64 token,UINT64 address,UINT64 bytes){
+  const auto& allocation=sources.at(token).allocation;
+  if(!bytes||address<allocation.address||address-allocation.address>allocation.bytes||bytes>allocation.bytes-(address-allocation.address))return false;
+  const auto start=(address-allocation.address)&~UINT64(3),end=address-allocation.address+bytes;
+  if(end>UINT64_MAX-3)return false;const auto last=(std::min)((end+3)&~UINT64(3),allocation.bytes);
+  const auto inserted=spans.emplace(token,std::make_pair(start,last));
+  if(!inserted.second){auto& span=inserted.first->second;span.first=(std::min)(span.first,start);span.second=(std::max)(span.second,last);}return true;
+ };
+ for(const auto& g:event.geometry){
+  if(!g.vertexCount||g.positionStride<12||UINT64(g.vertexCount-1)>(UINT64_MAX-12)/g.positionStride||
+    !include(g.indexToken,g.indices,UINT64(g.indexCount)*g.indexStride)||
+    !include(g.positionToken,g.positions,UINT64(g.vertexCount-1)*g.positionStride+12))return false;
+ }
+ for(auto& item:sources){const auto& span=spans.at(item.first);item.second.offset=span.first;item.second.bytes=span.second-span.first;}
+ std::vector<std::shared_ptr<gi_reuse::GIFrozenGeometry>> frozen;frozen.reserve(event.geometry.size());event.frozen.reserve(event.geometry.size());
+ for(const auto& g:event.geometry){
+  auto f=std::make_shared<gi_reuse::GIFrozenGeometry>();const auto& i=sources.at(g.indexToken);const auto& p=sources.at(g.positionToken);
+  f->indices.original=i.allocation.address+i.offset;f->indices.bytes=i.bytes;
+  f->positions.original=p.allocation.address+p.offset;f->positions.bytes=p.bytes;
+  event.frozen.push_back(f);frozen.push_back(std::move(f));
+ }
+ std::vector<GIGeometrySnapshot::Source> ordered;ordered.reserve(sources.size());for(const auto& item:sources)ordered.push_back(item.second);
+ struct Mute {Mute(){copyingGeometry=true;}~Mute(){copyingGeometry=false;}} mute;
+ if(!GIGeometrySnapshot::Record(list,ordered,geometryBudget,event.transfer,geometryPool)){event.frozen.clear();return false;}
+ // No allocations beyond this point: the command list now refers to the copies.
+ for(std::size_t n=0;n<frozen.size();++n){auto& f=*frozen[n];const auto& g=event.geometry[n];
+  const auto& index=event.transfer->storage->copies.at(g.indexToken);const auto& position=event.transfer->storage->copies.at(g.positionToken);
+  f.owner=event.transfer->storage;f.indices.address=index->GetGPUVirtualAddress();f.indices.capacity=index->GetDesc().Width;
+  f.positions.address=position->GetGPUVirtualAddress();f.positions.capacity=position->GetDesc().Width;
+ }
+ return true;
+}
 static void Build(ID3D12GraphicsCommandList4* list,const D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC* desc) noexcept {
  auto recording=ReadRecording(list);if(!recording||!recording->complete)return;
  try {
   if(!desc||recording->events.size()>=65536){recording->complete=false;return;}
   gi_reuse::D3D12LiveSceneOwners::Identity destination,source;
   if(!owners.Identify(desc->DestAccelerationStructureData,256,destination)){recording->complete=false;return;}
+  recording->events.reserve(recording->events.size()+1);
   Event e;auto& event=e.build.event;auto& r=event.record;
   r.address=desc->DestAccelerationStructureData;r.count=desc->Inputs.NumDescs;
   r.allowUpdate=(desc->Inputs.Flags&D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_ALLOW_UPDATE)!=0;
@@ -137,6 +216,7 @@ static void Build(ID3D12GraphicsCommandList4* list,const D3D12_BUILD_RAYTRACING_
   }else{
    r.geometry=gi_reuse::CopyBLASGeometry(desc->Inputs);valid=valid&&bool(r.geometry);
    if(valid){e.geometry.resize(r.count);for(UINT i=0;i<r.count;++i)if(!owners.Geometry(*r.geometry->At(i),e.geometry[i])){valid=false;break;}}
+   if(valid)valid=FreezeGeometry(list,*recording.Get(),e);
   }
   // Unsupported writes hide the prior version; they never preserve an old
   // valid geometry mapping at the same address.
@@ -183,7 +263,7 @@ static bool Install(HMODULE d3d) noexcept {
  if(ok)for(auto& p:creates)if(!RRAlbedoExchangeCall(&p,true)){ok=false;break;}
  if(ok)ok=lockPatch.Exchange(true)&&RRAlbedoExchangeCall(&copyPatch,true);
  if(!ok){if(copyPatch.site)RRAlbedoExchangeCall(&copyPatch,false);if(lockPatch.changed)lockPatch.Exchange(false);for(auto& p:creates)if(p.site)RRAlbedoExchangeCall(&p,false);}
- if(ok){GINativeLifetimeRuntime::liveRetire.store(&Retire);gi_reuse::runtime::liveBuild.store(&Build);gi_reuse::runtime::liveCopy.store(&Copy);gi_reuse::runtime::liveReset.store(&Reset);ready=true;}
+ if(ok){GINativeLifetimeRuntime::liveRetire.store(&Retire);gi_reuse::runtime::liveBuild.store(&Build);gi_reuse::runtime::liveCopy.store(&Copy);gi_reuse::runtime::liveReset.store(&Reset);gi_reuse::runtime::liveBarriers.store(&Barriers);ready=true;}
  Log("GI_LIVE_OWNERS ready=%u native_creates=11 instance_source_copy=1 replacement_dispatch=0",unsigned(ok));return ok;
 }
 }

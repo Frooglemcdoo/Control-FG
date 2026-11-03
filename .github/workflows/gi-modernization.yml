@@ -171,6 +171,10 @@ jobs:
           if not "%errorlevel%"=="0" exit /b 1
           gi-live-scene-owners.exe
           if not "%errorlevel%"=="0" exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-geometry-preservation.cpp /Fe:gi-geometry-preservation.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
+          if not "%errorlevel%"=="0" exit /b 1
+          gi-geometry-preservation.exe
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-frame-tiles.cpp /Fe:gi-frame-tiles.exe
           if not "%errorlevel%"=="0" exit /b 1
           gi-frame-tiles.exe

@@ -48,6 +48,15 @@ static void CheckBothWidths(unsigned width){
  assert((producer.table.bound==std::vector<unsigned char>{0,0,1}));
  assert((producer.allocationTokens==std::vector<std::uint64_t>{20,21,22}));
  assert(producer.table.records[0]==PTShaderTableAdapter::Bytes{}&&producer.table.records[4][0]==4);
+ // Preserve original native validation before rebasing immutable build copies.
+ auto frozen=std::make_shared<GIFrozenGeometry>();frozen->owner=std::make_shared<int>(1);
+ frozen->indices={4096,width==2?8u:12u,65536,width==2?8u:12u};frozen->positions={8192,44,73728,44};
+ witnesses[0].frozen=frozen;assert(prepare()==GISceneProducerError::None);
+ assert(producer.table.geometry[2].indices.address==65536&&producer.table.geometry[2].positions.address==73728);
+ auto wrong=frozen->indices;frozen->indices.bytes=2;assert(prepare()==GISceneProducerError::Geometry);frozen->indices=wrong;
+ auto oldOwner=frozen->owner;frozen->owner.reset();assert(prepare()==GISceneProducerError::Geometry);frozen->owner=oldOwner;
+ auto originalTable=table;table.bytes[4*96+32]^=4;assert(prepare()==GISceneProducerError::Table);table=originalTable;
+ witnesses[0].frozen.reset();assert(prepare()==GISceneProducerError::None);
  const auto preserved=producer.table.records;
  witnesses[0].blas.revision=1;assert(prepare()==GISceneProducerError::Geometry);witnesses[0].blas.revision=2;
  witnesses[0].triangle.positionToken=99;assert(prepare()==GISceneProducerError::Geometry);witnesses[0].triangle=witness;

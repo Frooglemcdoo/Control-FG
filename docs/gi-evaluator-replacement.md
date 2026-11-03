@@ -494,3 +494,45 @@ shader or producer algorithm changed. The reported text comes from the final
 debug-message scan after numerical readback assertions, so those assertions were
 reached without failure; the run is still not accepted as a clean DXR pass.
 A corrected hardware run is required to check for remaining debug errors.
+
+## Live integration after the accepted RTX 5090 producer run
+
+The corrected `GI-Producer-Result(1).txt` reports a clean PASS on the RTX 5090:
+private DXR state/SBT, R16 cutout acceptance/rejection, R32 opaque hits, material,
+UVs, normals, true hit position, finite-range PDF, misses, stale-input rejection,
+output guard and completion. Library identity:
+`libfile_faa3e54afb888191b0fbdd8934a9575d`. No repeat is needed. This supersedes
+the earlier request above for a corrected standalone run; it does not validate
+the live scene adapter or spatial/temporal reuse.
+
+The live path now tracks canonical wrapper owners and ordered queue submissions,
+retains CPU instance/writer snapshots, and selects native TLAS descriptors using
+the verified variant-specific t4/t5 slots. GI6 and ray-producer constant layouts
+are different; the range/ray/pass values come from verified native TLS providers.
+The complete owner-to-private-table handoff is covered by the Windows foundation
+fixture. A missing registration in the recovered geometry index was fixed.
+
+All five owned stages are embedded in the full mod build. The hash-matched GI6
+PSO owns the private pipeline and shares it with the translated evaluator without
+a native-PSO ownership cycle. Observer callbacks are optional in native-only test
+binaries. Foundation run `41741443019` passed this integration; full-mod run
+`41741443098` was still running when this entry was written.
+
+The new route uses `CONTROLTOH_GI_OWNED`, deliberately separate from the existing
+`CONTROLTOH_GI_LIVE` sampler switch. No shipped launcher enables GI_OWNED yet.
+
+Geometry preservation reuses the R103 PT strategy: bounded index/position copies
+at the BLAS build boundary, local transition tracking, source-state restoration,
+512 MiB active budget, and 64 MiB idle pool. Native SBT fields are validated against
+the original geometry before private bindings are rebased onto the immutable
+copies. Queue flights retain recording/transfer owners even when admission has
+failed; an unprovable completion quarantines references instead of freeing GPU
+inputs on Reset. Tests include source mutation after the copy and private-table
+rebasing for both index widths. Native read-default normalization is recovered
+from the earlier PT implementation; this is not a general D3D12 state inference.
+
+**Still not game-ready:** the live GI6 descriptor mirror/dispatch handoff,
+submission admission/arming, replay-safe execution, and spatial/temporal reuse
+remain to be completed. Pipeline creation and metadata tracking alone do not
+replace the live producer. R309 remains the last delivered game package. Reuse
+existing captures; do not request another standalone producer or R309 capture.
