@@ -228,3 +228,27 @@ Windows foundation run 41702579307 / job 126149402860 passed at remote commit
 cbc549b6d9a45493433c77b820d79d3425965acf (local f6d429a). Receiver candidate
 CPU checks and HLSL compilation are included. The actual fresh visibility trace,
 producer metadata wiring and runtime reservoir passes remain unimplemented.
+
+## Receiver-directed secondary shading extraction
+
+`generate-gi-secondary.py` separates the complete translated evaluator into
+`GIInitializeReceiver(targetPixel, state)` and
+`GIEvaluateSecondary(state, sample)`. Material ID, shading normal/UV and secondary
+position/UV are explicit inputs. All native volume, material, point, spot, cookie
+and shadow-atlas operations remain; the receiver-to-secondary direction is
+recomputed from the target receiver registers. This permits destination-specific
+secondary shading instead of transporting source-weighted RGB.
+
+The accompanying native reconstruction entry preserves all 674 instruction
+labels once. Only the primary validity control flow and three sample loads move
+across the function boundary; every other translated instruction is checked
+verbatim after register qualification. The input reference text has its own
+SHA256 admission guard. Primary throughput, all-ray normalization, depth fade,
+hit info and miss fallback remain in their original roles. The shading normal
+is not declared a geometric normal or used as PDF evidence.
+
+Local tests pass and DXC compiles the refactored complete shader with warnings
+as errors. Compiled code differs from the monolithic version; no bit-exact GPU
+or image-equivalence claim is made. Windows foundation creates its PSO against
+the captured native root. The runtime still selects the R309 reference shader;
+this extraction is not yet a live reservoir pass or a new game package.

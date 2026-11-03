@@ -1,6 +1,7 @@
 #pragma once
 // Prepare an augmented state object without changing native hit groups or SBTs.
 // Caller supplies the hash-admitted native contact-shadow state descriptor.
+#include "visibility_table.h"
 #include <d3d12.h>
 #include <wrl/client.h>
 #include <vector>
@@ -9,9 +10,6 @@
 #include <cstring>
 #include <limits>
 namespace gi_reuse {
-struct VisibilityIdentifierPair {
-    std::array<unsigned char,32> native{}, replacement{};
-};
 class VisibilityPipeline {
     Microsoft::WRL::ComPtr<ID3D12StateObject> state_;
     Microsoft::WRL::ComPtr<ID3D12Resource> records_;
@@ -21,6 +19,13 @@ public:
     ID3D12StateObject* State() const noexcept { return state_.Get(); }
     ID3D12Resource* Records() const noexcept { return records_.Get(); }
     const std::vector<VisibilityIdentifierPair>& Identifiers() const noexcept { return identifiers_; }
+    bool RemapTable(ID3D12StateObject* observedState,const unsigned char* source,
+                    std::size_t bytes,unsigned stride,const std::vector<unsigned char>& active,
+                    std::vector<unsigned char>& output) const noexcept {
+        if(!state_||observedState!=state_.Get()) return false;
+        try { return RemapVisibilityTable(source,bytes,stride,active,identifiers_,output); }
+        catch(...) { return false; }
+    }
     // Returns a completely prepared object or leaves this object unchanged.
     HRESULT Initialize(ID3D12Device5* device,const D3D12_STATE_OBJECT_DESC& native,
                        D3D12_SHADER_BYTECODE library,Create create) noexcept {

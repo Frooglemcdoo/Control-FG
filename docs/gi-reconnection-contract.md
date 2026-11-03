@@ -122,3 +122,22 @@ Library delivery: `libfile_e82a3c48ab408191948aee5c6d155dbc`.
 The executable enables the D3D12 debug layer when installed and reports errors
 in its result file. Hardware execution has NOT occurred on this host or CI.
 This package is not a replacement game DLL and must not be installed as one.
+
+## RTX 5090 execution result and native table handoff
+
+The user supplied `GI-Backend-Result.txt`, SHA256
+`df21e221cea3de830b6489a20d99dc8ee5b76029f41b98201b1e08f63a4ebf95`.
+It reports an RTX 5090, debug layer enabled and PASS for actual DXR-to-receiver
+shading. Four resource-creation messages report buffers effectively created in
+COMMON; no debug ERROR/CORRUPTION failed the test. This validates the synthetic
+backend on that device, not native Control alpha materials or complete GI reuse.
+Do not request this test again merely to establish hardware execution.
+
+`VisibilityPipeline::RemapTable` now requires the exact augmented state identity
+and maps only active shader identifiers. It preserves local-root bytes, stride,
+padding and inactive records without compacting native geometry indices. Unknown
+identifiers, ambiguous maps, malformed shapes, empty active sets and oversized
+input reject without publishing partial output. Sorted lookup avoids a linear
+scan of all shader identifiers per native record. The existing hardware fixture
+now calls this production converter instead of constructing replacement IDs by
+hand; portable tests cover the converter without another hardware request.

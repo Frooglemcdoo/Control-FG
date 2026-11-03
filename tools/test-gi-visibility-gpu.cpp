@@ -99,8 +99,10 @@ int main() try {
     D3D12_STATE_OBJECT_DESC desc{D3D12_STATE_OBJECT_TYPE_RAYTRACING_PIPELINE,6,objects};
     VisibilityPipeline visibility;Check(visibility.Initialize(gpu.device.Get(),desc,{bytes.data(),bytes.size()},&Create));
     Require(visibility.Identifiers().size()==2,"Missing alpha/opaque mappings");
-    std::vector<unsigned char> table(128,0);
-    for(size_t i=0;i<2;++i)std::memcpy(table.data()+64*i,visibility.Identifiers()[i].replacement.data(),32);
+    std::vector<unsigned char> nativeTable(128,0),table;
+    for(size_t i=0;i<2;++i)std::memcpy(nativeTable.data()+64*i,visibility.Identifiers()[i].native.data(),32);
+    Require(visibility.RemapTable(visibility.State(),nativeTable.data(),nativeTable.size(),64,{1,1},table),"Native table remapping failed");
+    Require(!visibility.RemapTable(nullptr,nativeTable.data(),nativeTable.size(),64,{1,1},table),"Unknown state table accepted");
     auto sbt=gpu.Upload(table);
     std::vector<GIVisibilityRequest> requests={Request(0,{-2,0,4}),Request(1,{2,0,4}),Request(2,{-2,0,1}),Request(3,{-2,0,4}),Request(4,{2,0,4}),Request(5,{2,0,4}),Request(6,{2,0,4}),Request(7,{2,0,4}),Request(8,{2,0,4}),Request(9,{2,0,4})};
     requests[3].instanceMask=2;requests[4].sceneRevision=6;requests[5].connection.frameTag=18;
