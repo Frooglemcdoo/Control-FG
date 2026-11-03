@@ -518,3 +518,49 @@ Next user test is one automatic paired-geometry run. Additional in-game tests
 cannot yet be bounded: scene-instance/material mapping and replacement-GI visual
 integration remain. Combine their validation where possible rather than requiring
 one user build for each internal layer.
+
+## R300 capture and R301 geometry classification
+
+Verified the 20261103-114412 capture part and all three payload checksums/sizes.
+R300 completed 41 pairs / 319,945 triangle observations; zero copy failures,
+invalid indices, nonfinite positions or quarantines. Tracking remained OBSERVING
+through 97,836 builds / 6,560 records with no missing geometry ranges. Eight
+samples of the 91,799-vertex descriptor reported all 9,362 sampled triangles as
+degenerate; the other uint32 descriptor and uint16 samples were nondegenerate.
+The 1,101,588-byte vertex hashes differ from the computed all-zero hash
+597734795377997109. This says nothing definitive about the referenced subset.
+The logs do not retain coordinates, so the cause cannot be recovered from R300.
+
+Reviewed DXR spec v1.49 sections on degenerate/inactive primitives. Degeneracy is
+legal and may change during updates; it is not grounds for blanket mesh rejection.
+Repeated index values differ from collapsed distinct vertices. Primitive identity
+must be retained. NaN in x can identify inactive input. R301 adds diagnostics
+rather than changing native geometry or inventing missing triangles.
+https://microsoft.github.io/DirectX-Specs/d3d/Raytracing.html#degenerate-primitives-and-instances
+
+R301 splits zero-area observations into repeated-index, coincident-position and
+collinear categories. It records all-zero referenced positions, x-NaN markers,
+and first/last/first-degenerate/first-nonfinite witnesses with exact indices and
+float32 bits. Build destination/flags, geometry ordinal/count and source addresses
+provide descriptor context. These are object-space observations, not TLAS/material
+mapping. Samples remain in the existing completion-gated capture path.
+
+A bounded 48-key source-owner/offset/layout table limits each descriptor to two
+attempts, allowing later geometries to be considered on subsequent builds. This
+is a diagnostic coverage policy, not lifetime proof or complete scene coverage.
+Existing memory budgets and rendering remain unchanged. Portable classification,
+witness and diversity tests passed with warnings-as-errors and UBSan. Initial
+Windows compilation caught a local variable shadowing the state GUID; renamed
+before rerunning validation.
+
+Corrected Windows foundation run 41630696301 / job 125899202781 passed; all
+four GPU sampler invocations passed. Full mod run 41630696336 / job 125899204713
+passed at ea28d53d1d10790f0938a447455da26d11d8e45f. Decoded logs confirm package,
+lighting, migration and restart-helper checks. Artifact and nested ZIP checksums,
+ZIP integrity, witness marker, all four launcher flags and sidecar verified.
+ControlTOH-R301.zip: 4,208,539 bytes, 74 files, SHA-256
+5b9070b30a13da85cd4eec2cbfcc5579e3d4f35750241cfbdaeaaaf9e373d238.
+Portable ASan/UBSan run passed with leak detection disabled: the environment
+prevented LeakSanitizer from reading /proc task metadata. No leak check claimed.
+R301 still requires a new game run for raw coordinate evidence absent from R300;
+no zero-area cause, scene mapping completion or visual fix is claimed.
