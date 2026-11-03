@@ -120,3 +120,28 @@ consistency, not an actual pending DXR command. The API remains disconnected fro
 native release: current journals retain tokens rather than AS leases, so enabling
 retirement now could invalidate resources still used by submitted work. Submission
 lease retention and a verified native lifecycle bridge are required together.
+
+## R304 submission integration — no additional user capture requested
+
+Remote code 610b4535a8bb996d8b7a190e130bf21243c3d1c3 adds distinct recorded
+AS leases and retains each AS-bearing journal through the observer's private
+submission fence. Resetting command-list metadata cannot release submitted roots.
+Same-queue replay gets its own retained submission. Completed references are
+released outside the state lock; uncertain/failed submissions remain pinned.
+The pending ring is bounded at 256 entries. Native release remains disconnected.
+
+Windows foundation run 41643117186 / job 125941390697 passed, including an
+actual blocked WARP queue, replay, simulated registry retirement, list metadata
+reset and fence-gated lease release. WARP executed empty lists, not DXR builds.
+The combined geometry/material test and 1,000 registry reuse cycles also passed.
+
+Existing R303 evidence already supplies the scene mapping: 30,565 observations,
+zero missing mappings across four samples. Repeating that two-minute run would
+not prove the missing traversal-lifetime or GI writer contracts. Therefore the
+R304 package is an integration checkpoint, not a request for another capture.
+
+Remaining live gaps are explicit: BLAS references reachable through TLAS,
+DispatchRays resource uses, native wrapper lifecycle coverage, GI-specific writer
+and shader export selection, captured attributes/material textures/alpha, and
+sampling proposal validity. A new user run must answer a named gap that the
+existing PT sources, supplied DLLs and archived captures cannot resolve offline.
