@@ -243,3 +243,13 @@ worker completion only releases the job slot. Tests exercise slot reuse, stale
 completion, duplicate begin, mismatched writer, invalid slot/count, GI table
 spacing, range overflow and undersized backing storage. Full live closure, material
 resource ownership, alpha visibility and replacement GI remain outstanding.
+
+The dispatch admission additionally requires the verified renderer return site
+0x12c5f1 while inside its native raytrace call; generic export names alone do not
+identify GI. Nested calls restore the previous scope. SnapshotNativeGIWriter can
+copy the matched writer's complete CPU binding array and active identifiers before
+scheduling. It verifies the buffer layout, pipeline, table range and generation,
+and reads only GI identifier slots 0 and 2. A Windows fixture deliberately leaves
+reflection slots 1/3 null, then checks pointer faults, pipeline mismatch, wrong ray
+count, altered table address, invalid types and zero identifiers. It does not read
+a GPU shader table or claim allocation/alpha visibility evidence.

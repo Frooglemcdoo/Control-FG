@@ -1,4 +1,5 @@
 #include <windows.h>
+#include "../src/gi_reuse/native_gi_writer_snapshot.h"
 #include <d3d12.h>
 #include <dxgi1_6.h>
 #include <wrl/client.h>
@@ -20,7 +21,31 @@ using Microsoft::WRL::ComPtr;
 namespace rt=gi_reuse::runtime;
 void CheckAt(HRESULT hr,int line){if(FAILED(hr)){std::fprintf(stderr,"HRESULT failure line=%d hr=0x%08lX\n",line,static_cast<unsigned long>(hr));std::exit(1);}}
 #define Check(expression) CheckAt((expression),__LINE__)
+static void TestNativeGIWriter(){
+ using namespace gi_reuse;using namespace GINativeJobRoute;
+ unsigned char buffer[80]{},state[64]{};
+ PTShaderTableAdapter::Identifier opaque{},alpha{};opaque[0]=1;alpha[0]=2;
+ const void* opaquePtr=opaque.data();const void* alphaPtr=alpha.data();
+ const std::uint64_t address=4096,bytes=1024,pipeline=42;
+ std::memcpy(buffer+0x48,&address,8);std::memcpy(buffer+0x30,&bytes,8);
+ std::memcpy(state,&pipeline,8);std::memcpy(state+0x20,&opaquePtr,8);std::memcpy(state+0x30,&alphaPtr,8);
+ // Reflection-only ID slots 1 and 3 are deliberately null.
+ PTNativeBinding::Binding bindings[2]{};bindings[1].type=1;bindings[1].constants[3]=77;
+ Ticket t;t.serial=1;t.list=2;t.pipeline=pipeline;t.counter=3;t.engineFrame=4;
+ t.layout={address,bytes,32,64,32,64,96,4};t.hitTable=address+128;t.hitBytes=384;
+ t.writer={reinterpret_cast<std::uintptr_t>(buffer),reinterpret_cast<std::uintptr_t>(state),reinterpret_cast<std::uintptr_t>(bindings),512,1,2};
+ NativeGIWriterInputs result;
+ assert(SnapshotNativeGIWriter(t,result)&&result.table.Active(2)&&result.table.bytes[192]==2&&result.bindings[1].constants[3]==77);
+ const auto saved=t;t.pipeline=43;assert(!SnapshotNativeGIWriter(t,result)&&result.bindings.empty()&&!result.table.pipeline);t=saved;
+ t.writer.rays=2;assert(!SnapshotNativeGIWriter(t,result));t=saved;
+ t.hitTable+=96;assert(!SnapshotNativeGIWriter(t,result));t=saved;
+ t.writer.bindings=1;assert(!SnapshotNativeGIWriter(t,result)&&result.bindings.empty());t=saved;
+ t.writer.state=1;assert(!SnapshotNativeGIWriter(t,result));t=saved;
+ bindings[1].type=2;assert(!SnapshotNativeGIWriter(t,result)&&result.table.bytes.empty());bindings[1].type=1;
+ alpha.fill(0);assert(!SnapshotNativeGIWriter(t,result));
+}
 int main(){
+ TestNativeGIWriter();
  SetEnvironmentVariableA("CONTROLTOH_GI_METADATA","1");
  SetEnvironmentVariableA("CONTROLTOH_GI_BINDINGS","1");
  ComPtr<IDXGIFactory4> factory;Check(CreateDXGIFactory1(IID_PPV_ARGS(&factory)));

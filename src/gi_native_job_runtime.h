@@ -1,6 +1,6 @@
 #pragma once
 #include "gi_reuse/native_gi_job_route.h"
-#include "gi_reuse/native_gi_table.h"
+#include "gi_reuse/native_gi_writer_snapshot.h"
 
 #include <atomic>
 // Exact Steam native dispatch -> scheduled job -> writer handoff. Inert until a
@@ -32,7 +32,7 @@ template<class F> [[maybe_unused]] static void Diagnostics(F&& log){
 static bool ReadDispatch(ID3D12GraphicsCommandList4* list,const D3D12_DISPATCH_RAYS_DESC* source,ID3D12StateObject* pipeline,Ticket& out,RouteFailure& failure)noexcept {
     out={};failure=RouteFailure::input;
     __try {
-        if(!verifiedD3d||!list||!source||!pipeline||!rrNativeGIRoute.Ready())return false;
+        if(!verifiedD3d||!list||!source||!pipeline||!rrNativeGIDispatchScope)return false;
         auto* module=reinterpret_cast<unsigned char*>(verifiedD3d);
         // The SBT counter advances at each native ray dispatch (RVA 3570f),
         // not once per frame. Use the established engine frame counter also
