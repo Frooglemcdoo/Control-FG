@@ -1,6 +1,7 @@
 #pragma once
 #include "gi_reuse/d3d12_live_scene_owners.h"
 #include "gi_reuse/live_scene_catalog.h"
+#include "gi_reuse/native_gi_identity.h"
 #include "gi_native_lifetime_runtime.h"
 // Recovered R103 creation boundaries. These observe native ownership only;
 // installing them does not enable the replacement lighting dispatch.
@@ -8,7 +9,7 @@ namespace GINativeSceneOwners {
 static gi_reuse::D3D12LiveSceneOwners owners;
 static std::atomic<bool> ready{false};
 static std::atomic<UINT64> created{0},rejected{0};
-static bool Enabled() noexcept {static const bool value=[] {char b[4]{};return GetEnvironmentVariableA("CONTROLTOH_GI_LIVE",b,4)==1&&b[0]=='1';}();return value;}
+static bool Enabled() noexcept {static const bool value=[] {char b[4]{};return GetEnvironmentVariableA("CONTROLTOH_GI_OWNED",b,4)==1&&b[0]=='1';}();return value;}
 struct Wrapper {IUnknown* resource=nullptr;UINT64 bytes=0,address=0;};
 static bool Read(void* pointer,Wrapper& output) noexcept {
  output={};__try{if(!pointer)return false;auto* p=static_cast<unsigned char*>(pointer);
@@ -26,9 +27,10 @@ static void Retire(void* wrapper) noexcept {if(ready.load())owners.Retire(reinte
 using General=void(*)(UINT64,UINT64,unsigned,unsigned,UINT64,UINT64,void*);
 using Ray=void(*)(int,int,void*,int);
 static General general=nullptr;static Ray ray=nullptr;
+static std::atomic<void(*)(void*) noexcept> liveASDescriptor{nullptr};
 static RRAlbedoCallPatch creates[11]{};
 static void GeneralHook(UINT64 bytes,UINT64 stride,unsigned flags,unsigned format,UINT64 a,UINT64 b,void* wrapper){general(bytes,stride,flags,format,a,b,wrapper);Created(wrapper);}
-static void RayHook(int bytes,int type,void* wrapper,int flags){ray(bytes,type,wrapper,flags);Created(wrapper);}
+static void RayHook(int bytes,int type,void* wrapper,int flags){ray(bytes,type,wrapper,flags);Created(wrapper);if(type==1)if(const auto observe=liveASDescriptor.load())observe(wrapper);}
 // CPU source bytes are copied before the native memcpy, never read back from
 // upload heaps. Build observers must retain the returned immutable snapshot.
 struct InstanceUpload {UINT64 address=0,token=0;std::vector<unsigned char> bytes;};
@@ -71,7 +73,10 @@ struct Writer {
  gi_reuse::NativeGIWriterInputs inputs;
  Microsoft::WRL::ComPtr<ID3D12StateObject> pipeline;
  PTShaderTableAdapter::Identifier opaque{},alpha{};
+ gi_reuse::D3D12LiveSceneOwners::Identity scene;
+ float baseRange=0;UINT rays=0,pass=0,passes=0;bool nativeInputs=false;
 };
+static std::atomic<bool(*)(Writer&) noexcept> writerInputs{nullptr};
 struct Event {
  gi_reuse::OrderedASEvent build;
  std::shared_ptr<const InstanceUpload> instances;
@@ -159,6 +164,7 @@ static void WriterReady(const GINativeJobRoute::Ticket& ticket) noexcept {
   if(!gi_reuse::SnapshotNativeGIWriter(ticket,writer->inputs)||!gi_reuse::native_gi_detail::ReadHeader(ticket.writer,header)||header.pipeline!=ticket.pipeline){recording->complete=false;return;}
   writer->opaque=header.opaque;writer->alpha=header.alpha;
   writer->pipeline=reinterpret_cast<ID3D12StateObject*>(ticket.pipeline);
+  if(const auto fill=writerInputs.load())writer->nativeInputs=fill(*writer);
   Event e;e.writer=std::move(writer);recording->events.push_back(std::move(e));
  }catch(...){recording->complete=false;}
 }

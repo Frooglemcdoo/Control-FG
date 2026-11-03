@@ -2,6 +2,7 @@
 #include "gi_native_job_runtime.h"
 #include "gi_native_lifetime_runtime.h"
 #include "gi_native_scene_owners.h"
+#include "gi_native_scene_descriptors.h"
 #include <memory>
 #include <string>
 // Diagnostic-only whole-table capture. Copies CPU inputs before scheduling and
@@ -62,6 +63,7 @@ static void Start(HMODULE d3d) noexcept {
  if(GetEnvironmentVariableA("CONTROLTOH_GI_METADATA",setting,4)!=1||setting[0]!='1')return;
  const bool lifetime=GINativeLifetimeRuntime::Install(d3d);
  if(lifetime&&GINativeSceneOwners::Enabled())GINativeSceneOwners::Install(d3d);
+ if(GINativeSceneOwners::ready.load())GINativeSceneDescriptors::Install(PTGlassRuntime::device.Get());
  const bool ready=GINativeJobRuntime::Install(d3d)&&GINativeJobRuntime::Register(&Capture);
  Log("GI_WRITER_R305_ARM ready=%u tables=4 interval_ms=10000 scope=whole_gi_binding_table native_outputs_unchanged=1",unsigned(ready));
 }

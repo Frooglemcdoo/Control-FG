@@ -1,4 +1,5 @@
 #pragma once
+#include "gi_reuse/native_gi_identity.h"
 // Both raygens share one state object: native hit/miss identifiers remain valid.
 namespace gi_live_toggle {
 inline const GUID kRecord={0x30730801,0x6611,0x4788,{0x81,0x22,0x33,0x44,0x55,0x66,0x77,0x01}};
@@ -55,6 +56,7 @@ inline HRESULT Create(gi_sequence::Create next,ID3D12Device5* device,const D3D12
    if(SUCCEEDED(prepared)){memset(mapped,0,64);memcpy(mapped,identifier,32);record->Unmap(0,nullptr);prepared=state->SetPrivateDataInterface(kRecord,record.Get());}
   }else prepared=E_FAIL;
   if(FAILED(prepared)){static_cast<IUnknown*>(candidate)->Release();Log("GI_TOGGLE_R308 record_failed=1 native_fallback=1");return next(device,desc,iid,out);}
+  const UINT variantTag=variant+1;state->SetPrivateData(gi_reuse::nativeGIVariantKey,sizeof(variantTag),&variantTag);
   *out=candidate;ready.store(true);Log("GI_TOGGLE_R308 ready=1 variant=%u native_original=1 new_sampler=R307 same_state=1",variant);return hr;
  }catch(...){Log("GI_TOGGLE_R308 exception=1 native_fallback=1");return next(device,desc,iid,out);}
 }

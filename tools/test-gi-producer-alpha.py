@@ -10,6 +10,7 @@ for variant,sha in enumerate(HASHES):
         source=subprocess.check_output([args.dxc,'-dumpbin',str(path)],text=True)
     resource_rows=[line for line in source.splitlines() if line.startswith('; g_rtScene ') or line.startswith('; DiffuseGIConstants ')]
     assert len(resource_rows)==2,'Missing GI scene/range binding evidence'
+    assert re.search(r'; g_rtScene .*\bt'+str(4+variant)+r'\s+1\s*$',resource_rows[1]),'Unexpected GI TLAS slot'
     print('Native GI variant',variant,'binding evidence:',*resource_rows,sep='\n')
     match=re.search(r'define void @"[^\n]*anyHitAlphaTest[^\n]*\n(.*?)^}',source,re.M|re.S)
     assert match,'Missing native alpha export'
