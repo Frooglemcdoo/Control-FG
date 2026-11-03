@@ -5,6 +5,7 @@
 #include "triangle_sample_validation.h"
 #include "sample_diversity.h"
 #include "instance_sample_validation.h"
+#include "instance_metadata_mapping.h"
 namespace gi_reuse {
 // A diagnostic owns everything needed by its recorded commands until the host
 // seals the recording and proves all submissions complete. No native lighting use.
@@ -15,6 +16,7 @@ struct IndexSample {
     IndexSnapshotPlan plan;
     bool recorded=false;
     std::unique_ptr<IndexSample> vertices;
+    std::shared_ptr<ASCutReceipt> instanceCut;
     std::uint64_t vertexStride=0,buildDestination=0,vertexAddress=0,indexAddress=0;
     std::uint32_t buildFlags=0,geometryCount=0;
     std::uint32_t geometryIndex=0;bool hasTransform=false;
@@ -65,6 +67,12 @@ struct IndexSample {
         result={};if(!recorded||!readback)return E_INVALIDARG;void* data=nullptr;D3D12_RANGE range{0,plan.copyBytes},none{0,0};
         auto hr=readback->Map(0,&range,&data);if(FAILED(hr))return hr;
         const bool ok=ValidateInstanceSample(static_cast<const unsigned char*>(data),bytes,result);readback->Unmap(0,&none);return ok?S_OK:E_INVALIDARG;
+    }
+    HRESULT ReadInstanceMapping(const ASMetadataCut& cut,InstanceMappingSummary& result) const noexcept {
+        result={};if(!recorded||!readback)return E_INVALIDARG;void* data=nullptr;D3D12_RANGE range{0,plan.copyBytes},none{0,0};
+        auto hr=readback->Map(0,&range,&data);if(FAILED(hr))return hr;
+        const bool ok=MapInstanceMetadata(static_cast<const unsigned char*>(data),bytes,cut,result);
+        readback->Unmap(0,&none);return ok?S_OK:E_INVALIDARG;
     }
     HRESULT ReadTriangles(TriangleSampleSummary& summary) const noexcept {
         summary={};if(!recorded||!vertices||!vertices->recorded)return E_INVALIDARG;

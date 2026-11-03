@@ -4,6 +4,8 @@
 #include <cstdint>
 #include <vector>
 #include <map>
+#include <algorithm>
+#include <atomic>
 #include "geometry_metadata.h"
 
 namespace gi_reuse {
@@ -17,7 +19,22 @@ struct ASRecord {
     bool allowUpdate=false;
 };
 enum class ASOperation { Build, Copy, Invalidate, Update };
-struct ASEvent { ASOperation operation{}; ASRecord record{}; std::uint64_t source=0; };
+// Descriptor metadata at one event in submission order, not a resource/byte lease.
+struct ASMetadataCut {
+    std::vector<ASRecord> records;
+    std::uint64_t queue=0,fence=0,generation=0,event=0,destination=0;
+    const ASRecord* Find(std::uint64_t address) const noexcept {
+        const auto it=std::lower_bound(records.begin(),records.end(),address,
+            [](const ASRecord& r,std::uint64_t a){return r.address<a;});
+        return it!=records.end()&&it->address==address?&*it:nullptr;
+    }
+};
+struct ASCutReceipt {
+    std::shared_ptr<const ASMetadataCut> data;
+    void Store(std::shared_ptr<const ASMetadataCut> value) noexcept {std::atomic_store(&data,std::move(value));}
+    std::shared_ptr<const ASMetadataCut> Load() const noexcept {return std::atomic_load(&data);}
+};
+struct ASEvent { ASOperation operation{}; ASRecord record{}; std::uint64_t source=0; std::shared_ptr<ASCutReceipt> cut{}; };
 template<std::size_t Capacity> struct ASJournal {
     static constexpr std::size_t Limit=Capacity;
     std::array<ASEvent,Capacity> events{};
@@ -84,7 +101,11 @@ public:
     }
     template<class Journal> bool Submit(std::uint64_t queue,std::uint64_t fence,
                                       const Journal& journal,std::uint64_t expectedGeneration) noexcept {
-        if(!complete_||!queue||!fence||!journal.complete||journal.size>Journal::Limit||journal.generation!=expectedGeneration||
+        // Replays replace the receipt. Never leave an earlier successful cut
+        // visible after a failed replay. Consumers separately prove GPU completion.
+        for(std::size_t i=0;i<journal.size&&i<Journal::Limit&&i<journal.events.size();++i)if(journal.events[i].cut)journal.events[i].cut->Store({});
+        std::vector<std::pair<std::shared_ptr<ASCutReceipt>,std::shared_ptr<const ASMetadataCut>>> cuts;
+        if(!complete_||!queue||!fence||!journal.complete||journal.size>Journal::Limit||journal.size>journal.events.size()||journal.generation!=expectedGeneration||
            (queue_&&queue_!=queue)||fence<=fence_){Invalidate("ledger_submission_contract");return false;}
         // Caller supplies a fresh increasing completion fence for each submission.
         queue_=queue;fence_=fence;
@@ -116,7 +137,15 @@ public:
             next.revision=++revision_;
             try {if(found!=records_.end())found->second=next;else records_.emplace(address,std::move(next));}
             catch(...){Invalidate("ledger_allocation");return false;}
+            if(e.cut)try {
+                auto cut=std::make_shared<ASMetadataCut>();
+                cut->queue=queue;cut->fence=fence;cut->generation=expectedGeneration;
+                cut->event=i;cut->destination=address;cut->records.reserve(records_.size());
+                for(const auto& entry:records_)cut->records.push_back(entry.second);
+                cuts.emplace_back(e.cut,std::move(cut));
+            }catch(...){Invalidate("ledger_cut_allocation");return false;}
         }
+        for(auto& cut:cuts)cut.first->Store(std::move(cut.second));
         return true;
     }
     // Copies metadata only after the caller-observed fence reaches this submission.

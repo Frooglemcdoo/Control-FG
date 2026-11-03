@@ -242,6 +242,10 @@ inline bool Snapshot(MetadataLedger& result) noexcept {
  const bool valid=!fault.load()&&!submitting&&fence&&ledger.Snapshot(reinterpret_cast<UINT64>(queue.Get()),fence->GetCompletedValue(),result);
  ReleaseSRWLockExclusive(&stateLock);return valid;
 }
+inline bool CutPublicationReady() noexcept {
+ AcquireSRWLockShared(&stateLock);const bool ready=!fault.load()&&!submitting;
+ ReleaseSRWLockShared(&stateLock);return ready;
+}
 inline void CompletionStats(UINT64& issued,UINT64& completed,bool& ready) noexcept {
  AcquireSRWLockShared(&stateLock);issued=nextFence;completed=fence?fence->GetCompletedValue():0;
  ready=!fault.load()&&!submitting&&fence&&completed!=UINT64_MAX&&completed>=issued&&ledger.Complete();ReleaseSRWLockShared(&stateLock);

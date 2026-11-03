@@ -6,6 +6,7 @@ struct Owner {UINT64 generation=0;std::unique_ptr<gi_reuse::IndexSample> sample,
 inline bool CaptureEnabled() noexcept {static const bool enabled=[] {char v[4]{};return GetEnvironmentVariableA("CONTROLTOH_GI_INDEX_SNAPSHOTS",v,4)==1&&v[0]=='1';}();return enabled;}
 inline bool InstancesEnabled() noexcept {static const bool enabled=[] {char v[4]{};return GetEnvironmentVariableA("CONTROLTOH_GI_INSTANCE_SNAPSHOTS",v,4)==1&&v[0]=='1';}();return enabled;}
 inline std::atomic<UINT64> instanceAttempts{0},instanceRecorded{0},instanceRead{0},instanceFailed{0},instanceSkipped{0},instanceBudget{0},instanceLastHash{0};
+inline std::atomic<UINT64> instanceMapped{0},instanceMapMissing{0},instanceCutUnavailable{0};
 inline bool TrianglesEnabled() noexcept {static const bool enabled=[] {char v[4]{};return GetEnvironmentVariableA("CONTROLTOH_GI_TRIANGLE_SNAPSHOTS",v,4)==1&&v[0]=='1';}();return enabled;}
 inline gi_reuse::SampleDiversity<> diversity;
 inline SRWLOCK diversityLock=SRWLOCK_INIT;
@@ -58,6 +59,11 @@ inline void CaptureInstances(ID3D12GraphicsCommandList4* list,const D3D12_BUILD_
  if(!charge||!Reserve(instanceAttempts,1,4)||!Reserve(instanceBudget,charge,32ull*1024*1024)){++instanceSkipped;return;}
  auto sample=std::unique_ptr<gi_reuse::IndexSample>(new(std::nothrow) gi_reuse::IndexSample);
  if(!sample||FAILED(sample->Prepare(captureDevice.Get(),source.Get(),offset,bytes,bindings,4,4*1024*1024,true))){++instanceFailed;return;}
+ if(!journal->data.complete||!journal->data.size){++instanceSkipped;return;}
+ auto& event=journal->data.events[journal->data.size-1];
+ if(!event.record.topLevel||event.record.address!=desc.DestAccelerationStructureData||event.record.instances!=input.InstanceDescs||event.record.count!=input.NumDescs||event.cut){++instanceSkipped;return;}
+ try{sample->instanceCut=std::make_shared<gi_reuse::ASCutReceipt>();}catch(...){++instanceFailed;return;}
+ event.cut=sample->instanceCut;
  sample->buildDestination=desc.DestAccelerationStructureData;sample->buildFlags=UINT(input.Flags);sample->indexAddress=input.InstanceDescs;
  owner.instances=std::move(sample);gi_compute_hooks::Mute mute;
  if(owner.instances->Record(list,indexPipeline))++instanceRecorded;else ++instanceFailed;
@@ -180,12 +186,14 @@ inline void Build(ID3D12GraphicsCommandList4* list,const D3D12_BUILD_RAYTRACING_
 }
 inline void Poll() noexcept {
     std::array<std::unique_ptr<Owner>,256> retired;
+    const bool cutsPublished=gi_reuse::runtime::CutPublicationReady();
     AcquireSRWLockExclusive(&lock);
     if(runtime){
       if(CaptureEnabled()&&!Coverage())runtime->QuarantineAll();
       runtime->Poll();unsigned gpuReads=0;
       for(unsigned i=0;i<records.size();++i)if(records[i]){
         const auto* view=runtime->View(records[i]);const bool published=view!=nullptr;
+        if(view&&view->instances&&!cutsPublished)continue;
         if(view&&(view->sample||view->instances)&&gpuReads++>=2)continue;
         if(runtime->Take(records[i],retired[i])){retired[i]->completeData=published;if(published)++completed;records[i]=0;}
     }}
@@ -195,6 +203,14 @@ inline void Poll() noexcept {
         const auto& sample=*owner->instances;gi_reuse::InstanceSampleSummary result;const auto hr=sample.ReadInstances(result);
         if(SUCCEEDED(hr)){++instanceRead;instanceLastHash=result.hash;}else ++instanceFailed;
         Trace("GI_INSTANCE_COPY_R302 hr=0x%08X destination=%llu build_flags=%u source_va=%llu bytes=%llu hash=%llu count=%u masked=%u null_blas=%u bad_alignment=%u nonfinite=%u unknown_flags=%u sealed=1 gpu_completed=1 material_mapping=0",unsigned(hr),sample.buildDestination,sample.buildFlags,sample.indexAddress,sample.bytes,result.hash,result.count,result.masked,result.nullBLAS,result.badAlignment,result.nonfinite,result.unknownFlags);
+        const auto cut=sample.instanceCut?sample.instanceCut->Load():nullptr;
+        const auto* top=cut?cut->Find(sample.buildDestination):nullptr;
+        if(SUCCEEDED(hr)&&cut&&top&&top->topLevel&&cut->generation==owner->generation&&
+           cut->destination==sample.buildDestination&&top->instances==sample.indexAddress&&UINT64(top->count)*64==sample.bytes){
+            gi_reuse::InstanceMappingSummary mapping;const auto mh=sample.ReadInstanceMapping(*cut,mapping);
+            if(SUCCEEDED(mh)){instanceMapped+=mapping.matched;instanceMapMissing+=mapping.missing;}else ++instanceCutUnavailable;
+            Trace("GI_INSTANCE_MAP_R303 hr=0x%08X queue=%llu fence=%llu generation=%llu event=%llu destination=%llu records=%llu count=%u matched=%u missing=%u null_blas=%u wrong_type=%u no_geometry=%u metadata_only=1 geometry_bytes_verified=0 material_mapping=0",unsigned(mh),cut->queue,cut->fence,cut->generation,cut->event,cut->destination,UINT64(cut->records.size()),mapping.count,mapping.matched,mapping.missing,mapping.nullBLAS,mapping.wrongType,mapping.noGeometry);
+        }else {++instanceCutUnavailable;Trace("GI_INSTANCE_MAP_R303 unavailable=1 destination=%llu metadata_only=1",sample.buildDestination);}
         if(SUCCEEDED(hr))for(unsigned i=0;i<result.count&&i<result.first.size();++i){const auto& v=result.first[i];
             Trace("GI_INSTANCE_RECORD_R302 array_index=%u instance_id=%u mask=%u hit_group_offset=%u flags=%u blas=%llu transform=%g,%g,%g,%g,%g,%g,%g,%g,%g,%g,%g,%g",i,v.id,v.mask,v.hitGroup,v.flags,v.blas,double(v.transform[0]),double(v.transform[1]),double(v.transform[2]),double(v.transform[3]),double(v.transform[4]),double(v.transform[5]),double(v.transform[6]),double(v.transform[7]),double(v.transform[8]),double(v.transform[9]),double(v.transform[10]),double(v.transform[11]));
         }
@@ -238,6 +254,7 @@ inline void Report() noexcept {
     Trace("GI_LIFETIME_R295 active=%u quarantined=%u cpu_metadata_owners_only=%u publication_requires_reset_and_gpu_completion=1",active,quarantined,unsigned(!CaptureEnabled()));
     Trace("GI_INDEX_STATUS_R296 enabled=%u ready=%u recorded=%llu readback=%llu failures=%llu reserved_bytes=%llu ordinary_attempts=%llu rejected_raw_attempts=%llu uint32_attempts=%llu native_lighting_changed=0",unsigned(CaptureEnabled()),unsigned(captureReady.load()),captureRecorded.load(),captureRead.load(),captureFailed.load(),captureBudget.load(),captureAttempts[0].load(),captureAttempts[1].load(),captureAttempts[2].load());
     Trace("GI_INSTANCE_STATUS_R302 enabled=%u attempts=%llu recorded=%llu readback=%llu failures=%llu skipped=%llu reserved_bytes=%llu",unsigned(InstancesEnabled()),instanceAttempts.load(),instanceRecorded.load(),instanceRead.load(),instanceFailed.load(),instanceSkipped.load(),instanceBudget.load());
+    Trace("GI_INSTANCE_MAP_STATUS_R303 matched=%llu missing=%llu unavailable=%llu metadata_only=1",instanceMapped.load(),instanceMapMissing.load(),instanceCutUnavailable.load());
     Trace("GI_SAMPLE_DIVERSITY_R301 repeated_or_untracked_skipped=%llu max_per_descriptor=2",diversitySkipped.load());
     Trace("GI_TRIANGLE_STATUS_R300 enabled=%u readback=%llu failures=%llu triangles=%llu out_of_range=%llu nonfinite=%llu degenerate=%llu skipped=%llu",unsigned(TrianglesEnabled()),triangleRead.load(),triangleFailed.load(),triangleCount.load(),triangleBadIndices.load(),triangleNonfinite.load(),triangleDegenerate.load(),triangleSkipped.load());
     Trace("GI_INDEX_VALIDATION_R296 out_of_range_indices=%llu padding_failures=%llu",captureBadIndices.load(),captureBadPadding.load());

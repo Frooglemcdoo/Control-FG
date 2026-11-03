@@ -23,10 +23,10 @@ set "CONTROLTOH_GI_SPOT_TRACE=0"
 set "CONTROLTOH_GI_RAY_TRACE=0"
 set "CONTROLTOH_GI_JOINT_TRACE=0"
 set "CONTROLTOH_GI_STACK_CAPTURE=0"
-echo R302 - 16/32-bit index GPU snapshots. Recording starts automatically.
+echo R303 - Scene-instance metadata mapping. Recording starts automatically.
 echo Load your usual save, move around for about two minutes, then exit normally.
 echo No F7, F9, CAPTURE RR, zoom, or fixed camera is needed.
-echo This build copies bounded index samples at native AS builds; replacement GI remains disabled.
+echo This build maps bounded instance samples to submission-specific geometry metadata; replacement GI remains disabled.
 echo Existing lighting settings are preserved. The tracker can retain up to 1 GiB of buffer resources during this diagnostic run.
 start "" /wait "Control_DX12.exe"
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0Capture-RR-Boundary.ps1" -DiagnosticsOnly

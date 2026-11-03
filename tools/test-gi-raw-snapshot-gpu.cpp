@@ -146,6 +146,10 @@ int main(int argc, char** argv) try {
  fixture::gi_snapshot_probe::Build(list.Get(),&sampleBuild);
  if(instances){gi_reuse::runtime::ObserveCreated(instanceUpload.Get(),D3D12_RESOURCE_STATE_GENERIC_READ,true);
  D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC top{};top.DestAccelerationStructureData=8192;top.Inputs.Type=D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL;top.Inputs.DescsLayout=D3D12_ELEMENTS_LAYOUT_ARRAY;top.Inputs.NumDescs=1;top.Inputs.InstanceDescs=instanceUpload->GetGPUVirtualAddress();
+ auto j=gi_reuse::runtime::Read(list.Get());
+ auto gm=GeometryMetadata::Create({TriangleMetadata{4096,8192,0,12,3,3,6,57,0}});
+ Require(j&&gm&&j->data.Append({ASOperation::Build,{4096,0,0,1,false,gm},0}),"fixture BLAS metadata");
+ gi_reuse::runtime::RecordBuild(list.Get(),&top);
  fixture::gi_snapshot_probe::Build(list.Get(),&top);Require(fixture::gi_snapshot_probe::instanceRecorded.load()==1,"instance upload GPU snapshot recorded");}
  Require(fixture::gi_snapshot_probe::captureRecorded.load()==1,"actual bounded native-boundary index copy recorded");
  Require(fixture::gi_snapshot_probe::bindingReady.load()==(instances?2u:1u) && fixture::gi_snapshot_probe::admitted.load()==1,"native-boundary probe admission");
@@ -164,7 +168,10 @@ int main(int argc, char** argv) try {
  list->CopyBufferRegion(read.Get(),0,output.Get(),0,512); list->CopyBufferRegion(read.Get(),512,sentinel.Get(),0,4);
  Check(list->Close()); ID3D12CommandList* lists[]={list.Get()};
  const auto probeToken=fixture::gi_snapshot_probe::Before(queue.Get(),1,lists);Require(probeToken!=0,"probe submission");
+ const auto metadataToken=instances?gi_reuse::runtime::BeforeExecute(queue.Get(),1,lists):0;
+ if(instances)Require(metadataToken!=0,"instance metadata submission");
  queue->ExecuteCommandLists(1,lists);fixture::gi_snapshot_probe::After(queue.Get(),probeToken);
+ if(instances)gi_reuse::runtime::AfterExecute(queue.Get(),metadataToken);
  ComPtr<ID3D12Fence> fence; Check(d->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&fence)));
  HANDLE event=CreateEventW(nullptr,FALSE,FALSE,nullptr); Require(event!=nullptr,"event");
  Check(queue->Signal(fence.Get(),1)); Check(fence->SetEventOnCompletion(1,event)); Require(WaitForSingleObject(event,30000)==WAIT_OBJECT_0,"GPU timeout"); CloseHandle(event);
@@ -178,6 +185,7 @@ int main(int argc, char** argv) try {
  Require(fixture::gi_snapshot_probe::captureRead.load()==1&&fixture::gi_snapshot_probe::captureFailed.load()==0,"sample readback only after completion and reset");
  UINT64 expectedHash=14695981039346656037ull;for(UINT64 i=wide?256:258;i<508;++i){expectedHash^=static_cast<unsigned char>((i*17+39)%251);expectedHash*=1099511628211ull;}
  if(instances)Require(fixture::gi_snapshot_probe::instanceRead.load()==1&&fixture::gi_snapshot_probe::instanceFailed.load()==0&&fixture::gi_snapshot_probe::instanceLastHash.load()==expectedInstanceHash,"instance array exact hash after fence/reset");
+ if(instances)Require(fixture::gi_snapshot_probe::instanceMapped.load()==1&&fixture::gi_snapshot_probe::instanceMapMissing.load()==0&&fixture::gi_snapshot_probe::instanceCutUnavailable.load()==0,"instance metadata from matching submission cut");
  if(paired)expectedHash=triangleHash;
  Require(fixture::gi_snapshot_probe::lastCaptureHash.load()==expectedHash&&fixture::gi_snapshot_probe::captureBadPadding.load()==0&&fixture::gi_snapshot_probe::captureBadIndices.load()==0,"native sampler hash, index bounds and padding");
  if(paired)Require(fixture::gi_snapshot_probe::lastVertexHash.load()==vertexHash&&fixture::gi_snapshot_probe::triangleRead.load()==1&&fixture::gi_snapshot_probe::triangleCount.load()==1&&fixture::gi_snapshot_probe::triangleFailed.load()==0&&fixture::gi_snapshot_probe::triangleNonfinite.load()==0&&fixture::gi_snapshot_probe::triangleBadIndices.load()==0&&fixture::gi_snapshot_probe::triangleDegenerate.load()==0,"paired native geometry triangle validated");
