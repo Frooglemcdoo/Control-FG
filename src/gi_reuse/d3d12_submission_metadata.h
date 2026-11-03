@@ -148,6 +148,18 @@ inline void Reset(ID3D12GraphicsCommandList* list) noexcept {
 inline void Initialize(ID3D12GraphicsCommandList* list) noexcept {
  if(!Enabled()||fault.load())return;if(!Read(list))Reset(list);
 }
+struct RejectedGeometry {GeometryDiagnostic diagnostic;UINT64 destination=0,source=0;UINT count=0,layout=0,flags=0;};
+inline SRWLOCK rejectionLock=SRWLOCK_INIT;
+inline RejectedGeometry rejectedGeometry{};
+inline bool haveRejectedGeometry=false;
+inline void RememberGeometryReject(const D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC& desc,const GeometryDiagnostic& diagnostic) noexcept {
+ AcquireSRWLockExclusive(&rejectionLock);
+ if(!haveRejectedGeometry){rejectedGeometry={diagnostic,desc.DestAccelerationStructureData,desc.SourceAccelerationStructureData,desc.Inputs.NumDescs,unsigned(desc.Inputs.DescsLayout),unsigned(desc.Inputs.Flags)};haveRejectedGeometry=true;}
+ ReleaseSRWLockExclusive(&rejectionLock);
+}
+inline bool ReadGeometryReject(RejectedGeometry& out) noexcept {
+ AcquireSRWLockShared(&rejectionLock);const bool found=haveRejectedGeometry;if(found)out=rejectedGeometry;ReleaseSRWLockShared(&rejectionLock);return found;
+}
 inline void RecordBuild(ID3D12GraphicsCommandList4* list,const D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC* desc) noexcept {
  if(!Enabled())return;++buildCount;if(fault.load())return;
  try {
@@ -161,10 +173,10 @@ inline void RecordBuild(ID3D12GraphicsCommandList4* list,const D3D12_BUILD_RAYTR
    if(desc->Inputs.DescsLayout!=D3D12_ELEMENTS_LAYOUT_ARRAY||!desc->Inputs.InstanceDescs){Fail("tlas_layout_or_instances");return;}
    r.topLevel=true;r.instances=desc->Inputs.InstanceDescs;
   }else{
-   r.geometry=CopyBLASGeometry(desc->Inputs);if(!r.geometry){Fail("blas_unsupported_descriptor");return;}
+   GeometryDiagnostic diagnostic;r.geometry=CopyBLASGeometry(desc->Inputs,&diagnostic);if(!r.geometry){RememberGeometryReject(*desc,diagnostic);Fail("blas_unsupported_descriptor");return;}
   }
   if(r.topLevel)CheckOwner(r.instances,UINT64(r.count)*64,OwnerKind::Instances,&journal->states);
-  else for(UINT i=0;i<r.count;++i){const auto* t=r.geometry->At(i);CheckOwner(t->vertices,UINT64(t->vertexCount)*t->stride,OwnerKind::Vertex,&journal->states);CheckOwner(t->indices,UINT64(t->indexCount)*2,OwnerKind::Index,&journal->states);if(t->transform)CheckOwner(t->transform,48,OwnerKind::Transform,&journal->states);}
+  else for(UINT i=0;i<r.count;++i){const auto* t=r.geometry->At(i);CheckOwner(t->vertices,GeometryMetadata::VertexBytes(*t),OwnerKind::Vertex,&journal->states);CheckOwner(t->indices,UINT64(t->indexCount)*2,OwnerKind::Index,&journal->states);if(t->transform)CheckOwner(t->transform,48,OwnerKind::Transform,&journal->states);}
   const auto source=update?desc->SourceAccelerationStructureData:0;
   journal->asTokens.push_back(ASIdentities(r.address,source));
   if(!journal->data.Append({update?ASOperation::Update:ASOperation::Build,r,source}))Fail("build_journal_capacity");

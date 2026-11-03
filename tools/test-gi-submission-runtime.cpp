@@ -202,6 +202,18 @@ int main(){
  D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC build{};build.DestAccelerationStructureData=256;
  build.Inputs.Type=D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL;build.Inputs.DescsLayout=D3D12_ELEMENTS_LAYOUT_ARRAY;
  build.Inputs.NumDescs=1;build.Inputs.pGeometryDescs=&geometry;
+ gi_reuse::GeometryDiagnostic detail;
+ geometry.Triangles.VertexBuffer.StrideInBytes=16;
+ auto padded=gi_reuse::CopyBLASGeometry(build.Inputs,&detail);assert(padded&&gi_reuse::GeometryMetadata::VertexBytes(*padded->At(0))==44);
+ geometry.Triangles.IndexFormat=DXGI_FORMAT_R32_UINT;
+ assert(!gi_reuse::CopyBLASGeometry(build.Inputs,&detail)&&detail.reason==gi_reuse::GeometryReject::IndexFormat&&detail.index==0&&detail.triangle.stride==16);
+ geometry.Triangles.IndexFormat=DXGI_FORMAT_R16_UINT;geometry.Triangles.VertexBuffer.StrideInBytes=12;
+ const D3D12_RAYTRACING_GEOMETRY_DESC* pointers[]={&geometry};build.Inputs.DescsLayout=D3D12_ELEMENTS_LAYOUT_ARRAY_OF_POINTERS;build.Inputs.ppGeometryDescs=pointers;
+ assert(gi_reuse::CopyBLASGeometry(build.Inputs,&detail));
+ pointers[0]=nullptr;assert(!gi_reuse::CopyBLASGeometry(build.Inputs,&detail)&&detail.reason==gi_reuse::GeometryReject::NullGeometry);
+ build.Inputs.DescsLayout=D3D12_ELEMENTS_LAYOUT_ARRAY;build.Inputs.pGeometryDescs=&geometry;
+ rt::RememberGeometryReject(build,detail);rt::RejectedGeometry saved;assert(rt::ReadGeometryReject(saved)&&saved.diagnostic.reason==gi_reuse::GeometryReject::NullGeometry&&saved.count==1);
+ std::puts("PASS R298 padded stride, exact vertex span, pointer-array parsing and retained rejection fields");
  // Synthetic metadata only. WARP executes an empty list, not a fake AS build.
  rt::RecordBuild(list.Get(),&build);rt::RecordCopy(list.Get(),512,256,D3D12_RAYTRACING_ACCELERATION_STRUCTURE_COPY_MODE_COMPACT);
  geometry.Triangles.VertexBuffer.StartAddress=16384;

@@ -26,7 +26,7 @@ public:
     if(r.topLevel){++tlas_;return append(r.instances,std::uint64_t(r.count)*64,0,ReadKind::Instances);}
     ++blas_;if(!r.geometry||r.geometry->Size()!=r.count)return false;
     for(std::uint32_t i=0;i<r.count;++i){const auto* t=r.geometry->At(i);
-     if(!append(t->vertices,std::uint64_t(t->vertexCount)*t->stride,i,ReadKind::Vertex)||
+     if(!append(t->vertices,GeometryMetadata::VertexBytes(*t),i,ReadKind::Vertex)||
         !append(t->indices,std::uint64_t(t->indexCount)*2,i,ReadKind::Index)||
         (t->transform&&!append(t->transform,48,i,ReadKind::Transform)))return false;
     }
