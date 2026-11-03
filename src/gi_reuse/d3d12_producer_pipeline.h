@@ -49,7 +49,7 @@ public:
             {D3D12_STATE_SUBOBJECT_TYPE_RAYTRACING_SHADER_CONFIG,&shaderConfig},
             {D3D12_STATE_SUBOBJECT_TYPE_RAYTRACING_PIPELINE_CONFIG,&pipelineConfig},
             {}};
-        const LPCWSTR localExports[]={L"giProducerOpaque",L"giProducerAlpha"};
+        LPCWSTR localExports[]={L"giProducerOpaque",L"giProducerAlpha"};
         const D3D12_SUBOBJECT_TO_EXPORTS_ASSOCIATION association{subobjects+4,2,localExports};
         subobjects[7]={D3D12_STATE_SUBOBJECT_TYPE_SUBOBJECT_TO_EXPORTS_ASSOCIATION,&association};
         const D3D12_STATE_OBJECT_DESC desc{D3D12_STATE_OBJECT_TYPE_RAYTRACING_PIPELINE,8,subobjects};

@@ -65,6 +65,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Accepted-hit alpha shader compile failed' }
           & $dxc.FullName -T lib_6_5 -WX src/shaders/gi_producer_trace.hlsl -Fo gi-producer-trace.dxil
           if ($LASTEXITCODE -ne 0) { throw 'Accepted-hit producer trace compile failed' }
+          & $dxc.FullName -T cs_6_0 -E main -HV 2018 -WX src/shaders/gi_producer_proposals.hlsl -Fo gi-producer-proposals.dxil
+          if ($LASTEXITCODE -ne 0) { throw 'Producer proposal generation compile failed' }
           python tools/test-gi-producer-alpha.py --dxc $dxc.FullName
           if ($LASTEXITCODE -ne 0) { throw 'Native GI alpha policy audit failed' }
           $commands=@"
@@ -76,6 +78,10 @@ jobs:
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-initial-reservoir-gpu.cpp /Fe:gi-initial-reservoir-gpu.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
           if not "%errorlevel%"=="0" exit /b 1
           gi-initial-reservoir-gpu.exe
+          if not "%errorlevel%"=="0" exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-producer-sampling.cpp /Fe:gi-producer-sampling.exe
+          if not "%errorlevel%"=="0" exit /b 1
+          gi-producer-sampling.exe
           if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-producer-table.cpp /Fe:gi-producer-table.exe
           if not "%errorlevel%"=="0" exit /b 1
@@ -90,6 +96,8 @@ jobs:
           gi-evaluator-pipeline.exe build/gi-evaluator-native.dxbc gi-evaluator-reference.dxil
           if not "%errorlevel%"=="0" exit /b 1
           gi-evaluator-pipeline.exe build/gi-evaluator-native.dxbc gi-evaluator-secondary.dxil gi-producer-shading.dxil
+          if not "%errorlevel%"=="0" exit /b 1
+          gi-evaluator-pipeline.exe build/gi-evaluator-native.dxbc gi-evaluator-secondary.dxil gi-producer-proposals.dxil
           if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-candidate-gpu.cpp /Fe:gi-candidate-gpu.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
           if not "%errorlevel%"=="0" exit /b 1

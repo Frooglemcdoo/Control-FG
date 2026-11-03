@@ -374,3 +374,24 @@ quality improvement is claimed. Live proposal generation, matched scene/binding
 admission, dispatch/retirement, output integration and spatial/temporal reuse are
 still required for the complete replacement. Reuse existing PT evidence and
 captures for those steps; do not ask for a repeat R309 route test.
+
+The proposal compute pass now produces a bounded tile of complete per-pixel ray
+batches directly from the extracted receiver state. It reuses R307's hash/strata
+coordinates and adds a separate reservoir-selection dimension. Native primary
+throughput is multiplied by the aggregate directional PDF; the accepted-hit
+trace applies range reach separately. An owned orthonormal basis normalizes the
+recovered near-unit normal to keep that PDF meaningful. This is not bit-exact
+native ray-direction parity.
+
+The proposal origin preserves the ray producer's .002*depth normal offset rather
+than mistakenly using the evaluator receiver's .001*depth offset. The host must
+supply the base range from the matched native producer constants and match the
+frame, scene, pixel dimensions and complete ray count. GI6's first-material
+validity gate is still used by the extracted receiver initializer, so this stage
+still depends on that native output until the full producer route replaces it.
+
+Local shader compilation and R307 coordinate/strata tests pass (including range
+and reservoir-selection dimensions and progression beyond frame 256). Windows
+validation exposed a const-qualified export-name-array incompatibility in the
+new state-object descriptor; the array declaration is corrected. Neither the
+proposal compute pass nor private DXR pipeline has been executed in-game yet.

@@ -67,7 +67,7 @@ int main(int argc,char** argv)try{
   producerDesc.CS={producer.data(),producer.size()};
   ComPtr<ID3D12PipelineState> producerPipeline;
   Check(d->CreateComputePipelineState(&producerDesc,IID_PPV_ARGS(&producerPipeline)));
-  std::cout<<"PASS producer shading PSO uses captured native root including t27/u2/b5.\n";
+  std::cout<<"PASS supplied producer compute PSO uses captured native root.\n";
  }
  // Deliberately invalid cached bytes prove the replacement does not reuse them.
  const unsigned char invalidCache[]={1,2,3,4};desc.CachedPSO={invalidCache,sizeof(invalidCache)};
