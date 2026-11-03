@@ -465,3 +465,22 @@ or disarmed batches leave the native output unchanged. The host must execute
 native GI6 first, and the recorder now requires observed u0/u1 descriptors and
 inserts UAV ordering around replacement writes. Live host activation and reuse
 are still pending; this is not a new game-ready package.
+
+Windows foundation run `41725071490` / job `126227595509` passed the fifth-stage
+output resolve fixture: complete and invalid batches, fallback RGB, all-ray mean
+distance, output bounds and disarmed controls. The first compile caught an HLSL
+reserved identifier; the corrected implementation passed GPU validation.
+
+The standalone owned-producer test is built at remote commit
+`c2a42989aae10bc61f938838baf3a3f1d2039e0d` (local `f94eb0a`), workflow
+`41726626662` / job `126232982767`. Windows C++ and actual trace-library compilation
+passed with warnings as errors. Package SHA256:
+`f5935258f628a1a81efbf1c059e389cb6578a075a09e5537226bd122a7f05dfe`.
+The package executes the real producer pipeline/private SBT with synthetic R16
+cutout and R32 opaque geometry, native alpha policy, accepted-hit payload,
+material/UV/normals/true position, finite-range PDF, misses, stale/malformed input
+and an output guard. Hardware execution is pending; compilation is not a pass
+for DXR execution. This fills a gap in the prior visibility/receiver hardware
+result, which did not execute the new producer. It requires no game capture and
+does not validate live scene admission, end-to-end game lighting, or reuse.
+R309 remains the last game-ready package.
