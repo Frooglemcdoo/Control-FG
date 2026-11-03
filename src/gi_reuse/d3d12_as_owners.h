@@ -29,9 +29,10 @@ public:
   const auto found=pointers_.find(resource);
   if(found!=pointers_.end()){const auto& old=entries_[found->second];const bool same=old.address==address&&old.bytes==d.Width&&old.heap.Get()==heap;ReleaseSRWLockExclusive(&lock_);return same;}
   if(count_==Capacity||d.Width>Budget-bytes_||next_==UINT64_MAX){++rejected_;ReleaseSRWLockExclusive(&lock_);return false;}
-  try{pointers_.emplace(resource,count_);}catch(...){++rejected_;ReleaseSRWLockExclusive(&lock_);return false;}
-  if(!ranges_.Insert(address,d.Width,count_)){pointers_.erase(resource);++rejected_;ReleaseSRWLockExclusive(&lock_);return false;}
-  entries_[count_++]={std::move(held),std::move(heldHeap),address,d.Width,++next_};bytes_+=d.Width;
+  std::size_t slot=0;while(slot<Capacity&&entries_[slot].resource)++slot;
+  try{pointers_.emplace(resource,slot);}catch(...){++rejected_;ReleaseSRWLockExclusive(&lock_);return false;}
+  if(!ranges_.Insert(address,d.Width,slot)){pointers_.erase(resource);++rejected_;ReleaseSRWLockExclusive(&lock_);return false;}
+  entries_[slot]={std::move(held),std::move(heldHeap),address,d.Width,++next_};++count_;bytes_+=d.Width;
   ReleaseSRWLockExclusive(&lock_);return true;
  }
  bool Resolve(UINT64 address,Lease& out,RangeMatch* reason=nullptr) noexcept {
@@ -39,6 +40,24 @@ public:
   const auto match=ranges_.Find(address,1,slot);if(reason)*reason=match;
   if(match==RangeMatch::Unique){const auto& e=entries_[slot];out={e.resource,e.heap,e.token,address-e.address};}
   ReleaseSRWLockShared(&lock_);return match==RangeMatch::Unique;
+ }
+ // Remove only the exact observed generation. Caller must hold a valid native
+ // resource reference and obtain the token before forwarding native release.
+ // Existing leases remain valid; this is NOT GPU completion or alias proof.
+ // Budget/Stats cover indexed owners only, not independent outstanding leases.
+ // No game hook calls this until lifecycle coverage and submission leases exist.
+ bool Retire(ID3D12Resource* resource,UINT64 token,Lease& retired) noexcept {
+  retired={};if(!resource||!token)return false;
+  Entry held;AcquireSRWLockExclusive(&lock_);
+  const auto found=pointers_.find(resource);
+  if(found==pointers_.end()||entries_[found->second].token!=token){ReleaseSRWLockExclusive(&lock_);return false;}
+  const auto slot=found->second;
+  if(!ranges_.Remove(slot)){ReleaseSRWLockExclusive(&lock_);return false;}
+  held=std::move(entries_[slot]);entries_[slot]={};
+  pointers_.erase(found);--count_;bytes_-=held.bytes;
+  ReleaseSRWLockExclusive(&lock_);
+  // Move COM references outside the lock; destruction may enter native code.
+  retired={std::move(held.resource),std::move(held.heap),held.token,0};return true;
  }
  void Stats(UINT64& count,UINT64& bytes,UINT64& rejected) noexcept {
   AcquireSRWLockShared(&lock_);count=static_cast<UINT64>(count_);bytes=bytes_;rejected=rejected_;ReleaseSRWLockShared(&lock_);

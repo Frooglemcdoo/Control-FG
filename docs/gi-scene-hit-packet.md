@@ -104,3 +104,19 @@ preserving independent leases for pending GPU work and old scene cuts. Native
 release does not itself prove GPU completion, alias validity, or that every
 AS allocation passes these callsites. No release hook or larger cap is enabled
 by this checkpoint; replacement GI remains disabled.
+
+## Retirement API implementation
+
+ASResourceOwners now has token-checked Retire. It removes the exact generation
+from new address lookups, returns the retained resource/heap to the caller,
+reuses vacant index slots and never resets its monotonically increasing token.
+Existing leases stay independent. Registry byte accounting describes indexed
+owners, not all outstanding leases; those must remain separately bounded.
+
+The Windows runtime fixture now exercises stale and duplicate retirement,
+re-admission of the same pointer, surviving adjacent index entries, placed heap
+retention and 1,000 retirement/reuse cycles. This checks COM lifetime and registry
+consistency, not an actual pending DXR command. The API remains disconnected from
+native release: current journals retain tokens rather than AS leases, so enabling
+retirement now could invalidate resources still used by submitted work. Submission
+lease retention and a verified native lifecycle bridge are required together.

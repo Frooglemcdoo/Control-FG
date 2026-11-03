@@ -174,6 +174,32 @@ int main(){
  UINT64 asCount=0,asBytes=0,asRejected=0;asRegistry.Stats(asCount,asBytes,asRejected);
  assert(asCount==2&&asBytes==128&&asRejected==1);
  assert(!asRegistry.Resolve(UINT64_MAX,asLease)&&!asLease.token);
+ // Retirement is an offline API until every submitted use holds its own lease.
+ gi_reuse::ASResourceOwners<2,128>::Lease pendingAS,retiredAS;
+ assert(asRegistry.Resolve(scene->GetGPUVirtualAddress(),pendingAS));
+ assert(!asRegistry.Retire(scene.Get(),asToken+100,retiredAS)&&!retiredAS.resource);
+ assert(asRegistry.Retire(scene.Get(),asToken,retiredAS));
+ assert(!asRegistry.Resolve(scene->GetGPUVirtualAddress(),asLease));
+ assert(pendingAS.resource->GetGPUVirtualAddress()==scene->GetGPUVirtualAddress());
+ assert(retiredAS.token==asToken&&retiredAS.resource.Get()==scene.Get());
+ assert(!asRegistry.Retire(scene.Get(),asToken,asLease));
+ asRegistry.Stats(asCount,asBytes,asRejected);assert(asCount==1&&asBytes==64);
+ // Reuse a freed slot without changing the surviving placed-resource index.
+ assert(asRegistry.Created(scene.Get()));
+ assert(asRegistry.Resolve(scene->GetGPUVirtualAddress(),asLease)&&asLease.token!=asToken);
+ assert(!asRegistry.Retire(scene.Get(),asToken,retiredAS));
+ assert(asRegistry.Resolve(placed->GetGPUVirtualAddress(),asLease)&&asLease.heap.Get()==placedHeap.Get());
+ const auto placedToken=asLease.token;
+ assert(asRegistry.Retire(placed.Get(),placedToken,retiredAS));
+ assert(retiredAS.heap.Get()==placedHeap.Get());
+ assert(!asRegistry.Resolve(placed->GetGPUVirtualAddress(),asLease));
+ for(unsigned cycle=0;cycle<1000;++cycle){
+  assert(asRegistry.Created(placed.Get(),placedHeap.Get()));
+  assert(asRegistry.Resolve(placed->GetGPUVirtualAddress(),asLease)&&asLease.token>placedToken);
+  assert(asRegistry.Retire(placed.Get(),asLease.token,retiredAS));
+ }
+ asRegistry.Stats(asCount,asBytes,asRejected);assert(asCount==1&&asBytes==64);
+ std::puts("PASS AS retirement: exact generation, stale/duplicate refusal, independent leases, placed heap retention and 1000 slot reuse cycles");
  rt::ObserveCreated(defaults[4].Get(),D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE,true);
  const auto knownIdentity=rt::ASIdentities(defaults[4]->GetGPUVirtualAddress(),defaults[4]->GetGPUVirtualAddress());
  assert(knownIdentity.first&&knownIdentity.first==knownIdentity.second);
