@@ -23,7 +23,7 @@ set "CONTROLTOH_GI_SPOT_TRACE=0"
 set "CONTROLTOH_GI_RAY_TRACE=0"
 set "CONTROLTOH_GI_JOINT_TRACE=0"
 set "CONTROLTOH_GI_STACK_CAPTURE=0"
-echo R305 - complete GI writer and scene capture. Recording starts automatically.
+echo R306 - GI resource lifetime integration. Recording starts automatically.
 echo Load your usual save, move around for about two minutes, then exit normally.
 echo No F7, F9, CAPTURE RR, zoom, or fixed camera is needed.
 echo Four complete GI material-binding tables are captured automatically, alongside scene and geometry data.

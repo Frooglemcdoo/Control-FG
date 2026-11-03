@@ -17,6 +17,17 @@ CALLS = {
               0x253b8, 0x25430, 0x254a0, 0x25508, 0x2565d, 0x28233, 0x2ae20, 0x35752),
     0x33a40: (0x357c6, 0x374a1),
 }
+RELEASE_SEQUENCE = {
+    0x25f0d: '488b09',          # wrapper.resource at offset 0
+    0x25f15: 'e816e5ffff',      # enqueue resource at 24430 before Release
+    0x24485: '488b07488bcfff5008', # resource vtable AddRef
+    0x244ac: '488938',          # queue entry retains resource pointer
+    0x244af: '488d0d6affffff',  # eventual callback 24420
+    0x244b6: '48894808',        # queue entry callback
+    0x24420: '488b0148ff6010',  # callback tail-calls resource Release
+    0x25f1a: '488b0b488b01ff5010', # wrapper's original Release
+    0x25f55: '4889034889431048894318', # clear resource/descriptor fields
+}
 
 
 def require(condition, message):
@@ -63,6 +74,9 @@ def check_calls(pe):
             require(actual == target, f'wrong target at {site:x}: {actual:x}')
             records.append({'site': hex(site), 'target': hex(target), 'bytes': raw.hex()})
     require(pe.read(0x34378, 4) == bytes.fromhex('4883c040'), 'binding row increment')
+    for site, expected in RELEASE_SEQUENCE.items():
+        raw = bytes.fromhex(expected)
+        require(pe.read(site, len(raw)) == raw, f'release ownership sequence at {site:x}')
     return records
 
 
@@ -88,10 +102,24 @@ def main():
                     rejected += 1
                 else:
                     raise RuntimeError('mutated call accepted')
-    report = {'schema': 1, 'sha256': SHA256, 'source_commit': '2f314e8992aec822f13cafbf7efa8bb55dc3915c',
+    sequence_rejected = 0
+    for site in RELEASE_SEQUENCE:
+        changed = bytearray(data)
+        changed[pe.offset(site, 1)] ^= 1
+        try:
+            check_calls(PE(changed))
+        except ValueError:
+            sequence_rejected += 1
+        else:
+            raise RuntimeError('mutated release sequence accepted')
+    report = {'schema': 2, 'sha256': SHA256, 'source_commit': '2f314e8992aec822f13cafbf7efa8bb55dc3915c',
               'calls': records, 'mutation_rejections': rejected, 'binding_row_stride': 64,
               'scope': 'listed direct calls only; not exhaustive callers, GI dispatch identity, ABI or lifetime proof',
-              'runtime_hooks_installed': False}
+              'release_sequence': {hex(k): v for k, v in RELEASE_SEQUENCE.items()},
+              'release_sequence_mutation_rejections': sequence_rejected,
+              'native_deferred_reference': True,
+              'gpu_completion_proven': False,
+              'runtime_hooks_installed_by_audit': False}
     text = json.dumps(report, indent=2)+'\n'
     if args.output:
         args.output.write_text(text, encoding='utf-8')

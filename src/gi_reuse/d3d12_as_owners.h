@@ -43,6 +43,14 @@ public:
   ReleaseSRWLockShared(&lock_);return match==RangeMatch::Unique;
  }
  struct Reference {UINT64 address=0,token=0;};
+ // Native wrapper release supplies a resource pointer, not an unambiguous GPU
+ // address. Capture its exact generation and a reference in one transaction.
+ bool AcquirePointer(ID3D12Resource* resource,Lease& out) noexcept {
+  out={};if(!resource)return false;
+  AcquireSRWLockShared(&lock_);const auto found=pointers_.find(resource);
+  if(found!=pointers_.end()){const auto& e=entries_[found->second];out={e.resource,e.heap,e.token,0};}
+  ReleaseSRWLockShared(&lock_);return bool(out.resource);
+ }
  // Validate all identities and AddRef under one owner transaction, following
  // the recovered PT PrepareLease contract. No partial output on failure.
  // This proves retained resource identity, not alias state or GPU contents.
@@ -63,7 +71,8 @@ public:
  // resource reference and obtain the token before forwarding native release.
  // Existing leases remain valid; this is NOT GPU completion or alias proof.
  // Budget/Stats cover indexed owners only, not independent outstanding leases.
- // No game hook calls this until lifecycle coverage and submission leases exist.
+ // Native diagnostic retirement must preserve native deferred release and all
+ // independently acquired observer leases. It does not authorize extra GPU use.
  bool Retire(ID3D12Resource* resource,UINT64 token,Lease& retired) noexcept {
   retired={};if(!resource||!token)return false;
   Entry held;AcquireSRWLockExclusive(&lock_);

@@ -266,3 +266,29 @@ triplets (full lengths, identifier consistency, local roots, inactive rows), rep
 complete-table count and retains partial failure evidence. This is the first user
 run needed for matched live GI writer inputs; R303's setup/dimensions and geometry
 are not requested as separate tests. Replacement GI remains disabled.
+
+## R306: native deferred ownership and diagnostic retirement
+
+The earlier blanket prerequisite of complete replacement traversal ownership
+before removing any inventory entry was too broad. Native release at 0x25f00
+calls 0x24430 before releasing the wrapper resource. That helper AddRefs the
+resource (vtable slot 1), stores it in the native queue at 0x111c00, and stores
+callback 0x24420, which tail-calls Release (slot 2). The wrapper subsequently
+clears its resource and descriptor fields. The updated hash-pinned audit checks
+nine relevant instruction sequences and rejects individual mutations. This
+proves reference transfer, not the deferred queue's GPU completion policy.
+
+R306 preserves that native path and drops only the diagnostic registry's own
+reference afterward. AcquirePointer captures the exact registry generation and
+retains it before forwarding. Retire rejects stale generations; the bridge never
+reads the cleared wrapper. Build/copy journal leases still survive until their
+own submission fence. No observer GPU work relies solely on the dropped entry.
+A missing native callsite can leave a retained entry, but cannot retire a newer
+entry by address reuse. Untracked wrappers are forwarded without mutation.
+
+The Windows fixture exercises the actual forwarding adapter, a clearing wrapper,
+a simulated native deferred reference, last-error preservation, untracked and
+unreadable inputs, and reentrant generation replacement. Existing blocked-queue
+submission and placed-heap tests remain required. WARP does not prove hardware
+DXR behavior. Full replacement traversal ownership remains required before
+issuing additional GI rays; this change enables no such rays.

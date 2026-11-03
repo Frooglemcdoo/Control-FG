@@ -208,8 +208,10 @@ inline MetadataLedger ledger;
 inline std::atomic<UINT64> ignoredCopySubmissions{0},ignoredEmptySubmissions{0},asSubmissions{0};
 // Keep recorded AS references through actual completion even if the native
 // command list resets. A failed signal or uncertain submission pins the entry.
-// Native retirement remains disabled: this covers recorded build/copy roots,
-// not every BLAS referenced by TLAS traversal or every DispatchRays use.
+// Covers recorded build/copy roots, not every BLAS referenced by traversal.
+// R306 drops obsolete diagnostic inventory references after native deferred
+// release; native traversal lifetime remains native-owned. Extra GI dispatches
+// still require a complete independently retained traversal closure.
 struct ASFlight {ComPtr<Journal> journal;UINT64 fenceValue=0;bool signaled=false;};
 inline std::array<ASFlight,256> asFlights;
 inline std::size_t activeFlight=asFlights.size();

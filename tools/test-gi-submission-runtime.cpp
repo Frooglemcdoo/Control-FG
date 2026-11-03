@@ -9,6 +9,7 @@
 #include <cstdlib>
 #include "../src/gi_reuse/d3d12_submission_metadata.h"
 #include "../src/gi_reuse/d3d12_scene_traversal_lease.h"
+#include "../src/gi_reuse/native_as_retirement.h"
 namespace fixture {
 inline bool PatchSlot(void** slot,void* expected,void* replacement) noexcept {
  DWORD old=0;if(!VirtualProtect(slot,sizeof(void*),PAGE_EXECUTE_READWRITE,&old))return false;
@@ -217,7 +218,7 @@ int main(){
  wrongRefs=sceneRefs;wrongRefs[1].address=UINT64_MAX;
  assert(!asRegistry.ResolveBatch(wrongRefs,sceneLeases)&&sceneLeases.empty());
  assert(!asRegistry.ResolveBatch({},sceneLeases));
- // Retirement is an offline API until every submitted use holds its own lease.
+ // Independent observer leases survive inventory retirement.
  gi_reuse::ASResourceOwners<2,128>::Lease pendingAS,retiredAS;
  assert(asRegistry.Resolve(scene->GetGPUVirtualAddress(),pendingAS));
  assert(!asRegistry.Retire(scene.Get(),asToken+100,retiredAS)&&!retiredAS.resource);
@@ -246,6 +247,33 @@ int main(){
  asRegistry.Stats(asCount,asBytes,asRejected);assert(asCount==1&&asBytes==64);
  std::puts("PASS atomic AS set acquisition: exact tokens, partial failure rollback, placed heaps and independent retirement lifetime");
  std::puts("PASS AS retirement: exact generation, stale/duplicate refusal, independent leases, placed heap retention and 1000 slot reuse cycles");
+ // Exercise the actual forwarding adapter with a clearing native wrapper and
+ // simulated native deferred owner. No post-forward wrapper read is permitted.
+ using Retirement=gi_reuse::NativeASRetirement;
+ ASRegistry lifecycle;assert(lifecycle.Created(scene.Get()));
+ ASRegistry::Lease beforeRelease;assert(lifecycle.AcquirePointer(scene.Get(),beforeRelease));
+ assert(!lifecycle.AcquirePointer(nullptr,asLease));
+ assert(!lifecycle.AcquirePointer(defaults[1].Get(),asLease));
+ ID3D12Resource* wrapper=scene.Get();ComPtr<ID3D12Resource> nativeDeferred;unsigned forwards=0;
+ SetLastError(123);
+ assert(gi_reuse::ForwardNativeASRelease(lifecycle,&wrapper,[&](void* p){
+  assert(GetLastError()==123);++forwards;auto** w=static_cast<ID3D12Resource**>(p);
+  nativeDeferred=*w;*w=nullptr;SetLastError(456);
+ })==Retirement::Retired);
+ assert(GetLastError()==456&&forwards==1&&!wrapper&&nativeDeferred.Get()==scene.Get());
+ assert(!lifecycle.AcquirePointer(scene.Get(),asLease)&&beforeRelease.resource.Get()==scene.Get());
+ assert(gi_reuse::ForwardNativeASRelease(lifecycle,&wrapper,[&](void*){++forwards;})==Retirement::Untracked);
+ // If a newer registry generation is installed during forwarding, stale
+ // retirement must not remove it. This also covers reentrant callbacks.
+ assert(lifecycle.Created(scene.Get()));wrapper=scene.Get();
+ assert(gi_reuse::ForwardNativeASRelease(lifecycle,&wrapper,[&](void*){
+  ++forwards;ASRegistry::Lease old,removed;assert(lifecycle.AcquirePointer(scene.Get(),old));
+  assert(lifecycle.Retire(scene.Get(),old.token,removed));assert(lifecycle.Created(scene.Get()));wrapper=nullptr;
+ })==Retirement::Stale);
+ assert(lifecycle.AcquirePointer(scene.Get(),asLease));
+ assert(gi_reuse::ForwardNativeASRelease(lifecycle,reinterpret_cast<void*>(1),[&](void*){++forwards;})==Retirement::InvalidWrapper);
+ assert(forwards==4);
+ std::puts("PASS native AS retirement adapter: exact pointer identity, forwarding once, wrapper clearing, native deferred owner, stale generation and last-error preservation");
  rt::ObserveCreated(defaults[4].Get(),D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE,true);
  const auto knownIdentity=rt::ASIdentities(defaults[4]->GetGPUVirtualAddress(),defaults[4]->GetGPUVirtualAddress());
  assert(knownIdentity.first&&knownIdentity.first==knownIdentity.second);
