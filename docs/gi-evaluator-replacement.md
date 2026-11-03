@@ -445,3 +445,13 @@ the complete AS closure through submission completion. The helper does not make
 the diagnostic metadata inventory a live scene provider. Final output integration
 and spatial/temporal reuse remain outstanding. No new capture or game package is
 requested by this checkpoint.
+
+Windows validation passed at remote commit
+`d50fd79ad1f2cd2a51a1ff8c86c0c642ea26e2ac` (local `6ce6fae`).
+Foundation run `41722234369` / job `126217744699` passed shader compilation,
+scene/producer binding tests and the existing D3D12 WARP suite. Full mod build
+run `41722234446` / job `126217746104` also completed successfully. The first
+Windows attempt exposed ambiguous unqualified `Bytes` lookup in MSVC; explicitly
+qualifying `PTShaderTableAdapter::Bytes` fixed it, and the full foundation suite
+was rerun successfully. The mod package still uses the R309 live renderer;
+successful compilation does not make the new GI producer live or game-ready.
