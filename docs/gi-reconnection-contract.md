@@ -111,3 +111,14 @@ resource wiring are not replaced by the synthetic test.
 References:
 - https://learn.microsoft.com/en-us/windows/win32/direct3d12/ignorehit-function
 - https://learn.microsoft.com/en-us/windows/win32/direct3d12/raytcurrent
+
+Windows validation at remote commit `1d914816763612edfee7865f2ce77c8ce285ca78`
+(local `30c52ad`, tree `a0cafa6e30864746307cddc12725c1342910b386`):
+foundation run 41705672364 / job 126160201934 passed. Backend build run
+41705672201 / job 126160201067 passed with MSVC warnings as errors; artifact
+13264843569 contains the four-file standalone test ZIP (154,480 bytes, SHA256
+`cb5f843ec9f5fe636cacfb0b8458782b342b08968fe3f265044084d40db106b7`).
+Library delivery: `libfile_e82a3c48ab408191948aee5c6d155dbc`.
+The executable enables the D3D12 debug layer when installed and reports errors
+in its result file. Hardware execution has NOT occurred on this host or CI.
+This package is not a replacement game DLL and must not be installed as one.
