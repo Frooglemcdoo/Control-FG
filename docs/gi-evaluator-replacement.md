@@ -69,3 +69,8 @@ handling, outputs/normalization, unmodified material sampling and wrong-hash
 rejection. DXC compiles the complete shader as cs_6_0, HLSL 2018, with warnings
 as errors. Windows foundation CI now includes these checks. This is compiler and
 source-contract validation, not a quality or speed result.
+
+Windows foundation run 41693404033 / job 126117527584 passed at remote commit
+6ed98f204a2f6cb43e133e1a6475786784a1ddc7. This includes the complete GI evaluator
+compile and translation tests plus the existing CPU/WARP foundation suite. The
+GI evaluator itself is not executed by those existing WARP adapter tests.
