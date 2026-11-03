@@ -20,14 +20,18 @@ static HRESULT STDMETHODCALLTYPE Next(ID3D12Device5*,const D3D12_STATE_OBJECT_DE
     Require(desc->NumSubobjects==3&&desc->Type==nativeDesc->Type);
     const auto& lib=*static_cast<const D3D12_DXIL_LIBRARY_DESC*>(desc->pSubobjects[0].pDesc);
     const auto& nativeLib=*static_cast<const D3D12_DXIL_LIBRARY_DESC*>(nativeDesc->pSubobjects[0].pDesc);
-    Require(lib.DXILLibrary.pShaderBytecode==(nativeLib.DXILLibrary.BytecodeLength==24472?gi_sequence::kGISequenceShader0:gi_sequence::kGISequenceShader1));
+    const auto expected=gi_sequence::LiveRequested()?
+        (nativeLib.DXILLibrary.BytecodeLength==24472?gi_sequence::kGILiveShader0:gi_sequence::kGILiveShader1):
+        (nativeLib.DXILLibrary.BytecodeLength==24472?gi_sequence::kGISequenceShader0:gi_sequence::kGISequenceShader1);
+    Require(lib.DXILLibrary.pShaderBytecode==expected);
     Require(lib.NumExports==nativeLib.NumExports&&lib.pExports==nativeLib.pExports);
     const auto& assoc=*static_cast<const D3D12_SUBOBJECT_TO_EXPORTS_ASSOCIATION*>(desc->pSubobjects[2].pDesc);
     Require(assoc.pSubobjectToAssociate==desc->pSubobjects+1);
     Require(desc->pSubobjects[1].pDesc==nativeDesc->pSubobjects[1].pDesc);
     *out=reject?nullptr:reinterpret_cast<void*>(2);return reject?E_FAIL:S_OK;
 }
-int main(){try{
+int main(int argc,char**){try{
+    SetEnvironmentVariableA("CONTROLTOH_GI_LIVE",argc>1?"1":"0");
     unsigned char source=0;
     D3D12_EXPORT_DESC exportDesc{L"diffuseGIRayGeneration",nullptr,D3D12_EXPORT_FLAG_NONE};
     D3D12_DXIL_LIBRARY_DESC library{{&source,24472},1,&exportDesc};

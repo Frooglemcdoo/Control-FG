@@ -2,6 +2,11 @@
 // Diagnostic creation-time replacement: applies to GI in every mode for this build.
 namespace gi_sequence {
 #include "../build/gi_sequence.generated.h"
+#include "../build/gi_live_sampling.generated.h"
+inline bool LiveRequested() noexcept {
+ static const bool requested=[] {char value[4]{};return GetEnvironmentVariableA("CONTROLTOH_GI_LIVE",value,4)==1&&value[0]=='1';}();
+ return requested;
+}
 using Create = HRESULT (STDMETHODCALLTYPE*)(ID3D12Device5*,const D3D12_STATE_OBJECT_DESC*,REFIID,void**);
 inline std::atomic<unsigned long long> matched{0},created{0},failures{0};
 inline HRESULT CreateState(Create next,ID3D12Device5* device,const D3D12_STATE_OBJECT_DESC* desc,REFIID iid,void** out) {
@@ -26,7 +31,8 @@ inline HRESULT CreateState(Create next,ID3D12Device5* device,const D3D12_STATE_O
         std::vector<D3D12_STATE_SUBOBJECT> objects(desc->pSubobjects,desc->pSubobjects+desc->NumSubobjects);
         std::vector<D3D12_SUBOBJECT_TO_EXPORTS_ASSOCIATION> associations(desc->NumSubobjects);
         auto library=*static_cast<const D3D12_DXIL_LIBRARY_DESC*>(objects[index].pDesc);
-        library.DXILLibrary=variant==0?D3D12_SHADER_BYTECODE{kGISequenceShader0,sizeof(kGISequenceShader0)}:D3D12_SHADER_BYTECODE{kGISequenceShader1,sizeof(kGISequenceShader1)};
+        if(LiveRequested())library.DXILLibrary=variant==0?D3D12_SHADER_BYTECODE{kGILiveShader0,sizeof(kGILiveShader0)}:D3D12_SHADER_BYTECODE{kGILiveShader1,sizeof(kGILiveShader1)};
+        else library.DXILLibrary=variant==0?D3D12_SHADER_BYTECODE{kGISequenceShader0,sizeof(kGISequenceShader0)}:D3D12_SHADER_BYTECODE{kGISequenceShader1,sizeof(kGISequenceShader1)};
         objects[index].pDesc=&library;
         // Associations point INTO the descriptor array; rebase every one.
         for(UINT i=0;i<desc->NumSubobjects;++i){
@@ -45,7 +51,8 @@ inline HRESULT CreateState(Create next,ID3D12Device5* device,const D3D12_STATE_O
         const HRESULT hr=next(device,&replacement,iid,&candidate);
         if(SUCCEEDED(hr)&&candidate){
             *out=candidate;++created;
-            Log("GI_SEQUENCE_R264 applied=1 variant=%u frame_mask=255 counter=69z rays=unchanged native_fallback=0 scope=diagnostic_all_gi",variant);
+            if(LiveRequested())Log("GI_LIVE_R307 state_created=1 variant=%u stage=stratified_initial_rays full_frame_seed=1 rays=unchanged native_hit_miss=1 extra_dispatches=0 reuse=0",variant);
+            else Log("GI_SEQUENCE_R264 applied=1 variant=%u frame_mask=255 counter=69z rays=unchanged native_fallback=0 scope=diagnostic_all_gi",variant);
             return hr;
         }
         if(candidate)static_cast<IUnknown*>(candidate)->Release();
