@@ -1,5 +1,6 @@
 #pragma once
 #include "gi_native_scene_owners.h"
+#include "gi_native_submission_hooks.h"
 #include <deque>
 namespace GINativeSceneQueues {
 using Microsoft::WRL::ComPtr;
@@ -110,4 +111,7 @@ static void CpuSignal(ID3D12Fence* input) noexcept {
  if(input&&SUCCEEDED(input->QueryInterface(IID_PPV_ARGS(&identity))))for(const auto& f:fences)if(f.identity.Get()==identity.Get()){catalog.Invalidate("live_cpu_signal_on_observed_fence");break;}
  SetLastError(error);
 }
+static const GINativeSubmission::Callbacks callbacks{&Before,&After,&BeforeFence,&AfterFence,&CpuSignal};
+[[maybe_unused]] static const bool registered=[] {GINativeSubmission::observer.store(&callbacks);return true;}();
+
 }

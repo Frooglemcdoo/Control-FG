@@ -16,9 +16,12 @@ inline std::atomic<unsigned long long> revision{0},lastReported{~0ull};
 #endif
 inline void Observe(ID3D12Device* device,const D3D12_COMPUTE_PIPELINE_STATE_DESC* desc,IUnknown* native,CreateCompute create) noexcept {
 #ifdef CONTROL_GI_LONG_SEQUENCE
- if(!Enabled()||!device||!desc||!native||!create||!desc->CS.pShaderBytecode||desc->CS.BytecodeLength!=kNativeEvaluatorSize)return;
+ if((!Enabled()&&!GIOwnedPipeline::Enabled())||!device||!desc||!native||!create||!desc->CS.pShaderBytecode||desc->CS.BytecodeLength!=kNativeEvaluatorSize)return;
  char sha[65]{};
  if(!PTReflectionSha256(static_cast<const unsigned char*>(desc->CS.pShaderBytecode),desc->CS.BytecodeLength,sha)||strcmp(sha,"1dfb4c9b054037e030ff9eed6ed5e482c8c32f9f301bb02c89eb0084c52842de"))return;
+ const auto owned=GIOwnedPipeline::Attach(device,desc->pRootSignature,native);
+ if(GIOwnedPipeline::Enabled())Trace("GI_OWNED_PIPELINE attached=%u hr=0x%08lX dispatch_enabled=0",unsigned(owned==S_OK),static_cast<unsigned long>(owned));
+ if(!Enabled())return;
  auto replacement=*desc;replacement.CS={kEvaluatorShader,sizeof(kEvaluatorShader)};replacement.CachedPSO={};
  ID3D12PipelineState* alternate=nullptr;
  HRESULT hr=create(device,&replacement,IID_PPV_ARGS(&alternate));
@@ -29,6 +32,7 @@ inline void Observe(ID3D12Device* device,const D3D12_COMPUTE_PIPELINE_STATE_DESC
   if(SUCCEEDED(hr)&&owner){hr=owner->SetPrivateData(kMode,sizeof(mode),&mode);
    if(SUCCEEDED(hr))hr=owner->SetPrivateDataInterface(kVariant,alternate);owner->Release();}
  }
+ if(SUCCEEDED(hr)&&alternate)GIOwnedPipeline::Share(native,alternate);
  if(alternate)alternate->Release();
  if(SUCCEEDED(hr))ready.store(true);
  Trace("GI_EVALUATOR_R309 ready=%u hr=0x%08lX shader=gi6 native_fallback=%u",unsigned(SUCCEEDED(hr)),static_cast<unsigned long>(hr),unsigned(FAILED(hr)));

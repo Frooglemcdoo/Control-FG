@@ -1,5 +1,7 @@
 #pragma once
 #include "gi_stack_capture.h"
+#include "gi_native_submission_hooks.h"
+#include "gi_owned_pipeline_runtime.h"
 #include "gi_reuse/d3d12_submission_metadata.h"
 #include "gi_reuse/d3d12_snapshot_retirement.h"
 #include "gi_reuse/d3d12_index_sample.h"

@@ -442,7 +442,7 @@ inline std::atomic<EndTiming> endIntegration{nullptr};
 inline void STDMETHODCALLTYPE ExecuteHook(ID3D12CommandQueue* queue,UINT count,ID3D12CommandList*const* lists) {
     const auto original=LookupQueue(queue).execute;
     if(submitDepth){original(queue,count,lists);return;}
-    ++submitDepth;const auto liveToken=GINativeSceneQueues::Before(queue,count,lists);CaptureLease lease;QueueCall call;
+    ++submitDepth;const auto liveToken=GINativeSubmission::Before(queue,count,lists);CaptureLease lease;QueueCall call;
     if(lease)call=BeginQueueCall(queue,QueueOperation::Execute,count,lists);
     rt_spot_capture_runtime::BeforeExecute(queue,count,lists);
     const auto timer=beginTiming.load();
@@ -459,17 +459,17 @@ inline void STDMETHODCALLTYPE ExecuteHook(ID3D12CommandQueue* queue,UINT count,I
     rt_spot_capture_runtime::AfterExecute(queue,count,lists);
     gi_spot_trace::AfterExecute(queue,count,lists);
     if(lease)EndQueueCall(call);
-    GINativeSceneQueues::After(queue,liveToken);
+    GINativeSubmission::After(queue,liveToken);
     --submitDepth;
 }
 inline HRESULT ForwardFenceCall(ID3D12CommandQueue* queue,ID3D12Fence* fence,UINT64 value,QueueOperation operation) {
     const auto hook=LookupQueue(queue);const auto original=operation==QueueOperation::Signal?hook.signal:hook.wait;
     if(submitDepth)return original(queue,fence,value);
-    ++submitDepth;const auto liveLocked=GINativeSceneQueues::BeforeFence();CaptureLease lease;QueueCall call;
+    ++submitDepth;const auto liveLocked=GINativeSubmission::BeforeFence();CaptureLease lease;QueueCall call;
     if(lease)call=BeginQueueCall(queue,operation,0,nullptr,fence,value);
     const auto result=original(queue,fence,value);
     if(lease)EndQueueCall(call,result);
-    GINativeSceneQueues::AfterFence(queue,fence,value,operation==QueueOperation::Signal,result,liveLocked);
+    GINativeSubmission::AfterFence(queue,fence,value,operation==QueueOperation::Signal,result,liveLocked);
     --submitDepth;return result;
 }
 inline HRESULT STDMETHODCALLTYPE SignalHook(ID3D12CommandQueue* queue,ID3D12Fence* fence,UINT64 value) {
@@ -479,7 +479,7 @@ inline HRESULT STDMETHODCALLTYPE WaitHook(ID3D12CommandQueue* queue,ID3D12Fence*
     return ForwardFenceCall(queue,fence,value,QueueOperation::Wait);
 }
 inline HRESULT STDMETHODCALLTYPE CpuSignalHook(ID3D12Fence* fence,UINT64 value) {
-    GINativeSceneQueues::CpuSignal(fence);
+    GINativeSubmission::CpuSignal(fence);
     // CPU signals do not carry a GPU queue dependency. Never let one silently
     // satisfy a recorded GPU producer/consumer edge.
     CaptureLease lease;

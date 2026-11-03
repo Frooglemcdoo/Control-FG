@@ -31,6 +31,7 @@ static bool PTReflectionSha256(const unsigned char* data,size_t size,char (&hex)
  if(ok)for(unsigned i=0;i<32;++i)sprintf_s(hex+i*2,3,"%02x",digest[i]);return ok;
 }
 #define CONTROL_GI_LONG_SEQUENCE
+#include "../src/gi_owned_pipeline_runtime.h"
 namespace native_lighting {
 using CreateCompute=HRESULT (STDMETHODCALLTYPE*)(ID3D12Device*,const D3D12_COMPUTE_PIPELINE_STATE_DESC*,REFIID,void**);
 inline void Trace(const char*,...) noexcept {}
