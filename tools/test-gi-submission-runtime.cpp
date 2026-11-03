@@ -206,6 +206,8 @@ int main(){
  geometry.Triangles.VertexBuffer.StrideInBytes=16;
  auto padded=gi_reuse::CopyBLASGeometry(build.Inputs,&detail);assert(padded&&gi_reuse::GeometryMetadata::VertexBytes(*padded->At(0))==44);
  geometry.Triangles.IndexFormat=DXGI_FORMAT_R32_UINT;
+ assert(gi_reuse::CopyBLASGeometry(build.Inputs,&detail));
+ geometry.Triangles.IndexFormat=DXGI_FORMAT_R32_FLOAT;
  assert(!gi_reuse::CopyBLASGeometry(build.Inputs,&detail)&&detail.reason==gi_reuse::GeometryReject::IndexFormat&&detail.index==0&&detail.triangle.stride==16);
  geometry.Triangles.IndexFormat=DXGI_FORMAT_R16_UINT;geometry.Triangles.VertexBuffer.StrideInBytes=12;
  const D3D12_RAYTRACING_GEOMETRY_DESC* pointers[]={&geometry};build.Inputs.DescsLayout=D3D12_ELEMENTS_LAYOUT_ARRAY_OF_POINTERS;build.Inputs.ppGeometryDescs=pointers;

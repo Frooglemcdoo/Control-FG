@@ -31,15 +31,22 @@ int main(){
  journal.Reset();journal.Append({ASOperation::Invalidate,{256},0});assert(live.Submit(1,4,journal,journal.generation));
  assert(!live.PlanTriangle(256,revision,0,0,plan));assert(live.PlanTriangle(512,copyRevision,0,0,plan));
  for(int test=0;test<11;++test){auto t=Triangle();switch(test){
- case 0:t.vertexFormat=2;break;case 1:t.indexFormat=42;break;case 2:t.stride=14;break;
+ case 0:t.vertexFormat=2;break;case 1:t.indexFormat=43;break;case 2:t.stride=14;break;
  case 3:t.vertexCount=0;break;case 4:t.indexCount=4;break;case 5:t.vertices=UINT64_MAX-3;break;
  case 6:t.indices=UINT64_MAX-1;break;case 7:t.transform=UINT64_MAX-15;break;
  case 8:t.flags=4;break;case 9:t.vertices=4097;break;case 10:t.indices=8193;break;}
  assert(!GeometryMetadata::Create({Triangle(),t})); // Whole geometry order rejected.
  }
+ auto wide=Triangle();wide.vertices=163708010496ull;wide.indices=161909921216ull;
+ wide.vertexCount=91799;wide.indexCount=28086;wide.indexFormat=42;
+ auto wideGeometry=GeometryMetadata::Create({wide});assert(wideGeometry&&GeometryMetadata::IndexBytes(wide)==112344);
+ ASLedger<4> wideLedger;ASJournal<4> wideJournal;wideJournal.Append(Build(256,wideGeometry));
+ assert(wideLedger.Submit(1,1,wideJournal,0));
+ assert(wideLedger.PlanTriangle(256,wideLedger.Find(256)->revision,0,1,plan)&&plan.indexAddress==wide.indices+12);
+ wide.indices+=2;assert(GeometryMetadata::Validate(wide)==GeometryReject::IndexAlignment);
  assert(!GeometryMetadata::Create({}));assert(!GeometryMetadata::Create(std::vector<TriangleMetadata>(4097,Triangle())));
  auto padded=Triangle();padded.stride=16;auto paddedGeometry=GeometryMetadata::Create({padded});assert(paddedGeometry&&GeometryMetadata::VertexBytes(padded)==124);
- GeometryReject rejection;std::uint32_t badIndex=0;auto bad=Triangle();bad.indexFormat=42;
+ GeometryReject rejection;std::uint32_t badIndex=0;auto bad=Triangle();bad.indexFormat=43;
  assert(!GeometryMetadata::Create({Triangle(),bad},&rejection,&badIndex)&&rejection==GeometryReject::IndexFormat&&badIndex==1);
  padded.stride=UINT64_MAX-3;assert(!GeometryMetadata::Create({padded},&rejection)&&rejection==GeometryReject::VertexRange);
  auto transformed=Triangle();transformed.transform=12288;assert(GeometryMetadata::Create({transformed}));

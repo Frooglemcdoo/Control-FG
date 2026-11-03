@@ -176,7 +176,7 @@ inline void RecordBuild(ID3D12GraphicsCommandList4* list,const D3D12_BUILD_RAYTR
    GeometryDiagnostic diagnostic;r.geometry=CopyBLASGeometry(desc->Inputs,&diagnostic);if(!r.geometry){RememberGeometryReject(*desc,diagnostic);Fail("blas_unsupported_descriptor");return;}
   }
   if(r.topLevel)CheckOwner(r.instances,UINT64(r.count)*64,OwnerKind::Instances,&journal->states);
-  else for(UINT i=0;i<r.count;++i){const auto* t=r.geometry->At(i);CheckOwner(t->vertices,GeometryMetadata::VertexBytes(*t),OwnerKind::Vertex,&journal->states);CheckOwner(t->indices,UINT64(t->indexCount)*2,OwnerKind::Index,&journal->states);if(t->transform)CheckOwner(t->transform,48,OwnerKind::Transform,&journal->states);}
+  else for(UINT i=0;i<r.count;++i){const auto* t=r.geometry->At(i);CheckOwner(t->vertices,GeometryMetadata::VertexBytes(*t),OwnerKind::Vertex,&journal->states);CheckOwner(t->indices,GeometryMetadata::IndexBytes(*t),OwnerKind::Index,&journal->states);if(t->transform)CheckOwner(t->transform,48,OwnerKind::Transform,&journal->states);}
   const auto source=update?desc->SourceAccelerationStructureData:0;
   journal->asTokens.push_back(ASIdentities(r.address,source));
   if(!journal->data.Append({update?ASOperation::Update:ASOperation::Build,r,source}))Fail("build_journal_capacity");

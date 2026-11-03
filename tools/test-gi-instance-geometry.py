@@ -16,8 +16,15 @@ class Decoder(unittest.TestCase):
   f['instance']=decode_instance(struct.pack('<12fIIQ',-2,0,0,10,0,3,0,0,0,0,1,0,1<<24,0,4096))
   p,n=decode_triangle(**f);self.assertEqual(p,((6,0,0),(4,0,0),(6,3,0)));self.assertEqual(n,(0,0,-1))
  def test_rejections(self):
-  for change in [dict(generation=8),dict(primitive=1),dict(index_count=4),dict(vertex_count=2),dict(stride=16),dict(index_format=42),dict(vertex_format=2),dict(vertex_address=99),dict(indices=Snapshot(7,200,b'')),dict(vertices=Snapshot(7,100,bytes(36))),dict(vertex_address=2**64)]:
+  for change in [dict(generation=8),dict(primitive=1),dict(index_count=4),dict(vertex_count=2),dict(stride=16),dict(index_format=43),dict(vertex_format=2),dict(vertex_address=99),dict(indices=Snapshot(7,200,b'')),dict(vertices=Snapshot(7,100,bytes(36))),dict(vertex_address=2**64)]:
    with self.subTest(change=change),self.assertRaises(ValueError):decode_triangle(**(self.fixture()|change))
+ def test_uint32_padded(self):
+  f=self.fixture();data=bytearray(65539*16)
+  for i,p in enumerate(((0,0,0),(1,0,0),(0,1,0))):struct.pack_into('<3f',data,(65536+i)*16,*p)
+  f.update(vertices=Snapshot(7,100,bytes(data)),indices=Snapshot(7,200,struct.pack('<3I',65536,65537,65538)),vertex_count=65539,index_format=42,stride=16)
+  self.assertEqual(decode_triangle(**f)[1],(0,0,1))
+  for change in [dict(index_address=202),dict(indices=Snapshot(7,200,bytes(11))),dict(vertex_count=65538)]:
+   with self.assertRaises(ValueError):decode_triangle(**(f|change))
  def test_instance_rejections(self):
   for data in [bytes(63),bytes(64),struct.pack('<12fIIQ',*IDENTITY,0,0,4097),struct.pack('<12fIIQ',float('nan'),*IDENTITY[1:],0,0,4096)]:
    with self.assertRaises(ValueError):decode_instance(data)

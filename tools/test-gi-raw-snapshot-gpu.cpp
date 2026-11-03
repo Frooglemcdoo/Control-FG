@@ -40,7 +40,8 @@ void STDMETHODCALLTYPE ObservedIndirect(ID3D12GraphicsCommandList*,ID3D12Command
  Require(count==7 && offset==16 && countOffset==32,"indirect arguments preserved");++indirectForwards;
 }
 int main(int argc, char** argv) try {
- Require(argc == 3, "usage: test raw-shader.dxil index-shader.dxil");
+ Require(argc == 3 || argc == 4, "usage: test raw-shader.dxil index-shader.dxil [--32]");
+ const bool wide=argc==4;
  SetEnvironmentVariableA("CONTROLTOH_GI_METADATA","1"); SetEnvironmentVariableA("CONTROLTOH_GI_BINDINGS","1");
  SetEnvironmentVariableA("CONTROLTOH_GI_INDEX_SNAPSHOTS","1");
  ComPtr<ID3D12Debug> debug; Check(D3D12GetDebugInterface(IID_PPV_ARGS(&debug))); debug->EnableDebugLayer();
@@ -113,8 +114,8 @@ int main(int argc, char** argv) try {
  gi_reuse::runtime::Initialize(list.Get());
  gi_reuse::runtime::ObserveCreated(source.Get(),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,true);
  D3D12_RAYTRACING_GEOMETRY_DESC sampleGeometry{};sampleGeometry.Type=D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES;
- sampleGeometry.Triangles.IndexBuffer=source->GetGPUVirtualAddress()+258;sampleGeometry.Triangles.IndexCount=125;
- sampleGeometry.Triangles.IndexFormat=DXGI_FORMAT_R16_UINT;sampleGeometry.Triangles.VertexCount=65536;
+ sampleGeometry.Triangles.IndexBuffer=source->GetGPUVirtualAddress()+(wide?256:258);sampleGeometry.Triangles.IndexCount=wide?63:125;
+ sampleGeometry.Triangles.IndexFormat=wide?DXGI_FORMAT_R32_UINT:DXGI_FORMAT_R16_UINT;sampleGeometry.Triangles.VertexCount=wide?UINT32_MAX:65536;
  D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC sampleBuild{};sampleBuild.Inputs.Type=D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL;
  sampleBuild.Inputs.DescsLayout=D3D12_ELEMENTS_LAYOUT_ARRAY;sampleBuild.Inputs.NumDescs=1;sampleBuild.Inputs.pGeometryDescs=&sampleGeometry;
  fixture::gi_snapshot_probe::Build(list.Get(),&sampleBuild);
@@ -147,8 +148,9 @@ int main(int argc, char** argv) try {
  fixture::gi_snapshot_probe::Reset(list.Get());fixture::gi_snapshot_probe::Poll();
  Require(fixture::gi_snapshot_probe::completed.load()==1,"probe completed sealed recording");
  Require(fixture::gi_snapshot_probe::captureRead.load()==1&&fixture::gi_snapshot_probe::captureFailed.load()==0,"sample readback only after completion and reset");
- UINT64 expectedHash=14695981039346656037ull;for(UINT64 i=258;i<508;++i){expectedHash^=static_cast<unsigned char>((i*17+39)%251);expectedHash*=1099511628211ull;}
+ UINT64 expectedHash=14695981039346656037ull;for(UINT64 i=wide?256:258;i<508;++i){expectedHash^=static_cast<unsigned char>((i*17+39)%251);expectedHash*=1099511628211ull;}
  Require(fixture::gi_snapshot_probe::lastCaptureHash.load()==expectedHash&&fixture::gi_snapshot_probe::captureBadPadding.load()==0&&fixture::gi_snapshot_probe::captureBadIndices.load()==0,"native sampler hash, index bounds and padding");
+ if(wide)Require(fixture::gi_snapshot_probe::lastCaptureMaximum.load()>65535&&fixture::gi_snapshot_probe::captureAttempts[2].load()==1,"32-bit index preserved above uint16 range");
  Require(fixture::gi_compute_hooks::Read(list.Get())->generation>capturedEpoch,"reset generation");
  Require(!fixture::gi_compute_hooks::Capture(list.Get(),unobserved,epoch),"reset clears root state");
  list->SetComputeRootSignature(nativeRoot.Get());

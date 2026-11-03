@@ -23,22 +23,24 @@ class GeometryMetadata final {
     }
 public:
     static constexpr std::size_t MaxGeometries=4096;
-    // Indexed float3/uint16 metadata. Stride is preserved, never assumed packed.
+    static std::uint32_t IndexSize(const TriangleMetadata& t) noexcept {return t.indexFormat==57?2u:t.indexFormat==42?4u:0u;}
+    static std::uint64_t IndexBytes(const TriangleMetadata& t) noexcept {return std::uint64_t(t.indexCount)*IndexSize(t);}
+    // Indexed float3/uint16 or uint32 metadata. Stride is preserved, never assumed packed.
     static std::uint64_t VertexBytes(const TriangleMetadata& t) noexcept {
         if(!t.vertexCount||t.stride<12||std::uint64_t(t.vertexCount-1)>(UINT64_MAX-12)/t.stride)return 0;
         return std::uint64_t(t.vertexCount-1)*t.stride+12;
     }
     static GeometryReject Validate(const TriangleMetadata& t) noexcept {
         if(t.vertexFormat!=6)return GeometryReject::VertexFormat;
-        if(t.indexFormat!=57)return GeometryReject::IndexFormat;
+        if(!IndexSize(t))return GeometryReject::IndexFormat;
         if(t.stride<12||t.stride%4)return GeometryReject::Stride;
         if(!t.vertexCount)return GeometryReject::VertexCount;
         if(!t.indexCount||t.indexCount%3)return GeometryReject::IndexCount;
         if(t.vertices%4)return GeometryReject::VertexAlignment;
-        if(t.indices%2)return GeometryReject::IndexAlignment;
+        if(t.indices%IndexSize(t))return GeometryReject::IndexAlignment;
         if(t.flags&~3u)return GeometryReject::Flags;
         if(!Range(t.vertices,VertexBytes(t)))return GeometryReject::VertexRange;
-        if(!Range(t.indices,std::uint64_t(t.indexCount)*2))return GeometryReject::IndexRange;
+        if(!Range(t.indices,IndexBytes(t)))return GeometryReject::IndexRange;
         if(t.transform&&(t.transform%16||!Range(t.transform,48)))return GeometryReject::Transform;
         return GeometryReject::None;
     }

@@ -69,7 +69,7 @@ public:
         for(const auto& entry:records_)if(!visitor(entry.second))return false;
         return true;
     }
-    // Plans only the six-byte index read. Vertex IDs must be decoded from
+    // Plans only the format-sized three-index read. Vertex IDs must be decoded from
     // same-generation bytes and bounded against vertexCount before GPU loads.
     bool PlanTriangle(std::uint64_t address,std::uint64_t expectedRevision,
                       std::uint32_t geometryIndex,std::uint32_t primitive,
@@ -79,7 +79,7 @@ public:
         if(!r||!expectedRevision||r->revision!=expectedRevision||r->topLevel||!r->geometry)return false;
         const auto* t=r->geometry->At(geometryIndex);
         if(!t||primitive>=t->indexCount/3)return false;
-        output={*t,r->revision,t->indices+std::uint64_t(primitive)*6,primitive};
+        output={*t,r->revision,t->indices+std::uint64_t(primitive)*3*GeometryMetadata::IndexSize(*t),primitive};
         return true;
     }
     template<class Journal> bool Submit(std::uint64_t queue,std::uint64_t fence,

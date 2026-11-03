@@ -12,7 +12,7 @@ struct IndexSample {
     IndexSnapshotPlan plan;
     bool recorded=false;
     std::uint64_t offset=0,bytes=0,fullBytes=0,charge=0;
-    std::uint32_t vertexCount=0,rawReject=0;
+    std::uint32_t vertexCount=0,rawReject=0,indexSize=2;
     static constexpr std::uint64_t MaxSampleBytes=256*1024;
     static D3D12_RESOURCE_DESC Description(std::uint64_t size,D3D12_RESOURCE_FLAGS flags) noexcept {
         D3D12_RESOURCE_DESC d{};d.Dimension=D3D12_RESOURCE_DIMENSION_BUFFER;d.Width=size;d.Height=1;d.DepthOrArraySize=1;d.MipLevels=1;d.SampleDesc.Count=1;d.Layout=D3D12_TEXTURE_LAYOUT_ROW_MAJOR;d.Flags=flags;return d;
@@ -27,8 +27,8 @@ struct IndexSample {
         }return sum;
     }
     HRESULT Prepare(ID3D12Device* device,ID3D12Resource* input,std::uint64_t inputOffset,std::uint64_t inputBytes,
-                    const ComputeBindingSnapshot& native) noexcept {
-        if(!device||!input||!native.Ready()||inputBytes>MaxSampleBytes)return E_INVALIDARG;
+                    const ComputeBindingSnapshot& native,std::uint32_t width=2) noexcept {
+        if((width!=2&&width!=4)||inputOffset%width||inputBytes%width||!device||!input||!native.Ready()||inputBytes>MaxSampleBytes)return E_INVALIDARG;
         Microsoft::WRL::ComPtr<ID3D12Device> sourceDevice;
         if(FAILED(input->GetDevice(IID_PPV_ARGS(&sourceDevice)))||sourceDevice.Get()!=device)return E_INVALIDARG;
         BufferStorageLease lease;const auto desc=input->GetDesc();D3D12_HEAP_PROPERTIES properties{};D3D12_HEAP_FLAGS flags{};
@@ -42,7 +42,7 @@ struct IndexSample {
         auto hr=device->CreateCommittedResource(&heap,D3D12_HEAP_FLAG_NONE,&outputDesc,D3D12_RESOURCE_STATE_UNORDERED_ACCESS,nullptr,IID_PPV_ARGS(&output));if(FAILED(hr))return hr;
         heap.Type=D3D12_HEAP_TYPE_READBACK;auto readDesc=Description(plan.copyBytes,D3D12_RESOURCE_FLAG_NONE);
         hr=device->CreateCommittedResource(&heap,D3D12_HEAP_FLAG_NONE,&readDesc,D3D12_RESOURCE_STATE_COPY_DEST,nullptr,IID_PPV_ARGS(&readback));if(FAILED(hr))return hr;
-        source=input;offset=inputOffset;bytes=inputBytes;bindings=native;return S_OK;
+        indexSize=width;source=input;offset=inputOffset;bytes=inputBytes;bindings=native;return S_OK;
     }
     bool Record(ID3D12GraphicsCommandList4* list,const IndexSnapshotPipeline& pipeline) noexcept {
         if(!source||!output||!readback)return false;IndexSnapshotPlan recordedPlan;
@@ -57,11 +57,11 @@ struct IndexSample {
     struct Summary {std::uint64_t hash=14695981039346656037ull;UINT maximum=0,outOfRange=0;bool paddingZero=true;};
     // Caller must prove sealed recording + GPU completion before this CPU read.
     HRESULT Read(Summary& result) const noexcept {
-        result={};if(!readback)return E_INVALIDARG;void* mapped=nullptr;D3D12_RANGE range{0,plan.copyBytes};
+        result={};if(!readback||(indexSize!=2&&indexSize!=4)||bytes%indexSize)return E_INVALIDARG;void* mapped=nullptr;D3D12_RANGE range{0,plan.copyBytes};
         auto hr=readback->Map(0,&range,&mapped);if(FAILED(hr))return hr;
         const auto* p=static_cast<const unsigned char*>(mapped);
         for(std::uint64_t i=0;i<bytes;++i){result.hash^=p[i];result.hash*=1099511628211ull;}
-        for(std::uint64_t i=0;i<bytes;i+=2){const UINT index=UINT(p[i])|(UINT(p[i+1])<<8);if(index>result.maximum)result.maximum=index;if(vertexCount&&index>=vertexCount)++result.outOfRange;}
+        for(std::uint64_t i=0;i<bytes;i+=indexSize){UINT index=UINT(p[i])|(UINT(p[i+1])<<8);if(indexSize==4)index|=(UINT(p[i+2])<<16)|(UINT(p[i+3])<<24);if(index>result.maximum)result.maximum=index;if(vertexCount&&index>=vertexCount)++result.outOfRange;}
         for(std::uint64_t i=bytes;i<plan.copyBytes;++i)if(p[i])result.paddingZero=false;
         D3D12_RANGE none{0,0};readback->Unmap(0,&none);return S_OK;
     }

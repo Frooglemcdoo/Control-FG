@@ -7,7 +7,8 @@ inline bool CaptureEnabled() noexcept {static const bool enabled=[] {char v[4]{}
 inline std::atomic<bool> captureReady{false};
 inline gi_reuse::IndexSnapshotPipeline indexPipeline;
 inline ComPtr<ID3D12Device> captureDevice;
-inline std::atomic<UINT64> captureAttempts[2]{},captureRecorded{0},captureRead{0},captureFailed{0},captureBudget{0};
+inline std::atomic<UINT> lastCaptureMaximum{0};
+inline std::atomic<UINT64> captureAttempts[3]{},captureRecorded{0},captureRead{0},captureFailed{0},captureBudget{0};
 inline std::atomic<UINT64> captureBadIndices{0},captureBadPadding{0},lastCaptureHash{0};
 inline std::atomic<bool(*)() noexcept> queueCoverage{nullptr};
 inline bool Coverage() noexcept {const auto check=queueCoverage.load();return check&&check()&&!gi_reuse::runtime::fault.load()&&!gi_compute_hooks::failed.load();}
@@ -29,7 +30,7 @@ inline void Configure(ID3D12Device* device,const void* shader,SIZE_T bytes) noex
     else if(captureDevice.Get()==device)hr=captureReady?S_OK:E_FAIL;
     else captureReady=false;
     ReleaseSRWLockExclusive(&lock);
-    Trace("GI_INDEX_INIT_R296 ready=%u hr=0x%08X max_samples=32 max_sample_bytes=262144 reserved_budget=134217728 source_committed_only=1",unsigned(SUCCEEDED(hr)),unsigned(hr));
+    Trace("GI_INDEX_INIT_R296 ready=%u hr=0x%08X max_samples=48 max_sample_bytes=262144 reserved_budget=134217728 source_committed_only=1",unsigned(SUCCEEDED(hr)),unsigned(hr));
 }
 inline bool Reserve(std::atomic<UINT64>& value,UINT64 amount,UINT64 limit) noexcept {
     auto old=value.load();while(old<=limit&&amount<=limit-old){if(value.compare_exchange_weak(old,old+amount))return true;}return false;
@@ -37,7 +38,7 @@ inline bool Reserve(std::atomic<UINT64>& value,UINT64 amount,UINT64 limit) noexc
 inline void Capture(ID3D12GraphicsCommandList4* list,const D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC* desc,
                     Owner& owner,const gi_reuse::ComputeBindingSnapshot& bindings) noexcept {
     if(!CaptureEnabled()||!captureReady.load()||owner.sample||!bindings.Ready()||!Coverage()||!desc)return;
-    if(captureAttempts[0].load()>=16&&captureAttempts[1].load()>=16)return;
+    if(captureAttempts[0].load()>=16&&captureAttempts[1].load()>=16&&captureAttempts[2].load()>=16)return;
     ComPtr<ID3D12Device> recordingDevice;if(FAILED(list->GetDevice(IID_PPV_ARGS(&recordingDevice)))||recordingDevice.Get()!=captureDevice.Get())return;
     const auto& input=desc->Inputs;
     if(input.Type!=D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL||!input.NumDescs||input.NumDescs>gi_reuse::GeometryMetadata::MaxGeometries)return;
@@ -47,8 +48,10 @@ inline void Capture(ID3D12GraphicsCommandList4* list,const D3D12_BUILD_RAYTRACIN
     for(UINT i=0;i<input.NumDescs;++i){
         const auto* geometry=array?input.pGeometryDescs+i:input.ppGeometryDescs[i];
         if(!geometry||geometry->Type!=D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES)continue;
-        const auto& t=geometry->Triangles;if(t.IndexFormat!=DXGI_FORMAT_R16_UINT||!t.IndexCount||!t.VertexCount)continue;
-        const UINT64 full=UINT64(t.IndexCount)*2;ComPtr<ID3D12Resource> source;UINT64 offset=0;
+        const auto& t=geometry->Triangles;if((t.IndexFormat!=DXGI_FORMAT_R16_UINT&&t.IndexFormat!=DXGI_FORMAT_R32_UINT)||!t.IndexCount||!t.VertexCount)continue;
+        const UINT width=t.IndexFormat==DXGI_FORMAT_R32_UINT?4u:2u;
+        if(t.IndexBuffer%width)continue;
+        const UINT64 full=UINT64(t.IndexCount)*width;ComPtr<ID3D12Resource> source;UINT64 offset=0;
         if(!gi_reuse::runtime::owners.Resolve(t.IndexBuffer,full,source,offset))continue;
         const auto state=journal->states.Find(gi_reuse::runtime::owners.Identity(source.Get()));
         if(state.kind==gi_reuse::LocalStateKind::Pending||state.kind==gi_reuse::LocalStateKind::Invalid||
@@ -58,14 +61,14 @@ inline void Capture(ID3D12GraphicsCommandList4* list,const D3D12_BUILD_RAYTRACIN
         gi_reuse::BufferStorageLease lease;if(!gi_reuse::AcquireStorageLease(source.Get(),lease)||lease.kind!=gi_reuse::BufferStorageKind::Committed)continue;
         gi_reuse::RawSnapshotPlan raw;gi_reuse::RawSnapshotReject reason;
         const bool rawOK=gi_reuse::RawSnapshotPlan::Make(source->GetDesc().Width,offset,full,raw,&reason);
-        const unsigned category=rawOK?0u:1u;if(captureAttempts[category].load()>=16)continue;
+        const unsigned category=width==4?2u:(rawOK?0u:1u);if(captureAttempts[category].load()>=16)continue;
         const UINT64 bytes=full<gi_reuse::IndexSample::MaxSampleBytes?full:gi_reuse::IndexSample::MaxSampleBytes;
         const UINT64 tailOffset=offset+(full-bytes);gi_reuse::IndexSnapshotPlan plan;
         if(!gi_reuse::IndexSnapshotPlan::Make(source->GetDesc().Width,tailOffset,bytes,plan))continue;
         const auto charge=gi_reuse::IndexSample::Charge(captureDevice.Get(),source.Get(),plan.copyBytes);
         if(!charge||!Reserve(captureAttempts[category],1,16)||!Reserve(captureBudget,charge,128ull*1024*1024))continue;
         auto sample=std::unique_ptr<gi_reuse::IndexSample>(new(std::nothrow) gi_reuse::IndexSample);
-        if(!sample||FAILED(sample->Prepare(captureDevice.Get(),source.Get(),tailOffset,bytes,bindings))){++captureFailed;return;}
+        if(!sample||FAILED(sample->Prepare(captureDevice.Get(),source.Get(),tailOffset,bytes,bindings,width))){++captureFailed;return;}
         sample->fullBytes=full;sample->vertexCount=t.VertexCount;sample->rawReject=unsigned(reason);
         // Ownership and session allocation budget are established before commands.
         owner.sample=std::move(sample);
@@ -136,8 +139,8 @@ inline void Poll() noexcept {
     // Readback and COM destruction happen outside the host observation lock.
     for(const auto& owner:retired)if(owner&&owner->completeData&&owner->sample&&owner->sample->recorded){
         const auto& sample=*owner->sample;gi_reuse::IndexSample::Summary result;
-        const auto hr=sample.Read(result);if(SUCCEEDED(hr)){++captureRead;captureBadIndices+=result.outOfRange;if(!result.paddingZero)++captureBadPadding;lastCaptureHash=result.hash;}else ++captureFailed;
-        Trace("GI_INDEX_COPY_R296 hr=0x%08X bytes=%llu full_bytes=%llu tail_window=%u source_offset=%llu raw_reject=%u hash=%llu max_index=%u vertex_count=%u out_of_range=%u padding_zero=%u sealed=1 gpu_completed=1",unsigned(hr),sample.bytes,sample.fullBytes,unsigned(sample.bytes!=sample.fullBytes),sample.offset,sample.rawReject,result.hash,result.maximum,sample.vertexCount,result.outOfRange,unsigned(result.paddingZero));
+        const auto hr=sample.Read(result);if(SUCCEEDED(hr)){++captureRead;captureBadIndices+=result.outOfRange;if(!result.paddingZero)++captureBadPadding;lastCaptureHash=result.hash;lastCaptureMaximum=result.maximum;}else ++captureFailed;
+        Trace("GI_INDEX_COPY_R296 index_bytes=%u hr=0x%08X bytes=%llu full_bytes=%llu tail_window=%u source_offset=%llu raw_reject=%u hash=%llu max_index=%u vertex_count=%u out_of_range=%u padding_zero=%u sealed=1 gpu_completed=1",sample.indexSize,unsigned(hr),sample.bytes,sample.fullBytes,unsigned(sample.bytes!=sample.fullBytes),sample.offset,sample.rawReject,result.hash,result.maximum,sample.vertexCount,result.outOfRange,unsigned(result.paddingZero));
     }
 }
 inline UINT64 Before(ID3D12CommandQueue* queue,UINT count,ID3D12CommandList*const* lists) noexcept {
@@ -162,7 +165,7 @@ inline void Report() noexcept {
     if(runtime)for(const auto id:records)if(id){++active;if(runtime->Quarantined(id))++quarantined;}
     ReleaseSRWLockExclusive(&lock);
     Trace("GI_LIFETIME_R295 active=%u quarantined=%u cpu_metadata_owners_only=%u publication_requires_reset_and_gpu_completion=1",active,quarantined,unsigned(!CaptureEnabled()));
-    Trace("GI_INDEX_STATUS_R296 enabled=%u ready=%u recorded=%llu readback=%llu failures=%llu reserved_bytes=%llu ordinary_attempts=%llu rejected_raw_attempts=%llu native_lighting_changed=0",unsigned(CaptureEnabled()),unsigned(captureReady.load()),captureRecorded.load(),captureRead.load(),captureFailed.load(),captureBudget.load(),captureAttempts[0].load(),captureAttempts[1].load());
+    Trace("GI_INDEX_STATUS_R296 enabled=%u ready=%u recorded=%llu readback=%llu failures=%llu reserved_bytes=%llu ordinary_attempts=%llu rejected_raw_attempts=%llu uint32_attempts=%llu native_lighting_changed=0",unsigned(CaptureEnabled()),unsigned(captureReady.load()),captureRecorded.load(),captureRead.load(),captureFailed.load(),captureBudget.load(),captureAttempts[0].load(),captureAttempts[1].load(),captureAttempts[2].load());
     Trace("GI_INDEX_VALIDATION_R296 out_of_range_indices=%llu padding_failures=%llu",captureBadIndices.load(),captureBadPadding.load());
     const auto& reasons=gi_reuse::runtime::indexRawReasons;
     Trace("GI_INDEX_PLAN_R296 raw_pass=%llu invalid_range=%llu address_overflow=%llu padding_outside=%llu dispatch_limit=%llu exact16_eligible=%llu",reasons[0].load(),reasons[1].load(),reasons[2].load(),reasons[3].load(),reasons[4].load(),gi_reuse::runtime::exactIndexEligible.load());

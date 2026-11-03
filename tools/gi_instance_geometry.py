@@ -55,9 +55,9 @@ def transform(point, matrix):
 def decode_triangle(*, vertices, indices, vertex_address, index_address,
                     vertex_count, index_count, stride, vertex_format, index_format,
                     primitive, instance, generation, geometry_transform=None):
-    # R279 observed DXGI_FORMAT_R32G32B32_FLOAT and R16_UINT only.
+    # Float3 with aligned packed/padded stride; explicit 16/32-bit indices.
     # Fail closed on other layouts instead of guessing the position offset.
-    if vertex_format != 6 or index_format != 57 or stride != 12:
+    if vertex_format != 6 or index_format not in (57, 42) or stride < 12 or stride % 4:
         raise ValueError('unaudited geometry format')
     if min(vertex_count, index_count, primitive) < 0 or index_count % 3:
         raise ValueError('invalid triangle counts')
@@ -65,7 +65,10 @@ def decode_triangle(*, vertices, indices, vertex_address, index_address,
         raise ValueError('primitive outside geometry')
     if instance.mask == 0:
         raise ValueError('disabled instance')
-    ids = struct.unpack('<3H', indices.read(index_address + 6*primitive, 6, generation))
+    width = 2 if index_format == 57 else 4
+    if vertex_address % 4 or index_address % width:
+        raise ValueError('unaligned geometry address')
+    ids = struct.unpack('<3H' if width == 2 else '<3I', indices.read(index_address + 3*width*primitive, 3*width, generation))
     if any(i >= vertex_count for i in ids):
         raise ValueError('index outside vertex range')
     points = []
