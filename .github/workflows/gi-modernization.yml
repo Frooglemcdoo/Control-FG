@@ -61,6 +61,10 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Initial reservoir shader compile failed' }
           & $dxc.FullName -T lib_6_5 -WX src/shaders/gi_producer_geometry.hlsl -Fo gi-producer-geometry.dxil
           if ($LASTEXITCODE -ne 0) { throw 'Accepted-hit geometry shader compile failed' }
+          & $dxc.FullName -T lib_6_5 -WX src/shaders/gi_producer_alpha.hlsl -Fo gi-producer-alpha.dxil
+          if ($LASTEXITCODE -ne 0) { throw 'Accepted-hit alpha shader compile failed' }
+          python tools/test-gi-producer-alpha.py --dxc $dxc.FullName
+          if ($LASTEXITCODE -ne 0) { throw 'Native GI alpha policy audit failed' }
           $commands=@"
           call "$vs\VC\Auxiliary\Build\vcvars64.bat"
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-initial-reservoir.cpp /Fe:gi-initial-reservoir.exe

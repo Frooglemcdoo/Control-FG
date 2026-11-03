@@ -85,3 +85,23 @@ Miss clears the entire payload before setting the native miss material sentinel.
 Validation: foundation run 41709365351 passed for the preceding geometry-only
 shader. The extended attribute shader compiles locally with DXC lib_6_5 / WX.
 These checks do not establish native alpha compatibility or runtime binding.
+
+## Owned alpha handler
+
+`gi_producer_alpha.hlsl` implements the pinned GI any-hit policy against the
+private geometry root and evaluator globals: packed signed UVs interpolated then
+scaled by 1/4095; material texture index material*35; LinearWrap SampleLevel 0;
+alpha multiplied by MaterialDataPart3 byte 64; IgnoreHit only below 0.5. The
+material buffer is remapped from native-ray t3 to evaluator t5, avoiding its
+collision with the evaluator's clip-depth texture. The 336-byte stride and
+material array bound are checked. Valid paths preserve payload contents.
+
+Malformed index/UV/material ranges mark nativeValue UINT_MAX; closest-hit keeps
+that failure invalid rather than publishing an opaque stand-in. An owned raygen
+must initialize the payload and nativeValue to rayIndex before each trace.
+No forced-opaque flag or altered alpha threshold is introduced. Recompilation
+is not a claim of bit-exact alpha behavior at floating-point threshold edges.
+`test-gi-producer-alpha.py` audits the relevant instructions in BOTH existing
+hash-pinned native ray libraries, including unchanged payload writes, without a
+new user capture. The owned shader compiles as lib_6_5 with warnings as errors.
+Runtime private-table mapping, state-object creation and traversal remain open.

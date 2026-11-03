@@ -73,7 +73,7 @@ void giAcceptedGeometry(inout GIProducerHit hit,BuiltInTriangleIntersectionAttri
     hit.reserved1=0;hit.reserved2=0;hit.reserved3=0;
     hit.instanceIndex=InstanceIndex();hit.instanceId=InstanceID();
     hit.geometry=GeometryIndex();hit.primitive=PrimitiveIndex();hit.hitKind=HitKind();
-    if(material>=65534||hit.primitive>0xffffffffu/3u)return;
+    if(hit.nativeValue==0xffffffffu||material>=65534||hit.primitive>0xffffffffu/3u)return;
     uint i0,i1,i2;uint first=hit.primitive*3;
     if(first>0xffffffffu-2||!GIReadIndex(first,i0)||!GIReadIndex(first+1,i1)||!GIReadIndex(first+2,i2))return;
     GIPoint v0,v1,v2;

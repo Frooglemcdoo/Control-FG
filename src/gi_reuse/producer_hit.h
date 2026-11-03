@@ -6,6 +6,8 @@ namespace gi_reuse {
 #endif
 // The first DWORD is reserved for the native GI alpha handler's payload prefix.
 // This layout alone does not prove compatibility with an arbitrary any-hit export.
+// Owned raygen initializes nativeValue to rayIndex (<64); owned alpha reserves
+// UINT_MAX for malformed material/UV input. Closest hit must retain that failure.
 struct GIProducerHit {
     uint nativeValue; uint material; uint geometry; uint primitive;
     GIPoint position; float rayT;
