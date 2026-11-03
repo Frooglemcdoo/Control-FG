@@ -65,6 +65,101 @@ static void* CopyHook(void* to,const void* from,std::size_t bytes){
   return found->second;
  }catch(...){return {};}
 }
+struct Writer {
+ GINativeJobRoute::Ticket ticket;
+ gi_reuse::NativeGIWriterInputs inputs;
+ Microsoft::WRL::ComPtr<ID3D12StateObject> pipeline;
+ PTShaderTableAdapter::Identifier opaque{},alpha{};
+};
+struct Event {
+ gi_reuse::OrderedASEvent build;
+ std::shared_ptr<const InstanceUpload> instances;
+ std::vector<gi_reuse::D3D12LiveSceneOwners::Identity> bottoms;
+ std::vector<PTOwnedScene::Triangle> geometry;
+ std::shared_ptr<const Writer> writer;
+};
+static const GUID recordingKey={0x310e0001,0x1739,0x4401,{0x91,0x33,0x41,0x51,0x61,0x71,0x81,0x91}};
+static std::atomic<UINT64> generations{1};
+class Recording final:public IUnknown {
+ std::atomic<ULONG> refs{1};
+public:
+ const UINT64 generation=generations.fetch_add(1);
+ bool complete=true;
+ std::vector<Event> events;
+ HRESULT STDMETHODCALLTYPE QueryInterface(REFIID iid,void** out)override {if(!out)return E_POINTER;*out=nullptr;if(iid!=__uuidof(IUnknown))return E_NOINTERFACE;*out=static_cast<IUnknown*>(this);AddRef();return S_OK;}
+ ULONG STDMETHODCALLTYPE AddRef()override{return ++refs;}
+ ULONG STDMETHODCALLTYPE Release()override{const auto n=--refs;if(!n)delete this;return n;}
+};
+static Microsoft::WRL::ComPtr<Recording> ReadRecording(ID3D12Object* object,bool create=true) noexcept {
+ Microsoft::WRL::ComPtr<Recording> result;if(!object||!ready.load())return result;
+ UINT bytes=sizeof(IUnknown*);IUnknown* value=nullptr;
+ if(SUCCEEDED(object->GetPrivateData(recordingKey,&bytes,&value))&&value){if(bytes==sizeof(value))result.Attach(static_cast<Recording*>(value));else value->Release();return result;}
+ if(!create)return result;result.Attach(new(std::nothrow) Recording);
+ if(result&&FAILED(object->SetPrivateDataInterface(recordingKey,result.Get())))result.Reset();return result;
+}
+static void Reset(ID3D12GraphicsCommandList* list) noexcept {
+ if(!ready.load()||!list)return;
+ // A successful native Reset cancels unsubmitted metadata, while submitted
+ // owners must be retained separately by the queue retirement path.
+ list->SetPrivateDataInterface(recordingKey,nullptr);
+}
+static void Build(ID3D12GraphicsCommandList4* list,const D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC* desc) noexcept {
+ auto recording=ReadRecording(list);if(!recording||!recording->complete)return;
+ try {
+  if(!desc||recording->events.size()>=65536){recording->complete=false;return;}
+  gi_reuse::D3D12LiveSceneOwners::Identity destination,source;
+  if(!owners.Identify(desc->DestAccelerationStructureData,256,destination)){recording->complete=false;return;}
+  Event e;auto& event=e.build.event;auto& r=event.record;
+  r.address=desc->DestAccelerationStructureData;r.count=desc->Inputs.NumDescs;
+  r.allowUpdate=(desc->Inputs.Flags&D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_ALLOW_UPDATE)!=0;
+  e.build.destinationToken=destination.token;event.operation=gi_reuse::ASOperation::Build;
+  if(desc->Inputs.Flags&D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PERFORM_UPDATE){
+   event.source=desc->SourceAccelerationStructureData;event.operation=gi_reuse::ASOperation::Update;
+   if(!owners.Identify(event.source,256,source)){recording->complete=false;return;}e.build.sourceToken=source.token;
+  }
+  bool valid=r.count!=0;
+  if(desc->Inputs.Type==D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL){
+   r.topLevel=true;r.instances=desc->Inputs.InstanceDescs;e.instances=Instances(r.instances,r.count);
+   valid=valid&&desc->Inputs.DescsLayout==D3D12_ELEMENTS_LAYOUT_ARRAY&&bool(e.instances);
+   if(valid){e.bottoms.resize(r.count);
+    for(UINT i=0;i<r.count;++i){gi_reuse::InstanceRecord row;
+     if(!gi_reuse::DecodeInstance(e.instances->bytes.data()+SIZE_T(i)*64,row)){valid=false;break;}
+     if(row.blas&&!owners.Identify(row.blas,256,e.bottoms[i])){valid=false;break;}
+    }
+   }
+  }else{
+   r.geometry=gi_reuse::CopyBLASGeometry(desc->Inputs);valid=valid&&bool(r.geometry);
+   if(valid){e.geometry.resize(r.count);for(UINT i=0;i<r.count;++i)if(!owners.Geometry(*r.geometry->At(i),e.geometry[i])){valid=false;break;}}
+  }
+  // Unsupported writes hide the prior version; they never preserve an old
+  // valid geometry mapping at the same address.
+  if(!valid){event.operation=gi_reuse::ASOperation::Invalidate;e.geometry.clear();e.bottoms.clear();e.instances.reset();}
+  recording->events.push_back(std::move(e));
+ }catch(...){recording->complete=false;}
+}
+static void Copy(ID3D12GraphicsCommandList4* list,UINT64 destination,UINT64 source,D3D12_RAYTRACING_ACCELERATION_STRUCTURE_COPY_MODE mode) noexcept {
+ auto recording=ReadRecording(list);if(!recording||!recording->complete)return;
+ try {gi_reuse::D3D12LiveSceneOwners::Identity dst,src;
+  if(recording->events.size()>=65536||!owners.Identify(destination,256,dst)){recording->complete=false;return;}
+  Event e;e.build.destinationToken=dst.token;e.build.event.record.address=destination;e.build.event.operation=gi_reuse::ASOperation::Invalidate;
+  if((mode==D3D12_RAYTRACING_ACCELERATION_STRUCTURE_COPY_MODE_CLONE||mode==D3D12_RAYTRACING_ACCELERATION_STRUCTURE_COPY_MODE_COMPACT)&&owners.Identify(source,256,src)){
+   e.build.sourceToken=src.token;e.build.event.source=source;e.build.event.operation=gi_reuse::ASOperation::Copy;
+  }
+  recording->events.push_back(std::move(e));
+ }catch(...){recording->complete=false;}
+}
+static void WriterReady(const GINativeJobRoute::Ticket& ticket) noexcept {
+ if(!ready.load())return;auto recording=ReadRecording(reinterpret_cast<ID3D12GraphicsCommandList4*>(ticket.list));
+ if(!recording||!recording->complete)return;
+ try {if(recording->events.size()>=65536){recording->complete=false;return;}
+  auto writer=std::make_shared<Writer>();writer->ticket=ticket;
+  gi_reuse::native_gi_detail::Header header;
+  if(!gi_reuse::SnapshotNativeGIWriter(ticket,writer->inputs)||!gi_reuse::native_gi_detail::ReadHeader(ticket.writer,header)||header.pipeline!=ticket.pipeline){recording->complete=false;return;}
+  writer->opaque=header.opaque;writer->alpha=header.alpha;
+  writer->pipeline=reinterpret_cast<ID3D12StateObject*>(ticket.pipeline);
+  Event e;e.writer=std::move(writer);recording->events.push_back(std::move(e));
+ }catch(...){recording->complete=false;}
+}
 static bool Install(HMODULE d3d) noexcept {
  if(!Enabled()||!gi_reuse::runtime::Enabled()||!HashMatches(d3d,kD3dHash)||!HashMatches(verifiedRenderer,kRendererHash))return false;
  if(ready.load())return true;auto* b=reinterpret_cast<unsigned char*>(d3d);auto* r=reinterpret_cast<unsigned char*>(verifiedRenderer);
@@ -80,7 +175,7 @@ static bool Install(HMODULE d3d) noexcept {
  if(ok)for(auto& p:creates)if(!RRAlbedoExchangeCall(&p,true)){ok=false;break;}
  if(ok)ok=lockPatch.Exchange(true)&&RRAlbedoExchangeCall(&copyPatch,true);
  if(!ok){if(copyPatch.site)RRAlbedoExchangeCall(&copyPatch,false);if(lockPatch.changed)lockPatch.Exchange(false);for(auto& p:creates)if(p.site)RRAlbedoExchangeCall(&p,false);}
- if(ok){GINativeLifetimeRuntime::liveRetire.store(&Retire);ready=true;}
+ if(ok){GINativeLifetimeRuntime::liveRetire.store(&Retire);gi_reuse::runtime::liveBuild.store(&Build);gi_reuse::runtime::liveCopy.store(&Copy);gi_reuse::runtime::liveReset.store(&Reset);ready=true;}
  Log("GI_LIVE_OWNERS ready=%u native_creates=11 instance_source_copy=1 replacement_dispatch=0",unsigned(ok));return ok;
 }
 }

@@ -15,6 +15,7 @@ class D3D12ProducerTable {
     std::vector<BufferStorageLease> backing_;
     std::uint64_t epoch_=0,version_=0,retainedBytes_=0;
     UINT64 size_=0;
+    bool deferred_=false;
 public:
     D3D12ProducerTable()=default;
     D3D12ProducerTable(const D3D12ProducerTable&)=delete;
@@ -78,6 +79,35 @@ public:
             epoch_=plan.epoch;version_=plan.writerVersion;size_=bytes;retainedBytes_=retained;return S_OK;
         }catch(...){return E_OUTOFMEMORY;}
     }
+    // Reserve the exact writer row count while recording. Every row is zero;
+    // raygen must remain disarmed until Commit succeeds before first submission.
+    HRESULT Reserve(ID3D12Device* device,ID3D12StateObject* pipeline,UINT bindings,UINT64 epoch,UINT64 version) noexcept {
+        if(upload_||!device||!pipeline||!bindings||bindings>65536||!epoch||!version)return E_INVALIDARG;
+        const UINT64 bytes=UINT64(bindings)*2*PTShaderTableAdapter::PrivateStride;
+        D3D12_HEAP_PROPERTIES heap{};heap.Type=D3D12_HEAP_TYPE_UPLOAD;heap.CreationNodeMask=heap.VisibleNodeMask=1;
+        D3D12_RESOURCE_DESC desc{};desc.Dimension=D3D12_RESOURCE_DIMENSION_BUFFER;desc.Width=bytes;desc.Height=1;
+        desc.DepthOrArraySize=desc.MipLevels=1;desc.SampleDesc.Count=1;desc.Layout=D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+        Ptr<ID3D12Resource> upload;auto hr=device->CreateCommittedResource(&heap,D3D12_HEAP_FLAG_NONE,&desc,D3D12_RESOURCE_STATE_GENERIC_READ,nullptr,IID_PPV_ARGS(&upload));
+        if(FAILED(hr))return hr;
+        void* mapped=nullptr;const D3D12_RANGE empty{};hr=upload->Map(0,&empty,&mapped);if(FAILED(hr))return hr;
+        if(!mapped){upload->Unmap(0,&empty);return E_UNEXPECTED;}
+        std::memset(mapped,0,static_cast<SIZE_T>(bytes));const D3D12_RANGE written{0,static_cast<SIZE_T>(bytes)};upload->Unmap(0,&written);
+        pipeline_=pipeline;upload_=std::move(upload);epoch_=epoch;version_=version;size_=retainedBytes_=bytes;deferred_=true;return S_OK;
+    }
+    // Host calls once at the serialized first Execute boundary, after selecting
+    // the strict scene cut and before arming the recorded constant upload. Never
+    // call on an in-flight/replayed command list. Failure leaves zero records.
+    HRESULT Commit(ID3D12Device* device,const GIProducerTable& plan,const std::vector<ID3D12Resource*>& resources) noexcept {
+        if(!deferred_||!upload_||plan.epoch!=epoch_||plan.writerVersion!=version_||
+           plan.records.size()*PTShaderTableAdapter::PrivateStride!=size_)return E_INVALIDARG;
+        Ptr<ID3D12Device> owner;if(!device||FAILED(upload_->GetDevice(IID_PPV_ARGS(&owner)))||owner.Get()!=device)return E_INVALIDARG;
+        D3D12ProducerTable checked;auto hr=checked.Initialize(device,pipeline_.Get(),plan,resources);if(FAILED(hr))return hr;
+        void* mapped=nullptr;const D3D12_RANGE empty{};hr=upload_->Map(0,&empty,&mapped);if(FAILED(hr))return hr;
+        if(!mapped){upload_->Unmap(0,&empty);return E_UNEXPECTED;}
+        std::memcpy(mapped,plan.records.data(),static_cast<SIZE_T>(size_));const D3D12_RANGE written{0,static_cast<SIZE_T>(size_)};upload_->Unmap(0,&written);
+        backing_=std::move(checked.backing_);retainedBytes_=checked.retainedBytes_;deferred_=false;return S_OK;
+    }
+    bool Deferred() const noexcept{return deferred_;}
     D3D12_GPU_VIRTUAL_ADDRESS_RANGE_AND_STRIDE Range() const noexcept {
         return upload_?D3D12_GPU_VIRTUAL_ADDRESS_RANGE_AND_STRIDE{upload_->GetGPUVirtualAddress(),size_,PTShaderTableAdapter::PrivateStride}:
                        D3D12_GPU_VIRTUAL_ADDRESS_RANGE_AND_STRIDE{};

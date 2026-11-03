@@ -42,6 +42,7 @@ static DWORD WINAPI Save(void* raw) {
  return 0;
 }
 static void Capture(GINativeJobRuntime::Phase phase,const GINativeJobRoute::Ticket& ticket) noexcept {
+ if(phase==GINativeJobRuntime::Phase::writerReady)GINativeSceneOwners::WriterReady(ticket);
  if(phase!=GINativeJobRuntime::Phase::writerReady||accepted.load()>=4||attempts.load()>=16)return;
  const auto now=GetTickCount64();auto due=nextAt.load();
  if(now<due||!nextAt.compare_exchange_strong(due,now+10000))return;

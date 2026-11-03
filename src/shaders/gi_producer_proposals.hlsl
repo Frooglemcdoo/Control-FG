@@ -21,7 +21,7 @@ float GIProposalDepthScale(float depth){
 }
 [numthreads(64,1,1)]
 void main(uint3 id:SV_DispatchThreadID){
-    if(any(id.yz))return;
+    if(any(id.yz)||!giProposalScene)return;
     uint rays,rayStride,batches,batchStride;
     giProposals.GetDimensions(rays,rayStride);giProposalBatches.GetDimensions(batches,batchStride);
     if(id.x>=giProposalPixels||id.x>=batches||rayStride!=96||batchStride!=16)return;

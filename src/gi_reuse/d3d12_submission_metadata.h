@@ -22,6 +22,11 @@ inline std::atomic<UINT64> generation{1};
 inline std::atomic<bool> fault{false};
 inline std::atomic<const char*> failureReason{nullptr};
 inline void Fail(const char* reason) noexcept {const char* empty=nullptr;failureReason.compare_exchange_strong(empty,reason);fault=true;}
+// Independent live-scene observers must still see writes after a diagnostic
+// inventory reaches its cap. They own their own identities and admission.
+inline std::atomic<void(*)(ID3D12GraphicsCommandList4*,const D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC*) noexcept> liveBuild{nullptr};
+inline std::atomic<void(*)(ID3D12GraphicsCommandList4*,UINT64,UINT64,D3D12_RAYTRACING_ACCELERATION_STRUCTURE_COPY_MODE) noexcept> liveCopy{nullptr};
+inline std::atomic<void(*)(ID3D12GraphicsCommandList*) noexcept> liveReset{nullptr};
 inline BufferOwners owners;
 inline ASResourceOwners<> asOwners;
 inline std::atomic<UINT64> asIdentityResolved{0},asIdentityMissing{0},asIdentityAmbiguous{0};
@@ -144,6 +149,7 @@ inline void RecordBarriers(ID3D12GraphicsCommandList* list,UINT count,const D3D1
  if(wasComplete&&!j->states.Complete())++localStateLimits;
 }
 inline void Reset(ID3D12GraphicsCommandList* list) noexcept {
+ if(const auto callback=liveReset.load())callback(list);
  if(!Enabled()||fault.load()||!list)return;
  auto* next=new(std::nothrow) Journal;if(!next){Fail("journal_allocation");return;}
  if(FAILED(list->SetPrivateDataInterface(journalKey,next)))Fail("journal_attachment");
@@ -165,6 +171,7 @@ inline bool ReadGeometryReject(RejectedGeometry& out) noexcept {
  AcquireSRWLockShared(&rejectionLock);const bool found=haveRejectedGeometry;if(found)out=rejectedGeometry;ReleaseSRWLockShared(&rejectionLock);return found;
 }
 inline void RecordBuild(ID3D12GraphicsCommandList4* list,const D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC* desc) noexcept {
+ if(const auto callback=liveBuild.load())callback(list,desc);
  if(!Enabled())return;++buildCount;if(fault.load())return;
  try {
   auto journal=Read(list);if(!journal){Fail("build_missing_journal");return;}
@@ -188,6 +195,7 @@ inline void RecordBuild(ID3D12GraphicsCommandList4* list,const D3D12_BUILD_RAYTR
  }catch(...){Fail("build_allocation_exception");}
 }
 inline void RecordCopy(ID3D12GraphicsCommandList4* list,UINT64 destination,UINT64 source,D3D12_RAYTRACING_ACCELERATION_STRUCTURE_COPY_MODE mode) noexcept {
+ if(const auto callback=liveCopy.load())callback(list,destination,source,mode);
  if(!Enabled())return;++copyCount;if(fault.load())return;auto journal=Read(list);
  if(!journal){Fail("copy_missing_journal");return;}
  if(!destination||!source||(mode!=D3D12_RAYTRACING_ACCELERATION_STRUCTURE_COPY_MODE_CLONE&&mode!=D3D12_RAYTRACING_ACCELERATION_STRUCTURE_COPY_MODE_COMPACT)){Fail("copy_address_or_mode");return;}

@@ -49,9 +49,12 @@ class D3D12InitialGITile {
     GIFrameTiles layout_;
     std::array<D3D12_GPU_DESCRIPTOR_HANDLE,5> tables_{};
     Ptr<ID3D12DescriptorHeap> visible_;
+    Ptr<ID3D12StateObject> recordedProducer_;
+    UINT64 recordedHits_=0;
     UINT pixels_=0,count_=0,firstPixel_=0,step_=0;
     UINT64 bytes_=0,epoch_=0,version_=0,nativeTable_=0;
-    bool recorded_=false,published_=false;
+    bool recorded_=false,published_=false,deferred_=false,armed_=false;
+    UINT sceneRevision_=0;
     D3D12_CPU_DESCRIPTOR_HANDLE At(UINT stage,UINT slot) const noexcept {
         auto h=staging_->GetCPUDescriptorHandleForHeapStart();h.ptr+=SIZE_T(stage*49+slot)*step_;return h;
     }
@@ -97,7 +100,7 @@ public:
     static constexpr UINT64 NativeRequired=1ull|(((1ull<<27)-1)<<5)|(1ull<<41)|(1ull<<42);
     HRESULT Initialize(ID3D12Device* device,const PTGlass::LightingTableShadow& native,
         UINT64 recording,UINT64 epoch,UINT64 version,UINT64 sceneAddress,
-        UINT frame,UINT sceneRevision,UINT width,UINT height,UINT firstPixel,UINT pixels,UINT rays,float baseRange) noexcept {
+        UINT frame,UINT sceneRevision,UINT width,UINT height,UINT firstPixel,UINT pixels,UINT rays,float baseRange,bool deferred=false) noexcept {
         if(device_||!device||!recording||!epoch||!version||!sceneAddress||sceneAddress%256||!sceneRevision||
            !width||!height||UINT64(width)*height>UINT32_MAX||!pixels||
            firstPixel>=UINT64(width)*height||pixels>UINT64(width)*height-firstPixel||!rays||rays>64||
@@ -128,8 +131,8 @@ public:
         auto* data=static_cast<unsigned char*>(mapped);const SIZE_T controlBytes=SIZE_T(layout.tiles)*512;
         std::memset(data,0,controlBytes);
         for(UINT i=0;i<layout.tiles;++i){const auto span=layout.At(i);auto* dst=data+SIZE_T(i)*512;
-            const UINT header[]={frame,sceneRevision,width,height,span.first,span.pixels,rays};
-            const UINT trace[]={frame,sceneRevision,span.samples,0};
+            const UINT header[]={frame,deferred?0u:sceneRevision,width,height,span.first,span.pixels,rays};
+            const UINT trace[]={frame,deferred?0u:sceneRevision,span.samples,0};
             std::memcpy(dst,header,sizeof(header));std::memcpy(dst+28,&baseRange,4);std::memcpy(dst+256,trace,sizeof(trace));
         }
         const D3D12_RANGE written{0,controlBytes};controlUpload_->Unmap(0,&written);
@@ -148,7 +151,7 @@ public:
         View(3,43,reservoirs_.Get(),sizeof(GIInitialReservoir),capacity,true);View(3,44,outputs_.Get(),sizeof(GIInitialResult),capacity,true);
         View(4,32,outputs_.Get(),sizeof(GIInitialResult),capacity,false);View(4,33,samples_.Get(),sizeof(GIShadedProducerSample),total,false);
         View(4,34,batches_.Get(),16,capacity,false);
-        layout_=layout;pixels_=pixels;count_=total;firstPixel_=firstPixel;epoch_=epoch;version_=version;return S_OK;
+        deferred_=deferred;sceneRevision_=sceneRevision;layout_=layout;pixels_=pixels;count_=total;firstPixel_=firstPixel;epoch_=epoch;version_=version;return S_OK;
     }
     // All ranges must be fresh native allocations in the SAME currently bound
     // heap. The host owns allocator retirement and supplies the native range to
@@ -173,7 +176,7 @@ public:
     }
     bool Record(ID3D12GraphicsCommandList4* list,const D3D12InitialGIPipeline& pipeline,
         const D3D12ProducerTable& hits,const ComputeBindingSnapshot& native) noexcept {
-        if(!list||recorded_||!published_||!native.Ready()||native.root.Get()!=pipeline.Root()||
+        if(!list||recorded_||!published_||(hits.Deferred()&&!deferred_)||!native.Ready()||native.root.Get()!=pipeline.Root()||
            !NativeBindingsMatch(native)||native.heaps[0].Get()!=visible_.Get()||hits.Pipeline()!=pipeline.Producer().State()||
            hits.Epoch()!=epoch_||hits.WriterVersion()!=version_||
            (list->GetType()!=D3D12_COMMAND_LIST_TYPE_DIRECT&&list->GetType()!=D3D12_COMMAND_LIST_TYPE_COMPUTE))return false;
@@ -205,7 +208,18 @@ public:
             list->SetPipelineState(pipeline.Resolve());list->SetComputeRootDescriptorTable(0,tables_[4]);list->Dispatch((span.pixels+63)/64,1,1);
             list->ResourceBarrier(1,&outputBarrier);
         }
-        native.Restore(list);recorded_=true;return true;
+        native.Restore(list);recordedProducer_=hits.Pipeline();recordedHits_=hits.Range().StartAddress;recorded_=true;return true;
+    }
+    // Called once after strict submission admission and a committed hit table.
+    // The host owns serialization with Execute; this is not a live toggle and
+    // must never mutate controls after the first submission begins.
+    HRESULT CommitAdmission(const D3D12ProducerTable& hits) noexcept {
+        if(!deferred_||armed_||!recorded_||hits.Deferred()||hits.Pipeline()!=recordedProducer_.Get()||hits.Range().StartAddress!=recordedHits_||hits.Epoch()!=epoch_||hits.WriterVersion()!=version_)return E_INVALIDARG;
+        void* mapped=nullptr;const D3D12_RANGE empty{};auto hr=controlUpload_->Map(0,&empty,&mapped);if(FAILED(hr))return hr;
+        if(!mapped){controlUpload_->Unmap(0,&empty);return E_UNEXPECTED;}
+        for(UINT i=0;i<layout_.tiles;++i){auto* dst=static_cast<unsigned char*>(mapped)+SIZE_T(i)*512;
+            std::memcpy(dst+4,&sceneRevision_,4);std::memcpy(dst+260,&sceneRevision_,4);}
+        const D3D12_RANGE written{0,SIZE_T(layout_.tiles)*512};controlUpload_->Unmap(0,&written);armed_=true;return S_OK;
     }
     // Scratch contains the last tile only; it is not full-frame reuse history.
     ID3D12Resource* Reservoirs()const noexcept{return reservoirs_.Get();}

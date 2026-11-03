@@ -77,6 +77,7 @@ int main()try{
  for(UINT c=0;c<cases.size();++c){GIProducerRay* rays=nullptr;Batch* batches=nullptr;
   Check(cases[c].readRays->Map(0,nullptr,reinterpret_cast<void**>(&rays)));Check(cases[c].readBatches->Map(0,nullptr,reinterpret_cast<void**>(&batches)));
   for(UINT p=0;p<2;++p){
+   if(c==1){Require(!std::memcmp(rays,sentinel.data(),sentinel.size())&&!std::memcmp(batches,batchSentinel.data(),batchSentinel.size()),"Disarmed tile touched scratch");continue;}
    if(c){Require(batches[p].count==0,"Invalid tile published batch");continue;}
    Require(batches[p].first==p*6&&batches[p].count==6&&batches[p].frame==257&&batches[p].scale==1,"Valid tile batch mismatch");
    const float nx=-2.6f/4.38f,nz=2.38f/4.38f;const float wx=p? .5f:-.5f;

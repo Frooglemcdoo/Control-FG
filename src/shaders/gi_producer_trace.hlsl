@@ -12,7 +12,7 @@ cbuffer GIProducerTraceConstants : register(b5) {
 float3 GITraceVector(GIPoint p){return float3(p.x,p.y,p.z);}
 [shader("raygeneration")]
 void giProduceAcceptedHits() {
-    if(any(DispatchRaysIndex().yz))return;
+    if(any(DispatchRaysIndex().yz)||!giTraceScene)return;
     uint index=DispatchRaysIndex().x,inputs,inputStride,outputs,outputStride;
     giRays.GetDimensions(inputs,inputStride);giAcceptedRequests.GetDimensions(outputs,outputStride);
     if(index>=outputs||outputStride!=160)return;

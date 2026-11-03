@@ -2,6 +2,7 @@
 #include "../gi_reuse/producer_shading.h"
 struct Batch {uint first;uint count;uint frameTag;float depthScale;};
 #ifdef GI_NATIVE_INITIAL_BINDINGS
+cbuffer GIInitialControls : register(b5){uint giInitialFrame;uint giInitialScene;uint giInitialCount;uint giInitialReserved;}
 StructuredBuffer<GIShadedProducerSample> samples : register(t27);
 StructuredBuffer<Batch> batches : register(t28);
 RWStructuredBuffer<GIInitialReservoir> reservoirs : register(u2);
@@ -15,6 +16,9 @@ RWStructuredBuffer<GIInitialResult> outputs : register(u1);
 [numthreads(64,1,1)]
 void main(uint3 id:SV_DispatchThreadID) {
     if(any(id.yz))return;
+#ifdef GI_NATIVE_INITIAL_BINDINGS
+    if(!giInitialScene||giInitialReserved)return;
+#endif
     uint n,s,nb,sb,nr,sr,no,so;
     batches.GetDimensions(nb,sb);samples.GetDimensions(n,s);
     reservoirs.GetDimensions(nr,sr);outputs.GetDimensions(no,so);
