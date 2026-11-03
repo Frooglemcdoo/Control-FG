@@ -89,13 +89,15 @@ struct GIShadingRegisters {
 struct GISecondaryInput { uint material; uint4 positionUV; uint4 normalUV; };
 // Receiver registers must be initialized by the target primary shading.
 // The input normal is a shading normal, never a geometric PDF normal.
-void GIEvaluateSecondary(inout GIShadingRegisters state,GISecondaryInput sample) {
+void GIEvaluateSecondaryCore(inout GIShadingRegisters state,GISecondaryInput sample,
+                             bool useWorldPosition,float3 worldPosition) {
     state.r7.w=sample.material; // native dword 995
     state.r11=sample.positionUV; // native dword 1003
     state.r12.xyz=(asuint((asfloat(state.r11.yyyy)*asfloat(giCB0[7u].xyzx)))).xyz; // native dword 1011
     state.r12.xyz=(asuint(mad(asfloat(giCB0[6u].xyzx),asfloat(state.r11.xxxx),asfloat(state.r12.xyzx)))).xyz; // native dword 1020
     state.r12.xyz=(asuint(mad(asfloat(giCB0[8u].xyzx),asfloat(state.r11.zzzz),asfloat(state.r12.xyzx)))).xyz; // native dword 1031
     state.r12.xyz=(asuint((asfloat(state.r12.xyzx)+asfloat(giCB0[9u].xyzx)))).xyz; // native dword 1042
+    if(useWorldPosition) state.r12.xyz=asuint(worldPosition);
     state.r13=sample.normalUV; // native dword 1051
     state.r14.xyz=(asuint((asfloat(asuint(-asfloat(state.r1.xyzx)))+asfloat(state.r12.xyzx)))).xyz; // native dword 1059
     state.r10.w=(asuint(dot(asfloat(state.r14.xyzx).xyz,asfloat(state.r14.xyzx).xyz).xxxx)).w; // native dword 1067
@@ -647,6 +649,21 @@ void GIEvaluateSecondary(inout GIShadingRegisters state,GISecondaryInput sample)
     state.r15.xyz=(uint4(0x0u,0x0u,0x0u,0x0u)).xyz; // native dword 5019
     } // native dword 5027
     } // native dword 5028
+}
+void GIEvaluateSecondary(inout GIShadingRegisters state,GISecondaryInput sample) {
+    GIEvaluateSecondaryCore(state,sample,false,float3(0,0,0));
+}
+// Owned producer supplies an unbiased WORLD point and world shading normal.
+// UV stays in native order: position.w=V, normal.w=U.
+void GIEvaluateSecondaryWorld(inout GIShadingRegisters state,uint material,
+                              float3 position,float3 shadingNormal,float2 uv) {
+    GISecondaryInput sample;
+    // Native light-cell indexing and hit distance still consume view position.
+    float3 viewPosition=position.x*asfloat(giCB0[2].xyz)+position.y*asfloat(giCB0[3].xyz)
+                       +position.z*asfloat(giCB0[4].xyz)+asfloat(giCB0[5].xyz);
+    sample.material=material;sample.positionUV=asuint(float4(viewPosition,uv.y));
+    sample.normalUV=asuint(float4(shadingNormal,uv.x));
+    GIEvaluateSecondaryCore(state,sample,true,position);
 }
 bool GIInitializeReceiver(uint2 targetPixel,out GIShadingRegisters state) {
     state=(GIShadingRegisters)0;

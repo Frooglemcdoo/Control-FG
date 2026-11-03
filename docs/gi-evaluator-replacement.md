@@ -302,3 +302,29 @@ Windows foundation run 41708831805 / job 126171222290 passed at remote commit
 checks and actual WARP execution of 1,024 initial-reservoir batches, selection,
 reconstruction, miss fallback, malformed inputs and output guard all passed.
 This is GPU execution of the initial reservoir kernel, not in-game reuse quality.
+
+## Producer-to-shading connection
+
+The extracted evaluator now has a world-position entry, used by
+`gi_producer_shading.hlsl`. It retains exact native instructions for the existing
+texture entry. The world entry supplies the unbiased accepted point directly to
+world-space lighting/direction evaluation; it also computes view position using
+native cb0[2..5] for light-cell indexing and hit-distance accounting. UV order is
+unchanged (position.w=V, normal.w=U). This is not a replacement of authored lights.
+
+The shading pass accepts frame/scene-matched 160-byte producer requests and emits
+the same 112-byte sample ABI now shared with the initial reservoir kernel. It
+evaluates secondary illumination at each requested receiver, preserves distinct
+geometric/shading normals, and keeps misses as primary-weighted fallback rather
+than reusable surface radiance. Invalid/stale/incomplete inputs publish an invalid
+zero record, which invalidates the whole reservoir batch instead of dropping its
+normalization denominator. Request proposal/BRDF values must come from the owned
+producer contract; this pass does not infer them from captured weighted RGB.
+
+Resources t27/u2/b5 occupy unused slots already covered by the captured native
+root signature. Windows validation creates this PSO against that root. No root
+expansion or material-table copy is required just to compile this shading pass.
+The descriptor contents and their lifetime still must be bound by the runtime.
+Shader compilation, source invariants and ABI checks pass locally. The pass is
+not selected in Control yet: native alpha linkage, admitted live scene mapping,
+producer dispatch/resource ownership, and spatial/temporal reuse remain open.

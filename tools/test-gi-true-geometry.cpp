@@ -1,4 +1,4 @@
-#include "../src/gi_reuse/producer_hit.h"
+#include "../src/gi_reuse/producer_shading.h"
 #include <cstddef>
 #include <iostream>
 #include <limits>

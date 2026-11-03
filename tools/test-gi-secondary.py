@@ -19,7 +19,7 @@ class Secondary(unittest.TestCase):
             if key in ('269','995','1003','1051'):continue
             self.assertEqual(re.sub(r'\br(\d+)\b',r'state.r\1',old[key]),new[key])
     def test_secondary_gets_explicit_sample(self):
-        block=self.text.split('void GIEvaluateSecondary(')[1].split('bool GIInitializeReceiver(')[0]
+        block=self.text.split('void GIEvaluateSecondaryCore(')[1].split('bool GIInitializeReceiver(')[0]
         for name in ('g_tMaterialId.Load','g_tPosition_TexcoordY.Load','g_tNormal_TexcoordX.Load'):
             self.assertNotIn(name,block)
         self.assertIn('state.r7.w=sample.material;',block)
@@ -33,6 +33,14 @@ class Secondary(unittest.TestCase):
         kernel=self.text.split('#ifndef GI_SECONDARY_LIBRARY_ONLY')[1]
         for at in (5029,5136,5143,5150,5184,5191):self.assertIn('// native dword '+str(at),kernel)
         self.assertIn('GIInitializeReceiver(dispatchId.xy,state)',kernel)
+    def test_world_position_override_precedes_direction_and_preserves_uv(self):
+        override=self.text.index('if(useWorldPosition) state.r12.xyz=asuint(worldPosition);')
+        self.assertLess(self.text.index('// native dword 1042'),override)
+        self.assertLess(override,self.text.index('// native dword 1059'))
+        self.assertIn('GIEvaluateSecondaryCore(state,sample,false,float3(0,0,0));',self.text)
+        self.assertIn('sample.positionUV=asuint(float4(viewPosition,uv.y))',self.text)
+        self.assertIn('sample.normalUV=asuint(float4(shadingNormal,uv.x))',self.text)
+        self.assertIn('GIEvaluateSecondaryCore(state,sample,true,position);',self.text)
     def test_changed_translation_rejected(self):
         with self.assertRaises(ValueError):m.generate(self.reference.replace('uint4 r29=0u','uint4 r29=1u'))
 if __name__=='__main__':unittest.main()

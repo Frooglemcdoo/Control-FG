@@ -25,6 +25,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Secondary evaluator extraction tests failed' }
           & $dxc.FullName -T cs_6_0 -E main -HV 2018 -WX src/shaders/gi_evaluator_secondary.generated.hlsl -Fo gi-evaluator-secondary.dxil
           if ($LASTEXITCODE -ne 0) { throw 'Secondary evaluator shader compile failed' }
+          & $dxc.FullName -T cs_6_0 -E main -HV 2018 -WX src/shaders/gi_producer_shading.hlsl -Fo gi-producer-shading.dxil
+          if ($LASTEXITCODE -ne 0) { throw 'Producer shading shader compile failed' }
           python tools/test-gi-evaluator.py
           if ($LASTEXITCODE -ne 0) { throw 'GI evaluator translation tests failed' }
           & $dxc.FullName -T cs_6_0 -E main -HV 2018 -WX src/shaders/gi_evaluator_reference.generated.hlsl -Fo gi-evaluator-reference.dxil
@@ -77,7 +79,7 @@ jobs:
           if not "%errorlevel%"=="0" exit /b 1
           gi-evaluator-pipeline.exe build/gi-evaluator-native.dxbc gi-evaluator-reference.dxil
           if not "%errorlevel%"=="0" exit /b 1
-          gi-evaluator-pipeline.exe build/gi-evaluator-native.dxbc gi-evaluator-secondary.dxil
+          gi-evaluator-pipeline.exe build/gi-evaluator-native.dxbc gi-evaluator-secondary.dxil gi-producer-shading.dxil
           if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-candidate-gpu.cpp /Fe:gi-candidate-gpu.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
           if not "%errorlevel%"=="0" exit /b 1

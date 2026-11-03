@@ -37,8 +37,26 @@ def generate(source):
     declarations+=['struct GISecondaryInput { uint material; uint4 positionUV; uint4 normalUV; };',
         '// Receiver registers must be initialized by the target primary shading.',
         '// The input normal is a shading normal, never a geometric PDF normal.',
-        'void GIEvaluateSecondary(inout GIShadingRegisters state,GISecondaryInput sample) {']
-    declarations += [registers(x) for x in body]+['}']
+        'void GIEvaluateSecondaryCore(inout GIShadingRegisters state,GISecondaryInput sample,',
+        '                             bool useWorldPosition,float3 worldPosition) {']
+    for line in body:
+        declarations.append(registers(line))
+        if line.endswith('// native dword 1042'):
+            declarations.append('    if(useWorldPosition) state.r12.xyz=asuint(worldPosition);')
+    declarations += ['}',
+        'void GIEvaluateSecondary(inout GIShadingRegisters state,GISecondaryInput sample) {',
+        '    GIEvaluateSecondaryCore(state,sample,false,float3(0,0,0));', '}',
+        '// Owned producer supplies an unbiased WORLD point and world shading normal.',
+        '// UV stays in native order: position.w=V, normal.w=U.',
+        'void GIEvaluateSecondaryWorld(inout GIShadingRegisters state,uint material,',
+        '                              float3 position,float3 shadingNormal,float2 uv) {',
+        '    GISecondaryInput sample;',
+        '    // Native light-cell indexing and hit distance still consume view position.',
+        '    float3 viewPosition=position.x*asfloat(giCB0[2].xyz)+position.y*asfloat(giCB0[3].xyz)',
+        '                       +position.z*asfloat(giCB0[4].xyz)+asfloat(giCB0[5].xyz);',
+        '    sample.material=material;sample.positionUV=asuint(float4(viewPosition,uv.y));',
+        '    sample.normalUV=asuint(float4(shadingNormal,uv.x));',
+        '    GIEvaluateSecondaryCore(state,sample,true,position);', '}']
     primary=lines[index(245):index(977)+1]
     primary=[line.replace('if((r1.xxxx).x != 0u) {','if((r1.xxxx).x == 0u) return false;') for line in primary]
     declarations += ['bool GIInitializeReceiver(uint2 targetPixel,out GIShadingRegisters state) {',

@@ -1,11 +1,7 @@
 #include "../gi_reuse/initial_reservoir.h"
-struct ProducerSample {
-    GIInitialInput shading;
-    float3 geometricNormal; uint geometryVerified;
-    float random; uint reserved0; uint reserved1; uint reserved2;
-};
+#include "../gi_reuse/producer_shading.h"
 struct Batch {uint first;uint count;uint frameTag;float depthScale;};
-StructuredBuffer<ProducerSample> samples : register(t0);
+StructuredBuffer<GIShadedProducerSample> samples : register(t0);
 StructuredBuffer<Batch> batches : register(t1);
 RWStructuredBuffer<GIInitialReservoir> reservoirs : register(u0);
 RWStructuredBuffer<GIInitialResult> outputs : register(u1);
@@ -23,7 +19,7 @@ void main(uint3 id:SV_DispatchThreadID) {
     GIInitialReservoir reservoir=GIBeginInitialReservoir(batch.frameTag,batch.count,batch.depthScale);
     if(!reservoir.valid)return;
     for(uint i=0;i<batch.count;++i) {
-        ProducerSample v=samples[batch.first+i];
+        GIShadedProducerSample v=samples[batch.first+i];
         if(v.reserved0||v.reserved1||v.reserved2){reservoir.valid=0;break;}
         GIPoint normal;normal.x=v.geometricNormal.x;normal.y=v.geometricNormal.y;normal.z=v.geometricNormal.z;
         if(!GIStreamInitialReservoir(reservoir,v.shading,normal,v.geometryVerified,v.random))break;

@@ -39,7 +39,7 @@ void Check(HRESULT h){if(FAILED(h))throw std::runtime_error("HRESULT "+std::to_s
 void Require(bool value,const char* message){if(!value)throw std::runtime_error(message);}
 std::vector<char> Read(const char* path){std::ifstream f(path,std::ios::binary);Require(bool(f),path);return {std::istreambuf_iterator<char>(f),{}};}
 int main(int argc,char** argv)try{
- Require(argc==3,"Expected native DXBC and translated DXIL paths");
+ Require(argc==3||argc==4,"Expected native DXBC, translated DXIL and optional producer-shading DXIL paths");
  auto native=Read(argv[1]),reference=Read(argv[2]);
  ComPtr<ID3D12Debug> debug;Check(D3D12GetDebugInterface(IID_PPV_ARGS(&debug)));debug->EnableDebugLayer();
  ComPtr<IDXGIFactory4> factory;Check(CreateDXGIFactory1(IID_PPV_ARGS(&factory)));
@@ -60,6 +60,13 @@ int main(int argc,char** argv)try{
  ComPtr<ID3D12RootSignature> root;Check(d->CreateRootSignature(0,blob->GetBufferPointer(),blob->GetBufferSize(),IID_PPV_ARGS(&root)));
  D3D12_COMPUTE_PIPELINE_STATE_DESC desc{};desc.pRootSignature=root.Get();desc.CS={native.data(),native.size()};
  ComPtr<ID3D12PipelineState> original;Check(d->CreateComputePipelineState(&desc,IID_PPV_ARGS(&original)));
+ if(argc==4){
+  auto producer=Read(argv[3]);auto producerDesc=desc;
+  producerDesc.CS={producer.data(),producer.size()};
+  ComPtr<ID3D12PipelineState> producerPipeline;
+  Check(d->CreateComputePipelineState(&producerDesc,IID_PPV_ARGS(&producerPipeline)));
+  std::cout<<"PASS producer shading PSO uses captured native root including t27/u2/b5.\n";
+ }
  // Deliberately invalid cached bytes prove the replacement does not reuse them.
  const unsigned char invalidCache[]={1,2,3,4};desc.CachedPSO={invalidCache,sizeof(invalidCache)};
  ComPtr<ID3D12PipelineState> translated;
