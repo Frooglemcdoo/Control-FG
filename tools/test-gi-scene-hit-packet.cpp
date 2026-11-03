@@ -38,6 +38,17 @@ static void CheckBothWidths(unsigned width){
  assert(ResolveSceneHit(history,p,result)==SceneHitError::None);
  assert(result.material==2&&result.tableRow==4&&result.instanceID==1234&&result.alphaTestedExport);
  assert(result.world[1].x==8&&result.world[2].y==23&&result.geometricNormal.z==-1);
+ // R305 contains shared geometry with distinct material bindings in one table.
+ // Select by instance contribution, never by index/attribute addresses alone.
+ {const auto original=p;auto shared=nativeBindings;shared[0].type=0;shared[0].constants[3]=1;
+  NativeGITable alternate;assert(BuildNativeGITable(44,1,1,shared,p.identifiers.nativeOpaque,p.identifiers.nativeAlpha,alternate));
+  unsigned char firstInstance[64];std::memcpy(firstInstance,instance,64);std::uint32_t contribution=0;std::memcpy(firstInstance+52,&contribution,4);
+  p.instances=Bytes(16384,23,firstInstance,64);p.shaderTable=Bytes(32768,24,alternate.bytes.data(),alternate.bytes.size());
+  assert(ResolveSceneHit(history,p,result)==SceneHitError::Table); // stale material from row 4
+  p.geometry.binding.material=1;
+  assert(ResolveSceneHit(history,p,result)==SceneHitError::None&&result.material==1&&result.tableRow==0&&!result.alphaTestedExport);
+  p=original;
+ }
  auto saved=p;p.geometry.revision=1;assert(ResolveSceneHit(history,p,result)==SceneHitError::Version&&result.material==0);p=saved;
  p.geometry.token=99;assert(ResolveSceneHit(history,p,result)==SceneHitError::Order);p=saved;
  p.geometry.positions.epoch=2;assert(ResolveSceneHit(history,p,result)==SceneHitError::Bytes);p=saved;
