@@ -116,7 +116,11 @@ from the earlier spotlight capture tests, without their added diagnostic root
 parameters. It creates both complete native and translated PSOs, checks invalid
 input handling and native-cache isolation, and checks the D3D12 debug queue.
 This validates pipeline compatibility only; full resource-bound image comparison
-is still required. Windows validation is pending.
+is still required. Windows foundation run 41696125622 / job 126127010038
+passed at commit dc6adee94f46aa5c62c654ee3e6ad567d479b61d, including both
+complete PSOs with the captured native root, cache isolation and clean debug
+validation. The first validator build needed an explicit standard string include;
+that compile issue was corrected before this successful run.
 
 Integration must handle both ordinary CreateComputePipelineState and cached
 LoadComputePipeline routes. The existing pipeline-library hook already documents
