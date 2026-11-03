@@ -455,3 +455,13 @@ Windows attempt exposed ambiguous unqualified `Bytes` lookup in MSVC; explicitly
 qualifying `PTShaderTableAdapter::Bytes` fixed it, and the full foundation suite
 was rerun successfully. The mod package still uses the R309 live renderer;
 successful compilation does not make the new GI producer live or game-ready.
+
+The command recorder now includes a fifth, native-output resolve stage. Producer
+shading retains GI6's per-ray distance convention (including its miss base range)
+in the existing 112-byte sample layout. The resolve writes normalized surface
+plus fallback RGB, validity alpha and the all-ray mean hit distance. It does not
+use the selected reservoir's distance as the native denoiser/RR guide. Invalid
+or disarmed batches leave the native output unchanged. The host must execute
+native GI6 first, and the recorder now requires observed u0/u1 descriptors and
+inserts UAV ordering around replacement writes. Live host activation and reuse
+are still pending; this is not a new game-ready package.

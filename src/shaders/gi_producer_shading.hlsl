@@ -59,6 +59,10 @@ void main(uint3 id:SV_DispatchThreadID) {
         result.geometricNormal=hit.geometricNormal;result.geometryVerified=1;
     }
     result.random=request.random;
+    // Preserve GI6's distance convention, including its base-range value for
+    // misses. RR hit distance is not the randomly selected reservoir distance.
+    result.hitDistance=asfloat(state.r5.w);
+    if(!isfinite(result.hitDistance)||result.hitDistance<0)return;
     if(!GIMakeInitialSample(result.shading,giProducerFrame).valid)return;
     giProducerSamples[id.x]=result;
 }

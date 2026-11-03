@@ -74,9 +74,9 @@ int main(int argc,char** argv)try{
  // This validates resource ownership and table boundaries, not DXR execution.
  {
   D3D12_DESCRIPTOR_HEAP_DESC hd{};hd.Type=D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-  hd.NumDescriptors=244300;hd.Flags=D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+  hd.NumDescriptors=244400;hd.Flags=D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
   ComPtr<ID3D12DescriptorHeap> visible;Check(d->CreateDescriptorHeap(&hd,IID_PPV_ARGS(&visible)));
-  hd.NumDescriptors=27;hd.Flags=D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
+  hd.NumDescriptors=29;hd.Flags=D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
   ComPtr<ID3D12DescriptorHeap> cpu;Check(d->CreateDescriptorHeap(&hd,IID_PPV_ARGS(&cpu)));
   auto h=cpu->GetCPUDescriptorHandleForHeapStart();const auto step=d->GetDescriptorHandleIncrementSize(hd.Type);
   D3D12_SHADER_RESOURCE_VIEW_DESC nullView{};nullView.Format=DXGI_FORMAT_R32_FLOAT;
@@ -93,10 +93,15 @@ int main(int argc,char** argv)try{
   Require(missing.Initialize(d.Get(),shadow,17,2,3,256,5,7,2,1,0,2,6,5)==E_INVALIDARG,"Incomplete native bindings accepted");
   Require(shadow.Copy(17,5,{cpu.Get(),0,27}),"CPU source shadow copy failed");
   Require(shadow.Constant(17,0,{cb->GetGPUVirtualAddress(),256}),"Native b4 shadow failed");
+  D3D12_UNORDERED_ACCESS_VIEW_DESC outputView{};outputView.Format=DXGI_FORMAT_R32G32B32A32_FLOAT;
+  outputView.ViewDimension=D3D12_UAV_DIMENSION_TEXTURE2D;
+  for(UINT i=0;i<2;++i){auto outputHandle=cpu->GetCPUDescriptorHandleForHeapStart();outputHandle.ptr+=SIZE_T(27+i)*step;
+   d->CreateUnorderedAccessView(nullptr,nullptr,&outputView,outputHandle);}
+  Require(shadow.Copy(17,41,{cpu.Get(),27,2}),"Native output shadow copy failed");
   gi_reuse::D3D12InitialGITile tile;
   Check(tile.Initialize(d.Get(),shadow,17,2,3,256,5,7,2,1,0,2,6,5));
   Require(tile.Pixels()==2&&tile.FirstPixel()==0&&tile.RetainedBytes()==5344,"Tile allocation accounting mismatch");
-  std::array<PTGlass::DescriptorRange,4> fresh{};for(UINT i=0;i<4;++i)fresh[i]={visible.Get(),244049+i*49,49};
+  std::array<PTGlass::DescriptorRange,5> fresh{};for(UINT i=0;i<5;++i)fresh[i]={visible.Get(),244049+i*49,49};
   auto bad=fresh;bad[1]=bad[0];Require(!tile.Publish(originalRange,bad),"Overlapping private tables accepted");
   bad=fresh;bad[0]=originalRange;Require(!tile.Publish(originalRange,bad),"Native table overwrite accepted");
   bad=fresh;bad[0].first=0;Require(!tile.Publish(originalRange,bad),"Material prefix overwrite accepted");

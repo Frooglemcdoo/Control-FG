@@ -18,7 +18,7 @@ struct GIProducerShadingRequest {
 struct GIShadedProducerSample {
     GIInitialInput shading;
     GIPoint geometricNormal; uint geometryVerified;
-    float random; uint reserved0; uint reserved1; uint reserved2;
+    float random; float hitDistance; uint reserved1; uint reserved2;
 };
 #ifdef __cplusplus
 static_assert(sizeof(GIProducerShadingRequest)==160);

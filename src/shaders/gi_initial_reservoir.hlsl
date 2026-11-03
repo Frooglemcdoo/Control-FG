@@ -27,7 +27,7 @@ void main(uint3 id:SV_DispatchThreadID) {
     if(!reservoir.valid)return;
     for(uint i=0;i<batch.count;++i) {
         GIShadedProducerSample v=samples[batch.first+i];
-        if(v.reserved0||v.reserved1||v.reserved2){reservoir.valid=0;break;}
+        if(!isfinite(v.hitDistance)||v.hitDistance<0||v.reserved1||v.reserved2){reservoir.valid=0;break;}
         GIPoint normal;normal.x=v.geometricNormal.x;normal.y=v.geometricNormal.y;normal.z=v.geometricNormal.z;
         if(!GIStreamInitialReservoir(reservoir,v.shading,normal,v.geometryVerified,v.random))break;
     }
