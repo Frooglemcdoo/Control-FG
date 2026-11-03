@@ -1,8 +1,13 @@
-#include "../src/gi_reuse/true_geometry.h"
+#include "../src/gi_reuse/producer_hit.h"
+#include <cstddef>
 #include <iostream>
 #include <limits>
 #include <stdexcept>
 using namespace gi_reuse;
+static_assert(offsetof(GIProducerHit, nativeValue)==0);
+static_assert(offsetof(GIProducerHit, geometricNormal)==32);
+static_assert(offsetof(GIProducerHit, shadingNormal)==64);
+static_assert(offsetof(GIProducerHit, texcoordV)==80);
 void Require(bool v){if(!v)throw std::runtime_error("true geometry failed");}
 void Near(float a,float b){Require(std::abs(a-b)<1e-6f);}
 int main()try{

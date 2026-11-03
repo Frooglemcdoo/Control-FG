@@ -51,7 +51,7 @@ No game shader is replaced and no new user capture is requested at this stage.
 ## Accepted-hit GPU producer
 
 `gi_producer_geometry.hlsl` uses the existing recovered PT private-record ABI:
-index SRV t0/space3, attribute slot t1 retained for native material handlers,
+index SRV t0/space3, attribute SRV t1/space3,
 position SRV t2/space3, and the twelve admitted local constants. It reads the
 accepted primitive's indices and actual float3 positions, applies the instance
 object-to-world transform, derives a winding-preserving geometric normal from
@@ -59,7 +59,7 @@ world-space triangle edges, and returns `O + D * RayTCurrent` without the native
 0.01 position shift. This reuses `GIRecoverTrueHit` and the earlier PT table/geometry
 admission contracts instead of interpreting interpolated shading normals as faces.
 
-The payload is 64 bytes with a reserved first DWORD for the native GI payload
+The payload is 96 bytes with a reserved first DWORD for the native GI payload
 prefix. This is NOT by itself proof that a native any-hit export can be linked:
 the host must use the admitted export, its material resources and matching local
 root. A native 96-byte record cannot be used directly; the existing private table
@@ -72,3 +72,16 @@ actual producer traversal and native alpha linkage are not yet executed or bound
 in Control. Existing 5090 visibility testing validates the separate four-byte
 visibility payload, not this new producer payload or geometry reads. No repeat
 of the earlier test is requested for that unrelated contract.
+
+The accepted hit now also carries UV and interpolated world shading normal,
+using the existing PT signed S16 decoding (UV /4095, normal /32767), barycentric
+interpolation and inverse-transpose instance transform. It keeps the shading
+normal distinct from the true geometric normal and does not silently normalize
+or face-forward it. Attribute reads reject misalignment, overflow, missing
+stride capacity and truncated buffers rather than clamp to a different vertex.
+Only hits with both geometry and shading attributes validated are published.
+Miss clears the entire payload before setting the native miss material sentinel.
+
+Validation: foundation run 41709365351 passed for the preceding geometry-only
+shader. The extended attribute shader compiles locally with DXC lib_6_5 / WX.
+These checks do not establish native alpha compatibility or runtime binding.

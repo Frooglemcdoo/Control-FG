@@ -11,9 +11,12 @@ struct GIProducerHit {
     GIPoint position; float rayT;
     GIPoint geometricNormal; uint valid;
     uint instanceIndex; uint instanceId; uint hitKind; uint reserved;
+    // Interpolated inverse-transpose shading normal, kept distinct from the face.
+    GIPoint shadingNormal; float texcoordU;
+    float texcoordV; uint reserved1; uint reserved2; uint reserved3;
 };
 #ifdef __cplusplus
-static_assert(sizeof(GIProducerHit)==64);
+static_assert(sizeof(GIProducerHit)==96);
 }
 #endif
 #endif
