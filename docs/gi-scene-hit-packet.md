@@ -167,3 +167,8 @@ widths. Portable warnings-as-errors and UBSan passed. The host still must obtain
 version-matched instance bytes and allocation identities and attach real leases;
 this helper alone does not make native release safe. Existing R303 metadata-only
 matching is not falsely promoted to that proof. No additional user run requested.
+
+Windows foundation run 41652270346, job 125973246312 passed at remote commit
+de92569d4aed96fc4c1408039663a449cd770661. Local and remote trees match
+99746349f6e7804b9432e603a0d06e29a0abdc1f. No new package delivered and no
+user capture requested for this offline closure-admission change.
