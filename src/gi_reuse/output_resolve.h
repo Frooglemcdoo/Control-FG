@@ -18,19 +18,19 @@ struct GIOutputState {
 };
 GI_OUTPUT_INLINE GIOutputState GIBeginOutput(GIInitialResult result,uint frameTag,uint count,float depthScale) {
 #ifdef __cplusplus
-    GIOutputState out{};
+    GIOutputState resolved{};
 #else
-    GIOutputState out=(GIOutputState)0;
+    GIOutputState resolved=(GIOutputState)0;
 #endif
     if(result.valid!=1||result.frameTag!=frameTag||!count||count>64||
        !GIFinite(depthScale)||depthScale<0||!GINonnegative(result.surfaceContribution)||
        !GINonnegative(result.fallbackContribution)||result.isSurface>1||
-       (result.isSurface&&result.rayIndex>=count))return out;
-    out.color.x=result.surfaceContribution.x+result.fallbackContribution.x;
-    out.color.y=result.surfaceContribution.y+result.fallbackContribution.y;
-    out.color.z=result.surfaceContribution.z+result.fallbackContribution.z;
-    if(!GINonnegative(out.color))return out;
-    out.frameTag=frameTag;out.count=count;out.depthScale=depthScale;out.valid=1;return out;
+       (result.isSurface&&result.rayIndex>=count))return resolved;
+    resolved.color.x=result.surfaceContribution.x+result.fallbackContribution.x;
+    resolved.color.y=result.surfaceContribution.y+result.fallbackContribution.y;
+    resolved.color.z=result.surfaceContribution.z+result.fallbackContribution.z;
+    if(!GINonnegative(resolved.color))return resolved;
+    resolved.frameTag=frameTag;resolved.count=count;resolved.depthScale=depthScale;resolved.valid=1;return resolved;
 }
 GI_OUTPUT_INLINE bool GIAddOutputDistance(
 #ifndef __cplusplus
