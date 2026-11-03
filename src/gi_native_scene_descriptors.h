@@ -1,6 +1,7 @@
 #pragma once
 #include "gi_native_scene_owners.h"
 #include "gi_reuse/as_descriptor_index.h"
+#include "rr_specular_native_clamp.h"
 namespace GINativeSceneDescriptors {
 using Microsoft::WRL::ComPtr;
 using CreateSRV=void(STDMETHODCALLTYPE*)(ID3D12Device*,ID3D12Resource*,const D3D12_SHADER_RESOURCE_VIEW_DESC*,D3D12_CPU_DESCRIPTOR_HANDLE);
@@ -12,6 +13,7 @@ using CopyRanges=void(STDMETHODCALLTYPE*)(ID3D12Device*,UINT,const D3D12_CPU_DES
 static CreateSRV srv=nullptr;static CreateUAV uav=nullptr;static CreateCBV cbv=nullptr;static CreateHeap heap=nullptr;
 static CopySimple simple=nullptr;static CopyRanges ranges=nullptr;
 static ComPtr<ID3D12Device> device;
+static control_rr_native_clamp::Api providerApi;
 static std::unique_ptr<GIASDescriptors::Index> index;
 static std::atomic<bool> installed{false},failed{false};
 static thread_local unsigned muted=0;
@@ -91,9 +93,9 @@ static bool Select(const PTGlassRuntime::Context& context,UINT srvSlot,gi_reuse:
 // Range comes from the ray producer's provider, not GI6's different cb4 layout.
 static bool Provider(const char* name,UINT& output) noexcept {
  output=0;__try {
-  if(!rrNativeClampApi.ready||!rrNativeClampApi.resolve)return false;
-  struct Slot {int id,tag;} slot{-1,0};rrNativeClampApi.resolve(&slot,name);
-  return rrNativeClampApi.ReadCurrent(slot.id,output);
+  if(!providerApi.ready||!providerApi.resolve)return false;
+  struct Slot {int id,tag;} slot{-1,0};providerApi.resolve(&slot,name);
+  return providerApi.ReadCurrent(slot.id,output);
  }__except(EXCEPTION_EXECUTE_HANDLER){return false;}
 }
 static bool Inputs(GINativeSceneOwners::Writer& writer) noexcept {
@@ -109,7 +111,8 @@ static bool Inputs(GINativeSceneOwners::Writer& writer) noexcept {
 }
 static bool Install(ID3D12Device* d) noexcept {
  if(!GINativeSceneOwners::Enabled()||!d)return false;if(installed.load())return d==device.Get()&&!failed.load();
- try{device=d;index=std::make_unique<GIASDescriptors::Index>(d->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV));
+ try{if(!providerApi.Initialize(verifiedRenderer,verifiedD3d))return false;
+  device=d;index=std::make_unique<GIASDescriptors::Index>(d->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV));
   const bool ok=PTGlassRuntime::Patch(d,18,reinterpret_cast<void*>(&SRVHook),reinterpret_cast<void**>(&srv))&&
    PTGlassRuntime::Patch(d,19,reinterpret_cast<void*>(&UAVHook),reinterpret_cast<void**>(&uav))&&
    PTGlassRuntime::Patch(d,17,reinterpret_cast<void*>(&CBVHook),reinterpret_cast<void**>(&cbv))&&

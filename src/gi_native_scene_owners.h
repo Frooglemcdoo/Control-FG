@@ -138,8 +138,9 @@ static bool FreezeGeometry(ID3D12GraphicsCommandList4* list,Recording& recording
   if(sources.count(token))continue;
   gi_reuse::BufferStorageLease lease;UINT64 wrapper=0;Wrapper native;
   if(!owners.Inspect(token,lease,wrapper)||!Read(reinterpret_cast<void*>(wrapper),native))return false;
-  Microsoft::WRL::ComPtr<IUnknown> expected,actual;
-  if(FAILED(lease.resource.As(&expected))||FAILED(native.resource->QueryInterface(IID_PPV_ARGS(&actual)))||actual.Get()!=expected.Get())return false;
+  // Never call through a raw wrapper pointer after releasing the owner lock.
+  // The retained resource is callable; a changed wrapper is simply ineligible.
+  if(native.resource!=static_cast<IUnknown*>(lease.resource.Get()))return false;
   const auto address=lease.resource->GetGPUVirtualAddress(),bytes=lease.resource->GetDesc().Width;
   if(address!=native.address||native.bytes>bytes)return false;
   const auto local=recording.states.Find(token);D3D12_RESOURCE_STATES state{};
