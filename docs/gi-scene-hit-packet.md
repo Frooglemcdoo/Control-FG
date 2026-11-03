@@ -145,3 +145,10 @@ DispatchRays resource uses, native wrapper lifecycle coverage, GI-specific write
 and shader export selection, captured attributes/material textures/alpha, and
 sampling proposal validity. A new user run must answer a named gap that the
 existing PT sources, supplied DLLs and archived captures cannot resolve offline.
+
+Full build 41643117332 / job 125941391200 passed at the same code commit.
+Artifact 13234011791 was downloaded and verified against its SHA-256 digest;
+the nested package checksum, ZIP integrity, 74-file layout, R304 lease marker
+and exact-index shader sidecar passed. ControlTOH-R304.zip is 4,216,584 bytes,
+SHA-256 66bd70705900359195a3d34650f459b8e312cfdfd878cb0e564ee0ae473b4af1.
+Saved package: libfile_1dc1a82da3988191b0532298f34d7424. No user run requested.
