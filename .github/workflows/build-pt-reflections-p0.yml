@@ -1148,7 +1148,7 @@ jobs:
           build\test-gi-spot-pcf.exe
           if errorlevel 1 exit /b 1
 
-      - name: Compile exact uint16 snapshot kernel R304
+      - name: Compile exact uint16 snapshot kernel R305
         shell: powershell
         run: |
           $dxc=Get-ChildItem "${env:ProgramFiles(x86)}/Windows Kits/10/bin/*/x64/dxc.exe" | Sort-Object FullName -Descending | Select-Object -First 1
@@ -1156,11 +1156,11 @@ jobs:
           & $dxc.FullName -T cs_6_2 -E main -enable-16bit-types -WX src/shaders/gi_index_snapshot.hlsl -Fo build/gi_index_snapshot.dxil
           if ($LASTEXITCODE -ne 0) { throw 'Exact index snapshot compile failed' }
 
-      - name: Package GI geometry integration R304
+      - name: Package GI geometry integration R305
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='ControlTOH-R304'
+          $out='ControlTOH-R305'
           $shader="$out/ControlTOH/Shaders"
           $tools="$out/ControlTOH/Tools"
           $diagnostics="$out/ControlTOH/Diagnostics"
@@ -1192,18 +1192,19 @@ jobs:
           Copy-Item build/DirectStorage "$diagnostics/DirectStorage" -Recurse
           Copy-Item build/DirectStorage/dstorage.dll,build/DirectStorage/dstoragecore.dll $out
           Copy-Item tools/directstorage/Validate-DirectStorage.cmd "$diagnostics/DirectStorage"
-          Copy-Item docs/native-lighting-r304.md "$out/ControlTOH/DIAGNOSTIC-NOTES.md"
+          Copy-Item docs/native-lighting-r305.md "$out/ControlTOH/DIAGNOSTIC-NOTES.md"
           Copy-Item tools/Organize-Existing-Install.cmd,tools/Organize-Existing-Install.ps1 $tools
           Copy-Item tools/diagnostics/Collect-ControlTOH-Materials.cmd,tools/diagnostics/Collect-ControlTOH-Materials.ps1 $tools
           & powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/diagnostics/test-material-collector.ps1
           if ($LASTEXITCODE -ne 0) { throw 'Material collector integration test failed' }
           @'
           Control The Oldest House: Visual and Performance Overhaul
-          R304 - GI submission lifetime integration
+          R305 - complete GI writer and scene capture
 
           Copy all package contents beside Control_DX12.exe, preserving folders.
           Run ControlTOH/Diagnostics/Start-GI-Metadata-Test.cmd.
-          Load your usual save, move around for two minutes, then exit normally.
+          Load your usual save. Keep the plant and hair visible for one minute,
+          then move around for another minute and exit normally.
           No F7, F9, CAPTURE RR, fixed camera or zoom is needed.
           Logs are packaged automatically. Send the diagnostics ZIP.
           Replacement GI remains disabled; no speckle fix is claimed.
@@ -1221,10 +1222,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: ControlTOH-R304
+          name: ControlTOH-R305
           path: |
-            ControlTOH-R304.zip
-            ControlTOH-R304.sha256
+            ControlTOH-R305.zip
+            ControlTOH-R305.sha256
             build/gi-joint-light-validation.json
             build/gi-joint-oracle-analysis.json
             build/gi-ray-trace-validation.json

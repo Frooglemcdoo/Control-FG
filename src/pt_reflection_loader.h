@@ -475,6 +475,7 @@ static void* PTReflectionHookTechniqueLookup(void* rfx,const char* technique) {
 }
 
 #include "pt_glass_runtime.h"
+#include "gi_native_writer_capture.h"
 
 static const char* PTReflectionHookShaderStorageGet(int id) {
     if(id>=kRRWorldAlbedoStorageBase && id<kRRWorldAlbedoStorageBase+4 &&
@@ -1975,7 +1976,7 @@ static bool PTReflectionInstallShaderLookupHooks(HMODULE renderer,HMODULE d3d) n
     rrWorldAlbedoStorageReady.store(storageReady,std::memory_order_release);
     if(!storageReady||!RRAlbedoShader::Initialize(d3d))return false;
     const bool glassReady=PTGlassRuntime::Install(renderer,d3d);
-    if(glassReady)GINativeJobRuntime::Install(d3d);
+    if(glassReady&&GINativeJobRuntime::Install(d3d))GINativeWriterCapture::Start();
     Log("GLASS_ONLY_R34 glass_ready=%u opaque_pt=disabled character_shader_transport=%u",unsigned(glassReady),unsigned(storageReady));
     // Glass has its own failure reporting; a glass fallback must not disable RR.
     return storageReady;

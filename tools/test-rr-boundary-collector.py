@@ -154,3 +154,28 @@ for key,value in [('stage','both_steady_spatial'),('applied',False),('spatial_ob
  except ValueError:pass
  else:raise AssertionError(key)
 print('PASS R263 stationary sequence: same-frame early GI, verified bypass, actual RR GI identity, projection/motion metadata and pair configuration')
+
+with tempfile.TemporaryDirectory() as tmp:
+ root=Path(tmp);local=root/'local';diagnostics=local/'Control-FG'/'Diagnostics';diagnostics.mkdir(parents=True)
+ probe=root/'probe';probe.mkdir();out=root/'out';out.mkdir()
+ names=['GI-Writer-R305-7-1.json','GI-Writer-R305-7-1-bindings.bin','GI-Writer-R305-7-1-table.bin']
+ for name in names:(diagnostics/name).write_bytes(b'whole-scene-writer')
+ (diagnostics/'GI-Writer-R305-8-1.json').write_bytes(b'other-session')
+ c.collect_logs(probe,local,7,out)
+ assert {p.name for p in (out/'logs').iterdir()}==set(names)
+ assert all((out/'logs'/name).read_bytes()==b'whole-scene-writer' for name in names)
+print('PASS R305 collector includes complete writer triplets and excludes other process IDs')
+
+with tempfile.TemporaryDirectory() as tmp:
+ root=Path(tmp);name='GI-Writer-R305-7-1';metadata=root/(name+'.json')
+ m=dict(schema='gi-native-writer-r305',pid=7,count=2,binding_stride=64,record_stride=96,rows_per_geometry=2,
+        active_rows='even',cpu_inputs_only=True,gpu_completion_proven=False,allocation_ownership_proven=False,
+        binding_bytes=128,table_bytes=384,hit_bytes=384,serial=1,engine_frame=100)
+ metadata.write_text(json.dumps(m));bindings=bytearray(128);bindings[68]=1
+ records=bytearray(384);records[0]=1;records[192]=2
+ (root/(name+'-bindings.bin')).write_bytes(bindings);table=root/(name+'-table.bin');table.write_bytes(records)
+ report=c.validate_writer_files(root,7);assert report['complete_tables']==1 and report['tables'][0]['alpha']==1
+ table.write_bytes(records[:-1]);assert c.validate_writer_files(root,7)['complete_tables']==0
+ records[96]=1;table.write_bytes(records);assert c.validate_writer_files(root,7)['complete_tables']==0
+ records[96]=0;records[224]=99;table.write_bytes(records);assert c.validate_writer_files(root,7)['complete_tables']==0
+print('PASS R305 complete-table validation: sizes, alpha classification, reserved rows, roots and partial export rejection')

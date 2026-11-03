@@ -253,3 +253,16 @@ and reads only GI identifier slots 0 and 2. A Windows fixture deliberately leave
 reflection slots 1/3 null, then checks pointer faults, pipeline mismatch, wrong ray
 count, altered table address, invalid types and zero identifiers. It does not read
 a GPU shader table or claim allocation/alpha visibility evidence.
+
+## R305 consolidated writer capture
+
+The metadata launcher now registers a diagnostic consumer for four whole GI
+binding tables ten seconds apart. It copies only matched pre-schedule CPU inputs,
+then exports bindings, reconstructed active records and explicit provenance on a
+background thread. Sixteen attempts bound failure retries; normal launch registers
+no capture consumer. Existing instance/geometry/submission recording runs alongside
+this without additional GPU passes. The collector packages and validates writer
+triplets (full lengths, identifier consistency, local roots, inactive rows), reports
+complete-table count and retains partial failure evidence. This is the first user
+run needed for matched live GI writer inputs; R303's setup/dimensions and geometry
+are not requested as separate tests. Replacement GI remains disabled.

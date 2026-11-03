@@ -175,13 +175,58 @@ def validate_gi_sequence_pair(pair, ordinal):
 
 
 def collect_logs(root, local, pid, destination):
-    for directory, pattern in [(root, f'probe-*-{pid}.log'), (local / 'Control-FG' / 'Diagnostics', f'GI-Joint-R28[123]-{pid}.bin'), (local / 'Control-FG' / 'Diagnostics', f'GI-Joint-R284-{pid}-frame[0-9][0-9].bin'), (local / 'Control-FG' / 'Diagnostics', f'GI-Joint-R284-{pid}-reference.bmp'), (local / 'Control-FG' / 'Diagnostics', f'GI-Joint-R285-{pid}-frame[0-9][0-9].bin'), (local / 'Control-FG' / 'Diagnostics', f'GI-Joint-R285-{pid}-frame[0-9][0-9].json'), (local / 'Control-FG' / 'Diagnostics', f'GI-Joint-R285-{pid}-reference.bmp'), (local / 'Control-FG' / 'Diagnostics', f'GI-Spot-R274-{pid}.bin'), (local / 'Control-FG' / 'Diagnostics', f'GI-Ray-R27[78]-{pid}.bin'), (local / 'Control-FG' / 'Diagnostics', f'Lighting-*-{pid}-*.log'), (Path(os.environ.get('TEMP', str(local))) / 'Control-FG' / 'Diagnostics', f'GI-Joint-R28[123]-{pid}.bin'), (Path(os.environ.get('TEMP', str(local))) / 'Control-FG' / 'Diagnostics', f'GI-Joint-R284-{pid}-frame[0-9][0-9].bin'), (Path(os.environ.get('TEMP', str(local))) / 'Control-FG' / 'Diagnostics', f'GI-Joint-R284-{pid}-reference.bmp'), (Path(os.environ.get('TEMP', str(local))) / 'Control-FG' / 'Diagnostics', f'GI-Joint-R285-{pid}-frame[0-9][0-9].bin'), (Path(os.environ.get('TEMP', str(local))) / 'Control-FG' / 'Diagnostics', f'GI-Joint-R285-{pid}-frame[0-9][0-9].json'), (Path(os.environ.get('TEMP', str(local))) / 'Control-FG' / 'Diagnostics', f'GI-Joint-R285-{pid}-reference.bmp'), (Path(os.environ.get('TEMP', str(local))) / 'Control-FG' / 'Diagnostics', f'GI-Spot-R274-{pid}.bin'), (Path(os.environ.get('TEMP', str(local))) / 'Control-FG' / 'Diagnostics', f'GI-Ray-R27[78]-{pid}.bin'), (Path(os.environ.get('TEMP', str(local))) / 'Control-FG' / 'Diagnostics', f'Lighting-*-{pid}-*.log')]:
+    for directory, pattern in [(root, f'probe-*-{pid}.log'), (local / 'Control-FG' / 'Diagnostics', f'GI-Writer-R305-{pid}-*.bin'), (local / 'Control-FG' / 'Diagnostics', f'GI-Writer-R305-{pid}-*.json'), (local / 'Control-FG' / 'Diagnostics', f'GI-Joint-R28[123]-{pid}.bin'), (local / 'Control-FG' / 'Diagnostics', f'GI-Joint-R284-{pid}-frame[0-9][0-9].bin'), (local / 'Control-FG' / 'Diagnostics', f'GI-Joint-R284-{pid}-reference.bmp'), (local / 'Control-FG' / 'Diagnostics', f'GI-Joint-R285-{pid}-frame[0-9][0-9].bin'), (local / 'Control-FG' / 'Diagnostics', f'GI-Joint-R285-{pid}-frame[0-9][0-9].json'), (local / 'Control-FG' / 'Diagnostics', f'GI-Joint-R285-{pid}-reference.bmp'), (local / 'Control-FG' / 'Diagnostics', f'GI-Spot-R274-{pid}.bin'), (local / 'Control-FG' / 'Diagnostics', f'GI-Ray-R27[78]-{pid}.bin'), (local / 'Control-FG' / 'Diagnostics', f'Lighting-*-{pid}-*.log'), (Path(os.environ.get('TEMP', str(local))) / 'Control-FG' / 'Diagnostics', f'GI-Joint-R28[123]-{pid}.bin'), (Path(os.environ.get('TEMP', str(local))) / 'Control-FG' / 'Diagnostics', f'GI-Joint-R284-{pid}-frame[0-9][0-9].bin'), (Path(os.environ.get('TEMP', str(local))) / 'Control-FG' / 'Diagnostics', f'GI-Joint-R284-{pid}-reference.bmp'), (Path(os.environ.get('TEMP', str(local))) / 'Control-FG' / 'Diagnostics', f'GI-Joint-R285-{pid}-frame[0-9][0-9].bin'), (Path(os.environ.get('TEMP', str(local))) / 'Control-FG' / 'Diagnostics', f'GI-Joint-R285-{pid}-frame[0-9][0-9].json'), (Path(os.environ.get('TEMP', str(local))) / 'Control-FG' / 'Diagnostics', f'GI-Joint-R285-{pid}-reference.bmp'), (Path(os.environ.get('TEMP', str(local))) / 'Control-FG' / 'Diagnostics', f'GI-Spot-R274-{pid}.bin'), (Path(os.environ.get('TEMP', str(local))) / 'Control-FG' / 'Diagnostics', f'GI-Ray-R27[78]-{pid}.bin'), (Path(os.environ.get('TEMP', str(local))) / 'Control-FG' / 'Diagnostics', f'Lighting-*-{pid}-*.log')]:
         if not directory.exists():
             continue
         for source in directory.rglob(pattern):
             target = destination / 'logs' / source.name
             target.parent.mkdir(exist_ok=True)
             shutil.copy2(source, target)
+
+
+def validate_writer_files(folder, pid):
+    """Validate serialized CPU records only; never promote this to GPU ownership."""
+    result = {'complete_tables': 0, 'tables': [], 'errors': [], 'cpu_inputs_only': True}
+    for path in sorted(folder.glob(f'GI-Writer-R305-{pid}-*.json')):
+        try:
+            if path.stat().st_size > 16384:
+                raise ValueError('oversized metadata')
+            m = json.loads(path.read_text())
+            if not isinstance(m, dict):
+                raise ValueError('metadata must be an object')
+            n = m.get('count')
+            if (m.get('schema') != 'gi-native-writer-r305' or m.get('pid') != pid
+                    or type(n) is not int or not 0 < n <= 65536
+                    or m.get('binding_stride') != 64 or m.get('record_stride') != 96
+                    or m.get('rows_per_geometry') != 2 or m.get('active_rows') != 'even'
+                    or m.get('cpu_inputs_only') is not True
+                    or m.get('gpu_completion_proven') is not False
+                    or m.get('allocation_ownership_proven') is not False):
+                raise ValueError('writer schema or scope mismatch')
+            binding = path.with_name(path.stem+'-bindings.bin')
+            table = path.with_name(path.stem+'-table.bin')
+            if (m.get('binding_bytes') != n*64 or m.get('table_bytes') != n*192
+                    or m.get('hit_bytes') != n*192 or binding.stat().st_size != n*64
+                    or table.stat().st_size != n*192):
+                raise ValueError('truncated or inconsistent whole-table capture')
+            bindings, records = binding.read_bytes(), table.read_bytes()
+            identifiers = {}; types = [0, 0]
+            for i in range(n):
+                b, r = bindings[i*64:(i+1)*64], records[i*192:(i+1)*192]
+                kind = int.from_bytes(b[4:8], 'little')
+                if kind not in (0, 1) or not any(r[:32]) or r[32:88] != b[8:64] or any(r[88:]):
+                    raise ValueError(f'identifier/root/reserved-row mismatch at binding {i}')
+                if kind in identifiers and identifiers[kind] != r[:32]:
+                    raise ValueError('inconsistent identifier within one pipeline')
+                identifiers[kind] = r[:32]; types[kind] += 1
+            if len(identifiers) == 2 and identifiers[0] == identifiers[1]:
+                raise ValueError('opaque and alpha identifiers alias')
+            result['tables'].append({'file': path.name, 'count': n, 'opaque': types[0], 'alpha': types[1],
+                                     'engine_frame': m.get('engine_frame'), 'serial': m.get('serial')})
+            result['complete_tables'] += 1
+        except (OSError, ValueError, TypeError) as error:
+            result['errors'].append({'file': path.name, 'error': str(error)})
+    return result
 
 
 def capture_status(root, pid):
@@ -314,6 +359,10 @@ def main():
         report['last_capture_status'] = 'Not requested (diagnostics-only).' if args.diagnostics_only else capture_status(root, args.pid)
         retain_metadata(root, args.pid, destination)
         collect_logs(root, local, args.pid, destination)
+        if os.environ.get('CONTROLTOH_GI_METADATA') == '1' or any((destination/'logs').glob(f'GI-Writer-R305-{args.pid}-*.json')):
+            report['native_gi_writer'] = validate_writer_files(destination/'logs', args.pid)
+            count = report['native_gi_writer']['complete_tables']
+            print(f'Complete GI writer tables: {count}/4. All available diagnostics will be packaged.', flush=True)
         (destination / 'boundary-report.json').write_text(json.dumps(report, indent=2))
     packager = Path(__file__).with_name('package-lighting-capture.py')
     spec = importlib.util.spec_from_file_location('packager', packager)
