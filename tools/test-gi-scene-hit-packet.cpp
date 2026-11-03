@@ -1,3 +1,5 @@
+#include "../src/gi_reuse/native_gi_table.h"
+#include "../src/gi_reuse/native_gi_route.h"
 #include "../src/gi_reuse/scene_traversal_closure.h"
 #include <cassert>
 #include <cstdio>
@@ -26,8 +28,12 @@ static void CheckBothWidths(unsigned width){
  p.instances=Bytes(16384,23,instance,64);
  p.identifiers.nativeOpaque[0]=1;p.identifiers.nativeAlpha[0]=2;p.identifiers.privateOpaque[0]=3;p.identifiers.privateAlpha[0]=4;
  PTSceneAdmission::Record admitted;assert(PTSceneAdmission::Admit(b,admitted)==PTSceneAdmission::Error::none);
- unsigned char table[5*96]{};auto* row=table+4*96;row[0]=2;std::memcpy(row+32,&admitted.indices,8);std::memcpy(row+40,&admitted.attributes,8);std::memcpy(row+48,admitted.constants,40);
- p.shaderTable=Bytes(32768,24,table,sizeof(table));SceneHitResult result;
+ std::vector<PTNativeBinding::Binding> nativeBindings(3);
+ for(auto& binding:nativeBindings){binding.type=1;binding.indices=admitted.indices;binding.attributes=admitted.attributes;std::memcpy(binding.constants,admitted.constants,40);}
+ NativeGITable table;
+ assert(BuildNativeGITable(44,1,1,nativeBindings,p.identifiers.nativeOpaque,p.identifiers.nativeAlpha,table));
+ assert(table.Active(4)&&!table.Active(5)&&table.bytes.size()==6*96);
+ p.shaderTable=Bytes(32768,24,table.bytes.data(),table.bytes.size());SceneHitResult result;
  assert(ResolveSceneHit(history,p,result)==SceneHitError::None);
  assert(result.material==2&&result.tableRow==4&&result.instanceID==1234&&result.alphaTestedExport);
  assert(result.world[1].x==8&&result.world[2].y==23&&result.geometricNormal.z==-1);
@@ -38,7 +44,7 @@ static void CheckBothWidths(unsigned width){
  p.identifiers.nativeAlpha[0]=9;assert(ResolveSceneHit(history,p,result)==SceneHitError::Table);p=saved;
  p.primitive=1;assert(ResolveSceneHit(history,p,result)==SceneHitError::Geometry);p=saved;
  p.instanceIndex=1234;assert(ResolveSceneHit(history,p,result)==SceneHitError::Instance);p=saved; // InstanceID is NOT array index
- p.shaderTable=Bytes(32768,24,table,sizeof(table)-1);assert(ResolveSceneHit(history,p,result)==SceneHitError::Table);p=saved;
+ p.shaderTable=Bytes(32768,24,table.bytes.data(),table.bytes.size()-1);assert(ResolveSceneHit(history,p,result)==SceneHitError::Table);p=saved;
  unsigned badIndex=99;std::memcpy(indexBytes,&badIndex,width);p.geometry.indices=Bytes(4096,20,indexBytes,width==2?8:12);
  assert(ResolveSceneHit(history,p,result)==SceneHitError::Index);p=saved;
  float collapsed[12]{};p.geometry.positions=Bytes(8192,21,collapsed,44);assert(ResolveSceneHit(history,p,result)==SceneHitError::Degenerate);p=saved;
@@ -68,4 +74,27 @@ static void CheckBothWidths(unsigned width){
  // A later native build on another queue makes the copied source dependency ambiguous.
  assert(history.Submit(2,{recording}));assert(ResolveSceneHit(history,p,result)==SceneHitError::Order);
 }
-int main(){CheckBothWidths(2);CheckBothWidths(4);std::puts("PASS complete traversal closure (masked/duplicate/null/partial/identity/epoch) and combined scene packet: ordered clone, owner/version, instance index, 16/32-bit geometry, padded vertices, mirrored transform, normal, material/SBT, stale/bounds/degenerate/competing-writer rejection");}
+static void CheckRouteAndTable(){
+ NativeGIRoute route;
+ const auto bind=[&](){route.RayGeneration("rayGenMain");route.Miss(0,"missMain");
+  route.Hit(0,0,true,true,nullptr,"closestHitMain");
+  route.Hit(0,1,true,false,"anyHitAlphaTest","closestHitMain");};
+ route.Begin(1,2);bind();assert(route.Ready());
+ route.Begin(1,2);assert(!route.Ready()); // no stale exports after next begin
+ route.RayGeneration("rayGenMain");assert(!route.Ready());
+ route.Begin(2,2);bind();assert(!route.Ready()); // reflection layout
+ route.Begin(1,2);bind();route.Hit(0,1,true,true,nullptr,"closestHitMain");assert(!route.Ready());
+ route.Begin(1,2);bind();route.Miss(1,"missMain");assert(!route.Ready());
+ route.Begin(1,2);bind();route.RayGeneration("reflectionRayGeneration");assert(!route.Ready());
+ NativeGITable table;PTShaderTableAdapter::Identifier a{},b{};a[0]=1;b[0]=2;
+ std::vector<PTNativeBinding::Binding> bindings(2);bindings[1].type=1;
+ assert(BuildNativeGITable(1,1,1,bindings,a,b,table));
+ assert(table.bytes[0]==1&&table.bytes[192]==2&&table.Active(2)&&!table.Active(1));
+ bindings[1].type=2;
+ assert(!BuildNativeGITable(1,1,1,bindings,a,b,table)&&table.bytes.empty()&&!table.pipeline);
+ bindings[1].type=1;
+ assert(!BuildNativeGITable(1,1,2,bindings,a,b,table));
+ assert(!BuildNativeGITable(1,1,1,bindings,a,a,table));
+ assert(!BuildNativeGITable(0,1,1,bindings,a,b,table));
+}
+int main(){CheckRouteAndTable();CheckBothWidths(2);CheckBothWidths(4);std::puts("PASS complete traversal closure (masked/duplicate/null/partial/identity/epoch) and combined scene packet: ordered clone, owner/version, instance index, 16/32-bit geometry, padded vertices, mirrored transform, normal, material/SBT, stale/bounds/degenerate/competing-writer rejection");}

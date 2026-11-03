@@ -196,3 +196,27 @@ acquisition, complete traversal admission, blocked-queue replay/reset and the
 existing CPU/WARP suite. Windows max-macro compatibility was corrected in the
 recovered PT headers without changing their algorithms. Local and remote code
 trees match 9b5aaff0bff0ac889968fedb18bc0d46edb62e92. No user run requested.
+
+## Native GI route and one-ray table recovery
+
+The supplied renderer hash now has a dedicated static audit in
+`tools/audit-gi-native-route.py`, with results in
+`research/gi-source-r267/native-gi-route.json`. Seven imported callsites establish
+GI setup `(1,2)`, rayGenMain, missMain, closestHitMain and anyHitAlphaTest. The
+native writer computes `2-rays` reserved rows and identifiers at
+`state+0x20+8*(ray+2*type)`. All nine writer instruction checks and seven mutated
+import targets were tested against the supplied DLLs. This is a static route
+proof, not live state-object/worker/queue provenance.
+
+NativeGITable reconstructs only the active even rows with 56 local-root bytes,
+preserving the native 96-byte stride and two-row geometry spacing. Reserved rows
+are explicitly inactive; their zero-filled storage is not claimed to match native
+padding. The combined scene-hit fixture now consumes this reconstruction instead
+of a hand-written shader record, for both index widths and alpha-tested material.
+
+The existing renderer observation hooks track all required GI exports in a
+thread-local route. Every begin resets the route and previous ray-generation name;
+a missing or incompatible binding fails recognition. GI_NATIVE_ROUTE logs are
+bounded and observation-only. They neither gate nor replace native rendering.
+The native writer itself is not yet hooked, so the CPU reconstruction does not
+supply a live GPU table or ownership proof. No additional user run is requested.

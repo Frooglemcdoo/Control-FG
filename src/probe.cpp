@@ -645,6 +645,9 @@ static std::atomic<unsigned long long> ptReflectionHitGroupBindCount{0};
 static void PTReflectionProbeCachedTechniqueOnce(HMODULE renderer,HMODULE d3d) noexcept;
 static bool PTReflectionInstallComputePsoHook(HMODULE d3d) noexcept;
 static bool PTReflectionInstallCommandListCaptureHooks(void* commandList) noexcept;
+#include "gi_reuse/native_gi_route.h"
+static thread_local gi_reuse::NativeGIRoute rrNativeGIRoute;
+static std::atomic<unsigned long long> rrNativeGIRouteCount{0},rrNativeGIRouteRejected{0};
 static thread_local int rrCurrentPipelineArg0 = -1;
 static thread_local int rrCurrentPipelineArg1 = -1;
 static thread_local char rrCurrentRayGeneration[128] = "<unset>";
@@ -671,6 +674,8 @@ static void RRSafeCopyCString(const char* source, char* dest, size_t destBytes) 
 
 static void HookRRBeginPipelineSetup(int a, int b) {
     const auto call = ++rrPipelineSetupCount;
+    rrNativeGIRoute.Begin(a,b);
+    strncpy_s(rrCurrentRayGeneration,sizeof(rrCurrentRayGeneration),"<unset>",_TRUNCATE);
     rrCurrentPipelineArg0 = a;
     rrCurrentPipelineArg1 = b;
     if (call <= 32) {
@@ -685,6 +690,7 @@ static void HookRRSetRayGeneration(const char* name) {
     char safeName[128]{};
     RRSafeCopyCString(name, safeName, sizeof(safeName));
     strncpy_s(rrCurrentRayGeneration, sizeof(rrCurrentRayGeneration), safeName, _TRUNCATE);
+    rrNativeGIRoute.RayGeneration(safeName);
     if (call <= 32) {
         Log("RR_RAYGEN_BIND call=%llu pipeline_arg0=%d pipeline_arg1=%d name=%s begin=%llu present=%llu aa=%llu",
             call, rrCurrentPipelineArg0, rrCurrentPipelineArg1, safeName,
@@ -696,6 +702,7 @@ static void HookRRSetRayGeneration(const char* name) {
 static void HookRRSetMiss(int slot, const char* name) {
     char safeName[128]{};
     RRSafeCopyCString(name,safeName,sizeof(safeName));
+    rrNativeGIRoute.Miss(slot,safeName);
     if(strcmp(rrCurrentRayGeneration,"reflectionRayGeneration")==0) {
         const auto n=++ptReflectionMissBindCount;
         if(n<=12 || (n%480)==0)
@@ -709,6 +716,7 @@ static void HookRRSetHitGroup(int rayType,int geometryType,const char* intersect
     RRSafeCopyCString(intersection,i,sizeof(i));
     RRSafeCopyCString(anyHit,a,sizeof(a));
     RRSafeCopyCString(closestHit,c,sizeof(c));
+    rrNativeGIRoute.Hit(rayType,geometryType,intersection==nullptr,anyHit==nullptr,a,c);
     if(strcmp(rrCurrentRayGeneration,"reflectionRayGeneration")==0) {
         const auto n=++ptReflectionHitGroupBindCount;
         if(n<=24 || (n%960)==0)
@@ -729,6 +737,15 @@ static void HookRRRaytrace(int a, int b) {
     bool commandKnown = false;
     char raygen[128]{};
     RRSafeCopyCString(rrCurrentRayGeneration, raygen, sizeof(raygen));
+    const bool nativeGI = strcmp(raygen,"rayGenMain")==0;
+    if(nativeGI) {
+        const auto giCall=++rrNativeGIRouteCount;
+        const bool matched=rrNativeGIRoute.Ready();
+        if(!matched)++rrNativeGIRouteRejected;
+        if(giCall<=8||(giCall%960)==0)
+            Log("GI_NATIVE_ROUTE call=%llu setup_matched=%u rejected=%llu mode=observe_only native_dispatch_unchanged=1",
+                giCall,unsigned(matched),rrNativeGIRouteRejected.load());
+    }
     const bool ptReflection = strcmp(raygen, "reflectionRayGeneration") == 0;
     const auto ptCall = ptReflection ? ++ptReflectionDispatchCount : 0ull;
     const bool ptSample = ptReflection && (ptCall <= 32 || (ptCall % 240) == 0);
