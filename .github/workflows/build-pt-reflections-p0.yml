@@ -868,9 +868,9 @@ jobs:
           build\test-gi-sequence-runtime.exe
           if not "%errorlevel%"=="0" exit /b 1
           build\test-gi-sequence-runtime.exe live
-          if ($LASTEXITCODE -ne 0) { throw "GI live selection failed" }
+          if errorlevel 1 exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-live-toggle.cpp /Febuild\test-gi-live-toggle.exe
-          if ($LASTEXITCODE -ne 0) { throw "GI toggle compile failed" }
+          if errorlevel 1 exit /b 1
           build\test-gi-live-toggle.exe
           if errorlevel 1 exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /DCONTROL_SPEC_LONG_SEQUENCE tools\test-spec-retry-runtime.cpp /Febuild\test-spec-long-runtime.exe
