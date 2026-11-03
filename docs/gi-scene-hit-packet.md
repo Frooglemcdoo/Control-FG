@@ -189,3 +189,10 @@ writes or alias changes. The Windows fixture covers late-member failure rollback
 exact identities, placed heap retention and leases surviving registry retirement.
 No live DispatchRays hook is enabled by these helpers; native retirement remains
 disconnected. No new user capture is requested.
+
+Windows foundation run 41653889808 / job 125978957102 passed at remote commit
+a0361000da01ee79f4a15f2c553ba09bdeebc8a9. This includes atomic AS set
+acquisition, complete traversal admission, blocked-queue replay/reset and the
+existing CPU/WARP suite. Windows max-macro compatibility was corrected in the
+recovered PT headers without changing their algorithms. Local and remote code
+trees match 9b5aaff0bff0ac889968fedb18bc0d46edb62e92. No user run requested.
