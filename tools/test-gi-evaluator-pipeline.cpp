@@ -18,6 +18,8 @@
 #include <bcrypt.h>
 #pragma comment(lib,"bcrypt.lib")
 #include "../src/gi_reuse/evaluator_reference_pipeline.h"
+#include "../src/gi_reuse/d3d12_producer_table.h"
+#include "../src/gi_reuse/d3d12_producer_pipeline.h"
 static bool PTReflectionSha256(const unsigned char* data,size_t size,char (&hex)[65]) noexcept {
  BCRYPT_ALG_HANDLE alg=nullptr;BCRYPT_HASH_HANDLE hash=nullptr;unsigned char digest[32]{};
  bool ok=BCryptOpenAlgorithmProvider(&alg,BCRYPT_SHA256_ALGORITHM,nullptr,0)>=0;

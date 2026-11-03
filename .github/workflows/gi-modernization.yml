@@ -63,6 +63,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Accepted-hit geometry shader compile failed' }
           & $dxc.FullName -T lib_6_5 -WX src/shaders/gi_producer_alpha.hlsl -Fo gi-producer-alpha.dxil
           if ($LASTEXITCODE -ne 0) { throw 'Accepted-hit alpha shader compile failed' }
+          & $dxc.FullName -T lib_6_5 -WX src/shaders/gi_producer_trace.hlsl -Fo gi-producer-trace.dxil
+          if ($LASTEXITCODE -ne 0) { throw 'Accepted-hit producer trace compile failed' }
           python tools/test-gi-producer-alpha.py --dxc $dxc.FullName
           if ($LASTEXITCODE -ne 0) { throw 'Native GI alpha policy audit failed' }
           $commands=@"
@@ -74,6 +76,10 @@ jobs:
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-initial-reservoir-gpu.cpp /Fe:gi-initial-reservoir-gpu.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
           if not "%errorlevel%"=="0" exit /b 1
           gi-initial-reservoir-gpu.exe
+          if not "%errorlevel%"=="0" exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-producer-table.cpp /Fe:gi-producer-table.exe
+          if not "%errorlevel%"=="0" exit /b 1
+          gi-producer-table.exe
           if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-visibility-table.cpp /Fe:gi-visibility-table.exe
           if not "%errorlevel%"=="0" exit /b 1

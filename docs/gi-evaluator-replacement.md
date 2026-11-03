@@ -334,3 +334,43 @@ Windows foundation run 41711803133 / job 126181476372 passed at commit
 shading PSO creation against the captured native root (t27/u2/b5), alongside the
 initial-reservoir GPU checks. This proves resource-layout compatibility, not a
 resource-bound full-scene dispatch. R309 remains the last user-facing game build.
+
+## Owned producer traversal and table preparation
+
+The owned producer now has a ray-generation entry (`gi_producer_trace.hlsl`)
+connected to its accepted-geometry and recovered alpha-test exports. It consumes
+explicit current-frame cosine proposals, uses the native mask/flags and two-row
+geometry multiplier, and emits `GIProducerShadingRequest` records. The finite
+range draw is independent of direction; accepted hits receive both the marginal
+surface PDF and receiver reach factor. Misses retain the true range endpoint for
+native fallback shading. Invalid proposals/geometry produce no verified request.
+The proposal generator must still establish the complete equal-strata contract;
+merely setting `proposalVerified` is not evidence of that contract.
+
+`D3D12ProducerPipeline` prepares a separate state object with a 96-byte payload
+and the recovered private local-root ABI. It uses the admitted GI6 global root:
+spare t27/t28/u2/b5 slots carry proposals, TLAS, accepted requests and constants.
+Those slots require a private descriptor table, not changes to Control's table.
+The raygen/miss records and opaque/alpha identifiers belong to this new state.
+
+`PrepareGIProducerTable` converts only active even native records. Reserved odd
+rows are zeroed without compacting the table or changing TLAS contributions.
+R16/R32 backing bounds and distinct material bindings on shared geometry remain
+validated. `D3D12ProducerTable` retains admitted geometry resources/backing heaps
+and owns immutable uploaded records; it does not establish scene provenance,
+alias activation, residency or submission completion. The host must retain this
+owner through the existing submission retirement path before dispatch.
+
+Backing-buffer containment uses a sorted batch index and two prefix maxima for
+logarithmic lookup, including nested alias rejection. It avoids repeated COM
+queries and scanning the complete resource set for every geometry view. Local
+randomized tests compare 262,144 queries against exhaustive containment. Sparse
+shader-table conversion, transactional rejection, existing alpha-policy audit
+and secondary extraction tests pass locally. The combined ray library compiles
+with DXC warnings as errors. Windows compilation remains a separate check.
+
+These components are not yet selected by the game hooks. No new game package or
+quality improvement is claimed. Live proposal generation, matched scene/binding
+admission, dispatch/retirement, output integration and spatial/temporal reuse are
+still required for the complete replacement. Reuse existing PT evidence and
+captures for those steps; do not ask for a repeat R309 route test.
