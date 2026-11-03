@@ -476,6 +476,7 @@ static void* PTReflectionHookTechniqueLookup(void* rfx,const char* technique) {
 
 #include "pt_glass_runtime.h"
 #include "gi_native_writer_capture.h"
+#include "gi_native_scene_queues.h"
 
 static const char* PTReflectionHookShaderStorageGet(int id) {
     if(id>=kRRWorldAlbedoStorageBase && id<kRRWorldAlbedoStorageBase+4 &&

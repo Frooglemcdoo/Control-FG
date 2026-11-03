@@ -1,5 +1,6 @@
 #pragma once
 #include "gi_reuse/d3d12_live_scene_owners.h"
+#include "gi_reuse/live_scene_catalog.h"
 #include "gi_native_lifetime_runtime.h"
 // Recovered R103 creation boundaries. These observe native ownership only;
 // installing them does not enable the replacement lighting dispatch.
@@ -84,7 +85,7 @@ class Recording final:public IUnknown {
  std::atomic<ULONG> refs{1};
 public:
  const UINT64 generation=generations.fetch_add(1);
- bool complete=true;
+ bool complete=true,submitted=false;
  std::vector<Event> events;
  HRESULT STDMETHODCALLTYPE QueryInterface(REFIID iid,void** out)override {if(!out)return E_POINTER;*out=nullptr;if(iid!=__uuidof(IUnknown))return E_NOINTERFACE;*out=static_cast<IUnknown*>(this);AddRef();return S_OK;}
  ULONG STDMETHODCALLTYPE AddRef()override{return ++refs;}
@@ -102,6 +103,7 @@ static void Reset(ID3D12GraphicsCommandList* list) noexcept {
  // A successful native Reset cancels unsubmitted metadata, while submitted
  // owners must be retained separately by the queue retirement path.
  list->SetPrivateDataInterface(recordingKey,nullptr);
+ ReadRecording(list);
 }
 static void Build(ID3D12GraphicsCommandList4* list,const D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC* desc) noexcept {
  auto recording=ReadRecording(list);if(!recording||!recording->complete)return;

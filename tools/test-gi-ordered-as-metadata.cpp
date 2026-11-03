@@ -75,5 +75,23 @@ int main(){
  assert(deformation.Submit(1,{Adapter::Freeze(blas,blas.generation,{{1,1}})}));
  assert(deformation.Select(deformation.Mark(1),1,256,out)==Status::missing); // incompatible update tombstones old data
  Adapter nonmonotonic;assert(nonmonotonic.Signal(1,10,2,true));assert(!nonmonotonic.Signal(1,10,1,true));
+ Adapter compact;
+ std::vector<std::pair<std::uint64_t,std::uint64_t>> revisions;
+ assert(compact.Submit(1,{early,Change(ASOperation::Copy,512,2,256,1)},&revisions));
+ assert(revisions.size()==2&&revisions[0].first==1&&revisions[0].second==0&&revisions[1].first==2&&revisions[1].second==1);
+ std::set<std::uint64_t> kept;
+ const auto tail=compact.TailStamp(1);
+ assert(!compact.Checkpoint({{1,tail-1}},false,kept));
+ assert(!compact.Checkpoint({{1,tail}},true,kept));
+ assert(compact.Checkpoint({{1,tail}},false,kept)&&kept==std::set<std::uint64_t>({1,2}));
+ for(unsigned n=0;n<1000;++n){
+  assert(compact.Submit(1,{late,Change(ASOperation::Copy,512,2,256,1)}));
+  assert(compact.Checkpoint({{1,compact.TailStamp(1)}},false,kept)&&kept.size()==2&&compact.VersionCount()==2);
+  assert(compact.Select(compact.Mark(1),2,512,out)==Status::ready&&out.instances==8192);
+ }
+ // A completed producer cannot authorize a checkpoint of another unfinished queue.
+ assert(compact.Signal(1,11,1,true)&&compact.Wait(2,11,1,true));
+ assert(!compact.Checkpoint({{1,compact.TailStamp(1)}},false,kept));
+ assert(compact.Checkpoint({{1,compact.TailStamp(1)},{2,compact.TailStamp(2)}},false,kept));
  std::puts("PASS GI ordered AS adapter: batch/list order, replay/reset, allocation identities, cross-queue copy lineage, updates, pending/failed fences and bounded rejection");
 }

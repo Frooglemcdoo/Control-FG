@@ -20,6 +20,7 @@ template<std::size_t Capacity=65536> class OrderedASMetadata {
  struct Version {ASRecord record;Dependency dependency;};
  PTSceneOrder::Graph order_;
  std::map<U64,Version> versions_;
+ std::set<U64> queues_;
  U64 serial_=0;
  bool healthy_=true;
  const char* failure_="none";
@@ -63,9 +64,11 @@ public:
  }
  // Feed immutable recordings in the exact Execute batch/list order. A closed
  // list may be replayed; each submission receives new metadata revisions.
- bool Submit(U64 queue,const std::vector<std::shared_ptr<const OrderedASRecording>>& batch) {
+ bool Submit(U64 queue,const std::vector<std::shared_ptr<const OrderedASRecording>>& batch,
+             std::vector<std::pair<U64,U64>>* revisions=nullptr) {
   if(!healthy_)return false;
   if(!queue)return Fail("queue_identity");
+  queues_.insert(queue);if(revisions)revisions->clear();
   for(const auto& r:batch)if(!r||!r->generation)return Fail("recording_missing");
   for(const auto& r:batch)for(const auto& item:r->events){
    const auto& e=item.event;const Key destination{item.destinationToken,e.record.address};
@@ -91,19 +94,41 @@ public:
    // Unsupported/unresolved writes hide older data. Never silently retain an
    // earlier geometry version when the new write cannot be reconstructed.
    if(!order_.Write(queue,destination,version,"gi_unavailable_write"))return Fail("order_capacity");
+   if(revisions)revisions->emplace_back(version,dep.version);
   }
   return true;
  }
- U64 Mark(U64 queue){if(!healthy_)return 0;const auto cut=order_.Mark(queue);if(!cut)Fail("mark_failed");return cut;}
+ U64 Mark(U64 queue){if(!healthy_)return 0;queues_.insert(queue);const auto cut=order_.Mark(queue);if(!cut)Fail("mark_failed");return cut;}
  bool Signal(U64 queue,U64 fence,U64 value,bool succeeded){
   if(!healthy_)return false;
   if(!succeeded)return Fail("signal_failed");
-  return order_.Signal(queue,fence,value)!=0||Fail("signal_contract");
+  queues_.insert(queue);return order_.Signal(queue,fence,value)!=0||Fail("signal_contract");
  }
  bool Wait(U64 queue,U64 fence,U64 value,bool succeeded){
   if(!healthy_)return false;
   if(!succeeded)return Fail("wait_failed");
-  return order_.Wait(queue,fence,value)!=0||Fail("wait_contract");
+  queues_.insert(queue);return order_.Wait(queue,fence,value)!=0||Fail("wait_contract");
+ }
+ U64 TailStamp(U64 queue) const {return order_.TailStamp(queue);}
+ std::size_t VersionCount() const {return versions_.size();}
+ // Caller supplies fence-proven completed tail stamps and no outstanding cuts.
+ // This is polling only: never wait on the GPU to obtain a checkpoint.
+ // Return retained revision IDs so the host prunes matching payload snapshots.
+ bool Checkpoint(const std::map<U64,U64>& completed,bool outstandingCuts,std::set<U64>& retained) {
+  retained.clear();if(!healthy_||outstandingCuts)return false;
+  for(const auto q:queues_){const auto found=completed.find(q);
+   if(found==completed.end()||found->second<order_.TailStamp(q))return false;}
+  std::map<Key,PTSceneOrder::Selection> latest;
+  if(!order_.CompletedCheckpoint(latest))return false;
+  std::map<U64,Version> next;std::map<Key,U64> baseline;
+  for(const auto& item:latest){const auto revision=item.second.version;baseline.emplace(item.first,revision);
+   if(!revision)continue;
+   if(!DependencyValid(revision))return false;
+   const auto found=versions_.find(revision);if(found==versions_.end())return false;
+   next.emplace(revision,Version{found->second.record,{}});retained.insert(revision);
+  }
+  if(!order_.RebaseCompleted(baseline)){retained.clear();return false;}
+  versions_=std::move(next);return true;
  }
  PTSceneOrder::Status Select(U64 cut,U64 token,U64 address,ASRecord& out) const {
   out={};if(!healthy_||!token||!address)return PTSceneOrder::Status::invalid;
