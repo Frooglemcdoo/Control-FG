@@ -11,6 +11,7 @@
 #include <iostream>
 #include <vector>
 #include <stdexcept>
+#include <string>
 #include "../src/gi_reuse/evaluator_reference_pipeline.h"
 using Microsoft::WRL::ComPtr;
 void Check(HRESULT h){if(FAILED(h))throw std::runtime_error("HRESULT "+std::to_string(static_cast<unsigned long>(h)));}
