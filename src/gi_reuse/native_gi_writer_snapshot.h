@@ -31,6 +31,9 @@ inline bool SnapshotNativeGIWriter(const GINativeJobRoute::Ticket& ticket,Native
  std::uint64_t hit=0,size=0;
  if(!GINativeJobRoute::HitRange(ticket.layout,static_cast<std::size_t>(writer.count),hit,size)||
     hit!=ticket.hitTable||size!=ticket.hitBytes||static_cast<std::uint64_t>(writer.bytes)>ticket.layout.bytes)return false;
+ const auto offset=hit-ticket.layout.buffer;
+ const auto written=static_cast<std::uint64_t>(writer.bytes);
+ if(offset>written||size>written-offset)return false;
  native_gi_detail::Header header;
  if(!native_gi_detail::ReadHeader(writer,header)||header.pipeline!=ticket.pipeline||
     header.buffer!=ticket.layout.buffer||header.bytes!=ticket.layout.bytes)return false;

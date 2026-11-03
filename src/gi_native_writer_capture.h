@@ -53,10 +53,10 @@ static void Capture(GINativeJobRuntime::Phase phase,const GINativeJobRoute::Tick
   e.release();CloseHandle(thread);
  }catch(...){++failed;Log("GI_WRITER_R305_REJECT serial=%llu stage=allocation",ticket.serial);}
 }
-static void Start() noexcept {
+static void Start(HMODULE d3d) noexcept {
  char setting[4]{};
  if(GetEnvironmentVariableA("CONTROLTOH_GI_METADATA",setting,4)!=1||setting[0]!='1')return;
- const bool ready=GINativeJobRuntime::Register(&Capture);
+ const bool ready=GINativeJobRuntime::Install(d3d)&&GINativeJobRuntime::Register(&Capture);
  Log("GI_WRITER_R305_ARM ready=%u tables=4 interval_ms=10000 scope=whole_gi_binding_table native_outputs_unchanged=1",unsigned(ready));
 }
 }

@@ -38,6 +38,7 @@ static void TestNativeGIWriter(){
  assert(SnapshotNativeGIWriter(t,result)&&result.table.Active(2)&&result.table.bytes[192]==2&&result.bindings[1].constants[3]==77);
  const auto saved=t;t.pipeline=43;assert(!SnapshotNativeGIWriter(t,result)&&result.bindings.empty()&&!result.table.pipeline);t=saved;
  t.writer.rays=2;assert(!SnapshotNativeGIWriter(t,result));t=saved;
+ t.writer.bytes=511;assert(!SnapshotNativeGIWriter(t,result));t=saved;
  t.hitTable+=96;assert(!SnapshotNativeGIWriter(t,result));t=saved;
  t.writer.bindings=1;assert(!SnapshotNativeGIWriter(t,result)&&result.bindings.empty());t=saved;
  t.writer.state=1;assert(!SnapshotNativeGIWriter(t,result));t=saved;

@@ -58,6 +58,8 @@ static bool ReadDispatch(ID3D12GraphicsCommandList4* list,const D3D12_DISPATCH_R
         UINT64 hit=0,size=0;
         failure=RouteFailure::layout;
         if(bytes<=0||UINT64(bytes)>layout.bytes||count<=0||!bindings||!GINativeJobRoute::HitRange(layout,static_cast<std::size_t>(count),hit,size))return false;
+        const auto offset=hit-layout.buffer;
+        if(offset>UINT64(bytes)||size>UINT64(bytes)-offset)return false;
         failure=RouteFailure::raygen;
         if(desc.RayGenerationShaderRecord.StartAddress!=layout.buffer||desc.RayGenerationShaderRecord.SizeInBytes!=32)return false;
         failure=RouteFailure::miss;
