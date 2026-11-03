@@ -63,3 +63,18 @@ range moments, angular-patch energy and frame variation. These statistical check
 are sanity tests, not proof of independent pseudorandom dimensions or low noise
 in Control. Windows state-object tests exercise both baseline/experimental
 selection, association rebasing, unsupported input and failed creation fallback.
+
+## Delivered validation
+
+Windows foundation run 41678850050 and full build run 41678849824 passed on
+2026-11-03. The full build validated both generated DXIL libraries and both
+state-object selection modes, then compiled and packaged the proxy. This is
+build/fixture evidence, not an in-game quality or performance result.
+
+Artifact 13252711944 contains the verified 75-entry install archive (4,276,241
+bytes). Outer and inner ZIP CRC checks passed, the inner SHA256 matched the
+packaged checksum, and the DLL contains the GI_LIVE_R307 marker. The rendering
+launcher is included.
+
+Install ZIP SHA256:
+`87a5485eaa0b3859b37221bdb48bd571864787edabed14b393c638e407e80fcc`
