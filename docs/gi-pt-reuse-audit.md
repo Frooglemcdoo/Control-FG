@@ -395,3 +395,46 @@ R297 ledger marker, R296 sampler markers, sidecar and launcher flags verified.
 `3d0b0b337cb25b58661bcfc94d068c5622e576e78deaead76511926f6e70332a`.
 Next evidence: two-minute traversal via the metadata launcher, examining occupancy
 and continued tracking past R296's failure point. No replacement GI is enabled.
+
+## R297 capture and R298 parser evidence
+
+Verified the November 2 session 44192 uploaded archive checksum and all payload
+sizes/hashes. All 32 GPU samples completed without errors. Metadata stopped with
+blas_unsupported_descriptor at 5,560 historical addresses; therefore this run
+did not exercise the old 8,192 ceiling. Last good heartbeat: builds=62,597,
+submission=2,462; first fault heartbeat: builds=69,186, submission=2,602. No missing
+geometry ranges, signal failures, batch overflows or admission refusals were
+reported. Seventeen remaining owners quarantined after fault as designed.
+The old generic rejection does not identify the actual descriptor field.
+
+R298 supports aligned float3 strides of at least 12 bytes while retaining the
+uint16 indexed decoder contract. Vertex extent now excludes unused trailing
+padding, using overflow-checked (count-1)*stride+12 consistently in ownership
+checks and scene plans. This is supported metadata, not a claim that a later
+packed-layout decoder accepts every stride. Microsoft documents component-size
+alignment for stride in D3D12_RAYTRACING_GEOMETRY_TRIANGLES_DESC:
+https://learn.microsoft.com/en-us/windows/win32/api/d3d12/ns-d3d12-d3d12_raytracing_geometry_triangles_desc
+
+Structured first-rejection evidence records geometry index/type, build count,
+layout and flags, addresses, formats, counts and stride. The CPU descriptor copy
+is made while native pointers are valid and does not retain those pointers.
+Publication still stops on an unsupported build; native execution is untouched.
+No assertion is made that stride caused the R297 rejection. Other formats, empty
+geometry and procedural geometry remain outside the supported decoder contract.
+Portable geometry and ledger tests passed with warnings-as-errors and UBSan.
+
+Windows foundation run `41560113235`, job `125668461861`, passed at
+`89e922db21dc7294594514a2fe0325babdb34a79`. Decoded logs confirm padded-stride
+extent checks, pointer-array parsing, retained structured rejection details and
+the native index-copy/readback fixture passed. The initial report-variable naming
+collision was corrected before this validated commit.
+
+Full Windows run `41560113293`, job `125668462180`, passed at that code commit.
+Decoded logs show no compiler/workflow errors; lighting switching, package layout,
+migration and restart-helper checks passed. Verified artifact digest, nested
+checksum, ZIP integrity, new rejection marker, existing index/ledger markers,
+shader sidecar and launcher flags. `ControlTOH-R298.zip`: 4,203,167 bytes,
+74 members, SHA-256
+`9cb0a2e61545feccb624476a07861796113eaf303de5039593fa9df9e400a950`.
+Next evidence is a two-minute automatic metadata run. No visual improvement or
+resolution of the unknown R297 descriptor rejection is claimed before that run.
