@@ -685,6 +685,10 @@ jobs:
           if($LASTEXITCODE -ne 0){throw 'Sampling test dependency failed'}
           python tools/test-gi-live-sampling.py --dxc $dxc
           if($LASTEXITCODE -ne 0){throw 'Live GI sampling coverage/energy checks failed'}
+          & $dxc -T cs_6_0 -E main -HV 2018 -WX src/shaders/gi_evaluator_reference.generated.hlsl -Fo build/gi_evaluator.dxil
+          if ($LASTEXITCODE -ne 0) { throw 'GI evaluator compile failed' }
+          python tools/embed-gi-evaluator.py build/gi_evaluator.dxil build/gi_evaluator.generated.h
+          if ($LASTEXITCODE -ne 0) { throw 'GI evaluator embedding failed' }
           python tools/gi_live_sampling.py --dxc $dxc --assembler build/assemble-validated-dxil.exe
           if($LASTEXITCODE -ne 0){throw 'Live GI producer DXIL validation failed'}
           python tools/test-spec-phase-precision.py
@@ -1160,7 +1164,7 @@ jobs:
           build\test-gi-spot-pcf.exe
           if errorlevel 1 exit /b 1
 
-      - name: Compile exact uint16 snapshot kernel R308
+      - name: Compile exact uint16 snapshot kernel R309
         shell: powershell
         run: |
           $dxc=Get-ChildItem "${env:ProgramFiles(x86)}/Windows Kits/10/bin/*/x64/dxc.exe" | Sort-Object FullName -Descending | Select-Object -First 1
@@ -1168,11 +1172,11 @@ jobs:
           & $dxc.FullName -T cs_6_2 -E main -enable-16bit-types -WX src/shaders/gi_index_snapshot.hlsl -Fo build/gi_index_snapshot.dxil
           if ($LASTEXITCODE -ne 0) { throw 'Exact index snapshot compile failed' }
 
-      - name: Package GI geometry integration R308
+      - name: Package GI geometry integration R309
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='ControlTOH-R308'
+          $out='ControlTOH-R309'
           $shader="$out/ControlTOH/Shaders"
           $tools="$out/ControlTOH/Tools"
           $diagnostics="$out/ControlTOH/Diagnostics"
@@ -1199,28 +1203,28 @@ jobs:
           Copy-Item Capture-RR-Boundary.cmd,Capture-RR-Boundary.ps1,Collect-RR-Boundary-Status.cmd,tools/collect-rr-boundary.py $diagnostics
           Copy-Item Start-Compact-Distance-Test.cmd,Capture-RR-Suite.ps1,tools/collect-rr-suite.py $diagnostics
           Copy-Item tools/diagnostics/Start-R258-Storage-Diagnostics.cmd,tools/diagnostics/Start-GI-Source-Probe.cmd,tools/diagnostics/Start-GI-Shadow-Test.cmd,tools/diagnostics/Start-GI-Lighting-Test.cmd,tools/diagnostics/Start-GI-Hit-Capture.cmd,tools/diagnostics/Start-GI-Binding-Audit.cmd,tools/diagnostics/Start-GI-Spot-Trace.cmd,tools/diagnostics/Start-Reflection-Clamp-Test.cmd,tools/diagnostics/Start-GI-Ray-Trace.cmd,tools/diagnostics/Start-GI-Geometry-Probe.cmd,tools/diagnostics/Start-GI-Joint-Trace.cmd $diagnostics
-          Copy-Item tools/diagnostics/Start-GI-Metadata-Test.cmd,tools/diagnostics/Start-GI-Rendering-Test.cmd $diagnostics
+          Copy-Item tools/diagnostics/Start-GI-Metadata-Test.cmd,tools/diagnostics/Start-GI-Rendering-Test.cmd,tools/diagnostics/Start-GI-Evaluator-Test.cmd $diagnostics
           Copy-Item tools/diagnostics/Collect-Texture-Trace.cmd,tools/diagnostics/Collect-Texture-Trace.ps1 $tools
           Copy-Item build/DirectStorage "$diagnostics/DirectStorage" -Recurse
           Copy-Item build/DirectStorage/dstorage.dll,build/DirectStorage/dstoragecore.dll $out
           Copy-Item tools/directstorage/Validate-DirectStorage.cmd "$diagnostics/DirectStorage"
-          Copy-Item docs/native-lighting-r308.md "$out/ControlTOH/DIAGNOSTIC-NOTES.md"
+          Copy-Item docs/native-lighting-r309.md "$out/ControlTOH/DIAGNOSTIC-NOTES.md"
           Copy-Item tools/Organize-Existing-Install.cmd,tools/Organize-Existing-Install.ps1 $tools
           Copy-Item tools/diagnostics/Collect-ControlTOH-Materials.cmd,tools/diagnostics/Collect-ControlTOH-Materials.ps1 $tools
           & powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/diagnostics/test-material-collector.ps1
           if ($LASTEXITCODE -ne 0) { throw 'Material collector integration test failed' }
           @'
           Control The Oldest House: Visual and Performance Overhaul
-          R308 - Live native/new GI sampler toggle
+          R309 - Complete GI evaluator integration test
 
           Copy all package contents beside Control_DX12.exe, preserving folders.
-          Run ControlTOH/Diagnostics/Start-GI-Rendering-Test.cmd and choose 1.
-          Select GI RAW BYPASS. Use F10 GI SAMPLER to compare NATIVE / NEW live.
+          Run ControlTOH/Diagnostics/Start-GI-Evaluator-Test.cmd.
+          Select GI RAW BYPASS. Use F10 GI EVAL to compare NATIVE / TRANSLATED live.
           Load your usual save. Keep the plant and hair visible for one minute,
           then move around for another minute and exit normally.
           No F7, F9, CAPTURE RR, fixed camera or zoom is needed.
           Logs are packaged automatically. Send the diagnostics ZIP.
-          Experimental initial GI rays are active; full ReSTIR reuse is not implemented.
+          The translated evaluator preserves native lighting math; ReSTIR reuse is not active.
           No quality or performance improvement is claimed until tested.
           Launch normally to leave the test observer off.
           See ControlTOH/DIAGNOSTIC-NOTES.md for exact scope and limits.
@@ -1236,10 +1240,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: ControlTOH-R308
+          name: ControlTOH-R309
           path: |
-            ControlTOH-R308.zip
-            ControlTOH-R308.sha256
+            ControlTOH-R309.zip
+            ControlTOH-R309.sha256
             build/gi-joint-light-validation.json
             build/gi-joint-oracle-analysis.json
             build/gi-ray-trace-validation.json

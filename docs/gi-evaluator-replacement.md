@@ -126,3 +126,20 @@ Integration must handle both ordinary CreateComputePipelineState and cached
 LoadComputePipeline routes. The existing pipeline-library hook already documents
 and handles this distinction for other shader replacements; reuse it rather than
 adding a second library interception mechanism.
+
+## R309 runtime integration
+
+The test launcher opts into `gi_evaluator_runtime.inl`, preparing a translated
+alternate only for the hash-pinned GI6 evaluator. Both ordinary and cached native
+PSOs reach the existing observer. The native PSO retains its alternate via private
+COM data; no global device or PSO ownership is introduced. SetPipelineState and
+Reset select the alternate, preserving all root arguments. Failure or unknown
+identity retains native execution. The evaluator test reuses the existing last
+F10 button for NATIVE / TRANSLATED; the R307 sampler stays enabled in both modes.
+The normal R308 sampler launcher still uses its original toggle.
+
+Dispatch logs report actual selected evaluator mode at recording time, separate
+from requested UI state. They do not establish GPU completion. No extra shading
+pass, new resource capture, AS inventory or readback is added. This is the editable
+native evaluator port, not the new GI estimator. Full in-game parity is the next
+user-visible check; existing captures cannot execute this newly integrated binary.

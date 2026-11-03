@@ -12,7 +12,28 @@
 #include <vector>
 #include <stdexcept>
 #include <string>
+#include <atomic>
+#include <cstring>
+#include <cstdio>
+#include <bcrypt.h>
+#pragma comment(lib,"bcrypt.lib")
 #include "../src/gi_reuse/evaluator_reference_pipeline.h"
+static bool PTReflectionSha256(const unsigned char* data,size_t size,char (&hex)[65]) noexcept {
+ BCRYPT_ALG_HANDLE alg=nullptr;BCRYPT_HASH_HANDLE hash=nullptr;unsigned char digest[32]{};
+ bool ok=BCryptOpenAlgorithmProvider(&alg,BCRYPT_SHA256_ALGORITHM,nullptr,0)>=0;
+ if(ok)ok=BCryptCreateHash(alg,&hash,nullptr,0,nullptr,0,0)>=0;
+ if(ok)ok=BCryptHashData(hash,const_cast<unsigned char*>(data),static_cast<ULONG>(size),0)>=0;
+ if(ok)ok=BCryptFinishHash(hash,digest,sizeof(digest),0)>=0;
+ if(hash)BCryptDestroyHash(hash);if(alg)BCryptCloseAlgorithmProvider(alg,0);
+ if(ok)for(unsigned i=0;i<32;++i)sprintf_s(hex+i*2,3,"%02x",digest[i]);return ok;
+}
+#define CONTROL_GI_LONG_SEQUENCE
+namespace native_lighting {
+using CreateCompute=HRESULT (STDMETHODCALLTYPE*)(ID3D12Device*,const D3D12_COMPUTE_PIPELINE_STATE_DESC*,REFIID,void**);
+inline void Trace(const char*,...) noexcept {}
+#include "../src/gi_evaluator_runtime.inl"
+}
+HRESULT STDMETHODCALLTYPE Create(ID3D12Device* d,const D3D12_COMPUTE_PIPELINE_STATE_DESC* p,REFIID iid,void** out){return d->CreateComputePipelineState(p,iid,out);}
 using Microsoft::WRL::ComPtr;
 void Check(HRESULT h){if(FAILED(h))throw std::runtime_error("HRESULT "+std::to_string(static_cast<unsigned long>(h)));}
 void Require(bool value,const char* message){if(!value)throw std::runtime_error(message);}
@@ -46,9 +67,23 @@ int main(int argc,char** argv)try{
  Require(desc.CS.pShaderBytecode==native.data()&&desc.CachedPSO.pCachedBlob==invalidCache,"Native descriptor modified");
  ID3D12PipelineState* invalid=original.Get();
  Require(gi_reuse::CreateEvaluatorReferencePipeline(d.Get(),desc,{},&invalid)==E_INVALIDARG&&!invalid,"Invalid shader did not fail closed");
+ SetEnvironmentVariableA("CONTROLTOH_GI_EVALUATOR","1");
+ namespace evaluator=native_lighting::gi_evaluator;
+ evaluator::Observe(d.Get(),&desc,original.Get(),&Create);
+ Require(evaluator::ready.load(),"Runtime failed to prepare exact native shader");
+ auto* selected=evaluator::Select(original.Get());Require(selected!=nullptr,"Translated selection unavailable");
+ ComPtr<ID3D12CommandAllocator> allocator;Check(d->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT,IID_PPV_ARGS(&allocator)));
+ ComPtr<ID3D12GraphicsCommandList> list;Check(d->CreateCommandList(0,D3D12_COMMAND_LIST_TYPE_DIRECT,allocator.Get(),nullptr,IID_PPV_ARGS(&list)));
+ evaluator::Bind(list.Get(),selected);evaluator::Dispatch(list.Get());selected->Release();
+ Require(evaluator::lastReported.load()==2,"Translated dispatch attribution failed");
+ evaluator::Toggle();Require(evaluator::Select(original.Get())==nullptr,"Native toggle did not restore original");
+ evaluator::Bind(list.Get(),original.Get());evaluator::Dispatch(list.Get());Require(evaluator::lastReported.load()==5,"Native dispatch attribution failed");
+ evaluator::Bind(list.Get(),nullptr);evaluator::Dispatch(list.Get());Require(evaluator::lastReported.load()==5,"Stale binding survived reset");
+ evaluator::Toggle();Require(evaluator::Select(translated.Get())==nullptr,"Foreign PSO accepted");
+ Check(list->Close());
  ComPtr<ID3D12InfoQueue> info;Check(d.As(&info));
  for(UINT64 i=0;i<info->GetNumStoredMessages();++i){SIZE_T size=0;Check(info->GetMessage(i,nullptr,&size));std::vector<char> bytes(size);auto* msg=reinterpret_cast<D3D12_MESSAGE*>(bytes.data());Check(info->GetMessage(i,msg,&size));
   Require(msg->Severity!=D3D12_MESSAGE_SEVERITY_ERROR&&msg->Severity!=D3D12_MESSAGE_SEVERITY_CORRUPTION,msg->pDescription);
  }
- std::cout<<"PASS complete native and translated GI evaluator PSOs with captured native root; cache isolation and debug clean. No dispatch/image parity claim.\n";
+ std::cout<<"PASS complete native and translated GI evaluator PSOs with captured native root; cache isolation, runtime selection/reset and debug clean. No dispatch/image parity claim.\n";
 }catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}

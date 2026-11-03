@@ -25,7 +25,7 @@ inline constexpr unsigned kButtonCount = kModeCount + 16;
 #endif
 inline const wchar_t* ButtonLabel(unsigned index) noexcept {
 #ifdef CONTROL_GI_LONG_SEQUENCE
-    if(index==kModeCount+16)return gi_live_toggle::Label();
+    if(index==kModeCount+16)return gi_evaluator::Enabled()?gi_evaluator::Label():gi_live_toggle::Label();
 #endif
     if(index==kModeCount+15)return control_rr_clamp::diagnosticBypass.load()?L"REF CLAMP: BYPASS":L"REF CLAMP: 60%";
     if(index==kModeCount+3&&gi_spot_trace::Enabled())return L"ARM GI TRACE";
@@ -367,7 +367,8 @@ inline LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPA
             }
 #ifdef CONTROL_GI_LONG_SEQUENCE
             else if(index==kModeCount+16 && !capture_suite::active) {
-                if(gi_live_toggle::ready.load())gi_live_toggle::Toggle();
+                if(gi_evaluator::Enabled())gi_evaluator::Toggle();
+                else if(gi_live_toggle::ready.load())gi_live_toggle::Toggle();
             }
 #endif
             else if(index==kModeCount+15 && !capture_suite::active) {

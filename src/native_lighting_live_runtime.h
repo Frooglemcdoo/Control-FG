@@ -244,6 +244,7 @@ inline void RecordDirect(const D3D12_COMPUTE_PIPELINE_STATE_DESC*) noexcept;
 inline void RecordCompute(const D3D12_COMPUTE_PIPELINE_STATE_DESC*) noexcept;
 }
 #include "gi_source_runtime.inl"
+#include "gi_evaluator_runtime.inl"
 #include "gi_spot_pcf_runtime.inl"
 namespace gi_binding_audit {
 inline void Observe(const D3D12_COMPUTE_PIPELINE_STATE_DESC*,IUnknown*) noexcept;
@@ -252,6 +253,7 @@ inline void Dispatch(ID3D12GraphicsCommandList*,UINT,UINT,UINT) noexcept;
 }
 inline void ObserveCompute(ID3D12Device* device, const D3D12_COMPUTE_PIPELINE_STATE_DESC* desc, IUnknown* native, CreateCompute original) noexcept {
     computeSeen.fetch_add(1);
+    gi_evaluator::Observe(device,desc,native,original);
     control_rr_gi::Capture(device,desc,native,original);
     gi_source_probe::Observe(device,desc,native,original);
     gi_binding_audit::Observe(desc,native);
@@ -343,7 +345,9 @@ inline void STDMETHODCALLTYPE SetHook(ID3D12GraphicsCommandList* list, ID3D12Pip
     auto* alternate = rt_spot_runtime::SelectCompute(binding.selected);
     if(!alternate)alternate=gi_source_probe::Select(binding.selected);
     if(!alternate)alternate=gi_spot_pcf_probe::Select(binding.selected);
+    if(!alternate)alternate=gi_evaluator::Select(binding.selected);
     original(list, alternate ? alternate : binding.selected);
+    gi_evaluator::Bind(list,alternate ? alternate : binding.selected);
     gi_binding_audit::Bind(list,alternate ? alternate : binding.selected);
     gi_spot_trace::Bind(list,alternate ? alternate : binding.selected);
     rt_spot_capture_runtime::BindCompute(list,pso,alternate ? alternate : binding.selected);
@@ -353,6 +357,7 @@ inline void STDMETHODCALLTYPE SetHook(ID3D12GraphicsCommandList* list, ID3D12Pip
 }
 inline void STDMETHODCALLTYPE ComputeDispatchHook(ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT z) {
     const auto hooks=Lookup(list);const auto original=hooks.dispatch;if(!original)return;
+    gi_evaluator::Dispatch(list);
     gi_binding_audit::Dispatch(list,x,y,z);
     rt_spot_capture_runtime::BeforeCompute(list,x,y,z);
     const auto timing=performance::Begin(list,performance::ComputeStage(list),x,y,z,0,performance::ComputeShader(list));
@@ -368,7 +373,9 @@ inline HRESULT STDMETHODCALLTYPE ResetHook(ID3D12GraphicsCommandList* list, ID3D
     auto* alternate = rt_spot_runtime::SelectCompute(binding.selected);
     if(!alternate)alternate=gi_source_probe::Select(binding.selected);
     if(!alternate)alternate=gi_spot_pcf_probe::Select(binding.selected);
+    if(!alternate)alternate=gi_evaluator::Select(binding.selected);
     const HRESULT hr = original(list, allocator, alternate ? alternate : binding.selected);
+    gi_evaluator::Bind(list,SUCCEEDED(hr)?(alternate?alternate:binding.selected):nullptr);
     gi_binding_audit::Bind(list,SUCCEEDED(hr)?(alternate?alternate:binding.selected):nullptr);
     if(SUCCEEDED(hr)){gi_spot_trace::Reset(list);gi_geometry_probe::ResetInstances(list);}
     gi_spot_trace::Bind(list,SUCCEEDED(hr)?(alternate?alternate:binding.selected):nullptr);
