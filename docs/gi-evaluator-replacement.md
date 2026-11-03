@@ -262,3 +262,36 @@ Backend compilation run 41707817434 / job 126167685088 passed too. Local table
 checks also passed UBSan. No new user hardware run is requested: the trace shader
 is unchanged from the supplied successful RTX 5090 test. Full resource-bound
 shading parity, runtime producer geometry and reservoir integration remain open.
+
+## Complete initial reservoir batch
+
+`initial_reservoir.h` and `gi_initial_reservoir.hlsl` implement initial weighted
+reservoir sampling over the complete configured ray batch. Each surface candidate
+has weight `targetDensity / sourcePdf`; selection uses its fraction of the running
+weight sum. Final shading multiplies the selected secondary radiance and primary
+BRDF*cos by `sumWeights / selectedTarget`, then by depthScale / configuredCount.
+Miss fallback is accumulated separately with the same all-ray denominator. Black
+hits and misses count toward coverage, including batches containing only either.
+
+Frame/count/depth mismatch, duplicate ray indices, absent geometric evidence,
+invalid random values and numerical overflow invalidate the entire result. A
+failed or incomplete result must leave the local estimator available. The GPU
+buffer keeps the selected unweighted sample and geometric normal separately from
+its reconstructed contribution. This is an original full-precision initial RIS
+implementation, not RTXDI packed storage or SDK reservoir merging. The output
+field named inverseSourcePdf is deliberately zero in its reconstruction result;
+the RIS weight must never be relabeled as a source proposal inverse.
+
+CPU checks integrate 65,536 selections of colored candidates with unequal PDFs
+and verify expected energy, miss fallback, 64-ray coverage and rejection cases.
+Local CPU and UBSan checks pass; DXC compiles the batch shader with warnings as
+errors. The Windows WARP fixture executes 1,024 such batches and malformed inputs,
+checks actual selected sample/reconstruction and output guards. This reuses the
+existing GPU harness and does not need another user capture. It does not validate
+the game's missing producer geometry or enable spatial/temporal reuse.
+
+This stage follows the initial reconstruction-before-reuse sequence described by
+NVIDIA: https://github.com/NVIDIA-RTX/RTXDI/blob/main/Doc/RestirGI.md
+The game's direction-dependent secondary shading and finite-radius proposal
+must remain explicit when implementing later reservoir transport; this initial
+batch does not establish spatial MIS or visibility-correct reservoir merging.

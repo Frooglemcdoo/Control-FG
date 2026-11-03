@@ -55,8 +55,18 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'GI native visibility shader compile failed' }
           & $dxc.FullName -T cs_6_0 -E main -WX src/shaders/gi_receiver_shading.hlsl -Fo gi-receiver-shading.dxil
           if ($LASTEXITCODE -ne 0) { throw 'GI receiver shading shader compile failed' }
+          & $dxc.FullName -T cs_6_0 -E main -WX src/shaders/gi_initial_reservoir.hlsl -Fo gi-initial-reservoir.dxil
+          if ($LASTEXITCODE -ne 0) { throw 'Initial reservoir shader compile failed' }
           $commands=@"
           call "$vs\VC\Auxiliary\Build\vcvars64.bat"
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-initial-reservoir.cpp /Fe:gi-initial-reservoir.exe
+          if not "%errorlevel%"=="0" exit /b 1
+          gi-initial-reservoir.exe
+          if not "%errorlevel%"=="0" exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-initial-reservoir-gpu.cpp /Fe:gi-initial-reservoir-gpu.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
+          if not "%errorlevel%"=="0" exit /b 1
+          gi-initial-reservoir-gpu.exe
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-visibility-table.cpp /Fe:gi-visibility-table.exe
           if not "%errorlevel%"=="0" exit /b 1
           gi-visibility-table.exe
