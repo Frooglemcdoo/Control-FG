@@ -95,4 +95,10 @@ complete shader parity, RTX 5090 timing, or in-game image quality. No new game
 capture is required for this test. Full resource-bound parity remains outstanding.
 
 Local validation: seven translation/replay tests passed; the replay compiled
-with DXC cs_6_0, HLSL 2018 and warnings as errors. Windows execution pending.
+with DXC cs_6_0, HLSL 2018 and warnings as errors.
+
+Windows foundation run 41694911293 / job 126122766325 passed at remote commit
+4d129e1f41fc5150062e8225778927f89f4aaacf. Both baseline and extracted replay
+passed nine valid fixtures, seven invalid cases, dispatch guard and D3D12 debug
+checks. Maximum captured RGB absolute error was 2.98023e-08 for each. This is
+D3D12 WARP accounting validation, not complete evaluator execution.
