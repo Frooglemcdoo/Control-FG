@@ -21,6 +21,10 @@ jobs:
           $vs=& "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
           $dxc=Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\dxc.exe" | Sort-Object FullName -Descending | Select-Object -First 1
           if (!$dxc) { throw 'Windows SDK DXC not found' }
+          python tools/test-gi-evaluator.py
+          if ($LASTEXITCODE -ne 0) { throw 'GI evaluator translation tests failed' }
+          & $dxc.FullName -T cs_6_0 -E main -HV 2018 -WX src/shaders/gi_evaluator_reference.generated.hlsl -Fo gi-evaluator-reference.dxil
+          if ($LASTEXITCODE -ne 0) { throw 'Complete GI evaluator compile failed' }
           & $dxc.FullName -T cs_6_0 -E main -WX src/shaders/gi_initial_sample.hlsl -Fo gi-initial.dxil
           if ($LASTEXITCODE -ne 0) { throw 'Initial shader compile failed' }
           & $dxc.FullName -T cs_6_0 -E main -WX -I .validation-rtxdi/Include src/shaders/gi_rtxdi_initial.hlsl -Fo gi-rtxdi.dxil

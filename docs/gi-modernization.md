@@ -4,6 +4,15 @@ Goal: replace the indirect-GI estimator incrementally, retaining Control's scene
 materials, authored lights and RR output contract. Higher resolution is a later
 quality control; it does not by itself solve isolated high-energy ray samples.
 
+## Current live status (2026-11-03)
+
+R307/R308 implement live initial GI sampling and a native/new sampler toggle.
+The R308 user run confirms both recorded routes; RAW BYPASS gives the reported
+clean result in most inspected areas. Full evaluator replacement and reuse are
+now explicitly authorized; remaining green speckles are deferred. The complete
+GI6 source port is described in [gi-evaluator-replacement.md](gi-evaluator-replacement.md).
+It is a reference baseline, not yet a live replacement or ReSTIR integration.
+
 ## Implemented foundation
 
 `src/gi_reuse/initial_sample.h` is shared C++/HLSL code for the initial, no-reuse
