@@ -1,10 +1,17 @@
 #include "../gi_reuse/initial_reservoir.h"
 #include "../gi_reuse/producer_shading.h"
 struct Batch {uint first;uint count;uint frameTag;float depthScale;};
+#ifdef GI_NATIVE_INITIAL_BINDINGS
+StructuredBuffer<GIShadedProducerSample> samples : register(t27);
+StructuredBuffer<Batch> batches : register(t28);
+RWStructuredBuffer<GIInitialReservoir> reservoirs : register(u2);
+RWStructuredBuffer<GIInitialResult> outputs : register(u3);
+#else
 StructuredBuffer<GIShadedProducerSample> samples : register(t0);
 StructuredBuffer<Batch> batches : register(t1);
 RWStructuredBuffer<GIInitialReservoir> reservoirs : register(u0);
 RWStructuredBuffer<GIInitialResult> outputs : register(u1);
+#endif
 [numthreads(64,1,1)]
 void main(uint3 id:SV_DispatchThreadID) {
     if(any(id.yz))return;

@@ -59,6 +59,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'GI receiver shading shader compile failed' }
           & $dxc.FullName -T cs_6_0 -E main -WX src/shaders/gi_initial_reservoir.hlsl -Fo gi-initial-reservoir.dxil
           if ($LASTEXITCODE -ne 0) { throw 'Initial reservoir shader compile failed' }
+          & $dxc.FullName -T cs_6_0 -E main -WX -D GI_NATIVE_INITIAL_BINDINGS=1 src/shaders/gi_initial_reservoir.hlsl -Fo gi-initial-reservoir-native.dxil
+          if ($LASTEXITCODE -ne 0) { throw 'Native-root reservoir shader compile failed' }
           & $dxc.FullName -T lib_6_5 -WX src/shaders/gi_producer_geometry.hlsl -Fo gi-producer-geometry.dxil
           if ($LASTEXITCODE -ne 0) { throw 'Accepted-hit geometry shader compile failed' }
           & $dxc.FullName -T lib_6_5 -WX src/shaders/gi_producer_alpha.hlsl -Fo gi-producer-alpha.dxil
@@ -102,6 +104,8 @@ jobs:
           gi-evaluator-pipeline.exe build/gi-evaluator-native.dxbc gi-evaluator-secondary.dxil gi-producer-shading.dxil
           if not "%errorlevel%"=="0" exit /b 1
           gi-evaluator-pipeline.exe build/gi-evaluator-native.dxbc gi-evaluator-secondary.dxil gi-producer-proposals.dxil
+          if not "%errorlevel%"=="0" exit /b 1
+          gi-evaluator-pipeline.exe build/gi-evaluator-native.dxbc gi-evaluator-secondary.dxil gi-initial-reservoir-native.dxil
           if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-candidate-gpu.cpp /Fe:gi-candidate-gpu.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
           if not "%errorlevel%"=="0" exit /b 1

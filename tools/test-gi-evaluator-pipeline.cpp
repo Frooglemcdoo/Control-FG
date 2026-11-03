@@ -20,6 +20,7 @@
 #include "../src/gi_reuse/evaluator_reference_pipeline.h"
 #include "../src/gi_reuse/d3d12_producer_table.h"
 #include "../src/gi_reuse/d3d12_producer_pipeline.h"
+#include "../src/gi_reuse/d3d12_initial_gi_pipeline.h"
 static bool PTReflectionSha256(const unsigned char* data,size_t size,char (&hex)[65]) noexcept {
  BCRYPT_ALG_HANDLE alg=nullptr;BCRYPT_HASH_HANDLE hash=nullptr;unsigned char digest[32]{};
  bool ok=BCryptOpenAlgorithmProvider(&alg,BCRYPT_SHA256_ALGORITHM,nullptr,0)>=0;
@@ -68,6 +69,40 @@ int main(int argc,char** argv)try{
   ComPtr<ID3D12PipelineState> producerPipeline;
   Check(d->CreateComputePipelineState(&producerDesc,IID_PPV_ARGS(&producerPipeline)));
   std::cout<<"PASS supplied producer compute PSO uses captured native root.\n";
+ }
+ // Exercise bounded tile allocation/publication using a CPU descriptor shadow.
+ // This validates resource ownership and table boundaries, not DXR execution.
+ {
+  D3D12_DESCRIPTOR_HEAP_DESC hd{};hd.Type=D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+  hd.NumDescriptors=244300;hd.Flags=D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+  ComPtr<ID3D12DescriptorHeap> visible;Check(d->CreateDescriptorHeap(&hd,IID_PPV_ARGS(&visible)));
+  hd.NumDescriptors=27;hd.Flags=D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
+  ComPtr<ID3D12DescriptorHeap> cpu;Check(d->CreateDescriptorHeap(&hd,IID_PPV_ARGS(&cpu)));
+  auto h=cpu->GetCPUDescriptorHandleForHeapStart();const auto step=d->GetDescriptorHandleIncrementSize(hd.Type);
+  D3D12_SHADER_RESOURCE_VIEW_DESC nullView{};nullView.Format=DXGI_FORMAT_R32_FLOAT;
+  nullView.ViewDimension=D3D12_SRV_DIMENSION_TEXTURE2D;nullView.Texture2D.MipLevels=1;
+  nullView.Shader4ComponentMapping=D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+  for(UINT i=0;i<27;++i){d->CreateShaderResourceView(nullptr,&nullView,h);h.ptr+=step;}
+  D3D12_HEAP_PROPERTIES hp{};hp.Type=D3D12_HEAP_TYPE_UPLOAD;hp.CreationNodeMask=hp.VisibleNodeMask=1;
+  D3D12_RESOURCE_DESC bd{};bd.Dimension=D3D12_RESOURCE_DIMENSION_BUFFER;bd.Width=256;bd.Height=1;
+  bd.DepthOrArraySize=bd.MipLevels=1;bd.SampleDesc.Count=1;bd.Layout=D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+  ComPtr<ID3D12Resource> cb;Check(d->CreateCommittedResource(&hp,D3D12_HEAP_FLAG_NONE,&bd,D3D12_RESOURCE_STATE_GENERIC_READ,nullptr,IID_PPV_ARGS(&cb)));
+  const PTGlass::DescriptorRange originalRange{visible.Get(),244000,49};
+  PTGlass::LightingTableShadow shadow;Check(shadow.Initialize(d.Get()));Require(shadow.Begin(17,originalRange),"Shadow begin failed");
+  gi_reuse::D3D12InitialGITile missing;
+  Require(missing.Initialize(d.Get(),shadow,17,2,3,256,5,7,2,1,0,2,6,5)==E_INVALIDARG,"Incomplete native bindings accepted");
+  Require(shadow.Copy(17,5,{cpu.Get(),0,27}),"CPU source shadow copy failed");
+  Require(shadow.Constant(17,0,{cb->GetGPUVirtualAddress(),256}),"Native b4 shadow failed");
+  gi_reuse::D3D12InitialGITile tile;
+  Check(tile.Initialize(d.Get(),shadow,17,2,3,256,5,7,2,1,0,2,6,5));
+  Require(tile.Pixels()==2&&tile.FirstPixel()==0&&tile.RetainedBytes()==5344,"Tile allocation accounting mismatch");
+  std::array<PTGlass::DescriptorRange,4> fresh{};for(UINT i=0;i<4;++i)fresh[i]={visible.Get(),244049+i*49,49};
+  auto bad=fresh;bad[1]=bad[0];Require(!tile.Publish(originalRange,bad),"Overlapping private tables accepted");
+  bad=fresh;bad[0]=originalRange;Require(!tile.Publish(originalRange,bad),"Native table overwrite accepted");
+  bad=fresh;bad[0].first=0;Require(!tile.Publish(originalRange,bad),"Material prefix overwrite accepted");
+  Require(tile.Publish(originalRange,fresh),"Valid private publication failed");
+  Require(!tile.Publish(originalRange,fresh),"Published tile was mutable");
+  std::cout<<"PASS bounded GI tile: native descriptor coverage, immutable private tables, resource accounting and overlap rejection. No traversal dispatch claim.\n";
  }
  // Deliberately invalid cached bytes prove the replacement does not reuse them.
  const unsigned char invalidCache[]={1,2,3,4};desc.CachedPSO={invalidCache,sizeof(invalidCache)};
