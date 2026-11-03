@@ -18,9 +18,15 @@ inline constexpr int kCameraY = kPerformanceY + 46;
 inline constexpr int kCaptureStatusY = kCameraY + 162;
 inline constexpr int kFooterY = kCaptureStatusY + 50;
 inline constexpr int kHeight = kFooterY + 72;
+#ifdef CONTROL_GI_LONG_SEQUENCE
 inline constexpr unsigned kButtonCount = kModeCount + 17;
+#else
+inline constexpr unsigned kButtonCount = kModeCount + 16;
+#endif
 inline const wchar_t* ButtonLabel(unsigned index) noexcept {
+#ifdef CONTROL_GI_LONG_SEQUENCE
     if(index==kModeCount+16)return gi_live_toggle::Label();
+#endif
     if(index==kModeCount+15)return control_rr_clamp::diagnosticBypass.load()?L"REF CLAMP: BYPASS":L"REF CLAMP: 60%";
     if(index==kModeCount+3&&gi_spot_trace::Enabled())return L"ARM GI TRACE";
 #ifdef CONTROL_RR_FOLIAGE_AUDIT
@@ -359,9 +365,11 @@ inline LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPA
                 if (!ReportVisual(index==kModeCount))
                     MessageBoxW(window, L"This mode has not applied yet. Press F10 to return to the game, wait for the image to settle, then reopen the panel and record your result.", L"Wait for mode to apply", MB_OK);
             }
+#ifdef CONTROL_GI_LONG_SEQUENCE
             else if(index==kModeCount+16 && !capture_suite::active) {
                 if(gi_live_toggle::ready.load())gi_live_toggle::Toggle();
             }
+#endif
             else if(index==kModeCount+15 && !capture_suite::active) {
                 const bool bypass=!control_rr_clamp::diagnosticBypass.load();
                 control_rr_clamp::diagnosticBypass.store(bypass,std::memory_order_release);

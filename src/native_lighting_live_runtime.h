@@ -529,8 +529,13 @@ inline void InstallLiveDiagnostic(ID3D12Device* device) noexcept {
     rt_spot_runtime::Install();
     rt_shadow_capture::onRoot = &rt_spot_capture_audit::RememberRoot;
     rt_shadow_capture::replacementState = &CreateLightingState;
+#ifdef CONTROL_GI_LONG_SEQUENCE
     rt_shadow_capture::onState = &gi_live_toggle::OnState;
     rt_shadow_capture::replacementDispatch = &gi_live_toggle::Dispatch;
+#else
+    rt_shadow_capture::onState = &rt_spot_runtime::OnState;
+    rt_shadow_capture::replacementDispatch = &rt_spot_runtime::Dispatch;
+#endif
     rt_shadow_capture::Install(device);
     rt_spot_capture_runtime::Install(device);
     void** table = *reinterpret_cast<void***>(device);
