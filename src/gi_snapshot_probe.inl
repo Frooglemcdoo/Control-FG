@@ -84,8 +84,8 @@ inline void Capture(ID3D12GraphicsCommandList4* list,const D3D12_BUILD_RAYTRACIN
                !gi_reuse::AcquireStorageLease(vertexSource.Get(),vl)||vl.kind!=gi_reuse::BufferStorageKind::Committed){++triangleSkipped;continue;}
             vertexCharge=gi_reuse::IndexSample::Charge(captureDevice.Get(),vertexSource.Get(),UINT(vertexBytes));
             if(!vertexCharge){++triangleSkipped;continue;}
-            const gi_reuse::SampleKey key{gi_reuse::runtime::owners.Identity(vertexSource.Get()),gi_reuse::runtime::owners.Identity(source.Get()),vertexOffset,offset,t.VertexBuffer.StrideInBytes,t.VertexCount,t.IndexCount,width,i};
-            AcquireSRWLockExclusive(&diversityLock);const bool selected=diversity.Reserve(key);ReleaseSRWLockExclusive(&diversityLock);
+            const gi_reuse::SampleKey sampleKey{gi_reuse::runtime::owners.Identity(vertexSource.Get()),gi_reuse::runtime::owners.Identity(source.Get()),vertexOffset,offset,t.VertexBuffer.StrideInBytes,t.VertexCount,t.IndexCount,width,i};
+            AcquireSRWLockExclusive(&diversityLock);const bool selected=diversity.Reserve(sampleKey);ReleaseSRWLockExclusive(&diversityLock);
             if(!selected){++diversitySkipped;continue;}
         }
         const UINT64 tailOffset=offset+(full-bytes);gi_reuse::IndexSnapshotPlan plan;
