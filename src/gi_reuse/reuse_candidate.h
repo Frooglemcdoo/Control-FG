@@ -1,18 +1,13 @@
 #ifndef CONTROL_GI_REUSE_CANDIDATE_H
 #define CONTROL_GI_REUSE_CANDIDATE_H
 #include "finite_range_proposal.h"
+#include "visibility.h"
 #ifdef __cplusplus
 namespace gi_reuse {
 #define GI_REUSE_INLINE inline
 #else
 #define GI_REUSE_INLINE
 #endif
-// Result of a FRESH connection trace using the current scene and native alpha
-// policy. This struct does not perform a trace or establish those facts itself.
-struct GIConnectionVisibility {
-    uint frameTag; uint connectionId; uint sceneRevision; uint visible;
-    uint completed; uint nativeAlphaPolicy; uint reserved0; uint reserved1;
-};
 // Build one receiver contribution from already admitted geometry and shading.
 // No reservoir combination/history is performed. secondaryRadiance must have
 // been evaluated for the receiver direction, or under an explicitly verified
@@ -52,7 +47,6 @@ GI_REUSE_INLINE GIInitialResult GIShadeReuseCandidate(GIConnection connection,
     return GIMakeInitialSample(receiver,frameTag);
 }
 #ifdef __cplusplus
-static_assert(sizeof(GIConnectionVisibility)==32);
 }
 #endif
 #undef GI_REUSE_INLINE

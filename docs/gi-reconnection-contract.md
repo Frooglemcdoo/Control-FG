@@ -67,3 +67,47 @@ shared calculation's analytic and rejection cases. Official DXC compiles
 `src/shaders/gi_connection_visibility.hlsl` as `lib_6_3` with `-WX`. No DXR scene
 execution, native game linkage, quality improvement or performance claim is made.
 Native Blend, DirectStorage and the shipping GI calculation are untouched.
+
+## Executable visibility-to-receiver backend
+
+The shared visibility ABI now carries current scene revision as well as frame and
+connection identity. The native-root shader variant uses contact-shadow t6/t8/u2
+and b4. Its owned closest-hit and miss exports use the four-byte distance payload;
+the owned miss writes a distinct negative sentinel. This matters because DXR
+preserves any-hit payload writes even when IgnoreHit rejects the intersection.
+The previous prototype could mistake such a write for an accepted blocker if the
+linked miss did not reset it. This is a defect in the unbound prototype, **not a
+proven cause of the game's speckles**.
+
+`VisibilityPipeline` constructs an augmented state object, retaining the original
+exports, native any-hit imports and local-root associations. It clones triangle
+hit groups with owned closest-hit exports, maps identifiers within that same
+state object, and supplies owned raygen/miss records. It refuses procedural
+geometry, existing collections, and raygen local-root arguments rather than
+silently discarding their ABI. Resource publication is transactional. The caller
+must retain the state, records, remapped hit table, scene, descriptors and buffers
+through GPU completion. This class does not install hooks or establish lifetime.
+
+`gi_receiver_shading.hlsl` consumes the actual trace-result SRV with identity checks
+and the existing finite-range/Jacobian candidate calculation. Failed/blocked
+candidates do not constitute a valid lighting result; the eventual resolver must
+retain its local estimator. No reservoir combination or native GI dispatch is
+installed by this backend.
+
+`test-gi-visibility-gpu.cpp` executes the augmented pipeline on a synthetic opaque/
+cutout scene, then transitions its result directly into receiver shading without
+CPU readback between passes. It checks dirty-payload alpha rejection, opaque
+occlusion, endpoint and mask behavior, stale scene/frame, unverified inputs,
+invalid geometry, energy reconstruction and an overdispatch guard. It needs an
+actual DXR GPU. The CI package compiles the Windows executable and shaders but
+cannot report a hardware execution pass on a CPU-only runner. Existing in-game
+captures cannot execute these new kernels; this is not another routing capture.
+
+Local DXC compilation and existing portable receiver-candidate tests pass.
+Full game integration remains incomplete: true accepted producer geometry,
+receiver-direction secondary shading, reservoir passes and their native-pass
+resource wiring are not replaced by the synthetic test.
+
+References:
+- https://learn.microsoft.com/en-us/windows/win32/direct3d12/ignorehit-function
+- https://learn.microsoft.com/en-us/windows/win32/direct3d12/raytcurrent

@@ -47,6 +47,10 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Finite-range proposal shader compile failed' }
           & $dxc.FullName -T cs_6_0 -E main -WX src/shaders/gi_reuse_candidate_test.hlsl -Fo gi-reuse-candidate.dxil
           if ($LASTEXITCODE -ne 0) { throw 'Receiver candidate shader compile failed' }
+          & $dxc.FullName -T lib_6_3 -WX -D GI_NATIVE_VISIBILITY_BINDINGS=1 src/shaders/gi_connection_visibility.hlsl -Fo gi-visibility-native.dxil
+          if ($LASTEXITCODE -ne 0) { throw 'GI native visibility shader compile failed' }
+          & $dxc.FullName -T cs_6_0 -E main -WX src/shaders/gi_receiver_shading.hlsl -Fo gi-receiver-shading.dxil
+          if ($LASTEXITCODE -ne 0) { throw 'GI receiver shading shader compile failed' }
           $commands=@"
           call "$vs\VC\Auxiliary\Build\vcvars64.bat"
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-evaluator-pipeline.cpp /Fe:gi-evaluator-pipeline.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
