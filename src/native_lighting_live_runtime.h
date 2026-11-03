@@ -402,7 +402,8 @@ inline bool PatchSlot(void** slot, void* expected, void* hook) noexcept {
 #include "spec_retry_runtime.h"
 #ifdef CONTROL_GI_LONG_SEQUENCE
 #include "gi_sequence_runtime.h"
-inline HRESULT STDMETHODCALLTYPE CreateGISequence(ID3D12Device5* device,const D3D12_STATE_OBJECT_DESC* desc,REFIID iid,void** out) {return gi_sequence::CreateState(&rt_spot_runtime::CreateAugmented,device,desc,iid,out);}
+#include "gi_live_toggle.h"
+inline HRESULT STDMETHODCALLTYPE CreateGISequence(ID3D12Device5* device,const D3D12_STATE_OBJECT_DESC* desc,REFIID iid,void** out) {return gi_live_toggle::Create(&rt_spot_runtime::CreateAugmented,device,desc,iid,out);}
 #endif
 inline HRESULT STDMETHODCALLTYPE CreateLightingState(ID3D12Device5* device,const D3D12_STATE_OBJECT_DESC* desc,REFIID iid,void** out) {
 #ifdef CONTROL_GI_LONG_SEQUENCE
@@ -528,8 +529,8 @@ inline void InstallLiveDiagnostic(ID3D12Device* device) noexcept {
     rt_spot_runtime::Install();
     rt_shadow_capture::onRoot = &rt_spot_capture_audit::RememberRoot;
     rt_shadow_capture::replacementState = &CreateLightingState;
-    rt_shadow_capture::onState = &rt_spot_runtime::OnState;
-    rt_shadow_capture::replacementDispatch = &rt_spot_runtime::Dispatch;
+    rt_shadow_capture::onState = &gi_live_toggle::OnState;
+    rt_shadow_capture::replacementDispatch = &gi_live_toggle::Dispatch;
     rt_shadow_capture::Install(device);
     rt_spot_capture_runtime::Install(device);
     void** table = *reinterpret_cast<void***>(device);

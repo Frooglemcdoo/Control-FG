@@ -12,9 +12,9 @@ if not errorlevel 1 (
  pause
  exit /b 1
 )
-echo R307 - LIVE GI INITIAL SAMPLING
+echo R308 - LIVE GI SAMPLER COMPARISON
  echo 1. Experimental stratified GI rays
- echo 2. Existing GI baseline
+ echo 2. Original native GI sampler
 choice /C 12 /N /M "Select 1 or 2: "
 set "CONTROLTOH_GI_LIVE=1"
 if errorlevel 2 set "CONTROLTOH_GI_LIVE=0"
@@ -34,6 +34,8 @@ echo Selected GI experiment state: %CONTROLTOH_GI_LIVE%
 echo Keep RT indirect lighting enabled. Keep your usual ray count and RR settings.
 echo Check the lit plant and hair while stationary, then move the camera.
 echo No capture hotkey is needed. Exit normally to package the logs.
+echo F10: GI SAMPLER button switches Native / New without restarting.
+echo Select GI RAW BYPASS and keep it the same for both comparisons.
 echo This replaces initial GI sampling only. ReSTIR sample reuse is not active.
 start "" /wait "Control_DX12.exe"
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0Capture-RR-Boundary.ps1" -DiagnosticsOnly
