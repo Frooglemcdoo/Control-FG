@@ -8,6 +8,9 @@ for variant,sha in enumerate(HASHES):
     with tempfile.TemporaryDirectory() as folder:
         path=pathlib.Path(folder)/'native.dxbc';path.write_bytes(data)
         source=subprocess.check_output([args.dxc,'-dumpbin',str(path)],text=True)
+    resource_rows=[line for line in source.splitlines() if line.startswith('; g_rtScene ') or line.startswith('; DiffuseGIConstants ')]
+    assert len(resource_rows)==2,'Missing GI scene/range binding evidence'
+    print('Native GI variant',variant,'binding evidence:',*resource_rows,sep='\n')
     match=re.search(r'define void @"[^\n]*anyHitAlphaTest[^\n]*\n(.*?)^}',source,re.M|re.S)
     assert match,'Missing native alpha export'
     body=match[1]

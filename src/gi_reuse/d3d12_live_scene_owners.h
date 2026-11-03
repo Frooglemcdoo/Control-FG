@@ -84,7 +84,8 @@ public:
             const auto index=index_.Find(t.indices,GeometryMetadata::IndexBytes(t));
             const auto position=index_.Find(t.vertices,GeometryMetadata::VertexBytes(t));
             if(!index||!position)return false;
-            out={t.indices,t.vertices,t.stride,index,position,GeometryMetadata::IndexSize(t),t.indexCount,t.vertexCount};return true;
+            out={t.indices,t.vertices,t.stride,index,position,GeometryMetadata::IndexSize(t),t.indexCount,t.vertexCount};
+            if(!index_.Observe(out)){out={};return false;}return true;
         }catch(...){return false;}
     }
     // Exact tokens are acquired while the matching metadata index is locked.
