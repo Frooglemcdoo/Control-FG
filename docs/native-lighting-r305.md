@@ -33,3 +33,16 @@ Each successful snapshot produces `GI-Writer-R305-<pid>-<serial>.json`,
 `-bindings.bin` and `-table.bin`. The metadata identifies the dispatch, pipeline,
 engine frame, row format and explicit evidence limits. The collector includes all
 three files, plus the existing logs, automatically.
+
+## Validated package
+
+Code commit: `3d0bb1e1d4038c810514a02b0b468f478a302105` (remote),
+`1a198d1` (local), matching tree `c2b228dce1712ae39d87c675761cb4de85faa4c1`.
+Windows foundation run `41660764470` / job `126003014534`: PASS.
+Full Windows build run `41660764126` / job `126003014033`: PASS.
+Artifact `13241538060` contains the 74-file install ZIP, 4,224,836 bytes.
+SHA-256: `dc49e2100f1ef85e58fa1c94a7808fbb1d0a46ad8f0c898ea11164208e4a9094`.
+The nested checksum, ZIP integrity, R305 binary markers, updated launcher,
+collector and packaged instructions were verified after download. Hardware DXR
+routing and visual behavior still require the requested game run. RT indirect
+lighting must be enabled for GI dispatches to occur.
