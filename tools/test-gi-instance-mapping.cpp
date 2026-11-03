@@ -16,7 +16,9 @@ int main(){
  assert(first->Find(512)->revision==2&&ledger.Find(512)->revision==4);
  unsigned char bytes[64]{};std::uint64_t address=512;std::memcpy(bytes+56,&address,8);
  InstanceMappingSummary map;assert(MapInstanceMetadata(bytes,64,*first,map)&&map.matched==1);
+ assert(map.firstMatched==512&&map.firstRevision==2&&map.firstGeometryCount==1);
  address=1024;std::memcpy(bytes+56,&address,8);assert(MapInstanceMetadata(bytes,64,*first,map)&&map.missing==1);
+ assert(map.firstMissing==1024&&map.firstMissingIndex==0);
  address=768;std::memcpy(bytes+56,&address,8);assert(MapInstanceMetadata(bytes,64,*first,map)&&map.wrongType==1);
  address=0;std::memcpy(bytes+56,&address,8);assert(MapInstanceMetadata(bytes,64,*first,map)&&map.nullBLAS==1);
  assert(!MapInstanceMetadata(bytes,63,*first,map));
