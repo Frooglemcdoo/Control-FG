@@ -438,3 +438,39 @@ shader sidecar and launcher flags. `ControlTOH-R298.zip`: 4,203,167 bytes,
 `9cb0a2e61545feccb624476a07861796113eaf303de5039593fa9df9e400a950`.
 Next evidence is a two-minute automatic metadata run. No visual improvement or
 resolution of the unknown R297 descriptor rejection is claimed before that run.
+
+## R298 capture and R299 uint32 index support
+
+The November 3 R298 capture rejected geometry 0 of a three-geometry BLAS:
+vertex VA 163708010496, index VA 161909921216, stride 12, vertex count 91,799,
+index count 28,086, vertex format 6, index format 42, geometry flags 1.
+Format 42 is DXGI_FORMAT_R32_UINT. This is an index-width support gap, not the
+padded vertex-stride case. Ledger occupancy was 6,070; all 32 prior index samples
+completed with zero index-bound or padding failures. No R298 recapture is needed.
+
+R299 handles uint16 and uint32 in metadata validation, ownership ranges, scene
+read plans and primitive offsets. The offline decoder also accepts aligned
+padded float3 strides. IndexSample validates width/alignment before dispatch and
+decodes completed readback by that width. The existing shader preserves all bits
+by combining two native uint16 loads into each DWORD; it does not narrow indices.
+A third quota permits 16 uint32 samples, independent of the two uint16 categories;
+the overall reservation cap remains 128 MiB. Logs identify index byte width.
+
+Portable tests passed: captured descriptor, 12-byte primitive offset, alignment
+rejection, uint32 indices over 65,535, padded vertices, truncated buffers, plus
+ledger, queue order, buffer tracking, snapshot lifetime and copy-plan regressions.
+Windows foundation run 41625681723, job 125882300927 passed at
+`e5bdede478e6455e7b7fc524712e780974f7a56b`. Decoded logs confirm both native sampler
+GPU runs passed. The --32 fixture asserts a preserved value above 65,535, exact
+hash, valid bounds and padding, with native binding restoration and clean debug
+layer. No native lighting change or speckle correction is enabled.
+
+Full Windows run 41625681497, job 125882299825 passed at the same commit.
+Decoded logs confirm material collection, 17-shader package layout, migration,
+restart helper and lighting regressions passed. Artifact 13226540948 is
+ControlTOH-R299 (4,847,856 bytes), reported digest
+c476a24dc7450c29f9f621cd7d49d6e0c0e5ab838f348f57d22e89a323fac88f.
+Two download attempts failed with transfer-storage ServerBusy/account ingress
+limit. Therefore no local artifact digest or nested ZIP verification is claimed.
+The build artifact remains available through GitHub Actions. R299 package contents
+were verified by CI; local download and Library delivery remain pending.
