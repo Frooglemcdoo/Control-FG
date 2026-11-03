@@ -4,6 +4,7 @@
 #include "d3d12_compute_bindings.h"
 #include "producer_ray.h"
 #include "initial_reservoir.h"
+#include "frame_tiles.h"
 #include "../pt_glass_descriptors.h"
 namespace gi_reuse {
 // Five stages sharing the admitted native GI6 root. Shader bytecode is prepared
@@ -35,7 +36,7 @@ public:
     ID3D12PipelineState* Resolve() const noexcept{return resolve_.Get();}
     ID3D12PipelineState* Reservoirs() const noexcept{return reservoirs_.Get();}
 };
-// Single-recording bounded tile. CPU descriptors and constants are immutable
+// Single-recording bounded frame or subregion. CPU descriptors and constants are immutable
 // after preparation. Retain this owner, its pipeline, the native binding owners,
 // the producer table and the selected TLAS/BLAS closure through queue completion.
 // Descriptor addresses are allocated by the native same-heap allocator; no heap
@@ -44,7 +45,8 @@ class D3D12InitialGITile {
     template<class T> using Ptr=Microsoft::WRL::ComPtr<T>;
     Ptr<ID3D12Device> device_;
     Ptr<ID3D12DescriptorHeap> staging_;
-    Ptr<ID3D12Resource> rays_,batches_,requests_,samples_,reservoirs_,outputs_,constants_;
+    Ptr<ID3D12Resource> rays_,batches_,requests_,samples_,reservoirs_,outputs_,constants_,controlUpload_;
+    GIFrameTiles layout_;
     std::array<D3D12_GPU_DESCRIPTOR_HANDLE,5> tables_{};
     Ptr<ID3D12DescriptorHeap> visible_;
     UINT pixels_=0,count_=0,firstPixel_=0,step_=0;
@@ -97,9 +99,10 @@ public:
         UINT64 recording,UINT64 epoch,UINT64 version,UINT64 sceneAddress,
         UINT frame,UINT sceneRevision,UINT width,UINT height,UINT firstPixel,UINT pixels,UINT rays,float baseRange) noexcept {
         if(device_||!device||!recording||!epoch||!version||!sceneAddress||sceneAddress%256||!sceneRevision||
-           !width||!height||UINT64(width)*height>UINT32_MAX||!pixels||pixels>16384||
+           !width||!height||UINT64(width)*height>UINT32_MAX||!pixels||
            firstPixel>=UINT64(width)*height||pixels>UINT64(width)*height-firstPixel||!rays||rays>64||
            !std::isfinite(baseRange)||baseRange<=0||!native.Has(recording,NativeRequired))return E_INVALIDARG;
+        GIFrameTiles layout;if(!GIFrameTiles::Make(width,height,firstPixel,pixels,rays,layout))return E_INVALIDARG;
         const auto source=native.Snapshot();if(!source.heap||source.count!=49)return E_INVALIDARG;
         const auto sourceDesc=source.heap->GetDesc();
         if(sourceDesc.Type!=D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV||sourceDesc.Flags!=D3D12_DESCRIPTOR_HEAP_FLAG_NONE||
@@ -109,36 +112,43 @@ public:
         device_=device;step_=device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
         D3D12_DESCRIPTOR_HEAP_DESC hd{};hd.Type=D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;hd.NumDescriptors=5*49;
         hr=device->CreateDescriptorHeap(&hd,IID_PPV_ARGS(&staging_));if(FAILED(hr))return hr;
-        const UINT total=pixels*rays;
+        const UINT capacity=layout.capacity,total=capacity*rays;
         struct Allocation {UINT64 bytes;Ptr<ID3D12Resource>* resource;};
-        const Allocation allocations[]={{UINT64(total)*sizeof(GIProducerRay),&rays_},{UINT64(pixels)*16,&batches_},
+        const Allocation allocations[]={{UINT64(total)*sizeof(GIProducerRay),&rays_},{UINT64(capacity)*16,&batches_},
             {UINT64(total)*sizeof(GIProducerShadingRequest),&requests_},{UINT64(total)*sizeof(GIShadedProducerSample),&samples_},
-            {UINT64(pixels)*sizeof(GIInitialReservoir),&reservoirs_},{UINT64(pixels)*sizeof(GIInitialResult),&outputs_}};
+            {UINT64(capacity)*sizeof(GIInitialReservoir),&reservoirs_},{UINT64(capacity)*sizeof(GIInitialResult),&outputs_}};
         for(const auto& a:allocations){hr=Buffer(a.bytes,*a.resource);if(FAILED(hr))return hr;}
-        hr=Buffer(512,constants_,D3D12_HEAP_TYPE_UPLOAD);if(FAILED(hr))return hr;
-        std::array<unsigned char,512> data{};
-        const UINT header[]={frame,sceneRevision,width,height,firstPixel,pixels,rays};
-        const UINT trace[]={frame,sceneRevision,total,0};
-        std::memcpy(data.data(),header,sizeof(header));std::memcpy(data.data()+28,&baseRange,4);std::memcpy(data.data()+256,trace,sizeof(trace));
-        void* mapped=nullptr;const D3D12_RANGE empty{};hr=constants_->Map(0,&empty,&mapped);if(FAILED(hr))return hr;
-        if(!mapped){constants_->Unmap(0,&empty);return E_UNEXPECTED;}
-        std::memcpy(mapped,data.data(),data.size());const D3D12_RANGE written{0,data.size()};constants_->Unmap(0,&written);
+        // Every tile copies its own immutable controls into one GPU CBV buffer.
+        // Rewriting a shader-visible descriptor or upload slice between recorded
+        // dispatches would make all dispatches see the final tile instead.
+        hr=Buffer(512,constants_);if(FAILED(hr))return hr;
+        hr=Buffer(UINT64(layout.tiles)*512,controlUpload_,D3D12_HEAP_TYPE_UPLOAD);if(FAILED(hr))return hr;
+        void* mapped=nullptr;const D3D12_RANGE empty{};hr=controlUpload_->Map(0,&empty,&mapped);if(FAILED(hr))return hr;
+        if(!mapped){controlUpload_->Unmap(0,&empty);return E_UNEXPECTED;}
+        auto* data=static_cast<unsigned char*>(mapped);const SIZE_T controlBytes=SIZE_T(layout.tiles)*512;
+        std::memset(data,0,controlBytes);
+        for(UINT i=0;i<layout.tiles;++i){const auto span=layout.At(i);auto* dst=data+SIZE_T(i)*512;
+            const UINT header[]={frame,sceneRevision,width,height,span.first,span.pixels,rays};
+            const UINT trace[]={frame,sceneRevision,span.samples,0};
+            std::memcpy(dst,header,sizeof(header));std::memcpy(dst+28,&baseRange,4);std::memcpy(dst+256,trace,sizeof(trace));
+        }
+        const D3D12_RANGE written{0,controlBytes};controlUpload_->Unmap(0,&written);
         auto from=source.heap->GetCPUDescriptorHandleForHeapStart();from.ptr+=SIZE_T(source.first)*step_;
         for(UINT stage=0;stage<5;++stage){
             device->CopyDescriptorsSimple(49,At(stage,0),from,D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
             D3D12_CONSTANT_BUFFER_VIEW_DESC cb{constants_->GetGPUVirtualAddress()+((stage==0||stage==4)?0:256),256};device->CreateConstantBufferView(&cb,At(stage,1));
         }
-        View(0,43,rays_.Get(),sizeof(GIProducerRay),total,true);View(0,44,batches_.Get(),16,pixels,true);
+        View(0,43,rays_.Get(),sizeof(GIProducerRay),total,true);View(0,44,batches_.Get(),16,capacity,true);
         View(1,32,rays_.Get(),sizeof(GIProducerRay),total,false);View(1,43,requests_.Get(),sizeof(GIProducerShadingRequest),total,true);
         D3D12_SHADER_RESOURCE_VIEW_DESC tlas{};tlas.ViewDimension=D3D12_SRV_DIMENSION_RAYTRACING_ACCELERATION_STRUCTURE;
         tlas.Shader4ComponentMapping=D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;tlas.RaytracingAccelerationStructure.Location=sceneAddress;
         device->CreateShaderResourceView(nullptr,&tlas,At(1,33));
         View(2,32,requests_.Get(),sizeof(GIProducerShadingRequest),total,false);View(2,43,samples_.Get(),sizeof(GIShadedProducerSample),total,true);
-        View(3,32,samples_.Get(),sizeof(GIShadedProducerSample),total,false);View(3,33,batches_.Get(),16,pixels,false);
-        View(3,43,reservoirs_.Get(),sizeof(GIInitialReservoir),pixels,true);View(3,44,outputs_.Get(),sizeof(GIInitialResult),pixels,true);
-        View(4,32,outputs_.Get(),sizeof(GIInitialResult),pixels,false);View(4,33,samples_.Get(),sizeof(GIShadedProducerSample),total,false);
-        View(4,34,batches_.Get(),16,pixels,false);
-        pixels_=pixels;count_=total;firstPixel_=firstPixel;epoch_=epoch;version_=version;return S_OK;
+        View(3,32,samples_.Get(),sizeof(GIShadedProducerSample),total,false);View(3,33,batches_.Get(),16,capacity,false);
+        View(3,43,reservoirs_.Get(),sizeof(GIInitialReservoir),capacity,true);View(3,44,outputs_.Get(),sizeof(GIInitialResult),capacity,true);
+        View(4,32,outputs_.Get(),sizeof(GIInitialResult),capacity,false);View(4,33,samples_.Get(),sizeof(GIShadedProducerSample),total,false);
+        View(4,34,batches_.Get(),16,capacity,false);
+        layout_=layout;pixels_=pixels;count_=total;firstPixel_=firstPixel;epoch_=epoch;version_=version;return S_OK;
     }
     // All ranges must be fresh native allocations in the SAME currently bound
     // heap. The host owns allocator retirement and supplies the native range to
@@ -171,20 +181,33 @@ public:
         // One transaction: validate before issuing any commands. Restore keeps
         // the original heaps; injected calls must be muted in the native tracker.
         native.Restore(list);
-        list->SetPipelineState(pipeline.Proposals());list->SetComputeRootDescriptorTable(0,tables_[0]);list->Dispatch((pixels_+63)/64,1,1);
-        Readable(list,rays_.Get());Readable(list,batches_.Get());
-        list->SetPipelineState1(pipeline.Producer().State());list->SetComputeRootDescriptorTable(0,tables_[1]);list->DispatchRays(&rays);
-        Readable(list,requests_.Get());
-        list->SetPipelineState(pipeline.Shading());list->SetComputeRootDescriptorTable(0,tables_[2]);list->Dispatch((count_+63)/64,1,1);
-        Readable(list,samples_.Get());
-        list->SetPipelineState(pipeline.Reservoirs());list->SetComputeRootDescriptorTable(0,tables_[3]);list->Dispatch((pixels_+63)/64,1,1);
-        Readable(list,reservoirs_.Get());Readable(list,outputs_.Get());
-        D3D12_RESOURCE_BARRIER outputBarrier{};outputBarrier.Type=D3D12_RESOURCE_BARRIER_TYPE_UAV;
-        list->ResourceBarrier(1,&outputBarrier);
-        list->SetPipelineState(pipeline.Resolve());list->SetComputeRootDescriptorTable(0,tables_[4]);list->Dispatch((pixels_+63)/64,1,1);
-        list->ResourceBarrier(1,&outputBarrier);
+        const auto transition=[list](ID3D12Resource* resource,D3D12_RESOURCE_STATES before,D3D12_RESOURCE_STATES after){
+            D3D12_RESOURCE_BARRIER b{};b.Type=D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+            b.Transition={resource,D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,before,after};list->ResourceBarrier(1,&b);
+        };
+        for(UINT tile=0;tile<layout_.tiles;++tile){const auto span=layout_.At(tile);
+            transition(constants_.Get(),tile?D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER:D3D12_RESOURCE_STATE_UNORDERED_ACCESS,D3D12_RESOURCE_STATE_COPY_DEST);
+            list->CopyBufferRegion(constants_.Get(),0,controlUpload_.Get(),UINT64(tile)*512,512);
+            transition(constants_.Get(),D3D12_RESOURCE_STATE_COPY_DEST,D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER);
+            if(tile)for(auto* resource:{rays_.Get(),batches_.Get(),requests_.Get(),samples_.Get(),reservoirs_.Get(),outputs_.Get()})
+                transition(resource,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+            list->SetPipelineState(pipeline.Proposals());list->SetComputeRootDescriptorTable(0,tables_[0]);list->Dispatch((span.pixels+63)/64,1,1);
+            Readable(list,rays_.Get());Readable(list,batches_.Get());
+            rays.Width=span.samples;
+            list->SetPipelineState1(pipeline.Producer().State());list->SetComputeRootDescriptorTable(0,tables_[1]);list->DispatchRays(&rays);
+            Readable(list,requests_.Get());
+            list->SetPipelineState(pipeline.Shading());list->SetComputeRootDescriptorTable(0,tables_[2]);list->Dispatch((span.samples+63)/64,1,1);
+            Readable(list,samples_.Get());
+            list->SetPipelineState(pipeline.Reservoirs());list->SetComputeRootDescriptorTable(0,tables_[3]);list->Dispatch((span.pixels+63)/64,1,1);
+            Readable(list,reservoirs_.Get());Readable(list,outputs_.Get());
+            D3D12_RESOURCE_BARRIER outputBarrier{};outputBarrier.Type=D3D12_RESOURCE_BARRIER_TYPE_UAV;
+            list->ResourceBarrier(1,&outputBarrier);
+            list->SetPipelineState(pipeline.Resolve());list->SetComputeRootDescriptorTable(0,tables_[4]);list->Dispatch((span.pixels+63)/64,1,1);
+            list->ResourceBarrier(1,&outputBarrier);
+        }
         native.Restore(list);recorded_=true;return true;
     }
+    // Scratch contains the last tile only; it is not full-frame reuse history.
     ID3D12Resource* Reservoirs()const noexcept{return reservoirs_.Get();}
     ID3D12Resource* Outputs()const noexcept{return outputs_.Get();}
     UINT FirstPixel()const noexcept{return firstPixel_;}

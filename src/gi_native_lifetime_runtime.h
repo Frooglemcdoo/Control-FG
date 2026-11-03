@@ -4,9 +4,11 @@
 namespace GINativeLifetimeRuntime {
 using Release=void(*)(void*);
 static Release originalRelease=nullptr;
+static std::atomic<void(*)(void*) noexcept> liveRetire{nullptr};
 static RRAlbedoCallPatch calls[16]{};
 static std::atomic<UINT64> observed{0},retired{0},untracked{0},stale{0},invalid{0};
 static void ReleaseHook(void* wrapper) {
+ const DWORD before=GetLastError();if(const auto retire=liveRetire.load())retire(wrapper);SetLastError(before);
  const auto result=gi_reuse::ForwardNativeASRelease(gi_reuse::runtime::asOwners,wrapper,originalRelease);
  const DWORD error=GetLastError();
  switch(result){
