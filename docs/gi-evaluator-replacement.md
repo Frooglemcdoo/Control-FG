@@ -417,3 +417,31 @@ metadata diagnostic inventory into a complete scene lease. The proposal origin
 and evaluator receiver origin differ; future reconnection PDF/Jacobian geometry
 must use the actual source/target proposal origins consistently. Spatial and
 temporal reuse remain unimplemented. R309 remains the last game-ready package.
+
+## Recovery and scene table integration, 2026-11-03
+
+The restored workspace initially contained the older R304 checkout. Work resumed
+in a separate checkout from remote commit `5b134e934b00ce053279b795a9a5a02c35c9abd5`,
+preserving the original checkout. That commit contains the four-stage command
+recorder, native binding restoration and bounded-tile descriptor publication.
+
+`scene_producer_table.h` now connects the complete ordered TLAS instance array
+to exact BLAS geometry witnesses and the matched native GI writer table. It
+reuses R103's `PTOwnedScene::Index::ResolveExact`, imported from commit
+`2f314e8992aec822f13cafbf7efa8bb55dc3915c`. Geometry allocation tokens must be
+captured at build time; a later lookup by index address is insufficient.
+Unreferenced native rows remain zero without compacting instance contributions.
+The GPU table owner checks bound flags, reserved rows and backing resource ranges.
+
+Local GCC C++17 warnings-as-errors and UBSan checks pass for producer-table and
+scene-hit-packet tests. Coverage includes both index widths, stale revisions and
+allocation tokens, duplicate witnesses, shared indices with different position
+buffers, distinct per-instance materials, conflicting SBT rows, and transactional
+rejection. These are CPU binding checks, not live DXR traversal validation.
+
+The runtime still needs to supply current instance bytes and build-time geometry
+identities, acquire the returned resource leases under the owner lock, and retain
+the complete AS closure through submission completion. The helper does not make
+the diagnostic metadata inventory a live scene provider. Final output integration
+and spatial/temporal reuse remain outstanding. No new capture or game package is
+requested by this checkpoint.

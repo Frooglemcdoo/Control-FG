@@ -2,6 +2,7 @@
 #include "../src/gi_reuse/native_gi_table.h"
 #include "../src/gi_reuse/native_gi_route.h"
 #include "../src/gi_reuse/scene_traversal_closure.h"
+#include "../src/gi_reuse/scene_producer_table.h"
 #include <cassert>
 #include <cstdio>
 using namespace gi_reuse;
@@ -34,6 +35,57 @@ static void CheckBothWidths(unsigned width){
  NativeGITable table;
  assert(BuildNativeGITable(44,1,1,nativeBindings,p.identifiers.nativeOpaque,p.identifiers.nativeAlpha,table));
  assert(table.Active(4)&&!table.Active(5)&&table.bytes.size()==6*96);
+ // Resolve the complete active table from current BLAS witnesses, not a single
+ // index-address candidate. Unreferenced native rows retain their slots.
+ PTOwnedScene::Index owners;
+ owners.Insert({20,4096,width==2?8u:12u});owners.Insert({21,8192,44});owners.Insert({22,12288,48});
+ PTOwnedScene::Triangle witness{4096,8192,16,20,21,width,3,3};assert(owners.Observe(witness));
+ std::vector<GISceneGeometry> witnesses={{{512,11,2},0,witness}};
+ GISceneProducerPlan producer;
+ auto prepare=[&](){return PrepareGISceneProducer(history,p.cut,1,{768,12,3},p.instances,
+     {{512,11,2}},witnesses,owners,table,nativeBindings,45,p.identifiers,producer);};
+ assert(prepare()==GISceneProducerError::None);
+ assert((producer.table.bound==std::vector<unsigned char>{0,0,1}));
+ assert((producer.allocationTokens==std::vector<std::uint64_t>{20,21,22}));
+ assert(producer.table.records[0]==PTShaderTableAdapter::Bytes{}&&producer.table.records[4][0]==4);
+ const auto preserved=producer.table.records;
+ witnesses[0].blas.revision=1;assert(prepare()==GISceneProducerError::Geometry);witnesses[0].blas.revision=2;
+ witnesses[0].triangle.positionToken=99;assert(prepare()==GISceneProducerError::Geometry);witnesses[0].triangle=witness;
+ witnesses[0].triangle.positions+=4;assert(prepare()==GISceneProducerError::Geometry);witnesses[0].triangle=witness;
+ witnesses.push_back(witnesses[0]);assert(prepare()==GISceneProducerError::Geometry);witnesses.pop_back();
+ owners.Remove(21);assert(prepare()==GISceneProducerError::Geometry);owners.Insert({21,8192,44});
+ assert(producer.table.records==preserved&&prepare()==GISceneProducerError::None);
+ {
+  // Two BLAS geometries may share indices yet use different position buffers.
+  // Preserve the per-instance material row; reject an actual SBT-row collision.
+  History multiple;assert(multiple.Submit(1,{recording}));
+  auto secondTriangle=triangle;secondTriangle.vertices=8448;
+  GrowingASJournal<8> changes;changes.Reset();
+  changes.Append({ASOperation::Build,{1536,0,0,1,false,GeometryMetadata::Create({secondTriangle})},0});
+  changes.Append({ASOperation::Build,{1792,0,16384,2,true},0});
+  auto changed=History::Freeze(changes,changes.generation,{{30,0},{31,0}});
+  assert(changed&&multiple.Submit(1,{changed}));const auto cut=multiple.Mark(1);
+  owners.Insert({24,8448,44});auto secondWitness=witness;secondWitness.positions=8448;secondWitness.positionToken=24;
+  assert(owners.Observe(secondWitness));
+  auto distinct=nativeBindings;distinct[0].type=0;distinct[0].constants[3]=1;
+  NativeGITable distinctTable;
+  assert(BuildNativeGITable(44,2,1,distinct,p.identifiers.nativeOpaque,p.identifiers.nativeAlpha,distinctTable));
+  unsigned char two[128];std::memcpy(two,instance,64);std::memcpy(two+64,instance,64);
+  std::uint32_t firstRow=0;std::uint64_t secondBLAS=1536;
+  std::memcpy(two+52,&firstRow,4);std::memcpy(two+64+56,&secondBLAS,8);
+  auto both=Bytes(16384,23,two,sizeof(two));
+  const auto prepareBoth=[&](){return PrepareGISceneProducer(multiple,cut,1,{1792,31,5},both,
+      {{512,11,2},{1536,30,4}},{{{512,11,2},0,witness},{{1536,30,4},0,secondWitness}},
+      owners,distinctTable,distinct,45,p.identifiers,producer);};
+  assert(prepareBoth()==GISceneProducerError::None);
+  assert((producer.table.bound==std::vector<unsigned char>{1,0,1}));
+  assert(producer.table.geometry[0].material==1&&producer.table.geometry[2].material==2);
+  assert(producer.table.geometry[0].positions.address==8192&&producer.table.geometry[2].positions.address==8448);
+  std::memcpy(two+64+52,&firstRow,4);both=Bytes(16384,23,two,sizeof(two));
+  assert(prepareBoth()==GISceneProducerError::Conflict);
+  assert(producer.table.geometry[2].positions.address==8448); // failed transaction preserves last valid plan
+  owners.Remove(24);
+ }
  p.shaderTable=Bytes(32768,24,table.bytes.data(),table.bytes.size());SceneHitResult result;
  assert(ResolveSceneHit(history,p,result)==SceneHitError::None);
  assert(result.material==2&&result.tableRow==4&&result.instanceID==1234&&result.alphaTestedExport);

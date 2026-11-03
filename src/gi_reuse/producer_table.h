@@ -7,6 +7,7 @@ struct GIProducerTable {
     std::uint64_t nativePipeline=0,producerPipeline=0,writerVersion=0,epoch=0;
     std::vector<PTShaderTableAdapter::Bytes> records;
     std::vector<PTSceneAdmission::Geometry> geometry;
+    std::vector<unsigned char> bound; // Unreferenced rows remain zero; never compact the native layout.
 };
 enum class GIProducerTableError {None,Identity,Shape,ActiveRows,Epoch,Exports,Geometry,Allocation};
 inline GIProducerTableError PrepareGIProducerTable(const NativeGITable& native,
@@ -32,6 +33,7 @@ inline GIProducerTableError PrepareGIProducerTable(const NativeGITable& native,
         next.nativePipeline=expectedPipeline;next.producerPipeline=producerPipeline;
         next.writerVersion=expectedVersion;next.epoch=epoch;
         next.records.resize(geometry.size()*2);next.geometry=geometry;
+        next.bound.assign(geometry.size(),1);
         for(std::size_t i=0;i<geometry.size();++i){
             if(failedBinding)*failedBinding=i;
             if(native.active[i*2]!=1||native.active[i*2+1]!=0)return GIProducerTableError::ActiveRows;

@@ -24,6 +24,7 @@ public:
         if(upload_||!device||!pipeline||!plan.epoch||!plan.writerVersion||!plan.nativePipeline||
            plan.producerPipeline!=reinterpret_cast<std::uintptr_t>(pipeline)||
            plan.geometry.empty()||plan.geometry.size()>65536||
+           plan.bound.size()!=plan.geometry.size()||
            plan.records.size()!=plan.geometry.size()*2||resources.empty()||resources.size()>196608)return E_INVALIDARG;
         try {
             std::vector<BufferStorageLease> leases;
@@ -43,7 +44,15 @@ public:
                 retained+=bytes;leases.push_back(std::move(lease));
             }
             ranges.Seal();
-            for(const auto& geometry:plan.geometry){
+            for(std::size_t i=0;i<plan.geometry.size();++i){
+                const auto& geometry=plan.geometry[i];
+                const PTShaderTableAdapter::Bytes zero{};
+                if(plan.records[i*2+1]!=zero)return E_INVALIDARG;
+                if(!plan.bound[i]){
+                    if(geometry.epoch||plan.records[i*2]!=zero)return E_INVALIDARG;
+                    continue;
+                }
+                if(plan.bound[i]!=1)return E_INVALIDARG;
                 if(geometry.epoch!=plan.epoch)return E_INVALIDARG;
                 PTSceneAdmission::Record checked;
                 if(PTSceneAdmission::Admit(geometry,checked)!=PTSceneAdmission::Error::none)return E_INVALIDARG;
