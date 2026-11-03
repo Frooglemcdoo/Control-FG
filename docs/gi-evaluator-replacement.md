@@ -223,3 +223,8 @@ weights, plus eleven rejection cases and missing producer/radiance contracts.
 The shared HLSL wrapper compiles with DXC warnings as errors. These are synthetic
 contract tests, not proof of actual alpha visibility, image quality or runtime
 reuse. This component is not game-bound; R309 remains the installed test build.
+
+Windows foundation run 41702579307 / job 126149402860 passed at remote commit
+cbc549b6d9a45493433c77b820d79d3425965acf (local f6d429a). Receiver candidate
+CPU checks and HLSL compilation are included. The actual fresh visibility trace,
+producer metadata wiring and runtime reservoir passes remain unimplemented.
