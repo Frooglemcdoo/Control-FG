@@ -152,3 +152,18 @@ the nested package checksum, ZIP integrity, 74-file layout, R304 lease marker
 and exact-index shader sidecar passed. ControlTOH-R304.zip is 4,216,584 bytes,
 SHA-256 66bd70705900359195a3d34650f459b8e312cfdfd878cb0e564ee0ae473b4af1.
 Saved package: libfile_1dc1a82da3988191b0532298f34d7424. No user run requested.
+
+## Complete traversal closure admission
+
+scene_traversal_closure.h now validates every reference in a complete TLAS
+instance array at one ordered version. It preserves masked BLAS references,
+deduplicates identical identities, rejects conflicting tokens/revisions, validates
+null slots and refuses partial arrays or epoch mismatches. Failure publishes no
+partial closure. Limits are 65,536 instances and 8,192 unique referenced BLAS.
+
+The combined CPU fixture exercises duplicate/masked/null instances, complete
+versus partial arrays, conflicting identities and epoch rejection for both index
+widths. Portable warnings-as-errors and UBSan passed. The host still must obtain
+version-matched instance bytes and allocation identities and attach real leases;
+this helper alone does not make native release safe. Existing R303 metadata-only
+matching is not falsely promoted to that proof. No additional user run requested.

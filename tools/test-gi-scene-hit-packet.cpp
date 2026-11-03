@@ -1,4 +1,4 @@
-#include "../src/gi_reuse/scene_hit_packet.h"
+#include "../src/gi_reuse/scene_traversal_closure.h"
 #include <cassert>
 #include <cstdio>
 using namespace gi_reuse;
@@ -42,7 +42,30 @@ static void CheckBothWidths(unsigned width){
  unsigned badIndex=99;std::memcpy(indexBytes,&badIndex,width);p.geometry.indices=Bytes(4096,20,indexBytes,width==2?8:12);
  assert(ResolveSceneHit(history,p,result)==SceneHitError::Index);p=saved;
  float collapsed[12]{};p.geometry.positions=Bytes(8192,21,collapsed,44);assert(ResolveSceneHit(history,p,result)==SceneHitError::Degenerate);p=saved;
+ // Full-array traversal closure cannot be inferred from one successful hit.
+ SceneTraversalClosure closure;SceneASReference top{768,12,3};
+ assert(ResolveTraversalClosure(history,p.cut,1,top,p.instances,{{512,11,2}},closure)==TraversalError::None);
+ assert(closure.bottoms.size()==1&&closure.bottoms[0].token==11);
+ assert(ResolveTraversalClosure(history,p.cut,1,top,p.instances,{},closure)==TraversalError::Instances&&closure.bottoms.empty());
+ unsigned char allInstances[3*64]{};
+ std::memcpy(allInstances,instance,64);std::memcpy(allInstances+64,instance,64);
+ // Second instance is masked out, but still belongs to the lifetime closure.
+ std::uint32_t masked=999;std::memcpy(allInstances+64+48,&masked,4);
+ GrowingASJournal<8> full;full.Reset();full.Append({ASOperation::Build,{1024,0,16384,3,true},0});
+ auto fullRecording=History::Freeze(full,full.generation,{{13,0}});assert(history.Submit(1,{fullRecording}));
+ const auto fullCut=history.Mark(1);top={1024,13,4};
+ auto whole=Bytes(16384,23,allInstances,sizeof(allInstances));
+ std::vector<SceneASReference> refs={{512,11,2},{512,11,2},{}};
+ assert(ResolveTraversalClosure(history,fullCut,1,top,whole,refs,closure)==TraversalError::None&&closure.bottoms.size()==1);
+ auto partial=Bytes(16384,23,allInstances,64);
+ assert(ResolveTraversalClosure(history,fullCut,1,top,partial,refs,closure)==TraversalError::Instances&&closure.cut==0);
+ refs[1].token=88;assert(ResolveTraversalClosure(history,fullCut,1,top,whole,refs,closure)==TraversalError::Identity);
+ refs[1]={};assert(ResolveTraversalClosure(history,fullCut,1,top,whole,refs,closure)==TraversalError::Identity);
+ refs[1]={512,11,2};refs[2]={512,11,2};
+ assert(ResolveTraversalClosure(history,fullCut,1,top,whole,refs,closure)==TraversalError::Identity);
+ refs[2]={};whole.epoch=2;
+ assert(ResolveTraversalClosure(history,fullCut,1,top,whole,refs,closure)==TraversalError::Instances);
  // A later native build on another queue makes the copied source dependency ambiguous.
  assert(history.Submit(2,{recording}));assert(ResolveSceneHit(history,p,result)==SceneHitError::Order);
 }
-int main(){CheckBothWidths(2);CheckBothWidths(4);std::puts("PASS combined scene packet: ordered clone, owner/version, instance index, 16/32-bit geometry, padded vertices, mirrored transform, normal, material/SBT, stale/bounds/degenerate/competing-writer rejection");}
+int main(){CheckBothWidths(2);CheckBothWidths(4);std::puts("PASS complete traversal closure (masked/duplicate/null/partial/identity/epoch) and combined scene packet: ordered clone, owner/version, instance index, 16/32-bit geometry, padded vertices, mirrored transform, normal, material/SBT, stale/bounds/degenerate/competing-writer rejection");}
