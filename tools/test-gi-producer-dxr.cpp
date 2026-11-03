@@ -9,6 +9,9 @@ int main()try {
     ComPtr<ID3D12Debug> debug;if(SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&debug))))debug->EnableDebugLayer();
     std::cout<<std::unitbuf;std::cerr<<std::unitbuf;
     Device gpu;ComPtr<ID3D12InfoQueue> messages;gpu.device.As(&messages);
+    // Device binds its default heap while recording. Retain it through Submit,
+    // even though this fixture switches to a larger heap before dispatch.
+    auto initialViews=gpu.views;
     D3D12_DESCRIPTOR_HEAP_DESC hd{};hd.Type=D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;hd.NumDescriptors=128;hd.Flags=D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
     Check(gpu.device->CreateDescriptorHeap(&hd,IID_PPV_ARGS(&gpu.views)));ID3D12DescriptorHeap* heaps[]={gpu.views.Get()};gpu.list->SetDescriptorHeaps(1,heaps);
     auto cpu=[&](UINT slot){auto h=gpu.views->GetCPUDescriptorHandleForHeapStart();h.ptr+=SIZE_T(slot)*gpu.descriptorSize;return h;};
