@@ -395,3 +395,25 @@ and reservoir-selection dimensions and progression beyond frame 256). Windows
 validation exposed a const-qualified export-name-array incompatibility in the
 new state-object descriptor; the array declaration is corrected. Neither the
 proposal compute pass nor private DXR pipeline has been executed in-game yet.
+
+Windows validation completed successfully at remote commit
+`82d3095e7bdec89ff3361468e2699ebf41895f1f` (local `5851d36`, tree
+`e3952adb7dba0759c03a5ec2f0172f13aec02821`), run 41717035123 / job
+126199625970. The WARP fixture executes the proposal shader against synthetic
+native receiver inputs and checks reconstructed origin (including the .002 vs
+.001 normal-bias distinction), unit directions/cosine, primary BRDF/PDF
+cancellation, complete batches, range/selection random values, stale/malformed
+controls and output guards. The fixture has no D3D12 debug errors. Existing
+initial-reservoir GPU execution and the rest of the foundation suite also pass.
+This is synthetic producer validation, not live scene traversal or image parity.
+
+Next integration must establish the current TLAS/BLAS-to-private-SBT mapping and
+retain that exact recording's backing resources, then connect proposal, trace,
+shading, reservoir and output passes with resource barriers and submission
+retirement. The recovered PT descriptor-shadow/native-allocation path can keep
+material heaps and root bindings unchanged. Do not copy descriptors from the
+shader-visible heap, infer geometry from index address alone, or promote the
+metadata diagnostic inventory into a complete scene lease. The proposal origin
+and evaluator receiver origin differ; future reconnection PDF/Jacobian geometry
+must use the actual source/target proposal origins consistently. Spatial and
+temporal reuse remain unimplemented. R309 remains the last game-ready package.
