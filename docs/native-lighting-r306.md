@@ -40,3 +40,15 @@ GI still needs independent traversal/geometry/material leases, visibility and
 shading integration. Normal launch leaves these diagnostic hooks off. Writer
 files retain their R305 schema/name for collector compatibility; the install
 and retirement markers identify R306.
+
+## Build validation
+
+Remote code commit `11f91f68f9647935c16260737f9b1a1e490a84a2`, matching local
+`2b11a6f`, tree `9cc8c8ac5aec33b02aeb1d8f6237b2faaea0845b`.
+Windows foundation run `41674040317` / job `126049711402`: PASS, including
+native forwarding, generation replacement, and blocked-queue lease retention.
+Full build run `41674040266` / job `126049712029`: PASS.
+Artifact `13249119782`: 74-file install ZIP, 4,226,337 bytes, SHA-256
+`1b952f9f1ecb4ea076805ac71df8925c828ed201e6740325166c30b7d599d4d9`.
+ZIP integrity, nested checksum, R306 DLL markers and launcher/instructions were
+verified after download. Game-side retirement coverage is not yet validated.
