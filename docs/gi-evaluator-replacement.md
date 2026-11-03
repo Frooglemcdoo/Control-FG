@@ -484,3 +484,13 @@ for DXR execution. This fills a gap in the prior visibility/receiver hardware
 result, which did not execute the new producer. It requires no game capture and
 does not validate live scene admission, end-to-end game lighting, or reuse.
 R309 remains the last game-ready package.
+
+The RTX 5090 result `GI-Producer-Result.txt` (Library
+`libfile_ebdd12bd111481918a4f245bf4e124bd`) reported a D3D12 debug error: the
+fixture deleted its initially bound descriptor heap before closing the command
+list. `Device` binds a default heap, and this test replaced it with a larger one.
+The fixture now retains the original heap through submission completion. No GI
+shader or producer algorithm changed. The reported text comes from the final
+debug-message scan after numerical readback assertions, so those assertions were
+reached without failure; the run is still not accepted as a clean DXR pass.
+A corrected hardware run is required to check for remaining debug errors.
