@@ -102,3 +102,23 @@ Windows foundation run 41694911293 / job 126122766325 passed at remote commit
 passed nine valid fixtures, seven invalid cases, dispatch guard and D3D12 debug
 checks. Maximum captured RGB absolute error was 2.98023e-08 for each. This is
 D3D12 WARP accounting validation, not complete evaluator execution.
+
+## Native pipeline compatibility
+
+`gi_reuse/evaluator_reference_pipeline.h` prepares the translated evaluator using
+an existing native compute descriptor. It preserves the root signature, node
+mask and flags, clears the native cached driver blob, and leaves the caller's
+descriptor unchanged. It is not yet called by the game hooks and does not select
+or dispatch the replacement. Callers must validate the exact native identity.
+
+`test-gi-evaluator-pipeline.cpp` reuses the observed eight-parameter native root
+from the earlier spotlight capture tests, without their added diagnostic root
+parameters. It creates both complete native and translated PSOs, checks invalid
+input handling and native-cache isolation, and checks the D3D12 debug queue.
+This validates pipeline compatibility only; full resource-bound image comparison
+is still required. Windows validation is pending.
+
+Integration must handle both ordinary CreateComputePipelineState and cached
+LoadComputePipeline routes. The existing pipeline-library hook already documents
+and handles this distinction for other shader replacements; reuse it rather than
+adding a second library interception mechanism.

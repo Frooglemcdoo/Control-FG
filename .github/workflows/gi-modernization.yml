@@ -35,12 +35,18 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Exact uint16 snapshot shader compile failed' }
           if (!(Select-String -Path gi-index-snapshot.asm -Pattern 'call.*rawBufferLoad.i16')) { throw 'Expected exact 16-bit source reads absent' }
           New-Item -ItemType Directory -Force build | Out-Null
+          python -c "import base64,pathlib; pathlib.Path('build/gi-evaluator-native.dxbc').write_bytes(base64.b64decode(pathlib.Path('research/gi-source-r267/gi-6.dxbc.b64').read_bytes()))"
+          if ($LASTEXITCODE -ne 0) { throw 'Native evaluator extraction failed' }
           python tools/make-gi-candidate-fixture.py research/gi-source-r267/candidate-gpu-fixture.json build/gi_candidate_fixture.h
           if ($LASTEXITCODE -ne 0) { throw 'Captured fixture generation failed' }
           & $dxc.FullName -T cs_6_0 -E main -HV 2018 -WX src/shaders/gi_evaluator_replay.generated.hlsl -Fo gi-evaluator-replay.dxil
           if ($LASTEXITCODE -ne 0) { throw 'Evaluator accounting replay compile failed' }
           $commands=@"
           call "$vs\VC\Auxiliary\Build\vcvars64.bat"
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-evaluator-pipeline.cpp /Fe:gi-evaluator-pipeline.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
+          if not "%errorlevel%"=="0" exit /b 1
+          gi-evaluator-pipeline.exe build/gi-evaluator-native.dxbc gi-evaluator-reference.dxil
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-candidate-gpu.cpp /Fe:gi-candidate-gpu.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
           if not "%errorlevel%"=="0" exit /b 1
           gi-candidate-gpu.exe
