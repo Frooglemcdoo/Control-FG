@@ -23,6 +23,6 @@ int main()try {
     auto unknown=gpu.Upload(std::vector<unsigned>{1,2,3});
     Require(!bank.Created(5,unknown.Get(),unknown->GetGPUVirtualAddress(),12),"Unknown storage admitted");
     Require(bank.RetainedBytes()==36,"Retirement accounting incorrect");
-    D3D12LiveSceneOwners small(4);Require(!small.Created(1,index.Get(),index->GetGPUVirtualAddress(),12),"Budget exceeded");
+    D3D12LiveSceneOwners limitedBank(4);Require(!limitedBank.Created(1,index.Get(),index->GetGPUVirtualAddress(),12),"Budget exceeded");
     std::cout<<"PASS live wrapper identities, shared ownership, exact build witnesses, retirement, generation reuse and lease preservation\n";return 0;
 }catch(const std::exception& e){std::cerr<<"FAIL "<<e.what()<<'\n';return 1;}
