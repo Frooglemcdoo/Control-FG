@@ -8,7 +8,7 @@ class Evaluator(unittest.TestCase):
   cls.raw=base64.b64decode((ROOT/'research/gi-source-r267/gi-6.dxbc.b64').read_bytes())
   cls.source=cls.path/'native.dxbc';cls.source.write_bytes(cls.raw)
   cls.output=cls.path/'evaluator.hlsl'
-  subprocess.run([sys.executable,str(ROOT/'tools/generate-gi-evaluator.py'),str(cls.source),str(cls.output)],check=True,stdout=subprocess.DEVNULL)
+  subprocess.run([sys.executable,str(ROOT/'tools/generate-gi-evaluator.py'),str(cls.source),str(cls.output),str(cls.path/'replay.hlsl')],check=True,stdout=subprocess.DEVNULL)
   cls.text=cls.output.read_text()
  @classmethod
  def tearDownClass(cls):cls.tmp.cleanup()
@@ -35,6 +35,12 @@ class Evaluator(unittest.TestCase):
   self.assertNotIn('PTNativeMaterialMip',self.text)
   self.assertIn('g_tGIBrickTextures[6]',self.text)
   self.assertIn('uint d[80]',self.text);self.assertIn('uint d[40]',self.text)
+ def test_replay_uses_actual_evaluator_instructions(self):
+  replay=(self.path/'replay.hlsl').read_text()
+  self.assertEqual(replay,(ROOT/'src/shaders/gi_evaluator_replay.generated.hlsl').read_text())
+  for offset in (5029,5136,5143,5150):self.assertIn(self.line(offset),replay)
+  self.assertEqual(replay.count('ReplayAccumulate(throughput, radiance,'),3)
+  self.assertEqual(replay.count('ReplayNormalize(scale,'),3)
  def test_wrong_shader_rejected(self):
   b=bytearray(self.raw);b[-1]^=1;(self.path/'bad.dxbc').write_bytes(b)
   r=subprocess.run([sys.executable,str(ROOT/'tools/generate-gi-evaluator.py'),str(self.path/'bad.dxbc'),str(self.path/'bad.hlsl')],capture_output=True)

@@ -74,3 +74,25 @@ Windows foundation run 41693404033 / job 126117527584 passed at remote commit
 6ed98f204a2f6cb43e133e1a6475786784a1ddc7. This includes the complete GI evaluator
 compile and translation tests plus the existing CPU/WARP foundation suite. The
 GI evaluator itself is not executed by those existing WARP adapter tests.
+
+## Captured accounting replay
+
+The optional third output of `generate-gi-evaluator.py` produces
+`gi_evaluator_replay.generated.hlsl` directly from translated instructions at
+native dwords 5029, 5136, 5143 and 5150. It reuses the existing candidate harness
+and `candidate-gpu-fixture.json` (trace SHA256
+`5d7992f6fa5ec78066314f35bc647b0565a5c42eb4e360083b5d39d8d1fd9efb`).
+The fixture includes selected captured pixels and two synthetic accounting edge
+cases; it is not an image-quality sample. Seven additional malformed inputs and
+an output guard region exercise the harness's fail-closed and bounds behavior.
+
+Foundation CI executes both the original accounting shader and the extracted
+translation on D3D12 WARP, checking captured total RGB, separate hit/miss RGB,
+counts and untouched output guards. These are accounting-boundary tests only:
+secondary lighting values come from the prior capture rather than execution of
+the complete material/local-light/volume evaluator. They do not establish
+complete shader parity, RTX 5090 timing, or in-game image quality. No new game
+capture is required for this test. Full resource-bound parity remains outstanding.
+
+Local validation: seven translation/replay tests passed; the replay compiled
+with DXC cs_6_0, HLSL 2018 and warnings as errors. Windows execution pending.

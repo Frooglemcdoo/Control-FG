@@ -7,6 +7,7 @@
 #include <d3dcompiler.h>
 #include <wrl/client.h>
 #include <vector>
+#include <fstream>
 #include <algorithm>
 #include <iterator>
 #include <iostream>
@@ -25,7 +26,8 @@ ComPtr<ID3D12Resource> Buffer(ID3D12Device* d,UINT64 bytes,D3D12_HEAP_TYPE type,
  ComPtr<ID3D12Resource> r;Check(d->CreateCommittedResource(&hp,D3D12_HEAP_FLAG_NONE,&rd,state,nullptr,IID_PPV_ARGS(&r)));return r;
 }
 void Transition(ID3D12GraphicsCommandList* l,ID3D12Resource* r,D3D12_RESOURCE_STATES a,D3D12_RESOURCE_STATES b){D3D12_RESOURCE_BARRIER x{};x.Type=D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;x.Transition={r,D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,a,b};l->ResourceBarrier(1,&x);}
-int main()try{
+int main(int argc,char** argv)try{
+ Require(argc<=2,"Expected optional compiled replay shader path");
  constexpr UINT stride=520,outputWords=12;
  constexpr UINT validCount=static_cast<UINT>(sizeof(fixtureWords)/sizeof(UINT)/stride);
  std::vector<UINT> input(std::begin(fixtureWords),std::end(fixtureWords));
@@ -43,9 +45,19 @@ int main()try{
  params[2].ParameterType=D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;params[2].Constants={0,0,1};
  D3D12_ROOT_SIGNATURE_DESC rd{3,params,0,nullptr,D3D12_ROOT_SIGNATURE_FLAG_NONE};ComPtr<ID3DBlob> blob,errors;Check(D3D12SerializeRootSignature(&rd,D3D_ROOT_SIGNATURE_VERSION_1,&blob,&errors));
  ComPtr<ID3D12RootSignature> root;Check(d->CreateRootSignature(0,blob->GetBufferPointer(),blob->GetBufferSize(),IID_PPV_ARGS(&root)));
- ComPtr<ID3DBlob> shader;HRESULT compiled=D3DCompileFromFile(L"src/shaders/gi_candidate_no_reuse.hlsl",nullptr,nullptr,"main","cs_5_1",D3DCOMPILE_WARNINGS_ARE_ERRORS|D3DCOMPILE_OPTIMIZATION_LEVEL3,0,&shader,&errors);
- if(errors)std::cerr.write(static_cast<const char*>(errors->GetBufferPointer()),static_cast<std::streamsize>(errors->GetBufferSize()));Check(compiled);
- D3D12_COMPUTE_PIPELINE_STATE_DESC pd{};pd.pRootSignature=root.Get();pd.CS={shader->GetBufferPointer(),shader->GetBufferSize()};ComPtr<ID3D12PipelineState> pso;Check(d->CreateComputePipelineState(&pd,IID_PPV_ARGS(&pso)));
+ ComPtr<ID3DBlob> shader;std::vector<char> dxil;
+ D3D12_COMPUTE_PIPELINE_STATE_DESC pd{};pd.pRootSignature=root.Get();
+ if(argc==2){
+  std::ifstream file(argv[1],std::ios::binary);Require(file.good(),"Cannot open replay shader");
+  dxil.assign(std::istreambuf_iterator<char>(file),std::istreambuf_iterator<char>());
+  Require(!dxil.empty(),"Empty replay shader");pd.CS={dxil.data(),dxil.size()};
+  std::cout<<"Captured accounting replay: "<<argv[1]<<"\n";
+ }else{
+  HRESULT compiled=D3DCompileFromFile(L"src/shaders/gi_candidate_no_reuse.hlsl",nullptr,nullptr,"main","cs_5_1",D3DCOMPILE_WARNINGS_ARE_ERRORS|D3DCOMPILE_OPTIMIZATION_LEVEL3,0,&shader,&errors);
+  if(errors)std::cerr.write(static_cast<const char*>(errors->GetBufferPointer()),static_cast<std::streamsize>(errors->GetBufferSize()));Check(compiled);
+  pd.CS={shader->GetBufferPointer(),shader->GetBufferSize()};
+ }
+ ComPtr<ID3D12PipelineState> pso;Check(d->CreateComputePipelineState(&pd,IID_PPV_ARGS(&pso)));
  auto in=Buffer(d.Get(),input.size()*4,D3D12_HEAP_TYPE_UPLOAD,D3D12_RESOURCE_STATE_GENERIC_READ,D3D12_RESOURCE_FLAG_NONE);
  auto init=Buffer(d.Get(),totalBytes,D3D12_HEAP_TYPE_UPLOAD,D3D12_RESOURCE_STATE_GENERIC_READ,D3D12_RESOURCE_FLAG_NONE);
  auto out=Buffer(d.Get(),totalBytes,D3D12_HEAP_TYPE_DEFAULT,D3D12_RESOURCE_STATE_COPY_DEST,D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);

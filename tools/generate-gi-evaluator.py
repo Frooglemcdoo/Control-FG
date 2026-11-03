@@ -7,7 +7,8 @@ import sys, pathlib, struct, hashlib, importlib.util, json
 root=pathlib.Path(__file__).resolve().parent.parent
 spec=importlib.util.spec_from_file_location('decode',root/'research/native-integration-audit/tools/decode_dxbc.py');mod=importlib.util.module_from_spec(spec);spec.loader.exec_module(mod)
 p=pathlib.Path(sys.argv[1]);data=p.read_bytes()
-assert hashlib.sha256(data).hexdigest()=='1dfb4c9b054037e030ff9eed6ed5e482c8c32f9f301bb02c89eb0084c52842de'
+if hashlib.sha256(data).hexdigest()!='1dfb4c9b054037e030ff9eed6ed5e482c8c32f9f301bb02c89eb0084c52842de':
+ raise ValueError('Unexpected native GI evaluator SHA256')
 j=mod.decode(p)
 for off in struct.unpack_from('<'+'I'*struct.unpack_from('<I',data,28)[0],data,32):
  if data[off:off+4]==b'SHEX':size=struct.unpack_from('<I',data,off+4)[0];w=list(struct.unpack_from('<'+'I'*(size//4),data,off+8))
@@ -164,3 +165,22 @@ assert depth==0,depth
 out+=['}']
 path=pathlib.Path(sys.argv[2]) if len(sys.argv)>2 else root/'src/shaders/gi_evaluator_reference.generated.hlsl'
 path.parent.mkdir(parents=True,exist_ok=True);path.write_text('\n'.join(out)+'\n');print('Generated',path,len(selected),'native instructions',counts)
+
+# Optional replay extracts the exact translated instructions, not a second
+# handwritten implementation. The surrounding guards belong to the test only.
+if len(sys.argv)>3:
+ def instruction(at):
+  return next(line for line in out if line.endswith('// native dword '+str(at)))
+ helpers = '// Generated accounting boundary only; NOT full material/light replay.\n'
+ helpers += 'float3 ReplayAccumulate(float3 throughput, float3 radiance, float3 sum) {\n'
+ helpers += '    uint4 r3=uint4(asuint(throughput),0), r15=uint4(asuint(radiance),0), r10=uint4(asuint(sum),0);\n'
+ helpers += instruction(5029)+'\n    return asfloat(r10.xyz);\n}\n'
+ helpers += 'float3 ReplayNormalize(float scale, float3 sum, uint count) {\n'
+ helpers += '    uint4 r0=asuint(scale).xxxx, r10=uint4(asuint(sum),0), r1=0;\n'
+ helpers += '    uint4 giCB4[1]; giCB4[0]=uint4(0,0,count,0);\n'
+ helpers += '\n'.join(instruction(at) for at in (5136,5143,5150))+'\n    return asfloat(r1.xyz);\n}\n'
+ replay=(root/'src/shaders/gi_candidate_no_reuse.hlsl').read_text()
+ replay=replay.replace('mad(throughput, radiance,', 'ReplayAccumulate(throughput, radiance,')
+ for name in ('nativeSum','surfaceSum','fallbackSum'):
+  replay=replay.replace('(scale * '+name+') / float(count)', 'ReplayNormalize(scale, '+name+', count)')
+ pathlib.Path(sys.argv[3]).write_text(helpers+replay)
