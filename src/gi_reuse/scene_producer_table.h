@@ -80,7 +80,7 @@ template<std::size_t Capacity> GISceneProducerError PrepareGISceneProducer(
                 const auto binding=static_cast<std::size_t>(row/2);PTOwnedScene::Index::Resolved resolved;
                 if(owners.ResolveExact(bindings[binding],witness,epoch,resolved)!=PTOwnedScene::Status::candidate)
                     return GISceneProducerError::Geometry;
-                Bytes converted;
+                PTShaderTableAdapter::Bytes converted;
                 if(Convert(native.bytes.data()+row*NativeStride,NativeStride,exports,&resolved.geometry,converted)!=Status::ready)
                     return GISceneProducerError::Table;
                 if(table.bound[binding]&&table.records[row]!=converted)return GISceneProducerError::Conflict;
