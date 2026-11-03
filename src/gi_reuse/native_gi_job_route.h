@@ -1,0 +1,51 @@
+#pragma once
+#include <array>
+#include <cstdint>
+#include <mutex>
+namespace GINativeJobRoute {
+using U64=std::uint64_t;
+struct Writer {
+    U64 buffer=0,state=0,bindings=0;
+    int bytes=0,rays=0,count=0;
+    bool operator==(const Writer& b)const noexcept {
+        return buffer==b.buffer&&state==b.state&&bindings==b.bindings&&bytes==b.bytes&&rays==b.rays&&count==b.count;
+    }
+};
+struct TableLayout {
+    U64 buffer=0,bytes=0;
+    std::uint32_t raygenBytes=0,missOffset=0,missStride=0,hitRelative=0,hitStride=0,hitRecords=0;
+};
+struct Ticket {U64 serial=0,list=0,pipeline=0,counter=0,hitTable=0,hitBytes=0;std::uint32_t width=0,height=0;Writer writer{};TableLayout layout{};U64 engineFrame=0;};
+// Native job slots are reused. A slot number alone is never a lifetime token.
+// The live host must register BEFORE runJob and finish BEFORE the worker returns.
+class Router {
+    struct Slot {Ticket ticket{};bool writing=false;};
+    std::mutex mutex;std::array<Slot,16> slots{};
+public:
+    bool Schedule(unsigned slot,const Ticket& ticket){
+        std::lock_guard<std::mutex> guard(mutex);
+        if(slot>=slots.size()||slots[slot].ticket.serial||!ticket.serial||!ticket.list||!ticket.pipeline||!ticket.counter||!ticket.engineFrame||
+           !ticket.writer.buffer||!ticket.writer.state||!ticket.writer.bindings||ticket.writer.bytes<=0||ticket.writer.rays!=1||ticket.writer.count<=0||ticket.writer.count>65536)return false;
+        slots[slot].ticket=ticket;return true;
+    }
+    bool Begin(unsigned slot,const Writer& writer,Ticket& out){
+        out={};std::lock_guard<std::mutex> guard(mutex);
+        if(slot>=slots.size()||!slots[slot].ticket.serial||slots[slot].writing||!(slots[slot].ticket.writer==writer))return false;
+        slots[slot].writing=true;out=slots[slot].ticket;return true;
+    }
+    bool Finish(unsigned slot,U64 serial){
+        std::lock_guard<std::mutex> guard(mutex);
+        if(slot>=slots.size()||!serial||slots[slot].ticket.serial!=serial||!slots[slot].writing)return false;
+        slots[slot]={};return true;
+    }
+};
+}
+
+namespace GINativeJobRoute {
+inline bool HitRange(const TableLayout& l,std::size_t bindings,U64& address,U64& bytes) noexcept {
+ address=bytes=0;const U64 offset=U64(l.missOffset)+l.hitRelative,size=U64(l.hitRecords)*l.hitStride;
+ if(!l.buffer||l.buffer%64||!bindings||bindings>65536||l.raygenBytes!=32||l.missOffset<32||l.missOffset%64||l.missStride!=32||l.hitRelative<32||offset%64||l.hitStride!=96||l.hitRecords!=bindings*2||offset>l.bytes||size>l.bytes-offset||offset>UINT64_MAX-l.buffer||size>UINT64_MAX-(l.buffer+offset))return false;
+ address=l.buffer+offset;bytes=size;return true;
+}
+}
+

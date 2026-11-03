@@ -1,3 +1,4 @@
+#include "../src/gi_reuse/native_gi_job_route.h"
 #include "../src/gi_reuse/native_gi_table.h"
 #include "../src/gi_reuse/native_gi_route.h"
 #include "../src/gi_reuse/scene_traversal_closure.h"
@@ -97,4 +98,23 @@ static void CheckRouteAndTable(){
  assert(!BuildNativeGITable(1,1,1,bindings,a,a,table));
  assert(!BuildNativeGITable(0,1,1,bindings,a,b,table));
 }
-int main(){CheckRouteAndTable();CheckBothWidths(2);CheckBothWidths(4);std::puts("PASS complete traversal closure (masked/duplicate/null/partial/identity/epoch) and combined scene packet: ordered clone, owner/version, instance index, 16/32-bit geometry, padded vertices, mirrored transform, normal, material/SBT, stale/bounds/degenerate/competing-writer rejection");}
+static void CheckJobHandoff(){
+ using namespace GINativeJobRoute;
+ TableLayout layout{4096,1024,32,64,32,64,96,6};U64 address=0,bytes=0;
+ assert(HitRange(layout,3,address,bytes)&&address==4224&&bytes==576);
+ auto bad=layout;bad.hitRecords=3;assert(!HitRange(bad,3,address,bytes)&&!address&&!bytes);
+ bad=layout;bad.bytes=703;assert(!HitRange(bad,3,address,bytes));
+ bad=layout;bad.buffer=UINT64_MAX-63;assert(!HitRange(bad,3,address,bytes));
+ Router route;Ticket t;t.serial=1;t.list=2;t.pipeline=3;t.counter=4;t.engineFrame=5;
+ t.writer={6,7,8,1024,1,3};t.layout=layout;Ticket seen;
+ assert(route.Schedule(0,t));assert(!route.Schedule(0,t));
+ auto wrong=t.writer;wrong.rays=2;assert(!route.Begin(0,wrong,seen)&&!seen.serial);
+ assert(!route.Finish(0,1));assert(route.Begin(0,t.writer,seen)&&seen.serial==1);
+ assert(!route.Begin(0,t.writer,seen)&&!seen.serial);assert(!route.Finish(0,2));
+ assert(route.Finish(0,1));t.serial=2;assert(route.Schedule(0,t));
+ assert(!route.Finish(0,1));assert(route.Begin(0,t.writer,seen)&&seen.serial==2);
+ assert(route.Finish(0,2));t.writer.rays=2;assert(!route.Schedule(0,t));
+ t.writer.rays=1;t.writer.count=65537;assert(!route.Schedule(0,t));
+ t.writer.count=3;assert(!route.Schedule(16,t));
+}
+int main(){CheckJobHandoff();CheckRouteAndTable();CheckBothWidths(2);CheckBothWidths(4);std::puts("PASS complete traversal closure (masked/duplicate/null/partial/identity/epoch) and combined scene packet: ordered clone, owner/version, instance index, 16/32-bit geometry, padded vertices, mirrored transform, normal, material/SBT, stale/bounds/degenerate/competing-writer rejection");}

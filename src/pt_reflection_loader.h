@@ -1975,6 +1975,7 @@ static bool PTReflectionInstallShaderLookupHooks(HMODULE renderer,HMODULE d3d) n
     rrWorldAlbedoStorageReady.store(storageReady,std::memory_order_release);
     if(!storageReady||!RRAlbedoShader::Initialize(d3d))return false;
     const bool glassReady=PTGlassRuntime::Install(renderer,d3d);
+    if(glassReady)GINativeJobRuntime::Install(d3d);
     Log("GLASS_ONLY_R34 glass_ready=%u opaque_pt=disabled character_shader_transport=%u",unsigned(glassReady),unsigned(storageReady));
     // Glass has its own failure reporting; a glass fallback must not disable RR.
     return storageReady;

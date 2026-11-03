@@ -220,3 +220,26 @@ a missing or incompatible binding fails recognition. GI_NATIVE_ROUTE logs are
 bounded and observation-only. They neither gate nor replace native rendering.
 The native writer itself is not yet hooked, so the CPU reconstruction does not
 supply a live GPU table or ownership proof. No additional user run is requested.
+
+## GI dispatch-to-worker handoff
+
+R303 `file2.txt` already records rayGenMain setup `(1,2)`, 2560x1440 dispatches,
+engine frame and command-list context. No user recapture is needed for those facts.
+The supplied native dispatch disassembly at 0x35800 multiplies the miss stride by
+the active ray count: GI's miss table is 32 bytes, whereas the recovered reflection
+adapter required 64. The hit table still uses two records per geometry.
+
+Recovered R103 native job routing is now adapted for GI and connected before the
+existing glass dispatch early return. Hash-verified writer calls 0x357c6/0x374a1
+and scheduler call 0x359d9 forward their original arguments unchanged. A consumer
+must explicitly register before any tickets are admitted. No consumer is yet
+registered, so the handoff is inactive and does not allocate snapshots, issue GPU
+work, or retire native allocations. This distinction is deliberate: hook coverage
+is not a validated traversal lease.
+
+The router validates one-ray writer arguments, finite binding count, same native
+buffer/state/bindings and generation. CPU publication remains before scheduling;
+worker completion only releases the job slot. Tests exercise slot reuse, stale
+completion, duplicate begin, mismatched writer, invalid slot/count, GI table
+spacing, range overflow and undersized backing storage. Full live closure, material
+resource ownership, alpha visibility and replacement GI remain outstanding.

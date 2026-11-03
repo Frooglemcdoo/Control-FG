@@ -1,5 +1,6 @@
 #pragma once
 #include "pt_glass_resources.h"
+#include "gi_native_job_runtime.h"
 #include "pt_glass_descriptors.h"
 #include "pt_glass_vtable_call.h"
 #include <intrin.h>
@@ -169,6 +170,7 @@ static HRESULT STDMETHODCALLTYPE ResetHook(ID3D12GraphicsCommandList* list,ID3D1
 }
 static void STDMETHODCALLTYPE SetRayPsoHook(ID3D12GraphicsCommandList4* list,ID3D12StateObject* pso){currentRayPso=pso;setRayPso(list,pso);}
 static void STDMETHODCALLTYPE RaysHook(ID3D12GraphicsCommandList4* list,const D3D12_DISPATCH_RAYS_DESC* desc){
+    GINativeJobRuntime::Recorded(list,desc,currentRayPso);
     if(!enabled||!rayScope||!desc||desc->Depth!=1||pass.mode==0||(ptReflectionUserState.load()&1u)==0){if(enabled&&rayScope)Skip("dispatch_disabled_or_shape");dispatchRays(list,desc);return;}
     if(!pass.ray){Skip("ray_descriptor_snapshot");dispatchRays(list,desc);return;}
     Context context{};unsigned char identifier[32]{};
@@ -357,6 +359,7 @@ static bool Install(HMODULE renderer,HMODULE d3d){
        RRAlbedoPrepareCallPatch(b+0xa562e,reinterpret_cast<void*>(bindNative),reinterpret_cast<void*>(&BindHook),&bindPatch);
     if(ready)ready=nativeSetCall.Exchange(true)&&nativeDispatchCall.Exchange(true)&&usePatch.Exchange(true)&&rayPatch.Exchange(true)&&lightPatch.Exchange(true)&&RRAlbedoExchangeCall(&bindPatch,true);
     if(!ready){nativeSetCall.Exchange(false);nativeDispatchCall.Exchange(false);usePatch.Exchange(false);rayPatch.Exchange(false);lightPatch.Exchange(false);RRAlbedoExchangeCall(&bindPatch,false);}
+    GINativeJobRuntime::dispatchHookReady.store(ready,std::memory_order_release);
     enabled=ready;Log("PT_GLASS_INSTALL ready=%u build=G3 glossy_only=1 diffuse_removed=1 gpu_diagnostics=0 smoothness_min=0.8",unsigned(ready));
     if(ready){ID3D12Device* existing=nullptr;memcpy(&existing,reinterpret_cast<unsigned char*>(d3d)+kControlGlobalD3D12DevicePointerRva,sizeof(existing));if(existing)InstallDevice(existing);}
     return ready;
