@@ -252,3 +252,13 @@ as errors. Compiled code differs from the monolithic version; no bit-exact GPU
 or image-equivalence claim is made. Windows foundation creates its PSO against
 the captured native root. The runtime still selects the R309 reference shader;
 this extraction is not yet a live reservoir pass or a new game package.
+
+Windows foundation run 41707817615 / job 126167685472 passed at remote commit
+`a1c094289652cc2c18a9e486339f29ed1ca7f62c` (local `d0d61c5`, tree
+`4cb716a6aa01ee1fd231cd655c04e4eee1dde75e`). Logs confirm five extraction tests,
+visibility-table preservation tests, and PSO creation for both the monolithic
+and refactored evaluator against the captured native root with no debug errors.
+Backend compilation run 41707817434 / job 126167685088 passed too. Local table
+checks also passed UBSan. No new user hardware run is requested: the trace shader
+is unchanged from the supplied successful RTX 5090 test. Full resource-bound
+shading parity, runtime producer geometry and reservoir integration remain open.
