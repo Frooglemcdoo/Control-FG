@@ -19,7 +19,7 @@ struct Record {
     std::uint32_t constants[12]{};
 };
 enum class Error {none,format,epoch,allocation,alignment,range,material};
-inline bool AddFits(std::uint64_t a,std::uint64_t b){return b<=std::numeric_limits<std::uint64_t>::max()-a;}
+inline bool AddFits(std::uint64_t a,std::uint64_t b){return b<=(std::numeric_limits<std::uint64_t>::max)()-a;}
 inline bool Contains(View v,std::uint64_t bytes){
     return v.allocation.address&&v.allocation.bytes&&AddFits(v.allocation.address,v.allocation.bytes)&&
         v.address>=v.allocation.address&&v.address-v.allocation.address<=v.allocation.bytes&&

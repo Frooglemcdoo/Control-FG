@@ -64,11 +64,11 @@ class Graph {
                 continue;
             }
             unresolved=unresolved||(n.previous&&clockState[n.previous]!=2)||(signal&&clockState[signal]!=2);
-            auto& c=clocks[id];c=n.base;if(n.previous)for(unsigned lane=0;lane<c.size();++lane)c[lane]=std::max(c[lane],clocks[n.previous][lane]);
-            if(signal)for(unsigned lane=0;lane<c.size();++lane)c[lane]=std::max(c[lane],clocks[signal][lane]);
+            auto& c=clocks[id];c=n.base;if(n.previous)for(unsigned lane=0;lane<c.size();++lane)c[lane]=(std::max)(c[lane],clocks[n.previous][lane]);
+            if(signal)for(unsigned lane=0;lane<c.size();++lane)c[lane]=(std::max)(c[lane],clocks[signal][lane]);
             // Preserve known predecessor edges even when another dependency
             // is unresolved. Strict admission still requires state==ready.
-            c[n.lane]=std::max(c[n.lane],n.stamp);clockState[id]=unresolved?3:2;
+            c[n.lane]=(std::max)(c[n.lane],n.stamp);clockState[id]=unresolved?3:2;
         }
         return clockState[at]==2?Status::ready:Status::pending;
     }
@@ -224,7 +224,7 @@ public:
         Clock done=observedComplete;
         for(const auto& proof:completed){const auto lane=lanes.find(proof.first);if(lane==lanes.end())continue;
             for(U64 id=1;id<nodes.size();++id)if(nodes[id].lane==lane->second&&nodes[id].stamp<=proof.second)
-                for(unsigned n=0;n<done.size();++n)done[n]=std::max(done[n],clocks[id][n]);
+                for(unsigned n=0;n<done.size();++n)done[n]=(std::max)(done[n],clocks[id][n]);
         }
         std::set<U64> roots=external;
         for(const auto& q:queues)roots.insert(q.second);
@@ -232,7 +232,7 @@ public:
         for(auto& f:newFences){
             auto& signals=f.second.signals;
             for(auto it=signals.begin();it!=signals.end();){const auto& node=nodes[it->second];
-                if(done[node.lane]>=node.stamp){f.second.completed=std::max(f.second.completed,it->first);it=signals.erase(it);}
+                if(done[node.lane]>=node.stamp){f.second.completed=(std::max)(f.second.completed,it->first);it=signals.erase(it);}
                 else {roots.insert(it->second);++it;}
             }
         }
