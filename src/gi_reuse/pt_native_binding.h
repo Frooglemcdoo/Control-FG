@@ -2,6 +2,9 @@
 #include <cstdint>
 #include <cstring>
 #include <cstddef>
+#ifdef _WIN32
+#include <excpt.h>
+#endif
 // Steam d3d 33a40 reads bindings at +8/+16 and ten dwords at +24,
 // advances 64 bytes at 34378; copied fields form the 56-byte SBT local root.
 namespace PTNativeBinding {
