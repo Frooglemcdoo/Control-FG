@@ -41,7 +41,9 @@ void STDMETHODCALLTYPE ObservedIndirect(ID3D12GraphicsCommandList*,ID3D12Command
 }
 int main(int argc, char** argv) try {
  Require(argc == 3 || argc == 4, "usage: test raw-shader.dxil index-shader.dxil [--32]");
- const bool wide=argc==4;
+ const bool paired=argc==4&&std::string(argv[3]).find("--tri")==0;
+ const bool wide=argc==4&&std::string(argv[3])!="--tri16";
+ if(paired)SetEnvironmentVariableA("CONTROLTOH_GI_TRIANGLE_SNAPSHOTS","1");
  SetEnvironmentVariableA("CONTROLTOH_GI_METADATA","1"); SetEnvironmentVariableA("CONTROLTOH_GI_BINDINGS","1");
  SetEnvironmentVariableA("CONTROLTOH_GI_INDEX_SNAPSHOTS","1");
  ComPtr<ID3D12Debug> debug; Check(D3D12GetDebugInterface(IID_PPV_ARGS(&debug))); debug->EnableDebugLayer();
@@ -73,6 +75,16 @@ int main(int argc, char** argv) try {
  ComPtr<ID3D12PipelineState> nativePipeline; Check(d->CreateComputePipelineState(&pd,IID_PPV_ARGS(&nativePipeline)));
  auto upload=Buffer(d.Get(),512,D3D12_HEAP_TYPE_UPLOAD,D3D12_RESOURCE_STATE_GENERIC_READ,D3D12_RESOURCE_FLAG_NONE);
  auto source=Buffer(d.Get(),512,D3D12_HEAP_TYPE_DEFAULT,D3D12_RESOURCE_STATE_COPY_DEST,D3D12_RESOURCE_FLAG_NONE);
+ const UINT firstVertex=wide?65536u:0u,vertexCount=firstVertex+3,vertexSize=(vertexCount-1)*16+12,geometrySize=vertexSize+12;
+ auto geometryUpload=Buffer(d.Get(),geometrySize,D3D12_HEAP_TYPE_UPLOAD,D3D12_RESOURCE_STATE_GENERIC_READ,D3D12_RESOURCE_FLAG_NONE);
+ auto geometrySource=Buffer(d.Get(),geometrySize,D3D12_HEAP_TYPE_DEFAULT,D3D12_RESOURCE_STATE_COPY_DEST,D3D12_RESOURCE_FLAG_NONE);
+ UINT64 triangleHash=14695981039346656037ull,vertexHash=14695981039346656037ull;
+ {void* gm=nullptr;D3D12_RANGE empty{0,0};Check(geometryUpload->Map(0,&empty,&gm));std::memset(gm,0,geometrySize);
+ const float positions[3][3]={{0,0,0},{1,0,0},{0,1,0}};auto* data=static_cast<unsigned char*>(gm);
+ for(UINT k=0;k<3;++k){std::memcpy(data+(firstVertex+k)*16,positions[k],12);const UINT id=firstVertex+k;
+ for(UINT j=0;j<(wide?4u:2u);++j){const auto b=static_cast<unsigned char>(id>>(j*8));data[vertexSize+k*(wide?4:2)+j]=b;triangleHash^=b;triangleHash*=1099511628211ull;}}
+ for(UINT i=0;i<vertexSize;++i){vertexHash^=data[i];vertexHash*=1099511628211ull;}
+ geometryUpload->Unmap(0,nullptr);}
  auto output=Buffer(d.Get(),512,D3D12_HEAP_TYPE_DEFAULT,D3D12_RESOURCE_STATE_COPY_DEST,D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
  auto sentinel=Buffer(d.Get(),4,D3D12_HEAP_TYPE_DEFAULT,D3D12_RESOURCE_STATE_UNORDERED_ACCESS,D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
  auto read=Buffer(d.Get(),516,D3D12_HEAP_TYPE_READBACK,D3D12_RESOURCE_STATE_COPY_DEST,D3D12_RESOURCE_FLAG_NONE);
@@ -91,6 +103,8 @@ int main(int argc, char** argv) try {
  auto transition=[&](ID3D12Resource* r,D3D12_RESOURCE_STATES from,D3D12_RESOURCE_STATES to){D3D12_RESOURCE_BARRIER b{};b.Type=D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;b.Transition={r,D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,from,to};list->ResourceBarrier(1,&b);};
  list->CopyBufferRegion(source.Get(),0,upload.Get(),0,512);
  list->CopyBufferRegion(output.Get(),0,upload.Get(),0,512);
+ list->CopyBufferRegion(geometrySource.Get(),0,geometryUpload.Get(),0,geometrySize);
+ transition(geometrySource.Get(),D3D12_RESOURCE_STATE_COPY_DEST,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
  // Combined native read state stays untouched by the snapshot.
  transition(source.Get(),D3D12_RESOURCE_STATE_COPY_DEST,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_INDEX_BUFFER);
  transition(output.Get(),D3D12_RESOURCE_STATE_COPY_DEST,D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
@@ -116,6 +130,9 @@ int main(int argc, char** argv) try {
  D3D12_RAYTRACING_GEOMETRY_DESC sampleGeometry{};sampleGeometry.Type=D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES;
  sampleGeometry.Triangles.IndexBuffer=source->GetGPUVirtualAddress()+(wide?256:258);sampleGeometry.Triangles.IndexCount=wide?63:125;
  sampleGeometry.Triangles.IndexFormat=wide?DXGI_FORMAT_R32_UINT:DXGI_FORMAT_R16_UINT;sampleGeometry.Triangles.VertexCount=wide?UINT32_MAX:65536;
+ if(paired){gi_reuse::runtime::ObserveCreated(geometrySource.Get(),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,true);
+ sampleGeometry.Triangles.IndexBuffer=geometrySource->GetGPUVirtualAddress()+vertexSize;sampleGeometry.Triangles.IndexCount=3;
+ sampleGeometry.Triangles.VertexBuffer={geometrySource->GetGPUVirtualAddress(),16};sampleGeometry.Triangles.VertexCount=vertexCount;sampleGeometry.Triangles.VertexFormat=DXGI_FORMAT_R32G32B32_FLOAT;}
  D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC sampleBuild{};sampleBuild.Inputs.Type=D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL;
  sampleBuild.Inputs.DescsLayout=D3D12_ELEMENTS_LAYOUT_ARRAY;sampleBuild.Inputs.NumDescs=1;sampleBuild.Inputs.pGeometryDescs=&sampleGeometry;
  fixture::gi_snapshot_probe::Build(list.Get(),&sampleBuild);
@@ -149,7 +166,9 @@ int main(int argc, char** argv) try {
  Require(fixture::gi_snapshot_probe::completed.load()==1,"probe completed sealed recording");
  Require(fixture::gi_snapshot_probe::captureRead.load()==1&&fixture::gi_snapshot_probe::captureFailed.load()==0,"sample readback only after completion and reset");
  UINT64 expectedHash=14695981039346656037ull;for(UINT64 i=wide?256:258;i<508;++i){expectedHash^=static_cast<unsigned char>((i*17+39)%251);expectedHash*=1099511628211ull;}
+ if(paired)expectedHash=triangleHash;
  Require(fixture::gi_snapshot_probe::lastCaptureHash.load()==expectedHash&&fixture::gi_snapshot_probe::captureBadPadding.load()==0&&fixture::gi_snapshot_probe::captureBadIndices.load()==0,"native sampler hash, index bounds and padding");
+ if(paired)Require(fixture::gi_snapshot_probe::lastVertexHash.load()==vertexHash&&fixture::gi_snapshot_probe::triangleRead.load()==1&&fixture::gi_snapshot_probe::triangleCount.load()==1&&fixture::gi_snapshot_probe::triangleFailed.load()==0&&fixture::gi_snapshot_probe::triangleNonfinite.load()==0&&fixture::gi_snapshot_probe::triangleBadIndices.load()==0&&fixture::gi_snapshot_probe::triangleDegenerate.load()==0,"paired native geometry triangle validated");
  if(wide)Require(fixture::gi_snapshot_probe::lastCaptureMaximum.load()>65535&&fixture::gi_snapshot_probe::captureAttempts[2].load()==1,"32-bit index preserved above uint16 range");
  Require(fixture::gi_compute_hooks::Read(list.Get())->generation>capturedEpoch,"reset generation");
  Require(!fixture::gi_compute_hooks::Capture(list.Get(),unobserved,epoch),"reset clears root state");

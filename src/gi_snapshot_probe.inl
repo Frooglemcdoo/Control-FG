@@ -4,6 +4,9 @@ namespace gi_snapshot_probe {
 using Microsoft::WRL::ComPtr;
 struct Owner {UINT64 generation=0;std::unique_ptr<gi_reuse::IndexSample> sample;bool completeData=false;};
 inline bool CaptureEnabled() noexcept {static const bool enabled=[] {char v[4]{};return GetEnvironmentVariableA("CONTROLTOH_GI_INDEX_SNAPSHOTS",v,4)==1&&v[0]=='1';}();return enabled;}
+inline bool TrianglesEnabled() noexcept {static const bool enabled=[] {char v[4]{};return GetEnvironmentVariableA("CONTROLTOH_GI_TRIANGLE_SNAPSHOTS",v,4)==1&&v[0]=='1';}();return enabled;}
+inline std::atomic<UINT64> lastVertexHash{0};
+inline std::atomic<UINT64> triangleRead{0},triangleFailed{0},triangleCount{0},triangleNonfinite{0},triangleDegenerate{0},triangleBadIndices{0},triangleSkipped{0};
 inline std::atomic<bool> captureReady{false};
 inline gi_reuse::IndexSnapshotPipeline indexPipeline;
 inline ComPtr<ID3D12Device> captureDevice;
@@ -62,18 +65,39 @@ inline void Capture(ID3D12GraphicsCommandList4* list,const D3D12_BUILD_RAYTRACIN
         gi_reuse::RawSnapshotPlan raw;gi_reuse::RawSnapshotReject reason;
         const bool rawOK=gi_reuse::RawSnapshotPlan::Make(source->GetDesc().Width,offset,full,raw,&reason);
         const unsigned category=width==4?2u:(rawOK?0u:1u);if(captureAttempts[category].load()>=16)continue;
-        const UINT64 bytes=full<gi_reuse::IndexSample::MaxSampleBytes?full:gi_reuse::IndexSample::MaxSampleBytes;
+        const bool paired=TrianglesEnabled();
+        const UINT64 cap=paired?(gi_reuse::IndexSample::MaxSampleBytes/(3*width))*(3*width):gi_reuse::IndexSample::MaxSampleBytes;
+        const UINT64 bytes=full<cap?full:cap;
+        ComPtr<ID3D12Resource> vertexSource;UINT64 vertexOffset=0,vertexBytes=0,vertexCharge=0;
+        if(paired){
+            const gi_reuse::TriangleMetadata metadata{t.VertexBuffer.StartAddress,t.IndexBuffer,t.Transform3x4,t.VertexBuffer.StrideInBytes,t.VertexCount,t.IndexCount,UINT(t.VertexFormat),UINT(t.IndexFormat),UINT(geometry->Flags)};
+            if(gi_reuse::GeometryMetadata::Validate(metadata)!=gi_reuse::GeometryReject::None){++triangleSkipped;continue;}
+            vertexBytes=gi_reuse::GeometryMetadata::VertexBytes(metadata);
+            if(vertexBytes>16*1024*1024||!gi_reuse::runtime::owners.Resolve(t.VertexBuffer.StartAddress,vertexBytes,vertexSource,vertexOffset)){++triangleSkipped;continue;}
+            const auto vs=journal->states.Find(gi_reuse::runtime::owners.Identity(vertexSource.Get()));
+            gi_reuse::BufferStorageLease vl;
+            if(vs.kind==gi_reuse::LocalStateKind::Pending||vs.kind==gi_reuse::LocalStateKind::Invalid||
+               (vs.kind==gi_reuse::LocalStateKind::Explicit&&!(vs.after&D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE))||
+               !gi_reuse::AcquireStorageLease(vertexSource.Get(),vl)||vl.kind!=gi_reuse::BufferStorageKind::Committed){++triangleSkipped;continue;}
+            vertexCharge=gi_reuse::IndexSample::Charge(captureDevice.Get(),vertexSource.Get(),UINT(vertexBytes));
+            if(!vertexCharge){++triangleSkipped;continue;}
+        }
         const UINT64 tailOffset=offset+(full-bytes);gi_reuse::IndexSnapshotPlan plan;
         if(!gi_reuse::IndexSnapshotPlan::Make(source->GetDesc().Width,tailOffset,bytes,plan))continue;
         const auto charge=gi_reuse::IndexSample::Charge(captureDevice.Get(),source.Get(),plan.copyBytes);
-        if(!charge||!Reserve(captureAttempts[category],1,16)||!Reserve(captureBudget,charge,128ull*1024*1024))continue;
+        if(!charge||!Reserve(captureAttempts[category],1,16)||vertexCharge>UINT64_MAX-charge||!Reserve(captureBudget,charge+vertexCharge,128ull*1024*1024))continue;
         auto sample=std::unique_ptr<gi_reuse::IndexSample>(new(std::nothrow) gi_reuse::IndexSample);
         if(!sample||FAILED(sample->Prepare(captureDevice.Get(),source.Get(),tailOffset,bytes,bindings,width))){++captureFailed;return;}
+        if(paired){
+            sample->vertices=std::unique_ptr<gi_reuse::IndexSample>(new(std::nothrow) gi_reuse::IndexSample);
+            if(!sample->vertices||FAILED(sample->vertices->Prepare(captureDevice.Get(),vertexSource.Get(),vertexOffset,vertexBytes,bindings,4,16*1024*1024))){++captureFailed;return;}
+            sample->vertexStride=t.VertexBuffer.StrideInBytes;sample->geometryIndex=i;sample->hasTransform=t.Transform3x4!=0;
+        }
         sample->fullBytes=full;sample->vertexCount=t.VertexCount;sample->rawReject=unsigned(reason);
         // Ownership and session allocation budget are established before commands.
         owner.sample=std::move(sample);
         gi_compute_hooks::Mute mute;
-        if(owner.sample->Record(list,indexPipeline))++captureRecorded;else ++captureFailed;
+        if(owner.sample->Record(list,indexPipeline)&&(!paired||owner.sample->vertices->Record(list,indexPipeline)))++captureRecorded;else ++captureFailed;
         return;
     }
 }
@@ -139,6 +163,10 @@ inline void Poll() noexcept {
     // Readback and COM destruction happen outside the host observation lock.
     for(const auto& owner:retired)if(owner&&owner->completeData&&owner->sample&&owner->sample->recorded){
         const auto& sample=*owner->sample;gi_reuse::IndexSample::Summary result;
+        if(sample.vertices){gi_reuse::TriangleSampleSummary tri;const auto th=sample.ReadTriangles(tri);
+            if(SUCCEEDED(th)){++triangleRead;lastVertexHash=tri.vertexHash;triangleCount+=tri.triangles;triangleNonfinite+=tri.nonfinite;triangleDegenerate+=tri.degenerate;triangleBadIndices+=tri.outOfRange;}else ++triangleFailed;
+            Trace("GI_TRIANGLE_COPY_R300 hr=0x%08X geometry=%u vertex_bytes=%llu vertex_hash=%llu stride=%llu vertex_count=%u index_bytes=%u first_primitive=%llu triangles=%u out_of_range=%u nonfinite=%u degenerate=%u has_geometry_transform=%u object_space=1 sealed=1 gpu_completed=1",unsigned(th),sample.geometryIndex,sample.vertices->bytes,tri.vertexHash,sample.vertexStride,sample.vertexCount,sample.indexSize,(sample.fullBytes-sample.bytes)/(3*sample.indexSize),tri.triangles,tri.outOfRange,tri.nonfinite,tri.degenerate,unsigned(sample.hasTransform));
+        }
         const auto hr=sample.Read(result);if(SUCCEEDED(hr)){++captureRead;captureBadIndices+=result.outOfRange;if(!result.paddingZero)++captureBadPadding;lastCaptureHash=result.hash;lastCaptureMaximum=result.maximum;}else ++captureFailed;
         Trace("GI_INDEX_COPY_R296 index_bytes=%u hr=0x%08X bytes=%llu full_bytes=%llu tail_window=%u source_offset=%llu raw_reject=%u hash=%llu max_index=%u vertex_count=%u out_of_range=%u padding_zero=%u sealed=1 gpu_completed=1",sample.indexSize,unsigned(hr),sample.bytes,sample.fullBytes,unsigned(sample.bytes!=sample.fullBytes),sample.offset,sample.rawReject,result.hash,result.maximum,sample.vertexCount,result.outOfRange,unsigned(result.paddingZero));
     }
@@ -166,6 +194,7 @@ inline void Report() noexcept {
     ReleaseSRWLockExclusive(&lock);
     Trace("GI_LIFETIME_R295 active=%u quarantined=%u cpu_metadata_owners_only=%u publication_requires_reset_and_gpu_completion=1",active,quarantined,unsigned(!CaptureEnabled()));
     Trace("GI_INDEX_STATUS_R296 enabled=%u ready=%u recorded=%llu readback=%llu failures=%llu reserved_bytes=%llu ordinary_attempts=%llu rejected_raw_attempts=%llu uint32_attempts=%llu native_lighting_changed=0",unsigned(CaptureEnabled()),unsigned(captureReady.load()),captureRecorded.load(),captureRead.load(),captureFailed.load(),captureBudget.load(),captureAttempts[0].load(),captureAttempts[1].load(),captureAttempts[2].load());
+    Trace("GI_TRIANGLE_STATUS_R300 enabled=%u readback=%llu failures=%llu triangles=%llu out_of_range=%llu nonfinite=%llu degenerate=%llu skipped=%llu",unsigned(TrianglesEnabled()),triangleRead.load(),triangleFailed.load(),triangleCount.load(),triangleBadIndices.load(),triangleNonfinite.load(),triangleDegenerate.load(),triangleSkipped.load());
     Trace("GI_INDEX_VALIDATION_R296 out_of_range_indices=%llu padding_failures=%llu",captureBadIndices.load(),captureBadPadding.load());
     const auto& reasons=gi_reuse::runtime::indexRawReasons;
     Trace("GI_INDEX_PLAN_R296 raw_pass=%llu invalid_range=%llu address_overflow=%llu padding_outside=%llu dispatch_limit=%llu exact16_eligible=%llu",reasons[0].load(),reasons[1].load(),reasons[2].load(),reasons[3].load(),reasons[4].load(),gi_reuse::runtime::exactIndexEligible.load());

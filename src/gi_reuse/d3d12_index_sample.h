@@ -2,6 +2,7 @@
 #include "d3d12_index_snapshot.h"
 #include "d3d12_storage_lease.h"
 #include <memory>
+#include "triangle_sample_validation.h"
 namespace gi_reuse {
 // A diagnostic owns everything needed by its recorded commands until the host
 // seals the recording and proves all submissions complete. No native lighting use.
@@ -11,6 +12,9 @@ struct IndexSample {
     IndexSnapshotPipeline retainedPipeline;
     IndexSnapshotPlan plan;
     bool recorded=false;
+    std::unique_ptr<IndexSample> vertices;
+    std::uint64_t vertexStride=0;
+    std::uint32_t geometryIndex=0;bool hasTransform=false;
     std::uint64_t offset=0,bytes=0,fullBytes=0,charge=0;
     std::uint32_t vertexCount=0,rawReject=0,indexSize=2;
     static constexpr std::uint64_t MaxSampleBytes=256*1024;
@@ -27,8 +31,8 @@ struct IndexSample {
         }return sum;
     }
     HRESULT Prepare(ID3D12Device* device,ID3D12Resource* input,std::uint64_t inputOffset,std::uint64_t inputBytes,
-                    const ComputeBindingSnapshot& native,std::uint32_t width=2) noexcept {
-        if((width!=2&&width!=4)||inputOffset%width||inputBytes%width||!device||!input||!native.Ready()||inputBytes>MaxSampleBytes)return E_INVALIDARG;
+                    const ComputeBindingSnapshot& native,std::uint32_t width=2,std::uint64_t limit=MaxSampleBytes) noexcept {
+        if((width!=2&&width!=4)||inputOffset%width||inputBytes%width||!device||!input||!native.Ready()||limit>16*1024*1024||inputBytes>limit)return E_INVALIDARG;
         Microsoft::WRL::ComPtr<ID3D12Device> sourceDevice;
         if(FAILED(input->GetDevice(IID_PPV_ARGS(&sourceDevice)))||sourceDevice.Get()!=device)return E_INVALIDARG;
         BufferStorageLease lease;const auto desc=input->GetDesc();D3D12_HEAP_PROPERTIES properties{};D3D12_HEAP_FLAGS flags{};
@@ -53,6 +57,18 @@ struct IndexSample {
         list->CopyBufferRegion(readback.Get(),0,output.Get(),0,recordedPlan.copyBytes);
         // Leave the private output in its initial state for legal closed-list replay.
         std::swap(b.Transition.StateBefore,b.Transition.StateAfter);list->ResourceBarrier(1,&b);recorded=true;return true;
+    }
+    HRESULT ReadTriangles(TriangleSampleSummary& summary) const noexcept {
+        summary={};if(!recorded||!vertices||!vertices->recorded)return E_INVALIDARG;
+        void* i=nullptr;void* v=nullptr;D3D12_RANGE ir{0,plan.copyBytes},vr{0,vertices->plan.copyBytes},none{0,0};
+        auto hr=readback->Map(0,&ir,&i);if(FAILED(hr))return hr;
+        hr=vertices->readback->Map(0,&vr,&v);
+        if(SUCCEEDED(hr)){
+            const bool valid=ValidateTriangleSample(static_cast<const unsigned char*>(i),bytes,indexSize,
+                static_cast<const unsigned char*>(v),vertices->bytes,vertexCount,vertexStride,summary);
+            vertices->readback->Unmap(0,&none);if(!valid)hr=E_INVALIDARG;
+        }
+        readback->Unmap(0,&none);return hr;
     }
     struct Summary {std::uint64_t hash=14695981039346656037ull;UINT maximum=0,outOfRange=0;bool paddingZero=true;};
     // Caller must prove sealed recording + GPU completion before this CPU read.
