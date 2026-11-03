@@ -200,3 +200,26 @@ Windows foundation run 41701703350 / job 126146356159 passed at commit
 53d3e0bcb7f3bcbb4e6fbaef381f5a0db61d14ad. The finite-range CPU tests and HLSL
 compile run alongside the existing accounting/runtime/geometry suite. No new
 runtime estimator or image-quality result is implied by these checks.
+
+## Receiver candidate composition
+
+`reuse_candidate.h` composes the existing geometric connection, finite-range
+proposal and initial shading adapters. It uses the mapped source surface PDF,
+receiver BRDF*cos and receiver reach probability, preserving the original
+all-ray denominator and depth scale. It requires explicit receiver-compatible
+radiance verification; source-dependent native GI6 radiance is not automatically
+admitted. Misses remain in the separate fallback estimator.
+
+Visibility is an input contract, not an implemented trace: current frame,
+connection ID and scene revision must match, with completed/visible/native-alpha
+flags exactly set and reserved fields zero. Blocked, pending, stale and unverified
+results reject the candidate. The host must supply these values from a real
+native-compatible connection trace; synthetic flags are not runtime evidence.
+Marginal reach uses the maximum support envelope for geometry gates, avoiding a
+second randomized receiver-TMax rejection.
+
+Local C++ tests pass for analytic source identity and moved-receiver Jacobian/range
+weights, plus eleven rejection cases and missing producer/radiance contracts.
+The shared HLSL wrapper compiles with DXC warnings as errors. These are synthetic
+contract tests, not proof of actual alpha visibility, image quality or runtime
+reuse. This component is not game-bound; R309 remains the installed test build.
