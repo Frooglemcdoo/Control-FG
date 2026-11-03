@@ -689,3 +689,23 @@ shader sidecar verified. ControlTOH-R303.zip: 4,215,468 bytes, 74 files, SHA-256
 5c060f2403d1dcbbc7bb45eefb1c082cd07e2f9ee2b6f0402cd08b1b9c880860.
 Ready for the normal automatic diagnostic launcher run; native game mapping
 coverage is not inferred from WARP and requires the resulting R303 logs.
+
+
+## R303 game result and combined offline integration
+
+Verified capture 20261103-125015: archive plus all payload sizes and hashes.
+All 30,565 instance observations across four snapshots matched the event-cut
+metadata; no missing, wrong-type, absent-geometry or unavailable results. The
+last snapshot matched a changed BLAS address at revision 3524 versus 1149 in the
+earlier snapshots. This applies to the logged first-match witness, not all
+instances. Thirty-nine geometry captures completed without invalid indices or
+nonfinite values, across 275,032 triangle observations (65,492 degenerate).
+The tracker remained OBSERVING through 86,038 builds with zero missing ranges;
+AS identities still hit their separate 512 MiB budget. No R303 repeat requested.
+
+The user requested faster progress and fewer one-off runs. New development now
+combines ordering, allocation-token selection, byte bounds, triangle/world
+geometry and native material/SBT agreement in one offline scene-packet test.
+See gi-scene-hit-packet.md for recovered PT source provenance, tests and the
+explicit remaining runtime/alpha/proposal gaps. No new user game test or
+replacement-lighting readiness is claimed by this checkpoint.

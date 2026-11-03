@@ -32,6 +32,10 @@ jobs:
           if (!(Select-String -Path gi-index-snapshot.asm -Pattern 'call.*rawBufferLoad.i16')) { throw 'Expected exact 16-bit source reads absent' }
           $commands=@"
           call "$vs\VC\Auxiliary\Build\vcvars64.bat"
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-scene-hit-packet.cpp /Fe:gi-scene-hit-packet.exe
+          if not "%errorlevel%"=="0" exit /b 1
+          gi-scene-hit-packet.exe
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-instance-mapping.cpp /Fe:gi-instance-mapping.exe
           if not "%errorlevel%"=="0" exit /b 1
           gi-instance-mapping.exe
