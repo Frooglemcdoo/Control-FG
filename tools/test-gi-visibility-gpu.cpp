@@ -1,7 +1,22 @@
 #include "gpu_test_device.h"
+#include <d3d12sdklayers.h>
 #include "../src/gi_reuse/receiver_input.h"
 #include "../src/gi_reuse/d3d12_visibility_pipeline.h"
 using namespace gi_reuse;
+static ComPtr<ID3D12InfoQueue> debugMessages;
+static bool ReportDebugErrors() {
+    if(!debugMessages) return false;
+    bool errors=false;
+    const UINT64 count=debugMessages->GetNumStoredMessagesAllowedByRetrievalFilter();
+    for(UINT64 i=0;i<count&&i<1024;++i) {
+        SIZE_T size=0;if(FAILED(debugMessages->GetMessage(i,nullptr,&size))) continue;
+        std::vector<unsigned char> storage(size);auto* message=reinterpret_cast<D3D12_MESSAGE*>(storage.data());
+        if(FAILED(debugMessages->GetMessage(i,message,&size))) continue;
+        if(message->Severity<=D3D12_MESSAGE_SEVERITY_WARNING) std::cerr<<"D3D12: "<<message->pDescription<<'\n';
+        errors|=message->Severity<=D3D12_MESSAGE_SEVERITY_ERROR;
+    }
+    return errors;
+}
 static ComPtr<ID3D12RootSignature> Root(Device& gpu,bool ray) {
     D3D12_ROOT_PARAMETER p[4]{};D3D12_DESCRIPTOR_RANGE ranges[3]{};
     for(UINT i=0;i<3;++i) {
@@ -61,7 +76,9 @@ static GIVisibilityRequest Request(uint index,GIPoint target) {
 static HRESULT STDMETHODCALLTYPE Create(ID3D12Device5* d,const D3D12_STATE_OBJECT_DESC* s,REFIID iid,void** out) {return d->CreateStateObject(s,iid,out);}
 int main() try {
     std::cout<<"GI visibility + receiver shading GPU integration test. No game files modified.\n";
-    Device gpu;auto scene=Scene(gpu);auto root=Root(gpu,true);auto computeRoot=Root(gpu,false);
+    ComPtr<ID3D12Debug> debug;if(SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&debug)))) debug->EnableDebugLayer();
+    Device gpu;gpu.device.As(&debugMessages);std::cout<<"Debug layer: "<<(debugMessages?"enabled":"unavailable")<<'\n';
+    auto scene=Scene(gpu);auto root=Root(gpu,true);auto computeRoot=Root(gpu,false);
     auto bytes=Read("gi-visibility-fixture.dxil");
     D3D12_EXPORT_DESC exports[]={
         {L"nativeBlocked",L"giConnectionBlocked",D3D12_EXPORT_FLAG_NONE},
@@ -127,5 +144,6 @@ int main() try {
     }
     Require(!std::memcmp(result+n,guard.data()+n*sizeof(GIConnectionVisibility),sizeof(GIConnectionVisibility)),"Dispatch wrote past output view");
     read->Unmap(0,nullptr);shadeRead->Unmap(0,nullptr);
+    Require(!ReportDebugErrors(),"D3D12 debug validation errors");
     std::cout<<"PASS: actual DXR -> receiver shading; opaque, dirty-payload cutout, endpoint, mask, scene/frame rejection, energy and output guard. Synthetic scene, not game integration.\n";return 0;
-} catch(const std::exception& e) {std::cerr<<"FAIL: "<<e.what()<<'\n';return 1;}
+} catch(const std::exception& e) {ReportDebugErrors();std::cerr<<"FAIL: "<<e.what()<<'\n';return 1;}
