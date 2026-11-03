@@ -4,6 +4,7 @@
 #include <memory>
 #include "triangle_sample_validation.h"
 #include "sample_diversity.h"
+#include "instance_sample_validation.h"
 namespace gi_reuse {
 // A diagnostic owns everything needed by its recorded commands until the host
 // seals the recording and proves all submissions complete. No native lighting use.
@@ -33,13 +34,13 @@ struct IndexSample {
         }return sum;
     }
     HRESULT Prepare(ID3D12Device* device,ID3D12Resource* input,std::uint64_t inputOffset,std::uint64_t inputBytes,
-                    const ComputeBindingSnapshot& native,std::uint32_t width=2,std::uint64_t limit=MaxSampleBytes) noexcept {
+                    const ComputeBindingSnapshot& native,std::uint32_t width=2,std::uint64_t limit=MaxSampleBytes,bool allowUpload=false) noexcept {
         if((width!=2&&width!=4)||inputOffset%width||inputBytes%width||!device||!input||!native.Ready()||limit>16*1024*1024||inputBytes>limit)return E_INVALIDARG;
         Microsoft::WRL::ComPtr<ID3D12Device> sourceDevice;
         if(FAILED(input->GetDevice(IID_PPV_ARGS(&sourceDevice)))||sourceDevice.Get()!=device)return E_INVALIDARG;
         BufferStorageLease lease;const auto desc=input->GetDesc();D3D12_HEAP_PROPERTIES properties{};D3D12_HEAP_FLAGS flags{};
         if(!AcquireStorageLease(input,lease)||lease.kind!=BufferStorageKind::Committed||
-           FAILED(input->GetHeapProperties(&properties,&flags))||properties.Type!=D3D12_HEAP_TYPE_DEFAULT||
+           FAILED(input->GetHeapProperties(&properties,&flags))||(properties.Type!=D3D12_HEAP_TYPE_DEFAULT&&(!allowUpload||properties.Type!=D3D12_HEAP_TYPE_UPLOAD))||
            desc.Dimension!=D3D12_RESOURCE_DIMENSION_BUFFER||(desc.Flags&D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE)||
            !IndexSnapshotPlan::Make(desc.Width,inputOffset,inputBytes,plan))return E_INVALIDARG;
         charge=Charge(device,input,plan.copyBytes);if(!charge)return E_INVALIDARG;
@@ -59,6 +60,11 @@ struct IndexSample {
         list->CopyBufferRegion(readback.Get(),0,output.Get(),0,recordedPlan.copyBytes);
         // Leave the private output in its initial state for legal closed-list replay.
         std::swap(b.Transition.StateBefore,b.Transition.StateAfter);list->ResourceBarrier(1,&b);recorded=true;return true;
+    }
+    HRESULT ReadInstances(InstanceSampleSummary& result) const noexcept {
+        result={};if(!recorded||!readback)return E_INVALIDARG;void* data=nullptr;D3D12_RANGE range{0,plan.copyBytes},none{0,0};
+        auto hr=readback->Map(0,&range,&data);if(FAILED(hr))return hr;
+        const bool ok=ValidateInstanceSample(static_cast<const unsigned char*>(data),bytes,result);readback->Unmap(0,&none);return ok?S_OK:E_INVALIDARG;
     }
     HRESULT ReadTriangles(TriangleSampleSummary& summary) const noexcept {
         summary={};if(!recorded||!vertices||!vertices->recorded)return E_INVALIDARG;

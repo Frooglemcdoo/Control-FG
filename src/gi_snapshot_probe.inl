@@ -2,8 +2,10 @@
 // Opt-in integration and bounded index-byte capture. Replacement GI stays off.
 namespace gi_snapshot_probe {
 using Microsoft::WRL::ComPtr;
-struct Owner {UINT64 generation=0;std::unique_ptr<gi_reuse::IndexSample> sample;bool completeData=false;};
+struct Owner {UINT64 generation=0;std::unique_ptr<gi_reuse::IndexSample> sample,instances;bool completeData=false;};
 inline bool CaptureEnabled() noexcept {static const bool enabled=[] {char v[4]{};return GetEnvironmentVariableA("CONTROLTOH_GI_INDEX_SNAPSHOTS",v,4)==1&&v[0]=='1';}();return enabled;}
+inline bool InstancesEnabled() noexcept {static const bool enabled=[] {char v[4]{};return GetEnvironmentVariableA("CONTROLTOH_GI_INSTANCE_SNAPSHOTS",v,4)==1&&v[0]=='1';}();return enabled;}
+inline std::atomic<UINT64> instanceAttempts{0},instanceRecorded{0},instanceRead{0},instanceFailed{0},instanceSkipped{0},instanceBudget{0},instanceLastHash{0};
 inline bool TrianglesEnabled() noexcept {static const bool enabled=[] {char v[4]{};return GetEnvironmentVariableA("CONTROLTOH_GI_TRIANGLE_SNAPSHOTS",v,4)==1&&v[0]=='1';}();return enabled;}
 inline gi_reuse::SampleDiversity<> diversity;
 inline SRWLOCK diversityLock=SRWLOCK_INIT;
@@ -41,11 +43,32 @@ inline void Configure(ID3D12Device* device,const void* shader,SIZE_T bytes) noex
 inline bool Reserve(std::atomic<UINT64>& value,UINT64 amount,UINT64 limit) noexcept {
     auto old=value.load();while(old<=limit&&amount<=limit-old){if(value.compare_exchange_weak(old,old+amount))return true;}return false;
 }
+inline void CaptureInstances(ID3D12GraphicsCommandList4* list,const D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC& desc,
+ Owner& owner,const gi_reuse::ComputeBindingSnapshot& bindings) noexcept {
+ if(!InstancesEnabled()||owner.instances||instanceAttempts.load()>=4)return;
+ const auto& input=desc.Inputs;const UINT64 bytes=UINT64(input.NumDescs)*64;
+ if(input.DescsLayout!=D3D12_ELEMENTS_LAYOUT_ARRAY||!bytes||bytes>4*1024*1024||!input.InstanceDescs||input.InstanceDescs%16){++instanceSkipped;return;}
+ ComPtr<ID3D12Resource> source;UINT64 offset=0;
+ if(!gi_reuse::runtime::owners.Resolve(input.InstanceDescs,bytes,source,offset)){++instanceSkipped;return;}
+ const auto journal=gi_reuse::runtime::Read(list);if(!journal||!journal->states.Complete()){++instanceSkipped;return;}
+ const auto state=journal->states.Find(gi_reuse::runtime::owners.Identity(source.Get()));
+ if(state.kind==gi_reuse::LocalStateKind::Pending||state.kind==gi_reuse::LocalStateKind::Invalid||
+    (state.kind==gi_reuse::LocalStateKind::Explicit&&!(state.after&D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE))){++instanceSkipped;return;}
+ const auto charge=gi_reuse::IndexSample::Charge(captureDevice.Get(),source.Get(),UINT(bytes));
+ if(!charge||!Reserve(instanceAttempts,1,4)||!Reserve(instanceBudget,charge,32ull*1024*1024)){++instanceSkipped;return;}
+ auto sample=std::unique_ptr<gi_reuse::IndexSample>(new(std::nothrow) gi_reuse::IndexSample);
+ if(!sample||FAILED(sample->Prepare(captureDevice.Get(),source.Get(),offset,bytes,bindings,4,4*1024*1024,true))){++instanceFailed;return;}
+ sample->buildDestination=desc.DestAccelerationStructureData;sample->buildFlags=UINT(input.Flags);sample->indexAddress=input.InstanceDescs;
+ owner.instances=std::move(sample);gi_compute_hooks::Mute mute;
+ if(owner.instances->Record(list,indexPipeline))++instanceRecorded;else ++instanceFailed;
+}
 inline void Capture(ID3D12GraphicsCommandList4* list,const D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC* desc,
                     Owner& owner,const gi_reuse::ComputeBindingSnapshot& bindings) noexcept {
-    if(!CaptureEnabled()||!captureReady.load()||owner.sample||!bindings.Ready()||!Coverage()||!desc)return;
-    if(captureAttempts[0].load()>=16&&captureAttempts[1].load()>=16&&captureAttempts[2].load()>=16)return;
+    if(!CaptureEnabled()||!captureReady.load()||!bindings.Ready()||!Coverage()||!desc)return;
+    if(owner.sample&&desc->Inputs.Type!=D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL)return;
+    if(desc->Inputs.Type!=D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL&&captureAttempts[0].load()>=16&&captureAttempts[1].load()>=16&&captureAttempts[2].load()>=16)return;
     ComPtr<ID3D12Device> recordingDevice;if(FAILED(list->GetDevice(IID_PPV_ARGS(&recordingDevice)))||recordingDevice.Get()!=captureDevice.Get())return;
+    if(desc->Inputs.Type==D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL){CaptureInstances(list,*desc,owner,bindings);return;}
     const auto& input=desc->Inputs;
     if(input.Type!=D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL||!input.NumDescs||input.NumDescs>gi_reuse::GeometryMetadata::MaxGeometries)return;
     const bool array=input.DescsLayout==D3D12_ELEMENTS_LAYOUT_ARRAY;
@@ -163,11 +186,19 @@ inline void Poll() noexcept {
       runtime->Poll();unsigned gpuReads=0;
       for(unsigned i=0;i<records.size();++i)if(records[i]){
         const auto* view=runtime->View(records[i]);const bool published=view!=nullptr;
-        if(view&&view->sample&&gpuReads++>=2)continue;
+        if(view&&(view->sample||view->instances)&&gpuReads++>=2)continue;
         if(runtime->Take(records[i],retired[i])){retired[i]->completeData=published;if(published)++completed;records[i]=0;}
     }}
     ReleaseSRWLockExclusive(&lock);
     // Readback and COM destruction happen outside the host observation lock.
+    for(const auto& owner:retired)if(owner&&owner->completeData&&owner->instances){
+        const auto& sample=*owner->instances;gi_reuse::InstanceSampleSummary result;const auto hr=sample.ReadInstances(result);
+        if(SUCCEEDED(hr)){++instanceRead;instanceLastHash=result.hash;}else ++instanceFailed;
+        Trace("GI_INSTANCE_COPY_R302 hr=0x%08X destination=%llu build_flags=%u source_va=%llu bytes=%llu hash=%llu count=%u masked=%u null_blas=%u bad_alignment=%u nonfinite=%u unknown_flags=%u sealed=1 gpu_completed=1 material_mapping=0",unsigned(hr),sample.buildDestination,sample.buildFlags,sample.indexAddress,sample.bytes,result.hash,result.count,result.masked,result.nullBLAS,result.badAlignment,result.nonfinite,result.unknownFlags);
+        if(SUCCEEDED(hr))for(unsigned i=0;i<result.count&&i<result.first.size();++i){const auto& v=result.first[i];
+            Trace("GI_INSTANCE_RECORD_R302 array_index=%u instance_id=%u mask=%u hit_group_offset=%u flags=%u blas=%llu transform=%g,%g,%g,%g,%g,%g,%g,%g,%g,%g,%g,%g",i,v.id,v.mask,v.hitGroup,v.flags,v.blas,double(v.transform[0]),double(v.transform[1]),double(v.transform[2]),double(v.transform[3]),double(v.transform[4]),double(v.transform[5]),double(v.transform[6]),double(v.transform[7]),double(v.transform[8]),double(v.transform[9]),double(v.transform[10]),double(v.transform[11]));
+        }
+    }
     for(const auto& owner:retired)if(owner&&owner->completeData&&owner->sample&&owner->sample->recorded){
         const auto& sample=*owner->sample;gi_reuse::IndexSample::Summary result;
         if(sample.vertices){gi_reuse::TriangleSampleSummary tri;const auto th=sample.ReadTriangles(tri);
@@ -206,6 +237,7 @@ inline void Report() noexcept {
     ReleaseSRWLockExclusive(&lock);
     Trace("GI_LIFETIME_R295 active=%u quarantined=%u cpu_metadata_owners_only=%u publication_requires_reset_and_gpu_completion=1",active,quarantined,unsigned(!CaptureEnabled()));
     Trace("GI_INDEX_STATUS_R296 enabled=%u ready=%u recorded=%llu readback=%llu failures=%llu reserved_bytes=%llu ordinary_attempts=%llu rejected_raw_attempts=%llu uint32_attempts=%llu native_lighting_changed=0",unsigned(CaptureEnabled()),unsigned(captureReady.load()),captureRecorded.load(),captureRead.load(),captureFailed.load(),captureBudget.load(),captureAttempts[0].load(),captureAttempts[1].load(),captureAttempts[2].load());
+    Trace("GI_INSTANCE_STATUS_R302 enabled=%u attempts=%llu recorded=%llu readback=%llu failures=%llu skipped=%llu reserved_bytes=%llu",unsigned(InstancesEnabled()),instanceAttempts.load(),instanceRecorded.load(),instanceRead.load(),instanceFailed.load(),instanceSkipped.load(),instanceBudget.load());
     Trace("GI_SAMPLE_DIVERSITY_R301 repeated_or_untracked_skipped=%llu max_per_descriptor=2",diversitySkipped.load());
     Trace("GI_TRIANGLE_STATUS_R300 enabled=%u readback=%llu failures=%llu triangles=%llu out_of_range=%llu nonfinite=%llu degenerate=%llu skipped=%llu",unsigned(TrianglesEnabled()),triangleRead.load(),triangleFailed.load(),triangleCount.load(),triangleBadIndices.load(),triangleNonfinite.load(),triangleDegenerate.load(),triangleSkipped.load());
     Trace("GI_INDEX_VALIDATION_R296 out_of_range_indices=%llu padding_failures=%llu",captureBadIndices.load(),captureBadPadding.load());

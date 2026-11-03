@@ -16,13 +16,14 @@ set "CONTROLTOH_GI_METADATA=1"
 set "CONTROLTOH_GI_BINDINGS=1"
 set "CONTROLTOH_GI_INDEX_SNAPSHOTS=1"
 set "CONTROLTOH_GI_TRIANGLE_SNAPSHOTS=1"
+set "CONTROLTOH_GI_INSTANCE_SNAPSHOTS=1"
 set "CONTROLTOH_GI_GEOMETRY=0"
 set "CONTROLTOH_GI_CAPTURE=0"
 set "CONTROLTOH_GI_SPOT_TRACE=0"
 set "CONTROLTOH_GI_RAY_TRACE=0"
 set "CONTROLTOH_GI_JOINT_TRACE=0"
 set "CONTROLTOH_GI_STACK_CAPTURE=0"
-echo R301 - 16/32-bit index GPU snapshots. Recording starts automatically.
+echo R302 - 16/32-bit index GPU snapshots. Recording starts automatically.
 echo Load your usual save, move around for about two minutes, then exit normally.
 echo No F7, F9, CAPTURE RR, zoom, or fixed camera is needed.
 echo This build copies bounded index samples at native AS builds; replacement GI remains disabled.

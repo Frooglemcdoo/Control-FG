@@ -32,6 +32,10 @@ jobs:
           if (!(Select-String -Path gi-index-snapshot.asm -Pattern 'call.*rawBufferLoad.i16')) { throw 'Expected exact 16-bit source reads absent' }
           $commands=@"
           call "$vs\VC\Auxiliary\Build\vcvars64.bat"
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-instance-sample.cpp /Fe:gi-instance-sample.exe
+          if not "%errorlevel%"=="0" exit /b 1
+          gi-instance-sample.exe
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-triangle-sample.cpp /Fe:gi-triangle-sample.exe
           if not "%errorlevel%"=="0" exit /b 1
           gi-triangle-sample.exe
@@ -99,6 +103,8 @@ jobs:
           gi-raw-snapshot-plan.exe
           if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-raw-snapshot-gpu.cpp /Fe:gi-raw-snapshot-gpu.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
+          if not "%errorlevel%"=="0" exit /b 1
+          gi-raw-snapshot-gpu.exe gi-raw-snapshot.dxil gi-index-snapshot.dxil --instances
           if not "%errorlevel%"=="0" exit /b 1
           gi-raw-snapshot-gpu.exe gi-raw-snapshot.dxil gi-index-snapshot.dxil --tri16
           if not "%errorlevel%"=="0" exit /b 1

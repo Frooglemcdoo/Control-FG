@@ -41,6 +41,8 @@ void STDMETHODCALLTYPE ObservedIndirect(ID3D12GraphicsCommandList*,ID3D12Command
 }
 int main(int argc, char** argv) try {
  Require(argc == 3 || argc == 4, "usage: test raw-shader.dxil index-shader.dxil [--32]");
+ const bool instances=argc==4&&std::string(argv[3])=="--instances";
+ if(instances)SetEnvironmentVariableA("CONTROLTOH_GI_INSTANCE_SNAPSHOTS","1");
  const bool paired=argc==4&&std::string(argv[3]).find("--tri")==0;
  const bool wide=argc==4&&std::string(argv[3])!="--tri16";
  if(paired)SetEnvironmentVariableA("CONTROLTOH_GI_TRIANGLE_SNAPSHOTS","1");
@@ -85,6 +87,12 @@ int main(int argc, char** argv) try {
  for(UINT j=0;j<(wide?4u:2u);++j){const auto b=static_cast<unsigned char>(id>>(j*8));data[vertexSize+k*(wide?4:2)+j]=b;triangleHash^=b;triangleHash*=1099511628211ull;}}
  for(UINT i=0;i<vertexSize;++i){vertexHash^=data[i];vertexHash*=1099511628211ull;}
  geometryUpload->Unmap(0,nullptr);}
+ auto instanceUpload=Buffer(d.Get(),64,D3D12_HEAP_TYPE_UPLOAD,D3D12_RESOURCE_STATE_GENERIC_READ,D3D12_RESOURCE_FLAG_NONE);
+ UINT64 expectedInstanceHash=14695981039346656037ull;
+ {void* data=nullptr;D3D12_RANGE empty{0,0};Check(instanceUpload->Map(0,&empty,&data));
+ D3D12_RAYTRACING_INSTANCE_DESC record{};record.Transform[0][0]=record.Transform[1][1]=record.Transform[2][2]=1;record.Transform[0][3]=10;
+ record.InstanceID=0xabcdef;record.InstanceMask=255;record.InstanceContributionToHitGroupIndex=0x123456;record.Flags=2;record.AccelerationStructure=4096;
+ std::memcpy(data,&record,64);for(unsigned i=0;i<64;++i){expectedInstanceHash^=static_cast<unsigned char*>(data)[i];expectedInstanceHash*=1099511628211ull;}instanceUpload->Unmap(0,nullptr);}
  auto output=Buffer(d.Get(),512,D3D12_HEAP_TYPE_DEFAULT,D3D12_RESOURCE_STATE_COPY_DEST,D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
  auto sentinel=Buffer(d.Get(),4,D3D12_HEAP_TYPE_DEFAULT,D3D12_RESOURCE_STATE_UNORDERED_ACCESS,D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
  auto read=Buffer(d.Get(),516,D3D12_HEAP_TYPE_READBACK,D3D12_RESOURCE_STATE_COPY_DEST,D3D12_RESOURCE_FLAG_NONE);
@@ -136,8 +144,11 @@ int main(int argc, char** argv) try {
  D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC sampleBuild{};sampleBuild.Inputs.Type=D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL;
  sampleBuild.Inputs.DescsLayout=D3D12_ELEMENTS_LAYOUT_ARRAY;sampleBuild.Inputs.NumDescs=1;sampleBuild.Inputs.pGeometryDescs=&sampleGeometry;
  fixture::gi_snapshot_probe::Build(list.Get(),&sampleBuild);
+ if(instances){gi_reuse::runtime::ObserveCreated(instanceUpload.Get(),D3D12_RESOURCE_STATE_GENERIC_READ,true);
+ D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC top{};top.DestAccelerationStructureData=8192;top.Inputs.Type=D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL;top.Inputs.DescsLayout=D3D12_ELEMENTS_LAYOUT_ARRAY;top.Inputs.NumDescs=1;top.Inputs.InstanceDescs=instanceUpload->GetGPUVirtualAddress();
+ fixture::gi_snapshot_probe::Build(list.Get(),&top);Require(fixture::gi_snapshot_probe::instanceRecorded.load()==1,"instance upload GPU snapshot recorded");}
  Require(fixture::gi_snapshot_probe::captureRecorded.load()==1,"actual bounded native-boundary index copy recorded");
- Require(fixture::gi_snapshot_probe::bindingReady.load()==1 && fixture::gi_snapshot_probe::admitted.load()==1,"native-boundary probe admission");
+ Require(fixture::gi_snapshot_probe::bindingReady.load()==(instances?2u:1u) && fixture::gi_snapshot_probe::admitted.load()==1,"native-boundary probe admission");
  fixture::gi_compute_hooks::Read(list.Get())->tracker.Invalidate(); ComputeBindingSnapshot rejected; Require(!fixture::gi_compute_hooks::Capture(list.Get(),rejected,epoch),"reject invalidated recording");
  RawSnapshotPlan plan;
  Require(!snapshot.RecordRestoring(list.Get(),source.Get(),258,250,output.Get(),rejected,plan),"reject missing bindings without dispatch");
@@ -166,6 +177,7 @@ int main(int argc, char** argv) try {
  Require(fixture::gi_snapshot_probe::completed.load()==1,"probe completed sealed recording");
  Require(fixture::gi_snapshot_probe::captureRead.load()==1&&fixture::gi_snapshot_probe::captureFailed.load()==0,"sample readback only after completion and reset");
  UINT64 expectedHash=14695981039346656037ull;for(UINT64 i=wide?256:258;i<508;++i){expectedHash^=static_cast<unsigned char>((i*17+39)%251);expectedHash*=1099511628211ull;}
+ if(instances)Require(fixture::gi_snapshot_probe::instanceRead.load()==1&&fixture::gi_snapshot_probe::instanceFailed.load()==0&&fixture::gi_snapshot_probe::instanceLastHash.load()==expectedInstanceHash,"instance array exact hash after fence/reset");
  if(paired)expectedHash=triangleHash;
  Require(fixture::gi_snapshot_probe::lastCaptureHash.load()==expectedHash&&fixture::gi_snapshot_probe::captureBadPadding.load()==0&&fixture::gi_snapshot_probe::captureBadIndices.load()==0,"native sampler hash, index bounds and padding");
  if(paired)Require(fixture::gi_snapshot_probe::lastVertexHash.load()==vertexHash&&fixture::gi_snapshot_probe::triangleRead.load()==1&&fixture::gi_snapshot_probe::triangleCount.load()==1&&fixture::gi_snapshot_probe::triangleFailed.load()==0&&fixture::gi_snapshot_probe::triangleNonfinite.load()==0&&fixture::gi_snapshot_probe::triangleBadIndices.load()==0&&fixture::gi_snapshot_probe::triangleDegenerate.load()==0,"paired native geometry triangle validated");
