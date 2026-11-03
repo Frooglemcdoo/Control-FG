@@ -5,6 +5,9 @@ using Microsoft::WRL::ComPtr;
 struct Owner {UINT64 generation=0;std::unique_ptr<gi_reuse::IndexSample> sample;bool completeData=false;};
 inline bool CaptureEnabled() noexcept {static const bool enabled=[] {char v[4]{};return GetEnvironmentVariableA("CONTROLTOH_GI_INDEX_SNAPSHOTS",v,4)==1&&v[0]=='1';}();return enabled;}
 inline bool TrianglesEnabled() noexcept {static const bool enabled=[] {char v[4]{};return GetEnvironmentVariableA("CONTROLTOH_GI_TRIANGLE_SNAPSHOTS",v,4)==1&&v[0]=='1';}();return enabled;}
+inline gi_reuse::SampleDiversity<> diversity;
+inline SRWLOCK diversityLock=SRWLOCK_INIT;
+inline std::atomic<UINT64> diversitySkipped{0};
 inline std::atomic<UINT64> lastVertexHash{0};
 inline std::atomic<UINT64> triangleRead{0},triangleFailed{0},triangleCount{0},triangleNonfinite{0},triangleDegenerate{0},triangleBadIndices{0},triangleSkipped{0};
 inline std::atomic<bool> captureReady{false};
@@ -81,6 +84,9 @@ inline void Capture(ID3D12GraphicsCommandList4* list,const D3D12_BUILD_RAYTRACIN
                !gi_reuse::AcquireStorageLease(vertexSource.Get(),vl)||vl.kind!=gi_reuse::BufferStorageKind::Committed){++triangleSkipped;continue;}
             vertexCharge=gi_reuse::IndexSample::Charge(captureDevice.Get(),vertexSource.Get(),UINT(vertexBytes));
             if(!vertexCharge){++triangleSkipped;continue;}
+            const gi_reuse::SampleKey key{gi_reuse::runtime::owners.Identity(vertexSource.Get()),gi_reuse::runtime::owners.Identity(source.Get()),vertexOffset,offset,t.VertexBuffer.StrideInBytes,t.VertexCount,t.IndexCount,width,i};
+            AcquireSRWLockExclusive(&diversityLock);const bool selected=diversity.Reserve(key);ReleaseSRWLockExclusive(&diversityLock);
+            if(!selected){++diversitySkipped;continue;}
         }
         const UINT64 tailOffset=offset+(full-bytes);gi_reuse::IndexSnapshotPlan plan;
         if(!gi_reuse::IndexSnapshotPlan::Make(source->GetDesc().Width,tailOffset,bytes,plan))continue;
@@ -91,6 +97,7 @@ inline void Capture(ID3D12GraphicsCommandList4* list,const D3D12_BUILD_RAYTRACIN
         if(paired){
             sample->vertices=std::unique_ptr<gi_reuse::IndexSample>(new(std::nothrow) gi_reuse::IndexSample);
             if(!sample->vertices||FAILED(sample->vertices->Prepare(captureDevice.Get(),vertexSource.Get(),vertexOffset,vertexBytes,bindings,4,16*1024*1024))){++captureFailed;return;}
+            sample->buildDestination=desc->DestAccelerationStructureData;sample->buildFlags=UINT(input.Flags);sample->geometryCount=input.NumDescs;sample->vertexAddress=t.VertexBuffer.StartAddress;sample->indexAddress=t.IndexBuffer;
             sample->vertexStride=t.VertexBuffer.StrideInBytes;sample->geometryIndex=i;sample->hasTransform=t.Transform3x4!=0;
         }
         sample->fullBytes=full;sample->vertexCount=t.VertexCount;sample->rawReject=unsigned(reason);
@@ -166,6 +173,11 @@ inline void Poll() noexcept {
         if(sample.vertices){gi_reuse::TriangleSampleSummary tri;const auto th=sample.ReadTriangles(tri);
             if(SUCCEEDED(th)){++triangleRead;lastVertexHash=tri.vertexHash;triangleCount+=tri.triangles;triangleNonfinite+=tri.nonfinite;triangleDegenerate+=tri.degenerate;triangleBadIndices+=tri.outOfRange;}else ++triangleFailed;
             Trace("GI_TRIANGLE_COPY_R300 hr=0x%08X geometry=%u vertex_bytes=%llu vertex_hash=%llu stride=%llu vertex_count=%u index_bytes=%u first_primitive=%llu triangles=%u out_of_range=%u nonfinite=%u degenerate=%u has_geometry_transform=%u object_space=1 sealed=1 gpu_completed=1",unsigned(th),sample.geometryIndex,sample.vertices->bytes,tri.vertexHash,sample.vertexStride,sample.vertexCount,sample.indexSize,(sample.fullBytes-sample.bytes)/(3*sample.indexSize),tri.triangles,tri.outOfRange,tri.nonfinite,tri.degenerate,unsigned(sample.hasTransform));
+            Trace("GI_TRIANGLE_DETAIL_R301 destination=%llu build_flags=%u geometry_count=%u geometry=%u vertex_va=%llu index_va=%llu repeated_indices=%u coincident_positions=%u collinear=%u all_zero_positions=%u inactive_x_nan=%u",sample.buildDestination,sample.buildFlags,sample.geometryCount,sample.geometryIndex,sample.vertexAddress,sample.indexAddress,tri.repeatedIndices,tri.coincidentPositions,tri.collinear,tri.zeroPositions,tri.inactive);
+            const gi_reuse::TriangleWitness* witnesses[]={&tri.first,&tri.last,&tri.firstDegenerate,&tri.firstNonfinite};
+            for(unsigned w=0;w<4;++w)if(witnesses[w]->present){const auto& v=*witnesses[w];
+                Trace("GI_TRIANGLE_WITNESS_R301 kind=%u primitive=%llu indices=%u,%u,%u p0_bits=%08X,%08X,%08X p1_bits=%08X,%08X,%08X p2_bits=%08X,%08X,%08X",w,(sample.fullBytes-sample.bytes)/(3*sample.indexSize)+v.primitive,v.indices[0],v.indices[1],v.indices[2],v.bits[0][0],v.bits[0][1],v.bits[0][2],v.bits[1][0],v.bits[1][1],v.bits[1][2],v.bits[2][0],v.bits[2][1],v.bits[2][2]);
+            }
         }
         const auto hr=sample.Read(result);if(SUCCEEDED(hr)){++captureRead;captureBadIndices+=result.outOfRange;if(!result.paddingZero)++captureBadPadding;lastCaptureHash=result.hash;lastCaptureMaximum=result.maximum;}else ++captureFailed;
         Trace("GI_INDEX_COPY_R296 index_bytes=%u hr=0x%08X bytes=%llu full_bytes=%llu tail_window=%u source_offset=%llu raw_reject=%u hash=%llu max_index=%u vertex_count=%u out_of_range=%u padding_zero=%u sealed=1 gpu_completed=1",sample.indexSize,unsigned(hr),sample.bytes,sample.fullBytes,unsigned(sample.bytes!=sample.fullBytes),sample.offset,sample.rawReject,result.hash,result.maximum,sample.vertexCount,result.outOfRange,unsigned(result.paddingZero));
@@ -194,6 +206,7 @@ inline void Report() noexcept {
     ReleaseSRWLockExclusive(&lock);
     Trace("GI_LIFETIME_R295 active=%u quarantined=%u cpu_metadata_owners_only=%u publication_requires_reset_and_gpu_completion=1",active,quarantined,unsigned(!CaptureEnabled()));
     Trace("GI_INDEX_STATUS_R296 enabled=%u ready=%u recorded=%llu readback=%llu failures=%llu reserved_bytes=%llu ordinary_attempts=%llu rejected_raw_attempts=%llu uint32_attempts=%llu native_lighting_changed=0",unsigned(CaptureEnabled()),unsigned(captureReady.load()),captureRecorded.load(),captureRead.load(),captureFailed.load(),captureBudget.load(),captureAttempts[0].load(),captureAttempts[1].load(),captureAttempts[2].load());
+    Trace("GI_SAMPLE_DIVERSITY_R301 repeated_or_untracked_skipped=%llu max_per_descriptor=2",diversitySkipped.load());
     Trace("GI_TRIANGLE_STATUS_R300 enabled=%u readback=%llu failures=%llu triangles=%llu out_of_range=%llu nonfinite=%llu degenerate=%llu skipped=%llu",unsigned(TrianglesEnabled()),triangleRead.load(),triangleFailed.load(),triangleCount.load(),triangleBadIndices.load(),triangleNonfinite.load(),triangleDegenerate.load(),triangleSkipped.load());
     Trace("GI_INDEX_VALIDATION_R296 out_of_range_indices=%llu padding_failures=%llu",captureBadIndices.load(),captureBadPadding.load());
     const auto& reasons=gi_reuse::runtime::indexRawReasons;

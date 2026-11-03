@@ -3,6 +3,7 @@
 #include "d3d12_storage_lease.h"
 #include <memory>
 #include "triangle_sample_validation.h"
+#include "sample_diversity.h"
 namespace gi_reuse {
 // A diagnostic owns everything needed by its recorded commands until the host
 // seals the recording and proves all submissions complete. No native lighting use.
@@ -13,7 +14,8 @@ struct IndexSample {
     IndexSnapshotPlan plan;
     bool recorded=false;
     std::unique_ptr<IndexSample> vertices;
-    std::uint64_t vertexStride=0;
+    std::uint64_t vertexStride=0,buildDestination=0,vertexAddress=0,indexAddress=0;
+    std::uint32_t buildFlags=0,geometryCount=0;
     std::uint32_t geometryIndex=0;bool hasTransform=false;
     std::uint64_t offset=0,bytes=0,fullBytes=0,charge=0;
     std::uint32_t vertexCount=0,rawReject=0,indexSize=2;
