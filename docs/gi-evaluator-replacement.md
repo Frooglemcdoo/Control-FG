@@ -187,3 +187,16 @@ integration of the range variate and hit/miss expected energy, plus invalid inpu
 DXC compiles the validation kernel with warnings as errors. Windows checks are
 added to foundation CI. No new user capture or game package is needed for this
 algebraic change.
+
+Integration constraint: this marginal reach model must not also reject samples
+against a newly drawn receiver TMax; that would count receiver reach twice.
+Geometry gates can use the maximum support envelope, while the receiving q term
+accounts for randomized range. Likewise, cosine/pi is the aggregate proposal
+across the complete equally weighted strata; a single fixed stratum has a
+restricted conditional density. Do not label an isolated R307 stratum with the
+aggregate proposal without the corresponding mixture estimator.
+
+Windows foundation run 41701703350 / job 126146356159 passed at commit
+53d3e0bcb7f3bcbb4e6fbaef381f5a0db61d14ad. The finite-range CPU tests and HLSL
+compile run alongside the existing accounting/runtime/geometry suite. No new
+runtime estimator or image-quality result is implied by these checks.
