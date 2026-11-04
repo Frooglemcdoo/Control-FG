@@ -2,6 +2,7 @@
 #include "gi_reuse/d3d12_initial_gi_pipeline.h"
 #include <atomic>
 #include <new>
+#include "gi_reuse/attempt_throttle.h"
 #ifdef CONTROL_GI_LONG_SEQUENCE
 #include "../build/gi_owned.generated.h"
 #endif
@@ -20,6 +21,7 @@ using DispatchObserver=void(*)(ID3D12GraphicsCommandList4*,const gi_reuse::Compu
 inline std::atomic<DispatchObserver> dispatchObserver{nullptr};
 inline std::atomic<UINT64> recorded{0},admitted{0},rejected{0};
 inline std::atomic<bool> requested{true},active{false};
+inline gi_reuse::AttemptThrottle attempts;
 inline thread_local bool recording=false;
 class Owner final:public IUnknown {
  std::atomic<ULONG> refs{1};

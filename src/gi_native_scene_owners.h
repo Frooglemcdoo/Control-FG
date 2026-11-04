@@ -5,6 +5,7 @@
 #include "gi_reuse/d3d12_geometry_snapshot.h"
 #include "gi_native_lifetime_runtime.h"
 #include "gi_reuse/writer_handoff.h"
+#include "gi_owned_metrics.h"
 // Recovered R103 creation boundaries. These observe native ownership only;
 // installing them does not enable the replacement lighting dispatch.
 namespace GINativeSceneOwners {
@@ -212,6 +213,7 @@ static bool FreezeGeometry(ID3D12GraphicsCommandList4* list,Recording& recording
  return true;
 }
 static void Build(ID3D12GraphicsCommandList4* list,const D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC* desc) noexcept {
+ GIOwnedMetrics::Scope timing(GIOwnedMetrics::Geometry);
  auto recording=ReadRecording(list);if(!recording||!recording->complete)return;
  try {
   if(!desc||recording->events.size()>=65536){recording->complete=false;return;}
@@ -267,7 +269,7 @@ static void Copy(ID3D12GraphicsCommandList4* list,UINT64 destination,UINT64 sour
  }catch(...){recording->complete=false;}
 }
 static void WriterReady(const GINativeJobRoute::Ticket& ticket) noexcept {
- if(!ready.load())return;writerHandoff.Clear();
+ if(!ready.load())return;GIOwnedMetrics::Scope timing(GIOwnedMetrics::Writer);writerHandoff.Clear();
  auto recording=ReadRecording(reinterpret_cast<ID3D12GraphicsCommandList4*>(ticket.list));
  const auto n=++writerPublications;
  const auto report=[&](const char* reason,const Writer* writer=nullptr){

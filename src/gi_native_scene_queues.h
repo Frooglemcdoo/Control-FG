@@ -25,6 +25,27 @@ static std::deque<Flight> flights;
 static UINT64 serial=0;
 static std::atomic<UINT64> submits{0},marks{0},checkpoints{0},compactions{0};
 static bool Active() noexcept {return Enabled()&&ready.load();}
+struct TraceEvent {UINT64 sequence=0,tick=0,queue=0,fence=0,value=0,completed=0;DWORD thread=0;HRESULT result=S_OK;const char* operation="none";};
+static std::array<TraceEvent,256> trace;
+static UINT64 traceSerial=0;
+static void Trace(const char* operation,UINT64 queue,UINT64 fence,UINT64 value,UINT64 completed=0,HRESULT result=S_OK){
+ LARGE_INTEGER qpc{};QueryPerformanceCounter(&qpc);const auto n=++traceSerial;
+ trace[n%trace.size()]={n,UINT64(qpc.QuadPart),queue,fence,value,completed,GetCurrentThreadId(),result,operation};
+}
+static void ExplainWait(UINT64 cut,UINT64 writer){
+ const auto pending=catalog.PendingWait(cut);static UINT64 reports=0;const auto n=++reports;
+ if(n>8&&n%120)return;
+ UINT64 actual=0;ID3D12Fence* native=nullptr;
+ for(const auto& f:fences)if(f.id==pending.fence){native=f.native.Get();actual=native->GetCompletedValue();break;}
+ Log("GI_OWNED_WAIT_DETAIL revision=R316 writer=%llu cut=%llu fence=%llu native_fence=%p wait_value=%llu observed_signal=%llu graph_completed=%llu actual_completed=%llu lane=%llu stamp=%llu count=%llu",
+  writer,cut,pending.fence,static_cast<void*>(native),pending.value,pending.signalValue,pending.completed,actual,pending.lane,pending.stamp,n);
+ if(n>2)return;
+ const auto first=traceSerial>=trace.size()?traceSerial-trace.size()+1:1;
+ for(UINT64 i=first;i<=traceSerial;++i){const auto& e=trace[i%trace.size()];
+  Log("GI_OWNED_QUEUE_EVENT sequence=%llu event_qpc=%llu event_tid=%lu op=%s queue=%llu fence=%llu value=%llu completed=%llu hr=%08x",e.sequence,e.tick,e.thread,e.operation,e.queue,e.fence,e.value,e.completed,unsigned(e.result));
+ }
+}
+
 // Nonblocking completion observations resolve only waits whose queue signal
 // was not observed. The graph retains all known producer/consumer edges.
 static void PollNativeFences(){
@@ -48,10 +69,11 @@ static bool Preflight(ID3D12CommandQueue* input,const Recording& recording,const
   std::lock_guard<std::recursive_mutex> guard(mutex);
   ComPtr<IUnknown> identity;if(!input||FAILED(input->QueryInterface(IID_PPV_ARGS(&identity))))return false;
   const auto queue=std::find_if(queues.begin(),queues.end(),[&](const Queue& q){return q.identity.Get()==identity.Get();});
-  if(queue==queues.end())return true;
+  if(queue==queues.end()){static unsigned n=0;if(++n<=4)Log("GI_OWNED_PREFLIGHT_PATH revision=R316 path=unknown_queue queue=%p",static_cast<void*>(input));return true;}
   PollNativeFences();
   const auto readiness=catalog.Mark(queue->id);
   const auto pending=catalog.PendingWait(readiness);
+  {static unsigned n=0;if(++n<=8)Log("GI_OWNED_PREFLIGHT_PATH revision=R316 queue=%llu writer=%llu producer_ordered=%u events=%llu pending_fence=%llu",queue->id,writer.ticket.serial,unsigned(writer.submission.Precedes(queue->id)),UINT64(recording.events.size()),pending.fence);}
   if(pending.fence){static std::atomic<UINT64> rejectedWaits{0};const auto n=++rejectedWaits;
    if(n<=8||n%120==0)Log("GI_OWNED_PREFLIGHT rejected=queue_wait fence=%llu value=%llu signal_value=%llu completed=%llu writer=%llu scratch_allocated=0 count=%llu",pending.fence,pending.value,pending.signalValue,pending.completed,writer.ticket.serial,n);
    return false;
@@ -119,11 +141,12 @@ static void Quarantine(UINT count,ID3D12CommandList*const* lists) noexcept {
  if(!lists)return;for(UINT i=0;i<count;++i){auto r=ReadRecording(lists[i],false);if(r)(void)r.Detach();}
 }
 static UINT64 Before(ID3D12CommandQueue* input,UINT count,ID3D12CommandList*const* lists) noexcept {
- if(!Active())return 0;mutex.lock();const DWORD error=GetLastError();
+ if(!Active())return 0;GIOwnedMetrics::Scope timing(GIOwnedMetrics::Submission);mutex.lock();const DWORD error=GetLastError();
  std::vector<std::pair<std::shared_ptr<Use>,UINT64>> pending;
  try {
   Poll();auto* q=FindQueue(input);
   if(!q||count>256||(count&&!lists)||flights.size()>=256){catalog.Invalidate("live_submission_preflight");Quarantine(count,lists);SetLastError(error);return 1;}
+  Trace("execute",q->id,0,count);
   Flight flight;flight.queue=q->id;flight.value=++q->next;
   if(!flight.value||flight.value==UINT64_MAX){catalog.Invalidate("live_fence_overflow");Quarantine(count,lists);SetLastError(error);return 1;}
   if(input->GetDesc().Type!=D3D12_COMMAND_LIST_TYPE_COPY){
@@ -172,6 +195,7 @@ static UINT64 Before(ID3D12CommandQueue* input,UINT count,ID3D12CommandList*cons
   if(!catalog.Healthy())GIOwnedPipeline::active=false;
   if(submits.load()<=8||submits.load()%600==0)Log("GI_OWNED_QUEUE submissions=%llu healthy=%u reason=%s pending=%llu admitted=%llu completed_checkpoints=%llu compactions=%llu geometry_bytes=%llu",
    submits.load(),unsigned(catalog.Healthy()),catalog.History().FailureReason(),static_cast<UINT64>(pending.size()),GIOwnedPipeline::admitted.load(),checkpoints.load(),compactions.load(),geometryBudget->Held());
+  if(submits.load()%600==0)GIOwnedMetrics::Report();
   if(prefixReady){ID3D12CommandList* prefix=flights.back().prefix.Get();input->ExecuteCommandLists(1,&prefix);}
 
  }catch(...){for(const auto& item:pending)item.first->Cancel();catalog.Invalidate("live_submission_exception");Quarantine(count,lists);}
@@ -193,6 +217,7 @@ static void AfterFence(ID3D12CommandQueue* input,ID3D12Fence* fence,UINT64 value
  try {auto* q=FindQueue(input);const auto id=FenceID(fence);
   if(!q||!id)catalog.Invalidate("live_fence_identity");
   else {
+   Trace(signal?"signal":"wait",q->id,id,value,fence->GetCompletedValue(),result);
    auto entry=std::find_if(fences.begin(),fences.end(),[&](const Fence& f){return f.id==id;});
    if(signal){catalog.Signal(q->id,id,value,SUCCEEDED(result));
     if(SUCCEEDED(result)){entry->observedSignal=(std::max)(entry->observedSignal,value);if(value>=entry->pendingValue)entry->pendingValue=0;}

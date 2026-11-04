@@ -56,6 +56,7 @@ static void Constant(D3D12_CPU_DESCRIPTOR_HANDLE destination,const D3D12_CONSTAN
  if(auto* s=Active()){GINativeSceneDescriptors::Mute mute;s->shadow.ObserveNativeConstant(s->generation,destination,cb);}
 }
 static void Hook(void* shader){
+ GIOwnedMetrics::Scope timing(GIOwnedMetrics::Bindings);
  current.Reset();rejected=false;failure="no_descriptor_callback";copies=constants=0;capturing=true;
  unsigned long long frame=0;DWORD fault=0;
  if(!ReadEngineFrameSafe(&frame,&fault))frame=0;

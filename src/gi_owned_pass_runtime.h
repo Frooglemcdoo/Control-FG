@@ -16,17 +16,20 @@ public:
  UINT64 bytes=0;
  ~Pass(){if(bytes)scratchBudget->Release(bytes);}
  bool Reject(const char* reason,unsigned detail=0) noexcept {
+  GIOwnedPipeline::attempts.Rejected(GetTickCount64());
   GIOwnedPipeline::active=false;const auto n=++GIOwnedPipeline::rejected;
   if(n<=12||n%600==0)Log("GI_OWNED_ADMISSION rejected=%s detail=%u writer=%llu count=%llu",reason,detail,native->writer->ticket.serial,n);
   return false;
  }
  bool Admit(const gi_reuse::GILiveSceneCatalog& catalog,UINT64 cut) noexcept override {
+  GIOwnedMetrics::Scope timing(GIOwnedMetrics::Admission);
   try {
    const auto& writer=*native->writer;gi_reuse::GILiveSceneCatalog::Selection selected;gi_reuse::GILiveSceneCatalog::Diagnostic diagnostic;
    if(!catalog.Select(cut,native->generation,writer.scene.token,writer.scene.address,selected,&diagnostic)){
     if(GIOwnedPipeline::rejected.load()<12||GIOwnedPipeline::rejected.load()%120==0)
      Log("GI_OWNED_SCENE stage=%s order=%s status=%u token=%llu address=%llx instance=%u missing_instances=%u",diagnostic.stage,
       diagnostic.orderReason,unsigned(diagnostic.status),diagnostic.token,diagnostic.address,diagnostic.instance,diagnostic.missingBottoms);
+    GINativeSceneQueues::ExplainWait(cut,native->writer->ticket.serial);
     return Reject("ordered_scene");
    }
    // Every triangle must be tied to its BLAS-build-time copies, including hair.
@@ -45,7 +48,7 @@ public:
    }
    const auto committed=table.Commit(device.Get(),scene.plan.table,resources);if(FAILED(committed))return Reject("table_commit",unsigned(committed));
    const auto armed=tile.CommitAdmission(table);if(FAILED(armed))return Reject("controls",unsigned(armed));
-   const auto n=++GIOwnedPipeline::admitted;GIOwnedPipeline::active=true;
+   GIOwnedPipeline::attempts.Succeeded();const auto n=++GIOwnedPipeline::admitted;GIOwnedPipeline::active=true;
    if(n<=4||n%600==0)Log("GI_OWNED_ADMITTED writer=%llu triangles=%llu backing_buffers=%llu count=%llu gpu_completion=0",writer.ticket.serial,
     static_cast<UINT64>(selected.geometry.size()),static_cast<UINT64>(resources.size()),n);
    return true;
@@ -65,6 +68,8 @@ static void AfterCompute(ID3D12GraphicsCommandList4* list,const gi_reuse::Comput
  if(GIOwnedPipeline::recording||!GIOwnedPipeline::Enabled()||!GIOwnedPipeline::requested.load())return;
  auto pipeline=GIOwnedPipeline::Read(bindings.pipeline.Get());if(!pipeline)return;
  auto native=GINativeGIBindings::Take(list);if(!native){Skip("missing_native_bind");return;}
+ if(!GIOwnedPipeline::attempts.Allow(GetTickCount64())){GIOwnedPipeline::active=false;return;}
+ GIOwnedMetrics::Scope timing(GIOwnedMetrics::Prepare);
  const auto& writer=*native->writer;
  if(!writer.nativeInputs||writer.pass||writer.passes!=1||!writer.ticket.width||!writer.ticket.height||z!=1||x!=(writer.ticket.width+7)/8||y!=(writer.ticket.height+15)/16||
     !native->shadow.Has(native->generation,gi_reuse::D3D12InitialGITile::NativeRequired)){Skip("native_pass_contract");return;}
