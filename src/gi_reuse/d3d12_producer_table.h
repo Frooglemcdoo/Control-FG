@@ -20,8 +20,9 @@ public:
     D3D12ProducerTable()=default;
     D3D12ProducerTable(const D3D12ProducerTable&)=delete;
     D3D12ProducerTable& operator=(const D3D12ProducerTable&)=delete;
-    HRESULT Initialize(ID3D12Device* device,ID3D12StateObject* pipeline,
-        const GIProducerTable& plan,const std::vector<ID3D12Resource*>& resources) noexcept {
+private:
+    HRESULT InitializeImpl(ID3D12Device* device,ID3D12StateObject* pipeline,
+        const GIProducerTable& plan,const std::vector<ID3D12Resource*>& resources,bool validationOnly) noexcept {
         if(upload_||!device||!pipeline||!plan.epoch||!plan.writerVersion||!plan.nativePipeline||
            plan.producerPipeline!=reinterpret_cast<std::uintptr_t>(pipeline)||
            plan.geometry.empty()||plan.geometry.size()>65536||
@@ -61,6 +62,9 @@ public:
                     if(!ranges.Unique(view.allocation.address,view.allocation.bytes))return E_INVALIDARG;
                 }
             }
+            // Deferred commit already owns its upload. Keep the exact validation
+            // and leases, without allocating/writing a second temporary table.
+            if(validationOnly){backing_=std::move(leases);retainedBytes_=retained;return S_OK;}
             const UINT64 bytes=plan.records.size()*PTShaderTableAdapter::PrivateStride;
             D3D12_HEAP_PROPERTIES heap{};heap.Type=D3D12_HEAP_TYPE_UPLOAD;heap.CreationNodeMask=heap.VisibleNodeMask=1;
             D3D12_RESOURCE_DESC desc{};desc.Dimension=D3D12_RESOURCE_DIMENSION_BUFFER;desc.Width=bytes;desc.Height=1;
@@ -78,6 +82,11 @@ public:
             pipeline_=pipeline;upload_=std::move(upload);backing_=std::move(leases);
             epoch_=plan.epoch;version_=plan.writerVersion;size_=bytes;retainedBytes_=retained;return S_OK;
         }catch(...){return E_OUTOFMEMORY;}
+    }
+public:
+    HRESULT Initialize(ID3D12Device* device,ID3D12StateObject* pipeline,
+        const GIProducerTable& plan,const std::vector<ID3D12Resource*>& resources) noexcept {
+        return InitializeImpl(device,pipeline,plan,resources,false);
     }
     // Reserve the exact writer row count while recording. Every row is zero;
     // raygen must remain disarmed until Commit succeeds before first submission.
@@ -101,7 +110,7 @@ public:
         if(!deferred_||!upload_||plan.epoch!=epoch_||plan.writerVersion!=version_||
            plan.records.size()*PTShaderTableAdapter::PrivateStride!=size_)return E_INVALIDARG;
         Ptr<ID3D12Device> owner;if(!device||FAILED(upload_->GetDevice(IID_PPV_ARGS(&owner)))||owner.Get()!=device)return E_INVALIDARG;
-        D3D12ProducerTable checked;auto hr=checked.Initialize(device,pipeline_.Get(),plan,resources);if(FAILED(hr))return hr;
+        D3D12ProducerTable checked;auto hr=checked.InitializeImpl(device,pipeline_.Get(),plan,resources,true);if(FAILED(hr))return hr;
         void* mapped=nullptr;const D3D12_RANGE empty{};hr=upload_->Map(0,&empty,&mapped);if(FAILED(hr))return hr;
         if(!mapped){upload_->Unmap(0,&empty);return E_UNEXPECTED;}
         std::memcpy(mapped,plan.records.data(),static_cast<SIZE_T>(size_));const D3D12_RANGE written{0,static_cast<SIZE_T>(size_)};upload_->Unmap(0,&written);

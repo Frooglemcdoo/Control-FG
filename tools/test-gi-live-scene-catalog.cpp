@@ -17,6 +17,19 @@ static std::shared_ptr<GISceneBuild> Top(){
  s->instances={12288,3,1,bytes};s->bottoms.push_back({256,1,0});return s;
 }
 int main(){
+ { // Many instances share one BLAS, but no cached revision crosses a cut.
+  GILiveSceneCatalog repeated;auto topMany=Top();
+  auto bytes=std::make_shared<std::vector<unsigned char>>(64*128);
+  for(unsigned i=0;i<128;++i)std::memcpy(bytes->data()+64*i,topMany->instances.bytes->data(),64);
+  topMany->instances.bytes=bytes;topMany->bottoms.resize(128,{256,1,0});topMany->build.event.record.count=128;
+  assert(repeated.Submit(1,1,Bottom())&&repeated.Submit(1,2,topMany));
+  const auto oldCut=repeated.Mark(1);GILiveSceneCatalog::Selection result;
+  assert(repeated.Select(oldCut,1,2,512,result)&&result.geometry.size()==1&&result.perInstance.size()==128);
+  assert(repeated.Submit(1,3,Bottom()));
+  assert(repeated.Select(repeated.Mark(1),2,2,512,result));for(const auto& r:result.perInstance)assert(r.revision==3);
+  assert(repeated.Select(oldCut,1,2,512,result));for(const auto& r:result.perInstance)assert(r.revision==1);
+ }
+
  AttemptThrottle retry;assert(retry.Allow(100));retry.Rejected(100);assert(!retry.Allow(100)&&!retry.Allow(349)&&retry.Allow(350));retry.Succeeded();assert(retry.Allow(351));retry.Rejected(UINT64_MAX-10);assert(!retry.Allow(UINT64_MAX-1)&&retry.Allow(UINT64_MAX));
  GILiveSceneCatalog c;GILiveSceneCatalog::Selection selected;
  auto bottom=Bottom(),top=Top();assert(c.Submit(1,1,bottom));assert(c.Signal(1,10,1,true));assert(c.Wait(2,10,1,true));

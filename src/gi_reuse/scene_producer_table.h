@@ -82,6 +82,7 @@ template<std::size_t Capacity> GISceneProducerError PrepareGISceneProducer(
         table.producerPipeline=producerPipeline;table.epoch=epoch;
         table.records.resize(bindings.size()*2);table.geometry.resize(bindings.size());table.bound.resize(bindings.size());
         std::set<std::uint64_t> tokens;
+        std::map<std::tuple<std::uint64_t,std::uint64_t,std::uint64_t>,ASRecord> selectedBottoms;
         for(std::uint32_t i=0;i<tlas.count;++i){
             InstanceRecord instance;
             if(!DecodeInstance(bytes+std::size_t(i)*64,instance))return GISceneProducerError::Closure;
@@ -89,9 +90,15 @@ template<std::size_t Capacity> GISceneProducerError PrepareGISceneProducer(
             GISceneGeometrySample sample;sample.instance=i;sample.blas=perInstance[i];
             bool finite=true;for(float value:instance.transform)finite=finite&&std::isfinite(value);
             if(!finite){sample.stage=GISceneGeometryStage::Transform;if(!diagnostic)return GISceneProducerError::Geometry;reject(sample,GISceneProducerError::Geometry);continue;}
-            const auto& ref=perInstance[i];ASRecord bottom;
-            if(history.Select(cut,ref.token,ref.address,bottom)!=PTSceneOrder::Status::ready||
-               bottom.revision!=ref.revision||!bottom.geometry)return GISceneProducerError::Closure;
+            const auto& ref=perInstance[i];const auto key=std::make_tuple(ref.address,ref.token,ref.revision);
+            auto cached=selectedBottoms.find(key);
+            if(cached==selectedBottoms.end()){
+                ASRecord selected;
+                if(history.Select(cut,ref.token,ref.address,selected)!=PTSceneOrder::Status::ready||
+                   selected.revision!=ref.revision||!selected.geometry)return GISceneProducerError::Closure;
+                cached=selectedBottoms.emplace(key,std::move(selected)).first;
+            }
+            const auto& bottom=cached->second;
             for(std::uint32_t g=0;g<bottom.count;++g){
                 const auto row=std::uint64_t(instance.hitGroup)+std::uint64_t(g)*2;
                 if((row&1)||row>=table.records.size())return GISceneProducerError::Mapping;

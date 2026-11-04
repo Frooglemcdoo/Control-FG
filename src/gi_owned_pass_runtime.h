@@ -22,7 +22,7 @@ public:
   return false;
  }
  static void ReportGeometry(const gi_reuse::GISceneProducerDiagnostic& d,UINT64 writer,unsigned result) noexcept {
-  Log("GI_OWNED_GEOMETRY revision=R321 writer=%llu result=%u checked=%llu valid=%llu samples=%llu",writer,result,d.checked,d.valid,UINT64(d.samples.size()));
+  Log("GI_OWNED_GEOMETRY revision=R322 writer=%llu result=%u checked=%llu valid=%llu samples=%llu",writer,result,d.checked,d.valid,UINT64(d.samples.size()));
   const char* names[]={"witness_identity","transform","witness_missing","metadata","resolve","convert","rebase","conflict"};
   for(unsigned i=0;i<unsigned(gi_reuse::GISceneGeometryStage::Count);++i)
    Log("GI_OWNED_GEOMETRY_COUNT writer=%llu stage=%s count=%llu",writer,names[i],d.counts[i]);
@@ -43,7 +43,10 @@ public:
   GIOwnedMetrics::Scope timing(GIOwnedMetrics::Admission);
   try {
    const auto& writer=*native->writer;gi_reuse::GILiveSceneCatalog::Selection selected;gi_reuse::GILiveSceneCatalog::Diagnostic diagnostic;
-   if(!catalog.Select(cut,native->generation,writer.scene.token,writer.scene.address,selected,&diagnostic)){
+   bool selectionReady=false;
+   {GIOwnedMetrics::Scope detail(GIOwnedMetrics::Selection);
+    selectionReady=catalog.Select(cut,native->generation,writer.scene.token,writer.scene.address,selected,&diagnostic);}
+   if(!selectionReady){
     if(GIOwnedPipeline::rejected.load()<12||GIOwnedPipeline::rejected.load()%120==0)
      Log("GI_OWNED_SCENE stage=%s order=%s status=%u token=%llu address=%llx instance=%u missing_instances=%u",diagnostic.stage,
       diagnostic.orderReason,unsigned(diagnostic.status),diagnostic.token,diagnostic.address,diagnostic.instance,diagnostic.missingBottoms);
@@ -58,8 +61,10 @@ public:
    static std::atomic<unsigned> censusAttempts{0};
    gi_reuse::GISceneProducerDiagnostic census;
    auto* censusOutput=censusAttempts.fetch_add(1)<3?&census:nullptr;
-   const auto prepared=GINativeSceneOwners::owners.Prepare(catalog.History(),cut,native->generation,selected.top,selected.instances,selected.perInstance,
-      selected.geometry,writer.inputs.table,writer.inputs.bindings,reinterpret_cast<UINT_PTR>(pipeline->pipeline.Producer().State()),exports,scene,censusOutput);
+   gi_reuse::GISceneProducerError prepared;
+   {GIOwnedMetrics::Scope detail(GIOwnedMetrics::Mapping);
+    prepared=GINativeSceneOwners::owners.Prepare(catalog.History(),cut,native->generation,selected.top,selected.instances,selected.perInstance,
+      selected.geometry,writer.inputs.table,writer.inputs.bindings,reinterpret_cast<UINT_PTR>(pipeline->pipeline.Producer().State()),exports,scene,censusOutput);}
    if(censusOutput)ReportGeometry(census,writer.ticket.serial,unsigned(prepared));
    if(prepared!=gi_reuse::GISceneProducerError::None)return Reject("private_scene_table",unsigned(prepared));
    std::vector<ID3D12Resource*> resources;resources.reserve(scene.buffers.size()+scene.frozen.size()*2);
@@ -69,8 +74,8 @@ public:
     const auto storage=std::static_pointer_cast<GIGeometrySnapshot::Storage>(geometry->owner);
     for(const auto& copy:storage->copies)resources.push_back(copy.second.Get());
    }
-   const auto committed=table.Commit(device.Get(),scene.plan.table,resources);if(FAILED(committed))return Reject("table_commit",unsigned(committed));
-   const auto armed=tile.CommitAdmission(table);if(FAILED(armed))return Reject("controls",unsigned(armed));
+   HRESULT committed;{GIOwnedMetrics::Scope detail(GIOwnedMetrics::TableCommit);committed=table.Commit(device.Get(),scene.plan.table,resources);}if(FAILED(committed))return Reject("table_commit",unsigned(committed));
+   HRESULT armed;{GIOwnedMetrics::Scope detail(GIOwnedMetrics::Controls);armed=tile.CommitAdmission(table);}if(FAILED(armed))return Reject("controls",unsigned(armed));
    GIOwnedPipeline::attempts.Succeeded();const auto n=++GIOwnedPipeline::admitted;GIOwnedPipeline::active=true;
    if(n<=4||n%600==0)Log("GI_OWNED_ADMITTED writer=%llu triangles=%llu backing_buffers=%llu count=%llu gpu_completion=0",writer.ticket.serial,
     static_cast<UINT64>(selected.geometry.size()),static_cast<UINT64>(resources.size()),n);

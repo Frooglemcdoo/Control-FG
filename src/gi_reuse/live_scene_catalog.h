@@ -62,17 +62,19 @@ public:
   const auto& payload=*found->second;
   if(!payload.instances.Read(top.instances,U64(top.count)*64)||payload.bottoms.size()!=top.count)return fail("instance_snapshot");
   next.top={address,token,top.revision};next.instances=payload.instances;next.instances.epoch=epoch;next.perInstance=payload.bottoms;
-  std::set<std::pair<U64,U64>> visited;
+  std::map<std::pair<U64,U64>,U64> visited; // exact cut-local revisions; never reused across frames
   unsigned instance=0;
   for(auto& ref:next.perInstance){
    const auto at=instance++;
    if(!ref.address){if(ref.token)return fail("null_instance_identity");ref.revision=0;continue;}
+   const auto cached=visited.find({ref.token,ref.address});
+   if(cached!=visited.end()){ref.revision=cached->second;continue;}
    ASRecord bottom;const char* reason="none";const auto status=order_.Select(cut,ref.token,ref.address,bottom,&reason);
    if(status!=PTSceneOrder::Status::ready||bottom.topLevel||!bottom.geometry){
     if(!d.missingBottoms){d.stage="blas_order_or_geometry";d.status=status;d.orderReason=reason;d.token=ref.token;d.address=ref.address;d.instance=at;}
     ++d.missingBottoms;continue;
    }
-   ref.revision=bottom.revision;if(!visited.emplace(ref.token,ref.address).second)continue;
+   ref.revision=bottom.revision;visited.emplace(std::make_pair(ref.token,ref.address),bottom.revision);
    const auto source=payloads_.find(bottom.revision);
    if(source==payloads_.end()||source->second->geometry.size()!=bottom.count)return fail("blas_payload");
    const auto& frozen=source->second->frozen;

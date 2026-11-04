@@ -7,11 +7,13 @@ int main(){
         assert(GIFrameTiles::Make(size,1,0,size,rays,plan));
         std::uint64_t next=0,total=0;
         for(std::uint32_t i=0;i<plan.tiles;++i){const auto s=plan.At(i);
-            assert(s.first==next&&s.pixels&&s.pixels<=16384&&s.samples<=262144);
+            assert(s.first==next&&s.pixels&&s.pixels<=65536&&s.samples<=262144);
             assert(s.samples==s.pixels*rays);next+=s.pixels;total+=s.samples;
         }
         assert(next==size&&total==std::uint64_t(size)*rays&&!plan.At(plan.tiles).pixels);
     }
+    assert(GIFrameTiles::Make(2560,1440,0,3686400,1,plan)&&plan.tiles==57);
+    assert(GIFrameTiles::Make(2560,1440,0,3686400,6,plan)&&plan.tiles==85);
     assert(GIFrameTiles::Make(2560,1440,12345,20001,64,plan));
     assert(plan.At(0).first==12345&&plan.At(plan.tiles-1).first+plan.At(plan.tiles-1).pixels==32346);
     for(auto rays:{0u,65u})assert(!GIFrameTiles::Make(10,10,0,100,rays,plan));
