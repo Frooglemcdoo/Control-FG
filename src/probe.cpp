@@ -90,6 +90,8 @@ static void Log(const char* format, ...) noexcept {
     SetLastError(savedError);
 }
 
+#include "gi_frame_capture.h"
+
 static std::wstring ModulePath(HMODULE module) {
     std::vector<wchar_t> path(32768);
     DWORD n = GetModuleFileNameW(module, path.data(), static_cast<DWORD>(path.size()));
@@ -810,6 +812,7 @@ static void RRVramLifecycleAfterPresent(unsigned long long present) noexcept;
 static void NativeCpuPoll(unsigned long long present) noexcept;
 
 static void HookPresent() {
+    control_gi_frames::Present();
     auto count = ++presentCount;
     const bool windowTrace = ShouldPathTrace(count);
     const bool periodicTrace = false; // r20x lean performance branch: no periodic swap capture

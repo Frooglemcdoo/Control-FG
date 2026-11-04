@@ -288,9 +288,9 @@ inline void RequestPerformanceCapture(HWND panel) noexcept {
         MessageBoxW(panel,L"Finish the current capture first.",L"GI recording",MB_OK);return;
     }
     if(control_gi_button::Start(selfModule,GetWindow(panel,GW_OWNER))) {
-        Trace("GI_BUTTON_CAPTURE requested=1 owned_requested=%u rr_requested=%u fg_selection=%u",unsigned(GIOwnedPipeline::requested.load()),unsigned(control_rr::RRUserRequested()),GetFGUserMultiplier());
+        Log("GI_BUTTON_CAPTURE requested=1 owned_requested=%u rr_requested=%u fg_selection=%u",unsigned(GIOwnedPipeline::requested.load()),unsigned(control_rr::RRUserRequested()),GetFGUserMultiplier());
         ClosePanel(panel);
-    } else MessageBoxW(panel,L"Could not start the recorder. Allow the Windows administrator prompt and make sure ControlTOH/Diagnostics/Capture-GI-Button.ps1 is installed.",L"GI recording",MB_OK|MB_ICONERROR);
+    } else MessageBoxW(panel,L"Could not start the recorder. Make sure ControlTOH/Diagnostics/Capture-GI-Button.ps1 is installed.",L"GI recording",MB_OK|MB_ICONERROR);
 }
 inline void RequestCamera(HWND panel,int mode) noexcept {
     using State=control_rr_capture_ui::State;

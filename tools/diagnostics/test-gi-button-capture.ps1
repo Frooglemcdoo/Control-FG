@@ -21,5 +21,5 @@ try{Invoke-GIButtonMeasurement}catch{$failed=$true}
 if(-not $failed -or $script:events.Contains('beep:2')){throw 'False completion signal after early exit'}
 $text=Get-Content -Raw $path
 if($text -match 'Read-Host|KeyAvailable|GetAsyncKeyState|recorder-check|Start-Process.*Control_DX12'){throw 'Unexpected prompt, key handling, preflight capture or game relaunch'}
-if(([regex]::Matches($text,"@\('-start','GeneralProfile'")).Count -ne 1){throw 'Expected one real recording start'}
+if($text -match 'GeneralProfile|cpu-gpu-timeline|function Wpr|package-lighting-capture.py'){throw 'Heavy trace path must not be part of compact capture'}
 Write-Output 'PASS: five-second delay; still and pan phases; exact 1/1/2 beep order; early failure never signals done; no console prompts/hotkeys/preflight/relaunch.'

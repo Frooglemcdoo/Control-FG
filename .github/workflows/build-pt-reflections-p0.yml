@@ -97,6 +97,8 @@ jobs:
       - name: Validate F10 GI recorder sequence under Windows PowerShell
         shell: powershell
         run: |
+          python tools/diagnostics/test-gi-performance-summary.py
+          if ($LASTEXITCODE -ne 0) { throw 'Compact summary test failed' }
           & powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/diagnostics/test-gi-button-capture.ps1
           if ($LASTEXITCODE -ne 0) { throw 'F10 recorder sequence failed' }
 
@@ -1188,11 +1190,11 @@ jobs:
           & $dxc.FullName -T cs_6_2 -E main -enable-16bit-types -WX src/shaders/gi_index_snapshot.hlsl -Fo build/gi_index_snapshot.dxil
           if ($LASTEXITCODE -ne 0) { throw 'Exact index snapshot compile failed' }
 
-      - name: Package owned GI integration R331
+      - name: Package owned GI integration R332
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='ControlTOH-R331'
+          $out='ControlTOH-R332'
           $shader="$out/ControlTOH/Shaders"
           $tools="$out/ControlTOH/Tools"
           $diagnostics="$out/ControlTOH/Diagnostics"
@@ -1220,29 +1222,29 @@ jobs:
           Copy-Item Start-Compact-Distance-Test.cmd,Capture-RR-Suite.ps1,tools/collect-rr-suite.py $diagnostics
           Copy-Item tools/diagnostics/Start-R258-Storage-Diagnostics.cmd,tools/diagnostics/Start-GI-Source-Probe.cmd,tools/diagnostics/Start-GI-Shadow-Test.cmd,tools/diagnostics/Start-GI-Lighting-Test.cmd,tools/diagnostics/Start-GI-Hit-Capture.cmd,tools/diagnostics/Start-GI-Binding-Audit.cmd,tools/diagnostics/Start-GI-Spot-Trace.cmd,tools/diagnostics/Start-Reflection-Clamp-Test.cmd,tools/diagnostics/Start-GI-Ray-Trace.cmd,tools/diagnostics/Start-GI-Geometry-Probe.cmd,tools/diagnostics/Start-GI-Joint-Trace.cmd $diagnostics
           Copy-Item tools/diagnostics/Start-GI-Metadata-Test.cmd,tools/diagnostics/Start-GI-Rendering-Test.cmd,tools/diagnostics/Start-GI-Evaluator-Test.cmd,tools/diagnostics/Start-GI-Owned-Test.cmd $diagnostics
-          Copy-Item tools/diagnostics/Capture-GI-Button.ps1,tools/diagnostics/Capture-NativeProcess.ps1,tools/diagnostics/check-capture-python.py $diagnostics
+          Copy-Item tools/diagnostics/Capture-GI-Button.ps1,tools/diagnostics/Capture-NativeProcess.ps1,tools/diagnostics/check-capture-python.py,tools/diagnostics/summarize-gi-performance.py $diagnostics
           Copy-Item tools/diagnostics/Collect-Texture-Trace.cmd,tools/diagnostics/Collect-Texture-Trace.ps1 $tools
           Copy-Item build/DirectStorage "$diagnostics/DirectStorage" -Recurse
           Copy-Item build/DirectStorage/dstorage.dll,build/DirectStorage/dstoragecore.dll $out
           Copy-Item tools/directstorage/Validate-DirectStorage.cmd "$diagnostics/DirectStorage"
-          Copy-Item docs/native-lighting-r331.md "$out/ControlTOH/DIAGNOSTIC-NOTES.md"
+          Copy-Item docs/native-lighting-r332.md "$out/ControlTOH/DIAGNOSTIC-NOTES.md"
           Copy-Item tools/Organize-Existing-Install.cmd,tools/Organize-Existing-Install.ps1 $tools
           Copy-Item tools/diagnostics/Collect-ControlTOH-Materials.cmd,tools/diagnostics/Collect-ControlTOH-Materials.ps1 $tools
           & powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/diagnostics/test-material-collector.ps1
           if ($LASTEXITCODE -ne 0) { throw 'Material collector integration test failed' }
           @'
           Control The Oldest House: Visual and Performance Overhaul
-          R331 - Owned GI integration test
+          R332 - Owned GI integration test
 
           Copy all package contents beside Control_DX12.exe, preserving folders.
           Run ControlTOH/Diagnostics/Start-GI-Owned-Test.cmd with the game closed.
           Keep RT indirect lighting and RR on. Select GI RAW BYPASS.
           Use the F10 GI button to compare NATIVE / OWNED live.
           OWNED WAIT means admission has not succeeded; native output remains.
-          F10: click RECORD GI. Allow Windows administrator consent for WPR.
+          F10: click RECORD GI. Compact capture; no WPR or administrator prompt.
           Five-second delay, one beep stand still ten seconds, next beep pan slowly ten seconds.
           Two beeps mean measurement finished: close the game normally.
-          The recorder saves and packages automatically, then opens the desktop SEND folder.
+          The recorder creates one small ZIP and SUMMARY.txt, then opens the desktop SEND folder.
           No hotkeys, console prompts, preliminary recording, or game relaunch sequence.
           The capture records the selected GI mode. No automatic mode switches.
           This runs the owned producer and initial estimator after native GI6.
@@ -1262,10 +1264,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: ControlTOH-R331
+          name: ControlTOH-R332
           path: |
-            ControlTOH-R331.zip
-            ControlTOH-R331.sha256
+            ControlTOH-R332.zip
+            ControlTOH-R332.sha256
             build/gi-joint-light-validation.json
             build/gi-joint-oracle-analysis.json
             build/gi-ray-trace-validation.json

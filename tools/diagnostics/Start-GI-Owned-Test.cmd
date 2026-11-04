@@ -12,7 +12,7 @@ if not errorlevel 1 (
  pause
  exit /b 1
 )
-echo R331 - OWNED GI WITH F10 RECORD BUTTON
+echo R332 - OWNED GI WITH F10 RECORD BUTTON
 set "CONTROLTOH_GI_LIVE=1"
 set "CONTROLTOH_GI_EVALUATOR=1"
 set "CONTROLTOH_GI_OWNED=1"
@@ -30,8 +30,8 @@ set "CONTROLTOH_GI_JOINT_TRACE=0"
 set "CONTROLTOH_GI_STACK_CAPTURE=0"
 set "CONTROLTOH_GI_SOURCE=full"
 echo Load the problem room with RR ON, FG OFF, and GI RAW BYPASS.
-echo F10: select GI OWNED, then click RECORD GI. Allow the Windows administrator prompt.
+echo F10: select GI OWNED, then click RECORD GI. No administrator prompt or full trace.
 echo Five-second delay. One beep: stand still. Next beep: move camera slowly.
-echo Two beeps: close the game. Capture ZIPs are packaged and opened automatically.
+echo Two beeps: close the game. One compact ZIP and summary are packaged and opened automatically.
 start "" /wait "Control_DX12.exe"
 endlocal
