@@ -17,6 +17,9 @@
 namespace gi_reuse::runtime {
 using Microsoft::WRL::ComPtr;
 inline bool Enabled() noexcept {static const bool value=[] {char b[4]{};return GetEnvironmentVariableA("CONTROLTOH_GI_METADATA",b,4)==1&&b[0]=='1';}();return value;}
+// The owned renderer needs creation/storage proof and live callbacks, but not
+// the independent R294 inventory, per-barrier cache or diagnostic ledger.
+inline bool InventoryEnabled() noexcept {static const bool value=[] {char b[4]{};return !(GetEnvironmentVariableA("CONTROLTOH_GI_LEGACY_AUDIT",b,4)==1&&b[0]=='0');}();return Enabled()&&value;}
 inline const GUID journalKey={0x28611345,0x28ab,0x4127,{0x93,0x44,0x12,0x10,0x16,0x85,0x42,0x31}};
 inline std::atomic<UINT64> generation{1};
 inline std::atomic<bool> fault{false};
@@ -35,21 +38,22 @@ inline std::atomic<UINT64> asIdentityResolved{0},asIdentityMissing{0},asIdentity
 inline std::atomic<UINT64> journalPeak{0}, creationObservations{0}, barrierObservations{0};
 inline void JournalPeak(std::size_t size) noexcept {auto old=journalPeak.load();while(old<size&&!journalPeak.compare_exchange_weak(old,size)){};}
 inline std::atomic<UINT64> buildCount{0},copyCount{0},resolvedRanges{0},missingRanges{0};
-inline void ObserveBuffer(ID3D12Resource* resource) noexcept {if(Enabled())owners.Observe(resource);}
+inline void ObserveBuffer(ID3D12Resource* resource) noexcept {if(InventoryEnabled())owners.Observe(resource);}
 inline void ObserveCreated(IUnknown* object,D3D12_RESOURCE_STATES initialState=D3D12_RESOURCE_STATE_COMMON,
                            bool supportedASStorage=false,ID3D12Heap* placedHeap=nullptr) noexcept {
  if(!Enabled()||!object)return;ComPtr<ID3D12Resource> resource;
  if(SUCCEEDED(object->QueryInterface(IID_PPV_ARGS(&resource)))&&resource->GetDesc().Dimension==D3D12_RESOURCE_DIMENSION_BUFFER){
-  ++creationObservations;
   // A creation hook supplies backing-storage proof. Barrier-only discoveries
   // and reserved/tiled resources deliberately remain ineligible for snapshots.
   if(supportedASStorage)RetainCreatedStorage(resource.Get(),placedHeap);
+  if(!InventoryEnabled())return;
+  ++creationObservations;
   owners.Observe(resource.Get(),initialState);
   if(supportedASStorage&&(initialState&D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE))asOwners.Created(resource.Get(),placedHeap);
  }
 }
 inline void ObserveBarriers(UINT count,const D3D12_RESOURCE_BARRIER* barriers) noexcept {
- if(!Enabled()||!barriers)return;
+ if(!InventoryEnabled()||!barriers)return;
  for(UINT i=0;i<count;++i){const auto& b=barriers[i];++barrierObservations;
   if(b.Type==D3D12_RESOURCE_BARRIER_TYPE_TRANSITION)owners.Observe(b.Transition.pResource,b.Transition.StateAfter);
   else if(b.Type==D3D12_RESOURCE_BARRIER_TYPE_UAV)owners.Observe(b.UAV.pResource);
@@ -140,7 +144,7 @@ inline ComPtr<Journal> Read(ID3D12Object* list) noexcept {
 }
 inline void RecordBarriers(ID3D12GraphicsCommandList* list,UINT count,const D3D12_RESOURCE_BARRIER* barriers) noexcept {
  if(const auto callback=liveBarriers.load())callback(list,count,barriers);
- if(!Enabled()||fault.load()||!list||!barriers)return;auto j=Read(list);if(!j)return;
+ if(!InventoryEnabled()||fault.load()||!list||!barriers)return;auto j=Read(list);if(!j)return;
  const bool wasComplete=j->states.Complete();
  for(UINT i=0;i<count;++i){const auto& b=barriers[i];
   if(b.Type==D3D12_RESOURCE_BARRIER_TYPE_ALIASING){j->states.Clear();++localAliasInvalidations;continue;}
@@ -153,14 +157,14 @@ inline void RecordBarriers(ID3D12GraphicsCommandList* list,UINT count,const D3D1
 }
 inline void Reset(ID3D12GraphicsCommandList* list) noexcept {
  if(const auto callback=liveReset.load())callback(list);
- if(!Enabled()||fault.load()||!list)return;
+ if(!InventoryEnabled()||fault.load()||!list)return;
  auto* next=new(std::nothrow) Journal;if(!next){Fail("journal_allocation");return;}
  if(FAILED(list->SetPrivateDataInterface(journalKey,next)))Fail("journal_attachment");
  next->Release();
 }
 inline void Initialize(ID3D12GraphicsCommandList* list) noexcept {
  if(const auto callback=liveInitialize.load())callback(list);
- if(!Enabled()||fault.load())return;if(!Read(list))Reset(list);
+ if(!InventoryEnabled()||fault.load())return;if(!Read(list))Reset(list);
 }
 struct RejectedGeometry {GeometryDiagnostic diagnostic;UINT64 destination=0,source=0;UINT count=0,layout=0,flags=0;};
 inline SRWLOCK rejectionLock=SRWLOCK_INIT;
@@ -176,7 +180,7 @@ inline bool ReadGeometryReject(RejectedGeometry& out) noexcept {
 }
 inline void RecordBuild(ID3D12GraphicsCommandList4* list,const D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC* desc) noexcept {
  if(const auto callback=liveBuild.load())callback(list,desc);
- if(!Enabled())return;++buildCount;if(fault.load())return;
+ if(!InventoryEnabled())return;++buildCount;if(fault.load())return;
  try {
   auto journal=Read(list);if(!journal){Fail("build_missing_journal");return;}
   if(!desc||!desc->DestAccelerationStructureData){Fail("build_invalid_descriptor");return;}
@@ -200,7 +204,7 @@ inline void RecordBuild(ID3D12GraphicsCommandList4* list,const D3D12_BUILD_RAYTR
 }
 inline void RecordCopy(ID3D12GraphicsCommandList4* list,UINT64 destination,UINT64 source,D3D12_RAYTRACING_ACCELERATION_STRUCTURE_COPY_MODE mode) noexcept {
  if(const auto callback=liveCopy.load())callback(list,destination,source,mode);
- if(!Enabled())return;++copyCount;if(fault.load())return;auto journal=Read(list);
+ if(!InventoryEnabled())return;++copyCount;if(fault.load())return;auto journal=Read(list);
  if(!journal){Fail("copy_missing_journal");return;}
  if(!destination||!source||(mode!=D3D12_RAYTRACING_ACCELERATION_STRUCTURE_COPY_MODE_CLONE&&mode!=D3D12_RAYTRACING_ACCELERATION_STRUCTURE_COPY_MODE_COMPACT)){Fail("copy_address_or_mode");return;}
  try {journal->asTokens.push_back(ASIdentities(destination,source,journal.Get()));if(!journal->data.Append({ASOperation::Copy,{destination},source}))Fail("copy_journal_capacity");JournalPeak(journal->data.size);}
@@ -238,7 +242,7 @@ inline void PollASLeases() noexcept {
  ReleaseSRWLockExclusive(&stateLock); // Destroy references outside observer locks.
 }
 inline UINT64 BeforeExecute(ID3D12CommandQueue* q,UINT count,ID3D12CommandList*const* lists) noexcept {
- if(!Enabled())return 0;PollASLeases();if(fault.load())return 0;
+ if(!InventoryEnabled())return 0;PollASLeases();if(fault.load())return 0;
  if(!q||(count&&!lists)){Fail("invalid_submission");return 0;}
  // Copy queues cannot contain AS build/copy commands. This says nothing about
  // geometry byte dependencies; those remain unverified by this metadata observer.
@@ -269,7 +273,7 @@ inline UINT64 BeforeExecute(ID3D12CommandQueue* q,UINT count,ID3D12CommandList*c
  ReleaseSRWLockExclusive(&stateLock);return token;
 }
 inline void AfterExecute(ID3D12CommandQueue* q,UINT64 token) noexcept {
- if(!Enabled()||!token)return;
+ if(!InventoryEnabled()||!token)return;
  AcquireSRWLockExclusive(&stateLock);
  if(!submitting||token!=activeToken||q!=queue.Get())Fail("submission_token_mismatch");
  if(!fault.load()){
@@ -281,7 +285,7 @@ inline void AfterExecute(ID3D12CommandQueue* q,UINT64 token) noexcept {
  ReleaseSRWLockExclusive(&stateLock);
 }
 inline bool Snapshot(MetadataLedger& result) noexcept {
- if(!Enabled()||fault.load())return false;AcquireSRWLockExclusive(&stateLock);
+ if(!InventoryEnabled()||fault.load())return false;AcquireSRWLockExclusive(&stateLock);
  const bool valid=!fault.load()&&!submitting&&fence&&ledger.Snapshot(reinterpret_cast<UINT64>(queue.Get()),fence->GetCompletedValue(),result);
  ReleaseSRWLockExclusive(&stateLock);return valid;
 }

@@ -147,18 +147,22 @@ static void Barriers(ID3D12GraphicsCommandList* list,UINT count,const D3D12_RESO
  }
  if(!recording->states.Complete())recording->complete=false;
 }
-static bool FreezeGeometry(ID3D12GraphicsCommandList4* list,Recording& recording,Event& event){
+static bool FreezeGeometry(ID3D12GraphicsCommandList4* list,Recording& recording,Event& event,const char*& reason){
+ reason="geometry_empty";
  if(event.geometry.empty())return false;
  std::map<UINT64,GIGeometrySnapshot::Source> sources;
  for(const auto& g:event.geometry)for(const auto token:{g.indexToken,g.positionToken}){
   if(sources.count(token))continue;
+  reason="geometry_storage_owner";
   gi_reuse::BufferStorageLease lease;UINT64 wrapper=0;Wrapper native;
   if(!owners.Inspect(token,lease,wrapper)||!Read(reinterpret_cast<void*>(wrapper),native))return false;
   // Never call through a raw wrapper pointer after releasing the owner lock.
   // The retained resource is callable; a changed wrapper is simply ineligible.
+  reason="geometry_wrapper_identity";
   if(native.resource!=static_cast<IUnknown*>(lease.resource.Get()))return false;
   const auto address=lease.resource->GetGPUVirtualAddress(),bytes=lease.resource->GetDesc().Width;
   if(address!=native.address||native.bytes>bytes)return false;
+  reason="geometry_resource_state";
   const auto local=recording.states.Find(token);D3D12_RESOURCE_STATES state{};
   if(local.kind==gi_reuse::LocalStateKind::Pending||local.kind==gi_reuse::LocalStateKind::Invalid)return false;
   if(local.kind==gi_reuse::LocalStateKind::Explicit)state=static_cast<D3D12_RESOURCE_STATES>(local.after);
@@ -172,6 +176,7 @@ static bool FreezeGeometry(ID3D12GraphicsCommandList4* list,Recording& recording
   }
   sources.emplace(token,GIGeometrySnapshot::Source{{token,address,bytes},lease.resource,state,0,0,lease});
  }
+ reason="geometry_copy_span";
  std::map<UINT64,std::pair<UINT64,UINT64>> spans;
  const auto include=[&](UINT64 token,UINT64 address,UINT64 bytes){
   const auto& allocation=sources.at(token).allocation;
@@ -196,6 +201,7 @@ static bool FreezeGeometry(ID3D12GraphicsCommandList4* list,Recording& recording
  }
  std::vector<GIGeometrySnapshot::Source> ordered;ordered.reserve(sources.size());for(const auto& item:sources)ordered.push_back(item.second);
  struct Mute {Mute(){copyingGeometry=true;}~Mute(){copyingGeometry=false;}} mute;
+ reason="geometry_copy_record";
  if(!GIGeometrySnapshot::Record(list,ordered,geometryBudget,event.transfer,geometryPool)){event.frozen.clear();return false;}
  // No allocations beyond this point: the command list now refers to the copies.
  for(std::size_t n=0;n<frozen.size();++n){auto& f=*frozen[n];const auto& g=event.geometry[n];
@@ -220,24 +226,32 @@ static void Build(ID3D12GraphicsCommandList4* list,const D3D12_BUILD_RAYTRACING_
    event.source=desc->SourceAccelerationStructureData;event.operation=gi_reuse::ASOperation::Update;
    if(!owners.Identify(event.source,256,source)){recording->complete=false;return;}e.build.sourceToken=source.token;
   }
-  bool valid=r.count!=0;
+  bool valid=r.count!=0;const char* reason="empty_build";unsigned failureClass=0;
+  gi_reuse::GeometryDiagnostic diagnostic;
   if(desc->Inputs.Type==D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL){
    r.topLevel=true;r.instances=desc->Inputs.InstanceDescs;e.instances=Instances(r.instances,r.count);
+   reason=desc->Inputs.DescsLayout==D3D12_ELEMENTS_LAYOUT_ARRAY?"tlas_instance_snapshot":"tlas_layout";failureClass=1;
    valid=valid&&desc->Inputs.DescsLayout==D3D12_ELEMENTS_LAYOUT_ARRAY&&bool(e.instances);
    if(valid){e.bottoms.resize(r.count);
     for(UINT i=0;i<r.count;++i){gi_reuse::InstanceRecord row;
-     if(!gi_reuse::DecodeInstance(e.instances->bytes.data()+SIZE_T(i)*64,row)){valid=false;break;}
-     if(row.blas&&!owners.Identify(row.blas,256,e.bottoms[i])){valid=false;break;}
+     if(!gi_reuse::DecodeInstance(e.instances->bytes.data()+SIZE_T(i)*64,row)){valid=false;reason="instance_decode";failureClass=2;break;}
+     if(row.blas&&!owners.Identify(row.blas,256,e.bottoms[i])){valid=false;reason="instance_blas_owner";failureClass=3;break;}
     }
    }
   }else{
-   r.geometry=gi_reuse::CopyBLASGeometry(desc->Inputs);valid=valid&&bool(r.geometry);
-   if(valid){e.geometry.resize(r.count);for(UINT i=0;i<r.count;++i)if(!owners.Geometry(*r.geometry->At(i),e.geometry[i])){valid=false;break;}}
-   if(valid)valid=FreezeGeometry(list,*recording.Get(),e);
+   r.geometry=gi_reuse::CopyBLASGeometry(desc->Inputs,&diagnostic);valid=valid&&bool(r.geometry);
+   reason=gi_reuse::GeometryRejectName(diagnostic.reason);failureClass=4;
+   if(valid){reason="geometry_owner_or_transform";failureClass=5;e.geometry.resize(r.count);for(UINT i=0;i<r.count;++i)if(!owners.Geometry(*r.geometry->At(i),e.geometry[i])){valid=false;diagnostic.index=i;diagnostic.triangle=*r.geometry->At(i);break;}}
+   if(valid){failureClass=6;valid=FreezeGeometry(list,*recording.Get(),e,reason);}
   }
   // Unsupported writes hide the prior version; they never preserve an old
   // valid geometry mapping at the same address.
-  if(!valid){event.operation=gi_reuse::ASOperation::Invalidate;e.geometry.clear();e.bottoms.clear();e.instances.reset();}
+  if(!valid){
+   static std::array<std::atomic<UINT64>,7> failures{};const auto n=++failures[failureClass];
+   if(n<=8||n%256==0)Log("GI_OWNED_BUILD_REJECT reason=%s class=%u count=%llu top=%u address=%llx token=%llu source=%llx descriptors=%u flags=%x instance_address=%llx geometry=%u vertices=%u indices=%u stride=%llu transform=%llx frozen_bytes=%llu",
+    reason,failureClass,n,unsigned(r.topLevel),r.address,destination.token,event.source,r.count,unsigned(desc->Inputs.Flags),r.instances,
+    diagnostic.index,diagnostic.triangle.vertexCount,diagnostic.triangle.indexCount,diagnostic.triangle.stride,diagnostic.triangle.transform,geometryBudget->Held());
+   event.operation=gi_reuse::ASOperation::Invalidate;e.geometry.clear();e.bottoms.clear();e.instances.reset();}
   recording->events.push_back(std::move(e));
  }catch(...){recording->complete=false;}
 }

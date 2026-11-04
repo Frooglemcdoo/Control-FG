@@ -159,11 +159,12 @@ public:
   }
   return true;
  }
- PTSceneOrder::Status Select(U64 cut,U64 token,U64 address,ASRecord& out) const {
-  out={};if(!healthy_||!token||!address)return PTSceneOrder::Status::invalid;
-  PTSceneOrder::Selection selected;const auto status=order_.Select(cut,{token,address},selected);
+ PTSceneOrder::Status Select(U64 cut,U64 token,U64 address,ASRecord& out,const char** reason=nullptr) const {
+  if(reason)*reason="none";
+  out={};if(!healthy_||!token||!address){if(reason)*reason="history_or_identity";return PTSceneOrder::Status::invalid;}
+  PTSceneOrder::Selection selected;const auto status=order_.Select(cut,{token,address},selected,reason);
   if(status!=PTSceneOrder::Status::ready)return status;
-  if(!DependencyValid(selected.version))return PTSceneOrder::Status::invalid;
+  if(!DependencyValid(selected.version)){if(reason)*reason="build_dependency";return PTSceneOrder::Status::invalid;}
   out=versions_.at(selected.version).record;return status;
  }
 };

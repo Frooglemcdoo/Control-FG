@@ -65,6 +65,6 @@ static void Start(HMODULE d3d) noexcept {
  if(lifetime&&GINativeSceneOwners::Enabled())GINativeSceneOwners::Install(d3d);
  if(GINativeSceneOwners::ready.load())GINativeSceneDescriptors::Install(PTGlassRuntime::device.Get());
  const bool ready=GINativeJobRuntime::Install(d3d)&&GINativeJobRuntime::Register(&Capture);
- Log("GI_WRITER_R305_ARM ready=%u tables=4 interval_ms=10000 scope=whole_gi_binding_table native_outputs_unchanged=1",unsigned(ready));
+ Log("GI_WRITER_R305_ARM ready=%u tables=4 interval_ms=10000 scope=whole_gi_binding_table native_outputs_unchanged=1 legacy_inventory=%u",unsigned(ready),unsigned(gi_reuse::runtime::InventoryEnabled()));
 }
 }

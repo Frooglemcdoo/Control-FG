@@ -32,6 +32,11 @@ int main(){
  assert(c.Select(c.Mark(2),12,2,512,selected)&&selected.perInstance[0].token==1); // tokens are never retargeted
  auto bad=std::make_shared<GISceneBuild>();bad->build={{ASOperation::Invalidate,{256},0},1,0};assert(c.Submit(2,6,bad));
  assert(!c.Select(c.Mark(2),12,2,512,selected)); // no previous geometry fallback
+ GILiveSceneCatalog::Diagnostic diagnostic;
+ assert(!c.Select(c.Mark(2),12,2,512,selected,&diagnostic));
+ assert(std::strcmp(diagnostic.stage,"blas_order_or_geometry")==0&&diagnostic.missingBottoms==1&&diagnostic.token==1&&diagnostic.address==256);
+ assert(!c.Select(c.Mark(2),12,999,1024,selected,&diagnostic));
+ assert(std::strcmp(diagnostic.stage,"tlas_order")==0&&std::strcmp(diagnostic.orderReason,"scene_no_ordered_build")==0);
  GILiveSceneCatalog race;assert(race.Submit(1,1,bottom)&&race.Submit(1,2,top));const auto before=race.Mark(1);
  assert(race.Submit(2,3,moved));assert(!race.Select(before,1,2,512,selected));
  GILiveSceneCatalog streaming;std::uint64_t completed=0;

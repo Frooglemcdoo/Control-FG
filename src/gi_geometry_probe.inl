@@ -42,7 +42,7 @@ inline void RequestInstances() noexcept {
 // Called immediately before the native ExecuteCommandLists call. These are CPU
 // submission observations, NOT GPU-completed bytes or proven cross-queue order.
 inline void BeforeExecute(ID3D12CommandQueue* queue,UINT count,ID3D12CommandList*const* lists) noexcept {
- if(gi_reuse::runtime::Enabled()){
+ if(gi_reuse::runtime::InventoryEnabled()){
   static std::atomic<UINT64> next{0};static std::atomic<unsigned> reports{0};const auto now=GetTickCount64();auto due=next.load();
   if(now>=due&&reports.load()<64&&next.compare_exchange_strong(due,now+5000)){
    ++reports;if(const auto report=integrationReport.load())report();unsigned owners=0;UINT64 bytes=0;bool limited=false;gi_reuse::runtime::owners.Stats(owners,bytes,limited);

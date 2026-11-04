@@ -25,6 +25,30 @@ static std::deque<Flight> flights;
 static UINT64 serial=0;
 static std::atomic<UINT64> submits{0},marks{0},checkpoints{0},compactions{0};
 static bool Active() noexcept {return Enabled()&&ready.load();}
+// A recording-time rejection avoids scratch/SBT allocation and tiled command
+// recording. It is only a preflight: actual submission must still revalidate.
+static bool Preflight(ID3D12CommandQueue* input,const Recording& recording,const Writer& writer) noexcept {
+ try {
+  // Unsubmitted AS writes can make this list's scene newer than the catalog.
+  // Defer these uncommon cases to the original exact submission check.
+  for(const auto& event:recording.events)if(!event.writer&&!event.use)return true;
+  std::lock_guard<std::recursive_mutex> guard(mutex);
+  ComPtr<IUnknown> identity;if(!input||FAILED(input->QueryInterface(IID_PPV_ARGS(&identity))))return false;
+  const auto queue=std::find_if(queues.begin(),queues.end(),[&](const Queue& q){return q.identity.Get()==identity.Get();});
+  // The producer may be queued with the consumer in a later Execute batch.
+  if(queue==queues.end()||!writer.submission.Precedes(queue->id))return true;
+  gi_reuse::GILiveSceneCatalog::Selection selected;gi_reuse::GILiveSceneCatalog::Diagnostic d;
+  const auto cut=catalog.Mark(queue->id);
+  bool valid=cut&&catalog.Select(cut,recording.generation,writer.scene.token,writer.scene.address,selected,&d);
+  if(valid)for(const auto& geometry:selected.geometry)if(!geometry.frozen||!geometry.frozen->owner){d.stage="unpreserved_geometry";valid=false;break;}
+  if(!valid){static std::atomic<UINT64> rejected{0};const auto n=++rejected;
+   if(n<=8||n%120==0)Log("GI_OWNED_PREFLIGHT rejected=%s order=%s status=%u token=%llu address=%llx instance=%u missing_instances=%u writer=%llu native_owners_created=%llu native_owners_rejected=%llu retained_bytes=%llu scratch_allocated=0 count=%llu",
+    cut?d.stage:"catalog_unhealthy",d.orderReason,unsigned(d.status),d.token,d.address,d.instance,d.missingBottoms,writer.ticket.serial,
+    created.load(),GINativeSceneOwners::rejected.load(),owners.RetainedBytes(),n);
+  }
+  return valid;
+ }catch(...){return false;}
+}
 static Queue* FindQueue(ID3D12CommandQueue* input){
  if(!input)return nullptr;ComPtr<IUnknown> identity;if(FAILED(input->QueryInterface(IID_PPV_ARGS(&identity))))return nullptr;
  for(auto& q:queues)if(q.identity.Get()==identity.Get())return &q;

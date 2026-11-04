@@ -15,6 +15,11 @@ class GILiveSceneCatalog {
  OrderedASMetadata<> order_;
  std::map<U64,std::shared_ptr<const GISceneBuild>> payloads_;
 public:
+ struct Diagnostic {
+  const char* stage="none";const char* orderReason="none";
+  PTSceneOrder::Status status=PTSceneOrder::Status::ready;
+  U64 token=0,address=0;unsigned instance=UINT32_MAX,missingBottoms=0;
+ };
  struct Selection {
   SceneASReference top;
   SceneByteView instances;
@@ -43,26 +48,38 @@ public:
   }
   payloads_.emplace(revision,std::move(input));return true;
  }
- bool Select(U64 cut,U64 epoch,U64 token,U64 address,Selection& output) const {
+ bool Select(U64 cut,U64 epoch,U64 token,U64 address,Selection& output,Diagnostic* diagnostic=nullptr) const {
+  Diagnostic local;auto& d=diagnostic?*diagnostic:local;d={};d.token=token;d.address=address;
+  const auto fail=[&](const char* stage){d.stage=stage;return false;};
   Selection next;ASRecord top;
-  if(!epoch||order_.Select(cut,token,address,top)!=PTSceneOrder::Status::ready||!top.topLevel)return false;
-  const auto found=payloads_.find(top.revision);if(found==payloads_.end())return false;
+  if(!epoch)return fail("epoch");
+  d.status=order_.Select(cut,token,address,top,&d.orderReason);
+  if(d.status!=PTSceneOrder::Status::ready)return fail("tlas_order");
+  if(!top.topLevel)return fail("tlas_type");
+  const auto found=payloads_.find(top.revision);if(found==payloads_.end())return fail("tlas_payload");
   const auto& payload=*found->second;
-  if(!payload.instances.Read(top.instances,U64(top.count)*64)||payload.bottoms.size()!=top.count)return false;
+  if(!payload.instances.Read(top.instances,U64(top.count)*64)||payload.bottoms.size()!=top.count)return fail("instance_snapshot");
   next.top={address,token,top.revision};next.instances=payload.instances;next.instances.epoch=epoch;next.perInstance=payload.bottoms;
   std::set<std::pair<U64,U64>> visited;
+  unsigned instance=0;
   for(auto& ref:next.perInstance){
-   if(!ref.address){if(ref.token)return false;ref.revision=0;continue;}
-   ASRecord bottom;if(order_.Select(cut,ref.token,ref.address,bottom)!=PTSceneOrder::Status::ready||bottom.topLevel||!bottom.geometry)return false;
+   const auto at=instance++;
+   if(!ref.address){if(ref.token)return fail("null_instance_identity");ref.revision=0;continue;}
+   ASRecord bottom;const char* reason="none";const auto status=order_.Select(cut,ref.token,ref.address,bottom,&reason);
+   if(status!=PTSceneOrder::Status::ready||bottom.topLevel||!bottom.geometry){
+    if(!d.missingBottoms){d.stage="blas_order_or_geometry";d.status=status;d.orderReason=reason;d.token=ref.token;d.address=ref.address;d.instance=at;}
+    ++d.missingBottoms;continue;
+   }
    ref.revision=bottom.revision;if(!visited.emplace(ref.token,ref.address).second)continue;
    const auto source=payloads_.find(bottom.revision);
-   if(source==payloads_.end()||source->second->geometry.size()!=bottom.count)return false;
+   if(source==payloads_.end()||source->second->geometry.size()!=bottom.count)return fail("blas_payload");
    const auto& frozen=source->second->frozen;
-   if(!frozen.empty()&&frozen.size()!=bottom.count)return false;
+   if(!frozen.empty()&&frozen.size()!=bottom.count)return fail("frozen_geometry_count");
    for(std::uint32_t g=0;g<bottom.count;++g)next.geometry.push_back({ref,g,source->second->geometry[g],frozen.empty()?nullptr:frozen[g]});
   }
+  if(d.missingBottoms)return false;
   SceneTraversalClosure closure;
-  if(ResolveTraversalClosure(order_,cut,epoch,next.top,next.instances,next.perInstance,closure)!=TraversalError::None)return false;
+  if(ResolveTraversalClosure(order_,cut,epoch,next.top,next.instances,next.perInstance,closure)!=TraversalError::None)return fail("traversal_closure");
   output=std::move(next);return true;
  }
  // Must run between admission calls, with no external CPU cut retained.

@@ -22,8 +22,13 @@ public:
  }
  bool Admit(const gi_reuse::GILiveSceneCatalog& catalog,UINT64 cut) noexcept override {
   try {
-   const auto& writer=*native->writer;gi_reuse::GILiveSceneCatalog::Selection selected;
-   if(!catalog.Select(cut,native->generation,writer.scene.token,writer.scene.address,selected))return Reject("ordered_scene");
+   const auto& writer=*native->writer;gi_reuse::GILiveSceneCatalog::Selection selected;gi_reuse::GILiveSceneCatalog::Diagnostic diagnostic;
+   if(!catalog.Select(cut,native->generation,writer.scene.token,writer.scene.address,selected,&diagnostic)){
+    if(GIOwnedPipeline::rejected.load()<12||GIOwnedPipeline::rejected.load()%120==0)
+     Log("GI_OWNED_SCENE stage=%s order=%s status=%u token=%llu address=%llx instance=%u missing_instances=%u",diagnostic.stage,
+      diagnostic.orderReason,unsigned(diagnostic.status),diagnostic.token,diagnostic.address,diagnostic.instance,diagnostic.missingBottoms);
+    return Reject("ordered_scene");
+   }
    // Every triangle must be tied to its BLAS-build-time copies, including hair.
    if(selected.geometry.empty())return Reject("empty_scene");
    for(const auto& geometry:selected.geometry)if(!geometry.frozen||!geometry.frozen->owner)return Reject("unpreserved_geometry");
@@ -67,6 +72,7 @@ static void AfterCompute(ID3D12GraphicsCommandList4* list,const gi_reuse::Comput
  if(count>UINT32_MAX||!UINT(writer.ticket.serial)){Skip("image_or_revision_range");return;}
  auto recording=GINativeSceneOwners::ReadRecording(list,false);
  if(!recording||!recording->complete||recording->submitted||recording->generation!=native->generation){Skip("recording_generation");return;}
+ if(!GINativeSceneQueues::Preflight(native->context.queue,*recording.Get(),writer)){Skip("scene_preflight");return;}
  struct Mute {Mute(){GIOwnedPipeline::recording=true;}~Mute(){GIOwnedPipeline::recording=false;}} mute;
  try {
   auto pass=std::make_shared<Pass>();pass->pipeline=pipeline;pass->native=native;pass->bindings=bindings;
