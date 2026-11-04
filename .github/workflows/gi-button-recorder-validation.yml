@@ -1,0 +1,44 @@
+name: Validate F10 recorder on Windows
+on:
+  push:
+    branches: [work/r329-recorder-validation]
+permissions:
+  contents: read
+jobs:
+  recorder:
+    runs-on: windows-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify sequence and real WPR start marker save
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          & powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/diagnostics/test-gi-button-capture.ps1
+          if ($LASTEXITCODE -ne 0) { throw 'Sequence test failed' }
+          . ./tools/diagnostics/Capture-NativeProcess.ps1
+          New-Item -ItemType Directory -Force build/recorder-test | Out-Null
+          $out=(Resolve-Path build/recorder-test).Path
+          $wpr=(Get-Command wpr.exe).Source
+          $instance='ControlGI_CI_'+[Guid]::NewGuid().ToString('N')
+          $recording=$false
+          try {
+            $r=Invoke-CaptureNative -Executable $wpr -Arguments @('-start','GeneralProfile','-start','GPU','-filemode','-instancename',$instance) -LogPath "$out/wpr.txt" -TimeoutSeconds 60
+            if($r.ExitCode -ne 0){throw $r.Text}
+            $recording=$true
+            $r=Invoke-CaptureNative -Executable $wpr -Arguments @('-marker','CONTROL_GI_CI','-instancename',$instance) -LogPath "$out/wpr.txt" -TimeoutSeconds 30
+            if($r.ExitCode -ne 0){throw $r.Text}
+            Start-Sleep -Seconds 2
+          } finally {
+            if($recording){
+              $r=Invoke-CaptureNative -Executable $wpr -Arguments @('-stop',"$out/test.etl",'GI recorder validation','-skipPdbGen','-instancename',$instance) -LogPath "$out/wpr.txt" -TimeoutSeconds 180
+              if($r.ExitCode -ne 0){throw $r.Text}
+            }
+          }
+          if(!(Test-Path "$out/test.etl") -or (Get-Item "$out/test.etl").Length -eq 0){throw 'Missing saved trace'}
+          'PASS: Windows PowerShell 5.1 invoked WPR GeneralProfile+GPU, marker, named save and produced a nonempty ETL.' | Tee-Object "$out/result.txt"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: R329-recorder-validation
+          path: build/recorder-test/*.txt
