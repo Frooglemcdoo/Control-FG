@@ -31,11 +31,18 @@ motion_exceptions=json.loads((root/'tools/fixtures/r210-baseline-exceptions.json
 pipeline_exceptions=json.loads((root/'tools/fixtures/r211-baseline-exceptions.json').read_text())
 foliage_exceptions=json.loads((root/'tools/fixtures/r265-baseline-exceptions.json').read_text())
 clamp_ab_exceptions=json.loads((root/'tools/fixtures/r276-baseline-exceptions.json').read_text())
+queue_boundary_exceptions=json.loads((root/'tools/fixtures/r317-baseline-exceptions.json').read_text())
 for name, expected in manifest['files'].items():
     if name == 'src/fg_overlay.h':
         assert not (root / name).exists(), 'Legacy settings popup must remain removed'
         continue # R42 replaces UI-only code with fg_settings.h; renderer hashes remain enforced.
     data = (root / name).read_bytes().replace(b'\r\n', b'\n')
+    if name in queue_boundary_exceptions:
+        text=data.decode()
+        for before,after in reversed(queue_boundary_exceptions[name]):
+            assert text.count(after)==1,(name,'R317 exact game queue observation boundary changed')
+            text=text.replace(after,before,1)
+        data=text.encode()
     if name in clamp_ab_exceptions:
         text=data.decode()
         for before,after in reversed(clamp_ab_exceptions[name]):
