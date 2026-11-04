@@ -1,6 +1,7 @@
 #pragma once
 #include "gi_reuse/d3d12_initial_gi_pipeline.h"
 #include <atomic>
+#include "gi_reuse/owned_request.h"
 #include <new>
 #include "gi_reuse/attempt_throttle.h"
 #ifdef CONTROL_GI_LONG_SEQUENCE
@@ -20,7 +21,8 @@ inline bool Enabled() noexcept {
 using DispatchObserver=void(*)(ID3D12GraphicsCommandList4*,const gi_reuse::ComputeBindingSnapshot&,UINT,UINT,UINT) noexcept;
 inline std::atomic<DispatchObserver> dispatchObserver{nullptr};
 inline std::atomic<UINT64> recorded{0},admitted{0},rejected{0};
-inline std::atomic<bool> requested{true},active{false};
+inline auto& requested=gi_reuse::ownedRequested;
+inline std::atomic<bool> active{false};
 inline gi_reuse::AttemptThrottle attempts;
 inline thread_local bool recording=false;
 class Owner final:public IUnknown {

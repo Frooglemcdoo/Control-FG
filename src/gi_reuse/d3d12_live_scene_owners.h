@@ -31,6 +31,7 @@ class D3D12LiveSceneOwners {
     }
 public:
     explicit D3D12LiveSceneOwners(U64 budget=2ull*1024*1024*1024):budget_(budget){}
+    struct LookupDiagnostic {U64 owners=0,bytes=0,budget=0,covering=0;const char* reason="none";};
     struct Identity {U64 token=0,address=0,bytes=0;};
     struct Lease {
         GISceneProducerPlan plan;
@@ -73,9 +74,16 @@ public:
         try {std::lock_guard<std::mutex> guard(mutex_);old=Remove(wrapper);}
         catch(...){std::lock_guard<std::mutex> guard(mutex_);healthy_=false;}
     }
-    bool Identify(U64 address,U64 bytes,Identity& out) noexcept {
-        out={};try {std::lock_guard<std::mutex> guard(mutex_);if(!healthy_)return false;
-            const auto token=index_.Find(address,bytes);if(!token)return false;
+    bool Identify(U64 address,U64 bytes,Identity& out,LookupDiagnostic* diagnostic=nullptr) noexcept {
+        out={};try {std::lock_guard<std::mutex> guard(mutex_);
+            if(diagnostic){*diagnostic={};diagnostic->owners=tokens_.size();diagnostic->bytes=bytes_;diagnostic->budget=budget_;}
+            if(!healthy_){if(diagnostic)diagnostic->reason="registry_unhealthy";return false;}
+            const auto token=index_.Find(address,bytes);if(!token){
+                if(diagnostic){for(const auto& item:tokens_){const auto& e=*item.second;
+                    if(address>=e.address&&address-e.address<=e.bytes&&bytes<=e.bytes-(address-e.address))++diagnostic->covering;}
+                    diagnostic->reason=diagnostic->covering>1?"overlapping_owners":"missing_owner";}
+                return false;
+            }
             const auto& e=*tokens_.at(token);out={token,address,e.bytes-(address-e.address)};return true;
         }catch(...){return false;}
     }

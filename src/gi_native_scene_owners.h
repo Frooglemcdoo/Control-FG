@@ -6,6 +6,7 @@
 #include "gi_native_lifetime_runtime.h"
 #include "gi_reuse/writer_handoff.h"
 #include "gi_owned_metrics.h"
+#include "gi_reuse/owned_request.h"
 // Recovered R103 creation boundaries. These observe native ownership only;
 // installing them does not enable the replacement lighting dispatch.
 namespace GINativeSceneOwners {
@@ -220,7 +221,11 @@ static void Build(ID3D12GraphicsCommandList4* list,const D3D12_BUILD_RAYTRACING_
  try {
   if(!desc||recording->events.size()>=65536){recording->Incomplete("build_descriptor_or_capacity");return;}
   gi_reuse::D3D12LiveSceneOwners::Identity destination,source;
-  if(!owners.Identify(desc->DestAccelerationStructureData,256,destination)){recording->Incomplete("build_destination_owner");return;}
+  gi_reuse::D3D12LiveSceneOwners::LookupDiagnostic lookup;
+  if(!owners.Identify(desc->DestAccelerationStructureData,256,destination,&lookup)){
+   Log("GI_OWNED_OWNER_FAILURE revision=R325 reason=%s address=%llx owners=%llu retained=%llu budget=%llu covering=%llu top=%u descriptors=%u",lookup.reason,desc->DestAccelerationStructureData,lookup.owners,lookup.bytes,lookup.budget,lookup.covering,unsigned(desc->Inputs.Type==D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL),desc->Inputs.NumDescs);
+   recording->Incomplete("build_destination_owner");return;}
+
   recording->events.reserve(recording->events.size()+1);
   Event e;auto& event=e.build.event;auto& r=event.record;
   r.address=desc->DestAccelerationStructureData;r.count=desc->Inputs.NumDescs;
@@ -271,7 +276,8 @@ static void Copy(ID3D12GraphicsCommandList4* list,UINT64 destination,UINT64 sour
  }catch(...){recording->Incomplete("observer_exception");}
 }
 static void WriterReady(const GINativeJobRoute::Ticket& ticket) noexcept {
- if(!ready.load())return;GIOwnedMetrics::Scope timing(GIOwnedMetrics::Writer);writerHandoff.Clear();
+ if(!ready.load())return;writerHandoff.Clear();if(!gi_reuse::ownedRequested.load())return;
+ GIOwnedMetrics::Scope timing(GIOwnedMetrics::Writer);
  auto recording=ReadRecording(reinterpret_cast<ID3D12GraphicsCommandList4*>(ticket.list));
  const auto n=++writerPublications;
  const auto report=[&](const char* reason,const Writer* writer=nullptr){

@@ -6,6 +6,7 @@
 #include "initial_reservoir.h"
 #include "frame_tiles.h"
 #include "d3d12_dispatch_gate.h"
+#include "d3d12_gi_scratch_pool.h"
 #include "../pt_glass_descriptors.h"
 namespace gi_reuse {
 // Five stages sharing the admitted native GI6 root. Shader bytecode is prepared
@@ -64,6 +65,8 @@ class D3D12InitialGITile {
         auto h=staging_->GetCPUDescriptorHandleForHeapStart();h.ptr+=SIZE_T(stage*49+slot)*step_;return h;
     }
     HRESULT Buffer(UINT64 bytes,Ptr<ID3D12Resource>& out,D3D12_HEAP_TYPE type=D3D12_HEAP_TYPE_DEFAULT) noexcept {
+        try {out=SharedGIScratchPool().Take(device_.Get(),bytes,type);}catch(...){}
+        if(out){bytes_+=bytes;return S_OK;}
         D3D12_HEAP_PROPERTIES heap{};heap.Type=type;heap.CreationNodeMask=heap.VisibleNodeMask=1;
         D3D12_RESOURCE_DESC d{};d.Dimension=D3D12_RESOURCE_DIMENSION_BUFFER;d.Width=bytes;d.Height=1;
         d.DepthOrArraySize=d.MipLevels=1;d.SampleDesc.Count=1;d.Layout=D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
@@ -101,7 +104,14 @@ class D3D12InitialGITile {
         return native.arguments.Replay(checked)&&checked.valid&&checked.mask==0xfdu&&checked.original==nativeTable_;
     }
 public:
-    ~D3D12InitialGITile(){if(controls_){const D3D12_RANGE written{0,SIZE_T(layout_.tiles)*512};controlUpload_->Unmap(0,&written);}}
+    ~D3D12InitialGITile(){
+        if(controls_){const D3D12_RANGE written{0,SIZE_T(layout_.tiles)*512};controlUpload_->Unmap(0,&written);}
+        // Host retains this owner through command-list replay and GPU completion.
+        // Record restores COMMON; an unrecorded allocation also starts COMMON.
+        for(auto* p:{&rays_,&batches_,&requests_,&samples_,&reservoirs_,&outputs_,&constants_})
+            SharedGIScratchPool().Return(std::move(*p),D3D12_HEAP_TYPE_DEFAULT);
+        SharedGIScratchPool().Return(std::move(controlUpload_),D3D12_HEAP_TYPE_UPLOAD);
+    }
     // Require native b4 and all GI6 SRVs actually observed for THIS recording.
     static constexpr UINT64 NativeRequired=1ull|(((1ull<<27)-1)<<5)|(1ull<<41)|(1ull<<42);
     HRESULT Initialize(ID3D12Device* device,const PTGlass::LightingTableShadow& native,

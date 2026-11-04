@@ -125,6 +125,7 @@ static void AfterCompute(ID3D12GraphicsCommandList4* list,const gi_reuse::Comput
   recording->events.push_back(std::move(use));
   if(!pass->tile.Record(list,pipeline->pipeline,pass->table,bindings)){recording->events.pop_back();Skip("native_root_state");return;}
   const auto n=++GIOwnedPipeline::recorded;
+  if(n<=4||n%600==0){const auto stats=gi_reuse::SharedGIScratchPool().Statistics();Log("GI_OWNED_SCRATCH revision=R325 idle_bytes=%llu reuses=%llu",stats.bytes,stats.reuses);}
   if(n<=4||n%600==0)Log("GI_OWNED_RECORDED frame=%llu writer=%llu pixels=%llu rays=%u scratch=%llu deferred_admission=1 count=%llu",
    writer.ticket.engineFrame,writer.ticket.serial,count,writer.rays,bytes,n);
  }catch(...){Skip("recording_exception");}
