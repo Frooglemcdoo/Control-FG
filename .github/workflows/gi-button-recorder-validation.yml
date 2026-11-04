@@ -37,6 +37,31 @@ jobs:
           }
           if(!(Test-Path "$out/test.etl") -or (Get-Item "$out/test.etl").Length -eq 0){throw 'Missing saved trace'}
           'PASS: Windows PowerShell 5.1 invoked WPR GeneralProfile+GPU, marker, named save and produced a nonempty ETL.' | Tee-Object "$out/result.txt"
+      - name: Exercise full recorder and packaging with a test process
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $root=Join-Path $PWD 'build/Game fixture with spaces'
+          $diag=Join-Path $root 'ControlTOH/Diagnostics'
+          New-Item -ItemType Directory -Force $diag | Out-Null
+          Copy-Item tools/diagnostics/Capture-GI-Button.ps1,tools/diagnostics/Capture-NativeProcess.ps1,tools/diagnostics/check-capture-python.py,tools/package-lighting-capture.py $diag
+          Add-Type -TypeDefinition 'public class GameFixture { public static void Main() { System.Threading.Thread.Sleep(60000); } }' -OutputAssembly "$root/Control_DX12.exe" -OutputType ConsoleApplication
+          'fixture hash input only' | Set-Content "$root/dxgi.dll"
+          $game=Start-Process "$root/Control_DX12.exe" -PassThru
+          & powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$diag/Capture-GI-Button.ps1" -GameProcessId $game.Id -ModuleFolder $root
+          if($LASTEXITCODE -ne 0){throw 'Full recorder failed'}
+          $capture=Get-ChildItem "$env:LOCALAPPDATA/ControlFGProbe" -Directory -Filter "GI-Button-*-$($game.Id)" | Select-Object -First 1
+          if(!$capture){throw 'Capture directory missing'}
+          $status=Get-Content "$($capture.FullName)/capture-status.json" -Raw | ConvertFrom-Json
+          if(!$status.measurement_complete -or !$status.trace_saved -or !$status.game_exited){throw 'Incomplete fixture capture'}
+          $phases=@(Get-Content "$($capture.FullName)/phases.jsonl" | ForEach-Object {($_ | ConvertFrom-Json).phase})
+          if(($phases -join ',') -ne 'STILL_BEGIN,STILL_END,PAN_BEGIN,PAN_END'){throw 'Unexpected measured phases'}
+          $desktop=[Environment]::GetFolderPath('Desktop')
+          $send=Get-ChildItem $desktop -Directory -Filter "Control-GI-SEND-*-$($game.Id)" | Select-Object -First 1
+          if(!$send -or !(Get-ChildItem $send.FullName -Filter '*.zip')){throw 'Send ZIPs missing'}
+          Copy-Item "$($capture.FullName)/wpr.txt" build/recorder-test/full-wpr.txt
+          Copy-Item "$($capture.FullName)/capture-status.json" build/recorder-test/full-status.txt
+          'PASS: actual recorder measured both phases, waited for test process exit, saved ETL, packaged ZIPs and created the desktop SEND folder.' | Tee-Object build/recorder-test/full-result.txt
       - uses: actions/upload-artifact@v4
         if: always()
         with:
