@@ -69,6 +69,10 @@ public:
    GIOwnedMetrics::RecordMS(GIOwnedMetrics::OwnerLock,timings.lockMS);
    GIOwnedMetrics::RecordMS(GIOwnedMetrics::MappingWork,timings.mappingMS);
    GIOwnedMetrics::RecordMS(GIOwnedMetrics::OwnerLeases,timings.leasesMS);
+   GIOwnedMetrics::RecordMS(GIOwnedMetrics::MappingClosure,timings.detail.closureMS);
+   GIOwnedMetrics::RecordMS(GIOwnedMetrics::MappingTable,timings.detail.tableMS);
+   GIOwnedMetrics::RecordMS(GIOwnedMetrics::MappingWitness,timings.detail.witnessMS);
+   GIOwnedMetrics::RecordMS(GIOwnedMetrics::MappingRows,timings.detail.rowsMS);
    if(censusOutput)ReportGeometry(census,writer.ticket.serial,unsigned(prepared));
    if(prepared!=gi_reuse::GISceneProducerError::None)return Reject("private_scene_table",unsigned(prepared));
    std::vector<gi_reuse::BufferStorageLease> retained=scene.buffers;

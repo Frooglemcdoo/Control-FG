@@ -34,7 +34,7 @@ class D3D12LiveSceneOwners {
     }
 public:
     explicit D3D12LiveSceneOwners(U64 budget=2ull*1024*1024*1024):budget_(budget){}
-    struct PrepareTimings {double lockMS=0,mappingMS=0,leasesMS=0;};
+    struct PrepareTimings {double lockMS=0,mappingMS=0,leasesMS=0;GISceneProducerTimings detail;};
     struct LookupDiagnostic {U64 owners=0,bytes=0,budget=0,covering=0;const char* reason="none";};
     struct Identity {U64 token=0,address=0,bytes=0;};
     struct Lease {
@@ -117,7 +117,7 @@ public:
             const auto locked=Clock::now();
             if(timings)timings->lockMS=std::chrono::duration<double,std::milli>(locked-started).count();
             if(!healthy_)return GISceneProducerError::Identity;
-            const auto result=PrepareGISceneProducer(history,cut,epoch,top,instances,perInstance,geometry,index_,native,bindings,pipeline,exports,next.plan,diagnostic,&mappingCache_);
+            const auto result=PrepareGISceneProducer(history,cut,epoch,top,instances,perInstance,geometry,index_,native,bindings,pipeline,exports,next.plan,diagnostic,&mappingCache_,timings?&timings->detail:nullptr);
             const auto mapped=Clock::now();
             if(timings)timings->mappingMS=std::chrono::duration<double,std::milli>(mapped-locked).count();
             if(result!=GISceneProducerError::None)return result;

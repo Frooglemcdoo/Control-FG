@@ -12,6 +12,8 @@ struct SceneTraversalClosure {
  SceneASReference top;
  std::uint64_t cut=0,epoch=0;
  std::vector<SceneASReference> bottoms;
+ ASRecord topRecord;
+ std::vector<ASRecord> bottomRecords; // Exact records already validated at this cut.
 };
 enum class TraversalError {None,Identity,Order,Version,Instances,Capacity,Bottom};
 template<std::size_t Capacity> TraversalError ResolveTraversalClosure(
@@ -28,7 +30,7 @@ template<std::size_t Capacity> TraversalError ResolveTraversalClosure(
     std::uint64_t(record.count)>(UINT64_MAX-record.instances)/64)return TraversalError::Instances;
  const auto* bytes=instances.Read(record.instances,std::uint64_t(record.count)*64);
  if(!bytes)return TraversalError::Instances;
- SceneTraversalClosure out;out.top=top;out.cut=cut;out.epoch=epoch;
+ SceneTraversalClosure out;out.top=top;out.cut=cut;out.epoch=epoch;out.topRecord=record;
  std::map<std::uint64_t,SceneASReference> unique;
  for(std::uint32_t i=0;i<record.count;++i){
   InstanceRecord instance;if(!DecodeInstance(bytes+std::size_t(i)*64,instance))return TraversalError::Instances;
@@ -47,7 +49,7 @@ template<std::size_t Capacity> TraversalError ResolveTraversalClosure(
   if(history.Select(cut,ref.token,ref.address,bottom)!=PTSceneOrder::Status::ready)return TraversalError::Order;
   if(bottom.revision!=ref.revision)return TraversalError::Version;
   if(bottom.topLevel||!bottom.geometry||bottom.count!=bottom.geometry->Size())return TraversalError::Bottom;
-  unique.emplace(ref.address,ref);out.bottoms.push_back(ref);
+  unique.emplace(ref.address,ref);out.bottoms.push_back(ref);out.bottomRecords.push_back(std::move(bottom));
  }
  result=std::move(out);return TraversalError::None;
 }

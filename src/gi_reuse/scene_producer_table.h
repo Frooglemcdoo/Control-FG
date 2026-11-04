@@ -7,6 +7,7 @@
 #include <set>
 #include <tuple>
 #include <unordered_map>
+#include <chrono>
 namespace gi_reuse {
 // Witnesses must carry the allocation identities observed at the BLAS build,
 // not identities recovered by looking up the same address later.
@@ -16,6 +17,7 @@ struct GISceneGeometry {
     PTOwnedScene::Triangle triangle{};
     std::shared_ptr<const GIFrozenGeometry> frozen;
 };
+struct GISceneProducerTimings {double closureMS=0,tableMS=0,witnessMS=0,rowsMS=0;};
 struct GISceneProducerPlan {
     SceneTraversalClosure closure;
     GIProducerTable table;
@@ -49,7 +51,10 @@ template<std::size_t Capacity> GISceneProducerError PrepareGISceneProducer(
     const std::vector<GISceneGeometry>& capturedGeometry,const PTOwnedScene::Index& owners,
     const NativeGITable& native,const std::vector<PTNativeBinding::Binding>& bindings,
     std::uint64_t producerPipeline,const PTShaderTableAdapter::Exports& exports,
-    GISceneProducerPlan& output,GISceneProducerDiagnostic* diagnostic=nullptr,GIValidatedMappingCache* persistent=nullptr) noexcept {
+    GISceneProducerPlan& output,GISceneProducerDiagnostic* diagnostic=nullptr,GIValidatedMappingCache* persistent=nullptr,GISceneProducerTimings* timings=nullptr) noexcept {
+    if(timings)*timings={};
+    using Clock=std::chrono::steady_clock;auto stageStart=Clock::now();
+    const auto elapsed=[&](){const auto now=Clock::now();const auto ms=std::chrono::duration<double,std::milli>(now-stageStart).count();stageStart=now;return ms;};
     if(diagnostic)*diagnostic={};
     using namespace PTShaderTableAdapter;
     if(!epoch||!producerPipeline||!native.pipeline||!native.version||!owners.Revision()||
@@ -66,7 +71,9 @@ template<std::size_t Capacity> GISceneProducerError PrepareGISceneProducer(
         };
         if(ResolveTraversalClosure(history,cut,epoch,top,instances,perInstance,next.closure)!=TraversalError::None)
             return GISceneProducerError::Closure;
+        const auto closureMS=elapsed();if(timings)timings->closureMS=closureMS;
         if(!MatchesNativeGITable(native,bindings,exports.nativeOpaque,exports.nativeAlpha))return GISceneProducerError::Table;
+        const auto tableMS=elapsed();if(timings)timings->tableMS=tableMS;
         using Key=std::tuple<std::uint64_t,std::uint64_t,std::uint64_t,std::uint32_t>;
         std::map<Key,const GISceneGeometry*> witnesses;
         for(const auto& g:capturedGeometry){
@@ -74,8 +81,8 @@ template<std::size_t Capacity> GISceneProducerError PrepareGISceneProducer(
                !witnesses.emplace(Key{g.blas.address,g.blas.token,g.blas.revision,g.geometry},&g).second)
                 {GISceneGeometrySample sample;sample.stage=GISceneGeometryStage::WitnessIdentity;sample.blas=g.blas;sample.geometry=g.geometry;if(!diagnostic)return GISceneProducerError::Geometry;reject(sample,GISceneProducerError::Geometry);}
         }
-        ASRecord tlas;
-        if(history.Select(cut,top.token,top.address,tlas)!=PTSceneOrder::Status::ready)return GISceneProducerError::Closure;
+        const auto witnessMS=elapsed();if(timings)timings->witnessMS=witnessMS;
+        const auto& tlas=next.closure.topRecord;
         const auto* bytes=instances.Read(tlas.instances,std::uint64_t(tlas.count)*64);
         if(!bytes)return GISceneProducerError::Closure;
         auto& table=next.table;
@@ -83,6 +90,9 @@ template<std::size_t Capacity> GISceneProducerError PrepareGISceneProducer(
         table.producerPipeline=producerPipeline;table.epoch=epoch;
         table.records.resize(bindings.size()*2);table.geometry.resize(bindings.size());table.bound.resize(bindings.size());
         std::set<std::uint64_t> tokens;
+        // One binding row is immutable for this owner-locked admission. A repeat
+        // of its exact BLAS/revision/geometry needs neither hashing nor conversion.
+        std::vector<Key> boundIdentity(bindings.size());
         // Reuse only within this owner-locked transaction. A full source row
         // and allocation/revision/geometry identity distinguish material variants.
         // No result survives a new submit cut, owner change or frozen snapshot.
@@ -100,7 +110,9 @@ template<std::size_t Capacity> GISceneProducerError PrepareGISceneProducer(
         };
         std::unordered_map<MappingKey,Mapping,MappingHash> mappings;
         mappings.reserve((std::min)(bindings.size(),capturedGeometry.size()*2));
-        std::map<std::tuple<std::uint64_t,std::uint64_t,std::uint64_t>,ASRecord> selectedBottoms;
+        std::map<std::tuple<std::uint64_t,std::uint64_t,std::uint64_t>,const ASRecord*> selectedBottoms;
+        for(std::size_t i=0;i<next.closure.bottoms.size();++i){const auto& ref=next.closure.bottoms[i];
+            selectedBottoms.emplace(std::make_tuple(ref.address,ref.token,ref.revision),&next.closure.bottomRecords[i]);}
         for(std::uint32_t i=0;i<tlas.count;++i){
             InstanceRecord instance;
             if(!DecodeInstance(bytes+std::size_t(i)*64,instance))return GISceneProducerError::Closure;
@@ -110,22 +122,23 @@ template<std::size_t Capacity> GISceneProducerError PrepareGISceneProducer(
             if(!finite){sample.stage=GISceneGeometryStage::Transform;if(!diagnostic)return GISceneProducerError::Geometry;reject(sample,GISceneProducerError::Geometry);continue;}
             const auto& ref=perInstance[i];const auto key=std::make_tuple(ref.address,ref.token,ref.revision);
             auto cached=selectedBottoms.find(key);
-            if(cached==selectedBottoms.end()){
-                ASRecord selected;
-                if(history.Select(cut,ref.token,ref.address,selected)!=PTSceneOrder::Status::ready||
-                   selected.revision!=ref.revision||!selected.geometry)return GISceneProducerError::Closure;
-                cached=selectedBottoms.emplace(key,std::move(selected)).first;
-            }
-            const auto& bottom=cached->second;
+            if(cached==selectedBottoms.end())return GISceneProducerError::Closure;
+            const auto& bottom=*cached->second;
             for(std::uint32_t g=0;g<bottom.count;++g){
                 const auto row=std::uint64_t(instance.hitGroup)+std::uint64_t(g)*2;
                 if((row&1)||row>=table.records.size())return GISceneProducerError::Mapping;
+                const Key identity{ref.address,ref.token,ref.revision,g};
+                const auto binding=static_cast<std::size_t>(row/2);
+                if(table.bound[binding]&&boundIdentity[binding]==identity){
+                    if(diagnostic){++diagnostic->checked;++diagnostic->valid;++diagnostic->reused;}
+                    continue;
+                }
                 sample.geometry=g;sample.row=row;sample.binding=bindings[static_cast<std::size_t>(row/2)];
                 sample.witness={};sample.metadata={};sample.metadataError=sample.convertError=0;sample.resolved={};sample.exact={};sample.rebase={};sample.frozenIndices={};sample.frozenPositions={};sample.status=PTOwnedScene::Status::candidate;
                 if(diagnostic)++diagnostic->checked;
                 const auto found=witnesses.find(Key{ref.address,ref.token,ref.revision,g});
                 if(found==witnesses.end()){sample.stage=GISceneGeometryStage::WitnessMissing;if(!diagnostic)return GISceneProducerError::Geometry;reject(sample,GISceneProducerError::Geometry);continue;}
-                const auto binding=static_cast<std::size_t>(row/2);PTOwnedScene::Index::Resolved resolved;
+                PTOwnedScene::Index::Resolved resolved;
                 PTShaderTableAdapter::Bytes converted;
                 MappingKey currentKey{{ref.address,ref.token,ref.revision,g},{}};
                 std::memcpy(currentKey.second.data(),native.bytes.data()+row*NativeStride,NativeStride);
@@ -174,13 +187,14 @@ template<std::size_t Capacity> GISceneProducerError PrepareGISceneProducer(
                 }
                 if(table.bound[binding]&&table.records[row]!=converted){sample.stage=GISceneGeometryStage::Conflict;if(!diagnostic)return GISceneProducerError::Conflict;reject(sample,GISceneProducerError::Conflict);continue;}
                 if(diagnostic)++diagnostic->valid;
-                table.records[row]=converted;table.geometry[binding]=resolved.geometry;table.bound[binding]=1;
+                table.records[row]=converted;table.geometry[binding]=resolved.geometry;table.bound[binding]=1;boundIdentity[binding]=identity;
                 if(!reusedMapping)for(auto token:resolved.tokens)tokens.insert(token);
             }
         }
         if(failure!=GISceneProducerError::None)return failure;
         if(tokens.empty())return GISceneProducerError::Empty;
         next.allocationTokens.assign(tokens.begin(),tokens.end());next.ownerRevision=owners.Revision();
+        const auto rowsMS=elapsed();if(timings)timings->rowsMS=rowsMS;
         output=std::move(next);return GISceneProducerError::None;
     }catch(...){return GISceneProducerError::Allocation;}
 }

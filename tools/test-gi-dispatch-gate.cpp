@@ -4,7 +4,12 @@
 static void Run(bool admit){
  ComPtr<ID3D12Debug> debug;Check(D3D12GetDebugInterface(IID_PPV_ARGS(&debug)));debug->EnableDebugLayer();
  Device gpu(false);ComPtr<ID3D12InfoQueue> info;Check(gpu.device.As(&info));
+ ID3D12Resource* retired=nullptr;
+ {gi_reuse::D3D12DispatchGate temporary;Check(temporary.Initialize(gpu.device.Get()));retired=temporary.Resource();}
  gi_reuse::D3D12DispatchGate gate;Check(gate.Initialize(gpu.device.Get()));
+ Require(gate.Resource()==retired,"Retired gate buffer was not reused");
+ {gi_reuse::D3D12DispatchGate concurrent;Check(concurrent.Initialize(gpu.device.Get()));
+  Require(concurrent.Resource()!=gate.Resource(),"Live gate buffer was reused prematurely");}
  auto one=gpu.Upload(std::vector<unsigned>{0}),zero=gpu.Upload(std::vector<unsigned>{0});
  auto output=gpu.Buffer(4,D3D12_HEAP_TYPE_DEFAULT,D3D12_RESOURCE_STATE_COPY_DEST,true);
  auto readback=gpu.Buffer(4,D3D12_HEAP_TYPE_READBACK,D3D12_RESOURCE_STATE_COPY_DEST);
