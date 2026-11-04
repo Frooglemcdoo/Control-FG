@@ -89,6 +89,29 @@ static void TestStaticSceneCompaction(){
     }
     std::printf("Static scene compaction: %.3f ms for 1,500 BLAS and 3,000 pending signals (informational)\n",elapsed);
 }
+// R316 reported queue 1 waiting on fence 52 value 4 while queue 54
+// supplied the releasing signal later. The public Control queue is a separate
+// Streamline proxy; observe its FIFO rather than importing this internal split.
+static void TestProxyQueueBoundary(){
+ Graph internal,logical;const Key as{5480,0x2466200000ull};Selection selected;
+ internal.Write(1,as,1);logical.Write(100,as,1);
+ for(U64 n=1;n<=4;++n){internal.Wait(1,52,n);if(n<4)internal.Signal(1,53,n);}
+ const auto internalCut=internal.Mark(1),publicCut=logical.Mark(100);
+ assert(internal.Select(internalCut,as,selected)==Status::pending);
+ assert(internal.PendingWait(internalCut).fence==52);
+ assert(logical.Select(publicCut,as,selected)==Status::ready&&selected.version==1);
+ internal.Signal(1,53,4);
+ internal.Signal(54,52,1);internal.Signal(54,52,2);internal.Wait(54,53,1);
+ internal.Signal(54,52,3);internal.Wait(54,53,2);internal.Signal(54,52,4);
+ assert(internal.Select(internalCut,as,selected)==Status::ready&&selected.version==1);
+ // Actual game cross-queue dependencies still require their signal. Filtering
+ // internal transport must not turn an unrelated compute writer into FIFO.
+ logical.Signal(100,199,1);logical.Wait(101,199,1);
+ logical.Write(101,as,2);assert(logical.Select(logical.Mark(100),as,selected)==Status::unordered);
+ logical.Signal(101,200,1);logical.Wait(100,200,1);
+ assert(logical.Select(logical.Mark(100),as,selected)==Status::ready&&selected.version==2);
+ puts("PASS R316 proxy boundary reproduction: internal late signal, public FIFO and real game cross-queue dependency.");
+}
 static void TestObservedFenceCompletion(){
     const Key as{1,0x1000};Selection selected;
     Graph cpu;cpu.Write(1,as,1);cpu.Wait(1,90,5);const auto cut=cpu.Mark(1);
@@ -155,6 +178,7 @@ int main(){
     TestAppendClockReuse();
     TestSampledProgress();
     TestIndexedSceneSelection();
+    TestProxyQueueBoundary();
     TestObservedFenceCompletion();
     TestStaticSceneCompaction();
     TestLiveCompaction();

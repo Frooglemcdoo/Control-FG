@@ -3,6 +3,7 @@
 #include "gi_native_submission_hooks.h"
 #include "gi_owned_pipeline_runtime.h"
 #include <deque>
+namespace rt_spot_table_audit {inline bool InstallGameQueue(ID3D12CommandQueue*) noexcept;}
 namespace GINativeSceneQueues {
 using Microsoft::WRL::ComPtr;
 using namespace GINativeSceneOwners;
@@ -20,11 +21,34 @@ struct Flight {
  ComPtr<ID3D12GraphicsCommandList4> prefix;
 };
 static std::vector<Queue> queues;
+static std::vector<ComPtr<IUnknown>> gameQueues;
 static std::vector<Fence> fences;
 static std::deque<Flight> flights;
 static UINT64 serial=0;
 static std::atomic<UINT64> submits{0},marks{0},checkpoints{0},compactions{0};
 static bool Active() noexcept {return Enabled()&&ready.load();}
+static bool IsGameQueue(ID3D12CommandQueue* queue) noexcept {
+ ComPtr<IUnknown> identity;if(!queue||FAILED(queue->QueryInterface(IID_PPV_ARGS(&identity))))return false;
+ for(const auto& entry:gameQueues)if(entry.Get()==identity.Get())return true;
+ return false;
+}
+static void RegisterGameQueue(ID3D12CommandQueue* queue) noexcept {
+ if(!Enabled()||!queue)return;const DWORD error=GetLastError();
+ try {std::lock_guard<std::recursive_mutex> guard(mutex);
+  [&] {
+  ComPtr<IUnknown> identity;if(FAILED(queue->QueryInterface(IID_PPV_ARGS(&identity)))){catalog.Invalidate("game_queue_identity");return;}
+  if(IsGameQueue(queue))return;
+  if(gameQueues.size()>=16){catalog.Invalidate("game_queue_capacity");return;}
+  // Hook the exact interface returned to Control, before its first submission.
+  // The existing submitDepth guard suppresses synchronous native forwarding.
+  if(!rt_spot_table_audit::InstallGameQueue(queue)){catalog.Invalidate("game_queue_hook");return;}
+  gameQueues.push_back(std::move(identity));
+  Log("GI_OWNED_GAME_QUEUE revision=R317 registered=1 queue=%p type=%u count=%llu",static_cast<void*>(queue),unsigned(queue->GetDesc().Type),UINT64(gameQueues.size()));
+  }();
+ }catch(...){catalog.Invalidate("game_queue_registration");}
+ SetLastError(error);
+}
+
 struct TraceEvent {UINT64 sequence=0,tick=0,queue=0,fence=0,value=0,completed=0;DWORD thread=0;HRESULT result=S_OK;const char* operation="none";};
 static std::array<TraceEvent,256> trace;
 static UINT64 traceSerial=0;
@@ -37,7 +61,7 @@ static void ExplainWait(UINT64 cut,UINT64 writer){
  if(n>8&&n%120)return;
  UINT64 actual=0;ID3D12Fence* native=nullptr;
  for(const auto& f:fences)if(f.id==pending.fence){native=f.native.Get();actual=native->GetCompletedValue();break;}
- Log("GI_OWNED_WAIT_DETAIL revision=R316 writer=%llu cut=%llu fence=%llu native_fence=%p wait_value=%llu observed_signal=%llu graph_completed=%llu actual_completed=%llu lane=%llu stamp=%llu count=%llu",
+ Log("GI_OWNED_WAIT_DETAIL revision=R317 writer=%llu cut=%llu fence=%llu native_fence=%p wait_value=%llu observed_signal=%llu graph_completed=%llu actual_completed=%llu lane=%llu stamp=%llu count=%llu",
   writer,cut,pending.fence,static_cast<void*>(native),pending.value,pending.signalValue,pending.completed,actual,pending.lane,pending.stamp,n);
  if(n>2)return;
  const auto first=traceSerial>=trace.size()?traceSerial-trace.size()+1:1;
@@ -69,11 +93,11 @@ static bool Preflight(ID3D12CommandQueue* input,const Recording& recording,const
   std::lock_guard<std::recursive_mutex> guard(mutex);
   ComPtr<IUnknown> identity;if(!input||FAILED(input->QueryInterface(IID_PPV_ARGS(&identity))))return false;
   const auto queue=std::find_if(queues.begin(),queues.end(),[&](const Queue& q){return q.identity.Get()==identity.Get();});
-  if(queue==queues.end()){static unsigned n=0;if(++n<=4)Log("GI_OWNED_PREFLIGHT_PATH revision=R316 path=unknown_queue queue=%p",static_cast<void*>(input));return true;}
+  if(queue==queues.end()){static unsigned n=0;if(++n<=4)Log("GI_OWNED_PREFLIGHT_PATH revision=R317 path=unknown_queue queue=%p",static_cast<void*>(input));return true;}
   PollNativeFences();
   const auto readiness=catalog.Mark(queue->id);
   const auto pending=catalog.PendingWait(readiness);
-  {static unsigned n=0;if(++n<=8)Log("GI_OWNED_PREFLIGHT_PATH revision=R316 queue=%llu writer=%llu producer_ordered=%u events=%llu pending_fence=%llu",queue->id,writer.ticket.serial,unsigned(writer.submission.Precedes(queue->id)),UINT64(recording.events.size()),pending.fence);}
+  {static unsigned n=0;if(++n<=8)Log("GI_OWNED_PREFLIGHT_PATH revision=R317 queue=%llu writer=%llu producer_ordered=%u events=%llu pending_fence=%llu",queue->id,writer.ticket.serial,unsigned(writer.submission.Precedes(queue->id)),UINT64(recording.events.size()),pending.fence);}
   if(pending.fence){static std::atomic<UINT64> rejectedWaits{0};const auto n=++rejectedWaits;
    if(n<=8||n%120==0)Log("GI_OWNED_PREFLIGHT rejected=queue_wait fence=%llu value=%llu signal_value=%llu completed=%llu writer=%llu scratch_allocated=0 count=%llu",pending.fence,pending.value,pending.signalValue,pending.completed,writer.ticket.serial,n);
    return false;
@@ -142,6 +166,14 @@ static void Quarantine(UINT count,ID3D12CommandList*const* lists) noexcept {
 }
 static UINT64 Before(ID3D12CommandQueue* input,UINT count,ID3D12CommandList*const* lists) noexcept {
  if(!Active())return 0;GIOwnedMetrics::Scope timing(GIOwnedMetrics::Submission);mutex.lock();const DWORD error=GetLastError();
+ if(!IsGameQueue(input)){
+  // Internal middleware/transport queues do not define the game's AS order.
+  // Never silently ignore a scene write or owned use on an unregistered queue.
+  bool scene=false;if(lists)for(UINT i=0;i<count;++i){auto r=ReadRecording(lists[i],false);if(r&&!r->events.empty()){scene=true;break;}}
+  if(scene){catalog.Invalidate("scene_on_unregistered_queue");Quarantine(count,lists);GIOwnedPipeline::active=false;
+   Log("GI_OWNED_QUEUE_UNREGISTERED revision=R317 scene_events=1 queue=%p count=%u",static_cast<void*>(input),count);}
+  SetLastError(error);mutex.unlock();return 0;
+ }
  std::vector<std::pair<std::shared_ptr<Use>,UINT64>> pending;
  try {
   Poll();auto* q=FindQueue(input);
@@ -214,7 +246,9 @@ static void After(ID3D12CommandQueue* input,UINT64 locked) noexcept {
 static bool BeforeFence() noexcept {if(!Active())return false;mutex.lock();return true;}
 static void AfterFence(ID3D12CommandQueue* input,ID3D12Fence* fence,UINT64 value,bool signal,HRESULT result,bool locked) noexcept {
  if(!locked)return;const DWORD error=GetLastError();
- try {auto* q=FindQueue(input);const auto id=FenceID(fence);
+ try {
+  if(!IsGameQueue(input)){SetLastError(error);mutex.unlock();return;}
+  auto* q=FindQueue(input);const auto id=FenceID(fence);
   if(!q||!id)catalog.Invalidate("live_fence_identity");
   else {
    Trace(signal?"signal":"wait",q->id,id,value,fence->GetCompletedValue(),result);
@@ -237,6 +271,6 @@ static void CpuSignal(ID3D12Fence* input) noexcept {
  SetLastError(error);
 }
 static const GINativeSubmission::Callbacks callbacks{&Before,&After,&BeforeFence,&AfterFence,&CpuSignal};
-[[maybe_unused]] static const bool registered=[] {GINativeSubmission::observer.store(&callbacks);return true;}();
+[[maybe_unused]] static const bool registered=[] {GINativeSubmission::observer.store(&callbacks);controlGameQueueObserver.store(&RegisterGameQueue);return true;}();
 
 }

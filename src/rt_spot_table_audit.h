@@ -524,6 +524,9 @@ inline void InstallQueue(ID3D12CommandQueue* queue) noexcept {
     } else {resetTracking.store(false);queueHooksFailed=true;}
     ReleaseSRWLockExclusive(&queueHookLock);
 }
+inline bool InstallGameQueue(ID3D12CommandQueue* queue) noexcept {
+    InstallQueue(queue);return !queueHooksFailed.load();
+}
 inline void InstallQueues(ID3D12Device* device) noexcept {
     Microsoft::WRL::ComPtr<ID3D12Fence> fence;
     if(SUCCEEDED(device->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&fence)))) {

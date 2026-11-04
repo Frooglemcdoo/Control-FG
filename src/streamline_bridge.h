@@ -21,6 +21,8 @@
 using D3D12CreateDeviceFn = HRESULT (WINAPI*)(IUnknown*, D3D_FEATURE_LEVEL, REFIID, void**);
 using SLUpgradeInterfaceFn = sl::Result(void**);
 
+// Optional observer installed before Control constructs its command queues.
+static std::atomic<void(*)(ID3D12CommandQueue*) noexcept> controlGameQueueObserver{nullptr};
 static HMODULE slInterposerModule = nullptr;
 static std::wstring slRuntimeDirectory;
 static std::wstring slGameDirectory;
@@ -2228,6 +2230,7 @@ static void* HookControlCommandQueueCtor(void* self, unsigned int queueType) {
     }
     Log("SL_QUEUE_ROUTE_END ordinal=%u queue_type=%u queue_name=%s object=%p queue=%p unwrap_result=%lld native_queue=%p proxy_queue=%u global_restored_native=1",
         ordinal, queueType, typeName, self, queue, SLResultCode(unwrapResult), nativeQueue, unsigned(proxyQueue));
+    if(queue)if(const auto observe=controlGameQueueObserver.load())observe(queue);
     if (nativeQueue) reinterpret_cast<IUnknown*>(nativeQueue)->Release();
     return result;
 }
