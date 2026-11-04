@@ -7,6 +7,7 @@
 #include "frame_tiles.h"
 #include "d3d12_dispatch_gate.h"
 #include "d3d12_gi_scratch_pool.h"
+#include <memory>
 #include "../pt_glass_descriptors.h"
 namespace gi_reuse {
 // Five stages sharing the admitted native GI6 root. Shader bytecode is prepared
@@ -108,7 +109,7 @@ public:
         if(controls_){const D3D12_RANGE written{0,SIZE_T(layout_.tiles)*512};controlUpload_->Unmap(0,&written);}
         // Host retains this owner through command-list replay and GPU completion.
         // Record restores COMMON; an unrecorded allocation also starts COMMON.
-        for(auto* p:{&rays_,&batches_,&requests_,&samples_,&reservoirs_,&outputs_,&constants_})
+        for(auto* p:{std::addressof(rays_),std::addressof(batches_),std::addressof(requests_),std::addressof(samples_),std::addressof(reservoirs_),std::addressof(outputs_),std::addressof(constants_)})
             SharedGIScratchPool().Return(std::move(*p),D3D12_HEAP_TYPE_DEFAULT);
         SharedGIScratchPool().Return(std::move(controlUpload_),D3D12_HEAP_TYPE_UPLOAD);
     }

@@ -223,7 +223,8 @@ static void Build(ID3D12GraphicsCommandList4* list,const D3D12_BUILD_RAYTRACING_
   gi_reuse::D3D12LiveSceneOwners::Identity destination,source;
   gi_reuse::D3D12LiveSceneOwners::LookupDiagnostic lookup;
   if(!owners.Identify(desc->DestAccelerationStructureData,256,destination,&lookup)){
-   Log("GI_OWNED_OWNER_FAILURE revision=R325 reason=%s address=%llx owners=%llu retained=%llu budget=%llu covering=%llu top=%u descriptors=%u",lookup.reason,desc->DestAccelerationStructureData,lookup.owners,lookup.bytes,lookup.budget,lookup.covering,unsigned(desc->Inputs.Type==D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL),desc->Inputs.NumDescs);
+   static std::atomic<UINT64> lookupFailures{0};const auto failures=++lookupFailures;
+   if(failures<=8||failures%600==0)Log("GI_OWNED_OWNER_FAILURE revision=R325 reason=%s address=%llx owners=%llu retained=%llu budget=%llu covering=%llu top=%u descriptors=%u",lookup.reason,desc->DestAccelerationStructureData,lookup.owners,lookup.bytes,lookup.budget,lookup.covering,unsigned(desc->Inputs.Type==D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL),desc->Inputs.NumDescs);
    recording->Incomplete("build_destination_owner");return;}
 
   recording->events.reserve(recording->events.size()+1);
