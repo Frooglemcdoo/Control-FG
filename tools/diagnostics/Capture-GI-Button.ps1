@@ -42,7 +42,8 @@ function Invoke-GIButtonMeasurement {
 try {
     $game=Get-Process -Id $GameProcessId -ErrorAction Stop
     if($game.ProcessName -ne 'Control_DX12'){throw 'The requested process is not Control DX12.'}
-    $wpr=(Get-Command wpr.exe -CommandType Application -ErrorAction Stop).Source
+    $wpr=Join-Path $env:WINDIR 'System32\wpr.exe'
+    if(-not (Test-Path -LiteralPath $wpr)){throw 'Windows Performance Recorder is missing from System32.'}
     $python=Get-Command python.exe -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
     if(-not $python){$python=Get-Command py.exe -CommandType Application -ErrorAction Stop | Select-Object -First 1}
     $check=Invoke-CaptureNative -Executable $python.Source -Arguments @('-I',(Join-Path $PSScriptRoot 'check-capture-python.py')) -TimeoutSeconds 30
