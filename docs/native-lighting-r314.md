@@ -83,7 +83,7 @@ it does not disable live geometry preservation or promise a measured FPS gain.
 
 R313 proved writer publication, native inputs and cross-list binding snapshots
 work, but all reported admissions failed at ordered_scene. Its sampled binding
-to recording intervals were approximately 24–36 ms; these intervals are not
+to recording intervals were approximately 24–27 ms; these intervals are not
 isolated setup timings. R314 addresses wasted setup and diagnostic overhead.
 The precise missing scene dependency was not recorded by R313, so this build
 must not be described as a verified activation fix. Use the ordinary launcher

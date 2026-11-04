@@ -202,7 +202,7 @@ static bool FreezeGeometry(ID3D12GraphicsCommandList4* list,Recording& recording
  std::vector<GIGeometrySnapshot::Source> ordered;ordered.reserve(sources.size());for(const auto& item:sources)ordered.push_back(item.second);
  struct Mute {Mute(){copyingGeometry=true;}~Mute(){copyingGeometry=false;}} mute;
  reason="geometry_copy_record";
- if(!GIGeometrySnapshot::Record(list,ordered,geometryBudget,event.transfer,geometryPool)){event.frozen.clear();return false;}
+ if(!GIGeometrySnapshot::Record(list,ordered,geometryBudget,event.transfer,geometryPool,&reason)){event.frozen.clear();return false;}
  // No allocations beyond this point: the command list now refers to the copies.
  for(std::size_t n=0;n<frozen.size();++n){auto& f=*frozen[n];const auto& g=event.geometry[n];
   const auto& index=event.transfer->storage->copies.at(g.indexToken);const auto& position=event.transfer->storage->copies.at(g.positionToken);
