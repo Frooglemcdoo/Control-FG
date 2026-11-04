@@ -110,6 +110,8 @@ public:
   if(!succeeded)return Fail("wait_failed");
   queues_.insert(queue);return order_.Wait(queue,fence,value)!=0||Fail("wait_contract");
  }
+ PTSceneOrder::Graph::PendingFence PendingWait(U64 cut) const {return order_.PendingWait(cut);}
+ U64 ObserveFenceCompletion(U64 fence,U64 completed){return healthy_?order_.ObserveFenceCompletion(fence,completed):0;}
  U64 TailStamp(U64 queue) const {return order_.TailStamp(queue);}
  std::size_t VersionCount() const {return versions_.size();}
  // Caller supplies fence-proven completed tail stamps and no outstanding cuts.

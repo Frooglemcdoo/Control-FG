@@ -37,6 +37,27 @@ int main(){
  assert(std::strcmp(diagnostic.stage,"blas_order_or_geometry")==0&&diagnostic.missingBottoms==1&&diagnostic.token==1&&diagnostic.address==256);
  assert(!c.Select(c.Mark(2),12,999,1024,selected,&diagnostic));
  assert(std::strcmp(diagnostic.stage,"tlas_order")==0&&std::strcmp(diagnostic.orderReason,"scene_no_ordered_build")==0);
+ // R314 live failure: scene_dispatch_wait_pending despite the native fence
+ // already being completed. Exercise the entire catalog forwarding path.
+ GILiveSceneCatalog waited;assert(waited.Submit(1,1,Bottom())&&waited.Submit(1,2,Top()));
+ assert(waited.Wait(1,90,5,true));const auto waiting=waited.Mark(1);
+ assert(!waited.Select(waiting,1,2,512,selected,&diagnostic));
+ assert(std::strcmp(diagnostic.orderReason,"scene_dispatch_wait_pending")==0);
+ assert(waited.PendingWait(waiting).fence==90);
+ assert(waited.ObserveFenceCompletion(90,4)==0);
+ assert(waited.ObserveFenceCompletion(90,UINT64_MAX)==0);
+ assert(!waited.Select(waiting,1,2,512,selected));
+ assert(waited.ObserveFenceCompletion(90,5)==1);
+ assert(waited.Select(waiting,1,2,512,selected));
+ auto updated=Bottom();updated->build.event.operation=ASOperation::Update;updated->build.event.source=256;updated->build.sourceToken=1;
+ assert(waited.Submit(1,3,updated));assert(waited.Select(waited.Mark(1),2,2,512,selected));
+ assert(waited.Compact({{1,waited.TailStamp(1)}}));
+ assert(waited.Wait(1,90,6,true));const auto future=waited.Mark(1);
+ assert(!waited.ObserveFenceCompletion(90,5)&&!waited.Select(future,1,2,512,selected));
+ GILiveSceneCatalog unrelated;assert(unrelated.Submit(1,1,Bottom())&&unrelated.Submit(1,2,Top()));
+ assert(unrelated.Wait(2,91,1,true));auto other=unrelated.Mark(2);
+ assert(unrelated.ObserveFenceCompletion(91,1)==1);
+ assert(!unrelated.Select(other,1,2,512,selected)); // completion is not a guessed cross-queue edge
  GILiveSceneCatalog race;assert(race.Submit(1,1,bottom)&&race.Submit(1,2,top));const auto before=race.Mark(1);
  assert(race.Submit(2,3,moved));assert(!race.Select(before,1,2,512,selected));
  GILiveSceneCatalog streaming;std::uint64_t completed=0;

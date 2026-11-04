@@ -30,6 +30,8 @@ public:
  bool Healthy() const {return order_.Healthy();}
  void Invalidate(const char* reason){order_.Invalidate(reason);}
  U64 Mark(U64 queue){return order_.Mark(queue);}
+ PTSceneOrder::Graph::PendingFence PendingWait(U64 cut)const{return order_.PendingWait(cut);}
+ U64 ObserveFenceCompletion(U64 fence,U64 completed){return order_.ObserveFenceCompletion(fence,completed);}
  U64 TailStamp(U64 queue)const{return order_.TailStamp(queue);}
  bool Signal(U64 queue,U64 fence,U64 value,bool ok){return order_.Signal(queue,fence,value,ok);}
  bool Wait(U64 queue,U64 fence,U64 value,bool ok){return order_.Wait(queue,fence,value,ok);}

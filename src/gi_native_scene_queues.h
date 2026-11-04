@@ -12,7 +12,7 @@ struct Queue {
  ComPtr<IUnknown> identity;ComPtr<ID3D12CommandQueue> native;ComPtr<ID3D12Fence> completed;
  UINT64 id=0,next=0,completedStamp=0;
 };
-struct Fence {ComPtr<IUnknown> identity;UINT64 id=0;};
+struct Fence {ComPtr<IUnknown> identity;ComPtr<ID3D12Fence> native;UINT64 id=0,pendingValue=0,observedSignal=0,lastCompleted=0;bool hasCompletion=false;};
 struct Flight {
  UINT64 queue=0,value=0,stamp=0;bool signaled=false;
  std::vector<ComPtr<Recording>> recordings;
@@ -25,18 +25,42 @@ static std::deque<Flight> flights;
 static UINT64 serial=0;
 static std::atomic<UINT64> submits{0},marks{0},checkpoints{0},compactions{0};
 static bool Active() noexcept {return Enabled()&&ready.load();}
+// Nonblocking completion observations resolve only waits whose queue signal
+// was not observed. The graph retains all known producer/consumer edges.
+static void PollNativeFences(){
+ for(auto& fence:fences){if(!fence.pendingValue)continue;const auto completed=fence.native->GetCompletedValue();
+  if(completed==UINT64_MAX){catalog.Invalidate("native_fence_device_removed");continue;}
+  if(fence.hasCompletion&&completed==fence.lastCompleted)continue;
+  fence.lastCompleted=completed;fence.hasCompletion=true;
+  const auto resolved=catalog.ObserveFenceCompletion(fence.id,completed);
+  if(completed>=fence.pendingValue)fence.pendingValue=0;
+  if(resolved){static UINT64 reports=0;const auto n=++reports;
+   if(n<=8||n%120==0)Log("GI_OWNED_FENCE_COMPLETION fence=%llu completed=%llu resolved_waits=%llu blocking_wait=0 count=%llu",fence.id,completed,resolved,n);
+  }
+ }
+}
 // A recording-time rejection avoids scratch/SBT allocation and tiled command
 // recording. It is only a preflight: actual submission must still revalidate.
 static bool Preflight(ID3D12CommandQueue* input,const Recording& recording,const Writer& writer) noexcept {
  try {
   // Unsubmitted AS writes can make this list's scene newer than the catalog.
   // Defer these uncommon cases to the original exact submission check.
-  for(const auto& event:recording.events)if(!event.writer&&!event.use)return true;
   std::lock_guard<std::recursive_mutex> guard(mutex);
   ComPtr<IUnknown> identity;if(!input||FAILED(input->QueryInterface(IID_PPV_ARGS(&identity))))return false;
   const auto queue=std::find_if(queues.begin(),queues.end(),[&](const Queue& q){return q.identity.Get()==identity.Get();});
+  if(queue==queues.end())return true;
+  PollNativeFences();
+  const auto readiness=catalog.Mark(queue->id);
+  const auto pending=catalog.PendingWait(readiness);
+  if(pending.fence){static std::atomic<UINT64> rejectedWaits{0};const auto n=++rejectedWaits;
+   if(n<=8||n%120==0)Log("GI_OWNED_PREFLIGHT rejected=queue_wait fence=%llu value=%llu signal_value=%llu completed=%llu writer=%llu scratch_allocated=0 count=%llu",pending.fence,pending.value,pending.signalValue,pending.completed,writer.ticket.serial,n);
+   return false;
+  }
+  // New AS writes may repair scene content, but cannot satisfy an existing
+  // queue wait. Check that wait first, before deferring content validation.
+  for(const auto& event:recording.events)if(!event.writer&&!event.use)return true;
   // The producer may be queued with the consumer in a later Execute batch.
-  if(queue==queues.end()||!writer.submission.Precedes(queue->id))return true;
+  if(!writer.submission.Precedes(queue->id))return true;
   gi_reuse::GILiveSceneCatalog::Selection selected;gi_reuse::GILiveSceneCatalog::Diagnostic d;
   const auto cut=catalog.Mark(queue->id);
   bool valid=cut&&catalog.Select(cut,recording.generation,writer.scene.token,writer.scene.address,selected,&d);
@@ -60,9 +84,10 @@ static Queue* FindQueue(ID3D12CommandQueue* input){
 static UINT64 FenceID(ID3D12Fence* input){
  if(!input)return 0;ComPtr<IUnknown> identity;if(FAILED(input->QueryInterface(IID_PPV_ARGS(&identity))))return 0;
  for(const auto& f:fences)if(f.identity.Get()==identity.Get())return f.id;
- if(fences.size()>=256)return 0;const auto id=++serial;fences.push_back({identity,id});return id;
+ if(fences.size()>=256)return 0;const auto id=++serial;fences.push_back({identity,input,id});return id;
 }
 static void Poll(){
+ PollNativeFences();
  for(auto it=flights.begin();it!=flights.end();){
   auto q=std::find_if(queues.begin(),queues.end(),[&](const Queue& entry){return entry.id==it->queue;});
   const auto done=q==queues.end()?0:q->completed->GetCompletedValue();
@@ -167,7 +192,16 @@ static void AfterFence(ID3D12CommandQueue* input,ID3D12Fence* fence,UINT64 value
  if(!locked)return;const DWORD error=GetLastError();
  try {auto* q=FindQueue(input);const auto id=FenceID(fence);
   if(!q||!id)catalog.Invalidate("live_fence_identity");
-  else if(signal)catalog.Signal(q->id,id,value,SUCCEEDED(result));else catalog.Wait(q->id,id,value,SUCCEEDED(result));
+  else {
+   auto entry=std::find_if(fences.begin(),fences.end(),[&](const Fence& f){return f.id==id;});
+   if(signal){catalog.Signal(q->id,id,value,SUCCEEDED(result));
+    if(SUCCEEDED(result)){entry->observedSignal=(std::max)(entry->observedSignal,value);if(value>=entry->pendingValue)entry->pendingValue=0;}
+   }else {catalog.Wait(q->id,id,value,SUCCEEDED(result));
+    // Only unknown signal ranges need polling. Known GPU signals retain their
+    // exact producer edges; completed initial values need no blocking wait.
+    if(SUCCEEDED(result)&&value>entry->observedSignal){entry->pendingValue=(std::max)(entry->pendingValue,value);entry->hasCompletion=false;PollNativeFences();}
+   }
+  }
  }catch(...){catalog.Invalidate("live_fence_exception");}
  SetLastError(error);mutex.unlock();
 }
