@@ -552,10 +552,9 @@ BYPASS for comparison, and collects logs automatically on exit. The owned path
 requires the observed one-pass GI contract and exact 8x16 GI6 dispatch dimensions.
 Native work still runs first for fallback; spatial/temporal reuse is not active.
 
-Build validation is in progress. The RTX 5090 standalone producer PASS remains
-accepted and requires no repeat. The next user action is the integrated R310
-game run once the package passes CI, not another one-off capture. R309 remains
-the last delivered package until then.
+The RTX 5090 standalone producer PASS remains accepted and requires no repeat.
+R310 is now ready for its integrated game run; this is not another standalone
+producer test or one-off capture.
 
 The live catalog now uses the recovered PT graph's incremental compaction between
 admissions. Completed copy/update dependencies are validated before their source
@@ -564,3 +563,21 @@ passes keep their own geometry/table leases. Sustained tests keep the newest
 submission unfinished, verify bounded version history and payload retirement,
 and preserve rejection of unordered source writes. No global idle or CPU wait
 is required to prune scene history.
+
+## R310 package validation and handoff — 2026-11-04
+
+Implementation commit `3446310bd5befa7fe33a8f3cfca9fede4a60c888` (local
+`c43a684`) passed foundation run `41746352998` / job `126300224356` and full-mod
+run `41746353020` / job `126300224839`. Artifact `13283419603` contains the
+integrated package. Both archive hashes, ZIP CRCs, three-root-DLL layout, exact
+owned launcher/source match, runtime admission/compaction markers and package
+notes were verified after download.
+
+Delivered `ControlTOH-R310.zip`: 4,454,214 bytes, SHA256
+`ba5fb6b3634c82d34d71eee217691b5f0a9b7d80650d942bc33db7e637f81ed1`.
+Library identity `libfile_ff76e0f8a100819193f4dcd58fe16612`, version 0.
+Run `ControlTOH/Diagnostics/Start-GI-Owned-Test.cmd`, keep RT indirect lighting
+and RR on, select GI RAW BYPASS, and compare the F10 NATIVE/OWNED toggle. Exit
+normally for automatic diagnostics. Persistent OWNED WAIT needs those logs,
+not a new capture. In-game image correctness/performance remains unverified.
+Native GI6 still runs for fallback; spatial/temporal reuse is not implemented.
