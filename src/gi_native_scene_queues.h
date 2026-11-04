@@ -23,7 +23,7 @@ static std::vector<Queue> queues;
 static std::vector<Fence> fences;
 static std::deque<Flight> flights;
 static UINT64 serial=0;
-static std::atomic<UINT64> submits{0},marks{0},checkpoints{0};
+static std::atomic<UINT64> submits{0},marks{0},checkpoints{0},compactions{0};
 static bool Active() noexcept {return Enabled()&&ready.load();}
 static Queue* FindQueue(ID3D12CommandQueue* input){
  if(!input)return nullptr;ComPtr<IUnknown> identity;if(FAILED(input->QueryInterface(IID_PPV_ARGS(&identity))))return nullptr;
@@ -44,11 +44,13 @@ static void Poll(){
   const auto done=q==queues.end()?0:q->completed->GetCompletedValue();
   if(it->signaled&&done!=UINT64_MAX&&done>=it->value){q->completedStamp=(std::max)(q->completedStamp,it->stamp);it=flights.erase(it);}else ++it;
  }
- // Rebase only on already-completed queue tails; no frame-time CPU/GPU wait.
- if(flights.empty()&&catalog.Healthy()){
+ // Compact between admission cuts, using completed stamps only for retirement.
+ // GPU work may remain in flight: its flights own independent resource leases.
+ if(catalog.Healthy()&&submits.load()%32==0){
   std::map<std::uint64_t,std::uint64_t> completed;
   for(const auto& q:queues)completed.emplace(q.id,q.completedStamp);
-  if(catalog.Checkpoint(completed,false))++checkpoints;
+  if(flights.empty()&&catalog.Checkpoint(completed,false))++checkpoints;
+  else if(catalog.Compact(completed))++compactions;
  }
 }
 static std::shared_ptr<const gi_reuse::GISceneBuild> Payload(const Event& input){
@@ -111,8 +113,8 @@ static UINT64 Before(ID3D12CommandQueue* input,UINT count,ID3D12CommandList*cons
   if(catalog.Healthy())catalog.Mark(q->id);
   flight.stamp=catalog.TailStamp(q->id);flights.push_back(std::move(flight));++submits;
   if(!catalog.Healthy())GIOwnedPipeline::active=false;
-  if(submits.load()<=8||submits.load()%600==0)Log("GI_OWNED_QUEUE submissions=%llu healthy=%u reason=%s pending=%llu admitted=%llu completed_checkpoints=%llu geometry_bytes=%llu",
-   submits.load(),unsigned(catalog.Healthy()),catalog.History().FailureReason(),static_cast<UINT64>(pending.size()),GIOwnedPipeline::admitted.load(),checkpoints.load(),geometryBudget->Held());
+  if(submits.load()<=8||submits.load()%600==0)Log("GI_OWNED_QUEUE submissions=%llu healthy=%u reason=%s pending=%llu admitted=%llu completed_checkpoints=%llu compactions=%llu geometry_bytes=%llu",
+   submits.load(),unsigned(catalog.Healthy()),catalog.History().FailureReason(),static_cast<UINT64>(pending.size()),GIOwnedPipeline::admitted.load(),checkpoints.load(),compactions.load(),geometryBudget->Held());
   if(prefixReady){ID3D12CommandList* prefix=flights.back().prefix.Get();input->ExecuteCommandLists(1,&prefix);}
 
  }catch(...){for(const auto& item:pending)item.first->Cancel();catalog.Invalidate("live_submission_exception");Quarantine(count,lists);}

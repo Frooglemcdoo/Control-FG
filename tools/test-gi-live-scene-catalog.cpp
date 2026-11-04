@@ -34,5 +34,19 @@ int main(){
  assert(!c.Select(c.Mark(2),12,2,512,selected)); // no previous geometry fallback
  GILiveSceneCatalog race;assert(race.Submit(1,1,bottom)&&race.Submit(1,2,top));const auto before=race.Mark(1);
  assert(race.Submit(2,3,moved));assert(!race.Select(before,1,2,512,selected));
+ GILiveSceneCatalog streaming;std::uint64_t completed=0;
+ for(unsigned n=0;n<300;++n){
+  auto payload=Bottom();std::weak_ptr<GISceneBuild> old=payload;
+  assert(streaming.Submit(1,n+1,payload));payload.reset();
+  assert(streaming.Submit(1,n+1,Top()));
+  const auto next=streaming.TailStamp(1);
+  assert(streaming.Compact({{1,completed}}));
+  assert(streaming.Select(streaming.Mark(1),n+1,2,512,selected));
+  assert(!old.expired()); // current producer geometry survives pruning
+  assert(streaming.Submit(1,n+1,Bottom()));
+  assert(streaming.Compact({{1,next}}));
+  assert(old.expired()); // superseded payload released; GPU flights retain their own leases
+  completed=next;
+ }
  std::puts("PASS live GI scene catalog: ordered writer cuts, cross-queue lineage, shared clone payloads, completed checkpoint, retired identities and conflicting writes");
 }

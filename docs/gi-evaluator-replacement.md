@@ -556,3 +556,11 @@ Build validation is in progress. The RTX 5090 standalone producer PASS remains
 accepted and requires no repeat. The next user action is the integrated R310
 game run once the package passes CI, not another one-off capture. R309 remains
 the last delivered package until then.
+
+The live catalog now uses the recovered PT graph's incremental compaction between
+admissions. Completed copy/update dependencies are validated before their source
+history is detached; raced dependencies retain permanent rejection. In-flight
+passes keep their own geometry/table leases. Sustained tests keep the newest
+submission unfinished, verify bounded version history and payload retirement,
+and preserve rejection of unordered source writes. No global idle or CPU wait
+is required to prune scene history.

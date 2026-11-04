@@ -33,7 +33,9 @@ geometry is limited to 64 MiB. Owners are retained through queue completion.
 The submission prefix arms each pass once and the GPU clears it after resolve,
 so a completed-list replay cannot rerun that owned pass. The live path adds no
 CPU fence wait and no image readback. Logs distinguish recording, admission,
-rejection reasons and completed queue checkpoints.
+rejection reasons, completed queue checkpoints and incremental compactions.
+Scene metadata is compacted between admissions using polled completion stamps;
+it does not require every queue to become idle.
 
 The existing RTX 5090 standalone producer result is reused. This package needs
 an in-game integration check, not a repeat of that standalone test. Report the

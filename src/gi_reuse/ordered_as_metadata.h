@@ -17,7 +17,7 @@ template<std::size_t Capacity=65536> class OrderedASMetadata {
  using U64=std::uint64_t;
  using Key=PTSceneOrder::Key;
  struct Dependency {Key key;U64 cut=0,version=0;};
- struct Version {ASRecord record;Dependency dependency;};
+ struct Version {ASRecord record;Dependency dependency;U64 queue=0,stamp=0;bool invalid=false;};
  PTSceneOrder::Graph order_;
  std::map<U64,Version> versions_;
  std::set<U64> queues_;
@@ -34,7 +34,7 @@ template<std::size_t Capacity=65536> class OrderedASMetadata {
   std::set<U64> seen;
   while(version){
    if(!seen.insert(version).second)return false;
-   const auto it=versions_.find(version);if(it==versions_.end())return false;
+   const auto it=versions_.find(version);if(it==versions_.end()||it->second.invalid)return false;
    const auto& d=it->second.dependency;if(!d.version)return true;
    PTSceneOrder::Selection selected;
    if(order_.Select(d.cut,d.key,selected)!=PTSceneOrder::Status::ready||selected.version!=d.version)return false;
@@ -94,6 +94,7 @@ public:
    // Unsupported/unresolved writes hide older data. Never silently retain an
    // earlier geometry version when the new write cannot be reconstructed.
    if(!order_.Write(queue,destination,version,"gi_unavailable_write"))return Fail("order_capacity");
+   if(version){auto& saved=versions_.at(version);saved.queue=queue;saved.stamp=order_.TailStamp(queue);}
    if(revisions)revisions->emplace_back(version,dep.version);
   }
   return true;
@@ -129,6 +130,34 @@ public:
   }
   if(!order_.RebaseCompleted(baseline)){retained.clear();return false;}
   versions_=std::move(next);return true;
+ }
+ // No external cuts survive this operation: the host calls between Execute
+ // admissions. In-flight passes already own their selected payload/resources.
+ // Completed copies/updates no longer depend on mutable source history. Validate
+ // all chains before detaching any of them; preserve a permanent rejection if
+ // a competing write was observed before completion.
+ bool Compact(const std::map<U64,U64>& completed,std::set<U64>& retained) {
+  retained.clear();if(!healthy_)return false;
+  std::vector<std::pair<U64,bool>> finished;
+  for(const auto& item:versions_){const auto& v=item.second;const auto done=completed.find(v.queue);
+   if(v.dependency.version&&v.stamp&&done!=completed.end()&&done->second>=v.stamp)
+    finished.emplace_back(item.first,DependencyValid(item.first));
+  }
+  for(const auto& item:finished){auto& v=versions_.at(item.first);v.invalid=!item.second;v.dependency={};}
+  std::set<U64> roots;
+  for(const auto& item:versions_)if(item.second.dependency.version)roots.insert(item.second.dependency.cut);
+  std::map<U64,U64> remap;
+  if(!order_.Compact(roots,completed,remap,retained))return false;
+  for(auto it=versions_.begin();it!=versions_.end();){
+   if(!retained.count(it->first)){it=versions_.erase(it);continue;}
+   auto& d=it->second.dependency;
+   if(d.version){const auto cut=remap.find(d.cut);
+    if(cut==remap.end()||!retained.count(d.version))return Fail("compacted_dependency_missing");
+    d.cut=cut->second;
+   }
+   ++it;
+  }
+  return true;
  }
  PTSceneOrder::Status Select(U64 cut,U64 token,U64 address,ASRecord& out) const {
   out={};if(!healthy_||!token||!address)return PTSceneOrder::Status::invalid;

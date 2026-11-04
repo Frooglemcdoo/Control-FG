@@ -65,6 +65,12 @@ public:
   if(ResolveTraversalClosure(order_,cut,epoch,next.top,next.instances,next.perInstance,closure)!=TraversalError::None)return false;
   output=std::move(next);return true;
  }
+ // Must run between admission calls, with no external CPU cut retained.
+ bool Compact(const std::map<U64,U64>& completed) {
+  std::set<U64> retained;if(!order_.Compact(completed,retained))return false;
+  for(auto p=payloads_.begin();p!=payloads_.end();)if(!retained.count(p->first))p=payloads_.erase(p);else ++p;
+  return true;
+ }
  bool Checkpoint(const std::map<U64,U64>& completed,bool outstandingCuts) {
   std::set<U64> retained;if(!order_.Checkpoint(completed,outstandingCuts,retained))return false;
   for(auto p=payloads_.begin();p!=payloads_.end();)if(!retained.count(p->first))p=payloads_.erase(p);else ++p;

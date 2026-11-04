@@ -93,5 +93,30 @@ int main(){
  assert(compact.Signal(1,11,1,true)&&compact.Wait(2,11,1,true));
  assert(!compact.Checkpoint({{1,compact.TailStamp(1)}},false,kept));
  assert(compact.Checkpoint({{1,compact.TailStamp(1)},{2,compact.TailStamp(2)}},false,kept));
+ // Sustained updates/clones while the most recent submission is unfinished.
+ // No global idle point is needed, and the historical source cut stays pinned
+ // until the dependent copy itself has completed.
+ Adapter busy;std::uint64_t completed=0;
+ for(unsigned n=0;n<2000;++n){
+  assert(busy.Submit(1,{early,Change(ASOperation::Copy,512,2,256,1)}));
+  const auto next=busy.TailStamp(1);
+  assert(busy.Compact({{1,completed}},kept));
+  assert(busy.VersionCount()<12);
+  assert(busy.Select(busy.Mark(1),2,512,out)==Status::ready&&out.instances==4096);
+  completed=next;
+ }
+ Adapter unfinished;
+ assert(unfinished.Submit(1,{early,Change(ASOperation::Copy,512,2,256,1)}));
+ assert(unfinished.Compact({},kept));
+ assert(unfinished.Submit(2,{late}));
+ assert(unfinished.Select(unfinished.Mark(1),2,512,out)==Status::invalid);
+ const auto completeBad=unfinished.TailStamp(1);
+ assert(unfinished.Compact({{1,completeBad},{2,unfinished.TailStamp(2)}},kept));
+ assert(unfinished.Select(unfinished.Mark(1),2,512,out)==Status::invalid); // no laundering a raced copy
+ Adapter finishedCopy;
+ assert(finishedCopy.Submit(1,{early,Change(ASOperation::Copy,512,2,256,1)}));
+ assert(finishedCopy.Compact({{1,finishedCopy.TailStamp(1)}},kept));
+ assert(finishedCopy.Submit(2,{late}));
+ assert(finishedCopy.Select(finishedCopy.Mark(1),2,512,out)==Status::ready); // completed copy is independent
  std::puts("PASS GI ordered AS adapter: batch/list order, replay/reset, allocation identities, cross-queue copy lineage, updates, pending/failed fences and bounded rejection");
 }
