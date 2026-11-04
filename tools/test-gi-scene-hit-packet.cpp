@@ -116,6 +116,27 @@ static void CheckBothWidths(unsigned width){
    assert(check()==GISceneProducerError::None&&census.reused==0);
    assert(cached.table.geometry[0].material==1&&cached.table.geometry[2].material==2);
   }
+  {
+   // A / B / A instances: nonadjacent reuse must keep B's distinct geometry
+   // and material, and must never carry cached ownership across transactions.
+   GrowingASJournal<8> tripleJournal;tripleJournal.Reset();
+   tripleJournal.Append({ASOperation::Build,{1792,0,16384,3,true},0});
+   auto tripleRecording=History::Freeze(tripleJournal,tripleJournal.generation,{{31,0}});
+   assert(tripleRecording&&multiple.Submit(1,{tripleRecording}));
+   const auto tripleCut=multiple.Mark(1);
+   unsigned char three[192];std::memcpy(three,two,128);std::memcpy(three+128,two,64);
+   const auto triple=Bytes(16384,23,three,sizeof(three));
+   GISceneProducerDiagnostic census;GISceneProducerPlan cached;
+   auto check=[&](){return PrepareGISceneProducer(multiple,tripleCut,1,{1792,31,6},triple,
+    {{512,11,2},{1536,30,4},{512,11,2}},{{{512,11,2},0,witness},{{1536,30,4},0,secondWitness}},
+    owners,distinctTable,distinct,45,p.identifiers,cached,&census);};
+   assert(check()==GISceneProducerError::None&&census.checked==3&&census.valid==3&&census.reused==1);
+   assert(cached.table.geometry[0].positions.address==8192&&cached.table.geometry[2].positions.address==8448);
+   const auto saved=cached.table.records;
+   owners.Remove(21);assert(check()==GISceneProducerError::Geometry&&census.valid==1&&census.reused==0);
+   assert(census.samples.size()==2&&census.samples[0].exact.positionToken==0&&cached.table.records==saved);
+   owners.Insert({21,8192,44});assert(check()==GISceneProducerError::None&&census.reused==1);
+  }
   std::memcpy(two+64+52,&firstRow,4);both=Bytes(16384,23,two,sizeof(two));
   assert(prepareBoth()==GISceneProducerError::Conflict);
   assert(producer.table.geometry[2].positions.address==8448); // failed transaction preserves last valid plan
