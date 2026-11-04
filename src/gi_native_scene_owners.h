@@ -76,6 +76,7 @@ struct Writer {
  PTShaderTableAdapter::Identifier opaque{},alpha{};
  gi_reuse::D3D12LiveSceneOwners::Identity scene;
  float baseRange=0;UINT rays=0,pass=0,passes=0;bool nativeInputs=false;
+ const char* inputReason="not_observed";
 };
 static std::atomic<bool(*)(Writer&) noexcept> writerInputs{nullptr};
 struct Use {

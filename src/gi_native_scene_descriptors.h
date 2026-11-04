@@ -101,13 +101,20 @@ static bool Provider(const char* name,UINT& output) noexcept {
 static bool Inputs(GINativeSceneOwners::Writer& writer) noexcept {
  writer.scene={};writer.baseRange=0;writer.rays=writer.pass=writer.passes=0;
  UINT tag=0,bytes=sizeof(tag),range=0;PTGlassRuntime::Context context;
- if(!writer.pipeline||FAILED(writer.pipeline->GetPrivateData(gi_reuse::nativeGIVariantKey,&bytes,&tag))||bytes!=sizeof(tag)||tag<1||tag>2||
-    !PTGlassRuntime::ReadContext(&context)||reinterpret_cast<UINT_PTR>(context.rays)!=writer.ticket.list||
-    !Select(context,tag==1?4u:5u,writer.scene)||!Provider("g_fDiffuseGIRadius",range)||
-    !Provider("g_uRTDiffuseRayCount",writer.rays)||!Provider("g_uDGIPass",writer.pass)||!Provider("g_uDGIPassCount",writer.passes))return false;
+ const auto fail=[&](const char* reason){writer.inputReason=reason;return false;};
+ if(!writer.pipeline)return fail("writer_pipeline");
+ if(FAILED(writer.pipeline->GetPrivateData(gi_reuse::nativeGIVariantKey,&bytes,&tag))||bytes!=sizeof(tag)||tag<1||tag>2)return fail("variant_tag");
+ if(!PTGlassRuntime::ReadContext(&context))return fail("ray_context");
+ if(reinterpret_cast<UINT_PTR>(context.rays)!=writer.ticket.list)return fail("ray_list_identity");
+ if(!Select(context,tag==1?4u:5u,writer.scene))return fail("tlas_descriptor");
+ if(!Provider("g_fDiffuseGIRadius",range))return fail("radius_provider");
+ if(!Provider("g_uRTDiffuseRayCount",writer.rays))return fail("ray_count_provider");
+ if(!Provider("g_uDGIPass",writer.pass))return fail("pass_provider");
+ if(!Provider("g_uDGIPassCount",writer.passes))return fail("pass_count_provider");
  std::memcpy(&writer.baseRange,&range,4);
- return std::isfinite(writer.baseRange)&&writer.baseRange>0&&writer.rays>0&&writer.rays<=64&&
-  writer.passes>0&&writer.pass<writer.passes&&((writer.pass==0&&tag==1)||(writer.pass>0&&tag==2));
+ if(!(std::isfinite(writer.baseRange)&&writer.baseRange>0&&writer.rays>0&&writer.rays<=64&&
+  writer.passes>0&&writer.pass<writer.passes&&((writer.pass==0&&tag==1)||(writer.pass>0&&tag==2))))return fail("provider_values");
+ writer.inputReason="none";return true;
 }
 static bool Install(ID3D12Device* d) noexcept {
  if(!GINativeSceneOwners::Enabled()||!d)return false;if(installed.load())return d==device.Get()&&!failed.load();

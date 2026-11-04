@@ -24,35 +24,52 @@ public:
 };
 static thread_local bool capturing=false,rejected=false;
 static thread_local ComPtr<Snapshot> current;
+static thread_local const char* failure="no_descriptor_callback";
+static thread_local UINT copies=0,constants=0;
+static std::atomic<UINT64> binds{0};
+static Snapshot* Reject(const char* reason) noexcept {failure=reason;rejected=true;return nullptr;}
 static Snapshot* Active() noexcept {
  if(!capturing||rejected)return nullptr;if(current)return current.Get();
  try {
-  PTGlassRuntime::Context context;if(!PTGlassRuntime::ReadContext(&context)){rejected=true;return nullptr;}
+  PTGlassRuntime::Context context;if(!PTGlassRuntime::ReadContext(&context)){return Reject("context");}
   auto recording=GINativeSceneOwners::ReadRecording(context.rays,false);
-  if(!recording||!recording->complete||recording->submitted){rejected=true;return nullptr;}
+  if(!recording)return Reject("recording_missing");
+  if(!recording->complete)return Reject("recording_incomplete");
+  if(recording->submitted)return Reject("recording_submitted");
   std::shared_ptr<const GINativeSceneOwners::Writer> writer;
   for(auto event=recording->events.rbegin();event!=recording->events.rend();++event)if(event->writer){writer=event->writer;break;}
-  if(!writer||!writer->nativeInputs||writer->ticket.list!=reinterpret_cast<UINT_PTR>(context.rays)){rejected=true;return nullptr;}
-  ComPtr<Snapshot> snapshot;snapshot.Attach(new(std::nothrow) Snapshot);if(!snapshot){rejected=true;return nullptr;}
+  if(!writer)return Reject("writer_missing");
+  if(!writer->nativeInputs)return Reject(writer->inputReason);
+  if(writer->ticket.list!=reinterpret_cast<UINT_PTR>(context.rays))return Reject("writer_list_identity");
+  ComPtr<Snapshot> snapshot;snapshot.Attach(new(std::nothrow) Snapshot);if(!snapshot)return Reject("snapshot_allocation");
   snapshot->generation=recording->generation;snapshot->context=context;snapshot->heap=context.table.heap;snapshot->writer=std::move(writer);
   GINativeSceneDescriptors::Mute mute;
-  if(FAILED(snapshot->shadow.Initialize(PTGlassRuntime::device.Get()))||!snapshot->shadow.Begin(snapshot->generation,context.table)){rejected=true;return nullptr;}
-  current=std::move(snapshot);return current.Get();
- }catch(...){rejected=true;return nullptr;}
+  if(FAILED(snapshot->shadow.Initialize(PTGlassRuntime::device.Get()))||!snapshot->shadow.Begin(snapshot->generation,context.table)){return Reject("shadow_initialize");}
+  failure="none";current=std::move(snapshot);return current.Get();
+ }catch(...){return Reject("exception");}
 }
 static void Copy(D3D12_CPU_DESCRIPTOR_HANDLE destination,UINT count,D3D12_CPU_DESCRIPTOR_HANDLE source) noexcept {
+ if(capturing)++copies;
  if(auto* s=Active()){GINativeSceneDescriptors::Mute mute;s->shadow.ObserveNativeCopy(s->generation,destination,count,source);}
 }
 static void Constant(D3D12_CPU_DESCRIPTOR_HANDLE destination,const D3D12_CONSTANT_BUFFER_VIEW_DESC& cb) noexcept {
+ if(capturing)++constants;
  if(auto* s=Active()){GINativeSceneDescriptors::Mute mute;s->shadow.ObserveNativeConstant(s->generation,destination,cb);}
 }
 static void Hook(void* shader){
- current.Reset();rejected=false;capturing=true;
+ current.Reset();rejected=false;failure="no_descriptor_callback";copies=constants=0;capturing=true;
  PTGlassRuntime::Context previous;if(PTGlassRuntime::ReadContext(&previous))previous.rays->SetPrivateDataInterface(key,nullptr);
  native(shader);
  const DWORD error=GetLastError();capturing=false;
  if(current){if(rejected)current->context.rays->SetPrivateDataInterface(key,nullptr);
   else current->context.rays->SetPrivateDataInterface(key,current.Get());}
+ const auto n=++binds;
+ if(n<=8||n%600==0){
+  const auto stats=GINativeSceneDescriptors::index->Statistics();
+  Log("GI_OWNED_BIND_RESULT call=%llu snapshot=%u reason=%s copies=%u constants=%u observed=%llx descriptor_failed=%u index_healthy=%u index_reason=%s as_writes=%llu entries=%llu",
+   n,unsigned(current.Get()!=nullptr&&!rejected),failure,copies,constants,current?current->shadow.Observed():0ull,
+   unsigned(GINativeSceneDescriptors::failed.load()),unsigned(stats.healthy),stats.failure,stats.asWrites,stats.entries);
+ }
  current.Reset();SetLastError(error);
 }
 static ComPtr<Snapshot> Take(ID3D12GraphicsCommandList4* list) noexcept {
