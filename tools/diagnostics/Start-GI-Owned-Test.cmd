@@ -12,7 +12,7 @@ if not errorlevel 1 (
  pause
  exit /b 1
 )
-echo R328 - OWNED GI INTEGRATION
+echo R329 - OWNED GI WITH F10 RECORD BUTTON
 set "CONTROLTOH_GI_LIVE=1"
 set "CONTROLTOH_GI_EVALUATOR=1"
 set "CONTROLTOH_GI_OWNED=1"
@@ -29,16 +29,9 @@ set "CONTROLTOH_GI_RAY_TRACE=0"
 set "CONTROLTOH_GI_JOINT_TRACE=0"
 set "CONTROLTOH_GI_STACK_CAPTURE=0"
 set "CONTROLTOH_GI_SOURCE=full"
-echo Owned GI requested: proposal, ray tracing, hit shading and output resolve.
-echo Keep RT indirect lighting and RR enabled. Select GI RAW BYPASS.
-echo F10: the GI button switches NATIVE / OWNED without restarting.
-echo OWNED WAIT means replacement has not been admitted; native output remains.
-echo Check the lit plant and hair while stationary, then move the camera.
-echo No capture hotkey or standalone producer test is needed.
-echo Exit normally to package the logs. Send the resulting diagnostics ZIP.
-echo Spatial and temporal sample reuse are not enabled in this build.
+echo Load the problem room with RR ON, FG OFF, and GI RAW BYPASS.
+echo F10: select GI OWNED, then click RECORD GI. Allow the Windows administrator prompt.
+echo Five-second delay. One beep: stand still. Next beep: move camera slowly.
+echo Two beeps: close the game. Capture ZIPs are packaged and opened automatically.
 start "" /wait "Control_DX12.exe"
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0Capture-RR-Boundary.ps1" -DiagnosticsOnly
-if errorlevel 1 echo Collection failed. Keep the console output and existing logs.
-pause
 endlocal

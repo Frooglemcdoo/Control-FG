@@ -1,5 +1,6 @@
 #pragma once
 #include "theme.h"
+#include "gi_button_capture.h"
 #include "../rr_gi_stage_policy.h"
 #include "../rr_clamp_strength_policy.h"
 #include "lighting_capture_suite.h"
@@ -43,7 +44,7 @@ inline const wchar_t* ButtonLabel(unsigned index) noexcept {
     if (index == kModeCount + 9) return L"FREE CAMERA";
     if (index == kModeCount + 10) return L"NORMAL CAMERA";
     constexpr const wchar_t* actions[] = {L"ISSUE REMAINS", L"ISSUE GONE", L"SAVE LOG", L"CAPTURE RR", L"PACKAGE RR", L"TRACE SHADOW", L"PERF CAPTURE"};
-    if(index==kModeCount+6 && performance_capture::Active())return L"CANCEL PERF";
+    if(index==kModeCount+6)return control_gi_button::Active()?L"RECORDING...":L"RECORD GI";
     if(index==kModeCount+7) {
         static wchar_t label[32]{};
         const unsigned samples=specularSampleChoice.load();
@@ -282,18 +283,14 @@ inline void RequestShadowTrace(HWND panel) noexcept {
     else MessageBoxW(panel,native_blend_capture::Message(capture_suite::lastFailure),L"Shadow trace",MB_OK);
 }
 inline void RequestPerformanceCapture(HWND panel) noexcept {
-    if(free_camera::commands.Pending())return;
-    if(performance_capture::Active()){
-        if(performance_capture::phase!=performance_capture::Phase::Package)performance_capture::Save(GetWindow(panel,GW_OWNER),"cancelled");
-        return;
+    if(control_gi_button::Active())return;
+    if(capture_suite::active || performance_capture::Active()) {
+        MessageBoxW(panel,L"Finish the current capture first.",L"GI recording",MB_OK);return;
     }
-    using State=control_rr_capture_ui::State;
-    const auto light=control_rr_capture_ui::state.load();
-    if(control_rr_capture_ui::requested.load() || (light!=State::Idle && light!=State::Complete)){
-        MessageBoxW(panel,L"Finish the light capture before starting a performance capture.",L"Performance capture",MB_OK);return;
-    }
-    if(performance_capture::Start())ClosePanel(panel);
-    else MessageBoxW(panel,L"Performance capture unavailable. Return to gameplay first and finish any active capture. If timing resources failed or their bounded capacity is exhausted, restart the game.",L"Performance capture",MB_OK);
+    if(control_gi_button::Start(selfModule,GetWindow(panel,GW_OWNER))) {
+        Trace("GI_BUTTON_CAPTURE requested=1 owned_requested=%u rr_requested=%u fg_selection=%u",unsigned(GIOwnedPipeline::requested.load()),unsigned(control_rr::RRUserRequested()),GetFGUserMultiplier());
+        ClosePanel(panel);
+    } else MessageBoxW(panel,L"Could not start the recorder. Allow the Windows administrator prompt and make sure ControlTOH/Diagnostics/Capture-GI-Button.ps1 is installed.",L"GI recording",MB_OK|MB_ICONERROR);
 }
 inline void RequestCamera(HWND panel,int mode) noexcept {
     using State=control_rr_capture_ui::State;
