@@ -17,6 +17,24 @@ static Recording Change(ASOperation op,std::uint64_t destination,std::uint64_t d
 }
 int main(){
  ASRecord out;
+ // Warm-cache parity and invalidation at an unchanged cut. New unordered
+ // writes and derived-source races must still reject a formerly ready choice.
+ Adapter memo;
+ assert(memo.Submit(1,{Build(256,1)}));const auto memoCut=memo.Mark(1);
+ for(unsigned n=0;n<4;++n)assert(memo.Select(memoCut,1,256,out)==Status::ready&&out.revision==1);
+ assert(memo.Submit(2,{Build(256,1,8192)}));
+ assert(memo.Select(memoCut,1,256,out)==Status::unordered&&!out.address);
+ Adapter invalidMemo;
+ assert(invalidMemo.Submit(1,{Build(256,1)}));const auto invalidCut=invalidMemo.Mark(1);
+ assert(invalidMemo.Select(invalidCut,1,256,out)==Status::ready);
+ invalidMemo.Invalidate();assert(invalidMemo.Select(invalidCut,1,256,out)==Status::invalid&&!out.address);
+ Adapter completeMemo;
+ assert(completeMemo.Wait(1,100,7,true));assert(completeMemo.Submit(1,{Build(256,1)}));
+ const auto waitingCut=completeMemo.Mark(1);
+ assert(completeMemo.Select(waitingCut,1,256,out)==Status::pending);
+ assert(completeMemo.ObserveFenceCompletion(100,7));
+ for(unsigned n=0;n<4;++n)assert(completeMemo.Select(waitingCut,1,256,out)==Status::ready);
+
  Adapter order;
  auto early=Build(256,1,4096),late=Build(256,1,8192);
  assert(order.Submit(1,{late,early}));auto cut=order.Mark(1);
@@ -37,6 +55,7 @@ int main(){
  assert(crossed.Submit(2,{Change(ASOperation::Copy,512,2,256,1)}));
  auto copyCut=crossed.Mark(2);
  assert(crossed.Select(copyCut,2,512,out)==Status::ready&&out.instances==4096);
+ for(unsigned n=0;n<4;++n)assert(crossed.Select(copyCut,2,512,out)==Status::ready);
  assert(crossed.Submit(3,{Build(256,1,12288)}));
  // A later-observed unordered producer invalidates an earlier source choice,
  // including the copy derived from it. Frozen metadata is not frozen bytes.
@@ -56,6 +75,7 @@ int main(){
  assert(noSource.Submit(1,{Build(512,2),Change(ASOperation::Copy,512,2,256,1)}));
  assert(noSource.Select(noSource.Mark(1),2,512,out)==Status::missing); // no stale fallback
  Adapter failedSignal;assert(failedSignal.Submit(1,{early}));auto failedCut=failedSignal.Mark(1);
+ assert(failedSignal.Select(failedCut,1,256,out)==Status::ready);
  assert(!failedSignal.Signal(1,10,1,false));assert(!failedSignal.Healthy());
  assert(failedSignal.Select(failedCut,1,256,out)==Status::invalid);
  Adapter failedWait;assert(!failedWait.Wait(1,10,1,false));assert(!failedWait.Submit(1,{early}));

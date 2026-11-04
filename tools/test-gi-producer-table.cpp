@@ -18,7 +18,7 @@ int main()try{
   Require(!index.Unique(1,1));Require(!index.Add(UINT64_MAX,1));index.Seal();Require(!index.Add(1,1));
   for(unsigned i=0;i<4096;++i){std::uint64_t begin=1+rng()%4608,bytes=1+rng()%512;
    unsigned count=0;for(auto r:ranges)if(begin>=r.first&&begin-r.first<=r.second&&bytes<=r.second-(begin-r.first))++count;
-   Require(index.Unique(begin,bytes)==(count==1));
+   for(unsigned repeat=0;repeat<3;++repeat)Require(index.Unique(begin,bytes)==(count==1));
   }
   Require(!index.Unique(0,1)&&!index.Unique(1,0)&&!index.Unique(UINT64_MAX,1));
  }

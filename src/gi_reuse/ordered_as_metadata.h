@@ -22,6 +22,20 @@ template<std::size_t Capacity=65536> class OrderedASMetadata {
  std::map<U64,Version> versions_;
  std::set<U64> queues_;
  U64 serial_=0;
+ // Cache only successful selections at one immutable observation generation.
+ // Store revision IDs, not resource owners. Every mutator invalidates the cache,
+ // including failed mutations, fence completion, compaction and cut creation.
+ // In particular a later unordered write must invalidate an earlier ready cut.
+ struct CachedSelection {U64 generation=0,cut=0,token=0,address=0,version=0;};
+ static constexpr std::size_t SelectionSlots=16384;
+ mutable std::vector<CachedSelection> selections_;
+ U64 selectionGeneration_=1;
+ void Changed(){if(++selectionGeneration_==0){selections_.clear();selectionGeneration_=1;}}
+ static std::size_t SelectionSlot(U64 cut,U64 token,U64 address){
+  U64 h=token^(address+0x9e3779b97f4a7c15ull+(cut<<6)+(cut>>2));
+  h=(h^(h>>30))*0xbf58476d1ce4e5b9ull;h=(h^(h>>27))*0x94d049bb133111ebull;
+  return static_cast<std::size_t>(h^(h>>31))&(SelectionSlots-1);
+ }
  bool healthy_=true;
  const char* failure_="none";
  bool Fail(const char* reason) {healthy_=false;failure_=reason;return false;}
@@ -45,7 +59,7 @@ template<std::size_t Capacity=65536> class OrderedASMetadata {
 public:
  bool Healthy() const {return healthy_;}
  const char* FailureReason() const {return failure_;}
- void Invalidate(const char* reason="host_observation_failure"){Fail(reason);}
+ void Invalidate(const char* reason="host_observation_failure"){Changed();Fail(reason);}
  // Freeze while recording is stable. The extra token vector is mandatory:
  // current R294 address-only journals cannot establish allocation identity.
  template<class Journal> static std::shared_ptr<const OrderedASRecording> Freeze(
@@ -66,6 +80,7 @@ public:
  // list may be replayed; each submission receives new metadata revisions.
  bool Submit(U64 queue,const std::vector<std::shared_ptr<const OrderedASRecording>>& batch,
              std::vector<std::pair<U64,U64>>* revisions=nullptr) {
+  Changed();
   if(!healthy_)return false;
   if(!queue)return Fail("queue_identity");
   queues_.insert(queue);if(revisions)revisions->clear();
@@ -99,26 +114,28 @@ public:
   }
   return true;
  }
- U64 Mark(U64 queue){if(!healthy_)return 0;queues_.insert(queue);const auto cut=order_.Mark(queue);if(!cut)Fail("mark_failed");return cut;}
+ U64 Mark(U64 queue){Changed();if(!healthy_)return 0;queues_.insert(queue);const auto cut=order_.Mark(queue);if(!cut)Fail("mark_failed");return cut;}
  bool Signal(U64 queue,U64 fence,U64 value,bool succeeded){
+  Changed();
   if(!healthy_)return false;
   if(!succeeded)return Fail("signal_failed");
   queues_.insert(queue);return order_.Signal(queue,fence,value)!=0||Fail("signal_contract");
  }
  bool Wait(U64 queue,U64 fence,U64 value,bool succeeded){
+  Changed();
   if(!healthy_)return false;
   if(!succeeded)return Fail("wait_failed");
   queues_.insert(queue);return order_.Wait(queue,fence,value)!=0||Fail("wait_contract");
  }
  PTSceneOrder::Graph::PendingFence PendingWait(U64 cut) const {return order_.PendingWait(cut);}
- U64 ObserveFenceCompletion(U64 fence,U64 completed){return healthy_?order_.ObserveFenceCompletion(fence,completed):0;}
+ U64 ObserveFenceCompletion(U64 fence,U64 completed){Changed();return healthy_?order_.ObserveFenceCompletion(fence,completed):0;}
  U64 TailStamp(U64 queue) const {return order_.TailStamp(queue);}
  std::size_t VersionCount() const {return versions_.size();}
  // Caller supplies fence-proven completed tail stamps and no outstanding cuts.
  // This is polling only: never wait on the GPU to obtain a checkpoint.
  // Return retained revision IDs so the host prunes matching payload snapshots.
  bool Checkpoint(const std::map<U64,U64>& completed,bool outstandingCuts,std::set<U64>& retained) {
-  retained.clear();if(!healthy_||outstandingCuts)return false;
+  Changed();retained.clear();if(!healthy_||outstandingCuts)return false;
   for(const auto q:queues_){const auto found=completed.find(q);
    if(found==completed.end()||found->second<order_.TailStamp(q))return false;}
   std::map<Key,PTSceneOrder::Selection> latest;
@@ -139,7 +156,7 @@ public:
  // all chains before detaching any of them; preserve a permanent rejection if
  // a competing write was observed before completion.
  bool Compact(const std::map<U64,U64>& completed,std::set<U64>& retained) {
-  retained.clear();if(!healthy_)return false;
+  Changed();retained.clear();if(!healthy_)return false;
   std::vector<std::pair<U64,bool>> finished;
   for(const auto& item:versions_){const auto& v=item.second;const auto done=completed.find(v.queue);
    if(v.dependency.version&&v.stamp&&done!=completed.end()&&done->second>=v.stamp)
@@ -164,9 +181,15 @@ public:
  PTSceneOrder::Status Select(U64 cut,U64 token,U64 address,ASRecord& out,const char** reason=nullptr) const {
   if(reason)*reason="none";
   out={};if(!healthy_||!token||!address){if(reason)*reason="history_or_identity";return PTSceneOrder::Status::invalid;}
+  if(selections_.empty())selections_.resize(SelectionSlots);
+  auto& cached=selections_[SelectionSlot(cut,token,address)];
+  if(cached.generation==selectionGeneration_&&cached.cut==cut&&cached.token==token&&cached.address==address){
+   out=versions_.at(cached.version).record;return PTSceneOrder::Status::ready;
+  }
   PTSceneOrder::Selection selected;const auto status=order_.Select(cut,{token,address},selected,reason);
   if(status!=PTSceneOrder::Status::ready)return status;
   if(!DependencyValid(selected.version)){if(reason)*reason="build_dependency";return PTSceneOrder::Status::invalid;}
+  cached={selectionGeneration_,cut,token,address,selected.version};
   out=versions_.at(selected.version).record;return status;
  }
 };
