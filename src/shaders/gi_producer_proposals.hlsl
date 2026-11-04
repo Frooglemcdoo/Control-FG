@@ -1,3 +1,4 @@
+#include "gi_dispatch_gate.hlsl"
 // A bounded tile of complete ray batches. The host supplies baseRange from the
 // matched native ray dispatch, not an assumed field in GI6's evaluator constants.
 #define GI_SECONDARY_LIBRARY_ONLY
@@ -21,7 +22,7 @@ float GIProposalDepthScale(float depth){
 }
 [numthreads(64,1,1)]
 void main(uint3 id:SV_DispatchThreadID){
-    if(any(id.yz)||!giProposalScene)return;
+    if(any(id.yz)||!giProposalScene||!GIOwnedGateOpen())return;
     uint rays,rayStride,batches,batchStride;
     giProposals.GetDimensions(rays,rayStride);giProposalBatches.GetDimensions(batches,batchStride);
     if(id.x>=giProposalPixels||id.x>=batches||rayStride!=96||batchStride!=16)return;

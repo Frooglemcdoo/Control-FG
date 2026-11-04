@@ -1,3 +1,4 @@
+#include "gi_dispatch_gate.hlsl"
 // Owned ray generation + accepted geometry + native-policy alpha. The native
 // GI6 root can bind this pass using spare t27/t28/u2/b5 slots in a PRIVATE table.
 // No descriptor in Control's table is overwritten by this shader contract.
@@ -12,7 +13,7 @@ cbuffer GIProducerTraceConstants : register(b5) {
 float3 GITraceVector(GIPoint p){return float3(p.x,p.y,p.z);}
 [shader("raygeneration")]
 void giProduceAcceptedHits() {
-    if(any(DispatchRaysIndex().yz)||!giTraceScene)return;
+    if(any(DispatchRaysIndex().yz)||!giTraceScene||!GIOwnedGateOpen())return;
     uint index=DispatchRaysIndex().x,inputs,inputStride,outputs,outputStride;
     giRays.GetDimensions(inputs,inputStride);giAcceptedRequests.GetDimensions(outputs,outputStride);
     if(index>=outputs||outputStride!=160)return;

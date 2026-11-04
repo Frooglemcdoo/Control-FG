@@ -57,6 +57,6 @@ inline void Dispatch(ID3D12GraphicsCommandList* list) noexcept {
  const auto rev=revision.load();const auto key=rev*4+mode;
  if(lastReported.exchange(key)!=key)Trace("GI_EVALUATOR_R309 dispatch_recorded=1 mode=%s revision=%llu gpu_completion=0",mode==2?"translated":"native",rev);
 }
-inline void Toggle() noexcept {if(!ready.load())return;const bool value=!requested.load();requested.store(value);const auto rev=++revision;Trace("GI_EVALUATOR_R309 requested=%s revision=%llu",value?"translated":"native",rev);}
-inline const wchar_t* Label() noexcept {return !ready.load()?L"GI EVAL: WAIT":requested.load()?L"GI EVAL: TRANSLATED":L"GI EVAL: NATIVE";}
+inline void Toggle() noexcept {if(!ready.load())return;const bool value=!requested.load();requested.store(value);GIOwnedPipeline::requested.store(value);const auto rev=++revision;Trace("GI_EVALUATOR_R309 requested=%s revision=%llu",value?"translated":"native",rev);}
+inline const wchar_t* Label() noexcept {if(GIOwnedPipeline::Enabled()&&ready.load())return !requested.load()?L"GI: NATIVE":GIOwnedPipeline::admitted.load()?L"GI: OWNED":L"GI: OWNED WAIT";return !ready.load()?L"GI EVAL: WAIT":requested.load()?L"GI EVAL: TRANSLATED":L"GI EVAL: NATIVE";}
 }

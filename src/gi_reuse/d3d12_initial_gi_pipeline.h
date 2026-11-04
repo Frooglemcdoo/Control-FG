@@ -5,6 +5,7 @@
 #include "producer_ray.h"
 #include "initial_reservoir.h"
 #include "frame_tiles.h"
+#include "d3d12_dispatch_gate.h"
 #include "../pt_glass_descriptors.h"
 namespace gi_reuse {
 // Five stages sharing the admitted native GI6 root. Shader bytecode is prepared
@@ -14,10 +15,11 @@ class D3D12InitialGIPipeline {
     Ptr<ID3D12RootSignature> root_;
     Ptr<ID3D12PipelineState> proposals_,shading_,reservoirs_,resolve_;
     D3D12ProducerPipeline producer_;
+    bool gated_=false;
 public:
     HRESULT Initialize(ID3D12Device5* device,ID3D12RootSignature* root,
         D3D12_SHADER_BYTECODE proposals,D3D12_SHADER_BYTECODE trace,
-        D3D12_SHADER_BYTECODE shading,D3D12_SHADER_BYTECODE reservoirs,D3D12_SHADER_BYTECODE resolve) noexcept {
+        D3D12_SHADER_BYTECODE shading,D3D12_SHADER_BYTECODE reservoirs,D3D12_SHADER_BYTECODE resolve,bool gated=false) noexcept {
         if(root_||producer_.State()||!device||!root)return E_INVALIDARG;
         for(const auto code:{proposals,trace,shading,reservoirs,resolve})if(!code.pShaderBytecode||!code.BytecodeLength)return E_INVALIDARG;
         Ptr<ID3D12PipelineState> a,b,c,e;
@@ -27,8 +29,9 @@ public:
         desc.CS=reservoirs;hr=device->CreateComputePipelineState(&desc,IID_PPV_ARGS(&c));if(FAILED(hr))return hr;
         desc.CS=resolve;hr=device->CreateComputePipelineState(&desc,IID_PPV_ARGS(&e));if(FAILED(hr))return hr;
         hr=producer_.Initialize(device,root,trace);if(FAILED(hr))return hr;
-        root_=root;proposals_=std::move(a);shading_=std::move(b);reservoirs_=std::move(c);resolve_=std::move(e);return S_OK;
+        gated_=gated;root_=root;proposals_=std::move(a);shading_=std::move(b);reservoirs_=std::move(c);resolve_=std::move(e);return S_OK;
     }
+    bool Gated()const noexcept{return gated_;}
     ID3D12RootSignature* Root() const noexcept{return root_.Get();}
     const D3D12ProducerPipeline& Producer() const noexcept{return producer_;}
     ID3D12PipelineState* Proposals() const noexcept{return proposals_.Get();}
@@ -46,7 +49,9 @@ class D3D12InitialGITile {
     Ptr<ID3D12Device> device_;
     Ptr<ID3D12DescriptorHeap> staging_;
     Ptr<ID3D12Resource> rays_,batches_,requests_,samples_,reservoirs_,outputs_,constants_,controlUpload_;
+    unsigned char* controls_=nullptr;
     GIFrameTiles layout_;
+    D3D12DispatchGate gate_;
     std::array<D3D12_GPU_DESCRIPTOR_HANDLE,5> tables_{};
     Ptr<ID3D12DescriptorHeap> visible_;
     Ptr<ID3D12StateObject> recordedProducer_;
@@ -64,7 +69,7 @@ class D3D12InitialGITile {
         d.DepthOrArraySize=d.MipLevels=1;d.SampleDesc.Count=1;d.Layout=D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
         if(type==D3D12_HEAP_TYPE_DEFAULT)d.Flags=D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
         auto hr=device_->CreateCommittedResource(&heap,D3D12_HEAP_FLAG_NONE,&d,
-            type==D3D12_HEAP_TYPE_DEFAULT?D3D12_RESOURCE_STATE_UNORDERED_ACCESS:D3D12_RESOURCE_STATE_GENERIC_READ,
+            type==D3D12_HEAP_TYPE_DEFAULT?D3D12_RESOURCE_STATE_COMMON:D3D12_RESOURCE_STATE_GENERIC_READ,
             nullptr,IID_PPV_ARGS(&out));if(SUCCEEDED(hr))bytes_+=bytes;return hr;
     }
     void View(UINT stage,UINT slot,ID3D12Resource* resource,UINT stride,UINT count,bool write) noexcept {
@@ -96,11 +101,12 @@ class D3D12InitialGITile {
         return native.arguments.Replay(checked)&&checked.valid&&checked.mask==0xfdu&&checked.original==nativeTable_;
     }
 public:
+    ~D3D12InitialGITile(){if(controls_){const D3D12_RANGE written{0,SIZE_T(layout_.tiles)*512};controlUpload_->Unmap(0,&written);}}
     // Require native b4 and all GI6 SRVs actually observed for THIS recording.
     static constexpr UINT64 NativeRequired=1ull|(((1ull<<27)-1)<<5)|(1ull<<41)|(1ull<<42);
     HRESULT Initialize(ID3D12Device* device,const PTGlass::LightingTableShadow& native,
         UINT64 recording,UINT64 epoch,UINT64 version,UINT64 sceneAddress,
-        UINT frame,UINT sceneRevision,UINT width,UINT height,UINT firstPixel,UINT pixels,UINT rays,float baseRange,bool deferred=false) noexcept {
+        UINT frame,UINT sceneRevision,UINT width,UINT height,UINT firstPixel,UINT pixels,UINT rays,float baseRange,bool deferred=false,bool singleUse=false) noexcept {
         if(device_||!device||!recording||!epoch||!version||!sceneAddress||sceneAddress%256||!sceneRevision||
            !width||!height||UINT64(width)*height>UINT32_MAX||!pixels||
            firstPixel>=UINT64(width)*height||pixels>UINT64(width)*height-firstPixel||!rays||rays>64||
@@ -115,6 +121,7 @@ public:
         device_=device;step_=device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
         D3D12_DESCRIPTOR_HEAP_DESC hd{};hd.Type=D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;hd.NumDescriptors=5*49;
         hr=device->CreateDescriptorHeap(&hd,IID_PPV_ARGS(&staging_));if(FAILED(hr))return hr;
+        if(singleUse){hr=gate_.Initialize(device);if(FAILED(hr))return hr;bytes_+=8;}
         const UINT capacity=layout.capacity,total=capacity*rays;
         struct Allocation {UINT64 bytes;Ptr<ID3D12Resource>* resource;};
         const Allocation allocations[]={{UINT64(total)*sizeof(GIProducerRay),&rays_},{UINT64(capacity)*16,&batches_},
@@ -135,11 +142,16 @@ public:
             const UINT trace[]={frame,deferred?0u:sceneRevision,span.samples,0};
             std::memcpy(dst,header,sizeof(header));std::memcpy(dst+28,&baseRange,4);std::memcpy(dst+256,trace,sizeof(trace));
         }
-        const D3D12_RANGE written{0,controlBytes};controlUpload_->Unmap(0,&written);
+        controls_=data;layout_=layout; // Persistently mapped, written only before first submission.
         auto from=source.heap->GetCPUDescriptorHandleForHeapStart();from.ptr+=SIZE_T(source.first)*step_;
         for(UINT stage=0;stage<5;++stage){
             device->CopyDescriptorsSimple(49,At(stage,0),from,D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
             D3D12_CONSTANT_BUFFER_VIEW_DESC cb{constants_->GetGPUVirtualAddress()+((stage==0||stage==4)?0:256),256};device->CreateConstantBufferView(&cb,At(stage,1));
+        }
+        if(gate_.Ready())for(UINT stage=0;stage<5;++stage){
+            D3D12_SHADER_RESOURCE_VIEW_DESC flag{};flag.ViewDimension=D3D12_SRV_DIMENSION_BUFFER;flag.Format=DXGI_FORMAT_R32_TYPELESS;
+            flag.Shader4ComponentMapping=D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;flag.Buffer.NumElements=1;flag.Buffer.Flags=D3D12_BUFFER_SRV_FLAG_RAW;
+            device_->CreateShaderResourceView(gate_.Resource(),&flag,At(stage,40));
         }
         View(0,43,rays_.Get(),sizeof(GIProducerRay),total,true);View(0,44,batches_.Get(),16,capacity,true);
         View(1,32,rays_.Get(),sizeof(GIProducerRay),total,false);View(1,43,requests_.Get(),sizeof(GIProducerShadingRequest),total,true);
@@ -177,7 +189,7 @@ public:
     bool Record(ID3D12GraphicsCommandList4* list,const D3D12InitialGIPipeline& pipeline,
         const D3D12ProducerTable& hits,const ComputeBindingSnapshot& native) noexcept {
         if(!list||recorded_||!published_||(hits.Deferred()&&!deferred_)||!native.Ready()||native.root.Get()!=pipeline.Root()||
-           !NativeBindingsMatch(native)||native.heaps[0].Get()!=visible_.Get()||hits.Pipeline()!=pipeline.Producer().State()||
+           pipeline.Gated()!=gate_.Ready()||!NativeBindingsMatch(native)||native.heaps[0].Get()!=visible_.Get()||hits.Pipeline()!=pipeline.Producer().State()||
            hits.Epoch()!=epoch_||hits.WriterVersion()!=version_||
            (list->GetType()!=D3D12_COMMAND_LIST_TYPE_DIRECT&&list->GetType()!=D3D12_COMMAND_LIST_TYPE_COMPUTE))return false;
         D3D12_DISPATCH_RAYS_DESC rays{};if(!pipeline.Producer().DispatchDescription(hits.Range(),count_,rays))return false;
@@ -188,8 +200,10 @@ public:
             D3D12_RESOURCE_BARRIER b{};b.Type=D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
             b.Transition={resource,D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,before,after};list->ResourceBarrier(1,&b);
         };
+        for(auto* resource:{rays_.Get(),batches_.Get(),requests_.Get(),samples_.Get(),reservoirs_.Get(),outputs_.Get()})
+            transition(resource,D3D12_RESOURCE_STATE_COMMON,D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
         for(UINT tile=0;tile<layout_.tiles;++tile){const auto span=layout_.At(tile);
-            transition(constants_.Get(),tile?D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER:D3D12_RESOURCE_STATE_UNORDERED_ACCESS,D3D12_RESOURCE_STATE_COPY_DEST);
+            transition(constants_.Get(),tile?D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER:D3D12_RESOURCE_STATE_COMMON,D3D12_RESOURCE_STATE_COPY_DEST);
             list->CopyBufferRegion(constants_.Get(),0,controlUpload_.Get(),UINT64(tile)*512,512);
             transition(constants_.Get(),D3D12_RESOURCE_STATE_COPY_DEST,D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER);
             if(tile)for(auto* resource:{rays_.Get(),batches_.Get(),requests_.Get(),samples_.Get(),reservoirs_.Get(),outputs_.Get()})
@@ -208,6 +222,11 @@ public:
             list->SetPipelineState(pipeline.Resolve());list->SetComputeRootDescriptorTable(0,tables_[4]);list->Dispatch((span.pixels+63)/64,1,1);
             list->ResourceBarrier(1,&outputBarrier);
         }
+        if(gate_.Ready())gate_.Close(list);
+        // Closed-list replay must start from the same private resource states.
+        for(auto* resource:{rays_.Get(),batches_.Get(),requests_.Get(),samples_.Get(),reservoirs_.Get(),outputs_.Get()})
+            transition(resource,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,D3D12_RESOURCE_STATE_COMMON);
+        transition(constants_.Get(),D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER,D3D12_RESOURCE_STATE_COMMON);
         native.Restore(list);recordedProducer_=hits.Pipeline();recordedHits_=hits.Range().StartAddress;recorded_=true;return true;
     }
     // Called once after strict submission admission and a committed hit table.
@@ -215,11 +234,21 @@ public:
     // must never mutate controls after the first submission begins.
     HRESULT CommitAdmission(const D3D12ProducerTable& hits) noexcept {
         if(!deferred_||armed_||!recorded_||hits.Deferred()||hits.Pipeline()!=recordedProducer_.Get()||hits.Range().StartAddress!=recordedHits_||hits.Epoch()!=epoch_||hits.WriterVersion()!=version_)return E_INVALIDARG;
-        void* mapped=nullptr;const D3D12_RANGE empty{};auto hr=controlUpload_->Map(0,&empty,&mapped);if(FAILED(hr))return hr;
-        if(!mapped){controlUpload_->Unmap(0,&empty);return E_UNEXPECTED;}
-        for(UINT i=0;i<layout_.tiles;++i){auto* dst=static_cast<unsigned char*>(mapped)+SIZE_T(i)*512;
+        if(!controls_)return E_UNEXPECTED;
+        for(UINT i=0;i<layout_.tiles;++i){auto* dst=controls_+SIZE_T(i)*512;
             std::memcpy(dst+4,&sceneRevision_,4);std::memcpy(dst+260,&sceneRevision_,4);}
-        const D3D12_RANGE written{0,SIZE_T(layout_.tiles)*512};controlUpload_->Unmap(0,&written);armed_=true;return S_OK;
+        armed_=true;return S_OK;
+    }
+    // Prefix is submitted only once and before the original list, on its queue.
+    bool RecordGate(ID3D12GraphicsCommandList* prefix) const noexcept {
+        if(!prefix||!recorded_||!gate_.Ready())return false;
+        gate_.Arm(prefix,controlUpload_.Get(),4);return true;
+    }
+    HRESULT CancelAdmission() noexcept {
+        if(!deferred_||!recorded_||!controls_)return E_INVALIDARG;
+        const UINT zero=0;for(UINT i=0;i<layout_.tiles;++i){auto* dst=controls_+SIZE_T(i)*512;
+            std::memcpy(dst+4,&zero,4);std::memcpy(dst+260,&zero,4);}
+        armed_=false;return S_OK;
     }
     // Scratch contains the last tile only; it is not full-frame reuse history.
     ID3D12Resource* Reservoirs()const noexcept{return reservoirs_.Get();}

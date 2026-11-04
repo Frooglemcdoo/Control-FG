@@ -1,3 +1,4 @@
+#include "gi_dispatch_gate.hlsl"
 #include "../gi_reuse/initial_reservoir.h"
 #include "../gi_reuse/producer_shading.h"
 struct Batch {uint first;uint count;uint frameTag;float depthScale;};
@@ -17,7 +18,7 @@ RWStructuredBuffer<GIInitialResult> outputs : register(u1);
 void main(uint3 id:SV_DispatchThreadID) {
     if(any(id.yz))return;
 #ifdef GI_NATIVE_INITIAL_BINDINGS
-    if(!giInitialScene||giInitialReserved)return;
+    if(!giInitialScene||!GIOwnedGateOpen()||giInitialReserved)return;
 #endif
     uint n,s,nb,sb,nr,sr,no,so;
     batches.GetDimensions(nb,sb);samples.GetDimensions(n,s);

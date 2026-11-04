@@ -78,6 +78,12 @@ struct Writer {
  float baseRange=0;UINT rays=0,pass=0,passes=0;bool nativeInputs=false;
 };
 static std::atomic<bool(*)(Writer&) noexcept> writerInputs{nullptr};
+struct Use {
+ virtual ~Use()=default;
+ virtual bool Admit(const gi_reuse::GILiveSceneCatalog&,UINT64 cut) noexcept=0;
+ virtual bool RecordGate(ID3D12GraphicsCommandList*) noexcept=0;
+ virtual void Cancel() noexcept=0;
+};
 struct Event {
  gi_reuse::OrderedASEvent build;
  std::shared_ptr<const InstanceUpload> instances;
@@ -86,6 +92,7 @@ struct Event {
  std::vector<std::shared_ptr<const gi_reuse::GIFrozenGeometry>> frozen;
  std::shared_ptr<GIGeometrySnapshot::Transfer> transfer;
  std::shared_ptr<const Writer> writer;
+ std::shared_ptr<Use> use;
 };
 static const GUID recordingKey={0x310e0001,0x1739,0x4401,{0x91,0x33,0x41,0x51,0x61,0x71,0x81,0x91}};
 static std::atomic<UINT64> generations{1};
@@ -107,6 +114,7 @@ static Microsoft::WRL::ComPtr<Recording> ReadRecording(ID3D12Object* object,bool
  if(!create)return result;result.Attach(new(std::nothrow) Recording);
  if(result&&FAILED(object->SetPrivateDataInterface(recordingKey,result.Get())))result.Reset();return result;
 }
+static void Initialize(ID3D12GraphicsCommandList* list) noexcept {ReadRecording(list);}
 static void Reset(ID3D12GraphicsCommandList* list) noexcept {
  if(!ready.load()||!list)return;
  // A successful native Reset cancels unsubmitted metadata, while submitted
@@ -264,7 +272,7 @@ static bool Install(HMODULE d3d) noexcept {
  if(ok)for(auto& p:creates)if(!RRAlbedoExchangeCall(&p,true)){ok=false;break;}
  if(ok)ok=lockPatch.Exchange(true)&&RRAlbedoExchangeCall(&copyPatch,true);
  if(!ok){if(copyPatch.site)RRAlbedoExchangeCall(&copyPatch,false);if(lockPatch.changed)lockPatch.Exchange(false);for(auto& p:creates)if(p.site)RRAlbedoExchangeCall(&p,false);}
- if(ok){GINativeLifetimeRuntime::liveRetire.store(&Retire);gi_reuse::runtime::liveBuild.store(&Build);gi_reuse::runtime::liveCopy.store(&Copy);gi_reuse::runtime::liveReset.store(&Reset);gi_reuse::runtime::liveBarriers.store(&Barriers);ready=true;}
+ if(ok){GINativeLifetimeRuntime::liveRetire.store(&Retire);gi_reuse::runtime::liveBuild.store(&Build);gi_reuse::runtime::liveCopy.store(&Copy);gi_reuse::runtime::liveReset.store(&Reset);gi_reuse::runtime::liveBarriers.store(&Barriers);gi_reuse::runtime::liveInitialize.store(&Initialize);ready=true;}
  Log("GI_LIVE_OWNERS ready=%u native_creates=11 instance_source_copy=1 replacement_dispatch=0",unsigned(ok));return ok;
 }
 }

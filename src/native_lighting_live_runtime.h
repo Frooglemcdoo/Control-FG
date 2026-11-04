@@ -33,6 +33,7 @@
 #include "free_camera_control.h"
 
 namespace native_lighting {
+namespace gi_owned_dispatch { inline void After(ID3D12GraphicsCommandList*,UINT,UINT,UINT) noexcept; }
 namespace gi_geometry_probe { inline void ResetInstances(ID3D12GraphicsCommandList*) noexcept; }
 namespace gi_spot_trace {
 inline void Poll() noexcept;
@@ -367,6 +368,7 @@ inline void STDMETHODCALLTYPE ComputeDispatchHook(ID3D12GraphicsCommandList* lis
     if(!gi_spot_trace::Dispatch(list,x,y,z))original(list,x,y,z);
     performance::End(timing);
     rt_spot_capture_runtime::AfterCompute(list,x,y,z);
+    gi_owned_dispatch::After(list,x,y,z);
 }
 inline HRESULT STDMETHODCALLTYPE ResetHook(ID3D12GraphicsCommandList* list, ID3D12CommandAllocator* allocator, ID3D12PipelineState* pso) {
     const auto original = Lookup(list).reset;
@@ -397,6 +399,19 @@ inline bool PatchSlot(void** slot, void* expected, void* hook) noexcept {
 #include "rt_spot_capture_audit.h"
 #include "gi_binding_audit.inl"
 #include "gi_compute_hooks.inl"
+namespace gi_owned_dispatch {
+inline void After(ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT z) noexcept {
+ if(!GIOwnedPipeline::Enabled()||GIOwnedPipeline::recording)return;
+ const auto callback=GIOwnedPipeline::dispatchObserver.load();if(!callback)return;
+ gi_reuse::ComputeBindingSnapshot bindings;UINT64 generation=0;
+ if(!gi_compute_hooks::Capture(list,bindings,generation))return;
+ if(auto* alternate=gi_evaluator::Select(bindings.pipeline.Get()))bindings.pipeline.Attach(alternate);
+ Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList4> rays;
+ if(FAILED(list->QueryInterface(IID_PPV_ARGS(&rays))))return;
+ gi_compute_hooks::Mute mute;callback(rays.Get(),bindings,x,y,z);
+}
+}
+
 #include "gi_snapshot_probe.inl"
 #include "gi_geometry_probe.inl"
 #include "gi_spot_trace_runtime.inl"

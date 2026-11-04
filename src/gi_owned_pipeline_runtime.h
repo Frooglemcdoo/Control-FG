@@ -16,6 +16,11 @@ inline bool Enabled() noexcept {
  return false;
 #endif
 }
+using DispatchObserver=void(*)(ID3D12GraphicsCommandList4*,const gi_reuse::ComputeBindingSnapshot&,UINT,UINT,UINT) noexcept;
+inline std::atomic<DispatchObserver> dispatchObserver{nullptr};
+inline std::atomic<UINT64> recorded{0},admitted{0},rejected{0};
+inline std::atomic<bool> requested{true};
+inline thread_local bool recording=false;
 class Owner final:public IUnknown {
  std::atomic<ULONG> refs{1};
 public:
@@ -40,7 +45,7 @@ inline HRESULT Attach(ID3D12Device* device,ID3D12RootSignature* root,IUnknown* n
  Microsoft::WRL::ComPtr<Owner> owner;owner.Attach(new(std::nothrow) Owner);if(!owner)return E_OUTOFMEMORY;
  hr=owner->pipeline.Initialize(dxr.Get(),root,{kGIOwnedProposals,sizeof(kGIOwnedProposals)},
   {kGIOwnedTrace,sizeof(kGIOwnedTrace)},{kGIOwnedShading,sizeof(kGIOwnedShading)},
-  {kGIOwnedReservoirs,sizeof(kGIOwnedReservoirs)},{kGIOwnedResolve,sizeof(kGIOwnedResolve)});
+  {kGIOwnedReservoirs,sizeof(kGIOwnedReservoirs)},{kGIOwnedResolve,sizeof(kGIOwnedResolve)},true);
  if(SUCCEEDED(hr))hr=target->SetPrivateDataInterface(key,owner.Get());return hr;
 #else
  (void)device;(void)root;(void)native;return S_FALSE;

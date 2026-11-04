@@ -15,7 +15,8 @@ struct Fence {ComPtr<IUnknown> identity;UINT64 id=0;};
 struct Flight {
  UINT64 queue=0,value=0,stamp=0;bool signaled=false;
  std::vector<ComPtr<Recording>> recordings;
- // Future renderer admission leases belong here, before native Execute.
+ ComPtr<ID3D12CommandAllocator> prefixAllocator;
+ ComPtr<ID3D12GraphicsCommandList4> prefix;
 };
 static std::vector<Queue> queues;
 static std::vector<Fence> fences;
@@ -67,6 +68,7 @@ static void Quarantine(UINT count,ID3D12CommandList*const* lists) noexcept {
 }
 static UINT64 Before(ID3D12CommandQueue* input,UINT count,ID3D12CommandList*const* lists) noexcept {
  if(!Active())return 0;mutex.lock();const DWORD error=GetLastError();
+ std::vector<std::pair<std::shared_ptr<Use>,UINT64>> pending;
  try {
   Poll();auto* q=FindQueue(input);
   if(!q||count>256||(count&&!lists)||flights.size()>=256){catalog.Invalidate("live_submission_preflight");Quarantine(count,lists);SetLastError(error);return 1;}
@@ -84,14 +86,32 @@ static UINT64 Before(ID3D12CommandQueue* input,UINT count,ID3D12CommandList*cons
    }
    for(const auto& recording:flight.recordings){recording->submitted=true;
     if(catalog.Healthy())for(const auto& event:recording->events){
-     if(event.writer){if(!catalog.Mark(q->id))break;++marks;}
+     if(event.use){const auto cut=catalog.Mark(q->id);if(!cut)break;pending.emplace_back(event.use,cut);}
+     else if(event.writer){if(!catalog.Mark(q->id))break;++marks;}
      else if(!catalog.Submit(q->id,recording->generation,Payload(event)))break;
     }
    }
   }
+  // Create all prefix owners before arming any mapped controls. The prefix
+  // initializes each gate once; the recorded pass clears it, including replays.
+  bool prefixReady=false;
+  if(catalog.Healthy()&&!pending.empty()){
+   ComPtr<ID3D12Device> device;const auto type=input->GetDesc().Type;
+   prefixReady=SUCCEEDED(input->GetDevice(IID_PPV_ARGS(&device)))&&
+    SUCCEEDED(device->CreateCommandAllocator(type,IID_PPV_ARGS(&flight.prefixAllocator)))&&
+    SUCCEEDED(device->CreateCommandList(0,type,flight.prefixAllocator.Get(),nullptr,IID_PPV_ARGS(&flight.prefix)));
+   if(prefixReady){
+    for(const auto& item:pending){if(!item.first->Admit(catalog,item.second))item.first->Cancel();
+     if(!item.first->RecordGate(flight.prefix.Get())){prefixReady=false;break;}}
+    if(FAILED(flight.prefix->Close()))prefixReady=false;
+   }
+  }
+  if(!prefixReady)for(const auto& item:pending)item.first->Cancel();
   if(catalog.Healthy())catalog.Mark(q->id);
   flight.stamp=catalog.TailStamp(q->id);flights.push_back(std::move(flight));++submits;
- }catch(...){catalog.Invalidate("live_submission_exception");Quarantine(count,lists);}
+  if(prefixReady){ID3D12CommandList* prefix=flights.back().prefix.Get();input->ExecuteCommandLists(1,&prefix);}
+
+ }catch(...){for(const auto& item:pending)item.first->Cancel();catalog.Invalidate("live_submission_exception");Quarantine(count,lists);}
  SetLastError(error);return 1;
 }
 static void After(ID3D12CommandQueue* input,UINT64 locked) noexcept {

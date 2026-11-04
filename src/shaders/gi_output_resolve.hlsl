@@ -1,3 +1,4 @@
+#include "gi_dispatch_gate.hlsl"
 #include "../gi_reuse/output_resolve.h"
 struct GIOutputBatch {uint first;uint count;uint frameTag;float depthScale;};
 StructuredBuffer<GIInitialResult> giOutputResults : register(t27);
@@ -11,7 +12,7 @@ cbuffer GIOutputConstants : register(b5) {
 }
 [numthreads(64,1,1)]
 void main(uint3 id:SV_DispatchThreadID) {
-    if(any(id.yz)||id.x>=giOutputPixels||!giOutputScene||!giOutputWidth||!giOutputHeight||
+    if(any(id.yz)||id.x>=giOutputPixels||!giOutputScene||!GIOwnedGateOpen()||!giOutputWidth||!giOutputHeight||
        giOutputHeight>0xffffffffu/giOutputWidth||!giOutputRayCount||giOutputRayCount>64||
        !isfinite(giOutputBaseRange)||giOutputBaseRange<=0)return;
     uint total=giOutputWidth*giOutputHeight;

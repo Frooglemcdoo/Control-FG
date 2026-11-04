@@ -1,3 +1,4 @@
+#include "gi_dispatch_gate.hlsl"
 // Native GI6 resource contract plus unused native table slots t27/u2/b5.
 // This pass shades accepted producer hits at their target receiver. It does not
 // replace the native evaluator dispatch until producer/scene ownership is bound.
@@ -13,7 +14,7 @@ float3 GIVector(GIPoint p) {return float3(p.x,p.y,p.z);}
 GIPoint GIPointFromVector(float3 v) {GIPoint p;p.x=v.x;p.y=v.y;p.z=v.z;return p;}
 [numthreads(64,1,1)]
 void main(uint3 id:SV_DispatchThreadID) {
-    if(any(id.yz)||!giProducerScene)return;
+    if(any(id.yz)||!giProducerScene||!GIOwnedGateOpen())return;
     uint inputs,inputStride,outputs,outputStride;
     giProducerRequests.GetDimensions(inputs,inputStride);
     giProducerSamples.GetDimensions(outputs,outputStride);

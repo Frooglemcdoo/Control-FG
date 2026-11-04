@@ -28,6 +28,7 @@ inline std::atomic<void(*)(ID3D12GraphicsCommandList4*,const D3D12_BUILD_RAYTRAC
 inline std::atomic<void(*)(ID3D12GraphicsCommandList4*,UINT64,UINT64,D3D12_RAYTRACING_ACCELERATION_STRUCTURE_COPY_MODE) noexcept> liveCopy{nullptr};
 inline std::atomic<void(*)(ID3D12GraphicsCommandList*) noexcept> liveReset{nullptr};
 inline std::atomic<void(*)(ID3D12GraphicsCommandList*,UINT,const D3D12_RESOURCE_BARRIER*) noexcept> liveBarriers{nullptr};
+inline std::atomic<void(*)(ID3D12GraphicsCommandList*) noexcept> liveInitialize{nullptr};
 inline BufferOwners owners;
 inline ASResourceOwners<> asOwners;
 inline std::atomic<UINT64> asIdentityResolved{0},asIdentityMissing{0},asIdentityAmbiguous{0};
@@ -158,6 +159,7 @@ inline void Reset(ID3D12GraphicsCommandList* list) noexcept {
  next->Release();
 }
 inline void Initialize(ID3D12GraphicsCommandList* list) noexcept {
+ if(const auto callback=liveInitialize.load())callback(list);
  if(!Enabled()||fault.load())return;if(!Read(list))Reset(list);
 }
 struct RejectedGeometry {GeometryDiagnostic diagnostic;UINT64 destination=0,source=0;UINT count=0,layout=0,flags=0;};
